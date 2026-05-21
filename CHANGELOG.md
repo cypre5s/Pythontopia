@@ -2,6 +2,14 @@
 
 ## 2026-05-21
 
+### R-11 - 根 README 重写为成熟教学游戏作品门面（完成）
+
+- 新增 R-0 baseline commit `59761c5`：把 R-10 完成态（234 / 234 测试通过）固化为首个 git commit（13032 文件 / 222589 行），建立 R-11 ~ R-100 可回滚锚点。`.env` / `node_modules` / `target` / `.venv` / `.work` 等敏感与产物目录已被 `.gitignore` 隔离，未泄露任何密钥。
+- 重写 `README.md`（30 行 → 147 行 / 11 节）：项目定位 → 游戏 ↔ 教学映射 → 技术栈 → 项目结构 → 一键演示 / 本地开发 → 234 测试基线 → 关键文档导览 → 防幻觉与合规底线 → 迭代历史（含 R-10 + R-11 ~ R-100 位置）→ 许可 → 团队。所有外链均指向仓库内真实文件，无虚构引用。
+- 新增 `docs/release/r100_iterations.md`：R-11 起每轮日志入口；定义全局状态（基线 commit / 独立 commit / 不动 git config / 不 push）；列出 R-12 ~ R-20 候选方向草稿（token 渗透、image-rendering 统一、a11y、小屏适配、empty state、错误码文档、时序图重审、demo 节奏微调）。
+- 同步更新 `docs/execution_status.md`：增 R-11 行 + 23:50 / 23:55 进度记录。
+- 验证：本轮纯文档变更，未触及代码 / 测试 / 构建配置，跳过 typecheck / lint / test。
+
 ### 阶段 15 + R-10 - Beta 验收 / 演示交付物 / 10 轮代码迭代（完成）
 
 - 阶段 15：`docs/beta_acceptance_checklist.md` 4 大维度 27 项全勾；`docs/release/{README,known_issues,regression_report,demo_v1,r10_iterations,r10_summary}.md` 全部就绪；视频 / PPT 物件需真人产出（已写脚本与剪辑指南），文档与脚本闭环就位。

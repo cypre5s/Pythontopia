@@ -24,8 +24,9 @@
 | 14 | Docker Compose、视觉打磨、文档 | 已完成 | 6 service 编排 / 5 个脚本 / 6 类文档 / tokens.css / UX checklist |
 | 15 | Beta 验收、视频、PPT | 已完成（文档/脚本/checklist） | 视频/PPT 本体需真人产出 |
 | R-10 | 10 轮代码质量审查与性能优化 | 已完成 | 最终 234 测试通过 |
+| R-11 | 根 README 重写为成熟教学游戏作品门面 | 已完成 | 单文件 30 → 147 行；R-0 baseline commit `59761c5` 建立 |
 
-## 当前状态：全部阶段交付完毕，等待视频与 PPT 物件由真人完成
+## 当前状态：R-11 已完成，进入 R-12 ~ R-100 持续小步成熟度迭代（详见 `docs/release/r100_iterations.md`）
 
 ## 阶段 15 — Beta 验收、演示视频与 PPT 收尾（文档与脚本部分已完成）
 
@@ -80,3 +81,5 @@
 - 22:35 启动 R-10：10 轮小步代码质量审查与性能优化，聚焦"让项目更像成熟教学游戏作品"。
 - 22:50 R-10 完成：router 全量懒加载、教学闭环引导文案、复盘 store + planDraft 单测补强、文档闭环；最终 backend 101 / graph 59 / rag 18 / frontend 56 = 234 测试通过。
 - 22:50 全部阶段交付完毕；视频与 PPT 物件需真人按 `docs/demo_script.md` 与 `docs/release/demo_v1.md` 录制制作。
+- 23:50 R-0 baseline commit `59761c5`：把 R-10 完成态固化为首个 git commit（13032 文件 / 222589 行），建立 R-11 ~ R-100 可回滚锚点。
+- 23:55 R-11 完成：根 `README.md` 重写为成熟教学游戏作品门面（30 → 147 行，11 节）；新建 `docs/release/r100_iterations.md`；同步本文件与 `CHANGELOG.md`。本轮无代码改动，无需跑测试套件。
