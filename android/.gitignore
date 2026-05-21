@@ -1,0 +1,44 @@
+# Gradle
+.gradle/
+build/
+out/
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+*.iws
+*.ipr
+local.properties
+captures/
+.cxx/
+
+# Kotlin
+.kotlin/
+kotlin-js-store/
+
+# NDK
+obj/
+
+# Lint baselines (re-generate on demand)
+lint-baseline.xml
+
+# Keystore (never commit signing keys)
+*.jks
+*.keystore
+keystore.properties
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Profiling
+*.hprof
+
+# Coverage
+coverage/
+
+# Generated docs (Dokka, etc.)
+docs/build/

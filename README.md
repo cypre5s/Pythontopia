@@ -132,10 +132,23 @@ cd services/pythontopia-rag && python -m pip install -e ".[dev]" && python -m py
 | 阶段 | 名称 | 状态 |
 | --- | --- | --- |
 | 00 ~ 15 | 仓库骨架 → Beta 验收 / PPT 收尾 | 已交付，见 `CHANGELOG.md` |
-| R-10 | 10 轮代码质量与性能小步迭代 | 已完成，见 `docs/release/r10_summary.md` |
-| R-11 ~ R-100 | 持续小步成熟度迭代 | 进行中，见 `docs/release/r100_iterations.md` |
+| R-10 | 10 轮 Web 端代码质量与性能小步迭代 | 已完成，见 `docs/release/r10_summary.md` |
+| R-11 | 根 README 重写为成熟教学游戏作品门面 | 已完成，见 `docs/release/r100_iterations.md` |
+| R-12 ~ R-100 | Web 端持续小步成熟度迭代 | **冻结**：Web 端代码冻结在 R-11，资源转入 Android 化路线 |
+| Android-R0 | Android 客户端启动：10 subagent 调研 + ADR-001 + roadmap | 已完成，见 `android/docs/` |
+| Android-R1 ~ R17 | Android 客户端从骨架到 Beta | 进行中，见 `android/docs/roadmap.md` |
 
 视频与 PPT 物件由真人按 `docs/demo_script.md` 与 `docs/release/demo_v1.md` 录制制作，不入 git。
+
+## 9.1 双端架构（重要）
+
+自 2026-05-22 起，Pythontopia 从单端 Web 项目演进为 **Web + Android 双客户端**：
+
+- **Web 端**（`frontend/`）：Vue 3 + Phaser 3，已完成 15 阶段 + R-11，234 / 234 测试通过；**冻结**，不再迭代。
+- **Android 端**（`android/`）：Kotlin + Jetpack Compose + LibGDX，**新增**路线，复用后端 / Agent / RAG。
+- **后端**（`backend/` + `services/`）：双端共用唯一真理源，作为 REST API 提供方继续演进。
+- **比赛 Beta 日期**：用户已确认接受推迟（详见 `android/docs/roadmap.md` 时间预估）。
+- **详见**：`android/README.md` + `android/docs/ADR-001-tech-selection.md`。
 
 ## 10. 许可
 

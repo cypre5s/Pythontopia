@@ -1,5 +1,29 @@
 # Changelog
 
+## 2026-05-22
+
+### Android-R0 - 原生 Android 客户端启动（完成）
+
+- **重大方向变更**：用户决策（2026-05-22 / `docs/execution_directive.md` 之后）— 在 `/home/cypress/Pythontopia/android/` 新增**原生 Android 客户端**，复用后端 / Agent / RAG / course-pack-43 数据；接受比赛 Beta 日期推迟；放弃 Web 端 R-12 ~ R-100 迭代（保留 R-11 完成态代码）；授权使用 subagent 并发。
+- 新建 `android/` 顶级目录 + `android/README.md`（11 节项目定位）+ `android/.gitignore`（Gradle / Android Studio / Keystore 隔离）+ `android/docs/README.md`（文档导览）。
+- 启动 10 个并发 subagent 调研，输出 3951 行 markdown 报告到 `.work/thinking/android_research_{01..10}.md`（已 gitignore，不入主 commit）：
+  - A1 项目结构与构建系统（Gradle KTS / multi-module / Kotlin / Compose / minSdk）
+  - A2 移动端像素游戏引擎（LibGDX 评分 36/40 胜出，Compose Canvas 备选）
+  - A3 Android Python 沙箱（Beta 首发仅服务端判题，Chaquopy 为 Beta+1 可选）
+  - A4 暗色像素主题（Pal-1 深夜炉火配色 + Fusion Pixel 12px / Press Start 2P / JetBrains Mono OFL 三字体）
+  - A5 网络层（Retrofit 2.12 + OkHttp 5.3 + kotlinx-serialization 1.11，28 端点映射表）
+  - A6 DI + 状态管理（Hilt + KSP + MVI for 复杂页 / MVVM for 简单页 + 12 ViewModel 拆分）
+  - A7 JWT 存储（EncryptedSharedPreferences + Keystore + BiometricPrompt，MASVS-L1）
+  - A8 测试栈（JUnit 5 + MockK + Robolectric + Compose UI Test + MockWebServer + Roborazzi + Kover）
+  - A9 DTO 对齐（OpenAPI Generator 7.22 + springdoc 2.6.0，28 个 frontend/src/dto/ ↔ backend Java 包路径映射）
+  - A10 CI/CD + APK 发布（GitHub Actions ubuntu-latest + R8 + AAB + GitHub Releases pre-release）
+- `android/docs/ADR-001-tech-selection.md` 锁定 18 项关键决策 + 版本统一锁定表（Kotlin 2.2.0 / AGP 8.7.3 / Compose BOM 2025.04.00 / LibGDX 1.13.1 / Hilt 2.52 / Retrofit 2.11 + OkHttp 4.12 / kotlinx-serialization 1.7.3 / kotlinx-coroutines 1.9.0 / EncryptedSharedPreferences 1.1.0-alpha06 / Biometric 1.1.0 / Room 2.6.1 / DataStore 1.1.1 / JUnit 5.10.3 + JUnit 4.13.2 + MockK 1.13.12 + Turbine 1.1.0 + Robolectric 4.13 + Compose UI Test 1.7.5 + MockWebServer 4.12 + Macrobenchmark 1.3.2 + Roborazzi 1.32.2 + Kover 0.8.3 + Detekt 1.23.7）。
+- `android/docs/roadmap.md` 定义 Android-R0 ~ R17 + R100 共 19 个阶段（R1 Gradle 骨架 → R6 LibGDX 集成 → R7~R14 八个 feature 模块 → R15 视觉打磨 → R16 CI/CD → R17 Beta 验收），时间预估 ~8 周。
+- 顶层文档同步：`README.md` 9.1 节双端架构说明 + 9 节迭代历史；`AGENTS.md` 新增"Android 客户端"技术栈小节 + 目录约定补 `android/` 行；`docs/execution_status.md` 增 Android-R0 行 + 进度记录。
+- 不破坏 Web 端 234 测试基线（Web 端代码冻结在 R-11，本目录独立运作）。
+- 不复用 Web Phaser 代码、不内嵌 LLM、不上架 Google Play（演示阶段直接发 debug APK）。
+- 验证：纯文档与骨架 commit，本轮未触代码 / 测试 / 构建配置。
+
 ## 2026-05-21
 
 ### R-11 - 根 README 重写为成熟教学游戏作品门面（完成）

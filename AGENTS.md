@@ -50,18 +50,38 @@ Pythontopia 是基于 Alethicode 技术资产抽取重构的独立新项目：�
 - Agent 故障必须 fail fast，不允许静默降级成普通聊天。
 - 生产和演示默认单 worker，避免进程内状态错乱。
 
+### Android 客户端（自 2026-05-22 新增）
+
+- 使用 Kotlin 2.2.0、Jetpack Compose（Material 3）、Compose BOM 2025.04.00。
+- 构建系统使用 Gradle 8.11.1 + Kotlin DSL + `gradle/libs.versions.toml` 版本目录。
+- 像素游戏渲染使用 LibGDX 1.13.1（主层）+ Compose Canvas（教学面板挂件）。
+- 依赖注入使用 Hilt + KSP（不用 KAPT）。
+- 网络使用 Retrofit 2.11 + OkHttp 4.12 + `kotlinx-serialization-json` 1.7.3 + 协程。
+- JWT 存储使用 `EncryptedSharedPreferences` + Keystore + BiometricPrompt（OWASP MASVS-L1）。
+- DTO 由 OpenAPI Generator 7.22 从后端 springdoc 自动生成；少量 sealed union 走手工补丁层。
+- 测试使用 JUnit 5 + MockK + Turbine + Robolectric + Compose UI Test + MockWebServer + Roborazzi + Kover。
+- 静态分析使用 Android Lint + Detekt（含 ktlint 规则）。
+- minSdk 26 / targetSdk 35 / compileSdk 35 / JVM Toolchain 17。
+- 业务层禁 `Any`；类名 PascalCase，方法变量 camelCase，常量 UPPER_SNAKE_CASE。
+- 模块拓扑：`:app + :core:{common,data,design,network} + :game + :feature:{profile,fields,workshop,arena,mine,retro,path,classroom}`。
+- 不复用 Web 端 Phaser 代码 / `tilemap.ts` / `frontend/src/api/*.ts`。
+- Android 端不运行 Python（Beta 首发仅服务端判题）。
+- 不上架 Google Play 直到 Beta+1（演示阶段直接发 debug APK）。
+- 完整决策见 `android/docs/ADR-001-tech-selection.md`。
+
 ## 目录约定
 
 ```text
 /home/cypress/Pythontopia/
-├── backend/                    # Spring Boot 后端
-├── frontend/                   # Vue 3 + Phaser 3 网页端
+├── backend/                    # Spring Boot 后端（Web + Android 双端共用）
+├── frontend/                   # Vue 3 + Phaser 3 网页端（冻结在 R-11，不再迭代）
+├── android/                    # Kotlin + Compose + LibGDX 原生 Android 客户端（2026-05-22 新增）
 ├── services/
 │   ├── pythontopia-graph/       # 多智能体资源生成与路径规划
 │   └── pythontopia-rag/         # 课件 RAG 服务
 ├── data/course-pack-43/         # Python语言基础完整课程种子数据
-├── assets/                      # 像素素材与 license
-├── docs/                        # 系统设计、测试说明、比赛文档
+├── assets/                      # 像素素材与 license（双端共用）
+├── docs/                        # 系统设计、测试说明、比赛文档（双端共用）
 ├── deploy/                      # Docker Compose 与启动脚本
 └── AGENTS.md
 ```

@@ -25,8 +25,11 @@
 | 15 | Beta 验收、视频、PPT | 已完成（文档/脚本/checklist） | 视频/PPT 本体需真人产出 |
 | R-10 | 10 轮代码质量审查与性能优化 | 已完成 | 最终 234 测试通过 |
 | R-11 | 根 README 重写为成熟教学游戏作品门面 | 已完成 | 单文件 30 → 147 行；R-0 baseline commit `59761c5` 建立 |
+| R-12 ~ R-100 | Web 端持续小步成熟度迭代 | **冻结** | Web 端代码冻结在 R-11；用户决策转入 Android 化路线 |
+| Android-R0 | Android 客户端启动：10 subagent 调研 + ADR-001 + roadmap | 已完成 | 详见 `android/docs/ADR-001-tech-selection.md` 与 `android/docs/roadmap.md` |
+| Android-R1 ~ R17 | Android 客户端从 Gradle 骨架到 Beta | 进行中 | 详见 `android/docs/roadmap.md` |
 
-## 当前状态：R-11 已完成，进入 R-12 ~ R-100 持续小步成熟度迭代（详见 `docs/release/r100_iterations.md`）
+## 当前状态：方向变更 — Web 端冻结于 R-11，Android-R0 已启动，等待 Android-R1 Gradle 骨架
 
 ## 阶段 15 — Beta 验收、演示视频与 PPT 收尾（文档与脚本部分已完成）
 
@@ -83,3 +86,7 @@
 - 22:50 全部阶段交付完毕；视频与 PPT 物件需真人按 `docs/demo_script.md` 与 `docs/release/demo_v1.md` 录制制作。
 - 23:50 R-0 baseline commit `59761c5`：把 R-10 完成态固化为首个 git commit（13032 文件 / 222589 行），建立 R-11 ~ R-100 可回滚锚点。
 - 23:55 R-11 完成：根 `README.md` 重写为成熟教学游戏作品门面（30 → 147 行，11 节）；新建 `docs/release/r100_iterations.md`；同步本文件与 `CHANGELOG.md`。本轮无代码改动，无需跑测试套件。
+- 00:00 用户决策方向变更：在本项目下新增 `android/` 文件夹做原生 Android 客户端；接受比赛 Beta 日期推迟；放弃 Web 端 R-12 ~ R-100 迭代（保留 R-11 完成态代码）；授权使用 subagent 并发。
+- 00:05 Android-R0 启动：新建 `android/` + `android/README.md` + `android/.gitignore` + `android/docs/README.md`；启动 10 个并发 subagent 调研（Gradle / 像素引擎 / Python 沙箱 / 暗色主题 / 网络 / DI 状态 / JWT 安全 / 测试 / DTO 对齐 / CI/CD），输出到 `.work/thinking/android_research_{01..10}.md`。
+- 00:08 10 个 subagent 全部完成，3951 行调研报告就位。
+- 00:12 Android-R0 ADR-001 + roadmap.md 落地：18 项关键决策锁定（Kotlin 2.2.0 / AGP 8.7.3 / Compose BOM 2025.04.00 / LibGDX 1.13.1 主渲染 / 仅服务端判题 / Hilt + KSP / Retrofit 2.11 + OkHttp 4.12 / EncryptedSharedPreferences + BiometricPrompt / JUnit5 + Robolectric + Compose UI Test / OpenAPI Generator 7.22 / GitHub Actions ubuntu-latest）；roadmap 列 Android-R0 ~ R17 + R100 共 19 个阶段。
