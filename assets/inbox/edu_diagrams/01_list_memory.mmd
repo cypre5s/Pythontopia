@@ -1,0 +1,37 @@
+%% Pythontopia CC0 - 用途：演示 Python list 的内存模型（变量 → 列表对象 → 元素对象的三层引用关系）
+%% 关联 KC：PY43-KC-040（列表基本操作）、PY43-KC-044（序列基本操作）
+%% 示例代码： nums = [10, 20, 30, "hi"]
+
+flowchart LR
+    subgraph NS["命名空间 Namespace"]
+        VAR["变量 nums"]
+    end
+
+    subgraph LIST["列表对象 list (PyListObject)"]
+        direction TB
+        META["ob_refcnt=1<br/>ob_type=list<br/>ob_size=4<br/>allocated=4"]
+        SLOT0["ob_item[0]"]
+        SLOT1["ob_item[1]"]
+        SLOT2["ob_item[2]"]
+        SLOT3["ob_item[3]"]
+    end
+
+    subgraph HEAP["堆 Heap（不可变对象池）"]
+        OBJ10["int 10<br/>@0x7f01"]
+        OBJ20["int 20<br/>@0x7f02"]
+        OBJ30["int 30<br/>@0x7f03"]
+        OBJHI["str 'hi'<br/>@0x7f04"]
+    end
+
+    VAR -->|"PyObject *"| LIST
+    SLOT0 -->|"指针引用"| OBJ10
+    SLOT1 -->|"指针引用"| OBJ20
+    SLOT2 -->|"指针引用"| OBJ30
+    SLOT3 -->|"指针引用"| OBJHI
+
+    classDef ns fill:#fff3cd,stroke:#856404,color:#222
+    classDef list fill:#cce5ff,stroke:#004085,color:#222
+    classDef heap fill:#d4edda,stroke:#155724,color:#222
+    class VAR ns
+    class META,SLOT0,SLOT1,SLOT2,SLOT3 list
+    class OBJ10,OBJ20,OBJ30,OBJHI heap

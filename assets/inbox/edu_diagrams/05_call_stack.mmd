@@ -1,0 +1,30 @@
+%% Pythontopia CC0 - 用途：演示 Python 函数调用栈（每次调用压入新栈帧，返回时弹出）
+%% 关联 KC：PY43-KC-060（函数变量的作用域）、PY43-KC-012（基础函数）
+%% 示例代码：
+%%   def add(a, b): return a + b
+%%   def main():
+%%       x = add(1, 2)
+%%       print(x)
+%%   main()
+
+flowchart TB
+    subgraph STACK["调用栈 Call Stack（栈顶在上）"]
+        direction TB
+        F3["栈帧 #3 print<br/>locals: x=3<br/>builtin print"]
+        F2["栈帧 #2 add<br/>locals: a=1, b=2<br/>返回值寄存器: 3"]
+        F1["栈帧 #1 main<br/>locals: x = ?"]
+        F0["栈帧 #0 &lt;module&gt;<br/>globals: __name__='__main__'"]
+    end
+
+    NOTE["调用顺序：<br/>① &lt;module&gt; 调 main → 压入 F1<br/>② main 调 add → 压入 F2<br/>③ add 返回 3 → 弹出 F2，x=3<br/>④ main 调 print → 压入 F3<br/>⑤ print 返回 → 弹出 F3<br/>⑥ main 返回 → 弹出 F1"]
+
+    F3 -.调用结束弹出.-> F2
+    F2 -.调用结束弹出.-> F1
+    F1 -.调用结束弹出.-> F0
+
+    STACK --- NOTE
+
+    classDef frame fill:#cce5ff,stroke:#004085,color:#222
+    classDef note fill:#fff3cd,stroke:#856404,color:#222
+    class F0,F1,F2,F3 frame
+    class NOTE note

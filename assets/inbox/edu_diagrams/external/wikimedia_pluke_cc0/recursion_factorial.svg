@@ -1,0 +1,470 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   width="498.91"
+   height="587.21277"
+   id="svg2"
+   version="1.1"
+   inkscape:version="0.48.1 "
+   sodipodi:docname="CPT-Recursion-Factorial-Code.svg">
+  <defs
+     id="defs4">
+    <marker
+       inkscape:stockid="Arrow1Lend"
+       orient="auto"
+       refY="0"
+       refX="0"
+       id="Arrow1Lend"
+       style="overflow:visible">
+      <path
+         id="path4265"
+         d="M 0,0 5,-5 -12.5,0 5,5 0,0 z"
+         style="fill-rule:evenodd;stroke:#000000;stroke-width:1pt;marker-start:none"
+         transform="matrix(-0.8,0,0,-0.8,-10,0)"
+         inkscape:connector-curvature="0" />
+    </marker>
+    <marker
+       inkscape:stockid="Arrow1Lend"
+       orient="auto"
+       refY="0"
+       refX="0"
+       id="Arrow1Lend-5"
+       style="overflow:visible">
+      <path
+         inkscape:connector-curvature="0"
+         id="path4265-1"
+         d="M 0,0 5,-5 -12.5,0 5,5 0,0 z"
+         style="fill-rule:evenodd;stroke:#000000;stroke-width:1pt;marker-start:none"
+         transform="matrix(-0.8,0,0,-0.8,-10,0)" />
+    </marker>
+    <marker
+       inkscape:stockid="Arrow1Lend"
+       orient="auto"
+       refY="0"
+       refX="0"
+       id="Arrow1Lend-2"
+       style="overflow:visible">
+      <path
+         inkscape:connector-curvature="0"
+         id="path4265-4"
+         d="M 0,0 5,-5 -12.5,0 5,5 0,0 z"
+         style="fill-rule:evenodd;stroke:#000000;stroke-width:1pt;marker-start:none"
+         transform="matrix(-0.8,0,0,-0.8,-10,0)" />
+    </marker>
+    <marker
+       inkscape:stockid="Arrow1Lend"
+       orient="auto"
+       refY="0"
+       refX="0"
+       id="Arrow1Lend-7"
+       style="overflow:visible">
+      <path
+         inkscape:connector-curvature="0"
+         id="path4265-5"
+         d="M 0,0 5,-5 -12.5,0 5,5 0,0 z"
+         style="fill-rule:evenodd;stroke:#000000;stroke-width:1pt;marker-start:none"
+         transform="matrix(-0.8,0,0,-0.8,-10,0)" />
+    </marker>
+  </defs>
+  <sodipodi:namedview
+     id="base"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageopacity="0.0"
+     inkscape:pageshadow="2"
+     inkscape:zoom="1.4"
+     inkscape:cx="377.91417"
+     inkscape:cy="156.88007"
+     inkscape:document-units="px"
+     inkscape:current-layer="layer1"
+     showgrid="false"
+     showguides="true"
+     inkscape:guide-bbox="true"
+     fit-margin-top="0"
+     fit-margin-left="0"
+     fit-margin-right="0"
+     fit-margin-bottom="0"
+     inkscape:window-width="1366"
+     inkscape:window-height="718"
+     inkscape:window-x="-8"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1" />
+  <metadata
+     id="metadata7">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title />
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(-9.90625,-368.66223)">
+    <text
+       xml:space="preserve"
+       style="font-size:12.25989437px;font-style:normal;font-weight:normal;line-height:125%;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;font-family:Liberation Sans;-inkscape-font-specification:Liberation Sans;font-stretch:normal;font-variant:normal;text-anchor:start;text-align:start;writing-mode:lr"
+       x="19.306742"
+       y="435.13251"
+       id="text2985"
+       sodipodi:linespacing="125%"><tspan
+         sodipodi:role="line"
+         id="tspan2987"
+         x="19.306742"
+         y="435.13251">1| function factorial(ByVal n as integer)</tspan><tspan
+         sodipodi:role="line"
+         x="19.306742"
+         y="450.45737"
+         id="tspan2989">2|   if n &gt; 1 then</tspan><tspan
+         sodipodi:role="line"
+         x="19.306742"
+         y="465.78226"
+         id="tspan2991">3|     return n * factorial(n-1) 'recursive call</tspan><tspan
+         sodipodi:role="line"
+         x="19.306742"
+         y="481.10712"
+         id="tspan2993">4|   else</tspan><tspan
+         sodipodi:role="line"
+         x="19.306742"
+         y="496.43198"
+         id="tspan2995">5|     return 1</tspan><tspan
+         sodipodi:role="line"
+         x="19.306742"
+         y="511.75684"
+         id="tspan2997">6|   end if</tspan><tspan
+         sodipodi:role="line"
+         x="19.306742"
+         y="527.08173"
+         id="tspan2999">7| end function</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:13.09062958px;font-style:normal;font-weight:normal;line-height:125%;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;font-family:Liberation Sans;-inkscape-font-specification:Liberation Sans;font-stretch:normal;font-variant:normal;text-anchor:start;text-align:start;writing-mode:lr"
+       x="15.193282"
+       y="382.19257"
+       id="text3001"
+       sodipodi:linespacing="125%"><tspan
+         sodipodi:role="line"
+         id="tspan3003"
+         x="15.193282"
+         y="382.19257">console.writeline(factorial(4))</tspan></text>
+    <path
+       style="fill:#00000f;fill-opacity:1;stroke:none"
+       d="m 160.26888,404.45395 -10.78366,13.53244 -10.14935,-13.53244 6.64645,0.6979 -6.64645,-19.93934 20.93301,0 -6.64645,19.48098 z"
+       id="rect3005"
+       inkscape:connector-curvature="0"
+       sodipodi:nodetypes="cccccccc" />
+    <text
+       xml:space="preserve"
+       style="font-size:12.25989437px;font-style:normal;font-weight:normal;line-height:125%;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;font-family:Liberation Sans;-inkscape-font-specification:Liberation Sans;font-stretch:normal;font-variant:normal;text-anchor:start;text-align:start;writing-mode:lr"
+       x="22.857588"
+       y="571.64453"
+       id="text2985-3"
+       sodipodi:linespacing="125%"><tspan
+         sodipodi:role="line"
+         id="tspan2987-3"
+         x="22.857588"
+         y="571.64453">1| function factorial(ByVal 4 as integer)</tspan><tspan
+         sodipodi:role="line"
+         x="22.857588"
+         y="586.96942"
+         id="tspan2989-0">2|   if 4 &gt; 1 then</tspan><tspan
+         sodipodi:role="line"
+         x="22.857588"
+         y="602.29425"
+         id="tspan2991-0">3|     <tspan
+   style="font-weight:bold;-inkscape-font-specification:Liberation Sans;font-family:Liberation Sans;font-style:normal;font-stretch:normal;font-variant:normal;font-size:12.25989437000000000px;text-anchor:start;text-align:start;writing-mode:lr;line-height:125%"
+   id="tspan3186">return n * factorial(4-1) </tspan></tspan><tspan
+         sodipodi:role="line"
+         x="22.857588"
+         y="617.61914"
+         id="tspan2993-8">4|   else</tspan><tspan
+         sodipodi:role="line"
+         x="22.857588"
+         y="632.94403"
+         id="tspan2995-1">5|     return 1</tspan><tspan
+         sodipodi:role="line"
+         x="22.857588"
+         y="648.26886"
+         id="tspan2997-38">6|   end if</tspan><tspan
+         sodipodi:role="line"
+         x="22.857588"
+         y="663.59375"
+         id="tspan2999-16">7| end function</tspan></text>
+    <rect
+       style="fill:none;stroke:#000000;stroke-width:1.05630159;stroke-opacity:1"
+       id="rect3836-6"
+       width="241.19955"
+       height="133.34013"
+       x="14.419631"
+       y="545.26556" />
+    <rect
+       style="fill:#00ffff;fill-opacity:1;stroke:#000000;stroke-width:1.02400565;stroke-opacity:1"
+       id="rect3836"
+       width="225.51094"
+       height="134.02895"
+       x="58.703106"
+       y="638.3255" />
+    <text
+       xml:space="preserve"
+       style="font-size:12.25989437px;font-style:normal;font-weight:normal;line-height:125%;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;font-family:Liberation Sans;-inkscape-font-specification:Liberation Sans;font-stretch:normal;font-variant:normal;text-anchor:start;text-align:start;writing-mode:lr"
+       x="69.102875"
+       y="664.50171"
+       id="text2985-3-0"
+       sodipodi:linespacing="125%"><tspan
+         sodipodi:role="line"
+         id="tspan2987-3-9"
+         x="69.102875"
+         y="664.50171">1| function factorial(ByVal 3 as integer)</tspan><tspan
+         sodipodi:role="line"
+         x="69.102875"
+         y="679.8266"
+         id="tspan2989-0-0">2|   if 3 &gt; 1 then</tspan><tspan
+         sodipodi:role="line"
+         x="69.102875"
+         y="695.15143"
+         id="tspan2991-0-5">3|     <tspan
+   style="font-weight:normal;-inkscape-font-specification:Liberation Sans;font-family:Liberation Sans;font-style:normal;font-stretch:normal;font-variant:normal;font-size:12.25989437px;text-anchor:start;text-align:start;writing-mode:lr;line-height:125%"
+   id="tspan3186-3"><tspan
+     style="font-weight:bold"
+     id="tspan3062">return n * factorial(3-1) </tspan></tspan></tspan><tspan
+         sodipodi:role="line"
+         x="69.102875"
+         y="710.47632"
+         id="tspan2993-8-1">4|   else</tspan><tspan
+         sodipodi:role="line"
+         x="69.102875"
+         y="725.80121"
+         id="tspan2995-1-4">5|     return 1</tspan><tspan
+         sodipodi:role="line"
+         x="69.102875"
+         y="741.12604"
+         id="tspan2997-38-2">6|   end if</tspan><tspan
+         sodipodi:role="line"
+         x="69.102875"
+         y="756.45093"
+         id="tspan2999-16-0">7| end function</tspan></text>
+    <path
+       style="fill:#00000f;fill-opacity:1;stroke:none"
+       d="m 159.96908,544.07949 -10.78366,13.53244 -10.14935,-13.53244 6.64645,0.6979 -6.64645,-19.93934 20.93301,0 -6.64645,19.48098 z"
+       id="rect3005-3"
+       inkscape:connector-curvature="0"
+       sodipodi:nodetypes="cccccccc" />
+    <path
+       style="fill:#00000f;fill-opacity:1;stroke:none"
+       d="m 183.38733,628.71103 -5.82511,16.29363 -13.98189,-9.52066 6.51473,-1.49012 -12.74039,-16.7163 19.80701,-6.77298 0.0142,20.58358 z"
+       id="rect3005-3-2"
+       inkscape:connector-curvature="0"
+       sodipodi:nodetypes="cccccccc" />
+    <rect
+       style="fill:#00ff00;fill-opacity:1;stroke:#000000;stroke-width:1.0224781;stroke-opacity:1"
+       id="rect3836-4"
+       width="226.00014"
+       height="133.34013"
+       x="98.950867"
+       y="729.25549" />
+    <text
+       xml:space="preserve"
+       style="font-size:12.25989437px;font-style:normal;font-weight:normal;line-height:125%;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;font-family:Liberation Sans;-inkscape-font-specification:Liberation Sans;font-stretch:normal;font-variant:normal;text-anchor:start;text-align:start;writing-mode:lr"
+       x="108.3886"
+       y="753.07318"
+       id="text2985-3-0-7"
+       sodipodi:linespacing="125%"><tspan
+         sodipodi:role="line"
+         id="tspan2987-3-9-4"
+         x="108.3886"
+         y="753.07318">1| function factorial(ByVal 2 as integer)</tspan><tspan
+         sodipodi:role="line"
+         x="108.3886"
+         y="768.39807"
+         id="tspan2989-0-0-8">2|   if 2 &gt; 1 then</tspan><tspan
+         sodipodi:role="line"
+         x="108.3886"
+         y="783.7229"
+         id="tspan2991-0-5-3">3|     <tspan
+   style="font-weight:normal;-inkscape-font-specification:Liberation Sans;font-family:Liberation Sans;font-style:normal;font-stretch:normal;font-variant:normal;font-size:12.25989437px;text-anchor:start;text-align:start;writing-mode:lr;line-height:125%"
+   id="tspan3186-3-9"><tspan
+     style="font-weight:bold"
+     id="tspan3064">return n * factorial(2-1) </tspan></tspan></tspan><tspan
+         sodipodi:role="line"
+         x="108.3886"
+         y="799.04779"
+         id="tspan2993-8-1-8">4|   else</tspan><tspan
+         sodipodi:role="line"
+         x="108.3886"
+         y="814.37268"
+         id="tspan2995-1-4-4">5|     return 1</tspan><tspan
+         sodipodi:role="line"
+         x="108.3886"
+         y="829.69751"
+         id="tspan2997-38-2-6">6|   end if</tspan><tspan
+         sodipodi:role="line"
+         x="108.3886"
+         y="845.0224"
+         id="tspan2999-16-0-8">7| end function</tspan></text>
+    <path
+       style="fill:#00000f;fill-opacity:1;stroke:none"
+       d="m 228.17882,719.96824 -5.82511,16.29363 -13.98189,-9.52066 6.51473,-1.49012 -12.74039,-16.7163 19.80701,-6.77298 0.0142,20.58358 z"
+       id="rect3005-3-2-1"
+       inkscape:connector-curvature="0"
+       sodipodi:nodetypes="cccccccc" />
+    <rect
+       style="fill:#ffff00;fill-opacity:1;stroke:#000000;stroke-width:1.02578485;stroke-opacity:1"
+       id="rect3836-4-9"
+       width="227.46426"
+       height="133.34013"
+       x="136.88269"
+       y="820.04742" />
+    <path
+       style="fill:#00000f;fill-opacity:1;stroke:none"
+       d="m 275.65599,810.88197 -5.82511,16.29363 -13.98189,-9.52066 6.51473,-1.49012 -12.74039,-16.7163 19.80701,-6.77298 0.0142,20.58358 z"
+       id="rect3005-3-2-1-7"
+       inkscape:connector-curvature="0"
+       sodipodi:nodetypes="cccccccc" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:1.15830338px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;marker-start:none;marker-end:url(#Arrow1Lend)"
+       d="m 367.03157,892.01731 c 0,0 24.47523,-19.19473 19.46779,-51.47309 -5.883,-33.22402 -26.80316,-36.84003 -58.3166,-46.08753"
+       id="path4077"
+       inkscape:connector-curvature="0"
+       sodipodi:nodetypes="ccc" />
+    <text
+       xml:space="preserve"
+       style="font-size:13.09062958px;font-style:normal;font-weight:normal;line-height:125%;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;font-family:Liberation Sans;-inkscape-font-specification:Liberation Sans;font-stretch:normal;font-variant:normal;text-anchor:start;text-align:start;writing-mode:lr"
+       x="383.75732"
+       y="819.62927"
+       id="text4703"
+       sodipodi:linespacing="125%"><tspan
+         sodipodi:role="line"
+         id="tspan4705"
+         x="383.75732"
+         y="819.62927">factorial(2-1) = 1</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:13.09062958px;font-style:normal;font-weight:normal;line-height:125%;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;font-family:Liberation Sans;-inkscape-font-specification:Liberation Sans;font-stretch:normal;font-variant:normal;text-anchor:start;text-align:start;writing-mode:lr"
+       x="357.32977"
+       y="728.46045"
+       id="text4703-5"
+       sodipodi:linespacing="125%"><tspan
+         sodipodi:role="line"
+         id="tspan4705-3"
+         x="357.32977"
+         y="728.46045">factorial(3-1) = 2 * 1</tspan></text>
+    <path
+       style="fill:none;stroke:#000000;stroke-width:1.15830338px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;marker-start:none;marker-end:url(#Arrow1Lend)"
+       d="m 327.29332,783.83204 c 0,0 23.76095,-17.76616 18.75351,-50.04452 -5.883,-33.22402 -26.80316,-36.84003 -58.3166,-46.08753"
+       id="path4077-6"
+       inkscape:connector-curvature="0"
+       sodipodi:nodetypes="ccc" />
+    <text
+       xml:space="preserve"
+       style="font-size:13.09062958px;font-style:normal;font-weight:normal;line-height:125%;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;font-family:Liberation Sans;-inkscape-font-specification:Liberation Sans;font-stretch:normal;font-variant:normal;text-anchor:start;text-align:start;writing-mode:lr"
+       x="318.51718"
+       y="634.51624"
+       id="text4703-5-7"
+       sodipodi:linespacing="125%"><tspan
+         sodipodi:role="line"
+         id="tspan4705-3-8"
+         x="318.51718"
+         y="634.51624">factorial(4-1) = 3 * 2 * 1</tspan></text>
+    <path
+       style="fill:none;stroke:#000000;stroke-width:1.15830338px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;marker-start:none;marker-end:url(#Arrow1Lend)"
+       d="m 288.23564,678.66377 c 0,0 28.04666,-20.6233 23.03922,-52.90166 -5.883,-33.22402 -21.80316,-33.98289 -53.3166,-43.23039"
+       id="path4077-6-0"
+       inkscape:connector-curvature="0"
+       sodipodi:nodetypes="ccc" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:1.15830338px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;marker-start:none;marker-end:url(#Arrow1Lend)"
+       d="m 258.30708,567.53684 c 0,0 29.94932,-36.81083 19.04937,-99.41944 -12.25452,-70.3892 -37.91484,-72.19537 -86.60087,-89.52409"
+       id="path4077-6-0-8"
+       inkscape:connector-curvature="0"
+       sodipodi:nodetypes="csc" />
+    <text
+       xml:space="preserve"
+       style="font-size:13.09062958px;font-style:normal;font-weight:normal;line-height:125%;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;font-family:Liberation Sans;-inkscape-font-specification:Liberation Sans;font-stretch:normal;font-variant:normal;text-anchor:start;text-align:start;writing-mode:lr"
+       x="281.12531"
+       y="441.57715"
+       id="text4703-5-7-1"
+       sodipodi:linespacing="125%"><tspan
+         sodipodi:role="line"
+         id="tspan4705-3-8-9"
+         x="281.12531"
+         y="441.57715">factorial(4) = 4 * 3 * 2 * 1</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:40px;font-style:normal;font-weight:normal;line-height:125%;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;font-family:Sans"
+       x="441.42856"
+       y="161.49847"
+       id="text4854"
+       sodipodi:linespacing="125%"
+       transform="translate(9.90625,368.66223)"><tspan
+         sodipodi:role="line"
+         id="tspan4856"
+         x="441.42856"
+         y="161.49847" /></text>
+    <path
+       style="fill:none;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       d="m 108.33482,605.875 72.14286,0"
+       id="path4858"
+       inkscape:connector-curvature="0" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       d="m 154.83482,698.01786 72.14286,0"
+       id="path4858-5"
+       inkscape:connector-curvature="0" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       d="m 194.97767,787.30357 72.14286,0"
+       id="path4858-5-1"
+       inkscape:connector-curvature="0" />
+    <text
+       xml:space="preserve"
+       style="font-size:12.25989437px;font-style:normal;font-weight:normal;line-height:125%;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;font-family:Liberation Sans;-inkscape-font-specification:Liberation Sans;font-stretch:normal;font-variant:normal;text-anchor:start;text-align:start;writing-mode:lr"
+       x="146.96002"
+       y="842.50165"
+       id="text2985-3-0-7-1"
+       sodipodi:linespacing="125%"><tspan
+         sodipodi:role="line"
+         id="tspan2987-3-9-4-0"
+         x="146.96002"
+         y="842.50165">1| function factorial(ByVal 1 as integer)</tspan><tspan
+         sodipodi:role="line"
+         x="146.96002"
+         y="857.82654"
+         id="tspan2989-0-0-8-6">2|   if 1 &gt; 1 then</tspan><tspan
+         sodipodi:role="line"
+         x="146.96002"
+         y="873.15137"
+         id="tspan2991-0-5-3-0">3|     return n * factorial(2-1) </tspan><tspan
+         sodipodi:role="line"
+         x="146.96002"
+         y="888.47626"
+         id="tspan2993-8-1-8-8">4|   else</tspan><tspan
+         sodipodi:role="line"
+         x="146.96002"
+         y="903.80115"
+         id="tspan2995-1-4-4-7">5|     <tspan
+   style="font-weight:bold;-inkscape-font-specification:Liberation Sans;font-family:Liberation Sans;font-style:normal;font-stretch:normal;font-variant:normal;font-size:12.25989437000000000px;text-anchor:start;text-align:start;writing-mode:lr;line-height:125%"
+   id="tspan3316">return 1</tspan></tspan><tspan
+         sodipodi:role="line"
+         x="146.96002"
+         y="919.12598"
+         id="tspan2997-38-2-6-3">6|   end if</tspan><tspan
+         sodipodi:role="line"
+         x="146.96002"
+         y="934.45087"
+         id="tspan2999-16-0-8-5">7| end function</tspan></text>
+  </g>
+</svg>

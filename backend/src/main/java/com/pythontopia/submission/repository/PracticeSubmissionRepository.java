@@ -1,0 +1,246 @@
+package com.pythontopia.submission.repository;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pythontopia.submission.dto.JudgeResultDto;
+import com.pythontopia.submission.dto.SubmissionDto;
+import com.pythontopia.submission.dto.SubmissionSource;
+import com.pythontopia.submission.dto.SubmissionStatus;
+import com.pythontopia.submission.dto.Verdict;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.support.GeneratedKeyHolder;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public class PracticeSubmissionRepository {
+
+  private final JdbcTemplate jdbcTemplate;
+  private final ObjectMapper objectMapper;
+
+  public PracticeSubmissionRepository(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
+    this.jdbcTemplate = jdbcTemplate;
+    this.objectMapper = objectMapper;
+  }
+
+  public Long insertSubmission(
+      Long userId,
+      Long problemId,
+      Long questId,
+      SubmissionSource source,
+      String code) {
+    GeneratedKeyHolder keyHolder = new GeneratedKeyHolder();
+    jdbcTemplate.update(
+        connection -> {
+          PreparedStatement ps =
+              connection.prepareStatement(
+                  """
+                  INSERT INTO practice_submission (
+                    user_id, problem_id, quest_id, source, language, code, status
+                  ) VALUES (?, ?, ?, ?, 'PYTHON_3_11', ?, 'PENDING')
+                  """,
+                  new String[] {"id"});
+          ps.setLong(1, userId);
+          ps.setLong(2, problemId);
+          if (questId == null) {
+            ps.setNull(3, java.sql.Types.BIGINT);
+          } else {
+            ps.setLong(3, questId);
+          }
+          ps.setString(4, source.name());
+          ps.setString(5, code);
+          return ps;
+        },
+        keyHolder);
+    Number key = keyHolder.getKey();
+    if (key == null) {
+      throw new IllegalStateException("practice_submission insert returned no key");
+    }
+    return key.longValue();
+  }
+
+  public void markStatus(
+      Long submissionId, SubmissionStatus status, Integer runtimeMs, Integer memoryKb) {
+    jdbcTemplate.update(
+        """
+        UPDATE practice_submission
+        SET status = ?, runtime_ms = ?, memory_kb = ?, updated_at = now()
+        WHERE id = ?
+        """,
+        status.name(),
+        runtimeMs,
+        memoryKb,
+        submissionId);
+  }
+
+  public Long insertJudgeResult(
+      Long submissionId,
+      Verdict verdict,
+      int passedCases,
+      int totalCases,
+      String failureReason,
+      JsonNode trace) {
+    GeneratedKeyHolder keyHolder = new GeneratedKeyHolder();
+    jdbcTemplate.update(
+        connection -> {
+          PreparedStatement ps =
+              connection.prepareStatement(
+                  """
+                  INSERT INTO judge_result (
+                    submission_id, verdict, passed_cases, total_cases, failure_reason, trace
+                  ) VALUES (?, ?, ?, ?, ?, ?::jsonb)
+                  """,
+                  new String[] {"id"});
+          ps.setLong(1, submissionId);
+          ps.setString(2, verdict.name());
+          ps.setInt(3, passedCases);
+          ps.setInt(4, totalCases);
+          ps.setString(5, failureReason);
+          ps.setString(6, writeJson(trace));
+          return ps;
+        },
+        keyHolder);
+    Number key = keyHolder.getKey();
+    return key == null ? null : key.longValue();
+  }
+
+  public Optional<SubmissionDto> findSubmission(Long userId, Long submissionId) {
+    return jdbcTemplate
+        .query(
+            """
+            SELECT id, user_id, problem_id, quest_id, source, language, code,
+                   submitted_at, status, runtime_ms, memory_kb
+            FROM practice_submission
+            WHERE id = ? AND user_id = ?
+            """,
+            (rs, rowNum) -> mapSubmission(rs),
+            submissionId,
+            userId)
+        .stream()
+        .findFirst();
+  }
+
+  public Optional<SubmissionDto> findById(Long submissionId) {
+    return jdbcTemplate
+        .query(
+            """
+            SELECT id, user_id, problem_id, quest_id, source, language, code,
+                   submitted_at, status, runtime_ms, memory_kb
+            FROM practice_submission
+            WHERE id = ?
+            """,
+            (rs, rowNum) -> mapSubmission(rs),
+            submissionId)
+        .stream()
+        .findFirst();
+  }
+
+  public List<SubmissionDto> list(Long userId, Long problemId, SubmissionStatus status, int limit, int offset) {
+    StringBuilder sql =
+        new StringBuilder(
+            """
+            SELECT id, user_id, problem_id, quest_id, source, language, code,
+                   submitted_at, status, runtime_ms, memory_kb
+            FROM practice_submission
+            WHERE user_id = ?
+            """);
+    List<Object> args = new ArrayList<>();
+    args.add(userId);
+    if (problemId != null) {
+      sql.append(" AND problem_id = ?");
+      args.add(problemId);
+    }
+    if (status != null) {
+      sql.append(" AND status = ?");
+      args.add(status.name());
+    }
+    sql.append(" ORDER BY submitted_at DESC LIMIT ? OFFSET ?");
+    args.add(limit);
+    args.add(offset);
+    return jdbcTemplate.query(sql.toString(), (rs, rowNum) -> mapSubmission(rs), args.toArray());
+  }
+
+  public int countSubmittedAfter(Long userId, OffsetDateTime since) {
+    Integer count =
+        jdbcTemplate.queryForObject(
+            """
+            SELECT COUNT(*) FROM practice_submission
+            WHERE user_id = ? AND submitted_at > ?
+            """,
+            Integer.class,
+            userId,
+            since);
+    return count == null ? 0 : count;
+  }
+
+  public Optional<JudgeResultDto> findJudgeResult(Long submissionId) {
+    return jdbcTemplate
+        .query(
+            """
+            SELECT id, submission_id, verdict, passed_cases, total_cases,
+                   failure_reason, trace, created_at
+            FROM judge_result
+            WHERE submission_id = ?
+            """,
+            (rs, rowNum) -> mapJudgeResult(rs),
+            submissionId)
+        .stream()
+        .findFirst();
+  }
+
+  private SubmissionDto mapSubmission(ResultSet rs) throws SQLException {
+    return new SubmissionDto(
+        rs.getLong("id"),
+        rs.getLong("user_id"),
+        rs.getLong("problem_id"),
+        (Long) rs.getObject("quest_id"),
+        SubmissionSource.valueOf(rs.getString("source")),
+        rs.getString("language"),
+        rs.getString("code"),
+        offset(rs, "submitted_at"),
+        SubmissionStatus.valueOf(rs.getString("status")),
+        (Integer) rs.getObject("runtime_ms"),
+        (Integer) rs.getObject("memory_kb"));
+  }
+
+  private JudgeResultDto mapJudgeResult(ResultSet rs) throws SQLException {
+    return new JudgeResultDto(
+        rs.getLong("id"),
+        rs.getLong("submission_id"),
+        Verdict.valueOf(rs.getString("verdict")),
+        rs.getInt("passed_cases"),
+        rs.getInt("total_cases"),
+        rs.getString("failure_reason"),
+        readJson(rs.getString("trace")),
+        offset(rs, "created_at"));
+  }
+
+  private OffsetDateTime offset(ResultSet rs, String column) throws SQLException {
+    java.sql.Timestamp ts = rs.getTimestamp(column);
+    return ts == null ? null : ts.toInstant().atOffset(ZoneOffset.UTC);
+  }
+
+  private String writeJson(JsonNode node) {
+    try {
+      return objectMapper.writeValueAsString(node == null ? objectMapper.createObjectNode() : node);
+    } catch (JsonProcessingException exception) {
+      throw new IllegalStateException("Failed to serialise judge trace", exception);
+    }
+  }
+
+  private JsonNode readJson(String raw) {
+    try {
+      return raw == null ? objectMapper.createObjectNode() : objectMapper.readTree(raw);
+    } catch (JsonProcessingException exception) {
+      throw new IllegalStateException("Failed to read judge trace", exception);
+    }
+  }
+}

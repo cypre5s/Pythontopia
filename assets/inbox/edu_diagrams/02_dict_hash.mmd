@@ -1,0 +1,44 @@
+%% Pythontopia CC0 - 用途：演示 Python dict 的哈希表寻址过程（hash → 取模 → 桶 → 冲突 → 开放定址）
+%% 关联 KC：PY43-KC-042（字典基本操作）、PY43-KC-043（字典类型）
+%% 示例代码： d = {"name": "Tom", "age": 18}; d["score"] = 99
+
+flowchart TB
+    START(["d&#91;'name'&#93; 查找 / 写入"])
+    H1["1. hash('name')<br/>= -8378037541xxxx"]
+    H2["2. 取模 index = hash &amp; (size-1)<br/>例如 size=8 → index=3"]
+
+    subgraph TABLE["哈希表 dk_indices / dk_entries"]
+        direction LR
+        B0["桶 0<br/>EMPTY"]
+        B1["桶 1<br/>EMPTY"]
+        B2["桶 2<br/>('age',18)"]
+        B3["桶 3<br/>('name','Tom')"]
+        B4["桶 4<br/>DUMMY"]
+        B5["桶 5<br/>EMPTY"]
+        B6["桶 6<br/>EMPTY"]
+        B7["桶 7<br/>EMPTY"]
+    end
+
+    CHK{"桶里 key == 'name'?"}
+    HIT["命中：返回 entry.value"]
+    COLLIDE["冲突：按探测序列<br/>perturb = hash;<br/>i = (5*i + 1 + perturb) % size<br/>继续找下一个桶"]
+    INSERT["写入：找到 EMPTY 或 DUMMY<br/>插入 (key, hash, value)<br/>used += 1"]
+    RESIZE{"used / size &gt; 2/3 ?"}
+    GROW["扩容：申请更大 table<br/>重新计算 index 重新放置"]
+
+    START --> H1 --> H2 --> CHK
+    H2 -.索引.-> B3
+    CHK -->|"是"| HIT
+    CHK -->|"否, 桶非空"| COLLIDE --> CHK
+    CHK -->|"桶 EMPTY/DUMMY"| INSERT --> RESIZE
+    RESIZE -->|"是"| GROW
+    RESIZE -->|"否"| FIN(["结束"])
+    HIT --> FIN
+    GROW --> FIN
+
+    classDef cell fill:#e2e3e5,stroke:#383d41,color:#222
+    classDef act fill:#cce5ff,stroke:#004085,color:#222
+    classDef warn fill:#f8d7da,stroke:#721c24,color:#222
+    class B0,B1,B2,B3,B4,B5,B6,B7 cell
+    class H1,H2,HIT,INSERT,GROW act
+    class COLLIDE,RESIZE warn

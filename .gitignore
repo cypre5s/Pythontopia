@@ -1,0 +1,26 @@
+target/
+*.class
+
+node_modules/
+dist/
+coverage/
+
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+*.egg-info/
+services/pythontopia-rag/data/*.parquet
+
+.idea/
+.vscode/
+
+.env
+.env.local
+deploy/.env
+
+.DS_Store
+
+# R-100 子代理工作产出
+.work/

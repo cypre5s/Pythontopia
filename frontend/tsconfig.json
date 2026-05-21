@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noImplicitAny": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "jsx": "preserve",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["vitest/globals", "node"],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@game/*": ["src/game/*"],
+      "@api/*": ["src/api/*"],
+      "@stores/*": ["src/stores/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.vue", "vite.config.ts", "vitest.config.ts"],
+  "references": []
+}

@@ -1,0 +1,47 @@
+%% Pythontopia CC0 - 用途：演示函数递归调用展开树（以斐波那契 fib(5) 为例）
+%% 关联 KC：PY43-KC-061（函数递归）
+%% 示例代码：
+%%   def fib(n):
+%%       if n &lt; 2: return n
+%%       return fib(n-1) + fib(n-2)
+
+flowchart TD
+    F5["fib(5) = 5"]
+    F4a["fib(4) = 3"]
+    F3a["fib(3) = 2"]
+    F4b["fib(3) = 2"]
+    F2a["fib(2) = 1"]
+    F3b["fib(2) = 1"]
+    F2b["fib(1) = 1<br/>BASE"]
+    F2c["fib(2) = 1"]
+    F1a["fib(1) = 1<br/>BASE"]
+    F1b["fib(1) = 1<br/>BASE"]
+    F0a["fib(0) = 0<br/>BASE"]
+    F1c["fib(1) = 1<br/>BASE"]
+    F0b["fib(0) = 0<br/>BASE"]
+    F1d["fib(1) = 1<br/>BASE"]
+    F0c["fib(0) = 0<br/>BASE"]
+
+    F5 -->|"n-1"| F4a
+    F5 -->|"n-2"| F4b
+    F4a -->|"n-1"| F3a
+    F4a -->|"n-2"| F3b
+    F4b -->|"n-1"| F2a
+    F4b -->|"n-2"| F2b
+    F3a -->|"n-1"| F2c
+    F3a -->|"n-2"| F1a
+    F3b -->|"n-1"| F1b
+    F3b -->|"n-2"| F0a
+    F2a -->|"n-1"| F1c
+    F2a -->|"n-2"| F0b
+    F2c -->|"n-1"| F1d
+    F2c -->|"n-2"| F0c
+
+    NOTE["核心三要素：<br/>① 基本情况 base case（n &lt; 2）<br/>② 递归分解（n-1, n-2）<br/>③ 自顶向下展开 + 自底向上汇总<br/>时间复杂度 O(2^n)，可用记忆化优化"]
+
+    classDef base fill:#d4edda,stroke:#155724,color:#222
+    classDef rec fill:#cce5ff,stroke:#004085,color:#222
+    classDef note fill:#fff3cd,stroke:#856404,color:#222
+    class F2b,F1a,F1b,F0a,F1c,F0b,F1d,F0c base
+    class F5,F4a,F4b,F3a,F3b,F2a,F2c rec
+    class NOTE note

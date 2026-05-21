@@ -1,0 +1,48 @@
+%% Pythontopia CC0 - 用途：演示 try / except / else / finally 的完整执行流程与异常传播路径
+%% 关联 KC：PY43-KC-048（Python 文件操作，常用 try/except 保护 I/O）、PY43-KC-061（函数递归边界保护）
+%% 备注：异常处理本身在课程包 packId=43 中作为通识扩展呈现
+%% 示例代码：
+%%   try:
+%%       x = int(input())
+%%       y = 10 / x
+%%   except ValueError as e:
+%%       ...
+%%   except ZeroDivisionError:
+%%       ...
+%%   else:
+%%       ...
+%%   finally:
+%%       ...
+
+flowchart TD
+    START(["进入 try 块"])
+    TRY["执行 try 块语句"]
+    RAISED{"是否抛出异常?"}
+
+    EXC_MATCH{"匹配 except 子句?"}
+    EXC1["执行匹配的 except 块<br/>异常被捕获"]
+    EXC_NONE["异常未捕获：<br/>沿调用栈向上传播"]
+    ELSE_BLK["执行 else 块<br/>（try 未抛异常才进）"]
+    FIN["执行 finally 块<br/>（无论是否异常都执行）"]
+    REPROP["finally 后继续向上抛出异常"]
+    NORMAL(["正常返回到调用方"])
+    PROPAGATE(["未捕获异常 → 由上层处理或<br/>终止程序并打印 Traceback"])
+
+    START --> TRY --> RAISED
+    RAISED -->|"否"| ELSE_BLK --> FIN --> NORMAL
+    RAISED -->|"是"| EXC_MATCH
+    EXC_MATCH -->|"匹配"| EXC1 --> FIN --> NORMAL
+    EXC_MATCH -->|"不匹配"| EXC_NONE --> FIN --> REPROP --> PROPAGATE
+
+    NOTE["要点：<br/>• except 顺序按声明顺序匹配，先具体后宽泛<br/>• 裸 except 会吞掉所有异常，不推荐<br/>• finally 一定执行，常用于关闭文件/释放锁<br/>• 在 finally 中 return 会覆盖原异常"]
+    FIN -.- NOTE
+
+    classDef start fill:#d1ecf1,stroke:#0c5460,color:#222
+    classDef act fill:#cce5ff,stroke:#004085,color:#222
+    classDef warn fill:#f8d7da,stroke:#721c24,color:#222
+    classDef ok fill:#d4edda,stroke:#155724,color:#222
+    classDef note fill:#fff3cd,stroke:#856404,color:#222
+    class START,NORMAL,PROPAGATE start
+    class TRY,EXC1,ELSE_BLK,FIN act
+    class RAISED,EXC_MATCH,EXC_NONE,REPROP warn
+    class NOTE note

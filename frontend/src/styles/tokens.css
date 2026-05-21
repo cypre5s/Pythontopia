@@ -1,0 +1,84 @@
+/* Pythontopia 像素小镇视觉 token（阶段 14）：教育优先，整体星露谷式像素混合色。 */
+:root {
+  /* Wood / Parchment 基色 */
+  --pyt-color-bg-primary: #fef7e3;
+  --pyt-color-bg-elevated: #fff7e6;
+  --pyt-color-bg-soft: #fdf3d0;
+  --pyt-color-bg-sunken: #f3e4be;
+
+  /* 边框/分隔 */
+  --pyt-color-border-strong: #4d3613;
+  --pyt-color-border: #c9a86b;
+  --pyt-color-border-soft: rgba(201, 168, 107, 0.45);
+
+  /* 文本 */
+  --pyt-color-text-primary: #4d3613;
+  --pyt-color-text-muted: #8a6c2c;
+  --pyt-color-text-hint: #6e4f1d;
+  --pyt-color-text-on-dark: #fff7e6;
+
+  /* 状态色 */
+  --pyt-color-success: #2f8f3c;
+  --pyt-color-success-bg: #d1eccf;
+  --pyt-color-warning: #c2871f;
+  --pyt-color-warning-bg: #f5e2c1;
+  --pyt-color-danger: #b8442d;
+  --pyt-color-danger-bg: #fde2dc;
+  --pyt-color-info: #2a6f97;
+  --pyt-color-info-bg: #d0e3f1;
+
+  /* 按钮主色 */
+  --pyt-color-primary: #6e4f1d;
+  --pyt-color-primary-dark: #4d3613;
+
+  /* 间距 */
+  --pyt-space-1: 4px;
+  --pyt-space-2: 8px;
+  --pyt-space-3: 12px;
+  --pyt-space-4: 16px;
+  --pyt-space-5: 24px;
+  --pyt-space-6: 32px;
+
+  /* 圆角 */
+  --pyt-radius-sm: 4px;
+  --pyt-radius-md: 6px;
+  --pyt-radius-lg: 10px;
+
+  /* 字体 */
+  --pyt-font-sans: 'LXGW WenKai', '霞鹜文楷', 'PingFang SC', 'Microsoft YaHei', system-ui, -apple-system,
+    'Segoe UI', sans-serif;
+  --pyt-font-mono: 'JetBrains Mono', 'Cascadia Code', Menlo, Consolas, 'Courier New', monospace;
+
+  /* 字号 */
+  --pyt-font-size-xs: 11px;
+  --pyt-font-size-sm: 12px;
+  --pyt-font-size-base: 14px;
+  --pyt-font-size-lg: 16px;
+  --pyt-font-size-xl: 20px;
+  --pyt-font-size-2xl: 24px;
+
+  /* 阴影（像素风克制使用，仅在浮层） */
+  --pyt-shadow-card: 0 2px 0 rgba(77, 54, 19, 0.12);
+  --pyt-shadow-modal: 0 6px 0 rgba(77, 54, 19, 0.16), 0 12px 24px rgba(77, 54, 19, 0.18);
+
+  /* z-index */
+  --pyt-z-toast: 1100;
+  --pyt-z-modal: 1000;
+}
+
+html,
+body,
+#app {
+  font-family: var(--pyt-font-sans);
+  color: var(--pyt-color-text-primary);
+  background: var(--pyt-color-bg-primary);
+}
+
+button {
+  font-family: var(--pyt-font-sans);
+}
+
+code,
+pre {
+  font-family: var(--pyt-font-mono);
+}

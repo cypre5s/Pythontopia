@@ -1,0 +1,31 @@
+%% Pythontopia CC0 - 用途：演示 Python for 循环的执行流程（基于 iterator 协议，含 break / continue / else）
+%% 关联 KC：PY43-KC-031（for 循环与遍历）、PY43-KC-037（循环控制语句）
+%% 示例代码： for item in [1,2,3]: ...
+
+flowchart TD
+    START(["进入 for item in iterable"])
+    IT["调用 iter(iterable)<br/>得到迭代器 it"]
+    NEXT["调用 next(it)"]
+    STOP{"捕获到 StopIteration?"}
+    BIND["将值绑定给循环变量 item"]
+    BODY["执行循环体语句块"]
+    CTRL{"循环体中遇到？"}
+    BRK(["break：跳出循环<br/>不执行 else"])
+    CONT["continue：跳过剩余体"]
+    ELSE["执行 else 子句<br/>（仅当未 break 时）"]
+    END(["循环结束"])
+
+    START --> IT --> NEXT --> STOP
+    STOP -->|"否"| BIND --> BODY --> CTRL
+    CTRL -->|"break"| BRK --> END
+    CTRL -->|"continue"| CONT --> NEXT
+    CTRL -->|"正常结束"| NEXT
+    STOP -->|"是"| ELSE --> END
+
+    classDef start fill:#d1ecf1,stroke:#0c5460,color:#222
+    classDef act fill:#cce5ff,stroke:#004085,color:#222
+    classDef warn fill:#fff3cd,stroke:#856404,color:#222
+    classDef done fill:#d4edda,stroke:#155724,color:#222
+    class START,END,BRK done
+    class IT,NEXT,BIND,BODY,CONT,ELSE act
+    class STOP,CTRL warn

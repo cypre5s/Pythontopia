@@ -1,0 +1,243 @@
+package com.pythontopia.workshop;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pythontopia.agent.run.RunStatus;
+import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.coursepack.domain.CourseKc;
+import com.pythontopia.coursepack.repository.CoursePackRepository;
+import com.pythontopia.learner.mastery.MasteryEvaluator;
+import com.pythontopia.learner.mastery.MasterySnapshot;
+import com.pythontopia.learner.mastery.MasterySource;
+import com.pythontopia.learner.profile.service.ProfileService;
+import com.pythontopia.workshop.config.WorkshopProperties;
+import com.pythontopia.workshop.dto.ResourceCreateRequest;
+import com.pythontopia.workshop.dto.ResourceCreateResponse;
+import com.pythontopia.workshop.dto.ResourceType;
+import com.pythontopia.workshop.graph.ResourceProduceRequestDto;
+import com.pythontopia.workshop.graph.ResourceProduceResponseDto;
+import com.pythontopia.workshop.graph.WorkshopGraphClient;
+import com.pythontopia.workshop.repository.LearningResourceRepository;
+import com.pythontopia.workshop.service.ResourceWorkshopService;
+import com.pythontopia.workshop.service.WorkshopRunRecorder;
+import com.pythontopia.world.crop.CropStateService;
+import java.math.BigDecimal;
+import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+
+class ResourceWorkshopServiceTest {
+
+  private WorkshopProperties properties;
+  private WorkshopGraphClient graphClient;
+  private LearningResourceRepository resourceRepository;
+  private CoursePackRepository coursePackRepository;
+  private WorkshopRunRecorder runRecorder;
+  private MasteryEvaluator masteryEvaluator;
+  private CropStateService cropStateService;
+  private ProfileService profileService;
+  private ObjectMapper objectMapper;
+  private ResourceWorkshopService service;
+
+  @BeforeEach
+  void setUp() {
+    properties = new WorkshopProperties(3, new BigDecimal("0.15"), List.of());
+    graphClient = Mockito.mock(WorkshopGraphClient.class);
+    resourceRepository = Mockito.mock(LearningResourceRepository.class);
+    coursePackRepository = Mockito.mock(CoursePackRepository.class);
+    runRecorder = Mockito.mock(WorkshopRunRecorder.class);
+    masteryEvaluator = Mockito.mock(MasteryEvaluator.class);
+    cropStateService = Mockito.mock(CropStateService.class);
+    profileService = Mockito.mock(ProfileService.class);
+    objectMapper = new ObjectMapper();
+    service =
+        new ResourceWorkshopService(
+            properties,
+            graphClient,
+            resourceRepository,
+            coursePackRepository,
+            runRecorder,
+            masteryEvaluator,
+            cropStateService,
+            profileService,
+            objectMapper);
+
+    when(coursePackRepository.findKcs(eq(43L), eq(null)))
+        .thenReturn(
+            List.of(
+                new CourseKc(1L, 43L, "PY43-KC-001", "输入输出", 11L, 1, "basic", "summary")));
+    when(profileService.findProfile(anyLong())).thenReturn(Optional.empty());
+    when(resourceRepository.countCreatedAfter(anyLong(), any())).thenReturn(0);
+    when(resourceRepository.sumMasteryRewardsToday(anyLong(), anyString(), any()))
+        .thenReturn(BigDecimal.ZERO);
+    when(resourceRepository.insert(
+            anyLong(),
+            anyLong(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any()))
+        .thenReturn(7L);
+    when(masteryEvaluator.applyEvent(anyLong(), anyString(), any(), any(), anyString()))
+        .thenReturn(
+            new MasterySnapshot(
+                1L,
+                1L,
+                "PY43-KC-001",
+                new BigDecimal("0.05"),
+                BigDecimal.ZERO,
+                OffsetDateTime.now(),
+                OffsetDateTime.now()));
+    when(runRecorder.recordInNewTransaction(
+            anyLong(),
+            anyString(),
+            anyString(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(UUID.class),
+            any(RunStatus.class)))
+        .thenReturn(42L);
+  }
+
+  @Test
+  void createPersistsResourceAndPublishesEvent() {
+    when(graphClient.produce(any())).thenReturn(successResponse());
+
+    ResourceCreateResponse response =
+        service.create(1L, new ResourceCreateRequest(List.of("PY43-KC-001"), ResourceType.HANDOUT, null));
+
+    assertThat(response.runId()).isEqualTo(42L);
+    assertThat(response.resourceId()).isEqualTo(7L);
+    assertThat(response.status()).isEqualTo("SUCCESS");
+    verify(masteryEvaluator, times(1))
+        .applyEvent(eq(1L), eq("PY43-KC-001"), eq(MasterySource.RESOURCE_READ), any(), anyString());
+    verify(cropStateService, times(1)).applyMasteryUpdate(1L, "PY43-KC-001");
+  }
+
+  @Test
+  void createRejectsUnknownKc() {
+    assertThatThrownBy(
+            () -> service.create(1L, new ResourceCreateRequest(List.of("PY43-KC-999"), ResourceType.HANDOUT, null)))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("未知 KC");
+    verifyNoInteractions(graphClient);
+  }
+
+  @Test
+  void createEnforcesThrottle() {
+    when(resourceRepository.countCreatedAfter(anyLong(), any())).thenReturn(3);
+    assertThatThrownBy(
+            () -> service.create(1L, new ResourceCreateRequest(List.of("PY43-KC-001"), ResourceType.HANDOUT, null)))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("每小时最多生成");
+    verifyNoInteractions(graphClient);
+  }
+
+  @Test
+  void createFailsWhenGraphReportsFailure() {
+    ResourceProduceResponseDto failed = failureResponse();
+    when(graphClient.produce(any())).thenReturn(failed);
+    assertThatThrownBy(
+            () -> service.create(1L, new ResourceCreateRequest(List.of("PY43-KC-001"), ResourceType.HANDOUT, null)))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("资源生成失败");
+    verify(resourceRepository, Mockito.never())
+        .insert(anyLong(), anyLong(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+  }
+
+  @Test
+  void createCapsMasteryRewardWhenDailyAlreadyMaxed() {
+    when(graphClient.produce(any())).thenReturn(successResponse());
+    when(resourceRepository.sumMasteryRewardsToday(anyLong(), anyString(), any()))
+        .thenReturn(new BigDecimal("0.15"));
+
+    service.create(1L, new ResourceCreateRequest(List.of("PY43-KC-001"), ResourceType.HANDOUT, null));
+
+    verify(masteryEvaluator, Mockito.never())
+        .applyEvent(anyLong(), anyString(), eq(MasterySource.RESOURCE_READ), any(), anyString());
+  }
+
+  @Test
+  void createAllowsAllowlistedUsersToBypassThrottle() {
+    properties = new WorkshopProperties(3, new BigDecimal("0.15"), List.of(99L));
+    service =
+        new ResourceWorkshopService(
+            properties,
+            graphClient,
+            resourceRepository,
+            coursePackRepository,
+            runRecorder,
+            masteryEvaluator,
+            cropStateService,
+            profileService,
+            objectMapper);
+    when(graphClient.produce(any())).thenReturn(successResponse());
+    when(resourceRepository.countCreatedAfter(anyLong(), any())).thenReturn(5);
+    when(coursePackRepository.findKcs(eq(43L), eq(null)))
+        .thenReturn(
+            List.of(
+                new CourseKc(1L, 43L, "PY43-KC-001", "输入输出", 11L, 1, "basic", "summary")));
+
+    assertThat(service.create(99L, new ResourceCreateRequest(List.of("PY43-KC-001"), ResourceType.HANDOUT, null)).resourceId())
+        .isEqualTo(7L);
+  }
+
+  private ResourceProduceResponseDto successResponse() {
+    JsonNode handout = objectMapper.createObjectNode()
+        .set("sections", objectMapper.createArrayNode());
+    ResourceProduceResponseDto.ResourceDraftDto draft =
+        new ResourceProduceResponseDto.ResourceDraftDto(
+            "讲义", "ok", "MARKDOWN", handout, null, null, null, null, null);
+    return new ResourceProduceResponseDto(
+        draft,
+        "HANDOUT",
+        List.of(101L),
+        new ResourceProduceResponseDto.GroundingResultDto(true, List.of(), false, false),
+        new ResourceProduceResponseDto.SafetyResultDto(true, List.of()),
+        List.of(),
+        "SUCCESS");
+  }
+
+  private ResourceProduceResponseDto failureResponse() {
+    JsonNode handout = objectMapper.createObjectNode()
+        .set("sections", objectMapper.createArrayNode());
+    ResourceProduceResponseDto.ResourceDraftDto draft =
+        new ResourceProduceResponseDto.ResourceDraftDto(
+            "讲义", "ok", "MARKDOWN", handout, null, null, null, null, null);
+    return new ResourceProduceResponseDto(
+        draft,
+        "HANDOUT",
+        List.of(),
+        new ResourceProduceResponseDto.GroundingResultDto(false, List.of("SAFETY_FAILED"), false, false),
+        new ResourceProduceResponseDto.SafetyResultDto(false, List.of("ANSWER_LEAK:answer_key")),
+        List.of(),
+        "FAILED");
+  }
+}

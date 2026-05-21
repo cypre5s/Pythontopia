@@ -1,0 +1,29 @@
+%% Pythontopia CC0 - 用途：演示 Python while 循环的执行流程（条件判断、循环体、break/continue、else 子句）
+%% 关联 KC：PY43-KC-032（while 循环与循环分支结合）、PY43-KC-037（循环控制语句）
+%% 示例代码： while n &gt; 0: ...
+
+flowchart TD
+    START(["进入 while cond"])
+    EVAL["计算条件表达式 cond"]
+    COND{"cond 为 True?"}
+    BODY["执行循环体语句块<br/>（通常更新计数器/状态）"]
+    CTRL{"循环体中遇到？"}
+    BRK(["break：跳出循环<br/>不执行 else"])
+    CONT["continue：跳过剩余体<br/>回到条件判断"]
+    ELSE["执行 else 子句<br/>（仅当条件自然变 False 时）"]
+    END(["循环结束"])
+
+    START --> EVAL --> COND
+    COND -->|"True"| BODY --> CTRL
+    CTRL -->|"break"| BRK --> END
+    CTRL -->|"continue"| CONT --> EVAL
+    CTRL -->|"正常结束"| EVAL
+    COND -->|"False"| ELSE --> END
+
+    classDef start fill:#d1ecf1,stroke:#0c5460,color:#222
+    classDef act fill:#cce5ff,stroke:#004085,color:#222
+    classDef warn fill:#fff3cd,stroke:#856404,color:#222
+    classDef done fill:#d4edda,stroke:#155724,color:#222
+    class START,END,BRK done
+    class EVAL,BODY,CONT,ELSE act
+    class COND,CTRL warn

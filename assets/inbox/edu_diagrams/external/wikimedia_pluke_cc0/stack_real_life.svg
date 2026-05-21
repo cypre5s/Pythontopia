@@ -1,0 +1,521 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:xlink="http://www.w3.org/1999/xlink"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   width="632"
+   height="158.48776"
+   id="svg2"
+   version="1.1"
+   inkscape:version="0.48.1 "
+   sodipodi:docname="New document 1">
+  <defs
+     id="defs4">
+    <linearGradient
+       id="linearGradient3757">
+      <stop
+         style="stop-color:#a0a0a0;stop-opacity:1"
+         offset="0"
+         id="stop3759" />
+      <stop
+         style="stop-color:#0000ff;stop-opacity:0;"
+         offset="1"
+         id="stop3761" />
+    </linearGradient>
+    <linearGradient
+       inkscape:collect="always"
+       xlink:href="#linearGradient3757"
+       id="linearGradient3763"
+       x1="213.57143"
+       y1="523.79077"
+       x2="212.85715"
+       y2="603.79077"
+       gradientUnits="userSpaceOnUse"
+       gradientTransform="matrix(0.32761311,0,0,0.64430578,41.350932,-193.56636)" />
+    <linearGradient
+       inkscape:collect="always"
+       xlink:href="#linearGradient3757"
+       id="linearGradient3831"
+       gradientUnits="userSpaceOnUse"
+       gradientTransform="matrix(0.32761311,0,0,0.64430578,203.35094,-193.56636)"
+       x1="213.57143"
+       y1="523.79077"
+       x2="212.85715"
+       y2="603.79077" />
+    <linearGradient
+       inkscape:collect="always"
+       xlink:href="#linearGradient3757"
+       id="linearGradient3873"
+       gradientUnits="userSpaceOnUse"
+       gradientTransform="matrix(0.32761311,0,0,0.64430578,363.35094,-193.56636)"
+       x1="213.57143"
+       y1="523.79077"
+       x2="212.85715"
+       y2="603.79077" />
+    <linearGradient
+       inkscape:collect="always"
+       xlink:href="#linearGradient3757"
+       id="linearGradient3909"
+       gradientUnits="userSpaceOnUse"
+       gradientTransform="matrix(0.32761311,0,0,0.64430578,523.35094,-193.56636)"
+       x1="213.57143"
+       y1="523.79077"
+       x2="212.85715"
+       y2="603.79077" />
+    <linearGradient
+       inkscape:collect="always"
+       xlink:href="#linearGradient3757"
+       id="linearGradient3984"
+       gradientUnits="userSpaceOnUse"
+       gradientTransform="matrix(0.32761311,0,0,0.64430578,523.35094,-5.56636)"
+       x1="213.57143"
+       y1="523.79077"
+       x2="212.85715"
+       y2="603.79077" />
+  </defs>
+  <sodipodi:namedview
+     id="base"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageopacity="0.0"
+     inkscape:pageshadow="2"
+     inkscape:zoom="0.98994949"
+     inkscape:cx="275.78202"
+     inkscape:cy="25.863277"
+     inkscape:document-units="px"
+     inkscape:current-layer="layer1"
+     showgrid="false"
+     fit-margin-top="0"
+     fit-margin-left="0"
+     fit-margin-right="0"
+     fit-margin-bottom="0"
+     inkscape:window-width="1366"
+     inkscape:window-height="718"
+     inkscape:window-x="-8"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1" />
+  <metadata
+     id="metadata7">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title></dc:title>
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(-46.73315,-43.875)">
+    <rect
+       style="fill:#0000ff;fill-rule:evenodd;stroke:#000000;stroke-width:0.50859952px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       id="rect2985"
+       width="87.188484"
+       height="29.062828"
+       x="64.790359"
+       y="131.40282" />
+    <rect
+       style="fill:url(#linearGradient3763);fill-opacity:1;fill-rule:evenodd;stroke:none"
+       id="rect2987"
+       width="150"
+       height="41.419655"
+       x="46.73315"
+       y="160.9431" />
+    <text
+       xml:space="preserve"
+       style="font-size:15.87636566px;font-style:normal;font-weight:normal;line-height:125%;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;font-family:Sans"
+       x="72.934616"
+       y="151.61656"
+       id="text3765"
+       sodipodi:linespacing="125%"><tspan
+         sodipodi:role="line"
+         id="tspan3767"
+         x="72.934616"
+         y="151.61656"
+         style="fill:#ffffff;fill-opacity:1">Cars</tspan></text>
+    <path
+       sodipodi:type="star"
+       style="fill:#ffffff;fill-opacity:1;stroke:none"
+       id="path3777"
+       sodipodi:sides="5"
+       sodipodi:cx="119.28571"
+       sodipodi:cy="473.07648"
+       sodipodi:r1="21.213203"
+       sodipodi:r2="10.606602"
+       sodipodi:arg1="0.78539816"
+       sodipodi:arg2="1.4137167"
+       inkscape:flatsided="false"
+       inkscape:rounded="0"
+       inkscape:randomized="0"
+       d="m 134.28571,488.07648 -13.34076,-4.52399 -11.28983,8.42509 0.18004,-14.08581 -11.501481,-8.13377 13.452031,-4.18152 4.18153,-13.45204 8.13377,11.50149 14.08581,-0.18005 -8.42509,11.28984 z"
+       inkscape:transform-center-x="0.3454295"
+       inkscape:transform-center-y="-0.363808"
+       transform="matrix(0.3368509,0,0,0.35477385,97.657324,-21.537138)" />
+    <rect
+       y="131.40282"
+       x="226.79036"
+       height="29.062828"
+       width="87.188484"
+       id="rect3821"
+       style="fill:#0000ff;fill-rule:evenodd;stroke:#000000;stroke-width:0.50859952px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1" />
+    <rect
+       y="160.9431"
+       x="208.73315"
+       height="41.419655"
+       width="150"
+       id="rect3823"
+       style="fill:url(#linearGradient3831);fill-opacity:1;fill-rule:evenodd;stroke:none" />
+    <text
+       sodipodi:linespacing="125%"
+       id="text3825"
+       y="151.61656"
+       x="234.93462"
+       style="font-size:15.87636566px;font-style:normal;font-weight:normal;line-height:125%;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;font-family:Sans"
+       xml:space="preserve"><tspan
+         style="fill:#ffffff;fill-opacity:1"
+         y="151.61656"
+         x="234.93462"
+         id="tspan3827"
+         sodipodi:role="line">Cars</tspan></text>
+    <path
+       transform="matrix(0.3368509,0,0,0.35477385,259.65733,-21.537138)"
+       inkscape:transform-center-y="-0.363808"
+       inkscape:transform-center-x="0.3454295"
+       d="m 134.28571,488.07648 -13.34076,-4.52399 -11.28983,8.42509 0.18004,-14.08581 -11.501481,-8.13377 13.452031,-4.18152 4.18153,-13.45204 8.13377,11.50149 14.08581,-0.18005 -8.42509,11.28984 z"
+       inkscape:randomized="0"
+       inkscape:rounded="0"
+       inkscape:flatsided="false"
+       sodipodi:arg2="1.4137167"
+       sodipodi:arg1="0.78539816"
+       sodipodi:r2="10.606602"
+       sodipodi:r1="21.213203"
+       sodipodi:cy="473.07648"
+       sodipodi:cx="119.28571"
+       sodipodi:sides="5"
+       id="path3829"
+       style="fill:#ffffff;fill-opacity:1;stroke:none"
+       sodipodi:type="star" />
+    <rect
+       style="fill:#008000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:0.50859952px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       id="rect3833"
+       width="87.188484"
+       height="29.062828"
+       x="230.79036"
+       y="102.11704" />
+    <text
+       xml:space="preserve"
+       style="font-size:15.87636566px;font-style:normal;font-weight:normal;line-height:125%;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;font-family:Sans"
+       x="238.93462"
+       y="122.33079"
+       id="text3835"
+       sodipodi:linespacing="125%"><tspan
+         sodipodi:role="line"
+         id="tspan3837"
+         x="238.93462"
+         y="122.33079"
+         style="fill:#ffffff;fill-opacity:1">Dogs</tspan></text>
+    <path
+       sodipodi:type="star"
+       style="fill:#ffffff;fill-opacity:1;stroke:none"
+       id="path3839"
+       sodipodi:sides="3"
+       sodipodi:cx="119.28571"
+       sodipodi:cy="473.07648"
+       sodipodi:r1="21.213203"
+       sodipodi:r2="10.606602"
+       sodipodi:arg1="0.78539816"
+       sodipodi:arg2="1.8325957"
+       inkscape:flatsided="false"
+       inkscape:rounded="0"
+       inkscape:randomized="0"
+       d="m 134.28571,488.07648 -17.74519,-4.75481 -17.745188,-4.75481 12.990378,-12.99038 12.99038,-12.99038 4.75481,17.74519 z"
+       inkscape:transform-center-x="0.3454295"
+       inkscape:transform-center-y="-0.363808"
+       transform="matrix(0.3368509,0,0,0.35477385,263.65733,-50.822858)" />
+    <rect
+       style="fill:#0000ff;fill-rule:evenodd;stroke:#000000;stroke-width:0.50859952px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       id="rect3855"
+       width="87.188484"
+       height="29.062828"
+       x="386.79034"
+       y="131.40282" />
+    <rect
+       style="fill:url(#linearGradient3873);fill-opacity:1;fill-rule:evenodd;stroke:none"
+       id="rect3857"
+       width="150"
+       height="41.419655"
+       x="368.73315"
+       y="160.9431" />
+    <text
+       xml:space="preserve"
+       style="font-size:15.87636566px;font-style:normal;font-weight:normal;line-height:125%;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;font-family:Sans"
+       x="394.9346"
+       y="151.61656"
+       id="text3859"
+       sodipodi:linespacing="125%"><tspan
+         sodipodi:role="line"
+         id="tspan3861"
+         x="394.9346"
+         y="151.61656"
+         style="fill:#ffffff;fill-opacity:1">Cars</tspan></text>
+    <path
+       sodipodi:type="star"
+       style="fill:#ffffff;fill-opacity:1;stroke:none"
+       id="path3863"
+       sodipodi:sides="5"
+       sodipodi:cx="119.28571"
+       sodipodi:cy="473.07648"
+       sodipodi:r1="21.213203"
+       sodipodi:r2="10.606602"
+       sodipodi:arg1="0.78539816"
+       sodipodi:arg2="1.4137167"
+       inkscape:flatsided="false"
+       inkscape:rounded="0"
+       inkscape:randomized="0"
+       d="m 134.28571,488.07648 -13.34076,-4.52399 -11.28983,8.42509 0.18004,-14.08581 -11.501481,-8.13377 13.452031,-4.18152 4.18153,-13.45204 8.13377,11.50149 14.08581,-0.18005 -8.42509,11.28984 z"
+       inkscape:transform-center-x="0.3454295"
+       inkscape:transform-center-y="-0.363808"
+       transform="matrix(0.3368509,0,0,0.35477385,419.65733,-21.537138)" />
+    <rect
+       y="102.11704"
+       x="390.79034"
+       height="29.062828"
+       width="87.188484"
+       id="rect3865"
+       style="fill:#008000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:0.50859952px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1" />
+    <text
+       sodipodi:linespacing="125%"
+       id="text3867"
+       y="122.33079"
+       x="398.9346"
+       style="font-size:15.87636566px;font-style:normal;font-weight:normal;line-height:125%;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;font-family:Sans"
+       xml:space="preserve"><tspan
+         style="fill:#ffffff;fill-opacity:1"
+         y="122.33079"
+         x="398.9346"
+         id="tspan3869"
+         sodipodi:role="line">Dogs</tspan></text>
+    <path
+       transform="matrix(0.3368509,0,0,0.35477385,423.65733,-50.822858)"
+       inkscape:transform-center-y="-0.363808"
+       inkscape:transform-center-x="0.3454295"
+       d="m 134.28571,488.07648 -17.74519,-4.75481 -17.745188,-4.75481 12.990378,-12.99038 12.99038,-12.99038 4.75481,17.74519 z"
+       inkscape:randomized="0"
+       inkscape:rounded="0"
+       inkscape:flatsided="false"
+       sodipodi:arg2="1.8325957"
+       sodipodi:arg1="0.78539816"
+       sodipodi:r2="10.606602"
+       sodipodi:r1="21.213203"
+       sodipodi:cy="473.07648"
+       sodipodi:cx="119.28571"
+       sodipodi:sides="3"
+       id="path3871"
+       style="fill:#ffffff;fill-opacity:1;stroke:none"
+       sodipodi:type="star" />
+    <rect
+       style="fill:#800000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:0.50859952px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       id="rect3875"
+       width="87.188484"
+       height="29.062828"
+       x="378.79034"
+       y="73.127174" />
+    <text
+       xml:space="preserve"
+       style="font-size:15.87636566px;font-style:normal;font-weight:normal;line-height:125%;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;font-family:Sans"
+       x="386.9346"
+       y="93.340919"
+       id="text3877"
+       sodipodi:linespacing="125%"><tspan
+         sodipodi:role="line"
+         id="tspan3879"
+         x="386.9346"
+         y="93.340919"
+         style="fill:#ffffff;fill-opacity:1">Cats</tspan></text>
+    <path
+       sodipodi:type="star"
+       style="fill:#ffffff;fill-opacity:1;stroke:none"
+       id="path3881"
+       sodipodi:sides="3"
+       sodipodi:cx="119.28571"
+       sodipodi:cy="473.07648"
+       sodipodi:r1="21.213203"
+       sodipodi:r2="10.606602"
+       sodipodi:arg1="0.78539816"
+       sodipodi:arg2="1.8325957"
+       inkscape:flatsided="false"
+       inkscape:rounded="0.83"
+       inkscape:randomized="0"
+       d="m 134.28571,488.07648 c -10.78201,10.78201 -3.01668,-0.80832 -17.74519,-4.75481 -14.72851,-3.94649 -13.7987,9.9737 -17.745188,-4.75481 -3.946492,-14.72851 2.208368,-2.20837 12.990378,-12.99038 10.78202,-10.78202 -1.73812,-16.93688 12.99038,-12.99038 14.72851,3.94649 0.80832,3.01668 4.75481,17.74519 3.9465,14.7285 15.53683,6.96317 4.75481,17.74519 z"
+       inkscape:transform-center-x="0.3454295"
+       inkscape:transform-center-y="-0.363808"
+       transform="matrix(0.3368509,0,0,0.35477385,411.65733,-79.812698)" />
+    <rect
+       y="131.40282"
+       x="546.79034"
+       height="29.062828"
+       width="87.188484"
+       id="rect3883"
+       style="fill:#0000ff;fill-rule:evenodd;stroke:#000000;stroke-width:0.50859952px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1" />
+    <rect
+       y="160.9431"
+       x="528.73315"
+       height="41.419655"
+       width="150"
+       id="rect3885"
+       style="fill:url(#linearGradient3909);fill-opacity:1;fill-rule:evenodd;stroke:none" />
+    <text
+       sodipodi:linespacing="125%"
+       id="text3887"
+       y="151.61656"
+       x="554.93457"
+       style="font-size:15.87636566px;font-style:normal;font-weight:normal;line-height:125%;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;font-family:Sans"
+       xml:space="preserve"><tspan
+         style="fill:#ffffff;fill-opacity:1"
+         y="151.61656"
+         x="554.93457"
+         id="tspan3889"
+         sodipodi:role="line">Cars</tspan></text>
+    <path
+       transform="matrix(0.3368509,0,0,0.35477385,579.65733,-21.537138)"
+       inkscape:transform-center-y="-0.363808"
+       inkscape:transform-center-x="0.3454295"
+       d="m 134.28571,488.07648 -13.34076,-4.52399 -11.28983,8.42509 0.18004,-14.08581 -11.501481,-8.13377 13.452031,-4.18152 4.18153,-13.45204 8.13377,11.50149 14.08581,-0.18005 -8.42509,11.28984 z"
+       inkscape:randomized="0"
+       inkscape:rounded="0"
+       inkscape:flatsided="false"
+       sodipodi:arg2="1.4137167"
+       sodipodi:arg1="0.78539816"
+       sodipodi:r2="10.606602"
+       sodipodi:r1="21.213203"
+       sodipodi:cy="473.07648"
+       sodipodi:cx="119.28571"
+       sodipodi:sides="5"
+       id="path3891"
+       style="fill:#ffffff;fill-opacity:1;stroke:none"
+       sodipodi:type="star" />
+    <rect
+       style="fill:#008000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:0.50859952px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       id="rect3893"
+       width="87.188484"
+       height="29.062828"
+       x="550.79034"
+       y="102.11704" />
+    <text
+       xml:space="preserve"
+       style="font-size:15.87636566px;font-style:normal;font-weight:normal;line-height:125%;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;font-family:Sans"
+       x="558.93457"
+       y="122.33079"
+       id="text3895"
+       sodipodi:linespacing="125%"><tspan
+         sodipodi:role="line"
+         id="tspan3897"
+         x="558.93457"
+         y="122.33079"
+         style="fill:#ffffff;fill-opacity:1">Dogs</tspan></text>
+    <path
+       sodipodi:type="star"
+       style="fill:#ffffff;fill-opacity:1;stroke:none"
+       id="path3899"
+       sodipodi:sides="3"
+       sodipodi:cx="119.28571"
+       sodipodi:cy="473.07648"
+       sodipodi:r1="21.213203"
+       sodipodi:r2="10.606602"
+       sodipodi:arg1="0.78539816"
+       sodipodi:arg2="1.8325957"
+       inkscape:flatsided="false"
+       inkscape:rounded="0"
+       inkscape:randomized="0"
+       d="m 134.28571,488.07648 -17.74519,-4.75481 -17.745188,-4.75481 12.990378,-12.99038 12.99038,-12.99038 4.75481,17.74519 z"
+       inkscape:transform-center-x="0.3454295"
+       inkscape:transform-center-y="-0.363808"
+       transform="matrix(0.3368509,0,0,0.35477385,583.65733,-50.822858)" />
+    <rect
+       y="73.127174"
+       x="538.79034"
+       height="29.062828"
+       width="87.188484"
+       id="rect3901"
+       style="fill:#800000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:0.50859952px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1" />
+    <text
+       sodipodi:linespacing="125%"
+       id="text3903"
+       y="93.340919"
+       x="546.93457"
+       style="font-size:15.87636566px;font-style:normal;font-weight:normal;line-height:125%;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;font-family:Sans"
+       xml:space="preserve"><tspan
+         style="fill:#ffffff;fill-opacity:1"
+         y="93.340919"
+         x="546.93457"
+         id="tspan3905"
+         sodipodi:role="line">Cats</tspan></text>
+    <path
+       transform="matrix(0.3368509,0,0,0.35477385,571.65733,-79.812698)"
+       inkscape:transform-center-y="-0.363808"
+       inkscape:transform-center-x="0.3454295"
+       d="m 134.28571,488.07648 c -10.78201,10.78201 -3.01668,-0.80832 -17.74519,-4.75481 -14.72851,-3.94649 -13.7987,9.9737 -17.745188,-4.75481 -3.946492,-14.72851 2.208368,-2.20837 12.990378,-12.99038 10.78202,-10.78202 -1.73812,-16.93688 12.99038,-12.99038 14.72851,3.94649 0.80832,3.01668 4.75481,17.74519 3.9465,14.7285 15.53683,6.96317 4.75481,17.74519 z"
+       inkscape:randomized="0"
+       inkscape:rounded="0.83"
+       inkscape:flatsided="false"
+       sodipodi:arg2="1.8325957"
+       sodipodi:arg1="0.78539816"
+       sodipodi:r2="10.606602"
+       sodipodi:r1="21.213203"
+       sodipodi:cy="473.07648"
+       sodipodi:cx="119.28571"
+       sodipodi:sides="3"
+       id="path3907"
+       style="fill:#ffffff;fill-opacity:1;stroke:none"
+       sodipodi:type="star" />
+    <rect
+       style="fill:#ffff00;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:0.50859952px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       id="rect3911"
+       width="87.188484"
+       height="29.062828"
+       x="560.79034"
+       y="44.13731" />
+    <text
+       xml:space="preserve"
+       style="font-size:15.87636566px;font-style:normal;font-weight:normal;line-height:125%;letter-spacing:0px;word-spacing:0px;fill:#0e0000;fill-opacity:1;stroke:none;font-family:Sans"
+       x="568.93457"
+       y="64.351044"
+       id="text3913"
+       sodipodi:linespacing="125%"><tspan
+         sodipodi:role="line"
+         id="tspan3915"
+         x="568.93457"
+         y="64.351044"
+         style="fill:#0e0000;fill-opacity:1">ICT</tspan></text>
+    <path
+       sodipodi:type="star"
+       style="fill:#110000;fill-opacity:1;stroke:none"
+       id="path3917"
+       sodipodi:sides="4"
+       sodipodi:cx="119.28571"
+       sodipodi:cy="473.07648"
+       sodipodi:r1="14.849242"
+       sodipodi:r2="21.213203"
+       sodipodi:arg1="0.78539816"
+       sodipodi:arg2="1.5707963"
+       inkscape:flatsided="false"
+       inkscape:rounded="0"
+       inkscape:randomized="0"
+       d="m 129.78571,483.57648 -10.5,10.7132 -10.5,-10.7132 -10.7132,-10.5 10.7132,-10.5 10.5,-10.71321 10.5,10.71321 10.71321,10.5 z"
+       inkscape:transform-center-x="0.3454295"
+       inkscape:transform-center-y="-0.363808"
+       transform="matrix(0.3368509,0,0,0.35477385,593.65733,-108.80254)" />
+  </g>
+</svg>
