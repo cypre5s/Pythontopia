@@ -18,6 +18,11 @@ export const router = createRouter({
     { path: '/', redirect: '/town' },
     { path: '/login', name: 'login', component: LoginPage, meta: { guestOnly: true } },
     {
+      path: '/credits',
+      name: 'credits',
+      component: () => import('@/pages/CreditsPage.vue'),
+    },
+    {
       path: '/register',
       name: 'register',
       component: () => import('@/pages/RegisterPage.vue'),
