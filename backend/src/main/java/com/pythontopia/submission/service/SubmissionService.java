@@ -124,8 +124,10 @@ public class SubmissionService {
           new LearningEvent.PracticeSucceeded(userId, kcCode, request.problemId()));
       if (request.questId() != null) {
         try {
-          QuestDto quest = questService.complete(
-              userId, request.questId(), new QuestCompleteRequest("AC@submission:" + submissionId));
+          QuestCompleteRequest autoEvidence =
+              new QuestCompleteRequest(
+                  "AC@submission:" + submissionId, submissionId, null, null, null);
+          QuestDto quest = questService.complete(userId, request.questId(), autoEvidence);
           log.info("Quest {} auto-completed via submission {}", quest.id(), submissionId);
         } catch (BusinessException exception) {
           log.warn(

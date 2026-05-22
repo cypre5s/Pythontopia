@@ -70,6 +70,31 @@ public class AuthService {
     return new LoginResponse(issued.token(), issued.expiresAt(), toDto(user));
   }
 
+  /**
+   * Reissue an access token from an existing valid token. The contract intentionally treats the
+   * access token as the refresh source — Stage 02 has not separated the two — so callers must hand
+   * back a non-expired access token. Invalid / expired tokens fail with {@code 401 UNAUTHORIZED}.
+   */
+  public LoginResponse refresh(String token) {
+    CurrentUserPrincipal principal;
+    try {
+      principal = jwtService.parse(token);
+    } catch (Exception exception) {
+      throw new BusinessException(
+          HttpStatus.UNAUTHORIZED, "REFRESH_TOKEN_INVALID", "Refresh token is invalid or expired");
+    }
+    UserAccount user =
+        userRepository
+            .findByUsername(principal.username())
+            .orElseThrow(
+                () ->
+                    new BusinessException(
+                        HttpStatus.UNAUTHORIZED, "REFRESH_TOKEN_INVALID", "Token subject not found"));
+    JwtService.IssuedToken issued =
+        jwtService.issue(new CurrentUserPrincipal(user.id(), user.username(), user.role()));
+    return new LoginResponse(issued.token(), issued.expiresAt(), toDto(user));
+  }
+
   public UserDto toDto(UserAccount user) {
     return new UserDto(user.id(), user.username(), user.displayName(), user.role());
   }

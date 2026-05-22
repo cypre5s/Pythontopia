@@ -2,6 +2,7 @@ package com.pythontopia.auth.controller;
 
 import com.pythontopia.auth.dto.LoginRequest;
 import com.pythontopia.auth.dto.LoginResponse;
+import com.pythontopia.auth.dto.RefreshRequest;
 import com.pythontopia.auth.dto.RegisterRequest;
 import com.pythontopia.auth.dto.UserDto;
 import com.pythontopia.auth.service.AuthService;
@@ -34,7 +35,7 @@ public class AuthController {
   }
 
   @PostMapping("/refresh")
-  ResponseEntity<Void> refresh() {
-    return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+  LoginResponse refresh(@Valid @RequestBody RefreshRequest request) {
+    return authService.refresh(request.token());
   }
 }

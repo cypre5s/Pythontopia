@@ -1,12 +1,17 @@
 package com.pythontopia.coursepack.repository;
 
 import com.pythontopia.coursepack.domain.CourseChapter;
+import com.pythontopia.coursepack.domain.CourseExample;
 import com.pythontopia.coursepack.domain.CourseKc;
 import com.pythontopia.coursepack.domain.CoursePack;
 import com.pythontopia.coursepack.domain.CoursePage;
 import com.pythontopia.coursepack.domain.CourseProblem;
+import java.sql.Array;
+import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -87,6 +92,71 @@ public class CoursePackRepository {
         .param("problemId", problemId)
         .query(CourseProblem.class)
         .optional();
+  }
+
+  public List<CourseExample> findExamples(Long packId, String kcCode) {
+    String kcFilter = kcCode == null || kcCode.isBlank() ? "" : " AND kc_code = :kcCode";
+    JdbcClient.StatementSpec spec =
+        jdbcClient
+            .sql(
+                """
+                SELECT id, pack_id, kc_code, title, code, explanation_markdown, page_refs
+                FROM course_example
+                WHERE pack_id = :packId
+                """
+                    + kcFilter
+                    + " ORDER BY id")
+            .param("packId", packId);
+    if (kcCode != null && !kcCode.isBlank()) {
+      spec = spec.param("kcCode", kcCode);
+    }
+    return spec.query(mapExample()).list();
+  }
+
+  public Optional<CourseExample> findExample(Long packId, Long exampleId) {
+    return jdbcClient
+        .sql(
+            """
+            SELECT id, pack_id, kc_code, title, code, explanation_markdown, page_refs
+            FROM course_example
+            WHERE pack_id = :packId AND id = :exampleId
+            """)
+        .param("packId", packId)
+        .param("exampleId", exampleId)
+        .query(mapExample())
+        .optional();
+  }
+
+  private RowMapper<CourseExample> mapExample() {
+    return (rs, rowNum) ->
+        new CourseExample(
+            rs.getLong("id"),
+            rs.getLong("pack_id"),
+            rs.getString("kc_code"),
+            rs.getString("title"),
+            rs.getString("code"),
+            rs.getString("explanation_markdown"),
+            readLongArray(rs.getArray("page_refs")));
+  }
+
+  private static Long[] readLongArray(Array array) throws SQLException {
+    if (array == null) {
+      return new Long[0];
+    }
+    Object raw = array.getArray();
+    if (raw instanceof Long[] longs) {
+      return longs;
+    }
+    if (raw instanceof Object[] objects) {
+      List<Long> result = new ArrayList<>(objects.length);
+      for (Object o : objects) {
+        if (o instanceof Number n) {
+          result.add(n.longValue());
+        }
+      }
+      return result.toArray(new Long[0]);
+    }
+    return new Long[0];
   }
 
   public List<CoursePage> findPagesByKc(Long packId, String kcCode) {

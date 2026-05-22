@@ -1,6 +1,7 @@
 package com.pythontopia.coursepack.service;
 
 import com.pythontopia.coursepack.domain.CourseChapter;
+import com.pythontopia.coursepack.domain.CourseExample;
 import com.pythontopia.coursepack.domain.CourseKc;
 import com.pythontopia.coursepack.domain.CoursePack;
 import com.pythontopia.coursepack.domain.CoursePage;
@@ -42,5 +43,17 @@ public class CoursePackService {
 
   public List<CoursePage> listPagesByKc(String kcCode) {
     return repository.findPagesByKc(ACTIVE_PACK_ID, kcCode);
+  }
+
+  public List<CourseExample> listExamples(Long packId, String kcCode) {
+    long pack = packId == null ? ACTIVE_PACK_ID : packId;
+    return repository.findExamples(pack, kcCode);
+  }
+
+  public CourseExample getExample(Long packId, Long exampleId) {
+    long pack = packId == null ? ACTIVE_PACK_ID : packId;
+    return repository
+        .findExample(pack, exampleId)
+        .orElseThrow(() -> new CoursePackNotFoundException(pack));
   }
 }

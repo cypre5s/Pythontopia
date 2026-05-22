@@ -21,6 +21,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -57,6 +58,8 @@ class Stage02AcceptanceIntegrationTest {
 
   @Autowired JdbcTemplate jdbcTemplate;
 
+  @Autowired PasswordEncoder passwordEncoder;
+
   @Autowired ObjectMapper objectMapper;
 
   @LocalServerPort int port;
@@ -72,6 +75,26 @@ class Stage02AcceptanceIntegrationTest {
 
     assertThat(session.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(session.getBody()).containsEntry("dayIndex", 1).containsEntry("weather", "SUNNY");
+  }
+
+  @Test
+  void adminCanUseWorldSessionAndEightDirectionMovement() throws Exception {
+    insertAdmin("admin02");
+    String token = login("admin02", "P@ssw0rd1");
+
+    ResponseEntity<Map> session =
+        restTemplate.exchange(
+            "/api/world/session", HttpMethod.GET, bearer(token, null), Map.class);
+    assertThat(session.getStatusCode()).isEqualTo(HttpStatus.OK);
+
+    RawResponse player =
+        patchJsonRaw(
+            "/api/world/player",
+            token,
+            Map.of("tileX", 16, "tileY", 10, "direction", "UP_RIGHT"));
+    assertThat(player.status()).isEqualTo(200);
+    assertThat(player.body()).containsEntry("tileX", 16).containsEntry("tileY", 10);
+    assertThat(player.body()).containsEntry("direction", "UP_RIGHT");
   }
 
   @Test
@@ -181,7 +204,7 @@ class Stage02AcceptanceIntegrationTest {
                 jdbcTemplate.update(
                     """
                     INSERT INTO users (username, display_name, password_hash, role)
-                    VALUES ('bad-role', 'Bad', 'hash', 'ADMIN')
+                    VALUES ('bad-role', 'Bad', 'hash', 'ROOT')
                     """))
         .isInstanceOf(RuntimeException.class);
 
@@ -227,6 +250,17 @@ class Stage02AcceptanceIntegrationTest {
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
   }
 
+  private void insertAdmin(String username) {
+    jdbcTemplate.update(
+        """
+        INSERT INTO users (username, display_name, password_hash, role)
+        VALUES (?, ?, ?, 'ADMIN')
+        """,
+        username,
+        username,
+        passwordEncoder.encode("P@ssw0rd1"));
+  }
+
   private String login(String username, String password) {
     ResponseEntity<Map> response =
         restTemplate.postForEntity(
@@ -247,6 +281,19 @@ class Stage02AcceptanceIntegrationTest {
         HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
             .header(HttpHeaders.CONTENT_TYPE, "application/json")
             .POST(HttpRequest.BodyPublishers.ofString(json))
+            .build();
+    HttpResponse<String> response =
+        HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+    return new RawResponse(response.statusCode(), objectMapper.readValue(response.body(), Map.class));
+  }
+
+  private RawResponse patchJsonRaw(String path, String bearerToken, Object body) throws Exception {
+    String json = objectMapper.writeValueAsString(body);
+    HttpRequest request =
+        HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
+            .header(HttpHeaders.CONTENT_TYPE, "application/json")
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + bearerToken)
+            .method("PATCH", HttpRequest.BodyPublishers.ofString(json))
             .build();
     HttpResponse<String> response =
         HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
