@@ -1,4 +1,5 @@
 import { router } from '@/app/router';
+import { playBgm } from '@/utils/bgm';
 import { createCropSprite, type CropSpriteHandle } from '@game/adapters/cropSprite';
 import type { SceneLike } from '@game/adapters/sceneTypes';
 import { useLearningStore } from '@stores/learning';
@@ -55,6 +56,7 @@ export const FieldScene = {
     });
     this.cameras.main.setBounds(0, 0, width * tileSize, height * tileSize);
     this.physics?.world.setBounds(0, 0, width * tileSize, height * tileSize);
+    playBgm('bgm_town_day');
   },
   update(this: SceneLike) {
     void this;

@@ -36,6 +36,7 @@ import {
 } from '@/api/submissions';
 import { getPublicProblem } from '@/api/problems';
 import { getPyodideRunner, type PyodideRunResult } from '@/game/adapters/pyodide';
+import { celebrateMature } from '@/utils/celebrate';
 import {
   openBugMineSession,
   getBugMineSession,
@@ -86,7 +87,21 @@ export interface FieldState {
   activeKcCode: string | null;
   loading: boolean;
   bootstrapped: boolean;
+  hydrated: boolean;
   lastSignature: string | null;
+}
+
+function detectNewMature(
+  prev: readonly CropTileDto[],
+  next: readonly CropTileDto[],
+): boolean {
+  if (next.length === 0) {
+    return false;
+  }
+  const prevByKc = new Map(prev.map((crop) => [crop.kcCode, crop.status]));
+  return next.some(
+    (crop) => crop.status === 'MATURE' && prevByKc.get(crop.kcCode) !== 'MATURE',
+  );
 }
 
 export type WorkshopRunPhase = 'idle' | 'creating' | 'success' | 'error';
@@ -274,10 +289,16 @@ export const useLearningStore = defineStore('learning', {
     async loadField(): Promise<void> {
       this.field.loading = true;
       try {
+        const prevCrops = this.field.crops;
+        const wasHydrated = this.field.hydrated;
         const [crops, mastery] = await Promise.all([fetchCrops(), fetchMastery()]);
         this.field.crops = crops;
         this.field.masterySnapshot = mastery;
         this.field.bootstrapped = crops.length > 0;
+        this.field.hydrated = true;
+        if (wasHydrated && detectNewMature(prevCrops, crops)) {
+          celebrateMature(null);
+        }
       } finally {
         this.field.loading = false;
       }
@@ -293,11 +314,17 @@ export const useLearningStore = defineStore('learning', {
       this.field.activeKcCode = kcCode;
     },
     async refreshAfterEvent(kcCode: string): Promise<void> {
+      const prevCrops = this.field.crops;
+      const wasHydrated = this.field.hydrated;
       const [crops, mastery] = await Promise.all([fetchCrops(), fetchMastery()]);
       this.field.crops = crops;
       this.field.masterySnapshot = mastery;
+      this.field.hydrated = true;
       if (kcCode) {
         this.field.activeKcCode = kcCode;
+      }
+      if (wasHydrated && detectNewMature(prevCrops, crops)) {
+        celebrateMature(null);
       }
     },
     async loadResources(): Promise<void> {

@@ -29,8 +29,13 @@ const TILESET_LIST: ReadonlyArray<[string, string]> = [
   ['vegetables', '/assets/pixel/vendor/opengameart/vegetables.png'],
   ['cereals', '/assets/pixel/vendor/opengameart/cereals.png'],
   ['crates_and_sacks', '/assets/pixel/vendor/opengameart/crates_and_sacks.png'],
-  ['kenney_tiny_town', '/assets/pixel/tilesets/kenney-tiny-town/Tilemap/tilemap_packed.png'],
   ['kenney_tiny_dungeon', '/assets/pixel/tilesets/kenney-tiny-dungeon/Tilemap/tilemap_packed.png'],
+];
+
+// Kenney tiny-town tilemap_packed.png: 192x176, 16x16 tiles, 12 cols × 11 rows = 132 frames.
+// 以 spritesheet 形式加载，便于按 frameIndex 取出单个 tile（frame 0 = 草地）。
+const TILESET_SPRITESHEETS: ReadonlyArray<[string, string, number, number]> = [
+  ['kenney_tiny_town', '/assets/pixel/tilesets/kenney-tiny-town/Tilemap/tilemap_packed.png', 16, 16],
 ];
 
 const KC_ICONS: ReadonlyArray<[string, string]> = [
@@ -68,6 +73,7 @@ export const BootScene = {
     });
 
     for (const [key, url] of TILESET_LIST) loader.image(key, url);
+    for (const [key, url, w, h] of TILESET_SPRITESHEETS) loader.spritesheet(key, url, { frameWidth: w, frameHeight: h });
     for (const [key, url] of KC_ICONS) loader.image(key, url);
     for (const [key, url, w, h] of CHARACTER_SHEETS) loader.spritesheet(key, url, { frameWidth: w, frameHeight: h });
     for (const [key, url] of SFX_LIST) loader.audio(key, url);

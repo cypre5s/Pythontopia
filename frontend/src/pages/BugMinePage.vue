@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue';
+import { computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import AppLayout from '@/app/AppLayout.vue';
 import BugMinePanel from '@/components/bugmine/BugMinePanel.vue';
+import { playBgm, stopBgm } from '@/utils/bgm';
 import { useLearningStore } from '@stores/learning';
 
 const learning = useLearningStore();
@@ -34,7 +35,13 @@ async function refresh(): Promise<void> {
   }
 }
 
+onMounted(() => {
+  playBgm('bgm_bug_mine');
+});
 onMounted(refresh);
+onUnmounted(() => {
+  stopBgm();
+});
 watch([sessionId, submissionId], refresh);
 </script>
 

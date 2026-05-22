@@ -1,11 +1,15 @@
 <script setup lang="ts">
-import { onMounted } from 'vue';
+import { onMounted, onUnmounted } from 'vue';
 import AppLayout from '@/app/AppLayout.vue';
 import ReviewHallPanel from '@/components/review/ReviewHallPanel.vue';
+import { playBgm, stopBgm } from '@/utils/bgm';
 import { useLearningStore } from '@stores/learning';
 
 const learning = useLearningStore();
 
+onMounted(() => {
+  playBgm('bgm_quest');
+});
 onMounted(async () => {
   await Promise.all([
     learning.loadEvaluations(4),
@@ -15,6 +19,9 @@ onMounted(async () => {
   if (first) {
     await learning.openEvaluation(first.id);
   }
+});
+onUnmounted(() => {
+  stopBgm();
 });
 </script>
 

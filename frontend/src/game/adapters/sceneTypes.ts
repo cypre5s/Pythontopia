@@ -33,8 +33,15 @@ export interface SceneAddLike {
     fillAlpha?: number,
   ): RectangleLike;
   text(x: number, y: number, text: string, style?: Record<string, string>): TextLike;
-  image(x: number, y: number, texture: string): ImageLike;
-  tileSprite(x: number, y: number, width: number, height: number, texture: string): ImageLike;
+  image(x: number, y: number, texture: string, frame?: number | string): ImageLike;
+  tileSprite(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    texture: string,
+    frame?: number | string,
+  ): ImageLike;
   grid(
     x: number,
     y: number,

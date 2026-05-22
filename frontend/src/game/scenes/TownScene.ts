@@ -1,4 +1,5 @@
 import { router } from '@/app/router';
+import { playBgm } from '@/utils/bgm';
 import type { Direction } from '@api/dto/Direction';
 import { createDirectionController, type DirectionController } from '@game/adapters/input';
 import { openNpcDialog } from '@game/adapters/dialog';
@@ -55,6 +56,7 @@ export const TownScene = {
     window.addEventListener('beforeunload', () => {
       void world.flushPlayerUpdate();
     });
+    playBgm('bgm_town_day');
   },
   update(this: SceneLike) {
     if (!map || !player || !controller) {

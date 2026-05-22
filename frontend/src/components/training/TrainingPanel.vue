@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useLearningStore } from '@stores/learning';
 import { useToastStore } from '@stores/toast';
+import { playSfx } from '@/utils/sfx';
 
 const learning = useLearningStore();
 const toast = useToastStore();
@@ -37,23 +38,42 @@ async function submit(): Promise<void> {
     toast.show('代码不能为空。', 'error');
     return;
   }
-  const detail = await learning.submitToServer({
-    problemId: problem.value.id,
-    code: learning.training.code,
-    source: 'TRAINING',
-  });
-  if (!detail) {
-    toast.show(learning.training.lastError ?? '提交失败', 'error');
-    return;
+  try {
+    const detail = await learning.submitToServer({
+      problemId: problem.value.id,
+      code: learning.training.code,
+      source: 'TRAINING',
+    });
+    if (!detail) {
+      playSfx('error');
+      toast.show(learning.training.lastError ?? '提交失败', 'error');
+      return;
+    }
+    const verdict = detail.judgeResult?.verdict;
+    if (verdict === 'AC') {
+      playSfx('jingleComplete');
+      toast.show('提交通过，KC 掌握度 +0.10。', 'success');
+    } else if (verdict === 'CE') {
+      playSfx('error');
+      toast.show('代码静态检查未通过：' + (detail.judgeResult?.failureReason ?? ''), 'error');
+    } else {
+      playSfx('error');
+      toast.show('未通过：' + verdict, 'error');
+    }
+  } catch (error) {
+    playSfx('error');
+    const message = error instanceof Error ? error.message : '提交失败';
+    toast.show(message, 'error');
   }
-  const verdict = detail.judgeResult?.verdict;
-  if (verdict === 'AC') {
-    toast.show('提交通过，KC 掌握度 +0.10。', 'success');
-  } else if (verdict === 'CE') {
-    toast.show('代码静态检查未通过：' + (detail.judgeResult?.failureReason ?? ''), 'error');
-  } else {
-    toast.show('未通过：' + verdict, 'error');
-  }
+}
+
+const HOVER_THROTTLE_MS = 300;
+let lastHoverAt = 0;
+function onSampleHover(): void {
+  const now = Date.now();
+  if (now - lastHoverAt < HOVER_THROTTLE_MS) return;
+  lastHoverAt = now;
+  playSfx('hover');
 }
 
 const showBugMineButton = computed(() => {
@@ -116,6 +136,7 @@ async function enterBugMine(): Promise<void> {
           v-for="(sample, i) in problem.samples"
           :key="i"
           class="sample"
+          @mouseenter="onSampleHover"
         >
           <pre><code>输入：{{ sample.input }}</code></pre>
           <pre><code>输出：{{ sample.output }}</code></pre>
