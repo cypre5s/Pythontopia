@@ -1,24 +1,19 @@
 <script setup lang="ts">
+// M2 重定向桩：/town 已在路由层 redirect 到 /world；保留组件仅作向后兼容，
+// 兜底直接挂载到该组件的边角场景（深链 / 旧入口）。
 import { onMounted } from 'vue';
-import AppLayout from '@/app/AppLayout.vue';
-import DialogModal from '@/components/game/DialogModal.vue';
-import GameCanvas from '@/components/game/GameCanvas.vue';
-import { useWorldStore } from '@stores/world';
+import { useRouter } from 'vue-router';
 
-const world = useWorldStore();
+const router = useRouter();
 
-onMounted(async () => {
-  if (!world.session) {
-    await world.loadSession();
-  }
+onMounted(() => {
+  void router.replace('/world');
 });
 </script>
 
 <template>
-  <AppLayout>
-    <section class="town-screen">
-      <GameCanvas />
-      <DialogModal />
-    </section>
-  </AppLayout>
+  <div
+    class="legacy-redirect"
+    aria-hidden="true"
+  />
 </template>

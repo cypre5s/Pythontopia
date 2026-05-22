@@ -5,27 +5,43 @@ import type { KcDto } from './dto/KcDto';
 import type { PageDto } from './dto/PageDto';
 import type { ProblemDto } from './dto/ProblemDto';
 
-export async function getCoursePack(packId = 43): Promise<CoursePackDto> {
-  const response = await http.get<CoursePackDto>(`/api/course/packs/${packId}`);
+// 后端只暴露当前激活课程包 (CoursePackService.ACTIVE_PACK_ID = 43)。
+// 保留 packId 参数仅作历史兼容；实际请求路径不再使用它。
+
+export async function getCoursePack(_packId: number = 43): Promise<CoursePackDto> {
+  void _packId;
+  const response = await http.get<CoursePackDto>(`/api/course/pack`);
   return response.data;
 }
 
-export async function listChapters(packId = 43): Promise<ChapterDto[]> {
-  const response = await http.get<ChapterDto[]>(`/api/course/packs/${packId}/chapters`);
+export async function listChapters(_packId: number = 43): Promise<ChapterDto[]> {
+  void _packId;
+  const response = await http.get<ChapterDto[]>(`/api/course/chapters`);
   return response.data;
 }
 
-export async function listKnowledgeComponents(packId = 43): Promise<KcDto[]> {
-  const response = await http.get<KcDto[]>(`/api/course/packs/${packId}/kcs`);
+export async function listKnowledgeComponents(
+  _packId: number = 43,
+  chapterId?: number,
+): Promise<KcDto[]> {
+  void _packId;
+  const params: Record<string, number> = {};
+  if (chapterId !== undefined) {
+    params.chapterId = chapterId;
+  }
+  const response = await http.get<KcDto[]>(`/api/course/kcs`, { params });
   return response.data;
 }
 
-export async function listKcPages(kcCode: string, packId = 43): Promise<PageDto[]> {
-  const response = await http.get<PageDto[]>(`/api/course/packs/${packId}/kcs/${kcCode}/pages`);
+export async function listKcPages(kcCode: string, _packId: number = 43): Promise<PageDto[]> {
+  void _packId;
+  const response = await http.get<PageDto[]>(`/api/course/pages`, {
+    params: { kcCode },
+  });
   return response.data;
 }
 
-export async function listProblems(packId = 43): Promise<ProblemDto[]> {
-  const response = await http.get<ProblemDto[]>(`/api/course/packs/${packId}/problems`);
+export async function getProblem(problemId: number): Promise<ProblemDto> {
+  const response = await http.get<ProblemDto>(`/api/course/problems/${problemId}`);
   return response.data;
 }

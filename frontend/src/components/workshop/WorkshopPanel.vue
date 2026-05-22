@@ -3,7 +3,7 @@ import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useLearningStore } from '@stores/learning';
 import { useToastStore } from '@stores/toast';
-import { playSfx } from '@/utils/sfx';
+import { playSfx } from '@/composables/useAudio';
 import type { WorkshopCreateRequest, WorkshopResourceType } from '@/api/dto/Workshop';
 
 const RESOURCE_TYPES: { value: WorkshopResourceType; label: string; hint: string }[] = [
@@ -50,12 +50,12 @@ async function submit(): Promise<void> {
         ? { kcCodes: selectedKcs.value, type: selectedType.value, focusHint: trimmed }
         : { kcCodes: selectedKcs.value, type: selectedType.value };
     const response = await learning.createResource(payload);
-    playSfx('success');
-    playSfx('coin');
+    playSfx('sfx_success');
+    playSfx('sfx_coin');
     toast.show(`资源生成成功（runId=${response.runId}）`, 'success');
     await router.push({ path: '/workshop', query: { id: String(response.resourceId) } });
   } catch (error) {
-    playSfx('error');
+    playSfx('sfx_error');
     const message = error instanceof Error ? error.message : '资源生成失败';
     toast.show(message, 'error');
   } finally {

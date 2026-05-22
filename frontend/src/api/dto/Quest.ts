@@ -14,6 +14,12 @@ export type QuestStatus =
   | 'SKIPPED'
   | 'EXPIRED';
 
+export type QuestRequiredEvidenceType =
+  | 'submission'
+  | 'resource'
+  | 'page_read'
+  | 'kc_mastery';
+
 export interface QuestDto {
   id: number;
   userId: number;
@@ -27,12 +33,22 @@ export interface QuestDto {
   dueDate: string;
   priority: number;
   status: QuestStatus;
+  requiredEvidenceType: QuestRequiredEvidenceType | null;
+  requiredMasteryDelta: number | null;
+  targetProblemIds: number[];
+  targetResourceId: number | null;
+  deepLinkRoute: string | null;
+  deepLinkParams: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface QuestCompleteRequest {
   note?: string;
+  submissionId?: number;
+  resourceId?: number;
+  pageReadId?: number;
+  kcMasteryDelta?: number;
 }
 
 export interface QuestSkipRequest {

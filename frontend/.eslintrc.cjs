@@ -30,9 +30,19 @@ module.exports = {
   },
   overrides: [
     {
-      files: ['src/game/adapters/**/*.ts'],
+      // game adapter + scene 层是 Phaser 与业务的隔离边界，允许直接 import phaser；
+      // 业务层（composables / stores / components）仍走 no-restricted-imports 拦截。
+      files: ['src/game/adapters/**/*.ts', 'src/game/scenes/**/*.ts'],
       rules: {
         '@typescript-eslint/no-explicit-any': 'warn',
+        'no-restricted-imports': 'off',
+      },
+    },
+    {
+      // useAudio 是业务层与 Phaser sound manager 唯一适配点（详见文件顶部注释），
+      // 只对它单独放行 phaser 类型导入，不放行 any 扩散。
+      files: ['src/composables/useAudio.ts'],
+      rules: {
         'no-restricted-imports': 'off',
       },
     },

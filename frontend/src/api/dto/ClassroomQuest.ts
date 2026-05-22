@@ -1,4 +1,4 @@
-import type { QuestNodeType } from './Quest';
+import type { QuestNodeType, QuestRequiredEvidenceType, QuestStatus } from './Quest';
 
 export interface ClassroomQuestDto {
   id: number;
@@ -14,6 +14,12 @@ export interface ClassroomQuestDto {
   status: string;
   targetProblemId: number | null;
   targetResourceType: string | null;
+  studentQuestId: number | null;
+  studentQuestStatus: QuestStatus | null;
+  requiredEvidenceType: QuestRequiredEvidenceType | null;
+  targetProblemIds: number[];
+  deepLinkRoute: string | null;
+  deepLinkParams: Record<string, unknown>;
 }
 
 export interface ClassroomQuestCreateRequest {

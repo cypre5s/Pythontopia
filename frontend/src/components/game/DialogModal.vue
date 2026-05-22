@@ -1,4 +1,6 @@
 <script setup lang="ts">
+// @deprecated 由 DialogTree.vue 替代，保留仅用于过渡期 placeholder 入口与单元测试。
+// 新代码请通过 store.openWithTree(npcKey) + DialogTree.vue（已挂载在 App.vue）走对话树渲染。
 import { useDialogStore } from '@stores/dialog';
 
 const dialog = useDialogStore();

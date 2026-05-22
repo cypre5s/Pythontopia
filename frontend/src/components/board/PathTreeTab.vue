@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import { useLearningStore } from '@stores/learning';
 import type { LearningPathNodeDto } from '@/api/dto/Path';
+import { resolvePathNodeDeepLink } from '@/utils/questDeepLink';
 
 const learning = useLearningStore();
+const router = useRouter();
 
 onMounted(async () => {
   if (!learning.pathState.active && learning.pathState.phase === 'idle') {
@@ -24,6 +27,32 @@ const days = computed(() => {
     .sort((a, b) => a[0] - b[0])
     .map(([day, nodes]) => ({ day, nodes }));
 });
+
+function actionLabelFor(node: LearningPathNodeDto): string {
+  switch (node.nodeType) {
+    case 'SOLVE_PROBLEM':
+      return node.suggestedProblemId ? '去做题' : '去练习';
+    case 'READ_RESOURCE':
+      return '去工坊读资源';
+    case 'FIX_BUG':
+      return '去矿洞修 Bug';
+    case 'PLANT_KC':
+      return '去田里种知识';
+    case 'PROFILE_UPDATE':
+      return '去画像屋更新';
+    default:
+      return '去做';
+  }
+}
+
+function tooltipFor(node: LearningPathNodeDto): string {
+  return `${actionLabelFor(node)}：${node.kcCode}`;
+}
+
+async function clickNode(node: LearningPathNodeDto): Promise<void> {
+  const target = resolvePathNodeDeepLink(node);
+  await router.push(target);
+}
 </script>
 
 <template>
@@ -35,7 +64,7 @@ const days = computed(() => {
       v-if="!learning.pathState.active"
       class="empty"
     >
-      还没有生成本周路径。点击右上角“规划本周路径”由多智能体生成。
+      还没有生成本周路径。点击右上角"规划本周路径"由多智能体生成。
     </p>
     <article
       v-else
@@ -58,20 +87,30 @@ const days = computed(() => {
               v-for="node in entry.nodes"
               :key="node.id"
               class="node-row"
+              :data-testid="`path-node-${node.id}`"
             >
-              <span class="type">{{ node.nodeType }}</span>
-              <span class="kc">{{ node.kcCode }}</span>
-              <p class="reason">
-                {{ node.reasonSummary }}
-              </p>
-              <small
-                v-if="node.suggestedResourceType"
-                class="hint"
-              >建议资源：{{ node.suggestedResourceType }}</small>
-              <small
-                v-if="node.suggestedProblemId"
-                class="hint"
-              >推荐题目 ID：{{ node.suggestedProblemId }}</small>
+              <button
+                type="button"
+                class="node-button"
+                :title="tooltipFor(node)"
+                :data-testid="`path-node-link-${node.id}`"
+                @click="clickNode(node)"
+              >
+                <span class="type">{{ node.nodeType }}</span>
+                <span class="kc">{{ node.kcCode }}</span>
+                <p class="reason">
+                  {{ node.reasonSummary }}
+                </p>
+                <small
+                  v-if="node.suggestedResourceType"
+                  class="hint"
+                >建议资源：{{ node.suggestedResourceType }}</small>
+                <small
+                  v-if="node.suggestedProblemId"
+                  class="hint"
+                >推荐题目 ID：{{ node.suggestedProblemId }}</small>
+                <span class="action">{{ actionLabelFor(node) }} →</span>
+              </button>
             </li>
           </ul>
         </li>
@@ -119,9 +158,28 @@ header small {
 .node-row {
   background: #fff2c9;
   border-radius: 6px;
-  padding: 8px;
+  padding: 0;
   display: grid;
   gap: 4px;
+}
+.node-button {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  padding: 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+.node-button:hover,
+.node-button:focus-visible {
+  background: #ffe6a4;
+  outline: 2px solid #c9a86b;
+  outline-offset: -2px;
 }
 .node-row .type {
   font-weight: 600;
@@ -139,6 +197,13 @@ header small {
 .node-row .hint {
   color: #6e4f1d;
   font-size: 12px;
+}
+.node-row .action {
+  margin-top: 4px;
+  align-self: end;
+  font-size: 12px;
+  font-weight: 600;
+  color: #2f5b8a;
 }
 .empty {
   padding: 14px;

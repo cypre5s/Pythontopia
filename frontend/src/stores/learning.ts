@@ -33,6 +33,7 @@ import { getMyClassroomQuests } from '@/api/classroomQuests';
 import {
   createSubmission,
   getSubmission,
+  listSubmissions,
 } from '@/api/submissions';
 import { getPublicProblem } from '@/api/problems';
 import { getPyodideRunner, type PyodideRunResult } from '@/game/adapters/pyodide';
@@ -313,6 +314,13 @@ export const useLearningStore = defineStore('learning', {
     selectKc(kcCode: string | null): void {
       this.field.activeKcCode = kcCode;
     },
+    /**
+     * W4-NAV-FINISH：保留 R-11 兼容别名。
+     * 部分老组件按 `setFieldActiveKc` 命名调用，等价于 `selectKc`。
+     */
+    setFieldActiveKc(kcCode: string | null): void {
+      this.field.activeKcCode = kcCode;
+    },
     async refreshAfterEvent(kcCode: string): Promise<void> {
       const prevCrops = this.field.crops;
       const wasHydrated = this.field.hydrated;
@@ -325,6 +333,37 @@ export const useLearningStore = defineStore('learning', {
       }
       if (wasHydrated && detectNewMature(prevCrops, crops)) {
         celebrateMature(null);
+      }
+    },
+    /**
+     * 由 world store 的 `bootstrap()` 一次性下发后调用，避免页面挂载时 N 次串行 GET。
+     * 各字段都是可选：W3-CTRL 后端在某些场景下（例如老用户没有 path）会留空，
+     * 此时保持现有 state 不变，等业务侧再触发对应 lazy load。
+     */
+    setBootstrapData(payload: {
+      crops?: CropTileDto[];
+      quests?: QuestDto[];
+      mastery?: MasterySnapshotDto[];
+      profile?: LearnerProfileDto | null;
+      path?: LearningPathDto | null;
+    }): void {
+      if (payload.crops) {
+        this.field.crops = payload.crops;
+        this.field.bootstrapped = payload.crops.length > 0;
+        this.field.hydrated = true;
+      }
+      if (payload.mastery) {
+        this.field.masterySnapshot = payload.mastery;
+      }
+      if (payload.profile !== undefined) {
+        this.profile = payload.profile;
+      }
+      if (payload.path !== undefined) {
+        this.pathState.active = payload.path;
+        this.pathState.phase = payload.path ? 'ready' : 'idle';
+      }
+      if (payload.quests) {
+        this.quests.today = payload.quests;
       }
     },
     async loadResources(): Promise<void> {
@@ -441,6 +480,17 @@ export const useLearningStore = defineStore('learning', {
         const message = error instanceof Error ? error.message : String(error);
         this.quests.lastError = message;
       }
+    },
+    async listRecentPassedSubmissions(
+      problemId: number,
+      limit = 10,
+    ): Promise<SubmissionDto[]> {
+      const submissions = await listSubmissions({
+        problemId,
+        status: 'PASSED',
+        limit,
+      });
+      return submissions;
     },
     async startQuestById(id: number): Promise<QuestDto> {
       const updated = await startQuest(id);

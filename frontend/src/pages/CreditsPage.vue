@@ -1,11 +1,65 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import { useRouter } from 'vue-router';
+import {
+  CREDITS,
+  LICENSE_GROUPS,
+  type CreditEntry,
+  type CreditLicense,
+  type LicenseGroupMeta,
+} from '@/data/credits';
+
 const router = useRouter();
+
 function back(): void {
   if (window.history.length > 1) {
     router.back();
   } else {
-    void router.push('/town');
+    void router.push('/');
+  }
+}
+
+const CATEGORY_LABELS: Readonly<Record<CreditEntry['category'], string>> = {
+  tileset: '地图 / Tileset',
+  character: '角色 / Sprite',
+  ui: 'UI 面板',
+  bgm: '背景音乐',
+  sfx: '音效',
+  font: '字体',
+  icon: '图标',
+  effect: '特效',
+};
+
+interface CreditGroup extends LicenseGroupMeta {
+  readonly entries: ReadonlyArray<CreditEntry>;
+}
+
+const groupedCredits = computed<ReadonlyArray<CreditGroup>>(() => {
+  return LICENSE_GROUPS.map((meta) => ({
+    ...meta,
+    entries: CREDITS.filter((entry) => entry.license === meta.license),
+  })).filter((group) => group.entries.length > 0);
+});
+
+const totalCount = computed<number>(() => CREDITS.length);
+
+function categoryLabel(category: CreditEntry['category']): string {
+  return CATEGORY_LABELS[category];
+}
+
+function licenseBadgeClass(license: CreditLicense): string {
+  switch (license) {
+    case 'CC0':
+      return 'badge badge--cc0';
+    case 'CC-BY 3.0':
+    case 'CC-BY 4.0':
+      return 'badge badge--by';
+    case 'CC-BY-SA 3.0':
+      return 'badge badge--sa';
+    case 'OFL-1.1':
+      return 'badge badge--ofl';
+    default:
+      return 'badge';
   }
 }
 </script>
@@ -24,110 +78,83 @@ function back(): void {
         Pythontopia 致谢
       </h1>
       <p class="lead">
-        本作品在游戏化学习闭环中使用了下列优秀的开源美术、音效与字体素材。
-        谨在此向所有作者致谢。完整 license 请见 <code>LICENSE-ART.md</code>。
+        本项目代码以 <strong>MIT License</strong> 发布；像素美术、音效与字体资产则按分层授权，
+        覆盖 <code>CC0 / CC-BY 3.0 / CC-BY 4.0 / CC-BY-SA 3.0 / OFL-1.1</code> 多个协议族。
+        共收录 <strong>{{ totalCount }}</strong> 项素材署名。
+      </p>
+      <p class="lead-secondary">
+        完整 license 见仓库根 <code>LICENSE-ART.md</code>，前端运行时简版见
+        <code>public/assets/pixel/LICENSE.md</code>。
       </p>
     </header>
 
-    <article class="credits-block">
-      <h2>像素字体 (OFL-1.1)</h2>
-      <ul>
-        <li>
-          <strong>Ark Pixel Font</strong> by TakWolf —
-          <a
-            href="https://github.com/TakWolf/ark-pixel-font"
-            target="_blank"
-            rel="noreferrer"
-          >GitHub</a>
-          — SIL Open Font License v1.1
-        </li>
-      </ul>
+    <section
+      v-for="group in groupedCredits"
+      :key="group.license"
+      class="license-group"
+    >
+      <header class="license-header">
+        <h2>
+          <span :class="licenseBadgeClass(group.license)">{{ group.license }}</span>
+          {{ group.title }}
+        </h2>
+        <ul class="license-meta">
+          <li>
+            署名：
+            <strong v-if="group.requiresAttribution">强制</strong>
+            <span v-else>推荐</span>
+          </li>
+          <li>
+            传染（Share-Alike）：
+            <strong v-if="group.shareAlike">是</strong>
+            <span v-else>否</span>
+          </li>
+        </ul>
+        <p class="license-note">
+          {{ group.note }}
+        </p>
+      </header>
 
-      <h2>图标 (CC-BY 3.0)</h2>
-      <ul>
-        <li>
-          <strong>Game Icons</strong> by Lorc / Delapouite / Skoll / sbed / Carl Olsen —
-          <a
-            href="https://game-icons.net"
-            target="_blank"
-            rel="noreferrer"
-          >game-icons.net</a> — CC BY 3.0
+      <ul class="card-grid">
+        <li
+          v-for="entry in group.entries"
+          :key="`${group.license}::${entry.name}`"
+          class="card"
+        >
+          <h3 class="card-title">
+            {{ entry.name }}
+          </h3>
+          <p class="card-row">
+            <span class="card-label">类别</span>
+            <span>{{ categoryLabel(entry.category) }}</span>
+          </p>
+          <p class="card-row">
+            <span class="card-label">作者</span>
+            <span>{{ entry.authors.join(' / ') }}</span>
+          </p>
+          <p class="card-row">
+            <span class="card-label">来源</span>
+            <span v-if="entry.sourceUrl">
+              <a
+                :href="entry.sourceUrl"
+                target="_blank"
+                rel="noreferrer noopener"
+              >{{ entry.source }}</a>
+            </span>
+            <span v-else>{{ entry.source }}</span>
+          </p>
+          <p class="card-row">
+            <span class="card-label">用途</span>
+            <span>{{ entry.usedFor }}</span>
+          </p>
         </li>
       </ul>
-
-      <h2>UI / Tiles / SFX (CC0)</h2>
-      <ul>
-        <li>
-          <strong>Kenney Vleugels</strong> — UI Pack Adventure / Tiny Town / Tiny Dungeon /
-          Roguelike Modern City / Roguelike Caves &amp; Dungeons / RPG Audio / Interface Sounds /
-          Game Icons Expansion / Cursor Pack / Input Prompts —
-          <a
-            href="https://kenney.nl"
-            target="_blank"
-            rel="noreferrer"
-          >kenney.nl</a> — CC0
-        </li>
-      </ul>
-
-      <h2>角色 Sprite (CC-BY-SA 3.0+)</h2>
-      <p class="hint">
-        Liberated Pixel Cup (LPC) 系列素材以 CC-BY-SA 3.0+ 协议发布，本作品最终发布的素材层亦以兼容协议公开。
-      </p>
-      <ul>
-        <li>
-          <strong>LPC Sara / Medieval Fantasy / Peppercarrot 24x32</strong> 等 base &amp; expansion —
-          作者群: bluecarrot16, Sharm, Reemax, daneeklu (Daniel Eddeland), Jetrel, J. Taylor,
-          Ivan Voirol, TheraHedwig, David Revoy 等 —
-          <a
-            href="https://opengameart.org"
-            target="_blank"
-            rel="noreferrer"
-          >OpenGameArt</a>
-          — CC BY-SA 3.0+
-        </li>
-      </ul>
-
-      <h2>BGM (CC0 / CC-BY 3.0)</h2>
-      <ul>
-        <li>
-          <strong>RandomMind</strong> — Medieval &amp; Old Tower Inn loops — CC0
-        </li>
-        <li>
-          <strong>MouthlessGames</strong> — Town &amp; Dungeon BGM — CC0
-        </li>
-        <li>
-          <strong>MintoDog</strong> — Reflection / Quest jingles — CC0 / CC BY 3.0
-        </li>
-      </ul>
-
-      <h2>特效 (CC0 / CC-BY 4.0)</h2>
-      <ul>
-        <li>codemanu — Pixel FX (CC0)</li>
-        <li>jellyfizh — Confetti / Poof (CC0)</li>
-        <li>john2k — Heal Effect (CC0)</li>
-      </ul>
-
-      <h2>OpenGameArt 农作物 / 季节场景 (混合协议)</h2>
-      <ul>
-        <li>
-          <strong>Jana Ochse (2DPIXX)</strong> — farming-game-basics — CC BY 4.0
-        </li>
-        <li>
-          <strong>marionline</strong> — Top-Down Season Environment Tileset — CC0
-        </li>
-        <li>
-          <strong>josehzz</strong> — farming-crops-16x16 — CC0
-        </li>
-        <li>
-          <strong>Marco L.</strong> — pixel-lightning — CC BY 4.0
-        </li>
-      </ul>
-    </article>
+    </section>
 
     <footer class="meta">
       <p>
-        本声明页面是软件运行时合规的一部分。代码层使用 MIT License；素材层使用上述各协议。
-        构建版本 R-100 / 阶段 1 集成 (2026-05-22)。
+        本声明页面是软件运行时合规的一部分。如发现条目缺漏或需补充作者，请在
+        <code>frontend/src/data/credits.ts</code> 提交补丁。
       </p>
     </footer>
   </section>
@@ -135,7 +162,7 @@ function back(): void {
 
 <style scoped>
 .credits-page {
-  max-width: 880px;
+  max-width: 960px;
   margin: 32px auto;
   padding: 24px 32px;
   background: var(--pyt-color-bg-elevated);
@@ -144,12 +171,14 @@ function back(): void {
   color: var(--pyt-color-text-primary);
   box-shadow: var(--pyt-shadow-card);
 }
+
 .hero {
   display: flex;
   flex-direction: column;
   gap: 8px;
   margin-bottom: 24px;
 }
+
 .back {
   align-self: flex-start;
   background: transparent;
@@ -159,42 +188,156 @@ function back(): void {
   font-family: var(--pyt-font-sans);
   cursor: pointer;
   color: var(--pyt-color-text-primary);
+  min-height: 32px;
+  box-shadow: none;
 }
+
 .back:hover {
   background: var(--pyt-color-bg-soft);
 }
+
 h1 {
   font-size: 24px;
   margin: 0;
 }
-.lead {
+
+.lead,
+.lead-secondary {
   color: var(--pyt-color-text-muted);
   font-size: 14px;
   line-height: 1.6;
+  margin: 0;
 }
-.hint {
+
+.lead-secondary {
   color: var(--pyt-color-text-hint);
   font-size: 13px;
 }
-.credits-block h2 {
-  margin-top: 24px;
-  margin-bottom: 8px;
-  font-size: 16px;
+
+.license-group {
+  margin-top: 28px;
+  padding-top: 16px;
+  border-top: 2px dashed var(--pyt-color-border-soft);
+}
+
+.license-group:first-of-type {
+  border-top: none;
+  margin-top: 8px;
+  padding-top: 0;
+}
+
+.license-header h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 17px;
+  margin: 0 0 8px;
   color: var(--pyt-color-primary-dark);
-  border-bottom: 1px solid var(--pyt-color-border-soft);
-  padding-bottom: 4px;
 }
-ul {
-  padding-left: 18px;
-  line-height: 1.6;
-  font-size: 14px;
+
+.badge {
+  display: inline-block;
+  font-family: var(--pyt-font-mono);
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--pyt-color-border);
+  background: var(--pyt-color-bg-soft);
+  color: var(--pyt-color-text-primary);
+  letter-spacing: 0.5px;
 }
-li {
-  margin-bottom: 4px;
+
+.badge--cc0 {
+  background: var(--pyt-color-success-bg);
+  border-color: var(--pyt-color-success);
+  color: var(--pyt-color-success);
 }
-a {
+
+.badge--by {
+  background: var(--pyt-color-info-bg);
+  border-color: var(--pyt-color-info);
   color: var(--pyt-color-info);
 }
+
+.badge--sa {
+  background: var(--pyt-color-warning-bg);
+  border-color: var(--pyt-color-warning);
+  color: var(--pyt-color-warning);
+}
+
+.badge--ofl {
+  background: var(--pyt-color-danger-bg);
+  border-color: var(--pyt-color-danger);
+  color: var(--pyt-color-danger);
+}
+
+.license-meta {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 13px;
+  color: var(--pyt-color-text-hint);
+}
+
+.license-meta strong {
+  color: var(--pyt-color-primary-dark);
+}
+
+.license-note {
+  font-size: 13px;
+  color: var(--pyt-color-text-muted);
+  margin: 0 0 14px;
+}
+
+.card-grid {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.card {
+  border: 2px solid var(--pyt-color-border);
+  background: var(--pyt-color-bg-primary);
+  border-radius: var(--pyt-radius-md);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.card-title {
+  font-size: 15px;
+  margin: 0 0 4px;
+  color: var(--pyt-color-primary-dark);
+  word-break: break-word;
+}
+
+.card-row {
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--pyt-color-text-primary);
+}
+
+.card-label {
+  color: var(--pyt-color-text-hint);
+  font-size: 12px;
+}
+
+.card a {
+  color: var(--pyt-color-info);
+  word-break: break-all;
+}
+
 .meta {
   margin-top: 32px;
   padding-top: 16px;
@@ -202,10 +345,12 @@ a {
   color: var(--pyt-color-text-hint);
   font-size: 12px;
 }
+
 code {
   font-family: var(--pyt-font-mono);
   background: var(--pyt-color-bg-soft);
   padding: 1px 4px;
   border-radius: 3px;
+  font-size: 12px;
 }
 </style>

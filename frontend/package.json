@@ -4,7 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "sync:npc": "node scripts/sync-npc-data.mjs",
+    "sync:course43": "node scripts/sync-course43.mjs",
+    "predev": "node scripts/sync-npc-data.mjs --quiet && node scripts/sync-course43.mjs --quiet",
     "dev": "vite",
+    "prebuild": "node scripts/sync-npc-data.mjs --quiet && node scripts/sync-course43.mjs --quiet",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "vue-tsc --noEmit",

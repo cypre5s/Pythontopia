@@ -2,7 +2,7 @@
 import { onMounted, onUnmounted } from 'vue';
 import AppLayout from '@/app/AppLayout.vue';
 import ReviewHallPanel from '@/components/review/ReviewHallPanel.vue';
-import { playBgm, stopBgm } from '@/utils/bgm';
+import { playBgm, stopBgm } from '@/composables/useAudio';
 import { useLearningStore } from '@stores/learning';
 
 const learning = useLearningStore();

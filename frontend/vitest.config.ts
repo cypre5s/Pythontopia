@@ -7,6 +7,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
+    setupFiles: ['./tests/_helpers/phaserMock.ts'],
     coverage: {
       enabled: true,
       provider: 'v8',

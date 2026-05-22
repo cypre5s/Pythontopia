@@ -1,1 +1,7 @@
-export { ApiClientError, http, setTokenProvider, setUnauthorizedHandler } from './http';
+export {
+  ApiClientError,
+  http,
+  setNetworkErrorHandler,
+  setTokenProvider,
+  setUnauthorizedHandler,
+} from './http';
