@@ -2,6 +2,12 @@
 可以使用子代理，且子代理并行上限是10
 Pythontopia 是基于 Alethicode 技术资产抽取重构的独立新项目：一个面向高校 Python 初学者的网页版像素学习小镇。项目核心是用多智能体、学生画像、课件 RAG、游戏化任务和真实练习评估，生成个性化学习资源并规划学习路径。
 
+## 版本节奏（2026-05-22 更新）
+
+- R-11 关闭（2026-05-21）：网页端冻结，专注后端补丁。
+- **R-12（2026-05-22 启动）**：星露谷改造解冻 Web，五张地图分块、20 NPC 系统、RPG 存档（背包/技能/对话/日历/经济）、Android 同步推进。
+- R-13 计划：班级班长视角拓展 + 教师课堂直播实时。
+
 ## 核心原则
 
 - 先思考，再编码。不确定且会影响架构、数据、比赛叙事或工作量时，先问用户。
@@ -17,7 +23,10 @@ Pythontopia 是基于 Alethicode 技术资产抽取重构的独立新项目：�
 - 唯一课程知识底座：Alethicode `packId=43`，课程名 `Python语言基础`。
 - 课程种子数据必须内置到 `data/course-pack-43/`。
 - 初始化后必须验证：7 份文档、561 页、7 章、65 个 KC、46 个示例、39 道题。
-- 不复制《星露谷物语》官方素材，不复制未确认 license 的素材。
+- 不复制任何商业像素游戏官方素材，仅用 CC0 / CC-BY 3.0/4.0 / CC-BY-SA 3.0 / OFL-1.1 已审计资产；最终二进制可作为 CC-BY-SA 3.0+ 公开发布（代码层 MIT 分层授权）。
+- 资产 license 在 `LICENSE-ART.md` 详尽列出。
+- 任何新素材必须在 `LICENSE-ART.md` 与 `frontend/public/assets/pixel/LICENSE.md` 同步更新。
+- LPC CC-BY-SA 3.0 传染已接受：包装作品同时以 CC-BY-SA 3.0+ 发布，代码层保持 MIT。
 - 不启用 ReAct 循环，除非用户明确要求。
 - 不做纯前端假数据冒充真实业务数据。
 
@@ -32,6 +41,10 @@ Pythontopia 是基于 Alethicode 技术资产抽取重构的独立新项目：�
 - API client 必须使用明确 DTO 类型。
 - 组件文件名使用 `PascalCase.vue`，普通工具模块使用 `camelCase.ts`。
 - 游戏画布之外的学习内容必须可读、可复制、可引用。
+- 5 张地图 Tiled JSON 存放于 `frontend/public/assets/maps/`，由 `scripts/generate-maps.mjs` 程序化生成。
+- NPC 静态数据放于 `data/npcs/<key>/{meta,dialog}.json`，由 `frontend/scripts/sync-npc-data.mjs` 同步到 `frontend/public/data/npcs/`（npm predev/prebuild 钩子）。
+- Phaser 单 Game 实例：禁止在多个 Vue 组件创建多个 `Phaser.Game`，统一用 `frontend/src/game/adapters/phaserGame.ts` 的单例 + `WorldCanvas.vue`。
+- 8 方向输入降级：input.ts 返回 ExtendedDirection（8 向），写后端用 toServerDirection 降为 4 向。
 
 ### 后端
 
@@ -41,6 +54,10 @@ Pythontopia 是基于 Alethicode 技术资产抽取重构的独立新项目：�
 - 新增 API 必须有 DTO、校验、统一错误返回和测试。
 - 数据库表名和字段名使用 `snake_case`。
 - 迁移文件必须说明目的、影响表和不可逆风险。
+- RPG 存档表名无前缀，沿用项目约定（V100-V110 不加 pyt_ 前缀）。
+- `learner_profile.dimensions` JSONB 是 8 维统一聚合，专业背景/知识基础/学习目标/认知风格/学习偏好/易错模式/实践能力/情绪与坚持度 8 个英文 snake_case key。
+- `PassiveProfileService` 通过 `LearningEvent` 监听被动更新 dimensions；学生可通过 `PUT /api/learner/profile/dimensions/{key}` 自评 4 个主观维度。
+- 任务完成必须提供 evidence（submission_id / resource_id / page_read_id / kc_mastery_delta），`QuestService` 强校验。
 
 ### Python 微服务
 
@@ -74,7 +91,7 @@ Pythontopia 是基于 Alethicode 技术资产抽取重构的独立新项目：�
 ```text
 /home/cypress/Pythontopia/
 ├── backend/                    # Spring Boot 后端（Web + Android 双端共用）
-├── frontend/                   # Vue 3 + Phaser 3 网页端（冻结在 R-11，不再迭代）
+├── frontend/                   # Vue 3 + Phaser 3 网页端（R-12 解冻，星露谷分块大世界）
 ├── android/                    # Kotlin + Compose + LibGDX 原生 Android 客户端（2026-05-22 新增）
 ├── services/
 │   ├── pythontopia-graph/       # 多智能体资源生成与路径规划
@@ -102,7 +119,7 @@ Pythontopia 是独立项目，但允许抽取 Alethicode 中必要能力。抽�
 
 ## 游戏化规则
 
-- 画风参考星露谷式像素小镇，但不得复制官方素材。
+- 画风参考星露谷式像素小镇，但不复制任何商业像素游戏官方素材，仅用 CC0 / CC-BY 3.0/4.0 / CC-BY-SA 3.0 / OFL-1.1 已审计资产。
 - 可参考 `Notyourbing/StardewValley` 的玩法结构：农场、天气、日夜、任务、NPC、背包、技能树、存档。
 - 教育化映射：
   - KC = 知识种子
@@ -113,7 +130,7 @@ Pythontopia 是独立项目，但允许抽取 Alethicode 中必要能力。抽�
   - 遗忘 = 枯萎
   - 复盘 = 收获与再播种
 - 不做无教育目的的装饰系统。
-- Beta 版本以紧凑小镇闭环为准，不做大型开放世界。
+- Beta 以 5 张地图分块世界为准（中央 hub + 4 外围地图：farm_north / mine_south / campus_east / port_west），单图最大 50×40，玩家走过地图边缘 fade 切换。
 
 ## 个性化规则
 
@@ -238,7 +255,7 @@ docker compose up -d
 - 不把 Alethicode 老前端技术债带进新仓库。
 - 不使用 Vuex、宽松 TypeScript 或散装 API 字段。
 - 不伪造课件引用。
-- 不复制星露谷官方素材。
+- 不复制任何商业像素游戏官方素材（包括但不限于星露谷物语）。
 - 不启用 ReAct 循环。
 - 不把班级架构删成单机游戏。
 - 不为了展示效果牺牲教育目标。

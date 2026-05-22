@@ -1,0 +1,73 @@
+{
+  "npcKey": "student_anxious",
+  "rootNodeId": "greet",
+  "nodes": {
+    "greet": {
+      "id": "greet",
+      "text": "{{playerName}}……你早。我昨晚那道题又错了，是不是我根本学不会 Python？",
+      "conditions": [],
+      "choices": [
+        { "label": "错一题不代表什么", "nextNodeId": "comfort" },
+        { "label": "把题给我看", "nextNodeId": "co_debug" },
+        { "label": "去找 Sage 聊聊吧", "nextNodeId": "refer_sage" },
+        { "label": "保重身体", "nextNodeId": null }
+      ]
+    },
+    "comfort": {
+      "id": "comfort",
+      "text": "你这么说我会好一点……可是我看到红色 X 就心慌。我妈说学不会就别学了。",
+      "conditions": [],
+      "choices": [
+        { "label": "红色 X 是矿头 Bug 喜欢的颜色", "nextNodeId": "reframe", "effects": [{ "type": "friendship", "delta": 2 }] }
+      ]
+    },
+    "reframe": {
+      "id": "reframe",
+      "text": "……听你这么说有点搞笑。好，那我把红色 X 当作矿头 Bug 在敲门。",
+      "conditions": [],
+      "choices": [
+        { "label": "走，去矿洞", "nextNodeId": null, "effects": [{ "type": "quest_recommend", "questKey": "drag_anxious_to_mine" }, { "type": "friendship", "delta": 2 }] }
+      ]
+    },
+    "co_debug": {
+      "id": "co_debug",
+      "text": "……你真的愿意看？是 #{{stats.anxiousLastFailProblemNo}}。错误是 {{stats.anxiousLastFailError}}。我已经改了五遍了。",
+      "conditions": [{ "type": "has_recent_failures" }],
+      "choices": [
+        { "label": "我们一起改第六遍", "nextNodeId": null, "effects": [{ "type": "quest_recommend", "questKey": "co_debug_anxious" }, { "type": "friendship", "delta": 3 }] }
+      ]
+    },
+    "refer_sage": {
+      "id": "refer_sage",
+      "text": "Sage……上次我去他给了我一杯茶，没让我做题。后来我自己想做了。",
+      "conditions": [],
+      "choices": [
+        { "label": "周五再去找他", "nextNodeId": null, "effects": [{ "type": "quest_recommend", "questKey": "weekly_review" }, { "type": "friendship", "delta": 1 }] }
+      ]
+    },
+    "score_reframe": {
+      "id": "score_reframe",
+      "text": "{{profileAdaptive:你今天掌握度 {{stats.masteryAvg}}，比上周升 {{stats.masteryDelta}} — 我比你低多了，能不能教我？ | 我看你画像里也是焦虑型，咱组队，错一起错。}}",
+      "conditions": [{ "type": "first_time_today", "key": "score_reframe" }],
+      "choices": [
+        { "label": "组队", "nextNodeId": null, "effects": [{ "type": "friendship", "delta": 2 }, { "type": "set_flag", "flagKey": "anxious_pair_today" }] }
+      ]
+    },
+    "gift_received": {
+      "id": "gift_received",
+      "text": "{{giftFavorite:好喝……谢谢你记得我喜欢什么。 | 谢谢，我……我会喝完的。}}",
+      "conditions": [{ "type": "gift_just_given" }],
+      "choices": [
+        { "label": "应该的", "nextNodeId": null, "effects": [{ "type": "friendship", "delta": 3 }] }
+      ]
+    },
+    "friendship_max": {
+      "id": "friendship_max",
+      "text": "{{playerName}}，这学期我居然敢举手回答了。这是我一直随身带的 \"不完美也可以\" 贴纸，分你一张。",
+      "conditions": [{ "type": "friendship_min", "value": 80 }],
+      "choices": [
+        { "label": "我贴电脑上", "nextNodeId": null, "effects": [{ "type": "give_item", "itemKey": "imperfect_sticker" }, { "type": "set_flag", "flagKey": "student_anxious_max_friend" }] }
+      ]
+    }
+  }
+}

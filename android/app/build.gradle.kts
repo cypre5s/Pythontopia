@@ -40,6 +40,7 @@ android {
     sourceSets {
         named("main") {
             kotlin.srcDir("src/main/kotlin")
+            // libgdx.so 已 vendored 到 src/main/jniLibs/<abi>/，详见 src/main/jniLibs/README.md。
         }
         named("test") {
             kotlin.srcDir("src/test/kotlin")
@@ -52,6 +53,14 @@ android {
     testOptions {
         unitTests.isReturnDefaultValues = true
     }
+
+    packaging {
+        // 多模块都依赖 LibGDX，避免 META-INF 资源冲突
+        resources.excludes += setOf(
+            "META-INF/AL2.0",
+            "META-INF/LGPL2.1",
+        )
+    }
 }
 
 dependencies {
@@ -59,7 +68,10 @@ dependencies {
     implementation(project(":core:data"))
     implementation(project(":core:design"))
     implementation(project(":core:network"))
+    implementation(project(":game"))
     implementation(project(":feature:auth"))
+    implementation(project(":feature:hub"))
+    implementation(project(":feature:dialog"))
     implementation(project(":feature:profile"))
     implementation(project(":feature:fields"))
     implementation(project(":feature:workshop"))
@@ -82,6 +94,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.hilt.navigation.compose)
+    implementation(libs.libgdx.backend.android)
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)

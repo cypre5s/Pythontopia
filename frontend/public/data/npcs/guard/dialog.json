@@ -1,0 +1,65 @@
+{
+  "npcKey": "guard",
+  "rootNodeId": "greet",
+  "nodes": {
+    "greet": {
+      "id": "greet",
+      "text": "{{playerName}}，去哪？要不要听一句门口规矩？",
+      "conditions": [],
+      "choices": [
+        { "label": "矿洞怎么进", "nextNodeId": "mine_entry" },
+        { "label": "港口要什么条件", "nextNodeId": "port_entry" },
+        { "label": "校园全开吗", "nextNodeId": "campus_entry" },
+        { "label": "谢了", "nextNodeId": null }
+      ]
+    },
+    "mine_entry": {
+      "id": "mine_entry",
+      "text": "{{profileAdaptive:你已经满足条件 — 提交失败过一次，门会开。 | 矿洞要先有一次正式失败提交。先去训练场练手再来。}}",
+      "conditions": [],
+      "choices": [
+        { "label": "知道了", "nextNodeId": null, "effects": [{ "type": "friendship", "delta": 1 }] }
+      ]
+    },
+    "port_entry": {
+      "id": "port_entry",
+      "text": "港口要解锁第 4 章 \"流程自动化\"。{{profileAdaptive:你已经过了第 4 章入口 — 走吧。 | 你还在第 {{stats.currentChapterOrder}} 章，先把课程跟到第 4 章再来。}}",
+      "conditions": [],
+      "choices": [
+        { "label": "了解", "nextNodeId": null, "effects": [{ "type": "friendship", "delta": 1 }] }
+      ]
+    },
+    "campus_entry": {
+      "id": "campus_entry",
+      "text": "校园全天开放，馆长 Doc 比我起得还早。注意周日晚上 22 点后图书馆关门，但 Sage 的复盘殿全天接客。",
+      "conditions": [],
+      "choices": [
+        { "label": "懂", "nextNodeId": null, "effects": [{ "type": "friendship", "delta": 1 }] }
+      ]
+    },
+    "lost_player_help": {
+      "id": "lost_player_help",
+      "text": "看你绕了 10 分钟没找路 — 北边是农场，东边校园，南边矿洞，西边港口，中间就是你站的小镇。",
+      "conditions": [{ "type": "player_wandering" }],
+      "choices": [
+        { "label": "感谢", "nextNodeId": null, "effects": [{ "type": "friendship", "delta": 2 }] }
+      ]
+    },
+    "gift_received": {
+      "id": "gift_received",
+      "text": "{{giftFavorite:夜里巡逻正缺。 | 谢，揣兜里。}}",
+      "conditions": [{ "type": "gift_just_given" }],
+      "choices": [
+        { "label": "辛苦", "nextNodeId": null, "effects": [{ "type": "friendship", "delta": 3 }] }
+      ]
+    },
+    "friendship_max": {
+      "id": "friendship_max",
+      "text": "{{playerName}}，给你一张全图地图卷轴 — 五个区域永远显示在你右上角小地图上。",
+      "conditions": [{ "type": "friendship_min", "value": 80 }],
+      "choices": [
+        { "label": "谢守门叔", "nextNodeId": null, "effects": [{ "type": "give_item", "itemKey": "town_map_scroll" }, { "type": "set_flag", "flagKey": "guard_max_friend" }] }
+      ]
+    }
+  }
+}

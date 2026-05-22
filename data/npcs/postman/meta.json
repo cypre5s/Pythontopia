@@ -1,0 +1,22 @@
+{
+  "key": "postman",
+  "name": "邮差",
+  "category": "life",
+  "sprite": "lpc_npc_postman",
+  "portrait": "portrait_postman.png",
+  "spawnMap": "town_hub",
+  "spawn": { "tileX": 20, "tileY": 11 },
+  "birthday": { "month": 1, "day": 25 },
+  "favoriteGifts": ["envelope", "stamp", "coffee"],
+  "schedule": {
+    "monday":    [{ "from": "07:00", "map": "town_hub", "tileX": 20, "tileY": 11 }, { "from": "14:00", "map": "port_west", "tileX": 14, "tileY": 12 }],
+    "tuesday":   [{ "from": "07:00", "map": "town_hub", "tileX": 20, "tileY": 11 }, { "from": "14:00", "map": "campus_east", "tileX": 12, "tileY": 6 }],
+    "wednesday": [{ "from": "07:00", "map": "town_hub", "tileX": 20, "tileY": 11 }, { "from": "14:00", "map": "farm_north", "tileX": 12, "tileY": 8 }],
+    "thursday":  [{ "from": "07:00", "map": "town_hub", "tileX": 20, "tileY": 11 }, { "from": "14:00", "map": "mine_south", "tileX": 10, "tileY": 16 }],
+    "friday":    [{ "from": "07:00", "map": "town_hub", "tileX": 20, "tileY": 11 }],
+    "saturday":  [{ "from": "09:00", "map": "town_hub", "tileX": 20, "tileY": 11 }],
+    "sunday":    [{ "from": "09:00", "map": "town_hub", "tileX": 20, "tileY": 11 }]
+  },
+  "tags": ["quest_gift", "mail_delivery", "daily_login"],
+  "description": "镇上的邮差，每天送一封任务礼包：日常签到题、班级公告、教师留言。生日时会送特别礼物。"
+}

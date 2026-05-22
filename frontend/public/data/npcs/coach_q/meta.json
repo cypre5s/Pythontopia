@@ -1,0 +1,22 @@
+{
+  "key": "coach_q",
+  "name": "教务 Q",
+  "category": "educator_core",
+  "sprite": "lpc_npc_coach",
+  "portrait": "portrait_coach_q.png",
+  "spawnMap": "campus_east",
+  "spawn": { "tileX": 12, "tileY": 6 },
+  "birthday": { "month": 9, "day": 1 },
+  "favoriteGifts": ["whistle", "stopwatch", "exercise_book"],
+  "schedule": {
+    "monday":    [{ "from": "08:00", "map": "campus_east", "tileX": 12, "tileY": 6 }, { "from": "14:00", "map": "town_hub",   "tileX": 14, "tileY": 14 }],
+    "tuesday":   [{ "from": "08:00", "map": "campus_east", "tileX": 12, "tileY": 6 }],
+    "wednesday": [{ "from": "08:00", "map": "campus_east", "tileX": 12, "tileY": 6 }],
+    "thursday":  [{ "from": "08:00", "map": "campus_east", "tileX": 12, "tileY": 6 }, { "from": "15:00", "map": "town_hub",   "tileX": 14, "tileY": 14 }],
+    "friday":    [{ "from": "08:00", "map": "campus_east", "tileX": 12, "tileY": 6 }],
+    "saturday":  [{ "from": "09:00", "map": "campus_east", "tileX": 12, "tileY": 6 }],
+    "sunday":    [{ "from": "09:00", "map": "campus_east", "tileX": 12, "tileY": 6 }]
+  },
+  "tags": ["problem_recommend", "training_dispatcher", "39_problems"],
+  "description": "教务处的老 Q，掌管 39 道官方题库。会按掌握度推荐你下一道该练的题，不让你刷无效题。"
+}

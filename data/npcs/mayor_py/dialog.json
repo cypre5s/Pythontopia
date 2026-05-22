@@ -1,0 +1,66 @@
+{
+  "npcKey": "mayor_py",
+  "rootNodeId": "greet",
+  "nodes": {
+    "greet": {
+      "id": "greet",
+      "text": "欢迎来到 Pythontopia，{{playerName}}！我是镇长 Py，python 之父的化身。",
+      "conditions": [],
+      "choices": [
+        { "label": "请告诉我这里有什么？", "nextNodeId": "introduce_town" },
+        { "label": "我应该从哪里开始？", "nextNodeId": "where_to_start" },
+        { "label": "聊聊我的进度", "nextNodeId": "chat_progress" },
+        { "label": "再见", "nextNodeId": null }
+      ]
+    },
+    "introduce_town": {
+      "id": "introduce_town",
+      "text": "小镇分为五个区域：中央 hub、北农场、南矿洞、东校园、西港口。每个区域都有不同的学习活动：田老在农场种知识、矿头 Bug 在矿洞带你打错误、馆长 Doc 在校园守着 561 页课件。",
+      "conditions": [],
+      "choices": [
+        { "label": "好的，我去探索一下", "nextNodeId": null, "effects": [{ "type": "friendship", "delta": 1 }] }
+      ]
+    },
+    "where_to_start": {
+      "id": "where_to_start",
+      "text": "{{profileAdaptive:你的画像显示偏好实践，建议先去北农场让田老带你解锁第一个 KC。 | 你刚来不久，建议先去校园找馆长 Doc 了解课程结构，再回农场动手做。}}",
+      "conditions": [],
+      "choices": [
+        { "label": "我懂了", "nextNodeId": null, "effects": [{ "type": "friendship", "delta": 2 }, { "type": "quest_recommend", "questKey": "first_kc_unlock" }] }
+      ]
+    },
+    "chat_progress": {
+      "id": "chat_progress",
+      "text": "你已经解锁 {{stats.kcUnlocked}} 个知识点，掌握度均值 {{stats.masteryAvg}}。继续保持节奏，python 之路无非两步：写下去、再写下去。",
+      "conditions": [],
+      "choices": [
+        { "label": "谢谢镇长", "nextNodeId": null, "effects": [{ "type": "friendship", "delta": 1 }] }
+      ]
+    },
+    "weekly_recap": {
+      "id": "weekly_recap",
+      "text": "上周你解锁了 {{stats.kcUnlockedLastWeek}} 个知识点，做了 {{stats.exercisesLastWeek}} 道练习。复盘师 Sage 在校园等你做本周复盘，去吗？",
+      "conditions": [{ "type": "first_time_this_week", "key": "weekly_recap" }],
+      "choices": [
+        { "label": "现在就去找 Sage", "nextNodeId": null, "effects": [{ "type": "quest_recommend", "questKey": "weekly_review" }, { "type": "friendship", "delta": 1 }] },
+        { "label": "晚点再去", "nextNodeId": null }
+      ]
+    },
+    "gift_received": {
+      "id": "gift_received",
+      "text": "{{giftFavorite:这正是我喜欢的！谢谢，{{playerName}}。 | 谢谢你的礼物，心意我收下了。}}",
+      "conditions": [{ "type": "gift_just_given" }],
+      "choices": [
+        { "label": "客气了", "nextNodeId": null, "effects": [{ "type": "friendship", "delta": 3 }] }
+      ]
+    },
+    "friendship_max": {
+      "id": "friendship_max",
+      "text": "{{playerName}}，你已经是我心里的 python 镇民。给你这本由我亲笔签名的《Python 之禅》，提醒你 — Simple is better than complex.",
+      "conditions": [{ "type": "friendship_min", "value": 80 }],
+      "choices": [
+        { "label": "我会牢记", "nextNodeId": null, "effects": [{ "type": "give_item", "itemKey": "zen_of_python_signed" }, { "type": "set_flag", "flagKey": "mayor_py_max_friend" }] }
+      ]
+    }
+  }
+}

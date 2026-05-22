@@ -1,0 +1,57 @@
+{
+  "npcKey": "gardener",
+  "rootNodeId": "greet",
+  "nodes": {
+    "greet": {
+      "id": "greet",
+      "text": "{{playerName}}，闻到没？今天换了 {{stats.seasonName}} 季的花。",
+      "conditions": [],
+      "choices": [
+        { "label": "现在是什么季？", "nextNodeId": "season_intro" },
+        { "label": "镇上有活动吗？", "nextNodeId": "seasonal_event" },
+        { "label": "我想种花", "nextNodeId": "want_garden" },
+        { "label": "再聊", "nextNodeId": null }
+      ]
+    },
+    "season_intro": {
+      "id": "season_intro",
+      "text": "现在是 {{stats.seasonName}}。农场的 KC 庄稼也跟着变 — 春发芽、夏抽穗、秋收成、冬休耕。学习也要跟季节。",
+      "conditions": [],
+      "choices": [
+        { "label": "受教", "nextNodeId": null, "effects": [{ "type": "friendship", "delta": 1 }] }
+      ]
+    },
+    "seasonal_event": {
+      "id": "seasonal_event",
+      "text": "{{profileAdaptive:本周末有 \"KC 花展\" — 把你掌握度最高的 3 个 KC 做成花圈，全镇展览。 | 下周是 \"补种节\" — 把所有枯萎 KC 重新浇一遍，能拿一束花。}}",
+      "conditions": [{ "type": "first_time_this_week", "key": "seasonal_event" }],
+      "choices": [
+        { "label": "我报名", "nextNodeId": null, "effects": [{ "type": "quest_recommend", "questKey": "seasonal_event_signup" }, { "type": "friendship", "delta": 2 }] }
+      ]
+    },
+    "want_garden": {
+      "id": "want_garden",
+      "text": "你画像屋外的窗台空着 — 拿一把当季种子，种成功了能挂自己名字。",
+      "conditions": [],
+      "choices": [
+        { "label": "拿种子", "nextNodeId": null, "effects": [{ "type": "give_item", "itemKey": "seasonal_seed" }, { "type": "friendship", "delta": 1 }] }
+      ]
+    },
+    "gift_received": {
+      "id": "gift_received",
+      "text": "{{giftFavorite:好种子！下季就开。 | 谢，搁库房。}}",
+      "conditions": [{ "type": "gift_just_given" }],
+      "choices": [
+        { "label": "客气", "nextNodeId": null, "effects": [{ "type": "friendship", "delta": 3 }] }
+      ]
+    },
+    "friendship_max": {
+      "id": "friendship_max",
+      "text": "{{playerName}}，给你一颗 \"四季花\" 籽 — 它会跟着你的 KC 进度开花，不会枯。",
+      "conditions": [{ "type": "friendship_min", "value": 80 }],
+      "choices": [
+        { "label": "我种好", "nextNodeId": null, "effects": [{ "type": "give_item", "itemKey": "evergreen_seed" }, { "type": "set_flag", "flagKey": "gardener_max_friend" }] }
+      ]
+    }
+  }
+}

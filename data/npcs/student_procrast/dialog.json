@@ -1,0 +1,74 @@
+{
+  "npcKey": "student_procrast",
+  "rootNodeId": "greet",
+  "nodes": {
+    "greet": {
+      "id": "greet",
+      "text": "{{playerName}}，你也才出门？我刚刚一觉睡到现在……今晚再补吧。",
+      "conditions": [],
+      "choices": [
+        { "label": "你不学了？", "nextNodeId": "not_studying" },
+        { "label": "deadline 还有几天？", "nextNodeId": "deadline_check" },
+        { "label": "我陪你去做一道题", "nextNodeId": "drag_him" },
+        { "label": "保重", "nextNodeId": null }
+      ]
+    },
+    "not_studying": {
+      "id": "not_studying",
+      "text": "学，肯定学，明天一定学。我感觉只要 deadline 前一晚硬熬，全部能补回来 — 上学期我就是这么过的。",
+      "conditions": [],
+      "choices": [
+        { "label": "上学期成绩呢？", "nextNodeId": "regret" }
+      ]
+    },
+    "regret": {
+      "id": "regret",
+      "text": "……60 分擦边，差点重修。其实我也想像小柒那样一天一道题，但就是起不来。",
+      "conditions": [],
+      "choices": [
+        { "label": "或许从今天起？", "nextNodeId": "start_today", "effects": [{ "type": "friendship", "delta": 2 }] },
+        { "label": "明天再说", "nextNodeId": null }
+      ]
+    },
+    "start_today": {
+      "id": "start_today",
+      "text": "……你这么一说我有点心动。要不你帮我推一道最简单的？我做完发你看。",
+      "conditions": [],
+      "choices": [
+        { "label": "推你 #{{stats.entryProblemNo}}", "nextNodeId": null, "effects": [{ "type": "quest_recommend", "questKey": "drag_procrast" }, { "type": "friendship", "delta": 2 }] }
+      ]
+    },
+    "deadline_check": {
+      "id": "deadline_check",
+      "text": "{{profileAdaptive:你画像里也是夜猫子吧？deadline 还有 3 天，今晚一起开会肝。 | 你比我自律 — 帮我盯着我今晚有没有摸鱼。}}",
+      "conditions": [],
+      "choices": [
+        { "label": "好", "nextNodeId": null, "effects": [{ "type": "friendship", "delta": 1 }] }
+      ]
+    },
+    "drag_him": {
+      "id": "drag_him",
+      "text": "真的假的？那我去教务找老 Q 拿题，你别跑啊。",
+      "conditions": [],
+      "choices": [
+        { "label": "等你", "nextNodeId": null, "effects": [{ "type": "quest_recommend", "questKey": "drag_procrast" }, { "type": "friendship", "delta": 2 }] }
+      ]
+    },
+    "gift_received": {
+      "id": "gift_received",
+      "text": "{{giftFavorite:咖啡因！谢了，今晚能再战两小时。 | ……谢，先放包里。}}",
+      "conditions": [{ "type": "gift_just_given" }],
+      "choices": [
+        { "label": "你也注意身体", "nextNodeId": null, "effects": [{ "type": "friendship", "delta": 3 }] }
+      ]
+    },
+    "friendship_max": {
+      "id": "friendship_max",
+      "text": "{{playerName}}，这学期我居然没挂科 — 全靠你天天拉我。给你我熬夜画的 \"早八打卡卡\"，咱继续。",
+      "conditions": [{ "type": "friendship_min", "value": 80 }],
+      "choices": [
+        { "label": "继续盯你", "nextNodeId": null, "effects": [{ "type": "give_item", "itemKey": "early_bird_card" }, { "type": "set_flag", "flagKey": "student_procrast_max_friend" }] }
+      ]
+    }
+  }
+}

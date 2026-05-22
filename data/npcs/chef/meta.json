@@ -1,0 +1,22 @@
+{
+  "key": "chef",
+  "name": "厨师",
+  "category": "life",
+  "sprite": "lpc_npc_chef",
+  "portrait": "portrait_chef.png",
+  "spawnMap": "town_hub",
+  "spawn": { "tileX": 22, "tileY": 11 },
+  "birthday": { "month": 11, "day": 11 },
+  "favoriteGifts": ["fresh_herb", "rare_spice", "cookbook"],
+  "schedule": {
+    "monday":    [{ "from": "07:00", "map": "town_hub", "tileX": 22, "tileY": 11 }],
+    "tuesday":   [{ "from": "07:00", "map": "town_hub", "tileX": 22, "tileY": 11 }],
+    "wednesday": [{ "from": "07:00", "map": "town_hub", "tileX": 22, "tileY": 11 }],
+    "thursday":  [{ "from": "07:00", "map": "town_hub", "tileX": 22, "tileY": 11 }],
+    "friday":    [{ "from": "07:00", "map": "town_hub", "tileX": 22, "tileY": 11 }, { "from": "18:00", "map": "town_hub", "tileX": 22, "tileY": 11 }],
+    "saturday":  [{ "from": "09:00", "map": "town_hub", "tileX": 22, "tileY": 11 }],
+    "sunday":    [{ "from": "09:00", "map": "town_hub", "tileX": 22, "tileY": 11 }]
+  },
+  "tags": ["recipe_buff", "energy_meal"],
+  "description": "镇上小餐馆的厨师，按 KC 主题做菜：列表沙拉、字典咖喱、循环饺子。吃完按菜对应的 KC 有短时学习速度 buff。"
+}

@@ -1,0 +1,22 @@
+{
+  "key": "guard",
+  "name": "守门",
+  "category": "life",
+  "sprite": "lpc_npc_guard",
+  "portrait": "portrait_guard.png",
+  "spawnMap": "town_hub",
+  "spawn": { "tileX": 24, "tileY": 18 },
+  "birthday": { "month": 7, "day": 30 },
+  "favoriteGifts": ["torch", "map", "polish_cloth"],
+  "schedule": {
+    "monday":    [{ "from": "06:00", "map": "town_hub", "tileX": 24, "tileY": 18 }],
+    "tuesday":   [{ "from": "06:00", "map": "town_hub", "tileX": 24, "tileY": 18 }],
+    "wednesday": [{ "from": "06:00", "map": "town_hub", "tileX": 24, "tileY": 18 }],
+    "thursday":  [{ "from": "06:00", "map": "town_hub", "tileX": 24, "tileY": 18 }],
+    "friday":    [{ "from": "06:00", "map": "town_hub", "tileX": 24, "tileY": 18 }],
+    "saturday":  [{ "from": "06:00", "map": "town_hub", "tileX": 24, "tileY": 18 }],
+    "sunday":    [{ "from": "06:00", "map": "town_hub", "tileX": 24, "tileY": 18 }]
+  },
+  "tags": ["map_guide", "area_unlock_hint"],
+  "description": "镇南门口的老守门。提示玩家各地图入口要求（如矿洞要先 1 次失败提交、港口要先解锁第 4 章）。"
+}

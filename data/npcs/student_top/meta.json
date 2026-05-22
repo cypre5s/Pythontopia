@@ -1,0 +1,22 @@
+{
+  "key": "student_top",
+  "name": "拔尖小尖",
+  "category": "student",
+  "sprite": "lpc_npc_student_e",
+  "portrait": "portrait_student_top.png",
+  "spawnMap": "town_hub",
+  "spawn": { "tileX": 14, "tileY": 11 },
+  "birthday": { "month": 2, "day": 29 },
+  "favoriteGifts": ["trophy", "advanced_book", "code_pendant"],
+  "schedule": {
+    "monday":    [{ "from": "07:00", "map": "town_hub",    "tileX": 14, "tileY": 11 }, { "from": "13:00", "map": "campus_east", "tileX": 12, "tileY": 6 }],
+    "tuesday":   [{ "from": "07:00", "map": "campus_east", "tileX": 12, "tileY": 6 }],
+    "wednesday": [{ "from": "07:00", "map": "campus_east", "tileX": 12, "tileY": 6 }],
+    "thursday":  [{ "from": "07:00", "map": "town_hub",    "tileX": 14, "tileY": 11 }],
+    "friday":    [{ "from": "07:00", "map": "campus_east", "tileX": 12, "tileY": 6 }],
+    "saturday":  [{ "from": "10:00", "map": "campus_east", "tileX": 12, "tileY": 6 }],
+    "sunday":    [{ "from": "10:00", "map": "campus_east", "tileX": 12, "tileY": 6 }]
+  },
+  "tags": ["peer_top", "advanced_tips", "competition_invite"],
+  "description": "拔尖型同学。39 题做完一个月就刷外校题。对话不傲，会主动分享解法和算法思路，让玩家看到上限。"
+}

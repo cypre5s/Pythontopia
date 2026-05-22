@@ -26,13 +26,16 @@ dependencies {
 
     implementation(libs.libgdx.core)
     implementation(libs.libgdx.backend.android)
-    // libs.libgdx.platform.armeabi.v7a 是 LibGDX 的 native .so 包,
-    // 暂不引入避免 R1 体积膨胀; Android-R6 真正实现渲染时再按
-    // arm64-v8a / armeabi-v7a / x86_64 拆 ABI 加入
+    // LibGDX native .so 在 :app 模块通过 `copyAndroidNatives` 自定义 Gradle 任务
+    // 从 gdx-platform classifier JAR 中解包到 :app/src/main/jniLibs/<abi>/libgdx.so，
+    // 这样运行时 System.loadLibrary("gdx") 才能找到。详见 :app/build.gradle.kts。
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.annotation)
     implementation(libs.androidx.startup)
+    // gdx-backend-android 1.13.1 的 AndroidFragmentApplication 继承 androidx.fragment.app.Fragment，
+    // 需要 fragment-ktx 把它的超类放到 :game 模块的编译期 classpath 上。
+    api(libs.androidx.fragment.ktx)
 
     testImplementation(libs.junit.jupiter.api)
     testRuntimeOnly(libs.junit.jupiter.engine)

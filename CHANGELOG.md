@@ -2,6 +2,58 @@
 
 ## 2026-05-22
 
+### R-12 — 星露谷改造（完成）
+
+> 23 个子代理并发执行、4 波收尾（Wave-1 资产/引擎 → Wave-2 地图/NPC/迁移 → Wave-3 Controllers/三库/Polish → Wave-4 Android/章节导航/Lint/E2E/Doc），从单图小镇升级为五分块开放世界 + 20 NPC + 真·RPG 存档 + 8 维画像直写 + 561 页课件 / 39 题 / 46 示例三库可读可练。完整跟踪：`docs/sv-progress.md`、`docs/r12_release_notes.md`、`docs/wave_subagent_report.md`、`docs/r12_subagent_files.md`。
+
+#### 视觉与玩法
+
+- **5 张分块大地图**：中央 hub + 北农场 + 南矿洞 + 东校园 + 西港口（单图最大 50×40）。Tiled JSON 全部由 `scripts/generate-maps.mjs` 程序化生成，含 collision/exit/spawn 层。
+- **20 NPC 系统**：6 教育核心 + 6 学生 + 8 生活，含 portrait / 对话树 / 周调度 / 友好度 / 礼物。140+ 对话节点、`data/npcs/<key>/{meta,dialog}.json` → `frontend/scripts/sync-npc-data.mjs` 同步到 `frontend/public/data/npcs/`（npm predev/prebuild 钩子）。
+- **Phaser Tilemap + TilemapLayer** 替代 R-11 手撸 image 铺地；LPC Sara 4 向 walk anim + tween 平滑移动 + 阴影 ellipse。原 `/town` `/field` `/bug-mine` 三页合并为单一 `/world`，跨地图 fade 切换、camera setZoom(2) 平滑跟随。
+- **8 方向输入**：WASD + 方向键 + F 交互（原神风），`input.ts` 返回 `ExtendedDirection`，写后端用 `toServerDirection` 降为 4 向兼容存档约定。
+- **天气粒子 + 昼夜 tint + confetti**：rainy / snowy / cloudy / stormy 粒子 + morning / noon / evening / night tween tint；任务通关 / 课程通关 / 班级第一 confetti 接通 `celebrate.ts`；BGM 跨场景 1.5s crossfade 无爆音。
+- **章节导航常驻 UI**（W4-CHAPTER-NAV）：`components/world/ChapterNavPanel.vue` 在 `farm_north` 子地图固定显示 7 章按钮，点击挑选范围内首个 KC + 同步 router query，hover 100ms 节流。
+
+#### 后端 RPG 存档
+
+- **V100-V113 共 14 个 migration**：bootstrap 视图、npc_dialog_state、npc_gift_log、inventory、skill_tree、currency、shop_listing、world_calendar、save_slot、course_example_index、quest_evidence/deep_link、learner_profile.dimensions JSONB（含 GIN 索引）、users.role 加 ADMIN、player_state.direction VARCHAR(16) 支持 8 方向。
+- **GameBootstrap API**（`POST /api/game/bootstrap`）：一次性聚合返回 12 字段 `world + playerState + crops + quests + kcMastery + profile + learningPath + inventory + skills + currency + npcStates + activeSaveSlot`，前端 `bootstrapGame()` 一次装配所有 store。
+- **WorldAdvance / Sleep**：手动 sleep 推进 day_index + weekday + season + 天气随机切换 + NPC schedule 按周更新；多 save_slot（最多 6 个）+ active 切换。
+- **商人 shop**：5 商品 + stock + weekday 限购；NPC 礼物 love/like/neutral/dislike/hate 5 档匹配（`item_catalog.gift_tier_map`）。
+- **8 维画像直写**：`learner_profile.dimensions` JSONB（8 个英文 snake_case key：subject_background / knowledge_baseline / learning_goal / cognitive_style / learning_preference / mistake_pattern / practice_ability / motivation_persistence）。`PassiveProfileService` 订阅 4 事件（`PracticeSucceeded` / `PracticeFailed` / `DebugResolved` / `ResourceConsumed`）真改 4 客观维度；学生通过 `PUT /api/learner/profile/dimensions/{key}` 自评 4 主观维度。
+- **任务 evidence 强校验**：4 类证据类型（submission_id / resource_id / page_read_id / kc_mastery_delta），`QuestService` 在 complete 时强校验「证据真实存在 + 属于当前 learner + 满足 KC/通过条件」；不传 evidence 直接 400。
+
+#### 教育闭环（三库 + deep link）
+
+- **LibraryPage**：561 页课件阅读器，左 7 章树 + 中正文 + 右 RAG 检索框；翻页流畅；KC 锚点跳转。
+- **ProblemListPage**：39 题题库（按 KC / 难度 / 状态过滤 + 一键跳 `/training?problemId=` + Pyodide 即时预览 / 服务端正式提交切换）。
+- **ExampleListPage**：46 示例库（按 KC 与章节分组、代码复制）。
+- **PathTreeTab deep link**：学习路径节点点击直接跳目标场景（KC 田地 `/world?spawn=farm_north&kc=` / 题库 `/problems?kcId=` / 课件页 `/library?page=` / 复盘大厅）。
+
+#### Android R-12 demo（W4-ANDROID）
+
+- 手写最小 OpenAPI 3.0 静态规格 `android/openapi/pythontopia-api.json`，覆盖 demo 链路 8 端点（auth login + game bootstrap + npc state/talk + calendar today + inventory + sleep + player patch 8 方向）。
+- 10 个 Kotlin world DTO（`android/core/data/src/main/kotlin/com/pythontopia/core/data/dto/world/`），`PlayerStatePatch.direction` 与后端 V113 + `@Pattern` 严格对齐；`NpcDialogStateDto.flags` 在 demo 阶段把后端 `JsonNode` 自由结构收敛为 `Map<String,String>` 避开 sealed union。
+- 完整 `springdoc /v3/api-docs` 自动生成 + 60+ 端点覆盖留给 Android-R13+（README 内含 curl 替换命令 + Generator 7.22 task 集成步骤）。
+
+#### 工程
+
+- **资产层**：CC0 + LPC CC-BY-SA + OFL 全离线，inbox 13000+ 文件 / 约 359 MB；`LICENSE-ART.md` 与 `frontend/public/assets/pixel/LICENSE.md` 双向同步；LPC CC-BY-SA 3.0 传染已接受（包装作品 CC-BY-SA 3.0+ 发布，代码层 MIT 分层授权）。
+- **测试基础设施**：`frontend/tests/_helpers/phaserMock.ts` 全局 `vi.mock('phaser')`，jsdom 下能正常跑 Phaser scene/adapter spec 不爆 canvas 错；`vitest.config.ts` 通过 `setupFiles` 全局加载。
+- **ESLint 预存零容忍**（W4-LINT）：业务层禁止 `import 'phaser'`（强制走 `src/game/adapters/*`）+ `@typescript-eslint/no-explicit-any` error；`PlaceholderScene` 残留 unused import 已清零；`npm run lint` 0 error。
+- **23 个子代理并发执行**：Wave-1 4 + Wave-2 7 + Wave-3 7 + Wave-4 5；并发墙钟时间约 2 小时，串行累加耗时约 14 小时。
+- **测试基线**：frontend vitest 45 文件 / 162 顶层 `it/test` 全过、frontend typecheck 0 错误、frontend lint 0 error、backend mvn compile 288 Java 源文件 BUILD SUCCESS、backend mvn test 34 类 / 140 `@Test` 全过 0 失败。
+- **Beta 演示 checklist + 自动化烟雾测试**（W4-E2E + W4-DEMO-DOC）：`docs/beta_demo_checklist.md` 学生 9 步 + 教师 4 步全程化人工 walkthrough（含 D 节「已知遗留」7 条）；`scripts/r12-smoke-test.sh` 可执行 shell 一键覆盖 backend `mvn test -DskipITs` + frontend typecheck/vitest + 3 关键像素资产 + 5 地图 + 20 NPC + ≥35 个 Flyway migration 共 7 项断言，`set -e` fail-fast。
+
+#### 已知遗留（R-13/R-14 处理）
+
+- Android 4 张外围地图 + 库存/技能/商店完整 UI（当前 demo 仅覆盖 town_hub + 8 端点）。
+- RAG 检索学生权限解锁 + `pythontopia-rag` 服务端通过 backend 代理。
+- 教师课堂直播实时班级监控大屏（当前 KC 热力图为 5 分钟 snapshot 缓存）。
+- 多语言切换（英文版）+ iOS 客户端规划。
+- **W4-PLAY-TEST 重派发现（演示前必修，R-13 第一周）**：浏览器实测登录链路时发现，本地 Vite 默认端口 5173 被占用时自动回退 5174，但后端 `WebSecurityConfig` CORS allowlist 与 `docs/beta_demo_checklist.md` 前置条件示例仍硬编码 5173 → 预检 `OPTIONS /api/auth/login` 直接 403；必修方向：`vite.config.ts` 加 `strictPort: true` 或后端 allowlist 同步加 `http://localhost:5174`。
+
 ### Android-R1 - 真实可构建多模块骨架（完成）
 
 - **核心成果**：在 WSL2 Linux 环境下完成 Pythontopia Android 客户端首个**真实可构建**版本。

@@ -1,0 +1,22 @@
+{
+  "key": "farmer_kc",
+  "name": "田老",
+  "category": "educator_core",
+  "sprite": "lpc_npc_farmer",
+  "portrait": "portrait_farmer_kc.png",
+  "spawnMap": "farm_north",
+  "spawn": { "tileX": 12, "tileY": 8 },
+  "birthday": { "month": 5, "day": 20 },
+  "favoriteGifts": ["watering_can", "fertilizer", "seeds_input"],
+  "schedule": {
+    "monday":    [{ "from": "06:00", "map": "farm_north", "tileX": 12, "tileY": 8 }, { "from": "12:00", "map": "farm_north", "tileX": 14, "tileY": 10 }],
+    "tuesday":   [{ "from": "06:00", "map": "farm_north", "tileX": 12, "tileY": 8 }],
+    "wednesday": [{ "from": "06:00", "map": "farm_north", "tileX": 12, "tileY": 8 }, { "from": "16:00", "map": "town_hub", "tileX": 18, "tileY": 14 }],
+    "thursday":  [{ "from": "06:00", "map": "farm_north", "tileX": 12, "tileY": 8 }],
+    "friday":    [{ "from": "06:00", "map": "farm_north", "tileX": 12, "tileY": 8 }],
+    "saturday":  [{ "from": "08:00", "map": "farm_north", "tileX": 12, "tileY": 8 }, { "from": "14:00", "map": "farm_north", "tileX": 10, "tileY": 12 }],
+    "sunday":    [{ "from": "08:00", "map": "farm_north", "tileX": 12, "tileY": 8 }]
+  },
+  "tags": ["kc_unlock", "crop_state", "field_guide"],
+  "description": "知识田的总田头，把每个 KC 当作一块庄稼。会根据你的掌握度解读作物状态：抽穗、扬花、枯萎、待收获。"
+}

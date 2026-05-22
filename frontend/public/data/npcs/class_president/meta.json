@@ -1,0 +1,22 @@
+{
+  "key": "class_president",
+  "name": "班长",
+  "category": "life",
+  "sprite": "lpc_npc_president",
+  "portrait": "portrait_class_president.png",
+  "spawnMap": "port_west",
+  "spawn": { "tileX": 14, "tileY": 12 },
+  "birthday": { "month": 9, "day": 10 },
+  "favoriteGifts": ["clipboard", "tea", "class_pin"],
+  "schedule": {
+    "monday":    [{ "from": "08:00", "map": "port_west", "tileX": 14, "tileY": 12 }],
+    "tuesday":   [{ "from": "08:00", "map": "port_west", "tileX": 14, "tileY": 12 }],
+    "wednesday": [{ "from": "08:00", "map": "port_west", "tileX": 14, "tileY": 12 }],
+    "thursday":  [{ "from": "08:00", "map": "port_west", "tileX": 14, "tileY": 12 }],
+    "friday":    [{ "from": "08:00", "map": "port_west", "tileX": 14, "tileY": 12 }],
+    "saturday":  [{ "from": "10:00", "map": "port_west", "tileX": 14, "tileY": 12 }],
+    "sunday":    [{ "from": "10:00", "map": "port_west", "tileX": 14, "tileY": 12 }]
+  },
+  "tags": ["class_board", "class_quests", "classmate_status"],
+  "description": "班级广场的班长，对接公告板与班级任务。所有教师发布的班级任务都先经她手贴上公告板。"
+}

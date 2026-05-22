@@ -1,0 +1,22 @@
+{
+  "key": "nurse",
+  "name": "医务",
+  "category": "life",
+  "sprite": "lpc_npc_nurse",
+  "portrait": "portrait_nurse.png",
+  "spawnMap": "town_hub",
+  "spawn": { "tileX": 10, "tileY": 14 },
+  "birthday": { "month": 5, "day": 12 },
+  "favoriteGifts": ["bandage", "tea", "rest_token"],
+  "schedule": {
+    "monday":    [{ "from": "08:00", "map": "town_hub", "tileX": 10, "tileY": 14 }],
+    "tuesday":   [{ "from": "08:00", "map": "town_hub", "tileX": 10, "tileY": 14 }],
+    "wednesday": [{ "from": "08:00", "map": "town_hub", "tileX": 10, "tileY": 14 }],
+    "thursday":  [{ "from": "08:00", "map": "town_hub", "tileX": 10, "tileY": 14 }],
+    "friday":    [{ "from": "08:00", "map": "town_hub", "tileX": 10, "tileY": 14 }],
+    "saturday":  [{ "from": "10:00", "map": "town_hub", "tileX": 10, "tileY": 14 }],
+    "sunday":    [{ "from": "10:00", "map": "town_hub", "tileX": 10, "tileY": 14 }]
+  },
+  "tags": ["energy_restore", "burnout_warning"],
+  "description": "镇中心医务室的医务，负责恢复体力（每日 Pyodide 体力上限）和提醒学生别过劳。"
+}

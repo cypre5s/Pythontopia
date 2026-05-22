@@ -1,0 +1,67 @@
+{
+  "npcKey": "postman",
+  "rootNodeId": "greet",
+  "nodes": {
+    "greet": {
+      "id": "greet",
+      "text": "{{playerName}}，今天的邮件！抽签题 + 班级公告 + 一张 Sage 留言。要领吗？",
+      "conditions": [],
+      "choices": [
+        { "label": "领今日邮件", "nextNodeId": "claim_daily" },
+        { "label": "我要给老师寄信", "nextNodeId": "send_letter" },
+        { "label": "镇上有什么新鲜事", "nextNodeId": "gossip" },
+        { "label": "下次", "nextNodeId": null }
+      ]
+    },
+    "claim_daily": {
+      "id": "claim_daily",
+      "text": "{{profileAdaptive:今天你抽到挑战题 #{{stats.dailyChallengeProblemNo}}（难度对应你）。 | 今天给你温习题 #{{stats.dailyReviewProblemNo}}，先稳住节奏。}}",
+      "conditions": [{ "type": "first_time_today", "key": "daily_mail" }],
+      "choices": [
+        { "label": "签收", "nextNodeId": null, "effects": [{ "type": "give_item", "itemKey": "daily_quest_envelope" }, { "type": "friendship", "delta": 2 }, { "type": "quest_recommend", "questKey": "daily_problem" }, { "type": "set_flag", "flagKey": "daily_mail_claimed" }] }
+      ]
+    },
+    "send_letter": {
+      "id": "send_letter",
+      "text": "你想问哪位老师？教务 Q 收的多是题目质疑，馆长 Doc 收的是页码勘误，Sage 收的是复盘里没写完的话。",
+      "conditions": [],
+      "choices": [
+        { "label": "寄给 Q", "nextNodeId": null, "effects": [{ "type": "quest_recommend", "questKey": "send_letter_q" }, { "type": "friendship", "delta": 1 }] },
+        { "label": "寄给 Doc", "nextNodeId": null, "effects": [{ "type": "quest_recommend", "questKey": "send_letter_doc" }, { "type": "friendship", "delta": 1 }] },
+        { "label": "寄给 Sage", "nextNodeId": null, "effects": [{ "type": "quest_recommend", "questKey": "send_letter_sage" }, { "type": "friendship", "delta": 1 }] }
+      ]
+    },
+    "gossip": {
+      "id": "gossip",
+      "text": "听说工长那边在攒副本组，拔尖小尖在写算法直觉笔记，焦虑小安最近敢举手了 — 你常去看看大家。",
+      "conditions": [],
+      "choices": [
+        { "label": "好", "nextNodeId": null, "effects": [{ "type": "friendship", "delta": 1 }] }
+      ]
+    },
+    "birthday_mail": {
+      "id": "birthday_mail",
+      "text": "今天是你生日！全镇凑了一张卡 — 镇长、田老、矿头都签字了。这一盒糖果给你。",
+      "conditions": [{ "type": "is_player_birthday" }],
+      "choices": [
+        { "label": "感动", "nextNodeId": null, "effects": [{ "type": "give_item", "itemKey": "birthday_box" }, { "type": "friendship", "delta": 5 }, { "type": "set_flag", "flagKey": "birthday_celebrated" }] }
+      ]
+    },
+    "gift_received": {
+      "id": "gift_received",
+      "text": "{{giftFavorite:咖啡因！每次到点送信全靠它。 | 谢，揣兜里。}}",
+      "conditions": [{ "type": "gift_just_given" }],
+      "choices": [
+        { "label": "辛苦你", "nextNodeId": null, "effects": [{ "type": "friendship", "delta": 3 }] }
+      ]
+    },
+    "friendship_max": {
+      "id": "friendship_max",
+      "text": "{{playerName}}，给你一张 \"加急邮章\" — 以后你寄的任何信，优先送达。",
+      "conditions": [{ "type": "friendship_min", "value": 80 }],
+      "choices": [
+        { "label": "谢谢", "nextNodeId": null, "effects": [{ "type": "give_item", "itemKey": "express_seal" }, { "type": "set_flag", "flagKey": "postman_max_friend" }] }
+      ]
+    }
+  }
+}

@@ -1,58 +1,84 @@
 # Pythontopia Web 端集成像素资产 License
 
-> 本目录 (`frontend/public/assets/pixel/`) 是 R-100 阶段 1 从 `assets/inbox/` 精选集成的最终运行素材，总约 29 MB。
-> 仓库级总声明见 `/LICENSE-ART.md`。
+> 本目录 (`frontend/public/assets/pixel/`) 是 Pythontopia 网页端运行所需像素资产的集成视图。
+> 源仓库 `assets/inbox/` 是已审计的离线镜像，由 `scripts/sync-assets.mjs` 增量复制到此处。
+> 全仓库资产 license 总声明见 `/LICENSE-ART.md`。
+> 代码层 license 见仓库根 `LICENSE` 文件（MIT）。
 
-## 资产清单与协议
+## 项目级 License 分层
 
-### fonts/ — Ark Pixel Font (3.1MB, OFL-1.1)
-- 作者: TakWolf — https://github.com/TakWolf/ark-pixel-font
-- 协议: SIL Open Font License v1.1
-- 必须保留 `OFL.txt` 全文
+- **代码层**：MIT
+- **资产层**：CC-BY-SA 3.0+ / OFL-1.1 / CC-BY 4.0 / CC-BY 3.0 / CC0 1.0（分文件标识）
+- **SA 传染**：LPC 系列素材以 CC-BY-SA 3.0+ 传染至本项目"包装作品"层；衍生发布须同样以 SA 兼容协议公开
 
-### icons_kc/ — Game-Icons.net KC 图标 (372KB, CC-BY 3.0)
-- 作者: Lorc, Delapouite, Skoll, sbed, Carl Olsen — https://game-icons.net
-- 协议: Creative Commons Attribution 3.0
-- **强制署名**：需在 about 页面列作者名单
+## 必读署名清单（CC-BY / CC-BY-SA / OFL 强制）
 
-### ui/kenney-adventure/ — Kenney UI Pack Adventure (1.1MB, CC0)
-- 作者: Kenney Vleugels — https://kenney.nl/assets/ui-pack-adventure
-- 协议: CC0 1.0
-- 建议致谢但非强制
+### game-icons.net (CC-BY 3.0)
+> Game icons by **Lorc**, **Delapouite**, **Skoll**, **sbed**, **Carl Olsen** — https://game-icons.net — licensed CC BY 3.0
 
-### tilesets/kenney-* (5.9MB, CC0)
-- Kenney Tiny Town / Tiny Dungeon / Roguelike Modern City / Roguelike Caves & Dungeons
-- 协议: CC0 1.0
+### LPC: Liberated Pixel Cup (CC-BY-SA 3.0+)
+> Tilesets & characters from LPC project, including contributions by **bluecarrot16, Sharm, Reemax, daneeklu (Daniel Eddeland), Jetrel, J. Taylor, Ivan Voirol, TheraHedwig**.
+> Source: https://opengameart.org/ — licensed CC BY-SA 3.0+
+> 完整 CREDITS 文件保留在各子目录的 `CREDITS-*.txt` 中。
 
-### sprites/lpc-* (4.5MB, CC-BY-SA 3.0+/GPL 3.0+)
-- LPC: Liberated Pixel Cup 角色（Sara / Medieval Fantasy / Peppercarrot）
-- 协议: CC-BY-SA 3.0+
-- **传染**: 本项目最终发布必须以 CC-BY-SA 3.0+ 兼容协议发布素材层
-- **强制署名**: 完整作者名单见 `/LICENSE-ART.md`
+### CC-BY 4.0 contributors
+- **Jana Ochse (2DPIXX)** — farming-game-basics (https://opengameart.org/content/farming-game-basics)
+- **Marco L.** — pixel-lightning (https://opengameart.org/content/pixel-lightning)
+- **bluecarrot16 / TheraHedwig / Ivan Voirol** — lpc-farm (https://opengameart.org/content/lpc-farm)
+- **David Revoy** — Pepper&Carrot 24x32 character tribute
 
-### sfx/ (336KB, CC0)
-- Kenney UI/RPG Audio + OGA digital-audio
-- 协议: CC0 1.0
+### OFL-1.1 字体
+> Ark Pixel Font & Fusion Pixel Font by **TakWolf** — https://github.com/TakWolf — SIL OFL-1.1
 
-### bgm/ (12MB, CC0 / CC-BY 3.0 双协议)
-- track_01-04: RandomMind, MouthlessGames, MintoDog
-- 来源: OpenGameArt.org
-- 协议: CC0 1.0（track_02 走 CC0 路径）
+### Kenney CC0（推荐致谢，非强制）
+> Many UI / tile / character / SFX / icon assets by **Kenney Vleugels** (https://kenney.nl) — released as CC0 1.0.
 
-### effects/ (1.8MB, CC0 / CC-BY 4.0)
-- codemanu_pixel_fx, jellyfizh_confetti/poof, john2k_heal_effect
-- 来源: OpenGameArt.org
 
-### vendor/opengameart/ (28KB, 多协议)
-- cereals.png / vegetables.png / tileset_farm.png / crates_and_sacks.png
-- 详细来源见 `/assets/inbox/LICENSE_AUDIT.md`
+<!-- AUTO-GENERATED LICENSE INDEX BEGIN -->
+## 按目录的 License 索引（由 `scripts/sync-assets.mjs` 自动生成，请勿手工编辑）
 
-## Attribution Block（部署到 about 页面）
+| 目标路径 (dest) | License | 作者 | 来源 | 备注 |
+| --- | --- | --- | --- | --- |
+| `tilesets/kenney-tiny-town` | CC0-1.0 | Kenney Vleugels | [link](https://kenney.nl/assets/tiny-town) | 小镇 16x16 像素 tileset，BootScene 主用 |
+| `tilesets/kenney-tiny-dungeon` | CC0-1.0 | Kenney Vleugels | [link](https://kenney.nl/assets/tiny-dungeon) | Bug 矿洞地牢 16x16 像素 tileset |
+| `tilesets/kenney-roguelike-modern-city` | CC0-1.0 | Kenney Vleugels | [link](https://kenney.nl/assets/roguelike-modern-city) | 现代城市 tileset（可选场景） |
+| `tilesets/kenney-roguelike-caves` | CC0-1.0 | Kenney Vleugels | [link](https://kenney.nl/assets/roguelike-caves-dungeons) | 洞穴/地牢 tileset |
+| `sprites/lpc-sara` | CC-BY-SA-3.0 | Sharm / LPC Project | [link](https://opengameart.org/content/lpc-sara) | LPC Sara 全身像，BootScene player_sara 帧 64x64 |
+| `sprites/lpc-medieval-fantasy` | CC-BY-SA-3.0 | bluecarrot16 / TheraHedwig / Reemax / Ivan Voirol 等 | [link](https://opengameart.org/content/lpc-medieval-fantasy-character-sprites) | LPC 中世纪风 NPC，校园老师/同学候选 |
+| `sprites/peppercarrot-24x32` | CC-BY-4.0 | David Revoy / Pepper&Carrot Tribute | [link](https://www.peppercarrot.com) | 24x32 矮人角色，可作"小作物"NPC 候选 |
+| `vendor/opengameart/tileset_farm.png` | CC-BY-3.0 | Marionline | [link](https://opengameart.org/content/farm-tileset) | 农场主 tileset，BootScene tileset_farm 引用 |
+| `vendor/opengameart/cereals.png` | CC0-1.0 | Scratchio | [link](https://opengameart.org/content/cereals) | 谷物像素图，BootScene cereals 引用（注意目标小写） |
+| `vendor/opengameart/vegetables.png` | CC0-1.0 | Scratchio | [link](https://opengameart.org/content/vegetables) | 蔬菜像素图，BootScene vegetables 引用（注意目标小写） |
+| `fonts/ark-pixel-10px-proportional-latin.woff2` | OFL-1.1 | TakWolf | [link](https://github.com/TakWolf/ark-pixel-font) | Ark Pixel 10px Latin（HUD 小数字） |
+| `fonts/ark-pixel-10px-proportional-zh_cn.woff2` | OFL-1.1 | TakWolf | [link](https://github.com/TakWolf/ark-pixel-font) | Ark Pixel 10px 简中（备用字体） |
+| `fonts/ark-pixel-12px-proportional-latin.woff2` | OFL-1.1 | TakWolf | [link](https://github.com/TakWolf/ark-pixel-font) | Ark Pixel 12px Latin（备用，主推 prop 系列已手工压缩入库） |
+| `fonts/ark-pixel-12px-proportional-zh_cn.woff2` | OFL-1.1 | TakWolf | [link](https://github.com/TakWolf/ark-pixel-font) | Ark Pixel 12px 简中（备用，主推 prop 系列已手工压缩入库） |
+| `fonts/LICENSE-ark-pixel-OFL.txt` | OFL-1.1 | TakWolf | [link](https://github.com/TakWolf/ark-pixel-font) | Ark Pixel OFL 协议原文（OFL-1.1 强制保留） |
+| `fonts/fusion-pixel-12px-proportional-zh_hans.woff2` | OFL-1.1 | TakWolf | [link](https://github.com/TakWolf/fusion-pixel-font) | Fusion Pixel 12px 简中（主推中文像素字体，GB2312 覆盖 93.92%） |
+| `fonts/fusion-pixel-10px-proportional-latin.woff2` | OFL-1.1 | TakWolf | [link](https://github.com/TakWolf/fusion-pixel-font) | Fusion Pixel 10px Latin（HUD 数字小字号） |
+| `fonts/LICENSE-fusion-pixel-OFL.txt` | OFL-1.1 | TakWolf | [link](https://github.com/TakWolf/fusion-pixel-font) | Fusion Pixel OFL 协议原文 |
+| `bgm/track_01.mp3` | CC0-1.0 | RandomMind | [link](https://opengameart.org/content/medieval-the-old-tower-inn) | 小镇白天主题 |
+| `bgm/track_02.ogg` | CC0-1.0 | MouthlessGames | [link](https://opengameart.org/content/snowy-cozyness-calm-pianoguitar) | 学习/RAG 阅读 BGM（CC0 + CC-BY 3.0 双授权，取 CC0 路径） |
+| `bgm/track_03.ogg` | CC0-1.0 | MintoDog | [link](https://opengameart.org/content/cozy-puzzle-in-game-1) | 练习/Bug 矿洞 BGM |
+| `bgm/track_04.mp3` | CC0-1.0 | RandomMind | [link](https://opengameart.org/content/chiptune-medieval-the-old-tower-inn) | 小镇夜晚主题（chiptune 改编） |
+| `bgm/LICENSE.md` | CC0-1.0 | Pythontopia inbox 审计 | [link](assets/inbox/bgm/LICENSE.md) | BGM 完整 license 与归属（运行时引用） |
+| `sfx/click` | CC0-1.0 | Kenney Vleugels | [link](https://kenney.nl/assets/ui-audio) | UI 按钮点击 10 个音效 |
+| `sfx/hover` | CC0-1.0 | Kenney Vleugels | [link](https://kenney.nl/assets/ui-audio) | UI 按钮悬停 6 个音效 |
+| `sfx/coin` | CC0-1.0 | Kenney Vleugels / rubberduck | [link](https://kenney.nl/assets/rpg-audio) | 金币奖励 4 个音效 |
+| `sfx/dig` | CC0-1.0 | Kenney Vleugels | [link](https://kenney.nl/assets/impact-sounds) | 挖矿/敲击 5 个音效 |
+| `sfx/plant` | CC0-1.0 | Kenney Vleugels | [link](https://kenney.nl/assets/impact-sounds) | 种植/放置 4 个音效 |
+| `sfx/water` | CC0-1.0 | rubberduck | [link](https://opengameart.org/content/40-cc0-water-splash-slime-sfx) | 浇水 7 个音效（inbox 用 water_can，dest 用 water 与 BootScene 命名一致） |
+| `sfx/footstep` | CC0-1.0 | Kenney Vleugels / rubberduck | [link](https://kenney.nl/assets/impact-sounds) | 脚步声 10 个音效 |
+| `sfx/harvest` | CC0-1.0 | Kenney Vleugels | [link](https://kenney.nl/assets/interface-sounds) | 收获/掉落 5 个音效（重命名 harvest_pickup → harvest） |
+| `sfx/bell` | CC0-1.0 | Kenney Vleugels | [link](https://kenney.nl/assets/impact-sounds) | 收获完成铃声 6 个音效（重命名 bell_chime → bell） |
+| `sfx/jingle-complete.ogg` | CC0-1.0 | Kenney Vleugels | [link](https://kenney.nl/assets/music-jingles) | 任务完成 jingle（NES 风），BootScene sfx_jingle_complete |
+| `sfx/jingle-level-up.ogg` | CC0-1.0 | Kenney Vleugels | [link](https://kenney.nl/assets/music-jingles) | 等级提升 jingle（NES 风），BootScene sfx_jingle_levelup |
+| `icons_kc` | CC-BY-3.0 | Lorc, Delapouite, Skoll, sbed, Carl Olsen | [link](https://game-icons.net) | 60+ KC 主题图标，按 Pythontopia 知识点分组 |
+| `effects/codemanu-pixel-fx` | CC0-1.0 | CodeManu | [link](https://opengameart.org/content/pixel-fx-pack) | 通用粒子特效 10 帧 |
+| `effects/jellyfizh-confetti` | CC0-1.0 | Jellyfizh | [link](https://opengameart.org/content/confetti) | 完成奖励彩纸 |
+| `effects/jellyfizh-poof` | CC0-1.0 | Jellyfizh | [link](https://opengameart.org/content/poof) | 消失/淡出动画 |
+| `effects/john2k-heal` | CC-BY-4.0 | john2k | [link](https://opengameart.org/content/heal-effect) | 治疗/复习成功特效 |
+| `ui/kenney-adventure` | CC0-1.0 | Kenney Vleugels | [link](https://kenney.nl/assets/ui-pack-adventure) | 🛈 manifest-only（已手工挑选，脚本不同步）；冒险风 UI 9-slice 元素，public 已挑选 Default/Double 子集，本脚本不再同步全量 |
 
-> Pythontopia 使用了以下开源美术资产：
-> - **Ark Pixel Font** by TakWolf — OFL-1.1
-> - **Game Icons** by Lorc / Delapouite / Skoll / sbed / Carl Olsen — CC BY 3.0 — https://game-icons.net
-> - **UI / Tiles / SFX** by Kenney Vleugels — CC0 — https://kenney.nl
-> - **LPC Characters** by bluecarrot16, Sharm, Reemax, daneeklu, TheraHedwig 等 — CC BY-SA 3.0+ — https://opengameart.org
-> - **BGM** by RandomMind, MouthlessGames, MintoDog — CC0 / CC BY 3.0 — https://opengameart.org
-> - **Effects** by codemanu, jellyfizh, john2k — CC0 / CC BY 4.0 — https://opengameart.org
+> 编辑方式：修改 `scripts/sync-assets.mjs` 的 MANIFEST 数组后重新运行 `node scripts/sync-assets.mjs`。
+<!-- AUTO-GENERATED LICENSE INDEX END -->

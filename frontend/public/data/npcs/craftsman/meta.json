@@ -1,0 +1,22 @@
+{
+  "key": "craftsman",
+  "name": "工长",
+  "category": "life",
+  "sprite": "lpc_npc_craftsman",
+  "portrait": "portrait_craftsman.png",
+  "spawnMap": "campus_east",
+  "spawn": { "tileX": 22, "tileY": 8 },
+  "birthday": { "month": 6, "day": 13 },
+  "favoriteGifts": ["hammer", "blueprint", "wood_plank"],
+  "schedule": {
+    "monday":    [{ "from": "08:00", "map": "campus_east", "tileX": 22, "tileY": 8 }],
+    "tuesday":   [{ "from": "08:00", "map": "campus_east", "tileX": 22, "tileY": 8 }],
+    "wednesday": [{ "from": "08:00", "map": "campus_east", "tileX": 22, "tileY": 8 }],
+    "thursday":  [{ "from": "08:00", "map": "campus_east", "tileX": 22, "tileY": 8 }],
+    "friday":    [{ "from": "08:00", "map": "campus_east", "tileX": 22, "tileY": 8 }],
+    "saturday":  [{ "from": "10:00", "map": "campus_east", "tileX": 22, "tileY": 8 }],
+    "sunday":    [{ "from": "10:00", "map": "campus_east", "tileX": 22, "tileY": 8 }]
+  },
+  "tags": ["workshop_outdoor", "side_project_admin", "tool_unlock"],
+  "description": "资源工坊的工长，负责对接副项目和小工具。把 Pythontopia 当一个真实木工房经营，乐于让学生在课程外造点东西。"
+}

@@ -15,6 +15,7 @@ androidxNavigation = "2.8.5"
 androidxHiltNav = "1.2.0"
 androidxAnnotation = "1.9.1"
 androidxStartup = "1.2.0"
+androidxFragment = "1.8.5"
 
 composeBom = "2024.12.01"
 
@@ -59,6 +60,7 @@ androidx-navigation-compose = { module = "androidx.navigation:navigation-compose
 androidx-hilt-navigation-compose = { module = "androidx.hilt:hilt-navigation-compose", version.ref = "androidxHiltNav" }
 androidx-annotation = { module = "androidx.annotation:annotation", version.ref = "androidxAnnotation" }
 androidx-startup = { module = "androidx.startup:startup-runtime", version.ref = "androidxStartup" }
+androidx-fragment-ktx = { module = "androidx.fragment:fragment-ktx", version.ref = "androidxFragment" }
 
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
 compose-ui = { module = "androidx.compose.ui:ui" }
@@ -98,7 +100,7 @@ androidx-biometric = { module = "androidx.biometric:biometric", version.ref = "b
 
 libgdx-core = { module = "com.badlogicgames.gdx:gdx", version.ref = "libgdx" }
 libgdx-backend-android = { module = "com.badlogicgames.gdx:gdx-backend-android", version.ref = "libgdx" }
-libgdx-platform-armeabi-v7a = { module = "com.badlogicgames.gdx:gdx-platform", version.ref = "libgdx" }
+libgdx-platform = { module = "com.badlogicgames.gdx:gdx-platform", version.ref = "libgdx" }
 
 junit4 = { module = "junit:junit", version.ref = "junit4" }
 junit-jupiter-api = { module = "org.junit.jupiter:junit-jupiter-api", version.ref = "junitJupiter" }

@@ -1,0 +1,22 @@
+{
+  "key": "student_anxious",
+  "name": "焦虑小安",
+  "category": "student",
+  "sprite": "lpc_npc_student_c",
+  "portrait": "portrait_student_anxious.png",
+  "spawnMap": "town_hub",
+  "spawn": { "tileX": 12, "tileY": 16 },
+  "birthday": { "month": 3, "day": 14 },
+  "favoriteGifts": ["tea", "chamomile", "review_journal"],
+  "schedule": {
+    "monday":    [{ "from": "08:00", "map": "town_hub",   "tileX": 12, "tileY": 16 }],
+    "tuesday":   [{ "from": "08:00", "map": "town_hub",   "tileX": 12, "tileY": 16 }, { "from": "16:00", "map": "campus_east", "tileX": 18, "tileY": 8 }],
+    "wednesday": [{ "from": "08:00", "map": "town_hub",   "tileX": 12, "tileY": 16 }],
+    "thursday":  [{ "from": "08:00", "map": "town_hub",   "tileX": 12, "tileY": 16 }],
+    "friday":    [{ "from": "08:00", "map": "campus_east","tileX": 18, "tileY": 8 }],
+    "saturday":  [{ "from": "10:00", "map": "town_hub",   "tileX": 12, "tileY": 16 }],
+    "sunday":    [{ "from": "10:00", "map": "town_hub",   "tileX": 12, "tileY": 16 }]
+  },
+  "tags": ["peer_anxious", "mistake_sensitive", "needs_validation"],
+  "description": "焦虑型学生。一题做错就反复检查，分数低于 90 就睡不着。对话用于让玩家看到 \"错也没关系\" 的另一面。"
+}

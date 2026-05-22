@@ -9,6 +9,10 @@ pluginManagement {
                 includeGroupByRegex("androidx.*")
             }
         }
+        // 中国大陆/WSL2 网络下 Maven Central 经 Cloudflare 偶尔 403；
+        // 阿里云 maven 镜像作为同步副本优先尝试，本机已缓存的 artifact 仍走本地 cache。
+        maven { url = uri("https://maven.aliyun.com/repository/central") }
+        maven { url = uri("https://maven.aliyun.com/repository/google") }
         mavenCentral()
         gradlePluginPortal()
     }
@@ -22,6 +26,8 @@ dependencyResolutionManagement {
     repositoriesMode = RepositoriesMode.FAIL_ON_PROJECT_REPOS
     repositories {
         google()
+        maven { url = uri("https://maven.aliyun.com/repository/central") }
+        maven { url = uri("https://maven.aliyun.com/repository/google") }
         mavenCentral()
     }
 }
@@ -35,6 +41,8 @@ include(":core:design")
 include(":core:network")
 include(":game")
 include(":feature:auth")
+include(":feature:hub")
+include(":feature:dialog")
 include(":feature:profile")
 include(":feature:fields")
 include(":feature:workshop")

@@ -1,0 +1,70 @@
+{
+  "npcKey": "merchant",
+  "rootNodeId": "greet",
+  "nodes": {
+    "greet": {
+      "id": "greet",
+      "text": "客官，新到港的小玩意 — 要不要看看？",
+      "conditions": [],
+      "choices": [
+        { "label": "看技能书", "nextNodeId": "skill_books" },
+        { "label": "看消耗道具", "nextNodeId": "consumables" },
+        { "label": "你都从哪进的货？", "nextNodeId": "where_from" },
+        { "label": "下次再逛", "nextNodeId": null }
+      ]
+    },
+    "skill_books": {
+      "id": "skill_books",
+      "text": "今日推荐：《列表速通》《字典讲究》《函数三件套》。每本读完，对应 KC 多 5% 学习速度，限购一本。",
+      "conditions": [],
+      "choices": [
+        { "label": "买《列表速通》", "nextNodeId": null, "effects": [{ "type": "give_item", "itemKey": "book_list_master" }, { "type": "friendship", "delta": 1 }] },
+        { "label": "买《字典讲究》", "nextNodeId": null, "effects": [{ "type": "give_item", "itemKey": "book_dict_master" }, { "type": "friendship", "delta": 1 }] },
+        { "label": "回头", "nextNodeId": null }
+      ]
+    },
+    "consumables": {
+      "id": "consumables",
+      "text": "{{profileAdaptive:你画像里 \"体力\" 偏低 — 来一瓶 \"番茄钟续命水\"？ | 你最近练得多 — 来一支 \"复盘香\"，能在 Sage 那减一个流程。}}",
+      "conditions": [],
+      "choices": [
+        { "label": "番茄钟续命水", "nextNodeId": null, "effects": [{ "type": "give_item", "itemKey": "pomodoro_potion" }, { "type": "friendship", "delta": 1 }] },
+        { "label": "复盘香", "nextNodeId": null, "effects": [{ "type": "give_item", "itemKey": "retro_incense" }, { "type": "friendship", "delta": 1 }] },
+        { "label": "今天不买", "nextNodeId": null }
+      ]
+    },
+    "where_from": {
+      "id": "where_from",
+      "text": "外港有几个老学府，他们的学生爱卖自己写过的笔记 — 我转手过来。每周不一样，下次再来。",
+      "conditions": [],
+      "choices": [
+        { "label": "下次见", "nextNodeId": null, "effects": [{ "type": "friendship", "delta": 1 }] }
+      ]
+    },
+    "weekly_special": {
+      "id": "weekly_special",
+      "text": "本周特价：限量 3 本《错误模式图鉴》— 把 39 道题历年错误模式画成漫画。{{stats.merchantWeeklySpecialLeft}} 本在架。",
+      "conditions": [{ "type": "first_time_this_week", "key": "weekly_special" }],
+      "choices": [
+        { "label": "拿一本", "nextNodeId": null, "effects": [{ "type": "give_item", "itemKey": "mistake_pattern_atlas" }, { "type": "set_flag", "flagKey": "weekly_special_bought" }] },
+        { "label": "下次", "nextNodeId": null }
+      ]
+    },
+    "gift_received": {
+      "id": "gift_received",
+      "text": "{{giftFavorite:够意思，给客官打八折。 | 谢，下次给你留一个新货。}}",
+      "conditions": [{ "type": "gift_just_given" }],
+      "choices": [
+        { "label": "做生意嘛", "nextNodeId": null, "effects": [{ "type": "friendship", "delta": 3 }] }
+      ]
+    },
+    "friendship_max": {
+      "id": "friendship_max",
+      "text": "{{playerName}}，老主顾啊。这张 VIP 港口章送你 — 以后我的所有限量货优先供你。",
+      "conditions": [{ "type": "friendship_min", "value": 80 }],
+      "choices": [
+        { "label": "感谢", "nextNodeId": null, "effects": [{ "type": "give_item", "itemKey": "port_vip_stamp" }, { "type": "set_flag", "flagKey": "merchant_max_friend" }] }
+      ]
+    }
+  }
+}

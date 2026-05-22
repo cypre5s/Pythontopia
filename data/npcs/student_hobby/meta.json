@@ -1,0 +1,22 @@
+{
+  "key": "student_hobby",
+  "name": "兴趣小好",
+  "category": "student",
+  "sprite": "lpc_npc_student_f",
+  "portrait": "portrait_student_hobby.png",
+  "spawnMap": "town_hub",
+  "spawn": { "tileX": 16, "tileY": 15 },
+  "birthday": { "month": 8, "day": 25 },
+  "favoriteGifts": ["pixel_canvas", "tea", "midi_keyboard"],
+  "schedule": {
+    "monday":    [{ "from": "12:00", "map": "town_hub",    "tileX": 16, "tileY": 15 }],
+    "tuesday":   [{ "from": "12:00", "map": "town_hub",    "tileX": 16, "tileY": 15 }],
+    "wednesday": [{ "from": "12:00", "map": "campus_east", "tileX": 16, "tileY": 10 }],
+    "thursday":  [{ "from": "12:00", "map": "town_hub",    "tileX": 16, "tileY": 15 }],
+    "friday":    [{ "from": "12:00", "map": "port_west",   "tileX": 18, "tileY": 12 }],
+    "saturday":  [{ "from": "11:00", "map": "town_hub",    "tileX": 16, "tileY": 15 }],
+    "sunday":    [{ "from": "11:00", "map": "town_hub",    "tileX": 16, "tileY": 15 }]
+  },
+  "tags": ["peer_hobby", "creative", "side_project"],
+  "description": "兴趣驱动型同学。她学 Python 不为了分数，是想做像素小游戏。对话承载 \"学这玩意能干嘛\" 的具体回答。"
+}
