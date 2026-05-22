@@ -1,0 +1,18 @@
+%% Pythontopia CC0 - 用途：函数调用栈（含传参、return、局部变量销毁）- 对应 KC：PY43-KC-012 基础函数 / PY43-KC-060 函数变量的作用域
+sequenceDiagram
+    autonumber
+    participant Main as main 帧
+    participant Outer as outer 帧
+    participant Inner as inner 帧
+
+    Note over Main: 程序入口<br/>x = 10
+    Main->>Outer: outer(x)  入栈
+    Note over Outer: 参数 a = 10<br/>局部 b = 5
+    Outer->>Inner: inner(a + b)  入栈
+    Note over Inner: 参数 v = 15<br/>局部 r = v * 2
+    Inner-->>Outer: return r (=30)  出栈
+    Note over Inner: Inner 帧销毁<br/>局部变量 v, r 释放
+    Note over Outer: 拿到 30，继续执行
+    Outer-->>Main: return 30  出栈
+    Note over Outer: Outer 帧销毁<br/>局部变量 a, b 释放
+    Note over Main: 拿到结果 30

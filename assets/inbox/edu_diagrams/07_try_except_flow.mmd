@@ -1,0 +1,25 @@
+%% Pythontopia CC0 - 用途：try / except / else / finally 流程 - 附加补充教学示意图（课程包无专门 KC，归类到 PY43-KC-014 程序的运行方式）
+flowchart TD
+    Start(["进入 try 块"]) --> Body["执行 try 内语句"]
+    Body --> Raised{"抛出异常？"}
+
+    Raised -- "否" --> Else["执行 else 子句（可选）"]
+    Else --> Finally["执行 finally 子句（可选）"]
+    Raised -- "是" --> Match{"匹配某个 except？"}
+    Match -- "是" --> Handle["执行对应 except 体"]
+    Match -- "否（无 except 匹配）" --> Unhandled["保留异常，继续传播"]
+    Handle --> Finally
+    Unhandled --> Finally
+    Finally --> Done(["结束 / 重新抛出"])
+
+    Note["finally 一定会执行<br/>常用：关闭文件、释放锁"]
+    Finally -.- Note
+
+    classDef start fill:#bbdefb,stroke:#1565c0;
+    classDef err fill:#ffcdd2,stroke:#c62828;
+    classDef ok fill:#c8e6c9,stroke:#2e7d32;
+    classDef note fill:#fff9c4,stroke:#f9a825;
+    class Start,Body,Else start;
+    class Unhandled err;
+    class Handle,Finally,Done ok;
+    class Note note;

@@ -1,0 +1,24 @@
+ArMM1998 — Zelda-like Tilesets and Sprites
+==========================================
+
+Author:    ArMM1998
+Source:    https://opengameart.org/content/zelda-like-tilesets-and-sprites
+License:   CC0 1.0 Universal (Public Domain Dedication)
+           https://creativecommons.org/publicdomain/zero/1.0/
+Date:      Originally published 2017-02-16 (Thursday, February 16, 2017 - 13:35 OGA)
+Tags:      pixelart, zelda, Top-down, RPG, 16x16
+Source ZIP: https://opengameart.org/sites/default/files/gfx_3.zip (174776 bytes)
+Verified:  2026-05-21 via HTTP_PROXY=127.0.0.1:7892, PNG validity confirmed by Pillow
+
+Files kept (character-related only; tile-related skipped to avoid duplication):
+- character.png   272x256, 8-bit RGBA  (17 col x 16 row grid of 16x16 cells = player + NPC sprites with 4-direction walk)
+- NPC_test.png    64x128,  8-bit RGBA  (4 col x 8 row grid of 16x16 cells = additional NPC variants)
+- font.png        240x144, 8-bit RGBA  (pixel font, optional companion)
+
+Files in the original ZIP that were NOT copied to assets/inbox/characters/
+(they are tile/level assets and belong under assets/inbox/tilesets/ if needed):
+- cave.png, Inner.png, Overworld.png, log.png, objects.png
+
+Attribution under CC0:
+  Not strictly required, but recommended as a courtesy:
+    "Character sprites by ArMM1998 (CC0) — https://opengameart.org/content/zelda-like-tilesets-and-sprites"

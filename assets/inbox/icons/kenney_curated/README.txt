@@ -1,0 +1,30 @@
+Pythontopia curated Kenney CC0 icon set
+=======================================
+Total domain icons: 23
+Variants per icon : 16x16, 24x24, 32x32 (PNG, RGBA)
+Source license    : CC0 1.0 (Kenney Vleugels, www.kenney.nl)
+
+Mapping:
+  resource_lecture         <- assets/inbox/kenney_tilemaps/generic-items/PNG/Colored/genericItem_color_033.png  (Red open book = 讲义 PPT)
+  resource_mindmap         <- assets/inbox/kenney_tilemaps/game-icons/PNG/Black/1x/share2.png  (Three connected nodes = 思维导图)
+  resource_practice        <- assets/inbox/kenney_tilemaps/generic-items/PNG/Colored/genericItem_color_037.png  (Clipboard with paper = 练习)
+  resource_code            <- assets/inbox/kenney_tilemaps/generic-items/PNG/Colored/genericItem_color_050.png  (Open laptop = 代码案例)
+  resource_extended        <- assets/inbox/kenney_tilemaps/generic-items/PNG/Colored/genericItem_color_036.png  (Yellow document folder = 拓展阅读)
+  resource_animation       <- assets/inbox/kenney_tilemaps/generic-items/PNG/Colored/genericItem_color_041.png  (Vintage movie camera = 动画)
+  task_daily               <- assets/inbox/kenney_tilemaps/game-icons/PNG/Black/1x/basket.png  (Daily basket = 每日任务)
+  task_class               <- assets/inbox/kenney_tilemaps/game-icons/PNG/Black/1x/multiplayer.png  (Group silhouette = 班级任务)
+  task_path                <- .work/assets_dl/icons/kenney_game-icons-expansion/PNG/Black/1x/flag.png  (Triangle pennant = 路径节点)
+  task_review              <- assets/inbox/kenney_tilemaps/game-icons/PNG/Black/1x/return.png  (Loop arrow = 复盘)
+  status_completed         <- assets/inbox/pixel_ui/kenney_ui-pack-rpg-expansion/PNG/iconCheck_blue.png  (Pixel check badge = 完成)
+  status_in_progress       <- assets/inbox/kenney_tilemaps/game-icons/PNG/Black/1x/gear.png  (Working gear = 进行中)
+  status_failed            <- assets/inbox/pixel_ui/kenney_ui-pack-rpg-expansion/PNG/iconCross_brown.png  (Pixel X badge = 失败)
+  status_skipped           <- assets/inbox/kenney_tilemaps/game-icons/PNG/Black/1x/next.png  (Skip arrow = 跳过)
+  status_pending           <- assets/inbox/kenney_tilemaps/game-icons/PNG/Black/1x/locked.png  (Padlock = 待领取)
+  kg_chapter               <- assets/inbox/kenney_tilemaps/game-icons/PNG/Black/1x/menuList.png  (Stacked list = 章节)
+  kg_kc                    <- .work/assets_dl/icons/kenney_game-icons-expansion/PNG/Black/1x/diamond.png  (Knowledge gem diamond = KC)
+  kg_example               <- assets/inbox/kenney_tilemaps/game-icons/PNG/Black/1x/information.png  (Info i = 例题)
+  kg_question              <- assets/inbox/kenney_tilemaps/game-icons/PNG/Black/1x/question.png  (Question mark = 题目)
+  class_student            <- assets/inbox/kenney_tilemaps/game-icons/PNG/Black/1x/singleplayer.png  (Single silhouette = 学生)
+  class_teacher            <- assets/inbox/kenney_tilemaps/generic-items/PNG/Colored/genericItem_color_152.png  (Teacher's bell = 教师)
+  class_group              <- assets/inbox/kenney_tilemaps/game-icons/PNG/Black/1x/massiveMultiplayer.png  (Cluster = 班级)
+  class_join_code          <- .work/assets_dl/icons/kenney_game-icons-expansion/PNG/Black/1x/key.png  (Key = 加入码)

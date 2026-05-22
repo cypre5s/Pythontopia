@@ -1,0 +1,20 @@
+%% Pythontopia CC0 - 用途：while 循环流程（含 else 子句）- 对应 KC：PY43-KC-032 while循环与循环分支结合
+flowchart TD
+    Start(["while cond:"]) --> Eval["计算 cond 为 True/False"]
+    Eval --> Cond{"cond 为真？"}
+    Cond -- "是" --> Body["执行循环体"]
+    Body --> Ctrl{"break / continue?"}
+    Ctrl -- "break" --> AfterAll["跳过 else，到 while 后面"]
+    Ctrl -- "continue / 都没有" --> Eval
+    Cond -- "否（自然退出）" --> ElseCheck{"有 else 子句？"}
+    ElseCheck -- "是" --> Else["执行 else 体"]
+    ElseCheck -- "否" --> AfterAll
+    Else --> AfterAll
+
+    Tip["⚠️ 死循环风险：循环体内必须改变 cond 涉及的变量<br/>否则永真，需 break 或外部中断"]
+    Body -.- Tip
+
+    classDef start fill:#bbdefb,stroke:#1565c0;
+    classDef warn fill:#ffe082,stroke:#f57f17;
+    class Start,Eval start;
+    class Tip warn;

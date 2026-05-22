@@ -1,0 +1,22 @@
+%% Pythontopia CC0 - 用途：for 循环执行流程 - 对应 KC：PY43-KC-031 for循环与遍历
+flowchart TD
+    Start(["for x in seq:"]) --> Iter["调用 iter(seq) 取迭代器"]
+    Iter --> Next["调用 next(it)"]
+    Next --> Stop{"抛出 StopIteration？"}
+    Stop -- "否（拿到值 x）" --> Body["执行循环体（使用 x）"]
+    Body --> Ctrl{"循环体内有 break / continue / return？"}
+    Ctrl -- "break" --> AfterFor["跳到 for 后面的语句"]
+    Ctrl -- "continue" --> Next
+    Ctrl -- "return" --> ReturnOut["函数立即返回"]
+    Ctrl -- "都没有" --> Next
+    Stop -- "是（迭代结束）" --> ElseClause{"for ... else 有 else 子句？"}
+    ElseClause -- "是 + 没 break 出去" --> Else["执行 else 体"]
+    ElseClause -- "否 / 已 break" --> AfterFor
+    Else --> AfterFor
+
+    classDef start fill:#bbdefb,stroke:#1565c0,color:#0d47a1;
+    classDef body fill:#c8e6c9,stroke:#2e7d32,color:#1b5e20;
+    classDef end_ fill:#d7ccc8,stroke:#5d4037,color:#3e2723;
+    class Start,Iter start;
+    class Body,Else body;
+    class AfterFor,ReturnOut end_;
