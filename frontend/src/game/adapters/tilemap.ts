@@ -27,12 +27,22 @@ export interface TownMapData {
   npcs: NpcSpawn[];
 }
 
-export function loadTownMap(scene: SceneLike, mapKey: string): TownMapData {
+const TOWN_TILESET_KEY = 'kenney_tiny_town';
+const TOWN_TILE_SOURCE_SIZE = 16;
+const GROUND_FRAME = 0;
+const BUILDING_FRAMES = [
+  [13, 14, 15],
+  [16, 17, 18],
+  [19, 20, 21],
+  [22, 23, 24],
+] as const;
+type BuildingFrameColumn = 0 | 1 | 2;
+type BuildingFrameRow = 0 | 1 | 2 | 3;
+
+export function loadTownMap(scene: SceneLike, mapKey: string, pixelMode = true): TownMapData {
   const tileSize = 32;
   const width = 30;
   const height = 20;
-  scene.add.tileSprite(480, 320, width * tileSize, height * tileSize, 'tileset_farm').setAlpha(0.18).setDepth(0);
-  scene.add.grid(480, 320, width * tileSize, height * tileSize, tileSize, tileSize, 0x87b779, 1, 0x5e8755, 0.35);
   const buildings: MapZone[] = [
     { key: 'profile-room', label: '画像屋', route: '/profile-room', tileX: 3, tileY: 3, width: 4, height: 3 },
     { key: 'workshop', label: '资源工坊', route: '/workshop', tileX: 12, tileY: 2, width: 5, height: 3 },
@@ -46,7 +56,15 @@ export function loadTownMap(scene: SceneLike, mapKey: string): TownMapData {
     { npcKey: 'librarian_loop', label: 'Loop', tileX: 13, tileY: 6 },
     { npcKey: 'coach_debug', label: 'Debug 教练', tileX: 8, tileY: 15 },
   ];
-  buildings.forEach((building) => drawBuilding(scene, building, tileSize));
+
+  if (pixelMode) {
+    drawPixelGround(scene, width, height, tileSize);
+    buildings.forEach((building) => drawPixelBuilding(scene, building, tileSize));
+  } else {
+    drawLegacyGround(scene, width, height, tileSize);
+    buildings.forEach((building) => drawLegacyBuilding(scene, building, tileSize));
+  }
+
   scene.add.image(760, 164, 'vegetables').setOrigin(0.5).setScale(0.42).setAlpha(0.94).setDepth(8);
   scene.add.image(764, 260, 'cereals').setOrigin(0.5).setScale(0.48).setAlpha(0.9).setDepth(8);
   scene.add.image(462, 198, 'crates_and_sacks').setOrigin(0.5).setScale(0.8).setAlpha(0.9).setDepth(8);
@@ -57,7 +75,66 @@ export function loadTownMap(scene: SceneLike, mapKey: string): TownMapData {
   return { tileSize, width, height, spawn: { tileX: 15, tileY: 11 }, buildings, npcs };
 }
 
-function drawBuilding(scene: SceneLike, zone: MapZone, tileSize: number): void {
+function drawPixelGround(scene: SceneLike, width: number, height: number, tileSize: number): void {
+  const scale = tileSize / TOWN_TILE_SOURCE_SIZE;
+  for (let tileY = 0; tileY < height; tileY += 1) {
+    for (let tileX = 0; tileX < width; tileX += 1) {
+      scene.add
+        .image(tileX * tileSize + tileSize / 2, tileY * tileSize + tileSize / 2, TOWN_TILESET_KEY, GROUND_FRAME)
+        .setOrigin(0.5)
+        .setScale(scale)
+        .setDepth(0);
+    }
+  }
+}
+
+function drawPixelBuilding(scene: SceneLike, zone: MapZone, tileSize: number): void {
+  const scale = tileSize / TOWN_TILE_SOURCE_SIZE;
+  for (let localY = 0; localY < zone.height; localY += 1) {
+    for (let localX = 0; localX < zone.width; localX += 1) {
+      const frame = getBuildingFrame(localX, localY, zone.width, zone.height);
+      scene.add
+        .image(
+          (zone.tileX + localX) * tileSize + tileSize / 2,
+          (zone.tileY + localY) * tileSize + tileSize / 2,
+          TOWN_TILESET_KEY,
+          frame,
+        )
+        .setOrigin(0.5)
+        .setScale(scale)
+        .setDepth(5);
+    }
+  }
+  const labelX = (zone.tileX + zone.width / 2) * tileSize;
+  const labelY = zone.tileY * tileSize + tileSize / 2;
+  scene.add
+    .text(labelX, labelY, zone.label, { color: '#fff8e1', fontFamily: 'monospace', fontSize: '14px' })
+    .setOrigin(0.5)
+    .setDepth(6);
+}
+
+function getBuildingFrame(localX: number, localY: number, width: number, height: number): number {
+  const frameColumn: BuildingFrameColumn = localX === 0 ? 0 : localX === width - 1 ? 2 : 1;
+  const frameRow = getBuildingFrameRow(localY, height);
+  return BUILDING_FRAMES[frameRow][frameColumn];
+}
+
+function getBuildingFrameRow(localY: number, height: number): BuildingFrameRow {
+  if (localY === 0) {
+    return 0;
+  }
+  if (localY === height - 1) {
+    return 3;
+  }
+  return localY === 1 ? 1 : 2;
+}
+
+function drawLegacyGround(scene: SceneLike, width: number, height: number, tileSize: number): void {
+  scene.add.tileSprite(480, 320, width * tileSize, height * tileSize, 'tileset_farm').setAlpha(0.18).setDepth(0);
+  scene.add.grid(480, 320, width * tileSize, height * tileSize, tileSize, tileSize, 0x87b779, 1, 0x5e8755, 0.35);
+}
+
+function drawLegacyBuilding(scene: SceneLike, zone: MapZone, tileSize: number): void {
   const x = (zone.tileX + zone.width / 2) * tileSize;
   const y = (zone.tileY + zone.height / 2) * tileSize;
   scene.add
