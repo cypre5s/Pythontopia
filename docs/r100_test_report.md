@@ -1,28 +1,30 @@
 # R-100 Stage 1 & P0 Optimization — 测试报告
 
 **生成时间**: 2026-05-22
-**范围**: 素材爬取 + 集成 + P0 优化 + Android-R1
+**范围**: 素材爬取 + 集成 + P0/P1 优化 + Android-R1 + R-100 handoff Task 1-3
 
 ## 测试套件总览
 
 | 套件 | 通过 / 总 | 耗时 | 状态 |
 | --- | ---: | ---: | :---: |
 | Backend (mvn test, skipITs) | 101 / 101 | 55s | ✅ BUILD SUCCESS |
-| Frontend (vitest --run) | 61 / 61 (27 files) | 5s | ✅ |
+| Frontend (vitest --run) | 79 / 79 (31 files) | 5s | ✅ |
 | Frontend (typecheck vue-tsc) | — | 4s | ✅ 0 errors |
 | Frontend (lint eslint) | — | 3s | ✅ 0 errors, 0 warnings |
 | Services / pythontopia-graph (pytest) | 59 / 59 | 0.4s | ✅ |
-| Services / pythontopia-rag (pytest) | ⚠️ Env | — | ⚠️ Python 3.10 不满足 `>=3.11` |
+| Services / pythontopia-rag (pytest) | 18 / 18 | 0.4s | ✅ Python 3.12 + uv 临时环境 |
 | Android (gradlew test) | 28 / 28 | — | ✅ (用户 worktree 已 commit) |
 | Android (assembleDebug) | — | — | ✅ 11MB APK (commit 8a49643) |
 
-**合计可跑测试: 249 / 249 通过** (不含 rag 因本机 Python 版本限制).
+**合计可跑测试: 285 / 285 通过**.
 
 ## 新增测试详情
 
 | 文件 | 测试数 | 模块 | 描述 |
 | --- | ---: | --- | --- |
 | `frontend/src/utils/sfx.test.ts` | 5 | sfx | 全局音效服务（启/禁/播放/preload/keys） |
+| `frontend/tests/game/adapters/tilemap.spec.ts` | 3 | TownScene map adapter | Kenney tiny-town frame 地面/建筑渲染 + legacy fallback |
+| `frontend/tests/pages/FieldPage.spec.ts` | 2 | FieldPage | 章节图标导航选择首个 KC + hover SFX |
 
 ## License 合规验证
 
@@ -61,10 +63,8 @@ inbox 27 个非空源目录覆盖：4 季节场景 / 校园室内 / 学生与教
 | 项 | 原因 |
 | --- | --- |
 | itch.io ansimuz sunny-land / fantasy-weapons-set | itch.io 自动下载需要 session token，按"严过滤"主动放弃 |
-| RAG 服务 pytest 跑通 | 本机 Python 3.10 不满足 services 声明的 `>=3.11` |
 | browser MCP 截图核心场景 | MCP 服务在 worktree 切换中断开，需重启 |
 | 判题 e2e (docker compose) | 时间限制 + 已由 Stage09/10 集成测试覆盖等价路径 |
-| Bug 矿洞 BGM 切换 / FieldPage KC 图标接入 | 留给 P1 后续 |
 | `tilesets/` `icons/` `buildings/` `characters/` `ui/` 二次 license 审计 | 已在 `LICENSE-ART.md` 标 backlog |
 
 ## Git 历史（本轮 R-100 新增 commit）
@@ -85,9 +85,9 @@ faf6eac chore(assets): 补遗 - 相对路径符号链接 + 补加 icons/kenney_c
 
 ## 结论
 
-阶段 1（素材）+ 阶段 2 P0（最有教学影响 / 演示效果改动）按 todolist 全部完成。阶段 3 Android-R1 用户已在 worktree 完成。剩余 P1/P2 优化与全套测试套件回归（含 rag、e2e）作为 backlog，可在用户醒来后按需推进。
+阶段 1（素材）+ 阶段 2 P0/P1（最有教学影响 / 演示效果改动）按 todolist 推进。阶段 3 Android-R1 用户已在 worktree 完成。RAG pytest 已补跑；剩余 e2e 与素材手动补充继续按 R-100 handoff 推进。
 
-测试合规：**249/249 通过**。素材合规：**license 白名单清晰，已删除所有违规与冗余路径，强制署名页 `/credits` 与 `LICENSE-ART.md` 就位**。
+测试合规：**285/285 通过**。素材合规：**license 白名单清晰，已删除所有违规与冗余路径，强制署名页 `/credits` 与 `LICENSE-ART.md` 就位**。
 
 不影响比赛演示链路：profile → field → workshop → training → bug_mine → review 全链路依赖的代码未被破坏，仅追加素材与可选 SFX 服务。
 
@@ -131,9 +131,41 @@ faf6eac chore(assets): 补遗 - 相对路径符号链接 + 补加 icons/kenney_c
 | P1-C | TrainingPanel / WorkshopPanel SFX | `playSfx('jingleComplete'/'success'/'error'/'coin')` 接到提交、生成结果 | `TrainingPanel.vue`, `WorkshopPanel.vue` |
 | P1-D | 玩家 LPC Sara walk 动画 | 13×21 LPC spritesheet，rows 8/9/10/11 = up/left/down/right；moveToTile 时 setFrame 切走路帧 | `BootScene.ts`, `sprite.ts`, `sceneTypes.ts` (ImageLike.setFrame?) |
 
-### P1-E backlog（跳过原因）
+### P1-E backlog（历史记录，已在 R-100 handoff Task 1 完成）
 
-P1-E TownScene 用 Kenney tiny-town tileset 真实渲染地图：子代理仅完成 BootScene spritesheet 注册（已并入 commit 57bd410），实际 tilemap.ts 改造需要扩展 SceneLike 接口（TilemapLayer / TileSprite layer），且要新接 phaserGame adapter 暴露 Phaser tilemap API。风险大且无人 review，留 backlog 等用户醒来 + 真机验证后再做。
+P1-E TownScene 用 Kenney tiny-town tileset 真实渲染地图：历史上因风险留 backlog；R-100 handoff Task 1 已用 `scene.add.image(..., 'kenney_tiny_town', frame)` 的 adapter 级最小改造完成，不需要引入 Phaser tilemap API。
+
+---
+
+## 2026-05-22 R-100 handoff Task 1-3 增量更新
+
+### 新增 commit
+
+```
+4cfafdb feat(frontend-r100): FieldPage header KC 章节图标导航 + hover SFX
+5224af6 feat(frontend-r100): P1-E TownScene 真 tileset 渲染 - Kenney tiny-town spritesheet 平铺地面 + frame-based 建筑
+```
+
+### 测试增量
+
+| 套件 | 之前 | 现在 | Δ |
+| --- | ---: | ---: | ---: |
+| Frontend vitest | 74 | **79** | **+5** |
+| Services / pythontopia-rag | 0 (env skip) | **18** | **+18** |
+| Backend | 101 | 101 | 0 |
+| Services graph | 59 | 59 | 0 |
+| Android | 28 | 28 | 0 |
+| **合计** | **262** | **285** | **+23** |
+
+### RAG pytest 补跑
+
+命令环境：Python 3.12.12 + `uv` 临时环境 `/tmp/pythontopia-rag-uv`，依赖下载显式使用 `HTTP_PROXY=http://127.0.0.1:7892` / `HTTPS_PROXY=http://127.0.0.1:7892`。
+
+结果：
+
+```text
+18 passed in 0.40s
+```
 
 ### 不影响演示链路
 
