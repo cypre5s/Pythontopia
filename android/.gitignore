@@ -1,3 +1,6 @@
+# gradlew + gradle/wrapper/gradle-wrapper.jar 应入 git；首次见 WRAPPER_SETUP.md 生成
+# （本文件不忽略它们，仅在此处提示）
+
 # Gradle
 .gradle/
 build/

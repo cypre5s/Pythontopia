@@ -1,0 +1,104 @@
+# Pythontopia Android detekt 配置（基于 detekt 1.23.7 官方默认）
+# 仅声明与默认值不同的项目；其余规则全部使用 detekt 内置默认。
+# 文档：https://detekt.dev/docs/rules/
+
+build:
+  maxIssues: 0
+  excludeCorrectable: false
+
+config:
+  validation: true
+  warningsAsErrors: false
+  # 配置文件路径变更时跳过 yaml 校验
+  checkExhaustiveness: false
+
+processors:
+  active: true
+
+console-reports:
+  active: true
+
+complexity:
+  active: true
+  LongMethod:
+    # 教育游戏面板（Compose 教学卡片、画像访谈对话流）天然偏长，60 行 → 80 行
+    active: true
+    threshold: 80
+  LongParameterList:
+    active: true
+    functionThreshold: 8
+    constructorThreshold: 8
+    ignoreDefaultParameters: true
+    ignoreDataClasses: true
+    ignoreAnnotatedParameter: ['Composable']
+  TooManyFunctions:
+    active: true
+    thresholdInFiles: 15
+    thresholdInClasses: 15
+    thresholdInObjects: 15
+
+style:
+  active: true
+  MagicNumber:
+    # Compose dp / sp / weight 数值高频使用，全开会噪音爆炸 → 关闭
+    active: false
+  MaxLineLength:
+    active: true
+    maxLineLength: 140
+    excludePackageStatements: true
+    excludeImportStatements: true
+  ReturnCount:
+    active: true
+    max: 4
+  UnusedPrivateMember:
+    active: true
+    ignoreAnnotated: ['Preview', 'PreviewParameter']
+
+naming:
+  active: true
+  # Kotlin 默认就要求 lower snake，这里显式打开避免被关
+  PackageNaming:
+    active: true
+    packagePattern: '[a-z]+(\.[a-z][a-z0-9_]*)*'
+  ClassNaming:
+    active: true
+    classPattern: '[A-Z][a-zA-Z0-9]*'
+  FunctionNaming:
+    active: true
+    functionPattern: '[a-z][a-zA-Z0-9]*'
+    # Compose @Composable 函数允许 PascalCase
+    ignoreAnnotated: ['Composable']
+
+empty-blocks:
+  active: true
+  EmptyFunctionBlock:
+    active: true
+    ignoreOverridden: true
+
+exceptions:
+  active: true
+  TooGenericExceptionCaught:
+    active: true
+    exceptionNames:
+      - ArrayIndexOutOfBoundsException
+      - Error
+      - Exception
+      - IllegalMonitorStateException
+      - NullPointerException
+      - IndexOutOfBoundsException
+      - RuntimeException
+      - Throwable
+
+potential-bugs:
+  active: true
+  UnsafeCast:
+    active: true
+  UnreachableCode:
+    active: true
+
+performance:
+  active: true
+  SpreadOperator:
+    active: true
+  ForEachOnRange:
+    active: true

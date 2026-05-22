@@ -86,6 +86,67 @@ cd android
 ./gradlew lint                           # Android Lint
 ```
 
+## 7.1 首次本机准备
+
+新协作者第一次在本机跑这个工程时，按以下 4 步初始化：
+
+1. **装 JDK 21**（Temurin LTS 推荐）
+
+   ```bash
+   # SDKMAN 一行装
+   sdk install java 21.0.5-tem
+   java -version   # 期望：openjdk 21.x.x
+   ```
+
+2. **装 Android SDK platform-35 + build-tools-35**
+   - 路径 A：用 Android Studio（Ladybug+），首启会自动下载 platform-35。
+   - 路径 B：纯命令行：
+
+     ```bash
+     export ANDROID_SDK_ROOT="$HOME/Android/Sdk"
+     mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
+     # 在 https://developer.android.com/studio#command-line-tools-only 拿到最新链接
+     curl -L https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o /tmp/cmdline.zip
+     unzip /tmp/cmdline.zip -d "$ANDROID_SDK_ROOT/cmdline-tools"
+     mv "$ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools" "$ANDROID_SDK_ROOT/cmdline-tools/latest"
+     export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH"
+     yes | sdkmanager --licenses
+     sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+     echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties   # in android/ 目录
+     ```
+
+3. **生成 gradle wrapper 一次**（详见 `WRAPPER_SETUP.md`）
+
+   ```bash
+   cd /home/cypress/Pythontopia/android
+   gradle wrapper --gradle-version 8.11.1 --distribution-type bin
+   chmod +x gradlew
+   ```
+
+4. **跑一次 debug 构建确认链路**
+
+   ```bash
+   ./gradlew :app:assembleDebug
+   # 产物：android/app/build/outputs/apk/debug/app-debug.apk
+   ```
+
+### 已知问题
+
+- **国内访问 `dl.google.com` 慢 / 失败**：先 `export HTTPS_PROXY=http://127.0.0.1:7890`（按本机代理端口改），
+  再跑 `sdkmanager` 和 `./gradlew`。或在 `android/gradle.properties` 配 `systemProp.https.proxyHost=...`。
+- **`./gradlew --version` 报找不到 jar**：说明 `gradle-wrapper.jar` 还没生成，回到第 3 步。
+- **`SDK location not found`**：缺 `android/local.properties`，按上面第 2 步末尾的命令生成。
+
+### 快速命令速查
+
+```bash
+cd /home/cypress/Pythontopia/android
+./gradlew :app:assembleDebug      # 构建 debug APK
+./gradlew test                    # 所有模块的 JVM 单测
+./gradlew lint                    # Android Lint 全模块
+./gradlew detekt                  # detekt 静态分析（配置 config/detekt/detekt.yml）
+```
+
 ## 8. 不做（边界）
 
 - 不复制 Web 端 Phaser 代码到 Android（重新设计游戏渲染层）。
