@@ -1,4 +1,25 @@
-/* Pythontopia 像素小镇视觉 token（阶段 14）：教育优先，整体星露谷式像素混合色。 */
+/* Pythontopia 像素小镇视觉 token（阶段 14 + R-100 字体集成）：教育优先，整体星露谷式像素混合色。 */
+
+/* Ark Pixel Font (TakWolf, OFL-1.1) — 中文像素字体，用于游戏画布与像素 UI */
+@font-face {
+  font-family: 'Ark Pixel 12';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/assets/pixel/fonts/ark-pixel-12px-prop-zh_cn.woff2') format('woff2'),
+       url('/assets/pixel/fonts/ark-pixel-12px-prop-latin.woff2') format('woff2');
+  unicode-range: U+0000-007F, U+4E00-9FFF, U+3000-303F, U+FF00-FFEF;
+}
+@font-face {
+  font-family: 'Ark Pixel 12 Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/assets/pixel/fonts/ark-pixel-12px-mono-zh_cn.woff2') format('woff2'),
+       url('/assets/pixel/fonts/ark-pixel-12px-mono-latin.woff2') format('woff2');
+  unicode-range: U+0000-007F, U+4E00-9FFF, U+3000-303F, U+FF00-FFEF;
+}
+
 :root {
   /* Wood / Parchment 基色 */
   --pyt-color-bg-primary: #fef7e3;
@@ -48,6 +69,9 @@
   --pyt-font-sans: 'LXGW WenKai', '霞鹜文楷', 'PingFang SC', 'Microsoft YaHei', system-ui, -apple-system,
     'Segoe UI', sans-serif;
   --pyt-font-mono: 'JetBrains Mono', 'Cascadia Code', Menlo, Consolas, 'Courier New', monospace;
+  /* R-100 新增：像素字体（游戏画布 / 像素徽章 / Phaser BitmapText 用） */
+  --pyt-font-pixel: 'Ark Pixel 12', var(--pyt-font-sans);
+  --pyt-font-pixel-mono: 'Ark Pixel 12 Mono', var(--pyt-font-mono);
 
   /* 字号 */
   --pyt-font-size-xs: 11px;
@@ -81,4 +105,19 @@ button {
 code,
 pre {
   font-family: var(--pyt-font-mono);
+}
+
+/* R-100 像素工具类：用于游戏画面外的徽章、积分、KC 标签等小尺寸像素文字 */
+.pyt-pixel-text {
+  font-family: var(--pyt-font-pixel);
+  letter-spacing: 0.5px;
+  image-rendering: pixelated;
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: grayscale;
+}
+.pyt-pixel-code {
+  font-family: var(--pyt-font-pixel-mono);
+  letter-spacing: 0;
+  image-rendering: pixelated;
+  -webkit-font-smoothing: none;
 }
