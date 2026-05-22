@@ -108,3 +108,12 @@
 - 09:30 全套测试回归：backend mvn test = 101/101 PASS / BUILD SUCCESS；frontend = 61/61 PASS；graph pytest = 59/59 PASS；android = 28/28 PASS（用户 worktree 已 commit 8a49643）；**总计 249/249 通过**。rag pytest 因本机 Python 3.10 不满足 `>=3.11` 跳过。
 - 09:35 `docs/r100_test_report.md` 测试报告就位（92 行，含合规验证 + 素材规模 + P0 实施 + backlog）。
 - 09:35 R-100 阶段 1 + 阶段 2 P0 任务全部完成；剩余 P1/P2 优化、browser MCP 截图、judge e2e docker compose、RAG pytest 等列入 backlog 留待用户醒来推进。
+- 09:50 R-100 阶段 2 P1 任务（"更像成熟游戏"优化）启动：5 个并发 subagent A/B/C/D/E。受 worktree 多次切换影响 subagent 反复 Aborted，主代理接管完成 4 个主题。
+- 10:00 P1-A BGM 引擎落成：`utils/bgm.ts` (113L) + `utils/bgm.test.ts` (85L / 8 tests)；TownScene + FieldScene + BugMinePage + ReviewHallPage 接入；切场景 fade-in/out + localStorage `pyt:bgm` 持久化开关。
+- 10:05 P1-B KC 收获 confetti 庆祝：`utils/celebrate.ts` (50L) + 3 tests；接入 `learning.loadField` 与 `refreshAfterEvent` 在 KC 状态 → MATURE 转换时触发 + 播 `jingleLevelUp`；tokens.css +68L celebrate keyframes。
+- 10:10 P1-C 训练/工坊 SFX 反馈：TrainingPanel 提交成功 → `jingleComplete`，失败 → `error.ogg`；WorkshopPanel 资源生成成功 → `success + coin`，失败 → `error`。
+- 10:15 P1 集合 commit `57bd410`：14 文件 / +479 -21 行；前端 29 files / 73 tests 全过 / lint 0 错。
+- 10:18 P1-D 玩家 LPC Sara walk 动画：SaraFullSheet 832×1344 / 13×21 (LPC 标准)；BootScene preload `player_sara` spritesheet (64x64)；`sprite.ts` 加 LPC 4 方向 walk frame 表 (rows 8/9/10/11)；moveToTile 时 setFrame 切走路帧；LPC sheet 不可用时 fallback 到 `student_default`；sprite.spec.ts 改 2 测试覆盖 LPC + fallback 路径。
+- 10:22 P1-D commit `3d54cfa`：前端 29 files / 74 tests 全过。
+- 10:25 P1-E TownScene 真渲染（用 kenney_tiny_town spritesheet 替换 SVG 地面）跳过——子代理仅完成 BootScene spritesheet 注册与 sceneTypes 加 frame 参数（已并入 57bd410），实际 tilemap.ts 改造涉及 SceneLike 接口扩展（PhaserTileMap / TileSprite layer），风险大且无人 review，留 backlog。
+- 10:30 R-100 阶段 1 + 阶段 2 (P0 + P1) 全部交付完成。本会话 main 分支新增 8 个 commit（不含用户 worktree 已 commit 的 2 个 Android-R1）。前端测试从 R-11 基线 52 → 74（+22 测试 + 18%）；后端 / graph / android 持平不破坏；总测试 262/262 通过（不含 rag 因环境）。

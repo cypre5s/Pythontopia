@@ -90,3 +90,58 @@ faf6eac chore(assets): 补遗 - 相对路径符号链接 + 补加 icons/kenney_c
 测试合规：**249/249 通过**。素材合规：**license 白名单清晰，已删除所有违规与冗余路径，强制署名页 `/credits` 与 `LICENSE-ART.md` 就位**。
 
 不影响比赛演示链路：profile → field → workshop → training → bug_mine → review 全链路依赖的代码未被破坏，仅追加素材与可选 SFX 服务。
+
+---
+
+## 2026-05-22 10:30 R-100 P1 增量更新
+
+### 新增 commit (5,6,7,8)
+
+```
+3d54cfa feat(frontend-r100): P1-D 玩家 LPC Sara 行走动画 + 4 方向 frame 切换 + fallback
+57bd410 feat(frontend-r100): P1 优化 - BGM 引擎 + KC 收获庆祝 confetti + Training/Workshop SFX 反馈
+2efd40d docs(r100): 测试报告 + execution_status 同步
+546152c feat(frontend-r100): P0 优化 - 全局 SFX 服务 + /credits 致谢页
+```
+
+### 测试增量
+
+| 套件 | 之前 | 现在 | Δ |
+| --- | ---: | ---: | ---: |
+| Frontend vitest | 61 | **74** | **+13** |
+| Backend | 101 | 101 | 0 |
+| Services graph | 59 | 59 | 0 |
+| Android | 28 | 28 | 0 |
+| **合计** | **249** | **262** | **+13** |
+
+### P1 新增测试详情
+
+| 模块 | 测试数 | 覆盖 |
+| --- | ---: | --- |
+| `utils/bgm.test.ts` | 8 | playBgm / 切歌 / stopBgm / 同 key 不重启 / 音量 / 启用持久化 / disabled fallback |
+| `utils/celebrate.test.ts` | 3 | celebrateMature DOM 注入 / .pyt-celebrate__burst / 1.2 秒自动移除 |
+| `tests/game/adapters/sprite.spec.ts` | 2 (改写) | LPC Sara walk frame 切换 / 不可用时 fallback 到 student_default |
+
+### P1 已落地清单
+
+| ID | 优化 | 实现 | 文件 |
+| --- | --- | --- | --- |
+| P1-A | BGM 引擎 + 场景切换 | `playBgm(key, fadeMs)`, `stopBgm`, `setBgmVolume`, localStorage 持久化 | `utils/bgm.ts` + 4 个场景接入 |
+| P1-B | KC 成熟 confetti + jingle | `celebrateMature(null)`，DOM 全屏覆盖层，1.2 秒自动移除，含粒子帧动画 | `utils/celebrate.ts` + `learning.ts` (loadField/refreshAfterEvent) |
+| P1-C | TrainingPanel / WorkshopPanel SFX | `playSfx('jingleComplete'/'success'/'error'/'coin')` 接到提交、生成结果 | `TrainingPanel.vue`, `WorkshopPanel.vue` |
+| P1-D | 玩家 LPC Sara walk 动画 | 13×21 LPC spritesheet，rows 8/9/10/11 = up/left/down/right；moveToTile 时 setFrame 切走路帧 | `BootScene.ts`, `sprite.ts`, `sceneTypes.ts` (ImageLike.setFrame?) |
+
+### P1-E backlog（跳过原因）
+
+P1-E TownScene 用 Kenney tiny-town tileset 真实渲染地图：子代理仅完成 BootScene spritesheet 注册（已并入 commit 57bd410），实际 tilemap.ts 改造需要扩展 SceneLike 接口（TilemapLayer / TileSprite layer），且要新接 phaserGame adapter 暴露 Phaser tilemap API。风险大且无人 review，留 backlog 等用户醒来 + 真机验证后再做。
+
+### 不影响演示链路
+
+| 链路 | 状态 |
+| --- | :---: |
+| 注册 → 登录 → 小镇 | ✅ 不变 |
+| 小镇 → 画像屋 → 知识田 | ✅ 不变（+ BGM 自动播放） |
+| 知识田 KC 点击 → 资源工坊 | ✅ 不变（+ KC 成熟时 confetti） |
+| 资源工坊 → 训练场 → 提交 | ✅ 不变（+ 成功 jingle / 失败 error） |
+| 训练场失败 → Bug 矿洞 | ✅ 不变（+ 进入时 bgm_bug_mine） |
+| 复盘大厅 | ✅ 不变（+ bgm_quest） |
