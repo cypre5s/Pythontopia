@@ -19,4 +19,10 @@ public record ClassroomQuestDto(
     OffsetDateTime createdAt,
     String status,
     Long targetProblemId,
-    String targetResourceType) {}
+    String targetResourceType,
+    Long studentQuestId,
+    String studentQuestStatus,
+    String requiredEvidenceType,
+    List<Long> targetProblemIds,
+    String deepLinkRoute,
+    JsonNode deepLinkParams) {}

@@ -21,11 +21,13 @@ import com.pythontopia.learner.quest.dto.QuestNodeType;
 import com.pythontopia.learner.quest.dto.QuestSkipRequest;
 import com.pythontopia.learner.quest.dto.QuestSource;
 import com.pythontopia.learner.quest.dto.QuestStatus;
+import com.pythontopia.learner.quest.evidence.QuestEvidenceVerifier;
 import com.pythontopia.learner.quest.repository.QuestRepository;
 import com.pythontopia.learner.quest.service.QuestService;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationEventPublisher;
@@ -34,7 +36,9 @@ class QuestServiceTest {
 
   private final QuestRepository repository = mock(QuestRepository.class);
   private final ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
-  private final QuestService service = new QuestService(repository, publisher);
+  private final QuestEvidenceVerifier evidenceVerifier = mock(QuestEvidenceVerifier.class);
+  private final QuestService service =
+      new QuestService(repository, publisher, evidenceVerifier);
   private final ObjectMapper mapper = new ObjectMapper();
 
   @Test
@@ -123,6 +127,12 @@ class QuestServiceTest {
         LocalDate.now(ZoneOffset.UTC),
         5,
         status,
+        null,
+        null,
+        List.of(),
+        null,
+        null,
+        mapper.createObjectNode(),
         OffsetDateTime.now(ZoneOffset.UTC),
         OffsetDateTime.now(ZoneOffset.UTC));
   }

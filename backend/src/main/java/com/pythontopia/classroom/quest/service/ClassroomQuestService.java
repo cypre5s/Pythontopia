@@ -23,6 +23,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
@@ -121,6 +122,10 @@ public class ClassroomQuestService {
             ? "班级任务：" + request.title()
             : request.description();
     String questTitle = "班级任务 · " + request.title();
+    String deepLinkRoute = deepLinkRouteFor(nodeType, request.targetResourceType());
+    ObjectNode deepLinkParams =
+        deepLinkParamsFor(
+            nodeType, kcCode, request.targetProblemId(), request.targetResourceType());
     for (ClassroomMemberDto member : members) {
       try {
         questRepository.insert(
@@ -134,7 +139,13 @@ public class ClassroomQuestService {
                 nodeType,
                 payload,
                 request.dueDate(),
-                9));
+                9,
+                null,
+                null,
+                List.of(),
+                null,
+                deepLinkRoute,
+                deepLinkParams));
         created += 1;
       } catch (DuplicateKeyException duplicate) {
         skipped += 1;
@@ -248,5 +259,44 @@ public class ClassroomQuestService {
   @Transactional(readOnly = true)
   public List<ClassroomQuestDto> listForClassroom(Long classroomId) {
     return repository.listActiveForClassroom(classroomId, LocalDate.now(ZoneOffset.UTC));
+  }
+
+  private String deepLinkRouteFor(QuestNodeType nodeType, String targetResourceType) {
+    if (nodeType == QuestNodeType.SOLVE_PROBLEM) {
+      return "/training";
+    }
+    if (nodeType == QuestNodeType.READ_RESOURCE) {
+      return "/workshop";
+    }
+    if (nodeType == QuestNodeType.FIX_BUG) {
+      return "/world";
+    }
+    if (nodeType == QuestNodeType.PLANT_KC) {
+      return "/world";
+    }
+    return "/world";
+  }
+
+  private ObjectNode deepLinkParamsFor(
+      QuestNodeType nodeType, String kcCode, Long problemId, String resourceType) {
+    ObjectNode params = objectMapper.createObjectNode();
+    if (nodeType == QuestNodeType.SOLVE_PROBLEM && problemId != null) {
+      params.put("problemId", problemId);
+    }
+    if (nodeType == QuestNodeType.READ_RESOURCE) {
+      if (kcCode != null) {
+        params.put("kcCode", kcCode);
+      }
+      if (resourceType != null && !resourceType.isBlank()) {
+        params.put("type", resourceType);
+      }
+    }
+    if (nodeType == QuestNodeType.FIX_BUG) {
+      params.put("goto", "mine_south");
+    }
+    if (nodeType == QuestNodeType.PLANT_KC && kcCode != null) {
+      params.put("focus", "kc_" + kcCode.toLowerCase(Locale.ROOT));
+    }
+    return params;
   }
 }

@@ -32,6 +32,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import org.springframework.http.HttpStatus;
@@ -153,6 +154,7 @@ public class LearningPathService {
     LocalDate today = LocalDate.now(ZoneOffset.UTC);
     if (draft.nodes() != null) {
       for (LearningPathNodeDto node : draft.nodes()) {
+        QuestNodeType questNodeType = QuestNodeType.valueOf(node.nodeType().name());
         QuestInsert insert =
             new QuestInsert(
                 userId,
@@ -161,10 +163,17 @@ public class LearningPathService {
                 questTitleFromDto(node),
                 node.reasonSummary(),
                 node.kcCode(),
-                QuestNodeType.valueOf(node.nodeType().name()),
+                questNodeType,
                 payloadFromDto(node),
                 today.plusDays(Math.max(0, node.dayIndex() - 1)),
-                questPriority(node.dayIndex(), node.sourceClassroomQuestId()));
+                questPriority(node.dayIndex(), node.sourceClassroomQuestId()),
+                null,
+                null,
+                List.of(),
+                null,
+                deepLinkRouteFor(questNodeType),
+                deepLinkParamsFor(
+                    questNodeType, node.kcCode(), node.suggestedProblemId()));
         questRepository.insert(insert);
       }
     }
@@ -272,6 +281,7 @@ public class LearningPathService {
       if (!writeQuests) {
         continue;
       }
+      QuestNodeType questNodeType = mapToQuestNodeType(nodeDraft.nodeType());
       QuestInsert insert =
           new QuestInsert(
               userId,
@@ -280,14 +290,57 @@ public class LearningPathService {
               questTitle(nodeDraft),
               draft.reasonSummary(),
               draft.kcCode(),
-              mapToQuestNodeType(nodeDraft.nodeType()),
+              questNodeType,
               questPayload(nodeDraft),
               today.plusDays(Math.max(0, draft.dayIndex() - 1)),
-              questPriority(draft.dayIndex(), nodeDraft.sourceClassroomQuestId()));
+              questPriority(draft.dayIndex(), nodeDraft.sourceClassroomQuestId()),
+              null,
+              null,
+              List.of(),
+              null,
+              deepLinkRouteFor(questNodeType),
+              deepLinkParamsFor(
+                  questNodeType, nodeDraft.kcCode(), nodeDraft.suggestedProblemId()));
       questRepository.insert(insert);
       generatedQuestCount += 1;
     }
     return generatedQuestCount;
+  }
+
+  private String deepLinkRouteFor(QuestNodeType type) {
+    return switch (type) {
+      case SOLVE_PROBLEM -> "/training";
+      case READ_RESOURCE -> "/workshop";
+      case FIX_BUG -> "/world";
+      case PLANT_KC -> "/world";
+      case PROFILE_UPDATE -> "/profile-room";
+    };
+  }
+
+  private ObjectNode deepLinkParamsFor(QuestNodeType type, String kcCode, Long problemId) {
+    ObjectNode params = objectMapper.createObjectNode();
+    switch (type) {
+      case SOLVE_PROBLEM -> {
+        if (problemId != null) {
+          params.put("problemId", problemId);
+        }
+      }
+      case READ_RESOURCE -> {
+        if (kcCode != null) {
+          params.put("kcCode", kcCode);
+        }
+      }
+      case FIX_BUG -> params.put("goto", "mine_south");
+      case PLANT_KC -> {
+        if (kcCode != null) {
+          params.put("focus", "kc_" + kcCode.toLowerCase(Locale.ROOT));
+        }
+      }
+      case PROFILE_UPDATE -> {
+        // 画像屋无附加参数
+      }
+    }
+    return params;
   }
 
   private String questTitleFromDto(LearningPathNodeDto node) {

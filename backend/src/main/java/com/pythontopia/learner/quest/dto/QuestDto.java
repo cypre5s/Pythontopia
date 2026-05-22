@@ -1,8 +1,10 @@
 package com.pythontopia.learner.quest.dto;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.List;
 
 public record QuestDto(
     Long id,
@@ -17,5 +19,11 @@ public record QuestDto(
     LocalDate dueDate,
     int priority,
     QuestStatus status,
+    String requiredEvidenceType,
+    BigDecimal requiredMasteryDelta,
+    List<Long> targetProblemIds,
+    Long targetResourceId,
+    String deepLinkRoute,
+    JsonNode deepLinkParams,
     OffsetDateTime createdAt,
     OffsetDateTime updatedAt) {}

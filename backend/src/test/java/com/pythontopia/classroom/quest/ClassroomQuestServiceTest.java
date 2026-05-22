@@ -178,6 +178,12 @@ class ClassroomQuestServiceTest {
         OffsetDateTime.now(ZoneOffset.UTC),
         status,
         12L,
+        null,
+        null,
+        null,
+        null,
+        List.of(),
+        null,
         null);
   }
 

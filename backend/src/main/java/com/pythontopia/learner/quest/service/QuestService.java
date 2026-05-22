@@ -7,6 +7,7 @@ import com.pythontopia.learner.quest.dto.QuestDto;
 import com.pythontopia.learner.quest.dto.QuestSkipRequest;
 import com.pythontopia.learner.quest.dto.QuestSource;
 import com.pythontopia.learner.quest.dto.QuestStatus;
+import com.pythontopia.learner.quest.evidence.QuestEvidenceVerifier;
 import com.pythontopia.learner.quest.repository.QuestRepository;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -28,10 +29,15 @@ public class QuestService {
 
   private final QuestRepository repository;
   private final ApplicationEventPublisher eventPublisher;
+  private final QuestEvidenceVerifier evidenceVerifier;
 
-  public QuestService(QuestRepository repository, ApplicationEventPublisher eventPublisher) {
+  public QuestService(
+      QuestRepository repository,
+      ApplicationEventPublisher eventPublisher,
+      QuestEvidenceVerifier evidenceVerifier) {
     this.repository = repository;
     this.eventPublisher = eventPublisher;
+    this.evidenceVerifier = evidenceVerifier;
   }
 
   @Transactional(readOnly = true)
@@ -69,6 +75,7 @@ public class QuestService {
           "QUEST_INVALID_STATE",
           "任务当前状态 " + quest.status() + " 无法完成");
     }
+    evidenceVerifier.verify(userId, quest, request);
     repository.updateStatus(userId, questId, QuestStatus.COMPLETED);
     repository.recordProgress(questId, "COMPLETED", request == null ? null : request.note());
     publishCompletionEvent(quest);

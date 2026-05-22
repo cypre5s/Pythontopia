@@ -14,8 +14,10 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.stereotype.Repository;
 
@@ -90,16 +92,76 @@ public class ClassroomQuestRepository {
         """
         SELECT cq.id, cq.classroom_id, cq.title, cq.description, cq.kc_codes,
                cq.node_type, cq.payload, cq.due_date, cq.created_by, cq.created_at, cq.status,
-               cq.target_problem_id, cq.target_resource_type
+               cq.target_problem_id, cq.target_resource_type,
+               q.id AS student_quest_id,
+               q.status AS student_quest_status,
+               q.required_evidence_type AS student_required_evidence_type,
+               q.target_problem_ids AS student_target_problem_ids,
+               q.deep_link_route AS student_deep_link_route,
+               q.deep_link_params AS student_deep_link_params
         FROM classroom_quest cq
         JOIN classroom_members cm ON cm.classroom_id = cq.classroom_id
+        LEFT JOIN quest q
+          ON q.user_id = cm.student_id
+         AND q.source = 'CLASSROOM'
+         AND q.source_ref_id = cq.id
         WHERE cm.student_id = ? AND cm.status = 'ACTIVE'
           AND cq.status = 'ACTIVE' AND cq.due_date >= ?
         ORDER BY cq.due_date ASC, cq.id ASC
         """,
-        (rs, rowNum) -> map(rs),
+        mapWithStudentQuest(),
         userId,
         today);
+  }
+
+  private RowMapper<ClassroomQuestDto> mapWithStudentQuest() {
+    return (rs, rowNum) -> {
+      ClassroomQuestDto base = map(rs);
+      Long studentQuestId = (Long) rs.getObject("student_quest_id");
+      String studentStatus = rs.getString("student_quest_status");
+      String requiredType = rs.getString("student_required_evidence_type");
+      List<Long> studentTargetProblemIds =
+          readLongArray(rs.getArray("student_target_problem_ids"));
+      String deepLinkRoute = rs.getString("student_deep_link_route");
+      JsonNode deepLinkParams = readJson(rs.getString("student_deep_link_params"));
+      return new ClassroomQuestDto(
+          base.id(),
+          base.classroomId(),
+          base.title(),
+          base.description(),
+          base.kcCodes(),
+          base.nodeType(),
+          base.payload(),
+          base.dueDate(),
+          base.createdBy(),
+          base.createdAt(),
+          base.status(),
+          base.targetProblemId(),
+          base.targetResourceType(),
+          studentQuestId,
+          studentStatus,
+          requiredType,
+          studentTargetProblemIds,
+          deepLinkRoute,
+          deepLinkParams);
+    };
+  }
+
+  private List<Long> readLongArray(Array array) throws SQLException {
+    if (array == null) {
+      return List.of();
+    }
+    Object raw = array.getArray();
+    if (raw instanceof Long[] values) {
+      return Arrays.asList(values);
+    }
+    if (raw instanceof Object[] values) {
+      return Arrays.stream(values)
+          .filter(Objects::nonNull)
+          .map(value -> ((Number) value).longValue())
+          .toList();
+    }
+    return List.of();
   }
 
   public List<ClassroomQuestDto> listActiveForClassroom(Long classroomId, LocalDate today) {
@@ -173,7 +235,13 @@ public class ClassroomQuestRepository {
         offset(rs, "created_at"),
         rs.getString("status"),
         (Long) rs.getObject("target_problem_id"),
-        rs.getString("target_resource_type"));
+        rs.getString("target_resource_type"),
+        null,
+        null,
+        null,
+        List.of(),
+        null,
+        null);
   }
 
   private OffsetDateTime offset(ResultSet rs, String column) throws SQLException {

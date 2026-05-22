@@ -149,6 +149,54 @@ public class ProfileRepository {
         evaluationId);
   }
 
+  /**
+   * 读取 learner_profile.dimensions JSONB（八维画像聚合字段）。
+   *
+   * <p>当 user 尚无 profile 行、列为 NULL、JSON 解析失败时返回 {@link Optional#empty()}。
+   *
+   * <p>当 {@code dimensions} 列尚未由 W2-MIGRATE 创建时，底层 SQL 会抛 {@link
+   * org.springframework.jdbc.BadSqlGrammarException}，本方法不吞掉以便调用方（PassiveProfileService /
+   * PassiveProfileRevisionListener）显式降级。
+   */
+  public Optional<JsonNode> findDimensions(Long userId) {
+    return jdbcTemplate
+        .query(
+            "SELECT dimensions FROM learner_profile WHERE user_id = ?",
+            (rs, rowNum) -> rs.getString("dimensions"),
+            userId)
+        .stream()
+        .findFirst()
+        .map(this::tryReadJson)
+        .filter(node -> node != null && !node.isMissingNode() && !node.isNull());
+  }
+
+  /**
+   * 覆盖写入 learner_profile.dimensions（八维聚合）。需要 profile 行存在；不存在时静默跳过（依赖 INTERVIEW 流程先建 profile）。
+   */
+  public void saveDimensions(Long userId, JsonNode dimensions) {
+    String payload = writeJson(dimensions == null ? objectMapper.createObjectNode() : dimensions);
+    jdbcTemplate.update(
+        """
+        UPDATE learner_profile
+        SET dimensions = ?::jsonb,
+            updated_at = now()
+        WHERE user_id = ?
+        """,
+        payload,
+        userId);
+  }
+
+  private JsonNode tryReadJson(String json) {
+    if (json == null || json.isBlank()) {
+      return null;
+    }
+    try {
+      return objectMapper.readTree(json);
+    } catch (Exception exception) {
+      throw new IllegalStateException("Failed to read learner_profile.dimensions JSON", exception);
+    }
+  }
+
   public List<ProfileRevisionDto> findRevisions(Long userId, int limit) {
     return jdbcTemplate.query(
         """
