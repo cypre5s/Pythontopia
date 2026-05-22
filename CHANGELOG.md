@@ -2,6 +2,58 @@
 
 ## 2026-05-22
 
+### Android-R1 - 真实可构建多模块骨架（完成）
+
+- **核心成果**：在 WSL2 Linux 环境下完成 Pythontopia Android 客户端首个**真实可构建**版本。
+  - `./gradlew :app:assembleDebug` → BUILD SUCCESSFUL in 3m 45s
+  - `app/build/outputs/apk/debug/app-debug.apk` = 11 MB
+  - `./gradlew test` → BUILD SUCCESSFUL in 1m 27s, **28 / 28 unit tests passed**（0 failures）
+  - 通过 commit `8a49643` 固化, 后续 R-2 起各阶段独立可回滚。
+
+- **15 个 Gradle 模块就位**:
+  - `:app`（Application module）+ MainActivity + PythontopiaApplication + MainScreen + Hilt entrypoint
+  - `:core:common`（pure JVM）+ Result / AppError / UiState sealed interface + MasteryLevel + 6 单测
+  - `:core:design` + PytColors（Pal-1 深夜炉火 18 色）+ PytSpace / PytShape / PythontopiaTheme
+  - `:core:data` + 5 个 DTO（UserDto / LoginRequest / LoginResponse / ApiErrorDto / ProfileDto）
+  - `:core:network` + AuthInterceptor + RetrofitFactory + NetworkConfig + AuthApi 接口
+  - `:game` + LibGDX 1.13.1 + TownGame + PlaceholderScreen + TownGameLauncher（R6 真正接渲染）
+  - `:feature:auth` + LoginScreen / RegisterScreen + LoginViewModel（StateFlow + Hilt）+ AuthNavGraph + 单测
+  - `:feature:profile / fields / workshop / arena / mine / retro / path / classroom`（8 个面板占位骨架，R7~R14 实施）
+  - 每模块均含 `build.gradle.kts` + `AndroidManifest.xml` + Kotlin 源 + JUnit 5 单测
+
+- **关键技术栈实测锁定**（与 ADR-001 略有调整）：
+  - Gradle 8.11.1 + Kotlin DSL + `gradle/libs.versions.toml`
+  - **Kotlin 2.0.21**（ADR 原写 2.2.0；实测后改 2.0.21 以匹配 KSP 2.0.21-1.0.27 + Compose BOM 2024.12.01）
+  - AGP 8.7.3 + Compose BOM 2024.12.01（含 Compose UI 1.7.x + Material3 1.3.x）
+  - Hilt 2.52 + KSP 2.0.21-1.0.27（KAPT 完全弃用）
+  - Retrofit 2.11.0 + OkHttp 4.12.0 + kotlinx-serialization-json 1.7.3 + retrofit2-kotlinx-serialization-converter 1.0.0
+  - kotlinx-coroutines 1.9.0 + kotlinx-datetime 0.6.1
+  - Room 2.6.1 + DataStore 1.1.1 + security-crypto 1.1.0-alpha06 + biometric 1.1.0
+  - LibGDX 1.13.1（仅 core + backend-android，未引 native lib，留待 R6）
+  - JUnit 5.10.3 + JUnit 4.13.2 + MockK 1.13.13 + Turbine 1.2.0 + Robolectric 4.13 + Compose UI Test
+  - foojay-resolver-convention 0.8.0（自动下载 JDK 17 toolchain；本机原 JDK 21 不匹配 jvmToolchain(17)）
+
+- **本机工具链准备**（走代理 127.0.0.1:7892）：
+  - Android cmdline-tools 11076708（153 MB）下载并解压到 `~/Android/cmdline-tools/latest/`
+  - SDK licenses 接受（android-sdk-license 等 7 项）
+  - sdkmanager 装 `platform-tools` + `platforms;android-35` + `build-tools;35.0.0`（gradle 后续自动追加 `build-tools;34.0.0` 满足 AGP 内部依赖）
+  - Gradle 8.11.1 二进制（137 MB）装到 `~/.local/tools/gradle-8.11.1/`
+  - 在 `/tmp/wrapper-gen/` 跑 `gradle wrapper --gradle-version 8.11.1 --distribution-type bin` 一次性生成 `gradlew + gradlew.bat + gradle-wrapper.jar (43.5 KB)`，复制到 `android/`
+  - `~/.gradle/gradle.properties` 配置全局 systemProp 代理 + JVM 内存
+
+- **CI / 静态分析就位**（暂未在 GitHub Actions 上跑通）：
+  - `.github/workflows/android.yml`：PR 跑 `lintDebug + testDebugUnitTest + :app:assembleDebug`，release 签名 APK + AAB
+  - `android/config/detekt/detekt.yml`：基于 detekt 1.23.7 默认规则微调（LongMethod threshold 80、MagicNumber 关闭）
+  - `android/WRAPPER_SETUP.md`：本机首次准备文档（含代理设置 + sdkmanager 命令）
+
+- **遗留小问题**（R-2 修）：
+  - `app/MainActivityUnitTest.kt:12` Package?.name nullable warning（不阻断构建）
+  - Gradle 8.11 几条 deprecation warnings（不影响 8.x，gradle 9.0 升级时再修）
+  - LibGDX native lib（`gdx-platform armeabi-v7a / arm64-v8a`）未引入；R6 真正实施像素渲染时按 abiFilters 加
+  - `:feature:*` 8 个面板仍为占位 Composable + ViewModel；R7~R14 真正实施业务逻辑
+
+- **不破坏 Web 端 234 测试基线**（Web 端代码未触动；R-11 状态保持）。
+
 ### Android-R0 - 原生 Android 客户端启动（完成）
 
 - **重大方向变更**：用户决策（2026-05-22 / `docs/execution_directive.md` 之后）— 在 `/home/cypress/Pythontopia/android/` 新增**原生 Android 客户端**，复用后端 / Agent / RAG / course-pack-43 数据；接受比赛 Beta 日期推迟；放弃 Web 端 R-12 ~ R-100 迭代（保留 R-11 完成态代码）；授权使用 subagent 并发。

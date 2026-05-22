@@ -27,9 +27,10 @@
 | R-11 | 根 README 重写为成熟教学游戏作品门面 | 已完成 | 单文件 30 → 147 行；R-0 baseline commit `59761c5` 建立 |
 | R-12 ~ R-100 | Web 端持续小步成熟度迭代 | **冻结** | Web 端代码冻结在 R-11；用户决策转入 Android 化路线 |
 | Android-R0 | Android 客户端启动：10 subagent 调研 + ADR-001 + roadmap | 已完成 | 详见 `android/docs/ADR-001-tech-selection.md` 与 `android/docs/roadmap.md` |
-| Android-R1 ~ R17 | Android 客户端从 Gradle 骨架到 Beta | 进行中 | 详见 `android/docs/roadmap.md` |
+| Android-R1 | 多模块 Gradle 骨架 + 真实可构建 + 28 测试通过 + 11MB APK 产出 | 已完成 | commit `8a49643`；本机已装 Android SDK 35 / JDK 17 toolchain / Gradle 8.11.1 |
+| Android-R2 ~ R17 | Android 客户端从骨架到 Beta | 进行中 | 详见 `android/docs/roadmap.md` |
 
-## 当前状态：方向变更 — Web 端冻结于 R-11，Android-R0 已启动，等待 Android-R1 Gradle 骨架
+## 当前状态：Android-R1 已交付（真实可构建 APK + 28/28 测试），等待 Android-R2 启动
 
 ## 阶段 15 — Beta 验收、演示视频与 PPT 收尾（文档与脚本部分已完成）
 
@@ -90,3 +91,10 @@
 - 00:05 Android-R0 启动：新建 `android/` + `android/README.md` + `android/.gitignore` + `android/docs/README.md`；启动 10 个并发 subagent 调研（Gradle / 像素引擎 / Python 沙箱 / 暗色主题 / 网络 / DI 状态 / JWT 安全 / 测试 / DTO 对齐 / CI/CD），输出到 `.work/thinking/android_research_{01..10}.md`。
 - 00:08 10 个 subagent 全部完成，3951 行调研报告就位。
 - 00:12 Android-R0 ADR-001 + roadmap.md 落地：18 项关键决策锁定（Kotlin 2.2.0 / AGP 8.7.3 / Compose BOM 2025.04.00 / LibGDX 1.13.1 主渲染 / 仅服务端判题 / Hilt + KSP / Retrofit 2.11 + OkHttp 4.12 / EncryptedSharedPreferences + BiometricPrompt / JUnit5 + Robolectric + Compose UI Test / OpenAPI Generator 7.22 / GitHub Actions ubuntu-latest）；roadmap 列 Android-R0 ~ R17 + R100 共 19 个阶段。
+- 00:25 Android-R1 启动：6 个并发 subagent 写源码（M1 :app / M2 :core×4 / M3 :game / M4 :feature×2 / M5 :feature×7 / M6 CI+detekt+wrapper）。
+- 00:35 105 个源码文件就位（含 15 模块 build.gradle.kts + Kotlin 类 + AndroidManifest + 单测）。
+- 08:00 工具链准备完成（走代理 127.0.0.1:7892）：Android cmdline-tools 11076708 解压；sdkmanager 装 platform-tools / platforms;android-35 / build-tools;35.0.0；Gradle 8.11.1 二进制装；gradle wrapper 生成（gradlew + gradlew.bat + gradle-wrapper.jar 43.5KB）。
+- 08:30 修 ADR-001 中 Kotlin 2.2.0 与 KSP 2.2 兼容性问题 → 实际锁定 Kotlin 2.0.21 + KSP 2.0.21-1.0.27 + Compose BOM 2024.12.01；settings.gradle.kts 加 foojay-resolver-convention 自动下载 JDK 17 toolchain。
+- 08:43 `./gradlew :app:assembleDebug --no-daemon` BUILD SUCCESSFUL in 3m 45s（271 tasks），产出 `app-debug.apk` = 11 MB。
+- 08:45 `./gradlew test --no-daemon` BUILD SUCCESSFUL in 1m 27s（613 tasks），**28 / 28 unit tests passed**（覆盖 15 模块）。
+- 08:50 Android-R1 commit `8a49643` 落成（107 文件 / 3053 行新增）。
