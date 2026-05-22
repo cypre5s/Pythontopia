@@ -57,8 +57,9 @@ const KC_ICONS: ReadonlyArray<[string, string]> = [
 ];
 
 const CHARACTER_SHEETS: ReadonlyArray<[string, string, number, number]> = [
-  // [key, url, frameWidth, frameHeight] — LPC 标准 64x64
+  // [key, url, frameWidth, frameHeight] — LPC 标准 64x64 / 12 列
   ['student_default', '/assets/pixel/characters/student_default.svg', 32, 32],
+  ['player_sara', '/assets/pixel/sprites/lpc-sara/SaraFullSheet.png', 64, 64],
 ];
 
 export const BootScene = {

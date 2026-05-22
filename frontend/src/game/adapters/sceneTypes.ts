@@ -19,6 +19,7 @@ export interface ImageLike {
   setDepth(depth: number): ImageLike;
   setScale(scale: number): ImageLike;
   setAlpha(alpha: number): ImageLike;
+  setFrame?(frame: number | string): ImageLike;
   x: number;
   y: number;
 }
