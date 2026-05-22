@@ -38,8 +38,8 @@ public class WorldService {
   }
 
   private void requireStudent(CurrentUserPrincipal user) {
-    if (user.role() != Role.STUDENT) {
-      throw new BusinessException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Only students have world state");
+    if (user.role() != Role.STUDENT && user.role() != Role.ADMIN) {
+      throw new BusinessException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Only students or admins have world state");
     }
   }
 

@@ -51,6 +51,40 @@ public class WorldRepository {
     return findSession(userId).orElseThrow();
   }
 
+  /**
+   * Advance the world by one in-game day. {@code newWeather} replaces the weather string, {@code
+   * newWeekday/newSeason/newMonthIndex/newTimeOfDay} apply the calendar tick computed by the
+   * service layer. Returns the post-tick session.
+   */
+  public WorldSession advanceDay(
+      Long userId,
+      String newWeather,
+      String newWeekday,
+      String newSeason,
+      int newMonthIndex,
+      String newTimeOfDay) {
+    jdbcTemplate.update(
+        """
+        UPDATE world_session
+        SET day_index = day_index + 1,
+            weather = ?,
+            weekday = ?,
+            season = ?,
+            month_index = ?,
+            time_of_day = ?,
+            in_game_minutes = 480,
+            last_active_at = now()
+        WHERE user_id = ?
+        """,
+        newWeather,
+        newWeekday,
+        newSeason,
+        newMonthIndex,
+        newTimeOfDay,
+        userId);
+    return findSession(userId).orElseThrow();
+  }
+
   public Optional<PlayerState> findPlayer(Long userId) {
     return jdbcTemplate
         .query(
