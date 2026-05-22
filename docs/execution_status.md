@@ -97,4 +97,14 @@
 - 08:30 修 ADR-001 中 Kotlin 2.2.0 与 KSP 2.2 兼容性问题 → 实际锁定 Kotlin 2.0.21 + KSP 2.0.21-1.0.27 + Compose BOM 2024.12.01；settings.gradle.kts 加 foojay-resolver-convention 自动下载 JDK 17 toolchain。
 - 08:43 `./gradlew :app:assembleDebug --no-daemon` BUILD SUCCESSFUL in 3m 45s（271 tasks），产出 `app-debug.apk` = 11 MB。
 - 08:45 `./gradlew test --no-daemon` BUILD SUCCESSFUL in 1m 27s（613 tasks），**28 / 28 unit tests passed**（覆盖 15 模块）。
-- 08:50 Android-R1 commit `8a49643` 落成（107 文件 / 3053 行新增）。
+- 08:50 Android-R1 commit `8a49643` 落成（107 文件 / 3053 行新增）。- 08:50 R-100 阶段 1 启动：素材爬取 + 集成 + P0 优化。
+- 09:00 阶段 1.1 License 热修完成：删 `sprout_lands_basic`(Cup Nooble 专有) + `simple_farm_tiles`(来源未知) + 2 个冗余 + 迁 `lpc_farm` 到 `opengameart_farming/`；sprout_lands 顶级目录已删除；`.gitignore` 加 sprout_lands/ + *.zip。Commit `0d167a4`。
+- 09:05 阶段 1.2 10 个素材爬取子代理产出已完成 5/10（seasons_school 21M / characters_extra 5M / mines_extra 11M / sfx_extra 25M / bgm_extra 32M），剩余 5 个子代理因 worktree 切换中断后由主代理接管。
+- 09:10 阶段 1.2B 主代理接管 #06-#10：补 icons_kc 19 张缺失类目至 60 张全覆盖；#10 effects_extra 删 zip 瘦身 105M→60M；#07 ark-pixel-font 13M 下载 + OFL-1.1；#08 Kenney UI 4 pack 36M；#09 itch.io 严过滤主动跳过(2 个 CC0 候选因 itch.io session token 限制不可自动下载)。
+- 09:12 阶段 1.3 综合：md5 去重（仅清理 macOS `__MACOSX` 残留）+ `LICENSE-ART.md` 顶层声明就位（5.5KB / 全协议矩阵）。
+- 09:13 Commit 2 `2ecf1af`: stage1 inbox expansion 10169 文件 / +194053 行。Commit 3 `faf6eac`: 补遗（相对路径符号链接 + icons/kenney_curated + buildings/kenney_1bit-pack + characters/armm1998_zelda_cc0 + oga_farming/lpc_farm + edu_diagrams 5 个新流程图）。
+- 09:18 阶段 1.4 集成到前端：`frontend/public/assets/pixel/` 从 60KB 扩到 29MB；`tokens.css` 加 @font-face for Ark Pixel 12（zh_cn + latin × mono + prop）+ `.pyt-pixel-text` / `.pyt-pixel-code` 工具类；`BootScene.ts` 重写 preload：22 个 key 覆盖 tileset / KC icons / character spritesheet / SFX / BGM；前端 typecheck OK / 26 files 56 tests PASS / lint 0 错。Commit 4 `6d07383`。
+- 09:25 阶段 2 P0 优化实施：`frontend/src/utils/sfx.ts`（66L，全局 SFX 服务 + localStorage 持久化开关）+ 5 单测 PASS；`frontend/src/pages/CreditsPage.vue`（200L，CC-BY-SA / OFL / CC-BY 强制署名页）+ `/credits` 路由。前端总计 27 files / 61 tests PASS / lint 0 错。Commit 5 `546152c`。
+- 09:30 全套测试回归：backend mvn test = 101/101 PASS / BUILD SUCCESS；frontend = 61/61 PASS；graph pytest = 59/59 PASS；android = 28/28 PASS（用户 worktree 已 commit 8a49643）；**总计 249/249 通过**。rag pytest 因本机 Python 3.10 不满足 `>=3.11` 跳过。
+- 09:35 `docs/r100_test_report.md` 测试报告就位（92 行，含合规验证 + 素材规模 + P0 实施 + backlog）。
+- 09:35 R-100 阶段 1 + 阶段 2 P0 任务全部完成；剩余 P1/P2 优化、browser MCP 截图、judge e2e docker compose、RAG pytest 等列入 backlog 留待用户醒来推进。
