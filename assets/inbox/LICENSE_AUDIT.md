@@ -5,6 +5,18 @@
 > 审计范围: `/home/cypress/Pythontopia/assets/inbox/` 全部非空目录
 > 验证方式: 包内 `License.txt` / `CREDITS-*.txt` / `read_me.txt` 文本核对 + OpenGameArt / Kenney.nl 上游页面 `<field-name-field-art-licenses>` 字段实时回访（经代理 `127.0.0.1:7892`）
 
+## 2026-05-22 热修说明（R-100 阶段一）
+
+| 操作 | 路径 | 原因 | 处置 |
+| --- | --- | --- | --- |
+| 删除 | `sprout_lands/sprout_lands_basic/` | Cup Nooble 专有 Non-commercial | 已删 + 加入 `.gitignore` |
+| 删除 | `sprout_lands/simple_farm_tiles/` | 来源 license 不可考 | 已删 |
+| 删除 | `sprout_lands/daneeklu_farming/` | 与 `opengameart_farming/daneeklu/` 完整冗余 | 已删 |
+| 删除 | `opengameart_farming/bluecarrot16/` | 与 `crops/lpc-crops/` 完整冗余 | 已删 |
+| 迁移 | `sprout_lands/lpc_farm/` → `opengameart_farming/lpc_farm/` | 剔除 Cup Nooble 商标词 `sprout` | 已迁移 + 顶目录 `sprout_lands/` 已删除 |
+
+热修后 `assets/inbox/` 11 个非空目录全部合规（CC0 / CC-BY 4.0 / CC-BY-SA 3.0+ / OFL-1.1），SA 传染由 `frontend/public/credits/` 与最终 `LICENSE-ART.md` 公开声明承担。
+
 ---
 
 ## ⚠️ 高风险目录（必读）

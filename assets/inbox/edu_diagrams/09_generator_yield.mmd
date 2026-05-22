@@ -1,40 +1,25 @@
-%% Pythontopia CC0 - 用途：演示 generator 函数的"暂停-恢复"语义（yield 挂起 / next 恢复 / 迭代器协议）
-%% 关联 KC：PY43-KC-031（for 循环与遍历，generator 是可迭代对象）、PY43-KC-012（基础函数）
-%% 备注：generator 在课程包 packId=43 中作为通识扩展呈现
-%% 示例代码：
-%%   def gen():
-%%       yield 1
-%%       yield 2
-%%       yield 3
-%%   g = gen()
-%%   next(g)  # 1
-%%   next(g)  # 2
+%% Pythontopia CC0 - 用途：generator / yield 状态机 - 附加补充教学示意图（课程包无专门 KC，归类到 PY43-KC-044 序列基本操作）
+stateDiagram-v2
+    [*] --> Created : gen = my_gen()
+    Created --> Suspended : next(gen) 首次调用
+    Suspended --> Running : yield 之后的代码继续执行
+    Running --> Suspended : 下一个 yield 暂停
+    Suspended --> Exhausted : 函数 return / 无 yield
+    Running --> Exhausted : 函数末尾 fallthrough
+    Exhausted --> [*] : 再 next() 抛 StopIteration
 
-sequenceDiagram
-    autonumber
-    participant Caller as 调用方代码
-    participant G as 生成器对象 g
-    participant Func as gen() 函数体
-    Note over Caller,Func: 第 1 阶段：创建生成器（函数体尚未执行）
+    note left of Created
+      generator 一开始不执行函数体
+      只有 next() 才会推进
+    end note
 
-    Caller->>Func: 调用 gen()
-    Func-->>G: 返回生成器对象（generator）
-    G-->>Caller: 持有 g，函数体仍处于"未启动"
+    note right of Suspended
+      局部变量与执行位置
+      被冻结保留在 frame 里
+    end note
 
-    Note over Caller,Func: 第 2 阶段：第一次 next(g) 启动函数体
-    Caller->>G: next(g)
-    G->>Func: 恢复执行，到 yield 1
-    Func-->>G: 暂停，保留局部变量与 PC
-    G-->>Caller: 返回值 1
-
-    Note over Caller,Func: 第 3 阶段：再次 next(g) 从上次暂停处继续
-    Caller->>G: next(g)
-    G->>Func: 从 yield 1 之后继续，到 yield 2
-    Func-->>G: 再次暂停
-    G-->>Caller: 返回值 2
-
-    Note over Caller,Func: 第 4 阶段：耗尽
-    Caller->>G: next(g)
-    G->>Func: 继续到函数末尾
-    Func-->>G: 抛出 StopIteration
-    G-->>Caller: raise StopIteration<br/>（for 循环会自动捕获）
+    note right of Exhausted
+      已结束的 generator
+      不能 reset / 倒带
+      只能新建一个
+    end note

@@ -2,7 +2,11 @@
   {
     "title": "完成第 1 章 input 与变量练习",
     "description": "演示用班级任务：练习 PY43-KC-001~003，附 1 道题目。",
-    "kcCodes": ["PY43-KC-001", "PY43-KC-002", "PY43-KC-003"],
+    "kcCodes": [
+      "PY43-KC-001",
+      "PY43-KC-002",
+      "PY43-KC-003"
+    ],
     "nodeType": "SOLVE_PROBLEM",
     "targetProblemId": 476,
     "dueOffsetDays": 7

@@ -1,11 +1,7 @@
-%% Pythontopia CC0 - 用途：演示 Python 类继承与多态的 UML 类图（封装 / 继承 / 多态 / MRO）
-%% 关联 KC：PY43-KC-064（类和对象基础）、PY43-KC-065（面向对象编程的特征）
-
+%% Pythontopia CC0 - 用途：类继承 / 多态 UML - 对应 KC：PY43-KC-064 类和对象基础 / PY43-KC-065 面向对象编程的特征
 classDiagram
-    direction BT
-
     class Animal {
-        +String name
+        +str name
         +int age
         +__init__(name, age)
         +speak() str
@@ -13,28 +9,20 @@ classDiagram
     }
 
     class Dog {
-        +String breed
+        +str breed
         +__init__(name, age, breed)
         +speak() str
-        +fetch() str
     }
 
     class Cat {
         +bool indoor
         +__init__(name, age, indoor)
         +speak() str
-        +purr() str
     }
 
-    class Puppy {
-        +__init__(name, age, breed)
-        +speak() str
-    }
+    Animal <|-- Dog : 继承
+    Animal <|-- Cat : 继承
 
-    Animal <|-- Dog : 继承 / 重写 speak()
-    Animal <|-- Cat : 继承 / 重写 speak()
-    Dog    <|-- Puppy : 多层继承 / 再重写
-
-    note for Animal "基类（父类）<br/>定义公共属性与行为<br/>speak() 留给子类实现：多态"
-    note for Dog "子类<br/>super().__init__ 复用父类构造<br/>新增 fetch() 行为"
-    note for Puppy "MRO: Puppy → Dog → Animal → object<br/>方法解析顺序，影响 super() 调用链"
+    note for Animal "基类 / 父类<br/>speak() 是抽象意图，<br/>子类必须重写"
+    note for Dog "Dog.speak() -> 汪汪<br/>describe() 继承自 Animal"
+    note for Cat "Cat.speak() -> 喵喵<br/>多态：同名方法 / 不同实现"

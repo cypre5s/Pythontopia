@@ -148,7 +148,19 @@ assets/inbox/crops/                       7.5 MB · 65 文件（含 LICENSE / SO
         └── ui/                           ❌ Pythontopia 不使用
 ```
 
-PNG 文件合计 **54 张**；目录总文件 **67 个**（54 PNG + 1 SVG + 4 ZIP/tar.gz + 3 本仓库映射文档 `LICENSE.md` `SOURCES.md` `KC_CROP_MAPPING.md` + 5 上游 README / LICENSE / CREDITS）。原始下载完成时为 65 个，本轮任务新增 2 个映射文档（`SOURCES.md` + `KC_CROP_MAPPING.md`）。
+PNG 文件合计 **54 张**；目录总文件 **67 个**，明细：
+
+| 类型 | 数量 | 说明 |
+| --- | --- | --- |
+| 本仓库映射文档 (`.md`) | 3 | `LICENSE.md` + `SOURCES.md` + `KC_CROP_MAPPING.md` |
+| PNG（与作物 / 田垄直接相关） | 41 | `lpc-crops/crops.png` (1) + `farming-crops-16x16/Crop_Spritesheet.png` (1) + `farming-game-basics/PNG/*.png` (29) + `lpc-farming-tilesets/.../tilesets/*.png` (11，作场景瓦片背景，详见 `KC_CROP_MAPPING.md §4`) |
+| PNG（LPC 包内自带、Pythontopia **不直接使用** 的 `character/` `magic/` `ui/` + preview） | 13 | 2 character + 7 magic + 1 `ui/scrollsandblocks.png` + 1 `tileset_preview.png` + 1 `ui_preview.png` + 1 GIF `magics_preview.gif`（其中 GIF 1 个，余 12 张 PNG），保留不删以维持原包结构与 license 完整性 |
+| SVG 矢量源 | 1 | `farming-game-basics/2DRP_CCArt_SimpleFarmGame.svg`（Inkscape 源） |
+| 压缩包归档 (`.zip` / `.tar.gz`) | 4 | 各包原始下载文件，保留作为校验基线，不入 git LFS |
+| 上游 README / LICENSE / CREDITS (`.txt` / `.TXT`) | 4 | `farming-crops-16x16/README.txt` + `farming-game-basics/LICENSE.TXT` + `lpc-crops/crops-v2/CREDITS-crops.txt` + `lpc-farming-tilesets/submission_daneeklu/readme.txt`，全部 **必须随产物保留** |
+| 合计 | **67** | `git ls-files assets/inbox/crops/` 与 `find … -type f` 双向核对 = 67，本轮素材爬取子代理 #5 未新增 / 未删除任何素材文件。 |
+
+> 任务工单里写"已有 65 文件"是旧统计快照（缺少了 `LICENSE.md` 与 `KC_CROP_MAPPING.md` 两份文档的计数），与现仓库 `git ls-files` 的 67 文件结果差 2。差异原因记录于此，**无丢失、无重复、无溢出**。
 
 ---
 

@@ -1,48 +1,25 @@
-%% Pythontopia CC0 - 用途：演示装饰器堆叠时"由近及远"的包装顺序与"由外到内"的执行顺序
-%% 关联 KC：PY43-KC-012（基础函数）、PY43-KC-060（函数变量的作用域）
-%% 备注：装饰器在课程包 packId=43 中作为通识扩展呈现
-%% 示例代码：
-%%   @log
-%%   @auth
-%%   @cache
-%%   def view(req): ...
-%% 等价于：view = log(auth(cache(view)))
+%% Pythontopia CC0 - 用途：装饰器调用顺序（含 @log @cache 嵌套）- 附加补充教学示意图（课程包无专门 KC，归类到 PY43-KC-059 函数参数高级用法）
+sequenceDiagram
+    autonumber
+    participant User as 调用方
+    participant LogWrap as log 包装层
+    participant CacheWrap as cache 包装层
+    participant Real as 原始函数 add
 
-flowchart LR
-    subgraph WRAP["① 装饰阶段（自下而上包装）"]
-        direction TB
-        ORIG["原始函数 view"]
-        W1["cache(view) → view'"]
-        W2["auth(view') → view''"]
-        W3["log(view'') → view'''"]
-        ORIG --> W1 --> W2 --> W3
+    Note over User: @log<br/>@cache<br/>def add(x, y): return x + y
+    Note over LogWrap,Real: 装饰器从下往上包，<br/>等价于 add = log(cache(add))
+
+    User->>LogWrap: add(2, 3)
+    LogWrap->>LogWrap: 打印 "调用 add(2, 3)"
+    LogWrap->>CacheWrap: 转交参数
+    CacheWrap->>CacheWrap: 查缓存 hit?
+    alt 缓存命中
+        CacheWrap-->>LogWrap: 返回缓存值
+    else 未命中
+        CacheWrap->>Real: 真正执行 add(2, 3)
+        Real-->>CacheWrap: 5
+        CacheWrap->>CacheWrap: 写缓存 (2,3) -> 5
+        CacheWrap-->>LogWrap: 5
     end
-
-    subgraph CALL["② 调用阶段（从最外层 log 开始向内）"]
-        direction TB
-        IN(["view'''(req) 被调用"])
-        L_IN["log 包装：打印请求日志"]
-        A_IN["auth 包装：校验权限"]
-        C_IN["cache 包装：查缓存"]
-        REAL["真正的 view(req)"]
-        C_OUT["cache 包装：写入缓存"]
-        A_OUT["auth 包装：审计返回"]
-        L_OUT["log 包装：打印响应耗时"]
-        OUT(["返回结果"])
-
-        IN --> L_IN --> A_IN --> C_IN --> REAL --> C_OUT --> A_OUT --> L_OUT --> OUT
-    end
-
-    W3 -.等价于.-> IN
-
-    NOTE["核心口诀：<br/>装饰时：靠近函数定义的装饰器先包<br/>调用时：最外层装饰器先跑（先入后出，洋葱模型）<br/>等价表达式：log(auth(cache(view)))"]
-    CALL --- NOTE
-
-    classDef wrap fill:#cce5ff,stroke:#004085,color:#222
-    classDef in fill:#fff3cd,stroke:#856404,color:#222
-    classDef core fill:#d4edda,stroke:#155724,color:#222
-    classDef note fill:#f8d7da,stroke:#721c24,color:#222
-    class ORIG,W1,W2,W3 wrap
-    class L_IN,A_IN,C_IN,C_OUT,A_OUT,L_OUT in
-    class REAL,IN,OUT core
-    class NOTE note
+    LogWrap->>LogWrap: 打印 "结果 = 5"
+    LogWrap-->>User: 5

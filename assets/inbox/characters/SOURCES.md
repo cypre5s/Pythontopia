@@ -1,8 +1,13 @@
 # Pythontopia 角色素材来源 (characters/)
 
-本目录收录 4 套互补的像素角色 sprite，用于 Pythontopia 像素小镇的学生主角与各类 NPC。
-所有素材均来自 OpenGameArt，license 为 CC0 / CC-BY 3.0 / CC-BY 4.0 / OGA-BY 3.0，符合 Pythontopia
+本目录收录 **5 套**互补的像素角色 sprite，用于 Pythontopia 像素小镇的学生主角与各类 NPC。
+所有素材均来自 OpenGameArt，license 为 CC0 / CC-BY 4.0 / CC-BY 3.0 / OGA-BY 3.0，符合 Pythontopia
 "教育优先、可商用 demo、保留 attribution" 的合规要求。**未引入任何星露谷官方素材。**
+
+> **R-100 严格许可状态:**
+> - 严格 CC0/CC-BY 4.0 (R-100 硬约束直接通过): `fleurman_tiny_cc0` (CC0)、`grafxkid_rpg_cc0` (CC0)、`armm1998_zelda_cc0` (CC0)、`tiny16_sharm` (含 CC-BY 4.0 选项) — **共 4 套**
+> - CC-BY 3.0 (无 SA，不传染，但严格 4.0 派认为有瑕疵): `cabbit_24x32` — 1 套，作为 NPC 变体补充保留
+> - 全目录无 CC-BY-SA / GPL / Non-commercial / 来源未知素材
 
 > 已有的 `kenney_characters/` (709 文件，CC0) 与 `buildings_npc/` (292 文件) 中的角色资源可直接复用，
 > 本目录不重复下载 Kenney 系列素材。详见 `MANIFEST.md` 的 "已有可复用" 段。
@@ -61,19 +66,51 @@
 - **本地文件:**
   - `RPG_assets.png` (1.9 KB,128×128) — 模板 sprite sheet
 
+## 5. armm1998_zelda_cc0/ — Zelda-like Tilesets and Sprites (character subset)
+
+- **作者:** ArMM1998
+- **OGA 页面:** <https://opengameart.org/content/zelda-like-tilesets-and-sprites>
+- **License:** **CC0 1.0** (公有领域,完全自由使用,无强制 attribution)
+- **发布日期:** 2017-02-16
+- **风格:** 16x16 像素,Zelda 风顶视 RPG,4 方向 walk,丰富的玩家与 NPC 变体
+- **来源 ZIP:** `https://opengameart.org/sites/default/files/gfx_3.zip` (174,776 字节;原始仓库 `.work/assets_dl/characters/armm1998_zelda_cc0/gfx_3.zip` 保留)
+- **本地文件:** (仅保留 character/font 子集,tile 子集留给 `assets/inbox/tilesets/` 处理)
+  - `character.png` (10.7 KB,272×256) — 主角色 sheet,17 列 × 16 行,16x16/cell,**含 4 方向 walk + 多种发型/性别/装束**
+  - `NPC_test.png` (1.4 KB,64×128) — NPC 变体测试 sheet,4 列 × 8 行
+  - `font.png` (2.5 KB,240×144) — 配套像素字体(可选)
+  - `LICENSE.txt` — 子目录级 license 凭证,含 OGA 链接 + ZIP URL + Pillow PNG 校验记录
+- **未复制的同包文件:** `cave.png`、`Inner.png`、`Overworld.png`、`log.png`、`objects.png`(归 tilesets/ 而非 characters/)
+
 ---
 
 ## License 兼容性总结
 
-| 包 | License | Attribution 必填 | Pythontopia 用途 |
-|----|---------|------------------|------------------|
-| tiny16_sharm | CC-BY 4.0 | 是 (Lanea Zimmerman) | 16x16 经典风,辅助 NPC |
-| cabbit_24x32 | CC-BY 3.0 | 是 (Svetlana Kushnariova) | 主力 NPC 库 (变体最丰富) |
-| fleurman_tiny_cc0 | CC0 | 否 (推荐感谢) | 学生主角候选 (无 attribution 负担) |
-| grafxkid_rpg_cc0 | CC0 | 否 | 模板/扩展参考 |
+| 包 | License | R-100 严格符合 | Attribution 必填 | Pythontopia 用途 |
+|----|---------|---------------|------------------|------------------|
+| `tiny16_sharm` | CC-BY 4.0 (多许可任选 4.0) | ✅ | 是 (Lanea Zimmerman) | 16x16 经典风,辅助 NPC |
+| `cabbit_24x32` | CC-BY 3.0 + OGA-BY 3.0 | ⚠️ (3.0 非 4.0,但无 SA/GPL 传染,作为额外 NPC 库保留;严格 R-100 模式可移除) | 是 (Svetlana Kushnariova, lana-chan@yandex.ru) | NPC 变体最丰富的非严格库 |
+| `fleurman_tiny_cc0` | CC0 1.0 | ✅ | 否 (推荐感谢) | 学生主角默认 (无 attribution 负担,4 方向 walk) |
+| `grafxkid_rpg_cc0` | CC0 1.0 | ✅ | 否 | 模板/扩展参考 |
+| `armm1998_zelda_cc0` | CC0 1.0 | ✅ | 否 (推荐感谢) | Zelda 风学生主角 + NPC 备选 (16x16 4 方向 walk) |
 
-游戏发布时,前 2 套需在 `docs/credits.md` 注明作者;后 2 套虽 CC0 但建议同样致谢。
+> 满足任务"至少 2 套 CC0 或 CC-BY 4.0 + 4 方向 walk"的严格集合: 4 套 (`fleurman_tiny_cc0`,`grafxkid_rpg_cc0`,`armm1998_zelda_cc0`,`tiny16_sharm`)。`cabbit_24x32` 是 CC-BY 3.0 的扩展库,游戏发布时如选择仅保留严格 R-100,可单独移除该子目录而不影响主角/NPC 闭环。
+
+游戏发布时,`tiny16_sharm` 与 `cabbit_24x32` 需在 `docs/credits.md` 注明作者;CC0 套虽不强制但建议同样致谢。
 
 ## 下载来源代理
 
-下载时通过 `HTTP_PROXY=http://127.0.0.1:7892`，原始 URL 已记录在各小节。所有 PNG 经过 `file(1)` 验证为合法 PNG/8-bit RGB(A)。
+下载时通过 `HTTP_PROXY=http://127.0.0.1:7892`,原始 URL 已记录在各小节。所有 PNG 经过 `file(1)` + Pillow `Image.open()` 双重验证为合法 PNG/8-bit RGB(A) 或调色板模式。
+
+## 文件总览 (本目录最终状态)
+
+| 项 | 数值 |
+|----|------|
+| 子目录(套数) | 5 |
+| sprite 文件总数 | **89** = 88 PNG + 1 BMP (`cabbit_24x32/Monsters/Mermaid_01.bmp`) |
+| PNG 文件 | **88** = 85 旧 + 3 新增 (ArMM `character.png` + `NPC_test.png` + `font.png`) |
+| 元数据文件 | 3 (`SOURCES.md`,`MANIFEST.md`,`armm1998_zelda_cc0/LICENSE.txt`) |
+| 全目录文件数 | **92** = 89 sprite + 3 元数据 |
+| 磁盘占用 | **676 KB** (`du -sh .`) |
+| 4 方向 walk 套数 | 4 套含 (`tiny16_sharm`、`cabbit_24x32`、`fleurman_tiny_cc0`、`armm1998_zelda_cc0`);`grafxkid_rpg_cc0` 是模板基底,非完整动画 |
+| 学生主角候选 | ≥ 3 套 (Fleurman 24 个 / Cabbit Heroes 10 个 / ArMM character.png 6+ 变体) |
+| NPC 候选 | ≥ 100 个 (Cabbit NPC 36 + Cabbit Heroes 10 + Cabbit Monsters 7 + ArMM character.png 行内变体 + NPC_test.png 32 + Fleurman 群众 22+) |

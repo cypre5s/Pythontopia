@@ -1,6 +1,6 @@
 # Pythontopia 建筑素材来源清单（`assets/inbox/buildings/`）
 
-本目录新增 3 套像素建筑 tileset，全部为 **CC0 / CC-BY 3.0 / CC-BY-SA 3.0+** 许可，符合 Pythontopia `AGENTS.md` 中"仅 CC0 / CC-BY / CC-BY-SA"的资产合规要求。
+本目录新增 **4 套像素建筑 tileset**，全部为 **CC0 / CC-BY 3.0 / CC-BY-SA 3.0+** 许可，符合 Pythontopia `AGENTS.md` 中"仅 CC0 / CC-BY / CC-BY-SA"的资产合规要求。
 
 另外两套现有建筑/装饰资产位于 `assets/inbox/buildings_npc/` 与 `assets/inbox/sprout_lands/`，本目录的 `MANIFEST.md` 同时引用它们以避免重复下载。
 
@@ -11,6 +11,7 @@
 | `kenney_tiny-town/` | [opengameart.org/content/tiny-town](https://opengameart.org/content/tiny-town)<br>镜像自 [kenney.nl/assets/tiny-town](https://kenney.nl/assets/tiny-town) | Kenney Vleugels (Kenney.nl) | **CC0 1.0** | 16×16 | 像素小镇外观：房屋（灰顶/红顶/储物棚）、城堡门楼、围栏、招牌、工具、桶、钥匙、靶子（132 个独立 tile + 整 tilemap） | `Tiles/tile_0000..0131.png`<br>`Tilemap/tilemap.png` (203×186)<br>`Tilemap/tilemap_packed.png` |
 | `tiny16_basic/` | [opengameart.org/content/tiny-16-basic](https://opengameart.org/content/tiny-16-basic) | Lanea Zimmerman (AKA Sharm) | **CC-BY 3.0** (anti-DRM clause waived) | 16×16 | Dawnbringer-16 palette 基础 RPG 砖：石塔/木屋外观、门、墙、招牌、宝藏、墓碑、传送门状黑方块（可作 Bug 矿洞入口） | `basictiles_2.png` (128×240)<br>`things_0.png` (192×128)<br>`characters_1.png` (9.9KB)<br>`dead_1.png` (2.3KB) |
 | `lpc_house_interior/` | [opengameart.org/content/lpc-house-interior-and-decorations](https://opengameart.org/content/lpc-house-interior-and-decorations) | Tuomo Untinen (Reemax)、Lanea Zimmerman、Hyptosis、Daniel Eddeland、Manuel Riecke (MrBeast)、William Thompson、caeles、Matthew Krohn、Johannes Sjölund 等（详见 `credits.txt`） | **CC-BY-SA 3.0+** | 32×32（LPC 标准） | 室内装饰：橱柜/书架/灶台/壁炉/蒸馏器/酒瓶/铠甲架/武器架/桌椅/木地板/石地板（512×512 一张大图） | `interior.png` (512×512)<br>`preview.png`<br>`credits.txt`（**分发时必须保留**） |
+| `kenney_1bit-pack/` **🆕** | [opengameart.org/content/1-bit-pack](https://opengameart.org/content/1-bit-pack)<br>镜像自 [kenney.nl/assets/1-bit-pack](https://kenney.nl/assets/1-bit-pack) | Kenney Vleugels (Kenney.nl) | **CC0 1.0** | 16×16 | **R-100 子代理 #3 新增**：1000+ 单像素 bit 风格 tile，覆盖 fantasy（地牢/矿洞/城堡）、urban（城市建筑/招牌/路牌）、interior（家具/书架/灶台）、platformer（关卡/平台）四大主题；含彩色 + 单色双版本，特别契合 Pythontopia"程序员极简"视觉隐喻（教师屋/复盘大厅可用纯黑白"1-bit"主题装饰，象征"二进制"） | `Tilesheet/colored.png` (815×373)<br>`Tilesheet/colored_packed.png` (768×352)<br>`Tilesheet/monochrome.png` / `monochrome_packed.png`（黑白版）<br>`Tilesheet/colored_transparent*.png`（透明背景）<br>`Tilemap/sample_fantasy.tmx` / `sample_urban.tmx` / `sample_interior.tmx` / `sample_platformer.tmx`（Tiled 模板）<br>`Tilemap/tileset_colored.tsx` / `tileset_legacy.png` |
 
 ## 与现有目录的关系（复用，不重新下载）
 
@@ -25,7 +26,7 @@
 
 ## 包合规说明
 
-1. **Kenney 系列（Tiny Town、medieval-rts、roguelike-rpg-pack；CC0）**：可商用、可修改、无需署名。建议在游戏内"鸣谢"中标注 `Kenney.nl`。
+1. **Kenney 系列（Tiny Town、1-Bit Pack、medieval-rts、roguelike-rpg-pack；CC0）**：可商用、可修改、无需署名。建议在游戏内"鸣谢"中标注 `Kenney.nl`。
 2. **Tiny 16: Basic（CC-BY 3.0）**：必须署名作者 **Lanea Zimmerman (Sharm)**，且保留来源链接。anti-DRM 条款已被作者豁免。
 3. **LPC House Interior（CC-BY-SA 3.0+）**：
    - 分发时必须附带 `lpc_house_interior/credits.txt`，且不得删改。
@@ -37,9 +38,9 @@
 
 ## 验证元数据
 
-- 下载时间：**2026-05-21**
+- 下载时间：**2026-05-21**（前 3 套）；**2026-05-21 二轮（R-100 #3）补齐 `kenney_1bit-pack/`**
 - 代理：`http://127.0.0.1:7892`
-- 校验：所有 PNG 已用 `file` 命令验证为合法 8-bit RGBA / palette PNG 文件
+- 校验：所有 PNG 已用 `file` 命令验证为合法 PNG 文件（1-bit / 2-bit / 4-bit / 8-bit colormap 多种）
 - 整体磁盘占用：见 `MANIFEST.md` 末尾"统计"段
 
 ## 后续建议
@@ -47,3 +48,4 @@
 - 进入 `assets/buildings/` 主目录前，应按 license 分子目录（`cc0/`、`cc-by/`、`cc-by-sa/`）。
 - LPC、Sprout Lands、Tiny 16 的 `CREDITS.txt` / `credits.txt` 必须保留并在游戏运行时可访问（建议放 `frontend/public/credits/`）。
 - 本目录所有素材**无星露谷物语官方血统**，符合 Pythontopia 硬约束。
+- Kenney 1-Bit Pack 的单色版本可作为"Bug 调试副本"的低保真渲染主题：玩家进入 Bug 矿洞时切换到 monochrome 即可获得强烈的"调试 / 二进制 / 逐位排查"视觉隐喻。

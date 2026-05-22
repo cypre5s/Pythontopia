@@ -24,3 +24,6 @@ deploy/.env
 
 # R-100 子代理工作产出
 .work/
+
+assets/inbox/sprout_lands/
+assets/inbox/**/*.zip
