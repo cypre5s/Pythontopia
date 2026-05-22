@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pythontopia: 演示前最小冒烟。检查 4 项核心服务 healthcheck + 1 个班级任务接口可达。
+# Pythontopia: 演示前最小冒烟。检查 4 项核心服务 healthcheck + 1 个课程包接口可达。
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -26,7 +26,7 @@ check "graph"    "${GRAPH_URL}/healthz"
 check "rag"      "${RAG_URL}/healthz"
 check "frontend" "${FRONTEND_URL}/healthz"
 
-if curl -fsS "${API_BASE}/api/course/packs/43" -o /dev/null; then
+if curl -fsS "${API_BASE}/api/course/pack" -o /dev/null; then
   echo "[demo_smoke] course pack 43 可读"
 else
   echo "[demo_smoke] course pack 43 读取失败" >&2
