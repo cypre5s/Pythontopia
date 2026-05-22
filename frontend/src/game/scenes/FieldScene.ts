@@ -1,5 +1,5 @@
 import { router } from '@/app/router';
-import { playBgm } from '@/utils/bgm';
+import { playBgm } from '@/composables/useAudio';
 import { createCropSprite, type CropSpriteHandle } from '@game/adapters/cropSprite';
 import type { SceneLike } from '@game/adapters/sceneTypes';
 import { useLearningStore } from '@stores/learning';

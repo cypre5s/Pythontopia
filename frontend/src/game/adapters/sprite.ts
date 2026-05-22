@@ -1,17 +1,14 @@
 // 隔离原因：保持业务层无 Phaser 依赖，禁止业务代码直接 import phaser。
+// 重构原因：原实现瞬移无 tween，新版用 Phaser tween + Sprite Animations 做 4 向行走 + 阴影。
+import Phaser from 'phaser';
 import type { Direction } from '@api/dto/Direction';
-import type { ImageLike, PlayerSpriteHandle, SceneLike } from './sceneTypes';
+import type { PlayerSpriteHandle, RectangleLike, SceneLike } from './sceneTypes';
 
-export interface PlayerSpriteSpec {
-  tileX: number;
-  tileY: number;
-  direction: Direction;
-  tileSize: number;
-}
-
-// LPC SaraFullSheet 832×1344, 64×64 帧 / 13 列 × 21 行
-// row 8 = walk up, row 9 = walk left, row 10 = walk down, row 11 = walk right
-// 每行 9 个 walk 帧（含 frame 0 idle，1~8 是 walk cycle）
+// LPC SaraFullSheet 832×1344, 64×64 帧 / 13 列 × 21 行。
+// row 10 = walk down, row 11 = walk right, row 8 = walk up, row 9 = walk left（标准 LPC 排布）。
+// 每行第 0 帧是 idle，1~8 是 walk cycle。
+const LPC_SHEET_KEY = 'player_sara';
+const LPC_FRAME_HEIGHT = 64;
 const LPC_COLS = 13;
 const LPC_WALK_ROW: Record<Direction, number> = {
   UP: 8,
@@ -19,68 +16,110 @@ const LPC_WALK_ROW: Record<Direction, number> = {
   DOWN: 10,
   RIGHT: 11,
 };
-const LPC_WALK_FRAMES_PER_DIR = 9;
-const LPC_PLAYER_KEY = 'player_sara';
-const LPC_FALLBACK_KEY = 'student_default';
 
-function lpcIdleFrame(dir: Direction): number {
+function idleFrame(dir: Direction): number {
   return LPC_WALK_ROW[dir] * LPC_COLS;
 }
 
-function lpcStepFrame(dir: Direction, step: number): number {
+function walkFrames(dir: Direction): number[] {
   const base = LPC_WALK_ROW[dir] * LPC_COLS;
-  const offset = ((step - 1) % (LPC_WALK_FRAMES_PER_DIR - 1)) + 1;
-  return base + offset;
+  return [1, 2, 3, 4, 5, 6, 7, 8].map((offset) => base + offset);
 }
 
-export function createPlayerSprite(scene: SceneLike, spec: PlayerSpriteSpec): PlayerSpriteHandle {
-  const initFrame = lpcIdleFrame(spec.direction);
-  let stepCounter = 0;
-  let body: ImageLike;
-  try {
-    body = scene.add
-      .image(tileCenter(spec.tileX, spec.tileSize), tileCenter(spec.tileY, spec.tileSize), LPC_PLAYER_KEY, initFrame)
-      .setScale(0.85)
-      .setDepth(20);
-    if (body.setFrame) {
-      body.setFrame(initFrame);
-    }
-  } catch (e) {
-    void e;
-    body = scene.add
-      .image(tileCenter(spec.tileX, spec.tileSize), tileCenter(spec.tileY, spec.tileSize), LPC_FALLBACK_KEY)
-      .setScale(1.35)
-      .setDepth(20);
+function walkAnimKey(dir: Direction): string {
+  return `sara_walk_${dir.toLowerCase()}`;
+}
+
+export interface CreatePlayerOptions {
+  tileX: number;
+  tileY: number;
+  direction: Direction;
+  tileSize: number;
+}
+
+const TWEEN_DURATION_MS = 140;
+
+let animsRegistered = false;
+
+function ensureAnims(phaserScene: Phaser.Scene): void {
+  if (animsRegistered) {
+    return;
   }
+  const directions: Direction[] = ['UP', 'LEFT', 'DOWN', 'RIGHT'];
+  directions.forEach((dir) => {
+    const key = walkAnimKey(dir);
+    if (!phaserScene.anims.exists(key)) {
+      phaserScene.anims.create({
+        key,
+        frames: walkFrames(dir).map((frame) => ({ key: LPC_SHEET_KEY, frame })),
+        frameRate: 10,
+        repeat: -1,
+      });
+    }
+  });
+  animsRegistered = true;
+}
+
+export function createPlayerSprite(scene: SceneLike, opts: CreatePlayerOptions): PlayerSpriteHandle {
+  const phaserScene = scene as unknown as Phaser.Scene;
+  ensureAnims(phaserScene);
+
+  const startX = opts.tileX * opts.tileSize + opts.tileSize / 2;
+  const startY = opts.tileY * opts.tileSize + opts.tileSize / 2;
+
+  const shadow = phaserScene.add
+    .ellipse(startX, startY + opts.tileSize / 2 - 4, opts.tileSize * 0.7, opts.tileSize * 0.3, 0x000000, 0.35)
+    .setDepth(14);
+  const sprite = phaserScene.add
+    .sprite(startX, startY, LPC_SHEET_KEY, idleFrame(opts.direction))
+    .setOrigin(0.5, 0.75)
+    .setDepth(15);
+  sprite.setScale((opts.tileSize / LPC_FRAME_HEIGHT) * 1.4);
+
   const handle: PlayerSpriteHandle = {
-    x: body.x,
-    y: body.y,
-    tileX: spec.tileX,
-    tileY: spec.tileY,
-    direction: spec.direction,
+    x: startX,
+    y: startY,
+    tileX: opts.tileX,
+    tileY: opts.tileY,
+    direction: opts.direction,
     moveToTile(tileX: number, tileY: number, direction: Direction): void {
       this.tileX = tileX;
       this.tileY = tileY;
       this.direction = direction;
-      const nextX = tileCenter(tileX, spec.tileSize);
-      const nextY = tileCenter(tileY, spec.tileSize);
-      this.x = nextX;
-      this.y = nextY;
-      moveImage(body, nextX, nextY);
-      if (body.setFrame) {
-        stepCounter += 1;
-        body.setFrame(lpcStepFrame(direction, stepCounter));
-      }
+      const targetX = tileX * opts.tileSize + opts.tileSize / 2;
+      const targetY = tileY * opts.tileSize + opts.tileSize / 2;
+      sprite.play(walkAnimKey(direction), true);
+      phaserScene.tweens.killTweensOf(sprite);
+      phaserScene.tweens.killTweensOf(shadow);
+      phaserScene.tweens.add({
+        targets: sprite,
+        x: targetX,
+        y: targetY,
+        duration: TWEEN_DURATION_MS,
+        ease: 'Linear',
+        onUpdate: () => {
+          handle.x = sprite.x;
+          handle.y = sprite.y;
+        },
+        onComplete: () => {
+          sprite.stop();
+          sprite.setFrame(idleFrame(direction));
+          handle.x = sprite.x;
+          handle.y = sprite.y;
+        },
+      });
+      phaserScene.tweens.add({
+        targets: shadow,
+        x: targetX,
+        y: targetY + opts.tileSize / 2 - 4,
+        duration: TWEEN_DURATION_MS,
+        ease: 'Linear',
+      });
     },
   };
   return handle;
 }
 
-function tileCenter(tile: number, tileSize: number): number {
-  return tile * tileSize + tileSize / 2;
-}
-
-function moveImage(image: ImageLike, x: number, y: number): void {
-  image.x = x;
-  image.y = y;
+export function setupClickable(target: RectangleLike, callback: () => void): void {
+  target.setInteractive().on('pointerdown', callback);
 }

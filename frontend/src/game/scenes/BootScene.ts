@@ -1,11 +1,26 @@
+import { ensurePixelFontLoaded } from '@game/adapters/pixelFont';
+
 type PhaserLoader = {
   on(event: string, callback: (value: number) => void): void;
   image(key: string, url: string): void;
   spritesheet(key: string, url: string, config: { frameWidth: number; frameHeight: number }): void;
   audio(key: string, url: string | string[]): void;
+  // M2 WorldScene 需要的额外 loader 方法；声明为可选，让现有单测的 loader 桩
+  // 不必同步实现 json / tilemapTiledJSON 即可继续通过 BootScene.preload.call。
+  json?(key: string, url: string): void;
+  tilemapTiledJSON?(key: string, url: string): void;
 };
 
 type BootSceneContext = { load?: PhaserLoader };
+
+// M2：5 张大地图在 BootScene 一次性预加载，WorldScene 切场景时直接命中缓存。
+const WORLD_MAP_KEYS: ReadonlyArray<string> = [
+  'town_hub',
+  'farm_north',
+  'mine_south',
+  'campus_east',
+  'port_west',
+];
 
 const SFX_LIST: ReadonlyArray<[string, string]> = [
   ['sfx_click', '/assets/pixel/sfx/click/click.ogg'],
@@ -62,9 +77,22 @@ const CHARACTER_SHEETS: ReadonlyArray<[string, string, number, number]> = [
   ['player_sara', '/assets/pixel/sprites/lpc-sara/SaraFullSheet.png', 64, 64],
 ];
 
+// W3 视觉 polish：天气粒子 + KC 收获 confetti 共用一套小型贴图。
+// 故意保持 5 张以内，避免 BootScene 启动开销。fx_confetti 与 fx_confetti_burst
+// 分别给「持续洒落」与「中心爆发」两种粒子节奏复用。
+const PARTICLE_LIST: ReadonlyArray<[string, string]> = [
+  ['fx_rain_drop', '/assets/pixel/effects/weather/rain_drop.png'],
+  ['fx_snowflake', '/assets/pixel/effects/weather/snowflake.png'],
+  ['fx_cloud_drift', '/assets/pixel/effects/weather/cloud.png'],
+  ['fx_confetti', '/assets/pixel/effects/weather/confetti.png'],
+  ['fx_confetti_burst', '/assets/pixel/effects/weather/confetti_burst.png'],
+];
+
 export const BootScene = {
   key: 'BootScene',
   preload(this: BootSceneContext) {
+    // 像素字体走 web font 注入，fire-and-forget，不阻塞 Phaser loader。
+    void ensurePixelFontLoaded();
     const loader = this.load;
     if (!loader) {
       return;
@@ -77,11 +105,18 @@ export const BootScene = {
     for (const [key, url, w, h] of TILESET_SPRITESHEETS) loader.spritesheet(key, url, { frameWidth: w, frameHeight: h });
     for (const [key, url] of KC_ICONS) loader.image(key, url);
     for (const [key, url, w, h] of CHARACTER_SHEETS) loader.spritesheet(key, url, { frameWidth: w, frameHeight: h });
+    for (const [key, url] of PARTICLE_LIST) loader.image(key, url);
     for (const [key, url] of SFX_LIST) loader.audio(key, url);
     for (const [key, url] of BGM_LIST) loader.audio(key, url);
+
+    // M2 地图清单 + 5 张 Tiled JSON：loader 桩可能未实现这两个方法，因此使用 ?.()。
+    loader.json?.('map_index', '/assets/maps/index.json');
+    for (const mapKey of WORLD_MAP_KEYS) {
+      loader.tilemapTiledJSON?.(`map_${mapKey}`, `/assets/maps/${mapKey}.json`);
+    }
   },
-  create(this: { scene: { start(key: string): void } }) {
+  create(this: { scene: { start(key: string, data?: unknown): void } }) {
     window.dispatchEvent(new CustomEvent('pythontopia:load-progress', { detail: { progress: 1 } }));
-    this.scene.start('TownScene');
+    this.scene.start('WorldScene', { mapKey: 'town_hub' });
   },
 };

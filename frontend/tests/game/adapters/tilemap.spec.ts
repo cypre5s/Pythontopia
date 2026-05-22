@@ -1,16 +1,10 @@
+// 重构原因：tilemap.ts 现在用 Phaser.Tilemaps API（make.tilemap + putTileAt），
+//          jsdom 下无法真正渲染，本 spec 改为接口级断言：只验证 loadTownMap 返回的
+//          数据结构是否符合预期（地图大小、出生点、buildings/npcs/collisions），不再
+//          断言具体 Phaser 渲染调用。
 import { describe, expect, it, vi } from 'vitest';
 import { loadTownMap } from '@game/adapters/tilemap';
 import type { ImageLike, RectangleLike, SceneLike, TextLike } from '@game/adapters/sceneTypes';
-
-interface AddCall {
-  readonly x: number;
-  readonly y: number;
-  readonly width?: number;
-  readonly height?: number;
-  readonly texture?: string;
-  readonly frame?: number | string;
-  readonly fillColor?: number;
-}
 
 function chainImage(): ImageLike {
   return {
@@ -64,95 +58,109 @@ function chainText(): TextLike {
   };
 }
 
-function createScene(): {
-  readonly scene: SceneLike;
-  readonly imageCalls: AddCall[];
-  readonly rectangleCalls: AddCall[];
-  readonly tileSpriteCalls: AddCall[];
-  readonly gridCalls: AddCall[];
-} {
-  const imageCalls: AddCall[] = [];
-  const rectangleCalls: AddCall[] = [];
-  const tileSpriteCalls: AddCall[] = [];
-  const gridCalls: AddCall[] = [];
+interface TilemapLayerMock {
+  fill: ReturnType<typeof vi.fn>;
+  setScale: ReturnType<typeof vi.fn>;
+  setDepth: ReturnType<typeof vi.fn>;
+  putTileAt: ReturnType<typeof vi.fn>;
+}
+
+function makeTilemapLayerMock(): TilemapLayerMock {
+  const layer: TilemapLayerMock = {
+    fill: vi.fn(() => layer),
+    setScale: vi.fn(() => layer),
+    setDepth: vi.fn(() => layer),
+    putTileAt: vi.fn(() => layer),
+  };
+  return layer;
+}
+
+function createScene(): { scene: SceneLike; putTileCalls: { frame: number; tileX: number; tileY: number }[] } {
+  const putTileCalls: { frame: number; tileX: number; tileY: number }[] = [];
+  const tilemapStub = {
+    addTilesetImage: vi.fn(() => ({})),
+    createBlankLayer: vi.fn((name: string) => {
+      const layer = makeTilemapLayerMock();
+      layer.putTileAt.mockImplementation((frame: number, tileX: number, tileY: number) => {
+        if (name === 'buildings') {
+          putTileCalls.push({ frame, tileX, tileY });
+        }
+        return layer;
+      });
+      return layer;
+    }),
+  };
 
   const scene = {
     add: {
-      image(x: number, y: number, texture: string, frame?: number | string): ImageLike {
-        imageCalls.push({ x, y, texture, frame });
-        return chainImage();
-      },
-      tileSprite(
-        x: number,
-        y: number,
-        width: number,
-        height: number,
-        texture: string,
-        frame?: number | string,
-      ): ImageLike {
-        tileSpriteCalls.push({ x, y, width, height, texture, frame });
-        return chainImage();
-      },
-      rectangle(x: number, y: number, width: number, height: number, fillColor: number): RectangleLike {
-        rectangleCalls.push({ x, y, width, height, fillColor });
-        return chainRectangle();
-      },
-      text(): TextLike {
-        return chainText();
-      },
-      grid(x: number, y: number, width: number, height: number): RectangleLike {
-        gridCalls.push({ x, y, width, height });
-        return chainRectangle();
-      },
+      image: vi.fn(() => chainImage()),
+      tileSprite: vi.fn(() => chainImage()),
+      rectangle: vi.fn(() => chainRectangle()),
+      text: vi.fn(() => chainText()),
+      grid: vi.fn(() => chainRectangle()),
+      ellipse: vi.fn(() => chainRectangle()),
+      sprite: vi.fn(() => chainImage()),
     },
+    make: { tilemap: vi.fn(() => tilemapStub) },
     input: { keyboard: null },
     time: { now: 0 },
-    cameras: { main: { startFollow() {}, setBounds: vi.fn() } },
+    cameras: { main: { startFollow: vi.fn(), setBounds: vi.fn() } },
     physics: { world: { setBounds: vi.fn() } },
-  } satisfies SceneLike;
+    anims: { exists: vi.fn(() => true), create: vi.fn() },
+    tweens: { add: vi.fn(), killTweensOf: vi.fn() },
+  } as unknown as SceneLike;
 
-  return { scene, imageCalls, rectangleCalls, tileSpriteCalls, gridCalls };
+  return { scene, putTileCalls };
 }
 
 describe('loadTownMap', () => {
-  it('renders the default town ground with kenney tiny-town frame tiles', () => {
-    const { scene, imageCalls, tileSpriteCalls, gridCalls } = createScene();
+  it('returns the canonical town map data with 30x20 grid', () => {
+    const { scene } = createScene();
 
     const map = loadTownMap(scene, 'town_main');
-    const groundTiles = imageCalls.filter((call) => call.texture === 'kenney_tiny_town' && call.frame === 0);
 
-    expect(groundTiles).toHaveLength(map.width * map.height);
-    expect(groundTiles[0]).toMatchObject({ x: 16, y: 16, frame: 0 });
-    expect(groundTiles.at(-1)).toMatchObject({ x: 944, y: 624, frame: 0 });
-    expect(tileSpriteCalls).toHaveLength(0);
-    expect(gridCalls).toHaveLength(0);
+    expect(map.tileSize).toBe(32);
+    expect(map.width).toBe(30);
+    expect(map.height).toBe(20);
+    expect(map.spawn).toEqual({ tileX: 15, tileY: 11 });
   });
 
-  it('builds town buildings from kenney tiny-town frames instead of rectangle blocks', () => {
-    const { scene, imageCalls, rectangleCalls } = createScene();
+  it('seeds 6 buildings and 3 npcs by default', () => {
+    const { scene } = createScene();
+
+    const map = loadTownMap(scene, 'town_main');
+
+    expect(map.buildings).toHaveLength(6);
+    expect(map.buildings.map((b) => b.key)).toEqual(
+      expect.arrayContaining(['profile-room', 'workshop', 'knowledge-field', 'board', 'training', 'teacher']),
+    );
+    expect(map.npcs).toHaveLength(3);
+    expect(map.npcs.map((n) => n.npcKey)).toEqual(
+      expect.arrayContaining(['mayor_py', 'librarian_loop', 'coach_debug']),
+    );
+  });
+
+  it('builds a height x width collision grid marking building footprints as blocked', () => {
+    const { scene } = createScene();
+
+    const map = loadTownMap(scene, 'town_main');
+
+    expect(map.collisions).toHaveLength(20);
+    expect(map.collisions[0]).toHaveLength(30);
+    const profileRoom = map.buildings.find((b) => b.key === 'profile-room');
+    expect(profileRoom).toBeTruthy();
+    if (profileRoom) {
+      expect(map.collisions[profileRoom.tileY]?.[profileRoom.tileX]).toBe(true);
+    }
+    expect(map.collisions[map.spawn.tileY]?.[map.spawn.tileX]).toBe(false);
+  });
+
+  it('paints building tiles via the tilemap layer (frame >= 13)', () => {
+    const { scene, putTileCalls } = createScene();
 
     loadTownMap(scene, 'town_main');
-    const buildingTiles = imageCalls.filter(
-      (call) => call.texture === 'kenney_tiny_town' && typeof call.frame === 'number' && call.frame >= 13,
-    );
 
-    expect(buildingTiles.length).toBeGreaterThan(0);
-    expect(buildingTiles.some((call) => call.frame === 13)).toBe(true);
-    expect(buildingTiles.some((call) => call.frame === 24)).toBe(true);
-    expect(rectangleCalls).toHaveLength(3);
-  });
-
-  it('keeps the legacy SVG-like rectangle rendering behind an explicit fallback', () => {
-    const { scene, imageCalls, rectangleCalls, tileSpriteCalls, gridCalls } = createScene();
-
-    const map = loadTownMap(scene, 'town_main', false);
-
-    expect(tileSpriteCalls).toHaveLength(1);
-    expect(gridCalls).toHaveLength(1);
-    expect(rectangleCalls.length).toBeGreaterThan(map.npcs.length);
-    expect(imageCalls.some((call) => call.texture === 'kenney_tiny_town')).toBe(false);
-    expect(map.spawn).toEqual({ tileX: 15, tileY: 11 });
-    expect(map.buildings).toHaveLength(6);
-    expect(map.npcs).toHaveLength(3);
+    expect(putTileCalls.length).toBeGreaterThan(0);
+    expect(putTileCalls.every((call) => call.frame >= 13)).toBe(true);
   });
 });
