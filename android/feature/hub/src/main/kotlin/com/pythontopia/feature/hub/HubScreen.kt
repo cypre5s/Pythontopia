@@ -9,29 +9,21 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import android.widget.FrameLayout
-import androidx.fragment.app.FragmentActivity
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pythontopia.feature.dialog.DemoDialogTree
 import com.pythontopia.feature.dialog.DialogViewModel
 import com.pythontopia.feature.dialog.NpcDialogPanel
 import com.pythontopia.game.HubEvent
-import com.pythontopia.game.HubLibGdxFragment
 import kotlinx.coroutines.delay
 
 /**
@@ -71,12 +63,21 @@ fun HubScreen(
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(modifier = Modifier.fillMaxSize()) {
-            HubLibGdxView(
-                hubViewModel = hubViewModel,
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
-            )
+            ) {
+                HubLibGdxView(
+                    bridge = hubViewModel.bridge,
+                    modifier = Modifier.fillMaxSize(),
+                )
+                HudOverlay(
+                    calendar = state.calendar,
+                    nearbyNpcKey = state.nearbyNpcKey,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -161,50 +162,6 @@ private fun HudChip(label: String, value: String) {
     }
 }
 
-/**
- * LibGDX 1.13.1 的 `AndroidFragmentApplication` 已迁移到 `androidx.fragment.app.Fragment`，
- * 因此宿主 Activity 必须是 `FragmentActivity`（见 :app 模块的 MainActivity），并通过
- * `supportFragmentManager` 挂载。这里不直接用 `AndroidView(FragmentContainerView)`，
- * 是为了在 Compose onDispose 时显式移除 fragment，避免 LibGDX 渲染线程持有过期 bridge。
- */
-@Composable
-private fun HubLibGdxView(
-    hubViewModel: HubViewModel,
-    modifier: Modifier = Modifier,
-) {
-    val bridge = hubViewModel.bridge
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val tag = remember { FRAGMENT_TAG }
-    androidx.compose.ui.viewinterop.AndroidView(
-        modifier = modifier,
-        factory = { ctx ->
-            val activity = ctx as FragmentActivity
-            FrameLayout(ctx).apply {
-                id = R.id.hub_libgdx_container
-            }.also { container ->
-                val fm = activity.supportFragmentManager
-                if (fm.findFragmentById(container.id) == null) {
-                    val fragment = HubLibGdxFragment.newInstance(bridge)
-                    fm.beginTransaction()
-                        .add(container.id, fragment, tag)
-                        .commitAllowingStateLoss()
-                }
-            }
-        },
-    )
-
-    DisposableEffect(Unit) {
-        onDispose {
-            val activity = context as? FragmentActivity ?: return@onDispose
-            val fm = activity.supportFragmentManager
-            val fragment = fm.findFragmentByTag(tag) ?: return@onDispose
-            fm.beginTransaction()
-                .remove(fragment)
-                .commitAllowingStateLoss()
-        }
-    }
-}
-
 private fun displayNameFor(npcKey: String): String = when (npcKey) {
     "mayor_py" -> "镇长 Py"
     DemoDialogTree.NPC_KEY -> "镇长 Py"
@@ -212,4 +169,3 @@ private fun displayNameFor(npcKey: String): String = when (npcKey) {
 }
 
 private const val POLL_INTERVAL_MS: Long = 200L
-private const val FRAGMENT_TAG: String = "hub-libgdx"
