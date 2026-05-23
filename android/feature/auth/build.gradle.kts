@@ -4,6 +4,9 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
+    // Android-R4.1: @Serializable annotations on feature-local AuthDto require the
+    // kotlinx.serialization compiler plugin (Retrofit converter relies on it).
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -52,9 +55,23 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.hilt.navigation.compose)
+    // Android-R4.5: BiometricPrompt requires androidx.fragment.app.FragmentActivity
+    // (which is exactly what app/MainActivity already extends).
+    implementation(libs.androidx.fragment.ktx)
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
+
+    implementation(libs.kotlinx.coroutines.android)
+    // Android-R4.1: feature-local DTOs use kotlinx.serialization-json runtime.
+    implementation(libs.kotlinx.serialization.json)
+    // Android-R4.2: EncryptedSharedPreferences + MasterKey for JWT persistence.
+    implementation(libs.androidx.security.crypto)
+    // Android-R4.5: BiometricPrompt API for token unlock after cold start.
+    implementation(libs.androidx.biometric)
+    // Android-R4.1: feature wraps Retrofit endpoints not yet present in :core:network;
+    // we depend on the same Retrofit instance provided by :core:network.NetworkModule.
+    implementation(libs.retrofit)
 
     testImplementation(libs.junit.jupiter.api)
     testRuntimeOnly(libs.junit.jupiter.engine)
