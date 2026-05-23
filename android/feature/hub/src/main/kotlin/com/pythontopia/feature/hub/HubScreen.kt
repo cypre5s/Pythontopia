@@ -23,8 +23,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import android.app.Activity
 import android.widget.FrameLayout
+import androidx.fragment.app.FragmentActivity
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pythontopia.feature.dialog.DemoDialogTree
@@ -162,13 +162,12 @@ private fun HudChip(label: String, value: String) {
 }
 
 /**
- * LibGDX 1.13.1 的 `AndroidFragmentApplication` 仍然继承自 *平台* `android.app.Fragment`
- * （deprecated 自 API 28，但 1.13.1 还没迁移到 androidx），所以这里只能用 *平台*
- * FragmentManager，不能用 supportFragmentManager。等 LibGDX 1.14+ 切换到 androidx
- * Fragment 后，再换回 supportFragmentManager + AndroidView(FragmentContainerView)。
+ * LibGDX 1.13.1 的 `AndroidFragmentApplication` 已迁移到 `androidx.fragment.app.Fragment`，
+ * 因此宿主 Activity 必须是 `FragmentActivity`（见 :app 模块的 MainActivity），并通过
+ * `supportFragmentManager` 挂载。这里不直接用 `AndroidView(FragmentContainerView)`，
+ * 是为了在 Compose onDispose 时显式移除 fragment，避免 LibGDX 渲染线程持有过期 bridge。
  */
 @Composable
-@Suppress("DEPRECATION") // 平台 FragmentManager / Fragment：LibGDX 1.13.1 必经之路。
 private fun HubLibGdxView(
     hubViewModel: HubViewModel,
     modifier: Modifier = Modifier,
@@ -179,11 +178,11 @@ private fun HubLibGdxView(
     androidx.compose.ui.viewinterop.AndroidView(
         modifier = modifier,
         factory = { ctx ->
-            val activity = ctx as Activity
+            val activity = ctx as FragmentActivity
             FrameLayout(ctx).apply {
                 id = R.id.hub_libgdx_container
             }.also { container ->
-                val fm = activity.fragmentManager
+                val fm = activity.supportFragmentManager
                 if (fm.findFragmentById(container.id) == null) {
                     val fragment = HubLibGdxFragment.newInstance(bridge)
                     fm.beginTransaction()
@@ -196,8 +195,8 @@ private fun HubLibGdxView(
 
     DisposableEffect(Unit) {
         onDispose {
-            val activity = context as? Activity ?: return@onDispose
-            val fm = activity.fragmentManager
+            val activity = context as? FragmentActivity ?: return@onDispose
+            val fm = activity.supportFragmentManager
             val fragment = fm.findFragmentByTag(tag) ?: return@onDispose
             fm.beginTransaction()
                 .remove(fragment)
