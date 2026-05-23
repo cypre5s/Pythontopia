@@ -30,6 +30,22 @@ export interface DialogChoice {
   effects?: DialogEffect[];
 }
 
+/**
+ * `dialog:choice` 全局事件 payload。
+ *
+ * 由 `chooseBranch(choiceId)` 触发，供业务侧（任务系统 / 分析 / 教师后台）订阅，
+ * 解耦 UI 选项点击和下游副作用。
+ */
+export interface DialogChoiceEvent {
+  npcKey: string | null;
+  nodeId: string | null;
+  choiceId: string;
+  choice: DialogChoice;
+  timestamp: number;
+}
+
+export type DialogChoiceListener = (event: DialogChoiceEvent) => void;
+
 export type DialogConditionType =
   | 'friendship_min'
   | 'first_time_this_week'
@@ -96,6 +112,18 @@ interface DialogState {
   loadError: string | null;
   /** 加载中（fetch 进行中） */
   loading: boolean;
+
+  /**
+   * 当前节点暴露给 UI 的分支选项快照。
+   *
+   * 由 `markTypingDone` 在打字机收尾时从 currentNode.choices 写入，
+   * 切换节点 / 关闭对话时清空，保证 UI 只在「文本读完」之后才渲染选项，
+   * 防止玩家在文字滚动期间误点。
+   */
+  branchChoices: DialogChoice[];
+
+  /** 当前节点的打字机是否已完成（自然结束或玩家跳过）。 */
+  isTypingDone: boolean;
 }
 
 /** NPC 数据目录前缀，可被测试 mock 覆写。 */
@@ -106,6 +134,30 @@ const DEFAULT_NPC_DATA_BASE = '/data/npcs';
  * 等 R-Live-Friendship 接入后端 /api/npc/friendship 时统一替换为 store 同步。
  */
 const friendshipMemory = new Map<string, number>();
+
+/**
+ * 模块级 `dialog:choice` 事件监听集合。
+ *
+ * 选择自建一个最小事件总线而不是引入 mitt，原因：
+ *   - 当前唯一需要的事件就是 `dialog:choice`，无需通用 emitter；
+ *   - Pinia 重置（每个测试 createPinia）不会清空模块级常量，方便业务订阅跨 store 实例存活；
+ *   - 测试通过 `__resetChoiceListenersForTests` 手动清空，避免状态泄漏。
+ */
+const choiceListeners = new Set<DialogChoiceListener>();
+
+function emitDialogChoice(event: DialogChoiceEvent): void {
+  // 复制一份再迭代，监听器内部取消订阅时不会扰乱 Set 迭代器。
+  for (const listener of [...choiceListeners]) {
+    try {
+      listener(event);
+    } catch (err) {
+      // 容错：单个监听器异常不应阻断其余订阅者；仅在控制台告警。
+      if (typeof console !== 'undefined' && typeof console.error === 'function') {
+        console.error('[dialog:choice] listener threw:', err);
+      }
+    }
+  }
+}
 
 async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url, { headers: { Accept: 'application/json' } });
@@ -129,6 +181,8 @@ export const useDialogStore = defineStore('dialog', {
     friendship: 0,
     loadError: null,
     loading: false,
+    branchChoices: [],
+    isTypingDone: false,
   }),
   getters: {
     /** 旧 API：兼容 DialogModal.vue 与已有测试。 */
@@ -138,6 +192,8 @@ export const useDialogStore = defineStore('dialog', {
       if (!state.tree || !state.currentNodeId) return null;
       return state.tree.nodes[state.currentNodeId] ?? null;
     },
+    /** 当前是否有可展示的分支选项（打字机结束 + currentNode.choices 非空）。 */
+    hasBranches: (state): boolean => state.branchChoices.length > 0,
   },
   actions: {
     /**
@@ -147,6 +203,8 @@ export const useDialogStore = defineStore('dialog', {
     open(npcKey: string): void {
       this.openNpcKey = npcKey;
       this.lines = npcDialog[npcKey] ?? ['[占位] 这位居民还没有准备好对话。'];
+      this.branchChoices = [];
+      this.isTypingDone = false;
     },
 
     /**
@@ -172,6 +230,8 @@ export const useDialogStore = defineStore('dialog', {
       this.npcName = npcKey;
       this.portrait = null;
       this.friendship = friendshipMemory.get(npcKey) ?? 0;
+      this.branchChoices = [];
+      this.isTypingDone = false;
       try {
         const [meta, tree] = await Promise.all([
           fetchJson<NpcMeta>(`${baseUrl}/${npcKey}/meta.json`),
@@ -224,6 +284,72 @@ export const useDialogStore = defineStore('dialog', {
       }
       this.currentNodeId = choice.nextNodeId;
       this.history.push(choice.nextNodeId);
+      // 切换节点必须把上一节点的分支快照和打字机状态归零，
+      // 否则 UI 会在下一段文字还没滚完时就把旧选项渲染出来。
+      this.branchChoices = [];
+      this.isTypingDone = false;
+    },
+
+    /**
+     * 标记当前节点的打字机已结束（自然结束或玩家跳过）。
+     *
+     * 副作用：把 currentNode.choices 快照写入 branchChoices，UI 据此渲染选项；
+     * 没有对应 currentNode 时（旧 placeholder 入口）只翻 isTypingDone 标记，
+     * branchChoices 保持调用方先前注入的值。
+     *
+     * 幂等：多次调用只生效一次，避免重复打字机回调污染 branchChoices。
+     */
+    markTypingDone(): void {
+      if (this.isTypingDone) return;
+      this.isTypingDone = true;
+      const node = this.currentNode;
+      if (node) {
+        this.branchChoices = node.choices.slice();
+      }
+    },
+
+    /**
+     * 玩家选择分支：
+     *   1. 在 branchChoices 中按 label 查找 choice（label 充当 UI 层 choiceId）；
+     *   2. 触发 `dialog:choice` 事件，业务侧（任务/分析/教师后台）可订阅；
+     *   3. 若 tree 存在则委托给 selectChoice 走原有 effects + 导航流程；
+     *      否则（纯占位入口或手动注入 branchChoices 场景）直接 close。
+     *
+     * 注：label 在同一节点内一般是唯一的；如果业务真的有重名 label，
+     * 第一个匹配项胜出，等同于 UI 上「上面的优先」的视觉直觉。
+     */
+    chooseBranch(choiceId: string): void {
+      const choice = this.branchChoices.find((c) => c.label === choiceId);
+      if (!choice) return;
+      emitDialogChoice({
+        npcKey: this.npcKey,
+        nodeId: this.currentNodeId,
+        choiceId,
+        choice,
+        timestamp: Date.now(),
+      });
+      const node = this.currentNode;
+      if (node) {
+        const idx = node.choices.findIndex((c) => c.label === choiceId);
+        if (idx >= 0) {
+          this.selectChoice(idx);
+          return;
+        }
+      }
+      this.close();
+    },
+
+    /**
+     * 订阅 `dialog:choice` 事件，返回取消订阅函数。
+     *
+     * 监听器集合是模块级 Set，不挂在 pinia state 上，
+     * 这样 Pinia 重置（createPinia + setActivePinia）也不会清空跨页面的业务订阅。
+     */
+    onChoice(listener: DialogChoiceListener): () => void {
+      choiceListeners.add(listener);
+      return () => {
+        choiceListeners.delete(listener);
+      };
     },
 
     /**
@@ -243,6 +369,8 @@ export const useDialogStore = defineStore('dialog', {
       this.history = [];
       this.loadError = null;
       this.loading = false;
+      this.branchChoices = [];
+      this.isTypingDone = false;
     },
   },
 });
@@ -250,4 +378,9 @@ export const useDialogStore = defineStore('dialog', {
 /** 内部测试钩子：清空 friendship 内存缓存，仅供 vitest 使用。 */
 export function __resetFriendshipMemoryForTests(): void {
   friendshipMemory.clear();
+}
+
+/** 内部测试钩子：清空 `dialog:choice` 监听集合，仅供 vitest 使用。 */
+export function __resetChoiceListenersForTests(): void {
+  choiceListeners.clear();
 }

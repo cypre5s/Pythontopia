@@ -8,12 +8,24 @@
  *   - selectChoice 应用 friendship effect 并切换节点
  *   - selectChoice 选到 nextNodeId=null 关闭对话
  *   - 同 NPC 再次 open 时 friendship 从内存还原
+ *
+ * W2-dialog-upgrade 追加覆盖：
+ *   - branchChoices / isTypingDone 初值
+ *   - markTypingDone 在 currentNode 存在时快照 choices；幂等
+ *   - hasBranches getter 与 branchChoices.length 同步
+ *   - chooseBranch 触发 dialog:choice 全局事件 + 委托给 selectChoice 走 effects
+ *   - chooseBranch 在无 tree 时直接 close（占位/手动注入场景）
+ *   - onChoice 返回的取消订阅函数能正确 detach 监听器
+ *   - selectChoice 跨节点导航时 branchChoices/isTypingDone 自动归零
+ *   - close 同时清空 branchChoices/isTypingDone
  */
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   useDialogStore,
+  __resetChoiceListenersForTests,
   __resetFriendshipMemoryForTests,
+  type DialogChoiceEvent,
   type NpcDialogTree,
   type NpcMeta,
 } from '@/stores/dialog';
@@ -66,6 +78,7 @@ describe('dialog store - legacy placeholder API', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     __resetFriendshipMemoryForTests();
+    __resetChoiceListenersForTests();
   });
 
   it('opens known placeholder NPC dialog and closes it', () => {
@@ -82,6 +95,7 @@ describe('dialog store - tree API', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     __resetFriendshipMemoryForTests();
+    __resetChoiceListenersForTests();
   });
 
   afterEach(() => {
@@ -163,5 +177,173 @@ describe('dialog store - tree API', () => {
     expect(store.tree).toBeNull();
     expect(store.currentNodeId).toBeNull();
     expect(store.history).toEqual([]);
+    expect(store.branchChoices).toEqual([]);
+    expect(store.isTypingDone).toBe(false);
+  });
+});
+
+describe('dialog store - typewriter & branch API (W2-dialog-upgrade)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    __resetFriendshipMemoryForTests();
+    __resetChoiceListenersForTests();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('initial state has empty branchChoices and isTypingDone=false', () => {
+    const store = useDialogStore();
+    expect(store.branchChoices).toEqual([]);
+    expect(store.isTypingDone).toBe(false);
+    expect(store.hasBranches).toBe(false);
+  });
+
+  it('markTypingDone snapshots currentNode.choices into branchChoices and is idempotent', async () => {
+    installFetchMock(async (url) => {
+      if (url.endsWith('/meta.json')) return makeMeta();
+      if (url.endsWith('/dialog.json')) return makeTree();
+      throw new Error(`unexpected url ${url}`);
+    });
+    const store = useDialogStore();
+    await store.openWithTree('mayor_py');
+    expect(store.isTypingDone).toBe(false);
+    expect(store.hasBranches).toBe(false);
+
+    store.markTypingDone();
+    expect(store.isTypingDone).toBe(true);
+    expect(store.hasBranches).toBe(true);
+    expect(store.branchChoices.map((c) => c.label)).toEqual(['了解小镇', '再见']);
+
+    // 幂等：第二次调用不应清空或重复填充 branchChoices。
+    const snapshot = store.branchChoices;
+    store.markTypingDone();
+    expect(store.branchChoices).toBe(snapshot);
+  });
+
+  it('hasBranches getter reflects branchChoices length', () => {
+    const store = useDialogStore();
+    expect(store.hasBranches).toBe(false);
+    store.branchChoices = [{ label: 'A', nextNodeId: null }];
+    expect(store.hasBranches).toBe(true);
+    store.branchChoices = [];
+    expect(store.hasBranches).toBe(false);
+  });
+
+  it('chooseBranch emits dialog:choice event and delegates to selectChoice for navigation', async () => {
+    installFetchMock(async (url) => {
+      if (url.endsWith('/meta.json')) return makeMeta();
+      if (url.endsWith('/dialog.json')) return makeTree();
+      throw new Error(`unexpected url ${url}`);
+    });
+    const store = useDialogStore();
+    await store.openWithTree('mayor_py');
+    store.markTypingDone();
+
+    const received: DialogChoiceEvent[] = [];
+    store.onChoice((ev) => received.push(ev));
+
+    store.chooseBranch('了解小镇');
+
+    expect(received).toHaveLength(1);
+    const ev = received[0]!;
+    expect(ev.npcKey).toBe('mayor_py');
+    expect(ev.nodeId).toBe('greet');
+    expect(ev.choiceId).toBe('了解小镇');
+    expect(ev.choice.nextNodeId).toBe('intro');
+    expect(typeof ev.timestamp).toBe('number');
+
+    // selectChoice 已被委托执行：导航到 intro，分支状态被重置等待下一次 markTypingDone。
+    expect(store.currentNodeId).toBe('intro');
+    expect(store.branchChoices).toEqual([]);
+    expect(store.isTypingDone).toBe(false);
+  });
+
+  it('chooseBranch applies friendship effect via selectChoice and closes when nextNodeId is null', async () => {
+    installFetchMock(async (url) => {
+      if (url.endsWith('/meta.json')) return makeMeta();
+      if (url.endsWith('/dialog.json')) return makeTree();
+      throw new Error(`unexpected url ${url}`);
+    });
+    const store = useDialogStore();
+    await store.openWithTree('mayor_py');
+    store.markTypingDone();
+
+    store.chooseBranch('再见');
+
+    expect(store.friendship).toBe(1);
+    expect(store.visible).toBe(false);
+    expect(store.currentNodeId).toBeNull();
+  });
+
+  it('chooseBranch on injected branchChoices without tree falls back to close', () => {
+    const store = useDialogStore();
+    store.open('mayor_py');
+    store.branchChoices = [{ label: '继续', nextNodeId: null }];
+    const received: DialogChoiceEvent[] = [];
+    store.onChoice((ev) => received.push(ev));
+
+    store.chooseBranch('继续');
+
+    expect(received).toHaveLength(1);
+    expect(received[0]!.choiceId).toBe('继续');
+    expect(store.isOpen).toBe(false);
+  });
+
+  it('chooseBranch with unknown choiceId is a no-op', async () => {
+    installFetchMock(async (url) => {
+      if (url.endsWith('/meta.json')) return makeMeta();
+      if (url.endsWith('/dialog.json')) return makeTree();
+      throw new Error(`unexpected url ${url}`);
+    });
+    const store = useDialogStore();
+    await store.openWithTree('mayor_py');
+    store.markTypingDone();
+    const received: DialogChoiceEvent[] = [];
+    store.onChoice((ev) => received.push(ev));
+
+    store.chooseBranch('not_a_real_label');
+
+    expect(received).toEqual([]);
+    expect(store.currentNodeId).toBe('greet');
+  });
+
+  it('onChoice returns a teardown that detaches the listener', async () => {
+    installFetchMock(async (url) => {
+      if (url.endsWith('/meta.json')) return makeMeta();
+      if (url.endsWith('/dialog.json')) return makeTree();
+      throw new Error(`unexpected url ${url}`);
+    });
+    const store = useDialogStore();
+    await store.openWithTree('mayor_py');
+    store.markTypingDone();
+
+    const listener = vi.fn();
+    const off = store.onChoice(listener);
+    off();
+
+    store.chooseBranch('了解小镇');
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it('selectChoice navigation resets branchChoices and isTypingDone for the next node', async () => {
+    installFetchMock(async (url) => {
+      if (url.endsWith('/meta.json')) return makeMeta();
+      if (url.endsWith('/dialog.json')) return makeTree();
+      throw new Error(`unexpected url ${url}`);
+    });
+    const store = useDialogStore();
+    await store.openWithTree('mayor_py');
+    store.markTypingDone();
+    expect(store.hasBranches).toBe(true);
+    expect(store.isTypingDone).toBe(true);
+
+    store.selectChoice(0);
+
+    expect(store.currentNodeId).toBe('intro');
+    expect(store.branchChoices).toEqual([]);
+    expect(store.isTypingDone).toBe(false);
+    expect(store.hasBranches).toBe(false);
   });
 });
