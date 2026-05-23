@@ -2,6 +2,17 @@
 // 合并为单一 WorldScene，通过 sceneKey 切换 5 张大地图（town_hub / farm_north /
 // mine_south / campus_east / port_west），消除多实例资源浪费与状态错乱。
 //
+// W2 集成：把 NpcFramework + InteractableSystem 真正接入 WorldScene：
+//   - parseObjects 解析出来的 npc 列表统一注册到 NpcFramework，便于后续 patrol /
+//     对话锚点 / faceTowards 等行为复用，而不是各场景再写一遍 dx/dy 巡逻；
+//   - 同一份 npc 列表派生出 InteractableSystem 的 circle trigger，靠 hintRenderer
+//     在屏幕底部气泡区显示 "按 E 与 {NPC 名} 对话"，actionPressed 边沿触发 dialog
+//     store openWithTree；
+//   - 额外注册一个 "公告板" trigger 作为 non-NPC trigger 示例（仍在 hub 喷泉东侧），
+//     验证 InteractableSystem 不仅能服务 NPC；
+//   - scene shutdown 走 attachLifecycle 兜底 tweens/time/input，并显式 clear
+//     framework 实例，避免切场景留下幽灵 trigger。
+//
 // 隔离边界：WorldScene 属于 game adapter 层，允许直接 import phaser；业务层仍
 // 只通过 SceneLike / PlayerSpriteHandle 等结构化接口与本文件交互。
 import Phaser from 'phaser';
@@ -15,6 +26,17 @@ import { drawNpcSprite, type NpcSpawn } from '@game/adapters/tilemap';
 import type { PlayerSpriteHandle, SceneLike } from '@game/adapters/sceneTypes';
 import { applyWeather, normalizeWeatherKind, type WeatherHandle } from '@game/adapters/weather';
 import { applyTimeOfDay, deriveTimeOfDay } from '@game/adapters/daynight';
+import {
+  InteractableSystem,
+  type HintRenderer,
+  type ITrigger,
+} from '@game/core/InteractableSystem';
+import {
+  NpcFramework,
+  defaultPortraitKey,
+  type NpcDefinition,
+} from '@game/core/NpcFramework';
+import { attachLifecycle } from '@game/core/SceneLifecycle';
 import { useWorldStore } from '@stores/world';
 
 const TILE_SIZE = 16;
@@ -75,6 +97,29 @@ interface BuildingZone {
   height: number;
 }
 
+/**
+ * W2 集成：公告板 trigger 在 town_hub 中的中心 tile。
+ * 喷泉位于 tile(24,19)-(25,20) 区域；公告板放在喷泉东侧两格，避开 spawn(25,20)。
+ * 5 张地图 hub 默认 50×40，27,20 落在喷泉右下方且在玩家可达范围内。
+ * 其他地图（farm/mine/campus/port）暂不挂公告板，留 TODO 给后续 wave。
+ */
+const BULLETIN_BOARD_TILE_X = 27;
+const BULLETIN_BOARD_TILE_Y = 20;
+/** Trigger 命中半径（以 tile 为单位）：1.4 ≈ 玩家走到相邻一圈即触发。 */
+const TRIGGER_RADIUS_TILES = 1.4;
+/** 公告板 trigger 跳转的目标路由。 */
+const BULLETIN_BOARD_ROUTE = '/board';
+
+/**
+ * Phaser hint 气泡渲染器句柄：scene 端注入到 InteractableSystem，
+ * 由 InteractableSystem 在 enter/exit/clear 时调用 show/hide。
+ * destroy 在 shutdown 时由 scene 主动调用，回收 Phaser GameObject。
+ */
+interface PhaserHintRendererHandle {
+  renderer: HintRenderer;
+  destroy(): void;
+}
+
 interface WorldSceneState {
   mapKey: string;
   index: MapIndex | null;
@@ -91,6 +136,16 @@ interface WorldSceneState {
   collisions: boolean[][];
   switching: boolean;
   weather: WeatherHandle | null;
+  // W2 集成：framework 实例在 create 中构造、shutdown 中 clear；testing 留 null
+  // 默认值，避免 jsdom 单测里 update() 误触发空 framework 时抛 NPE。
+  interactable: InteractableSystem | null;
+  npcFramework: NpcFramework | null;
+  hintRendererHandle: PhaserHintRendererHandle | null;
+  lifecycleDetach: (() => void) | null;
+  // npcFramework.update 需要 deltaMs。Phaser scene 的 this.time.now 是单调递增
+  // 毫秒时钟，记录上一帧的值在本帧相减即可。0 表示首帧，跳过 NPC tick 防止
+  // dt 巨大跳变。
+  prevUpdateTimeMs: number;
 }
 
 const state: WorldSceneState = {
@@ -109,6 +164,11 @@ const state: WorldSceneState = {
   collisions: [],
   switching: false,
   weather: null,
+  interactable: null,
+  npcFramework: null,
+  hintRendererHandle: null,
+  lifecycleDetach: null,
+  prevUpdateTimeMs: 0,
 };
 
 export const WorldScene = {
@@ -210,6 +270,47 @@ export const WorldScene = {
       paintNpcHotspot(phaserScene, npc);
     });
 
+    // W2 集成：NpcFramework 持有逻辑层 NPC（巡逻/朝向/对话状态），
+    // InteractableSystem 持有 trigger（distance + hint）。
+    // 两者从相同的 npcs 列表派生，drawNpcSprite 维持视觉层（不接 patrol 移动，
+    // 等 wave-3 把 Phaser sprite 与 NpcInstance.x/y 双向同步）。
+    state.npcFramework = new NpcFramework(phaserScene);
+    state.hintRendererHandle = createPhaserHintRenderer(phaserScene);
+    state.interactable = new InteractableSystem(phaserScene, {
+      hintRenderer: state.hintRendererHandle.renderer,
+    });
+    npcs.forEach((npc) => {
+      state.npcFramework?.register(buildNpcDefinitionFromSpawn(npc, RENDER_TILE_SIZE));
+      const trigger = buildNpcTrigger(npc, RENDER_TILE_SIZE, () => {
+        // 占位 dialog text 仍走 dialog store openWithTree，自动 fetch
+        // /data/npcs/{key}/{meta,dialog}.json，失败时 store 内部填 loadError。
+        // NpcDialogService 接通时只需替换 dialog store 拉取实现。
+        openNpcDialog(npc.npcKey);
+        state.npcFramework?.startDialog(npc.npcKey);
+        state.npcFramework?.faceTowards(
+          npc.npcKey,
+          player.tileX * RENDER_TILE_SIZE + RENDER_TILE_SIZE / 2,
+          player.tileY * RENDER_TILE_SIZE + RENDER_TILE_SIZE / 2,
+        );
+      });
+      state.interactable?.register(trigger);
+    });
+    // town_hub 专属示例 trigger：公告板（非 NPC trigger，验证 InteractableSystem
+    // 不只服务 NPC）。其他地图的 trigger（farm 浇水点 / mine 矿井入口等）留 TODO
+    // 给后续 wave，等地图 JSON 加入 triggers object layer 后批量注册。
+    if (state.mapKey === DEFAULT_MAP_KEY) {
+      state.interactable.register(
+        buildBulletinBoardTrigger({
+          tileX: BULLETIN_BOARD_TILE_X,
+          tileY: BULLETIN_BOARD_TILE_Y,
+          tileSize: RENDER_TILE_SIZE,
+          onActivate: () => {
+            void router.push(BULLETIN_BOARD_ROUTE);
+          },
+        }),
+      );
+    }
+
     const worldWidth = state.width * RENDER_TILE_SIZE;
     const worldHeight = state.height * RENDER_TILE_SIZE;
     this.cameras.main.setBounds(0, 0, worldWidth, worldHeight);
@@ -238,6 +339,22 @@ export const WorldScene = {
     };
     window.addEventListener('beforeunload', onBeforeUnload);
 
+    // W2 集成：attachLifecycle 兜底 tweens/time/input 清理，避免 HMR / restart
+    // 残留 ticker；onShutdown 闭包负责 clear 业务 framework + 销毁 hint 渲染器。
+    // 业务 state 字段（weather/player/...）仍在 shutdown handler 内 reset，便于
+    // 单步可读。
+    state.lifecycleDetach = attachLifecycle(phaserScene, {
+      onShutdown: () => {
+        state.interactable?.clear();
+        state.interactable = null;
+        state.npcFramework?.clear();
+        state.npcFramework = null;
+        state.hintRendererHandle?.destroy();
+        state.hintRendererHandle = null;
+        state.prevUpdateTimeMs = 0;
+      },
+    });
+
     this.events?.on('shutdown', () => {
       window.removeEventListener('beforeunload', onBeforeUnload);
       if (state.weather) {
@@ -251,6 +368,12 @@ export const WorldScene = {
       state.npcs = [];
       state.lastMoveAt = 0;
       state.actionWasDown = false;
+      // attachLifecycle 自己监听 shutdown 已经触发 onShutdown，这里仅 detach
+      // 多余引用，避免 restart 时挂多份相同监听。
+      if (state.lifecycleDetach) {
+        state.lifecycleDetach();
+        state.lifecycleDetach = null;
+      }
     });
   },
   update(this: SceneLike): void {
@@ -289,16 +412,27 @@ export const WorldScene = {
       }
     }
 
+    // W2 集成：framework 驱动。actionPressed 用边沿语义传入 InteractableSystem，
+    // 由 trigger.onActivate 取代旧的"曼哈顿 <=1 找 NPC 调 openNpcDialog"。
+    // npcFramework.update 接 deltaMs 推进 patrol；town_hub 当前 NPC 无 patrol
+    // 数据，update() 实际是 no-op，未来 JSON 加 patrol 字段后立刻生效。
     const actionIsDown = controller.isActionPressed();
-    if (actionIsDown && !state.actionWasDown) {
-      const nearby = state.npcs.find(
-        (npc) => Math.abs(npc.tileX - player.tileX) + Math.abs(npc.tileY - player.tileY) <= 1,
-      );
-      if (nearby) {
-        openNpcDialog(nearby.npcKey);
-      }
-    }
+    const actionPressedEdge = actionIsDown && !state.actionWasDown;
     state.actionWasDown = actionIsDown;
+
+    const nowMs = this.time.now;
+    if (state.prevUpdateTimeMs > 0) {
+      const deltaMs = nowMs - state.prevUpdateTimeMs;
+      // 浏览器切后台 / debugger 暂停可能让 deltaMs 几十秒。clamp 上限 200ms
+      // 避免 NPC 一次跳超过半屏；clamp 下限 0 防 time.now 偶发抖动出现负数。
+      const safeDelta = Math.max(0, Math.min(200, deltaMs));
+      state.npcFramework?.update(safeDelta);
+    }
+    state.prevUpdateTimeMs = nowMs;
+
+    const playerCenterX = player.tileX * RENDER_TILE_SIZE + RENDER_TILE_SIZE / 2;
+    const playerCenterY = player.tileY * RENDER_TILE_SIZE + RENDER_TILE_SIZE / 2;
+    state.interactable?.update(playerCenterX, playerCenterY, actionPressedEdge);
   },
 };
 
@@ -399,8 +533,11 @@ function parseObjects(
       }
       if (type === 'npc') {
         const spriteValue = props['sprite'];
+        // W2 集成：town_hub.json 用 "key" 字段（npc_mayor_py.properties[name=key]
+        // value=mayor_py），保留向后兼容 "npcKey"。obj.name fallback 仅用于
+        // 兜底，正式 NPC 必须显式声明 key 才能匹配 /data/npcs/<key>/。
         npcs.push({
-          npcKey: String(props['npcKey'] ?? obj.name ?? 'npc'),
+          npcKey: String(props['key'] ?? props['npcKey'] ?? obj.name ?? 'npc'),
           label: String(props['label'] ?? obj.name ?? ''),
           tileX,
           tileY,
@@ -516,4 +653,166 @@ function drawFallbackMessage(phaserScene: Phaser.Scene, text: string): void {
     })
     .setOrigin(0.5)
     .setDepth(100);
+}
+
+// =====================================================================
+// W2 集成辅助导出：把 npc 列表转 NpcDefinition / ITrigger，便于在 jsdom
+// 单测里 mock 调用而无需启动整个 Phaser scene。
+// =====================================================================
+
+/** Trigger id 前缀，业务侧调试时容易区分 npc trigger vs 其他类型。 */
+export const NPC_TRIGGER_ID_PREFIX = 'npc:';
+
+/** 公告板 trigger 固定 id，导出便于单测断言。 */
+export const BULLETIN_BOARD_TRIGGER_ID = 'trigger:bulletin_board';
+
+/**
+ * 玩家走到 NPC 旁边时显示的 hint 文本，单独抽出便于本地化与单测。
+ */
+export function buildNpcHintText(npcLabel: string): string {
+  // 故意保留中文以贴合 Beta 首批玩家（高校 Python 初学者）。
+  return `按 E 与 ${npcLabel} 对话`;
+}
+
+/**
+ * 由 tilemap parseObjects 返回的 NpcSpawn 推出 NpcFramework 注册用 NpcDefinition。
+ *
+ * 当前 town_hub.json 没有 patrol/dialogAnchor/questPublisher 字段，因此 NPC 会
+ * 站桩；后续 wave 在 JSON 增加这些字段时只要解析进 NpcSpawn 即可，不需要再改
+ * 本函数。
+ */
+export function buildNpcDefinitionFromSpawn(
+  npc: NpcSpawn,
+  tileSize: number,
+): NpcDefinition {
+  return {
+    id: npc.npcKey,
+    displayName: npc.label || npc.npcKey,
+    portraitKey: defaultPortraitKey(npc.npcKey),
+    spawnX: npc.tileX * tileSize + tileSize / 2,
+    spawnY: npc.tileY * tileSize + tileSize / 2,
+  };
+}
+
+/**
+ * 由 NpcSpawn 构造 InteractableSystem 用的 trigger。
+ *
+ * - id 用 `npc:<npcKey>` 前缀避免和未来的 trigger object layer 撞 id；
+ * - 形状采用 circle，半径 = TRIGGER_RADIUS_TILES × tileSize，玩家走到相邻一圈
+ *   即进入命中；
+ * - hint 走 buildNpcHintText(label) 拼接，UI 复用 hintRenderer。
+ */
+export function buildNpcTrigger(
+  npc: NpcSpawn,
+  tileSize: number,
+  onActivate: () => void,
+): ITrigger {
+  const cx = npc.tileX * tileSize + tileSize / 2;
+  const cy = npc.tileY * tileSize + tileSize / 2;
+  return {
+    id: `${NPC_TRIGGER_ID_PREFIX}${npc.npcKey}`,
+    shape: {
+      type: 'circle',
+      x: cx,
+      y: cy,
+      radius: tileSize * TRIGGER_RADIUS_TILES,
+    },
+    hint: buildNpcHintText(npc.label || npc.npcKey),
+    onActivate,
+  };
+}
+
+/**
+ * 构造公告板 trigger。当前仅 town_hub 注册，其他地图等后续 wave 接入 trigger
+ * object layer 后批量生成。
+ */
+export function buildBulletinBoardTrigger(opts: {
+  tileX: number;
+  tileY: number;
+  tileSize: number;
+  onActivate: () => void;
+}): ITrigger {
+  const cx = opts.tileX * opts.tileSize + opts.tileSize / 2;
+  const cy = opts.tileY * opts.tileSize + opts.tileSize / 2;
+  return {
+    id: BULLETIN_BOARD_TRIGGER_ID,
+    shape: {
+      type: 'circle',
+      x: cx,
+      y: cy,
+      radius: opts.tileSize * TRIGGER_RADIUS_TILES,
+    },
+    hint: '按 E 查看公告板',
+    onActivate: opts.onActivate,
+  };
+}
+
+/**
+ * 创建一个用 Phaser text + bg rectangle 实现的 hint 气泡渲染器。
+ *
+ * 设计取舍：
+ * - 用 scrollFactor=0 让气泡常驻镜头底部居中，避免被相机跟随玩家时遮挡操作；
+ * - depth=200 高于 weather / time-of-day tint（depth≈100），保证可见；
+ * - show/hide 用 visible 属性切换，不在每次 show 时重建 GameObject 防 GC 抖动；
+ * - destroy 在 scene shutdown 时调用，回收 GameObject 引用，避免 HMR 后留多份。
+ */
+function createPhaserHintRenderer(
+  phaserScene: Phaser.Scene,
+): PhaserHintRendererHandle {
+  const cameraWidth = phaserScene.cameras?.main?.width ?? 960;
+  const cameraHeight = phaserScene.cameras?.main?.height ?? 640;
+  const hintText = phaserScene.add
+    .text(cameraWidth / 2, cameraHeight - 36, '', {
+      fontFamily: 'monospace',
+      fontSize: '14px',
+      color: '#fff8e1',
+      backgroundColor: '#4d3613',
+      padding: { x: 10, y: 4 },
+    })
+    .setOrigin(0.5, 0.5)
+    .setDepth(200);
+
+  // scrollFactor=0 -> 跟相机一起平移（即不随世界滚动），保持屏幕底部位置。
+  const hintTextWithScroll = hintText as unknown as {
+    setScrollFactor?: (x: number, y?: number) => unknown;
+    setVisible?: (v: boolean) => unknown;
+    destroy?: () => void;
+    visible?: boolean;
+  };
+  hintTextWithScroll.setScrollFactor?.(0, 0);
+  hintTextWithScroll.setVisible?.(false);
+
+  let destroyed = false;
+  return {
+    renderer: {
+      show(text: string): void {
+        if (destroyed) {
+          return;
+        }
+        hintText.setText(text);
+        if (typeof hintTextWithScroll.setVisible === 'function') {
+          hintTextWithScroll.setVisible(true);
+        } else {
+          hintTextWithScroll.visible = true;
+        }
+      },
+      hide(): void {
+        if (destroyed) {
+          return;
+        }
+        if (typeof hintTextWithScroll.setVisible === 'function') {
+          hintTextWithScroll.setVisible(false);
+        } else {
+          hintTextWithScroll.visible = false;
+        }
+      },
+    },
+    destroy(): void {
+      if (destroyed) {
+        return;
+      }
+      destroyed = true;
+      hintTextWithScroll.destroy?.();
+    },
+  };
 }
