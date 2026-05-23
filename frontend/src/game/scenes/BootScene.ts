@@ -1,19 +1,67 @@
+import type Phaser from 'phaser';
 import { ensurePixelFontLoaded } from '@game/adapters/pixelFont';
+import { attachLifecycle } from '@game/core/SceneLifecycle';
 
-type PhaserLoader = {
-  on(event: string, callback: (value: number) => void): void;
+// W1：资源加载超时 fallback 默认 15s，超出后向外广播 pythontopia:load-timeout 让
+// WorldCanvas 给玩家提示，不强制中断 Phaser loader（loader 继续重试），避免在弱网/
+// 大资源场景下"黑屏死等"。
+const LOAD_TIMEOUT_MS = 15000;
+
+type LoaderProgressCallback = (value: number) => void;
+type LoaderGenericCallback = (...args: unknown[]) => void;
+
+interface PhaserLoader {
+  on(event: string, callback: LoaderProgressCallback): void;
+  once?(event: string, callback: LoaderGenericCallback): void;
   image(key: string, url: string): void;
   spritesheet(key: string, url: string, config: { frameWidth: number; frameHeight: number }): void;
   audio(key: string, url: string | string[]): void;
-  // M2 WorldScene 需要的额外 loader 方法；声明为可选，让现有单测的 loader 桩
-  // 不必同步实现 json / tilemapTiledJSON 即可继续通过 BootScene.preload.call。
   json?(key: string, url: string): void;
   tilemapTiledJSON?(key: string, url: string): void;
-};
+}
 
-type BootSceneContext = { load?: PhaserLoader };
+interface GraphicsLike {
+  fillStyle(color: number, alpha?: number): GraphicsLike;
+  fillRect(x: number, y: number, w: number, h: number): GraphicsLike;
+  clear(): GraphicsLike;
+  setDepth?(depth: number): GraphicsLike;
+}
 
-// M2：5 张大地图在 BootScene 一次性预加载，WorldScene 切场景时直接命中缓存。
+interface BootTextLike {
+  setOrigin(x: number, y?: number): BootTextLike;
+  setDepth?(depth: number): BootTextLike;
+  setText?(text: string): BootTextLike;
+  destroy?(): void;
+}
+
+interface BootSceneAddLike {
+  graphics?(): GraphicsLike;
+  text?(x: number, y: number, text: string, style?: Record<string, unknown>): BootTextLike;
+}
+
+interface BootSceneScaleLike {
+  width: number;
+  height: number;
+}
+
+interface BootScenePreloadContext {
+  load?: PhaserLoader;
+  add?: BootSceneAddLike;
+  scale?: BootSceneScaleLike;
+}
+
+interface BootSceneCreateContext {
+  scene: { start(key: string, data?: unknown): void };
+  events?: {
+    on(event: string, fn: () => void, context?: unknown): unknown;
+    off?(event: string, fn: () => void, context?: unknown, once?: boolean): unknown;
+  };
+  tweens?: { killAll(): unknown };
+  time?: { removeAllEvents(): unknown };
+  input?: { removeAllListeners(): unknown };
+}
+
+// M2 WorldScene 需要的 5 张大地图：BootScene 一次性预加载，切场景时直接命中缓存。
 const WORLD_MAP_KEYS: ReadonlyArray<string> = [
   'town_hub',
   'farm_north',
@@ -72,14 +120,11 @@ const KC_ICONS: ReadonlyArray<[string, string]> = [
 ];
 
 const CHARACTER_SHEETS: ReadonlyArray<[string, string, number, number]> = [
-  // [key, url, frameWidth, frameHeight] — LPC 标准 64x64 / 12 列
   ['student_default', '/assets/pixel/characters/student_default.svg', 32, 32],
   ['player_sara', '/assets/pixel/sprites/lpc-sara/SaraFullSheet.png', 64, 64],
 ];
 
 // W3 视觉 polish：天气粒子 + KC 收获 confetti 共用一套小型贴图。
-// 故意保持 5 张以内，避免 BootScene 启动开销。fx_confetti 与 fx_confetti_burst
-// 分别给「持续洒落」与「中心爆发」两种粒子节奏复用。
 const PARTICLE_LIST: ReadonlyArray<[string, string]> = [
   ['fx_rain_drop', '/assets/pixel/effects/weather/rain_drop.png'],
   ['fx_snowflake', '/assets/pixel/effects/weather/snowflake.png'],
@@ -88,23 +133,40 @@ const PARTICLE_LIST: ReadonlyArray<[string, string]> = [
   ['fx_confetti_burst', '/assets/pixel/effects/weather/confetti_burst.png'],
 ];
 
+interface ProgressUi {
+  update(progress: number): void;
+  setMessage(message: string): void;
+  destroy(): void;
+}
+
 export const BootScene = {
   key: 'BootScene',
-  preload(this: BootSceneContext) {
-    // 像素字体走 web font 注入，fire-and-forget，不阻塞 Phaser loader。
+  preload(this: BootScenePreloadContext) {
     void ensurePixelFontLoaded();
     const loader = this.load;
     if (!loader) {
       return;
     }
+
+    const progressUi = setupProgressUi(this);
+
     loader.on('progress', (value: number) => {
-      window.dispatchEvent(new CustomEvent('pythontopia:load-progress', { detail: { progress: value } }));
+      window.dispatchEvent(
+        new CustomEvent('pythontopia:load-progress', { detail: { progress: value } }),
+      );
+      progressUi?.update(value);
     });
 
+    setupTimeoutFallback(loader, progressUi);
+
     for (const [key, url] of TILESET_LIST) loader.image(key, url);
-    for (const [key, url, w, h] of TILESET_SPRITESHEETS) loader.spritesheet(key, url, { frameWidth: w, frameHeight: h });
+    for (const [key, url, w, h] of TILESET_SPRITESHEETS) {
+      loader.spritesheet(key, url, { frameWidth: w, frameHeight: h });
+    }
     for (const [key, url] of KC_ICONS) loader.image(key, url);
-    for (const [key, url, w, h] of CHARACTER_SHEETS) loader.spritesheet(key, url, { frameWidth: w, frameHeight: h });
+    for (const [key, url, w, h] of CHARACTER_SHEETS) {
+      loader.spritesheet(key, url, { frameWidth: w, frameHeight: h });
+    }
     for (const [key, url] of PARTICLE_LIST) loader.image(key, url);
     for (const [key, url] of SFX_LIST) loader.audio(key, url);
     for (const [key, url] of BGM_LIST) loader.audio(key, url);
@@ -115,8 +177,99 @@ export const BootScene = {
       loader.tilemapTiledJSON?.(`map_${mapKey}`, `/assets/maps/${mapKey}.json`);
     }
   },
-  create(this: { scene: { start(key: string, data?: unknown): void } }) {
-    window.dispatchEvent(new CustomEvent('pythontopia:load-progress', { detail: { progress: 1 } }));
+  create(this: BootSceneCreateContext) {
+    window.dispatchEvent(
+      new CustomEvent('pythontopia:load-progress', { detail: { progress: 1 } }),
+    );
+    // W1：BootScene 也接入统一生命周期清理，hot-reload 时 progress timer / loader
+    // listener 不会再泄漏到下一次 Game 实例。
+    attachLifecycle(this as unknown as Phaser.Scene);
     this.scene.start('WorldScene', { mapKey: 'town_hub' });
   },
 };
+
+function setupProgressUi(ctx: BootScenePreloadContext): ProgressUi | null {
+  const add = ctx.add;
+  if (!add || typeof add.graphics !== 'function') {
+    return null;
+  }
+  const width = ctx.scale?.width ?? 960;
+  const height = ctx.scale?.height ?? 640;
+  const barWidth = Math.max(160, Math.min(360, Math.floor(width * 0.45)));
+  const barHeight = 16;
+  const barX = Math.floor((width - barWidth) / 2);
+  const barY = Math.floor(height / 2 - barHeight / 2);
+
+  const bg = add.graphics();
+  bg.fillStyle(0x111418, 0.85);
+  bg.fillRect(barX - 4, barY - 4, barWidth + 8, barHeight + 8);
+  bg.setDepth?.(1000);
+
+  const fill = add.graphics();
+  fill.setDepth?.(1001);
+
+  let messageText: BootTextLike | null = null;
+  if (typeof add.text === 'function') {
+    const text = add.text(width / 2, barY - 22, '资源加载中...', {
+      fontSize: '12px',
+      color: '#ffd166',
+    });
+    text.setOrigin(0.5);
+    text.setDepth?.(1002);
+    messageText = text;
+  }
+
+  return {
+    update(progress: number): void {
+      const clamped = Math.max(0, Math.min(1, progress));
+      fill.clear();
+      fill.fillStyle(0xffd166, 1);
+      fill.fillRect(barX, barY, Math.floor(barWidth * clamped), barHeight);
+    },
+    setMessage(message: string): void {
+      messageText?.setText?.(message);
+    },
+    destroy(): void {
+      messageText?.destroy?.();
+    },
+  };
+}
+
+function setupTimeoutFallback(loader: PhaserLoader, progressUi: ProgressUi | null): void {
+  if (typeof loader.once !== 'function') {
+    return;
+  }
+  let completed = false;
+  const timerId = setTimeout(() => {
+    if (completed) {
+      return;
+    }
+    window.dispatchEvent(
+      new CustomEvent('pythontopia:load-timeout', { detail: { elapsedMs: LOAD_TIMEOUT_MS } }),
+    );
+    progressUi?.setMessage('资源加载较慢，正在重试，请稍候...');
+  }, LOAD_TIMEOUT_MS);
+
+  loader.once('complete', () => {
+    completed = true;
+    clearTimeout(timerId);
+  });
+
+  loader.once('loaderror', (file: unknown) => {
+    window.dispatchEvent(
+      new CustomEvent('pythontopia:load-error', {
+        detail: { src: extractSrc(file) },
+      }),
+    );
+  });
+}
+
+function extractSrc(file: unknown): string | undefined {
+  if (file && typeof file === 'object' && 'src' in file) {
+    const src = (file as { src: unknown }).src;
+    if (typeof src === 'string') {
+      return src;
+    }
+  }
+  return undefined;
+}

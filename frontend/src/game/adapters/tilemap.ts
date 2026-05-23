@@ -1,6 +1,8 @@
 // 隔离原因：保持业务层无 Phaser 依赖，禁止业务代码直接 import phaser。
 // 重构原因：原实现按 30x20 = 600 个 add.image 手撸铺地，性能差且不利于碰撞。
 // 改造为 Phaser.Tilemaps API：make.tilemap + addTilesetImage + createBlankLayer + putTileAt。
+// W1：loadTownMap 进入时立刻盖一层全屏黑色 loading mask，最少显示 200ms 后再 300ms
+// 渐隐，避免地图构图过程中露出底色 / 上一场景残影导致"黑屏 / 闪烁"。
 import Phaser from 'phaser';
 import type { SceneLike } from './sceneTypes';
 import { PIXEL_FONT_FAMILY } from './pixelFont';
@@ -65,9 +67,136 @@ const DEFAULT_NPCS: ReadonlyArray<NpcSpawn> = [
   { npcKey: 'coach_debug', label: 'Debug 教练', tileX: 8, tileY: 15, sprite: 'player_sara' },
 ];
 
+export interface LoadingMaskOptions {
+  minDisplayMs?: number;
+  fadeDurationMs?: number;
+  color?: number;
+  alpha?: number;
+  depth?: number;
+}
+
+export interface LoadingMaskHandle {
+  dismiss(): void;
+  destroy(): void;
+}
+
+const DEFAULT_MIN_DISPLAY_MS = 200;
+const DEFAULT_FADE_DURATION_MS = 300;
+const DEFAULT_MASK_DEPTH = 9999;
+
+interface MaskTargetLike {
+  setDepth(depth: number): unknown;
+  setScrollFactor?(x: number, y?: number): unknown;
+  setAlpha?(alpha: number): unknown;
+  alpha?: number;
+  destroy?(): void;
+}
+
+interface TweenManagerLike {
+  add(config: Record<string, unknown>): unknown;
+}
+
+export function showLoadingMask(
+  scene: SceneLike,
+  opts?: LoadingMaskOptions,
+): LoadingMaskHandle {
+  const minDisplayMs = opts?.minDisplayMs ?? DEFAULT_MIN_DISPLAY_MS;
+  const fadeDurationMs = opts?.fadeDurationMs ?? DEFAULT_FADE_DURATION_MS;
+  const color = opts?.color ?? 0x000000;
+  const alpha = opts?.alpha ?? 1;
+  const depth = opts?.depth ?? DEFAULT_MASK_DEPTH;
+
+  const sceneExtras = scene as unknown as {
+    cameras?: { main?: { width?: number; height?: number } };
+    tweens?: TweenManagerLike;
+  };
+  const camera = sceneExtras.cameras?.main;
+  const width = camera?.width ?? 960;
+  const height = camera?.height ?? 640;
+
+  const rect = scene.add.rectangle(width / 2, height / 2, width, height, color, alpha);
+  const mask = rect as unknown as MaskTargetLike;
+  mask.setDepth(depth);
+  mask.setScrollFactor?.(0, 0);
+
+  let dismissed = false;
+  let destroyed = false;
+  let autoDismissTimer: ReturnType<typeof setTimeout> | null = null;
+  const startedAt = Date.now();
+
+  const performFade = (): void => {
+    if (destroyed) {
+      return;
+    }
+    const tweens = sceneExtras.tweens;
+    if (tweens && typeof tweens.add === 'function') {
+      tweens.add({
+        targets: rect,
+        alpha: 0,
+        duration: fadeDurationMs,
+        onComplete: () => {
+          if (destroyed) {
+            return;
+          }
+          destroyed = true;
+          mask.destroy?.();
+        },
+      });
+    } else {
+      destroyed = true;
+      mask.destroy?.();
+    }
+  };
+
+  const triggerDismissNow = (): void => {
+    if (dismissed || destroyed) {
+      return;
+    }
+    dismissed = true;
+    performFade();
+  };
+
+  autoDismissTimer = setTimeout(() => {
+    autoDismissTimer = null;
+    triggerDismissNow();
+  }, minDisplayMs);
+
+  return {
+    dismiss(): void {
+      if (dismissed || destroyed) {
+        return;
+      }
+      const elapsed = Date.now() - startedAt;
+      const wait = Math.max(0, minDisplayMs - elapsed);
+      if (autoDismissTimer !== null) {
+        clearTimeout(autoDismissTimer);
+        autoDismissTimer = null;
+      }
+      if (wait > 0) {
+        setTimeout(triggerDismissNow, wait);
+      } else {
+        triggerDismissNow();
+      }
+    },
+    destroy(): void {
+      if (destroyed) {
+        return;
+      }
+      if (autoDismissTimer !== null) {
+        clearTimeout(autoDismissTimer);
+        autoDismissTimer = null;
+      }
+      destroyed = true;
+      mask.destroy?.();
+    },
+  };
+}
+
 export function loadTownMap(scene: SceneLike, mapKey: string): TownMapData {
   void mapKey;
   const phaserScene = scene as unknown as Phaser.Scene;
+  // W1：先盖一层 loading mask，构图过程中不会露出底色或上一场景残影。
+  showLoadingMask(scene);
 
   const map = phaserScene.make.tilemap({
     tileWidth: SOURCE_TILE_SIZE,
