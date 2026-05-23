@@ -12,7 +12,7 @@ import type { GameBootstrapResponseDto } from '@api/dto/GameBootstrapResponseDto
 import type { NpcStateDto } from '@api/dto/NpcStateDto';
 import type { PlayerCurrencyDto } from '@api/dto/PlayerCurrencyDto';
 import type { PlayerStateDto } from '@api/dto/PlayerStateDto';
-import type { SaveSlotDto } from '@api/dto/SaveSlotDto';
+import type { SaveSlotDto, SaveSlotInventoryItem } from '@api/dto/SaveSlotDto';
 import type { WorldSessionDto } from '@api/dto/WorldSessionDto';
 
 export type { Direction };
@@ -27,6 +27,8 @@ let throttleTimer: ReturnType<typeof setTimeout> | null = null;
 let lastSentAt = 0;
 let pendingUpdate: PendingPlayerUpdate | null = null;
 
+const DEFAULT_SCENE_NAME = 'WorldScene';
+
 export const useWorldStore = defineStore('world', {
   state: () => ({
     session: null as WorldSessionDto | null,
@@ -34,9 +36,22 @@ export const useWorldStore = defineStore('world', {
     npcStates: [] as NpcStateDto[],
     currency: null as PlayerCurrencyDto | null,
     activeSlot: null as SaveSlotDto | null,
+    sceneName: DEFAULT_SCENE_NAME as string,
+    unlockedBuildings: [] as string[],
+    accumulatedPlaySeconds: 0 as number,
+    inventoryItems: [] as SaveSlotInventoryItem[],
     bootstrapped: false,
     loading: false,
   }),
+  getters: {
+    /**
+     * `hasUnlocked('mine_entry')` 用于地图入口门禁判定。读自 W3 save_slot.unlocked_buildings，
+     * 不读 InventoryStore，避免与背包语义混淆。
+     */
+    hasUnlocked(state) {
+      return (buildingKey: string): boolean => state.unlockedBuildings.includes(buildingKey);
+    },
+  },
   actions: {
     async loadSession(): Promise<void> {
       this.loading = true;
@@ -81,6 +96,11 @@ export const useWorldStore = defineStore('world', {
       this.npcStates = data.world.npcs;
       this.currency = data.currency;
       this.activeSlot = data.activeSlot;
+      if (data.activeSlot) {
+        this.syncFromSlot(data.activeSlot);
+      } else {
+        this.resetSlotState();
+      }
 
       useLearningStore().setBootstrapData({
         crops: data.crops,
@@ -93,6 +113,17 @@ export const useWorldStore = defineStore('world', {
       useSkillStore().setBootstrap(data.skillsCatalog ?? [], data.skills);
       useCalendarStore().setBootstrap(data.calendar, data.events ?? []);
       useNpcStore().setBootstrap(data.npcStates ?? []);
+    },
+    /**
+     * 把后端最新的 SaveSlotDto 同步到 world store 的 RPG 扩展字段上。WorldScene 切换 / 解锁建筑 /
+     * 累计时长 / 背包快照 都从这里读，避免 component 各自 patch state。
+     */
+    syncFromSlot(slot: SaveSlotDto): void {
+      this.activeSlot = slot;
+      this.sceneName = slot.sceneName || DEFAULT_SCENE_NAME;
+      this.unlockedBuildings = [...slot.unlockedBuildings];
+      this.accumulatedPlaySeconds = slot.accumulatedPlaySeconds;
+      this.inventoryItems = slot.inventoryItems.map((item) => ({ ...item }));
     },
     /**
      * 推进一天：触发 mastery decay / 作物枯萎 / NPC 周计划重置。
@@ -144,6 +175,12 @@ export const useWorldStore = defineStore('world', {
     },
     async refreshWeather(): Promise<void> {
       await this.loadSession();
+    },
+    resetSlotState(): void {
+      this.sceneName = DEFAULT_SCENE_NAME;
+      this.unlockedBuildings = [];
+      this.accumulatedPlaySeconds = 0;
+      this.inventoryItems = [];
     },
   },
 });

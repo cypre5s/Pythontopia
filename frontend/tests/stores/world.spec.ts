@@ -163,6 +163,10 @@ describe('world store', () => {
         isActive: true,
         createdAt: '2026-05-22T08:00:00Z',
         lastPlayedAt: '2026-05-22T08:00:00Z',
+        sceneName: 'WorldScene',
+        unlockedBuildings: [],
+        accumulatedPlaySeconds: 0,
+        inventoryItems: [],
       },
     });
 
@@ -226,5 +230,118 @@ describe('world store', () => {
     expect(store.session?.weather).toBe('RAINY');
     expect(store.session?.player.tileX).toBe(15); // 旧 player 不被清空
     expect(useCalendarStore().today?.dayIndex).toBe(4);
+  });
+
+  describe('W3 save_state extension', () => {
+    const slotWithExtension = {
+      slotIndex: 1,
+      displayName: 'Beta save',
+      isActive: true,
+      createdAt: '2026-05-22T08:00:00Z',
+      lastPlayedAt: '2026-05-22T12:34:56Z',
+      sceneName: 'MineSouthScene',
+      unlockedBuildings: ['library', 'mine_entry', 'shop_main'],
+      accumulatedPlaySeconds: 7325,
+      inventoryItems: [
+        { itemId: 'seed_print', qty: 5, slot: 0 },
+        { itemId: 'pickaxe', qty: 1, slot: 1 },
+      ],
+    };
+
+    it('syncFromSlot copies all 4 extension fields into store state', () => {
+      vi.useRealTimers();
+      const store = useWorldStore();
+
+      store.syncFromSlot(slotWithExtension);
+
+      expect(store.sceneName).toBe('MineSouthScene');
+      expect(store.unlockedBuildings).toEqual(['library', 'mine_entry', 'shop_main']);
+      expect(store.accumulatedPlaySeconds).toBe(7325);
+      expect(store.inventoryItems).toHaveLength(2);
+      expect(store.inventoryItems[0]).toEqual({ itemId: 'seed_print', qty: 5, slot: 0 });
+      expect(store.activeSlot).toEqual(slotWithExtension);
+    });
+
+    it('syncFromSlot defends against shared references', () => {
+      vi.useRealTimers();
+      const store = useWorldStore();
+
+      store.syncFromSlot(slotWithExtension);
+      store.unlockedBuildings.push('extra_mutation');
+      store.inventoryItems[0]!.qty = 999;
+
+      expect(slotWithExtension.unlockedBuildings).toEqual(['library', 'mine_entry', 'shop_main']);
+      expect(slotWithExtension.inventoryItems[0]?.qty).toBe(5);
+    });
+
+    it('hasUnlocked getter reflects unlockedBuildings (true / false / case-sensitive)', () => {
+      vi.useRealTimers();
+      const store = useWorldStore();
+
+      store.syncFromSlot(slotWithExtension);
+
+      expect(store.hasUnlocked('mine_entry')).toBe(true);
+      expect(store.hasUnlocked('library')).toBe(true);
+      expect(store.hasUnlocked('arena_dome')).toBe(false);
+      expect(store.hasUnlocked('Mine_Entry')).toBe(false);
+    });
+
+    it('applyBootstrap with activeSlot=null resets extension fields to defaults', () => {
+      vi.useRealTimers();
+      const store = useWorldStore();
+      store.syncFromSlot(slotWithExtension);
+
+      store.applyBootstrap({
+        world: {
+          worldSessionId: 9,
+          dayIndex: 5,
+          weather: 'SUNNY',
+          inGameMinutes: 480,
+          player: {
+            playerStateId: 2,
+            avatarKey: 'student_default',
+            mapKey: 'town_main',
+            tileX: 1,
+            tileY: 2,
+            direction: 'DOWN',
+          },
+          npcs: [],
+        },
+        player: {
+          playerStateId: 2,
+          avatarKey: 'student_default',
+          mapKey: 'town_main',
+          tileX: 1,
+          tileY: 2,
+          direction: 'DOWN',
+        },
+        crops: [],
+        quests: [],
+        mastery: [],
+        profile: null,
+        path: null,
+        inventory: [],
+        skills: [],
+        skillsCatalog: [],
+        currency: { coins: 0, gems: 0 },
+        calendar: {
+          dayIndex: 5,
+          weekday: 'FRIDAY',
+          monthIndex: 1,
+          season: 'spring',
+          timeOfDay: 'MORNING',
+          weather: 'SUNNY',
+        },
+        events: [],
+        npcStates: [],
+        activeSlot: null,
+      });
+
+      expect(store.activeSlot).toBeNull();
+      expect(store.sceneName).toBe('WorldScene');
+      expect(store.unlockedBuildings).toEqual([]);
+      expect(store.accumulatedPlaySeconds).toBe(0);
+      expect(store.inventoryItems).toEqual([]);
+    });
   });
 });
