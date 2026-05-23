@@ -15,6 +15,10 @@ module.exports = {
   extends: ['eslint:recommended', 'plugin:vue/vue3-recommended', 'plugin:@typescript-eslint/recommended'],
   rules: {
     '@typescript-eslint/no-explicit-any': 'error',
+    '@typescript-eslint/no-unused-vars': [
+      'error',
+      { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
+    ],
     'no-restricted-imports': [
       'error',
       {
@@ -30,11 +34,26 @@ module.exports = {
   },
   overrides: [
     {
-      // game adapter + scene 层是 Phaser 与业务的隔离边界，允许直接 import phaser；
+      // game adapter + scene + core 层是 Phaser 与业务的隔离边界，允许 import type Phaser；
       // 业务层（composables / stores / components）仍走 no-restricted-imports 拦截。
-      files: ['src/game/adapters/**/*.ts', 'src/game/scenes/**/*.ts'],
+      // core/* 是 W1 引入的跨场景状态机/切换器/生命周期/交互/NPC 基础设施，只用 `import type Phaser`，
+      // 运行时零依赖 Phaser，需要解除 import 限制。
+      files: [
+        'src/game/adapters/**/*.ts',
+        'src/game/scenes/**/*.ts',
+        'src/game/core/**/*.ts',
+      ],
       rules: {
         '@typescript-eslint/no-explicit-any': 'warn',
+        'no-restricted-imports': 'off',
+      },
+    },
+    {
+      // 单测中允许 import 真 phaser 模块或 type，配合 jsdom + mock 验证 adapter / core 层契约
+      files: [
+        'tests/game/**/*.ts',
+      ],
+      rules: {
         'no-restricted-imports': 'off',
       },
     },
