@@ -269,10 +269,22 @@ function buildLevels(): ArenaLevel[] {
 
 export const ARENA_LEVELS: readonly ArenaLevel[] = Object.freeze(buildLevels());
 
+const _byChapter = new Map<number, readonly ArenaLevel[]>();
+const _byId = new Map<string, ArenaLevel>();
+for (const level of ARENA_LEVELS) {
+  _byId.set(level.id, level);
+  const list = _byChapter.get(level.chapter);
+  if (list) {
+    (_byChapter as Map<number, ArenaLevel[]>).set(level.chapter, [...list, level]);
+  } else {
+    _byChapter.set(level.chapter, [level]);
+  }
+}
+
 export function arenaLevelsByChapter(chapter: number): readonly ArenaLevel[] {
-  return ARENA_LEVELS.filter((l) => l.chapter === chapter);
+  return _byChapter.get(chapter) ?? [];
 }
 
 export function findArenaLevel(id: string): ArenaLevel | undefined {
-  return ARENA_LEVELS.find((l) => l.id === id);
+  return _byId.get(id);
 }

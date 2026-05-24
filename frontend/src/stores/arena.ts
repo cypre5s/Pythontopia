@@ -9,7 +9,7 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import type { ArenaLevelProgress } from '@/types/arena';
-import { ARENA_LEVELS, arenaLevelsByChapter } from '@/data/arenaLevels';
+import { ARENA_LEVELS, arenaLevelsByChapter, findArenaLevel } from '@/data/arenaLevels';
 
 const STORAGE_KEY = 'pyt_arena_v1';
 
@@ -99,7 +99,7 @@ export const useArenaStore = defineStore('arena', () => {
 
   /** 是否可解锁该关：前 1 关已通或该章首关 */
   function isUnlocked(levelId: string): boolean {
-    const level = ARENA_LEVELS.find((l) => l.id === levelId);
+    const level = findArenaLevel(levelId);
     if (!level) return false;
     if (level.index === 1) return true;
     const prev = `${level.chapter}-${level.index - 1}`;
