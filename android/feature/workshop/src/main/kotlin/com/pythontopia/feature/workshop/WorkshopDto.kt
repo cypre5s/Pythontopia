@@ -1,5 +1,7 @@
 package com.pythontopia.feature.workshop
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 
 /**
@@ -49,10 +51,12 @@ data class SubmissionDto(
     val isTerminal: Boolean get() = status.isTerminal
 }
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class SubmissionCreateRequest(
     val problemId: Long,
     val code: String,
+    @EncodeDefault
     val source: String = "TRAINING",
 )
 

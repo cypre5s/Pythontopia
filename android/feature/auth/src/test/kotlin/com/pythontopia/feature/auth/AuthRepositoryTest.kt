@@ -5,12 +5,10 @@ import com.pythontopia.core.common.ApiError
 import com.pythontopia.core.common.NetworkError
 import com.pythontopia.core.network.AuthTokenHolder
 import io.mockk.clearMocks
-import io.mockk.coAnswers
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.slot
 import io.mockk.verify
 import java.io.IOException
 import kotlinx.coroutines.Dispatchers
@@ -110,9 +108,7 @@ class AuthRepositoryTest {
                 expiresAtEpochMs = any(),
             )
         }
-        val tokenSlot = slot<String?>()
-        verify(exactly = 1) { tokenHolder.setToken(capture(tokenSlot)) }
-        assertEquals("jwt-access-1", tokenSlot.captured)
+        verify(exactly = 1) { tokenHolder.setToken("jwt-access-1") }
     }
 
     @Test
@@ -195,19 +191,12 @@ class AuthRepositoryTest {
             user = AuthUserDto(id = 7L, username = "alice", role = "STUDENT"),
             refreshToken = "rotated-refresh",
         )
-        // 用 coAnswers 显式控制每次调用的行为：第 1 次抛 IOException，第 2 次返回成功。
-        // 比 `throws X andThen Y` 链式语法更直观，避免 coEvery 与 andThen 推断歧义。
-        var callCount = 0
-        coEvery { api.refresh(any()) } coAnswers {
-            callCount++
-            if (callCount == 1) throw IOException("flaky") else successResponse
-        }
+        coEvery { api.refresh(any()) } throws IOException("flaky") andThen successResponse
 
         val outcome = repository.refresh(autoRetryOnce = true)
 
         assertTrue(outcome is AuthOutcome.Success)
         coVerify(exactly = 2) { api.refresh(RefreshRequest("old-refresh")) }
-        assertEquals(2, callCount)
     }
 
     @Test
@@ -292,7 +281,7 @@ class AuthRepositoryTest {
     private companion object {
         fun http(code: Int, jsonBody: String): HttpException {
             val body = jsonBody.toResponseBody("application/json".toMediaType())
-            return HttpException(Response.error<Any>(code, body))
+            return HttpException(Response.error<Unit>(code, body))
         }
     }
 }

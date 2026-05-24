@@ -23,7 +23,7 @@ import retrofit2.http.POST
 /**
  * Android-R4.1/4.4 认证仓库。
  *
- * 单一职责：把 4 个 `/api/auth/*` 端点翻译成 [AuthOutcome]，并同步两侧 token：
+ * 单一职责：把 4 个 `/api/auth/{endpoint}` 端点翻译成 [AuthOutcome]，并同步两侧 token：
  *  - 落盘到 [TokenStorage]（重启后能恢复）。
  *  - 写入 [AuthTokenHolder]（`:core:network` AuthInterceptor 真正读的位置）。
  *

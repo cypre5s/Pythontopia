@@ -1,6 +1,5 @@
 package com.pythontopia.feature.path
 
-import io.mockk.coAnswers
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk

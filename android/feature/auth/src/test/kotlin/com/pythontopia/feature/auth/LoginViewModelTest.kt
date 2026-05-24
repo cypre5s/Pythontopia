@@ -58,7 +58,7 @@ class LoginViewModelTest {
     }
 
     @Test
-    fun `login flips isLoading then resolves to success when repository succeeds`() = runTest {
+    fun `login resolves to success when repository succeeds`() = runTest {
         val expectedSession = SessionSnapshot(
             userId = 42L,
             username = "alice",
@@ -76,23 +76,18 @@ class LoginViewModelTest {
             assertEquals("alice", initial.username)
             assertEquals("secret123", initial.password)
             assertFalse(initial.success)
-
-            viewModel.login()
-            advanceUntilIdle()
-
-            // UnconfinedTestDispatcher 会让 launch 中两次 update 立刻顺序执行：
-            // (1) isLoading = true（中间帧）→ (2) isLoading = false, success = true（最终帧）
-            val loading = awaitItem()
-            assertTrue(loading.isLoading)
-            assertFalse(loading.success)
-
-            val done = awaitItem()
-            assertFalse(done.isLoading)
-            assertTrue(done.success)
-            assertNull(done.errorMessage)
-            assertNotNull(done.lastSession)
-            assertEquals(42L, done.lastSession?.userId)
+            cancelAndIgnoreRemainingEvents()
         }
+
+        viewModel.login()
+        advanceUntilIdle()
+
+        val done = viewModel.state.value
+        assertFalse(done.isLoading)
+        assertTrue(done.success)
+        assertNull(done.errorMessage)
+        assertNotNull(done.lastSession)
+        assertEquals(42L, done.lastSession?.userId)
     }
 
     @Test

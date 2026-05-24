@@ -1,10 +1,14 @@
 package com.pythontopia.learner.quest.service;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 @Component
 public class QuestExpirationScheduler {
+
+  private static final Logger LOGGER = LoggerFactory.getLogger(QuestExpirationScheduler.class);
 
   private final QuestService questService;
 
@@ -19,6 +23,12 @@ public class QuestExpirationScheduler {
    */
   @Scheduled(fixedDelay = 1_800_000L, initialDelay = 60_000L)
   public void expireOverdue() {
-    questService.expireOverdue();
+    try {
+      questService.expireOverdue();
+    } catch (RuntimeException ex) {
+      LOGGER.warn(
+          "Quest expiration maintenance failed; it will retry on the next schedule: {}",
+          ex.toString());
+    }
   }
 }

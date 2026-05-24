@@ -15,7 +15,7 @@ import kotlinx.serialization.Serializable
  *  - `@Serializable` 让 Retrofit 的 kotlinx-serialization converter 能直接解析，无需手写
  *    `JsonObject` 适配；也方便 [test/ClassroomRepositoryTest] 用 [okhttp3.mockwebserver.MockResponse]
  *    返回 JSON 字符串后做端到端断言。
- *  - 字段命名遵循后端 camelCase 习惯，与 `core/data/dto/world/*` 现有 DTO 风格一致；
+ *  - 字段命名遵循后端 camelCase 习惯，与 `core/data/dto/world/{dto}` 现有 DTO 风格一致；
  *    `dueDate` / `createdAt` 用 String 而非 `LocalDate`，因为后端用 Jackson 默认 ISO-8601
  *    输出，Android 端目前没有引入 kotlinx-datetime 序列化适配，String 透传可减少一类 issue。
  */

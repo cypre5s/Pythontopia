@@ -18,7 +18,7 @@ import androidx.compose.ui.unit.dp
 import com.pythontopia.core.design.PytColors
 
 /**
- * Feature-local 像素风组件：保持 R-12 demo 视觉与 `frontend/src/components/*` 像素镇风格一致。
+ * Feature-local 像素风组件：保持 R-12 demo 视觉与 `frontend/src/components/{component}` 像素镇风格一致。
  *
  * 没有上提到 core/design 的原因：profile 是首个深度使用 dashboard 卡片的 feature，
  * 等 classroom / path 也需要再抽象，避免过早抽象（AGENTS.md "外科手术式修改"）。

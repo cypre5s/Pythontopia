@@ -88,6 +88,39 @@ async def test_query_returns_input_evidence() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("query", "expected_page_id", "expected_page_no", "expected_kc_codes"),
+    [
+        ("input函数", 11, 12, ["PY43-KC-012"]),
+        ("for循环", 22, 20, ["PY43-KC-020"]),
+        ("列表", 33, 27, ["PY43-KC-030"]),
+    ],
+)
+async def test_required_course_queries_return_evidence_paths(
+    query: str,
+    expected_page_id: int,
+    expected_page_no: int,
+    expected_kc_codes: list[str],
+) -> None:
+    state = app.state.rag
+    await rebuild_index(source=_seed_pages(), embedder=state.embedder, store=state.store)
+
+    client = TestClient(app)
+    response = client.post(
+        "/rag/query", json={"query": query, "top_k": 5, "min_score": 0.1}
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["no_evidence_found"] is False
+    assert body["hits"]
+    top = body["hits"][0]
+    assert top["page_id"] == expected_page_id
+    assert top["page_no"] == expected_page_no
+    assert top["kc_codes"] == expected_kc_codes
+
+
+@pytest.mark.asyncio
 async def test_query_supports_kc_filter() -> None:
     state = app.state.rag
     await rebuild_index(source=_seed_pages(), embedder=state.embedder, store=state.store)

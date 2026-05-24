@@ -5,7 +5,7 @@ import math
 import os
 from typing import Protocol
 
-DEFAULT_DIM = 384
+DEFAULT_DIM = 1024
 
 
 class Embedder(Protocol):
@@ -19,13 +19,14 @@ class Embedder(Protocol):
 class HashEmbedder:
     """Deterministic embedding without external dependencies.
 
-    Each text is hashed into a fixed-dimension unit vector using char-trigram features.
-    Two semantically similar Chinese strings tend to produce overlapping trigram hashes,
-    which is sufficient for stable tests and offline CI use. Real production should use
+    Each text is hashed into a fixed-dimension unit vector using char n-gram features.
+    Chinese two-character terms such as "列表" get CJK bigrams, while longer mixed
+    code/courseware text still uses trigrams and whitespace-delimited words. This is
+    sufficient for stable tests and offline CI use. Real production should use
     ``BgeSmallEmbedder``.
     """
 
-    name = "hash-bow-384"
+    name = "hash-bow-1024"
     dim = DEFAULT_DIM
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
@@ -48,9 +49,18 @@ class HashEmbedder:
     @staticmethod
     def _tokens(text: str) -> list[str]:
         cleaned = text.lower()
+        cjk_bigrams = _cjk_bigrams(cleaned)
         trigrams = [cleaned[i : i + 3] for i in range(0, max(0, len(cleaned) - 2))]
         words = cleaned.split()
-        return trigrams + words
+        return cjk_bigrams + trigrams + words
+
+
+def _cjk_bigrams(text: str) -> list[str]:
+    spans = "".join(char if "\u4e00" <= char <= "\u9fff" else " " for char in text)
+    bigrams: list[str] = []
+    for span in spans.split():
+        bigrams.extend(span[index : index + 2] for index in range(0, max(0, len(span) - 1)))
+    return bigrams
 
 
 class BgeSmallEmbedder:

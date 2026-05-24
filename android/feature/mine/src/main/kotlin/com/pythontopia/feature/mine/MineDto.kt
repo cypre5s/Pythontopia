@@ -6,7 +6,7 @@ import kotlinx.serialization.Serializable
 /**
  * Bug 矿洞副本 DTO 集合。
  *
- * 与后端 `/api/mine/*` 端点保持字段一一对应；DTO 设计严格对齐
+ * 与后端 `/api/mine/{endpoint}` 端点保持字段一一对应；DTO 设计严格对齐
  * `docs/gameplay/r12-deepen/04-bugmine-puzzle-deck.md` 50 张谜题卡牌库的
  * "故事场景 / 错误代码 / 期望输出 / KC / 通过条件 / Pythoco" 结构。
  *

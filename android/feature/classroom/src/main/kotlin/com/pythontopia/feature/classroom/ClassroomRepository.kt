@@ -14,7 +14,7 @@ import retrofit2.http.Path
 
 /**
  * `:feature:classroom` 网络层：把后端 `/api/classrooms*`、`/api/classroom/quests*`、
- * `/api/teacher/classrooms/*/dashboard/*`、`/api/quests/*/complete` 五组端点收口到一个
+ * `/api/teacher/classrooms/{id}/dashboard/{view}`、`/api/quests/{id}/complete` 五组端点收口到一个
  * Retrofit 接口 + 一个仓库，向上层 ViewModel 暴露语义化的 suspend 方法。
  *
  * 设计原则（与 `:feature:hub` / `:feature:dialog` 一致）：
@@ -32,7 +32,7 @@ import retrofit2.http.Path
  * Provider，从已有的 `Retrofit` 单例 create 出 [ClassroomApi]。
  */
 @Singleton
-class ClassroomRepository @Inject constructor(
+class ClassroomRepository @Inject internal constructor(
     private val api: ClassroomApi,
 ) {
 

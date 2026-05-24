@@ -31,7 +31,14 @@ class ProfileRepository @Inject constructor(
      * - I/O 异常 → `Failure(NetworkError)`
      */
     suspend fun fetchProfile(): Result<LearnerProfileDto?> = runCatching {
-        api.getProfile()
+        val response = api.getProfile()
+        if (response.code() == HTTP_NO_CONTENT) {
+            return@runCatching null
+        }
+        if (!response.isSuccessful) {
+            throw HttpException(response)
+        }
+        response.body()
     }.fold(
         onSuccess = { Result.Success(it) },
         onFailure = { Result.Failure(it.toAppError()) },
@@ -61,5 +68,9 @@ class ProfileRepository @Inject constructor(
         )
         is IOException -> NetworkError(message = message ?: "Network IO failure")
         else -> UnknownError(message = message ?: this::class.java.simpleName)
+    }
+
+    private companion object {
+        const val HTTP_NO_CONTENT = 204
     }
 }

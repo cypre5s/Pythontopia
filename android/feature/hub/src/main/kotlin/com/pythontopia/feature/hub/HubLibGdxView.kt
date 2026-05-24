@@ -75,7 +75,7 @@ fun HubLibGdxView(
 }
 
 /** 装载点的稳定 key；用 bridge 的 identityHashCode 而非 hashCode，避免被 data class 误覆盖。 */
-private data class MountKey(val bridgeId: Int, val tag: String)
+internal data class MountKey(val bridgeId: Int, val tag: String)
 
 /**
  * Application 级 LibGDX 装载注册表：进程内必须保证最多 1 个 [HubLibGdxFragment] 同时存活，
@@ -113,7 +113,7 @@ internal object LibGdxMountRegistry {
     }
 
     @Synchronized
-    fun currentForTest(): Any? = current
+    fun currentForTest(): MountKey? = current
 }
 
 private const val DEFAULT_FRAGMENT_TAG: String = "hub-libgdx"
