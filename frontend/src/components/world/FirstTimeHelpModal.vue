@@ -71,12 +71,21 @@ defineExpose({
           <span class="pyt-help-text">与 NPC 对话、调查物品、领取任务</span>
         </li>
         <li>
-          <span class="pyt-help-key">ESC</span>
-          <span class="pyt-help-text">关闭当前对话或弹窗</span>
+          <span class="pyt-help-key">Tab</span>
+          <span class="pyt-help-text">展开任务面板（B 背包 / M 地图 / K 技能 / J 对话历史）</span>
         </li>
         <li>
-          <span class="pyt-help-key">点击</span>
-          <span class="pyt-help-text">点击建筑或导航卡片，进入功能页面</span>
+          <span class="pyt-help-key">L</span>
+          <span class="pyt-help-key">,</span>
+          <span class="pyt-help-text">L 直达课程库；逗号键打开设置（音量/语言/退出）</span>
+        </li>
+        <li>
+          <span class="pyt-help-key">右上角</span>
+          <span class="pyt-help-text">小地图常驻显示当前地图与出口方向，Shift+M 折叠</span>
+        </li>
+        <li>
+          <span class="pyt-help-key">ESC</span>
+          <span class="pyt-help-text">关闭当前对话、设置或快捷菜单</span>
         </li>
       </ul>
       <button

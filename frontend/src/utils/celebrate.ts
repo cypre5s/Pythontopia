@@ -1,4 +1,5 @@
 import { playSfx } from '@/composables/useAudio';
+import { playQuestComplete } from '@/composables/useStardewFx';
 import { getPhaserGame } from '@game/adapters/phaserGame';
 
 const OVERLAY_CLASS = 'pyt-celebrate';
@@ -46,6 +47,13 @@ export function celebrateMature(target: HTMLElement | null): void {
   } catch {
     /* sfx 失败不影响视觉反馈 */
   }
+  // R-13：叠加 Tone.js 程序化 fanfare，给 KC 收获/升级一个 3 和弦庆祝，
+  // 即使 Phaser sfx_jingle_levelup 资源缺失也能保留正向反馈。
+  try {
+    playQuestComplete();
+  } catch {
+    /* tone.js 未解锁时静默 */
+  }
 
   const remove = (): void => {
     if (overlay.parentNode) {
@@ -77,6 +85,11 @@ export function celebrateLevelUp(): void {
     playSfx('sfx_jingle_complete', { volume: 0.5 });
   } catch {
     // sfx 失败不影响视觉反馈。
+  }
+  try {
+    playQuestComplete();
+  } catch {
+    /* tone.js 未解锁时静默 */
   }
   playPhaserConfetti('fx_confetti_burst');
 }

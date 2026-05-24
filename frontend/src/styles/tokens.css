@@ -88,6 +88,43 @@
   /* z-index */
   --pyt-z-toast: 1100;
   --pyt-z-modal: 1000;
+
+  /* R-13 响应式断点 token（仅作记录用，@media 不能直接 var()） */
+  --pyt-bp-sm: 640px;
+  --pyt-bp-md: 1024px;
+  --pyt-bp-lg: 1280px;
+  /* R-13 画布尺寸：min 给极窄屏 fallback；max 不超过 1100px 避免远景拉伸 */
+  --pyt-canvas-min-w: 320px;
+  --pyt-canvas-max-w: 1100px;
+  --pyt-canvas-aspect: 1.5; /* 3 : 2，960×640 同比 */
+}
+
+/* R-13：全局 box-sizing 与水平滚动防护，避免响应式断点临界时窄屏被横向溢出。 */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  overflow-x: hidden;
+  min-height: 100dvh;
+}
+
+/* R-13 a11y：全局 :focus-visible 高亮，键盘导航时玩家能清楚看到焦点；
+   :focus（非键盘）不触发，避免鼠标点击后留下大方框。 */
+:focus-visible {
+  outline: 2px solid #f1c453;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* 浏览器拖动选择文本时不要被像素背景吞掉（黄底深字像素风可读） */
+::selection {
+  background: #ffd166;
+  color: #2a1a05;
 }
 
 html,

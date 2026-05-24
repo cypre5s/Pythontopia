@@ -13,6 +13,20 @@
 | **CC-BY-SA 3.0+ / GPL 3.0+** | 5 子源 | buildings_npc/lpc_*, crops/lpc-*, opengameart_farming/daneeklu, opengameart_farming/lpc_farm, seasons_school/lpc_* | ✅ | **强制** | **传染** |
 | **OFL-1.1** | 1 | github_extra/ark_pixel_font | ✅ | **强制** | 仅字体内 |
 
+## 代码层音视觉库（2026-05-24 R-13 新增，不属于资产层）
+
+R-13 Phase 3 引入 3 个前端音视觉 JavaScript 库，与本文档涵盖的"资产层"
+license 矩阵无关（它们是 JS 代码，受代码层 MIT 控制），但为完整性记录：
+
+| 库 | 版本 | License | 用途 |
+| --- | --- | --- | --- |
+| `tone` | 15.x | MIT | 程序化合成 SFX（脚步声 / UI 点击 / 金币 / 任务完成 / chime），零音频文件依赖 |
+| `howler` | 2.2.4 | MIT | 预留：未来接入 CC0 BGM 时取代 Phaser sound manager 做高级 crossfade |
+| `gsap` | 3.13.x | "GSAP No-Charge" license（个人/教育免费，包含本项目场景） | HUD 数字 tween、路由 fade transition、未来 KC 公告动画 |
+
+**GSAP 商用注意**：GSAP 3 主分发 license（"GreenSock No-Charge License"）对教育与非营利产品免费，
+本项目作为高校 Python 教学游戏在本分类内。若未来商业化（付费课程 / 闭源 SaaS 等），需购买 GSAP Business 许可证。
+
 ## 项目级 SA 传染决策
 
 **接受 CC-BY-SA 3.0 传染**：因 LPC 系列素材教育价值高，无 CC0 等价替代物。本项目最终二进制 / 包装作品同时以 **CC-BY-SA 3.0 / 4.0 (or compatible) 公开发布**，与代码层（MIT 推荐）分层授权：
@@ -35,13 +49,26 @@
 - **Jana Ochse (2DPIXX)** — farming-game-basics (https://opengameart.org/content/farming-game-basics)
 - **Marco L.** — pixel-lightning (https://opengameart.org/content/pixel-lightning)
 - **bluecarrot16 / TheraHedwig / Ivan Voirol** — lpc-farm (https://opengameart.org/content/lpc-farm)
-- **David Revoy / Pepper&Carrot 24x32** — characters_extra/peppercarrot_24x32
+- **Svetlana Kushnariova ("Cabbit") / David Revoy** — Pepper&Carrot 24x32 character sprites (`characters_extra/peppercarrot_24x32`)
 
 ### OFL-1.1 — Ark Pixel Font
 > Ark Pixel Font by **TakWolf** — https://github.com/TakWolf/ark-pixel-font — SIL OFL-1.1
 
 ### Kenney CC0 (推荐致谢，非强制)
 > Many UI / tile / character / SFX / icon assets by **Kenney Vleugels** (https://kenney.nl) — released as CC0.
+
+## R-12 Web 运行时补充索引（2026-05-24）
+
+以下条目补齐 `frontend/public/assets/pixel/` 中未由常规 inbox 同步覆盖、但已用于 BootScene / NPC 对话 / 字体加载的运行时素材；对应索引已同步到 `frontend/public/assets/pixel/LICENSE.md`。
+
+| 运行时路径 | 来源 | License | 备注 |
+| --- | --- | --- | --- |
+| `tilesets/town_tiles.svg`, `buildings/town_buildings.svg`, `characters/student_default.svg` | Pythontopia 自绘占位（见 `assets/pixel/LICENSE.md`） | CC0-1.0 | 早期占位与 fallback，不含商业像素游戏素材 |
+| `fonts/ark-pixel-12px-{mono,prop}-*.woff2`, `fonts/OFL.txt` | TakWolf Ark Pixel Font (`assets/inbox/github_extra/ark_pixel_font/`) | OFL-1.1 | 运行时短文件名，与 OFL 原文一并分发 |
+| `sfx/success.ogg`, `sfx/error.ogg` | Kenney Digital Audio (`assets/inbox/sfx_extra/digital-audio/`) | CC0-1.0 | 正误反馈提示音 |
+| `effects/weather/` | Weather FX 审计池 (`assets/inbox/weather_fx/LICENSE.md`) + Pythontopia 粒子占位 | CC0-1.0 | 云、雨滴、雪花来自已审计 CC0；confetti 为运行时占位 |
+| `portraits/` | isaiah658 Pixel Pack #1 + Pepper&Carrot 24x32 | CC0-1.0 / CC-BY-4.0 | 20 NPC 对话立绘；Pepper&Carrot 必须署名 Cabbit 与 David Revoy |
+| `vendor/opengameart/crates_and_sacks.png` | ScratchIO "Crates And Sacks" on OpenGameArt | CC0-1.0 | 港口/农场货箱与麻袋装饰 |
 
 ## 已删除的违规素材（不在本仓库分发）
 

@@ -43,6 +43,12 @@ export interface HudState {
   activeSlot: HudQuickSlot | null;
   /** 顶部状态条要显示的元数据 */
   meta: HudMeta;
+  /**
+   * R-13：设置弹窗开关。与 5 个 quickslot 互斥单选语义不同 —— 设置是「独立模态」，
+   * 不抢占 activeSlot，避免关掉地图后还要再点一次设置。
+   * 默认 false；reset() 拨回 false。
+   */
+  settingsOpen: boolean;
 }
 
 function defaultMeta(): HudMeta {
@@ -57,12 +63,26 @@ function defaultMeta(): HudMeta {
   };
 }
 
+const BGM_LABELS: Record<string, string> = {
+  bgm_town_day: '小镇·白日',
+  bgm_town_eve: '小镇·黄昏',
+  bgm_bug_mine: 'Bug 矿洞',
+  bgm_quest: '校园钟声',
+};
+
+/** R-13 迭代 14：把 BGM key 翻成人类可读名（HUD 显示用） */
+export function bgmLabel(key: string | null): string {
+  if (!key) return '静默';
+  return BGM_LABELS[key] ?? key;
+}
+
 function defaultState(): HudState {
   return {
     topBar: 'shown',
     bottomBar: 'shown',
     activeSlot: null,
     meta: defaultMeta(),
+    settingsOpen: false,
   };
 }
 
@@ -117,6 +137,19 @@ export const useHudStore = defineStore('hud', {
       this.bottomBar = fresh.bottomBar;
       this.activeSlot = fresh.activeSlot;
       this.meta = fresh.meta;
+      this.settingsOpen = fresh.settingsOpen;
+    },
+    /** R-13：打开设置弹窗（独立于 5 个 quickslot 互斥语义） */
+    openSettings(): void {
+      this.settingsOpen = true;
+    },
+    /** R-13：关闭设置弹窗 */
+    closeSettings(): void {
+      this.settingsOpen = false;
+    },
+    /** R-13：切换设置弹窗开关 */
+    toggleSettings(): void {
+      this.settingsOpen = !this.settingsOpen;
     },
   },
 });

@@ -208,4 +208,62 @@ describe('MiniMap', () => {
     const lastPlayerCall = playerCalls[playerCalls.length - 1];
     expect(lastPlayerCall?.x).toBe(expectedX);
   });
+
+  // R-13 增强：地图名 + 出口方向显示，不破坏既有 6 个用例。
+  it('R-13: renders map name label when mapName prop is provided', () => {
+    const wrapper = mount(MiniMap, {
+      props: {
+        tilemap: sampleTilemap,
+        playerX: 0,
+        playerY: 0,
+        mapName: 'Pythontopia 小镇',
+      },
+    });
+    const title = wrapper.find('[data-testid="mini-map-title"]');
+    expect(title.exists()).toBe(true);
+    expect(title.text()).toBe('Pythontopia 小镇');
+  });
+
+  it('R-13: omits map name label when mapName is empty (back-compat)', () => {
+    const wrapper = mount(MiniMap, {
+      props: {
+        tilemap: sampleTilemap,
+        playerX: 0,
+        playerY: 0,
+      },
+    });
+    expect(wrapper.find('[data-testid="mini-map-title"]').exists()).toBe(false);
+  });
+
+  it('R-13: renders one exit arrow per direction with arrow + tooltip + aria-label', () => {
+    const wrapper = mount(MiniMap, {
+      props: {
+        tilemap: sampleTilemap,
+        playerX: 0,
+        playerY: 0,
+        mapName: 'town_hub',
+        exits: [
+          { side: 'north', toMap: 'farm_north', label: '知识农场' },
+          { side: 'south', toMap: 'mine_south', label: 'Bug 矿洞' },
+          { side: 'east', toMap: 'campus_east', label: '校园' },
+          { side: 'west', toMap: 'port_west' },
+        ],
+      },
+    });
+    const north = wrapper.find('[data-testid="mini-map-exit-north"]');
+    const south = wrapper.find('[data-testid="mini-map-exit-south"]');
+    const east = wrapper.find('[data-testid="mini-map-exit-east"]');
+    const west = wrapper.find('[data-testid="mini-map-exit-west"]');
+    expect(north.exists()).toBe(true);
+    expect(south.exists()).toBe(true);
+    expect(east.exists()).toBe(true);
+    expect(west.exists()).toBe(true);
+    expect(north.text()).toBe('▲');
+    expect(south.text()).toBe('▼');
+    expect(east.text()).toBe('▶');
+    expect(west.text()).toBe('◀');
+    expect(north.attributes('title')).toContain('知识农场');
+    expect(west.attributes('title')).toBe('port_west');
+    expect(north.attributes('aria-label')).toContain('north');
+  });
 });

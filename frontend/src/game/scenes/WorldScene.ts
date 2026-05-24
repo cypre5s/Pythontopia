@@ -233,7 +233,7 @@ export const WorldScene = {
 
     state.collisions = buildCollisions(map);
 
-    const { spawnTile, exits, buildings, npcs } = parseObjects(map, state.entry?.spawn);
+    const { spawnTile, exits, buildings, npcs } = parseObjects(map, state.entry?.spawn, index);
     state.exits = exits;
     state.npcs = npcs;
 
@@ -489,6 +489,7 @@ function buildCollisions(map: Phaser.Tilemaps.Tilemap): boolean[][] {
 function parseObjects(
   map: Phaser.Tilemaps.Tilemap,
   fallbackSpawn: { tileX: number; tileY: number } | undefined,
+  index: MapIndex | null,
 ): {
   spawnTile: { tileX: number; tileY: number };
   exits: ExitTile[];
@@ -511,13 +512,39 @@ function parseObjects(
         return;
       }
       if (type === 'exit') {
-        exits.push({
-          tileX,
-          tileY,
-          toMap: String(props['toMap'] ?? ''),
-          toTileX: Number(props['toTileX'] ?? 0),
-          toTileY: Number(props['toTileY'] ?? 0),
-        });
+        // generate-maps.mjs 写出的字段是 `target`/`side`（4 tile 宽矩形,无 toTile*）;
+        // 历史代码读的是 `toMap`/`toTileX`/`toTileY`。这里双向兼容,并优先读新字段。
+        // 当只有 target 没有 toTile* 时,用目标地图 index.spawn 作为玩家落点 fallback。
+        const target = String(props['target'] ?? props['toMap'] ?? '');
+        if (!target) return;
+        const targetEntry = index?.maps?.find((m) => m.key === target) ?? null;
+        const toTileX = Number(
+          props['toTileX'] ?? targetEntry?.spawn?.tileX ?? 5,
+        );
+        const toTileY = Number(
+          props['toTileY'] ?? targetEntry?.spawn?.tileY ?? 5,
+        );
+        // 展开 4 tile 宽/高的 exit 区域,让玩家走到任意一格都触发跳转;
+        // 否则只命中左上角,其余 3 格直接穿过去毫无反应(W1 残留 bug)。
+        const widthTiles = Math.max(
+          1,
+          Math.round((Number(obj.width ?? TILE_SIZE)) / TILE_SIZE),
+        );
+        const heightTiles = Math.max(
+          1,
+          Math.round((Number(obj.height ?? TILE_SIZE)) / TILE_SIZE),
+        );
+        for (let dx = 0; dx < widthTiles; dx += 1) {
+          for (let dy = 0; dy < heightTiles; dy += 1) {
+            exits.push({
+              tileX: tileX + dx,
+              tileY: tileY + dy,
+              toMap: target,
+              toTileX,
+              toTileY,
+            });
+          }
+        }
         return;
       }
       if (type === 'building') {

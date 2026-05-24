@@ -34,13 +34,33 @@ const visible = computed<boolean>(() => route.path === '/world');
     </span>
     <span class="hint-dot">·</span>
     <span class="hint-item">
-      <span class="hint-key">ESC</span>
-      <span class="hint-text">关闭</span>
+      <span class="hint-key">B</span>
+      <span class="hint-text">背包</span>
+    </span>
+    <span class="hint-dot">·</span>
+    <span class="hint-item">
+      <span class="hint-key">M</span>
+      <span class="hint-text">地图</span>
+    </span>
+    <span class="hint-dot">·</span>
+    <span class="hint-item">
+      <span class="hint-key">L</span>
+      <span class="hint-text">课程</span>
+    </span>
+    <span class="hint-dot">·</span>
+    <span class="hint-item">
+      <span class="hint-key">,</span>
+      <span class="hint-text">设置</span>
     </span>
     <span class="hint-dot">·</span>
     <span class="hint-item">
       <span class="hint-key">Tab</span>
       <span class="hint-text">任务</span>
+    </span>
+    <span class="hint-dot">·</span>
+    <span class="hint-item">
+      <span class="hint-key">ESC</span>
+      <span class="hint-text">关闭</span>
     </span>
   </div>
 </template>
@@ -100,5 +120,37 @@ const visible = computed<boolean>(() => route.path === '/world');
 .hint-dot {
   color: rgba(255, 209, 102, 0.5);
   font-size: 14px;
+}
+
+/* R-13 Phase 6：窄屏折叠成单行，节省垂直空间不挤画布 */
+@media (max-width: 760px) {
+  .operation-hints {
+    bottom: 8px;
+    padding: 4px 10px;
+    gap: 4px;
+    font-size: 11px;
+    max-width: calc(100vw - 16px);
+  }
+  .hint-key {
+    min-width: 18px;
+    padding: 1px 4px;
+    font-size: 10px;
+    box-shadow: 1px 1px 0 #4d3613;
+  }
+  .hint-text {
+    font-size: 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .operation-hints {
+    /* 在 mobile 把次要提示隐掉，只保留移动 + 交互 + ESC 三件套 */
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .operation-hints::-webkit-scrollbar {
+    display: none;
+  }
 }
 </style>

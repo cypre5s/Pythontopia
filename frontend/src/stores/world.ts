@@ -7,6 +7,7 @@ import { useLearningStore } from '@stores/learning';
 import { useNpcStore } from '@stores/npc';
 import { useSkillStore } from '@stores/skill';
 import { useToastStore } from '@stores/toast';
+import { playChime } from '@/composables/useStardewFx';
 import type { Direction } from '@api/dto/Direction';
 import type { GameBootstrapResponseDto } from '@api/dto/GameBootstrapResponseDto';
 import type { NpcStateDto } from '@api/dto/NpcStateDto';
@@ -111,7 +112,9 @@ export const useWorldStore = defineStore('world', {
       });
       useInventoryStore().setBootstrapItems(data.inventory);
       useSkillStore().setBootstrap(data.skillsCatalog ?? [], data.skills);
-      useCalendarStore().setBootstrap(data.calendar, data.events ?? []);
+      // R-13：后端实际字段是 pendingEvents（GameBootstrapResponse.java），
+      // events 是旧前端别名；兼容两边别名，确保拿得到事件。
+      useCalendarStore().setBootstrap(data.calendar, data.events ?? data.pendingEvents ?? []);
       useNpcStore().setBootstrap(data.npcStates ?? []);
     },
     /**
@@ -140,8 +143,22 @@ export const useWorldStore = defineStore('world', {
       if (this.session) {
         this.session = { ...this.session, ...response.world };
       }
-      useCalendarStore().setBootstrap(response.calendar, response.events ?? []);
+      // R-13：后端实际字段是 newEvents（WorldAdvanceResponse.java）；calendar 是
+      // 旧前端兼容字段，新版后端不再返回时就用现有 calendar 兜底。
+      const events = response.events ?? response.newEvents ?? [];
+      const calendar = response.calendar;
+      if (calendar) {
+        useCalendarStore().setBootstrap(calendar, events);
+      } else if (events.length > 0) {
+        useCalendarStore().pushEvents(events);
+      }
       useToastStore().show(`第 ${response.world.dayIndex} 天醒来`, 'info');
+      // R-13：推一天给 dawn chime，星露谷感拉满
+      try {
+        playChime('dawn');
+      } catch {
+        /* tone.js 未解锁时静默 */
+      }
     },
     async updatePlayerTile(update: PendingPlayerUpdate): Promise<void> {
       pendingUpdate = update;

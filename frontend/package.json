@@ -17,9 +17,13 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@types/howler": "^2.2.13",
     "axios": "1.7.9",
+    "gsap": "3.13",
+    "howler": "^2.2.4",
     "phaser": "3.87.0",
     "pinia": "2.3.0",
+    "tone": "^15.1.22",
     "vue": "3.5.13",
     "vue-router": "4.5.0"
   },

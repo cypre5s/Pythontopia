@@ -73,5 +73,17 @@ export const useCalendarStore = defineStore('calendar', {
       this.today = today;
       this.events = events;
     },
+    /**
+     * R-13：增量追加新事件（sleep 推进后若后端只返回 newEvents 没返回 calendar 时使用）。
+     * 按 id 去重，避免同一事件被重复入队。
+     */
+    pushEvents(events: WorldEventDto[]): void {
+      if (!events.length) return;
+      const known = new Set(this.events.map((e) => e.id));
+      const fresh = events.filter((e) => !known.has(e.id));
+      if (fresh.length) {
+        this.events = [...this.events, ...fresh];
+      }
+    },
   },
 });

@@ -1,33 +1,43 @@
 // 隔离原因：保持业务层无 Phaser 依赖，禁止业务代码直接 import phaser。
 // 重构原因：原实现瞬移无 tween，新版用 Phaser tween + Sprite Animations 做 4 向行走 + 阴影。
 import Phaser from 'phaser';
-import type { Direction } from '@api/dto/Direction';
+import type { CardinalDirection, Direction } from '@api/dto/Direction';
 import type { PlayerSpriteHandle, RectangleLike, SceneLike } from './sceneTypes';
 
 // LPC SaraFullSheet 832×1344, 64×64 帧 / 13 列 × 21 行。
 // row 10 = walk down, row 11 = walk right, row 8 = walk up, row 9 = walk left（标准 LPC 排布）。
 // 每行第 0 帧是 idle，1~8 是 walk cycle。
+// R-13：Direction 已扩到 8 方向；sprite 动画仍按 4 方向 cardinal 渲染，
+// 对角线方向通过 toCardinalFrame 收敛为最近的 4 向。
 const LPC_SHEET_KEY = 'player_sara';
 const LPC_FRAME_HEIGHT = 64;
 const LPC_COLS = 13;
-const LPC_WALK_ROW: Record<Direction, number> = {
+const LPC_WALK_ROW: Record<CardinalDirection, number> = {
   UP: 8,
   LEFT: 9,
   DOWN: 10,
   RIGHT: 11,
 };
 
+function toCardinalFrame(dir: Direction): CardinalDirection {
+  if (dir === 'UP' || dir === 'DOWN' || dir === 'LEFT' || dir === 'RIGHT') return dir;
+  // 对角线：横向优先（与 WorldScene.toCardinal 保持一致）
+  if (dir === 'UP_LEFT' || dir === 'DOWN_LEFT') return 'LEFT';
+  if (dir === 'UP_RIGHT' || dir === 'DOWN_RIGHT') return 'RIGHT';
+  return 'DOWN';
+}
+
 function idleFrame(dir: Direction): number {
-  return LPC_WALK_ROW[dir] * LPC_COLS;
+  return LPC_WALK_ROW[toCardinalFrame(dir)] * LPC_COLS;
 }
 
 function walkFrames(dir: Direction): number[] {
-  const base = LPC_WALK_ROW[dir] * LPC_COLS;
+  const base = LPC_WALK_ROW[toCardinalFrame(dir)] * LPC_COLS;
   return [1, 2, 3, 4, 5, 6, 7, 8].map((offset) => base + offset);
 }
 
 function walkAnimKey(dir: Direction): string {
-  return `sara_walk_${dir.toLowerCase()}`;
+  return `sara_walk_${toCardinalFrame(dir).toLowerCase()}`;
 }
 
 export interface CreatePlayerOptions {

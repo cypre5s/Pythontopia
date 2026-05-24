@@ -11,7 +11,7 @@
 // W4-FINAL-POLISH：把 BootScene 广播的 pythontopia:load-progress 渲染为像素风加载条，
 // progress=1 时延迟 600ms 淡出，避免玩家看着黑屏怀疑卡死。
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-import { createPhaserGame, type PhaserGameHandle, type PhaserSceneConfig } from '@game/adapters/phaserGame';
+import { createPhaserGame, getPhaserGame, type PhaserGameHandle, type PhaserSceneConfig } from '@game/adapters/phaserGame';
 import { BootScene } from '@game/scenes/BootScene';
 import { WorldScene } from '@game/scenes/WorldScene';
 import { useWorldStore } from '@stores/world';
@@ -22,6 +22,8 @@ const overlayVisible = ref(true);
 const overlayFading = ref(false);
 let game: PhaserGameHandle | null = null;
 let fadeTimer: number | null = null;
+let resizeRaf: number | null = null;
+let resizeObserver: ResizeObserver | null = null;
 
 const progressPercent = computed(() => Math.min(100, Math.max(0, Math.round(progress.value * 100))));
 
@@ -40,6 +42,36 @@ function onProgress(event: Event): void {
   }
 }
 
+/**
+ * R-13：响应式触发 Phaser game.scale.resize，避免硬编码 960×640 在窄屏被截断。
+ * 用 ResizeObserver 监听容器盒子尺寸，rAF 合并多次 resize 抖动。
+ * 不重建 Phaser.Game，符合 AGENTS.md「单 Phaser.Game 实例」硬约束。
+ */
+function applyCanvasSize(width: number, height: number): void {
+  const phaser = getPhaserGame();
+  if (!phaser) return;
+  // 进入 destroy 流程后 scale 可能已为 null；安全防护
+  const scale = phaser.scale as unknown as {
+    resize?: (w: number, h: number) => void;
+  };
+  if (typeof scale.resize === 'function') {
+    scale.resize(width, height);
+  }
+}
+
+function scheduleResize(): void {
+  if (resizeRaf !== null) return;
+  resizeRaf = window.requestAnimationFrame(() => {
+    resizeRaf = null;
+    const el = root.value;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const w = Math.max(320, Math.floor(rect.width));
+    const h = Math.max(240, Math.floor(rect.height));
+    applyCanvasSize(w, h);
+  });
+}
+
 onMounted(async () => {
   window.addEventListener('pythontopia:load-progress', onProgress);
   const world = useWorldStore();
@@ -49,11 +81,26 @@ onMounted(async () => {
   if (root.value) {
     const scenes: PhaserSceneConfig[] = [BootScene, WorldScene];
     game = createPhaserGame(root.value, scenes);
+    if (typeof ResizeObserver === 'function') {
+      resizeObserver = new ResizeObserver(() => scheduleResize());
+      resizeObserver.observe(root.value);
+    } else {
+      window.addEventListener('resize', scheduleResize);
+    }
   }
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener('pythontopia:load-progress', onProgress);
+  window.removeEventListener('resize', scheduleResize);
+  if (resizeRaf !== null) {
+    window.cancelAnimationFrame(resizeRaf);
+    resizeRaf = null;
+  }
+  if (resizeObserver) {
+    resizeObserver.disconnect();
+    resizeObserver = null;
+  }
   if (fadeTimer !== null) {
     window.clearTimeout(fadeTimer);
     fadeTimer = null;
@@ -100,8 +147,10 @@ onBeforeUnmount(() => {
 <style scoped>
 .world-frame {
   position: relative;
-  width: 960px;
-  height: 640px;
+  width: min(1100px, calc(100vw - 24px));
+  /* 3:2 比例锁定，画布缩放时不会被截断 */
+  aspect-ratio: 3 / 2;
+  max-height: calc(100dvh - 96px);
   margin: 0 auto;
   border: 2px solid #6e4f1d;
   border-radius: 8px;
@@ -111,6 +160,22 @@ onBeforeUnmount(() => {
 .world-root {
   width: 100%;
   height: 100%;
+}
+
+@media (max-width: 1024px) {
+  .world-frame {
+    width: min(900px, calc(100vw - 16px));
+    max-height: calc(100dvh - 72px);
+  }
+}
+
+@media (max-width: 640px) {
+  .world-frame {
+    width: calc(100vw - 8px);
+    border-radius: 4px;
+    border-width: 1px;
+    max-height: 60dvh;
+  }
 }
 .world-load-overlay {
   position: absolute;

@@ -29,6 +29,9 @@ const DEFAULT_CROSSFADE_MS = 600;
 let currentBgmKey: BgmKey | null = null;
 let currentBgm: Phaser.Sound.BaseSound | null = null;
 let muted = false;
+// R-13 迭代 11：全局音量倍率，0..1，与 SettingsModal slider 联动
+let bgmVolumeMul = 1;
+let sfxVolumeMul = 1;
 
 // W4-BGM：浏览器 autoplay 策略要求音频必须由用户交互触发；
 // 我们在 audioUnlocked=false 期间把 playBgm 入参缓存到 pendingBgm，
@@ -45,6 +48,10 @@ export function useAudio(): {
   isMuted: () => boolean;
   getCurrentBgmKey: () => BgmKey | null;
   unlockAudio: typeof unlockAudio;
+  setBgmVolume: typeof setBgmVolume;
+  setSfxVolume: typeof setSfxVolume;
+  getBgmVolume: () => number;
+  getSfxVolume: () => number;
 } {
   return {
     playBgm,
@@ -54,7 +61,36 @@ export function useAudio(): {
     isMuted: () => muted,
     getCurrentBgmKey: () => currentBgmKey,
     unlockAudio,
+    setBgmVolume,
+    setSfxVolume,
+    getBgmVolume: () => bgmVolumeMul,
+    getSfxVolume: () => sfxVolumeMul,
   };
+}
+
+/**
+ * R-13 迭代 11：设置 BGM 音量倍率（0..1）。
+ * 立即影响当前正在播放的 BGM；新启动的 BGM 也会按此倍率。
+ */
+export function setBgmVolume(value: number): void {
+  bgmVolumeMul = Math.max(0, Math.min(1, value));
+  if (currentBgm) {
+    const sound = currentBgm as unknown as { setVolume?: (v: number) => void; volume?: number };
+    const targetVolume = DEFAULT_BGM_VOLUME * bgmVolumeMul;
+    if (typeof sound.setVolume === 'function') {
+      sound.setVolume(targetVolume);
+    } else if (typeof sound.volume === 'number') {
+      sound.volume = targetVolume;
+    }
+  }
+}
+
+/**
+ * R-13 迭代 11：设置 SFX 音量倍率（0..1）。
+ * 仅影响下次 playSfx 调用，已经发出的 SFX 不被回拨。
+ */
+export function setSfxVolume(value: number): void {
+  sfxVolumeMul = Math.max(0, Math.min(1, value));
 }
 
 export function playBgm(key: BgmKey, options: PlayBgmOptions = {}): void {
@@ -80,7 +116,7 @@ export function playBgm(key: BgmKey, options: PlayBgmOptions = {}): void {
   const next = game.sound.add(key, { loop: true, volume: 0 });
   next.play();
 
-  const targetVolume = options.volume ?? DEFAULT_BGM_VOLUME;
+  const targetVolume = (options.volume ?? DEFAULT_BGM_VOLUME) * bgmVolumeMul;
   const duration = options.crossfadeMs ?? DEFAULT_CROSSFADE_MS;
   const scene = game.scene.scenes[0];
 
@@ -137,7 +173,8 @@ export function playSfx(key: SfxKey, options: PlaySfxOptions = {}): void {
   if (!game) {
     return;
   }
-  game.sound.play(key, { volume: options.volume ?? DEFAULT_SFX_VOLUME });
+  const base = options.volume ?? DEFAULT_SFX_VOLUME;
+  game.sound.play(key, { volume: base * sfxVolumeMul });
 }
 
 export function unlockAudio(): void {

@@ -9,8 +9,18 @@
 //      stores/hud.ts 的 `HudQuickSlot` 类型一一对应；
 //   4. 视觉沿用 src/styles/tokens.css 已有像素风变量（fef7e3 / 4d3613 / d4af37），
 //      不引入新色板，与 LoginForm / OperationHints / ChapterNavPanel 协调。
-import { computed } from 'vue';
-import { useHudStore, type HudQuickSlot } from '@stores/hud';
+//   5. R-13：右侧新增 hud-tools（课程 / 设置），独立 .hud-tool-slot class 不计入
+//      `findAll('button.hud-slot')`，保持 HudShell.spec 的 5 按钮硬约束。
+//   6. R-13：window 级 keydown 监听 Tab/B/M/K/L/`,`/ESC（避开 F，防止与 Phaser
+//      NPC 交互 F 键冲突），并对 input/textarea/contenteditable 焦点做 guard。
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
+import gsap from 'gsap';
+import { useHudStore, type HudQuickSlot, bgmLabel } from '@stores/hud';
+import { useWorldStore } from '@stores/world';
+import { useToastStore } from '@stores/toast';
+import { useAudio } from '@/composables/useAudio';
+import { playUiClick, playUiHover, playCoinJingle } from '@/composables/useStardewFx';
 
 interface SlotDescriptor {
   key: HudQuickSlot;
@@ -21,13 +31,27 @@ interface SlotDescriptor {
 
 const SLOTS: readonly SlotDescriptor[] = [
   { key: 'quest', label: '任务', icon: 'Q', shortcut: 'Tab' },
-  { key: 'dialog', label: '对话', icon: 'D', shortcut: 'F' },
+  { key: 'dialog', label: '对话', icon: 'D', shortcut: 'J' },
   { key: 'inventory', label: '背包', icon: 'I', shortcut: 'B' },
   { key: 'map', label: '地图', icon: 'M', shortcut: 'M' },
   { key: 'skill', label: '技能', icon: 'S', shortcut: 'K' },
 ] as const;
 
 const hud = useHudStore();
+const router = useRouter();
+const audio = useAudio();
+const world = useWorldStore();
+const toast = useToastStore();
+
+// R-13 迭代 14：当前 BGM 显示。1s 轮询 useAudio 的 currentBgmKey，避免 audio 内部不暴露 ref。
+const currentBgm = ref<string>(bgmLabel(audio.getCurrentBgmKey()));
+let bgmPollTimer: number | null = null;
+function pollBgm(): void {
+  const next = bgmLabel(audio.getCurrentBgmKey());
+  if (next !== currentBgm.value) {
+    currentBgm.value = next;
+  }
+}
 
 const topBarVisible = computed(() => hud.topBar !== 'hidden');
 const topBarCollapsed = computed(() => hud.topBar === 'collapsed');
@@ -37,6 +61,30 @@ const bottomBarCollapsed = computed(() => hud.bottomBar === 'collapsed');
 const energyPct = computed(() => clamp(hud.meta.energy));
 const masteryPct = computed(() => clamp(hud.meta.masteryAvg));
 
+// R-13 迭代 8：金币变化时 GSAP tween + coin jingle，强化金币获得反馈。
+// 用 ref 缓冲展示值，store 的 hud.meta.coin 是真实值；watch 触发 tween。
+const displayedCoin = ref<number>(hud.meta.coin);
+watch(
+  () => hud.meta.coin,
+  (next, prev) => {
+    const from = Number(prev) || 0;
+    const to = Number(next) || 0;
+    if (from === to) return;
+    if (to > from) {
+      playCoinJingle();
+    }
+    const obj = { v: from };
+    gsap.to(obj, {
+      v: to,
+      duration: 0.5,
+      ease: 'power2.out',
+      onUpdate: () => {
+        displayedCoin.value = Math.round(obj.v);
+      },
+    });
+  },
+);
+
 function clamp(value: number): number {
   if (!Number.isFinite(value)) return 0;
   if (value < 0) return 0;
@@ -44,13 +92,171 @@ function clamp(value: number): number {
   return value;
 }
 
+// R-13 Phase 6：星露谷感 chip 图标。
+function weatherIcon(w: string): string {
+  switch (w) {
+    case 'SUNNY': return '☀';
+    case 'CLOUDY': return '☁';
+    case 'RAIN':
+    case 'RAINY': return '☂';
+    case 'WIND':
+    case 'WINDY': return '✦';
+    case 'SNOWY': return '❄';
+    case 'STORMY': return '⚡';
+    default: return '✦';
+  }
+}
+function timeIcon(t: string): string {
+  switch (t) {
+    case 'DAWN': return '◐';
+    case 'MORNING': return '☼';
+    case 'NOON': return '☀';
+    case 'AFTERNOON': return '☼';
+    case 'EVENING': return '◑';
+    case 'NIGHT': return '☾';
+    default: return '☼';
+  }
+}
+function seasonIcon(s: string): string {
+  switch (s) {
+    case 'SPRING':
+    case 'spring': return '🌱';
+    case 'SUMMER':
+    case 'summer': return '☀';
+    case 'AUTUMN':
+    case 'autumn': return '🍁';
+    case 'WINTER':
+    case 'winter': return '❄';
+    default: return '✿';
+  }
+}
+
 function onClickSlot(slot: HudQuickSlot): void {
+  playUiClick();
   hud.toggleSlot(slot);
 }
 
 function isActive(slot: HudQuickSlot): boolean {
   return hud.activeSlot === slot;
 }
+
+function openLibrary(): void {
+  playUiClick();
+  void router.push('/library');
+}
+
+function onToggleSettings(): void {
+  playUiClick();
+  hud.toggleSettings();
+}
+
+function onSlotHover(): void {
+  playUiHover();
+}
+
+// R-13 迭代 19：通过自定义事件触发 FastTravelPanel，避免组件相互 import。
+function onOpenFastTravel(): void {
+  playUiClick();
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('pythontopia:fast-travel-open'));
+  }
+}
+
+const sleepBusy = ref(false);
+async function onSleep(): Promise<void> {
+  if (sleepBusy.value) return;
+  sleepBusy.value = true;
+  playUiClick();
+  try {
+    await world.sleep();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    toast.show(`推进时间失败：${msg}`, 'error');
+  } finally {
+    sleepBusy.value = false;
+  }
+}
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  const tag = target.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+  if (target.isContentEditable) return true;
+  return false;
+}
+
+function onKey(event: KeyboardEvent): void {
+  if (isEditableTarget(event.target)) return;
+  if (event.altKey || event.ctrlKey || event.metaKey) return;
+  // 按 ESC 关闭一切：先关设置，再关 activeSlot，避免 ESC 既关 dialog 又关画布。
+  if (event.key === 'Escape') {
+    if (hud.settingsOpen) {
+      hud.closeSettings();
+      event.preventDefault();
+      return;
+    }
+    if (hud.activeSlot) {
+      hud.closeAll();
+      event.preventDefault();
+    }
+    return;
+  }
+  // Tab → 任务面板：preventDefault 避免焦点漂移。
+  if (event.key === 'Tab') {
+    if (hud.canToggleSlot) {
+      hud.toggleSlot('quest');
+      event.preventDefault();
+    }
+    return;
+  }
+  const lowered = event.key.toLowerCase();
+  if (lowered === 'b' && hud.canToggleSlot) {
+    hud.toggleSlot('inventory');
+    event.preventDefault();
+    return;
+  }
+  if (lowered === 'm' && !event.shiftKey && hud.canToggleSlot) {
+    hud.toggleSlot('map');
+    event.preventDefault();
+    return;
+  }
+  if (lowered === 'k' && hud.canToggleSlot) {
+    hud.toggleSlot('skill');
+    event.preventDefault();
+    return;
+  }
+  if (lowered === 'j' && hud.canToggleSlot) {
+    hud.toggleSlot('dialog');
+    event.preventDefault();
+    return;
+  }
+  if (lowered === 'l') {
+    openLibrary();
+    event.preventDefault();
+    return;
+  }
+  if (event.key === ',') {
+    onToggleSettings();
+    event.preventDefault();
+  }
+}
+
+onMounted(() => {
+  if (typeof window !== 'undefined') {
+    window.addEventListener('keydown', onKey);
+    bgmPollTimer = window.setInterval(pollBgm, 1000);
+  }
+});
+
+onUnmounted(() => {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('keydown', onKey);
+    if (bgmPollTimer !== null) {
+      window.clearInterval(bgmPollTimer);
+      bgmPollTimer = null;
+    }
+  }
+});
 </script>
 
 <template>
@@ -70,30 +276,41 @@ function isActive(slot: HudQuickSlot): boolean {
         <span
           class="hud-chip"
           data-testid="hud-weather"
+          :title="`天气：${hud.meta.weather}`"
         >
-          <span class="hud-chip__label">天气</span>
+          <span class="hud-chip__label">{{ weatherIcon(hud.meta.weather) }} 天气</span>
           <span class="hud-chip__value">{{ hud.meta.weather }}</span>
         </span>
         <span
           class="hud-chip"
           data-testid="hud-day"
+          :title="`第 ${hud.meta.dayIndex} 天`"
         >
-          <span class="hud-chip__label">Day</span>
+          <span class="hud-chip__label">☼ Day</span>
           <span class="hud-chip__value">{{ hud.meta.dayIndex }}</span>
         </span>
         <span
           class="hud-chip"
           data-testid="hud-time"
+          :title="`时段：${hud.meta.timeOfDay}`"
         >
-          <span class="hud-chip__label">时段</span>
+          <span class="hud-chip__label">{{ timeIcon(hud.meta.timeOfDay) }} 时段</span>
           <span class="hud-chip__value">{{ hud.meta.timeOfDay }}</span>
         </span>
         <span
           class="hud-chip"
           data-testid="hud-season"
+          :title="`季节：${hud.meta.season}`"
         >
-          <span class="hud-chip__label">季节</span>
+          <span class="hud-chip__label">{{ seasonIcon(hud.meta.season) }} 季节</span>
           <span class="hud-chip__value">{{ hud.meta.season }}</span>
+        </span>
+        <span
+          class="hud-chip hud-chip--bgm"
+          data-testid="hud-bgm"
+        >
+          <span class="hud-chip__label">♪</span>
+          <span class="hud-chip__value">{{ currentBgm }}</span>
         </span>
       </div>
       <div class="hud-top__group">
@@ -120,7 +337,7 @@ function isActive(slot: HudQuickSlot): boolean {
           data-testid="hud-coin"
         >
           <span class="hud-chip__label">金币</span>
-          <span class="hud-chip__value">{{ hud.meta.coin }}</span>
+          <span class="hud-chip__value">{{ displayedCoin }}</span>
         </span>
         <div
           class="hud-bar"
@@ -160,6 +377,7 @@ function isActive(slot: HudQuickSlot): boolean {
         :aria-pressed="isActive(slot.key)"
         :aria-label="`${slot.label}（${slot.shortcut}）`"
         @click="onClickSlot(slot.key)"
+        @mouseenter="onSlotHover"
       >
         <span
           class="hud-slot__icon"
@@ -169,6 +387,72 @@ function isActive(slot: HudQuickSlot): boolean {
         <span class="hud-slot__shortcut">{{ slot.shortcut }}</span>
       </button>
     </nav>
+    <aside
+      v-if="bottomBarVisible"
+      class="hud-tools"
+      data-testid="hud-tools"
+      aria-label="工具栏"
+    >
+      <button
+        type="button"
+        class="hud-tool-slot"
+        data-testid="hud-tool-library"
+        aria-label="课程与资源（L）"
+        @click="openLibrary"
+      >
+        <span
+          class="hud-tool-slot__icon"
+          aria-hidden="true"
+        >L</span>
+        <span class="hud-tool-slot__label">课程</span>
+        <span class="hud-tool-slot__shortcut">L</span>
+      </button>
+      <button
+        type="button"
+        class="hud-tool-slot"
+        data-testid="hud-tool-fast-travel"
+        aria-label="快速旅行（T）"
+        @click="onOpenFastTravel"
+      >
+        <span
+          class="hud-tool-slot__icon"
+          aria-hidden="true"
+        >➤</span>
+        <span class="hud-tool-slot__label">传送</span>
+        <span class="hud-tool-slot__shortcut">T</span>
+      </button>
+      <button
+        type="button"
+        class="hud-tool-slot"
+        data-testid="hud-tool-sleep"
+        aria-label="休息一晚（推进 1 天）"
+        :disabled="sleepBusy"
+        @click="onSleep"
+      >
+        <span
+          class="hud-tool-slot__icon"
+          aria-hidden="true"
+        >☾</span>
+        <span class="hud-tool-slot__label">休息</span>
+        <span class="hud-tool-slot__shortcut">+1d</span>
+      </button>
+      <button
+        type="button"
+        class="hud-tool-slot"
+        :class="{ 'hud-tool-slot--active': hud.settingsOpen }"
+        :aria-pressed="hud.settingsOpen"
+        data-testid="hud-tool-settings"
+        aria-label="设置（,）"
+        @click="onToggleSettings"
+      >
+        <span
+          class="hud-tool-slot__icon"
+          aria-hidden="true"
+        >⚙</span>
+        <span class="hud-tool-slot__label">设置</span>
+        <span class="hud-tool-slot__shortcut">,</span>
+      </button>
+    </aside>
   </div>
 </template>
 
@@ -238,6 +522,23 @@ function isActive(slot: HudQuickSlot): boolean {
 .hud-chip--coin {
   background: rgba(241, 196, 83, 0.22);
   border-color: #f1c453;
+}
+
+.hud-chip--bgm {
+  background: rgba(120, 170, 220, 0.18);
+  border-color: #6aa1d6;
+  max-width: 140px;
+}
+
+.hud-chip--bgm .hud-chip__label {
+  color: #aac6d9;
+  font-size: 14px;
+}
+
+.hud-chip--bgm .hud-chip__value {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .hud-chip__label {
@@ -355,6 +656,77 @@ function isActive(slot: HudQuickSlot): boolean {
   color: rgba(255, 247, 230, 0.6);
 }
 
+.hud-tools {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: rgba(28, 24, 16, 0.78);
+  border: 2px solid var(--pyt-color-border, #d4af37);
+  border-radius: var(--pyt-radius-md, 6px);
+  pointer-events: auto;
+  z-index: 100;
+  box-shadow: var(--pyt-shadow-card, 0 2px 0 rgba(77, 54, 19, 0.12));
+}
+
+.hud-tool-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 56px;
+  min-height: 48px;
+  padding: 4px 8px;
+  background: rgba(212, 175, 55, 0.12);
+  border: 2px solid rgba(212, 175, 55, 0.45);
+  border-radius: var(--pyt-radius-sm, 4px);
+  color: #fff7e6;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 120ms, border-color 120ms, transform 80ms;
+}
+
+.hud-tool-slot:hover {
+  background: rgba(212, 175, 55, 0.28);
+  border-color: #d4af37;
+}
+
+.hud-tool-slot:focus-visible {
+  outline: 2px solid #f1c453;
+  outline-offset: 1px;
+}
+
+.hud-tool-slot:active {
+  transform: translateY(1px);
+}
+
+.hud-tool-slot--active {
+  background: rgba(212, 175, 55, 0.36);
+  border-color: #f1c453;
+  box-shadow: inset 0 0 0 1px #f1c453;
+}
+
+.hud-tool-slot__icon {
+  font-size: 18px;
+  font-weight: 800;
+  color: #f1c453;
+  line-height: 1;
+}
+
+.hud-tool-slot__label {
+  font-size: 11px;
+  color: #fff7e6;
+}
+
+.hud-tool-slot__shortcut {
+  font-size: 10px;
+  color: rgba(255, 247, 230, 0.6);
+}
+
 @media (max-width: 760px) {
   .hud-top {
     gap: 6px;
@@ -371,6 +743,15 @@ function isActive(slot: HudQuickSlot): boolean {
     min-width: 52px;
     min-height: 48px;
     padding: 4px;
+  }
+  .hud-tool-slot {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 4px;
+  }
+  .hud-tool-slot__label,
+  .hud-tool-slot__shortcut {
+    display: none;
   }
 }
 </style>

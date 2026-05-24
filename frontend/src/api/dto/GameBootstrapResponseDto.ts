@@ -34,13 +34,18 @@ export interface GameBootstrapResponseDto {
   quests: QuestDto[];
   mastery: MasterySnapshotDto[];
   profile: LearnerProfileDto | null;
+  // 后端实际返回 LearningPathNodeDto[]，老前端期望 LearningPathDto 整体对象。
+  // 这里保留旧 union，新增 pathNodes 字段承接节点数组，由 world store 解析时择一使用。
   path: LearningPathDto | null;
+  pathNodes?: unknown[];
   inventory: InventoryItemDto[];
   skills: LearnerSkillDto[];
   skillsCatalog?: SkillNodeDto[];
   currency: PlayerCurrencyDto;
   calendar: WorldCalendarDto;
+  /** R-13：后端实际字段名是 pendingEvents，events 是旧前端别名 */
   events?: WorldEventDto[];
+  pendingEvents?: WorldEventDto[];
   npcStates?: NpcDialogStateDto[];
   activeSlot: SaveSlotDto | null;
   saveSlots?: SaveSlotDto[];
@@ -55,6 +60,8 @@ export interface GameBootstrapResponseDto {
  */
 export interface WorldSleepResponseDto {
   world: Pick<WorldSessionDto, 'worldSessionId' | 'dayIndex' | 'weather' | 'inGameMinutes'>;
-  calendar: WorldCalendarDto;
+  calendar?: WorldCalendarDto;
+  /** R-13：后端实际字段名是 newEvents，events 是旧前端别名 */
   events?: WorldEventDto[];
+  newEvents?: WorldEventDto[];
 }

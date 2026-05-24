@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { npcDialog } from '@/game/data/npcDialog';
+import { playDialogClose, playDialogOpen } from '@/composables/useStardewFx';
 
 /**
  * NPC 对话树 / 节点 / 选项 / 效果类型定义。
@@ -205,6 +206,7 @@ export const useDialogStore = defineStore('dialog', {
       this.lines = npcDialog[npcKey] ?? ['[占位] 这位居民还没有准备好对话。'];
       this.branchChoices = [];
       this.isTypingDone = false;
+      playDialogOpen();
     },
 
     /**
@@ -223,6 +225,7 @@ export const useDialogStore = defineStore('dialog', {
       this.npcKey = npcKey;
       this.visible = true;
       this.loading = true;
+      playDialogOpen();
       this.loadError = null;
       this.history = [];
       this.tree = null;
@@ -358,6 +361,7 @@ export const useDialogStore = defineStore('dialog', {
      *   - friendship 不重置（写入 friendshipMemory，下次打开同 NPC 还原）。
      */
     close(): void {
+      const wasOpen = this.visible || this.openNpcKey !== null;
       this.openNpcKey = null;
       this.lines = [];
       this.visible = false;
@@ -371,6 +375,9 @@ export const useDialogStore = defineStore('dialog', {
       this.loading = false;
       this.branchChoices = [];
       this.isTypingDone = false;
+      if (wasOpen) {
+        playDialogClose();
+      }
     },
   },
 });
