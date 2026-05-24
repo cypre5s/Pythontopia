@@ -128,8 +128,18 @@ license 矩阵无关（它们是 JS 代码，受代码层 MIT 控制），但为
 
 **总计**：约 13000+ 文件 / 359 MB，覆盖小镇 + 4 季 + 校园 + 矿洞 + 角色（多套） + UI + 音效 + BGM + 粒子特效 + 中文像素字体。
 
+## R-13 B6 计划集成素材
+
+| 素材 | 来源 | License | 用途 | 状态 |
+|---|---|---|---|---|
+| LPC Lamp Posts Rework v1.0 | OpenGameArt @bluecarrot16 | CC-BY 3.0 | town_hub / campus_east 路灯 tile | 待下载 |
+| Pastoral 32x32 Tileset | OpenGameArt CC0 | CC0 | farm_north 田地装饰 | 待下载 |
+| 20 NPC 统一风格头像 | 自绘 / AI 辅助 | CC-BY-SA 3.0 | portraits/heads/ 统一尺寸 32×48 | 部分完成 |
+
 ## 待办（backlog）
 
 1. `assets/inbox/tilesets/` 与 `assets/inbox/icons/`、`assets/inbox/buildings/`、`assets/inbox/characters/`、`assets/inbox/ui/`、`assets/inbox/mines/` 待补 LICENSE_AUDIT 二次确认
 2. 醒来后可选：手动下载 ansimuz/sunny-land-pixel-game-art + ansimuz/fantasy-weapons-set（itch.io CC0，需浏览器 session）
 3. 真实部署后 `frontend/public/credits/` 全量署名页生成（CC-BY-SA 3.0 + OFL-1.1 必备）
+4. B6 LPC Lamp Posts 下载后集成到 town_hub.json / campus_east.json 的 tileset 层
+5. B6 NPC portraits 批量统一：scripts/crop-portrait-heads.py 需要跑一遍确保 20 NPC 全覆盖
