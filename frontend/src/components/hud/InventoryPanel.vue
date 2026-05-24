@@ -24,10 +24,40 @@ import type {
 
 const emit = defineEmits<{
   (e: 'use', payload: { itemId: string }): void;
+  (e: 'equip', payload: { itemId: string }): void;
+  (e: 'gift', payload: { itemId: string }): void;
 }>();
 
 const store = useInventoryStore();
 const { items, catalog } = storeToRefs(store);
+
+const contextItem = ref<InventoryItemDto | null>(null);
+
+function openContext(item: InventoryItemDto): void {
+  contextItem.value = contextItem.value?.itemKey === item.itemKey ? null : item;
+}
+
+function closeContext(): void {
+  contextItem.value = null;
+}
+
+function doAction(action: 'use' | 'equip' | 'gift', item: InventoryItemDto): void {
+  contextItem.value = null;
+  const payload = { itemId: item.itemKey };
+  switch (action) {
+    case 'use': emit('use', payload); break;
+    case 'equip': emit('equip', payload); break;
+    case 'gift': emit('gift', payload); break;
+  }
+}
+
+function isEquippable(item: InventoryItemDto): boolean {
+  return item.category === 'tool';
+}
+
+function isGiftable(item: InventoryItemDto): boolean {
+  return item.category === 'gift' || item.category === 'consumable' || item.category === 'book';
+}
 
 const CATEGORY_ICONS: Record<ItemCategory, string> = {
   seed: '🌱',
@@ -72,7 +102,7 @@ function onLeave(itemKey: string): void {
 }
 
 function onUse(item: InventoryItemDto): void {
-  emit('use', { itemId: item.itemKey });
+  openContext(item);
 }
 </script>
 
@@ -131,7 +161,7 @@ function onUse(item: InventoryItemDto): void {
           >×{{ item.qty }}</span>
         </button>
         <div
-          v-if="hoveredKey === item.itemKey"
+          v-if="hoveredKey === item.itemKey && contextItem?.itemKey !== item.itemKey"
           class="inventory-tooltip"
           role="tooltip"
           :data-testid="`inventory-tooltip-${item.itemKey}`"
@@ -145,6 +175,45 @@ function onUse(item: InventoryItemDto): void {
           >
             {{ descriptionOf(item.itemKey) }}
           </div>
+        </div>
+        <div
+          v-if="contextItem?.itemKey === item.itemKey"
+          class="inventory-context"
+          data-testid="inventory-context"
+        >
+          <button
+            type="button"
+            class="ctx-btn"
+            data-testid="inventory-action-use"
+            @click="doAction('use', item)"
+          >
+            🧪 使用
+          </button>
+          <button
+            v-if="isEquippable(item)"
+            type="button"
+            class="ctx-btn"
+            data-testid="inventory-action-equip"
+            @click="doAction('equip', item)"
+          >
+            ⚔ 装备
+          </button>
+          <button
+            v-if="isGiftable(item)"
+            type="button"
+            class="ctx-btn"
+            data-testid="inventory-action-gift"
+            @click="doAction('gift', item)"
+          >
+            🎁 赠送 NPC
+          </button>
+          <button
+            type="button"
+            class="ctx-btn ctx-btn--cancel"
+            @click="closeContext"
+          >
+            ✕ 取消
+          </button>
         </div>
       </li>
     </ul>
@@ -272,5 +341,50 @@ function onUse(item: InventoryItemDto): void {
 .inventory-tooltip__desc {
   color: #f1d8a4;
   font-size: 11px;
+}
+
+.inventory-context {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 100px;
+  padding: 6px;
+  background: rgba(28, 24, 16, 0.96);
+  border: 2px solid #d4af37;
+  border-radius: 6px;
+  z-index: 80;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.ctx-btn {
+  width: 100%;
+  padding: 5px 8px;
+  background: #fdf3d0;
+  border: 2px solid #4d3613;
+  border-radius: 3px;
+  font-family: inherit;
+  font-size: 11px;
+  color: #4d3613;
+  cursor: pointer;
+  text-align: left;
+  transition: background 80ms;
+}
+
+.ctx-btn:hover {
+  background: #ffe57f;
+}
+
+.ctx-btn--cancel {
+  background: rgba(193, 74, 47, 0.15);
+  border-color: #b3402a;
+  color: #ff7466;
+}
+
+.ctx-btn--cancel:hover {
+  background: rgba(193, 74, 47, 0.3);
 }
 </style>

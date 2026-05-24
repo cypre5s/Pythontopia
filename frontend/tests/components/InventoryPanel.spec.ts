@@ -120,19 +120,40 @@ describe('InventoryPanel', () => {
     ).toBe(false);
   });
 
-  it('emits "use" with { itemId } when a slot button is clicked', async () => {
+  it('opens context menu on slot click, then emits "use" when Use is clicked', async () => {
     const store = useInventoryStore();
-    store.setBootstrapItems([makeItem('watering_can', { qty: 1 })]);
+    store.setBootstrapItems([makeItem('watering_can', { qty: 1, category: 'tool' })]);
 
     const wrapper = mount(InventoryPanel);
     await wrapper
       .find('[data-testid="inventory-use-watering_can"]')
       .trigger('click');
 
+    expect(wrapper.find('[data-testid="inventory-context"]').exists()).toBe(true);
+
+    await wrapper
+      .find('[data-testid="inventory-action-use"]')
+      .trigger('click');
+
     const useEvents = wrapper.emitted('use');
     expect(useEvents).toBeDefined();
     expect(useEvents).toHaveLength(1);
     expect(useEvents?.[0]).toEqual([{ itemId: 'watering_can' }]);
+  });
+
+  it('shows equip option for tool items and gift option for gift items', async () => {
+    const store = useInventoryStore();
+    store.setBootstrapItems([
+      makeItem('watering_can', { qty: 1, category: 'tool' }),
+      makeItem('flower', { qty: 1, category: 'gift' }),
+    ]);
+
+    const wrapper = mount(InventoryPanel);
+    await wrapper.find('[data-testid="inventory-use-watering_can"]').trigger('click');
+    expect(wrapper.find('[data-testid="inventory-action-equip"]').exists()).toBe(true);
+
+    await wrapper.find('[data-testid="inventory-use-flower"]').trigger('click');
+    expect(wrapper.find('[data-testid="inventory-action-gift"]').exists()).toBe(true);
   });
 
   it('reactively refreshes slots when the inventory store changes', async () => {
