@@ -497,15 +497,15 @@ function generateTownHub() {
     }
   }
 
-  // R-13 修复 C4：把 24 提到 90，且多种素材轮换：小灌木 / 大灌木 / 黄花 / 粉花 /
-  // 树桩 / 带花草地，让广场外的草地真正"星露谷感"。喷泉广场仍不撒。
+  // R-13 §-1 后续：把散布从 90 提到 220，让 town_hub 更"星露谷化"，多种素材轮换：
+  // 小灌木 / 大灌木 / 黄花 / 粉花 / 树桩 / 带花草地。喷泉广场仍不撒。
   const rng = mulberry32(0x10101);
   scatterDecoration(
     decoration,
     buildings,
     W,
     H,
-    90,
+    220,
     [
       TOWN_GIDS.bushSmall,
       TOWN_GIDS.bushBig,
@@ -517,6 +517,32 @@ function generateTownHub() {
     rng,
     { x: 22, y: 17, w: 7, h: 7 },
   );
+
+  // R-13 §-1 后续：在喷泉广场四角撒 4 个对称粉花柱（2×1），让喷泉中心更醒目。
+  // 喷泉位置 (24,19) 2×2，四角偏 4 格放粉花，形成菱形花阵。
+  [
+    [22, 17], [27, 17], [22, 22], [27, 22],
+  ].forEach(([fx, fy]) => {
+    setTile(decoration, W, fx, fy, TOWN_GIDS.flowerPink);
+    setTile(decoration, W, fx, fy + 1, TOWN_GIDS.flowerYellow);
+  });
+
+  // R-13 §-1 后续：南北主轴贯穿砂石路（喷泉到南门），让玩家有"主街"叙事。
+  for (let y = 21; y < H - 1; y += 1) {
+    setTile(ground, W, 24, y, TOWN_GIDS.sandPath);
+    setTile(ground, W, 25, y, TOWN_GIDS.sandPath);
+  }
+  // 东西副轴砂石路（喷泉到东、西门）
+  for (let x = 1; x < W - 1; x += 1) {
+    if (x === 24 || x === 25) continue; // 跳过主轴交叉点
+    setTile(ground, W, x, 19, TOWN_GIDS.sandPath);
+    setTile(ground, W, x, 20, TOWN_GIDS.sandPath);
+  }
+  // 在主轴两侧每 6 格摆一个 treeStump（充当路灯桩占位，等爬到正式 streetlamp 替换）
+  for (let y = 22; y < H - 2; y += 6) {
+    setTile(decoration, W, 23, y, TOWN_GIDS.treeStump);
+    setTile(decoration, W, 26, y, TOWN_GIDS.treeStump);
+  }
 
   // objects ----------
   const objects = [
@@ -532,8 +558,11 @@ function generateTownHub() {
     makeNpc('npc_librarian_doc', 'librarian_doc', '图书管理员 Doc', 6, 18),
     makeNpc('npc_coach_q', 'coach_q', '练习教练 Q', 44, 18),
     makeNpc('npc_sage_review', 'sage_review', '复盘贤者', 25, 24),
-    makeNpc('npc_peasant_a', 'peasant_a', '居民 A', 12, 32),
-    makeNpc('npc_peasant_b', 'peasant_b', '居民 B', 38, 32),
+    // R-13 §-1 修复：原 peasant_a / peasant_b 在 NPC index.json 里不存在，
+    // 前端会 fetch /data/npcs/peasant_b/meta.json 404。换成已有的 gardener / chef
+    // （同样 spawnMap=town_hub，category=life，复用现成 portrait + dialog 数据）。
+    makeNpc('npc_gardener', 'gardener', '园丁', 12, 32),
+    makeNpc('npc_chef', 'chef', '厨师', 38, 32),
     makeSpawn(25, 20),
   ];
 
@@ -608,8 +637,8 @@ function generateFarmNorth() {
   }
 
   const rng = mulberry32(0x20202);
-  // R-13 修复 C4：farm_north 提到 110，多色花草让"知识农场"丰盛
-  scatterDecoration(decoration, buildings, W, H, 110, [
+  // R-13 §-1 后续：farm_north 提到 240，让 7 块知识田之外的边角也铺满野花野草
+  scatterDecoration(decoration, buildings, W, H, 240, [
     TOWN_GIDS.bushSmall,
     TOWN_GIDS.bushBig,
     TOWN_GIDS.flowerYellow,
@@ -620,7 +649,7 @@ function generateFarmNorth() {
     x: 0,
     y: 5,
     w: W,
-    h: 25, // 不要在田块密集区域撒（避免污染）
+    h: 25,
   });
 
   // objects ----------
@@ -700,8 +729,8 @@ function generateMineSouth() {
 
   // 散落矿石（蓝色）+ 宝箱
   const rng = mulberry32(0x30303);
-  // R-13 修复 C4：矿洞密度 20→60 + 加 wall variations 让墙体不那么单调
-  scatterDecoration(decoration, buildings, W, H, 60, [
+  // R-13 §-1 后续：矿洞密度 60→160，让"二进制矿洞"看起来真有矿
+  scatterDecoration(decoration, buildings, W, H, 160, [
     DUNG_GIDS.oreBlue,
     DUNG_GIDS.chest,
     DUNG_GIDS.pillar,
@@ -746,14 +775,54 @@ function generateCampusEast() {
 
   fillAll(ground, TOWN_GIDS.grass);
 
-  // 一条贯穿东西的中心步道（砂石路）
-  for (let x = 2; x < W - 1; x += 1) {
+  // R-13 §-1 续：campus_east 改造为「东华松江校区」风格（不含校名）：
+  //   - 中央镜月湖（核心生态水域，6×4 椭圆形）
+  //   - 图文信息中心（圆柱形标志建筑 5×4，位于湖东岸）
+  //   - 北行三栋教学楼（图书馆/教室/复盘大厅）— 沿用，对应纺织/服装/材料 3 院
+  //   - 南行工坊
+  //   - 樱花大道（中轴步道两侧密集粉花，对应校园樱花季）
+  //
+  // 镜月湖（rows 12-16，cols 8-15），椭圆形：rows 12/16 用 waterEdge，
+  // rows 13-15 用 water/waterDeep（中央深蓝）。
+  for (let y = 12; y <= 16; y += 1) {
+    for (let x = 8; x <= 15; x += 1) {
+      if (y === 12) {
+        setTile(ground, W, x, y, TOWN_GIDS.waterEdgeTop);
+      } else if (y === 16) {
+        setTile(ground, W, x, y, TOWN_GIDS.waterEdgeBottom);
+      } else if (y === 14 && x >= 10 && x <= 13) {
+        setTile(ground, W, x, y, TOWN_GIDS.waterDeep);
+      } else {
+        setTile(ground, W, x, y, TOWN_GIDS.water);
+      }
+    }
+  }
+
+  // 樱花大道：中心步道（rows 14-15）仅在湖东延伸（cols 18..W-2）
+  for (let x = 18; x < W - 1; x += 1) {
     setTile(ground, W, x, 14, TOWN_GIDS.sandPath);
     setTile(ground, W, x, 15, TOWN_GIDS.sandPath);
   }
+  // 湖西短步道（cols 2..7）
+  for (let x = 2; x <= 7; x += 1) {
+    setTile(ground, W, x, 14, TOWN_GIDS.sandPath);
+    setTile(ground, W, x, 15, TOWN_GIDS.sandPath);
+  }
+  // 樱花大道两侧密集粉花（模拟樱花瓣）
+  for (let x = 19; x < W - 2; x += 1) {
+    if (x % 3 === 0) {
+      setTile(decoration, W, x, 12, TOWN_GIDS.flowerPink);
+      setTile(decoration, W, x, 13, TOWN_GIDS.flowerPink);
+      setTile(decoration, W, x, 17, TOWN_GIDS.flowerPink);
+    }
+  }
 
-  // 北行三栋教学楼 5×4
-  const library = { x: 8, y: 4, w: 5, h: 4, label: '图书馆', route: '/library', name: 'building_library' };
+  // 图文信息中心（圆柱体标志建筑，5×4，位于湖东岸 cols 16-20, rows 18-21）
+  const infoCenter = { x: 16, y: 18, w: 5, h: 4, label: '图文信息中心', route: '/library', name: 'building_info_center' };
+  paintBuilding(buildings, W, infoCenter.x, infoCenter.y, infoCenter.w, infoCenter.h);
+
+  // 北行三栋教学楼 5×4（沿用旧布局，作为纺织/服装/材料 3 院）
+  const library = { x: 8, y: 4, w: 5, h: 4, label: '图书馆（藏书 95 万册）', route: '/library', name: 'building_library' };
   const classroom = { x: 18, y: 4, w: 5, h: 4, label: '教室（题库）', route: '/problems', name: 'building_classroom' };
   const reviewHall = { x: 28, y: 4, w: 5, h: 4, label: '复盘大厅', route: '/review-hall', name: 'building_review_hall' };
   paintBuilding(buildings, W, library.x, library.y, library.w, library.h);
@@ -761,7 +830,7 @@ function generateCampusEast() {
   paintBuilding(buildings, W, reviewHall.x, reviewHall.y, reviewHall.w, reviewHall.h);
 
   // 南行工坊 4×3
-  const workshop = { x: 18, y: 22, w: 4, h: 3, label: '资源工坊', route: '/workshop', name: 'building_workshop' };
+  const workshop = { x: 26, y: 22, w: 4, h: 3, label: '资源工坊', route: '/workshop', name: 'building_workshop' };
   paintBuilding(buildings, W, workshop.x, workshop.y, workshop.w, workshop.h);
 
   // 工坊周围花坛
@@ -773,6 +842,20 @@ function generateCampusEast() {
     setTile(decoration, W, x, 9, TOWN_GIDS.fenceWoodH);
   }
 
+  // 湖周围围栏 + 4 角灯柱
+  for (let x = 7; x <= 16; x += 1) {
+    setTile(decoration, W, x, 11, TOWN_GIDS.fenceWoodH);
+    setTile(decoration, W, x, 17, TOWN_GIDS.fenceWoodH);
+  }
+  setTile(decoration, W, 7, 12, TOWN_GIDS.fenceWoodV);
+  setTile(decoration, W, 7, 16, TOWN_GIDS.fenceWoodV);
+  setTile(decoration, W, 16, 12, TOWN_GIDS.fenceWoodV);
+  setTile(decoration, W, 16, 16, TOWN_GIDS.fenceWoodV);
+  setTile(decoration, W, 7, 11, TOWN_GIDS.treeStump);
+  setTile(decoration, W, 16, 11, TOWN_GIDS.treeStump);
+  setTile(decoration, W, 7, 17, TOWN_GIDS.treeStump);
+  setTile(decoration, W, 16, 17, TOWN_GIDS.treeStump);
+
   // 边界树
   for (let x = 2; x < W - 2; x += 3) {
     setTile(decoration, W, x, 1, TOWN_GIDS.bushBig);
@@ -780,8 +863,8 @@ function generateCampusEast() {
   }
 
   const rng = mulberry32(0x40404);
-  // R-13 修复 C4：校园密度 16→70 多色
-  scatterDecoration(decoration, buildings, W, H, 70, [
+  // R-13 §-1 续：校园 200 装饰物（避开湖区域 + 中央步道）
+  scatterDecoration(decoration, buildings, W, H, 200, [
     TOWN_GIDS.bushSmall,
     TOWN_GIDS.bushBig,
     TOWN_GIDS.flowerYellow,
@@ -789,10 +872,10 @@ function generateCampusEast() {
     TOWN_GIDS.treeStump,
     TOWN_GIDS.grassFlower,
   ], rng, {
-    x: 2,
-    y: 14,
-    w: W - 4,
-    h: 2, // 步道不撒花
+    x: 7,
+    y: 11,
+    w: 10,
+    h: 7, // 湖泊及其围栏区域不撒
   });
 
   // objects ----------
@@ -802,6 +885,9 @@ function generateCampusEast() {
     makeBuilding(classroom.name, classroom.label, classroom.route, classroom.x, classroom.y, classroom.w, classroom.h),
     makeBuilding(reviewHall.name, reviewHall.label, reviewHall.route, reviewHall.x, reviewHall.y, reviewHall.w, reviewHall.h),
     makeBuilding(workshop.name, workshop.label, workshop.route, workshop.x, workshop.y, workshop.w, workshop.h),
+    makeBuilding(infoCenter.name, infoCenter.label, infoCenter.route, infoCenter.x, infoCenter.y, infoCenter.w, infoCenter.h),
+    makeLandmark('mirror_moon_lake', '镜月湖', 8, 12, 8, 5, 'landmark'),
+    makeLandmark('cherry_avenue', '樱花大道', 19, 14, 19, 2, 'landmark'),
     makeNpc('npc_librarian_doc', 'librarian_doc', '图书管理员 Doc', 10, 9),
     makeNpc('npc_coach_q', 'coach_q', '练习教练 Q', 20, 9),
     makeNpc('npc_sage_review', 'sage_review', '复盘贤者', 30, 9),
@@ -810,7 +896,7 @@ function generateCampusEast() {
 
   return buildMapJson({
     key: 'campus_east',
-    label: '校园',
+    label: '东校园（镜月湖畔）',
     width: W,
     height: H,
     tileset: 'kenney_tiny_town',
@@ -870,8 +956,8 @@ function generatePortWest() {
   }
 
   const rng = mulberry32(0x50505);
-  // R-13 修复 C4：港口密度 12→50 多色（含 sandPath 增加海岸沙地感）
-  scatterDecoration(decoration, buildings, W, H, 50, [
+  // R-13 §-1 后续：港口密度 50→160 多色，让陆地段也丰富
+  scatterDecoration(decoration, buildings, W, H, 160, [
     TOWN_GIDS.bushSmall,
     TOWN_GIDS.bushBig,
     TOWN_GIDS.flowerYellow,
@@ -883,7 +969,7 @@ function generatePortWest() {
     x: 0,
     y: 18,
     w: W,
-    h: H - 18, // 水里不撒
+    h: H - 18,
   });
 
   // objects ----------
@@ -1009,7 +1095,7 @@ ${rows}
   - \`building_shop_east\`（4×4）→ \`/shop-east\`
   - \`building_house_a / b / c\`（4×4 三栋住宅）
 - 中央喷泉：(24, 19) 起 2×2 粉色花坛
-- NPC：\`mayor_py\`, \`librarian_doc\`, \`coach_q\`, \`sage_review\`, \`peasant_a\`, \`peasant_b\`
+- NPC：\`mayor_py\`, \`librarian_doc\`, \`coach_q\`, \`sage_review\`, \`gardener\`, \`chef\`
 
 ### farm_north.json（40×40，知识农场）
 

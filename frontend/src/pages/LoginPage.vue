@@ -112,21 +112,13 @@ function fillAndSubmitDemo(): void {
       </svg>
     </div>
 
-    <!-- 远景层：远山 -->
+    <!-- 远景层：星露谷暖色像素小镇 hero（AI 原创，CC-BY-SA 3.0+ 入库）
+         位置：/assets/pixel/ui/login-hero-stardew.png
+         样式：cover 撑满容器，pixelated 渲染保留像素感。 -->
     <div
-      class="auth-page__hills"
+      class="auth-page__hero"
       aria-hidden="true"
-    >
-      <svg
-        viewBox="0 0 480 80"
-        preserveAspectRatio="xMidYMid slice"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <polygon points="0,80 80,30 160,80" fill="#6b8e60" opacity="0.7" />
-        <polygon points="120,80 220,20 320,80" fill="#7a9b6a" opacity="0.85" />
-        <polygon points="280,80 380,35 480,80" fill="#638555" opacity="0.7" />
-      </svg>
-    </div>
+    />
 
     <!-- 主场景：星露谷小镇全景 -->
     <div
@@ -327,7 +319,7 @@ function fillAndSubmitDemo(): void {
 }
 
 .auth-page__sky,
-.auth-page__hills,
+.auth-page__hero,
 .auth-page__bg-art {
   position: absolute;
   left: 0;
@@ -336,22 +328,31 @@ function fillAndSubmitDemo(): void {
 }
 .auth-page__sky {
   top: 0;
-  height: 35%;
+  height: 28%;
   z-index: 0;
 }
-.auth-page__hills {
-  bottom: 35%;
-  height: 22%;
+/* R-13 §-1 LoginPage 美化：星露谷暖色像素小镇 hero（AI 原创，CC-BY-SA 3.0+ 入库）
+   pixelated 渲染保留像素感；cover 撑满；background-position 缓慢横向平移 80s 让画面呼吸。 */
+.auth-page__hero {
+  top: 28%;
+  bottom: 0;
+  height: 72%;
   z-index: 0;
+  background-image: url('/assets/pixel/ui/login-hero-stardew.png');
+  background-size: cover;
+  background-position: center bottom;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+  -ms-interpolation-mode: nearest-neighbor;
 }
 .auth-page__bg-art {
   bottom: 0;
   height: 55%;
   z-index: 0;
-  opacity: 0.95;
+  opacity: 0;
+  pointer-events: none;
 }
 .auth-page__sky svg,
-.auth-page__hills svg,
 .auth-page__bg-art svg {
   width: 100%;
   height: 100%;

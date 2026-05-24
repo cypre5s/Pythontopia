@@ -25,7 +25,7 @@ Pythontopia M2 阶段的 5 张分块大地图，全部以 16×16 源 tile 渲染
   - `building_shop_east`（4×4）→ `/shop-east`
   - `building_house_a / b / c`（4×4 三栋住宅）
 - 中央喷泉：(24, 19) 起 2×2 粉色花坛
-- NPC：`mayor_py`, `librarian_doc`, `coach_q`, `sage_review`, `peasant_a`, `peasant_b`
+- NPC：`mayor_py`, `librarian_doc`, `coach_q`, `sage_review`, `gardener`, `chef`
 
 ### farm_north.json（40×40，知识农场）
 

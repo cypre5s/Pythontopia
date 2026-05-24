@@ -57,6 +57,18 @@ license 矩阵无关（它们是 JS 代码，受代码层 MIT 控制），但为
 ### Kenney CC0 (推荐致谢，非强制)
 > Many UI / tile / character / SFX / icon assets by **Kenney Vleugels** (https://kenney.nl) — released as CC0.
 
+## R-13 §-1 新增运行时素材（2026-05-25）
+
+| 运行时路径 | 来源 | License | 用途 |
+| --- | --- | --- | --- |
+| `frontend/public/assets/pixel/ui/login-hero-stardew.png` | Pythontopia 原创（AI 辅助生成 + 人工审核） | CC-BY-SA 3.0+ | LoginPage 星露谷风暖色像素小镇 hero；NPC 与建筑均为原创，不复制任何商业像素游戏 |
+| `frontend/public/assets/pixel/vendor/ansimuz-mountain-dusk/{5×PNG,LICENSE-CC0.txt}` | ansimuz "Mountain at Dusk Background" (https://opengameart.org/content/mountain-at-dusk-background) | **CC0-1.0** | 备用：4 层 parallax 远山日落剪影，预留 boss 终局 / 章末过场使用 |
+| `frontend/public/assets/pixel/portraits/heads/portrait_*_head.png` (20 张) | `frontend/public/assets/pixel/portraits/portrait_*.png` 子裁切，由 `scripts/crop-portrait-heads.py` 输出 | 继承原 portrait（CC0 / CC-BY-SA 3.0 / CC-BY 4.0 分文件） | DialogModal 单帧头像，每张为对应 portrait 的左上 idle-down 16×24 帧 2x 放大 |
+| `assets/inbox/r13-overworld/pastoral-tileset-db32.png` | Ragnar Random Hat (https://opengameart.org/content/pastoral-overworld) | **CC0-1.0** | 备用：DawnBringer db32 32×32 乡村瓦片，未集成到运行时 |
+| `assets/inbox/r13-lpc-lamp/lpc_lamp_posts_rework-1.0.zip` | Curt, Sharm, William.Thompsonj, mold (LPC) | CC-BY 3.0 / OGA-BY 3.0 / GPL 3.0 | 备用：32×32 路灯柱多色，未集成到运行时；引入时需署名 4 位作者 |
+
+**AI 原创素材声明**：`login-hero-stardew.png` 由项目以 GenerateImage 工具生成，prompt 与生成结果由维护者人工审核确认不包含任何受版权保护角色 / 建筑布局，作为本项目自有资产以 CC-BY-SA 3.0+ 公开发布。
+
 ## R-12 Web 运行时补充索引（2026-05-24）
 
 以下条目补齐 `frontend/public/assets/pixel/` 中未由常规 inbox 同步覆盖、但已用于 BootScene / NPC 对话 / 字体加载的运行时素材；对应索引已同步到 `frontend/public/assets/pixel/LICENSE.md`。
