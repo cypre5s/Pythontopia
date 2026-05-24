@@ -174,7 +174,15 @@ export const useWorldStore = defineStore('world', {
         useCalendarStore().pushEvents(events);
       }
       useToastStore().show(`第 ${response.world.dayIndex} 天醒来`, 'info');
-      // R-13：推一天给 dawn chime，星露谷感拉满
+
+      // A7: KC mastery 自然衰减 — 模拟遗忘曲线，sleep 推进 1 天时已掌握 KC 各 -2
+      try {
+        const learningStore = (await import('@stores/learning')).useLearningStore();
+        if (typeof learningStore.applyMasteryDecay === 'function') {
+          learningStore.applyMasteryDecay(2);
+        }
+      } catch { /* learning store 不存在时忽略 */ }
+
       try {
         playChime('dawn');
       } catch {

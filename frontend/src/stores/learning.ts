@@ -722,5 +722,18 @@ export const useLearningStore = defineStore('learning', {
         this.bugMine.loading = false;
       }
     },
+
+    /**
+     * A7: KC mastery 自然衰减 — 模拟学习遗忘曲线。
+     * sleep 推进 1 天时调用，每个已掌握的 KC mastery 减少 decayAmount。
+     * 下限 clamp 到 0，不会变成负数。
+     */
+    applyMasteryDecay(decayAmount: number): void {
+      if (decayAmount <= 0) return;
+      this.field.masterySnapshot = this.field.masterySnapshot.map((entry) => ({
+        ...entry,
+        masteryScore: Math.max(0, entry.masteryScore - decayAmount),
+      }));
+    },
   },
 });

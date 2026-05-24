@@ -24,7 +24,7 @@ import { openNpcDialog } from '@game/adapters/dialog';
 import { createPlayerSprite } from '@game/adapters/sprite';
 import { drawNpcSprite, type NpcSpawn } from '@game/adapters/tilemap';
 import type { PlayerSpriteHandle, SceneLike } from '@game/adapters/sceneTypes';
-import { applyWeather, normalizeWeatherKind, type WeatherHandle } from '@game/adapters/weather';
+import { applyWeather, normalizeWeatherKind, type WeatherHandle, type WeatherKind } from '@game/adapters/weather';
 import { applyTimeOfDay, deriveTimeOfDay } from '@game/adapters/daynight';
 import {
   InteractableSystem,
@@ -54,6 +54,7 @@ const RENDER_TILE_SIZE = TILE_SIZE * RENDER_SCALE;
 const CAMERA_ZOOM = 1.35;
 const CAMERA_LERP = 0.15;
 const MOVE_COOLDOWN_MS = 130;
+const RAIN_SLOWDOWN = 1.25;
 const FADE_DURATION_MS = 280;
 
 const SUPPORTED_MAP_KEYS: ReadonlySet<string> = new Set([
@@ -145,6 +146,7 @@ interface WorldSceneState {
   collisions: boolean[][];
   switching: boolean;
   weather: WeatherHandle | null;
+  weatherKind: WeatherKind;
   // W2 集成：framework 实例在 create 中构造、shutdown 中 clear；testing 留 null
   // 默认值，避免 jsdom 单测里 update() 误触发空 framework 时抛 NPE。
   interactable: InteractableSystem | null;
@@ -173,6 +175,7 @@ const state: WorldSceneState = {
   collisions: [],
   switching: false,
   weather: null,
+  weatherKind: 'sunny' as WeatherKind,
   interactable: null,
   npcFramework: null,
   hintRendererHandle: null,
@@ -340,6 +343,7 @@ export const WorldScene = {
     // W3 Polish：先应用 weather 粒子，再用 timeOfDay tint 覆盖颜色。两者顺序固定，
     // 不要互换，否则 setTint 会被 weather 反覆盖回去。
     const weatherKind = normalizeWeatherKind(worldStore.session?.weather);
+    state.weatherKind = weatherKind;
     state.weather = applyWeather(this, weatherKind, worldWidth, worldHeight);
     const sessionForTime = worldStore.session;
     const timeOfDay = deriveTimeOfDay({
@@ -400,7 +404,10 @@ export const WorldScene = {
     }
 
     const rawDirection = controller.getDirection();
-    if (rawDirection && this.time.now - state.lastMoveAt > MOVE_COOLDOWN_MS) {
+    const effectiveCooldown = state.weatherKind === 'rainy' || state.weatherKind === 'stormy'
+      ? MOVE_COOLDOWN_MS * RAIN_SLOWDOWN
+      : MOVE_COOLDOWN_MS;
+    if (rawDirection && this.time.now - state.lastMoveAt > effectiveCooldown) {
       state.lastMoveAt = this.time.now;
       const delta = directionDelta(rawDirection);
       const cardinal = toCardinal(rawDirection, player.direction);
