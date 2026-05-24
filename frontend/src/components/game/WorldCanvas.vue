@@ -87,6 +87,17 @@ onMounted(async () => {
     } else {
       window.addEventListener('resize', scheduleResize);
     }
+    // R-13 修复：Phaser canvas 在多 div 嵌套下不会自动获得焦点，
+    // 导致 keyboard events 不到 scene.input。手动 tabindex + 点击聚焦。
+    setTimeout(() => {
+      const canvas = root.value?.querySelector('canvas');
+      if (canvas instanceof HTMLCanvasElement) {
+        canvas.tabIndex = 0;
+        canvas.style.outline = 'none';
+        canvas.focus();
+        canvas.addEventListener('click', () => canvas.focus());
+      }
+    }, 300);
   }
 });
 

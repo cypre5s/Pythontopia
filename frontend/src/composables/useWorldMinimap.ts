@@ -35,8 +35,25 @@ const SUPPORTED_MAP_KEYS = [
 ] as const;
 type MapKey = (typeof SUPPORTED_MAP_KEYS)[number];
 
-function isMapKey(value: unknown): value is MapKey {
-  return typeof value === 'string' && (SUPPORTED_MAP_KEYS as readonly string[]).includes(value);
+/**
+ * R-13 修复：后端旧数据可能返回 `town-beta` `student-default` 等横杠/旧命名，
+ * 这里做命名规范化：横杠→下划线，旧 `town-beta` → `town_hub`，未匹配则 fallback。
+ */
+function normalizeMapKey(value: unknown): MapKey {
+  if (typeof value !== 'string') return 'town_hub';
+  const norm = value.replace(/-/g, '_');
+  const LEGACY_ALIAS: Record<string, MapKey> = {
+    town_beta: 'town_hub',
+    town: 'town_hub',
+    town_main: 'town_hub',
+    farm: 'farm_north',
+    mine: 'mine_south',
+    campus: 'campus_east',
+    port: 'port_west',
+  };
+  if ((SUPPORTED_MAP_KEYS as readonly string[]).includes(norm)) return norm as MapKey;
+  if (LEGACY_ALIAS[norm]) return LEGACY_ALIAS[norm];
+  return 'town_hub';
 }
 
 export interface MinimapTilemapShape {
@@ -299,10 +316,9 @@ export function useWorldMinimap(): UseWorldMinimapReturn {
     loading.value = true;
     try {
       const next = await loadMinimapData(mapKey);
-      // 仅当用户在加载期间没有再切到别的地图时才落到当前 ref，避免错位。
-      if (world.player?.mapKey === mapKey) {
-        data.value = next;
-      }
+      // R-13 修复：用 normalizeMapKey 后即认为命中，不再要求 strict equal
+      // （旧后端 town-beta 永远不等于 town_hub，导致 minimap 永远空）
+      data.value = next;
     } finally {
       loading.value = false;
     }
@@ -311,11 +327,8 @@ export function useWorldMinimap(): UseWorldMinimapReturn {
   watch(
     () => world.player?.mapKey ?? null,
     (key) => {
-      if (isMapKey(key)) {
-        void refreshForMap(key);
-      } else {
-        data.value = null;
-      }
+      // R-13 修复：永远 fallback 到合法 mapKey，避免 minimap 在旧后端数据下消失
+      void refreshForMap(normalizeMapKey(key));
     },
     { immediate: true },
   );

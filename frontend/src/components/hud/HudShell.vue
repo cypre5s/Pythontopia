@@ -185,9 +185,16 @@ function isEditableTarget(target: EventTarget | null): boolean {
   return false;
 }
 
+function isCanvasFocused(target: EventTarget | null): boolean {
+  return target instanceof HTMLCanvasElement;
+}
+
 function onKey(event: KeyboardEvent): void {
   if (isEditableTarget(event.target)) return;
   if (event.altKey || event.ctrlKey || event.metaKey) return;
+  // R-13 修复：Phaser canvas 聚焦时，HudShell 只处理 Tab / Esc / `,` 三个功能键，
+  // b/m/k/j/l 全部交给 game.input.keyboard，避免抢走 NPC 交互（F）/ 移动（WASD）。
+  const canvasOwned = isCanvasFocused(event.target);
   // 按 ESC 关闭一切：先关设置，再关 activeSlot，避免 ESC 既关 dialog 又关画布。
   if (event.key === 'Escape') {
     if (hud.settingsOpen) {
@@ -209,6 +216,13 @@ function onKey(event: KeyboardEvent): void {
     }
     return;
   }
+  if (event.key === ',') {
+    onToggleSettings();
+    event.preventDefault();
+    return;
+  }
+  // 字母快捷键：canvas 聚焦时禁用，让游戏独占
+  if (canvasOwned) return;
   const lowered = event.key.toLowerCase();
   if (lowered === 'b' && hud.canToggleSlot) {
     hud.toggleSlot('inventory');
@@ -232,11 +246,6 @@ function onKey(event: KeyboardEvent): void {
   }
   if (lowered === 'l') {
     openLibrary();
-    event.preventDefault();
-    return;
-  }
-  if (event.key === ',') {
-    onToggleSettings();
     event.preventDefault();
   }
 }
@@ -656,10 +665,14 @@ onUnmounted(() => {
   color: rgba(255, 247, 230, 0.6);
 }
 
+/* R-13 修复：hud-tools 不再独立 fixed，而是放到 hud-bottom 同一行右侧，
+   通过左右对齐 + 中间留空让 quickslot 居中。避免视觉双行重叠。 */
 .hud-tools {
   position: fixed;
   bottom: 16px;
-  right: 16px;
+  /* 跟 hud-bottom 同一垂直线，但右移 280px 让出 quickslot 居中空间 */
+  left: calc(50% + 200px);
+  transform: translateX(0);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -670,6 +683,14 @@ onUnmounted(() => {
   pointer-events: auto;
   z-index: 100;
   box-shadow: var(--pyt-shadow-card, 0 2px 0 rgba(77, 54, 19, 0.12));
+}
+
+@media (max-width: 1024px) {
+  .hud-tools {
+    /* 窄屏让 hud-tools 重新独立靠右，避免与 quickslot 撞 */
+    left: auto;
+    right: 16px;
+  }
 }
 
 .hud-tool-slot {

@@ -145,7 +145,7 @@ describe('useWorldMinimap', () => {
     expect(hook.playerY.value).toBe(5);
   });
 
-  it('未知 mapKey 时 data 重置为 null（向后兼容）', async () => {
+  it('未知 mapKey 时 fallback 到 town_hub（R-13 修复：永不让 minimap 消失）', async () => {
     const world = useWorldStore();
     world.player = {
       playerStateId: 1,
@@ -157,6 +157,24 @@ describe('useWorldMinimap', () => {
     };
     const { hook } = mountHost();
     await flushPromises();
-    expect(hook.data.value).toBeNull();
+    await flushPromises();
+    // 旧 spec 期望 null；R-13 修复后改为 fallback town_hub，避免后端旧数据让 minimap 消失
+    expect(hook.data.value?.mapKey).toBe('town_hub');
+  });
+
+  it('R-13 兼容旧后端横杠命名：town-beta → town_hub', async () => {
+    const world = useWorldStore();
+    world.player = {
+      playerStateId: 1,
+      avatarKey: 'student_default',
+      mapKey: 'town-beta',
+      tileX: 0,
+      tileY: 0,
+      direction: 'DOWN',
+    };
+    const { hook } = mountHost();
+    await flushPromises();
+    await flushPromises();
+    expect(hook.data.value?.mapKey).toBe('town_hub');
   });
 });
