@@ -17,6 +17,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import AppLayout from '@/app/AppLayout.vue';
 import BossSprite from '@/components/boss/BossSprite.vue';
+import BossMoveEffect from '@/components/boss/BossMoveEffect.vue';
 import { useBossSession } from '@/composables/useBossSession';
 import { findBossByChapter } from '@/data/mainQuests';
 
@@ -101,6 +102,16 @@ watch(
       }, 4000);
     }
   },
+);
+
+const effectTrigger = ref(0);
+watch(
+  () => session.stage.value,
+  () => { effectTrigger.value += 1; },
+);
+watch(
+  () => session.lastResult.value,
+  (r) => { if (r) effectTrigger.value += 1; },
 );
 
 const bossSpritePhase = computed<'idle' | 'hurt' | 'angry' | 'victory'>(() => {
@@ -298,6 +309,10 @@ const bossSpritePhase = computed<'idle' | 'hurt' | 'angry' | 'victory'>(() => {
         </article>
         <article class="boss-sprite">
           <div class="boss-sprite-wrap" data-testid="boss-sprite-wrap">
+            <BossMoveEffect
+              :stage="session.stage.value"
+              :trigger="effectTrigger"
+            />
             <BossSprite
               :chapter="chapter"
               :phase="bossSpritePhase"
