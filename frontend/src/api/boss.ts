@@ -12,6 +12,8 @@ import type {
   BossAttemptRequest,
   BossAttemptResultDto,
   BossProblemDto,
+  BossProblemRequest,
+  ProfileSignalsDto,
 } from './dto/Boss';
 import { findBossByChapter } from '@/data/mainQuests';
 
@@ -65,7 +67,11 @@ interface GoldenTemplate {
   solution: string;
 }
 
-function buildGoldenProblem(chapter: number, stage: number): BossProblemDto {
+function buildGoldenProblem(
+  chapter: number,
+  stage: number,
+  preferredKc?: string,
+): BossProblemDto {
   const templates = GOLDEN_TEMPLATES[chapter];
   const fallback: GoldenTemplate = {
     title: '占位题目（待 graph 服务接入）',
@@ -76,10 +82,16 @@ function buildGoldenProblem(chapter: number, stage: number): BossProblemDto {
     kcCode: findBossByChapter(chapter)?.kcRange.startCode ?? 'PY43-KC-001',
     solution: 'print(input())',
   };
-  const idx = Math.max(0, Math.min(stage - 1, (templates?.length ?? 1) - 1));
-  const template = templates?.[idx] ?? fallback;
+  // R-13 §-1 续：若 preferredKc 命中本章某 template，优先用之让玩家"刷弱项"有效果。
+  let template: GoldenTemplate;
+  if (preferredKc && templates) {
+    template = templates.find((t) => t.kcCode === preferredKc) ?? templates[Math.max(0, Math.min(stage - 1, templates.length - 1))] ?? fallback;
+  } else {
+    const idx = Math.max(0, Math.min(stage - 1, (templates?.length ?? 1) - 1));
+    template = templates?.[idx] ?? fallback;
+  }
   return {
-    problemId: `golden-c${chapter}-s${stage}`,
+    problemId: `golden-c${chapter}-s${stage}${preferredKc ? `-${preferredKc}` : ''}`,
     chapter,
     stage,
     difficulty: Math.min(5, stage),
@@ -95,18 +107,26 @@ function buildGoldenProblem(chapter: number, stage: number): BossProblemDto {
 }
 
 /**
- * 请求 boss 题目。
+ * 请求 boss / endless / arena 题目。
+ *
+ * R-13 §-1 续：第 2 参数可以是 `number`（兼容旧调用，仅 stage）或 `BossProblemRequest`
+ * （含 stage + preferredKc + preferredKind + profileSignals）。后者让 PracticeAgent
+ * 真正基于学生画像偏好出题，不再随机抽 KC。
+ *
  * - 优先调真后端 /api/world/boss/{chapter}/problem
  * - 任意 4xx/5xx/网络异常 → 退化到本地 golden 题（不阻塞玩家流程）
+ * - golden 兜底支持 preferredKc：若给定 KC 命中，从该 KC 对应的 template 抽题；
+ *   否则按 stage 取默认 template（保留旧行为）。
  */
 export async function requestBossProblem(
   chapter: number,
-  stage: number,
+  arg: number | BossProblemRequest,
 ): Promise<BossProblemDto> {
+  const req: BossProblemRequest = typeof arg === 'number' ? { stage: arg } : arg;
   try {
     const response = await http.post<BossProblemDto>(
       `/api/world/boss/${chapter}/problem`,
-      { stage },
+      req,
     );
     if (response.data && typeof response.data.problemId === 'string') {
       return response.data;
@@ -118,7 +138,7 @@ export async function requestBossProblem(
       console.warn(`[boss] backend status=${status} ${msg} — falling back to golden`);
     }
   }
-  return buildGoldenProblem(chapter, stage);
+  return buildGoldenProblem(chapter, req.stage, req.preferredKc);
 }
 
 /**

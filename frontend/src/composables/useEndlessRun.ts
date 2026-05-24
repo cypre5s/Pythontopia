@@ -12,9 +12,12 @@
 import { computed, ref, type Ref } from 'vue';
 import { requestBossProblem, submitBossAttempt } from '@/api/boss';
 import { getPyodideRunner } from '@/game/adapters/pyodide';
+import { useProfileSignals, computeAdaptiveDifficulty } from '@/composables/useProfileSignals';
 import type {
   BossAttemptResultDto,
   BossProblemDto,
+  BossProblemRequest,
+  ProfileSignalsDto,
 } from '@/api/dto/Boss';
 
 export interface EndlessHistoryEntry {
@@ -40,6 +43,10 @@ export type EndlessPhase =
 export interface UseEndlessRunOptions {
   /** 锁定章节 1..7；空 = 随机抽章 */
   focusChapter?: Ref<number | null>;
+  /** R-13 §-1 续：锁定 KC（来自 ArenaPage 关卡）；空 = 按 chapter 随机 / 画像 weakKcs 优先 */
+  focusKc?: Ref<string | null>;
+  /** R-13 §-1 续：偏好题型（来自 ArenaPage 关卡 kind） */
+  preferredKind?: Ref<string | null>;
 }
 
 export interface UseEndlessRunReturn {
@@ -100,6 +107,31 @@ function clampDifficulty(d: number): number {
   return Math.max(1, Math.min(5, Math.round(d)));
 }
 
+/**
+ * R-13 §-1 续：从画像 weakKcs 中按 chapter 过滤出可命中本章的 KC（PY43-KC-XXX）。
+ * 章 1 = KC-001..007, 章 2 = KC-008..016, ... 章 7 = KC-054..065 — 与 mainQuests boss
+ * kcRange 一致。
+ */
+function pickWeakKcForChapter(
+  weakKcs: readonly string[] | undefined,
+  chapter: number,
+): string | undefined {
+  if (!weakKcs || weakKcs.length === 0) return undefined;
+  // 简化：直接找带 chapter 前缀的 KC（如果有定义），否则按编号区间
+  const ranges: readonly [number, number, number][] = [
+    [1, 1, 7], [2, 8, 16], [3, 17, 30], [4, 31, 38], [5, 39, 47], [6, 48, 53], [7, 54, 65],
+  ];
+  const range = ranges.find(([c]) => c === chapter);
+  if (!range) return undefined;
+  const [, lo, hi] = range;
+  return weakKcs.find((code) => {
+    const m = /PY43-KC-(\d+)/.exec(code);
+    if (!m) return false;
+    const num = Number(m[1]);
+    return num >= lo && num <= hi;
+  });
+}
+
 export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunReturn {
   const phase = ref<EndlessPhase>('idle');
   const problem = ref<BossProblemDto | null>(null);
@@ -113,6 +145,8 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
   const elapsedSec = ref<number>(0);
   const errorMessage = ref<string>('');
   const history = ref<EndlessHistoryEntry[]>(loadHistory());
+  // R-13 §-1 续：画像信号接入。
+  const profileSignals = useProfileSignals();
 
   const failureRate = computed<number>(() => {
     if (attempts.value === 0) return 0;
@@ -133,10 +167,35 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
     try {
       const chapter = pickChapter(opts.focusChapter?.value ?? null);
       const stage = 1 + Math.floor(Math.random() * 4);
-      const fetched = await requestBossProblem(chapter, stage);
+
+      // R-13 §-1 续：构造 BossProblemRequest，深度接入学生画像。
+      // - focusKc（来自 ArenaPage 关卡）优先级最高；
+      // - 否则按画像 weakKcs 命中本章 KC，让玩家"刷弱项"；
+      // - profileSignals 一并传给后端 PracticeAgent 偏好出题；
+      // - difficulty 用 computeAdaptiveDifficulty 计算（考虑 successRate / resilience）。
+      const recentFailures = history.value.slice(0, 3).filter((h) => !h.passed).length;
+      const adaptiveDiff = computeAdaptiveDifficulty({
+        signals: profileSignals.signals.value,
+        baseDifficulty: currentDifficulty.value,
+        recentFailures,
+        recentStreak: streak.value,
+      });
+      currentDifficulty.value = adaptiveDiff;
+
+      const preferredKc =
+        opts.focusKc?.value
+        ?? pickWeakKcForChapter(profileSignals.weakKcs.value, chapter);
+
+      const req: BossProblemRequest = {
+        stage,
+        ...(preferredKc ? { preferredKc } : {}),
+        ...(opts.preferredKind?.value ? { preferredKind: opts.preferredKind.value } : {}),
+        ...(profileSignals.hasAnySignal.value ? { profileSignals: profileSignals.signals.value } : {}),
+      };
+      const fetched = await requestBossProblem(chapter, req);
       problem.value = {
         ...fetched,
-        difficulty: clampDifficulty(currentDifficulty.value),
+        difficulty: clampDifficulty(adaptiveDiff),
       };
       phase.value = 'playing';
     } catch (error) {
@@ -178,6 +237,8 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
         stage: p.stage,
         code: code.value,
         elapsedSec: elapsedSec.value,
+        // R-13 §-1 续：上传画像信号供后端 PassiveProfileService 被动更新弱项 KC
+        ...(profileSignals.hasAnySignal.value ? { profileSignals: profileSignals.signals.value } : {}),
       });
     } catch (error) {
       backendResult = {

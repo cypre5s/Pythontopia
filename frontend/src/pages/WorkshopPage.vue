@@ -85,6 +85,11 @@ function backToWorld(): void {
   playUiClick();
   void router.push({ path: '/world' });
 }
+
+function openArena(chapter: number): void {
+  playUiClick();
+  void router.push({ path: `/arena/${chapter}` });
+}
 </script>
 
 <template>
@@ -135,6 +140,17 @@ function backToWorld(): void {
               @click="openLibrary"
             >
               <span class="travel-chip__label">图书馆 L</span>
+            </button>
+          </li>
+          <li>
+            <button
+              type="button"
+              class="travel-chip travel-chip--arena"
+              data-testid="workshop-open-arena"
+              title="章节闯关塔（7 章 × 10 关 = 70 关）"
+              @click="openArena(1)"
+            >
+              <span class="travel-chip__label">闯关塔 A</span>
             </button>
           </li>
         </ul>
@@ -239,6 +255,11 @@ function backToWorld(): void {
   background: #d0e3f1;
   border-color: #2a6f97;
   color: #1b4a6b;
+}
+.travel-chip--arena {
+  background: #ffd166;
+  border-color: #b8442d;
+  color: #4d1b14;
 }
 .travel-chip__label {
   letter-spacing: 0.5px;

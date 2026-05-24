@@ -15,15 +15,64 @@
  *   - 右：最近 8 题历史 + 总览
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import AppLayout from '@/app/AppLayout.vue';
 import BossSprite from '@/components/boss/BossSprite.vue';
 import { useEndlessRun } from '@/composables/useEndlessRun';
 import { MAIN_QUEST_BOSSES } from '@/data/mainQuests';
+import { useArenaStore } from '@stores/arena';
 
 const router = useRouter();
-const focusChapter = ref<number | null>(null);
-const run = useEndlessRun({ focusChapter });
+const route = useRoute();
+const arena = useArenaStore();
+
+// R-13 §-1 续：从 query 读 ?chapter & ?arenaLevel 让 EndlessPage 同时承担
+// "随机刷题" 与 "ArenaPage 闯关塔单关入口" 两个角色。
+// arenaLevel 形如 "1-3"，通关后回 ArenaPage 上方 markCleared。
+const queryChapter = computed<number | null>(() => {
+  const raw = Number(route.query.chapter);
+  return Number.isInteger(raw) && raw >= 1 && raw <= 7 ? raw : null;
+});
+const queryKc = computed<string | null>(() =>
+  typeof route.query.kc === 'string' && route.query.kc.length > 0 ? route.query.kc : null,
+);
+const queryKind = computed<string | null>(() =>
+  typeof route.query.kind === 'string' && route.query.kind.length > 0 ? route.query.kind : null,
+);
+const arenaLevelId = computed<string | null>(() =>
+  typeof route.query.arenaLevel === 'string' ? route.query.arenaLevel : null,
+);
+const focusChapter = ref<number | null>(queryChapter.value);
+const focusKc = ref<string | null>(queryKc.value);
+const preferredKind = ref<string | null>(queryKind.value);
+const run = useEndlessRun({ focusChapter, focusKc, preferredKind });
+
+watch(queryChapter, (next) => {
+  focusChapter.value = next;
+});
+watch(queryKc, (next) => {
+  focusKc.value = next;
+});
+watch(queryKind, (next) => {
+  preferredKind.value = next;
+});
+
+// R-13 §-1 续：作为闯关塔单关入口时，通过 1 题即记 markCleared 并自动回 ArenaPage。
+watch(
+  () => run.phase.value,
+  (phase) => {
+    if (phase === 'passed' && arenaLevelId.value) {
+      arena.markCleared(arenaLevelId.value, run.elapsedSec.value);
+      // 留 1.5s 让玩家看到「通过」庆祝再回闯关塔
+      if (typeof window !== 'undefined' && queryChapter.value !== null) {
+        const ch = queryChapter.value;
+        window.setTimeout(() => {
+          void router.push(`/arena/${ch}`);
+        }, 1500);
+      }
+    }
+  },
+);
 
 let secondTimer: number | null = null;
 

@@ -126,6 +126,15 @@ export const router = createRouter({
       component: () => import('@/pages/EndlessPage.vue'),
       meta: { requiresAuth: true },
     },
+    // R-13 §-1 续（用户 Q2=A）：章节闯关塔，每章 10 关 = 9 知识/技能小关 + 1 章末 boss。
+    // 前 9 关跳 /endless?chapter=&kc=；第 10 关跳 /boss/:chapter。
+    // 关卡进度由 useArenaStore 持久化到 localStorage。
+    {
+      path: '/arena/:chapter(\\d+)',
+      name: 'arena',
+      component: () => import('@/pages/ArenaPage.vue'),
+      meta: { requiresAuth: true },
+    },
     // R-13：3 条静态 shop 路由（与 ShopController GET /api/world/shops/{shopKey} 对齐）。
     // 路由 props 注入 shopKey + 中文 displayName，避免在 URL 里暴露中文。
     {

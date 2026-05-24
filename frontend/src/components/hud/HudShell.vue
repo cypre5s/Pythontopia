@@ -154,6 +154,11 @@ function openLibrary(): void {
   void router.push('/library');
 }
 
+function openArena(): void {
+  playUiClick();
+  void router.push('/arena/1');
+}
+
 function onToggleSettings(): void {
   playUiClick();
   hud.toggleSettings();
@@ -245,6 +250,12 @@ function onKey(event: KeyboardEvent): void {
   }
   if (lowered === 'l') {
     openLibrary();
+    event.preventDefault();
+    return;
+  }
+  if (lowered === 'a' && !event.shiftKey) {
+    // R-13 §-1 续：A 键 = 章节闯关塔（章 1 默认入口）
+    openArena();
     event.preventDefault();
     return;
   }
@@ -420,6 +431,20 @@ onUnmounted(() => {
         >L</span>
         <span class="hud-tool-slot__label">课程</span>
         <span class="hud-tool-slot__shortcut">L</span>
+      </button>
+      <button
+        type="button"
+        class="hud-tool-slot hud-tool-slot--arena"
+        data-testid="hud-tool-arena"
+        aria-label="章节闯关塔（A）"
+        @click="openArena"
+      >
+        <span
+          class="hud-tool-slot__icon"
+          aria-hidden="true"
+        >A</span>
+        <span class="hud-tool-slot__label">闯关</span>
+        <span class="hud-tool-slot__shortcut">A</span>
       </button>
       <button
         type="button"
