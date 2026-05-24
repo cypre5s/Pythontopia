@@ -46,12 +46,12 @@ describe('hud.integration: 全键位 + 工具区 + 边界', () => {
   );
 
   it.each([
-    ['Tab', 'quest'],
-    ['b', 'inventory'],
-    ['B', 'inventory'],
+    ['q', 'quest'],
+    ['Q', 'quest'],
+    ['j', 'dialog'],
+    ['i', 'inventory'],
     ['m', 'map'],
     ['k', 'skill'],
-    ['j', 'dialog'],
   ])('window keydown "%s" 切换到 %s', async (key, slot) => {
     const hud = useHudStore();
     const wrapper = mountShell();

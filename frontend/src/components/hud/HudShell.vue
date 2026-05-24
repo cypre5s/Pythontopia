@@ -29,12 +29,14 @@ interface SlotDescriptor {
   shortcut: string;
 }
 
+// R-13 修复：icon 字母 = 真实快捷键，且避开 WASD（D/S 与移动键冲突）。
+// 玩家按 Q 任务 / J 对话 / I 背包 / M 地图 / K 技能。
 const SLOTS: readonly SlotDescriptor[] = [
-  { key: 'quest', label: '任务', icon: 'Q', shortcut: 'Tab' },
-  { key: 'dialog', label: '对话', icon: 'D', shortcut: 'J' },
-  { key: 'inventory', label: '背包', icon: 'I', shortcut: 'B' },
+  { key: 'quest', label: '任务', icon: 'Q', shortcut: 'Q' },
+  { key: 'dialog', label: '对话', icon: 'J', shortcut: 'J' },
+  { key: 'inventory', label: '背包', icon: 'I', shortcut: 'I' },
   { key: 'map', label: '地图', icon: 'M', shortcut: 'M' },
-  { key: 'skill', label: '技能', icon: 'S', shortcut: 'K' },
+  { key: 'skill', label: '技能', icon: 'K', shortcut: 'K' },
 ] as const;
 
 const hud = useHudStore();
@@ -208,44 +210,36 @@ function onKey(event: KeyboardEvent): void {
     }
     return;
   }
-  // Tab → 任务面板：preventDefault 避免焦点漂移。
-  if (event.key === 'Tab') {
-    if (hud.canToggleSlot) {
-      hud.toggleSlot('quest');
-      event.preventDefault();
-    }
-    return;
-  }
   if (event.key === ',') {
     onToggleSettings();
     event.preventDefault();
     return;
   }
-  // 字母快捷键：canvas 聚焦时禁用，让游戏独占
+  // 字母快捷键：canvas 聚焦时禁用，让游戏独占（WASD 移动 + F 交互）
   if (canvasOwned) return;
   const lowered = event.key.toLowerCase();
-  if (lowered === 'b' && hud.canToggleSlot) {
-    hud.toggleSlot('inventory');
-    event.preventDefault();
-    return;
-  }
-  if (lowered === 'm' && !event.shiftKey && hud.canToggleSlot) {
-    hud.toggleSlot('map');
-    event.preventDefault();
-    return;
-  }
-  if (lowered === 'k' && hud.canToggleSlot) {
-    hud.toggleSlot('skill');
-    event.preventDefault();
-    return;
-  }
-  if (lowered === 'j' && hud.canToggleSlot) {
-    hud.toggleSlot('dialog');
+  // R-13：icon 字母 = shortcut，全部避开 WASD（W/A/S/D 留给移动）
+  const slotByLetter: Record<string, HudQuickSlot | undefined> = {
+    q: 'quest',
+    j: 'dialog',
+    i: 'inventory',
+    m: 'map',
+    k: 'skill',
+  };
+  const target = slotByLetter[lowered];
+  if (target && !event.shiftKey && hud.canToggleSlot) {
+    hud.toggleSlot(target);
     event.preventDefault();
     return;
   }
   if (lowered === 'l') {
     openLibrary();
+    event.preventDefault();
+    return;
+  }
+  if (lowered === 'c' && !event.shiftKey) {
+    // R-13：sleep / 休息 快捷键 C（icon 是 ☾，C 取「Calm 夜晚」助记）
+    void onSleep();
     event.preventDefault();
   }
 }
