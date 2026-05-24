@@ -175,4 +175,7 @@ const effect = STAGE_EFFECTS[props.stage] ?? STAGE_EFFECTS[1]!;
   border-radius: 50%;
   opacity: 0;
 }
+@media (prefers-reduced-motion: reduce) {
+  .boss-move-effect { display: none; }
+}
 </style>

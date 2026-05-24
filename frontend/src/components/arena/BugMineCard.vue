@@ -105,4 +105,8 @@ onBeforeUnmount(() => {
 .mine-editor:disabled { opacity: 0.5; }
 .hint { font-size: 12px; color: rgba(255,247,230,0.5); margin: 0; }
 @keyframes pulse { from { opacity: 0.7; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .timer-bar { transition: none; }
+  .timer--danger .timer-bar { animation: none; }
+}
 </style>
