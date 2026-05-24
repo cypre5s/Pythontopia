@@ -129,8 +129,23 @@ function approveCurrent(): void {
 function rejectCurrent(): void {
   if (selectedIdx.value === null) return;
   const reason = rejectReason.value.trim() || '未提供原因';
+  const entry = entries.value[selectedIdx.value];
   setDecision(selectedIdx.value, 'rejected', reason);
   rejectReason.value = '';
+  if (entry) {
+    void import('@/api/learningEvent').then((mod) => {
+      mod.postLearningEvent({
+        eventType: 'AI_PROBLEM_REJECTED',
+        payload: {
+          problemId: entry.problem.problemId,
+          chapter: entry.problem.chapter,
+          stage: entry.problem.stage,
+          kcCode: entry.problem.kcCode,
+          reason,
+        },
+      }).catch(() => {});
+    });
+  }
 }
 
 function clearAll(): void {
