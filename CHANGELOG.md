@@ -13,6 +13,7 @@
 - [x] **Phase 5 已 28 轮**：bundle 拆分（主 chunk 70× 缩减）+ FestivalRibbon + FastTravelPanel + 休息按钮 + 重看引导 + minimap 脉动 + 路由 fade + 8 项 a11y/UX/VFX/合规增强 + HUD chip emoji + OperationHints 折叠 + barrel 收纳 + NotFoundPage/FestivalRibbon/FastTravelPanel 三个新 spec（剩余 ~72 轮等下一会话）
 - [x] **赛题符合度自检**：8 维画像 / 11 Agent / 5+ 资源类型 / GroundingCritic / SafetyAgent 全部命中。**科大讯飞**：docker-compose 已预置 PYT_SPARK_APP_ID/API_KEY/API_SECRET/MODEL_ID 环境变量，仅需注入即可启用星火 provider（pythontopia-graph 服务已支持）。**流式输出**待后续确认。
 - [x] **Phase 7 大爆炸联动测试**：见 `docs/r13-integration-test-plan.md`，**17 项 live 测试全过**（healthz / register / login / bootstrap / shop / 8 方向 / sleep / calendar / NPC SET_FLAG / 前端 SPA / vite proxy / build size），同时验证了所有 DTO 错位修复都与后端真实契约对齐
+- [x] **Phase 8 200 条集成测试套**：新增 5 个 spec 文件 200 条用例（routing 44 + hud 27 + shop 22 + contracts 69 + settings/fasttravel/festival 38），**100% PASS**；全量 vitest 升级至 **1075 / 1075 PASS** Test Files 91（本会话 +232 用例）
 
 ### Phase 1 最终验证（2026-05-24 21:25）
 

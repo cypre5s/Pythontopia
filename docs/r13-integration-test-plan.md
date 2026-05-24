@@ -162,3 +162,52 @@ npm run dev  # 启动 5173（strictPort）
 - [ ] 并发：多个学生同时 sleep / 同时 talk 同一 NPC 的隔离性
 - [ ] 性能：1000 + crops 时 bootstrap 响应时长
 - [ ] 班级演示：教师创建班级 → 学生加入 → 教师发布 quest → 学生在 quest mine 看到
+
+---
+
+## 6. R-13 Phase 8 · 200 条集成测试套（2026-05-24 23:30）
+
+> 用户要求「以专业软件测试师角度设计 200 条集成测试」。下表汇总产出。
+
+### 6.1 测试套清单
+
+| 文件 | 用例 | 主题 |
+| -- | -- | -- |
+| `tests/integration/routing.integration.spec.ts` | **44** | 24 path → name + 6 未知 catch-all + 3 redirect + 2 query 透传 + 3 shop props + 6 placeholder props |
+| `tests/integration/hud.integration.spec.ts` | **27** | 5 quickslot 点击 + 6 keydown 全键位 + Esc 双重退化 + `,` toggle settings + 2 input/textarea focus guard + Ctrl+B 不抢键 + 4 工具按钮渲染 + 3 工具按钮行为 + 2 visibility 边界 + 3 chip 显示 |
+| `tests/integration/shop.integration.spec.ts` | **22** | 4 shopKey 标题 + empty/listings/loading/error/retry + 4 SAMPLE item 价格库存 + priceGems + availableDays + buy 契约 ×4 + encode + 返回按钮 |
+| `tests/integration/contracts.integration.spec.ts` | **69** | 8 Direction + cardinal subset + 8 Weather + 3 UserRole + 4 NpcDialogEffect + 2 GameBootstrap 别名 + 1 calendar 可选 + 1 WorldSleep 别名 + 4 Shop DTO + 1 Festival 长度 + 11 节日日期 + 6 upcoming 推断 + 1 FastTravel 长度 + 5 mapKey + hud 4 边界 + bgmLabel ×6 + calendar 4 边界 |
+| `tests/integration/settings-fasttravel.integration.spec.ts` | **38** | settings 2 visibility + 控件齐 + mute + BGM + SFX + 2 locale + close + ok + logout + reduced-motion = 11 ; fasttravel 默认隐 + open + 5 route + 5 disabled + 1 click + keydown T = 13 ; festival 11 节日 + upcoming = 12 |
+
+合计 **200 条**新增集成测试，**100% PASS**。
+
+### 6.2 整体测试规模
+
+| 指标 | 数值 |
+| -- | -- |
+| Test Files | **91** |
+| Tests | **1075 / 1075 PASS** |
+| 本会话新增（含 Phase 1-7） | **+232 用例**（基线 4 failed / 839 → 0 failed / 1075） |
+| typecheck | 0 error |
+| lint | 0 error（2 历史 warning） |
+
+### 6.3 覆盖矩阵（功能 × 测试套）
+
+|  | router | hud | shop | dto/contract | settings | fasttravel | festival | calendar | minimap |
+|--|--|--|--|--|--|--|--|--|--|
+| **R-13 路由** | ✓44 | — | — | — | — | — | — | — | — |
+| **HUD 7 slot** | — | ✓27 | — | — | — | — | — | — | — |
+| **ShopPage / api** | — | — | ✓22 | ✓4 | — | — | — | — | — |
+| **DTO 对齐** | — | — | — | ✓69 | — | — | — | — | — |
+| **SettingsModal** | — | ✓2 | — | — | ✓11 | — | — | — | — |
+| **FastTravelPanel** | — | ✓2 | — | ✓2 | — | ✓13 | — | — | — |
+| **FestivalRibbon** | — | — | — | ✓18 | — | — | ✓12 | ✓2 | — |
+| **MiniMap + composable** | — | — | — | — | — | — | — | — | ✓13（既有，未纳入 200） |
+| **NotFoundPage** | ✓ catch-all | — | — | — | — | — | — | — | — |
+
+### 6.4 仍未覆盖（声明）
+
+- Phaser 真渲染（jsdom 不支持 canvas WebGL，需 Playwright 真浏览器）
+- 后端 mvn test 全量（本会话只跑了 mvn compile）
+- 流式 SSE 输出端到端
+- 多用户并发隔离
