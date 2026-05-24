@@ -394,6 +394,19 @@ export const WorldScene = {
       if (delta.dx === 0 && delta.dy === 0) {
         return;
       }
+      // R-13 修复：星露谷式 turn-then-walk。如果当前 cardinal 不是玩家朝向，
+      // 第一次按只转身不前进；下一次再按才真正走一格。
+      // 这样玩家从「面朝下站立」按右键，先转脸朝右；再按右键，走一格。
+      // 避免「按一下就强制蹭一步」的笨重感。
+      if (player.direction !== cardinal) {
+        player.moveToTile(player.tileX, player.tileY, cardinal);
+        void useWorldStore().updatePlayerTile({
+          tileX: player.tileX,
+          tileY: player.tileY,
+          direction: cardinal,
+        });
+        return;
+      }
       const nextX = clamp(player.tileX + delta.dx, 0, state.width - 1);
       const nextY = clamp(player.tileY + delta.dy, 0, state.height - 1);
       if (!isBlocked(nextX, nextY)) {
