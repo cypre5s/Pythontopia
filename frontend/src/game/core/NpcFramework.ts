@@ -32,8 +32,8 @@ export interface NpcDefinition {
   spawnX: number;
   spawnY: number;
   spawnDirection?: Direction;
-  /** 巡逻路点（空数组或省略 = 站桩）。 */
-  patrol?: NpcWaypoint[];
+  /** 巡逻路点（空数组或省略或 undefined = 站桩）。 */
+  patrol?: NpcWaypoint[] | undefined;
   /** 巡逻移动速度 px/s（默认 32）。 */
   speed?: number;
   /** 任务发布器：true 表示该 NPC 可发布任务，scene 在交互时拉取任务列表。 */
@@ -122,6 +122,23 @@ export class NpcFramework {
       return false;
     }
     npc.inDialog = false;
+    return true;
+  }
+
+  /**
+   * A5 schedule 支持：瞬移 NPC 到新位置（用于日程切换）。
+   * 同时可选更新巡逻路点。
+   */
+  teleport(id: string, x: number, y: number, patrol?: NpcWaypoint[]): boolean {
+    const npc = this.npcs.get(id);
+    if (!npc) return false;
+    npc.x = x;
+    npc.y = y;
+    npc.currentWaypoint = 0;
+    npc.dwellRemainingMs = 0;
+    if (patrol !== undefined) {
+      (npc.def as { patrol?: NpcWaypoint[] }).patrol = patrol;
+    }
     return true;
   }
 

@@ -35,8 +35,14 @@ import {
   NpcFramework,
   defaultPortraitKey,
   type NpcDefinition,
+  type NpcWaypoint,
 } from '@game/core/NpcFramework';
 import { attachLifecycle } from '@game/core/SceneLifecycle';
+import {
+  resolveSchedulePosition,
+  getScheduleWaypoints,
+  type NpcSchedule,
+} from '@game/core/npcSchedule';
 import { useWorldStore } from '@stores/world';
 
 const TILE_SIZE = 16;
@@ -298,6 +304,10 @@ export const WorldScene = {
       });
       state.interactable?.register(trigger);
     });
+
+    // A5: 异步加载 NPC 日程并更新位置（火后不管，不阻塞场景初始化）
+    void applyNpcSchedules(npcs, state.npcFramework, state.mapKey, RENDER_TILE_SIZE);
+
     // town_hub 专属示例 trigger：公告板（非 NPC trigger，验证 InteractableSystem
     // 不只服务 NPC）。其他地图的 trigger（farm 浇水点 / mine 矿井入口等）留 TODO
     // 给后续 wave，等地图 JSON 加入 triggers object layer 后批量注册。
@@ -720,20 +730,52 @@ export function buildNpcHintText(npcLabel: string): string {
 /**
  * 由 tilemap parseObjects 返回的 NpcSpawn 推出 NpcFramework 注册用 NpcDefinition。
  *
- * 当前 town_hub.json 没有 patrol/dialogAnchor/questPublisher 字段，因此 NPC 会
- * 站桩；后续 wave 在 JSON 增加这些字段时只要解析进 NpcSpawn 即可，不需要再改
- * 本函数。
+ * A5 schedule 支持：
+ *   - 如果 NPC 有 schedule 数据 + 当前有日历信息，
+ *     使用 resolveSchedulePosition 计算当前应在的位置；
+ *   - 同一地图内多个时段位置自动生成巡逻 waypoints。
  */
 export function buildNpcDefinitionFromSpawn(
   npc: NpcSpawn,
   tileSize: number,
+  scheduleCtx?: { schedule?: NpcSchedule; weekday: string; timeOfDay: string; mapKey: string },
 ): NpcDefinition {
+  let spawnX = npc.tileX * tileSize + tileSize / 2;
+  let spawnY = npc.tileY * tileSize + tileSize / 2;
+  let patrol: NpcWaypoint[] | undefined;
+
+  if (scheduleCtx?.schedule) {
+    const resolved = resolveSchedulePosition(
+      scheduleCtx.schedule,
+      scheduleCtx.weekday,
+      scheduleCtx.timeOfDay,
+    );
+    if (resolved && resolved.map === scheduleCtx.mapKey) {
+      spawnX = resolved.tileX * tileSize + tileSize / 2;
+      spawnY = resolved.tileY * tileSize + tileSize / 2;
+    }
+
+    const waypoints = getScheduleWaypoints(
+      scheduleCtx.schedule,
+      scheduleCtx.weekday,
+      scheduleCtx.mapKey,
+    );
+    if (waypoints.length >= 2) {
+      patrol = waypoints.map((wp) => ({
+        x: wp.tileX * tileSize + tileSize / 2,
+        y: wp.tileY * tileSize + tileSize / 2,
+        dwellMs: 8000,
+      }));
+    }
+  }
+
   return {
     id: npc.npcKey,
     displayName: npc.label || npc.npcKey,
     portraitKey: defaultPortraitKey(npc.npcKey),
-    spawnX: npc.tileX * tileSize + tileSize / 2,
-    spawnY: npc.tileY * tileSize + tileSize / 2,
+    spawnX,
+    spawnY,
+    patrol,
   };
 }
 
@@ -858,4 +900,54 @@ function createPhaserHintRenderer(
       hintTextWithScroll.destroy?.();
     },
   };
+}
+
+/**
+ * A5: 异步加载 NPC meta.json 获取 schedule，然后通过 NpcFramework.teleport
+ * 把 NPC 移动到当前日程位置。
+ */
+async function applyNpcSchedules(
+  npcs: readonly NpcSpawn[],
+  framework: NpcFramework | null,
+  mapKey: string,
+  tileSize: number,
+): Promise<void> {
+  if (!framework || npcs.length === 0) return;
+
+  const calendarStore = await import('@stores/calendar').then((m) => m.useCalendarStore());
+  const today = calendarStore.today;
+  const weekday = today?.weekday ?? new Date().toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+  const timeOfDay = today?.timeOfDay ?? '10:00';
+
+  const fetches = npcs.map(async (npc) => {
+    try {
+      const res = await fetch(`/data/npcs/${npc.npcKey}/meta.json`, { headers: { Accept: 'application/json' } });
+      if (!res.ok) return;
+      const meta = await res.json() as { schedule?: NpcSchedule };
+      if (!meta.schedule) return;
+
+      const position = resolveSchedulePosition(meta.schedule, weekday, timeOfDay);
+      if (!position || position.map !== mapKey) return;
+
+      const waypoints = getScheduleWaypoints(meta.schedule, weekday, mapKey);
+      const patrol = waypoints.length >= 2
+        ? waypoints.map((wp) => ({
+            x: wp.tileX * tileSize + tileSize / 2,
+            y: wp.tileY * tileSize + tileSize / 2,
+            dwellMs: 8000,
+          }))
+        : undefined;
+
+      framework.teleport(
+        npc.npcKey,
+        position.tileX * tileSize + tileSize / 2,
+        position.tileY * tileSize + tileSize / 2,
+        patrol,
+      );
+    } catch {
+      // NPC 没有 meta.json 或加载失败，保持默认位置
+    }
+  });
+
+  await Promise.allSettled(fetches);
 }
