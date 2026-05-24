@@ -76,13 +76,18 @@ async def generate_boss_problem(
     kc_keywords: Mapping[str, list[str]] | None = None,
     max_retries: int = 3,
     skip_self_test: bool = False,
+    preferred_kind: str | None = None,
+    profile_signals: Mapping[str, object] | None = None,
 ) -> BossProblemReview:
     """编排 5 重审查链。
 
     Args:
-        problem_factory: 异步出题函数，签名 ``(chapter, stage, kc_code, difficulty, temperature) -> BossProblem``。
+        problem_factory: 异步出题函数，签名 ``(chapter, stage, kc_code, difficulty,
+            temperature, [preferred_kind], [profile_signals]) -> BossProblem``。
         golden_fallback: 重试用完仍失败时使用的兜底题（必须保证 5 重审查通过；
             如未提供，最后返回最后一次的 review，passed=False 由调用方处理）。
+        preferred_kind: 关卡题型偏好（ArenaPage 关卡 kind）。
+        profile_signals: 学生画像信号 dict。R-13 §-1 新增。
     """
 
     temperature_base = 0.4
@@ -91,13 +96,26 @@ async def generate_boss_problem(
     for attempt in range(1, max_retries + 1):
         temperature = temperature_base + 0.1 * (attempt - 1)
         try:
-            problem = await problem_factory(
-                chapter=chapter,
-                stage=stage,
-                kc_code=kc_code,
-                difficulty=difficulty,
-                temperature=temperature,
-            )
+            # R-13 §-1：把 preferred_kind / profile_signals 透传给 factory。
+            # 旧 factory 签名只有 5 个 kwargs 时，TypeError 兜底丢掉新参数。
+            try:
+                problem = await problem_factory(
+                    chapter=chapter,
+                    stage=stage,
+                    kc_code=kc_code,
+                    difficulty=difficulty,
+                    temperature=temperature,
+                    preferred_kind=preferred_kind,
+                    profile_signals=dict(profile_signals) if profile_signals else None,
+                )
+            except TypeError:
+                problem = await problem_factory(
+                    chapter=chapter,
+                    stage=stage,
+                    kc_code=kc_code,
+                    difficulty=difficulty,
+                    temperature=temperature,
+                )
         except Exception as exc:  # noqa: BLE001
             LOG.warning("boss factory raised on attempt %s: %s", attempt, exc)
             continue

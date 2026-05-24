@@ -110,11 +110,54 @@ def build_llm_problem_factory(provider: LlmProvider) -> ProblemFactory:
         kc_code: str,
         difficulty: int,
         temperature: float = 0.4,
+        preferred_kind: str | None = None,
+        profile_signals: dict[str, Any] | None = None,
     ) -> BossProblem:
+        # R-13 §-1 续：把学生画像信号 + 关卡题型偏好嵌入 prompt，
+        # 让 LLM 真正按画像出题（不再只是 LOG 记录字段后丢掉）。
+        extras: list[str] = []
+        if preferred_kind:
+            kind_map = {
+                "fill_blank": "代码填空（题面包含 ___BLANK___ 让玩家填）",
+                "debug": "改错题（给出有 bug 的代码片段让玩家修）",
+                "short_answer": "简答题（学生用 30-100 字解释概念，AI 评分）",
+                "closed_loop": "调试闭环（堆栈 trace 定位 → 修复）",
+                "dual_track": "双轨（前端 Pyodide 预览 + 服务端判题）",
+                "multi_round": "3 题组合（同主题 3 道渐进式小题）",
+                "teach_back": "教学反转（学生向 NPC 解释 KC，AI 评分）",
+                "bug_mine": "Bug 矿洞（30 秒限时 ImportError/NameError 突袭）",
+                "pdf_question": "课件问答（基于课件页 1-3 单选 + 引用页号）",
+            }
+            extras.append(
+                f"题型偏好: {kind_map.get(preferred_kind, preferred_kind)}，请按对应玩法出题。"
+            )
+        if profile_signals:
+            weak = profile_signals.get("weakKcCodes") or []
+            if weak:
+                extras.append(f"学生弱项 KC: {','.join(weak[:4])} —— 优先围绕这些 KC 出题。")
+            level = profile_signals.get("pythonSelfRatedLevel")
+            if isinstance(level, int):
+                extras.append(f"学生 Python 自评水平: {level}/5。")
+            success = profile_signals.get("successRate")
+            if isinstance(success, (int, float)):
+                if success < 0.4:
+                    extras.append("学生近况通过率偏低，请降低难度且多给上下文。")
+                elif success > 0.75:
+                    extras.append("学生近况通过率较高，可以略提高综合度。")
+            media = profile_signals.get("mediaPriority") or []
+            if "DIAGRAM" in media:
+                extras.append("学生偏好可视化，可在 statement 末尾用 mermaid 或 ascii 简图。")
+            resilience = profile_signals.get("resilience")
+            if isinstance(resilience, (int, float)) and resilience < 0.4:
+                extras.append("学生抗挫折度较低，请把 hints 写得鼓励一些。")
+
+        extras_block = ("\n\n【画像与题型提示】\n" + "\n".join(extras)) if extras else ""
+
         user_prompt = (
             f"请为第 {chapter} 章 Stage {stage} 出一道难度 {difficulty}/5 的 Python 题。\n"
             f"目标 KC: {kc_code}\n"
             f"难度参考：1=只需 1 行 print；3=两步运算；5=综合 3+ 步逻辑。"
+            f"{extras_block}"
         )
         messages = [
             {"role": "system", "content": PROBLEM_GEN_SYSTEM_PROMPT},
@@ -145,6 +188,11 @@ def build_llm_problem_factory(provider: LlmProvider) -> ProblemFactory:
         hints = [str(h) for h in hints_raw] if isinstance(hints_raw, list) else []
 
         slug = kc_code.lower().replace("-", "_")
+        meta = {"source": "llm", "temperature": temperature}
+        if preferred_kind:
+            meta["preferred_kind"] = preferred_kind
+        if profile_signals:
+            meta["profile_signals_used"] = sorted(profile_signals.keys())
         return BossProblem(
             problem_id=f"ai-c{chapter}-s{stage}-{slug}",
             chapter=chapter,
@@ -156,7 +204,7 @@ def build_llm_problem_factory(provider: LlmProvider) -> ProblemFactory:
             test_cases=test_cases,
             difficulty=difficulty,
             hints=hints,
-            metadata={"source": "llm", "temperature": temperature},
+            metadata=meta,
         )
 
     return factory

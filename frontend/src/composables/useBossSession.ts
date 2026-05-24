@@ -230,6 +230,12 @@ export function useBossSession(opts: UseBossSessionOptions): UseBossSessionRetur
     });
     if (passed) {
       clearedStages.value += 1;
+      // R-13 §-1 critical fix：boss 每个 stage 通过都触发 onSubmissionPassed，
+      // 让 evidenceRequired.type==='submission' 的主线任务能被 boss 副本通过解锁。
+      mainQuest.onSubmissionPassed({
+        problemId: p.problemId,
+        kcCode: p.kcCode,
+      });
       // R-13 §-1 续：boss HP 真扣血 + 飘字效果
       const move = currentMove.value ?? getBossMove(opts.chapter, stage.value);
       const dmg = move?.damageOnDefeat ?? Math.floor(100 / totalStages);

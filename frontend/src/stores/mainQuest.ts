@@ -230,6 +230,86 @@ export const useMainQuestStore = defineStore('mainQuest', {
       this.progress.recentAiProblems = next;
       persist(this.progress);
     },
+
+    // ─────────────────── R-13 §-1 critical fix：evidence 自动检测链路 ───────────────────
+    // 此前 completeSubQuest() 无任何外部调用，35 个主线任务的 evidence 触发链路全断 —
+    // 玩家与 NPC 对话、用工坊生成资源、提交代码后任务永远卡住。
+    // 5 类 onXxx 钩子分别由 dialog store / learning store / boss session / world scene 调用，
+    // 自动遍历未完成的主线任务找 evidence 匹配项并 markComplete。
+
+    /** dialog store close 时调：找 evidenceRequired.type==='dialog_complete' 且 npcKey 匹配的子任务。 */
+    onDialogClose(npcKey: string): MainSubQuest | null {
+      for (const q of MAIN_QUESTS) {
+        if (this.progress.completedSubQuests.includes(q.id)) continue;
+        const ev = q.evidenceRequired;
+        if (ev.type === 'dialog_complete' && ev.npcKey === npcKey) {
+          return this.completeSubQuest(q.id);
+        }
+      }
+      return null;
+    },
+
+    /** learning store createResource 成功时调：找 evidenceRequired.type==='resource_consumed' 匹配的子任务。 */
+    onResourceCreated(resourceType: string, kcCodes: readonly string[]): MainSubQuest | null {
+      for (const q of MAIN_QUESTS) {
+        if (this.progress.completedSubQuests.includes(q.id)) continue;
+        const ev = q.evidenceRequired;
+        if (ev.type !== 'resource_consumed') continue;
+        if (ev.resourceType !== resourceType) continue;
+        // 资源 KC 与子任务 kcCodes 任一重合即可
+        if (q.kcCodes.some((c) => kcCodes.includes(c))) {
+          return this.completeSubQuest(q.id);
+        }
+      }
+      return null;
+    },
+
+    /** Arena/Endless/Boss submission 通过时调：找 evidenceRequired.type==='submission' 匹配的子任务。 */
+    onSubmissionPassed(payload: { problemId?: number | string; kcCode?: string }): MainSubQuest | null {
+      for (const q of MAIN_QUESTS) {
+        if (this.progress.completedSubQuests.includes(q.id)) continue;
+        const ev = q.evidenceRequired;
+        if (ev.type !== 'submission') continue;
+        // problemId=0 是 placeholder，命中任一通过即视作完成（早期演示阶段宽松）
+        if (ev.problemId === 0) {
+          if (!payload.kcCode || q.kcCodes.includes(payload.kcCode)) {
+            return this.completeSubQuest(q.id);
+          }
+        } else if (typeof payload.problemId !== 'undefined' && String(ev.problemId) === String(payload.problemId)) {
+          return this.completeSubQuest(q.id);
+        }
+      }
+      return null;
+    },
+
+    /** 学习掌握度达阈值时调：找 evidenceRequired.type==='kc_mastery' 匹配。 */
+    onMasteryReached(kcCode: string, score: number): MainSubQuest | null {
+      for (const q of MAIN_QUESTS) {
+        if (this.progress.completedSubQuests.includes(q.id)) continue;
+        const ev = q.evidenceRequired;
+        if (ev.type !== 'kc_mastery') continue;
+        if (ev.kcCode !== kcCode) continue;
+        if (score >= ev.thresholdScore) {
+          return this.completeSubQuest(q.id);
+        }
+      }
+      return null;
+    },
+
+    /** WorldScene 玩家走到指定 tile 时调（容差 ±1 tile）。 */
+    onBuildingVisited(mapKey: string, tileX: number, tileY: number): MainSubQuest | null {
+      for (const q of MAIN_QUESTS) {
+        if (this.progress.completedSubQuests.includes(q.id)) continue;
+        const ev = q.evidenceRequired;
+        if (ev.type !== 'building_visit') continue;
+        if (ev.mapKey !== mapKey) continue;
+        if (Math.abs(ev.tileX - tileX) <= 1 && Math.abs(ev.tileY - tileY) <= 1) {
+          return this.completeSubQuest(q.id);
+        }
+      }
+      return null;
+    },
+
     /** 测试 / QA：彻底清空进度。 */
     resetProgress(): void {
       this.progress = mainQuestEmptyProgress();

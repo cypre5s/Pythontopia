@@ -393,6 +393,17 @@ export const useLearningStore = defineStore('learning', {
         const response = await createWorkshopResource(request);
         this.resources.phase = 'success';
         await this.loadResources();
+        // R-13 §-1 critical fix：触发主线 evidence_type='resource_consumed' 检测，
+        // 修复"工坊生成资源后主线任务永远卡住"的 bug。
+        if (typeof window !== 'undefined') {
+          void import('@stores/mainQuest').then((mod) => {
+            try {
+              mod.useMainQuestStore().onResourceCreated(request.type, request.kcCodes);
+            } catch {
+              // mainQuest store 不可用时静默
+            }
+          });
+        }
         return response;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);

@@ -362,6 +362,10 @@ export const useDialogStore = defineStore('dialog', {
      */
     close(): void {
       const wasOpen = this.visible || this.openNpcKey !== null;
+      // R-13 §-1 critical fix：抓住关闭前的 npcKey，作为主线 evidence 触发。
+      // 之前 close() 直接清 npcKey，导致主线任务 1-1（找镇长 Py 对话）等
+      // dialog_complete 类 evidence 永远无法触发完成。
+      const closingNpcKey = this.npcKey ?? this.openNpcKey;
       this.openNpcKey = null;
       this.lines = [];
       this.visible = false;
@@ -377,6 +381,17 @@ export const useDialogStore = defineStore('dialog', {
       this.isTypingDone = false;
       if (wasOpen) {
         playDialogClose();
+        // Lazy import 避免与 mainQuest store 循环依赖（dialog store 不在 mainQuest
+        // 加载之前初始化）。仅当真有 npcKey 时通知主线。
+        if (closingNpcKey && typeof window !== 'undefined') {
+          void import('@stores/mainQuest').then((mod) => {
+            try {
+              mod.useMainQuestStore().onDialogClose(closingNpcKey);
+            } catch {
+              // 忽略：mainQuest store 未挂载（test / 极端环境）
+            }
+          });
+        }
       }
     },
   },

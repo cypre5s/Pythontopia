@@ -16,6 +16,7 @@ import {
   FestivalRibbon,
   FastTravelPanel,
   MainQuestPanel,
+  QuickslotPanelHost,
 } from '@/components/hud';
 import { openNpcDialog } from '@game/adapters/dialog';
 import { useWorldStore } from '@stores/world';
@@ -78,6 +79,10 @@ onMounted(async () => {
       <FestivalRibbon />
       <FastTravelPanel />
       <MainQuestPanel />
+      <!-- R-13 §-1 critical fix：5 个底部 HUD slot 按钮（Q/J/I/M/K）之前
+           只切换 hud.activeSlot 但没人监听弹面板 —— 玩家点了一个起作用的都没有。
+           QuickslotPanelHost 统一渲染 5 个面板，让按钮真起作用。 -->
+      <QuickslotPanelHost />
     </section>
   </AppLayout>
 </template>

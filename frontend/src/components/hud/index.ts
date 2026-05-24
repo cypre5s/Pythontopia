@@ -6,6 +6,7 @@ export { default as HudShell } from './HudShell.vue';
 export { default as MiniMap } from './MiniMap.vue';
 export { default as WorldMinimapHud } from './WorldMinimapHud.vue';
 export { default as InventoryPanel } from './InventoryPanel.vue';
+export { default as QuickslotPanelHost } from './QuickslotPanelHost.vue';
 export { default as SettingsModal } from './SettingsModal.vue';
 export { default as FestivalRibbon } from './FestivalRibbon.vue';
 export { default as FastTravelPanel } from './FastTravelPanel.vue';

@@ -103,11 +103,26 @@ def _resolve_kc(chapter: int, override: str) -> str:
 
 
 def _safe_provider() -> LlmProvider:
-    """provider 不可用时回落到 DryRun，保证 problem 路由永不 500。"""
+    """R-13 §-1 续：provider 不可用时回落到 DryRun，保证 problem 路由永不 500。
+
+    优先级：
+      1. PYT_LLM_PROVIDER 显式指定 → 走 provider_from_env；
+      2. 未指定但已 load Alethicode .env 拿到 OPENAI_API_KEY → 优先 OpenAiCompat；
+      3. 其他情况 → DryRun（确保路由可用）。
+    """
+
+    import os
 
     try:
         return provider_from_env()
     except RuntimeError as exc:
+        # PYT_LLM_PROVIDER 未设置时尝试自动检测 Alethicode 的 OPENAI/LLM env
+        has_key = bool(os.environ.get("OPENAI_API_KEY") or os.environ.get("LLM_API_KEY"))
+        if has_key:
+            try:
+                return OpenAiCompatProvider()
+            except RuntimeError as inner:
+                LOG.warning("OpenAi-compat auto-detect failed: %s", inner)
         LOG.warning("LLM provider unavailable, fall back to DryRun: %s", exc)
         return DryRunProvider()
 
@@ -138,6 +153,11 @@ async def request_boss_problem(body: BossProblemRequest) -> dict[str, Any]:
     golden = get_golden_problem(chapter, stage)
 
     factory = build_llm_problem_factory(provider)
+    # R-13 §-1：把 preferredKind + profileSignals 透传给 orchestrator，
+    # 让 PracticeAgent 真正按画像出题（不是只 LOG 字段后丢掉）。
+    profile_signals_dict = (
+        body.profileSignals.model_dump(exclude_none=True) if body.profileSignals else None
+    )
     try:
         review = await generate_boss_problem(
             chapter,
@@ -147,6 +167,8 @@ async def request_boss_problem(body: BossProblemRequest) -> dict[str, Any]:
             problem_factory=factory,
             golden_fallback=golden,
             max_retries=2,
+            preferred_kind=body.preferredKind,
+            profile_signals=profile_signals_dict,
         )
     except LlmProviderError as exc:
         LOG.warning("LLM provider error (%s); returning golden problem", exc.kind)
@@ -158,6 +180,8 @@ async def request_boss_problem(body: BossProblemRequest) -> dict[str, Any]:
             problem_factory=_async_raise_factory,
             golden_fallback=golden,
             max_retries=0,
+            preferred_kind=body.preferredKind,
+            profile_signals=profile_signals_dict,
         )
 
     problem = review.problem if review.passed else golden
