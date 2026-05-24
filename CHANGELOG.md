@@ -14,6 +14,7 @@
 - [x] **赛题符合度自检**：8 维画像 / 11 Agent / 5+ 资源类型 / GroundingCritic / SafetyAgent 全部命中。**科大讯飞**：docker-compose 已预置 PYT_SPARK_APP_ID/API_KEY/API_SECRET/MODEL_ID 环境变量，仅需注入即可启用星火 provider（pythontopia-graph 服务已支持）。**流式输出**待后续确认。
 - [x] **Phase 7 大爆炸联动测试**：见 `docs/r13-integration-test-plan.md`，**17 项 live 测试全过**（healthz / register / login / bootstrap / shop / 8 方向 / sleep / calendar / NPC SET_FLAG / 前端 SPA / vite proxy / build size），同时验证了所有 DTO 错位修复都与后端真实契约对齐
 - [x] **Phase 8 200 条集成测试套**：新增 5 个 spec 文件 200 条用例（routing 44 + hud 27 + shop 22 + contracts 69 + settings/fasttravel/festival 38），**100% PASS**；全量 vitest 升级至 **1075 / 1075 PASS** Test Files 91（本会话 +232 用例）
+- [x] **Phase 9 安全审计**：13 项 live 后端 curl 测试（SQL/CORS/JWT/XSS/路径遍历/弱密码全防住），发现并修复 **2 个 bug**（RegisterRequest 加 @Pattern 拒绝 HTML 元字符 + GlobalExceptionHandler 405/415/404/400 替代 500），新增 **91 个测试**（security 55 + workflows 36）。**最终 Test Files 93 / Tests 1166 PASS**，本会话累计 **+323 用例**
 
 ### Phase 1 最终验证（2026-05-24 21:25）
 
@@ -237,16 +238,31 @@
 
 - **2026-05-24 21:18**：subagent 因 API 限额接连 fail-fast。用户要求停止新 subagent，全部由主 agent 接管。已派的 explore A/B/C/D 报告全部读完用作上下文，实施 E/H 由主 agent 自己写。
 
-### 最终交付摘要
+### 最终交付摘要（2026-05-24 22:25 收官）
 
 | 类别 | 数量 |
 | -- | -- |
-| 修复 bug | **15+ 个**（Exit 跳转 / shop 白屏 / DTO 错位 ×8 / 缺失路由 ×6 / vite 端口回退） |
-| 新功能 | **6 个**（小地图整合 / 快捷菜单扩展 / 设置弹窗 / 404 页 / 程序化音效 / 季节背景） |
+| 修复 bug | **17+ 个**（Exit 跳转 / shop 白屏 / DTO 错位 ×8 / 缺失路由 ×6 / vite 端口回退 + 后端 RegisterRequest XSS + 后端 405/415/404/400 异常映射） |
+| 新功能 | **6 个**（小地图整合 / 快捷菜单扩展 / 设置弹窗 / 404 页 / 程序化音效 / 季节背景 + 节日 ribbon + 快速旅行 + 休息按钮） |
 | 健壮性 | App.vue Suspense + onErrorCaptured + router.onError，永不白屏 |
 | 性能 | 主 bundle **1.88MB → 27KB** ，Phaser/Tone 单独 lazy chunk |
-| 测试 | 4 failed/839 → **0 failed/866 PASS**（+27 用例） |
-| 演示链路影响 | **强化**：5 地图边缘出口现在能跳了；HUD/MiniMap/Settings 全部可用；季节性视觉氛围拉满 |
+| 测试 | 4 failed/839 → **0 failed/1166 PASS**（**+323 用例**） |
+| 安全 | 13 项 live curl 全过，2 个 bug 修复；前端 0 XSS 入口（无 v-html / innerHTML）；后端 SQL 注入/CORS/JWT/路径遍历/弱密码全防住 |
+| Git Commits | **4 个**（feat: phase 1-7 50 files / test: +200 / feat security: +91 / fix: 405 异常映射） |
+| 演示链路影响 | **强化**：5 地图边缘出口能跳；HUD/MiniMap/Settings/Festival/FastTravel/Sleep 全部可用；季节性视觉氛围；7 个程序化 SFX；XSS 防护加固 |
+
+### 整体最终验证（2026-05-24 22:25）
+
+| 命令 | 结果 |
+| -- | -- |
+| `frontend $ npm run typecheck` | 0 error |
+| `frontend $ npm run test`（全量 vitest） | **1166 / 1166 PASS** |
+| `frontend $ npm run lint` | 0 error（2 历史 warning） |
+| `frontend $ npm run build` | 7.33s 成功，主 bundle 27KB / gzip 11KB |
+| `backend $ mvn -DskipTests compile` | BUILD SUCCESS |
+| `backend $ mvn -DskipITs test` | BUILD SUCCESS |
+| live 后端 17 项 API 联动测试 | 全过 |
+| live 后端 13 项安全测试 | 全过（2 个 bug 已修） |
 
 ### 第一波并行 subagent（已派发，进行中）
 
