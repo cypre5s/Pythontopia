@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from pythontopia_graph.agents.curriculum_mapper_agent import CurriculumMapperAgent
 from pythontopia_graph.agents.profile_agent import ProfileAgent
 from pythontopia_graph.llm.provider import provider_from_env
+from pythontopia_graph.routes.boss import router as boss_router
 from pythontopia_graph.routes.debug import router as debug_router
 from pythontopia_graph.routes.path import router as path_router
 from pythontopia_graph.routes.evaluation import router as evaluation_router
@@ -21,6 +22,7 @@ app.include_router(resource_router)
 app.include_router(path_router)
 app.include_router(debug_router)
 app.include_router(evaluation_router)
+app.include_router(boss_router)
 
 
 @app.get("/healthz", response_model=HealthResponse)
