@@ -443,6 +443,7 @@ function fillAndSubmitDemo(): void {
   color: #4d3613;
   font-weight: 800;
   box-shadow: 3px 3px 0 #4d3613;
+  min-height: 44px;
 }
 
 :deep(.auth-form button[type='submit']:disabled) {
