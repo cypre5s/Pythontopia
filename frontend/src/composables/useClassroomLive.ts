@@ -54,6 +54,11 @@ export function useClassroomLive(): UseClassroomLiveReturn {
 
     source.onerror = () => {
       connected.value = false;
+      source?.close();
+      source = null;
+      setTimeout(() => {
+        if (!source) connect(classroomId);
+      }, 5000);
     };
   }
 
