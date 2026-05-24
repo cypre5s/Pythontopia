@@ -352,3 +352,97 @@ a {
     font-size: 12px;
   }
 }
+
+/* ── B5 Mobile adaptation (414×896) ────────────────────────────── */
+@media (max-width: 480px) {
+  body {
+    font-size: 14px;
+  }
+
+  .pyt-pixel-text {
+    font-size: 13px !important;
+  }
+
+  /* Touch target minimum 44×44 */
+  button, [role="button"], a.btn, .choice-btn, .pixel-btn {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Global grid collapse to single column */
+  .review-body,
+  .arena-body,
+  .boss-body,
+  .endless-body {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* HUD bottom bar touch-friendly sizing */
+  .quickslot-bar button {
+    min-width: 48px;
+    min-height: 48px;
+    font-size: 18px;
+  }
+
+  /* Dialog modal full-width on mobile */
+  .dialog-modal {
+    padding: 0 8px 16px !important;
+    gap: 6px !important;
+  }
+
+  .dialog-panel {
+    width: calc(100vw - 16px) !important;
+    max-width: calc(100vw - 16px) !important;
+    padding: 10px 12px !important;
+    font-size: 14px !important;
+  }
+
+  .dialog-portrait {
+    width: 56px !important;
+    height: 56px !important;
+  }
+
+  /* Inventory panel 3-column on mobile */
+  .inventory-panel__grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+
+  /* Workshop resource cards stack */
+  .workshop-cards {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Arena steps compact */
+  .arena-step {
+    grid-template-columns: 24px 24px 1fr 18px !important;
+    font-size: 11px !important;
+    padding: 6px 8px !important;
+  }
+
+  .arena-detail {
+    padding: 12px !important;
+  }
+
+  /* Boss page compact */
+  .boss-head {
+    grid-template-columns: 1fr !important;
+    gap: 6px !important;
+    text-align: center;
+  }
+
+  .boss-stage-bar {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  /* Storyboard nav dots compact */
+  .scene-nav {
+    justify-content: center;
+  }
+
+  /* Teacher review toolbar wrap */
+  .review-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
