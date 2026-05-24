@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BootScene } from '@/game/scenes/BootScene';
@@ -16,10 +16,12 @@ interface LoaderSpy {
   progressHandlers: Array<(value: number) => void>;
   onceHandlers: Map<string, AnyFn>;
   audioUrls: string[];
+  imageUrls: string[];
 }
 
 function makeLoaderSpy(): LoaderSpy {
   const audioUrls: string[] = [];
+  const imageUrls: string[] = [];
   const progressHandlers: Array<(value: number) => void> = [];
   const onceHandlers = new Map<string, AnyFn>();
   return {
@@ -31,8 +33,12 @@ function makeLoaderSpy(): LoaderSpy {
     once: vi.fn((event: string, cb: AnyFn) => {
       onceHandlers.set(event, cb);
     }),
-    image: vi.fn(),
-    spritesheet: vi.fn(),
+    image: vi.fn((_key: string, url: string) => {
+      imageUrls.push(url);
+    }),
+    spritesheet: vi.fn((_key: string, url: string) => {
+      imageUrls.push(url);
+    }),
     audio: vi.fn((_key: string, url: string | string[]) => {
       if (Array.isArray(url)) {
         audioUrls.push(...url);
@@ -45,7 +51,20 @@ function makeLoaderSpy(): LoaderSpy {
     progressHandlers,
     onceHandlers,
     audioUrls,
+    imageUrls,
   };
+}
+
+function expectPublicImageAsset(url: string): void {
+  const filePath = join(process.cwd(), 'public', url);
+  expect(existsSync(filePath), `${url} should exist`).toBe(true);
+  if (url.endsWith('.png')) {
+    const signature = readFileSync(filePath).subarray(0, 8).toString('hex');
+    expect(signature, `${url} should be a PNG`).toBe('89504e470d0a1a0a');
+  } else if (url.endsWith('.svg')) {
+    const head = readFileSync(filePath, 'utf-8').trimStart().slice(0, 5);
+    expect(head, `${url} should be an SVG`).toBe('<svg ');
+  }
 }
 
 interface GraphicsSpy {
@@ -91,6 +110,17 @@ describe('BootScene asset manifest', () => {
     expect(loader.audioUrls.length).toBeGreaterThan(0);
     for (const url of loader.audioUrls) {
       expect(existsSync(join(process.cwd(), 'public', url))).toBe(true);
+    }
+  });
+
+  it('loads only existing public image assets with valid file signatures', () => {
+    const loader = makeLoaderSpy();
+
+    BootScene.preload.call({ load: loader });
+
+    expect(loader.imageUrls.length).toBeGreaterThan(0);
+    for (const url of loader.imageUrls) {
+      expectPublicImageAsset(url);
     }
   });
 });

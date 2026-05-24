@@ -168,6 +168,16 @@ describe('applyWeather', () => {
     expect(calls.clearTint).toBeGreaterThanOrEqual(1);
   });
 
+  it('真实 Phaser camera 缺少 tint API 时不抛错', () => {
+    const { scene } = createScene();
+    const phaserScene = scene as unknown as { cameras: { main: Record<string, unknown> } };
+    phaserScene.cameras.main = {};
+
+    expect(() => applyWeather(scene, 'sunny', 640, 480)).not.toThrow();
+    const handle = applyWeather(scene, 'rainy', 640, 480);
+    expect(() => handle.destroy()).not.toThrow();
+  });
+
   it('destroy() 清理所有粒子句柄并 clearTint', () => {
     const { scene, calls } = createScene();
     const handle = applyWeather(scene, 'rainy', 640, 480);

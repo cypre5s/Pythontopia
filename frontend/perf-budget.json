@@ -1,0 +1,98 @@
+{
+  "$schema": "https://raw.githubusercontent.com/ai/size-limit/main/packages/size-limit/schema.json",
+  "_meta": {
+    "name": "Pythontopia Frontend Performance Budget",
+    "version": "1.0.0",
+    "spec": "docs/performance-baseline.md",
+    "owner": "Pythontopia 性能工程师",
+    "lastReview": "2026-05-24",
+    "review": "R-12 W4 baseline；R-13 演示窗口前必须复审一次",
+    "format": "size-limit 兼容；CI 通过 `npx size-limit` 直接读取",
+    "enforcement": "CI 上若任一入口超出 limit 阻断合并；本地 `npm run build` 后人工自查",
+    "notes": [
+      "limit 为 gzip 后体积，符合 size-limit 默认行为；如需 brotli，CI 配 size-limit-preset-app",
+      "Phaser 3 单 chunk 体积来自 R-12 dist 统计（约 480 KB gzip），故拆 vendor + phaser 双 chunk",
+      "Pyodide / Python wheel 不入此预算，由 services/pythontopia-graph 与 backend 单独度量",
+      "图片以 public/assets/pixel 合计为度量；Tiled JSON 与 LPC sheet 是大头"
+    ]
+  },
+  "budgets": [
+    {
+      "name": "main-bundle",
+      "path": "dist/assets/index-*.js",
+      "limit": "180 KB",
+      "gzip": true,
+      "rationale": "Vue 3 app + 路由 + Pinia + 自有业务代码；R-12 baseline 156 KB gzip，留 ~15% 增长余量",
+      "blockingMetric": "TBT / TTI",
+      "alertOn": [">90% 预算时 warning", "超 limit 立即 fail CI"]
+    },
+    {
+      "name": "vendor-chunk",
+      "path": "dist/assets/vendor-*.js",
+      "limit": "240 KB",
+      "gzip": true,
+      "rationale": "Vue 运行时 + vue-router + pinia + axios + utils；不含 Phaser",
+      "blockingMetric": "首屏 LCP",
+      "alertOn": ["新增第三方依赖前必须 review", "升级 vue/pinia 主版本时复测"]
+    },
+    {
+      "name": "phaser-chunk",
+      "path": "dist/assets/phaser-*.js",
+      "limit": "520 KB",
+      "gzip": true,
+      "rationale": "Phaser 3.87 单 chunk（含 Arcade Physics + Tilemap + Animation），R-12 实测 487 KB gzip",
+      "blockingMetric": "进入小镇前 BootScene 时长 + Scene 切换",
+      "alertOn": ["升级 Phaser 主版本时复测", "如启用 Phaser 新插件需评估额外体积"]
+    },
+    {
+      "name": "pixel-assets",
+      "path": "dist/assets/pixel/**/*.{png,json}",
+      "limit": "2 MB",
+      "gzip": false,
+      "rationale": "五张 Tiled 地图 JSON + LPC Sara sheet + Kenney tileset + NPC portraits + 树/树荫 sprite；当前 1.6 MB",
+      "blockingMetric": "BootScene preload 时长（首次进入小镇）",
+      "alertOn": ["新增地图或 NPC sprite 前评估总量", "PNG 必须经 pngquant 压缩入库"]
+    },
+    {
+      "name": "css-bundle",
+      "path": "dist/assets/index-*.css",
+      "limit": "50 KB",
+      "gzip": true,
+      "rationale": "全局 tokens + Vue scoped + 像素 HUD 样式；R-12 baseline 32 KB gzip",
+      "blockingMetric": "FCP / CLS",
+      "alertOn": ["引入新 UI 库时复测", "scoped 样式重复时合并到 tokens.css"]
+    },
+    {
+      "name": "fonts",
+      "path": "dist/assets/pixel/fonts/*.woff2",
+      "limit": "300 KB",
+      "gzip": false,
+      "rationale": "Ark Pixel 中文像素字体 + 拉丁子集合计；中文像素字体本身就是大头（OFL）",
+      "blockingMetric": "FCP（首次出现像素字符）",
+      "alertOn": ["子集化（unicode-range）后必须复测", "新增字体前必须替换不叠加"]
+    }
+  ],
+  "scenes": {
+    "_doc": "Phaser 场景切换时长上限（非 size-limit 范畴，由 perfMonitor.ts 运行时埋点）",
+    "boot_to_town_hub_ms": 800,
+    "scene_transition_ms": 400,
+    "tilemap_load_ms": 600
+  },
+  "webVitals": {
+    "_doc": "Web Vitals 目标值；阈值来源 docs/performance-baseline.md §3，与 web.dev 标准一致",
+    "LCP": { "good": 2500, "poor": 4000, "unit": "ms" },
+    "FCP": { "good": 1800, "poor": 3000, "unit": "ms" },
+    "INP": { "good": 200, "poor": 500, "unit": "ms" },
+    "CLS": { "good": 0.1, "poor": 0.25, "unit": "score" },
+    "TTI": { "good": 3800, "poor": 7300, "unit": "ms" },
+    "TTFB": { "good": 800, "poor": 1800, "unit": "ms" }
+  },
+  "runtime": {
+    "_doc": "运行时性能预算；由 perfMonitor.ts 上报，违反时控制台 warn",
+    "fps_min": 50,
+    "fps_target": 60,
+    "frame_time_ms_max": 20,
+    "api_p95_ms": 300,
+    "api_p99_ms": 800
+  }
+}

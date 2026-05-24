@@ -46,7 +46,7 @@ Pythontopia M2 阶段的 5 张分块大地图，全部以 16×16 源 tile 渲染
 ### campus_east.json（40×30，校园）
 
 - 出口：west→town_hub
-- 北行 3 栋教学楼：图书馆（→ `/library`）、教室（→ `/training`）、复盘大厅（→ `/review-hall`）
+- 北行 3 栋教学楼：图书馆（→ `/library`）、教室（题库，→ `/problems`）、复盘大厅（→ `/review-hall`）
 - 南行 1 栋工坊（→ `/workshop`）
 - 中央东西向砂石步道
 - NPC：`librarian_doc`, `coach_q`, `sage_review`

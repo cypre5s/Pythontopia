@@ -729,7 +729,7 @@ function generateCampusEast() {
 
   // 北行三栋教学楼 5×4
   const library = { x: 8, y: 4, w: 5, h: 4, label: '图书馆', route: '/library', name: 'building_library' };
-  const classroom = { x: 18, y: 4, w: 5, h: 4, label: '教室', route: '/training', name: 'building_classroom' };
+  const classroom = { x: 18, y: 4, w: 5, h: 4, label: '教室（题库）', route: '/problems', name: 'building_classroom' };
   const reviewHall = { x: 28, y: 4, w: 5, h: 4, label: '复盘大厅', route: '/review-hall', name: 'building_review_hall' };
   paintBuilding(buildings, W, library.x, library.y, library.w, library.h);
   paintBuilding(buildings, W, classroom.x, classroom.y, classroom.w, classroom.h);
@@ -988,7 +988,7 @@ ${rows}
 ### campus_east.json（40×30，校园）
 
 - 出口：west→town_hub
-- 北行 3 栋教学楼：图书馆（→ \`/library\`）、教室（→ \`/training\`）、复盘大厅（→ \`/review-hall\`）
+- 北行 3 栋教学楼：图书馆（→ \`/library\`）、教室（题库，→ \`/problems\`）、复盘大厅（→ \`/review-hall\`）
 - 南行 1 栋工坊（→ \`/workshop\`）
 - 中央东西向砂石步道
 - NPC：\`librarian_doc\`, \`coach_q\`, \`sage_review\`

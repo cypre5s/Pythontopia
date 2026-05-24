@@ -30,8 +30,8 @@ const CLOUD_BASE_DURATION_MS = 60_000;
 const CLOUD_STEP_DURATION_MS = 5_000;
 
 interface PhaserCamera {
-  setTint(color: number): void;
-  clearTint(): void;
+  setTint?: (color: number) => void;
+  clearTint?: () => void;
 }
 
 interface PhaserTextures {
@@ -125,9 +125,9 @@ export function applyWeather(
 
   const weatherTint = WEATHER_TINT[kind];
   if (weatherTint !== undefined) {
-    phaserScene.cameras.main.setTint(weatherTint);
+    phaserScene.cameras.main.setTint?.(weatherTint);
   } else {
-    phaserScene.cameras.main.clearTint();
+    phaserScene.cameras.main.clearTint?.();
   }
 
   let destroyed = false;
@@ -143,7 +143,7 @@ export function applyWeather(
         }
       });
       try {
-        phaserScene.cameras.main.clearTint();
+        phaserScene.cameras.main.clearTint?.();
       } catch {
         // 场景已销毁时 cameras.main 可能为 null。
       }

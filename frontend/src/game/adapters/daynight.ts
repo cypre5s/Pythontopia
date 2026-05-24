@@ -1,5 +1,4 @@
-// W3 Polish：用相机 tint 表达「昼夜」。和 weather 一样直接操作 Phaser.Camera，
-// 通过结构化入口 applyTimeOfDay 隔离业务层。
+// W3 Polish：昼夜 tint 通过结构化入口隔离在 adapter。
 //
 // 实现要点：
 // - 4 段制（morning / noon / evening / night），与课表节奏对齐。
@@ -17,7 +16,7 @@ const TINTS: Record<TimeOfDay, number> = {
 };
 
 interface PhaserCamera {
-  setTint(color: number): void;
+  setTint?: (color: number) => void;
 }
 
 interface PhaserScene {
@@ -27,7 +26,7 @@ interface PhaserScene {
 export function applyTimeOfDay(scene: SceneLike, time: TimeOfDay): void {
   const phaserScene = scene as unknown as PhaserScene;
   const target = TINTS[time];
-  phaserScene.cameras.main.setTint(target);
+  phaserScene.cameras.main.setTint?.(target);
 }
 
 // inGameMinutes（0~24*60）→ TimeOfDay。

@@ -36,6 +36,12 @@ describe('applyTimeOfDay', () => {
     const keys = Object.keys(__testing.TINTS).sort();
     expect(keys).toEqual(['evening', 'morning', 'night', 'noon']);
   });
+
+  it('真实 Phaser camera 缺少 tint API 时不抛错', () => {
+    const scene = { cameras: { main: {} } } as unknown as SceneLike;
+
+    expect(() => applyTimeOfDay(scene, 'morning')).not.toThrow();
+  });
 });
 
 describe('deriveTimeOfDay', () => {

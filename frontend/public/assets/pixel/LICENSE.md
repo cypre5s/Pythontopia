@@ -1,7 +1,8 @@
 # Pythontopia Web 端集成像素资产 License
 
 > 本目录 (`frontend/public/assets/pixel/`) 是 Pythontopia 网页端运行所需像素资产的集成视图。
-> 源仓库 `assets/inbox/` 是已审计的离线镜像，由 `scripts/sync-assets.mjs` 增量复制到此处。
+> 源仓库 `assets/inbox/` 是已审计的离线镜像，由 `scripts/sync-assets.mjs` 增量复制到此处；
+> 少量自绘占位与手工挑选运行时素材以 manifest-only 方式登记。
 > 全仓库资产 license 总声明见 `/LICENSE-ART.md`。
 > 代码层 license 见仓库根 `LICENSE` 文件（MIT）。
 
@@ -25,7 +26,7 @@
 - **Jana Ochse (2DPIXX)** — farming-game-basics (https://opengameart.org/content/farming-game-basics)
 - **Marco L.** — pixel-lightning (https://opengameart.org/content/pixel-lightning)
 - **bluecarrot16 / TheraHedwig / Ivan Voirol** — lpc-farm (https://opengameart.org/content/lpc-farm)
-- **David Revoy** — Pepper&Carrot 24x32 character tribute
+- **Svetlana Kushnariova ("Cabbit") / David Revoy** — Pepper&Carrot 24x32 character tribute
 
 ### OFL-1.1 字体
 > Ark Pixel Font & Fusion Pixel Font by **TakWolf** — https://github.com/TakWolf — SIL OFL-1.1
@@ -43,17 +44,27 @@
 | `tilesets/kenney-tiny-dungeon` | CC0-1.0 | Kenney Vleugels | [link](https://kenney.nl/assets/tiny-dungeon) | Bug 矿洞地牢 16x16 像素 tileset |
 | `tilesets/kenney-roguelike-modern-city` | CC0-1.0 | Kenney Vleugels | [link](https://kenney.nl/assets/roguelike-modern-city) | 现代城市 tileset（可选场景） |
 | `tilesets/kenney-roguelike-caves` | CC0-1.0 | Kenney Vleugels | [link](https://kenney.nl/assets/roguelike-caves-dungeons) | 洞穴/地牢 tileset |
+| `tilesets/town_tiles.svg` | CC0-1.0 | Pythontopia project | [link](assets/pixel/LICENSE.md) | 🛈 manifest-only（已手工挑选，脚本不同步）；自绘小镇 tileset 占位 SVG；源文件为项目早期占位清单 |
+| `buildings/town_buildings.svg` | CC0-1.0 | Pythontopia project | [link](assets/pixel/LICENSE.md) | 🛈 manifest-only（已手工挑选，脚本不同步）；自绘建筑占位 SVG；源文件为项目早期占位清单 |
+| `characters/student_default.svg` | CC0-1.0 | Pythontopia project | [link](assets/pixel/LICENSE.md) | 🛈 manifest-only（已手工挑选，脚本不同步）；自绘默认学生占位 SVG；LPC Sara 不可用时的 fallback |
 | `sprites/lpc-sara` | CC-BY-SA-3.0 | Sharm / LPC Project | [link](https://opengameart.org/content/lpc-sara) | LPC Sara 全身像，BootScene player_sara 帧 64x64 |
 | `sprites/lpc-medieval-fantasy` | CC-BY-SA-3.0 | bluecarrot16 / TheraHedwig / Reemax / Ivan Voirol 等 | [link](https://opengameart.org/content/lpc-medieval-fantasy-character-sprites) | LPC 中世纪风 NPC，校园老师/同学候选 |
-| `sprites/peppercarrot-24x32` | CC-BY-4.0 | David Revoy / Pepper&Carrot Tribute | [link](https://www.peppercarrot.com) | 24x32 矮人角色，可作"小作物"NPC 候选 |
+| `sprites/peppercarrot-24x32` | CC-BY-4.0 | Svetlana Kushnariova ("Cabbit") / David Revoy | [link](https://www.peppercarrot.com) | 24x32 矮人角色，可作"小作物"NPC 候选 |
+| `portraits` | CC0-1.0 / CC-BY-4.0 | isaiah658 / Svetlana Kushnariova ("Cabbit") / David Revoy | [link](portraits/README.md) | 🛈 manifest-only（已手工挑选，脚本不同步）；20 NPC 对话立绘；来自 isaiah658 CC0 与 Pepper&Carrot 24x32 CC-BY 4.0 |
 | `vendor/opengameart/tileset_farm.png` | CC-BY-3.0 | Marionline | [link](https://opengameart.org/content/farm-tileset) | 农场主 tileset，BootScene tileset_farm 引用 |
 | `vendor/opengameart/cereals.png` | CC0-1.0 | Scratchio | [link](https://opengameart.org/content/cereals) | 谷物像素图，BootScene cereals 引用（注意目标小写） |
 | `vendor/opengameart/vegetables.png` | CC0-1.0 | Scratchio | [link](https://opengameart.org/content/vegetables) | 蔬菜像素图，BootScene vegetables 引用（注意目标小写） |
+| `vendor/opengameart/crates_and_sacks.png` | CC0-1.0 | ScratchIO | [link](https://opengameart.org/content/crates-and-sacks) | 🛈 manifest-only（已手工挑选，脚本不同步）；货箱与麻袋像素图；当前 public 文件为手工集成，源页 CC0 已核对 |
 | `fonts/ark-pixel-10px-proportional-latin.woff2` | OFL-1.1 | TakWolf | [link](https://github.com/TakWolf/ark-pixel-font) | Ark Pixel 10px Latin（HUD 小数字） |
 | `fonts/ark-pixel-10px-proportional-zh_cn.woff2` | OFL-1.1 | TakWolf | [link](https://github.com/TakWolf/ark-pixel-font) | Ark Pixel 10px 简中（备用字体） |
 | `fonts/ark-pixel-12px-proportional-latin.woff2` | OFL-1.1 | TakWolf | [link](https://github.com/TakWolf/ark-pixel-font) | Ark Pixel 12px Latin（备用，主推 prop 系列已手工压缩入库） |
 | `fonts/ark-pixel-12px-proportional-zh_cn.woff2` | OFL-1.1 | TakWolf | [link](https://github.com/TakWolf/ark-pixel-font) | Ark Pixel 12px 简中（备用，主推 prop 系列已手工压缩入库） |
 | `fonts/LICENSE-ark-pixel-OFL.txt` | OFL-1.1 | TakWolf | [link](https://github.com/TakWolf/ark-pixel-font) | Ark Pixel OFL 协议原文（OFL-1.1 强制保留） |
+| `fonts/OFL.txt` | OFL-1.1 | TakWolf | [link](https://github.com/TakWolf/ark-pixel-font) | Ark Pixel OFL 协议原文（旧运行时路径） |
+| `fonts/ark-pixel-12px-mono-latin.woff2` | OFL-1.1 | TakWolf | [link](https://github.com/TakWolf/ark-pixel-font) | Ark Pixel 12px monospaced Latin（运行时短文件名） |
+| `fonts/ark-pixel-12px-mono-zh_cn.woff2` | OFL-1.1 | TakWolf | [link](https://github.com/TakWolf/ark-pixel-font) | Ark Pixel 12px monospaced 简中（运行时短文件名） |
+| `fonts/ark-pixel-12px-prop-latin.woff2` | OFL-1.1 | TakWolf | [link](https://github.com/TakWolf/ark-pixel-font) | Ark Pixel 12px proportional Latin（运行时短文件名） |
+| `fonts/ark-pixel-12px-prop-zh_cn.woff2` | OFL-1.1 | TakWolf | [link](https://github.com/TakWolf/ark-pixel-font) | Ark Pixel 12px proportional 简中（运行时短文件名） |
 | `fonts/fusion-pixel-12px-proportional-zh_hans.woff2` | OFL-1.1 | TakWolf | [link](https://github.com/TakWolf/fusion-pixel-font) | Fusion Pixel 12px 简中（主推中文像素字体，GB2312 覆盖 93.92%） |
 | `fonts/fusion-pixel-10px-proportional-latin.woff2` | OFL-1.1 | TakWolf | [link](https://github.com/TakWolf/fusion-pixel-font) | Fusion Pixel 10px Latin（HUD 数字小字号） |
 | `fonts/LICENSE-fusion-pixel-OFL.txt` | OFL-1.1 | TakWolf | [link](https://github.com/TakWolf/fusion-pixel-font) | Fusion Pixel OFL 协议原文 |
@@ -73,11 +84,14 @@
 | `sfx/bell` | CC0-1.0 | Kenney Vleugels | [link](https://kenney.nl/assets/impact-sounds) | 收获完成铃声 6 个音效（重命名 bell_chime → bell） |
 | `sfx/jingle-complete.ogg` | CC0-1.0 | Kenney Vleugels | [link](https://kenney.nl/assets/music-jingles) | 任务完成 jingle（NES 风），BootScene sfx_jingle_complete |
 | `sfx/jingle-level-up.ogg` | CC0-1.0 | Kenney Vleugels | [link](https://kenney.nl/assets/music-jingles) | 等级提升 jingle（NES 风），BootScene sfx_jingle_levelup |
+| `sfx/success.ogg` | CC0-1.0 | Kenney Vleugels | [link](https://kenney.nl/assets/digital-audio) | 答题/资源生成成功提示音，BootScene sfx_success |
+| `sfx/error.ogg` | CC0-1.0 | Kenney Vleugels | [link](https://kenney.nl/assets/digital-audio) | 答题/资源生成失败提示音，BootScene sfx_error |
 | `icons_kc` | CC-BY-3.0 | Lorc, Delapouite, Skoll, sbed, Carl Olsen | [link](https://game-icons.net) | 60+ KC 主题图标，按 Pythontopia 知识点分组 |
 | `effects/codemanu-pixel-fx` | CC0-1.0 | CodeManu | [link](https://opengameart.org/content/pixel-fx-pack) | 通用粒子特效 10 帧 |
 | `effects/jellyfizh-confetti` | CC0-1.0 | Jellyfizh | [link](https://opengameart.org/content/confetti) | 完成奖励彩纸 |
 | `effects/jellyfizh-poof` | CC0-1.0 | Jellyfizh | [link](https://opengameart.org/content/poof) | 消失/淡出动画 |
 | `effects/john2k-heal` | CC-BY-4.0 | john2k | [link](https://opengameart.org/content/heal-effect) | 治疗/复习成功特效 |
+| `effects/weather` | CC0-1.0 | Yevhen Babiichuk (DustDFG) / donte / alxl / Pythontopia project | [link](assets/inbox/weather_fx/LICENSE.md) | 🛈 manifest-only（已手工挑选，脚本不同步）；天气粒子运行时精选：云、雨滴、雪花来自已审计 CC0；confetti 为项目运行时粒子占位 |
 | `ui/kenney-adventure` | CC0-1.0 | Kenney Vleugels | [link](https://kenney.nl/assets/ui-pack-adventure) | 🛈 manifest-only（已手工挑选，脚本不同步）；冒险风 UI 9-slice 元素，public 已挑选 Default/Double 子集，本脚本不再同步全量 |
 
 > 编辑方式：修改 `scripts/sync-assets.mjs` 的 MANIFEST 数组后重新运行 `node scripts/sync-assets.mjs`。

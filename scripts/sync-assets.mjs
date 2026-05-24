@@ -107,6 +107,36 @@ const MANIFEST = [
     source: 'https://kenney.nl/assets/roguelike-caves-dungeons',
     notes: '洞穴/地牢 tileset',
   },
+  {
+    src: 'assets/pixel/LICENSE.md',
+    dest: 'tilesets/town_tiles.svg',
+    kind: 'file',
+    license: 'CC0-1.0',
+    author: 'Pythontopia project',
+    source: 'assets/pixel/LICENSE.md',
+    notes: '自绘小镇 tileset 占位 SVG；源文件为项目早期占位清单',
+    noSync: true,
+  },
+  {
+    src: 'assets/pixel/LICENSE.md',
+    dest: 'buildings/town_buildings.svg',
+    kind: 'file',
+    license: 'CC0-1.0',
+    author: 'Pythontopia project',
+    source: 'assets/pixel/LICENSE.md',
+    notes: '自绘建筑占位 SVG；源文件为项目早期占位清单',
+    noSync: true,
+  },
+  {
+    src: 'assets/pixel/LICENSE.md',
+    dest: 'characters/student_default.svg',
+    kind: 'file',
+    license: 'CC0-1.0',
+    author: 'Pythontopia project',
+    source: 'assets/pixel/LICENSE.md',
+    notes: '自绘默认学生占位 SVG；LPC Sara 不可用时的 fallback',
+    noSync: true,
+  },
 
   // ============================================================
   // === LPC 角色（CC-BY-SA 3.0+，传染性，已接受）===
@@ -134,9 +164,19 @@ const MANIFEST = [
     dest: 'sprites/peppercarrot-24x32',
     kind: 'dir',
     license: 'CC-BY-4.0',
-    author: 'David Revoy / Pepper&Carrot Tribute',
+    author: 'Svetlana Kushnariova ("Cabbit") / David Revoy',
     source: 'https://www.peppercarrot.com',
     notes: '24x32 矮人角色，可作"小作物"NPC 候选',
+  },
+  {
+    src: 'portraits/README.md',
+    dest: 'portraits',
+    kind: 'dir',
+    license: 'CC0-1.0 / CC-BY-4.0',
+    author: 'isaiah658 / Svetlana Kushnariova ("Cabbit") / David Revoy',
+    source: 'portraits/README.md',
+    notes: '20 NPC 对话立绘；来自 isaiah658 CC0 与 Pepper&Carrot 24x32 CC-BY 4.0',
+    noSync: true,
   },
 
   // ============================================================
@@ -168,6 +208,16 @@ const MANIFEST = [
     author: 'Scratchio',
     source: 'https://opengameart.org/content/vegetables',
     notes: '蔬菜像素图，BootScene vegetables 引用（注意目标小写）',
+  },
+  {
+    src: 'opengameart_farming/scratchio/Crates And Sacks.png',
+    dest: 'vendor/opengameart/crates_and_sacks.png',
+    kind: 'file',
+    license: 'CC0-1.0',
+    author: 'ScratchIO',
+    source: 'https://opengameart.org/content/crates-and-sacks',
+    notes: '货箱与麻袋像素图；当前 public 文件为手工集成，源页 CC0 已核对',
+    noSync: true,
   },
 
   // ============================================================
@@ -217,6 +267,51 @@ const MANIFEST = [
     author: 'TakWolf',
     source: 'https://github.com/TakWolf/ark-pixel-font',
     notes: 'Ark Pixel OFL 协议原文（OFL-1.1 强制保留）',
+  },
+  {
+    src: 'github_extra/ark_pixel_font/OFL.txt',
+    dest: 'fonts/OFL.txt',
+    kind: 'file',
+    license: 'OFL-1.1',
+    author: 'TakWolf',
+    source: 'https://github.com/TakWolf/ark-pixel-font',
+    notes: 'Ark Pixel OFL 协议原文（旧运行时路径）',
+  },
+  {
+    src: 'github_extra/ark_pixel_font/ark-pixel-12px-monospaced-latin.ttf.woff2',
+    dest: 'fonts/ark-pixel-12px-mono-latin.woff2',
+    kind: 'file',
+    license: 'OFL-1.1',
+    author: 'TakWolf',
+    source: 'https://github.com/TakWolf/ark-pixel-font',
+    notes: 'Ark Pixel 12px monospaced Latin（运行时短文件名）',
+  },
+  {
+    src: 'github_extra/ark_pixel_font/ark-pixel-12px-monospaced-zh_cn.ttf.woff2',
+    dest: 'fonts/ark-pixel-12px-mono-zh_cn.woff2',
+    kind: 'file',
+    license: 'OFL-1.1',
+    author: 'TakWolf',
+    source: 'https://github.com/TakWolf/ark-pixel-font',
+    notes: 'Ark Pixel 12px monospaced 简中（运行时短文件名）',
+  },
+  {
+    src: 'github_extra/ark_pixel_font/ark-pixel-12px-proportional-latin.ttf.woff2',
+    dest: 'fonts/ark-pixel-12px-prop-latin.woff2',
+    kind: 'file',
+    license: 'OFL-1.1',
+    author: 'TakWolf',
+    source: 'https://github.com/TakWolf/ark-pixel-font',
+    notes: 'Ark Pixel 12px proportional Latin（运行时短文件名）',
+  },
+  {
+    src: 'github_extra/ark_pixel_font/ark-pixel-12px-proportional-zh_cn.ttf.woff2',
+    dest: 'fonts/ark-pixel-12px-prop-zh_cn.woff2',
+    kind: 'file',
+    license: 'OFL-1.1',
+    author: 'TakWolf',
+    source: 'https://github.com/TakWolf/ark-pixel-font',
+    notes: 'Ark Pixel 12px proportional 简中（运行时短文件名）',
   },
 
   // === Fusion Pixel 字体（OFL-1.1，主推 CJK 字体）===
@@ -401,6 +496,24 @@ const MANIFEST = [
     source: 'https://kenney.nl/assets/music-jingles',
     notes: '等级提升 jingle（NES 风），BootScene sfx_jingle_levelup',
   },
+  {
+    src: 'sfx_extra/digital-audio/Audio/highUp.ogg',
+    dest: 'sfx/success.ogg',
+    kind: 'file',
+    license: 'CC0-1.0',
+    author: 'Kenney Vleugels',
+    source: 'https://kenney.nl/assets/digital-audio',
+    notes: '答题/资源生成成功提示音，BootScene sfx_success',
+  },
+  {
+    src: 'sfx_extra/digital-audio/Audio/highDown.ogg',
+    dest: 'sfx/error.ogg',
+    kind: 'file',
+    license: 'CC0-1.0',
+    author: 'Kenney Vleugels',
+    source: 'https://kenney.nl/assets/digital-audio',
+    notes: '答题/资源生成失败提示音，BootScene sfx_error',
+  },
 
   // ============================================================
   // === game-icons.net KC 图标（CC-BY 3.0，强制署名）===
@@ -453,6 +566,16 @@ const MANIFEST = [
     author: 'john2k',
     source: 'https://opengameart.org/content/heal-effect',
     notes: '治疗/复习成功特效',
+  },
+  {
+    src: 'weather_fx/LICENSE.md',
+    dest: 'effects/weather',
+    kind: 'dir',
+    license: 'CC0-1.0',
+    author: 'Yevhen Babiichuk (DustDFG) / donte / alxl / Pythontopia project',
+    source: 'assets/inbox/weather_fx/LICENSE.md',
+    notes: '天气粒子运行时精选：云、雨滴、雪花来自已审计 CC0；confetti 为项目运行时粒子占位',
+    noSync: true,
   },
 
   // ============================================================
@@ -653,7 +776,8 @@ async function processEntry(entry, opts) {
 const LICENSE_HEADER = `# Pythontopia Web 端集成像素资产 License
 
 > 本目录 (\`frontend/public/assets/pixel/\`) 是 Pythontopia 网页端运行所需像素资产的集成视图。
-> 源仓库 \`assets/inbox/\` 是已审计的离线镜像，由 \`scripts/sync-assets.mjs\` 增量复制到此处。
+> 源仓库 \`assets/inbox/\` 是已审计的离线镜像，由 \`scripts/sync-assets.mjs\` 增量复制到此处；
+> 少量自绘占位与手工挑选运行时素材以 manifest-only 方式登记。
 > 全仓库资产 license 总声明见 \`/LICENSE-ART.md\`。
 > 代码层 license 见仓库根 \`LICENSE\` 文件（MIT）。
 
@@ -677,7 +801,7 @@ const LICENSE_HEADER = `# Pythontopia Web 端集成像素资产 License
 - **Jana Ochse (2DPIXX)** — farming-game-basics (https://opengameart.org/content/farming-game-basics)
 - **Marco L.** — pixel-lightning (https://opengameart.org/content/pixel-lightning)
 - **bluecarrot16 / TheraHedwig / Ivan Voirol** — lpc-farm (https://opengameart.org/content/lpc-farm)
-- **David Revoy** — Pepper&Carrot 24x32 character tribute
+- **Svetlana Kushnariova ("Cabbit") / David Revoy** — Pepper&Carrot 24x32 character tribute
 
 ### OFL-1.1 字体
 > Ark Pixel Font & Fusion Pixel Font by **TakWolf** — https://github.com/TakWolf — SIL OFL-1.1
