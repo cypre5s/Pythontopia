@@ -41,6 +41,9 @@ public class LearningEventController {
       @CurrentUser CurrentUserPrincipal user,
       @Valid @RequestBody List<LearningEventLogDto> events) {
     requireStudent(user);
+    if (events.size() > 100) {
+      throw new BusinessException(HttpStatus.BAD_REQUEST, "BATCH_TOO_LARGE", "Max 100 events per batch");
+    }
     for (LearningEventLogDto dto : events) {
       repository.insert(
           user.userId(),
