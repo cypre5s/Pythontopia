@@ -21,6 +21,14 @@ import {
 } from '@/types/mainQuest';
 
 const PERSIST_KEY = 'pyt_main_quest_progress_v1';
+
+function syncEventToBackend(eventType: string, payload: Record<string, unknown>): void {
+  void import('@/api/learningEvent').then((mod) => {
+    mod.postLearningEvent({ eventType, payload }).catch(() => {
+      // B3: 后端不可达时静默忽略，前端 localStorage 仍兜底
+    });
+  });
+}
 const MAX_AI_LOG = 30;
 
 function safeParse(raw: string | null): MainQuestProgress | null {
@@ -239,6 +247,7 @@ export const useMainQuestStore = defineStore('mainQuest', {
 
     /** dialog store close 时调：找 evidenceRequired.type==='dialog_complete' 且 npcKey 匹配的子任务。 */
     onDialogClose(npcKey: string): MainSubQuest | null {
+      syncEventToBackend('dialog_complete', { npcKey });
       for (const q of MAIN_QUESTS) {
         if (this.progress.completedSubQuests.includes(q.id)) continue;
         const ev = q.evidenceRequired;
@@ -251,6 +260,7 @@ export const useMainQuestStore = defineStore('mainQuest', {
 
     /** learning store createResource 成功时调：找 evidenceRequired.type==='resource_consumed' 匹配的子任务。 */
     onResourceCreated(resourceType: string, kcCodes: readonly string[]): MainSubQuest | null {
+      syncEventToBackend('resource_consumed', { resourceType, kcCodes: [...kcCodes] });
       for (const q of MAIN_QUESTS) {
         if (this.progress.completedSubQuests.includes(q.id)) continue;
         const ev = q.evidenceRequired;
@@ -266,6 +276,7 @@ export const useMainQuestStore = defineStore('mainQuest', {
 
     /** Arena/Endless/Boss submission 通过时调：找 evidenceRequired.type==='submission' 匹配的子任务。 */
     onSubmissionPassed(payload: { problemId?: number | string; kcCode?: string }): MainSubQuest | null {
+      syncEventToBackend('submission_passed', payload);
       for (const q of MAIN_QUESTS) {
         if (this.progress.completedSubQuests.includes(q.id)) continue;
         const ev = q.evidenceRequired;
