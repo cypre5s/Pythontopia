@@ -165,12 +165,15 @@ describe('DialogModal.vue typewriter (W2-dialog-upgrade)', () => {
     expect(right.attributes('src')).toBe('/custom-right.png');
   });
 
-  it('falls back to /assets/pixel/portraits/portrait_<npcKey>.png when portraitLeft prop is omitted', () => {
+  it('falls back to /assets/pixel/portraits/heads/portrait_<npcKey>_head.png when portraitLeft prop is omitted (R-13 §-1 B1 v3)', () => {
     primeLegacy();
     const wrapper = mount(DialogModal);
     const left = wrapper.find('[data-testid="dialog-portrait-left"] img');
     expect(left.exists()).toBe(true);
-    expect(left.attributes('src')).toBe('/assets/pixel/portraits/portrait_test_npc.png');
+    // R-13 §-1 B1 续修 v3：源 portrait 是 LPC sprite sheet，sprite-sheet 整张直接 <img>
+    // 会显示 9 个小头；scripts/crop-portrait-heads.py 已批量切单帧到 portraits/heads/
+    // *_head.png，DialogModal 改走单帧 PNG 路径。
+    expect(left.attributes('src')).toBe('/assets/pixel/portraits/heads/portrait_test_npc_head.png');
     expect(wrapper.find('[data-testid="dialog-portrait-right"]').exists()).toBe(false);
   });
 

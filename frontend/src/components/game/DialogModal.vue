@@ -63,7 +63,13 @@ const fullText = computed<string>(() => {
 
 const resolvedPortraitLeft = computed<string>(() => {
   if (props.portraitLeft) return props.portraitLeft;
-  if (dialog.npcKey) return `/assets/pixel/portraits/portrait_${dialog.npcKey}.png`;
+  if (dialog.npcKey) {
+    // R-13 §-1 B1 续修：原 portrait 是 LPC sprite sheet（48x72 = 3x3 朝向×动画帧），
+    // 直接 <img> 会一次性显示整张 sheet 的 9 个小头。改走 scripts/crop-portrait-heads.py
+    // 预切的单帧头像 `_head.png`（32x48）。脚本输出在 portraits/heads/ 下，每张图
+    // 都是左上 idle-down 帧 + 2x NEAREST 放大，DialogModal CSS 直接 object-fit: contain。
+    return `/assets/pixel/portraits/heads/portrait_${dialog.npcKey}_head.png`;
+  }
   return '';
 });
 
@@ -350,25 +356,21 @@ onBeforeUnmount(() => {
   align-self: flex-end;
 }
 
-/* R-13 §-1 B1 续修：CDP 实测 (cursor-ide-browser) 确认 portrait 文件确实是
-   48x72 的 3x3 LPC sprite sheet（行=朝向，列=动画帧）。展示策略：
-     1. `<img>` 自身尺寸 16x24（即单帧）；
-     2. `object-fit: none` 阻止浏览器拉伸把整张 sprite sheet 塞进 16x24；
-     3. `object-position: 0 0` 永远只显示左上第一帧（idle 朝下）；
-     4. `transform: scale(4)` 把 16x24 像素放大到 64x96，等高填满容器；
-        scale 4 而不是 3.5 让头部更醒目，宽 64 与容器 96 左右各 16px 留白；
-     5. `image-rendering: pixelated` 保留方块像素感不模糊。
-   测试时若调大 scale 至 6x，头部会撑满宽度但下半身被 overflow:hidden 切掉，
-   适合「只想看脸」的紧凑场景；当前保持 4x 用于和星露谷立绘风格保持一致。 */
+/* R-13 §-1 B1 续修 v3：源文件已被 scripts/crop-portrait-heads.py 切成 32x48 单帧 PNG
+   并放在 portraits/heads/，DialogModal 改用 `_head.png` 路径后，CSS 不再需要做
+   sprite sheet 偏移与 transform scale。直接 `object-fit: contain` 让 32x48 头像在
+   96x96 容器内等比放大到 64x96（宽 64 + 左右 16 px 留白），像素感由
+   `image-rendering: pixelated` 保留。
+
+   这样修复了之前 "整张 sheet 9 个小头同时出现" 的 bug，并兼容了非 48x72 的异类
+   尺寸（48x64 / 48x96 / 153x128 / ...），因为切片脚本统一输出 32x48。 */
 .pixel-portrait {
-  width: 16px;
-  height: 24px;
+  width: 100%;
+  height: 100%;
   image-rendering: pixelated;
   -ms-interpolation-mode: nearest-neighbor;
-  object-fit: none;
-  object-position: 0 0;
-  transform: scale(4);
-  transform-origin: center center;
+  object-fit: contain;
+  object-position: center;
 }
 
 /* R-13 修复：
