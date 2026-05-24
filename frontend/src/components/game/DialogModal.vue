@@ -61,6 +61,15 @@ const fullText = computed<string>(() => {
   return '';
 });
 
+const heartDisplay = computed<string>(() => {
+  const f = dialog.friendship;
+  if (f <= 0) return '';
+  const full = Math.min(Math.floor(f / 10), 10);
+  const remainder = f % 10;
+  if (full >= 10) return '❤'.repeat(10);
+  return '❤'.repeat(full) + (remainder > 0 ? ` +${remainder}` : '');
+});
+
 const resolvedPortraitLeft = computed<string>(() => {
   if (props.portraitLeft) return props.portraitLeft;
   if (dialog.npcKey) {
@@ -256,6 +265,14 @@ onBeforeUnmount(() => {
         class="dialog-head"
       >
         <span class="name-tag">{{ dialog.npcName || dialog.npcKey }}</span>
+        <span
+          v-if="dialog.friendship > 0"
+          class="friendship-badge"
+          :aria-label="`好感度 ${dialog.friendship}`"
+          data-testid="dialog-friendship"
+        >
+          <span class="hearts">{{ heartDisplay }}</span>
+        </span>
       </header>
 
       <p
@@ -419,6 +436,25 @@ onBeforeUnmount(() => {
 
 .name-tag {
   font-weight: 600;
+}
+
+.dialog-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.friendship-badge {
+  font-size: 13px;
+  color: #ffb3b3;
+  background: rgba(255, 179, 179, 0.12);
+  padding: 2px 8px;
+  border-radius: 999px;
+  letter-spacing: 1px;
+}
+
+.hearts {
+  font-size: 12px;
 }
 
 .dialog-text {

@@ -30,6 +30,15 @@ const currentNode = computed<DialogNode | null>(() => store.currentNode);
 const loading = computed<boolean>(() => store.loading);
 const loadError = computed<string | null>(() => store.loadError);
 
+const heartDisplay = computed<string>(() => {
+  const f = store.friendship;
+  if (f <= 0) return '';
+  const full = Math.min(Math.floor(f / 10), 10);
+  const remainder = f % 10;
+  if (full >= 10) return '❤'.repeat(10);
+  return '❤'.repeat(full) + (remainder > 0 ? ` +${remainder}` : '');
+});
+
 const portraitSrc = computed<string | null>(() => {
   if (!store.portrait) return null;
   return `/assets/pixel/portraits/${store.portrait}`;
@@ -157,10 +166,11 @@ function onPortraitError(event: Event): void {
           <header class="dialog-head">
             <span class="name-tag">{{ store.npcName || '???' }}</span>
             <span
-              v-if="store.friendship !== 0"
+              v-if="store.friendship > 0"
               class="friendship"
               :aria-label="`好感度 ${store.friendship}`"
-            >♥ {{ store.friendship }}</span>
+              data-testid="dialog-friendship"
+            >{{ heartDisplay }}</span>
           </header>
 
           <p

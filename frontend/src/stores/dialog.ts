@@ -137,6 +137,35 @@ const DEFAULT_NPC_DATA_BASE = '/data/npcs';
 const friendshipMemory = new Map<string, number>();
 
 /**
+ * 持久化到 localStorage — 让跨刷新也保留。
+ * 后端 /api/npc/friendship 接入后可废弃此本地层。
+ */
+const FRIENDSHIP_KEY = 'pyt_friendship_v1';
+
+function loadFriendshipFromStorage(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const raw = window.localStorage.getItem(FRIENDSHIP_KEY);
+    if (!raw) return;
+    const obj = JSON.parse(raw) as Record<string, number>;
+    for (const [k, v] of Object.entries(obj)) {
+      if (typeof v === 'number') friendshipMemory.set(k, v);
+    }
+  } catch { /* private mode / corrupt */ }
+}
+
+function persistFriendship(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const obj: Record<string, number> = {};
+    for (const [k, v] of friendshipMemory) obj[k] = v;
+    window.localStorage.setItem(FRIENDSHIP_KEY, JSON.stringify(obj));
+  } catch { /* private mode */ }
+}
+
+loadFriendshipFromStorage();
+
+/**
  * 模块级 `dialog:choice` 事件监听集合。
  *
  * 选择自建一个最小事件总线而不是引入 mitt，原因：
@@ -243,8 +272,11 @@ export const useDialogStore = defineStore('dialog', {
         this.npcName = meta.name || npcKey;
         this.portrait = meta.portrait ?? null;
         this.tree = tree;
-        this.currentNodeId = tree.rootNodeId;
-        this.history = tree.rootNodeId ? [tree.rootNodeId] : [];
+
+        const gated = this.findBestGatedNode(tree);
+        const startNode = gated ?? tree.rootNodeId;
+        this.currentNodeId = startNode;
+        this.history = startNode ? [startNode] : [];
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         this.loadError = `NPC 数据加载失败：${npcKey}（${message}）`;
@@ -270,9 +302,8 @@ export const useDialogStore = defineStore('dialog', {
           if (effect.type === 'friendship' && typeof effect.delta === 'number') {
             this.friendship += effect.delta;
             friendshipMemory.set(this.npcKey, this.friendship);
+            persistFriendship();
           }
-          // give_item / quest_recommend / set_flag / open_panel：
-          // 当前阶段保留为占位，后续由 R-Live-Quest / R-Live-Inventory 子代理接入。
         }
       }
 
@@ -356,16 +387,61 @@ export const useDialogStore = defineStore('dialog', {
     },
 
     /**
+     * 评估条件列表是否全部满足（AND 逻辑）。
+     * 当前只实现 friendship_min；其余类型在 R-Live 接入后端后补全。
+     */
+    evaluateConditions(conditions: DialogCondition[]): boolean {
+      if (conditions.length === 0) return true;
+      for (const cond of conditions) {
+        switch (cond.type) {
+          case 'friendship_min':
+            if (this.friendship < (cond.value ?? 0)) return false;
+            break;
+          case 'flag_set':
+          case 'kc_mastered':
+          case 'first_time_this_week':
+          case 'gift_just_given':
+            break;
+        }
+      }
+      return true;
+    },
+
+    /**
+     * 在对话树中找 friendship-gated 特殊节点（如 friendship_max）。
+     * 优先选 friendship_min 值最高且当前满足的节点。
+     */
+    findBestGatedNode(tree: NpcDialogTree): string | null {
+      let best: { nodeId: string; threshold: number } | null = null;
+      for (const [nodeId, node] of Object.entries(tree.nodes)) {
+        if (nodeId === tree.rootNodeId) continue;
+        const friendshipCond = node.conditions.find((c) => c.type === 'friendship_min');
+        if (!friendshipCond) continue;
+        const threshold = friendshipCond.value ?? 0;
+        if (this.friendship >= threshold) {
+          if (!best || threshold > best.threshold) {
+            best = { nodeId, threshold };
+          }
+        }
+      }
+      return best?.nodeId ?? null;
+    },
+
+    /**
      * 关闭对话：
      *   - 同时清理旧 API 状态，确保 DialogModal 也会跟着收起；
-     *   - friendship 不重置（写入 friendshipMemory，下次打开同 NPC 还原）。
+     *   - friendship 不重置（写入 friendshipMemory，下次打开同 NPC 还原）；
+     *   - 有过实质互动（history > 1）时自动 +1 好感。
      */
     close(): void {
       const wasOpen = this.visible || this.openNpcKey !== null;
-      // R-13 §-1 critical fix：抓住关闭前的 npcKey，作为主线 evidence 触发。
-      // 之前 close() 直接清 npcKey，导致主线任务 1-1（找镇长 Py 对话）等
-      // dialog_complete 类 evidence 永远无法触发完成。
       const closingNpcKey = this.npcKey ?? this.openNpcKey;
+
+      if (closingNpcKey && this.history.length > 1) {
+        this.friendship += 1;
+        friendshipMemory.set(closingNpcKey, this.friendship);
+        persistFriendship();
+      }
       this.openNpcKey = null;
       this.lines = [];
       this.visible = false;
