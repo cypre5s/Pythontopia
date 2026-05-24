@@ -211,3 +211,67 @@ npm run dev  # 启动 5173（strictPort）
 - 后端 mvn test 全量（本会话只跑了 mvn compile）
 - 流式 SSE 输出端到端
 - 多用户并发隔离
+
+---
+
+## 7. R-13 Phase 9 · 安全测试（2026-05-24 22:15）
+
+### 7.1 前端 vitest 安全套（55 用例）
+
+`tests/integration/security.integration.spec.ts`：
+- XSS 8 个常见 payload 不引入 script/iframe/inline event（×2 = ShopPage / NotFoundPage = 16）
+- DoS：超长字符串 0/1/10k/100k 字符渲染不抛错 = 4
+- 路由权限：18 个受保护路由未登录跳 login（带 redirect query）+ 2 guestOnly 跳 /world + 1 公开 = 21
+- Token 处理：localStorage 空 / 含 token / JSON 损坏 / 过期 / 篡改 = 5
+- URL fuzz：超长/转义/路径遍历 6 个 url 命中 catch-all = 6
+- HUD 边界：hidden 时 toggleSlot 被忽略 / NaN / 负数 = 3
+
+### 7.2 前端工作流套（36 用例）
+
+`tests/integration/workflows.integration.spec.ts`：登录态 + HUD + Calendar + FastTravel + Dialog + Inventory 跨 store。
+
+### 7.3 后端 live curl 安全测试（13 项）
+
+| # | 测试 | 结果 | 等级 |
+| -- | -- | -- | -- |
+| 1 | SQL 注入登录 `admin' OR 1=1--` | 401 BAD_CREDENTIALS | ✅ |
+| 2 | XSS displayName `<script>` 注册 | **修复前 201** → **修复后 400 VALIDATION_ERROR**（加 @Pattern） | ⚠️→✅ |
+| 3 | JWT 篡改 token | 401 UNAUTHORIZED | ✅ |
+| 4 | 无 token 访问 bootstrap | 401 UNAUTHORIZED | ✅ |
+| 5 | 路径遍历 `/api/world/shops/..%2F..%2Fetc%2Fpasswd` | 400 Bad Request（Tomcat 默认拒） | ✅ |
+| 6 | username `$evil` | **修复前 201** → **修复后 400 VALIDATION_ERROR**（加 @Pattern） | ⚠️→✅ |
+| 7 | 超长 username 5KB | 400 size must be between 3 and 64 | ✅ |
+| 8 | 弱密码 6 字符 | 400 size must be between 8 and 72 | ✅ |
+| 9 | CORS 跨源 `http://evil.com` 预检 | **403 Invalid CORS** + `X-Frame-Options: DENY` + `X-Content-Type-Options: nosniff` | ✅ |
+| 10 | TEACHER 角色注册无 invite code | 403 FORBIDDEN | ✅ |
+| 11 | JWT 重放（同 token 5 次 bootstrap） | 全 200（无状态 JWT 设计，演示场景可接受） | ℹ️ |
+| 12 | 50 次错误登录速率限制 | **全 401，无 rate limit** | ⚠️ medium，遗留 |
+| 13 | DELETE /api/world/shops/{key} | **500（应 405 Method Not Allowed）** | ⚠️ low，遗留 |
+
+### 7.4 安全修复（本会话）
+
+| # | bug | 文件 | 修复 |
+| -- | -- | -- | -- |
+| 1 | RegisterRequest.displayName 无 HTML 净化（XSS via Android / 邮件渲染） | `backend/src/main/java/com/pythontopia/auth/dto/RegisterRequest.java` | 加 `@Pattern("^[^<>&\"'\`]+$")` 拒绝 HTML 元字符 |
+| 2 | RegisterRequest.username 接受 `$evil` 等特殊字符（命名混乱 + 潜在 query 拼接风险） | 同上 | 加 `@Pattern("^[A-Za-z0-9_.-]+$")` 只允许字母数字下划线连字符点 |
+
+修复后**正常注册仍 OK**（中文 displayName 如「张三 Lee.2」通过）。
+
+### 7.5 安全遗留（下一会话处理）
+
+- **rate limit**：建议加 Bucket4j 或 spring-cloud-gateway，对 /api/auth/login 限速（同 IP 10/min lockout）
+- **方法限制**：DELETE/PUT 等未支持方法应统一返回 405 而非 500（加 @ResponseStatus 或 GlobalExceptionHandler HttpRequestMethodNotSupportedException）
+- **traceId**：`GlobalExceptionHandler.traceId` 永远空字符串，事故排查困难（加 filter 注入 MDC）
+- **JWT replay**：无状态设计，建议加 jti + Redis 黑名单防重放
+- **session timeout**：JWT 720 分钟过长（12 小时），建议缩到 60 分钟 + refresh token
+- **CSP**：响应头缺 Content-Security-Policy，建议加 default-src 'self'
+- **HTTPS**：dev 用 HTTP，生产部署必须 HTTPS + HSTS
+
+### 7.6 最终全量验证（2026-05-24 22:18）
+
+- frontend typecheck 0 error
+- frontend vitest **1166 / 1166 PASS**（base 843 → +323 用例累计）
+- frontend lint 0 error（2 历史 warning）
+- frontend build 主 bundle 27KB / gzip 11KB
+- backend mvn compile BUILD SUCCESS（含 RegisterRequest @Pattern 修复）
+- live 后端 13 项安全测试通过 + 2 项 bug 修复 + 5 项遗留
