@@ -71,47 +71,6 @@ function fillAndSubmitDemo(): void {
 
 <template>
   <main class="auth-page auth-page--pixel">
-    <!-- 天空层：太阳 + 云朵（cloud-drift 缓慢漂移） -->
-    <div
-      class="auth-page__sky"
-      aria-hidden="true"
-    >
-      <svg
-        viewBox="0 0 480 120"
-        preserveAspectRatio="xMidYMid slice"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <!-- 太阳 -->
-        <circle
-          cx="420"
-          cy="36"
-          r="22"
-          fill="#ffd166"
-        />
-        <circle
-          cx="420"
-          cy="36"
-          r="32"
-          fill="#ffd166"
-          opacity="0.18"
-        />
-        <!-- 飞鸟剪影（v 形） -->
-        <path d="M 90 24 l 6 -4 l 6 4 M 120 32 l 5 -3 l 5 3" stroke="#4d3613" stroke-width="1.5" fill="none" />
-        <!-- 云朵：3 组 group + cloud-drift 平移 -->
-        <g class="cloud cloud--a">
-          <ellipse cx="40" cy="40" rx="20" ry="9" fill="#fff7e6" />
-          <ellipse cx="55" cy="32" rx="14" ry="8" fill="#fff7e6" />
-        </g>
-        <g class="cloud cloud--b">
-          <ellipse cx="200" cy="55" rx="24" ry="10" fill="#fff7e6" />
-          <ellipse cx="220" cy="48" rx="14" ry="7" fill="#fff7e6" />
-        </g>
-        <g class="cloud cloud--c">
-          <ellipse cx="320" cy="38" rx="18" ry="8" fill="#fff7e6" opacity="0.85" />
-        </g>
-      </svg>
-    </div>
-
     <!-- 远景层：星露谷暖色像素小镇 hero（AI 原创，CC-BY-SA 3.0+ 入库）
          位置：/assets/pixel/ui/login-hero-stardew.png
          样式：cover 撑满容器，pixelated 渲染保留像素感。 -->
@@ -313,12 +272,10 @@ function fillAndSubmitDemo(): void {
 <style scoped>
 .auth-page--pixel {
   position: relative;
-  background:
-    linear-gradient(180deg, #9bd5f7 0%, #c5e6f8 35%, #faf3e0 75%, #e7d8a8 100%);
+  background: #faf3e0;
   overflow: hidden;
 }
 
-.auth-page__sky,
 .auth-page__hero,
 .auth-page__bg-art {
   position: absolute;
@@ -326,17 +283,10 @@ function fillAndSubmitDemo(): void {
   right: 0;
   pointer-events: none;
 }
-.auth-page__sky {
-  top: 0;
-  height: 28%;
-  z-index: 0;
-}
-/* R-13 §-1 LoginPage 美化：星露谷暖色像素小镇 hero（AI 原创，CC-BY-SA 3.0+ 入库）
-   pixelated 渲染保留像素感；cover 撑满；background-position 缓慢横向平移 80s 让画面呼吸。 */
 .auth-page__hero {
-  top: 28%;
+  top: 0;
   bottom: 0;
-  height: 72%;
+  height: 100%;
   z-index: 0;
   background-image: url('/assets/pixel/ui/login-hero-stardew.png');
   background-size: cover;
@@ -352,40 +302,10 @@ function fillAndSubmitDemo(): void {
   opacity: 0;
   pointer-events: none;
 }
-.auth-page__sky svg,
 .auth-page__bg-art svg {
   width: 100%;
   height: 100%;
   image-rendering: pixelated;
-}
-
-/* 云朵漂浮动画（reduced-motion 友好） */
-.cloud {
-  transform-origin: center;
-}
-.cloud--a {
-  animation: cloud-drift 60s linear infinite;
-}
-.cloud--b {
-  animation: cloud-drift 75s linear infinite;
-  animation-delay: -10s;
-}
-.cloud--c {
-  animation: cloud-drift 90s linear infinite;
-  animation-delay: -25s;
-}
-@keyframes cloud-drift {
-  from {
-    transform: translateX(-120px);
-  }
-  to {
-    transform: translateX(520px);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .cloud {
-    animation: none !important;
-  }
 }
 
 .auth-copy--pixel,
