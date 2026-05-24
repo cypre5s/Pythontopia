@@ -7,10 +7,10 @@ Pythontopia M2 阶段的 5 张分块大地图，全部以 16×16 源 tile 渲染
 | key | 中文名 | 尺寸（列×行） | tileset | BGM | 出口 | spawn |
 | --- | --- | --- | --- | --- | --- | --- |
 | town_hub | Pythontopia 小镇 | 50×40 | kenney_tiny_town | bgm_town_day | farm_north, mine_south, campus_east, port_west | (25, 20) |
-| farm_north | 知识农场 | 40×40 | kenney_tiny_town | bgm_town_day | town_hub | (20, 37) |
-| mine_south | Bug 矿洞 | 30×30 | kenney_tiny_dungeon | bgm_bug_mine | town_hub | (15, 2) |
+| farm_north | 北农场 · 棉麻试验田 | 40×40 | kenney_tiny_town | bgm_town_day | town_hub | (20, 37) |
+| mine_south | Bug 矿洞 · 织丝走廊 | 30×30 | kenney_tiny_dungeon | bgm_bug_mine | town_hub | (15, 2) |
 | campus_east | 校园 | 40×30 | kenney_tiny_town | bgm_quest | town_hub | (2, 15) |
-| port_west | 码头港口 | 35×25 | kenney_tiny_town | bgm_town_eve | town_hub | (33, 12) |
+| port_west | 西港 · 棉布商埠 | 35×25 | kenney_tiny_town | bgm_town_eve | town_hub | (33, 12) |
 
 > 出口列说明：当前地图边缘门洞会切换到列出的目标地图；M2-ROUTER 子代理读取 `exits` 解析跳转。
 

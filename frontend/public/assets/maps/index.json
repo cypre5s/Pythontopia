@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-05-24T18:51:44.637Z",
+  "generatedAt": "2026-05-24T19:09:38.864Z",
   "maps": [
     {
       "key": "town_hub",
@@ -24,7 +24,7 @@
     {
       "key": "farm_north",
       "file": "farm_north.json",
-      "label": "知识农场",
+      "label": "北农场 · 棉麻试验田",
       "width": 40,
       "height": 40,
       "bgm": "bgm_town_day",
@@ -40,7 +40,7 @@
     {
       "key": "mine_south",
       "file": "mine_south.json",
-      "label": "Bug 矿洞",
+      "label": "Bug 矿洞 · 织丝走廊",
       "width": 30,
       "height": 30,
       "bgm": "bgm_bug_mine",
@@ -72,7 +72,7 @@
     {
       "key": "port_west",
       "file": "port_west.json",
-      "label": "码头港口",
+      "label": "西港 · 棉布商埠",
       "width": 35,
       "height": 25,
       "bgm": "bgm_town_eve",

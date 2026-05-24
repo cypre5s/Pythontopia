@@ -458,9 +458,17 @@ function generateTownHub() {
   // 中央广场铺一层略带花纹的草地（24,18 ~ 26,22，5×5）
   fillRect(ground, W, 23, 18, 5, 5, TOWN_GIDS.grassFlower);
 
-  // 镇长大厅：北中央，4×5
+  // 镇长大厅：北中央，4×5（叙事上对应「东校园老镇厅」，承担画像 / 主线推进）
   const mayorHall = { x: 23, y: 4, w: 4, h: 5, label: '镇长大厅', route: '/profile-room', name: 'building_mayor_hall' };
   paintBuilding(buildings, W, mayorHall.x, mayorHall.y, mayorHall.w, mayorHall.h);
+
+  // R-13 §-1 后续：在镇长大厅东西两侧加 2 栋纺织主题民居（不命名校名），
+  // 叙事上呼应「松江纺织文化」+「东华纺织学院」一脉相承的小镇背景；
+  // 实现：复用 paintBuilding 普通房屋瓦面，标记 building_textile_pavilion_*。
+  const textileWest = { x: 16, y: 5, w: 4, h: 4, label: '纺织展馆·西', route: '/house-west', name: 'building_textile_pavilion_w' };
+  const textileEast = { x: 30, y: 5, w: 4, h: 4, label: '纺织展馆·东', route: '/house-east', name: 'building_textile_pavilion_e' };
+  paintBuilding(buildings, W, textileWest.x, textileWest.y, textileWest.w, textileWest.h);
+  paintBuilding(buildings, W, textileEast.x, textileEast.y, textileEast.w, textileEast.h);
 
   // 南面 3 栋民居（peasant 房子）
   const housesSouth = [
@@ -551,9 +559,11 @@ function generateTownHub() {
     makeExit('exit_east', 'east', W, H, 'campus_east'),
     makeExit('exit_west', 'west', W, H, 'port_west'),
     makeBuilding(mayorHall.name, mayorHall.label, mayorHall.route, mayorHall.x, mayorHall.y, mayorHall.w, mayorHall.h),
+    makeBuilding(textileWest.name, textileWest.label, textileWest.route, textileWest.x, textileWest.y, textileWest.w, textileWest.h),
+    makeBuilding(textileEast.name, textileEast.label, textileEast.route, textileEast.x, textileEast.y, textileEast.w, textileEast.h),
     ...housesSouth.map((h) => makeBuilding(h.name, h.label, h.route, h.x, h.y, h.w, h.h)),
     ...shops.map((s) => makeBuilding(s.name, s.label, s.route, s.x, s.y, s.w, s.h)),
-    makeLandmark('fountain', '中央喷泉', 24, 19, 2, 2, 'landmark'),
+    makeLandmark('fountain', '镜月喷泉', 24, 19, 2, 2, 'landmark'),
     makeNpc('npc_mayor_py', 'mayor_py', '镇长 Py', 25, 10),
     makeNpc('npc_librarian_doc', 'librarian_doc', '图书管理员 Doc', 6, 18),
     makeNpc('npc_coach_q', 'coach_q', '练习教练 Q', 44, 18),
@@ -592,7 +602,9 @@ function generateFarmNorth() {
 
   fillAll(ground, TOWN_GIDS.grass);
 
-  // 7 块知识田，每块 5×5，4+3 布局：行 5-9 / 行 14-18 / 行 23-27
+  // R-13 §-1 续：farm_north 叙事改为「北农场 · 棉麻试验田」，呼应松江历史文化名镇
+  // 的棉布纺织传统 + 东华纺织学院的试验田（不出现校名）。
+  // 7 块知识田 = 棉/麻/丝/桑 4 种纺织原料田 + 3 块 Python 概念田。
   const fieldOrigins = [
     { x: 3, y: 5, kc: 'chapter_basics' },
     { x: 10, y: 5, kc: 'variable' },
@@ -609,17 +621,24 @@ function generateFarmNorth() {
     paintFenceRect(decoration, W, f.x, f.y, 5, 5);
   });
 
-  // 谷仓：东侧 (26,8)，5×4
-  const barn = { x: 26, y: 8, w: 5, h: 4, label: '谷仓', route: '/storage', name: 'building_barn' };
+  // 谷仓：东侧 (26,8)，5×4 — 叙事上是「棉麻仓」
+  const barn = { x: 26, y: 8, w: 5, h: 4, label: '棉麻仓', route: '/storage', name: 'building_barn' };
   paintBuilding(buildings, W, barn.x, barn.y, barn.w, barn.h);
 
-  // 鸡舍：东侧 (28,18)，4×3
-  const coop = { x: 28, y: 18, w: 4, h: 3, label: '鸡舍', route: '/coop', name: 'building_chicken_coop' };
+  // 鸡舍：东侧 (28,18)，4×3 — 叙事上是「丝蚕房」（养蚕）
+  const coop = { x: 28, y: 18, w: 4, h: 3, label: '丝蚕房', route: '/coop', name: 'building_chicken_coop' };
   paintBuilding(buildings, W, coop.x, coop.y, coop.w, coop.h);
 
-  // 水井：单 tile (32, 25)
+  // 水井：单 tile (32, 25) — 叙事上是「染坊井」（漂染用井水）
   setTile(decoration, W, 32, 25, TOWN_GIDS.water);
   setTile(decoration, W, 32, 24, TOWN_GIDS.waterEdgeTop);
+
+  // R-13 §-1 续：在田块边缘撒密集 grassFlower 模拟「桑园」蚕食叶痕迹（不增帧号）
+  for (let i = 0; i < 6; i += 1) {
+    setTile(decoration, W, 22, 24 + i, TOWN_GIDS.grassFlower);
+    setTile(decoration, W, 24, 24 + i, TOWN_GIDS.bushSmall);
+    setTile(decoration, W, 36, 24 + i, TOWN_GIDS.grassFlower);
+  }
 
   // 边界树林（北/东两侧），南边留给出口
   for (let x = 1; x < W - 1; x += 2) {
@@ -657,8 +676,8 @@ function generateFarmNorth() {
     makeExit('exit_south', 'south', W, H, 'town_hub'),
     makeBuilding(barn.name, barn.label, barn.route, barn.x, barn.y, barn.w, barn.h),
     makeBuilding(coop.name, coop.label, coop.route, coop.x, coop.y, coop.w, coop.h),
-    makeLandmark('well', '水井', 32, 24, 1, 2, 'landmark'),
-    ...fieldOrigins.map((f, i) =>
+    makeLandmark('well', '染坊井', 32, 24, 1, 2, 'landmark'),
+    ...fieldOrigins.map((f) =>
       makeLandmark(`field_${f.kc}`, `知识田·${f.kc}`, f.x, f.y, 5, 5, 'field'),
     ),
     makeNpc('npc_farmer_kc', 'farmer_kc', '田主 KC', 28, 13, 'player_sara'),
@@ -667,7 +686,7 @@ function generateFarmNorth() {
 
   return buildMapJson({
     key: 'farm_north',
-    label: '知识农场',
+    label: '北农场 · 棉麻试验田',
     width: W,
     height: H,
     tileset: 'kenney_tiny_town',
@@ -741,17 +760,21 @@ function generateMineSouth() {
   ], rng);
 
   // objects ----------
+  // R-13 §-1 续：矿洞叙事改为「二进制矿洞 · 织丝走廊」：呼应纺织文化里
+  // "丝线在织机上像 0/1 一样穿梭"的视觉双关；不出现校名。
+  // 蓝色 oreBlue 同时象征 "蓝染" 工艺；pillar 充当织机立柱。
   const objects = [
     makeExit('exit_north', 'north', W, H, 'town_hub'),
     makeBuilding(mine1.name, mine1.label, mine1.route, mine1.x, mine1.y, mine1.w, mine1.h),
     makeBuilding(mine2.name, mine2.label, mine2.route, mine2.x, mine2.y, mine2.w, mine2.h),
+    makeLandmark('loom_pillar', '织机立柱', 15, 8, 1, 4, 'landmark'),
     makeNpc('npc_foreman_bug', 'foreman_bug', '矿洞工头 Bug', 14, 5, 'player_sara'),
     makeSpawn(15, 2),
   ];
 
   return buildMapJson({
     key: 'mine_south',
-    label: 'Bug 矿洞',
+    label: 'Bug 矿洞 · 织丝走廊',
     width: W,
     height: H,
     tileset: 'kenney_tiny_dungeon',
@@ -973,19 +996,21 @@ function generatePortWest() {
   });
 
   // objects ----------
+  // R-13 §-1 续：port_west 叙事改为「西港 · 棉布商埠」：呼应松江古代是
+  // "衣被天下" 的棉布出海大港。班级广场叙事为「锦绣讲坛」（不含校名）。
   const objects = [
     makeExit('exit_east', 'east', W, H, 'town_hub'),
     makeBuilding(lighthouse.name, lighthouse.label, lighthouse.route, lighthouse.x, lighthouse.y, lighthouse.w, lighthouse.h),
     makeBuilding(ship.name, ship.label, ship.route, ship.x, ship.y, ship.w, ship.h),
-    makeLandmark('class_plaza', '班级广场', 22, 6, 6, 6, 'plaza'),
-    makeNpc('npc_merchant', 'merchant', '商人', 16, 19),
+    makeLandmark('silk_plaza', '锦绣讲坛', 22, 6, 6, 6, 'plaza'),
+    makeNpc('npc_merchant', 'merchant', '布商', 16, 19),
     makeNpc('npc_class_president', 'class_president', '班长', 25, 9),
     makeSpawn(33, 12),
   ];
 
   return buildMapJson({
     key: 'port_west',
-    label: '码头港口',
+    label: '西港 · 棉布商埠',
     width: W,
     height: H,
     tileset: 'kenney_tiny_town',
@@ -1017,7 +1042,7 @@ function buildIndex() {
       {
         key: 'farm_north',
         file: 'farm_north.json',
-        label: '知识农场',
+        label: '北农场 · 棉麻试验田',
         width: 40,
         height: 40,
         bgm: 'bgm_town_day',
@@ -1028,7 +1053,7 @@ function buildIndex() {
       {
         key: 'mine_south',
         file: 'mine_south.json',
-        label: 'Bug 矿洞',
+        label: 'Bug 矿洞 · 织丝走廊',
         width: 30,
         height: 30,
         bgm: 'bgm_bug_mine',
@@ -1050,7 +1075,7 @@ function buildIndex() {
       {
         key: 'port_west',
         file: 'port_west.json',
-        label: '码头港口',
+        label: '西港 · 棉布商埠',
         width: 35,
         height: 25,
         bgm: 'bgm_town_eve',

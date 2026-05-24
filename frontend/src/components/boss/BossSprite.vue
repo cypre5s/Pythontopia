@@ -1,25 +1,20 @@
 <script setup lang="ts">
 /**
- * R-13 §-1 BossSprite v2：7 章 boss 像素立绘，对齐 mainQuests.ts 命名（v2 重写）。
+ * R-13 §-1 BossSprite v3：7 章 boss 立绘 = AI 原创 PNG（高清）+ CSS 像素 fallback。
  *
- * 旧版本设计名（NameError 雾团/TypeError 章鱼...）与 `frontend/src/data/mainQuests.ts`
- * 的 MAIN_QUEST_BOSSES 实际章节命名（算盘灵/解释器学徒/二进制独眼/流程钟楼/
- * 集合棱镜/文档守护神/归纳之镜）完全不对应。BossPage.vue 显示 boss 名走 mainQuests，
- * 但 sprite 走错主题，玩家会看到「集合棱镜」配镜像反射 boss 的 sprite。
- *
- * v2 重写：每章 sprite 主题严格对齐 mainQuests.ts 的 boss 名 + storyboardCue：
- *   - 1 章 算盘灵 Abacus Spirit       — 木珠算盘 + 1-5 行算珠（棕色 + 米色）
- *   - 2 章 解释器学徒 Interpreter    — 终端框 + 闪烁光标 + Python 蓝黄双色
- *   - 3 章 二进制独眼 Binary Cyclop  — 中央巨眼 + 0/1 字符流（黑白 + 蓝瞳）
- *   - 4 章 流程钟楼 Loop Tower       — 钟塔形 + 顶部圆钟 + for/while 循环箭头
- *   - 5 章 集合棱镜 Dict Prism       — 三色三角棱镜 list/dict/set（红/绿/蓝拼合）
- *   - 6 章 文档守护神 File Keeper    — 翻开卷轴 + 锁 + 鸽子（图书馆深绿 + 金）
- *   - 7 章 归纳之镜 Mirror of Abstr. — 多面镜组合 + 类层级金字塔（蓝紫 + 金）
+ * v3 改造（用户 G·B 决策）：
+ *   - 主路径：每章用 1024×1024 AI 原创像素 PNG（CC-BY-SA 3.0+ 入库），
+ *     主题严格对齐 mainQuests.ts 的 boss 名（算盘灵 / 解释器学徒 / ...）+
+ *     风格统一星露谷暖色调，与 LoginPage hero 一致；
+ *   - Fallback 路径：PNG 加载失败时回退到 v2 的 CSS pixel-art rect 绘制
+ *     （兼容 spec 测试 + 无网络场景）；
+ *   - 视觉：image-rendering: pixelated 保持像素感，object-fit: contain
+ *     居中放大到 size×size。
  *
  * 状态 phase 控制简单动画：idle 上下浮动 / hurt 红色 shake / angry 抖动 / victory 上扬。
  * 不引入 GSAP（演示 Beta 用纯 CSS keyframes 已够；R-14 接入 GSAP 做更丝滑的 boss 入场转场）。
  */
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 
 interface Props {
   chapter: number;
@@ -31,6 +26,24 @@ const props = withDefaults(defineProps<Props>(), {
   phase: 'idle',
   size: 96,
 });
+
+// R-13 §-1 §G·B：每章 boss 立绘 PNG 路径（CC-BY-SA 3.0+ 原创）。
+const BOSS_PNG: Record<number, string> = {
+  1: '/assets/pixel/bosses/boss-1-abacus-spirit.png',
+  2: '/assets/pixel/bosses/boss-2-interpreter-apprentice.png',
+  3: '/assets/pixel/bosses/boss-3-binary-cyclop.png',
+  4: '/assets/pixel/bosses/boss-4-loop-tower.png',
+  5: '/assets/pixel/bosses/boss-5-dict-prism.png',
+  6: '/assets/pixel/bosses/boss-6-file-keeper.png',
+  7: '/assets/pixel/bosses/boss-7-mirror-abstraction.png',
+};
+
+const pngSrc = computed<string | null>(() => BOSS_PNG[props.chapter] ?? null);
+const pngLoadFailed = ref<boolean>(false);
+
+function onPngError(): void {
+  pngLoadFailed.value = true;
+}
 
 interface PixelDef {
   r: number;
@@ -370,7 +383,19 @@ const phaseClass = computed<string>(() => `boss-sprite--${props.phase}`);
 </script>
 
 <template>
+  <!-- v3: PNG 优先；加载失败回退 SVG pixel art。 -->
+  <img
+    v-if="pngSrc && !pngLoadFailed"
+    class="boss-sprite boss-sprite--png"
+    :class="phaseClass"
+    :width="size ?? 96"
+    :height="size ?? 96"
+    :src="pngSrc"
+    :alt="`第 ${chapter} 章 Boss 立绘`"
+    @error="onPngError"
+  >
   <svg
+    v-else
     class="boss-sprite"
     :class="phaseClass"
     :width="size ?? 96"
@@ -397,6 +422,10 @@ const phaseClass = computed<string>(() => `boss-sprite--${props.phase}`);
   image-rendering: pixelated;
   filter: drop-shadow(0 0 8px rgba(255, 80, 80, 0.45));
   display: block;
+}
+.boss-sprite--png {
+  object-fit: contain;
+  object-position: center;
 }
 .boss-sprite--idle {
   animation: boss-sprite-bob 1.6s ease-in-out infinite;

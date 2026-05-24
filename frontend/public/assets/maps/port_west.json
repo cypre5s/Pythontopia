@@ -20,7 +20,7 @@
     {
       "name": "label",
       "type": "string",
-      "value": "码头港口"
+      "value": "西港 · 棉布商埠"
     }
   ],
   "tilesets": [
@@ -2784,7 +2784,7 @@
         },
         {
           "id": 4,
-          "name": "class_plaza",
+          "name": "silk_plaza",
           "type": "plaza",
           "x": 352,
           "y": 96,
@@ -2796,7 +2796,7 @@
             {
               "name": "label",
               "type": "string",
-              "value": "班级广场"
+              "value": "锦绣讲坛"
             }
           ]
         },
@@ -2819,7 +2819,7 @@
             {
               "name": "label",
               "type": "string",
-              "value": "商人"
+              "value": "布商"
             },
             {
               "name": "sprite",

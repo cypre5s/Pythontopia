@@ -62,6 +62,7 @@ license 矩阵无关（它们是 JS 代码，受代码层 MIT 控制），但为
 | 运行时路径 | 来源 | License | 用途 |
 | --- | --- | --- | --- |
 | `frontend/public/assets/pixel/ui/login-hero-stardew.png` | Pythontopia 原创（AI 辅助生成 + 人工审核） | CC-BY-SA 3.0+ | LoginPage 星露谷风暖色像素小镇 hero；NPC 与建筑均为原创，不复制任何商业像素游戏 |
+| `frontend/public/assets/pixel/bosses/boss-{1..7}-*.png` (7 张) | Pythontopia 原创（AI 辅助生成 + 人工审核 + 原创主题设计） | CC-BY-SA 3.0+ | BossPage / Endless / Arena 第 10 关 Boss 立绘；7 章主题：算盘灵 / 解释器学徒 / 二进制独眼 / 流程钟楼 / 集合棱镜 / 文档守护神 / 归纳之镜；风格统一星露谷暖色像素，与 hero 同调 |
 | `frontend/public/assets/pixel/vendor/ansimuz-mountain-dusk/{5×PNG,LICENSE-CC0.txt}` | ansimuz "Mountain at Dusk Background" (https://opengameart.org/content/mountain-at-dusk-background) | **CC0-1.0** | 备用：4 层 parallax 远山日落剪影，预留 boss 终局 / 章末过场使用 |
 | `frontend/public/assets/pixel/portraits/heads/portrait_*_head.png` (20 张) | `frontend/public/assets/pixel/portraits/portrait_*.png` 子裁切，由 `scripts/crop-portrait-heads.py` 输出 | 继承原 portrait（CC0 / CC-BY-SA 3.0 / CC-BY 4.0 分文件） | DialogModal 单帧头像，每张为对应 portrait 的左上 idle-down 16×24 帧 2x 放大 |
 | `assets/inbox/r13-overworld/pastoral-tileset-db32.png` | Ragnar Random Hat (https://opengameart.org/content/pastoral-overworld) | **CC0-1.0** | 备用：DawnBringer db32 32×32 乡村瓦片，未集成到运行时 |
