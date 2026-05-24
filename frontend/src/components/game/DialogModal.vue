@@ -333,58 +333,84 @@ onBeforeUnmount(() => {
 
 .dialog-portrait {
   flex: 0 0 auto;
-  width: 128px;
-  height: 160px;
-  background-color: rgba(0, 0, 0, 0.35);
+  width: 96px;
+  height: 96px;
+  background-color: rgba(0, 0, 0, 0.45);
   border: 3px solid #d4af37;
   border-radius: 6px;
   overflow: hidden;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
   box-shadow: 0 4px 0 rgba(0, 0, 0, 0.45);
 }
 
-.dialog-portrait--left {
-  align-self: flex-end;
-}
-
+.dialog-portrait--left,
 .dialog-portrait--right {
   align-self: flex-end;
 }
 
+/* R-13 修复：portrait png 多为 spritesheet（多 pose），用 object-fit: none +
+   object-position 裁剪左上 64×64 第一帧；缩放 1.5× 撑满容器，保留像素感。
+   image-rendering: pixelated 防像素插值模糊。 */
 .pixel-portrait {
-  width: 100%;
-  height: 100%;
+  width: 96px;
+  height: 96px;
   image-rendering: pixelated;
   -ms-interpolation-mode: nearest-neighbor;
-  object-fit: cover;
+  object-fit: none;
+  object-position: -2px -2px;
+  transform: scale(1.5);
+  transform-origin: top left;
 }
 
+/* R-13 修复：
+   1. 宽度响应式（min(640px, calc(100vw - 280px))）；
+   2. 文字颜色改为深褐色，与牛皮纸面板对比强烈；
+   3. background 改纯色牛皮纸（去 9-slice border-image，避免文字溢出边框） */
 .dialog-panel {
-  flex: 0 1 640px;
+  flex: 1 1 auto;
+  width: min(640px, calc(100vw - 240px));
+  max-width: calc(100vw - 240px);
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 18px 22px;
-  background-color: rgba(56, 39, 18, 0.96);
-  background-image: url('/assets/pixel/ui/kenney-adventure/Default/panel_brown.png');
-  background-repeat: stretch;
-  background-size: 100% 100%;
-  border-image-source: url('/assets/pixel/ui/kenney-adventure/Default/panel_brown.png');
-  border-image-slice: 24 fill;
-  border-image-width: 24px;
-  border-image-repeat: stretch;
-  border: 24px solid transparent;
+  padding: 20px 28px;
+  background: linear-gradient(180deg, #f9e7bc 0%, #f1d896 100%);
+  border: 4px solid #6e4f1d;
   border-radius: 10px;
-  color: #fff7e6;
-  box-shadow: var(--pyt-shadow-modal, 0 6px 16px rgba(0, 0, 0, 0.4));
+  color: #3a2a14;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4), inset 0 0 0 2px rgba(255, 247, 230, 0.5);
 }
 
 .dialog-head {
-  color: #ffe098;
+  color: #6e4f1d;
   font-size: 16px;
   letter-spacing: 0.5px;
+  font-weight: 700;
+  border-bottom: 2px solid rgba(110, 79, 29, 0.35);
+  padding-bottom: 6px;
+}
+
+@media (max-width: 760px) {
+  .dialog-modal {
+    padding: 0 12px 24px;
+    gap: 8px;
+  }
+  .dialog-panel {
+    width: calc(100vw - 32px);
+    max-width: calc(100vw - 32px);
+    padding: 12px 16px;
+  }
+  .dialog-portrait {
+    width: 64px;
+    height: 64px;
+  }
+  .pixel-portrait {
+    width: 64px;
+    height: 64px;
+    transform: scale(1);
+  }
 }
 
 .name-tag {
@@ -399,6 +425,7 @@ onBeforeUnmount(() => {
   word-break: break-word;
   min-height: 1.75em;
   cursor: pointer;
+  color: #3a2a14;
 }
 
 .typing-cursor {
