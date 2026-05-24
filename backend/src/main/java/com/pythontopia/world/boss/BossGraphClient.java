@@ -3,6 +3,7 @@ package com.pythontopia.world.boss;
 import com.pythontopia.common.config.GraphServiceProperties;
 import com.pythontopia.world.boss.dto.BossEvaluateResultDto;
 import com.pythontopia.world.boss.dto.BossInternalProblem;
+import com.pythontopia.world.boss.dto.BossProblemRequest.ProfileSignalsPayload;
 import com.pythontopia.world.boss.dto.BossTestCasePayload;
 import java.util.HashMap;
 import java.util.List;
@@ -44,18 +45,53 @@ public class BossGraphClient {
 
   /**
    * 调 graph 出题。失败抛 {@link RestClientException}，由调用方决定是否降级。
+   *
+   * <p>R-13 §-1 续：5 参数版本兼容旧 BossService 调用；preferredKc / preferredKind /
+   * profileSignals 透传给 graph 后由 PracticeAgent 决定是否走画像偏好模板。
    */
   public BossInternalProblem requestProblem(
       Long userId, int chapter, int stage, String kcCode, Integer difficulty) {
+    return requestProblem(userId, chapter, stage, kcCode, difficulty, null, null, null);
+  }
+
+  /** R-13 §-1 续：8 参数版本，前端透传 profile signals 给 graph。 */
+  public BossInternalProblem requestProblem(
+      Long userId,
+      int chapter,
+      int stage,
+      String kcCode,
+      Integer difficulty,
+      String preferredKc,
+      String preferredKind,
+      ProfileSignalsPayload profileSignals) {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
-    Map<String, Object> body =
-        Map.of(
-            "userId", userId == null ? -1L : userId,
-            "chapter", chapter,
-            "stage", stage,
-            "kcCode", kcCode == null ? "" : kcCode,
-            "difficulty", difficulty == null ? Math.min(5, Math.max(1, stage)) : difficulty);
+    Map<String, Object> body = new HashMap<>();
+    body.put("userId", userId == null ? -1L : userId);
+    body.put("chapter", chapter);
+    body.put("stage", stage);
+    body.put("kcCode", kcCode == null ? "" : kcCode);
+    body.put("difficulty", difficulty == null ? Math.min(5, Math.max(1, stage)) : difficulty);
+    if (preferredKc != null) {
+      body.put("preferredKc", preferredKc);
+    }
+    if (preferredKind != null) {
+      body.put("preferredKind", preferredKind);
+    }
+    if (profileSignals != null) {
+      Map<String, Object> sig = new HashMap<>();
+      if (profileSignals.weakKcCodes() != null) sig.put("weakKcCodes", profileSignals.weakKcCodes());
+      if (profileSignals.pythonSelfRatedLevel() != null)
+        sig.put("pythonSelfRatedLevel", profileSignals.pythonSelfRatedLevel());
+      if (profileSignals.successRate() != null) sig.put("successRate", profileSignals.successRate());
+      if (profileSignals.mediaPriority() != null) sig.put("mediaPriority", profileSignals.mediaPriority());
+      if (profileSignals.resilience() != null) sig.put("resilience", profileSignals.resilience());
+      if (profileSignals.questPreferredKind() != null)
+        sig.put("questPreferredKind", profileSignals.questPreferredKind());
+      if (!sig.isEmpty()) {
+        body.put("profileSignals", sig);
+      }
+    }
     return restTemplate
         .exchange(
             properties.graphUrl() + "/agents/boss/problem",

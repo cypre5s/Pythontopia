@@ -72,11 +72,11 @@ class BossServiceTest {
   @Test
   void returnsGraphProblemAndStripsHiddenFields() {
     BossInternalProblem fromGraph = sampleInternal("ai-1", 1, 1);
-    when(graphClient.requestProblem(anyLong(), eq(1), eq(1), eq("PY43-KC-001"), anyInt()))
+    when(graphClient.requestProblem(anyLong(), eq(1), eq(1), eq("PY43-KC-001"), anyInt(), any(), any(), any()))
         .thenReturn(fromGraph);
 
     BossProblemDto result =
-        service.fetchProblem(1, new BossProblemRequest(1, null, 2), 42L);
+        service.fetchProblem(1, new BossProblemRequest(1, null, 2, null, null, null), 42L);
 
     assertThat(result.problemId()).isEqualTo("ai-1");
     assertThat(result.aiGenerated()).isTrue();
@@ -87,10 +87,10 @@ class BossServiceTest {
 
   @Test
   void fallsBackToGoldenWhenGraphReturnsNull() {
-    when(graphClient.requestProblem(anyLong(), eq(2), eq(1), any(), anyInt())).thenReturn(null);
+    when(graphClient.requestProblem(anyLong(), eq(2), eq(1), any(), anyInt(), any(), any(), any())).thenReturn(null);
 
     BossProblemDto result =
-        service.fetchProblem(2, new BossProblemRequest(1, null, 1), 99L);
+        service.fetchProblem(2, new BossProblemRequest(1, null, 1, null, null, null), 99L);
 
     assertThat(result.aiGenerated()).isFalse();
     assertThat(result.problemId()).contains("golden-c2-s1");
@@ -99,11 +99,11 @@ class BossServiceTest {
 
   @Test
   void fallsBackToGoldenWhenGraphThrows() {
-    when(graphClient.requestProblem(anyLong(), anyInt(), anyInt(), any(), anyInt()))
+    when(graphClient.requestProblem(anyLong(), anyInt(), anyInt(), any(), anyInt(), any(), any(), any()))
         .thenThrow(new RestClientException("graph down"));
 
     BossProblemDto result =
-        service.fetchProblem(3, new BossProblemRequest(2, null, 3), 1L);
+        service.fetchProblem(3, new BossProblemRequest(2, null, 3, null, null, null), 1L);
 
     assertThat(result.aiGenerated()).isFalse();
     assertThat(result.totalTestCases()).isEqualTo(3);
@@ -123,9 +123,10 @@ class BossServiceTest {
 
   @Test
   void difficultyDefaultsToMinOfStageAndFive() {
-    when(graphClient.requestProblem(anyLong(), eq(4), eq(3), any(), eq(3))).thenReturn(null);
+    when(graphClient.requestProblem(anyLong(), eq(4), eq(3), any(), eq(3), any(), any(), any()))
+        .thenReturn(null);
     BossProblemDto result =
-        service.fetchProblem(4, new BossProblemRequest(3, null, null), 1L);
+        service.fetchProblem(4, new BossProblemRequest(3, null, null, null, null, null), 1L);
     assertThat(result.difficulty()).isEqualTo(3);
   }
 
@@ -145,9 +146,9 @@ class BossServiceTest {
   @Test
   void evaluateAttemptCachesProblemAfterFetchAndForwardsToGraph() {
     BossInternalProblem internal = sampleInternal("ai-cache-1", 1, 1);
-    when(graphClient.requestProblem(anyLong(), eq(1), eq(1), any(), anyInt()))
+    when(graphClient.requestProblem(anyLong(), eq(1), eq(1), any(), anyInt(), any(), any(), any()))
         .thenReturn(internal);
-    service.fetchProblem(1, new BossProblemRequest(1, null, 2), 42L);
+    service.fetchProblem(1, new BossProblemRequest(1, null, 2, null, null, null), 42L);
 
     when(graphClient.evaluateAttempt(
             eq("ai-cache-1"), eq("print(input())"), any(), anyInt()))
@@ -168,9 +169,9 @@ class BossServiceTest {
   @Test
   void evaluateAttemptReportsFailureFirstHintFromGraph() {
     BossInternalProblem internal = sampleInternal("ai-cache-2", 2, 1);
-    when(graphClient.requestProblem(anyLong(), eq(2), eq(1), any(), anyInt()))
+    when(graphClient.requestProblem(anyLong(), eq(2), eq(1), any(), anyInt(), any(), any(), any()))
         .thenReturn(internal);
-    service.fetchProblem(2, new BossProblemRequest(1, null, 2), 42L);
+    service.fetchProblem(2, new BossProblemRequest(1, null, 2, null, null, null), 42L);
 
     when(graphClient.evaluateAttempt(eq("ai-cache-2"), any(), any(), anyInt()))
         .thenReturn(
@@ -196,9 +197,9 @@ class BossServiceTest {
   @Test
   void evaluateAttemptForwardsRuntimeErrorFromGraph() {
     BossInternalProblem internal = sampleInternal("ai-cache-3", 1, 1);
-    when(graphClient.requestProblem(anyLong(), anyInt(), anyInt(), any(), anyInt()))
+    when(graphClient.requestProblem(anyLong(), anyInt(), anyInt(), any(), anyInt(), any(), any(), any()))
         .thenReturn(internal);
-    service.fetchProblem(1, new BossProblemRequest(1, null, 2), 42L);
+    service.fetchProblem(1, new BossProblemRequest(1, null, 2, null, null, null), 42L);
 
     when(graphClient.evaluateAttempt(eq("ai-cache-3"), any(), any(), anyInt()))
         .thenReturn(
@@ -223,9 +224,9 @@ class BossServiceTest {
   @Test
   void evaluateAttemptFallsBackOnGraphRestClientException() {
     BossInternalProblem internal = sampleInternal("ai-cache-4", 1, 1);
-    when(graphClient.requestProblem(anyLong(), anyInt(), anyInt(), any(), anyInt()))
+    when(graphClient.requestProblem(anyLong(), anyInt(), anyInt(), any(), anyInt(), any(), any(), any()))
         .thenReturn(internal);
-    service.fetchProblem(1, new BossProblemRequest(1, null, 2), 42L);
+    service.fetchProblem(1, new BossProblemRequest(1, null, 2, null, null, null), 42L);
 
     when(graphClient.evaluateAttempt(eq("ai-cache-4"), any(), any(), anyInt()))
         .thenThrow(new RestClientException("graph down"));
@@ -240,9 +241,9 @@ class BossServiceTest {
   @Test
   void evaluateAttemptHandlesGraphReturningNull() {
     BossInternalProblem internal = sampleInternal("ai-cache-5", 1, 1);
-    when(graphClient.requestProblem(anyLong(), anyInt(), anyInt(), any(), anyInt()))
+    when(graphClient.requestProblem(anyLong(), anyInt(), anyInt(), any(), anyInt(), any(), any(), any()))
         .thenReturn(internal);
-    service.fetchProblem(1, new BossProblemRequest(1, null, 2), 42L);
+    service.fetchProblem(1, new BossProblemRequest(1, null, 2, null, null, null), 42L);
 
     when(graphClient.evaluateAttempt(eq("ai-cache-5"), any(), any(), anyInt())).thenReturn(null);
 

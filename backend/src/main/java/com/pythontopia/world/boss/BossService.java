@@ -50,12 +50,22 @@ public class BossService {
   }
 
   public BossProblemDto fetchProblem(int chapter, BossProblemRequest request, Long userId) {
-    String kc = resolveKc(chapter, request.kcCode());
+    // R-13 §-1 续：preferredKc 优先级高于旧 kcCode（前端 ArenaPage 走 preferredKc）。
+    String effectiveKc = request.preferredKc() != null ? request.preferredKc() : request.kcCode();
+    String kc = resolveKc(chapter, effectiveKc);
     int difficulty =
         request.difficulty() == null ? Math.min(5, request.stage()) : request.difficulty();
     try {
       BossInternalProblem fromGraph =
-          graphClient.requestProblem(userId, chapter, request.stage(), kc, difficulty);
+          graphClient.requestProblem(
+              userId,
+              chapter,
+              request.stage(),
+              kc,
+              difficulty,
+              request.preferredKc(),
+              request.preferredKind(),
+              request.profileSignals());
       if (fromGraph != null && fromGraph.problemId() != null) {
         cache.put(fromGraph.problemId(), new CachedProblem(fromGraph, Instant.now()));
         evictExpired();
