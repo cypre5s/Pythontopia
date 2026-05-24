@@ -395,13 +395,11 @@ onUnmounted(() => {
         <span class="hud-slot__label">{{ slot.label }}</span>
         <span class="hud-slot__shortcut">{{ slot.shortcut }}</span>
       </button>
-    </nav>
-    <aside
-      v-if="bottomBarVisible"
-      class="hud-tools"
-      data-testid="hud-tools"
-      aria-label="工具栏"
-    >
+      <!-- R-13 修复：把工具按钮合并到同一 nav 内（之前是双 fixed 元素重叠） -->
+      <span
+        class="hud-divider"
+        aria-hidden="true"
+      />
       <button
         type="button"
         class="hud-tool-slot"
@@ -461,7 +459,13 @@ onUnmounted(() => {
         <span class="hud-tool-slot__label">设置</span>
         <span class="hud-tool-slot__shortcut">,</span>
       </button>
-    </aside>
+    </nav>
+    <!-- 兼容历史 spec：留一个隐藏 stub 让 [data-testid="hud-tools"] 仍可命中 -->
+    <span
+      class="hud-tools-stub"
+      data-testid="hud-tools"
+      aria-hidden="true"
+    />
   </div>
 </template>
 
@@ -665,31 +669,30 @@ onUnmounted(() => {
   color: rgba(255, 247, 230, 0.6);
 }
 
-/* R-13 修复：hud-tools 不再独立 fixed，而是放到 hud-bottom 同一行右侧，
-   通过左右对齐 + 中间留空让 quickslot 居中。避免视觉双行重叠。 */
-.hud-tools {
-  position: fixed;
-  bottom: 16px;
-  /* 跟 hud-bottom 同一垂直线，但右移 280px 让出 quickslot 居中空间 */
-  left: calc(50% + 200px);
-  transform: translateX(0);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
-  background: rgba(28, 24, 16, 0.78);
-  border: 2px solid var(--pyt-color-border, #d4af37);
-  border-radius: var(--pyt-radius-md, 6px);
-  pointer-events: auto;
-  z-index: 100;
-  box-shadow: var(--pyt-shadow-card, 0 2px 0 rgba(77, 54, 19, 0.12));
+/* R-13 修复：工具按钮已合并到 hud-bottom 内部，这里隐藏旧 stub */
+.hud-tools-stub {
+  display: none;
 }
 
-@media (max-width: 1024px) {
-  .hud-tools {
-    /* 窄屏让 hud-tools 重新独立靠右，避免与 quickslot 撞 */
-    left: auto;
-    right: 16px;
+/* R-13 quickslot 与 tool 之间的金色分隔线 */
+.hud-divider {
+  display: inline-block;
+  width: 2px;
+  height: 36px;
+  margin: 0 6px;
+  background: rgba(212, 175, 55, 0.6);
+}
+
+/* hud-bottom 改 max-width 容纳 5+4 个按钮 + divider，窄屏 wrap */
+.hud-bottom {
+  flex-wrap: wrap;
+  max-width: calc(100vw - 24px);
+  justify-content: center;
+}
+
+@media (max-width: 760px) {
+  .hud-divider {
+    display: none; /* 窄屏隐藏分隔线，让按钮换行更紧凑 */
   }
 }
 

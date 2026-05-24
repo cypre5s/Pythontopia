@@ -65,7 +65,9 @@ onMounted(async () => {
     >
       <WorldCanvas />
       <ChapterNavPanel v-if="isOnFarm" />
-      <OperationHints />
+      <!-- R-13 修复：OperationHints 与 HUD 按钮快捷键文字重复，隐藏避免视觉混乱
+           历史快捷键提示在 HudShell 各按钮上仍可见。FirstTimeHelpModal 完整介绍。 -->
+      <OperationHints v-if="false" />
       <DialogModal />
       <FirstTimeHelpModal />
       <!-- R-13 HUD 三件套 + 节日 ribbon + 快速旅行 -->
