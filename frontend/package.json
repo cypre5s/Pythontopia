@@ -17,10 +17,14 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@types/dompurify": "^3.0.5",
     "@types/howler": "^2.2.13",
     "axios": "1.7.9",
+    "dompurify": "^3.4.5",
     "gsap": "3.13",
     "howler": "^2.2.4",
+    "marked": "^14.1.4",
+    "pdfjs-dist": "^4.7.76",
     "phaser": "3.87.0",
     "pinia": "2.3.0",
     "tone": "^15.1.22",

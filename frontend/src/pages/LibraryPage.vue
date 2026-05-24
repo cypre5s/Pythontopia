@@ -8,6 +8,7 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import AppLayout from '@/app/AppLayout.vue';
+import PdfPageView from '@/components/library/PdfPageView.vue';
 import { useToastStore } from '@stores/toast';
 import {
   getDocumentPage,
@@ -30,6 +31,28 @@ import type {
 } from '@/api/dto/Library';
 import type { ChapterDto } from '@/api/dto/ChapterDto';
 import type { KcDto } from '@/api/dto/KcDto';
+
+// R-13 D1/D2：默认显示原 PDF，Markdown 摘录作为补充视图。
+// localStorage 记忆用户偏好，避免每次都要切回 PDF。
+type PageViewMode = 'pdf' | 'markdown';
+const VIEW_MODE_STORAGE_KEY = 'pyt_library_view_mode';
+function readPreferredViewMode(): PageViewMode {
+  if (typeof window === 'undefined') return 'pdf';
+  try {
+    const raw = window.localStorage.getItem(VIEW_MODE_STORAGE_KEY);
+    return raw === 'markdown' ? 'markdown' : 'pdf';
+  } catch {
+    return 'pdf';
+  }
+}
+function persistViewMode(mode: PageViewMode): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(VIEW_MODE_STORAGE_KEY, mode);
+  } catch {
+    /* private mode */
+  }
+}
 
 interface ChapterGroup {
   chapter: ChapterDto;
@@ -62,6 +85,13 @@ const ragQuery = ref<string>('');
 const ragRunning = ref<boolean>(false);
 const ragResults = ref<LibrarySearchHit[]>([]);
 const ragHint = ref<string>('在课件 561 页中关键词检索；登录身份不足时自动降级为本地全文检索。');
+
+const viewMode = ref<PageViewMode>(readPreferredViewMode());
+function setViewMode(mode: PageViewMode): void {
+  if (viewMode.value === mode) return;
+  viewMode.value = mode;
+  persistViewMode(mode);
+}
 
 const currentDocument = computed<CourseDocumentSummary | null>(
   () => documents.value.find((doc) => doc.documentId === currentDocId.value) ?? null,
@@ -280,44 +310,39 @@ async function runRagSearch(): Promise<void> {
 }
 
 /**
- * R-13：把课件 contentMarkdown 切成段落 + 代码块识别（行首四空格或以 ``` 包围）。
- * 等 R-14 接入 pdf.js 后改为渲染真实页面图。
+ * R-13：把课件 contentMarkdown 用 marked + DOMPurify 渲染成富文本 HTML。
+ * 原页 PDF/PPT 需要服务端额外接 pdf.js，本期先把现有 OCR 文本做到漂亮排版：
+ * - 章节标题（# / ##）
+ * - 代码块（``` 围起 / 行首 4 空格）
+ * - 列表 / 引用 / 表格
+ * 用 DOMPurify 严格清洗，禁 <script>/<iframe>/onclick 等危险标签。
  */
-interface PageSegment {
-  kind: 'para' | 'code';
-  text: string;
-}
-function renderPageSegments(raw: string): PageSegment[] {
-  if (!raw) return [];
-  const cleaned = raw.replace(/\x0b/g, '\n').trim();
-  const lines = cleaned.split('\n');
-  const segments: PageSegment[] = [];
-  let buf: string[] = [];
-  let inFence = false;
-  const flush = (kind: 'para' | 'code'): void => {
-    if (buf.length === 0) return;
-    segments.push({ kind, text: buf.join('\n').trim() });
-    buf = [];
-  };
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (trimmed.startsWith('```')) {
-      flush(inFence ? 'code' : 'para');
-      inFence = !inFence;
-      continue;
-    }
-    if (inFence) {
-      buf.push(line);
-      continue;
-    }
-    if (trimmed === '') {
-      flush('para');
-      continue;
-    }
-    buf.push(line);
-  }
-  flush(inFence ? 'code' : 'para');
-  return segments.filter((s) => s.text);
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
+
+// 不用 `DOMPurify.Config` 命名空间（dompurify@3.4 起改成普通 module export
+// 不再暴露 namespace；用 sanitize 第二参形态推导出 Config 类型，避免版本耦合）。
+type PurifyConfig = NonNullable<Parameters<typeof DOMPurify.sanitize>[1]>;
+
+const PAGE_PURIFY_CONFIG: PurifyConfig = {
+  ALLOWED_TAGS: [
+    'p', 'br', 'strong', 'em', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'ul', 'ol', 'li', 'blockquote', 'pre', 'code',
+    'table', 'thead', 'tbody', 'tr', 'th', 'td',
+    'hr', 'span', 'div',
+  ],
+  ALLOWED_ATTR: ['class'],
+};
+
+function renderPageHtml(raw: string): string {
+  if (!raw) return '';
+  // OCR 文本里 \x0b 是 page break，先转换 + 重复段去掉
+  const cleaned = raw.replace(/\x0b/g, '\n\n').replace(/(\n\n)+/g, '\n\n').trim();
+  const html = marked.parse(cleaned, { async: false }) as string;
+  // dompurify@3.4 在 trusted-types 浏览器返回 TrustedHTML，这里强转 string
+  // （Vue 的 v-html 接受字符串；TrustedHTML 在普通浏览器里实际就是 string，
+  // 但 sanitize 默认 RETURN_TRUSTED_TYPE=false，应当返回 string。）
+  return DOMPurify.sanitize(html, PAGE_PURIFY_CONFIG) as unknown as string;
 }
 
 function backToWorld(): void {
@@ -504,33 +529,56 @@ watch(
             class="page-content"
             data-testid="library-page-content"
           >
+            <!-- R-13 D1/D2：原 PDF 视图（pdfjs-dist）+ Markdown 摘录视图切换。
+                 默认显示原 PDF（不丢任何图/排版信息）；Markdown 仅做 fallback 与 RAG 命中预览。 -->
+            <nav
+              class="view-mode-tabs"
+              data-testid="library-view-mode-tabs"
+              aria-label="课件视图切换"
+            >
+              <button
+                type="button"
+                class="view-mode-tab"
+                :class="{ 'view-mode-tab--active': viewMode === 'pdf' }"
+                data-testid="library-view-mode-pdf"
+                @click="setViewMode('pdf')"
+              >
+                原 PDF
+              </button>
+              <button
+                type="button"
+                class="view-mode-tab"
+                :class="{ 'view-mode-tab--active': viewMode === 'markdown' }"
+                data-testid="library-view-mode-markdown"
+                @click="setViewMode('markdown')"
+              >
+                文字摘录
+              </button>
+            </nav>
             <p
               v-if="pageLoading"
               class="muted"
             >
               翻页中…
             </p>
+            <PdfPageView
+              v-else-if="viewMode === 'pdf' && currentDocId"
+              :doc-id="currentDocId"
+              :page-no="currentPage"
+            />
             <template v-else-if="pageDetail">
-              <!-- R-13：课程包当前只提供 contentMarkdown 文本（OCR 提取，无原 PDF）。
-                   按段落 + 行首代码块识别渲染，提升可读性；原 PDF/PPT 渲染需要
-                   服务端供应原文件 + pdf.js 接入，标记为下一会话工作 -->
-              <div class="page-prose">
-                <div
-                  v-for="(seg, i) in renderPageSegments(pageDetail.contentMarkdown || pageDetail.excerpt || '')"
-                  :key="i"
-                  :class="['page-prose__seg', seg.kind === 'code' ? 'page-prose__code' : 'page-prose__para']"
-                >
-                  {{ seg.text }}
-                </div>
-                <p
-                  v-if="!pageDetail.contentMarkdown && !pageDetail.excerpt"
-                  class="muted"
-                >
-                  （本页暂无可读文本）
-                </p>
-              </div>
-              <p class="page-prose__hint">
-                提示：本页内容来自课件 OCR 抽取的纯文本。原 PDF/PPT 渲染需要服务端 PDF 代理 + pdf.js，等 R-14 接入。
+              <!-- R-13：用 marked + DOMPurify 渲染 contentMarkdown 富文本，
+                   章节标题/代码块/列表/表格全保留。提供给原 PDF 看不清时切换查看。 -->
+              <div
+                v-if="pageDetail.contentMarkdown || pageDetail.excerpt"
+                class="page-prose page-prose--md"
+                v-html="renderPageHtml(pageDetail.contentMarkdown || pageDetail.excerpt || '')"
+              />
+              <p
+                v-else
+                class="muted"
+              >
+                （本页暂无可读文本）
               </p>
             </template>
             <p
@@ -881,9 +929,39 @@ watch(
   font-family: var(--pyt-font-sans, sans-serif);
   font-size: 15px;
   line-height: 1.65;
-  /* R-13：CSS resize 让中央 panel 可拉伸高度（用户反馈想自由调） */
-  resize: vertical;
+  /* R-13 D3：CSS resize 让中央 panel 可双向拉伸（用户反馈想自由调） */
+  resize: both;
   min-height: 240px;
+  min-width: 320px;
+}
+
+/* R-13 D1/D2：PDF / Markdown 视图切换 tab */
+.view-mode-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+  border-bottom: 2px solid var(--pyt-color-border, #c9a86b);
+  padding-bottom: 4px;
+}
+.view-mode-tab {
+  font-family: 'PythontopiaPixel', monospace;
+  font-size: 12px;
+  padding: 4px 12px;
+  background: var(--pyt-color-bg-soft, #fdf3d0);
+  border: 2px solid var(--pyt-color-border, #c9a86b);
+  border-bottom-color: transparent;
+  cursor: pointer;
+  color: var(--pyt-color-text-primary, #4d3613);
+  min-height: 28px;
+}
+.view-mode-tab--active {
+  background: var(--pyt-color-bg-elevated, #fff7e6);
+  border-color: var(--pyt-color-border-strong, #4d3613);
+  border-bottom-color: var(--pyt-color-bg-elevated, #fff7e6);
+  font-weight: 700;
+}
+.view-mode-tab:hover:not(.view-mode-tab--active) {
+  background: var(--pyt-color-warning-bg, #f5e2c1);
 }
 .page-content pre {
   margin: 0;

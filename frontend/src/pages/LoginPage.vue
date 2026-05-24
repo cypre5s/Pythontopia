@@ -71,109 +71,219 @@ function fillAndSubmitDemo(): void {
 
 <template>
   <main class="auth-page auth-page--pixel">
+    <!-- 天空层：太阳 + 云朵（cloud-drift 缓慢漂移） -->
+    <div
+      class="auth-page__sky"
+      aria-hidden="true"
+    >
+      <svg
+        viewBox="0 0 480 120"
+        preserveAspectRatio="xMidYMid slice"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <!-- 太阳 -->
+        <circle
+          cx="420"
+          cy="36"
+          r="22"
+          fill="#ffd166"
+        />
+        <circle
+          cx="420"
+          cy="36"
+          r="32"
+          fill="#ffd166"
+          opacity="0.18"
+        />
+        <!-- 飞鸟剪影（v 形） -->
+        <path d="M 90 24 l 6 -4 l 6 4 M 120 32 l 5 -3 l 5 3" stroke="#4d3613" stroke-width="1.5" fill="none" />
+        <!-- 云朵：3 组 group + cloud-drift 平移 -->
+        <g class="cloud cloud--a">
+          <ellipse cx="40" cy="40" rx="20" ry="9" fill="#fff7e6" />
+          <ellipse cx="55" cy="32" rx="14" ry="8" fill="#fff7e6" />
+        </g>
+        <g class="cloud cloud--b">
+          <ellipse cx="200" cy="55" rx="24" ry="10" fill="#fff7e6" />
+          <ellipse cx="220" cy="48" rx="14" ry="7" fill="#fff7e6" />
+        </g>
+        <g class="cloud cloud--c">
+          <ellipse cx="320" cy="38" rx="18" ry="8" fill="#fff7e6" opacity="0.85" />
+        </g>
+      </svg>
+    </div>
+
+    <!-- 远景层：远山 -->
+    <div
+      class="auth-page__hills"
+      aria-hidden="true"
+    >
+      <svg
+        viewBox="0 0 480 80"
+        preserveAspectRatio="xMidYMid slice"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <polygon points="0,80 80,30 160,80" fill="#6b8e60" opacity="0.7" />
+        <polygon points="120,80 220,20 320,80" fill="#7a9b6a" opacity="0.85" />
+        <polygon points="280,80 380,35 480,80" fill="#638555" opacity="0.7" />
+      </svg>
+    </div>
+
+    <!-- 主场景：星露谷小镇全景 -->
     <div
       class="auth-page__bg-art"
       aria-hidden="true"
     >
       <svg
-        viewBox="0 0 320 200"
+        viewBox="0 0 480 220"
+        preserveAspectRatio="xMidYEnd slice"
         xmlns="http://www.w3.org/2000/svg"
+        shape-rendering="crispEdges"
       >
-        <rect
-          x="0"
-          y="120"
-          width="320"
-          height="80"
-          fill="#9fd082"
-        />
-        <rect
-          x="0"
-          y="140"
-          width="320"
-          height="60"
-          fill="#7fb56a"
-        />
-        <rect
-          x="40"
-          y="80"
-          width="40"
-          height="40"
-          fill="#c9a86b"
-        />
-        <polygon
-          points="35,80 60,55 85,80"
-          fill="#b8442d"
-        />
-        <rect
-          x="55"
-          y="95"
-          width="10"
-          height="20"
-          fill="#4d3613"
-        />
-        <rect
-          x="120"
-          y="70"
-          width="50"
-          height="50"
-          fill="#fff7e6"
-        />
-        <polygon
-          points="115,70 145,40 175,70"
-          fill="#2a6f97"
-        />
-        <rect
-          x="135"
-          y="90"
-          width="20"
-          height="30"
-          fill="#4d3613"
-        />
-        <rect
-          x="200"
-          y="85"
-          width="40"
-          height="35"
-          fill="#f1c453"
-        />
-        <polygon
-          points="195,85 220,60 245,85"
-          fill="#8a6c2c"
-        />
-        <rect
-          x="260"
-          y="90"
-          width="35"
-          height="30"
-          fill="#c2871f"
-        />
-        <polygon
-          points="255,90 277,65 300,90"
-          fill="#6e4f1d"
-        />
-        <circle
-          cx="270"
-          cy="30"
-          r="14"
-          fill="#ffd166"
-        />
-        <rect
-          x="20"
-          y="170"
-          width="280"
-          height="4"
-          fill="#4d3613"
-          opacity="0.25"
-        />
+        <!-- 草地 3 层（深→浅做日光感） -->
+        <rect x="0" y="130" width="480" height="90" fill="#a8d088" />
+        <rect x="0" y="150" width="480" height="70" fill="#82b56a" />
+        <rect x="0" y="180" width="480" height="40" fill="#6ba059" />
+        <!-- 远栏栅 -->
+        <g stroke="#6e4f1d" stroke-width="1.5">
+          <line x1="0" y1="148" x2="480" y2="148" />
+          <line x1="0" y1="146" x2="480" y2="146" />
+        </g>
+        <g fill="#8a6c2c">
+          <rect x="20" y="142" width="2" height="14" />
+          <rect x="60" y="142" width="2" height="14" />
+          <rect x="100" y="142" width="2" height="14" />
+          <rect x="140" y="142" width="2" height="14" />
+          <rect x="180" y="142" width="2" height="14" />
+          <rect x="220" y="142" width="2" height="14" />
+          <rect x="260" y="142" width="2" height="14" />
+          <rect x="300" y="142" width="2" height="14" />
+          <rect x="340" y="142" width="2" height="14" />
+          <rect x="380" y="142" width="2" height="14" />
+          <rect x="420" y="142" width="2" height="14" />
+          <rect x="460" y="142" width="2" height="14" />
+        </g>
+        <!-- 房子 1：红屋顶 -->
+        <rect x="30" y="100" width="50" height="45" fill="#c9a86b" />
+        <polygon points="25,100 55,72 85,100" fill="#b8442d" />
+        <rect x="50" y="118" width="10" height="27" fill="#4d3613" />
+        <rect x="36" y="110" width="6" height="6" fill="#fff7e6" />
+        <rect x="68" y="110" width="6" height="6" fill="#fff7e6" />
+        <!-- 烟囱 -->
+        <rect x="70" y="80" width="6" height="14" fill="#6e4f1d" />
+        <!-- 烟 -->
+        <ellipse cx="73" cy="76" rx="6" ry="3" fill="#fff7e6" opacity="0.6" />
+        <ellipse cx="76" cy="68" rx="5" ry="3" fill="#fff7e6" opacity="0.4" />
+
+        <!-- 房子 2：蓝屋顶（镇长 Py 镇厅，最高最大） -->
+        <rect x="195" y="78" width="60" height="68" fill="#fff7e6" />
+        <polygon points="185,78 225,40 265,78" fill="#2a6f97" />
+        <rect x="210" y="108" width="20" height="38" fill="#4d3613" />
+        <rect x="215" y="116" width="10" height="14" fill="#ffd166" />
+        <rect x="200" y="92" width="8" height="8" fill="#9bc1d4" />
+        <rect x="242" y="92" width="8" height="8" fill="#9bc1d4" />
+        <!-- 大门匾额：Pythontopia 镇厅 -->
+        <rect x="206" y="100" width="38" height="6" fill="#d4af37" />
+        <!-- 钟塔顶上小金球 -->
+        <circle cx="225" cy="36" r="4" fill="#ffd166" />
+
+        <!-- 房子 3：黄屋顶 -->
+        <rect x="305" y="105" width="44" height="40" fill="#f1c453" />
+        <polygon points="298,105 327,80 356,105" fill="#8a6c2c" />
+        <rect x="320" y="120" width="12" height="25" fill="#4d3613" />
+
+        <!-- 房子 4：橘屋顶 -->
+        <rect x="385" y="108" width="42" height="38" fill="#c2871f" />
+        <polygon points="378,108 406,82 434,108" fill="#6e4f1d" />
+        <rect x="396" y="124" width="12" height="22" fill="#4d3613" />
+
+        <!-- 树 4 棵 -->
+        <g>
+          <rect x="115" y="118" width="6" height="22" fill="#6e4f1d" />
+          <circle cx="118" cy="112" r="14" fill="#5fa54a" />
+          <circle cx="111" cy="118" r="9" fill="#73b66a" />
+        </g>
+        <g>
+          <rect x="160" y="120" width="6" height="20" fill="#6e4f1d" />
+          <circle cx="163" cy="115" r="12" fill="#73b66a" />
+        </g>
+        <g>
+          <rect x="275" y="120" width="6" height="22" fill="#6e4f1d" />
+          <circle cx="278" cy="114" r="13" fill="#5fa54a" />
+        </g>
+        <g>
+          <rect x="365" y="124" width="5" height="18" fill="#6e4f1d" />
+          <circle cx="367" cy="118" r="10" fill="#73b66a" />
+        </g>
+
+        <!-- 灯柱（点亮） -->
+        <rect x="90" y="120" width="2" height="28" fill="#4d3613" />
+        <rect x="86" y="116" width="10" height="6" fill="#ffd166" />
+        <rect x="340" y="120" width="2" height="28" fill="#4d3613" />
+        <rect x="336" y="116" width="10" height="6" fill="#ffd166" />
+
+        <!-- 田地（橙色 patch + 多色小花） -->
+        <rect x="0" y="160" width="36" height="28" fill="#c08a55" />
+        <circle cx="6" cy="166" r="2" fill="#f06" />
+        <circle cx="14" cy="174" r="2" fill="#fc0" />
+        <circle cx="24" cy="168" r="2" fill="#9cf" />
+        <circle cx="30" cy="180" r="2" fill="#f06" />
+        <rect x="448" y="168" width="32" height="24" fill="#c08a55" />
+        <circle cx="456" cy="176" r="2" fill="#fc0" />
+        <circle cx="468" cy="184" r="2" fill="#f06" />
+
+        <!-- 镇长 Py 像素角色（站在镇厅门口） -->
+        <g transform="translate(220,116)">
+          <!-- 头 -->
+          <rect x="0" y="0" width="10" height="10" fill="#f4caa5" />
+          <!-- 头发：紫色 Python 头巾 -->
+          <rect x="0" y="-2" width="10" height="4" fill="#3776ab" />
+          <rect x="-1" y="0" width="2" height="3" fill="#3776ab" />
+          <rect x="9" y="0" width="2" height="3" fill="#3776ab" />
+          <!-- 眼 -->
+          <rect x="2" y="4" width="1" height="2" fill="#000" />
+          <rect x="7" y="4" width="1" height="2" fill="#000" />
+          <!-- 身体：黄色围巾 + 蓝衣 -->
+          <rect x="0" y="10" width="10" height="2" fill="#ffd166" />
+          <rect x="0" y="12" width="10" height="12" fill="#3776ab" />
+          <!-- 腿 -->
+          <rect x="1" y="24" width="3" height="6" fill="#4d3613" />
+          <rect x="6" y="24" width="3" height="6" fill="#4d3613" />
+        </g>
+
+        <!-- Python 蛇 logo（小镇厅前盘旋的小蛇，主题元素） -->
+        <g transform="translate(168,144)">
+          <rect x="0" y="0" width="3" height="3" fill="#3776ab" />
+          <rect x="3" y="0" width="3" height="3" fill="#3776ab" />
+          <rect x="6" y="0" width="3" height="3" fill="#3776ab" />
+          <rect x="9" y="0" width="3" height="3" fill="#ffd166" />
+          <rect x="12" y="0" width="3" height="3" fill="#ffd166" />
+          <rect x="12" y="3" width="3" height="3" fill="#ffd166" />
+          <rect x="9" y="3" width="3" height="3" fill="#ffd166" />
+          <rect x="6" y="3" width="3" height="3" fill="#ffd166" />
+          <rect x="0" y="3" width="3" height="3" fill="#3776ab" />
+          <rect x="0" y="6" width="3" height="3" fill="#ffd166" />
+          <rect x="0" y="6" width="3" height="3" fill="#3776ab" />
+          <!-- 蛇眼 -->
+          <rect x="1" y="1" width="1" height="1" fill="#fff" />
+          <rect x="13" y="1" width="1" height="1" fill="#fff" />
+        </g>
       </svg>
     </div>
+
     <section class="auth-copy auth-copy--pixel">
-      <h1 class="auth-title">
-        Pythontopia
-      </h1>
+      <div class="auth-title-frame">
+        <h1 class="auth-title">
+          Pythontopia
+        </h1>
+      </div>
       <p class="auth-subtitle">
-        Python 学习像素小镇 · 用游戏学编程
+        Python 学习像素小镇 · 35 主线 + 7 章 boss + 无尽闯关
       </p>
+      <ul class="auth-feature-pills" aria-label="特色">
+        <li>5 重审查 AI 出题</li>
+        <li>真课件 PDF 渲染</li>
+        <li>65 KC 自适应路径</li>
+      </ul>
     </section>
     <section class="auth-card auth-card--pixel">
       <h2>登录</h2>
@@ -212,24 +322,69 @@ function fillAndSubmitDemo(): void {
 .auth-page--pixel {
   position: relative;
   background:
-    radial-gradient(ellipse at top, #fff3c4 0%, transparent 60%),
-    linear-gradient(180deg, #faf3e0 0%, #f4ecd8 100%);
+    linear-gradient(180deg, #9bd5f7 0%, #c5e6f8 35%, #faf3e0 75%, #e7d8a8 100%);
   overflow: hidden;
 }
 
+.auth-page__sky,
+.auth-page__hills,
 .auth-page__bg-art {
   position: absolute;
-  inset: auto 0 0 0;
-  height: 45%;
+  left: 0;
+  right: 0;
   pointer-events: none;
-  opacity: 0.65;
+}
+.auth-page__sky {
+  top: 0;
+  height: 35%;
   z-index: 0;
 }
-
+.auth-page__hills {
+  bottom: 35%;
+  height: 22%;
+  z-index: 0;
+}
+.auth-page__bg-art {
+  bottom: 0;
+  height: 55%;
+  z-index: 0;
+  opacity: 0.95;
+}
+.auth-page__sky svg,
+.auth-page__hills svg,
 .auth-page__bg-art svg {
   width: 100%;
   height: 100%;
   image-rendering: pixelated;
+}
+
+/* 云朵漂浮动画（reduced-motion 友好） */
+.cloud {
+  transform-origin: center;
+}
+.cloud--a {
+  animation: cloud-drift 60s linear infinite;
+}
+.cloud--b {
+  animation: cloud-drift 75s linear infinite;
+  animation-delay: -10s;
+}
+.cloud--c {
+  animation: cloud-drift 90s linear infinite;
+  animation-delay: -25s;
+}
+@keyframes cloud-drift {
+  from {
+    transform: translateX(-120px);
+  }
+  to {
+    transform: translateX(520px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cloud {
+    animation: none !important;
+  }
 }
 
 .auth-copy--pixel,
@@ -238,23 +393,57 @@ function fillAndSubmitDemo(): void {
   z-index: 1;
 }
 
+.auth-title-frame {
+  display: inline-block;
+  padding: 4px 18px;
+  background:
+    repeating-linear-gradient(135deg, rgba(212, 175, 55, 0.18) 0 6px, transparent 6px 14px),
+    rgba(255, 247, 230, 0.92);
+  border: 4px solid #d4af37;
+  border-radius: 8px;
+  box-shadow: 4px 4px 0 #6e4f1d;
+  margin-bottom: 12px;
+}
+
 .auth-title {
-  margin: 0 0 12px;
+  margin: 0;
   font-family: var(--pyt-font-pixel, 'Ark Pixel 12', monospace);
-  font-size: 56px;
-  line-height: 1.1;
-  color: #d4af37;
+  font-size: 60px;
+  line-height: 1.05;
+  color: #4d3613;
   text-shadow:
-    2px 2px 0 #4d3613,
-    4px 4px 0 rgba(77, 54, 19, 0.25);
-  letter-spacing: 1px;
+    2px 2px 0 #d4af37,
+    4px 4px 0 rgba(77, 54, 19, 0.35);
+  letter-spacing: 2px;
 }
 
 .auth-subtitle {
   margin: 0;
-  font-size: 18px;
-  color: #6e4f1d;
+  font-size: 16px;
+  color: #4d3613;
   font-weight: 600;
+  background: rgba(255, 247, 230, 0.84);
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.auth-feature-pills {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.auth-feature-pills li {
+  font-family: var(--pyt-font-pixel, 'Ark Pixel 12', monospace);
+  font-size: 12px;
+  padding: 2px 10px;
+  background: rgba(74, 144, 226, 0.15);
+  border: 1px solid #4a90e2;
+  color: #1e3a8a;
+  border-radius: 3px;
 }
 
 .auth-card--pixel {

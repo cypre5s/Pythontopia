@@ -78,8 +78,30 @@ onMounted(async () => {
   if (!world.bootstrapped) {
     await world.bootstrap();
   }
+  // R-13 §-1 C-FastTravel：从 Workshop 5 传送 chip 跳过来时，store 已经把目标
+  // mapKey 暂存到 pendingTravelMap；这里把它写回 player.mapKey 让 BootScene 读到。
+  const pending = world.consumePendingTravel();
+  if (pending && world.player) {
+    world.player = {
+      ...world.player,
+      mapKey: pending.mapKey,
+      tileX: pending.tile?.x ?? world.player.tileX,
+      tileY: pending.tile?.y ?? world.player.tileY,
+    };
+  }
   if (root.value) {
     const scenes: PhaserSceneConfig[] = [BootScene, WorldScene];
+    // R-13 §-1 C-FastTravel：如果 Phaser singleton 已存在（路由切换回 /world）
+    // 且本次有 pending travel，要让 WorldScene 重启到目标地图。
+    // 不重启 BootScene，避免重复 preload；直接 scene.start('WorldScene', { mapKey })。
+    const existingGame = getPhaserGame();
+    if (existingGame && pending) {
+      try {
+        existingGame.scene.start('WorldScene', { mapKey: pending.mapKey });
+      } catch {
+        // 极端：scene manager 还没就绪；下面 createPhaserGame 会一次性 init
+      }
+    }
     game = createPhaserGame(root.value, scenes);
     if (typeof ResizeObserver === 'function') {
       resizeObserver = new ResizeObserver(() => scheduleResize());

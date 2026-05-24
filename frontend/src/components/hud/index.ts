@@ -9,5 +9,8 @@ export { default as InventoryPanel } from './InventoryPanel.vue';
 export { default as SettingsModal } from './SettingsModal.vue';
 export { default as FestivalRibbon } from './FestivalRibbon.vue';
 export { default as FastTravelPanel } from './FastTravelPanel.vue';
+// R-13 §5：主线 + Boss
+export { default as MainQuestChip } from './MainQuestChip.vue';
+export { default as MainQuestPanel } from './MainQuestPanel.vue';
 
 export type { MinimapExitMarker, MinimapExitSide } from './MiniMap.vue';

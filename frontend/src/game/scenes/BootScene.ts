@@ -184,9 +184,39 @@ export const BootScene = {
     // W1：BootScene 也接入统一生命周期清理，hot-reload 时 progress timer / loader
     // listener 不会再泄漏到下一次 Game 实例。
     attachLifecycle(this as unknown as Phaser.Scene);
-    this.scene.start('WorldScene', { mapKey: 'town_hub' });
+    // R-13 §-1 C-FastTravel：从 Workshop 5 传送 chip 跳过来 / 玩家重连恢复存档
+    // 时，世界场景应当从 world.player.mapKey 读取目标地图，而不是硬编码 town_hub。
+    // 兜底：worldStore 未初始化或 mapKey 不在 5 张地图中时仍走 town_hub。
+    const initialMap = resolveInitialMapKey();
+    this.scene.start('WorldScene', { mapKey: initialMap });
   },
 };
+
+const ALLOWED_INITIAL_MAPS = new Set([
+  'town_hub',
+  'farm_north',
+  'mine_south',
+  'campus_east',
+  'port_west',
+]);
+
+function resolveInitialMapKey(): string {
+  try {
+    if (typeof document === 'undefined') return 'town_hub';
+    const appEl = document.querySelector('#app') as
+      | (Element & { __vue_app__?: { config: { globalProperties: { $pinia?: { _s: Map<string, unknown> } } } } })
+      | null;
+    const pinia = appEl?.__vue_app__?.config.globalProperties.$pinia;
+    const worldStore = pinia?._s.get('world') as { player?: { mapKey?: string } } | undefined;
+    const candidate = worldStore?.player?.mapKey;
+    if (typeof candidate === 'string' && ALLOWED_INITIAL_MAPS.has(candidate)) {
+      return candidate;
+    }
+  } catch {
+    // ignore: 没起 pinia 或 SSR 环境就走 fallback
+  }
+  return 'town_hub';
+}
 
 function setupProgressUi(ctx: BootScenePreloadContext): ProgressUi | null {
   const add = ctx.add;

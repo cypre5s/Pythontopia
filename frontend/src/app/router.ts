@@ -100,6 +100,32 @@ export const router = createRouter({
       component: () => import('@/pages/teacher/ClassroomDetail.vue'),
       meta: { requiresAuth: true },
     },
+    // R-13 §2.3-6：AI 出题教师审核兜底页。
+    // 教师拉一题 → 看 5 重审查结论 → 通过 / 驳回；驳回原因写 LearningEvent
+    // （R-14 后端落库）。Web 演示用 localStorage 兜底。
+    {
+      path: '/teacher/review',
+      name: 'teacher-review',
+      component: () => import('@/pages/teacher/TeacherReviewPage.vue'),
+      meta: { requiresAuth: true },
+    },
+    // R-13 §5 Phase 4：章末 BOSS 副本（4 阶段 AI 出题）。
+    // chapter param 1..7 对应主线 7 章；进入前必须本章 5 子任务全部完成。
+    {
+      path: '/boss/:chapter(\\d+)',
+      name: 'boss',
+      component: () => import('@/pages/BossPage.vue'),
+      meta: { requiresAuth: true },
+      props: (route) => ({ chapter: Number(route.params.chapter) }),
+    },
+    // R-13 §5 Phase 8 续：无尽模式 — 连续 AI 出题，自适应难度。
+    // 与闯关模式 /boss/:chapter 互补：闯关推主线，无尽刷分练手。
+    {
+      path: '/endless',
+      name: 'endless',
+      component: () => import('@/pages/EndlessPage.vue'),
+      meta: { requiresAuth: true },
+    },
     // R-13：3 条静态 shop 路由（与 ShopController GET /api/world/shops/{shopKey} 对齐）。
     // 路由 props 注入 shopKey + 中文 displayName，避免在 URL 里暴露中文。
     {

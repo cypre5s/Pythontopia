@@ -3,7 +3,7 @@ import { login as loginApi, register as registerApi } from '@api/auth';
 import { setTokenProvider, setUnauthorizedHandler } from '@api/http';
 import type { LoginRequest } from '@api/dto/LoginRequest';
 import type { RegisterRequest } from '@api/dto/RegisterRequest';
-import type { UserDto } from '@api/dto/UserDto';
+import type { UserDto, UserRole } from '@api/dto/UserDto';
 
 const TOKEN_KEY = 'pythontopia.token';
 const EXPIRES_KEY = 'pythontopia.expiresAt';
@@ -22,6 +22,8 @@ export const useSessionStore = defineStore('session', {
       return Date.parse(state.expiresAt) > Date.now();
     },
     displayName: (state): string => state.user?.displayName ?? state.user?.username ?? '学习者',
+    /** R-13 §2.3-6：教师审核页 / 班级面板按角色显示不同视图。 */
+    role: (state): UserRole | null => state.user?.role ?? null,
   },
   actions: {
     hydrateFromStorage(): void {

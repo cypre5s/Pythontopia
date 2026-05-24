@@ -15,6 +15,7 @@ import {
   SettingsModal,
   FestivalRibbon,
   FastTravelPanel,
+  MainQuestPanel,
 } from '@/components/hud';
 import { openNpcDialog } from '@game/adapters/dialog';
 import { useWorldStore } from '@stores/world';
@@ -70,12 +71,13 @@ onMounted(async () => {
       <OperationHints v-if="false" />
       <DialogModal />
       <FirstTimeHelpModal />
-      <!-- R-13 HUD 三件套 + 节日 ribbon + 快速旅行 -->
+      <!-- R-13 HUD 三件套 + 节日 ribbon + 快速旅行 + R-13 §5 主线面板 -->
       <HudShell />
       <WorldMinimapHud />
       <SettingsModal />
       <FestivalRibbon />
       <FastTravelPanel />
+      <MainQuestPanel />
     </section>
   </AppLayout>
 </template>
@@ -127,7 +129,14 @@ onMounted(async () => {
   z-index: 0;
 }
 
-.world-page > * {
+/* 注意：只对 WorldCanvas / ChapterNavPanel 这类 in-flow 子元素生效。
+   原 `.world-page > *` 覆盖了 fixed 子元素（MinimapHud / FastTravelPanel / HudShell），
+   把它们都拉到了 flex 流末尾（页面底部），属于 R-13 §-1 用户痛点。
+   现在用 `:not([class*="hud"]):not(.dialog-modal):not(.fast-travel)` 兜底，
+   并显式给 fixed 子元素覆写 z-index: auto，避免与 .world-page 同层堆叠。 */
+.world-page > .world-frame,
+.world-page > nav,
+.world-page > article {
   position: relative;
   z-index: 1;
 }

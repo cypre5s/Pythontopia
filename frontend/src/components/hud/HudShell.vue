@@ -19,8 +19,10 @@ import gsap from 'gsap';
 import { useHudStore, type HudQuickSlot, bgmLabel } from '@stores/hud';
 import { useWorldStore } from '@stores/world';
 import { useToastStore } from '@stores/toast';
+import { useMainQuestStore } from '@stores/mainQuest';
 import { useAudio } from '@/composables/useAudio';
 import { playUiClick, playUiHover, playCoinJingle } from '@/composables/useStardewFx';
+import MainQuestChip from './MainQuestChip.vue';
 
 interface SlotDescriptor {
   key: HudQuickSlot;
@@ -44,6 +46,7 @@ const router = useRouter();
 const audio = useAudio();
 const world = useWorldStore();
 const toast = useToastStore();
+const mainQuest = useMainQuestStore();
 
 // R-13 迭代 14：当前 BGM 显示。1s 轮询 useAudio 的 currentBgmKey，避免 audio 内部不暴露 ref。
 const currentBgm = ref<string>(bgmLabel(audio.getCurrentBgmKey()));
@@ -136,6 +139,10 @@ function seasonIcon(s: string): string {
 function onClickSlot(slot: HudQuickSlot): void {
   playUiClick();
   hud.toggleSlot(slot);
+  // R-13 §5 Phase 3：Q 槽既保留 quickslot 状态，也触发主线面板（quest = MainQuest）。
+  if (slot === 'quest') {
+    mainQuest.togglePanel();
+  }
 }
 
 function isActive(slot: HudQuickSlot): boolean {
@@ -229,6 +236,10 @@ function onKey(event: KeyboardEvent): void {
   const target = slotByLetter[lowered];
   if (target && !event.shiftKey && hud.canToggleSlot) {
     hud.toggleSlot(target);
+    // R-13 §5 Phase 3：Q 键同步开关主线面板。
+    if (target === 'quest') {
+      mainQuest.togglePanel();
+    }
     event.preventDefault();
     return;
   }
@@ -315,6 +326,8 @@ onUnmounted(() => {
           <span class="hud-chip__label">♪</span>
           <span class="hud-chip__value">{{ currentBgm }}</span>
         </span>
+        <!-- R-13 §5 Phase 3：主线进度 chip。点击或按 Q 打开主线面板。 -->
+        <MainQuestChip />
       </div>
       <div class="hud-top__group">
         <div

@@ -339,9 +339,9 @@ onBeforeUnmount(() => {
   border: 3px solid #d4af37;
   border-radius: 6px;
   overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  /* 关键：用 grid 把内部 16x24 单帧居中，再交给 transform 放大撑满。 */
+  display: grid;
+  place-items: center;
   box-shadow: 0 4px 0 rgba(0, 0, 0, 0.45);
 }
 
@@ -350,18 +350,25 @@ onBeforeUnmount(() => {
   align-self: flex-end;
 }
 
-/* R-13 修复：portrait png 多为 spritesheet（多 pose），用 object-fit: none +
-   object-position 裁剪左上 64×64 第一帧；缩放 1.5× 撑满容器，保留像素感。
-   image-rendering: pixelated 防像素插值模糊。 */
+/* R-13 §-1 B1 续修：CDP 实测 (cursor-ide-browser) 确认 portrait 文件确实是
+   48x72 的 3x3 LPC sprite sheet（行=朝向，列=动画帧）。展示策略：
+     1. `<img>` 自身尺寸 16x24（即单帧）；
+     2. `object-fit: none` 阻止浏览器拉伸把整张 sprite sheet 塞进 16x24；
+     3. `object-position: 0 0` 永远只显示左上第一帧（idle 朝下）；
+     4. `transform: scale(4)` 把 16x24 像素放大到 64x96，等高填满容器；
+        scale 4 而不是 3.5 让头部更醒目，宽 64 与容器 96 左右各 16px 留白；
+     5. `image-rendering: pixelated` 保留方块像素感不模糊。
+   测试时若调大 scale 至 6x，头部会撑满宽度但下半身被 overflow:hidden 切掉，
+   适合「只想看脸」的紧凑场景；当前保持 4x 用于和星露谷立绘风格保持一致。 */
 .pixel-portrait {
-  width: 96px;
-  height: 96px;
+  width: 16px;
+  height: 24px;
   image-rendering: pixelated;
   -ms-interpolation-mode: nearest-neighbor;
   object-fit: none;
-  object-position: -2px -2px;
-  transform: scale(1.5);
-  transform-origin: top left;
+  object-position: 0 0;
+  transform: scale(4);
+  transform-origin: center center;
 }
 
 /* R-13 修复：
@@ -405,11 +412,6 @@ onBeforeUnmount(() => {
   .dialog-portrait {
     width: 64px;
     height: 64px;
-  }
-  .pixel-portrait {
-    width: 64px;
-    height: 64px;
-    transform: scale(1);
   }
 }
 

@@ -43,6 +43,11 @@ export const useWorldStore = defineStore('world', {
     inventoryItems: [] as SaveSlotInventoryItem[],
     bootstrapped: false,
     loading: false,
+    // R-13 §-1 C-FastTravel：Workshop 顶部 5 传送 chip 跳 /world 时把目标 mapKey
+    // 暂存在 store；WorldCanvas mount + bootstrap 之后会读取并强制 BootScene 起到
+    // 该地图，避免 BootScene 始终硬编码 town_hub。
+    pendingTravelMap: null as string | null,
+    pendingTravelTile: null as { x: number; y: number } | null,
   }),
   getters: {
     /**
@@ -64,6 +69,22 @@ export const useWorldStore = defineStore('world', {
       } finally {
         this.loading = false;
       }
+    },
+    /**
+     * 在跳路由到 /world 之前调用，告诉 WorldCanvas / BootScene 应该启动到哪张地图，
+     * 而不是按 server bootstrap 返回的 player.mapKey。`tile` 可选，未提供时落到地图
+     * 默认 spawn。设置后第一次被 WorldCanvas 消费就清空。
+     */
+    setPendingTravel(mapKey: string, tile?: { x: number; y: number }): void {
+      this.pendingTravelMap = mapKey;
+      this.pendingTravelTile = tile ?? null;
+    },
+    consumePendingTravel(): { mapKey: string; tile: { x: number; y: number } | null } | null {
+      if (!this.pendingTravelMap) return null;
+      const next = { mapKey: this.pendingTravelMap, tile: this.pendingTravelTile };
+      this.pendingTravelMap = null;
+      this.pendingTravelTile = null;
+      return next;
     },
     /**
      * 一次性拉全量并分发到各子 store，由 WorldCanvas 在挂载时调用。
