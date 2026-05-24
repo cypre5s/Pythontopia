@@ -497,17 +497,25 @@ function generateTownHub() {
     }
   }
 
-  // 撒一些小灌木在内场
+  // R-13 修复 C4：把 24 提到 90，且多种素材轮换：小灌木 / 大灌木 / 黄花 / 粉花 /
+  // 树桩 / 带花草地，让广场外的草地真正"星露谷感"。喷泉广场仍不撒。
   const rng = mulberry32(0x10101);
   scatterDecoration(
     decoration,
     buildings,
     W,
     H,
-    24,
-    [TOWN_GIDS.bushSmall, TOWN_GIDS.flowerYellow],
+    90,
+    [
+      TOWN_GIDS.bushSmall,
+      TOWN_GIDS.bushBig,
+      TOWN_GIDS.flowerYellow,
+      TOWN_GIDS.flowerPink,
+      TOWN_GIDS.treeStump,
+      TOWN_GIDS.grassFlower,
+    ],
     rng,
-    { x: 22, y: 17, w: 7, h: 7 }, // 喷泉广场不撒
+    { x: 22, y: 17, w: 7, h: 7 },
   );
 
   // objects ----------
@@ -600,7 +608,15 @@ function generateFarmNorth() {
   }
 
   const rng = mulberry32(0x20202);
-  scatterDecoration(decoration, buildings, W, H, 18, [TOWN_GIDS.bushSmall, TOWN_GIDS.flowerYellow], rng, {
+  // R-13 修复 C4：farm_north 提到 110，多色花草让"知识农场"丰盛
+  scatterDecoration(decoration, buildings, W, H, 110, [
+    TOWN_GIDS.bushSmall,
+    TOWN_GIDS.bushBig,
+    TOWN_GIDS.flowerYellow,
+    TOWN_GIDS.flowerPink,
+    TOWN_GIDS.treeStump,
+    TOWN_GIDS.grassFlower,
+  ], rng, {
     x: 0,
     y: 5,
     w: W,
@@ -684,7 +700,16 @@ function generateMineSouth() {
 
   // 散落矿石（蓝色）+ 宝箱
   const rng = mulberry32(0x30303);
-  scatterDecoration(decoration, buildings, W, H, 20, [DUNG_GIDS.oreBlue, DUNG_GIDS.chest, DUNG_GIDS.pillar], rng);
+  // R-13 修复 C4：矿洞密度 20→60 + 加 wall variations 让墙体不那么单调
+  scatterDecoration(decoration, buildings, W, H, 60, [
+    DUNG_GIDS.oreBlue,
+    DUNG_GIDS.chest,
+    DUNG_GIDS.pillar,
+    DUNG_GIDS.wallStone,
+    DUNG_GIDS.wallStone2,
+    DUNG_GIDS.floorAlt,
+    DUNG_GIDS.floorAlt2,
+  ], rng);
 
   // objects ----------
   const objects = [
@@ -755,7 +780,15 @@ function generateCampusEast() {
   }
 
   const rng = mulberry32(0x40404);
-  scatterDecoration(decoration, buildings, W, H, 16, [TOWN_GIDS.bushSmall, TOWN_GIDS.flowerYellow], rng, {
+  // R-13 修复 C4：校园密度 16→70 多色
+  scatterDecoration(decoration, buildings, W, H, 70, [
+    TOWN_GIDS.bushSmall,
+    TOWN_GIDS.bushBig,
+    TOWN_GIDS.flowerYellow,
+    TOWN_GIDS.flowerPink,
+    TOWN_GIDS.treeStump,
+    TOWN_GIDS.grassFlower,
+  ], rng, {
     x: 2,
     y: 14,
     w: W - 4,
@@ -837,7 +870,16 @@ function generatePortWest() {
   }
 
   const rng = mulberry32(0x50505);
-  scatterDecoration(decoration, buildings, W, H, 12, [TOWN_GIDS.bushSmall, TOWN_GIDS.flowerYellow, TOWN_GIDS.treeStump], rng, {
+  // R-13 修复 C4：港口密度 12→50 多色（含 sandPath 增加海岸沙地感）
+  scatterDecoration(decoration, buildings, W, H, 50, [
+    TOWN_GIDS.bushSmall,
+    TOWN_GIDS.bushBig,
+    TOWN_GIDS.flowerYellow,
+    TOWN_GIDS.flowerPink,
+    TOWN_GIDS.treeStump,
+    TOWN_GIDS.grassFlower,
+    TOWN_GIDS.sandPath,
+  ], rng, {
     x: 0,
     y: 18,
     w: W,
