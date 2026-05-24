@@ -683,16 +683,49 @@ onUnmounted(() => {
   background: rgba(212, 175, 55, 0.6);
 }
 
-/* hud-bottom 改 max-width 容纳 5+4 个按钮 + divider，窄屏 wrap */
+/* R-13 修复：9 个按钮 + 分隔线在窄屏被切。强制 wrap + 紧凑按钮宽度。 */
 .hud-bottom {
   flex-wrap: wrap;
-  max-width: calc(100vw - 24px);
+  max-width: min(960px, calc(100vw - 16px));
+  width: max-content;
   justify-content: center;
+  gap: 4px;
+  padding: 6px 8px;
+}
+
+/* 窄屏让按钮变小，5+4 仍可同行；超窄屏自动换行 */
+@media (max-width: 980px) {
+  .hud-slot,
+  .hud-tool-slot {
+    min-width: 50px;
+    min-height: 46px;
+    padding: 3px 4px;
+  }
+  .hud-slot__icon,
+  .hud-tool-slot__icon {
+    font-size: 14px;
+  }
+  .hud-slot__label,
+  .hud-tool-slot__label {
+    font-size: 10px;
+  }
+  .hud-slot__shortcut,
+  .hud-tool-slot__shortcut {
+    font-size: 9px;
+  }
+  .hud-divider {
+    margin: 0 3px;
+    height: 30px;
+  }
 }
 
 @media (max-width: 760px) {
   .hud-divider {
-    display: none; /* 窄屏隐藏分隔线，让按钮换行更紧凑 */
+    display: none;
+  }
+  .hud-slot,
+  .hud-tool-slot {
+    min-width: 44px;
   }
 }
 

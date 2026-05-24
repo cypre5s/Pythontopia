@@ -279,6 +279,47 @@ async function runRagSearch(): Promise<void> {
   }
 }
 
+/**
+ * R-13：把课件 contentMarkdown 切成段落 + 代码块识别（行首四空格或以 ``` 包围）。
+ * 等 R-14 接入 pdf.js 后改为渲染真实页面图。
+ */
+interface PageSegment {
+  kind: 'para' | 'code';
+  text: string;
+}
+function renderPageSegments(raw: string): PageSegment[] {
+  if (!raw) return [];
+  const cleaned = raw.replace(/\x0b/g, '\n').trim();
+  const lines = cleaned.split('\n');
+  const segments: PageSegment[] = [];
+  let buf: string[] = [];
+  let inFence = false;
+  const flush = (kind: 'para' | 'code'): void => {
+    if (buf.length === 0) return;
+    segments.push({ kind, text: buf.join('\n').trim() });
+    buf = [];
+  };
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('```')) {
+      flush(inFence ? 'code' : 'para');
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) {
+      buf.push(line);
+      continue;
+    }
+    if (trimmed === '') {
+      flush('para');
+      continue;
+    }
+    buf.push(line);
+  }
+  flush(inFence ? 'code' : 'para');
+  return segments.filter((s) => s.text);
+}
+
 function backToWorld(): void {
   void router.push({ path: '/world' });
 }
@@ -470,7 +511,27 @@ watch(
               翻页中…
             </p>
             <template v-else-if="pageDetail">
-              <pre v-text="pageDetail.contentMarkdown || pageDetail.excerpt || '（本页暂无可读文本）'" />
+              <!-- R-13：课程包当前只提供 contentMarkdown 文本（OCR 提取，无原 PDF）。
+                   按段落 + 行首代码块识别渲染，提升可读性；原 PDF/PPT 渲染需要
+                   服务端供应原文件 + pdf.js 接入，标记为下一会话工作 -->
+              <div class="page-prose">
+                <div
+                  v-for="(seg, i) in renderPageSegments(pageDetail.contentMarkdown || pageDetail.excerpt || '')"
+                  :key="i"
+                  :class="['page-prose__seg', seg.kind === 'code' ? 'page-prose__code' : 'page-prose__para']"
+                >
+                  {{ seg.text }}
+                </div>
+                <p
+                  v-if="!pageDetail.contentMarkdown && !pageDetail.excerpt"
+                  class="muted"
+                >
+                  （本页暂无可读文本）
+                </p>
+              </div>
+              <p class="page-prose__hint">
+                提示：本页内容来自课件 OCR 抽取的纯文本。原 PDF/PPT 渲染需要服务端 PDF 代理 + pdf.js，等 R-14 接入。
+              </p>
             </template>
             <p
               v-else-if="!indexLoading"
@@ -820,12 +881,54 @@ watch(
   font-family: var(--pyt-font-sans, sans-serif);
   font-size: 15px;
   line-height: 1.65;
+  /* R-13：CSS resize 让中央 panel 可拉伸高度（用户反馈想自由调） */
+  resize: vertical;
+  min-height: 240px;
 }
 .page-content pre {
   margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
   font-family: inherit;
+}
+
+/* R-13：page-prose 分段渲染，让 OCR 文本不再像 plaintext 一块 */
+.page-prose {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.page-prose__seg {
+  margin: 0;
+  word-break: break-word;
+}
+
+.page-prose__para {
+  font-size: 15px;
+  line-height: 1.8;
+  color: var(--pyt-color-text-primary, #4d3613);
+  white-space: pre-wrap;
+}
+
+.page-prose__code {
+  font-family: var(--pyt-font-mono, monospace);
+  background: rgba(77, 54, 19, 0.08);
+  border-left: 3px solid var(--pyt-color-border, #c9a86b);
+  padding: 8px 12px;
+  white-space: pre;
+  overflow-x: auto;
+  font-size: 13px;
+}
+
+.page-prose__hint {
+  margin: 12px 0 0;
+  padding: 8px 10px;
+  font-size: 11px;
+  color: var(--pyt-color-text-muted, #8a6c2c);
+  background: rgba(201, 168, 107, 0.18);
+  border: 1px dashed var(--pyt-color-border-soft, rgba(201, 168, 107, 0.45));
+  border-radius: 4px;
 }
 .kc-anchor {
   background: var(--pyt-color-bg-soft, #fdf3d0);
