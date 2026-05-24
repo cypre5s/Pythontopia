@@ -6,11 +6,16 @@ import jakarta.validation.ConstraintViolationException;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.NoHandlerFoundException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -61,6 +66,53 @@ public class GlobalExceptionHandler {
   ResponseEntity<ApiError> handleAccessDenied(
       AccessDeniedException exception, HttpServletRequest request) {
     return error(HttpStatus.FORBIDDEN, "FORBIDDEN", "Access denied", List.of(), request);
+  }
+
+  // R-13 安全加固：客户端用错 HTTP 方法时应返回 405 而不是 500。
+  @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+  ResponseEntity<ApiError> handleMethodNotAllowed(
+      HttpRequestMethodNotSupportedException exception, HttpServletRequest request) {
+    return error(
+        HttpStatus.METHOD_NOT_ALLOWED,
+        "METHOD_NOT_ALLOWED",
+        "HTTP method " + exception.getMethod() + " not supported on this endpoint",
+        List.of(),
+        request);
+  }
+
+  @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+  ResponseEntity<ApiError> handleMediaTypeNotSupported(
+      HttpMediaTypeNotSupportedException exception, HttpServletRequest request) {
+    return error(
+        HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+        "UNSUPPORTED_MEDIA_TYPE",
+        "Request media type not supported",
+        List.of(),
+        request);
+  }
+
+  @ExceptionHandler(NoHandlerFoundException.class)
+  ResponseEntity<ApiError> handleNoHandler(
+      NoHandlerFoundException exception, HttpServletRequest request) {
+    return error(
+        HttpStatus.NOT_FOUND,
+        "NOT_FOUND",
+        "Endpoint " + exception.getRequestURL() + " not found",
+        List.of(),
+        request);
+  }
+
+  @ExceptionHandler({
+    HttpMessageNotReadableException.class,
+    MissingServletRequestParameterException.class
+  })
+  ResponseEntity<ApiError> handleBadRequest(Exception exception, HttpServletRequest request) {
+    return error(
+        HttpStatus.BAD_REQUEST,
+        "BAD_REQUEST",
+        "Request payload is malformed",
+        List.of(exception.getMessage() == null ? "" : exception.getMessage()),
+        request);
   }
 
   @ExceptionHandler(Exception.class)
