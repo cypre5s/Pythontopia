@@ -1,6 +1,60 @@
 # Changelog
 
-## 2026-05-24 — R-13 Web 体验高强度优化会话（进行中）
+## 2026-05-24 — R-13 Wave 2：主线 + AI Boss + PDF + 工坊改造（进行中）
+
+> 由用户原话「严格遵守 AGENTS.md，不准 subagent，实现 R13_OPTIMIZATION_PLAN.md」串行推进的一次会话。
+> §-1 18 条原话痛点 100% 落地 + §5 Phase 1-8 主线+Boss 全链路打通。
+
+### 完成清单
+
+- **§-1 D1/D2 PDF 真渲染**：拷贝 Alethicode `language_pack/tasks/31/originals` 的 7 章 PDF 到
+  `data/course-pack-43/pdfs/186.pdf~192.pdf`（96MB，.gitignore 排除），新增后端
+  `CourseDocumentPdfController` 流式分发 + 前端 `pdfjs-dist@4.7.76`（动态 import 避开
+  jsdom Promise.withResolvers 兼容问题）+ `PdfPageView.vue` 自适应 DPR/resize +
+  LibraryPage 加 PDF/Markdown 视图切换 tab + localStorage 持久化偏好。
+- **§-1 D3 拖拽 resize**：LibraryPage `.page-content` 改 `resize: both`。
+- **资源工坊改造（用户原话 A）**：WorkshopPanel 全部 65 KC 按章分组，去 unlockedCrops 限制，
+  9-slice 牛皮纸像素风。WorkshopPage 顶部 5 张地图传送 + 图书馆 quick access，全页 fit
+  viewport（`height: calc(100dvh - 56px)`，外层 overflow:hidden）。
+- **§5 Phase 1**：35 主线子任务 + 7 boss 静态数据（`mainQuests.ts` / `types/mainQuest.ts`）。
+- **§5 Phase 2**：`useMainQuestStore` Pinia store + localStorage 持久化 + chapter views getter。
+- **§5 Phase 3**：HUD `MainQuestChip` 顶部进度条 + `MainQuestPanel` 全屏面板 + Q 键切换 +
+  「去做」按钮复用 fastTravel 路由 + 「打 Boss」5 任务完成后亮起。
+- **§5 Phase 4**：`/boss/:chapter` 路由 + `BossPage.vue` 4 阶段 UI + `useBossSession`
+  状态机（idle/loading/playing/evaluating/passed/failed/victory）+ `boss.ts` API 真后端
+  调用 + golden fallback + Pyodide 即时评测。
+- **§5 Phase 5**：`pythontopia-graph` 新增 `agents/boss/` 子包，5 重审查链 ：
+  `struct_validator` / `self_tester`（POSIX RLIMIT + forbidden imports 扫描）/
+  `grounding`（按章 syntax 白名单 + KC 关键字命中）/ `difficulty_estimator`
+  （AST 特征加权 + 差距≤1 通过 / ==2 自动覆盖 / >2 reject）/ `plagiarism_checker`
+  （SequenceMatcher 0.8 阈值 + 敏感词）+ `orchestrator`（3 次 LLM 重试 + temperature
+  +0.1 + golden fallback）。
+- **§5 Phase 6**：后端 `BossController` `/api/world/boss/{chapter}/problem|attempt`
+  + `BossService` 章节→默认 KC 映射 + golden fallback + `BossGraphClient` RestTemplate
+  调 graph + `BossProblemDto`/`BossAttemptRequest`/`BossAttemptResultDto`。
+- **§5 Phase 7**：前端 boss API 已默认接真后端，失败自动 golden fallback；新增 20 条
+  main-quest 集成测试覆盖：chip→panel→接任务→推进→boss 解锁→章节切换全闭环。
+- **§5 Phase 8**：本 CHANGELOG 收录 + R13_OPTIMIZATION_PLAN.md 落地标识。
+
+### 测试统计（本会话累计）
+
+| 模块 | 数量 |
+| -- | -- |
+| 前端 vitest | 105 files / **1326 PASS**（本会话 +71 用例：mainQuests/Boss/Workshop/PdfPageView/...） |
+| 前端 typecheck | 0 error |
+| 后端 mvn test | 新增 **19 个**（CourseDocumentPdfController 5 + BossService 8 + BossController 6） |
+| Python graph | **153 PASS**（本会话 +94：struct 10 + self_tester 15 + grounding 14 + difficulty 19 + plagiarism 10 + orchestrator 11） |
+
+### 仍待办（下次会话）
+
+- BossPage 4 阶段动画 / 像素 Boss 立绘（当前用 emoji）。
+- graph 服务 `/agents/boss/problem` 实际 LLM provider 接入（当前 fallback 走 golden）。
+- BossController evaluate 端点接 graph 真评测（当前返回占位，靠前端 Pyodide 二次验证）。
+- 教师审核兜底页面 `/teacher/review`（plan §2.3-6）。
+
+---
+
+## 2026-05-24 — R-13 Web 体验高强度优化会话（已收官）
 
 > 本会话由用户一次性下达 5 个核心目标 + 玩法审查 + 星露谷风格美化 + 全面联合测试 + 100 轮 subagent 迭代。激进模式，允许较大重构以换取长期收益，但严格保证比赛演示链路（hub → 5 地图 → 课程包 43 → 班级 → RPG 存档）可走通。代理走 127.0.0.1:7892。
 

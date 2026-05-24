@@ -54,11 +54,25 @@ services:
     build:
       context: ../services/pythontopia-graph
       dockerfile: Dockerfile
+    # R-13 §5 Phase 6 续：开发态把 host 源码 mount 进 /app，
+    # 容器内 sys.path 优先 /app/pythontopia_graph，因此 hot reload 走这里；
+    # site-packages 也保留原 wheel（pyproject 依赖照常工作）。
+    volumes:
+      - ../services/pythontopia-graph/pythontopia_graph:/app/pythontopia_graph:ro
     environment:
       PYT_LLM_PROVIDER: ${PYT_LLM_PROVIDER:-dryrun}
       PYT_OPENAI_BASE_URL: ${PYT_OPENAI_BASE_URL:-}
       PYT_OPENAI_API_KEY: ${PYT_OPENAI_API_KEY:-}
       PYT_OPENAI_MODEL: ${PYT_OPENAI_MODEL:-}
+      # R-13：OpenAiCompatProvider 读取无前缀的 OPENAI_*/LLM_* env，
+      # 这里把带 PYT_ 前缀的容器入口映射成 provider 期望的形态，
+      # 同时保留 Alethicode .env 加载兜底（见 provider.load_alethicode_env）。
+      OPENAI_BASE_URL: ${PYT_OPENAI_BASE_URL:-}
+      OPENAI_API_KEY: ${PYT_OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${PYT_OPENAI_MODEL:-}
+      LLM_BASE_URL: ${PYT_OPENAI_BASE_URL:-}
+      LLM_API_KEY: ${PYT_OPENAI_API_KEY:-}
+      LLM_MODEL: ${PYT_OPENAI_MODEL:-}
       PYT_SPARK_APP_ID: ${PYT_SPARK_APP_ID:-}
       PYT_SPARK_API_KEY: ${PYT_SPARK_API_KEY:-}
       PYT_SPARK_API_SECRET: ${PYT_SPARK_API_SECRET:-}

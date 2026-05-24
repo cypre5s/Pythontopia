@@ -27,3 +27,10 @@ deploy/.env
 
 assets/inbox/sprout_lands/
 assets/inbox/**/*.zip
+
+# R-13 课程包原 PDF（来自 Alethicode language_pack tasks/31，本地缓存供后端 PDF 端点流式分发，
+# 单文件最大 ~80MB，git 仓库不存。后端启动时通过 pythontopia.coursepack.pdfDir 指向本地路径）
+data/course-pack-43/pdfs/
+
+# 浏览器实测截图归档
+qa-screens/
