@@ -33,6 +33,20 @@ export interface UseBossSessionOptions {
   totalStages?: number;
 }
 
+/**
+ * R-13 §-1 续 BossPage 交互深挖：每章 boss 4 个阶段对应 4 个招式名（按 chapter 主题）。
+ * 招式名只是文本预告，不实际改变题目；目的：让 boss 战在「玩家提交代码」之外
+ * 有"对战"叙事，不再只是一张静态立绘 + 计时器。
+ */
+export interface BossMove {
+  /** 招式名（中文，带 boss 个性） */
+  name: string;
+  /** 招式介绍（玩家读到题目前看到的预告） */
+  preview: string;
+  /** 招式造成的伤害（设计上 = 玩家通关该 stage 后造成的对应反伤；总 100） */
+  damageOnDefeat: number;
+}
+
 export interface UseBossSessionReturn {
   phase: Ref<BossPhase>;
   problem: Ref<BossProblemDto | null>;
@@ -42,12 +56,70 @@ export interface UseBossSessionReturn {
   lastResult: Ref<BossAttemptResultDto | null>;
   elapsedSec: Ref<number>;
   errorMessage: Ref<string>;
+  /** R-13 §-1 续：boss 当前 HP（满 100，每通过一 stage 扣 25）。 */
+  bossHp: Ref<number>;
+  /** R-13 §-1 续：当前阶段招式预告，由 chapter+stage 查表得到。 */
+  currentMove: Ref<BossMove | null>;
+  /** R-13 §-1 续：最近一次造成的伤害（用于飘字动画）；null = 未刚扣血。 */
+  recentDamage: Ref<number | null>;
   startStage: () => Promise<void>;
   submit: () => Promise<void>;
   reset: () => void;
   status: () => BossSessionStatus;
   tickSecond: () => void;
   advanceStage: () => Promise<void>;
+}
+
+/** R-13 §-1 续：7 章 × 4 阶段招式表（不含校名，与 boss 主题一致）。 */
+const BOSS_MOVES: Record<number, readonly BossMove[]> = {
+  1: [
+    { name: '算珠初震', preview: '算盘灵抛出一连串横向算珠，需要你识别"什么是计算"。', damageOnDefeat: 25 },
+    { name: '光阴回响', preview: '算盘指向算筹→ENIAC→现代芯片，问你计算思维 5 步走。', damageOnDefeat: 25 },
+    { name: '木珠迷阵', preview: '5 行算珠混乱排列，让你区分计算科学与计算机科学边界。', damageOnDefeat: 25 },
+    { name: '终幕之珠', preview: '所有算珠汇聚成一个超大珠子，综合考查本章。', damageOnDefeat: 25 },
+  ],
+  2: [
+    { name: 'IDLE 启动咒', preview: 'Python 学徒展开终端，问你解释器启动符是哪个。', damageOnDefeat: 25 },
+    { name: '变量魔法术', preview: '巫师举起 a, b = 3, 4，让你算 a+b。', damageOnDefeat: 25 },
+    { name: 'input 之印', preview: '学徒念出 input/print 双轨咒，让你回响一段文字。', damageOnDefeat: 25 },
+    { name: '解释执行终', preview: 'Python 蛇盘绕终端，考综合编译/解释差别。', damageOnDefeat: 25 },
+  ],
+  3: [
+    { name: '0/1 视察', preview: '独眼睁开，0/1 字符在你周围旋转，问十进制 7 的二进制。', damageOnDefeat: 25 },
+    { name: '字符切片', preview: '黑白条纹收缩为字符串，让你切出 Pythontopia 中的 "thon"。', damageOnDefeat: 25 },
+    { name: '编码漩涡', preview: 'UTF-8 / ASCII 风暴袭来，问你两者本质差别。', damageOnDefeat: 25 },
+    { name: '进制终焉', preview: '独眼瞳孔变形为 2/8/10/16 四面体，综合考进制转换。', damageOnDefeat: 25 },
+  ],
+  4: [
+    { name: '钟楼鸣初', preview: '钟楼敲第一声，让你写出顺序结构 hello world。', damageOnDefeat: 25 },
+    { name: '分支铭', preview: '钟摆左右摇摆，问你 if/elif 边界。', damageOnDefeat: 25 },
+    { name: 'for 之环', preview: '齿轮自转 N 圈，让你写 for i in range。', damageOnDefeat: 25 },
+    { name: '循环终断', preview: '钟塔轰鸣 4 阶段，考查 while + break/continue。', damageOnDefeat: 25 },
+  ],
+  5: [
+    { name: '红光折射', preview: '棱镜射出红光，list[] 在你面前排成一列让你访问。', damageOnDefeat: 25 },
+    { name: '绿光折射', preview: '绿光折射成 dict{}，让你 CRUD 一个 dict。', damageOnDefeat: 25 },
+    { name: '蓝光折射', preview: '蓝光折射成 set，让你去重一组数据。', damageOnDefeat: 25 },
+    { name: '三光合流', preview: '红绿蓝三光合流，list+dict+set 综合。', damageOnDefeat: 25 },
+  ],
+  6: [
+    { name: '卷轴开篇', preview: '文档守护神翻开第一页，问 with open 的好处。', damageOnDefeat: 25 },
+    { name: '猫头鹰之眼', preview: '猫头鹰盯着你，让你用 readlines 数行。', damageOnDefeat: 25 },
+    { name: '编码钥匙', preview: '金钥匙旋转，让你用 utf-8 读一段中文。', damageOnDefeat: 25 },
+    { name: '词频终章', preview: '卷轴合上，综合考词频统计 + 文件 IO。', damageOnDefeat: 25 },
+  ],
+  7: [
+    { name: '类的诞生', preview: '镜面浮现一只蓝色蛋，问 class 与 object 的关系。', damageOnDefeat: 25 },
+    { name: '继承之裂', preview: '镜面裂出多个小镜，让你写 class Dog(Animal)。', damageOnDefeat: 25 },
+    { name: '抽象金字', preview: '类层级金字塔上升，让你写 abstract 方法。', damageOnDefeat: 25 },
+    { name: '归纳终极', preview: '镜面汇聚成元，综合考类 + lambda + 递归。', damageOnDefeat: 25 },
+  ],
+};
+
+export function getBossMove(chapter: number, stage: number): BossMove | null {
+  const moves = BOSS_MOVES[chapter];
+  if (!moves || stage < 1 || stage > moves.length) return null;
+  return moves[stage - 1] ?? null;
 }
 
 export function useBossSession(opts: UseBossSessionOptions): UseBossSessionReturn {
@@ -60,6 +132,10 @@ export function useBossSession(opts: UseBossSessionOptions): UseBossSessionRetur
   const lastResult = ref<BossAttemptResultDto | null>(null);
   const elapsedSec = ref<number>(0);
   const errorMessage = ref<string>('');
+  // R-13 §-1 续 BossPage 交互深挖
+  const bossHp = ref<number>(100);
+  const currentMove = ref<BossMove | null>(getBossMove(opts.chapter, 1));
+  const recentDamage = ref<number | null>(null);
 
   const mainQuest = useMainQuestStore();
 
@@ -67,6 +143,8 @@ export function useBossSession(opts: UseBossSessionOptions): UseBossSessionRetur
     phase.value = 'loading';
     lastResult.value = null;
     elapsedSec.value = 0;
+    // R-13 §-1 续：每个 stage 切换招式预告。
+    currentMove.value = getBossMove(opts.chapter, stage.value);
     try {
       const fetched = await requestBossProblem(opts.chapter, stage.value);
       problem.value = fetched;
@@ -152,6 +230,17 @@ export function useBossSession(opts: UseBossSessionOptions): UseBossSessionRetur
     });
     if (passed) {
       clearedStages.value += 1;
+      // R-13 §-1 续：boss HP 真扣血 + 飘字效果
+      const move = currentMove.value ?? getBossMove(opts.chapter, stage.value);
+      const dmg = move?.damageOnDefeat ?? Math.floor(100 / totalStages);
+      bossHp.value = Math.max(0, bossHp.value - dmg);
+      recentDamage.value = dmg;
+      // 飘字 1.2s 后清空（UI 通过 watch 处理 fade-out）
+      if (typeof window !== 'undefined') {
+        window.setTimeout(() => {
+          recentDamage.value = null;
+        }, 1200);
+      }
       if (stage.value >= totalStages) {
         phase.value = 'victory';
         mainQuest.defeatBoss(opts.chapter);
@@ -172,6 +261,9 @@ export function useBossSession(opts: UseBossSessionOptions): UseBossSessionRetur
     lastResult.value = null;
     elapsedSec.value = 0;
     errorMessage.value = '';
+    bossHp.value = 100;
+    currentMove.value = getBossMove(opts.chapter, 1);
+    recentDamage.value = null;
   }
 
   function tickSecond(): void {
@@ -209,6 +301,9 @@ export function useBossSession(opts: UseBossSessionOptions): UseBossSessionRetur
     lastResult,
     elapsedSec,
     errorMessage,
+    bossHp,
+    currentMove,
+    recentDamage,
     startStage,
     submit,
     reset,

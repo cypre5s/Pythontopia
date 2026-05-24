@@ -297,17 +297,61 @@ const bossSpritePhase = computed<'idle' | 'hurt' | 'angry' | 'victory'>(() => {
           </div>
         </article>
         <article class="boss-sprite">
-          <BossSprite
-            :chapter="chapter"
-            :phase="bossSpritePhase"
-            :size="128"
-          />
+          <div class="boss-sprite-wrap" data-testid="boss-sprite-wrap">
+            <BossSprite
+              :chapter="chapter"
+              :phase="bossSpritePhase"
+              :size="160"
+            />
+            <transition name="dmg-float">
+              <span
+                v-if="session.recentDamage.value !== null"
+                class="boss-dmg-float"
+                data-testid="boss-dmg-float"
+              >
+                -{{ session.recentDamage.value }}
+              </span>
+            </transition>
+          </div>
           <p class="boss-sprite__stage">
             Stage {{ session.stage.value }} / 4
           </p>
-          <p class="boss-sprite__hp">
-            HP {{ Math.max(0, 4 - session.clearedStages.value) }}/4
-          </p>
+
+          <!-- R-13 §-1 续：boss HP 血条（不再是 "4 / 4" 静态文字） -->
+          <div
+            class="boss-hpbar"
+            data-testid="boss-hpbar"
+            :aria-valuenow="session.bossHp.value"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            role="progressbar"
+          >
+            <div
+              class="boss-hpbar__fill"
+              :style="{ width: `${session.bossHp.value}%` }"
+            />
+            <span class="boss-hpbar__label">HP {{ session.bossHp.value }} / 100</span>
+          </div>
+
+          <!-- R-13 §-1 续：当前阶段招式预告（让玩家有"对战"叙事） -->
+          <div
+            v-if="session.currentMove.value"
+            class="boss-move-card"
+            data-testid="boss-move-card"
+          >
+            <header class="boss-move-card__head">
+              <span class="boss-move-card__label">招式预告 · Stage {{ session.stage.value }}</span>
+            </header>
+            <h3 class="boss-move-card__name">
+              ★ {{ session.currentMove.value.name }}
+            </h3>
+            <p class="boss-move-card__preview">
+              {{ session.currentMove.value.preview }}
+            </p>
+            <p class="boss-move-card__dmg">
+              通关此招可对 boss 造成 {{ session.currentMove.value.damageOnDefeat }} 伤害
+            </p>
+          </div>
         </article>
       </div>
     </section>
@@ -376,6 +420,101 @@ const bossSpritePhase = computed<'idle' | 'hurt' | 'angry' | 'victory'>(() => {
   background: rgba(120, 200, 100, 0.45);
   border-color: #6bbf59;
   text-decoration: line-through;
+}
+
+/* R-13 §-1 续 BossPage 交互深挖：血条 / 招式预告 / hurt 飘字 */
+.boss-sprite-wrap {
+  position: relative;
+  display: inline-block;
+}
+.boss-dmg-float {
+  position: absolute;
+  top: 10%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 28px;
+  font-weight: 800;
+  color: #fff7e6;
+  text-shadow:
+    0 0 6px #ef4444,
+    2px 2px 0 #4d1b14,
+    -2px -2px 0 #4d1b14;
+  pointer-events: none;
+}
+.dmg-float-enter-active {
+  transition: transform 1.1s cubic-bezier(0.16, 0.84, 0.44, 1), opacity 1.1s ease-out;
+}
+.dmg-float-enter-from {
+  transform: translateX(-50%) translateY(0) scale(1.4);
+  opacity: 1;
+}
+.dmg-float-enter-to {
+  transform: translateX(-50%) translateY(-60px) scale(1);
+  opacity: 0;
+}
+
+.boss-hpbar {
+  position: relative;
+  width: 200px;
+  height: 22px;
+  margin: 8px auto 0;
+  background: linear-gradient(180deg, #2a1a05 0%, #1c0e02 100%);
+  border: 3px solid #6e4f1d;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+}
+.boss-hpbar__fill {
+  height: 100%;
+  background: linear-gradient(180deg, #ef4444 0%, #b8442d 60%, #7c1d1d 100%);
+  transition: width 0.6s cubic-bezier(0.4, 0.2, 0.2, 1);
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.25);
+}
+.boss-hpbar__label {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  color: #fff7e6;
+  text-shadow: 1px 1px 0 #000;
+  letter-spacing: 0.5px;
+}
+
+.boss-move-card {
+  margin: 12px auto 0;
+  padding: 10px 14px;
+  background: rgba(28, 14, 4, 0.85);
+  border: 2px solid #b3402a;
+  border-radius: 6px;
+  box-shadow: 0 0 10px rgba(255, 80, 40, 0.35);
+  max-width: 280px;
+  text-align: left;
+}
+.boss-move-card__head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #f1c453;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+.boss-move-card__name {
+  margin: 0 0 6px;
+  font-size: 16px;
+  color: #ffd166;
+  text-shadow: 1px 1px 0 #4d1b14;
+}
+.boss-move-card__preview {
+  margin: 0 0 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #fff7e6;
+}
+.boss-move-card__dmg {
+  margin: 0;
+  font-size: 11px;
+  color: #ef4444;
+  font-weight: 600;
 }
 .boss-timer {
   font-size: 13px;

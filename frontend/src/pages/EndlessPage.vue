@@ -118,6 +118,25 @@ const showNextButton = computed<boolean>(() => {
   return ph === 'passed' || ph === 'failed';
 });
 
+// R-13 §-1 续：让闯关塔单关入口显示题型中文名，让玩家直观感受到 9 种关卡的差异
+// （而不是所有关卡走完全一样的 endless 随机抽题流程）。
+const KIND_LABELS: Record<string, string> = {
+  pdf_question: '📖 课件问答',
+  fill_blank:   '▭ 代码填空',
+  debug:        '⚠ 改错题',
+  short_answer: '✎ 简答 (grounding 评分)',
+  closed_loop:  '⟲ 调试闭环',
+  dual_track:   '⇆ 双轨判题',
+  multi_round:  '◉◉◉ 3 题组合',
+  teach_back:   '🎙 教学反转',
+  bug_mine:     '⛏ Bug 矿洞 (30s 限时)',
+};
+const kindLabel = computed<string>(() => {
+  const kind = preferredKind.value;
+  if (!kind) return '随机刷题';
+  return KIND_LABELS[kind] ?? kind;
+});
+
 watch(
   () => focusChapter.value,
   (next) => {
@@ -143,7 +162,7 @@ watch(
           ← 返回小镇
         </button>
         <h1 class="endless-title">
-          无尽闯关 · 连续出题
+          {{ arenaLevelId ? `闯关塔 ${arenaLevelId} · ${kindLabel}` : '无尽闯关 · 连续出题' }}
         </h1>
         <div class="endless-stats">
           <span class="stat" data-testid="endless-streak">

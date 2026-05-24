@@ -42,7 +42,10 @@ import { useWorldStore } from '@stores/world';
 const TILE_SIZE = 16;
 const RENDER_SCALE = 2;
 const RENDER_TILE_SIZE = TILE_SIZE * RENDER_SCALE;
-const CAMERA_ZOOM = 2;
+// R-13 §-1 续：CAMERA_ZOOM 2 → 1.35 让屏幕上每个 tile 视觉尺寸从 64px → ~43px，
+// 解决玩家反馈"地上像素块太大"——同时 player sprite 仍清晰可辨（48×72 → 32×48），
+// 可视范围相应扩大约 50%，更接近星露谷标准缩放。
+const CAMERA_ZOOM = 1.35;
 const CAMERA_LERP = 0.15;
 const MOVE_COOLDOWN_MS = 130;
 const FADE_DURATION_MS = 280;
