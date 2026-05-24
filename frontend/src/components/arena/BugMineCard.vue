@@ -53,10 +53,14 @@ onBeforeUnmount(() => {
     <header class="card-head">
       <span class="card-icon">⛏</span>
       <h3>Bug 矿洞</h3>
-      <div :class="['timer', `timer--${urgency}`]">
+    <div
+        :class="['timer', `timer--${urgency}`]"
+        role="timer"
+        :aria-label="`剩余 ${remaining} 秒`"
+    >
         <div class="timer-bar" :style="{ width: `${progress * 100}%` }" />
         <span class="timer-text">{{ remaining }}s</span>
-      </div>
+    </div>
     </header>
 
     <div v-if="expired" class="expired-overlay">
