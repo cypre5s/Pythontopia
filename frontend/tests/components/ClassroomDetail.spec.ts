@@ -114,8 +114,8 @@ describe('ClassroomDetail', () => {
 
     expect(wrapper.text()).toContain('Stage12 Demo');
     const tabButtons = wrapper.findAll('.tabs button');
-    expect(tabButtons.length).toBeGreaterThanOrEqual(6);
-    await tabButtons[1]!.trigger('click');
+    expect(tabButtons.length).toBeGreaterThanOrEqual(7);
+    await tabButtons[2]!.trigger('click');
     expect(wrapper.find('[data-testid="quest-tab"]').isVisible()).toBe(true);
   });
 

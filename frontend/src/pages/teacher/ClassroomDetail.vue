@@ -10,15 +10,18 @@ import ClassroomMembersTab from '@/components/teacher/ClassroomMembersTab.vue';
 import ClassroomHotspotsTab from '@/components/teacher/ClassroomHotspotsTab.vue';
 import { useTeacherStore } from '@stores/teacher';
 import { useToastStore } from '@stores/toast';
+import { useClassroomLive } from '@/composables/useClassroomLive';
 import type { ClassroomQuestCreateRequest } from '@/api/dto/ClassroomQuest';
 
 const route = useRoute();
 const router = useRouter();
 const teacher = useTeacherStore();
 const toast = useToastStore();
+const live = useClassroomLive();
 
 const tabs = [
   { id: 'overview', label: '概览' },
+  { id: 'live', label: '直播' },
   { id: 'quests', label: '任务' },
   { id: 'heatmap', label: 'KC 热力图' },
   { id: 'hotspots', label: '高频误区' },
@@ -154,6 +157,45 @@ function back() {
         :recent-activity="dashboard.recentActivity"
       />
 
+      <section
+        v-show="activeTab === 'live'"
+        class="live-tab"
+        data-testid="classroom-live-tab"
+      >
+        <div class="live-header">
+          <span :class="['live-dot', { 'live-dot--on': live.connected.value }]" />
+          <span>{{ live.connected.value ? '已连接直播' : '未连接' }}</span>
+          <button
+            v-if="!live.connected.value"
+            class="secondary"
+            @click="live.connect(classroomId)"
+          >
+            开始直播
+          </button>
+          <button
+            v-else
+            class="secondary"
+            @click="live.disconnect()"
+          >
+            断开
+          </button>
+        </div>
+        <div v-if="live.events.value.length === 0" class="empty">
+          等待学生提交事件…
+        </div>
+        <ul v-else class="live-events">
+          <li
+            v-for="(evt, i) in live.events.value"
+            :key="i"
+            class="live-event"
+          >
+            <span class="live-event__type">{{ evt.type }}</span>
+            <span class="live-event__time">{{ new Date(evt.timestamp).toLocaleTimeString() }}</span>
+            <pre class="live-event__data">{{ JSON.stringify(evt.data, null, 2) }}</pre>
+          </li>
+        </ul>
+      </section>
+
       <ClassroomQuestTab
         v-show="activeTab === 'quests'"
         :quests="quests"
@@ -263,4 +305,15 @@ header h1 {
   border-radius: 8px;
   text-align: center;
 }
+
+.live-tab { display: grid; gap: 12px; }
+.live-header { display: flex; align-items: center; gap: 10px; padding: 8px; background: #fdf3d0; border-radius: 6px; font-size: 13px; }
+.live-dot { width: 10px; height: 10px; border-radius: 50%; background: #ccc; }
+.live-dot--on { background: #16a34a; animation: pulse-live 1.5s infinite; }
+@keyframes pulse-live { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+.live-events { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; max-height: 400px; overflow: auto; }
+.live-event { padding: 8px; background: #fff7e6; border: 1px solid #c9a86b; border-radius: 4px; display: grid; grid-template-columns: auto 1fr; gap: 6px; font-size: 12px; }
+.live-event__type { font-weight: 600; color: #2f5b8a; text-transform: uppercase; font-size: 10px; padding: 2px 6px; background: #e0eaf5; border-radius: 3px; }
+.live-event__time { color: #6e4f1d; font-size: 11px; text-align: right; }
+.live-event__data { grid-column: 1 / -1; margin: 0; padding: 6px; background: #fdf3d0; border: 1px solid #c9a86b; font-size: 11px; white-space: pre-wrap; max-height: 100px; overflow: auto; }
 </style>
