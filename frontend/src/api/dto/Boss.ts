@@ -55,6 +55,8 @@ export interface BossProblemDto {
   reviewed: boolean;
   /** 是否来自 AI 出题（false = golden test 兜底）。 */
   aiGenerated: boolean;
+  /** 课件引用页码（PdfQuestionCard 用于跳转 LibraryPage）。 */
+  evidencePageIds?: number[];
 }
 
 /**

@@ -18,6 +18,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import AppLayout from '@/app/AppLayout.vue';
 import BossSprite from '@/components/boss/BossSprite.vue';
+import { KindRouter } from '@/components/arena';
 import { useEndlessRun } from '@/composables/useEndlessRun';
 import { MAIN_QUEST_BOSSES } from '@/data/mainQuests';
 import { useArenaStore } from '@stores/arena';
@@ -280,27 +281,40 @@ watch(
             >Golden 兜底</span>
             <span class="timer">⏱ {{ run.elapsedSec.value }}s</span>
           </header>
-          <pre class="endless-problem__statement">{{ run.problem.value?.statement }}</pre>
-          <details
-            v-if="run.problem.value?.sampleInput || run.problem.value?.sampleOutput"
-            class="endless-sample"
-          >
-            <summary>样例输入 / 输出</summary>
-            <div class="endless-sample__pair">
-              <pre>{{ run.problem.value?.sampleInput }}</pre>
-              <pre>{{ run.problem.value?.sampleOutput }}</pre>
-            </div>
-          </details>
 
-          <label class="endless-editor">
-            <span>你的代码（Python 3）</span>
-            <textarea
-              v-model="run.code.value"
-              data-testid="endless-code"
-              rows="10"
-              placeholder="# 在这里写 Python 代码，stdout 等于样例期望即可"
-            />
-          </label>
+          <KindRouter
+            v-if="preferredKind && run.problem.value"
+            v-model:code="run.code.value"
+            :kind="preferredKind"
+            :problem="run.problem.value"
+            @timeout="onSubmit"
+          >
+            <pre class="endless-problem__statement">{{ run.problem.value?.statement }}</pre>
+          </KindRouter>
+
+          <template v-else>
+            <pre class="endless-problem__statement">{{ run.problem.value?.statement }}</pre>
+            <details
+              v-if="run.problem.value?.sampleInput || run.problem.value?.sampleOutput"
+              class="endless-sample"
+            >
+              <summary>样例输入 / 输出</summary>
+              <div class="endless-sample__pair">
+                <pre>{{ run.problem.value?.sampleInput }}</pre>
+                <pre>{{ run.problem.value?.sampleOutput }}</pre>
+              </div>
+            </details>
+
+            <label class="endless-editor">
+              <span>你的代码（Python 3）</span>
+              <textarea
+                v-model="run.code.value"
+                data-testid="endless-code"
+                rows="10"
+                placeholder="# 在这里写 Python 代码，stdout 等于样例期望即可"
+              />
+            </label>
+          </template>
           <div class="endless-actions">
             <button
               type="button"

@@ -137,12 +137,12 @@ describe('dialog-tree.integration · selectChoice 状态机', () => {
     expect(d.npcKey).toBeNull();
   });
 
-  it('连续走 root → thanks → 告辞：friendship 累加 6（5+1）', async () => {
+  it('连续走 root → thanks → 告辞：friendship 累加 7（5+1+1auto）', async () => {
     const d = useDialogStore();
     await d.openWithTree('mayor_py');
     d.selectChoice(0); // root → thanks, +5
-    d.selectChoice(1); // thanks → 告辞 null, +1
-    expect(d.friendship).toBe(6);
+    d.selectChoice(1); // thanks → 告辞 null, +1 effect; close() auto +1 (history>1)
+    expect(d.friendship).toBe(7);
     expect(d.visible).toBe(false);
   });
 
@@ -179,14 +179,14 @@ describe('dialog-tree.integration · selectChoice 状态机', () => {
 });
 
 describe('dialog-tree.integration · 内存友好度跨实例', () => {
-  it('close 后再 open 同 NPC：friendship 从 memory 还原', async () => {
+  it('close 后再 open 同 NPC：friendship 从 memory 还原（含 auto +1）', async () => {
     const d = useDialogStore();
     await d.openWithTree('mayor_py');
     d.selectChoice(0); // +5
-    d.selectChoice(0); // root → thanks 之后 selectChoice(0) 在 thanks 走「继续聊」 → intro
-    d.close();
+    d.selectChoice(0); // thanks → 继续聊 → intro
+    d.close(); // history.length > 1 → auto +1
     await d.openWithTree('mayor_py');
-    expect(d.friendship).toBe(5);
+    expect(d.friendship).toBe(6); // 5 + 1 auto
   });
 
   it('close 后再 open 不同 NPC：friendship 重置为 0', async () => {
