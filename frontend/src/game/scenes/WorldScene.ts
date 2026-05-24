@@ -956,5 +956,8 @@ async function applyNpcSchedules(
     }
   });
 
-  await Promise.allSettled(fetches);
+  const BATCH_SIZE = 5;
+  for (let i = 0; i < fetches.length; i += BATCH_SIZE) {
+    await Promise.allSettled(fetches.slice(i, i + BATCH_SIZE));
+  }
 }
