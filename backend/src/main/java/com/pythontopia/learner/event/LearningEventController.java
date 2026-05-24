@@ -8,10 +8,12 @@ import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/learning/events")
+@Validated
 public class LearningEventController {
 
   private final LearningEventLogRepository repository;
