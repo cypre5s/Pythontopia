@@ -44,8 +44,7 @@ public class ProfileInterviewController {
   @PostMapping("/{sessionId}/finish")
   void finish(@CurrentUser CurrentUserPrincipal user, @PathVariable String sessionId) {
     requireStudent(user);
-    profileService.findProfile(user.userId())
-        .orElseThrow(() -> new BusinessException(HttpStatus.CONFLICT, "PROFILE_NOT_READY", "Profile draft is not ready"));
+    profileService.finishInterview(user.userId(), sessionId);
   }
 
   private void requireStudent(CurrentUserPrincipal user) {

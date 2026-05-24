@@ -85,6 +85,10 @@ public class ProfileService {
     profileRepository.completeInterview(userId, sessionId);
   }
 
+  public void finishInterview(Long userId, String sessionId) {
+    profileRepository.completeInterview(userId, sessionId);
+  }
+
   public void applyPassiveRevision(Long userId, String source, Object diff) {
     applyPassiveRevision(userId, source, diff, null);
   }

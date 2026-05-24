@@ -286,6 +286,8 @@ export const useLearningStore = defineStore('learning', {
       if (this.profileInterview.sessionId) {
         await finishProfileInterview(this.profileInterview.sessionId);
       }
+      await this.loadProfile();
+      this.profileInterview.done = true;
     },
     async loadField(): Promise<void> {
       this.field.loading = true;
