@@ -77,13 +77,37 @@ async function submitFeedback(status: 'LIKED' | 'DISLIKED'): Promise<void> {
           引用 {{ resource.evidencePageIds.length }} 个页码
         </p>
       </div>
-      <span
-        v-if="resource.groundingStatus === 'NO_EVIDENCE'"
-        class="badge"
-      >
-        基于通识知识
-      </span>
+      <div class="badges">
+        <span
+          :class="['status-badge', resource.groundingStatus === 'PASSED' ? 'grounded' : resource.groundingStatus === 'NO_EVIDENCE' ? 'no-evidence' : 'failed']"
+        >
+          {{ resource.groundingStatus === 'PASSED' ? '✓ 课件证据充分' : resource.groundingStatus === 'NO_EVIDENCE' ? '基于通识知识' : '⚠ 证据不足' }}
+        </span>
+        <span
+          :class="['status-badge', resource.safetyStatus === 'PASSED' ? 'safe' : resource.safetyStatus === 'FAILED' ? 'unsafe' : 'no-check']"
+        >
+          {{ resource.safetyStatus === 'PASSED' ? '✓ 安全审查通过' : resource.safetyStatus === 'FAILED' ? '⚠ 存在安全隐患' : '未审查' }}
+        </span>
+      </div>
     </header>
+
+    <section
+      v-if="resource.evidencePageIds.length > 0"
+      class="evidence-detail"
+    >
+      <h4>课件引用页码</h4>
+      <div class="page-chips">
+        <router-link
+          v-for="pid in resource.evidencePageIds"
+          :key="pid"
+          :to="{ name: 'library', query: { pageId: String(pid) } }"
+          class="page-chip"
+        >
+          p.{{ pid }}
+        </router-link>
+      </div>
+    </section>
+
     <p
       v-if="resource.summary"
       class="summary"
@@ -125,19 +149,19 @@ async function submitFeedback(status: 'LIKED' | 'DISLIKED'): Promise<void> {
       <div class="actions">
         <button
           type="button"
-          class="like"
+          :class="['like', { selected: resource.feedbackStatus === 'LIKED' }]"
           :disabled="submittingFeedback"
           @click="submitFeedback('LIKED')"
         >
-          有帮助
+          👍 有帮助
         </button>
         <button
           type="button"
-          class="dislike"
+          :class="['dislike', { selected: resource.feedbackStatus === 'DISLIKED' }]"
           :disabled="submittingFeedback"
           @click="submitFeedback('DISLIKED')"
         >
-          需要改进
+          👎 需要改进
         </button>
         <span
           v-if="resource.feedbackStatus !== 'NONE'"
@@ -184,12 +208,53 @@ header h2 {
   line-height: 1.5;
   color: #2b1c0b;
 }
-.badge {
-  background: #b39554;
-  color: #fff7e6;
-  padding: 2px 8px;
+.badges {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-end;
+  flex-shrink: 0;
+}
+.status-badge {
+  padding: 2px 10px;
   border-radius: 999px;
   font-size: 12px;
+  white-space: nowrap;
+}
+.status-badge.grounded { background: #4f8a3e; color: #fff7e6; }
+.status-badge.no-evidence { background: #b39554; color: #fff7e6; }
+.status-badge.failed { background: #c14a2f; color: #fff7e6; }
+.status-badge.safe { background: #3a7d6e; color: #fff7e6; }
+.status-badge.unsafe { background: #c14a2f; color: #fff7e6; }
+.status-badge.no-check { background: #9e9e9e; color: #fff; }
+.evidence-detail {
+  background: #fff2c9;
+  border: 1px dashed #6e4f1d;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.evidence-detail h4 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: #4d3613;
+}
+.page-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.page-chip {
+  display: inline-block;
+  padding: 2px 10px;
+  background: #6e4f1d;
+  color: #fff7e6;
+  border-radius: 4px;
+  font-size: 12px;
+  text-decoration: none;
+  transition: background 0.15s;
+}
+.page-chip:hover {
+  background: #4f8a3e;
 }
 .feedback h4 {
   margin: 0 0 6px;
@@ -219,9 +284,20 @@ header h2 {
   color: #fff7e6;
   border-color: #2b6021;
 }
+.like.selected {
+  box-shadow: 0 0 0 3px rgba(79, 138, 62, 0.4);
+  transform: scale(1.05);
+}
 .dislike {
   background: #fff7e6;
   color: #6e4f1d;
+}
+.dislike.selected {
+  background: #c14a2f;
+  color: #fff7e6;
+  border-color: #8b2e1a;
+  box-shadow: 0 0 0 3px rgba(193, 74, 47, 0.3);
+  transform: scale(1.05);
 }
 .hint {
   font-size: 12px;
