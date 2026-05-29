@@ -36,7 +36,8 @@ export interface TownMapData {
   lowObstacles: boolean[][];
 }
 
-// Kenney tiny-town tilemap_packed.png: 16x16 源 tile，渲染时按 2x 放大为 32px 网格。
+// Kenney tiny-town tilemap_packed.png: 16x16 源 tile。R-12 星露谷改造后渲染按 1:1
+// 保持 16px 网格（原 2x→32px），镜头放大改由 cameraTuning zoom 承担。
 const TOWN_TILESET_KEY = 'kenney_tiny_town';
 const SOURCE_TILE_SIZE = 16;
 const RENDER_TILE_SIZE = 16;

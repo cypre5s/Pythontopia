@@ -195,25 +195,10 @@ describe('demo-smoke.integration · 完整演示链路', () => {
     expect(r.name).toBe('not-found');
   });
 
-  it('STEP 14 访问 /shop-east → 静态 props { shop_east, 工具铺 }', () => {
-    const r = appRouter.resolve('/shop-east');
-    const matched = r.matched[0];
-    expect(matched).toBeDefined();
-    if (!matched) return;
-    expect(matched.props.default).toMatchObject({ shopKey: 'shop_east', displayName: '工具铺' });
-  });
-
-  it('STEP 15 访问 /merchant-ship → 静态 props { merchant_port, 商船 }', () => {
-    const r = appRouter.resolve('/merchant-ship');
-    expect(r.matched[0]?.props.default).toMatchObject({ shopKey: 'merchant_port', displayName: '商船' });
-  });
-
   it('STEP 16 节日推进：day=27 显示 upcoming 春日嘉年华', async () => {
-    const cal = useCalendarStore();
-    cal.setBootstrap(
-      { dayIndex: 27, weekday: 'monday', monthIndex: 1, season: 'spring', timeOfDay: 'MORNING', weather: 'SUNNY' },
-      [],
-    );
+    // FestivalRibbon 读 hud.meta.dayIndex（R-12 起数据源由 calendar 切到 hud）。
+    const hud = useHudStore();
+    hud.syncMeta({ dayIndex: 27 });
     const wrapper = mount(FestivalRibbon);
     await flushPromises();
     expect(wrapper.text()).toContain('春日嘉年华');

@@ -119,7 +119,8 @@ describe('loadTownMap', () => {
 
     const map = loadTownMap(scene, 'town_main');
 
-    expect(map.tileSize).toBe(32);
+    // R-12（commit e20cc7ad）星露谷改造：渲染 tile 由 32 改为 16（1:1 源 tile）。
+    expect(map.tileSize).toBe(16);
     expect(map.width).toBe(30);
     expect(map.height).toBe(20);
     expect(map.spawn).toEqual({ tileX: 15, tileY: 11 });

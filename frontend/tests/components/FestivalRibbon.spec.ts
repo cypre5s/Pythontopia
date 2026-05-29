@@ -1,21 +1,11 @@
 // R-13 Phase 6 迭代 27：FestivalRibbon spec。
+// R-12 改造后 FestivalRibbon 数据源由 calendar store 切到 hud.meta.dayIndex
+// （world store 推进时通过 syncMeta 注入），故测试改为驱动 hud store。
 import { mount, flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it } from 'vitest';
 import FestivalRibbon from '@/components/hud/FestivalRibbon.vue';
-import { useCalendarStore } from '@stores/calendar';
-import type { WorldCalendarDto } from '@/api/dto/WorldCalendarDto';
-
-function makeCalendar(dayIndex: number): WorldCalendarDto {
-  return {
-    dayIndex,
-    weekday: 'MONDAY',
-    monthIndex: Math.ceil(dayIndex / 28),
-    season: 'spring',
-    timeOfDay: 'MORNING',
-    weather: 'SUNNY',
-  };
-}
+import { useHudStore } from '@stores/hud';
 
 describe('FestivalRibbon', () => {
   beforeEach(() => {
@@ -23,8 +13,8 @@ describe('FestivalRibbon', () => {
   });
 
   it('当日命中节日时显示节日 label 与描述', async () => {
-    const calendar = useCalendarStore();
-    calendar.setBootstrap(makeCalendar(1), []);
+    const hud = useHudStore();
+    hud.syncMeta({ dayIndex: 1 });
     const wrapper = mount(FestivalRibbon);
     await flushPromises();
     const ribbon = wrapper.find('[data-testid="festival-ribbon"]');
@@ -33,8 +23,8 @@ describe('FestivalRibbon', () => {
   });
 
   it('非节日日显示 upcoming festival 倒数提示', async () => {
-    const calendar = useCalendarStore();
-    calendar.setBootstrap(makeCalendar(5), []); // day 5 → upcoming day 14 春耕祭
+    const hud = useHudStore();
+    hud.syncMeta({ dayIndex: 5 }); // day 5 → upcoming day 14 春耕祭
     const wrapper = mount(FestivalRibbon);
     await flushPromises();
     expect(wrapper.text()).toContain('春耕祭');
@@ -42,8 +32,8 @@ describe('FestivalRibbon', () => {
   });
 
   it('超出最后一个节日（day > 112）时 ribbon 隐藏', async () => {
-    const calendar = useCalendarStore();
-    calendar.setBootstrap(makeCalendar(200), []);
+    const hud = useHudStore();
+    hud.syncMeta({ dayIndex: 200 });
     const wrapper = mount(FestivalRibbon);
     await flushPromises();
     expect(wrapper.find('[data-testid="festival-ribbon"]').exists()).toBe(false);

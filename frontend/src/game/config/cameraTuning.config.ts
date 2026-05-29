@@ -1,9 +1,10 @@
 // W4 cameraTuning：镜头跟随 / 缩放 / 死区 / shake 等所有「魔术数字」集中处。
 //
-// 设计依据：docs/gameplay/r12-deepen/02-camera-follow.md。
+// 设计依据：docs/gameplay/r12-deepen/02-camera-follow.md（R-12 主线改造后微调）。
 // - §2.1 lerp 分档 idle/walk/run = 0.10/0.15/0.25
-// - §3.1 死区 ±64 px（边长 128 = 2 tile）
-// - §5.1 zoom 分档 桌面 2.0 / 手机横屏 2.5 / 手机竖屏 2.2 / 节日 1.5 / 硬上限 3.0
+// - §3.1 死区 ±24 px（R-12 星露谷大世界拉近镜头后收紧，原 ±64）
+// - §5.1 zoom 分档 桌面 2.4 / 手机横屏 3.2 / 手机竖屏 2.8 / 节日 2.0 / 硬上限 5.0
+//   （R-12 改造把镜头整体拉近，原 2.0/2.5/2.2/1.5/3.0）
 // - §7.4 KC 收获 shake 短 20 ms / 强度 0.005
 // - §4   地图边界 clamp（不暴露 canvas 黑边；小图镜头居中）
 //
@@ -120,9 +121,9 @@ export function getLerpFactorByState(state: PlayerCameraState): number {
  * 根据视口宽度与方向选择 zoom 档位。§5.1 / §9.1。
  *
  * 判定优先级：
- *   isPortrait === true                  → 竖屏档 2.2（无论宽度，覆盖小屏竖手机）
- *   else if viewportWidth < 768          → 手机横屏档 2.5（pointer:coarse 小屏）
- *   else                                 → 桌面档 2.0
+ *   isPortrait === true                  → 竖屏档 2.8（无论宽度，覆盖小屏竖手机）
+ *   else if viewportWidth < 768          → 手机横屏档 3.2（pointer:coarse 小屏）
+ *   else                                 → 桌面档 2.4
  *
  * 768 是 Tailwind / Material 通用的 mobile→tablet 断点；与「pointer: coarse」
  * 媒体查询的真实硬件区间高度吻合，业务层无需再传 isMobile。

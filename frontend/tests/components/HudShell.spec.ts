@@ -123,7 +123,9 @@ describe('HudShell', () => {
     ).toContain('hud-slot--active');
   });
 
-  it('对话历史面板里的对话文字统一黑字', async () => {
+  it('对话历史面板渲染当前 NPC 节点（名字 / 文本 / 提示）', async () => {
+    // R-12 主题化：对话历史面板由内联黑字改为像素主题（CSS 变量 --pyt-text-*），
+    // 不再有内联 color:#111。此处改为校验对话节点内容正确渲染。
     const hud = useHudStore();
     const dialog = useDialogStore();
     dialog.npcKey = 'mayor_py';
@@ -147,15 +149,10 @@ describe('HudShell', () => {
     hud.toggleSlot('dialog');
     await flushPromises();
 
-    expect(wrapper.get('.qslot-dialog-npc-line').attributes('style')).toContain(
-      'color: rgb(17, 17, 17)',
-    );
-    expect(wrapper.get('.qslot-dialog-npc-line b').attributes('style')).toContain(
-      'color: rgb(17, 17, 17)',
-    );
-    expect(wrapper.get('.qslot-dialog-text').attributes('style')).toContain(
-      'color: rgb(17, 17, 17)',
-    );
-    expect(wrapper.get('.qslot-hint').attributes('style')).toContain('color: rgb(17, 17, 17)');
+    const npcLine = wrapper.get('.qslot-dialog-npc-line');
+    expect(npcLine.text()).toContain('镇长 Py');
+    expect(npcLine.get('b').text()).toBe('镇长 Py');
+    expect(wrapper.get('.qslot-dialog-text').text()).toContain('欢迎来到 Pythontopia');
+    expect(wrapper.find('.qslot-hint').exists()).toBe(true);
   });
 });

@@ -1,10 +1,13 @@
-// R-13 Phase 8 大爆炸测试 · HUD 模块（目标 30 用例）。
+// R-13 Phase 8 大爆炸测试 · HUD 模块。
+//
+// R-12 星露谷改造后 HudShell 精简为 4 quickslot（quest/dialog/map/skill）+ 单个
+// 菜单按钮（hud-tool-menu）；快速旅行/睡眠/图书馆/设置改为键盘触发（T/C/L/,），
+// 不再有独立工具按钮与金币 chip。本测试随之对齐当前组件。
 //
 // 覆盖：
-//   - HudShell 5 quickslot + 2 tool-slot 全键位监听
+//   - HudShell 4 quickslot + 菜单按钮
 //   - keydown input/textarea/contenteditable focus guard
 //   - settingsOpen toggle 不影响 activeSlot
-//   - HudShell sleep 按钮 disabled 状态
 //   - HudShell BGM chip 显示
 //   - chip emoji 不破坏 data-testid 文本
 import { mount } from '@vue/test-utils';
@@ -34,7 +37,7 @@ describe('hud.integration: 全键位 + 工具区 + 边界', () => {
     setActivePinia(createPinia());
   });
 
-  it.each(['quest', 'dialog', 'inventory', 'map', 'skill'] as const)(
+  it.each(['quest', 'dialog', 'map', 'skill'] as const)(
     '点击 %s slot：activeSlot 切换',
     async (slot) => {
       const hud = useHudStore();
@@ -49,7 +52,6 @@ describe('hud.integration: 全键位 + 工具区 + 边界', () => {
     ['q', 'quest'],
     ['Q', 'quest'],
     ['j', 'dialog'],
-    ['i', 'inventory'],
     ['m', 'map'],
     ['k', 'skill'],
   ])('window keydown "%s" 切换到 %s', async (key, slot) => {
@@ -118,43 +120,37 @@ describe('hud.integration: 全键位 + 工具区 + 边界', () => {
     wrapper.unmount();
   });
 
-  it.each([
-    'hud-tool-fast-travel',
-    'hud-tool-sleep',
-    'hud-tool-library',
-    'hud-tool-settings',
-  ])('工具区按钮 %s 渲染', (id) => {
+  it('菜单按钮 hud-tool-menu 渲染', () => {
     const wrapper = mountShell();
-    expect(wrapper.find(`[data-testid="${id}"]`).exists()).toBe(true);
+    expect(wrapper.find('[data-testid="hud-tool-menu"]').exists()).toBe(true);
     wrapper.unmount();
   });
 
-  it('点击 fast-travel 工具按钮触发 window CustomEvent', async () => {
+  it('keydown "t" 触发 window 快速旅行 CustomEvent', async () => {
     const wrapper = mountShell();
     const handler = vi.fn();
     window.addEventListener('pythontopia:fast-travel-open', handler);
-    await wrapper.find('[data-testid="hud-tool-fast-travel"]').trigger('click');
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 't' }));
     expect(handler).toHaveBeenCalled();
     window.removeEventListener('pythontopia:fast-travel-open', handler);
     wrapper.unmount();
   });
 
-  it('点击 settings 工具按钮 toggle settingsOpen', async () => {
+  it('keydown "," toggle settingsOpen', async () => {
     const hud = useHudStore();
     const wrapper = mountShell();
-    await wrapper.find('[data-testid="hud-tool-settings"]').trigger('click');
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: ',' }));
     expect(hud.settingsOpen).toBe(true);
-    await wrapper.find('[data-testid="hud-tool-settings"]').trigger('click');
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: ',' }));
     expect(hud.settingsOpen).toBe(false);
     wrapper.unmount();
   });
 
-  it('点击 library 工具按钮触发 router.push(/library)', async () => {
+  it('keydown "l" 打开图书馆不抛错', async () => {
     const wrapper = mountShell();
-    await wrapper.find('[data-testid="hud-tool-library"]').trigger('click');
-    // router 是 memory history，跳转后 fullPath 应该是 /library
-    // 由于使用了 stub router，我们简单验证按钮可点击不抛错
-    expect(true).toBe(true);
+    expect(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'l' }));
+    }).not.toThrow();
     wrapper.unmount();
   });
 
@@ -168,9 +164,9 @@ describe('hud.integration: 全键位 + 工具区 + 边界', () => {
     expect(hud.bottomBar).toBe('collapsed');
   });
 
-  it('hud-coin chip 默认显示 0', () => {
+  it('hud-day chip 默认显示 Day 1', () => {
     const wrapper = mountShell();
-    expect(wrapper.find('[data-testid="hud-coin"]').text()).toContain('0');
+    expect(wrapper.find('[data-testid="hud-day"]').text()).toContain('1');
     wrapper.unmount();
   });
 

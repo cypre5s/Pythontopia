@@ -124,10 +124,10 @@ describe('a11y.integration · HudShell aria + 按钮可达性', () => {
     setActivePinia(createPinia());
   });
 
-  it('HudShell 5 quickslot 都有 aria-label 与 aria-pressed', () => {
+  it('HudShell 4 quickslot 都有 aria-label 与 aria-pressed', () => {
     const wrapper = mount(HudShell, { global: { plugins: [makeRouter()] }, attachTo: document.body });
     const slots = wrapper.findAll('.hud-slot');
-    expect(slots.length).toBe(5);
+    expect(slots.length).toBe(4);
     for (const s of slots) {
       expect(s.attributes('aria-label')).toBeDefined();
       expect(s.attributes('aria-pressed')).toBeDefined();
@@ -153,7 +153,7 @@ describe('a11y.integration · HudShell aria + 按钮可达性', () => {
     wrapper.unmount();
   });
 
-  it.each(['hud-tool-fast-travel', 'hud-tool-sleep', 'hud-tool-library', 'hud-tool-settings'])(
+  it.each(['hud-tool-menu'])(
     '工具按钮 %s 含 aria-label',
     (id) => {
       const wrapper = mount(HudShell, { global: { plugins: [makeRouter()] }, attachTo: document.body });

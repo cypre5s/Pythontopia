@@ -39,14 +39,19 @@ interface Props {
   portraitLeft?: string;
   /** 右侧立绘 URL（一般为玩家 / 同伴）；为空时不渲染右侧立绘。 */
   portraitRight?: string;
-  /** 打字机推进间隔，毫秒。默认 30，符合星露谷阅读节奏。 */
+  /**
+   * 打字机推进间隔，毫秒。显式传入时覆盖玩家全局文字速度设置；
+   * 未传入时回退到 gameSettings.education.textSpeed（默认 normal=35ms）。
+   * 故意不设默认值：undefined 表示「跟随全局设置」，且 exactOptionalPropertyTypes
+   * 下 withDefaults 不允许显式 undefined 默认值。
+   */
+  // eslint-disable-next-line vue/require-default-prop
   typingSpeedMs?: number;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   portraitLeft: '',
   portraitRight: '',
-  typingSpeedMs: 30,
 });
 
 const dialog = useDialogStore();
@@ -56,8 +61,10 @@ const gameSettings = useGameSettingsStore();
 const SPEED_MAP: Record<TextSpeed, number> = {
   slow: 60, normal: 35, fast: 15, instant: 0,
 };
+// 优先级：显式 prop > 玩家全局文字速度设置 > 30ms 兜底。
+// 生产中无调用方传 prop，行为等同读 gameSettings；prop 主要给测试/特殊场景做确定性覆盖。
 const effectiveTypingMs = computed(() =>
-  SPEED_MAP[gameSettings.education.textSpeed] ?? props.typingSpeedMs,
+  props.typingSpeedMs ?? SPEED_MAP[gameSettings.education.textSpeed] ?? 30,
 );
 
 /**

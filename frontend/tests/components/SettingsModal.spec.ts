@@ -50,7 +50,12 @@ describe('SettingsModal', () => {
     expect(modal.attributes('role')).toBe('dialog');
     expect(modal.attributes('aria-modal')).toBe('true');
     expect(wrapper.find('[data-testid="settings-close"]').exists()).toBe(true);
+    // 「音频」标签默认激活，静音开关可见。
     expect(wrapper.find('[data-testid="settings-mute"]').exists()).toBe(true);
+    // R-12 设置弹窗改为 5 标签页；语言下拉在「显示」标签页，切换后才渲染。
+    const displayTab = wrapper.findAll('[role="tab"]').find((t) => t.text().includes('显示'));
+    expect(displayTab).toBeDefined();
+    await displayTab!.trigger('click');
     expect(wrapper.find('[data-testid="settings-locale"]').exists()).toBe(true);
   });
 

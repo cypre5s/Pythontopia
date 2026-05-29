@@ -98,7 +98,8 @@ describe('DialogModal.vue typewriter (W2-dialog-upgrade)', () => {
 
   it('reveals text progressively at 30ms per char and marks typing done at the end', async () => {
     const store = primeLegacy();
-    const wrapper = mount(DialogModal);
+    // 显式传 typingSpeedMs 覆盖全局文字速度设置（默认 normal=35ms），保证确定性。
+    const wrapper = mount(DialogModal, { props: { typingSpeedMs: 30 } });
     expect(store.isTypingDone).toBe(false);
     expect(wrapper.find('.typing-cursor').exists()).toBe(true);
     expect(visibleText(wrapper)).toBe('');
@@ -121,7 +122,7 @@ describe('DialogModal.vue typewriter (W2-dialog-upgrade)', () => {
 
   it('clicking the dialog text mid-typewriter skips to full text and marks done', async () => {
     const store = primeLegacy();
-    const wrapper = mount(DialogModal);
+    const wrapper = mount(DialogModal, { props: { typingSpeedMs: 30 } });
     await vi.advanceTimersByTimeAsync(30);
     expect(visibleText(wrapper)).toBe('h');
 
@@ -177,25 +178,23 @@ describe('DialogModal.vue typewriter (W2-dialog-upgrade)', () => {
     expect(wrapper.find('[data-testid="dialog-portrait-right"]').exists()).toBe(false);
   });
 
-  it('uses black ink for the npc name and dialog copy', () => {
+  it('renders npc name, dialog copy and friendship badge under the pixel theme', () => {
+    // R-12 主题化：对话面板由「浅底黑字」改为像素主题（cream-on-dark，CSS 变量
+    // --pyt-text-* 控制），不再用内联 color:#111。此处改为校验结构 + 主题 class。
     const store = primeLegacy();
     store.friendship = 2;
-    const wrapper = mount(DialogModal);
+    const wrapper = mount(DialogModal, { props: { typingSpeedMs: 0 } });
 
-    expect(wrapper.get('.dialog-head').attributes('style')).toContain('color: rgb(17, 17, 17)');
-    expect(wrapper.get('.name-tag').attributes('style')).toContain('color: rgb(17, 17, 17)');
-    expect(wrapper.get('[data-testid="dialog-text"]').attributes('style')).toContain(
-      'color: rgb(17, 17, 17)',
-    );
-    expect(getComputedStyle(wrapper.get('[data-testid="dialog-friendship"]').element).color).toBe(
-      'rgb(17, 17, 17)',
-    );
+    expect(wrapper.get('.dialog-panel').classes()).toContain('pyt-pixel-text');
+    expect(wrapper.get('.name-tag').text()).toBe('Test NPC');
+    expect(wrapper.find('[data-testid="dialog-text"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="dialog-friendship"]').exists()).toBe(true);
   });
 
   it('renders branch buttons when hasBranches=true and clicking one calls store.chooseBranch', async () => {
     const store = primeWithTree();
     const spy = vi.spyOn(store, 'chooseBranch');
-    const wrapper = mount(DialogModal);
+    const wrapper = mount(DialogModal, { props: { typingSpeedMs: 30 } });
     await vi.advanceTimersByTimeAsync(30 * 5);
     await wrapper.vm.$nextTick();
 
@@ -213,7 +212,7 @@ describe('DialogModal.vue typewriter (W2-dialog-upgrade)', () => {
   it('Enter on completed typewriter with branches triggers chooseBranch on highlighted choice', async () => {
     const store = primeWithTree();
     const spy = vi.spyOn(store, 'chooseBranch');
-    const wrapper = mount(DialogModal);
+    const wrapper = mount(DialogModal, { props: { typingSpeedMs: 30 } });
     await vi.advanceTimersByTimeAsync(30 * 5);
     await wrapper.vm.$nextTick();
     expect(store.hasBranches).toBe(true);
@@ -225,7 +224,7 @@ describe('DialogModal.vue typewriter (W2-dialog-upgrade)', () => {
 
   it('ArrowDown moves the highlighted choice and updates the highlight class', async () => {
     primeWithTree();
-    const wrapper = mount(DialogModal);
+    const wrapper = mount(DialogModal, { props: { typingSpeedMs: 30 } });
     await vi.advanceTimersByTimeAsync(30 * 5);
     await wrapper.vm.$nextTick();
 

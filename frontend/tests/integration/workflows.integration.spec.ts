@@ -204,8 +204,9 @@ describe('workflows.integration · Calendar + Festival 联动', () => {
   );
 
   it('day=15 不在节日表 → ribbon 显示 upcoming（春日嘉年华 day=28）', async () => {
-    const cal = useCalendarStore();
-    cal.setBootstrap(makeCal(15), []);
+    // FestivalRibbon 读 hud.meta.dayIndex（R-12 起数据源由 calendar 切到 hud）。
+    const hud = useHudStore();
+    hud.syncMeta({ dayIndex: 15 });
     const wrapper = mount(FestivalRibbon);
     await flushPromises();
     expect(wrapper.text()).toContain('春日嘉年华');

@@ -69,19 +69,30 @@ describe('settings.integration: SettingsModal（20 case）', () => {
     expect(wrapper.find('[data-testid="settings-modal"]').exists()).toBe(open);
   });
 
-  it('挂载时显示所有控件', async () => {
+  // R-12 设置弹窗改为 5 标签页：音频默认激活，语言/动画在「显示」页，
+  // 重看引导/退出/完成在常驻底栏。
+  async function openDisplayTab(wrapper: ReturnType<typeof mount>): Promise<void> {
+    const tab = wrapper.findAll('[role="tab"]').find((t) => t.text().includes('显示'));
+    await tab!.trigger('click');
+  }
+
+  it('挂载时显示所有控件（含标签页切换）', async () => {
     const hud = useHudStore();
     hud.openSettings();
     const wrapper = mount(SettingsModal);
     await flushPromises();
+    // 音频标签默认激活
     expect(wrapper.find('[data-testid="settings-mute"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="settings-bgm"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="settings-sfx"]').exists()).toBe(true);
-    expect(wrapper.find('[data-testid="settings-locale"]').exists()).toBe(true);
-    expect(wrapper.find('[data-testid="settings-reduced-motion"]').exists()).toBe(true);
+    // 底栏常驻
     expect(wrapper.find('[data-testid="settings-reset-help"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="settings-logout"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="settings-ok"]').exists()).toBe(true);
+    // 切到「显示」页：语言 + 减弱动画
+    await openDisplayTab(wrapper);
+    expect(wrapper.find('[data-testid="settings-locale"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="settings-reduced-motion"]').exists()).toBe(true);
   });
 
   it('mute toggle: audio.setMuted + setStardewFxMuted 调用', async () => {
@@ -119,6 +130,7 @@ describe('settings.integration: SettingsModal（20 case）', () => {
     hud.openSettings();
     const wrapper = mount(SettingsModal);
     await flushPromises();
+    await openDisplayTab(wrapper);
     const select = wrapper.find<HTMLSelectElement>('[data-testid="settings-locale"]');
     await select.setValue(lang);
     // 不抛错即认为合规（实际 setLocale 调用在 composable 内部）
@@ -158,6 +170,7 @@ describe('settings.integration: SettingsModal（20 case）', () => {
     hud.openSettings();
     const wrapper = mount(SettingsModal);
     await flushPromises();
+    await openDisplayTab(wrapper);
     const rmRow = wrapper.find('[data-testid="settings-reduced-motion"]');
     expect(rmRow.exists()).toBe(true);
   });
@@ -261,8 +274,9 @@ describe('festival.integration: FestivalRibbon（10 case）', () => {
   );
 
   it('day=2 显示 upcoming 春耕祭', async () => {
-    const cal = useCalendarStore();
-    cal.setBootstrap(makeCal(2), []);
+    // FestivalRibbon 读 hud.meta.dayIndex（R-12 起数据源由 calendar 切到 hud）。
+    const hud = useHudStore();
+    hud.syncMeta({ dayIndex: 2 });
     const wrapper = mount(FestivalRibbon);
     await flushPromises();
     expect(wrapper.text()).toContain('春耕祭');
