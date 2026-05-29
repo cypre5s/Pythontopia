@@ -1,11 +1,18 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useTutorStore } from '@stores/tutor';
 import { useToastStore } from '@stores/toast';
 import { useSseStream } from '@/composables/useSseStream';
 import { playSfx } from '@/composables/useAudio';
 import MarkdownView from '@/components/common/MarkdownView.vue';
+import CoursewareMentionMenu from '@/components/tutor/CoursewareMentionMenu.vue';
+import { listChapters, listKnowledgeComponents } from '@/api/course';
+import {
+  buildMentionItems,
+  useCoursewareMention,
+  type MentionItem,
+} from '@/composables/useCoursewareMention';
 import type { TutorSessionDto } from '@/api/tutor';
 
 interface TutorStreamResult {
@@ -27,15 +34,23 @@ const router = useRouter();
 const tutor = useTutorStore();
 const toast = useToastStore();
 
-const question = ref('');
 const scrollRef = ref<HTMLElement | null>(null);
 const inputRef = ref<HTMLTextAreaElement | null>(null);
+
+// `@/` 课件引用命令：输入区状态机 + 候选项（章节 / KC）。
+const mentionItems = ref<MentionItem[]>([]);
+const composer = useCoursewareMention(mentionItems);
+const inputText = composer.text;
+const mentionVisible = composer.menuVisible;
+const mentionGroups = composer.groups;
+const mentionActiveIndex = composer.activeIndex;
+const selectedRefs = composer.selected;
 
 // 路径修正：后端映射 POST /api/tutor/ask（此前前端误用 /ask/stream 会 404）。
 const sse = useSseStream<TutorStreamResult>('/api/tutor/ask');
 
 const isStreaming = computed(() => sse.status.value === 'streaming' || sse.status.value === 'connecting');
-const canSubmit = computed(() => question.value.trim().length > 0 && !isStreaming.value);
+const canSubmit = computed(() => inputText.value.trim().length > 0 && !isStreaming.value);
 
 const displayedAnswer = computed(() => {
   if (isStreaming.value || sse.status.value === 'done') {
@@ -80,35 +95,85 @@ function selectSession(session: TutorSessionDto): void {
   playSfx('sfx_click');
   sse.abort();
   tutor.selectSession(session);
-  question.value = '';
+  composer.reset();
 }
 
 function startNew(): void {
   playSfx('sfx_click');
   sse.abort();
   tutor.startNewSession();
-  question.value = '';
-  toast.show('新对话已开始，请输入问题', 'info');
+  composer.reset();
+  toast.show('新对话已开始，输入 @ 可引用课件章节/知识点', 'info');
   void nextTick(() => {
     inputRef.value?.focus();
   });
 }
 
+function onInputChange(event: Event): void {
+  const target = event.target as HTMLTextAreaElement;
+  composer.updateFromText(target.value);
+}
+
+function onSelectMention(item: MentionItem): void {
+  composer.selectItem(item);
+  void nextTick(() => {
+    inputRef.value?.focus();
+  });
+}
+
+function onInputKeydown(event: KeyboardEvent): void {
+  if (mentionVisible.value) {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      composer.moveActive(1);
+      return;
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      composer.moveActive(-1);
+      return;
+    }
+    if (event.key === 'Enter' && !event.shiftKey) {
+      if (composer.commitActive()) {
+        event.preventDefault();
+        return;
+      }
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      composer.close();
+      return;
+    }
+  }
+  if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+    event.preventDefault();
+    void submit();
+  }
+}
+
 async function submit(): Promise<void> {
-  const q = question.value.trim();
+  const q = inputText.value.trim();
   if (!q) return;
 
   playSfx('sfx_click');
   tutor.setStatus('streaming');
   tutor.setStreamingAnswer('');
 
-  const savedQuestion = q;
-  question.value = '';
+  // `@/` 引用：选中的 KC 合并进 kcCodes（驱动 RAG 过滤），引用标签拼进 context。
+  const mergedKcCodes = Array.from(
+    new Set([...props.kcCodes, ...composer.selectedKcCodes.value]),
+  );
+  const context = [props.context, composer.contextHint.value]
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0)
+    .join(' ');
+
+  composer.reset();
 
   await sse.start({
-    question: savedQuestion,
-    kcCodes: props.kcCodes,
-    context: props.context,
+    question: q,
+    kcCodes: mergedKcCodes,
+    context,
   });
 
   if (sse.status.value === 'done' && sse.result.value) {
@@ -137,6 +202,19 @@ function goToPage(pageId: number): void {
   // 而 ?page 是文档内 1-based 页码，二者语义不同，不能混用）。
   void router.push({ path: '/library', query: { pageId: String(pageId) } });
 }
+
+onMounted(async () => {
+  // 加载课程包 43 的章节 + KC 作为 `@` 引用候选；失败不影响普通问答。
+  try {
+    const [chapters, kcs] = await Promise.all([
+      listChapters(43),
+      listKnowledgeComponents(43),
+    ]);
+    mentionItems.value = buildMentionItems(chapters, kcs);
+  } catch {
+    mentionItems.value = [];
+  }
+});
 </script>
 
 <template>
@@ -253,18 +331,48 @@ function goToPage(pageId: number): void {
         ⚠ {{ tutor.lastError }}
       </p>
 
+      <!-- Selected courseware references (@ command) -->
+      <div
+        v-if="selectedRefs.length > 0"
+        class="ref-chips"
+        data-testid="tutor-ref-chips"
+      >
+        <span class="ref-chips__label">引用课件：</span>
+        <button
+          v-for="ref_ in selectedRefs"
+          :key="ref_.token"
+          type="button"
+          class="ref-chip"
+          :class="`ref-chip--${ref_.kind}`"
+          :title="`移除引用 ${ref_.label}`"
+          @click="composer.removeRef(ref_.token)"
+        >
+          <span class="ref-chip__label">{{ ref_.label }}</span>
+          <span
+            class="ref-chip__x"
+            aria-hidden="true"
+          >×</span>
+        </button>
+      </div>
+
       <!-- Input Area -->
       <div class="input-area">
+        <CoursewareMentionMenu
+          :visible="mentionVisible"
+          :groups="mentionGroups"
+          :active-index="mentionActiveIndex"
+          @select="onSelectMention"
+        />
         <textarea
           ref="inputRef"
-          v-model="question"
+          :value="inputText"
           class="input-area__textarea"
           data-testid="tutor-input"
-          placeholder="输入你的 Python 问题…"
+          placeholder="输入你的 Python 问题…（输入 @ 引用课件章节/知识点）"
           rows="2"
           :disabled="isStreaming"
-          @keydown.enter.ctrl.exact="submit"
-          @keydown.enter.meta.exact="submit"
+          @input="onInputChange"
+          @keydown="onInputKeydown"
         />
         <button
           type="button"
@@ -502,8 +610,60 @@ function goToPage(pageId: number): void {
   color: #b3402a;
 }
 
+/* Selected reference chips (@ command) */
+.ref-chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ref-chips__label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #8a6c2c;
+}
+.ref-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px 2px 8px;
+  font-family: inherit;
+  font-size: 11px;
+  border-radius: 999px;
+  cursor: pointer;
+  border: 1px solid #6e4f1d;
+  background: #ffe098;
+  color: #4d3613;
+  transition: background 120ms;
+}
+.ref-chip:hover {
+  background: #f7d774;
+}
+.ref-chip--chapter {
+  background: #d6e6f4;
+  border-color: #2a6f97;
+  color: #1b4a6b;
+}
+.ref-chip--kc {
+  background: #d6ead1;
+  border-color: #4d6e1d;
+  color: #2d5b1b;
+}
+.ref-chip__label {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ref-chip__x {
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1;
+}
+
 /* Input */
 .input-area {
+  position: relative;
   display: flex;
   gap: 8px;
   align-items: flex-end;
