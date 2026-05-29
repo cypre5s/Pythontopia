@@ -191,11 +191,13 @@ a {
   box-shadow: 6px 6px 0 #263426;
   padding: 18px;
   pointer-events: auto;
+  color: #111111;
 }
 
 .dialog-panel p {
   margin: 0 0 12px;
   line-height: 1.6;
+  color: #111111;
 }
 
 .placeholder-page {

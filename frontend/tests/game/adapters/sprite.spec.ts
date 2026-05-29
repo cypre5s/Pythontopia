@@ -72,4 +72,23 @@ describe('createPlayerSprite', () => {
     expect(handle.tileY).toBe(5);
     expect(handle.direction).toBe('RIGHT');
   });
+
+  it('jumpToTile updates coords, reports jumping during the arc, and lands at idle', () => {
+    const scene = createSceneMock();
+
+    const handle = createPlayerSprite(scene, { tileX: 2, tileY: 3, direction: 'DOWN', tileSize: 32 });
+    handle.jumpToTile(2, 1, 'UP');
+
+    expect(handle.tileX).toBe(2);
+    expect(handle.tileY).toBe(1);
+    expect(handle.direction).toBe('UP');
+    expect(handle.isJumping()).toBe(true);
+
+    const tweenConfig = vi.mocked(scene.tweens?.add).mock.calls[0]?.[0] as
+      | { onComplete?: () => void }
+      | undefined;
+    tweenConfig?.onComplete?.();
+
+    expect(handle.isJumping()).toBe(false);
+  });
 });

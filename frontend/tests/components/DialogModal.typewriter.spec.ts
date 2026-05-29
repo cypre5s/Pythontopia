@@ -177,6 +177,21 @@ describe('DialogModal.vue typewriter (W2-dialog-upgrade)', () => {
     expect(wrapper.find('[data-testid="dialog-portrait-right"]').exists()).toBe(false);
   });
 
+  it('uses black ink for the npc name and dialog copy', () => {
+    const store = primeLegacy();
+    store.friendship = 2;
+    const wrapper = mount(DialogModal);
+
+    expect(wrapper.get('.dialog-head').attributes('style')).toContain('color: rgb(17, 17, 17)');
+    expect(wrapper.get('.name-tag').attributes('style')).toContain('color: rgb(17, 17, 17)');
+    expect(wrapper.get('[data-testid="dialog-text"]').attributes('style')).toContain(
+      'color: rgb(17, 17, 17)',
+    );
+    expect(getComputedStyle(wrapper.get('[data-testid="dialog-friendship"]').element).color).toBe(
+      'rgb(17, 17, 17)',
+    );
+  });
+
   it('renders branch buttons when hasBranches=true and clicking one calls store.chooseBranch', async () => {
     const store = primeWithTree();
     const spy = vi.spyOn(store, 'chooseBranch');

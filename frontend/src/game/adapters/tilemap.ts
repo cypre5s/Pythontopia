@@ -33,12 +33,13 @@ export interface TownMapData {
   buildings: MapZone[];
   npcs: NpcSpawn[];
   collisions: boolean[][];
+  lowObstacles: boolean[][];
 }
 
 // Kenney tiny-town tilemap_packed.png: 16x16 源 tile，渲染时按 2x 放大为 32px 网格。
 const TOWN_TILESET_KEY = 'kenney_tiny_town';
 const SOURCE_TILE_SIZE = 16;
-const RENDER_TILE_SIZE = 32;
+const RENDER_TILE_SIZE = 16;
 const RENDER_SCALE = RENDER_TILE_SIZE / SOURCE_TILE_SIZE;
 const MAP_WIDTH = 30;
 const MAP_HEIGHT = 20;
@@ -240,6 +241,9 @@ export function loadTownMap(scene: SceneLike, mapKey: string): TownMapData {
   const collisions: boolean[][] = Array.from({ length: MAP_HEIGHT }, () =>
     Array.from({ length: MAP_WIDTH }, () => false),
   );
+  const lowObstacles: boolean[][] = Array.from({ length: MAP_HEIGHT }, () =>
+    Array.from({ length: MAP_WIDTH }, () => false),
+  );
   buildings.forEach((building) => {
     for (let dy = 0; dy < building.height; dy += 1) {
       for (let dx = 0; dx < building.width; dx += 1) {
@@ -250,6 +254,20 @@ export function loadTownMap(scene: SceneLike, mapKey: string): TownMapData {
           row[tx] = true;
         }
       }
+    }
+  });
+
+  const tutorialLogs = [
+    { tileX: 16, tileY: 11 },
+    { tileX: 17, tileY: 11 },
+  ];
+  tutorialLogs.forEach(({ tileX, tileY }) => {
+    buildingLayer.putTileAt(84, tileX, tileY);
+    const collisionRow = collisions[tileY];
+    const obstacleRow = lowObstacles[tileY];
+    if (collisionRow && obstacleRow) {
+      collisionRow[tileX] = true;
+      obstacleRow[tileX] = true;
     }
   });
 
@@ -270,6 +288,7 @@ export function loadTownMap(scene: SceneLike, mapKey: string): TownMapData {
     buildings,
     npcs,
     collisions,
+    lowObstacles,
   };
 }
 
@@ -324,7 +343,7 @@ export function drawNpcSprite(scene: SceneLike, npc: NpcSpawn, tileSize: number)
     .sprite(x, y, spriteKey, idleFrame)
     .setOrigin(0.5, 0.7)
     .setDepth(10)
-    .setScale((tileSize / 64) * 1.4);
+    .setScale(0.7);
   phaserScene.add
     .text(x, y - tileSize * 0.9, npc.label, {
       fontFamily: PIXEL_FONT_FAMILY,

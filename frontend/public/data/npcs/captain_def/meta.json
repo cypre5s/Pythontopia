@@ -1,0 +1,11 @@
+{
+  "key": "captain_def",
+  "name": "船长 Def",
+  "category": "educator_core",
+  "sprite": "player_sara",
+  "portrait": "portrait_sailor.png",
+  "spawnMap": "port_west",
+  "spawn": { "tileX": 23, "tileY": 9 },
+  "tags": ["quest_giver", "chapter_5", "data_structures"],
+  "description": "西港口锦绣讲坛旁的老船长，船舱里列表、字典、栈各占一格。负责第 5 章「数据结构」的开课引导。"
+}

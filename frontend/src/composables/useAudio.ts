@@ -10,6 +10,8 @@ export type SfxKey =
   | 'sfx_coin'
   | 'sfx_success'
   | 'sfx_error'
+  | 'sfx_jump'
+  | 'sfx_land'
   | 'sfx_jingle_complete'
   | 'sfx_jingle_levelup';
 

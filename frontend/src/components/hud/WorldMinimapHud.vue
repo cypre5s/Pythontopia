@@ -14,19 +14,29 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import MiniMap from '@/components/hud/MiniMap.vue';
 import { useWorldMinimap } from '@/composables/useWorldMinimap';
+import { useDraggable } from '@/composables/useDraggable';
 import { useHudStore } from '@stores/hud';
 import { playUiClick } from '@/composables/useStardewFx';
 
-const { data, playerX, playerY, loading } = useWorldMinimap();
+const { data, playerX, playerY, playerFacing, loading } = useWorldMinimap();
 const hud = useHudStore();
+
+const rootRef = ref<HTMLElement | null>(null);
+const { style: dragStyle, onPointerDown: onDragStart } = useDraggable(
+  rootRef,
+  'pyt_minimap_pos',
+  { top: 96, right: 24 },
+);
 
 const collapsed = ref(false);
 
 const visible = computed(() => hud.activeSlot !== 'inventory' && hud.activeSlot !== 'skill');
 
 const sizePx = computed(() => {
-  if (typeof window === 'undefined') return 180;
-  return window.innerWidth < 640 ? 120 : 180;
+  if (typeof window === 'undefined') return 200;
+  if (window.innerWidth < 640) return 120;
+  if (window.innerWidth < 1280) return 160;
+  return 200;
 });
 
 function toggleCollapsed(): void {
@@ -59,10 +69,13 @@ onUnmounted(() => {
 <template>
   <aside
     v-if="visible"
+    ref="rootRef"
     class="world-minimap-hud"
     :class="{ 'world-minimap-hud--collapsed': collapsed }"
+    :style="dragStyle"
     data-testid="world-minimap-hud"
     :aria-label="data ? `小地图：${data.mapName}` : '小地图'"
+    @pointerdown="onDragStart"
   >
     <button
       type="button"
@@ -95,7 +108,11 @@ onUnmounted(() => {
         :npcs="data?.npcs ?? []"
         :map-name="''"
         :exits="data?.exits ?? []"
+        :player-facing="playerFacing"
       />
+      <p class="world-minimap-hud__hint">
+        当前位置 · 按 M 查看大地图
+      </p>
     </div>
   </aside>
 </template>
@@ -103,17 +120,31 @@ onUnmounted(() => {
 <style scoped>
 .world-minimap-hud {
   position: fixed;
-  top: 72px;
-  right: 16px;
+  top: 36px;
+  right: 12px;
+  width: max-content;
+  height: fit-content;
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
+  align-items: stretch;
+  gap: 6px;
+  padding: 10px 10px 8px;
+  background: var(--pyt-panel-bg);
+  border: 3px solid var(--pyt-panel-border);
+  border-radius: 2px;
+  box-shadow: 4px 4px 0 var(--pyt-panel-border-dark), 0 8px 24px var(--pyt-panel-shadow);
   z-index: 90;
   pointer-events: auto;
-  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.35));
+  color: var(--pyt-text-primary);
+  font-family: var(--pyt-font-pixel, 'Ark Pixel 12', 'PingFang SC', monospace);
+  image-rendering: pixelated;
+  overflow: hidden;
 }
 
+.world-minimap-hud--collapsed {
+  padding: 6px 10px;
+  gap: 0;
+}
 .world-minimap-hud--collapsed .world-minimap-hud__body {
   display: none;
 }
@@ -121,54 +152,82 @@ onUnmounted(() => {
 .world-minimap-hud__handle {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  background: rgba(28, 24, 16, 0.86);
-  border: 2px solid #d4af37;
-  border-radius: 4px;
-  color: #fff7e6;
-  font-family: 'PythontopiaPixel', 'PingFang SC', monospace;
-  font-size: 11px;
+  gap: 6px;
+  padding: 2px 6px;
+  background: none;
+  border: none;
+  color: var(--pyt-text-accent);
+  font-family: inherit;
+  font-size: 12px;
   cursor: pointer;
-  transition: background 120ms, border-color 120ms;
+  border-radius: 2px;
+  transition: background 140ms, color 140ms;
 }
-
 .world-minimap-hud__handle:hover {
-  background: rgba(60, 40, 12, 0.92);
-  border-color: #f1c453;
+  background: var(--pyt-btn-hover-bg);
+  color: var(--pyt-text-primary);
 }
-
 .world-minimap-hud__handle:focus-visible {
-  outline: 2px solid #f1c453;
+  outline: 2px solid var(--pyt-text-gold);
   outline-offset: 1px;
 }
-
 .world-minimap-hud__handle-icon {
   font-size: 12px;
-  color: #ffd166;
+  color: var(--pyt-text-accent);
 }
-
 .world-minimap-hud__handle-label {
   white-space: nowrap;
-  max-width: 140px;
+  max-width: 180px;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-weight: 700;
+  letter-spacing: 0.3px;
 }
 
 .world-minimap-hud__body {
-  position: relative;
-  padding: 22px 4px 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  max-height: 300px;
+}
+
+.world-minimap-hud__hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--pyt-text-secondary);
+  letter-spacing: 0.3px;
+}
+
+@media (max-width: 1280px) {
+  .world-minimap-hud {
+    top: 88px;
+    right: 16px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .world-minimap-hud {
+    top: auto;
+    bottom: 100px;
+    right: 12px;
+    opacity: 0.92;
+  }
 }
 
 @media (max-width: 640px) {
   .world-minimap-hud {
-    top: 60px;
+    bottom: 96px;
     right: 8px;
-    opacity: 0.88;
+    padding: 6px;
   }
   .world-minimap-hud__handle-label {
-    max-width: 96px;
-    font-size: 10px;
+    max-width: 120px;
+    font-size: 11px;
+  }
+  .world-minimap-hud__hint {
+    display: none;
   }
 }
 </style>

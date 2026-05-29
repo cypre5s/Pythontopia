@@ -6,6 +6,7 @@ import { useInventoryStore } from '@stores/inventory';
 import { useLearningStore } from '@stores/learning';
 import { useNpcStore } from '@stores/npc';
 import { useSkillStore } from '@stores/skill';
+import { useHudStore } from '@stores/hud';
 import { useToastStore } from '@stores/toast';
 import { playChime } from '@/composables/useStardewFx';
 import type { Direction } from '@api/dto/Direction';
@@ -137,6 +138,12 @@ export const useWorldStore = defineStore('world', {
       // events 是旧前端别名；兼容两边别名，确保拿得到事件。
       useCalendarStore().setBootstrap(data.calendar, data.events ?? data.pendingEvents ?? []);
       useNpcStore().setBootstrap(data.npcStates ?? []);
+
+      useHudStore().syncMeta({
+        dayIndex: data.world.dayIndex ?? 1,
+        weather: data.world.weather ?? 'SUNNY',
+        coin: data.currency?.coins ?? 0,
+      });
     },
     /**
      * 把后端最新的 SaveSlotDto 同步到 world store 的 RPG 扩展字段上。WorldScene 切换 / 解锁建筑 /
@@ -174,6 +181,11 @@ export const useWorldStore = defineStore('world', {
         useCalendarStore().pushEvents(events);
       }
       useToastStore().show(`第 ${response.world.dayIndex} 天醒来`, 'info');
+
+      useHudStore().syncMeta({
+        dayIndex: response.world.dayIndex,
+        weather: response.world.weather ?? 'SUNNY',
+      });
 
       // A7: KC mastery 自然衰减 — 模拟遗忘曲线，sleep 推进 1 天时已掌握 KC 各 -2
       try {
@@ -216,8 +228,9 @@ export const useWorldStore = defineStore('world', {
       const update = pendingUpdate;
       pendingUpdate = null;
       lastSentAt = Date.now();
+      const currentMapKey = this.player?.mapKey;
       const player = await patchPlayerState(update);
-      this.player = player;
+      this.player = currentMapKey ? { ...player, mapKey: currentMapKey } : player;
     },
     async refreshWeather(): Promise<void> {
       await this.loadSession();

@@ -9,11 +9,11 @@
 //   ch4=PY43-KC-031~038  ch5=PY43-KC-039~047  ch6=PY43-KC-048~053
 //   ch7=PY43-KC-054~065  （共 65 个 KC，与课程种子 65 KC 一致）
 //
-// 章节名沿用 R-11 教学化语义（"基础启航 / 变量赋值 / 数据类型 …"），
-// 不直接拿 course_chapter.json 的原章节标题，原因是：
-//   - course_chapter.json 章节标题（如 "计算工具与计算思维"）更偏教材原文，
-//     不适合放进侧栏 88px 宽的小图标按钮；
-//   - R-11 已经对外发布过这套教学化文案，沿用以避免回归。
+// 章节显示名已与真实课程 data/course-pack-43/json/course_chapter.json 对齐
+// （取短名以适配侧栏 ~88px 图标按钮）。此前 R-11 旧名（容器结构/条件分支/循环结构…）
+// 与各章真实 KC 内容错位（本课程先讲「流程自动化」后讲「数据结构」），已修正。
+// 注意：`kcCode` slug 是 testid + icons_kc/<slug>/ 资产目录键，必须保持稳定，
+// 故只改 `name`，不改 slug（slug 与新名语义不再字面对应，是已知取舍）。
 
 export interface ChapterEntry {
   /** 章节 slug，等价于 icons_kc/<kcCode>/ 资产目录与 testid 标识符。 */
@@ -33,7 +33,7 @@ export interface ChapterEntry {
 export const CHAPTERS: ReadonlyArray<ChapterEntry> = [
   {
     kcCode: 'chapter_basics',
-    name: '第 1 章 · 基础启航',
+    name: '第 1 章 · 计算思维',
     iconPath: '/assets/pixel/icons_kc/chapter_basics/lorc__brain.png',
     order: 1,
     startKc: 1,
@@ -41,7 +41,7 @@ export const CHAPTERS: ReadonlyArray<ChapterEntry> = [
   },
   {
     kcCode: 'variable_assignment',
-    name: '第 2 章 · 变量赋值',
+    name: '第 2 章 · 语言基础',
     iconPath: '/assets/pixel/icons_kc/variable_assignment/lorc__padlock.png',
     order: 2,
     startKc: 8,
@@ -49,7 +49,7 @@ export const CHAPTERS: ReadonlyArray<ChapterEntry> = [
   },
   {
     kcCode: 'data_types_number_string_bool',
-    name: '第 3 章 · 数据类型',
+    name: '第 3 章 · 信息表示',
     iconPath: '/assets/pixel/icons_kc/data_types_number_string_bool/lorc__light-bulb.png',
     order: 3,
     startKc: 17,
@@ -57,7 +57,7 @@ export const CHAPTERS: ReadonlyArray<ChapterEntry> = [
   },
   {
     kcCode: 'list_tuple_set_dict',
-    name: '第 4 章 · 容器结构',
+    name: '第 4 章 · 流程自动化',
     // R-11 spec 用 delapouite__chemical-tank.png，但该图标在 public 资产里不存在；
     // 改用 delapouite__stack.png（同目录现存且语义吻合「堆栈/容器」）。
     iconPath: '/assets/pixel/icons_kc/list_tuple_set_dict/delapouite__stack.png',
@@ -67,7 +67,7 @@ export const CHAPTERS: ReadonlyArray<ChapterEntry> = [
   },
   {
     kcCode: 'control_flow_if_else',
-    name: '第 5 章 · 条件分支',
+    name: '第 5 章 · 数据结构',
     iconPath: '/assets/pixel/icons_kc/control_flow_if_else/delapouite__choice.png',
     order: 5,
     startKc: 39,
@@ -75,7 +75,7 @@ export const CHAPTERS: ReadonlyArray<ChapterEntry> = [
   },
   {
     kcCode: 'loop_for_while',
-    name: '第 6 章 · 循环结构',
+    name: '第 6 章 · 数据存取分析',
     iconPath: '/assets/pixel/icons_kc/loop_for_while/lorc__cycle.png',
     order: 6,
     startKc: 48,
@@ -83,7 +83,7 @@ export const CHAPTERS: ReadonlyArray<ChapterEntry> = [
   },
   {
     kcCode: 'function_def_args_return',
-    name: '第 7 章 · 函数定义',
+    name: '第 7 章 · 归纳与抽象',
     iconPath: '/assets/pixel/icons_kc/function_def_args_return/lorc__gears.png',
     order: 7,
     startKc: 54,

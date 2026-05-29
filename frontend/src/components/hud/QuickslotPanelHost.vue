@@ -1,19 +1,5 @@
 <script setup lang="ts">
-/**
- * R-13 §-1 critical fix：5 个底部 HUD 按钮（Q 任务 / J 对话 / I 背包 / M 地图 / K 技能）
- * 之前 onClickSlot 只调 hud.toggleSlot 切 activeSlot 状态，但 WorldPage 上没有任何
- * 组件监听 activeSlot 来弹出对应面板 —— 玩家点了"什么都没发生"。
- *
- * 本组件统一承担 5 个 slot 的弹窗：
- *   - quest    → 跳到 MainQuestPanel（mainQuest.togglePanel 已挂在 HudShell 里）
- *   - dialog   → 对话历史面板（dialog.history 已存）
- *   - inventory → 复用现有 InventoryPanel
- *   - map      → 大地图概览（5 张地图缩略图 + 当前位置）
- *   - skill    → 技能与画像面板（useLearningStore.profile 8 维度）
- *
- * 设计：每个 panel 用同一套牛皮纸 9-slice + 关闭按钮 + ESC 监听；居中固定，
- * z-index 110 高于 HUD bottom (100)；点击遮罩外侧关闭。
- */
+/** 5 个底部快捷槽的弹窗宿主：对话/背包/地图/技能面板。 */
 import { computed, onBeforeUnmount, onMounted } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useHudStore } from '@stores/hud';
@@ -80,11 +66,11 @@ const dialogContext = computed(() => {
   };
 });
 const MAP_LIST = [
-  { key: 'town_hub',    label: 'Pythontopia 小镇', icon: '🏛' },
-  { key: 'farm_north',  label: '北农场 · 棉麻试验田', icon: '🌾' },
-  { key: 'mine_south',  label: 'Bug 矿洞 · 织丝走廊', icon: '⛏' },
-  { key: 'campus_east', label: '东校园 · 镜月湖畔', icon: '📚' },
-  { key: 'port_west',   label: '西港 · 棉布商埠', icon: '⚓' },
+  { key: 'town_hub',    label: 'Pythontopia 小镇', icon: 'H' },
+  { key: 'farm_north',  label: '北农场 · 棉麻试验田', icon: 'N' },
+  { key: 'mine_south',  label: 'Bug 矿洞 · 织丝走廊', icon: 'S' },
+  { key: 'campus_east', label: '东校园 · 镜月湖畔', icon: 'E' },
+  { key: 'port_west',   label: '西港 · 棉布商埠', icon: 'W' },
 ];
 const currentMapKey = computed<string>(() => world.player?.mapKey ?? 'town_hub');
 
@@ -128,7 +114,7 @@ const profileDimensions = computed(() => {
         data-testid="qslot-dialog"
       >
         <header class="qslot-head">
-          <h2>🗨 对话历史</h2>
+          <h2>对话历史</h2>
           <button
             type="button"
             class="qslot-close"
@@ -148,13 +134,19 @@ const profileDimensions = computed(() => {
           v-else
           class="qslot-dialog-current"
         >
-          <p class="qslot-dialog-npc-line">
+          <p
+            class="qslot-dialog-npc-line"
+          >
             正与 <b>{{ dialogContext.npcName || dialogContext.npcKey }}</b> 对话（已对话节点数 {{ dialogContext.nodeCount }}）
           </p>
-          <p class="qslot-dialog-text">
+          <p
+            class="qslot-dialog-text"
+          >
             {{ dialogContext.currentText || '（节点无文字内容）' }}
           </p>
-          <p class="qslot-hint">
+          <p
+            class="qslot-hint"
+          >
             提示：按 Enter / E 推进打字机或选择分支；按 ESC 关闭。
           </p>
         </div>
@@ -167,7 +159,7 @@ const profileDimensions = computed(() => {
         data-testid="qslot-inventory"
       >
         <header class="qslot-head">
-          <h2>🎒 背包 · {{ inventory.items.length }} 件</h2>
+          <h2>背包 · {{ inventory.items.length }} 件</h2>
           <button
             type="button"
             class="qslot-close"
@@ -186,7 +178,7 @@ const profileDimensions = computed(() => {
         data-testid="qslot-map"
       >
         <header class="qslot-head">
-          <h2>🗺 五张地图（点击传送）</h2>
+          <h2>五张地图（点击传送）</h2>
           <button
             type="button"
             class="qslot-close"
@@ -222,7 +214,7 @@ const profileDimensions = computed(() => {
         data-testid="qslot-skill"
       >
         <header class="qslot-head">
-          <h2>🌱 技能 · 学生画像（8 维度）</h2>
+          <h2>技能 · 学生画像（8 维度）</h2>
           <button
             type="button"
             class="qslot-close"
@@ -284,14 +276,13 @@ const profileDimensions = computed(() => {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  background:
-    repeating-linear-gradient(135deg, rgba(212, 175, 55, 0.06) 0 8px, transparent 8px 18px),
-    linear-gradient(180deg, #fff7e6 0%, #f1d896 100%);
-  border: 4px solid #6e4f1d;
-  border-radius: 12px;
-  box-shadow: 6px 6px 0 #2a1a05;
-  color: #3a2a14;
+  background: var(--pyt-panel-bg);
+  border: 3px solid var(--pyt-panel-border);
+  border-radius: 2px;
+  box-shadow: 4px 4px 0 var(--pyt-panel-border-dark), 0 8px 24px var(--pyt-panel-shadow);
+  color: var(--pyt-text-primary);
   font-family: var(--pyt-font-pixel, 'Ark Pixel 12', monospace);
+  image-rendering: pixelated;
 }
 .qslot-card--wide {
   width: min(720px, 100%);
@@ -301,34 +292,35 @@ const profileDimensions = computed(() => {
   justify-content: space-between;
   align-items: center;
   padding: 10px 16px;
-  background: rgba(212, 175, 55, 0.25);
-  border-bottom: 3px solid #8a6c2c;
+  background: var(--pyt-panel-header-bg);
+  border-bottom: 2px solid var(--pyt-panel-border);
 }
 .qslot-head h2 {
   margin: 0;
   font-size: 16px;
-  color: #4d3613;
+  color: var(--pyt-text-accent);
+  text-shadow: 1px 1px 0 #2a1a05;
   letter-spacing: 1px;
 }
 .qslot-close {
   font-family: inherit;
   font-size: 11px;
   padding: 4px 10px;
-  background: #ffd166;
-  border: 2px solid #4d3613;
-  box-shadow: 2px 2px 0 #2a1a05;
+  background: var(--pyt-btn-bg);
+  border: 2px solid var(--pyt-btn-border);
+  box-shadow: 2px 2px 0 var(--pyt-panel-border-dark);
   cursor: pointer;
-  color: #4d3613;
+  color: var(--pyt-text-primary);
 }
 .qslot-close:active {
   transform: translate(2px, 2px);
-  box-shadow: 0 0 0 #2a1a05;
+  box-shadow: 0 0 0 var(--pyt-panel-border-dark);
 }
 
 .qslot-empty {
   padding: 24px;
   text-align: center;
-  color: #5d4524;
+  color: var(--pyt-text-secondary);
   line-height: 1.6;
   font-size: 13px;
 }
@@ -351,20 +343,20 @@ const profileDimensions = computed(() => {
 .qslot-dialog-npc-line {
   margin: 0 0 8px;
   font-size: 13px;
-  color: #5d4524;
+  color: var(--pyt-text-secondary);
 }
 .qslot-dialog-npc-line b {
-  color: #b8442d;
+  color: var(--pyt-text-accent);
 }
 .qslot-dialog-text {
   margin: 0 0 8px;
   padding: 10px 14px;
-  background: rgba(255, 247, 230, 0.85);
-  border: 2px solid #c9a86b;
-  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 2px solid var(--pyt-panel-border-dark);
+  border-radius: 2px;
   font-size: 14px;
   line-height: 1.6;
-  color: #3a2a14;
+  color: var(--pyt-text-primary);
   min-height: 60px;
 }
 
@@ -374,19 +366,19 @@ const profileDimensions = computed(() => {
   gap: 10px;
   align-items: center;
   padding: 8px 12px;
-  background: rgba(255, 247, 230, 0.7);
-  border: 2px solid #8a6c2c;
-  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 2px solid var(--pyt-panel-border-dark);
+  border-radius: 2px;
   cursor: pointer;
   transition: transform 0.12s, background 0.15s;
 }
 .qslot-map-row:hover:not(.qslot-map-row--current) {
-  background: #ffe7b3;
+  background: var(--pyt-btn-hover-bg);
   transform: translateX(2px);
 }
 .qslot-map-row--current {
-  background: rgba(187, 247, 208, 0.55);
-  border-color: #16a34a;
+  background: rgba(107, 191, 89, 0.2);
+  border-color: var(--pyt-bar-energy);
   cursor: default;
 }
 .qslot-map-icon {
@@ -396,11 +388,11 @@ const profileDimensions = computed(() => {
 .qslot-map-label {
   font-size: 14px;
   font-weight: 700;
-  color: #4d3613;
+  color: var(--pyt-text-accent);
 }
 .qslot-map-state {
   font-size: 11px;
-  color: #5d4524;
+  color: var(--pyt-text-secondary);
 }
 
 .qslot-skill-list li {
@@ -408,21 +400,21 @@ const profileDimensions = computed(() => {
   grid-template-columns: 130px 1fr;
   gap: 8px;
   padding: 5px 10px;
-  background: rgba(255, 247, 230, 0.55);
-  border-left: 3px solid #d4af37;
+  background: rgba(0, 0, 0, 0.15);
+  border-left: 3px solid var(--pyt-panel-border);
   font-size: 12px;
 }
 .qslot-skill-list li b {
-  color: #4d3613;
+  color: var(--pyt-text-accent);
 }
 .qslot-skill-list li span {
-  color: #5d4524;
+  color: var(--pyt-text-secondary);
 }
 
 .qslot-hint {
   margin: 8px 16px 12px;
   font-size: 11px;
-  color: #8a6c2c;
+  color: var(--pyt-text-secondary);
   font-style: italic;
 }
 </style>

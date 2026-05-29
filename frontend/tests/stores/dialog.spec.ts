@@ -30,6 +30,18 @@ import {
   type NpcMeta,
 } from '@/stores/dialog';
 
+// R-12 W2-NPC：openWithTree 现在会并行拉 /api/dialog/context 取真实 stats。
+// 单测环境无后端，统一 stub 一个稳定上下文，避免 axios 真发请求引发抖动；
+// 同时保证 store.context 在测试断言里可观察。
+vi.mock('@/api/dialog', () => ({
+  fetchDialogContext: vi.fn(async () => ({
+    playerName: '测试者',
+    profileType: 'cautious',
+    giftJustGiven: false,
+    stats: { exercisesThisWeek: '5' },
+  })),
+}));
+
 function makeTree(): NpcDialogTree {
   return {
     npcKey: 'mayor_py',
@@ -118,6 +130,9 @@ describe('dialog store - tree API', () => {
     expect(store.tree?.nodes.greet?.text).toContain('Pythontopia');
     expect(store.loadError).toBeNull();
     expect(store.loading).toBe(false);
+    // R-12 W2-NPC：openWithTree 同时填充对话渲染上下文，方便组件渲染 stats / profileAdaptive。
+    expect(store.context?.playerName).toBe('测试者');
+    expect(store.context?.stats.exercisesThisWeek).toBe('5');
   });
 
   it('openWithTree records loadError when fetch fails', async () => {
@@ -179,6 +194,7 @@ describe('dialog store - tree API', () => {
     expect(store.history).toEqual([]);
     expect(store.branchChoices).toEqual([]);
     expect(store.isTypingDone).toBe(false);
+    expect(store.context).toBeNull();
   });
 });
 

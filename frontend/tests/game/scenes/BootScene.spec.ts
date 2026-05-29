@@ -17,11 +17,13 @@ interface LoaderSpy {
   onceHandlers: Map<string, AnyFn>;
   audioUrls: string[];
   imageUrls: string[];
+  spritesheetKeys: string[];
 }
 
 function makeLoaderSpy(): LoaderSpy {
   const audioUrls: string[] = [];
   const imageUrls: string[] = [];
+  const spritesheetKeys: string[] = [];
   const progressHandlers: Array<(value: number) => void> = [];
   const onceHandlers = new Map<string, AnyFn>();
   return {
@@ -36,7 +38,8 @@ function makeLoaderSpy(): LoaderSpy {
     image: vi.fn((_key: string, url: string) => {
       imageUrls.push(url);
     }),
-    spritesheet: vi.fn((_key: string, url: string) => {
+    spritesheet: vi.fn((key: string, url: string) => {
+      spritesheetKeys.push(key);
       imageUrls.push(url);
     }),
     audio: vi.fn((_key: string, url: string | string[]) => {
@@ -52,6 +55,7 @@ function makeLoaderSpy(): LoaderSpy {
     onceHandlers,
     audioUrls,
     imageUrls,
+    spritesheetKeys,
   };
 }
 
@@ -122,6 +126,15 @@ describe('BootScene asset manifest', () => {
     for (const url of loader.imageUrls) {
       expectPublicImageAsset(url);
     }
+  });
+
+  it('preloads dedicated low obstacle fence spritesheet for jumpable path props', () => {
+    const loader = makeLoaderSpy();
+
+    BootScene.preload.call({ load: loader });
+
+    expect(loader.spritesheetKeys).toContain('low_fence_16');
+    expect(loader.imageUrls).toContain('/assets/pixel/props/fantastic-fence/fence_00.png');
   });
 });
 

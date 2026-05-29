@@ -60,28 +60,28 @@ function isGiftable(item: InventoryItemDto): boolean {
 }
 
 const CATEGORY_ICONS: Record<ItemCategory, string> = {
-  seed: '🌱',
-  tool: '🔧',
-  gift: '🎁',
-  consumable: '🧪',
-  book: '📖',
-  quest: '📜',
+  seed: 'Sd',
+  tool: 'Tl',
+  gift: 'Gf',
+  consumable: 'Pt',
+  book: 'Bk',
+  quest: 'Qt',
 };
 
 const ITEM_KEY_ICONS: Record<string, string> = {
-  watering_can: '💧',
-  hoe: '⛏️',
-  axe: '🪓',
-  pickaxe: '⚒️',
-  fertilizer: '🧴',
-  bread: '🍞',
-  coffee: '☕',
-  flower: '🌸',
-  bug_jar: '🪲',
+  watering_can: 'Wc',
+  hoe: 'Hoe',
+  axe: 'Axe',
+  pickaxe: 'Pk',
+  fertilizer: 'Ft',
+  bread: 'Bd',
+  coffee: 'Cf',
+  flower: 'Fl',
+  bug_jar: 'Bg',
 };
 
 function iconOf(item: InventoryItemDto): string {
-  return ITEM_KEY_ICONS[item.itemKey] ?? CATEGORY_ICONS[item.category] ?? '📦';
+  return ITEM_KEY_ICONS[item.itemKey] ?? CATEGORY_ICONS[item.category] ?? 'Itm';
 }
 
 function descriptionOf(itemKey: string): string {
@@ -187,7 +187,7 @@ function onUse(item: InventoryItemDto): void {
             data-testid="inventory-action-use"
             @click="doAction('use', item)"
           >
-            🧪 使用
+            [USE] 使用
           </button>
           <button
             v-if="isEquippable(item)"
@@ -196,7 +196,7 @@ function onUse(item: InventoryItemDto): void {
             data-testid="inventory-action-equip"
             @click="doAction('equip', item)"
           >
-            ⚔ 装备
+            装备
           </button>
           <button
             v-if="isGiftable(item)"
@@ -205,7 +205,7 @@ function onUse(item: InventoryItemDto): void {
             data-testid="inventory-action-gift"
             @click="doAction('gift', item)"
           >
-            🎁 赠送 NPC
+            [GIFT] 赠送 NPC
           </button>
           <button
             type="button"
@@ -223,23 +223,27 @@ function onUse(item: InventoryItemDto): void {
 <style scoped>
 .inventory-panel {
   position: relative;
-  background: rgba(34, 24, 14, 0.88);
-  border: 3px solid #d4af37;
-  border-radius: 8px;
+  background: var(--pyt-panel-bg);
+  border: 3px solid var(--pyt-panel-border);
+  border-radius: 2px;
   padding: 10px 12px;
-  color: #fff7e6;
-  font-family: 'PythontopiaPixel', 'PingFang SC', 'Noto Sans CJK SC', monospace;
-  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.4);
+  color: var(--pyt-text-primary);
+  font-family: var(--pyt-font-pixel, 'Ark Pixel 12', 'PingFang SC', monospace);
+  box-shadow: 4px 4px 0 var(--pyt-panel-border-dark), 0 8px 24px var(--pyt-panel-shadow);
   min-width: 220px;
   user-select: none;
+  image-rendering: pixelated;
 }
 
 .inventory-panel__header {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  margin-bottom: 8px;
-  color: #f1d35a;
+  background: var(--pyt-panel-header-bg);
+  border-bottom: 2px solid var(--pyt-panel-border);
+  margin: -10px -12px 8px;
+  padding: 10px 12px;
+  color: var(--pyt-text-accent);
   font-size: 13px;
 }
 
@@ -247,17 +251,18 @@ function onUse(item: InventoryItemDto): void {
   margin: 0;
   font-size: 14px;
   letter-spacing: 1px;
+  text-shadow: 1px 1px 0 #2a1a05;
 }
 
 .inventory-panel__count {
   font-size: 11px;
-  color: rgba(241, 211, 90, 0.8);
+  color: var(--pyt-text-secondary);
 }
 
 .inventory-panel__empty {
   margin: 18px 0 6px;
   text-align: center;
-  color: #ffd166;
+  color: var(--pyt-text-accent);
   font-size: 12px;
 }
 
@@ -283,22 +288,22 @@ function onUse(item: InventoryItemDto): void {
   justify-content: center;
   gap: 2px;
   padding: 4px;
-  background: #fdf3d0;
-  border: 2px solid #4d3613;
-  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 2px solid var(--pyt-panel-border-dark);
+  border-radius: 2px;
   cursor: pointer;
-  color: #4d3613;
+  color: var(--pyt-text-primary);
   font-family: inherit;
-  box-shadow: 1px 1px 0 #4d3613;
+  box-shadow: 1px 1px 0 var(--pyt-panel-border-dark);
   transition: transform 80ms ease, background 80ms ease;
 }
 
 .inventory-slot__btn:hover,
 .inventory-slot__btn:focus-visible {
-  background: #fff7c2;
+  background: var(--pyt-btn-hover-bg);
   transform: translate(-1px, -1px);
   outline: none;
-  box-shadow: 2px 2px 0 #4d3613;
+  box-shadow: 2px 2px 0 var(--pyt-panel-border-dark);
 }
 
 .inventory-slot__icon {
@@ -309,7 +314,7 @@ function onUse(item: InventoryItemDto): void {
 .inventory-slot__qty {
   font-size: 11px;
   font-weight: 700;
-  color: #4d3613;
+  color: var(--pyt-text-accent);
 }
 
 .inventory-tooltip {
@@ -320,26 +325,26 @@ function onUse(item: InventoryItemDto): void {
   min-width: 140px;
   max-width: 220px;
   padding: 6px 8px;
-  background: rgba(28, 24, 16, 0.95);
-  border: 2px solid #d4af37;
-  border-radius: 4px;
-  color: #ffd166;
+  background: var(--pyt-panel-bg);
+  border: 2px solid var(--pyt-panel-border);
+  border-radius: 2px;
+  color: var(--pyt-text-accent);
   font-size: 12px;
   line-height: 1.4;
   pointer-events: none;
   z-index: 70;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+  box-shadow: 4px 4px 0 var(--pyt-panel-border-dark);
   white-space: normal;
 }
 
 .inventory-tooltip__name {
   font-weight: 700;
-  color: #ffe57f;
+  color: var(--pyt-text-accent);
   margin-bottom: 2px;
 }
 
 .inventory-tooltip__desc {
-  color: #f1d8a4;
+  color: var(--pyt-text-secondary);
   font-size: 11px;
 }
 
@@ -353,38 +358,39 @@ function onUse(item: InventoryItemDto): void {
   gap: 3px;
   min-width: 100px;
   padding: 6px;
-  background: rgba(28, 24, 16, 0.96);
-  border: 2px solid #d4af37;
-  border-radius: 6px;
+  background: var(--pyt-panel-bg);
+  border: 2px solid var(--pyt-panel-border);
+  border-radius: 2px;
   z-index: 80;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  box-shadow: 4px 4px 0 var(--pyt-panel-border-dark);
 }
 
 .ctx-btn {
   width: 100%;
   padding: 5px 8px;
-  background: #fdf3d0;
-  border: 2px solid #4d3613;
-  border-radius: 3px;
+  background: var(--pyt-btn-bg);
+  border: 2px solid var(--pyt-btn-border);
+  border-radius: 2px;
   font-family: inherit;
   font-size: 11px;
-  color: #4d3613;
+  color: var(--pyt-text-primary);
   cursor: pointer;
   text-align: left;
+  box-shadow: 2px 2px 0 var(--pyt-panel-border-dark);
   transition: background 80ms;
 }
 
 .ctx-btn:hover {
-  background: #ffe57f;
+  background: var(--pyt-btn-hover-bg);
 }
 
 .ctx-btn--cancel {
-  background: rgba(193, 74, 47, 0.15);
-  border-color: #b3402a;
-  color: #ff7466;
+  background: rgba(230, 57, 70, 0.15);
+  border-color: var(--pyt-danger);
+  color: var(--pyt-danger);
 }
 
 .ctx-btn--cancel:hover {
-  background: rgba(193, 74, 47, 0.3);
+  background: rgba(230, 57, 70, 0.3);
 }
 </style>

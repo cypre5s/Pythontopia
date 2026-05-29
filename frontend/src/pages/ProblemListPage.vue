@@ -438,7 +438,7 @@ onMounted(async () => {
 }
 .page-header h1 {
   margin: 0;
-  font-family: 'PythontopiaPixel', sans-serif;
+  font-family: var(--pyt-font-pixel), sans-serif;
   font-size: 22px;
 }
 .muted {
@@ -447,7 +447,7 @@ onMounted(async () => {
   color: var(--pyt-color-text-muted, #8a6c2c);
 }
 .back-button {
-  font-family: 'PythontopiaPixel', monospace;
+  font-family: var(--pyt-font-pixel), monospace;
   min-height: 36px;
   padding: 0 16px;
   background: var(--pyt-color-warning-bg, #f5e2c1);
@@ -467,7 +467,7 @@ onMounted(async () => {
 }
 .filter-group h3 {
   margin: 0 0 6px;
-  font-family: 'PythontopiaPixel', sans-serif;
+  font-family: var(--pyt-font-pixel), sans-serif;
   font-size: 13px;
   letter-spacing: 0.5px;
 }
@@ -485,7 +485,7 @@ onMounted(async () => {
   padding-right: 4px;
 }
 .chip {
-  font-family: 'PythontopiaPixel', monospace;
+  font-family: var(--pyt-font-pixel), monospace;
   font-size: 11px;
   padding: 4px 8px;
   border: 2px solid var(--pyt-color-border, #c9a86b);
@@ -508,7 +508,7 @@ onMounted(async () => {
 .reset-button {
   min-height: 36px;
   padding: 0 12px;
-  font-family: 'PythontopiaPixel', monospace;
+  font-family: var(--pyt-font-pixel), monospace;
   background: var(--pyt-color-danger-bg, #fde2dc);
   border: 2px solid var(--pyt-color-border-strong, #4d3613);
   cursor: pointer;
@@ -531,12 +531,12 @@ onMounted(async () => {
 }
 .problem-row--head {
   background: var(--pyt-color-bg-soft, #fdf3d0);
-  font-family: 'PythontopiaPixel', sans-serif;
+  font-family: var(--pyt-font-pixel), sans-serif;
   font-weight: 700;
   font-size: 12px;
 }
 .row-toggle {
-  font-family: 'PythontopiaPixel', monospace;
+  font-family: var(--pyt-font-pixel), monospace;
   background: none;
   border: none;
   padding: 0;
@@ -561,7 +561,7 @@ onMounted(async () => {
   background: var(--pyt-color-bg-soft, #fdf3d0);
   border: 1px solid var(--pyt-color-border, #c9a86b);
   padding: 1px 6px;
-  font-family: 'PythontopiaPixel', monospace;
+  font-family: var(--pyt-font-pixel), monospace;
   font-size: 11px;
   margin-right: 4px;
 }
@@ -576,11 +576,11 @@ onMounted(async () => {
 .status-idle { background: var(--pyt-color-bg-soft, #fdf3d0); color: var(--pyt-color-text-muted, #8a6c2c); }
 
 .attempts {
-  font-family: 'PythontopiaPixel', monospace;
+  font-family: var(--pyt-font-pixel), monospace;
   text-align: center;
 }
 .go-button {
-  font-family: 'PythontopiaPixel', monospace;
+  font-family: var(--pyt-font-pixel), monospace;
   min-height: 30px;
   padding: 0 10px;
   background: var(--pyt-color-primary, #6e4f1d);

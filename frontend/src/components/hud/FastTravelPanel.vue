@@ -147,13 +147,14 @@ defineExpose({ open, close });
 
 .ft-card {
   width: min(440px, calc(100vw - 32px));
-  background: rgba(28, 24, 16, 0.96);
-  border: 3px solid #d4af37;
-  border-radius: 10px;
-  color: #fff7e6;
-  font-family: 'PythontopiaPixel', 'PingFang SC', monospace;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  background: var(--pyt-panel-bg);
+  border: 3px solid var(--pyt-panel-border);
+  border-radius: 2px;
+  color: var(--pyt-text-primary);
+  font-family: var(--pyt-font-pixel, 'Ark Pixel 12', 'PingFang SC', monospace);
+  box-shadow: 4px 4px 0 var(--pyt-panel-border-dark), 0 8px 24px var(--pyt-panel-shadow);
   padding: 16px 20px;
+  image-rendering: pixelated;
 }
 
 .ft-card__head {
@@ -161,33 +162,34 @@ defineExpose({ open, close });
   align-items: center;
   justify-content: space-between;
   padding-bottom: 8px;
-  border-bottom: 2px solid rgba(212, 175, 55, 0.4);
+  border-bottom: 2px solid var(--pyt-panel-border);
   margin-bottom: 10px;
 }
 
 .ft-card__title {
   margin: 0;
   font-size: 18px;
-  color: #ffd166;
+  color: var(--pyt-text-accent);
   letter-spacing: 1px;
   text-shadow: 1px 1px 0 #2a1a05;
 }
 
 .ft-card__close {
-  background: transparent;
-  border: 2px solid rgba(255, 247, 230, 0.4);
-  color: #fff7e6;
+  background: var(--pyt-btn-bg);
+  border: 2px solid var(--pyt-btn-border);
+  color: var(--pyt-text-primary);
   font-size: 14px;
   width: 30px;
   height: 30px;
-  border-radius: 4px;
+  border-radius: 2px;
   cursor: pointer;
+  box-shadow: 2px 2px 0 var(--pyt-panel-border-dark);
 }
 
 .ft-card__hint {
   margin: 0 0 10px;
   font-size: 12px;
-  color: rgba(255, 247, 230, 0.7);
+  color: var(--pyt-text-secondary);
 }
 
 .ft-card__list {
@@ -204,10 +206,10 @@ defineExpose({ open, close });
   gap: 4px 12px;
   width: 100%;
   padding: 10px 12px;
-  background: rgba(77, 54, 19, 0.45);
-  border: 2px solid #d4af37;
-  border-radius: 6px;
-  color: #fff7e6;
+  background: rgba(0, 0, 0, 0.2);
+  border: 2px solid var(--pyt-panel-border-dark);
+  border-radius: 2px;
+  color: var(--pyt-text-primary);
   cursor: pointer;
   text-align: left;
   font-family: inherit;
@@ -216,7 +218,7 @@ defineExpose({ open, close });
 }
 
 .ft-card__item:hover:not([disabled]) {
-  background: rgba(212, 175, 55, 0.28);
+  background: var(--pyt-btn-hover-bg);
 }
 
 .ft-card__item[disabled] {
@@ -225,23 +227,23 @@ defineExpose({ open, close });
 }
 
 .ft-card__item--current {
-  border-color: #b8d99a;
+  border-color: var(--pyt-bar-energy);
 }
 
 .ft-card__item-label {
-  color: #ffd166;
+  color: var(--pyt-text-accent);
   font-weight: 700;
 }
 
 .ft-card__item-cost {
   align-self: center;
-  color: #f1c453;
+  color: var(--pyt-text-gold);
   font-size: 12px;
 }
 
 .ft-card__item-desc {
   grid-column: 1 / -1;
-  color: rgba(255, 247, 230, 0.75);
+  color: var(--pyt-text-secondary);
   font-size: 11px;
 }
 </style>

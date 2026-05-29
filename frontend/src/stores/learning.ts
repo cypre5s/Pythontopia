@@ -725,6 +725,11 @@ export const useLearningStore = defineStore('learning', {
       }
     },
 
+    streamCreateResource(_request: WorkshopCreateRequest): void {
+      this.resources.phase = 'creating';
+      this.resources.lastError = null;
+    },
+
     /**
      * A7: KC mastery 自然衰减 — 模拟学习遗忘曲线。
      * sleep 推进 1 天时调用，每个已掌握的 KC mastery 减少 decayAmount。

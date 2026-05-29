@@ -179,6 +179,27 @@ describe('WorkshopPanel', () => {
   });
 
   it('submits the create request with selected KCs and pushed type', async () => {
+    const sseResult = {
+      runId: 'run-1',
+      resourceId: 7,
+      status: 'SUCCESS',
+    };
+    const ssePayload =
+      `event: trace\ndata: {"node":"evidence_fetcher","status":"ok","elapsed_ms":100}\n\n` +
+      `event: result\ndata: ${JSON.stringify(sseResult)}\n\n`;
+    const mockStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(ssePayload));
+        controller.close();
+      },
+    });
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(mockStream, {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+      }),
+    );
+
     await router.push('/workshop');
     const wrapper = mount(WorkshopPanel, { global: { plugins: [router] } });
     await flushPromises();
@@ -192,12 +213,16 @@ describe('WorkshopPanel', () => {
     await submitBtn.trigger('click');
     await flushPromises();
 
-    expect(apiMocks.createWorkshopResource).toHaveBeenCalledTimes(1);
-    expect(apiMocks.createWorkshopResource.mock.calls[0]?.[0]).toMatchObject({
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [fetchUrl, fetchInit] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    expect(fetchUrl).toBe('/api/workshop/resources/stream');
+    const body = JSON.parse(fetchInit.body as string) as Record<string, unknown>;
+    expect(body).toMatchObject({
       kcCodes: ['PY43-KC-001', 'PY43-KC-002'],
       type: 'PRACTICE',
     });
-    expect(router.currentRoute.value.query.id).toBe('7');
+
+    fetchSpy.mockRestore();
   });
 
   it('disables submit button when no KC selected', async () => {

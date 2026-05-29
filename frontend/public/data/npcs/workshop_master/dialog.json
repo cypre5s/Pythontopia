@@ -1,0 +1,53 @@
+{
+  "npcKey": "workshop_master",
+  "rootNodeId": "greet",
+  "nodes": {
+    "greet": {
+      "id": "greet",
+      "text": "{{playerName}}，想定制学习资源吗？选一个 KC，我帮你打造专属的学习材料！",
+      "conditions": [],
+      "choices": [
+        {
+          "label": "打开资源工坊",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "route",
+              "route": "/workshop"
+            }
+          ]
+        },
+        {
+          "label": "有哪些类型？",
+          "nextNodeId": "types"
+        },
+        {
+          "label": "下次吧",
+          "nextNodeId": null
+        }
+      ]
+    },
+    "open_workshop": {
+      "id": "open_workshop",
+      "text": "去旁边的工坊大门，就能开始定制资源了！",
+      "conditions": [],
+      "choices": [
+        {
+          "label": "好！",
+          "nextNodeId": null
+        }
+      ]
+    },
+    "types": {
+      "id": "types",
+      "text": "我能做五种资源：讲义（段落+引用）、思维导图、练习题、代码案例、拓展阅读。每种都基于课件内容生成，保证准确。",
+      "conditions": [],
+      "choices": [
+        {
+          "label": "太好了！",
+          "nextNodeId": null
+        }
+      ]
+    }
+  }
+}

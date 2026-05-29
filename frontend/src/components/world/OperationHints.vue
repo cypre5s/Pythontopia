@@ -79,7 +79,7 @@ const visible = computed<boolean>(() => route.path === '/world');
   border: 2px solid #d4af37;
   border-radius: 999px;
   color: #ffd166;
-  font-family: 'PythontopiaPixel', 'PingFang SC', 'Noto Sans CJK SC', monospace;
+  font-family: var(--pyt-font-pixel), 'PingFang SC', 'Noto Sans CJK SC', monospace;
   font-size: 14px;
   letter-spacing: 0.5px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);

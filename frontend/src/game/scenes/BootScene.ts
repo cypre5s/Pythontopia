@@ -76,6 +76,8 @@ const SFX_LIST: ReadonlyArray<[string, string]> = [
   ['sfx_coin', '/assets/pixel/sfx/coin/coin.ogg'],
   ['sfx_success', '/assets/pixel/sfx/success.ogg'],
   ['sfx_error', '/assets/pixel/sfx/error.ogg'],
+  ['sfx_jump', '/assets/pixel/sfx/jump/kenney_jump_soft_000.ogg'],
+  ['sfx_land', '/assets/pixel/sfx/jump/kenney_land_wood_000.ogg'],
   ['sfx_jingle_complete', '/assets/pixel/sfx/jingle-complete.ogg'],
   ['sfx_jingle_levelup', '/assets/pixel/sfx/jingle-level-up.ogg'],
 ];
@@ -99,6 +101,7 @@ const TILESET_LIST: ReadonlyArray<[string, string]> = [
 // 以 spritesheet 形式加载，便于按 frameIndex 取出单个 tile（frame 0 = 草地）。
 const TILESET_SPRITESHEETS: ReadonlyArray<[string, string, number, number]> = [
   ['kenney_tiny_town', '/assets/pixel/tilesets/kenney-tiny-town/Tilemap/tilemap_packed.png', 16, 16],
+  ['low_fence_16', '/assets/pixel/props/fantastic-fence/fence_00.png', 16, 16],
 ];
 
 const KC_ICONS: ReadonlyArray<[string, string]> = [
@@ -119,9 +122,26 @@ const KC_ICONS: ReadonlyArray<[string, string]> = [
   ['icon_quest_daily', '/assets/pixel/icons_kc/quest_daily/delapouite__calendar.png'],
 ];
 
+const NPC_SPRITE_BASE = '/assets/pixel/sprites/npc-composites';
 const CHARACTER_SHEETS: ReadonlyArray<[string, string, number, number]> = [
   ['student_default', '/assets/pixel/characters/student_default.svg', 32, 32],
   ['player_sara', '/assets/pixel/sprites/lpc-sara/SaraFullSheet.png', 64, 64],
+  ['npc_mayor', `${NPC_SPRITE_BASE}/npc_mayor.png`, 64, 64],
+  ['npc_librarian', `${NPC_SPRITE_BASE}/npc_librarian.png`, 64, 64],
+  ['npc_coach', `${NPC_SPRITE_BASE}/npc_coach.png`, 64, 64],
+  ['npc_sage', `${NPC_SPRITE_BASE}/npc_sage.png`, 64, 64],
+  ['npc_guard', `${NPC_SPRITE_BASE}/npc_guard.png`, 64, 64],
+  ['npc_merchant', `${NPC_SPRITE_BASE}/npc_merchant.png`, 64, 64],
+  ['npc_miner', `${NPC_SPRITE_BASE}/npc_miner.png`, 64, 64],
+  ['npc_professor', `${NPC_SPRITE_BASE}/npc_professor.png`, 64, 64],
+  ['npc_farmer', `${NPC_SPRITE_BASE}/npc_farmer.png`, 64, 64],
+  ['npc_sailor', `${NPC_SPRITE_BASE}/npc_sailor.png`, 64, 64],
+  ['npc_chef', `${NPC_SPRITE_BASE}/npc_chef.png`, 64, 64],
+  ['npc_student', `${NPC_SPRITE_BASE}/npc_student.png`, 64, 64],
+  ['npc_trainer', `${NPC_SPRITE_BASE}/npc_trainer.png`, 64, 64],
+  ['npc_workshop', `${NPC_SPRITE_BASE}/npc_workshop.png`, 64, 64],
+  ['npc_tutor_ai', `${NPC_SPRITE_BASE}/npc_tutor_ai.png`, 64, 64],
+  ['npc_gardener', `${NPC_SPRITE_BASE}/npc_gardener.png`, 64, 64],
 ];
 
 // W3 视觉 polish：天气粒子 + KC 收获 confetti 共用一套小型贴图。

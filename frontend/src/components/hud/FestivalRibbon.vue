@@ -14,11 +14,11 @@ import {
   findUpcomingFestival,
   daysUntilFestival,
 } from '@/data/festivals';
-import { useCalendarStore } from '@stores/calendar';
+import { useHudStore } from '@stores/hud';
 import { playChime } from '@/composables/useStardewFx';
 
-const calendar = useCalendarStore();
-const today = computed(() => calendar.today?.dayIndex ?? 0);
+const hud = useHudStore();
+const today = computed(() => hud.meta.dayIndex);
 
 const current = computed(() => findCurrentFestival(today.value));
 const upcoming = computed(() => findUpcomingFestival(today.value));
@@ -81,7 +81,7 @@ const ribbonClass = computed(() => {
   border: 2px solid #d4af37;
   border-radius: 999px;
   color: #fff7e6;
-  font-family: 'PythontopiaPixel', 'PingFang SC', monospace;
+  font-family: var(--pyt-font-pixel), 'PingFang SC', monospace;
   font-size: 12px;
   letter-spacing: 0.5px;
   pointer-events: none;

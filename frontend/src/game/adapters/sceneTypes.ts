@@ -142,5 +142,8 @@ export interface PlayerSpriteHandle {
   tileX: number;
   tileY: number;
   direction: Direction;
+  faceDirection(direction: Direction): void;
   moveToTile(tileX: number, tileY: number, direction: Direction): void;
+  jumpToTile(tileX: number, tileY: number, direction: Direction): void;
+  isJumping(): boolean;
 }

@@ -1,0 +1,83 @@
+{
+  "key": "miner",
+  "name": "矿工",
+  "category": "life",
+  "sprite": "npc_miner",
+  "portrait": "portrait_miner.png",
+  "spawnMap": "town_hub",
+  "spawn": {
+    "tileX": 24,
+    "tileY": 36
+  },
+  "birthday": {
+    "month": 1,
+    "day": 15
+  },
+  "favoriteGifts": [
+    "debug_lamp",
+    "pickaxe"
+  ],
+  "schedule": {
+    "monday": [
+      {
+        "from": "06:00",
+        "map": "town_hub",
+        "tileX": 24,
+        "tileY": 36
+      }
+    ],
+    "tuesday": [
+      {
+        "from": "06:00",
+        "map": "town_hub",
+        "tileX": 24,
+        "tileY": 36
+      }
+    ],
+    "wednesday": [
+      {
+        "from": "06:00",
+        "map": "town_hub",
+        "tileX": 24,
+        "tileY": 36
+      }
+    ],
+    "thursday": [
+      {
+        "from": "06:00",
+        "map": "town_hub",
+        "tileX": 24,
+        "tileY": 36
+      }
+    ],
+    "friday": [
+      {
+        "from": "06:00",
+        "map": "town_hub",
+        "tileX": 24,
+        "tileY": 36
+      }
+    ],
+    "saturday": [
+      {
+        "from": "06:00",
+        "map": "town_hub",
+        "tileX": 24,
+        "tileY": 36
+      }
+    ],
+    "sunday": [
+      {
+        "from": "06:00",
+        "map": "town_hub",
+        "tileX": 24,
+        "tileY": 36
+      }
+    ]
+  },
+  "tags": [
+    "bug_mine",
+    "debugging"
+  ],
+  "description": "Bug 矿洞的老矿工，专门挖掘代码中的 Bug，教你调试技巧。"
+}

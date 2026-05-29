@@ -109,17 +109,41 @@ function onHover(): void {
 
 <style scoped>
 .chapter-nav {
+  /* R-12 美化：与新版顶部 HUD（top:16px,height~64px）+ 学习目标面板（top:96px）
+     共存，下移到 top:96px 起，并向右挪到 left:340px 让出左侧 300px 给
+     LearningObjectivePanel。窄屏（≤1280px）回到 left:288px 避免重叠。 */
   position: fixed;
-  top: 80px;
-  left: 16px;
+  top: 96px;
+  left: 340px;
   width: 132px;
-  background: rgba(34, 24, 14, 0.85);
-  border: 3px solid #d4af37;
-  border-radius: 8px;
+  background: rgba(25, 28, 18, 0.78);
+  border: 1px solid rgba(218, 176, 76, 0.65);
+  border-radius: 12px;
   padding: 12px 8px;
   z-index: 50;
   color: #fff;
-  font-family: 'PythontopiaPixel', 'PingFang SC', 'Noto Sans CJK SC', monospace;
+  font-family: var(--pyt-font-pixel, monospace);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+@media (max-width: 1280px) {
+  .chapter-nav {
+    top: 88px;
+    left: 288px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .chapter-nav {
+    /* 极窄屏让出左侧 HUD：放到画面右下角作为折叠章节按钮 */
+    top: auto;
+    bottom: 100px;
+    left: 12px;
+    width: 110px;
+    opacity: 0.94;
+  }
 }
 .chapter-nav__title {
   color: #f1d35a;

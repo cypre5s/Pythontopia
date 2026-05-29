@@ -13,11 +13,13 @@ import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useMainQuestStore } from '@stores/mainQuest';
 import { useWorldStore } from '@stores/world';
+import { useToastStore } from '@stores/toast';
 import { FAST_TRAVEL_ROUTES, type FastTravelRoute } from '@/data/fastTravel';
 import type { MainSubQuestViewItem } from '@/types/mainQuest';
 
 const mainQuest = useMainQuestStore();
 const world = useWorldStore();
+const toast = useToastStore();
 const router = useRouter();
 
 const visible = computed(() => mainQuest.panelOpen);
@@ -55,8 +57,27 @@ function goEndless(): void {
   void router.push({ path: '/endless' });
 }
 
-function chapterReady(chapter: number, complete: number, total: number, defeated: boolean): boolean {
-  return !defeated && complete >= total && chapter === mainQuest.progress.currentChapter;
+// R-12 主线 Phase 5：Boss 解锁条件升级 —— 5/5 子任务全完成「或」章节达标（双条件）均可。
+function bossUnlocked(chapter: number, defeated: boolean): boolean {
+  if (defeated || chapter !== mainQuest.progress.currentChapter) return false;
+  const view = mainQuest.chapterViews[chapter - 1];
+  const all5 = view ? view.subQuests.every((s) => s.status === 'completed') : false;
+  return all5 || mainQuest.chapterStandardMet(chapter);
+}
+
+// 进阶 Hub（达标后出现）：进阶难题 / 工坊拓展 / 跳过进入下一章。
+function goArena(chapter: number): void {
+  mainQuest.closePanel();
+  void router.push({ path: `/arena/${chapter}` });
+}
+function goWorkshop(): void {
+  mainQuest.closePanel();
+  void router.push({ path: '/workshop' });
+}
+function skipToNext(chapter: number): void {
+  if (mainQuest.advanceChapter()) {
+    toast.show(`第 ${chapter} 章已达标，进入第 ${chapter + 1} 章！`, 'success');
+  }
 }
 </script>
 
@@ -169,20 +190,50 @@ function chapterReady(chapter: number, complete: number, total: number, defeated
               type="button"
               class="mq-boss-btn"
               :data-testid="`main-quest-boss-${ch.chapter}`"
-              :disabled="!chapterReady(ch.chapter, ch.subQuests.filter((s) => s.status === 'completed').length, ch.subQuests.length, ch.bossDefeated)"
+              :disabled="!bossUnlocked(ch.chapter, ch.bossDefeated)"
               @click="fightBoss(ch.chapter)"
             >
-              {{
-                chapterReady(ch.chapter, ch.subQuests.filter((s) => s.status === 'completed').length, ch.subQuests.length, ch.bossDefeated)
-                  ? '挑战 BOSS'
-                  : '完成全部子任务后解锁'
-              }}
+              {{ bossUnlocked(ch.chapter, ch.bossDefeated) ? '挑战 BOSS' : '达标 / 五任务全完成后解锁' }}
             </button>
             <span
               v-else
               class="mq-boss-cleared"
             >★ 已击败</span>
           </footer>
+
+          <!-- R-12 主线 Phase 5：达标后进阶 Hub（当前章 + 已达标 + boss 未通关） -->
+          <div
+            v-if="ch.chapter === mainQuest.progress.currentChapter && mainQuest.chapterStandardMet(ch.chapter) && !ch.bossDefeated"
+            class="mq-hub"
+            :data-testid="`main-quest-hub-${ch.chapter}`"
+          >
+            <span class="mq-hub__badge">✓ 本章已达标（必做题全过 · KC 掌握度 ≥ 70%）</span>
+            <p class="mq-hub__tip">可选进阶（不选也能直接进下一章）：</p>
+            <div class="mq-hub__actions">
+              <button
+                type="button"
+                class="mq-hub__btn"
+                @click="goArena(ch.chapter)"
+              >
+                ⚔ 进阶难题
+              </button>
+              <button
+                type="button"
+                class="mq-hub__btn"
+                @click="goWorkshop"
+              >
+                🛠 工坊拓展
+              </button>
+              <button
+                type="button"
+                class="mq-hub__btn mq-hub__btn--skip"
+                :data-testid="`main-quest-skip-${ch.chapter}`"
+                @click="skipToNext(ch.chapter)"
+              >
+                ⏭ 跳过，进入下一章
+              </button>
+            </div>
+          </div>
         </article>
       </div>
     </div>
@@ -203,45 +254,48 @@ function chapterReady(chapter: number, complete: number, total: number, defeated
 .mq-card {
   width: min(960px, calc(100vw - 32px));
   max-height: calc(100vh - 64px);
-  background: linear-gradient(180deg, #fff7e6 0%, #f5e2c1 100%);
-  border: 4px solid #4d3613;
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), inset 0 0 0 2px rgba(255, 247, 230, 0.6);
-  color: #3a2a14;
-  font-family: 'PythontopiaPixel', 'PingFang SC', monospace;
+  background: var(--pyt-panel-bg);
+  border: 3px solid var(--pyt-panel-border);
+  border-radius: 2px;
+  box-shadow: 4px 4px 0 var(--pyt-panel-border-dark), 0 8px 24px var(--pyt-panel-shadow);
+  color: var(--pyt-text-primary);
+  font-family: var(--pyt-font-pixel, 'Ark Pixel 12', 'PingFang SC', monospace);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  image-rendering: pixelated;
 }
 .mq-card__head {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 12px 18px;
-  border-bottom: 3px solid #c9a86b;
-  background: rgba(212, 175, 55, 0.18);
+  border-bottom: 2px solid var(--pyt-panel-border);
+  background: var(--pyt-panel-header-bg);
 }
 .mq-card__title {
   margin: 0;
   font-size: 16px;
-  color: #4d3613;
+  color: var(--pyt-text-accent);
   letter-spacing: 1px;
+  text-shadow: 1px 1px 0 #2a1a05;
 }
 .mq-card__close {
-  background: transparent;
-  border: 2px solid #6e4f1d;
-  color: #4d3613;
+  background: var(--pyt-btn-bg);
+  border: 2px solid var(--pyt-btn-border);
+  color: var(--pyt-text-primary);
   width: 28px;
   height: 28px;
-  border-radius: 4px;
+  border-radius: 2px;
   cursor: pointer;
+  box-shadow: 2px 2px 0 var(--pyt-panel-border-dark);
 }
 .mq-card__progress {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 8px 18px;
-  border-bottom: 2px dashed #c9a86b;
+  border-bottom: 2px dashed var(--pyt-panel-border-dark);
   font-size: 12px;
 }
 .mq-progress-bar {
@@ -249,8 +303,8 @@ function chapterReady(chapter: number, complete: number, total: number, defeated
   display: inline-block;
   flex: 1 1 auto;
   height: 8px;
-  background: rgba(110, 79, 29, 0.2);
-  border: 1px solid #4d3613;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--pyt-panel-border-dark);
   border-radius: 2px;
   overflow: hidden;
 }
@@ -262,33 +316,33 @@ function chapterReady(chapter: number, complete: number, total: number, defeated
 .mq-progress-bar__fill {
   display: block;
   height: 100%;
-  background: linear-gradient(90deg, #6bbf59, #f1c453);
+  background: linear-gradient(90deg, var(--pyt-bar-energy), var(--pyt-bar-mastery));
 }
 .mq-progress-pct {
   font-size: 12px;
   font-weight: 700;
-  color: #4d3613;
+  color: var(--pyt-text-accent);
   min-width: 36px;
   text-align: right;
 }
 .mq-endless-btn {
   margin-left: 12px;
-  font-family: 'PythontopiaPixel', monospace;
+  font-family: var(--pyt-font-pixel, 'Ark Pixel 12', monospace);
   font-size: 12px;
   padding: 4px 12px;
-  background: #1e3a8a;
-  color: #fff7e6;
-  border: 2px solid #4a90e2;
-  border-radius: 4px;
-  box-shadow: 0 2px 0 #1a2a6e;
+  background: rgba(106, 161, 214, 0.2);
+  color: var(--pyt-info);
+  border: 2px solid var(--pyt-info);
+  border-radius: 2px;
+  box-shadow: 2px 2px 0 var(--pyt-panel-border-dark);
   cursor: pointer;
 }
 .mq-endless-btn:hover {
-  background: #2a4fb0;
+  background: rgba(106, 161, 214, 0.35);
 }
 .mq-endless-btn:active {
-  transform: translateY(1px);
-  box-shadow: none;
+  transform: translateY(2px);
+  box-shadow: 0 0 0 var(--pyt-panel-border-dark);
 }
 .mq-chapters {
   flex: 1 1 auto;
@@ -298,14 +352,14 @@ function chapterReady(chapter: number, complete: number, total: number, defeated
   gap: 12px;
 }
 .mq-chapter {
-  background: #fff7e6;
-  border: 2px solid #c9a86b;
-  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.15);
+  border: 2px solid var(--pyt-panel-border-dark);
+  border-radius: 2px;
   padding: 10px 14px;
 }
 .mq-chapter--active {
-  border-color: #4d3613;
-  box-shadow: inset 0 0 0 1px #f1c453;
+  border-color: var(--pyt-panel-border);
+  box-shadow: inset 0 0 0 1px var(--pyt-text-gold);
 }
 .mq-chapter--done {
   opacity: 0.78;
@@ -319,7 +373,7 @@ function chapterReady(chapter: number, complete: number, total: number, defeated
 .mq-chapter__no {
   font-weight: 700;
   font-size: 13px;
-  color: #6e4f1d;
+  color: var(--pyt-text-gold);
 }
 .mq-chapter__name {
   font-size: 13px;
@@ -330,7 +384,7 @@ function chapterReady(chapter: number, complete: number, total: number, defeated
   align-items: center;
   gap: 4px;
   font-size: 11px;
-  color: #6e4f1d;
+  color: var(--pyt-text-secondary);
 }
 .mq-quest-list {
   list-style: none;
@@ -346,24 +400,24 @@ function chapterReady(chapter: number, complete: number, total: number, defeated
   gap: 8px;
   align-items: center;
   padding: 4px 8px;
-  border: 1px solid #c9a86b;
-  border-radius: 4px;
-  background: #fdf3d0;
+  border: 1px solid var(--pyt-panel-border-dark);
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.1);
 }
 .mq-quest-item--completed {
-  background: rgba(180, 220, 160, 0.4);
-  border-color: #5a8a3a;
-  color: #1f4720;
+  background: rgba(107, 191, 89, 0.15);
+  border-color: var(--pyt-bar-energy);
+  color: var(--pyt-bar-energy);
 }
 .mq-quest-item--in_progress {
-  background: #ffe098;
-  border-color: #6e4f1d;
+  background: rgba(241, 196, 83, 0.12);
+  border-color: var(--pyt-panel-border);
 }
 .mq-quest-status {
   font-size: 14px;
   width: 18px;
   text-align: center;
-  color: #6e4f1d;
+  color: var(--pyt-text-gold);
 }
 .mq-quest-meta {
   display: flex;
@@ -376,26 +430,26 @@ function chapterReady(chapter: number, complete: number, total: number, defeated
 }
 .mq-quest-hint {
   font-size: 10px;
-  color: #6e4f1d;
+  color: var(--pyt-text-secondary);
 }
 .mq-quest-go {
   font-family: inherit;
   font-size: 11px;
   padding: 4px 10px;
-  background: #f7d774;
-  color: #2a1a08;
-  border: 2px solid #8c6a23;
-  border-radius: 4px;
+  background: var(--pyt-btn-bg);
+  color: var(--pyt-text-primary);
+  border: 2px solid var(--pyt-btn-border);
+  border-radius: 2px;
   cursor: pointer;
-  box-shadow: 0 2px 0 #8c6a23;
+  box-shadow: 2px 2px 0 var(--pyt-panel-border-dark);
 }
 .mq-quest-go:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
 .mq-quest-go:active:not(:disabled) {
-  transform: translateY(1px);
-  box-shadow: 0 1px 0 #8c6a23;
+  transform: translateY(2px);
+  box-shadow: 0 0 0 var(--pyt-panel-border-dark);
 }
 .mq-chapter__foot {
   display: flex;
@@ -403,35 +457,81 @@ function chapterReady(chapter: number, complete: number, total: number, defeated
   justify-content: space-between;
   margin-top: 8px;
   padding-top: 6px;
-  border-top: 1px dashed #c9a86b;
+  border-top: 1px dashed var(--pyt-panel-border-dark);
 }
 .mq-boss-label {
   font-size: 11px;
-  color: #6e4f1d;
+  color: var(--pyt-text-gold);
   font-weight: 700;
 }
 .mq-boss-btn {
   font-family: inherit;
   font-size: 12px;
   padding: 4px 12px;
-  background: #c95e3a;
-  color: #fff7e6;
-  border: 2px solid #5a1a08;
-  border-radius: 4px;
+  background: rgba(230, 57, 70, 0.25);
+  color: var(--pyt-text-primary);
+  border: 2px solid var(--pyt-danger);
+  border-radius: 2px;
   cursor: pointer;
-  box-shadow: 0 2px 0 #5a1a08;
+  box-shadow: 2px 2px 0 var(--pyt-panel-border-dark);
 }
 .mq-boss-btn:disabled {
-  background: #d6c6a1;
-  color: #6e4f1d;
-  border-color: #6e4f1d;
+  background: rgba(0, 0, 0, 0.15);
+  color: var(--pyt-text-secondary);
+  border-color: var(--pyt-panel-border-dark);
   box-shadow: none;
   cursor: not-allowed;
 }
 .mq-boss-cleared {
   font-size: 12px;
-  color: #5a8a3a;
+  color: var(--pyt-bar-energy);
   font-weight: 700;
+}
+.mq-hub {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 2px solid var(--pyt-text-gold);
+  border-radius: 2px;
+  background: rgba(241, 196, 83, 0.12);
+  display: grid;
+  gap: 6px;
+}
+.mq-hub__badge {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--pyt-bar-energy);
+}
+.mq-hub__tip {
+  margin: 0;
+  font-size: 11px;
+  color: var(--pyt-text-secondary);
+}
+.mq-hub__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.mq-hub__btn {
+  font-family: inherit;
+  font-size: 12px;
+  padding: 4px 12px;
+  background: var(--pyt-btn-bg);
+  color: var(--pyt-text-primary);
+  border: 2px solid var(--pyt-btn-border);
+  border-radius: 2px;
+  cursor: pointer;
+  box-shadow: 2px 2px 0 var(--pyt-panel-border-dark);
+}
+.mq-hub__btn:hover {
+  filter: brightness(1.08);
+}
+.mq-hub__btn:active {
+  transform: translateY(2px);
+  box-shadow: 0 0 0 var(--pyt-panel-border-dark);
+}
+.mq-hub__btn--skip {
+  background: rgba(107, 191, 89, 0.25);
+  border-color: var(--pyt-bar-energy);
 }
 @media (max-width: 760px) {
   .mq-card {

@@ -193,7 +193,7 @@ function openArena(chapter: number): void {
   border: 3px solid #4d3613;
   background: #fff7e6;
   box-shadow: 4px 4px 0 #4d3613;
-  font-family: 'PythontopiaPixel', 'PingFang SC', monospace;
+  font-family: var(--pyt-font-pixel), 'PingFang SC', monospace;
   color: #4d3613;
   flex: 0 0 auto;
 }

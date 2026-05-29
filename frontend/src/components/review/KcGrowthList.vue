@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import MarkdownView from '@/components/common/MarkdownView.vue';
 import type { EvaluationDto } from '@/api/dto/Evaluation';
 
 defineProps<{ evaluation: EvaluationDto }>();
@@ -19,7 +20,7 @@ defineProps<{ evaluation: EvaluationDto }>();
       v-if="evaluation.narrativeSummary"
       class="narrative"
     >
-      <pre>{{ evaluation.narrativeSummary }}</pre>
+      <MarkdownView :source="evaluation.narrativeSummary" />
     </div>
     <p
       v-else
@@ -48,15 +49,12 @@ defineProps<{ evaluation: EvaluationDto }>();
   font-size: 11px;
   color: #8a6c2c;
 }
-.narrative pre {
-  white-space: pre-wrap;
-  word-break: break-word;
+.narrative :deep(.md-view) {
   background: #fdf3d0;
   border: 1px dashed #c9a86b;
   border-radius: 6px;
   padding: 8px 10px;
   font-size: 13px;
-  color: #4d3613;
 }
 .empty {
   margin: 0;

@@ -10,6 +10,8 @@ import {
   findMainQuestById,
   listSubQuestsByChapter,
 } from '@/data/mainQuests';
+import { CHAPTERS, formatKcNumber } from '@/data/chapters';
+import { useLearningStore } from '@stores/learning';
 import {
   mainQuestEmptyProgress,
   type MainQuestBoss,
@@ -153,6 +155,56 @@ export const useMainQuestStore = defineStore('mainQuest', {
       const total = MAIN_QUESTS.length;
       return total === 0 ? 0 : this.progress.completedSubQuests.length / total;
     },
+
+    // ── R-12 主线 Phase 5：章节达标判定（双条件） ──
+    /** 某章覆盖的全部 KC code（PY43-KC-NNN，由 chapters.ts 的 start/endKc 推导）。 */
+    chapterKcCodes() {
+      return (chapter: number): string[] => {
+        const ch = CHAPTERS.find((c) => c.order === chapter);
+        if (!ch) return [];
+        const codes: string[] = [];
+        for (let n = ch.startKc; n <= ch.endKc; n += 1) {
+          codes.push(formatKcNumber(n));
+        }
+        return codes;
+      };
+    },
+    /**
+     * 本章 KC 平均掌握度（0..1）。分母用「本章全部 KC 数」，缺快照的 KC 记 0，
+     * 避免「只练了 2 个 KC 就平均达标」的虚高。掌握度读 learning store 的 masterySnapshot
+     * （来自 GET /api/learner/mastery / bootstrap）。
+     */
+    chapterMasteryAvg() {
+      return (chapter: number): number => {
+        const codes = this.chapterKcCodes(chapter);
+        if (codes.length === 0) return 0;
+        const wanted = new Set(codes);
+        const snaps = useLearningStore().field.masterySnapshot.filter((s) =>
+          wanted.has(s.kcCode),
+        );
+        const sum = snaps.reduce((acc, s) => acc + (s.masteryScore ?? 0), 0);
+        return sum / codes.length;
+      };
+    },
+    /**
+     * 章节达标：本章「必做题」（submission 类子任务）全过 且 本章 KC 平均掌握度 ≥ 0.7。
+     * 达标后解锁进阶 Hub（Boss / 进阶难题 / 工坊），也可直接跳过进下一章。
+     */
+    chapterStandardMet() {
+      return (chapter: number): boolean => {
+        const required = MAIN_QUESTS.filter(
+          (q) => q.chapter === chapter && q.evidenceRequired.type === 'submission',
+        );
+        const allRequiredDone = required.every((q) =>
+          this.progress.completedSubQuests.includes(q.id),
+        );
+        return allRequiredDone && this.chapterMasteryAvg(chapter) >= 0.7;
+      };
+    },
+    /** 当前章是否达标（HUD/面板便捷读取）。 */
+    currentChapterStandardMet(): boolean {
+      return this.chapterStandardMet(this.progress.currentChapter);
+    },
   },
 
   actions: {
@@ -178,6 +230,28 @@ export const useMainQuestStore = defineStore('mainQuest', {
     },
     closePanel(): void {
       this.panelOpen = false;
+    },
+    /**
+     * R-12 主线：NPC 通过 dialog 的 `quest_recommend` 效果「发任务」。
+     * - `questKey` 对齐 mainQuests id（如 "1-1"）；未知/自由串则仅打开主线面板做引导。
+     * - 找到对应子任务且属于当前章、未完成、且不会让指针回退时，把当前指针指向它（高亮引导）。
+     * - 不借此跳章：指向未来章节时只打开面板，不前移进度，避免越过 boss 闯关。
+     * - 完成仍由各任务自身的 evidence 钩子负责，本动作只做「接取/聚焦」。
+     */
+    acceptQuest(questKey: string): MainSubQuest | null {
+      syncEventToBackend('quest_accepted', { questKey });
+      const quest = findMainQuestById(questKey);
+      if (
+        quest &&
+        quest.chapter === this.progress.currentChapter &&
+        !this.progress.completedSubQuests.includes(quest.id) &&
+        quest.index >= this.progress.currentSubQuest
+      ) {
+        this.progress.currentSubQuest = quest.index;
+        persist(this.progress);
+      }
+      this.openPanel();
+      return quest ?? null;
     },
     /**
      * 标记一个子任务完成。
@@ -232,6 +306,20 @@ export const useMainQuestStore = defineStore('mainQuest', {
       this.progress.unlockedMilestones = Array.from(existing);
       persist(this.progress);
       return boss;
+    },
+    /**
+     * R-12 主线 Phase 5：达标后「跳过进阶」直接进入下一章。
+     * 进阶（Boss / 进阶难题 / 工坊）是可选的，不阻塞章节推进；本动作只前移章节指针，
+     * 不标记 boss 已击败（boss 仍可日后回来挑战）。仅在已达标时由 Hub 调用。
+     */
+    advanceChapter(): boolean {
+      const ch = this.progress.currentChapter;
+      if (ch >= 7) return false;
+      if (!this.chapterStandardMet(ch)) return false;
+      this.progress.currentChapter = ch + 1;
+      this.progress.currentSubQuest = 1;
+      persist(this.progress);
+      return true;
     },
     recordAiProblem(entry: RecentAiProblemEntry): void {
       const next = [entry, ...this.progress.recentAiProblems].slice(0, MAX_AI_LOG);

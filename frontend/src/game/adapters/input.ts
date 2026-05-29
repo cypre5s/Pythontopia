@@ -28,6 +28,7 @@ export type ExtendedDirection =
 export interface DirectionController {
   getDirection(): ExtendedDirection | null;
   isActionPressed(): boolean;
+  isJumpPressed(): boolean;
 }
 
 export function toServerDirection(dir: ExtendedDirection): Direction {
@@ -54,7 +55,7 @@ export function createDirectionController(scene: SceneLike): DirectionController
   const sKey: KeyboardKeyLike | null = scene.input.keyboard?.addKey('S') ?? null;
   const dKey: KeyboardKeyLike | null = scene.input.keyboard?.addKey('D') ?? null;
   const fKey: KeyboardKeyLike | null = scene.input.keyboard?.addKey('F') ?? null;
-  // 兼容旧版 Space/E 触发交互；新版主控为 F。
+  // 新版主控：F/E 交互，Space 留给跳跃。
   const spaceKey: KeyboardKeyLike | null = scene.input.keyboard?.addKey('SPACE') ?? null;
   const eKey: KeyboardKeyLike | null = scene.input.keyboard?.addKey('E') ?? null;
 
@@ -96,7 +97,10 @@ export function createDirectionController(scene: SceneLike): DirectionController
       return null;
     },
     isActionPressed() {
-      return isPressed(fKey) || isPressed(spaceKey) || isPressed(eKey);
+      return isPressed(fKey) || isPressed(eKey);
+    },
+    isJumpPressed() {
+      return isPressed(spaceKey);
     },
   };
 }

@@ -23,7 +23,7 @@ const showTips = ref(false);
 <template>
   <div class="teach-back-card" data-testid="teach-back-card">
     <header class="card-head">
-      <span class="card-icon">🎙</span>
+      <span class="card-icon">[T]</span>
       <h3>教学反转</h3>
       <span class="badge-teach">向 NPC 解释概念</span>
     </header>
@@ -32,7 +32,10 @@ const showTips = ref(false);
       <div class="npc-bubble">
         <img src="/assets/pixel/portraits/heads/portrait_student_anxious_head.png" alt="NPC" class="npc-avatar" @error="($event.target as HTMLImageElement).style.display='none'">
         <div class="bubble-text">
-          <p class="npc-says">"同学，我不太理解这个概念，你能用简单的话给我解释一下吗？"</p>
+          <p
+            class="npc-says"
+            style="color: #111111;"
+          >"同学，我不太理解这个概念，你能用简单的话给我解释一下吗？"</p>
           <pre class="concept-prompt">{{ problem.statement }}</pre>
         </div>
       </div>
@@ -79,7 +82,7 @@ const showTips = ref(false);
 .npc-bubble { display: flex; gap: 12px; align-items: flex-start; }
 .npc-avatar { width: 48px; height: 48px; image-rendering: pixelated; border: 2px solid #d4af37; border-radius: 4px; flex-shrink: 0; }
 .bubble-text { flex: 1; }
-.npc-says { margin: 0 0 8px; font-style: italic; color: #93c5fd; font-size: 13px; }
+.npc-says { margin: 0 0 8px; font-style: italic; color: #111111; font-size: 13px; }
 .concept-prompt { margin: 0; padding: 8px; background: #0a1428; border: 1px solid #4a90e2; white-space: pre-wrap; font-size: 13px; color: #e5e7eb; }
 .teach-editor { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
 .teach-editor textarea { font-family: inherit; font-size: 14px; background: #0a1428; color: #f0f9ff; border: 2px solid #8b5cf6; padding: 10px; resize: vertical; min-height: 120px; line-height: 1.6; }

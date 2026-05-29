@@ -122,7 +122,7 @@ function nodeAction(node: LearningPathNodeDto): string {
   color: #4d3613;
 }
 .col.draft h5::before {
-  content: '✨ ';
+  content: '* ';
 }
 .nodes {
   list-style: none;

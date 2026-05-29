@@ -1,0 +1,82 @@
+{
+  "key": "student_a",
+  "name": "学生 A",
+  "category": "student",
+  "sprite": "npc_student",
+  "portrait": "portrait_student_a.png",
+  "spawnMap": "town_hub",
+  "spawn": {
+    "tileX": 15,
+    "tileY": 14
+  },
+  "birthday": {
+    "month": 5,
+    "day": 20
+  },
+  "favoriteGifts": [
+    "coffee",
+    "notebook"
+  ],
+  "schedule": {
+    "monday": [
+      {
+        "from": "08:00",
+        "map": "town_hub",
+        "tileX": 15,
+        "tileY": 14
+      }
+    ],
+    "tuesday": [
+      {
+        "from": "08:00",
+        "map": "town_hub",
+        "tileX": 15,
+        "tileY": 14
+      }
+    ],
+    "wednesday": [
+      {
+        "from": "08:00",
+        "map": "town_hub",
+        "tileX": 15,
+        "tileY": 14
+      }
+    ],
+    "thursday": [
+      {
+        "from": "08:00",
+        "map": "town_hub",
+        "tileX": 15,
+        "tileY": 14
+      }
+    ],
+    "friday": [
+      {
+        "from": "08:00",
+        "map": "town_hub",
+        "tileX": 15,
+        "tileY": 14
+      }
+    ],
+    "saturday": [
+      {
+        "from": "08:00",
+        "map": "town_hub",
+        "tileX": 15,
+        "tileY": 14
+      }
+    ],
+    "sunday": [
+      {
+        "from": "08:00",
+        "map": "town_hub",
+        "tileX": 15,
+        "tileY": 14
+      }
+    ]
+  },
+  "tags": [
+    "peer_learning"
+  ],
+  "description": "和你一样在学习 Python 的同学，可以交流学习心得。"
+}

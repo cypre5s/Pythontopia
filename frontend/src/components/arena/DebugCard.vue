@@ -31,7 +31,7 @@ function selectLine(idx: number): void {
       >
         <span class="line-num">{{ idx + 1 }}</span>
         <span class="line-text">{{ line }}</span>
-        <span v-if="selectedLine === idx" class="bug-marker">← 🐛?</span>
+        <span v-if="selectedLine === idx" class="bug-marker">&lt;- BUG?</span>
       </div>
     </div>
     <label class="fix-editor">

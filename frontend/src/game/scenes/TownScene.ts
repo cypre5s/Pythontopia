@@ -1,15 +1,17 @@
 import { router } from '@/app/router';
-import { playBgm } from '@/composables/useAudio';
+import { playBgm, playSfx } from '@/composables/useAudio';
 import {
   createDirectionController,
   toServerDirection,
   type DirectionController,
   type ExtendedDirection,
 } from '@game/adapters/input';
+import type { Direction } from '@api/dto/Direction';
 import { openNpcDialog } from '@game/adapters/dialog';
 import { createPlayerSprite } from '@game/adapters/sprite';
 import { drawNpcSprite, loadTownMap, type TownMapData } from '@game/adapters/tilemap';
 import type { PlayerSpriteHandle, RectangleLike, SceneLike } from '@game/adapters/sceneTypes';
+import { resolveLowObstacleJump } from '@game/core/JumpSystem';
 import { useWorldStore } from '@stores/world';
 
 const MOVE_COOLDOWN_MS = 130;
@@ -21,6 +23,7 @@ let player: PlayerSpriteHandle | null = null;
 let controller: DirectionController | null = null;
 let lastMoveAt = 0;
 let actionWasDown = false;
+let jumpWasDown = false;
 
 export interface BuildingInteraction {
   kind: 'building';
@@ -99,23 +102,66 @@ export const TownScene = {
       controller = null;
       lastMoveAt = 0;
       actionWasDown = false;
+      jumpWasDown = false;
     });
   },
   update(this: SceneLike) {
     if (!map || !player || !controller) {
       return;
     }
+    const jumpIsDown = controller.isJumpPressed();
+    const jumpPressedEdge = jumpIsDown && !jumpWasDown;
+    jumpWasDown = jumpIsDown;
+    if (jumpPressedEdge && !player.isJumping()) {
+      const facing = toMovementFacing(player.direction, 'DOWN');
+      const jump = resolveLowObstacleJump({
+        tileX: player.tileX,
+        tileY: player.tileY,
+        direction: facing,
+        width: map.width,
+        height: map.height,
+        collisions: map.collisions,
+        lowObstacles: map.lowObstacles,
+      });
+      if (jump.kind === 'jump') {
+        player.jumpToTile(jump.landing.tileX, jump.landing.tileY, jump.direction);
+        playSfx('sfx_jump', { volume: 0.42 });
+        window.setTimeout(() => playSfx('sfx_land', { volume: 0.36 }), 220);
+        void useWorldStore().updatePlayerTile({
+          tileX: jump.landing.tileX,
+          tileY: jump.landing.tileY,
+          direction: jump.direction,
+        });
+      } else {
+        player.jumpToTile(player.tileX, player.tileY, facing);
+        playSfx('sfx_jump', { volume: 0.18 });
+        window.setTimeout(() => playSfx('sfx_land', { volume: 0.18 }), 220);
+      }
+      return;
+    }
+    if (player.isJumping()) {
+      return;
+    }
     const direction = controller.getDirection();
     if (direction && this.time.now - lastMoveAt > MOVE_COOLDOWN_MS) {
       lastMoveAt = this.time.now;
-      const serverDir = toServerDirection(direction);
+      const facing = toMovementFacing(direction, player.direction);
+      if (shouldTurnBeforeMove(player.direction, direction)) {
+        player.moveToTile(player.tileX, player.tileY, facing);
+        void useWorldStore().updatePlayerTile({
+          tileX: player.tileX,
+          tileY: player.tileY,
+          direction: facing,
+        });
+        return;
+      }
       const next = nextTile(player.tileX, player.tileY, direction, map.width, map.height);
       if (!isBlocked(map, next.tileX, next.tileY)) {
-        player.moveToTile(next.tileX, next.tileY, serverDir);
+        player.moveToTile(next.tileX, next.tileY, facing);
         void useWorldStore().updatePlayerTile({
           tileX: next.tileX,
           tileY: next.tileY,
-          direction: serverDir,
+          direction: facing,
         });
       } else {
         // 对角线撞墙时降级为主轴方向重试一次
@@ -128,7 +174,7 @@ export const TownScene = {
             direction: toServerDirection(fallback.direction),
           });
         } else {
-          player.moveToTile(player.tileX, player.tileY, serverDir);
+          player.moveToTile(player.tileX, player.tileY, facing);
         }
       }
     }
@@ -189,6 +235,23 @@ export function nextTile(
     tileX: Math.max(0, Math.min(width - 1, tileX + dx)),
     tileY: Math.max(0, Math.min(height - 1, tileY + dy)),
   };
+}
+
+export function shouldTurnBeforeMove(currentDirection: Direction, requestedDirection: ExtendedDirection): boolean {
+  return currentDirection !== toMovementFacing(requestedDirection, currentDirection);
+}
+
+function toMovementFacing(direction: ExtendedDirection, fallback: Direction): Direction {
+  if (direction === 'UP' || direction === 'DOWN' || direction === 'LEFT' || direction === 'RIGHT') {
+    return direction;
+  }
+  if (direction === 'UP_LEFT' || direction === 'DOWN_LEFT') {
+    return 'LEFT';
+  }
+  if (direction === 'UP_RIGHT' || direction === 'DOWN_RIGHT') {
+    return 'RIGHT';
+  }
+  return fallback;
 }
 
 function fallbackAxis(

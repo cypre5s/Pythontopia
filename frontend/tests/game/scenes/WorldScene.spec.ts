@@ -14,7 +14,9 @@ import {
   buildNpcHintText,
   buildNpcTrigger,
   directionDelta,
+  shouldTurnBeforeMove,
   toCardinal,
+  WorldScene,
 } from '@/game/scenes/WorldScene';
 import { InteractableSystem, type HintRenderer } from '@/game/core/InteractableSystem';
 import { NpcFramework } from '@/game/core/NpcFramework';
@@ -52,6 +54,27 @@ describe('WorldScene.buildNpcHintText', () => {
   it('returns "按 E 与 {label} 对话" using the provided NPC label', () => {
     expect(buildNpcHintText('镇长 Py')).toBe('按 E 与 镇长 Py 对话');
     expect(buildNpcHintText('练习教练 Q')).toBe('按 E 与 练习教练 Q 对话');
+  });
+});
+
+describe('WorldScene map routing', () => {
+  it('keeps mine_south instead of falling back to town_hub', () => {
+    const scene = {
+      cache: {
+        json: { exists: vi.fn(() => true) },
+        tilemap: { exists: vi.fn(() => false) },
+      },
+      load: {
+        json: vi.fn(),
+        tilemapTiledJSON: vi.fn(),
+      },
+    } as unknown as Phaser.Scene;
+
+    WorldScene.init.call(scene, { mapKey: 'mine_south' });
+    WorldScene.preload.call(scene);
+
+    expect((scene.load as unknown as { tilemapTiledJSON: ReturnType<typeof vi.fn> }).tilemapTiledJSON)
+      .toHaveBeenCalledWith('map_mine_south', '/assets/maps/mine_south.json');
   });
 });
 
@@ -288,5 +311,11 @@ describe('WorldScene.directionDelta / toCardinal (existing helpers; sanity)', ()
     expect(toCardinal('UP_LEFT', 'DOWN')).toBe('LEFT');
     expect(toCardinal('UP', 'DOWN')).toBe('UP');
     expect(toCardinal('NONE' as unknown as string, 'DOWN')).toBe('DOWN');
+  });
+
+  it('turns in place before moving when the requested cardinal facing changes', () => {
+    expect(shouldTurnBeforeMove('DOWN', 'RIGHT')).toBe(true);
+    expect(shouldTurnBeforeMove('RIGHT', 'RIGHT')).toBe(false);
+    expect(shouldTurnBeforeMove('RIGHT', 'UP_RIGHT')).toBe(false);
   });
 });

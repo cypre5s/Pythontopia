@@ -50,7 +50,31 @@ describe('createDirectionController', () => {
     expect(scene.input.keyboard?.addKey).toHaveBeenCalledWith('S');
     expect(scene.input.keyboard?.addKey).toHaveBeenCalledWith('D');
     expect(scene.input.keyboard?.addKey).toHaveBeenCalledWith('F');
+    expect(scene.input.keyboard?.addKey).toHaveBeenCalledWith('E');
     expect(controller.isActionPressed()).toBe(true);
+  });
+
+  it('uses Space for jumping without making Space an interaction key', () => {
+    const keys = {
+      W: key(),
+      A: key(),
+      S: key(),
+      D: key(),
+      F: key(),
+      E: key(),
+      SPACE: key(true),
+    };
+    const scene = sceneWithKeys(keys, {
+      up: key(),
+      down: key(),
+      left: key(),
+      right: key(),
+    });
+
+    const controller = createDirectionController(scene);
+
+    expect(controller.isJumpPressed()).toBe(true);
+    expect(controller.isActionPressed()).toBe(false);
   });
 
   it('returns eight-direction movement from simultaneous keys', () => {

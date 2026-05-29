@@ -80,6 +80,8 @@ export interface StoryboardScene {
   visual_hint: string;
   kc_codes: string[];
   duration_seconds: number;
+  evidence_page_id?: number;
+  narration_tts_voice?: string;
 }
 
 export interface StoryboardContent {

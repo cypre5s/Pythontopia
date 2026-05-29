@@ -7,6 +7,11 @@ export const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', redirect: '/world' },
+    {
+      path: '/home',
+      name: 'home',
+      component: () => import('@/pages/HomePage.vue'),
+    },
     { path: '/login', name: 'login', component: LoginPage, meta: { guestOnly: true } },
     {
       path: '/credits',
@@ -23,7 +28,7 @@ export const router = createRouter({
       path: '/world',
       name: 'world',
       component: () => import('@/pages/WorldPage.vue'),
-      meta: { requiresAuth: true },
+      meta: { fullscreen: true, requiresAuth: true },
     },
     // M2 向后兼容：旧的 /town /field /bug-mine 路由保留，但直接 redirect 到 /world，
     // 由 WorldScene 内部用 sceneKey 切换 town_hub / farm_north / mine_south。
@@ -58,6 +63,15 @@ export const router = createRouter({
       component: () => import('@/pages/LibraryPage.vue'),
       meta: { requiresAuth: true },
     },
+    // R-12 主线 Phase 2：章节视频讲解页（超星任务点视频 / 无视频时回退到 PPT）。
+    // 由 NPC 对话的 open_panel 效果（route="/lecture/:chapter"）进入。
+    {
+      path: '/lecture/:chapter(\\d+)',
+      name: 'lecture',
+      component: () => import('@/pages/LecturePage.vue'),
+      meta: { requiresAuth: true },
+      props: (route) => ({ chapter: Number(route.params.chapter) }),
+    },
     {
       path: '/problems',
       name: 'problems',
@@ -86,6 +100,12 @@ export const router = createRouter({
       path: '/review-hall',
       name: 'review-hall',
       component: () => import('@/pages/ReviewHallPage.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/tutor',
+      name: 'tutor',
+      component: () => import('@/pages/TutorPage.vue'),
       meta: { requiresAuth: true },
     },
     {

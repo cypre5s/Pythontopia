@@ -68,7 +68,12 @@ defineExpose({
         </li>
         <li>
           <span class="pyt-help-key">F</span>
+          <span class="pyt-help-key">E</span>
           <span class="pyt-help-text">与 NPC 对话、调查物品、领取任务</span>
+        </li>
+        <li>
+          <span class="pyt-help-key">Space</span>
+          <span class="pyt-help-text">面朝矮栅栏或木桩时跳过低障碍</span>
         </li>
         <li>
           <span class="pyt-help-key">Tab</span>

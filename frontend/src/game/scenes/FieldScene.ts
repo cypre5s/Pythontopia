@@ -5,7 +5,7 @@ import type { SceneLike } from '@game/adapters/sceneTypes';
 import { useLearningStore } from '@stores/learning';
 
 let cropHandles: CropSpriteHandle[] = [];
-let tileSize = 32;
+let tileSize = 16;
 
 export const FieldScene = {
   key: 'FieldScene',
@@ -14,7 +14,7 @@ export const FieldScene = {
     void this;
   },
   create(this: SceneLike) {
-    tileSize = 32;
+    tileSize = 16;
     const width = 30;
     const height = 15;
     this.add

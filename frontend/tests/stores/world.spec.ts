@@ -72,6 +72,25 @@ describe('world store', () => {
     expect(patchPlayerState).toHaveBeenLastCalledWith({ tileX: 16, tileY: 12, direction: 'RIGHT' });
   });
 
+  it('preserves the local map after persisting movement from a travelled map', async () => {
+    const store = useWorldStore();
+    store.player = {
+      playerStateId: 2,
+      avatarKey: 'student_default',
+      mapKey: 'mine_south',
+      tileX: 15,
+      tileY: 2,
+      direction: 'DOWN',
+    };
+
+    await store.updatePlayerTile({ tileX: 16, tileY: 2, direction: 'RIGHT' });
+    await store.flushPlayerUpdate();
+
+    expect(store.player?.mapKey).toBe('mine_south');
+    expect(store.player?.tileX).toBe(16);
+    expect(store.player?.direction).toBe('RIGHT');
+  });
+
   it('bootstrap() POST /api/game/bootstrap fan-outs to all sub stores', async () => {
     vi.useRealTimers();
     vi.mocked(fetchGameBootstrap).mockResolvedValue({

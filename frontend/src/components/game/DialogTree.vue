@@ -21,9 +21,12 @@
  */
 import { computed, onUnmounted, ref, watch } from 'vue';
 import { useDialogStore, type DialogNode } from '@stores/dialog';
+import { useSessionStore } from '@stores/session';
 import { playSfx } from '@/composables/useAudio';
+import { createDialogContext, renderDialogText } from '@/game/dialogTemplate';
 
 const store = useDialogStore();
+const session = useSessionStore();
 
 const visible = computed<boolean>(() => store.visible);
 const currentNode = computed<DialogNode | null>(() => store.currentNode);
@@ -35,19 +38,72 @@ const heartDisplay = computed<string>(() => {
   if (f <= 0) return '';
   const full = Math.min(Math.floor(f / 10), 10);
   const remainder = f % 10;
-  if (full >= 10) return '❤'.repeat(10);
-  return '❤'.repeat(full) + (remainder > 0 ? ` +${remainder}` : '');
+  if (full >= 10) return '<3'.repeat(10);
+  return '<3'.repeat(full) + (remainder > 0 ? ` +${remainder}` : '');
 });
 
-const portraitSrc = computed<string | null>(() => {
-  if (!store.portrait) return null;
-  return `/assets/pixel/portraits/${store.portrait}`;
+const useFullPortraitFallback = ref(false);
+
+const portraitFileName = computed<string | null>(() => {
+  const portrait = store.portrait;
+  if (portrait) {
+    return portrait.split('/').pop() ?? portrait;
+  }
+  if (store.npcKey) {
+    return `portrait_${store.npcKey}.png`;
+  }
+  return null;
 });
+
+const fullPortraitSrc = computed<string | null>(() => {
+  const fileName = portraitFileName.value;
+  return fileName ? `/assets/pixel/portraits/${fileName}` : null;
+});
+
+const headPortraitSrc = computed<string | null>(() => {
+  const fileName = portraitFileName.value;
+  if (!fileName) return null;
+  const stem = fileName.replace(/\.png$/i, '');
+  const headFileName = stem.endsWith('_head') ? `${stem}.png` : `${stem}_head.png`;
+  return `/assets/pixel/portraits/heads/${headFileName}`;
+});
+
+const portraitSrc = computed<string | null>(() =>
+  useFullPortraitFallback.value ? fullPortraitSrc.value : headPortraitSrc.value,
+);
 
 const typedText = ref('');
 const typing = ref(false);
 let typeTimer: ReturnType<typeof setTimeout> | null = null;
 const TYPE_INTERVAL_MS = 24;
+
+const templateContext = computed(() => {
+  // R-12 W2-NPC：把 {{playerName}} / {{stats.*}} / {{profileAdaptive:..}} / {{giftFavorite:..}}
+  // 全部交给统一渲染器；store.context 缺失时只用 displayName 兜底，stats 取不到走 '—'。
+  const ctx = store.context;
+  return createDialogContext({
+    playerName: ctx?.playerName ?? session.displayName,
+    profileType: ctx?.profileType ?? 'cautious',
+    giftJustGiven: ctx?.giftJustGiven ?? false,
+    stats: ctx?.stats ?? {},
+  });
+});
+
+const currentText = computed<string>(() => {
+  const rawText = currentNode.value?.text ?? '';
+  if (!rawText) return '';
+  return renderDialogText(rawText, templateContext.value);
+});
+
+const renderedChoices = computed(() => {
+  const node = currentNode.value;
+  if (!node) return [] as Array<{ label: string; rawIndex: number }>;
+  const ctx = templateContext.value;
+  return node.choices.map((choice, idx) => ({
+    label: renderDialogText(choice.label, ctx),
+    rawIndex: idx,
+  }));
+});
 
 function clearTypeTimer(): void {
   if (typeTimer !== null) {
@@ -84,16 +140,15 @@ function startTypewriter(text: string): void {
 
 function finishTypewriter(): void {
   clearTypeTimer();
-  const text = currentNode.value?.text ?? '';
-  typedText.value = text;
+  typedText.value = currentText.value;
   typing.value = false;
 }
 
 watch(
-  currentNode,
-  (node) => {
-    if (node) {
-      startTypewriter(node.text);
+  currentText,
+  (text) => {
+    if (currentNode.value) {
+      startTypewriter(text);
     } else {
       clearTypeTimer();
       typedText.value = '';
@@ -101,6 +156,13 @@ watch(
     }
   },
   { immediate: true },
+);
+
+watch(
+  () => [store.npcKey, store.portrait],
+  () => {
+    useFullPortraitFallback.value = false;
+  },
 );
 
 onUnmounted(() => {
@@ -132,6 +194,10 @@ function onEscape(): void {
 }
 
 function onPortraitError(event: Event): void {
+  if (!useFullPortraitFallback.value && fullPortraitSrc.value) {
+    useFullPortraitFallback.value = true;
+    return;
+  }
   const target = event.target as HTMLImageElement | null;
   if (target) {
     target.style.visibility = 'hidden';
@@ -163,8 +229,14 @@ function onPortraitError(event: Event): void {
           >
         </aside>
         <section class="dialog-body">
-          <header class="dialog-head">
-            <span class="name-tag">{{ store.npcName || '???' }}</span>
+          <header
+            class="dialog-head"
+            style="color: #111111;"
+          >
+            <span
+              class="name-tag"
+              style="color: #111111;"
+            >{{ store.npcName || '???' }}</span>
             <span
               v-if="store.friendship > 0"
               class="friendship"
@@ -192,6 +264,7 @@ function onPortraitError(event: Event): void {
           <p
             v-else-if="currentNode"
             class="dialog-text"
+            style="color: #111111;"
             data-testid="dialog-text"
             @click="onAdvance"
           >
@@ -222,11 +295,11 @@ function onPortraitError(event: Event): void {
             data-testid="dialog-choices"
           >
             <button
-              v-for="(choice, idx) in currentNode.choices"
-              :key="`${currentNode.id}-${idx}`"
+              v-for="choice in renderedChoices"
+              :key="`${currentNode.id}-${choice.rawIndex}`"
               type="button"
               class="choice-btn pixel-btn"
-              @click="chooseOption(idx)"
+              @click="chooseOption(choice.rawIndex)"
             >
               {{ choice.label }}
             </button>
@@ -266,7 +339,7 @@ function onPortraitError(event: Event): void {
   border: 24px solid transparent;
   border-radius: 12px;
   box-shadow: var(--pyt-shadow-modal, 0 6px 16px rgba(0, 0, 0, 0.35));
-  color: #fff7e6;
+  color: #111111;
 }
 
 .dialog-portrait {
@@ -287,7 +360,8 @@ function onPortraitError(event: Event): void {
   height: 100%;
   image-rendering: pixelated;
   -ms-interpolation-mode: nearest-neighbor;
-  object-fit: cover;
+  object-fit: contain;
+  object-position: center;
 }
 
 .dialog-body {
@@ -303,7 +377,7 @@ function onPortraitError(event: Event): void {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  color: #ffe098;
+  color: #111111;
   font-size: 16px;
   letter-spacing: 0.5px;
 }
@@ -314,8 +388,8 @@ function onPortraitError(event: Event): void {
 
 .friendship {
   font-size: 13px;
-  color: #ffb3b3;
-  background: rgba(255, 255, 255, 0.08);
+  color: #111111;
+  background: rgba(17, 17, 17, 0.08);
   padding: 2px 8px;
   border-radius: 999px;
 }
@@ -331,13 +405,13 @@ function onPortraitError(event: Event): void {
 }
 
 .dialog-text--meta {
-  color: #ffe098;
+  color: #111111;
   cursor: default;
   font-style: italic;
 }
 
 .dialog-text--error {
-  color: #ffb3b3;
+  color: #111111;
 }
 
 .typing-cursor {
@@ -365,7 +439,7 @@ function onPortraitError(event: Event): void {
 .pixel-btn {
   font-family: var(--pyt-font-pixel, monospace);
   font-size: 14px;
-  color: #2a1a08;
+  color: #111111;
   background-color: #f7d774;
   border: 3px solid #8c6a23;
   padding: 6px 14px;

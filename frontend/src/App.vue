@@ -2,15 +2,18 @@
 // R-13：把 RouterView 包在 Suspense 内，叠加全局错误兜底，避免 chunk 加载失败时
 // 玩家看到纯白屏。同步加 router.onError 监听，对 chunk 失败 emit 友好 toast 并
 // 提供刷新建议。
-import { onErrorCaptured, ref } from 'vue';
+import { onBeforeUnmount, onErrorCaptured, onMounted, ref } from 'vue';
 import { RouterView, useRouter } from 'vue-router';
 import AppToast from '@/components/system/AppToast.vue';
 import DialogTree from '@/components/game/DialogTree.vue';
 import { useToastStore } from '@stores/toast';
+import { useWorldStore } from '@stores/world';
 
 const router = useRouter();
 const toast = useToastStore();
+const world = useWorldStore();
 const fatalError = ref<string | null>(null);
+const BUG_MINE_ENTRY_TILE = { x: 15, y: 2 };
 
 router.onError((err) => {
   const message = err instanceof Error ? err.message : String(err);
@@ -30,6 +33,29 @@ onErrorCaptured((err) => {
     fatalError.value = message;
   }
   return false;
+});
+
+function onDialogNavigate(e: Event): void {
+  const detail = (e as CustomEvent<{ route?: unknown }>).detail;
+  const route = detail?.route;
+  if (typeof route !== 'string' || route.length === 0) {
+    return;
+  }
+  if (route.startsWith('/bug-mine')) {
+    world.setPendingTravel('mine_south', BUG_MINE_ENTRY_TILE);
+    window.dispatchEvent(new CustomEvent('pythontopia:world-travel'));
+    void router.push({ path: '/world', query: { goto: 'mine_south' } });
+    return;
+  }
+  void router.push(route);
+}
+
+onMounted(() => {
+  window.addEventListener('pythontopia:dialog-navigate', onDialogNavigate);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('pythontopia:dialog-navigate', onDialogNavigate);
 });
 </script>
 
@@ -87,7 +113,7 @@ onErrorCaptured((err) => {
   border: 3px solid #c9a86b;
   border-radius: 10px;
   color: #4d3613;
-  font-family: 'PythontopiaPixel', 'PingFang SC', monospace;
+  font-family: var(--pyt-font-pixel, monospace);
   font-size: 14px;
   letter-spacing: 0.5px;
   box-shadow: 4px 4px 0 rgba(77, 54, 19, 0.3);

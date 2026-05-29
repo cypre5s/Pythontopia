@@ -2,10 +2,12 @@ import { createPinia } from 'pinia';
 import { createApp } from 'vue';
 import App from './App.vue';
 import { setNetworkErrorHandler } from './api/http';
+import { shouldShowNetworkToast } from './api/networkNotice';
 import { router } from './app/router';
 import { useSessionStore } from './stores/session';
 import { useToastStore } from './stores/toast';
 import './styles/tokens.css';
+import './styles/pixel-ui.css';
 import './styles.css';
 
 const pinia = createPinia();
@@ -24,6 +26,10 @@ session.configureHttp(() => {
 // 避免后端短暂抖动时反复刷屏。
 const toast = useToastStore();
 setNetworkErrorHandler((code) => {
+  const env = (import.meta as ImportMeta & { readonly env?: Parameters<typeof shouldShowNetworkToast>[1] }).env ?? {};
+  if (!shouldShowNetworkToast(code, env)) {
+    return;
+  }
   if (code === 'TIMEOUT') {
     toast.push({ kind: 'error', text: '请求超时，请检查网络后重试' });
   } else {

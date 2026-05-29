@@ -96,6 +96,7 @@ frontend/public/assets/maps/
 - `building`：建筑点击区，`properties.route` 指向 Vue 路由
 - `npc`：NPC 出生点，`properties.key` / `label` / `sprite`
 - `spawn`：玩家默认出生点（每张地图唯一）
+- `low_obstacle`：低障碍物，正常行走视为阻挡，玩家可面朝它按 Space 跳过 1 格
 - `landmark` / `field` / `plaza`：纯视觉锚点
 
 ## 编辑流程

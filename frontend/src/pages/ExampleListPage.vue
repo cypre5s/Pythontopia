@@ -278,7 +278,7 @@ onMounted(async () => {
 }
 .page-header h1 {
   margin: 0;
-  font-family: 'PythontopiaPixel', sans-serif;
+  font-family: var(--pyt-font-pixel), sans-serif;
   font-size: 22px;
 }
 .muted {
@@ -287,7 +287,7 @@ onMounted(async () => {
   color: var(--pyt-color-text-muted, #8a6c2c);
 }
 .back-button {
-  font-family: 'PythontopiaPixel', monospace;
+  font-family: var(--pyt-font-pixel), monospace;
   min-height: 36px;
   padding: 0 16px;
   background: var(--pyt-color-warning-bg, #f5e2c1);
@@ -306,7 +306,7 @@ onMounted(async () => {
 }
 .filter-bar h3 {
   margin: 0;
-  font-family: 'PythontopiaPixel', sans-serif;
+  font-family: var(--pyt-font-pixel), sans-serif;
   font-size: 13px;
 }
 .chip-row {
@@ -317,7 +317,7 @@ onMounted(async () => {
   overflow-y: auto;
 }
 .chip {
-  font-family: 'PythontopiaPixel', monospace;
+  font-family: var(--pyt-font-pixel), monospace;
   font-size: 11px;
   padding: 4px 8px;
   border: 2px solid var(--pyt-color-border, #c9a86b);
@@ -335,7 +335,7 @@ onMounted(async () => {
   justify-self: start;
   min-height: 32px;
   padding: 0 10px;
-  font-family: 'PythontopiaPixel', monospace;
+  font-family: var(--pyt-font-pixel), monospace;
   background: var(--pyt-color-danger-bg, #fde2dc);
   border: 2px solid var(--pyt-color-border-strong, #4d3613);
   cursor: pointer;
@@ -362,7 +362,7 @@ onMounted(async () => {
 }
 .kc-bucket-head h2 {
   margin: 0;
-  font-family: 'PythontopiaPixel', sans-serif;
+  font-family: var(--pyt-font-pixel), sans-serif;
   font-size: 16px;
 }
 .example-grid {
@@ -384,7 +384,7 @@ onMounted(async () => {
 }
 .card-head h3 {
   margin: 0;
-  font-family: 'PythontopiaPixel', sans-serif;
+  font-family: var(--pyt-font-pixel), sans-serif;
   font-size: 14px;
 }
 .card-explain {
@@ -409,7 +409,7 @@ onMounted(async () => {
   gap: 8px;
 }
 .ghost-button {
-  font-family: 'PythontopiaPixel', monospace;
+  font-family: var(--pyt-font-pixel), monospace;
   min-height: 28px;
   padding: 0 8px;
   background: var(--pyt-color-bg-primary, #fef7e3);
@@ -423,7 +423,7 @@ onMounted(async () => {
   padding: 1px 6px;
   background: var(--pyt-color-warning-bg, #f5e2c1);
   border: 1px solid var(--pyt-color-border, #c9a86b);
-  font-family: 'PythontopiaPixel', monospace;
+  font-family: var(--pyt-font-pixel), monospace;
   font-size: 11px;
 }
 .badge.kc {

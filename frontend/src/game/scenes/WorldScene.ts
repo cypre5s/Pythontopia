@@ -17,7 +17,7 @@
 // 只通过 SceneLike / PlayerSpriteHandle 等结构化接口与本文件交互。
 import Phaser from 'phaser';
 import { router } from '@/app/router';
-import { playBgm, type BgmKey } from '@/composables/useAudio';
+import { playBgm, playSfx, type BgmKey } from '@/composables/useAudio';
 import type { Direction } from '@api/dto/Direction';
 import { createDirectionController, type DirectionController } from '@game/adapters/input';
 import { openNpcDialog } from '@game/adapters/dialog';
@@ -38,20 +38,24 @@ import {
   type NpcWaypoint,
 } from '@game/core/NpcFramework';
 import { attachLifecycle } from '@game/core/SceneLifecycle';
+import { resolveLowObstacleJump } from '@game/core/JumpSystem';
 import {
   resolveSchedulePosition,
   getScheduleWaypoints,
   type NpcSchedule,
 } from '@game/core/npcSchedule';
 import { useWorldStore } from '@stores/world';
+import { useMainQuestStore } from '@stores/mainQuest';
+import { findMainQuestById } from '@/data/mainQuests';
 
 const TILE_SIZE = 16;
-const RENDER_SCALE = 2;
+const RENDER_SCALE = 1;
 const RENDER_TILE_SIZE = TILE_SIZE * RENDER_SCALE;
-// R-13 §-1 续：CAMERA_ZOOM 2 → 1.35 让屏幕上每个 tile 视觉尺寸从 64px → ~43px，
-// 解决玩家反馈"地上像素块太大"——同时 player sprite 仍清晰可辨（48×72 → 32×48），
-// 可视范围相应扩大约 50%，更接近星露谷标准缩放。
-const CAMERA_ZOOM = 1.35;
+// R-12 美化：CAMERA_ZOOM 改为 1.5（整数倍配合 RENDER_SCALE=2 → 屏幕等效 3x 缩放，
+// 16×16 tile → 48×48 像素），符合「整数倍缩放（2x / 3x）」要求，避免过去 1.35
+// 这种非整数缩放导致的子像素接缝；与玩家「像素块太大」反馈相比，48px 既保留
+// 清晰度又比早期 64px 更紧凑，可视范围适中。
+const CAMERA_ZOOM = 1.5;
 const CAMERA_LERP = 0.15;
 const MOVE_COOLDOWN_MS = 130;
 const RAIN_SLOWDOWN = 1.25;
@@ -107,6 +111,15 @@ interface BuildingZone {
   height: number;
 }
 
+interface LowObstacleZone {
+  tileX: number;
+  tileY: number;
+  width: number;
+  height: number;
+  sprite: string | null;
+  frame: number | null;
+}
+
 /**
  * W2 集成：公告板 trigger 在 town_hub 中的中心 tile。
  * 喷泉位于 tile(24,19)-(25,20) 区域；公告板放在喷泉东侧两格，避开 spawn(25,20)。
@@ -138,12 +151,14 @@ interface WorldSceneState {
   controller: DirectionController | null;
   lastMoveAt: number;
   actionWasDown: boolean;
+  jumpWasDown: boolean;
   exits: ExitTile[];
   npcs: NpcSpawn[];
   width: number;
   height: number;
   renderTileSize: number;
   collisions: boolean[][];
+  lowObstacles: boolean[][];
   switching: boolean;
   weather: WeatherHandle | null;
   weatherKind: WeatherKind;
@@ -167,12 +182,14 @@ const state: WorldSceneState = {
   controller: null,
   lastMoveAt: 0,
   actionWasDown: false,
+  jumpWasDown: false,
   exits: [],
   npcs: [],
   width: 0,
   height: 0,
   renderTileSize: RENDER_TILE_SIZE,
   collisions: [],
+  lowObstacles: [],
   switching: false,
   weather: null,
   weatherKind: 'sunny' as WeatherKind,
@@ -212,6 +229,7 @@ export const WorldScene = {
     state.exits = [];
     state.npcs = [];
     state.collisions = [];
+    state.lowObstacles = [];
 
     const index = phaserScene.cache.json.exists('map_index')
       ? (phaserScene.cache.json.get('map_index') as MapIndex)
@@ -243,11 +261,11 @@ export const WorldScene = {
     const decorationLayer = map.createLayer('decoration', tileset, 0, 0);
     decorationLayer?.setScale(RENDER_SCALE).setDepth(4);
 
-    state.collisions = buildCollisions(map);
-
-    const { spawnTile, exits, buildings, npcs } = parseObjects(map, state.entry?.spawn, index);
+    const { spawnTile, exits, buildings, npcs, lowObstacles } = parseObjects(map, state.entry?.spawn, index);
     state.exits = exits;
     state.npcs = npcs;
+    state.lowObstacles = buildLowObstacleGrid(map.width, map.height, lowObstacles);
+    state.collisions = mergeCollisionGrids(buildCollisions(map), state.lowObstacles);
 
     const worldStore = useWorldStore();
     const persisted =
@@ -276,6 +294,9 @@ export const WorldScene = {
 
     buildings.forEach((building) => {
       paintBuildingZone(phaserScene, building);
+    });
+    lowObstacles.forEach((obstacle) => {
+      paintLowObstacleSprite(phaserScene, obstacle);
     });
     npcs.forEach((npc) => {
       drawNpcSprite(this, npc, RENDER_TILE_SIZE);
@@ -351,6 +372,8 @@ export const WorldScene = {
     });
     applyTimeOfDay(this, timeOfDay);
 
+    paintQuestMarkers(phaserScene, state.mapKey, state.npcs, RENDER_TILE_SIZE);
+
     const onBeforeUnload = (): void => {
       void worldStore.flushPlayerUpdate();
     };
@@ -381,10 +404,12 @@ export const WorldScene = {
       state.player = null;
       state.controller = null;
       state.collisions = [];
+      state.lowObstacles = [];
       state.exits = [];
       state.npcs = [];
       state.lastMoveAt = 0;
       state.actionWasDown = false;
+      state.jumpWasDown = false;
       // attachLifecycle 自己监听 shutdown 已经触发 onShutdown，这里仅 detach
       // 多余引用，避免 restart 时挂多份相同监听。
       if (state.lifecycleDetach) {
@@ -404,6 +429,44 @@ export const WorldScene = {
     }
 
     const rawDirection = controller.getDirection();
+    const jumpIsDown = controller.isJumpPressed();
+    const jumpPressedEdge = jumpIsDown && !state.jumpWasDown;
+    state.jumpWasDown = jumpIsDown;
+    if (jumpPressedEdge && !player.isJumping()) {
+      const facing = toCardinal(player.direction, 'DOWN');
+      const jump = resolveLowObstacleJump({
+        tileX: player.tileX,
+        tileY: player.tileY,
+        direction: facing,
+        width: state.width,
+        height: state.height,
+        collisions: state.collisions,
+        lowObstacles: state.lowObstacles,
+      });
+      if (jump.kind === 'jump') {
+        player.jumpToTile(jump.landing.tileX, jump.landing.tileY, jump.direction);
+        playSfx('sfx_jump', { volume: 0.42 });
+        window.setTimeout(() => playSfx('sfx_land', { volume: 0.36 }), 220);
+        void useWorldStore().updatePlayerTile({
+          tileX: jump.landing.tileX,
+          tileY: jump.landing.tileY,
+          direction: jump.direction,
+        });
+        const exit = findExit(jump.landing.tileX, jump.landing.tileY);
+        if (exit) {
+          triggerSceneTransition(this as unknown as Phaser.Scene, exit);
+        }
+      } else {
+        player.jumpToTile(player.tileX, player.tileY, facing);
+        playSfx('sfx_jump', { volume: 0.18 });
+        window.setTimeout(() => playSfx('sfx_land', { volume: 0.18 }), 220);
+      }
+      return;
+    }
+    if (player.isJumping()) {
+      return;
+    }
+
     const effectiveCooldown = state.weatherKind === 'rainy' || state.weatherKind === 'stormy'
       ? MOVE_COOLDOWN_MS * RAIN_SLOWDOWN
       : MOVE_COOLDOWN_MS;
@@ -418,8 +481,8 @@ export const WorldScene = {
       // 第一次按只转身不前进；下一次再按才真正走一格。
       // 这样玩家从「面朝下站立」按右键，先转脸朝右；再按右键，走一格。
       // 避免「按一下就强制蹭一步」的笨重感。
-      if (player.direction !== cardinal) {
-        player.moveToTile(player.tileX, player.tileY, cardinal);
+      if (shouldTurnBeforeMove(player.direction, rawDirection)) {
+        player.faceDirection(cardinal);
         void useWorldStore().updatePlayerTile({
           tileX: player.tileX,
           tileY: player.tileY,
@@ -519,6 +582,29 @@ function buildCollisions(map: Phaser.Tilemaps.Tilemap): boolean[][] {
   return grid;
 }
 
+function buildLowObstacleGrid(width: number, height: number, zones: readonly LowObstacleZone[]): boolean[][] {
+  const grid = Array.from({ length: height }, () => Array.from({ length: width }, () => false));
+  zones.forEach((zone) => {
+    for (let dy = 0; dy < zone.height; dy += 1) {
+      for (let dx = 0; dx < zone.width; dx += 1) {
+        const tileX = zone.tileX + dx;
+        const tileY = zone.tileY + dy;
+        const row = grid[tileY];
+        if (row && tileX >= 0 && tileX < width) {
+          row[tileX] = true;
+        }
+      }
+    }
+  });
+  return grid;
+}
+
+function mergeCollisionGrids(collisions: boolean[][], lowObstacles: boolean[][]): boolean[][] {
+  return collisions.map((row, y) =>
+    row.map((blocked, x) => blocked || lowObstacles[y]?.[x] === true),
+  );
+}
+
 function parseObjects(
   map: Phaser.Tilemaps.Tilemap,
   fallbackSpawn: { tileX: number; tileY: number } | undefined,
@@ -528,11 +614,13 @@ function parseObjects(
   exits: ExitTile[];
   buildings: BuildingZone[];
   npcs: NpcSpawn[];
+  lowObstacles: LowObstacleZone[];
 } {
   let spawnTile: { tileX: number; tileY: number } = fallbackSpawn ?? { tileX: 5, tileY: 5 };
   const exits: ExitTile[] = [];
   const buildings: BuildingZone[] = [];
   const npcs: NpcSpawn[] = [];
+  const lowObstacles: LowObstacleZone[] = [];
 
   map.objects.forEach((group) => {
     group.objects.forEach((obj) => {
@@ -591,6 +679,18 @@ function parseObjects(
         });
         return;
       }
+      if (type === 'low_obstacle') {
+        const frameValue = props['frame'];
+        lowObstacles.push({
+          tileX,
+          tileY,
+          width: Math.max(1, Math.floor((obj.width ?? TILE_SIZE) / TILE_SIZE)),
+          height: Math.max(1, Math.floor((obj.height ?? TILE_SIZE) / TILE_SIZE)),
+          sprite: typeof props['sprite'] === 'string' ? props['sprite'] : null,
+          frame: typeof frameValue === 'number' ? frameValue : null,
+        });
+        return;
+      }
       if (type === 'npc') {
         const spriteValue = props['sprite'];
         // W2 集成：town_hub.json 用 "key" 字段（npc_mayor_py.properties[name=key]
@@ -607,7 +707,7 @@ function parseObjects(
     });
   });
 
-  return { spawnTile, exits, buildings, npcs };
+  return { spawnTile, exits, buildings, npcs, lowObstacles };
 }
 
 function collectProperties(props: unknown): Record<string, unknown> {
@@ -633,26 +733,121 @@ function paintBuildingZone(phaserScene: Phaser.Scene, building: BuildingZone): v
   rect.on('pointerdown', () => {
     void router.push(building.route);
   });
-  phaserScene.add
+  // R-12 美化：建筑标签只在鼠标 hover 时显示，平时不挡视野。
+  const label = phaserScene.add
     .text(px, building.tileY * RENDER_TILE_SIZE - 4, building.label, {
       fontFamily: 'monospace',
       fontSize: '12px',
       color: '#fff8e1',
-      backgroundColor: '#00000088',
-      padding: { x: 4, y: 2 },
+      backgroundColor: '#1c1810dd',
+      padding: { x: 6, y: 3 },
     })
     .setOrigin(0.5, 1)
-    .setDepth(8);
+    .setDepth(8)
+    .setVisible(false);
+  rect.on('pointerover', () => label.setVisible(true));
+  rect.on('pointerout', () => label.setVisible(false));
 }
 
 function paintNpcHotspot(phaserScene: Phaser.Scene, npc: NpcSpawn): void {
   const cx = npc.tileX * RENDER_TILE_SIZE + RENDER_TILE_SIZE / 2;
   const cy = npc.tileY * RENDER_TILE_SIZE + RENDER_TILE_SIZE / 2;
+  // R-12 美化：NPC 名称标签默认隐藏；鼠标 hover 或玩家靠近时再亮起，
+  // 避免「NPC 名字常驻显示遮挡地图」的反馈。靠近触发由 InteractableSystem
+  // 的 hint 气泡承担（屏幕底部「按 E 与 XX 对话」），此处只补一层 hover 反馈。
   const marker = phaserScene.add
     .rectangle(cx, cy, RENDER_TILE_SIZE, RENDER_TILE_SIZE, 0xffffff, 0)
     .setInteractive({ useHandCursor: true })
     .setDepth(12);
   marker.on('pointerdown', () => openNpcDialog(npc.npcKey));
+  const labelText = npc.label || npc.npcKey;
+  const label = phaserScene.add
+    .text(cx, cy - RENDER_TILE_SIZE * 0.9, labelText, {
+      fontFamily: 'monospace',
+      fontSize: '11px',
+      color: '#fff7e6',
+      backgroundColor: '#1c1810dd',
+      padding: { x: 5, y: 2 },
+    })
+    .setOrigin(0.5, 1)
+    .setDepth(13)
+    .setVisible(false);
+  marker.on('pointerover', () => label.setVisible(true));
+  marker.on('pointerout', () => label.setVisible(false));
+}
+
+function paintLowObstacleSprite(phaserScene: Phaser.Scene, obstacle: LowObstacleZone): void {
+  if (!obstacle.sprite || obstacle.frame === null) {
+    return;
+  }
+  for (let dy = 0; dy < obstacle.height; dy += 1) {
+    for (let dx = 0; dx < obstacle.width; dx += 1) {
+      phaserScene.add
+        .sprite(
+          (obstacle.tileX + dx) * RENDER_TILE_SIZE + RENDER_TILE_SIZE / 2,
+          (obstacle.tileY + dy) * RENDER_TILE_SIZE + RENDER_TILE_SIZE / 2,
+          obstacle.sprite,
+          obstacle.frame,
+        )
+        .setScale(RENDER_SCALE)
+        .setDepth(5);
+    }
+  }
+}
+
+function paintQuestMarkers(
+  phaserScene: Phaser.Scene,
+  mapKey: string,
+  npcs: readonly NpcSpawn[],
+  tileSize: number,
+): void {
+  try {
+    const mqStore = useMainQuestStore();
+    const progress = mqStore.progress;
+    const questId = `${progress.currentChapter}-${progress.currentSubQuest}`;
+    const subQuest = findMainQuestById(questId);
+    if (!subQuest || subQuest.mapKey !== mapKey) return;
+
+    const evidence = subQuest.evidenceRequired;
+    if (evidence.type === 'building_visit') {
+      const cx = evidence.tileX * tileSize + tileSize / 2;
+      const cy = evidence.tileY * tileSize + tileSize / 2;
+      const circle = phaserScene.add.circle(cx, cy, tileSize * 0.6, 0xffd166, 0.3);
+      circle.setDepth(6).setStrokeStyle(2, 0xffd166, 0.6);
+      phaserScene.tweens.add({
+        targets: circle,
+        alpha: { from: 0.3, to: 0.8 },
+        duration: 1200,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    } else if (evidence.type === 'dialog_complete') {
+      const npcSpawn = npcs.find((n) => n.npcKey === evidence.npcKey);
+      if (!npcSpawn) return;
+      const nx = npcSpawn.tileX * tileSize + tileSize / 2;
+      const ny = npcSpawn.tileY * tileSize - 4;
+      const excl = phaserScene.add
+        .text(nx, ny, '!', {
+          fontFamily: 'monospace',
+          fontSize: '16px',
+          color: '#ffd166',
+          fontStyle: 'bold',
+        })
+        .setOrigin(0.5, 1)
+        .setDepth(15);
+      phaserScene.tweens.add({
+        targets: excl,
+        y: ny - 6,
+        duration: 800,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    }
+  } catch {
+    // store not available in jsdom / test context — silently skip
+  }
 }
 
 function isBlocked(tileX: number, tileY: number): boolean {
@@ -689,6 +884,10 @@ export function toCardinal(dir: string, fallback: Direction): Direction {
   if (tokens.includes('UP')) return 'UP';
   if (tokens.includes('DOWN')) return 'DOWN';
   return fallback;
+}
+
+export function shouldTurnBeforeMove(currentDirection: Direction, requestedDirection: string): boolean {
+  return currentDirection !== toCardinal(requestedDirection, currentDirection);
 }
 
 function clamp(value: number, lower: number, upper: number): number {
@@ -868,11 +1067,19 @@ function createPhaserHintRenderer(
   const hintTextWithScroll = hintText as unknown as {
     setScrollFactor?: (x: number, y?: number) => unknown;
     setVisible?: (v: boolean) => unknown;
+    setPosition?: (x: number, y: number) => unknown;
     destroy?: () => void;
     visible?: boolean;
   };
   hintTextWithScroll.setScrollFactor?.(0, 0);
   hintTextWithScroll.setVisible?.(false);
+
+  const onResize = (gameSize: { width: number; height: number }): void => {
+    hintTextWithScroll.setPosition?.(gameSize.width / 2, gameSize.height - 36);
+  };
+  if (typeof phaserScene.scale?.on === 'function') {
+    phaserScene.scale.on('resize', onResize);
+  }
 
   let destroyed = false;
   return {
@@ -904,6 +1111,9 @@ function createPhaserHintRenderer(
         return;
       }
       destroyed = true;
+      if (typeof phaserScene.scale?.off === 'function') {
+        phaserScene.scale.off('resize', onResize);
+      }
       hintTextWithScroll.destroy?.();
     },
   };

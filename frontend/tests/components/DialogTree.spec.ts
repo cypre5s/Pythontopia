@@ -17,6 +17,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import DialogTree from '@/components/game/DialogTree.vue';
 import { useDialogStore, type NpcDialogTree } from '@/stores/dialog';
+import { useSessionStore } from '@/stores/session';
 
 const sfxMocks = vi.hoisted(() => ({
   playSfx: vi.fn(),
@@ -59,13 +60,15 @@ function makeTree(): NpcDialogTree {
   };
 }
 
-function primeStore(): ReturnType<typeof useDialogStore> {
+function primeStore(text = 'hi'): ReturnType<typeof useDialogStore> {
   const store = useDialogStore();
   store.visible = true;
   store.npcKey = 'mayor_py';
   store.npcName = '镇长 Py';
   store.portrait = 'portrait_mayor_py.png';
-  store.tree = makeTree();
+  const tree = makeTree();
+  tree.nodes.greet.text = text;
+  store.tree = tree;
   store.currentNodeId = 'greet';
   store.history = ['greet'];
   store.loading = false;
@@ -97,9 +100,86 @@ describe('DialogTree.vue', () => {
     expect(wrapper.find('.dialog-overlay').exists()).toBe(true);
     expect(wrapper.text()).toContain('镇长 Py');
     expect(wrapper.find('img.pixel-portrait').attributes('src')).toBe(
-      '/assets/pixel/portraits/portrait_mayor_py.png',
+      '/assets/pixel/portraits/heads/portrait_mayor_py_head.png',
     );
     expect(wrapper.find('[data-testid="dialog-text"]').text().trim()).toBe('▏');
+  });
+
+  it('falls back to the full portrait when the cropped head asset is missing', async () => {
+    const store = primeStore();
+    store.npcKey = 'workshop_master';
+    store.npcName = '工坊师傅';
+    store.portrait = 'portrait_workshop_master.png';
+    const wrapper = mount(DialogTree);
+    const img = wrapper.get('img.pixel-portrait');
+
+    expect(img.attributes('src')).toBe(
+      '/assets/pixel/portraits/heads/portrait_workshop_master_head.png',
+    );
+    await img.trigger('error');
+
+    expect(wrapper.get('img.pixel-portrait').attributes('src')).toBe(
+      '/assets/pixel/portraits/portrait_workshop_master.png',
+    );
+    expect((wrapper.get('img.pixel-portrait').element as HTMLImageElement).style.visibility).toBe('');
+  });
+
+  it('renders playerName template with the session display name', async () => {
+    const session = useSessionStore();
+    session.user = { id: 7, username: 'stu07', displayName: '小七', role: 'STUDENT' };
+    primeStore('欢迎来到 Pythontopia，{{playerName}}！');
+    const wrapper = mount(DialogTree);
+
+    await vi.advanceTimersByTimeAsync(1000);
+
+    const text = wrapper.find('[data-testid="dialog-text"]').text().replace(/▏/g, '').trim();
+    expect(text).toBe('欢迎来到 Pythontopia，小七！');
+  });
+
+  it('substitutes stats / profileAdaptive / giftFavorite from store.context (R-12 W2-NPC)', async () => {
+    const store = primeStore(
+      '本周做了 {{stats.exercisesThisWeek}} 道题。{{profileAdaptive:实践型 | 谨慎型}}。{{giftFavorite:谢谢礼物 | 收下了}}',
+    );
+    store.context = {
+      playerName: '小七',
+      profileType: 'practical',
+      giftJustGiven: true,
+      stats: { exercisesThisWeek: '7' },
+    };
+    const wrapper = mount(DialogTree);
+
+    await vi.advanceTimersByTimeAsync(1500);
+
+    const text = wrapper.find('[data-testid="dialog-text"]').text().replace(/▏/g, '').trim();
+    expect(text).toBe('本周做了 7 道题。实践型。谢谢礼物');
+  });
+
+  it('falls back to "—" for unresolved stats so the {{...}} literal never leaks to UI', async () => {
+    const store = primeStore('最难的是 "{{stats.toughestKcNameThisWeek}}"。');
+    store.context = null;
+    const wrapper = mount(DialogTree);
+
+    await vi.advanceTimersByTimeAsync(1500);
+
+    const text = wrapper.find('[data-testid="dialog-text"]').text().replace(/▏/g, '').trim();
+    expect(text).toBe('最难的是 "—"。');
+    expect(text.includes('{{')).toBe(false);
+  });
+
+  it('uses black ink for npc name and dialog copy on the parchment panel', () => {
+    const store = primeStore();
+    store.friendship = 2;
+    const wrapper = mount(DialogTree, { attachTo: document.body });
+
+    expect(getComputedStyle(wrapper.get('.dialog-head').element).color).toBe('rgb(17, 17, 17)');
+    expect(getComputedStyle(wrapper.get('[data-testid="dialog-text"]').element).color).toBe(
+      'rgb(17, 17, 17)',
+    );
+    expect(getComputedStyle(wrapper.get('[data-testid="dialog-friendship"]').element).color).toBe(
+      'rgb(17, 17, 17)',
+    );
+
+    wrapper.unmount();
   });
 
   it('typewriter reveals characters progressively then shows choices', async () => {
@@ -125,6 +205,46 @@ describe('DialogTree.vue', () => {
     expect(choices.length).toBeGreaterThan(0);
     await choices[0]!.trigger('click');
     expect(spy).toHaveBeenCalledWith(0);
+  });
+
+  it('route effect choices close the dialog and dispatch navigation', async () => {
+    const store = primeStore();
+    store.tree = {
+      npcKey: 'workshop_master',
+      rootNodeId: 'greet',
+      nodes: {
+        greet: {
+          id: 'greet',
+          text: '要进工坊吗？',
+          conditions: [],
+          choices: [
+            {
+              label: '打开资源工坊',
+              nextNodeId: null,
+              effects: [{ type: 'route', route: '/workshop' }],
+            },
+          ],
+        },
+      },
+    };
+    store.npcKey = 'workshop_master';
+    store.currentNodeId = 'greet';
+    store.history = ['greet'];
+
+    const routes: string[] = [];
+    const onNavigate = (event: Event): void => {
+      const detail = (event as CustomEvent<{ route?: string }>).detail;
+      if (detail?.route) routes.push(detail.route);
+    };
+    window.addEventListener('pythontopia:dialog-navigate', onNavigate);
+
+    const wrapper = mount(DialogTree);
+    await vi.advanceTimersByTimeAsync(500);
+    await wrapper.get('.choice-btn').trigger('click');
+
+    expect(store.visible).toBe(false);
+    expect(routes).toEqual(['/workshop']);
+    window.removeEventListener('pythontopia:dialog-navigate', onNavigate);
   });
 
   it('clicking text during typewriter finishes the typewriter instead of advancing', async () => {

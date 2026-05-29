@@ -62,15 +62,15 @@ const selectedLevel = computed<ArenaLevel | null>(
 );
 
 const KIND_ICON: Record<ArenaLevelKind, string> = {
-  pdf_question: '📖',
+  pdf_question: 'Rd',
   fill_blank:   '▭',
   debug:        '⚠',
   short_answer: '✎',
   closed_loop:  '⟲',
   dual_track:   '⇆',
   multi_round:  '◉◉◉',
-  teach_back:   '🎙',
-  bug_mine:     '⛏',
+  teach_back:   'Tb',
+  bug_mine:     'Bg',
   boss:         '★',
 };
 
@@ -207,7 +207,7 @@ function star(level: ArenaLevel): string {
               <span class="arena-step__icon">{{ KIND_ICON[level.kind] }}</span>
               <span class="arena-step__title">{{ level.title }}</span>
               <span class="arena-step__state">
-                <template v-if="!arena.isUnlocked(level.id)">🔒</template>
+                <template v-if="!arena.isUnlocked(level.id)">[X]</template>
                 <template v-else-if="arena.getProgress(level.id).cleared">★</template>
                 <template v-else>·</template>
               </span>
@@ -252,7 +252,7 @@ function star(level: ArenaLevel): string {
               v-for="r in selectedLevel.rewards"
               :key="`${r.kind}-${r.ref ?? r.amount}`"
             >
-              奖励：{{ r.kind === 'coin' ? '🪙' : '📈' }} {{ r.amount }}{{ r.ref ? ` (${r.ref})` : '' }}
+              奖励：{{ r.kind === 'coin' ? '$' : '+' }} {{ r.amount }}{{ r.ref ? ` (${r.ref})` : '' }}
             </li>
           </ul>
 
@@ -271,7 +271,7 @@ function star(level: ArenaLevel): string {
             @click="enterLevel(selectedLevel)"
           >
             <template v-if="!arena.isUnlocked(selectedLevel.id)">
-              🔒 解锁上一关再来
+              [X] 解锁上一关再来
             </template>
             <template v-else-if="selectedLevel.kind === 'boss'">
               ★ 挑战 BOSS（4 阶段）

@@ -11,6 +11,7 @@ import type { PlayerSpriteHandle, RectangleLike, SceneLike } from './sceneTypes'
 // 对角线方向通过 toCardinalFrame 收敛为最近的 4 向。
 const LPC_SHEET_KEY = 'player_sara';
 const LPC_FRAME_HEIGHT = 64;
+const SPRITE_FIXED_SCALE = 0.7;
 const LPC_COLS = 13;
 const LPC_WALK_ROW: Record<CardinalDirection, number> = {
   UP: 8,
@@ -48,6 +49,8 @@ export interface CreatePlayerOptions {
 }
 
 const TWEEN_DURATION_MS = 140;
+const JUMP_DURATION_MS = 260;
+const JUMP_ARC_PX = 18;
 
 let animsRegistered = false;
 
@@ -84,7 +87,9 @@ export function createPlayerSprite(scene: SceneLike, opts: CreatePlayerOptions):
     .sprite(startX, startY, LPC_SHEET_KEY, idleFrame(opts.direction))
     .setOrigin(0.5, 0.75)
     .setDepth(15);
-  sprite.setScale((opts.tileSize / LPC_FRAME_HEIGHT) * 1.4);
+  sprite.setScale(SPRITE_FIXED_SCALE);
+
+  let jumping = false;
 
   const handle: PlayerSpriteHandle = {
     x: startX,
@@ -92,7 +97,16 @@ export function createPlayerSprite(scene: SceneLike, opts: CreatePlayerOptions):
     tileX: opts.tileX,
     tileY: opts.tileY,
     direction: opts.direction,
+    isJumping(): boolean {
+      return jumping;
+    },
+    faceDirection(direction: Direction): void {
+      this.direction = direction;
+      sprite.stop();
+      sprite.setFrame(idleFrame(direction));
+    },
     moveToTile(tileX: number, tileY: number, direction: Direction): void {
+      jumping = false;
       this.tileX = tileX;
       this.tileY = tileY;
       this.direction = direction;
@@ -124,6 +138,52 @@ export function createPlayerSprite(scene: SceneLike, opts: CreatePlayerOptions):
         y: targetY + opts.tileSize / 2 - 4,
         duration: TWEEN_DURATION_MS,
         ease: 'Linear',
+      });
+    },
+    jumpToTile(tileX: number, tileY: number, direction: Direction): void {
+      const sourceX = sprite.x;
+      const sourceY = sprite.y;
+      const sourceShadowX = shadow.x;
+      const sourceShadowY = shadow.y;
+      const targetX = tileX * opts.tileSize + opts.tileSize / 2;
+      const targetY = tileY * opts.tileSize + opts.tileSize / 2;
+      const targetShadowY = targetY + opts.tileSize / 2 - 4;
+      const progress = { t: 0 };
+
+      jumping = true;
+      this.tileX = tileX;
+      this.tileY = tileY;
+      this.direction = direction;
+      sprite.play(walkAnimKey(direction), true);
+      phaserScene.tweens.killTweensOf(sprite);
+      phaserScene.tweens.killTweensOf(shadow);
+
+      phaserScene.tweens.add({
+        targets: progress,
+        t: 1,
+        duration: JUMP_DURATION_MS,
+        ease: 'Sine.easeInOut',
+        onUpdate: () => {
+          const t = progress.t;
+          const arc = Math.sin(Math.PI * t) * JUMP_ARC_PX;
+          sprite.x = sourceX + (targetX - sourceX) * t;
+          sprite.y = sourceY + (targetY - sourceY) * t - arc;
+          shadow.x = sourceShadowX + (targetX - sourceShadowX) * t;
+          shadow.y = sourceShadowY + (targetShadowY - sourceShadowY) * t;
+          handle.x = sprite.x;
+          handle.y = sprite.y;
+        },
+        onComplete: () => {
+          jumping = false;
+          sprite.stop();
+          sprite.setFrame(idleFrame(direction));
+          sprite.x = targetX;
+          sprite.y = targetY;
+          shadow.x = targetX;
+          shadow.y = targetShadowY;
+          handle.x = sprite.x;
+          handle.y = sprite.y;
+        },
       });
     },
   };

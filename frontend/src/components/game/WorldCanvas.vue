@@ -1,20 +1,26 @@
 <script setup lang="ts">
-// M2：WorldCanvas 替代 GameCanvas / FieldCanvas，提供单一 Phaser 实例 + WorldScene 入口。
-// 多挂载点引发的双实例 Bug 由 phaserGame.ts 的单例兜底，但 WorldPage 是 M2 之后唯一会
-// 创建 Phaser.Game 的组件。
+// R-12 美化：WorldCanvas 改为全屏背景式画布。
 //
-// M4：挂载前先调用 world.bootstrap() 一次性拉 world + player + crops + quests + mastery +
-// profile + path + inventory + skills + currency + npc_states + calendar，避免 WorldScene
-// 启动后再 N 次串行 GET。bootstrap 失败时仍会创建 Phaser 实例（WorldScene 会用 fallback 数据），
-// 由 toast 提示原因。
+// 设计要点：
+//   1. 容器铺满整个 .world-page（position:absolute + inset:0），让地图占据
+//      全部主视觉区域，避免右侧出现大块深绿色无内容空白；
+//   2. 显式声明 image-rendering: pixelated + crisp-edges，让浏览器以最近邻
+//      插值缩放像素，避免低分屏下出现模糊毛刺；
+//   3. ResizeObserver 把容器盒子尺寸推给 Phaser.game.scale.resize，配合
+//      phaserGame.ts 的 Phaser.Scale.RESIZE 模式实现「画布永远 = 视口」；
+//   4. 仍保留 BootScene 加载条遮罩，避免黑屏；
+//   5. 单 Phaser.Game 实例（AGENTS.md 硬约束）。
 //
-// W4-FINAL-POLISH：把 BootScene 广播的 pythontopia:load-progress 渲染为像素风加载条，
-// progress=1 时延迟 600ms 淡出，避免玩家看着黑屏怀疑卡死。
+// 注意：不再使用 aspect-ratio + max-height，因为父容器已是 100vh，子层只需要
+// 充满父层即可。
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { createPhaserGame, getPhaserGame, type PhaserGameHandle, type PhaserSceneConfig } from '@game/adapters/phaserGame';
 import { BootScene } from '@game/scenes/BootScene';
 import { WorldScene } from '@game/scenes/WorldScene';
 import { useWorldStore } from '@stores/world';
+import { useGameSettingsStore } from '@stores/gameSettings';
+
+const gameSettings = useGameSettingsStore();
 
 const root = ref<HTMLElement | null>(null);
 const progress = ref(0);
@@ -42,15 +48,9 @@ function onProgress(event: Event): void {
   }
 }
 
-/**
- * R-13：响应式触发 Phaser game.scale.resize，避免硬编码 960×640 在窄屏被截断。
- * 用 ResizeObserver 监听容器盒子尺寸，rAF 合并多次 resize 抖动。
- * 不重建 Phaser.Game，符合 AGENTS.md「单 Phaser.Game 实例」硬约束。
- */
 function applyCanvasSize(width: number, height: number): void {
   const phaser = getPhaserGame();
   if (!phaser) return;
-  // 进入 destroy 流程后 scale 可能已为 null；安全防护
   const scale = phaser.scale as unknown as {
     resize?: (w: number, h: number) => void;
   };
@@ -72,16 +72,11 @@ function scheduleResize(): void {
   });
 }
 
-onMounted(async () => {
-  window.addEventListener('pythontopia:load-progress', onProgress);
+function applyPendingTravel(): string | null {
   const world = useWorldStore();
-  if (!world.bootstrapped) {
-    await world.bootstrap();
-  }
-  // R-13 §-1 C-FastTravel：从 Workshop 5 传送 chip 跳过来时，store 已经把目标
-  // mapKey 暂存到 pendingTravelMap；这里把它写回 player.mapKey 让 BootScene 读到。
   const pending = world.consumePendingTravel();
-  if (pending && world.player) {
+  if (!pending) return null;
+  if (world.player) {
     world.player = {
       ...world.player,
       mapKey: pending.mapKey,
@@ -89,17 +84,36 @@ onMounted(async () => {
       tileY: pending.tile?.y ?? world.player.tileY,
     };
   }
+  return pending.mapKey;
+}
+
+function onWorldTravel(): void {
+  const mapKey = applyPendingTravel();
+  if (!mapKey) return;
+  const existingGame = getPhaserGame();
+  try {
+    existingGame?.scene.start('WorldScene', { mapKey });
+  } catch {
+    // scene manager 尚未就绪时保留当前画面；下次挂载会从 store/player 兜底。
+  }
+}
+
+onMounted(async () => {
+  window.addEventListener('pythontopia:load-progress', onProgress);
+  window.addEventListener('pythontopia:world-travel', onWorldTravel);
+  const world = useWorldStore();
+  if (!world.bootstrapped) {
+    await world.bootstrap();
+  }
+  const pendingMapKey = applyPendingTravel();
   if (root.value) {
     const scenes: PhaserSceneConfig[] = [BootScene, WorldScene];
-    // R-13 §-1 C-FastTravel：如果 Phaser singleton 已存在（路由切换回 /world）
-    // 且本次有 pending travel，要让 WorldScene 重启到目标地图。
-    // 不重启 BootScene，避免重复 preload；直接 scene.start('WorldScene', { mapKey })。
     const existingGame = getPhaserGame();
-    if (existingGame && pending) {
+    if (existingGame && pendingMapKey) {
       try {
-        existingGame.scene.start('WorldScene', { mapKey: pending.mapKey });
+        existingGame.scene.start('WorldScene', { mapKey: pendingMapKey });
       } catch {
-        // 极端：scene manager 还没就绪；下面 createPhaserGame 会一次性 init
+        // scene manager 尚未就绪，下面 createPhaserGame 会兜底
       }
     }
     game = createPhaserGame(root.value, scenes);
@@ -109,8 +123,8 @@ onMounted(async () => {
     } else {
       window.addEventListener('resize', scheduleResize);
     }
-    // R-13 修复：Phaser canvas 在多 div 嵌套下不会自动获得焦点，
-    // 导致 keyboard events 不到 scene.input。手动 tabindex + 点击聚焦。
+    // 触发一次首屏尺寸同步，防止初始 width=960 与全屏父层不一致
+    scheduleResize();
     setTimeout(() => {
       const canvas = root.value?.querySelector('canvas');
       if (canvas instanceof HTMLCanvasElement) {
@@ -125,6 +139,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('pythontopia:load-progress', onProgress);
+  window.removeEventListener('pythontopia:world-travel', onWorldTravel);
   window.removeEventListener('resize', scheduleResize);
   if (resizeRaf !== null) {
     window.cancelAnimationFrame(resizeRaf);
@@ -144,7 +159,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="world-frame">
+    <div class="world-frame" :class="{ 'world-frame--smooth': !gameSettings.display.pixelPerfect }">
     <div
       ref="root"
       class="world-root"
@@ -179,48 +194,43 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .world-frame {
-  position: relative;
-  width: min(1100px, calc(100vw - 24px));
-  /* 3:2 比例锁定，画布缩放时不会被截断 */
-  aspect-ratio: 3 / 2;
-  max-height: calc(100dvh - 96px);
-  margin: 0 auto;
-  border: 2px solid #6e4f1d;
-  border-radius: 8px;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   overflow: hidden;
   background: #1c2b18;
+  z-index: 2;
 }
 .world-root {
   width: 100%;
   height: 100%;
 }
 
-@media (max-width: 1024px) {
-  .world-frame {
-    width: min(900px, calc(100vw - 16px));
-    max-height: calc(100dvh - 72px);
-  }
+/* 让所有 Phaser 渲染的 canvas 以及子图都按最近邻像素缩放，保持像素风清晰边缘 */
+.world-frame :deep(canvas) {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+.world-frame--smooth :deep(canvas) {
+  image-rendering: auto;
 }
 
-@media (max-width: 640px) {
-  .world-frame {
-    width: calc(100vw - 8px);
-    border-radius: 4px;
-    border-width: 1px;
-    max-height: 60dvh;
-  }
-}
 .world-load-overlay {
   position: absolute;
   inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(28, 43, 24, 0.88);
+  background: rgba(20, 28, 18, 0.92);
   color: #fff7e6;
   font-family: var(--pyt-font-pixel, 'Ark Pixel 12', monospace);
   opacity: 1;
   transition: opacity 600ms ease;
+  z-index: 3;
 }
 .world-load-overlay--fading {
   opacity: 0;
@@ -232,10 +242,10 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 14px;
   padding: 24px 32px;
-  background: #4d3613;
-  border: 3px solid #ffd166;
-  box-shadow: 4px 4px 0 #2a1a05;
-  image-rendering: pixelated;
+  background: rgba(40, 28, 14, 0.94);
+  border: 2px solid #d4af37;
+  border-radius: 14px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(255, 247, 230, 0.06);
 }
 .world-load-title {
   margin: 0;
@@ -243,14 +253,16 @@ onBeforeUnmount(() => {
   letter-spacing: 1px;
   color: #ffd166;
   text-shadow: 2px 2px 0 #2a1a05;
+  font-family: var(--pyt-font-pixel, 'Ark Pixel 12'), 'PingFang SC', monospace;
 }
 .world-load-bar {
   position: relative;
   width: 280px;
-  height: 18px;
-  border: 3px solid #6e4f1d;
+  height: 14px;
+  border: 2px solid #6e4f1d;
   background: #2a1a05;
-  image-rendering: pixelated;
+  border-radius: 4px;
+  overflow: hidden;
 }
 .world-load-bar__fill {
   height: 100%;
@@ -261,11 +273,12 @@ onBeforeUnmount(() => {
   margin: 0;
   font-size: 14px;
   color: #fff7e6;
+  font-weight: 700;
 }
 .world-load-hint {
   margin: 0;
   font-size: 12px;
   color: #f5e2c1;
-  opacity: 0.8;
+  opacity: 0.82;
 }
 </style>

@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useLearningStore } from '@stores/learning';
 import { useToastStore } from '@stores/toast';
 import { playSfx } from '@/composables/useAudio';
+import TutorPanel from '@/components/tutor/TutorPanel.vue';
 
 const learning = useLearningStore();
 const toast = useToastStore();
@@ -92,6 +93,35 @@ async function enterBugMine(): Promise<void> {
     query: { submissionId: String(submission.submission.id) },
   });
 }
+
+// ── R-12 主线 Phase 4：做题页内嵌 AI 导学助手 ──
+// 复用 TutorPanel + Phase 3 的 kcCodes/context；把「当前题目 KC + 题面 + 最近判定」
+// 作为上下文传入，并在 context 末尾追加防泄答提醒（与 Python 端 SAFETY_KEYWORDS +
+// 系统提示「不输出完整答案代码」双重护栏，确保做题时只给思路/提示）。
+const showTutor = ref(false);
+function toggleTutor(): void {
+  playSfx('sfx_click');
+  showTutor.value = !showTutor.value;
+}
+const tutorKcCodes = computed<string[]>(() =>
+  problem.value?.kcCode ? [problem.value.kcCode] : [],
+);
+const tutorContext = computed<string>(() => {
+  const p = problem.value;
+  if (!p) return '';
+  const stmt = (p.statementMarkdown ?? '').slice(0, 600);
+  const sub = learning.training.submission;
+  const verdict = sub?.judgeResult?.verdict;
+  const reason = sub?.judgeResult?.failureReason;
+  const verdictPart = verdict
+    ? `；学生最近一次提交判定：${verdict}${reason ? `（${reason}）` : ''}`
+    : '';
+  return (
+    `学生正在做练习题《${p.title}》（KC ${p.kcCode}，难度 ${p.difficulty}）。题面：${stmt}` +
+    `${verdictPart}。请只给思路、关键提示或苏格拉底式追问，` +
+    `严禁给出可直接提交的完整答案代码。`
+  );
+});
 </script>
 
 <template>
@@ -214,6 +244,30 @@ async function enterBugMine(): Promise<void> {
           </button>
         </section>
       </article>
+    </section>
+
+    <section
+      v-if="problem"
+      class="tutor-dock"
+    >
+      <button
+        type="button"
+        class="tutor-toggle"
+        data-testid="training-tutor-toggle"
+        @click="toggleTutor"
+      >
+        {{ showTutor ? '收起 AI 导学助手 ▴' : '🤖 问 AI 导学助手（带本题上下文，只给思路）▾' }}
+      </button>
+      <div
+        v-if="showTutor"
+        class="tutor-dock__body"
+        data-testid="training-tutor-body"
+      >
+        <TutorPanel
+          :kc-codes="tutorKcCodes"
+          :context="tutorContext"
+        />
+      </div>
     </section>
   </section>
 </template>
@@ -356,5 +410,29 @@ header h2 {
   border-radius: 6px;
   cursor: pointer;
   font-weight: 600;
+}
+.tutor-dock {
+  display: grid;
+  gap: 8px;
+}
+.tutor-toggle {
+  justify-self: start;
+  padding: 8px 16px;
+  border: 2px solid #6e4f1d;
+  background: #ffe7b5;
+  color: #6e4f1d;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.tutor-toggle:hover {
+  background: #ffdf9e;
+}
+.tutor-dock__body {
+  height: 460px;
+  border: 2px solid #c9a86b;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff7e6;
 }
 </style>

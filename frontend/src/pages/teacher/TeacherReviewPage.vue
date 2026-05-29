@@ -423,7 +423,7 @@ const currentEntry = computed<ReviewEntry | null>(() => {
   padding: 16px;
   min-height: calc(100dvh - 56px);
   background: linear-gradient(180deg, #fff7e6 0%, #f1d896 100%);
-  font-family: 'PythontopiaPixel', 'PingFang SC', monospace;
+  font-family: var(--pyt-font-pixel), 'PingFang SC', monospace;
   color: #3a2a14;
 }
 .review-header {

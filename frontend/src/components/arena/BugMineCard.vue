@@ -51,7 +51,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="bug-mine-card" :class="{ expired }" data-testid="bug-mine-card">
     <header class="card-head">
-      <span class="card-icon">⛏</span>
+      <span class="card-icon">[B]</span>
       <h3>Bug 矿洞</h3>
     <div
         :class="['timer', `timer--${urgency}`]"
@@ -64,7 +64,7 @@ onBeforeUnmount(() => {
     </header>
 
     <div v-if="expired" class="expired-overlay">
-      <p>⏰ 时间到！</p>
+      <p>时间到！</p>
       <p class="expired-hint">已自动提交你的当前代码。</p>
     </div>
 

@@ -8,14 +8,14 @@ const code = defineModel<string>('code', { required: true });
 <template>
   <div class="pdf-question-card" data-testid="pdf-question-card">
     <header class="card-head">
-      <span class="card-icon">📖</span>
+      <span class="card-icon">[R]</span>
       <h3>课件问答</h3>
       <router-link
         v-if="problem.evidencePageIds && problem.evidencePageIds.length > 0"
         :to="{ name: 'library', query: { pageId: String(problem.evidencePageIds[0]) } }"
         class="pdf-link"
       >
-        📄 查看课件 p.{{ problem.evidencePageIds?.[0] }}
+        [PDF] 查看课件 p.{{ problem.evidencePageIds?.[0] }}
       </router-link>
     </header>
 

@@ -371,12 +371,25 @@ onMounted(async () => {
       currentDocId.value = first.documentId;
     }
   }
+  // 证据回链（来自导师 evidence_page_ids / RAG 命中）：?pageId 解析 page_id → docId+pageNo。
+  const pageId = parseQueryNumber(route.query.pageId, 0);
+  if (pageId > 0) {
+    await resolvePageById(pageId);
+    return;
+  }
   await loadPage(currentDocId.value, currentPage.value);
 });
 
 watch(
   () => route.query,
   async (next, prev) => {
+    // 证据回链优先：pageId 变化时解析 page_id → docId+pageNo（再由 loadPage 归一化 URL）。
+    const nextPageId = parseQueryNumber(next.pageId, 0);
+    const prevPageId = prev ? parseQueryNumber(prev.pageId, 0) : 0;
+    if (nextPageId > 0 && nextPageId !== prevPageId) {
+      await resolvePageById(nextPageId);
+      return;
+    }
     if (prev && next.docId === prev.docId && next.page === prev.page) {
       return;
     }
@@ -719,7 +732,7 @@ watch(
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  font-family: 'PythontopiaPixel', var(--pyt-font-sans, sans-serif);
+  font-family: var(--pyt-font-pixel), var(--pyt-font-sans, sans-serif);
   font-size: 14px;
   color: var(--pyt-color-text-primary, #4d3613);
 }
@@ -730,7 +743,7 @@ watch(
   color: var(--pyt-color-text-muted, #8a6c2c);
 }
 .back-button {
-  font-family: 'PythontopiaPixel', monospace;
+  font-family: var(--pyt-font-pixel), monospace;
   min-height: 36px;
   padding: 0 16px;
   background: var(--pyt-color-warning-bg, #f5e2c1);
@@ -773,7 +786,7 @@ watch(
 }
 .side-title {
   margin: 0 0 4px;
-  font-family: 'PythontopiaPixel', sans-serif;
+  font-family: var(--pyt-font-pixel), sans-serif;
   font-size: 14px;
   letter-spacing: 1px;
   border-bottom: 2px dashed var(--pyt-color-border, #c9a86b);
@@ -808,7 +821,7 @@ watch(
   border-color: var(--pyt-color-border-strong, #4d3613);
 }
 .doc-index {
-  font-family: 'PythontopiaPixel', monospace;
+  font-family: var(--pyt-font-pixel), monospace;
   font-weight: 700;
   color: var(--pyt-color-text-muted, #8a6c2c);
 }
@@ -828,7 +841,7 @@ watch(
   width: 100%;
   background: transparent;
   border: none;
-  font-family: 'PythontopiaPixel', sans-serif;
+  font-family: var(--pyt-font-pixel), sans-serif;
   font-size: 13px;
   color: var(--pyt-color-text-primary, #4d3613);
   text-align: left;
@@ -867,7 +880,7 @@ watch(
   font-weight: 700;
 }
 .kc-code {
-  font-family: 'PythontopiaPixel', monospace;
+  font-family: var(--pyt-font-pixel), monospace;
   font-size: 11px;
 }
 
@@ -892,7 +905,7 @@ watch(
 }
 .page-title {
   margin: 0;
-  font-family: 'PythontopiaPixel', sans-serif;
+  font-family: var(--pyt-font-pixel), sans-serif;
   font-size: 18px;
 }
 .page-controls {
@@ -905,7 +918,7 @@ watch(
   padding: 0 10px;
   background: var(--pyt-color-bg-soft, #fdf3d0);
   border: 2px solid var(--pyt-color-border-strong, #4d3613);
-  font-family: 'PythontopiaPixel', monospace;
+  font-family: var(--pyt-font-pixel), monospace;
   font-size: 12px;
   cursor: pointer;
 }
@@ -919,7 +932,7 @@ watch(
   border: 2px solid var(--pyt-color-border-strong, #4d3613);
   background: var(--pyt-color-bg-primary, #fef7e3);
   padding: 2px 6px;
-  font-family: 'PythontopiaPixel', monospace;
+  font-family: var(--pyt-font-pixel), monospace;
 }
 .page-content {
   overflow: auto;
@@ -944,7 +957,7 @@ watch(
   padding-bottom: 4px;
 }
 .view-mode-tab {
-  font-family: 'PythontopiaPixel', monospace;
+  font-family: var(--pyt-font-pixel), monospace;
   font-size: 12px;
   padding: 4px 12px;
   background: var(--pyt-color-bg-soft, #fdf3d0);
@@ -1015,7 +1028,7 @@ watch(
 }
 .kc-anchor h3 {
   margin: 0 0 6px;
-  font-family: 'PythontopiaPixel', sans-serif;
+  font-family: var(--pyt-font-pixel), sans-serif;
   font-size: 14px;
 }
 .kc-anchor p {
@@ -1029,7 +1042,7 @@ watch(
 }
 .kc-resource-grid h4 {
   margin: 0 0 4px;
-  font-family: 'PythontopiaPixel', sans-serif;
+  font-family: var(--pyt-font-pixel), sans-serif;
   font-size: 12px;
   color: var(--pyt-color-text-muted, #8a6c2c);
 }
@@ -1056,7 +1069,7 @@ watch(
   border: 1px solid var(--pyt-color-border, #c9a86b);
   padding: 0 6px;
   font-size: 10px;
-  font-family: 'PythontopiaPixel', monospace;
+  font-family: var(--pyt-font-pixel), monospace;
   margin-left: 4px;
 }
 .badge.difficulty {
@@ -1077,7 +1090,7 @@ watch(
 .rag-submit {
   min-height: 32px;
   padding: 0 8px;
-  font-family: 'PythontopiaPixel', monospace;
+  font-family: var(--pyt-font-pixel), monospace;
   background: var(--pyt-color-primary, #6e4f1d);
   color: var(--pyt-color-text-on-dark, #fff7e6);
   border: 2px solid var(--pyt-color-border-strong, #4d3613);

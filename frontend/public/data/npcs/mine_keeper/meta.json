@@ -1,0 +1,11 @@
+{
+  "key": "mine_keeper",
+  "name": "矿洞守矿人",
+  "category": "educator_core",
+  "sprite": "player_sara",
+  "portrait": "portrait_miner.png",
+  "spawnMap": "mine_south",
+  "spawn": { "tileX": 18, "tileY": 5 },
+  "tags": ["quest_giver", "chapter_3", "computational_thinking"],
+  "description": "南矿洞的守矿人，靠一盏矿灯和满手煤灰读懂 0 与 1。负责第 3 章「计算工具与计算思维」的开课引导。"
+}

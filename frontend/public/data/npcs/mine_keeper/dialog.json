@@ -1,0 +1,25 @@
+{
+  "npcKey": "mine_keeper",
+  "rootNodeId": "greet",
+  "nodes": {
+    "greet": {
+      "id": "greet",
+      "text": "矿灯照过来，{{playerName}}。这矿洞里挖的不是金子，是 0 和 1 —— 看懂二进制，才算摸到计算的门。",
+      "conditions": [],
+      "choices": [
+        { "label": "二进制和计算思维是什么？", "nextNodeId": "about_binary" },
+        { "label": "领取本章任务·去上课", "nextNodeId": null, "effects": [{ "type": "quest_recommend", "questKey": "3-1" }, { "type": "open_panel", "route": "/lecture/3" }] },
+        { "label": "再见", "nextNodeId": null }
+      ]
+    },
+    "about_binary": {
+      "id": "about_binary",
+      "text": "机器只认两种石头：亮是 1，暗是 0。把脑子里的十进制念头翻成这串明暗，就是第 3 章「计算工具与计算思维」要练的本事。",
+      "conditions": [],
+      "choices": [
+        { "label": "那我去上这一课", "nextNodeId": null, "effects": [{ "type": "quest_recommend", "questKey": "3-1" }, { "type": "open_panel", "route": "/lecture/3" }] },
+        { "label": "先记下了", "nextNodeId": null }
+      ]
+    }
+  }
+}

@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia';
 import { npcDialog } from '@/game/data/npcDialog';
 import { playDialogClose, playDialogOpen } from '@/composables/useStardewFx';
+import { fetchDialogContext } from '@/api/dialog';
+import type { DialogContextDto } from '@/api/dto/DialogContextDto';
 
 /**
  * NPC 对话树 / 节点 / 选项 / 效果类型定义。
@@ -14,7 +16,8 @@ export type DialogEffectType =
   | 'give_item'
   | 'quest_recommend'
   | 'set_flag'
-  | 'open_panel';
+  | 'open_panel'
+  | 'route';
 
 export interface DialogEffect {
   type: DialogEffectType;
@@ -23,6 +26,11 @@ export interface DialogEffect {
   questKey?: string;
   flagKey?: string;
   route?: string;
+  /**
+   * open_panel 的目标面板简称（无路由参数的学习面板）。
+   * 也可直接用 `route` 指定带参路由（如 `/lecture/1`）。
+   */
+  panel?: string;
 }
 
 export interface DialogChoice {
@@ -52,7 +60,8 @@ export type DialogConditionType =
   | 'first_time_this_week'
   | 'kc_mastered'
   | 'flag_set'
-  | 'gift_just_given';
+  | 'gift_just_given'
+  | 'has_failed_submission';
 
 export interface DialogCondition {
   type: DialogConditionType;
@@ -125,10 +134,36 @@ interface DialogState {
 
   /** 当前节点的打字机是否已完成（自然结束或玩家跳过）。 */
   isTypingDone: boolean;
+
+  /**
+   * 当前对话使用的渲染上下文，由 `openWithTree` 调用 /api/dialog/context 拿到。
+   *
+   * - 拉取失败 / 未登录时保留为 null，DialogTree / DialogModal 渲染器自动用空 stats + 'cautious'
+   *   profile 兜底，所有 {{stats.xxx}} 走 '—' 占位，不会暴露字面量；
+   * - 同一玩家在同一 NPC 间切换时复用上一次 context，避免每次对话都打一次接口造成抖动；
+   * - 任意 NPC `openWithTree` 触发首次拉取（context 与 NPC 的 giftJustGiven 强相关，
+   *   所以每次开新 NPC 都重拉一次）。
+   */
+  context: DialogContextDto | null;
 }
 
 /** NPC 数据目录前缀，可被测试 mock 覆写。 */
 const DEFAULT_NPC_DATA_BASE = '/data/npcs';
+
+/**
+ * `open_panel` 效果的 `panel` 简称 → 前端学习面板路由映射。
+ * 带参路由（如 `/lecture/:chapter`）请在 dialog.json 里直接用 `route` 字段指定，
+ * 例如 `{ "type": "open_panel", "route": "/lecture/1" }`。
+ */
+const PANEL_ROUTE_MAP: Readonly<Record<string, string>> = Object.freeze({
+  library: '/library',
+  training: '/training',
+  workshop: '/workshop',
+  tutor: '/tutor',
+  review: '/review-hall',
+  examples: '/examples',
+  problems: '/problems',
+});
 
 /**
  * 内存级好感度缓存：dialog store 关闭后仍保留同会话内 NPC 的好感度，
@@ -213,6 +248,7 @@ export const useDialogStore = defineStore('dialog', {
     loading: false,
     branchChoices: [],
     isTypingDone: false,
+    context: null,
   }),
   getters: {
     /** 旧 API：兼容 DialogModal.vue 与已有测试。 */
@@ -265,13 +301,22 @@ export const useDialogStore = defineStore('dialog', {
       this.branchChoices = [];
       this.isTypingDone = false;
       try {
-        const [meta, tree] = await Promise.all([
+        // R-12 W2-NPC：除 meta + dialog 静态数据之外，并行拉 context 让模板渲染拿到真实 stats。
+        // context 拉取失败不影响对话本体，渲染器会自动用空 stats 兜底成 '—'。
+        const [meta, tree, context] = await Promise.all([
           fetchJson<NpcMeta>(`${baseUrl}/${npcKey}/meta.json`),
           fetchJson<NpcDialogTree>(`${baseUrl}/${npcKey}/dialog.json`),
+          fetchDialogContext(npcKey).catch((err) => {
+            if (typeof console !== 'undefined' && typeof console.warn === 'function') {
+              console.warn('[dialog] context fetch failed; using fallback', err);
+            }
+            return null;
+          }),
         ]);
         this.npcName = meta.name || npcKey;
         this.portrait = meta.portrait ?? null;
         this.tree = tree;
+        this.context = context;
 
         const gated = this.findBestGatedNode(tree);
         const startNode = gated ?? tree.rootNodeId;
@@ -297,6 +342,7 @@ export const useDialogStore = defineStore('dialog', {
       const choice = node.choices[choiceIndex];
       if (!choice) return;
 
+      let routeToNavigate: string | null = null;
       if (choice.effects && this.npcKey) {
         for (const effect of choice.effects) {
           if (effect.type === 'friendship' && typeof effect.delta === 'number') {
@@ -304,7 +350,36 @@ export const useDialogStore = defineStore('dialog', {
             friendshipMemory.set(this.npcKey, this.friendship);
             persistFriendship();
           }
+          // 主线发任务：NPC 推荐/激活一个主线子任务（questKey 对齐 mainQuests id，如 "1-1"）。
+          // 用 lazy import 规避与 mainQuest store 的循环依赖（同 close() 的做法）。
+          if (effect.type === 'quest_recommend' && effect.questKey) {
+            const questKey = effect.questKey;
+            void import('@stores/mainQuest').then((mod) => {
+              try {
+                mod.useMainQuestStore().acceptQuest(questKey);
+              } catch {
+                /* mainQuest store 未挂载（test / 极端环境）忽略 */
+              }
+            });
+          }
+          // 打开学习面板：复用 route 的 pythontopia:dialog-navigate 机制，
+          // 既支持 effect.route 带参路由（/lecture/1），也支持 effect.panel 简称。
+          if (effect.type === 'route' || effect.type === 'open_panel') {
+            const target =
+              effect.route ?? (effect.panel ? PANEL_ROUTE_MAP[effect.panel] ?? null : null);
+            if (target) {
+              routeToNavigate = target;
+            }
+          }
         }
+      }
+
+      if (routeToNavigate) {
+        this.close();
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('pythontopia:dialog-navigate', { detail: { route: routeToNavigate } }));
+        }
+        return;
       }
 
       if (choice.nextNodeId === null) {
@@ -397,6 +472,11 @@ export const useDialogStore = defineStore('dialog', {
           case 'friendship_min':
             if (this.friendship < (cond.value ?? 0)) return false;
             break;
+          case 'has_failed_submission': {
+            const title = this.context?.stats?.lastFailedProblemTitle;
+            if (!title || title === '—' || title === '-') return false;
+            break;
+          }
           case 'flag_set':
           case 'kc_mastered':
           case 'first_time_this_week':
@@ -455,6 +535,8 @@ export const useDialogStore = defineStore('dialog', {
       this.loading = false;
       this.branchChoices = [];
       this.isTypingDone = false;
+      // 关闭时清掉 context，下次再开走最新数据；避免本周练习数 / 班级数据等过期。
+      this.context = null;
       if (wasOpen) {
         playDialogClose();
         // Lazy import 避免与 mainQuest store 循环依赖（dialog store 不在 mainQuest

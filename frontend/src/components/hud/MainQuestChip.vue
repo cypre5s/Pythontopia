@@ -69,7 +69,7 @@ function onChipClick(): void {
   border: 2px solid #f1c453;
   border-radius: 4px;
   color: #fff7e6;
-  font-family: 'PythontopiaPixel', 'PingFang SC', monospace;
+  font-family: var(--pyt-font-pixel), 'PingFang SC', monospace;
   font-size: 12px;
   cursor: pointer;
   pointer-events: auto;

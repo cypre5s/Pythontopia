@@ -77,18 +77,18 @@ export interface CameraTuningConfig {
 // （例如测试里 @ts-expect-error 强赋会真的污染单例），所以再叠一层 Object.freeze
 // 防止跨测试污染 / 业务侧偷偷突变。
 export const DEFAULT_CAMERA_TUNING = Object.freeze({
-  zoomBase: 2,
-  zoomMobile: 2.5,
-  zoomPortrait: 2.2,
-  zoomFestival: 1.5,
-  zoomMax: 3,
+  zoomBase: 2.4,
+  zoomMobile: 3.2,
+  zoomPortrait: 2.8,
+  zoomFestival: 2.0,
+  zoomMax: 5.0,
 
   lerpFactorIdle: 0.10,
   lerpFactorWalk: 0.15,
   lerpFactorRun: 0.25,
 
-  deadZoneHalfWidth: 64,
-  deadZoneHalfHeight: 64,
+  deadZoneHalfWidth: 24,
+  deadZoneHalfHeight: 24,
 
   shakeShortMs: 20,
   shakeMediumMs: 80,

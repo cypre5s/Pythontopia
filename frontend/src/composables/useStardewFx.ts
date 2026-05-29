@@ -31,6 +31,7 @@ let coinSynth: Tone.PluckSynth | null = null;
 let questSynth: Tone.PolySynth | null = null;
 let dialogSynth: Tone.Synth | null = null;
 let chimeSynth: Tone.PolySynth | null = null;
+let lastToneStartAt = 0;
 
 const lastFiredAt = new Map<string, number>();
 
@@ -43,6 +44,12 @@ function shouldFire(key: string, cooldownMs: number): boolean {
   if (now - prev < effectiveCooldown) return false;
   lastFiredAt.set(key, now);
   return true;
+}
+
+function nextToneStartTime(): number {
+  const next = Math.max(Tone.now() + 0.005, lastToneStartAt + 0.02);
+  lastToneStartAt = next;
+  return next;
 }
 
 function detectReducedMotion(): void {
@@ -221,7 +228,7 @@ export function playStep(terrain: TerrainKind = 'grass'): void {
   const synth = ensureStepSynth();
   if (!synth) return;
   try {
-    synth.triggerAttackRelease(TERRAIN_NOTES[terrain], '32n');
+    synth.triggerAttackRelease(TERRAIN_NOTES[terrain], '32n', nextToneStartTime());
   } catch {
     // ignore
   }
@@ -233,7 +240,7 @@ export function playUiClick(): void {
   const synth = ensureClickSynth();
   if (!synth) return;
   try {
-    synth.triggerAttackRelease('32n', Tone.now(), 0.7);
+    synth.triggerAttackRelease('32n', nextToneStartTime(), 0.7);
   } catch {
     // ignore
   }
@@ -245,7 +252,7 @@ export function playUiHover(): void {
   const synth = ensureHoverSynth();
   if (!synth) return;
   try {
-    synth.triggerAttackRelease('A5', '64n');
+    synth.triggerAttackRelease('A5', '64n', nextToneStartTime());
   } catch {
     // ignore
   }
@@ -257,9 +264,10 @@ export function playCoinJingle(): void {
   const synth = ensureCoinSynth();
   if (!synth) return;
   try {
-    synth.triggerAttackRelease('C5', '16n');
-    setTimeout(() => synth.triggerAttackRelease('E5', '16n'), 90);
-    setTimeout(() => synth.triggerAttackRelease('G5', '16n'), 180);
+    const startAt = nextToneStartTime();
+    synth.triggerAttackRelease('C5', '16n', startAt);
+    synth.triggerAttackRelease('E5', '16n', startAt + 0.09);
+    synth.triggerAttackRelease('G5', '16n', startAt + 0.18);
   } catch {
     // ignore
   }
@@ -271,7 +279,7 @@ export function playQuestComplete(): void {
   const synth = ensureQuestSynth();
   if (!synth) return;
   try {
-    const now = Tone.now();
+    const now = nextToneStartTime();
     synth.triggerAttackRelease(['C4', 'E4', 'G4'], '8n', now);
     synth.triggerAttackRelease(['F4', 'A4', 'C5'], '8n', now + 0.2);
     synth.triggerAttackRelease(['G4', 'B4', 'D5'], '4n', now + 0.4);
@@ -286,7 +294,7 @@ export function playDialogOpen(): void {
   const synth = ensureDialogSynth();
   if (!synth) return;
   try {
-    synth.triggerAttackRelease('A4', '16n');
+    synth.triggerAttackRelease('A4', '16n', nextToneStartTime());
   } catch {
     // ignore
   }
@@ -297,7 +305,7 @@ export function playDialogClose(): void {
   const synth = ensureDialogSynth();
   if (!synth) return;
   try {
-    synth.triggerAttackRelease('E4', '16n');
+    synth.triggerAttackRelease('E4', '16n', nextToneStartTime());
   } catch {
     // ignore
   }
@@ -314,7 +322,7 @@ export function playChime(mood: 'dawn' | 'dusk' | 'season' = 'dawn'): void {
     season: ['C5', 'E5', 'G5', 'C6'],
   };
   try {
-    const now = Tone.now();
+    const now = nextToneStartTime();
     notes[mood]?.forEach((note, i) => {
       synth.triggerAttackRelease(note, '8n', now + i * 0.15);
     });
@@ -347,6 +355,7 @@ export function disposeStardewFx(): void {
 export function __resetStardewFxForTest(): void {
   muted = false;
   unlocked = false;
+  lastToneStartAt = 0;
   lastFiredAt.clear();
   disposeStardewFx();
 }

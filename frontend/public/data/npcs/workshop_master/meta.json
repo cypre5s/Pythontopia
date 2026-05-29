@@ -1,0 +1,83 @@
+{
+  "key": "workshop_master",
+  "name": "工坊师傅",
+  "category": "life",
+  "sprite": "npc_workshop",
+  "portrait": "portrait_workshop_master.png",
+  "spawnMap": "town_hub",
+  "spawn": {
+    "tileX": 42,
+    "tileY": 26
+  },
+  "birthday": {
+    "month": 8,
+    "day": 8
+  },
+  "favoriteGifts": [
+    "notebook",
+    "python_book"
+  ],
+  "schedule": {
+    "monday": [
+      {
+        "from": "08:00",
+        "map": "town_hub",
+        "tileX": 42,
+        "tileY": 26
+      }
+    ],
+    "tuesday": [
+      {
+        "from": "08:00",
+        "map": "town_hub",
+        "tileX": 42,
+        "tileY": 26
+      }
+    ],
+    "wednesday": [
+      {
+        "from": "08:00",
+        "map": "town_hub",
+        "tileX": 42,
+        "tileY": 26
+      }
+    ],
+    "thursday": [
+      {
+        "from": "08:00",
+        "map": "town_hub",
+        "tileX": 42,
+        "tileY": 26
+      }
+    ],
+    "friday": [
+      {
+        "from": "08:00",
+        "map": "town_hub",
+        "tileX": 42,
+        "tileY": 26
+      }
+    ],
+    "saturday": [
+      {
+        "from": "08:00",
+        "map": "town_hub",
+        "tileX": 42,
+        "tileY": 26
+      }
+    ],
+    "sunday": [
+      {
+        "from": "08:00",
+        "map": "town_hub",
+        "tileX": 42,
+        "tileY": 26
+      }
+    ]
+  },
+  "tags": [
+    "workshop",
+    "resource_gen"
+  ],
+  "description": "资源工坊的师傅，能为你定制讲义、思维导图、练习题等学习资源。"
+}

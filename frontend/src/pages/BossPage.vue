@@ -382,7 +382,7 @@ const bossSpritePhase = computed<'idle' | 'hurt' | 'angry' | 'victory'>(() => {
   min-height: calc(100dvh - 56px);
   background: radial-gradient(ellipse at center, #2c1408 0%, #0a0500 80%);
   color: #fff7e6;
-  font-family: 'PythontopiaPixel', 'PingFang SC', monospace;
+  font-family: var(--pyt-font-pixel), 'PingFang SC', monospace;
 }
 .boss-head {
   display: grid;

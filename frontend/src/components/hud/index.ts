@@ -13,5 +13,10 @@ export { default as FastTravelPanel } from './FastTravelPanel.vue';
 // R-13 §5：主线 + Boss
 export { default as MainQuestChip } from './MainQuestChip.vue';
 export { default as MainQuestPanel } from './MainQuestPanel.vue';
+// R-12 美化：教学目标面板
+export { default as LearningObjectivePanel } from './LearningObjectivePanel.vue';
+// 游戏成熟度：ESC 暂停菜单 + Tab 快捷轮盘
+export { default as PauseMenu } from './PauseMenu.vue';
+export { default as QuickWheel } from './QuickWheel.vue';
 
 export type { MinimapExitMarker, MinimapExitSide } from './MiniMap.vue';

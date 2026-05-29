@@ -27,7 +27,7 @@ function logout(): void {
   <header class="app-header">
     <RouterLink
       class="brand"
-      to="/town"
+      to="/world"
     >
       Pythontopia
     </RouterLink>
@@ -64,6 +64,7 @@ function logout(): void {
   text-decoration: none;
   font-size: 16px;
   letter-spacing: 0.5px;
+  font-family: var(--pyt-font-pixel, monospace);
 }
 
 .header-status {

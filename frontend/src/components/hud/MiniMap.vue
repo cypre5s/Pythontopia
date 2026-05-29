@@ -48,6 +48,8 @@ interface Props {
   mapName?: string;
   /** R-13 增强：边缘出口方向列表，渲染为 4 边箭头 */
   exits?: MinimapExitMarker[];
+  /** 玩家当前朝向（UP/DOWN/LEFT/RIGHT），用于高亮对应方向的 exit arrow */
+  playerFacing?: string;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -57,6 +59,7 @@ const props = withDefaults(defineProps<Props>(), {
   npcs: () => [],
   mapName: '',
   exits: () => [],
+  playerFacing: '',
 });
 
 const canvasWidth = computed<number>(() => props.width);
@@ -180,6 +183,17 @@ function exitArrow(side: MinimapExitSide): string {
   return '◀';
 }
 
+const SIDE_TO_DIRECTION: Record<MinimapExitSide, string> = {
+  north: 'UP',
+  south: 'DOWN',
+  east: 'RIGHT',
+  west: 'LEFT',
+};
+
+function isFacingExit(side: MinimapExitSide): boolean {
+  return !!props.playerFacing && SIDE_TO_DIRECTION[side] === props.playerFacing;
+}
+
 onMounted(() => {
   redraw();
 });
@@ -232,7 +246,7 @@ watch(
       <span
         v-for="exit in (exits ?? [])"
         :key="`${exit.side}:${exit.toMap}`"
-        :class="['mini-map__exit', `mini-map__exit--${exit.side}`]"
+        :class="['mini-map__exit', `mini-map__exit--${exit.side}`, { 'mini-map__exit--facing': isFacingExit(exit.side) }]"
         :data-testid="`mini-map-exit-${exit.side}`"
         :title="exit.label ? `${exit.label}（${exit.toMap}）` : exit.toMap"
         :aria-label="`出口：${exit.side}${exit.label ? `，目标 ${exit.label}` : ''}`"
@@ -269,7 +283,7 @@ watch(
   align-items: center;
   justify-content: center;
   color: #ffd166;
-  font-family: 'PythontopiaPixel', 'PingFang SC', 'Noto Sans CJK SC', monospace;
+  font-family: var(--pyt-font-pixel, monospace);
   font-size: 13px;
   letter-spacing: 0.5px;
 }
@@ -280,7 +294,7 @@ watch(
   left: 0;
   right: 0;
   text-align: center;
-  font-family: 'PythontopiaPixel', 'PingFang SC', 'Noto Sans CJK SC', monospace;
+  font-family: var(--pyt-font-pixel, monospace);
   font-size: 12px;
   color: #fff7e6;
   background: rgba(28, 24, 16, 0.78);
@@ -331,8 +345,20 @@ watch(
   transform: translateY(-50%);
 }
 
+.mini-map__exit--facing {
+  color: #fff7e6;
+  font-size: 15px;
+  animation: minimap-exit-pulse-facing 900ms ease-in-out infinite;
+  filter: drop-shadow(0 0 4px rgba(255, 247, 230, 0.7));
+}
+
 @keyframes minimap-exit-pulse {
   0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+@keyframes minimap-exit-pulse-facing {
+  0%, 100% { opacity: 0.7; }
   50% { opacity: 1; }
 }
 

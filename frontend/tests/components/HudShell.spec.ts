@@ -2,12 +2,13 @@ import { mount, flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it } from 'vitest';
 import HudShell from '@/components/hud/HudShell.vue';
+import QuickslotPanelHost from '@/components/hud/QuickslotPanelHost.vue';
+import { useDialogStore } from '@stores/dialog';
 import { useHudStore, type HudQuickSlot } from '@stores/hud';
 
 const SLOT_KEYS: readonly HudQuickSlot[] = [
   'quest',
   'dialog',
-  'inventory',
   'map',
   'skill',
 ];
@@ -21,7 +22,7 @@ describe('HudShell', () => {
     setActivePinia(createPinia());
   });
 
-  it('挂载后渲染 5 个 quickslot 按钮（quest/dialog/inventory/map/skill）', () => {
+  it('挂载后渲染 4 个 quickslot 按钮（quest/dialog/map/skill）', () => {
     const wrapper = mountShell();
     for (const key of SLOT_KEYS) {
       const btn = wrapper.find(`[data-testid="hud-slot-${key}"]`);
@@ -31,21 +32,20 @@ describe('HudShell', () => {
     expect(wrapper.findAll('button.hud-slot')).toHaveLength(SLOT_KEYS.length);
   });
 
-  it('顶部状态条按 store.meta 渲染：天气 / Day / 时段 / 季节 / 金币', () => {
+  it('顶部状态条按 store.meta 渲染：天气 / Day / 时段 / 季节', () => {
     const hud = useHudStore();
     hud.syncMeta({
       weather: 'RAINY',
       dayIndex: 12,
       timeOfDay: 'EVENING',
       season: 'AUTUMN',
-      coin: 88,
     });
     const wrapper = mountShell();
     expect(wrapper.get('[data-testid="hud-weather"]').text()).toContain('RAINY');
     expect(wrapper.get('[data-testid="hud-day"]').text()).toContain('12');
-    expect(wrapper.get('[data-testid="hud-time"]').text()).toContain('EVENING');
-    expect(wrapper.get('[data-testid="hud-season"]').text()).toContain('AUTUMN');
-    expect(wrapper.get('[data-testid="hud-coin"]').text()).toContain('88');
+    // 时段/季节以像素图标呈现，语义信息在 title 里（time/season 无文本 value span）。
+    expect(wrapper.get('[data-testid="hud-time"]').attributes('title')).toContain('EVENING');
+    expect(wrapper.get('[data-testid="hud-season"]').attributes('title')).toContain('AUTUMN');
   });
 
   it('点击 quest 按钮：store.activeSlot === "quest" 且按钮带 active class + aria-pressed', async () => {
@@ -61,9 +61,9 @@ describe('HudShell', () => {
   it('再次点击同一按钮：activeSlot 回到 null 并清除 active class', async () => {
     const hud = useHudStore();
     const wrapper = mountShell();
-    const btn = wrapper.get('[data-testid="hud-slot-inventory"]');
+    const btn = wrapper.get('[data-testid="hud-slot-skill"]');
     await btn.trigger('click');
-    expect(hud.activeSlot).toBe('inventory');
+    expect(hud.activeSlot).toBe('skill');
     await btn.trigger('click');
     expect(hud.activeSlot).toBeNull();
     expect(btn.classes()).not.toContain('hud-slot--active');
@@ -121,5 +121,41 @@ describe('HudShell', () => {
     expect(
       wrapper.get('[data-testid="hud-slot-map"]').classes(),
     ).toContain('hud-slot--active');
+  });
+
+  it('对话历史面板里的对话文字统一黑字', async () => {
+    const hud = useHudStore();
+    const dialog = useDialogStore();
+    dialog.npcKey = 'mayor_py';
+    dialog.npcName = '镇长 Py';
+    dialog.tree = {
+      npcKey: 'mayor_py',
+      rootNodeId: 'greet',
+      nodes: {
+        greet: {
+          id: 'greet',
+          text: '欢迎来到 Pythontopia',
+          conditions: [],
+          choices: [],
+        },
+      },
+    };
+    dialog.currentNodeId = 'greet';
+    dialog.history = ['greet'];
+
+    const wrapper = mount(QuickslotPanelHost);
+    hud.toggleSlot('dialog');
+    await flushPromises();
+
+    expect(wrapper.get('.qslot-dialog-npc-line').attributes('style')).toContain(
+      'color: rgb(17, 17, 17)',
+    );
+    expect(wrapper.get('.qslot-dialog-npc-line b').attributes('style')).toContain(
+      'color: rgb(17, 17, 17)',
+    );
+    expect(wrapper.get('.qslot-dialog-text').attributes('style')).toContain(
+      'color: rgb(17, 17, 17)',
+    );
+    expect(wrapper.get('.qslot-hint').attributes('style')).toContain('color: rgb(17, 17, 17)');
   });
 });

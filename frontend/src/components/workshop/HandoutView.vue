@@ -1,10 +1,22 @@
 <script setup lang="ts">
 import EvidenceTag from './EvidenceTag.vue';
-import type { HandoutContent } from '@/api/dto/Workshop';
+import MarkdownView from '@/components/common/MarkdownView.vue';
+import type { HandoutContent, HandoutSection } from '@/api/dto/Workshop';
 
 const props = defineProps<{
   content: HandoutContent;
 }>();
+
+function sectionToMarkdown(section: HandoutSection): string {
+  const parts: string[] = [];
+  for (const paragraph of section.paragraphs) {
+    parts.push(paragraph);
+  }
+  for (const snippet of section.code_snippets) {
+    parts.push('```python\n' + snippet + '\n```');
+  }
+  return parts.join('\n\n');
+}
 </script>
 
 <template>
@@ -15,16 +27,7 @@ const props = defineProps<{
       class="section"
     >
       <h3>{{ section.heading }}</h3>
-      <p
-        v-for="(paragraph, pIndex) in section.paragraphs"
-        :key="pIndex"
-      >
-        {{ paragraph }}
-      </p>
-      <pre
-        v-for="(snippet, sIndex) in section.code_snippets"
-        :key="`code-${sIndex}`"
-      ><code>{{ snippet }}</code></pre>
+      <MarkdownView :source="sectionToMarkdown(section)" />
       <EvidenceTag :refs="section.page_refs" />
     </section>
   </article>
@@ -49,16 +52,7 @@ const props = defineProps<{
   margin: 0 0 6px;
   font-size: 18px;
 }
-.section p {
+.section :deep(.md-view) {
   margin: 6px 0;
-  line-height: 1.55;
-}
-.section pre {
-  background: #2e2417;
-  color: #f1e5c8;
-  padding: 10px;
-  border-radius: 6px;
-  overflow-x: auto;
-  font-size: 13px;
 }
 </style>

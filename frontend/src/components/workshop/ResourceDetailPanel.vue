@@ -8,6 +8,7 @@ import PracticeList from './PracticeList.vue';
 import CodeLabView from './CodeLabView.vue';
 import ReadingList from './ReadingList.vue';
 import StoryboardView from './StoryboardView.vue';
+import PptView from './PptView.vue';
 import type {
   CodeLabContent,
   HandoutContent,
@@ -26,12 +27,14 @@ const learning = useLearningStore();
 const toast = useToastStore();
 const feedbackNote = ref<string>('');
 const submittingFeedback = ref<boolean>(false);
+const showPpt = ref<boolean>(false);
 
 const resource = computed(() => learning.resources.current);
 
 watch(
   () => props.resourceId,
   async (id) => {
+    showPpt.value = false;
     if (id) {
       try {
         await learning.openResource(id);
@@ -114,10 +117,21 @@ async function submitFeedback(status: 'LIKED' | 'DISLIKED'): Promise<void> {
     >
       {{ resource.summary }}
     </p>
-    <HandoutView
+    <div
       v-if="resource.type === 'HANDOUT'"
-      :content="(resource.content as HandoutContent)"
-    />
+      class="handout-section"
+    >
+      <div class="handout-actions">
+        <button
+          type="button"
+          class="ppt-btn"
+          @click="showPpt = true"
+        >
+          查看 PPT
+        </button>
+      </div>
+      <HandoutView :content="(resource.content as HandoutContent)" />
+    </div>
     <MindMapView
       v-else-if="resource.type === 'MINDMAP'"
       :content="(resource.content as MindMapContent)"
@@ -153,7 +167,7 @@ async function submitFeedback(status: 'LIKED' | 'DISLIKED'): Promise<void> {
           :disabled="submittingFeedback"
           @click="submitFeedback('LIKED')"
         >
-          👍 有帮助
+          [+] 有帮助
         </button>
         <button
           type="button"
@@ -161,7 +175,7 @@ async function submitFeedback(status: 'LIKED' | 'DISLIKED'): Promise<void> {
           :disabled="submittingFeedback"
           @click="submitFeedback('DISLIKED')"
         >
-          👎 需要改进
+          [-] 需要改进
         </button>
         <span
           v-if="resource.feedbackStatus !== 'NONE'"
@@ -171,6 +185,21 @@ async function submitFeedback(status: 'LIKED' | 'DISLIKED'): Promise<void> {
         </span>
       </div>
     </section>
+    <Teleport to="body">
+      <div
+        v-if="showPpt"
+        class="ppt-modal-overlay"
+      >
+        <PptView
+          :title="resource.title"
+          :kc-codes="resource.kcCodes"
+          :content="(resource.content as HandoutContent)"
+          :grounding-status="resource.groundingStatus"
+          :evidence-page-ids="resource.evidencePageIds"
+          @close="showPpt = false"
+        />
+      </div>
+    </Teleport>
   </article>
   <p
     v-else
@@ -307,5 +336,38 @@ header h2 {
   padding: 24px;
   text-align: center;
   color: #6e4f1d;
+}
+.handout-section {
+  display: grid;
+  gap: 10px;
+}
+.handout-actions {
+  display: flex;
+  gap: 10px;
+}
+.ppt-btn {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 2px solid #2b6021;
+  background: #4f8a3e;
+  color: #fff7e6;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: var(--pyt-font-pixel, monospace);
+  transition: background 0.15s;
+}
+.ppt-btn:hover {
+  background: #3d7230;
+}
+.ppt-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  flex-direction: column;
 }
 </style>

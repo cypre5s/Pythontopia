@@ -1,44 +1,32 @@
 <script setup lang="ts">
-// W3 HUD-Shell：固定顶部状态条 + 固定底部快捷栏。
-//
-// 设计要点：
-//   1. 完全 store-driven：props 与 emits 都为空，只读 useHudStore，避免父组件级别的状态分裂；
-//   2. 顶部 / 底部使用 position: fixed，预留中间区域给 Phaser canvas，且 `pointer-events:none`
-//      传到容器只在交互元素上 `pointer-events:auto`，确保鼠标穿透到画布；
-//   3. 5 个 quickslot 按钮固定顺序 Quest / Dialog / Inventory / Map / Skill，与
-//      stores/hud.ts 的 `HudQuickSlot` 类型一一对应；
-//   4. 视觉沿用 src/styles/tokens.css 已有像素风变量（fef7e3 / 4d3613 / d4af37），
-//      不引入新色板，与 LoginForm / OperationHints / ChapterNavPanel 协调。
-//   5. R-13：右侧新增 hud-tools（课程 / 设置），独立 .hud-tool-slot class 不计入
-//      `findAll('button.hud-slot')`，保持 HudShell.spec 的 5 按钮硬约束。
-//   6. R-13：window 级 keydown 监听 Tab/B/M/K/L/`,`/ESC（避开 F，防止与 Phaser
-//      NPC 交互 F 键冲突），并对 input/textarea/contenteditable 焦点做 guard。
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+// HUD：紧凑状态条 + 底部 Dock(5快捷+菜单) + 日夜配色。
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import gsap from 'gsap';
 import { useHudStore, type HudQuickSlot, bgmLabel } from '@stores/hud';
 import { useWorldStore } from '@stores/world';
 import { useToastStore } from '@stores/toast';
 import { useMainQuestStore } from '@stores/mainQuest';
+import { useSessionStore } from '@stores/session';
+import { useGameSettingsStore } from '@stores/gameSettings';
 import { useAudio } from '@/composables/useAudio';
-import { playUiClick, playUiHover, playCoinJingle } from '@/composables/useStardewFx';
-import MainQuestChip from './MainQuestChip.vue';
+import { usePomodoro } from '@/composables/usePomodoro';
+import { playUiClick, playUiHover } from '@/composables/useStardewFx';
 
 interface SlotDescriptor {
   key: HudQuickSlot;
   label: string;
   icon: string;
+  iconImg?: string;
   shortcut: string;
 }
 
-// R-13 修复：icon 字母 = 真实快捷键，且避开 WASD（D/S 与移动键冲突）。
-// 玩家按 Q 任务 / J 对话 / I 背包 / M 地图 / K 技能。
+const ICON_BASE = '/assets/pixel/icons/dock';
+
 const SLOTS: readonly SlotDescriptor[] = [
-  { key: 'quest', label: '任务', icon: 'Q', shortcut: 'Q' },
-  { key: 'dialog', label: '对话', icon: 'J', shortcut: 'J' },
-  { key: 'inventory', label: '背包', icon: 'I', shortcut: 'I' },
-  { key: 'map', label: '地图', icon: 'M', shortcut: 'M' },
-  { key: 'skill', label: '技能', icon: 'K', shortcut: 'K' },
+  { key: 'quest', label: '任务', icon: '✦', iconImg: `${ICON_BASE}/checkered-flag.png`, shortcut: 'Q' },
+  { key: 'dialog', label: '对话', icon: '✉', iconImg: `${ICON_BASE}/speech-bubble.svg`, shortcut: 'J' },
+  { key: 'map', label: '地图', icon: '◰', iconImg: `${ICON_BASE}/treasure-map.svg`, shortcut: 'M' },
+  { key: 'skill', label: '技能', icon: '★', iconImg: `${ICON_BASE}/star-formation.png`, shortcut: 'K' },
 ] as const;
 
 const hud = useHudStore();
@@ -47,8 +35,10 @@ const audio = useAudio();
 const world = useWorldStore();
 const toast = useToastStore();
 const mainQuest = useMainQuestStore();
+const session = useSessionStore();
+const gameSettings = useGameSettingsStore();
+const pomodoro = usePomodoro();
 
-// R-13 迭代 14：当前 BGM 显示。1s 轮询 useAudio 的 currentBgmKey，避免 audio 内部不暴露 ref。
 const currentBgm = ref<string>(bgmLabel(audio.getCurrentBgmKey()));
 let bgmPollTimer: number | null = null;
 function pollBgm(): void {
@@ -66,29 +56,43 @@ const bottomBarCollapsed = computed(() => hud.bottomBar === 'collapsed');
 const energyPct = computed(() => clamp(hud.meta.energy));
 const masteryPct = computed(() => clamp(hud.meta.masteryAvg));
 
-// R-13 迭代 8：金币变化时 GSAP tween + coin jingle，强化金币获得反馈。
-// 用 ref 缓冲展示值，store 的 hud.meta.coin 是真实值；watch 触发 tween。
-const displayedCoin = ref<number>(hud.meta.coin);
-watch(
-  () => hud.meta.coin,
-  (next, prev) => {
-    const from = Number(prev) || 0;
-    const to = Number(next) || 0;
-    if (from === to) return;
-    if (to > from) {
-      playCoinJingle();
-    }
-    const obj = { v: from };
-    gsap.to(obj, {
-      v: to,
-      duration: 0.5,
-      ease: 'power2.out',
-      onUpdate: () => {
-        displayedCoin.value = Math.round(obj.v);
-      },
-    });
-  },
-);
+// 日夜 / 季节 CSS 类，驱动 pixel-ui.css 中的颜色变量切换
+const timeClass = computed(() => `pyt-time--${hud.meta.timeOfDay.toLowerCase()}`);
+const seasonClass = computed(() => `pyt-season--${hud.meta.season.toLowerCase()}`);
+
+// 主线进度信息（中间列展示）
+const currentChapter = computed<number>(() => mainQuest.progress.currentChapter);
+const chapterTitle = computed<string>(() => {
+  const view = mainQuest.chapterViews[currentChapter.value - 1];
+  return view?.title ?? 'Python 学习之旅';
+});
+const chapterSubsCompleted = computed<number>(() => {
+  const view = mainQuest.chapterViews[currentChapter.value - 1];
+  if (!view) return 0;
+  return view.subQuests.filter((s) => s.status === 'completed').length;
+});
+const chapterSubsTotal = computed<number>(() => {
+  const view = mainQuest.chapterViews[currentChapter.value - 1];
+  return view ? view.subQuests.length : 5;
+});
+// 修正显示：completed 永远不大于 total，避免反直觉的 "8/5"
+const chapterCountText = computed<string>(() => {
+  const done = Math.min(chapterSubsCompleted.value, chapterSubsTotal.value);
+  return `${done} / ${chapterSubsTotal.value}`;
+});
+const chapterPct = computed<number>(() => {
+  const total = chapterSubsTotal.value || 1;
+  const done = Math.min(chapterSubsCompleted.value, total);
+  return Math.round((done / total) * 100);
+});
+const currentSubQuestTitle = computed<string>(() => {
+  const view = mainQuest.chapterViews[currentChapter.value - 1];
+  if (!view) return '探索 Pythontopia';
+  const current = view.subQuests.find((s) => s.status === 'in_progress');
+  return current?.title ?? (view.subQuests.find((s) => s.status === 'available')?.title ?? '挑战章节 BOSS');
+});
+
+const overallPct = computed<number>(() => Math.round(mainQuest.overallProgress * 100));
 
 function clamp(value: number): number {
   if (!Number.isFinite(value)) return 0;
@@ -97,7 +101,6 @@ function clamp(value: number): number {
   return value;
 }
 
-// R-13 Phase 6：星露谷感 chip 图标。
 function weatherIcon(w: string): string {
   switch (w) {
     case 'SUNNY': return '☀';
@@ -125,21 +128,20 @@ function timeIcon(t: string): string {
 function seasonIcon(s: string): string {
   switch (s) {
     case 'SPRING':
-    case 'spring': return '🌱';
+    case 'spring': return '*';
     case 'SUMMER':
-    case 'summer': return '☀';
+    case 'summer': return '+';
     case 'AUTUMN':
-    case 'autumn': return '🍁';
+    case 'autumn': return '~';
     case 'WINTER':
-    case 'winter': return '❄';
-    default: return '✿';
+    case 'winter': return '.';
+    default: return '*';
   }
 }
 
 function onClickSlot(slot: HudQuickSlot): void {
   playUiClick();
   hud.toggleSlot(slot);
-  // R-13 §5 Phase 3：Q 槽既保留 quickslot 状态，也触发主线面板（quest = MainQuest）。
   if (slot === 'quest') {
     mainQuest.togglePanel();
   }
@@ -164,11 +166,15 @@ function onToggleSettings(): void {
   hud.toggleSettings();
 }
 
+function onOpenMenu(): void {
+  playUiClick();
+  gameSettings.openPauseMenu();
+}
+
 function onSlotHover(): void {
   playUiHover();
 }
 
-// R-13 迭代 19：通过自定义事件触发 FastTravelPanel，避免组件相互 import。
 function onOpenFastTravel(): void {
   playUiClick();
   if (typeof window !== 'undefined') {
@@ -191,6 +197,17 @@ async function onSleep(): Promise<void> {
   }
 }
 
+function onLogout(): void {
+  playUiClick();
+  session.logout();
+  void router.push({ name: 'login' });
+}
+
+function onClickQuestSummary(): void {
+  playUiClick();
+  mainQuest.togglePanel();
+}
+
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   const tag = target.tagName;
@@ -203,45 +220,60 @@ function isCanvasFocused(target: EventTarget | null): boolean {
   return target instanceof HTMLCanvasElement;
 }
 
+function onToggleTopBar(): void {
+  playUiClick();
+  hud.toggleTopBar();
+}
+
 function onKey(event: KeyboardEvent): void {
-  if (isEditableTarget(event.target)) return;
   if (event.altKey || event.ctrlKey || event.metaKey) return;
-  // R-13 修复：Phaser canvas 聚焦时，HudShell 只处理 Tab / Esc / `,` 三个功能键，
-  // b/m/k/j/l 全部交给 game.input.keyboard，避免抢走 NPC 交互（F）/ 移动（WASD）。
-  const canvasOwned = isCanvasFocused(event.target);
-  // 按 ESC 关闭一切：先关设置，再关 activeSlot，避免 ESC 既关 dialog 又关画布。
-  if (event.key === 'Escape') {
-    if (hud.settingsOpen) {
-      hud.closeSettings();
-      event.preventDefault();
-      return;
-    }
-    if (hud.activeSlot) {
-      hud.closeAll();
-      event.preventDefault();
-    }
+
+  // Tab → 打开快捷轮盘（可编辑元素内不拦截）
+  if (event.key === 'Tab') {
+    if (isEditableTarget(event.target)) return;
+    event.preventDefault();
+    gameSettings.openQuickWheel();
     return;
   }
+
+  if (isEditableTarget(event.target)) return;
+
+  // H 键切换顶部 HUD 显示/隐藏
+  if (event.key === 'h' || event.key === 'H') {
+    onToggleTopBar();
+    event.preventDefault();
+    return;
+  }
+
+  const canvasOwned = isCanvasFocused(event.target);
+
+  // ESC 优先级链：暂停菜单 → 轮盘 → 设置 → 面板 → 打开暂停菜单
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    if (gameSettings.pauseMenuOpen) { gameSettings.closePauseMenu(); return; }
+    if (gameSettings.quickWheelOpen) { gameSettings.closeQuickWheel(); return; }
+    if (hud.settingsOpen) { hud.closeSettings(); return; }
+    if (hud.activeSlot) { hud.closeAll(); return; }
+    gameSettings.openPauseMenu();
+    return;
+  }
+
   if (event.key === ',') {
     onToggleSettings();
     event.preventDefault();
     return;
   }
-  // 字母快捷键：canvas 聚焦时禁用，让游戏独占（WASD 移动 + F 交互）
   if (canvasOwned) return;
   const lowered = event.key.toLowerCase();
-  // R-13：icon 字母 = shortcut，全部避开 WASD（W/A/S/D 留给移动）
   const slotByLetter: Record<string, HudQuickSlot | undefined> = {
     q: 'quest',
     j: 'dialog',
-    i: 'inventory',
     m: 'map',
     k: 'skill',
   };
   const target = slotByLetter[lowered];
   if (target && !event.shiftKey && hud.canToggleSlot) {
     hud.toggleSlot(target);
-    // R-13 §5 Phase 3：Q 键同步开关主线面板。
     if (target === 'quest') {
       mainQuest.togglePanel();
     }
@@ -254,13 +286,16 @@ function onKey(event: KeyboardEvent): void {
     return;
   }
   if (lowered === 'a' && !event.shiftKey) {
-    // R-13 §-1 续：A 键 = 章节闯关塔（章 1 默认入口）
     openArena();
     event.preventDefault();
     return;
   }
+  if (lowered === 't' && !event.shiftKey) {
+    onOpenFastTravel();
+    event.preventDefault();
+    return;
+  }
   if (lowered === 'c' && !event.shiftKey) {
-    // R-13：sleep / 休息 快捷键 C（icon 是 ☾，C 取「Calm 夜晚」助记）
     void onSleep();
     event.preventDefault();
   }
@@ -287,105 +322,90 @@ onUnmounted(() => {
 <template>
   <div
     class="hud-shell"
+    :class="[timeClass, seasonClass]"
     data-testid="hud-shell"
   >
-    <header
+    <!-- 顶栏隐藏时的触发条 -->
+    <button
+      v-if="!topBarVisible"
+      type="button"
+      class="hud-reveal-strip"
+      data-testid="hud-reveal-strip"
+      title="展开 HUD (H)"
+      aria-label="展开 HUD"
+      @click="onToggleTopBar"
+    >
+      <svg class="hud-reveal-strip__arrow" width="16" height="6" viewBox="0 0 16 6" aria-hidden="true">
+        <path d="M4 0h8v1H4zM3 2h10v1H3zM2 4h12v1H2z" fill="currentColor"/>
+      </svg>
+    </button>
+
+    <!-- 紧凑状态条：左上角天气+时间，右上角玩家+金币 -->
+    <div
       v-if="topBarVisible"
-      class="hud-top"
-      :class="{ 'hud-top--collapsed': topBarCollapsed }"
+      class="hud-status-strip"
       data-testid="hud-top"
       role="status"
-      aria-label="顶部状态条"
+      aria-label="状态条"
     >
-      <div class="hud-top__group">
-        <span
-          class="hud-chip"
-          data-testid="hud-weather"
-          :title="`天气：${hud.meta.weather}`"
-        >
-          <span class="hud-chip__label">{{ weatherIcon(hud.meta.weather) }} 天气</span>
+      <div class="hud-status-left">
+        <button type="button" class="hud-chip hud-chip--btn" data-testid="hud-weather" :title="`天气：${hud.meta.weather}`" @click="onSleep">
+          <span class="hud-chip__icon">{{ weatherIcon(hud.meta.weather) }}</span>
           <span class="hud-chip__value">{{ hud.meta.weather }}</span>
-        </span>
-        <span
-          class="hud-chip"
-          data-testid="hud-day"
-          :title="`第 ${hud.meta.dayIndex} 天`"
-        >
-          <span class="hud-chip__label">☼ Day</span>
-          <span class="hud-chip__value">{{ hud.meta.dayIndex }}</span>
-        </span>
-        <span
-          class="hud-chip"
-          data-testid="hud-time"
-          :title="`时段：${hud.meta.timeOfDay}`"
-        >
-          <span class="hud-chip__label">{{ timeIcon(hud.meta.timeOfDay) }} 时段</span>
-          <span class="hud-chip__value">{{ hud.meta.timeOfDay }}</span>
-        </span>
-        <span
-          class="hud-chip"
-          data-testid="hud-season"
-          :title="`季节：${hud.meta.season}`"
-        >
-          <span class="hud-chip__label">{{ seasonIcon(hud.meta.season) }} 季节</span>
-          <span class="hud-chip__value">{{ hud.meta.season }}</span>
-        </span>
-        <span
-          class="hud-chip hud-chip--bgm"
-          data-testid="hud-bgm"
-        >
-          <span class="hud-chip__label">♪</span>
-          <span class="hud-chip__value">{{ currentBgm }}</span>
-        </span>
-        <!-- R-13 §5 Phase 3：主线进度 chip。点击或按 Q 打开主线面板。 -->
-        <MainQuestChip />
+        </button>
+        <button type="button" class="hud-chip hud-chip--btn" data-testid="hud-day" title="点击推进时间" @click="onSleep">
+          <span class="hud-chip__value">Day {{ hud.meta.dayIndex }}</span>
+        </button>
+        <button type="button" class="hud-chip hud-chip--btn" data-testid="hud-time" :title="`时段：${hud.meta.timeOfDay}`" @click="onSleep">
+          <span class="hud-chip__icon">{{ timeIcon(hud.meta.timeOfDay) }}</span>
+        </button>
+        <button type="button" class="hud-chip hud-chip--btn" data-testid="hud-season" :title="`季节：${hud.meta.season}`" @click="onClickQuestSummary">
+          <span class="hud-chip__icon">{{ seasonIcon(hud.meta.season) }}</span>
+        </button>
       </div>
-      <div class="hud-top__group">
-        <div
-          class="hud-bar"
-          data-testid="hud-energy"
-          :aria-valuenow="energyPct"
-          aria-valuemin="0"
-          aria-valuemax="100"
-          role="progressbar"
-          aria-label="能量"
+      <div class="hud-status-right">
+        <button type="button" class="hud-status-name hud-chip--btn" title="点击查看画像" @click="playUiClick(); router.push('/profile')">{{ session.displayName }}</button>
+        <button type="button" class="hud-logout" data-testid="hud-logout" aria-label="退出登录" @click="onLogout">
+          退出
+        </button>
+        <button
+          type="button"
+          class="hud-hide-btn"
+          data-testid="hud-hide-btn"
+          title="隐藏 HUD (H)"
+          aria-label="隐藏 HUD"
+          @click="onToggleTopBar"
         >
-          <span class="hud-bar__label">能量</span>
-          <span class="hud-bar__track">
-            <span
-              class="hud-bar__fill hud-bar__fill--energy"
-              :style="{ width: `${energyPct}%` }"
-            />
-          </span>
-          <span class="hud-bar__value">{{ energyPct }}</span>
-        </div>
-        <span
-          class="hud-chip hud-chip--coin"
-          data-testid="hud-coin"
-        >
-          <span class="hud-chip__label">金币</span>
-          <span class="hud-chip__value">{{ displayedCoin }}</span>
-        </span>
-        <div
-          class="hud-bar"
-          data-testid="hud-mastery"
-          :aria-valuenow="masteryPct"
-          aria-valuemin="0"
-          aria-valuemax="100"
-          role="progressbar"
-          aria-label="平均掌握度"
-        >
-          <span class="hud-bar__label">掌握</span>
-          <span class="hud-bar__track">
-            <span
-              class="hud-bar__fill hud-bar__fill--mastery"
-              :style="{ width: `${masteryPct}%` }"
-            />
-          </span>
-          <span class="hud-bar__value">{{ masteryPct }}</span>
-        </div>
+          <svg width="10" height="6" viewBox="0 0 10 6" aria-hidden="true">
+            <path d="M1 5h8v-1H1zM2 3h6v-1H2zM3 1h4v-1H3z" fill="currentColor"/>
+          </svg>
+        </button>
       </div>
-    </header>
+    </div>
+    <!-- 能量/掌握/BGM/番茄钟 保留为隐藏的 a11y 元素 -->
+    <div class="hud-meta-hidden" aria-hidden="false" style="position:absolute;top:-9999px;">
+      <div class="hud-bar" data-testid="hud-energy" :aria-valuenow="energyPct" aria-valuemin="0" aria-valuemax="100" role="progressbar" aria-label="能量">
+        <span class="hud-bar__value">{{ energyPct }}</span>
+      </div>
+      <div class="hud-bar" data-testid="hud-mastery" :aria-valuenow="masteryPct" aria-valuemin="0" aria-valuemax="100" role="progressbar" aria-label="平均掌握度">
+        <span class="hud-bar__value">{{ masteryPct }}</span>
+      </div>
+      <span data-testid="hud-bgm">{{ currentBgm }}</span>
+    </div>
+    <!-- 中间顶部：主线进度条（紧凑一行） -->
+    <button
+      v-if="topBarVisible"
+      type="button"
+      class="hud-quest-bar"
+      data-testid="hud-quest-summary"
+      :aria-label="`主线进度：第 ${currentChapter} 章 ${chapterTitle}（${chapterCountText}），总进度 ${overallPct}%`"
+      @click="onClickQuestSummary"
+    >
+      <span class="hud-quest-bar__chapter">第{{ currentChapter }}章</span>
+      <span class="hud-quest-bar__title">{{ chapterTitle }}</span>
+      <span class="hud-quest-bar__fill" :style="{ width: `${chapterPct}%` }" />
+      <span class="hud-quest-bar__count">{{ chapterCountText }}</span>
+    </button>
 
     <nav
       v-if="bottomBarVisible"
@@ -403,17 +423,25 @@ onUnmounted(() => {
         :data-testid="`hud-slot-${slot.key}`"
         :aria-pressed="isActive(slot.key)"
         :aria-label="`${slot.label}（${slot.shortcut}）`"
+        :title="`${slot.label}（${slot.shortcut}）`"
         @click="onClickSlot(slot.key)"
         @mouseenter="onSlotHover"
       >
         <span
           class="hud-slot__icon"
           aria-hidden="true"
-        >{{ slot.icon }}</span>
+        >
+          <img
+            v-if="slot.iconImg"
+            :src="slot.iconImg"
+            :alt="slot.label"
+            class="hud-slot__icon-img"
+          >
+          <template v-else>{{ slot.icon }}</template>
+        </span>
         <span class="hud-slot__label">{{ slot.label }}</span>
         <span class="hud-slot__shortcut">{{ slot.shortcut }}</span>
       </button>
-      <!-- R-13 修复：把工具按钮合并到同一 nav 内（之前是双 fixed 元素重叠） -->
       <span
         class="hud-divider"
         aria-hidden="true"
@@ -421,78 +449,20 @@ onUnmounted(() => {
       <button
         type="button"
         class="hud-tool-slot"
-        data-testid="hud-tool-library"
-        aria-label="课程与资源（L）"
-        @click="openLibrary"
+        data-testid="hud-tool-menu"
+        aria-label="菜单（ESC）"
+        title="菜单（ESC）"
+        @click="onOpenMenu"
+        @mouseenter="onSlotHover"
       >
         <span
           class="hud-tool-slot__icon"
           aria-hidden="true"
-        >L</span>
-        <span class="hud-tool-slot__label">课程</span>
-        <span class="hud-tool-slot__shortcut">L</span>
-      </button>
-      <button
-        type="button"
-        class="hud-tool-slot hud-tool-slot--arena"
-        data-testid="hud-tool-arena"
-        aria-label="章节闯关塔（A）"
-        @click="openArena"
-      >
-        <span
-          class="hud-tool-slot__icon"
-          aria-hidden="true"
-        >A</span>
-        <span class="hud-tool-slot__label">闯关</span>
-        <span class="hud-tool-slot__shortcut">A</span>
-      </button>
-      <button
-        type="button"
-        class="hud-tool-slot"
-        data-testid="hud-tool-fast-travel"
-        aria-label="快速旅行（T）"
-        @click="onOpenFastTravel"
-      >
-        <span
-          class="hud-tool-slot__icon"
-          aria-hidden="true"
-        >➤</span>
-        <span class="hud-tool-slot__label">传送</span>
-        <span class="hud-tool-slot__shortcut">T</span>
-      </button>
-      <button
-        type="button"
-        class="hud-tool-slot"
-        data-testid="hud-tool-sleep"
-        aria-label="休息一晚（推进 1 天）"
-        :disabled="sleepBusy"
-        @click="onSleep"
-      >
-        <span
-          class="hud-tool-slot__icon"
-          aria-hidden="true"
-        >☾</span>
-        <span class="hud-tool-slot__label">休息</span>
-        <span class="hud-tool-slot__shortcut">+1d</span>
-      </button>
-      <button
-        type="button"
-        class="hud-tool-slot"
-        :class="{ 'hud-tool-slot--active': hud.settingsOpen }"
-        :aria-pressed="hud.settingsOpen"
-        data-testid="hud-tool-settings"
-        aria-label="设置（,）"
-        @click="onToggleSettings"
-      >
-        <span
-          class="hud-tool-slot__icon"
-          aria-hidden="true"
-        >⚙</span>
-        <span class="hud-tool-slot__label">设置</span>
-        <span class="hud-tool-slot__shortcut">,</span>
+        >☰</span>
+        <span class="hud-tool-slot__label">菜单</span>
+        <span class="hud-tool-slot__shortcut">ESC</span>
       </button>
     </nav>
-    <!-- 兼容历史 spec：留一个隐藏 stub 让 [data-testid="hud-tools"] 仍可命中 -->
     <span
       class="hud-tools-stub"
       data-testid="hud-tools"
@@ -509,337 +479,694 @@ onUnmounted(() => {
   z-index: 100;
 }
 
+/* ── 通用半透明深色游戏 HUD panel ──────────────────────────────── */
+.game-panel,
 .hud-top,
 .hud-bottom {
+  background: var(--pyt-hud-bg);
+  border: 1px solid var(--pyt-hud-border);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+/* ── 顶栏隐藏后的触发条 ────────────────────────────────────────── */
+.hud-reveal-strip {
   position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 48px;
+  height: 14px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: var(--pyt-hud-bg);
+  border: 1px solid var(--pyt-hud-border);
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+  color: var(--pyt-text-secondary);
+  cursor: pointer;
+  pointer-events: auto;
+  z-index: 110;
+  opacity: 0.4;
+  transition: opacity 180ms, height 180ms, background 180ms;
+  padding-bottom: 1px;
+  font-family: inherit;
+}
+.hud-reveal-strip:hover {
+  opacity: 1;
+  height: 18px;
+  background: var(--pyt-btn-hover-bg);
+  color: var(--pyt-text-accent);
+}
+.hud-reveal-strip__arrow {
+  display: block;
+}
+
+/* ── 可点击芯片 ────────────────────────────────────────────────── */
+.hud-chip--btn {
+  cursor: pointer;
+  transition: background 120ms, border-color 120ms;
+}
+.hud-chip--btn:hover {
+  background: rgba(212, 175, 55, 0.3);
+  border-color: var(--pyt-text-accent, #ffd166);
+}
+.hud-chip--btn:active {
+  transform: translateY(1px);
+}
+
+/* ── 顶栏隐藏按钮 ──────────────────────────────────────────────── */
+.hud-hide-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--pyt-hud-border);
+  border-radius: 2px;
+  color: var(--pyt-text-secondary);
+  cursor: pointer;
+  transition: background 120ms, color 120ms;
+}
+.hud-hide-btn:hover {
+  background: var(--pyt-btn-hover-bg);
+  color: var(--pyt-text-accent);
+}
+
+/* ── 顶栏展开/收起动画 ──────────────────────────────────────────── */
+.hud-status-strip {
+  animation: hud-slide-down 240ms ease-out both;
+}
+.hud-quest-bar {
+  animation: hud-slide-down 240ms ease-out 60ms both;
+}
+
+/* ── 紧凑状态条 ────────────────────────────────────────────────── */
+.hud-status-strip {
+  position: fixed;
+  top: 8px;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  pointer-events: auto;
+  user-select: none;
+  z-index: 100;
+  font-size: 11px;
+  color: var(--pyt-text-primary);
+  font-family: var(--pyt-font-pixel, monospace);
+}
+.hud-status-left,
+.hud-status-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--pyt-hud-bg);
+  border: 1px solid var(--pyt-hud-border);
+  border-radius: 2px;
+  padding: 3px 8px;
+  backdrop-filter: blur(4px);
+}
+.hud-status-name {
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 2px 6px;
+  border-radius: 2px;
+  font-family: var(--pyt-font-pixel, monospace);
+  color: var(--pyt-text-primary);
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 11px;
+  max-width: 10ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 中间进度条 */
+.hud-quest-bar {
+  position: fixed;
+  top: 8px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: var(--pyt-space-3, 12px);
-  background: rgba(28, 24, 16, 0.82);
-  border: 2px solid var(--pyt-color-border, #d4af37);
-  border-radius: var(--pyt-radius-md, 6px);
-  color: var(--pyt-color-text-on-dark, #fff7e6);
-  font-family: var(--pyt-font-pixel, 'Ark Pixel 12'), 'PingFang SC', monospace;
-  font-size: var(--pyt-font-size-sm, 12px);
-  letter-spacing: 0.5px;
+  gap: 6px;
+  background: var(--pyt-hud-bg);
+  border: 1px solid var(--pyt-hud-border);
+  border-radius: 2px;
+  padding: 4px 12px;
+  color: var(--pyt-text-primary);
+  font-family: var(--pyt-font-pixel, monospace);
+  font-size: 11px;
+  cursor: pointer;
   pointer-events: auto;
-  box-shadow: var(--pyt-shadow-card, 0 2px 0 rgba(77, 54, 19, 0.12));
-  user-select: none;
   z-index: 100;
+  min-width: 200px;
+  max-width: 380px;
+  backdrop-filter: blur(4px);
+}
+.hud-quest-bar:hover { background: rgba(241, 196, 83, 0.12); }
+.hud-quest-bar__chapter {
+  color: var(--pyt-text-accent);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.hud-quest-bar__title {
+  color: var(--pyt-text-primary);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+.hud-quest-bar__fill {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--pyt-bar-energy) 0%, var(--pyt-text-accent) 100%);
+  border-radius: 0 0 2px 2px;
+  transition: width 240ms ease-out;
+}
+.hud-quest-bar__count {
+  color: var(--pyt-text-secondary);
+  font-size: 10px;
+  white-space: nowrap;
 }
 
-.hud-top {
-  top: 12px;
-  padding: 8px 18px;
-  max-width: calc(100vw - 32px);
-  flex-wrap: wrap;
-  justify-content: space-between;
-}
-
-.hud-top__group {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.hud-top--collapsed {
-  padding: 2px 12px;
-  font-size: var(--pyt-font-size-xs, 11px);
-}
-
-.hud-top--collapsed .hud-bar,
-.hud-top--collapsed .hud-chip__label {
+/* 旧类保留兼容 */
+.hud-top { display: none; }
+.hud-top--collapsed .hud-quest__progress,
+.hud-top--collapsed .hud-meta-strip {
   display: none;
 }
 
+.hud-top__col {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.hud-top__col--left {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.hud-top__col--center {
+  justify-content: center;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  min-width: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  font-family: inherit;
+  text-align: center;
+  padding: 4px 12px;
+  border-radius: 2px;
+  transition: background 140ms ease;
+}
+.hud-top__col--center:hover {
+  background: rgba(241, 196, 83, 0.12);
+}
+.hud-top__col--center:focus-visible {
+  outline: 2px solid #f1c453;
+  outline-offset: 2px;
+}
+
+.hud-top__col--right {
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* ── 状态 chip ─────────────────────────────────────────────────── */
 .hud-chip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 2px 8px;
-  background: rgba(212, 175, 55, 0.18);
-  border: 1px solid rgba(212, 175, 55, 0.5);
-  border-radius: var(--pyt-radius-sm, 4px);
+  padding: 4px 10px;
+  background: rgba(212, 175, 55, 0.14);
+  border: 1px solid rgba(212, 175, 55, 0.45);
+  border-radius: 2px;
+  font-size: 13px;
+  line-height: 1.2;
+  white-space: nowrap;
 }
-
+.hud-chip__icon {
+  font-size: 14px;
+  color: var(--pyt-text-accent);
+}
+.hud-chip__value {
+  color: var(--pyt-text-primary);
+  font-weight: 600;
+}
 .hud-chip--coin {
   background: rgba(241, 196, 83, 0.22);
   border-color: #f1c453;
 }
-
-.hud-chip--bgm {
-  background: rgba(120, 170, 220, 0.18);
-  border-color: #6aa1d6;
-  max-width: 140px;
+.hud-chip--coin .hud-chip__icon {
+  color: var(--pyt-text-accent);
 }
 
-.hud-chip--bgm .hud-chip__label {
-  color: #aac6d9;
-  font-size: 14px;
+/* ── 中列任务摘要 ──────────────────────────────────────────────── */
+.hud-quest__head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 13px;
 }
-
-.hud-chip--bgm .hud-chip__value {
+.hud-quest__chapter {
+  color: var(--pyt-text-accent);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.4px;
+}
+.hud-quest__title {
+  color: var(--pyt-text-primary);
+  font-weight: 600;
+  font-size: 15px;
   overflow: hidden;
-  white-space: nowrap;
   text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 40vw;
+}
+.hud-quest__count {
+  color: var(--pyt-text-secondary);
+  font-size: 12px;
+  background: rgba(212, 175, 55, 0.16);
+  border: 1px solid rgba(212, 175, 55, 0.4);
+  padding: 1px 8px;
+  border-radius: 999px;
+}
+.hud-quest__progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+.hud-quest__bar {
+  flex: 1 1 auto;
+  position: relative;
+  height: 6px;
+  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid rgba(212, 175, 55, 0.45);
+  border-radius: 3px;
+  overflow: hidden;
+  min-width: 120px;
+}
+.hud-quest__bar-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #6bbf59 0%, #f1c453 100%);
+  transition: width 240ms ease-out;
+  box-shadow: 0 0 6px rgba(241, 196, 83, 0.5);
+}
+.hud-quest__objective {
+  color: #f0e6c6;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 38vw;
 }
 
-.hud-chip__label {
-  color: #d4af37;
+/* ── 右列身份 ──────────────────────────────────────────────────── */
+.hud-identity {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  line-height: 1.2;
+}
+.hud-identity__name {
+  color: var(--pyt-text-primary);
+  font-weight: 700;
+  font-size: 14px;
+  max-width: 14ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hud-identity__day {
+  color: var(--pyt-text-secondary);
   font-size: 11px;
 }
-
-.hud-chip__value {
-  color: #fff7e6;
-  font-weight: 700;
+.hud-logout {
+  font-family: inherit;
+  font-size: 12px;
+  padding: 4px 12px;
+  background: rgba(184, 68, 45, 0.22);
+  border: 1px solid #b8442d;
+  color: #ffe3da;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background 140ms, transform 80ms;
+}
+.hud-logout:hover {
+  background: rgba(184, 68, 45, 0.45);
+}
+.hud-logout:active {
+  transform: translateY(1px);
 }
 
+/* ── 旧的状态条（能量 / 掌握 / BGM）：折到顶部 HUD 内部，作为补充信息 ── */
+.hud-meta-strip {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--pyt-text-secondary);
+  padding-top: 2px;
+  border-top: 1px dashed rgba(212, 175, 55, 0.22);
+  margin-top: 2px;
+}
 .hud-bar {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-width: 130px;
+  min-width: 140px;
 }
-
 .hud-bar__label {
-  color: #d4af37;
+  color: var(--pyt-text-gold);
   font-size: 11px;
 }
-
 .hud-bar__track {
   position: relative;
   display: inline-block;
   width: 70px;
-  height: 8px;
-  background: rgba(255, 247, 230, 0.18);
+  height: 6px;
+  background: rgba(255, 247, 230, 0.12);
   border: 1px solid #4d3613;
-  border-radius: 2px;
+  border-radius: 3px;
   overflow: hidden;
 }
-
 .hud-bar__fill {
   display: block;
   height: 100%;
   transition: width 220ms ease-out;
 }
-
-.hud-bar__fill--energy {
-  background: #6bbf59;
-}
-
-.hud-bar__fill--mastery {
-  background: #f1c453;
-}
-
+.hud-bar__fill--energy { background: #6bbf59; }
+.hud-bar__fill--mastery { background: #f1c453; }
 .hud-bar__value {
-  color: #fff7e6;
+  color: var(--pyt-text-primary);
   font-weight: 700;
   font-size: 11px;
-  min-width: 24px;
+  min-width: 22px;
   text-align: right;
 }
+.hud-bgm {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: rgba(120, 170, 220, 0.18);
+  border: 1px solid #6aa1d6;
+  border-radius: 2px;
+  max-width: 200px;
+  color: #d8e8f8;
+  font-size: 11px;
+}
+.hud-bgm__icon { color: #aac6d9; font-size: 13px; }
+.hud-bgm__value {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
+/* ── 番茄钟 ────────────────────────────────────────────────── */
+.hud-pomodoro {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  background: rgba(230, 57, 70, 0.15);
+  border: 1px solid rgba(230, 57, 70, 0.5);
+  border-radius: 2px;
+  color: var(--pyt-text-primary);
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 120ms, transform 80ms;
+}
+.hud-pomodoro:hover { background: rgba(230, 57, 70, 0.3); }
+.hud-pomodoro:active { transform: translateY(1px); }
+.hud-pomodoro--work {
+  border-color: #e63946;
+  animation: pyt-glow-pulse 2s ease-in-out infinite;
+}
+.hud-pomodoro--break {
+  background: rgba(107, 191, 89, 0.15);
+  border-color: rgba(107, 191, 89, 0.5);
+}
+.hud-pomodoro__icon { font-size: 13px; }
+.hud-pomodoro__time { font-weight: 700; font-variant-numeric: tabular-nums; }
+.hud-pomodoro__phase { font-size: 10px; color: var(--pyt-text-secondary); }
+
+/* ── 底部 Dock ─────────────────────────────────────────────────── */
 .hud-bottom {
-  bottom: 16px;
-  padding: 6px 10px;
-  gap: 6px;
+  position: fixed;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 2px;
+  pointer-events: auto;
+  z-index: 100;
+  user-select: none;
+  max-width: calc(100vw - 32px);
+  flex-wrap: wrap;
+  justify-content: center;
 }
-
 .hud-bottom--collapsed {
-  padding: 2px 6px;
+  padding: 4px 10px;
 }
 
-.hud-slot {
+/* 共享 dock 按钮基础样式：HudShell.spec 严格依赖 button.hud-slot 数量 = 5（5 个
+   quickslot），不能让工具按钮也带 .hud-slot 类。所以 .hud-slot 与 .hud-tool-slot
+   分两套 class，共享 CSS 变量与外观规则。 */
+.hud-slot,
+.hud-tool-slot {
+  width: 58px;
+  height: 58px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 2px;
-  min-width: 64px;
-  min-height: 56px;
-  padding: 6px 8px;
-  background: rgba(212, 175, 55, 0.12);
-  border: 2px solid rgba(212, 175, 55, 0.45);
-  border-radius: var(--pyt-radius-sm, 4px);
-  color: #fff7e6;
-  font-family: inherit;
+  padding: 4px;
+  background: var(--pyt-btn-bg);
+  border: 1px solid var(--pyt-btn-border);
+  border-radius: 2px;
+  color: var(--pyt-text-primary);
+  font-family: var(--pyt-font-pixel, monospace);
+  font-size: 11px;
   cursor: pointer;
-  transition: background 120ms, border-color 120ms, transform 80ms;
+  transition: background 140ms ease, border-color 140ms ease, transform 140ms ease, box-shadow 140ms ease;
 }
-
-.hud-slot:hover {
-  background: rgba(212, 175, 55, 0.28);
-  border-color: #d4af37;
+.hud-slot:hover,
+.hud-tool-slot:hover {
+  background: var(--pyt-btn-hover-bg);
+  border-color: var(--pyt-text-accent);
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 0 10px rgba(241, 196, 83, 0.35), 0 6px 14px rgba(0, 0, 0, 0.35);
 }
-
-.hud-slot:active {
-  transform: translateY(1px);
+.hud-slot:active,
+.hud-tool-slot:active {
+  transform: translateY(0);
 }
-
-.hud-slot--active {
-  background: rgba(212, 175, 55, 0.36);
-  border-color: #f1c453;
-  box-shadow: inset 0 0 0 1px #f1c453;
+.hud-slot:focus-visible,
+.hud-tool-slot:focus-visible {
+  outline: 2px solid #f1c453;
+  outline-offset: 2px;
 }
-
-.hud-slot__icon {
-  font-size: 18px;
-  font-weight: 800;
-  color: #f1c453;
+.hud-slot:disabled,
+.hud-tool-slot:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+.hud-slot--active,
+.hud-tool-slot--active {
+  background: var(--pyt-btn-active-bg);
+  border-color: var(--pyt-text-accent);
+  box-shadow: 0 0 0 1px var(--pyt-text-accent) inset, 0 4px 10px rgba(241, 196, 83, 0.28);
+}
+.hud-slot__icon,
+.hud-tool-slot__icon {
+  font-size: 22px;
+  line-height: 1;
+  color: #ffe6a2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.hud-slot__icon-img {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 2px rgba(255, 230, 162, 0.5));
+  image-rendering: pixelated;
+}
+.hud-slot__label,
+.hud-tool-slot__label {
+  font-size: 11px;
+  color: var(--pyt-text-primary);
+  letter-spacing: 0.5px;
+}
+.hud-slot__shortcut,
+.hud-tool-slot__shortcut {
+  font-size: 10px;
+  color: rgba(255, 247, 230, 0.55);
   line-height: 1;
 }
-
-.hud-slot__label {
-  font-size: 11px;
-  color: #fff7e6;
+.hud-tool-slot__icon {
+  color: var(--pyt-text-accent);
 }
 
-.hud-slot__shortcut {
-  font-size: 10px;
-  color: rgba(255, 247, 230, 0.6);
+.hud-divider {
+  display: inline-block;
+  width: 1px;
+  height: 38px;
+  margin: 0 4px;
+  background: rgba(212, 175, 55, 0.45);
 }
 
-/* R-13 修复：工具按钮已合并到 hud-bottom 内部，这里隐藏旧 stub */
 .hud-tools-stub {
   display: none;
 }
 
-/* R-13 quickslot 与 tool 之间的金色分隔线 */
-.hud-divider {
-  display: inline-block;
-  width: 2px;
-  height: 36px;
-  margin: 0 6px;
-  background: rgba(212, 175, 55, 0.6);
+/* ── 入场动画 ──────────────────────────────────────────────────── */
+.hud-top {
+  animation: hud-slide-down 320ms ease-out both;
 }
-
-/* R-13 修复：9 个按钮 + 分隔线在窄屏被切。强制 wrap + 紧凑按钮宽度。 */
 .hud-bottom {
-  flex-wrap: wrap;
-  max-width: min(960px, calc(100vw - 16px));
-  width: max-content;
-  justify-content: center;
-  gap: 4px;
-  padding: 6px 8px;
+  animation: hud-slide-up 320ms ease-out both;
+}
+@keyframes hud-slide-down {
+  from { opacity: 0; transform: translateY(-18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes hud-slide-up {
+  from { opacity: 0; transform: translateX(-50%) translateY(18px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+@keyframes hud-coin-bounce {
+  0%   { transform: scale(1); }
+  30%  { transform: scale(1.18); }
+  60%  { transform: scale(0.95); }
+  100% { transform: scale(1); }
+}
+.hud-coin-bounce {
+  animation: hud-coin-bounce 400ms ease-out;
 }
 
-/* 窄屏让按钮变小，5+4 仍可同行；超窄屏自动换行 */
-@media (max-width: 980px) {
+/* ── 响应式：窄屏（≤1280px）适度压缩 ─────────────────────────── */
+@media (max-width: 1280px) {
+  .hud-top {
+    grid-template-columns: minmax(240px, auto) 1fr minmax(220px, auto);
+    gap: 12px;
+    padding: 6px 12px;
+  }
+  .hud-quest__title {
+    max-width: 28vw;
+    font-size: 14px;
+  }
+  .hud-quest__objective {
+    max-width: 30vw;
+  }
+}
+
+@media (max-width: 1024px) {
+  .hud-top {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    padding: 8px 12px;
+  }
+  .hud-top__col--left {
+    justify-content: center;
+  }
+  .hud-top__col--right {
+    justify-content: center;
+  }
+  .hud-meta-strip {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
   .hud-slot,
   .hud-tool-slot {
-    min-width: 50px;
-    min-height: 46px;
-    padding: 3px 4px;
+    width: 52px;
+    height: 52px;
   }
   .hud-slot__icon,
   .hud-tool-slot__icon {
-    font-size: 14px;
+    font-size: 18px;
   }
-  .hud-slot__label,
-  .hud-tool-slot__label {
-    font-size: 10px;
+  .hud-slot__icon-img {
+    width: 18px;
+    height: 18px;
   }
-  .hud-slot__shortcut,
-  .hud-tool-slot__shortcut {
-    font-size: 9px;
-  }
-  .hud-divider {
-    margin: 0 3px;
-    height: 30px;
-  }
-}
-
-@media (max-width: 760px) {
-  .hud-divider {
-    display: none;
-  }
-  .hud-slot,
-  .hud-tool-slot {
-    min-width: 44px;
-  }
-}
-
-.hud-tool-slot {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  min-width: 56px;
-  min-height: 48px;
-  padding: 4px 8px;
-  background: rgba(212, 175, 55, 0.12);
-  border: 2px solid rgba(212, 175, 55, 0.45);
-  border-radius: var(--pyt-radius-sm, 4px);
-  color: #fff7e6;
-  font-family: inherit;
-  cursor: pointer;
-  transition: background 120ms, border-color 120ms, transform 80ms;
-}
-
-.hud-tool-slot:hover {
-  background: rgba(212, 175, 55, 0.28);
-  border-color: #d4af37;
-}
-
-.hud-tool-slot:focus-visible {
-  outline: 2px solid #f1c453;
-  outline-offset: 1px;
-}
-
-.hud-tool-slot:active {
-  transform: translateY(1px);
-}
-
-.hud-tool-slot--active {
-  background: rgba(212, 175, 55, 0.36);
-  border-color: #f1c453;
-  box-shadow: inset 0 0 0 1px #f1c453;
-}
-
-.hud-tool-slot__icon {
-  font-size: 18px;
-  font-weight: 800;
-  color: #f1c453;
-  line-height: 1;
-}
-
-.hud-tool-slot__label {
-  font-size: 11px;
-  color: #fff7e6;
-}
-
-.hud-tool-slot__shortcut {
-  font-size: 10px;
-  color: rgba(255, 247, 230, 0.6);
 }
 
 @media (max-width: 760px) {
   .hud-top {
-    gap: 6px;
-    padding: 6px 10px;
+    font-size: 12px;
+  }
+  .hud-chip {
+    font-size: 11px;
+    padding: 3px 8px;
+  }
+  .hud-quest__title {
+    font-size: 13px;
+    max-width: 60vw;
+  }
+  .hud-quest__objective {
+    max-width: 60vw;
     font-size: 11px;
   }
-  .hud-bar {
-    min-width: 100px;
-  }
-  .hud-bar__track {
-    width: 56px;
-  }
-  .hud-slot {
-    min-width: 52px;
-    min-height: 48px;
-    padding: 4px;
-  }
+  .hud-slot,
   .hud-tool-slot {
-    min-width: 44px;
-    min-height: 44px;
-    padding: 4px;
+    width: 48px;
+    height: 48px;
+    gap: 1px;
   }
-  .hud-tool-slot__label,
+  .hud-slot__icon,
+  .hud-tool-slot__icon {
+    font-size: 16px;
+  }
+  .hud-slot__icon-img {
+    width: 16px;
+    height: 16px;
+  }
+  .hud-slot__label,
+  .hud-tool-slot__label {
+    display: none;
+  }
+  .hud-slot__shortcut,
   .hud-tool-slot__shortcut {
+    display: none;
+  }
+  .hud-divider {
+    display: none;
+  }
+  .hud-identity__day {
     display: none;
   }
 }

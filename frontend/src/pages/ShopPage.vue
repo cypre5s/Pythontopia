@@ -28,6 +28,60 @@ const props = defineProps<Props>();
 const router = useRouter();
 const toast = useToastStore();
 
+const ITEM_NAMES: Record<string, string> = {
+  hoe: '锄头',
+  watering_can: '浇水壶',
+  axe: '斧头',
+  pickaxe: '镐',
+  bug_jar: 'Bug 瓶',
+  debug_lamp: '调试灯',
+  python_book: 'Python 经典书',
+  coffee: '咖啡',
+  bread: '面包',
+  flower: '鲜花',
+  trophy: '奖杯',
+  fertilizer: '肥料',
+  notebook: '笔记本',
+  energy_potion: '精力药水',
+  seed_chapter_1: '基础种子',
+  seed_chapter_2: '进阶种子',
+  seed_chapter_3: '计算种子',
+  seed_chapter_4: '流程种子',
+  seed_chapter_5: '结构种子',
+  seed_chapter_6: '存取种子',
+  seed_chapter_7: '抽象种子',
+};
+
+function itemName(key: string): string {
+  return ITEM_NAMES[key] ?? key;
+}
+
+const FALLBACK_EAST: ShopListingDto[] = [
+  { shopKey: 'shop_east', itemKey: 'hoe', priceCoins: 50, priceGems: 0, stock: null, availableDays: null },
+  { shopKey: 'shop_east', itemKey: 'watering_can', priceCoins: 40, priceGems: 0, stock: null, availableDays: null },
+  { shopKey: 'shop_east', itemKey: 'pickaxe', priceCoins: 70, priceGems: 0, stock: null, availableDays: null },
+  { shopKey: 'shop_east', itemKey: 'seed_chapter_1', priceCoins: 10, priceGems: 0, stock: null, availableDays: null },
+  { shopKey: 'shop_east', itemKey: 'seed_chapter_2', priceCoins: 15, priceGems: 0, stock: null, availableDays: null },
+  { shopKey: 'shop_east', itemKey: 'debug_lamp', priceCoins: 80, priceGems: 0, stock: 3, availableDays: null },
+];
+const FALLBACK_WEST: ShopListingDto[] = [
+  { shopKey: 'shop_west', itemKey: 'bread', priceCoins: 15, priceGems: 0, stock: null, availableDays: null },
+  { shopKey: 'shop_west', itemKey: 'coffee', priceCoins: 30, priceGems: 0, stock: null, availableDays: null },
+  { shopKey: 'shop_west', itemKey: 'energy_potion', priceCoins: 50, priceGems: 0, stock: null, availableDays: null },
+  { shopKey: 'shop_west', itemKey: 'flower', priceCoins: 25, priceGems: 0, stock: null, availableDays: null },
+  { shopKey: 'shop_west', itemKey: 'python_book', priceCoins: 100, priceGems: 0, stock: 5, availableDays: null },
+];
+const FALLBACK_PORT: ShopListingDto[] = [
+  { shopKey: 'merchant_port', itemKey: 'python_book', priceCoins: 100, priceGems: 0, stock: 5, availableDays: null },
+  { shopKey: 'merchant_port', itemKey: 'coffee', priceCoins: 30, priceGems: 0, stock: null, availableDays: null },
+  { shopKey: 'merchant_port', itemKey: 'hoe', priceCoins: 50, priceGems: 0, stock: 1, availableDays: null },
+];
+const FALLBACKS: Record<string, ShopListingDto[]> = {
+  shop_east: FALLBACK_EAST,
+  shop_west: FALLBACK_WEST,
+  merchant_port: FALLBACK_PORT,
+};
+
 const listings = ref<ShopListingDto[]>([]);
 const loading = ref(true);
 const errorMessage = ref<string | null>(null);
@@ -40,10 +94,15 @@ async function load(): Promise<void> {
     if (listings.value.length > 0) {
       playCoinJingle();
     }
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    errorMessage.value = msg;
-    toast.show(`无法加载商品列表：${msg}`, 'error');
+  } catch {
+    const fallback = FALLBACKS[props.shopKey];
+    if (fallback) {
+      listings.value = fallback;
+      toast.show('后端暂不可用，使用本地商品数据', 'info');
+    } else {
+      errorMessage.value = '无法连接商店服务';
+      toast.show('无法加载商品列表', 'error');
+    }
   } finally {
     loading.value = false;
   }
@@ -121,7 +180,7 @@ onMounted(() => {
         >
           <div class="shop-card__head">
             <h2 class="shop-card__name">
-              {{ item.itemKey }}
+              {{ itemName(item.itemKey) }}
             </h2>
             <span
               v-if="item.stock !== null"
@@ -171,7 +230,7 @@ onMounted(() => {
   border: 3px solid #d4af37;
   border-radius: 10px;
   color: #fff7e6;
-  font-family: 'PythontopiaPixel', 'PingFang SC', 'Noto Sans CJK SC', monospace;
+  font-family: var(--pyt-font-pixel), 'PingFang SC', 'Noto Sans CJK SC', monospace;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
 

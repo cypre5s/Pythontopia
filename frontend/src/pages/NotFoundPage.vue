@@ -114,7 +114,7 @@ onUnmounted(() => {
   border: 3px solid #d4af37;
   border-radius: 10px;
   color: #fff7e6;
-  font-family: 'PythontopiaPixel', 'PingFang SC', 'Noto Sans CJK SC', monospace;
+  font-family: var(--pyt-font-pixel), 'PingFang SC', 'Noto Sans CJK SC', monospace;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   text-align: center;
 }

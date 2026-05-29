@@ -30,6 +30,9 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useDialogStore, type DialogChoice } from '@stores/dialog';
+import { useGameSettingsStore, type TextSpeed } from '@stores/gameSettings';
+import { useSessionStore } from '@stores/session';
+import { createDialogContext, renderDialogText } from '@/game/dialogTemplate';
 
 interface Props {
   /** 左侧立绘 URL（一般为 NPC）；为空时尝试用 store.npcKey 约定路径回退。 */
@@ -47,6 +50,31 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 const dialog = useDialogStore();
+const session = useSessionStore();
+const gameSettings = useGameSettingsStore();
+
+const SPEED_MAP: Record<TextSpeed, number> = {
+  slow: 60, normal: 35, fast: 15, instant: 0,
+};
+const effectiveTypingMs = computed(() =>
+  SPEED_MAP[gameSettings.education.textSpeed] ?? props.typingSpeedMs,
+);
+
+/**
+ * R-12 W2-NPC：与 DialogTree 共用同一个渲染上下文。
+ *
+ * 旧 placeholder 入口（lines）通常不含 `{{}}` 占位符，但渲染器对纯文本是 no-op，
+ * 顺手 pipe 一道也不会改坏；新对话树入口的 stats / profileAdaptive / giftFavorite 会被实际替换。
+ */
+const templateContext = computed(() => {
+  const ctx = dialog.context;
+  return createDialogContext({
+    playerName: ctx?.playerName ?? session.displayName,
+    profileType: ctx?.profileType ?? 'cautious',
+    giftJustGiven: ctx?.giftJustGiven ?? false,
+    stats: ctx?.stats ?? {},
+  });
+});
 
 /**
  * 文本来源优先级：currentNode.text > 旧 lines 换行合并 > 空串。
@@ -56,18 +84,22 @@ const dialog = useDialogStore();
  */
 const fullText = computed<string>(() => {
   const node = dialog.currentNode;
-  if (node) return node.text;
-  if (dialog.lines.length > 0) return dialog.lines.join('\n');
-  return '';
+  const raw = node ? node.text : dialog.lines.length > 0 ? dialog.lines.join('\n') : '';
+  if (!raw) return '';
+  return renderDialogText(raw, templateContext.value);
 });
+
+const renderedBranchLabels = computed<string[]>(() =>
+  dialog.branchChoices.map((c) => renderDialogText(c.label, templateContext.value)),
+);
 
 const heartDisplay = computed<string>(() => {
   const f = dialog.friendship;
   if (f <= 0) return '';
   const full = Math.min(Math.floor(f / 10), 10);
   const remainder = f % 10;
-  if (full >= 10) return '❤'.repeat(10);
-  return '❤'.repeat(full) + (remainder > 0 ? ` +${remainder}` : '');
+  if (full >= 10) return '<3'.repeat(10);
+  return '<3'.repeat(full) + (remainder > 0 ? ` +${remainder}` : '');
 });
 
 const resolvedPortraitLeft = computed<string>(() => {
@@ -88,6 +120,7 @@ const resolvedPortraitRight = computed<string>(() => props.portraitRight);
 const displayedText = ref('');
 const highlightedIndex = ref(0);
 let typeTimer: ReturnType<typeof setTimeout> | null = null;
+let autoAdvanceTimer: ReturnType<typeof setTimeout> | null = null;
 
 function clearTypeTimer(): void {
   if (typeTimer !== null) {
@@ -96,10 +129,20 @@ function clearTypeTimer(): void {
   }
 }
 
+function clearAutoAdvanceTimer(): void {
+  if (autoAdvanceTimer !== null) {
+    clearTimeout(autoAdvanceTimer);
+    autoAdvanceTimer = null;
+  }
+}
+
 function startTypewriter(text: string): void {
   clearTypeTimer();
+  clearAutoAdvanceTimer();
   displayedText.value = '';
-  if (text.length === 0) {
+  const delay = effectiveTypingMs.value;
+  if (text.length === 0 || delay === 0) {
+    displayedText.value = text;
     dialog.markTypingDone();
     return;
   }
@@ -112,9 +155,9 @@ function startTypewriter(text: string): void {
       dialog.markTypingDone();
       return;
     }
-    typeTimer = setTimeout(tick, props.typingSpeedMs);
+    typeTimer = setTimeout(tick, delay);
   };
-  typeTimer = setTimeout(tick, props.typingSpeedMs);
+  typeTimer = setTimeout(tick, delay);
 }
 
 function skipTypewriter(): void {
@@ -206,6 +249,7 @@ watch(
       startTypewriter(fullText.value);
     } else if (!open) {
       clearTypeTimer();
+      clearAutoAdvanceTimer();
       displayedText.value = '';
       highlightedIndex.value = 0;
     }
@@ -221,6 +265,19 @@ watch(
   },
 );
 
+watch(
+  () => dialog.isTypingDone,
+  (done) => {
+    clearAutoAdvanceTimer();
+    if (done && !dialog.hasBranches && gameSettings.education.autoAdvanceDialog) {
+      autoAdvanceTimer = setTimeout(() => {
+        autoAdvanceTimer = null;
+        dialog.close();
+      }, gameSettings.education.autoAdvanceDelayMs);
+    }
+  },
+);
+
 onMounted(() => {
   window.addEventListener('keydown', onKeyDown);
   if (dialog.isOpen && fullText.value) {
@@ -231,6 +288,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeyDown);
   clearTypeTimer();
+  clearAutoAdvanceTimer();
 });
 </script>
 
@@ -264,7 +322,9 @@ onBeforeUnmount(() => {
         v-if="dialog.npcName || dialog.npcKey"
         class="dialog-head"
       >
-        <span class="name-tag">{{ dialog.npcName || dialog.npcKey }}</span>
+        <span
+          class="name-tag"
+        >{{ dialog.npcName || dialog.npcKey }}</span>
         <span
           v-if="dialog.friendship > 0"
           class="friendship-badge"
@@ -303,7 +363,7 @@ onBeforeUnmount(() => {
           @click="onChooseBranch(choice)"
           @mouseenter="highlightedIndex = idx"
         >
-          {{ choice.label }}
+          {{ renderedBranchLabels[idx] ?? choice.label }}
         </button>
       </div>
 
@@ -356,16 +416,15 @@ onBeforeUnmount(() => {
 
 .dialog-portrait {
   flex: 0 0 auto;
-  width: 96px;
-  height: 96px;
-  background-color: rgba(0, 0, 0, 0.45);
-  border: 3px solid #d4af37;
-  border-radius: 6px;
+  width: 72px;
+  height: 108px;
+  background-color: var(--pyt-panel-bg);
+  border: 3px solid var(--pyt-panel-border);
+  border-radius: 2px;
   overflow: hidden;
-  /* 关键：用 grid 把内部 16x24 单帧居中，再交给 transform 放大撑满。 */
   display: grid;
   place-items: center;
-  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.45);
+  box-shadow: 4px 4px 0 var(--pyt-panel-border-dark);
 }
 
 .dialog-portrait--left,
@@ -373,27 +432,16 @@ onBeforeUnmount(() => {
   align-self: flex-end;
 }
 
-/* R-13 §-1 B1 续修 v3：源文件已被 scripts/crop-portrait-heads.py 切成 32x48 单帧 PNG
-   并放在 portraits/heads/，DialogModal 改用 `_head.png` 路径后，CSS 不再需要做
-   sprite sheet 偏移与 transform scale。直接 `object-fit: contain` 让 32x48 头像在
-   96x96 容器内等比放大到 64x96（宽 64 + 左右 16 px 留白），像素感由
-   `image-rendering: pixelated` 保留。
-
-   这样修复了之前 "整张 sheet 9 个小头同时出现" 的 bug，并兼容了非 48x72 的异类
-   尺寸（48x64 / 48x96 / 153x128 / ...），因为切片脚本统一输出 32x48。 */
 .pixel-portrait {
   width: 100%;
   height: 100%;
   image-rendering: pixelated;
+  image-rendering: crisp-edges;
   -ms-interpolation-mode: nearest-neighbor;
   object-fit: contain;
-  object-position: center;
+  object-position: center bottom;
 }
 
-/* R-13 修复：
-   1. 宽度响应式（min(640px, calc(100vw - 280px))）；
-   2. 文字颜色改为深褐色，与牛皮纸面板对比强烈；
-   3. background 改纯色牛皮纸（去 9-slice border-image，避免文字溢出边框） */
 .dialog-panel {
   flex: 1 1 auto;
   width: min(640px, calc(100vw - 240px));
@@ -402,20 +450,25 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 10px;
   padding: 20px 28px;
-  background: linear-gradient(180deg, #f9e7bc 0%, #f1d896 100%);
-  border: 4px solid #6e4f1d;
-  border-radius: 10px;
-  color: #3a2a14;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4), inset 0 0 0 2px rgba(255, 247, 230, 0.5);
+  background: var(--pyt-panel-bg);
+  border: 3px solid var(--pyt-panel-border);
+  border-radius: 2px;
+  color: var(--pyt-text-primary);
+  box-shadow: 4px 4px 0 var(--pyt-panel-border-dark), 0 8px 24px var(--pyt-panel-shadow);
+  image-rendering: pixelated;
 }
 
 .dialog-head {
-  color: #6e4f1d;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--pyt-text-accent);
   font-size: 16px;
   letter-spacing: 0.5px;
   font-weight: 700;
-  border-bottom: 2px solid rgba(110, 79, 29, 0.35);
+  border-bottom: 2px solid var(--pyt-panel-border);
   padding-bottom: 6px;
+  text-shadow: 1px 1px 0 #2a1a05;
 }
 
 @media (max-width: 760px) {
@@ -429,8 +482,8 @@ onBeforeUnmount(() => {
     padding: 12px 16px;
   }
   .dialog-portrait {
-    width: 64px;
-    height: 64px;
+    width: 48px;
+    height: 72px;
   }
 }
 
@@ -438,18 +491,12 @@ onBeforeUnmount(() => {
   font-weight: 600;
 }
 
-.dialog-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
 .friendship-badge {
   font-size: 13px;
-  color: #ffb3b3;
-  background: rgba(255, 179, 179, 0.12);
+  color: var(--pyt-text-primary);
+  background: rgba(0, 0, 0, 0.2);
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: 2px;
   letter-spacing: 1px;
 }
 
@@ -465,7 +512,7 @@ onBeforeUnmount(() => {
   word-break: break-word;
   min-height: 1.75em;
   cursor: pointer;
-  color: #3a2a14;
+  color: var(--pyt-text-primary);
 }
 
 .typing-cursor {
@@ -490,35 +537,35 @@ onBeforeUnmount(() => {
 }
 
 .choice-btn {
-  font-family: var(--pyt-font-pixel, monospace);
+  font-family: var(--pyt-font-pixel, 'Ark Pixel 12', monospace);
   font-size: 14px;
-  color: #2a1a08;
-  background-color: #f7d774;
-  border: 3px solid #8c6a23;
+  color: var(--pyt-text-primary);
+  background: var(--pyt-btn-bg);
+  border: 2px solid var(--pyt-btn-border);
   padding: 6px 14px;
-  border-radius: 4px;
-  box-shadow: 0 3px 0 #8c6a23;
+  border-radius: 2px;
+  box-shadow: 2px 2px 0 var(--pyt-panel-border-dark);
   cursor: pointer;
-  transition: background-color 120ms ease, transform 80ms ease;
+  transition: background 120ms ease, transform 80ms ease;
 }
 
 .choice-btn:hover,
 .choice-btn--highlight {
-  background-color: #ffe098;
+  background: var(--pyt-btn-hover-bg);
 }
 
 .choice-btn--highlight {
-  outline: 2px solid #4d3613;
+  outline: 2px solid var(--pyt-panel-border);
   outline-offset: 2px;
 }
 
 .choice-btn:active {
   transform: translateY(2px);
-  box-shadow: 0 1px 0 #8c6a23;
+  box-shadow: 0 0 0 var(--pyt-panel-border-dark);
 }
 
 .choice-btn:focus-visible {
-  outline: 2px solid #4d3613;
+  outline: 2px solid var(--pyt-panel-border);
   outline-offset: 2px;
 }
 </style>
