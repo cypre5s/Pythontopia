@@ -1,0 +1,83 @@
+{
+  "key": "sailor",
+  "name": "水手",
+  "category": "life",
+  "sprite": "npc_sailor",
+  "portrait": "portrait_sailor.png",
+  "spawnMap": "town_hub",
+  "spawn": {
+    "tileX": 4,
+    "tileY": 28
+  },
+  "birthday": {
+    "month": 7,
+    "day": 7
+  },
+  "favoriteGifts": [
+    "coffee",
+    "bread"
+  ],
+  "schedule": {
+    "monday": [
+      {
+        "from": "06:00",
+        "map": "town_hub",
+        "tileX": 4,
+        "tileY": 28
+      }
+    ],
+    "tuesday": [
+      {
+        "from": "06:00",
+        "map": "town_hub",
+        "tileX": 4,
+        "tileY": 28
+      }
+    ],
+    "wednesday": [
+      {
+        "from": "06:00",
+        "map": "town_hub",
+        "tileX": 4,
+        "tileY": 28
+      }
+    ],
+    "thursday": [
+      {
+        "from": "06:00",
+        "map": "town_hub",
+        "tileX": 4,
+        "tileY": 28
+      }
+    ],
+    "friday": [
+      {
+        "from": "06:00",
+        "map": "town_hub",
+        "tileX": 4,
+        "tileY": 28
+      }
+    ],
+    "saturday": [
+      {
+        "from": "06:00",
+        "map": "town_hub",
+        "tileX": 4,
+        "tileY": 28
+      }
+    ],
+    "sunday": [
+      {
+        "from": "06:00",
+        "map": "town_hub",
+        "tileX": 4,
+        "tileY": 28
+      }
+    ]
+  },
+  "tags": [
+    "port",
+    "trade"
+  ],
+  "description": "港口的水手，带来外界的编程趣闻和稀有商品。"
+}

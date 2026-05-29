@@ -28,7 +28,39 @@
     "source_pages_json": "[45]",
     "related_kc_ids_json": "[1844]",
     "teaching_explanation": "本题是让初学者熟悉 Python 的基本输入输出、变量赋值以及算术运算。通过实现一个简单的数学公式，学生可以练习如何把数学表达式转化为代码，并了解控制台 I/O 的基本流程。",
-    "common_mistakes_json": "[\"使用 `math.pi` 而不是题目要求的固定值 3.1415。\",\"忘记将输入的字符串转换为浮点数，导致类型错误。\",\"在计算面积时忘记对 `radius` 进行平方，而是直接使用 `radius`。\",\"输出时使用了多余的格式化或空格，导致答案不匹配。\",\"没有处理输入可能出现的空行或额外空白字符。\"]"
+    "common_mistakes_json": "[\"使用 `math.pi` 而不是题目要求的固定值 3.1415。\",\"忘记将输入的字符串转换为浮点数，导致类型错误。\",\"在计算面积时忘记对 `radius` 进行平方，而是直接使用 `radius`。\",\"输出时使用了多余的格式化或空格，导致答案不匹配。\",\"没有处理输入可能出现的空行或额外空白字符。\"]",
+    "test_cases": [
+      {
+        "input": "25",
+        "expected_output": "1963.4375",
+        "is_sample": true
+      },
+      {
+        "input": "10",
+        "expected_output": "314.1500",
+        "is_sample": true
+      },
+      {
+        "input": "0.5",
+        "expected_output": "0.7854",
+        "is_sample": true
+      },
+      {
+        "input": "1",
+        "expected_output": "3.1415",
+        "is_sample": false
+      },
+      {
+        "input": "0",
+        "expected_output": "0.0000",
+        "is_sample": false
+      },
+      {
+        "input": "100",
+        "expected_output": "31415.0000",
+        "is_sample": false
+      }
+    ]
   },
   {
     "id": 477,
@@ -51,7 +83,24 @@
     "source_pages_json": "[37]",
     "related_kc_ids_json": "[1834]",
     "teaching_explanation": "本题是学习整数位提取的基础练习，通过整数除法和取模运算（掐头去尾法）提取多位数的各位数字。这是理解计算机如何处理数字、位运算以及后续学习字符串索引与切片的重要基础。掌握这种方法后，可以推广到提取任意位数数字的场景。",
-    "common_mistakes_json": "[\"百位提取错误：忘记对100取模，导致百位数字不正确\",\"十位提取错误：直接用n // 10而没有再对10取模\",\"输出格式错误：忘记或写错中文冒号、逗号等标点符号\",\"数据类型混淆：将数字与字符串拼接时没有转换类型\"]"
+    "common_mistakes_json": "[\"百位提取错误：忘记对100取模，导致百位数字不正确\",\"十位提取错误：直接用n // 10而没有再对10取模\",\"输出格式错误：忘记或写错中文冒号、逗号等标点符号\",\"数据类型混淆：将数字与字符串拼接时没有转换类型\"]",
+    "test_cases": [
+      {
+        "input": "1314",
+        "expected_output": "千位数是1，百位数是3，十位数是1，个位数是4",
+        "is_sample": true
+      },
+      {
+        "input": "1000",
+        "expected_output": "1\n0\n0\n0",
+        "is_sample": false
+      },
+      {
+        "input": "9999",
+        "expected_output": "9\n9\n9\n9",
+        "is_sample": false
+      }
+    ]
   },
   {
     "id": 478,
@@ -82,7 +131,24 @@
     "source_pages_json": "[82]",
     "related_kc_ids_json": "[1826]",
     "teaching_explanation": "本题引导初学者理解字符与ASCII码的转换关系（ord和chr函数），并通过模运算实现字母的环绕效果（如Z->A）。这是字符串处理和字符编码的基础练习，也是理解凯撒密码这一经典加密算法的入门案例。",
-    "common_mistakes_json": "[\"忘记对偏移结果取模26，导致输入Z时输出非字母字符\",\"使用硬编码的if-elif语句而不是通用公式\",\"直接输出而没有考虑环绕情况\"]"
+    "common_mistakes_json": "[\"忘记对偏移结果取模26，导致输入Z时输出非字母字符\",\"使用硬编码的if-elif语句而不是通用公式\",\"直接输出而没有考虑环绕情况\"]",
+    "test_cases": [
+      {
+        "input": "A",
+        "expected_output": "D",
+        "is_sample": true
+      },
+      {
+        "input": "Z",
+        "expected_output": "C",
+        "is_sample": true
+      },
+      {
+        "input": "X",
+        "expected_output": "A",
+        "is_sample": true
+      }
+    ]
   },
   {
     "id": 479,
@@ -113,7 +179,24 @@
     "source_pages_json": "[73,74,75]",
     "related_kc_ids_json": "[1828,1826]",
     "teaching_explanation": "本题是字符串索引与列表查找的入门练习。学生需要理解如何将用户输入的数字（1-7）映射到对应的中文星期字符串。通过使用列表存储所有星期字符串，然后根据输入的数字访问列表的对应位置，可以培养学生对离散数据映射的理解能力。",
-    "common_mistakes_json": "[\"索引越界：直接使用 n 作为列表索引时忘记 n-1，导致访问 week[n] 时超出范围\",\"硬编码输出：使用多个 if 语句分别处理每个数字，没有利用列表索引的便捷性\",\"列表定义错误：将列表定义为 weekdays = \\\"星期一,星期二,...\\\" 字符串形式而非列表\"]"
+    "common_mistakes_json": "[\"索引越界：直接使用 n 作为列表索引时忘记 n-1，导致访问 week[n] 时超出范围\",\"硬编码输出：使用多个 if 语句分别处理每个数字，没有利用列表索引的便捷性\",\"列表定义错误：将列表定义为 weekdays = \\\"星期一,星期二,...\\\" 字符串形式而非列表\"]",
+    "test_cases": [
+      {
+        "input": "3",
+        "expected_output": "星期三",
+        "is_sample": true
+      },
+      {
+        "input": "1",
+        "expected_output": "星期一",
+        "is_sample": true
+      },
+      {
+        "input": "7",
+        "expected_output": "星期日",
+        "is_sample": true
+      }
+    ]
   },
   {
     "id": 480,
@@ -140,7 +223,19 @@
     "source_pages_json": "[58]",
     "related_kc_ids_json": "[1808]",
     "teaching_explanation": "本题是while循环与循环分支结合的经典练习。通过莱布尼茨公式计算π的近似值，学生需要掌握：1) 使用while循环控制迭代次数；2) 结合分支语句（符号交替）实现数列累加；3) 设置合理的循环终止条件（项的绝对值小于阈值）。这个练习帮助学生理解如何将数学公式转化为程序逻辑，以及如何处理无限级数的近似计算问题。",
-    "common_mistakes_json": "[\"符号变量没有正确更新导致所有项都是正数或负数\",\"循环条件写成 term > threshold 而非 abs(term) >= threshold\",\"在循环内累加前忘记先初始化 pi_approx = 0\",\"分母更新顺序错误，应先加2再计算新项\",\"输出时忘记乘以4，直接输出累计和\"]"
+    "common_mistakes_json": "[\"符号变量没有正确更新导致所有项都是正数或负数\",\"循环条件写成 term > threshold 而非 abs(term) >= threshold\",\"在循环内累加前忘记先初始化 pi_approx = 0\",\"分母更新顺序错误，应先加2再计算新项\",\"输出时忘记乘以4，直接输出累计和\"]",
+    "test_cases": [
+      {
+        "input": "0.001",
+        "expected_output": "3.1396",
+        "is_sample": true
+      },
+      {
+        "input": "0.0001",
+        "expected_output": "3.1414",
+        "is_sample": true
+      }
+    ]
   },
   {
     "id": 481,
@@ -171,7 +266,24 @@
     "source_pages_json": "[52,53,54]",
     "related_kc_ids_json": "[1797]",
     "teaching_explanation": "本题是Python循环遍历的基础练习，通过计算偶数和让初学者掌握：1）for循环遍历整数序列的用法；2）range()函数的参数设置；3）条件判断筛选数据；4）累加求和的思路。本题也引入了参数化的设计思想，将固定边界改为可输入的变量，增强程序的通用性。",
-    "common_mistakes_json": "[\"错误使用 range(1, N) 而不是 range(1, N+1)，导致漏掉边界值 N\",\"忘记初始化累加器 total = 0\",\"将条件写成 i % 2 != 0（误把奇数当偶数累加）\",\"使用 print(total) 时多输出换行或其他字符\"]"
+    "common_mistakes_json": "[\"错误使用 range(1, N) 而不是 range(1, N+1)，导致漏掉边界值 N\",\"忘记初始化累加器 total = 0\",\"将条件写成 i % 2 != 0（误把奇数当偶数累加）\",\"使用 print(total) 时多输出换行或其他字符\"]",
+    "test_cases": [
+      {
+        "input": "4",
+        "expected_output": "6",
+        "is_sample": true
+      },
+      {
+        "input": "6",
+        "expected_output": "12",
+        "is_sample": true
+      },
+      {
+        "input": "1",
+        "expected_output": "0",
+        "is_sample": true
+      }
+    ]
   },
   {
     "id": 482,
@@ -194,7 +306,19 @@
     "source_pages_json": "[64,65]",
     "related_kc_ids_json": "[1831]",
     "teaching_explanation": "本问题练习嵌套循环的使用。外层循环控制行数，内层循环控制每行输出的列数。这是经典的循环嵌套应用场景，帮助学生理解双层循环的执行原理和行列关系。每个内层循环遍历到当前行号 i，构造格式为 \"a×b=c\" 的表达式，最后用制表符连接同一行的表达式。",
-    "common_mistakes_json": "[\"混淆行列关系：内层循环上界应该是 i（当前行号），而不是 n\",\"行末多余制表符：每行最后一个表达式后不应再有制表符，应使用 join 或正确控制输出\",\"换行时机错误：应该在完成一整行的所有表达式后才换行（print 默认换行）\",\"符号错误：使用字母 x 或 * 而非中文乘号 ×\"]"
+    "common_mistakes_json": "[\"混淆行列关系：内层循环上界应该是 i（当前行号），而不是 n\",\"行末多余制表符：每行最后一个表达式后不应再有制表符，应使用 join 或正确控制输出\",\"换行时机错误：应该在完成一整行的所有表达式后才换行（print 默认换行）\",\"符号错误：使用字母 x 或 * 而非中文乘号 ×\"]",
+    "test_cases": [
+      {
+        "input": "3",
+        "expected_output": "1×1=1\n1×2=2\t2×2=4\n1×3=3\t2×3=6\t3×3=9",
+        "is_sample": true
+      },
+      {
+        "input": "",
+        "expected_output": "1*1= 1\n1*2= 2  2*2= 4\n1*3= 3  2*3= 6  3*3= 9\n1*4= 4  2*4= 8  3*4=12  4*4=16\n1*5= 5  2*5=10  3*5=15  4*5=20  5*5=25\n1*6= 6  2*6=12  3*6=18  4*6=24  5*6=30  6*6=36\n1*7= 7  2*7=14  3*7=21  4*7=28  5*7=35  6*7=42  7*7=49\n1*8= 8  2*8=16  3*8=24  4*8=32  5*8=40  6*8=48  7*8=56  8*8=64\n1*9= 9  2*9=18  3*9=27  4*9=36  5*9=45  6*9=54  7*9=63  8*9=72  9*9=81",
+        "is_sample": false
+      }
+    ]
   },
   {
     "id": 483,
@@ -225,7 +349,24 @@
     "source_pages_json": "[71]",
     "related_kc_ids_json": "[1832]",
     "teaching_explanation": "本题是循环控制语句的经典应用场景。通过while True创建无限循环，使用break语句在密码正确时退出循环，实现'半路循环'的效果。学生需要理解：1) 如何根据条件判断输出不同提示；2) 如何在满足条件时使用break跳出循环；3) 如何处理长度验证和密码匹配两个判断条件。这是从理论到实践的良好过渡。",
-    "common_mistakes_json": "[\"混淆break和continue的用法：break是退出整个循环，而continue是跳过本次循环继续下一次\",\"忘记在密码正确时使用break语句，导致程序无法正常退出\",\"判断条件顺序错误：应该先判断长度是否小于6，再判断长度是否等于6且密码是否正确\",\"输出信息与题目要求不一致，如少了'请重新输入'等字样\"]"
+    "common_mistakes_json": "[\"混淆break和continue的用法：break是退出整个循环，而continue是跳过本次循环继续下一次\",\"忘记在密码正确时使用break语句，导致程序无法正常退出\",\"判断条件顺序错误：应该先判断长度是否小于6，再判断长度是否等于6且密码是否正确\",\"输出信息与题目要求不一致，如少了'请重新输入'等字样\"]",
+    "test_cases": [
+      {
+        "input": "abc123\nabc123",
+        "expected_output": "密码正确，登录成功",
+        "is_sample": true
+      },
+      {
+        "input": "abc123\nab\nabc123",
+        "expected_output": "密码长度不足6位，请重新输入\n密码正确，登录成功",
+        "is_sample": true
+      },
+      {
+        "input": "abc123\nwrong1\nabc123",
+        "expected_output": "密码错误，请重新输入\n密码正确，登录成功",
+        "is_sample": true
+      }
+    ]
   },
   {
     "id": 484,
@@ -256,7 +397,24 @@
     "source_pages_json": "[72]",
     "related_kc_ids_json": "[1832]",
     "teaching_explanation": "本题是经典的猜数字游戏，用于帮助初学者掌握 while 循环或 for 循环与条件判断的结合使用。核心知识点包括：1) 使用 break 语句提前退出循环，实现'猜中即停'的逻辑；2) 通过循环计数器控制猜测次数；3) 使用 if-elif-else 分支结构输出偏大/偏小/正确的提示；4) 当循环正常结束（未 break）时，说明三次均未猜中，此时输出'机会用完'。这个练习帮助学生理解循环控制语句在程序流程自动化中的重要作用。",
-    "common_mistakes_json": "[\"猜中后没有用 break 语句退出循环，导致继续执行后面的猜测\",\"三次猜错时忘记输出'机会用完'的提示\",\"将'机会用完'的输出放在循环内部而不是循环结束后\",\"条件判断顺序错误，例如先判断偏小再判断偏大导致逻辑混乱\"]"
+    "common_mistakes_json": "[\"猜中后没有用 break 语句退出循环，导致继续执行后面的猜测\",\"三次猜错时忘记输出'机会用完'的提示\",\"将'机会用完'的输出放在循环内部而不是循环结束后\",\"条件判断顺序错误，例如先判断偏小再判断偏大导致逻辑混乱\"]",
+    "test_cases": [
+      {
+        "input": "3 1 5 6",
+        "expected_output": "偏小\n偏大\n偏大\n机会用完",
+        "is_sample": true
+      },
+      {
+        "input": "5 1 5 3",
+        "expected_output": "偏小\n正确",
+        "is_sample": true
+      },
+      {
+        "input": "1 6 6 6",
+        "expected_output": "偏大\n偏大\n偏大\n机会用完",
+        "is_sample": true
+      }
+    ]
   },
   {
     "id": 485,
@@ -283,7 +441,19 @@
     "source_pages_json": "[66]",
     "related_kc_ids_json": "[1831]",
     "teaching_explanation": "本题是嵌套循环（双重循环）的经典入门练习。通过外层循环控制行数，内层循环控制每行输出的星号数量，帮助学生理解循环嵌套的执行原理——外层循环执行一次，内层循环完整执行一次。这与打印九九乘法表同属于循环嵌套的典型应用场景，是理解循环嵌套的重要基础练习。",
-    "common_mistakes_json": "[\"内层循环的范围写错，如写成 range(i) 导致少打印一个星号\",\"忘记在外层循环末尾添加 print() 换行\",\"print() 语句的 end 参数设置错误，导致星号连成一行\"]"
+    "common_mistakes_json": "[\"内层循环的范围写错，如写成 range(i) 导致少打印一个星号\",\"忘记在外层循环末尾添加 print() 换行\",\"print() 语句的 end 参数设置错误，导致星号连成一行\"]",
+    "test_cases": [
+      {
+        "input": "3",
+        "expected_output": "*\n**\n***",
+        "is_sample": true
+      },
+      {
+        "input": "5",
+        "expected_output": "*\n**\n***\n****\n*****",
+        "is_sample": true
+      }
+    ]
   },
   {
     "id": 486,
@@ -306,7 +476,24 @@
     "source_pages_json": "[44]",
     "related_kc_ids_json": "[1816]",
     "teaching_explanation": "本题是流程自动化章节的入门练习，要求学生掌握基本的输入输出操作和算术运算。通过计算BMI这一实际应用，让学生理解如何将数学公式转化为程序代码，同时复习浮点数的使用和基本运算。",
-    "common_mistakes_json": "[\"身高平方计算错误：使用 height * 2 而不是 height * height 或 height ** 2\",\"公式顺序颠倒：写成 height ** 2 / weight 而不是 weight / height ** 2\",\"输入读取错误：没有正确读取两行输入，或忘记转换为浮点数\"]"
+    "common_mistakes_json": "[\"身高平方计算错误：使用 height * 2 而不是 height * height 或 height ** 2\",\"公式顺序颠倒：写成 height ** 2 / weight 而不是 weight / height ** 2\",\"输入读取错误：没有正确读取两行输入，或忘记转换为浮点数\"]",
+    "test_cases": [
+      {
+        "input": "75\n1.75",
+        "expected_output": "24.489795918367346",
+        "is_sample": true
+      },
+      {
+        "input": "70\n1.65",
+        "expected_output": "25.71",
+        "is_sample": false
+      },
+      {
+        "input": "50\n1.70",
+        "expected_output": "17.30",
+        "is_sample": false
+      }
+    ]
   },
   {
     "id": 487,
@@ -333,7 +520,19 @@
     "source_pages_json": "[34,35]",
     "related_kc_ids_json": "[1822,1815]",
     "teaching_explanation": "本题是Python流程控制中的经典多条件判断练习。通过判断三角形边长条件，学生需要同时运用逻辑运算符（and）和多个条件的组合，培养逻辑思维能力。本题也是后续学习更复杂条件判断和循环控制的基础。",
-    "common_mistakes_json": "[\"只检查了 a + b > c 一个条件，忽略了其他两组条件的检查\",\"使用了 or 运算符代替 and，导致条件判断错误\",\"没有考虑边长为0或负数的情况\"]"
+    "common_mistakes_json": "[\"只检查了 a + b > c 一个条件，忽略了其他两组条件的检查\",\"使用了 or 运算符代替 and，导致条件判断错误\",\"没有考虑边长为0或负数的情况\"]",
+    "test_cases": [
+      {
+        "input": "3 4 5",
+        "expected_output": "可以构成三角形",
+        "is_sample": true
+      },
+      {
+        "input": "1 2 3",
+        "expected_output": "不能构成三角形",
+        "is_sample": true
+      }
+    ]
   },
   {
     "id": 488,
@@ -360,7 +559,19 @@
     "source_pages_json": "[7]",
     "related_kc_ids_json": "[1859]",
     "teaching_explanation": "本题是顺序结构的经典练习，展示了程序自上而下依次执行的三环节：数据输入（读取半径）、运算处理（计算周长和面积）、结果输出（打印结果）。通过这道题，初学者可以熟悉变量赋值、基本数学运算和格式化输出，是后续学习循环和分支结构的基础。",
-    "common_mistakes_json": "[\"面积公式错误：误用 r*2*r 而非 r*r，或忘记平方操作\",\"使用错误的π值：直接写死3.14导致精度不足，应使用 math.pi\",\"输出格式错误：忘记保留两位小数，或使用整数除法导致结果截断\"]"
+    "common_mistakes_json": "[\"面积公式错误：误用 r*2*r 而非 r*r，或忘记平方操作\",\"使用错误的π值：直接写死3.14导致精度不足，应使用 math.pi\",\"输出格式错误：忘记保留两位小数，或使用整数除法导致结果截断\"]",
+    "test_cases": [
+      {
+        "input": "1",
+        "expected_output": "6.28\n3.14",
+        "is_sample": true
+      },
+      {
+        "input": "2.5",
+        "expected_output": "15.71\n19.63",
+        "is_sample": true
+      }
+    ]
   },
   {
     "id": 489,
@@ -387,7 +598,19 @@
     "source_pages_json": "[6]",
     "related_kc_ids_json": "[1859]",
     "teaching_explanation": "本题是顺序结构的典型应用示例，展示了程序自上而下依次执行数据输入、运算处理、结果输出三个基本环节。通过计算三门功课的平均成绩，帮助初学者理解基本的算术运算、变量赋值和格式化输出。题目要求保留1位小数，涉及到浮点数运算和字符串格式化，是后续学习更复杂数据处理的基础。",
-    "common_mistakes_json": "[\"计算平均值时忘记除以3，导致输出三门成绩之和而非平均值\",\"输出时没有保留1位小数，如直接print(average)导致输出90.0显示为90\",\"使用整数除法//而非浮点数除法/，导致结果为整数\",\"输入使用split()后忘记将字符串转换为浮点数进行计算\"]"
+    "common_mistakes_json": "[\"计算平均值时忘记除以3，导致输出三门成绩之和而非平均值\",\"输出时没有保留1位小数，如直接print(average)导致输出90.0显示为90\",\"使用整数除法//而非浮点数除法/，导致结果为整数\",\"输入使用split()后忘记将字符串转换为浮点数进行计算\"]",
+    "test_cases": [
+      {
+        "input": "90 85 95",
+        "expected_output": "90.0",
+        "is_sample": true
+      },
+      {
+        "input": "70 80 90",
+        "expected_output": "80.0",
+        "is_sample": true
+      }
+    ]
   },
   {
     "id": 490,
@@ -410,7 +633,24 @@
     "source_pages_json": "[8]",
     "related_kc_ids_json": "[1859]",
     "teaching_explanation": "本题是顺序结构的典型应用，需要学生综合运用数据输入、运算处理和结果输出三个环节。学生需要：1）正确输入年份；2）计算闰年和月份天数；3）计算每月第一天是星期几；4）格式化输出整齐的年历。这个练习帮助学生理解程序自上而下执行的流程，培养逻辑思维和问题分解能力。",
-    "common_mistakes_json": "[\"闰年判断逻辑错误，特别是忽略能被400整除也是闰年的规则\",\"没有正确计算每月第一天的星期位置，导致日期对齐错误\",\"2月份天数在闰年时未正确设置为29天\",\"输出格式不整齐，日期宽度不一致或分隔不正确\"]"
+    "common_mistakes_json": "[\"闰年判断逻辑错误，特别是忽略能被400整除也是闰年的规则\",\"没有正确计算每月第一天的星期位置，导致日期对齐错误\",\"2月份天数在闰年时未正确设置为29天\",\"输出格式不整齐，日期宽度不一致或分隔不正确\"]",
+    "test_cases": [
+      {
+        "input": "2024",
+        "expected_output": "2024\nJanuary\nSun Mon Tue Wed Thu Fri Sat\n       1   2   3   4   5   6\n   7   8   9  10  11  12  13\n  14  15  16  17  18  19  20\n  21  22  23  24  25  26  27\n  28  29  30  31\n\nFebruary\nSun Mon Tue Wed Thu Fri Sat\n                   1   2   3\n   4   5   6   7   8   9  10\n  11  12  13  14  15  16  17\n  18  19  20  21  22  23  24\n  25  26  27  28  29\n\nMarch\nSun Mon Tue Wed Thu Fri Sat\n                       1   2\n   3   4   5   6   7   8   9\n  10  11  12  13  14  15  16\n  17  18  19  20  21  22  23\n  24  25  26  27  28  29  30\n  31\n\nApril\nSun Mon Tue Wed Thu Fri Sat\n       1   2   3   4   5   6\n   7   8   9  10  11  12  13\n  14  15  16  17  18  19  20\n  21  22  23  24  25  26  27\n  28  29  30\n\nMay\nSun Mon Tue Wed Thu Fri Sat\n               1   2   3   4\n   5   6   7   8   9  10  11\n  12  13  14  15  16  17  18\n  19  20  21  22  23  24  25\n  26  27  28  29  30  31\n\nJune\nSun Mon Tue Wed Thu Fri Sat\n                           1\n   2   3   4   5   6   7   8\n   9  10  11  12  13  14  15\n  16  17  18  19  20  21  22\n  23  24  25  26  27  28  29\n  30\n\nJuly\nSun Mon Tue Wed Thu Fri Sat\n       1   2   3   4   5   6\n   7   8   9  10  11  12  13\n  14  15  16  17  18  19  20\n  21  22  23  24  25  26  27\n  28  29  30  31\n\nAugust\nSun Mon Tue Wed Thu Fri Sat\n                   1   2   3\n   4   5   6   7   8   9  10\n  11  12  13  14  15  16  17\n  18  19  20  21  22  23  24\n  25  26  27  28  29  30  31\n\nSeptember\nSun Mon Tue Wed Thu Fri Sat\n   1   2   3   4   5   6   7\n   8   9  10  11  12  13  14\n  15  16  17  18  19  20  21\n  22  23  24  25  26  27  28\n  29  30\n\nOctober\nSun Mon Tue Wed Thu Fri Sat\n           1   2   3   4   5\n   6   7   8   9  10  11  12\n  13  14  15  16  17  18  19\n  20  21  22  23  24  25  26\n  27  28  29  30  31\n\nNovember\nSun Mon Tue Wed Thu Fri Sat\n                       1   2\n   3   4   5   6   7   8   9\n  10  11  12  13  14  15  16\n  17  18  19  20  21  22  23\n  24  25  26  27  28  29  30\n\nDecember\nSun Mon Tue Wed Thu Fri Sat\n   1   2   3   4   5   6   7\n   8   9  10  11  12  13  14\n  15  16  17  18  19  20  21\n  22  23  24  25  26  27  28\n  29  30  31",
+        "is_sample": true
+      },
+      {
+        "input": "2024\n2",
+        "expected_output": "",
+        "is_sample": false
+      },
+      {
+        "input": "2025\n1",
+        "expected_output": "",
+        "is_sample": false
+      }
+    ]
   },
   {
     "id": 491,
@@ -441,7 +681,24 @@
     "source_pages_json": "[37,38,39]",
     "related_kc_ids_json": "[1816]",
     "teaching_explanation": "本题是分支语句嵌套的经典应用场景。通过用户登录验证的例子，帮助初学者理解多层条件判断的逻辑结构——先进行外层条件判断（用户名是否正确），只有在满足外层条件后才会进入内层判断（密码是否正确）。这种嵌套结构广泛应用于需要递进判断的实际问题中。",
-    "common_mistakes_json": "[\"直接使用两个独立的 if 语句判断用户名和密码，导致即使用户名错误也会继续判断密码\",\"将判断顺序搞反，先判断密码再判断用户名\",\"输出信息与题目要求不完全匹配，如输出 \\\"用户名错误\\\" 而非 \\\"用户名输入有误\\\"\"]"
+    "common_mistakes_json": "[\"直接使用两个独立的 if 语句判断用户名和密码，导致即使用户名错误也会继续判断密码\",\"将判断顺序搞反，先判断密码再判断用户名\",\"输出信息与题目要求不完全匹配，如输出 \\\"用户名错误\\\" 而非 \\\"用户名输入有误\\\"\"]",
+    "test_cases": [
+      {
+        "input": "admin\n123456",
+        "expected_output": "登录成功",
+        "is_sample": true
+      },
+      {
+        "input": "admin\nwrong",
+        "expected_output": "密码错误",
+        "is_sample": true
+      },
+      {
+        "input": "user\n123456",
+        "expected_output": "用户名输入有误",
+        "is_sample": true
+      }
+    ]
   },
   {
     "id": 492,
@@ -472,7 +729,24 @@
     "source_pages_json": "[15]",
     "related_kc_ids_json": "[1815]",
     "teaching_explanation": "本题是分支结构的典型应用，通过多条件判断将分数划分为四个等级。练习if-elif-else多分支语句的使用，理解条件判断的逻辑顺序（从高到低逐级判断）。这是编程中最基础也是最实用的控制结构之一。",
-    "common_mistakes_json": "[\"条件顺序错误：没有从高到低判断，导致分数90被\\\"良好\\\"分支捕获\",\"边界值判断错误：使用了>而不是>=，导致90分无法输出\\\"优秀\\\"\",\"忘记处理所有情况：缺少else分支处理不及格的情况\"]"
+    "common_mistakes_json": "[\"条件顺序错误：没有从高到低判断，导致分数90被\\\"良好\\\"分支捕获\",\"边界值判断错误：使用了>而不是>=，导致90分无法输出\\\"优秀\\\"\",\"忘记处理所有情况：缺少else分支处理不及格的情况\"]",
+    "test_cases": [
+      {
+        "input": "85",
+        "expected_output": "良好",
+        "is_sample": true
+      },
+      {
+        "input": "92",
+        "expected_output": "优秀",
+        "is_sample": true
+      },
+      {
+        "input": "60",
+        "expected_output": "及格",
+        "is_sample": true
+      }
+    ]
   },
   {
     "id": 493,
@@ -499,7 +773,19 @@
     "source_pages_json": "[51,52]",
     "related_kc_ids_json": "[1797]",
     "teaching_explanation": "本题帮助初学者理解for循环的基本用法，特别是与range()函数配合实现确定次数的循环操作。通过累加计算自然数之和的经典案例，让学习者掌握如何在循环中使用累加器变量，是理解循环控制结构的入门级练习。",
-    "common_mistakes_json": "[\"range()函数的右边界是开区间，容易漏加最后一个数，应写成range(1, n+1)\",\"累加变量需要先初始化为0\",\"输出时忘记用print()函数或格式错误\"]"
+    "common_mistakes_json": "[\"range()函数的右边界是开区间，容易漏加最后一个数，应写成range(1, n+1)\",\"累加变量需要先初始化为0\",\"输出时忘记用print()函数或格式错误\"]",
+    "test_cases": [
+      {
+        "input": "10",
+        "expected_output": "55",
+        "is_sample": true
+      },
+      {
+        "input": "100",
+        "expected_output": "5050",
+        "is_sample": true
+      }
+    ]
   },
   {
     "id": 494,
@@ -530,7 +816,24 @@
     "source_pages_json": "[43]",
     "related_kc_ids_json": "[1816]",
     "teaching_explanation": "本题是分支语句嵌套的典型应用场景。通过 if-elif-else 结构处理多个运算符的分支判断，帮助初学者理解多条件分支的处理方式。题目还涉及浮点数输入、格式化输出以及除法运算，是综合练习分支结构的良好素材。",
-    "common_mistakes_json": "[\"没有将输入的字符串转换为浮点数进行计算，导致整数除法结果不正确\",\"输出时没有保留两位小数格式（如将 7.0 输出为 7 而不是 7.00）\",\"没有处理除数为零的情况\",\"运算符比较时使用了赋值运算符 = 而不是比较运算符 ==\",\"输入分割时没有正确处理空格，导致索引错误\"]"
+    "common_mistakes_json": "[\"没有将输入的字符串转换为浮点数进行计算，导致整数除法结果不正确\",\"输出时没有保留两位小数格式（如将 7.0 输出为 7 而不是 7.00）\",\"没有处理除数为零的情况\",\"运算符比较时使用了赋值运算符 = 而不是比较运算符 ==\",\"输入分割时没有正确处理空格，导致索引错误\"]",
+    "test_cases": [
+      {
+        "input": "3 4 +",
+        "expected_output": "7.00",
+        "is_sample": true
+      },
+      {
+        "input": "10 3 -",
+        "expected_output": "7.00",
+        "is_sample": true
+      },
+      {
+        "input": "5 3 %",
+        "expected_output": "Error",
+        "is_sample": true
+      }
+    ]
   },
   {
     "id": 495,
@@ -557,7 +860,19 @@
     "source_pages_json": "[43]",
     "related_kc_ids_json": "[1816]",
     "teaching_explanation": "本题是分支语句嵌套的典型应用，要求学生使用 if-elif-else 结构处理多条件判断。通过构建一个小型计算器，学生需要判断运算符是否合法，并分别执行相应的算术运算。这训练了学生对分支结构的理解和多条件判断的能力。",
-    "common_mistakes_json": "[\"忘记处理非法运算符的情况，直接进行运算导致报错\",\"使用 == 比较字符串时未注意大小写问题\",\"除法运算使用了整数除法 // 而非浮点数除法 /\"]"
+    "common_mistakes_json": "[\"忘记处理非法运算符的情况，直接进行运算导致报错\",\"使用 == 比较字符串时未注意大小写问题\",\"除法运算使用了整数除法 // 而非浮点数除法 /\"]",
+    "test_cases": [
+      {
+        "input": "3\n2\n+",
+        "expected_output": "5.0",
+        "is_sample": true
+      },
+      {
+        "input": "5\n3\n%",
+        "expected_output": "错误：运算符非法",
+        "is_sample": true
+      }
+    ]
   },
   {
     "id": 496,
@@ -588,7 +903,24 @@
     "source_pages_json": "[45]",
     "related_kc_ids_json": "[1816]",
     "teaching_explanation": "本题是分支语句嵌套的经典应用场景。程序需要根据猜测数字与秘密数字的比较结果，输出三种不同的提示信息。通过if-elif-else结构实现多层次的条件判断，帮助初学者理解分支嵌套的逻辑流程。猜数字游戏融合了随机数生成、用户输入和条件判断三个基本编程概念。",
-    "common_mistakes_json": "[\"输出的中文字符串写错，如写成\\\"太大了\\\"或\\\"toodaxia\\\"\",\"比较条件写反了，把大于判断成太小，小于判断成太大\",\"没有处理等于的情况，只写了if和else两种分支\"]"
+    "common_mistakes_json": "[\"输出的中文字符串写错，如写成\\\"太大了\\\"或\\\"toodaxia\\\"\",\"比较条件写反了，把大于判断成太小，小于判断成太大\",\"没有处理等于的情况，只写了if和else两种分支\"]",
+    "test_cases": [
+      {
+        "input": "5 7",
+        "expected_output": "太大",
+        "is_sample": true
+      },
+      {
+        "input": "3 1",
+        "expected_output": "太小",
+        "is_sample": true
+      },
+      {
+        "input": "8 8",
+        "expected_output": "成功",
+        "is_sample": true
+      }
+    ]
   },
   {
     "id": 497,
@@ -611,7 +943,24 @@
     "source_pages_json": "[93,94]",
     "related_kc_ids_json": "[1823]",
     "teaching_explanation": "本题是字典在实际问题中应用的经典入门案例。通过统计班级学生成绩的分布情况，让学生理解字典这一数据结构的核心用途：使用键（成绩等级）快速存储和查找对应的值（该等级的个数）。这种统计模式在数据分析、信息检索等场景中非常常见，是后续学习更复杂数据处理的基础。",
-    "common_mistakes_json": "[\"在向字典添加新键时忘记初始化，导致 KeyError\",\"未处理输入中的空格或换行符，导致成绩列表为空\",\"输出格式不正确，如忘记按字母顺序输出或格式不匹配\",\"未考虑边界情况，如只有一个成绩或所有成绩都相同的情况\"]"
+    "common_mistakes_json": "[\"在向字典添加新键时忘记初始化，导致 KeyError\",\"未处理输入中的空格或换行符，导致成绩列表为空\",\"输出格式不正确，如忘记按字母顺序输出或格式不匹配\",\"未考虑边界情况，如只有一个成绩或所有成绩都相同的情况\"]",
+    "test_cases": [
+      {
+        "input": "A A B B F F B A B F",
+        "expected_output": "A 3\nB 4\nF 3",
+        "is_sample": true
+      },
+      {
+        "input": "3\nAlice 85\nBob 60\nCharlie 45",
+        "expected_output": "",
+        "is_sample": false
+      },
+      {
+        "input": "2\nDave 90\nEve 72",
+        "expected_output": "",
+        "is_sample": false
+      }
+    ]
   },
   {
     "id": 498,
@@ -634,7 +983,24 @@
     "source_pages_json": "[94,95,96]",
     "related_kc_ids_json": "[1823,1824]",
     "teaching_explanation": "本题是字典应用的经典入门示例，帮助初学者理解如何用字典存储键值对并实现计数功能。通过遍历列表并更新字典，学生可以掌握字典的基本操作（创建、添加、查找），以及字典与列表的区别。这是后续学习数据统计和信息管理问题的基础。",
-    "common_mistakes_json": "[\"忘记初始化字典就直接进行计数操作\",\"输出时顺序不确定（应使用 sorted() 确保按字母顺序输出）\",\"没有处理只出现一次的字母，输出格式不完整\"]"
+    "common_mistakes_json": "[\"忘记初始化字典就直接进行计数操作\",\"输出时顺序不确定（应使用 sorted() 确保按字母顺序输出）\",\"没有处理只出现一次的字母，输出格式不完整\"]",
+    "test_cases": [
+      {
+        "input": "A A B B F F B A B F",
+        "expected_output": "A有3个\nB有4个\nF有3个",
+        "is_sample": true
+      },
+      {
+        "input": "3\nAlice 85\nBob 60\nCharlie 45",
+        "expected_output": "",
+        "is_sample": false
+      },
+      {
+        "input": "1\nDave 100",
+        "expected_output": "",
+        "is_sample": false
+      }
+    ]
   },
   {
     "id": 499,
@@ -657,7 +1023,24 @@
     "source_pages_json": "[97,98,99,100,101,102,103,104,105]",
     "related_kc_ids_json": "[1823,1824]",
     "teaching_explanation": "本问题通过实现一个完整的手机通讯录管理系统，帮助初学者掌握字典在实际问题中的应用。字典作为Python中重要的数据结构，适合用于需要键值对存储和快速查找的场景，如通讯录、成绩统计等。通过本问题，学生将学会：1）使用字典存储联系人信息；2）实现添加、删除、查找、遍历等字典基本操作；3）使用while循环和分支语句构建菜单驱动的程序框架。这是从理论学习到实践应用的重要过渡。",
-    "common_mistakes_json": "[\"直接访问字典键而未先检查键是否存在，导致KeyError异常\",\"使用input()直接与数字比较时未注意类型（input返回字符串）\",\"删除或查找前忘记使用in运算符检查键是否存在\",\"遍历字典时使用错误的迭代方式，应使用items()同时获取键和值\"]"
+    "common_mistakes_json": "[\"直接访问字典键而未先检查键是否存在，导致KeyError异常\",\"使用input()直接与数字比较时未注意类型（input返回字符串）\",\"删除或查找前忘记使用in运算符检查键是否存在\",\"遍历字典时使用错误的迭代方式，应使用items()同时获取键和值\"]",
+    "test_cases": [
+      {
+        "input": "1\nAlice\n123456\n4\n0",
+        "expected_output": "联系人Alice已成功保存到通讯录!!\nAlice:123456",
+        "is_sample": true
+      },
+      {
+        "input": "add Alice 13800001111\nsearch Alice\nquit",
+        "expected_output": "",
+        "is_sample": false
+      },
+      {
+        "input": "add Bob 13900002222\ndelete Bob\nsearch Bob\nquit",
+        "expected_output": "",
+        "is_sample": false
+      }
+    ]
   },
   {
     "id": 500,
@@ -680,7 +1063,24 @@
     "source_pages_json": "[64,65]",
     "related_kc_ids_json": "[1857]",
     "teaching_explanation": "本题是集合类型的经典入门练习。通过循环读取用户输入并将数据存入集合，直观展示集合的两个核心特性：无序性和元素唯一性。收货人名单天然适合用集合存储——顺序无关紧要，且同一个人不会重复通知。本题帮助学生理解如何用 `set()` 创建集合、如何用 `add()` 添加元素、以及何时适合选用集合而非列表。",
-    "common_mistakes_json": "[\"在输入 EXIT 后仍然尝试将 \\\"EXIT\\\" 加入集合，应先判断再决定是否添加。\",\"忘记在输入非 EXIT 时调用 `contact_set.add(name)` 将姓名加入集合。\",\"输出时没有按题目要求的固定顺序输出 \\\"结束录入！\\\" 和 \\\"所有收货人名单如下：\\\" 两行引导文字。\",\"重复输入的姓名在输出中出现多次——未理解集合的去重特性，导致输出包含重复项。\"]"
+    "common_mistakes_json": "[\"在输入 EXIT 后仍然尝试将 \\\"EXIT\\\" 加入集合，应先判断再决定是否添加。\",\"忘记在输入非 EXIT 时调用 `contact_set.add(name)` 将姓名加入集合。\",\"输出时没有按题目要求的固定顺序输出 \\\"结束录入！\\\" 和 \\\"所有收货人名单如下：\\\" 两行引导文字。\",\"重复输入的姓名在输出中出现多次——未理解集合的去重特性，导致输出包含重复项。\"]",
+    "test_cases": [
+      {
+        "input": "张三\n李四\n王五\nEXIT",
+        "expected_output": "结束录入！\n所有收货人名单如下：\n张三\n李四\n王五",
+        "is_sample": true
+      },
+      {
+        "input": "3\nAlice Bob Charlie\n2\nAlice Dave",
+        "expected_output": "",
+        "is_sample": false
+      },
+      {
+        "input": "1\nAlice\n1\nAlice",
+        "expected_output": "",
+        "is_sample": false
+      }
+    ]
   },
   {
     "id": 501,
@@ -703,7 +1103,24 @@
     "source_pages_json": "[50]",
     "related_kc_ids_json": "[1857]",
     "teaching_explanation": "集合的交集运算是Python集合类型的基本操作之一。本问题让初学者理解：1) 如何将逗号分隔的字符串转换为集合；2) 如何使用 intersection() 方法或 & 运算符求交集；3) 集合的无序性和元素唯一性特点。这是后续学习集合其他运算（并集、差集、补集）的基础。",
-    "common_mistakes_json": "[\"混淆字符串和集合：需要先将逗号分隔的字符串用 split(',') 拆分成列表，再用 set() 转换为集合\",\"输出格式错误：输出应该是Python集合表示法，元素用逗号分隔，外层用大括号包裹；空集合应输出 set() 而不是 {}\"]"
+    "common_mistakes_json": "[\"混淆字符串和集合：需要先将逗号分隔的字符串用 split(',') 拆分成列表，再用 set() 转换为集合\",\"输出格式错误：输出应该是Python集合表示法，元素用逗号分隔，外层用大括号包裹；空集合应输出 set() 而不是 {}\"]",
+    "test_cases": [
+      {
+        "input": "天水,淄博\n哈尔滨,天水",
+        "expected_output": "{'天水'}",
+        "is_sample": true
+      },
+      {
+        "input": "{1, 2, 3}\n{2, 3, 4}",
+        "expected_output": "{2, 3}",
+        "is_sample": false
+      },
+      {
+        "input": "{1, 2}\n{3, 4}",
+        "expected_output": "set()",
+        "is_sample": false
+      }
+    ]
   },
   {
     "id": 502,
@@ -730,7 +1147,19 @@
     "source_pages_json": "[49]",
     "related_kc_ids_json": "[1857]",
     "teaching_explanation": "本题要求学生掌握 Python 集合类型的基本概念及其运算操作，特别是集合的差集运算（`-` 或 `difference`）。通过实际处理两组字符串集合，学生可以体会集合的‘唯一性’与‘无序性’，并学习如何在程序中实现数据的去重与比较。该题目是后续学习交集、并集等集合运算的基础，也是处理去重、唯一标识等实际问题的常用技巧。",
-    "common_mistakes_json": "[\"忘记把输入的字符串转换为集合，直接在列表上进行差运算导致结果错误。\",\"未去除元素两侧的空格，导致集合中出现 `\\\" 天水\\\"` 与 `\\\"天水\\\"` 被视为不同元素。\",\"输出时使用 `print(set1 - set2)` 而不是 `print(set1 - set2)`，但忘记处理空集的情况（空集应输出 `set()`）。\",\"误用列表的减法（如 `list1 - list2`）而期待得到差集，Python 列表不支持减法运算符。\",\"在输出集合时，使用 `print(*sorted_set)` 等方式导致输出缺少花括号或元素顺序不符合预期。\"]"
+    "common_mistakes_json": "[\"忘记把输入的字符串转换为集合，直接在列表上进行差运算导致结果错误。\",\"未去除元素两侧的空格，导致集合中出现 `\\\" 天水\\\"` 与 `\\\"天水\\\"` 被视为不同元素。\",\"输出时使用 `print(set1 - set2)` 而不是 `print(set1 - set2)`，但忘记处理空集的情况（空集应输出 `set()`）。\",\"误用列表的减法（如 `list1 - list2`）而期待得到差集，Python 列表不支持减法运算符。\",\"在输出集合时，使用 `print(*sorted_set)` 等方式导致输出缺少花括号或元素顺序不符合预期。\"]",
+    "test_cases": [
+      {
+        "input": "天水,淄博\n哈尔滨,天水",
+        "expected_output": "{'淄博'}\n{'哈尔滨'}",
+        "is_sample": true
+      },
+      {
+        "input": "a,b,c\nc,b,a",
+        "expected_output": "set()\nset()",
+        "is_sample": true
+      }
+    ]
   },
   {
     "id": 503,
@@ -753,7 +1182,24 @@
     "source_pages_json": "[51]",
     "related_kc_ids_json": "[1857]",
     "teaching_explanation": "本题帮助初学者理解Python集合类型中的对称差集（补集）运算。对称差集返回的是只出现在一个集合而不出现在另一个集合中的元素，这是集合论中的基础概念。通过实际处理字符串集合（如地点集合），学生可以掌握集合的创建、交集/并集/差集/对称差集的运算方法，以及set类型的实际应用场景。",
-    "common_mistakes_json": "[\"将输入的字符串直接作为集合处理，忘记用split()分割后再转为set\",\"误用交集（&）或普通差集（-）而非对称差集（^）\",\"输出时没有将结果转换为set格式\",\"忽略输入中可能存在的空字符串或空格\"]"
+    "common_mistakes_json": "[\"将输入的字符串直接作为集合处理，忘记用split()分割后再转为set\",\"误用交集（&）或普通差集（-）而非对称差集（^）\",\"输出时没有将结果转换为set格式\",\"忽略输入中可能存在的空字符串或空格\"]",
+    "test_cases": [
+      {
+        "input": "天水,淄博\n哈尔滨,天水",
+        "expected_output": "{'哈尔滨', '淄博'}",
+        "is_sample": true
+      },
+      {
+        "input": "{1, 2, 3, 4, 5}\n{1, 3, 5}",
+        "expected_output": "{2, 4}",
+        "is_sample": false
+      },
+      {
+        "input": "{1, 2}\n{1, 2}",
+        "expected_output": "set()",
+        "is_sample": false
+      }
+    ]
   },
   {
     "id": 504,
@@ -776,7 +1222,24 @@
     "source_pages_json": "[52]",
     "related_kc_ids_json": "[1857]",
     "teaching_explanation": "本题练习集合的复合赋值操作符 symmetric_difference_update，该操作符将集合更新为自身的对称差集。相比普通操作符（如 ^），复合赋值操作符（如下划线后缀版本）会直接修改原集合，而不是返回新集合。这是Python中常见的原地更新模式，在处理大型数据集时可以节省内存。",
-    "common_mistakes_json": "[\"将 symmetric_difference_update 与 symmetric_difference 混淆，前者会修改原集合，后者返回新集合\",\"忘记将输入的逗号分隔字符串转换为集合，直接对字符串进行集合操作\",\"误用其他集合操作符（如 union_update、intersection_update），导致结果错误\",\"输出时没有正确处理集合的字符串表示格式\"]"
+    "common_mistakes_json": "[\"将 symmetric_difference_update 与 symmetric_difference 混淆，前者会修改原集合，后者返回新集合\",\"忘记将输入的逗号分隔字符串转换为集合，直接对字符串进行集合操作\",\"误用其他集合操作符（如 union_update、intersection_update），导致结果错误\",\"输出时没有正确处理集合的字符串表示格式\"]",
+    "test_cases": [
+      {
+        "input": "天水,淄博\n哈尔滨,天水",
+        "expected_output": "{'哈尔滨', '淄博'}",
+        "is_sample": true
+      },
+      {
+        "input": "{1, 2, 3}\n{2, 3, 4}",
+        "expected_output": "",
+        "is_sample": false
+      },
+      {
+        "input": "{5, 6}\n{6, 7}",
+        "expected_output": "",
+        "is_sample": false
+      }
+    ]
   },
   {
     "id": 505,
@@ -807,7 +1270,24 @@
     "source_pages_json": "[36,37]",
     "related_kc_ids_json": "[1853]",
     "teaching_explanation": "词频统计是数据分析的基础技能，通过本问题可以学习如何使用字典作为计数器存储单词出现次数，掌握字典的get()方法优化计数逻辑，将字典转换为列表进行排序，以及使用lambda函数配合sort()方法实现按值降序排列。这是Python文件操作和数据分析章节的综合性练习。",
-    "common_mistakes_json": "[\"直接输出字典而不是按要求格式输出词:次数\",\"没有按出现次数从高到低排序\",\"计算总词数时出错，应统计所有单词的数量而非不同单词的数量\"]"
+    "common_mistakes_json": "[\"直接输出字典而不是按要求格式输出词:次数\",\"没有按出现次数从高到低排序\",\"计算总词数时出错，应统计所有单词的数量而非不同单词的数量\"]",
+    "test_cases": [
+      {
+        "input": "hello world hello",
+        "expected_output": "3\nhello:2 world:1",
+        "is_sample": true
+      },
+      {
+        "input": "Python Python Java Python",
+        "expected_output": "4\nPython:3 Java:1",
+        "is_sample": true
+      },
+      {
+        "input": "one two three",
+        "expected_output": "3\none:1 three:1 two:1",
+        "is_sample": true
+      }
+    ]
   },
   {
     "id": 506,
@@ -830,7 +1310,24 @@
     "source_pages_json": "[41]",
     "related_kc_ids_json": "[1853]",
     "teaching_explanation": "本问题是词频统计分析的核心步骤之一。在实际文本分析中，我们经常需要知道哪些词出现得最频繁。通过将字典转换为列表并按值排序，可以快速得到按出现次数降序排列的结果。这个技能不仅用于词频统计，在任何需要按数值排序数据的场景下都很实用，如成绩排名、销售数据分析等。",
-    "common_mistakes_json": "[\"忘记使用 reverse=True 导致结果按升序排列而非降序\",\"lambda函数的key参数写错，如写成 lambda x:x[0] 而非 lambda x:x[1]\",\"未将字典转换为列表就直接调用sort方法，因为字典本身没有sort方法\",\"排序后输出格式错误，忘记用空格分隔单词和次数\"]"
+    "common_mistakes_json": "[\"忘记使用 reverse=True 导致结果按升序排列而非降序\",\"lambda函数的key参数写错，如写成 lambda x:x[0] 而非 lambda x:x[1]\",\"未将字典转换为列表就直接调用sort方法，因为字典本身没有sort方法\",\"排序后输出格式错误，忘记用空格分隔单词和次数\"]",
+    "test_cases": [
+      {
+        "input": "4\nthe 1138\ntragedy 3\nof 669\nhamlet 462",
+        "expected_output": "the 1138\nof 669\nhamlet 462\ntragedy 3",
+        "is_sample": true
+      },
+      {
+        "input": "hello world hello python world hello",
+        "expected_output": "",
+        "is_sample": false
+      },
+      {
+        "input": "a b a b c",
+        "expected_output": "",
+        "is_sample": false
+      }
+    ]
   },
   {
     "id": 507,
@@ -853,7 +1350,19 @@
     "source_pages_json": "[49,50]",
     "related_kc_ids_json": "[1819]",
     "teaching_explanation": "本题要求学生从CSV格式文件中读取数据，理解文件结构和字段含义，掌握字符串分割和数据解析方法。核心是理解地理坐标的边界条件判断，并能够根据多个条件进行数据筛选。通过处理出租车定位数据，让学生体会文件数据分析在实际场景中的应用价值。",
-    "common_mistakes_json": "[\"将坐标边界条件写错，例如只判断大于而不包含等于，或混淆经度和纬度的边界值\",\"没有处理空行或格式不规范的行导致程序报错\",\"浮点数比较时直接用==导致精度问题，应使用区间判断\",\"输出格式与输入格式不一致，漏写逗号或多余的空格\"]"
+    "common_mistakes_json": "[\"将坐标边界条件写错，例如只判断大于而不包含等于，或混淆经度和纬度的边界值\",\"没有处理空行或格式不规范的行导致程序报错\",\"浮点数比较时直接用==导致精度问题，应使用区间判断\",\"输出格式与输入格式不一致，漏写逗号或多余的空格\"]",
+    "test_cases": [
+      {
+        "input": "13:30,沪A12345,31.2280,121.5000\n14:15,沪B67890,31.2300,121.4800\n10:00,沪C11111,31.2200,121.4600\n15:45,沪D22222,31.2400,121.5200\n12:30,沪E33333,31.2250,121.5400",
+        "expected_output": "13:30,沪A12345,31.2280,121.5000\n14:15,沪B67890,31.2300,121.4800\n12:30,沪E33333,31.2250,121.5400",
+        "is_sample": true
+      },
+      {
+        "input": "5\n1,100.5,200.3\n2,101.2,201.4\n1,100.6,200.5\n3,102.0,203.1\n1,100.7,200.6",
+        "expected_output": "",
+        "is_sample": false
+      }
+    ]
   },
   {
     "id": 508,
@@ -876,7 +1385,19 @@
     "source_pages_json": "[46,47,48]",
     "related_kc_ids_json": "[1819]",
     "teaching_explanation": "本题是典型的基于文件的数据分析任务，要求学生从结构化文本数据中读取学生成绩，根据多条复合条件进行等级判定。通过处理制表符分隔的数据，学生可以练习字符串分割、列表索引、整数转换等基本操作，同时理解多条件分支的逻辑顺序（先判断优秀，再判断及格，最后不及格）。",
-    "common_mistakes_json": "[\"条件判断顺序错误：应先判断优秀再判断及格，否则可能将优秀误判为及格\",\"忽略制表符分隔：直接用空格分割会导致数据解析错误\",\"总分计算遗漏：需将三门成绩相加后再与阈值比较\"]"
+    "common_mistakes_json": "[\"条件判断顺序错误：应先判断优秀再判断及格，否则可能将优秀误判为及格\",\"忽略制表符分隔：直接用空格分割会导致数据解析错误\",\"总分计算遗漏：需将三门成绩相加后再与阈值比较\"]",
+    "test_cases": [
+      {
+        "input": "S001\t100\t100\t100",
+        "expected_output": "S001,优秀",
+        "is_sample": true
+      },
+      {
+        "input": "3\nAlice A\nBob B\nCharlie C",
+        "expected_output": "",
+        "is_sample": false
+      }
+    ]
   },
   {
     "id": 509,
@@ -899,7 +1420,24 @@
     "source_pages_json": "[44]",
     "related_kc_ids_json": "[1853,1819]",
     "teaching_explanation": "本题是词频统计的经典应用场景，综合训练了字符串处理（大小写转换、去除标点符号）、字典作为计数器的使用、列表排序等核心技能。通过完成本题，学生能够掌握使用字典的get()方法优化计数逻辑，以及使用lambda函数配合sort()方法实现按值降序排列。这在实际数据分析、文本挖掘等领域都有广泛应用。",
-    "common_mistakes_json": "[\"忘记将文本转换为小写，导致大小写不同的同一单词被当作不同单词统计\",\"没有去除标点符号，标点符号会被当作单词的一部分\",\"排序时使用错误的key，导致按字母序而非次数排序\",\"排序方向错误（升序而非降序）\"]"
+    "common_mistakes_json": "[\"忘记将文本转换为小写，导致大小写不同的同一单词被当作不同单词统计\",\"没有去除标点符号，标点符号会被当作单词的一部分\",\"排序时使用错误的key，导致按字母序而非次数排序\",\"排序方向错误（升序而非降序）\"]",
+    "test_cases": [
+      {
+        "input": "the sun is bright the sky is blue the sun shines bright",
+        "expected_output": "the===3\nbright===2\nis===2\nsun===2\nblue===1\nshines===1\nsky===1",
+        "is_sample": true
+      },
+      {
+        "input": "the quick brown fox jumps over the lazy dog",
+        "expected_output": "",
+        "is_sample": false
+      },
+      {
+        "input": "hello hello hello",
+        "expected_output": "",
+        "is_sample": false
+      }
+    ]
   },
   {
     "id": 510,
@@ -926,7 +1464,19 @@
     "source_pages_json": "[58]",
     "related_kc_ids_json": "[1846]",
     "teaching_explanation": "本题帮助初学者理解面向对象编程的基本概念。通过创建Dog和Cat类，学生需要掌握：1) 如何定义类包含属性和方法；2) 如何创建类的实例（对象）；3) 如何调用对象的方法。本题通过一个生活化的情景（宠物迎接主人并进食），将抽象的类与对象概念具体化。",
-    "common_mistakes_json": "[\"忘记在方法中使用print语句输出内容\",\"输出顺序错误，将狗叫放在最后而不是开头\",\"没有正确使用input()读取输入，导致程序无法处理多组测试数据\",\"类的方法没有正确接收self参数\"]"
+    "common_mistakes_json": "[\"忘记在方法中使用print语句输出内容\",\"输出顺序错误，将狗叫放在最后而不是开头\",\"没有正确使用input()读取输入，导致程序无法处理多组测试数据\",\"类的方法没有正确接收self参数\"]",
+    "test_cases": [
+      {
+        "input": "1",
+        "expected_output": "小狗汪汪叫\n小猫喵喵叫\n小猫吃猫粮\n小狗吃骨头",
+        "is_sample": true
+      },
+      {
+        "input": "2",
+        "expected_output": "小狗汪汪叫\n小猫喵喵叫\n小猫吃猫粮\n小狗吃骨头\n小狗汪汪叫\n小猫喵喵叫\n小猫吃猫粮\n小狗吃骨头",
+        "is_sample": true
+      }
+    ]
   },
   {
     "id": 511,
@@ -957,7 +1507,24 @@
     "source_pages_json": "[54,55]",
     "related_kc_ids_json": "[1814]",
     "teaching_explanation": "阶乘是理解递归最经典的入门例子。通过计算阶乘，初学者可以深刻理解递归的两大要素：基准情形（递归终止条件）和递归情形（规模缩小）。这道题帮助学生掌握如何将数学递归定义转化为代码实现，为后续解决更复杂的递归问题打下基础。",
-    "common_mistakes_json": "[\"忘记基准情形（base case），导致无限递归\",\"递归调用参数没有缩小规模，如写成 factorial(n) 调用 factorial(n)\",\"没有正确处理 0 的边界情况\",\"return 语句缺少递归调用的结果\"]"
+    "common_mistakes_json": "[\"忘记基准情形（base case），导致无限递归\",\"递归调用参数没有缩小规模，如写成 factorial(n) 调用 factorial(n)\",\"没有正确处理 0 的边界情况\",\"return 语句缺少递归调用的结果\"]",
+    "test_cases": [
+      {
+        "input": "0",
+        "expected_output": "1",
+        "is_sample": true
+      },
+      {
+        "input": "5",
+        "expected_output": "120",
+        "is_sample": true
+      },
+      {
+        "input": "10",
+        "expected_output": "3628800",
+        "is_sample": true
+      }
+    ]
   },
   {
     "id": 512,
@@ -988,7 +1555,24 @@
     "source_pages_json": "[49]",
     "related_kc_ids_json": "[1812]",
     "teaching_explanation": "本题练习Python函数中 **kwargs 可变关键字参数的用法。通过将函数参数写成 **kwargs 的形式，函数可以接收任意数量的关键字参数，这些参数会被组织成一个字典。本题将这个概念转化为实际的程序：读取若干 key=value 格式的输入，并按相同格式输出，帮助学生理解 **kwargs 的工作原理。",
-    "common_mistakes_json": "[\"忘记使用 split('=', 1) 分割，如果值中包含等号会被错误分割\",\"没有处理空输入的情况\",\"输出时每个 key=value 后没有换行\",\"函数定义中使用了 *args 而不是 **kwargs\"]"
+    "common_mistakes_json": "[\"忘记使用 split('=', 1) 分割，如果值中包含等号会被错误分割\",\"没有处理空输入的情况\",\"输出时每个 key=value 后没有换行\",\"函数定义中使用了 *args 而不是 **kwargs\"]",
+    "test_cases": [
+      {
+        "input": "name=Alice\\nage=30",
+        "expected_output": "name=Alice\\nage=30",
+        "is_sample": true
+      },
+      {
+        "input": "x=10\\ny=20\\nz=30",
+        "expected_output": "x=10\\ny=20\\nz=30",
+        "is_sample": true
+      },
+      {
+        "input": "a=hello\\nb=world",
+        "expected_output": "a=hello\\nb=world",
+        "is_sample": true
+      }
+    ]
   },
   {
     "id": 513,
@@ -1019,7 +1603,24 @@
     "source_pages_json": "[47]",
     "related_kc_ids_json": "[1812]",
     "teaching_explanation": "本题引导初学者掌握 Python 函数参数的高级用法——使用 `*args` 实现可变数量位置参数的接收。通过将可变参数与标准输入输出结合，让学习者理解 `*args` 在实际编程中的典型应用场景：处理未知数量的输入数据。",
-    "common_mistakes_json": "[\"在函数定义时忘记使用 `*args`，导致无法接收多个参数\",\"在调用函数时忘记使用 `*` 解包列表/元组传递参数\",\"混淆 `*args`（可变位置参数）和 `**kwargs`（可变关键字参数）的使用场景\"]"
+    "common_mistakes_json": "[\"在函数定义时忘记使用 `*args`，导致无法接收多个参数\",\"在调用函数时忘记使用 `*` 解包列表/元组传递参数\",\"混淆 `*args`（可变位置参数）和 `**kwargs`（可变关键字参数）的使用场景\"]",
+    "test_cases": [
+      {
+        "input": "3\n1 2 3",
+        "expected_output": "6",
+        "is_sample": true
+      },
+      {
+        "input": "5\n1 2 3 4 5",
+        "expected_output": "15",
+        "is_sample": true
+      },
+      {
+        "input": "1\n100",
+        "expected_output": "100",
+        "is_sample": true
+      }
+    ]
   },
   {
     "id": 514,
@@ -1042,6 +1643,23 @@
     "source_pages_json": "[59]",
     "related_kc_ids_json": "[1846]",
     "teaching_explanation": "本题是面向过程编程的入门练习，通过定义三个不同参数的函数（opendoor 1个参数，bark和eat 2个参数），帮助学生理解：1) 函数定义的基本语法；2) 函数参数的作用；3) 如何通过函数调用实现不同行为。题目将原始hardcoded的函数调用转换为命令驱动的输入模式，保留核心的函数定义教学目标，同时满足OJ系统的stdin/stdout格式要求。",
-    "common_mistakes_json": "[\"忘记使用 format() 或 f-string，直接 print 字符串字面量而非变量\",\"输出格式错误，如 bark 函数应输出'的声音'而非'叫'或'叫了一声'\",\"没有正确处理多参数函数的参数传递，导致参数错位\",\"split() 后没有检查参数个数就直接使用 parts[1]、parts[2]\"]"
+    "common_mistakes_json": "[\"忘记使用 format() 或 f-string，直接 print 字符串字面量而非变量\",\"输出格式错误，如 bark 函数应输出'的声音'而非'叫'或'叫了一声'\",\"没有正确处理多参数函数的参数传递，导致参数错位\",\"split() 后没有检查参数个数就直接使用 parts[1]、parts[2]\"]",
+    "test_cases": [
+      {
+        "input": "opendoor 小明\nbark 小狼 汪汪\nbark 小虎 喵喵\nbark 小虎 猫粮\nbark 小狼 骨头",
+        "expected_output": "小明打开门\n小狼发出汪汪的声音\n小虎发出喵喵的声音\n小虎发出猫粮的声音\n小狼发出骨头的声音",
+        "is_sample": true
+      },
+      {
+        "input": "",
+        "expected_output": "",
+        "is_sample": false
+      },
+      {
+        "input": "",
+        "expected_output": "",
+        "is_sample": false
+      }
+    ]
   }
 ]

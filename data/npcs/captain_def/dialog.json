@@ -1,0 +1,25 @@
+{
+  "npcKey": "captain_def",
+  "rootNodeId": "greet",
+  "nodes": {
+    "greet": {
+      "id": "greet",
+      "text": "上船当心脚下，{{playerName}}。我这船舱分了好几格：列表排一格、字典挂一格、栈和队列各占一格 —— 装货讲究的就是数据结构。",
+      "conditions": [],
+      "choices": [
+        { "label": "数据结构有什么讲究？", "nextNodeId": "about_ds" },
+        { "label": "领取本章任务·去上课", "nextNodeId": null, "effects": [{ "type": "quest_recommend", "questKey": "5-1" }, { "type": "open_panel", "route": "/lecture/5" }] },
+        { "label": "再见", "nextNodeId": null }
+      ]
+    },
+    "about_ds": {
+      "id": "about_ds",
+      "text": "货乱堆，到港翻半天；按列表排队、按字典挂牌、急用的压进栈，取用就快。第 5 章「数据结构」教的就是这套装货的章法。",
+      "conditions": [],
+      "choices": [
+        { "label": "这就去上课", "nextNodeId": null, "effects": [{ "type": "quest_recommend", "questKey": "5-1" }, { "type": "open_panel", "route": "/lecture/5" }] },
+        { "label": "记住了", "nextNodeId": null }
+      ]
+    }
+  }
+}

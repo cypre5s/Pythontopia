@@ -7,19 +7,80 @@
       "text": "{{playerName}}，茶刚煮好。坐下，把本周的事说一遍。",
       "conditions": [],
       "choices": [
-        { "label": "开始本周复盘", "nextNodeId": "weekly_retro" },
-        { "label": "看看我的易错模式", "nextNodeId": "mistake_pattern" },
-        { "label": "我累了，只想坐会", "nextNodeId": "rest" },
-        { "label": "改天再来", "nextNodeId": null }
+        {
+          "label": "进入复盘大厅",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "route",
+              "route": "/review-hall"
+            }
+          ]
+        },
+        {
+          "label": "开始本周复盘",
+          "nextNodeId": "weekly_retro"
+        },
+        {
+          "label": "看看我的易错模式",
+          "nextNodeId": "mistake_pattern"
+        },
+        {
+          "label": "我累了，只想坐会",
+          "nextNodeId": "rest"
+        },
+        {
+          "label": "领取本章任务·去上课",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "quest_recommend",
+              "questKey": "7-1"
+            },
+            {
+              "type": "open_panel",
+              "route": "/lecture/7"
+            }
+          ]
+        },
+        {
+          "label": "改天再来",
+          "nextNodeId": null
+        }
       ]
     },
     "weekly_retro": {
       "id": "weekly_retro",
       "text": "本周你做了 {{stats.exercisesThisWeek}} 道题，解锁 {{stats.kcUnlockedThisWeek}} 个 KC，失败提交 {{stats.failedSubmissionsThisWeek}} 次，最难的关在 \"{{stats.toughestKcNameThisWeek}}\"。在这张纸上写一句你对自己说的话，我替你存档。",
-      "conditions": [{ "type": "first_time_this_week", "key": "weekly_retro" }],
+      "conditions": [
+        {
+          "type": "first_time_this_week",
+          "key": "weekly_retro"
+        }
+      ],
       "choices": [
-        { "label": "写下心得", "nextNodeId": "retro_thanks", "effects": [{ "type": "set_flag", "flagKey": "weekly_retro_done" }, { "type": "friendship", "delta": 3 }, { "type": "quest_recommend", "questKey": "weekly_retro_submit" }] },
-        { "label": "我下周再写", "nextNodeId": null }
+        {
+          "label": "写下心得",
+          "nextNodeId": "retro_thanks",
+          "effects": [
+            {
+              "type": "set_flag",
+              "flagKey": "weekly_retro_done"
+            },
+            {
+              "type": "friendship",
+              "delta": 3
+            },
+            {
+              "type": "quest_recommend",
+              "questKey": "weekly_retro_submit"
+            }
+          ]
+        },
+        {
+          "label": "我下周再写",
+          "nextNodeId": null
+        }
       ]
     },
     "retro_thanks": {
@@ -27,7 +88,20 @@
       "text": "字写得不错。把这枚 \"复盘印\" 收好 — 用它在下周第一道题前点一下，可以看到上周易错点。",
       "conditions": [],
       "choices": [
-        { "label": "谢 Sage", "nextNodeId": null, "effects": [{ "type": "give_item", "itemKey": "retro_seal" }, { "type": "friendship", "delta": 2 }] }
+        {
+          "label": "谢 Sage",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "give_item",
+              "itemKey": "retro_seal"
+            },
+            {
+              "type": "friendship",
+              "delta": 2
+            }
+          ]
+        }
       ]
     },
     "mistake_pattern": {
@@ -35,7 +109,16 @@
       "text": "你最常错的是 {{stats.topMistakePattern}}（占失败提交 {{stats.topMistakeRate}}%）。{{profileAdaptive:你属于实践型，建议先动手再回看课件页。 | 你属于谨慎型，下笔前先翻一遍 page_refs。}}",
       "conditions": [],
       "choices": [
-        { "label": "了解", "nextNodeId": null, "effects": [{ "type": "friendship", "delta": 1 }] }
+        {
+          "label": "了解",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "friendship",
+              "delta": 1
+            }
+          ]
+        }
       ]
     },
     "rest": {
@@ -43,23 +126,63 @@
       "text": "学得太满会忘得更快。坐 5 分钟，喝一杯 — 你也是这片小镇的一片叶子。",
       "conditions": [],
       "choices": [
-        { "label": "谢谢", "nextNodeId": null, "effects": [{ "type": "friendship", "delta": 1 }] }
+        {
+          "label": "谢谢",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "friendship",
+              "delta": 1
+            }
+          ]
+        }
       ]
     },
     "gift_received": {
       "id": "gift_received",
       "text": "{{giftFavorite:这茶味，是老味道。 | 收下了，茶我请。}}",
-      "conditions": [{ "type": "gift_just_given" }],
+      "conditions": [
+        {
+          "type": "gift_just_given"
+        }
+      ],
       "choices": [
-        { "label": "应该的", "nextNodeId": null, "effects": [{ "type": "friendship", "delta": 3 }] }
+        {
+          "label": "应该的",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "friendship",
+              "delta": 3
+            }
+          ]
+        }
       ]
     },
     "friendship_max": {
       "id": "friendship_max",
       "text": "{{playerName}}，复盘满四十次，是为大成。这本《学问之静》给你，比 39 道题更值。",
-      "conditions": [{ "type": "friendship_min", "value": 80 }],
+      "conditions": [
+        {
+          "type": "friendship_min",
+          "value": 80
+        }
+      ],
       "choices": [
-        { "label": "受教", "nextNodeId": null, "effects": [{ "type": "give_item", "itemKey": "stillness_book" }, { "type": "set_flag", "flagKey": "sage_review_max_friend" }] }
+        {
+          "label": "受教",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "give_item",
+              "itemKey": "stillness_book"
+            },
+            {
+              "type": "set_flag",
+              "flagKey": "sage_review_max_friend"
+            }
+          ]
+        }
       ]
     }
   }

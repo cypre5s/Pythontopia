@@ -7,10 +7,46 @@
       "text": "{{playerName}}，要排今天的练习吗？39 道题我手上都有底。",
       "conditions": [],
       "choices": [
-        { "label": "下一道我该练哪题？", "nextNodeId": "next_problem" },
-        { "label": "看我的练习进度", "nextNodeId": "training_stats" },
-        { "label": "我想挑战难题", "nextNodeId": "challenge_problem" },
-        { "label": "今天先到这", "nextNodeId": null }
+        {
+          "label": "开始练习",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "route",
+              "route": "/problems"
+            }
+          ]
+        },
+        {
+          "label": "下一道我该练哪题？",
+          "nextNodeId": "next_problem"
+        },
+        {
+          "label": "看我的练习进度",
+          "nextNodeId": "training_stats"
+        },
+        {
+          "label": "我想挑战难题",
+          "nextNodeId": "challenge_problem"
+        },
+        {
+          "label": "领取本章任务·去上课",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "quest_recommend",
+              "questKey": "4-1"
+            },
+            {
+              "type": "open_panel",
+              "route": "/lecture/4"
+            }
+          ]
+        },
+        {
+          "label": "今天先到这",
+          "nextNodeId": null
+        }
       ]
     },
     "next_problem": {
@@ -18,8 +54,24 @@
       "text": "{{profileAdaptive:你目前掌握度最低的是 \"{{stats.lowestMasteryKcName}}\"，对应题号 #{{stats.recommendProblemNo}}，难度 {{stats.recommendProblemDifficulty}}。 | 你刚解锁 \"{{stats.latestKcName}}\"，先练入门题 #{{stats.entryProblemNo}}，再上手。}}",
       "conditions": [],
       "choices": [
-        { "label": "去训练场做这题", "nextNodeId": null, "effects": [{ "type": "quest_recommend", "questKey": "training_recommend_today" }, { "type": "friendship", "delta": 2 }] },
-        { "label": "换一道", "nextNodeId": "challenge_problem" }
+        {
+          "label": "去训练场做这题",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "quest_recommend",
+              "questKey": "training_recommend_today"
+            },
+            {
+              "type": "friendship",
+              "delta": 2
+            }
+          ]
+        },
+        {
+          "label": "换一道",
+          "nextNodeId": "challenge_problem"
+        }
       ]
     },
     "training_stats": {
@@ -27,40 +79,115 @@
       "text": "你已完成 {{stats.problemsSolved}}/39 道，平均一次过率 {{stats.firstAttemptRate}}%。本周做了 {{stats.exercisesThisWeek}} 道，比上周 {{stats.exercisesDelta}}。",
       "conditions": [],
       "choices": [
-        { "label": "知道了", "nextNodeId": null, "effects": [{ "type": "friendship", "delta": 1 }] }
+        {
+          "label": "知道了",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "friendship",
+              "delta": 1
+            }
+          ]
+        }
       ]
     },
     "challenge_problem": {
       "id": "challenge_problem",
       "text": "想挑战？给你 #{{stats.challengeProblemNo}}，难度 advanced。过了我请你喝一杯 coach 牌咖啡。",
-      "conditions": [{ "type": "friendship_min", "value": 30 }],
+      "conditions": [
+        {
+          "type": "friendship_min",
+          "value": 30
+        }
+      ],
       "choices": [
-        { "label": "上", "nextNodeId": null, "effects": [{ "type": "quest_recommend", "questKey": "training_challenge" }, { "type": "friendship", "delta": 1 }] },
-        { "label": "下次", "nextNodeId": null }
+        {
+          "label": "上",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "quest_recommend",
+              "questKey": "training_challenge"
+            },
+            {
+              "type": "friendship",
+              "delta": 1
+            }
+          ]
+        },
+        {
+          "label": "下次",
+          "nextNodeId": null
+        }
       ]
     },
     "no_evidence_warn": {
       "id": "no_evidence_warn",
       "text": "提醒一下，正式提交不走 Pyodide 预览，走服务端判题。预览过了 ≠ 通过。",
-      "conditions": [{ "type": "first_time_this_week", "key": "no_evidence_warn" }],
+      "conditions": [
+        {
+          "type": "first_time_this_week",
+          "key": "no_evidence_warn"
+        }
+      ],
       "choices": [
-        { "label": "记住", "nextNodeId": null, "effects": [{ "type": "set_flag", "flagKey": "judge_aware" }] }
+        {
+          "label": "记住",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "set_flag",
+              "flagKey": "judge_aware"
+            }
+          ]
+        }
       ]
     },
     "gift_received": {
       "id": "gift_received",
       "text": "{{giftFavorite:口哨给力，谢了。 | 收着。}}",
-      "conditions": [{ "type": "gift_just_given" }],
+      "conditions": [
+        {
+          "type": "gift_just_given"
+        }
+      ],
       "choices": [
-        { "label": "应该的", "nextNodeId": null, "effects": [{ "type": "friendship", "delta": 3 }] }
+        {
+          "label": "应该的",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "friendship",
+              "delta": 3
+            }
+          ]
+        }
       ]
     },
     "friendship_max": {
       "id": "friendship_max",
       "text": "{{playerName}}，39 道你打了大半。给你一张题面解锁券，可以提前看下周公开题。",
-      "conditions": [{ "type": "friendship_min", "value": 80 }],
+      "conditions": [
+        {
+          "type": "friendship_min",
+          "value": 80
+        }
+      ],
       "choices": [
-        { "label": "谢老 Q", "nextNodeId": null, "effects": [{ "type": "give_item", "itemKey": "problem_preview_ticket" }, { "type": "set_flag", "flagKey": "coach_q_max_friend" }] }
+        {
+          "label": "谢老 Q",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "give_item",
+              "itemKey": "problem_preview_ticket"
+            },
+            {
+              "type": "set_flag",
+              "flagKey": "coach_q_max_friend"
+            }
+          ]
+        }
       ]
     }
   }

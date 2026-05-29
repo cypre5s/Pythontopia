@@ -41,7 +41,7 @@ const TILED_VERSION = '1.10';
 const TOWN_GIDS = {
   grass: 1, // frame 0 = 主草地（纯绿）
   grassFlower: 3, // frame 2 = 带黄色小花的草地（农田路面/装饰）
-  sandPath: 10, // frame 9 = 砂石路面（黄色细节），用于矿洞外景或入口铺地
+  sandPath: 13, // frame 12 = 砂石路面左上块，用于小镇主路 / 分岔路
   // 4×N 建筑（沿用 M1-B BUILDING_FRAMES 约定，3 列对应房屋宽度归一化）
   bld: [
     [14, 15, 16], // 顶/屋顶：frame 13 / 14 / 15
@@ -49,17 +49,32 @@ const TOWN_GIDS = {
     [20, 21, 22], // 中层墙：frame 19 / 20 / 21
     [23, 24, 25], // 底层墙（中间是门）：frame 22 / 23 / 24
   ],
+  grassAlt: 2, // frame 1 = 草地变种
+  grassTall: 4, // frame 3 = 高草
   bushSmall: 5, // frame 4 = 小绿色灌木
   bushBig: 17, // frame 16 = 较大绿色灌木（屋边树）
+  rockSmall: 6, // frame 5 = 小石头
+  rockMedium: 7, // frame 6 = 中石头
+  logPile: 8, // frame 7 = 木柴堆
+  mushroom: 9, // frame 8 = 蘑菇
   flowerPink: 26, // frame 25 = 纯粉色（用作花坛 / 喷泉花池）
   flowerYellow: 22, // frame 21 = 黄+棕（黄色花坛）
+  flowerBlue: 27, // frame 26 = 蓝色花
+  barrel: 28, // frame 27 = 木桶
+  crate: 29, // frame 28 = 木箱
+  well: 30, // frame 29 = 水井
   fenceWoodH: 69, // frame 68 = 木质栅栏水平段
   fenceWoodV: 81, // frame 80 = 木质栅栏竖向段
+  fencePost: 70, // frame 69 = 栅栏柱
   water: 50, // frame 49 = 纯蓝水面
   waterEdgeTop: 49, // frame 48 = 水边沿（上沿）
   waterEdgeBottom: 51, // frame 50 = 水边沿（下沿）
   waterDeep: 62, // frame 61 = 深蓝水（中央）
   treeStump: 85, // frame 84 = 棕色 + 暗色（树桩 / 木箱外观）
+  treePine: 86, // frame 85 = 松树
+  signPost: 87, // frame 86 = 路标
+  lamp: 88, // frame 87 = 路灯
+  benchH: 89, // frame 88 = 横向长椅
 };
 
 // Kenney tiny-dungeon 132 帧采样（用于矿洞）
@@ -441,6 +456,36 @@ function makeLandmark(name, label, tileX, tileY, bw, bh, kind = 'landmark') {
   };
 }
 
+const LOW_FENCE_FRAMES = {
+  post: 0,
+  horizontal: 1,
+  vertical: 2,
+  corner: 3,
+  stump: 4,
+  cap: 5,
+};
+
+/** 低障碍对象：玩家不可直接走过，但可用 Space 按当前朝向跳过 1 格。 */
+function makeLowObstacle(name, label, tileX, tileY, bw = 1, bh = 1, kind = 'low', frame = LOW_FENCE_FRAMES.post) {
+  return {
+    id: nextObjectId(),
+    name,
+    type: 'low_obstacle',
+    x: tileX * TILE,
+    y: tileY * TILE,
+    width: bw * TILE,
+    height: bh * TILE,
+    visible: true,
+    rotation: 0,
+    properties: [
+      { name: 'label', type: 'string', value: label },
+      { name: 'kind', type: 'string', value: kind },
+      { name: 'sprite', type: 'string', value: 'low_fence_16' },
+      { name: 'frame', type: 'int', value: frame },
+    ],
+  };
+}
+
 // ---------- 各张地图配置 + 生成器 ----------
 
 // ============================================================
@@ -505,22 +550,38 @@ function generateTownHub() {
     }
   }
 
-  // R-13 §-1 后续：把散布从 90 提到 220，让 town_hub 更"星露谷化"，多种素材轮换：
-  // 小灌木 / 大灌木 / 黄花 / 粉花 / 树桩 / 带花草地。喷泉广场仍不撒。
+  // 高密度装饰：多种素材轮换，town_hub 更精致
   const rng = mulberry32(0x10101);
+
+  // 地面变种：随机替换部分草地为花草/高草，增加地面层次感
+  for (let i = 0; i < ground.length; i += 1) {
+    if (ground[i] === TOWN_GIDS.grass && rng() < 0.12) {
+      ground[i] = rng() < 0.5 ? TOWN_GIDS.grassFlower : TOWN_GIDS.grassAlt;
+    }
+  }
+
   scatterDecoration(
     decoration,
     buildings,
     W,
     H,
-    220,
+    380,
     [
+      TOWN_GIDS.bushSmall,
       TOWN_GIDS.bushSmall,
       TOWN_GIDS.bushBig,
       TOWN_GIDS.flowerYellow,
       TOWN_GIDS.flowerPink,
+      TOWN_GIDS.flowerBlue,
       TOWN_GIDS.treeStump,
       TOWN_GIDS.grassFlower,
+      TOWN_GIDS.grassTall,
+      TOWN_GIDS.rockSmall,
+      TOWN_GIDS.rockMedium,
+      TOWN_GIDS.mushroom,
+      TOWN_GIDS.barrel,
+      TOWN_GIDS.treePine,
+      TOWN_GIDS.lamp,
     ],
     rng,
     { x: 22, y: 17, w: 7, h: 7 },
@@ -551,28 +612,80 @@ function generateTownHub() {
     setTile(decoration, W, 23, y, TOWN_GIDS.treeStump);
     setTile(decoration, W, 26, y, TOWN_GIDS.treeStump);
   }
+  // Space 跳跃教学：出生点右侧放一根低木桩，玩家可面朝右跨过。
+  setTile(decoration, W, 26, 20, TOWN_GIDS.treeStump);
 
-  // objects ----------
+  // 专用低栅栏沿主街围出小路：中间 2 格保持通行，两侧是可跳过的低障碍。
+  const lowPathFences = [];
+  for (let y = 22; y <= 34; y += 2) {
+    lowPathFences.push(
+      makeLowObstacle(`low_path_fence_w_${y}`, '主街西侧矮栅栏', 23, y, 1, 1, 'fence', LOW_FENCE_FRAMES.vertical),
+      makeLowObstacle(`low_path_fence_e_${y}`, '主街东侧矮栅栏', 26, y, 1, 1, 'fence', LOW_FENCE_FRAMES.vertical),
+    );
+  }
+  lowPathFences.push(
+    makeLowObstacle('low_path_fence_gate_w', '主街低木桩', 23, 20, 1, 1, 'stump', LOW_FENCE_FRAMES.post),
+    makeLowObstacle('low_path_fence_gate_e', '主街低木桩', 26, 20, 1, 1, 'stump', LOW_FENCE_FRAMES.post),
+  );
+
+  // 来自其他地图的建筑（统一到小镇）
+  // farm_north 建筑
+  const farmHouse = { x: 4, y: 3, w: 4, h: 4, label: '农舍', route: '/field', name: 'building_farmhouse' };
+  paintBuilding(buildings, W, farmHouse.x, farmHouse.y, farmHouse.w, farmHouse.h);
+  // campus_east 建筑
+  const library = { x: 10, y: 8, w: 5, h: 4, label: '图书馆', route: '/library', name: 'building_library' };
+  const reviewHall = { x: 36, y: 8, w: 4, h: 4, label: '复盘大厅', route: '/review-hall', name: 'building_review_hall' };
+  const workshop = { x: 40, y: 24, w: 4, h: 4, label: '资源工坊', route: '/workshop', name: 'building_workshop' };
+  paintBuilding(buildings, W, library.x, library.y, library.w, library.h);
+  paintBuilding(buildings, W, reviewHall.x, reviewHall.y, reviewHall.w, reviewHall.h);
+  paintBuilding(buildings, W, workshop.x, workshop.y, workshop.w, workshop.h);
+  // port_west 建筑
+  const portShop = { x: 4, y: 24, w: 4, h: 3, label: '商船', route: '/shop-port', name: 'building_merchant_port' };
+  paintBuilding(buildings, W, portShop.x, portShop.y, portShop.w, portShop.h);
+  // mine_south 入口
+  const mine = { x: 22, y: 34, w: 3, h: 2, label: 'Bug 矿洞', route: '/bug-mine', name: 'building_mine' };
+  paintBuilding(buildings, W, mine.x, mine.y, mine.w, mine.h);
+  // 竞技场
+  const arena = { x: 36, y: 34, w: 4, h: 3, label: '闯关竞技场', route: '/arena/1', name: 'building_arena' };
+  paintBuilding(buildings, W, arena.x, arena.y, arena.w, arena.h);
+  // 训练场
+  const training = { x: 8, y: 34, w: 4, h: 3, label: '训练场', route: '/training', name: 'building_training' };
+  paintBuilding(buildings, W, training.x, training.y, training.w, training.h);
+
+  // objects ---------- (no exits, single map)
   const objects = [
-    makeExit('exit_north', 'north', W, H, 'farm_north'),
-    makeExit('exit_south', 'south', W, H, 'mine_south'),
-    makeExit('exit_east', 'east', W, H, 'campus_east'),
-    makeExit('exit_west', 'west', W, H, 'port_west'),
     makeBuilding(mayorHall.name, mayorHall.label, mayorHall.route, mayorHall.x, mayorHall.y, mayorHall.w, mayorHall.h),
     makeBuilding(textileWest.name, textileWest.label, textileWest.route, textileWest.x, textileWest.y, textileWest.w, textileWest.h),
     makeBuilding(textileEast.name, textileEast.label, textileEast.route, textileEast.x, textileEast.y, textileEast.w, textileEast.h),
     ...housesSouth.map((h) => makeBuilding(h.name, h.label, h.route, h.x, h.y, h.w, h.h)),
     ...shops.map((s) => makeBuilding(s.name, s.label, s.route, s.x, s.y, s.w, s.h)),
+    makeBuilding(farmHouse.name, farmHouse.label, farmHouse.route, farmHouse.x, farmHouse.y, farmHouse.w, farmHouse.h),
+    makeBuilding(library.name, library.label, library.route, library.x, library.y, library.w, library.h),
+    makeBuilding(reviewHall.name, reviewHall.label, reviewHall.route, reviewHall.x, reviewHall.y, reviewHall.w, reviewHall.h),
+    makeBuilding(workshop.name, workshop.label, workshop.route, workshop.x, workshop.y, workshop.w, workshop.h),
+    makeBuilding(portShop.name, portShop.label, portShop.route, portShop.x, portShop.y, portShop.w, portShop.h),
+    makeBuilding(mine.name, mine.label, mine.route, mine.x, mine.y, mine.w, mine.h),
+    makeBuilding(arena.name, arena.label, arena.route, arena.x, arena.y, arena.w, arena.h),
+    makeBuilding(training.name, training.label, training.route, training.x, training.y, training.w, training.h),
     makeLandmark('fountain', '镜月喷泉', 24, 19, 2, 2, 'landmark'),
-    makeNpc('npc_mayor_py', 'mayor_py', '镇长 Py', 25, 10),
-    makeNpc('npc_librarian_doc', 'librarian_doc', '图书管理员 Doc', 6, 18),
-    makeNpc('npc_coach_q', 'coach_q', '练习教练 Q', 44, 18),
-    makeNpc('npc_sage_review', 'sage_review', '复盘贤者', 25, 24),
-    // R-13 §-1 修复：原 peasant_a / peasant_b 在 NPC index.json 里不存在，
-    // 前端会 fetch /data/npcs/peasant_b/meta.json 404。换成已有的 gardener / chef
-    // （同样 spawnMap=town_hub，category=life，复用现成 portrait + dialog 数据）。
-    makeNpc('npc_gardener', 'gardener', '园丁', 12, 32),
-    makeNpc('npc_chef', 'chef', '厨师', 38, 32),
+    ...lowPathFences,
+    makeLowObstacle('low_tutorial_log', '跳跃练习木桩', 26, 20, 1, 1, 'stump', LOW_FENCE_FRAMES.post),
+    makeNpc('npc_mayor_py', 'mayor_py', '镇长 Py', 25, 10, 'npc_mayor'),
+    makeNpc('npc_librarian_doc', 'librarian_doc', '图书管理员 Doc', 12, 12, 'npc_librarian'),
+    makeNpc('npc_coach_q', 'coach_q', '练习教练 Q', 44, 18, 'npc_coach'),
+    makeNpc('npc_sage_review', 'sage_review', '复盘贤者', 38, 12, 'npc_sage'),
+    makeNpc('npc_gardener', 'gardener', '园丁', 6, 6, 'npc_gardener'),
+    makeNpc('npc_chef', 'chef', '厨师', 38, 32, 'npc_chef'),
+    makeNpc('npc_farmer', 'farmer', '农场主', 6, 4, 'npc_farmer'),
+    makeNpc('npc_professor', 'professor', '教授', 12, 10, 'npc_professor'),
+    makeNpc('npc_student_a', 'student_a', '学生 A', 15, 14, 'npc_student'),
+    makeNpc('npc_merchant', 'merchant', '商人', 6, 26, 'npc_merchant'),
+    makeNpc('npc_sailor', 'sailor', '水手', 4, 28, 'npc_sailor'),
+    makeNpc('npc_miner', 'miner', '矿工', 24, 36, 'npc_miner'),
+    makeNpc('npc_tutor_ai', 'tutor_ai', 'AI 导师', 30, 16, 'npc_tutor_ai'),
+    makeNpc('npc_workshop_master', 'workshop_master', '工坊师傅', 42, 26, 'npc_workshop'),
+    makeNpc('npc_arena_guard', 'arena_guard', '竞技场守卫', 38, 36, 'npc_guard'),
+    makeNpc('npc_trainer', 'trainer', '训练师', 10, 36, 'npc_trainer'),
     makeSpawn(25, 20),
   ];
 
@@ -654,16 +767,31 @@ function generateFarmNorth() {
     setTile(ground, W, 19, y, TOWN_GIDS.sandPath);
     setTile(ground, W, 20, y, TOWN_GIDS.sandPath);
   }
+  // 田间小跨栏：装饰与 low_obstacle 对象配对，给农场路径提供跳跃练习。
+  setTile(decoration, W, 20, 34, TOWN_GIDS.fenceWoodH);
 
   const rng = mulberry32(0x20202);
-  // R-13 §-1 后续：farm_north 提到 240，让 7 块知识田之外的边角也铺满野花野草
-  scatterDecoration(decoration, buildings, W, H, 240, [
+
+  // 地面变种
+  for (let i = 0; i < ground.length; i += 1) {
+    if (ground[i] === TOWN_GIDS.grass && rng() < 0.15) {
+      ground[i] = rng() < 0.6 ? TOWN_GIDS.grassFlower : TOWN_GIDS.grassAlt;
+    }
+  }
+
+  scatterDecoration(decoration, buildings, W, H, 400, [
+    TOWN_GIDS.bushSmall,
     TOWN_GIDS.bushSmall,
     TOWN_GIDS.bushBig,
     TOWN_GIDS.flowerYellow,
     TOWN_GIDS.flowerPink,
+    TOWN_GIDS.flowerBlue,
     TOWN_GIDS.treeStump,
     TOWN_GIDS.grassFlower,
+    TOWN_GIDS.grassTall,
+    TOWN_GIDS.rockSmall,
+    TOWN_GIDS.mushroom,
+    TOWN_GIDS.treePine,
   ], rng, {
     x: 0,
     y: 5,
@@ -677,6 +805,7 @@ function generateFarmNorth() {
     makeBuilding(barn.name, barn.label, barn.route, barn.x, barn.y, barn.w, barn.h),
     makeBuilding(coop.name, coop.label, coop.route, coop.x, coop.y, coop.w, coop.h),
     makeLandmark('well', '染坊井', 32, 24, 1, 2, 'landmark'),
+    makeLowObstacle('low_field_hurdle', '田间小跨栏', 20, 34, 1, 1, 'fence'),
     ...fieldOrigins.map((f) =>
       makeLandmark(`field_${f.kc}`, `知识田·${f.kc}`, f.x, f.y, 5, 5, 'field'),
     ),
@@ -758,6 +887,8 @@ function generateMineSouth() {
     DUNG_GIDS.floorAlt,
     DUNG_GIDS.floorAlt2,
   ], rng);
+  // 矿洞碎石：只允许跳过，不允许直接穿越。
+  setTile(decoration, W, 15, 4, DUNG_GIDS.wallStone);
 
   // objects ----------
   // R-13 §-1 续：矿洞叙事改为「二进制矿洞 · 织丝走廊」：呼应纺织文化里
@@ -768,6 +899,7 @@ function generateMineSouth() {
     makeBuilding(mine1.name, mine1.label, mine1.route, mine1.x, mine1.y, mine1.w, mine1.h),
     makeBuilding(mine2.name, mine2.label, mine2.route, mine2.x, mine2.y, mine2.w, mine2.h),
     makeLandmark('loom_pillar', '织机立柱', 15, 8, 1, 4, 'landmark'),
+    makeLowObstacle('low_mine_rubble', '可跨越碎石', 15, 4, 1, 1, 'rubble'),
     makeNpc('npc_foreman_bug', 'foreman_bug', '矿洞工头 Bug', 14, 5, 'player_sara'),
     makeSpawn(15, 2),
   ];
@@ -878,6 +1010,8 @@ function generateCampusEast() {
   setTile(decoration, W, 16, 11, TOWN_GIDS.treeStump);
   setTile(decoration, W, 7, 17, TOWN_GIDS.treeStump);
   setTile(decoration, W, 16, 17, TOWN_GIDS.treeStump);
+  // 校园步道低栅栏：从出生点向东走会遇到，可用 Space 跨过。
+  setTile(decoration, W, 4, 15, TOWN_GIDS.fenceWoodH);
 
   // 边界树
   for (let x = 2; x < W - 2; x += 3) {
@@ -886,19 +1020,33 @@ function generateCampusEast() {
   }
 
   const rng = mulberry32(0x40404);
-  // R-13 §-1 续：校园 200 装饰物（避开湖区域 + 中央步道）
-  scatterDecoration(decoration, buildings, W, H, 200, [
+
+  for (let i = 0; i < ground.length; i += 1) {
+    if (ground[i] === TOWN_GIDS.grass && rng() < 0.1) {
+      ground[i] = rng() < 0.5 ? TOWN_GIDS.grassFlower : TOWN_GIDS.grassAlt;
+    }
+  }
+
+  scatterDecoration(decoration, buildings, W, H, 350, [
+    TOWN_GIDS.bushSmall,
     TOWN_GIDS.bushSmall,
     TOWN_GIDS.bushBig,
     TOWN_GIDS.flowerYellow,
     TOWN_GIDS.flowerPink,
+    TOWN_GIDS.flowerBlue,
     TOWN_GIDS.treeStump,
     TOWN_GIDS.grassFlower,
+    TOWN_GIDS.grassTall,
+    TOWN_GIDS.rockSmall,
+    TOWN_GIDS.benchH,
+    TOWN_GIDS.lamp,
+    TOWN_GIDS.treePine,
+    TOWN_GIDS.signPost,
   ], rng, {
     x: 7,
     y: 11,
     w: 10,
-    h: 7, // 湖泊及其围栏区域不撒
+    h: 7,
   });
 
   // objects ----------
@@ -911,6 +1059,7 @@ function generateCampusEast() {
     makeBuilding(infoCenter.name, infoCenter.label, infoCenter.route, infoCenter.x, infoCenter.y, infoCenter.w, infoCenter.h),
     makeLandmark('mirror_moon_lake', '镜月湖', 8, 12, 8, 5, 'landmark'),
     makeLandmark('cherry_avenue', '樱花大道', 19, 14, 19, 2, 'landmark'),
+    makeLowObstacle('low_campus_rail', '湖畔低栅栏', 4, 15, 1, 1, 'fence'),
     makeNpc('npc_librarian_doc', 'librarian_doc', '图书管理员 Doc', 10, 9),
     makeNpc('npc_coach_q', 'coach_q', '练习教练 Q', 20, 9),
     makeNpc('npc_sage_review', 'sage_review', '复盘贤者', 30, 9),
@@ -977,17 +1126,32 @@ function generatePortWest() {
   for (let x = 2; x < W - 2; x += 2) {
     setTile(decoration, W, x, 1, TOWN_GIDS.bushBig);
   }
+  // 港口货箱低障碍：视觉上用木桩/货箱占位，跳过后仍可到讲坛。
+  setTile(decoration, W, 29, 12, TOWN_GIDS.treeStump);
 
   const rng = mulberry32(0x50505);
-  // R-13 §-1 后续：港口密度 50→160 多色，让陆地段也丰富
-  scatterDecoration(decoration, buildings, W, H, 160, [
+
+  for (let i = 0; i < ground.length; i += 1) {
+    if (ground[i] === TOWN_GIDS.grass && rng() < 0.08) {
+      ground[i] = rng() < 0.4 ? TOWN_GIDS.grassFlower : TOWN_GIDS.grassAlt;
+    }
+  }
+
+  scatterDecoration(decoration, buildings, W, H, 280, [
+    TOWN_GIDS.bushSmall,
     TOWN_GIDS.bushSmall,
     TOWN_GIDS.bushBig,
     TOWN_GIDS.flowerYellow,
     TOWN_GIDS.flowerPink,
+    TOWN_GIDS.flowerBlue,
     TOWN_GIDS.treeStump,
     TOWN_GIDS.grassFlower,
+    TOWN_GIDS.grassTall,
+    TOWN_GIDS.rockSmall,
+    TOWN_GIDS.barrel,
+    TOWN_GIDS.crate,
     TOWN_GIDS.sandPath,
+    TOWN_GIDS.lamp,
   ], rng, {
     x: 0,
     y: 18,
@@ -1003,6 +1167,7 @@ function generatePortWest() {
     makeBuilding(lighthouse.name, lighthouse.label, lighthouse.route, lighthouse.x, lighthouse.y, lighthouse.w, lighthouse.h),
     makeBuilding(ship.name, ship.label, ship.route, ship.x, ship.y, ship.w, ship.h),
     makeLandmark('silk_plaza', '锦绣讲坛', 22, 6, 6, 6, 'plaza'),
+    makeLowObstacle('low_port_crate', '码头矮货箱', 29, 12, 1, 1, 'crate'),
     makeNpc('npc_merchant', 'merchant', '布商', 16, 19),
     makeNpc('npc_class_president', 'class_president', '班长', 25, 9),
     makeSpawn(33, 12),
@@ -1191,6 +1356,7 @@ frontend/public/assets/maps/
 - \`building\`：建筑点击区，\`properties.route\` 指向 Vue 路由
 - \`npc\`：NPC 出生点，\`properties.key\` / \`label\` / \`sprite\`
 - \`spawn\`：玩家默认出生点（每张地图唯一）
+- \`low_obstacle\`：低障碍物，正常行走视为阻挡，玩家可面朝它按 Space 跳过 1 格
 - \`landmark\` / \`field\` / \`plaza\`：纯视觉锚点
 
 ## 编辑流程

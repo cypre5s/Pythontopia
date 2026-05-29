@@ -10,6 +10,7 @@
         { "label": "请告诉我这里有什么？", "nextNodeId": "introduce_town" },
         { "label": "我应该从哪里开始？", "nextNodeId": "where_to_start" },
         { "label": "聊聊我的进度", "nextNodeId": "chat_progress" },
+        { "label": "领取本章任务·去上课", "nextNodeId": null, "effects": [{ "type": "quest_recommend", "questKey": "1-1" }, { "type": "open_panel", "route": "/lecture/1" }] },
         { "label": "再见", "nextNodeId": null }
       ]
     },

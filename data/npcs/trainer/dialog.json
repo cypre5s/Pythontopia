@@ -1,0 +1,53 @@
+{
+  "npcKey": "trainer",
+  "rootNodeId": "greet",
+  "nodes": {
+    "greet": {
+      "id": "greet",
+      "text": "{{playerName}}，想来训练场练练手吗？实践出真知！",
+      "conditions": [],
+      "choices": [
+        {
+          "label": "开始训练",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "route",
+              "route": "/training"
+            }
+          ]
+        },
+        {
+          "label": "有什么训练内容？",
+          "nextNodeId": "content"
+        },
+        {
+          "label": "下次来",
+          "nextNodeId": null
+        }
+      ]
+    },
+    "start": {
+      "id": "start",
+      "text": "训练场里有各种编程题，从简单到困难。做完后系统会自动判题，告诉你哪里做对了、哪里需要改进。",
+      "conditions": [],
+      "choices": [
+        {
+          "label": "开始！",
+          "nextNodeId": null
+        }
+      ]
+    },
+    "content": {
+      "id": "content",
+      "text": "39 道精选 OJ 题，覆盖 7 章知识点。每题都有输入输出样例和参考代码。错了也没关系，失败的提交会被送进 Bug 矿洞，变成可挖掘的经验！",
+      "conditions": [],
+      "choices": [
+        {
+          "label": "有意思！",
+          "nextNodeId": null
+        }
+      ]
+    }
+  }
+}
