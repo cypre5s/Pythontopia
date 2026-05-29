@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "totalNpcs": 31,
+  "totalNpcs": 20,
   "categories": {
     "educator_core": [
       "mayor_py",
@@ -16,23 +16,12 @@
       "captain_def"
     ],
     "student": [
-      "student_diligent",
-      "student_procrast",
-      "student_anxious",
-      "student_late_starter",
-      "student_top",
-      "student_hobby",
       "student_a"
     ],
     "life": [
-      "craftsman",
       "class_president",
-      "merchant",
-      "nurse",
-      "postman",
       "gardener",
       "chef",
-      "guard",
       "farmer",
       "sailor",
       "miner",
@@ -105,46 +94,18 @@
       "portrait": "portrait_trainer.png"
     },
     {
-      "key": "student_diligent",
-      "name": "勤勉小柒",
-      "category": "student",
-      "spawnMap": "town_hub",
-      "portrait": "portrait_student_diligent.png"
+      "key": "mine_keeper",
+      "name": "矿洞守矿人",
+      "category": "educator_core",
+      "spawnMap": "mine_south",
+      "portrait": "portrait_mine_keeper.png"
     },
     {
-      "key": "student_procrast",
-      "name": "拖延小迟",
-      "category": "student",
-      "spawnMap": "town_hub",
-      "portrait": "portrait_student_procrast.png"
-    },
-    {
-      "key": "student_anxious",
-      "name": "焦虑小安",
-      "category": "student",
-      "spawnMap": "town_hub",
-      "portrait": "portrait_student_anxious.png"
-    },
-    {
-      "key": "student_late_starter",
-      "name": "后赶小赶",
-      "category": "student",
-      "spawnMap": "town_hub",
-      "portrait": "portrait_student_late_starter.png"
-    },
-    {
-      "key": "student_top",
-      "name": "拔尖小尖",
-      "category": "student",
-      "spawnMap": "town_hub",
-      "portrait": "portrait_student_top.png"
-    },
-    {
-      "key": "student_hobby",
-      "name": "兴趣小好",
-      "category": "student",
-      "spawnMap": "town_hub",
-      "portrait": "portrait_student_hobby.png"
+      "key": "captain_def",
+      "name": "船长 Def",
+      "category": "educator_core",
+      "spawnMap": "port_west",
+      "portrait": "portrait_captain_def.png"
     },
     {
       "key": "student_a",
@@ -154,39 +115,11 @@
       "portrait": "portrait_student_a.png"
     },
     {
-      "key": "craftsman",
-      "name": "工长",
-      "category": "life",
-      "spawnMap": "campus_east",
-      "portrait": "portrait_craftsman.png"
-    },
-    {
       "key": "class_president",
       "name": "班长",
       "category": "life",
       "spawnMap": "port_west",
       "portrait": "portrait_class_president.png"
-    },
-    {
-      "key": "merchant",
-      "name": "商人",
-      "category": "life",
-      "spawnMap": "port_west",
-      "portrait": "portrait_merchant.png"
-    },
-    {
-      "key": "nurse",
-      "name": "医务",
-      "category": "life",
-      "spawnMap": "town_hub",
-      "portrait": "portrait_nurse.png"
-    },
-    {
-      "key": "postman",
-      "name": "邮差",
-      "category": "life",
-      "spawnMap": "town_hub",
-      "portrait": "portrait_postman.png"
     },
     {
       "key": "gardener",
@@ -201,13 +134,6 @@
       "category": "life",
       "spawnMap": "town_hub",
       "portrait": "portrait_chef.png"
-    },
-    {
-      "key": "guard",
-      "name": "守门",
-      "category": "life",
-      "spawnMap": "town_hub",
-      "portrait": "portrait_guard.png"
     },
     {
       "key": "farmer",
@@ -243,20 +169,6 @@
       "category": "life",
       "spawnMap": "town_hub",
       "portrait": "portrait_arena_guard.png"
-    },
-    {
-      "key": "mine_keeper",
-      "name": "矿洞守矿人",
-      "category": "educator_core",
-      "spawnMap": "mine_south",
-      "portrait": "portrait_mine_keeper.png"
-    },
-    {
-      "key": "captain_def",
-      "name": "船长 Def",
-      "category": "educator_core",
-      "spawnMap": "port_west",
-      "portrait": "portrait_captain_def.png"
     }
   ]
 }

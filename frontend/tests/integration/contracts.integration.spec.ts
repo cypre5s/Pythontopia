@@ -22,11 +22,6 @@ import type {
   GameBootstrapResponseDto,
   WorldSleepResponseDto,
 } from '@/api/dto/GameBootstrapResponseDto';
-import type {
-  ShopListingDto,
-  ShopBuyRequest,
-  ShopBuyResponseDto,
-} from '@/api/dto/ShopDto';
 import { FESTIVALS, findCurrentFestival, findUpcomingFestival } from '@/data/festivals';
 import { FAST_TRAVEL_ROUTES } from '@/data/fastTravel';
 import { useHudStore, bgmLabel } from '@stores/hud';
@@ -139,50 +134,6 @@ describe('contracts.integration: DTO 字段 + store 边界', () => {
     const b: Partial<WorldSleepResponseDto> = { newEvents: e };
     expect(a.events).toEqual([]);
     expect(b.newEvents).toEqual([]);
-  });
-
-  // ---------- Shop DTO 字段 ----------
-  it('ShopListingDto 必须字段', () => {
-    const l: ShopListingDto = {
-      shopKey: 'merchant_port',
-      itemKey: 'python_book',
-      priceCoins: 100,
-      priceGems: 0,
-      stock: 5,
-      availableDays: null,
-    };
-    expect(l.shopKey).toBe('merchant_port');
-    expect(l.stock).toBe(5);
-  });
-
-  it('ShopListingDto availableDays 可为 null 或 number[]', () => {
-    const a: ShopListingDto = {
-      shopKey: 'x',
-      itemKey: 'y',
-      priceCoins: 0,
-      priceGems: 0,
-      stock: null,
-      availableDays: null,
-    };
-    const b: ShopListingDto = { ...a, availableDays: [1, 2, 3] };
-    expect(a.availableDays).toBeNull();
-    expect(b.availableDays).toEqual([1, 2, 3]);
-  });
-
-  it('ShopBuyRequest 字段', () => {
-    const r: ShopBuyRequest = { itemKey: 'python_book', qty: 1 };
-    expect(r.qty).toBe(1);
-  });
-
-  it('ShopBuyResponseDto 字段', () => {
-    const r: ShopBuyResponseDto = {
-      itemKey: 'python_book',
-      qty: 1,
-      totalCoins: 100,
-      totalGems: 0,
-      remainingStock: 4,
-    };
-    expect(r.remainingStock).toBe(4);
   });
 
   // ---------- Festival 静态数据 ----------

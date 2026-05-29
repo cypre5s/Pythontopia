@@ -21,6 +21,7 @@ import {
   searchCourseLibrary,
 } from '@/api/courseLibrary';
 import { listChapters, listKnowledgeComponents } from '@/api/course';
+import { listChapterVideos, videoStreamUrl, type CourseVideoDto } from '@/api/courseVideo';
 import type {
   CourseDocumentSummary,
   CourseExampleSummary,
@@ -32,15 +33,15 @@ import type {
 import type { ChapterDto } from '@/api/dto/ChapterDto';
 import type { KcDto } from '@/api/dto/KcDto';
 
-// R-13 D1/D2：默认显示原 PDF，Markdown 摘录作为补充视图。
+// R-13 优化：默认显示原 PDF；第二视图由「文字摘录」改为「课件视频」。
 // localStorage 记忆用户偏好，避免每次都要切回 PDF。
-type PageViewMode = 'pdf' | 'markdown';
+type PageViewMode = 'pdf' | 'video';
 const VIEW_MODE_STORAGE_KEY = 'pyt_library_view_mode';
 function readPreferredViewMode(): PageViewMode {
   if (typeof window === 'undefined') return 'pdf';
   try {
     const raw = window.localStorage.getItem(VIEW_MODE_STORAGE_KEY);
-    return raw === 'markdown' ? 'markdown' : 'pdf';
+    return raw === 'video' ? 'video' : 'pdf';
   } catch {
     return 'pdf';
   }
@@ -93,6 +94,38 @@ function setViewMode(mode: PageViewMode): void {
   persistViewMode(mode);
 }
 
+// R-13 优化：课件视频（替代原「文字摘录」Tab）。按当前章号拉 video_manifest，
+// 优先选第一个已就绪(available)的视频；整章无视频时回退到文字摘录。
+const chapterVideos = ref<CourseVideoDto[]>([]);
+const videosLoading = ref<boolean>(false);
+const selectedVideoId = ref<number | null>(null);
+const videoChapterLoaded = ref<number | null>(null);
+
+async function loadChapterVideos(chapterNo: number): Promise<void> {
+  if (videoChapterLoaded.value === chapterNo) return;
+  videosLoading.value = true;
+  try {
+    const list = await listChapterVideos(chapterNo);
+    chapterVideos.value = list;
+    videoChapterLoaded.value = chapterNo;
+    const firstReady = list.find((v) => v.available) ?? list[0] ?? null;
+    selectedVideoId.value = firstReady?.id ?? null;
+  } finally {
+    videosLoading.value = false;
+  }
+}
+
+function selectVideo(id: number): void {
+  selectedVideoId.value = id;
+}
+
+function formatDuration(sec: number | null): string {
+  if (!sec || sec <= 0) return '';
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
 const currentDocument = computed<CourseDocumentSummary | null>(
   () => documents.value.find((doc) => doc.documentId === currentDocId.value) ?? null,
 );
@@ -102,6 +135,12 @@ const currentChapter = computed<ChapterDto | null>(() => {
   }
   return chapters.value.find((ch) => ch.chapterId === pageDetail.value?.chapterId) ?? null;
 });
+const chapterNoForVideo = computed<number>(
+  () => currentChapter.value?.orderIndex ?? currentDocument.value?.sortOrder ?? 1,
+);
+const selectedVideo = computed<CourseVideoDto | null>(
+  () => chapterVideos.value.find((v) => v.id === selectedVideoId.value) ?? null,
+);
 const currentKc = computed<CourseKcSummary | null>(() => {
   if (!currentKcCode.value) {
     return autoActiveKc.value;
@@ -272,6 +311,14 @@ function jumpToKc(kc: CourseKcSummary): void {
   void resolvePageById(targetPageId);
 }
 
+// R-13 优化：每章 KC 收纳进下拉框，选中即跳转，节约侧栏空间。
+function onKcSelect(group: ChapterGroup, event: Event): void {
+  const code = (event.target as HTMLSelectElement).value;
+  if (!code) return;
+  const kc = group.kcs.find((k) => k.kcCode === code);
+  if (kc) jumpToKc(kc);
+}
+
 async function resolvePageById(pageId: number): Promise<void> {
   for (const doc of documents.value) {
     const pages = await listDocumentPages(doc.documentId);
@@ -403,6 +450,18 @@ watch(
     }
   },
 );
+
+// 切到「课件视频」视图时按需拉取本章视频清单；切章时自动换片。
+watch(
+  viewMode,
+  (mode) => {
+    if (mode === 'video') void loadChapterVideos(chapterNoForVideo.value);
+  },
+  { immediate: true },
+);
+watch(chapterNoForVideo, (next) => {
+  if (viewMode.value === 'video') void loadChapterVideos(next);
+});
 </script>
 
 <template>
@@ -476,28 +535,28 @@ watch(
                   <span class="chapter-no">第 {{ group.chapter.orderIndex }} 章</span>
                   <span>{{ group.chapter.title }}</span>
                 </button>
-                <ul class="kc-list">
-                  <li
-                    v-for="kc in group.kcs"
-                    :key="kc.kcCode"
+                <div
+                  v-if="group.kcs.length > 0"
+                  class="kc-select-wrap"
+                >
+                  <select
+                    class="kc-select"
+                    :data-testid="`kc-select-${group.chapter.orderIndex}`"
+                    :value="group.kcs.some((k) => k.kcCode === currentKc?.kcCode) ? currentKc?.kcCode : ''"
+                    @change="onKcSelect(group, $event)"
                   >
-                    <button
-                      type="button"
-                      :class="[
-                        'kc-item',
-                        {
-                          active: kc.kcCode === currentKc?.kcCode,
-                          'has-refs': kc.pageRefs.length > 0,
-                        },
-                      ]"
-                      :title="kc.summary"
-                      @click="jumpToKc(kc)"
+                    <option value="">
+                      {{ group.kcs.length }} 个 KC ▾ 选择跳转
+                    </option>
+                    <option
+                      v-for="kc in group.kcs"
+                      :key="kc.kcCode"
+                      :value="kc.kcCode"
                     >
-                      <span class="kc-code">{{ kc.kcCode }}</span>
-                      <span class="kc-name">{{ kc.kcName }}</span>
-                    </button>
-                  </li>
-                </ul>
+                      {{ kc.kcCode.replace('PY43-', '') }} · {{ kc.kcName }}{{ kc.pageRefs.length === 0 ? '（无页）' : '' }}
+                    </option>
+                  </select>
+                </div>
               </li>
             </ul>
           </section>
@@ -562,11 +621,11 @@ watch(
               <button
                 type="button"
                 class="view-mode-tab"
-                :class="{ 'view-mode-tab--active': viewMode === 'markdown' }"
-                data-testid="library-view-mode-markdown"
-                @click="setViewMode('markdown')"
+                :class="{ 'view-mode-tab--active': viewMode === 'video' }"
+                data-testid="library-view-mode-video"
+                @click="setViewMode('video')"
               >
-                文字摘录
+                课件视频
               </button>
             </nav>
             <p
@@ -580,21 +639,79 @@ watch(
               :doc-id="currentDocId"
               :page-no="currentPage"
             />
-            <template v-else-if="pageDetail">
-              <!-- R-13：用 marked + DOMPurify 渲染 contentMarkdown 富文本，
-                   章节标题/代码块/列表/表格全保留。提供给原 PDF 看不清时切换查看。 -->
-              <div
-                v-if="pageDetail.contentMarkdown || pageDetail.excerpt"
-                class="page-prose page-prose--md"
-                v-html="renderPageHtml(pageDetail.contentMarkdown || pageDetail.excerpt || '')"
-              />
+            <!-- R-13 优化：课件视频视图（替代「文字摘录」）。整章无视频时回退到文字摘录。 -->
+            <div
+              v-else-if="viewMode === 'video'"
+              class="video-pane"
+              data-testid="library-video-pane"
+            >
               <p
-                v-else
+                v-if="videosLoading"
                 class="muted"
               >
-                （本页暂无可读文本）
+                加载课件视频清单…
               </p>
-            </template>
+              <template v-else-if="chapterVideos.length > 0">
+                <div class="video-stage">
+                  <video
+                    v-if="selectedVideo && selectedVideo.available"
+                    :key="selectedVideo.id"
+                    class="video-player"
+                    controls
+                    preload="metadata"
+                    :src="videoStreamUrl(selectedVideo.id)"
+                  />
+                  <div
+                    v-else
+                    class="video-unavailable"
+                  >
+                    <span
+                      class="video-unavailable__icon"
+                      aria-hidden="true"
+                    >▶</span>
+                    <p>该视频文件整理中（manifest 已登记，尚未下载到服务器）。</p>
+                  </div>
+                </div>
+                <ul class="video-list">
+                  <li
+                    v-for="v in chapterVideos"
+                    :key="v.id"
+                  >
+                    <button
+                      type="button"
+                      class="video-item"
+                      :class="{ 'video-item--active': v.id === selectedVideoId }"
+                      @click="selectVideo(v.id)"
+                    >
+                      <span class="video-item__title">{{ v.title }}</span>
+                      <span class="video-item__meta">
+                        <span v-if="formatDuration(v.durationSec)">{{ formatDuration(v.durationSec) }}</span>
+                        <span
+                          v-if="!v.available"
+                          class="video-item__pending"
+                        >未就绪</span>
+                      </span>
+                    </button>
+                  </li>
+                </ul>
+              </template>
+              <template v-else>
+                <p class="muted video-fallback-note">
+                  本章暂无课件视频，以下为文字摘录：
+                </p>
+                <div
+                  v-if="pageDetail && (pageDetail.contentMarkdown || pageDetail.excerpt)"
+                  class="page-prose page-prose--md"
+                  v-html="renderPageHtml(pageDetail.contentMarkdown || pageDetail.excerpt || '')"
+                />
+                <p
+                  v-else
+                  class="muted"
+                >
+                  （本页暂无可读文本）
+                </p>
+              </template>
+            </div>
             <p
               v-else-if="!indexLoading"
               class="muted"
@@ -883,6 +1000,121 @@ watch(
 .kc-code {
   font-family: var(--pyt-font-pixel), monospace;
   font-size: 11px;
+}
+
+/* R-13 优化：每章 KC 收纳进下拉框 */
+.kc-select-wrap {
+  margin-top: 4px;
+  padding-left: 4px;
+}
+.kc-select {
+  width: 100%;
+  font-family: var(--pyt-font-sans, sans-serif);
+  font-size: 12px;
+  padding: 5px 6px;
+  background: var(--pyt-color-bg-primary, #fef7e3);
+  border: 2px solid var(--pyt-color-border, #c9a86b);
+  color: var(--pyt-color-text-primary, #4d3613);
+  cursor: pointer;
+}
+.kc-select:focus {
+  outline: none;
+  border-color: var(--pyt-color-border-strong, #4d3613);
+}
+
+/* R-13 优化：课件视频视图 */
+.video-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.video-stage {
+  width: 100%;
+  background: #160f04;
+  border: 2px solid var(--pyt-color-border-strong, #4d3613);
+  box-shadow: 3px 3px 0 var(--pyt-color-border-strong, #4d3613);
+  overflow: hidden;
+}
+.video-player {
+  display: block;
+  width: 100%;
+  max-height: 52vh;
+  background: #000;
+}
+.video-unavailable {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 36px 16px;
+  color: #f5e2c1;
+  text-align: center;
+  font-size: 13px;
+}
+.video-unavailable__icon {
+  width: 46px;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #f5e2c1;
+  border-radius: 50%;
+  font-size: 18px;
+}
+.video-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.video-item {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  text-align: left;
+  cursor: pointer;
+  background: var(--pyt-color-bg-soft, #fdf3d0);
+  border: 2px solid var(--pyt-color-border, #c9a86b);
+  font-family: var(--pyt-font-sans, sans-serif);
+  font-size: 13px;
+  color: var(--pyt-color-text-primary, #4d3613);
+}
+.video-item:hover {
+  background: var(--pyt-color-warning-bg, #f5e2c1);
+}
+.video-item--active {
+  background: var(--pyt-color-warning-bg, #f5e2c1);
+  border-color: var(--pyt-color-border-strong, #4d3613);
+  font-weight: 700;
+}
+.video-item__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.video-item__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  font-family: var(--pyt-font-pixel), monospace;
+  font-size: 11px;
+  color: var(--pyt-color-text-muted, #8a6c2c);
+}
+.video-item__pending {
+  padding: 0 6px;
+  border: 1px solid var(--pyt-color-border, #c9a86b);
+  background: var(--pyt-color-info-bg, #d0e3f1);
+  color: #1b4a6b;
+  font-size: 10px;
+}
+.video-fallback-note {
+  margin: 0 0 4px;
 }
 
 .library-main {

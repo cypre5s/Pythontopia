@@ -129,20 +129,11 @@
     "sage_review": {
       "greeting": "Sit a moment. Share a thought."
     },
-    "merchant": {
-      "greeting": "Fresh batch just in today."
-    },
     "class_president": {
       "greeting": "From the teacher, for you."
     },
-    "postman": {
-      "greeting": "Passing by. This is yours."
-    },
     "chef": {
       "greeting": "New list salad today."
-    },
-    "student_anxious": {
-      "greeting": "Mistakes are fine. Try again."
     }
   },
   "tpl": {

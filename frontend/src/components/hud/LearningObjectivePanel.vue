@@ -13,13 +13,18 @@ import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useMainQuestStore } from '@stores/mainQuest';
 import { useLearningStore } from '@stores/learning';
 import { useWorldStore } from '@stores/world';
+import { useToastStore } from '@stores/toast';
 import { findChapterByKcCode } from '@/data/chapters';
+import { FAST_TRAVEL_ROUTES } from '@/data/fastTravel';
+import { resolveQuestGuidance, type QuestGuidance } from '@/utils/questGuidance';
+import { openNpcDialog } from '@game/adapters/dialog';
 import { useDraggable } from '@/composables/useDraggable';
 import { playUiClick } from '@/composables/useStardewFx';
 
 const mainQuest = useMainQuestStore();
 const learning = useLearningStore();
 const world = useWorldStore();
+const toast = useToastStore();
 
 const rootRef = ref<HTMLElement | null>(null);
 const { style: dragStyle, onPointerDown: onDragStart } = useDraggable(
@@ -117,6 +122,54 @@ const currentMapLabel = computed<string>(() => {
     default: return currentMapKey.value;
   }
 });
+
+// R-13：把当前子任务翻译成「下一步该干什么 + 去找哪个 NPC」。
+const guidance = computed<QuestGuidance | null>(() =>
+  currentSubQuest.value ? resolveQuestGuidance(currentSubQuest.value) : null,
+);
+
+/** 传送到目标地图（带落点）；复用 WorldCanvas 的 world-travel 监听重启场景。 */
+function travelToMap(mapKey: string, tile: { x: number; y: number } | null): void {
+  const route = FAST_TRAVEL_ROUTES.find((r) => r.toMap === mapKey);
+  const landing = tile ?? (route ? { x: route.tileX, y: route.tileY } : undefined);
+  world.setPendingTravel(mapKey, landing);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('pythontopia:world-travel'));
+  }
+}
+
+/**
+ * 「前往」：自动指路到当前任务对应的 NPC / 设施。
+ *   - dialog：传送到任务地图（若不同）→ 打开该 NPC 对话（对话完成即交证据）；
+ *   - workshop / training：直接打开工坊师傅 / 教务 Q 对话，NPC 对话内 route 进设施；
+ *   - practice：传送到知识农场 → 打开田老对话；
+ *   - building：传送到证据精确点位并标记到点完成。
+ * 无当前子任务（待打 Boss）时打开主线面板做引导。
+ */
+function goNext(): void {
+  playUiClick();
+  const g = guidance.value;
+  if (!g) {
+    mainQuest.openPanel();
+    return;
+  }
+  const playerMap = world.player?.mapKey ?? null;
+
+  if (g.kind === 'building' && g.tile) {
+    travelToMap(g.mapKey, g.tile);
+    mainQuest.onBuildingVisited(g.mapKey, g.tile.x, g.tile.y);
+  } else if (g.teleport && playerMap !== g.mapKey) {
+    travelToMap(g.mapKey, null);
+    if (g.openDialog) {
+      // 地图重建后再唤起 NPC 对话，避免与 BootScene 加载抢镜。
+      window.setTimeout(() => openNpcDialog(g.npcKey), 900);
+    }
+  } else if (g.openDialog) {
+    openNpcDialog(g.npcKey);
+  }
+
+  toast.show(`已为你指路：${g.stepText}`, 'info');
+}
 
 function toggleCollapsed(): void {
   playUiClick();
@@ -226,6 +279,35 @@ onUnmounted(() => {
       <div class="lop-row">
         <span class="lop-row__label">奖励</span>
         <span class="lop-row__value lop-row__value--reward">{{ rewardText }}</span>
+      </div>
+      <div
+        v-if="guidance"
+        class="lop-next"
+        data-testid="lop-next-step"
+      >
+        <div class="lop-next__head">
+          <span
+            class="lop-next__badge"
+            aria-hidden="true"
+          >➤</span>
+          <span class="lop-next__label">下一步</span>
+        </div>
+        <p class="lop-next__text">
+          {{ guidance.stepText }}
+        </p>
+        <button
+          type="button"
+          class="lop-next__cta"
+          data-testid="lop-go-next"
+          :aria-label="`前往：${guidance.stepText}`"
+          @click="goNext"
+        >
+          <span
+            class="lop-next__cta-icon"
+            aria-hidden="true"
+          >▶</span>
+          <span class="lop-next__cta-text">{{ guidance.ctaText }}</span>
+        </button>
       </div>
       <p class="lop-tip">
         [TIP] 提示：{{ currentTaskHint }}
@@ -382,6 +464,76 @@ onUnmounted(() => {
   flex: 1 1 auto;
 }
 
+/* ── 下一步指路块 ──────────────────────────────────────────────── */
+.lop-next {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  background: rgba(241, 196, 83, 0.1);
+  border: 1px solid rgba(241, 196, 83, 0.45);
+  border-radius: 2px;
+}
+.lop-next__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.lop-next__badge {
+  color: var(--pyt-text-gold);
+  font-size: 11px;
+  animation: lop-next-nudge 1.6s ease-in-out infinite;
+}
+.lop-next__label {
+  color: var(--pyt-text-accent);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.4px;
+}
+.lop-next__text {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--pyt-text-primary);
+}
+.lop-next__cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 7px 10px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: #2a1a05;
+  background: linear-gradient(180deg, var(--pyt-text-accent, #ffd166) 0%, var(--pyt-text-gold, #f1c453) 100%);
+  border: 1px solid var(--pyt-panel-border-dark);
+  border-radius: 2px;
+  box-shadow: 2px 2px 0 var(--pyt-panel-border-dark);
+  cursor: pointer;
+  transition: filter 120ms, transform 80ms, box-shadow 80ms;
+}
+.lop-next__cta:hover {
+  filter: brightness(1.08);
+}
+.lop-next__cta:active {
+  transform: translateY(2px);
+  box-shadow: 0 0 0 var(--pyt-panel-border-dark);
+}
+.lop-next__cta:focus-visible {
+  outline: 2px solid var(--pyt-text-gold);
+  outline-offset: 2px;
+}
+.lop-next__cta-icon {
+  font-size: 10px;
+}
+
+@keyframes lop-next-nudge {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(3px); }
+}
+
 .lop-tip {
   margin: 0;
   padding: 6px 8px;
@@ -462,7 +614,8 @@ onUnmounted(() => {
 
 @media (prefers-reduced-motion: reduce) {
   .learning-objective-panel,
-  .lop-row__value--accent {
+  .lop-row__value--accent,
+  .lop-next__badge {
     animation: none;
   }
 }

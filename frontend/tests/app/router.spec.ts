@@ -2,17 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { router } from '@/app/router';
 
 describe('app router building routes', () => {
-  it.each([
-    ['/shop-east', 'shop-east'],
-    ['/shop-west', 'shop-west'],
-    ['/merchant-ship', 'merchant-ship'],
-  ])('matches generated map building route %s', (path, name) => {
-    const resolved = router.resolve(path);
-
-    expect(resolved.name).toBe(name);
-    expect(resolved.matched).toHaveLength(1);
-  });
-
   it('matches unknown routes so RouterView never renders an empty white page', () => {
     const resolved = router.resolve('/missing-building');
 
@@ -42,18 +31,5 @@ describe('app router building routes', () => {
   it('R-13: catch-all 404 命中未注册路径', () => {
     const resolved = router.resolve('/this-route-definitely-does-not-exist');
     expect(resolved.name).toBe('not-found');
-  });
-
-  it('R-13: ShopPage 路由 props 包含 shopKey + displayName', () => {
-    const eastResolved = router.resolve('/shop-east');
-    const matched0 = eastResolved.matched[0];
-    expect(matched0).toBeDefined();
-    if (!matched0) return;
-    const props = matched0.props.default ?? {};
-    expect(props).toMatchObject({ shopKey: 'shop_east', displayName: '工具铺' });
-
-    const merchant = router.resolve('/merchant-ship');
-    const mProps = merchant.matched[0]?.props.default ?? {};
-    expect(mProps).toMatchObject({ shopKey: 'merchant_port', displayName: '商船' });
   });
 });

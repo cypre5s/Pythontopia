@@ -41,9 +41,6 @@ describe('routing.integration: 完整路由表（R-13 大爆炸）', () => {
     ['/review-hall', 'review-hall'],
     ['/teacher', 'teacher'],
     ['/teacher/classroom/42', 'teacher-classroom'],
-    ['/shop-east', 'shop-east'],
-    ['/shop-west', 'shop-west'],
-    ['/merchant-ship', 'merchant-ship'],
     ['/lighthouse', 'lighthouse'],
     ['/house-east', 'house-east'],
     ['/house-mid', 'house-mid'],
@@ -88,18 +85,6 @@ describe('routing.integration: 完整路由表（R-13 大爆炸）', () => {
   it('/bug-mine?side=west push 后 query 透传', async () => {
     await router.push('/bug-mine?side=west');
     expect(router.currentRoute.value.query.side).toBe('west');
-  });
-
-  it.each([
-    ['/shop-east', 'shop_east', '工具铺'],
-    ['/shop-west', 'shop_west', '杂货铺'],
-    ['/merchant-ship', 'merchant_port', '商船'],
-  ])('shop %s 静态 props = (%s, %s)', (path, shopKey, displayName) => {
-    const matched = router.resolve(path).matched[0];
-    expect(matched).toBeDefined();
-    if (!matched) return;
-    const props = matched.props.default ?? {};
-    expect(props).toMatchObject({ shopKey, displayName });
   });
 
   it.each([

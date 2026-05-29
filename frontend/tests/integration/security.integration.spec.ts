@@ -37,36 +37,6 @@ describe('security.integration · XSS：用户输入必须被转义', () => {
     setActivePinia(createPinia());
   });
 
-  it.each(XSS_PAYLOADS)('ShopPage shopKey="%s" 不创建真实 script/iframe 子元素', async (payload) => {
-    vi.doMock('@/api/shop', () => ({
-      fetchShopListings: vi.fn().mockResolvedValue([
-        { shopKey: payload, itemKey: payload, priceCoins: 100, priceGems: 0, stock: null, availableDays: null },
-      ]),
-      buyShopItem: vi.fn(),
-    }));
-    const { default: ShopPage } = await import('@/pages/ShopPage.vue');
-    const router = createRouter({
-      history: createMemoryHistory(),
-      routes: [
-        { path: '/world', name: 'world', component: { template: '<div />' } },
-        { path: '/shop', name: 'shop', component: ShopPage },
-      ],
-    });
-    const wrapper = mount(ShopPage, {
-      props: { shopKey: payload, displayName: payload },
-      global: { plugins: [router], stubs: { AppLayout: APP_LAYOUT_STUB } },
-    });
-    await flushPromises();
-    // 真实安全检查：DOM 中不能有从 payload 注入产生的 script / iframe / 事件处理器
-    const root = wrapper.element as HTMLElement;
-    expect(root.querySelectorAll('script').length).toBe(0);
-    expect(root.querySelectorAll('iframe').length).toBe(0);
-    // onerror / onclick 等内联事件属性不能从 payload 注入
-    const onAttrEls = root.querySelectorAll('[onerror], [onclick], [onload]');
-    expect(onAttrEls.length).toBe(0);
-    vi.doUnmock('@/api/shop');
-  });
-
   it.each(XSS_PAYLOADS)('NotFoundPage 路径 %s 不引入可执行 HTML', async (payload) => {
     const { default: NotFoundPage } = await import('@/pages/NotFoundPage.vue');
     const router = createRouter({
@@ -90,42 +60,6 @@ describe('security.integration · XSS：用户输入必须被转义', () => {
   });
 });
 
-describe('security.integration · 输入验证（DoS 友好）', () => {
-  beforeEach(() => {
-    setActivePinia(createPinia());
-  });
-
-  it.each([
-    [0, 'empty'],
-    [1, 'single char'],
-    [10_000, '10k chars'],
-    [100_000, '100k chars'],
-  ])('超长字符串 length=%i (%s) 渲染不抛错', async (len) => {
-    const huge = 'A'.repeat(len);
-    vi.doMock('@/api/shop', () => ({
-      fetchShopListings: vi.fn().mockResolvedValue([
-        { shopKey: huge, itemKey: huge, priceCoins: 100, priceGems: 0, stock: null, availableDays: null },
-      ]),
-      buyShopItem: vi.fn(),
-    }));
-    const { default: ShopPage } = await import('@/pages/ShopPage.vue');
-    const router = createRouter({
-      history: createMemoryHistory(),
-      routes: [
-        { path: '/world', name: 'world', component: { template: '<div />' } },
-      ],
-    });
-    expect(() => {
-      const wrapper = mount(ShopPage, {
-        props: { shopKey: huge, displayName: 'X' },
-        global: { plugins: [router], stubs: { AppLayout: APP_LAYOUT_STUB } },
-      });
-      wrapper.unmount();
-    }).not.toThrow();
-    vi.doUnmock('@/api/shop');
-  });
-});
-
 describe('security.integration · 路由权限', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -143,9 +77,6 @@ describe('security.integration · 路由权限', () => {
     '/board',
     '/review-hall',
     '/teacher',
-    '/shop-east',
-    '/shop-west',
-    '/merchant-ship',
     '/lighthouse',
     '/house-east',
     '/storage',

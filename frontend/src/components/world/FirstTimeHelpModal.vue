@@ -8,6 +8,10 @@ import { unlockAudio } from '@/composables/useAudio';
 
 const HELP_FLAG = 'pyt_helped_v1';
 
+// 关闭时通知父级（WorldPage）：首次进入的镇长 Py 发任务对话要等帮助弹窗关掉后再触发，
+// 避免「帮助弹窗 + 自动对话」两层叠加打断新手。
+const emit = defineEmits<{ dismissed: [] }>();
+
 const visible = ref(false);
 
 function dismiss(): void {
@@ -18,6 +22,7 @@ function dismiss(): void {
   } catch {
     // 隐私模式下 localStorage 可能不可用，忽略写入失败。
   }
+  emit('dismissed');
 }
 
 onMounted(() => {
@@ -77,7 +82,7 @@ defineExpose({
         </li>
         <li>
           <span class="pyt-help-key">Tab</span>
-          <span class="pyt-help-text">展开任务面板（B 背包 / M 地图 / K 技能 / J 对话历史）</span>
+          <span class="pyt-help-text">展开快捷面板（M 地图 / K 技能 / J 对话历史）</span>
         </li>
         <li>
           <span class="pyt-help-key">L</span>

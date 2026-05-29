@@ -1,0 +1,74 @@
+import { describe, expect, it } from 'vitest';
+import { MAIN_QUESTS, findMainQuestById } from '@/data/mainQuests';
+import { resolveQuestGuidance } from '@/utils/questGuidance';
+
+const VALID_MAPS = new Set([
+  'town_hub',
+  'farm_north',
+  'mine_south',
+  'campus_east',
+  'port_west',
+]);
+
+describe('resolveQuestGuidance（学习目标面板「下一步」指路）', () => {
+  it('dialog_complete → 指路到任务指定 NPC，需传送 + 开对话', () => {
+    const g = resolveQuestGuidance(findMainQuestById('1-1')!);
+    expect(g.kind).toBe('dialog');
+    expect(g.npcKey).toBe('mayor_py');
+    expect(g.npcName).toBe('镇长 Py');
+    expect(g.teleport).toBe(true);
+    expect(g.openDialog).toBe(true);
+    expect(g.tile).toBeNull();
+  });
+
+  it('resource_consumed → 指路到工坊师傅（工坊），文案含 KC + 资源类型', () => {
+    const g = resolveQuestGuidance(findMainQuestById('1-2')!);
+    expect(g.kind).toBe('workshop');
+    expect(g.npcKey).toBe('workshop_master');
+    expect(g.teleport).toBe(false);
+    expect(g.openDialog).toBe(true);
+    expect(g.stepText).toContain('KC-002');
+    expect(g.stepText).toContain('STORYBOARD');
+  });
+
+  it('submission → 指路到教务 Q（训练场）', () => {
+    const g = resolveQuestGuidance(findMainQuestById('1-4')!);
+    expect(g.kind).toBe('training');
+    expect(g.npcKey).toBe('coach_q');
+    expect(g.mapKey).toBe('campus_east');
+  });
+
+  it('kc_mastery → 指路到田老（知识农场），文案含目标掌握度', () => {
+    const g = resolveQuestGuidance(findMainQuestById('2-5')!);
+    expect(g.kind).toBe('practice');
+    expect(g.npcKey).toBe('farmer_kc');
+    expect(g.mapKey).toBe('farm_north');
+    expect(g.teleport).toBe(true);
+    expect(g.stepText).toMatch(/\d+/);
+  });
+
+  it('building_visit → 落点用证据精确 tile，不开对话', () => {
+    const g = resolveQuestGuidance(findMainQuestById('4-1')!);
+    expect(g.kind).toBe('building');
+    expect(g.tile).toEqual({ x: 12, y: 15 });
+    expect(g.openDialog).toBe(false);
+    expect(g.teleport).toBe(true);
+  });
+
+  it('全部 35 个子任务都能产出有效指路（非空文案 + 合法地图）', () => {
+    for (const quest of MAIN_QUESTS) {
+      const g = resolveQuestGuidance(quest);
+      expect(g.npcKey.length).toBeGreaterThan(0);
+      expect(g.npcName.length).toBeGreaterThan(0);
+      expect(g.stepText.length).toBeGreaterThan(0);
+      expect(g.ctaText.length).toBeGreaterThan(0);
+      expect(VALID_MAPS.has(g.mapKey)).toBe(true);
+      // building 任务必带 tile，其余不带。
+      if (g.kind === 'building') {
+        expect(g.tile).not.toBeNull();
+      } else {
+        expect(g.tile).toBeNull();
+      }
+    }
+  });
+});

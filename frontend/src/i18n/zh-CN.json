@@ -129,20 +129,11 @@
     "sage_review": {
       "greeting": "坐一坐，说一句心得"
     },
-    "merchant": {
-      "greeting": "今儿这批新到的不错"
-    },
     "class_president": {
       "greeting": "老师让我转给你"
     },
-    "postman": {
-      "greeting": "正好路过，给你这个"
-    },
     "chef": {
       "greeting": "今天新出列表沙拉"
-    },
-    "student_anxious": {
-      "greeting": "错也没关系，再来一次"
     }
   },
   "tpl": {

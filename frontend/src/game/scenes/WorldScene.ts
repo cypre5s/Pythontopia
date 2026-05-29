@@ -58,6 +58,9 @@ const RENDER_TILE_SIZE = TILE_SIZE * RENDER_SCALE;
 const CAMERA_ZOOM = 1.5;
 const CAMERA_LERP = 0.15;
 const MOVE_COOLDOWN_MS = 130;
+// 转身→起步的短延迟：转身只占这一小段（而非整段移动冷却），让「按住转个方向就走」
+// 跟手，同时仍保留「点一下=转身、按住=走起来」的星露谷手感。
+const TURN_DELAY_MS = 70;
 const RAIN_SLOWDOWN = 1.25;
 const FADE_DURATION_MS = 280;
 
@@ -483,6 +486,9 @@ export const WorldScene = {
       // 避免「按一下就强制蹭一步」的笨重感。
       if (shouldTurnBeforeMove(player.direction, rawDirection)) {
         player.faceDirection(cardinal);
+        // 转身只占用较短的 turn 延迟，而非整段移动冷却：下一帧只要再过 TURN_DELAY_MS
+        // 就能起步，避免「转完身要干等一个完整冷却才走」的卡顿。
+        state.lastMoveAt = this.time.now - (effectiveCooldown - TURN_DELAY_MS);
         void useWorldStore().updatePlayerTile({
           tileX: player.tileX,
           tileY: player.tileY,

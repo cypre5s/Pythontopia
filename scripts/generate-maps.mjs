@@ -523,12 +523,7 @@ function generateTownHub() {
   ];
   housesSouth.forEach((h) => paintBuilding(buildings, W, h.x, h.y, h.w, h.h));
 
-  // 东西商店
-  const shops = [
-    { x: 4, y: 14, w: 4, h: 4, label: '杂货铺', route: '/shop-west', name: 'building_shop_west' },
-    { x: 42, y: 14, w: 4, h: 4, label: '工具铺', route: '/shop-east', name: 'building_shop_east' },
-  ];
-  shops.forEach((s) => paintBuilding(buildings, W, s.x, s.y, s.w, s.h));
+  // R-13 优化：货币/商店系统移除 —— 删除 东西商店（杂货铺/工具铺）。
 
   // 中央喷泉（24-25, 19-20，2×2，用粉色块代替石雕）
   fillRect(decoration, W, 24, 19, 2, 2, TOWN_GIDS.flowerPink);
@@ -639,9 +634,6 @@ function generateTownHub() {
   paintBuilding(buildings, W, library.x, library.y, library.w, library.h);
   paintBuilding(buildings, W, reviewHall.x, reviewHall.y, reviewHall.w, reviewHall.h);
   paintBuilding(buildings, W, workshop.x, workshop.y, workshop.w, workshop.h);
-  // port_west 建筑
-  const portShop = { x: 4, y: 24, w: 4, h: 3, label: '商船', route: '/shop-port', name: 'building_merchant_port' };
-  paintBuilding(buildings, W, portShop.x, portShop.y, portShop.w, portShop.h);
   // mine_south 入口
   const mine = { x: 22, y: 34, w: 3, h: 2, label: 'Bug 矿洞', route: '/bug-mine', name: 'building_mine' };
   paintBuilding(buildings, W, mine.x, mine.y, mine.w, mine.h);
@@ -658,12 +650,10 @@ function generateTownHub() {
     makeBuilding(textileWest.name, textileWest.label, textileWest.route, textileWest.x, textileWest.y, textileWest.w, textileWest.h),
     makeBuilding(textileEast.name, textileEast.label, textileEast.route, textileEast.x, textileEast.y, textileEast.w, textileEast.h),
     ...housesSouth.map((h) => makeBuilding(h.name, h.label, h.route, h.x, h.y, h.w, h.h)),
-    ...shops.map((s) => makeBuilding(s.name, s.label, s.route, s.x, s.y, s.w, s.h)),
     makeBuilding(farmHouse.name, farmHouse.label, farmHouse.route, farmHouse.x, farmHouse.y, farmHouse.w, farmHouse.h),
     makeBuilding(library.name, library.label, library.route, library.x, library.y, library.w, library.h),
     makeBuilding(reviewHall.name, reviewHall.label, reviewHall.route, reviewHall.x, reviewHall.y, reviewHall.w, reviewHall.h),
     makeBuilding(workshop.name, workshop.label, workshop.route, workshop.x, workshop.y, workshop.w, workshop.h),
-    makeBuilding(portShop.name, portShop.label, portShop.route, portShop.x, portShop.y, portShop.w, portShop.h),
     makeBuilding(mine.name, mine.label, mine.route, mine.x, mine.y, mine.w, mine.h),
     makeBuilding(arena.name, arena.label, arena.route, arena.x, arena.y, arena.w, arena.h),
     makeBuilding(training.name, training.label, training.route, training.x, training.y, training.w, training.h),
@@ -679,7 +669,6 @@ function generateTownHub() {
     makeNpc('npc_farmer', 'farmer', '农场主', 6, 4, 'npc_farmer'),
     makeNpc('npc_professor', 'professor', '教授', 12, 10, 'npc_professor'),
     makeNpc('npc_student_a', 'student_a', '学生 A', 15, 14, 'npc_student'),
-    makeNpc('npc_merchant', 'merchant', '商人', 6, 26, 'npc_merchant'),
     makeNpc('npc_sailor', 'sailor', '水手', 4, 28, 'npc_sailor'),
     makeNpc('npc_miner', 'miner', '矿工', 24, 36, 'npc_miner'),
     makeNpc('npc_tutor_ai', 'tutor_ai', 'AI 导师', 30, 16, 'npc_tutor_ai'),
@@ -1115,9 +1104,7 @@ function generatePortWest() {
   const lighthouse = { x: 3, y: 4, w: 2, h: 4, label: '灯塔', route: '/lighthouse', name: 'building_lighthouse' };
   paintBuilding(buildings, W, lighthouse.x, lighthouse.y, lighthouse.w, lighthouse.h);
 
-  // 商船：在水边（rows 21-22），4×2，使用建筑外观近似船体
-  const ship = { x: 13, y: 21, w: 4, h: 2, label: '商船', route: '/merchant-ship', name: 'building_merchant_ship' };
-  paintBuilding(buildings, W, ship.x, ship.y, ship.w, ship.h);
+  // R-13 优化：货币/商店系统移除 —— 删除 商船（/merchant-ship 店铺）。
 
   // 班级广场：5×5 围栏空地（坐标 24, 8）
   paintFenceRect(decoration, W, 22, 6, 6, 6);
@@ -1165,10 +1152,8 @@ function generatePortWest() {
   const objects = [
     makeExit('exit_east', 'east', W, H, 'town_hub'),
     makeBuilding(lighthouse.name, lighthouse.label, lighthouse.route, lighthouse.x, lighthouse.y, lighthouse.w, lighthouse.h),
-    makeBuilding(ship.name, ship.label, ship.route, ship.x, ship.y, ship.w, ship.h),
     makeLandmark('silk_plaza', '锦绣讲坛', 22, 6, 6, 6, 'plaza'),
     makeLowObstacle('low_port_crate', '码头矮货箱', 29, 12, 1, 1, 'crate'),
-    makeNpc('npc_merchant', 'merchant', '布商', 16, 19),
     makeNpc('npc_class_president', 'class_president', '班长', 25, 9),
     makeSpawn(33, 12),
   ];

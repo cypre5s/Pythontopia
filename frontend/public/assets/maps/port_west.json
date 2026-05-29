@@ -10,7 +10,7 @@
   "tileheight": 16,
   "infinite": false,
   "nextlayerid": 5,
-  "nextobjectid": 10,
+  "nextobjectid": 7,
   "properties": [
     {
       "name": "mapKey",
@@ -1686,10 +1686,6 @@
         0,
         0,
         0,
-        14,
-        15,
-        15,
-        16,
         0,
         0,
         0,
@@ -1721,10 +1717,14 @@
         0,
         0,
         0,
-        23,
-        24,
-        24,
-        25,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
         0,
         0,
         0,
@@ -2761,29 +2761,6 @@
         },
         {
           "id": 3,
-          "name": "building_merchant_ship",
-          "type": "building",
-          "x": 208,
-          "y": 336,
-          "width": 64,
-          "height": 32,
-          "visible": true,
-          "rotation": 0,
-          "properties": [
-            {
-              "name": "route",
-              "type": "string",
-              "value": "/merchant-ship"
-            },
-            {
-              "name": "label",
-              "type": "string",
-              "value": "商船"
-            }
-          ]
-        },
-        {
-          "id": 4,
           "name": "silk_plaza",
           "type": "plaza",
           "x": 352,
@@ -2801,7 +2778,7 @@
           ]
         },
         {
-          "id": 5,
+          "id": 4,
           "name": "low_port_crate",
           "type": "low_obstacle",
           "x": 464,
@@ -2834,35 +2811,7 @@
           ]
         },
         {
-          "id": 6,
-          "name": "npc_merchant",
-          "type": "npc",
-          "x": 256,
-          "y": 304,
-          "width": 0,
-          "height": 0,
-          "visible": true,
-          "rotation": 0,
-          "properties": [
-            {
-              "name": "key",
-              "type": "string",
-              "value": "merchant"
-            },
-            {
-              "name": "label",
-              "type": "string",
-              "value": "布商"
-            },
-            {
-              "name": "sprite",
-              "type": "string",
-              "value": "player_sara"
-            }
-          ]
-        },
-        {
-          "id": 7,
+          "id": 5,
           "name": "npc_class_president",
           "type": "npc",
           "x": 400,
@@ -2890,35 +2839,7 @@
           ]
         },
         {
-          "id": 9,
-          "name": "npc_captain_def",
-          "type": "npc",
-          "x": 368,
-          "y": 144,
-          "width": 0,
-          "height": 0,
-          "visible": true,
-          "rotation": 0,
-          "properties": [
-            {
-              "name": "key",
-              "type": "string",
-              "value": "captain_def"
-            },
-            {
-              "name": "label",
-              "type": "string",
-              "value": "船长 Def"
-            },
-            {
-              "name": "sprite",
-              "type": "string",
-              "value": "player_sara"
-            }
-          ]
-        },
-        {
-          "id": 8,
+          "id": 6,
           "name": "spawn",
           "type": "spawn",
           "x": 528,

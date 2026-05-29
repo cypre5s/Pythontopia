@@ -155,29 +155,7 @@ export const router = createRouter({
       component: () => import('@/pages/ArenaPage.vue'),
       meta: { requiresAuth: true },
     },
-    // R-13：3 条静态 shop 路由（与 ShopController GET /api/world/shops/{shopKey} 对齐）。
-    // 路由 props 注入 shopKey + 中文 displayName，避免在 URL 里暴露中文。
-    {
-      path: '/shop-east',
-      name: 'shop-east',
-      component: () => import('@/pages/ShopPage.vue'),
-      props: { shopKey: 'shop_east', displayName: '工具铺' },
-      meta: { requiresAuth: true },
-    },
-    {
-      path: '/shop-west',
-      name: 'shop-west',
-      component: () => import('@/pages/ShopPage.vue'),
-      props: { shopKey: 'shop_west', displayName: '杂货铺' },
-      meta: { requiresAuth: true },
-    },
-    {
-      path: '/merchant-ship',
-      name: 'merchant-ship',
-      component: () => import('@/pages/ShopPage.vue'),
-      props: { shopKey: 'merchant_port', displayName: '商船' },
-      meta: { requiresAuth: true },
-    },
+    // R-13 优化：货币/商店系统已移除，原 /shop-east /shop-west /merchant-ship 路由删除。
     // R-13：6 个小建筑（民居/灯塔/谷仓/鸡舍）用 PlaceholderPage 兜底，
     // 让 town_hub.json / port_west.json / farm_north.json 里的 building.route 全部能 resolve。
     // 真实功能（NPC 互动 / 道具入库 / 任务节点）等 R-14 接入。

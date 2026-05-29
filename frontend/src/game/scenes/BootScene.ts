@@ -131,7 +131,6 @@ const CHARACTER_SHEETS: ReadonlyArray<[string, string, number, number]> = [
   ['npc_coach', `${NPC_SPRITE_BASE}/npc_coach.png`, 64, 64],
   ['npc_sage', `${NPC_SPRITE_BASE}/npc_sage.png`, 64, 64],
   ['npc_guard', `${NPC_SPRITE_BASE}/npc_guard.png`, 64, 64],
-  ['npc_merchant', `${NPC_SPRITE_BASE}/npc_merchant.png`, 64, 64],
   ['npc_miner', `${NPC_SPRITE_BASE}/npc_miner.png`, 64, 64],
   ['npc_professor', `${NPC_SPRITE_BASE}/npc_professor.png`, 64, 64],
   ['npc_farmer', `${NPC_SPRITE_BASE}/npc_farmer.png`, 64, 64],

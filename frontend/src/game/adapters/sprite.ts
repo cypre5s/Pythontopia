@@ -101,6 +101,19 @@ export function createPlayerSprite(scene: SceneLike, opts: CreatePlayerOptions):
     },
     faceDirection(direction: Direction): void {
       this.direction = direction;
+      // 转身即定身：杀掉上一格残留的位移 tween 并把精灵/阴影对齐到当前 tile 中心。
+      // 否则当「移动冷却 < 位移 tween 时长」时，转身瞬间人物还在往旧方向滑动、却已切成
+      // 新朝向，玩家就会看到「先移动再转向」的错觉。
+      phaserScene.tweens.killTweensOf(sprite);
+      phaserScene.tweens.killTweensOf(shadow);
+      const cx = this.tileX * opts.tileSize + opts.tileSize / 2;
+      const cy = this.tileY * opts.tileSize + opts.tileSize / 2;
+      sprite.x = cx;
+      sprite.y = cy;
+      shadow.x = cx;
+      shadow.y = cy + opts.tileSize / 2 - 4;
+      this.x = cx;
+      this.y = cy;
       sprite.stop();
       sprite.setFrame(idleFrame(direction));
     },

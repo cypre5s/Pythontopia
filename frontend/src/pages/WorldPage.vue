@@ -34,7 +34,22 @@ const isOnFarm = computed<boolean>(
 );
 
 const FIRST_VISIT_FLAG = 'pyt_first_world_visit';
+const HELP_FLAG = 'pyt_helped_v1';
 const WELCOME_DELAY_MS = 2000;
+
+// 首次进入时，镇长 Py 的「发任务」对话要等新手帮助弹窗关闭后再弹，避免叠加。
+let pendingWelcome = false;
+
+function openWelcomeDialog(delayMs: number): void {
+  window.setTimeout(() => openNpcDialog('mayor_py'), delayMs);
+}
+
+function onHelpDismissed(): void {
+  if (pendingWelcome) {
+    pendingWelcome = false;
+    openWelcomeDialog(400);
+  }
+}
 
 function onFullscreenChange(): void {
   const isFs = !!document.fullscreenElement;
@@ -58,13 +73,17 @@ onMounted(async () => {
   try {
     const seen = window.localStorage.getItem(FIRST_VISIT_FLAG);
     if (!seen) {
-      window.setTimeout(() => {
-        openNpcDialog('mayor_py');
-      }, WELCOME_DELAY_MS);
+      // 帮助弹窗还没看过 → 等它 dismiss 后再触发对话；已看过 → 短延时直接触发。
+      if (window.localStorage.getItem(HELP_FLAG)) {
+        openWelcomeDialog(800);
+      } else {
+        pendingWelcome = true;
+      }
       window.localStorage.setItem(FIRST_VISIT_FLAG, '1');
     }
   } catch {
-    // 隐私模式 localStorage 不可用，FirstTimeHelpModal 兜底
+    // 隐私模式 localStorage 不可用：直接延时打开，FirstTimeHelpModal 兜底
+    openWelcomeDialog(WELCOME_DELAY_MS);
   }
   document.addEventListener('fullscreenchange', onFullscreenChange);
 });
@@ -91,7 +110,7 @@ onBeforeUnmount(() => {
     <!-- 历史快捷键提示由 HudShell 各按钮承担，避免文字重复 -->
     <OperationHints v-if="false" />
     <DialogModal />
-    <FirstTimeHelpModal />
+    <FirstTimeHelpModal @dismissed="onHelpDismissed" />
     <!-- HUD 套件 -->
     <HudShell />
     <LearningObjectivePanel />

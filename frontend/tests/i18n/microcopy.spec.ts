@@ -170,9 +170,9 @@ describe('tList 按 prefix 收集', () => {
     expect(list).toHaveLength(10);
   });
 
-  it('tList("npc") 命中 11 个 NPC 招呼语', () => {
+  it('tList("npc") 命中 8 个 NPC 招呼语', () => {
     const list = tList('npc', 'zh-CN');
-    expect(list).toHaveLength(11);
+    expect(list).toHaveLength(8);
   });
 });
 

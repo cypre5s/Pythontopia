@@ -21,7 +21,6 @@ const items: readonly WheelItem[] = [
   { icon: 'A',  label: '闯关',  action: () => void router.push('/arena/1') },
   { icon: 'T',  label: '传送',  action: () => window.dispatchEvent(new CustomEvent('pythontopia:fast-travel-open')) },
   { icon: 'Z',  label: '休息',  action: () => void world.sleep() },
-  { icon: '$',  label: '商店',  action: () => void router.push('/shop-east') },
   { icon: 'B',  label: '矿洞',  action: () => void router.push('/bug-mine') },
   { icon: 'W',  label: '工坊',  action: () => void router.push('/workshop') },
   { icon: '#',  label: '训练',  action: () => void router.push('/training') },
