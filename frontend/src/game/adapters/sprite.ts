@@ -10,7 +10,6 @@ import type { PlayerSpriteHandle, RectangleLike, SceneLike } from './sceneTypes'
 // R-13：Direction 已扩到 8 方向；sprite 动画仍按 4 方向 cardinal 渲染，
 // 对角线方向通过 toCardinalFrame 收敛为最近的 4 向。
 const LPC_SHEET_KEY = 'player_sara';
-const LPC_FRAME_HEIGHT = 64;
 const SPRITE_FIXED_SCALE = 0.7;
 const LPC_COLS = 13;
 const LPC_WALK_ROW: Record<CardinalDirection, number> = {

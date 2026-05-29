@@ -9,7 +9,6 @@ import { useMainQuestStore } from '@stores/mainQuest';
 import { useSessionStore } from '@stores/session';
 import { useGameSettingsStore } from '@stores/gameSettings';
 import { useAudio } from '@/composables/useAudio';
-import { usePomodoro } from '@/composables/usePomodoro';
 import { playUiClick, playUiHover } from '@/composables/useStardewFx';
 
 interface SlotDescriptor {
@@ -37,7 +36,6 @@ const toast = useToastStore();
 const mainQuest = useMainQuestStore();
 const session = useSessionStore();
 const gameSettings = useGameSettingsStore();
-const pomodoro = usePomodoro();
 
 const currentBgm = ref<string>(bgmLabel(audio.getCurrentBgmKey()));
 let bgmPollTimer: number | null = null;
@@ -49,7 +47,6 @@ function pollBgm(): void {
 }
 
 const topBarVisible = computed(() => hud.topBar !== 'hidden');
-const topBarCollapsed = computed(() => hud.topBar === 'collapsed');
 const bottomBarVisible = computed(() => hud.bottomBar !== 'hidden');
 const bottomBarCollapsed = computed(() => hud.bottomBar === 'collapsed');
 
@@ -85,13 +82,6 @@ const chapterPct = computed<number>(() => {
   const done = Math.min(chapterSubsCompleted.value, total);
   return Math.round((done / total) * 100);
 });
-const currentSubQuestTitle = computed<string>(() => {
-  const view = mainQuest.chapterViews[currentChapter.value - 1];
-  if (!view) return '探索 Pythontopia';
-  const current = view.subQuests.find((s) => s.status === 'in_progress');
-  return current?.title ?? (view.subQuests.find((s) => s.status === 'available')?.title ?? '挑战章节 BOSS');
-});
-
 const overallPct = computed<number>(() => Math.round(mainQuest.overallProgress * 100));
 
 function clamp(value: number): number {

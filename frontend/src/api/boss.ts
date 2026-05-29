@@ -13,7 +13,6 @@ import type {
   BossAttemptResultDto,
   BossProblemDto,
   BossProblemRequest,
-  ProfileSignalsDto,
 } from './dto/Boss';
 import { findBossByChapter } from '@/data/mainQuests';
 

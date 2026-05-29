@@ -12,7 +12,7 @@
 import { mount, flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { createMemoryHistory, createRouter, type Router } from 'vue-router';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { router as appRouter } from '@/app/router';
 import { useSessionStore } from '@stores/session';
 import { useHudStore } from '@stores/hud';
@@ -22,7 +22,6 @@ import { useDialogStore } from '@stores/dialog';
 import { useInventoryStore } from '@stores/inventory';
 import HudShell from '@/components/hud/HudShell.vue';
 import FastTravelPanel from '@/components/hud/FastTravelPanel.vue';
-import SettingsModal from '@/components/hud/SettingsModal.vue';
 import FestivalRibbon from '@/components/hud/FestivalRibbon.vue';
 import type { WorldCalendarDto } from '@/api/dto/WorldCalendarDto';
 

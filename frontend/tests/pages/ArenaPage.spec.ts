@@ -12,7 +12,7 @@
  *   7. 章节切换 tab：路由跳到 /arena/2，selectedLevelId 重置到 2-1
  *   8. 显示总进度 0/70；通关一关后变 1/70
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { setActivePinia, createPinia } from 'pinia';
 import { createRouter, createMemoryHistory, type Router } from 'vue-router';

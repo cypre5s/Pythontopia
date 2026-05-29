@@ -6,7 +6,6 @@
 //   - chooseBranch 触发 dialog:choice 事件
 //   - 多次 open / close 状态机
 //   - 内存友好度跨实例存活
-import { flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {

@@ -58,8 +58,6 @@ interface BossDesign {
   accent: string;
 }
 
-const GRID = 16;
-
 function rect(r: number, c: number, fill: string): PixelDef {
   return { r, c, fill };
 }

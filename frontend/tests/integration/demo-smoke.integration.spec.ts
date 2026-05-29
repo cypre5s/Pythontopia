@@ -7,8 +7,7 @@
 
 import { mount, flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
-import { createMemoryHistory, createRouter, type Router } from 'vue-router';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSessionStore } from '@stores/session';
 import { useWorldStore } from '@stores/world';
 import { useHudStore } from '@stores/hud';

@@ -11,7 +11,6 @@ import { useMainQuestStore } from '@stores/mainQuest';
 const mainQuest = useMainQuestStore();
 
 const currentChapter = computed(() => mainQuest.progress.currentChapter);
-const currentSubQuest = computed(() => mainQuest.progress.currentSubQuest);
 
 const chapterTitle = computed<string>(() => {
   const idx = currentChapter.value - 1;

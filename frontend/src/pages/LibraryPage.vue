@@ -337,6 +337,7 @@ const PAGE_PURIFY_CONFIG: PurifyConfig = {
 function renderPageHtml(raw: string): string {
   if (!raw) return '';
   // OCR 文本里 \x0b 是 page break，先转换 + 重复段去掉
+  // eslint-disable-next-line no-control-regex -- 故意匹配垂直制表符(\x0b)作为 OCR 分页符
   const cleaned = raw.replace(/\x0b/g, '\n\n').replace(/(\n\n)+/g, '\n\n').trim();
   const html = marked.parse(cleaned, { async: false }) as string;
   // dompurify@3.4 在 trusted-types 浏览器返回 TrustedHTML，这里强转 string

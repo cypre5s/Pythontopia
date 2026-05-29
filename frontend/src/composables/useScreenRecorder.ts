@@ -34,7 +34,7 @@ export function useScreenRecorder() {
     animFrameId = requestAnimationFrame(tickElapsed);
   }
 
-  function captureFrame(
+  function _captureFrame(
     ctx: CanvasRenderingContext2D,
     target: HTMLElement,
     w: number,
@@ -48,7 +48,7 @@ export function useScreenRecorder() {
 
     ctx.clearRect(0, 0, canvas!.width, canvas!.height);
 
-    requestAnimationFrame(() => captureFrame(ctx, target, w, h));
+    requestAnimationFrame(() => _captureFrame(ctx, target, w, h));
   }
 
   async function start(options: ScreenRecorderOptions): Promise<void> {

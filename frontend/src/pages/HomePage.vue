@@ -4,7 +4,6 @@ import { useRouter } from 'vue-router';
 import AppLayout from '@/app/AppLayout.vue';
 import { useSessionStore } from '@stores/session';
 import { useLearningStore } from '@stores/learning';
-import { useToastStore } from '@stores/toast';
 import { listMyClassrooms } from '@/api/classroom';
 import { getRecommendations, type RecommendationDto } from '@/api/recommendations';
 import { playSfx } from '@/composables/useAudio';
@@ -13,7 +12,6 @@ import type { ClassroomDto } from '@/api/dto/ClassroomDto';
 const router = useRouter();
 const session = useSessionStore();
 const learning = useLearningStore();
-const toast = useToastStore();
 
 const classroom = ref<ClassroomDto | null>(null);
 const recommendations = ref<RecommendationDto[]>([]);

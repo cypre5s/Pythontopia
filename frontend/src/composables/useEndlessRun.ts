@@ -17,7 +17,6 @@ import type {
   BossAttemptResultDto,
   BossProblemDto,
   BossProblemRequest,
-  ProfileSignalsDto,
 } from '@/api/dto/Boss';
 
 export interface EndlessHistoryEntry {
