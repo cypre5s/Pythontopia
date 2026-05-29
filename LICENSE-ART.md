@@ -57,6 +57,40 @@ license 矩阵无关（它们是 JS 代码，受代码层 MIT 控制），但为
 ### Kenney CC0 (推荐致谢，非强制)
 > Many UI / tile / character / SFX / icon assets by **Kenney Vleugels** (https://kenney.nl) — released as CC0.
 
+## R-14 HUD 美化：Dock 图标 + RPG UI 面板（2026-05-28）
+
+| 运行时路径 | 来源 | License | 用途 |
+| --- | --- | --- | --- |
+| `frontend/public/assets/pixel/ui/kenney-rpg/*.png` (86 张) | Kenney "UI Pack RPG Expansion" (https://kenney.nl/assets/ui-pack-rpg-expansion) | **CC0-1.0** | RPG 风面板、按钮、进度条、箭头、光标、勾叉图标，HUD 面板纹理备选 |
+| `frontend/public/assets/pixel/icons/dock/star.png` | Kenney "Game Icons" (https://kenney.nl/assets/game-icons) | **CC0-1.0** | 底部 Dock 技能槽备用星标 |
+| `frontend/public/assets/pixel/icons/dock/gear.png` | Kenney "Game Icons" | **CC0-1.0** | 底部 Dock 设置槽备用齿轮 |
+| `frontend/public/assets/pixel/icons/dock/home.png` | Kenney "Game Icons" | **CC0-1.0** | 底部 Dock 首页 / 回城备用 |
+| `frontend/public/assets/pixel/icons/dock/exit.png` | Kenney "Game Icons" | **CC0-1.0** | 底部 Dock 退出备用 |
+| `frontend/public/assets/pixel/icons/dock/trophy.png` | Kenney "Game Icons" | **CC0-1.0** | 底部 Dock 闯关塔备用奖杯 |
+| `frontend/public/assets/pixel/icons/dock/exclamation.png` | Kenney "Game Icons" | **CC0-1.0** | 通知 / 任务警告标记备用 |
+| `frontend/public/assets/pixel/icons/dock/information.png` | Kenney "Game Icons" | **CC0-1.0** | 信息提示备用 |
+| `frontend/public/assets/pixel/icons/dock/target.png` | Kenney "Game Icons" | **CC0-1.0** | 目标 / 准心备用 |
+| `frontend/public/assets/pixel/icons/dock/save.png` | Kenney "Game Icons" | **CC0-1.0** | 存档备用 |
+| `frontend/public/assets/pixel/icons/dock/checkered-flag.png` | game-icons.net Lorc | **CC-BY 3.0** | 底部 Dock 任务槽（替换 ✦） |
+| `frontend/public/assets/pixel/icons/dock/speech-bubble.svg` | game-icons.net Lorc | **CC-BY 3.0** | 底部 Dock 对话槽（替换 ✉） |
+| `frontend/public/assets/pixel/icons/dock/swap-bag.svg` | game-icons.net Lorc | **CC-BY 3.0** | 底部 Dock 背包槽（替换 ⛃） |
+| `frontend/public/assets/pixel/icons/dock/treasure-map.svg` | game-icons.net Lorc | **CC-BY 3.0** | 底部 Dock 地图槽（替换 ◰） |
+| `frontend/public/assets/pixel/icons/dock/star-formation.png` | game-icons.net Delapouite | **CC-BY 3.0** | 底部 Dock 技能槽（替换 ★） |
+| `frontend/public/assets/pixel/icons/dock/book-cover.png` | game-icons.net Lorc | **CC-BY 3.0** | 底部 Dock 课程槽（替换 📖） |
+| `frontend/public/assets/pixel/icons/dock/crossed-swords.png` | game-icons.net Lorc | **CC-BY 3.0** | 底部 Dock 闯关槽（替换 ⚔） |
+| `frontend/public/assets/pixel/icons/dock/teleport.svg` | game-icons.net Lorc | **CC-BY 3.0** | 底部 Dock 传送槽（替换 ➤） |
+| `frontend/public/assets/pixel/icons/dock/night-sleep.svg` | game-icons.net Delapouite | **CC-BY 3.0** | 底部 Dock 休息槽（替换 ☾） |
+| `frontend/public/assets/pixel/icons/dock/gears.png` | game-icons.net Lorc | **CC-BY 3.0** | 底部 Dock 设置槽（替换 ⚙） |
+| `frontend/public/assets/pixel/icons/dock/compass-rose.png` | game-icons.net Lorc | **CC-BY 3.0** | 传送/导航备用 |
+| `frontend/public/assets/pixel/icons/dock/scroll-unfurled.png` | game-icons.net Lorc | **CC-BY 3.0** | 任务/课程备用卷轴 |
+| `frontend/public/assets/pixel/icons/dock/locked-chest.png` | game-icons.net Lorc | **CC-BY 3.0** | 背包/宝箱备用 |
+| `frontend/public/assets/pixel/icons/dock/school-bag.svg` | game-icons.net Delapouite | **CC-BY 3.0** | 背包备选书包 |
+| `frontend/public/assets/pixel/icons/dock/chat-bubble.svg` | game-icons.net Delapouite | **CC-BY 3.0** | 对话备选气泡 |
+| `frontend/public/assets/pixel/icons/dock/moon.svg` | game-icons.net Lorc | **CC-BY 3.0** | 休息/夜晚备选月亮 |
+| `frontend/public/assets/pixel/icons/dock/portal.svg` | game-icons.net Lorc | **CC-BY 3.0** | 传送备选传送门 |
+
+**集成状态**：Dock 10 个图标已在 `HudShell.vue` 中由 emoji 替换为 `<img>` 像素图标。RPG UI 面板已复制到运行时但尚未接入 CSS。
+
 ## R-13 §-1 新增运行时素材（2026-05-25）
 
 | 运行时路径 | 来源 | License | 用途 |
@@ -64,7 +98,7 @@ license 矩阵无关（它们是 JS 代码，受代码层 MIT 控制），但为
 | `frontend/public/assets/pixel/ui/login-hero-stardew.png` | Pythontopia 原创（AI 辅助生成 + 人工审核） | CC-BY-SA 3.0+ | LoginPage 星露谷风暖色像素小镇 hero；NPC 与建筑均为原创，不复制任何商业像素游戏 |
 | `frontend/public/assets/pixel/bosses/boss-{1..7}-*.png` (7 张) | Pythontopia 原创（AI 辅助生成 + 人工审核 + 原创主题设计） | CC-BY-SA 3.0+ | BossPage / Endless / Arena 第 10 关 Boss 立绘；7 章主题：算盘灵 / 解释器学徒 / 二进制独眼 / 流程钟楼 / 集合棱镜 / 文档守护神 / 归纳之镜；风格统一星露谷暖色像素，与 hero 同调 |
 | `frontend/public/assets/pixel/vendor/ansimuz-mountain-dusk/{5×PNG,LICENSE-CC0.txt}` | ansimuz "Mountain at Dusk Background" (https://opengameart.org/content/mountain-at-dusk-background) | **CC0-1.0** | 备用：4 层 parallax 远山日落剪影，预留 boss 终局 / 章末过场使用 |
-| `frontend/public/assets/pixel/portraits/heads/portrait_*_head.png` (20 张) | `frontend/public/assets/pixel/portraits/portrait_*.png` 子裁切，由 `scripts/crop-portrait-heads.py` 输出 | 继承原 portrait（CC0 / CC-BY-SA 3.0 / CC-BY 4.0 分文件） | DialogModal 单帧头像，每张为对应 portrait 的左上 idle-down 16×24 帧 2x 放大 |
+| `frontend/public/assets/pixel/portraits/heads/portrait_*_head.png` (29 张) | `frontend/public/assets/pixel/portraits/portrait_*.png` 子裁切；9 个 R-14 demo NPC 从 `sprites/npc-composites/npc_*.png` 的 down idle 正面帧裁切，由 `scripts/crop-portrait-heads.py` 输出 | 继承原 portrait / composite（CC0 / CC-BY 4.0 / OGA-BY 3.0 分文件） | DialogModal / DialogTree 单帧头像，每张 32×48 |
 | `assets/inbox/r13-overworld/pastoral-tileset-db32.png` | Ragnar Random Hat (https://opengameart.org/content/pastoral-overworld) | **CC0-1.0** | 备用：DawnBringer db32 32×32 乡村瓦片，未集成到运行时 |
 | `assets/inbox/r13-lpc-lamp/lpc_lamp_posts_rework-1.0.zip` | Curt, Sharm, William.Thompsonj, mold (LPC) | CC-BY 3.0 / OGA-BY 3.0 / GPL 3.0 | 备用：32×32 路灯柱多色，未集成到运行时；引入时需署名 4 位作者 |
 
@@ -79,8 +113,11 @@ license 矩阵无关（它们是 JS 代码，受代码层 MIT 控制），但为
 | `tilesets/town_tiles.svg`, `buildings/town_buildings.svg`, `characters/student_default.svg` | Pythontopia 自绘占位（见 `assets/pixel/LICENSE.md`） | CC0-1.0 | 早期占位与 fallback，不含商业像素游戏素材 |
 | `fonts/ark-pixel-12px-{mono,prop}-*.woff2`, `fonts/OFL.txt` | TakWolf Ark Pixel Font (`assets/inbox/github_extra/ark_pixel_font/`) | OFL-1.1 | 运行时短文件名，与 OFL 原文一并分发 |
 | `sfx/success.ogg`, `sfx/error.ogg` | Kenney Digital Audio (`assets/inbox/sfx_extra/digital-audio/`) | CC0-1.0 | 正误反馈提示音 |
+| `sfx/jump/kenney_jump_soft_000.ogg`, `sfx/jump/kenney_land_wood_000.ogg` | Kenney "Impact Sounds" (https://kenney.nl/assets/impact-sounds)，通过本机代理 7892 下载；源文件与协议保留在 `assets/inbox/sfx_jump/kenney_impact-sounds/` | CC0-1.0 | 低障碍跳跃起跳/落地反馈音效 |
+| `props/fantastic-fence/fence_00.png` | InThePixel "fantastic fence 16x16" (https://opengameart.org/content/fantastic-fence-16x16)，通过本机代理 7892 下载；源文件保留在 `assets/inbox/fantastic-fence-16x16/` | CC0-1.0 | 低障碍小路矮栅栏 / 木桩 spritesheet（16×16，含单木桩、横栏、竖栏） |
+| `props/fantastic-fence/stump_agnaldo.png` | Agnaldo "Tree(Arvore) & stump" (https://opengameart.org/content/treearvore-stump)，通过本机代理 7892 下载；源文件保留在 `assets/inbox/tree-stump/` | CC0-1.0 | 备用树桩 sprite，当前未接入 BootScene |
 | `effects/weather/` | Weather FX 审计池 (`assets/inbox/weather_fx/LICENSE.md`) + Pythontopia 粒子占位 | CC0-1.0 | 云、雨滴、雪花来自已审计 CC0；confetti 为运行时占位 |
-| `portraits/` | isaiah658 Pixel Pack #1 + Pepper&Carrot 24x32 | CC0-1.0 / CC-BY-4.0 | 20 NPC 对话立绘；Pepper&Carrot 必须署名 Cabbit 与 David Revoy |
+| `portraits/` | isaiah658 Pixel Pack #1 + Pepper&Carrot 24x32 + LPC Medieval Fantasy npc-composites | CC0-1.0 / CC-BY-4.0 / OGA-BY-3.0 | 29 NPC 对话立绘；Pepper&Carrot 必须署名 Cabbit 与 David Revoy，LPC composite 必须署名 Johannes Sjolund ("wulax") 与 base contributors |
 | `vendor/opengameart/crates_and_sacks.png` | ScratchIO "Crates And Sacks" on OpenGameArt | CC0-1.0 | 港口/农场货箱与麻袋装饰 |
 
 ## 已删除的违规素材（不在本仓库分发）
@@ -134,7 +171,17 @@ license 矩阵无关（它们是 JS 代码，受代码层 MIT 控制），但为
 |---|---|---|---|---|
 | LPC Lamp Posts Rework v1.0 | OpenGameArt @bluecarrot16 | CC-BY 3.0 | town_hub / campus_east 路灯 tile | 待下载 |
 | Pastoral 32x32 Tileset | OpenGameArt CC0 | CC0 | farm_north 田地装饰 | 待下载 |
-| 20 NPC 统一风格头像 | 自绘 / AI 辅助 | CC-BY-SA 3.0 | portraits/heads/ 统一尺寸 32×48 | 部分完成 |
+| 29 NPC 统一头像裁切 | isaiah658 / Pepper&Carrot / LPC Medieval Fantasy composite | CC0-1.0 / CC-BY-4.0 / OGA-BY-3.0 | portraits/heads/ 统一尺寸 32×48 | 已完成 |
+
+## R-14 新增软件依赖
+
+| 依赖 | 版本 | License | 用途 |
+|------|------|---------|------|
+| reveal.js | 5.x | MIT | PPT 幻灯片渲染（前端） |
+| 讯飞 Spark TTS API | v2 WebSocket | [讯飞服务条款](https://www.xfyun.cn/doc/tts/online_tts/API.html) | 语音合成（后端中继，失败降级 speechSynthesis） |
+
+> reveal.js MIT License 不影响项目 CC-BY-SA 3.0 分层授权。
+> 讯飞 TTS 为商用 API 调用，不包含可再分发代码，仅需遵守讯飞服务条款。
 
 ## 待办（backlog）
 
@@ -142,4 +189,4 @@ license 矩阵无关（它们是 JS 代码，受代码层 MIT 控制），但为
 2. 醒来后可选：手动下载 ansimuz/sunny-land-pixel-game-art + ansimuz/fantasy-weapons-set（itch.io CC0，需浏览器 session）
 3. 真实部署后 `frontend/public/credits/` 全量署名页生成（CC-BY-SA 3.0 + OFL-1.1 必备）
 4. B6 LPC Lamp Posts 下载后集成到 town_hub.json / campus_east.json 的 tileset 层
-5. B6 NPC portraits 批量统一：scripts/crop-portrait-heads.py 需要跑一遍确保 20 NPC 全覆盖
+5. B6 NPC portraits 批量统一：scripts/crop-portrait-heads.py 已覆盖 29 NPC；后续如新增 NPC，需同步 meta/index 与 heads 裁切

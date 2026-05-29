@@ -77,6 +77,9 @@ services:
       PYT_SPARK_API_KEY: ${PYT_SPARK_API_KEY:-}
       PYT_SPARK_API_SECRET: ${PYT_SPARK_API_SECRET:-}
       PYT_SPARK_MODEL_ID: ${PYT_SPARK_MODEL_ID:-}
+      PYT_RAG_URL: http://pythontopia-rag:18092
+      NO_PROXY: localhost,127.0.0.1,pythontopia-rag,postgres,redis
+      no_proxy: localhost,127.0.0.1,pythontopia-rag,postgres,redis
     ports:
       - "127.0.0.1:18091:18091"
 

@@ -1,0 +1,19 @@
+# 本地受限网络构建覆盖：host 网络 + 127.0.0.1:7892 代理 + 国内镜像。
+# 用法：docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+x-build-proxy: &build-proxy
+  network: host
+  pull: false
+  args:
+    HTTP_PROXY: ${PYT_BUILD_PROXY:-http://127.0.0.1:7892}
+    HTTPS_PROXY: ${PYT_BUILD_PROXY:-http://127.0.0.1:7892}
+    NO_PROXY: localhost,127.0.0.1
+
+services:
+  backend:
+    build: *build-proxy
+  frontend:
+    build: *build-proxy
+  pythontopia-graph:
+    build: *build-proxy
+  pythontopia-rag:
+    build: *build-proxy

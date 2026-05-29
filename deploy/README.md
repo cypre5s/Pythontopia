@@ -3,6 +3,24 @@
 阶段 14 起，Docker Compose 一键拉起 Postgres + Redis + Backend + Graph + RAG + Frontend 六项服务。
 Beta 演示路径以本目录为准。
 
+## 受限网络重建（代理 7892 + 国内镜像）
+
+当 Maven Central 403 或容器内无法直连时，使用 host 网络 + 本地代理重建：
+
+```bash
+cd /home/cypress/Pythontopia/deploy
+bash scripts/build-with-proxy.sh
+# 或手动：
+# docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+```
+
+构建覆盖项（`docker-compose.build.yml`）：
+
+- Docker build 使用 `network: host`，使容器内可访问 `127.0.0.1:7892`
+- Maven：`backend/.mvn/settings.build.xml`（腾讯云镜像 + 7892 代理）
+- npm：`registry.npmmirror.com`
+- pip：`mirrors.aliyun.com/pypi/simple/`
+
 ## 一键启动
 
 ```bash
