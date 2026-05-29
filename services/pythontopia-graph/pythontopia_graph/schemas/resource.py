@@ -95,6 +95,8 @@ class StoryboardScene(BaseModel):
     visual_hint: str
     kc_codes: list[str] = Field(default_factory=list)
     duration_seconds: int = Field(ge=5, le=90)
+    evidence_page_id: int | None = None
+    narration_tts_voice: str = "x4_yezi"
 
 
 class StoryboardContent(BaseModel):

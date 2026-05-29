@@ -41,14 +41,20 @@ def test_load_pages_maps_database_rows(monkeypatch: Any, tmp_path: Path) -> None
     rows = [
         {
             "page_id": 10682,
-            "kc_code": "PY43-KC-001",
+            "kc_codes": ["PY43-KC-001"],
             "document_id": 186,
+            "chapter_id": 179,
+            "page_no": 1,
+            "title": "计算思维与人工智能",
             "content_markdown": "计算思维与人工智能",
         },
         {
             "page_id": 10683,
-            "kc_code": "PY43-KC-002",
+            "kc_codes": ["PY43-KC-002", "PY43-KC-003"],
             "document_id": 186,
+            "chapter_id": None,
+            "page_no": 2,
+            "title": "程序设计语言基础",
             "content_markdown": "程序设计语言基础",
         },
     ]
@@ -59,7 +65,12 @@ def test_load_pages_maps_database_rows(monkeypatch: Any, tmp_path: Path) -> None
 
     assert result.count == 2
     assert result.pages[0].page_id == 10682
-    assert result.pages[0].kc_code == "PY43-KC-001"
+    assert result.pages[0].kc_codes == ["PY43-KC-001"]
     assert result.pages[0].document_id == 186
+    assert result.pages[0].chapter_id == 179
+    assert result.pages[0].page_no == 1
+    assert result.pages[0].title == "计算思维与人工智能"
     assert result.pages[0].content_markdown == "计算思维与人工智能"
+    assert result.pages[1].kc_codes == ["PY43-KC-002", "PY43-KC-003"]
+    assert result.pages[1].chapter_id is None
     assert not (tmp_path / "pages.parquet").exists()

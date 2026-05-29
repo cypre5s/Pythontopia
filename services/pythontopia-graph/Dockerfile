@@ -1,4 +1,8 @@
 FROM python:3.11-slim
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+ENV HTTP_PROXY=${HTTP_PROXY} HTTPS_PROXY=${HTTPS_PROXY} NO_PROXY=${NO_PROXY}
 WORKDIR /app
 
 RUN apt-get update \
@@ -7,7 +11,10 @@ RUN apt-get update \
 
 COPY pyproject.toml ./
 COPY pythontopia_graph ./pythontopia_graph
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir \
+    --index-url https://mirrors.aliyun.com/pypi/simple/ \
+    --trusted-host mirrors.aliyun.com \
+    .
 
 EXPOSE 18091
 HEALTHCHECK --interval=15s --timeout=5s --retries=5 --start-period=15s \

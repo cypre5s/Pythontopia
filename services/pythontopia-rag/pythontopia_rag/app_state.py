@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from pythontopia_rag.index.embedder import Embedder, HashEmbedder
+from pythontopia_rag.index.embedder import Embedder, select_embedder
 from pythontopia_rag.index.store import InMemoryVectorStore, VectorStore
 
 
@@ -13,4 +13,4 @@ class AppState:
 
 
 def create_default_state() -> AppState:
-    return AppState(embedder=HashEmbedder(), store=InMemoryVectorStore())
+    return AppState(embedder=select_embedder(), store=InMemoryVectorStore())

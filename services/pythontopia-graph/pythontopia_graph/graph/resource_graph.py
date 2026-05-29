@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from typing import Any
 
 from pythontopia_graph.agents.code_lab_agent import CodeLabAgent
 from pythontopia_graph.agents.handout_agent import HandoutAgent
@@ -126,6 +128,113 @@ class ResourceGraph:
             status="FAILED",
         )
         raise ResourceGraphError("grounding failed after retry", response)
+
+    async def run_streaming(
+        self,
+        request: ResourceProduceRequest,
+        emit: Callable[[str, dict[str, Any]], Awaitable[None]],
+    ) -> None:
+        """Run the graph with SSE callbacks for each step."""
+        trace: list[GraphTraceStep] = []
+
+        try:
+            evidence = await self._step(
+                trace,
+                "evidence_fetcher",
+                self._fetch_evidence(request),
+            )
+            await emit("trace", trace[-1].model_dump(mode="json"))
+
+            agent = self._select_agent(request)
+
+            attempt = 0
+            last_grounding: GroundingResult | None = None
+            last_safety: SafetyResult | None = None
+            draft: ResourceDraft | None = None
+            while attempt <= self.MAX_RETRIES:
+                draft = await self._step(
+                    trace,
+                    f"{agent.AGENT_NAME}.attempt{attempt}",
+                    agent.design(request, evidence),
+                )
+                await emit("trace", trace[-1].model_dump(mode="json"))
+
+                grounding = grounding_critic(draft, evidence)
+                self._record_sync(trace, "grounding_critic", grounding.passed)
+                await emit("trace", trace[-1].model_dump(mode="json"))
+
+                hallucination = hallucination_detector(
+                    draft, evidence, self._config.valid_kc_codes
+                )
+                self._record_sync(
+                    trace, "hallucination_detector", hallucination.passed,
+                    note=str(hallucination.reasons),
+                )
+                await emit("trace", trace[-1].model_dump(mode="json"))
+
+                safety = safety_critic(draft)
+                self._record_sync(
+                    trace, "safety_critic", safety.passed, note=str(safety.reasons),
+                )
+                await emit("trace", trace[-1].model_dump(mode="json"))
+
+                if not safety.passed:
+                    response = build_response(
+                        artifact=draft,
+                        resource_type=request.type,
+                        evidence_page_ids=evidence.page_ids,
+                        grounding=GroundingResult(passed=False, reasons=["SAFETY_FAILED"]),
+                        safety=safety,
+                        graph_trace=trace,
+                        status="FAILED",
+                    )
+                    await emit("error", {
+                        "code": "SAFETY_FAILED",
+                        "message": "safety failed",
+                    })
+                    return
+
+                combined = GroundingResult(
+                    passed=grounding.passed and hallucination.passed,
+                    reasons=list(grounding.reasons) + list(hallucination.reasons),
+                    no_evidence_found=grounding.no_evidence_found,
+                    retried=attempt > 0,
+                )
+                last_grounding, last_safety = combined, safety
+                if combined.passed:
+                    status = "PARTIAL" if combined.no_evidence_found else "SUCCESS"
+                    resp = build_response(
+                        artifact=draft,
+                        resource_type=request.type,
+                        evidence_page_ids=evidence.page_ids,
+                        grounding=combined,
+                        safety=safety,
+                        graph_trace=trace,
+                        status=status,
+                    )
+                    await emit("result", resp.model_dump(mode="json"))
+                    return
+                attempt += 1
+
+            assert draft is not None and last_grounding is not None and last_safety is not None
+            build_response(
+                artifact=draft,
+                resource_type=request.type,
+                evidence_page_ids=evidence.page_ids,
+                grounding=last_grounding,
+                safety=last_safety,
+                graph_trace=trace,
+                status="FAILED",
+            )
+            await emit("error", {
+                "code": "RESOURCE_GRAPH_FAILED",
+                "message": "grounding failed after retry",
+            })
+        except Exception as exc:
+            await emit("error", {
+                "code": "RESOURCE_GRAPH_FAILED",
+                "message": str(exc),
+            })
 
     def _select_agent(self, request: ResourceProduceRequest):
         if request.type == "HANDOUT":

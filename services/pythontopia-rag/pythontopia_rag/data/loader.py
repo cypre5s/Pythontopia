@@ -16,8 +16,11 @@ DEFAULT_OUTPUT = Path(__file__).resolve().parents[2] / "data" / "pages.parquet"
 
 class PageRecord(BaseModel):
     page_id: int = Field(gt=0)
-    kc_code: str
+    kc_codes: list[str] = Field(default_factory=list)
     document_id: int = Field(gt=0)
+    chapter_id: int | None = None
+    page_no: int
+    title: str
     content_markdown: str
 
 
@@ -37,15 +40,21 @@ def normalize_db_url(db_url: str) -> str:
 def fetch_pages(db_url: str) -> list[PageRecord]:
     sql = """
         SELECT p.id AS page_id,
-               COALESCE(MIN(kc.kc_code), '') AS kc_code,
+               COALESCE(
+                   array_agg(DISTINCT kc.kc_code) FILTER (WHERE kc.kc_code IS NOT NULL),
+                   '{}'
+               ) AS kc_codes,
                p.document_id AS document_id,
+               p.chapter_id AS chapter_id,
+               p.page_no AS page_no,
+               COALESCE(p.title, '') AS title,
                p.content_markdown AS content_markdown
         FROM course_page p
         LEFT JOIN course_kc kc
           ON kc.pack_id = p.pack_id
          AND p.id = ANY(kc.page_refs)
         WHERE p.pack_id = 43
-        GROUP BY p.id, p.document_id, p.content_markdown
+        GROUP BY p.id, p.document_id, p.chapter_id, p.page_no, p.title, p.content_markdown
         ORDER BY p.document_id, p.page_no, p.chunk_index, p.id
     """
     with psycopg.connect(normalize_db_url(db_url), row_factory=dict_row) as conn:

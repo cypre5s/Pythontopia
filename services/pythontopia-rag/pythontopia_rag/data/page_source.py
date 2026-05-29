@@ -34,15 +34,15 @@ def page_records_to_indexable(records: list[PageRecord]) -> list[IndexablePage]:
     """Adapter from the existing dry-run loader records to IndexablePage."""
 
     indexable: list[IndexablePage] = []
-    for index, record in enumerate(records):
+    for record in records:
         indexable.append(
             IndexablePage(
                 page_id=record.page_id,
-                page_no=index + 1,
+                page_no=record.page_no,
                 document_id=record.document_id,
-                chapter_id=None,
-                kc_codes=[record.kc_code] if record.kc_code else [],
-                title="",
+                chapter_id=record.chapter_id,
+                kc_codes=list(record.kc_codes),
+                title=record.title,
                 text=record.content_markdown,
             )
         )

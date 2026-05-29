@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json as _json
 import os
+from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -19,6 +21,12 @@ class LlmResponse(BaseModel):
 class LlmProvider(Protocol):
     async def chat(self, messages: list[dict[str, str]], **kwargs: object) -> LlmResponse:
         raise NotImplementedError
+
+    async def chat_stream(
+        self, messages: list[dict[str, str]], **kwargs: object
+    ) -> AsyncIterator[str]:
+        raise NotImplementedError
+        yield  # noqa: RET503 – makes this a proper async generator in Protocol
 
 
 class EnvLoadResult(BaseModel):
@@ -51,6 +59,13 @@ class DryRunProvider:
         draft = ProfileDraft.example_complete(target_kc_codes=["PY43-KC-001", "PY43-KC-003"])
         return LlmResponse(content_json={"profile_draft": draft.model_dump(mode="json")})
 
+    async def chat_stream(
+        self, messages: list[dict[str, str]], **kwargs: object
+    ) -> AsyncIterator[str]:
+        text = "\n".join(message["content"] for message in messages)
+        for i in range(0, len(text), 20):
+            yield text[i : i + 20]
+
 
 class OpenAiCompatProvider:
     def __init__(self) -> None:
@@ -77,6 +92,36 @@ class OpenAiCompatProvider:
         data = response.json()
         content = data["choices"][0]["message"]["content"]
         return LlmResponse(content_text=content)
+
+    async def chat_stream(
+        self, messages: list[dict[str, str]], **kwargs: object
+    ) -> AsyncIterator[str]:
+        url = f"{self.base_url.rstrip('/')}/chat/completions"
+        payload: dict[str, object] = {
+            "model": self.model,
+            "messages": messages,
+            "stream": True,
+            **kwargs,
+        }
+        async with httpx.AsyncClient(timeout=60) as client:
+            async with client.stream(
+                "POST",
+                url,
+                headers={"Authorization": f"Bearer {self.api_key}"},
+                json=payload,
+            ) as response:
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    if not line.startswith("data: "):
+                        continue
+                    data_str = line[len("data: "):]
+                    if data_str.strip() == "[DONE]":
+                        break
+                    chunk = _json.loads(data_str)
+                    delta = chunk.get("choices", [{}])[0].get("delta", {})
+                    content = delta.get("content")
+                    if content:
+                        yield content
 
 
 class LlmProviderError(RuntimeError):
@@ -171,6 +216,57 @@ class SparkProvider:
                 f"Spark response malformed: {exc}", kind="MALFORMED", retryable=False
             ) from exc
         return LlmResponse(content_text=content)
+
+    async def chat_stream(
+        self, messages: list[dict[str, str]], **kwargs: object
+    ) -> AsyncIterator[str]:
+        payload: dict[str, object] = {
+            "model": self.model_id,
+            "messages": messages,
+            "stream": True,
+        }
+        for forwarded in ("temperature", "top_p", "max_tokens"):
+            if forwarded in kwargs:
+                payload[forwarded] = kwargs[forwarded]
+        async with httpx.AsyncClient(timeout=60) as client:
+            async with client.stream(
+                "POST",
+                f"{self.base_url}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {self._token}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            ) as response:
+                if response.status_code in self.RATE_LIMIT_STATUSES:
+                    raise LlmProviderError(
+                        "Spark rate limited", kind="RATE_LIMITED", retryable=True
+                    )
+                if response.status_code in self.BILLING_STATUSES:
+                    raise LlmProviderError(
+                        "Spark billing rejected", kind="BILLING", retryable=False
+                    )
+                if response.status_code >= 500:
+                    raise LlmProviderError(
+                        f"Spark upstream {response.status_code}",
+                        kind="UPSTREAM_ERROR",
+                        retryable=True,
+                    )
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    if not line.startswith("data: "):
+                        continue
+                    data_str = line[len("data: "):]
+                    if data_str.strip() == "[DONE]":
+                        break
+                    try:
+                        chunk = _json.loads(data_str)
+                        delta = chunk["choices"][0]["delta"]
+                        content = delta.get("content")
+                        if content:
+                            yield content
+                    except (KeyError, IndexError, TypeError, _json.JSONDecodeError):
+                        continue
 
 
 def provider_from_env() -> LlmProvider:

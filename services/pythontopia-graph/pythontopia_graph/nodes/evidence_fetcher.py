@@ -72,7 +72,7 @@ class HttpRagEvidenceFetcher:
             "kc_codes": list(kc_codes),
             "min_score": 0.3,
         }
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
+        async with httpx.AsyncClient(timeout=self._timeout, trust_env=False) as client:
             response = await client.post(f"{self._base_url}/rag/query", json=payload)
         response.raise_for_status()
         body = response.json()
