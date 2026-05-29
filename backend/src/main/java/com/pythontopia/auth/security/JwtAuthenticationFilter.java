@@ -21,6 +21,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     this.jwtService = jwtService;
   }
 
+  /**
+   * SSE 端点（如 {@code POST /api/tutor/ask}）返回 {@code SseEmitter} 后会触发 ASYNC 再分发。
+   * {@code OncePerRequestFilter} 默认在 ASYNC 分发上跳过本过滤器（{@code shouldNotFilterAsyncDispatch}
+   * 默认 true），而项目是 STATELESS 无 SecurityContext 仓库，于是 ASYNC 分发上下文为空，
+   * Spring Security 的 AuthorizationFilter 会把异步分发判成未认证而回 401。返回 false 让本过滤器
+   * 在 ASYNC 分发上也重新从 Authorization 头解析并恢复认证。
+   */
+  @Override
+  protected boolean shouldNotFilterAsyncDispatch() {
+    return false;
+  }
+
   @Override
   protected void doFilterInternal(
       HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)

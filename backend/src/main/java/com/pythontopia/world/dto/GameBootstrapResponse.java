@@ -6,8 +6,6 @@ import com.pythontopia.learner.profile.dto.LearnerProfileDto;
 import com.pythontopia.learner.quest.dto.QuestDto;
 import com.pythontopia.world.calendar.dto.WorldEventDto;
 import com.pythontopia.world.crop.dto.CropTileDto;
-import com.pythontopia.world.currency.dto.PlayerCurrencyDto;
-import com.pythontopia.world.inventory.dto.InventoryItemDto;
 import com.pythontopia.world.npc.dto.NpcDialogStateDto;
 import com.pythontopia.world.save.dto.SaveSlotDto;
 import com.pythontopia.world.skill.dto.LearnerSkillDto;
@@ -26,9 +24,7 @@ public record GameBootstrapResponse(
     List<QuestDto> quests,
     List<MasterySnapshotDto> mastery,
     List<LearningPathNodeDto> path,
-    List<InventoryItemDto> inventory,
     List<LearnerSkillDto> skills,
-    PlayerCurrencyDto currency,
     List<NpcDialogStateDto> npcStates,
     SaveSlotDto activeSlot,
     List<WorldEventDto> pendingEvents) {}

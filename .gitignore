@@ -34,3 +34,11 @@ data/course-pack-43/pdfs/
 
 # 浏览器实测截图归档
 qa-screens/
+
+# 超星登录 cookie（本地敏感凭据，绝不入库）
+secrets/
+# 超星爬取的任务点视频（仅本地缓存供演示，manifest 入库、视频不入库）
+data/course-pack-43/videos/
+
+# 后端本地开发软链（指向仓库根 data/，仅本地 mvn spring-boot:run 用，不入库）
+backend/data/

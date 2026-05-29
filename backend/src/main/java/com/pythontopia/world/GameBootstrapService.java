@@ -10,13 +10,9 @@ import com.pythontopia.learner.quest.dto.QuestDto;
 import com.pythontopia.learner.quest.service.QuestService;
 import com.pythontopia.world.calendar.CalendarService;
 import com.pythontopia.world.crop.CropStateService;
-import com.pythontopia.world.currency.CurrencyRepository;
-import com.pythontopia.world.currency.dto.PlayerCurrencyDto;
 import com.pythontopia.world.dto.GameBootstrapResponse;
 import com.pythontopia.world.dto.PlayerStateDto;
 import com.pythontopia.world.dto.WorldSnapshotDto;
-import com.pythontopia.world.inventory.InventoryRepository;
-import com.pythontopia.world.inventory.dto.InventoryItemDto;
 import com.pythontopia.world.npc.NpcDialogStateRepository;
 import com.pythontopia.world.npc.dto.NpcDialogStateDto;
 import com.pythontopia.world.repository.GameBootstrapRepository;
@@ -32,8 +28,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Assembles {@link GameBootstrapResponse} in a single transaction so the front-end pixel town can
- * hydrate after login with one round-trip. Lazily provisions the world session + player + currency
- * rows when they are missing so freshly-registered learners always get a non-null payload.
+ * hydrate after login with one round-trip. Lazily provisions the world session + player rows when
+ * they are missing so freshly-registered learners always get a non-null payload.
  */
 @Service
 public class GameBootstrapService {
@@ -47,9 +43,7 @@ public class GameBootstrapService {
   private final QuestService questService;
   private final MasteryService masteryService;
   private final LearningPathRepository pathRepository;
-  private final InventoryRepository inventoryRepository;
   private final SkillRepository skillRepository;
-  private final CurrencyRepository currencyRepository;
   private final NpcDialogStateRepository npcDialogStateRepository;
   private final SaveSlotRepository saveSlotRepository;
   private final CalendarService calendarService;
@@ -62,9 +56,7 @@ public class GameBootstrapService {
       QuestService questService,
       MasteryService masteryService,
       LearningPathRepository pathRepository,
-      InventoryRepository inventoryRepository,
       SkillRepository skillRepository,
-      CurrencyRepository currencyRepository,
       NpcDialogStateRepository npcDialogStateRepository,
       SaveSlotRepository saveSlotRepository,
       CalendarService calendarService) {
@@ -75,9 +67,7 @@ public class GameBootstrapService {
     this.questService = questService;
     this.masteryService = masteryService;
     this.pathRepository = pathRepository;
-    this.inventoryRepository = inventoryRepository;
     this.skillRepository = skillRepository;
-    this.currencyRepository = currencyRepository;
     this.npcDialogStateRepository = npcDialogStateRepository;
     this.saveSlotRepository = saveSlotRepository;
     this.calendarService = calendarService;
@@ -91,7 +81,6 @@ public class GameBootstrapService {
     }
     ensureWorldSession(userId);
     ensurePlayer(userId);
-    currencyRepository.findOrInit(userId);
 
     GameBootstrapRepository.BootstrapRow row =
         bootstrapRepository
@@ -114,12 +103,8 @@ public class GameBootstrapService {
             .findActive(userId, DEFAULT_PACK_ID)
             .map(LearningPathDto::nodes)
             .orElse(List.of());
-    List<InventoryItemDto> inventory =
-        inventoryRepository.findInventory(userId).stream().map(InventoryItemDto::from).toList();
     List<LearnerSkillDto> skills =
         skillRepository.findUnlocked(userId).stream().map(LearnerSkillDto::from).toList();
-    PlayerCurrencyDto currency =
-        PlayerCurrencyDto.from(currencyRepository.findOrInit(userId));
     List<NpcDialogStateDto> npcStates =
         npcDialogStateRepository.findAll(userId).stream().map(NpcDialogStateDto::from).toList();
     SaveSlotDto activeSlot =
@@ -134,9 +119,7 @@ public class GameBootstrapService {
         quests,
         mastery,
         pathNodes,
-        inventory,
         skills,
-        currency,
         npcStates,
         activeSlot,
         pendingEvents);

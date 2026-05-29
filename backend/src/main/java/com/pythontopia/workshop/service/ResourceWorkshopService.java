@@ -35,16 +35,20 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @Service
 public class ResourceWorkshopService {
 
   static final Long DEFAULT_PACK_ID = 43L;
+  private static final Set<String> GRAPH_MAJOR_VALUES =
+      Set.of("CS", "NON_CS_STEM", "NON_CS_HUMANITIES", "OTHER");
 
   private final WorkshopProperties properties;
   private final WorkshopGraphClient graphClient;
@@ -156,6 +160,106 @@ public class ResourceWorkshopService {
     return new ResourceCreateResponse(runId, resourceId, runStatus.name());
   }
 
+  public SseEmitter createStream(Long userId, ResourceCreateRequest request) {
+    enforceThrottle(userId);
+    Map<String, CourseKc> kcIdx = kcIndex();
+    List<String> validatedKcCodes = validateKcCodes(request.kcCodes(), kcIdx);
+    LearnerProfileDto profile = profileService.findProfile(userId).orElse(null);
+
+    ResourceProduceRequestDto graphRequest =
+        new ResourceProduceRequestDto(
+            userId,
+            validatedKcCodes,
+            request.type().name(),
+            request.focusHint(),
+            profileSnapshot(profile));
+
+    SseEmitter emitter = new SseEmitter(120_000L);
+    Long chapterId = pickChapterId(validatedKcCodes, kcIdx);
+
+    graphClient.produceStream(graphRequest, emitter, resultJson -> {
+      ResourceProduceResponseDto graphResponse;
+      try {
+        graphResponse = objectMapper.readValue(resultJson, ResourceProduceResponseDto.class);
+        if (graphResponse == null) {
+          throw new BusinessException(
+              HttpStatus.BAD_GATEWAY, "RESOURCE_GRAPH_EMPTY", "资源生成服务返回空响应");
+        }
+        ResourceCreateResponse response =
+            persistResource(userId, request, validatedKcCodes, chapterId, graphResponse);
+        return objectMapper.writeValueAsString(response);
+      } catch (BusinessException e) {
+        throw e;
+      } catch (Exception e) {
+        throw new BusinessException(
+            HttpStatus.BAD_GATEWAY, "RESOURCE_STREAM_RESULT_FAILED", "资源生成结果保存失败");
+      }
+    });
+    return emitter;
+  }
+
+  private ResourceCreateResponse persistResource(
+      Long userId,
+      ResourceCreateRequest request,
+      List<String> validatedKcCodes,
+      Long chapterId,
+      ResourceProduceResponseDto graphResponse) {
+    RunStatus runStatus = parseRunStatus(graphResponse.status());
+    ResourceProduceResponseDto.ResourceDraftDto artifact = graphResponse.artifact();
+    if (artifact == null) {
+      throw new BusinessException(
+          HttpStatus.BAD_GATEWAY, "RESOURCE_GRAPH_NO_ARTIFACT", "资源生成结果缺失 artifact");
+    }
+    com.fasterxml.jackson.databind.JsonNode content = artifact.contentPayload();
+    if (content == null) {
+      content = objectMapper.createObjectNode();
+    }
+    ResourceStatusFlag safetyFlag = flagFromSafety(graphResponse.safetyResult());
+    ResourceStatusFlag groundingFlag = flagFromGrounding(graphResponse.groundingResult());
+
+    Long runId =
+        runRecorder.recordInNewTransaction(
+            userId,
+            agentName(request.type()),
+            scenarioForType(request.type()),
+            Map.of(
+                "kcCodes", validatedKcCodes,
+                "type", request.type().name(),
+                "focusHint", Optional.ofNullable(request.focusHint()).orElse("")),
+            graphResponse.artifact(),
+            Optional.ofNullable(graphResponse.evidencePageIds()).orElse(List.of()),
+            graphResponse.safetyResult(),
+            graphResponse.groundingResult(),
+            graphResponse.graphTrace(),
+            UUID.randomUUID(),
+            runStatus);
+
+    if (runStatus == RunStatus.FAILED) {
+      throw new BusinessException(
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          "RESOURCE_GENERATION_FAILED",
+          "资源生成失败：" + safetyReason(graphResponse));
+    }
+
+    Long resourceId = resourceRepository.insert(
+        userId,
+        DEFAULT_PACK_ID,
+        validatedKcCodes,
+        chapterId,
+        request.type(),
+        artifact.title(),
+        ContentFormat.valueOf(artifact.contentFormat()),
+        content,
+        Optional.ofNullable(graphResponse.evidencePageIds()).orElse(List.of()),
+        artifact.summary(),
+        safetyFlag,
+        groundingFlag,
+        runId);
+
+    awardMastery(userId, validatedKcCodes, request.type());
+    return new ResourceCreateResponse(runId, resourceId, runStatus.name());
+  }
+
   @Transactional(readOnly = true)
   public List<ResourceListItemDto> list(Long userId, ResourceType type, String kcCode, int limit, int offset) {
     int safeLimit = Math.max(1, Math.min(limit, 50));
@@ -248,7 +352,7 @@ public class ResourceWorkshopService {
     if (profile == null) {
       return new ResourceProduceRequestDto.ProfileSnapshotDto("OTHER", 2, List.of());
     }
-    String major = profile.major() == null ? "OTHER" : profile.major();
+    String major = graphMajor(profile.major());
     int level =
         profile.baseLevel() == null || profile.baseLevel().pythonSelfRatedLevel() == null
             ? 2
@@ -258,6 +362,35 @@ public class ResourceWorkshopService {
             ? List.of()
             : List.copyOf(profile.learningPreference().mediaPriority());
     return new ResourceProduceRequestDto.ProfileSnapshotDto(major, level, media);
+  }
+
+  private String graphMajor(String rawMajor) {
+    if (rawMajor == null || rawMajor.isBlank()) {
+      return "OTHER";
+    }
+    String normalized = rawMajor.trim().toUpperCase(Locale.ROOT);
+    if (GRAPH_MAJOR_VALUES.contains(normalized)) {
+      return normalized;
+    }
+    String lower = rawMajor.trim().toLowerCase(Locale.ROOT);
+    if (lower.contains("计算机")
+        || lower.contains("软件")
+        || lower.contains("computer")
+        || lower.contains("cs")) {
+      return "CS";
+    }
+    if (lower.contains("理工")
+        || lower.contains("工科")
+        || lower.contains("stem")
+        || lower.contains("engineering")) {
+      return "NON_CS_STEM";
+    }
+    if (lower.contains("文科")
+        || lower.contains("人文")
+        || lower.contains("humanities")) {
+      return "NON_CS_HUMANITIES";
+    }
+    return "OTHER";
   }
 
   private ResourceStatusFlag flagFromSafety(ResourceProduceResponseDto.SafetyResultDto safety) {

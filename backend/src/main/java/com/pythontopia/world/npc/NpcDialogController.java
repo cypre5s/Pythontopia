@@ -3,10 +3,7 @@ package com.pythontopia.world.npc;
 import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.common.web.CurrentUser;
 import com.pythontopia.world.npc.dto.NpcDialogStateDto;
-import com.pythontopia.world.npc.dto.NpcGiftRequest;
-import com.pythontopia.world.npc.dto.NpcGiftResponse;
 import com.pythontopia.world.npc.dto.NpcTalkRequest;
-import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -42,13 +39,5 @@ public class NpcDialogController {
       @PathVariable String npcKey,
       @RequestBody(required = false) NpcTalkRequest request) {
     return service.talk(user.userId(), npcKey, request == null ? new NpcTalkRequest(null, null, null) : request);
-  }
-
-  @PostMapping("/{npcKey}/gift")
-  public NpcGiftResponse gift(
-      @CurrentUser CurrentUserPrincipal user,
-      @PathVariable String npcKey,
-      @Valid @RequestBody NpcGiftRequest request) {
-    return service.gift(user.userId(), npcKey, request);
   }
 }

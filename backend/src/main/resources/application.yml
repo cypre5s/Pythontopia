@@ -40,9 +40,19 @@ pythontopia:
     maxResourcesPerHour: 10
     masteryDailyCapPerKc: 0.15
     allowlist: []
+  tts:
+    appId: ${PYT_SPARK_APP_ID:}
+    apiKey: ${PYT_SPARK_API_KEY:}
+    apiSecret: ${PYT_SPARK_API_SECRET:}
+    dailyLimitPerUser: 100
   coursepack:
     # R-13 D1/D2：原 PDF 本地路径（不进 git）。文件命名 {documentId}.pdf（186~192）。
     # 来源：Alethicode/deploy/data/language_pack/tasks/31/originals 的 7 章 PDF
     # （第一~第七章），首次部署需 cp 进来，路径与 Pythontopia/data/course-pack-43/pdfs/ 对应。
     # 后端通过 /api/course/documents/{docId}/pdf 流式分发给 pdfjs-dist 渲染。
     pdfDir: ${PYT_COURSEPACK_PDF_DIR:./data/course-pack-43/pdfs}
+    # R-12 Phase 2：超星任务点视频本地缓存目录（不进 git，见 .gitignore；由
+    # crawl_chaoxing_videos.py 下载到此）。后端通过 /api/course/videos/{id} 支持 Range 流式分发。
+    videoDir: ${PYT_COURSEPACK_VIDEO_DIR:./data/course-pack-43/videos}
+    # 视频清单（入库；空数组表示当前课程无任务点视频）。由 crawl_chaoxing_videos.py 生成/维护。
+    videoManifest: ${PYT_COURSEPACK_VIDEO_MANIFEST:./data/course-pack-43/video_manifest.json}

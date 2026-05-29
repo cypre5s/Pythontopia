@@ -16,7 +16,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 /**
- * Read + write helpers for the per-learner NPC dialog state and gift log.
+ * Read + write helpers for the per-learner NPC dialog state.
  *
  * <p>All mutations clamp friendship into the {@code [0, 100]} range to honour the V101 CHECK
  * constraint. Flags are merged at the top-level keys (later writes win).
@@ -157,50 +157,6 @@ public class NpcDialogStateRepository {
     return findOne(userId, npcKey).orElseThrow();
   }
 
-  public NpcGiftLog logGift(
-      Long userId, String npcKey, String itemKey, String giftTier, int friendshipDelta) {
-    Long id =
-        jdbcTemplate.queryForObject(
-            """
-            INSERT INTO npc_gift_log (user_id, npc_key, item_key, gift_tier, friendship_delta)
-            VALUES (?, ?, ?, ?, ?)
-            RETURNING id
-            """,
-            Long.class,
-            userId,
-            npcKey,
-            itemKey,
-            giftTier,
-            friendshipDelta);
-    return jdbcTemplate
-        .query(
-            """
-            SELECT id, user_id, npc_key, item_key, gift_tier, friendship_delta, given_at
-            FROM npc_gift_log
-            WHERE id = ?
-            """,
-            this::mapGift,
-            id)
-        .stream()
-        .findFirst()
-        .orElseThrow();
-  }
-
-  public List<NpcGiftLog> recentGifts(Long userId, String npcKey, int limit) {
-    return jdbcTemplate.query(
-        """
-        SELECT id, user_id, npc_key, item_key, gift_tier, friendship_delta, given_at
-        FROM npc_gift_log
-        WHERE user_id = ? AND npc_key = ?
-        ORDER BY given_at DESC
-        LIMIT ?
-        """,
-        this::mapGift,
-        userId,
-        npcKey,
-        Math.max(1, Math.min(100, limit)));
-  }
-
   private NpcDialogState map(ResultSet rs, int rowNum) throws SQLException {
     return new NpcDialogState(
         rs.getLong("id"),
@@ -213,17 +169,6 @@ public class NpcDialogStateRepository {
         readJson(rs.getString("flags")),
         offset(rs, "created_at"),
         offset(rs, "updated_at"));
-  }
-
-  private NpcGiftLog mapGift(ResultSet rs, int rowNum) throws SQLException {
-    return new NpcGiftLog(
-        rs.getLong("id"),
-        rs.getLong("user_id"),
-        rs.getString("npc_key"),
-        rs.getString("item_key"),
-        rs.getString("gift_tier"),
-        rs.getInt("friendship_delta"),
-        offset(rs, "given_at"));
   }
 
   private List<String> readStringArray(Array array) throws SQLException {

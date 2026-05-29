@@ -3,8 +3,10 @@ package com.pythontopia.workshop;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.common.config.GraphServiceProperties;
 import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.common.sse.SseRelayExecutor;
 import com.pythontopia.workshop.graph.ResourceProduceRequestDto;
 import com.pythontopia.workshop.graph.ResourceProduceResponseDto;
 import com.pythontopia.workshop.graph.WorkshopGraphClient;
@@ -23,7 +25,10 @@ class WorkshopGraphClientTest {
   private final RestTemplate restTemplate = new RestTemplate();
   private final GraphServiceProperties properties =
       new GraphServiceProperties("http://graph.test", "http://rag.test", "secret");
-  private final WorkshopGraphClient client = new WorkshopGraphClient(restTemplate, properties);
+  private final ObjectMapper objectMapper = new ObjectMapper();
+  private final SseRelayExecutor sseRelayExecutor = new SseRelayExecutor();
+  private final WorkshopGraphClient client =
+      new WorkshopGraphClient(restTemplate, properties, objectMapper, sseRelayExecutor);
 
   @Test
   void produceParsesSuccessResponse() {

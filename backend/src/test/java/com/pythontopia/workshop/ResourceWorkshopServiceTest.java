@@ -21,6 +21,9 @@ import com.pythontopia.coursepack.repository.CoursePackRepository;
 import com.pythontopia.learner.mastery.MasteryEvaluator;
 import com.pythontopia.learner.mastery.MasterySnapshot;
 import com.pythontopia.learner.mastery.MasterySource;
+import com.pythontopia.learner.profile.dto.BaseLevelDto;
+import com.pythontopia.learner.profile.dto.LearnerProfileDto;
+import com.pythontopia.learner.profile.dto.LearningPreferenceDto;
 import com.pythontopia.learner.profile.service.ProfileService;
 import com.pythontopia.workshop.config.WorkshopProperties;
 import com.pythontopia.workshop.dto.ResourceCreateRequest;
@@ -38,9 +41,12 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 class ResourceWorkshopServiceTest {
 
@@ -207,6 +213,59 @@ class ResourceWorkshopServiceTest {
 
     assertThat(service.create(99L, new ResourceCreateRequest(List.of("PY43-KC-001"), ResourceType.HANDOUT, null)).resourceId())
         .isEqualTo(7L);
+  }
+
+  @Test
+  void createNormalizesProfileMajorForGraphSchema() {
+    when(graphClient.produce(any())).thenReturn(successResponse());
+    when(profileService.findProfile(1L))
+        .thenReturn(
+            Optional.of(
+                new LearnerProfileDto(
+                    10L,
+                    1L,
+                    43L,
+                    "演示学生",
+                    new BaseLevelDto(null, List.of("Python"), 4),
+                    null,
+                    null,
+                    new LearningPreferenceDto(List.of("HANDOUT"), 30),
+                    null,
+                    null,
+                    null,
+                    "demo")));
+
+    service.create(1L, new ResourceCreateRequest(List.of("PY43-KC-001"), ResourceType.HANDOUT, null));
+
+    ArgumentCaptor<ResourceProduceRequestDto> captor =
+        ArgumentCaptor.forClass(ResourceProduceRequestDto.class);
+    verify(graphClient).produce(captor.capture());
+    assertThat(captor.getValue().profileSnapshot().major()).isEqualTo("OTHER");
+    assertThat(captor.getValue().profileSnapshot().pythonSelfRatedLevel()).isEqualTo(4);
+    assertThat(captor.getValue().profileSnapshot().mediaPriority()).containsExactly("HANDOUT");
+  }
+
+  @Test
+  void createStreamPersistsAndReturnsCreateResponsePayload() throws Exception {
+    service.createStream(
+        1L, new ResourceCreateRequest(List.of("PY43-KC-001"), ResourceType.HANDOUT, null));
+
+    @SuppressWarnings("unchecked")
+    ArgumentCaptor<Function<String, String>> resultHandlerCaptor =
+        ArgumentCaptor.forClass(Function.class);
+    verify(graphClient).produceStream(any(), any(SseEmitter.class), resultHandlerCaptor.capture());
+
+    String outboundJson =
+        resultHandlerCaptor.getValue().apply(objectMapper.writeValueAsString(successResponse()));
+    ResourceCreateResponse response = objectMapper.readValue(outboundJson, ResourceCreateResponse.class);
+
+    assertThat(response.runId()).isEqualTo(42L);
+    assertThat(response.resourceId()).isEqualTo(7L);
+    assertThat(response.status()).isEqualTo("SUCCESS");
+    verify(resourceRepository, times(1))
+        .insert(anyLong(), anyLong(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+    verify(masteryEvaluator, times(1))
+        .applyEvent(eq(1L), eq("PY43-KC-001"), eq(MasterySource.RESOURCE_READ), any(), anyString());
   }
 
   private ResourceProduceResponseDto successResponse() {

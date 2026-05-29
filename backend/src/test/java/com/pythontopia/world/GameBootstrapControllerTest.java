@@ -13,7 +13,6 @@ import com.pythontopia.common.error.GlobalExceptionHandler;
 import com.pythontopia.common.web.CurrentUserArgumentResolver;
 import com.pythontopia.common.web.WebConfig;
 import com.pythontopia.world.calendar.dto.WorldEventDto;
-import com.pythontopia.world.currency.dto.PlayerCurrencyDto;
 import com.pythontopia.world.dto.GameBootstrapResponse;
 import com.pythontopia.world.dto.PlayerStateDto;
 import com.pythontopia.world.dto.WorldSnapshotDto;
@@ -69,8 +68,6 @@ class GameBootstrapControllerTest {
             List.of(),
             List.of(),
             List.of(),
-            new PlayerCurrencyDto(50, 0, now),
-            List.of(),
             new SaveSlotDto(0, "Slot A", true, now, now, null),
             List.<WorldEventDto>of());
     when(service.bootstrap(eq(42L))).thenReturn(response);
@@ -81,7 +78,6 @@ class GameBootstrapControllerTest {
         .andExpect(jsonPath("$.world.dayIndex").value(7))
         .andExpect(jsonPath("$.world.weekday").value("monday"))
         .andExpect(jsonPath("$.player.tileX").value(12))
-        .andExpect(jsonPath("$.currency.coins").value(50))
         .andExpect(jsonPath("$.activeSlot.displayName").value("Slot A"));
   }
 }
