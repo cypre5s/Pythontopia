@@ -25,10 +25,11 @@ def test_problem_endpoint_returns_golden_when_llm_unavailable(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.delenv("PYT_LLM_PROVIDER", raising=False)
-    # 删除全部 OPENAI_/LLM_ 相关 env，强制 provider_from_env() 抛 RuntimeError
+    # 删除全部 OPENAI_/LLM_/PYT_OPENAI_ 凭证，强制 provider_from_env() 回落 dryrun（无 LLM）
     for key in [
         "OPENAI_BASE_URL", "OPENAI_API_KEY", "OPENAI_MODEL",
         "LLM_BASE_URL", "LLM_API_KEY", "LLM_MODEL",
+        "PYT_OPENAI_BASE_URL", "PYT_OPENAI_API_KEY", "PYT_OPENAI_MODEL",
     ]:
         monkeypatch.delenv(key, raising=False)
     response = client.post(
@@ -50,6 +51,7 @@ def test_problem_endpoint_default_kc_when_blank(
     for key in [
         "PYT_LLM_PROVIDER", "OPENAI_BASE_URL", "OPENAI_API_KEY", "OPENAI_MODEL",
         "LLM_BASE_URL", "LLM_API_KEY", "LLM_MODEL",
+        "PYT_OPENAI_BASE_URL", "PYT_OPENAI_API_KEY", "PYT_OPENAI_MODEL",
     ]:
         monkeypatch.delenv(key, raising=False)
     response = client.post(

@@ -66,11 +66,16 @@ class HttpRagEvidenceFetcher:
     async def fetch(
         self, *, kc_codes: list[str], query: str, top_k: int = 6
     ) -> EvidenceBundle:
+        # 命中 KC 过滤时（资源工坊按 KC 生成）候选已被限定在该 KC，精度由过滤保证，
+        # 故阈值放到 0 以确保该 KC 的页面一定作为证据返回（hash 向量对会话式 query
+        # 余弦偏低，0.3 会把相关页全部过滤成 NO_EVIDENCE）。无 KC（自由答疑）时用
+        # 适中阈值 0.15 抑制噪声页被误引。
+        min_score = 0.0 if kc_codes else 0.15
         payload = {
             "query": query,
             "top_k": top_k,
             "kc_codes": list(kc_codes),
-            "min_score": 0.3,
+            "min_score": min_score,
         }
         async with httpx.AsyncClient(timeout=self._timeout, trust_env=False) as client:
             response = await client.post(f"{self._base_url}/rag/query", json=payload)

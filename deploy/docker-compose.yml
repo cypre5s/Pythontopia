@@ -88,6 +88,11 @@ services:
     build:
       context: ../services/pythontopia-rag
       dockerfile: Dockerfile
+    # 开发态把 host 源码 mount 进 /app，与 pythontopia-graph 一致：
+    # 容器内 /app/pythontopia_rag 直接用 host 当前代码，避免镜像滞后于源码
+    # （如 lifespan 课件加载等改动需重启容器生效）。
+    volumes:
+      - ../services/pythontopia-rag/pythontopia_rag:/app/pythontopia_rag:ro
     environment:
       PYT_DB_URL: postgresql://${PYT_DB_USERNAME:-pytopia}:${PYT_DB_PASSWORD:-pytopia_dev_password}@postgres:5432/pythontopia
       PYT_RAG_ADMIN_TOKEN: ${PYT_RAG_ADMIN_TOKEN:-pytopia-rag-admin}

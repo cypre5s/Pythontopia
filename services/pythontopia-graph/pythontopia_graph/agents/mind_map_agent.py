@@ -78,16 +78,22 @@ class MindMapAgent:
 
     def _fallback(self, request: ResourceProduceRequest) -> MindMapContent:
         root = request.kc_codes[0]
-        related = request.kc_codes[1:] or [f"{root}-extend-1", f"{root}-extend-2", f"{root}-extend-3"]
-        lines = ["graph TD"]
-        lines.append(f"  {self._node_id(root)}[{root}]")
-        for index, code in enumerate(related[:5]):
-            node = self._node_id(code)
-            lines.append(f"  {self._node_id(root)} --> {node}[{code}]")
-            lines.append(f"  note{index}({code} 详解)")
-            lines.append(f"  {node} --> note{index}")
+        related = list(request.kc_codes[1:])
+        lines = ["graph TD", f"  {self._node_id(root)}[{root}]"]
+        if related:
+            for index, code in enumerate(related[:5]):
+                node = self._node_id(code)
+                lines.append(f"  {self._node_id(root)} --> {node}[{code}]")
+                lines.append(f"  note{index}({code} 详解)")
+                lines.append(f"  {node} --> note{index}")
+        else:
+            # 单 KC 时用通用概念子节点（非 KC code），避免编造 KC code 触发
+            # hallucination_detector 的 "Unknown KC"（此前 -extend-N 会让单 KC 思维导图
+            # 必定 grounding 失败）。
+            for index, label in enumerate(("核心概念", "典型用法", "常见误区")):
+                lines.append(f"  {self._node_id(root)} --> concept{index}[{label}]")
         mermaid = "\n".join(lines)
-        kc_map = {root: list(related[:5])}
+        kc_map = {root: related[:5]}
         return MindMapContent(mermaid=mermaid, kc_map=kc_map)
 
     @staticmethod

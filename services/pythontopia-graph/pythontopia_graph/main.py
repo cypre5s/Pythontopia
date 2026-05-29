@@ -1,9 +1,18 @@
+import logging
+from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator
+
 from fastapi import FastAPI
 from pydantic import BaseModel
 
 from pythontopia_graph.agents.curriculum_mapper_agent import CurriculumMapperAgent
 from pythontopia_graph.agents.profile_agent import ProfileAgent
-from pythontopia_graph.llm.provider import provider_from_env
+from pythontopia_graph.llm.provider import (
+    load_alethicode_env,
+    load_pythontopia_env,
+    provider_from_env,
+    provider_label,
+)
 from pythontopia_graph.routes.boss import router as boss_router
 from pythontopia_graph.routes.debug import router as debug_router
 from pythontopia_graph.routes.path import router as path_router
@@ -19,7 +28,26 @@ class HealthResponse(BaseModel):
     status: str
 
 
-app = FastAPI(title="Pythontopia Graph", version="0.1.0")
+LOG = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    # 启动时加载 <repo>/deploy/.env（DeepSeek 凭证）+ Alethicode .env 兜底，并构建一个
+    # 共享 LLM provider 供 tutor / streaming 等路由复用。这样「直接 uvicorn 跑」也会
+    # 默认接入真实 DeepSeek，而不是回显 prompt 的 dryrun。失败不阻塞启动。
+    load_pythontopia_env()
+    load_alethicode_env()
+    try:
+        _app.state.llm_provider = provider_from_env()
+        LOG.info("LLM provider 已初始化: %s", provider_label())
+    except Exception as exc:  # noqa: BLE001 - 启动期容错，路由各自再兜底
+        _app.state.llm_provider = None
+        LOG.warning("LLM provider 初始化失败，路由将各自兜底: %s", exc)
+    yield
+
+
+app = FastAPI(title="Pythontopia Graph", version="0.1.0", lifespan=lifespan)
 app.include_router(resource_router)
 app.include_router(path_router)
 app.include_router(debug_router)
