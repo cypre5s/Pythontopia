@@ -69,6 +69,26 @@ async def test_llm_intent_used_grounds_kcs_and_filters_bogus() -> None:
 
 
 @pytest.mark.asyncio
+async def test_llm_video_intent_routes_and_grounds_kc() -> None:
+    """VIDEO 与 ASK 一样是非生成意图，需被 LLM 路由识别并锚定 KC（用于检索关键词）。"""
+    payload = {
+        "intent": "video",
+        "kc_codes": ["PY43-KC-001"],
+        "focus_hint": "for 循环讲解视频",
+        "confidence": 0.8,
+        "reason": "用户想看视频",
+    }
+    agent = IntentRouterAgent(StubProvider(payload))
+
+    resp = await agent.route(request_of("给我找点讲 for 循环的视频"))
+
+    assert resp.intent == "VIDEO"
+    assert resp.kc_codes == ["PY43-KC-001"]
+    assert "VIDEO" in ALL_INTENTS
+    assert "VIDEO" not in RESOURCE_INTENTS
+
+
+@pytest.mark.asyncio
 async def test_confidence_is_clamped_to_unit_interval() -> None:
     agent = IntentRouterAgent(StubProvider({"intent": "ASK", "confidence": 1.7}))
 
@@ -90,6 +110,8 @@ async def test_confidence_is_clamped_to_unit_interval() -> None:
         ("给我一段能跑的示例代码", "CODE_LAB"),
         ("来点拓展阅读资料", "READING"),
         ("做个循环的动画分镜脚本", "STORYBOARD"),
+        ("我想看看 for 循环的视频讲解", "VIDEO"),
+        ("有没有 B站 上讲列表的视频", "VIDEO"),
         ("梳理一下循环的讲义", "HANDOUT"),
         ("为什么我的循环会报错", "ASK"),
         ("随便看看列表", "HANDOUT"),

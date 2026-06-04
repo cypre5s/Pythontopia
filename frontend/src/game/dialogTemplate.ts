@@ -9,6 +9,9 @@
  *    保证 UI 不会出现 `{{stats.xxx}}` 字面量泄露。
  * 3. `{{profileAdaptive:A | B}}` —— profileType === 'practical' 走 A，否则走 B。
  * 4. `{{giftFavorite:A | B}}` —— giftJustGiven === true 走 A，否则走 B。
+ * 5. `{{styleAdaptive:视觉文案|逻辑文案|试错文案}}` —— 按 cognitiveStyle 三分支选择
+ *    （'visual' 走第 1 段、'logical' 走第 2 段、'trial' 走第 3 段，'unknown'/其它兜底首段视觉文案），
+ *    用于「看阶段」按认知风格因材施教。
  *
  * 支持任意层级嵌套，例如：
  *   `{{profileAdaptive:走吧 | 你还在第 {{stats.currentChapterOrder}} 章}}`
@@ -22,6 +25,11 @@ export interface DialogTemplateContext {
   playerName: string;
   /** 'practical' 走 profileAdaptive 的 A 分支；'cautious' 或其他走 B 分支。 */
   profileType: string;
+  /**
+   * 认知风格三态：'visual' | 'logical' | 'trial' | 'unknown'，驱动 styleAdaptive 三分支。
+   * 缺省 'unknown' 时按视觉型首分支兜底。
+   */
+  cognitiveStyle: string;
   /** true 走 giftFavorite 的 A 分支。 */
   giftJustGiven: boolean;
   /** 各类 stats key → 真实字符串。 */
@@ -92,6 +100,20 @@ function evaluatePlaceholder(
       const [a, b] = splitFirstPipe(payload);
       return ctx.giftJustGiven ? a : b;
     }
+    if (tag === 'styleAdaptive') {
+      // 三分支：视觉 | 逻辑 | 试错。未知/缺省（unknown）回退首段视觉文案；
+      // 某段为空时也回退视觉文案，避免作者漏写导致空气泡。
+      const [visual, logical, trial] = splitThreeBranches(payload);
+      switch (ctx.cognitiveStyle) {
+        case 'logical':
+          return logical || visual;
+        case 'trial':
+          return trial || visual;
+        case 'visual':
+        default:
+          return visual;
+      }
+    }
     // 未来若扩展更多 tag（seasonAdaptive: ... | ... 等）可以在此追加，
     // 现阶段未知 tag 视为静默兜底，不让模板异常打断对话。
     return DEFAULT_FALLBACK;
@@ -137,6 +159,25 @@ function splitFirstPipe(s: string): [string, string] {
 }
 
 /**
+ * 在前两个 `|` 处把字符串切成三段（styleAdaptive 的 视觉|逻辑|试错）。
+ *
+ * 与 {@link splitFirstPipe} 同理：只认最外层前两道 `|` 为分隔符，第三段保留其内部可能出现的
+ * 所有 `|`（极少见但允许）。缺段时对应位置回退空串，交由调用方按视觉首段兜底。
+ */
+function splitThreeBranches(s: string): [string, string, string] {
+  const first = s.indexOf('|');
+  if (first === -1) {
+    return [s.trim(), '', ''];
+  }
+  const rest = s.slice(first + 1);
+  const second = rest.indexOf('|');
+  if (second === -1) {
+    return [s.slice(0, first).trim(), rest.trim(), ''];
+  }
+  return [s.slice(0, first).trim(), rest.slice(0, second).trim(), rest.slice(second + 1).trim()];
+}
+
+/**
  * 工厂：把后端 `DialogContextDto` 适配为渲染器需要的纯本地结构。
  *
  * 抽出来是为了让 store / 组件不直接耦合 DTO 名空间，
@@ -146,6 +187,7 @@ export function createDialogContext(input: Partial<DialogTemplateContext>): Dial
   return {
     playerName: input.playerName ?? '学习者',
     profileType: input.profileType ?? 'cautious',
+    cognitiveStyle: input.cognitiveStyle ?? 'unknown',
     giftJustGiven: input.giftJustGiven === true,
     stats: input.stats ?? {},
   };

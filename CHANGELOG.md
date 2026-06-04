@@ -1,5 +1,72 @@
 # Changelog
 
+## 2026-06-04（晚）— 画像闭环三连融入主链路 · 前端认知负担优化 · B站卡片/智能体工作室
+
+> 本夜横跨两份计划并行推进：`docs/plans/2026-06-04-profile-loop-trilogy-*`（画像闭环三连 + 前端体验）
+> 与 `docs/plans/2026-06-04-bilibili-cards-and-agent-studio-plan.md`（B站卡片 + 智能体工作室）。
+> 大量使用并行子代理（最高 8 并发，按「文件域互不重叠」分区，每个子代理启动均实时核验），
+> 共享后端/收口全量验证由父代理亲自完成。**验证总账**：后端 `mvn test` **342/0 BUILD SUCCESS**、
+> graph `pytest` **276 passed**、前端 `vue-tsc` 干净 + `vitest` **1451 通过 / 127 文件** + eslint 0 error。
+
+### 一、画像闭环三连 ②③ 全量融入「看→学→练→测」主链路
+
+> 关键修复：①「助教因材施教」早已落地却**种子饥饿**（无信号播种 `cognitive_style`，主链路答疑/资源静默降级
+> 为通用版）。本轮③探针在「看」阶段播种，使 ① 在 LecturePage(看/学)+TrainingPanel(练) 真正触发，闭环打通。
+
+- **画像引擎地基（confidence + decay）**：`ProfileDimensionDto.confidence = min(1, evidence_count/8)`；
+  `getDimensions` 读时半衰期 14 天 decay（raw 不入库）。落实「随学随新」、低置信不贴标签（防幻觉）。
+- **建③ 玩中建画像（探针）**：`ProbeCatalog`（服务端权威，`cog_intro→cognitive_style` / `fail_react→emotion_persistence`
+  / `media_pref→learning_preference`，source 复用 RESOURCE_FEEDBACK 无新迁移）+ `POST /api/learner/probe` +
+  `LearningEvent.ProbeChoiceMade` → 监听器回写维度。前端 `useProbeStore` + 数据驱动 `ProbeCard`：看阶段章首弹
+  `cog_intro`、练失败弹 `fail_react`（中性可跳过、失败静默降级绝不阻塞玩家、`pyt_probe_answered` 去重）。
+- **境② 情绪化小镇（练→情绪→世界）**：新事件 `PracticeRetried/PracticeAbandoned/ComebackSolved`，
+  从 `SubmissionService`（`countPriorFailures` 判重试/逆袭）与 `BugMineService`(ABANDONED) 派生 → `emotion_persistence`；
+  新增 `GET /api/learner/world-state`（mood 派生：连胜/连挫优先，再看慢分，失败降级中性）。前端 `useMoodStore` +
+  `MoodOverlay`（rainy 弹「需要我搭把手吗」助教台阶，可关闭）+ Phaser `mood.ts` 叠加层（深度 150，不抢相机 tint）+
+  `WorldScene` 反应式刷新 + 练后即时刷新。
+- **学①扩展（资源生成下传画像）**：`ResourceWorkshopService.profileSnapshot` 下传 `cognitive_style`/`error_patterns`；
+  graph `ProfileSnapshot` 加两字段 + 新 `agents/personalization.py` 把讲法指令注入全部 6 个资源 agent（讲义/导图/示例随讲法自适应）。
+- **用① 体验闭环**：① 换讲法**即时改写当前答案**（`TutorAskRequest.style` → `buildProfileBrief` 显式选择绕过 0.3 门 →
+  `TutorPanel` 带 style 重问重渲染，仍写回 styleEngaged；graph 不动）；① 看阶段 **NPC 对话 3-way 个性化**
+  （`DialogContextService.inferCognitiveStyle` + `DialogContextDto.cognitiveStyle` + 前端 `{{styleAdaptive:visual|logical|trial}}`
+  token，mayor_py/professor 示范；旧 `{{profileAdaptive}}` 不变）。
+- **#1 cognitive_style 纠偏**：`SELF_EDITABLE_DIMENSIONS` 加 `cognitive_style`，自评（source=INTERVIEW）所选 tag **置顶为主**
+  （仅此路径，passive 不变 + 回归测试）；`ProfilePage` 三选纠偏控件。透明可纠偏、不贴死标签。
+- 新增后端测试：`ProbeCatalogTest`/`PassiveProfileProbeTest`/`PassiveProfileEmotionTest`/`WorldStateServiceTest`/
+  `SubmissionEmotionSignalTest`/`DialogContextServiceTest` + `TutorProfileBriefTest`/`PassiveProfileServiceTest`/`ResourceWorkshopServiceTest` 扩充。
+
+### 二、前端「降低学生认知负担」优化 C1–C6（对齐 `docs/frontend-ui-standard.md`）
+
+> 经只读审计发现 town `WorldPage` 同屏挂 17 浮层、2–3 个脉冲主 CTA、导航三套（dock/QuickWheel/PauseMenu）、
+> 术语外泄（KC/Pyodide/practice_submission/防幻觉/场依存，「问AI」6 个名字）。按标准 4 工作流并行整改：
+
+- **C1 一屏一主操作**：向导脉冲→安静次级；`LearningObjectivePanel` 默认折叠为「标题+下一步」、去呼吸动画；唯一实心主按钮。
+- **C2 去术语 + 统一「AI 助教」**：6 个「问AI」名字→1 个；KC→知识点、Pyodide/服务端判题→本机试跑(不记分)/正式提交(评分)、
+  防幻觉→已核对教材来源、多模态讲解→图文/视频讲解、删 `practice_submission`、场依存/序列型→口语。
+- **C3 菜单/导航精简**：PauseMenu 17→4 组、合并重复「画像」；QuickWheel 降级；FestivalRibbon 仅节日当天。
+- **C4 首次进入节奏**：Help 精简三条+「更多操作」折叠；防 Help→镇长对话→探针 三连堆叠（ProbeCard `hold`+`dialog.visible` 门控）；向导首句具体化。
+- **C5 R-14 残留清理**：去金币（FastTravel/Arena）、去农场/5图死路、修「Pythonopia」拼写。
+- **C6 渐进披露**：工坊欢迎一句话+「更多用法」折叠、slash 去密集；Training 默认收起预览/AI助教坞；Lecture 单主按钮；画像口语化。
+
+### 三、B站视频卡片 + Marvis 式智能体工作室（并发会话，`bilibili-cards-and-agent-studio-plan.md`）
+
+- **A B站视频卡片**：graph `routes/video.py`（`bilibili-api-python`，GPL 隔离在 graph，记入 `LICENSE-ART.md`）
+  `GET /agents/video/bilibili/search`；后端 `video/`（`BilibiliVideoController/Service/Dto`，鉴权代理）`GET /api/videos/bilibili`；
+  前端 `api/bilibiliVideo.ts` + `components/video/BilibiliVideoCards.vue`（封面 `referrerpolicy=no-referrer`、「外部资源·B站」角标），
+  落点 LecturePage 空洞 + 工坊 STORYBOARD；不进课件 grounding、不下载视频。
+- **B 真·按 agent 实时工作室**：graph `resource_graph.run_streaming` 增开场 `plan` 事件 + 每节点 `start/finish` 相位（落库 schema 不变）；
+  后端 SSE 逐事件透传（仅特判 result）；前端 `useSseStream` 加 `phase`/`plan`、`AgentOfficeScene` 按 `plan` 动态渲染真实工位
+  （设计师工位显真实 agent 名，非泛称），无 `plan` 时回退旧 4 工位。仅改资源流，Tutor/Orchestrator SSE 不动。
+- 并发会话自测（其计划记录）：B站 Python 5 / 后端 5 / 前端 9；工作室 Python 4 / 前端 2。
+
+### 验证与未验证（诚实交付）
+
+- **已验证（代码层，本机）**：后端 342/0、graph 276、前端 typecheck+vitest 1451+eslint 0；新增 REST 以单测覆盖控制器/服务/监听器。
+- **未验证（需联网/起栈，比赛演示前必做）**：真实 B 站检索联通、浏览器内封面防盗链、SSE 工作室端到端实时动画、
+  新探针/world-state/纠偏的浏览器端视觉确认；建议 `dev.sh` 起全栈 + 联网做一次端到端。
+- **剩余项（留后）**：② 情绪化小镇重量级（天气粒子/NPC 动作）；探针 `media_pref` 前端落点；#4 PM 调度助教
+  （已被 orchestrator + GuideOverlay + AgentOfficeScene 覆盖，未重复实现）。
+
 ## 2026-06-04 — R-14 世界收缩方案 A：单中央小镇 hub（S0–S7）
 
 > 废弃「5 图分块大世界」，收敛为单一中央小镇 `town_hub`：移除 KC 作物/播种/浇水（农场）玩法、

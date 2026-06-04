@@ -15,7 +15,12 @@ import {
   useCoursewareMention,
   type MentionItem,
 } from '@/composables/useCoursewareMention';
-import { styleEngaged, type CognitiveStyle, type TutorSessionDto } from '@/api/tutor';
+import {
+  styleEngaged,
+  type CognitiveStyle,
+  type TutorAskRequest,
+  type TutorSessionDto,
+} from '@/api/tutor';
 import { getProfileDimensions } from '@/api/learner';
 
 interface TutorStreamResult {
@@ -96,6 +101,16 @@ const visualAids = computed<TutorVisualAid[]>(
 const crewTraces = computed(() => sse.traces.value);
 const crewStatus = computed(() => sse.status.value);
 const lastSentImageCount = ref(0);
+
+// 即时换讲法（①）：记住「上一次实际提交的问题」原样参数（题面 / KC / 上下文 / 图片），
+// 以便点「换讲法」时用同一问题、换一种认知风格立刻重发并改写当前答案。
+interface LastAsk {
+  question: string;
+  kcCodes: string[];
+  context: string;
+  images?: string[];
+}
+const lastAsk = ref<LastAsk | null>(null);
 
 // 因材施教：当前认知风格 + 易错点（来自画像），传给助教小队并支持"换讲法"。
 const cognitiveStyle = ref<CognitiveStyle | ''>('');
@@ -226,34 +241,21 @@ function clearAttachedImages(): void {
   attachedImages.value = [];
 }
 
-async function submit(): Promise<void> {
-  const q = inputText.value.trim();
-  if (!q) return;
-
-  playSfx('sfx_click');
+// 发起一次答疑流并处理流终态；被首次提交 submit 与「换讲法」即时重问共用。
+// style 仅在显式换讲法时传入（无视后端画像置信度门槛）；首次提交不传，保持原行为。
+async function runAsk(ask: LastAsk, style?: CognitiveStyle): Promise<void> {
   tutor.setStatus('streaming');
   tutor.setStreamingAnswer('');
+  lastSentImageCount.value = ask.images?.length ?? 0;
 
-  // `@/` 引用：选中的 KC 合并进 kcCodes（驱动 RAG 过滤），引用标签拼进 context。
-  const mergedKcCodes = Array.from(
-    new Set([...props.kcCodes, ...composer.selectedKcCodes.value]),
-  );
-  const context = [props.context, composer.contextHint.value]
-    .map((part) => part.trim())
-    .filter((part) => part.length > 0)
-    .join(' ');
-
-  composer.reset();
-
-  const images = attachedImages.value.length > 0 ? [...attachedImages.value] : undefined;
-  lastSentImageCount.value = attachedImages.value.length;
-  await sse.start({
-    question: q,
-    kcCodes: mergedKcCodes,
-    context,
-    images,
-  });
-  clearAttachedImages();
+  const body: TutorAskRequest = {
+    question: ask.question,
+    kcCodes: ask.kcCodes,
+    context: ask.context,
+    ...(ask.images ? { images: ask.images } : {}),
+    ...(style ? { style } : {}),
+  };
+  await sse.start(body);
 
   if (sse.status.value === 'done' && sse.result.value) {
     playSfx('sfx_success');
@@ -270,9 +272,39 @@ async function submit(): Promise<void> {
   } else if (sse.status.value === 'error' || sse.error.value) {
     playSfx('sfx_error');
     tutor.setStatus('error');
-    tutor.lastError = sse.error.value?.message ?? '导师回答失败';
-    toast.show(tutor.lastError ?? '导师回答失败', 'error');
+    tutor.lastError = sse.error.value?.message ?? 'AI 助教回答失败';
+    toast.show(tutor.lastError ?? 'AI 助教回答失败', 'error');
   }
+}
+
+async function submit(): Promise<void> {
+  const q = inputText.value.trim();
+  if (!q) return;
+
+  playSfx('sfx_click');
+
+  // `@/` 引用：选中的 KC 合并进 kcCodes（驱动 RAG 过滤），引用标签拼进 context。
+  const mergedKcCodes = Array.from(
+    new Set([...props.kcCodes, ...composer.selectedKcCodes.value]),
+  );
+  const context = [props.context, composer.contextHint.value]
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0)
+    .join(' ');
+
+  composer.reset();
+
+  const images = attachedImages.value.length > 0 ? [...attachedImages.value] : undefined;
+  // 记住本次问题原样参数，供「换讲法」即时重问复用同一题面。
+  const ask: LastAsk = {
+    question: q,
+    kcCodes: mergedKcCodes,
+    context,
+    ...(images ? { images } : {}),
+  };
+  lastAsk.value = ask;
+  await runAsk(ask);
+  clearAttachedImages();
 }
 
 function goToPage(pageId: number): void {
@@ -301,16 +333,36 @@ async function loadProfileSignals(): Promise<void> {
   }
 }
 
+// 重建「上一次问题」：换讲法时若 lastAsk 已失（如从侧栏选中历史会话），退回用当前会话题面 + props 上下文。
+function resolveAskForRestyle(): LastAsk | null {
+  if (lastAsk.value) return lastAsk.value;
+  const session = tutor.currentSession;
+  if (!session) return null;
+  return { question: session.question, kcCodes: [...props.kcCodes], context: props.context };
+}
+
+// 即时换讲法（①）：(a) 高亮选中风格 → (b) 用同一问题换风格立刻重发、改写当前答案 →
+// (c) 同时写回画像（影响后续轮次）。无历史问题时仅写回偏好。
 async function onPickStyle(style: CognitiveStyle): Promise<void> {
+  if (isStreaming.value) return; // 流式进行中不打断；避免并发覆盖当前回答
   cognitiveStyle.value = style;
   playSfx('sfx_click');
-  try {
-    await styleEngaged(style, props.kcCodes[0]);
-    const label = style === 'visual' ? '图解' : style === 'logical' ? '推理' : '示例';
-    toast.show(`已记录：之后答疑更偏「${label}」`, 'info');
-  } catch {
+
+  // (c) 写回画像 cognitive_style（影响后续轮次，非本次），与重问解耦、失败不阻塞重问。
+  void styleEngaged(style, props.kcCodes[0]).catch(() => {
     toast.show('讲法偏好记录失败', 'error');
+  });
+
+  const label = style === 'visual' ? '图解' : style === 'logical' ? '推理' : '示例';
+  const ask = resolveAskForRestyle();
+  if (!ask) {
+    toast.show(`已记录：之后 AI 助教更偏「${label}」`, 'info');
+    return;
   }
+  // (b) 同一问题、换风格立刻重问，流式改写当前答案。
+  lastAsk.value = ask;
+  toast.show(`换「${label}」讲法重讲本题…`, 'info');
+  await runAsk(ask, style);
 }
 
 onMounted(async () => {
@@ -338,7 +390,7 @@ onMounted(async () => {
       v-if="embedded"
       class="embedded-bar"
     >
-      <span class="embedded-bar__hint">基于本章 KC 与课件 RAG</span>
+      <span class="embedded-bar__hint">依据本章知识点和课件</span>
       <button
         type="button"
         class="embedded-bar__new"
@@ -450,7 +502,7 @@ onMounted(async () => {
           v-if="displayedAnswer"
           class="msg msg--tutor"
         >
-          <span class="msg__role">导师</span>
+          <span class="msg__role">AI 助教</span>
           <MarkdownView :source="displayedAnswer" />
           <span
             v-if="isStreaming"
@@ -465,7 +517,7 @@ onMounted(async () => {
           v-else-if="!tutor.currentSession && !isStreaming"
           class="answer-placeholder"
         >
-          {{ embedded ? '边看视频边问：输入 @ 可引用本章知识点' : '有什么 Python 问题？向导师提问吧' }}
+          {{ embedded ? '边看视频边问：输入 @ 可引用本章知识点' : '有什么 Python 问题？问问 AI 助教' }}
         </p>
       </div>
 
@@ -560,7 +612,7 @@ onMounted(async () => {
           type="button"
           class="input-area__attach"
           data-testid="tutor-image-button"
-          title="上传截图 / 手写代码图（最多 3 张），看图答疑"
+          title="上传截图 / 手写代码图（最多 3 张），看图问 AI 助教"
           :disabled="isStreaming || attachedImages.length >= MAX_IMAGES"
           @click="triggerImagePick"
         >

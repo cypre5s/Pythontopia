@@ -429,15 +429,15 @@ onUnmounted(() => {
       data-testid="hud-bottom"
       aria-label="快捷面板"
     >
-      <!-- P1-a：伴学向导 = 单一入口，常驻 Dock 最左、独立高亮样式（不计入 .hud-slot） -->
+      <!-- P1-a：AI 助教 = 单一入口，常驻 Dock 最左（calm secondary，不计入 .hud-slot） -->
       <button
         type="button"
         class="hud-guide-slot"
         :class="{ 'hud-guide-slot--active': guide.open }"
         data-testid="hud-guide"
         :aria-pressed="guide.open"
-        aria-label="伴学向导（G）"
-        title="伴学向导 · 学习总管（G）"
+        aria-label="AI 助教（G）"
+        title="AI 助教（G）"
         @click="onClickGuide"
         @mouseenter="onSlotHover"
       >
@@ -445,7 +445,7 @@ onUnmounted(() => {
           class="hud-guide-slot__icon"
           aria-hidden="true"
         >✧</span>
-        <span class="hud-guide-slot__label">向导</span>
+        <span class="hud-guide-slot__label">AI 助教</span>
         <span class="hud-guide-slot__shortcut">G</span>
       </button>
       <span
@@ -1037,7 +1037,7 @@ onUnmounted(() => {
   border-color: var(--pyt-text-accent);
   box-shadow: 0 0 0 1px var(--pyt-text-accent) inset, 0 4px 10px rgba(241, 196, 83, 0.28);
 }
-/* P1-a：伴学向导按钮——单一入口，金色高亮 + 轻微脉冲吸引注意。 */
+/* P1-a：AI 助教按钮——单一入口，但保持 calm secondary（不脉冲、不抢主按钮）。 */
 .hud-guide-slot {
   width: 58px;
   height: 58px;
@@ -1047,20 +1047,20 @@ onUnmounted(() => {
   justify-content: center;
   gap: 2px;
   padding: 4px;
-  background: linear-gradient(160deg, rgba(241, 196, 83, 0.28), rgba(110, 79, 29, 0.35));
-  border: 1px solid var(--pyt-text-accent);
+  background: var(--pyt-btn-bg);
+  border: 1px solid var(--pyt-btn-border);
   border-radius: 2px;
   color: var(--pyt-text-primary);
   font-family: var(--pyt-font-pixel);
   font-size: 11px;
   cursor: pointer;
-  box-shadow: 0 0 0 1px rgba(241, 196, 83, 0.4) inset;
-  animation: pyt-glow-pulse 2.4s ease-in-out infinite;
   transition: background 140ms ease, border-color 140ms ease, transform 140ms ease, box-shadow 140ms ease;
 }
 .hud-guide-slot:hover {
-  transform: translateY(-2px) scale(1.06);
-  box-shadow: 0 0 12px rgba(241, 196, 83, 0.55), 0 6px 14px rgba(0, 0, 0, 0.35);
+  background: var(--pyt-btn-hover-bg);
+  border-color: var(--pyt-text-accent);
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 0 10px rgba(241, 196, 83, 0.35), 0 6px 14px rgba(0, 0, 0, 0.35);
 }
 .hud-guide-slot:active {
   transform: translateY(0);
@@ -1071,18 +1071,19 @@ onUnmounted(() => {
 }
 .hud-guide-slot--active {
   background: var(--pyt-btn-active-bg);
-  box-shadow: 0 0 0 2px var(--pyt-text-accent) inset, 0 4px 10px rgba(241, 196, 83, 0.4);
+  border-color: var(--pyt-text-accent);
+  box-shadow: 0 0 0 1px var(--pyt-text-accent) inset, 0 4px 10px rgba(241, 196, 83, 0.28);
 }
 .hud-guide-slot__icon {
   font-size: 22px;
   line-height: 1;
-  color: #fff0c2;
-  text-shadow: 0 0 6px rgba(241, 196, 83, 0.8);
+  color: var(--pyt-text-accent);
 }
 .hud-guide-slot__label {
-  font-size: 11px;
-  color: var(--pyt-text-accent);
-  font-weight: 700;
+  font-size: 10px;
+  color: var(--pyt-text-primary);
+  letter-spacing: 0.5px;
+  white-space: nowrap;
 }
 .hud-guide-slot__shortcut {
   font-size: 9px;

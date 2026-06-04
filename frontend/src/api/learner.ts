@@ -99,14 +99,26 @@ export interface DimensionUpdateResult {
   finalDimension: Record<string, unknown>;
 }
 
-/** 学生自评：对单个可自评维度提交得分增量（scoreDelta ∈ [-1,1]）。 */
+/** 学生自评维度增量：scoreDelta ∈ [-1,1]；tagsAdd 去重追加（INTERVIEW 自评把所选 tag 提为主导）。 */
+export interface SelfDimensionDelta {
+  scoreDelta?: number;
+  evidenceIncrement?: number;
+  tagsAdd?: string[];
+}
+
+/**
+ * 学生自评：对单个可自评维度提交增量。
+ * 兼容旧调用（传 number = 仅 scoreDelta）；认知风格纠偏传 {@link SelfDimensionDelta}
+ * （tagsAdd:[choice] + 小 evidence/score），后端按 source=INTERVIEW 让所选 tag 成为主导。
+ */
 export async function selfUpdateDimension(
   dimensionKey: string,
-  scoreDelta: number,
+  delta: number | SelfDimensionDelta,
 ): Promise<DimensionUpdateResult> {
+  const body: SelfDimensionDelta = typeof delta === 'number' ? { scoreDelta: delta } : delta;
   const response = await http.put<DimensionUpdateResult>(
     `/api/learner/profile/dimensions/${dimensionKey}`,
-    { scoreDelta },
+    body,
   );
   return response.data;
 }

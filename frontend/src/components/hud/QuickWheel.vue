@@ -1,5 +1,7 @@
 <script setup lang="ts">
-// Tab 快捷轮盘：按住弹出 8 扇区，松开执行选中项。
+// Tab 快捷轮盘（进阶 / power-user 快捷入口）：按住 Tab 弹出扇区，松开执行选中项。
+// 定位：与底部 dock / 暂停菜单入口重复，仅作熟练玩家的快捷方式，不是主学习路径；
+//       不做脉冲 / 新手引导强调，避免与中央任务列抢注意力（降低新手认知负荷）。
 import { computed, onMounted, onBeforeUnmount, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useGameSettingsStore } from '@stores/gameSettings';
@@ -378,8 +380,9 @@ onBeforeUnmount(() => {
 .wheel-enter-active {
   transition: opacity 150ms ease-out;
 }
+/* 进阶快捷工具：平静淡入，不做弹跳 / 过冲等吸睛强调。 */
 .wheel-enter-active .wheel-ring {
-  animation: wheel-pop-in 200ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  animation: wheel-pop-in 160ms ease-out both;
 }
 
 .wheel-leave-active {
@@ -396,7 +399,7 @@ onBeforeUnmount(() => {
 
 @keyframes wheel-pop-in {
   from {
-    transform: scale(0.6);
+    transform: scale(0.92);
     opacity: 0;
   }
   to {

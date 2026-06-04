@@ -81,7 +81,7 @@ _PHASE_LABEL: dict[Phase, str] = {
     "assess": "测",
 }
 _DEFAULT_TITLE: dict[Phase, str] = {
-    "watch": "看微课：建立直观印象",
+    "watch": "看视频：B站精选讲解 + 微课",
     "learn": "学讲义：吃透核心概念",
     "practice": "练一练：巩固本节技能",
     "assess": "测一测：检验掌握程度",
@@ -321,7 +321,8 @@ class OrchestratorAgent:
                     '"title":"<=20字","detail":"<=80字","kc_codes":["…"],'
                     '"resource_type":"HANDOUT|MINDMAP|PRACTICE|CODE_LAB|READING|STORYBOARD"}]}。'
                     "kc_codes 只能取自允许列表，列表为空则留空数组；"
-                    "resource_type 仅 learn 阶段需要，按画像偏好选择。"
+                    "resource_type 仅 learn 阶段需要，按画像偏好选择；"
+                    "watch（看）阶段优先推荐 B站精选讲解视频/微课，帮助学生建立直观印象。"
                 ),
             },
             {"role": "system", "content": f"允许 KC 列表: {allowed}"},
@@ -473,7 +474,7 @@ class OrchestratorAgent:
     def _default_detail(phase: Phase, goal: str, kcs: list[str]) -> str:
         kc_part = ("，覆盖 " + "、".join(kcs)) if kcs else ""
         templates: dict[Phase, str] = {
-            "watch": f"围绕「{goal}」观看故事板/微课{kc_part}，建立整体认知。",
+            "watch": f"围绕「{goal}」观看 B站精选讲解视频与微课{kc_part}，先建立直观印象。",
             "learn": f"研读讲义或思维导图{kc_part}，理解关键概念与示例。",
             "practice": f"完成配套练习{kc_part}，把概念真正用起来。",
             "assess": f"正式提交评估{kc_part}，确认是否达标。",

@@ -22,13 +22,12 @@ describe('FestivalRibbon', () => {
     expect(ribbon.text()).toContain('开学日');
   });
 
-  it('非节日日显示 upcoming festival 倒数提示', async () => {
+  it('非节日日 ribbon 隐藏（R-14：只在当天节日显示，不再常驻倒数）', async () => {
     const hud = useHudStore();
-    hud.syncMeta({ dayIndex: 5 }); // day 5 → upcoming day 14 春耕祭
+    hud.syncMeta({ dayIndex: 5 }); // day 5 非节日 → 不显示
     const wrapper = mount(FestivalRibbon);
     await flushPromises();
-    expect(wrapper.text()).toContain('春耕祭');
-    expect(wrapper.text()).toContain('9 天');
+    expect(wrapper.find('[data-testid="festival-ribbon"]').exists()).toBe(false);
   });
 
   it('超出最后一个节日（day > 112）时 ribbon 隐藏', async () => {

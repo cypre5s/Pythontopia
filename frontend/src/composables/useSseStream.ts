@@ -5,6 +5,11 @@ export interface SseTraceEvent {
   node: string;
   status: string;
   elapsed_ms: number;
+  /**
+   * 资源流「虚拟工作室」相位：start=节点开工，finish=节点完工。
+   * 仅资源流（/api/workshop/resources/stream）发送；其它流不带，按既有逻辑处理。
+   */
+  phase?: 'start' | 'finish';
   /** evidence_fetcher：命中的课件证据段数。 */
   chunks?: number;
   /** image_understanding：当前/总图片序号（看图答疑多图进度）。 */
@@ -14,12 +19,26 @@ export interface SseTraceEvent {
   chars?: number;
 }
 
+/** 资源流开场「工位清单」事件（仅资源流发送）。 */
+export interface SsePlanNode {
+  node: string;
+  agent_label: string;
+  kind: string;
+}
+
+export interface SsePlan {
+  type: string;
+  nodes: SsePlanNode[];
+}
+
 export interface SseStreamState<T = unknown> {
   traces: Ref<SseTraceEvent[]>;
   tokens: Ref<string>;
   result: Ref<T | null>;
   error: Ref<{ code: string; message: string } | null>;
   status: Ref<SseStatus>;
+  /** 资源流开场工位清单；其它流恒为 null（不发 plan 事件，走默认分支）。 */
+  plan: Ref<SsePlan | null>;
   abort: () => void;
 }
 
@@ -33,6 +52,7 @@ export function useSseStream<T = unknown>(url: string): {
   const result = ref<T | null>(null) as Ref<T | null>;
   const error = ref<{ code: string; message: string } | null>(null);
   const status = ref<SseStatus>('idle');
+  const plan = ref<SsePlan | null>(null);
 
   let controller: AbortController | null = null;
 
@@ -55,6 +75,7 @@ export function useSseStream<T = unknown>(url: string): {
     tokens.value = '';
     result.value = null;
     error.value = null;
+    plan.value = null;
     status.value = 'connecting';
 
     controller = new AbortController();
@@ -169,6 +190,12 @@ export function useSseStream<T = unknown>(url: string): {
 
   function dispatch(event: string, raw: string): void {
     switch (event) {
+      case 'plan': {
+        try {
+          plan.value = JSON.parse(raw) as SsePlan;
+        } catch { /* malformed plan */ }
+        break;
+      }
       case 'trace': {
         try {
           const t = JSON.parse(raw) as SseTraceEvent;
@@ -205,5 +232,5 @@ export function useSseStream<T = unknown>(url: string): {
     }
   }
 
-  return { traces, tokens, result, error, status, abort, start };
+  return { traces, tokens, result, error, status, plan, abort, start };
 }

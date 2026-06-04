@@ -26,6 +26,15 @@ const router = useRouter();
 const dimensions = ref<ProfileDimensionDto[]>([]);
 const savingKey = ref<string | null>(null);
 
+const COGNITIVE_STYLE_KEY = 'cognitive_style';
+// #1 学生纠偏阀：认知风格 3 选 1（与探针 / 后端 tag 取值对齐：visual / logical / trial）。
+const cognitiveStyleChoices = [
+  { id: 'visual', label: '先看图解' },
+  { id: 'logical', label: '先读推理' },
+  { id: 'trial', label: '先跑例子' },
+] as const;
+const savingCognitiveStyle = ref(false);
+
 function goBack(): void {
   playUiClick();
   void router.push('/world');
@@ -39,7 +48,18 @@ async function loadDimensions(): Promise<void> {
   }
 }
 
-const selfEditable = computed(() => dimensions.value.filter((d) => d.selfEditable));
+// 认知风格走专门的 3 选 1 纠偏（categorical），不混入 0..100 滑块自评。
+const selfEditable = computed(() =>
+  dimensions.value.filter((d) => d.selfEditable && d.key !== COGNITIVE_STYLE_KEY),
+);
+
+// 当前主导认知风格 = cognitive_style 维度末尾 tag（与后端消费口径一致），用于高亮已选项。
+const currentCognitiveStyle = computed<string | null>(() => {
+  const dim = dimensions.value.find((d) => d.key === COGNITIVE_STYLE_KEY);
+  const tags = dim?.tags ?? [];
+  const last = tags.length > 0 ? tags[tags.length - 1] : undefined;
+  return last ?? null;
+});
 
 /** 学生自评：滑块给出目标分（0..100），换算成相对当前分的增量提交。 */
 async function onSelfRate(dim: ProfileDimensionDto, event: Event): Promise<void> {
@@ -56,6 +76,26 @@ async function onSelfRate(dim: ProfileDimensionDto, event: Event): Promise<void>
     toast.show(message, 'error');
   } finally {
     savingKey.value = null;
+  }
+}
+
+/** #1 纠偏：把所选风格作为主导 tag 提交（tagsAdd + 小 evidence/score），保存后回读反映选择。 */
+async function onPickCognitiveStyle(choice: string): Promise<void> {
+  if (savingCognitiveStyle.value) return;
+  savingCognitiveStyle.value = true;
+  try {
+    await selfUpdateDimension(COGNITIVE_STYLE_KEY, {
+      scoreDelta: 0.05,
+      evidenceIncrement: 1,
+      tagsAdd: [choice],
+    });
+    await loadDimensions();
+    toast.show('已更新学习风格', 'success');
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '更新失败';
+    toast.show(message, 'error');
+  } finally {
+    savingCognitiveStyle.value = false;
   }
 }
 
@@ -96,9 +136,13 @@ const dimensionCards = computed(() => {
       key: 'cognitiveStyle',
       title: '认知风格',
       value: p.value.cognitiveStyle
-        ? `场依存 ${p.value.cognitiveStyle.fieldDependent}/10 | ${p.value.cognitiveStyle.sequentialVsHolistic > 5 ? '整体型' : '序列型'}`
+        ? p.value.cognitiveStyle.sequentialVsHolistic > 5
+          ? '喜欢先看全局'
+          : '喜欢一步步来'
         : '待评估',
-      detail: null,
+      detail: p.value.cognitiveStyle
+        ? `学术：${p.value.cognitiveStyle.sequentialVsHolistic > 5 ? '整体型' : '序列型'} · 场依存 ${p.value.cognitiveStyle.fieldDependent}/10`
+        : null,
     },
     {
       key: 'learningPreference',
@@ -214,6 +258,26 @@ const dimensionCards = computed(() => {
           </div>
           <p class="dim-card__value">{{ dim.value }}</p>
           <p v-if="dim.detail" class="dim-card__detail">{{ dim.detail }}</p>
+          <div
+            v-if="dim.key === 'cognitiveStyle'"
+            class="cog-correct"
+            data-testid="cognitive-style-correct"
+          >
+            <span class="cog-correct__hint">选最顺手的，随时可改</span>
+            <div class="cog-correct__options">
+              <PyButton
+                v-for="opt in cognitiveStyleChoices"
+                :key="opt.id"
+                :variant="currentCognitiveStyle === opt.id ? 'primary' : 'secondary'"
+                size="sm"
+                :disabled="savingCognitiveStyle"
+                :test-id="`cog-style-${opt.id}`"
+                @click="onPickCognitiveStyle(opt.id)"
+              >
+                {{ opt.label }}
+              </PyButton>
+            </div>
+          </div>
         </article>
       </div>
 
@@ -364,6 +428,24 @@ const dimensionCards = computed(() => {
   border-top: 1px dashed var(--pyt-color-border-soft);
   padding-top: 6px;
   margin-top: 6px;
+}
+
+.cog-correct {
+  margin-top: 10px;
+  border-top: 1px dashed var(--pyt-color-border-soft);
+  padding-top: 8px;
+}
+.cog-correct__hint {
+  display: block;
+  margin-bottom: 6px;
+  font-family: var(--pyt-font-pixel);
+  font-size: 11px;
+  color: var(--pyt-color-text-muted);
+}
+.cog-correct__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .radar-section {

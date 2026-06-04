@@ -14,6 +14,7 @@ import { useMainQuestStore } from '@stores/mainQuest';
 import { useLearningStore } from '@stores/learning';
 import { useWorldStore } from '@stores/world';
 import { useToastStore } from '@stores/toast';
+import { useDialogStore } from '@stores/dialog';
 import { findChapterByKcCode } from '@/data/chapters';
 import { humanizeKcText } from '@/data/kcNames';
 import { FAST_TRAVEL_ROUTES } from '@/data/fastTravel';
@@ -26,6 +27,10 @@ const mainQuest = useMainQuestStore();
 const learning = useLearningStore();
 const world = useWorldStore();
 const toast = useToastStore();
+const dialog = useDialogStore();
+
+// B2：有对话/弹窗在前台时，安静下来——下一步只保留为静态提示，不再脉冲，留单一注意力线。
+const dialogActive = computed<boolean>(() => dialog.visible);
 
 const rootRef = ref<HTMLElement | null>(null);
 const { style: dragStyle, onPointerDown: onDragStart } = useDraggable(
@@ -34,7 +39,8 @@ const { style: dragStyle, onPointerDown: onDragStart } = useDraggable(
   { top: 96, left: 24 },
 );
 
-const collapsed = ref(false);
+// 渐进披露：默认折叠，只露标题 + 单一「下一步」CTA；其余细节按需展开。
+const collapsed = ref(true);
 const hidden = ref(localStorage.getItem('pyt_lop_hidden') === '1');
 
 function hide(): void {
@@ -110,16 +116,16 @@ const rewardText = computed<string>(() => {
   if (sub?.rewards && sub.rewards.length > 0) {
     const masteryRewards = sub.rewards
       .filter((r) => r.kind === 'kc_mastery')
-      .map((r) => `掌握度 +${r.amount}${r.ref ? `（${r.ref}）` : ''}`);
+      .map((r) => `掌握进度 +${r.amount}${r.ref ? `（${r.ref}）` : ''}`);
     if (masteryRewards.length > 0) return masteryRewards.join('，');
   }
-  return '掌握度 +5';
+  return '掌握进度 +5';
 });
 
 const currentMapKey = computed<string>(() => world.player?.mapKey ?? 'town_hub');
 const currentMapLabel = computed<string>(() => {
   switch (currentMapKey.value) {
-    case 'town_hub': return 'Pythonopia 小镇';
+    case 'town_hub': return 'Pythontopia 小镇';
     case 'farm_north': return '知识农场';
     case 'mine_south': return 'Bug 矿洞';
     case 'campus_east': return '函数学院';
@@ -253,6 +259,37 @@ onUnmounted(() => {
         ✕
       </button>
     </button>
+    <!-- 下一步：唯一注意力线，折叠态也常驻；有对话在前台时静音脉冲（B2） -->
+    <div
+      v-if="guidance"
+      class="lop-next"
+      :class="{ 'lop-next--quiet': dialogActive }"
+      data-testid="lop-next-step"
+    >
+      <div class="lop-next__head">
+        <span
+          class="lop-next__badge"
+          aria-hidden="true"
+        >➤</span>
+        <span class="lop-next__label">下一步</span>
+      </div>
+      <p class="lop-next__text">
+        {{ guidance.stepText }}
+      </p>
+      <button
+        type="button"
+        class="lop-next__cta"
+        data-testid="lop-go-next"
+        :aria-label="`前往：${guidance.stepText}`"
+        @click="goNext"
+      >
+        <span
+          class="lop-next__cta-icon"
+          aria-hidden="true"
+        >▶</span>
+        <span class="lop-next__cta-text">{{ guidance.ctaText }}</span>
+      </button>
+    </div>
     <div
       v-show="!collapsed"
       class="lop-body"
@@ -285,35 +322,6 @@ onUnmounted(() => {
         <span class="lop-row__label">奖励</span>
         <span class="lop-row__value lop-row__value--reward">{{ rewardText }}</span>
       </div>
-      <div
-        v-if="guidance"
-        class="lop-next"
-        data-testid="lop-next-step"
-      >
-        <div class="lop-next__head">
-          <span
-            class="lop-next__badge"
-            aria-hidden="true"
-          >➤</span>
-          <span class="lop-next__label">下一步</span>
-        </div>
-        <p class="lop-next__text">
-          {{ guidance.stepText }}
-        </p>
-        <button
-          type="button"
-          class="lop-next__cta"
-          data-testid="lop-go-next"
-          :aria-label="`前往：${guidance.stepText}`"
-          @click="goNext"
-        >
-          <span
-            class="lop-next__cta-icon"
-            aria-hidden="true"
-          >▶</span>
-          <span class="lop-next__cta-text">{{ guidance.ctaText }}</span>
-        </button>
-      </div>
       <p class="lop-tip">
         [TIP] 提示：{{ currentTaskHint }}
       </p>
@@ -344,7 +352,6 @@ onUnmounted(() => {
 
 .learning-objective-panel--collapsed {
   padding: 8px 12px;
-  width: max-content;
 }
 
 @keyframes lop-fade-in {
@@ -423,16 +430,10 @@ onUnmounted(() => {
 .lop-row__value--accent {
   color: var(--pyt-text-accent);
   font-weight: 700;
-  animation: lop-breathing 2.6s ease-in-out infinite;
 }
 .lop-row__value--reward {
   color: var(--pyt-bar-energy);
   font-weight: 600;
-}
-
-@keyframes lop-breathing {
-  0%, 100% { text-shadow: 0 0 0 transparent; }
-  50% { text-shadow: 0 0 8px rgba(241, 196, 83, 0.6); }
 }
 
 .lop-section {
@@ -474,10 +475,15 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  margin-top: 10px;
   padding: 8px 10px;
   background: rgba(241, 196, 83, 0.1);
   border: 1px solid rgba(241, 196, 83, 0.45);
   border-radius: 2px;
+}
+/* B2：前台有对话/弹窗时，下一步降为静态提示（不脉冲），只留一条注意力线。 */
+.lop-next--quiet .lop-next__badge {
+  animation: none;
 }
 .lop-next__head {
   display: flex;
@@ -578,9 +584,6 @@ onUnmounted(() => {
     max-width: calc(100vw - 16px);
     opacity: 0.96;
   }
-  .learning-objective-panel--collapsed {
-    width: max-content;
-  }
 }
 
 /* ── 关闭按钮 ──────────────────────────────────────────────── */
@@ -619,7 +622,6 @@ onUnmounted(() => {
 
 @media (prefers-reduced-motion: reduce) {
   .learning-objective-panel,
-  .lop-row__value--accent,
   .lop-next__badge {
     animation: none;
   }

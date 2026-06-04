@@ -1,8 +1,9 @@
 """Schemas for the IntentRouterAgent（百晓工坊 意图路由）.
 
-The router picks ONE tool for a single composer message — either Q&A (``ASK``) or
-one of the 6 resource generators — and grounds suggested KC codes to the course
-catalog the frontend already loaded for its ``@`` mention menu.
+The router picks ONE tool for a single composer message — Q&A (``ASK``), a B站
+video lookup (``VIDEO``, an external-resource fetch, not generation), or one of
+the 6 resource generators — and grounds suggested KC codes to the course catalog
+the frontend already loaded for its ``@`` mention menu.
 
 It does NOT generate content: the frontend dispatches the chosen intent to the
 existing tutor (``/api/tutor/ask``) or workshop (``/api/workshop/resources/stream``)
@@ -17,9 +18,11 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-# ASK = 答疑问答（导师管线）；其余 6 个对应资源工坊的 6 类资源。
+# ASK = 答疑问答（导师管线）；VIDEO = B站精选讲解视频（外部资源检索，非生成）；
+# 其余 6 个对应资源工坊的 6 类资源。
 IntentKind = Literal[
     "ASK",
+    "VIDEO",
     "HANDOUT",
     "MINDMAP",
     "PRACTICE",

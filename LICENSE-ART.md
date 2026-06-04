@@ -201,9 +201,21 @@ license 矩阵无关（它们是 JS 代码，受代码层 MIT 控制），但为
 |------|------|---------|------|
 | reveal.js | 5.x | MIT | PPT 幻灯片渲染（前端） |
 | 讯飞 Spark TTS API | v2 WebSocket | [讯飞服务条款](https://www.xfyun.cn/doc/tts/online_tts/API.html) | 语音合成（后端中继，失败降级 speechSynthesis） |
+| [bilibili-api-python](https://pypi.org/project/bilibili-api-python/) | >=17.4,<18 | **GPL-3.0-or-later** | 「B站精选讲解」方案 A：在 `services/pythontopia-graph` 微服务内检索 B 站视频（取数），后端 Spring 仅 HTTP 代理 |
 
 > reveal.js MIT License 不影响项目 CC-BY-SA 3.0 分层授权。
 > 讯飞 TTS 为商用 API 调用，不包含可再分发代码，仅需遵守讯飞服务条款。
+
+### 方案 A · B站精选讲解（2026-06-04 R-14 新增）
+
+- **GPL 隔离**：`bilibili-api-python`（GPL-3.0-or-later）**仅**作为 Python 微服务
+  `services/pythontopia-graph` 的依赖（`routes/video.py` 内**惰性 import**），不进入 Spring 后端
+  与 Vue 前端代码层；后端 `com.pythontopia.video.*` 只通过 HTTP 代理调用该微服务。代码层分层授权
+  （后端/前端 MIT，资产层 CC-BY-SA 3.0+）不受影响。
+- **B 站缩略图 / 外链为外部资源，不随仓库分发**：前端「B站精选讲解」卡片仅展示 B 站返回的封面
+  缩略图（`<img referrerpolicy="no-referrer">` 实时加载，规避防盗链）并跳转
+  `https://www.bilibili.com/video/{bvid}` 官方页面——**不下载、不转存、不打包**任何 B 站视频或图片，
+  亦**不**作为课件 grounding 引用。版权归原 UP 主 / 哔哩哔哩所有。
 
 ## R-12 智能体事务所像素场景（2026-05-29）
 

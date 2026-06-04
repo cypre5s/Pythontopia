@@ -64,11 +64,17 @@ public class PassiveProfileService {
           "practical_ability",
           "emotion_persistence");
 
-  /** 学生 PUT 自评接口允许直写的 4 个偏主观维度；其余只读，由 PassiveProfileService 被动改。 */
+  /**
+   * 学生 PUT 自评接口允许直写的偏主观维度；其余只读，由 PassiveProfileService 被动改。
+   *
+   * <p>#1 学生纠偏阀：{@code cognitive_style} 纳入自评，让学生可在画像屋纠正认知风格
+   * （防幻觉 / 不贴死标签，见 trilogy 设计 §3 设计原则、§5 数据模型）。
+   */
   public static final Set<String> SELF_EDITABLE_DIMENSIONS =
       Set.of(
           "professional_background",
           "learning_goal",
+          "cognitive_style",
           "learning_preference",
           "emotion_persistence");
 
@@ -158,11 +164,20 @@ public class PassiveProfileService {
       } else {
         tagsArray = dimensionObj.putArray("tags");
       }
+      // 学生纠偏阀（#1）：deliberate 自评（source=INTERVIEW，仅 ProfileController 自评路径）
+      // 把所选 tag 提升到末尾，使其成为「末尾=主导」信号——即便该 tag 早先已出现，也移到末尾，
+      // 让纠偏 decisively 覆盖旧推断（消费方 TutorService / ResourceWorkshopService 取末尾 tag）。
+      // 被动累积（其它 source）保持首见去重，避免扰动 learning_preference 媒介排序等既有行为。
+      boolean authoritativeSelfReport = "INTERVIEW".equals(delta.source());
       for (String tag : delta.tagsAdd()) {
         if (tag == null || tag.isBlank()) {
           continue;
         }
-        if (!arrayContains(tagsArray, tag)) {
+        boolean present = arrayContains(tagsArray, tag);
+        if (authoritativeSelfReport && present) {
+          removeTag(tagsArray, tag);
+          tagsArray.add(tag);
+        } else if (!present) {
           tagsArray.add(tag);
         }
       }
@@ -302,5 +317,14 @@ public class PassiveProfileService {
       }
     }
     return false;
+  }
+
+  /** 从 tags 数组移除等值项（倒序遍历以安全 remove），供 INTERVIEW 自评把所选 tag 移到末尾。 */
+  private static void removeTag(ArrayNode arr, String value) {
+    for (int i = arr.size() - 1; i >= 0; i--) {
+      if (value.equals(arr.get(i).asText())) {
+        arr.remove(i);
+      }
+    }
   }
 }

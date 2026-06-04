@@ -78,7 +78,7 @@ interface ChapterGate {
   practiceMet: boolean;
   masteryMet: boolean;
   met: boolean;
-  /** 软门槛：是否已消费本章多模态讲解（视频 / AI 动画 / 图解）。不硬阻塞推进。 */
+  /** 软门槛：是否已看过本章图文 / 视频讲解（视频 / AI 动画 / 图解）。不硬阻塞推进。 */
   mediaConsumed: boolean;
 }
 
@@ -268,7 +268,7 @@ function skipToNext(chapter: number): void {
             class="mq-elective"
             :data-testid="`main-quest-elective-${ch.chapter}`"
           >
-            主线核心 KC {{ chapterIntros.get(ch.chapter)?.mainlineCount ?? 0 }} 个<template
+            主线核心知识点 {{ chapterIntros.get(ch.chapter)?.mainlineCount ?? 0 }} 个<template
               v-if="chapterIntros.get(ch.chapter)?.electiveCount"
             >
               · 另有 {{ chapterIntros.get(ch.chapter)?.electiveCount }} 个为选修 / 拓展（不必全啃）
@@ -304,9 +304,9 @@ function skipToNext(chapter: number): void {
                   :class="{ 'mq-quest-mastery--met': masteryHints.get(sub.id)!.met }"
                   :data-testid="`main-quest-mastery-${sub.id}`"
                 >
-                  <template v-if="masteryHints.get(sub.id)!.met">✓ 掌握度已达标</template>
+                  <template v-if="masteryHints.get(sub.id)!.met">✓ 掌握进度已达标</template>
                   <template v-else>
-                    掌握度 {{ masteryHints.get(sub.id)!.current }} → 目标 {{ masteryHints.get(sub.id)!.target }}
+                    掌握进度 {{ masteryHints.get(sub.id)!.current }} → 目标 {{ masteryHints.get(sub.id)!.target }}
                     （约再做对 {{ masteryHints.get(sub.id)!.remainingProblems }} 题）
                   </template>
                 </small>
@@ -338,7 +338,7 @@ function skipToNext(chapter: number): void {
               class="mq-gate__item"
               :class="{ 'mq-gate__item--ok': chapterGates.get(ch.chapter)?.masteryMet }"
             >
-              测 · 本章 KC 均掌握 {{ chapterGates.get(ch.chapter)?.masteryPct ?? 0 }}%/70%
+              测 · 本章知识点均掌握 {{ chapterGates.get(ch.chapter)?.masteryPct ?? 0 }}%/70%
             </span>
             <span
               class="mq-gate__item mq-gate__item--soft"
@@ -346,7 +346,7 @@ function skipToNext(chapter: number): void {
               :data-testid="`main-quest-gate-media-${ch.chapter}`"
               title="软门槛：看过本章讲解视频 / AI 动画 / 知识点图解（不阻塞推进）"
             >
-              看 · 多模态讲解 {{ chapterGates.get(ch.chapter)?.mediaConsumed ? '✓' : '建议' }}
+              看 · 图文·视频讲解 {{ chapterGates.get(ch.chapter)?.mediaConsumed ? '✓' : '建议' }}
             </span>
           </div>
           <footer class="mq-chapter__foot">
@@ -373,7 +373,7 @@ function skipToNext(chapter: number): void {
             class="mq-hub"
             :data-testid="`main-quest-hub-${ch.chapter}`"
           >
-            <span class="mq-hub__badge">✓ 本章已达标（必做题全过 · KC 掌握度 ≥ 70%）</span>
+            <span class="mq-hub__badge">✓ 本章已达标（必做题全过 · 知识点掌握进度 ≥ 70%）</span>
             <p class="mq-hub__tip">
               可选进阶（不选也能直接进下一章）：
             </p>

@@ -8,6 +8,15 @@ import type { ProfileDimensionDto } from '@/api/learner';
 
 const props = defineProps<{ dimensions: ProfileDimensionDto[] }>();
 
+// 学生侧友好别名：把偏学术的维度名换成口语短label（仅显示，data key 不变）；未列出的用后端 label。
+const FRIENDLY_LABELS: Readonly<Record<string, string>> = {
+  cognitive_style: '学习风格',
+  error_pattern: '易错点',
+};
+function displayLabel(dim: ProfileDimensionDto): string {
+  return FRIENDLY_LABELS[dim.key] ?? dim.label;
+}
+
 const SIZE = 320;
 const CENTER = SIZE / 2;
 const RADIUS = 120;
@@ -37,7 +46,7 @@ const axes = computed<Axis[]>(() => {
     const score = Math.max(0, Math.min(1, dim.score));
     const tip = pointAt(angle, RADIUS * score);
     const label = pointAt(angle, RADIUS + 22);
-    return { label: dim.label, score, x: tip.x, y: tip.y, lx: label.x, ly: label.y };
+    return { label: displayLabel(dim), score, x: tip.x, y: tip.y, lx: label.x, ly: label.y };
   });
 });
 

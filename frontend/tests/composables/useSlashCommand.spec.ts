@@ -3,7 +3,7 @@
  *
  * 覆盖：
  *   1. `/` 触发检测：文本末尾 /query 弹菜单并解析 query；非触发态关闭。
- *   2. 分组与过滤：答疑 / 生成资源分组；query 子串（含别名）过滤。
+ *   2. 分组与过滤：AI 助教 / 生成资源分组；query 子串（含别名）过滤。
  *   3. 选中即模式：抹掉末尾 /query、设 forcedIntent（不往文本插 token）。
  *   4. 键盘导航：moveActive 环形；commitActive 选中当前项。
  *   5. forcedIntent：setForced / clearForced / forcedCommand 派生。
@@ -31,13 +31,13 @@ describe('SLASH_TRIGGER_RE', () => {
 });
 
 describe('useSlashCommand', () => {
-  it('输入 / 弹出菜单，分组为答疑 + 生成资源，共 7 个命令', () => {
+  it('输入 / 弹出菜单，分组为 AI 助教 + 生成资源 + 看讲解，共 8 个命令', () => {
     const s = useSlashCommand(ref('/'));
     s.updateFromText('/');
     expect(s.menuVisible.value).toBe(true);
-    expect(s.groups.value.map((g) => g.group)).toEqual(['答疑', '生成资源']);
+    expect(s.groups.value.map((g) => g.group)).toEqual(['AI 助教', '生成资源', '看讲解']);
     expect(s.flatItems.value).toHaveLength(SLASH_COMMANDS.length);
-    expect(s.flatItems.value).toHaveLength(7);
+    expect(s.flatItems.value).toHaveLength(8);
   });
 
   it('query 子串过滤（命中 label/别名）', () => {
@@ -51,6 +51,12 @@ describe('useSlashCommand', () => {
     const s = useSlashCommand(ref('/mindmap'));
     s.updateFromText('/mindmap');
     expect(s.flatItems.value[0]?.intent).toBe('MINDMAP');
+  });
+
+  it('别名过滤：b站 命中 B站视频（VIDEO）', () => {
+    const s = useSlashCommand(ref('/b站'));
+    s.updateFromText('/b站');
+    expect(s.flatItems.value[0]?.intent).toBe('VIDEO');
   });
 
   it('非触发态关闭菜单', () => {
@@ -90,7 +96,7 @@ describe('useSlashCommand', () => {
     s.updateFromText('/');
     expect(s.activeIndex.value).toBe(0);
     s.moveActive(-1);
-    expect(s.activeIndex.value).toBe(6);
+    expect(s.activeIndex.value).toBe(7);
     s.moveActive(1);
     expect(s.activeIndex.value).toBe(0);
     const committed = s.commitActive();

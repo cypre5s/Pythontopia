@@ -71,7 +71,6 @@ function entriesOf(group: SlashCommandGroup): FlatEntry[] {
           class="slash-item__icon"
           aria-hidden="true"
         >{{ entry.item.icon }}</span>
-        <span class="slash-item__token">{{ entry.item.token }}</span>
         <span class="slash-item__label">{{ entry.item.label }}</span>
         <span class="slash-item__hint">{{ entry.item.hint }}</span>
       </button>
@@ -112,7 +111,7 @@ function entriesOf(group: SlashCommandGroup): FlatEntry[] {
 }
 .slash-item {
   display: grid;
-  grid-template-columns: 20px minmax(72px, auto) auto 1fr;
+  grid-template-columns: 20px auto 1fr;
   gap: 8px;
   align-items: center;
   width: 100%;
@@ -136,18 +135,6 @@ function entriesOf(group: SlashCommandGroup): FlatEntry[] {
   text-align: center;
   color: #8c6a23;
   font-weight: 700;
-}
-.slash-item__token {
-  font-family: monospace;
-  font-size: 11px;
-  color: #1b4a6b;
-  background: var(--pyt-color-info-bg);
-  border: 1px solid var(--pyt-color-info);
-  padding: 1px 6px;
-  border-radius: 4px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .slash-item__label {
   font-weight: 600;

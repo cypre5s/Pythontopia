@@ -124,9 +124,6 @@ defineExpose({ open, close });
           >
             <span class="ft-card__item-label">{{ route.label }}</span>
             <span class="ft-card__item-desc">{{ route.description }}</span>
-            <span class="ft-card__item-cost">
-              {{ route.costCoins > 0 ? `${route.costCoins} 金币` : '免费' }}
-            </span>
           </button>
         </li>
       </ul>
@@ -202,7 +199,7 @@ defineExpose({ open, close });
 
 .ft-card__item {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr;
   gap: 4px 12px;
   width: 100%;
   padding: 10px 12px;
@@ -233,12 +230,6 @@ defineExpose({ open, close });
 .ft-card__item-label {
   color: var(--pyt-text-accent);
   font-weight: 700;
-}
-
-.ft-card__item-cost {
-  align-self: center;
-  color: var(--pyt-text-gold);
-  font-size: 12px;
 }
 
 .ft-card__item-desc {

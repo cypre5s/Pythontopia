@@ -74,3 +74,23 @@
 - ③ 第二/第三探针（fail_react@练 / media_pref）：后端 ProbeCatalog 已支持并测试，前端仅接 cog_intro@看；其余探针待后续按落点接入。
 - ② 情绪化小镇取「轻量+反应式」（tint + 助教台阶）；重量级（天气粒子/NPC 动作）按设计 §13 #3 留后。
 - 新增 REST（/api/learner/probe、/api/learner/world-state）以单测覆盖控制器/服务/监听器；未单独加 @SpringBootTest 端到端集成（全套 322 集成测试通过，未回归）。
+
+### 附加 · 前端「降低学生认知负担」优化（对齐 docs/frontend-ui-standard.md）
+- 先本地提交整个项目检查点（commit 3803bb23，553 文件；.tmp-preview 加 .gitignore 排除）。
+- 经只读审计 → 6 集群 C1–C6，按「不相交文件域」拆 4 个并行子代理实现（均实时核验启动）：
+  - WS-1 壳/HUD/引导（C1+C4）：一屏唯一主按钮（向导脉冲→安静次级、LOP 默认折叠+去呼吸动画）、首次进入 Help 精简三条+折叠、防 Help→镇长对话→探针 三连堆叠（ProbeCard hold + dialog.visible 门控）、向导首句具体化、统一「AI 助教」。
+  - WS-2 菜单/导航/残留（C3+C5）：PauseMenu 17→4 组、QuickWheel 降级、FestivalRibbon 仅节日、FastTravel 去金币、questGuidance 去农场/5图死路+修 Pythonopia 拼写。
+  - WS-3 工坊（C2+C6）：欢迎一句话+「更多用法」折叠、slash 去密集、防幻觉→已核对教材来源、AI 助教命名。
+  - WS-4 练/看/画像（C2+C6+D3）：Pyodide/服务端判题/practice_submission→本机试跑(不记分)/正式提交(评分)、KC→知识点、Lecture 单主按钮、Arena 去金币、画像「场依存/序列型」→口语。
+- 验证（本体亲自全量复跑）：`npm run typecheck` 全绿；`vitest` 125 文件 / 1426 测试全过；eslint 24 改动文件 0 error（仅历史格式 warning）。
+- ⚠ 发现并发工作流：仓库存在另一会话在并行开发（docs/plans/2026-06-04-bilibili-cards-and-agent-studio-plan.md + video/bilibili/agent-studio 新文件），与本轮 UX 在 `AgentOfficeScene.vue` 有文件级交叠，一度令全局 typecheck 瞬时变红（其 WIP，已自行恢复）。本轮未提交 UX 改动，待与用户协调（避免把对方半成品一并入库）。
+
+### 附加 · ①体验闭环 + ③探针补全 + #1 纠偏（4 并行子代理，避开并发会话文件域）
+- 先读并发会话 plan 做文件分区（其拥有 video/bilibili/agent-studio + useSseStream + resource_graph.run_streaming + LecturePage B站区；其声明不动 Tutor/Orchestrator）。本轮只取与之不相交、且对方未碰的 tutor/dialog/probe/profile。
+- ①a 换讲法即时改写：`TutorAskRequest` 增可选 `style`；`TutorService.buildProfileBrief(dims, styleOverride)` 显式选择**绕过 0.3 置信门**；`TutorPanel.onPickStyle` 用上次问题带 style 重问并重渲染（仍写回 styleEngaged）。graph 不动（override 注入 profile_brief，既有 `_cognitive_style_directive` 解析）。测试 `TutorProfileBriefTest` 7。
+- ①b 看阶段对话 3-way：`DialogContextService.inferCognitiveStyle`（读 cognitive_style.tags 取主 tag，降级 unknown）+ `DialogContextDto.cognitiveStyle`（保留旧 binary profileType）；前端 `dialogTemplate.ts` 新增 `{{styleAdaptive:visual|logical|trial}}` token（旧 token 不变）；mayor_py/professor 各 1 行示范。测试 `DialogContextServiceTest` 9 + dialogTemplate 80。
+- ③ fail_react 探针：新 `data/probeCatalog.ts`（cog_intro + fail_react）；`probe.ts` 增 `requested` 会话态；`ProbeCard` 数据驱动；`learning.submitToServer` 失败分支 fire-and-forget `probe.request('fail_react')`（Pinia 单例跨路由可达，胜过 window 事件）。media_pref 跳过（后端未确认 + 落点争用）。测试 probe 26。
+- #1 cognitive_style 纠偏：`SELF_EDITABLE_DIMENSIONS` 加 `cognitive_style`；自评（source=INTERVIEW）时所选 tag **置顶为主**（仅此路径，passive 不变，附回归测试）；`learner.ts selfUpdateDimension` 支持 tagsAdd；`ProfilePage` 三选纠偏控件。测试 `PassiveProfileServiceTest` 17。
+- 全量验证：后端 `mvn test` **342/0 BUILD SUCCESS**；前端 typecheck 干净 + vitest **127 文件/1451 测试** + eslint 12 改动文件 0 error。与并发会话无文件冲突，合并工作树全绿。
+- #4 PM 调度助教：经核，既有 `orchestrator`（后端/graph/路由）+ `GuideOverlay`(/api/orchestrator/turn/stream) + 并发会话 `AgentOfficeScene` 工作室已覆盖「多智能体可视化」，再做会撞车，故不重复实现。
+- 仍未提交（用户「等两会话都完成再统一提交」）。

@@ -200,14 +200,13 @@ describe('demo-smoke.integration · 完整演示链路', () => {
     expect(r.name).toBe('not-found');
   });
 
-  it('STEP 16 节日推进：day=27 显示 upcoming 春日嘉年华', async () => {
+  it('STEP 16 节日推进：day=28 当天显示春日嘉年华（R-14：只在节日当天显示）', async () => {
     // FestivalRibbon 读 hud.meta.dayIndex（R-12 起数据源由 calendar 切到 hud）。
     const hud = useHudStore();
-    hud.syncMeta({ dayIndex: 27 });
+    hud.syncMeta({ dayIndex: 28 });
     const wrapper = mount(FestivalRibbon);
     await flushPromises();
     expect(wrapper.text()).toContain('春日嘉年华');
-    expect(wrapper.text()).toContain('1 天');
     wrapper.unmount();
   });
 

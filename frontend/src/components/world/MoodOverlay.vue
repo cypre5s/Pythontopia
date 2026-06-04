@@ -4,7 +4,7 @@
 // 职责（轻量 + 反应式，见 docs/plans/2026-06-04-profile-loop-trilogy-design.md §4.3）：
 //   1. 挂载即 refresh()：拉世界情绪状态，驱动 WorldScene 的氛围叠加层（背景级 tint）。
 //   2. 连挫导致 mood==='rainy'（低情绪）时，弹出一个「需要我搭把手吗？」的助教台阶——
-//      小、可关闭、非阻塞、背景级，绝不打断玩家操作；点「看看助教」跳百晓工坊（导师）。
+//      小、可关闭、非阻塞、背景级，绝不打断玩家操作；点「AI 助教」跳百晓工坊（导师）。
 //   3. 提供「关闭氛围」开关 → setDisabled(true)，玩家可一键关停情绪推断（透明可纠偏）。
 // 不渲染天气粒子（那是 weather adapter 的事），本组件只负责 DOM 层的助教台阶与开关。
 import { computed, onMounted, ref } from 'vue';
@@ -78,7 +78,7 @@ function disableAmbience(): void {
           data-testid="mood-nudge-help"
           @click="goToTutor"
         >
-          看看助教 →
+          找 AI 助教 →
         </button>
         <button
           type="button"

@@ -16,6 +16,10 @@ dependencies = [
   "structlog>=24.4,<25",
   "tenacity>=9,<10",
   "python-dotenv>=1,<2",
+  # B站视频检索（GPL-3.0-or-later）。GPL 隔离在本 graph 微服务内，后端仅 HTTP 代理，
+  # 不进入 Spring / 前端代码层；合规声明见仓库根 LICENSE-ART.md。仅在 routes/video.py
+  # 内惰性 import，缺包/无网时应用导入与单测均不受影响。
+  "bilibili-api-python>=17.4,<18",
 ]
 
 [project.optional-dependencies]

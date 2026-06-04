@@ -13,7 +13,9 @@ import java.util.Map;
  *       {@link DialogContextService} 从 mastery / submission / classroom / world 等模块实时聚合，
  *       不再依赖前端硬编码；
  *   <li>{@code {{profileAdaptive:A | B}}} 与 {@code {{giftFavorite:A | B}}} — 二分支模板，
- *       由 {@link #profileType} 与 {@link #giftJustGiven} 决策走哪个文案。
+ *       由 {@link #profileType} 与 {@link #giftJustGiven} 决策走哪个文案；
+ *   <li>{@code {{styleAdaptive:视觉|逻辑|试错}}} — 三分支模板，由 {@link #cognitiveStyle}
+ *       （visual / logical / trial / unknown）决策走哪个文案，用于「看阶段」按认知风格因材施教。
  * </ul>
  *
  * <p>{@link #stats} 用 {@link Map} 形态而非具名 record 字段：占位符可能在多个 NPC 中按需扩展，
@@ -23,6 +25,7 @@ import java.util.Map;
 public record DialogContextDto(
     String playerName,
     String profileType,
+    String cognitiveStyle,
     boolean giftJustGiven,
     Map<String, String> stats) {
 
@@ -30,4 +33,18 @@ public record DialogContextDto(
   public static final String PROFILE_PRACTICAL = "practical";
 
   public static final String PROFILE_CAUTIOUS = "cautious";
+
+  /**
+   * 认知风格三态常量（{@code {{styleAdaptive:视觉|逻辑|试错}}} 用），由 {@code
+   * learner_profile.dimensions} 的 {@code cognitive_style.tags} 最新/主导标签推断；无信号时为 {@link
+   * #STYLE_UNKNOWN}。取值与 {@code ProbeCatalog} / TutorCrew 的 cognitive_style tag
+   * （visual / logical / trial）保持一致，保证「玩中建画像 → 因材施教」同一套语义。
+   */
+  public static final String STYLE_VISUAL = "visual";
+
+  public static final String STYLE_LOGICAL = "logical";
+
+  public static final String STYLE_TRIAL = "trial";
+
+  public static final String STYLE_UNKNOWN = "unknown";
 }

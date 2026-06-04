@@ -12,7 +12,7 @@
  * 美术全部复用已审计的 CC-BY-SA-3.0 LPC npc-composites（9×4 walkcycle，64px），不新增二进制。
  */
 import { computed } from 'vue';
-import type { SseTraceEvent } from '@/composables/useSseStream';
+import type { SsePlan, SseTraceEvent } from '@/composables/useSseStream';
 import { playUiClick, playUiHover } from '@/composables/useStardewFx';
 import type { OfficeEvidence } from './agentOffice';
 
@@ -22,6 +22,11 @@ const props = defineProps<{
   tokenPreview: string;
   errorMessage: string | null;
   evidence: OfficeEvidence | null;
+  /**
+   * R-14「真·按 agent 工作室」开场工位清单（来自资源流的 `plan` SSE 事件）。
+   * 存在时按真实节点动态渲染工位 + 相位驱动；缺省（旧后端）时回退旧 4 工位逻辑。
+   */
+  plan?: SsePlan | null;
 }>();
 
 const emit = defineEmits<{
@@ -29,30 +34,102 @@ const emit = defineEmits<{
   (e: 'cancel'): void;
 }>();
 
-type StageKey = 'evidence' | 'generate' | 'grounding' | 'safety';
-type StageState = 'pending' | 'active' | 'done' | 'error';
+type StationState = 'pending' | 'active' | 'done' | 'retry' | 'error';
 
-interface OfficeAgent {
-  stage: StageKey;
-  sprite: string;
-  name: string;
+/** 统一工位视图模型：plan 模式与回退模式产出相同形状，模板只迭代它。 */
+interface StationVm {
+  key: string;
+  /** 后端 trace node（plan 模式）或阶段键（回退模式），用于匹配 trace。 */
+  node: string;
+  /** 工位台名（plan 模式 = 真实 agent_label）。 */
+  label: string;
+  /** 右栏清单条目名（plan 模式 = agent_label；回退 = 阶段中文名）。 */
+  stepLabel: string;
+  /** 工位下方角色小字。 */
   role: string;
-  /** 工作时的动作描述（日志 / 气泡）。 */
-  action: string;
+  sprite: string;
+  state: StationState;
+  elapsedMs: number;
 }
 
 const SPRITE_BASE = '/assets/pixel/sprites/npc-composites';
-const STAGE_ORDER: readonly StageKey[] = ['evidence', 'generate', 'grounding', 'safety'];
-
-const AGENTS: readonly OfficeAgent[] = [
-  { stage: 'evidence', sprite: 'npc_librarian', name: '馆员 Doc', role: '证据检索', action: '翻阅课本检索证据' },
-  { stage: 'generate', sprite: 'npc_workshop', name: '设计师 Make', role: '内容生成', action: '撰写学习资源' },
-  { stage: 'grounding', sprite: 'npc_sage', name: '审查官 Sage', role: '引用审查', action: '逐条核对课本页码' },
-  { stage: 'safety', sprite: 'npc_guard', name: '安全员 Safe', role: '安全审查', action: '排查泄答与风险' },
-];
-
 const SUPERVISOR = { sprite: 'npc_mayor', name: '总管 Py' };
 
+function spriteUrl(sprite: string): string {
+  return `url(${SPRITE_BASE}/${sprite}.png)`;
+}
+
+function statusZh(status: string): string {
+  if (status === 'fail') return '失败';
+  if (status === 'retry') return '重试';
+  if (status === 'running') return '进行中';
+  return '完成';
+}
+
+// ── plan 模式：kind / designer → 已审计 NPC sprite（均已在 BootScene 预加载，不新增素材） ──
+const KIND_ROLE: Record<string, string> = {
+  evidence: '证据检索',
+  designer: '内容生成',
+  grounding: '引用审查',
+  hallucination: '防幻觉',
+  safety: '安全审查',
+};
+const KIND_SPRITE: Record<string, string> = {
+  evidence: 'npc_librarian',
+  designer: 'npc_workshop',
+  grounding: 'npc_sage',
+  hallucination: 'npc_student',
+  safety: 'npc_guard',
+};
+const DESIGNER_SPRITE_BY_TYPE: Record<string, string> = {
+  HANDOUT: 'npc_professor',
+  MINDMAP: 'npc_tutor_ai',
+  PRACTICE: 'npc_trainer',
+  CODE_LAB: 'npc_coach',
+  READING: 'npc_workshop',
+  STORYBOARD: 'npc_gardener',
+};
+
+function designerSprite(type: string): string {
+  return DESIGNER_SPRITE_BY_TYPE[type] ?? KIND_SPRITE.designer ?? 'npc_workshop';
+}
+
+/** 去掉设计师节点的 `.attemptN` 后缀，使 attempt0/1（重试）映射到同一工位。 */
+function nodeBase(node: string): string {
+  return node.replace(/\.attempt\d+$/, '');
+}
+
+/** plan 模式：取某工位「最新一条」trace（按 base 名匹配，兼容重试）。 */
+function latestTrace(node: string): SseTraceEvent | null {
+  const base = nodeBase(node);
+  let found: SseTraceEvent | null = null;
+  for (const t of props.traces) {
+    if (nodeBase(t.node) === base) found = t;
+  }
+  return found;
+}
+
+function planStationState(node: string): { state: StationState; elapsedMs: number } {
+  const t = latestTrace(node);
+  if (!t) return { state: 'pending', elapsedMs: 0 };
+  if (t.phase === 'start') return { state: 'active', elapsedMs: 0 };
+  // finish（或旧式无 phase 的 trace）→ 按状态落定。
+  const elapsedMs = t.elapsed_ms ?? 0;
+  if (t.status === 'fail') return { state: 'error', elapsedMs };
+  if (t.status === 'retry') return { state: 'retry', elapsedMs };
+  return { state: 'done', elapsedMs };
+}
+
+// ── 回退模式（无 plan 事件）：保留旧 4 工位 + stageOf 正则，确保旧后端不崩 ──
+type StageKey = 'evidence' | 'generate' | 'grounding' | 'safety';
+const STAGE_ORDER: readonly StageKey[] = ['evidence', 'generate', 'grounding', 'safety'];
+interface LegacyAgent { stage: StageKey; sprite: string; name: string; role: string; }
+const LEGACY_AGENTS: readonly LegacyAgent[] = [
+  { stage: 'evidence', sprite: 'npc_librarian', name: '馆员 Doc', role: '证据检索' },
+  { stage: 'generate', sprite: 'npc_workshop', name: '设计师 Make', role: '内容生成' },
+  { stage: 'grounding', sprite: 'npc_sage', name: '审查官 Sage', role: '引用审查' },
+  { stage: 'safety', sprite: 'npc_guard', name: '安全员 Safe', role: '安全审查' },
+];
 const STAGE_LABEL: Record<StageKey, string> = {
   evidence: '证据检索',
   generate: '内容生成',
@@ -60,11 +137,6 @@ const STAGE_LABEL: Record<StageKey, string> = {
   safety: '安全审查',
 };
 
-function spriteUrl(sprite: string): string {
-  return `url(${SPRITE_BASE}/${sprite}.png)`;
-}
-
-/** 把真实后端 trace node 归类到 4 个工位阶段。 */
 function stageOf(node: string): StageKey | null {
   if (node === 'evidence_fetcher') return 'evidence';
   if (node === 'grounding_critic' || node === 'hallucination_detector') return 'grounding';
@@ -73,7 +145,7 @@ function stageOf(node: string): StageKey | null {
   return null;
 }
 
-const stageStates = computed<Record<StageKey, StageState>>(() => {
+function legacyStations(): StationVm[] {
   const done: Record<StageKey, boolean> = {
     evidence: false, generate: false, grounding: false, safety: false,
   };
@@ -87,68 +159,112 @@ const stageStates = computed<Record<StageKey, StageState>>(() => {
     else done[stage] = true;
   }
   const firstPending = STAGE_ORDER.find((s) => !done[s] && !failed[s]) ?? null;
-  const result = {} as Record<StageKey, StageState>;
-  for (const s of STAGE_ORDER) {
-    if (failed[s]) result[s] = 'error';
-    else if (done[s]) result[s] = 'done';
-    else if (s === firstPending && (props.status === 'streaming' || props.status === 'idle'))
-      result[s] = 'active';
-    else result[s] = 'pending';
+  return LEGACY_AGENTS.map((a) => {
+    let state: StationState;
+    if (failed[a.stage]) state = 'error';
+    else if (done[a.stage]) state = 'done';
+    else if (a.stage === firstPending && (props.status === 'streaming' || props.status === 'idle'))
+      state = 'active';
+    else state = 'pending';
+    return {
+      key: a.stage,
+      node: a.stage,
+      label: a.name,
+      stepLabel: STAGE_LABEL[a.stage],
+      role: a.role,
+      sprite: a.sprite,
+      state,
+      elapsedMs: 0,
+    };
+  });
+}
+
+const stations = computed<StationVm[]>(() => {
+  const plan = props.plan;
+  if (plan && plan.nodes.length > 0) {
+    return plan.nodes.map((n) => {
+      const { state, elapsedMs } = planStationState(n.node);
+      const sprite = n.kind === 'designer'
+        ? designerSprite(plan.type)
+        : (KIND_SPRITE[n.kind] ?? 'npc_workshop');
+      return {
+        key: n.node,
+        node: n.node,
+        label: n.agent_label,
+        stepLabel: n.agent_label,
+        role: KIND_ROLE[n.kind] ?? n.kind,
+        sprite,
+        state,
+        elapsedMs,
+      };
+    });
   }
-  return result;
+  return legacyStations();
 });
 
-const activeIndex = computed<number>(() => {
-  const idx = STAGE_ORDER.findIndex((s) => stageStates.value[s] === 'active');
-  return idx === -1 ? -1 : idx;
-});
+const activeIndex = computed<number>(() => stations.value.findIndex((s) => s.state === 'active'));
 
-const doneCount = computed<number>(
-  () => STAGE_ORDER.filter((s) => stageStates.value[s] === 'done').length,
+// 已完成工位（含重试，不含失败）用于进度条；回退模式无 retry，等同旧 doneCount。
+const completedCount = computed<number>(
+  () => stations.value.filter((s) => s.state === 'done' || s.state === 'retry').length,
 );
-const progressPct = computed<number>(() => Math.round((doneCount.value / STAGE_ORDER.length) * 100));
+const progressPct = computed<number>(() =>
+  Math.round((completedCount.value / (stations.value.length || 1)) * 100),
+);
 
 const allDone = computed<boolean>(() => props.status === 'done' && props.evidence !== null);
 
+const deskGridStyle = computed(() => ({
+  gridTemplateColumns: `repeat(${stations.value.length || 1}, 1fr)`,
+}));
+
 // 主管位置：站到当前派活工位上方；全部完工后回到交付台（最右）。
 const supervisorLeftPct = computed<number>(() => {
-  const slot = activeIndex.value === -1 ? (allDone.value ? AGENTS.length - 1 : 0) : activeIndex.value;
-  // 4 工位均分，主管对齐到工位中心。
-  return (slot + 0.5) * (100 / AGENTS.length);
+  const count = stations.value.length || 1;
+  const slot = activeIndex.value === -1 ? (allDone.value ? count - 1 : 0) : activeIndex.value;
+  return (slot + 0.5) * (100 / count);
 });
 
 const supervisorLine = computed<string>(() => {
   if (props.status === 'error') return '出了点状况…';
   if (allDone.value) return '完工，待交付！';
   if (activeIndex.value === -1) return '准备派活…';
-  return `${AGENTS[activeIndex.value]?.name}，开工！`;
+  return `${stations.value[activeIndex.value]?.label}，开工！`;
 });
 
 interface LogLine {
   stage: string;
   status: string;
   elapsedMs: number;
-  note: string;
 }
-const logLines = computed<LogLine[]>(() =>
-  props.traces.map((t) => {
+const logLines = computed<LogLine[]>(() => {
+  const plan = props.plan;
+  if (plan && plan.nodes.length > 0) {
+    const labelOf = (node: string): string => {
+      const base = nodeBase(node);
+      const match = plan.nodes.find((n) => nodeBase(n.node) === base);
+      return match ? match.agent_label : node;
+    };
+    // plan 模式日志：每节点「完工」时记一条（agent_label · 状态 · 耗时）。
+    return props.traces
+      .filter((t) => t.phase === 'finish')
+      .map((t) => ({
+        stage: labelOf(t.node),
+        status: statusZh(t.status),
+        elapsedMs: t.elapsed_ms ?? 0,
+      }));
+  }
+  return props.traces.map((t) => {
     const stage = stageOf(t.node);
     const label = stage ? STAGE_LABEL[stage] : t.node;
-    const statusZh =
-      t.status === 'fail' ? '失败' : t.status === 'retry' ? '重试' : '完成';
-    const agent = stage ? AGENTS.find((a) => a.stage === stage) : null;
+    const agent = stage ? LEGACY_AGENTS.find((a) => a.stage === stage) : null;
     return {
       stage: agent ? `${agent.name} · ${label}` : label,
-      status: statusZh,
+      status: statusZh(t.status),
       elapsedMs: t.elapsed_ms ?? 0,
-      note: agent?.action ?? '',
     };
-  }),
-);
-
-function agentStateClass(stage: StageKey): string {
-  return `office-agent--${stageStates.value[stage]}`;
-}
+  });
+});
 
 function onConfirm(): void {
   playUiClick();
@@ -197,37 +313,44 @@ const groundingText = computed<string>(() => {
           />
         </div>
 
-        <div class="office-desks">
+        <div
+          class="office-desks"
+          :style="deskGridStyle"
+        >
           <div
-            v-for="agent in AGENTS"
-            :key="agent.stage"
+            v-for="station in stations"
+            :key="station.key"
             class="office-agent"
-            :class="agentStateClass(agent.stage)"
-            :data-testid="`office-agent-${agent.stage}`"
+            :class="`office-agent--${station.state}`"
+            :data-testid="`office-agent-${station.key}`"
           >
             <span
-              v-if="stageStates[agent.stage] === 'done'"
+              v-if="station.state === 'done'"
               class="office-agent__badge office-agent__badge--ok"
             >✓</span>
             <span
-              v-else-if="stageStates[agent.stage] === 'error'"
+              v-else-if="station.state === 'retry'"
+              class="office-agent__badge office-agent__badge--retry"
+            >↻</span>
+            <span
+              v-else-if="station.state === 'error'"
               class="office-agent__badge office-agent__badge--err"
             >✗</span>
             <span
-              v-else-if="stageStates[agent.stage] === 'active'"
+              v-else-if="station.state === 'active'"
               class="office-agent__badge office-agent__badge--work"
             >…</span>
             <span
               class="office-sprite"
-              :style="{ backgroundImage: spriteUrl(agent.sprite) }"
-              :title="`${agent.name} · ${agent.role}`"
+              :style="{ backgroundImage: spriteUrl(station.sprite) }"
+              :title="`${station.label} · ${station.role}`"
             />
             <span
               class="office-agent__desk"
               aria-hidden="true"
             />
-            <span class="office-agent__name">{{ agent.name }}</span>
-            <span class="office-agent__role">{{ agent.role }}</span>
+            <span class="office-agent__name">{{ station.label }}</span>
+            <span class="office-agent__role">{{ station.role }}</span>
           </div>
         </div>
       </div>
@@ -250,19 +373,20 @@ const groundingText = computed<string>(() => {
 
         <ol class="office-steps">
           <li
-            v-for="(stage, idx) in STAGE_ORDER"
-            :key="stage"
+            v-for="(station, idx) in stations"
+            :key="station.key"
             class="office-step"
-            :class="`office-step--${stageStates[stage]}`"
-            :data-testid="`office-step-${stage}`"
+            :class="`office-step--${station.state}`"
+            :data-testid="`office-step-${station.key}`"
           >
             <span class="office-step__marker">
-              <template v-if="stageStates[stage] === 'done'">✓</template>
-              <template v-else-if="stageStates[stage] === 'error'">✗</template>
-              <template v-else-if="stageStates[stage] === 'active'">●</template>
+              <template v-if="station.state === 'done'">✓</template>
+              <template v-else-if="station.state === 'retry'">↻</template>
+              <template v-else-if="station.state === 'error'">✗</template>
+              <template v-else-if="station.state === 'active'">●</template>
               <template v-else>{{ idx + 1 }}</template>
             </span>
-            <span class="office-step__label">{{ STAGE_LABEL[stage] }}</span>
+            <span class="office-step__label">{{ station.stepLabel }}</span>
           </li>
         </ol>
 
@@ -344,7 +468,7 @@ const groundingText = computed<string>(() => {
           </li>
         </ul>
         <p class="office-evidence__hint">
-          多智能体已协同生成并通过防幻觉 / 安全审查。确认后收入「我的书房」并记一次「学」里程碑。
+          多智能体已协同生成，已核对教材来源 / 安全。确认后收入「我的书房」并记一次「学」里程碑。
         </p>
         <div class="office-evidence__actions">
           <button
@@ -426,6 +550,7 @@ const groundingText = computed<string>(() => {
   flex-direction: column;
   align-items: center;
   gap: 1px;
+  min-width: 0;
 }
 .office-sprite {
   width: 64px;
@@ -444,7 +569,8 @@ const groundingText = computed<string>(() => {
   opacity: 0.82;
   animation: office-idle 2.4s ease-in-out infinite;
 }
-.office-agent--done .office-sprite {
+.office-agent--done .office-sprite,
+.office-agent--retry .office-sprite {
   opacity: 0.95;
 }
 .office-agent--error .office-sprite {
@@ -471,10 +597,15 @@ const groundingText = computed<string>(() => {
   font-size: 10px;
   font-weight: 700;
   color: #3a2a14;
+  max-width: 100%;
+  text-align: center;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
 }
 .office-agent__role {
   font-size: 9px;
   color: var(--pyt-color-text-hint);
+  text-align: center;
 }
 .office-agent__badge {
   position: absolute;
@@ -492,6 +623,9 @@ const groundingText = computed<string>(() => {
 }
 .office-agent__badge--ok {
   background: #4d6e1d;
+}
+.office-agent__badge--retry {
+  background: #c98a1c;
 }
 .office-agent__badge--err {
   background: var(--pyt-color-danger);
@@ -567,6 +701,10 @@ const groundingText = computed<string>(() => {
   border-color: #d4af37;
   animation: office-blink 1.2s ease-in-out infinite;
 }
+.office-step--retry {
+  background: #fbe8c8;
+  border-color: #c98a1c;
+}
 .office-step--error {
   background: #f8d7d0;
   border-color: var(--pyt-color-danger);
@@ -588,6 +726,9 @@ const groundingText = computed<string>(() => {
 }
 .office-step--active .office-step__marker {
   background: #d4af37;
+}
+.office-step--retry .office-step__marker {
+  background: #c98a1c;
 }
 .office-step--error .office-step__marker {
   background: var(--pyt-color-danger);

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -40,6 +41,17 @@ class ResourceGraphConfig:
 
 class ResourceGraph:
     MAX_RETRIES = 1
+
+    # 设计师工位的中文 label（仅用于线上 `plan` 事件，零 LLM 成本）。键对应
+    # ResourceProduceRequest.type，与 _select_agent 选出的设计师 AGENT_NAME 配对。
+    _DESIGNER_LABELS: dict[str, str] = {
+        "HANDOUT": "讲义设计师",
+        "MINDMAP": "思维导图师",
+        "PRACTICE": "出题官",
+        "CODE_LAB": "代码教练",
+        "READING": "阅读策展人",
+        "STORYBOARD": "动画分镜师",
+    }
 
     def __init__(
         self,
@@ -134,49 +146,61 @@ class ResourceGraph:
         request: ResourceProduceRequest,
         emit: Callable[[str, dict[str, Any]], Awaitable[None]],
     ) -> None:
-        """Run the graph with SSE callbacks for each step."""
+        """Run the graph with SSE callbacks for each step.
+
+        Wire protocol is a superset of the persisted trace: an opening
+        ``plan`` event lists the deterministic stations, and every node emits
+        a ``start`` then a ``finish`` ``trace`` event carrying an extra
+        ``phase`` field so the frontend studio can animate per-agent progress.
+        The persisted ``trace`` list (and the terminal ``result``/``error``
+        events) stay byte-for-byte identical to ``run``.
+        """
         trace: list[GraphTraceStep] = []
 
         try:
-            evidence = await self._step(
+            agent = self._select_agent(request)
+            # 开场工位清单：在任何节点运行前发出（零 LLM 成本）。
+            await emit("plan", self._build_plan(request, agent))
+
+            evidence = await self._step_streaming(
+                emit,
                 trace,
                 "evidence_fetcher",
                 self._fetch_evidence(request),
             )
-            await emit("trace", trace[-1].model_dump(mode="json"))
-
-            agent = self._select_agent(request)
 
             attempt = 0
             last_grounding: GroundingResult | None = None
             last_safety: SafetyResult | None = None
             draft: ResourceDraft | None = None
             while attempt <= self.MAX_RETRIES:
-                draft = await self._step(
+                draft = await self._step_streaming(
+                    emit,
                     trace,
                     f"{agent.AGENT_NAME}.attempt{attempt}",
                     agent.design(request, evidence),
                 )
-                await emit("trace", trace[-1].model_dump(mode="json"))
 
                 grounding = grounding_critic(draft, evidence)
-                self._record_sync(trace, "grounding_critic", grounding.passed)
-                await emit("trace", trace[-1].model_dump(mode="json"))
+                await self._record_sync_streaming(
+                    emit, trace, "grounding_critic", grounding.passed,
+                )
+                await asyncio.sleep(0.05)
 
                 hallucination = hallucination_detector(
                     draft, evidence, self._config.valid_kc_codes
                 )
-                self._record_sync(
-                    trace, "hallucination_detector", hallucination.passed,
+                await self._record_sync_streaming(
+                    emit, trace, "hallucination_detector", hallucination.passed,
                     note=str(hallucination.reasons),
                 )
-                await emit("trace", trace[-1].model_dump(mode="json"))
+                await asyncio.sleep(0.05)
 
                 safety = safety_critic(draft)
-                self._record_sync(
-                    trace, "safety_critic", safety.passed, note=str(safety.reasons),
+                await self._record_sync_streaming(
+                    emit, trace, "safety_critic", safety.passed, note=str(safety.reasons),
                 )
-                await emit("trace", trace[-1].model_dump(mode="json"))
+                await asyncio.sleep(0.05)
 
                 if not safety.passed:
                     response = build_response(
@@ -279,3 +303,81 @@ class ResourceGraph:
                 note=note,
             )
         )
+
+    # ── 流式专用私有助手（不影响同步 run() 与落库 trace） ──
+
+    def _build_plan(
+        self, request: ResourceProduceRequest, agent: Any
+    ) -> dict[str, Any]:
+        """开场工位清单：evidence → designer → grounding → hallucination → safety。
+
+        设计师工位用 ``_select_agent`` 选出的真实 ``AGENT_NAME``（attempt0），
+        附中文 label，忠实反映真实节点，不摆假 agent。
+        """
+        designer_label = self._DESIGNER_LABELS.get(request.type, request.type)
+        return {
+            "type": request.type,
+            "nodes": [
+                {"node": "evidence_fetcher", "agent_label": "证据检索·馆员", "kind": "evidence"},
+                {
+                    "node": f"{agent.AGENT_NAME}.attempt0",
+                    "agent_label": designer_label,
+                    "kind": "designer",
+                },
+                {"node": "grounding_critic", "agent_label": "引用审查·审查官", "kind": "grounding"},
+                {
+                    "node": "hallucination_detector",
+                    "agent_label": "防幻觉核查·校对官",
+                    "kind": "hallucination",
+                },
+                {"node": "safety_critic", "agent_label": "安全审查·安全员", "kind": "safety"},
+            ],
+        }
+
+    async def _step_streaming(
+        self,
+        emit: Callable[[str, dict[str, Any]], Awaitable[None]],
+        trace: list[GraphTraceStep],
+        name: str,
+        awaitable,
+    ):
+        """异步节点：先发 ``start``，跑既有 ``_step``，再用落库的步骤发 ``finish``。"""
+        await self._emit_start(emit, name)
+        try:
+            result = await self._step(trace, name, awaitable)
+        except Exception:
+            # _step 已追加 fail 步骤；发出 finish(fail) 后再抛给外层统一转 error。
+            await self._emit_finish(emit, trace[-1])
+            raise
+        await self._emit_finish(emit, trace[-1])
+        return result
+
+    async def _record_sync_streaming(
+        self,
+        emit: Callable[[str, dict[str, Any]], Awaitable[None]],
+        trace: list[GraphTraceStep],
+        name: str,
+        passed: bool,
+        note: str | None = None,
+    ) -> None:
+        """同步审查节点：先发 ``start``，跑既有 ``_record_sync``，再发 ``finish``。"""
+        await self._emit_start(emit, name)
+        self._record_sync(trace, name, passed, note=note)
+        await self._emit_finish(emit, trace[-1])
+
+    @staticmethod
+    async def _emit_start(
+        emit: Callable[[str, dict[str, Any]], Awaitable[None]], name: str
+    ) -> None:
+        await emit(
+            "trace",
+            {"node": name, "phase": "start", "status": "running", "elapsed_ms": 0, "note": None},
+        )
+
+    @staticmethod
+    async def _emit_finish(
+        emit: Callable[[str, dict[str, Any]], Awaitable[None]], step: GraphTraceStep
+    ) -> None:
+        payload = step.model_dump(mode="json")
+        payload["phase"] = "finish"
+        await emit("trace", payload)

@@ -26,7 +26,7 @@ export interface ComposerSubmitPayload {
   forcedIntent: IntentKind | null;
 }
 
-const DEFAULT_PLACEHOLDER = '说说你想学什么…  输入 @ 引用知识点 · / 选工具';
+const DEFAULT_PLACEHOLDER = '说说你想学什么…';
 
 const props = withDefaults(
   defineProps<{

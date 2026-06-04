@@ -18,6 +18,7 @@ import { getWorkshopResource, listWorkshopResources } from '@/api/workshop';
 import { useMainQuestStore } from '@/stores/mainQuest';
 import { useToastStore } from '@/stores/toast';
 import PptView from '@/components/workshop/PptView.vue';
+import BilibiliVideoCards from '@/components/video/BilibiliVideoCards.vue';
 import TutorPanel from '@/components/tutor/TutorPanel.vue';
 import { useTutorStore } from '@stores/tutor';
 import type { HandoutContent, WorkshopResourceDto } from '@/api/dto/Workshop';
@@ -61,6 +62,11 @@ const chapterKcCodes = computed<string[]>(() => {
   for (let n = ch.startKc; n <= ch.endKc; n += 1) codes.push(formatKcNumber(n));
   return codes;
 });
+
+// 「B站精选讲解」检索关键词：章节名 + Python + 首个 KC 中文名（kcDisplayName 兜底「本知识点」）。
+const biliKeyword = computed<string>(
+  () => `${chapterName.value} Python ${kcDisplayName(chapterKcCodes.value[0] ?? '')}`,
+);
 
 const mediaConsumed = computed<boolean>(() => mainQuest.chapterMediaConsumed(props.chapter));
 
@@ -218,7 +224,6 @@ watch(() => props.chapter, () => {
       <header class="lecture-top">
         <div class="lecture-top__title">
           <h1 class="lecture-title">{{ chapterName }}</h1>
-          <span class="lecture-tag">视频讲解</span>
           <span
             v-if="mediaConsumed"
             class="lecture-done"
@@ -272,8 +277,14 @@ watch(() => props.chapter, () => {
           >
             <p class="lecture-empty-title">本章暂无在线视频</p>
             <p class="lecture-empty-sub">
-              可直接在右侧：看 PPT、课件问答或做题。
+              可直接在右侧：看 PPT、问 AI 助教或做题。下面是 B 站精选讲解（外部资源）：
             </p>
+            <BilibiliVideoCards
+              class="lecture-empty-bili"
+              :keyword="biliKeyword"
+              heading="本章 B站精选"
+              @consumed="reportMediaConsumed('video')"
+            />
           </div>
         </main>
 
@@ -307,7 +318,7 @@ watch(() => props.chapter, () => {
               data-testid="lecture-goto-tutor"
               @click="openTutorAside"
             >
-              问答
+              AI 助教
             </button>
           </div>
 
@@ -326,7 +337,7 @@ watch(() => props.chapter, () => {
               class="aside-tutor-full"
               @click="openTutorFullPage"
             >
-              在独立页打开问答
+              在独立页打开 AI 助教
             </button>
           </div>
 
@@ -341,6 +352,14 @@ watch(() => props.chapter, () => {
                 class="aside-span2"
                 variant="primary"
                 block
+                test-id="lecture-goto-training"
+                @click="goTraining"
+              >
+                看完去做题
+              </PyButton>
+              <PyButton
+                variant="secondary"
+                block
                 test-id="lecture-goto-ppt"
                 :disabled="pptLoading"
                 @click="goPpt"
@@ -352,19 +371,11 @@ watch(() => props.chapter, () => {
                 block
                 @click="openTutorAside"
               >
-                问答
-              </PyButton>
-              <PyButton
-                variant="secondary"
-                block
-                test-id="lecture-goto-training"
-                @click="goTraining"
-              >
-                做题
+                AI 助教
               </PyButton>
               <PyButton
                 class="aside-span2"
-                variant="ghost"
+                variant="secondary"
                 block
                 @click="goWorld"
               >
@@ -442,6 +453,18 @@ watch(() => props.chapter, () => {
             >
               暂无图解
             </p>
+          </section>
+
+          <section
+            class="aside-block aside-block--bili"
+            data-testid="lecture-bili-aside"
+          >
+            <BilibiliVideoCards
+              :keyword="biliKeyword"
+              :limit="6"
+              heading="本章 B站精选"
+              @consumed="reportMediaConsumed('video')"
+            />
           </section>
           </template>
         </aside>
@@ -521,14 +544,6 @@ watch(() => props.chapter, () => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.lecture-tag {
-  font-size: 11px;
-  padding: 2px 8px;
-  background: var(--pyt-color-warning-bg);
-  border: 1px solid var(--pyt-color-border);
-  border-radius: 4px;
-  color: var(--pyt-color-text-hint);
-}
 .lecture-done {
   font-size: 11px;
   color: var(--pyt-color-bg-elevated);
@@ -594,8 +609,16 @@ watch(() => props.chapter, () => {
 }
 .lecture-empty {
   margin: auto;
+  width: 100%;
+  max-width: 760px;
+  max-height: 100%;
+  overflow-y: auto;
   text-align: center;
   padding: 16px;
+}
+.lecture-empty-bili {
+  margin-top: 16px;
+  text-align: left;
 }
 .lecture-empty-title {
   margin: 0 0 6px;
@@ -686,8 +709,14 @@ watch(() => props.chapter, () => {
   overflow: hidden;
 }
 .aside-block--illust {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   overflow: hidden;
+  border-top: 2px dashed var(--pyt-color-border);
+}
+.aside-block--bili {
+  flex: 1 1 auto;
+  min-height: 120px;
+  overflow-y: auto;
   border-top: 2px dashed var(--pyt-color-border);
 }
 

@@ -62,6 +62,11 @@ const selectedLevel = computed<ArenaLevel | null>(
   () => chapterLevels.value.find((l) => l.id === selectedLevelId.value) ?? null,
 );
 
+// R-14：学生侧不露货币。过滤掉 coin 奖励，只展示掌握进度类奖励（ref 用知识点中文名）。
+const visibleRewards = computed(() =>
+  (selectedLevel.value?.rewards ?? []).filter((r) => r.kind !== 'coin'),
+);
+
 const KIND_ICON: Record<ArenaLevelKind, string> = {
   pdf_question: '▤',
   fill_blank:   '▭',
@@ -231,7 +236,7 @@ function star(level: ArenaLevel): string {
               v-if="isRecommendedByProfile(selectedLevel)"
               class="badge badge--reco"
               data-testid="arena-reco-badge"
-              title="基于你的学生画像 errorPatterns.frequentKcCodes 推荐"
+              title="根据你的学生画像，这是你的薄弱知识点"
             >★ 画像推荐</span>
           </header>
           <h2 class="arena-detail__title">
@@ -249,14 +254,17 @@ function star(level: ArenaLevel): string {
             data-testid="arena-profile-hint"
           >
             <span class="profile-icon">◑</span>
-            <span>已接入学生画像 · 出题会偏好你的弱项 KC、按画像调节难度</span>
+            <span>已接入学生画像 · 出题会偏好你的弱项知识点、按画像调节难度</span>
           </div>
-          <ul class="arena-detail__rewards">
+          <ul
+            v-if="visibleRewards.length > 0"
+            class="arena-detail__rewards"
+          >
             <li
-              v-for="r in selectedLevel.rewards"
+              v-for="r in visibleRewards"
               :key="`${r.kind}-${r.ref ?? r.amount}`"
             >
-              奖励：{{ r.kind === 'coin' ? '$' : '+' }} {{ r.amount }}{{ r.ref ? ` (${r.ref})` : '' }}
+              奖励：掌握进度 +{{ r.amount }}{{ r.ref ? ` · ${kcDisplayName(r.ref)}` : '' }}
             </li>
           </ul>
 

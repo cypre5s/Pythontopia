@@ -35,12 +35,15 @@ RESOURCE_INTENTS: tuple[str, ...] = (
     "READING",
     "STORYBOARD",
 )
-ALL_INTENTS: tuple[str, ...] = ("ASK", *RESOURCE_INTENTS)
+# VIDEO = B站精选讲解视频（外部资源检索，非生成），与 ASK 一样不走工坊生成管线。
+ALL_INTENTS: tuple[str, ...] = ("ASK", "VIDEO", *RESOURCE_INTENTS)
 
 # 确定性关键词 → 工具映射（顺序敏感：靠前先命中）。仅 provider 不可用时兜底。
+# VIDEO 放在 STORYBOARD 之后，使「视频脚本/动画分镜」仍判 STORYBOARD，「看视频/B站」才判 VIDEO。
 _INTENT_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("MINDMAP", ("思维导图", "导图", "脑图", "知识图谱", "mindmap", "mind map")),
     ("STORYBOARD", ("动画", "分镜", "故事板", "动画脚本", "视频脚本", "storyboard")),
+    ("VIDEO", ("看视频", "视频讲解", "讲解视频", "b站", "bilibili", "哔哩", "影片", "找视频", "看个视频")),
     ("CODE_LAB", ("代码", "示例代码", "敲代码", "实操", "动手", "跑一下", "运行", "code", "demo")),
     ("PRACTICE", ("练习", "练一练", "做题", "习题", "题目", "出题", "练题", "practice", "quiz")),
     ("READING", ("拓展", "延伸", "扩展阅读", "延伸阅读", "课外", "拓展阅读", "reading")),
@@ -141,9 +144,10 @@ class IntentRouterAgent:
         system = (
             "你是 Pythontopia「百晓工坊」的意图路由器，只输出 JSON 对象。"
             "从学生这一句话判断该调用哪个工具，并从课程知识点目录里挑出最相关的 KC。schema:"
-            '{"intent":"ASK|HANDOUT|MINDMAP|PRACTICE|CODE_LAB|READING|STORYBOARD",'
+            '{"intent":"ASK|VIDEO|HANDOUT|MINDMAP|PRACTICE|CODE_LAB|READING|STORYBOARD",'
             '"kc_codes":["…"],"focus_hint":"一句话学习重点","confidence":0~1,"reason":"简短理由"}。'
-            "工具语义：ASK=直接答疑/解释/回答提问；HANDOUT=讲义笔记；MINDMAP=思维导图；"
+            "工具语义：ASK=直接答疑/解释/回答提问；VIDEO=想看视频讲解时按主题检索B站精选视频卡片"
+            "（外部资源，非生成）；HANDOUT=讲义笔记；MINDMAP=思维导图；"
             "PRACTICE=练习题；CODE_LAB=可运行代码案例；READING=拓展阅读；STORYBOARD=动画分镜脚本。"
             f"kc_codes 只能取自下方目录里的 code，最多 {_MAX_KC} 个；目录找不到就留空数组，禁止编造。"
         )

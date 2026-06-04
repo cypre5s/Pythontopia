@@ -3,7 +3,7 @@
 //   2. 「该去找哪个 NPC / 去哪张地图」。
 //
 // 目标：学生不再只看到一个任务标题，而是清楚知道下一步动作 + 被自动指路到对应 NPC。
-// NPC 对话再把学生引导进对应设施（工坊 / 训练场 / 农场 / 图书馆），形成完整学习回路。
+// NPC 对话再把学生引导进对应设施（工坊 / 训练场 / 图书馆），形成完整学习回路。
 //
 // 纯函数：只依赖静态任务数据，不碰 store / DOM / Phaser，方便单测与复用。
 
@@ -14,7 +14,7 @@ export type QuestActionKind =
   | 'dialog' // 与指定 NPC 对话（dialog_complete）
   | 'workshop' // 工坊生成资源（resource_consumed）
   | 'training' // 训练场提交判题（submission）
-  | 'practice' // 知识农场浇水提升掌握度（kc_mastery）
+  | 'practice' // 训练场多刷题提升掌握进度（kc_mastery）
   | 'building'; // 走到地图指定建筑点（building_visit）
 
 export interface QuestGuidance {
@@ -39,12 +39,11 @@ export interface QuestGuidance {
   ctaText: string;
 }
 
-const MAP_LABELS: Readonly<Record<MainQuestMapKey, string>> = Object.freeze({
-  town_hub: 'Pythonopia 小镇',
-  farm_north: '知识农场',
+// R-14 方案A：世界收敛为单一中央小镇 town_hub，外围图（农场 / 学院 / 港口）已从主线与
+// 导航弃用。学生侧只保留「小镇」与作为支线的「Bug 矿洞」，其余地图不再作为可前往目的地。
+const MAP_LABELS: Readonly<Partial<Record<MainQuestMapKey, string>>> = Object.freeze({
+  town_hub: 'Pythontopia 小镇',
   mine_south: 'Bug 矿洞',
-  campus_east: '函数学院',
-  port_west: '商船港口',
 });
 
 // 与 data/npcs/index.json 对齐的中文名（只列引导会用到的 NPC）。
@@ -70,7 +69,8 @@ const RESOURCE_LABELS: Readonly<Record<string, string>> = Object.freeze({
 });
 
 export function mapLabelOf(mapKey: MainQuestMapKey): string {
-  return MAP_LABELS[mapKey] ?? mapKey;
+  // 已弃用的外围图一律回落到中央小镇，避免把新手指向不存在的死路目的地。
+  return MAP_LABELS[mapKey] ?? MAP_LABELS.town_hub ?? 'Pythontopia 小镇';
 }
 
 export function npcNameOf(key: string): string {
@@ -94,7 +94,7 @@ function resourceLabelOf(type: string): string {
  *   dialog_complete  → 任务指定 NPC（镇长 / 守矿人 / 船长…）
  *   resource_consumed→ 工坊师傅（对话内开「资源工坊」）
  *   submission       → 教务 Q（对话内开「训练场」）
- *   kc_mastery       → 田老（知识农场浇水）
+ *   kc_mastery       → 教务 Q（训练场多刷题提升掌握进度）
  *   building_visit   → 馆长 Doc（图书馆点位；落点用证据 tile）
  */
 export function resolveQuestGuidance(sub: MainSubQuest): QuestGuidance {
@@ -160,7 +160,7 @@ export function resolveQuestGuidance(sub: MainSubQuest): QuestGuidance {
       tile: null,
       teleport: false,
       openDialog: true,
-      stepText: `找${name}进「训练场」，多刷${kc}的题，把掌握度刷到 ${ev.thresholdScore}`,
+      stepText: `找${name}进「训练场」，多刷${kc}的题，把掌握进度刷到 ${ev.thresholdScore}`,
       ctaText: '去训练场找教务 Q',
     };
   }

@@ -1,6 +1,7 @@
 package com.pythontopia.tutor.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.util.List;
 
@@ -15,9 +16,14 @@ import java.util.List;
  * <p>R-14 看图答疑（B）：可选 {@code images}（截图 / 手写代码图，可带 data URL 前缀，最多 3 张，
  * 仿 Cursor 多图附件）。非空时后端逐张经讯飞「图片理解」转客观描述并入 context，再交
  * deepseek-v4-pro 作答；单图上限约 8MB 字符（≈ 讯飞 4MB base64），缺省则为纯文本提问。
+ *
+ * <p>R-14 即时换讲法（①）：可选 {@code style}（{@code visual}/{@code logical}/{@code trial}）。
+ * 学生点「换讲法」时带上本次显式选择的认知风格，由 {@code TutorService} 注入 profile_brief 并
+ * <b>无视画像置信度门槛</b>，让同一问题立刻按新风格改写当前答案；为空则按画像（门槛内）决定，行为不变。
  */
 public record TutorAskRequest(
     @NotBlank @Size(max = 2000) String question,
     List<String> kcCodes,
     @Size(max = 2000) String context,
-    @Size(max = 3) List<@Size(max = 8_000_000) String> images) {}
+    @Size(max = 3) List<@Size(max = 8_000_000) String> images,
+    @Pattern(regexp = "visual|logical|trial") String style) {}

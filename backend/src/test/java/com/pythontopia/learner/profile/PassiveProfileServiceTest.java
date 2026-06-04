@@ -224,15 +224,50 @@ class PassiveProfileServiceTest {
   }
 
   @Test
-  void testIsSelfEditable_onlyFourSubjectiveDimensions() {
+  void testIsSelfEditable_subjectiveDimensionsIncludeCognitiveStyle() {
     assertThat(service.isSelfEditable("professional_background")).isTrue();
     assertThat(service.isSelfEditable("learning_goal")).isTrue();
     assertThat(service.isSelfEditable("learning_preference")).isTrue();
     assertThat(service.isSelfEditable("emotion_persistence")).isTrue();
+    // #1 学生纠偏阀：cognitive_style 现可被学生自评纠正。
+    assertThat(service.isSelfEditable("cognitive_style")).isTrue();
     assertThat(service.isSelfEditable("knowledge_base")).isFalse();
-    assertThat(service.isSelfEditable("cognitive_style")).isFalse();
     assertThat(service.isSelfEditable("error_pattern")).isFalse();
     assertThat(service.isSelfEditable("practical_ability")).isFalse();
+  }
+
+  @Test
+  void testApplyDimensionUpdate_selfReportPromotesChosenTagToDominant() {
+    // 既有 cognitive_style tags=[visual, logical]，末尾 logical=旧主导。
+    ObjectNode existing = objectMapper.createObjectNode();
+    existing.putObject("cognitive_style").putArray("tags").add("visual").add("logical");
+    when(profileRepository.findDimensions(7L)).thenReturn(Optional.of(existing));
+
+    // 学生纠偏选 visual（自评路径 source=INTERVIEW，tagsAdd=[visual] + 小增量）。
+    DimensionDelta delta = new DimensionDelta(0.05, 1, List.of("visual"), null, "INTERVIEW");
+    DimensionUpdateResult result = service.applyDimensionUpdate(7L, "cognitive_style", delta);
+
+    java.util.List<String> tags = new java.util.ArrayList<>();
+    result.finalDimension().path("tags").forEach(n -> tags.add(n.asText()));
+    // visual 去重后被移到末尾 → 成为 dominant（消费方取末尾 tag），纠偏 decisively 生效。
+    assertThat(tags).containsExactly("logical", "visual");
+    assertThat(result.finalDimension().path("evidence_count").asInt()).isEqualTo(1);
+  }
+
+  @Test
+  void testApplyDimensionUpdate_passiveTagKeepsFirstSeenOrder() {
+    // 被动信号（非 INTERVIEW）保持首见去重：已存在 tag 不移动，保护媒介排序等既有行为。
+    ObjectNode existing = objectMapper.createObjectNode();
+    existing.putObject("learning_preference").putArray("tags").add("video").add("text");
+    when(profileRepository.findDimensions(7L)).thenReturn(Optional.of(existing));
+
+    DimensionDelta delta =
+        new DimensionDelta(0.01, 1, List.of("video"), null, "RESOURCE_FEEDBACK");
+    DimensionUpdateResult result = service.applyDimensionUpdate(7L, "learning_preference", delta);
+
+    java.util.List<String> tags = new java.util.ArrayList<>();
+    result.finalDimension().path("tags").forEach(n -> tags.add(n.asText()));
+    assertThat(tags).containsExactly("video", "text");
   }
 
   @Test

@@ -82,7 +82,7 @@ async function submit(): Promise<void> {
     const verdict = detail.judgeResult?.verdict;
     if (verdict === 'AC') {
       playSfx('sfx_jingle_complete');
-      toast.show('提交通过，KC 掌握度 +0.10。', 'success');
+      toast.show('提交通过，掌握进度 +0.10', 'success');
     } else if (verdict === 'CE') {
       playSfx('sfx_error');
       toast.show('代码静态检查未通过：' + (detail.judgeResult?.failureReason ?? ''), 'error');
@@ -170,8 +170,9 @@ const tutorContext = computed<string>(() => {
         v-if="kcMasteryHint"
         class="mastery-hint"
         data-testid="training-mastery-hint"
+        title="掌握进度：做对题目会涨，达到目标就过关"
       >
-        本题 KC 掌握度：<strong>{{ kcMasteryHint.current }}/100</strong>（做对一题约 +{{ MASTERY_PER_PASS }}）
+        本题知识点掌握进度：<strong>{{ kcMasteryHint.current }}/100</strong>（做对一题约 +{{ MASTERY_PER_PASS }}）
         <template v-if="kcMasteryHint.target !== null">
           · 主线「测」目标 {{ kcMasteryHint.target }}
           <span v-if="kcMasteryHint.remaining">（约再做对 {{ kcMasteryHint.remaining }} 题达标）</span>
@@ -179,7 +180,7 @@ const tutorContext = computed<string>(() => {
         </template>
       </p>
       <p class="warning">
-        Pyodide 即时预览结果不入库；正式提交才会记录到 practice_submission。
+        本机试跑不记分；正式提交才会评分入库
       </p>
     </header>
 
@@ -229,7 +230,7 @@ const tutorContext = computed<string>(() => {
             :disabled="learning.training.phase === 'previewing'"
             @click="preview"
           >
-            即时预览（Pyodide）
+            本机试跑（不记分）
           </PyButton>
           <PyButton
             test-id="submit-button"
@@ -237,7 +238,7 @@ const tutorContext = computed<string>(() => {
             :disabled="learning.training.phase === 'submitting'"
             @click="submit"
           >
-            正式提交（服务端判题）
+            正式提交（评分）
           </PyButton>
         </div>
         <section
@@ -245,7 +246,7 @@ const tutorContext = computed<string>(() => {
           class="preview"
           data-testid="preview-output"
         >
-          <h4>即时预览结果（不入库）</h4>
+          <h4>本机试跑结果（不记分）</h4>
           <pre class="stdout">{{ learning.training.preview.stdout || '(无 stdout)' }}</pre>
           <pre
             v-if="learning.training.preview.stderr"
@@ -258,7 +259,7 @@ const tutorContext = computed<string>(() => {
           class="submission"
           data-testid="submission-result"
         >
-          <h4>正式判题结果</h4>
+          <h4>评分结果</h4>
           <p>
             状态：{{ learning.training.submission.submission.status }} ·
             判定：{{ learning.training.submission.judgeResult?.verdict ?? '未判' }} ·
@@ -294,7 +295,7 @@ const tutorContext = computed<string>(() => {
         variant="secondary"
         @click="toggleTutor"
       >
-        {{ showTutor ? '收起 AI 导学助手 ▴' : '🤖 问 AI 导学助手（带本题上下文，只给思路）▾' }}
+        {{ showTutor ? '收起 AI 助教 ▴' : '🤖 问 AI 助教（只给思路）▾' }}
       </PyButton>
       <div
         v-if="showTutor"

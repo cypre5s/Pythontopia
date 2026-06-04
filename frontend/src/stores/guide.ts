@@ -80,8 +80,8 @@ const WELCOME: GuideMessage = {
   id: 'welcome',
   role: 'assistant',
   content:
-    '我是你的**学习总管**。说一句你的目标（比如「我想学循环」「第 3 章太难了」「这题报错怎么办」），'
-    + '我会帮你拆成「看 → 学 → 练 → 测」的步骤，并直接带你到对应面板。',
+    '我是你的 **AI 助教**。要不要我带你做第 1 章第一步？'
+    + '也可以直接说目标，比如「我想学循环」「这题报错怎么办」。',
   done: true,
 };
 
@@ -173,7 +173,7 @@ export const useGuideStore = defineStore('guide', {
     failAssistant(id: string, message: string): void {
       this.messages = this.messages.map((m) =>
         m.id === id
-          ? { ...m, streaming: false, failed: true, content: m.content || '抱歉，学习总管暂时无法回应，请稍后重试。' }
+          ? { ...m, streaming: false, failed: true, content: m.content || '抱歉，AI 助教暂时没法回应，过一会再试。' }
           : m,
       );
       this.status = 'error';

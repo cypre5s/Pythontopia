@@ -2,18 +2,14 @@
 // R-13 迭代 13：节日 ribbon 横幅，挂在顶部 HUD 下方。
 //
 // 设计要点：
-//   1. 优先显示「今日节日」（重要事件 ribbon 闪 + chime SFX 一次）；
-//   2. 没有今日节日时显示「下一个节日」与倒数 N 天，引导玩家期待；
-//   3. 数据来自 calendar.today.dayIndex + 前端静态 FESTIVALS（后端 V118 seed 对齐）；
+//   1. 只在「今日节日」当天显示（重要事件 ribbon 闪 + chime SFX 一次）；
+//   2. R-14 降负荷：不再常驻显示「距下个节日还有 N 天」的倒数，避免与中央任务列抢注意力；
+//   3. 数据来自 hud.meta.dayIndex + 前端静态 FESTIVALS（后端 V118 seed 对齐）；
 //   4. 一旦后端 WorldFestivalService 暴露 Controller，可以平滑切换为 fetch；
 //   5. 不挤占小地图（minimap 在 top:72px，ribbon 在 top:50px）。
 
 import { computed, ref, watch } from 'vue';
-import {
-  findCurrentFestival,
-  findUpcomingFestival,
-  daysUntilFestival,
-} from '@/data/festivals';
+import { findCurrentFestival } from '@/data/festivals';
 import { useHudStore } from '@stores/hud';
 import { playChime } from '@/composables/useStardewFx';
 
@@ -21,7 +17,6 @@ const hud = useHudStore();
 const today = computed(() => hud.meta.dayIndex);
 
 const current = computed(() => findCurrentFestival(today.value));
-const upcoming = computed(() => findUpcomingFestival(today.value));
 
 const lastChimedDay = ref<number>(-1);
 watch(current, (festival) => {
@@ -31,38 +26,25 @@ watch(current, (festival) => {
   }
 });
 
-const ribbonClass = computed(() => {
-  const season = current.value?.season ?? upcoming.value?.season ?? 'spring';
-  return `festival-ribbon--${season}`;
-});
+const ribbonClass = computed(() => `festival-ribbon--${current.value?.season ?? 'spring'}`);
 </script>
 
 <template>
   <transition name="festival-fade">
     <div
-      v-if="current || upcoming"
+      v-if="current"
       class="festival-ribbon"
       :class="ribbonClass"
       data-testid="festival-ribbon"
       role="status"
       aria-live="polite"
     >
-      <template v-if="current">
-        <span
-          class="festival-ribbon__icon"
-          aria-hidden="true"
-        >{{ current.icon }}</span>
-        <span class="festival-ribbon__label">{{ current.label }}</span>
-        <span class="festival-ribbon__desc">{{ current.description }}</span>
-      </template>
-      <template v-else-if="upcoming">
-        <span
-          class="festival-ribbon__icon"
-          aria-hidden="true"
-        >{{ upcoming.icon }}</span>
-        <span class="festival-ribbon__label">距 {{ upcoming.label }} 还有 {{ daysUntilFestival(today, upcoming) }} 天</span>
-        <span class="festival-ribbon__desc">{{ upcoming.description }}</span>
-      </template>
+      <span
+        class="festival-ribbon__icon"
+        aria-hidden="true"
+      >{{ current.icon }}</span>
+      <span class="festival-ribbon__label">{{ current.label }}</span>
+      <span class="festival-ribbon__desc">{{ current.description }}</span>
     </div>
   </transition>
 </template>

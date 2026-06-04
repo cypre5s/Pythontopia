@@ -24,7 +24,7 @@
     },
     "where_to_start": {
       "id": "where_to_start",
-      "text": "{{profileAdaptive:你的画像显示偏好实践，建议先去北农场让田老带你解锁第一个 KC。 | 你刚来不久，建议先去校园找馆长 Doc 了解课程结构，再回农场动手做。}}",
+      "text": "{{profileAdaptive:你的画像显示偏好实践，建议先去北农场让田老带你解锁第一个 KC。 | 你刚来不久，建议先去校园找馆长 Doc 了解课程结构，再回农场动手做。}}{{styleAdaptive:看课件时可以先看图解和流程图，从整体结构入手。|看课件时可以顺着代码一行行读，先理清每步的逻辑。|看课件时可以边看边在练习区跑一个最小例子，动手验证。}}",
       "conditions": [],
       "choices": [
         { "label": "我懂了", "nextNodeId": null, "effects": [{ "type": "friendship", "delta": 2 }, { "type": "quest_recommend", "questKey": "first_kc_unlock" }] }

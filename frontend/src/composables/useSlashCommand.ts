@@ -4,8 +4,9 @@
  * 设计要点：
  *   - 斜杠命令是「模式」不是「内联引用」：选中后不往文本里插 token，而是抹掉末尾
  *     `/query`、把 forcedIntent 设为对应工具，由调用方渲染成一枚可移除的「工具」徽标。
- *   - 7 个命令 = 问答（ASK，走导师管线）+ 6 类资源（走工坊生成管线）；intent 直接对齐
- *     api/intent.ts 的 IntentKind，6 类资源即 WorkshopResourceType。
+ *   - 8 个命令 = 问答（ASK，走导师管线）+ 6 类资源（走工坊生成管线）+ B站视频（VIDEO，外部
+ *     检索非生成，渲染视频卡片）；intent 直接对齐 api/intent.ts 的 IntentKind，6 类资源即
+ *     WorkshopResourceType。
  *   - 触发/替换正则与文本所有权解耦：text 由 useCoursewareMention 持有，本组合式只读它做
  *     检测、并在选中时写回（剥离 /query），便于和 `@` 共用同一个 textarea。
  *
@@ -20,7 +21,7 @@ export interface SlashCommand {
   token: string;
   label: string;
   hint: string;
-  /** 分组名：答疑 / 生成资源。 */
+  /** 分组名：AI 助教 / 生成资源。 */
   group: string;
   icon: string;
   /** 额外可被 query 命中的别名（英文 / 拼音 / 同义词）。 */
@@ -32,9 +33,10 @@ export interface SlashCommandGroup {
   items: SlashCommand[];
 }
 
-const GROUP_ASK = '答疑';
+const GROUP_ASK = 'AI 助教';
 const GROUP_RESOURCE = '生成资源';
-const GROUP_ORDER = [GROUP_ASK, GROUP_RESOURCE];
+const GROUP_WATCH = '看讲解';
+const GROUP_ORDER = [GROUP_ASK, GROUP_RESOURCE, GROUP_WATCH];
 
 // 单一事实来源：Phase 3 的 WorkshopChat 也从这里取命令表，避免标签 / 图标重复定义。
 export const SLASH_COMMANDS: readonly SlashCommand[] = [
@@ -42,7 +44,7 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
     intent: 'ASK',
     token: '/问答',
     label: '问答',
-    hint: '直接答疑，引用课件证据',
+    hint: '随时提问，附课本依据',
     group: GROUP_ASK,
     icon: '?',
     aliases: ['ask', 'wenda', '答疑', '提问', 'qa'],
@@ -60,7 +62,7 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
     intent: 'MINDMAP',
     token: '/思维导图',
     label: '思维导图',
-    hint: 'Mermaid 文本，浏览器渲染',
+    hint: '自动画知识结构图',
     group: GROUP_RESOURCE,
     icon: '✦',
     aliases: ['mindmap', 'daotu', '导图', '脑图'],
@@ -78,7 +80,7 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
     intent: 'CODE_LAB',
     token: '/代码案例',
     label: '代码案例',
-    hint: '可在 Pyodide 跑通',
+    hint: '能在网页里直接运行',
     group: GROUP_RESOURCE,
     icon: '⚒',
     aliases: ['code', 'codelab', 'daima', '代码', '实操'],
@@ -100,6 +102,15 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
     group: GROUP_RESOURCE,
     icon: '⌘',
     aliases: ['storyboard', 'donghua', '分镜', '故事板'],
+  },
+  {
+    intent: 'VIDEO',
+    token: '/视频',
+    label: 'B站视频',
+    hint: '抓取B站精选讲解视频卡片',
+    group: GROUP_WATCH,
+    icon: '▶',
+    aliases: ['video', 'shipin', 'b站', 'bilibili', '视频', '讲解视频', '哔哩'],
   },
 ];
 

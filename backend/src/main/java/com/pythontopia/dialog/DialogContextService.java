@@ -1,5 +1,6 @@
 package com.pythontopia.dialog;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.pythontopia.auth.domain.UserAccount;
 import com.pythontopia.auth.repository.UserRepository;
 import com.pythontopia.dialog.DialogContextRepository.EnergyRow;
@@ -352,13 +353,16 @@ public class DialogContextService {
     // profile 类型 + gift just given
     LearnerProfileDto profile = profileRepository.findProfile(userId).orElse(null);
     String profileType = inferProfileType(profile);
+    String cognitiveStyle = inferCognitiveStyle(userId);
     boolean giftJustGiven =
         npcKey != null && repository.hasFavoriteGiftRecently(userId, npcKey, GIFT_RECENT_HOURS);
 
-    // 把 profileType 同步暴露到 stats（少数对话直接引用 stats.profileType）
+    // 把 profileType / cognitiveStyle 同步暴露到 stats（少数对话直接引用 stats.* 字面量）
     stats.put("profileType", profileType);
+    stats.put("cognitiveStyle", cognitiveStyle);
 
-    return new DialogContextDto(displayName, profileType, giftJustGiven, Map.copyOf(stats));
+    return new DialogContextDto(
+        displayName, profileType, cognitiveStyle, giftJustGiven, Map.copyOf(stats));
   }
 
   private String resolveDisplayName(Long userId, String fallbackUsername) {
@@ -400,6 +404,50 @@ public class DialogContextService {
       return DialogContextDto.PROFILE_PRACTICAL;
     }
     return DialogContextDto.PROFILE_CAUTIOUS;
+  }
+
+  /**
+   * 三态认知风格推断：读 {@code learner_profile.dimensions} 的 {@code cognitive_style.tags}，取最新/主导
+   * 标签（数组末元素，与 TutorCrew 因材施教取风格的口径一致）并归一化为 {@code visual/logical/trial}；
+   * 无 profile、无 tags、标签不可识别、或 dimensions 列尚未迁移（DataAccessException）均回退 {@code
+   * unknown}。整段防御性吞掉运行时异常，保证 {@code /api/dialog/context} 不因画像缺失而 500。
+   */
+  private String inferCognitiveStyle(Long userId) {
+    try {
+      JsonNode dims = profileRepository.findDimensions(userId).orElse(null);
+      if (dims == null) {
+        return DialogContextDto.STYLE_UNKNOWN;
+      }
+      JsonNode tags = dims.path("cognitive_style").path("tags");
+      if (!tags.isArray() || tags.isEmpty()) {
+        return DialogContextDto.STYLE_UNKNOWN;
+      }
+      // 最新/主导 = 最后追加的 tag（PassiveProfileService 按时间顺序 append）。
+      String latest = tags.get(tags.size() - 1).asText(null);
+      return normalizeCognitiveStyle(latest);
+    } catch (RuntimeException ex) {
+      log.debug("cognitive_style dimensions unavailable for user {}: {}", userId, ex.getMessage());
+      return DialogContextDto.STYLE_UNKNOWN;
+    }
+  }
+
+  /**
+   * 把画像里的 cognitive_style 标签归一化到三态。主用法是 ProbeCatalog / TutorCrew 写入的
+   * {@code visual/logical/trial}；同时容忍设计文档里出现过的别名（verbal-logical、trial-and-error 等），
+   * 不可识别一律 {@code unknown}，避免把脏标签泄露成对话分支。
+   */
+  private static String normalizeCognitiveStyle(String tag) {
+    if (tag == null || tag.isBlank()) {
+      return DialogContextDto.STYLE_UNKNOWN;
+    }
+    String t = tag.trim().toLowerCase(Locale.ROOT);
+    return switch (t) {
+      case "visual" -> DialogContextDto.STYLE_VISUAL;
+      case "logical", "verbal", "verbal-logical", "verbal_logical" -> DialogContextDto.STYLE_LOGICAL;
+      case "trial", "trial-and-error", "trial_and_error", "trialanderror" ->
+          DialogContextDto.STYLE_TRIAL;
+      default -> DialogContextDto.STYLE_UNKNOWN;
+    };
   }
 
   private static String formatSignedInt(int value) {

@@ -1,90 +1,115 @@
 <script setup lang="ts">
-// ③玩中建画像：世界内认知风格探针卡（中性、可跳过、低风险）。
-//
-// 触发：watch 主线当前子任务，当其处于「看」阶段（mainSubQuestPhase==='watch'）
-// 且该探针尚未回答时弹出。首发只接 cog_intro → cognitive_style（visual/logical/trial）。
+// ③玩中建画像：世界内探针卡（中性、可跳过、低风险）。数据驱动 PROBE_CATALOG，
+// 一张组件承载多类探针，但任一时刻只展示一张：
+//   - cog_intro（trigger 'watch-phase'）：进入主线「看」阶段时弹 → cognitive_style；
+//   - fail_react（trigger 'requested'）：练习失败后由 learning.submitToServer 置 requested
+//     标记（失败发生在训练页、探针卡在世界页，借 store 跨页传信号），玩家回到世界即弹
+//     → emotion_persistence。
 // 设计约束（见 docs/plans/2026-06-04-profile-loop-trilogy-design.md §4.1）：
-//   - 三选项美术等价、措辞中性、无优劣暗示；可随时跳过；
+//   - 选项美术等价、措辞中性、无优劣暗示；可随时跳过；
 //   - 提交走 fire-and-forget，失败静默降级，绝不阻塞玩家主线。
-// 仅依赖 probe/mainQuest store（只读主线），不改 dialog/mainQuest 状态。
-import { ref, watch } from 'vue';
+// 仅依赖 probe/mainQuest/dialog store（只读主线），不改 dialog/mainQuest 状态。
+import { computed, ref, watch } from 'vue';
 import { useMainQuestStore } from '@stores/mainQuest';
 import { useProbeStore } from '@stores/probe';
+import { useDialogStore } from '@stores/dialog';
 import { mainSubQuestPhase } from '@/data/mainQuests';
+import { PROBE_CATALOG, REQUESTED_PROBES } from '@/data/probeCatalog';
 
-interface ProbeOption {
-  /** 提交给后端的 choiceId（与 cognitive_style 取值对齐）。 */
-  id: string;
-  label: string;
-}
+// C4：首次引导（帮助弹窗 + 镇长对话）期间由父级 WorldPage 置 hold，避免探针叠成第三层弹窗。
+const props = withDefaults(defineProps<{ hold?: boolean }>(), { hold: false });
 
-const PROBE_KEY = 'cog_intro';
-
-// 视觉等价的三种「入门顺手度」，仅描述偏好、不暗示优劣。
-const OPTIONS: readonly ProbeOption[] = [
-  { id: 'visual', label: '先看图解' },
-  { id: 'logical', label: '先读代码' },
-  { id: 'trial', label: '先跑一个最小例子' },
-];
+// 进入主线「看」阶段触发的探针 key（首发只有 cog_intro）。
+const WATCH_PROBE_KEY = 'cog_intro';
 
 const mainQuest = useMainQuestStore();
 const probe = useProbeStore();
+const dialog = useDialogStore();
 
-const visible = ref(false);
+// 当前正在展示的探针 key（一次只展示一张卡）；null 表示无卡。
+const activeKey = ref<string | null>(null);
+const activeProbe = computed(() =>
+  activeKey.value ? PROBE_CATALOG[activeKey.value] ?? null : null,
+);
 
-function maybeShow(): void {
-  const quest = mainQuest.currentSubQuest;
-  if (!quest) return;
-  if (mainSubQuestPhase(quest).phase !== 'watch') return;
-  if (!probe.shouldShow(PROBE_KEY)) return;
-  probe.markShown(PROBE_KEY);
-  visible.value = true;
+function show(key: string): void {
+  probe.markShown(key);
+  activeKey.value = key;
 }
 
-// 主线推进到新的子任务时复评一次；immediate 让进入世界即评估首个「看」阶段任务。
-watch(() => mainQuest.currentSubQuest, maybeShow, { immediate: true });
+// 统一复评入口：各触发源都走这里。一次只弹一张；引导期（hold）/对话在前台时先压住。
+function reevaluate(): void {
+  if (activeKey.value) return;
+  if (props.hold) return;
+  if (dialog.visible) return;
+  // 1) 外部事件请求的探针优先（如练习失败 → fail_react）。
+  for (const def of REQUESTED_PROBES) {
+    if (probe.isRequested(def.key) && probe.shouldShow(def.key)) {
+      show(def.key);
+      return;
+    }
+  }
+  // 2) 主线「看」阶段触发的探针（cog_intro）。
+  const quest = mainQuest.currentSubQuest;
+  if (quest && mainSubQuestPhase(quest).phase === 'watch' && probe.shouldShow(WATCH_PROBE_KEY)) {
+    show(WATCH_PROBE_KEY);
+  }
+}
+
+// 主线推进 / 引导结束 / 对话关闭 / 探针被请求后都复评一次。
+// immediate：进入世界即评估首个「看」阶段任务，并兜底「回到世界时已有 requested 探针待弹」。
+watch(() => mainQuest.currentSubQuest, reevaluate, { immediate: true });
+watch(() => props.hold, reevaluate);
+watch(() => dialog.visible, reevaluate);
+// requested 在已挂载期间被置位时（如停留世界内时收到失败信号）也即时复评。
+watch(() => probe.requested.size, reevaluate);
 
 function choose(choiceId: string): void {
+  const key = activeKey.value;
+  if (!key) return;
   // 先提交（fire-and-forget，store 内部吞错 + 标记已答），再立即收卡，不阻塞玩家。
-  void probe.submit(PROBE_KEY, choiceId);
-  visible.value = false;
+  void probe.submit(key, choiceId);
+  activeKey.value = null;
 }
 
-function skip(): void {
-  probe.markAnswered(PROBE_KEY);
-  visible.value = false;
+function dismiss(): void {
+  const key = activeKey.value;
+  if (!key) return;
+  probe.markAnswered(key);
+  activeKey.value = null;
 }
 </script>
 
 <template>
   <div
-    v-if="visible"
+    v-if="activeProbe"
     class="pyt-probe"
     role="dialog"
     aria-modal="true"
     aria-labelledby="pyt-probe-title"
     data-testid="probe-card"
+    :data-probe-key="activeProbe.key"
   >
     <div
       class="pyt-probe__backdrop"
-      @click="skip"
+      @click="dismiss"
     />
     <div class="pyt-probe__panel">
       <p class="pyt-probe__eyebrow">
-        悄悄话 · 随时可跳过
+        {{ activeProbe.eyebrow }}
       </p>
       <h2
         id="pyt-probe-title"
         class="pyt-probe__title"
       >
-        初次进镇 · 你更想先怎么入门？
+        {{ activeProbe.title }}
       </h2>
       <p class="pyt-probe__lede">
-        没有标准答案，选此刻最顺手的那种就好，小镇会照你的节奏来。
+        {{ activeProbe.lede }}
       </p>
       <div class="pyt-probe__options">
         <button
-          v-for="opt in OPTIONS"
+          v-for="opt in activeProbe.options"
           :key="opt.id"
           type="button"
           class="pyt-probe__option"
@@ -98,9 +123,9 @@ function skip(): void {
         type="button"
         class="pyt-probe__skip"
         data-testid="probe-skip"
-        @click="skip"
+        @click="dismiss"
       >
-        跳过
+        {{ activeProbe.dismissLabel }}
       </button>
     </div>
   </div>

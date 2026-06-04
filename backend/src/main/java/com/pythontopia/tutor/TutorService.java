@@ -42,7 +42,7 @@ public class TutorService {
   public SseEmitter ask(Long userId, TutorAskRequest request) {
     SseEmitter emitter = new SseEmitter(120_000L);
 
-    String profileBrief = resolveProfileBrief(userId);
+    String profileBrief = resolveProfileBrief(userId, request.style());
 
     graphClient.askStream(
         userId,
@@ -68,33 +68,49 @@ public class TutorService {
     eventPublisher.publishEvent(new LearningEvent.TutorStyleEngaged(userId, style, kcCode));
   }
 
-  /** 取学生画像（认知风格 + 易错点）组装 profile_brief；任何失败降级为空串（=纯文本答疑）。 */
-  private String resolveProfileBrief(Long userId) {
+  /**
+   * 取学生画像（认知风格 + 易错点）组装 profile_brief；任何失败降级（仅显式 style 仍生效）。
+   *
+   * @param styleOverride 学生本次显式选择的讲法（{@code visual}/{@code logical}/{@code trial}），可空；
+   *     非空时无视画像置信度门槛，用于「换讲法即时改写当前答案」。
+   */
+  private String resolveProfileBrief(Long userId, String styleOverride) {
     try {
-      return buildProfileBrief(passiveProfileService.getDimensions(userId));
+      return buildProfileBrief(passiveProfileService.getDimensions(userId), styleOverride);
     } catch (RuntimeException ex) {
       log.warn("resolveProfileBrief degraded for user {}: {}", userId, ex.getMessage());
-      return "";
+      // 画像取数失败时，仍尊重学生的显式换讲法选择（无画像维度，仅靠 override）。
+      return buildProfileBrief(null, styleOverride);
     }
   }
 
+  /** 兼容旧签名：无显式换讲法时，按画像（含置信度门槛）组装 profile_brief。 */
+  static String buildProfileBrief(List<ProfileDimensionDto> dims) {
+    return buildProfileBrief(dims, null);
+  }
+
   /**
-   * 由画像维度组装答疑 profile_brief：仅在 cognitive_style 置信度≥0.3 时给出认知风格（防幻觉，
-   * 信号不足不贴标签）；易错点取 error_pattern 最近至多 3 个 tag。
+   * 由画像维度组装答疑 profile_brief。认知风格优先级：<b>显式选择 {@code styleOverride}</b>（学生点
+   * 「换讲法」，无视置信度门槛）→ 否则取 cognitive_style 且置信度≥0.3（防幻觉，信号不足不贴标签）。
+   * 易错点取 error_pattern 最近至多 3 个 tag，无论是否有 override 都照常附带。
    * 格式："认知风格: &lt;tag&gt;; 易错: &lt;a,b,c&gt;"，无信号则空串。
    */
-  static String buildProfileBrief(List<ProfileDimensionDto> dims) {
-    if (dims == null) {
-      return "";
-    }
-    String style = null;
+  static String buildProfileBrief(List<ProfileDimensionDto> dims, String styleOverride) {
+    // 显式换讲法：学生的主动选择，绕过画像置信度门槛。
+    String style =
+        (styleOverride != null && !styleOverride.isBlank()) ? styleOverride.trim() : null;
     List<String> errTags = List.of();
-    for (ProfileDimensionDto d : dims) {
-      if ("cognitive_style".equals(d.key()) && d.confidence() >= 0.3 && !d.tags().isEmpty()) {
-        style = d.tags().get(d.tags().size() - 1);
-      } else if ("error_pattern".equals(d.key()) && !d.tags().isEmpty()) {
-        List<String> t = d.tags();
-        errTags = t.size() > 3 ? t.subList(t.size() - 3, t.size()) : t;
+    if (dims != null) {
+      for (ProfileDimensionDto d : dims) {
+        if (style == null
+            && "cognitive_style".equals(d.key())
+            && d.confidence() >= 0.3
+            && !d.tags().isEmpty()) {
+          style = d.tags().get(d.tags().size() - 1);
+        } else if ("error_pattern".equals(d.key()) && !d.tags().isEmpty()) {
+          List<String> t = d.tags();
+          errTags = t.size() > 3 ? t.subList(t.size() - 3, t.size()) : t;
+        }
       }
     }
     List<String> parts = new ArrayList<>();

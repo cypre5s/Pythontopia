@@ -2,7 +2,7 @@
 // 世界主页面：全屏沉浸式像素 RPG，HUD/面板以 fixed 悬浮叠加。
 defineOptions({ name: 'WorldPage' });
 
-import { computed, onBeforeUnmount, onMounted, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import FirstTimeHelpModal from '@/components/world/FirstTimeHelpModal.vue';
 import ProbeCard from '@/components/world/ProbeCard.vue';
 import MoodOverlay from '@/components/world/MoodOverlay.vue';
@@ -36,12 +36,22 @@ const seasonClass = computed<string>(() => `world-page--season-${calendar.today?
 const FIRST_VISIT_FLAG = 'pyt_first_world_visit';
 const HELP_FLAG = 'pyt_helped_v1';
 const WELCOME_DELAY_MS = 2000;
+// 镇长对话弹出后再多压制几秒探针，给新手留出读对话的时间（C4 不叠弹）。
+const WELCOME_HOLD_GRACE_MS = 6000;
 
 // 首次进入时，镇长 Py 的「发任务」对话要等新手帮助弹窗关闭后再弹，避免叠加。
 let pendingWelcome = false;
+// 引导期间（帮助弹窗 / 镇长对话）压制世界内探针卡，保证一次只有一条引导线（C4）。
+const onboardingHold = ref(false);
+let welcomeHoldTimer: number | null = null;
 
 function openWelcomeDialog(delayMs: number): void {
+  onboardingHold.value = true;
   window.setTimeout(() => openNpcDialog('mayor_py'), delayMs);
+  if (welcomeHoldTimer !== null) window.clearTimeout(welcomeHoldTimer);
+  welcomeHoldTimer = window.setTimeout(() => {
+    onboardingHold.value = false;
+  }, delayMs + WELCOME_HOLD_GRACE_MS);
 }
 
 function onHelpDismissed(): void {
@@ -77,6 +87,8 @@ onMounted(async () => {
       if (window.localStorage.getItem(HELP_FLAG)) {
         openWelcomeDialog(800);
       } else {
+        // 帮助弹窗即将显示：先压制探针，待 dismiss 后再串接镇长对话。
+        onboardingHold.value = true;
         pendingWelcome = true;
       }
       window.localStorage.setItem(FIRST_VISIT_FLAG, '1');
@@ -89,6 +101,10 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+  if (welcomeHoldTimer !== null) {
+    window.clearTimeout(welcomeHoldTimer);
+    welcomeHoldTimer = null;
+  }
   document.removeEventListener('fullscreenchange', onFullscreenChange);
 });
 </script>
@@ -110,7 +126,7 @@ onBeforeUnmount(() => {
     <OperationHints v-if="false" />
     <DialogModal />
     <FirstTimeHelpModal @dismissed="onHelpDismissed" />
-    <ProbeCard />
+    <ProbeCard :hold="onboardingHold" />
     <MoodOverlay />
     <!-- HUD 套件 -->
     <HudShell />

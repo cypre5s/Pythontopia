@@ -52,7 +52,7 @@ const PANEL_LABEL: Record<string, string> = {
   library: '去书房',
   training: '去训练场',
   workshop: '去工坊',
-  tutor: '问 AI 导师',
+  tutor: '找 AI 助教',
   problems: '去题库',
   examples: '看例题',
   review: '去复盘厅',
@@ -101,7 +101,7 @@ const suggestions = computed<string[]>(() => {
   if (last?.needsUserInput) {
     return ['从当前章开始', '想先打好概念', '想多做题练手', '偏视频/图解'];
   }
-  return ['这步太难了', '换个例子', '跳过这步', '下一步做什么？'];
+  return ['想看视频讲解', '这步太难了', '换个例子', '下一步做什么？'];
 });
 
 async function scrollToBottom(): Promise<void> {
@@ -172,7 +172,7 @@ async function send(raw: string): Promise<void> {
   if (sse.result.value) {
     guide.finalizeAssistant(aid, sse.result.value, sse.tokens.value);
   } else if (sse.status.value === 'error' || sse.error.value) {
-    guide.failAssistant(aid, sse.error.value?.message ?? '学习总管请求失败');
+    guide.failAssistant(aid, sse.error.value?.message ?? 'AI 助教请求失败');
   } else {
     // 流结束但只收到 token（无结构化 result）：用累计文本兜底定稿。
     guide.finalizeAssistant(
@@ -231,10 +231,10 @@ function goToPanel(panel: string | null): void {
     <section
       class="guide-card"
       role="dialog"
-      aria-label="伴学向导 · 学习总管"
+      aria-label="AI 助教"
     >
       <header class="guide-head">
-        <span class="guide-head__title">✧ 伴学向导 · 学习总管</span>
+        <span class="guide-head__title">✧ AI 助教</span>
         <button
           type="button"
           class="guide-head__close"
@@ -275,7 +275,7 @@ function goToPanel(panel: string | null): void {
             <span
               v-else-if="m.streaming"
               class="guide-typing"
-            >学习总管思考中 ▌</span>
+            >AI 助教思考中 ▌</span>
 
             <ol
               v-if="m.plan && m.plan.length"
@@ -362,7 +362,7 @@ function goToPanel(panel: string | null): void {
           v-model="inputText"
           class="guide-input__field"
           rows="2"
-          :placeholder="guide.isStreaming ? '学习总管回复中…' : '说说你的目标 / 困惑（Enter 发送，Shift+Enter 换行）'"
+          :placeholder="guide.isStreaming ? 'AI 助教回复中…' : '说说你的目标 / 困惑（Enter 发送，Shift+Enter 换行）'"
           :disabled="guide.isStreaming"
           data-testid="guide-input"
           @keydown="onKeydown"

@@ -84,6 +84,7 @@ const templateContext = computed(() => {
   return createDialogContext({
     playerName: ctx?.playerName ?? session.displayName,
     profileType: ctx?.profileType ?? 'cautious',
+    cognitiveStyle: ctx?.cognitiveStyle ?? 'unknown',
     giftJustGiven: ctx?.giftJustGiven ?? false,
     stats: ctx?.stats ?? {},
   });

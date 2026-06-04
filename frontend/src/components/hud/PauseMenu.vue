@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** ESC 暂停菜单：8 功能入口 + 快捷键速查 + 退出确认。 */
+/** ESC 暂停菜单：4 分组入口（继续 / 学习 / 我 / 系统）+ 快捷键速查 + 退出确认。 */
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useGameSettingsStore } from '@stores/gameSettings';
@@ -29,161 +29,120 @@ interface MenuItem {
   action: () => void;
 }
 
+interface MenuSection {
+  id: string;
+  title: string;
+  items: MenuItem[];
+}
+
 function close(): void {
   showHelp.value = false;
   showQuitConfirm.value = false;
   settings.closePauseMenu();
 }
 
-const menuItems: MenuItem[] = [
+// R-14 降负荷：把扁平 17 项拆进 4 个分组（继续 / 学习 / 我 / 系统），减少一屏认知负荷。
+function go(path: string): void {
+  close();
+  void router.push(path);
+}
+
+const menuSections: MenuSection[] = [
   {
     id: 'resume',
-    icon: `${ICON_BASE}/home.svg`,
-    label: '继续游戏',
-    action: () => close(),
+    title: '继续',
+    items: [
+      { id: 'resume', icon: `${ICON_BASE}/home.svg`, label: '继续游戏', action: () => close() },
+    ],
   },
   {
-    id: 'save',
-    icon: `${ICON_BASE}/save.svg`,
-    label: '存档',
-    action: () => {
-      toast.show('已保存', 'success');
-    },
+    id: 'learn',
+    title: '学习',
+    items: [
+      { id: 'library', icon: `${ICON_BASE}/book-open.svg`, label: '课程图书馆', action: () => go('/library') },
+      { id: 'training', icon: `${ICON_BASE}/shield.svg`, label: '训练场', action: () => go('/training') },
+      { id: 'workshop-nav', icon: `${ICON_BASE}/notebook.svg`, label: '百晓工坊', action: () => go('/workshop') },
+      { id: 'review', icon: `${ICON_BASE}/scroll-horizontal.svg`, label: '复盘大厅', action: () => go('/review-hall') },
+      { id: 'arena', icon: `${ICON_BASE}/flag.svg`, label: '闯关竞技场', action: () => go('/arena/1') },
+      { id: 'problems', icon: `${ICON_BASE}/book-open.svg`, label: '题目列表', action: () => go('/problems') },
+      { id: 'examples', icon: `${ICON_BASE}/notebook.svg`, label: '例题列表', action: () => go('/examples') },
+      { id: 'tutor', icon: `${ICON_BASE}/save.svg`, label: 'AI 助教', action: () => go('/tutor') },
+    ],
   },
   {
-    id: 'settings',
-    icon: `${ICON_BASE}/notebook.svg`,
-    label: '设置',
-    action: () => {
-      close();
-      hud.openSettings();
-    },
+    id: 'me',
+    title: '我',
+    items: [
+      { id: 'profile-nav', icon: `${ICON_BASE}/shield.svg`, label: '我的画像', action: () => go('/profile') },
+      {
+        id: 'quest',
+        icon: `${ICON_BASE}/flag.svg`,
+        label: '任务日志',
+        action: () => {
+          close();
+          mainQuest.togglePanel();
+        },
+      },
+      {
+        id: 'skill',
+        icon: `${ICON_BASE}/shield.svg`,
+        label: '技能',
+        action: () => {
+          close();
+          hud.toggleSlot('skill');
+        },
+      },
+    ],
   },
   {
-    id: 'map',
-    icon: `${ICON_BASE}/map-pin.svg`,
-    label: '大地图',
-    action: () => {
-      close();
-      hud.toggleSlot('map');
-    },
-  },
-  {
-    id: 'quest',
-    icon: `${ICON_BASE}/flag.svg`,
-    label: '任务日志',
-    action: () => {
-      close();
-      mainQuest.togglePanel();
-    },
-  },
-  {
-    id: 'profile',
-    icon: `${ICON_BASE}/shield.svg`,
-    label: '角色画像',
-    action: () => {
-      close();
-      hud.toggleSlot('skill');
-    },
-  },
-  {
-    id: 'library',
-    icon: `${ICON_BASE}/book-open.svg`,
-    label: '课程图书馆',
-    action: () => {
-      close();
-      void router.push('/library');
-    },
-  },
-  {
-    id: 'arena',
-    icon: `${ICON_BASE}/flag.svg`,
-    label: '闯关竞技场',
-    action: () => {
-      close();
-      void router.push('/arena/1');
-    },
-  },
-  {
-    id: 'workshop-nav',
-    icon: `${ICON_BASE}/notebook.svg`,
-    label: '百晓工坊',
-    action: () => {
-      close();
-      void router.push('/workshop');
-    },
-  },
-  {
-    id: 'training',
-    icon: `${ICON_BASE}/shield.svg`,
-    label: '训练场',
-    action: () => {
-      close();
-      void router.push('/training');
-    },
-  },
-  {
-    id: 'tutor',
-    icon: `${ICON_BASE}/save.svg`,
-    label: 'AI 导师',
-    action: () => {
-      close();
-      void router.push('/tutor');
-    },
-  },
-  {
-    id: 'profile-nav',
-    icon: `${ICON_BASE}/shield.svg`,
-    label: '我的画像',
-    action: () => {
-      close();
-      void router.push('/profile');
-    },
-  },
-  {
-    id: 'review',
-    icon: `${ICON_BASE}/scroll-horizontal.svg`,
-    label: '复盘大厅',
-    action: () => {
-      close();
-      void router.push('/review-hall');
-    },
-  },
-  {
-    id: 'problems',
-    icon: `${ICON_BASE}/book-open.svg`,
-    label: '题目列表',
-    action: () => {
-      close();
-      void router.push('/problems');
-    },
-  },
-  {
-    id: 'examples',
-    icon: `${ICON_BASE}/notebook.svg`,
-    label: '例题列表',
-    action: () => {
-      close();
-      void router.push('/examples');
-    },
-  },
-  {
-    id: 'help',
-    icon: `${ICON_BASE}/book-open.svg`,
-    label: '操作帮助',
-    action: () => {
-      showHelp.value = !showHelp.value;
-      showQuitConfirm.value = false;
-    },
-  },
-  {
-    id: 'quit',
-    icon: `${ICON_BASE}/scroll-horizontal.svg`,
-    label: '返回主菜单',
-    action: () => {
-      showQuitConfirm.value = true;
-      showHelp.value = false;
-    },
+    id: 'system',
+    title: '系统',
+    items: [
+      {
+        id: 'save',
+        icon: `${ICON_BASE}/save.svg`,
+        label: '存档',
+        action: () => {
+          toast.show('已保存', 'success');
+        },
+      },
+      {
+        id: 'map',
+        icon: `${ICON_BASE}/map-pin.svg`,
+        label: '大地图',
+        action: () => {
+          close();
+          hud.toggleSlot('map');
+        },
+      },
+      {
+        id: 'settings',
+        icon: `${ICON_BASE}/notebook.svg`,
+        label: '设置',
+        action: () => {
+          close();
+          hud.openSettings();
+        },
+      },
+      {
+        id: 'help',
+        icon: `${ICON_BASE}/book-open.svg`,
+        label: '操作帮助',
+        action: () => {
+          showHelp.value = !showHelp.value;
+          showQuitConfirm.value = false;
+        },
+      },
+      {
+        id: 'quit',
+        icon: `${ICON_BASE}/scroll-horizontal.svg`,
+        label: '返回主菜单',
+        action: () => {
+          showQuitConfirm.value = true;
+          showHelp.value = false;
+        },
+      },
+    ],
   },
 ];
 
@@ -251,16 +210,25 @@ onUnmounted(() => {
         </div>
 
         <div class="pause-menu">
-          <button
-            v-for="item in menuItems"
-            :key="item.id"
-            class="pause-item"
-            :data-testid="`pause-${item.id}`"
-            @click="onMenuClick(item)"
+          <section
+            v-for="section in menuSections"
+            :key="section.id"
+            class="pause-section"
           >
-            <img :src="item.icon" :alt="item.label" class="pause-item__icon-img" aria-hidden="true">
-            <span class="pause-item__label">{{ item.label }}</span>
-          </button>
+            <h2 class="pause-section__title">{{ section.title }}</h2>
+            <div class="pause-section__items">
+              <button
+                v-for="item in section.items"
+                :key="item.id"
+                class="pause-item"
+                :data-testid="`pause-${item.id}`"
+                @click="onMenuClick(item)"
+              >
+                <img :src="item.icon" :alt="item.label" class="pause-item__icon-img" aria-hidden="true">
+                <span class="pause-item__label">{{ item.label }}</span>
+              </button>
+            </div>
+          </section>
         </div>
 
         <!-- 快捷键速查卡 -->
@@ -342,8 +310,32 @@ onUnmounted(() => {
 .pause-menu {
   display: flex;
   flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.pause-section {
+  display: flex;
+  flex-direction: column;
   gap: 6px;
   width: 100%;
+}
+
+.pause-section__title {
+  width: 280px;
+  margin: 0 auto;
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-align: left;
+  color: var(--pyt-text-secondary);
+  border-bottom: 1px solid var(--pyt-panel-border-dark);
+  padding-bottom: 3px;
+}
+
+.pause-section__items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .pause-item {
@@ -473,7 +465,9 @@ onUnmounted(() => {
   }
   .pause-title { font-size: 18px; }
   .pause-player { font-size: 11px; margin-bottom: 2px; }
-  .pause-menu { gap: 3px; }
+  .pause-menu { gap: 6px; }
+  .pause-section { gap: 3px; }
+  .pause-section__title { width: 240px; font-size: 10px; padding-bottom: 1px; }
   .pause-item {
     width: 240px;
     padding: 5px 12px;

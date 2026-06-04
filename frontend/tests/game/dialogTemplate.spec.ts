@@ -85,6 +85,54 @@ describe('renderDialogText', () => {
     ).toBe('你还在第 3 章');
   });
 
+  it('picks the visual branch of styleAdaptive when cognitiveStyle is visual', () => {
+    const ctx = createDialogContext({ cognitiveStyle: 'visual' });
+    expect(renderDialogText('{{styleAdaptive:看图解|读代码|跑例子}}', ctx)).toBe('看图解');
+  });
+
+  it('picks the logical branch of styleAdaptive when cognitiveStyle is logical', () => {
+    const ctx = createDialogContext({ cognitiveStyle: 'logical' });
+    expect(renderDialogText('{{styleAdaptive:看图解|读代码|跑例子}}', ctx)).toBe('读代码');
+  });
+
+  it('picks the trial branch of styleAdaptive when cognitiveStyle is trial', () => {
+    const ctx = createDialogContext({ cognitiveStyle: 'trial' });
+    expect(renderDialogText('{{styleAdaptive:看图解|读代码|跑例子}}', ctx)).toBe('跑例子');
+  });
+
+  it('falls back to the first (visual) styleAdaptive branch when cognitiveStyle is unknown', () => {
+    const unknown = createDialogContext({ cognitiveStyle: 'unknown' });
+    expect(renderDialogText('{{styleAdaptive:看图解|读代码|跑例子}}', unknown)).toBe('看图解');
+    // 未提供 cognitiveStyle 时 createDialogContext 默认 'unknown'，同样回退首段。
+    const omitted = createDialogContext({});
+    expect(renderDialogText('{{styleAdaptive:看图解|读代码|跑例子}}', omitted)).toBe('看图解');
+    // 非法风格值同样兜底首段，不泄露占位符。
+    const weird = createDialogContext({ cognitiveStyle: 'kinesthetic' });
+    expect(renderDialogText('{{styleAdaptive:看图解|读代码|跑例子}}', weird)).toBe('看图解');
+  });
+
+  it('falls back to the visual branch when the chosen styleAdaptive branch is empty', () => {
+    const ctx = createDialogContext({ cognitiveStyle: 'logical' });
+    expect(renderDialogText('{{styleAdaptive:看图解||跑例子}}', ctx)).toBe('看图解');
+  });
+
+  it('resolves nested stats inside a styleAdaptive branch', () => {
+    const ctx = createDialogContext({
+      cognitiveStyle: 'logical',
+      stats: { currentChapterOrder: '2' },
+    });
+    expect(
+      renderDialogText('{{styleAdaptive:先看图|顺着第 {{stats.currentChapterOrder}} 章代码读|先跑例子}}', ctx),
+    ).toBe('顺着第 2 章代码读');
+  });
+
+  it('keeps profileAdaptive working when styleAdaptive is also present (back-compat)', () => {
+    const ctx = createDialogContext({ profileType: 'practical', cognitiveStyle: 'trial' });
+    expect(
+      renderDialogText('{{profileAdaptive:先动手|先看课件}}，{{styleAdaptive:看图|读码|跑例}}', ctx),
+    ).toBe('先动手，跑例');
+  });
+
   it('returns empty string for empty input', () => {
     const ctx = createDialogContext({});
     expect(renderDialogText('', ctx)).toBe('');
@@ -117,6 +165,7 @@ describe('createDialogContext', () => {
     const ctx = createDialogContext({});
     expect(ctx.playerName).toBe('学习者');
     expect(ctx.profileType).toBe('cautious');
+    expect(ctx.cognitiveStyle).toBe('unknown');
     expect(ctx.giftJustGiven).toBe(false);
     expect(ctx.stats).toEqual({});
   });
@@ -125,11 +174,13 @@ describe('createDialogContext', () => {
     const ctx = createDialogContext({
       playerName: '阿杰',
       profileType: 'practical',
+      cognitiveStyle: 'logical',
       giftJustGiven: true,
       stats: { foo: 'bar' },
     });
     expect(ctx.playerName).toBe('阿杰');
     expect(ctx.profileType).toBe('practical');
+    expect(ctx.cognitiveStyle).toBe('logical');
     expect(ctx.giftJustGiven).toBe(true);
     expect(ctx.stats).toEqual({ foo: 'bar' });
   });

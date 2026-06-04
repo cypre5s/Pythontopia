@@ -60,4 +60,43 @@ describe('probe store', () => {
     expect(store.answered.has('cog_intro')).toBe(true);
     expect(persistedAnswered()).toContain('cog_intro');
   });
+
+  // ③ fail_react 探针：练习失败 → emotion_persistence（retry/hint/skip）。
+  it('request() marks a probe as requested without affecting shouldShow gating', () => {
+    const store = useProbeStore();
+    expect(store.isRequested('fail_react')).toBe(false);
+    store.request('fail_react');
+    expect(store.isRequested('fail_react')).toBe(true);
+    // request 只是触发信号，本身不消费可弹资格。
+    expect(store.shouldShow('fail_react')).toBe(true);
+  });
+
+  it.each(['retry', 'hint', 'skip'])(
+    'submit() maps the fail_react choice "%s" verbatim then marks answered + persists',
+    async (choiceId) => {
+      const store = useProbeStore();
+      await store.submit('fail_react', choiceId);
+      expect(submitProbe).toHaveBeenCalledTimes(1);
+      expect(submitProbe).toHaveBeenCalledWith('fail_react', choiceId);
+      expect(store.answered.has('fail_react')).toBe(true);
+      expect(persistedAnswered()).toContain('fail_react');
+      expect(store.shouldShow('fail_react')).toBe(false);
+    },
+  );
+
+  it('submit("fail_react", ...) stays fail-silent when the API rejects', async () => {
+    vi.mocked(submitProbe).mockRejectedValueOnce(new Error('PROBE_INVALID'));
+    const store = useProbeStore();
+    await expect(store.submit('fail_react', 'skip')).resolves.toBeUndefined();
+    expect(store.answered.has('fail_react')).toBe(true);
+    expect(persistedAnswered()).toContain('fail_react');
+  });
+
+  it('an already answered fail_react is never re-shown even after request()', () => {
+    const store = useProbeStore();
+    store.markAnswered('fail_react');
+    store.request('fail_react');
+    expect(store.isRequested('fail_react')).toBe(true);
+    expect(store.shouldShow('fail_react')).toBe(false);
+  });
 });

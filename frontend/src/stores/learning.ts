@@ -118,6 +118,22 @@ function notifyMoodRefresh(): void {
   });
 }
 
+// ③玩中建画像：练习失败后请求 fail_react 探针（emotion_persistence 行为信号）。
+// 与 notifyMoodRefresh 同构：动态 import 解耦，避免 learning ↔ probe 静态互依；probe store
+// 仅置 requested 标记，由世界内 ProbeCard 监听弹出（失败发生在训练页、探针卡在世界页，
+// 借 store 跨页传信号）。fire-and-forget、失败静默，绝不阻塞提交结果展示——最不侵入：
+// 仅 submitToServer 失败分支一处调用。
+function notifyProbeRequest(probeKey: string): void {
+  if (typeof window === 'undefined') return;
+  void import('@stores/probe').then((mod) => {
+    try {
+      mod.useProbeStore().request(probeKey);
+    } catch {
+      /* probe store 不可用时静默 */
+    }
+  });
+}
+
 // P0-c：掌握度快照刷新后，联动主线 kc_mastery「测」子任务。
 // 后端 masteryScore 为 0..1；onMasteryReached 阈值（mainQuests thresholdScore）为 0..100，
 // 故乘 100 归一到同一标度后再比较。
@@ -617,6 +633,14 @@ export const useLearningStore = defineStore('learning', {
           } catch {
             /* 掌握度刷新失败不阻断提交结果展示 */
           }
+        } else if (
+          // ③玩中建画像：服务端判题为「失败」（FAILED/ERROR 或有非 AC 判定）→ 请求 fail_react
+          // 探针。仅置标记、不阻塞；排除 PENDING/RUNNING（尚未判定）误触。
+          detail.submission.status === 'FAILED' ||
+          detail.submission.status === 'ERROR' ||
+          (detail.judgeResult !== null && detail.judgeResult.verdict !== 'AC')
+        ) {
+          notifyProbeRequest('fail_react');
         }
         return detail;
       } catch (error) {

@@ -22,6 +22,7 @@ from pythontopia_graph.routes.evaluation import router as evaluation_router
 from pythontopia_graph.routes.resource import router as resource_router
 from pythontopia_graph.routes.streaming import router as streaming_router
 from pythontopia_graph.routes.tutor import router as tutor_router
+from pythontopia_graph.routes.video import router as video_router
 from pythontopia_graph.schemas.curriculum import MapperInput, MapperOutput
 from pythontopia_graph.schemas.profile import ProfileAgentInput, ProfileAgentOutput
 
@@ -59,6 +60,7 @@ app.include_router(streaming_router)
 app.include_router(tutor_router)
 app.include_router(orchestrator_router)
 app.include_router(intent_router)
+app.include_router(video_router)
 
 
 @app.get("/healthz", response_model=HealthResponse)

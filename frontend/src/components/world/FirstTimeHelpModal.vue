@@ -63,98 +63,109 @@ defineExpose({
         欢迎来到 Pythontopia
       </h2>
       <p class="pyt-help-lede">
-        先花 10 秒认识操作和界面，让小镇之旅更顺畅。
+        先记 3 件事，就能开始逛小镇。
       </p>
 
-      <!-- 首次进入 HUD 引导：突出「向导=问 AI」这一新手生命线 -->
-      <div class="pyt-help-guide">
-        <span
-          class="pyt-help-guide__icon"
-          aria-hidden="true"
-        >✧</span>
-        <p class="pyt-help-guide__text">
-          卡住了？随时点左下角「<b>向导</b>」问 AI 老师（按 <b>G</b>），它会带你看 / 学 / 练 / 测。
-        </p>
-      </div>
+      <!-- 第一屏只留 3 件必会：移动 / 对话 / 卡住找 AI 助教（渐进披露） -->
       <ul class="pyt-help-list">
         <li>
           <span class="pyt-help-key">WASD</span>
-          <span class="pyt-help-key">↑ ↓ ← →</span>
-          <span class="pyt-help-text">移动角色，走到地图边缘自动切换场景</span>
+          <span class="pyt-help-text">走路逛小镇，走到边缘自动换场景</span>
         </li>
         <li>
           <span class="pyt-help-key">F</span>
-          <span class="pyt-help-key">E</span>
-          <span class="pyt-help-text">与 NPC 对话、调查物品、领取任务</span>
+          <span class="pyt-help-text">和 NPC 对话、领任务</span>
         </li>
         <li>
-          <span class="pyt-help-key">Space</span>
-          <span class="pyt-help-text">面朝矮栅栏或木桩时跳过低障碍</span>
-        </li>
-        <li>
-          <span class="pyt-help-key">Tab</span>
-          <span class="pyt-help-text">展开快捷面板（M 地图 / K 技能 / J 对话历史）</span>
-        </li>
-        <li>
-          <span class="pyt-help-key">L</span>
-          <span class="pyt-help-key">,</span>
-          <span class="pyt-help-text">L 直达课程库；逗号键打开设置（音量/语言/退出）</span>
-        </li>
-        <li>
-          <span class="pyt-help-key">右上角</span>
-          <span class="pyt-help-text">小地图常驻显示当前地图与出口方向，Shift+M 折叠</span>
-        </li>
-        <li>
-          <span class="pyt-help-key">ESC</span>
-          <span class="pyt-help-text">关闭当前对话、设置或快捷菜单</span>
+          <span class="pyt-help-key">G</span>
+          <span class="pyt-help-text">卡住就找左下角「AI 助教」</span>
         </li>
       </ul>
 
-      <p class="pyt-help-subtitle">
-        底部工具栏一览
-      </p>
-      <ul class="pyt-help-dock">
-        <li>
-          <span
-            class="pyt-help-dock__ico"
-            aria-hidden="true"
-          >✦</span>
-          <span class="pyt-help-dock__name">任务</span>
-          <span class="pyt-help-dock__desc">主线进度（Q）</span>
-        </li>
-        <li>
-          <span
-            class="pyt-help-dock__ico"
-            aria-hidden="true"
-          >✉</span>
-          <span class="pyt-help-dock__name">对话</span>
-          <span class="pyt-help-dock__desc">最近对话（J）</span>
-        </li>
-        <li>
-          <span
-            class="pyt-help-dock__ico"
-            aria-hidden="true"
-          >◰</span>
-          <span class="pyt-help-dock__name">地图</span>
-          <span class="pyt-help-dock__desc">打开地图（M）</span>
-        </li>
-        <li>
-          <span
-            class="pyt-help-dock__ico"
-            aria-hidden="true"
-          >★</span>
-          <span class="pyt-help-dock__name">技能</span>
-          <span class="pyt-help-dock__desc">技能树（K）</span>
-        </li>
-        <li>
-          <span
-            class="pyt-help-dock__ico"
-            aria-hidden="true"
-          >☰</span>
-          <span class="pyt-help-dock__name">菜单</span>
-          <span class="pyt-help-dock__desc">设置 / 退出（ESC）</span>
-        </li>
-      </ul>
+      <details class="pyt-help-more">
+        <summary class="pyt-help-more__summary">
+          更多操作
+        </summary>
+        <ul class="pyt-help-list">
+          <li>
+            <span class="pyt-help-key">WASD</span>
+            <span class="pyt-help-key">↑ ↓ ← →</span>
+            <span class="pyt-help-text">移动角色，走到地图边缘自动切换场景</span>
+          </li>
+          <li>
+            <span class="pyt-help-key">F</span>
+            <span class="pyt-help-key">E</span>
+            <span class="pyt-help-text">与 NPC 对话、调查物品、领取任务</span>
+          </li>
+          <li>
+            <span class="pyt-help-key">Space</span>
+            <span class="pyt-help-text">面朝矮栅栏或木桩时跳过低障碍</span>
+          </li>
+          <li>
+            <span class="pyt-help-key">Tab</span>
+            <span class="pyt-help-text">展开快捷面板（M 地图 / K 技能 / J 对话历史）</span>
+          </li>
+          <li>
+            <span class="pyt-help-key">L</span>
+            <span class="pyt-help-key">,</span>
+            <span class="pyt-help-text">L 直达课程库；逗号键打开设置（音量/语言/退出）</span>
+          </li>
+          <li>
+            <span class="pyt-help-key">右上角</span>
+            <span class="pyt-help-text">小地图常驻显示当前地图与出口方向，Shift+M 折叠</span>
+          </li>
+          <li>
+            <span class="pyt-help-key">ESC</span>
+            <span class="pyt-help-text">关闭当前对话、设置或快捷菜单</span>
+          </li>
+        </ul>
+
+        <p class="pyt-help-subtitle">
+          底部工具栏一览
+        </p>
+        <ul class="pyt-help-dock">
+          <li>
+            <span
+              class="pyt-help-dock__ico"
+              aria-hidden="true"
+            >✦</span>
+            <span class="pyt-help-dock__name">任务</span>
+            <span class="pyt-help-dock__desc">主线进度（Q）</span>
+          </li>
+          <li>
+            <span
+              class="pyt-help-dock__ico"
+              aria-hidden="true"
+            >✉</span>
+            <span class="pyt-help-dock__name">对话</span>
+            <span class="pyt-help-dock__desc">最近对话（J）</span>
+          </li>
+          <li>
+            <span
+              class="pyt-help-dock__ico"
+              aria-hidden="true"
+            >◰</span>
+            <span class="pyt-help-dock__name">地图</span>
+            <span class="pyt-help-dock__desc">打开地图（M）</span>
+          </li>
+          <li>
+            <span
+              class="pyt-help-dock__ico"
+              aria-hidden="true"
+            >★</span>
+            <span class="pyt-help-dock__name">技能</span>
+            <span class="pyt-help-dock__desc">技能树（K）</span>
+          </li>
+          <li>
+            <span
+              class="pyt-help-dock__ico"
+              aria-hidden="true"
+            >☰</span>
+            <span class="pyt-help-dock__name">菜单</span>
+            <span class="pyt-help-dock__desc">设置 / 退出（ESC）</span>
+          </li>
+        </ul>
+      </details>
       <button
         type="button"
         class="pyt-help-btn"
@@ -267,28 +278,35 @@ defineExpose({
   box-shadow: 1px 1px 0 var(--pyt-color-text-primary);
 }
 
-/* 首次进入 HUD 引导：向导高亮 callout + 底部工具栏一览 */
-.pyt-help-guide {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+/* 更多操作：默认收起，点开才显示完整快捷键 + 工具栏一览（渐进披露） */
+.pyt-help-more {
   margin: 0 0 18px;
-  padding: 12px 14px;
-  background: linear-gradient(160deg, rgba(241, 196, 83, 0.28), rgba(110, 79, 29, 0.14));
-  border: 2px solid var(--pyt-color-gold);
-  border-radius: var(--pyt-radius-lg);
 }
-.pyt-help-guide__icon {
-  flex: 0 0 auto;
-  font-size: 24px;
-  color: #d4af37;
-  text-shadow: 0 0 6px rgba(241, 196, 83, 0.7);
-}
-.pyt-help-guide__text {
-  margin: 0;
-  font-size: 14px;
-  line-height: 1.5;
+.pyt-help-more__summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 8px 12px;
+  border: 2px solid var(--pyt-color-border);
+  border-radius: 6px;
+  background: var(--pyt-color-bg-soft);
   color: var(--pyt-color-text-primary);
+  font-family: var(--pyt-font-pixel);
+  font-size: 13px;
+  font-weight: 700;
+  user-select: none;
+}
+.pyt-help-more__summary::-webkit-details-marker {
+  display: none;
+}
+.pyt-help-more__summary::before {
+  content: '▸ ';
+  color: var(--pyt-color-text-hint);
+}
+.pyt-help-more[open] .pyt-help-more__summary {
+  margin-bottom: 12px;
+}
+.pyt-help-more[open] .pyt-help-more__summary::before {
+  content: '▾ ';
 }
 .pyt-help-subtitle {
   margin: 0 0 8px;

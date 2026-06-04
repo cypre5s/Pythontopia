@@ -25,6 +25,8 @@ import AgentOfficeScene from '@/components/workshop/AgentOfficeScene.vue';
 import type { OfficeEvidence } from '@/components/workshop/agentOffice';
 import MarkdownView from '@/components/common/MarkdownView.vue';
 import TutorVisualAids, { type TutorVisualAid } from '@/components/tutor/TutorVisualAids.vue';
+import BilibiliVideoCards from '@/components/video/BilibiliVideoCards.vue';
+import { kcDisplayName } from '@/data/kcNames';
 import { listChapters, listKnowledgeComponents } from '@/api/course';
 import { getWorkshopResource } from '@/api/workshop';
 import {
@@ -51,13 +53,15 @@ interface TutorStreamResult {
 interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
-  kind: 'text' | 'answer' | 'resource' | 'error';
+  kind: 'text' | 'answer' | 'resource' | 'video' | 'error';
   text: string;
   streaming?: boolean;
   intent?: IntentKind;
   toolLabel?: string;
   toolIcon?: string;
   kcCodes?: string[];
+  /** kind==='video'：B站卡片检索关键词。 */
+  videoKeyword?: string;
   groundingStatus?: string;
   evidencePageIds?: number[];
   visualAids?: TutorVisualAid[];
@@ -215,9 +219,32 @@ async function onSubmit(payload: ComposerSubmitPayload): Promise<void> {
 
   if (intent === 'ASK') {
     await runAsk(payload.text, kcCodes, payload.contextHint);
+  } else if (intent === 'VIDEO') {
+    runVideo(kcCodes, focusHint || payload.text);
   } else {
     await runResource(intent, kcCodes, focusHint || payload.text);
   }
+}
+
+/**
+ * VIDEO 意图：不走生成/SSE，直接出一条「视频卡片」气泡，由 BilibiliVideoCards 按关键词
+ * 现取现渲染（外部资源）。关键词 = Python + KC 显示名 + 学习重点（去重去空、限长）。
+ */
+function runVideo(kcCodes: string[], focus: string): void {
+  const meta = commandOf('VIDEO');
+  const kcPart = kcCodes.map((c) => kcDisplayName(c)).filter(Boolean).join(' ');
+  const keyword = `Python ${kcPart} ${focus}`.replace(/\s+/g, ' ').trim().slice(0, 60);
+  playSfx('sfx_success');
+  pushMessage({
+    id: genId(),
+    role: 'assistant',
+    kind: 'video',
+    intent: 'VIDEO',
+    text: '',
+    videoKeyword: keyword,
+    toolIcon: meta.icon,
+    toolLabel: meta.label,
+  });
 }
 
 async function runAsk(question: string, kcCodes: string[], context: string): Promise<void> {
@@ -249,7 +276,7 @@ async function runAsk(question: string, kcCodes: string[], context: string): Pro
     playSfx('sfx_error');
     updateMessage(id, {
       kind: 'error',
-      text: tutorSse.error.value?.message ?? '导师回答失败，请稍后重试。',
+      text: tutorSse.error.value?.message ?? 'AI 助教暂时没答上来，再试一次',
       streaming: false,
     });
   }
@@ -268,7 +295,7 @@ async function runResource(
       id: genId(),
       role: 'assistant',
       kind: 'error',
-      text: `生成「${meta.label}」需要先指定知识点：请用 @ 选一个 KC，或把主题说得更具体些。`,
+      text: `生成「${meta.label}」需要先选中知识点：用 @ 选一个，或把主题说得更具体些。`,
     });
     return;
   }
@@ -407,14 +434,26 @@ onMounted(async () => {
         class="chat__welcome"
       >
         <p class="chat__welcome-title">
-          欢迎来到百晓工坊
+          想学什么直接说
         </p>
         <p class="chat__welcome-body">
-          说说你想学什么，我会自动判断该「答疑」还是生成「讲义 / 思维导图 / 练习 / 代码 / 阅读 / 动画脚本」。
+          比如「循环怎么用」，AI 助教来帮你
         </p>
-        <p class="chat__welcome-hint">
-          输入 <b>@</b> 引用知识点 · 输入 <b>/</b> 直接指定工具
-        </p>
+        <details
+          class="chat__more"
+          data-testid="workshop-welcome-more"
+        >
+          <summary class="chat__more-summary">
+            更多用法
+          </summary>
+          <div class="chat__more-body">
+            <p>输入 <b>@</b> 引用知识点</p>
+            <p>输入 <b>/</b> 选讲解方式</p>
+            <p class="chat__more-kinds">
+              讲义、思维导图、练习、代码、阅读、动画、B站视频
+            </p>
+          </div>
+        </details>
       </div>
 
       <template
@@ -437,7 +476,7 @@ onMounted(async () => {
             <span
               v-if="m.kcCodes && m.kcCodes.length"
               class="msg__kc"
-            >@{{ m.kcCodes.length }} KC</span>
+            >@{{ m.kcCodes.length }} 知识点</span>
           </div>
           <p class="msg__text">
             {{ m.text }}
@@ -501,6 +540,23 @@ onMounted(async () => {
           <span class="resource-card__cta">在书房查看 →</span>
         </button>
 
+        <!-- 助手：B站视频卡片（外部资源，按意图检索，不走生成） -->
+        <div
+          v-else-if="m.kind === 'video'"
+          class="msg msg--assistant msg--video"
+        >
+          <div
+            v-if="m.toolLabel"
+            class="msg__tags"
+          >
+            <span class="msg__tool">{{ m.toolIcon }} {{ m.toolLabel }}</span>
+          </div>
+          <BilibiliVideoCards
+            :keyword="m.videoKeyword ?? ''"
+            heading="B站精选讲解"
+          />
+        </div>
+
         <!-- 助手：错误 / 澄清 -->
         <div
           v-else-if="m.kind === 'error'"
@@ -528,6 +584,7 @@ onMounted(async () => {
         :token-preview="officeTokenPreview"
         :error-message="workshopSse.error.value?.message ?? null"
         :evidence="officeEvidence"
+        :plan="workshopSse.plan.value"
         @confirm="onOfficeConfirm"
         @cancel="onOfficeCancel"
       />
@@ -584,13 +641,41 @@ onMounted(async () => {
   color: var(--pyt-color-text-primary);
 }
 .chat__welcome-body {
-  margin: 0 0 10px;
+  margin: 0 0 14px;
   font-size: 13px;
   line-height: 1.6;
 }
-.chat__welcome-hint {
-  margin: 0;
+.chat__more {
+  max-width: 260px;
+  margin: 0 auto;
   font-size: 12px;
+  text-align: left;
+}
+.chat__more-summary {
+  text-align: center;
+  font-weight: 700;
+  color: var(--pyt-color-text-hint);
+  cursor: pointer;
+  list-style: none;
+}
+.chat__more-summary::-webkit-details-marker {
+  display: none;
+}
+.chat__more-summary:hover {
+  color: var(--pyt-color-text-primary);
+}
+.chat__more-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+  line-height: 1.6;
+}
+.chat__more-body p {
+  margin: 0;
+}
+.chat__more-kinds {
+  color: var(--pyt-color-text-muted);
 }
 
 /* messages */
@@ -613,6 +698,12 @@ onMounted(async () => {
   background: #f8d7d0;
   border-color: var(--pyt-color-danger);
   color: #b3402a;
+}
+.msg--video {
+  align-self: stretch;
+  max-width: 100%;
+  width: 100%;
+  background: #f5ecd4;
 }
 .msg__tags {
   display: flex;

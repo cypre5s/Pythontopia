@@ -5,6 +5,7 @@ import { useSessionStore } from '@/stores/session';
 import { useToastStore } from '@/stores/toast';
 import { composeStoryboardVideo, generateImage } from '@/api/media';
 import { kcDisplayName } from '@/data/kcNames';
+import BilibiliVideoCards from '@/components/video/BilibiliVideoCards.vue';
 import type { StoryboardContent, StoryboardScene } from '@/api/dto/Workshop';
 
 const props = defineProps<{
@@ -36,6 +37,12 @@ const composing = ref(false);
 let imageRequestToken = 0;
 
 const scenes = computed(() => props.content.scenes);
+// 「B站精选讲解」关键词：Python + 故事板涉及的前两个 KC 中文名（去重）。
+const biliKeyword = computed<string>(() => {
+  const codes = Array.from(new Set(scenes.value.flatMap((s) => s.kc_codes)));
+  const names = codes.slice(0, 2).map(kcDisplayName);
+  return `Python ${names.join(' ')}`.trim();
+});
 const activeScene = computed<StoryboardScene | undefined>(
   () => scenes.value[currentScene.value],
 );
@@ -331,6 +338,13 @@ watch(
       暂无故事板场景数据。
     </div>
     <template v-else>
+      <BilibiliVideoCards
+        class="storyboard-bili"
+        :keyword="biliKeyword"
+        :limit="6"
+        heading="B站精选讲解"
+        data-testid="storyboard-bili"
+      />
       <div
         ref="stageRef"
         class="theater-stage"
@@ -426,7 +440,7 @@ watch(
           data-testid="storyboard-compose"
           @click="composeVideo"
         >
-          {{ composing ? '合成中…' : '🎬 合成讲解视频' }}
+          {{ composing ? '合成中…' : '（较慢）🎬 合成讲解视频' }}
         </button>
         <template v-else>
           <span
