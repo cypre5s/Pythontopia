@@ -24,6 +24,8 @@ import com.pythontopia.learner.mastery.MasterySource;
 import com.pythontopia.learner.profile.dto.BaseLevelDto;
 import com.pythontopia.learner.profile.dto.LearnerProfileDto;
 import com.pythontopia.learner.profile.dto.LearningPreferenceDto;
+import com.pythontopia.learner.profile.dto.ProfileDimensionDto;
+import com.pythontopia.learner.profile.service.PassiveProfileService;
 import com.pythontopia.learner.profile.service.ProfileService;
 import com.pythontopia.workshop.config.WorkshopProperties;
 import com.pythontopia.workshop.dto.ResourceCreateRequest;
@@ -35,7 +37,6 @@ import com.pythontopia.workshop.graph.WorkshopGraphClient;
 import com.pythontopia.workshop.repository.LearningResourceRepository;
 import com.pythontopia.workshop.service.ResourceWorkshopService;
 import com.pythontopia.workshop.service.WorkshopRunRecorder;
-import com.pythontopia.world.crop.CropStateService;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -56,8 +57,8 @@ class ResourceWorkshopServiceTest {
   private CoursePackRepository coursePackRepository;
   private WorkshopRunRecorder runRecorder;
   private MasteryEvaluator masteryEvaluator;
-  private CropStateService cropStateService;
   private ProfileService profileService;
+  private PassiveProfileService passiveProfileService;
   private ObjectMapper objectMapper;
   private ResourceWorkshopService service;
 
@@ -69,8 +70,8 @@ class ResourceWorkshopServiceTest {
     coursePackRepository = Mockito.mock(CoursePackRepository.class);
     runRecorder = Mockito.mock(WorkshopRunRecorder.class);
     masteryEvaluator = Mockito.mock(MasteryEvaluator.class);
-    cropStateService = Mockito.mock(CropStateService.class);
     profileService = Mockito.mock(ProfileService.class);
+    passiveProfileService = Mockito.mock(PassiveProfileService.class);
     objectMapper = new ObjectMapper();
     service =
         new ResourceWorkshopService(
@@ -80,8 +81,8 @@ class ResourceWorkshopServiceTest {
             coursePackRepository,
             runRecorder,
             masteryEvaluator,
-            cropStateService,
             profileService,
+            passiveProfileService,
             objectMapper);
 
     when(coursePackRepository.findKcs(eq(43L), eq(null)))
@@ -89,6 +90,7 @@ class ResourceWorkshopServiceTest {
             List.of(
                 new CourseKc(1L, 43L, "PY43-KC-001", "输入输出", 11L, 1, "basic", "summary")));
     when(profileService.findProfile(anyLong())).thenReturn(Optional.empty());
+    when(passiveProfileService.getDimensions(anyLong())).thenReturn(List.of());
     when(resourceRepository.countCreatedAfter(anyLong(), any())).thenReturn(0);
     when(resourceRepository.sumMasteryRewardsToday(anyLong(), anyString(), any()))
         .thenReturn(BigDecimal.ZERO);
@@ -144,7 +146,6 @@ class ResourceWorkshopServiceTest {
     assertThat(response.status()).isEqualTo("SUCCESS");
     verify(masteryEvaluator, times(1))
         .applyEvent(eq(1L), eq("PY43-KC-001"), eq(MasterySource.RESOURCE_READ), any(), anyString());
-    verify(cropStateService, times(1)).applyMasteryUpdate(1L, "PY43-KC-001");
   }
 
   @Test
@@ -201,8 +202,8 @@ class ResourceWorkshopServiceTest {
             coursePackRepository,
             runRecorder,
             masteryEvaluator,
-            cropStateService,
             profileService,
+            passiveProfileService,
             objectMapper);
     when(graphClient.produce(any())).thenReturn(successResponse());
     when(resourceRepository.countCreatedAfter(anyLong(), any())).thenReturn(5);
@@ -243,6 +244,26 @@ class ResourceWorkshopServiceTest {
     assertThat(captor.getValue().profileSnapshot().major()).isEqualTo("OTHER");
     assertThat(captor.getValue().profileSnapshot().pythonSelfRatedLevel()).isEqualTo(4);
     assertThat(captor.getValue().profileSnapshot().mediaPriority()).containsExactly("HANDOUT");
+  }
+
+  @Test
+  void createPassesCognitiveStyleAndErrorTagsFromDimensions() {
+    when(graphClient.produce(any())).thenReturn(successResponse());
+    when(passiveProfileService.getDimensions(1L))
+        .thenReturn(
+            List.of(
+                new ProfileDimensionDto(
+                    "cognitive_style", "认知风格", 0.6, 0.5, 4, false, List.of("visual")),
+                new ProfileDimensionDto(
+                    "error_pattern", "易错模式", 0.5, 0.5, 4, false, List.of("缩进", "冒号"))));
+
+    service.create(1L, new ResourceCreateRequest(List.of("PY43-KC-001"), ResourceType.HANDOUT, null));
+
+    ArgumentCaptor<ResourceProduceRequestDto> captor =
+        ArgumentCaptor.forClass(ResourceProduceRequestDto.class);
+    verify(graphClient).produce(captor.capture());
+    assertThat(captor.getValue().profileSnapshot().cognitiveStyle()).isEqualTo("visual");
+    assertThat(captor.getValue().profileSnapshot().errorPatterns()).containsExactly("缩进", "冒号");
   }
 
   @Test

@@ -8,24 +8,13 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import retrofit2.Retrofit
 import retrofit2.http.GET
-import retrofit2.http.POST
-import retrofit2.http.Path
-import retrofit2.http.Query
 
 /**
  * Fields feature 的网络仓库：聚合 Alethicode `packId=43` 65 KC 的"庄稼网格"业务。
  *
- *  - [fetchKcGrid]：拉一次完整 65 KC 网格；网络失败时 fall back 到本地 [KcSeedCatalog]，
- *    保证 demo 未登录也能看到完整田地（mastery 全 0.0 → 全 SEED 状态）。
- *  - [waterKc]：触发"浇水"业务事件。等价于 docs/gameplay/economy-system.md §2.2 中
- *    `tool_watering_can_basic` 工具的使用，后端会按 `+0.05` 推高 mastery。本仓库优先
- *    走真实 API；离线降级时本地 +0.05 立即反馈，让玩家依旧能感觉到点击反馈。
- *  - [harvestKc]：作物 mastery≥0.8 时显式收获，状态切到 HARVESTED；离线降级时
- *    本地把 mastery 锁到 1.0 + 状态 HARVESTED，避免 UI 卡在 MATURE。
- *
- * 与 [com.pythontopia.feature.hub.HubRepository]、[com.pythontopia.feature.dialog.DialogRepository]
- * 一致，所有方法对网络异常 `runCatching { ... }.getOrElse { fallback }` 静默降级，
- * Beta demo 不引入网络断流报错 Toast，避免影响首发体验。
+ *  - [fetchKcGrid]：拉一次当前登录用户的 KC mastery 快照；后端未返回的 KC 以课程目录补 0。
+ *  - [waterKc] / [harvestKc]：Android 不再本地加 mastery。掌握度只能由后端 evidence
+ *    链路更新，例如资源阅读、练习通过、失败练习和 Bug 修复。
  */
 @Singleton
 class FieldsRepository @Inject constructor(
@@ -36,13 +25,12 @@ class FieldsRepository @Inject constructor(
      * 拉取 65 KC 网格。
      *
      * 流程：
-     *  1. 尝试 `GET /api/learner/mastery/kc?packId=43`；
-     *  2. 若失败，返回 [KcSeedCatalog.entries] 生成的全 SEED 网格；
-     *  3. 若 API 返回不全（< 65 条），用 catalog 补齐缺失 KC，保证 grid 8×9 永远满 65 格。
+     *  1. 尝试 `GET /api/learner/mastery`；
+     *  2. 若 API 返回不全（< 65 条），用 catalog 补齐缺失 KC 为 0，保证 grid 8×9 永远满 65 格；
+     *  3. 网络/鉴权错误向上抛出，由 ViewModel 展示加载失败，不伪造业务数据。
      */
     suspend fun fetchKcGrid(): List<KcTileState> {
-        val remote = runCatching { api.fetchMasteryKc(packId = ALETHICODE_PACK_ID) }
-            .getOrElse { emptyList() }
+        val remote = api.fetchMastery()
         val byCode = remote.associateBy { it.kcCode }
         return KcSeedCatalog.entries.map { seed ->
             val dto = byCode[seed.kcCode]
@@ -59,42 +47,19 @@ class FieldsRepository @Inject constructor(
     }
 
     /**
-     * 浇水：本地 mastery 推高 [WATER_DELTA]，封顶 1.0；API 成功时以服务端值为准。
+     * 浇水是视觉隐喻，不是正式 mastery 写入端点。学生需要进入资源/练习完成 evidence。
      */
     suspend fun waterKc(kcCode: String): KcTileState {
-        val seed = requireSeed(kcCode)
-        val updated = runCatching { api.water(kcCode) }
-            .getOrElse {
-                KcMasteryDto(
-                    kcCode = kcCode,
-                    title = seed.title,
-                    mastery = WATER_DELTA,
-                    chapterOrder = seed.chapterOrder,
-                    status = null,
-                )
-            }
-        return updated.toTileState().withSeedFallback(seed)
+        requireSeed(kcCode)
+        throw UnsupportedOperationException("请通过阅读资源或完成练习触发后端 mastery 更新")
     }
 
     /**
-     * 收获：mastery 锁到 1.0，status 强制 HARVESTED；API 成功时尊重服务端响应。
-     * 调用方应自行确保 [KcTileState.status] == [KcStatus.MATURE]，否则视为无效操作。
+     * 收获必须对应后端已记录的学习证据，Android 不做本地状态推进。
      */
     suspend fun harvestKc(kcCode: String): KcTileState {
-        val seed = requireSeed(kcCode)
-        val updated = runCatching { api.harvest(kcCode) }
-            .getOrElse {
-                KcMasteryDto(
-                    kcCode = kcCode,
-                    title = seed.title,
-                    mastery = 1.0,
-                    chapterOrder = seed.chapterOrder,
-                    status = KcStatus.HARVESTED.name,
-                )
-            }
-        return updated.toTileState().withSeedFallback(seed).let {
-            if (it.status == KcStatus.HARVESTED) it else it.copy(status = KcStatus.HARVESTED)
-        }
+        requireSeed(kcCode)
+        throw UnsupportedOperationException("收获必须来自后端 evidence；请先完成对应资源或练习")
     }
 
     private fun seedTile(seed: KcSeed): KcTileState = KcTileState(
@@ -105,18 +70,11 @@ class FieldsRepository @Inject constructor(
         status = KcStatus.SEED,
     )
 
-    private fun KcTileState.withSeedFallback(seed: KcSeed): KcTileState = copy(
-        title = title.ifBlank { seed.title },
-        chapterOrder = if (chapterOrder in 1..MAX_CHAPTER) chapterOrder else seed.chapterOrder,
-    )
-
     private fun requireSeed(kcCode: String): KcSeed =
         KcSeedCatalog.byCode(kcCode)
             ?: error("Unknown KC code: $kcCode (must be one of Alethicode pack 43 65 KC)")
 
     private companion object {
-        const val ALETHICODE_PACK_ID: Int = 43
-        const val WATER_DELTA: Double = 0.05
         const val MAX_CHAPTER: Int = 7
     }
 }
@@ -125,21 +83,12 @@ class FieldsRepository @Inject constructor(
  * Retrofit 接口：本应迁移到 `:core:network/api/`，本次 R-8 在 feature 内自洽实现，
  * 待 R-13 OpenAPI Generator 接入后由生成器接管。
  *
- * 后端契约（与 `docs/android/01-feature-port-checklist.md` §4.4 一致）：
- *  - `GET /api/learner/mastery/kc?packId=43` → `List<KcMasteryDto>`；
- *  - `POST /api/learner/mastery/kc/{kcCode}/water` → 单条 [KcMasteryDto]（浇水后新 mastery）；
- *  - `POST /api/learner/mastery/kc/{kcCode}/harvest` → 单条 [KcMasteryDto]（status=HARVESTED）。
+ * 后端契约：`GET /api/learner/mastery` → `List<KcMasteryDto>`。
  */
 interface FieldsApi {
 
-    @GET("api/learner/mastery/kc")
-    suspend fun fetchMasteryKc(@Query("packId") packId: Int): List<KcMasteryDto>
-
-    @POST("api/learner/mastery/kc/{kcCode}/water")
-    suspend fun water(@Path("kcCode") kcCode: String): KcMasteryDto
-
-    @POST("api/learner/mastery/kc/{kcCode}/harvest")
-    suspend fun harvest(@Path("kcCode") kcCode: String): KcMasteryDto
+    @GET("api/learner/mastery")
+    suspend fun fetchMastery(): List<KcMasteryDto>
 }
 
 /**

@@ -630,7 +630,7 @@ function generateTownHub() {
   // campus_east 建筑
   const library = { x: 10, y: 8, w: 5, h: 4, label: '图书馆', route: '/library', name: 'building_library' };
   const reviewHall = { x: 36, y: 8, w: 4, h: 4, label: '复盘大厅', route: '/review-hall', name: 'building_review_hall' };
-  const workshop = { x: 40, y: 24, w: 4, h: 4, label: '资源工坊', route: '/workshop', name: 'building_workshop' };
+  const workshop = { x: 40, y: 24, w: 4, h: 4, label: '百晓工坊', route: '/workshop', name: 'building_workshop' };
   paintBuilding(buildings, W, library.x, library.y, library.w, library.h);
   paintBuilding(buildings, W, reviewHall.x, reviewHall.y, reviewHall.w, reviewHall.h);
   paintBuilding(buildings, W, workshop.x, workshop.y, workshop.w, workshop.h);
@@ -675,6 +675,11 @@ function generateTownHub() {
     makeNpc('npc_workshop_master', 'workshop_master', '工坊师傅', 42, 26, 'npc_workshop'),
     makeNpc('npc_arena_guard', 'arena_guard', '竞技场守卫', 38, 36, 'npc_guard'),
     makeNpc('npc_trainer', 'trainer', '训练师', 10, 36, 'npc_trainer'),
+    // R-14 方案A：原外围图的主线 NPC 收进中央小镇，玩家不再跨图就能自然遇见。
+    makeNpc('npc_mine_keeper', 'mine_keeper', '矿洞守矿人', 21, 33, 'npc_miner'),
+    makeNpc('npc_foreman_bug', 'foreman_bug', '矿头 Bug', 24, 33, 'npc_guard'),
+    makeNpc('npc_captain_def', 'captain_def', '船长 Def', 4, 24, 'npc_sailor'),
+    makeNpc('npc_class_president', 'class_president', '班长', 16, 16, 'npc_student'),
     makeSpawn(25, 20),
   ];
 
@@ -798,7 +803,6 @@ function generateFarmNorth() {
     ...fieldOrigins.map((f) =>
       makeLandmark(`field_${f.kc}`, `知识田·${f.kc}`, f.x, f.y, 5, 5, 'field'),
     ),
-    makeNpc('npc_farmer_kc', 'farmer_kc', '田主 KC', 28, 13, 'player_sara'),
     makeSpawn(20, 37),
   ];
 
@@ -974,7 +978,7 @@ function generateCampusEast() {
   paintBuilding(buildings, W, reviewHall.x, reviewHall.y, reviewHall.w, reviewHall.h);
 
   // 南行工坊 4×3
-  const workshop = { x: 26, y: 22, w: 4, h: 3, label: '资源工坊', route: '/workshop', name: 'building_workshop' };
+  const workshop = { x: 26, y: 22, w: 4, h: 3, label: '百晓工坊', route: '/workshop', name: 'building_workshop' };
   paintBuilding(buildings, W, workshop.x, workshop.y, workshop.w, workshop.h);
 
   // 工坊周围花坛

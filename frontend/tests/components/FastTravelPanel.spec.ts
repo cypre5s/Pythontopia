@@ -27,41 +27,34 @@ describe('FastTravelPanel', () => {
     expect(wrapper.find('[data-testid="fast-travel-panel"]').exists()).toBe(false);
   });
 
-  it('监听 CustomEvent 打开后渲染 5 条路线', async () => {
+  it('监听 CustomEvent 打开后渲染 hub 路线（R-14 单 hub）', async () => {
     setWorldPlayer('town_hub');
     const wrapper = mount(FastTravelPanel, { attachTo: document.body });
     await flushPromises();
     window.dispatchEvent(new CustomEvent('pythontopia:fast-travel-open'));
     await flushPromises();
     expect(wrapper.find('[data-testid="fast-travel-panel"]').exists()).toBe(true);
-    const items = wrapper.findAll('[data-testid^="fast-travel-"]');
-    // 5 个路线按钮（hub/farm/mine/campus/port）
-    expect(items.length).toBeGreaterThanOrEqual(5);
+    expect(wrapper.find('[data-testid="fast-travel-hub"]').exists()).toBe(true);
     wrapper.unmount();
   });
 
-  it('当前所在地图按钮被 disabled', async () => {
-    setWorldPlayer('farm_north');
-    const wrapper = mount(FastTravelPanel, { attachTo: document.body });
-    window.dispatchEvent(new CustomEvent('pythontopia:fast-travel-open'));
-    await flushPromises();
-    const farmBtn = wrapper.find('[data-testid="fast-travel-farm"]');
-    expect(farmBtn.attributes('disabled')).toBeDefined();
-    const hubBtn = wrapper.find('[data-testid="fast-travel-hub"]');
-    expect(hubBtn.attributes('disabled')).toBeUndefined();
-    wrapper.unmount();
-  });
-
-  it('点击非当前路线后更新 worldStore.player.mapKey + 关闭面板', async () => {
+  it('当前所在地图（hub）按钮被 disabled', async () => {
     setWorldPlayer('town_hub');
-    const world = useWorldStore();
     const wrapper = mount(FastTravelPanel, { attachTo: document.body });
     window.dispatchEvent(new CustomEvent('pythontopia:fast-travel-open'));
     await flushPromises();
-    await wrapper.find('[data-testid="fast-travel-mine"]').trigger('click');
+    const hubBtn = wrapper.find('[data-testid="fast-travel-hub"]');
+    expect(hubBtn.attributes('disabled')).toBeDefined();
+    wrapper.unmount();
+  });
+
+  it('单 hub：外围图路线已移除', async () => {
+    setWorldPlayer('town_hub');
+    const wrapper = mount(FastTravelPanel, { attachTo: document.body });
+    window.dispatchEvent(new CustomEvent('pythontopia:fast-travel-open'));
     await flushPromises();
-    expect(world.player?.mapKey).toBe('mine_south');
-    expect(wrapper.find('[data-testid="fast-travel-panel"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="fast-travel-farm"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="fast-travel-mine"]').exists()).toBe(false);
     wrapper.unmount();
   });
 });

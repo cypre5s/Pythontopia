@@ -161,9 +161,9 @@ header h1 {
 }
 .primary {
   background: #2f5b8a;
-  color: #fff7e6;
+  color: var(--pyt-color-bg-elevated);
   border: 2px solid #1b3a5a;
-  border-radius: 8px;
+  border-radius: var(--pyt-radius-lg);
   padding: 8px 18px;
   cursor: pointer;
 }
@@ -182,15 +182,15 @@ header h1 {
   display: grid;
   gap: 12px;
   background: #fffbe9;
-  border: 2px solid #c9a86b;
-  border-radius: 10px;
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-lg);
   padding: 16px;
 }
 .create-form input,
 .create-form textarea {
   width: 100%;
   padding: 8px 10px;
-  border: 1px solid #c9a86b;
+  border: 1px solid var(--pyt-color-border);
   border-radius: 6px;
   background: #fff;
   font-family: inherit;
@@ -200,10 +200,10 @@ header h1 {
 }
 .empty {
   padding: 16px;
-  background: #fdf3d0;
-  border-radius: 8px;
+  background: var(--pyt-color-bg-soft);
+  border-radius: var(--pyt-radius-lg);
   text-align: center;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
 }
 .classroom-list {
   list-style: none;
@@ -215,8 +215,8 @@ header h1 {
 }
 .classroom-card {
   background: #fffbe9;
-  border: 2px solid #c9a86b;
-  border-radius: 10px;
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-lg);
   padding: 14px;
   display: grid;
   gap: 8px;
@@ -232,14 +232,14 @@ header h1 {
 }
 .badge {
   background: #2f5b8a;
-  color: #fff7e6;
+  color: var(--pyt-color-bg-elevated);
   border-radius: 999px;
   padding: 2px 10px;
   font-size: 12px;
 }
 .classroom-card .desc {
   margin: 0;
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
   font-size: 13px;
   line-height: 1.55;
 }
@@ -251,6 +251,6 @@ header h1 {
 }
 .code {
   font-size: 13px;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
 }
 </style>

@@ -7,6 +7,7 @@
 //
 // 纯函数：只依赖静态任务数据，不碰 store / DOM / Phaser，方便单测与复用。
 
+import { kcDisplayName } from '@/data/kcNames';
 import type { MainQuestMapKey, MainSubQuest } from '@/types/mainQuest';
 
 export type QuestActionKind =
@@ -53,8 +54,9 @@ const NPC_NAMES: Readonly<Record<string, string>> = Object.freeze({
   captain_def: '船长 Def',
   workshop_master: '工坊师傅',
   coach_q: '教务 Q',
-  farmer_kc: '田老',
   librarian_doc: '馆长 Doc',
+  professor: '教授',
+  sage_review: '复盘师 Sage',
 });
 
 // 六类资源类型的中文标签，用于「下一步」文案。
@@ -75,10 +77,9 @@ export function npcNameOf(key: string): string {
   return NPC_NAMES[key] ?? key;
 }
 
-/** `PY43-KC-002` → `KC-002`；空值回退到「本知识点」。 */
-function shortKc(code: string | undefined): string {
-  if (!code) return '本知识点';
-  return code.replace(/^PY43-/, '');
+/** KC code → 面向学生的「知识点中文名」（不暴露原始编码）；空值回退到「本知识点」。 */
+function kcLabel(code: string | undefined): string {
+  return `「${kcDisplayName(code)}」`;
 }
 
 function resourceLabelOf(type: string): string {
@@ -98,7 +99,7 @@ function resourceLabelOf(type: string): string {
  */
 export function resolveQuestGuidance(sub: MainSubQuest): QuestGuidance {
   const ev = sub.evidenceRequired;
-  const kc = shortKc(sub.kcCodes[0]);
+  const kc = kcLabel(sub.kcCodes[0]);
 
   if (ev.type === 'dialog_complete') {
     const name = npcNameOf(ev.npcKey);
@@ -127,7 +128,7 @@ export function resolveQuestGuidance(sub: MainSubQuest): QuestGuidance {
       tile: null,
       teleport: false,
       openDialog: true,
-      stepText: `找${name}进「工坊」，为 ${kc} 生成一份${resourceLabelOf(ev.resourceType)}`,
+      stepText: `找${name}进「工坊」，为${kc}生成一份${resourceLabelOf(ev.resourceType)}`,
       ctaText: '去工坊找工坊师傅',
     };
   }
@@ -138,29 +139,29 @@ export function resolveQuestGuidance(sub: MainSubQuest): QuestGuidance {
       kind: 'training',
       npcKey: 'coach_q',
       npcName: name,
-      mapKey: 'campus_east',
-      mapLabel: mapLabelOf('campus_east'),
+      mapKey: 'town_hub',
+      mapLabel: mapLabelOf('town_hub'),
       tile: null,
       teleport: false,
       openDialog: true,
-      stepText: `找${name}进「训练场」，提交一道 ${kc} 练习并通过判题`,
+      stepText: `找${name}进「训练场」，提交一道${kc}练习并通过判题`,
       ctaText: '去训练场找教务 Q',
     };
   }
 
   if (ev.type === 'kc_mastery') {
-    const name = npcNameOf('farmer_kc');
+    const name = npcNameOf('coach_q');
     return {
       kind: 'practice',
-      npcKey: 'farmer_kc',
+      npcKey: 'coach_q',
       npcName: name,
-      mapKey: 'farm_north',
-      mapLabel: mapLabelOf('farm_north'),
+      mapKey: 'town_hub',
+      mapLabel: mapLabelOf('town_hub'),
       tile: null,
-      teleport: true,
+      teleport: false,
       openDialog: true,
-      stepText: `去「知识农场」找${name}，给 ${kc} 浇水练习，掌握度到 ${ev.thresholdScore}`,
-      ctaText: '去知识农场找田老',
+      stepText: `找${name}进「训练场」，多刷${kc}的题，把掌握度刷到 ${ev.thresholdScore}`,
+      ctaText: '去训练场找教务 Q',
     };
   }
 

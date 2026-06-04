@@ -1,4 +1,5 @@
 import type { Direction } from '@api/dto/Direction';
+import type { CharacterAction } from './lpcAnimations';
 
 export interface RectangleLike {
   setStrokeStyle(width: number, color: number, alpha?: number): RectangleLike;
@@ -143,7 +144,14 @@ export interface PlayerSpriteHandle {
   tileY: number;
   direction: Direction;
   faceDirection(direction: Direction): void;
-  moveToTile(tileX: number, tileY: number, direction: Direction): void;
+  moveToTile(tileX: number, tileY: number, direction: Direction, opts?: { running?: boolean }): void;
   jumpToTile(tileX: number, tileY: number, direction: Direction): void;
   isJumping(): boolean;
+  /** 是否正在播放一次性动作动画（浇水/挖矿等），调用方据此暂停移动输入。 */
+  isBusy(): boolean;
+  /**
+   * 播放一次性动作动画（星露谷工具动作），结束后自动回到当前朝向待机。
+   * universal 表支持全部动作；其它布局不支持时静默忽略并回调 onComplete。
+   */
+  playAction(action: CharacterAction, opts?: { direction?: Direction; onComplete?: () => void }): void;
 }

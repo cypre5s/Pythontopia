@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router';
 import { useLearningStore } from '@stores/learning';
 import type { LearningPathNodeDto } from '@/api/dto/Path';
 import { resolvePathNodeDeepLink } from '@/utils/questDeepLink';
+import { kcDisplayName } from '@/data/kcNames';
 
 const learning = useLearningStore();
 const router = useRouter();
@@ -97,7 +98,7 @@ async function clickNode(node: LearningPathNodeDto): Promise<void> {
                 @click="clickNode(node)"
               >
                 <span class="type">{{ node.nodeType }}</span>
-                <span class="kc">{{ node.kcCode }}</span>
+                <span class="kc">{{ kcDisplayName(node.kcCode) }}</span>
                 <p class="reason">
                   {{ node.reasonSummary }}
                 </p>
@@ -126,8 +127,8 @@ async function clickNode(node: LearningPathNodeDto): Promise<void> {
 }
 .path-card {
   background: #fffbe9;
-  border: 2px solid #c9a86b;
-  border-radius: 8px;
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-lg);
   padding: 14px;
   display: grid;
   gap: 12px;
@@ -136,7 +137,7 @@ header h3 {
   margin: 0;
 }
 header small {
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
   font-size: 12px;
 }
 .day-list {
@@ -178,24 +179,24 @@ header small {
 .node-button:hover,
 .node-button:focus-visible {
   background: #ffe6a4;
-  outline: 2px solid #c9a86b;
+  outline: 2px solid var(--pyt-color-border);
   outline-offset: -2px;
 }
 .node-row .type {
   font-weight: 600;
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
 }
 .node-row .kc {
   font-size: 12px;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
 }
 .node-row .reason {
   margin: 0;
   line-height: 1.5;
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
 }
 .node-row .hint {
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
   font-size: 12px;
 }
 .node-row .action {
@@ -207,9 +208,9 @@ header small {
 }
 .empty {
   padding: 14px;
-  background: #fdf3d0;
-  border-radius: 8px;
+  background: var(--pyt-color-bg-soft);
+  border-radius: var(--pyt-radius-lg);
   text-align: center;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
 }
 </style>

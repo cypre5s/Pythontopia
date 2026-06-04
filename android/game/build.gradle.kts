@@ -36,6 +36,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.annotation)
     implementation(libs.androidx.startup)
+    implementation(libs.kotlinx.coroutines.core)
     // gdx-backend-android 1.13.1 的 AndroidFragmentApplication 继承 androidx.fragment.app.Fragment，
     // 需要 fragment-ktx 把它的超类放到 :game 模块的编译期 classpath 上。
     api(libs.androidx.fragment.ktx)

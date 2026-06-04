@@ -8,6 +8,14 @@
       "conditions": [],
       "choices": [
         {
+          "label": "听第 1 课 · 计算工具的演变",
+          "nextNodeId": null,
+          "effects": [
+            { "type": "quest_recommend", "questKey": "1-2" },
+            { "type": "open_panel", "route": "/lecture/1" }
+          ]
+        },
+        {
           "label": "推荐我学什么",
           "nextNodeId": "recommend"
         },

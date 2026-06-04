@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
+import { kcDisplayName } from '@/data/kcNames';
 import type { PracticeContent } from '@/api/dto/Workshop';
 
 const props = defineProps<{
@@ -60,7 +61,7 @@ function toggleHints(index: number): void {
         </div>
       </section>
       <p class="kc">
-        关联 KC: {{ problem.kc_codes.join(', ') || '未标注' }}
+        关联知识点: {{ problem.kc_codes.map(kcDisplayName).join('、') || '未标注' }}
       </p>
     </li>
   </ol>
@@ -76,8 +77,8 @@ function toggleHints(index: number): void {
 }
 .problem {
   background: #fffbe9;
-  border: 2px solid #c9a86b;
-  border-radius: 8px;
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-lg);
   padding: 14px;
 }
 .problem header {
@@ -90,8 +91,8 @@ function toggleHints(index: number): void {
   font-size: 16px;
 }
 .difficulty {
-  background: #6e4f1d;
-  color: #fff7e6;
+  background: var(--pyt-color-text-hint);
+  color: var(--pyt-color-bg-elevated);
   border-radius: 999px;
   padding: 1px 8px;
   font-size: 12px;
@@ -102,7 +103,7 @@ function toggleHints(index: number): void {
 }
 .hints summary {
   cursor: pointer;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
   font-weight: 600;
 }
 .hints ul {
@@ -119,8 +120,8 @@ function toggleHints(index: number): void {
   margin-bottom: 8px;
 }
 .io pre {
-  background: #2e2417;
-  color: #f1e5c8;
+  background: var(--pyt-color-terminal-bg);
+  color: var(--pyt-color-terminal-text);
   margin: 0;
   padding: 8px;
   border-radius: 6px;
@@ -130,6 +131,6 @@ function toggleHints(index: number): void {
 .kc {
   margin: 8px 0 0;
   font-size: 12px;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
 }
 </style>

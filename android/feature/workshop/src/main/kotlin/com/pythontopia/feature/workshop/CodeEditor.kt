@@ -3,6 +3,7 @@ package com.pythontopia.feature.workshop
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -57,9 +58,17 @@ fun CodeEditor(
         }
     }
     val scrollState = rememberScrollState()
+    val horizontalScrollState = rememberScrollState()
     val lineNumberWidth = remember(lineCount) {
         val digits = lineCount.toString().length.coerceAtLeast(3).coerceAtMost(5)
         (digits * MONO_CHAR_DP + LINE_NUMBER_PADDING_DP * 2).dp
+    }
+    val codeContentWidth = remember(code) {
+        val longestLine = code.lineSequence().maxOfOrNull { it.length } ?: 0
+        val widthDp = ((longestLine + CODE_TRAILING_CHARS) * MONO_CHAR_DP)
+            .coerceAtLeast(CODE_MIN_WIDTH_DP)
+            .coerceAtMost(CODE_MAX_WIDTH_DP)
+        widthDp.dp
     }
 
     LaunchedEffect(code.length) {
@@ -94,12 +103,13 @@ fun CodeEditor(
                 .fillMaxHeight()
                 .fillMaxWidth()
                 .verticalScroll(scrollState)
+                .horizontalScroll(horizontalScrollState)
                 .padding(horizontal = PytSpace.s2, vertical = PytSpace.s2),
         ) {
             BasicTextField(
                 value = code,
                 onValueChange = onCodeChange,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.width(codeContentWidth),
                 enabled = enabled,
                 textStyle = baseStyle,
                 cursorBrush = SolidColor(PytColors.primary),
@@ -145,6 +155,9 @@ private const val MONO_CHAR_DP: Int = 9
 private const val LINE_NUMBER_PADDING_DP: Int = 6
 private const val CODE_FONT_SIZE: Int = 13
 private const val CODE_LINE_HEIGHT: Int = 20
+private const val CODE_TRAILING_CHARS: Int = 8
+private const val CODE_MIN_WIDTH_DP: Int = 720
+private const val CODE_MAX_WIDTH_DP: Int = 1800
 private const val CODE_PLACEHOLDER: String = "# 在这里编写你的解答"
 
 /**

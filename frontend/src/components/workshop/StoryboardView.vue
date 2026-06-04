@@ -2,11 +2,16 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import gsap from 'gsap';
 import { useSessionStore } from '@/stores/session';
+import { useToastStore } from '@/stores/toast';
+import { composeStoryboardVideo, generateImage } from '@/api/media';
+import { kcDisplayName } from '@/data/kcNames';
 import type { StoryboardContent, StoryboardScene } from '@/api/dto/Workshop';
 
 const props = defineProps<{
   content: StoryboardContent;
 }>();
+
+const toast = useToastStore();
 
 const currentScene = ref(0);
 const isPlaying = ref(false);
@@ -17,6 +22,18 @@ const sceneImageUrl = ref('');
 const sceneImageError = ref(false);
 const stageRef = ref<HTMLElement | null>(null);
 const sceneRefs = ref<HTMLLIElement[]>([]);
+
+// 多模态：AI 文生图插画（默认开启）。每个分镜按 image_prompt 生成一次并缓存（index → {url,degraded}）。
+const useAiIllustration = ref(true);
+const imageGenerating = ref(false);
+const imageDegraded = ref(false);
+const sceneImageCache = new Map<number, { url: string; degraded: boolean }>();
+
+// 多模态：合成短视频（图序列 + TTS → ffmpeg mp4）。无 ffmpeg 时后端降级，回退实时剧场。
+const composedVideoUrl = ref('');
+const composedDegraded = ref(false);
+const composing = ref(false);
+let imageRequestToken = 0;
 
 const scenes = computed(() => props.content.scenes);
 const activeScene = computed<StoryboardScene | undefined>(
@@ -35,14 +52,92 @@ function setSceneRef(el: unknown, i: number): void {
   if (el instanceof HTMLElement) sceneRefs.value[i] = el as HTMLLIElement;
 }
 
-function loadSceneImage(scene: StoryboardScene): void {
+function coursePageFallback(scene: StoryboardScene): void {
   sceneImageError.value = false;
+  imageDegraded.value = false;
   if (scene.evidence_page_id) {
     sceneImageUrl.value = `/api/coursepack/pages/${scene.evidence_page_id}/image`;
   } else {
     sceneImageUrl.value = '';
     sceneImageError.value = true;
   }
+}
+
+/**
+ * 舞台图加载：开启 AI 插画时优先按 image_prompt 文生图（生成一次后缓存），失败回退课件页图，
+ * 再回退占位 SVG。关闭 AI 插画时直接走课件页图（旧行为）。
+ */
+async function loadSceneImage(scene: StoryboardScene, index: number): Promise<void> {
+  if (!useAiIllustration.value) {
+    coursePageFallback(scene);
+    return;
+  }
+  const cached = sceneImageCache.get(index);
+  if (cached) {
+    sceneImageUrl.value = cached.url;
+    sceneImageError.value = false;
+    imageDegraded.value = cached.degraded;
+    return;
+  }
+  const prompt = (scene.image_prompt ?? scene.visual_hint ?? '').trim();
+  if (!prompt) {
+    coursePageFallback(scene);
+    return;
+  }
+  const token = ++imageRequestToken;
+  imageGenerating.value = true;
+  try {
+    const asset = await generateImage(prompt, scene.kc_codes[0], scene.kc_codes);
+    if (token !== imageRequestToken) return; // 已切到别的分镜，丢弃过期结果
+    sceneImageCache.set(index, { url: asset.url, degraded: asset.degraded });
+    sceneImageUrl.value = asset.url;
+    sceneImageError.value = false;
+    imageDegraded.value = asset.degraded;
+  } catch {
+    if (token !== imageRequestToken) return;
+    coursePageFallback(scene);
+  } finally {
+    if (token === imageRequestToken) imageGenerating.value = false;
+  }
+}
+
+async function composeVideo(): Promise<void> {
+  if (composing.value || scenes.value.length === 0) return;
+  pause();
+  composing.value = true;
+  try {
+    const asset = await composeStoryboardVideo(
+      scenes.value.map((s) => ({
+        imagePrompt: (s.image_prompt ?? s.visual_hint ?? '').trim(),
+        narration: s.narration,
+        voice: s.narration_tts_voice ?? 'x4_yezi',
+        durationSeconds: s.duration_seconds,
+        kcCodes: s.kc_codes,
+      })),
+    );
+    composedVideoUrl.value = asset.url;
+    composedDegraded.value = asset.degraded;
+    toast.show(
+      asset.degraded ? '已合成短视频（含占位素材，未接入真实模型）' : '短视频合成完成',
+      'success',
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '短视频合成失败';
+    // 无 ffmpeg/未配置等降级：保留实时剧场，不阻塞。
+    toast.show(`${message}，已保留实时剧场播放`, 'info');
+  } finally {
+    composing.value = false;
+  }
+}
+
+function closeComposedVideo(): void {
+  composedVideoUrl.value = '';
+}
+
+function toggleAiIllustration(): void {
+  useAiIllustration.value = !useAiIllustration.value;
+  const scene = scenes.value[currentScene.value];
+  if (scene) void loadSceneImage(scene, currentScene.value);
 }
 
 function onImageError(): void {
@@ -112,7 +207,7 @@ async function playScene(index: number): Promise<void> {
   const scene = scenes.value[index];
   if (!scene) return;
 
-  loadSceneImage(scene);
+  void loadSceneImage(scene, index);
   animateScene(index);
   animateStage();
 
@@ -179,7 +274,7 @@ function goToScene(i: number): void {
   currentScene.value = i;
   const scene = scenes.value[i];
   if (scene) {
-    loadSceneImage(scene);
+    void loadSceneImage(scene, i);
     animateScene(i);
     animateStage();
   }
@@ -201,7 +296,7 @@ onMounted(async () => {
   await nextTick();
   const first = scenes.value[0];
   if (first) {
-    loadSceneImage(first);
+    void loadSceneImage(first, 0);
     animateScene(0);
   }
 });
@@ -215,10 +310,12 @@ watch(
   async () => {
     pause();
     currentScene.value = 0;
+    sceneImageCache.clear();
+    composedVideoUrl.value = '';
     await nextTick();
     const first = scenes.value[0];
     if (first) {
-      loadSceneImage(first);
+      void loadSceneImage(first, 0);
       animateScene(0);
     }
   },
@@ -239,8 +336,16 @@ watch(
         class="theater-stage"
       >
         <div class="stage-content">
+          <video
+            v-if="composedVideoUrl"
+            :src="composedVideoUrl"
+            class="stage-video"
+            controls
+            autoplay
+            data-testid="storyboard-video"
+          />
           <img
-            v-if="sceneImageUrl && !sceneImageError"
+            v-else-if="sceneImageUrl && !sceneImageError"
             :src="sceneImageUrl"
             :alt="activeScene?.visual_hint ?? ''"
             class="stage-image"
@@ -280,15 +385,63 @@ watch(
             </p>
           </div>
         </div>
+        <div
+          v-if="imageGenerating && !composedVideoUrl"
+          class="stage-loading"
+          data-testid="storyboard-image-loading"
+        >
+          AI 插画生成中…
+        </div>
+        <span
+          v-if="imageDegraded && !composedVideoUrl"
+          class="degraded-badge"
+          title="未配置讯飞文生图 apikey，当前为本地占位插画"
+        >占位插画</span>
         <Transition name="subtitle-fade">
           <div
-            v-if="showSubtitle && activeScene"
+            v-if="showSubtitle && activeScene && !composedVideoUrl"
             :key="currentScene"
             class="subtitle-overlay"
           >
             <p>{{ activeScene.narration }}</p>
           </div>
         </Transition>
+      </div>
+
+      <div class="multimodal-bar">
+        <button
+          type="button"
+          :class="['mm-btn', { active: useAiIllustration }]"
+          :title="useAiIllustration ? '已开启 AI 文生图插画' : '使用课件页图'"
+          data-testid="storyboard-ai-toggle"
+          @click="toggleAiIllustration"
+        >
+          {{ useAiIllustration ? '✨ AI 插画 开' : 'AI 插画 关' }}
+        </button>
+        <button
+          v-if="!composedVideoUrl"
+          type="button"
+          class="mm-btn compose-btn"
+          :disabled="composing"
+          data-testid="storyboard-compose"
+          @click="composeVideo"
+        >
+          {{ composing ? '合成中…' : '🎬 合成讲解视频' }}
+        </button>
+        <template v-else>
+          <span
+            v-if="composedDegraded"
+            class="degraded-pill"
+          >占位合成</span>
+          <button
+            type="button"
+            class="mm-btn"
+            data-testid="storyboard-back-theater"
+            @click="closeComposedVideo"
+          >
+            ← 返回实时剧场
+          </button>
+        </template>
       </div>
 
       <div class="control-bar">
@@ -380,7 +533,7 @@ watch(
           <p class="visual">
             画面：{{ scene.visual_hint }}
           </p>
-          <small>关联 KC: {{ scene.kc_codes.join(', ') || '未标注' }}</small>
+          <small>关联知识点: {{ scene.kc_codes.map(kcDisplayName).join('、') || '未标注' }}</small>
         </li>
       </ol>
     </template>
@@ -396,7 +549,7 @@ watch(
 .empty-state {
   padding: 24px;
   text-align: center;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
   font-size: 14px;
 }
 
@@ -405,9 +558,9 @@ watch(
   position: relative;
   width: 100%;
   aspect-ratio: 16 / 9;
-  background: #2e2417;
-  border-radius: 8px;
-  border: 3px solid #6e4f1d;
+  background: var(--pyt-color-terminal-bg);
+  border-radius: var(--pyt-radius-lg);
+  border: 3px solid var(--pyt-color-text-hint);
   overflow: hidden;
 }
 .stage-content {
@@ -422,13 +575,82 @@ watch(
   height: 100%;
   object-fit: contain;
 }
+.stage-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #1a1208;
+}
+.stage-loading {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 12px;
+  background: rgba(46, 36, 23, 0.85);
+  color: #f9e7bc;
+  border-radius: 999px;
+  font-size: 12px;
+  font-family: var(--pyt-font-pixel);
+}
+.degraded-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 3px 10px;
+  background: #b39554;
+  color: var(--pyt-color-bg-elevated);
+  border-radius: 999px;
+  font-size: 11px;
+  font-family: var(--pyt-font-pixel);
+}
+
+/* ── Multimodal Bar ── */
+.multimodal-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.mm-btn {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 2px solid var(--pyt-color-text-hint);
+  background: #f9e7bc;
+  color: #3a2a14;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: var(--pyt-font-pixel);
+  transition: background 0.15s;
+}
+.mm-btn:hover:not(:disabled) { background: #f1d896; }
+.mm-btn:disabled { opacity: 0.5; cursor: default; }
+.mm-btn.active {
+  background: #4f8a3e;
+  color: var(--pyt-color-bg-elevated);
+  border-color: #2b6021;
+}
+.compose-btn {
+  background: #d4af37;
+  border-color: #8a6a12;
+  color: var(--pyt-color-shadow);
+}
+.compose-btn:hover:not(:disabled) { background: #e6c14a; }
+.degraded-pill {
+  padding: 3px 10px;
+  background: #b39554;
+  color: var(--pyt-color-bg-elevated);
+  border-radius: 999px;
+  font-size: 11px;
+  font-family: var(--pyt-font-pixel);
+}
 .stage-placeholder {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 12px;
-  color: #c9a86b;
+  color: var(--pyt-color-border);
   padding: 20px;
   text-align: center;
 }
@@ -455,7 +677,7 @@ watch(
   font-size: 15px;
   line-height: 1.55;
   text-align: center;
-  font-family: var(--pyt-font-pixel, monospace);
+  font-family: var(--pyt-font-pixel);
 }
 .subtitle-fade-enter-active,
 .subtitle-fade-leave-active {
@@ -474,8 +696,8 @@ watch(
   gap: 10px;
   padding: 8px 12px;
   background: #fffbe9;
-  border: 2px solid #c9a86b;
-  border-radius: 8px;
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-lg);
 }
 .playback-controls {
   display: flex;
@@ -484,12 +706,12 @@ watch(
 .ctrl-btn {
   padding: 6px 12px;
   border-radius: 6px;
-  border: 2px solid #6e4f1d;
+  border: 2px solid var(--pyt-color-text-hint);
   background: #f9e7bc;
   color: #3a2a14;
   cursor: pointer;
   font-size: 14px;
-  font-family: var(--pyt-font-pixel, monospace);
+  font-family: var(--pyt-font-pixel);
   transition: background 0.15s;
   line-height: 1;
 }
@@ -497,7 +719,7 @@ watch(
 .ctrl-btn:disabled { opacity: 0.4; cursor: default; }
 .play-btn {
   background: #4f8a3e;
-  color: #fff7e6;
+  color: var(--pyt-color-bg-elevated);
   border-color: #2b6021;
   min-width: 40px;
   text-align: center;
@@ -505,9 +727,9 @@ watch(
 .play-btn:hover { background: #3d7230; }
 .scene-counter {
   font-size: 13px;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
   white-space: nowrap;
-  font-family: var(--pyt-font-pixel, monospace);
+  font-family: var(--pyt-font-pixel);
 }
 .progress-track {
   flex: 1;
@@ -515,7 +737,7 @@ watch(
   background: #e6d4a5;
   border-radius: 4px;
   overflow: hidden;
-  border: 1px solid #c9a86b;
+  border: 1px solid var(--pyt-color-border);
   min-width: 60px;
 }
 .progress-fill {
@@ -530,17 +752,17 @@ watch(
 }
 .subtitle-toggle.active {
   background: #4f8a3e;
-  color: #fff7e6;
+  color: var(--pyt-color-bg-elevated);
   border-color: #2b6021;
 }
 .speed-select {
   padding: 4px 6px;
   border-radius: 4px;
-  border: 2px solid #6e4f1d;
+  border: 2px solid var(--pyt-color-text-hint);
   background: #f9e7bc;
   color: #3a2a14;
   font-size: 12px;
-  font-family: var(--pyt-font-pixel, monospace);
+  font-family: var(--pyt-font-pixel);
   cursor: pointer;
 }
 
@@ -554,7 +776,7 @@ watch(
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  border: 2px solid #c9a86b;
+  border: 2px solid var(--pyt-color-border);
   background: #fffbe9;
   font-size: 12px;
   cursor: pointer;
@@ -562,11 +784,11 @@ watch(
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
-  font-family: var(--pyt-font-pixel, monospace);
+  font-family: var(--pyt-font-pixel);
 }
 .nav-dot.active {
   background: #4f8a3e;
-  color: #fff7e6;
+  color: var(--pyt-color-bg-elevated);
   border-color: #2b6021;
   transform: scale(1.15);
 }
@@ -580,8 +802,8 @@ watch(
 }
 .scene-card {
   background: #fffbe9;
-  border: 2px solid #c9a86b;
-  border-radius: 8px;
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-lg);
   padding: 12px;
   transition: opacity 0.3s, border-color 0.3s;
 }
@@ -601,7 +823,7 @@ watch(
 }
 .badge {
   background: #4f8a3e;
-  color: #fff7e6;
+  color: var(--pyt-color-bg-elevated);
   padding: 2px 8px;
   border-radius: 999px;
   font-size: 12px;
@@ -615,7 +837,7 @@ watch(
   color: #5e4923;
 }
 small {
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
   font-size: 12px;
 }
 </style>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import PyButton from '@/components/ui/PyButton.vue';
 import MetricCard from './MetricCard.vue';
 import KcGrowthList from './KcGrowthList.vue';
 import PathDiffView from './PathDiffView.vue';
@@ -71,15 +72,14 @@ async function keepOld(): Promise<void> {
           mastery / KC / 提交数据，不会捏造结论。先在小镇里完成几次画像 / 资源 / 提交，再来评估效果更佳。
         </p>
       </div>
-      <button
-        type="button"
-        class="primary"
+      <PyButton
+        variant="primary"
         :disabled="runPhase"
-        data-testid="run-evaluation"
+        test-id="run-evaluation"
         @click="runEvaluation"
       >
         {{ runPhase ? '评估中…' : '立即评估' }}
-      </button>
+      </PyButton>
     </header>
 
     <p
@@ -154,24 +154,22 @@ async function keepOld(): Promise<void> {
         v-if="isPending"
         class="actions"
       >
-        <button
-          type="button"
-          class="accept"
-          data-testid="accept-new-path"
+        <PyButton
+          variant="primary"
+          test-id="accept-new-path"
           :disabled="loading || !current.draftPathId"
           @click="accept"
         >
           接受新路径
-        </button>
-        <button
-          type="button"
-          class="keep"
-          data-testid="keep-old"
+        </PyButton>
+        <PyButton
+          variant="secondary"
+          test-id="keep-old"
           :disabled="loading"
           @click="keepOld"
         >
           保留当前
-        </button>
+        </PyButton>
       </footer>
       <p
         v-else
@@ -185,9 +183,9 @@ async function keepOld(): Promise<void> {
 
 <style scoped>
 .review {
-  background: linear-gradient(180deg, #fff7e6 0%, #fdf3d0 100%);
-  border: 2px solid #c9a86b;
-  border-radius: 10px;
+  background: linear-gradient(180deg, var(--pyt-color-bg-elevated) 0%, var(--pyt-color-bg-soft) 100%);
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-lg);
   padding: 16px;
   display: grid;
   gap: 14px;
@@ -203,26 +201,13 @@ async function keepOld(): Promise<void> {
 }
 .hint {
   margin: 4px 0 0;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
   font-size: 12px;
 }
-.primary {
-  background: #6e4f1d;
-  color: #fff7e6;
-  border: 2px solid #4d3613;
-  border-radius: 4px;
-  padding: 6px 16px;
-  cursor: pointer;
-  font-weight: 600;
-}
-.primary:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
 .error {
-  background: #fde2dc;
-  border: 1px solid #b8442d;
-  color: #5b2017;
+  background: var(--pyt-color-danger-bg);
+  border: 1px solid var(--pyt-color-danger);
+  color: var(--pyt-color-danger);
   border-radius: 6px;
   padding: 6px 10px;
   margin: 0;
@@ -230,7 +215,7 @@ async function keepOld(): Promise<void> {
 }
 .history h3 {
   margin: 0 0 6px;
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
 }
 .entries {
   list-style: none;
@@ -241,8 +226,8 @@ async function keepOld(): Promise<void> {
   flex-wrap: wrap;
 }
 .entry-button {
-  background: #fff7e6;
-  border: 1px solid #c9a86b;
+  background: var(--pyt-color-bg-elevated);
+  border: 1px solid var(--pyt-color-border);
   border-radius: 6px;
   padding: 6px 10px;
   cursor: pointer;
@@ -250,12 +235,12 @@ async function keepOld(): Promise<void> {
   flex-direction: column;
   align-items: flex-start;
   gap: 2px;
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
 }
 .entry.active .entry-button {
-  background: #6e4f1d;
-  color: #fff7e6;
-  border-color: #4d3613;
+  background: var(--pyt-color-text-hint);
+  color: var(--pyt-color-bg-elevated);
+  border-color: var(--pyt-color-text-primary);
 }
 .entry-time {
   font-size: 11px;
@@ -265,25 +250,25 @@ async function keepOld(): Promise<void> {
   font-size: 11px;
   padding: 1px 4px;
   border-radius: 4px;
-  background: #f3e4be;
-  color: #4d3613;
+  background: var(--pyt-color-bg-sunken);
+  color: var(--pyt-color-text-primary);
 }
 .entry-status.status-accepted {
-  background: #d1eccf;
-  color: #2f8f3c;
+  background: var(--pyt-color-success-bg);
+  color: var(--pyt-color-success);
 }
 .entry-status.status-kept_old {
-  background: #f5e2c1;
-  color: #6e4f1d;
+  background: var(--pyt-color-warning-bg);
+  color: var(--pyt-color-text-hint);
 }
 .entry-status.status-pending {
-  background: #f3e4be;
-  color: #4d3613;
+  background: var(--pyt-color-bg-sunken);
+  color: var(--pyt-color-text-primary);
 }
 .empty {
   margin: 0;
   font-size: 12px;
-  color: #8a6c2c;
+  color: var(--pyt-color-text-muted);
 }
 .detail {
   display: grid;
@@ -296,12 +281,12 @@ async function keepOld(): Promise<void> {
 }
 .detail-header h3 {
   margin: 0;
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
 }
 .ai-tag {
-  background: #f3e4be;
-  border: 1px dashed #c9a86b;
-  color: #6e4f1d;
+  background: var(--pyt-color-bg-sunken);
+  border: 1px dashed var(--pyt-color-border);
+  color: var(--pyt-color-text-hint);
   padding: 2px 8px;
   border-radius: 4px;
   font-size: 11px;
@@ -313,36 +298,14 @@ async function keepOld(): Promise<void> {
 }
 .loading {
   font-size: 12px;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
 }
 .actions {
   display: flex;
   gap: 10px;
 }
-.actions .accept {
-  background: #2f8f3c;
-  color: #fff7e6;
-  border: 2px solid #1f6a28;
-  border-radius: 4px;
-  padding: 6px 16px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.actions .accept:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-.actions .keep {
-  background: #fff7e6;
-  color: #4d3613;
-  border: 2px solid #c9a86b;
-  border-radius: 4px;
-  padding: 6px 16px;
-  font-weight: 600;
-  cursor: pointer;
-}
 .acted-note {
   font-size: 12px;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
 }
 </style>

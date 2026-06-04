@@ -53,8 +53,10 @@ async def run_profile_graph(provider: LlmProvider, input_data: ProfileAgentInput
             grounding_result=grounding,
         )
     done = len(draft.filled_dimensions) == 8
+    dynamic_q = _dynamic_next_question(response.content_json)
+    fallback_q = "还差一些信息：你更偏好视频、文字、思维导图还是代码练习？"
     return ProfileAgentOutput(
-        next_question=None if done else "还差一些信息：你更偏好视频、文字、思维导图还是代码练习？",
+        next_question=None if done else (dynamic_q or fallback_q),
         profile_draft=draft if done else None,
         done=done,
         dimensions_filled=draft.filled_dimensions,
@@ -66,17 +68,41 @@ async def run_profile_graph(provider: LlmProvider, input_data: ProfileAgentInput
 
 def node_question_planner(input_data: ProfileAgentInput) -> list[dict[str, str]]:
     kc_summary = ", ".join(item.kc_code for item in input_data.course_kc_index[:12])
-    return [
+    messages: list[dict[str, str]] = [
         {
             "role": "system",
             "content": (
                 "你是 Pythontopia ProfileAgent。只输出 JSON。"
                 "必须覆盖 8 维画像，KC code 只能来自给定列表。"
+                "结合多轮对话历史，避免重复已问过的问题；"
+                "可在 JSON 中附带 next_question 字段：针对【尚未补全的维度】提出的、不重复的下一个追问。"
             ),
         },
         {"role": "system", "content": f"课程 KC 列表: {kc_summary}"},
-        {"role": "user", "content": input_data.last_user_message},
     ]
+    # 把多轮对话历史并入上下文，让 ProfileAgent 具备记忆（此前只发当前单轮，等于无记忆）。
+    turns = input_data.last_turn_history
+    for turn in turns[-13:]:
+        role = "assistant" if turn.role == "assistant" else "user"
+        messages.append({"role": role, "content": turn.content})
+    # 后端的 history 末尾通常已含当前消息；仅当历史为空或末尾非当前消息时再补一条，避免重复。
+    last_is_current = (
+        bool(turns)
+        and turns[-1].role == "user"
+        and turns[-1].content == input_data.last_user_message
+    )
+    if not last_is_current:
+        messages.append({"role": "user", "content": input_data.last_user_message})
+    return messages
+
+
+def _dynamic_next_question(content_json: dict[str, object] | None) -> str | None:
+    """优先采用 LLM 给出的针对性追问；无则返回 None 由调用方回退到默认追问。"""
+    if isinstance(content_json, dict):
+        candidate = content_json.get("next_question")
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+    return None
 
 
 def node_response_parser(content_json: dict[str, object] | None) -> ProfileDraft:

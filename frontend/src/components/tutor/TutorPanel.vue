@@ -7,13 +7,16 @@ import { useSseStream } from '@/composables/useSseStream';
 import { playSfx } from '@/composables/useAudio';
 import MarkdownView from '@/components/common/MarkdownView.vue';
 import CoursewareMentionMenu from '@/components/tutor/CoursewareMentionMenu.vue';
+import TutorVisualAids, { type TutorVisualAid } from '@/components/tutor/TutorVisualAids.vue';
+import TutorCrew from '@/components/tutor/TutorCrew.vue';
 import { listChapters, listKnowledgeComponents } from '@/api/course';
 import {
   buildMentionItems,
   useCoursewareMention,
   type MentionItem,
 } from '@/composables/useCoursewareMention';
-import type { TutorSessionDto } from '@/api/tutor';
+import { styleEngaged, type CognitiveStyle, type TutorSessionDto } from '@/api/tutor';
+import { getProfileDimensions } from '@/api/learner';
 
 interface TutorStreamResult {
   sessionId: number;
@@ -21,13 +24,20 @@ interface TutorStreamResult {
   answerMd: string;
   evidencePageIds: number[];
   groundingStatus: string;
+  // Python TutorResponse 原样透传（snake_case）：多模态图解。
+  visual_aids?: TutorVisualAid[];
 }
 
 // R-12 主线 Phase 3/4：可选上下文 props，让本面板可复用到做题页（TrainingPanel）
 // 时带上「当前题目 KC + 题面摘要」，普通 /tutor 页不传则为空，行为不变。
 const props = withDefaults(
-  defineProps<{ kcCodes?: string[]; context?: string }>(),
-  { kcCodes: () => [], context: '' },
+  defineProps<{
+    kcCodes?: string[];
+    context?: string;
+    /** 内嵌模式：隐藏左侧会话列表，单列对话（讲解页/做题页侧栏） */
+    embedded?: boolean;
+  }>(),
+  { kcCodes: () => [], context: '', embedded: false },
 );
 
 const router = useRouter();
@@ -36,6 +46,13 @@ const toast = useToastStore();
 
 const scrollRef = ref<HTMLElement | null>(null);
 const inputRef = ref<HTMLTextAreaElement | null>(null);
+
+// 看图答疑（R-14 多模态B）：仿 Cursor 多图附件，最多 3 张截图 / 手写代码图，
+// 后端逐张经讯飞「图片理解」转描述后交 deepseek 作答。
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+const MAX_IMAGES = 3;
+const fileInputRef = ref<HTMLInputElement | null>(null);
+const attachedImages = ref<string[]>([]);
 
 // `@/` 课件引用命令：输入区状态机 + 候选项（章节 / KC）。
 const mentionItems = ref<MentionItem[]>([]);
@@ -71,6 +88,19 @@ const evidencePageIds = computed<number[]>(() => {
   return [];
 });
 
+const visualAids = computed<TutorVisualAid[]>(
+  () => sse.result.value?.visual_aids ?? [],
+);
+
+// 助教小队（工作流拟人化）数据源：透出 SSE trace/status，并记录本次发送的图片数。
+const crewTraces = computed(() => sse.traces.value);
+const crewStatus = computed(() => sse.status.value);
+const lastSentImageCount = ref(0);
+
+// 因材施教：当前认知风格 + 易错点（来自画像），传给助教小队并支持"换讲法"。
+const cognitiveStyle = ref<CognitiveStyle | ''>('');
+const errorTags = ref<string[]>([]);
+
 const GROUNDING_LABELS: Record<string, { text: string; cls: string }> = {
   PASSED: { text: '引用充分', cls: 'grounding--passed' },
   NO_EVIDENCE: { text: '通识知识', cls: 'grounding--general' },
@@ -96,6 +126,8 @@ function selectSession(session: TutorSessionDto): void {
   sse.abort();
   tutor.selectSession(session);
   composer.reset();
+  clearAttachedImages();
+  lastSentImageCount.value = 0;
 }
 
 function startNew(): void {
@@ -103,6 +135,8 @@ function startNew(): void {
   sse.abort();
   tutor.startNewSession();
   composer.reset();
+  clearAttachedImages();
+  lastSentImageCount.value = 0;
   toast.show('新对话已开始，输入 @ 可引用课件章节/知识点', 'info');
   void nextTick(() => {
     inputRef.value?.focus();
@@ -151,6 +185,47 @@ function onInputKeydown(event: KeyboardEvent): void {
   }
 }
 
+function triggerImagePick(): void {
+  playSfx('sfx_click');
+  fileInputRef.value?.click();
+}
+
+function onImageSelected(event: Event): void {
+  const input = event.target as HTMLInputElement;
+  const files = Array.from(input.files ?? []);
+  input.value = '';
+  for (const file of files) {
+    if (attachedImages.value.length >= MAX_IMAGES) {
+      toast.show(`最多上传 ${MAX_IMAGES} 张图片`, 'error');
+      break;
+    }
+    if (!/^image\/(png|jpe?g)$/.test(file.type)) {
+      toast.show('仅支持 PNG / JPG 图片', 'error');
+      continue;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      toast.show('单张图片不能超过 4MB', 'error');
+      continue;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string' && attachedImages.value.length < MAX_IMAGES) {
+        attachedImages.value = [...attachedImages.value, reader.result];
+      }
+    };
+    reader.onerror = () => toast.show('图片读取失败', 'error');
+    reader.readAsDataURL(file);
+  }
+}
+
+function removeImageAt(index: number): void {
+  attachedImages.value = attachedImages.value.filter((_, i) => i !== index);
+}
+
+function clearAttachedImages(): void {
+  attachedImages.value = [];
+}
+
 async function submit(): Promise<void> {
   const q = inputText.value.trim();
   if (!q) return;
@@ -170,11 +245,15 @@ async function submit(): Promise<void> {
 
   composer.reset();
 
+  const images = attachedImages.value.length > 0 ? [...attachedImages.value] : undefined;
+  lastSentImageCount.value = attachedImages.value.length;
   await sse.start({
     question: q,
     kcCodes: mergedKcCodes,
     context,
+    images,
   });
+  clearAttachedImages();
 
   if (sse.status.value === 'done' && sse.result.value) {
     playSfx('sfx_success');
@@ -203,6 +282,37 @@ function goToPage(pageId: number): void {
   void router.push({ path: '/library', query: { pageId: String(pageId) } });
 }
 
+async function loadProfileSignals(): Promise<void> {
+  try {
+    const dims = await getProfileDimensions();
+    const cog = dims.find((d) => d.key === 'cognitive_style');
+    if (cog && cog.confidence >= 0.3 && cog.tags.length > 0) {
+      const last = cog.tags[cog.tags.length - 1];
+      if (last === 'visual' || last === 'logical' || last === 'trial') {
+        cognitiveStyle.value = last;
+      }
+    }
+    const err = dims.find((d) => d.key === 'error_pattern');
+    if (err) {
+      errorTags.value = err.tags.slice(-3);
+    }
+  } catch {
+    /* 画像不可用不影响答疑 */
+  }
+}
+
+async function onPickStyle(style: CognitiveStyle): Promise<void> {
+  cognitiveStyle.value = style;
+  playSfx('sfx_click');
+  try {
+    await styleEngaged(style, props.kcCodes[0]);
+    const label = style === 'visual' ? '图解' : style === 'logical' ? '推理' : '示例';
+    toast.show(`已记录：之后答疑更偏「${label}」`, 'info');
+  } catch {
+    toast.show('讲法偏好记录失败', 'error');
+  }
+}
+
 onMounted(async () => {
   // 加载课程包 43 的章节 + KC 作为 `@` 引用候选；失败不影响普通问答。
   try {
@@ -214,16 +324,36 @@ onMounted(async () => {
   } catch {
     mentionItems.value = [];
   }
+  void loadProfileSignals();
 });
 </script>
 
 <template>
   <div
     class="tutor-panel"
+    :class="{ 'tutor-panel--embedded': embedded }"
     data-testid="tutor-panel"
   >
+    <div
+      v-if="embedded"
+      class="embedded-bar"
+    >
+      <span class="embedded-bar__hint">基于本章 KC 与课件 RAG</span>
+      <button
+        type="button"
+        class="embedded-bar__new"
+        data-testid="tutor-new-session"
+        @click="startNew"
+      >
+        + 新问
+      </button>
+    </div>
+
     <!-- Left Sidebar: Session History -->
-    <aside class="sidebar">
+    <aside
+      v-if="!embedded"
+      class="sidebar"
+    >
       <div class="sidebar__head">
         <h3 class="sidebar__title">
           对话记录
@@ -288,6 +418,18 @@ onMounted(async () => {
         </span>
       </div>
 
+      <!-- 助教小队：工作流拟人化（看图答疑 / 检索 / 讲解 / 校对 实时可视，借鉴 Marvis 虚拟办公室） -->
+      <TutorCrew
+        v-if="isStreaming || groundingStatus"
+        :traces="crewTraces"
+        :status="crewStatus"
+        :image-count="lastSentImageCount"
+        :grounding="groundingStatus"
+        :cognitive-style="cognitiveStyle"
+        :error-tags="errorTags"
+        @pick-style="onPickStyle"
+      />
+
       <!-- Current Question -->
       <div
         v-if="tutor.currentSession"
@@ -314,12 +456,16 @@ onMounted(async () => {
             v-if="isStreaming"
             class="streaming-cursor"
           >▌</span>
+          <TutorVisualAids
+            v-if="!isStreaming && visualAids.length > 0"
+            :aids="visualAids"
+          />
         </div>
         <p
           v-else-if="!tutor.currentSession && !isStreaming"
           class="answer-placeholder"
         >
-          有什么 Python 问题？向导师提问吧
+          {{ embedded ? '边看视频边问：输入 @ 可引用本章知识点' : '有什么 Python 问题？向导师提问吧' }}
         </p>
       </div>
 
@@ -355,8 +501,44 @@ onMounted(async () => {
         </button>
       </div>
 
+      <!-- 看图答疑：仿 Cursor 的多图附件缩略图，列在输入框上方 -->
+      <div
+        v-if="attachedImages.length > 0"
+        class="image-attachments"
+        data-testid="tutor-image-attach"
+      >
+        <div
+          v-for="(img, i) in attachedImages"
+          :key="i"
+          class="image-chip"
+        >
+          <img
+            :src="img"
+            class="image-chip__thumb"
+            :alt="`待识别图片 ${i + 1}`"
+          >
+          <button
+            type="button"
+            class="image-chip__remove"
+            :aria-label="`移除图片 ${i + 1}`"
+            @click="removeImageAt(i)"
+          >
+            ×
+          </button>
+        </div>
+      </div>
+
       <!-- Input Area -->
       <div class="input-area">
+        <input
+          ref="fileInputRef"
+          type="file"
+          accept="image/png,image/jpeg"
+          multiple
+          hidden
+          data-testid="tutor-image-input"
+          @change="onImageSelected"
+        >
         <CoursewareMentionMenu
           :visible="mentionVisible"
           :groups="mentionGroups"
@@ -374,6 +556,16 @@ onMounted(async () => {
           @input="onInputChange"
           @keydown="onInputKeydown"
         />
+        <button
+          type="button"
+          class="input-area__attach"
+          data-testid="tutor-image-button"
+          title="上传截图 / 手写代码图（最多 3 张），看图答疑"
+          :disabled="isStreaming || attachedImages.length >= MAX_IMAGES"
+          @click="triggerImagePick"
+        >
+          🖼
+        </button>
         <button
           type="button"
           class="input-area__submit"
@@ -395,15 +587,59 @@ onMounted(async () => {
   gap: 0;
   height: 100%;
   min-height: 0;
-  font-family: var(--pyt-font-pixel, monospace);
+  font-family: var(--pyt-font-pixel);
   color: #3a2a14;
+}
+.tutor-panel--embedded {
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr;
+}
+.embedded-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 2px dashed rgba(110, 79, 29, 0.35);
+  background: rgba(255, 247, 230, 0.6);
+}
+.embedded-bar__hint {
+  font-size: 10px;
+  color: var(--pyt-color-text-hint);
+  line-height: 1.3;
+}
+.embedded-bar__new {
+  flex: 0 0 auto;
+  font-family: inherit;
+  font-size: 10px;
+  padding: 3px 8px;
+  background: #f7d774;
+  border: 2px solid #8c6a23;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 700;
+}
+.tutor-panel--embedded .conversation {
+  padding: 8px;
+  gap: 6px;
+}
+.tutor-panel--embedded .input-area__textarea {
+  font-size: 12px;
+}
+.tutor-panel--embedded .input-area__submit {
+  font-size: 12px;
+  padding: 6px 10px;
+}
+.tutor-panel--embedded .msg__text,
+.tutor-panel--embedded .answer-placeholder {
+  font-size: 12px;
 }
 
 /* ── Sidebar ── */
 .sidebar {
   display: flex;
   flex-direction: column;
-  border-right: 3px solid #6e4f1d;
+  border-right: 3px solid var(--pyt-color-text-hint);
   background: linear-gradient(180deg, #f9e7bc 0%, #f1d896 100%);
   padding: 10px;
   min-height: 0;
@@ -420,7 +656,7 @@ onMounted(async () => {
 .sidebar__title {
   margin: 0;
   font-size: 14px;
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
 }
 .sidebar__new {
   font-family: inherit;
@@ -449,8 +685,8 @@ onMounted(async () => {
 }
 .session-item {
   padding: 6px 8px;
-  background: #fff7e6;
-  border: 2px solid #c9a86b;
+  background: var(--pyt-color-bg-elevated);
+  border: 2px solid var(--pyt-color-border);
   border-radius: 6px;
   cursor: pointer;
   display: flex;
@@ -459,17 +695,17 @@ onMounted(async () => {
   transition: background 120ms, border-color 120ms;
 }
 .session-item:hover {
-  background: #f5e2c1;
-  border-color: #6e4f1d;
+  background: var(--pyt-color-warning-bg);
+  border-color: var(--pyt-color-text-hint);
 }
 .session-item--active {
   background: #ffe098;
-  border-color: #6e4f1d;
-  box-shadow: inset 0 0 0 1px #6e4f1d;
+  border-color: var(--pyt-color-text-hint);
+  box-shadow: inset 0 0 0 1px var(--pyt-color-text-hint);
 }
 .session-item__q {
   font-size: 12px;
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -477,13 +713,13 @@ onMounted(async () => {
 }
 .session-item__time {
   font-size: 10px;
-  color: #8a6c2c;
+  color: var(--pyt-color-text-muted);
 }
 .session-empty {
   padding: 16px 8px;
   text-align: center;
   font-size: 12px;
-  color: #8a6c2c;
+  color: var(--pyt-color-text-muted);
 }
 
 /* ── Conversation ── */
@@ -516,13 +752,13 @@ onMounted(async () => {
 }
 .grounding--general {
   background: #fff3cd;
-  color: #8a6c2c;
+  color: var(--pyt-color-text-muted);
   border: 1px solid #d4af37;
 }
 .grounding--failed {
   background: #f8d7d0;
   color: #b3402a;
-  border: 1px solid #b8442d;
+  border: 1px solid var(--pyt-color-danger);
 }
 .evidence-badges {
   display: inline-flex;
@@ -533,8 +769,8 @@ onMounted(async () => {
   font-family: monospace, 'PingFang SC', sans-serif;
   font-size: 11px;
   padding: 2px 6px;
-  background: #d0e3f1;
-  border: 1px solid #2a6f97;
+  background: var(--pyt-color-info-bg);
+  border: 1px solid var(--pyt-color-info);
   color: #1b4a6b;
   border-radius: 4px;
   cursor: pointer;
@@ -547,11 +783,11 @@ onMounted(async () => {
 /* Messages */
 .msg {
   padding: 8px 12px;
-  border-radius: 8px;
-  border: 2px solid #c9a86b;
+  border-radius: var(--pyt-radius-lg);
+  border: 2px solid var(--pyt-color-border);
 }
 .msg--user {
-  background: #fff7e6;
+  background: var(--pyt-color-bg-elevated);
   align-self: flex-end;
   max-width: 80%;
 }
@@ -564,7 +800,7 @@ onMounted(async () => {
   display: block;
   font-size: 10px;
   font-weight: 700;
-  color: #8a6c2c;
+  color: var(--pyt-color-text-muted);
   margin-bottom: 2px;
 }
 .msg__text {
@@ -587,7 +823,7 @@ onMounted(async () => {
   padding: 32px 16px;
   text-align: center;
   font-size: 14px;
-  color: #8a6c2c;
+  color: var(--pyt-color-text-muted);
 }
 .streaming-cursor {
   animation: blink-cursor 0.8s steps(2) infinite;
@@ -604,7 +840,7 @@ onMounted(async () => {
   margin: 0;
   padding: 6px 10px;
   background: #f8d7d0;
-  border: 1px solid #b8442d;
+  border: 1px solid var(--pyt-color-danger);
   border-radius: 4px;
   font-size: 12px;
   color: #b3402a;
@@ -620,7 +856,7 @@ onMounted(async () => {
 .ref-chips__label {
   font-size: 11px;
   font-weight: 700;
-  color: #8a6c2c;
+  color: var(--pyt-color-text-muted);
 }
 .ref-chip {
   display: inline-flex;
@@ -631,9 +867,9 @@ onMounted(async () => {
   font-size: 11px;
   border-radius: 999px;
   cursor: pointer;
-  border: 1px solid #6e4f1d;
+  border: 1px solid var(--pyt-color-text-hint);
   background: #ffe098;
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
   transition: background 120ms;
 }
 .ref-chip:hover {
@@ -641,7 +877,7 @@ onMounted(async () => {
 }
 .ref-chip--chapter {
   background: #d6e6f4;
-  border-color: #2a6f97;
+  border-color: var(--pyt-color-info);
   color: #1b4a6b;
 }
 .ref-chip--kc {
@@ -673,8 +909,8 @@ onMounted(async () => {
 .input-area__textarea {
   flex: 1 1 auto;
   padding: 8px 10px;
-  background: #fff7e6;
-  border: 3px solid #c9a86b;
+  background: var(--pyt-color-bg-elevated);
+  border: 3px solid var(--pyt-color-border);
   border-radius: 6px;
   font-family: inherit;
   font-size: 14px;
@@ -683,7 +919,7 @@ onMounted(async () => {
 }
 .input-area__textarea:focus {
   outline: none;
-  border-color: #6e4f1d;
+  border-color: var(--pyt-color-text-hint);
 }
 .input-area__textarea:disabled {
   opacity: 0.6;
@@ -714,6 +950,67 @@ onMounted(async () => {
   cursor: not-allowed;
 }
 
+/* 看图答疑：附件按钮 + 仿 Cursor 缩略图附件条 */
+.input-area__attach {
+  flex: 0 0 auto;
+  font-size: 16px;
+  padding: 6px 10px;
+  background: var(--pyt-color-bg-elevated);
+  border: 3px solid var(--pyt-color-border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 80ms;
+}
+.input-area__attach:hover:not(:disabled) {
+  background: var(--pyt-color-warning-bg);
+}
+.input-area__attach:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.image-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px 0;
+}
+.image-chip {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--pyt-radius-md);
+  border: 1px solid var(--pyt-color-border);
+  overflow: hidden;
+  background: var(--pyt-color-bg-soft);
+}
+.image-chip__thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.image-chip__remove {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--pyt-color-text-on-dark);
+  background: var(--pyt-color-shadow);
+  border: none;
+  border-radius: var(--pyt-radius-sm);
+  cursor: pointer;
+  opacity: 0.85;
+}
+.image-chip__remove:hover {
+  opacity: 1;
+}
+
 /* ── Responsive ── */
 @media (max-width: 768px) {
   .tutor-panel {
@@ -722,7 +1019,7 @@ onMounted(async () => {
   }
   .sidebar {
     border-right: none;
-    border-bottom: 3px solid #6e4f1d;
+    border-bottom: 3px solid var(--pyt-color-text-hint);
     max-height: 140px;
   }
   .session-list {

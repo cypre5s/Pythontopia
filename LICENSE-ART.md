@@ -13,6 +13,28 @@
 | **CC-BY-SA 3.0+ / GPL 3.0+** | 5 子源 | buildings_npc/lpc_*, crops/lpc-*, opengameart_farming/daneeklu, opengameart_farming/lpc_farm, seasons_school/lpc_* | ✅ | **强制** | **传染** |
 | **OFL-1.1** | 1 | github_extra/ark_pixel_font | ✅ | **强制** | 仅字体内 |
 
+## Android 客户端打包资产（2026-06-02 新增）
+
+R-12 原生安卓化把 `:game`（LibGDX）从「色块占位」升级为真实瓦片+精灵渲染，所用资产
+**全部是上表已审计来源的副本**（与 `frontend/public/assets/` 字节一致），打包进
+`android/app/src/main/assets/`，无新增外部素材，license 不变：
+
+| 安卓路径 | 来源 | License |
+| --- | --- | --- |
+| `tilesets/town.png` | Kenney Tiny Town `tilemap_packed.png` | CC0 1.0 |
+| `tilesets/dungeon.png` | Kenney Tiny Dungeon `tilemap_packed.png` | CC0 1.0 |
+| `maps/{town_hub,farm_north,mine_south,campus_east,port_west}.json` | 项目程序化生成（`frontend/scripts/generate-maps.mjs`） | 项目源码（CC-BY-SA 3.0+ 包装版本） |
+| `sprites/player.png` | LPC walk9 主角行走表（9×4，64px），由 Universal-LPC-Spritesheet-Character-Generator 图层合成（body+pants+longsleeve+cowlick） | CC-BY-SA 3.0+ / GPL 3.0+（传染） |
+| `sprites/player_sara2.png` | ULPC「Expanded」主角整表（13×42，合成自 Universal-LPC 库） | CC-BY-SA 3.0+ / GPL 3.0+（传染） |
+| `sprites/npc/npc_*.png`（16 个） | LPC walk9 NPC 合成图（9×4，64px，按角色配色合成自 Universal-LPC 库） | CC-BY-SA 3.0+ / GPL 3.0+（传染） |
+
+> LPC 合成角色署名：Universal-LPC-Spritesheet-Character-Generator（LiberatedPixelCup）及其部件作者
+> （Stephen Challener "Redshrike"、Johannes Sjölund "wulax"、bluecarrot16、JaidynReiman、ElizaWy 等），
+> 源 https://github.com/LiberatedPixelCup/Universal-LPC-Spritesheet-Character-Generator ，CC-BY-SA 3.0+。
+> 兜底安全网：缺上述任一二进制图集时，`:game/ProceduralArt` + `GameAssets` 在运行时**程序化生成**
+> 等价配色瓦片与简易像素角色（纯算法产物，CC0），保证 5 张地图永不因缺图崩溃，真素材在场时自动优先。
+> 程序化软阴影 / 1×1 纯白像素（`GameAssets` 内 `Pixmap` 运行时生成）同属 CC0，不计外部素材。
+
 ## 代码层音视觉库（2026-05-24 R-13 新增，不属于资产层）
 
 R-13 Phase 3 引入 3 个前端音视觉 JavaScript 库，与本文档涵盖的"资产层"
@@ -182,6 +204,68 @@ license 矩阵无关（它们是 JS 代码，受代码层 MIT 控制），但为
 
 > reveal.js MIT License 不影响项目 CC-BY-SA 3.0 分层授权。
 > 讯飞 TTS 为商用 API 调用，不包含可再分发代码，仅需遵守讯飞服务条款。
+
+## R-12 智能体事务所像素场景（2026-05-29）
+
+P3-a2「智能体事务所」执行动画复用既有 NPC 行走帧（无新增二进制美术）。这批合成帧此前已在
+`BootScene` 预载但未单独登记，本次随事务所场景（`AgentOfficeScene.vue` 以 CSS background 引用）
+补齐双文件登记。
+
+| 运行时路径 | 来源 | License | 用途 |
+| --- | --- | --- | --- |
+| `frontend/public/assets/pixel/sprites/npc-composites/npc_*.png`（16 张） | 由 LPC walkcycle 图层合成（Johannes Sjölund "wulax" + bluecarrot16 + LPC base contributors），源 [LPC Medieval Fantasy Character Sprites](https://opengameart.org/content/lpc-medieval-fantasy-character-sprites) | **CC-BY-SA-3.0** | 智能体事务所 Agent / 主管 NPC 行走帧（9×4 walkcycle，64×64）；事务所动画 + 世界 NPC 复用 |
+
+> LPC CC-BY-SA 3.0 传染已接受：包装作品同时以 CC-BY-SA 3.0+ 发布，代码层保持 MIT。
+> 已同步登记到 `scripts/sync-assets.mjs` MANIFEST（noSync）与 `frontend/public/assets/pixel/LICENSE.md` 自动索引。
+
+## R-12 ULPC 全动作角色（动作模组方案A，2026-05-29 修订）
+
+主角与世界 NPC 改用**官方 Universal-LPC-Spritesheet-Character-Generator** 的整套素材库
+合成「Expanded」全动作角色表（13×42：base 6 动作 + climb/idle/jump/sit/emote/run）。
+由 `scripts/build-ulpc-characters.py` 忠实合成（仅用官方像素，非手绘）。源 zip/credits 留存于
+`assets/inbox/characters_extra/ulpc_generated/`（`README_SOURCE.md` + `CREDITS-ulpc-used.txt` +
+`LICENSE-ulpc.txt`）。早前 `scripts/build-npc-action-sheets.py` 的本地合成套装（npcact_*）已废弃删除。
+
+| 运行时路径 | 来源 | License | 用途 |
+| --- | --- | --- | --- |
+| `frontend/public/assets/pixel/sprites/ulpc/{player_sara2,ulpc_villager_f,ulpc_villager_m,ulpc_scholar,ulpc_worker,ulpc_lady,ulpc_youth,ulpc_elder,ulpc_guard}.png`（9 张） | [Universal-LPC-Spritesheet-Character-Generator](https://github.com/LiberatedPixelCup/Universal-LPC-Spritesheet-Character-Generator)，部件作者见 `CREDITS-ulpc-used.txt`（bluecarrot16 / ElizaWy / JaidynReiman / wulax / Redshrike 等） | **CC-BY-SA-3.0 / OGA-BY-3.0 / CC-BY-3.0+ / CC0 / GPL（分文件混合）** | 主角 + 8 个变体 NPC 全动作精灵表（64×64，含 run/jump/idle/sit）；16 个城镇 NPC 按角色映射复用 |
+
+> 合成产物为构建产物（build artifact）：源 = 官方 ULPC 素材库 + 合成脚本；二者均已审计。
+> 接受 CC-BY-SA 3.0 传染：以 CC-BY-SA 3.0+ 发布。
+
+## R-12 手持工具叠加层（动作模组 C 阶段，联网爬取，2026-05-29）
+
+为主角与 NPC 的「浇水 / 锄地」动作添加星露谷味的手持工具，从 OpenGameArt 爬取
+**[LPC] Hand Tools**（与 LPC 通用表同帧布局，可直接叠加在任意 LPC 角色之上）。
+源 zip 留存于 `assets/inbox/characters_extra/lpc_hand_tools/`（含 `CREDITS-hand-tools.txt`）。
+
+| 运行时路径 | 来源 | License | 用途 |
+| --- | --- | --- | --- |
+| `frontend/public/assets/pixel/sprites/lpc-tools/{watering-can,watering-can-bg,hoe,hoe-bg}.png`（4 张） | [\[LPC\] Hand Tools](https://opengameart.org/content/lpc-hand-tools) by **bluecarrot16, Pierre Vigier, Tuomo Untinen, Johannes Sjölund (wulax), Inboxninja** | **CC-BY-SA-3.0**（浇水壶另可 OGA-BY-3.0+/CC-BY-4.0+/GPL-2.0+） | 主角/NPC 浇水(thrust)动作的手持工具叠加层（universal 13×21，前景 + 身后两层）；浇水壶由 SWRG 委托、锄头由 SWRG 委托 |
+
+> 仅取 thrust 系工具（与基础表 thrust 帧对齐）；smash/fishing 系工具因主角缺对应扩展动画暂未采用。
+> 完整署名见运行时目录内 `CREDITS-hand-tools.txt`；CC-BY-SA 3.0 传染同上。
+
+## R-12 茅草屋建筑（替换方块拼接，2026-05-29）
+
+世界场景的建筑由「方块瓦片拼接」升级为 LPC 茅草屋整屋 sprite（四坡茅草顶 + 半木墙体），
+由 `scripts/build-cottages.py` 从 kit 裁切合成，按建筑区位底沿对齐贴在旧瓦片之上。
+
+| 运行时路径 | 来源 | License | 用途 |
+| --- | --- | --- | --- |
+| `frontend/public/assets/pixel/sprites/cottages/cottage_{tan,cream,stone}.png`（3 张） | [\[LPC\] Thatched-roof Cottage](https://opengameart.org/content/lpc-thatched-roof-cottage) by **bluecarrot16, Daniel Eddeland (daneeklu), Lanea Zimmerman (Sharm)** | **CC-BY-SA-3.0** | 世界场景建筑整屋 sprite（142×220），按 route 哈希取色 |
+
+> 源 kit 留存于 `assets/inbox/buildings_npc/lpc_thatched-roof-cottage/`；CC-BY-SA 3.0 传染同上。
+
+## R-12 砍伐工具叠加（斧头，2026-05-30）
+
+主角砍树/挖矿用「斧头挥砍」：身体播标准 slash，斧头用 ULPC 192px oversize `attack_slash`
+叠加层同步挥出（取自 `weapon_blunt_waraxe`）。fishing/pickaxe 专用动画因 ULPC 缺对应
+身体+衣物帧暂不可用（见 ULPC README）。
+
+| 运行时路径 | 来源 | License | 用途 |
+| --- | --- | --- | --- |
+| `frontend/public/assets/pixel/sprites/weapons/weapon_axe{,_bg}.png`（2 张，192×192） | [Universal-LPC-Spritesheet-Character-Generator](https://github.com/LiberatedPixelCup/Universal-LPC-Spritesheet-Character-Generator) 的 `weapon_blunt_waraxe`（LPC contributors） | **CC-BY-SA-3.0 / OGA-BY-3.0 / GPL** | 主角砍树/挖矿斧头挥砍叠加（与 slash 同步） |
 
 ## 待办（backlog）
 

@@ -133,7 +133,7 @@ describe('ProblemListPage', () => {
     expect(wrapper.text()).toContain('失败');
   });
 
-  it('点击难度 chip 过滤题目', async () => {
+  it('知识点下拉仅含本题库关联的 KC', async () => {
     const router = createTestRouter();
     await router.push('/problems');
     await router.isReady();
@@ -142,10 +142,42 @@ describe('ProblemListPage', () => {
     });
     await flushPromises();
 
-    const chips = wrapper.findAll('.filter-group .chip');
-    const mediumChip = chips.find((chip) => chip.text() === '中等');
-    expect(mediumChip).toBeDefined();
-    await mediumChip!.trigger('click');
+    const kcSelect = wrapper.find('[data-testid="filter-kc"]');
+    const options = kcSelect.findAll('option');
+    // 1 个「全部」+ 4 个有题的 KC（016/025/022/032）
+    expect(options.length).toBe(5);
+    expect(kcSelect.text()).not.toContain('PY43-KC-001');
+    expect(wrapper.text()).toContain('知识点（4）');
+  });
+
+  it('搜索栏按标题过滤题目', async () => {
+    const router = createTestRouter();
+    await router.push('/problems');
+    await router.isReady();
+    const wrapper = mount(ProblemListPage, {
+      global: { plugins: [router], stubs: { AppLayout: APP_LAYOUT_STUB } },
+    });
+    await flushPromises();
+
+    await wrapper.find('[data-testid="filter-search"]').setValue('莱布尼茨');
+    await flushPromises();
+
+    const rowsAfter = wrapper.findAll('.problem-row:not(.problem-row--head)');
+    expect(rowsAfter.length).toBe(1);
+    expect(wrapper.text()).toContain('莱布尼茨级数');
+  });
+
+  it('难度下拉过滤题目', async () => {
+    const router = createTestRouter();
+    await router.push('/problems');
+    await router.isReady();
+    const wrapper = mount(ProblemListPage, {
+      global: { plugins: [router], stubs: { AppLayout: APP_LAYOUT_STUB } },
+    });
+    await flushPromises();
+
+    const diffSelect = wrapper.find('[data-testid="filter-difficulty"]');
+    await diffSelect.setValue('Medium');
     await flushPromises();
 
     const rowsAfter = wrapper.findAll('.problem-row:not(.problem-row--head)');

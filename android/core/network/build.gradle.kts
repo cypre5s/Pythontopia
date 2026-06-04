@@ -12,6 +12,19 @@ android {
 
     defaultConfig {
         minSdk = libs.versions.minSdk.get().toInt()
+        // debug 连本地后端（明文，network_security_config 白名单放行）。
+        buildConfigField("String", "BASE_URL", "\"http://10.0.2.2:18080/\"")
+    }
+
+    buildFeatures {
+        buildConfig = true
+    }
+
+    buildTypes {
+        getByName("release") {
+            // 生产走 HTTPS；上架前替换为真实域名。
+            buildConfigField("String", "BASE_URL", "\"https://api.pythontopia.example/\"")
+        }
     }
 
     compileOptions {

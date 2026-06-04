@@ -10,7 +10,7 @@
   "tileheight": 16,
   "infinite": false,
   "nextlayerid": 5,
-  "nextobjectid": 48,
+  "nextobjectid": 52,
   "properties": [
     {
       "name": "mapKey",
@@ -6314,7 +6314,7 @@
             {
               "name": "label",
               "type": "string",
-              "value": "资源工坊"
+              "value": "百晓工坊"
             }
           ]
         },
@@ -7388,6 +7388,118 @@
         },
         {
           "id": 47,
+          "name": "npc_mine_keeper",
+          "type": "npc",
+          "x": 336,
+          "y": 528,
+          "width": 0,
+          "height": 0,
+          "visible": true,
+          "rotation": 0,
+          "properties": [
+            {
+              "name": "key",
+              "type": "string",
+              "value": "mine_keeper"
+            },
+            {
+              "name": "label",
+              "type": "string",
+              "value": "矿洞守矿人"
+            },
+            {
+              "name": "sprite",
+              "type": "string",
+              "value": "npc_miner"
+            }
+          ]
+        },
+        {
+          "id": 48,
+          "name": "npc_foreman_bug",
+          "type": "npc",
+          "x": 384,
+          "y": 528,
+          "width": 0,
+          "height": 0,
+          "visible": true,
+          "rotation": 0,
+          "properties": [
+            {
+              "name": "key",
+              "type": "string",
+              "value": "foreman_bug"
+            },
+            {
+              "name": "label",
+              "type": "string",
+              "value": "矿头 Bug"
+            },
+            {
+              "name": "sprite",
+              "type": "string",
+              "value": "npc_guard"
+            }
+          ]
+        },
+        {
+          "id": 49,
+          "name": "npc_captain_def",
+          "type": "npc",
+          "x": 64,
+          "y": 384,
+          "width": 0,
+          "height": 0,
+          "visible": true,
+          "rotation": 0,
+          "properties": [
+            {
+              "name": "key",
+              "type": "string",
+              "value": "captain_def"
+            },
+            {
+              "name": "label",
+              "type": "string",
+              "value": "船长 Def"
+            },
+            {
+              "name": "sprite",
+              "type": "string",
+              "value": "npc_sailor"
+            }
+          ]
+        },
+        {
+          "id": 50,
+          "name": "npc_class_president",
+          "type": "npc",
+          "x": 256,
+          "y": 256,
+          "width": 0,
+          "height": 0,
+          "visible": true,
+          "rotation": 0,
+          "properties": [
+            {
+              "name": "key",
+              "type": "string",
+              "value": "class_president"
+            },
+            {
+              "name": "label",
+              "type": "string",
+              "value": "班长"
+            },
+            {
+              "name": "sprite",
+              "type": "string",
+              "value": "npc_student"
+            }
+          ]
+        },
+        {
+          "id": 51,
           "name": "spawn",
           "type": "spawn",
           "x": 400,

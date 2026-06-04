@@ -1,13 +1,14 @@
 <script setup lang="ts">
 // HUD：紧凑状态条 + 底部 Dock(5快捷+菜单) + 日夜配色。
 import { computed, onMounted, onUnmounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { useHudStore, type HudQuickSlot, bgmLabel } from '@stores/hud';
 import { useWorldStore } from '@stores/world';
 import { useToastStore } from '@stores/toast';
 import { useMainQuestStore } from '@stores/mainQuest';
 import { useSessionStore } from '@stores/session';
 import { useGameSettingsStore } from '@stores/gameSettings';
+import { useGuideStore } from '@stores/guide';
 import { useAudio } from '@/composables/useAudio';
 import { playUiClick, playUiHover } from '@/composables/useStardewFx';
 
@@ -29,6 +30,7 @@ const SLOTS: readonly SlotDescriptor[] = [
 ] as const;
 
 const hud = useHudStore();
+const route = useRoute();
 const router = useRouter();
 const audio = useAudio();
 const world = useWorldStore();
@@ -36,6 +38,7 @@ const toast = useToastStore();
 const mainQuest = useMainQuestStore();
 const session = useSessionStore();
 const gameSettings = useGameSettingsStore();
+const guide = useGuideStore();
 
 const currentBgm = ref<string>(bgmLabel(audio.getCurrentBgmKey()));
 let bgmPollTimer: number | null = null;
@@ -141,6 +144,12 @@ function isActive(slot: HudQuickSlot): boolean {
   return hud.activeSlot === slot;
 }
 
+// P1-a：伴学向导单一入口（常驻 Dock）。独立 store flag，可与其他面板共存。
+function onClickGuide(): void {
+  playUiClick();
+  guide.toggle();
+}
+
 function openLibrary(): void {
   playUiClick();
   void router.push('/library');
@@ -210,6 +219,11 @@ function isCanvasFocused(target: EventTarget | null): boolean {
   return target instanceof HTMLCanvasElement;
 }
 
+/** 小镇内 WASD / C 等交给 Phaser，不与 HUD 单键导航抢键。 */
+function isWorldGameplayActive(): boolean {
+  return route.name === 'world';
+}
+
 function onToggleTopBar(): void {
   playUiClick();
   hud.toggleTopBar();
@@ -243,6 +257,7 @@ function onKey(event: KeyboardEvent): void {
     if (gameSettings.pauseMenuOpen) { gameSettings.closePauseMenu(); return; }
     if (gameSettings.quickWheelOpen) { gameSettings.closeQuickWheel(); return; }
     if (hud.settingsOpen) { hud.closeSettings(); return; }
+    if (guide.open) { guide.closePanel(); return; }
     if (hud.activeSlot) { hud.closeAll(); return; }
     gameSettings.openPauseMenu();
     return;
@@ -250,6 +265,12 @@ function onKey(event: KeyboardEvent): void {
 
   if (event.key === ',') {
     onToggleSettings();
+    event.preventDefault();
+    return;
+  }
+  // G → 伴学向导（即便游戏画布聚焦也可呼出，单一入口）
+  if ((event.key === 'g' || event.key === 'G') && !event.shiftKey) {
+    onClickGuide();
     event.preventDefault();
     return;
   }
@@ -275,9 +296,13 @@ function onKey(event: KeyboardEvent): void {
     event.preventDefault();
     return;
   }
-  if (lowered === 'a' && !event.shiftKey) {
+  // 闯关：Shift+A（单键 A 与小镇左移冲突，见 input.ts）
+  if (lowered === 'a' && event.shiftKey) {
     openArena();
     event.preventDefault();
+    return;
+  }
+  if (isWorldGameplayActive() && (lowered === 'a' || lowered === 'c')) {
     return;
   }
   if (lowered === 't' && !event.shiftKey) {
@@ -330,7 +355,7 @@ onUnmounted(() => {
       </svg>
     </button>
 
-    <!-- 紧凑状态条：左上角天气+时间，右上角玩家+金币 -->
+    <!-- 紧凑状态条：左上角天气+时间，右上角玩家 -->
     <div
       v-if="topBarVisible"
       class="hud-status-strip"
@@ -404,6 +429,29 @@ onUnmounted(() => {
       data-testid="hud-bottom"
       aria-label="快捷面板"
     >
+      <!-- P1-a：伴学向导 = 单一入口，常驻 Dock 最左、独立高亮样式（不计入 .hud-slot） -->
+      <button
+        type="button"
+        class="hud-guide-slot"
+        :class="{ 'hud-guide-slot--active': guide.open }"
+        data-testid="hud-guide"
+        :aria-pressed="guide.open"
+        aria-label="伴学向导（G）"
+        title="伴学向导 · 学习总管（G）"
+        @click="onClickGuide"
+        @mouseenter="onSlotHover"
+      >
+        <span
+          class="hud-guide-slot__icon"
+          aria-hidden="true"
+        >✧</span>
+        <span class="hud-guide-slot__label">向导</span>
+        <span class="hud-guide-slot__shortcut">G</span>
+      </button>
+      <span
+        class="hud-divider"
+        aria-hidden="true"
+      />
       <button
         v-for="slot in SLOTS"
         :key="slot.key"
@@ -521,7 +569,7 @@ onUnmounted(() => {
 }
 .hud-chip--btn:hover {
   background: rgba(212, 175, 55, 0.3);
-  border-color: var(--pyt-text-accent, #ffd166);
+  border-color: var(--pyt-text-accent, var(--pyt-color-gold-bright));
 }
 .hud-chip--btn:active {
   transform: translateY(1px);
@@ -569,7 +617,7 @@ onUnmounted(() => {
   z-index: 100;
   font-size: 11px;
   color: var(--pyt-text-primary);
-  font-family: var(--pyt-font-pixel, monospace);
+  font-family: var(--pyt-font-pixel);
 }
 .hud-status-left,
 .hud-status-right {
@@ -587,7 +635,7 @@ onUnmounted(() => {
   border: 1px solid transparent;
   padding: 2px 6px;
   border-radius: 2px;
-  font-family: var(--pyt-font-pixel, monospace);
+  font-family: var(--pyt-font-pixel);
   color: var(--pyt-text-primary);
   font-weight: 600;
   cursor: pointer;
@@ -612,7 +660,7 @@ onUnmounted(() => {
   border-radius: 2px;
   padding: 4px 12px;
   color: var(--pyt-text-primary);
-  font-family: var(--pyt-font-pixel, monospace);
+  font-family: var(--pyt-font-pixel);
   font-size: 11px;
   cursor: pointer;
   pointer-events: auto;
@@ -689,7 +737,7 @@ onUnmounted(() => {
   background: rgba(241, 196, 83, 0.12);
 }
 .hud-top__col--center:focus-visible {
-  outline: 2px solid #f1c453;
+  outline: 2px solid var(--pyt-color-gold);
   outline-offset: 2px;
 }
 
@@ -718,13 +766,6 @@ onUnmounted(() => {
 .hud-chip__value {
   color: var(--pyt-text-primary);
   font-weight: 600;
-}
-.hud-chip--coin {
-  background: rgba(241, 196, 83, 0.22);
-  border-color: #f1c453;
-}
-.hud-chip--coin .hud-chip__icon {
-  color: var(--pyt-text-accent);
 }
 
 /* ── 中列任务摘要 ──────────────────────────────────────────────── */
@@ -777,7 +818,7 @@ onUnmounted(() => {
 .hud-quest__bar-fill {
   display: block;
   height: 100%;
-  background: linear-gradient(90deg, #6bbf59 0%, #f1c453 100%);
+  background: linear-gradient(90deg, #6bbf59 0%, var(--pyt-color-gold) 100%);
   transition: width 240ms ease-out;
   box-shadow: 0 0 6px rgba(241, 196, 83, 0.5);
 }
@@ -816,7 +857,7 @@ onUnmounted(() => {
   font-size: 12px;
   padding: 4px 12px;
   background: rgba(184, 68, 45, 0.22);
-  border: 1px solid #b8442d;
+  border: 1px solid var(--pyt-color-danger);
   color: #ffe3da;
   border-radius: 2px;
   cursor: pointer;
@@ -857,7 +898,7 @@ onUnmounted(() => {
   width: 70px;
   height: 6px;
   background: rgba(255, 247, 230, 0.12);
-  border: 1px solid #4d3613;
+  border: 1px solid var(--pyt-color-text-primary);
   border-radius: 3px;
   overflow: hidden;
 }
@@ -867,7 +908,7 @@ onUnmounted(() => {
   transition: width 220ms ease-out;
 }
 .hud-bar__fill--energy { background: #6bbf59; }
-.hud-bar__fill--mastery { background: #f1c453; }
+.hud-bar__fill--mastery { background: var(--pyt-color-gold); }
 .hud-bar__value {
   color: var(--pyt-text-primary);
   font-weight: 700;
@@ -962,7 +1003,7 @@ onUnmounted(() => {
   border: 1px solid var(--pyt-btn-border);
   border-radius: 2px;
   color: var(--pyt-text-primary);
-  font-family: var(--pyt-font-pixel, monospace);
+  font-family: var(--pyt-font-pixel);
   font-size: 11px;
   cursor: pointer;
   transition: background 140ms ease, border-color 140ms ease, transform 140ms ease, box-shadow 140ms ease;
@@ -980,7 +1021,7 @@ onUnmounted(() => {
 }
 .hud-slot:focus-visible,
 .hud-tool-slot:focus-visible {
-  outline: 2px solid #f1c453;
+  outline: 2px solid var(--pyt-color-gold);
   outline-offset: 2px;
 }
 .hud-slot:disabled,
@@ -995,6 +1036,57 @@ onUnmounted(() => {
   background: var(--pyt-btn-active-bg);
   border-color: var(--pyt-text-accent);
   box-shadow: 0 0 0 1px var(--pyt-text-accent) inset, 0 4px 10px rgba(241, 196, 83, 0.28);
+}
+/* P1-a：伴学向导按钮——单一入口，金色高亮 + 轻微脉冲吸引注意。 */
+.hud-guide-slot {
+  width: 58px;
+  height: 58px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 4px;
+  background: linear-gradient(160deg, rgba(241, 196, 83, 0.28), rgba(110, 79, 29, 0.35));
+  border: 1px solid var(--pyt-text-accent);
+  border-radius: 2px;
+  color: var(--pyt-text-primary);
+  font-family: var(--pyt-font-pixel);
+  font-size: 11px;
+  cursor: pointer;
+  box-shadow: 0 0 0 1px rgba(241, 196, 83, 0.4) inset;
+  animation: pyt-glow-pulse 2.4s ease-in-out infinite;
+  transition: background 140ms ease, border-color 140ms ease, transform 140ms ease, box-shadow 140ms ease;
+}
+.hud-guide-slot:hover {
+  transform: translateY(-2px) scale(1.06);
+  box-shadow: 0 0 12px rgba(241, 196, 83, 0.55), 0 6px 14px rgba(0, 0, 0, 0.35);
+}
+.hud-guide-slot:active {
+  transform: translateY(0);
+}
+.hud-guide-slot:focus-visible {
+  outline: 2px solid var(--pyt-color-gold);
+  outline-offset: 2px;
+}
+.hud-guide-slot--active {
+  background: var(--pyt-btn-active-bg);
+  box-shadow: 0 0 0 2px var(--pyt-text-accent) inset, 0 4px 10px rgba(241, 196, 83, 0.4);
+}
+.hud-guide-slot__icon {
+  font-size: 22px;
+  line-height: 1;
+  color: #fff0c2;
+  text-shadow: 0 0 6px rgba(241, 196, 83, 0.8);
+}
+.hud-guide-slot__label {
+  font-size: 11px;
+  color: var(--pyt-text-accent);
+  font-weight: 700;
+}
+.hud-guide-slot__shortcut {
+  font-size: 9px;
+  opacity: 0.7;
 }
 .hud-slot__icon,
 .hud-tool-slot__icon {
@@ -1055,16 +1147,6 @@ onUnmounted(() => {
   from { opacity: 0; transform: translateX(-50%) translateY(18px); }
   to   { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
-@keyframes hud-coin-bounce {
-  0%   { transform: scale(1); }
-  30%  { transform: scale(1.18); }
-  60%  { transform: scale(0.95); }
-  100% { transform: scale(1); }
-}
-.hud-coin-bounce {
-  animation: hud-coin-bounce 400ms ease-out;
-}
-
 /* ── 响应式：窄屏（≤1280px）适度压缩 ─────────────────────────── */
 @media (max-width: 1280px) {
   .hud-top {

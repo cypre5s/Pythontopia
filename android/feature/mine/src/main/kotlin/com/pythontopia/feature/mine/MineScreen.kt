@@ -200,7 +200,7 @@ private fun ActiveSolveView(
             onValueChange = onCodeChange,
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = EDITOR_MIN_HEIGHT.dp),
+                .heightIn(min = EDITOR_MIN_HEIGHT.dp, max = EDITOR_MAX_HEIGHT.dp),
             textStyle = MaterialTheme.typography.bodyMedium.copy(
                 fontFamily = FontFamily.Monospace,
                 color = PytColors.textPrimary,
@@ -355,4 +355,5 @@ private fun ErrorBanner(message: String, onClear: () -> Unit) {
 
 private const val LOADING_MIN_HEIGHT = 220
 private const val EDITOR_MIN_HEIGHT = 160
+private const val EDITOR_MAX_HEIGHT = 280
 private const val BANNER_BG_ALPHA = 0.18f

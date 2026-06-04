@@ -1,0 +1,199 @@
+package com.pythontopia.orchestrator;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pythontopia.common.config.GraphServiceProperties;
+import com.pythontopia.common.sse.SseRelayExecutor;
+import com.pythontopia.orchestrator.dto.OrchestratorTurnMessage;
+import com.pythontopia.orchestrator.dto.OrchestratorTurnRequest;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+/**
+ * 用 JDK 自带的 {@link HttpServer} 起一个本地假 graph 服务，端到端验证：
+ *
+ * <ul>
+ *   <li>转发给 Python 的 body 全部是约定好的 snake_case 字段，值正确，可选字段为空时不下发；
+ *   <li>上游 SSE 事件（trace / token / result）被原样按事件名转发到 {@link SseEmitter}。
+ * </ul>
+ *
+ * 全程不依赖数据库或外部服务，因此可在任意环境稳定运行。
+ */
+class OrchestratorGraphClientTest {
+
+  private static final String SSE_BODY =
+      "event: trace\n"
+          + "data: {\"node\":\"planner\"}\n\n"
+          + "event: token\n"
+          + "data: {\"text\":\"hi\"}\n\n"
+          + "event: result\n"
+          + "data: {\"reply_md\":\"done\"}\n\n";
+
+  private HttpServer server;
+
+  @AfterEach
+  void tearDown() {
+    if (server != null) {
+      server.stop(0);
+    }
+  }
+
+  @Test
+  void forwardsSnakeCaseBodyAndRelaysAllEvents() throws Exception {
+    CompletableFuture<String> capturedBody = new CompletableFuture<>();
+    CompletableFuture<String> capturedPath = new CompletableFuture<>();
+    int port = startFakeGraph(capturedBody, capturedPath);
+
+    OrchestratorGraphClient client = newClient(port);
+    RecordingSseEmitter emitter = new RecordingSseEmitter();
+
+    OrchestratorTurnRequest request =
+        new OrchestratorTurnRequest(
+            "讲一下 for 循环",
+            "   ",
+            List.of(
+                new OrchestratorTurnMessage("user", "你好"),
+                new OrchestratorTurnMessage("assistant", "我是学习总管")),
+            3,
+            List.of("PY43-KC-010"),
+            List.of("sub-99"),
+            "偏好示例驱动",
+            List.of("PY43-KC-001", "PY43-KC-010"));
+
+    client.turnStream(7L, request, emitter);
+
+    String body = capturedBody.get(5, TimeUnit.SECONDS);
+    assertThat(capturedPath.get(5, TimeUnit.SECONDS))
+        .isEqualTo("/agents/orchestrator/turn/stream");
+
+    JsonNode json = new ObjectMapper().readTree(body);
+    assertThat(json.get("user_id").asLong()).isEqualTo(7L);
+    assertThat(json.get("user_message").asText()).isEqualTo("讲一下 for 循环");
+    // 空白 sessionId -> 服务端生成 "u{userId}-{timestamp}"
+    assertThat(json.get("session_id").asText()).startsWith("u7-");
+    assertThat(json.get("current_chapter").asInt()).isEqualTo(3);
+    assertThat(json.get("profile_brief").asText()).isEqualTo("偏好示例驱动");
+    assertThat(json.get("recent_kc_codes")).hasSize(1);
+    assertThat(json.get("recent_kc_codes").get(0).asText()).isEqualTo("PY43-KC-010");
+    assertThat(json.get("recent_failures").get(0).asText()).isEqualTo("sub-99");
+    assertThat(json.get("course_kc_index")).hasSize(2);
+    assertThat(json.get("history")).hasSize(2);
+    assertThat(json.get("history").get(0).get("role").asText()).isEqualTo("user");
+    assertThat(json.get("history").get(0).get("content").asText()).isEqualTo("你好");
+    assertThat(json.get("history").get(1).get("role").asText()).isEqualTo("assistant");
+
+    awaitEvent(emitter, "event:result");
+    assertThat(emitter.events()).anyMatch(e -> e.contains("event:trace"));
+    assertThat(emitter.events()).anyMatch(e -> e.contains("event:token"));
+    assertThat(emitter.events())
+        .anyMatch(e -> e.contains("event:result") && e.contains("reply_md"));
+  }
+
+  @Test
+  void passesThroughSessionIdAndOmitsNullOptionalFields() throws Exception {
+    CompletableFuture<String> capturedBody = new CompletableFuture<>();
+    CompletableFuture<String> capturedPath = new CompletableFuture<>();
+    int port = startFakeGraph(capturedBody, capturedPath);
+
+    OrchestratorGraphClient client = newClient(port);
+    RecordingSseEmitter emitter = new RecordingSseEmitter();
+
+    OrchestratorTurnRequest request =
+        new OrchestratorTurnRequest("hi", "sess-abc", null, null, null, null, null, null);
+
+    client.turnStream(42L, request, emitter);
+
+    String body = capturedBody.get(5, TimeUnit.SECONDS);
+    JsonNode json = new ObjectMapper().readTree(body);
+
+    assertThat(json.get("user_id").asLong()).isEqualTo(42L);
+    assertThat(json.get("user_message").asText()).isEqualTo("hi");
+    assertThat(json.get("session_id").asText()).isEqualTo("sess-abc");
+    assertThat(json.has("history")).isFalse();
+    assertThat(json.has("current_chapter")).isFalse();
+    assertThat(json.has("profile_brief")).isFalse();
+    assertThat(json.has("recent_kc_codes")).isFalse();
+    assertThat(json.has("recent_failures")).isFalse();
+    assertThat(json.has("course_kc_index")).isFalse();
+
+    awaitEvent(emitter, "event:result");
+  }
+
+  private OrchestratorGraphClient newClient(int port) {
+    GraphServiceProperties properties =
+        new GraphServiceProperties("http://127.0.0.1:" + port, "http://rag.test", "secret");
+    return new OrchestratorGraphClient(properties, new ObjectMapper(), new SseRelayExecutor());
+  }
+
+  private int startFakeGraph(
+      CompletableFuture<String> capturedBody, CompletableFuture<String> capturedPath)
+      throws IOException {
+    server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext(
+        "/agents/orchestrator/turn/stream",
+        (HttpExchange exchange) -> {
+          capturedPath.complete(exchange.getRequestURI().getPath());
+          String reqBody =
+              new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+          capturedBody.complete(reqBody);
+
+          byte[] payload = SSE_BODY.getBytes(StandardCharsets.UTF_8);
+          exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
+          exchange.sendResponseHeaders(200, payload.length);
+          try (OutputStream os = exchange.getResponseBody()) {
+            os.write(payload);
+          }
+        });
+    server.start();
+    return server.getAddress().getPort();
+  }
+
+  private static void awaitEvent(RecordingSseEmitter emitter, String marker)
+      throws InterruptedException {
+    long deadline = System.currentTimeMillis() + 5_000L;
+    while (System.currentTimeMillis() < deadline) {
+      if (emitter.events().stream().anyMatch(e -> e.contains(marker))) {
+        return;
+      }
+      Thread.sleep(20L);
+    }
+    assertThat(emitter.events()).anyMatch(e -> e.contains(marker));
+  }
+
+  /** 捕获每次 {@code send} 的事件文本，避免依赖真实的 HTTP 异步分发即可断言转发内容。 */
+  private static final class RecordingSseEmitter extends SseEmitter {
+
+    private final List<String> events = new CopyOnWriteArrayList<>();
+
+    RecordingSseEmitter() {
+      super(120_000L);
+    }
+
+    @Override
+    public void send(SseEmitter.SseEventBuilder builder) {
+      StringBuilder sb = new StringBuilder();
+      for (ResponseBodyEmitter.DataWithMediaType part : builder.build()) {
+        sb.append(part.getData());
+      }
+      events.add(sb.toString());
+    }
+
+    List<String> events() {
+      return events;
+    }
+  }
+}

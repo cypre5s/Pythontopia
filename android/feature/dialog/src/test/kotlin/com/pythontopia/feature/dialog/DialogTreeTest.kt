@@ -38,9 +38,9 @@ class DialogTreeTest {
     }
 
     @Test
-    fun `chat_progress includes a SET_FLAG choice for r12 demo`() {
+    fun `chat_progress includes a SET_FLAG choice for native hub progress`() {
         val node = DemoDialogTree.nodes.getValue("chat_progress")
-        val flagged = node.choices.firstOrNull { it.setFlagKey == "android_r12_demo_played" }
+        val flagged = node.choices.firstOrNull { it.setFlagKey == "android_native_hub_played" }
         assertNotNull(flagged)
         assertEquals("true", flagged!!.setFlagValue)
     }

@@ -43,18 +43,20 @@ const rendered = computed(() => {
 </template>
 
 <style scoped>
+/* 统一标准·可读性分层：学习正文用 --pyt-font-read（易读无衬线）而非像素字，
+   即便挂在像素字面板里也保证大段讲义/答疑清晰可读。 */
 .md-view {
-  font-family: var(--pyt-font-pixel, monospace);
-  font-size: 14px;
-  line-height: 1.7;
-  color: #3a2a14;
+  font-family: var(--pyt-font-read);
+  font-size: 15px;
+  line-height: 1.75;
+  color: var(--pyt-color-text-primary);
   word-break: break-word;
 }
 .md-view :deep(h1),
 .md-view :deep(h2),
 .md-view :deep(h3),
 .md-view :deep(h4) {
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
   margin: 16px 0 8px;
   line-height: 1.3;
 }
@@ -63,7 +65,7 @@ const rendered = computed(() => {
 .md-view :deep(h3) { font-size: 15px; }
 .md-view :deep(p) { margin: 6px 0; }
 .md-view :deep(a) {
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
   text-decoration: underline;
   text-decoration-style: dashed;
 }
@@ -76,14 +78,14 @@ const rendered = computed(() => {
   font-size: 13px;
 }
 .md-view :deep(pre) {
-  background: #2e2417;
-  color: #f1d896;
+  background: var(--pyt-color-terminal-bg);
+  color: var(--pyt-color-terminal-text);
   padding: 12px 14px;
   border-radius: 6px;
   overflow-x: auto;
   font-size: 13px;
   line-height: 1.5;
-  border: 2px solid #6e4f1d;
+  border: 2px solid var(--pyt-color-text-hint);
 }
 .md-view :deep(pre code) {
   background: transparent;
@@ -93,7 +95,7 @@ const rendered = computed(() => {
 .md-view :deep(blockquote) {
   margin: 8px 0;
   padding: 8px 14px;
-  border-left: 4px solid #c9a86b;
+  border-left: 4px solid var(--pyt-color-border);
   background: rgba(249, 231, 188, 0.4);
   color: #5e4923;
 }
@@ -105,14 +107,14 @@ const rendered = computed(() => {
 }
 .md-view :deep(th),
 .md-view :deep(td) {
-  border: 1px solid #c9a86b;
+  border: 1px solid var(--pyt-color-border);
   padding: 6px 10px;
   text-align: left;
 }
 .md-view :deep(th) {
   background: #f1d896;
   font-weight: 700;
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
 }
 .md-view :deep(ul),
 .md-view :deep(ol) {
@@ -122,13 +124,13 @@ const rendered = computed(() => {
 .md-view :deep(li) { margin: 3px 0; }
 .md-view :deep(hr) {
   border: none;
-  border-top: 2px dashed #c9a86b;
+  border-top: 2px dashed var(--pyt-color-border);
   margin: 12px 0;
 }
 .md-view :deep(img) {
   max-width: 100%;
   border-radius: 6px;
-  border: 2px solid #c9a86b;
+  border: 2px solid var(--pyt-color-border);
 }
 .md-view--inline { display: inline; }
 </style>

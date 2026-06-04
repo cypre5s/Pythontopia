@@ -45,6 +45,16 @@ services:
       PYTHONTOPIA_SERVICES_GRAPHURL: http://pythontopia-graph:18091
       PYTHONTOPIA_SERVICES_RAGURL: http://pythontopia-rag:18092
       PYTHONTOPIA_SERVICES_RAGADMINTOKEN: ${PYT_RAG_ADMIN_TOKEN:-pytopia-rag-admin}
+      # 多模态：文生图/TTS/看图答疑全部复用同一套讯飞 PYT_SPARK_* 凭据。此前后端容器未注入
+      # 这些变量，导致 ImageProperties/TtsProperties.isEnabled()=false 而恒走本地占位降级；
+      # 在此补齐后配置真实密钥即可切换为讯飞真实生成（缺失仍自动降级，不阻塞链路）。
+      PYT_SPARK_APP_ID: ${PYT_SPARK_APP_ID:-}
+      PYT_SPARK_API_KEY: ${PYT_SPARK_API_KEY:-}
+      PYT_SPARK_API_SECRET: ${PYT_SPARK_API_SECRET:-}
+      PYT_SPARK_IMAGE_URL: ${PYT_SPARK_IMAGE_URL:-https://spark-api.cn-huabei-1.xf-yun.com/v2.1/tti}
+      PYT_SPARK_IMAGE_UNDERSTANDING_URL: ${PYT_SPARK_IMAGE_UNDERSTANDING_URL:-wss://spark-api.cn-huabei-1.xf-yun.com/v2.1/image}
+      PYT_SPARK_IMAGE_UNDERSTANDING_DOMAIN: ${PYT_SPARK_IMAGE_UNDERSTANDING_DOMAIN:-imagev3}
+      PYT_MEDIA_GENERATED_DIR: ${PYT_MEDIA_GENERATED_DIR:-./data/course-pack-43/generated-media}
       JAVA_OPTS: -XX:MaxRAMPercentage=70
     ports:
       - "127.0.0.1:18080:18080"

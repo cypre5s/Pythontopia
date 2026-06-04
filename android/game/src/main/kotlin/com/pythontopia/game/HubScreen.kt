@@ -8,17 +8,12 @@ import com.badlogic.gdx.graphics.glutils.ShapeRenderer
 import com.badlogic.gdx.math.Matrix4
 
 /**
- * Pythontopia hub LibGDX 屏幕：[PythontopiaGame] 启动后默认进入的场景。
+ * Native LibGDX town screen backed by five lightweight map definitions.
  *
- * 与既有 [HubScene] 的差异（两者可共存）：
- * - 把"输入处理 / 玩家状态 / 颜色 token"拆出独立类（[InputController]/[PlayerActor]/[PixelTheme]），
- *   方便 headless 测试与 R-13 替换为 `SpriteBatch + TextureAtlas`。
- * - 摄像机用 `y-up`（更贴近标准 LibGDX 约定），渲染时直接写世界坐标，省掉手工镜像。
- * - 渲染分两阶段：世界（用世界投影矩阵）+ HUD overlay（虚拟摇杆用屏幕像素矩阵），
- *   避免摇杆随相机缩放变形。
- *
- * 渲染数据来自硬编码的 [HUB_BUILDINGS] / [HUB_NPCS]，与 [HubScene] 同源；R-13 后改为从
- * `assets/pixel/maps/town_hub.tmx` 读取（见 `docs/android/03-rendering-libgdx-vs-compose.md` §13）。
+ * The renderer intentionally stays rectangle-based for the Android beta: it is fast on low-end
+ * devices, deterministic in JVM tests, and avoids shipping unaudited sprite copies. The gameplay
+ * surface is no longer a browser shell or a one-map placeholder: exits switch between the hub,
+ * farm, mine, campus, and port, and all 20 NPC anchors are present as native interaction targets.
  */
 class HubScreen(
     private val bridge: HubGameBridge,
@@ -33,18 +28,21 @@ class HubScreen(
         viewportWidthProvider = { Gdx.graphics?.width ?: 0 },
         viewportHeightProvider = { Gdx.graphics?.height ?: 0 },
     )
+
+    private var currentMap: WorldMapDefinition = WorldMaps.townHub
     private var lastEmittedNpcKey: String? = null
 
     override fun show() {
-        camera.setToOrtho(false, WORLD_PIXEL_WIDTH.toFloat(), WORLD_PIXEL_HEIGHT.toFloat())
-        camera.update()
         Gdx.input?.inputProcessor = input
-
         val seed = bridge.latestPlayerTile()
-        if (seed.x != player.tileX || seed.y != player.tileY) {
-            player.snapTo(seed.x, seed.y)
-            bridge.updatePlayerTile(player.tileX, player.tileY)
-        }
+        currentMap = WorldMaps.byKey(seed.mapKey)
+        player.snapTo(
+            seed.x.coerceIn(0, currentMap.width - 1),
+            seed.y.coerceIn(0, currentMap.height - 1),
+        )
+        bridge.updatePlayerTile(player.tileX, player.tileY, currentMap.key)
+        configureCamera(Gdx.graphics?.width ?: currentMap.pixelWidth, Gdx.graphics?.height ?: currentMap.pixelHeight)
+        checkProximity(force = true)
     }
 
     override fun hide() {
@@ -54,24 +52,7 @@ class HubScreen(
     }
 
     override fun resize(width: Int, height: Int) {
-        val targetAspect = WORLD_PIXEL_WIDTH.toFloat() / WORLD_PIXEL_HEIGHT
-        val actualAspect = width.toFloat() / height
-        val viewportWidth: Float
-        val viewportHeight: Float
-        if (actualAspect >= targetAspect) {
-            viewportHeight = WORLD_PIXEL_HEIGHT.toFloat()
-            viewportWidth = viewportHeight * actualAspect
-        } else {
-            viewportWidth = WORLD_PIXEL_WIDTH.toFloat()
-            viewportHeight = viewportWidth / actualAspect
-        }
-        camera.viewportWidth = viewportWidth
-        camera.viewportHeight = viewportHeight
-        camera.position.set(WORLD_PIXEL_WIDTH / 2f, WORLD_PIXEL_HEIGHT / 2f, 0f)
-        camera.update()
-
-        hudMatrix.setToOrtho2D(0f, 0f, width.toFloat(), height.toFloat())
-        input.updateLayout()
+        configureCamera(width, height)
     }
 
     override fun render(delta: Float) {
@@ -86,26 +67,44 @@ class HubScreen(
         shapeRenderer.dispose()
     }
 
+    private fun configureCamera(width: Int, height: Int) {
+        val safeWidth = width.coerceAtLeast(1)
+        val safeHeight = height.coerceAtLeast(1)
+        val targetAspect = currentMap.pixelWidth.toFloat() / currentMap.pixelHeight
+        val actualAspect = safeWidth.toFloat() / safeHeight
+        val viewportWidth: Float
+        val viewportHeight: Float
+        if (actualAspect >= targetAspect) {
+            viewportHeight = currentMap.pixelHeight.toFloat()
+            viewportWidth = viewportHeight * actualAspect
+        } else {
+            viewportWidth = currentMap.pixelWidth.toFloat()
+            viewportHeight = viewportWidth / actualAspect
+        }
+        camera.viewportWidth = viewportWidth
+        camera.viewportHeight = viewportHeight
+        camera.position.set(currentMap.pixelWidth / 2f, currentMap.pixelHeight / 2f, 0f)
+        camera.update()
+
+        hudMatrix.setToOrtho2D(0f, 0f, safeWidth.toFloat(), safeHeight.toFloat())
+        input.updateLayout()
+    }
+
     private fun handleInput() {
-        val snapshot = InputController.KeyboardSnapshot.from(buildSet {
-            for (k in MOVE_KEYS) {
-                if (Gdx.input?.isKeyPressed(k) == true) add(k)
-            }
-        })
+        val gdxInput = Gdx.input
+        val snapshot = InputController.KeyboardSnapshot(
+            up = gdxInput?.isKeyPressed(com.badlogic.gdx.Input.Keys.W) == true ||
+                gdxInput?.isKeyPressed(com.badlogic.gdx.Input.Keys.UP) == true,
+            down = gdxInput?.isKeyPressed(com.badlogic.gdx.Input.Keys.S) == true ||
+                gdxInput?.isKeyPressed(com.badlogic.gdx.Input.Keys.DOWN) == true,
+            left = gdxInput?.isKeyPressed(com.badlogic.gdx.Input.Keys.A) == true ||
+                gdxInput?.isKeyPressed(com.badlogic.gdx.Input.Keys.LEFT) == true,
+            right = gdxInput?.isKeyPressed(com.badlogic.gdx.Input.Keys.D) == true ||
+                gdxInput?.isKeyPressed(com.badlogic.gdx.Input.Keys.RIGHT) == true,
+        )
         val (dx, dy) = input.resolveStep(snapshot)
         if (dx != 0 || dy != 0) {
-            val moved = player.tryStep(
-                dx = dx,
-                dy = dy,
-                mapWidth = MAP_WIDTH,
-                mapHeight = MAP_HEIGHT,
-                blocked = ::isBlocked,
-            )
-            if (moved) {
-                bridge.updatePlayerTile(player.tileX, player.tileY)
-                onPlayerMoved?.invoke(player.tileX, player.tileY, player.facing.toServerString())
-                checkProximity(force = false)
-            }
+            tryMove(dx, dy)
         }
 
         while (true) {
@@ -118,6 +117,47 @@ class HubScreen(
         if (bridge.consumeInteractRequest()) {
             checkProximity(force = true)
         }
+    }
+
+    private fun tryMove(dx: Int, dy: Int) {
+        val nextX = (player.tileX + dx).coerceIn(0, currentMap.width - 1)
+        val nextY = (player.tileY + dy).coerceIn(0, currentMap.height - 1)
+        val exit = currentMap.exits.firstOrNull { it.area.contains(nextX, nextY) }
+        if (exit != null) {
+            switchMap(exit.targetMap)
+            return
+        }
+
+        val moved = player.tryStep(
+            dx = dx,
+            dy = dy,
+            mapWidth = currentMap.width,
+            mapHeight = currentMap.height,
+            blocked = ::isBlocked,
+        )
+        if (moved) {
+            publishPlayerPosition()
+            checkProximity(force = false)
+        }
+    }
+
+    private fun switchMap(targetMapKey: String) {
+        val target = WorldMaps.byKey(targetMapKey)
+        currentMap = target
+        player.snapTo(target.spawnX, target.spawnY)
+        lastEmittedNpcKey = null
+        configureCamera(Gdx.graphics?.width ?: target.pixelWidth, Gdx.graphics?.height ?: target.pixelHeight)
+        bridge.emit(HubEvent.NpcOutOfRange)
+        bridge.emit(HubEvent.ExitTouched(target.key))
+        publishPlayerPosition()
+        checkProximity(force = true)
+    }
+
+    private fun publishPlayerPosition() {
+        val direction = player.facing.toServerString()
+        bridge.updatePlayerTile(player.tileX, player.tileY, currentMap.key)
+        bridge.emit(HubEvent.PlayerMoved(currentMap.key, player.tileX, player.tileY, direction))
+        onPlayerMoved?.invoke(player.tileX, player.tileY, direction)
     }
 
     private fun clear() {
@@ -150,18 +190,18 @@ class HubScreen(
     }
 
     private fun drawGround() {
-        shapeRenderer.color = PixelTheme.ground
-        shapeRenderer.rect(0f, 0f, WORLD_PIXEL_WIDTH.toFloat(), WORLD_PIXEL_HEIGHT.toFloat())
+        shapeRenderer.color = currentMap.groundColor
+        shapeRenderer.rect(0f, 0f, currentMap.pixelWidth.toFloat(), currentMap.pixelHeight.toFloat())
     }
 
     private fun drawPathways() {
-        shapeRenderer.color = PixelTheme.path
-        rectTile(MAP_WIDTH / 2, 0, 1, MAP_HEIGHT)
-        rectTile(0, MAP_HEIGHT / 2, MAP_WIDTH, 1)
+        shapeRenderer.color = currentMap.pathColor
+        rectTile(currentMap.width / 2, 0, 1, currentMap.height)
+        rectTile(0, currentMap.height / 2, currentMap.width, 1)
     }
 
     private fun drawBuildings() {
-        for (b in HUB_BUILDINGS) {
+        for (b in currentMap.buildings) {
             shapeRenderer.color = PixelTheme.buildingWall
             rectTile(b.x, b.y, b.w, b.h)
             shapeRenderer.color = PixelTheme.buildingRoof
@@ -171,15 +211,14 @@ class HubScreen(
 
     private fun drawExits() {
         shapeRenderer.color = PixelTheme.mapExit
-        rectTile(MAP_WIDTH / 2 - 2, MAP_HEIGHT - 1, 4, 1)
-        rectTile(MAP_WIDTH / 2 - 2, 0, 4, 1)
-        rectTile(MAP_WIDTH - 1, MAP_HEIGHT / 2 - 2, 1, 4)
-        rectTile(0, MAP_HEIGHT / 2 - 2, 1, 4)
+        for (exit in currentMap.exits) {
+            rectTile(exit.area.x, exit.area.y, exit.area.w, exit.area.h)
+        }
     }
 
     private fun drawNpcs() {
-        shapeRenderer.color = PixelTheme.npcBody
-        for (n in HUB_NPCS) {
+        for (n in currentMap.npcs) {
+            shapeRenderer.color = npcColor(n.key)
             rectTile(n.x, n.y, 1, 1)
         }
     }
@@ -193,12 +232,11 @@ class HubScreen(
         )
     }
 
-    private fun isBlocked(x: Int, y: Int): Boolean = HUB_BUILDINGS.any { b ->
-        x in b.x until (b.x + b.w) && y in b.y until (b.y + b.h)
-    }
+    private fun isBlocked(x: Int, y: Int): Boolean =
+        currentMap.buildings.any { it.contains(x, y) }
 
     private fun checkProximity(force: Boolean) {
-        val nearby = HUB_NPCS.firstOrNull { player.isAdjacentTo(it.x, it.y) }
+        val nearby = currentMap.npcs.firstOrNull { player.isAdjacentTo(it.x, it.y) }
         if (nearby == null) {
             if (lastEmittedNpcKey != null) {
                 lastEmittedNpcKey = null
@@ -212,45 +250,15 @@ class HubScreen(
         }
     }
 
-    data class Building(val x: Int, val y: Int, val w: Int, val h: Int)
-    data class Npc(val key: String, val x: Int, val y: Int)
+    private fun npcColor(key: String) = when (key) {
+        "coach_q", "trainer", "arena_guard" -> PixelTheme.warning
+        "librarian_doc", "sage_review", "professor", "tutor_ai" -> PixelTheme.accentPurple
+        "foreman_bug", "miner", "mine_keeper" -> PixelTheme.gray300
+        "sailor", "captain_def", "class_president" -> PixelTheme.info
+        else -> PixelTheme.npcBody
+    }
 
     companion object {
-        const val TILE_SIZE: Int = 32
-        const val MAP_WIDTH: Int = 50
-        const val MAP_HEIGHT: Int = 40
-        const val WORLD_PIXEL_WIDTH: Int = MAP_WIDTH * TILE_SIZE
-        const val WORLD_PIXEL_HEIGHT: Int = MAP_HEIGHT * TILE_SIZE
-
-        private val MOVE_KEYS = intArrayOf(
-            com.badlogic.gdx.Input.Keys.W,
-            com.badlogic.gdx.Input.Keys.A,
-            com.badlogic.gdx.Input.Keys.S,
-            com.badlogic.gdx.Input.Keys.D,
-            com.badlogic.gdx.Input.Keys.UP,
-            com.badlogic.gdx.Input.Keys.LEFT,
-            com.badlogic.gdx.Input.Keys.DOWN,
-            com.badlogic.gdx.Input.Keys.RIGHT,
-        )
-
-        // 与 frontend/public/assets/maps/town_hub.json 的 building 对象同源（y 轴 y-up 翻转）：
-        // frontend 用 y-down（pixel y=0 在上），本 Screen 用 y-up（tile y=0 在下），坐标 = 40 - y_down - h。
-        // R-13 接入 TmxMapLoader 后由 tmx 解析取代，本表删除。
-        // 严格避让主路：x=25 竖向主路、y=20 横向主路 不被任何 building 覆盖，
-        // 否则玩家无法从 spawn 走到 mayor_py。
-        val HUB_BUILDINGS: List<Building> = listOf(
-            Building(23, 31, 5, 5), // 镇长大厅 mayor_hall（北侧主建筑，挡住玩家继续北上）
-            Building(8, 4, 4, 4),   // 民居·东 house_a（南侧左）
-            Building(21, 4, 4, 4),  // 民居·中 house_b（南侧中，覆盖 21-24 避开 x=25）
-            Building(36, 4, 4, 4),  // 民居·西 house_c（南侧右）
-            Building(4, 14, 4, 4),  // 杂货铺 shop_west（左中，避开 y=20 横路）
-            Building(42, 14, 4, 4), // 工具铺 shop_east（右中，避开 y=20 横路）
-        )
-
-        // demo 仅启用 mayor_py；y-up 坐标：站在 mayor_hall (y=31-35) 正南的主路 (25, 30)。
-        // 玩家从 spawn (25, 20) 向北走 10 格即可与之相邻并触发 NpcInRange。
-        val HUB_NPCS: List<Npc> = listOf(
-            Npc("mayor_py", 25, 30),
-        )
+        const val TILE_SIZE: Int = ANDROID_TILE_SIZE
     }
 }

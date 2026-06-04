@@ -26,6 +26,9 @@ import com.pythontopia.learner.quest.dto.QuestSource;
 import com.pythontopia.learner.quest.dto.QuestStatus;
 import com.pythontopia.learner.quest.repository.QuestRepository;
 import com.pythontopia.learner.quest.repository.QuestRepository.QuestInsert;
+import com.pythontopia.submission.repository.PracticeSubmissionRepository;
+import com.pythontopia.workshop.dto.ResourceListItemDto;
+import com.pythontopia.workshop.repository.LearningResourceRepository;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -53,6 +56,11 @@ public class LearningPathService {
   private final MasteryEvaluator masteryEvaluator;
   private final PathPlannerGraphClient graphClient;
   private final ObjectMapper objectMapper;
+  private final PracticeSubmissionRepository submissionRepository;
+  private final LearningResourceRepository learningResourceRepository;
+
+  static final int RECENT_SUBMISSION_LIMIT = 30;
+  static final int RECENT_RESOURCE_LIMIT = 30;
 
   public LearningPathService(
       LearningPathRepository pathRepository,
@@ -62,7 +70,9 @@ public class LearningPathService {
       ProfileService profileService,
       MasteryEvaluator masteryEvaluator,
       PathPlannerGraphClient graphClient,
-      ObjectMapper objectMapper) {
+      ObjectMapper objectMapper,
+      PracticeSubmissionRepository submissionRepository,
+      LearningResourceRepository learningResourceRepository) {
     this.pathRepository = pathRepository;
     this.questRepository = questRepository;
     this.classroomQuestRepository = classroomQuestRepository;
@@ -71,6 +81,8 @@ public class LearningPathService {
     this.masteryEvaluator = masteryEvaluator;
     this.graphClient = graphClient;
     this.objectMapper = objectMapper;
+    this.submissionRepository = submissionRepository;
+    this.learningResourceRepository = learningResourceRepository;
   }
 
   @Transactional
@@ -223,6 +235,8 @@ public class LearningPathService {
                         HttpStatus.CONFLICT, "PROFILE_REQUIRED", "请先完成画像访谈再规划学习路径"));
 
     List<CourseKc> kcs = coursePackRepository.findKcs(DEFAULT_PACK_ID, null);
+    Map<String, List<String>> prerequisiteIndex =
+        coursePackRepository.findKcPrerequisites(DEFAULT_PACK_ID);
     List<MasterySnapshot> snapshots = masteryEvaluator.snapshots(userId);
     Map<String, MasterySnapshot> snapshotIndex = new java.util.HashMap<>();
     for (MasterySnapshot snapshot : snapshots) {
@@ -236,9 +250,9 @@ public class LearningPathService {
             userId,
             DEFAULT_PACK_ID,
             buildProfileSnapshot(profile),
-            buildKcSnapshots(kcs, snapshotIndex),
-            List.of(),
-            List.of(),
+            buildKcSnapshots(kcs, snapshotIndex, prerequisiteIndex),
+            buildRecentResources(userId),
+            buildRecentSubmissions(userId),
             buildClassroomQuests(activeClassroomQuests));
 
     PathPlannerGraphResponse response = graphClient.plan(graphRequest);
@@ -446,7 +460,9 @@ public class LearningPathService {
   }
 
   private List<PathPlannerGraphRequest.KcSnapshot> buildKcSnapshots(
-      List<CourseKc> kcs, Map<String, MasterySnapshot> snapshotIndex) {
+      List<CourseKc> kcs,
+      Map<String, MasterySnapshot> snapshotIndex,
+      Map<String, List<String>> prerequisiteIndex) {
     List<PathPlannerGraphRequest.KcSnapshot> out = new ArrayList<>();
     for (CourseKc kc : kcs) {
       MasterySnapshot snapshot = snapshotIndex.get(kc.kcCode());
@@ -457,6 +473,8 @@ public class LearningPathService {
       double confidence = snapshot == null || snapshot.confidence() == null
           ? 0.0
           : snapshot.confidence().doubleValue();
+      List<String> prerequisites =
+          prerequisiteIndex.getOrDefault(kc.kcCode(), List.of());
       out.add(
           new PathPlannerGraphRequest.KcSnapshot(
               kc.kcCode(),
@@ -464,7 +482,41 @@ public class LearningPathService {
               confidence,
               unlocked,
               kc.chapterId(),
-              List.of()));
+              prerequisites));
+    }
+    return out;
+  }
+
+  /** 最近练习记录 → planner（驱动 FIX_BUG / 难度匹配 / 已做过则不重复出题）。 */
+  private List<PathPlannerGraphRequest.ProblemSubmission> buildRecentSubmissions(Long userId) {
+    List<PathPlannerGraphRequest.ProblemSubmission> out = new ArrayList<>();
+    for (PracticeSubmissionRepository.PlannerSubmission sub :
+        submissionRepository.findRecentForPlanner(userId, RECENT_SUBMISSION_LIMIT)) {
+      if (sub.kcCode() == null) {
+        continue;
+      }
+      out.add(
+          new PathPlannerGraphRequest.ProblemSubmission(
+              sub.problemId(), sub.kcCode(), sub.passed()));
+    }
+    return out;
+  }
+
+  /** 最近消费的资源 → planner（已读过的 KC 不再重复安排 READ_RESOURCE）。 */
+  private List<PathPlannerGraphRequest.ResourceUsage> buildRecentResources(Long userId) {
+    List<PathPlannerGraphRequest.ResourceUsage> out = new ArrayList<>();
+    List<ResourceListItemDto> resources =
+        learningResourceRepository.list(userId, null, null, RECENT_RESOURCE_LIMIT, 0);
+    for (ResourceListItemDto resource : resources) {
+      String createdAt = resource.createdAt() == null ? "" : resource.createdAt().toString();
+      for (String kcCode : resource.kcCodes()) {
+        if (kcCode == null || kcCode.isBlank()) {
+          continue;
+        }
+        out.add(
+            new PathPlannerGraphRequest.ResourceUsage(
+                kcCode, resource.type().name(), createdAt));
+      }
     }
     return out;
   }

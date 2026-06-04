@@ -97,6 +97,12 @@ const TILESET_LIST: ReadonlyArray<[string, string]> = [
   ['kenney_tiny_dungeon', '/assets/pixel/tilesets/kenney-tiny-dungeon/Tilemap/tilemap_packed.png'],
 ];
 
+// R-12：超尺寸武器叠加层（ULPC 192px oversize），砍树/挖矿斧头挥砍，与标准 slash 同步。
+const WEAPON_SHEETS: ReadonlyArray<[string, string, number, number]> = [
+  ['weapon_axe', '/assets/pixel/sprites/weapons/weapon_axe.png', 192, 192],
+  ['weapon_axe_bg', '/assets/pixel/sprites/weapons/weapon_axe_bg.png', 192, 192],
+];
+
 // Kenney tiny-town tilemap_packed.png: 192x176, 16x16 tiles, 12 cols × 11 rows = 132 frames.
 // 以 spritesheet 形式加载，便于按 frameIndex 取出单个 tile（frame 0 = 草地）。
 const TILESET_SPRITESHEETS: ReadonlyArray<[string, string, number, number]> = [
@@ -123,9 +129,39 @@ const KC_ICONS: ReadonlyArray<[string, string]> = [
 ];
 
 const NPC_SPRITE_BASE = '/assets/pixel/sprites/npc-composites';
+const TOOL_BASE = '/assets/pixel/sprites/lpc-tools';
+// R-12：用 LPC 茅草屋整屋 sprite 替换方块拼接建筑（scripts/build-cottages.py 合成）。
+const COTTAGE_IMAGES: ReadonlyArray<[string, string]> = [
+  ['cottage_tan', '/assets/pixel/sprites/cottages/cottage_tan.png'],
+  ['cottage_cream', '/assets/pixel/sprites/cottages/cottage_cream.png'],
+  ['cottage_stone', '/assets/pixel/sprites/cottages/cottage_stone.png'],
+];
+// R-12 动作模组（方案A）：官方 ULPC「Expanded」全动作角色表（13×42，含 run/jump/idle/sit），
+// 由 scripts/build-ulpc-characters.py 用官方 Universal-LPC 素材库合成。主角 + 8 个变体 NPC。
+const ULPC_BASE = '/assets/pixel/sprites/ulpc';
+const ULPC_NPC_SHEETS: ReadonlyArray<string> = [
+  'ulpc_villager_f',
+  'ulpc_villager_m',
+  'ulpc_scholar',
+  'ulpc_worker',
+  'ulpc_lady',
+  'ulpc_youth',
+  'ulpc_elder',
+  'ulpc_guard',
+];
 const CHARACTER_SHEETS: ReadonlyArray<[string, string, number, number]> = [
   ['student_default', '/assets/pixel/characters/student_default.svg', 32, 32],
+  // player_sara（旧 21 行表）仍供少量地图里以 sprite=player_sara 声明的 NPC 使用。
   ['player_sara', '/assets/pixel/sprites/lpc-sara/SaraFullSheet.png', 64, 64],
+  // 主角：ULPC 全动作表。
+  ['player_sara2', `${ULPC_BASE}/player_sara2.png`, 64, 64],
+  ...ULPC_NPC_SHEETS.map((k): [string, string, number, number] => [k, `${ULPC_BASE}/${k}.png`, 64, 64]),
+  // R-12 动作模组：星露谷味手持工具叠加层（LPC Hand Tools，universal 13×21）。
+  // 与角色同帧布局，叠在主角/NPC 之上即「手持工具」，浇水=thrust 倒水动作。
+  ['tool_watering_can', `${TOOL_BASE}/watering-can.png`, 64, 64],
+  ['tool_watering_can_bg', `${TOOL_BASE}/watering-can-bg.png`, 64, 64],
+  ['tool_hoe', `${TOOL_BASE}/hoe.png`, 64, 64],
+  ['tool_hoe_bg', `${TOOL_BASE}/hoe-bg.png`, 64, 64],
   ['npc_mayor', `${NPC_SPRITE_BASE}/npc_mayor.png`, 64, 64],
   ['npc_librarian', `${NPC_SPRITE_BASE}/npc_librarian.png`, 64, 64],
   ['npc_coach', `${NPC_SPRITE_BASE}/npc_coach.png`, 64, 64],
@@ -179,7 +215,11 @@ export const BootScene = {
     setupTimeoutFallback(loader, progressUi);
 
     for (const [key, url] of TILESET_LIST) loader.image(key, url);
+    for (const [key, url] of COTTAGE_IMAGES) loader.image(key, url);
     for (const [key, url, w, h] of TILESET_SPRITESHEETS) {
+      loader.spritesheet(key, url, { frameWidth: w, frameHeight: h });
+    }
+    for (const [key, url, w, h] of WEAPON_SHEETS) {
       loader.spritesheet(key, url, { frameWidth: w, frameHeight: h });
     }
     for (const [key, url] of KC_ICONS) loader.image(key, url);

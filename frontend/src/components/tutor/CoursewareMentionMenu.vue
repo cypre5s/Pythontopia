@@ -83,12 +83,12 @@ function entriesOf(group: MentionGroup): FlatEntry[] {
   max-height: min(280px, 48vh);
   overflow-y: auto;
   padding: 8px 6px;
-  background: #fff7e6;
-  border: 3px solid #6e4f1d;
-  border-radius: 8px;
+  background: var(--pyt-color-bg-elevated);
+  border: 3px solid var(--pyt-color-text-hint);
+  border-radius: var(--pyt-radius-lg);
   box-shadow: 0 6px 0 rgba(0, 0, 0, 0.18);
   z-index: 60;
-  font-family: var(--pyt-font-pixel, monospace);
+  font-family: var(--pyt-font-pixel);
   scrollbar-width: thin;
 }
 .mention-group + .mention-group {
@@ -99,7 +99,7 @@ function entriesOf(group: MentionGroup): FlatEntry[] {
   padding: 2px 8px;
   font-size: 11px;
   font-weight: 700;
-  color: #8a6c2c;
+  color: var(--pyt-color-text-muted);
   letter-spacing: 0.5px;
 }
 .mention-item {
@@ -122,14 +122,14 @@ function entriesOf(group: MentionGroup): FlatEntry[] {
 .mention-item:hover,
 .mention-item--active {
   background: #ffe098;
-  box-shadow: inset 0 0 0 1px #6e4f1d;
+  box-shadow: inset 0 0 0 1px var(--pyt-color-text-hint);
 }
 .mention-item__token {
   font-family: monospace;
   font-size: 11px;
   color: #1b4a6b;
-  background: #d0e3f1;
-  border: 1px solid #2a6f97;
+  background: var(--pyt-color-info-bg);
+  border: 1px solid var(--pyt-color-info);
   padding: 1px 6px;
   border-radius: 4px;
   white-space: nowrap;

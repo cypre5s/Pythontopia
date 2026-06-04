@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from pythontopia_graph.agents.path_planner_agent import PathPlannerAgent
+from pythontopia_graph.agents.path_planner_agent import PathPlannerAgent, _CandidateKc
 from pythontopia_graph.graph.path_graph import PathGraph
 from pythontopia_graph.main import app
 from pythontopia_graph.schemas.path import (
@@ -128,6 +128,50 @@ def test_recent_resource_skips_read_node() -> None:
         if n.kc_code == "PY43-KC-001" and n.node_type == "READ_RESOURCE"
     ]
     assert kc1_reads == []
+
+
+def test_topological_order_places_prerequisites_first() -> None:
+    agent = PathPlannerAgent()
+    dependent_a = _CandidateKc("PY43-KC-003", 0.1, True, 1, ("PY43-KC-001",))
+    dependent_b = _CandidateKc("PY43-KC-002", 0.1, True, 1, ("PY43-KC-001",))
+    prereq = _CandidateKc("PY43-KC-001", 0.1, True, 1, ())
+    ordered = agent._topological_order([dependent_a, dependent_b, prereq])
+    codes = [c.kc_code for c in ordered]
+    assert codes.index("PY43-KC-001") < codes.index("PY43-KC-002")
+    assert codes.index("PY43-KC-001") < codes.index("PY43-KC-003")
+
+
+def test_topological_order_no_prerequisites_preserves_input() -> None:
+    agent = PathPlannerAgent()
+    items = [
+        _CandidateKc("PY43-KC-005", 0.1, True, 1, ()),
+        _CandidateKc("PY43-KC-002", 0.1, True, 1, ()),
+        _CandidateKc("PY43-KC-009", 0.1, True, 1, ()),
+    ]
+    ordered = agent._topological_order(items)
+    assert [c.kc_code for c in ordered] == ["PY43-KC-005", "PY43-KC-002", "PY43-KC-009"]
+
+
+def test_prerequisite_chain_schedules_prereq_no_later_than_dependent() -> None:
+    # KC-001 是 KC-002/003 的先修；三者都低掌握度会被选入聚焦集合，先修应排到不晚于依赖的天。
+    kcs = [
+        PlannerKcSnapshot(kc_code="PY43-KC-001", mastery_score=0.1, unlocked=True),
+        PlannerKcSnapshot(
+            kc_code="PY43-KC-002", mastery_score=0.1, unlocked=True,
+            prerequisite_codes=["PY43-KC-001"],
+        ),
+        PlannerKcSnapshot(
+            kc_code="PY43-KC-003", mastery_score=0.1, unlocked=True,
+            prerequisite_codes=["PY43-KC-001"],
+        ),
+    ]
+    response = PathPlannerAgent().plan(_request(kcs=kcs))
+    first_day = {}
+    for node in response.nodes:
+        if node.kc_code not in first_day:
+            first_day[node.kc_code] = node.day_index
+    assert first_day["PY43-KC-001"] <= first_day["PY43-KC-002"]
+    assert first_day["PY43-KC-001"] <= first_day["PY43-KC-003"]
 
 
 def test_signature_is_deterministic() -> None:

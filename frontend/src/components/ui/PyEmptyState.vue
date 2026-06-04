@@ -133,10 +133,10 @@ const hasDescription = computed<boolean>(() => resolvedDescription.value.length 
   gap: var(--pyt-r12-space-2, 8px);
   min-height: 160px;
   padding: var(--pyt-r12-space-5, 24px) var(--pyt-r12-space-4, 16px);
-  border: 1px dashed var(--pyt-r12-color-primary-500, var(--pyt-color-border, #c9a86b));
+  border: 1px dashed var(--pyt-r12-color-primary-500, var(--pyt-color-border, var(--pyt-color-border)));
   border-radius: var(--pyt-r12-radius-md, 4px);
-  background-color: var(--pyt-r12-color-primary-50, var(--pyt-color-bg-primary, #fef7e3));
-  color: var(--pyt-r12-color-primary-900, var(--pyt-color-text-primary, #4d3613));
+  background-color: var(--pyt-r12-color-primary-50, var(--pyt-color-bg-primary, var(--pyt-color-bg-primary)));
+  color: var(--pyt-r12-color-primary-900, var(--pyt-color-text-primary, var(--pyt-color-text-primary)));
   font-family: var(--pyt-r12-font-pixel-cn, var(--pyt-font-pixel, system-ui));
   text-align: center;
 }

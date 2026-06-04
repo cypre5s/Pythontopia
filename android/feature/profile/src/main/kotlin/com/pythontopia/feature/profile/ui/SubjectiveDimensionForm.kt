@@ -252,7 +252,7 @@ private fun LikertRow(
             horizontalArrangement = Arrangement.spacedBy(PytSpace.s2),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            (DimensionFormState.MIN_SCORE..DimensionFormState.MAX_SCORE).forEach { score ->
+            for (score in DimensionFormState.MIN_SCORE..DimensionFormState.MAX_SCORE) {
                 Row(
                     modifier = Modifier
                         .selectable(

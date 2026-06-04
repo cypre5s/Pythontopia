@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pythontopia_graph.agents.personalization import personalization_messages
 from pythontopia_graph.llm.provider import LlmProvider
 from pythontopia_graph.nodes.evidence_fetcher import EvidenceBundle
 from pythontopia_graph.schemas.resource import (
@@ -35,6 +36,7 @@ class ReadingAgent:
                     "每个 item 必须含 summary_md (>=10 字) 与 page_refs。"
                 ),
             },
+            *personalization_messages(request.profile_snapshot),
             {"role": "user", "content": ",".join(request.kc_codes)},
         ]
 

@@ -56,16 +56,16 @@ const props = defineProps<{
 }
 .walkthrough {
   background: #fffbe9;
-  border: 2px solid #c9a86b;
-  border-radius: 8px;
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-lg);
   padding: 14px;
 }
 .narrative {
   line-height: 1.55;
 }
 .walkthrough pre {
-  background: #2e2417;
-  color: #f1e5c8;
+  background: var(--pyt-color-terminal-bg);
+  color: var(--pyt-color-terminal-text);
   padding: 10px;
   border-radius: 6px;
   overflow-x: auto;
@@ -87,9 +87,9 @@ const props = defineProps<{
 .primary {
   margin-top: 12px;
   padding: 6px 10px;
-  border: 2px solid #6e4f1d;
-  background: #6e4f1d;
-  color: #fff7e6;
+  border: 2px solid var(--pyt-color-text-hint);
+  background: var(--pyt-color-text-hint);
+  color: var(--pyt-color-bg-elevated);
   border-radius: 4px;
   cursor: not-allowed;
   opacity: 0.7;

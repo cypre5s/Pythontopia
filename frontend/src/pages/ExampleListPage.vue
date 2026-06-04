@@ -4,6 +4,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import AppLayout from '@/app/AppLayout.vue';
+import PyButton from '@/components/ui/PyButton.vue';
 import { listAllExamples, listKcFallbacks } from '@/api/courseLibrary';
 import { listKnowledgeComponents } from '@/api/course';
 import { useToastStore } from '@stores/toast';
@@ -154,13 +155,14 @@ onMounted(async () => {
             </template>
           </p>
         </div>
-        <button
-          class="back-button"
-          type="button"
+        <PyButton
+          test-id="example-back"
+          variant="secondary"
+          size="sm"
           @click="backToWorld"
         >
           ← 返回小镇
-        </button>
+        </PyButton>
       </header>
 
       <section class="filter-bar">
@@ -174,17 +176,18 @@ onMounted(async () => {
             :title="kc.kcName"
             @click="toggleKcFilter(kc.kcCode)"
           >
-            {{ kc.kcCode }}
+            {{ kc.kcName }}
           </button>
         </div>
-        <button
+        <PyButton
           v-if="filterKcCodes.length"
           class="reset-button"
-          type="button"
+          variant="secondary"
+          size="sm"
           @click="clearFilter"
         >
           清空筛选
-        </button>
+        </PyButton>
       </section>
 
       <div
@@ -198,7 +201,6 @@ onMounted(async () => {
         >
           <header class="kc-bucket-head">
             <h2>
-              <span class="badge kc">{{ bucket.kc?.kcCode ?? '未关联' }}</span>
               {{ bucket.kc?.kcName ?? '未匹配 KC' }}
             </h2>
             <span class="muted">第 {{ bucket.kc?.chapterOrder ?? '—' }} 章 · {{ bucket.list.length }} 示例</span>
@@ -225,22 +227,22 @@ onMounted(async () => {
                 v-text="ex.code || '（示例尚未提供代码片段）'"
               />
               <footer class="card-footer">
-                <button
-                  type="button"
-                  class="ghost-button"
-                  data-testid="copy-code"
+                <PyButton
+                  test-id="copy-code"
+                  variant="secondary"
+                  size="sm"
                   @click="copyCode(ex.code || '')"
                 >
                   复制代码
-                </button>
-                <button
-                  type="button"
-                  class="ghost-button"
-                  data-testid="open-context"
+                </PyButton>
+                <PyButton
+                  test-id="open-context"
+                  variant="secondary"
+                  size="sm"
                   @click="openContext(ex)"
                 >
                   看上下文 →
-                </button>
+                </PyButton>
               </footer>
             </article>
           </div>
@@ -263,7 +265,7 @@ onMounted(async () => {
   padding: 16px;
   min-height: calc(100vh - 56px);
   background:
-    linear-gradient(180deg, #fef7e3 0%, #f3e4be 100%),
+    linear-gradient(180deg, var(--pyt-color-bg-primary) 0%, var(--pyt-color-bg-sunken) 100%),
     repeating-linear-gradient(45deg, rgba(110, 79, 29, 0.04) 0 4px, transparent 4px 12px);
 }
 .page-header {
@@ -272,9 +274,9 @@ onMounted(async () => {
   align-items: flex-end;
   gap: 12px;
   padding: 12px 16px;
-  background: var(--pyt-color-bg-elevated, #fff7e6);
-  border: 3px solid var(--pyt-color-border-strong, #4d3613);
-  box-shadow: 4px 4px 0 var(--pyt-color-border-strong, #4d3613);
+  background: var(--pyt-color-bg-elevated, var(--pyt-color-bg-elevated));
+  border: 3px solid var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+  box-shadow: 4px 4px 0 var(--pyt-color-border-strong, var(--pyt-color-text-primary));
 }
 .page-header h1 {
   margin: 0;
@@ -284,25 +286,15 @@ onMounted(async () => {
 .muted {
   margin: 4px 0 0;
   font-size: 13px;
-  color: var(--pyt-color-text-muted, #8a6c2c);
+  color: var(--pyt-color-text-muted, var(--pyt-color-text-muted));
 }
-.back-button {
-  font-family: var(--pyt-font-pixel), monospace;
-  min-height: 36px;
-  padding: 0 16px;
-  background: var(--pyt-color-warning-bg, #f5e2c1);
-  border: 2px solid var(--pyt-color-border-strong, #4d3613);
-  cursor: pointer;
-  box-shadow: 3px 3px 0 var(--pyt-color-border-strong, #4d3613);
-}
-
 .filter-bar {
   display: grid;
   gap: 8px;
   padding: 12px;
-  background: var(--pyt-color-bg-elevated, #fff7e6);
-  border: 3px solid var(--pyt-color-border-strong, #4d3613);
-  box-shadow: 4px 4px 0 var(--pyt-color-border-strong, #4d3613);
+  background: var(--pyt-color-bg-elevated, var(--pyt-color-bg-elevated));
+  border: 3px solid var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+  box-shadow: 4px 4px 0 var(--pyt-color-border-strong, var(--pyt-color-text-primary));
 }
 .filter-bar h3 {
   margin: 0;
@@ -320,26 +312,19 @@ onMounted(async () => {
   font-family: var(--pyt-font-pixel), monospace;
   font-size: 11px;
   padding: 4px 8px;
-  border: 2px solid var(--pyt-color-border, #c9a86b);
-  background: var(--pyt-color-bg-soft, #fdf3d0);
+  border: 2px solid var(--pyt-color-border, var(--pyt-color-border));
+  background: var(--pyt-color-bg-soft, var(--pyt-color-bg-soft));
   cursor: pointer;
   min-height: auto;
-  color: var(--pyt-color-text-primary, #4d3613);
+  color: var(--pyt-color-text-primary, var(--pyt-color-text-primary));
 }
 .chip.active {
-  background: var(--pyt-color-warning-bg, #f5e2c1);
-  border-color: var(--pyt-color-border-strong, #4d3613);
+  background: var(--pyt-color-warning-bg, var(--pyt-color-warning-bg));
+  border-color: var(--pyt-color-border-strong, var(--pyt-color-text-primary));
   font-weight: 700;
 }
 .reset-button {
   justify-self: start;
-  min-height: 32px;
-  padding: 0 10px;
-  font-family: var(--pyt-font-pixel), monospace;
-  background: var(--pyt-color-danger-bg, #fde2dc);
-  border: 2px solid var(--pyt-color-border-strong, #4d3613);
-  cursor: pointer;
-  box-shadow: 2px 2px 0 var(--pyt-color-border-strong, #4d3613);
 }
 
 .kc-bucket-list {
@@ -347,16 +332,16 @@ onMounted(async () => {
   gap: 16px;
 }
 .kc-bucket {
-  background: var(--pyt-color-bg-elevated, #fff7e6);
-  border: 3px solid var(--pyt-color-border-strong, #4d3613);
-  box-shadow: 4px 4px 0 var(--pyt-color-border-strong, #4d3613);
+  background: var(--pyt-color-bg-elevated, var(--pyt-color-bg-elevated));
+  border: 3px solid var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+  box-shadow: 4px 4px 0 var(--pyt-color-border-strong, var(--pyt-color-text-primary));
   padding: 12px;
 }
 .kc-bucket-head {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  border-bottom: 2px dashed var(--pyt-color-border, #c9a86b);
+  border-bottom: 2px dashed var(--pyt-color-border, var(--pyt-color-border));
   padding-bottom: 6px;
   margin-bottom: 10px;
 }
@@ -374,8 +359,8 @@ onMounted(async () => {
   display: grid;
   gap: 8px;
   padding: 10px;
-  background: var(--pyt-color-bg-soft, #fdf3d0);
-  border: 2px solid var(--pyt-color-border, #c9a86b);
+  background: var(--pyt-color-bg-soft, var(--pyt-color-bg-soft));
+  border: 2px solid var(--pyt-color-border, var(--pyt-color-border));
 }
 .card-head {
   display: flex;
@@ -395,8 +380,8 @@ onMounted(async () => {
 .card-code {
   margin: 0;
   padding: 8px;
-  background: #fff;
-  border: 1px solid var(--pyt-color-border, #c9a86b);
+  background: var(--pyt-color-bg-elevated);
+  border: 1px solid var(--pyt-color-border, var(--pyt-color-border));
   font-family: var(--pyt-font-mono, 'JetBrains Mono', monospace);
   font-size: 12px;
   line-height: 1.45;
@@ -412,27 +397,27 @@ onMounted(async () => {
   font-family: var(--pyt-font-pixel), monospace;
   min-height: 28px;
   padding: 0 8px;
-  background: var(--pyt-color-bg-primary, #fef7e3);
-  border: 2px solid var(--pyt-color-border-strong, #4d3613);
+  background: var(--pyt-color-bg-primary, var(--pyt-color-bg-primary));
+  border: 2px solid var(--pyt-color-border-strong, var(--pyt-color-text-primary));
   cursor: pointer;
   font-size: 11px;
-  box-shadow: 2px 2px 0 var(--pyt-color-border-strong, #4d3613);
+  box-shadow: 2px 2px 0 var(--pyt-color-border-strong, var(--pyt-color-text-primary));
 }
 .badge {
   display: inline-block;
   padding: 1px 6px;
-  background: var(--pyt-color-warning-bg, #f5e2c1);
-  border: 1px solid var(--pyt-color-border, #c9a86b);
+  background: var(--pyt-color-warning-bg, var(--pyt-color-warning-bg));
+  border: 1px solid var(--pyt-color-border, var(--pyt-color-border));
   font-family: var(--pyt-font-pixel), monospace;
   font-size: 11px;
 }
 .badge.kc {
-  background: var(--pyt-color-info-bg, #d0e3f1);
+  background: var(--pyt-color-info-bg, var(--pyt-color-info-bg));
 }
 .empty {
   text-align: center;
   margin: 0;
   padding: 24px;
-  color: var(--pyt-color-text-muted, #8a6c2c);
+  color: var(--pyt-color-text-muted, var(--pyt-color-text-muted));
 }
 </style>

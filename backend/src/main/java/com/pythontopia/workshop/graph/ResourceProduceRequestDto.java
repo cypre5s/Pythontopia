@@ -13,5 +13,7 @@ public record ResourceProduceRequestDto(
   public record ProfileSnapshotDto(
       String major,
       @JsonProperty("python_self_rated_level") int pythonSelfRatedLevel,
-      @JsonProperty("media_priority") List<String> mediaPriority) {}
+      @JsonProperty("media_priority") List<String> mediaPriority,
+      @JsonProperty("cognitive_style") String cognitiveStyle,
+      @JsonProperty("error_patterns") List<String> errorPatterns) {}
 }

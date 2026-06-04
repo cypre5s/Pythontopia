@@ -35,10 +35,10 @@ const props = defineProps<{
   margin-top: 8px;
   padding: 8px 10px;
   background: #fff2c9;
-  border: 1px dashed #6e4f1d;
+  border: 1px dashed var(--pyt-color-text-hint);
   border-radius: 6px;
   font-size: 12px;
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
 }
 .label {
   font-weight: 600;

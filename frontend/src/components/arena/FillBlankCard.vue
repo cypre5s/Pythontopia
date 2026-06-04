@@ -68,11 +68,11 @@ watch(
 .fill-blank-card { display: grid; gap: 12px; }
 .card-head { display: flex; align-items: center; gap: 8px; }
 .card-icon { font-size: 20px; }
-.card-head h3 { margin: 0; font-size: 16px; color: #ffd166; }
+.card-head h3 { margin: 0; font-size: 16px; color: var(--pyt-color-gold-bright); }
 .blank-count { margin-left: auto; font-size: 11px; color: #93c5fd; padding: 2px 8px; background: rgba(74,144,226,0.2); border: 1px solid #4a90e2; border-radius: 3px; }
 .code-body { background: #0a1428; border: 2px solid #4a90e2; padding: 12px; font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 2; white-space: pre-wrap; color: #e5e7eb; }
 .code-seg { white-space: pre-wrap; }
-.blank-input { display: inline-block; width: 120px; margin: 0 4px; padding: 2px 6px; background: #1a3a6e; border: 2px dashed #f1c453; border-radius: 3px; color: #ffd166; font-family: inherit; font-size: 13px; text-align: center; }
+.blank-input { display: inline-block; width: 120px; margin: 0 4px; padding: 2px 6px; background: #1a3a6e; border: 2px dashed var(--pyt-color-gold); border-radius: 3px; color: var(--pyt-color-gold-bright); font-family: inherit; font-size: 13px; text-align: center; }
 .blank-input:focus { border-color: #6bbf59; background: #1a4a3e; outline: none; }
 .hint { font-size: 12px; color: rgba(255,247,230,0.5); margin: 0; }
 </style>

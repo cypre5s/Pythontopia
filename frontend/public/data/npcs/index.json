@@ -1,10 +1,9 @@
 {
   "version": 1,
-  "totalNpcs": 20,
+  "totalNpcs": 19,
   "categories": {
     "educator_core": [
       "mayor_py",
-      "farmer_kc",
       "foreman_bug",
       "librarian_doc",
       "coach_q",
@@ -36,13 +35,6 @@
       "category": "educator_core",
       "spawnMap": "town_hub",
       "portrait": "portrait_mayor_py.png"
-    },
-    {
-      "key": "farmer_kc",
-      "name": "田老",
-      "category": "educator_core",
-      "spawnMap": "farm_north",
-      "portrait": "portrait_farmer_kc.png"
     },
     {
       "key": "foreman_bug",

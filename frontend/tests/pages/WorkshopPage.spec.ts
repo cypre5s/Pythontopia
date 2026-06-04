@@ -144,26 +144,7 @@ describe('WorkshopPage R-13 改造', () => {
 
   it('clicking fast-travel chip writes to world.player and pushes /world', async () => {
     const world = useWorldStore();
-    world.player = {
-      mapKey: 'town_hub',
-      tileX: 25,
-      tileY: 20,
-      direction: 'DOWN',
-    };
-
-    await router.push('/workshop');
-    const wrapper = mountPage();
-    await flushPromises();
-
-    await wrapper.find('[data-testid="workshop-travel-farm"]').trigger('click');
-    await flushPromises();
-
-    expect(world.player.mapKey).toBe('farm_north');
-    expect(router.currentRoute.value.path).toBe('/world');
-  });
-
-  it('current map chip is disabled (cannot travel to where you already are)', async () => {
-    const world = useWorldStore();
+    // R-14 单 hub：玩家位于（历史遗留的）外围图时，点击 hub chip 把 player 拉回 town_hub。
     world.player = {
       mapKey: 'campus_east',
       tileX: 2,
@@ -175,8 +156,28 @@ describe('WorkshopPage R-13 改造', () => {
     const wrapper = mountPage();
     await flushPromises();
 
-    const campusChip = wrapper.find('[data-testid="workshop-travel-campus"]');
-    expect(campusChip.attributes('disabled')).toBeDefined();
+    await wrapper.find('[data-testid="workshop-travel-hub"]').trigger('click');
+    await flushPromises();
+
+    expect(world.player.mapKey).toBe('town_hub');
+    expect(router.currentRoute.value.path).toBe('/world');
+  });
+
+  it('current map chip is disabled (cannot travel to where you already are)', async () => {
+    const world = useWorldStore();
+    world.player = {
+      mapKey: 'town_hub',
+      tileX: 25,
+      tileY: 20,
+      direction: 'DOWN',
+    };
+
+    await router.push('/workshop');
+    const wrapper = mountPage();
+    await flushPromises();
+
+    const hubChip = wrapper.find('[data-testid="workshop-travel-hub"]');
+    expect(hubChip.attributes('disabled')).toBeDefined();
   });
 
   it('opens library via the quick access chip', async () => {

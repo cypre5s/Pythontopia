@@ -102,6 +102,8 @@ class PathPlannerAgent:
         focus_candidates = self._select_focus_kcs(
             unlocked_kcs, request.recent_resources, request.recent_submissions, classroom_kcs
         )
+        # DAG：按先修关系拓扑排序，先修 KC 排到更靠前的天，保证「先学先修再学依赖」。
+        focus_candidates = self._topological_order(focus_candidates)
         for index, candidate in enumerate(focus_candidates):
             day = (index % MAX_DAYS) + 1
             already_read = self._already_read(candidate.kc_code, request.recent_resources)
@@ -224,6 +226,33 @@ class PathPlannerAgent:
             )
             for kc in focus
         ]
+
+    def _topological_order(self, candidates: list[_CandidateKc]) -> list[_CandidateKc]:
+        """对聚焦 KC 做拓扑排序：先修（落在聚焦集合内的）排在依赖之前。
+
+        DFS 后序 + 临时标记防环；以输入顺序为稳定 tie-break，保证确定式可复现。
+        无先修时输出顺序 == 输入顺序（不影响既有行为）。
+        """
+        by_code = {c.kc_code: c for c in candidates}
+        visited: set[str] = set()
+        in_progress: set[str] = set()
+        ordered: list[_CandidateKc] = []
+
+        def visit(node: _CandidateKc) -> None:
+            if node.kc_code in visited or node.kc_code in in_progress:
+                return
+            in_progress.add(node.kc_code)
+            for prereq in node.prerequisite_codes:
+                dep = by_code.get(prereq)
+                if dep is not None:
+                    visit(dep)
+            in_progress.discard(node.kc_code)
+            visited.add(node.kc_code)
+            ordered.append(node)
+
+        for candidate in candidates:
+            visit(candidate)
+        return ordered
 
     def _already_read(self, kc_code: str, resources: list[PlannerResourceUsage]) -> bool:
         return any(usage.kc_code == kc_code for usage in resources)

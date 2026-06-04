@@ -1,8 +1,11 @@
 <script setup lang="ts">
 // 世界主页面：全屏沉浸式像素 RPG，HUD/面板以 fixed 悬浮叠加。
+defineOptions({ name: 'WorldPage' });
+
 import { computed, onBeforeUnmount, onMounted, watch } from 'vue';
-import ChapterNavPanel from '@/components/world/ChapterNavPanel.vue';
 import FirstTimeHelpModal from '@/components/world/FirstTimeHelpModal.vue';
+import ProbeCard from '@/components/world/ProbeCard.vue';
+import MoodOverlay from '@/components/world/MoodOverlay.vue';
 import OperationHints from '@/components/world/OperationHints.vue';
 import DialogModal from '@/components/game/DialogModal.vue';
 import WorldCanvas from '@/components/game/WorldCanvas.vue';
@@ -17,6 +20,7 @@ import {
   LearningObjectivePanel,
   PauseMenu,
   QuickWheel,
+  GuideOverlay,
 } from '@/components/hud';
 import { openNpcDialog } from '@game/adapters/dialog';
 import { useWorldStore } from '@stores/world';
@@ -28,10 +32,6 @@ const calendar = useCalendarStore();
 const gameSettings = useGameSettingsStore();
 
 const seasonClass = computed<string>(() => `world-page--season-${calendar.today?.season ?? 'spring'}`);
-
-const isOnFarm = computed<boolean>(
-  () => world.player?.mapKey === 'farm_north',
-);
 
 const FIRST_VISIT_FLAG = 'pyt_first_world_visit';
 const HELP_FLAG = 'pyt_helped_v1';
@@ -106,11 +106,12 @@ onBeforeUnmount(() => {
     :style="{ '--pyt-code-font-size': gameSettings.education.codeFontSize + 'px' }"
   >
     <WorldCanvas />
-    <ChapterNavPanel v-if="isOnFarm" />
     <!-- 历史快捷键提示由 HudShell 各按钮承担，避免文字重复 -->
     <OperationHints v-if="false" />
     <DialogModal />
     <FirstTimeHelpModal @dismissed="onHelpDismissed" />
+    <ProbeCard />
+    <MoodOverlay />
     <!-- HUD 套件 -->
     <HudShell />
     <LearningObjectivePanel />
@@ -121,6 +122,7 @@ onBeforeUnmount(() => {
     <QuickslotPanelHost />
     <PauseMenu />
     <QuickWheel />
+    <GuideOverlay />
     <SceneTransition />
   </section>
 </template>
@@ -137,14 +139,14 @@ onBeforeUnmount(() => {
   --world-bg-top: #2f5a36;
   --world-bg-bot: #1c2b18;
   transition: background 1.2s ease;
-  font-family: var(--pyt-font-pixel, monospace);
-  color: #fff7e6;
+  font-family: var(--pyt-font-pixel);
+  color: var(--pyt-color-bg-elevated);
 }
 
 /* 季节渐变（地图未加载完时也能看到星露谷感氛围底色） */
 .world-page--season-spring { --world-bg-top: #6bbf59; --world-bg-bot: #2f5a36; }
-.world-page--season-summer { --world-bg-top: #2f8f3c; --world-bg-bot: #14401b; }
-.world-page--season-autumn { --world-bg-top: #c2871f; --world-bg-bot: #5b3a10; }
+.world-page--season-summer { --world-bg-top: var(--pyt-color-success); --world-bg-bot: #14401b; }
+.world-page--season-autumn { --world-bg-top: var(--pyt-color-warning); --world-bg-bot: #5b3a10; }
 .world-page--season-winter { --world-bg-top: #aac6d9; --world-bg-bot: #2a3d49; }
 
 /* 四角羽化暗角，让玩家视线收束到画面中心；HUD 在 z>=100，vignette 永远不挡 UI。 */

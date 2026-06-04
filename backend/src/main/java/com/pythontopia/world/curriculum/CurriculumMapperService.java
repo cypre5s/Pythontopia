@@ -9,15 +9,12 @@ import com.pythontopia.coursepack.repository.CoursePackRepository;
 import com.pythontopia.learner.event.LearningEvent;
 import com.pythontopia.learner.profile.dto.LearnerProfileDto;
 import com.pythontopia.learner.profile.repository.ProfileRepository;
-import com.pythontopia.world.crop.CropStateService;
 import com.pythontopia.world.curriculum.dto.CurriculumBootstrapResult;
 import com.pythontopia.world.curriculum.dto.MapperChapterDto;
 import com.pythontopia.world.curriculum.dto.MapperKcDto;
 import com.pythontopia.world.curriculum.dto.MapperProfileSummaryDto;
 import com.pythontopia.world.curriculum.dto.MapperRequest;
 import com.pythontopia.world.curriculum.dto.MapperResponse;
-import com.pythontopia.world.curriculum.dto.TileAssignmentDto;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -37,7 +34,6 @@ public class CurriculumMapperService {
   private final ProfileRepository profileRepository;
   private final CoursePackRepository coursePackRepository;
   private final CurriculumMapperClient client;
-  private final CropStateService cropStateService;
   private final ResourceRunRecorder recorder;
   private final ApplicationEventPublisher eventPublisher;
 
@@ -45,13 +41,11 @@ public class CurriculumMapperService {
       ProfileRepository profileRepository,
       CoursePackRepository coursePackRepository,
       CurriculumMapperClient client,
-      CropStateService cropStateService,
       ResourceRunRecorder recorder,
       ApplicationEventPublisher eventPublisher) {
     this.profileRepository = profileRepository;
     this.coursePackRepository = coursePackRepository;
     this.client = client;
-    this.cropStateService = cropStateService;
     this.recorder = recorder;
     this.eventPublisher = eventPublisher;
   }
@@ -135,15 +129,6 @@ public class CurriculumMapperService {
           HttpStatus.BAD_GATEWAY,
           "CURRICULUM_MAPPER_EMPTY",
           "知识田映射服务返回空数据。");
-    }
-
-    Set<String> unlocked = new HashSet<>(response.unlockedKcs());
-    for (TileAssignmentDto tile : response.tileAssignments()) {
-      boolean isUnlocked = unlocked.contains(tile.kcCode());
-      cropStateService.ensureTile(userId, tile.kcCode(), tile.tileX(), tile.tileY(), isUnlocked);
-      if (isUnlocked) {
-        cropStateService.unlock(userId, tile.kcCode(), tile.tileX(), tile.tileY());
-      }
     }
 
     eventPublisher.publishEvent(

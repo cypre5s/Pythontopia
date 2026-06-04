@@ -168,6 +168,50 @@ public class PracticeSubmissionRepository {
     return jdbcTemplate.query(sql.toString(), (rs, rowNum) -> mapSubmission(rs), args.toArray());
   }
 
+  /** PathPlanner 用的最近提交记录（含 KC + 是否通过），按时间升序（最新在末尾，匹配 planner 取 [-1]）。 */
+  public List<PlannerSubmission> findRecentForPlanner(Long userId, int limit) {
+    List<PlannerSubmission> rows =
+        jdbcTemplate.query(
+            """
+            SELECT s.problem_id AS problem_id, p.kc_code AS kc_code,
+                   (s.status = 'PASSED') AS passed
+            FROM practice_submission s
+            JOIN course_problem p ON p.id = s.problem_id
+            WHERE s.user_id = ?
+            ORDER BY s.submitted_at DESC
+            LIMIT ?
+            """,
+            (rs, rowNum) ->
+                new PlannerSubmission(
+                    rs.getLong("problem_id"), rs.getString("kc_code"), rs.getBoolean("passed")),
+            userId,
+            limit);
+    // 查询是 DESC（最新优先），planner 的 _failed_recently 取列表 [-1] 视为最新，故反转成升序。
+    java.util.Collections.reverse(rows);
+    return rows;
+  }
+
+  /** 最近提交的精简投影，供 PathPlanner 判定最近练习成败。 */
+  public record PlannerSubmission(Long problemId, String kcCode, boolean passed) {}
+
+  /**
+   * 同一题在某次提交之前的失败次数（情绪化小镇②：判定重试/逆袭）。{@code id < beforeSubmissionId}
+   * 保证只数「先前」的失败（id 单调递增），不含当前这次。
+   */
+  public int countPriorFailures(Long userId, Long problemId, Long beforeSubmissionId) {
+    Integer count =
+        jdbcTemplate.queryForObject(
+            """
+            SELECT COUNT(*) FROM practice_submission
+            WHERE user_id = ? AND problem_id = ? AND id < ? AND status = 'FAILED'
+            """,
+            Integer.class,
+            userId,
+            problemId,
+            beforeSubmissionId);
+    return count == null ? 0 : count;
+  }
+
   public int countSubmittedAfter(Long userId, OffsetDateTime since) {
     Integer count =
         jdbcTemplate.queryForObject(

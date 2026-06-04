@@ -76,6 +76,42 @@ public class CoursePackRepository {
     return spec.query(CourseKc.class).list();
   }
 
+  /**
+   * 读取每个 KC 的先修 KC code 列表（{@code course_kc.prerequisite_codes}，由 V125 按教学顺序播种）。
+   * 供 PathPlanner 做 DAG 拓扑排序。
+   */
+  public java.util.Map<String, List<String>> findKcPrerequisites(Long packId) {
+    java.util.Map<String, List<String>> result = new java.util.HashMap<>();
+    jdbcClient
+        .sql(
+            """
+            SELECT kc_code, prerequisite_codes
+            FROM course_kc
+            WHERE pack_id = :packId
+            """)
+        .param("packId", packId)
+        .query(
+            (rs, rowNum) -> {
+              String kcCode = rs.getString("kc_code");
+              List<String> prereqs = new ArrayList<>();
+              Array array = rs.getArray("prerequisite_codes");
+              if (array != null) {
+                Object raw = array.getArray();
+                if (raw instanceof Object[] values) {
+                  for (Object value : values) {
+                    if (value != null) {
+                      prereqs.add(String.valueOf(value));
+                    }
+                  }
+                }
+              }
+              result.put(kcCode, prereqs);
+              return kcCode;
+            })
+        .list();
+    return result;
+  }
+
   public Optional<CourseProblem> findProblem(Long packId, Long problemId) {
     return jdbcClient
         .sql(
@@ -92,6 +128,29 @@ public class CoursePackRepository {
         .param("problemId", problemId)
         .query(CourseProblem.class)
         .optional();
+  }
+
+  public List<CourseProblem> findProblems(Long packId, String kcCode) {
+    String kcFilter = kcCode == null || kcCode.isBlank() ? "" : " AND kc_code = :kcCode";
+    JdbcClient.StatementSpec spec =
+        jdbcClient
+            .sql(
+                """
+                SELECT id, pack_id AS packId, kc_code AS kcCode, title,
+                       statement_markdown AS statementMarkdown,
+                       input_description AS inputDescription,
+                       output_description AS outputDescription, difficulty,
+                       source_label AS sourceLabel
+                FROM course_problem
+                WHERE pack_id = :packId
+                """
+                    + kcFilter
+                    + " ORDER BY id")
+            .param("packId", packId);
+    if (kcCode != null && !kcCode.isBlank()) {
+      spec = spec.param("kcCode", kcCode);
+    }
+    return spec.query(CourseProblem.class).list();
   }
 
   public List<CourseExample> findExamples(Long packId, String kcCode) {

@@ -5,6 +5,13 @@ export interface SseTraceEvent {
   node: string;
   status: string;
   elapsed_ms: number;
+  /** evidence_fetcher：命中的课件证据段数。 */
+  chunks?: number;
+  /** image_understanding：当前/总图片序号（看图答疑多图进度）。 */
+  index?: number;
+  total?: number;
+  /** image_understanding：识别描述字符数。 */
+  chars?: number;
 }
 
 export interface SseStreamState<T = unknown> {

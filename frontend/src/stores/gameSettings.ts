@@ -23,6 +23,8 @@ export interface DisplaySettings {
   colorMode: ColorMode;
   showVignette: boolean;
   showParticles: boolean;
+  /** 开发/调试：显示 FPS 性能诊断框（F3 切换），默认关闭。 */
+  showPerfHud: boolean;
 }
 
 export interface EducationSettings {
@@ -83,6 +85,7 @@ function defaults(): GameSettingsState {
       colorMode: 'default',
       showVignette: true,
       showParticles: true,
+      showPerfHud: false,
     },
     education: {
       textSpeed: 'normal',

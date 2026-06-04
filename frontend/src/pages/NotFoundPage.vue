@@ -112,8 +112,8 @@ onUnmounted(() => {
   padding: 24px 28px;
   background: rgba(28, 24, 16, 0.94);
   border: 3px solid #d4af37;
-  border-radius: 10px;
-  color: #fff7e6;
+  border-radius: var(--pyt-radius-lg);
+  color: var(--pyt-color-bg-elevated);
   font-family: var(--pyt-font-pixel), 'PingFang SC', 'Noto Sans CJK SC', monospace;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   text-align: center;
@@ -122,21 +122,21 @@ onUnmounted(() => {
 .not-found-page__title {
   margin: 0 0 12px;
   font-size: 22px;
-  color: #ffd166;
-  text-shadow: 1px 1px 0 #2a1a05;
+  color: var(--pyt-color-gold-bright);
+  text-shadow: 1px 1px 0 var(--pyt-color-shadow);
   letter-spacing: 1px;
 }
 
 .not-found-page__hint {
   font-size: 14px;
-  color: #fff7e6;
+  color: var(--pyt-color-bg-elevated);
   margin: 0 0 14px;
   line-height: 1.6;
 }
 
 .not-found-page__countdown {
   font-size: 13px;
-  color: #ffd166;
+  color: var(--pyt-color-gold-bright);
   margin: 0 0 20px;
   animation: not-found-pulse 1s ease-in-out infinite;
 }
@@ -156,7 +156,7 @@ onUnmounted(() => {
   background: rgba(0, 0, 0, 0.4);
   padding: 2px 6px;
   border-radius: 4px;
-  color: #ffd166;
+  color: var(--pyt-color-gold-bright);
 }
 
 .not-found-page__actions {
@@ -177,19 +177,19 @@ onUnmounted(() => {
 
 .btn-primary {
   background: #d4af37;
-  border: 2px solid #f1c453;
-  color: #2a1a05;
+  border: 2px solid var(--pyt-color-gold);
+  color: var(--pyt-color-shadow);
   font-weight: 700;
 }
 
 .btn-primary:hover {
-  background: #f1c453;
+  background: var(--pyt-color-gold);
 }
 
 .btn-secondary {
   background: rgba(212, 175, 55, 0.18);
   border: 2px solid #d4af37;
-  color: #fff7e6;
+  color: var(--pyt-color-bg-elevated);
 }
 
 .btn-secondary:hover {

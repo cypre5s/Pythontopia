@@ -126,14 +126,14 @@ function fmtRate(value: number): string {
 }
 .card {
   background: #fffbe9;
-  border: 2px solid #c9a86b;
-  border-radius: 10px;
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-lg);
   padding: 12px;
 }
 .card h4 {
   margin: 0 0 6px;
   font-size: 13px;
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
 }
 .card .value {
   margin: 0 0 4px;
@@ -146,7 +146,7 @@ function fmtRate(value: number): string {
   font-size: 18px;
 }
 .card small {
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
   font-size: 11px;
 }
 .activity {
@@ -161,11 +161,11 @@ function fmtRate(value: number): string {
   grid-template-columns: 150px 100px 100px 110px 1fr;
   gap: 8px;
   padding: 6px 10px;
-  border-bottom: 1px dashed #c9a86b;
+  border-bottom: 1px dashed var(--pyt-color-border);
   font-size: 12px;
 }
 .activity .time {
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
 }
 .activity .student {
   font-weight: 600;
@@ -177,12 +177,12 @@ function fmtRate(value: number): string {
   font-family: 'JetBrains Mono', monospace;
 }
 .activity .detail {
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
 }
 .empty {
   padding: 16px;
-  background: #fdf3d0;
-  border-radius: 8px;
+  background: var(--pyt-color-bg-soft);
+  border-radius: var(--pyt-radius-lg);
   text-align: center;
 }
 </style>

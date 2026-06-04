@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
 }
@@ -32,6 +33,7 @@ dependencies {
     implementation(project(":core:common"))
     implementation(project(":core:design"))
     implementation(project(":core:data"))
+    implementation(project(":core:network"))
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
@@ -47,6 +49,8 @@ dependencies {
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
+    implementation(libs.retrofit)
+    implementation(libs.kotlinx.serialization.json)
 
     testImplementation(libs.junit.jupiter.api)
     testRuntimeOnly(libs.junit.jupiter.engine)

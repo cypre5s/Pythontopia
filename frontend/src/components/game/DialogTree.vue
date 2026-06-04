@@ -337,7 +337,7 @@ function onPortraitError(event: Event): void {
   border-image-width: 24px;
   border-image-repeat: stretch;
   border: 24px solid transparent;
-  border-radius: 12px;
+  border-radius: var(--pyt-radius-lg);
   box-shadow: var(--pyt-shadow-modal, 0 6px 16px rgba(0, 0, 0, 0.35));
   color: #111111;
 }
@@ -437,7 +437,7 @@ function onPortraitError(event: Event): void {
 
 /* Kenney UI 风按钮：黄棕底 + 深棕粗边，hover 提亮。 */
 .pixel-btn {
-  font-family: var(--pyt-font-pixel, monospace);
+  font-family: var(--pyt-font-pixel);
   font-size: 14px;
   color: #111111;
   background-color: #f7d774;
@@ -459,7 +459,7 @@ function onPortraitError(event: Event): void {
 }
 
 .pixel-btn:focus-visible {
-  outline: 2px solid #4d3613;
+  outline: 2px solid var(--pyt-color-text-primary);
   outline-offset: 2px;
 }
 

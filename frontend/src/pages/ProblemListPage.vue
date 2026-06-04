@@ -1,9 +1,10 @@
 <script setup lang="ts">
 // ProblemListPage —— 39 题题库浏览页。支持 KC / 难度 / 玩家状态多重过滤，
 // 排序按章节-KC 或者按通过率，点击行展开题目预览，点击"去做"跳到 /training。
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import AppLayout from '@/app/AppLayout.vue';
+import PyButton from '@/components/ui/PyButton.vue';
 import {
   listAllProblems,
   listKcFallbacks,
@@ -18,8 +19,11 @@ import type {
   PlayerProblemProgress,
 } from '@/api/dto/Library';
 import type { KcDto } from '@/api/dto/KcDto';
+import { kcDisplayName } from '@/data/kcNames';
 
 type SortField = 'chapter' | 'difficulty' | 'attempts';
+type DifficultyFilter = '' | 'Low' | 'Medium' | 'High';
+type StatusFilter = '' | PlayerProblemStatus;
 
 const router = useRouter();
 const toast = useToastStore();
@@ -28,33 +32,68 @@ const problems = ref<CourseProblemSummary[]>([]);
 const kcMap = ref<Map<string, CourseKcSummary>>(new Map());
 const progressMap = ref<Map<number, PlayerProblemProgress>>(new Map());
 
-const filterKcCodes = ref<string[]>([]);
-const filterDifficulty = ref<string[]>([]);
-const filterStatus = ref<PlayerProblemStatus[]>([]);
+const searchQuery = ref<string>('');
+const filterKcCode = ref<string>('');
+const filterDifficulty = ref<DifficultyFilter>('');
+const filterStatus = ref<StatusFilter>('');
 const sortField = ref<SortField>('chapter');
 const expanded = ref<Set<number>>(new Set());
 
 const loading = ref<boolean>(true);
 
-const allKcs = computed<CourseKcSummary[]>(() =>
-  Array.from(kcMap.value.values()).sort((a, b) => {
-    const co = (a.chapterOrder ?? 0) - (b.chapterOrder ?? 0);
-    if (co !== 0) return co;
-    return a.kcCode.localeCompare(b.kcCode);
-  }),
-);
+/** 题库下拉仅展示「至少关联 1 道题」的 KC（pack 共 65 KC，题库仅 39 题）。 */
+const kcsWithProblems = computed<CourseKcSummary[]>(() => {
+  const codes = [...new Set(problems.value.map((p) => p.kcCode))];
+  return codes
+    .map((code) => kcMap.value.get(code) ?? stubKcSummary(code))
+    .sort((a, b) => {
+      const co = (a.chapterOrder ?? 0) - (b.chapterOrder ?? 0);
+      if (co !== 0) return co;
+      return a.kcCode.localeCompare(b.kcCode);
+    });
+});
 
 const difficulties = ['Low', 'Medium', 'High'] as const;
 const statusOptions: PlayerProblemStatus[] = ['NOT_TRIED', 'PASSED', 'FAILED'];
 
+const kcChapterGroups = computed(() => {
+  const byChapter = new Map<number, CourseKcSummary[]>();
+  for (const kc of kcsWithProblems.value) {
+    const order = kc.chapterOrder ?? 0;
+    const list = byChapter.get(order) ?? [];
+    list.push(kc);
+    byChapter.set(order, list);
+  }
+  return Array.from(byChapter.entries())
+    .sort(([a], [b]) => a - b)
+    .map(([chapterOrder, kcs]) => ({ chapterOrder, kcs }));
+});
+
+function normalizedSearchQuery(): string {
+  return searchQuery.value.trim().toLowerCase();
+}
+
+function problemMatchesSearch(p: CourseProblemSummary): boolean {
+  const q = normalizedSearchQuery();
+  if (!q) return true;
+  const haystack = [
+    String(p.problemId),
+    p.title,
+    p.kcCode,
+    kcNameOf(p.kcCode),
+    p.statementMarkdown,
+  ]
+    .join('\n')
+    .toLowerCase();
+  return haystack.includes(q);
+}
+
 const filtered = computed<CourseProblemSummary[]>(() => {
-  const kcFilter = new Set(filterKcCodes.value);
-  const diffFilter = new Set(filterDifficulty.value);
-  const statFilter = new Set(filterStatus.value);
   return problems.value
-    .filter((p) => kcFilter.size === 0 || kcFilter.has(p.kcCode))
-    .filter((p) => diffFilter.size === 0 || diffFilter.has(p.difficulty))
-    .filter((p) => statFilter.size === 0 || statFilter.has(statusOf(p.problemId)));
+    .filter((p) => problemMatchesSearch(p))
+    .filter((p) => !filterKcCode.value || p.kcCode === filterKcCode.value)
+    .filter((p) => !filterDifficulty.value || p.difficulty === filterDifficulty.value)
+    .filter((p) => !filterStatus.value || statusOf(p.problemId) === filterStatus.value);
 });
 
 const sorted = computed<CourseProblemSummary[]>(() => {
@@ -103,8 +142,38 @@ function chapterOf(kcCode: string): number | null {
   return kcMap.value.get(kcCode)?.chapterOrder ?? null;
 }
 function kcNameOf(kcCode: string): string {
-  return kcMap.value.get(kcCode)?.kcName ?? kcCode;
+  const fromApi = kcMap.value.get(kcCode)?.kcName;
+  if (fromApi) return fromApi;
+  return kcDisplayName(kcCode);
 }
+
+function stubKcSummary(kcCode: string): CourseKcSummary {
+  return {
+    kcId: 0,
+    packId: 43,
+    kcCode,
+    kcName: kcDisplayName(kcCode),
+    chapterId: 0,
+    chapterOrder: 99,
+    difficulty: null,
+    summary: '',
+    pageRefs: [],
+  };
+}
+
+function kcOptionLabel(kc: CourseKcSummary): string {
+  const name = kc.kcName || kcDisplayName(kc.kcCode);
+  const count = problems.value.filter((p) => p.kcCode === kc.kcCode).length;
+  const ch = kc.chapterOrder;
+  const prefix = ch != null && ch < 99 ? `第${ch}章 · ` : '';
+  return `${prefix}${name}（${count} 题）`;
+}
+
+watch(kcsWithProblems, (kcs) => {
+  if (filterKcCode.value && !kcs.some((kc) => kc.kcCode === filterKcCode.value)) {
+    filterKcCode.value = '';
+  }
+});
 
 function toggleExpand(problemId: number): void {
   if (expanded.value.has(problemId)) {
@@ -121,36 +190,6 @@ function goTraining(problemId: number): void {
 
 function backToWorld(): void {
   void router.push({ path: '/world' });
-}
-
-function toggleKcFilter(code: string): void {
-  const next = new Set(filterKcCodes.value);
-  if (next.has(code)) {
-    next.delete(code);
-  } else {
-    next.add(code);
-  }
-  filterKcCodes.value = Array.from(next);
-}
-
-function toggleDifficultyFilter(d: string): void {
-  const next = new Set(filterDifficulty.value);
-  if (next.has(d)) {
-    next.delete(d);
-  } else {
-    next.add(d);
-  }
-  filterDifficulty.value = Array.from(next);
-}
-
-function toggleStatusFilter(s: PlayerProblemStatus): void {
-  const next = new Set(filterStatus.value);
-  if (next.has(s)) {
-    next.delete(s);
-  } else {
-    next.add(s);
-  }
-  filterStatus.value = Array.from(next);
 }
 
 function difficultyLabel(d: string): string {
@@ -189,10 +228,18 @@ function statusClass(s: PlayerProblemStatus): string {
 }
 
 function clearFilters(): void {
-  filterKcCodes.value = [];
-  filterDifficulty.value = [];
-  filterStatus.value = [];
+  searchQuery.value = '';
+  filterKcCode.value = '';
+  filterDifficulty.value = '';
+  filterStatus.value = '';
 }
+
+const hasActiveFilters = computed(
+  () =>
+    Boolean(
+      normalizedSearchQuery() || filterKcCode.value || filterDifficulty.value || filterStatus.value,
+    ),
+);
 
 onMounted(async () => {
   loading.value = true;
@@ -245,83 +292,121 @@ onMounted(async () => {
             </template>
           </p>
         </div>
-        <button
-          class="back-button"
-          type="button"
+        <PyButton
+          test-id="problem-back"
+          variant="secondary"
+          size="sm"
           @click="backToWorld"
         >
           ← 返回小镇
-        </button>
+        </PyButton>
       </header>
 
       <section class="filter-bar">
-        <div class="filter-group">
-          <h3>难度</h3>
-          <div class="chip-row">
-            <button
-              v-for="d in difficulties"
-              :key="d"
-              type="button"
-              :class="['chip', { active: filterDifficulty.includes(d) }]"
-              @click="toggleDifficultyFilter(d)"
-            >
-              {{ difficultyLabel(d) }}
-            </button>
-          </div>
-        </div>
-        <div class="filter-group">
-          <h3>玩家状态</h3>
-          <div class="chip-row">
-            <button
-              v-for="s in statusOptions"
-              :key="s"
-              type="button"
-              :class="['chip', statusClass(s), { active: filterStatus.includes(s) }]"
-              @click="toggleStatusFilter(s)"
-            >
-              {{ statusLabel(s) }}
-            </button>
-          </div>
-        </div>
-        <div class="filter-group">
-          <h3>排序</h3>
-          <select
-            v-model="sortField"
-            class="sort-select"
+        <label class="filter-search">
+          <span class="filter-label">搜索题目</span>
+          <input
+            v-model="searchQuery"
+            type="search"
+            class="filter-search-input"
+            placeholder="题号、标题、知识点…"
+            autocomplete="off"
+            data-testid="filter-search"
           >
-            <option value="chapter">
-              按章节
-            </option>
-            <option value="difficulty">
-              按难度
-            </option>
-            <option value="attempts">
-              按尝试次数
-            </option>
-          </select>
-        </div>
-        <div class="filter-group filter-group--wide">
-          <h3>KC 筛选（{{ filterKcCodes.length }}/{{ allKcs.length }}）</h3>
-          <div class="chip-row chip-row--scroll">
-            <button
-              v-for="kc in allKcs"
-              :key="kc.kcCode"
-              type="button"
-              :class="['chip', { active: filterKcCodes.includes(kc.kcCode) }]"
-              :title="kc.summary"
-              @click="toggleKcFilter(kc.kcCode)"
+        </label>
+        <div class="filter-bar__controls">
+          <label class="filter-field">
+            <span class="filter-label">难度</span>
+            <select
+              v-model="filterDifficulty"
+              class="filter-select"
+              data-testid="filter-difficulty"
             >
-              {{ kc.kcCode }}
-            </button>
-          </div>
+              <option value="">
+                全部难度
+              </option>
+              <option
+                v-for="d in difficulties"
+                :key="d"
+                :value="d"
+              >
+                {{ difficultyLabel(d) }}
+              </option>
+            </select>
+          </label>
+          <label class="filter-field">
+            <span class="filter-label">玩家状态</span>
+            <select
+              v-model="filterStatus"
+              class="filter-select"
+              data-testid="filter-status"
+            >
+              <option value="">
+                全部状态
+              </option>
+              <option
+                v-for="s in statusOptions"
+                :key="s"
+                :value="s"
+              >
+                {{ statusLabel(s) }}
+              </option>
+            </select>
+          </label>
+          <label class="filter-field">
+            <span class="filter-label">排序</span>
+            <select
+              v-model="sortField"
+              class="filter-select"
+              data-testid="filter-sort"
+            >
+              <option value="chapter">
+                按章节
+              </option>
+              <option value="difficulty">
+                按难度
+              </option>
+              <option value="attempts">
+                按尝试次数
+              </option>
+            </select>
+          </label>
+          <label class="filter-field filter-field--kc">
+            <span class="filter-label">知识点（{{ kcsWithProblems.length }}）</span>
+            <select
+              v-model="filterKcCode"
+              class="filter-select"
+              data-testid="filter-kc"
+            >
+              <option value="">
+                全部知识点
+              </option>
+              <optgroup
+                v-for="group in kcChapterGroups"
+                :key="group.chapterOrder"
+                :label="`第 ${group.chapterOrder} 章`"
+              >
+                <option
+                  v-for="kc in group.kcs"
+                  :key="kc.kcCode"
+                  :value="kc.kcCode"
+                  :title="kc.summary"
+                >
+                  {{ kcOptionLabel(kc) }}
+                </option>
+              </optgroup>
+            </select>
+          </label>
+          <PyButton
+            test-id="filter-reset"
+            variant="ghost"
+            size="sm"
+            :disabled="!hasActiveFilters"
+            @click="clearFilters"
+          >
+            清空
+          </PyButton>
         </div>
-        <button
-          class="reset-button"
-          type="button"
-          @click="clearFilters"
-        >
-          清空筛选
-        </button>
       </section>
 
       <div
@@ -365,8 +450,8 @@ onMounted(async () => {
             <span class="badge">第 {{ chapterOf(p.kcCode) ?? '?' }} 章</span>
             <span
               class="badge kc"
-              :title="kcNameOf(p.kcCode)"
-            >{{ p.kcCode }}</span>
+              :title="p.kcCode"
+            >{{ kcNameOf(p.kcCode) }}</span>
           </span>
           <span :class="['badge difficulty', `diff-${p.difficulty.toLowerCase()}`]">
             {{ difficultyLabel(p.difficulty) }}
@@ -375,21 +460,21 @@ onMounted(async () => {
             {{ statusLabel(statusOf(p.problemId)) }}
           </span>
           <span class="attempts">{{ attemptsOf(p.problemId) }}</span>
-          <button
-            type="button"
-            class="go-button"
-            data-testid="go-training"
+          <PyButton
+            test-id="go-training"
+            variant="primary"
+            size="sm"
             @click="goTraining(p.problemId)"
           >
             去做
-          </button>
+          </PyButton>
           <article
             v-if="expanded.has(p.problemId)"
             class="row-preview"
           >
             <header>
               <strong>{{ p.title }}</strong>
-              <span class="badge kc">{{ p.kcCode }} · {{ kcNameOf(p.kcCode) }}</span>
+              <span class="badge kc">{{ kcNameOf(p.kcCode) }}</span>
             </header>
             <pre
               v-text="
@@ -423,7 +508,7 @@ onMounted(async () => {
   padding: 16px;
   min-height: calc(100vh - 56px);
   background:
-    linear-gradient(180deg, #fef7e3 0%, #f3e4be 100%),
+    linear-gradient(180deg, var(--pyt-color-bg-primary) 0%, var(--pyt-color-bg-sunken) 100%),
     repeating-linear-gradient(0deg, rgba(110, 79, 29, 0.04) 0 2px, transparent 2px 6px);
 }
 .page-header {
@@ -432,9 +517,9 @@ onMounted(async () => {
   align-items: flex-end;
   gap: 12px;
   padding: 12px 16px;
-  background: var(--pyt-color-bg-elevated, #fff7e6);
-  border: 3px solid var(--pyt-color-border-strong, #4d3613);
-  box-shadow: 4px 4px 0 var(--pyt-color-border-strong, #4d3613);
+  background: var(--pyt-color-bg-elevated, var(--pyt-color-bg-elevated));
+  border: 3px solid var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+  box-shadow: 4px 4px 0 var(--pyt-color-border-strong, var(--pyt-color-text-primary));
 }
 .page-header h1 {
   margin: 0;
@@ -444,81 +529,116 @@ onMounted(async () => {
 .muted {
   margin: 4px 0 0;
   font-size: 13px;
-  color: var(--pyt-color-text-muted, #8a6c2c);
+  color: var(--pyt-color-text-muted, var(--pyt-color-text-muted));
 }
 .back-button {
   font-family: var(--pyt-font-pixel), monospace;
   min-height: 36px;
   padding: 0 16px;
-  background: var(--pyt-color-warning-bg, #f5e2c1);
-  border: 2px solid var(--pyt-color-border-strong, #4d3613);
+  background: var(--pyt-color-warning-bg, var(--pyt-color-warning-bg));
+  border: 2px solid var(--pyt-color-border-strong, var(--pyt-color-text-primary));
   cursor: pointer;
-  box-shadow: 3px 3px 0 var(--pyt-color-border-strong, #4d3613);
+  box-shadow: 3px 3px 0 var(--pyt-color-border-strong, var(--pyt-color-text-primary));
 }
 
 .filter-bar {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
-  padding: 12px;
-  background: var(--pyt-color-bg-elevated, #fff7e6);
-  border: 3px solid var(--pyt-color-border-strong, #4d3613);
-  box-shadow: 4px 4px 0 var(--pyt-color-border-strong, #4d3613);
-}
-.filter-group h3 {
-  margin: 0 0 6px;
-  font-family: var(--pyt-font-pixel), sans-serif;
-  font-size: 13px;
-  letter-spacing: 0.5px;
-}
-.filter-group--wide {
-  grid-column: span 2;
-}
-.chip-row {
   display: flex;
   flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px 16px;
+  padding: 10px 12px;
+  background: var(--pyt-color-bg-elevated, var(--pyt-color-bg-elevated));
+  border: 3px solid var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+  box-shadow: 4px 4px 0 var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+}
+.filter-search {
+  display: flex;
+  flex-direction: column;
   gap: 4px;
+  flex: 1 1 240px;
+  min-width: 200px;
+  max-width: 420px;
 }
-.chip-row--scroll {
-  max-height: 84px;
-  overflow-y: auto;
-  padding-right: 4px;
-}
-.chip {
-  font-family: var(--pyt-font-pixel), monospace;
-  font-size: 11px;
-  padding: 4px 8px;
-  border: 2px solid var(--pyt-color-border, #c9a86b);
-  background: var(--pyt-color-bg-soft, #fdf3d0);
-  cursor: pointer;
-  min-height: auto;
-  color: var(--pyt-color-text-primary, #4d3613);
-}
-.chip.active {
-  background: var(--pyt-color-warning-bg, #f5e2c1);
-  border-color: var(--pyt-color-border-strong, #4d3613);
-  font-weight: 700;
-}
-.sort-select {
-  padding: 4px 8px;
-  border: 2px solid var(--pyt-color-border-strong, #4d3613);
-  background: var(--pyt-color-bg-primary, #fef7e3);
+.filter-search-input {
+  width: 100%;
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 2px solid var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+  background: var(--pyt-color-bg-primary, var(--pyt-color-bg-primary));
   font: inherit;
+  font-size: 13px;
+}
+.filter-search-input::placeholder {
+  color: var(--pyt-color-text-muted, var(--pyt-color-text-muted));
+}
+.filter-search-input:focus-visible {
+  outline: 2px solid var(--pyt-color-primary, var(--pyt-color-text-hint));
+  outline-offset: 1px;
+}
+.filter-bar__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 10px 14px;
+  flex: 1 1 auto;
+  margin-left: auto;
+}
+.filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 120px;
+}
+.filter-field--kc {
+  flex: 0 1 240px;
+  min-width: 180px;
+  max-width: 280px;
+}
+.filter-label {
+  font-family: var(--pyt-font-pixel), sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.4px;
+  color: var(--pyt-color-text-muted, var(--pyt-color-text-muted));
+}
+.filter-select {
+  width: 100%;
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 2px solid var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+  background: var(--pyt-color-bg-primary, var(--pyt-color-bg-primary));
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.filter-select:focus-visible {
+  outline: 2px solid var(--pyt-color-primary, var(--pyt-color-text-hint));
+  outline-offset: 1px;
 }
 .reset-button {
-  min-height: 36px;
-  padding: 0 12px;
+  flex-shrink: 0;
+  align-self: flex-end;
+  min-height: 32px;
+  padding: 4px 10px;
   font-family: var(--pyt-font-pixel), monospace;
-  background: var(--pyt-color-danger-bg, #fde2dc);
-  border: 2px solid var(--pyt-color-border-strong, #4d3613);
+  font-size: 11px;
+  line-height: 1.2;
+  background: var(--pyt-color-danger-bg, var(--pyt-color-danger-bg));
+  border: 2px solid var(--pyt-color-border-strong, var(--pyt-color-text-primary));
   cursor: pointer;
-  box-shadow: 2px 2px 0 var(--pyt-color-border-strong, #4d3613);
+  box-shadow: 2px 2px 0 var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+}
+.reset-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
 }
 
 .problem-table {
-  background: var(--pyt-color-bg-elevated, #fff7e6);
-  border: 3px solid var(--pyt-color-border-strong, #4d3613);
-  box-shadow: 4px 4px 0 var(--pyt-color-border-strong, #4d3613);
+  background: var(--pyt-color-bg-elevated, var(--pyt-color-bg-elevated));
+  border: 3px solid var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+  box-shadow: 4px 4px 0 var(--pyt-color-border-strong, var(--pyt-color-text-primary));
 }
 .problem-row {
   display: grid;
@@ -526,11 +646,11 @@ onMounted(async () => {
   gap: 8px;
   padding: 8px 12px;
   align-items: center;
-  border-bottom: 2px dashed var(--pyt-color-border, #c9a86b);
+  border-bottom: 2px dashed var(--pyt-color-border, var(--pyt-color-border));
   font-size: 13px;
 }
 .problem-row--head {
-  background: var(--pyt-color-bg-soft, #fdf3d0);
+  background: var(--pyt-color-bg-soft, var(--pyt-color-bg-soft));
   font-family: var(--pyt-font-pixel), sans-serif;
   font-weight: 700;
   font-size: 12px;
@@ -558,22 +678,22 @@ onMounted(async () => {
 }
 .badge {
   display: inline-block;
-  background: var(--pyt-color-bg-soft, #fdf3d0);
-  border: 1px solid var(--pyt-color-border, #c9a86b);
+  background: var(--pyt-color-bg-soft, var(--pyt-color-bg-soft));
+  border: 1px solid var(--pyt-color-border, var(--pyt-color-border));
   padding: 1px 6px;
   font-family: var(--pyt-font-pixel), monospace;
   font-size: 11px;
   margin-right: 4px;
 }
 .badge.kc {
-  background: var(--pyt-color-info-bg, #d0e3f1);
+  background: var(--pyt-color-info-bg, var(--pyt-color-info-bg));
 }
-.diff-low { background: var(--pyt-color-success-bg, #d1eccf); }
-.diff-medium { background: var(--pyt-color-warning-bg, #f5e2c1); }
-.diff-high { background: var(--pyt-color-danger-bg, #fde2dc); }
-.status-passed { background: var(--pyt-color-success-bg, #d1eccf); color: var(--pyt-color-success, #2f8f3c); }
-.status-failed { background: var(--pyt-color-danger-bg, #fde2dc); color: var(--pyt-color-danger, #b8442d); }
-.status-idle { background: var(--pyt-color-bg-soft, #fdf3d0); color: var(--pyt-color-text-muted, #8a6c2c); }
+.diff-low { background: var(--pyt-color-success-bg, var(--pyt-color-success-bg)); }
+.diff-medium { background: var(--pyt-color-warning-bg, var(--pyt-color-warning-bg)); }
+.diff-high { background: var(--pyt-color-danger-bg, var(--pyt-color-danger-bg)); }
+.status-passed { background: var(--pyt-color-success-bg, var(--pyt-color-success-bg)); color: var(--pyt-color-success, var(--pyt-color-success)); }
+.status-failed { background: var(--pyt-color-danger-bg, var(--pyt-color-danger-bg)); color: var(--pyt-color-danger, var(--pyt-color-danger)); }
+.status-idle { background: var(--pyt-color-bg-soft, var(--pyt-color-bg-soft)); color: var(--pyt-color-text-muted, var(--pyt-color-text-muted)); }
 
 .attempts {
   font-family: var(--pyt-font-pixel), monospace;
@@ -583,16 +703,16 @@ onMounted(async () => {
   font-family: var(--pyt-font-pixel), monospace;
   min-height: 30px;
   padding: 0 10px;
-  background: var(--pyt-color-primary, #6e4f1d);
-  color: var(--pyt-color-text-on-dark, #fff7e6);
-  border: 2px solid var(--pyt-color-border-strong, #4d3613);
+  background: var(--pyt-color-primary, var(--pyt-color-text-hint));
+  color: var(--pyt-color-text-on-dark, var(--pyt-color-bg-elevated));
+  border: 2px solid var(--pyt-color-border-strong, var(--pyt-color-text-primary));
   cursor: pointer;
-  box-shadow: 2px 2px 0 var(--pyt-color-border-strong, #4d3613);
+  box-shadow: 2px 2px 0 var(--pyt-color-border-strong, var(--pyt-color-text-primary));
 }
 .row-preview {
   grid-column: 1 / -1;
-  background: var(--pyt-color-bg-soft, #fdf3d0);
-  border: 2px solid var(--pyt-color-border, #c9a86b);
+  background: var(--pyt-color-bg-soft, var(--pyt-color-bg-soft));
+  border: 2px solid var(--pyt-color-border, var(--pyt-color-border));
   margin-top: 6px;
   padding: 8px 10px;
 }
@@ -606,12 +726,12 @@ onMounted(async () => {
 .row-preview .mistakes {
   margin: 0;
   font-size: 12px;
-  color: var(--pyt-color-warning, #c2871f);
+  color: var(--pyt-color-warning, var(--pyt-color-warning));
 }
 .empty {
   text-align: center;
   padding: 24px;
   margin: 0;
-  color: var(--pyt-color-text-muted, #8a6c2c);
+  color: var(--pyt-color-text-muted, var(--pyt-color-text-muted));
 }
 </style>

@@ -3,6 +3,7 @@ import { computed, onMounted } from 'vue';
 import { useLearningStore } from '@stores/learning';
 import { useToastStore } from '@stores/toast';
 import type { QuestDto } from '@/api/dto/Quest';
+import { kcDisplayName } from '@/data/kcNames';
 
 const learning = useLearningStore();
 const toast = useToastStore();
@@ -83,7 +84,7 @@ async function skip(id: number): Promise<void> {
           {{ quest.description }}
         </p>
         <p class="meta">
-          KC: {{ quest.kcCode ?? '未关联' }} · 类型: {{ quest.nodeType }} · 截止 {{ quest.dueDate }}
+          知识点: {{ quest.kcCode ? kcDisplayName(quest.kcCode) : '未关联' }} · 类型: {{ quest.nodeType }} · 截止 {{ quest.dueDate }}
         </p>
         <div class="actions">
           <button
@@ -134,8 +135,8 @@ async function skip(id: number): Promise<void> {
 }
 .quest-card {
   background: #fffbe9;
-  border: 2px solid #c9a86b;
-  border-radius: 8px;
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-lg);
   padding: 12px;
   display: grid;
   gap: 6px;
@@ -151,8 +152,8 @@ header h3 {
 }
 .badge {
   padding: 2px 6px;
-  background: #6e4f1d;
-  color: #fff7e6;
+  background: var(--pyt-color-text-hint);
+  color: var(--pyt-color-bg-elevated);
   border-radius: 999px;
   font-size: 12px;
 }
@@ -161,13 +162,13 @@ header h3 {
 .badge.system_default { background: #c47a35; }
 .description {
   margin: 0;
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
   line-height: 1.55;
 }
 .meta {
   margin: 0;
   font-size: 12px;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
 }
 .actions {
   display: flex;
@@ -177,29 +178,29 @@ header h3 {
 .actions button {
   padding: 6px 12px;
   border-radius: 6px;
-  border: 2px solid #6e4f1d;
+  border: 2px solid var(--pyt-color-text-hint);
   cursor: pointer;
 }
 .actions .primary {
-  background: #6e4f1d;
-  color: #fff7e6;
+  background: var(--pyt-color-text-hint);
+  color: var(--pyt-color-bg-elevated);
 }
 .actions .ghost {
-  background: #fff7e6;
-  color: #6e4f1d;
+  background: var(--pyt-color-bg-elevated);
+  color: var(--pyt-color-text-hint);
 }
 .status {
   background: #fff2c9;
   border-radius: 999px;
   padding: 2px 8px;
   font-size: 12px;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
 }
 .empty {
   padding: 14px;
-  background: #fdf3d0;
-  border-radius: 8px;
+  background: var(--pyt-color-bg-soft);
+  border-radius: var(--pyt-radius-lg);
   text-align: center;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
 }
 </style>

@@ -3,10 +3,11 @@
 Pythontopia 是基于 Alethicode 技术资产抽取重构的独立新项目：一个面向高校 Python 初学者的网页版像素学习小镇。项目核心是用多智能体、学生画像、课件 RAG、游戏化任务和真实练习评估，生成个性化学习资源并规划学习路径。
 
 ## 版本节奏（2026-05-22 更新）
-
+网络通不了就走7892.
 - R-11 关闭（2026-05-21）：网页端冻结，专注后端补丁。
 - **R-12（2026-05-22 启动）**：星露谷改造解冻 Web，五张地图分块、20 NPC 系统、RPG 存档（背包/技能/对话/日历/经济）、Android 同步推进。
 - R-13 计划：班级班长视角拓展 + 教师课堂直播实时。
+- **R-14（2026-06-04 启动 · 世界收缩方案 A）**：废弃「5 图分块大世界」，收敛为**单一中央小镇 hub**；移除 KC 作物/播种/浇水玩法与农场（`farm_north` 不再作主线场景）、田老 NPC；清理货币/商店残留；主线 35 任务与引导全部收敛进 `town_hub`，目标「主线清晰 + 引导易于理解」。本条**推翻**下文「5 图分块」与「农场/作物隐喻」旧约束。
 
 ## 核心原则
 
@@ -41,7 +42,7 @@ Pythontopia 是基于 Alethicode 技术资产抽取重构的独立新项目：�
 - API client 必须使用明确 DTO 类型。
 - 组件文件名使用 `PascalCase.vue`，普通工具模块使用 `camelCase.ts`。
 - 游戏画布之外的学习内容必须可读、可复制、可引用。
-- 5 张地图 Tiled JSON 存放于 `frontend/public/assets/maps/`，由 `scripts/generate-maps.mjs` 程序化生成。
+- 地图 Tiled JSON 存放于 `frontend/public/assets/maps/`，由 `scripts/generate-maps.mjs` 程序化生成；**R-14 起以单一 `town_hub` 为主玩图**，外围图（farm_north / mine_south / campus_east / port_west）从主线与导航中弃用。
 - NPC 静态数据放于 `data/npcs/<key>/{meta,dialog}.json`，由 `frontend/scripts/sync-npc-data.mjs` 同步到 `frontend/public/data/npcs/`（npm predev/prebuild 钩子）。
 - Phaser 单 Game 实例：禁止在多个 Vue 组件创建多个 `Phaser.Game`，统一用 `frontend/src/game/adapters/phaserGame.ts` 的单例 + `WorldCanvas.vue`。
 - 8 方向输入降级：input.ts 返回 ExtendedDirection（8 向），写后端用 toServerDirection 降为 4 向。
@@ -91,7 +92,7 @@ Pythontopia 是基于 Alethicode 技术资产抽取重构的独立新项目：�
 ```text
 /home/cypress/Pythontopia/
 ├── backend/                    # Spring Boot 后端（Web + Android 双端共用）
-├── frontend/                   # Vue 3 + Phaser 3 网页端（R-12 解冻，星露谷分块大世界）
+├── frontend/                   # Vue 3 + Phaser 3 网页端（R-12 解冻；R-14 收缩为单中央小镇 hub）
 ├── android/                    # Kotlin + Compose + LibGDX 原生 Android 客户端（2026-05-22 新增）
 ├── services/
 │   ├── pythontopia-graph/       # 多智能体资源生成与路径规划
@@ -121,16 +122,16 @@ Pythontopia 是独立项目，但允许抽取 Alethicode 中必要能力。抽�
 
 - 画风参考星露谷式像素小镇，但不复制任何商业像素游戏官方素材，仅用 CC0 / CC-BY 3.0/4.0 / CC-BY-SA 3.0 / OFL-1.1 已审计资产。
 - 可参考 `Notyourbing/StardewValley` 的玩法结构：农场、天气、日夜、任务、NPC、背包、技能树、存档。
-- 教育化映射：
-  - KC = 知识种子
-  - 学习资源 = 浇水/施肥
-  - 练习 = 除草
-  - Bug = 病害/矿洞事件
-  - 掌握度 = 作物成长
-  - 遗忘 = 枯萎
-  - 复盘 = 收获与再播种
+- 教育化映射（R-14 去农场/作物隐喻，改为直接的「看→学→练→测」学习闭环）：
+  - KC = 知识点任务
+  - 看 = 课程视频 / PPT / 课件问答（RAG）
+  - 学 = 工坊生成并消费学习资源
+  - 练 = 训练场提交真题判题
+  - 测 = 掌握度达阈值
+  - Bug = 矿洞调试事件（保留为支线）
+  - 复盘 = 复盘大厅再巩固
 - 不做无教育目的的装饰系统。
-- Beta 以 5 张地图分块世界为准（中央 hub + 4 外围地图：farm_north / mine_south / campus_east / port_west），单图最大 50×40，玩家走过地图边缘 fade 切换。
+- Beta 以**单一中央小镇 `town_hub`** 为准（R-14 方案 A 收缩）：所有学习入口与 NPC 收进 hub，玩家不在多图间奔波；外围图保留素材但不作主线场景。单图最大 50×40。
 
 ## 个性化规则
 
@@ -196,6 +197,8 @@ Pythontopia 保留轻量班级能力：
 - 不允许把 Pyodide 预览结果当作正式判题结果。
 
 ## 开发命令
+
+**本地全栈开发（含 graph/rag 微服务）优先用根目录 `./dev.sh`**，不要只起 backend 而漏 Docker 依赖。踩坑备忘见 `docs/dev-startup.md`（Postgres 数据卷密码与 `deploy/.env` 不一致会导致 Flyway 失败）。
 
 后端：
 

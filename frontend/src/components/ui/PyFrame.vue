@@ -204,12 +204,12 @@ const rootButtonType = computed<'button' | null>(() =>
   box-sizing: border-box;
   display: inline-block;
   border-style: solid;
-  border-color: var(--pyt-color-border-strong, #4d3613);
+  border-color: var(--pyt-color-border-strong, var(--pyt-color-text-primary));
   border-image-repeat: stretch;
   border-radius: 4px;
-  background-color: var(--pyt-color-bg-elevated, #fff7e6);
-  color: var(--pyt-color-text-primary, #4d3613);
-  font-family: var(--pyt-font-pixel, 'Ark Pixel 12'), monospace;
+  background-color: var(--pyt-color-bg-elevated, var(--pyt-color-bg-elevated));
+  color: var(--pyt-color-text-primary, var(--pyt-color-text-primary));
+  font-family: var(--pyt-font-pixel);
   font-size: var(--pyt-font-size-sm, 12px);
   letter-spacing: 0.5px;
   image-rendering: pixelated;
@@ -221,7 +221,7 @@ const rootButtonType = computed<'button' | null>(() =>
   border-image-repeat: round;
   border-color: #5c3a24;
   background-color: #e2bc85;
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
 }
 
 .py-frame--dialog {
@@ -238,7 +238,7 @@ const rootButtonType = computed<'button' | null>(() =>
   font-family: inherit;
 }
 .py-frame--button:focus-visible {
-  outline: 2px solid #f1c453;
+  outline: 2px solid var(--pyt-color-gold);
   outline-offset: 2px;
 }
 
@@ -256,7 +256,7 @@ const rootButtonType = computed<'button' | null>(() =>
 .py-frame--tooltip {
   background-color: rgba(28, 24, 16, 0.95);
   border-color: #d4af37;
-  color: #ffd166;
+  color: var(--pyt-color-gold-bright);
   border-radius: 2px;
 }
 
@@ -264,18 +264,18 @@ const rootButtonType = computed<'button' | null>(() =>
   box-shadow: inset 0 0 0 1px #d4af37;
 }
 .py-frame--tone-success {
-  border-color: var(--pyt-color-success, #2f8f3c);
-  background-color: var(--pyt-color-success-bg, #d1eccf);
+  border-color: var(--pyt-color-success, var(--pyt-color-success));
+  background-color: var(--pyt-color-success-bg, var(--pyt-color-success-bg));
   color: #1f5a2a;
 }
 .py-frame--tone-warning {
-  border-color: var(--pyt-color-warning, #c2871f);
-  background-color: var(--pyt-color-warning-bg, #f5e2c1);
-  color: #6e4f1d;
+  border-color: var(--pyt-color-warning, var(--pyt-color-warning));
+  background-color: var(--pyt-color-warning-bg, var(--pyt-color-warning-bg));
+  color: var(--pyt-color-text-hint);
 }
 .py-frame--tone-danger {
-  border-color: var(--pyt-color-danger, #b8442d);
-  background-color: var(--pyt-color-danger-bg, #fde2dc);
+  border-color: var(--pyt-color-danger, var(--pyt-color-danger));
+  background-color: var(--pyt-color-danger-bg, var(--pyt-color-danger-bg));
   color: #6e2418;
 }
 
@@ -284,7 +284,7 @@ const rootButtonType = computed<'button' | null>(() =>
 }
 .py-frame--state-pressed {
   transform: translateY(1px);
-  background-color: #c9a86b;
+  background-color: var(--pyt-color-border);
 }
 
 .py-frame--fallback {

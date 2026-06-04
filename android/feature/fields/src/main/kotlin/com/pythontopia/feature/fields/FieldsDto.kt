@@ -4,7 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * 后端 `GET /api/learner/mastery/kc?packId=43` 单条返回结构。
+ * 后端 `GET /api/learner/mastery` 单条返回结构。
  *
  * 与 Alethicode `LearnerKcMastery` JSON 对齐：
  *  - [kcCode] = `PY43-KC-001` 形式，唯一稳定标识；
@@ -16,9 +16,9 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class KcMasteryDto(
     @SerialName("kcCode") val kcCode: String,
-    @SerialName("title") val title: String,
-    @SerialName("mastery") val mastery: Double,
-    @SerialName("chapterOrder") val chapterOrder: Int,
+    @SerialName("title") val title: String = "",
+    @SerialName("masteryScore") val mastery: Double = 0.0,
+    @SerialName("chapterOrder") val chapterOrder: Int = 0,
     @SerialName("status") val status: String? = null,
 )
 
@@ -84,8 +84,7 @@ fun KcMasteryDto.toTileState(): KcTileState = KcTileState(
  *
  * 数据来源：`/home/cypress/Pythontopia/data/course-pack-43/json/course_kc.json`（已审计 65 条），
  * 这里只截取 `kc_code / kc_name / chapter_order` 三列，供以下两种场景使用：
- *  1. 后端 `GET /api/learner/mastery/kc?packId=43` 不可用时（未登录 / 离线 demo），
- *     Repository 返回完整 65 KC 列表，全部 mastery=0.0；
+ *  1. 后端只返回已产生 snapshot 的 KC 时，Repository 用本目录补齐其余 KC 为 0；
  *  2. 后端只返回 mastery 数值，未带 title/chapterOrder 时，Repository 用本目录补齐。
  *
  * **禁止修改 KC 排序或漏项**，与 `AGENTS.md` "项目硬约束"段的 7 章 / 65 KC 验证一致。

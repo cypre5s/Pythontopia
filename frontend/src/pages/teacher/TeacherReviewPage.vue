@@ -422,7 +422,7 @@ const currentEntry = computed<ReviewEntry | null>(() => {
   gap: 12px;
   padding: 16px;
   min-height: calc(100dvh - 56px);
-  background: linear-gradient(180deg, #fff7e6 0%, #f1d896 100%);
+  background: linear-gradient(180deg, var(--pyt-color-bg-elevated) 0%, #f1d896 100%);
   font-family: var(--pyt-font-pixel), 'PingFang SC', monospace;
   color: #3a2a14;
 }
@@ -439,7 +439,7 @@ const currentEntry = computed<ReviewEntry | null>(() => {
 .subtitle {
   margin: 0;
   font-size: 13px;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
   max-width: 720px;
 }
 .btn {
@@ -447,11 +447,11 @@ const currentEntry = computed<ReviewEntry | null>(() => {
   cursor: pointer;
   font-size: 13px;
   padding: 6px 12px;
-  border: 2px solid #6e4f1d;
-  background: #fdf3d0;
+  border: 2px solid var(--pyt-color-text-hint);
+  background: var(--pyt-color-bg-soft);
   color: #3a2a14;
   border-radius: 4px;
-  box-shadow: 2px 2px 0 #6e4f1d;
+  box-shadow: 2px 2px 0 var(--pyt-color-text-hint);
 }
 .btn:disabled {
   opacity: 0.55;
@@ -460,13 +460,13 @@ const currentEntry = computed<ReviewEntry | null>(() => {
 }
 .btn:active:not(:disabled) {
   transform: translate(2px, 2px);
-  box-shadow: 0 0 0 #6e4f1d;
+  box-shadow: 0 0 0 var(--pyt-color-text-hint);
 }
 .btn-back {
-  background: #f5e2c1;
+  background: var(--pyt-color-warning-bg);
 }
 .btn-primary {
-  background: #f1c453;
+  background: var(--pyt-color-gold);
   color: #2a1a08;
 }
 .btn-ok {
@@ -483,7 +483,7 @@ const currentEntry = computed<ReviewEntry | null>(() => {
 }
 .btn-ghost {
   background: transparent;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
   box-shadow: none;
   border-style: dashed;
 }
@@ -499,9 +499,9 @@ const currentEntry = computed<ReviewEntry | null>(() => {
   align-items: center;
   gap: 10px;
   padding: 8px 12px;
-  background: #fff7e6;
-  border: 2px solid #4d3613;
-  box-shadow: 3px 3px 0 #4d3613;
+  background: var(--pyt-color-bg-elevated);
+  border: 2px solid var(--pyt-color-text-primary);
+  box-shadow: 3px 3px 0 var(--pyt-color-text-primary);
   flex-wrap: wrap;
 }
 .toolbar-field {
@@ -514,11 +514,11 @@ const currentEntry = computed<ReviewEntry | null>(() => {
   font-family: inherit;
   font-size: 12px;
   padding: 2px 6px;
-  border: 2px solid #6e4f1d;
+  border: 2px solid var(--pyt-color-text-hint);
 }
 .counts {
   font-size: 12px;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
 }
 .counts .ok {
   color: #2d5b1b;
@@ -535,9 +535,9 @@ const currentEntry = computed<ReviewEntry | null>(() => {
 }
 .review-list {
   overflow: auto;
-  background: #fff7e6;
-  border: 2px solid #4d3613;
-  box-shadow: 3px 3px 0 #4d3613;
+  background: var(--pyt-color-bg-elevated);
+  border: 2px solid var(--pyt-color-text-primary);
+  box-shadow: 3px 3px 0 var(--pyt-color-text-primary);
   padding: 8px;
   max-height: calc(100dvh - 220px);
 }
@@ -552,16 +552,16 @@ const currentEntry = computed<ReviewEntry | null>(() => {
   display: grid;
   gap: 3px;
   padding: 8px;
-  border: 2px solid #c9a86b;
-  background: #fdf3d0;
+  border: 2px solid var(--pyt-color-border);
+  background: var(--pyt-color-bg-soft);
   cursor: pointer;
   border-radius: 3px;
 }
 .list-item:hover {
-  background: #f5e2c1;
+  background: var(--pyt-color-warning-bg);
 }
 .list-item--current {
-  outline: 3px solid #6e4f1d;
+  outline: 3px solid var(--pyt-color-text-hint);
   outline-offset: -1px;
 }
 .list-item--approved {
@@ -580,13 +580,13 @@ const currentEntry = computed<ReviewEntry | null>(() => {
 .list-statement {
   margin: 0;
   font-size: 12px;
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
   line-height: 1.5;
   word-break: break-word;
 }
 .list-meta {
   font-size: 10px;
-  color: #8a6c2c;
+  color: var(--pyt-color-text-muted);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -595,8 +595,8 @@ const currentEntry = computed<ReviewEntry | null>(() => {
   display: inline-block;
   width: 8px;
   height: 8px;
-  border: 1px solid #4d3613;
-  background: #fdf3d0;
+  border: 1px solid var(--pyt-color-text-primary);
+  background: var(--pyt-color-bg-soft);
 }
 .decision-dot--approved {
   background: #4d7a2e;
@@ -606,9 +606,9 @@ const currentEntry = computed<ReviewEntry | null>(() => {
 }
 .review-detail {
   overflow: auto;
-  background: #fff7e6;
-  border: 2px solid #4d3613;
-  box-shadow: 3px 3px 0 #4d3613;
+  background: var(--pyt-color-bg-elevated);
+  border: 2px solid var(--pyt-color-text-primary);
+  box-shadow: 3px 3px 0 var(--pyt-color-text-primary);
   padding: 14px;
   max-height: calc(100dvh - 220px);
 }
@@ -626,7 +626,7 @@ const currentEntry = computed<ReviewEntry | null>(() => {
 .detail-head p {
   margin: 0;
   font-size: 12px;
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
@@ -634,8 +634,8 @@ const currentEntry = computed<ReviewEntry | null>(() => {
 .statement {
   margin: 0;
   padding: 10px;
-  background: #fdf3d0;
-  border: 2px solid #c9a86b;
+  background: var(--pyt-color-bg-soft);
+  border: 2px solid var(--pyt-color-border);
   font-family: 'JetBrains Mono', monospace;
   font-size: 13px;
   line-height: 1.7;
@@ -653,11 +653,11 @@ const currentEntry = computed<ReviewEntry | null>(() => {
   color: #f6f1e6;
   font-family: 'JetBrains Mono', monospace;
   font-size: 12px;
-  border: 2px solid #4d3613;
+  border: 2px solid var(--pyt-color-text-primary);
 }
 .decision-recap {
   padding: 8px 12px;
-  border: 2px solid #4d3613;
+  border: 2px solid var(--pyt-color-text-primary);
   font-size: 13px;
 }
 .decision-recap--approved {
@@ -671,7 +671,7 @@ const currentEntry = computed<ReviewEntry | null>(() => {
 .decision-recap small {
   display: block;
   margin-top: 4px;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
 }
 .actions {
   display: grid;
@@ -683,15 +683,15 @@ const currentEntry = computed<ReviewEntry | null>(() => {
   font-family: inherit;
   font-size: 12px;
   padding: 6px;
-  border: 2px solid #6e4f1d;
-  background: #fdf3d0;
+  border: 2px solid var(--pyt-color-text-hint);
+  background: var(--pyt-color-bg-soft);
   resize: vertical;
 }
 .badge {
   font-size: 10px;
   padding: 1px 6px;
-  background: #f5e2c1;
-  border: 1px solid #c9a86b;
+  background: var(--pyt-color-warning-bg);
+  border: 1px solid var(--pyt-color-border);
   border-radius: 3px;
 }
 .badge--ai {
@@ -699,16 +699,16 @@ const currentEntry = computed<ReviewEntry | null>(() => {
   border-color: #4d7a2e;
 }
 .badge--golden {
-  background: #f5e2c1;
-  border-color: #c9a86b;
+  background: var(--pyt-color-warning-bg);
+  border-color: var(--pyt-color-border);
 }
 .badge--reviewed {
-  background: #d0e3f1;
-  border-color: #2a6f97;
+  background: var(--pyt-color-info-bg);
+  border-color: var(--pyt-color-info);
 }
 .muted {
   font-size: 13px;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
 }
 @media (max-width: 900px) {
   .review-body {

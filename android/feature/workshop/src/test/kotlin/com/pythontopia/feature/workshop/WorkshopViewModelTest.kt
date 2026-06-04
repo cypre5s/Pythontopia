@@ -44,7 +44,7 @@ class WorkshopViewModelTest {
     @BeforeEach
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
-        coEvery { repository.history(any()) } returns emptyList()
+        coEvery { repository.history() } returns emptyList()
         viewModel = WorkshopViewModel(repository)
     }
 
@@ -162,13 +162,13 @@ class WorkshopViewModelTest {
             id = 999L,
             problemId = sampleProblem.id,
             code = "print(1)",
-            status = SubmissionStatus.ACCEPTED,
+            status = SubmissionStatus.PASSED,
             passedCases = 3,
             totalCases = 3,
             runtimeMs = 12,
         )
         coEvery { repository.submit(sampleProblem.id, any()) } returns accepted
-        coEvery { repository.history(any()) } returns listOf(accepted)
+        coEvery { repository.history() } returns listOf(accepted)
 
         viewModel.selectProblem(sampleProblem)
         viewModel.updateCode("print(1)")
@@ -176,12 +176,12 @@ class WorkshopViewModelTest {
         advanceUntilIdle()
 
         val state = viewModel.state.value
-        assertEquals(SubmissionStatus.ACCEPTED, state.latestStatus?.status)
+        assertEquals(SubmissionStatus.PASSED, state.latestStatus?.status)
         assertEquals(999L, state.currentSubmissionId)
         assertFalse(state.isPolling)
         assertFalse(state.isSubmitting)
         assertEquals(1, state.history.size)
-        coVerify { repository.history(WorkshopViewModel.DEMO_HISTORY_OWNER_ID) }
+        coVerify { repository.history() }
     }
 
     @Test
@@ -194,14 +194,14 @@ class WorkshopViewModelTest {
         )
         val running = pending.copy(status = SubmissionStatus.RUNNING)
         val wrong = pending.copy(
-            status = SubmissionStatus.WRONG_ANSWER,
+            status = SubmissionStatus.FAILED,
             passedCases = 1,
             totalCases = 3,
             traceback = "AssertionError",
         )
         coEvery { repository.submit(sampleProblem.id, any()) } returns pending
         every { repository.pollStatus(1234L, any(), any()) } returns flowOf(running, wrong)
-        coEvery { repository.history(any()) } returns listOf(wrong)
+        coEvery { repository.history() } returns listOf(wrong)
 
         viewModel.selectProblem(sampleProblem)
         viewModel.updateCode("print(1)")
@@ -209,10 +209,10 @@ class WorkshopViewModelTest {
         advanceUntilIdle()
 
         val state = viewModel.state.value
-        assertEquals(SubmissionStatus.WRONG_ANSWER, state.latestStatus?.status)
+        assertEquals(SubmissionStatus.FAILED, state.latestStatus?.status)
         assertEquals("AssertionError", state.latestStatus?.traceback)
         assertFalse(state.isPolling)
-        coVerify { repository.history(WorkshopViewModel.DEMO_HISTORY_OWNER_ID) }
+        coVerify { repository.history() }
     }
 
     @Test
@@ -239,7 +239,7 @@ class WorkshopViewModelTest {
             status = SubmissionStatus.PENDING,
         )
         coEvery { repository.submit(sampleProblem.id, any()) } returns pending
-        every { repository.pollStatus(7L, any(), any()) } returns flow { throw RuntimeException("network down") }
+        every { repository.pollStatus(7L, any(), any()) } returns flow { throw IllegalStateException("network down") }
 
         viewModel.selectProblem(sampleProblem)
         viewModel.updateCode("print(1)")

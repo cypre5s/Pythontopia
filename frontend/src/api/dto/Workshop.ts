@@ -82,6 +82,10 @@ export interface StoryboardScene {
   duration_seconds: number;
   evidence_page_id?: number;
   narration_tts_voice?: string;
+  /** 文生图提示词（讯飞 TTI）：用于生成分镜插画与合成短视频。 */
+  image_prompt?: string;
+  /** 已生成插画的 media_asset id（后端填充，可空）。 */
+  image_asset_id?: number;
 }
 
 export interface StoryboardContent {

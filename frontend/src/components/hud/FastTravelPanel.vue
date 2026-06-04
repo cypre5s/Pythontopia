@@ -151,7 +151,7 @@ defineExpose({ open, close });
   border: 3px solid var(--pyt-panel-border);
   border-radius: 2px;
   color: var(--pyt-text-primary);
-  font-family: var(--pyt-font-pixel, 'Ark Pixel 12', 'PingFang SC', monospace);
+  font-family: var(--pyt-font-pixel);
   box-shadow: 4px 4px 0 var(--pyt-panel-border-dark), 0 8px 24px var(--pyt-panel-shadow);
   padding: 16px 20px;
   image-rendering: pixelated;
@@ -171,7 +171,7 @@ defineExpose({ open, close });
   font-size: 18px;
   color: var(--pyt-text-accent);
   letter-spacing: 1px;
-  text-shadow: 1px 1px 0 #2a1a05;
+  text-shadow: 1px 1px 0 var(--pyt-color-shadow);
 }
 
 .ft-card__close {

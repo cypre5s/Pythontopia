@@ -10,7 +10,7 @@
   "tileheight": 16,
   "infinite": false,
   "nextlayerid": 5,
-  "nextobjectid": 15,
+  "nextobjectid": 14,
   "properties": [
     {
       "name": "mapKey",
@@ -5136,34 +5136,6 @@
         },
         {
           "id": 13,
-          "name": "npc_farmer_kc",
-          "type": "npc",
-          "x": 448,
-          "y": 208,
-          "width": 0,
-          "height": 0,
-          "visible": true,
-          "rotation": 0,
-          "properties": [
-            {
-              "name": "key",
-              "type": "string",
-              "value": "farmer_kc"
-            },
-            {
-              "name": "label",
-              "type": "string",
-              "value": "田主 KC"
-            },
-            {
-              "name": "sprite",
-              "type": "string",
-              "value": "player_sara"
-            }
-          ]
-        },
-        {
-          "id": 14,
           "name": "spawn",
           "type": "spawn",
           "x": 320,

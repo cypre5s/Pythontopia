@@ -20,10 +20,10 @@ import retrofit2.Retrofit
  * MockWebServer 集成测试：直接对 [WorkshopRepository] + [WorkshopApi] 做 HTTP wire 级验证。
  *
  * 覆盖：
- *  - `GET /api/problems?kcCode=` 列表反序列化（包括嵌套 [ProblemSampleDto]）；
+ *  - `GET /api/course/problems?kcCode=` 列表反序列化（包括嵌套 [ProblemSampleDto]）；
  *  - 列表请求异常时仓库静默返回空表（仓库容错合同）；
  *  - `POST /api/submissions` 把 [SubmissionCreateRequest] 序列化为正确 JSON；
- *  - `pollStatus` 在 MockWebServer 上多次入队 PENDING → RUNNING → ACCEPTED，
+ *  - `pollStatus` 在 MockWebServer 上多次入队 PENDING → RUNNING → PASSED，
  *    验证轮询正好发起 3 次请求并在终态停止；
  *  - `history` 反序列化。
  */
@@ -65,7 +65,7 @@ class WorkshopRepositoryTest {
                     """
                     [
                       {
-                        "id": 476,
+                        "problemId": 476,
                         "kcCode": "PY43-KC-016",
                         "title": "圆面积计算",
                         "statementMarkdown": "## 题目",
@@ -93,7 +93,7 @@ class WorkshopRepositoryTest {
 
         val recorded = server.takeRequest()
         assertEquals("GET", recorded.method)
-        assertTrue(recorded.path!!.startsWith("/api/problems?kcCode=PY43-KC-016"))
+        assertTrue(recorded.path!!.startsWith("/api/course/problems?kcCode=PY43-KC-016"))
     }
 
     @Test
@@ -133,19 +133,24 @@ class WorkshopRepositoryTest {
 
     @Test
     fun `pollStatus emits each response and stops at terminal status`() = runTest {
-        server.enqueue(jsonOk("""{"id":7,"problemId":476,"code":"x","status":"PENDING"}"""))
-        server.enqueue(jsonOk("""{"id":7,"problemId":476,"code":"x","status":"RUNNING"}"""))
+        server.enqueue(jsonOk("""{"submission":{"id":7,"problemId":476,"code":"x","status":"PENDING"},"judgeResult":null}"""))
+        server.enqueue(jsonOk("""{"submission":{"id":7,"problemId":476,"code":"x","status":"RUNNING"},"judgeResult":null}"""))
         server.enqueue(
             jsonOk(
                 """
                 {
-                  "id":7,
-                  "problemId":476,
-                  "code":"x",
-                  "status":"ACCEPTED",
-                  "passedCases":3,
-                  "totalCases":3,
-                  "runtimeMs":12
+                  "submission":{
+                    "id":7,
+                    "problemId":476,
+                    "code":"x",
+                    "status":"PASSED",
+                    "runtimeMs":12
+                  },
+                  "judgeResult":{
+                    "verdict":"PASSED",
+                    "passedCases":3,
+                    "totalCases":3
+                  }
                 }
                 """.trimIndent(),
             ),
@@ -158,7 +163,7 @@ class WorkshopRepositoryTest {
         assertEquals(3, emissions.size)
         assertEquals(SubmissionStatus.PENDING, emissions[0].status)
         assertEquals(SubmissionStatus.RUNNING, emissions[1].status)
-        assertEquals(SubmissionStatus.ACCEPTED, emissions[2].status)
+        assertEquals(SubmissionStatus.PASSED, emissions[2].status)
         assertEquals(12, emissions[2].runtimeMs)
 
         assertEquals(3, server.requestCount)
@@ -171,10 +176,17 @@ class WorkshopRepositoryTest {
 
     @Test
     fun `pollStatus tolerates a single transient error then resumes`() = runTest {
-        server.enqueue(jsonOk("""{"id":9,"problemId":476,"code":"x","status":"PENDING"}"""))
+        server.enqueue(jsonOk("""{"submission":{"id":9,"problemId":476,"code":"x","status":"PENDING"},"judgeResult":null}"""))
         server.enqueue(MockResponse().setResponseCode(503))
         server.enqueue(
-            jsonOk("""{"id":9,"problemId":476,"code":"x","status":"WRONG_ANSWER","passedCases":1,"totalCases":3}"""),
+            jsonOk(
+                """
+                {
+                  "submission":{"id":9,"problemId":476,"code":"x","status":"FAILED"},
+                  "judgeResult":{"verdict":"WRONG_ANSWER","passedCases":1,"totalCases":3}
+                }
+                """.trimIndent(),
+            ),
         )
 
         val emissions = repository
@@ -183,14 +195,14 @@ class WorkshopRepositoryTest {
 
         assertEquals(2, emissions.size)
         assertEquals(SubmissionStatus.PENDING, emissions[0].status)
-        assertEquals(SubmissionStatus.WRONG_ANSWER, emissions[1].status)
+        assertEquals(SubmissionStatus.FAILED, emissions[1].status)
         assertEquals(1, emissions[1].passedCases)
     }
 
     @Test
     fun `pollStatus stops after maxAttempts when terminal never arrives`() = runTest {
         repeat(3) {
-            server.enqueue(jsonOk("""{"id":11,"problemId":476,"code":"x","status":"RUNNING"}"""))
+            server.enqueue(jsonOk("""{"submission":{"id":11,"problemId":476,"code":"x","status":"RUNNING"},"judgeResult":null}"""))
         }
 
         val emissions = repository
@@ -203,28 +215,28 @@ class WorkshopRepositoryTest {
     }
 
     @Test
-    fun `history deserializes list keyed to userId query param`() = runTest {
+    fun `history deserializes list for current authenticated user`() = runTest {
         server.enqueue(
             jsonOk(
                 """
                 [
-                  {"id":1,"problemId":476,"code":"a","status":"ACCEPTED","passedCases":3,"totalCases":3},
-                  {"id":2,"problemId":476,"code":"b","status":"WRONG_ANSWER","passedCases":1,"totalCases":3}
+                  {"id":1,"problemId":476,"code":"a","status":"PASSED","passedCases":3,"totalCases":3},
+                  {"id":2,"problemId":476,"code":"b","status":"FAILED","passedCases":1,"totalCases":3}
                 ]
                 """.trimIndent(),
             ),
         )
 
-        val history = repository.history(userId = 42L)
+        val history = repository.history()
 
         assertEquals(2, history.size)
-        assertEquals(SubmissionStatus.ACCEPTED, history[0].status)
-        assertEquals(SubmissionStatus.WRONG_ANSWER, history[1].status)
+        assertEquals(SubmissionStatus.PASSED, history[0].status)
+        assertEquals(SubmissionStatus.FAILED, history[1].status)
 
         val recorded = server.takeRequest()
         assertEquals("GET", recorded.method)
         assertNotNull(recorded.path)
-        assertTrue(recorded.path!!.startsWith("/api/submissions?userId=42"))
+        assertEquals("/api/submissions", recorded.path)
     }
 
     private fun jsonOk(body: String): MockResponse =

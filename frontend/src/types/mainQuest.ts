@@ -76,6 +76,8 @@ export interface MainQuestProgress {
   unlockedMilestones: string[];
   /** AI 出题历史日志（最近 N 题），用于自适应难度。 */
   recentAiProblems: RecentAiProblemEntry[];
+  /** 已消费多模态讲解的章节标记（如 "ch1"），用于章节「完整通关」软门槛。 */
+  consumedMedia: string[];
 }
 
 export interface RecentAiProblemEntry {
@@ -114,5 +116,6 @@ export function mainQuestEmptyProgress(): MainQuestProgress {
     defeatedBosses: [],
     unlockedMilestones: [],
     recentAiProblems: [],
+    consumedMedia: [],
   };
 }

@@ -2,6 +2,7 @@
 import { ref } from 'vue';
 import { useLearningStore } from '@stores/learning';
 import { useToastStore } from '@stores/toast';
+import PyButton from '@/components/ui/PyButton.vue';
 import TodayQuestsTab from './TodayQuestsTab.vue';
 import PathTreeTab from './PathTreeTab.vue';
 import ClassroomQuestsTab from './ClassroomQuestsTab.vue';
@@ -50,14 +51,14 @@ async function planNow(): Promise<void> {
           点击"规划本周路径"由 PathPlannerAgent 基于你的画像 + KC mastery 即时生成。
         </p>
       </div>
-      <button
-        type="button"
-        class="primary"
+      <PyButton
+        variant="primary"
+        test-id="board-plan"
         :disabled="planning"
         @click="planNow"
       >
         {{ planning ? '规划中…' : '规划本周路径' }}
-      </button>
+      </PyButton>
     </header>
 
     <nav class="tabs">
@@ -82,9 +83,9 @@ async function planNow(): Promise<void> {
 
 <style scoped>
 .board {
-  background: linear-gradient(180deg, #fff7e6 0%, #fdf3d0 100%);
-  border: 2px solid #c9a86b;
-  border-radius: 10px;
+  background: linear-gradient(180deg, var(--pyt-color-bg-elevated) 0%, var(--pyt-color-bg-soft) 100%);
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-lg);
   padding: 16px;
   display: grid;
   gap: 14px;
@@ -100,39 +101,26 @@ async function planNow(): Promise<void> {
 }
 .hint {
   margin: 4px 0 0;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
   font-size: 12px;
-}
-.primary {
-  background: #6e4f1d;
-  color: #fff7e6;
-  border: 2px solid #4d3613;
-  border-radius: 4px;
-  padding: 6px 16px;
-  cursor: pointer;
-  font-weight: 600;
-}
-.primary:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 .tabs {
   display: flex;
   gap: 6px;
-  border-bottom: 2px solid #c9a86b;
+  border-bottom: 2px solid var(--pyt-color-border);
 }
 .tab {
-  background: #fff7e6;
-  border: 1px solid #c9a86b;
+  background: var(--pyt-color-bg-elevated);
+  border: 1px solid var(--pyt-color-border);
   border-bottom: none;
   padding: 6px 12px;
   cursor: pointer;
   border-radius: 6px 6px 0 0;
   font-weight: 600;
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
 }
 .tab.active {
-  background: #6e4f1d;
-  color: #fff7e6;
+  background: var(--pyt-color-text-hint);
+  color: var(--pyt-color-bg-elevated);
 }
 </style>

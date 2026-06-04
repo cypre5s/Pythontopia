@@ -46,7 +46,7 @@ class ClassroomRepository @Inject internal constructor(
      * 仍可通过 `result.isEmpty()` + 已知"未登录"信号给出更友好的兜底文案。
      */
     suspend fun myClassrooms(): List<Classroom> =
-        runCatching { api.myClassrooms() }.getOrElse { emptyList() }
+        runCatching { api.myClassrooms() }.getOrDefault(emptyList())
 
     /**
      * 学生用 6 位邀请码加入班级。
@@ -70,13 +70,11 @@ class ClassroomRepository @Inject internal constructor(
      *   的活跃任务，**本地按 [classroomId] 过滤**（后端没有按班级过滤的子端点，避免
      *   N+1 网络请求）。
      *
-     * 网络异常时返回空 list，[ClassroomScreen] 公告板 tab 展示"暂无任务"提示。
+     * 网络/HTTP 异常直接上抛，避免把加载失败显示成"暂无任务"。
      */
     suspend fun quests(classroomId: Long, asTeacher: Boolean = false): List<ClassroomQuest> =
-        runCatching {
-            if (asTeacher) api.teacherQuests(classroomId)
-            else api.myQuests().filter { it.classroomId == classroomId }
-        }.getOrElse { emptyList() }
+        if (asTeacher) api.teacherQuests(classroomId)
+        else api.myQuests().filter { it.classroomId == classroomId }
 
     /**
      * 学生提交班级任务 evidence。
@@ -105,10 +103,9 @@ class ClassroomRepository @Inject internal constructor(
      * 双重校验；非教师调用会被 403 拒绝，仓库不做客户端预校验（让 ViewModel 据 role 决定
      * 是否调用此方法）。
      *
-     * 网络异常时返回空 list，[KcHeatmapView] 渲染空骨架并提示"热力图加载失败"。
+     * 网络/HTTP 异常直接上抛，让教师知道看板没有加载成功。
      */
-    suspend fun heatmap(classroomId: Long): List<KcHeatmapEntry> =
-        runCatching { api.kcHeatmap(classroomId) }.getOrElse { emptyList() }
+    suspend fun heatmap(classroomId: Long): List<KcHeatmapEntry> = api.kcHeatmap(classroomId)
 
     /**
      * 教师视角：拉取班级"高频误区"聚类。
@@ -117,10 +114,9 @@ class ClassroomRepository @Inject internal constructor(
      * 任务清单未明确这条方法（仅要求 6 个 DTO 中包含 [ErrorHotspot]），但既然 DTO 存在，
      * 仓库就得有 producer，否则教师看板上 [ErrorHotspot] 没有数据源 = 死字段。
      *
-     * 与 [heatmap] 同策略：异常 → 空 list；权限校验交给后端。
+     * 与 [heatmap] 同策略：异常上抛；权限校验交给后端。
      */
-    suspend fun errorHotspots(classroomId: Long): List<ErrorHotspot> =
-        runCatching { api.errorHotspots(classroomId) }.getOrElse { emptyList() }
+    suspend fun errorHotspots(classroomId: Long): List<ErrorHotspot> = api.errorHotspots(classroomId)
 }
 
 /**

@@ -10,7 +10,8 @@ pluginManagement {
             }
         }
         // 中国大陆/WSL2 网络下 Maven Central 经 Cloudflare 偶尔 403；
-        // 阿里云 maven 镜像作为同步副本优先尝试，本机已缓存的 artifact 仍走本地 cache。
+        // 国内 maven 镜像作为同步副本优先尝试，本机已缓存的 artifact 仍走本地 cache。
+        maven { url = uri("https://mirrors.tencent.com/nexus/repository/maven-public/") }
         maven { url = uri("https://maven.aliyun.com/repository/central") }
         maven { url = uri("https://maven.aliyun.com/repository/google") }
         mavenCentral()
@@ -26,6 +27,7 @@ dependencyResolutionManagement {
     repositoriesMode = RepositoriesMode.FAIL_ON_PROJECT_REPOS
     repositories {
         google()
+        maven { url = uri("https://mirrors.tencent.com/nexus/repository/maven-public/") }
         maven { url = uri("https://maven.aliyun.com/repository/central") }
         maven { url = uri("https://maven.aliyun.com/repository/google") }
         mavenCentral()
@@ -51,3 +53,8 @@ include(":feature:mine")
 include(":feature:retro")
 include(":feature:path")
 include(":feature:classroom")
+include(":feature:tutor")
+include(":feature:library")
+include(":feature:boss")
+include(":feature:endless")
+include(":feature:lecture")

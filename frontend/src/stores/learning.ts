@@ -9,7 +9,6 @@ import {
 } from '@/api/learner';
 import {
   bootstrapCurriculum,
-  fetchCrops,
   fetchMastery,
 } from '@/api/field';
 import {
@@ -37,7 +36,6 @@ import {
 } from '@/api/submissions';
 import { getPublicProblem } from '@/api/problems';
 import { getPyodideRunner, type PyodideRunResult } from '@/game/adapters/pyodide';
-import { celebrateMature } from '@/utils/celebrate';
 import {
   openBugMineSession,
   getBugMineSession,
@@ -51,7 +49,6 @@ import {
   listEvaluations,
   runEvaluation,
 } from '@/api/evaluation';
-import type { CropTileDto } from '@/api/dto/CropTileDto';
 import type { CurriculumBootstrapResult } from '@/api/dto/CurriculumBootstrapResult';
 import type { LearnerProfileDto } from '@/api/dto/LearnerProfileDto';
 import type { MasterySnapshotDto } from '@/api/dto/MasterySnapshotDto';
@@ -83,7 +80,6 @@ import type {
 } from '@/api/dto/Quest';
 
 export interface FieldState {
-  crops: CropTileDto[];
   masterySnapshot: MasterySnapshotDto[];
   activeKcCode: string | null;
   loading: boolean;
@@ -92,17 +88,53 @@ export interface FieldState {
   lastSignature: string | null;
 }
 
-function detectNewMature(
-  prev: readonly CropTileDto[],
-  next: readonly CropTileDto[],
-): boolean {
-  if (next.length === 0) {
-    return false;
-  }
-  const prevByKc = new Map(prev.map((crop) => [crop.kcCode, crop.status]));
-  return next.some(
-    (crop) => crop.status === 'MATURE' && prevByKc.get(crop.kcCode) !== 'MATURE',
-  );
+// P0-c：训练真题判定通过后，推进主线 submission 子任务。
+// 用动态 import 避免 learning ↔ mainQuest 循环依赖（mainQuest 已静态 import learning）。
+function notifyMainQuestSubmission(payload: {
+  problemId?: number | string;
+  kcCode?: string;
+}): void {
+  if (typeof window === 'undefined') return;
+  void import('@stores/mainQuest').then((mod) => {
+    try {
+      mod.useMainQuestStore().onSubmissionPassed(payload);
+    } catch {
+      /* mainQuest store 不可用时静默 */
+    }
+  });
+}
+
+// ②情绪化小镇：一次服务端判题（无论 AC/WA）后刷新世界情绪氛围——连挫触发细雨+助教台阶、
+// 逆袭回暖到晴。用动态 import 避免 learning ↔ mood 潜在耦合；mood store refresh 内部
+// try/finally 不抛错、失败降级 sunny，绝不阻断提交结果展示（最不侵入：仅一处调用）。
+function notifyMoodRefresh(): void {
+  if (typeof window === 'undefined') return;
+  void import('@stores/mood').then((mod) => {
+    try {
+      void mod.useMoodStore().refresh();
+    } catch {
+      /* mood store 不可用时静默 */
+    }
+  });
+}
+
+// P0-c：掌握度快照刷新后，联动主线 kc_mastery「测」子任务。
+// 后端 masteryScore 为 0..1；onMasteryReached 阈值（mainQuests thresholdScore）为 0..100，
+// 故乘 100 归一到同一标度后再比较。
+function notifyMainQuestMastery(
+  snapshots: readonly MasterySnapshotDto[],
+): void {
+  if (typeof window === 'undefined') return;
+  void import('@stores/mainQuest').then((mod) => {
+    try {
+      const mq = mod.useMainQuestStore();
+      for (const snap of snapshots) {
+        mq.onMasteryReached(snap.kcCode, Math.round((snap.masteryScore ?? 0) * 100));
+      }
+    } catch {
+      /* mainQuest store 不可用时静默 */
+    }
+  });
 }
 
 export type WorkshopRunPhase = 'idle' | 'creating' | 'success' | 'error';
@@ -183,7 +215,6 @@ export const useLearningStore = defineStore('learning', {
       loading: false,
     },
     field: {
-      crops: [] as CropTileDto[],
       masterySnapshot: [] as MasterySnapshotDto[],
       activeKcCode: null as string | null,
       loading: false,
@@ -234,9 +265,6 @@ export const useLearningStore = defineStore('learning', {
     } as EvaluationState,
   }),
   getters: {
-    unlockedCrops(): CropTileDto[] {
-      return this.field.crops.filter((crop) => crop.unlocked);
-    },
     activeKcMastery(): MasterySnapshotDto | null {
       if (!this.field.activeKcCode) {
         return null;
@@ -265,8 +293,10 @@ export const useLearningStore = defineStore('learning', {
       }
       this.profileInterview.loading = true;
       try {
+        // 先快照本轮之前的多轮历史（用于给 ProfileAgent 多轮记忆），再把当前消息加入本地展示。
+        const priorHistory = [...this.profileInterview.history];
         this.profileInterview.history.push({ role: 'user', content: userMessage });
-        const response = await sendProfileTurn(sessionId, { userMessage });
+        const response = await sendProfileTurn(sessionId, { userMessage, history: priorHistory });
         this.profileInterview.dimensionsFilled = response.dimensionsFilled;
         this.profileInterview.done = response.done;
         this.profileInterview.safety = response.safetyResult;
@@ -292,16 +322,11 @@ export const useLearningStore = defineStore('learning', {
     async loadField(): Promise<void> {
       this.field.loading = true;
       try {
-        const prevCrops = this.field.crops;
-        const wasHydrated = this.field.hydrated;
-        const [crops, mastery] = await Promise.all([fetchCrops(), fetchMastery()]);
-        this.field.crops = crops;
+        const mastery = await fetchMastery();
         this.field.masterySnapshot = mastery;
-        this.field.bootstrapped = crops.length > 0;
+        this.field.bootstrapped = mastery.length > 0;
         this.field.hydrated = true;
-        if (wasHydrated && detectNewMature(prevCrops, crops)) {
-          celebrateMature(null);
-        }
+        notifyMainQuestMastery(mastery);
       } finally {
         this.field.loading = false;
       }
@@ -324,18 +349,13 @@ export const useLearningStore = defineStore('learning', {
       this.field.activeKcCode = kcCode;
     },
     async refreshAfterEvent(kcCode: string): Promise<void> {
-      const prevCrops = this.field.crops;
-      const wasHydrated = this.field.hydrated;
-      const [crops, mastery] = await Promise.all([fetchCrops(), fetchMastery()]);
-      this.field.crops = crops;
+      const mastery = await fetchMastery();
       this.field.masterySnapshot = mastery;
       this.field.hydrated = true;
       if (kcCode) {
         this.field.activeKcCode = kcCode;
       }
-      if (wasHydrated && detectNewMature(prevCrops, crops)) {
-        celebrateMature(null);
-      }
+      notifyMainQuestMastery(mastery);
     },
     /**
      * 由 world store 的 `bootstrap()` 一次性下发后调用，避免页面挂载时 N 次串行 GET。
@@ -343,19 +363,14 @@ export const useLearningStore = defineStore('learning', {
      * 此时保持现有 state 不变，等业务侧再触发对应 lazy load。
      */
     setBootstrapData(payload: {
-      crops?: CropTileDto[];
       quests?: QuestDto[];
       mastery?: MasterySnapshotDto[];
       profile?: LearnerProfileDto | null;
       path?: LearningPathDto | null;
     }): void {
-      if (payload.crops) {
-        this.field.crops = payload.crops;
-        this.field.bootstrapped = payload.crops.length > 0;
-        this.field.hydrated = true;
-      }
       if (payload.mastery) {
         this.field.masterySnapshot = payload.mastery;
+        notifyMainQuestMastery(payload.mastery);
       }
       if (payload.profile !== undefined) {
         this.profile = payload.profile;
@@ -585,7 +600,24 @@ export const useLearningStore = defineStore('learning', {
         const detail = await getSubmission(created.id);
         this.training.submission = detail;
         this.training.phase = 'done';
+        // ②情绪化小镇：判题结果回来即刷新情绪氛围（streak 同时计入 AC/WA，故无论通过与否都刷）。
+        notifyMoodRefresh();
         await this.loadTodayQuests();
+        // P0-c：真题判定通过 → 推进主线「练」子任务，并刷新掌握度联动「测」子任务。
+        const passed =
+          detail.submission.status === 'PASSED' || detail.judgeResult?.verdict === 'AC';
+        if (passed) {
+          const kcCode = this.training.problem?.kcCode;
+          notifyMainQuestSubmission(
+            kcCode ? { problemId: payload.problemId, kcCode } : { problemId: payload.problemId },
+          );
+          try {
+            // 后端在 AC 时 +0.20 掌握度；刷新快照后 refreshAfterEvent 会触发 kc_mastery 联动。
+            await this.refreshAfterEvent(kcCode ?? '');
+          } catch {
+            /* 掌握度刷新失败不阻断提交结果展示 */
+          }
+        }
         return detail;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);

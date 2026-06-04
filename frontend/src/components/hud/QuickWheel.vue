@@ -235,7 +235,7 @@ onBeforeUnmount(() => {
 .wheel-mask {
   position: fixed;
   inset: 0;
-  z-index: 9999;
+  z-index: var(--pyt-z-modal);
   background: rgba(0, 0, 0, 0.55);
   display: flex;
   align-items: center;
@@ -280,18 +280,18 @@ onBeforeUnmount(() => {
 
 .wheel-center__label {
   font-size: 11px;
-  color: var(--pyt-text-primary, #fff7e6);
+  color: var(--pyt-text-primary, var(--pyt-color-bg-elevated));
   text-align: center;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 84px;
-  font-family: var(--pyt-font-pixel, monospace);
+  font-family: var(--pyt-font-pixel);
 }
 
 .wheel-center__hint {
   font-size: 9px;
-  color: var(--pyt-text-accent, #ffd166);
+  color: var(--pyt-text-accent, var(--pyt-color-gold-bright));
   letter-spacing: 0.5px;
   opacity: 0.8;
 }
@@ -306,9 +306,9 @@ onBeforeUnmount(() => {
   gap: 3px;
   padding: 6px;
   background: var(--pyt-panel-bg, rgba(28, 24, 16, 0.94));
-  border: 2px solid var(--pyt-panel-border-dark, #6e4f1d);
+  border: 2px solid var(--pyt-panel-border-dark, var(--pyt-color-text-hint));
   border-radius: 2px;
-  color: var(--pyt-text-primary, #fff7e6);
+  color: var(--pyt-text-primary, var(--pyt-color-bg-elevated));
   cursor: pointer;
   transition:
     background 120ms ease,
@@ -316,7 +316,7 @@ onBeforeUnmount(() => {
     box-shadow 120ms ease,
     transform 120ms ease;
   z-index: 1;
-  font-family: var(--pyt-font-pixel, monospace);
+  font-family: var(--pyt-font-pixel);
 }
 
 .wheel-sector:hover {
@@ -325,13 +325,13 @@ onBeforeUnmount(() => {
 }
 
 .wheel-sector:focus-visible {
-  outline: 2px solid var(--pyt-text-accent, #ffd166);
+  outline: 2px solid var(--pyt-text-accent, var(--pyt-color-gold-bright));
   outline-offset: 2px;
 }
 
 .wheel-sector--active {
   background: rgba(241, 196, 83, 0.28);
-  border-color: #ffd166;
+  border-color: var(--pyt-color-gold-bright);
   box-shadow:
     0 0 12px rgba(255, 209, 102, 0.45),
     0 0 4px rgba(255, 209, 102, 0.3);
@@ -348,11 +348,11 @@ onBeforeUnmount(() => {
   font-size: 10px;
   letter-spacing: 0.4px;
   white-space: nowrap;
-  color: var(--pyt-text-primary, #fff7e6);
+  color: var(--pyt-text-primary, var(--pyt-color-bg-elevated));
 }
 
 .wheel-sector--active .wheel-sector__label {
-  color: var(--pyt-text-accent, #ffd166);
+  color: var(--pyt-text-accent, var(--pyt-color-gold-bright));
 }
 
 /* ── 连接线（扇区中心 → 轮盘中心） ──────────────────────── */

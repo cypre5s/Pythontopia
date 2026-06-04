@@ -29,6 +29,10 @@ export interface DirectionController {
   getDirection(): ExtendedDirection | null;
   isActionPressed(): boolean;
   isJumpPressed(): boolean;
+  /** 奔跑修饰键（Shift）按住时为 true：星露谷式「按住跑、松开走」。 */
+  isRunPressed(): boolean;
+  /** 工具/动作键（C）：触发与当前地图相称的工具动作（浇水/挖矿/钓鱼/施法/庆祝）。 */
+  isToolPressed(): boolean;
 }
 
 export function toServerDirection(dir: ExtendedDirection): Direction {
@@ -58,6 +62,9 @@ export function createDirectionController(scene: SceneLike): DirectionController
   // 新版主控：F/E 交互，Space 留给跳跃。
   const spaceKey: KeyboardKeyLike | null = scene.input.keyboard?.addKey('SPACE') ?? null;
   const eKey: KeyboardKeyLike | null = scene.input.keyboard?.addKey('E') ?? null;
+  // R-12 动作模组：Shift 奔跑，C 使用工具（与交互/跳跃键互不冲突）。
+  const shiftKey: KeyboardKeyLike | null = scene.input.keyboard?.addKey('SHIFT') ?? null;
+  const cKey: KeyboardKeyLike | null = scene.input.keyboard?.addKey('C') ?? null;
 
   function isPressed(key: KeyboardKeyLike | null): boolean {
     return key?.isDown === true;
@@ -101,6 +108,12 @@ export function createDirectionController(scene: SceneLike): DirectionController
     },
     isJumpPressed() {
       return isPressed(spaceKey);
+    },
+    isRunPressed() {
+      return isPressed(shiftKey);
+    },
+    isToolPressed() {
+      return isPressed(cKey);
     },
   };
 }

@@ -3,10 +3,29 @@ package com.pythontopia.feature.arena
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.Tab
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -46,23 +65,64 @@ fun ChapterTowerScreen(
                 modifier = Modifier.padding(16.dp),
             )
         } else {
+            TowerBody(
+                levels = state.levels,
+                selectedLevelId = state.selectedLevelId,
+                onSelectLevel = viewModel::selectLevel,
+                onEnter = { level ->
+                    if (level.kind == "boss") {
+                        onNavigateToBoss(level.chapter)
+                    } else {
+                        onNavigateToEndless(level.chapter, level.kind, level.id)
+                    }
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun TowerBody(
+    levels: List<ChapterTowerLevel>,
+    selectedLevelId: String?,
+    onSelectLevel: (String) -> Unit,
+    onEnter: (ChapterTowerLevel) -> Unit,
+) {
+    val selectedLevel = levels.find { it.id == selectedLevelId }
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        if (maxWidth < COMPACT_WIDTH_BREAKPOINT.dp) {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                LevelList(
+                    levels = levels,
+                    selectedId = selectedLevelId,
+                    onSelect = onSelectLevel,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = COMPACT_LIST_MAX_HEIGHT.dp),
+                )
+                LevelDetail(
+                    level = selectedLevel,
+                    onEnter = onEnter,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                )
+            }
+        } else {
             Row(modifier = Modifier.fillMaxSize()) {
                 LevelList(
-                    levels = state.levels,
-                    selectedId = state.selectedLevelId,
-                    onSelect = viewModel::selectLevel,
+                    levels = levels,
+                    selectedId = selectedLevelId,
+                    onSelect = onSelectLevel,
                     modifier = Modifier.weight(0.45f),
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 LevelDetail(
-                    level = state.levels.find { it.id == state.selectedLevelId },
-                    onEnter = { level ->
-                        if (level.kind == "boss") {
-                            onNavigateToBoss(level.chapter)
-                        } else {
-                            onNavigateToEndless(level.chapter, level.kind, level.id)
-                        }
-                    },
+                    level = selectedLevel,
+                    onEnter = onEnter,
                     modifier = Modifier.weight(0.55f),
                 )
             }
@@ -76,7 +136,7 @@ private fun ChapterTabRow(selectedChapter: Int, onSelect: (Int) -> Unit) {
         selectedTabIndex = selectedChapter - 1,
         edgePadding = 4.dp,
     ) {
-        (1..7).forEach { chapter ->
+        for (chapter in 1..7) {
             Tab(
                 selected = chapter == selectedChapter,
                 onClick = { onSelect(chapter) },
@@ -209,3 +269,6 @@ private fun LevelDetail(
         }
     }
 }
+
+private const val COMPACT_WIDTH_BREAKPOINT: Int = 600
+private const val COMPACT_LIST_MAX_HEIGHT: Int = 260

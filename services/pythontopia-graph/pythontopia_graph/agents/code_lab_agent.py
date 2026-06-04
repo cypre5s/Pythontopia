@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 
+from pythontopia_graph.agents.personalization import personalization_messages
 from pythontopia_graph.llm.provider import LlmProvider
 from pythontopia_graph.nodes.evidence_fetcher import EvidenceBundle
 from pythontopia_graph.schemas.resource import (
@@ -36,6 +37,7 @@ class CodeLabAgent:
                     "必须是合法 Python 3.11 语法，并附 common_mistakes。"
                 ),
             },
+            *personalization_messages(request.profile_snapshot),
             {"role": "user", "content": ",".join(request.kc_codes)},
         ]
 

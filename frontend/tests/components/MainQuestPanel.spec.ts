@@ -81,11 +81,11 @@ describe('MainQuestPanel', () => {
     const wrapper = mount(MainQuestPanel, { global: { plugins: [router] } });
     await flushPromises();
 
-    // R-13 mainQuests v2：章 2 farm_north 任务在 2-5（理解程序运行方式）
+    // R-14 方案A：主线全部收敛 town_hub，「去做」传送目标统一为 town_hub
     await wrapper.find('[data-testid="main-quest-go-2-5"]').trigger('click');
     await flushPromises();
 
-    expect(world.player.mapKey).toBe('farm_north');
+    expect(world.player.mapKey).toBe('town_hub');
     expect(router.currentRoute.value.path).toBe('/world');
     expect(store.panelOpen).toBe(false);
   });

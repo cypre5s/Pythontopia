@@ -84,12 +84,13 @@ class MineViewModel @Inject constructor(
      *   自动弹 [MineEscapeDialog]，让玩家选择撤退或召唤 NPC 提示。
      */
     fun submitAttempt() {
-        val card = _state.value.currentCard ?: return
+        _state.value.currentCard ?: return
+        val session = _state.value.session ?: return
         if (_state.value.isLoading) return
         val codeNow = _state.value.userCode
         _state.update { it.copy(isLoading = true, errorMessage = null) }
         viewModelScope.launch {
-            val result = runCatching { repository.attempt(card.id, codeNow) }
+            val result = runCatching { repository.attempt(session.sessionId, codeNow) }
             result.fold(
                 onSuccess = { attempt ->
                     val passed = attempt.status == MineAttempt.STATUS_PASS

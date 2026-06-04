@@ -171,21 +171,21 @@ onBeforeUnmount(() => {
 .pdf-canvas {
   display: block;
   max-width: 100%;
-  border: 2px solid #c9a86b;
+  border: 2px solid var(--pyt-color-border);
   background: #fff;
-  box-shadow: 4px 4px 0 #4d3613;
+  box-shadow: 4px 4px 0 var(--pyt-color-text-primary);
 }
 
 .state {
   margin: 0;
   padding: 8px 12px;
   font-size: 13px;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
   font-family: var(--pyt-font-sans, sans-serif);
 }
 
 .state--loading {
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
 }
 
 .state--error {
@@ -195,6 +195,6 @@ onBeforeUnmount(() => {
 
 .state--meta {
   font-size: 11px;
-  color: #8a6c2c;
+  color: var(--pyt-color-text-muted);
 }
 </style>

@@ -37,6 +37,6 @@ onUnmounted(() => {
 .review-hall-page {
   padding: 16px;
   min-height: calc(100vh - 64px);
-  background: linear-gradient(180deg, #fef7e3 0%, #f3e4be 100%);
+  background: linear-gradient(180deg, var(--pyt-color-bg-primary) 0%, var(--pyt-color-bg-sunken) 100%);
 }
 </style>

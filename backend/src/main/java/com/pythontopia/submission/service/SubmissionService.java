@@ -119,9 +119,15 @@ public class SubmissionService {
       log.warn("Submission {} has no kc_code for problem {}", submissionId, request.problemId());
       return;
     }
+    // 情绪化小镇②：本次提交前同题失败次数，用于判定重试 / 逆袭行为信号。
+    int priorFails = submissionRepository.countPriorFailures(userId, request.problemId(), submissionId);
     if (outcome.verdict() == Verdict.AC) {
       eventPublisher.publishEvent(
           new LearningEvent.PracticeSucceeded(userId, kcCode, request.problemId()));
+      if (priorFails >= 2) {
+        eventPublisher.publishEvent(
+            new LearningEvent.ComebackSolved(userId, request.problemId(), kcCode, priorFails));
+      }
       if (request.questId() != null) {
         try {
           QuestCompleteRequest autoEvidence =
@@ -141,6 +147,10 @@ public class SubmissionService {
       eventPublisher.publishEvent(
           new LearningEvent.PracticeFailed(
               userId, kcCode, request.problemId(), outcome.verdict().name()));
+      if (priorFails >= 1) {
+        eventPublisher.publishEvent(
+            new LearningEvent.PracticeRetried(userId, request.problemId(), kcCode));
+      }
     }
   }
 }

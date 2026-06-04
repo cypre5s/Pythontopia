@@ -54,6 +54,13 @@ public class ProfileService {
     return profileRepository.findOpenInterview(userId).orElseGet(() -> profileRepository.createInterview(userId));
   }
 
+  /** 拼接「本轮之前的多轮历史 + 当前用户消息」，让 ProfileAgent 具备多轮记忆。 */
+  private List<ProfileMessageDto> buildHistory(ProfileTurnRequest request) {
+    List<ProfileMessageDto> history = new java.util.ArrayList<>(request.resolvedHistory());
+    history.add(new ProfileMessageDto("user", request.userMessage()));
+    return history;
+  }
+
   public ProfileTurnResponse sendTurn(Long userId, String sessionId, ProfileTurnRequest request) {
     if (!profileRepository.ownsInterview(userId, sessionId)) {
       throw new BusinessException(HttpStatus.NOT_FOUND, "PROFILE_INTERVIEW_NOT_FOUND", "Interview not found");
@@ -62,7 +69,7 @@ public class ProfileService {
         new ProfileAgentTurnRequest(
             userId,
             sessionId,
-            List.of(new ProfileMessageDto("user", request.userMessage())),
+            buildHistory(request),
             request.userMessage(),
             coursePackRepository.findKcs(43L, null).stream()
                 .map(kc -> new KcIndexItemDto(kc.kcCode(), kc.kcName()))
@@ -103,7 +110,7 @@ public class ProfileService {
         new ProfileAgentTurnRequest(
             userId,
             sessionId,
-            List.of(new ProfileMessageDto("user", request.userMessage())),
+            buildHistory(request),
             request.userMessage(),
             coursePackRepository.findKcs(43L, null).stream()
                 .map(kc -> new KcIndexItemDto(kc.kcCode(), kc.kcName()))

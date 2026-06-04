@@ -169,6 +169,64 @@ const MANIFEST = [
     notes: '24x32 矮人角色，可作"小作物"NPC 候选',
   },
   {
+    // P3-a3：智能体事务所复用的 16 张 NPC 行走帧（由 LPC walkcycle 图层合成，9×4，64px）。
+    // 已在 BootScene 预载，并被 AgentOfficeScene.vue 以 CSS background 引用；CC-BY-SA-3.0 传染已接受。
+    src: 'characters_extra/npc_composites',
+    dest: 'sprites/npc-composites',
+    kind: 'dir',
+    license: 'CC-BY-SA-3.0',
+    author: 'Johannes Sjölund (wulax) / bluecarrot16 / LPC base contributors',
+    source: 'https://opengameart.org/content/lpc-medieval-fantasy-character-sprites',
+    notes: '16 个 Agent / 主管 NPC walkcycle 合成帧（npc_*.png），智能体事务所动画 + 世界 NPC 复用',
+    noSync: true,
+  },
+  {
+    // R-12 动作模组（方案A）：官方 ULPC「Expanded」全动作角色表（13×42，含 run/jump/idle/sit），
+    // 由 scripts/build-ulpc-characters.py 用官方 Universal-LPC 素材库合成；主角 + 8 个变体 NPC。
+    src: 'characters_extra/ulpc_generated',
+    dest: 'sprites/ulpc',
+    kind: 'dir',
+    license: 'CC-BY-SA-3.0',
+    author: 'LPC contributors (bluecarrot16, ElizaWy, JaidynReiman, wulax, Redshrike, …，见 CREDITS-ulpc-used.txt)',
+    source: 'https://github.com/LiberatedPixelCup/Universal-LPC-Spritesheet-Character-Generator',
+    notes: '官方 ULPC 全动作角色表（player_sara2 + ulpc_*，13×42 expanded，run/jump/idle/sit/emote + 6 基础），scripts/build-ulpc-characters.py 合成',
+    noSync: true,
+  },
+  {
+    // R-12 动作模组 C 阶段：星露谷味手持工具叠加层（LPC Hand Tools 的 thrust 系工具，
+    // universal 13×21 同帧布局，叠在主角/NPC 之上即「手持工具」）。联网爬取自 OpenGameArt。
+    src: 'characters_extra/lpc_hand_tools',
+    dest: 'sprites/lpc-tools',
+    kind: 'dir',
+    license: 'CC-BY-SA-3.0',
+    author: 'bluecarrot16, Pierre Vigier, Johannes Sjölund (wulax), Tuomo Untinen, Inboxninja',
+    source: 'https://opengameart.org/content/lpc-hand-tools',
+    notes: '浇水壶/锄头手持工具叠加层（watering-can/hoe + bg，universal），主角/NPC 浇水=thrust 动作叠加；含 CREDITS-hand-tools.txt',
+    noSync: true,
+  },
+  {
+    // R-12：用 LPC 茅草屋 kit 合成的整屋 sprite（scripts/build-cottages.py），替换世界场景方块拼接建筑。
+    src: 'buildings_npc/lpc_thatched-roof-cottage',
+    dest: 'sprites/cottages',
+    kind: 'dir',
+    license: 'CC-BY-SA-3.0',
+    author: 'bluecarrot16 / Daniel Eddeland (daneeklu) / Lanea Zimmerman (Sharm)',
+    source: 'https://opengameart.org/content/lpc-thatched-roof-cottage',
+    notes: '茅草屋整屋 sprite（cottage_tan/cream/stone），scripts/build-cottages.py 从 kit 合成，世界场景建筑',
+    noSync: true,
+  },
+  {
+    // R-12 动作模组：砍树/挖矿用的超尺寸斧头叠加层（ULPC 192px attack_slash，与标准 slash 同步）。
+    src: 'characters_extra/ulpc_generated',
+    dest: 'sprites/weapons',
+    kind: 'dir',
+    license: 'CC-BY-SA-3.0',
+    author: 'LPC contributors（weapon_blunt_waraxe，见 ULPC CREDITS）',
+    source: 'https://github.com/LiberatedPixelCup/Universal-LPC-Spritesheet-Character-Generator',
+    notes: '斧头超尺寸挥砍叠加（weapon_axe + bg，192px oversize attack_slash），主角砍树/挖矿动作；取自 ULPC weapon_blunt_waraxe',
+    noSync: true,
+  },
+  {
     src: 'portraits/README.md',
     dest: 'portraits',
     kind: 'dir',

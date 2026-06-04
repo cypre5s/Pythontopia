@@ -2,6 +2,7 @@ package com.pythontopia.feature.auth
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.pythontopia.core.network.SessionState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,10 +29,16 @@ data class LoginUiState(
 @HiltViewModel
 class LoginViewModel @Inject constructor(
     private val repository: AuthRepository,
+    private val sessionState: SessionState = SessionState(),
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(LoginUiState())
     val state: StateFlow<LoginUiState> = _state.asStateFlow()
+
+    /** 游客快速体验：标记进程为游客模式，调用方随后导航进世界（无需登录/注册）。 */
+    fun enterGuestMode() {
+        sessionState.isGuest = true
+    }
 
     fun onUsernameChange(v: String) {
         _state.update { it.copy(username = v, errorMessage = null) }

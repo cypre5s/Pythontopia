@@ -1,7 +1,7 @@
 package com.pythontopia.feature.arena
 
 /**
- * Arena 模块 DTO 集合。
+ * Arena 模块 UI DTO 集合。
  *
  * Arena = 班级内 / 全校的练习赛：每日一场（单日多题快速判定），赛后按通过题数 + 通关时长出
  * 积分榜。Beta 首发不做 PVP 实时同步，所以 DTO 只覆盖最小闭环：
@@ -11,14 +11,13 @@ package com.pythontopia.feature.arena
  *   式记分；判题细节交给后端 SubprocessPythonSandbox，前端只做展示
  * - 积分榜条目（[LeaderboardEntry]）：单赛事内的排名快照
  *
- * 这些类故意不加 `@Serializable`，因为 `:feature:arena` 模块没有应用
- * `kotlin-serialization` 插件（AGENTS.md 约束 R-12 不引入新依赖）。等 `:core:network`
- * 正式补充 `ArenaApi` 时，再用 OpenAPI Generator 生成等价 DTO 即可，业务层迁移成本可控。
+ * 这些类是 Compose/ViewModel 使用的稳定模型；Retrofit wire DTO 留在
+ * [ArenaRepository] 内部，避免把后端字段形状扩散到 UI。
  *
  * 对应后端端点（见任务背景）：
- * - GET  /api/arena/sessions/today          → [ArenaSession]（内含 [ArenaProblem] 列表）
- * - POST /api/arena/submit                  → [Submission]
- * - GET  /api/arena/leaderboard?classroomId → List&lt;[LeaderboardEntry]&gt;
+ * - GET  /api/course/problems?kcCode=       → [ArenaProblem] 来源
+ * - POST /api/submissions                   → [Submission]
+ * - GET  /api/submissions?status=PASSED     → 当前账号真实练习统计
  */
 
 /**
@@ -47,7 +46,7 @@ data class ArenaSession(
  * "题面 markdown + 起始模板代码"。Arena 不渲染样例 IO，因为快速判定场景里玩家直接看
  * statementMd 中的说明即可，多余的样例栏会占用倒计时下方的稀缺垂直空间。
  *
- * @property problemId 全局题目 ID，提交时透传给 `POST /api/arena/submit` 的 problemId 字段。
+ * @property problemId 全局题目 ID，提交时透传给 `POST /api/submissions` 的 problemId 字段。
  * @property title 题目标题，用于 tab 切换显示 "T1 / T2 / T3"。
  * @property statementMd 题面 markdown 文本；当前用纯文本 [androidx.compose.material3.Text]
  *           渲染（不引入 Markwon），Beta+1 接 :feature:workshop 的 Markdown renderer。

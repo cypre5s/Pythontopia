@@ -74,7 +74,7 @@ private fun LayerSegment(
     modifier: Modifier = Modifier,
 ) {
     val color = layerColor(layer)
-    val (fillAlpha, borderAlpha, labelColor, labelWeight) = when (state) {
+    val style = when (state) {
         SegmentState.COMPLETED -> SegmentStyle(
             fillAlpha = FILL_ALPHA_COMPLETED,
             borderAlpha = BORDER_ALPHA_COMPLETED,
@@ -104,20 +104,20 @@ private fun LayerSegment(
                 .fillMaxWidth()
                 .height(SEGMENT_HEIGHT.dp)
                 .background(
-                    color.copy(alpha = fillAlpha),
+                    color.copy(alpha = style.fillAlpha),
                     RoundedCornerShape(PytSpace.s1),
                 )
                 .border(
                     width = if (state == SegmentState.CURRENT) CURRENT_BORDER_WIDTH.dp else 1.dp,
-                    color = color.copy(alpha = borderAlpha),
+                    color = color.copy(alpha = style.borderAlpha),
                     shape = RoundedCornerShape(PytSpace.s1),
                 ),
         )
         Text(
             text = "B$layer",
             style = MaterialTheme.typography.labelSmall,
-            color = labelColor,
-            fontWeight = labelWeight,
+            color = style.labelColor,
+            fontWeight = style.labelWeight,
             modifier = Modifier.padding(top = PytSpace.s1),
         )
     }

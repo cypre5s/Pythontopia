@@ -207,40 +207,32 @@ describe('fasttravel.integration: FastTravelPanel（15 case）', () => {
     wrapper.unmount();
   });
 
-  it.each(['hub', 'farm', 'mine', 'campus', 'port'])('路线 %s 渲染', async (key) => {
+  it('路线 hub 渲染（R-14 单 hub）', async () => {
     setMap('town_hub');
     const wrapper = mount(FastTravelPanel, { attachTo: document.body });
     window.dispatchEvent(new CustomEvent('pythontopia:fast-travel-open'));
     await flushPromises();
-    expect(wrapper.find(`[data-testid="fast-travel-${key}"]`).exists()).toBe(true);
+    expect(wrapper.find('[data-testid="fast-travel-hub"]').exists()).toBe(true);
     wrapper.unmount();
   });
 
-  it.each([
-    ['town_hub', 'hub'],
-    ['farm_north', 'farm'],
-    ['mine_south', 'mine'],
-    ['campus_east', 'campus'],
-    ['port_west', 'port'],
-  ])('mapKey=%s → 路线 %s 被 disabled', async (mapKey, routeKey) => {
-    setMap(mapKey);
+  it('mapKey=town_hub → 路线 hub 被 disabled', async () => {
+    setMap('town_hub');
     const wrapper = mount(FastTravelPanel, { attachTo: document.body });
     window.dispatchEvent(new CustomEvent('pythontopia:fast-travel-open'));
     await flushPromises();
-    const btn = wrapper.find(`[data-testid="fast-travel-${routeKey}"]`);
+    const btn = wrapper.find('[data-testid="fast-travel-hub"]');
     expect(btn.attributes('disabled')).toBeDefined();
     wrapper.unmount();
   });
 
-  it('点击非当前路线：worldStore.player.mapKey 更新 + 面板关闭', async () => {
+  it('单 hub：外围图路线已移除（farm/mine/campus/port 不渲染）', async () => {
     setMap('town_hub');
-    const world = useWorldStore();
     const wrapper = mount(FastTravelPanel, { attachTo: document.body });
     window.dispatchEvent(new CustomEvent('pythontopia:fast-travel-open'));
     await flushPromises();
-    await wrapper.find('[data-testid="fast-travel-campus"]').trigger('click');
-    await flushPromises();
-    expect(world.player?.mapKey).toBe('campus_east');
+    expect(wrapper.find('[data-testid="fast-travel-farm"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="fast-travel-campus"]').exists()).toBe(false);
     wrapper.unmount();
   });
 

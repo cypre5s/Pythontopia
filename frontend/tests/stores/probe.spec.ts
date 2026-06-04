@@ -1,0 +1,63 @@
+import { createPinia, setActivePinia } from 'pinia';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { useProbeStore } from '@/stores/probe';
+import { submitProbe } from '@/api/learner';
+
+vi.mock('@/api/learner', () => ({
+  submitProbe: vi.fn(async () => undefined),
+}));
+
+const PERSIST_KEY = 'pyt_probe_answered';
+
+function persistedAnswered(): string[] {
+  const raw = window.localStorage.getItem(PERSIST_KEY);
+  return raw ? (JSON.parse(raw) as string[]) : [];
+}
+
+describe('probe store', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    window.localStorage.clear();
+    vi.mocked(submitProbe).mockReset();
+    vi.mocked(submitProbe).mockResolvedValue(undefined);
+  });
+
+  it('shouldShow is true for an unseen probe, false once shown in-session', () => {
+    const store = useProbeStore();
+    expect(store.shouldShow('cog_intro')).toBe(true);
+    store.markShown('cog_intro');
+    expect(store.shouldShow('cog_intro')).toBe(false);
+  });
+
+  it('markAnswered persists to localStorage and permanently blocks re-show', () => {
+    const store = useProbeStore();
+    store.markAnswered('cog_intro');
+    expect(store.shouldShow('cog_intro')).toBe(false);
+    expect(store.answered.has('cog_intro')).toBe(true);
+    expect(persistedAnswered()).toContain('cog_intro');
+  });
+
+  it('hydrates the answered set from localStorage on init', () => {
+    window.localStorage.setItem(PERSIST_KEY, JSON.stringify(['cog_intro']));
+    const store = useProbeStore();
+    expect(store.answered.has('cog_intro')).toBe(true);
+    expect(store.shouldShow('cog_intro')).toBe(false);
+  });
+
+  it('submit() POSTs the choice, then marks answered + persists', async () => {
+    const store = useProbeStore();
+    await store.submit('cog_intro', 'visual');
+    expect(submitProbe).toHaveBeenCalledTimes(1);
+    expect(submitProbe).toHaveBeenCalledWith('cog_intro', 'visual');
+    expect(store.answered.has('cog_intro')).toBe(true);
+    expect(persistedAnswered()).toContain('cog_intro');
+  });
+
+  it('submit() still marks answered when the API rejects (never blocks the player)', async () => {
+    vi.mocked(submitProbe).mockRejectedValueOnce(new Error('PROBE_INVALID'));
+    const store = useProbeStore();
+    await expect(store.submit('cog_intro', 'logical')).resolves.toBeUndefined();
+    expect(store.answered.has('cog_intro')).toBe(true);
+    expect(persistedAnswered()).toContain('cog_intro');
+  });
+});

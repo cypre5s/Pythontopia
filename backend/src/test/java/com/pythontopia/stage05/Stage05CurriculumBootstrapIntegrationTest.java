@@ -97,17 +97,6 @@ class Stage05CurriculumBootstrapIntegrationTest {
     assertThat(((Number) response.getBody().get("totalKcs")).intValue()).isEqualTo(65);
     assertThat(((Number) response.getBody().get("unlockedCount")).intValue()).isEqualTo(8);
 
-    Integer total =
-        jdbcTemplate.queryForObject(
-            "SELECT COUNT(*) FROM crop_tile_state WHERE user_id = ?", Integer.class, userId);
-    Integer unlocked =
-        jdbcTemplate.queryForObject(
-            "SELECT COUNT(*) FROM crop_tile_state WHERE user_id = ? AND unlocked = TRUE",
-            Integer.class,
-            userId);
-    assertThat(total).isEqualTo(65);
-    assertThat(unlocked).isEqualTo(8);
-
     Integer events =
         jdbcTemplate.queryForObject(
             "SELECT COUNT(*) FROM kc_mastery_event WHERE user_id = ?", Integer.class, userId);
@@ -119,12 +108,6 @@ class Stage05CurriculumBootstrapIntegrationTest {
             Integer.class,
             userId);
     assertThat(runs).isEqualTo(1);
-
-    ResponseEntity<List> crops =
-        restTemplate.exchange(
-            "/api/world/crops", HttpMethod.GET, bearer(token, null), List.class);
-    assertThat(crops.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(crops.getBody()).hasSize(65);
 
     ResponseEntity<List> mastery =
         restTemplate.exchange(

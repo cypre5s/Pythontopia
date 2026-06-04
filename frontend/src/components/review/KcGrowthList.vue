@@ -33,25 +33,25 @@ defineProps<{ evaluation: EvaluationDto }>();
 
 <style scoped>
 .kc-growth {
-  background: #fff7e6;
-  border: 2px solid #c9a86b;
-  border-radius: 8px;
+  background: var(--pyt-color-bg-elevated);
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-lg);
   padding: 12px;
   display: grid;
   gap: 10px;
 }
 .header h4 {
   margin: 0;
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
 }
 .hint {
   margin: 4px 0 0;
   font-size: 11px;
-  color: #8a6c2c;
+  color: var(--pyt-color-text-muted);
 }
 .narrative :deep(.md-view) {
-  background: #fdf3d0;
-  border: 1px dashed #c9a86b;
+  background: var(--pyt-color-bg-soft);
+  border: 1px dashed var(--pyt-color-border);
   border-radius: 6px;
   padding: 8px 10px;
   font-size: 13px;
@@ -59,6 +59,6 @@ defineProps<{ evaluation: EvaluationDto }>();
 .empty {
   margin: 0;
   font-size: 12px;
-  color: #8a6c2c;
+  color: var(--pyt-color-text-muted);
 }
 </style>

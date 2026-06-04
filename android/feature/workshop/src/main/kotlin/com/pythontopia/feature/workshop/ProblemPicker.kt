@@ -156,7 +156,7 @@ private fun EmptyHint(kcCode: String) {
             style = MaterialTheme.typography.bodyMedium,
         )
         Text(
-            text = "确认账号已登录且后端 /api/problems?kcCode= 已上线",
+            text = "确认账号已登录且后端 /api/course/problems?kcCode= 已上线",
             color = PytColors.textHint,
             style = MaterialTheme.typography.labelSmall,
         )

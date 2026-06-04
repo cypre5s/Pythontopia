@@ -65,9 +65,9 @@ function onChipClick(): void {
   gap: 6px;
   padding: 4px 10px;
   background: rgba(241, 196, 83, 0.25);
-  border: 2px solid #f1c453;
+  border: 2px solid var(--pyt-color-gold);
   border-radius: 4px;
-  color: #fff7e6;
+  color: var(--pyt-color-bg-elevated);
   font-family: var(--pyt-font-pixel), 'PingFang SC', monospace;
   font-size: 12px;
   cursor: pointer;
@@ -80,17 +80,17 @@ function onChipClick(): void {
 }
 .main-quest-chip[aria-pressed="true"] {
   background: rgba(241, 196, 83, 0.55);
-  box-shadow: inset 0 0 0 1px #fff7e6;
+  box-shadow: inset 0 0 0 1px var(--pyt-color-bg-elevated);
 }
 .mqc-chapter {
-  color: #ffd166;
+  color: var(--pyt-color-gold-bright);
   font-weight: 700;
 }
 .mqc-sep {
   color: rgba(255, 247, 230, 0.5);
 }
 .mqc-title {
-  color: #fff7e6;
+  color: var(--pyt-color-bg-elevated);
 }
 .mqc-progress {
   display: inline-flex;
@@ -100,7 +100,7 @@ function onChipClick(): void {
 }
 .mqc-sub {
   font-size: 11px;
-  color: #fff7e6;
+  color: var(--pyt-color-bg-elevated);
 }
 .mqc-bar {
   position: relative;
@@ -108,19 +108,19 @@ function onChipClick(): void {
   width: 50px;
   height: 6px;
   background: rgba(0, 0, 0, 0.35);
-  border: 1px solid #6e4f1d;
+  border: 1px solid var(--pyt-color-text-hint);
   border-radius: 1px;
   overflow: hidden;
 }
 .mqc-bar__fill {
   display: block;
   height: 100%;
-  background: linear-gradient(90deg, #6bbf59, #f1c453);
+  background: linear-gradient(90deg, #6bbf59, var(--pyt-color-gold));
   transition: width 220ms ease-out;
 }
 .mqc-pct {
   font-size: 10px;
-  color: #f1c453;
+  color: var(--pyt-color-gold);
   min-width: 28px;
   text-align: right;
 }

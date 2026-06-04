@@ -19,10 +19,8 @@ export interface FastTravelRoute {
   costCoins: number;
 }
 
+// R-14 方案A：世界收缩为单一中央小镇 hub，所有学习入口与 NPC 都在 town_hub，
+// 不再提供前往外围图的快速旅行（外围图已从主线与导航中弃用）。
 export const FAST_TRAVEL_ROUTES: readonly FastTravelRoute[] = [
   { key: 'hub', toMap: 'town_hub', tileX: 25, tileY: 20, label: '小镇中心', description: '回到喷泉广场', costCoins: 0 },
-  { key: 'farm', toMap: 'farm_north', tileX: 20, tileY: 37, label: '知识农场', description: '种植 / 浇水 / 收获 KC', costCoins: 5 },
-  { key: 'mine', toMap: 'mine_south', tileX: 15, tileY: 2, label: 'Bug 矿洞', description: '调试副本入口', costCoins: 5 },
-  { key: 'campus', toMap: 'campus_east', tileX: 2, tileY: 15, label: '校园广场', description: '图书馆 / 教室 / 复盘大厅', costCoins: 5 },
-  { key: 'port', toMap: 'port_west', tileX: 33, tileY: 12, label: '码头', description: '商船 / 班级广场', costCoins: 5 },
 ] as const;

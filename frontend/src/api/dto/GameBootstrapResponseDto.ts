@@ -1,12 +1,9 @@
-import type { CropTileDto } from './CropTileDto';
 import type { CurriculumBootstrapResult } from './CurriculumBootstrapResult';
-import type { InventoryItemDto } from './InventoryItemDto';
 import type { LearnerProfileDto } from './LearnerProfileDto';
 import type { LearnerSkillDto } from './LearnerSkillDto';
 import type { LearningPathDto } from './Path';
 import type { MasterySnapshotDto } from './MasterySnapshotDto';
 import type { NpcDialogStateDto } from './NpcDialogStateDto';
-import type { PlayerCurrencyDto } from './PlayerCurrencyDto';
 import type { PlayerStateDto } from './PlayerStateDto';
 import type { QuestDto } from './Quest';
 import type { SaveSlotDto } from './SaveSlotDto';
@@ -30,7 +27,6 @@ import type { WorldSessionDto } from './WorldSessionDto';
 export interface GameBootstrapResponseDto {
   world: WorldSessionDto;
   player: PlayerStateDto;
-  crops: CropTileDto[];
   quests: QuestDto[];
   mastery: MasterySnapshotDto[];
   profile: LearnerProfileDto | null;
@@ -38,10 +34,8 @@ export interface GameBootstrapResponseDto {
   // 这里保留旧 union，新增 pathNodes 字段承接节点数组，由 world store 解析时择一使用。
   path: LearningPathDto | null;
   pathNodes?: unknown[];
-  inventory: InventoryItemDto[];
   skills: LearnerSkillDto[];
   skillsCatalog?: SkillNodeDto[];
-  currency: PlayerCurrencyDto;
   calendar: WorldCalendarDto;
   /** R-13：后端实际字段名是 pendingEvents，events 是旧前端别名 */
   events?: WorldEventDto[];

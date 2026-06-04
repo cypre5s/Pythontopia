@@ -51,7 +51,7 @@ const code = defineModel<string>('code', { required: true });
 .pdf-question-card { display: grid; gap: 12px; }
 .card-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .card-icon { font-size: 20px; }
-.card-head h3 { margin: 0; font-size: 16px; color: #ffd166; }
+.card-head h3 { margin: 0; font-size: 16px; color: var(--pyt-color-gold-bright); }
 .pdf-link { margin-left: auto; font-size: 12px; color: #93c5fd; text-decoration: none; padding: 2px 10px; background: rgba(74,144,226,0.2); border: 1px solid #4a90e2; border-radius: 3px; }
 .pdf-link:hover { background: rgba(74,144,226,0.35); }
 .page-ref { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px; color: #93c5fd; }

@@ -4,6 +4,7 @@ import com.pythontopia.core.common.ApiError
 import com.pythontopia.core.common.NetworkError
 import com.pythontopia.core.common.UnknownError
 import com.pythontopia.core.network.AuthTokenHolder
+import com.pythontopia.core.network.SessionState
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -40,6 +41,7 @@ class AuthRepository @Inject constructor(
     private val tokenStorage: TokenStorage,
     private val tokenHolder: AuthTokenHolder,
     private val errorParser: AuthErrorParser = AuthErrorParser.Default,
+    private val sessionState: SessionState = SessionState(),
 ) {
 
     suspend fun login(request: LoginRequest): AuthOutcome =
@@ -50,8 +52,16 @@ class AuthRepository @Inject constructor(
 
     suspend fun register(request: RegisterRequest): AuthOutcome =
         runCatchingApi {
-            val response = api.register(request)
-            persist(response)
+            val user = api.register(request)
+            AuthOutcome.Success(
+                session = SessionSnapshot(
+                    userId = user.id,
+                    username = user.username,
+                    role = user.role,
+                    displayName = user.displayName,
+                    expiresAtEpochMs = 0L,
+                ),
+            )
         }
 
     /**
@@ -78,8 +88,6 @@ class AuthRepository @Inject constructor(
      * 服务端调用失败也仍然清本地——客户端的"我已退出"状态必须立即生效。
      */
     suspend fun logout() {
-        val refreshToken = tokenStorage.readRefreshToken()
-        runCatching { api.logout(LogoutRequest(refreshToken)) }
         clearSession()
     }
 
@@ -91,9 +99,26 @@ class AuthRepository @Inject constructor(
         return snapshot
     }
 
+    /**
+     * 启动自动登录：盘上 token 存在**且未过期**才恢复到内存桥并返回会话；
+     * 已过期则清空（避免拿着死 token 反复 401）。磁盘 + Keystore I/O，调用方须放 IO 线程。
+     */
+    fun restoreValidSession(): SessionSnapshot? {
+        val snapshot = tokenStorage.readSnapshot() ?: return null
+        if (tokenStorage.isExpiringWithin(0L)) {
+            clearSession()
+            return null
+        }
+        val accessToken = tokenStorage.readAccessToken() ?: return null
+        tokenHolder.setToken(accessToken)
+        sessionState.isGuest = false
+        return snapshot
+    }
+
     fun clearSession() {
         tokenHolder.setToken(null)
         tokenStorage.clear()
+        sessionState.isGuest = false
     }
 
     private fun persist(response: LoginResponse): AuthOutcome.Success {
@@ -108,6 +133,7 @@ class AuthRepository @Inject constructor(
             expiresAtEpochMs = expiresAtEpochMs,
         )
         tokenHolder.setToken(response.token)
+        sessionState.isGuest = false
         return AuthOutcome.Success(
             session = SessionSnapshot(
                 userId = response.user.id,
@@ -133,8 +159,6 @@ class AuthRepository @Inject constructor(
             AuthOutcome.Failure(NetworkError(message = ioEx.message ?: "网络连接失败，请检查网络后重试"))
         } catch (serEx: SerializationException) {
             AuthOutcome.Failure(UnknownError(message = "服务端响应格式异常：${serEx.message ?: "未知"}"))
-        } catch (t: Throwable) {
-            AuthOutcome.Failure(UnknownError(message = t.message ?: "未知错误"))
         }
 
     private companion object {
@@ -170,13 +194,11 @@ interface FeatureAuthApi {
     suspend fun login(@Body req: LoginRequest): LoginResponse
 
     @POST("api/auth/register")
-    suspend fun register(@Body req: RegisterRequest): LoginResponse
+    suspend fun register(@Body req: RegisterRequest): AuthUserDto
 
     @POST("api/auth/refresh")
     suspend fun refresh(@Body req: RefreshRequest): LoginResponse
 
-    @POST("api/auth/logout")
-    suspend fun logout(@Body req: LogoutRequest)
 }
 
 /**

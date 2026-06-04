@@ -75,6 +75,54 @@ class CoursePackServiceIntegrationTest {
     assertThat(danglingPrerequisites).isZero();
   }
 
+  @Test
+  void coursePackKcPageRefsLinkPagesSoRagGetsKcCodes() {
+    // R-14 S6-B：RAG loader 用 `p.id = ANY(kc.page_refs)` 把 KC 贴到课件页（见
+    // services/pythontopia-rag/.../data/loader.py）。若 page_refs 缺失/悬挂（曾出现的
+    // chunks=0 根因之一），该 join 为空 → 索引页 kc_codes 全空 → 按 KC 检索全 NO_EVIDENCE。
+    // 这里在 Testcontainers 真库上断言该数据链路非空且无悬挂，作为 RAG 检索的永久回归守门。
+    Integer kcWithPageRefs =
+        jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM course_kc WHERE pack_id = 43 AND cardinality(page_refs) > 0",
+            Integer.class);
+    assertThat(kcWithPageRefs).isNotNull().isGreaterThanOrEqualTo(60);
+
+    Integer pagesLinkedToKc =
+        jdbcTemplate.queryForObject(
+            """
+            SELECT COUNT(DISTINCT p.id)
+            FROM course_page p
+            JOIN course_kc kc ON kc.pack_id = p.pack_id AND p.id = ANY(kc.page_refs)
+            WHERE p.pack_id = 43
+            """,
+            Integer.class);
+    assertThat(pagesLinkedToKc).isNotNull().isGreaterThan(50);
+
+    Integer danglingPageRefs =
+        jdbcTemplate.queryForObject(
+            """
+            SELECT COUNT(*)
+            FROM course_kc kc
+            CROSS JOIN LATERAL unnest(kc.page_refs) ref(page_id)
+            LEFT JOIN course_page p ON p.id = ref.page_id AND p.pack_id = kc.pack_id
+            WHERE kc.pack_id = 43 AND p.id IS NULL
+            """,
+            Integer.class);
+    assertThat(danglingPageRefs).isZero();
+
+    // 具体可观测样例：KC-012「基础函数」(input/print) 必须能 join 到课件页。
+    Integer kc012Pages =
+        jdbcTemplate.queryForObject(
+            """
+            SELECT COUNT(DISTINCT p.id)
+            FROM course_page p
+            JOIN course_kc kc ON kc.pack_id = p.pack_id AND p.id = ANY(kc.page_refs)
+            WHERE p.pack_id = 43 AND kc.kc_code = 'PY43-KC-012'
+            """,
+            Integer.class);
+    assertThat(kc012Pages).isNotNull().isGreaterThanOrEqualTo(1);
+  }
+
   private void assertCount(String tableName, int expected) {
     Integer actual =
         jdbcTemplate.queryForObject(

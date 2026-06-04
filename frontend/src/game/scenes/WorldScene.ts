@@ -17,15 +17,18 @@
 // 只通过 SceneLike / PlayerSpriteHandle 等结构化接口与本文件交互。
 import Phaser from 'phaser';
 import { router } from '@/app/router';
+import { perfMonitor } from '@/services/perfMonitor';
 import { playBgm, playSfx, type BgmKey } from '@/composables/useAudio';
 import type { Direction } from '@api/dto/Direction';
 import { createDirectionController, type DirectionController } from '@game/adapters/input';
 import { openNpcDialog } from '@game/adapters/dialog';
 import { createPlayerSprite } from '@game/adapters/sprite';
-import { drawNpcSprite, type NpcSpawn } from '@game/adapters/tilemap';
+import type { CharacterAction } from '@game/adapters/lpcAnimations';
+import { drawNpcSprite, type NpcSpawn, type NpcSpriteController } from '@game/adapters/tilemap';
 import type { PlayerSpriteHandle, SceneLike } from '@game/adapters/sceneTypes';
 import { applyWeather, normalizeWeatherKind, type WeatherHandle, type WeatherKind } from '@game/adapters/weather';
 import { applyTimeOfDay, deriveTimeOfDay } from '@game/adapters/daynight';
+import { applyMood, type MoodHandle, type MoodKind } from '@game/adapters/mood';
 import {
   InteractableSystem,
   type HintRenderer,
@@ -46,6 +49,7 @@ import {
 } from '@game/core/npcSchedule';
 import { useWorldStore } from '@stores/world';
 import { useMainQuestStore } from '@stores/mainQuest';
+import { useMoodStore } from '@stores/mood';
 import { findMainQuestById } from '@/data/mainQuests';
 
 const TILE_SIZE = 16;
@@ -56,8 +60,26 @@ const RENDER_TILE_SIZE = TILE_SIZE * RENDER_SCALE;
 // 这种非整数缩放导致的子像素接缝；与玩家「像素块太大」反馈相比，48px 既保留
 // 清晰度又比早期 64px 更紧凑，可视范围适中。
 const CAMERA_ZOOM = 1.5;
+// 全屏适配 cover 缩放上限：地图小于视口时放大铺满，但不超过此值，避免像素插值毛刺
+// （cameraTuning §5.1：>3.0 单屏 < 10 tile 且毛刺暴露）。
+const CAMERA_ZOOM_MAX = 3;
 const CAMERA_LERP = 0.15;
 const MOVE_COOLDOWN_MS = 130;
+// 奔跑时缩短逐格移动冷却（手感更快），与 run 动画帧率配合。
+const RUN_COOLDOWN_FACTOR = 0.62;
+
+// 每张地图按主题映射一个「工具动作」（按 C 触发）：
+//   farm 浇水 / mine 挖矿 / campus 施法（钻研）/ port 钓鱼 / hub 庆祝挥手。
+const MAP_TOOL_ACTION: Readonly<Record<string, CharacterAction>> = {
+  town_hub: 'celebrate',
+  farm_north: 'water',
+  mine_south: 'mine',
+  campus_east: 'cast',
+  port_west: 'fish',
+};
+function toolActionForMap(mapKey: string): CharacterAction {
+  return MAP_TOOL_ACTION[mapKey] ?? 'celebrate';
+}
 // 转身→起步的短延迟：转身只占这一小段（而非整段移动冷却），让「按住转个方向就走」
 // 跟手，同时仍保留「点一下=转身、按住=走起来」的星露谷手感。
 const TURN_DELAY_MS = 70;
@@ -155,6 +177,7 @@ interface WorldSceneState {
   lastMoveAt: number;
   actionWasDown: boolean;
   jumpWasDown: boolean;
+  toolWasDown: boolean;
   exits: ExitTile[];
   npcs: NpcSpawn[];
   width: number;
@@ -165,10 +188,15 @@ interface WorldSceneState {
   switching: boolean;
   weather: WeatherHandle | null;
   weatherKind: WeatherKind;
+  // ②情绪化小镇：氛围叠加层句柄，与 weather 同生命周期（create 应用、init/shutdown 销毁）。
+  mood: MoodHandle | null;
   // W2 集成：framework 实例在 create 中构造、shutdown 中 clear；testing 留 null
   // 默认值，避免 jsdom 单测里 update() 误触发空 framework 时抛 NPE。
   interactable: InteractableSystem | null;
   npcFramework: NpcFramework | null;
+  // R-12 动作模组：每个 NPC 的动画控制器，按 npcKey 索引；update() 每帧用
+  // NpcFramework 实例位置同步贴图 + 行走/待机/工作手势动画。
+  npcSprites: Map<string, NpcSpriteController>;
   hintRendererHandle: PhaserHintRendererHandle | null;
   lifecycleDetach: (() => void) | null;
   // npcFramework.update 需要 deltaMs。Phaser scene 的 this.time.now 是单调递增
@@ -186,6 +214,7 @@ const state: WorldSceneState = {
   lastMoveAt: 0,
   actionWasDown: false,
   jumpWasDown: false,
+  toolWasDown: false,
   exits: [],
   npcs: [],
   width: 0,
@@ -196,8 +225,10 @@ const state: WorldSceneState = {
   switching: false,
   weather: null,
   weatherKind: 'sunny' as WeatherKind,
+  mood: null,
   interactable: null,
   npcFramework: null,
+  npcSprites: new Map(),
   hintRendererHandle: null,
   lifecycleDetach: null,
   prevUpdateTimeMs: 0,
@@ -217,6 +248,21 @@ export const WorldScene = {
       state.weather.destroy();
       state.weather = null;
     }
+    // ②情绪化小镇：上一次 restart 残留的 mood 句柄同样在 init 阶段销毁，保持与 weather 一致。
+    if (state.mood) {
+      state.mood.destroy();
+      state.mood = null;
+    }
+    // 地图加载/切换耗时埋点：init → 首个 update（create 完成后第一帧）≈ 一次完整地图构建。
+    // 可选链兜底 stub 场景（单测只传 cache/load，无 events），不影响既有断言。
+    const perfLabel = `map_load:${state.mapKey}`;
+    perfMonitor.start(perfLabel);
+    const sceneEvents = (this as unknown as {
+      events?: { once?: (event: string, cb: () => void) => void };
+    }).events;
+    sceneEvents?.once?.('update', () => {
+      perfMonitor.end(perfLabel);
+    });
   },
   preload(this: Phaser.Scene): void {
     if (!this.cache.json.exists('map_index')) {
@@ -301,8 +347,11 @@ export const WorldScene = {
     lowObstacles.forEach((obstacle) => {
       paintLowObstacleSprite(phaserScene, obstacle);
     });
+    state.npcSprites.clear();
+    const npcWorkAction = toolActionForMap(state.mapKey);
     npcs.forEach((npc) => {
-      drawNpcSprite(this, npc, RENDER_TILE_SIZE);
+      const controller = drawNpcSprite(this, npc, RENDER_TILE_SIZE, { workAction: npcWorkAction });
+      state.npcSprites.set(npc.npcKey, controller);
       paintNpcHotspot(phaserScene, npc);
     });
 
@@ -328,6 +377,8 @@ export const WorldScene = {
           player.tileX * RENDER_TILE_SIZE + RENDER_TILE_SIZE / 2,
           player.tileY * RENDER_TILE_SIZE + RENDER_TILE_SIZE / 2,
         );
+        // 对话开始：NPC 朝向玩家并做一次点头/施法手势。
+        state.npcSprites.get(npc.npcKey)?.playGesture('talk');
       });
       state.interactable?.register(trigger);
     });
@@ -358,7 +409,28 @@ export const WorldScene = {
       this.physics.world.setBounds(0, 0, worldWidth, worldHeight);
     }
     this.cameras.main.startFollow(player, true, CAMERA_LERP, CAMERA_LERP);
-    this.cameras.main.setZoom?.(CAMERA_ZOOM);
+    // 全屏适配：固定 zoom 在「地图比视口小」（宽屏 / 小图）时会露出背景色。改用 cover
+    // 缩放——取「基准 zoom」与「恰好覆盖视口所需 zoom」的较大值（封顶 CAMERA_ZOOM_MAX），
+    // 并随画布 resize 重算、scene shutdown 解绑，保证世界始终铺满视口。
+    const applyCoverZoom = (): void => {
+      const viewW = phaserScene.scale?.width ?? 0;
+      const viewH = phaserScene.scale?.height ?? 0;
+      const zoom =
+        worldWidth > 0 && worldHeight > 0 && viewW > 0 && viewH > 0
+          ? Math.min(
+              CAMERA_ZOOM_MAX,
+              Math.max(CAMERA_ZOOM, viewW / worldWidth, viewH / worldHeight),
+            )
+          : CAMERA_ZOOM;
+      this.cameras.main.setZoom?.(zoom);
+    };
+    applyCoverZoom();
+    if (typeof phaserScene.scale?.on === 'function') {
+      phaserScene.scale.on('resize', applyCoverZoom);
+      phaserScene.events?.once?.('shutdown', () => {
+        phaserScene.scale?.off?.('resize', applyCoverZoom);
+      });
+    }
     phaserScene.cameras.main.fadeIn(FADE_DURATION_MS, 0, 0, 0);
 
     const bgm = pickBgm(state.entry?.bgm);
@@ -374,6 +446,29 @@ export const WorldScene = {
       inGameMinutes: sessionForTime ? sessionForTime.inGameMinutes : null,
     });
     applyTimeOfDay(this, timeOfDay);
+
+    // ②情绪化小镇：在 weather/time 之后叠加「氛围层」（背景级、不抢 tint）。初始从 mood store
+    // 读当前 mood；之后 mood store refresh / 开关变更派发的 window CustomEvent 实时重应用
+    // （先销毁旧句柄再重建），实现「画像 emotion_persistence 改了世界」的可见联动。
+    const applyMoodKind = (kind: MoodKind): void => {
+      if (state.mood) {
+        state.mood.destroy();
+        state.mood = null;
+      }
+      state.mood = applyMood(this, kind, worldWidth, worldHeight);
+    };
+    try {
+      applyMoodKind(useMoodStore().mood);
+    } catch {
+      // mood store 不可用（极端测试场景）时跳过初始氛围，不阻断场景构建。
+    }
+    const onMoodChanged = (event: Event): void => {
+      const detail = (event as CustomEvent<{ mood?: MoodKind }>).detail;
+      if (detail?.mood) {
+        applyMoodKind(detail.mood);
+      }
+    };
+    window.addEventListener('pythontopia:mood-changed', onMoodChanged);
 
     paintQuestMarkers(phaserScene, state.mapKey, state.npcs, RENDER_TILE_SIZE);
 
@@ -392,6 +487,8 @@ export const WorldScene = {
         state.interactable = null;
         state.npcFramework?.clear();
         state.npcFramework = null;
+        state.npcSprites.forEach((controller) => controller.destroy());
+        state.npcSprites.clear();
         state.hintRendererHandle?.destroy();
         state.hintRendererHandle = null;
         state.prevUpdateTimeMs = 0;
@@ -400,9 +497,15 @@ export const WorldScene = {
 
     this.events?.on('shutdown', () => {
       window.removeEventListener('beforeunload', onBeforeUnload);
+      window.removeEventListener('pythontopia:mood-changed', onMoodChanged);
       if (state.weather) {
         state.weather.destroy();
         state.weather = null;
+      }
+      // ②情绪化小镇：与 weather 同步销毁氛围层句柄。
+      if (state.mood) {
+        state.mood.destroy();
+        state.mood = null;
       }
       state.player = null;
       state.controller = null;
@@ -413,6 +516,7 @@ export const WorldScene = {
       state.lastMoveAt = 0;
       state.actionWasDown = false;
       state.jumpWasDown = false;
+      state.toolWasDown = false;
       // attachLifecycle 自己监听 shutdown 已经触发 onShutdown，这里仅 detach
       // 多余引用，避免 restart 时挂多份相同监听。
       if (state.lifecycleDetach) {
@@ -470,10 +574,26 @@ export const WorldScene = {
       return;
     }
 
-    const effectiveCooldown = state.weatherKind === 'rainy' || state.weatherKind === 'stormy'
+    // R-12 动作模组：C 键使用工具——按地图主题播放浇水/挖矿/钓鱼/施法/庆祝动画（定身播放）。
+    const toolIsDown = controller.isToolPressed();
+    const toolPressedEdge = toolIsDown && !state.toolWasDown;
+    state.toolWasDown = toolIsDown;
+    if (toolPressedEdge && !player.isBusy()) {
+      player.playAction(toolActionForMap(state.mapKey));
+      void useWorldStore().updatePlayerTile({
+        tileX: player.tileX,
+        tileY: player.tileY,
+        direction: toCardinal(player.direction, 'DOWN'),
+      });
+    }
+
+    const running = controller.isRunPressed();
+    const baseCooldown = state.weatherKind === 'rainy' || state.weatherKind === 'stormy'
       ? MOVE_COOLDOWN_MS * RAIN_SLOWDOWN
       : MOVE_COOLDOWN_MS;
-    if (rawDirection && this.time.now - state.lastMoveAt > effectiveCooldown) {
+    // 奔跑缩短逐格冷却；动作播放（isBusy）期间暂停移动，让一次性动画播完。
+    const effectiveCooldown = running ? baseCooldown * RUN_COOLDOWN_FACTOR : baseCooldown;
+    if (rawDirection && !player.isBusy() && this.time.now - state.lastMoveAt > effectiveCooldown) {
       state.lastMoveAt = this.time.now;
       const delta = directionDelta(rawDirection);
       const cardinal = toCardinal(rawDirection, player.direction);
@@ -499,7 +619,7 @@ export const WorldScene = {
       const nextX = clamp(player.tileX + delta.dx, 0, state.width - 1);
       const nextY = clamp(player.tileY + delta.dy, 0, state.height - 1);
       if (!isBlocked(nextX, nextY)) {
-        player.moveToTile(nextX, nextY, cardinal);
+        player.moveToTile(nextX, nextY, cardinal, { running });
         void useWorldStore().updatePlayerTile({
           tileX: nextX,
           tileY: nextY,
@@ -529,6 +649,12 @@ export const WorldScene = {
       // 避免 NPC 一次跳超过半屏；clamp 下限 0 防 time.now 偶发抖动出现负数。
       const safeDelta = Math.max(0, Math.min(200, deltaMs));
       state.npcFramework?.update(safeDelta);
+      // R-12 动作模组：用逻辑层实例位置驱动 NPC 贴图（巡逻走动 / 站桩待机 / 工作手势）。
+      if (state.npcFramework) {
+        for (const instance of state.npcFramework.getAll()) {
+          state.npcSprites.get(instance.id)?.sync(instance, safeDelta);
+        }
+      }
     }
     state.prevUpdateTimeMs = nowMs;
 
@@ -726,22 +852,49 @@ function collectProperties(props: unknown): Record<string, unknown> {
   return Object.fromEntries(entries.map((p) => [p.name, p.value]));
 }
 
+// R-12 美化：用 LPC 茅草屋整屋 sprite 替换方块拼接建筑。屋子底沿对齐建筑区位底部、
+// 屋顶向上延伸（星露谷式），整屋遮住底下旧的瓦片建筑；点击进入对应房间。
+const COTTAGE_VARIANTS: ReadonlyArray<string> = ['cottage_tan', 'cottage_cream', 'cottage_stone'];
+const COTTAGE_FALLBACK_W = 200;
+
+function cottageVariantFor(route: string): string {
+  let hash = 0;
+  for (let i = 0; i < route.length; i += 1) hash = (hash + route.charCodeAt(i)) % COTTAGE_VARIANTS.length;
+  return COTTAGE_VARIANTS[hash] ?? COTTAGE_VARIANTS[0] ?? 'cottage_tan';
+}
+
 function paintBuildingZone(phaserScene: Phaser.Scene, building: BuildingZone): void {
   const px = (building.tileX + building.width / 2) * RENDER_TILE_SIZE;
-  const py = (building.tileY + building.height / 2) * RENDER_TILE_SIZE;
-  const width = building.width * RENDER_TILE_SIZE;
-  const height = building.height * RENDER_TILE_SIZE;
-  const rect = phaserScene.add
-    .rectangle(px, py, width, height, 0x000000, 0)
-    .setStrokeStyle(2, 0x2f5a36, 0.4)
-    .setInteractive({ useHandCursor: true })
-    .setDepth(7);
-  rect.on('pointerdown', () => {
+  const footprintW = building.width * RENDER_TILE_SIZE;
+  const bottomY = (building.tileY + building.height) * RENDER_TILE_SIZE;
+  // 屋子略宽于地基以盖住旧瓦片边缘；底沿坐在地基底部，屋顶往上探出。
+  const targetW = footprintW * 1.2;
+
+  const textures = (phaserScene as unknown as { textures?: { exists?: (k: string) => boolean } }).textures;
+  const variant = cottageVariantFor(building.route);
+  const useCottage = textures?.exists?.(variant) === true;
+
+  let interactive: Phaser.GameObjects.GameObject;
+  if (useCottage) {
+    const cottage = phaserScene.add.image(px, bottomY, variant).setOrigin(0.5, 1).setDepth(6);
+    // 按整屋实际像素宽缩放（不同变体宽度不一），底沿对齐地基底部。
+    const nativeW = cottage.width || COTTAGE_FALLBACK_W;
+    cottage.setScale(targetW / nativeW).setInteractive({ useHandCursor: true });
+    interactive = cottage;
+  } else {
+    // 兜底（纹理缺失，如测试桩）：保留透明可点击矩形。
+    const height = building.height * RENDER_TILE_SIZE;
+    interactive = phaserScene.add
+      .rectangle(px, building.tileY * RENDER_TILE_SIZE + height / 2, footprintW, height, 0x000000, 0)
+      .setInteractive({ useHandCursor: true })
+      .setDepth(6);
+  }
+  interactive.on('pointerdown', () => {
     void router.push(building.route);
   });
-  // R-12 美化：建筑标签只在鼠标 hover 时显示，平时不挡视野。
+
   const label = phaserScene.add
-    .text(px, building.tileY * RENDER_TILE_SIZE - 4, building.label, {
+    .text(px, bottomY - building.height * RENDER_TILE_SIZE - 8, building.label, {
       fontFamily: 'monospace',
       fontSize: '12px',
       color: '#fff8e1',
@@ -751,35 +904,21 @@ function paintBuildingZone(phaserScene: Phaser.Scene, building: BuildingZone): v
     .setOrigin(0.5, 1)
     .setDepth(8)
     .setVisible(false);
-  rect.on('pointerover', () => label.setVisible(true));
-  rect.on('pointerout', () => label.setVisible(false));
+  interactive.on('pointerover', () => label.setVisible(true));
+  interactive.on('pointerout', () => label.setVisible(false));
 }
 
 function paintNpcHotspot(phaserScene: Phaser.Scene, npc: NpcSpawn): void {
+  // 名牌已由 NpcSpriteController 常驻显示在头顶上方；此处只保留覆盖整个 NPC 立绘
+  // 高度的可点击热点（点一下直接开对话），不再重复画名牌。热点比单格高，覆盖
+  // ULPC 立绘（约 2.5 tile 高）。
   const cx = npc.tileX * RENDER_TILE_SIZE + RENDER_TILE_SIZE / 2;
   const cy = npc.tileY * RENDER_TILE_SIZE + RENDER_TILE_SIZE / 2;
-  // R-12 美化：NPC 名称标签默认隐藏；鼠标 hover 或玩家靠近时再亮起，
-  // 避免「NPC 名字常驻显示遮挡地图」的反馈。靠近触发由 InteractableSystem
-  // 的 hint 气泡承担（屏幕底部「按 E 与 XX 对话」），此处只补一层 hover 反馈。
   const marker = phaserScene.add
-    .rectangle(cx, cy, RENDER_TILE_SIZE, RENDER_TILE_SIZE, 0xffffff, 0)
+    .rectangle(cx, cy - RENDER_TILE_SIZE, RENDER_TILE_SIZE * 1.2, RENDER_TILE_SIZE * 3, 0xffffff, 0)
     .setInteractive({ useHandCursor: true })
     .setDepth(12);
   marker.on('pointerdown', () => openNpcDialog(npc.npcKey));
-  const labelText = npc.label || npc.npcKey;
-  const label = phaserScene.add
-    .text(cx, cy - RENDER_TILE_SIZE * 0.9, labelText, {
-      fontFamily: 'monospace',
-      fontSize: '11px',
-      color: '#fff7e6',
-      backgroundColor: '#1c1810dd',
-      padding: { x: 5, y: 2 },
-    })
-    .setOrigin(0.5, 1)
-    .setDepth(13)
-    .setVisible(false);
-  marker.on('pointerover', () => label.setVisible(true));
-  marker.on('pointerout', () => label.setVisible(false));
 }
 
 function paintLowObstacleSprite(phaserScene: Phaser.Scene, obstacle: LowObstacleZone): void {

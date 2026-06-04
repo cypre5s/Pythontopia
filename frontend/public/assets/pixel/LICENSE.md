@@ -50,7 +50,12 @@
 | `sprites/lpc-sara` | CC-BY-SA-3.0 | Sharm / LPC Project | [link](https://opengameart.org/content/lpc-sara) | LPC Sara 全身像，BootScene player_sara 帧 64x64 |
 | `sprites/lpc-medieval-fantasy` | CC-BY-SA-3.0 | bluecarrot16 / TheraHedwig / Reemax / Ivan Voirol 等 | [link](https://opengameart.org/content/lpc-medieval-fantasy-character-sprites) | LPC 中世纪风 NPC，校园老师/同学候选 |
 | `sprites/peppercarrot-24x32` | CC-BY-4.0 | Svetlana Kushnariova ("Cabbit") / David Revoy | [link](https://www.peppercarrot.com) | 24x32 矮人角色，可作"小作物"NPC 候选 |
-| `portraits` | CC0-1.0 / CC-BY-4.0 / OGA-BY-3.0 | isaiah658 / Svetlana Kushnariova ("Cabbit") / David Revoy / Johannes Sjolund ("wulax") | [link](portraits/README.md) | 🛈 manifest-only（已手工挑选，脚本不同步）；29 NPC 对话立绘；来自 isaiah658 CC0、Pepper&Carrot 24x32 CC-BY 4.0 与 LPC Medieval Fantasy OGA-BY 3.0 composite |
+| `sprites/npc-composites` | CC-BY-SA-3.0 | Johannes Sjölund (wulax) / bluecarrot16 / LPC base contributors | [link](https://opengameart.org/content/lpc-medieval-fantasy-character-sprites) | 🛈 manifest-only（已手工挑选，脚本不同步）；16 个 Agent / 主管 NPC walkcycle 合成帧（npc_*.png），智能体事务所动画 + 世界 NPC 复用 |
+| `sprites/ulpc` | CC-BY-SA-3.0 | LPC contributors (bluecarrot16, ElizaWy, JaidynReiman, wulax, Redshrike, …，见 CREDITS-ulpc-used.txt) | [link](https://github.com/LiberatedPixelCup/Universal-LPC-Spritesheet-Character-Generator) | 🛈 manifest-only（已手工挑选，脚本不同步）；官方 ULPC 全动作角色表（player_sara2 + ulpc_*，13×42 expanded，run/jump/idle/sit/emote + 6 基础），scripts/build-ulpc-characters.py 合成 |
+| `sprites/lpc-tools` | CC-BY-SA-3.0 | bluecarrot16, Pierre Vigier, Johannes Sjölund (wulax), Tuomo Untinen, Inboxninja | [link](https://opengameart.org/content/lpc-hand-tools) | 🛈 manifest-only（已手工挑选，脚本不同步）；浇水壶/锄头手持工具叠加层（watering-can/hoe + bg，universal），主角/NPC 浇水=thrust 动作叠加；含 CREDITS-hand-tools.txt |
+| `sprites/cottages` | CC-BY-SA-3.0 | bluecarrot16 / Daniel Eddeland (daneeklu) / Lanea Zimmerman (Sharm) | [link](https://opengameart.org/content/lpc-thatched-roof-cottage) | 🛈 manifest-only（已手工挑选，脚本不同步）；茅草屋整屋 sprite（cottage_tan/cream/stone），scripts/build-cottages.py 从 kit 合成，世界场景建筑 |
+| `sprites/weapons` | CC-BY-SA-3.0 | LPC contributors（weapon_blunt_waraxe，见 ULPC CREDITS） | [link](https://github.com/LiberatedPixelCup/Universal-LPC-Spritesheet-Character-Generator) | 🛈 manifest-only（已手工挑选，脚本不同步）；斧头超尺寸挥砍叠加（weapon_axe + bg，192px oversize attack_slash），主角砍树/挖矿动作；取自 ULPC weapon_blunt_waraxe |
+| `portraits` | CC0-1.0 / CC-BY-4.0 | isaiah658 / Svetlana Kushnariova ("Cabbit") / David Revoy | [link](portraits/README.md) | 🛈 manifest-only（已手工挑选，脚本不同步）；20 NPC 对话立绘；来自 isaiah658 CC0 与 Pepper&Carrot 24x32 CC-BY 4.0 |
 | `vendor/opengameart/tileset_farm.png` | CC-BY-3.0 | Marionline | [link](https://opengameart.org/content/farm-tileset) | 农场主 tileset，BootScene tileset_farm 引用 |
 | `vendor/opengameart/cereals.png` | CC0-1.0 | Scratchio | [link](https://opengameart.org/content/cereals) | 谷物像素图，BootScene cereals 引用（注意目标小写） |
 | `vendor/opengameart/vegetables.png` | CC0-1.0 | Scratchio | [link](https://opengameart.org/content/vegetables) | 蔬菜像素图，BootScene vegetables 引用（注意目标小写） |
@@ -86,8 +91,6 @@
 | `sfx/jingle-level-up.ogg` | CC0-1.0 | Kenney Vleugels | [link](https://kenney.nl/assets/music-jingles) | 等级提升 jingle（NES 风），BootScene sfx_jingle_levelup |
 | `sfx/success.ogg` | CC0-1.0 | Kenney Vleugels | [link](https://kenney.nl/assets/digital-audio) | 答题/资源生成成功提示音，BootScene sfx_success |
 | `sfx/error.ogg` | CC0-1.0 | Kenney Vleugels | [link](https://kenney.nl/assets/digital-audio) | 答题/资源生成失败提示音，BootScene sfx_error |
-| `sfx/jump` | CC0-1.0 | Kenney Vleugels | [link](https://kenney.nl/assets/impact-sounds) | 低障碍跳跃起跳/落地 2 个音效；通过本机代理 7892 下载，协议原文随目录 `License.txt` 分发 |
-| `props/fantastic-fence` | CC0-1.0 | InThePixel / Agnaldo | [link](https://opengameart.org/content/fantastic-fence-16x16) | 矮栅栏 / 木桩低障碍 sprites；通过本机代理 7892 下载，源页 CC0 已核对 |
 | `icons_kc` | CC-BY-3.0 | Lorc, Delapouite, Skoll, sbed, Carl Olsen | [link](https://game-icons.net) | 60+ KC 主题图标，按 Pythontopia 知识点分组 |
 | `effects/codemanu-pixel-fx` | CC0-1.0 | CodeManu | [link](https://opengameart.org/content/pixel-fx-pack) | 通用粒子特效 10 帧 |
 | `effects/jellyfizh-confetti` | CC0-1.0 | Jellyfizh | [link](https://opengameart.org/content/confetti) | 完成奖励彩纸 |
@@ -95,19 +98,6 @@
 | `effects/john2k-heal` | CC-BY-4.0 | john2k | [link](https://opengameart.org/content/heal-effect) | 治疗/复习成功特效 |
 | `effects/weather` | CC0-1.0 | Yevhen Babiichuk (DustDFG) / donte / alxl / Pythontopia project | [link](assets/inbox/weather_fx/LICENSE.md) | 🛈 manifest-only（已手工挑选，脚本不同步）；天气粒子运行时精选：云、雨滴、雪花来自已审计 CC0；confetti 为项目运行时粒子占位 |
 | `ui/kenney-adventure` | CC0-1.0 | Kenney Vleugels | [link](https://kenney.nl/assets/ui-pack-adventure) | 🛈 manifest-only（已手工挑选，脚本不同步）；冒险风 UI 9-slice 元素，public 已挑选 Default/Double 子集，本脚本不再同步全量 |
-| `ui/kenney-rpg` | CC0-1.0 | Kenney Vleugels | [link](https://kenney.nl/assets/ui-pack-rpg-expansion) | RPG 风面板 / 按钮 / 进度条 / 箭头 / 光标 / 勾叉，HUD 面板纹理备选 |
-| `icons/dock/star.png`, `gear.png`, `home.png`, `exit.png`, `trophy.png`, `exclamation.png`, `information.png`, `target.png`, `save.png` | CC0-1.0 | Kenney Vleugels | [link](https://kenney.nl/assets/game-icons) | Dock 各槽 CC0 备用图标 |
-| `icons/dock/checkered-flag.png` | CC-BY-3.0 | Lorc | [link](https://game-icons.net) | Dock 任务槽（替换 ✦） |
-| `icons/dock/speech-bubble.svg` | CC-BY-3.0 | Lorc | [link](https://game-icons.net) | Dock 对话槽（替换 ✉） |
-| `icons/dock/swap-bag.svg` | CC-BY-3.0 | Lorc | [link](https://game-icons.net) | Dock 背包槽（替换 ⛃） |
-| `icons/dock/treasure-map.svg` | CC-BY-3.0 | Lorc | [link](https://game-icons.net) | Dock 地图槽（替换 ◰） |
-| `icons/dock/star-formation.png` | CC-BY-3.0 | Delapouite | [link](https://game-icons.net) | Dock 技能槽（替换 ★） |
-| `icons/dock/book-cover.png` | CC-BY-3.0 | Lorc | [link](https://game-icons.net) | Dock 课程槽（替换 📖） |
-| `icons/dock/crossed-swords.png` | CC-BY-3.0 | Lorc | [link](https://game-icons.net) | Dock 闯关槽（替换 ⚔） |
-| `icons/dock/teleport.svg` | CC-BY-3.0 | Lorc | [link](https://game-icons.net) | Dock 传送槽（替换 ➤） |
-| `icons/dock/night-sleep.svg` | CC-BY-3.0 | Delapouite | [link](https://game-icons.net) | Dock 休息槽（替换 ☾） |
-| `icons/dock/gears.png` | CC-BY-3.0 | Lorc | [link](https://game-icons.net) | Dock 设置槽（替换 ⚙） |
-| `icons/dock/compass-rose.png`, `scroll-unfurled.png`, `locked-chest.png`, `school-bag.svg`, `chat-bubble.svg`, `moon.svg`, `portal.svg` | CC-BY-3.0 | Lorc / Delapouite | [link](https://game-icons.net) | Dock 各槽备选图标 |
 
 > 编辑方式：修改 `scripts/sync-assets.mjs` 的 MANIFEST 数组后重新运行 `node scripts/sync-assets.mjs`。
 <!-- AUTO-GENERATED LICENSE INDEX END -->

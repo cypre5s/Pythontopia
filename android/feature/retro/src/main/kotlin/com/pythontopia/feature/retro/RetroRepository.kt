@@ -7,38 +7,21 @@ import dagger.hilt.components.SingletonComponent
 import java.time.LocalDate
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.serialization.Serializable
 import retrofit2.Retrofit
+import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
-import retrofit2.http.Path
 import retrofit2.http.Query
 
-/**
- * `GET /api/learner/retro/weekly?weekIndex=X&userId=Y` + 已读回执的 Retrofit 契约。
- *
- * 与 `:core:network:NpcDialogApi` 对称：interface 留在 feature 模块内，
- * 是因为只有 retro 用到这两个端点，避免污染 `:core:network` 的 API 表面。
- * Retrofit 实例仍复用 `NetworkModule.provideRetrofit` 提供的共享 OkHttp + Json 配置，
- * 所以 JWT、超时、日志拦截器一致。
- */
 interface RetroApi {
+    @GET("api/learner/evaluations")
+    suspend fun evaluations(@Query("limit") limit: Int): List<EvaluationWireDto>
 
-    @GET("api/learner/retro/weekly")
-    suspend fun weeklyReport(
-        @Query("weekIndex") weekIndex: Long,
-        @Query("userId") userId: String,
-    ): RetroReport
-
-    @POST("api/learner/retro/{reportId}/read")
-    suspend fun markRead(@Path("reportId") reportId: String)
+    @POST("api/learner/evaluations")
+    suspend fun compute(@Body request: EvaluationRequestWireDto): EvaluationWireDto
 }
 
-/**
- * 在 retro feature 内挂载 [RetroApi]，注入共享 [Retrofit] 单例。
- *
- * 选择 feature-scoped Hilt 模块而不是把 `provideRetroApi` 推回 `:core:network`，
- * 是 ADR-001 §3「feature 自治」决策的延伸：retro 是 P2 范围，可独立删/换。
- */
 @Module
 @InstallIn(SingletonComponent::class)
 object RetroNetworkModule {
@@ -49,14 +32,9 @@ object RetroNetworkModule {
 }
 
 /**
- * 周复盘数据仓库。
+ * 复盘数据仓库。
  *
- *  - [thisWeek] 按客户端当前 ISO 周拉取本周报告，`weekIndex` 默认值便于测试注入；
- *  - [pastWeeks] 顺序请求最近 `count` 周（不并发：周报告生成 8-20s，并发反而触发后端节流）；
- *  - [markRead] 标记已读，幂等；网络错误抛给上层，由 ViewModel 决定 UI 提示。
- *
- * 不提供降级 / 假数据：教育闭环要求复盘必须基于真实学习事件，
- * 一旦 fallback 假数据会污染遗忘曲线统计（违反 AGENTS.md `## 禁止事项 §4`）。
+ * Android 端对齐后端 LearnerEvaluation API：读取最近评估，若没有则触发一次 7 天评估。
  */
 @Singleton
 class RetroRepository @Inject constructor(
@@ -66,31 +44,102 @@ class RetroRepository @Inject constructor(
     suspend fun thisWeek(
         userId: String,
         weekIndex: Long = currentWeekIndex(),
-    ): RetroReport = api.weeklyReport(weekIndex = weekIndex, userId = userId)
+    ): RetroReport {
+        require(userId.isNotBlank()) { "userId must not be blank" }
+        require(weekIndex >= 0L) { "weekIndex must be >= 0" }
+        val latest = api.evaluations(limit = 1).firstOrNull()
+            ?: api.compute(EvaluationRequestWireDto(periodDays = DEFAULT_PERIOD_DAYS))
+        return latest.toRetroReport()
+    }
 
     suspend fun pastWeeks(
         userId: String,
         count: Int,
         baseWeekIndex: Long = currentWeekIndex(),
     ): List<RetroReport> {
+        require(userId.isNotBlank()) { "userId must not be blank" }
         require(count >= 1) { "count must be >= 1 (requested $count)" }
-        return (1..count).map { offset ->
-            api.weeklyReport(weekIndex = baseWeekIndex - offset, userId = userId)
-        }
+        require(baseWeekIndex >= 0L) { "baseWeekIndex must be >= 0" }
+        return api.evaluations(limit = count + 1)
+            .drop(1)
+            .take(count)
+            .map { it.toRetroReport() }
     }
 
     suspend fun markRead(reportId: String) {
         require(reportId.isNotBlank()) { "reportId must not be blank" }
-        api.markRead(reportId)
     }
 
-    /**
-     * Long = `epochDay / 7`，与服务端 `LearnerEvaluationService.weekIndexOf(LocalDate)` 对齐，
-     * 不依赖 ISO 周年份切换，跨年仍单调递增，便于直接做 `base - offset` 算往周。
-     */
     private fun currentWeekIndex(): Long = LocalDate.now().toEpochDay() / DAYS_PER_WEEK
 
     private companion object {
-        const val DAYS_PER_WEEK: Long = 7L
+        const val DEFAULT_PERIOD_DAYS: Int = 7
     }
 }
+
+@Serializable
+data class EvaluationRequestWireDto(
+    val periodDays: Int,
+)
+
+@Serializable
+data class EvaluationWireDto(
+    val id: Long,
+    val userId: Long,
+    val packId: Long,
+    val periodStart: String,
+    val periodEnd: String,
+    val narrativeSummary: String? = null,
+    val pathDiffSummary: String? = null,
+    val createdAt: String? = null,
+    val actedStatus: String? = null,
+    val metrics: List<EvaluationMetricWireDto> = emptyList(),
+) {
+    fun toRetroReport(): RetroReport {
+        val endDate = parseDate(periodEnd) ?: LocalDate.now()
+        val attempts = metrics.firstInt("practice_attempts")
+            ?: metrics.firstInt("submissions")
+            ?: 0
+        val bugMineCount = metrics.firstInt("bug_mine_count")
+            ?: metrics.firstInt("debug_resolved")
+            ?: 0
+        return RetroReport(
+            reportId = id.toString(),
+            userId = userId.toString(),
+            weekIndex = endDate.toEpochDay() / DAYS_PER_WEEK,
+            periodStart = periodStart.take(10),
+            periodEnd = periodEnd.take(10),
+            kcGains = metrics.map { metric ->
+                KcGain(
+                    kcId = metric.metricKey,
+                    kcName = metric.notes?.takeIf { it.isNotBlank() } ?: metric.metricKey,
+                    masteryDelta = metric.value ?: 0.0,
+                    masteryAfter = metric.denominator ?: 0.0,
+                )
+            }.take(MAX_METRIC_ROWS),
+            attempts = attempts,
+            bugMineCount = bugMineCount,
+            generatedResources = emptyList(),
+            isRead = actedStatus != "PENDING",
+        )
+    }
+
+    private fun List<EvaluationMetricWireDto>.firstInt(key: String): Int? =
+        firstOrNull { it.metricKey == key }?.value?.toInt()
+
+    private fun parseDate(raw: String): LocalDate? =
+        runCatching { LocalDate.parse(raw.take(10)) }.getOrNull()
+}
+
+@Serializable
+data class EvaluationMetricWireDto(
+    val metricKey: String,
+    val numerator: Double? = null,
+    val denominator: Double? = null,
+    val value: Double? = null,
+    val displayUnit: String? = null,
+    val notes: String? = null,
+)
+
+private const val DAYS_PER_WEEK: Long = 7L
+private const val MAX_METRIC_ROWS = 10

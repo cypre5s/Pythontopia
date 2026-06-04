@@ -9,10 +9,6 @@ vi.mock('@/components/game/GameCanvas.vue', () => ({
   default: { template: '<div class="game-canvas-mock" />' },
 }));
 
-vi.mock('@/components/game/FieldCanvas.vue', () => ({
-  default: { template: '<div class="field-canvas-mock" />' },
-}));
-
 vi.mock('@/pages/WorkshopPage.vue', () => ({
   default: { template: '<main>Workshop mock</main>' },
 }));

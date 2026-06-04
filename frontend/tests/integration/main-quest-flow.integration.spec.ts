@@ -114,7 +114,7 @@ describe('R-13 §5 主线 + Boss 端到端集成', () => {
 
     await panel.find('[data-testid="main-quest-go-3-1"]').trigger('click');
     await flushPromises();
-    expect(world.player.mapKey).toBe('mine_south');
+    expect(world.player.mapKey).toBe('town_hub');
     expect(router.currentRoute.value.path).toBe('/world');
   });
 

@@ -51,12 +51,13 @@ class PlayerActor(
     fun tryStep(dx: Int, dy: Int, mapWidth: Int, mapHeight: Int, blocked: (Int, Int) -> Boolean): Boolean {
         if (dx == 0 && dy == 0) return false
         facing = directionOf(dx, dy)
-        if (stepCooldown > 0f) return false
 
         val nextX = (tileX + dx).coerceIn(0, mapWidth - 1)
         val nextY = (tileY + dy).coerceIn(0, mapHeight - 1)
-        if (nextX == tileX && nextY == tileY) return false
-        if (blocked(nextX, nextY)) return false
+        val canMove = stepCooldown <= 0f &&
+            (nextX != tileX || nextY != tileY) &&
+            !blocked(nextX, nextY)
+        if (!canMove) return false
 
         tileX = nextX
         tileY = nextY

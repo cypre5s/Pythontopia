@@ -475,7 +475,7 @@ onBeforeUnmount(() => {
   font-weight: 700;
   border-bottom: 2px solid var(--pyt-panel-border);
   padding-bottom: 6px;
-  text-shadow: 1px 1px 0 #2a1a05;
+  text-shadow: 1px 1px 0 var(--pyt-color-shadow);
 }
 
 @media (max-width: 760px) {
@@ -544,7 +544,7 @@ onBeforeUnmount(() => {
 }
 
 .choice-btn {
-  font-family: var(--pyt-font-pixel, 'Ark Pixel 12', monospace);
+  font-family: var(--pyt-font-pixel);
   font-size: 14px;
   color: var(--pyt-text-primary);
   background: var(--pyt-btn-bg);

@@ -6,50 +6,44 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Inject
 import javax.inject.Singleton
-import retrofit2.HttpException
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import retrofit2.Retrofit
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
+import retrofit2.http.Query
 
-/**
- * Bug 矿洞 Retrofit 接口。
- *
- * 端点路径与 R-12 后端 `BugMineController` 对齐：
- * - `POST /api/mine/sessions`             开新副本（可携带触发的 submissionId）
- * - `GET  /api/mine/sessions/{id}/cards`  拉取本次会话的 5 张卡（已含主卡 + 候补）
- * - `POST /api/mine/cards/{id}/attempt`   单卡判题，body 是玩家代码
- * - `POST /api/mine/sessions/{id}/next`   推进下一张卡；无更多卡返回 404 → null
- *
- * 设为 `internal` 是因为外层调用方走 [MineRepository] 包装，不应该绕过仓库直接调 API；
- * Hilt 通过 [MineApiModule] 注入。
- */
 internal interface MineApi {
 
-    @POST("api/mine/sessions")
-    suspend fun startSession(@Body request: MineStartRequest): MineSession
+    @POST("api/bug-mine/sessions")
+    suspend fun startSession(@Body request: MineStartRequest): BugMineSessionWireDto
 
-    @GET("api/mine/sessions/{id}/cards")
-    suspend fun cards(@Path("id") sessionId: Long): List<MineCard>
+    @GET("api/bug-mine/sessions/{id}")
+    suspend fun session(@Path("id") sessionId: Long): BugMineSessionWireDto
 
-    @POST("api/mine/cards/{id}/attempt")
-    suspend fun attempt(
-        @Path("id") cardId: Long,
+    @POST("api/bug-mine/sessions/{id}/cards/{cardId}/reveal")
+    suspend fun reveal(
+        @Path("id") sessionId: Long,
+        @Path("cardId") cardId: Long,
+    ): BugMineCardWireDto
+
+    @POST("api/bug-mine/sessions/{id}/retry-submit")
+    suspend fun retrySubmit(
+        @Path("id") sessionId: Long,
         @Body request: MineAttemptRequest,
-    ): MineAttempt
+    ): MineSubmissionWireDto
 
-    @POST("api/mine/sessions/{id}/next")
-    suspend fun next(@Path("id") sessionId: Long): MineCard
+    @POST("api/bug-mine/sessions/{id}/close")
+    suspend fun close(
+        @Path("id") sessionId: Long,
+        @Query("status") status: String,
+    ): BugMineSessionWireDto
 }
 
-/**
- * Hilt 把 :core:network 提供的 [Retrofit] 单例转成 [MineApi]。
- *
- * 之所以放在 :feature:mine 而不是 :core:network/NetworkModule，是为了让 mine feature
- * 保持自包含，不必每加一个 feature 就动 :core:network；缺点是 mine 模块需要直接依赖
- * `retrofit2.Retrofit`，已在 build.gradle.kts 中 implementation。
- */
 @Module
 @InstallIn(SingletonComponent::class)
 internal object MineApiModule {
@@ -60,63 +54,132 @@ internal object MineApiModule {
 }
 
 /**
- * Bug 矿洞副本仓库。
+ * Bug 矿洞仓库。
  *
- * 业务定位（对齐 `docs/gameplay/r12-deepen/04-bugmine-puzzle-deck.md` §8.3 状态机）：
- *  1. [startSession] 从 ENTRY 进入；可携带 `sourceSubmissionId` 把"刚失败的提交"作为
- *     选卡上下文，让后端 `BugMineCardSelectorService` 推 3 卡套餐。
- *  2. [cards] 拉取本次会话的全部卡（首屏 ≥ 1 张，后端可补送候补）。
- *  3. [attempt] 单卡判题；服务端为权威，Pyodide 仅前端预览。
- *  4. [next] 当前卡通过后请求下一张；无更多卡返回 null，调用方可结束会话。
- *
- * 错误处理策略：
- *  - 网络异常 / HTTP 5xx 由 ViewModel 捕获并展示 errorMessage，不在仓库降级，
- *    因为副本是「玩家正主动尝试」的强交互场景，假数据会让玩家误以为通关。
- *  - [next] 单独包了 404 → null 的语义，因为「副本结束」本身就是合法状态而非错误。
- *
- * 关于 OFFLINE FALLBACK：与 [com.pythontopia.feature.hub.HubRepository] / DialogRepository 的演示
- * fallback 不同，副本判题不允许 fallback。fallback 出来的 "通过" 会触发后端 quest_evidence
- * 写入，违反 AGENTS.md「Pyodide 不能当正式判题结果」原则。
+ * 后端真实入口要求 `submissionId`：矿洞是失败提交的调试副本，不再支持 Android 本地
+ * 随机/主动生成卡牌。重试提交走服务端 `/retry-submit`，通过后由后端写入 DebugResolved。
  */
 @Singleton
 class MineRepository @Inject internal constructor(
     private val api: MineApi,
 ) {
 
-    /**
-     * 开新副本。
-     *
-     * @param srcSubmissionId 触发副本的失败提交 ID；纯主动入口（hub 直接进入 / 教师任务）传 null。
-     */
-    suspend fun startSession(srcSubmissionId: Long?): MineSession =
-        api.startSession(MineStartRequest(sourceSubmissionId = srcSubmissionId))
-
-    /** 拉取本次会话所有可用卡片，按 layer 升序、同 layer 内按推荐权重排列。 */
-    suspend fun cards(sessionId: Long): List<MineCard> = api.cards(sessionId)
-
-    /**
-     * 提交单卡的修复代码。
-     *
-     * @param cardId 当前卡 ID（来自 [MineCard.id]）。
-     * @param code 玩家修改后的完整代码；后端会原样运行并比对 [MineCard.expectedOutput]。
-     */
-    suspend fun attempt(cardId: Long, code: String): MineAttempt =
-        api.attempt(cardId, MineAttemptRequest(code = code))
-
-    /**
-     * 请求下一张卡。
-     *
-     * 后端 404 / 410 表示「副本已结束」是合法状态，捕获后返回 null，调用方据此进入完结态。
-     * 其他错误（5xx / 网络）抛给 ViewModel，避免把网络问题误判成「副本结束」。
-     */
-    suspend fun next(sessionId: Long): MineCard? = try {
-        api.next(sessionId)
-    } catch (e: HttpException) {
-        if (e.code() == HTTP_NOT_FOUND || e.code() == HTTP_GONE) null else throw e
+    suspend fun startSession(srcSubmissionId: Long?): MineSession {
+        val submissionId = requireNotNull(srcSubmissionId) {
+            "Bug 矿洞需要从一次失败提交进入；请先在代码工坊或训练场提交未通过代码"
+        }
+        return api.startSession(MineStartRequest(submissionId = submissionId)).toMineSession()
     }
 
-    private companion object {
-        const val HTTP_NOT_FOUND = 404
-        const val HTTP_GONE = 410
+    suspend fun cards(sessionId: Long): List<MineCard> =
+        api.session(sessionId).cards.mapIndexed { index, card -> card.toMineCard(index) }
+
+    suspend fun attempt(sessionId: Long, code: String): MineAttempt =
+        api.retrySubmit(sessionId, MineAttemptRequest(code = code)).toMineAttempt()
+
+    suspend fun next(sessionId: Long): MineCard? {
+        val session = api.session(sessionId)
+        val next = session.cards.firstOrNull { !it.revealed } ?: return null
+        return api.reveal(sessionId, next.id).toMineCard(session.cards.indexOf(next))
     }
 }
+
+@Serializable
+internal data class BugMineSessionWireDto(
+    val id: Long,
+    val submissionId: Long? = null,
+    val problemId: Long? = null,
+    val status: String = "OPEN",
+    val retryCount: Int = 0,
+    val cards: List<BugMineCardWireDto> = emptyList(),
+) {
+    fun toMineSession(): MineSession =
+        MineSession(
+            sessionId = id,
+            entry = MineSession.ENTRY_FAILED_SUBMISSION,
+            sourceSubmissionId = submissionId,
+            currentLayer = (cards.count { it.revealed } + 1).coerceIn(1, 5),
+            totalCards = cards.size.coerceAtLeast(1),
+            status = status,
+        )
+}
+
+@Serializable
+internal data class BugMineCardWireDto(
+    val id: Long,
+    val sessionId: Long,
+    val cardType: String,
+    val payload: JsonObject = JsonObject(emptyMap()),
+    val revealed: Boolean = false,
+) {
+    fun toMineCard(index: Int): MineCard {
+        val expected = payload.string("expected_stdout").orEmpty()
+        return MineCard(
+            id = id,
+            deckCardId = cardType,
+            layer = (index + 1).coerceIn(1, 5),
+            title = titleFor(cardType),
+            snippet = "阅读提示后，在这里粘贴你的修复代码。\n\n# ${bodyFrom(payload)}\n",
+            expectedOutput = expected,
+            kcCode = kcFrom(payload),
+            pythocoReward = if (revealed) 5 else 0,
+            revealed = revealed,
+        )
+    }
+
+    private fun titleFor(type: String): String = when (type) {
+        "COUNTER_EXAMPLE" -> "反例矿脉"
+        "VARIABLE_TRACE" -> "变量轨迹"
+        "WRONG_ASSUMPTION" -> "错误假设"
+        "HINT_LAYER_1" -> "一层提示"
+        "HINT_LAYER_2" -> "二层提示"
+        "HINT_LAYER_3" -> "三层提示"
+        else -> type
+    }
+
+    private fun bodyFrom(payload: JsonObject): String =
+        payload.string("body")
+            ?: payload.string("diff_summary")
+            ?: payload.string("actually")
+            ?: payload.string("summary")
+            ?: payload.toString()
+
+    private fun kcFrom(payload: JsonObject): String =
+        payload.arrayStrings("evidence_kc_codes").firstOrNull()
+            ?: payload.arrayStrings("expected_kc_codes").firstOrNull()
+            ?: "PY43-KC-016"
+}
+
+@Serializable
+internal data class MineSubmissionWireDto(
+    val id: Long,
+    val problemId: Long,
+    val code: String,
+    val status: String,
+    val runtimeMs: Int? = null,
+) {
+    fun toMineAttempt(): MineAttempt =
+        MineAttempt(
+            cardId = id,
+            code = code,
+            status = when (status) {
+                "PASSED" -> MineAttempt.STATUS_PASS
+                "ERROR" -> MineAttempt.STATUS_RUNTIME_ERROR
+                else -> MineAttempt.STATUS_FAIL
+            },
+            actualOutput = null,
+            message = when (status) {
+                "PASSED" -> runtimeMs?.let { "修复提交通过，耗时 ${it}ms" } ?: "修复提交通过"
+                "ERROR" -> "服务端运行错误，请检查异常信息和输入处理"
+                else -> "服务端判题未通过，请继续利用矿洞提示修复"
+            },
+        )
+}
+
+private fun JsonObject.string(key: String): String? =
+    (this[key] as? JsonPrimitive)?.contentOrNull
+
+private fun JsonObject.arrayStrings(key: String): List<String> =
+    (this[key] as? kotlinx.serialization.json.JsonArray)
+        ?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
+        .orEmpty()

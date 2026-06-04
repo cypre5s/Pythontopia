@@ -208,6 +208,12 @@ public class BugMineService {
           HttpStatus.BAD_REQUEST, "BUG_MINE_INVALID_CLOSE", "无法把会话状态置回 OPEN");
     }
     repository.updateStatus(session.id(), status);
+    if (status == BugMineSessionStatus.ABANDONED) {
+      // 情绪化小镇②：失败后放弃 → emotion_persistence 负向行为信号。
+      String kcCode = problemRepository.findKcCode(session.problemId());
+      eventPublisher.publishEvent(
+          new LearningEvent.PracticeAbandoned(userId, session.problemId(), kcCode));
+    }
     return repository
         .findSession(userId, sessionId)
         .orElseThrow(

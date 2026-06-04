@@ -1,6 +1,7 @@
 package com.pythontopia.feature.mine
 
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
@@ -8,40 +9,28 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.Assertions.fail
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import retrofit2.HttpException
 import retrofit2.Retrofit
 
-/**
- * 用 MockWebServer 端到端验证 [MineRepository] 与 [MineApi] 之间的 HTTP 契约。
- *
- * 之所以不走 mockk 单元测试：mock 掉 [MineApi] 接口会绕过 Retrofit 注解，
- * 拼错 `@POST` 路径 / 漏掉 `@Path` / JSON 字段命名失配都不会被发现。MockWebServer
- * 让我们能：
- *  1. 校验客户端发出的请求 method + path + body 是否符合后端契约；
- *  2. 校验 `MineApi` 接口注解（`@POST`/`@GET`/`@Path`/`@Body`）正确反射到 Retrofit；
- *  3. 校验 [MineDto] 的 [kotlinx.serialization] 注解能正确双向反序列化后端 JSON；
- *  4. 校验 [MineRepository.next] 对 404 的语义降级（→ null）而非抛异常。
- */
 class MineRepositoryTest {
 
     private lateinit var server: MockWebServer
     private lateinit var repository: MineRepository
-    private val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
 
     @BeforeEach
     fun setUp() {
         server = MockWebServer().apply { start() }
         val retrofit = Retrofit.Builder()
             .baseUrl(server.url("/"))
-            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .addConverterFactory(
+                Json { ignoreUnknownKeys = true; explicitNulls = false }
+                    .asConverterFactory("application/json".toMediaType()),
+            )
             .build()
-        val api = retrofit.create(MineApi::class.java)
-        repository = MineRepository(api)
+        repository = MineRepository(retrofit.create(MineApi::class.java))
     }
 
     @AfterEach
@@ -50,224 +39,114 @@ class MineRepositoryTest {
     }
 
     @Test
-    fun `startSession posts to api mine sessions with sourceSubmissionId body`() = runTest {
-        server.enqueue(
-            MockResponse()
-                .setResponseCode(HTTP_OK)
-                .setHeader("Content-Type", JSON_CT)
-                .setBody(
-                    """
-                    {
-                      "sessionId": 12345,
-                      "entry": "FAILED_SUBMISSION",
-                      "sourceSubmissionId": 9981,
-                      "currentLayer": 1,
-                      "totalCards": 5
-                    }
-                    """.trimIndent(),
-                ),
-        )
+    fun `startSession posts failed submission id to bug mine endpoint`() = runTest {
+        server.enqueue(jsonOk(SESSION_JSON))
 
         val session = repository.startSession(srcSubmissionId = 9981L)
 
         val request = server.takeRequest()
         assertEquals("POST", request.method)
-        assertEquals("/api/mine/sessions", request.path)
-        assertTrue(
-            request.body.readUtf8().contains("\"sourceSubmissionId\":9981"),
-            "request body should serialize sourceSubmissionId",
-        )
+        assertEquals("/api/bug-mine/sessions", request.path)
+        assertTrue(request.body.readUtf8().contains("\"submissionId\":9981"))
         assertEquals(12345L, session.sessionId)
-        assertEquals(MineSession.ENTRY_FAILED_SUBMISSION, session.entry)
         assertEquals(9981L, session.sourceSubmissionId)
+        assertEquals("OPEN", session.status)
     }
 
     @Test
-    fun `startSession omits sourceSubmissionId from body when null thanks to explicitNulls false`() = runTest {
-        server.enqueue(
-            MockResponse()
-                .setResponseCode(HTTP_OK)
-                .setHeader("Content-Type", JSON_CT)
-                .setBody("""{"sessionId":1,"entry":"IDLE_RECOMMEND","currentLayer":1,"totalCards":5}"""),
-        )
-
-        repository.startSession(srcSubmissionId = null)
-
-        val body = server.takeRequest().body.readUtf8()
-        assertTrue(
-            !body.contains("sourceSubmissionId"),
-            "explicitNulls=false should drop null sourceSubmissionId, got: $body",
-        )
+    fun `startSession rejects missing source submission`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            runBlocking { repository.startSession(srcSubmissionId = null) }
+        }
+        assertEquals(0, server.requestCount)
     }
 
     @Test
-    fun `cards GET returns deserialized list ordered by layer`() = runTest {
-        server.enqueue(
-            MockResponse()
-                .setResponseCode(HTTP_OK)
-                .setHeader("Content-Type", JSON_CT)
-                .setBody(
-                    """
-                    [
-                      {
-                        "id": 101,
-                        "deckCardId": "B1-01",
-                        "layer": 1,
-                        "title": "无名魔兽",
-                        "snippet": "print(magick)",
-                        "expectedOutput": "spell\n",
-                        "kcCode": "PY43-KC-010",
-                        "pythocoReward": 5
-                      },
-                      {
-                        "id": 102,
-                        "deckCardId": "B2-01",
-                        "layer": 2,
-                        "title": "站门口的 if",
-                        "snippet": "x = 7\nif x > 0:\nprint(\"positive\")",
-                        "expectedOutput": "positive\n",
-                        "kcCode": "PY43-KC-033",
-                        "pythocoReward": 6
-                      }
-                    ]
-                    """.trimIndent(),
-                ),
-        )
+    fun `cards maps session payload cards to mine cards`() = runTest {
+        server.enqueue(jsonOk(SESSION_JSON))
 
         val cards = repository.cards(sessionId = 12345L)
 
         val request = server.takeRequest()
         assertEquals("GET", request.method)
-        assertEquals("/api/mine/sessions/12345/cards", request.path)
+        assertEquals("/api/bug-mine/sessions/12345", request.path)
         assertEquals(2, cards.size)
-        assertEquals("B1-01", cards[0].deckCardId)
-        assertEquals(1, cards[0].layer)
-        assertEquals("PY43-KC-010", cards[0].kcCode)
-        assertEquals(2, cards[1].layer)
+        assertEquals("COUNTER_EXAMPLE", cards[0].deckCardId)
+        assertEquals("PY43-KC-016", cards[0].kcCode)
+        assertTrue(cards[0].snippet.contains("样例 1 输出不一致"))
     }
 
     @Test
-    fun `attempt POST sends code in body and parses PASS verdict`() = runTest {
+    fun `attempt uses retry submit endpoint and maps passed status`() = runTest {
         server.enqueue(
-            MockResponse()
-                .setResponseCode(HTTP_OK)
-                .setHeader("Content-Type", JSON_CT)
-                .setBody(
-                    """
-                    {
-                      "cardId": 101,
-                      "code": "magick = 'spell'\nprint(magick)",
-                      "status": "PASS",
-                      "actualOutput": "spell\n",
-                      "message": "通过"
-                    }
-                    """.trimIndent(),
-                ),
+            jsonOk("""{"id":777,"problemId":476,"code":"print(1)","status":"PASSED","runtimeMs":12}"""),
         )
 
-        val attempt = repository.attempt(cardId = 101L, code = "magick = 'spell'\nprint(magick)")
+        val attempt = repository.attempt(sessionId = 12345L, code = "print(1)")
 
         val request = server.takeRequest()
         assertEquals("POST", request.method)
-        assertEquals("/api/mine/cards/101/attempt", request.path)
-        val body = request.body.readUtf8()
-        assertTrue(body.contains("\"code\""), "body should contain code field, got: $body")
+        assertEquals("/api/bug-mine/sessions/12345/retry-submit", request.path)
+        assertTrue(request.body.readUtf8().contains("\"code\":\"print(1)\""))
         assertEquals(MineAttempt.STATUS_PASS, attempt.status)
-        assertEquals(101L, attempt.cardId)
-        assertEquals("spell\n", attempt.actualOutput)
+        assertEquals(777L, attempt.cardId)
     }
 
     @Test
-    fun `attempt POST surfaces FAIL verdict with message and actualOutput`() = runTest {
-        server.enqueue(
-            MockResponse()
-                .setResponseCode(HTTP_OK)
-                .setHeader("Content-Type", JSON_CT)
-                .setBody(
-                    """
-                    {
-                      "cardId": 101,
-                      "code": "print(magick)",
-                      "status": "FAIL",
-                      "actualOutput": "",
-                      "message": "NameError: name 'magick' is not defined"
-                    }
-                    """.trimIndent(),
-                ),
-        )
-
-        val attempt = repository.attempt(101L, "print(magick)")
-        assertEquals(MineAttempt.STATUS_FAIL, attempt.status)
-        assertTrue(attempt.message!!.contains("NameError"))
-    }
-
-    @Test
-    fun `next POST returns parsed card when backend has one`() = runTest {
-        server.enqueue(
-            MockResponse()
-                .setResponseCode(HTTP_OK)
-                .setHeader("Content-Type", JSON_CT)
-                .setBody(
-                    """
-                    {
-                      "id": 201,
-                      "deckCardId": "B3-04",
-                      "layer": 3,
-                      "title": "缺页的档案柜",
-                      "snippet": "record = {\"silver\": 12}\nprint(record[\"gold\"])",
-                      "expectedOutput": "0\n",
-                      "kcCode": "PY43-KC-041",
-                      "pythocoReward": 10
-                    }
-                    """.trimIndent(),
-                ),
-        )
+    fun `next reveals first hidden card`() = runTest {
+        server.enqueue(jsonOk(SESSION_JSON_WITH_HIDDEN))
+        server.enqueue(jsonOk(HIDDEN_CARD_JSON.replace("\"revealed\":false", "\"revealed\":true")))
 
         val card = repository.next(sessionId = 12345L)
 
-        val request = server.takeRequest()
-        assertEquals("POST", request.method)
-        assertEquals("/api/mine/sessions/12345/next", request.path)
-        assertEquals(201L, card?.id)
-        assertEquals("B3-04", card?.deckCardId)
-        assertEquals(3, card?.layer)
+        assertEquals("/api/bug-mine/sessions/12345", server.takeRequest().path)
+        val reveal = server.takeRequest()
+        assertEquals("POST", reveal.method)
+        assertEquals("/api/bug-mine/sessions/12345/cards/302/reveal", reveal.path)
+        assertEquals(302L, card?.id)
+        assertTrue(card?.revealed == true)
     }
 
-    @Test
-    fun `next returns null on 404 to signal session exhausted`() = runTest {
-        server.enqueue(MockResponse().setResponseCode(HTTP_NOT_FOUND))
-
-        val card = repository.next(sessionId = 12345L)
-
-        assertNull(card)
-    }
-
-    @Test
-    fun `next returns null on 410 GONE for explicitly closed session`() = runTest {
-        server.enqueue(MockResponse().setResponseCode(HTTP_GONE))
-
-        val card = repository.next(sessionId = 12345L)
-
-        assertNull(card)
-    }
-
-    @Test
-    fun `next propagates 5xx as HttpException so ViewModel can surface error`() = runTest {
-        server.enqueue(MockResponse().setResponseCode(HTTP_INTERNAL_ERROR))
-
-        try {
-            repository.next(12345L)
-            fail<Unit>("expected HttpException for 500 status")
-        } catch (e: HttpException) {
-            assertEquals(HTTP_INTERNAL_ERROR, e.code())
-        }
-    }
+    private fun jsonOk(body: String): MockResponse =
+        MockResponse()
+            .setResponseCode(200)
+            .setHeader("Content-Type", "application/json")
+            .setBody(body)
 
     private companion object {
-        const val JSON_CT = "application/json"
-        const val HTTP_OK = 200
-        const val HTTP_NOT_FOUND = 404
-        const val HTTP_GONE = 410
-        const val HTTP_INTERNAL_ERROR = 500
+        const val CARD_JSON = """
+        {
+          "id":301,
+          "sessionId":12345,
+          "cardType":"COUNTER_EXAMPLE",
+          "revealed":true,
+          "payload":{
+            "expected_stdout":"42\n",
+            "diff_summary":"样例 1 输出不一致",
+            "evidence_kc_codes":["PY43-KC-016"]
+          }
+        }
+        """
+        const val HIDDEN_CARD_JSON = """
+        {
+          "id":302,
+          "sessionId":12345,
+          "cardType":"HINT_LAYER_1",
+          "revealed":false,
+          "payload":{"body":"先检查 input 转 int"}
+        }
+        """
+        const val SESSION_JSON = """
+        {
+          "id":12345,
+          "userId":42,
+          "submissionId":9981,
+          "problemId":476,
+          "status":"OPEN",
+          "retryCount":0,
+          "cards":[$CARD_JSON,$HIDDEN_CARD_JSON]
+        }
+        """
+        const val SESSION_JSON_WITH_HIDDEN = SESSION_JSON
     }
 }

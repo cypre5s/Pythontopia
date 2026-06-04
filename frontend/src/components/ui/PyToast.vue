@@ -160,10 +160,10 @@ onBeforeUnmount(clearTimer);
   min-width: 200px;
   max-width: 360px;
   padding: var(--pyt-r12-space-2, 8px) var(--pyt-r12-space-3, 12px);
-  border: 2px solid var(--pyt-r12-color-primary-900, #4d3613);
+  border: 2px solid var(--pyt-r12-color-primary-900, var(--pyt-color-text-primary));
   border-radius: var(--pyt-r12-radius-md, 4px);
-  background-color: var(--pyt-r12-color-gray-50, #fff7e6);
-  color: var(--pyt-r12-color-primary-900, #4d3613);
+  background-color: var(--pyt-r12-color-gray-50, var(--pyt-color-bg-elevated));
+  color: var(--pyt-r12-color-primary-900, var(--pyt-color-text-primary));
   font-family: var(--pyt-r12-font-pixel-cn, var(--pyt-font-pixel, 'Ark Pixel 12'), system-ui);
   font-size: var(--pyt-r12-font-size-sm, 12px);
   letter-spacing: 0.5px;
@@ -188,20 +188,20 @@ onBeforeUnmount(clearTimer);
 
 .py-toast--error {
   border-color: var(--pyt-r12-color-danger, #d9534f);
-  background-color: #fde2dc;
+  background-color: var(--pyt-color-danger-bg);
   color: #6e2418;
 }
 
 .py-toast--info {
-  border-color: var(--pyt-r12-color-info, #2a6f97);
+  border-color: var(--pyt-r12-color-info, var(--pyt-color-info));
   background-color: #dceef5;
   color: #143b50;
 }
 
 .py-toast--warning {
-  border-color: var(--pyt-r12-color-warning, #c2871f);
+  border-color: var(--pyt-r12-color-warning, var(--pyt-color-warning));
   background-color: #f7e3bd;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
 }
 
 .py-toast__icon {
@@ -247,7 +247,7 @@ onBeforeUnmount(clearTimer);
 }
 
 .py-toast__close:focus-visible {
-  outline: var(--pyt-r12-focus-ring, 2px solid #f1c453);
+  outline: var(--pyt-r12-focus-ring, 2px solid var(--pyt-color-gold));
   outline-offset: 2px;
 }
 

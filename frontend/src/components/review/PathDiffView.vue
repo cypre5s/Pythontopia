@@ -97,9 +97,9 @@ function nodeAction(node: LearningPathNodeDto): string {
 
 <style scoped>
 .diff-view {
-  background: #fff7e6;
-  border: 2px solid #c9a86b;
-  border-radius: 8px;
+  background: var(--pyt-color-bg-elevated);
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-lg);
   padding: 12px;
   display: grid;
   gap: 10px;
@@ -110,7 +110,7 @@ function nodeAction(node: LearningPathNodeDto): string {
 .hint {
   margin: 4px 0 0;
   font-size: 12px;
-  color: #8a6c2c;
+  color: var(--pyt-color-text-muted);
 }
 .cols {
   display: grid;
@@ -119,7 +119,7 @@ function nodeAction(node: LearningPathNodeDto): string {
 }
 .col h5 {
   margin: 0 0 6px;
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
 }
 .col.draft h5::before {
   content: '* ';
@@ -132,21 +132,21 @@ function nodeAction(node: LearningPathNodeDto): string {
   gap: 8px;
 }
 .node {
-  background: #fdf3d0;
+  background: var(--pyt-color-bg-soft);
   border-radius: 6px;
   padding: 8px 10px;
-  border: 1px dashed #c9a86b;
+  border: 1px dashed var(--pyt-color-border);
   font-size: 13px;
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
 }
 .node .reason {
   margin: 4px 0 0;
   font-size: 11px;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
 }
 .empty {
   margin: 0;
   font-size: 12px;
-  color: #8a6c2c;
+  color: var(--pyt-color-text-muted);
 }
 </style>

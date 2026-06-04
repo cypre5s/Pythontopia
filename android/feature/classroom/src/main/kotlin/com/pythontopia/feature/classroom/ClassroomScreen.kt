@@ -17,6 +17,7 @@ import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -30,7 +31,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pythontopia.core.common.learner.StudentRole
@@ -62,6 +65,7 @@ fun ClassroomScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     var selectedTabIndex by remember { mutableStateOf(0) }
     var joinDialogVisible by remember { mutableStateOf(false) }
+    var evidenceQuest by remember { mutableStateOf<ClassroomQuest?>(null) }
 
     LaunchedEffect(role) { viewModel.bind(role) }
 
@@ -112,9 +116,7 @@ fun ClassroomScreen(
                     state = current,
                     onSelectClassroom = viewModel::selectClassroom,
                     onShowJoinDialog = { joinDialogVisible = true },
-                    onSubmitEvidence = { quest ->
-                        viewModel.submitEvidence(quest, QuestEvidence(note = "Android demo 提交"))
-                    },
+                    onSubmitEvidence = { quest -> evidenceQuest = quest },
                 )
                 is ClassroomUiState.TeacherState -> TeacherTabContent(
                     tabIndex = selectedTabIndex,
@@ -132,6 +134,15 @@ fun ClassroomScreen(
         onConfirm = { code ->
             viewModel.join(code)
             joinDialogVisible = false
+        },
+    )
+
+    QuestEvidenceDialog(
+        quest = evidenceQuest,
+        onDismiss = { evidenceQuest = null },
+        onConfirm = { quest, evidence ->
+            evidenceQuest = null
+            viewModel.submitEvidence(quest, evidence)
         },
     )
 
@@ -206,6 +217,60 @@ private fun TeacherTabContent(
             errorHotspots = state.errorHotspots,
         )
     }
+}
+
+@Composable
+private fun QuestEvidenceDialog(
+    quest: ClassroomQuest?,
+    onDismiss: () -> Unit,
+    onConfirm: (ClassroomQuest, QuestEvidence) -> Unit,
+) {
+    if (quest == null) return
+    var evidenceValue by remember(quest.id) { mutableStateOf("") }
+    var note by remember(quest.id) { mutableStateOf("") }
+    val evidenceType = quest.requiredEvidenceType
+    val needsStructuredEvidence = evidenceType != null
+    val valueValid = evidenceValueValid(evidenceType, evidenceValue)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("提交任务证据") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(PytSpace.s2)) {
+                Text(
+                    text = quest.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = PytColors.textPrimary,
+                )
+                if (needsStructuredEvidence) {
+                    OutlinedTextField(
+                        value = evidenceValue,
+                        onValueChange = { evidenceValue = it.trim() },
+                        label = { Text(evidenceInputLabel(evidenceType)) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = if (evidenceType == "kc_mastery") KeyboardType.Decimal else KeyboardType.Number,
+                        ),
+                    )
+                }
+                OutlinedTextField(
+                    value = note,
+                    onValueChange = { note = it },
+                    label = { Text("补充说明（可选）") },
+                    minLines = 2,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(quest, evidenceFromInput(evidenceType, evidenceValue, note)) },
+                enabled = valueValid,
+            ) { Text("提交") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("取消") }
+        },
+    )
 }
 
 @Composable
@@ -411,3 +476,30 @@ private fun FailurePlaceholder(code: String, message: String, onDismiss: () -> U
     }
 }
 
+
+
+private fun evidenceValueValid(type: String?, raw: String): Boolean = when (type) {
+    null -> true
+    "submission", "resource", "page_read" -> raw.toLongOrNull() != null
+    "kc_mastery" -> raw.toDoubleOrNull()?.let { it in 0.0..1.0 } == true
+    else -> raw.isNotBlank()
+}
+
+private fun evidenceFromInput(type: String?, raw: String, note: String): QuestEvidence {
+    val cleanNote = note.trim().ifBlank { null }
+    return when (type) {
+        "submission" -> QuestEvidence(note = cleanNote, submissionId = raw.toLongOrNull())
+        "resource" -> QuestEvidence(note = cleanNote, resourceId = raw.toLongOrNull())
+        "page_read" -> QuestEvidence(note = cleanNote, pageReadId = raw.toLongOrNull())
+        "kc_mastery" -> QuestEvidence(note = cleanNote, kcMasteryDelta = raw.toDoubleOrNull())
+        else -> QuestEvidence(note = cleanNote)
+    }
+}
+
+private fun evidenceInputLabel(type: String?): String = when (type) {
+    "submission" -> "练习提交 ID"
+    "resource" -> "资源记录 ID"
+    "page_read" -> "课件阅读记录 ID"
+    "kc_mastery" -> "KC 掌握度提升（0.0 - 1.0）"
+    else -> "证据值"
+}

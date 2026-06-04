@@ -1,0 +1,83 @@
+# ULPC 角色合成所用素材署名（focused credits）
+
+来源：官方 Universal-LPC-Spritesheet-Character-Generator（https://github.com/LiberatedPixelCup/Universal-LPC-Spritesheet-Character-Generator）
+合成脚本：scripts/build-ulpc-characters.py。下列为本项目实际使用的各部件署名（取自官方 sheet_definitions 的 credits）。
+
+## body — Body Color
+   - bluecarrot16, JaidynReiman, Benjamin K. Smith (BenCreating), Evert, Eliza Wyatt (ElizaWy), TheraHedwig, MuffinElZangano, Durrani, Johannes Sjölund (wulax), Stephen Challener (Redshrike) | OGA-BY 3.0, CC-BY-SA 3.0, GPL 3.0 | https://opengameart.org/content/liberated-pixel-cup-lpc-base-assets-sprites-map-tiles
+   - Benjamin K. Smith (BenCreating), bluecarrot16, TheraHedwig, Evert, MuffinElZangano, Durrani, Pierre Vigier (pvigier), ElizaWy, Matthew Krohn (makrohn), Johannes Sjölund (wulax), Stephen Challener (Redshrike) | OGA-BY 3.0, CC-BY-SA 3.0, GPL 3.0 | https://opengameart.org/content/liberated-pixel-cup-lpc-base-assets-sprites-map-tiles
+   - bluecarrot16, JaidynReiman, Evert, TheraHedwig, MuffinElZangano, Durrani, Sander Frenken (castelonia), Benjamin K. Smith (BenCreating), Eliza Wyatt (ElizaWy), dalonedrau, Stephen Challener (Redshrike) | CC-BY-SA 3.0, GPL 3.0 | https://opengameart.org/content/liberated-pixel-cup-lpc-base-assets-sprites-map-tiles
+   - bluecarrot16, Evert, TheraHedwig, Benjamin K. Smith (BenCreating), MuffinElZangano, Durrani, Pierre Vigier (pvigier), Eliza Wyatt (ElizaWy), Matthew Krohn (makrohn), Johannes Sjölund (wulax), Stephen Challener (Redshrike) | OGA-BY 3.0, CC-BY-SA 3.0, GPL 3.0 | https://opengameart.org/content/liberated-pixel-cup-lpc-base-assets-sprites-map-tiles
+   - bluecarrot16, JaidynReiman, Evert, TheraHedwig, MuffinElZangano, Durrani, Benjamin K. Smith (BenCreating), Pierre Vigier (pvigier), Eliza Wyatt (ElizaWy), Matthew Krohn (makrohn), Johannes Sjölund (wulax), Stephen Challener (Redshrike) | CC-BY-SA 3.0, GPL 3.0 | https://opengameart.org/content/liberated-pixel-cup-lpc-base-assets-sprites-map-tiles
+   - bluecarrot16, Benjamin K. Smith (BenCreating), ElizaWy, MuffinElZangano, Durrani, Nila122, kheftel, Stephen Challener (Redshrike) | OGA-BY 3.0, CC-BY-SA 3.0, GPL 3.0 | https://opengameart.org/content/liberated-pixel-cup-lpc-base-assets-sprites-map-tiles
+
+## hair_long — Long
+   - JaidynReiman, Manuel Riecke (MrBeast) | CC-BY-SA 3.0, GPL 3.0 | https://opengameart.org/content/liberated-pixel-cup-lpc-base-assets-sprites-map-tiles
+
+## hair_bob — Bob
+   - ElizaWy, bluecarrot16 | CC0 | https://opengameart.org/content/lpc-hair
+
+## hair_relm_short — Relm Short
+   - JaidynReiman | OGA-BY 3.0+, CC-BY 3.0+, GPL 3.0 | https://opengameart.org/content/lpc-relm-hair-xlong-ponytail
+
+## hair_natural — Natural
+
+## hair_afro — Afro
+   - bluecarrot16 | CC0 | https://opengameart.org/content/lpc-hair
+
+## hair_lob — Lob
+
+## torso_clothes_longsleeve — Longsleeve
+   - JaidynReiman, Johannes Sjölund (wulax) | OGA-BY 3.0, CC-BY-SA 3.0, GPL 3.0 | https://opengameart.org/content/lpc-medieval-fantasy-character-sprites
+   - bluecarrot16, ElizaWy, JaidynReiman, Stephen Challener (Redshrike) | OGA-BY 3.0, CC-BY-SA 3.0, GPL 3.0 | https://opengameart.org/content/liberated-pixel-cup-lpc-base-assets-sprites-map-tiles
+   - bluecarrot16, ElizaWy, JaidynReiman, Stephen Challener (Redshrike), Johannes Sjölund (wulax) | OGA-BY 3.0, GPL 3.0 | https://opengameart.org/content/liberated-pixel-cup-lpc-base-assets-sprites-map-tiles
+   - bluecarrot16, ElizaWy, Stephen Challener (Redshrike), Johannes Sjölund (wulax) | CC-BY-SA 3.0, GPL 3.0 | https://opengameart.org/content/lpc-7-womens-shirts
+
+## torso_clothes_tshirt — TShirt
+   - ElizaWy, JaidynReiman, Stephen Challener (Redshrike), Johannes Sjölund (wulax) | OGA-BY 3.0 | https://opengameart.org/content/lpc-revised-character-basics
+
+## torso_clothes_shortsleeve — Shortsleeve
+   - Nyom, bluecarrot16, ElizaWy, JaidynReiman, Stephen Challener (Redshrike) | OGA-BY 3.0, CC-BY-SA 3.0, GPL 3.0 | https://opengameart.org/content/liberated-pixel-cup-lpc-base-assets-sprites-map-tiles
+   - bluecarrot16, ElizaWy, Stephen Challener (Redshrike), Johannes Sjölund (wulax) | OGA-BY 3.0, GPL 3.0 | https://opengameart.org/content/liberated-pixel-cup-lpc-base-assets-sprites-map-tiles
+
+## torso_clothes_longsleeve2_buttoned — Longsleeve 2 Buttoned
+   - ElizaWy, JaidynReiman, Stephen Challener (Redshrike), Johannes Sjölund (wulax) | OGA-BY 3.0 | http://opengameart.org/content/lpc-revised-character-basics
+
+## torso_clothes_shortsleeve_polo — Shortsleeve Polo
+
+## torso_clothes_shortsleeve_cardigan — Shortsleeve Cardigan
+   - ElizaWy, JaidynReiman, Stephen Challener (Redshrike), Johannes Sjölund (wulax) | OGA-BY 3.0 | https://github.com/ElizaWy/LPC/tree/main/Characters/Clothing
+
+## torso_clothes_tshirt_scoop — TShirt Scoop
+
+## legs_leggings — Leggings
+   - bluecarrot16, ElizaWy, JaidynReiman, Mandi Paugh, William.Thompsonj, Johannes Sjölund (wulax), Stephen Challener (Redshrike) | OGA-BY 3.0, GPL 3.0 | https://github.com/ElizaWy/LPC/tree/main/Characters/Clothing
+   - bluecarrot16, ElizaWy, JaidynReiman, Mandi Paugh, William.Thompsonj, Johannes Sjölund (wulax), Stephen Challener (Redshrike) | OGA-BY 3.0 | http://opengameart.org/content/sara-wizard
+
+## legs_pants — Pants
+   - bluecarrot16, JaidynReiman, ElizaWy, Matthew Krohn (makrohn), Johannes Sjölund (wulax), Stephen Challener (Redshrike) | OGA-BY 3.0, GPL 3.0, CC-BY-SA 3.0 | https://opengameart.org/content/liberated-pixel-cup-lpc-base-assets-sprites-map-tiles
+   - bluecarrot16, JaidynReiman, ElizaWy, Joe White, Matthew Krohn (makrohn), Johannes Sjölund (wulax), Stephen Challener (Redshrike) | OGA-BY 3.0, GPL 3.0, CC-BY-SA 3.0 | https://opengameart.org/content/liberated-pixel-cup-lpc-base-assets-sprites-map-tiles
+
+## legs_pants2 — Long Pants
+   - JaidynReiman, ElizaWy, Bluecarrot16, Johannes Sjölund (wulax), Stephen Challener (Redshrike) | OGA-BY 3.0, GPL 3.0 | https://github.com/ElizaWy/LPC/tree/main/Characters/Clothing
+   - ElizaWy, JaidynReiman, Johannes Sjölund (wulax), Stephen Challener (Redshrike) | OGA-BY 3.0 | https://github.com/ElizaWy/LPC/tree/main/Characters/Clothing
+
+## legs_formal — Formal Pants
+   - bluecarrot16, JaidynReiman, ElizaWy, Johannes Sjölund (wulax), Stephen Challener (Redshrike) | OGA-BY 3.0, CC-BY-SA 3.0, GPL 3.0 | https://opengameart.org/content/liberated-pixel-cup-lpc-base-assets-sprites-map-tiles
+
+## legs_shorts — Shorts
+
+## legs_hose — Hose
+   - JaidynReiman, ElizaWy, bluecarrot16, JaidynReiman, ElizaWy, Johannes Sjölund (wulax), Stephen Challener (Redshrike) | OGA-BY 3.0, GPL 3.0 | https://github.com/ElizaWy/LPC/tree/main/Characters/Clothing
+
+## feet_shoes_sara — Sara Shoes
+   - JaidynReiman, Bluecarrot16, Mandi Paugh, Stephen Challener (Redshrike), William.Thompsonj | OGA-BY 3.0, CC-BY 3.0+, GPL 2.0, GPL 3.0 | http://opengameart.org/content/sara-wizard
+
+## feet_slippers — Slippers
+   - bluecarrot16, JaidynReiman, Joe White, Luke Mehl | CC-BY-SA 3.0, GPL 3.0 | https://opengameart.org/content/thin-mage-clothing-set
+
+## feet_boots_basic — Basic Boots
+   - JaidynReiman, bluecarrot16, Nila122 | OGA-BY 3.0, CC-BY-SA 3.0, GPL 2.0, GPL 3.0 | https://opengameart.org/content/lpc-clothes-and-hair
+
+## feet_sandals — Sandals
+   - Nila122, JaidynReiman, Matthew Krohn (makrohn), Johannes Sjölund (wulax) | OGA-BY 3.0, CC-BY-SA 3.0, GPL 2.0, GPL 3.0 | https://opengameart.org/content/lpc-roman-armor

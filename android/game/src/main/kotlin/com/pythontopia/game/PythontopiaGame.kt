@@ -61,7 +61,7 @@ class PythontopiaGame(
      */
     fun switchScreen(key: ScreenKey) {
         val factory = screens[key]
-            ?: throw IllegalStateException("ScreenKey $key not registered with PythontopiaGame")
+            ?: error("ScreenKey $key not registered with PythontopiaGame")
         val next = factory()
         currentScreenKey = key
         setScreen(next)

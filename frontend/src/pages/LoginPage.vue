@@ -321,17 +321,17 @@ function fillAndSubmitDemo(): void {
     repeating-linear-gradient(135deg, rgba(212, 175, 55, 0.18) 0 6px, transparent 6px 14px),
     rgba(255, 247, 230, 0.92);
   border: 4px solid #d4af37;
-  border-radius: 8px;
-  box-shadow: 4px 4px 0 #6e4f1d;
+  border-radius: var(--pyt-radius-lg);
+  box-shadow: 4px 4px 0 var(--pyt-color-text-hint);
   margin-bottom: 12px;
 }
 
 .auth-title {
   margin: 0;
-  font-family: var(--pyt-font-pixel, 'Ark Pixel 12', monospace);
+  font-family: var(--pyt-font-pixel);
   font-size: 60px;
   line-height: 1.05;
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
   text-shadow:
     2px 2px 0 #d4af37,
     4px 4px 0 rgba(77, 54, 19, 0.35);
@@ -341,7 +341,7 @@ function fillAndSubmitDemo(): void {
 .auth-subtitle {
   margin: 0;
   font-size: 16px;
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
   font-weight: 600;
   background: rgba(255, 247, 230, 0.84);
   display: inline-block;
@@ -358,7 +358,7 @@ function fillAndSubmitDemo(): void {
   gap: 6px;
 }
 .auth-feature-pills li {
-  font-family: var(--pyt-font-pixel, 'Ark Pixel 12', monospace);
+  font-family: var(--pyt-font-pixel);
   font-size: 12px;
   padding: 2px 10px;
   background: rgba(74, 144, 226, 0.15);
@@ -368,55 +368,55 @@ function fillAndSubmitDemo(): void {
 }
 
 .auth-card--pixel {
-  border: 3px solid #4d3613;
-  border-radius: 12px;
-  background: #fff7e6;
+  border: 3px solid var(--pyt-color-text-primary);
+  border-radius: var(--pyt-radius-lg);
+  background: var(--pyt-color-bg-elevated);
   box-shadow:
-    6px 6px 0 #4d3613,
+    6px 6px 0 var(--pyt-color-text-primary),
     0 16px 32px rgba(77, 54, 19, 0.18);
   padding: 32px;
 }
 
 .auth-card--pixel h2 {
   margin: 0 0 18px;
-  font-family: var(--pyt-font-pixel, 'Ark Pixel 12', monospace);
-  color: #4d3613;
+  font-family: var(--pyt-font-pixel);
+  color: var(--pyt-color-text-primary);
   font-size: 22px;
 }
 
 .auth-health-banner {
   margin: 0 0 14px;
   padding: 10px 12px;
-  border: 2px solid #b8442d;
+  border: 2px solid var(--pyt-color-danger);
   border-radius: 6px;
-  background: #fde2dc;
+  background: var(--pyt-color-danger-bg);
   color: #7a1f0f;
   font-size: 13px;
   line-height: 1.5;
-  box-shadow: 2px 2px 0 #b8442d;
+  box-shadow: 2px 2px 0 var(--pyt-color-danger);
 }
 
 .auth-demo-btn {
   margin-top: 16px;
   width: 100%;
   min-height: 44px;
-  border: 2px dashed #6e4f1d;
-  background: #fdf3d0;
-  color: #4d3613;
+  border: 2px dashed var(--pyt-color-text-hint);
+  background: var(--pyt-color-bg-soft);
+  color: var(--pyt-color-text-primary);
   cursor: pointer;
   font-weight: 700;
-  border-radius: 8px;
-  box-shadow: 2px 2px 0 #6e4f1d;
+  border-radius: var(--pyt-radius-lg);
+  box-shadow: 2px 2px 0 var(--pyt-color-text-hint);
   transition: transform 80ms ease;
 }
 
 .auth-demo-btn:hover:not(:disabled) {
-  background: #f5e2c1;
+  background: var(--pyt-color-warning-bg);
 }
 
 .auth-demo-btn:active:not(:disabled) {
   transform: translate(2px, 2px);
-  box-shadow: 0 0 0 #6e4f1d;
+  box-shadow: 0 0 0 var(--pyt-color-text-hint);
 }
 
 .auth-demo-btn:disabled {
@@ -427,22 +427,22 @@ function fillAndSubmitDemo(): void {
 .auth-link {
   display: inline-block;
   margin-top: 14px;
-  color: #2a6f97;
+  color: var(--pyt-color-info);
   font-weight: 600;
 }
 
 :deep(.auth-form input.has-error) {
-  border-color: #b8442d;
-  background: #fde2dc;
+  border-color: var(--pyt-color-danger);
+  background: var(--pyt-color-danger-bg);
 }
 
 :deep(.auth-form button[type='submit']) {
-  background: #ffd166;
-  border: 2px solid #4d3613;
+  background: var(--pyt-color-gold-bright);
+  border: 2px solid var(--pyt-color-text-primary);
   border-radius: 6px;
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
   font-weight: 800;
-  box-shadow: 3px 3px 0 #4d3613;
+  box-shadow: 3px 3px 0 var(--pyt-color-text-primary);
   min-height: 44px;
 }
 

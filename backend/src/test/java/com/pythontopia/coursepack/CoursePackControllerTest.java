@@ -9,8 +9,10 @@ import com.pythontopia.auth.security.JwtAuthenticationFilter;
 import com.pythontopia.common.error.GlobalExceptionHandler;
 import com.pythontopia.coursepack.controller.CoursePackController;
 import com.pythontopia.coursepack.domain.CoursePack;
+import com.pythontopia.coursepack.domain.CourseProblem;
 import com.pythontopia.coursepack.service.CoursePackNotFoundException;
 import com.pythontopia.coursepack.service.CoursePackService;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -54,5 +56,36 @@ class CoursePackControllerTest {
         .perform(get("/api/course/pack"))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.code").value("COURSE_PACK_NOT_FOUND"));
+  }
+
+  @Test
+  void listProblemsSupportsKcFilterForAndroidWorkshop() throws Exception {
+    when(service.listProblems("PY43-KC-001"))
+        .thenReturn(
+            List.of(
+                new CourseProblem(
+                    11L,
+                    43L,
+                    "PY43-KC-001",
+                    "输出 Hello",
+                    "请输出 Hello",
+                    "无",
+                    "Hello",
+                    "EASY",
+                    "seed")));
+
+    mockMvc
+        .perform(get("/api/course/problems").param("kcCode", "PY43-KC-001"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].problemId").value(11))
+        .andExpect(jsonPath("$[0].kcCode").value("PY43-KC-001"))
+        .andExpect(jsonPath("$[0].title").value("输出 Hello"));
+  }
+
+  @Test
+  void listProblemsRejectsInvalidKcCode() throws Exception {
+    mockMvc
+        .perform(get("/api/course/problems").param("kcCode", "KC-1"))
+        .andExpect(status().isBadRequest());
   }
 }

@@ -20,25 +20,25 @@ import retrofit2.http.Query
  * Workshop（代码工坊）Retrofit 端点契约。
  *
  * 与后端约定（参见 docs/android/01-feature-port-checklist.md §4.8）：
- *   - `GET /api/problems?kcCode=PY43-KC-040` 返回该 KC 关联的题目列表；
+ *   - `GET /api/course/problems?kcCode=PY43-KC-040` 返回该 KC 关联的题目列表；
  *   - `POST /api/submissions` 提交代码，返回带 PENDING / RUNNING 状态的初始 [SubmissionDto]；
- *   - `GET /api/submissions/{id}` 拉取最新状态，[WorkshopRepository.pollStatus] 据此轮询。
+ *   - `GET /api/submissions/{id}` 拉取 [SubmissionDetailDto]，[WorkshopRepository.pollStatus] 据此轮询。
  *
  * Beta 首发严格 server-side judge：Android 端不内置 Pyodide。
  */
 interface WorkshopApi {
 
-    @GET("api/problems")
+    @GET("api/course/problems")
     suspend fun listProblems(@Query("kcCode") kcCode: String): List<ProblemDto>
 
     @POST("api/submissions")
     suspend fun submit(@Body request: SubmissionCreateRequest): SubmissionDto
 
     @GET("api/submissions/{id}")
-    suspend fun status(@Path("id") submissionId: Long): SubmissionDto
+    suspend fun status(@Path("id") submissionId: Long): SubmissionDetailDto
 
     @GET("api/submissions")
-    suspend fun history(@Query("userId") userId: Long): List<SubmissionDto>
+    suspend fun history(): List<SubmissionDto>
 }
 
 /**
@@ -77,7 +77,8 @@ class WorkshopRepository @Inject constructor(
         while (attempts < maxAttempts) {
             attempts++
             val result = runCatching { api.status(submissionId) }
-            result.onSuccess { dto ->
+            result.onSuccess { detail ->
+                val dto = detail.toSubmissionDto()
                 consecutiveErrors = 0
                 emit(dto)
                 if (dto.isTerminal) {
@@ -94,8 +95,8 @@ class WorkshopRepository @Inject constructor(
         }
     }
 
-    suspend fun history(userId: Long): List<SubmissionDto> =
-        runCatching { api.history(userId) }.getOrElse { emptyList() }
+    suspend fun history(): List<SubmissionDto> =
+        runCatching { api.history() }.getOrElse { emptyList() }
 
     companion object {
         const val POLL_INTERVAL_MS: Long = 1_200L

@@ -211,8 +211,8 @@ function fmtRate(value: number): string {
   display: grid;
   gap: 8px;
   background: #fffbe9;
-  border: 2px solid #c9a86b;
-  border-radius: 10px;
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-lg);
   padding: 14px;
 }
 .publish-form input,
@@ -220,15 +220,15 @@ function fmtRate(value: number): string {
 .publish-form select {
   width: 100%;
   padding: 6px 8px;
-  border: 1px solid #c9a86b;
+  border: 1px solid var(--pyt-color-border);
   border-radius: 6px;
   background: #fff;
 }
 .primary {
   background: #2f5b8a;
-  color: #fff7e6;
+  color: var(--pyt-color-bg-elevated);
   border: 2px solid #1b3a5a;
-  border-radius: 8px;
+  border-radius: var(--pyt-radius-lg);
   padding: 8px 18px;
   cursor: pointer;
 }
@@ -242,8 +242,8 @@ function fmtRate(value: number): string {
 }
 .empty {
   padding: 16px;
-  background: #fdf3d0;
-  border-radius: 8px;
+  background: var(--pyt-color-bg-soft);
+  border-radius: var(--pyt-radius-lg);
   text-align: center;
 }
 .quest-table {
@@ -253,11 +253,11 @@ function fmtRate(value: number): string {
 }
 .quest-table th,
 .quest-table td {
-  border: 1px solid #c9a86b;
+  border: 1px solid var(--pyt-color-border);
   padding: 6px 8px;
   text-align: center;
 }
 .quest-table th {
-  background: #fdf3d0;
+  background: var(--pyt-color-bg-soft);
 }
 </style>

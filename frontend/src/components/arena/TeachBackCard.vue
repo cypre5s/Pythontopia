@@ -76,7 +76,7 @@ const showTips = ref(false);
 .teach-back-card { display: grid; gap: 12px; }
 .card-head { display: flex; align-items: center; gap: 8px; }
 .card-icon { font-size: 20px; }
-.card-head h3 { margin: 0; font-size: 16px; color: #ffd166; }
+.card-head h3 { margin: 0; font-size: 16px; color: var(--pyt-color-gold-bright); }
 .badge-teach { margin-left: auto; font-size: 11px; color: #c4b5fd; padding: 2px 8px; background: rgba(196,181,253,0.15); border: 1px solid #8b5cf6; border-radius: 3px; }
 .scenario { padding: 12px; background: rgba(10,20,40,0.5); border: 2px solid #4a90e2; border-radius: 6px; }
 .npc-bubble { display: flex; gap: 12px; align-items: flex-start; }
@@ -89,7 +89,7 @@ const showTips = ref(false);
 .teach-footer { display: flex; align-items: center; justify-content: space-between; }
 .word-badge { font-size: 11px; padding: 2px 8px; border-radius: 3px; }
 .word-badge--short { color: #ffb3b3; background: rgba(179,64,42,0.2); }
-.word-badge--ok { color: #f1c453; background: rgba(241,196,83,0.15); }
+.word-badge--ok { color: var(--pyt-color-gold); background: rgba(241,196,83,0.15); }
 .word-badge--good { color: #b8d99a; background: rgba(120,220,120,0.15); }
 .tips-btn { font-family: inherit; font-size: 11px; padding: 4px 10px; background: transparent; color: #93c5fd; border: 1px solid #4a90e2; border-radius: 3px; cursor: pointer; }
 .tips-list { margin: 0; padding: 0 0 0 18px; font-size: 12px; color: rgba(255,247,230,0.6); }

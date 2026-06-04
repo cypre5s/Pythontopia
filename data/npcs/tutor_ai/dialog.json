@@ -4,16 +4,16 @@
   "nodes": {
     "greet": {
       "id": "greet",
-      "text": "{{playerName}}，我是 AI 导师。有任何 Python 问题都可以问我！我会从课件中找到最准确的答案。",
+      "text": "{{playerName}}，我是 AI 导师，现在搬进了「百晓工坊」。有任何 Python 问题都可以问我，我会从课件中找到最准确的答案。",
       "conditions": [],
       "choices": [
         {
-          "label": "打开 AI 对话",
+          "label": "去百晓工坊问我",
           "nextNodeId": null,
           "effects": [
             {
               "type": "route",
-              "route": "/tutor"
+              "route": "/workshop"
             }
           ]
         },
@@ -29,7 +29,7 @@
     },
     "open_tutor": {
       "id": "open_tutor",
-      "text": "正在打开 AI 导师界面...点击上方导航可以进入完整的对话模式。",
+      "text": "百晓工坊就在前面，进去直接打字提问就行——答疑和资源生成都在那里。",
       "conditions": [],
       "choices": [
         {

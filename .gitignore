@@ -39,6 +39,11 @@ qa-screens/
 secrets/
 # 超星爬取的任务点视频（仅本地缓存供演示，manifest 入库、视频不入库）
 data/course-pack-43/videos/
+# 多模态生成产物（文生图/合成短视频，含占位降级产物，本地落盘可重生，不入库）
+data/course-pack-43/generated-media/
 
 # 后端本地开发软链（指向仓库根 data/，仅本地 mvn spring-boot:run 用，不入库）
 backend/data/
+
+# 素材预览临时目录（本地 scratch，不入库）
+.tmp-preview/

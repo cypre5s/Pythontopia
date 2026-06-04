@@ -95,14 +95,14 @@ function back(): void {
   padding: 36px 32px 28px;
   background:
     repeating-linear-gradient(135deg, rgba(212, 175, 55, 0.07) 0 8px, transparent 8px 18px),
-    linear-gradient(180deg, #fff7e6 0%, #f1d896 100%);
-  border: 4px solid #6e4f1d;
-  border-radius: 14px;
+    linear-gradient(180deg, var(--pyt-color-bg-elevated) 0%, #f1d896 100%);
+  border: 4px solid var(--pyt-color-text-hint);
+  border-radius: var(--pyt-radius-lg);
   box-shadow:
     inset 0 0 0 2px rgba(212, 175, 55, 0.65),
-    6px 6px 0 #2a1a05;
+    6px 6px 0 var(--pyt-color-shadow);
   color: #3a2a14;
-  font-family: var(--pyt-font-pixel, 'Ark Pixel 12', monospace);
+  font-family: var(--pyt-font-pixel);
   text-align: center;
   animation: placeholder-in 0.4s ease-out;
 }
@@ -125,7 +125,7 @@ function back(): void {
   inset: 0 20px auto 20px;
   height: 50px;
   background:
-    linear-gradient(180deg, #b8442d 0%, #8b3520 100%);
+    linear-gradient(180deg, var(--pyt-color-danger) 0%, #8b3520 100%);
   clip-path: polygon(8% 100%, 50% 0%, 92% 100%);
   filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.2));
 }
@@ -134,7 +134,7 @@ function back(): void {
   position: absolute;
   inset: 45px 20px 22px 20px;
   background: linear-gradient(180deg, #f1d896 0%, #d6b97a 100%);
-  border: 3px solid #6e4f1d;
+  border: 3px solid var(--pyt-color-text-hint);
 }
 
 .illust-window {
@@ -144,13 +144,13 @@ function back(): void {
   height: 22px;
   background:
     linear-gradient(180deg, #9bc1d4 0%, #6b8da8 100%);
-  border: 2px solid #6e4f1d;
+  border: 2px solid var(--pyt-color-text-hint);
 }
 .illust-window::before,
 .illust-window::after {
   content: '';
   position: absolute;
-  background: #6e4f1d;
+  background: var(--pyt-color-text-hint);
 }
 .illust-window::before {
   inset: 0 50% 0 50%;
@@ -172,8 +172,8 @@ function back(): void {
   width: 28px;
   height: 42px;
   transform: translateX(-50%);
-  background: linear-gradient(180deg, #6e4f1d 0%, #4d3613 100%);
-  border: 2px solid #2a1a05;
+  background: linear-gradient(180deg, var(--pyt-color-text-hint) 0%, var(--pyt-color-text-primary) 100%);
+  border: 2px solid var(--pyt-color-shadow);
   box-shadow: inset 0 0 0 2px rgba(255, 215, 0, 0.2);
 }
 .illust-door::after {
@@ -183,15 +183,15 @@ function back(): void {
   right: 5px;
   width: 4px;
   height: 4px;
-  background: #ffd166;
-  box-shadow: 0 0 4px #ffd166;
+  background: var(--pyt-color-gold-bright);
+  box-shadow: 0 0 4px var(--pyt-color-gold-bright);
 }
 
 .illust-lantern {
   position: absolute;
   width: 8px;
   height: 10px;
-  background: #ffd166;
+  background: var(--pyt-color-gold-bright);
   box-shadow: 0 0 10px rgba(255, 209, 102, 0.75);
   top: 32px;
 }
@@ -218,7 +218,7 @@ function back(): void {
 .placeholder-title {
   margin: 0 0 8px;
   font-size: 26px;
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
   text-shadow: 2px 2px 0 rgba(212, 175, 55, 0.55);
   letter-spacing: 1px;
 }
@@ -244,8 +244,8 @@ function back(): void {
   border: 2px solid #d4af37;
   border-radius: 999px;
 }
-.chip--coming { color: #b8442d; border-color: #b8442d; }
-.chip--bind   { color: #2a6f97; border-color: #2a6f97; }
+.chip--coming { color: var(--pyt-color-danger); border-color: var(--pyt-color-danger); }
+.chip--bind   { color: var(--pyt-color-info); border-color: var(--pyt-color-info); }
 
 .placeholder-actions {
   display: flex;
@@ -254,26 +254,26 @@ function back(): void {
 
 .placeholder-btn {
   padding: 10px 22px;
-  border: 3px solid #4d3613;
-  background: #ffd166;
-  color: #4d3613;
+  border: 3px solid var(--pyt-color-text-primary);
+  background: var(--pyt-color-gold-bright);
+  color: var(--pyt-color-text-primary);
   font-family: inherit;
   font-size: 14px;
   letter-spacing: 1px;
   cursor: pointer;
-  box-shadow: 3px 3px 0 #2a1a05;
+  box-shadow: 3px 3px 0 var(--pyt-color-shadow);
   transition: transform 0.1s, box-shadow 0.1s;
 }
 .placeholder-btn:hover {
   transform: translate(1px, 1px);
-  box-shadow: 2px 2px 0 #2a1a05;
+  box-shadow: 2px 2px 0 var(--pyt-color-shadow);
 }
 .placeholder-btn:active {
   transform: translate(3px, 3px);
-  box-shadow: 0 0 0 #2a1a05;
+  box-shadow: 0 0 0 var(--pyt-color-shadow);
 }
 .placeholder-btn--primary {
-  background: linear-gradient(180deg, #ffd166 0%, #f4b400 100%);
+  background: linear-gradient(180deg, var(--pyt-color-gold-bright) 0%, #f4b400 100%);
 }
 
 @media (prefers-reduced-motion: reduce) {

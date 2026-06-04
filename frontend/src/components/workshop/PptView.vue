@@ -167,7 +167,7 @@ function exportMarpMd(): void {
   flex-direction: column;
   width: 100%;
   height: 100%;
-  background: #2e2417;
+  background: var(--pyt-color-terminal-bg);
 }
 
 .ppt-toolbar {
@@ -176,7 +176,7 @@ function exportMarpMd(): void {
   justify-content: space-between;
   padding: 8px 16px;
   background: #3a2a14;
-  border-bottom: 2px solid #6e4f1d;
+  border-bottom: 2px solid var(--pyt-color-text-hint);
   flex-shrink: 0;
   z-index: 10;
 }
@@ -184,10 +184,10 @@ function exportMarpMd(): void {
 .toolbar-btn {
   padding: 6px 14px;
   border-radius: 4px;
-  border: 2px solid #6e4f1d;
+  border: 2px solid var(--pyt-color-text-hint);
   background: #f9e7bc;
   color: #3a2a14;
-  font-family: var(--pyt-font-pixel, monospace);
+  font-family: var(--pyt-font-pixel);
   font-size: 13px;
   cursor: pointer;
   transition: background 0.15s;
@@ -197,7 +197,7 @@ function exportMarpMd(): void {
 }
 .close-btn {
   background: #c14a2f;
-  color: #fff7e6;
+  color: var(--pyt-color-bg-elevated);
   border-color: #8b2e1a;
 }
 .close-btn:hover {
@@ -206,8 +206,8 @@ function exportMarpMd(): void {
 
 .toolbar-hint {
   font-size: 12px;
-  color: #c9a86b;
-  font-family: var(--pyt-font-pixel, monospace);
+  color: var(--pyt-color-border);
+  font-family: var(--pyt-font-pixel);
 }
 
 .ppt-reveal {
@@ -224,12 +224,12 @@ function exportMarpMd(): void {
   --r-main-font-size: 28px;
   --r-main-color: #3a2a14;
   --r-heading-font: 'PythontopiaPixel', 'PingFang SC', sans-serif;
-  --r-heading-color: #4d3613;
+  --r-heading-color: var(--pyt-color-text-primary);
   --r-heading-text-transform: none;
   --r-link-color: #4f8a3e;
   --r-link-color-hover: #2b6021;
-  --r-selection-background-color: #c9a86b;
-  --r-selection-color: #fff7e6;
+  --r-selection-background-color: var(--pyt-color-border);
+  --r-selection-color: var(--pyt-color-bg-elevated);
 }
 
 .ppt-reveal .slides {
@@ -242,8 +242,8 @@ function exportMarpMd(): void {
 
 .ppt-reveal .slides h1 {
   font-size: 2em;
-  color: #4d3613;
-  border-bottom: 3px solid #6e4f1d;
+  color: var(--pyt-color-text-primary);
+  border-bottom: 3px solid var(--pyt-color-text-hint);
   padding-bottom: 12px;
   margin-bottom: 24px;
   text-align: center;
@@ -251,8 +251,8 @@ function exportMarpMd(): void {
 
 .ppt-reveal .slides h2 {
   font-size: 1.5em;
-  color: #4d3613;
-  border-bottom: 2px dashed #c9a86b;
+  color: var(--pyt-color-text-primary);
+  border-bottom: 2px dashed var(--pyt-color-border);
   padding-bottom: 8px;
   margin-bottom: 20px;
 }
@@ -265,11 +265,11 @@ function exportMarpMd(): void {
 }
 
 .ppt-reveal .slides .slide-code {
-  background: #2e2417;
-  color: #f1e5c8;
+  background: var(--pyt-color-terminal-bg);
+  color: var(--pyt-color-terminal-text);
   padding: 14px 18px;
   border-radius: 6px;
-  border: 2px solid #6e4f1d;
+  border: 2px solid var(--pyt-color-text-hint);
   font-size: 0.7em;
   overflow-x: auto;
   text-align: left;
@@ -293,7 +293,7 @@ function exportMarpMd(): void {
   display: inline-block;
   padding: 4px 12px;
   background: #4f8a3e;
-  color: #fff7e6;
+  color: var(--pyt-color-bg-elevated);
   border-radius: 4px;
   font-size: 0.65em;
   border: 2px solid #2b6021;
@@ -310,14 +310,14 @@ function exportMarpMd(): void {
 
 .ppt-reveal .evidence-label {
   font-size: 0.6em;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
 }
 
 .ppt-reveal .evidence-chip {
   display: inline-block;
   padding: 3px 10px;
-  background: #6e4f1d;
-  color: #fff7e6;
+  background: var(--pyt-color-text-hint);
+  color: var(--pyt-color-bg-elevated);
   border-radius: 4px;
   font-size: 0.55em;
 }
@@ -343,15 +343,15 @@ function exportMarpMd(): void {
 }
 .ppt-reveal .grounding-badge.grounded {
   background: #4f8a3e;
-  color: #fff7e6;
+  color: var(--pyt-color-bg-elevated);
 }
 .ppt-reveal .grounding-badge.no-evidence {
   background: #b39554;
-  color: #fff7e6;
+  color: var(--pyt-color-bg-elevated);
 }
 .ppt-reveal .grounding-badge.failed {
   background: #c14a2f;
-  color: #fff7e6;
+  color: var(--pyt-color-bg-elevated);
 }
 
 /* Progress bar theming */
@@ -365,13 +365,13 @@ function exportMarpMd(): void {
 
 /* Controls theming */
 .ppt-reveal .controls button {
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
 }
 
 /* Slide number theming */
 .ppt-reveal .slide-number {
-  color: #6e4f1d;
-  font-family: var(--pyt-font-pixel, monospace);
+  color: var(--pyt-color-text-hint);
+  font-family: var(--pyt-font-pixel);
   font-size: 14px;
   background: rgba(249, 231, 188, 0.8);
   padding: 4px 10px;

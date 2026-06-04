@@ -107,7 +107,7 @@ const menuItems: MenuItem[] = [
   {
     id: 'workshop-nav',
     icon: `${ICON_BASE}/notebook.svg`,
-    label: '资源工坊',
+    label: '百晓工坊',
     action: () => {
       close();
       void router.push('/workshop');
@@ -198,7 +198,7 @@ const HOTKEYS: readonly { key: string; desc: string }[] = [
   { key: 'M', desc: '地图' },
   { key: 'K', desc: '技能' },
   { key: 'L', desc: '课程' },
-  { key: 'A', desc: '闯关' },
+  { key: 'Shift+A', desc: '闯关塔（小镇内单按 A 为左移）' },
   { key: 'T', desc: '传送' },
   { key: 'C', desc: '休息' },
   { key: ',', desc: '设置' },
@@ -296,7 +296,7 @@ onUnmounted(() => {
 .pause-mask {
   position: fixed;
   inset: 0;
-  z-index: 9000;
+  z-index: var(--pyt-z-modal);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -327,7 +327,7 @@ onUnmounted(() => {
   text-shadow:
     0 0 8px rgba(212, 175, 55, 0.5),
     2px 2px 0 var(--pyt-panel-border-dark);
-  font-family: var(--pyt-font-pixel, 'Ark Pixel 12', 'PingFang SC', monospace);
+  font-family: var(--pyt-font-pixel);
   user-select: none;
 }
 
@@ -357,7 +357,7 @@ onUnmounted(() => {
   border-radius: 2px;
   background: var(--pyt-btn-bg);
   color: var(--pyt-text-primary);
-  font-family: var(--pyt-font-pixel, 'Ark Pixel 12', 'PingFang SC', monospace);
+  font-family: var(--pyt-font-pixel);
   font-size: 15px;
   cursor: pointer;
   image-rendering: pixelated;
@@ -427,7 +427,7 @@ onUnmounted(() => {
 
 .pause-help__key {
   color: var(--pyt-text-accent);
-  font-family: var(--pyt-font-pixel, 'Ark Pixel 12', 'PingFang SC', monospace);
+  font-family: var(--pyt-font-pixel);
   background: rgba(212, 175, 55, 0.1);
   border: 1px solid var(--pyt-btn-border);
   border-radius: 2px;

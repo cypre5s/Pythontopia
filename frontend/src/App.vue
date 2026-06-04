@@ -6,6 +6,7 @@ import { onBeforeUnmount, onErrorCaptured, onMounted, ref } from 'vue';
 import { RouterView, useRouter } from 'vue-router';
 import AppToast from '@/components/system/AppToast.vue';
 import DialogTree from '@/components/game/DialogTree.vue';
+import PerfHud from '@/components/hud/PerfHud.vue';
 import { useToastStore } from '@stores/toast';
 import { useWorldStore } from '@stores/world';
 
@@ -64,16 +65,19 @@ onBeforeUnmount(() => {
     <template #default>
       <!-- R-13 Phase 5 迭代 6：路由切换 fade transition。
            世界场景（/world）不参与 transition，避免每次切场景 Phaser canvas 重建。 -->
+      <!-- WorldPage 用 KeepAlive 缓存：离开 /world 不销毁 Phaser，避免每次返回重跑 BootScene -->
       <RouterView v-slot="{ Component, route }">
-        <Transition
-          :name="route.name === 'world' ? 'route-none' : 'route-fade'"
-          mode="out-in"
-        >
-          <component
-            :is="Component"
-            :key="route.fullPath"
-          />
-        </Transition>
+        <KeepAlive include="WorldPage">
+          <Transition
+            :name="route.name === 'world' ? 'route-none' : 'route-fade'"
+            mode="out-in"
+          >
+            <component
+              :is="Component"
+              :key="route.name === 'world' ? 'world' : route.fullPath"
+            />
+          </Transition>
+        </KeepAlive>
       </RouterView>
     </template>
     <template #fallback>
@@ -93,6 +97,8 @@ onBeforeUnmount(() => {
   </Suspense>
   <AppToast />
   <DialogTree />
+  <!-- 全局性能诊断框（F3 切换，默认关闭）：单例挂在根组件，覆盖所有路由（含 Phaser 游戏页）。 -->
+  <PerfHud />
 </template>
 
 <style scoped>
@@ -101,7 +107,7 @@ onBeforeUnmount(() => {
   min-height: 100dvh;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(180deg, #fef7e3 0%, #f3e4be 100%);
+  background: linear-gradient(180deg, var(--pyt-color-bg-primary) 0%, var(--pyt-color-bg-sunken) 100%);
 }
 .app-suspense__card {
   display: flex;
@@ -109,11 +115,11 @@ onBeforeUnmount(() => {
   gap: 12px;
   align-items: center;
   padding: 24px;
-  background: #fff7e6;
-  border: 3px solid #c9a86b;
-  border-radius: 10px;
-  color: #4d3613;
-  font-family: var(--pyt-font-pixel, monospace);
+  background: var(--pyt-color-bg-elevated);
+  border: 3px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-lg);
+  color: var(--pyt-color-text-primary);
+  font-family: var(--pyt-font-pixel);
   font-size: 14px;
   letter-spacing: 0.5px;
   box-shadow: 4px 4px 0 rgba(77, 54, 19, 0.3);
@@ -121,7 +127,7 @@ onBeforeUnmount(() => {
 .app-suspense__spinner {
   width: 28px;
   height: 28px;
-  border: 4px solid #f1c453;
+  border: 4px solid var(--pyt-color-gold);
   border-top-color: transparent;
   border-radius: 50%;
   animation: app-suspense-spin 0.9s linear infinite;

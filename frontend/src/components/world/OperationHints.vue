@@ -78,7 +78,7 @@ const visible = computed<boolean>(() => route.path === '/world');
   background: rgba(28, 24, 16, 0.78);
   border: 2px solid #d4af37;
   border-radius: 999px;
-  color: #ffd166;
+  color: var(--pyt-color-gold-bright);
   font-family: var(--pyt-font-pixel), 'PingFang SC', 'Noto Sans CJK SC', monospace;
   font-size: 14px;
   letter-spacing: 0.5px;
@@ -101,19 +101,19 @@ const visible = computed<boolean>(() => route.path === '/world');
   display: inline-block;
   min-width: 22px;
   padding: 2px 7px;
-  background: #ffd166;
-  color: #4d3613;
-  border: 1px solid #4d3613;
+  background: var(--pyt-color-gold-bright);
+  color: var(--pyt-color-text-primary);
+  border: 1px solid var(--pyt-color-text-primary);
   border-radius: 4px;
   font-weight: 700;
   font-size: 12px;
   line-height: 1.2;
   text-align: center;
-  box-shadow: 1px 1px 0 #4d3613;
+  box-shadow: 1px 1px 0 var(--pyt-color-text-primary);
 }
 
 .hint-text {
-  color: #ffd166;
+  color: var(--pyt-color-gold-bright);
   font-size: 13px;
 }
 
@@ -135,7 +135,7 @@ const visible = computed<boolean>(() => route.path === '/world');
     min-width: 18px;
     padding: 1px 4px;
     font-size: 10px;
-    box-shadow: 1px 1px 0 #4d3613;
+    box-shadow: 1px 1px 0 var(--pyt-color-text-primary);
   }
   .hint-text {
     font-size: 10px;

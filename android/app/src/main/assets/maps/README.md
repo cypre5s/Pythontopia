@@ -10,17 +10,21 @@
 
 ## 当前消费方
 
-Android-R12 demo 阶段 **不解析** 上述任何文件——`:game/HubScene` 走程序化绘制
-（草地 + 路 + 建筑 + 门洞 + NPC 全部以 `ShapeRenderer` 几何填色完成）。
+`:game/WorldRenderScreen` **已解析** 这 5 张 `*.json`（[TiledMapVisual]）并按 ground →
+buildings → decoration 分层渲染 + 视锥剔除，玩家走到地图边缘出口自动切图，碰撞取自
+buildings 瓦片层。
 
-文件提前落地是为：
+**瓦片集 / 角色精灵的二进制 PNG（Kenney tiny-town/dungeon、LPC 角色）目前未落地仓库**。
+为保证缺图不崩且仍能忠实渲染，`:game/ProceduralArt` + `GameAssets` 在运行时**程序化生成**
+等价配色：
 
-1. 让 Android-R13+ 接入瓦片渲染时无需再处理资产路径迁移；
-2. 让 LICENSE 跟资产同步存在，避免单独的二进制提交破坏 license 审计；
-3. Android-R13+ 真正用 `tilemap_packed.png` 时调用：
-   ```kotlin
-   val pixmap = Pixmap(Gdx.files.internal("maps/tilemap_packed.png"))
-   ```
+- 瓦片集：按 `scripts/generate-maps.mjs` 的 Kenney 帧语义（grass/path/water/roof/wall/door/
+  ore…）生成 12×11×16px 调色瓦片集（`frame = gid - 1`，与本目录 JSON 完全对齐）；
+- 角色：玩家 + NPC 用 Pixmap 现画的简易 4 向像素小人（NPC 上衣色按精灵文件名稳定派生）。
+
+若日后把真正的 CC0/CC-BY 二进制图集放到 `assets/tilesets/town.png`、`assets/tilesets/dungeon.png`、
+`assets/sprites/player_sara2.png`、`assets/sprites/npc/*.png`，`GameAssets` 会自动优先加载真素材，
+无需改代码。程序化生成属纯算法产物（CC0），不引入任何商业素材。
 
 ## 与 Web 端的关系
 

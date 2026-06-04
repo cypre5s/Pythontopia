@@ -15,6 +15,7 @@ import { useLearningStore } from '@stores/learning';
 import { useWorldStore } from '@stores/world';
 import { useToastStore } from '@stores/toast';
 import { findChapterByKcCode } from '@/data/chapters';
+import { humanizeKcText } from '@/data/kcNames';
 import { FAST_TRAVEL_ROUTES } from '@/data/fastTravel';
 import { resolveQuestGuidance, type QuestGuidance } from '@/utils/questGuidance';
 import { openNpcDialog } from '@game/adapters/dialog';
@@ -77,8 +78,12 @@ const currentKcName = computed<string>(() => {
   return code;
 });
 
-const currentTaskTitle = computed<string>(() => currentSubQuest.value?.title ?? '探索 Pythontopia 小镇');
-const currentTaskHint = computed<string>(() => currentSubQuest.value?.hint ?? '与 NPC 对话、参与练习，逐步积累 Python 基础。');
+const currentTaskTitle = computed<string>(
+  () => humanizeKcText(currentSubQuest.value?.title) || '探索 Pythontopia 小镇',
+);
+const currentTaskHint = computed<string>(
+  () => humanizeKcText(currentSubQuest.value?.hint) || '与 NPC 对话、参与练习，逐步积累 Python 基础。',
+);
 
 // 各章节默认教学要点：当子任务没有显式 objective 字段时（types/mainQuest.ts 暂未定义），
 // 用本地固定的章节级语义补足，避免硬塞空数组。
@@ -329,7 +334,7 @@ onUnmounted(() => {
   border-radius: 2px;
   box-shadow: 4px 4px 0 var(--pyt-panel-border-dark), 0 8px 24px var(--pyt-panel-shadow);
   color: var(--pyt-text-primary);
-  font-family: var(--pyt-font-pixel, 'Ark Pixel 12', 'PingFang SC', monospace);
+  font-family: var(--pyt-font-pixel);
   font-size: 13px;
   z-index: 80;
   pointer-events: auto;
@@ -506,8 +511,8 @@ onUnmounted(() => {
   font-family: inherit;
   font-size: 12px;
   font-weight: 700;
-  color: #2a1a05;
-  background: linear-gradient(180deg, var(--pyt-text-accent, #ffd166) 0%, var(--pyt-text-gold, #f1c453) 100%);
+  color: var(--pyt-color-shadow);
+  background: linear-gradient(180deg, var(--pyt-text-accent, var(--pyt-color-gold-bright)) 0%, var(--pyt-text-gold, var(--pyt-color-gold)) 100%);
   border: 1px solid var(--pyt-panel-border-dark);
   border-radius: 2px;
   box-shadow: 2px 2px 0 var(--pyt-panel-border-dark);
@@ -601,12 +606,12 @@ onUnmounted(() => {
   pointer-events: auto;
   background: var(--pyt-hud-bg, rgba(25, 28, 18, 0.82));
   border: 2px solid var(--pyt-panel-border, #d4af37);
-  color: var(--pyt-text-accent, #ffd166);
-  font-family: var(--pyt-font-pixel, monospace);
+  color: var(--pyt-text-accent, var(--pyt-color-gold-bright));
+  font-family: var(--pyt-font-pixel);
   font-size: 11px;
   padding: 6px 10px;
   cursor: pointer;
-  box-shadow: 2px 2px 0 var(--pyt-panel-border-dark, #6e4f1d);
+  box-shadow: 2px 2px 0 var(--pyt-panel-border-dark, var(--pyt-color-text-hint));
   transition: background 120ms;
   border-radius: 2px;
 }

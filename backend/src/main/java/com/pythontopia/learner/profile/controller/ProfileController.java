@@ -6,6 +6,7 @@ import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
 import com.pythontopia.learner.profile.dto.DimensionUpdateResult;
 import com.pythontopia.learner.profile.dto.LearnerProfileDto;
+import com.pythontopia.learner.profile.dto.ProfileDimensionDto;
 import com.pythontopia.learner.profile.dto.ProfileRevisionDto;
 import com.pythontopia.learner.profile.dto.SelfDimensionRequest;
 import com.pythontopia.learner.profile.service.PassiveProfileService;
@@ -47,6 +48,12 @@ public class ProfileController {
   List<ProfileRevisionDto> revisions(
       @CurrentUser CurrentUserPrincipal user, @RequestParam(defaultValue = "10") int limit) {
     return profileService.findRevisions(user.userId(), limit);
+  }
+
+  /** 8 维画像得分快照（供前端雷达图 + 自评 UI）。 */
+  @GetMapping("/dimensions")
+  List<ProfileDimensionDto> dimensions(@CurrentUser CurrentUserPrincipal user) {
+    return passiveProfileService.getDimensions(user.userId());
   }
 
   /**

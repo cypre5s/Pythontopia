@@ -49,6 +49,12 @@ class LearningPathServiceTest {
   private final MasteryEvaluator masteryEvaluator = mock(MasteryEvaluator.class);
   private final PathPlannerGraphClient graphClient = mock(PathPlannerGraphClient.class);
   private final ObjectMapper objectMapper = new ObjectMapper();
+  private final com.pythontopia.submission.repository.PracticeSubmissionRepository
+      submissionRepository =
+          mock(com.pythontopia.submission.repository.PracticeSubmissionRepository.class);
+  private final com.pythontopia.workshop.repository.LearningResourceRepository
+      learningResourceRepository =
+          mock(com.pythontopia.workshop.repository.LearningResourceRepository.class);
 
   private final LearningPathService service =
       new LearningPathService(
@@ -59,7 +65,9 @@ class LearningPathServiceTest {
           profileService,
           masteryEvaluator,
           graphClient,
-          objectMapper);
+          objectMapper,
+          submissionRepository,
+          learningResourceRepository);
 
   @Test
   void planRequiresProfile() {

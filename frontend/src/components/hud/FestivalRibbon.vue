@@ -80,7 +80,7 @@ const ribbonClass = computed(() => {
   background: rgba(28, 24, 16, 0.86);
   border: 2px solid #d4af37;
   border-radius: 999px;
-  color: #fff7e6;
+  color: var(--pyt-color-bg-elevated);
   font-family: var(--pyt-font-pixel), 'PingFang SC', monospace;
   font-size: 12px;
   letter-spacing: 0.5px;
@@ -92,12 +92,12 @@ const ribbonClass = computed(() => {
 
 .festival-ribbon__icon {
   font-size: 16px;
-  color: #ffd166;
-  text-shadow: 1px 1px 0 #2a1a05;
+  color: var(--pyt-color-gold-bright);
+  text-shadow: 1px 1px 0 var(--pyt-color-shadow);
 }
 
 .festival-ribbon__label {
-  color: #ffd166;
+  color: var(--pyt-color-gold-bright);
   font-weight: 700;
 }
 
@@ -109,10 +109,10 @@ const ribbonClass = computed(() => {
   border-color: #6bbf59;
 }
 .festival-ribbon--summer {
-  border-color: #2f8f3c;
+  border-color: var(--pyt-color-success);
 }
 .festival-ribbon--autumn {
-  border-color: #c2871f;
+  border-color: var(--pyt-color-warning);
 }
 .festival-ribbon--winter {
   border-color: #aac6d9;

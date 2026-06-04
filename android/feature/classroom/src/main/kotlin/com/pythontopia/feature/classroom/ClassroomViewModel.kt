@@ -75,7 +75,13 @@ class ClassroomViewModel @Inject constructor(
                 StudentRole.TEACHER, StudentRole.ADMIN ->
                     updateTeacher { it.copy(selectedClassroomId = classroomId) }
             }
-            loadClassroomDetail(classroomId)
+            runCatching { loadClassroomDetail(classroomId) }
+                .onFailure { error ->
+                    _state.value = ClassroomUiState.Failure(
+                        code = "CLASSROOM_DETAIL_FAILED",
+                        message = error.message ?: "班级详情加载失败，请稍后重试",
+                    )
+                }
         }
     }
 
@@ -107,7 +113,13 @@ class ClassroomViewModel @Inject constructor(
                         pendingJoin = false,
                         message = "已加入：${joined.name}",
                     )
-                    loadClassroomDetail(joined.classroomId)
+                    runCatching { loadClassroomDetail(joined.classroomId) }
+                        .onFailure { error ->
+                            _state.value = ClassroomUiState.Failure(
+                                code = "CLASSROOM_DETAIL_FAILED",
+                                message = error.message ?: "班级详情加载失败，请稍后重试",
+                            )
+                        }
                 }
                 .onFailure { error ->
                     _state.value = ClassroomUiState.Failure(
@@ -192,22 +204,29 @@ class ClassroomViewModel @Inject constructor(
      */
     private suspend fun refresh(initial: Boolean) {
         if (initial) _state.value = ClassroomUiState.Loading("正在加载班级…")
-        val classrooms = repository.myClassrooms()
-        val selectedId = classrooms.firstOrNull()?.classroomId
-        when (role) {
-            StudentRole.STUDENT ->
-                _state.value = ClassroomUiState.StudentState(
-                    classrooms = classrooms,
-                    selectedClassroomId = selectedId,
-                )
-            StudentRole.TEACHER, StudentRole.ADMIN ->
-                _state.value = ClassroomUiState.TeacherState(
-                    classrooms = classrooms,
-                    selectedClassroomId = selectedId,
-                )
-            null -> Unit
+        runCatching {
+            val classrooms = repository.myClassrooms()
+            val selectedId = classrooms.firstOrNull()?.classroomId
+            when (role) {
+                StudentRole.STUDENT ->
+                    _state.value = ClassroomUiState.StudentState(
+                        classrooms = classrooms,
+                        selectedClassroomId = selectedId,
+                    )
+                StudentRole.TEACHER, StudentRole.ADMIN ->
+                    _state.value = ClassroomUiState.TeacherState(
+                        classrooms = classrooms,
+                        selectedClassroomId = selectedId,
+                    )
+                null -> Unit
+            }
+            if (selectedId != null) loadClassroomDetail(selectedId)
+        }.onFailure { error ->
+            _state.value = ClassroomUiState.Failure(
+                code = "CLASSROOM_LOAD_FAILED",
+                message = error.message ?: "班级加载失败，请确认已登录且后端可用",
+            )
         }
-        if (selectedId != null) loadClassroomDetail(selectedId)
     }
 
     /**

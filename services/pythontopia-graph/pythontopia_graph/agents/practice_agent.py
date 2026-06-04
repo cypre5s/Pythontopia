@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pythontopia_graph.agents.personalization import personalization_messages
 from pythontopia_graph.llm.provider import LlmProvider
 from pythontopia_graph.nodes.evidence_fetcher import EvidenceBundle
 from pythontopia_graph.schemas.resource import (
@@ -46,6 +47,7 @@ class PracticeAgent:
                     "禁止给出完整答案；如需提示请放 hints 字段。"
                 ),
             },
+            *personalization_messages(request.profile_snapshot),
             {
                 "role": "user",
                 "content": (

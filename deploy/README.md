@@ -21,13 +21,25 @@ bash scripts/build-with-proxy.sh
 - npm：`registry.npmmirror.com`
 - pip：`mirrors.aliyun.com/pypi/simple/`
 
-## 一键启动
+## 开发模式（推荐日常改代码）
+
+```bash
+cd /home/cypress/Pythontopia
+./dev.sh            # Docker: postgres/redis/graph/rag；本机: mvn + Vite :5173
+./dev.sh --down     # 停止依赖与本机后端
+```
+
+故障排查（**Postgres 密码与 `.env` 不一致**等）：见 [`docs/dev-startup.md`](../docs/dev-startup.md)。
+
+## 一键启动（全 Docker 演示）
 
 ```bash
 cd /home/cypress/Pythontopia/deploy
 cp .env.example .env            # 按需填入 Spark/JWT/Invite/RAG token
 docker compose up -d --build    # 首次构建约需 5~10 分钟
 ```
+
+或项目根目录：`./start.sh`（不重建镜像时更快）。
 
 启动后端口约定：
 

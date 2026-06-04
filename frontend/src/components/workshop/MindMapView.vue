@@ -122,8 +122,8 @@ watch(() => props.content.mermaid, async () => {
 }
 .mermaid-render {
   background: #fffbe9;
-  border: 2px solid #c9a86b;
-  border-radius: 8px;
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-lg);
   padding: 16px;
   overflow-x: auto;
   min-height: 80px;
@@ -148,19 +148,19 @@ watch(() => props.content.mermaid, async () => {
 }
 .source-toggle button {
   background: none;
-  border: 1px solid #c9a86b;
+  border: 1px solid var(--pyt-color-border);
   border-radius: 4px;
   padding: 4px 10px;
   font-size: 12px;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
   cursor: pointer;
 }
 .source-toggle button:hover {
-  background: #fdf3d0;
+  background: var(--pyt-color-bg-soft);
 }
 .mermaid-source {
   background: #fffbe9;
-  border: 2px solid #c9a86b;
+  border: 2px solid var(--pyt-color-border);
   border-radius: 6px;
   padding: 10px;
   font-family: 'Fira Code', monospace;
@@ -168,7 +168,7 @@ watch(() => props.content.mermaid, async () => {
   white-space: pre-wrap;
 }
 .kc-map {
-  background: #fdf3d0;
+  background: var(--pyt-color-bg-soft);
   border-radius: 6px;
   padding: 10px;
 }

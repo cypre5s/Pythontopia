@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pythontopia_graph.agents.personalization import personalization_messages
 from pythontopia_graph.llm.provider import LlmProvider
 from pythontopia_graph.nodes.evidence_fetcher import EvidenceBundle
 from pythontopia_graph.schemas.resource import (
@@ -30,22 +31,42 @@ class HandoutAgent:
         self, request: ResourceProduceRequest, evidence: EvidenceBundle
     ) -> list[dict[str, str]]:
         evidence_summary = "\n".join(
-            f"page_id={hit.page_id} page_no={hit.page_no} kc={','.join(hit.kc_codes)} text={hit.text[:80]}"
+            f"page_id={hit.page_id} page_no={hit.page_no} kc={','.join(hit.kc_codes)} text={hit.text[:200]}"
             for hit in evidence.chunks[:6]
+        )
+        # 显式给出目标 JSON schema：真实 LLM（DeepSeek）虽返回 JSON，但若缺少顶层 handout
+        # 键，_build_from_response 会回落「自动兜底讲义」。page_refs 只能引用下方证据出现过
+        # 的 page_id/page_no，杜绝伪造页码（对齐 AGENTS 防幻觉约束）。
+        schema_hint = (
+            '{"title": "字符串", "summary": "一句话摘要", '
+            '"handout": {"sections": [{"heading": "小节标题", '
+            '"paragraphs": ["正文段落"], "code_snippets": ["可选代码"], '
+            '"page_refs": [{"page_id": 整数, "page_no": 整数, "chapter_id": 整数或null}]}]}}'
         )
         return [
             {
                 "role": "system",
                 "content": (
-                    "你是 Pythontopia ResourceDesignerAgent，输出 JSON，必须给出 page_refs。"
-                    "未知内容请明确标注'基于通识知识'。"
+                    "你是 Pythontopia ResourceDesignerAgent，为目标 KC 生成结构化讲义。"
+                    "只输出一个 JSON 对象，顶层必须包含 title、summary、handout 三个键，"
+                    f"严格遵循此结构：{schema_hint}。"
+                    "handout.sections 至少 1 个；每个 section 的 page_refs 只能引用下方证据中"
+                    "出现过的 page_id/page_no，严禁编造页码；若某段来自通识而非课件，"
+                    "page_refs 留空并在正文标注'基于通识知识'。"
                 ),
             },
             {
                 "role": "system",
-                "content": f"目标 KC: {','.join(request.kc_codes)}\n证据: {evidence_summary}",
+                "content": (
+                    f"目标 KC: {','.join(request.kc_codes)}\n"
+                    f"可引用证据(page_id/page_no/kc/文本片段):\n{evidence_summary}"
+                ),
             },
-            {"role": "user", "content": request.focus_hint or "请围绕目标 KC 生成讲义"},
+            *personalization_messages(request.profile_snapshot),
+            {
+                "role": "user",
+                "content": request.focus_hint or "请围绕目标 KC，结合上述证据页生成一份讲义",
+            },
         ]
 
     def _build_from_response(

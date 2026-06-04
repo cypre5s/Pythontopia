@@ -4,6 +4,9 @@ import { useRouter } from 'vue-router';
 import { useLearningStore } from '@stores/learning';
 import { useToastStore } from '@stores/toast';
 import { playSfx } from '@/composables/useAudio';
+import { MAIN_QUESTS } from '@/data/mainQuests';
+import { kcDisplayName } from '@/data/kcNames';
+import PyButton from '@/components/ui/PyButton.vue';
 import TutorPanel from '@/components/tutor/TutorPanel.vue';
 
 const learning = useLearningStore();
@@ -11,6 +14,32 @@ const toast = useToastStore();
 const router = useRouter();
 
 const problem = computed(() => learning.training.problem);
+
+// P1-c：掌握度透明化——把本题 KC 的隐藏掌握度翻成「当前/100 + 做对一题约 +20」，
+// 若该 KC 是某主线 kc_mastery「测」子任务目标，再显式给出目标分与还差几题。
+const MASTERY_PER_PASS = 20;
+interface KcMasteryHint {
+  current: number;
+  target: number | null;
+  remaining: number | null;
+}
+const kcMasteryHint = computed<KcMasteryHint | null>(() => {
+  const kc = problem.value?.kcCode;
+  if (!kc) return null;
+  const snap = learning.field.masterySnapshot.find((s) => s.kcCode === kc);
+  const current = Math.round((snap?.masteryScore ?? 0) * 100);
+  let target: number | null = null;
+  for (const q of MAIN_QUESTS) {
+    const ev = q.evidenceRequired;
+    if (ev.type === 'kc_mastery' && ev.kcCode === kc) {
+      target = ev.thresholdScore;
+      break;
+    }
+  }
+  const remaining =
+    target === null ? null : current >= target ? 0 : Math.ceil((target - current) / MASTERY_PER_PASS);
+  return { current, target, remaining };
+});
 const sampleStdin = computed(() => {
   const samples = problem.value?.samples ?? [];
   const first = samples[0];
@@ -135,7 +164,19 @@ const tutorContext = computed<string>(() => {
         v-if="problem"
         class="meta"
       >
-        KC: {{ problem.kcCode }} · 难度: {{ problem.difficulty }}
+        {{ kcDisplayName(problem.kcCode) }} · 难度: {{ problem.difficulty }}
+      </p>
+      <p
+        v-if="kcMasteryHint"
+        class="mastery-hint"
+        data-testid="training-mastery-hint"
+      >
+        本题 KC 掌握度：<strong>{{ kcMasteryHint.current }}/100</strong>（做对一题约 +{{ MASTERY_PER_PASS }}）
+        <template v-if="kcMasteryHint.target !== null">
+          · 主线「测」目标 {{ kcMasteryHint.target }}
+          <span v-if="kcMasteryHint.remaining">（约再做对 {{ kcMasteryHint.remaining }} 题达标）</span>
+          <span v-else>· ✓ 已达标</span>
+        </template>
       </p>
       <p class="warning">
         Pyodide 即时预览结果不入库；正式提交才会记录到 practice_submission。
@@ -182,24 +223,22 @@ const tutorContext = computed<string>(() => {
           @input="(event) => learning.setTrainingCode((event.target as HTMLTextAreaElement).value)"
         />
         <div class="actions">
-          <button
-            type="button"
-            class="ghost"
+          <PyButton
+            test-id="preview-button"
+            variant="secondary"
             :disabled="learning.training.phase === 'previewing'"
-            data-testid="preview-button"
             @click="preview"
           >
             即时预览（Pyodide）
-          </button>
-          <button
-            type="button"
-            class="primary"
+          </PyButton>
+          <PyButton
+            test-id="submit-button"
+            variant="primary"
             :disabled="learning.training.phase === 'submitting'"
-            data-testid="submit-button"
             @click="submit"
           >
             正式提交（服务端判题）
-          </button>
+          </PyButton>
         </div>
         <section
           v-if="learning.training.preview"
@@ -233,15 +272,14 @@ const tutorContext = computed<string>(() => {
           >
             {{ learning.training.submission.judgeResult.failureReason }}
           </p>
-          <button
+          <PyButton
             v-if="showBugMineButton"
-            type="button"
-            class="mine"
-            data-testid="bug-mine-button"
+            test-id="bug-mine-button"
+            variant="secondary"
             @click="enterBugMine"
           >
             进入 Bug 矿洞分析
-          </button>
+          </PyButton>
         </section>
       </article>
     </section>
@@ -250,14 +288,14 @@ const tutorContext = computed<string>(() => {
       v-if="problem"
       class="tutor-dock"
     >
-      <button
-        type="button"
+      <PyButton
         class="tutor-toggle"
-        data-testid="training-tutor-toggle"
+        test-id="training-tutor-toggle"
+        variant="secondary"
         @click="toggleTutor"
       >
         {{ showTutor ? '收起 AI 导学助手 ▴' : '🤖 问 AI 导学助手（带本题上下文，只给思路）▾' }}
-      </button>
+      </PyButton>
       <div
         v-if="showTutor"
         class="tutor-dock__body"
@@ -274,28 +312,40 @@ const tutorContext = computed<string>(() => {
 
 <style scoped>
 .training {
-  background: #fffbe9;
-  border: 2px solid #c9a86b;
-  border-radius: 10px;
+  background: var(--pyt-color-bg-elevated);
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-lg);
   padding: 16px;
   display: grid;
   gap: 14px;
-  color: #2b1c0b;
+  color: var(--pyt-color-text-primary);
 }
 header h2 {
   margin: 0;
 }
 .meta {
   margin: 4px 0 0;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
   font-size: 13px;
 }
 .warning {
-  background: #ffe7b5;
+  background: var(--pyt-color-warning-bg);
   border-radius: 6px;
   padding: 6px 10px;
   font-size: 12px;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
+}
+.mastery-hint {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--pyt-color-text-hint);
+  background: var(--pyt-color-bg-soft);
+  border: 1px solid var(--pyt-color-border);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+.mastery-hint strong {
+  color: var(--pyt-color-text-primary);
 }
 .layout {
   display: grid;
@@ -306,9 +356,9 @@ header h2 {
   .layout { grid-template-columns: 1fr; }
 }
 .problem {
-  background: #fff7e6;
-  border: 1px solid #c9a86b;
-  border-radius: 8px;
+  background: var(--pyt-color-bg-elevated);
+  border: 1px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-lg);
   padding: 12px;
   display: grid;
   gap: 8px;
@@ -328,8 +378,8 @@ header h2 {
   gap: 6px;
 }
 .sample pre {
-  background: #2e2417;
-  color: #f1e5c8;
+  background: var(--pyt-color-terminal-bg);
+  color: var(--pyt-color-terminal-text);
   margin: 0;
   padding: 6px;
   border-radius: 4px;
@@ -346,70 +396,41 @@ header h2 {
   font-size: 13px;
   padding: 10px;
   border-radius: 6px;
-  border: 1px solid #c9a86b;
-  background: #fffbe9;
-  color: #2b1c0b;
+  border: 1px solid var(--pyt-color-border);
+  background: var(--pyt-color-bg-elevated);
+  color: var(--pyt-color-text-primary);
   resize: vertical;
 }
 .actions {
   display: flex;
   gap: 8px;
 }
-.actions button {
-  padding: 6px 14px;
-  border-radius: 6px;
-  border: 2px solid #6e4f1d;
-  cursor: pointer;
-  font-weight: 600;
-}
-.actions .primary {
-  background: #6e4f1d;
-  color: #fff7e6;
-}
-.actions .ghost {
-  background: #fff7e6;
-  color: #6e4f1d;
-}
-.actions button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
 .preview, .submission {
-  background: #fff7e6;
-  border: 1px solid #c9a86b;
+  background: var(--pyt-color-bg-elevated);
+  border: 1px solid var(--pyt-color-border);
   border-radius: 6px;
   padding: 10px;
   display: grid;
   gap: 6px;
 }
 .stdout {
-  background: #2e2417;
-  color: #b1e8a1;
+  background: var(--pyt-color-terminal-bg);
+  color: var(--pyt-color-terminal-stdout);
   padding: 8px;
   border-radius: 4px;
   margin: 0;
   white-space: pre-wrap;
 }
 .stderr {
-  background: #381b18;
-  color: #ff9d8a;
+  background: var(--pyt-color-terminal-stderr-bg);
+  color: var(--pyt-color-terminal-stderr-text);
   padding: 8px;
   border-radius: 4px;
   margin: 0;
   white-space: pre-wrap;
 }
 .reason {
-  color: #b3402a;
-}
-.mine {
-  margin-top: 8px;
-  background: #4d3613;
-  color: #fff7e6;
-  border: 2px solid #2b1c0b;
-  padding: 6px 14px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 600;
+  color: var(--pyt-color-danger);
 }
 .tutor-dock {
   display: grid;
@@ -417,22 +438,12 @@ header h2 {
 }
 .tutor-toggle {
   justify-self: start;
-  padding: 8px 16px;
-  border: 2px solid #6e4f1d;
-  background: #ffe7b5;
-  color: #6e4f1d;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 600;
-}
-.tutor-toggle:hover {
-  background: #ffdf9e;
 }
 .tutor-dock__body {
   height: 460px;
-  border: 2px solid #c9a86b;
-  border-radius: 8px;
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-lg);
   overflow: hidden;
-  background: #fff7e6;
+  background: var(--pyt-color-bg-elevated);
 }
 </style>

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -69,7 +70,7 @@ fun SubmissionResultPanel(
         }
 
         val traceback = submission?.traceback
-        if (!traceback.isNullOrBlank() && submission.status != SubmissionStatus.ACCEPTED) {
+        if (!traceback.isNullOrBlank() && !submission.status.isSuccess) {
             TracebackBox(traceback = traceback)
         }
     }
@@ -152,6 +153,7 @@ private fun TracebackBox(traceback: String) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(max = TRACEBACK_MAX_HEIGHT.dp)
             .background(PytColors.bgSunken, RoundedCornerShape(PytSpace.s2))
             .border(1.dp, PytColors.danger.copy(alpha = 0.4f), RoundedCornerShape(PytSpace.s2))
             .padding(PytSpace.s2)
@@ -170,9 +172,12 @@ private fun TracebackBox(traceback: String) {
 private fun statusColors(status: SubmissionStatus): Pair<Color, Color> = when (status) {
     SubmissionStatus.PENDING -> PytColors.bgSoft to PytColors.textHint
     SubmissionStatus.RUNNING -> PytColors.bgSoft to PytColors.info
+    SubmissionStatus.PASSED,
     SubmissionStatus.ACCEPTED -> PytColors.success.copy(alpha = 0.18f) to PytColors.success
+    SubmissionStatus.FAILED,
     SubmissionStatus.WRONG_ANSWER -> PytColors.danger.copy(alpha = 0.18f) to PytColors.danger
     SubmissionStatus.TIME_LIMIT -> PytColors.warning.copy(alpha = 0.18f) to PytColors.warning
+    SubmissionStatus.ERROR,
     SubmissionStatus.RUNTIME_ERROR -> PytColors.danger.copy(alpha = 0.18f) to PytColors.danger
 }
 
@@ -184,3 +189,4 @@ private fun formatCases(passed: Int?, total: Int?): String {
 }
 
 private const val TRACEBACK_FONT_SIZE: Int = 12
+private const val TRACEBACK_MAX_HEIGHT: Int = 220

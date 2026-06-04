@@ -17,6 +17,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import AppLayout from '@/app/AppLayout.vue';
+import { kcDisplayName } from '@/data/kcNames';
 import BossSprite from '@/components/boss/BossSprite.vue';
 import { KindRouter } from '@/components/arena';
 import { useEndlessRun } from '@/composables/useEndlessRun';
@@ -166,7 +167,10 @@ watch(
           {{ arenaLevelId ? `闯关塔 ${arenaLevelId} · ${kindLabel}` : '无尽闯关 · 连续出题' }}
         </h1>
         <div class="endless-stats">
-          <span class="stat" data-testid="endless-streak">
+          <span
+            class="stat"
+            data-testid="endless-streak"
+          >
             <span class="stat-label">连胜</span>
             <span class="stat-value">{{ run.streak.value }}</span>
           </span>
@@ -174,7 +178,10 @@ watch(
             <span class="stat-label">最佳</span>
             <span class="stat-value">{{ run.bestStreak.value }}</span>
           </span>
-          <span class="stat" data-testid="endless-total-score">
+          <span
+            class="stat"
+            data-testid="endless-total-score"
+          >
             <span class="stat-label">总分</span>
             <span class="stat-value">{{ run.totalScore.value }}</span>
           </span>
@@ -269,7 +276,7 @@ watch(
         <article class="endless-problem">
           <header class="endless-problem__head">
             <span class="chapter-pill">{{ currentChapterName }}</span>
-            <span class="kc-pill">KC {{ run.problem.value?.kcCode }}</span>
+            <span class="kc-pill">{{ kcDisplayName(run.problem.value?.kcCode) }}</span>
             <span class="diff-pill">难度 {{ run.problem.value?.difficulty }} / 5</span>
             <span
               v-if="run.problem.value?.aiGenerated"
@@ -374,7 +381,7 @@ watch(
             >
               <header>
                 <strong>第 {{ h.chapter }} 章 · 难 {{ h.difficulty }}</strong>
-                <span class="badge">{{ h.kcCode }}</span>
+                <span class="badge">{{ kcDisplayName(h.kcCode) }}</span>
               </header>
               <small>
                 {{ h.passed ? '通过' : '失败' }} · +{{ h.score }} 分 · {{ h.elapsedSec }}s
@@ -395,8 +402,8 @@ watch(
   padding: 14px;
   min-height: calc(100dvh - 56px);
   background: radial-gradient(ellipse at top, #1a3a6e 0%, #0a0a1a 80%);
-  color: #fff7e6;
-  font-family: var(--pyt-font-pixel, monospace);
+  color: var(--pyt-color-bg-elevated);
+  font-family: var(--pyt-font-pixel);
 }
 .endless-head {
   display: grid;
@@ -411,7 +418,7 @@ watch(
 .endless-title {
   margin: 0;
   font-size: 18px;
-  color: #ffd166;
+  color: var(--pyt-color-gold-bright);
   text-shadow: 2px 2px 0 #1a0e04;
 }
 .endless-stats {
@@ -430,7 +437,7 @@ watch(
 }
 .stat-value {
   font-size: 16px;
-  color: #f1c453;
+  color: var(--pyt-color-gold);
 }
 .endless-toolbar {
   display: flex;
@@ -450,7 +457,7 @@ watch(
 .toolbar-field select {
   font-family: inherit;
   background: #1a2a4a;
-  color: #fff7e6;
+  color: var(--pyt-color-bg-elevated);
   border: 2px solid #4a90e2;
   padding: 2px 6px;
 }
@@ -460,21 +467,21 @@ watch(
   font-size: 13px;
   padding: 6px 14px;
   background: #1e3a8a;
-  color: #fff7e6;
+  color: var(--pyt-color-bg-elevated);
   border: 2px solid #4a90e2;
   border-radius: 4px;
   box-shadow: 0 2px 0 #1a2a6e;
 }
 .endless-btn--exit {
-  background: #6e4f1d;
-  border-color: #4d3613;
-  box-shadow: 0 2px 0 #4d3613;
+  background: var(--pyt-color-text-hint);
+  border-color: var(--pyt-color-text-primary);
+  box-shadow: 0 2px 0 var(--pyt-color-text-primary);
 }
 .endless-btn--primary {
-  background: #f1c453;
+  background: var(--pyt-color-gold);
   color: #2a1a08;
-  border-color: #6e4f1d;
-  box-shadow: 0 2px 0 #6e4f1d;
+  border-color: var(--pyt-color-text-hint);
+  box-shadow: 0 2px 0 var(--pyt-color-text-hint);
 }
 .endless-btn--next {
   background: #6bbf59;
@@ -492,7 +499,7 @@ watch(
   box-shadow: none;
 }
 .endless-rate {
-  color: #f1c453;
+  color: var(--pyt-color-gold);
   font-size: 12px;
 }
 .endless-empty,
@@ -558,14 +565,14 @@ watch(
 }
 .badge--golden {
   background: rgba(241, 196, 83, 0.2);
-  border-color: #f1c453;
-  color: #f1c453;
+  border-color: var(--pyt-color-gold);
+  color: var(--pyt-color-gold);
 }
 .timer {
   margin-left: auto;
   background: rgba(241, 196, 83, 0.18);
-  border-color: #f1c453;
-  color: #f1c453;
+  border-color: var(--pyt-color-gold);
+  color: var(--pyt-color-gold);
 }
 .endless-problem__statement {
   margin: 0;
@@ -599,7 +606,7 @@ watch(
   background: #1a2a4a;
   border: 1px solid #4a90e2;
   font-size: 12px;
-  color: #fff7e6;
+  color: var(--pyt-color-bg-elevated);
 }
 .endless-editor {
   display: flex;
@@ -641,11 +648,11 @@ watch(
 }
 .hint {
   font-style: italic;
-  color: #f1c453;
+  color: var(--pyt-color-gold);
 }
 .endless-side h3 {
   margin: 0;
-  color: #ffd166;
+  color: var(--pyt-color-gold-bright);
   font-size: 14px;
 }
 .history-list {

@@ -7,7 +7,7 @@ describe('hud store', () => {
     setActivePinia(createPinia());
   });
 
-  it('默认 state 与 5 个 quick slot 互斥单选 + 顶/底栏 shown', () => {
+  it('默认 state 与 4 个 quick slot 互斥单选 + 顶/底栏 shown', () => {
     const store = useHudStore();
     expect(store.topBar).toBe('shown');
     expect(store.bottomBar).toBe('shown');
@@ -18,7 +18,6 @@ describe('hud store', () => {
       timeOfDay: 'MORNING',
       season: 'SPRING',
       energy: 100,
-      coin: 0,
       masteryAvg: 0,
     });
   });
@@ -29,11 +28,11 @@ describe('hud store', () => {
     expect(store.activeSlot).toBe('quest');
   });
 
-  it('toggleSlot 同 slot 再次调用关闭：quest → null', () => {
+  it('toggleSlot 同 slot 再次调用关闭：map → null', () => {
     const store = useHudStore();
-    store.toggleSlot('inventory');
-    expect(store.activeSlot).toBe('inventory');
-    store.toggleSlot('inventory');
+    store.toggleSlot('map');
+    expect(store.activeSlot).toBe('map');
+    store.toggleSlot('map');
     expect(store.activeSlot).toBeNull();
   });
 
@@ -49,7 +48,7 @@ describe('hud store', () => {
   it('toggleSlot 在 bottomBar=hidden 时被忽略（避免程序化误弹）', () => {
     const store = useHudStore();
     store.setVisibility('bottom', 'hidden');
-    store.toggleSlot('inventory');
+    store.toggleSlot('map');
     expect(store.activeSlot).toBeNull();
     expect(store.canToggleSlot).toBe(false);
   });
@@ -81,7 +80,6 @@ describe('hud store', () => {
     expect(store.meta.energy).toBe(42);
     expect(store.meta.weather).toBe('SUNNY');
     expect(store.meta.season).toBe('SPRING');
-    expect(store.meta.coin).toBe(0);
     store.syncMeta({ weather: 'RAINY' });
     expect(store.meta.weather).toBe('RAINY');
     expect(store.meta.dayIndex).toBe(7);
@@ -92,23 +90,21 @@ describe('hud store', () => {
     store.toggleSlot('skill');
     store.setVisibility('top', 'hidden');
     store.setVisibility('bottom', 'collapsed');
-    store.syncMeta({ coin: 999, dayIndex: 30 });
+    store.syncMeta({ dayIndex: 30 });
 
     store.reset();
 
     expect(store.topBar).toBe('shown');
     expect(store.bottomBar).toBe('shown');
     expect(store.activeSlot).toBeNull();
-    expect(store.meta.coin).toBe(0);
     expect(store.meta.dayIndex).toBe(1);
     expect(store.meta.weather).toBe('SUNNY');
   });
 
-  it('5 个面板 getter（quest/dialog/inventory/map/skill）随 activeSlot 切换返回对应布尔', () => {
+  it('4 个面板 getter（quest/dialog/map/skill）随 activeSlot 切换返回对应布尔', () => {
     const store = useHudStore();
     expect(store.isQuestOpen).toBe(false);
     expect(store.isDialogOpen).toBe(false);
-    expect(store.isInventoryOpen).toBe(false);
     expect(store.isMapOpen).toBe(false);
     expect(store.isSkillOpen).toBe(false);
 
@@ -120,13 +116,9 @@ describe('hud store', () => {
     expect(store.isQuestOpen).toBe(false);
     expect(store.isDialogOpen).toBe(true);
 
-    store.toggleSlot('inventory');
-    expect(store.isInventoryOpen).toBe(true);
-    expect(store.isDialogOpen).toBe(false);
-
     store.toggleSlot('map');
     expect(store.isMapOpen).toBe(true);
-    expect(store.isInventoryOpen).toBe(false);
+    expect(store.isDialogOpen).toBe(false);
 
     store.toggleSlot('skill');
     expect(store.isSkillOpen).toBe(true);

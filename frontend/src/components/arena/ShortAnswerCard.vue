@@ -30,7 +30,7 @@ const code = defineModel<string>('code', { required: true });
 .short-answer-card { display: grid; gap: 12px; }
 .card-head { display: flex; align-items: center; gap: 8px; }
 .card-icon { font-size: 20px; }
-.card-head h3 { margin: 0; font-size: 16px; color: #ffd166; }
+.card-head h3 { margin: 0; font-size: 16px; color: var(--pyt-color-gold-bright); }
 .badge-grounding { margin-left: auto; font-size: 11px; color: #b8d99a; padding: 2px 8px; background: rgba(120,220,120,0.2); border: 1px solid #6bbf59; border-radius: 3px; }
 .question { margin: 0; padding: 12px; background: #0a1428; border: 2px solid #4a90e2; white-space: pre-wrap; font-size: 14px; line-height: 1.7; color: #e5e7eb; }
 .answer-editor { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }

@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import AppLayout from '@/app/AppLayout.vue';
+import PyButton from '@/components/ui/PyButton.vue';
 import { useSessionStore } from '@stores/session';
 import { useLearningStore } from '@stores/learning';
 import { listMyClassrooms } from '@/api/classroom';
@@ -158,15 +159,14 @@ onMounted(async () => {
                 cy="50"
                 r="42"
                 fill="none"
-                stroke="#c9a86b"
                 stroke-width="6"
+                class="mastery-ring__track"
               />
               <circle
                 cx="50"
                 cy="50"
                 r="42"
                 fill="none"
-                stroke="#6bbf59"
                 stroke-width="6"
                 stroke-linecap="round"
                 :stroke-dasharray="CIRCUMFERENCE"
@@ -225,7 +225,7 @@ onMounted(async () => {
               >{{ typeIcon(rec.type) }}</span>
               <div class="rec-card__body">
                 <span class="rec-card__title">{{ rec.title }}</span>
-                <span class="rec-card__kc">{{ rec.kcCode }} · {{ rec.kcName }}</span>
+                <span class="rec-card__kc">{{ rec.kcName }}</span>
                 <span class="rec-card__reason">{{ rec.reason }}</span>
               </div>
             </li>
@@ -267,22 +267,20 @@ onMounted(async () => {
 
         <!-- ── CTA 区域 ── -->
         <div class="cta-row">
-          <button
-            type="button"
-            class="cta-main"
-            data-testid="cta-world"
+          <PyButton
+            test-id="cta-world"
+            variant="primary"
             @click="goWorld"
           >
             继续学习
-          </button>
-          <button
-            type="button"
-            class="cta-secondary"
-            data-testid="cta-tutor"
+          </PyButton>
+          <PyButton
+            test-id="cta-tutor"
+            variant="secondary"
             @click="goTutor"
           >
             问导师
-          </button>
+          </PyButton>
         </div>
 
         <!-- ── 快速导航 ── -->
@@ -346,13 +344,12 @@ onMounted(async () => {
           <p class="guest-sub">
             面向高校 Python 初学者的像素学习小镇
           </p>
-          <button
-            type="button"
-            class="cta-main"
+          <PyButton
+            variant="primary"
             @click="goLogin"
           >
             登录 / 注册
-          </button>
+          </PyButton>
         </div>
       </template>
     </main>
@@ -366,9 +363,9 @@ onMounted(async () => {
   background:
     linear-gradient(180deg, rgba(255, 247, 230, 0.5), rgba(243, 228, 190, 0.7)),
     repeating-linear-gradient(135deg, rgba(110, 79, 29, 0.05) 0 6px, transparent 6px 14px),
-    #fef6dd;
-  font-family: var(--pyt-font-pixel, monospace);
-  color: #3a2a14;
+    var(--pyt-color-bg-primary);
+  font-family: var(--pyt-font-pixel);
+  color: var(--pyt-color-text-primary);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -383,9 +380,9 @@ onMounted(async () => {
   width: 100%;
   max-width: 720px;
   padding: 16px 20px;
-  background: linear-gradient(180deg, #f9e7bc 0%, #f1d896 100%);
-  border: 4px solid #6e4f1d;
-  border-radius: 10px;
+  background: linear-gradient(180deg, var(--pyt-color-bg-soft) 0%, var(--pyt-color-bg-sunken) 100%);
+  border: 4px solid var(--pyt-color-text-hint);
+  border-radius: var(--pyt-radius-lg);
   box-shadow: 0 4px 0 rgba(0, 0, 0, 0.18), inset 0 0 0 2px rgba(255, 247, 230, 0.55);
 }
 .welcome-text {
@@ -395,18 +392,18 @@ onMounted(async () => {
 .welcome-title {
   margin: 0;
   font-size: 22px;
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
   line-height: 1.3;
 }
 .welcome-class {
   margin: 4px 0 0;
   font-size: 13px;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
 }
 .welcome-hint {
   margin: 6px 0 0;
   font-size: 12px;
-  color: #8a6c2c;
+  color: var(--pyt-color-text-muted);
 }
 
 /* ── Mastery Ring ── */
@@ -419,19 +416,23 @@ onMounted(async () => {
   width: 100%;
   height: 100%;
 }
+.mastery-ring__track {
+  stroke: var(--pyt-color-border);
+}
 .mastery-ring__fill {
+  stroke: var(--pyt-color-success);
   transition: stroke-dashoffset 600ms ease-out;
 }
 .ring-pct {
-  font-family: var(--pyt-font-pixel, monospace);
+  font-family: var(--pyt-font-pixel);
   font-size: 20px;
   font-weight: 700;
-  fill: #4d3613;
+  fill: var(--pyt-color-text-primary);
 }
 .ring-label {
-  font-family: var(--pyt-font-pixel, monospace);
+  font-family: var(--pyt-font-pixel);
   font-size: 10px;
-  fill: #8a6c2c;
+  fill: var(--pyt-color-text-muted);
 }
 
 /* ── Sections ── */
@@ -442,7 +443,7 @@ onMounted(async () => {
 .section__title {
   margin: 0 0 10px;
   font-size: 16px;
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
   border-bottom: 2px dashed rgba(110, 79, 29, 0.35);
   padding-bottom: 4px;
 }
@@ -450,11 +451,11 @@ onMounted(async () => {
   margin: 0;
   padding: 14px;
   text-align: center;
-  background: #fff7e6;
-  border: 2px dashed #c9a86b;
+  background: var(--pyt-color-bg-elevated);
+  border: 2px dashed var(--pyt-color-border);
   border-radius: 6px;
   font-size: 13px;
-  color: #8a6c2c;
+  color: var(--pyt-color-text-muted);
 }
 
 /* ── Recommendation Cards ── */
@@ -471,16 +472,16 @@ onMounted(async () => {
   align-items: flex-start;
   gap: 10px;
   padding: 10px 14px;
-  background: #fff7e6;
-  border: 3px solid #c9a86b;
-  border-radius: 8px;
+  background: var(--pyt-color-bg-elevated);
+  border: 3px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-lg);
   cursor: pointer;
   transition: background 120ms, border-color 120ms, transform 80ms;
   box-shadow: 0 2px 0 rgba(0, 0, 0, 0.1);
 }
 .rec-card:hover {
-  background: #f5e2c1;
-  border-color: #6e4f1d;
+  background: var(--pyt-color-warning-bg);
+  border-color: var(--pyt-color-text-hint);
   transform: translateY(-1px);
   box-shadow: 0 4px 0 rgba(0, 0, 0, 0.14);
 }
@@ -490,7 +491,7 @@ onMounted(async () => {
 }
 .rec-card__icon {
   font-size: 20px;
-  color: #d4af37;
+  color: var(--pyt-color-gold);
   flex: 0 0 auto;
   margin-top: 2px;
 }
@@ -504,19 +505,19 @@ onMounted(async () => {
 .rec-card__title {
   font-size: 14px;
   font-weight: 700;
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .rec-card__kc {
   font-size: 11px;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
   font-family: var(--pyt-font-pixel-mono, monospace);
 }
 .rec-card__reason {
   font-size: 12px;
-  color: #8a6c2c;
+  color: var(--pyt-color-text-muted);
   line-height: 1.4;
 }
 
@@ -534,13 +535,13 @@ onMounted(async () => {
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  background: #fff7e6;
-  border: 2px solid #c9a86b;
+  background: var(--pyt-color-bg-elevated);
+  border: 2px solid var(--pyt-color-border);
   border-radius: 6px;
   font-size: 13px;
 }
 .quest-chip__title {
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -555,15 +556,15 @@ onMounted(async () => {
 }
 .quest-chip--open .quest-chip__status {
   background: rgba(212, 175, 55, 0.25);
-  color: #8a6c2c;
+  color: var(--pyt-color-text-muted);
 }
 .quest-chip--in_progress .quest-chip__status {
   background: rgba(107, 191, 89, 0.25);
-  color: #2d5b1b;
+  color: var(--pyt-color-success);
 }
 .quest-chip--completed .quest-chip__status {
   background: rgba(120, 180, 80, 0.3);
-  color: #1a4d0a;
+  color: var(--pyt-color-success);
 }
 
 /* ── CTA Row ── */
@@ -574,48 +575,6 @@ onMounted(async () => {
   max-width: 720px;
   justify-content: center;
 }
-.cta-main {
-  font-family: var(--pyt-font-pixel, monospace);
-  font-size: 16px;
-  font-weight: 700;
-  padding: 10px 32px;
-  background: #f7d774;
-  color: #2a1a08;
-  border: 4px solid #8c6a23;
-  border-radius: 6px;
-  box-shadow: 0 4px 0 #8c6a23;
-  cursor: pointer;
-  transition: transform 80ms, box-shadow 80ms;
-}
-.cta-main:hover {
-  background: #fde48a;
-}
-.cta-main:active {
-  transform: translateY(3px);
-  box-shadow: 0 1px 0 #8c6a23;
-}
-.cta-secondary {
-  font-family: var(--pyt-font-pixel, monospace);
-  font-size: 14px;
-  font-weight: 700;
-  padding: 10px 24px;
-  background: #fff7e6;
-  color: #4d3613;
-  border: 3px solid #c9a86b;
-  border-radius: 6px;
-  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.12);
-  cursor: pointer;
-  transition: transform 80ms, box-shadow 80ms;
-}
-.cta-secondary:hover {
-  background: #f5e2c1;
-  border-color: #6e4f1d;
-}
-.cta-secondary:active {
-  transform: translateY(2px);
-  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.1);
-}
-
 /* ── Quick Actions ── */
 .quick-actions {
   display: flex;
@@ -630,9 +589,9 @@ onMounted(async () => {
   align-items: center;
   gap: 4px;
   padding: 10px 18px;
-  background: linear-gradient(180deg, #f9e7bc 0%, #f1d896 100%);
-  border: 3px solid #c9a86b;
-  border-radius: 8px;
+  background: linear-gradient(180deg, var(--pyt-color-bg-soft) 0%, var(--pyt-color-bg-sunken) 100%);
+  border: 3px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-lg);
   cursor: pointer;
   font-family: inherit;
   transition: background 120ms, border-color 120ms, transform 80ms;
@@ -640,8 +599,8 @@ onMounted(async () => {
   min-width: 72px;
 }
 .quick-btn:hover {
-  border-color: #6e4f1d;
-  background: #f5e2c1;
+  border-color: var(--pyt-color-text-hint);
+  background: var(--pyt-color-warning-bg);
   transform: translateY(-1px);
   box-shadow: 0 4px 0 rgba(0, 0, 0, 0.14);
 }
@@ -651,11 +610,11 @@ onMounted(async () => {
 }
 .quick-btn__icon {
   font-size: 22px;
-  color: #d4af37;
+  color: var(--pyt-color-gold);
 }
 .quick-btn__label {
   font-size: 12px;
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
   font-weight: 700;
 }
 
@@ -670,13 +629,13 @@ onMounted(async () => {
 .guest-title {
   margin: 0;
   font-size: 48px;
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
   letter-spacing: 2px;
 }
 .guest-sub {
   margin: 0;
   font-size: 16px;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
 }
 
 /* ── Responsive ── */

@@ -2,17 +2,16 @@ import { defineStore } from 'pinia';
 import { fetchWorldSession, patchPlayerState } from '@api/world';
 import { fetchGameBootstrap, postWorldSleep } from '@api/game';
 import { useCalendarStore } from '@stores/calendar';
-import { useInventoryStore } from '@stores/inventory';
 import { useLearningStore } from '@stores/learning';
 import { useNpcStore } from '@stores/npc';
 import { useSkillStore } from '@stores/skill';
 import { useHudStore } from '@stores/hud';
 import { useToastStore } from '@stores/toast';
+import { useMainQuestStore } from '@stores/mainQuest';
 import { playChime } from '@/composables/useStardewFx';
 import type { Direction } from '@api/dto/Direction';
 import type { GameBootstrapResponseDto } from '@api/dto/GameBootstrapResponseDto';
 import type { NpcStateDto } from '@api/dto/NpcStateDto';
-import type { PlayerCurrencyDto } from '@api/dto/PlayerCurrencyDto';
 import type { PlayerStateDto } from '@api/dto/PlayerStateDto';
 import type { SaveSlotDto, SaveSlotInventoryItem } from '@api/dto/SaveSlotDto';
 import type { WorldSessionDto } from '@api/dto/WorldSessionDto';
@@ -36,7 +35,6 @@ export const useWorldStore = defineStore('world', {
     session: null as WorldSessionDto | null,
     player: null as PlayerStateDto | null,
     npcStates: [] as NpcStateDto[],
-    currency: null as PlayerCurrencyDto | null,
     activeSlot: null as SaveSlotDto | null,
     sceneName: DEFAULT_SCENE_NAME as string,
     unlockedBuildings: [] as string[],
@@ -117,7 +115,6 @@ export const useWorldStore = defineStore('world', {
       this.session = data.world;
       this.player = data.player;
       this.npcStates = data.world.npcs;
-      this.currency = data.currency;
       this.activeSlot = data.activeSlot;
       if (data.activeSlot) {
         this.syncFromSlot(data.activeSlot);
@@ -126,13 +123,11 @@ export const useWorldStore = defineStore('world', {
       }
 
       useLearningStore().setBootstrapData({
-        crops: data.crops,
         quests: data.quests,
         mastery: data.mastery,
         profile: data.profile,
         path: data.path,
       });
-      useInventoryStore().setBootstrapItems(data.inventory);
       useSkillStore().setBootstrap(data.skillsCatalog ?? [], data.skills);
       // R-13：后端实际字段是 pendingEvents（GameBootstrapResponse.java），
       // events 是旧前端别名；兼容两边别名，确保拿得到事件。
@@ -142,7 +137,6 @@ export const useWorldStore = defineStore('world', {
       useHudStore().syncMeta({
         dayIndex: data.world.dayIndex ?? 1,
         weather: data.world.weather ?? 'SUNNY',
-        coin: data.currency?.coins ?? 0,
       });
     },
     /**
@@ -155,6 +149,9 @@ export const useWorldStore = defineStore('world', {
       this.unlockedBuildings = [...slot.unlockedBuildings];
       this.accumulatedPlaySeconds = slot.accumulatedPlaySeconds;
       this.inventoryItems = slot.inventoryItems.map((item) => ({ ...item }));
+      // R-14 S6：用后端存档快照回灌主线进度（跨设备跟随）。空快照 `{}` 或缺失会被
+      // hydrateFromSnapshot 安全忽略，从而保留本地 localStorage 进度。
+      useMainQuestStore().hydrateFromSnapshot(slot.snapshot ?? null);
     },
     /**
      * 推进一天：触发 mastery decay / 作物枯萎 / NPC 周计划重置。

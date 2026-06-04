@@ -2,7 +2,6 @@ import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useWorldStore } from '@/stores/world';
 import { useCalendarStore } from '@/stores/calendar';
-import { useInventoryStore } from '@/stores/inventory';
 import { useLearningStore } from '@/stores/learning';
 import { useNpcStore } from '@/stores/npc';
 import { useSkillStore } from '@/stores/skill';
@@ -194,15 +193,12 @@ describe('world store', () => {
     expect(result).not.toBeNull();
     expect(store.bootstrapped).toBe(true);
     expect(store.session?.dayIndex).toBe(3);
-    expect(store.currency?.coins).toBe(200);
     expect(store.activeSlot?.slotIndex).toBe(0);
 
-    expect(useInventoryStore().items).toHaveLength(1);
     expect(useSkillStore().catalog).toHaveLength(2);
     expect(useSkillStore().isUnlocked('SK-LOOP')).toBe(true);
     expect(useCalendarStore().today?.dayIndex).toBe(3);
     expect(useNpcStore().friendship('mayor_py')).toBe(5);
-    expect(useLearningStore().field.crops).toHaveLength(1);
     expect(useLearningStore().field.masterySnapshot).toHaveLength(1);
   });
 

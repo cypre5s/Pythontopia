@@ -113,7 +113,8 @@ describe('ExampleListPage', () => {
     const cards = wrapper.findAll('[data-testid="example-card"]');
     expect(cards.length).toBe(EXAMPLES.length);
     expect(wrapper.text()).toContain('圆面积示例');
-    expect(wrapper.text()).toContain('PY43-KC-016');
+    // 统一标准·KC 收敛：学生侧显示知识点中文名而非原始码 PY43-KC-016。
+    expect(wrapper.text()).toContain('基础数值运算');
     expect(wrapper.text()).toContain('个十百千');
   });
 
@@ -127,7 +128,8 @@ describe('ExampleListPage', () => {
     await flushPromises();
 
     const chips = wrapper.findAll('.chip');
-    const kc25 = chips.find((c) => c.text() === 'PY43-KC-025');
+    // KC chip 现在以知识点中文名展示（PY43-KC-025 → 整数位提取）。
+    const kc25 = chips.find((c) => c.text() === '整数位提取');
     expect(kc25).toBeDefined();
     await kc25!.trigger('click');
     await flushPromises();

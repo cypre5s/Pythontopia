@@ -42,11 +42,11 @@ describe('useMainQuestStore evidence hooks (R-13 §-1 critical fix)', () => {
     expect(mq.progress.completedSubQuests.filter((id) => id === '1-1')).toHaveLength(1);
   });
 
-  it('onResourceCreated: STORYBOARD + PY43-KC-002 → 1-2 markComplete', () => {
+  it('onDialogClose: 与 professor 对话完成 → 1-2 markComplete（首进听第 1 课）', () => {
     const mq = useMainQuestStore();
     // 先解锁 1-1 让 1-2 成为当前
     mq.onDialogClose('mayor_py');
-    const completed = mq.onResourceCreated('STORYBOARD', ['PY43-KC-002']);
+    const completed = mq.onDialogClose('professor');
     expect(completed?.id).toBe('1-2');
     expect(mq.progress.completedSubQuests).toContain('1-2');
   });
@@ -61,9 +61,17 @@ describe('useMainQuestStore evidence hooks (R-13 §-1 critical fix)', () => {
     expect(mq.onResourceCreated('STORYBOARD', ['PY43-KC-099'])).toBeNull();
   });
 
-  it('onSubmissionPassed: problemId=0 placeholder 命中 KC → 完成对应任务', () => {
+  it('onSubmissionPassed: 命中真实 problemId（476）→ 完成 2-3', () => {
     const mq = useMainQuestStore();
-    const completed = mq.onSubmissionPassed({ kcCode: 'PY43-KC-006' });
+    // P0-a：占位 problemId:0 已接真实题库，2-3 现指向 problem #476。
+    const completed = mq.onSubmissionPassed({ problemId: 476, kcCode: 'PY43-KC-011' });
+    expect(completed?.id).toBe('2-3');
+    expect(mq.progress.completedSubQuests).toContain('2-3');
+  });
+
+  it('onResourceCreated: READING + PY43-KC-006 → 1-4（第1章学里程碑，无判题真题）', () => {
+    const mq = useMainQuestStore();
+    const completed = mq.onResourceCreated('READING', ['PY43-KC-006']);
     expect(completed?.id).toBe('1-4');
   });
 
@@ -79,15 +87,15 @@ describe('useMainQuestStore evidence hooks (R-13 §-1 critical fix)', () => {
     expect(mq.onMasteryReached('PY43-KC-016', 20)).toBeNull();
   });
 
-  it('onBuildingVisited: 走到 campus_east (12, 15) ±1 → 完成 4-1', () => {
+  it('onDialogClose: 与 librarian_doc 对话完成 → 4-1 markComplete（顺序结构课）', () => {
     const mq = useMainQuestStore();
-    const completed = mq.onBuildingVisited('campus_east', 12, 15);
+    const completed = mq.onDialogClose('librarian_doc');
     expect(completed?.id).toBe('4-1');
   });
 
   it('onBuildingVisited: 走偏 → 不触发', () => {
     const mq = useMainQuestStore();
-    expect(mq.onBuildingVisited('campus_east', 20, 20)).toBeNull();
+    expect(mq.onBuildingVisited('town_hub', 20, 20)).toBeNull();
   });
 
   it('persist 持久化：evidence 完成后跨 store 实例可读', () => {

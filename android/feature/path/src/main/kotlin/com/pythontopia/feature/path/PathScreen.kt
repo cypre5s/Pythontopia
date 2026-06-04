@@ -45,14 +45,14 @@ import com.pythontopia.core.design.PytSpace
  * 跳转策略：节点点击优先 advance（UNLOCKED -> IN_PROGRESS 或 IN_PROGRESS -> DONE），
  * 顺带通过 [onOpenNodeTarget] 通知 host nav graph 跳到对应 feature（READ/PRACTICE/QUEST/DEBUG）。
  *
- * @param userId        当前学习者 ID。host 通常从 SessionRepository 注入；
- *                      为了 Beta+1 演示，未登录时传 [DEMO_USER_ID]，仓库会 fallback 到 demo 路径。
+ * @param userId        保留给测试和未来 SessionRepository 注入；真实请求由 JWT 当前用户决定，
+ *                      不再把本地 userId 发送给后端。
  * @param onOpenNodeTarget 节点点击副作用回调；feature/path 本身不持有 NavController，
  *                      由 :app navGraph 决定跳到 :feature:workshop / :feature:arena 等。
  */
 @Composable
 fun PathScreen(
-    userId: Long = DEMO_USER_ID,
+    userId: Long = CURRENT_USER_SENTINEL_ID,
     onOpenNodeTarget: (PathNodeDto) -> Unit = {},
     viewModel: PathViewModel = hiltViewModel(),
 ) {
@@ -208,5 +208,5 @@ private fun EmptyBlock(onRefresh: () -> Unit) {
     }
 }
 
-/** 未登录场景下传给 [PathScreen] 的占位 userId；仓库会用 fallback 返回 demo 路径。 */
-const val DEMO_USER_ID: Long = -1L
+/** Compose key 用哨兵值；后端身份来自 JWT 当前用户。 */
+const val CURRENT_USER_SENTINEL_ID: Long = -1L

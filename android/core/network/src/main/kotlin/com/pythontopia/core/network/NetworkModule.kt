@@ -40,6 +40,8 @@ object NetworkModule {
         RetrofitFactory.create(
             baseUrl = NetworkConfig.DEFAULT_BASE_URL,
             tokenProvider = { tokenHolder.get().get() },
+            // 仅 debug 打 HTTP 日志（BASIC，不含令牌）；release 关闭避免 logcat 信息外泄。
+            enableLogging = BuildConfig.DEBUG,
         )
 
     @Provides

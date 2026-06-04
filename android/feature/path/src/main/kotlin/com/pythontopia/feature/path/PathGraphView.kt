@@ -56,9 +56,11 @@ fun PathGraphView(
     }
 
     val nodeRadiusDp = 10.dp
-    val rowHeightDp = 56.dp
     val verticalPadding = PytSpace.s2
-    val totalHeight = rowHeightDp * nodes.size + verticalPadding * 2
+    val rawHeight = GRAPH_ROW_HEIGHT.dp * nodes.size + verticalPadding * 2
+    val totalHeight = rawHeight
+        .coerceAtLeast(GRAPH_MIN_HEIGHT.dp)
+        .coerceAtMost(GRAPH_MAX_HEIGHT.dp)
 
     val idToIndex = remember(nodes) { nodes.mapIndexed { i, n -> n.id to i }.toMap() }
 
@@ -116,3 +118,7 @@ private fun PathNodeStatus.dotColor(): Color = when (this) {
     PathNodeStatus.IN_PROGRESS -> PytColors.warning
     PathNodeStatus.DONE -> PytColors.success
 }
+
+private const val GRAPH_ROW_HEIGHT: Int = 56
+private const val GRAPH_MIN_HEIGHT: Int = 96
+private const val GRAPH_MAX_HEIGHT: Int = 240

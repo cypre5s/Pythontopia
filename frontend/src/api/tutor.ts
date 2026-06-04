@@ -6,6 +6,8 @@ export interface TutorAskRequest {
   kcCodes?: string[];
   /** 当前学习上下文（视频标题 / PPT 页 / 题面摘要），透传给导师增强答疑。 */
   context?: string;
+  /** R-14 看图答疑：可选多图 base64（可带 data URL 前缀，最多 3 张）；后端逐张经讯飞图片理解转描述后交 deepseek 作答。 */
+  images?: string[];
 }
 
 export interface TutorSessionDto {
@@ -25,4 +27,11 @@ export async function listTutorSessions(): Promise<TutorSessionDto[]> {
 export async function getTutorSession(id: number): Promise<TutorSessionDto> {
   const response = await http.get<TutorSessionDto>(`/api/tutor/sessions/${id}`);
   return response.data;
+}
+
+export type CognitiveStyle = 'visual' | 'logical' | 'trial';
+
+/** 学生采纳某讲法（因材施教闭环）：回流画像 cognitive_style。 */
+export async function styleEngaged(style: CognitiveStyle, kcCode?: string): Promise<void> {
+  await http.post('/api/tutor/style-engaged', { style, kcCode });
 }

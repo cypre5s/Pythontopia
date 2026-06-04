@@ -43,8 +43,8 @@ function sectionToMarkdown(section: HandoutSection): string {
 }
 .section {
   background: #fffbe9;
-  border: 2px solid #c9a86b;
-  border-radius: 8px;
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-lg);
   padding: 14px;
   box-shadow: 0 4px 12px rgba(74, 53, 21, 0.12);
 }

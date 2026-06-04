@@ -4,6 +4,7 @@ import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
+import com.pythontopia.tutor.dto.StyleEngagedRequest;
 import com.pythontopia.tutor.dto.TutorAskRequest;
 import com.pythontopia.tutor.dto.TutorSessionDto;
 import jakarta.validation.Valid;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -34,6 +36,15 @@ public class TutorController {
       @Valid @RequestBody TutorAskRequest request) {
     requireStudent(user);
     return service.ask(user.userId(), request);
+  }
+
+  @PostMapping("/style-engaged")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  public void styleEngaged(
+      @CurrentUser CurrentUserPrincipal user,
+      @Valid @RequestBody StyleEngagedRequest request) {
+    requireStudent(user);
+    service.recordStyleEngaged(user.userId(), request.style(), request.kcCode());
   }
 
   @GetMapping("/sessions")

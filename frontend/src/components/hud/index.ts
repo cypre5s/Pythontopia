@@ -5,7 +5,6 @@
 export { default as HudShell } from './HudShell.vue';
 export { default as MiniMap } from './MiniMap.vue';
 export { default as WorldMinimapHud } from './WorldMinimapHud.vue';
-export { default as InventoryPanel } from './InventoryPanel.vue';
 export { default as QuickslotPanelHost } from './QuickslotPanelHost.vue';
 export { default as SettingsModal } from './SettingsModal.vue';
 export { default as FestivalRibbon } from './FestivalRibbon.vue';
@@ -18,5 +17,7 @@ export { default as LearningObjectivePanel } from './LearningObjectivePanel.vue'
 // 游戏成熟度：ESC 暂停菜单 + Tab 快捷轮盘
 export { default as PauseMenu } from './PauseMenu.vue';
 export { default as QuickWheel } from './QuickWheel.vue';
+// P1-a/P1-d：伴学向导（学习总管多轮对话 overlay）
+export { default as GuideOverlay } from './GuideOverlay.vue';
 
 export type { MinimapExitMarker, MinimapExitSide } from './MiniMap.vue';

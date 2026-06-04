@@ -37,6 +37,20 @@ class HubGameBridgeTest {
     }
 
     @Test
+    fun `event buffer drops oldest movement events instead of growing without bound`() {
+        val bridge = HubGameBridge()
+
+        repeat(HubGameBridge.EVENT_BUFFER_CAPACITY + 4) { index ->
+            bridge.emit(HubEvent.PlayerMoved("town_hub", index, 20, "RIGHT"))
+        }
+
+        val first = bridge.poll()
+
+        assertTrue(first is HubEvent.PlayerMoved)
+        assertEquals(4, (first as HubEvent.PlayerMoved).tileX)
+    }
+
+    @Test
     fun `interact request is consumed exactly once`() {
         val bridge = HubGameBridge()
         bridge.requestInteract()

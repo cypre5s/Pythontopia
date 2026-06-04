@@ -87,6 +87,9 @@ async def tutor_ask_stream(
 
             answer = "".join(collected)
             response = agent._build_response(answer, evidence.chunks)
+            # 多模态答疑：安全通过时附带图解（mermaid 结构图 + 文生图插画提示）。
+            if response.safety_result.passed:
+                response.visual_aids = agent.build_visual_aids(base_question, kc_codes)
             yield _format_sse("result", response.model_dump(mode="json"))
         except Exception as exc:
             yield _format_sse("error", {"code": "TUTOR_FAILED", "message": str(exc)})

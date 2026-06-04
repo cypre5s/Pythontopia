@@ -64,7 +64,7 @@ class WorkshopGraphClientTest {
                 List.of("PY43-KC-001"),
                 "HANDOUT",
                 null,
-                new ResourceProduceRequestDto.ProfileSnapshotDto("OTHER", 2, List.of())));
+                new ResourceProduceRequestDto.ProfileSnapshotDto("OTHER", 2, List.of(), "", List.of())));
 
     assertThat(response.status()).isEqualTo("SUCCESS");
     assertThat(response.evidencePageIds()).containsExactly(101L);
@@ -88,7 +88,8 @@ class WorkshopGraphClientTest {
                         List.of("PY43-KC-001"),
                         "HANDOUT",
                         null,
-                        new ResourceProduceRequestDto.ProfileSnapshotDto("OTHER", 2, List.of()))))
+                        new ResourceProduceRequestDto.ProfileSnapshotDto(
+                            "OTHER", 2, List.of(), "", List.of()))))
         .isInstanceOf(BusinessException.class)
         .hasMessageContaining("资源生成服务暂不可用");
   }

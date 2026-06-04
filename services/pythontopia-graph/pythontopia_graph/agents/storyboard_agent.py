@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pythontopia_graph.agents.personalization import personalization_messages
 from pythontopia_graph.llm.provider import LlmProvider
 from pythontopia_graph.nodes.evidence_fetcher import EvidenceBundle
 from pythontopia_graph.schemas.resource import (
@@ -42,9 +43,12 @@ class StoryboardAgent:
                     "你是 StoryboardAgent，输出 JSON，3-5 个分镜。"
                     "每个分镜 duration_seconds ≤ 90，visual_hint 不得包含真实人物姓名或知名品牌。"
                     "每个分镜可附带 evidence_page_id（int|null）和 narration_tts_voice（默认 x4_yezi）。"
+                    "每个分镜必须给出 image_prompt：一句可直接用于文生图模型的中文画面描述"
+                    "（像素插画风、教学示意，禁止真实人物/品牌/二维码），用于生成分镜插画与合成短视频。"
                     + evidence_hint
                 ),
             },
+            *personalization_messages(request.profile_snapshot),
             {"role": "user", "content": ",".join(request.kc_codes)},
         ]
 
@@ -53,16 +57,25 @@ class StoryboardAgent:
         evidence: EvidenceBundle | None = None,
     ) -> ResourceDraft:
         content = self._build_content(request, content_json)
-        if evidence and evidence.chunks and content.scenes:
+        if content.scenes:
             for scene in content.scenes:
-                if scene.evidence_page_id is None and evidence.chunks:
+                if evidence and evidence.chunks and scene.evidence_page_id is None:
                     scene.evidence_page_id = evidence.chunks[0].page_id
+                # image_prompt 缺省时由 visual_hint 派生，保证每个分镜都能生成插画/合成视频。
+                if not scene.image_prompt.strip():
+                    scene.image_prompt = self._derive_image_prompt(scene)
         return ResourceDraft(
             title=f"动画脚本：{','.join(request.kc_codes[:3])}",
-            summary="不渲染视频；输出结构化分镜",
+            summary="结构化分镜 + 文生图插画提示，可合成短视频讲解",
             content_format="STRUCT_JSON",
             storyboard=content,
         )
+
+    @staticmethod
+    def _derive_image_prompt(scene: StoryboardScene) -> str:
+        """把 visual_hint 包装成像素插画风的文生图提示词。"""
+        hint = scene.visual_hint.strip() or scene.title.strip()
+        return f"像素教学插画，{hint}，暖色调，无真实人物，无文字水印"
 
     def _build_content(
         self, request: ResourceProduceRequest, content_json: dict | None

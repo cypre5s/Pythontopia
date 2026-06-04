@@ -49,10 +49,10 @@ onMounted(async () => {
 <style scoped>
 .empty {
   padding: 14px;
-  background: #fdf3d0;
-  border-radius: 8px;
+  background: var(--pyt-color-bg-soft);
+  border-radius: var(--pyt-radius-lg);
   text-align: center;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
 }
 .path-list {
   list-style: none;
@@ -63,8 +63,8 @@ onMounted(async () => {
 }
 .path-card {
   background: #fffbe9;
-  border: 2px solid #c9a86b;
-  border-radius: 8px;
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-lg);
   padding: 12px;
   display: grid;
   gap: 6px;
@@ -79,11 +79,11 @@ header h3 {
 }
 .goal {
   margin: 0;
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
   line-height: 1.5;
 }
 small {
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
   font-size: 12px;
 }
 </style>

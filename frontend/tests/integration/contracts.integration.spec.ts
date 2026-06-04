@@ -158,16 +158,20 @@ describe('contracts.integration: DTO 字段 + store 边界', () => {
     },
   );
 
-  // ---------- FastTravel 静态数据 ----------
-  it('FAST_TRAVEL_ROUTES 长度 = 5（5 个地图）', () => {
-    expect(FAST_TRAVEL_ROUTES.length).toBe(5);
+  // ---------- FastTravel 静态数据（R-14 方案A：世界收缩为单一 town_hub） ----------
+  it('FAST_TRAVEL_ROUTES 长度 = 1（R-14 单 hub）', () => {
+    expect(FAST_TRAVEL_ROUTES.length).toBe(1);
   });
 
-  it.each(['town_hub', 'farm_north', 'mine_south', 'campus_east', 'port_west'])(
-    'FAST_TRAVEL_ROUTES 含 mapKey=%s',
+  it('FAST_TRAVEL_ROUTES 只含 mapKey=town_hub', () => {
+    expect(FAST_TRAVEL_ROUTES.every((r) => r.toMap === 'town_hub')).toBe(true);
+  });
+
+  it.each(['farm_north', 'mine_south', 'campus_east', 'port_west'])(
+    'FAST_TRAVEL_ROUTES 不再含外围图 mapKey=%s（已从主线/导航弃用）',
     (mapKey) => {
       const has = FAST_TRAVEL_ROUTES.some((r) => r.toMap === mapKey);
-      expect(has).toBe(true);
+      expect(has).toBe(false);
     },
   );
 

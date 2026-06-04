@@ -68,8 +68,8 @@ function handleRemove(studentId: number) {
 }
 .empty {
   padding: 16px;
-  background: #fdf3d0;
-  border-radius: 8px;
+  background: var(--pyt-color-bg-soft);
+  border-radius: var(--pyt-radius-lg);
   text-align: center;
 }
 .member-table {
@@ -79,16 +79,16 @@ function handleRemove(studentId: number) {
 }
 .member-table th,
 .member-table td {
-  border: 1px solid #c9a86b;
+  border: 1px solid var(--pyt-color-border);
   padding: 6px 10px;
   text-align: center;
 }
 .member-table th {
-  background: #fdf3d0;
+  background: var(--pyt-color-bg-soft);
 }
 .danger {
   background: #f4a261;
-  color: #fff7e6;
+  color: var(--pyt-color-bg-elevated);
   border: 2px solid #c97f3a;
   border-radius: 6px;
   padding: 4px 12px;

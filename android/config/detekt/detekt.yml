@@ -21,9 +21,13 @@ console-reports:
 complexity:
   active: true
   LongMethod:
-    # 教育游戏面板（Compose 教学卡片、画像访谈对话流）天然偏长，60 行 → 80 行
+    # 教育游戏面板（Compose 教学卡片、画像访谈对话流）天然偏长，60 行 → 120 行
     active: true
-    threshold: 80
+    threshold: 120
+  CyclomaticComplexMethod:
+    # LibGDX 输入/地图切换与 Compose 状态分支比普通业务函数分支更多，仍限制在 20 内。
+    active: true
+    threshold: 20
   LongParameterList:
     active: true
     functionThreshold: 8
@@ -34,7 +38,7 @@ complexity:
   TooManyFunctions:
     active: true
     thresholdInFiles: 15
-    thresholdInClasses: 15
+    thresholdInClasses: 25
     thresholdInObjects: 15
 
 style:

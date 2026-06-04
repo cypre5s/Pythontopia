@@ -2,7 +2,7 @@ import { defineStore } from 'pinia';
 
 /** HUD 状态桥接 store：顶部/底部可见性、互斥面板、元数据缓存。纯前端，不调后端 API。 */
 export type HudVisibility = 'shown' | 'hidden' | 'collapsed';
-export type HudQuickSlot = 'quest' | 'dialog' | 'inventory' | 'map' | 'skill';
+export type HudQuickSlot = 'quest' | 'dialog' | 'map' | 'skill';
 export type HudBarPart = 'top' | 'bottom';
 
 export interface HudMeta {
@@ -15,8 +15,6 @@ export interface HudMeta {
   season: string;
   /** 玩家精力 0-100 */
   energy: number;
-  /** 玩家金币 */
-  coin: number;
   /** KC 平均掌握度 0-100 */
   masteryAvg: number;
 }
@@ -39,7 +37,6 @@ function defaultMeta(): HudMeta {
     timeOfDay: 'MORNING',
     season: 'SPRING',
     energy: 100,
-    coin: 0,
     masteryAvg: 0,
   };
 }
@@ -72,7 +69,6 @@ export const useHudStore = defineStore('hud', {
   getters: {
     isQuestOpen: (state): boolean => state.activeSlot === 'quest',
     isDialogOpen: (state): boolean => state.activeSlot === 'dialog',
-    isInventoryOpen: (state): boolean => state.activeSlot === 'inventory',
     isMapOpen: (state): boolean => state.activeSlot === 'map',
     isSkillOpen: (state): boolean => state.activeSlot === 'skill',
     /**

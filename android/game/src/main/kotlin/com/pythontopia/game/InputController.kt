@@ -72,29 +72,36 @@ class InputController(
      *   测试时可手工构造。
      */
     fun resolveStep(keyboardSnapshot: KeyboardSnapshot = KeyboardSnapshot.from(keysHeld)): IntPair {
-        // 1) 键盘 WASD / 方向键
+        val keyboardStep = keyboardStep(keyboardSnapshot)
+        return if (keyboardStep.isMoving) keyboardStep else joystickStep()
+    }
+
+    private fun keyboardStep(keyboardSnapshot: KeyboardSnapshot): IntPair {
         var dx = 0
         var dy = 0
         if (keyboardSnapshot.up) dy += 1
         if (keyboardSnapshot.down) dy -= 1
         if (keyboardSnapshot.left) dx -= 1
         if (keyboardSnapshot.right) dx += 1
-        if (dx != 0 || dy != 0) return IntPair(reduceTo4(dx), reduceTo4(dy, dropDx = dx != 0))
+        return if (dx != 0 || dy != 0) {
+            IntPair(reduceTo4(dx), reduceTo4(dy, dropDx = dx != 0))
+        } else {
+            IntPair.ZERO
+        }
+    }
 
-        // 2) 摇杆（如果按下且在摇杆范围内）
-        val sample = pointer ?: return IntPair(0, 0)
+    private fun joystickStep(): IntPair {
+        val sample = pointer ?: return IntPair.ZERO
         val w = viewportWidthProvider()
         val h = viewportHeightProvider()
-        if (w <= 0 || h <= 0) return IntPair(0, 0)
-
-        // 摇杆原点：joystickCenter；y 在屏幕坐标里向下增长，玩家世界 y 向上，所以反转。
+        if (w <= 0 || h <= 0) return IntPair.ZERO
         val rawDx = sample.x - joystickCenterX
         val rawDyScreen = sample.y - joystickCenterY
         val distance = hypot(rawDx, rawDyScreen)
-        if (distance > joystickRadius * 1.4f) return IntPair(0, 0) // 摇杆外的触摸不参与
-        if (distance < joystickRadius * DEADZONE_RATIO) return IntPair(0, 0) // 死区
+        val withinActiveRing = distance <= joystickRadius * JOYSTICK_MAX_DISTANCE_RATIO
+        val outsideDeadzone = distance >= joystickRadius * DEADZONE_RATIO
+        if (!withinActiveRing || !outsideDeadzone) return IntPair.ZERO
 
-        // 屏幕 y 向下 → 世界 y 向上：取反
         val rawDyWorld = -rawDyScreen
         return if (abs(rawDx) > abs(rawDyWorld)) {
             IntPair(if (rawDx > 0) 1 else -1, 0)
@@ -190,7 +197,14 @@ class InputController(
 
     data class PointerSample(val x: Float, val y: Float)
 
-    data class IntPair(val dx: Int, val dy: Int)
+    data class IntPair(val dx: Int, val dy: Int) {
+        val isMoving: Boolean
+            get() = dx != 0 || dy != 0
+
+        companion object {
+            val ZERO: IntPair = IntPair(0, 0)
+        }
+    }
 
     /**
      * 当前帧键盘状态（4 向 + 2 边沿）。
@@ -220,6 +234,7 @@ class InputController(
         const val DEFAULT_JOYSTICK_RADIUS: Float = 80f
         const val MIN_JOYSTICK_RADIUS: Float = 60f
         const val JOYSTICK_RADIUS_RATIO: Float = 0.12f
+        const val JOYSTICK_MAX_DISTANCE_RATIO: Float = 1.4f
         const val DEADZONE_RATIO: Float = 0.18f
         const val JOYSTICK_BASE_ALPHA: Float = 0.35f
     }

@@ -55,6 +55,16 @@ fun NavGraphBuilder.authGraph(navController: NavController) {
                     popUpTo(AuthDestination.LOGIN) { inclusive = true }
                 }
             },
+            onCreateAccount = {
+                navController.navigate(AuthDestination.REGISTER) {
+                    launchSingleTop = true
+                }
+            },
+            onGuest = {
+                navController.navigate(AuthDestination.HOME) {
+                    popUpTo(AuthDestination.LOGIN) { inclusive = true }
+                }
+            },
         )
     }
     composable(AuthDestination.REGISTER) {

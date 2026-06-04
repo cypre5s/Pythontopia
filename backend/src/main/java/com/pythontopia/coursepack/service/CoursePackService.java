@@ -41,6 +41,10 @@ public class CoursePackService {
         .orElseThrow(() -> new CoursePackNotFoundException(ACTIVE_PACK_ID));
   }
 
+  public List<CourseProblem> listProblems(String kcCode) {
+    return repository.findProblems(ACTIVE_PACK_ID, kcCode);
+  }
+
   public List<CoursePage> listPagesByKc(String kcCode) {
     return repository.findPagesByKc(ACTIVE_PACK_ID, kcCode);
   }

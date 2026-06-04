@@ -139,7 +139,7 @@ describe('BoardPanel', () => {
     await flushPromises();
     expect(wrapper.find('[data-testid="path-tab"]').exists()).toBe(true);
 
-    await wrapper.find('button.primary').trigger('click');
+    await wrapper.find('[data-testid="board-plan"]').trigger('click');
     await flushPromises();
     expect(planLearningPath).toHaveBeenCalledTimes(1);
     expect(getTodayQuests).toHaveBeenCalled();

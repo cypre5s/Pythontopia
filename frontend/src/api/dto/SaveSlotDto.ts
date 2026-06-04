@@ -13,12 +13,27 @@ export interface SaveSlotInventoryItem {
   slot: number;
 }
 
+/**
+ * R-14 S6：后端 `save_slot.snapshot` JSONB blob。与迁移 V120 契约对齐：
+ * `{ version, mainQuest: { currentChapter, currentSubQuest, completedSubQuests, ... } }`。
+ * 主线进度跨设备同步即写读此字段；`mainQuest` 用 unknown，由 mainQuest store 自行 safeParse。
+ */
+export interface SaveSlotSnapshot {
+  version?: number;
+  mainQuest?: unknown;
+}
+
 export interface SaveSlotDto {
   slotIndex: number;
   displayName: string;
   isActive: boolean;
   createdAt: string;
   lastPlayedAt: string;
+  /**
+   * 存档快照（后端始终下发，至少是 `{}`）。设为可选以兼容历史 DTO mock，
+   * 消费方（mainQuest.hydrateFromSnapshot）对缺失 / 空对象做安全忽略。
+   */
+  snapshot?: SaveSlotSnapshot | null;
   sceneName: string;
   unlockedBuildings: string[];
   accumulatedPlaySeconds: number;

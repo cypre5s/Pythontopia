@@ -9,6 +9,7 @@ import CodeLabView from './CodeLabView.vue';
 import ReadingList from './ReadingList.vue';
 import StoryboardView from './StoryboardView.vue';
 import PptView from './PptView.vue';
+import { kcDisplayName } from '@/data/kcNames';
 import type {
   CodeLabContent,
   HandoutContent,
@@ -76,7 +77,7 @@ async function submitFeedback(status: 'LIKED' | 'DISLIKED'): Promise<void> {
       <div>
         <h2>{{ resource.title }}</h2>
         <p class="meta">
-          {{ resource.type }} · KC: {{ resource.kcCodes.join(', ') }} ·
+          {{ resource.type }} · 知识点: {{ resource.kcCodes.map(kcDisplayName).join('、') }} ·
           引用 {{ resource.evidencePageIds.length }} 个页码
         </p>
       </div>
@@ -213,9 +214,9 @@ async function submitFeedback(status: 'LIKED' | 'DISLIKED'): Promise<void> {
 .detail {
   display: grid;
   gap: 12px;
-  background: linear-gradient(180deg, #fff7e6, #fdf3d0);
-  border: 2px solid #c9a86b;
-  border-radius: 10px;
+  background: linear-gradient(180deg, var(--pyt-color-bg-elevated), var(--pyt-color-bg-soft));
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-lg);
   padding: 16px;
 }
 header {
@@ -230,7 +231,7 @@ header h2 {
 .meta {
   margin: 4px 0 0;
   font-size: 12px;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
 }
 .summary {
   margin: 0;
@@ -250,22 +251,22 @@ header h2 {
   font-size: 12px;
   white-space: nowrap;
 }
-.status-badge.grounded { background: #4f8a3e; color: #fff7e6; }
-.status-badge.no-evidence { background: #b39554; color: #fff7e6; }
-.status-badge.failed { background: #c14a2f; color: #fff7e6; }
-.status-badge.safe { background: #3a7d6e; color: #fff7e6; }
-.status-badge.unsafe { background: #c14a2f; color: #fff7e6; }
+.status-badge.grounded { background: #4f8a3e; color: var(--pyt-color-bg-elevated); }
+.status-badge.no-evidence { background: #b39554; color: var(--pyt-color-bg-elevated); }
+.status-badge.failed { background: #c14a2f; color: var(--pyt-color-bg-elevated); }
+.status-badge.safe { background: #3a7d6e; color: var(--pyt-color-bg-elevated); }
+.status-badge.unsafe { background: #c14a2f; color: var(--pyt-color-bg-elevated); }
 .status-badge.no-check { background: #9e9e9e; color: #fff; }
 .evidence-detail {
   background: #fff2c9;
-  border: 1px dashed #6e4f1d;
-  border-radius: 8px;
+  border: 1px dashed var(--pyt-color-text-hint);
+  border-radius: var(--pyt-radius-lg);
   padding: 10px 12px;
 }
 .evidence-detail h4 {
   margin: 0 0 8px;
   font-size: 13px;
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
 }
 .page-chips {
   display: flex;
@@ -275,8 +276,8 @@ header h2 {
 .page-chip {
   display: inline-block;
   padding: 2px 10px;
-  background: #6e4f1d;
-  color: #fff7e6;
+  background: var(--pyt-color-text-hint);
+  color: var(--pyt-color-bg-elevated);
   border-radius: 4px;
   font-size: 12px;
   text-decoration: none;
@@ -292,7 +293,7 @@ header h2 {
   width: 100%;
   padding: 8px;
   border-radius: 6px;
-  border: 1px solid #c9a86b;
+  border: 1px solid var(--pyt-color-border);
   background: #fffbe9;
   resize: vertical;
 }
@@ -306,11 +307,11 @@ header h2 {
   padding: 6px 12px;
   border-radius: 6px;
   cursor: pointer;
-  border: 2px solid #6e4f1d;
+  border: 2px solid var(--pyt-color-text-hint);
 }
 .like {
   background: #4f8a3e;
-  color: #fff7e6;
+  color: var(--pyt-color-bg-elevated);
   border-color: #2b6021;
 }
 .like.selected {
@@ -318,24 +319,24 @@ header h2 {
   transform: scale(1.05);
 }
 .dislike {
-  background: #fff7e6;
-  color: #6e4f1d;
+  background: var(--pyt-color-bg-elevated);
+  color: var(--pyt-color-text-hint);
 }
 .dislike.selected {
   background: #c14a2f;
-  color: #fff7e6;
+  color: var(--pyt-color-bg-elevated);
   border-color: #8b2e1a;
   box-shadow: 0 0 0 3px rgba(193, 74, 47, 0.3);
   transform: scale(1.05);
 }
 .hint {
   font-size: 12px;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
 }
 .placeholder {
   padding: 24px;
   text-align: center;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
 }
 .handout-section {
   display: grid;
@@ -350,10 +351,10 @@ header h2 {
   border-radius: 6px;
   border: 2px solid #2b6021;
   background: #4f8a3e;
-  color: #fff7e6;
+  color: var(--pyt-color-bg-elevated);
   cursor: pointer;
   font-size: 13px;
-  font-family: var(--pyt-font-pixel, monospace);
+  font-family: var(--pyt-font-pixel);
   transition: background 0.15s;
 }
 .ppt-btn:hover {
@@ -365,7 +366,7 @@ header h2 {
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 9999;
+  z-index: var(--pyt-z-modal);
   background: rgba(0, 0, 0, 0.85);
   display: flex;
   flex-direction: column;

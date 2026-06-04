@@ -1,6 +1,7 @@
 import { mount, flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { createMemoryHistory, createRouter } from 'vue-router';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import HudShell from '@/components/hud/HudShell.vue';
 import QuickslotPanelHost from '@/components/hud/QuickslotPanelHost.vue';
 import { useDialogStore } from '@stores/dialog';
@@ -13,8 +14,17 @@ const SLOT_KEYS: readonly HudQuickSlot[] = [
   'skill',
 ];
 
-function mountShell() {
-  return mount(HudShell);
+const router = createRouter({
+  history: createMemoryHistory(),
+  routes: [
+    { path: '/world', name: 'world', component: { template: '<div/>' } },
+    { path: '/workshop', name: 'workshop', component: { template: '<div/>' } },
+  ],
+});
+
+function mountShell(initialPath = '/workshop') {
+  void router.push(initialPath);
+  return mount(HudShell, { global: { plugins: [router] } });
 }
 
 describe('HudShell', () => {
@@ -121,6 +131,31 @@ describe('HudShell', () => {
     expect(
       wrapper.get('[data-testid="hud-slot-map"]').classes(),
     ).toContain('hud-slot--active');
+  });
+
+  it('小镇内单按 A 不跳转闯关塔（A 留给左移）', async () => {
+    const push = vi.spyOn(router, 'push');
+    mountShell('/world');
+    window.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'a', bubbles: true, cancelable: true }),
+    );
+    expect(push).not.toHaveBeenCalledWith('/arena/1');
+    push.mockRestore();
+  });
+
+  it('Shift+A 打开闯关塔第 1 章', async () => {
+    const push = vi.spyOn(router, 'push');
+    mountShell('/workshop');
+    window.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'A',
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    expect(push).toHaveBeenCalledWith('/arena/1');
+    push.mockRestore();
   });
 
   it('对话历史面板渲染当前 NPC 节点（名字 / 文本 / 提示）', async () => {

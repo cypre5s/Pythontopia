@@ -19,7 +19,6 @@ import { useHudStore } from '@stores/hud';
 import { useCalendarStore } from '@stores/calendar';
 import { useWorldStore } from '@stores/world';
 import { useDialogStore } from '@stores/dialog';
-import { useInventoryStore } from '@stores/inventory';
 import HudShell from '@/components/hud/HudShell.vue';
 import FastTravelPanel from '@/components/hud/FastTravelPanel.vue';
 import FestivalRibbon from '@/components/hud/FestivalRibbon.vue';
@@ -131,11 +130,11 @@ describe('workflows.integration · HUD + Settings + 工具', () => {
     setActivePinia(createPinia());
   });
 
-  it('打开 inventory slot → 再打开 settings → 两个都开 + 互不影响', () => {
+  it('打开 map slot → 再打开 settings → 两个都开 + 互不影响', () => {
     const hud = useHudStore();
-    hud.toggleSlot('inventory');
+    hud.toggleSlot('map');
     hud.openSettings();
-    expect(hud.activeSlot).toBe('inventory');
+    expect(hud.activeSlot).toBe('map');
     expect(hud.settingsOpen).toBe(true);
   });
 
@@ -164,19 +163,18 @@ describe('workflows.integration · HUD + Settings + 工具', () => {
     const hud = useHudStore();
     hud.toggleSlot('skill');
     hud.openSettings();
-    hud.syncMeta({ coin: 1000, energy: 50 });
+    hud.syncMeta({ energy: 50 });
     hud.setVisibility('top', 'hidden');
     hud.reset();
     expect(hud.activeSlot).toBeNull();
     expect(hud.settingsOpen).toBe(false);
-    expect(hud.meta.coin).toBe(0);
+    expect(hud.meta.energy).toBe(100);
     expect(hud.topBar).toBe('shown');
   });
 
   it.each([
     ['quest', 'isQuestOpen'],
     ['dialog', 'isDialogOpen'],
-    ['inventory', 'isInventoryOpen'],
     ['map', 'isMapOpen'],
     ['skill', 'isSkillOpen'],
   ] as const)('slot %s 切到 → getter %s 为 true', (slot, getter) => {
@@ -240,12 +238,14 @@ describe('workflows.integration · FastTravel + World player 联动', () => {
     setActivePinia(createPinia());
   });
 
+  // R-14 方案A：世界收缩为单一 town_hub，快速旅行只剩 hub 一条路线。
+  // 验证点击 hub 路线会把 player 写回 town_hub（FastTravel ↔ worldStore 联动）。
   it.each([
-    ['town_hub', 'campus_east'],
-    ['campus_east', 'mine_south'],
-    ['mine_south', 'port_west'],
-    ['port_west', 'farm_north'],
-  ])('从 %s 通过 FastTravel 切到 %s', async (from, to) => {
+    'campus_east',
+    'mine_south',
+    'port_west',
+    'farm_north',
+  ])('从 %s 通过 FastTravel 回到 town_hub', async (from) => {
     const world = useWorldStore();
     world.player = {
       playerStateId: 1,
@@ -258,10 +258,9 @@ describe('workflows.integration · FastTravel + World player 联动', () => {
     const wrapper = mount(FastTravelPanel, { attachTo: document.body });
     window.dispatchEvent(new CustomEvent('pythontopia:fast-travel-open'));
     await flushPromises();
-    const routeKey = to.split('_')[0] === 'town' ? 'hub' : to.split('_')[0];
-    await wrapper.find(`[data-testid="fast-travel-${routeKey}"]`).trigger('click');
+    await wrapper.find('[data-testid="fast-travel-hub"]').trigger('click');
     await flushPromises();
-    expect(world.player.mapKey).toBe(to);
+    expect(world.player.mapKey).toBe('town_hub');
     wrapper.unmount();
   });
 });
@@ -301,21 +300,5 @@ describe('workflows.integration · Dialog store 状态机', () => {
     dlg.chooseBranch('any');
     // 没有 currentNode，chooseBranch 会找不到 → 不抛错
     expect(dlg.isOpen).toBe(true);
-  });
-});
-
-describe('workflows.integration · Inventory store', () => {
-  beforeEach(() => {
-    setActivePinia(createPinia());
-  });
-
-  it('setBootstrapItems 重置 items', () => {
-    const inv = useInventoryStore();
-    inv.setBootstrapItems([
-      { itemKey: 'a', displayName: 'A', category: 'tool', qty: 1, basePrice: 0 },
-    ]);
-    expect(inv.items.length).toBe(1);
-    inv.setBootstrapItems([]);
-    expect(inv.items.length).toBe(0);
   });
 });

@@ -21,38 +21,39 @@ describe('resolveQuestGuidance（学习目标面板「下一步」指路）', ()
     expect(g.tile).toBeNull();
   });
 
-  it('resource_consumed → 指路到工坊师傅（工坊），文案含 KC + 资源类型', () => {
-    const g = resolveQuestGuidance(findMainQuestById('1-2')!);
+  it('resource_consumed → 指路到工坊师傅（工坊），文案含资源类型', () => {
+    // 2-1（KC-008 装好 Python）是 STORYBOARD 资源子任务
+    const g = resolveQuestGuidance(findMainQuestById('2-1')!);
     expect(g.kind).toBe('workshop');
     expect(g.npcKey).toBe('workshop_master');
     expect(g.teleport).toBe(false);
     expect(g.openDialog).toBe(true);
-    expect(g.stepText).toContain('KC-002');
+    expect(g.stepText).not.toContain('KC-008');
     expect(g.stepText).toContain('STORYBOARD');
   });
 
   it('submission → 指路到教务 Q（训练场）', () => {
-    const g = resolveQuestGuidance(findMainQuestById('1-4')!);
+    // 7-3（KC-061 递归，problem #511）是 submission 子任务；1-4 已回归为「学」里程碑。
+    const g = resolveQuestGuidance(findMainQuestById('7-3')!);
     expect(g.kind).toBe('training');
     expect(g.npcKey).toBe('coach_q');
-    expect(g.mapKey).toBe('campus_east');
+    expect(g.mapKey).toBe('town_hub');
   });
 
-  it('kc_mastery → 指路到田老（知识农场），文案含目标掌握度', () => {
+  it('kc_mastery → 指路到训练场（教务 Q），文案含目标掌握度', () => {
     const g = resolveQuestGuidance(findMainQuestById('2-5')!);
     expect(g.kind).toBe('practice');
-    expect(g.npcKey).toBe('farmer_kc');
-    expect(g.mapKey).toBe('farm_north');
-    expect(g.teleport).toBe(true);
+    expect(g.npcKey).toBe('coach_q');
+    expect(g.mapKey).toBe('town_hub');
+    expect(g.teleport).toBe(false);
     expect(g.stepText).toMatch(/\d+/);
   });
 
-  it('building_visit → 落点用证据精确 tile，不开对话', () => {
-    const g = resolveQuestGuidance(findMainQuestById('4-1')!);
-    expect(g.kind).toBe('building');
-    expect(g.tile).toEqual({ x: 12, y: 15 });
-    expect(g.openDialog).toBe(false);
-    expect(g.teleport).toBe(true);
+  it('首进 1-2 → 指路到教授对话（不再是抽象资源生成）', () => {
+    const g = resolveQuestGuidance(findMainQuestById('1-2')!);
+    expect(g.kind).toBe('dialog');
+    expect(g.npcKey).toBe('professor');
+    expect(g.openDialog).toBe(true);
   });
 
   it('全部 35 个子任务都能产出有效指路（非空文案 + 合法地图）', () => {

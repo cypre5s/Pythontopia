@@ -88,6 +88,12 @@ public class PassiveProfileService {
 
   private static final double DEFAULT_SCORE = 0.5;
 
+  /** confidence 饱和证据数：evidence_count 达到该值时置信度=1（读时派生，不入库）。 */
+  private static final int EVIDENCE_SATURATION = 8;
+
+  /** 读时 decay 半衰期（天）：久未更新的维度得分向中性 0.5 回归，落实「随学随新」。 */
+  private static final double DECAY_HALF_LIFE_DAYS = 14.0;
+
   private final ProfileRepository profileRepository;
   private final ObjectMapper objectMapper;
 
@@ -185,6 +191,80 @@ public class PassiveProfileService {
   /** 学生 PUT 自评接口是否允许直写该维度。 */
   public boolean isSelfEditable(String dimensionKey) {
     return SELF_EDITABLE_DIMENSIONS.contains(dimensionKey);
+  }
+
+  /** 八维 key → 中文标签（雷达图轴标签）。 */
+  private static final Map<String, String> DIMENSION_LABELS =
+      Map.of(
+          "professional_background", "专业背景",
+          "knowledge_base", "知识基础",
+          "learning_goal", "学习目标",
+          "cognitive_style", "认知风格",
+          "learning_preference", "学习偏好",
+          "error_pattern", "易错模式",
+          "practical_ability", "实践能力",
+          "emotion_persistence", "情绪与坚持");
+
+  /**
+   * 读取学生 8 维画像得分快照（供雷达图）。缺失维度按 {@link #DEFAULT_SCORE} 兜底，保证一定返回 8 维。
+   */
+  @Transactional(readOnly = true)
+  public List<com.pythontopia.learner.profile.dto.ProfileDimensionDto> getDimensions(Long userId) {
+    JsonNode dims = profileRepository.findDimensions(userId).orElse(null);
+    List<com.pythontopia.learner.profile.dto.ProfileDimensionDto> out = new java.util.ArrayList<>();
+    for (String key : DIMENSION_KEYS) {
+      JsonNode dim = dims == null ? null : dims.get(key);
+      double rawScore = DEFAULT_SCORE;
+      int evidenceCount = 0;
+      String lastUpdated = null;
+      List<String> tags = new java.util.ArrayList<>();
+      if (dim instanceof ObjectNode obj) {
+        rawScore = obj.path("score").asDouble(DEFAULT_SCORE);
+        evidenceCount = obj.path("evidence_count").asInt(0);
+        JsonNode lu = obj.get("last_updated");
+        lastUpdated = lu != null && lu.isTextual() ? lu.asText() : null;
+        JsonNode tagsNode = obj.get("tags");
+        if (tagsNode instanceof ArrayNode arr) {
+          for (JsonNode t : arr) {
+            tags.add(t.asText());
+          }
+        }
+      }
+      double confidence = Math.min(1.0, evidenceCount / (double) EVIDENCE_SATURATION);
+      double effectiveScore = applyDecay(rawScore, lastUpdated);
+      out.add(
+          new com.pythontopia.learner.profile.dto.ProfileDimensionDto(
+              key,
+              DIMENSION_LABELS.getOrDefault(key, key),
+              effectiveScore,
+              confidence,
+              evidenceCount,
+              SELF_EDITABLE_DIMENSIONS.contains(key),
+              tags));
+    }
+    return out;
+  }
+
+  /**
+   * 读时半衰期 decay：久未更新的维度得分向中性 {@value #DEFAULT_SCORE} 轻微回归，落实「随学随新」；
+   * raw 分不入库改动。{@code last_updated} 缺失或不可解析时不衰减。
+   */
+  private static double applyDecay(double score, String lastUpdatedIso) {
+    if (lastUpdatedIso == null || lastUpdatedIso.isBlank()) {
+      return score;
+    }
+    try {
+      java.time.Instant last = java.time.Instant.parse(lastUpdatedIso);
+      double days =
+          java.time.Duration.between(last, java.time.Instant.now()).toMillis() / 86_400_000.0;
+      if (days <= 0) {
+        return score;
+      }
+      double factor = Math.pow(0.5, days / DECAY_HALF_LIFE_DAYS);
+      return DEFAULT_SCORE + (score - DEFAULT_SCORE) * factor;
+    } catch (java.time.format.DateTimeParseException ex) {
+      return score;
+    }
   }
 
   private void writeRevisionAudit(

@@ -83,22 +83,40 @@ class TokenStorage @VisibleForTesting constructor(
      * 上层据此判断是否需要走 Login 流程。
      */
     fun readSnapshot(): SessionSnapshot? {
-        val token = readAccessToken() ?: return null
-        if (token.isBlank()) return null
-        val userId = prefs.getLong(KEY_USER_ID, INVALID_USER_ID)
-        if (userId == INVALID_USER_ID) return null
-        val username = prefs.getString(KEY_USERNAME, null) ?: return null
-        val role = prefs.getString(KEY_ROLE, null) ?: return null
-        val expiresAt = prefs.getLong(KEY_EXPIRES_AT, 0L)
-        if (expiresAt == 0L) return null
+        val fields = readRequiredSessionFields() ?: return null
         return SessionSnapshot(
-            userId = userId,
-            username = username,
-            role = role,
+            userId = fields.userId,
+            username = fields.username,
+            role = fields.role,
             displayName = prefs.getString(KEY_DISPLAY_NAME, null),
-            expiresAtEpochMs = expiresAt,
+            expiresAtEpochMs = fields.expiresAtEpochMs,
         )
     }
+
+    private fun readRequiredSessionFields(): RequiredSessionFields? {
+        val accessToken = readAccessToken()?.takeUnless { it.isBlank() }
+        val userId = accessToken?.let {
+            prefs.getLong(KEY_USER_ID, INVALID_USER_ID)
+                .takeIf { storedUserId -> storedUserId != INVALID_USER_ID }
+        }
+        val username = userId?.let {
+            prefs.getString(KEY_USERNAME, null)?.takeUnless { storedUsername -> storedUsername.isBlank() }
+        }
+        val role = username?.let {
+            prefs.getString(KEY_ROLE, null)?.takeUnless { storedRole -> storedRole.isBlank() }
+    }
+    val expiresAt = role?.let {
+        prefs.getLong(KEY_EXPIRES_AT, 0L).takeIf { storedExpiresAt -> storedExpiresAt != 0L }
+    }
+    return expiresAt?.let { requiredExpiresAt ->
+        RequiredSessionFields(
+            userId = requireNotNull(userId),
+            username = requireNotNull(username),
+            role = requireNotNull(role),
+            expiresAtEpochMs = requiredExpiresAt,
+        )
+    }
+}
 
     fun clear() {
         prefs.edit().clear().apply()
@@ -129,6 +147,13 @@ class TokenStorage @VisibleForTesting constructor(
         private const val INVALID_USER_ID: Long = -1L
     }
 }
+
+private data class RequiredSessionFields(
+    val userId: Long,
+    val username: String,
+    val role: String,
+    val expiresAtEpochMs: Long,
+)
 
 private fun createEncryptedPrefs(context: Context): SharedPreferences {
     val masterKey = MasterKey.Builder(context)

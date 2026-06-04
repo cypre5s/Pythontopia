@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -20,6 +22,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     compileOptions {
@@ -31,9 +34,37 @@ android {
         jvmTarget = libs.versions.jvmTarget.get()
     }
 
+    val keystorePropsFile = rootProject.file("keystore.properties")
+    val hasReleaseKeystore = keystorePropsFile.exists()
+    signingConfigs {
+        if (hasReleaseKeystore) {
+            create("release") {
+                val props = Properties().apply {
+                    keystorePropsFile.inputStream().use { load(it) }
+                }
+                storeFile = file(props.getProperty("storeFile"))
+                storePassword = props.getProperty("storePassword")
+                keyAlias = props.getProperty("keyAlias")
+                keyPassword = props.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         getByName("release") {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
+            // 有正式 keystore（keystore.properties，已 gitignore）则用之；
+            // 否则回退 debug 签名，保证演示期 assembleRelease 也能产出可安装包。
+            signingConfig = if (hasReleaseKeystore) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 
@@ -80,9 +111,16 @@ dependencies {
     implementation(project(":feature:retro"))
     implementation(project(":feature:path"))
     implementation(project(":feature:classroom"))
+    implementation(project(":feature:tutor"))
+    implementation(project(":feature:library"))
+    implementation(project(":feature:boss"))
+    implementation(project(":feature:endless"))
+    implementation(project(":feature:lecture"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
+    // Baseline Profile 运行时安装（AGP 已在 release 编译 ART 配置；此依赖保证无 Play 云配置的设备也能落地）。
+    implementation(libs.androidx.profileinstaller)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)

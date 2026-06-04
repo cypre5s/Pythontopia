@@ -25,6 +25,7 @@ import AppLayout from '@/app/AppLayout.vue';
 import { useArenaStore } from '@stores/arena';
 import { arenaLevelsByChapter } from '@/data/arenaLevels';
 import { findBossByChapter } from '@/data/mainQuests';
+import { kcDisplayName } from '@/data/kcNames';
 import { useProfileSignals } from '@/composables/useProfileSignals';
 import type { ArenaLevel, ArenaLevelKind } from '@/types/arena';
 
@@ -62,15 +63,15 @@ const selectedLevel = computed<ArenaLevel | null>(
 );
 
 const KIND_ICON: Record<ArenaLevelKind, string> = {
-  pdf_question: 'Rd',
+  pdf_question: '▤',
   fill_blank:   '▭',
   debug:        '⚠',
   short_answer: '✎',
   closed_loop:  '⟲',
   dual_track:   '⇆',
   multi_round:  '◉◉◉',
-  teach_back:   'Tb',
-  bug_mine:     'Bg',
+  teach_back:   '↩',
+  bug_mine:     '⛏',
   boss:         '★',
 };
 
@@ -194,7 +195,10 @@ function star(level: ArenaLevel): string {
       </nav>
 
       <div class="arena-body">
-        <aside class="arena-steps" data-testid="arena-steps">
+        <aside
+          class="arena-steps"
+          data-testid="arena-steps"
+        >
           <ol class="arena-step-list">
             <li
               v-for="level in chapterLevels"
@@ -237,7 +241,7 @@ function star(level: ArenaLevel): string {
             {{ selectedLevel.hint }}
           </p>
           <p class="arena-detail__kc">
-            锚定 KC：{{ selectedLevel.kcCodes.join(' / ') }}
+            锚定知识点：{{ selectedLevel.kcCodes.map(kcDisplayName).join(' / ') }}
           </p>
           <div
             v-if="profileSignals.hasAnySignal.value"
@@ -292,8 +296,8 @@ function star(level: ArenaLevel): string {
   padding: 24px;
   background:
     radial-gradient(ellipse at top, rgba(255, 247, 230, 0.85) 0%, rgba(241, 216, 150, 0.55) 60%, rgba(212, 175, 55, 0.18) 100%);
-  font-family: var(--pyt-font-pixel, 'Ark Pixel 12', monospace);
-  color: #3a2a14;
+  font-family: var(--pyt-font-pixel);
+  color: var(--pyt-color-text-primary);
 }
 
 .arena-head {
@@ -302,10 +306,10 @@ function star(level: ArenaLevel): string {
   align-items: center;
   gap: 16px;
   padding: 14px 22px;
-  background: linear-gradient(180deg, #fff7e6 0%, #f1d896 100%);
-  border: 3px solid #6e4f1d;
-  border-radius: 12px;
-  box-shadow: 4px 4px 0 #2a1a05;
+  background: linear-gradient(180deg, var(--pyt-color-bg-elevated) 0%, var(--pyt-color-bg-sunken) 100%);
+  border: 3px solid var(--pyt-color-border-strong);
+  border-radius: var(--pyt-radius-lg);
+  box-shadow: 4px 4px 0 var(--pyt-color-shadow);
   margin-bottom: 16px;
 }
 .arena-head__center {
@@ -314,14 +318,14 @@ function star(level: ArenaLevel): string {
 .arena-title {
   margin: 0;
   font-size: 22px;
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
   text-shadow: 2px 2px 0 rgba(212, 175, 55, 0.55);
   letter-spacing: 1px;
 }
 .arena-subtitle {
   margin: 2px 0 0;
   font-size: 12px;
-  color: #5d4524;
+  color: var(--pyt-color-text-hint);
 }
 .arena-stats {
   display: flex;
@@ -332,31 +336,31 @@ function star(level: ArenaLevel): string {
 .arena-stat {
   font-size: 13px;
   padding: 4px 12px;
-  background: #ffd166;
-  border: 2px solid #4d3613;
-  border-radius: 999px;
+  background: var(--pyt-color-gold-bright);
+  border: 2px solid var(--pyt-color-text-primary);
+  border-radius: var(--pyt-radius-full);
 }
-.arena-stat--total { background: #c5e6f8; }
+.arena-stat--total { background: var(--pyt-color-info-bg); }
 
 .arena-btn {
   padding: 10px 18px;
   font-family: inherit;
   font-size: 13px;
   letter-spacing: 1px;
-  border: 3px solid #4d3613;
-  background: #fff7e6;
-  color: #4d3613;
+  border: 3px solid var(--pyt-color-text-primary);
+  background: var(--pyt-color-bg-elevated);
+  color: var(--pyt-color-text-primary);
   cursor: pointer;
-  box-shadow: 3px 3px 0 #2a1a05;
+  box-shadow: 3px 3px 0 var(--pyt-color-shadow);
   transition: transform 0.1s, box-shadow 0.1s;
 }
 .arena-btn:hover:not(:disabled) {
   transform: translate(1px, 1px);
-  box-shadow: 2px 2px 0 #2a1a05;
+  box-shadow: 2px 2px 0 var(--pyt-color-shadow);
 }
 .arena-btn:active:not(:disabled) {
   transform: translate(3px, 3px);
-  box-shadow: 0 0 0 #2a1a05;
+  box-shadow: 0 0 0 var(--pyt-color-shadow);
 }
 .arena-btn:disabled {
   opacity: 0.6;
@@ -364,7 +368,7 @@ function star(level: ArenaLevel): string {
 }
 .arena-btn--exit { background: #e2c391; }
 .arena-btn--primary {
-  background: linear-gradient(180deg, #ffd166 0%, #f4b400 100%);
+  background: linear-gradient(180deg, var(--pyt-color-gold-bright) 0%, var(--pyt-color-gold) 100%);
   width: 100%;
   margin-top: 16px;
   padding: 14px 20px;
@@ -380,11 +384,11 @@ function star(level: ArenaLevel): string {
 .arena-tab {
   padding: 8px 14px;
   background: rgba(255, 247, 230, 0.85);
-  border: 2px solid #6e4f1d;
-  border-radius: 6px;
+  border: 2px solid var(--pyt-color-text-hint);
+  border-radius: var(--pyt-radius-lg);
   font-family: inherit;
   font-size: 12px;
-  color: #5d4524;
+  color: var(--pyt-color-text-hint);
   cursor: pointer;
   display: flex;
   flex-direction: column;
@@ -393,10 +397,10 @@ function star(level: ArenaLevel): string {
   min-width: 70px;
 }
 .arena-tab--active {
-  background: linear-gradient(180deg, #ffd166 0%, #f4b400 100%);
-  color: #4d3613;
-  box-shadow: 3px 3px 0 #2a1a05;
-  border-color: #4d3613;
+  background: linear-gradient(180deg, var(--pyt-color-gold-bright) 0%, var(--pyt-color-gold) 100%);
+  color: var(--pyt-color-text-primary);
+  box-shadow: 3px 3px 0 var(--pyt-color-shadow);
+  border-color: var(--pyt-color-text-primary);
 }
 .arena-tab__count {
   font-size: 10px;
@@ -412,11 +416,11 @@ function star(level: ArenaLevel): string {
 .arena-steps {
   background:
     repeating-linear-gradient(135deg, rgba(212, 175, 55, 0.08) 0 8px, transparent 8px 18px),
-    linear-gradient(180deg, #fff7e6 0%, #f1d896 100%);
-  border: 3px solid #6e4f1d;
-  border-radius: 10px;
+    linear-gradient(180deg, var(--pyt-color-bg-elevated) 0%, var(--pyt-color-bg-sunken) 100%);
+  border: 3px solid var(--pyt-color-border-strong);
+  border-radius: var(--pyt-radius-lg);
   padding: 12px;
-  box-shadow: 4px 4px 0 #2a1a05;
+  box-shadow: 4px 4px 0 var(--pyt-color-shadow);
 }
 .arena-step-list {
   list-style: none;
@@ -433,17 +437,17 @@ function star(level: ArenaLevel): string {
   gap: 8px;
   padding: 8px 10px;
   background: rgba(255, 247, 230, 0.85);
-  border: 2px solid #8a6c2c;
-  border-radius: 6px;
+  border: 2px solid var(--pyt-color-text-muted);
+  border-radius: var(--pyt-radius-lg);
   cursor: pointer;
   transition: transform 0.1s, background 0.15s;
 }
 .arena-step:hover:not(.arena-step--locked) {
-  background: #fff7e6;
+  background: var(--pyt-color-bg-elevated);
   transform: translateX(2px);
 }
 .arena-step--cleared {
-  border-color: #16a34a;
+  border-color: var(--pyt-color-success);
   background: rgba(187, 247, 208, 0.55);
 }
 .arena-step--locked {
@@ -451,17 +455,17 @@ function star(level: ArenaLevel): string {
   cursor: not-allowed;
 }
 .arena-step--current {
-  border-color: #b8442d;
-  box-shadow: 2px 2px 0 #4d3613;
+  border-color: var(--pyt-color-danger);
+  box-shadow: 2px 2px 0 var(--pyt-color-text-primary);
   background: #ffe7b3;
 }
 .arena-step--boss {
-  background: linear-gradient(135deg, #fff7e6 0%, #facc15 50%, #ffd166 100%);
-  border-color: #b8442d;
+  background: linear-gradient(135deg, var(--pyt-color-bg-elevated) 0%, var(--pyt-color-gold-bright) 50%, var(--pyt-color-gold-bright) 100%);
+  border-color: var(--pyt-color-danger);
   border-width: 3px;
 }
 .arena-step--recommended {
-  outline: 2px dashed #7b2cbf;
+  outline: 2px dashed var(--pyt-color-accent);
   outline-offset: 2px;
   position: relative;
 }
@@ -471,16 +475,16 @@ function star(level: ArenaLevel): string {
   top: -8px;
   right: -2px;
   font-size: 9px;
-  background: #7b2cbf;
-  color: #fff7e6;
+  background: var(--pyt-color-accent);
+  color: var(--pyt-color-bg-elevated);
   padding: 1px 4px;
-  border-radius: 4px;
+  border-radius: var(--pyt-radius-md);
   letter-spacing: 0.5px;
 }
 .arena-step__num {
   font-weight: bold;
   text-align: center;
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
 }
 .arena-step__icon {
   font-size: 16px;
@@ -488,7 +492,7 @@ function star(level: ArenaLevel): string {
 }
 .arena-step__title {
   font-size: 12px;
-  color: #3a2a14;
+  color: var(--pyt-color-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -498,11 +502,11 @@ function star(level: ArenaLevel): string {
 }
 
 .arena-detail {
-  background: linear-gradient(180deg, #fff7e6 0%, #f1d896 100%);
-  border: 3px solid #6e4f1d;
-  border-radius: 10px;
+  background: linear-gradient(180deg, var(--pyt-color-bg-elevated) 0%, var(--pyt-color-bg-sunken) 100%);
+  border: 3px solid var(--pyt-color-border-strong);
+  border-radius: var(--pyt-radius-lg);
   padding: 22px 24px;
-  box-shadow: 4px 4px 0 #2a1a05;
+  box-shadow: 4px 4px 0 var(--pyt-color-shadow);
 }
 .arena-detail__head {
   display: flex;
@@ -512,20 +516,20 @@ function star(level: ArenaLevel): string {
 .badge {
   padding: 3px 10px;
   font-size: 11px;
-  border-radius: 999px;
-  border: 2px solid #4d3613;
-  background: #ffd166;
-  color: #4d3613;
+  border-radius: var(--pyt-radius-full);
+  border: 2px solid var(--pyt-color-text-primary);
+  background: var(--pyt-color-gold-bright);
+  color: var(--pyt-color-text-primary);
 }
 .badge--diff {
-  background: #fff7e6;
+  background: var(--pyt-color-bg-elevated);
   letter-spacing: 1px;
-  color: #b8442d;
+  color: var(--pyt-color-danger);
 }
 .badge--reco {
-  background: #ede9fe;
-  border-color: #7b2cbf;
-  color: #5b21b6;
+  background: var(--pyt-color-accent-bg);
+  border-color: var(--pyt-color-accent);
+  color: var(--pyt-color-accent);
 }
 .arena-profile-hint {
   display: flex;
@@ -534,37 +538,37 @@ function star(level: ArenaLevel): string {
   padding: 8px 12px;
   margin: 10px 0;
   background: rgba(237, 233, 254, 0.7);
-  border: 2px dashed #7b2cbf;
-  border-radius: 6px;
+  border: 2px dashed var(--pyt-color-accent);
+  border-radius: var(--pyt-radius-lg);
   font-size: 12px;
-  color: #4c1d95;
+  color: var(--pyt-color-accent);
 }
 .profile-icon {
   font-size: 16px;
-  color: #7b2cbf;
+  color: var(--pyt-color-accent);
 }
 .arena-detail__title {
   margin: 8px 0 12px;
   font-size: 22px;
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
 }
 .arena-detail__hint {
   margin: 0 0 12px;
   font-size: 14px;
   line-height: 1.6;
-  color: #5d4524;
+  color: var(--pyt-color-text-hint);
 }
 .arena-detail__kc {
   margin: 0 0 12px;
   font-size: 12px;
-  color: #8a6c2c;
+  color: var(--pyt-color-text-muted);
 }
 .arena-detail__rewards {
   list-style: none;
   padding: 0;
   margin: 0 0 12px;
   font-size: 13px;
-  color: #5d4524;
+  color: var(--pyt-color-text-hint);
 }
 .arena-detail__rewards li {
   padding: 3px 0;
@@ -572,9 +576,9 @@ function star(level: ArenaLevel): string {
 .arena-detail__cleared {
   padding: 8px 12px;
   background: rgba(187, 247, 208, 0.6);
-  border: 2px solid #16a34a;
-  border-radius: 6px;
-  color: #14532d;
+  border: 2px solid var(--pyt-color-success);
+  border-radius: var(--pyt-radius-lg);
+  color: var(--pyt-color-success);
   font-size: 13px;
   margin-bottom: 6px;
 }

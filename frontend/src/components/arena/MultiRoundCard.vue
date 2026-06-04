@@ -85,14 +85,14 @@ function prevRound(): void {
 <style scoped>
 .multi-round-card { display: grid; gap: 12px; }
 .card-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.card-icon { font-size: 18px; color: #f1c453; }
-.card-head h3 { margin: 0; font-size: 16px; color: #ffd166; }
+.card-icon { font-size: 18px; color: var(--pyt-color-gold); }
+.card-head h3 { margin: 0; font-size: 16px; color: var(--pyt-color-gold-bright); }
 .round-dots { display: flex; gap: 4px; margin-left: auto; }
 .round-dot { width: 26px; height: 26px; border-radius: 50%; border: 2px solid #4a90e2; background: rgba(74,144,226,0.1); color: #93c5fd; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-.round-dot.active { background: #f1c453; color: #2a1a08; border-color: #6e4f1d; }
+.round-dot.active { background: var(--pyt-color-gold); color: #2a1a08; border-color: var(--pyt-color-text-hint); }
 .round-dot.done { background: #6bbf59; color: #fff; border-color: #2d5b1b; }
 .round-nav { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: #93c5fd; }
-.round-nav button { font-family: inherit; font-size: 12px; padding: 4px 10px; background: #1e3a8a; color: #fff7e6; border: 1px solid #4a90e2; border-radius: 3px; cursor: pointer; }
+.round-nav button { font-family: inherit; font-size: 12px; padding: 4px 10px; background: #1e3a8a; color: var(--pyt-color-bg-elevated); border: 1px solid #4a90e2; border-radius: 3px; cursor: pointer; }
 .round-nav button:disabled { opacity: 0.4; cursor: not-allowed; }
 .question { margin: 0; padding: 10px; background: #0a1428; border: 2px solid #4a90e2; white-space: pre-wrap; font-size: 13px; line-height: 1.7; color: #e5e7eb; }
 .round-editor { font-family: 'JetBrains Mono', monospace; font-size: 13px; background: #0a1428; color: #f0f9ff; border: 2px solid #4a90e2; padding: 8px; resize: vertical; min-height: 120px; }

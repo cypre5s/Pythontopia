@@ -8,6 +8,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -20,6 +21,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 @Composable
 fun LoginScreen(
     onLoginSuccess: () -> Unit,
+    onCreateAccount: () -> Unit = {},
+    onGuest: () -> Unit = {},
     viewModel: LoginViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -46,6 +49,21 @@ fun LoginScreen(
             enabled = !state.isLoading,
         ) {
             Text(if (state.isLoading) "登录中..." else "登录")
+        }
+        TextButton(
+            onClick = onCreateAccount,
+            enabled = !state.isLoading,
+        ) {
+            Text("创建新账号")
+        }
+        TextButton(
+            onClick = {
+                viewModel.enterGuestMode()
+                onGuest()
+            },
+            enabled = !state.isLoading,
+        ) {
+            Text("游客快速体验（无需注册）")
         }
         state.errorMessage?.let { message ->
             Text(message, color = MaterialTheme.colorScheme.error)

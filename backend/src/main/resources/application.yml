@@ -45,6 +45,26 @@ pythontopia:
     apiKey: ${PYT_SPARK_API_KEY:}
     apiSecret: ${PYT_SPARK_API_SECRET:}
     dailyLimitPerUser: 100
+  image:
+    # 讯飞星火文生图：复用与 TTS / Spark LLM 相同的讯飞控制台应用凭据。
+    # 任一缺失则降级为本地占位图（degraded=true），保证无 apikey 时多模态验收链路不被阻塞。
+    appId: ${PYT_SPARK_APP_ID:}
+    apiKey: ${PYT_SPARK_API_KEY:}
+    apiSecret: ${PYT_SPARK_API_SECRET:}
+    baseUrl: ${PYT_SPARK_IMAGE_URL:https://spark-api.cn-huabei-1.xf-yun.com/v2.1/tti}
+    dailyLimitPerUser: 50
+  image-understanding:
+    # 讯飞星火「图片理解」(看图答疑)：复用同一套讯飞凭据；缺失则导师答疑回退纯文本，不阻塞链路。
+    appId: ${PYT_SPARK_APP_ID:}
+    apiKey: ${PYT_SPARK_API_KEY:}
+    apiSecret: ${PYT_SPARK_API_SECRET:}
+    baseUrl: ${PYT_SPARK_IMAGE_UNDERSTANDING_URL:wss://spark-api.cn-huabei-1.xf-yun.com/v2.1/image}
+    domain: ${PYT_SPARK_IMAGE_UNDERSTANDING_DOMAIN:imagev3}
+    maxTokens: 1024
+    dailyLimitPerUser: 50
+  media:
+    # 多模态生成产物（文生图/合成短视频）本地落盘目录，不入 git（见 .gitignore），可重生。
+    generatedDir: ${PYT_MEDIA_GENERATED_DIR:./data/course-pack-43/generated-media}
   coursepack:
     # R-13 D1/D2：原 PDF 本地路径（不进 git）。文件命名 {documentId}.pdf（186~192）。
     # 来源：Alethicode/deploy/data/language_pack/tasks/31/originals 的 7 章 PDF

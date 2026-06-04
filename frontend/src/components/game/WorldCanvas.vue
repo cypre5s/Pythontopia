@@ -13,8 +13,15 @@
 //
 // 注意：不再使用 aspect-ratio + max-height，因为父容器已是 100vh，子层只需要
 // 充满父层即可。
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-import { createPhaserGame, getPhaserGame, type PhaserGameHandle, type PhaserSceneConfig } from '@game/adapters/phaserGame';
+import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref } from 'vue';
+import {
+  createPhaserGame,
+  getPhaserGame,
+  pausePhaserGame,
+  resumePhaserGame,
+  type PhaserGameHandle,
+  type PhaserSceneConfig,
+} from '@game/adapters/phaserGame';
 import { BootScene } from '@game/scenes/BootScene';
 import { WorldScene } from '@game/scenes/WorldScene';
 import { useWorldStore } from '@stores/world';
@@ -30,8 +37,16 @@ let game: PhaserGameHandle | null = null;
 let fadeTimer: number | null = null;
 let resizeRaf: number | null = null;
 let resizeObserver: ResizeObserver | null = null;
+let listenersBound = false;
 
 const progressPercent = computed(() => Math.min(100, Math.max(0, Math.round(progress.value * 100))));
+
+function bindListeners(): void {
+  if (listenersBound) return;
+  listenersBound = true;
+  window.addEventListener('pythontopia:load-progress', onProgress);
+  window.addEventListener('pythontopia:world-travel', onWorldTravel);
+}
 
 function onProgress(event: Event): void {
   const custom = event as CustomEvent<{ progress: number }>;
@@ -98,49 +113,93 @@ function onWorldTravel(): void {
   }
 }
 
-onMounted(async () => {
-  window.addEventListener('pythontopia:load-progress', onProgress);
-  window.addEventListener('pythontopia:world-travel', onWorldTravel);
+function hideLoadOverlay(): void {
+  overlayVisible.value = false;
+  overlayFading.value = true;
+}
+
+async function ensureGameMounted(): Promise<void> {
+  bindListeners();
   const world = useWorldStore();
   if (!world.bootstrapped) {
     await world.bootstrap();
   }
   const pendingMapKey = applyPendingTravel();
-  if (root.value) {
-    const scenes: PhaserSceneConfig[] = [BootScene, WorldScene];
-    const existingGame = getPhaserGame();
-    if (existingGame && pendingMapKey) {
+  if (!root.value) return;
+
+  const existingGame = getPhaserGame();
+  if (existingGame) {
+    if (pendingMapKey) {
       try {
         existingGame.scene.start('WorldScene', { mapKey: pendingMapKey });
       } catch {
-        // scene manager 尚未就绪，下面 createPhaserGame 会兜底
+        // scene manager 尚未就绪
       }
     }
-    game = createPhaserGame(root.value, scenes);
-    if (typeof ResizeObserver === 'function') {
-      resizeObserver = new ResizeObserver(() => scheduleResize());
-      resizeObserver.observe(root.value);
-    } else {
-      window.addEventListener('resize', scheduleResize);
-    }
-    // 触发一次首屏尺寸同步，防止初始 width=960 与全屏父层不一致
+    hideLoadOverlay();
     scheduleResize();
-    setTimeout(() => {
-      const canvas = root.value?.querySelector('canvas');
-      if (canvas instanceof HTMLCanvasElement) {
-        canvas.tabIndex = 0;
-        canvas.style.outline = 'none';
-        canvas.focus();
-        canvas.addEventListener('click', () => canvas.focus());
-      }
-    }, 300);
+    resumePhaserGame();
+    return;
+  }
+
+  const scenes: PhaserSceneConfig[] = [BootScene, WorldScene];
+  if (pendingMapKey) {
+    try {
+      getPhaserGame()?.scene.start('WorldScene', { mapKey: pendingMapKey });
+    } catch {
+      // createPhaserGame 会兜底
+    }
+  }
+  game = createPhaserGame(root.value, scenes);
+  if (typeof ResizeObserver === 'function') {
+    resizeObserver = new ResizeObserver(() => scheduleResize());
+    resizeObserver.observe(root.value);
+  }
+  window.addEventListener('resize', scheduleResize);
+  window.addEventListener('orientationchange', scheduleResize);
+  document.addEventListener('fullscreenchange', scheduleResize);
+  scheduleResize();
+  window.setTimeout(scheduleResize, 150);
+  window.setTimeout(scheduleResize, 600);
+  setTimeout(() => {
+    const canvas = root.value?.querySelector('canvas');
+    if (canvas instanceof HTMLCanvasElement) {
+      canvas.tabIndex = 0;
+      canvas.style.outline = 'none';
+      canvas.focus();
+      canvas.addEventListener('click', () => canvas.focus());
+    }
+  }, 300);
+}
+
+onMounted(() => {
+  void ensureGameMounted();
+});
+
+onActivated(() => {
+  onWorldTravel();
+  if (getPhaserGame()) {
+    hideLoadOverlay();
+    scheduleResize();
+    resumePhaserGame();
+  } else {
+    void ensureGameMounted();
   }
 });
 
+onDeactivated(() => {
+  pausePhaserGame();
+});
+
 onBeforeUnmount(() => {
-  window.removeEventListener('pythontopia:load-progress', onProgress);
-  window.removeEventListener('pythontopia:world-travel', onWorldTravel);
+  if (listenersBound) {
+    window.removeEventListener('pythontopia:load-progress', onProgress);
+    window.removeEventListener('pythontopia:world-travel', onWorldTravel);
+    listenersBound = false;
+  }
   window.removeEventListener('resize', scheduleResize);
+  window.removeEventListener('orientationchange', scheduleResize);
+  document.removeEventListener('fullscreenchange', scheduleResize);
   if (resizeRaf !== null) {
     window.cancelAnimationFrame(resizeRaf);
     resizeRaf = null;
@@ -226,8 +285,8 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   background: rgba(20, 28, 18, 0.92);
-  color: #fff7e6;
-  font-family: var(--pyt-font-pixel, 'Ark Pixel 12', monospace);
+  color: var(--pyt-color-bg-elevated);
+  font-family: var(--pyt-font-pixel);
   opacity: 1;
   transition: opacity 600ms ease;
   z-index: 3;
@@ -244,41 +303,41 @@ onBeforeUnmount(() => {
   padding: 24px 32px;
   background: rgba(40, 28, 14, 0.94);
   border: 2px solid #d4af37;
-  border-radius: 14px;
+  border-radius: var(--pyt-radius-lg);
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(255, 247, 230, 0.06);
 }
 .world-load-title {
   margin: 0;
   font-size: 22px;
   letter-spacing: 1px;
-  color: #ffd166;
-  text-shadow: 2px 2px 0 #2a1a05;
-  font-family: var(--pyt-font-pixel, 'Ark Pixel 12'), 'PingFang SC', monospace;
+  color: var(--pyt-color-gold-bright);
+  text-shadow: 2px 2px 0 var(--pyt-color-shadow);
+  font-family: var(--pyt-font-pixel);
 }
 .world-load-bar {
   position: relative;
   width: 280px;
   height: 14px;
-  border: 2px solid #6e4f1d;
-  background: #2a1a05;
+  border: 2px solid var(--pyt-color-text-hint);
+  background: var(--pyt-color-shadow);
   border-radius: 4px;
   overflow: hidden;
 }
 .world-load-bar__fill {
   height: 100%;
-  background: linear-gradient(90deg, #f4b400 0%, #ffd166 100%);
+  background: linear-gradient(90deg, #f4b400 0%, var(--pyt-color-gold-bright) 100%);
   transition: width 180ms linear;
 }
 .world-load-percent {
   margin: 0;
   font-size: 14px;
-  color: #fff7e6;
+  color: var(--pyt-color-bg-elevated);
   font-weight: 700;
 }
 .world-load-hint {
   margin: 0;
   font-size: 12px;
-  color: #f5e2c1;
+  color: var(--pyt-color-warning-bg);
   opacity: 0.82;
 }
 </style>

@@ -6,15 +6,13 @@ import kotlinx.serialization.Serializable
 /**
  * Bug 矿洞副本 DTO 集合。
  *
- * 与后端 `/api/mine/{endpoint}` 端点保持字段一一对应；DTO 设计严格对齐
- * `docs/gameplay/r12-deepen/04-bugmine-puzzle-deck.md` 50 张谜题卡牌库的
- * "故事场景 / 错误代码 / 期望输出 / KC / 通过条件 / Pythoco" 结构。
+ * UI 层仍保留"矿洞卡牌"模型；Retrofit wire DTO 在 [MineRepository] 内部适配
+ * 后端 `/api/bug-mine/sessions` 的真实会话、卡片 payload 和 retry-submit 协议。
  *
  * 端点 → DTO 映射：
- * - `POST /api/mine/sessions`                  → [MineStartRequest] → [MineSession]
- * - `GET  /api/mine/sessions/{id}/cards`       → `List<`[MineCard]`>`
- * - `POST /api/mine/cards/{id}/attempt`        → [MineAttemptRequest] → [MineAttempt]
- * - `POST /api/mine/sessions/{id}/next`        → [MineCard]?（无更多卡返回 204/404）
+ * - `POST /api/bug-mine/sessions`              → [MineStartRequest] → [MineSession]
+ * - `GET  /api/bug-mine/sessions/{id}`         → session.cards → `List<`[MineCard]`>`
+ * - `POST /api/bug-mine/sessions/{id}/retry-submit` → [MineAttemptRequest] → [MineAttempt]
  *
  * 所有类型都带 `@Serializable`：DTO 与 ViewState 共用同一份 model 可减少层间转换
  * 噪音；Beta+1 接 OpenAPI Generator 时这层可被生成版本替换，业务代码不动。
@@ -41,6 +39,7 @@ data class MineSession(
     @SerialName("sourceSubmissionId") val sourceSubmissionId: Long? = null,
     val currentLayer: Int = 1,
     val totalCards: Int = 5,
+    val status: String = "OPEN",
 ) {
     companion object {
         const val ENTRY_FAILED_SUBMISSION = "FAILED_SUBMISSION"
@@ -75,6 +74,7 @@ data class MineCard(
     val expectedOutput: String,
     val kcCode: String,
     val pythocoReward: Int = 0,
+    val revealed: Boolean = true,
 )
 
 /**
@@ -106,10 +106,10 @@ data class MineAttempt(
     }
 }
 
-/** [MineRepository.startSession] 的请求体。null 表示玩家从 hub 主动进入而非失败提交触发。 */
+/** [MineRepository.startSession] 的请求体。后端要求来自一个失败提交。 */
 @Serializable
 data class MineStartRequest(
-    @SerialName("sourceSubmissionId") val sourceSubmissionId: Long? = null,
+    @SerialName("submissionId") val submissionId: Long,
 )
 
 /** [MineRepository.attempt] 的请求体；只携带玩家代码，cardId 走 URL path。 */

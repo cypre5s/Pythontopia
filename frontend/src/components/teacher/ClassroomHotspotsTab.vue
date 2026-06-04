@@ -57,8 +57,8 @@ defineProps<{ hotspots: ErrorHotspotDto[] }>();
 }
 .empty {
   padding: 16px;
-  background: #fdf3d0;
-  border-radius: 8px;
+  background: var(--pyt-color-bg-soft);
+  border-radius: var(--pyt-radius-lg);
   text-align: center;
 }
 .hotspot-table {
@@ -68,7 +68,7 @@ defineProps<{ hotspots: ErrorHotspotDto[] }>();
 }
 .hotspot-table th,
 .hotspot-table td {
-  border: 1px solid #c9a86b;
+  border: 1px solid var(--pyt-color-border);
   padding: 6px 10px;
   text-align: center;
 }

@@ -91,17 +91,17 @@ onBeforeUnmount(() => {
 .bug-mine-card.expired { opacity: 0.7; }
 .card-head { display: flex; align-items: center; gap: 8px; }
 .card-icon { font-size: 20px; }
-.card-head h3 { margin: 0; font-size: 16px; color: #ffd166; }
+.card-head h3 { margin: 0; font-size: 16px; color: var(--pyt-color-gold-bright); }
 .timer { position: relative; margin-left: auto; width: 120px; height: 24px; background: rgba(10,20,40,0.8); border: 2px solid #4a90e2; border-radius: 3px; overflow: hidden; }
 .timer-bar { position: absolute; inset: 0; background: #6bbf59; transition: width 1s linear; }
-.timer--warn .timer-bar { background: #f1c453; }
+.timer--warn .timer-bar { background: var(--pyt-color-gold); }
 .timer--danger .timer-bar { background: #ff7466; animation: pulse 0.5s infinite alternate; }
 .timer-text { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; height: 100%; font-size: 13px; color: #fff; font-weight: bold; }
 .expired-overlay { position: absolute; inset: 0; background: rgba(10,10,20,0.8); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 2; border-radius: 6px; }
 .expired-overlay p { margin: 0; font-size: 20px; color: #ff7466; }
 .expired-hint { font-size: 13px !important; color: #93c5fd !important; margin-top: 8px !important; }
 .question { margin: 0; padding: 10px; background: #0a1428; border: 2px solid #b3402a; white-space: pre-wrap; font-size: 13px; line-height: 1.7; color: #e5e7eb; }
-.mine-editor { font-family: 'JetBrains Mono', monospace; font-size: 13px; background: #0a1428; color: #f0f9ff; border: 2px solid #f1c453; padding: 8px; resize: vertical; min-height: 120px; }
+.mine-editor { font-family: 'JetBrains Mono', monospace; font-size: 13px; background: #0a1428; color: #f0f9ff; border: 2px solid var(--pyt-color-gold); padding: 8px; resize: vertical; min-height: 120px; }
 .mine-editor:disabled { opacity: 0.5; }
 .hint { font-size: 12px; color: rgba(255,247,230,0.5); margin: 0; }
 @keyframes pulse { from { opacity: 0.7; } to { opacity: 1; } }

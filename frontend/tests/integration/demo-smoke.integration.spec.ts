@@ -1,7 +1,7 @@
 // R-13 Phase 10 演示链路 smoke spec（目标 20 用例）。
 //
-// 完整模拟比赛演示路径：登录 → 进入世界 → 切场景 → 推一天 → 触发节日 ribbon
-// → NPC 对话 → 设置静音 → 退出。
+// 完整模拟比赛演示路径：登录 → 进入世界 → 查看 FastTravel（R-14 单 hub）→ 推一天
+// → 触发节日 ribbon → NPC 对话 → 设置静音 → 退出。
 // 不依赖后端（用 axios mock），不依赖 Phaser（纯 store + composable），
 // 验证整个数据流贯通。
 
@@ -90,14 +90,19 @@ describe('demo-smoke.integration · 完整演示链路', () => {
     expect(world.player?.tileX).toBe(25);
   });
 
-  it('STEP 5 通过 FastTravel 切到 farm_north', async () => {
+  it('STEP 5 FastTravel 面板只提供 hub 路线（R-14 单 hub，外围图已移除）', async () => {
+    // R-14 方案A：世界收缩为单一 town_hub，快速旅行只剩 hub 一条路线，
+    // 不再提供前往 farm_north 等外围图的传送（外围图已从主线/导航弃用）。
     setPlayer('town_hub');
     const wrapper = mount(FastTravelPanel, { attachTo: document.body });
     window.dispatchEvent(new CustomEvent('pythontopia:fast-travel-open'));
     await flushPromises();
-    await wrapper.find('[data-testid="fast-travel-farm"]').trigger('click');
-    await flushPromises();
-    expect(useWorldStore().player?.mapKey).toBe('farm_north');
+    expect(wrapper.find('[data-testid="fast-travel-panel"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="fast-travel-hub"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="fast-travel-farm"]').exists()).toBe(false);
+    // 已位于 hub，hub 路线被 disabled（单图收缩后无处可去即预期行为）。
+    expect(wrapper.find('[data-testid="fast-travel-hub"]').attributes('disabled')).toBeDefined();
+    expect(useWorldStore().player?.mapKey).toBe('town_hub');
     wrapper.unmount();
   });
 
@@ -158,11 +163,11 @@ describe('demo-smoke.integration · 完整演示链路', () => {
     vi.restoreAllMocks();
   });
 
-  it('STEP 9 HUD 切换 inventory + 打开 settings 同时存在', () => {
+  it('STEP 9 HUD 切换 map + 打开 settings 同时存在', () => {
     const hud = useHudStore();
-    hud.toggleSlot('inventory');
+    hud.toggleSlot('map');
     hud.openSettings();
-    expect(hud.activeSlot).toBe('inventory');
+    expect(hud.activeSlot).toBe('map');
     expect(hud.settingsOpen).toBe(true);
   });
 
@@ -211,12 +216,10 @@ describe('demo-smoke.integration · 完整演示链路', () => {
     const session = useSessionStore();
     hud.toggleSlot('quest');
     hud.openSettings();
-    hud.syncMeta({ coin: 9999 });
     hud.reset();
     session.logout();
     expect(hud.activeSlot).toBeNull();
     expect(hud.settingsOpen).toBe(false);
-    expect(hud.meta.coin).toBe(0);
     expect(session.isAuthenticated).toBe(false);
   });
 });

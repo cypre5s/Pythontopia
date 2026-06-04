@@ -203,7 +203,7 @@ describe('LibraryPage', () => {
     vi.clearAllMocks();
   });
 
-  it('挂载后渲染 7 章导航 + 课件列表，并调用 loadPage 取页', async () => {
+  it('挂载后渲染合并章节目录（章名 + 页数 + KC），并调用 loadPage 取页', async () => {
     const router = createTestRouter();
     await router.push('/library');
     await router.isReady();
@@ -218,13 +218,16 @@ describe('LibraryPage', () => {
     expect(vi.mocked(listCourseDocuments)).toHaveBeenCalled();
     expect(vi.mocked(listChapters)).toHaveBeenCalled();
     expect(vi.mocked(getDocumentPage)).toHaveBeenCalled();
-    expect(wrapper.text()).toContain('第一章：计算工具与计算思维');
-    expect(wrapper.text()).toContain('第七章：归纳与抽象');
+    expect(wrapper.text()).toContain('计算工具与计算思维');
+    expect(wrapper.text()).toContain('归纳与抽象');
+    expect(wrapper.text()).not.toContain('7 份课件');
+    expect(wrapper.text()).toContain('7 章 · 5 页 · 2 KC');
     const chapterHeads = wrapper.findAll('.chapter-head');
     expect(chapterHeads.length).toBe(7);
+    expect(wrapper.find('[data-testid="chapter-doc-1"]').text()).toContain('3 页');
   });
 
-  it('点击文档切换 docId，触发新的 getDocumentPage 调用', async () => {
+  it('点击章节目录切换 docId，触发新的 getDocumentPage 调用', async () => {
     const router = createTestRouter();
     await router.push('/library');
     await router.isReady();
@@ -234,9 +237,9 @@ describe('LibraryPage', () => {
     await flushPromises();
 
     vi.mocked(getDocumentPage).mockClear();
-    const docButtons = wrapper.findAll('.doc-item');
-    expect(docButtons.length).toBe(2);
-    await docButtons[1]!.trigger('click');
+    const ch2 = wrapper.find('[data-testid="chapter-doc-2"]');
+    expect(ch2.exists()).toBe(true);
+    await ch2.trigger('click');
     await flushPromises();
 
     expect(vi.mocked(getDocumentPage)).toHaveBeenCalledWith(187, 1);
@@ -274,7 +277,7 @@ describe('LibraryPage', () => {
     await flushPromises();
 
     pushSpy.mockClear();
-    await wrapper.find('.back-button').trigger('click');
+    await wrapper.find('[data-testid="library-back"]').trigger('click');
     expect(pushSpy).toHaveBeenCalledWith({ path: '/world' });
   });
 });

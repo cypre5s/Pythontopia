@@ -26,8 +26,8 @@ import kotlinx.coroutines.launch
  *     终态后自动刷新 [WorkshopUiState.history]；
  *  5. 用户连续 [submit] 会先 cancel 已有的轮询 Job，避免两个 polling 串扰。
  *
- * 历史归属：服务端 `/api/submissions` 走 CurrentUser 鉴权，userId 在请求体里无意义；
- * Android 端用 [DEMO_HISTORY_OWNER_ID] 占位，单元测试可直接读取常量校验调用契约。
+ * 历史归属：服务端 `/api/submissions` 走 CurrentUser 鉴权，Android 不再传 demo userId，
+ * 避免把本地占位身份冒充正式业务数据。
  */
 @HiltViewModel
 class WorkshopViewModel @Inject constructor(
@@ -66,7 +66,7 @@ class WorkshopViewModel @Inject constructor(
                     isLoadingProblems = false,
                     problems = problems,
                     errorMessage = if (problems.isEmpty()) {
-                        "未拉到 $kcCode 的题目，请确认后端 /api/problems 已上线"
+                        "未拉到 $kcCode 的题目，请确认后端 /api/course/problems 已上线"
                     } else {
                         null
                     },
@@ -163,7 +163,7 @@ class WorkshopViewModel @Inject constructor(
 
     fun loadHistory() {
         viewModelScope.launch {
-            val items = repository.history(DEMO_HISTORY_OWNER_ID)
+            val items = repository.history()
             _state.update { it.copy(history = items) }
         }
     }
@@ -177,7 +177,4 @@ class WorkshopViewModel @Inject constructor(
         super.onCleared()
     }
 
-    companion object {
-        const val DEMO_HISTORY_OWNER_ID: Long = 0L
-    }
 }

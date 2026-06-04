@@ -62,6 +62,14 @@ public class CoursePackController {
     return toDto(service.getProblem(id));
   }
 
+  @GetMapping("/problems")
+  public List<ProblemDto> listProblems(
+      @RequestParam(required = false)
+          @Pattern(regexp = "^PY43-KC-[0-9]{3}$")
+          String kcCode) {
+    return service.listProblems(kcCode).stream().map(this::toDto).toList();
+  }
+
   @GetMapping("/pages")
   public List<PageDto> listPages(
       @RequestParam @Pattern(regexp = "^PY43-KC-[0-9]{3}$") String kcCode) {

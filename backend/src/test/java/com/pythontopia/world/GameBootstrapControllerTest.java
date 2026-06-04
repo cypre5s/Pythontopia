@@ -67,7 +67,6 @@ class GameBootstrapControllerTest {
             List.of(),
             List.of(),
             List.of(),
-            List.of(),
             new SaveSlotDto(0, "Slot A", true, now, now, null),
             List.<WorldEventDto>of());
     when(service.bootstrap(eq(42L))).thenReturn(response);

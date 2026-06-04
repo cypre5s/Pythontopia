@@ -142,8 +142,8 @@ function pointsFor(type: string): string {
 }
 .empty {
   padding: 16px;
-  background: #fdf3d0;
-  border-radius: 8px;
+  background: var(--pyt-color-bg-soft);
+  border-radius: var(--pyt-radius-lg);
   text-align: center;
 }
 .legend {
@@ -167,8 +167,8 @@ function pointsFor(type: string): string {
   width: 100%;
   height: 140px;
   background: #fffbe9;
-  border: 2px solid #c9a86b;
-  border-radius: 8px;
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-lg);
 }
 .totals {
   width: 100%;
@@ -177,7 +177,7 @@ function pointsFor(type: string): string {
 }
 .totals th,
 .totals td {
-  border: 1px solid #c9a86b;
+  border: 1px solid var(--pyt-color-border);
   padding: 4px 8px;
   text-align: center;
 }

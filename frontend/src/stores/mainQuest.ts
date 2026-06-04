@@ -1,7 +1,9 @@
 // R-13 §5 Phase 2：主线进度 Pinia store。
 //
-// 持久化策略：本会话不做 V120 migration（按 §3 计划），先用 localStorage 把 progress
-// 序列化下来，跨刷新仍生效。后端 SaveSlot.snapshot JSONB 接入留 R-14（届时改 save 钩子）。
+// 持久化策略（R-14 S6 起为双写）：
+//   - localStorage（`pyt_main_quest_progress_v1`）：离线 / 未登录兜底，跨刷新即时生效。
+//   - 后端 `save_slot.snapshot.mainQuest`（V120 契约）：登录后 debounced 同步，跨设备跟随。
+// 进入世界 bootstrap 时由 world.syncFromSlot 调 hydrateFromSnapshot 回灌后端快照。
 
 import { defineStore } from 'pinia';
 import {
@@ -12,6 +14,8 @@ import {
 } from '@/data/mainQuests';
 import { CHAPTERS, formatKcNumber } from '@/data/chapters';
 import { useLearningStore } from '@stores/learning';
+import { useSessionStore } from '@stores/session';
+import { createSaveSlot, saveSlotSnapshot } from '@/api/saveSlot';
 import {
   mainQuestEmptyProgress,
   type MainQuestBoss,
@@ -59,10 +63,65 @@ function safeParse(raw: string | null): MainQuestProgress | null {
               typeof (e as RecentAiProblemEntry).problemId === 'string',
           )
         : [],
+      consumedMedia: Array.isArray(p.consumedMedia)
+        ? p.consumedMedia.filter((s): s is string => typeof s === 'string')
+        : [],
     };
   } catch {
     return null;
   }
+}
+
+/**
+ * 单调合并两份主线进度（hydrateFromSnapshot 把后端快照并入本地时用）。
+ *
+ * R-14 S6 风险修复：避免「离线先行的本地进度被后端旧快照覆盖」。教育进度天然只增
+ * （不会 un-complete 一个任务 / un-defeat 一个 boss），所以合并语义为：
+ *   - completed / defeated / milestone / consumedMedia 取并集
+ *   - 章节指针取「更靠前」的一方（章号优先，同章取更大子任务序号）
+ *   - AI 题日志按时间倒序去重，保留最新 MAX_AI_LOG 条
+ * 真正想清零进度请走显式的 resetProgress。
+ */
+function mergeProgress(local: MainQuestProgress, incoming: MainQuestProgress): MainQuestProgress {
+  const union = (a: readonly string[], b: readonly string[]): string[] =>
+    Array.from(new Set([...a, ...b]));
+  const unionNum = (a: readonly number[], b: readonly number[]): number[] =>
+    Array.from(new Set([...a, ...b])).sort((x, y) => x - y);
+
+  let currentChapter: number;
+  let currentSubQuest: number;
+  if (incoming.currentChapter > local.currentChapter) {
+    currentChapter = incoming.currentChapter;
+    currentSubQuest = incoming.currentSubQuest;
+  } else if (incoming.currentChapter < local.currentChapter) {
+    currentChapter = local.currentChapter;
+    currentSubQuest = local.currentSubQuest;
+  } else {
+    currentChapter = local.currentChapter;
+    currentSubQuest = Math.max(local.currentSubQuest, incoming.currentSubQuest);
+  }
+
+  const combinedAi = [...local.recentAiProblems, ...incoming.recentAiProblems].sort((a, b) =>
+    (b.timestamp ?? '').localeCompare(a.timestamp ?? ''),
+  );
+  const seen = new Set<string>();
+  const recentAiProblems: RecentAiProblemEntry[] = [];
+  for (const entry of combinedAi) {
+    if (seen.has(entry.problemId)) continue;
+    seen.add(entry.problemId);
+    recentAiProblems.push(entry);
+    if (recentAiProblems.length >= MAX_AI_LOG) break;
+  }
+
+  return {
+    currentChapter,
+    currentSubQuest,
+    completedSubQuests: union(local.completedSubQuests, incoming.completedSubQuests),
+    defeatedBosses: unionNum(local.defeatedBosses, incoming.defeatedBosses),
+    unlockedMilestones: union(local.unlockedMilestones, incoming.unlockedMilestones),
+    recentAiProblems,
+    consumedMedia: union(local.consumedMedia, incoming.consumedMedia),
+  };
 }
 
 function readPersisted(): MainQuestProgress {
@@ -81,6 +140,55 @@ function persist(progress: MainQuestProgress): void {
   } catch {
     /* private mode */
   }
+  scheduleSnapshotSync(progress);
+}
+
+// ───────────────── R-14 S6：后端存档槽同步（主线进度跨设备跟随） ─────────────────
+// 每次 persist 都 debounce 推送一次 snapshot 到 `save_slot.snapshot.mainQuest`；
+// 仅在已登录时真正发请求，未登录 / 离线时静默兜底 localStorage（与 syncEventToBackend 一致）。
+// hydrateFromSnapshot 期间用 suppressSnapshotSync 抑制回灌→回写的回声。
+
+const SNAPSHOT_SYNC_DEBOUNCE_MS = 1000;
+let snapshotSyncTimer: ReturnType<typeof setTimeout> | null = null;
+let suppressSnapshotSync = false;
+
+function scheduleSnapshotSync(progress: MainQuestProgress): void {
+  if (suppressSnapshotSync) return;
+  if (typeof window === 'undefined') return;
+  if (snapshotSyncTimer) clearTimeout(snapshotSyncTimer);
+  snapshotSyncTimer = setTimeout(() => {
+    snapshotSyncTimer = null;
+    void pushSnapshotToBackend(progress);
+  }, SNAPSHOT_SYNC_DEBOUNCE_MS);
+}
+
+async function pushSnapshotToBackend(progress: MainQuestProgress): Promise<void> {
+  try {
+    if (!useSessionStore().isAuthenticated) return;
+    // world 必须动态 import：world.ts 静态依赖本 store（hydrate 回灌），避免静态环。
+    const { useWorldStore } = await import('@stores/world');
+    const world = useWorldStore();
+    let slotIndex = world.activeSlot?.slotIndex;
+    if (slotIndex === undefined) {
+      // 新用户尚无存档槽：创建 slot 0（后端首槽自动激活），失败仍退回 slot 0 尝试写入。
+      try {
+        world.activeSlot = await createSaveSlot(0, '自动存档');
+        slotIndex = world.activeSlot.slotIndex;
+      } catch {
+        slotIndex = 0;
+      }
+    }
+    await saveSlotSnapshot(slotIndex, { version: 1, mainQuest: progress });
+  } catch {
+    // 未登录 / 后端不可达：localStorage 已兜底，静默忽略。
+  }
+}
+
+/** 仅供测试：清掉挂起的同步计时器，避免跨用例泄漏。 */
+export function __resetSnapshotSyncForTests(): void {
+  if (snapshotSyncTimer) clearTimeout(snapshotSyncTimer);
+  snapshotSyncTimer = null;
+  suppressSnapshotSync = false;
 }
 
 export interface MainQuestStoreState {
@@ -205,6 +313,21 @@ export const useMainQuestStore = defineStore('mainQuest', {
     currentChapterStandardMet(): boolean {
       return this.chapterStandardMet(this.progress.currentChapter);
     },
+
+    /** 本章是否已消费过多模态讲解（视频 / AI 动画 / 图解）。 */
+    chapterMediaConsumed() {
+      return (chapter: number): boolean =>
+        this.progress.consumedMedia.includes(`ch${chapter}`);
+    },
+    /**
+     * 章节「完整通关」软门槛：达标（做题 + 掌握度）之外，再叠加「看过本章多模态讲解」。
+     * 不硬阻塞章节推进（advanceChapter 仍只看 chapterStandardMet），仅用于面板的完整度提示与激励，
+     * 把多模态消费真正纳入主线学习闭环。
+     */
+    chapterFullyComplete() {
+      return (chapter: number): boolean =>
+        this.chapterStandardMet(chapter) && this.chapterMediaConsumed(chapter);
+    },
   },
 
   actions: {
@@ -217,8 +340,13 @@ export const useMainQuestStore = defineStore('mainQuest', {
       if (obj.mainQuest && typeof obj.mainQuest === 'object') {
         const parsed = safeParse(JSON.stringify(obj.mainQuest));
         if (parsed) {
-          this.progress = parsed;
-          persist(parsed);
+          // 单调合并而非覆盖：离线先行的本地进度不会被后端旧快照回灌冲掉（见 mergeProgress）。
+          // 写 localStorage 但抑制反向 snapshot 同步，避免 load→write 回声。
+          const merged = mergeProgress(this.progress, parsed);
+          suppressSnapshotSync = true;
+          this.progress = merged;
+          persist(merged);
+          suppressSnapshotSync = false;
         }
       }
     },
@@ -379,6 +507,29 @@ export const useMainQuestStore = defineStore('mainQuest', {
         }
       }
       return null;
+    },
+
+    /**
+     * 章节学习页消费多模态讲解（看完视频 / AI 动画 / 浏览知识点图解）时调。
+     * - 上报后端 media_consumed 事件（→ 画像 learning_preference 回流 + 审计）
+     * - 标记本章 consumedMedia（软门槛 chapterFullyComplete 用）
+     * 幂等：同章重复消费只记一次。
+     */
+    onMediaConsumed(payload: {
+      mediaType: string;
+      chapter: number;
+      kcCodes?: readonly string[];
+    }): void {
+      syncEventToBackend('media_consumed', {
+        mediaType: payload.mediaType,
+        chapter: payload.chapter,
+        kcCodes: payload.kcCodes ? [...payload.kcCodes] : [],
+      });
+      const key = `ch${payload.chapter}`;
+      if (!this.progress.consumedMedia.includes(key)) {
+        this.progress.consumedMedia = [...this.progress.consumedMedia, key];
+        persist(this.progress);
+      }
     },
 
     /** 学习掌握度达阈值时调：找 evidenceRequired.type==='kc_mastery' 匹配。 */

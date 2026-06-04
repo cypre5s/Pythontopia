@@ -3,14 +3,11 @@
 import { computed, onBeforeUnmount, onMounted } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useHudStore } from '@stores/hud';
-import { useInventoryStore } from '@stores/inventory';
 import { useDialogStore } from '@stores/dialog';
 import { useLearningStore } from '@stores/learning';
 import { useWorldStore } from '@stores/world';
-import InventoryPanel from './InventoryPanel.vue';
 
 const hud = useHudStore();
-const inventory = useInventoryStore();
 const dialog = useDialogStore();
 const learning = useLearningStore();
 const world = useWorldStore();
@@ -18,7 +15,6 @@ const world = useWorldStore();
 const { activeSlot } = storeToRefs(hud);
 const showOverlay = computed<boolean>(() =>
   activeSlot.value === 'dialog'
-  || activeSlot.value === 'inventory'
   || activeSlot.value === 'map'
   || activeSlot.value === 'skill',
 );
@@ -65,12 +61,9 @@ const dialogContext = computed(() => {
     currentText: dialog.currentNode?.text ?? '',
   };
 });
+// R-14 方案A：单一中央小镇 hub，所有学习入口都在镇内（图书馆/工坊/训练场/矿洞入口…）。
 const MAP_LIST = [
   { key: 'town_hub',    label: 'Pythontopia 小镇', icon: 'H' },
-  { key: 'farm_north',  label: '北农场 · 棉麻试验田', icon: 'N' },
-  { key: 'mine_south',  label: 'Bug 矿洞 · 织丝走廊', icon: 'S' },
-  { key: 'campus_east', label: '东校园 · 镜月湖畔', icon: 'E' },
-  { key: 'port_west',   label: '西港 · 棉布商埠', icon: 'W' },
 ];
 const currentMapKey = computed<string>(() => world.player?.mapKey ?? 'town_hub');
 
@@ -152,25 +145,6 @@ const profileDimensions = computed(() => {
         </div>
       </section>
 
-      <!-- ─────── I · 背包 ─────── -->
-      <section
-        v-else-if="activeSlot === 'inventory'"
-        class="qslot-card qslot-card--wide"
-        data-testid="qslot-inventory"
-      >
-        <header class="qslot-head">
-          <h2>背包 · {{ inventory.items.length }} 件</h2>
-          <button
-            type="button"
-            class="qslot-close"
-            @click="close"
-          >
-            ✕ 关闭 (ESC)
-          </button>
-        </header>
-        <InventoryPanel />
-      </section>
-
       <!-- ─────── M · 大地图 ─────── -->
       <section
         v-else-if="activeSlot === 'map'"
@@ -178,7 +152,7 @@ const profileDimensions = computed(() => {
         data-testid="qslot-map"
       >
         <header class="qslot-head">
-          <h2>五张地图（点击传送）</h2>
+          <h2>小镇地图</h2>
           <button
             type="button"
             class="qslot-close"
@@ -203,7 +177,7 @@ const profileDimensions = computed(() => {
           </li>
         </ul>
         <p class="qslot-hint">
-          也可以按 T 打开快速旅行；走到地图边缘自动 fade 切场景。
+          小镇里集齐了所有学习设施（图书馆 / 工坊 / 训练场 / 矿洞入口…），无需在多张地图间奔波。
         </p>
       </section>
 
@@ -281,7 +255,7 @@ const profileDimensions = computed(() => {
   border-radius: 2px;
   box-shadow: 4px 4px 0 var(--pyt-panel-border-dark), 0 8px 24px var(--pyt-panel-shadow);
   color: var(--pyt-text-primary);
-  font-family: var(--pyt-font-pixel, 'Ark Pixel 12', monospace);
+  font-family: var(--pyt-font-pixel);
   image-rendering: pixelated;
 }
 .qslot-card--wide {
@@ -299,7 +273,7 @@ const profileDimensions = computed(() => {
   margin: 0;
   font-size: 16px;
   color: var(--pyt-text-accent);
-  text-shadow: 1px 1px 0 #2a1a05;
+  text-shadow: 1px 1px 0 var(--pyt-color-shadow);
   letter-spacing: 1px;
 }
 .qslot-close {

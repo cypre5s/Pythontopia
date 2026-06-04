@@ -117,10 +117,11 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     chapter: 1,
     index: 2,
     title: '从算盘到 ENIAC（KC-002）',
-    hint: '在工坊为「计算工具的演变」生成一份 STORYBOARD，看 5 段历史。',
+    hint: '去广场找教授，听他用「计算工具的演变」给你上第 1 课（算盘 → ENIAC → 超算）。',
     mapKey: 'town_hub',
+    npcKey: 'professor',
     kcCodes: ['PY43-KC-002'],
-    evidenceRequired: { type: 'resource_consumed', resourceType: 'STORYBOARD' },
+    evidenceRequired: { type: 'dialog_complete', npcKey: 'professor' },
     rewards: [{ kind: 'coin', amount: 30 }],
   },
   {
@@ -139,10 +140,12 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     chapter: 1,
     index: 4,
     title: '计算的概念（KC-006）',
-    hint: '到训练场提交一道关于「什么是计算」的小练（PLACEHOLDER problemId，教师可补）。',
+    // P0-a：第 1 章为理论导入章，packId=43 题库无 KC-006 判题真题（且受「39 题」硬约束不可新增）。
+    // 故此里程碑回归「学」性质——在工坊读懂「数据+运算=计算」，而非点进空题库。
+    hint: '第 1 章是理论导入：在工坊为 KC-006「什么是计算」生成一份 READING，读懂「数据 + 运算 = 计算」。',
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-006'],
-    evidenceRequired: { type: 'submission', problemId: 0 },
+    evidenceRequired: { type: 'resource_consumed', resourceType: 'READING' },
     rewards: [{ kind: 'coin', amount: 40 }],
   },
   {
@@ -185,10 +188,10 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     chapter: 2,
     index: 3,
     title: '基本数据类型（KC-011）',
-    hint: '完成一道 int / float / str 转换题（PLACEHOLDER problemId，教师可补）。',
+    hint: '到训练场完成真题「圆面积」：用 float() 把输入转成数值再计算（problem #476）。',
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-011'],
-    evidenceRequired: { type: 'submission', problemId: 0 },
+    evidenceRequired: { type: 'submission', problemId: 476 },
     rewards: [{ kind: 'coin', amount: 65 }],
   },
   {
@@ -208,7 +211,7 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     index: 5,
     title: '理解程序运行方式（KC-014）',
     hint: 'KC-014 + KC-016 共同推到 40 以上，搞清楚解释执行 vs 编译执行。',
-    mapKey: 'farm_north',
+    mapKey: 'town_hub',
     kcCodes: ['PY43-KC-014', 'PY43-KC-016'],
     evidenceRequired: { type: 'kc_mastery', kcCode: 'PY43-KC-016', thresholdScore: 40 },
     rewards: [{ kind: 'coin', amount: 80 }, { kind: 'kc_mastery', amount: 10, ref: 'PY43-KC-016' }],
@@ -221,7 +224,7 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     index: 1,
     title: '0 和 1 的计算思维（KC-017）',
     hint: '到矿洞入口与守矿人对话，他会讲二进制的本质（PLACEHOLDER NPC mine_keeper）。',
-    mapKey: 'mine_south',
+    mapKey: 'town_hub',
     npcKey: 'mine_keeper',
     kcCodes: ['PY43-KC-017'],
     evidenceRequired: { type: 'dialog_complete', npcKey: 'mine_keeper' },
@@ -232,10 +235,10 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     chapter: 3,
     index: 2,
     title: '数值类型与运算（KC-019）',
-    hint: '完成一道 int / float / complex 计算题（PLACEHOLDER）。',
-    mapKey: 'mine_south',
+    hint: '到矿洞训练台完成真题「数位提取」：用 // 和 % 做整数运算（problem #477）。',
+    mapKey: 'town_hub',
     kcCodes: ['PY43-KC-019'],
-    evidenceRequired: { type: 'submission', problemId: 0 },
+    evidenceRequired: { type: 'submission', problemId: 477 },
     rewards: [{ kind: 'coin', amount: 80 }],
   },
   {
@@ -244,7 +247,7 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     index: 3,
     title: '字符串方法包（KC-022）',
     hint: '在工坊生成一份字符串处理 MINDMAP（split / strip / find / replace 等）。',
-    mapKey: 'mine_south',
+    mapKey: 'town_hub',
     kcCodes: ['PY43-KC-022'],
     evidenceRequired: { type: 'resource_consumed', resourceType: 'MINDMAP' },
     rewards: [{ kind: 'coin', amount: 85 }],
@@ -255,7 +258,7 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     index: 4,
     title: '字符串索引与切片（KC-024）',
     hint: 'KC-023 + KC-024 共同推到 35 以上，能熟练用 s[1:-1]。',
-    mapKey: 'mine_south',
+    mapKey: 'town_hub',
     kcCodes: ['PY43-KC-023', 'PY43-KC-024'],
     evidenceRequired: { type: 'kc_mastery', kcCode: 'PY43-KC-024', thresholdScore: 35 },
     rewards: [{ kind: 'coin', amount: 90 }],
@@ -266,7 +269,7 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     index: 5,
     title: '进制转换（KC-030）',
     hint: '工坊生成 KC-030 的 PRACTICE，跑一遍 2/8/10/16 进制互转。',
-    mapKey: 'mine_south',
+    mapKey: 'town_hub',
     kcCodes: ['PY43-KC-030'],
     evidenceRequired: { type: 'resource_consumed', resourceType: 'PRACTICE' },
     rewards: [{ kind: 'coin', amount: 95 }, { kind: 'kc_mastery', amount: 10, ref: 'PY43-KC-030' }],
@@ -278,10 +281,11 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     chapter: 4,
     index: 1,
     title: '走通顺序结构（KC-038）',
-    hint: '到校园广场图书馆入口（建筑触发），看顺序执行示意图。',
-    mapKey: 'campus_east',
+    hint: '去镇里找馆长 Doc，听他讲「顺序结构」——程序默认一行行往下跑。',
+    mapKey: 'town_hub',
+    npcKey: 'librarian_doc',
     kcCodes: ['PY43-KC-038'],
-    evidenceRequired: { type: 'building_visit', mapKey: 'campus_east', tileX: 12, tileY: 15 },
+    evidenceRequired: { type: 'dialog_complete', npcKey: 'librarian_doc' },
     rewards: [{ kind: 'coin', amount: 100 }],
   },
   {
@@ -289,10 +293,10 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     chapter: 4,
     index: 2,
     title: '分支与多条件（KC-033 + KC-035）',
-    hint: '提交一道 if / elif / and / or 综合题（PLACEHOLDER）。',
-    mapKey: 'campus_east',
+    hint: '到校园训练台完成真题「三角形判断」：用 and 组合多条件 + if/else（problem #487）。',
+    mapKey: 'town_hub',
     kcCodes: ['PY43-KC-033', 'PY43-KC-035'],
-    evidenceRequired: { type: 'submission', problemId: 0 },
+    evidenceRequired: { type: 'submission', problemId: 487 },
     rewards: [{ kind: 'coin', amount: 105 }],
   },
   {
@@ -301,7 +305,7 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     index: 3,
     title: 'for 循环与遍历（KC-031）',
     hint: '工坊生成 KC-031 的 CODE_LAB，跑一段 for i in range(n)。',
-    mapKey: 'campus_east',
+    mapKey: 'town_hub',
     kcCodes: ['PY43-KC-031'],
     evidenceRequired: { type: 'resource_consumed', resourceType: 'CODE_LAB' },
     rewards: [{ kind: 'coin', amount: 110 }],
@@ -312,7 +316,7 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     index: 4,
     title: 'while 与循环控制（KC-032 + KC-037）',
     hint: 'KC-032 + KC-037 共同推到 45 以上，掌握 break / continue。',
-    mapKey: 'campus_east',
+    mapKey: 'town_hub',
     kcCodes: ['PY43-KC-032', 'PY43-KC-037'],
     evidenceRequired: { type: 'kc_mastery', kcCode: 'PY43-KC-037', thresholdScore: 45 },
     rewards: [{ kind: 'coin', amount: 115 }],
@@ -323,7 +327,7 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     index: 5,
     title: '嵌套循环综合（KC-036）',
     hint: '工坊生成 KC-036 的 HANDOUT，理解二维问题里的循环嵌套。',
-    mapKey: 'campus_east',
+    mapKey: 'town_hub',
     kcCodes: ['PY43-KC-036'],
     evidenceRequired: { type: 'resource_consumed', resourceType: 'HANDOUT' },
     rewards: [{ kind: 'coin', amount: 125 }, { kind: 'kc_mastery', amount: 12, ref: 'PY43-KC-036' }],
@@ -336,7 +340,7 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     index: 1,
     title: '列表与 Random（KC-039）',
     hint: '到码头与船长对话，他给你一个抽奖箱演示列表 + random（PLACEHOLDER NPC captain_def）。',
-    mapKey: 'port_west',
+    mapKey: 'town_hub',
     npcKey: 'captain_def',
     kcCodes: ['PY43-KC-039'],
     evidenceRequired: { type: 'dialog_complete', npcKey: 'captain_def' },
@@ -348,7 +352,7 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     index: 2,
     title: '列表基本操作（KC-040）',
     hint: '工坊生成 KC-040 的 PRACTICE：append / pop / sort 一气呵成。',
-    mapKey: 'port_west',
+    mapKey: 'town_hub',
     kcCodes: ['PY43-KC-040'],
     evidenceRequired: { type: 'resource_consumed', resourceType: 'PRACTICE' },
     rewards: [{ kind: 'coin', amount: 135 }],
@@ -358,10 +362,10 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     chapter: 5,
     index: 3,
     title: '字典基本操作（KC-042）',
-    hint: '提交一道字典 CRUD 题（PLACEHOLDER）。',
-    mapKey: 'port_west',
+    hint: '到码头训练台完成真题「通讯录」：增删查改一气呵成，体会字典 CRUD（problem #499）。',
+    mapKey: 'town_hub',
     kcCodes: ['PY43-KC-042'],
-    evidenceRequired: { type: 'submission', problemId: 0 },
+    evidenceRequired: { type: 'submission', problemId: 499 },
     rewards: [{ kind: 'coin', amount: 140 }],
   },
   {
@@ -370,7 +374,7 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     index: 4,
     title: '序列共性（KC-044 + KC-045）',
     hint: 'KC-045 掌握度推到 45 — 理解 list / tuple / str 都是序列。',
-    mapKey: 'port_west',
+    mapKey: 'town_hub',
     kcCodes: ['PY43-KC-044', 'PY43-KC-045'],
     evidenceRequired: { type: 'kc_mastery', kcCode: 'PY43-KC-045', thresholdScore: 45 },
     rewards: [{ kind: 'coin', amount: 145 }],
@@ -381,7 +385,7 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     index: 5,
     title: '集合去重（KC-046 + KC-047）',
     hint: '工坊生成集合主题的 STORYBOARD，用 set 解决商船清单去重。',
-    mapKey: 'port_west',
+    mapKey: 'town_hub',
     kcCodes: ['PY43-KC-046', 'PY43-KC-047'],
     evidenceRequired: { type: 'resource_consumed', resourceType: 'STORYBOARD' },
     rewards: [{ kind: 'coin', amount: 160 }, { kind: 'kc_mastery', amount: 12, ref: 'PY43-KC-047' }],
@@ -394,7 +398,7 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     index: 1,
     title: '初识文件系统（KC-051）',
     hint: '工坊生成 KC-051 的 HANDOUT，搞清 abs path vs relative path。',
-    mapKey: 'campus_east',
+    mapKey: 'town_hub',
     kcCodes: ['PY43-KC-051'],
     evidenceRequired: { type: 'resource_consumed', resourceType: 'HANDOUT' },
     rewards: [{ kind: 'coin', amount: 165 }],
@@ -404,10 +408,10 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     chapter: 6,
     index: 2,
     title: '文件读写四步（KC-048）',
-    hint: '提交一道 open / read / write / close 题（PLACEHOLDER）。',
-    mapKey: 'campus_east',
+    hint: '到图书馆训练台完成真题「学科等级」：读入数据并按规则处理输出（problem #508）。',
+    mapKey: 'town_hub',
     kcCodes: ['PY43-KC-048'],
-    evidenceRequired: { type: 'submission', problemId: 0 },
+    evidenceRequired: { type: 'submission', problemId: 508 },
     rewards: [{ kind: 'coin', amount: 170 }],
   },
   {
@@ -416,7 +420,7 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     index: 3,
     title: '文件写入实战（KC-050）',
     hint: '工坊生成 KC-050 的 MINDMAP，覆盖 w/a/r+ 三种模式。',
-    mapKey: 'campus_east',
+    mapKey: 'town_hub',
     kcCodes: ['PY43-KC-050'],
     evidenceRequired: { type: 'resource_consumed', resourceType: 'MINDMAP' },
     rewards: [{ kind: 'coin', amount: 180 }],
@@ -427,7 +431,7 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     index: 4,
     title: '文件读取数据处理（KC-052）',
     hint: 'KC-052 推到 50：把一份 CSV 读进来并求和。',
-    mapKey: 'campus_east',
+    mapKey: 'town_hub',
     kcCodes: ['PY43-KC-052'],
     evidenceRequired: { type: 'kc_mastery', kcCode: 'PY43-KC-052', thresholdScore: 50 },
     rewards: [{ kind: 'coin', amount: 185 }],
@@ -438,7 +442,7 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     index: 5,
     title: '词频统计综合（KC-053）',
     hint: '工坊生成 KC-049 + KC-053 的 CODE_LAB，做一篇文章的 top-10 词频。',
-    mapKey: 'campus_east',
+    mapKey: 'town_hub',
     kcCodes: ['PY43-KC-049', 'PY43-KC-053'],
     evidenceRequired: { type: 'resource_consumed', resourceType: 'CODE_LAB' },
     rewards: [{ kind: 'coin', amount: 200 }, { kind: 'kc_mastery', amount: 12, ref: 'PY43-KC-053' }],
@@ -450,10 +454,11 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     chapter: 7,
     index: 1,
     title: '函数作用域 LEGB（KC-060）',
-    hint: '到图书馆翻一份原 PDF 课件 KC-060 任意页（building_visit 触发）。',
+    hint: '去镇里找复盘师 Sage，听他用 LEGB 讲清「变量在哪一层可见」。',
     mapKey: 'town_hub',
+    npcKey: 'sage_review',
     kcCodes: ['PY43-KC-060'],
-    evidenceRequired: { type: 'building_visit', mapKey: 'town_hub', tileX: 32, tileY: 18 },
+    evidenceRequired: { type: 'dialog_complete', npcKey: 'sage_review' },
     rewards: [{ kind: 'coin', amount: 200 }],
   },
   {
@@ -472,10 +477,10 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     chapter: 7,
     index: 3,
     title: '函数递归（KC-061）',
-    hint: '提交一道递归题，例如 N! 或斐波那契（PLACEHOLDER）。',
+    hint: '到训练场完成真题「计算阶乘」：用递归实现 N!（problem #511）。',
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-061'],
-    evidenceRequired: { type: 'submission', problemId: 0 },
+    evidenceRequired: { type: 'submission', problemId: 511 },
     rewards: [{ kind: 'coin', amount: 220 }],
   },
   {
@@ -521,6 +526,60 @@ export function listSubQuestsByChapter(chapter: number): MainSubQuest[] {
   );
 }
 
+/**
+ * P2：某章主线实际覆盖的核心 KC code 集合（去重）。
+ * 用于把章内「非主线 KC」显式标为选修/拓展，避免初学者误以为必须全啃。
+ */
+export function mainlineKcCodesForChapter(chapter: number): string[] {
+  const set = new Set<string>();
+  for (const quest of MAIN_QUESTS) {
+    if (quest.chapter === chapter) {
+      quest.kcCodes.forEach((code) => set.add(code));
+    }
+  }
+  return [...set];
+}
+
 export function findBossByChapter(chapter: number): MainQuestBoss | null {
   return MAIN_QUEST_BOSSES.find((b) => b.chapter === chapter) ?? null;
+}
+
+/** 规范学习闭环阶段。P0-b：让「看→学→练→测」对玩家显式可见。 */
+export type MainQuestPhase = 'watch' | 'learn' | 'practice' | 'assess';
+
+export interface MainQuestPhaseMeta {
+  phase: MainQuestPhase;
+  /** 中文短标签（看/学/练/测）。 */
+  label: string;
+  /** 一句话说明此阶段在闭环里的角色。 */
+  role: string;
+}
+
+const PHASE_META: Readonly<Record<MainQuestPhase, MainQuestPhaseMeta>> = Object.freeze({
+  watch: { phase: 'watch', label: '看', role: '观察 / 访谈，建立直觉' },
+  learn: { phase: 'learn', label: '学', role: '生成并消费学习资源（里程碑，非章节判据）' },
+  practice: { phase: 'practice', label: '练', role: '提交真题，服务端判题' },
+  assess: { phase: 'assess', label: '测', role: '掌握度达阈值，验证真的学会' },
+});
+
+/**
+ * 把子任务 evidence 类型映射成规范闭环阶段（看/学/练/测）。
+ * - dialog_complete / building_visit → 看
+ * - resource_consumed → 学（输入里程碑，不作章节完成判据，见 chapterStandardMet）
+ * - submission → 练
+ * - kc_mastery → 测
+ */
+export function mainSubQuestPhase(quest: MainSubQuest): MainQuestPhaseMeta {
+  switch (quest.evidenceRequired.type) {
+    case 'submission':
+      return PHASE_META.practice;
+    case 'kc_mastery':
+      return PHASE_META.assess;
+    case 'resource_consumed':
+      return PHASE_META.learn;
+    case 'dialog_complete':
+    case 'building_visit':
+    default:
+      return PHASE_META.watch;
+  }
 }

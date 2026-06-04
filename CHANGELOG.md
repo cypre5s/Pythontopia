@@ -1,5 +1,129 @@
 # Changelog
 
+## 2026-06-04 — R-14 世界收缩方案 A：单中央小镇 hub（S0–S7）
+
+> 废弃「5 图分块大世界」，收敛为单一中央小镇 `town_hub`：移除 KC 作物/播种/浇水（农场）玩法、
+> 田老 NPC、货币/商店残留；主线 35 任务与引导全部收进 hub。目标「主线清晰 + 引导易懂」。
+> 全程外科手术式修改；仅用只读子代理从历史会话找回计划，未用 subagent 改码。
+
+### 世界收缩（S0–S5，前序会话落地）
+
+- **S0 蓝图**：重写 `AGENTS.md` 宪法为单 hub、去作物隐喻（R-14 标注）。
+- **S1 主线收敛**：`mainQuests.ts` 35 任务 `mapKey` 全部 → `town_hub`；6 个掌握度任务引导由
+  「农场田老」改为「训练场教务 Q」（`questGuidance.ts`）；首进节奏与引导文案简化。
+- **S2 删农场作物**：后端删 `world/crop` 包 + 解耦 5 服务，迁移 **V126** drop `crop_tile_state`
+  （不可逆；掌握度存于 `kc_mastery_event`，不受影响）；前端删 5 个农场渲染组件 + `crops` 数据层。
+- **S3 外围图摘除导航**：`fastTravel` 仅留 `hub` 一条路线；minimap / `WorldScene` 多图 /
+  `QuickslotPanelHost` MAP_LIST 收敛为 `town_hub`。
+- **S4 NPC 进 hub**：`generate-maps.mjs` 的 `generateTownHub` 放入 4 个主线 NPC（mine_keeper /
+  captain_def / foreman_bug / class_president）；田老 `farmer_kc` 数据/目录/地图/i18n 全删；
+  重生成地图 + `sync:npc`。
+- **S5 货币/商店清理**：前端删 inventory store / `InventoryPanel` / 3 个 DTO，解耦 HUD coin 与 bootstrap；
+  为不破坏前后端存档契约，**保留** `SaveSlotDto.inventoryItems`（设置但不使用）。
+
+### S3 收尾：fast-travel 测试对齐（本会话）
+
+- 前序会话只重写了 3 个 fast-travel spec（`FastTravelPanel` / `settings-fasttravel` / `demo-smoke`），
+  漏掉 3 个同因测试。本会话补齐：`demo-smoke` STEP5、`contracts.integration`（FAST_TRAVEL_ROUTES
+  长度=1 + 仅 `town_hub` + 外围图已移除）、`workflows.integration`（外围图→hub 联动）、`WorkshopPage`
+  （hub chip 点击/禁用）共 **12 个陈旧断言**对齐单 hub 现实。纯测试改动，无业务回归。
+
+### S6-A：SaveSlot 后端同步主线进度（本会话新增）
+
+- 主线进度此前仅存 localStorage（`pyt_main_quest_progress_v1`），换设备不跟随。R-14 接入后端双写：
+  - 新增 `frontend/src/api/saveSlot.ts`（list / create / activate / saveSnapshot；snapshot 以
+    序列化 JSON 文本 + `application/json` POST，匹配后端 `@RequestBody String` + `SET snapshot = ?::jsonb`）。
+  - `SaveSlotDto` 增可选 `snapshot` 字段（后端早已下发 `JsonNode snapshot`，前端此前丢弃）。
+  - `world.syncFromSlot` 进入世界时用 `slot.snapshot` 回灌 `mainQuest.hydrateFromSnapshot`
+    （空快照安全忽略，保留本地进度）。
+  - `mainQuest` store 每次 `persist` 触发 1s debounce 的后端写入（仅登录态）；无 active slot 时
+    自动建 `slot 0「自动存档」`（后端首槽自动激活）；hydrate 期间抑制反向回声。
+  - 后端 `save_slot.snapshot.mainQuest` 契约沿用 **V120**，**无新增迁移**。
+  - **风险修复（离线回连不回退）**：`hydrateFromSnapshot` 由「覆盖」改为「单调合并」（`mergeProgress`）——
+    completed / defeated / milestone / consumedMedia 取并集，章节指针取更靠前者，AI 题日志按时间去重取新；
+    离线先行的本地进度不会被后端旧快照冲掉，清零仍走显式 `resetProgress`。+3 回归测试。
+
+### S6-B：RAG chunks=0 排查（运维/数据项）+ 数据链路永久守门
+
+- 通读 RAG 全链路（loader / index / store / query / embedder）并跑测：**rag pytest 21 通过**，
+  确认**非代码 bug**。RAG 的三连查（`input函数` / `for循环` / `列表` → page_id/page_no/kc_codes）由
+  `tests/test_query_route.py::test_required_course_queries_return_evidence_paths` 覆盖（已在 21 内）。
+- 三类根因均有缓解：① 种子未落库即建索引 → `main.py` 自愈轮询 + `deploy/scripts/init_rag_index.sh`；
+  ② KC↔页 `page_refs` 链接缺失 → 见下方新增守门；③ 默认 `hash` 嵌入器 + `min_score=0.3` 对短中文查询
+  易低于阈值 → 生产应 `PYT_RAG_EMBEDDER=bge`。
+- **新增** `CoursePackServiceIntegrationTest.coursePackKcPageRefsLinkPagesSoRagGetsKcCodes`（Testcontainers
+  真库）：复刻 RAG loader 的 `p.id = ANY(kc.page_refs)` join，断言 ≥60 个 KC 有页引用、>50 页被 KC 命中、
+  **0 悬挂引用**、KC-012 可 join 到页——把「chunks=0 根因②」转成永久回归守门。
+
+### 测试统计（S7 + 收尾验证）
+
+- 前端 `npm run typecheck`：**0 错误**；`npm run test`：**1397 通过 / 119 文件 / 0 失败**
+  （S3 重写后 1384 + S6-A 10 + 离线回退风险修复 3）。
+- 后端 `mvn test`：**291 → 292 通过 / 0 失败**，BUILD SUCCESS（新增 RAG 数据链路守门 1 条；最高迁移 V126；
+  `CoursePackServiceIntegrationTest` 用 Testcontainers 空库跑全量迁移 + 种子，断言 7/561/7/65/46/39）。
+- RAG `pytest`：**21 通过**；Graph `pytest`：**246 通过**。
+- **空库迁移初始化**：由 `CoursePackServiceIntegrationTest`（Testcontainers `pgvector:pg16`，Flyway V1→V126
+  + 种子）覆盖，断言达标数字 7/561/7/65/46/39 + 无悬挂先修/页引用。
+- 未跑（需运行整套 Pythontopia 栈，留部署阶段）：完整 docker compose 起 6 服务的在线 e2e 与
+  RAG 在线 HTTP 检索（rag 服务 + 实库索引）。注：本仓无独立 `*IT`（Failsafe）测试，`-DskipITs` 不漏任何用例。
+
+### 已知无害残留（建议后续）
+
+- `mainQuests.ts` 仍保留 coin/gem/item 奖励数据（被过滤不展示，奖励类型仍被 boss 里程碑逻辑使用）；
+  NPC `meta.json` `spawnMap` 仍指外围图（放置已在 hub，字段未被用于放置）；`SaveSlotDto.inventoryItems`
+  为前后端存档契约兼容保留。已清理：`HudShell` `.hud-chip--coin` / `hud-coin-bounce` 死 CSS。
+- 外围图（farm_north / mine_south / campus_east / port_west）素材、场景、minimap、输入调速保留，
+  仅从主线 / 导航 / fast-travel 弃用；`mine_south` 仍作 Bug 矿洞支线深链目标。
+
+## 2026-06-02 — 多模态深化与赛题缺口补强（7 阶段）
+
+> 对照赛题逐条核查后，以「多模态全面接入科大讯飞 + 无 apikey 本地占位降级」为主线，把真实文生图/
+> 合成短视频/图解嵌入章节学习主流程与答疑，并补齐路径 DAG、画像可视化、评估回灌与防幻觉。
+> 全程外科手术式修改，未引入 subagent。
+
+### 多模态（核心）
+
+- **Phase 0 基座**：后端 `media/` 新增 `XfyunImageService`（复刻 TTS 的 HMAC-SHA256 讯飞鉴权，
+  指向星火 TTI）+ `MediaPlaceholderFactory`（AWT 内存生成确定式像素风占位 PNG，CJK 安全）+
+  `MediaAssetStorage` + `MediaAssetRepository` + `ByteRangeResponder` + `MediaAssetController`
+  （`POST /api/media/image`、`GET /api/media/assets/{id}` 带 HTTP Range、匿名放行供 `<img>/<video>` src）。
+  迁移 **V124 `media_asset`**（kind/degraded/source/kc_codes/meta）。无 apikey 自动降级 `degraded=true`
+  占位，验收链路不阻塞；环境变量复用 `PYT_SPARK_*`（写入 application.yml / .env.example / llm-provider-env.md）。
+- **Phase 1 资源生成多模态化**：`StoryboardScene` 增 `image_prompt`/`image_asset_id`；StoryboardAgent
+  每镜产文生图提示词；后端 `StoryboardCompositionService` 用 ffmpeg 将「图序列 + 每镜 TTS」合成真实 mp4
+  （无 ffmpeg 抛 `VIDEO_COMPOSE_UNAVAILABLE` 优雅降级）；`POST /api/media/storyboard/video`；
+  `StoryboardView.vue` 舞台图改用 AI 插画（缓存 + 降级）+「🎬 合成讲解视频」按钮 + 占位角标。
+- **Phase 2 多模态融入章节主流程**：`LecturePage` 内嵌「AI 知识点图解卡」+ 点击放大 lightbox；
+  视频 `timeupdate≥90%/ended` 上报 `media_consumed`；「看本章 PPT」改打开**真实生成的 HANDOUT**
+  （reveal.js，回退课件 PDF，不造假数据）；`mainQuest` 新增 `consumedMedia` + `chapterMediaConsumed`
+  /`chapterFullyComplete` 软门槛 + 主线面板「看·多模态讲解」指示；后端新增 `LearningEvent.MediaConsumed`
+  领域事件（`LearningEventController` 发布）→ `PassiveProfileRevisionListener` 回流画像 `learning_preference`。
+- **Phase 3 答疑多模态化**：`TutorResponse` 增 `visual_aids`，TutorAgent `build_visual_aids` 生成
+  「文生图插画 + mermaid 结构图」（safety 通过才附带）；新增 `TutorVisualAids.vue`（mermaid 渲染 SVG +
+  调 `/api/media/image` 渲染插画）；`TutorPanel` 文字答案下方渲染「图解说明」。
+
+### 其余赛题缺口
+
+- **Phase 4 学习路径 DAG**：迁移 **V125** 按 `kc_code` 教学顺序播种 `course_kc.prerequisite_codes`
+  （清洁链 KC-002→KC-001…）；`CoursePackRepository.findKcPrerequisites` +
+  `PracticeSubmissionRepository.findRecentForPlanner`；`LearningPathService` 不再传空——真实先修 +
+  最近提交 + 最近资源全部喂入 planner；`path_planner_agent` 新增拓扑排序（先修排到依赖之前）。
+- **Phase 5 画像增强**：`GET /api/learner/profile/dimensions`（8 维得分快照）+ 纯 SVG 八边形
+  `ProfileRadar.vue` + ProfilePage 自评滑块（PUT dimensions/{key}）；`ProfileTurnRequest` 增 `history`，
+  `ProfileService` 拼接多轮历史，`profile_graph` 把历史并入 prompt + LLM 动态追问（回退默认）。
+- **Phase 6 评估回灌 + 防幻觉**：多模态消费/评估信号经 `learning_preference` tags 回灌
+  `LearnerRecommendationService` 媒介优先级（看视频多→推荐偏叙事/视觉）；`hallucination_detector`
+  增「正文统计型数字须源于证据」校验（拦截编造百分比/年份，忽略普通小数量）。
+  （像素 token 全量重构、性能 Lighthouse 实测回填按风险权衡延后。）
+
+### 测试统计
+
+- 后端 `mvn test`：**291 通过 / 0 失败**（含 V124+V125 迁移、新端点、事件链、Stage08 路径集成、65 KC 不变）
+  + 新增 `MediaAssetAcceptanceIntegrationTest`（文生图占位降级 + 匿名取流 + 维度端点 端到端）。
+- Graph `pytest`：**231 通过**（+planner 拓扑 +数字溯源新测）；RAG **21 通过**。
+- 前端 `typecheck` 0 错、`lint` 0 错、mainQuest/Panel/集成 spec 全通过。
+- 前后端契约核对：Vite 代理 `/api → :18080`，新端点 DTO 前后端字段一一对齐。
+
 ## 2026-05-24 — R-13 Wave 2：主线 + AI Boss + PDF + 工坊改造（进行中）
 
 > 由用户原话「严格遵守 AGENTS.md，不准 subagent，实现 R13_OPTIMIZATION_PLAN.md」串行推进的一次会话。

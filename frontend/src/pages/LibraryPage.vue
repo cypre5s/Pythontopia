@@ -1,14 +1,12 @@
 <script setup lang="ts">
 // LibraryPage —— Pythontopia 校园图书馆 / 课件阅读器（packId=43）。
-// 三栏布局：
-//   左 25%：7 章 + 65 KC + 7 份文档导航
-//   中 60%：当前页（docId+pageNo）的 Markdown 渲染
-//   右 15%：RAG 检索框 + 命中片段列表
+// 三栏可拖拽分栏（左导航 | 中阅读 | 右检索），宽度记忆在 localStorage。
 // URL query 同步：?docId=&page=&kcCode=
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import AppLayout from '@/app/AppLayout.vue';
 import PdfPageView from '@/components/library/PdfPageView.vue';
+import PyButton from '@/components/ui/PyButton.vue';
 import { useToastStore } from '@stores/toast';
 import {
   getDocumentPage,
@@ -32,6 +30,10 @@ import type {
 } from '@/api/dto/Library';
 import type { ChapterDto } from '@/api/dto/ChapterDto';
 import type { KcDto } from '@/api/dto/KcDto';
+import { useLibrarySplitLayout } from '@/composables/useLibrarySplitLayout';
+import { chapterTitleLabel } from '@/utils/chapterTitleLabel';
+
+const { bodyRef, onSplitterPointerDown, paneStyle } = useLibrarySplitLayout();
 
 // R-13 优化：默认显示原 PDF；第二视图由「文字摘录」改为「课件视频」。
 // localStorage 记忆用户偏好，避免每次都要切回 PDF。
@@ -59,6 +61,7 @@ interface ChapterGroup {
   chapter: ChapterDto;
   kcs: CourseKcSummary[];
   documentId: number | null;
+  pageCount: number | null;
 }
 
 const route = useRoute();
@@ -165,7 +168,22 @@ const chapterGroups = computed<ChapterGroup[]>(() => {
         .sort((a, b) => a.kcCode.localeCompare(b.kcCode)),
       documentId:
         documents.value.find((doc) => doc.sortOrder === chapter.orderIndex)?.documentId ?? null,
+      pageCount:
+        documents.value.find((doc) => doc.sortOrder === chapter.orderIndex)?.pageCount ?? null,
     }));
+});
+
+const catalogSidebarTitle = computed<string>(() => {
+  const ch = chapters.value.length;
+  const pages = documents.value.reduce((sum, doc) => sum + doc.pageCount, 0);
+  const kc = kcs.value.length;
+  if (ch > 0 && pages > 0 && kc > 0) {
+    return `${ch} 章 · ${pages} 页 · ${kc} KC`;
+  }
+  if (ch > 0 && kc > 0) {
+    return `${ch} 章 · ${kc} KC`;
+  }
+  return '章节目录';
 });
 
 const relatedProblems = computed<CourseProblemSummary[]>(() => {
@@ -311,7 +329,6 @@ function jumpToKc(kc: CourseKcSummary): void {
   void resolvePageById(targetPageId);
 }
 
-// R-13 优化：每章 KC 收纳进下拉框，选中即跳转，节约侧栏空间。
 function onKcSelect(group: ChapterGroup, event: Event): void {
   const code = (event.target as HTMLSelectElement).value;
   if (!code) return;
@@ -476,84 +493,78 @@ watch(chapterNoForVideo, (next) => {
           <span class="sep">/</span>
           <span>{{ currentChapter?.title ?? '第 — 章' }}</span>
           <span class="sep">/</span>
-          <span>KC {{ currentKc?.kcCode ?? '—' }}</span>
+          <span>{{ currentKc?.kcName ?? '—' }}</span>
           <span class="sep">/</span>
           <span>第 {{ currentPage }} 页 / {{ currentDocument?.pageCount ?? '—' }}</span>
         </nav>
-        <button
-          class="back-button"
-          type="button"
+        <PyButton
+          test-id="library-back"
+          variant="secondary"
+          size="sm"
           @click="backToWorld"
         >
           ← 返回小镇
-        </button>
+        </PyButton>
       </header>
 
-      <div class="library-body">
+      <div
+        ref="bodyRef"
+        class="library-body"
+        data-testid="library-split-body"
+      >
         <aside
-          class="library-side library-side--left"
+          class="library-pane library-pane--left"
+          :style="paneStyle.left()"
           aria-label="章节与 KC 导航"
         >
           <section class="side-block">
             <h3 class="side-title">
-              7 份课件
-            </h3>
-            <ul class="doc-list">
-              <li
-                v-for="doc in documents"
-                :key="doc.documentId"
-              >
-                <button
-                  type="button"
-                  :class="['doc-item', { active: doc.documentId === currentDocId }]"
-                  :title="doc.filename"
-                  @click="selectDocument(doc.documentId)"
-                >
-                  <span class="doc-index">{{ doc.sortOrder }}</span>
-                  <span class="doc-title">{{ doc.title }}</span>
-                  <span class="doc-meta">{{ doc.pageCount }} 页</span>
-                </button>
-              </li>
-            </ul>
-          </section>
-
-          <section class="side-block">
-            <h3 class="side-title">
-              7 章 / 65 KC
+              {{ catalogSidebarTitle }}
             </h3>
             <ul class="chapter-list">
               <li
                 v-for="group in chapterGroups"
                 :key="group.chapter.chapterId"
-                class="chapter-item"
+                :class="['chapter-item', { active: group.documentId === currentDocId }]"
               >
-                <button
-                  type="button"
-                  class="chapter-head"
-                  @click="group.documentId && selectDocument(group.documentId)"
-                >
-                  <span class="chapter-no">第 {{ group.chapter.orderIndex }} 章</span>
-                  <span>{{ group.chapter.title }}</span>
-                </button>
-                <div
-                  v-if="group.kcs.length > 0"
-                  class="kc-select-wrap"
-                >
+                <div class="chapter-row">
+                  <button
+                    type="button"
+                    class="chapter-head"
+                    :data-testid="`chapter-doc-${group.chapter.orderIndex}`"
+                    :title="
+                      group.documentId
+                        ? documents.find((d) => d.documentId === group.documentId)?.filename ?? ''
+                        : ''
+                    "
+                    :disabled="!group.documentId"
+                    @click="group.documentId && selectDocument(group.documentId)"
+                  >
+                    <span class="chapter-no">第 {{ group.chapter.orderIndex }} 章</span>
+                    <span class="chapter-title">{{ chapterTitleLabel(group.chapter.title) }}</span>
+                    <span
+                      v-if="group.pageCount != null"
+                      class="chapter-pages"
+                    >{{ group.pageCount }} 页</span>
+                  </button>
                   <select
+                    v-if="group.kcs.length > 0"
                     class="kc-select"
                     :data-testid="`kc-select-${group.chapter.orderIndex}`"
                     :value="group.kcs.some((k) => k.kcCode === currentKc?.kcCode) ? currentKc?.kcCode : ''"
+                    :title="`${group.kcs.length} 个知识点`"
+                    @click.stop
                     @change="onKcSelect(group, $event)"
                   >
                     <option value="">
-                      {{ group.kcs.length }} 个 KC ▾ 选择跳转
+                      KC
                     </option>
                     <option
                       v-for="kc in group.kcs"
                       :key="kc.kcCode"
                       :value="kc.kcCode"
                     >
-                      {{ kc.kcCode.replace('PY43-', '') }} · {{ kc.kcName }}{{ kc.pageRefs.length === 0 ? '（无页）' : '' }}
+                      {{ kc.kcName }}{{ kc.pageRefs.length === 0 ? '（无页）' : '' }}
                     </option>
                   </select>
                 </div>
@@ -562,8 +573,18 @@ watch(chapterNoForVideo, (next) => {
           </section>
         </aside>
 
+        <div
+          class="library-splitter"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="调整左侧栏宽度"
+          title="拖动调整左栏宽度"
+          data-testid="library-splitter-left"
+          @pointerdown="onSplitterPointerDown('left', $event)"
+        />
+
         <main
-          class="library-main"
+          class="library-pane library-pane--main"
           aria-label="课件正文"
         >
           <header class="page-bar">
@@ -571,14 +592,15 @@ watch(chapterNoForVideo, (next) => {
               {{ pageDetail?.title || currentDocument?.title || '加载中…' }}
             </h2>
             <div class="page-controls">
-              <button
-                type="button"
-                class="page-nav"
+              <PyButton
+                test-id="library-prev-page"
+                variant="secondary"
+                size="sm"
                 :disabled="currentPage <= 1"
                 @click="gotoPage(currentPage - 1)"
               >
                 ◀ 上一页
-              </button>
+              </PyButton>
               <input
                 class="page-jump"
                 type="number"
@@ -587,14 +609,15 @@ watch(chapterNoForVideo, (next) => {
                 :value="currentPage"
                 @change="(e) => gotoPage(Number((e.target as HTMLInputElement).value))"
               >
-              <button
-                type="button"
-                class="page-nav"
+              <PyButton
+                test-id="library-next-page"
+                variant="secondary"
+                size="sm"
                 :disabled="!!currentDocument && currentPage >= currentDocument.pageCount"
                 @click="gotoPage(currentPage + 1)"
               >
                 下一页 ▶
-              </button>
+              </PyButton>
             </div>
           </header>
 
@@ -725,7 +748,7 @@ watch(chapterNoForVideo, (next) => {
             class="kc-anchor"
             aria-label="当前 KC 资源"
           >
-            <h3>KC {{ currentKc.kcCode }} · {{ currentKc.kcName }}</h3>
+            <h3>{{ currentKc.kcName }}</h3>
             <p class="muted">
               {{ currentKc.summary }}
             </p>
@@ -765,8 +788,19 @@ watch(chapterNoForVideo, (next) => {
           </section>
         </main>
 
+        <div
+          class="library-splitter"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="调整右侧栏宽度"
+          title="拖动调整右栏宽度"
+          data-testid="library-splitter-right"
+          @pointerdown="onSplitterPointerDown('right', $event)"
+        />
+
         <aside
-          class="library-side library-side--right"
+          class="library-pane library-pane--right"
+          :style="paneStyle.right()"
           aria-label="RAG 检索"
         >
           <h3 class="side-title">
@@ -826,9 +860,12 @@ watch(chapterNoForVideo, (next) => {
 .library-page {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 16px;
-  min-height: calc(100vh - 56px);
+  gap: clamp(8px, 1.2vw, 14px);
+  padding: clamp(8px, 1.5vw, 16px);
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  box-sizing: border-box;
   background:
     linear-gradient(180deg, rgba(255, 247, 230, 0.7), rgba(243, 228, 190, 0.85)),
     repeating-linear-gradient(135deg, rgba(110, 79, 29, 0.05) 0 6px, transparent 6px 14px),
@@ -836,14 +873,15 @@ watch(chapterNoForVideo, (next) => {
 }
 
 .library-header {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   padding: 12px 16px;
-  border: 3px solid var(--pyt-color-border-strong, #4d3613);
-  background: var(--pyt-color-bg-elevated, #fff7e6);
-  box-shadow: 4px 4px 0 var(--pyt-color-border-strong, #4d3613);
+  border: 3px solid var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+  background: var(--pyt-color-bg-elevated, var(--pyt-color-bg-elevated));
+  box-shadow: 4px 4px 0 var(--pyt-color-border-strong, var(--pyt-color-text-primary));
 }
 .breadcrumb {
   display: flex;
@@ -852,52 +890,74 @@ watch(chapterNoForVideo, (next) => {
   gap: 6px;
   font-family: var(--pyt-font-pixel), var(--pyt-font-sans, sans-serif);
   font-size: 14px;
-  color: var(--pyt-color-text-primary, #4d3613);
+  color: var(--pyt-color-text-primary, var(--pyt-color-text-primary));
 }
 .breadcrumb .brand {
   font-weight: 700;
 }
 .breadcrumb .sep {
-  color: var(--pyt-color-text-muted, #8a6c2c);
+  color: var(--pyt-color-text-muted, var(--pyt-color-text-muted));
 }
 .back-button {
   font-family: var(--pyt-font-pixel), monospace;
   min-height: 36px;
   padding: 0 16px;
-  background: var(--pyt-color-warning-bg, #f5e2c1);
-  border: 2px solid var(--pyt-color-border-strong, #4d3613);
-  color: var(--pyt-color-text-primary, #4d3613);
+  background: var(--pyt-color-warning-bg, var(--pyt-color-warning-bg));
+  border: 2px solid var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+  color: var(--pyt-color-text-primary, var(--pyt-color-text-primary));
   cursor: pointer;
-  box-shadow: 3px 3px 0 var(--pyt-color-border-strong, #4d3613);
+  box-shadow: 3px 3px 0 var(--pyt-color-border-strong, var(--pyt-color-text-primary));
 }
 .back-button:active {
   transform: translate(2px, 2px);
-  box-shadow: 1px 1px 0 var(--pyt-color-border-strong, #4d3613);
+  box-shadow: 1px 1px 0 var(--pyt-color-border-strong, var(--pyt-color-text-primary));
 }
 
 .library-body {
-  flex: 1;
-  display: grid;
-  grid-template-columns: minmax(220px, 25%) minmax(0, 60%) minmax(220px, 15%);
-  gap: 14px;
-}
-@media (max-width: 1100px) {
-  .library-body {
-    grid-template-columns: 1fr;
-  }
+  flex: 1 1 0;
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
-.library-side {
+.library-pane--left,
+.library-pane--right {
+  flex-shrink: 0;
   display: grid;
   align-content: start;
   gap: 14px;
   padding: 12px;
-  background: var(--pyt-color-bg-elevated, #fff7e6);
-  border: 3px solid var(--pyt-color-border-strong, #4d3613);
-  box-shadow: 4px 4px 0 var(--pyt-color-border-strong, #4d3613);
-  max-height: calc(100vh - 140px);
+  background: var(--pyt-color-bg-elevated, var(--pyt-color-bg-elevated));
+  border: 3px solid var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+  box-shadow: 4px 4px 0 var(--pyt-color-border-strong, var(--pyt-color-text-primary));
   overflow: auto;
+  min-height: 0;
 }
+
+.library-splitter {
+  flex: 0 0 10px;
+  margin: 0 2px;
+  align-self: stretch;
+  cursor: col-resize;
+  touch-action: none;
+  border-radius: 4px;
+  background: repeating-linear-gradient(
+    180deg,
+    var(--pyt-color-border, var(--pyt-color-border)) 0 4px,
+    transparent 4px 8px
+  );
+  opacity: 0.55;
+  transition: opacity 120ms ease, background-color 120ms ease;
+}
+.library-splitter:hover,
+.library-splitter:focus-visible {
+  opacity: 1;
+  background-color: var(--pyt-color-warning-bg, var(--pyt-color-warning-bg));
+  outline: none;
+}
+
 .side-block {
   display: grid;
   gap: 6px;
@@ -907,10 +967,9 @@ watch(chapterNoForVideo, (next) => {
   font-family: var(--pyt-font-pixel), sans-serif;
   font-size: 14px;
   letter-spacing: 1px;
-  border-bottom: 2px dashed var(--pyt-color-border, #c9a86b);
+  border-bottom: 2px dashed var(--pyt-color-border, var(--pyt-color-border));
   padding-bottom: 4px;
 }
-.doc-list,
 .chapter-list,
 .kc-list,
 .rag-results {
@@ -920,59 +979,64 @@ watch(chapterNoForVideo, (next) => {
   display: grid;
   gap: 4px;
 }
-.doc-item {
-  width: 100%;
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 6px;
-  align-items: center;
-  padding: 6px 8px;
-  background: var(--pyt-color-bg-soft, #fdf3d0);
-  border: 2px solid var(--pyt-color-border, #c9a86b);
-  font-family: var(--pyt-font-sans, sans-serif);
-  font-size: 13px;
-  text-align: left;
-  cursor: pointer;
-}
-.doc-item.active {
-  background: var(--pyt-color-warning-bg, #f5e2c1);
-  border-color: var(--pyt-color-border-strong, #4d3613);
-}
-.doc-index {
-  font-family: var(--pyt-font-pixel), monospace;
-  font-weight: 700;
-  color: var(--pyt-color-text-muted, #8a6c2c);
-}
-.doc-meta {
-  color: var(--pyt-color-text-muted, #8a6c2c);
-  font-size: 11px;
-}
 .chapter-item {
-  border: 2px solid var(--pyt-color-border, #c9a86b);
-  background: var(--pyt-color-bg-soft, #fdf3d0);
-  padding: 6px;
+  border: 2px solid var(--pyt-color-border, var(--pyt-color-border));
+  background: var(--pyt-color-bg-soft, var(--pyt-color-bg-soft));
+  padding: 4px 6px;
+}
+.chapter-item.active {
+  background: var(--pyt-color-warning-bg, var(--pyt-color-warning-bg));
+  border-color: var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+}
+.chapter-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
 }
 .chapter-head {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  flex: 1 1 auto;
   gap: 6px;
   align-items: center;
-  width: 100%;
+  min-width: 0;
   background: transparent;
   border: none;
   font-family: var(--pyt-font-pixel), sans-serif;
-  font-size: 13px;
-  color: var(--pyt-color-text-primary, #4d3613);
+  font-size: 12px;
+  color: var(--pyt-color-text-primary, var(--pyt-color-text-primary));
   text-align: left;
-  padding: 4px;
+  padding: 4px 2px;
   cursor: pointer;
 }
+.chapter-head:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+.chapter-pages {
+  flex-shrink: 0;
+  color: var(--pyt-color-text-muted, var(--pyt-color-text-muted));
+  font-family: var(--pyt-font-sans, sans-serif);
+  font-size: 11px;
+}
 .chapter-no {
+  flex-shrink: 0;
   font-weight: 700;
+}
+.chapter-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--pyt-font-sans, sans-serif);
+  font-size: 12px;
 }
 .kc-list {
   margin-top: 4px;
   padding-left: 8px;
-  border-left: 2px dotted var(--pyt-color-border, #c9a86b);
+  border-left: 2px dotted var(--pyt-color-border, var(--pyt-color-border));
 }
 .kc-item {
   width: 100%;
@@ -984,7 +1048,7 @@ watch(chapterNoForVideo, (next) => {
   border: none;
   padding: 3px 4px;
   font-size: 12px;
-  color: var(--pyt-color-text-hint, #6e4f1d);
+  color: var(--pyt-color-text-hint, var(--pyt-color-text-hint));
   cursor: pointer;
   opacity: 0.7;
 }
@@ -992,9 +1056,9 @@ watch(chapterNoForVideo, (next) => {
   opacity: 1;
 }
 .kc-item.active {
-  background: var(--pyt-color-warning-bg, #f5e2c1);
-  border: 2px solid var(--pyt-color-border-strong, #4d3613);
-  color: var(--pyt-color-text-primary, #4d3613);
+  background: var(--pyt-color-warning-bg, var(--pyt-color-warning-bg));
+  border: 2px solid var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+  color: var(--pyt-color-text-primary, var(--pyt-color-text-primary));
   font-weight: 700;
 }
 .kc-code {
@@ -1002,24 +1066,20 @@ watch(chapterNoForVideo, (next) => {
   font-size: 11px;
 }
 
-/* R-13 优化：每章 KC 收纳进下拉框 */
-.kc-select-wrap {
-  margin-top: 4px;
-  padding-left: 4px;
-}
 .kc-select {
-  width: 100%;
+  flex: 0 0 72px;
+  max-width: 88px;
   font-family: var(--pyt-font-sans, sans-serif);
-  font-size: 12px;
-  padding: 5px 6px;
-  background: var(--pyt-color-bg-primary, #fef7e3);
-  border: 2px solid var(--pyt-color-border, #c9a86b);
-  color: var(--pyt-color-text-primary, #4d3613);
+  font-size: 11px;
+  padding: 4px 4px;
+  background: var(--pyt-color-bg-primary, var(--pyt-color-bg-primary));
+  border: 2px solid var(--pyt-color-border, var(--pyt-color-border));
+  color: var(--pyt-color-text-primary, var(--pyt-color-text-primary));
   cursor: pointer;
 }
 .kc-select:focus {
   outline: none;
-  border-color: var(--pyt-color-border-strong, #4d3613);
+  border-color: var(--pyt-color-border-strong, var(--pyt-color-text-primary));
 }
 
 /* R-13 优化：课件视频视图 */
@@ -1031,8 +1091,8 @@ watch(chapterNoForVideo, (next) => {
 .video-stage {
   width: 100%;
   background: #160f04;
-  border: 2px solid var(--pyt-color-border-strong, #4d3613);
-  box-shadow: 3px 3px 0 var(--pyt-color-border-strong, #4d3613);
+  border: 2px solid var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+  box-shadow: 3px 3px 0 var(--pyt-color-border-strong, var(--pyt-color-text-primary));
   overflow: hidden;
 }
 .video-player {
@@ -1048,7 +1108,7 @@ watch(chapterNoForVideo, (next) => {
   justify-content: center;
   gap: 10px;
   padding: 36px 16px;
-  color: #f5e2c1;
+  color: var(--pyt-color-warning-bg);
   text-align: center;
   font-size: 13px;
 }
@@ -1058,7 +1118,7 @@ watch(chapterNoForVideo, (next) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 2px solid #f5e2c1;
+  border: 2px solid var(--pyt-color-warning-bg);
   border-radius: 50%;
   font-size: 18px;
 }
@@ -1078,18 +1138,18 @@ watch(chapterNoForVideo, (next) => {
   padding: 8px 10px;
   text-align: left;
   cursor: pointer;
-  background: var(--pyt-color-bg-soft, #fdf3d0);
-  border: 2px solid var(--pyt-color-border, #c9a86b);
+  background: var(--pyt-color-bg-soft, var(--pyt-color-bg-soft));
+  border: 2px solid var(--pyt-color-border, var(--pyt-color-border));
   font-family: var(--pyt-font-sans, sans-serif);
   font-size: 13px;
-  color: var(--pyt-color-text-primary, #4d3613);
+  color: var(--pyt-color-text-primary, var(--pyt-color-text-primary));
 }
 .video-item:hover {
-  background: var(--pyt-color-warning-bg, #f5e2c1);
+  background: var(--pyt-color-warning-bg, var(--pyt-color-warning-bg));
 }
 .video-item--active {
-  background: var(--pyt-color-warning-bg, #f5e2c1);
-  border-color: var(--pyt-color-border-strong, #4d3613);
+  background: var(--pyt-color-warning-bg, var(--pyt-color-warning-bg));
+  border-color: var(--pyt-color-border-strong, var(--pyt-color-text-primary));
   font-weight: 700;
 }
 .video-item__title {
@@ -1104,12 +1164,12 @@ watch(chapterNoForVideo, (next) => {
   flex: 0 0 auto;
   font-family: var(--pyt-font-pixel), monospace;
   font-size: 11px;
-  color: var(--pyt-color-text-muted, #8a6c2c);
+  color: var(--pyt-color-text-muted, var(--pyt-color-text-muted));
 }
 .video-item__pending {
   padding: 0 6px;
-  border: 1px solid var(--pyt-color-border, #c9a86b);
-  background: var(--pyt-color-info-bg, #d0e3f1);
+  border: 1px solid var(--pyt-color-border, var(--pyt-color-border));
+  background: var(--pyt-color-info-bg, var(--pyt-color-info-bg));
   color: #1b4a6b;
   font-size: 10px;
 }
@@ -1117,29 +1177,35 @@ watch(chapterNoForVideo, (next) => {
   margin: 0 0 4px;
 }
 
-.library-main {
+.library-pane--main {
+  flex: 1 1 0;
+  min-width: 0;
+  width: 0;
   display: grid;
   grid-template-rows: auto 1fr auto;
   gap: 12px;
   padding: 16px;
-  background: var(--pyt-color-bg-elevated, #fff7e6);
-  border: 3px solid var(--pyt-color-border-strong, #4d3613);
-  box-shadow: 4px 4px 0 var(--pyt-color-border-strong, #4d3613);
-  max-height: calc(100vh - 140px);
+  background: var(--pyt-color-bg-elevated, var(--pyt-color-bg-elevated));
+  border: 3px solid var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+  box-shadow: 4px 4px 0 var(--pyt-color-border-strong, var(--pyt-color-text-primary));
   overflow: hidden;
+  min-height: 0;
 }
 .page-bar {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
-  border-bottom: 2px dashed var(--pyt-color-border, #c9a86b);
+  gap: 8px 12px;
+  border-bottom: 2px dashed var(--pyt-color-border, var(--pyt-color-border));
   padding-bottom: 6px;
 }
 .page-title {
   margin: 0;
   font-family: var(--pyt-font-pixel), sans-serif;
-  font-size: 18px;
+  font-size: clamp(14px, 2vw, 18px);
+  min-width: 0;
+  flex: 1 1 12rem;
 }
 .page-controls {
   display: flex;
@@ -1149,8 +1215,8 @@ watch(chapterNoForVideo, (next) => {
 .page-nav {
   min-height: 32px;
   padding: 0 10px;
-  background: var(--pyt-color-bg-soft, #fdf3d0);
-  border: 2px solid var(--pyt-color-border-strong, #4d3613);
+  background: var(--pyt-color-bg-soft, var(--pyt-color-bg-soft));
+  border: 2px solid var(--pyt-color-border-strong, var(--pyt-color-text-primary));
   font-family: var(--pyt-font-pixel), monospace;
   font-size: 12px;
   cursor: pointer;
@@ -1162,23 +1228,21 @@ watch(chapterNoForVideo, (next) => {
 .page-jump {
   width: 64px;
   text-align: center;
-  border: 2px solid var(--pyt-color-border-strong, #4d3613);
-  background: var(--pyt-color-bg-primary, #fef7e3);
+  border: 2px solid var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+  background: var(--pyt-color-bg-primary, var(--pyt-color-bg-primary));
   padding: 2px 6px;
   font-family: var(--pyt-font-pixel), monospace;
 }
 .page-content {
   overflow: auto;
   padding: 12px;
-  background: var(--pyt-color-bg-primary, #fef7e3);
-  border: 2px solid var(--pyt-color-border, #c9a86b);
+  background: var(--pyt-color-bg-primary, var(--pyt-color-bg-primary));
+  border: 2px solid var(--pyt-color-border, var(--pyt-color-border));
   font-family: var(--pyt-font-sans, sans-serif);
   font-size: 15px;
   line-height: 1.65;
-  /* R-13 D3：CSS resize 让中央 panel 可双向拉伸（用户反馈想自由调） */
-  resize: both;
-  min-height: 240px;
-  min-width: 320px;
+  min-height: 0;
+  flex: 1;
 }
 
 /* R-13 D1/D2：PDF / Markdown 视图切换 tab */
@@ -1186,28 +1250,28 @@ watch(chapterNoForVideo, (next) => {
   display: flex;
   gap: 6px;
   margin-bottom: 8px;
-  border-bottom: 2px solid var(--pyt-color-border, #c9a86b);
+  border-bottom: 2px solid var(--pyt-color-border, var(--pyt-color-border));
   padding-bottom: 4px;
 }
 .view-mode-tab {
   font-family: var(--pyt-font-pixel), monospace;
   font-size: 12px;
   padding: 4px 12px;
-  background: var(--pyt-color-bg-soft, #fdf3d0);
-  border: 2px solid var(--pyt-color-border, #c9a86b);
+  background: var(--pyt-color-bg-soft, var(--pyt-color-bg-soft));
+  border: 2px solid var(--pyt-color-border, var(--pyt-color-border));
   border-bottom-color: transparent;
   cursor: pointer;
-  color: var(--pyt-color-text-primary, #4d3613);
+  color: var(--pyt-color-text-primary, var(--pyt-color-text-primary));
   min-height: 28px;
 }
 .view-mode-tab--active {
-  background: var(--pyt-color-bg-elevated, #fff7e6);
-  border-color: var(--pyt-color-border-strong, #4d3613);
-  border-bottom-color: var(--pyt-color-bg-elevated, #fff7e6);
+  background: var(--pyt-color-bg-elevated, var(--pyt-color-bg-elevated));
+  border-color: var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+  border-bottom-color: var(--pyt-color-bg-elevated, var(--pyt-color-bg-elevated));
   font-weight: 700;
 }
 .view-mode-tab:hover:not(.view-mode-tab--active) {
-  background: var(--pyt-color-warning-bg, #f5e2c1);
+  background: var(--pyt-color-warning-bg, var(--pyt-color-warning-bg));
 }
 .page-content pre {
   margin: 0;
@@ -1231,14 +1295,14 @@ watch(chapterNoForVideo, (next) => {
 .page-prose__para {
   font-size: 15px;
   line-height: 1.8;
-  color: var(--pyt-color-text-primary, #4d3613);
+  color: var(--pyt-color-text-primary, var(--pyt-color-text-primary));
   white-space: pre-wrap;
 }
 
 .page-prose__code {
   font-family: var(--pyt-font-mono, monospace);
   background: rgba(77, 54, 19, 0.08);
-  border-left: 3px solid var(--pyt-color-border, #c9a86b);
+  border-left: 3px solid var(--pyt-color-border, var(--pyt-color-border));
   padding: 8px 12px;
   white-space: pre;
   overflow-x: auto;
@@ -1249,15 +1313,15 @@ watch(chapterNoForVideo, (next) => {
   margin: 12px 0 0;
   padding: 8px 10px;
   font-size: 11px;
-  color: var(--pyt-color-text-muted, #8a6c2c);
+  color: var(--pyt-color-text-muted, var(--pyt-color-text-muted));
   background: rgba(201, 168, 107, 0.18);
   border: 1px dashed var(--pyt-color-border-soft, rgba(201, 168, 107, 0.45));
   border-radius: 4px;
 }
 .kc-anchor {
-  background: var(--pyt-color-bg-soft, #fdf3d0);
+  background: var(--pyt-color-bg-soft, var(--pyt-color-bg-soft));
   padding: 10px 12px;
-  border: 2px solid var(--pyt-color-border, #c9a86b);
+  border: 2px solid var(--pyt-color-border, var(--pyt-color-border));
 }
 .kc-anchor h3 {
   margin: 0 0 6px;
@@ -1277,7 +1341,7 @@ watch(chapterNoForVideo, (next) => {
   margin: 0 0 4px;
   font-family: var(--pyt-font-pixel), sans-serif;
   font-size: 12px;
-  color: var(--pyt-color-text-muted, #8a6c2c);
+  color: var(--pyt-color-text-muted, var(--pyt-color-text-muted));
 }
 .kc-resource-grid ul {
   list-style: square;
@@ -1289,7 +1353,7 @@ watch(chapterNoForVideo, (next) => {
   background: none;
   border: none;
   padding: 0;
-  color: var(--pyt-color-info, #2a6f97);
+  color: var(--pyt-color-info, var(--pyt-color-info));
   cursor: pointer;
   text-align: left;
   font: inherit;
@@ -1298,15 +1362,15 @@ watch(chapterNoForVideo, (next) => {
 }
 .badge {
   display: inline-block;
-  background: var(--pyt-color-warning-bg, #f5e2c1);
-  border: 1px solid var(--pyt-color-border, #c9a86b);
+  background: var(--pyt-color-warning-bg, var(--pyt-color-warning-bg));
+  border: 1px solid var(--pyt-color-border, var(--pyt-color-border));
   padding: 0 6px;
   font-size: 10px;
   font-family: var(--pyt-font-pixel), monospace;
   margin-left: 4px;
 }
 .badge.difficulty {
-  background: var(--pyt-color-info-bg, #d0e3f1);
+  background: var(--pyt-color-info-bg, var(--pyt-color-info-bg));
 }
 
 .rag-form {
@@ -1314,8 +1378,8 @@ watch(chapterNoForVideo, (next) => {
   gap: 6px;
 }
 .rag-input {
-  border: 2px solid var(--pyt-color-border-strong, #4d3613);
-  background: var(--pyt-color-bg-primary, #fef7e3);
+  border: 2px solid var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+  background: var(--pyt-color-bg-primary, var(--pyt-color-bg-primary));
   padding: 6px;
   font: inherit;
   resize: vertical;
@@ -1324,11 +1388,11 @@ watch(chapterNoForVideo, (next) => {
   min-height: 32px;
   padding: 0 8px;
   font-family: var(--pyt-font-pixel), monospace;
-  background: var(--pyt-color-primary, #6e4f1d);
-  color: var(--pyt-color-text-on-dark, #fff7e6);
-  border: 2px solid var(--pyt-color-border-strong, #4d3613);
+  background: var(--pyt-color-primary, var(--pyt-color-text-hint));
+  color: var(--pyt-color-text-on-dark, var(--pyt-color-bg-elevated));
+  border: 2px solid var(--pyt-color-border-strong, var(--pyt-color-text-primary));
   cursor: pointer;
-  box-shadow: 2px 2px 0 var(--pyt-color-border-strong, #4d3613);
+  box-shadow: 2px 2px 0 var(--pyt-color-border-strong, var(--pyt-color-text-primary));
 }
 .rag-submit:disabled {
   opacity: 0.5;
@@ -1337,7 +1401,7 @@ watch(chapterNoForVideo, (next) => {
 .rag-hint {
   margin: 0;
   font-size: 11px;
-  color: var(--pyt-color-text-muted, #8a6c2c);
+  color: var(--pyt-color-text-muted, var(--pyt-color-text-muted));
 }
 .rag-hit {
   display: grid;
@@ -1345,8 +1409,8 @@ watch(chapterNoForVideo, (next) => {
   width: 100%;
   padding: 6px;
   text-align: left;
-  background: var(--pyt-color-bg-soft, #fdf3d0);
-  border: 2px solid var(--pyt-color-border, #c9a86b);
+  background: var(--pyt-color-bg-soft, var(--pyt-color-bg-soft));
+  border: 2px solid var(--pyt-color-border, var(--pyt-color-border));
   font: inherit;
   cursor: pointer;
   min-height: auto;
@@ -1362,8 +1426,83 @@ watch(chapterNoForVideo, (next) => {
   line-height: 1.45;
 }
 .muted {
-  color: var(--pyt-color-text-muted, #8a6c2c);
+  color: var(--pyt-color-text-muted, var(--pyt-color-text-muted));
   font-size: 13px;
   margin: 0;
 }
+
+@media (max-width: 1100px) {
+  .library-body {
+    flex-direction: column;
+    overflow: auto;
+  }
+  .library-splitter {
+    display: none;
+  }
+  .library-pane--left,
+  .library-pane--right {
+    width: auto !important;
+    flex-shrink: 0;
+  }
+  .library-pane--left {
+    max-height: min(38dvh, 340px);
+  }
+  .library-pane--right {
+    max-height: min(32dvh, 300px);
+  }
+  .library-pane--main {
+    flex: 1 1 auto;
+    width: auto;
+    min-height: min(42dvh, 480px);
+  }
+}
+
+@media (max-width: 720px) {
+  .library-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .back-button {
+    width: 100%;
+  }
+  .breadcrumb {
+    font-size: 12px;
+  }
+  .kc-resource-grid {
+    grid-template-columns: 1fr;
+  }
+  .page-controls {
+    flex-wrap: wrap;
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 480px) {
+  .chapter-row {
+    flex-wrap: wrap;
+  }
+  .kc-select {
+    width: 100%;
+    max-width: none;
+  }
+}
 </style>
+
+<!-- 图书馆页占满 app-main 剩余视口，三栏高度随窗口伸缩 -->
+<style>
+.app-main:has(.library-page) {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100dvh - 56px);
+  max-height: calc(100dvh - 56px);
+  overflow: hidden;
+}
+@supports not (height: 100dvh) {
+  .app-main:has(.library-page) {
+    min-height: calc(100vh - 56px);
+    max-height: calc(100vh - 56px);
+  }
+}
+</style>
+

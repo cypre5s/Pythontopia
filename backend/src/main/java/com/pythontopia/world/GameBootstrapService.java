@@ -9,7 +9,6 @@ import com.pythontopia.learner.profile.repository.ProfileRepository;
 import com.pythontopia.learner.quest.dto.QuestDto;
 import com.pythontopia.learner.quest.service.QuestService;
 import com.pythontopia.world.calendar.CalendarService;
-import com.pythontopia.world.crop.CropStateService;
 import com.pythontopia.world.dto.GameBootstrapResponse;
 import com.pythontopia.world.dto.PlayerStateDto;
 import com.pythontopia.world.dto.WorldSnapshotDto;
@@ -39,7 +38,6 @@ public class GameBootstrapService {
   private final GameBootstrapRepository bootstrapRepository;
   private final WorldRepository worldRepository;
   private final ProfileRepository profileRepository;
-  private final CropStateService cropStateService;
   private final QuestService questService;
   private final MasteryService masteryService;
   private final LearningPathRepository pathRepository;
@@ -52,7 +50,6 @@ public class GameBootstrapService {
       GameBootstrapRepository bootstrapRepository,
       WorldRepository worldRepository,
       ProfileRepository profileRepository,
-      CropStateService cropStateService,
       QuestService questService,
       MasteryService masteryService,
       LearningPathRepository pathRepository,
@@ -63,7 +60,6 @@ public class GameBootstrapService {
     this.bootstrapRepository = bootstrapRepository;
     this.worldRepository = worldRepository;
     this.profileRepository = profileRepository;
-    this.cropStateService = cropStateService;
     this.questService = questService;
     this.masteryService = masteryService;
     this.pathRepository = pathRepository;
@@ -95,7 +91,6 @@ public class GameBootstrapService {
     PlayerStateDto player = row.player();
 
     LearnerProfileDto profile = profileRepository.findProfile(userId).orElse(null);
-    var crops = cropStateService.getMap(userId);
     List<QuestDto> quests = questService.today(userId);
     var mastery = masteryService.listSnapshots(userId);
     List<com.pythontopia.learner.path.dto.LearningPathNodeDto> pathNodes =
@@ -115,7 +110,6 @@ public class GameBootstrapService {
         world,
         player,
         profile,
-        crops,
         quests,
         mastery,
         pathNodes,

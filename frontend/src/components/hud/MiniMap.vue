@@ -282,8 +282,8 @@ watch(
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #ffd166;
-  font-family: var(--pyt-font-pixel, monospace);
+  color: var(--pyt-color-gold-bright);
+  font-family: var(--pyt-font-pixel);
   font-size: 13px;
   letter-spacing: 0.5px;
 }
@@ -294,9 +294,9 @@ watch(
   left: 0;
   right: 0;
   text-align: center;
-  font-family: var(--pyt-font-pixel, monospace);
+  font-family: var(--pyt-font-pixel);
   font-size: 12px;
-  color: #fff7e6;
+  color: var(--pyt-color-bg-elevated);
   background: rgba(28, 24, 16, 0.78);
   border: 2px solid #d4af37;
   border-bottom: none;
@@ -304,7 +304,7 @@ watch(
   padding: 2px 6px;
   letter-spacing: 0.5px;
   pointer-events: none;
-  text-shadow: 1px 1px 0 #2a1a05;
+  text-shadow: 1px 1px 0 var(--pyt-color-shadow);
 }
 
 .mini-map__exit {
@@ -314,9 +314,9 @@ watch(
   justify-content: center;
   width: 18px;
   height: 18px;
-  color: #ffd166;
+  color: var(--pyt-color-gold-bright);
   font-size: 12px;
-  text-shadow: 1px 1px 0 #2a1a05;
+  text-shadow: 1px 1px 0 var(--pyt-color-shadow);
   pointer-events: none;
   animation: minimap-exit-pulse 1600ms ease-in-out infinite;
 }
@@ -346,7 +346,7 @@ watch(
 }
 
 .mini-map__exit--facing {
-  color: #fff7e6;
+  color: var(--pyt-color-bg-elevated);
   font-size: 15px;
   animation: minimap-exit-pulse-facing 900ms ease-in-out infinite;
   filter: drop-shadow(0 0 4px rgba(255, 247, 230, 0.7));

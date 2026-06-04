@@ -10,9 +10,10 @@ import com.pythontopia.coursepack.repository.CoursePackRepository;
 import com.pythontopia.learner.mastery.MasteryEvaluator;
 import com.pythontopia.learner.mastery.MasterySource;
 import com.pythontopia.learner.profile.dto.LearnerProfileDto;
+import com.pythontopia.learner.profile.dto.ProfileDimensionDto;
+import com.pythontopia.learner.profile.service.PassiveProfileService;
 import com.pythontopia.learner.profile.service.ProfileService;
 import com.pythontopia.workshop.config.WorkshopProperties;
-import com.pythontopia.world.crop.CropStateService;
 import com.pythontopia.workshop.dto.ContentFormat;
 import com.pythontopia.workshop.dto.LearningResourceDto;
 import com.pythontopia.workshop.dto.ResourceCreateRequest;
@@ -38,6 +39,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,9 +49,14 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @Service
 public class ResourceWorkshopService {
 
+  private static final Logger log = LoggerFactory.getLogger(ResourceWorkshopService.class);
+
   static final Long DEFAULT_PACK_ID = 43L;
   private static final Set<String> GRAPH_MAJOR_VALUES =
       Set.of("CS", "NON_CS_STEM", "NON_CS_HUMANITIES", "OTHER");
+
+  /** cognitive_style 注入资源生成的置信度门控（与答疑 profile_brief 一致，信号不足不下传）。 */
+  private static final double STYLE_CONFIDENCE_GATE = 0.3;
 
   private final WorkshopProperties properties;
   private final WorkshopGraphClient graphClient;
@@ -56,8 +64,8 @@ public class ResourceWorkshopService {
   private final CoursePackRepository coursePackRepository;
   private final WorkshopRunRecorder runRecorder;
   private final MasteryEvaluator masteryEvaluator;
-  private final CropStateService cropStateService;
   private final ProfileService profileService;
+  private final PassiveProfileService passiveProfileService;
   private final ObjectMapper objectMapper;
 
   public ResourceWorkshopService(
@@ -67,8 +75,8 @@ public class ResourceWorkshopService {
       CoursePackRepository coursePackRepository,
       WorkshopRunRecorder runRecorder,
       MasteryEvaluator masteryEvaluator,
-      CropStateService cropStateService,
       ProfileService profileService,
+      PassiveProfileService passiveProfileService,
       ObjectMapper objectMapper) {
     this.properties = properties;
     this.graphClient = graphClient;
@@ -76,8 +84,8 @@ public class ResourceWorkshopService {
     this.coursePackRepository = coursePackRepository;
     this.runRecorder = runRecorder;
     this.masteryEvaluator = masteryEvaluator;
-    this.cropStateService = cropStateService;
     this.profileService = profileService;
+    this.passiveProfileService = passiveProfileService;
     this.objectMapper = objectMapper;
   }
 
@@ -96,7 +104,7 @@ public class ResourceWorkshopService {
             validatedKcCodes,
             request.type().name(),
             request.focusHint(),
-            profileSnapshot(profile));
+            profileSnapshot(profile, safeDimensions(userId)));
     ResourceProduceResponseDto graphResponse = graphClient.produce(graphRequest);
     if (graphResponse == null) {
       throw new BusinessException(
@@ -172,7 +180,7 @@ public class ResourceWorkshopService {
             validatedKcCodes,
             request.type().name(),
             request.focusHint(),
-            profileSnapshot(profile));
+            profileSnapshot(profile, safeDimensions(userId)));
 
     SseEmitter emitter = new SseEmitter(120_000L);
     Long chapterId = pickChapterId(validatedKcCodes, kcIdx);
@@ -348,9 +356,14 @@ public class ResourceWorkshopService {
     return null;
   }
 
-  private ResourceProduceRequestDto.ProfileSnapshotDto profileSnapshot(LearnerProfileDto profile) {
+  private ResourceProduceRequestDto.ProfileSnapshotDto profileSnapshot(
+      LearnerProfileDto profile, List<ProfileDimensionDto> dims) {
+    // 学①扩展：把认知风格 + 易错点下传给资源生成 graph，让讲义/导图/示例随画像自适应。
+    String cognitiveStyle = cognitiveStyleTag(dims);
+    List<String> errorTags = errorTags(dims);
     if (profile == null) {
-      return new ResourceProduceRequestDto.ProfileSnapshotDto("OTHER", 2, List.of());
+      return new ResourceProduceRequestDto.ProfileSnapshotDto(
+          "OTHER", 2, List.of(), cognitiveStyle, errorTags);
     }
     String major = graphMajor(profile.major());
     int level =
@@ -361,7 +374,47 @@ public class ResourceWorkshopService {
         profile.learningPreference() == null || profile.learningPreference().mediaPriority() == null
             ? List.of()
             : List.copyOf(profile.learningPreference().mediaPriority());
-    return new ResourceProduceRequestDto.ProfileSnapshotDto(major, level, media);
+    return new ResourceProduceRequestDto.ProfileSnapshotDto(
+        major, level, media, cognitiveStyle, errorTags);
+  }
+
+  /** 取画像维度，任何失败降级为空（资源生成不因画像读失败而中断）。 */
+  private List<ProfileDimensionDto> safeDimensions(Long userId) {
+    try {
+      return passiveProfileService.getDimensions(userId);
+    } catch (RuntimeException ex) {
+      log.warn("workshop profile dimensions degraded for user {}: {}", userId, ex.getMessage());
+      return List.of();
+    }
+  }
+
+  /** 认知风格主 tag：仅在 cognitive_style 置信度≥门控时给出（信号不足不下传，防幻觉）。 */
+  static String cognitiveStyleTag(List<ProfileDimensionDto> dims) {
+    if (dims == null) {
+      return "";
+    }
+    for (ProfileDimensionDto d : dims) {
+      if ("cognitive_style".equals(d.key())
+          && d.confidence() >= STYLE_CONFIDENCE_GATE
+          && !d.tags().isEmpty()) {
+        return d.tags().get(d.tags().size() - 1);
+      }
+    }
+    return "";
+  }
+
+  /** 易错点：error_pattern 维度最近至多 3 个 tag。 */
+  static List<String> errorTags(List<ProfileDimensionDto> dims) {
+    if (dims == null) {
+      return List.of();
+    }
+    for (ProfileDimensionDto d : dims) {
+      if ("error_pattern".equals(d.key()) && !d.tags().isEmpty()) {
+        List<String> t = d.tags();
+        return t.size() > 3 ? List.copyOf(t.subList(t.size() - 3, t.size())) : List.copyOf(t);
+      }
+    }
+    return List.of();
   }
 
   private String graphMajor(String rawMajor) {
@@ -426,7 +479,6 @@ public class ResourceWorkshopService {
       BigDecimal proposed = new BigDecimal("0.05");
       BigDecimal delta = proposed.min(remaining);
       masteryEvaluator.applyEvent(userId, code, MasterySource.RESOURCE_READ, delta, "workshop:" + type.name());
-      cropStateService.applyMasteryUpdate(userId, code);
     }
   }
 

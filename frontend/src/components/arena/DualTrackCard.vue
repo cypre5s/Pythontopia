@@ -71,7 +71,7 @@ async function runLocal(): Promise<void> {
 .dual-track-card { display: grid; gap: 12px; }
 .card-head { display: flex; align-items: center; gap: 8px; }
 .card-icon { font-size: 20px; }
-.card-head h3 { margin: 0; font-size: 16px; color: #ffd166; }
+.card-head h3 { margin: 0; font-size: 16px; color: var(--pyt-color-gold-bright); }
 .badge-dual { margin-left: auto; font-size: 11px; color: #93c5fd; padding: 2px 8px; background: rgba(74,144,226,0.2); border: 1px solid #4a90e2; border-radius: 3px; }
 .question { margin: 0; padding: 10px; background: #0a1428; border: 2px solid #4a90e2; white-space: pre-wrap; font-size: 13px; line-height: 1.7; color: #e5e7eb; }
 .dual-panels { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }

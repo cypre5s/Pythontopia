@@ -255,14 +255,14 @@ header h1 {
 }
 .badge {
   background: #2f5b8a;
-  color: #fff7e6;
+  color: var(--pyt-color-bg-elevated);
   border-radius: 999px;
   padding: 2px 10px;
   font-size: 12px;
 }
 .code {
   font-size: 13px;
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
 }
 .secondary {
   background: transparent;
@@ -276,7 +276,7 @@ header h1 {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
-  border-bottom: 2px solid #c9a86b;
+  border-bottom: 2px solid var(--pyt-color-border);
   padding-bottom: 4px;
 }
 .tabs button {
@@ -284,7 +284,7 @@ header h1 {
   background: transparent;
   padding: 6px 14px;
   cursor: pointer;
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
   font-weight: 500;
   border-bottom: 3px solid transparent;
 }
@@ -295,25 +295,25 @@ header h1 {
 .error {
   background: #fbe9d7;
   border: 2px solid #c97f3a;
-  border-radius: 8px;
+  border-radius: var(--pyt-radius-lg);
   padding: 10px;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
 }
 .empty {
   padding: 16px;
-  background: #fdf3d0;
-  border-radius: 8px;
+  background: var(--pyt-color-bg-soft);
+  border-radius: var(--pyt-radius-lg);
   text-align: center;
 }
 
 .live-tab { display: grid; gap: 12px; }
-.live-header { display: flex; align-items: center; gap: 10px; padding: 8px; background: #fdf3d0; border-radius: 6px; font-size: 13px; }
+.live-header { display: flex; align-items: center; gap: 10px; padding: 8px; background: var(--pyt-color-bg-soft); border-radius: 6px; font-size: 13px; }
 .live-dot { width: 10px; height: 10px; border-radius: 50%; background: #ccc; }
 .live-dot--on { background: #16a34a; animation: pulse-live 1.5s infinite; }
 @keyframes pulse-live { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 .live-events { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; max-height: 400px; overflow: auto; }
-.live-event { padding: 8px; background: #fff7e6; border: 1px solid #c9a86b; border-radius: 4px; display: grid; grid-template-columns: auto 1fr; gap: 6px; font-size: 12px; }
+.live-event { padding: 8px; background: var(--pyt-color-bg-elevated); border: 1px solid var(--pyt-color-border); border-radius: 4px; display: grid; grid-template-columns: auto 1fr; gap: 6px; font-size: 12px; }
 .live-event__type { font-weight: 600; color: #2f5b8a; text-transform: uppercase; font-size: 10px; padding: 2px 6px; background: #e0eaf5; border-radius: 3px; }
-.live-event__time { color: #6e4f1d; font-size: 11px; text-align: right; }
-.live-event__data { grid-column: 1 / -1; margin: 0; padding: 6px; background: #fdf3d0; border: 1px solid #c9a86b; font-size: 11px; white-space: pre-wrap; max-height: 100px; overflow: auto; }
+.live-event__time { color: var(--pyt-color-text-hint); font-size: 11px; text-align: right; }
+.live-event__data { grid-column: 1 / -1; margin: 0; padding: 6px; background: var(--pyt-color-bg-soft); border: 1px solid var(--pyt-color-border); font-size: 11px; white-space: pre-wrap; max-height: 100px; overflow: auto; }
 </style>

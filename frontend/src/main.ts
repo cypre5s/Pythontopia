@@ -4,10 +4,12 @@ import App from './App.vue';
 import { setNetworkErrorHandler } from './api/http';
 import { shouldShowNetworkToast } from './api/networkNotice';
 import { router } from './app/router';
+import { initWebVitals } from './services/webVitals';
 import { useSessionStore } from './stores/session';
 import { useToastStore } from './stores/toast';
 import './styles/tokens.css';
 import './styles/pixel-ui.css';
+import './styles/split-layout.css';
 import './styles.css';
 
 const pinia = createPinia();
@@ -38,3 +40,6 @@ setNetworkErrorHandler((code) => {
 });
 
 app.mount('#app');
+
+// 接入真实 Web Vitals 采集（FCP/LCP/CLS/TTFB），转发给 perfMonitor 供 PerfHud 展示。
+initWebVitals();

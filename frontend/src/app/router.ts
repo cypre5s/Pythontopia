@@ -102,12 +102,9 @@ export const router = createRouter({
       component: () => import('@/pages/ReviewHallPage.vue'),
       meta: { requiresAuth: true },
     },
-    {
-      path: '/tutor',
-      name: 'tutor',
-      component: () => import('@/pages/TutorPage.vue'),
-      meta: { requiresAuth: true },
-    },
+    // R-13 §-1：导师并入「百晓工坊」。/tutor 永久重定向到 /workshop，
+    // PauseMenu / HomePage / GuideOverlay / NPC 对话等旧入口自动落到合并页。
+    { path: '/tutor', redirect: '/workshop' },
     {
       path: '/teacher',
       name: 'teacher',

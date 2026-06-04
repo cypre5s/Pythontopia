@@ -105,8 +105,8 @@ function fmt(value: number): string {
 }
 .empty {
   padding: 16px;
-  background: #fdf3d0;
-  border-radius: 8px;
+  background: var(--pyt-color-bg-soft);
+  border-radius: var(--pyt-radius-lg);
   text-align: center;
 }
 .legend {
@@ -125,12 +125,12 @@ function fmt(value: number): string {
   width: 14px;
   height: 14px;
   border-radius: 3px;
-  border: 1px solid #c9a86b;
+  border: 1px solid var(--pyt-color-border);
 }
 .chapter h4 {
   margin: 4px 0;
   font-size: 13px;
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
 }
 .row {
   display: grid;

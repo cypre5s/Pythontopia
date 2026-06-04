@@ -53,18 +53,18 @@ function logout(): void {
   justify-content: space-between;
   gap: 12px;
   padding: 8px 16px;
-  background: var(--pyt-color-bg-elevated, #fff7e6);
-  border-bottom: 2px solid var(--pyt-color-border, #c9a86b);
+  background: var(--pyt-color-bg-elevated, var(--pyt-color-bg-elevated));
+  border-bottom: 2px solid var(--pyt-color-border, var(--pyt-color-border));
   min-height: 48px;
 }
 
 .brand {
   font-weight: 700;
-  color: var(--pyt-color-text-primary, #4d3613);
+  color: var(--pyt-color-text-primary, var(--pyt-color-text-primary));
   text-decoration: none;
   font-size: 16px;
   letter-spacing: 0.5px;
-  font-family: var(--pyt-font-pixel, monospace);
+  font-family: var(--pyt-font-pixel);
 }
 
 .header-status {
@@ -72,14 +72,14 @@ function logout(): void {
   align-items: center;
   gap: 12px;
   font-size: 13px;
-  color: var(--pyt-color-text-primary, #4d3613);
+  color: var(--pyt-color-text-primary, var(--pyt-color-text-primary));
 }
 
 .header-status__logout {
   padding: 4px 10px;
   background: rgba(184, 68, 45, 0.12);
-  border: 2px solid var(--pyt-color-danger, #b8442d);
-  color: var(--pyt-color-danger, #b8442d);
+  border: 2px solid var(--pyt-color-danger, var(--pyt-color-danger));
+  color: var(--pyt-color-danger, var(--pyt-color-danger));
   border-radius: 4px;
   cursor: pointer;
   font-size: 12px;

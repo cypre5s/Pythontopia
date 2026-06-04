@@ -24,11 +24,15 @@ data class LoginRequest(
 data class RegisterRequest(
     val username: String,
     val password: String,
-    val displayName: String? = null,
+    val displayName: String,
+    val role: String = "STUDENT",
+    val email: String? = null,
+    val teacherInviteCode: String? = null,
 )
 
 @Serializable
 data class RefreshRequest(
+    @SerialName("token")
     val refreshToken: String,
 )
 

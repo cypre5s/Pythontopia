@@ -136,12 +136,12 @@ const rootClasses = computed<string[]>(() => {
   display: block;
   position: relative;
   overflow: hidden;
-  background-color: var(--pyt-r12-color-gray-100, #f3e4be);
+  background-color: var(--pyt-r12-color-gray-100, var(--pyt-color-bg-sunken));
   background-image: linear-gradient(
     90deg,
-    var(--pyt-r12-color-gray-100, #f3e4be) 0%,
-    var(--pyt-r12-color-gray-50, #fff7e6) 50%,
-    var(--pyt-r12-color-gray-100, #f3e4be) 100%
+    var(--pyt-r12-color-gray-100, var(--pyt-color-bg-sunken)) 0%,
+    var(--pyt-r12-color-gray-50, var(--pyt-color-bg-elevated)) 50%,
+    var(--pyt-r12-color-gray-100, var(--pyt-color-bg-sunken)) 100%
   );
   background-size: 200% 100%;
   background-position: 200% 0;
@@ -152,7 +152,7 @@ const rootClasses = computed<string[]>(() => {
 .py-skeleton--reduced-motion .py-skeleton__item {
   animation: none;
   background-image: none;
-  background-color: var(--pyt-r12-color-gray-100, #f3e4be);
+  background-color: var(--pyt-r12-color-gray-100, var(--pyt-color-bg-sunken));
 }
 
 @keyframes py-skeleton-shimmer {
@@ -168,7 +168,7 @@ const rootClasses = computed<string[]>(() => {
   .py-skeleton__item {
     animation: none;
     background-image: none;
-    background-color: var(--pyt-r12-color-gray-100, #f3e4be);
+    background-color: var(--pyt-r12-color-gray-100, var(--pyt-color-bg-sunken));
   }
 }
 </style>

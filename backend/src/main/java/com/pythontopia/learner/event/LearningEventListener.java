@@ -2,7 +2,6 @@ package com.pythontopia.learner.event;
 
 import com.pythontopia.learner.mastery.MasteryEvaluator;
 import com.pythontopia.learner.mastery.MasterySource;
-import com.pythontopia.world.crop.CropStateService;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
@@ -10,19 +9,15 @@ import org.springframework.stereotype.Component;
 public class LearningEventListener {
 
   private final MasteryEvaluator masteryEvaluator;
-  private final CropStateService cropStateService;
 
-  public LearningEventListener(
-      MasteryEvaluator masteryEvaluator, CropStateService cropStateService) {
+  public LearningEventListener(MasteryEvaluator masteryEvaluator) {
     this.masteryEvaluator = masteryEvaluator;
-    this.cropStateService = cropStateService;
   }
 
   @EventListener
   public void onResourceConsumed(LearningEvent.ResourceConsumed event) {
     masteryEvaluator.applyEvent(
         event.userId(), event.kcCode(), MasterySource.RESOURCE_READ, null, "resource:" + event.resourceKind());
-    cropStateService.applyMasteryUpdate(event.userId(), event.kcCode());
   }
 
   @EventListener
@@ -30,7 +25,6 @@ public class LearningEventListener {
     masteryEvaluator.applyEvent(
         event.userId(), event.kcCode(), MasterySource.PRACTICE_PASS, null,
         "problem:" + event.problemId());
-    cropStateService.applyMasteryUpdate(event.userId(), event.kcCode());
   }
 
   @EventListener
@@ -38,7 +32,6 @@ public class LearningEventListener {
     masteryEvaluator.applyEvent(
         event.userId(), event.kcCode(), MasterySource.PRACTICE_FAIL, null,
         "problem:" + event.problemId() + ":" + event.failureKind());
-    cropStateService.applyMasteryUpdate(event.userId(), event.kcCode());
   }
 
   @EventListener
@@ -46,7 +39,6 @@ public class LearningEventListener {
     masteryEvaluator.applyEvent(
         event.userId(), event.kcCode(), MasterySource.DEBUG_FIX, null,
         "debug:" + event.problemId());
-    cropStateService.applyMasteryUpdate(event.userId(), event.kcCode());
   }
 
   @EventListener

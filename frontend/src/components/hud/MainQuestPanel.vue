@@ -12,17 +12,118 @@
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useMainQuestStore } from '@stores/mainQuest';
+import { useLearningStore } from '@stores/learning';
 import { useWorldStore } from '@stores/world';
 import { useToastStore } from '@stores/toast';
 import { FAST_TRAVEL_ROUTES, type FastTravelRoute } from '@/data/fastTravel';
+import { humanizeKcText } from '@/data/kcNames';
+import {
+  mainSubQuestPhase,
+  mainlineKcCodesForChapter,
+  type MainQuestPhaseMeta,
+} from '@/data/mainQuests';
+import { CHAPTERS } from '@/data/chapters';
 import type { MainSubQuestViewItem } from '@/types/mainQuest';
 
 const mainQuest = useMainQuestStore();
+const learning = useLearningStore();
 const world = useWorldStore();
 const toast = useToastStore();
 const router = useRouter();
 
 const visible = computed(() => mainQuest.panelOpen);
+
+// 每个 PRACTICE_PASS 后端 +0.20 掌握度（0..1）== 0..100 标度的 +20。
+const MASTERY_PER_PASS = 20;
+
+function phaseOf(sub: MainSubQuestViewItem): MainQuestPhaseMeta {
+  return mainSubQuestPhase(sub);
+}
+
+// P0-c / P1-c：把 kc_mastery 子任务的隐藏阈值翻译成「当前→目标 + 约再做对 N 题」。
+interface MasteryHint {
+  current: number;
+  target: number;
+  remainingProblems: number;
+  met: boolean;
+}
+
+const masteryHints = computed<Map<string, MasteryHint>>(() => {
+  const map = new Map<string, MasteryHint>();
+  for (const ch of mainQuest.chapterViews) {
+    for (const sub of ch.subQuests) {
+      if (sub.evidenceRequired.type !== 'kc_mastery') continue;
+      const ev = sub.evidenceRequired;
+      const snap = learning.field.masterySnapshot.find((s) => s.kcCode === ev.kcCode);
+      const current = Math.round((snap?.masteryScore ?? 0) * 100);
+      const target = ev.thresholdScore;
+      const met = current >= target;
+      map.set(sub.id, {
+        current,
+        target,
+        met,
+        remainingProblems: met ? 0 : Math.ceil((target - current) / MASTERY_PER_PASS),
+      });
+    }
+  }
+  return map;
+});
+
+// P0-c：章节达标双条件的显式拆解（必做真题全过 + 本章 KC 平均掌握度 ≥ 70%）。
+interface ChapterGate {
+  requiredDone: number;
+  requiredTotal: number;
+  masteryPct: number;
+  masteryTargetPct: number;
+  practiceMet: boolean;
+  masteryMet: boolean;
+  met: boolean;
+  /** 软门槛：是否已消费本章多模态讲解（视频 / AI 动画 / 图解）。不硬阻塞推进。 */
+  mediaConsumed: boolean;
+}
+
+const chapterGates = computed<Map<number, ChapterGate>>(() => {
+  const map = new Map<number, ChapterGate>();
+  for (const ch of mainQuest.chapterViews) {
+    const required = ch.subQuests.filter((s) => s.evidenceRequired.type === 'submission');
+    const requiredDone = required.filter((s) => s.status === 'completed').length;
+    const masteryPct = Math.round(mainQuest.chapterMasteryAvg(ch.chapter) * 100);
+    const practiceMet = requiredDone >= required.length;
+    const masteryMet = masteryPct >= 70;
+    map.set(ch.chapter, {
+      requiredDone,
+      requiredTotal: required.length,
+      masteryPct,
+      masteryTargetPct: 70,
+      practiceMet,
+      masteryMet,
+      met: practiceMet && masteryMet,
+      mediaConsumed: mainQuest.chapterMediaConsumed(ch.chapter),
+    });
+  }
+  return map;
+});
+
+// P2：每章动机帧（为什么先学）+ 主线核心 / 选修拓展 KC 计数。
+interface ChapterIntro {
+  motivation: string;
+  mainlineCount: number;
+  electiveCount: number;
+}
+const chapterIntros = computed<Map<number, ChapterIntro>>(() => {
+  const map = new Map<number, ChapterIntro>();
+  for (const ch of mainQuest.chapterViews) {
+    const entry = CHAPTERS.find((c) => c.order === ch.chapter);
+    const totalKc = mainQuest.chapterKcCodes(ch.chapter).length;
+    const mainlineCount = mainlineKcCodesForChapter(ch.chapter).length;
+    map.set(ch.chapter, {
+      motivation: entry?.motivation ?? '',
+      mainlineCount,
+      electiveCount: Math.max(0, totalKc - mainlineCount),
+    });
+  }
+  return map;
+});
 
 function close(): void {
   mainQuest.closePanel();
@@ -155,6 +256,24 @@ function skipToNext(chapter: number): void {
               <span>{{ ch.subQuests.filter((s) => s.status === 'completed').length }}/5</span>
             </span>
           </header>
+          <!-- P2：动机帧（为什么先学）+ 选修/拓展标注 -->
+          <p
+            v-if="chapterIntros.get(ch.chapter)?.motivation"
+            class="mq-motivation"
+            :data-testid="`main-quest-motivation-${ch.chapter}`"
+          >
+            💡 {{ chapterIntros.get(ch.chapter)?.motivation }}
+          </p>
+          <p
+            class="mq-elective"
+            :data-testid="`main-quest-elective-${ch.chapter}`"
+          >
+            主线核心 KC {{ chapterIntros.get(ch.chapter)?.mainlineCount ?? 0 }} 个<template
+              v-if="chapterIntros.get(ch.chapter)?.electiveCount"
+            >
+              · 另有 {{ chapterIntros.get(ch.chapter)?.electiveCount }} 个为选修 / 拓展（不必全啃）
+            </template>
+          </p>
           <ul class="mq-quest-list">
             <li
               v-for="sub in ch.subQuests"
@@ -169,8 +288,28 @@ function skipToNext(chapter: number): void {
                 <template v-else>•</template>
               </span>
               <div class="mq-quest-meta">
-                <span class="mq-quest-title">{{ sub.title }}</span>
-                <small class="mq-quest-hint">{{ sub.hint }}</small>
+                <span class="mq-quest-titleline">
+                  <span
+                    class="mq-quest-phase"
+                    :class="`mq-quest-phase--${phaseOf(sub).phase}`"
+                    :title="phaseOf(sub).role"
+                    :data-testid="`main-quest-phase-${sub.id}`"
+                  >{{ phaseOf(sub).label }}</span>
+                  <span class="mq-quest-title">{{ humanizeKcText(sub.title) }}</span>
+                </span>
+                <small class="mq-quest-hint">{{ humanizeKcText(sub.hint) }}</small>
+                <small
+                  v-if="masteryHints.get(sub.id)"
+                  class="mq-quest-mastery"
+                  :class="{ 'mq-quest-mastery--met': masteryHints.get(sub.id)!.met }"
+                  :data-testid="`main-quest-mastery-${sub.id}`"
+                >
+                  <template v-if="masteryHints.get(sub.id)!.met">✓ 掌握度已达标</template>
+                  <template v-else>
+                    掌握度 {{ masteryHints.get(sub.id)!.current }} → 目标 {{ masteryHints.get(sub.id)!.target }}
+                    （约再做对 {{ masteryHints.get(sub.id)!.remainingProblems }} 题）
+                  </template>
+                </small>
               </div>
               <button
                 type="button"
@@ -183,6 +322,33 @@ function skipToNext(chapter: number): void {
               </button>
             </li>
           </ul>
+          <!-- P0-c：章节达标双条件硬验证显式拆解（练 + 测） -->
+          <div
+            class="mq-gate"
+            :data-testid="`main-quest-gate-${ch.chapter}`"
+          >
+            <span class="mq-gate__label">达标条件</span>
+            <span
+              class="mq-gate__item"
+              :class="{ 'mq-gate__item--ok': chapterGates.get(ch.chapter)?.practiceMet }"
+            >
+              练 · 必做真题 {{ chapterGates.get(ch.chapter)?.requiredDone ?? 0 }}/{{ chapterGates.get(ch.chapter)?.requiredTotal ?? 0 }}
+            </span>
+            <span
+              class="mq-gate__item"
+              :class="{ 'mq-gate__item--ok': chapterGates.get(ch.chapter)?.masteryMet }"
+            >
+              测 · 本章 KC 均掌握 {{ chapterGates.get(ch.chapter)?.masteryPct ?? 0 }}%/70%
+            </span>
+            <span
+              class="mq-gate__item mq-gate__item--soft"
+              :class="{ 'mq-gate__item--ok': chapterGates.get(ch.chapter)?.mediaConsumed }"
+              :data-testid="`main-quest-gate-media-${ch.chapter}`"
+              title="软门槛：看过本章讲解视频 / AI 动画 / 知识点图解（不阻塞推进）"
+            >
+              看 · 多模态讲解 {{ chapterGates.get(ch.chapter)?.mediaConsumed ? '✓' : '建议' }}
+            </span>
+          </div>
           <footer class="mq-chapter__foot">
             <span class="mq-boss-label">章末 BOSS · {{ ch.boss.name }}</span>
             <button
@@ -208,7 +374,9 @@ function skipToNext(chapter: number): void {
             :data-testid="`main-quest-hub-${ch.chapter}`"
           >
             <span class="mq-hub__badge">✓ 本章已达标（必做题全过 · KC 掌握度 ≥ 70%）</span>
-            <p class="mq-hub__tip">可选进阶（不选也能直接进下一章）：</p>
+            <p class="mq-hub__tip">
+              可选进阶（不选也能直接进下一章）：
+            </p>
             <div class="mq-hub__actions">
               <button
                 type="button"
@@ -259,7 +427,7 @@ function skipToNext(chapter: number): void {
   border-radius: 2px;
   box-shadow: 4px 4px 0 var(--pyt-panel-border-dark), 0 8px 24px var(--pyt-panel-shadow);
   color: var(--pyt-text-primary);
-  font-family: var(--pyt-font-pixel, 'Ark Pixel 12', 'PingFang SC', monospace);
+  font-family: var(--pyt-font-pixel);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -278,7 +446,7 @@ function skipToNext(chapter: number): void {
   font-size: 16px;
   color: var(--pyt-text-accent);
   letter-spacing: 1px;
-  text-shadow: 1px 1px 0 #2a1a05;
+  text-shadow: 1px 1px 0 var(--pyt-color-shadow);
 }
 .mq-card__close {
   background: var(--pyt-btn-bg);
@@ -327,7 +495,7 @@ function skipToNext(chapter: number): void {
 }
 .mq-endless-btn {
   margin-left: 12px;
-  font-family: var(--pyt-font-pixel, 'Ark Pixel 12', monospace);
+  font-family: var(--pyt-font-pixel);
   font-size: 12px;
   padding: 4px 12px;
   background: rgba(106, 161, 214, 0.2);
@@ -386,6 +554,22 @@ function skipToNext(chapter: number): void {
   font-size: 11px;
   color: var(--pyt-text-secondary);
 }
+/* P2：动机帧 + 选修标注 */
+.mq-motivation {
+  margin: 2px 0 4px;
+  padding: 6px 8px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--pyt-text-secondary);
+  background: rgba(241, 196, 83, 0.1);
+  border-left: 3px solid var(--pyt-text-accent);
+  border-radius: 2px;
+}
+.mq-elective {
+  margin: 0 0 4px;
+  font-size: 10px;
+  color: var(--pyt-text-secondary);
+}
 .mq-quest-list {
   list-style: none;
   margin: 4px 0 0;
@@ -431,6 +615,69 @@ function skipToNext(chapter: number): void {
 .mq-quest-hint {
   font-size: 10px;
   color: var(--pyt-text-secondary);
+}
+.mq-quest-titleline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+/* P0-b：看/学/练/测 阶段徽章 */
+.mq-quest-phase {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 2px;
+  border: 1px solid currentColor;
+}
+.mq-quest-phase--watch {
+  color: #6aa1d6;
+}
+.mq-quest-phase--learn {
+  color: var(--pyt-color-gold);
+}
+.mq-quest-phase--practice {
+  color: #e07a3a;
+}
+.mq-quest-phase--assess {
+  color: #6bbf59;
+}
+/* P1-c：掌握度透明化 */
+.mq-quest-mastery {
+  font-size: 10px;
+  color: var(--pyt-text-gold);
+}
+.mq-quest-mastery--met {
+  color: var(--pyt-bar-energy);
+}
+/* P0-c：章节达标双条件 */
+.mq-gate {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 11px;
+}
+.mq-gate__label {
+  color: var(--pyt-text-secondary);
+}
+.mq-gate__item {
+  padding: 2px 8px;
+  border-radius: 2px;
+  border: 1px solid var(--pyt-panel-border-dark);
+  background: rgba(0, 0, 0, 0.12);
+  color: var(--pyt-text-secondary);
+}
+.mq-gate__item--ok {
+  border-color: var(--pyt-bar-energy);
+  color: var(--pyt-bar-energy);
+  background: rgba(107, 191, 89, 0.15);
+}
+/* 软门槛：多模态讲解为建议项，用虚线弱化以区别于硬性达标条件。 */
+.mq-gate__item--soft {
+  border-style: dashed;
 }
 .mq-quest-go {
   font-family: inherit;

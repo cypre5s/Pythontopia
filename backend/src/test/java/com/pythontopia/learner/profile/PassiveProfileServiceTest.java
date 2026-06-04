@@ -234,4 +234,58 @@ class PassiveProfileServiceTest {
     assertThat(service.isSelfEditable("error_pattern")).isFalse();
     assertThat(service.isSelfEditable("practical_ability")).isFalse();
   }
+
+  @Test
+  void testGetDimensions_confidenceFromEvidenceCount() {
+    ObjectNode dims = objectMapper.createObjectNode();
+    dims.putObject("cognitive_style").put("evidence_count", 4).put("score", 0.5);
+    dims.putObject("practical_ability").put("evidence_count", 16).put("score", 0.5);
+    when(profileRepository.findDimensions(7L)).thenReturn(Optional.of(dims));
+
+    var list = service.getDimensions(7L);
+    assertThat(list).hasSize(8);
+    var cog = list.stream().filter(d -> d.key().equals("cognitive_style")).findFirst().orElseThrow();
+    var prac = list.stream().filter(d -> d.key().equals("practical_ability")).findFirst().orElseThrow();
+    var missing = list.stream().filter(d -> d.key().equals("learning_goal")).findFirst().orElseThrow();
+    assertThat(cog.confidence()).isEqualTo(0.5, org.assertj.core.data.Offset.offset(1e-9));
+    assertThat(prac.confidence()).isEqualTo(1.0, org.assertj.core.data.Offset.offset(1e-9));
+    assertThat(missing.confidence()).isEqualTo(0.0);
+  }
+
+  @Test
+  void testGetDimensions_decayTowardHalf() {
+    ObjectNode dims = objectMapper.createObjectNode();
+    ObjectNode prac = dims.putObject("practical_ability");
+    prac.put("score", 1.0);
+    prac.put("last_updated", java.time.Instant.now().minus(java.time.Duration.ofDays(14)).toString());
+    ObjectNode neutral = dims.putObject("error_pattern");
+    neutral.put("score", 0.5);
+    neutral.put("last_updated", java.time.Instant.now().minus(java.time.Duration.ofDays(28)).toString());
+    when(profileRepository.findDimensions(7L)).thenReturn(Optional.of(dims));
+
+    var list = service.getDimensions(7L);
+    double pracScore =
+        list.stream().filter(d -> d.key().equals("practical_ability")).findFirst().orElseThrow().score();
+    double neutralScore =
+        list.stream().filter(d -> d.key().equals("error_pattern")).findFirst().orElseThrow().score();
+    // 1.0 经 14 天半衰期回归：0.5 + 0.5*0.5^1 ≈ 0.75
+    assertThat(pracScore).isEqualTo(0.75, org.assertj.core.data.Offset.offset(0.02));
+    // 中性 0.5 不随时间变化
+    assertThat(neutralScore).isEqualTo(0.5, org.assertj.core.data.Offset.offset(1e-9));
+  }
+
+  @Test
+  void testGetDimensions_noLastUpdated_noDecay() {
+    ObjectNode dims = objectMapper.createObjectNode();
+    dims.putObject("knowledge_base").put("score", 0.9);
+    when(profileRepository.findDimensions(7L)).thenReturn(Optional.of(dims));
+
+    double s =
+        service.getDimensions(7L).stream()
+            .filter(d -> d.key().equals("knowledge_base"))
+            .findFirst()
+            .orElseThrow()
+            .score();
+    assertThat(s).isEqualTo(0.9, org.assertj.core.data.Offset.offset(1e-9));
+  }
 }

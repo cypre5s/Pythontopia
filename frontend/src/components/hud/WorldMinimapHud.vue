@@ -30,7 +30,7 @@ const { style: dragStyle, onPointerDown: onDragStart } = useDraggable(
 
 const collapsed = ref(false);
 
-const visible = computed(() => hud.activeSlot !== 'inventory' && hud.activeSlot !== 'skill');
+const visible = computed(() => hud.activeSlot !== 'skill');
 
 const sizePx = computed(() => {
   if (typeof window === 'undefined') return 200;
@@ -136,7 +136,7 @@ onUnmounted(() => {
   z-index: 90;
   pointer-events: auto;
   color: var(--pyt-text-primary);
-  font-family: var(--pyt-font-pixel, 'Ark Pixel 12', 'PingFang SC', monospace);
+  font-family: var(--pyt-font-pixel);
   image-rendering: pixelated;
   overflow: hidden;
 }

@@ -28,6 +28,11 @@ export interface ChapterEntry {
   startKc: number;
   /** PY43-KC-NNN 范围终点（含）。 */
   endKc: number;
+  /**
+   * P2 动机帧：「为什么先学这个」一句话，缓动机悬崖。课本顺序是 packId=43 硬约束不可改，
+   * 故只用动机帧帮初学者建立「这一章如何支撑后面的程序」的认知。
+   */
+  motivation: string;
 }
 
 export const CHAPTERS: ReadonlyArray<ChapterEntry> = [
@@ -38,6 +43,7 @@ export const CHAPTERS: ReadonlyArray<ChapterEntry> = [
     order: 1,
     startKc: 1,
     endKc: 7,
+    motivation: '先建立「计算 = 用规则处理信息」的直觉——后面所有代码，都是这套思维的具体化。',
   },
   {
     kcCode: 'variable_assignment',
@@ -46,6 +52,7 @@ export const CHAPTERS: ReadonlyArray<ChapterEntry> = [
     order: 2,
     startKc: 8,
     endKc: 16,
+    motivation: '先学会和 Python 解释器对话（变量 / 类型 / 输入输出），才能把想法写成能跑的代码。',
   },
   {
     kcCode: 'data_types_number_string_bool',
@@ -54,6 +61,11 @@ export const CHAPTERS: ReadonlyArray<ChapterEntry> = [
     order: 3,
     startKc: 17,
     endKc: 30,
+    // P2：第 3 章理论最重（进制/编码），动机帧讲清「为什么先学」，缓动机悬崖。
+    motivation:
+      '为什么先学「信息表示」？因为计算机只认 0 和 1——先搞懂数字、字符、进制是怎么被编码的，'
+      + '后面的分支、循环、数据结构才有「被处理的对象」。这是从「人话」翻译到「机器话」的桥，'
+      + '不必一次啃完 14 个知识点，跟着主线 5 个核心 KC 走通即可。',
   },
   {
     kcCode: 'list_tuple_set_dict',
@@ -64,6 +76,7 @@ export const CHAPTERS: ReadonlyArray<ChapterEntry> = [
     order: 4,
     startKc: 31,
     endKc: 38,
+    motivation: '有了数据，就用顺序 / 分支 / 循环让程序自己跑起来，把重复劳动交给机器。',
   },
   {
     kcCode: 'control_flow_if_else',
@@ -72,6 +85,7 @@ export const CHAPTERS: ReadonlyArray<ChapterEntry> = [
     order: 5,
     startKc: 39,
     endKc: 47,
+    motivation: '单个变量装不下复杂数据——列表 / 字典 / 集合让你成批地组织和处理信息。',
   },
   {
     kcCode: 'loop_for_while',
@@ -80,6 +94,7 @@ export const CHAPTERS: ReadonlyArray<ChapterEntry> = [
     order: 6,
     startKc: 48,
     endKc: 53,
+    motivation: '数据要能存下来、读回来、再分析，程序才从「一次性」变成「可积累」。',
   },
   {
     kcCode: 'function_def_args_return',
@@ -88,6 +103,7 @@ export const CHAPTERS: ReadonlyArray<ChapterEntry> = [
     order: 7,
     startKc: 54,
     endKc: 65,
+    motivation: '用函数 / 递归 / 类把重复模式抽象成可复用零件——这是从「会写」到「写好」的跃迁。',
   },
 ];
 

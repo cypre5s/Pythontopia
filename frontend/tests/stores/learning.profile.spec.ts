@@ -52,9 +52,10 @@ describe('learning profile store', () => {
     await store.sendTurn('我是计算机大一，目标是期末考试。');
 
     expect(openProfileInterview).toHaveBeenCalledTimes(1);
+    // 多轮记忆：首轮 priorHistory 为空数组，随轮次累积传给 ProfileAgent。
     expect(sendProfileTurn).toHaveBeenCalledWith(
       '00000000-0000-0000-0000-000000000001',
-      { userMessage: '我是计算机大一，目标是期末考试。' },
+      { userMessage: '我是计算机大一，目标是期末考试。', history: [] },
     );
     expect(store.profileInterview.dimensionsFilled).toHaveLength(8);
     expect(store.profile?.major).toBe('CS');

@@ -254,10 +254,10 @@ function isCompletable(quest: ClassroomQuestDto): boolean {
 <style scoped>
 .empty {
   padding: 14px;
-  background: #fdf3d0;
-  border-radius: 8px;
+  background: var(--pyt-color-bg-soft);
+  border-radius: var(--pyt-radius-lg);
   text-align: center;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
 }
 .quest-list {
   list-style: none;
@@ -268,8 +268,8 @@ function isCompletable(quest: ClassroomQuestDto): boolean {
 }
 .quest-card {
   background: #fffbe9;
-  border: 2px solid #c9a86b;
-  border-radius: 8px;
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-lg);
   padding: 12px;
   display: grid;
   gap: 8px;
@@ -286,18 +286,18 @@ header h3 {
 .badge {
   padding: 2px 8px;
   background: #2f5b8a;
-  color: #fff7e6;
+  color: var(--pyt-color-bg-elevated);
   border-radius: 999px;
   font-size: 12px;
 }
 .description {
   margin: 0;
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
   line-height: 1.55;
 }
 .meta {
   margin: 0;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
   font-size: 12px;
 }
 .actions {
@@ -309,16 +309,16 @@ header h3 {
 .actions button {
   padding: 6px 12px;
   border-radius: 6px;
-  border: 2px solid #6e4f1d;
+  border: 2px solid var(--pyt-color-text-hint);
   cursor: pointer;
 }
 .actions .primary {
-  background: #6e4f1d;
-  color: #fff7e6;
+  background: var(--pyt-color-text-hint);
+  color: var(--pyt-color-bg-elevated);
 }
 .actions .ghost {
-  background: #fff7e6;
-  color: #6e4f1d;
+  background: var(--pyt-color-bg-elevated);
+  color: var(--pyt-color-text-hint);
 }
 .actions button:disabled {
   opacity: 0.6;
@@ -336,11 +336,11 @@ header h3 {
   gap: 6px;
   align-items: center;
   font-size: 12px;
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
 }
 .hint {
   margin: 0;
   font-size: 12px;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
 }
 </style>

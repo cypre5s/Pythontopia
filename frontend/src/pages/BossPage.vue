@@ -16,6 +16,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import AppLayout from '@/app/AppLayout.vue';
+import { kcDisplayName } from '@/data/kcNames';
 import BossSprite from '@/components/boss/BossSprite.vue';
 import BossMoveEffect from '@/components/boss/BossMoveEffect.vue';
 import { useBossSession } from '@/composables/useBossSession';
@@ -217,7 +218,7 @@ const bossSpritePhase = computed<'idle' | 'hurt' | 'angry' | 'victory'>(() => {
           data-testid="boss-problem"
         >
           <h2 class="boss-problem__title">
-            难度 {{ session.problem.value.difficulty }} · KC {{ session.problem.value.kcCode }}
+            难度 {{ session.problem.value.difficulty }} · {{ kcDisplayName(session.problem.value.kcCode) }}
             <span
               v-if="session.problem.value.aiGenerated"
               class="badge badge--ai"
@@ -308,7 +309,10 @@ const bossSpritePhase = computed<'idle' | 'hurt' | 'angry' | 'victory'>(() => {
           </div>
         </article>
         <article class="boss-sprite">
-          <div class="boss-sprite-wrap" data-testid="boss-sprite-wrap">
+          <div
+            class="boss-sprite-wrap"
+            data-testid="boss-sprite-wrap"
+          >
             <BossMoveEffect
               :stage="session.stage.value"
               :trigger="effectTrigger"
@@ -381,7 +385,7 @@ const bossSpritePhase = computed<'idle' | 'hurt' | 'angry' | 'victory'>(() => {
   padding: 16px;
   min-height: calc(100dvh - 56px);
   background: radial-gradient(ellipse at center, #2c1408 0%, #0a0500 80%);
-  color: #fff7e6;
+  color: var(--pyt-color-bg-elevated);
   font-family: var(--pyt-font-pixel), 'PingFang SC', monospace;
 }
 .boss-head {
@@ -398,9 +402,9 @@ const bossSpritePhase = computed<'idle' | 'hurt' | 'angry' | 'victory'>(() => {
   font-family: inherit;
   font-size: 12px;
   padding: 4px 10px;
-  background: #6e4f1d;
-  color: #fff7e6;
-  border: 2px solid #4d3613;
+  background: var(--pyt-color-text-hint);
+  color: var(--pyt-color-bg-elevated);
+  border: 2px solid var(--pyt-color-text-primary);
   cursor: pointer;
 }
 .boss-title {
@@ -409,7 +413,7 @@ const bossSpritePhase = computed<'idle' | 'hurt' | 'angry' | 'victory'>(() => {
 }
 .boss-chapter {
   font-size: 11px;
-  color: #f1c453;
+  color: var(--pyt-color-gold);
 }
 .boss-name {
   font-size: 16px;
@@ -422,13 +426,13 @@ const bossSpritePhase = computed<'idle' | 'hurt' | 'angry' | 'victory'>(() => {
 .boss-stage-step {
   padding: 2px 8px;
   font-size: 11px;
-  border: 2px solid #6e4f1d;
-  color: #fff7e6;
+  border: 2px solid var(--pyt-color-text-hint);
+  color: var(--pyt-color-bg-elevated);
   background: rgba(110, 79, 29, 0.4);
   border-radius: 4px;
 }
 .boss-stage-step--current {
-  border-color: #f1c453;
+  border-color: var(--pyt-color-gold);
   background: rgba(241, 196, 83, 0.35);
 }
 .boss-stage-step--cleared {
@@ -449,7 +453,7 @@ const bossSpritePhase = computed<'idle' | 'hurt' | 'angry' | 'victory'>(() => {
   transform: translateX(-50%);
   font-size: 28px;
   font-weight: 800;
-  color: #fff7e6;
+  color: var(--pyt-color-bg-elevated);
   text-shadow:
     0 0 6px #ef4444,
     2px 2px 0 #4d1b14,
@@ -473,14 +477,14 @@ const bossSpritePhase = computed<'idle' | 'hurt' | 'angry' | 'victory'>(() => {
   width: 200px;
   height: 22px;
   margin: 8px auto 0;
-  background: linear-gradient(180deg, #2a1a05 0%, #1c0e02 100%);
-  border: 3px solid #6e4f1d;
+  background: linear-gradient(180deg, var(--pyt-color-shadow) 0%, #1c0e02 100%);
+  border: 3px solid var(--pyt-color-text-hint);
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
   overflow: hidden;
 }
 .boss-hpbar__fill {
   height: 100%;
-  background: linear-gradient(180deg, #ef4444 0%, #b8442d 60%, #7c1d1d 100%);
+  background: linear-gradient(180deg, #ef4444 0%, var(--pyt-color-danger) 60%, #7c1d1d 100%);
   transition: width 0.6s cubic-bezier(0.4, 0.2, 0.2, 1);
   box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.25);
 }
@@ -490,7 +494,7 @@ const bossSpritePhase = computed<'idle' | 'hurt' | 'angry' | 'victory'>(() => {
   display: grid;
   place-items: center;
   font-size: 12px;
-  color: #fff7e6;
+  color: var(--pyt-color-bg-elevated);
   text-shadow: 1px 1px 0 #000;
   letter-spacing: 0.5px;
 }
@@ -509,21 +513,21 @@ const bossSpritePhase = computed<'idle' | 'hurt' | 'angry' | 'victory'>(() => {
   display: flex;
   justify-content: space-between;
   font-size: 10px;
-  color: #f1c453;
+  color: var(--pyt-color-gold);
   letter-spacing: 0.5px;
   margin-bottom: 4px;
 }
 .boss-move-card__name {
   margin: 0 0 6px;
   font-size: 16px;
-  color: #ffd166;
+  color: var(--pyt-color-gold-bright);
   text-shadow: 1px 1px 0 #4d1b14;
 }
 .boss-move-card__preview {
   margin: 0 0 6px;
   font-size: 12px;
   line-height: 1.5;
-  color: #fff7e6;
+  color: var(--pyt-color-bg-elevated);
 }
 .boss-move-card__dmg {
   margin: 0;
@@ -533,7 +537,7 @@ const bossSpritePhase = computed<'idle' | 'hurt' | 'angry' | 'victory'>(() => {
 }
 .boss-timer {
   font-size: 13px;
-  color: #f1c453;
+  color: var(--pyt-color-gold);
 }
 .boss-state {
   flex: 1 1 auto;
@@ -543,21 +547,21 @@ const bossSpritePhase = computed<'idle' | 'hurt' | 'angry' | 'victory'>(() => {
   flex-direction: column;
   gap: 12px;
   font-size: 18px;
-  color: #fff7e6;
+  color: var(--pyt-color-bg-elevated);
 }
 .boss-state--error {
   color: #ff7466;
 }
 .boss-state--victory h2 {
   font-size: 28px;
-  color: #f1c453;
+  color: var(--pyt-color-gold);
 }
 .boss-reward {
   display: inline-block;
   padding: 2px 8px;
   margin: 0 4px;
   background: rgba(241, 196, 83, 0.25);
-  border: 1px solid #f1c453;
+  border: 1px solid var(--pyt-color-gold);
   border-radius: 4px;
 }
 .boss-storyboard {
@@ -579,7 +583,7 @@ const bossSpritePhase = computed<'idle' | 'hurt' | 'angry' | 'victory'>(() => {
 .boss-editor,
 .boss-sprite {
   background: rgba(15, 8, 2, 0.75);
-  border: 2px solid #4d3613;
+  border: 2px solid var(--pyt-color-text-primary);
   padding: 12px;
   display: flex;
   flex-direction: column;
@@ -589,7 +593,7 @@ const bossSpritePhase = computed<'idle' | 'hurt' | 'angry' | 'victory'>(() => {
 .boss-problem__title {
   margin: 0;
   font-size: 13px;
-  color: #f1c453;
+  color: var(--pyt-color-gold);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -600,7 +604,7 @@ const bossSpritePhase = computed<'idle' | 'hurt' | 'angry' | 'victory'>(() => {
   white-space: pre-wrap;
   font-size: 13px;
   line-height: 1.6;
-  color: #fff7e6;
+  color: var(--pyt-color-bg-elevated);
 }
 .badge {
   font-size: 10px;
@@ -614,18 +618,18 @@ const bossSpritePhase = computed<'idle' | 'hurt' | 'angry' | 'victory'>(() => {
 }
 .badge--golden {
   background: rgba(241, 196, 83, 0.2);
-  border: 1px solid #f1c453;
-  color: #f1c453;
+  border: 1px solid var(--pyt-color-gold);
+  color: var(--pyt-color-gold);
 }
 .boss-sample {
   background: rgba(0, 0, 0, 0.35);
   padding: 6px 10px;
-  border: 1px solid #6e4f1d;
+  border: 1px solid var(--pyt-color-text-hint);
 }
 .boss-sample summary {
   cursor: pointer;
   font-size: 12px;
-  color: #f1c453;
+  color: var(--pyt-color-gold);
 }
 .boss-sample__pair {
   display: grid;
@@ -637,7 +641,7 @@ const bossSpritePhase = computed<'idle' | 'hurt' | 'angry' | 'victory'>(() => {
   font-size: 12px;
   background: #1a0e04;
   padding: 6px;
-  border: 1px solid #4d3613;
+  border: 1px solid var(--pyt-color-text-primary);
   color: #fff;
 }
 .boss-editor__label {
@@ -645,14 +649,14 @@ const bossSpritePhase = computed<'idle' | 'hurt' | 'angry' | 'victory'>(() => {
   flex-direction: column;
   gap: 4px;
   font-size: 12px;
-  color: #f1c453;
+  color: var(--pyt-color-gold);
 }
 .boss-editor__label textarea {
   font-family: 'JetBrains Mono', monospace;
   font-size: 13px;
   background: #110a04;
   color: #f6f1e6;
-  border: 2px solid #4d3613;
+  border: 2px solid var(--pyt-color-text-primary);
   padding: 8px;
   resize: vertical;
   min-height: 220px;
@@ -666,16 +670,16 @@ const bossSpritePhase = computed<'idle' | 'hurt' | 'angry' | 'victory'>(() => {
   font-size: 12px;
   padding: 6px 14px;
   background: #c95e3a;
-  color: #fff7e6;
+  color: var(--pyt-color-bg-elevated);
   border: 2px solid #5a1a08;
   cursor: pointer;
   box-shadow: 0 2px 0 #5a1a08;
 }
 .boss-btn--primary {
-  background: #f1c453;
+  background: var(--pyt-color-gold);
   color: #2a1a08;
-  border-color: #6e4f1d;
-  box-shadow: 0 2px 0 #6e4f1d;
+  border-color: var(--pyt-color-text-hint);
+  box-shadow: 0 2px 0 var(--pyt-color-text-hint);
 }
 .boss-btn--next {
   background: #6bbf59;
@@ -695,7 +699,7 @@ const bossSpritePhase = computed<'idle' | 'hurt' | 'angry' | 'victory'>(() => {
   border-radius: 4px;
   font-size: 12px;
   background: rgba(0, 0, 0, 0.45);
-  border: 1px solid #4d3613;
+  border: 1px solid var(--pyt-color-text-primary);
 }
 .boss-result--passed {
   border-color: #6bbf59;
@@ -710,7 +714,7 @@ const bossSpritePhase = computed<'idle' | 'hurt' | 'angry' | 'victory'>(() => {
 }
 .boss-hint {
   font-style: italic;
-  color: #f1c453;
+  color: var(--pyt-color-gold);
 }
 .boss-sprite {
   align-items: center;
@@ -719,7 +723,7 @@ const bossSpritePhase = computed<'idle' | 'hurt' | 'angry' | 'victory'>(() => {
 }
 .boss-sprite__stage {
   margin: 0;
-  color: #f1c453;
+  color: var(--pyt-color-gold);
 }
 .boss-sprite__hp {
   margin: 0;

@@ -1,6 +1,5 @@
 package com.pythontopia.feature.arena
 
-import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -9,7 +8,9 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
@@ -30,8 +31,7 @@ class ChapterTowerViewModelTest {
 
     @Test
     fun `initial state loads chapter 1 with 10 levels`() = runTest {
-        val repo = mockk<ArenaRepository>(relaxed = true)
-        val vm = ChapterTowerViewModel(repo)
+        val vm = ChapterTowerViewModel()
         advanceUntilIdle()
         val state = vm.state.value
         assertEquals(1, state.selectedChapter)
@@ -42,8 +42,7 @@ class ChapterTowerViewModelTest {
 
     @Test
     fun `selectChapter changes chapter and reloads levels`() = runTest {
-        val repo = mockk<ArenaRepository>(relaxed = true)
-        val vm = ChapterTowerViewModel(repo)
+        val vm = ChapterTowerViewModel()
         advanceUntilIdle()
         vm.selectChapter(3)
         advanceUntilIdle()
@@ -54,8 +53,7 @@ class ChapterTowerViewModelTest {
 
     @Test
     fun `selectLevel sets selectedLevelId for unlocked level`() = runTest {
-        val repo = mockk<ArenaRepository>(relaxed = true)
-        val vm = ChapterTowerViewModel(repo)
+        val vm = ChapterTowerViewModel()
         advanceUntilIdle()
         vm.selectLevel("1-1")
         assertEquals("1-1", vm.state.value.selectedLevelId)
@@ -63,8 +61,7 @@ class ChapterTowerViewModelTest {
 
     @Test
     fun `selectLevel is no-op for locked level`() = runTest {
-        val repo = mockk<ArenaRepository>(relaxed = true)
-        val vm = ChapterTowerViewModel(repo)
+        val vm = ChapterTowerViewModel()
         advanceUntilIdle()
         vm.selectLevel("1-5")
         assertNull(vm.state.value.selectedLevelId)
@@ -72,8 +69,7 @@ class ChapterTowerViewModelTest {
 
     @Test
     fun `markCleared updates level and increments chapterCleared`() = runTest {
-        val repo = mockk<ArenaRepository>(relaxed = true)
-        val vm = ChapterTowerViewModel(repo)
+        val vm = ChapterTowerViewModel()
         advanceUntilIdle()
         assertEquals(0, vm.state.value.chapterCleared)
         vm.markCleared("1-1")
@@ -83,16 +79,14 @@ class ChapterTowerViewModelTest {
 
     @Test
     fun `level 10 is boss kind`() = runTest {
-        val repo = mockk<ArenaRepository>(relaxed = true)
-        val vm = ChapterTowerViewModel(repo)
+        val vm = ChapterTowerViewModel()
         advanceUntilIdle()
         assertEquals("boss", vm.state.value.levels.last().kind)
     }
 
     @Test
     fun `selectChapter out of range is no-op`() = runTest {
-        val repo = mockk<ArenaRepository>(relaxed = true)
-        val vm = ChapterTowerViewModel(repo)
+        val vm = ChapterTowerViewModel()
         advanceUntilIdle()
         vm.selectChapter(0)
         assertEquals(1, vm.state.value.selectedChapter)
@@ -102,16 +96,14 @@ class ChapterTowerViewModelTest {
 
     @Test
     fun `first level is always unlocked`() = runTest {
-        val repo = mockk<ArenaRepository>(relaxed = true)
-        val vm = ChapterTowerViewModel(repo)
+        val vm = ChapterTowerViewModel()
         advanceUntilIdle()
         assertTrue(vm.state.value.levels.first().unlocked)
     }
 
     @Test
     fun `levels have correct difficulty range`() = runTest {
-        val repo = mockk<ArenaRepository>(relaxed = true)
-        val vm = ChapterTowerViewModel(repo)
+        val vm = ChapterTowerViewModel()
         advanceUntilIdle()
         for (level in vm.state.value.levels) {
             assertTrue(level.difficulty in 1..5)
@@ -120,8 +112,7 @@ class ChapterTowerViewModelTest {
 
     @Test
     fun `all 7 chapters produce valid levels`() = runTest {
-        val repo = mockk<ArenaRepository>(relaxed = true)
-        val vm = ChapterTowerViewModel(repo)
+        val vm = ChapterTowerViewModel()
         advanceUntilIdle()
         for (ch in 1..7) {
             vm.selectChapter(ch)

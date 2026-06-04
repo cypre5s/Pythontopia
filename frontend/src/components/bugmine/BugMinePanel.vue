@@ -194,9 +194,9 @@ async function retry(): Promise<void> {
 <style scoped>
 .bug-mine {
   background: linear-gradient(180deg, #2a1d10 0%, #3d2c1a 100%);
-  color: #fff7e6;
-  border: 2px solid #6e4f1d;
-  border-radius: 10px;
+  color: var(--pyt-color-bg-elevated);
+  border: 2px solid var(--pyt-color-text-hint);
+  border-radius: var(--pyt-radius-lg);
   padding: 16px;
   display: grid;
   gap: 12px;
@@ -212,7 +212,7 @@ header h2 {
 .card {
   background: rgba(255, 251, 233, 0.92);
   color: #2b1c0b;
-  border-radius: 8px;
+  border-radius: var(--pyt-radius-lg);
   padding: 12px;
   display: grid;
   gap: 6px;
@@ -226,8 +226,8 @@ header h2 {
   border-radius: 4px;
 }
 .trace {
-  background: #2e2417;
-  color: #f1e5c8;
+  background: var(--pyt-color-terminal-bg);
+  color: var(--pyt-color-terminal-text);
   border-radius: 6px;
   padding: 8px;
   max-height: 220px;
@@ -240,9 +240,9 @@ header h2 {
   font-weight: 600;
 }
 .reveal {
-  background: #fff7e6;
-  color: #6e4f1d;
-  border: 2px solid #6e4f1d;
+  background: var(--pyt-color-bg-elevated);
+  color: var(--pyt-color-text-hint);
+  border: 2px solid var(--pyt-color-text-hint);
   padding: 6px 12px;
   border-radius: 6px;
   cursor: pointer;
@@ -251,7 +251,7 @@ header h2 {
 .retry {
   background: rgba(255, 251, 233, 0.92);
   color: #2b1c0b;
-  border-radius: 8px;
+  border-radius: var(--pyt-radius-lg);
   padding: 12px;
   display: grid;
   gap: 8px;
@@ -260,15 +260,15 @@ header h2 {
   font-family: monospace;
   padding: 8px;
   border-radius: 6px;
-  border: 1px solid #c9a86b;
+  border: 1px solid var(--pyt-color-border);
   background: #fffbe9;
   resize: vertical;
 }
 .retry .primary {
   align-self: start;
-  background: #6e4f1d;
-  color: #fff7e6;
-  border: 2px solid #4d3613;
+  background: var(--pyt-color-text-hint);
+  color: var(--pyt-color-bg-elevated);
+  border: 2px solid var(--pyt-color-text-primary);
   border-radius: 6px;
   padding: 6px 14px;
   cursor: pointer;
@@ -276,14 +276,14 @@ header h2 {
 }
 .status {
   font-size: 12px;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
   margin: 0;
 }
 .empty {
   padding: 14px;
-  background: #fdf3d0;
-  border-radius: 8px;
+  background: var(--pyt-color-bg-soft);
+  border-radius: var(--pyt-radius-lg);
   text-align: center;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
 }
 </style>

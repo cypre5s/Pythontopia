@@ -66,7 +66,8 @@ class RegisterViewModel @Inject constructor(
                 RegisterRequest(
                     username = current.username.trim(),
                     password = current.password,
-                    displayName = current.displayName.trim().takeIf { it.isNotEmpty() },
+                    displayName = current.displayName.trim().takeIf { it.isNotEmpty() }
+                        ?: current.username.trim(),
                 ),
             )
             _state.update {

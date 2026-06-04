@@ -78,9 +78,9 @@ const subline = computed(() => {
 
 <style scoped>
 .metric-card {
-  background: #fff7e6;
-  border: 2px solid #c9a86b;
-  border-radius: 8px;
+  background: var(--pyt-color-bg-elevated);
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-lg);
   padding: 10px 12px;
   min-width: 140px;
   display: flex;
@@ -88,34 +88,34 @@ const subline = computed(() => {
   gap: 4px;
 }
 .metric-card.trend-up {
-  border-color: #2f8f3c;
+  border-color: var(--pyt-color-success);
 }
 .metric-card.trend-down {
-  border-color: #b8442d;
+  border-color: var(--pyt-color-danger);
 }
 .header {
   display: flex;
   justify-content: space-between;
   font-size: 12px;
   font-weight: 600;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-hint);
 }
 .value {
   font-size: 22px;
   font-weight: 700;
-  color: #4d3613;
+  color: var(--pyt-color-text-primary);
 }
 .subline {
   font-size: 11px;
-  color: #8a6c2c;
+  color: var(--pyt-color-text-muted);
 }
 .trend {
   font-size: 16px;
 }
 .trend-up .trend {
-  color: #2f8f3c;
+  color: var(--pyt-color-success);
 }
 .trend-down .trend {
-  color: #b8442d;
+  color: var(--pyt-color-danger);
 }
 </style>

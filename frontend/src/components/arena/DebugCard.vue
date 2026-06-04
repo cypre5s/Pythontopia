@@ -52,7 +52,7 @@ function selectLine(idx: number): void {
 .debug-card { display: grid; gap: 12px; }
 .card-head { display: flex; align-items: center; gap: 8px; }
 .card-icon { font-size: 20px; }
-.card-head h3 { margin: 0; font-size: 16px; color: #ffd166; }
+.card-head h3 { margin: 0; font-size: 16px; color: var(--pyt-color-gold-bright); }
 .badge-bug { margin-left: auto; font-size: 11px; color: #ffb3b3; padding: 2px 8px; background: rgba(179,64,42,0.3); border: 1px solid #b3402a; border-radius: 3px; }
 .buggy-code { background: #0a1428; border: 2px solid #b3402a; padding: 8px; font-family: 'JetBrains Mono', monospace; font-size: 13px; }
 .code-line { display: flex; align-items: center; gap: 8px; padding: 2px 4px; cursor: pointer; border-radius: 2px; transition: background 0.15s; }

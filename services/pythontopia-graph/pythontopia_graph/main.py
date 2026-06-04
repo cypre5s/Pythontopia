@@ -15,6 +15,8 @@ from pythontopia_graph.llm.provider import (
 )
 from pythontopia_graph.routes.boss import router as boss_router
 from pythontopia_graph.routes.debug import router as debug_router
+from pythontopia_graph.routes.intent import router as intent_router
+from pythontopia_graph.routes.orchestrator import router as orchestrator_router
 from pythontopia_graph.routes.path import router as path_router
 from pythontopia_graph.routes.evaluation import router as evaluation_router
 from pythontopia_graph.routes.resource import router as resource_router
@@ -55,6 +57,8 @@ app.include_router(evaluation_router)
 app.include_router(boss_router)
 app.include_router(streaming_router)
 app.include_router(tutor_router)
+app.include_router(orchestrator_router)
+app.include_router(intent_router)
 
 
 @app.get("/healthz", response_model=HealthResponse)

@@ -1,12 +1,6 @@
 import { http } from './http';
-import type { CropTileDto } from './dto/CropTileDto';
 import type { CurriculumBootstrapResult } from './dto/CurriculumBootstrapResult';
 import type { MasterySnapshotDto } from './dto/MasterySnapshotDto';
-
-export async function fetchCrops(): Promise<CropTileDto[]> {
-  const response = await http.get<CropTileDto[]>('/api/world/crops');
-  return response.data;
-}
 
 export async function fetchMastery(): Promise<MasterySnapshotDto[]> {
   const response = await http.get<MasterySnapshotDto[]>('/api/learner/mastery');

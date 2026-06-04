@@ -49,6 +49,24 @@ uvicorn pythontopia_graph.main:app --host 0.0.0.0 --port 18091 --workers 1
 - `SparkProvider` 不持久化任何用户提交内容到上游模型供应商之外，所有 grounding / safety
   审查仍在本服务进行。
 
+## 多模态生成接入（文生图 / 配音 / 合成短视频）
+
+多模态能力统一接入**科大讯飞**，并复用与 Spark LLM 相同的讯飞控制台应用凭据
+（`PYT_SPARK_APP_ID` / `PYT_SPARK_API_KEY` / `PYT_SPARK_API_SECRET`），无需额外申请独立 key。
+
+| 能力 | 服务 | 必需 env | 缺失时降级 |
+| ---- | ---- | -------- | -------- |
+| 配音 TTS | `XfyunTtsService`（`tts-api.xfyun.cn/v2/tts`） | `PYT_SPARK_APP_ID/API_KEY/API_SECRET` | 前端 `speechSynthesis` 浏览器语音 |
+| 文生图 | `XfyunImageService`（讯飞星火 TTI，`PYT_SPARK_IMAGE_URL` 可覆盖） | 同上 | 本地占位 PNG（`degraded=true`，`MediaPlaceholderFactory` 内存生成） |
+| 短视频合成 | `StoryboardCompositionService`（图序列 + TTS 经 ffmpeg） | 同上 + 容器内 `ffmpeg` | 前端「图 + TTS + 动效」实时剧场（不落地 mp4） |
+
+降级原则：**任一凭据缺失或上游失败都不阻塞业务**，落到本地占位产物并打 `degraded=true` 标记落库
+（`media_asset` 表），保证无 apikey 时多模态验收链路仍可完整跑通；配置真实密钥后自动切回真实生成。
+多模态产物落盘在 `PYT_MEDIA_GENERATED_DIR`（默认 `./data/course-pack-43/generated-media`，不入 git、可重生）。
+
+> 注：讯飞未提供公开「文生视频」接口，故短视频走「文生图序列 + TTS 配音 → ffmpeg 程序化合成」路线，
+> 而非端到端文生视频模型（如 SeeDance）。
+
 ## RAG 嵌入接入
 
 - 当前 `pythontopia-rag` 默认使用 384 维 `HashEmbedder`；生产可切到 384 维 `BgeSmallEmbedder`。

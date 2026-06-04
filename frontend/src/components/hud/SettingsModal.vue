@@ -626,7 +626,7 @@ onUnmounted(() => {
   border: none;
   border-bottom: 3px solid transparent;
   color: var(--pyt-text-secondary);
-  font-family: var(--pyt-font-pixel, 'Ark Pixel 12', 'PingFang SC', monospace);
+  font-family: var(--pyt-font-pixel);
   font-size: 11px;
   cursor: pointer;
   transition: color 120ms, border-color 120ms, background 120ms;
@@ -767,7 +767,7 @@ onUnmounted(() => {
   color: var(--pyt-text-primary);
   padding: 4px 8px;
   border-radius: 2px;
-  font-family: var(--pyt-font-pixel, 'Ark Pixel 12', 'PingFang SC', monospace);
+  font-family: var(--pyt-font-pixel);
   font-size: 12px;
   cursor: pointer;
 }

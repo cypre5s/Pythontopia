@@ -120,7 +120,7 @@ class MineViewModelTest {
     @Test
     fun `submit pass clears failureCount and exposes pass result`() = runTest {
         givenSessionWithCards(sessionId = 1L, cards = listOf(sampleCard(101L, layer = 1)))
-        coEvery { repository.attempt(101L, any()) } returns MineAttempt(
+        coEvery { repository.attempt(1L, any()) } returns MineAttempt(
             cardId = 101L,
             code = "fixed",
             status = MineAttempt.STATUS_PASS,

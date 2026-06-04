@@ -84,9 +84,12 @@ describe('createPlayerSprite', () => {
     expect(handle.direction).toBe('UP');
     expect(handle.isJumping()).toBe(true);
 
-    const tweenConfig = vi.mocked(scene.tweens?.add).mock.calls[0]?.[0] as
-      | { onComplete?: () => void }
-      | undefined;
+    // 待机呼吸 tween（yoyo/repeat，无 onComplete）会与跳跃 tween 一起被记录，
+    // 跳跃落地 tween 是唯一带 onComplete 的，按此定位更稳健，不依赖调用顺序。
+    const tweenConfig = vi
+      .mocked(scene.tweens?.add)
+      .mock.calls.map((call) => call?.[0] as { onComplete?: () => void } | undefined)
+      .find((cfg) => typeof cfg?.onComplete === 'function');
     tweenConfig?.onComplete?.();
 
     expect(handle.isJumping()).toBe(false);

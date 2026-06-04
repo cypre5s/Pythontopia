@@ -145,30 +145,19 @@ class AuthRepositoryTest {
     }
 
     @Test
-    fun `register success persists same as login path`() = runTest {
-        val loginResponse = LoginResponse(
-            token = "jwt-new",
-            expiresAt = "2099-01-01T00:00:00Z",
-            user = AuthUserDto(id = 8L, username = "bob", role = "STUDENT", displayName = null),
-            refreshToken = null,
-        )
-        coEvery { api.register(any()) } returns loginResponse
+    fun `register success returns created user without persisting token`() = runTest {
+        val user = AuthUserDto(id = 8L, username = "bob", role = "STUDENT", displayName = "Bob")
+        coEvery { api.register(any()) } returns user
 
-        val outcome = repository.register(RegisterRequest("bob", "Strong1Pass"))
+        val outcome = repository.register(RegisterRequest("bob", "Strong1Pass", "Bob"))
 
         assertTrue(outcome is AuthOutcome.Success)
-        coVerify(exactly = 1) { api.register(RegisterRequest("bob", "Strong1Pass", null)) }
-        verify(exactly = 1) {
-            storage.save(
-                accessToken = "jwt-new",
-                refreshToken = null,
-                userId = 8L,
-                username = "bob",
-                role = "STUDENT",
-                displayName = null,
-                expiresAtEpochMs = any(),
-            )
-        }
+        val session = (outcome as AuthOutcome.Success).session
+        assertEquals(8L, session.userId)
+        assertEquals("bob", session.username)
+        coVerify(exactly = 1) { api.register(RegisterRequest("bob", "Strong1Pass", "Bob")) }
+        verify(exactly = 0) { storage.save(any(), any(), any(), any(), any(), any(), any()) }
+        verify(exactly = 0) { tokenHolder.setToken(any()) }
     }
 
     @Test
@@ -218,10 +207,7 @@ class AuthRepositoryTest {
     }
 
     @Test
-    fun `logout clears local session even when API throws`() = runTest {
-        every { storage.readRefreshToken() } returns "refresh-x"
-        coEvery { api.logout(any()) } throws IOException("server down")
-
+    fun `logout clears local session`() = runTest {
         repository.logout()
 
         verify(exactly = 1) { storage.clear() }

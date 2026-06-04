@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 
+from pythontopia_graph.agents.personalization import personalization_messages
 from pythontopia_graph.llm.provider import LlmProvider
 from pythontopia_graph.nodes.evidence_fetcher import EvidenceBundle
 from pythontopia_graph.schemas.resource import (
@@ -51,6 +52,7 @@ class MindMapAgent:
                     "kc_map 字段：以中心 KC 为 key，相关 KC code 数组为 value。"
                 ),
             },
+            *personalization_messages(request.profile_snapshot),
             {"role": "user", "content": ",".join(request.kc_codes)},
         ]
 

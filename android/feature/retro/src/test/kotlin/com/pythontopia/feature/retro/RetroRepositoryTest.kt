@@ -6,29 +6,18 @@ import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
-import okhttp3.mockwebserver.RecordedRequest
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
 import retrofit2.HttpException
 import retrofit2.Retrofit
 
-/**
- * 用 [MockWebServer] 验证 [RetroRepository] 通过 Retrofit 真正发出的请求路径 / 查询串 /
- * 反序列化结果，不 mock interface，把契约风险（端点拼错、Query 参数漏掉）也覆盖。
- */
 class RetroRepositoryTest {
 
-    private val json = Json {
-        ignoreUnknownKeys = true
-        explicitNulls = false
-    }
-
     private lateinit var server: MockWebServer
-    private lateinit var api: RetroApi
     private lateinit var repository: RetroRepository
 
     @BeforeEach
@@ -36,10 +25,12 @@ class RetroRepositoryTest {
         server = MockWebServer().apply { start() }
         val retrofit = Retrofit.Builder()
             .baseUrl(server.url("/"))
-            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .addConverterFactory(
+                Json { ignoreUnknownKeys = true; explicitNulls = false }
+                    .asConverterFactory("application/json".toMediaType()),
+            )
             .build()
-        api = retrofit.create(RetroApi::class.java)
-        repository = RetroRepository(api)
+        repository = RetroRepository(retrofit.create(RetroApi::class.java))
     }
 
     @AfterEach
@@ -48,150 +39,103 @@ class RetroRepositoryTest {
     }
 
     @Test
-    fun `thisWeek hits weekly endpoint with userId and decodes report`() = runTest {
-        server.enqueue(jsonResponse(SAMPLE_REPORT_JSON))
+    fun `thisWeek reads latest evaluation and maps it to report`() = runTest {
+        server.enqueue(jsonOk("[$EVALUATION_JSON]"))
 
-        val report = repository.thisWeek(userId = "alice", weekIndex = 2812L)
+        val report = repository.thisWeek(userId = "current-user")
 
-        val recorded = server.takeRequest()
-        assertEquals("GET", recorded.method)
-        assertEquals("/api/learner/retro/weekly", recorded.requestUrl?.encodedPath)
-        assertEquals("2812", recorded.requestUrl?.queryParameter("weekIndex"))
-        assertEquals("alice", recorded.requestUrl?.queryParameter("userId"))
-
-        assertEquals("rep-1", report.reportId)
-        assertEquals(2812L, report.weekIndex)
+        val request = server.takeRequest()
+        assertEquals("GET", request.method)
+        assertEquals("/api/learner/evaluations", request.requestUrl?.encodedPath)
+        assertEquals("1", request.requestUrl?.queryParameter("limit"))
+        assertEquals("501", report.reportId)
+        assertEquals("42", report.userId)
         assertEquals("2026-05-18", report.periodStart)
-        assertEquals(2, report.kcGains.size)
-        assertEquals("变量与赋值", report.kcGains.first().kcName)
-        assertEquals(0.12, report.kcGains.first().masteryDelta)
-        assertEquals(9, report.attempts)
-        assertEquals(2, report.bugMineCount)
-        assertEquals(1, report.generatedResources.size)
-        assertEquals("mindmap", report.generatedResources.first().resourceType)
+        assertEquals("2026-05-24", report.periodEnd)
+        assertEquals(2, report.attempts)
+        assertEquals(1, report.bugMineCount)
+        assertEquals(3, report.kcGains.size)
+        assertEquals("练习提交数", report.kcGains.first().kcName)
     }
 
     @Test
-    fun `pastWeeks issues count sequential requests with descending weekIndex`() = runTest {
-        repeat(3) { idx ->
-            server.enqueue(jsonResponse(reportJson(weekIndex = 2812L - (idx + 1))))
-        }
+    fun `thisWeek computes evaluation when list is empty`() = runTest {
+        server.enqueue(jsonOk("[]"))
+        server.enqueue(jsonOk(EVALUATION_JSON))
 
-        val past = repository.pastWeeks(userId = "alice", count = 3, baseWeekIndex = 2812L)
+        val report = repository.thisWeek(userId = "current-user")
 
-        assertEquals(listOf(2811L, 2810L, 2809L), past.map { it.weekIndex })
-        val orderedWeekParams = (1..3).map {
-            server.takeRequest().requestUrl?.queryParameter("weekIndex")
-        }
-        assertEquals(listOf("2811", "2810", "2809"), orderedWeekParams)
+        assertEquals("501", report.reportId)
+        assertEquals("/api/learner/evaluations?limit=1", server.takeRequest().path)
+        val compute = server.takeRequest()
+        assertEquals("POST", compute.method)
+        assertEquals("/api/learner/evaluations", compute.path)
+        assertTrue(compute.body.readUtf8().contains("\"periodDays\":7"))
     }
 
     @Test
-    fun `pastWeeks rejects non-positive count`() = runTest {
-        assertThrows<IllegalArgumentException> {
-            repository.pastWeeks(userId = "alice", count = 0, baseWeekIndex = 100L)
+    fun `pastWeeks reads recent evaluations after current one`() = runTest {
+        server.enqueue(jsonOk("[$EVALUATION_JSON,${evaluationJson(id = 502L, end = "2026-05-17")}]"))
+
+        val reports = repository.pastWeeks(userId = "current-user", count = 1)
+
+        assertEquals(1, reports.size)
+        assertEquals("502", reports.first().reportId)
+        assertEquals("2", server.takeRequest().requestUrl?.queryParameter("limit"))
+    }
+
+    @Test
+    fun `pastWeeks rejects non-positive count`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            kotlinx.coroutines.runBlocking { repository.pastWeeks(userId = "current-user", count = 0) }
         }
     }
 
     @Test
-    fun `markRead posts to read endpoint with reportId path`() = runTest {
-        server.enqueue(MockResponse().setResponseCode(204))
-
-        repository.markRead("report-77")
-
-        val recorded: RecordedRequest = server.takeRequest()
-        assertEquals("POST", recorded.method)
-        assertEquals("/api/learner/retro/report-77/read", recorded.requestUrl?.encodedPath)
-        assertEquals(0L, recorded.bodySize)
-    }
-
-    @Test
-    fun `markRead rejects blank reportId before hitting network`() = runTest {
-        assertThrows<IllegalArgumentException> {
-            repository.markRead("   ")
-        }
+    fun `markRead validates report id without hitting network`() = runTest {
+        repository.markRead("501")
         assertEquals(0, server.requestCount)
-    }
-
-    @Test
-    fun `thisWeek propagates 5xx via HttpException`() = runTest {
-        server.enqueue(
-            MockResponse()
-                .setResponseCode(500)
-                .setBody("""{"error":"boom"}"""),
-        )
-
-        val ex = assertThrows<HttpException> {
-            repository.thisWeek(userId = "alice", weekIndex = 1L)
+        assertThrows(IllegalArgumentException::class.java) {
+            kotlinx.coroutines.runBlocking { repository.markRead(" ") }
         }
-        assertEquals(500, ex.code())
     }
 
     @Test
-    fun `weekly report tolerates missing optional fields`() = runTest {
-        // 后端在 demo 阶段可能漏发 generatedResources / bugMineCount，
-        // 校验 DTO 默认值兜底（也间接验证 explicitNulls=false 的配置）。
-        server.enqueue(
-            jsonResponse(
-                """
-                {
-                  "reportId":"rep-min",
-                  "userId":"alice",
-                  "weekIndex":2812,
-                  "periodStart":"2026-05-18",
-                  "periodEnd":"2026-05-24"
-                }
-                """.trimIndent(),
-            ),
-        )
+    fun `thisWeek propagates server errors`() = runTest {
+        server.enqueue(MockResponse().setResponseCode(500).setBody("""{"error":"boom"}"""))
 
-        val report = repository.thisWeek(userId = "alice", weekIndex = 2812L)
+        val error = assertThrows(HttpException::class.java) {
+            kotlinx.coroutines.runBlocking { repository.thisWeek(userId = "current-user") }
+        }
 
-        assertEquals("rep-min", report.reportId)
-        assertTrue(report.kcGains.isEmpty())
-        assertTrue(report.generatedResources.isEmpty())
-        assertEquals(0, report.attempts)
-        assertEquals(0, report.bugMineCount)
+        assertEquals(500, error.code())
     }
 
-    private fun jsonResponse(body: String): MockResponse =
+    private fun jsonOk(body: String): MockResponse =
         MockResponse()
             .setResponseCode(200)
-            .addHeader("Content-Type", "application/json")
+            .setHeader("Content-Type", "application/json")
             .setBody(body)
 
-    private fun reportJson(weekIndex: Long): String = """
-        {
-          "reportId":"rep-$weekIndex",
-          "userId":"alice",
-          "weekIndex":$weekIndex,
-          "periodStart":"2026-05-${10 + weekIndex % 10}",
-          "periodEnd":"2026-05-${16 + weekIndex % 10}",
-          "kcGains":[],
-          "attempts":0,
-          "bugMineCount":0,
-          "generatedResources":[]
-        }
-    """.trimIndent()
+    private fun evaluationJson(id: Long, end: String): String = EVALUATION_JSON
+        .replace("\"id\":501", "\"id\":$id")
+        .replace("\"periodEnd\":\"2026-05-24\"", "\"periodEnd\":\"$end\"")
 
     private companion object {
-        const val SAMPLE_REPORT_JSON: String = """
+        const val EVALUATION_JSON = """
         {
-          "reportId":"rep-1",
-          "userId":"alice",
-          "weekIndex":2812,
-          "periodStart":"2026-05-18",
-          "periodEnd":"2026-05-24",
-          "kcGains":[
-            {"kcId":"kc-1","kcName":"变量与赋值","masteryDelta":0.12,"masteryAfter":0.62},
-            {"kcId":"kc-2","kcName":"if 条件","masteryDelta":0.07,"masteryAfter":0.55}
-          ],
-          "attempts":9,
-          "bugMineCount":2,
-          "generatedResources":[
-            {"resourceId":"res-1","title":"本周脑图","resourceType":"mindmap","url":"https://example.org/m.png","createdAt":"2026-05-24T02:00:00Z"}
-          ],
-          "read":false
+          "id":501,
+          "userId":42,
+          "packId":43,
+          "periodStart":"2026-05-18T00:00:00Z",
+          "periodEnd":"2026-05-24T00:00:00Z",
+          "narrativeSummary":"本周练习稳定",
+          "actedStatus":"PENDING",
+          "metrics":[
+            {"metricKey":"practice_attempts","value":2,"notes":"练习提交数"},
+            {"metricKey":"bug_mine_count","value":1,"notes":"Bug 修复数"},
+            {"metricKey":"mastery_delta","value":0.14,"denominator":0.62,"notes":"掌握度提升"}
+          ]
         }
         """
     }

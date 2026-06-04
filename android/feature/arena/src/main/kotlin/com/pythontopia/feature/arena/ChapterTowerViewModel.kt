@@ -9,11 +9,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import java.util.Locale
 
 @HiltViewModel
-class ChapterTowerViewModel @Inject constructor(
-    private val repository: ArenaRepository,
-) : ViewModel() {
+class ChapterTowerViewModel @Inject constructor() : ViewModel() {
 
     private val _state = MutableStateFlow(ChapterTowerUiState())
     val state: StateFlow<ChapterTowerUiState> = _state.asStateFlow()
@@ -47,23 +46,14 @@ class ChapterTowerViewModel @Inject constructor(
     private fun loadChapter(chapter: Int) {
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, errorMessage = null) }
-            try {
-                val levels = buildLevelsForChapter(chapter)
-                _state.update {
-                    it.copy(
-                        levels = levels,
-                        chapterCleared = levels.count { l -> l.cleared },
-                        chapterTotal = levels.size,
-                        isLoading = false,
-                    )
-                }
-            } catch (e: Exception) {
-                _state.update {
-                    it.copy(
-                        isLoading = false,
-                        errorMessage = e.message ?: "加载失败",
-                    )
-                }
+            val levels = buildLevelsForChapter(chapter)
+            _state.update {
+                it.copy(
+                    levels = levels,
+                    chapterCleared = levels.count { l -> l.cleared },
+                    chapterTotal = levels.size,
+                    isLoading = false,
+                )
             }
         }
     }
@@ -83,7 +73,7 @@ class ChapterTowerViewModel @Inject constructor(
                 kind = kind,
                 title = if (index == 10) "第${chapter}章 BOSS" else "第${index}关 · ${kindLabel(kind)}",
                 hint = "完成本关解锁下一关",
-                kcCodes = listOf("PY43-KC-${String.format("%03d", (chapter - 1) * 9 + index)}"),
+                kcCodes = listOf("PY43-KC-${String.format(Locale.ROOT, "%03d", (chapter - 1) * 9 + index)}"),
                 difficulty = minOf(index / 2 + 1, 5),
                 cleared = false,
                 unlocked = unlocked,
