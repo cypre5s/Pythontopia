@@ -38,7 +38,9 @@ export const router = createRouter({
     { path: '/field', redirect: '/world' },
     {
       path: '/bug-mine',
-      redirect: (to) => ({ path: '/world', query: to.query }),
+      name: 'bug-mine',
+      component: () => import('@/pages/BugMinePage.vue'),
+      meta: { requiresAuth: true },
     },
     {
       path: '/profile-room',

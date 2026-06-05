@@ -21,6 +21,10 @@ const DEFAULT_PROBLEM_ID = 476;
 onMounted(async () => {
   const target = problemId.value ?? DEFAULT_PROBLEM_ID;
   await learning.loadTrainingProblem(target);
+  const rawSession = route.query.bugMineSessionId;
+  if (typeof rawSession === 'string' && /^\d+$/.test(rawSession) && route.query.variant === '1') {
+    learning.setPendingVariantSession(Number(rawSession));
+  }
 });
 
 watch(problemId, async (id) => {

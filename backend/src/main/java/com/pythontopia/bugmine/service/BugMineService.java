@@ -17,9 +17,9 @@ import com.pythontopia.bugmine.graph.DebugAgentResponse;
 import com.pythontopia.bugmine.judge.CounterExampleSelector;
 import com.pythontopia.bugmine.judge.PythonTraceCollector;
 import com.pythontopia.bugmine.repository.BugMineRepository;
+import com.pythontopia.bugmine.repository.BugMineRepository.SessionContextRow;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.learner.event.LearningEvent;
-import com.pythontopia.learner.quest.dto.QuestStatus;
 import com.pythontopia.submission.dto.SubmissionCreateRequest;
 import com.pythontopia.submission.dto.SubmissionDto;
 import com.pythontopia.submission.dto.SubmissionSource;
@@ -28,7 +28,9 @@ import com.pythontopia.submission.dto.Verdict;
 import com.pythontopia.submission.repository.PracticeSubmissionRepository;
 import com.pythontopia.submission.repository.PublicProblemRepository;
 import com.pythontopia.submission.service.SubmissionService;
+import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
@@ -39,6 +41,7 @@ import org.springframework.transaction.annotation.Transactional;
  * Bug 矿洞调试会话服务，维护 OPEN → RESOLVED/ABANDONED 状态机：
  * {@code open} 仅接受未 PASSED 的提交，收集反例与变量轨迹后由 DebugAgent 生成分层提示卡；
  * {@code retrySubmit} 受单会话重试上限约束，通过即转 RESOLVED 并发布 DebugResolved 事件；
+ * {@code variantSubmit} 在 L5 对同 KC 变式题提交，通过后 mastery_confirmed 并 RESOLVED；
  * {@code close} 不可置回 OPEN，置为 ABANDONED 时发布 PracticeAbandoned 事件。
  */
 @Service
@@ -53,6 +56,7 @@ public class BugMineService {
   private final SubmissionService submissionService;
   private final ApplicationEventPublisher eventPublisher;
   private final ObjectMapper objectMapper;
+  private final BugMineProfileAdvisor profileAdvisor;
   private final int maxRetries;
 
   public BugMineService(
@@ -65,6 +69,7 @@ public class BugMineService {
       SubmissionService submissionService,
       ApplicationEventPublisher eventPublisher,
       ObjectMapper objectMapper,
+      BugMineProfileAdvisor profileAdvisor,
       @Value("${pythontopia.bugMine.maxRetriesPerSession:3}") int maxRetries) {
     this.repository = repository;
     this.submissionRepository = submissionRepository;
@@ -75,11 +80,23 @@ public class BugMineService {
     this.submissionService = submissionService;
     this.eventPublisher = eventPublisher;
     this.objectMapper = objectMapper;
+    this.profileAdvisor = profileAdvisor;
     this.maxRetries = maxRetries;
   }
 
   @Transactional
   public BugMineSessionDto open(Long userId, Long submissionId) {
+    Optional<Long> existing = repository.findSessionIdBySubmission(userId, submissionId);
+    if (existing.isPresent()) {
+      return enrichSession(
+          repository
+              .findSession(userId, existing.get())
+              .orElseThrow(
+                  () ->
+                      new BusinessException(
+                          HttpStatus.NOT_FOUND, "BUG_MINE_NOT_FOUND", "Bug 矿洞会话不存在")));
+    }
+
     SubmissionDto submission =
         submissionRepository
             .findSubmission(userId, submissionId)
@@ -93,17 +110,31 @@ public class BugMineService {
       throw new BusinessException(
           HttpStatus.CONFLICT, "SUBMISSION_ALREADY_PASSED", "已通过的提交无需进入 Bug 矿洞");
     }
+
+    String kcCode = problemRepository.findKcCode(submission.problemId());
+    SessionContextRow context = resolveContext(userId, submission.problemId(), submissionId);
+    int profileDepthTarget =
+        profileAdvisor.recommendedDepthTarget(context.masteryScore(), context.patternMatched());
+    Long variantProblemId =
+        problemRepository
+            .findVariantProblem(userId, submission.problemId(), kcCode)
+            .map(PublicProblemRepository.VariantProblem::id)
+            .orElse(null);
+
     Long sessionId =
         repository.insertSession(
-            userId, submissionId, submission.problemId(), submission.questId());
+            userId,
+            submissionId,
+            submission.problemId(),
+            submission.questId(),
+            variantProblemId,
+            profileDepthTarget);
 
     CounterExampleSelector.CounterExample counterExample =
         counterExampleSelector
             .findFirstFailing(submission.problemId(), submission.code())
             .orElseGet(
-                () ->
-                    new CounterExampleSelector.CounterExample(
-                        "", "", "", false));
+                () -> new CounterExampleSelector.CounterExample("", "", "", false));
 
     PythonTraceCollector.TraceResult traceResult =
         traceCollector.collect(submission.code(), counterExample.stdin());
@@ -113,7 +144,6 @@ public class BugMineService {
             .findJudgeResult(submissionId)
             .map(judge -> judge.verdict())
             .orElse(Verdict.WA);
-    String kcCode = problemRepository.findKcCode(submission.problemId());
     DebugAgentRequest request =
         new DebugAgentRequest(
             userId,
@@ -128,7 +158,8 @@ public class BugMineService {
                 counterExample.actual(),
                 buildDiffSummary(counterExample.expected(), counterExample.actual()),
                 counterExample.redacted()),
-            new DebugAgentRequest.VariableTracePayload(stepsFromTrace(traceResult), traceResult.truncated()),
+            new DebugAgentRequest.VariableTracePayload(
+                stepsFromTrace(traceResult), traceResult.truncated()),
             List.of());
     DebugAgentResponse response = debugAgentClient.analyse(request);
     if (response == null) {
@@ -163,24 +194,7 @@ public class BugMineService {
   @Transactional(readOnly = true)
   public List<BugMineErrorBookItemDto> errorBook(Long userId) {
     return repository.findOpenErrorBook(userId).stream()
-        .map(
-            row ->
-                new BugMineErrorBookItemDto(
-                    row.sessionId(),
-                    row.submissionId(),
-                    row.problemId(),
-                    row.questId(),
-                    row.kcCode(),
-                    row.problemTitle(),
-                    row.status(),
-                    row.retryCount(),
-                    row.depthLayer(),
-                    row.masteryScore(),
-                    row.mistakePatterns(),
-                    row.patternMatched(),
-                    row.openedAt(),
-                    resolveVariant(row.problemId(), row.kcCode()),
-                    depthSteps(row.depthLayer())))
+        .map(this::toErrorBookItem)
         .toList();
   }
 
@@ -194,6 +208,16 @@ public class BugMineService {
                 () ->
                     new BusinessException(
                         HttpStatus.NOT_FOUND, "BUG_MINE_CARD_NOT_FOUND", "卡片不存在"));
+    int requiredDepth = depthForCard(card.cardType());
+    if (session.depthLayer() < requiredDepth) {
+      throw new BusinessException(
+          HttpStatus.CONFLICT,
+          "BUG_MINE_DEPTH_LOCKED",
+          "当前深度 L" + session.depthLayer() + " 不足以解锁该卡片，请先完成上一层或重试失败后再下探。");
+    }
+    if (card.revealed()) {
+      return card;
+    }
     repository.revealCard(session.id(), cardId);
     repository.bumpDepthLayer(session.id(), depthForCard(card.cardType()));
     return repository
@@ -228,14 +252,42 @@ public class BugMineService {
                 session.questId(),
                 SubmissionSource.BUG_MINE_RETRY));
     if (submission.status() == SubmissionStatus.PASSED) {
-      repository.updateStatus(session.id(), BugMineSessionStatus.RESOLVED);
-      String kcCode = problemRepository.findKcCode(session.problemId());
-      if (kcCode != null && !kcCode.isBlank()) {
-        eventPublisher.publishEvent(
-            new LearningEvent.DebugResolved(userId, kcCode, session.problemId()));
-      }
+      resolveSession(userId, session.id(), session.problemId(), false);
     } else {
       repository.advanceDepthLayer(session.id());
+    }
+    return submission;
+  }
+
+  @Transactional
+  public SubmissionDto variantSubmit(Long userId, Long sessionId, String code) {
+    BugMineSessionDto session = find(userId, sessionId);
+    if (session.status() != BugMineSessionStatus.OPEN) {
+      throw new BusinessException(
+          HttpStatus.CONFLICT, "BUG_MINE_SESSION_CLOSED", "Bug 矿洞会话已关闭");
+    }
+    if (session.depthLayer() < 5) {
+      throw new BusinessException(
+          HttpStatus.CONFLICT,
+          "BUG_MINE_VARIANT_LOCKED",
+          "需下探到 L5 才能提交同 KC 变式掌握确认。");
+    }
+    if (session.variantProblem() == null) {
+      throw new BusinessException(
+          HttpStatus.CONFLICT, "BUG_MINE_VARIANT_MISSING", "当前会话没有可用的同 KC 变式题。");
+    }
+    SubmissionDto submission =
+        submissionService.submit(
+            userId,
+            new SubmissionCreateRequest(
+                session.variantProblem().id(),
+                code,
+                session.questId(),
+                SubmissionSource.BUG_MINE_VARIANT));
+    repository.updateVariantSubmission(session.id(), submission.id());
+    if (submission.status() == SubmissionStatus.PASSED) {
+      repository.markMasteryConfirmed(session.id());
+      resolveSession(userId, session.id(), session.variantProblem().id(), true);
     }
     return submission;
   }
@@ -249,7 +301,6 @@ public class BugMineService {
     }
     repository.updateStatus(session.id(), status);
     if (status == BugMineSessionStatus.ABANDONED) {
-      // 放弃调试：作为 emotion_persistence 维度的负向行为信号
       String kcCode = problemRepository.findKcCode(session.problemId());
       eventPublisher.publishEvent(
           new LearningEvent.PracticeAbandoned(userId, session.problemId(), kcCode));
@@ -263,8 +314,51 @@ public class BugMineService {
                         HttpStatus.INTERNAL_SERVER_ERROR, "BUG_MINE_CLOSE_FAILED", "关闭会话失败")));
   }
 
+  private void resolveSession(Long userId, Long sessionId, Long problemId, boolean masteryConfirmed) {
+    repository.updateStatus(sessionId, BugMineSessionStatus.RESOLVED);
+    if (masteryConfirmed) {
+      repository.markMasteryConfirmed(sessionId);
+    }
+    String kcCode = problemRepository.findKcCode(problemId);
+    if (kcCode != null && !kcCode.isBlank()) {
+      eventPublisher.publishEvent(
+          new LearningEvent.DebugResolved(userId, kcCode, problemId));
+    }
+  }
+
+  private BugMineErrorBookItemDto toErrorBookItem(BugMineRepository.ErrorBookRow row) {
+    String guidance =
+        profileAdvisor.guidanceLabel(row.profileDepthTarget(), row.patternMatched());
+    BugMineVariantProblemDto variant = toVariant(row.variantProblemId(), row.variantProblemTitle());
+    return new BugMineErrorBookItemDto(
+        row.sessionId(),
+        row.submissionId(),
+        row.problemId(),
+        row.questId(),
+        row.kcCode(),
+        row.problemTitle(),
+        row.status(),
+        row.retryCount(),
+        row.depthLayer(),
+        row.profileDepthTarget(),
+        guidance,
+        row.masteryScore(),
+        row.mistakePatterns(),
+        row.patternMatched(),
+        row.openedAt(),
+        variant,
+        depthSteps(row.depthLayer()));
+  }
+
   private BugMineSessionDto enrichSession(BugMineSessionDto session) {
-    String kcCode = problemRepository.findKcCode(session.problemId());
+    SessionContextRow context =
+        resolveContext(session.userId(), session.problemId(), session.submissionId());
+    int depthTarget =
+        session.profileDepthTarget() > 0
+            ? session.profileDepthTarget()
+            : profileAdvisor.recommendedDepthTarget(
+                context.masteryScore(), context.patternMatched());
+    String guidance = profileAdvisor.guidanceLabel(depthTarget, context.patternMatched());
     return new BugMineSessionDto(
         session.id(),
         session.userId(),
@@ -274,21 +368,28 @@ public class BugMineService {
         session.status(),
         session.retryCount(),
         session.depthLayer(),
+        depthTarget,
+        session.masteryConfirmed(),
+        session.variantSubmissionId(),
         session.openedAt(),
         session.closedAt(),
-        resolveVariant(session.problemId(), kcCode),
+        session.variantProblem(),
+        guidance,
+        depthSteps(session.depthLayer()),
         session.cards());
   }
 
-  private BugMineVariantProblemDto resolveVariant(Long problemId, String kcCode) {
-    return problemRepository
-        .findVariantProblem(problemId, kcCode)
-        .map(variant -> new BugMineVariantProblemDto(variant.id(), variant.title()))
-        .orElse(null);
+  private SessionContextRow resolveContext(Long userId, Long problemId, Long submissionId) {
+    return repository
+        .findSessionContext(userId, problemId, submissionId)
+        .orElse(new SessionContextRow(BigDecimal.ZERO, List.of(), false));
   }
 
-  private DebugAgentRequest.VariableTracePayload toRequestTrace(PythonTraceCollector.TraceResult trace) {
-    return new DebugAgentRequest.VariableTracePayload(stepsFromTrace(trace), trace.truncated());
+  private BugMineVariantProblemDto toVariant(Long variantProblemId, String title) {
+    if (variantProblemId == null) {
+      return null;
+    }
+    return new BugMineVariantProblemDto(variantProblemId, title);
   }
 
   private List<DebugAgentRequest.TraceStep> stepsFromTrace(PythonTraceCollector.TraceResult trace) {
@@ -328,7 +429,7 @@ public class BugMineService {
             case 3 -> BugMineCardType.HINT_LAYER_3;
             default -> throw new IllegalStateException("Unknown hint layer " + layer.layer());
           };
-      persistCard(sessionId, type, layer, layer.layer() == 1);
+      persistCard(sessionId, type, layer, false);
     }
   }
 
@@ -362,7 +463,6 @@ public class BugMineService {
   private String buildDiffSummary(String expected, String actual) {
     String[] e = expected == null ? new String[0] : expected.split("\\n", -1);
     String[] a = actual == null ? new String[0] : actual.split("\\n", -1);
-    ArrayNode lines = objectMapper.createArrayNode();
     int max = Math.max(e.length, a.length);
     int reported = 0;
     StringBuilder diffSummary = new StringBuilder();

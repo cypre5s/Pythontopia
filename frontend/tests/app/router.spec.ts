@@ -21,11 +21,10 @@ describe('app router building routes', () => {
     expect(resolved.name).toBe(name);
   });
 
-  it('R-13: /bug-mine 透传 query（如 ?side=east）到 /world', () => {
-    const resolved = router.resolve('/bug-mine?side=east');
-    // function-form redirect 在 vue-router 中 redirect 字段是 function；
-    // resolve 后 matched 仍能命中（matched.length > 0）
-    expect(resolved.matched.length).toBeGreaterThan(0);
+  it('R-14: /bug-mine 为独立错题矿洞页并保留 query', () => {
+    const resolved = router.resolve('/bug-mine?submissionId=99');
+    expect(resolved.name).toBe('bug-mine');
+    expect(resolved.query.submissionId).toBe('99');
   });
 
   it('R-13: catch-all 404 命中未注册路径', () => {

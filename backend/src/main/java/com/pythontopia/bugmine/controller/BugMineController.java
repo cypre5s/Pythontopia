@@ -71,6 +71,15 @@ public class BugMineController {
     return service.retrySubmit(user.userId(), id, request.code());
   }
 
+  @PostMapping("/sessions/{id}/variant-submit")
+  public SubmissionDto variantSubmit(
+      @CurrentUser CurrentUserPrincipal user,
+      @PathVariable Long id,
+      @Valid @RequestBody BugMineRetryRequest request) {
+    requireStudent(user);
+    return service.variantSubmit(user.userId(), id, request.code());
+  }
+
   @PostMapping("/sessions/{id}/close")
   public BugMineSessionDto close(
       @CurrentUser CurrentUserPrincipal user,

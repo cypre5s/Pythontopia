@@ -58,9 +58,35 @@ public class PublicProblemRepository {
         "SELECT kc_code FROM course_problem WHERE id = ?", String.class, problemId);
   }
 
-  public Optional<VariantProblem> findVariantProblem(Long problemId, String kcCode) {
+  public Optional<VariantProblem> findVariantProblem(Long userId, Long problemId, String kcCode) {
     if (kcCode == null || kcCode.isBlank()) {
       return Optional.empty();
+    }
+    Optional<VariantProblem> fresh =
+        jdbcTemplate
+            .query(
+                """
+                SELECT p.id, p.title
+                FROM course_problem p
+                WHERE p.kc_code = ? AND p.id <> ?
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM practice_submission ps
+                    WHERE ps.user_id = ?
+                      AND ps.problem_id = p.id
+                      AND ps.status = 'PASSED'
+                  )
+                ORDER BY p.id
+                LIMIT 1
+                """,
+                (rs, rowNum) -> new VariantProblem(rs.getLong("id"), rs.getString("title")),
+                kcCode,
+                problemId,
+                userId)
+            .stream()
+            .findFirst();
+    if (fresh.isPresent()) {
+      return fresh;
     }
     return jdbcTemplate
         .query(

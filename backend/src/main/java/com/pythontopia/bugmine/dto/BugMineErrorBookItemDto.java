@@ -14,6 +14,8 @@ public record BugMineErrorBookItemDto(
     BugMineSessionStatus status,
     int retryCount,
     int depthLayer,
+    int profileDepthTarget,
+    String profileGuidance,
     BigDecimal masteryScore,
     List<String> mistakePatterns,
     boolean patternMatched,

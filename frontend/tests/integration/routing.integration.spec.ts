@@ -37,6 +37,7 @@ describe('routing.integration: 完整路由表（R-13 大爆炸）', () => {
     ['/problems', 'problems'],
     ['/examples', 'examples'],
     ['/training', 'training'],
+    ['/bug-mine', 'bug-mine'],
     ['/board', 'board'],
     ['/review-hall', 'review-hall'],
     ['/teacher', 'teacher'],
@@ -76,15 +77,10 @@ describe('routing.integration: 完整路由表（R-13 大爆炸）', () => {
     expect(router.currentRoute.value.path).toBe(to);
   });
 
-  it('/bug-mine?side=east push 后 query 透传到 /world', async () => {
-    await router.push('/bug-mine?side=east');
-    expect(router.currentRoute.value.path).toBe('/world');
-    expect(router.currentRoute.value.query.side).toBe('east');
-  });
-
-  it('/bug-mine?side=west push 后 query 透传', async () => {
-    await router.push('/bug-mine?side=west');
-    expect(router.currentRoute.value.query.side).toBe('west');
+  it('/bug-mine?submissionId=42 push 后保留 query', async () => {
+    await router.push('/bug-mine?submissionId=42');
+    expect(router.currentRoute.value.path).toBe('/bug-mine');
+    expect(router.currentRoute.value.query.submissionId).toBe('42');
   });
 
   it.each([

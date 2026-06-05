@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { useLearningStore } from '@stores/learning';
 import { useToastStore } from '@stores/toast';
 import { playSfx } from '@/composables/useAudio';
@@ -14,6 +14,16 @@ import TutorPanel from '@/components/tutor/TutorPanel.vue';
 const learning = useLearningStore();
 const toast = useToastStore();
 const router = useRouter();
+const route = useRoute();
+
+const variantBugMineSessionId = computed<number | null>(() => {
+  const raw = route.query.bugMineSessionId;
+  if (typeof raw === 'string' && /^\d+$/.test(raw)) {
+    return Number(raw);
+  }
+  return null;
+});
+const isVariantMode = computed<boolean>(() => route.query.variant === '1' && variantBugMineSessionId.value != null);
 
 const problem = computed(() => learning.training.problem);
 
@@ -80,6 +90,27 @@ async function submit(): Promise<void> {
     return;
   }
   try {
+    if (isVariantMode.value && variantBugMineSessionId.value != null) {
+      const result = await learning.submitBugMineVariant(code, variantBugMineSessionId.value);
+      if (!result) {
+        playSfx('sfx_error');
+        toast.show(learning.bugMine.lastError ?? '变式提交失败', 'error');
+        return;
+      }
+      if (result.status === 'PASSED') {
+        playSfx('sfx_jingle_complete');
+        toast.show('L5 变式掌握确认通过，错题矿洞会话已关闭。', 'success');
+        await router.push({
+          path: '/bug-mine',
+          query: { sessionId: String(variantBugMineSessionId.value) },
+        });
+      } else {
+        playSfx('sfx_error');
+        toast.show('变式仍未通过，请继续调整。', 'error');
+      }
+      return;
+    }
+
     const detail = await learning.submitToServer({
       problemId: problem.value.id,
       code: learning.training.code,

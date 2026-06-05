@@ -42,6 +42,7 @@ import {
   getBugMineSession,
   revealBugMineCard,
   retryBugMineSubmit,
+  variantBugMineSubmit,
 } from '@/api/bugMine';
 import {
   acceptEvaluationPath,
@@ -205,9 +206,11 @@ export interface BugMineState {
   errorBook: BugMineErrorBookItemDto[];
   errorBookLoading: boolean;
   errorBookError: string | null;
+  pendingVariantSessionId: number | null;
   loading: boolean;
   lastError: string | null;
   lastRetry: SubmissionDto | null;
+  lastVariant: SubmissionDto | null;
 }
 
 export type EvaluationPhase = 'idle' | 'running' | 'ready' | 'error';
@@ -277,9 +280,11 @@ export const useLearningStore = defineStore('learning', {
       errorBook: [] as BugMineErrorBookItemDto[],
       errorBookLoading: false,
       errorBookError: null as string | null,
+      pendingVariantSessionId: null as number | null,
       loading: false,
       lastError: null as string | null,
       lastRetry: null as SubmissionDto | null,
+      lastVariant: null as SubmissionDto | null,
     } as BugMineState,
     evaluation: {
       list: [] as EvaluationDto[],
@@ -694,14 +699,34 @@ export const useLearningStore = defineStore('learning', {
     async revealBugMineCardById(cardId: number): Promise<void> {
       if (!this.bugMine.session) return;
       const sessionId = this.bugMine.session.id;
-      const updated = await revealBugMineCard(sessionId, cardId);
-      this.bugMine.session = {
-        ...this.bugMine.session,
-        cards: this.bugMine.session.cards.map((card) =>
-          card.id === updated.id ? { ...card, revealed: true } : card,
-        ),
-      };
+      await revealBugMineCard(sessionId, cardId);
+      this.bugMine.session = await getBugMineSession(sessionId);
       await this.loadBugMineErrorBook();
+    },
+    setPendingVariantSession(sessionId: number | null): void {
+      this.bugMine.pendingVariantSessionId = sessionId;
+    },
+    async submitBugMineVariant(code: string, sessionId?: number): Promise<SubmissionDto | null> {
+      const targetSessionId = sessionId ?? this.bugMine.pendingVariantSessionId ?? this.bugMine.session?.id;
+      if (targetSessionId == null) return null;
+      this.bugMine.loading = true;
+      this.bugMine.lastError = null;
+      try {
+        const result = await variantBugMineSubmit(targetSessionId, { code });
+        this.bugMine.lastVariant = result;
+        this.bugMine.session = await getBugMineSession(targetSessionId);
+        await this.loadBugMineErrorBook();
+        if (result.status === 'PASSED') {
+          this.bugMine.pendingVariantSessionId = null;
+          await this.loadTodayQuests();
+        }
+        return result;
+      } catch (error) {
+        this.bugMine.lastError = error instanceof Error ? error.message : String(error);
+        return null;
+      } finally {
+        this.bugMine.loading = false;
+      }
     },
     async loadEvaluations(limit = 4): Promise<void> {
       this.evaluation.loading = true;

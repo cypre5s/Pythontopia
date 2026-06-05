@@ -43,7 +43,7 @@ function onDialogNavigate(e: Event): void {
   if (route.startsWith('/bug-mine')) {
     world.setPendingTravel('mine_south', BUG_MINE_ENTRY_TILE);
     window.dispatchEvent(new CustomEvent('pythontopia:world-travel'));
-    void router.push({ path: '/world', query: { goto: 'mine_south' } });
+    void router.push(route);
     return;
   }
   void router.push(route);

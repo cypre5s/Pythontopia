@@ -48,6 +48,17 @@ export async function retryBugMineSubmit(
   return response.data;
 }
 
+export async function variantBugMineSubmit(
+  sessionId: number,
+  request: BugMineRetryRequest,
+): Promise<SubmissionDto> {
+  const response = await http.post<SubmissionDto>(
+    `/api/bug-mine/sessions/${sessionId}/variant-submit`,
+    request,
+  );
+  return response.data;
+}
+
 export async function closeBugMineSession(
   sessionId: number,
   status: BugMineSessionStatus,

@@ -31,9 +31,14 @@ export interface BugMineSessionDto {
   status: BugMineSessionStatus;
   retryCount: number;
   depthLayer: number;
+  profileDepthTarget: number;
+  masteryConfirmed: boolean;
+  variantSubmissionId: number | null;
   openedAt: string;
   closedAt: string | null;
   variantProblem: BugMineVariantProblemDto | null;
+  profileGuidance: string;
+  depthSteps: BugMineDepthStepDto[];
   cards: BugMineCardDto[];
 }
 
@@ -55,6 +60,8 @@ export interface BugMineErrorBookItemDto {
   status: BugMineSessionStatus;
   retryCount: number;
   depthLayer: number;
+  profileDepthTarget: number;
+  profileGuidance: string;
   masteryScore: number;
   mistakePatterns: string[];
   patternMatched: boolean;

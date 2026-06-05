@@ -7,6 +7,7 @@ import com.pythontopia.bugmine.dto.BugMineCardDto;
 import com.pythontopia.bugmine.dto.BugMineCardType;
 import com.pythontopia.bugmine.dto.BugMineSessionDto;
 import com.pythontopia.bugmine.dto.BugMineSessionStatus;
+import com.pythontopia.bugmine.dto.BugMineVariantProblemDto;
 import java.math.BigDecimal;
 import java.sql.Array;
 import java.sql.PreparedStatement;
@@ -25,6 +26,16 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class BugMineRepository {
 
+  private static final String SESSION_SELECT =
+      """
+      SELECT s.id, s.user_id, s.submission_id, s.problem_id, s.quest_id, s.status,
+             s.retry_count, s.depth_layer, s.opened_at, s.closed_at,
+             s.variant_problem_id, s.variant_submission_id, s.mastery_confirmed, s.profile_depth_target,
+             vp.title AS variant_problem_title
+      FROM bug_mine_session s
+      LEFT JOIN course_problem vp ON vp.id = s.variant_problem_id
+      """;
+
   private final JdbcTemplate jdbcTemplate;
   private final ObjectMapper objectMapper;
 
@@ -33,7 +44,13 @@ public class BugMineRepository {
     this.objectMapper = objectMapper;
   }
 
-  public Long insertSession(Long userId, Long submissionId, Long problemId, Long questId) {
+  public Long insertSession(
+      Long userId,
+      Long submissionId,
+      Long problemId,
+      Long questId,
+      Long variantProblemId,
+      int profileDepthTarget) {
     GeneratedKeyHolder keyHolder = new GeneratedKeyHolder();
     try {
       jdbcTemplate.update(
@@ -42,8 +59,9 @@ public class BugMineRepository {
                 connection.prepareStatement(
                     """
                     INSERT INTO bug_mine_session (
-                      user_id, submission_id, problem_id, quest_id, status
-                    ) VALUES (?, ?, ?, ?, 'OPEN')
+                      user_id, submission_id, problem_id, quest_id, status,
+                      variant_problem_id, profile_depth_target
+                    ) VALUES (?, ?, ?, ?, 'OPEN', ?, ?)
                     """,
                     new String[] {"id"});
             ps.setLong(1, userId);
@@ -54,6 +72,12 @@ public class BugMineRepository {
             } else {
               ps.setLong(4, questId);
             }
+            if (variantProblemId == null) {
+              ps.setNull(5, java.sql.Types.BIGINT);
+            } else {
+              ps.setLong(5, variantProblemId);
+            }
+            ps.setInt(6, profileDepthTarget);
             return ps;
           },
           keyHolder);
@@ -68,6 +92,86 @@ public class BugMineRepository {
       throw new IllegalStateException("bug_mine_session insert returned no key");
     }
     return key.longValue();
+  }
+
+  public Optional<Long> findSessionIdBySubmission(Long userId, Long submissionId) {
+    return jdbcTemplate
+        .query(
+            "SELECT id FROM bug_mine_session WHERE user_id = ? AND submission_id = ?",
+            (rs, rowNum) -> rs.getLong("id"),
+            userId,
+            submissionId)
+        .stream()
+        .findFirst();
+  }
+
+  public Optional<SessionContextRow> findSessionContext(
+      Long userId, Long problemId, Long submissionId) {
+    return jdbcTemplate
+        .query(
+            """
+            SELECT COALESCE(km.mastery_score, 0.000) AS mastery_score,
+                   COALESCE(profile_tags.tags, ARRAY[]::text[]) AS mistake_patterns,
+                   EXISTS (
+                     SELECT 1
+                     FROM unnest(COALESCE(profile_tags.tags, ARRAY[]::text[])) AS tag(value)
+                     WHERE tag.value <> ''
+                       AND (
+                         upper(tag.value) = COALESCE(jr.verdict, '')
+                         OR lower(COALESCE(jr.failure_reason, '')) LIKE '%' || lower(tag.value) || '%'
+                         OR lower(COALESCE(p.common_mistakes::text, '')) LIKE '%' || lower(tag.value) || '%'
+                       )
+                   ) AS pattern_matched
+            FROM course_problem p
+            LEFT JOIN kc_mastery km ON km.user_id = ? AND km.kc_code = p.kc_code
+            LEFT JOIN judge_result jr ON jr.submission_id = ?
+            LEFT JOIN LATERAL (
+              SELECT ARRAY(
+                SELECT DISTINCT tag
+                FROM (
+                  SELECT jsonb_array_elements_text(
+                    CASE
+                      WHEN jsonb_typeof(lp.dimensions #> '{error_pattern,tags}') = 'array'
+                        THEN lp.dimensions #> '{error_pattern,tags}'
+                      ELSE '[]'::jsonb
+                    END
+                  ) AS tag
+                  UNION ALL
+                  SELECT jsonb_array_elements_text(
+                    CASE
+                      WHEN jsonb_typeof(lp.error_patterns -> 'common_categories') = 'array'
+                        THEN lp.error_patterns -> 'common_categories'
+                      ELSE '[]'::jsonb
+                    END
+                  ) AS tag
+                  UNION ALL
+                  SELECT jsonb_array_elements_text(
+                    CASE
+                      WHEN jsonb_typeof(lp.error_patterns -> 'frequent_kc_codes') = 'array'
+                        THEN lp.error_patterns -> 'frequent_kc_codes'
+                      ELSE '[]'::jsonb
+                    END
+                  ) AS tag
+                ) collected
+                WHERE tag IS NOT NULL AND tag <> ''
+                LIMIT 5
+              ) AS tags
+              FROM learner_profile lp
+              WHERE lp.user_id = ?
+            ) profile_tags ON TRUE
+            WHERE p.id = ?
+            """,
+            (rs, rowNum) ->
+                new SessionContextRow(
+                    rs.getBigDecimal("mastery_score"),
+                    readTextArray(rs, "mistake_patterns"),
+                    rs.getBoolean("pattern_matched")),
+            userId,
+            submissionId,
+            userId,
+            problemId)
+        .stream()
+        .findFirst();
   }
 
   public void insertCard(Long sessionId, BugMineCardType type, JsonNode payload, boolean revealed) {
@@ -87,12 +191,7 @@ public class BugMineRepository {
   public Optional<BugMineSessionDto> findSession(Long userId, Long sessionId) {
     return jdbcTemplate
         .query(
-            """
-            SELECT id, user_id, submission_id, problem_id, quest_id, status,
-                   retry_count, depth_layer, opened_at, closed_at
-            FROM bug_mine_session
-            WHERE id = ? AND user_id = ?
-            """,
+            SESSION_SELECT + " WHERE s.id = ? AND s.user_id = ?",
             (rs, rowNum) -> mapSession(rs),
             sessionId,
             userId)
@@ -104,12 +203,7 @@ public class BugMineRepository {
   public Optional<BugMineSessionDto> findByIdInternal(Long sessionId) {
     return jdbcTemplate
         .query(
-            """
-            SELECT id, user_id, submission_id, problem_id, quest_id, status,
-                   retry_count, depth_layer, opened_at, closed_at
-            FROM bug_mine_session
-            WHERE id = ?
-            """,
+            SESSION_SELECT + " WHERE s.id = ?",
             (rs, rowNum) -> mapSession(rs),
             sessionId)
         .stream()
@@ -163,6 +257,19 @@ public class BugMineRepository {
         sessionId);
   }
 
+  public void updateVariantSubmission(Long sessionId, Long submissionId) {
+    jdbcTemplate.update(
+        "UPDATE bug_mine_session SET variant_submission_id = ? WHERE id = ?",
+        submissionId,
+        sessionId);
+  }
+
+  public void markMasteryConfirmed(Long sessionId) {
+    jdbcTemplate.update(
+        "UPDATE bug_mine_session SET mastery_confirmed = TRUE WHERE id = ?",
+        sessionId);
+  }
+
   public int incrementRetry(Long sessionId) {
     return jdbcTemplate.update(
         "UPDATE bug_mine_session SET retry_count = retry_count + 1 WHERE id = ?",
@@ -196,7 +303,10 @@ public class BugMineRepository {
                s.status,
                s.retry_count,
                s.depth_layer,
+               s.profile_depth_target,
                s.opened_at,
+               s.variant_problem_id,
+               vp.title AS variant_problem_title,
                p.kc_code,
                p.title AS problem_title,
                COALESCE(km.mastery_score, 0.000) AS mastery_score,
@@ -213,6 +323,7 @@ public class BugMineRepository {
                ) AS pattern_matched
         FROM bug_mine_session s
         JOIN course_problem p ON p.id = s.problem_id
+        LEFT JOIN course_problem vp ON vp.id = s.variant_problem_id
         LEFT JOIN kc_mastery km ON km.user_id = s.user_id AND km.kc_code = p.kc_code
         LEFT JOIN judge_result jr ON jr.submission_id = s.submission_id
         LEFT JOIN LATERAL (
@@ -263,10 +374,13 @@ public class BugMineRepository {
                 BugMineSessionStatus.valueOf(rs.getString("status")),
                 rs.getInt("retry_count"),
                 rs.getInt("depth_layer"),
+                rs.getInt("profile_depth_target"),
                 rs.getBigDecimal("mastery_score"),
                 readTextArray(rs, "mistake_patterns"),
                 rs.getBoolean("pattern_matched"),
-                offset(rs, "opened_at")),
+                offset(rs, "opened_at"),
+                (Long) rs.getObject("variant_problem_id"),
+                rs.getString("variant_problem_title")),
         userId);
   }
 
@@ -290,13 +404,23 @@ public class BugMineRepository {
         session.status(),
         session.retryCount(),
         session.depthLayer(),
+        session.profileDepthTarget(),
+        session.masteryConfirmed(),
+        session.variantSubmissionId(),
         session.openedAt(),
         session.closedAt(),
         session.variantProblem(),
+        session.profileGuidance(),
+        session.depthSteps(),
         cards);
   }
 
   private BugMineSessionDto mapSession(ResultSet rs) throws SQLException {
+    Long variantProblemId = (Long) rs.getObject("variant_problem_id");
+    BugMineVariantProblemDto variant =
+        variantProblemId == null
+            ? null
+            : new BugMineVariantProblemDto(variantProblemId, rs.getString("variant_problem_title"));
     return new BugMineSessionDto(
         rs.getLong("id"),
         rs.getLong("user_id"),
@@ -306,9 +430,14 @@ public class BugMineRepository {
         BugMineSessionStatus.valueOf(rs.getString("status")),
         rs.getInt("retry_count"),
         rs.getInt("depth_layer"),
+        rs.getInt("profile_depth_target"),
+        rs.getBoolean("mastery_confirmed"),
+        (Long) rs.getObject("variant_submission_id"),
         offset(rs, "opened_at"),
         offset(rs, "closed_at"),
+        variant,
         null,
+        List.of(),
         List.of());
   }
 
@@ -355,6 +484,9 @@ public class BugMineRepository {
     }
   }
 
+  public record SessionContextRow(
+      BigDecimal masteryScore, List<String> mistakePatterns, boolean patternMatched) {}
+
   public record ErrorBookRow(
       Long sessionId,
       Long submissionId,
@@ -365,8 +497,11 @@ public class BugMineRepository {
       BugMineSessionStatus status,
       int retryCount,
       int depthLayer,
+      int profileDepthTarget,
       BigDecimal masteryScore,
       List<String> mistakePatterns,
       boolean patternMatched,
-      OffsetDateTime openedAt) {}
+      OffsetDateTime openedAt,
+      Long variantProblemId,
+      String variantProblemTitle) {}
 }

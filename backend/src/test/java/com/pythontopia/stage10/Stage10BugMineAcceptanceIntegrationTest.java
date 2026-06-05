@@ -7,6 +7,7 @@ import com.pythontopia.PythontopiaApplication;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -99,7 +100,7 @@ class Stage10BugMineAcceptanceIntegrationTest {
             "SELECT COUNT(*) FROM bug_mine_card WHERE session_id = ? AND revealed = TRUE",
             Integer.class,
             sessionId);
-    assertThat(revealed).isEqualTo(1); // only layer 1 is revealed by default
+    assertThat(revealed).isZero();
 
     ResponseEntity<Map> fetched =
         restTemplate.exchange(
@@ -108,6 +109,8 @@ class Stage10BugMineAcceptanceIntegrationTest {
             bearer(token, null),
             Map.class);
     assertThat(fetched.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(fetched.getBody().get("profileDepthTarget")).isNotNull();
+    assertThat(fetched.getBody().get("profileGuidance")).isNotNull();
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> cardList = (List<Map<String, Object>>) fetched.getBody().get("cards");
     assertThat(cardList).hasSize(6);
@@ -118,6 +121,16 @@ class Stage10BugMineAcceptanceIntegrationTest {
             .map(card -> ((Number) card.get("id")).longValue())
             .findFirst()
             .orElseThrow();
+    ResponseEntity<Map> blocked =
+        restTemplate.exchange(
+            "/api/bug-mine/sessions/" + sessionId + "/cards/" + layer2CardId + "/reveal",
+            HttpMethod.POST,
+            bearer(token, null),
+            Map.class);
+    assertThat(blocked.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+    assertThat(blocked.getBody().get("code")).isEqualTo("BUG_MINE_DEPTH_LOCKED");
+
+    jdbcTemplate.update("UPDATE bug_mine_session SET depth_layer = 4 WHERE id = ?", sessionId);
     ResponseEntity<Map> reveal =
         restTemplate.exchange(
             "/api/bug-mine/sessions/" + sessionId + "/cards/" + layer2CardId + "/reveal",
@@ -392,7 +405,7 @@ class Stage10BugMineAcceptanceIntegrationTest {
     String siblingTitle = (String) kcPair.get(0).get("sibling_title");
 
     Long submissionId = seedFailedSubmission(userId, baseProblemId);
-    seedOpenBugMineSession(userId, submissionId, baseProblemId, 5);
+    seedOpenBugMineSession(userId, submissionId, baseProblemId, 5, siblingProblemId);
 
     ResponseEntity<List> response =
         restTemplate.exchange(
@@ -409,6 +422,121 @@ class Stage10BugMineAcceptanceIntegrationTest {
     assertThat(variant).isNotNull();
     assertThat(((Number) variant.get("id")).longValue()).isEqualTo(siblingProblemId);
     assertThat(variant.get("title")).isEqualTo(siblingTitle);
+  }
+
+  @Test
+  void variantSubmitBeforeLayer5IsRejected() throws Exception {
+    MockRestServiceServer graphServer = MockRestServiceServer.bindTo(graphRestTemplate).build();
+    String token = registerAndLogin("mine-stu09");
+    Long userId = userId("mine-stu09");
+    Long submissionId = seedFailedSubmission(userId, 476L);
+
+    graphServer
+        .expect(MockRestRequestMatchers.requestTo("http://graph.test/agents/debug/analyze"))
+        .andRespond(
+            MockRestResponseCreators.withSuccess(
+                graphDebugResponse(), MediaType.APPLICATION_JSON));
+
+    ResponseEntity<Map> open =
+        restTemplate.exchange(
+            "/api/bug-mine/sessions",
+            HttpMethod.POST,
+            bearer(token, Map.of("submissionId", submissionId)),
+            Map.class);
+    Long sessionId = ((Number) open.getBody().get("id")).longValue();
+
+    ResponseEntity<Map> blocked =
+        restTemplate.exchange(
+            "/api/bug-mine/sessions/" + sessionId + "/variant-submit",
+            HttpMethod.POST,
+            bearer(token, Map.of("code", "print(1)")),
+            Map.class);
+    assertThat(blocked.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+    assertThat(blocked.getBody().get("code")).isEqualTo("BUG_MINE_VARIANT_LOCKED");
+    graphServer.verify(Duration.ofSeconds(2));
+  }
+
+  @Test
+  void variantSubmitAtLayer5UsesVariantSourceAndCanResolveSession() throws Exception {
+    String token = registerAndLogin("mine-stu09b");
+    Long userId = userId("mine-stu09b");
+    List<Map<String, Object>> kcPair =
+        jdbcTemplate.queryForList(
+            """
+            SELECT base.id AS base_id, sibling.id AS sibling_id
+            FROM course_problem base
+            JOIN course_problem sibling
+              ON sibling.kc_code = base.kc_code AND sibling.id <> base.id
+            WHERE base.kc_code <> ''
+            ORDER BY base.id, sibling.id
+            LIMIT 1
+            """);
+    Assumptions.assumeFalse(kcPair.isEmpty(), "seed 数据缺少同 KC 兄弟题，跳过变式掌握确认用例");
+
+    Long baseProblemId = ((Number) kcPair.get(0).get("base_id")).longValue();
+    Long siblingProblemId = ((Number) kcPair.get(0).get("sibling_id")).longValue();
+    Long submissionId = seedFailedSubmission(userId, baseProblemId);
+    Long sessionId = seedOpenBugMineSession(userId, submissionId, baseProblemId, 5, siblingProblemId);
+
+    String code =
+        "radius = float(input())\n"
+            + "area = 3.1415 * radius * radius\n"
+            + "print(f\"{area:.4f}\")\n";
+    ResponseEntity<Map> variant =
+        restTemplate.exchange(
+            "/api/bug-mine/sessions/" + sessionId + "/variant-submit",
+            HttpMethod.POST,
+            bearer(token, Map.of("code", code)),
+            Map.class);
+    assertThat(variant.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(variant.getBody().get("source")).isEqualTo("BUG_MINE_VARIANT");
+
+    if ("PASSED".equals(variant.getBody().get("status"))) {
+      String status =
+          jdbcTemplate.queryForObject(
+              "SELECT status FROM bug_mine_session WHERE id = ?",
+              String.class,
+              sessionId);
+      assertThat(status).isEqualTo("RESOLVED");
+      Boolean masteryConfirmed =
+          jdbcTemplate.queryForObject(
+              "SELECT mastery_confirmed FROM bug_mine_session WHERE id = ?",
+              Boolean.class,
+              sessionId);
+      assertThat(masteryConfirmed).isTrue();
+    }
+  }
+
+  @Test
+  void reopenExistingSessionDoesNotCallDebugGraphAgain() throws Exception {
+    MockRestServiceServer graphServer = MockRestServiceServer.bindTo(graphRestTemplate).build();
+    String token = registerAndLogin("mine-stu10");
+    Long userId = userId("mine-stu10");
+    Long submissionId = seedFailedSubmission(userId, 476L);
+
+    graphServer
+        .expect(ExpectedCount.once(), MockRestRequestMatchers.requestTo("http://graph.test/agents/debug/analyze"))
+        .andRespond(
+            MockRestResponseCreators.withSuccess(
+                graphDebugResponse(), MediaType.APPLICATION_JSON));
+
+    ResponseEntity<Map> first =
+        restTemplate.exchange(
+            "/api/bug-mine/sessions",
+            HttpMethod.POST,
+            bearer(token, Map.of("submissionId", submissionId)),
+            Map.class);
+    Long sessionId = ((Number) first.getBody().get("id")).longValue();
+
+    ResponseEntity<Map> second =
+        restTemplate.exchange(
+            "/api/bug-mine/sessions",
+            HttpMethod.POST,
+            bearer(token, Map.of("submissionId", submissionId)),
+            Map.class);
+    assertThat(second.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(((Number) second.getBody().get("id")).longValue()).isEqualTo(sessionId);
+    graphServer.verify(Duration.ofSeconds(2));
   }
 
   private String graphDebugResponse() throws Exception {
@@ -474,19 +602,30 @@ class Stage10BugMineAcceptanceIntegrationTest {
 
   private Long seedOpenBugMineSession(
       Long userId, Long submissionId, Long problemId, int depthLayer) {
+    return seedOpenBugMineSession(userId, submissionId, problemId, depthLayer, null);
+  }
+
+  private Long seedOpenBugMineSession(
+      Long userId,
+      Long submissionId,
+      Long problemId,
+      int depthLayer,
+      Long variantProblemId) {
     return jdbcTemplate.queryForObject(
         """
         INSERT INTO bug_mine_session (
-          user_id, submission_id, problem_id, quest_id, status, depth_layer
+          user_id, submission_id, problem_id, quest_id, status, depth_layer,
+          variant_problem_id, profile_depth_target
         )
-        VALUES (?, ?, ?, NULL, 'OPEN', ?)
+        VALUES (?, ?, ?, NULL, 'OPEN', ?, ?, 5)
         RETURNING id
         """,
         Long.class,
         userId,
         submissionId,
         problemId,
-        depthLayer);
+        depthLayer,
+        variantProblemId);
   }
 
   private Long userId(String username) {

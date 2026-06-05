@@ -11,6 +11,7 @@ vi.mock('@/api/bugMine', () => ({
   getBugMineSession: vi.fn(),
   revealBugMineCard: vi.fn(),
   retryBugMineSubmit: vi.fn(),
+  variantBugMineSubmit: vi.fn(),
   closeBugMineSession: vi.fn(),
 }));
 vi.mock('@/api/quests', () => ({
@@ -39,59 +40,25 @@ import type {
   BugMineSessionDto,
 } from '@/api/dto/BugMine';
 
-function buildDepthSteps(): BugMineDepthStepDto[] {
-  return [
-    {
-      layer: 1,
-      key: 'NAKED_RETRY',
-      title: 'L1 裸重试',
-      description: '先独立改一次。',
-      unlocked: true,
-    },
-    {
-      layer: 2,
-      key: 'COUNTER_EXAMPLE',
-      title: 'L2 反例',
-      description: '看一组打脸输入。',
-      unlocked: true,
-    },
-    {
-      layer: 3,
-      key: 'VARIABLE_TRACE',
-      title: 'L3 变量轨迹',
-      description: '追踪关键变量。',
-      unlocked: true,
-    },
-    {
-      layer: 4,
-      key: 'LAYERED_HINTS',
-      title: 'L4 分层提示',
-      description: '逐层拿提示。',
-      unlocked: false,
-    },
-    {
-      layer: 5,
-      key: 'KC_VARIANT',
-      title: 'L5 同 KC 变式',
-      description: '确认能迁移。',
-      unlocked: false,
-    },
-  ];
+function buildDepthSteps(depthLayer = 3): BugMineDepthStepDto[] {
+  return [1, 2, 3, 4, 5].map((layer) => ({
+    layer,
+    key: `L${layer}`,
+    title: `L${layer}`,
+    description: `step-${layer}`,
+    unlocked: layer <= depthLayer,
+  }));
 }
 
 function buildSession(overrides: Partial<BugMineSessionDto> = {}): BugMineSessionDto {
+  const depthLayer = overrides.depthLayer ?? 3;
   const cards: BugMineCardDto[] = [
     {
       id: 1,
       sessionId: 100,
       cardType: 'COUNTER_EXAMPLE',
-      payload: {
-        stdin: '5',
-        expectedStdout: '78.5375',
-        yourStdout: '5',
-        diffSummary: '形状不符',
-      },
-      revealed: true,
+      payload: { stdin: '5', expectedStdout: '78.5375', yourStdout: '5', diffSummary: '形状不符' },
+      revealed: false,
       createdAt: '2026-05-21T19:50:00Z',
     },
     {
@@ -99,7 +66,7 @@ function buildSession(overrides: Partial<BugMineSessionDto> = {}): BugMineSessio
       sessionId: 100,
       cardType: 'VARIABLE_TRACE',
       payload: { steps: [], truncated: false },
-      revealed: true,
+      revealed: false,
       createdAt: '2026-05-21T19:50:00Z',
     },
     {
@@ -107,7 +74,7 @@ function buildSession(overrides: Partial<BugMineSessionDto> = {}): BugMineSessio
       sessionId: 100,
       cardType: 'WRONG_ASSUMPTION',
       payload: { youThought: '你以为...', actually: '实际上...' },
-      revealed: true,
+      revealed: false,
       createdAt: '2026-05-21T19:50:00Z',
     },
     {
@@ -115,7 +82,7 @@ function buildSession(overrides: Partial<BugMineSessionDto> = {}): BugMineSessio
       sessionId: 100,
       cardType: 'HINT_LAYER_1',
       payload: { headline: 'L1', body: '先想想' },
-      revealed: true,
+      revealed: false,
       createdAt: '2026-05-21T19:50:00Z',
     },
     {
@@ -143,10 +110,15 @@ function buildSession(overrides: Partial<BugMineSessionDto> = {}): BugMineSessio
     questId: null,
     status: 'OPEN',
     retryCount: 0,
-    depthLayer: 3,
+    depthLayer,
+    profileDepthTarget: 4,
+    masteryConfirmed: false,
+    variantSubmissionId: null,
     openedAt: '2026-05-21T19:50:00Z',
     closedAt: null,
     variantProblem: null,
+    profileGuidance: '画像命中易错模式，建议逐层下探。',
+    depthSteps: buildDepthSteps(depthLayer),
     cards,
     ...overrides,
   };
@@ -165,12 +137,14 @@ function buildErrorBookItem(
     status: 'OPEN',
     retryCount: 2,
     depthLayer: 3,
+    profileDepthTarget: 4,
+    profileGuidance: '掌握度中等，先 L1 独立重试。',
     masteryScore: 0.42,
     mistakePatterns: ['变量覆盖', '输出格式'],
     patternMatched: true,
     openedAt: '2026-05-21T19:50:00Z',
     variantProblem: null,
-    depthSteps: buildDepthSteps(),
+    depthSteps: buildDepthSteps(3),
     ...overrides,
   };
 }
@@ -178,7 +152,10 @@ function buildErrorBookItem(
 function mountPanel() {
   const router: Router = createRouter({
     history: createMemoryHistory(),
-    routes: [{ path: '/bug-mine', name: 'bug-mine', component: { template: '<div />' } }],
+    routes: [
+      { path: '/bug-mine', name: 'bug-mine', component: { template: '<div />' } },
+      { path: '/training', name: 'training', component: { template: '<div />' } },
+    ],
   });
   return mount(BugMinePanel, {
     global: { plugins: [createPinia(), router] },
@@ -189,7 +166,7 @@ describe('BugMinePanel', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     vi.mocked(getBugMineErrorBook).mockResolvedValue([buildErrorBookItem()]);
-    vi.mocked(getBugMineSession).mockResolvedValue(buildSession());
+    vi.mocked(getBugMineSession).mockImplementation(async () => buildSession({ depthLayer: 4 }));
     vi.mocked(revealBugMineCard).mockResolvedValue({
       id: 5,
       sessionId: 100,
@@ -201,19 +178,14 @@ describe('BugMinePanel', () => {
     vi.mocked(getTodayQuests).mockResolvedValue([]);
   });
 
-  it('loads the error book list, renders five depth steps, and opens a clicked session', async () => {
+  it('loads error book, shows profile guidance, and opens clicked session', async () => {
     const wrapper = mountPanel();
     await flushPromises();
 
     expect(getBugMineErrorBook).toHaveBeenCalledTimes(1);
     expect(wrapper.text()).toContain('错题矿洞');
     expect(wrapper.text()).toContain('圆面积调试');
-    expect(wrapper.text()).toContain('python.variables');
-    expect(wrapper.text()).toContain('L1 裸重试');
-    expect(wrapper.text()).toContain('L2 反例');
-    expect(wrapper.text()).toContain('L3 变量轨迹');
-    expect(wrapper.text()).toContain('L4 分层提示');
-    expect(wrapper.text()).toContain('L5 同 KC 变式');
+    expect(wrapper.text()).toContain('掌握度中等');
 
     await wrapper.find('[data-testid="error-book-item-100"]').trigger('click');
     await flushPromises();
@@ -222,33 +194,31 @@ describe('BugMinePanel', () => {
     expect(wrapper.text()).toContain('会话 #100');
   });
 
-  it('renders 6 cards with layer 1 unlocked by default', async () => {
+  it('locks L4 cards when depth is below requirement', async () => {
     const wrapper = mountPanel();
     const learning = useLearningStore();
-    learning.bugMine.session = buildSession();
+    learning.bugMine.session = buildSession({ depthLayer: 2 });
     await flushPromises();
-    expect(wrapper.find('[data-testid="card-counter-example"]').exists()).toBe(true);
-    expect(wrapper.find('[data-testid="card-trace"]').exists()).toBe(true);
-    expect(wrapper.find('[data-testid="card-assumption"]').exists()).toBe(true);
-    expect(wrapper.find('[data-testid="card-hint-1"]').exists()).toBe(true);
-    expect(wrapper.text()).toContain('Layer 2 （未解锁）');
-    expect(wrapper.text()).toContain('Layer 3 （未解锁）');
+
+    expect(wrapper.find('[data-testid="card-assumption"]').text()).toContain('需先下探到 L4');
+    expect(wrapper.find('[data-testid="card-hint-1"]').text()).toContain('需先下探到 L4');
   });
 
-  it('reveals layer 2 when clicking unlock button', async () => {
+  it('reveals hint layer 2 when depth allows and button clicked', async () => {
     const wrapper = mountPanel();
     const learning = useLearningStore();
-    learning.bugMine.session = buildSession();
+    learning.bugMine.session = buildSession({ depthLayer: 4 });
     await flushPromises();
+
     const buttons = wrapper.findAll('button').filter((btn) => btn.text() === '解锁 Layer 2 提示');
     expect(buttons).toHaveLength(1);
     await buttons[0]!.trigger('click');
     await flushPromises();
     expect(revealBugMineCard).toHaveBeenCalledWith(100, 5);
-    expect(learning.bugMine.session?.cards.find((card) => card.id === 5)?.revealed).toBe(true);
+    expect(getBugMineSession).toHaveBeenCalled();
   });
 
-  it('shows L5 variant action when depth reaches layer 5', async () => {
+  it('navigates to training for L5 variant mastery confirmation', async () => {
     vi.mocked(getPublicProblem).mockResolvedValue({
       id: 501,
       packId: 43,
@@ -262,17 +232,26 @@ describe('BugMinePanel', () => {
     });
     const wrapper = mountPanel();
     const learning = useLearningStore();
+    const router = wrapper.vm.$router;
+    const pushSpy = vi.spyOn(router, 'push');
     learning.bugMine.session = buildSession({
       depthLayer: 5,
       variantProblem: { id: 501, title: '列表求和变式' },
     });
     await flushPromises();
 
-    expect(wrapper.find('[data-testid="card-kc-variant"]').exists()).toBe(true);
     await wrapper.find('[data-testid="variant-problem-button"]').trigger('click');
     await flushPromises();
     expect(getPublicProblem).toHaveBeenCalledWith(501);
-    expect(learning.training.problem?.title).toBe('列表求和变式');
+    expect(learning.bugMine.pendingVariantSessionId).toBe(100);
+    expect(pushSpy).toHaveBeenCalledWith({
+      path: '/training',
+      query: {
+        problemId: '501',
+        bugMineSessionId: '100',
+        variant: '1',
+      },
+    });
   });
 
   it('retry button posts new code and refreshes session', async () => {
@@ -293,8 +272,7 @@ describe('BugMinePanel', () => {
     const learning = useLearningStore();
     learning.bugMine.session = buildSession();
     await flushPromises();
-    const textarea = wrapper.find('textarea');
-    await textarea.setValue('print("hi")');
+    await wrapper.find('textarea').setValue('print("hi")');
     await wrapper.find('[data-testid="retry-button"]').trigger('click');
     await flushPromises();
     expect(retryBugMineSubmit).toHaveBeenCalledWith(100, { code: 'print("hi")' });

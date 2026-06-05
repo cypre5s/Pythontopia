@@ -70,7 +70,7 @@ test('routes legacy bug mine dialog navigation into the mine map', async () => {
 
   expect(world.pendingTravelMap).toBe('mine_south');
   expect(world.pendingTravelTile).toEqual({ x: 15, y: 2 });
-  expect(pushSpy).toHaveBeenCalledWith({ path: '/world', query: { goto: 'mine_south' } });
+  expect(pushSpy).toHaveBeenCalledWith('/bug-mine');
   pushSpy.mockRestore();
   wrapper.unmount();
 });
