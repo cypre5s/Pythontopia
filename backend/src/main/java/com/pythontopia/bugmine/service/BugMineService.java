@@ -6,8 +6,11 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.pythontopia.bugmine.dto.BugMineCardDto;
 import com.pythontopia.bugmine.dto.BugMineCardType;
+import com.pythontopia.bugmine.dto.BugMineDepthStepDto;
+import com.pythontopia.bugmine.dto.BugMineErrorBookItemDto;
 import com.pythontopia.bugmine.dto.BugMineSessionDto;
 import com.pythontopia.bugmine.dto.BugMineSessionStatus;
+import com.pythontopia.bugmine.dto.BugMineVariantProblemDto;
 import com.pythontopia.bugmine.graph.DebugAgentClient;
 import com.pythontopia.bugmine.graph.DebugAgentRequest;
 import com.pythontopia.bugmine.graph.DebugAgentResponse;
@@ -134,36 +137,65 @@ public class BugMineService {
     }
 
     persistCards(sessionId, response, traceResult);
-    return repository
-        .findSession(userId, sessionId)
-        .orElseThrow(
-            () ->
-                new BusinessException(
-                    HttpStatus.INTERNAL_SERVER_ERROR,
-                    "BUG_MINE_PERSIST_FAILED",
-                    "Bug 矿洞会话写入后未能读回"));
+    return enrichSession(
+        repository
+            .findSession(userId, sessionId)
+            .orElseThrow(
+                () ->
+                    new BusinessException(
+                        HttpStatus.INTERNAL_SERVER_ERROR,
+                        "BUG_MINE_PERSIST_FAILED",
+                        "Bug 矿洞会话写入后未能读回")));
   }
 
   @Transactional(readOnly = true)
   public BugMineSessionDto find(Long userId, Long sessionId) {
-    return repository
-        .findSession(userId, sessionId)
-        .orElseThrow(
-            () ->
-                new BusinessException(
-                    HttpStatus.NOT_FOUND, "BUG_MINE_NOT_FOUND", "Bug 矿洞会话不存在"));
+    BugMineSessionDto session =
+        repository
+            .findSession(userId, sessionId)
+            .orElseThrow(
+                () ->
+                    new BusinessException(
+                        HttpStatus.NOT_FOUND, "BUG_MINE_NOT_FOUND", "Bug 矿洞会话不存在"));
+    return enrichSession(session);
+  }
+
+  @Transactional(readOnly = true)
+  public List<BugMineErrorBookItemDto> errorBook(Long userId) {
+    return repository.findOpenErrorBook(userId).stream()
+        .map(
+            row ->
+                new BugMineErrorBookItemDto(
+                    row.sessionId(),
+                    row.submissionId(),
+                    row.problemId(),
+                    row.questId(),
+                    row.kcCode(),
+                    row.problemTitle(),
+                    row.status(),
+                    row.retryCount(),
+                    row.depthLayer(),
+                    row.masteryScore(),
+                    row.mistakePatterns(),
+                    row.patternMatched(),
+                    row.openedAt(),
+                    resolveVariant(row.problemId(), row.kcCode()),
+                    depthSteps(row.depthLayer())))
+        .toList();
   }
 
   @Transactional
   public BugMineCardDto reveal(Long userId, Long sessionId, Long cardId) {
     BugMineSessionDto session = find(userId, sessionId);
-    repository
-        .findCard(session.id(), cardId)
-        .orElseThrow(
-            () ->
-                new BusinessException(
-                    HttpStatus.NOT_FOUND, "BUG_MINE_CARD_NOT_FOUND", "卡片不存在"));
+    BugMineCardDto card =
+        repository
+            .findCard(session.id(), cardId)
+            .orElseThrow(
+                () ->
+                    new BusinessException(
+                        HttpStatus.NOT_FOUND, "BUG_MINE_CARD_NOT_FOUND", "卡片不存在"));
     repository.revealCard(session.id(), cardId);
+    repository.bumpDepthLayer(session.id(), depthForCard(card.cardType()));
     return repository
         .findCard(session.id(), cardId)
         .orElseThrow(
@@ -202,6 +234,8 @@ public class BugMineService {
         eventPublisher.publishEvent(
             new LearningEvent.DebugResolved(userId, kcCode, session.problemId()));
       }
+    } else {
+      repository.advanceDepthLayer(session.id());
     }
     return submission;
   }
@@ -220,12 +254,37 @@ public class BugMineService {
       eventPublisher.publishEvent(
           new LearningEvent.PracticeAbandoned(userId, session.problemId(), kcCode));
     }
-    return repository
-        .findSession(userId, sessionId)
-        .orElseThrow(
-            () ->
-                new BusinessException(
-                    HttpStatus.INTERNAL_SERVER_ERROR, "BUG_MINE_CLOSE_FAILED", "关闭会话失败"));
+    return enrichSession(
+        repository
+            .findSession(userId, sessionId)
+            .orElseThrow(
+                () ->
+                    new BusinessException(
+                        HttpStatus.INTERNAL_SERVER_ERROR, "BUG_MINE_CLOSE_FAILED", "关闭会话失败")));
+  }
+
+  private BugMineSessionDto enrichSession(BugMineSessionDto session) {
+    String kcCode = problemRepository.findKcCode(session.problemId());
+    return new BugMineSessionDto(
+        session.id(),
+        session.userId(),
+        session.submissionId(),
+        session.problemId(),
+        session.questId(),
+        session.status(),
+        session.retryCount(),
+        session.depthLayer(),
+        session.openedAt(),
+        session.closedAt(),
+        resolveVariant(session.problemId(), kcCode),
+        session.cards());
+  }
+
+  private BugMineVariantProblemDto resolveVariant(Long problemId, String kcCode) {
+    return problemRepository
+        .findVariantProblem(problemId, kcCode)
+        .map(variant -> new BugMineVariantProblemDto(variant.id(), variant.title()))
+        .orElse(null);
   }
 
   private DebugAgentRequest.VariableTracePayload toRequestTrace(PythonTraceCollector.TraceResult trace) {
@@ -276,6 +335,28 @@ public class BugMineService {
   private void persistCard(Long sessionId, BugMineCardType type, Object payload, boolean revealed) {
     JsonNode node = objectMapper.valueToTree(payload);
     repository.insertCard(sessionId, type, node, revealed);
+  }
+
+  private List<BugMineDepthStepDto> depthSteps(int depthLayer) {
+    return List.of(
+        depthStep(1, "bare_retry", "L1 裸重试", "不看提示，先按题意重写一次。", depthLayer),
+        depthStep(2, "counter_example", "L2 反例", "查看第一个失败输入与期望输出。", depthLayer),
+        depthStep(3, "variable_trace", "L3 变量轨迹", "沿执行过程检查变量如何变化。", depthLayer),
+        depthStep(4, "layered_hints", "L4 分层提示", "逐层打开提示，只拿思路不拿完整答案。", depthLayer),
+        depthStep(5, "same_kc_variant", "L5 同 KC 变式", "换一道同知识点题确认迁移能力。", depthLayer));
+  }
+
+  private BugMineDepthStepDto depthStep(
+      int layer, String key, String title, String description, int depthLayer) {
+    return new BugMineDepthStepDto(layer, key, title, description, layer <= depthLayer);
+  }
+
+  private int depthForCard(BugMineCardType type) {
+    return switch (type) {
+      case COUNTER_EXAMPLE -> 2;
+      case VARIABLE_TRACE -> 3;
+      case WRONG_ASSUMPTION, HINT_LAYER_1, HINT_LAYER_2, HINT_LAYER_3 -> 4;
+    };
   }
 
   private String buildDiffSummary(String expected, String actual) {

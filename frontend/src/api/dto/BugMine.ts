@@ -17,6 +17,11 @@ export interface BugMineCardDto {
   createdAt: string;
 }
 
+export interface BugMineVariantProblemDto {
+  id: number;
+  title: string;
+}
+
 export interface BugMineSessionDto {
   id: number;
   userId: number;
@@ -25,9 +30,37 @@ export interface BugMineSessionDto {
   questId: number | null;
   status: BugMineSessionStatus;
   retryCount: number;
+  depthLayer: number;
   openedAt: string;
   closedAt: string | null;
+  variantProblem: BugMineVariantProblemDto | null;
   cards: BugMineCardDto[];
+}
+
+export interface BugMineDepthStepDto {
+  layer: number;
+  key: string;
+  title: string;
+  description: string;
+  unlocked: boolean;
+}
+
+export interface BugMineErrorBookItemDto {
+  sessionId: number;
+  submissionId: number;
+  problemId: number;
+  questId: number | null;
+  kcCode: string;
+  problemTitle: string;
+  status: BugMineSessionStatus;
+  retryCount: number;
+  depthLayer: number;
+  masteryScore: number;
+  mistakePatterns: string[];
+  patternMatched: boolean;
+  openedAt: string;
+  variantProblem: BugMineVariantProblemDto | null;
+  depthSteps: BugMineDepthStepDto[];
 }
 
 export interface BugMineOpenRequest {

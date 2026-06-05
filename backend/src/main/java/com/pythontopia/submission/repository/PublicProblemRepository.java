@@ -58,6 +58,28 @@ public class PublicProblemRepository {
         "SELECT kc_code FROM course_problem WHERE id = ?", String.class, problemId);
   }
 
+  public Optional<VariantProblem> findVariantProblem(Long problemId, String kcCode) {
+    if (kcCode == null || kcCode.isBlank()) {
+      return Optional.empty();
+    }
+    return jdbcTemplate
+        .query(
+            """
+            SELECT id, title
+            FROM course_problem
+            WHERE kc_code = ? AND id <> ?
+            ORDER BY id
+            LIMIT 1
+            """,
+            (rs, rowNum) -> new VariantProblem(rs.getLong("id"), rs.getString("title")),
+            kcCode,
+            problemId)
+        .stream()
+        .findFirst();
+  }
+
+  public record VariantProblem(Long id, String title) {}
+
   private PublicProblemDto map(ResultSet rs) throws SQLException {
     return new PublicProblemDto(
         rs.getLong("id"),

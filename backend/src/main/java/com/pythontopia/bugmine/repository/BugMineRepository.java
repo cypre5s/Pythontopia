@@ -7,11 +7,14 @@ import com.pythontopia.bugmine.dto.BugMineCardDto;
 import com.pythontopia.bugmine.dto.BugMineCardType;
 import com.pythontopia.bugmine.dto.BugMineSessionDto;
 import com.pythontopia.bugmine.dto.BugMineSessionStatus;
+import java.math.BigDecimal;
+import java.sql.Array;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.dao.DuplicateKeyException;
@@ -86,7 +89,7 @@ public class BugMineRepository {
         .query(
             """
             SELECT id, user_id, submission_id, problem_id, quest_id, status,
-                   retry_count, opened_at, closed_at
+                   retry_count, depth_layer, opened_at, closed_at
             FROM bug_mine_session
             WHERE id = ? AND user_id = ?
             """,
@@ -103,7 +106,7 @@ public class BugMineRepository {
         .query(
             """
             SELECT id, user_id, submission_id, problem_id, quest_id, status,
-                   retry_count, opened_at, closed_at
+                   retry_count, depth_layer, opened_at, closed_at
             FROM bug_mine_session
             WHERE id = ?
             """,
@@ -166,6 +169,107 @@ public class BugMineRepository {
         sessionId);
   }
 
+  public int bumpDepthLayer(Long sessionId, int layer) {
+    return jdbcTemplate.update(
+        """
+        UPDATE bug_mine_session
+        SET depth_layer = GREATEST(depth_layer, LEAST(5, GREATEST(1, ?)))
+        WHERE id = ?
+        """,
+        layer,
+        sessionId);
+  }
+
+  public int advanceDepthLayer(Long sessionId) {
+    return jdbcTemplate.update(
+        "UPDATE bug_mine_session SET depth_layer = LEAST(5, depth_layer + 1) WHERE id = ?",
+        sessionId);
+  }
+
+  public List<ErrorBookRow> findOpenErrorBook(Long userId) {
+    return jdbcTemplate.query(
+        """
+        SELECT s.id AS session_id,
+               s.submission_id,
+               s.problem_id,
+               s.quest_id,
+               s.status,
+               s.retry_count,
+               s.depth_layer,
+               s.opened_at,
+               p.kc_code,
+               p.title AS problem_title,
+               COALESCE(km.mastery_score, 0.000) AS mastery_score,
+               COALESCE(profile_tags.tags, ARRAY[]::text[]) AS mistake_patterns,
+               EXISTS (
+                 SELECT 1
+                 FROM unnest(COALESCE(profile_tags.tags, ARRAY[]::text[])) AS tag(value)
+                 WHERE tag.value <> ''
+                   AND (
+                     upper(tag.value) = COALESCE(jr.verdict, '')
+                     OR lower(COALESCE(jr.failure_reason, '')) LIKE '%' || lower(tag.value) || '%'
+                     OR lower(COALESCE(p.common_mistakes::text, '')) LIKE '%' || lower(tag.value) || '%'
+                   )
+               ) AS pattern_matched
+        FROM bug_mine_session s
+        JOIN course_problem p ON p.id = s.problem_id
+        LEFT JOIN kc_mastery km ON km.user_id = s.user_id AND km.kc_code = p.kc_code
+        LEFT JOIN judge_result jr ON jr.submission_id = s.submission_id
+        LEFT JOIN LATERAL (
+          SELECT ARRAY(
+            SELECT DISTINCT tag
+            FROM (
+              SELECT jsonb_array_elements_text(
+                CASE
+                  WHEN jsonb_typeof(lp.dimensions #> '{error_pattern,tags}') = 'array'
+                    THEN lp.dimensions #> '{error_pattern,tags}'
+                  ELSE '[]'::jsonb
+                END
+              ) AS tag
+              UNION ALL
+              SELECT jsonb_array_elements_text(
+                CASE
+                  WHEN jsonb_typeof(lp.error_patterns -> 'common_categories') = 'array'
+                    THEN lp.error_patterns -> 'common_categories'
+                  ELSE '[]'::jsonb
+                END
+              ) AS tag
+              UNION ALL
+              SELECT jsonb_array_elements_text(
+                CASE
+                  WHEN jsonb_typeof(lp.error_patterns -> 'frequent_kc_codes') = 'array'
+                    THEN lp.error_patterns -> 'frequent_kc_codes'
+                  ELSE '[]'::jsonb
+                END
+              ) AS tag
+            ) collected
+            WHERE tag IS NOT NULL AND tag <> ''
+            LIMIT 5
+          ) AS tags
+          FROM learner_profile lp
+          WHERE lp.user_id = s.user_id
+        ) profile_tags ON TRUE
+        WHERE s.user_id = ? AND s.status = 'OPEN'
+        ORDER BY mastery_score ASC, pattern_matched DESC, s.opened_at DESC
+        """,
+        (rs, rowNum) ->
+            new ErrorBookRow(
+                rs.getLong("session_id"),
+                rs.getLong("submission_id"),
+                rs.getLong("problem_id"),
+                (Long) rs.getObject("quest_id"),
+                rs.getString("kc_code"),
+                rs.getString("problem_title"),
+                BugMineSessionStatus.valueOf(rs.getString("status")),
+                rs.getInt("retry_count"),
+                rs.getInt("depth_layer"),
+                rs.getBigDecimal("mastery_score"),
+                readTextArray(rs, "mistake_patterns"),
+                rs.getBoolean("pattern_matched"),
+                offset(rs, "opened_at")),
+        userId);
+  }
+
   public int retryCount(Long sessionId) {
     Integer count =
         jdbcTemplate.queryForObject(
@@ -185,8 +289,10 @@ public class BugMineRepository {
         session.questId(),
         session.status(),
         session.retryCount(),
+        session.depthLayer(),
         session.openedAt(),
         session.closedAt(),
+        session.variantProblem(),
         cards);
   }
 
@@ -199,8 +305,10 @@ public class BugMineRepository {
         (Long) rs.getObject("quest_id"),
         BugMineSessionStatus.valueOf(rs.getString("status")),
         rs.getInt("retry_count"),
+        rs.getInt("depth_layer"),
         offset(rs, "opened_at"),
         offset(rs, "closed_at"),
+        null,
         List.of());
   }
 
@@ -219,6 +327,18 @@ public class BugMineRepository {
     return ts == null ? null : ts.toInstant().atOffset(ZoneOffset.UTC);
   }
 
+  private List<String> readTextArray(ResultSet rs, String column) throws SQLException {
+    Array array = rs.getArray(column);
+    if (array == null) {
+      return List.of();
+    }
+    Object raw = array.getArray();
+    if (raw instanceof String[] values) {
+      return Arrays.stream(values).filter(value -> value != null && !value.isBlank()).toList();
+    }
+    return List.of();
+  }
+
   private String writeJson(JsonNode node) {
     try {
       return objectMapper.writeValueAsString(node == null ? objectMapper.createObjectNode() : node);
@@ -234,4 +354,19 @@ public class BugMineRepository {
       throw new IllegalStateException("Failed to read bug_mine_card payload", exception);
     }
   }
+
+  public record ErrorBookRow(
+      Long sessionId,
+      Long submissionId,
+      Long problemId,
+      Long questId,
+      String kcCode,
+      String problemTitle,
+      BugMineSessionStatus status,
+      int retryCount,
+      int depthLayer,
+      BigDecimal masteryScore,
+      List<String> mistakePatterns,
+      boolean patternMatched,
+      OffsetDateTime openedAt) {}
 }

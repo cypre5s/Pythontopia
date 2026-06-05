@@ -38,6 +38,7 @@ import { getPublicProblem } from '@/api/problems';
 import { getPyodideRunner, type PyodideRunResult } from '@/game/adapters/pyodide';
 import {
   openBugMineSession,
+  getBugMineErrorBook,
   getBugMineSession,
   revealBugMineCard,
   retryBugMineSubmit,
@@ -58,7 +59,10 @@ import type {
   SubmissionDetailDto,
   SubmissionDto,
 } from '@/api/dto/Submission';
-import type { BugMineSessionDto } from '@/api/dto/BugMine';
+import type {
+  BugMineErrorBookItemDto,
+  BugMineSessionDto,
+} from '@/api/dto/BugMine';
 import type {
   EvaluationDto,
   EvaluationRequest,
@@ -198,6 +202,9 @@ export interface TrainingState {
 
 export interface BugMineState {
   session: BugMineSessionDto | null;
+  errorBook: BugMineErrorBookItemDto[];
+  errorBookLoading: boolean;
+  errorBookError: string | null;
   loading: boolean;
   lastError: string | null;
   lastRetry: SubmissionDto | null;
@@ -267,6 +274,9 @@ export const useLearningStore = defineStore('learning', {
     } as TrainingState,
     bugMine: {
       session: null as BugMineSessionDto | null,
+      errorBook: [] as BugMineErrorBookItemDto[],
+      errorBookLoading: false,
+      errorBookError: null as string | null,
       loading: false,
       lastError: null as string | null,
       lastRetry: null as SubmissionDto | null,
@@ -650,12 +660,24 @@ export const useLearningStore = defineStore('learning', {
       try {
         const session = await openBugMineSession({ submissionId });
         this.bugMine.session = session;
+        await this.loadBugMineErrorBook();
         return session;
       } catch (error) {
         this.bugMine.lastError = error instanceof Error ? error.message : String(error);
         return null;
       } finally {
         this.bugMine.loading = false;
+      }
+    },
+    async loadBugMineErrorBook(): Promise<void> {
+      this.bugMine.errorBookLoading = true;
+      this.bugMine.errorBookError = null;
+      try {
+        this.bugMine.errorBook = await getBugMineErrorBook();
+      } catch (error) {
+        this.bugMine.errorBookError = error instanceof Error ? error.message : String(error);
+      } finally {
+        this.bugMine.errorBookLoading = false;
       }
     },
     async loadBugMine(sessionId: number): Promise<void> {
@@ -679,6 +701,7 @@ export const useLearningStore = defineStore('learning', {
           card.id === updated.id ? { ...card, revealed: true } : card,
         ),
       };
+      await this.loadBugMineErrorBook();
     },
     async loadEvaluations(limit = 4): Promise<void> {
       this.evaluation.loading = true;
@@ -763,6 +786,7 @@ export const useLearningStore = defineStore('learning', {
         this.bugMine.lastRetry = result;
         const session = await getBugMineSession(this.bugMine.session.id);
         this.bugMine.session = session;
+        await this.loadBugMineErrorBook();
         if (result.status === 'PASSED') {
           await this.loadTodayQuests();
         }

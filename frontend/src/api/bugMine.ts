@@ -1,6 +1,7 @@
 import { http } from './http';
 import type {
   BugMineCardDto,
+  BugMineErrorBookItemDto,
   BugMineOpenRequest,
   BugMineRetryRequest,
   BugMineSessionDto,
@@ -17,6 +18,11 @@ export async function openBugMineSession(
 
 export async function getBugMineSession(id: number): Promise<BugMineSessionDto> {
   const response = await http.get<BugMineSessionDto>(`/api/bug-mine/sessions/${id}`);
+  return response.data;
+}
+
+export async function getBugMineErrorBook(): Promise<BugMineErrorBookItemDto[]> {
+  const response = await http.get<BugMineErrorBookItemDto[]>('/api/bug-mine/errorbook');
   return response.data;
 }
 

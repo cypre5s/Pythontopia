@@ -11,6 +11,8 @@ public record BugMineSessionDto(
     Long questId,
     BugMineSessionStatus status,
     int retryCount,
+    int depthLayer,
     OffsetDateTime openedAt,
     OffsetDateTime closedAt,
+    BugMineVariantProblemDto variantProblem,
     List<BugMineCardDto> cards) {}

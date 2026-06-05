@@ -126,6 +126,12 @@ class Stage10BugMineAcceptanceIntegrationTest {
             Map.class);
     assertThat(reveal.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat((Boolean) reveal.getBody().get("revealed")).isTrue();
+    Integer depth =
+        jdbcTemplate.queryForObject(
+            "SELECT depth_layer FROM bug_mine_session WHERE id = ?",
+            Integer.class,
+            sessionId);
+    assertThat(depth).isEqualTo(4);
 
     graphServer.verify(Duration.ofSeconds(2));
   }
@@ -245,6 +251,166 @@ class Stage10BugMineAcceptanceIntegrationTest {
     graphServer.verify(Duration.ofSeconds(2));
   }
 
+  @Test
+  void errorBookOrdersOpenSessionsByWeakMasteryAndProfilePatterns() throws Exception {
+    String token = registerAndLogin("mine-stu06");
+    Long userId = userId("mine-stu06");
+    List<Map<String, Object>> problems =
+        jdbcTemplate.queryForList(
+            """
+            SELECT DISTINCT ON (kc_code) id, kc_code, title
+            FROM course_problem
+            WHERE kc_code <> ''
+            ORDER BY kc_code, id
+            LIMIT 2
+            """);
+    assertThat(problems).hasSizeGreaterThanOrEqualTo(2);
+
+    Map<String, Object> weakProblem = problems.get(0);
+    Map<String, Object> strongerProblem = problems.get(1);
+    Long weakProblemId = ((Number) weakProblem.get("id")).longValue();
+    Long strongerProblemId = ((Number) strongerProblem.get("id")).longValue();
+    String weakKc = (String) weakProblem.get("kc_code");
+    String strongerKc = (String) strongerProblem.get("kc_code");
+
+    Long strongerSubmissionId = seedFailedSubmission(userId, strongerProblemId);
+    Long weakSubmissionId = seedFailedSubmission(userId, weakProblemId);
+    Long strongerSessionId =
+        seedOpenBugMineSession(userId, strongerSubmissionId, strongerProblemId, 1);
+    Long weakSessionId = seedOpenBugMineSession(userId, weakSubmissionId, weakProblemId, 3);
+
+    jdbcTemplate.update(
+        """
+        INSERT INTO kc_mastery (user_id, kc_code, mastery_score, confidence, last_event_at)
+        VALUES (?, ?, 0.820, 0.700, now()), (?, ?, 0.120, 0.500, now())
+        ON CONFLICT (user_id, kc_code) DO UPDATE SET
+          mastery_score = EXCLUDED.mastery_score,
+          confidence = EXCLUDED.confidence,
+          last_event_at = EXCLUDED.last_event_at,
+          updated_at = now()
+        """,
+        userId,
+        strongerKc,
+        userId,
+        weakKc);
+    jdbcTemplate.update(
+        """
+        INSERT INTO learner_profile (user_id, pack_id, dimensions)
+        VALUES (?, 43, ?::jsonb)
+        ON CONFLICT (user_id) DO UPDATE SET dimensions = EXCLUDED.dimensions
+        """,
+        userId,
+        """
+        {"error_pattern":{"score":0.74,"tags":["WA","边界条件","变量追踪"]}}
+        """);
+
+    ResponseEntity<List> response =
+        restTemplate.exchange(
+            "/api/bug-mine/errorbook",
+            HttpMethod.GET,
+            bearer(token, null),
+            List.class);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> items = response.getBody();
+    assertThat(items).hasSize(2);
+    assertThat(((Number) items.get(0).get("sessionId")).longValue()).isEqualTo(weakSessionId);
+    assertThat(((Number) items.get(1).get("sessionId")).longValue()).isEqualTo(strongerSessionId);
+
+    Map<String, Object> first = items.get(0);
+    assertThat(first.get("kcCode")).isEqualTo(weakKc);
+    assertThat(first.get("mistakePatterns")).asList().contains("WA", "变量追踪");
+    assertThat(first.get("patternMatched")).isEqualTo(true);
+    assertThat(((Number) first.get("depthLayer")).intValue()).isEqualTo(3);
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> steps = (List<Map<String, Object>>) first.get("depthSteps");
+    assertThat(steps).hasSize(5);
+    assertThat(steps.get(0).get("title")).isEqualTo("L1 裸重试");
+    assertThat(steps.get(2).get("unlocked")).isEqualTo(true);
+    assertThat(steps.get(3).get("unlocked")).isEqualTo(false);
+  }
+
+  @Test
+  void failedRetryAdvancesDepthLayer() throws Exception {
+    MockRestServiceServer graphServer = MockRestServiceServer.bindTo(graphRestTemplate).build();
+    String token = registerAndLogin("mine-stu07");
+    Long userId = userId("mine-stu07");
+    Long submissionId = seedFailedSubmission(userId, 476L);
+
+    graphServer
+        .expect(MockRestRequestMatchers.requestTo("http://graph.test/agents/debug/analyze"))
+        .andRespond(
+            MockRestResponseCreators.withSuccess(
+                graphDebugResponse(), MediaType.APPLICATION_JSON));
+
+    ResponseEntity<Map> open =
+        restTemplate.exchange(
+            "/api/bug-mine/sessions",
+            HttpMethod.POST,
+            bearer(token, Map.of("submissionId", submissionId)),
+            Map.class);
+    Long sessionId = ((Number) open.getBody().get("id")).longValue();
+
+    ResponseEntity<Map> retry =
+        restTemplate.exchange(
+            "/api/bug-mine/sessions/" + sessionId + "/retry-submit",
+            HttpMethod.POST,
+            bearer(token, Map.of("code", "print(\"still wrong\")")),
+            Map.class);
+    assertThat(retry.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(retry.getBody().get("status")).isEqualTo("FAILED");
+
+    Integer depth =
+        jdbcTemplate.queryForObject(
+            "SELECT depth_layer FROM bug_mine_session WHERE id = ?",
+            Integer.class,
+            sessionId);
+    assertThat(depth).isEqualTo(2);
+    graphServer.verify(Duration.ofSeconds(2));
+  }
+
+  @Test
+  void errorBookIncludesVariantProblemForSameKc() throws Exception {
+    String token = registerAndLogin("mine-stu08");
+    Long userId = userId("mine-stu08");
+    List<Map<String, Object>> kcPair =
+        jdbcTemplate.queryForList(
+            """
+            SELECT base.id AS base_id, sibling.id AS sibling_id, sibling.title AS sibling_title
+            FROM course_problem base
+            JOIN course_problem sibling
+              ON sibling.kc_code = base.kc_code AND sibling.id <> base.id
+            WHERE base.kc_code <> ''
+            ORDER BY base.id, sibling.id
+            LIMIT 1
+            """);
+    assertThat(kcPair).isNotEmpty();
+
+    Long baseProblemId = ((Number) kcPair.get(0).get("base_id")).longValue();
+    Long siblingProblemId = ((Number) kcPair.get(0).get("sibling_id")).longValue();
+    String siblingTitle = (String) kcPair.get(0).get("sibling_title");
+
+    Long submissionId = seedFailedSubmission(userId, baseProblemId);
+    seedOpenBugMineSession(userId, submissionId, baseProblemId, 5);
+
+    ResponseEntity<List> response =
+        restTemplate.exchange(
+            "/api/bug-mine/errorbook",
+            HttpMethod.GET,
+            bearer(token, null),
+            List.class);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> item = (Map<String, Object>) response.getBody().get(0);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> variant = (Map<String, Object>) item.get("variantProblem");
+    assertThat(variant).isNotNull();
+    assertThat(((Number) variant.get("id")).longValue()).isEqualTo(siblingProblemId);
+    assertThat(variant.get("title")).isEqualTo(siblingTitle);
+  }
+
   private String graphDebugResponse() throws Exception {
     Map<String, Object> body =
         Map.of(
@@ -304,6 +470,23 @@ class Stage10BugMineAcceptanceIntegrationTest {
         """,
         submissionId);
     return submissionId;
+  }
+
+  private Long seedOpenBugMineSession(
+      Long userId, Long submissionId, Long problemId, int depthLayer) {
+    return jdbcTemplate.queryForObject(
+        """
+        INSERT INTO bug_mine_session (
+          user_id, submission_id, problem_id, quest_id, status, depth_layer
+        )
+        VALUES (?, ?, ?, NULL, 'OPEN', ?)
+        RETURNING id
+        """,
+        Long.class,
+        userId,
+        submissionId,
+        problemId,
+        depthLayer);
   }
 
   private Long userId(String username) {
