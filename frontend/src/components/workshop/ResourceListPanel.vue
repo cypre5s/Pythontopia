@@ -1,14 +1,12 @@
 <script setup lang="ts">
 /**
- * 个人书房（P3-b）：生成资源按 KC 沉淀 + 检索 + 间隔复习。
+ * 个人书房：生成资源按 KC 沉淀 + 检索 + 间隔复习。
  *
  * - 复用 listWorkshopResources（learning.resources.list）+ 掌握度快照（learning.field.masterySnapshot）。
- * - 遗忘曲线 / 间隔复习：把「资源对应 KC 掌握度偏低（或睡觉衰减后下降）」的资源挑出来，
- *   作为「待复习」置顶，提示「重温资源 + 再练一题」——把 resource_consumed 从「点一下」
- *   升级为「可积累、会回访、促长期记忆」的复盘闭环。
+ * - 间隔复习：把对应 KC 掌握度偏低的资源置顶为「待复习」，提示「重温资源 + 再练一题」。
  * - 检索：按 KC code / 标题过滤。
  */
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useLearningStore } from '@stores/learning';
 import { playUiClick } from '@/composables/useStardewFx';
@@ -20,8 +18,6 @@ const router = useRouter();
 
 // 掌握度低于此值（0..100）的资源进入「待复习」。
 const REVIEW_THRESHOLD = 60;
-
-const searchText = ref<string>('');
 
 const masteryByKc = computed<Map<string, number>>(() => {
   const map = new Map<string, number>();
@@ -43,17 +39,6 @@ function resourceMastery(item: WorkshopResourceListItemDto): number {
 }
 
 const allItems = computed<WorkshopResourceListItemDto[]>(() => learning.resources.list);
-
-const filteredItems = computed<WorkshopResourceListItemDto[]>(() => {
-  const q = searchText.value.trim().toLowerCase();
-  if (!q) return allItems.value;
-  return allItems.value.filter(
-    (item) =>
-      item.title.toLowerCase().includes(q) ||
-      item.kcCodes.some((c) => c.toLowerCase().includes(q)) ||
-      item.type.toLowerCase().includes(q),
-  );
-});
 
 interface ReviewItem {
   resource: WorkshopResourceListItemDto;
@@ -80,6 +65,14 @@ const reviewItems = computed<ReviewItem[]>(() => {
   }
   return list.sort((a, b) => a.mastery - b.mastery).slice(0, 6);
 });
+
+// 去冗余：「待复习」已置顶的资源不再在下方「全部资源」里重复出现。
+const reviewIds = computed<Set<number>>(
+  () => new Set(reviewItems.value.map((r) => r.resource.id)),
+);
+const otherItems = computed<WorkshopResourceListItemDto[]>(
+  () => allItems.value.filter((item) => !reviewIds.value.has(item.id)),
+);
 
 onMounted(async () => {
   await learning.loadResources();
@@ -108,18 +101,6 @@ function practiceKc(kcCode: string): void {
     class="list"
     data-testid="resource-library"
   >
-    <header>
-      <h3>我的书房</h3>
-      <button
-        type="button"
-        class="link"
-        title="刷新列表"
-        @click="learning.loadResources()"
-      >
-        ↻
-      </button>
-    </header>
-
     <section
       v-if="reviewItems.length > 0"
       class="review"
@@ -158,52 +139,57 @@ function practiceKc(kcCode: string): void {
       </ul>
     </section>
 
-    <input
-      v-model="searchText"
-      class="search"
-      type="search"
-      placeholder="按 KC / 标题 / 类型检索书房…"
-      data-testid="resource-search"
-    >
-
     <p
       v-if="learning.resources.loading"
       class="hint"
     >
       载入资源列表中…
     </p>
-    <ul
-      v-else-if="filteredItems.length > 0"
-      data-testid="resource-list"
-    >
-      <li
-        v-for="item in filteredItems"
-        :key="item.id"
-      >
+    <template v-else-if="allItems.length > 0">
+      <div class="toolbar">
+        <span class="toolbar__label">资源 · {{ allItems.length }}</span>
         <button
           type="button"
-          class="card"
-          @click="openDetail(item.id)"
+          class="link"
+          title="刷新列表"
+          @click="learning.loadResources()"
         >
-          <span class="title">{{ item.title }}</span>
-          <span class="meta">
-            {{ item.type }} · 掌握 {{ resourceMastery(item) }}
-            <template v-if="item.feedbackStatus !== 'NONE'"> · {{ item.feedbackStatus }}</template>
-          </span>
+          ↻
         </button>
-      </li>
-    </ul>
-    <p
-      v-else-if="allItems.length > 0"
-      class="hint"
-    >
-      没有匹配「{{ searchText }}」的资源，换个关键词试试。
-    </p>
+      </div>
+      <ul
+        v-if="otherItems.length > 0"
+        data-testid="resource-list"
+      >
+        <li
+          v-for="item in otherItems"
+          :key="item.id"
+        >
+          <button
+            type="button"
+            class="card"
+            @click="openDetail(item.id)"
+          >
+            <span class="title">{{ item.title }}</span>
+            <span class="meta">
+              {{ item.type }} · 掌握 {{ resourceMastery(item) }}
+              <template v-if="item.feedbackStatus !== 'NONE'"> · {{ item.feedbackStatus }}</template>
+            </span>
+          </button>
+        </li>
+      </ul>
+      <p
+        v-else
+        class="hint"
+      >
+        其余资源都掌握得不错 🎉
+      </p>
+    </template>
     <p
       v-else
       class="hint"
     >
-      还没有生成任何资源，先在左侧挑选 KC 与类型试试。
+      还没有生成任何资源，去聊天里说说你想学什么吧。
     </p>
   </aside>
 </template>
@@ -218,12 +204,20 @@ function practiceKc(kcCode: string): void {
   gap: 8px;
   height: 100%;
   min-height: 0;
-  overflow: auto;
+  /* 窄栏：只允许纵向滚动，禁止横向（卡片内部用 wrap/ellipsis 自适应宽度）。 */
+  overflow-x: hidden;
+  overflow-y: auto;
 }
-header {
+.toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+.toolbar__label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--pyt-color-text-muted);
+  letter-spacing: 0.5px;
 }
 .link {
   background: none;
@@ -232,7 +226,7 @@ header {
   cursor: pointer;
   text-decoration: underline;
 }
-/* P3-b：复习区 */
+/* 复习区 */
 .review {
   display: grid;
   gap: 6px;
@@ -256,9 +250,10 @@ header {
 }
 .review__item {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  gap: 8px;
+  gap: 6px 8px;
   padding: 6px 8px;
   background: #fffbe9;
   border: 1px solid var(--pyt-color-border);
@@ -269,6 +264,7 @@ header {
   flex-direction: column;
   gap: 1px;
   min-width: 0;
+  flex: 1 1 auto;
 }
 .review__title {
   font-size: 12px;
@@ -286,6 +282,7 @@ header {
   display: flex;
   gap: 4px;
   flex: 0 0 auto;
+  margin-left: auto;
 }
 .review__btn {
   font-family: inherit;
@@ -300,16 +297,6 @@ header {
 .review__btn--practice {
   background: #f7d774;
   font-weight: 700;
-}
-.search {
-  width: 100%;
-  padding: 6px 8px;
-  border: 2px solid var(--pyt-color-border);
-  border-radius: 6px;
-  background: #fffbe9;
-  color: #3a2a14;
-  font: inherit;
-  font-size: 12px;
 }
 ul {
   list-style: none;

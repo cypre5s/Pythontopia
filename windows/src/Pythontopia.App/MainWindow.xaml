@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="Pythontopia.App.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid>
+        <NavigationView
+            x:Name="Nav"
+            IsSettingsVisible="False"
+            IsBackButtonVisible="Collapsed"
+            PaneDisplayMode="Left"
+            ItemInvoked="Nav_ItemInvoked">
+            <NavigationView.MenuItems>
+                <NavigationViewItem Content="小镇" Tag="TownPage" Icon="Home" />
+                <NavigationViewItem Content="画像" Tag="ProfilePage" Icon="Contact" />
+                <NavigationViewItem Content="任务公告板" Tag="QuestsPage" Icon="List" />
+                <NavigationViewItem Content="课程" Tag="CoursePage" Icon="Library" />
+                <NavigationViewItem Content="训练场" Tag="PracticePage" Icon="Play" />
+                <NavigationViewItem Content="班级" Tag="ClassroomPage" Icon="People" />
+            </NavigationView.MenuItems>
+            <NavigationView.FooterMenuItems>
+                <NavigationViewItem Content="退出登录" Tag="Logout" Icon="BlockContact" />
+            </NavigationView.FooterMenuItems>
+            <Frame x:Name="ContentFrame" />
+        </NavigationView>
+    </Grid>
+</Window>

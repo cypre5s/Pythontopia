@@ -48,7 +48,7 @@ const BGM_LABELS: Record<string, string> = {
   bgm_quest: '校园钟声',
 };
 
-/** R-13 迭代 14：把 BGM key 翻成人类可读名（HUD 显示用） */
+/** 把 BGM key 翻成人类可读名（HUD 显示用） */
 export function bgmLabel(key: string | null): string {
   if (!key) return '静默';
   return BGM_LABELS[key] ?? key;
@@ -116,15 +116,12 @@ export const useHudStore = defineStore('hud', {
       this.meta = fresh.meta;
       this.settingsOpen = fresh.settingsOpen;
     },
-    /** 打开设置弹窗 */
     openSettings(): void {
       this.settingsOpen = true;
     },
-    /** 关闭设置弹窗 */
     closeSettings(): void {
       this.settingsOpen = false;
     },
-    /** 切换设置弹窗 */
     toggleSettings(): void {
       this.settingsOpen = !this.settingsOpen;
     },

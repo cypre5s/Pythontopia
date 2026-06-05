@@ -122,7 +122,7 @@ describe('PathTreeTab deep link', () => {
     expect(router.currentRoute.value.query.type).toBe('HANDOUT');
   });
 
-  it('FIX_BUG node routes to /world?goto=mine_south', async () => {
+  it('FIX_BUG node routes to /world (mine is a side area, no goto query)', async () => {
     const wrapper = await setupNode({
       id: 3,
       nodeType: 'FIX_BUG',
@@ -134,10 +134,10 @@ describe('PathTreeTab deep link', () => {
     await flushPromises();
 
     expect(router.currentRoute.value.path).toBe('/world');
-    expect(router.currentRoute.value.query.goto).toBe('mine_south');
+    expect(router.currentRoute.value.query.goto).toBeUndefined();
   });
 
-  it('PLANT_KC node routes to /world?focus=kc_...', async () => {
+  it('PLANT_KC node routes to /workshop (learn the KC in the workshop)', async () => {
     const wrapper = await setupNode({
       id: 4,
       nodeType: 'PLANT_KC',
@@ -148,8 +148,7 @@ describe('PathTreeTab deep link', () => {
     await wrapper.find('[data-testid="path-node-link-4"]').trigger('click');
     await flushPromises();
 
-    expect(router.currentRoute.value.path).toBe('/world');
-    expect(router.currentRoute.value.query.focus).toBe('kc_py43-kc-004');
+    expect(router.currentRoute.value.path).toBe('/workshop');
   });
 
   it('PROFILE_UPDATE node routes to /profile-room', async () => {

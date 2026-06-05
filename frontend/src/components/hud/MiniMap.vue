@@ -1,16 +1,10 @@
 <script setup lang="ts">
 /**
- * MiniMap.vue —— W3 HUD 小地图组件。
- *
- * 设计要点：
- *   1. 组件为纯展示组件，不直接依赖 store / Phaser，数据由 Page 通过 props 喂入，
- *      保证跨场景（town / farm / mine / campus / port）调出时不与 Phaser 渲染抢资源。
- *   2. 用 <canvas> 一次性绘制整张缩略图：ground 浅绿、collision 深灰、玩家红点、NPC 黄点，
- *      仅在 mount 与相关 props 变化时重画，不参与 requestAnimationFrame 主循环。
- *   3. tilemap 缺失（例如尚未 bootstrap）时降级显示「无地图数据」占位文本，避免空白画布。
- *   4. 像素风：image-rendering: pixelated + 木色边框 + 半透明深色背景，与 OperationHints / ChapterNavPanel 视觉一致。
- *   5. R-13 增强：可选 mapName/exits props 显示当前地图名与出口方向箭头（4 向：north/south/east/west）；
- *      所有新 prop 都是 optional，保持对现有 spec 完全向后兼容。
+ * HUD 小地图：纯展示组件，数据由父级通过 props 注入，不依赖 store / Phaser，
+ * 也不复用 Phaser scene，避免与画布渲染抢资源。
+ * 用 <canvas> 一次性绘制缩略图，仅在 mount 与相关 props 变化时重画，不进 rAF 主循环。
+ * tilemap 缺失时降级显示「无地图数据」占位，避免空白画布。
+ * mapName / exits 等均为 optional：显示地图名与 4 向出口箭头（north/south/east/west）。
  */
 import { computed, onMounted, ref, watch } from 'vue';
 
@@ -33,7 +27,7 @@ export interface MinimapExitMarker {
   side: MinimapExitSide;
   /** 目标地图 key，用于 tooltip 与 a11y 标签 */
   toMap: string;
-  /** 中文显示名（可选）。例如「知识农场」 */
+  /** 中文显示名（可选） */
   label?: string;
 }
 
@@ -44,9 +38,9 @@ interface Props {
   playerX: number;
   playerY: number;
   npcs?: NpcMarker[];
-  /** R-13 增强：当前地图中文显示名，例如「Pythontopia 小镇」 */
+  /** 当前地图中文显示名，例如「Pythontopia 小镇」 */
   mapName?: string;
-  /** R-13 增强：边缘出口方向列表，渲染为 4 边箭头 */
+  /** 边缘出口方向列表，渲染为 4 边箭头 */
   exits?: MinimapExitMarker[];
   /** 玩家当前朝向（UP/DOWN/LEFT/RIGHT），用于高亮对应方向的 exit arrow */
   playerFacing?: string;
@@ -71,7 +65,7 @@ const BG_COLOR = '#2a2118';
 const PLAYER_COLOR = '#e63946';
 const NPC_COLOR = '#ffd166';
 const POINT_SIZE = 3;
-// R-13 迭代 17：玩家点脉动半径（最大半径，用 sin(time) 调制）
+// 玩家点脉动半径（最大半径，用 sin(time) 调制）
 const PLAYER_PULSE_MAX_RADIUS = 6;
 
 const canvasRef = ref<HTMLCanvasElement | null>(null);
@@ -146,11 +140,10 @@ function redraw(): void {
   const py = Math.floor(props.playerY * scaleY);
   ctx.fillRect(px, py, POINT_SIZE, POINT_SIZE);
 
-  // R-13 迭代 17：玩家点外圈脉动光晕。每次 redraw 时按 performance.now() 计算
-  // 半径，不接 rAF 主循环（避免空闲时 CPU 占用），仅在 player/tilemap/npcs 变化
-  // 触发 watch 时重新计算。
-  // jsdom 的 mock canvas context 可能只实现 fillRect/fillStyle，arc/stroke 缺失时
-  // 静默跳过，确保 MiniMap.spec 既有用例（只断言 fillRect）不被破坏。
+  // 玩家点外圈脉动光晕：每次 redraw 按 performance.now() 计算半径，不接 rAF 主循环
+  // （避免空闲时 CPU 占用），仅 player/tilemap/npcs 变化触发 watch 时重算。
+  // jsdom 的 mock canvas 可能只实现 fillRect/fillStyle，arc/stroke 缺失时静默跳过，
+  // 确保 MiniMap.spec 既有用例（只断言 fillRect）不被破坏。
   const ctxWithArc = ctx as unknown as {
     arc?: (x: number, y: number, r: number, a0: number, a1: number) => void;
     beginPath?: () => void;

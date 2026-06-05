@@ -23,7 +23,7 @@
     },
     "discuss_loop": {
       "id": "discuss_loop",
-      "text": "for 循环就像种田时一行一行浇水——遍历列表里的每一个元素。while 循环则是一直干到条件不满足为止！",
+      "text": "for 循环就像一行一行读代码、一个一个过——遍历列表里的每一个元素。while 循环则是一直干到条件不满足为止！",
       "conditions": [],
       "choices": [
         {

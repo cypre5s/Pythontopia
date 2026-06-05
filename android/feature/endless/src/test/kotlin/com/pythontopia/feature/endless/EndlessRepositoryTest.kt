@@ -40,7 +40,7 @@ class EndlessRepositoryTest {
     fun `kcCodes 提取代码列表`() = runTest {
         server.enqueue(
             MockResponse().setBody(
-                """[{"id":1,"kcCode":"PY43-KC-001","kcName":"计算思维"},{"id":2,"kcCode":"PY43-KC-016","kcName":"分支"}]""",
+                """[{"kcId":1,"kcCode":"PY43-KC-001","kcName":"计算思维"},{"kcId":2,"kcCode":"PY43-KC-016","kcName":"分支"}]""",
             ),
         )
         assertEquals(listOf("PY43-KC-001", "PY43-KC-016"), repository.kcCodes())

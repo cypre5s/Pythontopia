@@ -1,6 +1,6 @@
-// W2 NpcFramework：把 NPC 巡逻状态、对话锚点、任务发布器收敛到一处，避免每个 scene
+// NpcFramework：把 NPC 巡逻状态、对话锚点、任务发布器收敛到一处，避免每个 scene
 // 自己再写一遍 dx/dy + waypoint 循环。本框架是纯逻辑层：scene 只用 import type，
-// NPC sprite 的实际渲染 / Phaser GameObject 创建留给 scene 整合层（后续 commit）。
+// NPC sprite 的实际渲染 / Phaser GameObject 创建留给 scene 整合层。
 //
 // 设计边界：
 // - 巡逻：按 deltaMs 推进当前 waypoint，到达后 dwell；dwell 完成走下一个；环形循环。
@@ -126,8 +126,7 @@ export class NpcFramework {
   }
 
   /**
-   * A5 schedule 支持：瞬移 NPC 到新位置（用于日程切换）。
-   * 同时可选更新巡逻路点。
+   * 瞬移 NPC 到新位置（用于日程切换），同时可选更新巡逻路点。
    */
   teleport(id: string, x: number, y: number, patrol?: NpcWaypoint[]): boolean {
     const npc = this.npcs.get(id);

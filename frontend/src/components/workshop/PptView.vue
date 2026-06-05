@@ -217,7 +217,7 @@ function exportMarpMd(): void {
 </style>
 
 <style>
-/* Reveal.js parchment theme overrides (unscoped for :deep penetration) */
+/* Reveal.js 羊皮纸主题覆盖（不加 scoped 以便穿透 :deep） */
 .ppt-reveal {
   --r-background-color: #f9e7bc;
   --r-main-font: 'PythontopiaPixel', 'PingFang SC', sans-serif;
@@ -354,7 +354,7 @@ function exportMarpMd(): void {
   color: var(--pyt-color-bg-elevated);
 }
 
-/* Progress bar theming */
+/* 进度条主题 */
 .ppt-reveal .progress {
   background: rgba(110, 79, 29, 0.3);
   height: 4px;
@@ -363,12 +363,12 @@ function exportMarpMd(): void {
   background: #4f8a3e;
 }
 
-/* Controls theming */
+/* 控制按钮主题 */
 .ppt-reveal .controls button {
   color: var(--pyt-color-text-hint);
 }
 
-/* Slide number theming */
+/* 页码主题 */
 .ppt-reveal .slide-number {
   color: var(--pyt-color-text-hint);
   font-family: var(--pyt-font-pixel);

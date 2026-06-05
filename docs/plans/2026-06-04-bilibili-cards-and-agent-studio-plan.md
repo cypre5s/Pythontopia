@@ -180,7 +180,21 @@ STORYBOARD（动画脚本）这条线：
   - graph `/agents/video/bilibili/search` → 502 `No module named 'bilibili_api'`（路由+lazy import+结构化错误对；缺包因无网）。
   - graph orchestrator/turn → 看步标题「B站视频：Python for循环基础」（D 实证）。
   - graph + **后端** SSE `/agents/resource/produce/stream` & `/api/workshop/resources/stream` → `event:plan`(5 工位+真实 agent_label) + 每节点 `phase:start→finish`，**经后端原样透传**（Feature B 端到端）。
-- `[2026-06-04 22:22] B 浏览器截图受限` — 浏览器子代理因账户计费被拦无法启动；公网不通，真实 B 站检索 + 浏览器可视化截图未取。已用「API 级 live e2e + 读码/ tokens 风格审计」替代。**剩余需人工：联网 + 浏览器看一眼 B站真实卡片与工作室动画视觉。** 开发栈仍在运行（localhost:5173，停止：`./dev.sh --down`）。
+- `[2026-06-04 22:22] B 浏览器截图受限` — 浏览器子代理因账户计费被拦无法启动；公网不通，真实 B 站检索 + 浏览器可视化截图未取。已用「API 级 live e2e + 读码/ tokens 风格审计」替代。开发栈仍在运行（localhost:5173，停止：`./dev.sh --down`）。
+- `[2026-06-04 22:30] ✅ 确保 B 站可联通` — 代理 7892 可达 B 站（`api.bilibili.com/nav` 200；直连 000）。
+  - 代码：`routes/video.py` 新增 `_configure_bilibili_proxy()`——读 `PYT_BILI_PROXY`（回退 `HTTPS_PROXY`）调 `request_settings.set_proxy()`，幂等、版本容错（可提交的真实改进，不是临时 hack）。
+  - 运行时：宿主装 `bilibili-api-python 17.4.1`，用代理 env 跑宿主版 graph 顶替容器版（容器内 `127.0.0.1` 触达不到宿主代理 7892）。后端 `PYT_GRAPH_URL=127.0.0.1:18091` 无需改。
+  - **验真**：graph 直连真实搜索出 3 条真视频；**后端带 JWT `/api/videos/bilibili` → 200，3 张真实卡片**（bvid/清洗标题/UP/时长秒/播放量/**https 封面 hdslb**）。`test_video_route.py` 仍 5 passed。
+  - 残留：dockerized graph 镜像未含该包且容器触达不到宿主代理——容器化需 `rebuild` 镜像 + 让容器经 `host.docker.internal`/网关访问代理；当前运行栈走宿主 graph，B 站实卡可用。
+- `[2026-06-04 22:50] ✅ 浏览器深度使用（学生视角，真实点击+截图）` — 直连 cursor-ide-browser MCP（子代理被计费拦，直连可用），锁定标签模拟学生：
+  - 世界/小镇：星露谷像素镇 + 20+ NPC（镇长 Py / AI 导师 / 工坊师傅 / 矿洞 Bug / 竞技场…）加载正常。
+  - **学习总管（D）**：输入"我想系统学 for 循环"→ 看→学→练→测 4 步计划，**看步标题=「看视频：B站精选讲解 + 微课」**，多智能体协同链 ✓，已随学更新画像 learning_goal；新增「想看视频讲解」建议气泡可见。
+  - **看课页 B站精选（真实）**：/lecture/1 侧栏"本章 B站精选"出 6 张真卡（真实封面 + 角标 + 时长 + UP + 播放量），`no-referrer` 封面无 403；主播放器放课程视频。
+  - **工坊 VIDEO 意图（真实）**：聊天"我想看 for 循环的视频讲解"→「▶ B站视频」气泡 + 8 张高度相关真卡（第15课 Python For循环 / 7分钟学会Python循环 / 3小时入门 ▶623.2万 …）。
+  - **智能体工作室（Feature B）**：生成讲义触发「智能体事务所」——5 个真实 agent 工位全 ✓（馆员/讲义设计师/审查官/校对官/安全员）+ 执行日志带耗时 + 交付证据确认卡（课本第 4/5/12 页 + 安全通过）。证据卡为交付前硬确认模态（合理设计）。
+  - 题库：packId=43 · 39 题（章/KC/难度筛选）；图书馆：7 章/561 页/65 KC + 课件 RAG 检索。
+  - 风格：全程星露谷牛皮纸像素风一致（含新增 B站卡片/视频气泡/工作室）。
+  - 未单独点击深用：训练场判题、闯关塔 boss、矿洞、复盘、画像（均为既有功能，非本次改动）。
 
 ## 8. 验证结果（父代理收口）
 

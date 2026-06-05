@@ -4,19 +4,19 @@
   "category": "educator_core",
   "sprite": "lpc_npc_librarian",
   "portrait": "portrait_librarian_doc.png",
-  "spawnMap": "campus_east",
+  "spawnMap": "town_hub",
   "spawn": { "tileX": 6, "tileY": 6 },
   "birthday": { "month": 10, "day": 11 },
   "favoriteGifts": ["python_book", "bookmark", "tea"],
   "schedule": {
-    "monday":    [{ "from": "08:00", "map": "campus_east", "tileX": 6, "tileY": 6 }],
-    "tuesday":   [{ "from": "08:00", "map": "campus_east", "tileX": 6, "tileY": 6 }],
-    "wednesday": [{ "from": "08:00", "map": "campus_east", "tileX": 6, "tileY": 6 }, { "from": "15:00", "map": "campus_east", "tileX": 8, "tileY": 8 }],
-    "thursday":  [{ "from": "08:00", "map": "campus_east", "tileX": 6, "tileY": 6 }],
-    "friday":    [{ "from": "08:00", "map": "campus_east", "tileX": 6, "tileY": 6 }],
-    "saturday":  [{ "from": "10:00", "map": "campus_east", "tileX": 6, "tileY": 6 }],
+    "monday":    [{ "from": "08:00", "map": "town_hub", "tileX": 6, "tileY": 6 }],
+    "tuesday":   [{ "from": "08:00", "map": "town_hub", "tileX": 6, "tileY": 6 }],
+    "wednesday": [{ "from": "08:00", "map": "town_hub", "tileX": 6, "tileY": 6 }, { "from": "15:00", "map": "town_hub", "tileX": 8, "tileY": 8 }],
+    "thursday":  [{ "from": "08:00", "map": "town_hub", "tileX": 6, "tileY": 6 }],
+    "friday":    [{ "from": "08:00", "map": "town_hub", "tileX": 6, "tileY": 6 }],
+    "saturday":  [{ "from": "10:00", "map": "town_hub", "tileX": 6, "tileY": 6 }],
     "sunday":    [{ "from": "12:00", "map": "town_hub",    "tileX": 17, "tileY": 9 }]
   },
   "tags": ["doc_recommend", "evidence_finder", "chapter_guide"],
-  "description": "校园图书馆馆长，掌管 7 份课件 561 页索引。能根据你的 KC 进度精确翻到对应章节页码。"
+  "description": "小镇图书馆馆长，掌管 7 份课件 561 页索引。能根据你的 KC 进度精确翻到对应章节页码，让你带着证据页码出门。"
 }

@@ -1,4 +1,4 @@
-// R-13 §5 Phase 1（v2 重写）：35 主线子任务 + 7 boss 静态数据。
+// 35 主线子任务 + 7 boss 静态数据。
 //
 // 数据严格 ground 在 `data/course-pack-43/json/course_chapter.json` 的 7 章 +
 // `course_kc.json` 的 65 KC（packId=43《Python 语言基础》，东华大学教材）。
@@ -30,8 +30,8 @@ export const MAIN_QUEST_BOSSES: readonly MainQuestBoss[] = [
     name: '算盘灵 · 计算工具守卫',
     kcRange: { startCode: 'PY43-KC-001', endCode: 'PY43-KC-007' },
     rewards: [
-      { kind: 'coin', amount: 200 },
       { kind: 'item', amount: 1, ref: 'outfit:apprentice' },
+      { kind: 'kc_mastery', amount: 12, ref: 'PY43-KC-001' },
     ],
     storyboardCue: '镇长 Py 将算盘交予你，作为计算思维实习生的徽章。',
   },
@@ -40,8 +40,8 @@ export const MAIN_QUEST_BOSSES: readonly MainQuestBoss[] = [
     name: '解释器学徒 · Python 语言守关',
     kcRange: { startCode: 'PY43-KC-008', endCode: 'PY43-KC-016' },
     rewards: [
-      { kind: 'coin', amount: 320 },
       { kind: 'item', amount: 1, ref: 'title:python_speaker' },
+      { kind: 'kc_mastery', amount: 15, ref: 'PY43-KC-016' },
     ],
     storyboardCue: 'Python 解释器在终端中打出一行 "Hello, learner!" 作为礼物。',
   },
@@ -50,56 +50,56 @@ export const MAIN_QUEST_BOSSES: readonly MainQuestBoss[] = [
     name: '二进制独眼 · 信息表示之灵',
     kcRange: { startCode: 'PY43-KC-017', endCode: 'PY43-KC-030' },
     rewards: [
-      { kind: 'coin', amount: 420 },
       { kind: 'item', amount: 1, ref: 'storyboard:binary_dawn' },
+      { kind: 'kc_mastery', amount: 18, ref: 'PY43-KC-030' },
     ],
-    storyboardCue: '矿洞深处亮起 0/1 双色雾灯，照见进制转换的真章。',
+    storyboardCue: '小镇广场亮起 0/1 双色雾灯，照见进制转换的真章。',
   },
   {
     chapter: 4,
     name: '流程钟楼 · 自动化锻造神',
     kcRange: { startCode: 'PY43-KC-031', endCode: 'PY43-KC-038' },
     rewards: [
-      { kind: 'coin', amount: 520 },
       { kind: 'item', amount: 1, ref: 'item:loop_bookmark' },
+      { kind: 'kc_mastery', amount: 20, ref: 'PY43-KC-037' },
     ],
-    storyboardCue: '校园广场的钟楼自此走时不再卡帧，循环与分支井然有序。',
+    storyboardCue: '镇中钟楼自此走时不再卡帧，循环与分支井然有序。',
   },
   {
     chapter: 5,
     name: '集合棱镜 · 数据结构灵兽',
     kcRange: { startCode: 'PY43-KC-039', endCode: 'PY43-KC-047' },
     rewards: [
-      { kind: 'coin', amount: 620 },
       { kind: 'item', amount: 1, ref: 'outfit:captain' },
+      { kind: 'kc_mastery', amount: 22, ref: 'PY43-KC-047' },
     ],
-    storyboardCue: '码头商船升起绣有 list / dict / set 三面棱镜的银帆。',
+    storyboardCue: '小镇集市升起绣有 list / dict / set 三面棱镜的银帆。',
   },
   {
     chapter: 6,
     name: '文档守护神 · 文件存取灵',
     kcRange: { startCode: 'PY43-KC-048', endCode: 'PY43-KC-053' },
     rewards: [
-      { kind: 'coin', amount: 720 },
       { kind: 'item', amount: 1, ref: 'title:file_keeper' },
+      { kind: 'kc_mastery', amount: 25, ref: 'PY43-KC-053' },
     ],
-    storyboardCue: '图书馆深处档案柜重新归位，词频统计帮你找到失落的篇章。',
+    storyboardCue: '镇上的档案馆里档案柜重新归位，词频统计帮你找到失落的篇章。',
   },
   {
     chapter: 7,
     name: '归纳之镜 · 面向对象与抽象终极',
     kcRange: { startCode: 'PY43-KC-054', endCode: 'PY43-KC-065' },
     rewards: [
-      { kind: 'coin', amount: 1000 },
       { kind: 'item', amount: 1, ref: 'outfit:graduate' },
       { kind: 'item', amount: 1, ref: 'title:pythontopia_alumnus' },
+      { kind: 'kc_mastery', amount: 30, ref: 'PY43-KC-065' },
     ],
     storyboardCue: '镇长 Py 在毕业典礼把镇徽别在你身上，标志你已完成 7 章 65 KC。',
   },
 ] as const;
 
 export const MAIN_QUESTS: readonly MainSubQuest[] = [
-  // ───── 第 1 章 计算工具与计算思维：town_hub 喷泉广场 ─────
+  // ───── 第 1 章 计算工具与计算思维：小镇 town_hub 启程 ─────
   {
     id: '1-1',
     chapter: 1,
@@ -110,7 +110,7 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     npcKey: 'mayor_py',
     kcCodes: ['PY43-KC-001'],
     evidenceRequired: { type: 'dialog_complete', npcKey: 'mayor_py' },
-    rewards: [{ kind: 'coin', amount: 25 }],
+    rewards: [{ kind: 'kc_mastery', amount: 5, ref: 'PY43-KC-001' }],
   },
   {
     id: '1-2',
@@ -122,7 +122,7 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     npcKey: 'professor',
     kcCodes: ['PY43-KC-002'],
     evidenceRequired: { type: 'dialog_complete', npcKey: 'professor' },
-    rewards: [{ kind: 'coin', amount: 30 }],
+    rewards: [{ kind: 'kc_mastery', amount: 5, ref: 'PY43-KC-002' }],
   },
   {
     id: '1-3',
@@ -133,20 +133,20 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-003'],
     evidenceRequired: { type: 'resource_consumed', resourceType: 'HANDOUT' },
-    rewards: [{ kind: 'coin', amount: 35 }, { kind: 'kc_mastery', amount: 5, ref: 'PY43-KC-003' }],
+    rewards: [{ kind: 'kc_mastery', amount: 5, ref: 'PY43-KC-003' }],
   },
   {
     id: '1-4',
     chapter: 1,
     index: 4,
     title: '计算的概念（KC-006）',
-    // P0-a：第 1 章为理论导入章，packId=43 题库无 KC-006 判题真题（且受「39 题」硬约束不可新增）。
+    // 第 1 章为理论导入章，packId=43 题库无 KC-006 判题真题（且受「39 题」硬约束不可新增）。
     // 故此里程碑回归「学」性质——在工坊读懂「数据+运算=计算」，而非点进空题库。
     hint: '第 1 章是理论导入：在工坊为 KC-006「什么是计算」生成一份 READING，读懂「数据 + 运算 = 计算」。',
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-006'],
     evidenceRequired: { type: 'resource_consumed', resourceType: 'READING' },
-    rewards: [{ kind: 'coin', amount: 40 }],
+    rewards: [{ kind: 'kc_mastery', amount: 6, ref: 'PY43-KC-006' }],
   },
   {
     id: '1-5',
@@ -157,10 +157,10 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-007'],
     evidenceRequired: { type: 'resource_consumed', resourceType: 'READING' },
-    rewards: [{ kind: 'coin', amount: 50 }, { kind: 'kc_mastery', amount: 5, ref: 'PY43-KC-007' }],
+    rewards: [{ kind: 'kc_mastery', amount: 5, ref: 'PY43-KC-007' }],
   },
 
-  // ───── 第 2 章 Python 语言基础(2)：town_hub Python 启动 + farm_north 学习田 ─────
+  // ───── 第 2 章 Python 语言基础(2)：小镇 town_hub Python 启动 ─────
   {
     id: '2-1',
     chapter: 2,
@@ -170,7 +170,7 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-008'],
     evidenceRequired: { type: 'resource_consumed', resourceType: 'STORYBOARD' },
-    rewards: [{ kind: 'coin', amount: 60 }],
+    rewards: [{ kind: 'kc_mastery', amount: 6, ref: 'PY43-KC-008' }],
   },
   {
     id: '2-2',
@@ -181,7 +181,7 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-010'],
     evidenceRequired: { type: 'resource_consumed', resourceType: 'CODE_LAB' },
-    rewards: [{ kind: 'coin', amount: 60 }],
+    rewards: [{ kind: 'kc_mastery', amount: 6, ref: 'PY43-KC-010' }],
   },
   {
     id: '2-3',
@@ -192,7 +192,7 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-011'],
     evidenceRequired: { type: 'submission', problemId: 476 },
-    rewards: [{ kind: 'coin', amount: 65 }],
+    rewards: [{ kind: 'kc_mastery', amount: 8, ref: 'PY43-KC-011' }],
   },
   {
     id: '2-4',
@@ -203,7 +203,7 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-012', 'PY43-KC-013'],
     evidenceRequired: { type: 'resource_consumed', resourceType: 'PRACTICE' },
-    rewards: [{ kind: 'coin', amount: 70 }],
+    rewards: [{ kind: 'kc_mastery', amount: 6, ref: 'PY43-KC-012' }],
   },
   {
     id: '2-5',
@@ -214,32 +214,32 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-014', 'PY43-KC-016'],
     evidenceRequired: { type: 'kc_mastery', kcCode: 'PY43-KC-016', thresholdScore: 40 },
-    rewards: [{ kind: 'coin', amount: 80 }, { kind: 'kc_mastery', amount: 10, ref: 'PY43-KC-016' }],
+    rewards: [{ kind: 'kc_mastery', amount: 10, ref: 'PY43-KC-016' }],
   },
 
-  // ───── 第 3 章 计算机信息表示及计算：mine_south 矿洞 0/1 ─────
+  // ───── 第 3 章 计算机信息表示及计算：小镇 town_hub 二进制 0/1 ─────
   {
     id: '3-1',
     chapter: 3,
     index: 1,
     title: '0 和 1 的计算思维（KC-017）',
-    hint: '到矿洞入口与守矿人对话，他会讲二进制的本质（PLACEHOLDER NPC mine_keeper）。',
+    hint: '在小镇找守矿人对话，他会讲二进制的本质。',
     mapKey: 'town_hub',
     npcKey: 'mine_keeper',
     kcCodes: ['PY43-KC-017'],
     evidenceRequired: { type: 'dialog_complete', npcKey: 'mine_keeper' },
-    rewards: [{ kind: 'coin', amount: 75 }],
+    rewards: [{ kind: 'kc_mastery', amount: 5, ref: 'PY43-KC-017' }],
   },
   {
     id: '3-2',
     chapter: 3,
     index: 2,
     title: '数值类型与运算（KC-019）',
-    hint: '到矿洞训练台完成真题「数位提取」：用 // 和 % 做整数运算（problem #477）。',
+    hint: '在小镇训练场完成真题「数位提取」：用 // 和 % 做整数运算（problem #477）。',
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-019'],
     evidenceRequired: { type: 'submission', problemId: 477 },
-    rewards: [{ kind: 'coin', amount: 80 }],
+    rewards: [{ kind: 'kc_mastery', amount: 8, ref: 'PY43-KC-019' }],
   },
   {
     id: '3-3',
@@ -250,7 +250,7 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-022'],
     evidenceRequired: { type: 'resource_consumed', resourceType: 'MINDMAP' },
-    rewards: [{ kind: 'coin', amount: 85 }],
+    rewards: [{ kind: 'kc_mastery', amount: 6, ref: 'PY43-KC-022' }],
   },
   {
     id: '3-4',
@@ -261,7 +261,7 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-023', 'PY43-KC-024'],
     evidenceRequired: { type: 'kc_mastery', kcCode: 'PY43-KC-024', thresholdScore: 35 },
-    rewards: [{ kind: 'coin', amount: 90 }],
+    rewards: [{ kind: 'kc_mastery', amount: 10, ref: 'PY43-KC-023' }],
   },
   {
     id: '3-5',
@@ -272,10 +272,10 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-030'],
     evidenceRequired: { type: 'resource_consumed', resourceType: 'PRACTICE' },
-    rewards: [{ kind: 'coin', amount: 95 }, { kind: 'kc_mastery', amount: 10, ref: 'PY43-KC-030' }],
+    rewards: [{ kind: 'kc_mastery', amount: 10, ref: 'PY43-KC-030' }],
   },
 
-  // ───── 第 4 章 流程自动化：campus_east 校园广场 ─────
+  // ───── 第 4 章 流程自动化：小镇 town_hub 流程钟楼 ─────
   {
     id: '4-1',
     chapter: 4,
@@ -286,18 +286,18 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     npcKey: 'librarian_doc',
     kcCodes: ['PY43-KC-038'],
     evidenceRequired: { type: 'dialog_complete', npcKey: 'librarian_doc' },
-    rewards: [{ kind: 'coin', amount: 100 }],
+    rewards: [{ kind: 'kc_mastery', amount: 5, ref: 'PY43-KC-038' }],
   },
   {
     id: '4-2',
     chapter: 4,
     index: 2,
     title: '分支与多条件（KC-033 + KC-035）',
-    hint: '到校园训练台完成真题「三角形判断」：用 and 组合多条件 + if/else（problem #487）。',
+    hint: '在小镇训练场完成真题「三角形判断」：用 and 组合多条件 + if/else（problem #487）。',
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-033', 'PY43-KC-035'],
     evidenceRequired: { type: 'submission', problemId: 487 },
-    rewards: [{ kind: 'coin', amount: 105 }],
+    rewards: [{ kind: 'kc_mastery', amount: 8, ref: 'PY43-KC-033' }],
   },
   {
     id: '4-3',
@@ -308,7 +308,7 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-031'],
     evidenceRequired: { type: 'resource_consumed', resourceType: 'CODE_LAB' },
-    rewards: [{ kind: 'coin', amount: 110 }],
+    rewards: [{ kind: 'kc_mastery', amount: 6, ref: 'PY43-KC-031' }],
   },
   {
     id: '4-4',
@@ -319,7 +319,7 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-032', 'PY43-KC-037'],
     evidenceRequired: { type: 'kc_mastery', kcCode: 'PY43-KC-037', thresholdScore: 45 },
-    rewards: [{ kind: 'coin', amount: 115 }],
+    rewards: [{ kind: 'kc_mastery', amount: 10, ref: 'PY43-KC-032' }],
   },
   {
     id: '4-5',
@@ -330,21 +330,21 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-036'],
     evidenceRequired: { type: 'resource_consumed', resourceType: 'HANDOUT' },
-    rewards: [{ kind: 'coin', amount: 125 }, { kind: 'kc_mastery', amount: 12, ref: 'PY43-KC-036' }],
+    rewards: [{ kind: 'kc_mastery', amount: 12, ref: 'PY43-KC-036' }],
   },
 
-  // ───── 第 5 章 数据结构：port_west 商船 ─────
+  // ───── 第 5 章 数据结构：小镇 town_hub 集合工坊 ─────
   {
     id: '5-1',
     chapter: 5,
     index: 1,
     title: '列表与 Random（KC-039）',
-    hint: '到码头与船长对话，他给你一个抽奖箱演示列表 + random（PLACEHOLDER NPC captain_def）。',
+    hint: '在小镇找船长 Def 对话，他给你一个抽奖箱演示列表 + random。',
     mapKey: 'town_hub',
     npcKey: 'captain_def',
     kcCodes: ['PY43-KC-039'],
     evidenceRequired: { type: 'dialog_complete', npcKey: 'captain_def' },
-    rewards: [{ kind: 'coin', amount: 130 }],
+    rewards: [{ kind: 'kc_mastery', amount: 5, ref: 'PY43-KC-039' }],
   },
   {
     id: '5-2',
@@ -355,18 +355,18 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-040'],
     evidenceRequired: { type: 'resource_consumed', resourceType: 'PRACTICE' },
-    rewards: [{ kind: 'coin', amount: 135 }],
+    rewards: [{ kind: 'kc_mastery', amount: 6, ref: 'PY43-KC-040' }],
   },
   {
     id: '5-3',
     chapter: 5,
     index: 3,
     title: '字典基本操作（KC-042）',
-    hint: '到码头训练台完成真题「通讯录」：增删查改一气呵成，体会字典 CRUD（problem #499）。',
+    hint: '在小镇训练场完成真题「通讯录」：增删查改一气呵成，体会字典 CRUD（problem #499）。',
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-042'],
     evidenceRequired: { type: 'submission', problemId: 499 },
-    rewards: [{ kind: 'coin', amount: 140 }],
+    rewards: [{ kind: 'kc_mastery', amount: 8, ref: 'PY43-KC-042' }],
   },
   {
     id: '5-4',
@@ -377,21 +377,21 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-044', 'PY43-KC-045'],
     evidenceRequired: { type: 'kc_mastery', kcCode: 'PY43-KC-045', thresholdScore: 45 },
-    rewards: [{ kind: 'coin', amount: 145 }],
+    rewards: [{ kind: 'kc_mastery', amount: 10, ref: 'PY43-KC-044' }],
   },
   {
     id: '5-5',
     chapter: 5,
     index: 5,
     title: '集合去重（KC-046 + KC-047）',
-    hint: '工坊生成集合主题的 STORYBOARD，用 set 解决商船清单去重。',
+    hint: '工坊生成集合主题的 STORYBOARD，用 set 解决小镇集市清单去重。',
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-046', 'PY43-KC-047'],
     evidenceRequired: { type: 'resource_consumed', resourceType: 'STORYBOARD' },
-    rewards: [{ kind: 'coin', amount: 160 }, { kind: 'kc_mastery', amount: 12, ref: 'PY43-KC-047' }],
+    rewards: [{ kind: 'kc_mastery', amount: 12, ref: 'PY43-KC-047' }],
   },
 
-  // ───── 第 6 章 数据存取与分析：campus_east 图书馆档案 ─────
+  // ───── 第 6 章 数据存取与分析：小镇 town_hub 档案馆 ─────
   {
     id: '6-1',
     chapter: 6,
@@ -401,18 +401,18 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-051'],
     evidenceRequired: { type: 'resource_consumed', resourceType: 'HANDOUT' },
-    rewards: [{ kind: 'coin', amount: 165 }],
+    rewards: [{ kind: 'kc_mastery', amount: 6, ref: 'PY43-KC-051' }],
   },
   {
     id: '6-2',
     chapter: 6,
     index: 2,
     title: '文件读写四步（KC-048）',
-    hint: '到图书馆训练台完成真题「学科等级」：读入数据并按规则处理输出（problem #508）。',
+    hint: '在小镇训练场完成真题「学科等级」：读入数据并按规则处理输出（problem #508）。',
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-048'],
     evidenceRequired: { type: 'submission', problemId: 508 },
-    rewards: [{ kind: 'coin', amount: 170 }],
+    rewards: [{ kind: 'kc_mastery', amount: 8, ref: 'PY43-KC-048' }],
   },
   {
     id: '6-3',
@@ -423,7 +423,7 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-050'],
     evidenceRequired: { type: 'resource_consumed', resourceType: 'MINDMAP' },
-    rewards: [{ kind: 'coin', amount: 180 }],
+    rewards: [{ kind: 'kc_mastery', amount: 6, ref: 'PY43-KC-050' }],
   },
   {
     id: '6-4',
@@ -434,7 +434,7 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-052'],
     evidenceRequired: { type: 'kc_mastery', kcCode: 'PY43-KC-052', thresholdScore: 50 },
-    rewards: [{ kind: 'coin', amount: 185 }],
+    rewards: [{ kind: 'kc_mastery', amount: 10, ref: 'PY43-KC-052' }],
   },
   {
     id: '6-5',
@@ -445,10 +445,10 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-049', 'PY43-KC-053'],
     evidenceRequired: { type: 'resource_consumed', resourceType: 'CODE_LAB' },
-    rewards: [{ kind: 'coin', amount: 200 }, { kind: 'kc_mastery', amount: 12, ref: 'PY43-KC-053' }],
+    rewards: [{ kind: 'kc_mastery', amount: 12, ref: 'PY43-KC-053' }],
   },
 
-  // ───── 第 7 章 归纳与抽象：全镇毕业典礼 ─────
+  // ───── 第 7 章 归纳与抽象：小镇 town_hub 毕业典礼 ─────
   {
     id: '7-1',
     chapter: 7,
@@ -459,7 +459,7 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     npcKey: 'sage_review',
     kcCodes: ['PY43-KC-060'],
     evidenceRequired: { type: 'dialog_complete', npcKey: 'sage_review' },
-    rewards: [{ kind: 'coin', amount: 200 }],
+    rewards: [{ kind: 'kc_mastery', amount: 5, ref: 'PY43-KC-060' }],
   },
   {
     id: '7-2',
@@ -470,7 +470,7 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-054'],
     evidenceRequired: { type: 'resource_consumed', resourceType: 'READING' },
-    rewards: [{ kind: 'coin', amount: 210 }],
+    rewards: [{ kind: 'kc_mastery', amount: 6, ref: 'PY43-KC-054' }],
   },
   {
     id: '7-3',
@@ -481,7 +481,7 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-061'],
     evidenceRequired: { type: 'submission', problemId: 511 },
-    rewards: [{ kind: 'coin', amount: 220 }],
+    rewards: [{ kind: 'kc_mastery', amount: 8, ref: 'PY43-KC-061' }],
   },
   {
     id: '7-4',
@@ -492,7 +492,7 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-063'],
     evidenceRequired: { type: 'resource_consumed', resourceType: 'CODE_LAB' },
-    rewards: [{ kind: 'coin', amount: 230 }],
+    rewards: [{ kind: 'kc_mastery', amount: 6, ref: 'PY43-KC-063' }],
   },
   {
     id: '7-5',
@@ -504,7 +504,6 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     kcCodes: ['PY43-KC-064', 'PY43-KC-065'],
     evidenceRequired: { type: 'kc_mastery', kcCode: 'PY43-KC-065', thresholdScore: 60 },
     rewards: [
-      { kind: 'coin', amount: 300 },
       { kind: 'kc_mastery', amount: 15, ref: 'PY43-KC-065' },
       { kind: 'item', amount: 1, ref: 'outfit:graduate' },
     ],
@@ -527,7 +526,7 @@ export function listSubQuestsByChapter(chapter: number): MainSubQuest[] {
 }
 
 /**
- * P2：某章主线实际覆盖的核心 KC code 集合（去重）。
+ * 某章主线实际覆盖的核心 KC code 集合（去重）。
  * 用于把章内「非主线 KC」显式标为选修/拓展，避免初学者误以为必须全啃。
  */
 export function mainlineKcCodesForChapter(chapter: number): string[] {
@@ -544,7 +543,7 @@ export function findBossByChapter(chapter: number): MainQuestBoss | null {
   return MAIN_QUEST_BOSSES.find((b) => b.chapter === chapter) ?? null;
 }
 
-/** 规范学习闭环阶段。P0-b：让「看→学→练→测」对玩家显式可见。 */
+/** 规范学习闭环阶段：让「看→学→练→测」对玩家显式可见。 */
 export type MainQuestPhase = 'watch' | 'learn' | 'practice' | 'assess';
 
 export interface MainQuestPhaseMeta {

@@ -38,7 +38,7 @@ const GROUP_RESOURCE = '生成资源';
 const GROUP_WATCH = '看讲解';
 const GROUP_ORDER = [GROUP_ASK, GROUP_RESOURCE, GROUP_WATCH];
 
-// 单一事实来源：Phase 3 的 WorkshopChat 也从这里取命令表，避免标签 / 图标重复定义。
+// 单一事实来源：WorkshopChat 也从这里取命令表，避免标签 / 图标重复定义。
 export const SLASH_COMMANDS: readonly SlashCommand[] = [
   {
     intent: 'ASK',

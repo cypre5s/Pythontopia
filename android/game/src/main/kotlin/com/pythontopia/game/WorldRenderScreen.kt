@@ -16,13 +16,16 @@ import kotlin.math.min
  * 原生像素世界主屏：Kenney 瓦片地图 + 官方 LPC/ULPC 角色精灵，镜头跟随玩家。
  *
  * 取代旧 [HubScreen] 的 `ShapeRenderer` 色块渲染：
- * - 真实瓦片：解析 [TiledMapVisual]（town_hub 等 5 图）按层渲染 + 视锥剔除；
- * - 真实角色：主角 ULPC 行走/待机动画 + 平滑插值移动，16 个 NPC 用 LPC 合成图；
+ * - 真实瓦片：解析 [TiledMapVisual]（R-14 收缩后只渲染单中央小镇 town_hub）按层渲染 + 视锥剔除；
+ * - 真实角色：主角 ULPC 行走/待机动画 + 平滑插值移动，19 个 hub NPC 用 LPC 合成图；
  * - 镜头：跟随玩家 + 边界 clamp + 拉近缩放，告别"小镇缩成一团、玩家是个点"。
+ *
+ * R-14「世界收缩方案 A」：只有 town_hub 作为主线场景，[show] 强制载入 hub，且 hub 已无边缘出口；
+ * 外围 4 图（farm/mine/campus/port）的定义与 JSON 仍在仓库，但正常游玩不可达。
  *
  * 对外契约与 [HubScreen] 完全一致（同一 [HubGameBridge] 事件），因此 `:feature:hub`
  * 的 Compose HUD / 对话面板无需改动。碰撞优先取自瓦片 `buildings` 层（与可见建筑一致），
- * 缺图时回退 [WorldMapData] 矩形；NPC 锚点与出口仍用 [WorldMaps]（被 20-NPC 测试约束）。
+ * 缺图时回退 [WorldMapData] 矩形；NPC 锚点仍用 [WorldMaps]（被 20-NPC 测试约束）。
  */
 @Suppress("TooManyFunctions") // 渲染屏编排器：地图/输入/镜头/绘制各拆成小而单一职责的私有函数。
 class WorldRenderScreen(
@@ -53,8 +56,15 @@ class WorldRenderScreen(
             viewportHeightProvider = { Gdx.graphics?.height ?: 0 },
         ).also { Gdx.input?.inputProcessor = it }
 
+        // R-14 单中央小镇：始终从 town_hub 进入。若历史存档停在已弃用的外围图，
+        // 仅在 mapKey 仍是 town_hub 时沿用其 tile 坐标，否则回退到 hub 默认出生点。
         val seed = bridge.latestPlayerTile()
-        loadMap(WorldMaps.byKey(seed.mapKey), spawnX = seed.x, spawnY = seed.y)
+        val onHub = seed.mapKey == WorldMaps.townHub.key
+        loadMap(
+            WorldMaps.townHub,
+            spawnX = if (onHub) seed.x else WorldMaps.townHub.spawnX,
+            spawnY = if (onHub) seed.y else WorldMaps.townHub.spawnY,
+        )
     }
 
     override fun hide() {
@@ -193,8 +203,11 @@ class WorldRenderScreen(
         val nextX = player.tileX + dx
         val nextY = player.tileY + dy
 
+        // R-14 单中央小镇：仅允许回到 town_hub 的出口；通往外围 4 图的出口一律忽略。
+        // 当前 town_hub 已无任何出口，故正常游玩不会触发本分支，这里作防御性约束，
+        // 防止日后数据回退后玩家又能走出 hub。
         val exit = currentMap.exits.firstOrNull { it.area.contains(nextX, nextY) }
-        if (exit != null) {
+        if (exit != null && exit.targetMap == DEFAULT_WORLD_MAP_KEY) {
             switchMap(exit.targetMap)
             return
         }

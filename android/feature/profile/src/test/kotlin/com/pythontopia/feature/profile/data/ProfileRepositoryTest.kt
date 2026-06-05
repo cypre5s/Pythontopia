@@ -13,6 +13,7 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -93,6 +94,52 @@ class ProfileRepositoryTest {
         val req = server.takeRequest()
         assertEquals("/api/learner/profile", req.path)
         assertEquals("GET", req.method)
+    }
+
+    @Test
+    fun `fetchDimensions parses the 8-dimension snapshot array`() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(200).setBody(
+                """
+                [
+                  {"key":"professional_background","label":"专业背景","score":0.5,"confidence":0.0,"evidenceCount":0,"selfEditable":true,"tags":[]},
+                  {"key":"learning_goal","label":"学习目标","score":0.72,"confidence":0.5,"evidenceCount":4,"selfEditable":true,"tags":["exam"]},
+                  {"key":"practical_ability","label":"实践能力","score":0.4,"confidence":0.25,"evidenceCount":2,"selfEditable":false,"tags":[]}
+                ]
+                """.trimIndent(),
+            ),
+        )
+
+        val result = repository.fetchDimensions()
+
+        check(result is Result.Success)
+        val dims = result.data
+        assertEquals(3, dims.size)
+        assertEquals("professional_background", dims[0].key)
+        assertTrue(dims[0].selfEditable)
+        assertEquals(0.72, dims[1].score)
+        assertEquals(0.5, dims[1].confidence)
+        assertEquals(4, dims[1].evidenceCount)
+        assertEquals(listOf("exam"), dims[1].tags)
+        assertFalse(dims[2].selfEditable)
+
+        val req = server.takeRequest()
+        assertEquals("/api/learner/profile/dimensions", req.path)
+        assertEquals("GET", req.method)
+    }
+
+    @Test
+    fun `fetchDimensions maps 5xx to Failure with ApiError carrying httpStatus`() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(500).setBody("""{"code":"E","message":"boom"}"""),
+        )
+
+        val result = repository.fetchDimensions()
+
+        check(result is Result.Failure)
+        val error = result.error
+        check(error is ApiError)
+        assertEquals(500, error.httpStatus)
     }
 
     @Test

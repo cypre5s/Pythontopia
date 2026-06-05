@@ -18,8 +18,8 @@
       "text": "你最近一次失败在 \"{{stats.lastFailedProblemTitle}}\"，错的类型是 {{stats.lastFailedErrorType}}。矿洞 B{{stats.lastFailedMineLevel}} 层有它的影子，要下去吗？",
       "conditions": [{ "type": "has_failed_submission" }],
       "choices": [
-        { "label": "下去打", "nextNodeId": null, "effects": [{ "type": "quest_recommend", "questKey": "mine_replay_last_fail" }, { "type": "friendship", "delta": 2 }] },
-        { "label": "我先看看课件", "nextNodeId": null, "effects": [{ "type": "quest_recommend", "questKey": "review_evidence_for_failed" }] }
+        { "label": "下去打", "nextNodeId": null, "effects": [{ "type": "route", "route": "/bug-mine" }, { "type": "friendship", "delta": 2 }] },
+        { "label": "我先看看课件", "nextNodeId": null, "effects": [{ "type": "friendship", "delta": 1 }] }
       ]
     },
     "mine_rules": {
@@ -35,7 +35,7 @@
       "text": "{{profileAdaptive:你提交记录干净，去训练场挑战题刷一两道，掉下来的 Bug 我替你存着。 | 还没失败？早晚的事。先去训练场练手，回头再来。}}",
       "conditions": [{ "type": "no_failed_submission" }],
       "choices": [
-        { "label": "去训练场", "nextNodeId": null, "effects": [{ "type": "quest_recommend", "questKey": "training_attempt" }] }
+        { "label": "去训练场", "nextNodeId": null, "effects": [{ "type": "route", "route": "/training" }] }
       ]
     },
     "mine_boss_hint": {
@@ -56,10 +56,10 @@
     },
     "friendship_max": {
       "id": "friendship_max",
-      "text": "{{playerName}}，矿洞最深层只对我亲信开。给你这把缩进精修镐，遇到 IndentationError 一镐一个。",
+      "text": "{{playerName}}，矿洞最深层只对我亲信开。以后遇到 IndentationError，按我教你的法子一层层排查，一个都跑不掉。",
       "conditions": [{ "type": "friendship_min", "value": 80 }],
       "choices": [
-        { "label": "我会用好", "nextNodeId": null, "effects": [{ "type": "give_item", "itemKey": "indent_pickaxe" }, { "type": "set_flag", "flagKey": "foreman_bug_max_friend" }] }
+        { "label": "我记下了", "nextNodeId": null, "effects": [{ "type": "set_flag", "flagKey": "foreman_bug_max_friend" }] }
       ]
     }
   }

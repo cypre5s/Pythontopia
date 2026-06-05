@@ -1,4 +1,4 @@
-// 教学闭环（R-13 学习目标面板优化）：把「当前主线子任务」翻译成
+// 教学闭环：把「当前主线子任务」翻译成
 //   1. 一句「下一步该干什么」；
 //   2. 「该去找哪个 NPC / 去哪张地图」。
 //
@@ -39,8 +39,8 @@ export interface QuestGuidance {
   ctaText: string;
 }
 
-// R-14 方案A：世界收敛为单一中央小镇 town_hub，外围图（农场 / 学院 / 港口）已从主线与
-// 导航弃用。学生侧只保留「小镇」与作为支线的「Bug 矿洞」，其余地图不再作为可前往目的地。
+// 世界收敛为单一中央小镇 town_hub，外围图（农场 / 学院 / 港口）已从主线与导航弃用；
+// 学生侧只保留「小镇」与作为支线的「Bug 矿洞」，其余地图不再作为可前往目的地。
 const MAP_LABELS: Readonly<Partial<Record<MainQuestMapKey, string>>> = Object.freeze({
   town_hub: 'Pythontopia 小镇',
   mine_south: 'Bug 矿洞',
@@ -103,16 +103,17 @@ export function resolveQuestGuidance(sub: MainSubQuest): QuestGuidance {
 
   if (ev.type === 'dialog_complete') {
     const name = npcNameOf(ev.npcKey);
+    const mapLabel = mapLabelOf(sub.mapKey);
     return {
       kind: 'dialog',
       npcKey: ev.npcKey,
       npcName: name,
       mapKey: sub.mapKey,
-      mapLabel: mapLabelOf(sub.mapKey),
+      mapLabel,
       tile: null,
       teleport: true,
       openDialog: true,
-      stepText: `前往「${mapLabelOf(sub.mapKey)}」，找${name}对话`,
+      stepText: `在「${mapLabel}」找${name}对话，听他讲${kc}`,
       ctaText: `去找${name}`,
     };
   }
@@ -128,7 +129,7 @@ export function resolveQuestGuidance(sub: MainSubQuest): QuestGuidance {
       tile: null,
       teleport: false,
       openDialog: true,
-      stepText: `找${name}进「工坊」，为${kc}生成一份${resourceLabelOf(ev.resourceType)}`,
+      stepText: `在「小镇」工坊找${name}，为${kc}生成一份${resourceLabelOf(ev.resourceType)}并学完`,
       ctaText: '去工坊找工坊师傅',
     };
   }
@@ -144,7 +145,7 @@ export function resolveQuestGuidance(sub: MainSubQuest): QuestGuidance {
       tile: null,
       teleport: false,
       openDialog: true,
-      stepText: `找${name}进「训练场」，提交一道${kc}练习并通过判题`,
+      stepText: `在「小镇训练场」找${name}，提交一道${kc}练习并通过判题`,
       ctaText: '去训练场找教务 Q',
     };
   }
@@ -160,7 +161,7 @@ export function resolveQuestGuidance(sub: MainSubQuest): QuestGuidance {
       tile: null,
       teleport: false,
       openDialog: true,
-      stepText: `找${name}进「训练场」，多刷${kc}的题，把掌握进度刷到 ${ev.thresholdScore}`,
+      stepText: `在「小镇训练场」找${name}，多刷${kc}练习，把掌握进度刷到 ${ev.thresholdScore}`,
       ctaText: '去训练场找教务 Q',
     };
   }
@@ -176,7 +177,7 @@ export function resolveQuestGuidance(sub: MainSubQuest): QuestGuidance {
     tile: { x: ev.tileX, y: ev.tileY },
     teleport: true,
     openDialog: false,
-    stepText: `前往「${mapLabelOf(ev.mapKey)}」图书馆的指定位置（走到即可完成）`,
-    ctaText: '前往目标地点',
+    stepText: `去「${mapLabelOf(ev.mapKey)}」的图书馆，走到${name}指定的位置即可完成（无需对话）`,
+    ctaText: '前往图书馆',
   };
 }

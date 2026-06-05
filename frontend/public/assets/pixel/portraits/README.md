@@ -91,6 +91,6 @@ W2-DIALOG 子代理在渲染时可在头像下显示 NPC 名 + 角色标签（�
 
 ## 后续 TODO
 
-- [x] **运行时头像自动裁剪**：`scripts/crop-portrait-heads.py` 已输出 29 张 `heads/*_head.png`，DialogTree / DialogModal 直接使用单帧头像。
+- [x] **运行时头像自动裁剪**：`scripts/crop_portrait_heads.py` 已输出 29 张 `heads/*_head.png`，DialogTree / DialogModal 直接使用单帧头像。
 - [ ] **R-M3 后期增补**：如有更高质量 portrait（例如 lpc_sara 渲染单帧、four_lpc_entries 静态半身），可优先替换 `coach_q`、`class_president`、`guard` 这三个复用项。
 - [ ] **致谢页更新**：在游戏 Credits 页（`frontend/src/pages/CreditsPage.vue`）已有素材致谢小节加入：isaiah658（CC0，无需署名但建议致谢）+ Pepper&Carrot pixel adaptation（CC-BY 4.0，必须署名作者 + OGA 链接）。

@@ -1,13 +1,8 @@
 <script setup lang="ts">
 /**
- * R-13 §5 Phase 3：主线全屏面板（按 Q 切换显示）。
- *
- * 视觉：星露谷牛皮纸 9-slice 大窗 + 半透明遮罩。
- * 内容：7 章树（每章 5 子任务 + boss）+ 进度条 + 「去做」「打 Boss」按钮。
- * 行为：
- *   - 「去做」按钮跳到对应地图（复用 fastTravel 路由），无对应路径时回 town_hub；
- *   - 「打 Boss」按钮在该章 5 任务完成后亮起，跳 /boss/{chapter}（Phase 4 实现）；
- *   - ESC / 重按 Q 关闭。
+ * 主线全屏面板（按 Q 切换显示，ESC / 重按 Q 关闭）。
+ * 内容：7 章树（每章 5 子任务 + 章末 Boss）+ 进度条 + 「去做」「挑战 BOSS」按钮。
+ * 「去做」复用 fastTravel 路由跳到子任务对应地图；「挑战 BOSS」在 5 子任务全完成或本章达标后解锁，跳 /boss/{chapter}。
  */
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
@@ -40,7 +35,7 @@ function phaseOf(sub: MainSubQuestViewItem): MainQuestPhaseMeta {
   return mainSubQuestPhase(sub);
 }
 
-// P0-c / P1-c：把 kc_mastery 子任务的隐藏阈值翻译成「当前→目标 + 约再做对 N 题」。
+// 把 kc_mastery 子任务的隐藏阈值翻译成「当前→目标 + 约再做对 N 题」。
 interface MasteryHint {
   current: number;
   target: number;
@@ -69,7 +64,7 @@ const masteryHints = computed<Map<string, MasteryHint>>(() => {
   return map;
 });
 
-// P0-c：章节达标双条件的显式拆解（必做真题全过 + 本章 KC 平均掌握度 ≥ 70%）。
+// 章节达标双条件的显式拆解（必做真题全过 + 本章 KC 平均掌握度 ≥ 70%）。
 interface ChapterGate {
   requiredDone: number;
   requiredTotal: number;
@@ -104,7 +99,7 @@ const chapterGates = computed<Map<number, ChapterGate>>(() => {
   return map;
 });
 
-// P2：每章动机帧（为什么先学）+ 主线核心 / 选修拓展 KC 计数。
+// 每章动机帧（为什么先学）+ 主线核心 / 选修拓展 KC 计数。
 interface ChapterIntro {
   motivation: string;
   mainlineCount: number;
@@ -158,7 +153,7 @@ function goEndless(): void {
   void router.push({ path: '/endless' });
 }
 
-// R-12 主线 Phase 5：Boss 解锁条件升级 —— 5/5 子任务全完成「或」章节达标（双条件）均可。
+// Boss 解锁：5/5 子任务全完成「或」章节达标（双条件）均可。
 function bossUnlocked(chapter: number, defeated: boolean): boolean {
   if (defeated || chapter !== mainQuest.progress.currentChapter) return false;
   const view = mainQuest.chapterViews[chapter - 1];
@@ -256,7 +251,7 @@ function skipToNext(chapter: number): void {
               <span>{{ ch.subQuests.filter((s) => s.status === 'completed').length }}/5</span>
             </span>
           </header>
-          <!-- P2：动机帧（为什么先学）+ 选修/拓展标注 -->
+          <!-- 动机帧（为什么先学）+ 选修/拓展标注 -->
           <p
             v-if="chapterIntros.get(ch.chapter)?.motivation"
             class="mq-motivation"
@@ -322,7 +317,7 @@ function skipToNext(chapter: number): void {
               </button>
             </li>
           </ul>
-          <!-- P0-c：章节达标双条件硬验证显式拆解（练 + 测） -->
+          <!-- 章节达标双条件硬验证显式拆解（练 + 测） -->
           <div
             class="mq-gate"
             :data-testid="`main-quest-gate-${ch.chapter}`"
@@ -367,7 +362,7 @@ function skipToNext(chapter: number): void {
             >★ 已击败</span>
           </footer>
 
-          <!-- R-12 主线 Phase 5：达标后进阶 Hub（当前章 + 已达标 + boss 未通关） -->
+          <!-- 达标后进阶 Hub（当前章 + 已达标 + boss 未通关） -->
           <div
             v-if="ch.chapter === mainQuest.progress.currentChapter && mainQuest.chapterStandardMet(ch.chapter) && !ch.bossDefeated"
             class="mq-hub"
@@ -554,7 +549,7 @@ function skipToNext(chapter: number): void {
   font-size: 11px;
   color: var(--pyt-text-secondary);
 }
-/* P2：动机帧 + 选修标注 */
+/* 动机帧 + 选修标注 */
 .mq-motivation {
   margin: 2px 0 4px;
   padding: 6px 8px;
@@ -621,7 +616,7 @@ function skipToNext(chapter: number): void {
   align-items: center;
   gap: 6px;
 }
-/* P0-b：看/学/练/测 阶段徽章 */
+/* 看/学/练/测 阶段徽章 */
 .mq-quest-phase {
   flex: 0 0 auto;
   font-size: 10px;
@@ -643,7 +638,7 @@ function skipToNext(chapter: number): void {
 .mq-quest-phase--assess {
   color: #6bbf59;
 }
-/* P1-c：掌握度透明化 */
+/* 掌握度透明化 */
 .mq-quest-mastery {
   font-size: 10px;
   color: var(--pyt-text-gold);
@@ -651,7 +646,7 @@ function skipToNext(chapter: number): void {
 .mq-quest-mastery--met {
   color: var(--pyt-bar-energy);
 }
-/* P0-c：章节达标双条件 */
+/* 章节达标双条件 */
 .mq-gate {
   display: flex;
   align-items: center;

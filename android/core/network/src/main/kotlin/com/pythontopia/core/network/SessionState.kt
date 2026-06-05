@@ -1,5 +1,8 @@
 package com.pythontopia.core.network
 
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -16,4 +19,26 @@ import javax.inject.Singleton
 class SessionState @Inject constructor() {
     @Volatile
     var isGuest: Boolean = false
+
+    private val _sessionExpired = MutableStateFlow(false)
+
+    /**
+     * 会话被动失效信号（由 401 触发，见 [NetworkModule] 接线）。
+     *
+     * `:app` / `:feature:auth` 可观察它执行 `:core:network` 够不到的那部分清理：
+     * 清空磁盘 TokenStorage（归 `:feature:auth`）并导航回登录页。网络层自身只负责
+     * 清掉内存 token（见 [AuthTokenHolder]）+ 在此广播信号，避免反向依赖 feature。
+     */
+    val sessionExpired: StateFlow<Boolean> = _sessionExpired.asStateFlow()
+
+    /** 由 [NetworkModule] 在收到 401 时调用：重置为登出态并广播失效信号。 */
+    fun markSessionExpired() {
+        isGuest = false
+        _sessionExpired.value = true
+    }
+
+    /** UI 消费完失效信号后复位，避免重复导航。 */
+    fun acknowledgeSessionExpired() {
+        _sessionExpired.value = false
+    }
 }

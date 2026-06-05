@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** 5 个底部快捷槽的弹窗宿主：对话/背包/地图/技能面板。 */
+/** 快捷槽弹窗宿主：对话 / 地图 / 技能面板。 */
 import { computed, onBeforeUnmount, onMounted } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useHudStore } from '@stores/hud';
@@ -42,8 +42,7 @@ onBeforeUnmount(() => {
   }
 });
 
-// dialog.history 实际是当前会话的 nodeId 字符串数组（dialog tree 遍历路径）。
-// 这里把它和当前对话上下文合成「最近 N 节」对话记录给玩家看。
+// dialog.history 是当前会话的 nodeId 字符串数组（对话树遍历路径），非文本内容。
 const dialogContext = computed(() => {
   const tree = dialog.tree;
   if (!tree) {
@@ -61,7 +60,7 @@ const dialogContext = computed(() => {
     currentText: dialog.currentNode?.text ?? '',
   };
 });
-// R-14 方案A：单一中央小镇 hub，所有学习入口都在镇内（图书馆/工坊/训练场/矿洞入口…）。
+// 单一中央小镇 hub：所有学习入口都在镇内（图书馆/工坊/训练场/矿洞入口…）。
 const MAP_LIST = [
   { key: 'town_hub',    label: 'Pythontopia 小镇', icon: 'H' },
 ];

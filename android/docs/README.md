@@ -2,12 +2,13 @@
 
 | 文档 | 用途 |
 | --- | --- |
-| `../README.md` | Android 客户端定位 + 目标 + 边界 |
-| `ADR-001-tech-selection.md` | 关键技术选型 ADR（基于 `.work/thinking/android_research_{01..10}.md` 10 agent 调研汇总） |
-| `roadmap.md` | 从骨架 → MVP → Beta 的阶段计划 |
-| `system_design.md` | 模块架构 + 关键时序图（待 ADR 锁定后产出） |
-| `ui_design.md` | 暗色像素主题 + 字体规范 + 关键页 UI（待) |
-| `api_contracts.md` | Spring Boot REST API → Kotlin data class 映射（待） |
+| `../README.md` | Android 客户端定位 + **实测现状**（22 模块 / 16 feature / debug APK）+ 边界 |
+| `ADR-001-tech-selection.md` | 关键技术选型 ADR；**§8 附录（2026-06-05）记录实锁版本 vs 决策表** |
+| `roadmap.md` | 阶段计划（2026-06-05 已按真实代码重写：什么已落地 / 进行中 / 待办） |
+| `04-backend-contract-drift.md` | **后端契约漂移审计**：虚构的 inventory/currency、refresh 语义、存档槽位范围 |
+| `system_design.md` | 模块架构 + 关键时序图（待） |
+| `ui_design.md` | 暗色像素主题 + 字体规范 + 关键页 UI（待） |
+| `api_contracts.md` | Spring Boot REST API → Kotlin data class 映射（待；目标改由 OpenAPI 生成） |
 | `testing_strategy.md` | 测试金字塔与质量门禁（待） |
 
 ## 调研子代理输出位置

@@ -3,7 +3,7 @@
 //   - 旧 API（createDirectionController / DirectionController /
 //     ExtendedDirection / toServerDirection）保持向后兼容，TownScene 与
 //     WorldScene 仍在使用，签名与行为不变。
-//   - 新 API（InputAdapter / InputIntent / Direction8）面向 W1 多设备输入抽象：
+//   - 新 API（InputAdapter / InputIntent / Direction8）面向多设备输入抽象：
 //     键盘 / 触屏虚拟摇杆 / 手柄三套实现可单独测试，由组合 adapter 在单例层
 //     按 gamepad > keyboard > touch 的优先级合成 intent，避免多源冲突。
 //   - Phaser 仅以 `import type` 方式引入，运行时不依赖 phaser 模块，便于
@@ -59,10 +59,10 @@ export function createDirectionController(scene: SceneLike): DirectionController
   const sKey: KeyboardKeyLike | null = scene.input.keyboard?.addKey('S') ?? null;
   const dKey: KeyboardKeyLike | null = scene.input.keyboard?.addKey('D') ?? null;
   const fKey: KeyboardKeyLike | null = scene.input.keyboard?.addKey('F') ?? null;
-  // 新版主控：F/E 交互，Space 留给跳跃。
+  // F/E 交互，Space 留给跳跃。
   const spaceKey: KeyboardKeyLike | null = scene.input.keyboard?.addKey('SPACE') ?? null;
   const eKey: KeyboardKeyLike | null = scene.input.keyboard?.addKey('E') ?? null;
-  // R-12 动作模组：Shift 奔跑，C 使用工具（与交互/跳跃键互不冲突）。
+  // Shift 奔跑，C 使用工具（与交互/跳跃键互不冲突）。
   const shiftKey: KeyboardKeyLike | null = scene.input.keyboard?.addKey('SHIFT') ?? null;
   const cKey: KeyboardKeyLike | null = scene.input.keyboard?.addKey('C') ?? null;
 
@@ -119,7 +119,7 @@ export function createDirectionController(scene: SceneLike): DirectionController
 }
 
 // ===================================================================
-// W1 新 API：8 方向 InputIntent + 多设备 InputAdapter
+// 新 API：8 方向 InputIntent + 多设备 InputAdapter
 // ===================================================================
 
 /**

@@ -46,7 +46,7 @@
 
 | 模块 | 源码文件数 | 注释优化状态 |
 |---|---|---|
-| `frontend` | 417 | 部分（上一轮 8 文件待审，见明细）|
+| `frontend` | 290(src)+127(test) | ✅ src 全 290 完成（Wave 3，10 路并发；`npm run typecheck` exit 0）；上一轮 8 待审已并入；tests 127 未做 |
 | `backend` | 346(main)+64(test) | ✅ main 全 346 完成（prev 24 + Wave1 119 + Wave2 198 + 入口类已审）；`mvn test-compile` exit 0；测试 64 未做 |
 | `android` | 217 | 未开始 |
 | `services/pythontopia-graph` | 96 | 部分（上一轮已审若干）|
@@ -151,3 +151,25 @@
 | W2-B10 | intent+orchestrator+rag+video+tutor 余 | 25 | 11 | rag 全补检索/`no_evidence_found` 防幻觉契约；video 去「方案 A」；tutor 英译中补 Controller/Session 契约；intent/orchestrator 已合规 |
 
 > backend main 全 346 文件 + 入口类已覆盖；`mvn test-compile` exit 0。剩余：backend 测试（64）、`frontend`、`services/pythontopia-graph`、`services/pythontopia-rag`、`android`、`scripts`。
+
+## 全项目扩展 · 并发批次（Wave 3 · frontend src，2026-06-05）
+
+> 10 路并发子代理覆盖 `frontend/src` 全部 290 个 `.vue`/`.ts`；`npm run typecheck`（vue-tsc）通过（exit 0）。
+
+| 批次 | 范围 | 文件 | 有改动 | 要点 |
+|---|---|---|---|---|
+| W3-F1 | components/workshop + tutor | 23 | 10 | 去 R-1x/P3/C1-C2 与外部产品叙事（腾讯 Marvis/Claude/Cursor）；保留 Marvis 活动条/SSE 节点映射/证据接地契约 |
+| W3-F2 | components/hud+world+system+boss | 23 | 19 | 去 R-1x/Phase/P0-c/W4/①②③；纠正多处过期注释；保留 HUD 交互/a11y/Phaser 单实例 |
+| W3-F3 | components/arena+ui+training+video/library/common/bugmine | 25 | 3 | 去 R-1x/方案A/A-8；保留 ui 设计系统契约、TrainingPanel 防泄答双护栏 |
+| W3-F4 | components/teacher+game+board+review+profile+auth + App.vue/main.ts | 26 | 5 | 去 R-12/W2；保留 WorldCanvas 单 Game/ResizeObserver、DialogModal a11y；纠正立绘路径注释 |
+| W3-F5 | api 根层 | 34 | 9 | 去 R-1x/方案A/§；保留端点/SSE/错误码/`saveSlot` jsonb 序列化契约 |
+| W3-F6 | api/dto | 37 | 9 | 去 R-1x/V11x/W3-CTRL；删复述；纠正 crops/inventory 过期；保留 snake_case 对齐 |
+| W3-F7 | game | 31 | 20 | 去 R-12/W1-W5/§/doc 路径；保留 Phaser 隔离/单实例/8 向降级/tilemap/场景生命周期；纠正 3 处失实注释（死区/keyDebounce/RENDER_SCALE）|
+| W3-F8 | pages | 27 | 18 | 去 R-1x/M2/W4/§/Phase；保留路由/守卫/DOMPurify 安全/localStorage 契约 |
+| W3-F9 | stores + data | 27 | 19 | 去 R-1x/W3-CTRL/P0-c；保留 Pinia 状态/双写持久化/mainQuest 单一源；data 保留 packId=43 grounding |
+| W3-F10 | composables+utils+types+services+app(router.ts)+lib+i18n+test | 36 | 24 | 去 R-1x/§/决策日志；英文 catch 译中；保留副作用/清理/i18n key 不动 |
+
+> `frontend/src` 全 290 文件覆盖（`App.vue`/`main.ts`/`AppLayout.vue` 均已审，AppLayout 无注释无改动）；`npm run typecheck` exit 0。
+> ⚠️ 注意：`stores/mainQuest.ts` 编辑期间被**外部进程**并发改动（acceptQuest/completeSubQuest/defeatBoss 逻辑），子代理据当前代码仅调整了注释，建议复核合并。
+> ⚠️ frontend 改动与未提交的工坊 feature WIP 在同文件内交织，无法像 backend 那样干净单独 commit。
+> 剩余：`frontend/tests`（127）、`services/pythontopia-graph`、`services/pythontopia-rag`、`android`、`scripts`、backend 测试（64）。

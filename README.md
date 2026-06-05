@@ -60,6 +60,20 @@ plan/                       16 个阶段计划（00 ~ 15 + 阶段总览）
 .cursor/ .github/           Cursor 规则与 GitHub workflow 占位
 ```
 
+## 4.1 客户端（4 端共用一套后端）
+
+自 R-14 起，Pythontopia 从「Web + Android 双端」扩展为面向 **4 类客户端**（Web / Android / Windows / 微信）共用 **同一套 Spring Boot 后端**（`:18080`，前缀 `/api`，JWT Bearer）。微信端含 **小程序**（学习陪伴）与 **小游戏**（像素小镇）两个工程，故共 5 个客户端目录。
+
+| 平台 | 目录 | 技术栈 | 像素小镇 | 快速开始 |
+| --- | --- | --- | --- | --- |
+| Web | `frontend/` | Vue 3 + Phaser 3 + TS | 有 | `cd frontend && npm ci && npm run dev` |
+| Android | `android/` | Kotlin + Compose + LibGDX | 有 | `cd android && ./gradlew assembleDebug` |
+| Windows | `windows/` | .NET 8 WinUI 3 + MonoGame | 有（建设中） | `cd windows && dotnet build` |
+| 微信小程序 | `wechat-miniprogram/` | 原生小程序（TS） | 无（学习陪伴） | 微信开发者工具导入该目录 |
+| 微信小游戏 | `wechat-minigame/` | 原生小游戏（TS + canvas2d） | 有 | 微信开发者工具（小游戏）导入该目录 |
+
+各端构建细节以其自身 README 为准；**共享后端**的启动见下方 §5。客户端接入后端的**唯一权威契约**见 [`docs/clients/api-contract.md`](./docs/clients/api-contract.md)，跨端总览见 [`docs/clients/README.md`](./docs/clients/README.md)。
+
 ## 5. 快速开始
 
 ### 5.1 一键演示（推荐）

@@ -1,4 +1,4 @@
-// 多模态媒资前端访问层（Phase 0/1）。
+// 多模态媒资前端访问层。
 //
 // 后端端点（MediaAssetController）：
 //   POST /api/media/image            → MediaAssetDto（按 prompt 文生图；无 apikey 返回占位 degraded=true）
@@ -38,7 +38,11 @@ export async function generateImage(
   label?: string,
   kcCodes?: string[],
 ): Promise<MediaAssetDto> {
-  const res = await http.post<MediaAssetDto>('/api/media/image', { prompt, label, kcCodes });
+  const res = await http.post<MediaAssetDto>(
+    '/api/media/image',
+    { prompt, label, kcCodes },
+    { suppressNetworkToast: true },
+  );
   return res.data;
 }
 
@@ -46,6 +50,10 @@ export async function generateImage(
 export async function composeStoryboardVideo(
   scenes: StoryboardSceneSpec[],
 ): Promise<MediaAssetDto> {
-  const res = await http.post<MediaAssetDto>('/api/media/storyboard/video', { scenes });
+  const res = await http.post<MediaAssetDto>(
+    '/api/media/storyboard/video',
+    { scenes },
+    { suppressNetworkToast: true },
+  );
   return res.data;
 }

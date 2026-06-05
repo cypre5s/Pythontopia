@@ -2,7 +2,7 @@ import type Phaser from 'phaser';
 import { ensurePixelFontLoaded } from '@game/adapters/pixelFont';
 import { attachLifecycle } from '@game/core/SceneLifecycle';
 
-// W1：资源加载超时 fallback 默认 15s，超出后向外广播 pythontopia:load-timeout 让
+// 资源加载超时 fallback 默认 15s，超出后向外广播 pythontopia:load-timeout 让
 // WorldCanvas 给玩家提示，不强制中断 Phaser loader（loader 继续重试），避免在弱网/
 // 大资源场景下"黑屏死等"。
 const LOAD_TIMEOUT_MS = 15000;
@@ -61,7 +61,7 @@ interface BootSceneCreateContext {
   input?: { removeAllListeners(): unknown };
 }
 
-// M2 WorldScene 需要的 5 张大地图：BootScene 一次性预加载，切场景时直接命中缓存。
+// WorldScene 需要的 5 张大地图：BootScene 一次性预加载，切场景时直接命中缓存。
 const WORLD_MAP_KEYS: ReadonlyArray<string> = [
   'town_hub',
   'farm_north',
@@ -97,13 +97,13 @@ const TILESET_LIST: ReadonlyArray<[string, string]> = [
   ['kenney_tiny_dungeon', '/assets/pixel/tilesets/kenney-tiny-dungeon/Tilemap/tilemap_packed.png'],
 ];
 
-// R-12：超尺寸武器叠加层（ULPC 192px oversize），砍树/挖矿斧头挥砍，与标准 slash 同步。
+// 超尺寸武器叠加层（ULPC 192px），砍树/挖矿斧头挥砍，与标准 slash 同步。
 const WEAPON_SHEETS: ReadonlyArray<[string, string, number, number]> = [
   ['weapon_axe', '/assets/pixel/sprites/weapons/weapon_axe.png', 192, 192],
   ['weapon_axe_bg', '/assets/pixel/sprites/weapons/weapon_axe_bg.png', 192, 192],
 ];
 
-// Kenney tiny-town tilemap_packed.png: 192x176, 16x16 tiles, 12 cols × 11 rows = 132 frames.
+// Kenney tiny-town tilemap_packed.png：192×176，16×16 tile，12 列 × 11 行 = 132 帧。
 // 以 spritesheet 形式加载，便于按 frameIndex 取出单个 tile（frame 0 = 草地）。
 const TILESET_SPRITESHEETS: ReadonlyArray<[string, string, number, number]> = [
   ['kenney_tiny_town', '/assets/pixel/tilesets/kenney-tiny-town/Tilemap/tilemap_packed.png', 16, 16],
@@ -130,14 +130,14 @@ const KC_ICONS: ReadonlyArray<[string, string]> = [
 
 const NPC_SPRITE_BASE = '/assets/pixel/sprites/npc-composites';
 const TOOL_BASE = '/assets/pixel/sprites/lpc-tools';
-// R-12：用 LPC 茅草屋整屋 sprite 替换方块拼接建筑（scripts/build-cottages.py 合成）。
+// 用 LPC 茅草屋整屋 sprite 替换方块拼接建筑（scripts/build_cottages.py 合成）。
 const COTTAGE_IMAGES: ReadonlyArray<[string, string]> = [
   ['cottage_tan', '/assets/pixel/sprites/cottages/cottage_tan.png'],
   ['cottage_cream', '/assets/pixel/sprites/cottages/cottage_cream.png'],
   ['cottage_stone', '/assets/pixel/sprites/cottages/cottage_stone.png'],
 ];
-// R-12 动作模组（方案A）：官方 ULPC「Expanded」全动作角色表（13×42，含 run/jump/idle/sit），
-// 由 scripts/build-ulpc-characters.py 用官方 Universal-LPC 素材库合成。主角 + 8 个变体 NPC。
+// 官方 ULPC「Expanded」全动作角色表（13×42，含 run/jump/idle/sit），
+// 由 scripts/build_ulpc_characters.py 用官方 Universal-LPC 素材库合成。主角 + 8 个变体 NPC。
 const ULPC_BASE = '/assets/pixel/sprites/ulpc';
 const ULPC_NPC_SHEETS: ReadonlyArray<string> = [
   'ulpc_villager_f',
@@ -156,7 +156,7 @@ const CHARACTER_SHEETS: ReadonlyArray<[string, string, number, number]> = [
   // 主角：ULPC 全动作表。
   ['player_sara2', `${ULPC_BASE}/player_sara2.png`, 64, 64],
   ...ULPC_NPC_SHEETS.map((k): [string, string, number, number] => [k, `${ULPC_BASE}/${k}.png`, 64, 64]),
-  // R-12 动作模组：星露谷味手持工具叠加层（LPC Hand Tools，universal 13×21）。
+  // 星露谷味手持工具叠加层（LPC Hand Tools，universal 13×21）。
   // 与角色同帧布局，叠在主角/NPC 之上即「手持工具」，浇水=thrust 倒水动作。
   ['tool_watering_can', `${TOOL_BASE}/watering-can.png`, 64, 64],
   ['tool_watering_can_bg', `${TOOL_BASE}/watering-can-bg.png`, 64, 64],
@@ -179,7 +179,7 @@ const CHARACTER_SHEETS: ReadonlyArray<[string, string, number, number]> = [
   ['npc_gardener', `${NPC_SPRITE_BASE}/npc_gardener.png`, 64, 64],
 ];
 
-// W3 视觉 polish：天气粒子 + KC 收获 confetti 共用一套小型贴图。
+// 天气粒子 + KC 收获 confetti 共用一套小型贴图。
 const PARTICLE_LIST: ReadonlyArray<[string, string]> = [
   ['fx_rain_drop', '/assets/pixel/effects/weather/rain_drop.png'],
   ['fx_snowflake', '/assets/pixel/effects/weather/snowflake.png'],
@@ -230,7 +230,7 @@ export const BootScene = {
     for (const [key, url] of SFX_LIST) loader.audio(key, url);
     for (const [key, url] of BGM_LIST) loader.audio(key, url);
 
-    // M2 地图清单 + 5 张 Tiled JSON：loader 桩可能未实现这两个方法，因此使用 ?.()。
+    // 地图清单 + 5 张 Tiled JSON：loader 桩可能未实现这两个方法，因此使用 ?.()。
     loader.json?.('map_index', '/assets/maps/index.json');
     for (const mapKey of WORLD_MAP_KEYS) {
       loader.tilemapTiledJSON?.(`map_${mapKey}`, `/assets/maps/${mapKey}.json`);
@@ -240,11 +240,10 @@ export const BootScene = {
     window.dispatchEvent(
       new CustomEvent('pythontopia:load-progress', { detail: { progress: 1 } }),
     );
-    // W1：BootScene 也接入统一生命周期清理，hot-reload 时 progress timer / loader
+    // BootScene 接入统一生命周期清理，hot-reload 时 progress timer / loader
     // listener 不会再泄漏到下一次 Game 实例。
     attachLifecycle(this as unknown as Phaser.Scene);
-    // R-13 §-1 C-FastTravel：从 Workshop 5 传送 chip 跳过来 / 玩家重连恢复存档
-    // 时，世界场景应当从 world.player.mapKey 读取目标地图，而不是硬编码 town_hub。
+    // 初始地图从 world.player.mapKey 读取（传送 / 重连恢复存档），而非硬编码 town_hub。
     // 兜底：worldStore 未初始化或 mapKey 不在 5 张地图中时仍走 town_hub。
     const initialMap = resolveInitialMapKey();
     this.scene.start('WorldScene', { mapKey: initialMap });
@@ -272,7 +271,7 @@ function resolveInitialMapKey(): string {
       return candidate;
     }
   } catch {
-    // ignore: 没起 pinia 或 SSR 环境就走 fallback
+    // 没起 pinia 或 SSR 环境就走 fallback
   }
   return 'town_hub';
 }

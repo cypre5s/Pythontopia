@@ -104,6 +104,22 @@ Pythontopia 是基于 Alethicode 技术资产抽取重构的独立新项目：�
 └── AGENTS.md
 ```
 
+### 目录约定（多端，R-14 追加）
+
+自 R-14 起 Pythontopia 面向 4 类客户端（Web / Android / Windows / 微信）共用同一套后端，除上文已列的 `frontend/`、`android/` 外，新增以下客户端目录（**仅追加约定，不改动上文既有政策**）：
+
+```text
+/home/cypress/Pythontopia/
+├── windows/                    # .NET 8 + WinUI 3 + MonoGame 原生桌面端（像素小镇）
+├── wechat-miniprogram/         # 原生微信小程序（TypeScript），学习陪伴（无像素小镇）
+└── wechat-minigame/            # 原生微信小游戏（TypeScript + canvas2d），像素小镇
+```
+
+- 这三个目录由各自端的负责人/Agent 维护，构建与实现细节以各端 README 为准。
+- 4 端共用 `backend/`（`:18080`，前缀 `/api`，JWT Bearer）。客户端接入契约以 `docs/clients/api-contract.md` 为唯一权威，跨端总览见 `docs/clients/README.md`。
+- 各原生/微信端**不复用** Web 端 Phaser 代码 / `tilemap.ts` / `frontend/src/api/*.ts`（沿用既有 Android 端约定）。
+- 收敛后无背包 / 货币 / 商店端点，客户端不要为其建 UI。
+
 ## Alethicode 来源模块
 
 Pythontopia 是独立项目，但允许抽取 Alethicode 中必要能力。抽取时必须保留来源说明。

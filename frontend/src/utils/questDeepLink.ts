@@ -6,9 +6,9 @@ import type { ClassroomQuestDto } from '@/api/dto/ClassroomQuest';
 /**
  * 教育闭环：把路径节点 / 任务卡片映射为前端"去做"按钮的具体路由。
  *
- * - 后端写入 deep_link_route + deep_link_params 时优先使用后端版本（V110+），
+ * - 后端写入 deep_link_route + deep_link_params 时优先使用后端版本，
  *   只在历史 quest 上兜底用 node_type / payload 推导（不破坏旧数据）。
- * - WorldScene 自身解析 `focus=kc_xxx` / `goto=mine_south` 等 query 由 W3-CTRL 负责，
+ * - WorldScene 自身解析 `focus=kc_xxx` / `goto=mine_south` 等 query，
  *   这里只负责"把人送到那个 URL"。
  */
 
@@ -34,7 +34,6 @@ function fallbackRoute(
   nodeType: QuestNodeType | PathNodeType,
   options: { kcCode?: string | null; problemId?: number | null; resourceType?: string | null },
 ): RouteLocationRaw {
-  const kcLower = options.kcCode ? options.kcCode.toLowerCase() : null;
   switch (nodeType) {
     case 'SOLVE_PROBLEM':
       if (options.problemId) {
@@ -48,12 +47,9 @@ function fallbackRoute(
       return { path: '/workshop', query };
     }
     case 'FIX_BUG':
-      return { path: '/world', query: { goto: 'mine_south' } };
+      return { path: '/world' };
     case 'PLANT_KC':
-      return {
-        path: '/world',
-        query: kcLower ? { focus: `kc_${kcLower}` } : {},
-      };
+      return { path: '/workshop' };
     case 'PROFILE_UPDATE':
       return { path: '/profile-room' };
     default:

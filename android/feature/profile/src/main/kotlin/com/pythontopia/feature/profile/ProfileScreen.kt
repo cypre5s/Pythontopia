@@ -23,6 +23,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pythontopia.core.design.PytColors
 import com.pythontopia.core.design.PytSpace
 import com.pythontopia.feature.profile.data.LearnerProfileDto
+import com.pythontopia.feature.profile.data.ProfileDimensionDto
 import com.pythontopia.feature.profile.data.ProfileDimensions
 import com.pythontopia.feature.profile.ui.DimensionProgressBar
 import com.pythontopia.feature.profile.ui.PassiveDimensionView
@@ -34,7 +35,7 @@ fun ProfileScreen(viewModel: ProfileViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
-        if (state.profile == null && state.error == null) {
+        if (state.dimensions.isEmpty() && state.error == null) {
             viewModel.loadProfile()
         }
     }
@@ -80,7 +81,10 @@ fun ProfileScreen(viewModel: ProfileViewModel = hiltViewModel()) {
 
             else -> Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 when (state.tab) {
-                    ProfileTab.DASHBOARD -> DashboardContent(state.profile)
+                    ProfileTab.DASHBOARD -> DashboardContent(
+                        profile = state.profile,
+                        dimensions = state.dimensions,
+                    )
                     ProfileTab.SUBJECTIVE -> SubjectiveDimensionForm(
                         isSaving = state.isSaving,
                         savedKey = state.savedDimensionKey,
@@ -93,16 +97,22 @@ fun ProfileScreen(viewModel: ProfileViewModel = hiltViewModel()) {
 }
 
 @Composable
-private fun DashboardContent(profile: LearnerProfileDto?) {
+private fun DashboardContent(
+    profile: LearnerProfileDto?,
+    dimensions: List<ProfileDimensionDto>,
+) {
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(PytSpace.s4),
     ) {
-        if (profile == null) {
+        if (dimensions.isEmpty()) {
             EmptyProfileHint()
         } else {
-            EightDimensionDashboard(profile)
-            profile.narrativeSummary?.takeIf { it.isNotBlank() }?.let { summary ->
+            EightDimensionDashboard(dimensions)
+            if (profile == null) {
+                InterviewPendingHint()
+            }
+            profile?.narrativeSummary?.takeIf { it.isNotBlank() }?.let { summary ->
                 PixelCard(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(PytSpace.s3)) {
                         Text(
@@ -119,7 +129,9 @@ private fun DashboardContent(profile: LearnerProfileDto?) {
                     }
                 }
             }
-            PassiveDimensionView(profile = profile)
+            if (profile != null) {
+                PassiveDimensionView(profile = profile)
+            }
         }
     }
 }
@@ -143,16 +155,36 @@ private fun EmptyProfileHint() {
     }
 }
 
+/** 有 8 维快照但画像主体尚未生成（GET /profile 204）时的解释卡：分数为中性默认，去访谈后变准。 */
+@Composable
+private fun InterviewPendingHint() {
+    PixelCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(PytSpace.s3)) {
+            Text(
+                "画像访谈未完成",
+                style = MaterialTheme.typography.titleMedium,
+                color = PytColors.textPrimary,
+            )
+            Text(
+                "以上为系统默认 / 被动聚合的初始值（多数维度信号不足）。去镇长 Py 那里完成访谈后，分数与置信度会随真实学习行为更新。",
+                style = MaterialTheme.typography.bodySmall,
+                color = PytColors.textMuted,
+                modifier = Modifier.padding(top = PytSpace.s2),
+            )
+        }
+    }
+}
+
 /**
- * 8 维仪表盘：每维一行 [DimensionProgressBar]。
+ * 8 维仪表盘：每维一行 [DimensionProgressBar]，数据全部来自后端
+ * `GET /api/learner/profile/dimensions`（[ProfileDimensionDto]）。
  *
- * 分数估算策略（前端简化）：
- *  - 4 主观维度：用 PUT 后的 `dimensions.{key}.score`（暂不在 GET 暴露，placeholder 0.5）。
- *  - 4 被动维度：从结构化字段倒推一个粗略分（如 success_rate 直接用，frequent_kc 数 / 10 归一）。
- * 真实分由后端 `learner_profile.dimensions.{key}.score` 给出，R-13 再把它合到 GET payload。
+ * 每维直接读真实 `score` / `confidence` / `evidenceCount`，并用 DTO 权威的 `selfEditable`
+ * 决定「可自评 / 系统聚合」徽标——不再用前端 placeholder 0.5 倒推。`evidenceCount == 0` 时
+ * 灰显，提示 0.5 为中性默认而非测量值。
  */
 @Composable
-private fun EightDimensionDashboard(profile: LearnerProfileDto) {
+private fun EightDimensionDashboard(dimensions: List<ProfileDimensionDto>) {
     PixelCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
@@ -165,28 +197,16 @@ private fun EightDimensionDashboard(profile: LearnerProfileDto) {
                 style = MaterialTheme.typography.titleLarge,
                 color = PytColors.textPrimary,
             )
-            ProfileDimensions.KEYS.forEach { key ->
-                val score = profile.scoreFor(key)
+            dimensions.forEach { dim ->
                 DimensionProgressBar(
-                    title = ProfileDimensions.label(key),
-                    score = score ?: PLACEHOLDER_SCORE,
-                    filled = score != null,
+                    title = dim.label.ifBlank { ProfileDimensions.label(dim.key) },
+                    score = dim.score,
+                    confidence = dim.confidence,
+                    evidenceCount = dim.evidenceCount,
+                    selfEditable = dim.selfEditable,
+                    hasSignal = dim.evidenceCount > 0,
                 )
             }
         }
     }
 }
-
-private fun LearnerProfileDto.scoreFor(key: String): Double? = when (key) {
-    ProfileDimensions.PROFESSIONAL_BACKGROUND -> major?.let { 0.5 }
-    ProfileDimensions.KNOWLEDGE_BASE -> baseLevel?.pythonSelfRatedLevel?.let { it.toDouble() / 5.0 }
-    ProfileDimensions.LEARNING_GOAL -> learningGoal?.kind?.let { 0.5 }
-    ProfileDimensions.COGNITIVE_STYLE -> cognitiveStyle?.fieldDependent
-    ProfileDimensions.LEARNING_PREFERENCE -> learningPreference?.sessionMinutesPerDay?.let { (it / 240.0).coerceIn(0.0, 1.0) }
-    ProfileDimensions.ERROR_PATTERN -> errorPatterns?.frequentKcCodes?.let { 1.0 - (it.size / 10.0).coerceIn(0.0, 1.0) }
-    ProfileDimensions.PRACTICAL_ABILITY -> practiceCapability?.successRate
-    ProfileDimensions.EMOTION_PERSISTENCE -> emotionPersistence?.resilience
-    else -> null
-}
-
-private const val PLACEHOLDER_SCORE = 0.0

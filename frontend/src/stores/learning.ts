@@ -88,7 +88,7 @@ export interface FieldState {
   lastSignature: string | null;
 }
 
-// P0-c：训练真题判定通过后，推进主线 submission 子任务。
+// 训练真题判定通过后，推进主线 submission 子任务。
 // 用动态 import 避免 learning ↔ mainQuest 循环依赖（mainQuest 已静态 import learning）。
 function notifyMainQuestSubmission(payload: {
   problemId?: number | string;
@@ -104,9 +104,9 @@ function notifyMainQuestSubmission(payload: {
   });
 }
 
-// ②情绪化小镇：一次服务端判题（无论 AC/WA）后刷新世界情绪氛围——连挫触发细雨+助教台阶、
-// 逆袭回暖到晴。用动态 import 避免 learning ↔ mood 潜在耦合；mood store refresh 内部
-// try/finally 不抛错、失败降级 sunny，绝不阻断提交结果展示（最不侵入：仅一处调用）。
+// 一次服务端判题（无论 AC/WA）后刷新世界情绪氛围——连挫触发细雨+助教台阶、逆袭回暖到晴。
+// 用动态 import 避免 learning ↔ mood 潜在耦合；mood store refresh 内部 try/finally 不抛错、
+// 失败降级 sunny，绝不阻断提交结果展示。
 function notifyMoodRefresh(): void {
   if (typeof window === 'undefined') return;
   void import('@stores/mood').then((mod) => {
@@ -118,11 +118,10 @@ function notifyMoodRefresh(): void {
   });
 }
 
-// ③玩中建画像：练习失败后请求 fail_react 探针（emotion_persistence 行为信号）。
-// 与 notifyMoodRefresh 同构：动态 import 解耦，避免 learning ↔ probe 静态互依；probe store
-// 仅置 requested 标记，由世界内 ProbeCard 监听弹出（失败发生在训练页、探针卡在世界页，
-// 借 store 跨页传信号）。fire-and-forget、失败静默，绝不阻塞提交结果展示——最不侵入：
-// 仅 submitToServer 失败分支一处调用。
+// 练习失败后请求 fail_react 探针（emotion_persistence 行为信号）。
+// 动态 import 解耦，避免 learning ↔ probe 静态互依；probe store 仅置 requested 标记，
+// 由世界内 ProbeCard 监听弹出（失败发生在训练页、探针卡在世界页，借 store 跨页传信号）。
+// fire-and-forget、失败静默，绝不阻塞提交结果展示。
 function notifyProbeRequest(probeKey: string): void {
   if (typeof window === 'undefined') return;
   void import('@stores/probe').then((mod) => {
@@ -134,7 +133,7 @@ function notifyProbeRequest(probeKey: string): void {
   });
 }
 
-// P0-c：掌握度快照刷新后，联动主线 kc_mastery「测」子任务。
+// 掌握度快照刷新后，联动主线 kc_mastery「测」子任务。
 // 后端 masteryScore 为 0..1；onMasteryReached 阈值（mainQuests thresholdScore）为 0..100，
 // 故乘 100 归一到同一标度后再比较。
 function notifyMainQuestMastery(
@@ -357,10 +356,7 @@ export const useLearningStore = defineStore('learning', {
     selectKc(kcCode: string | null): void {
       this.field.activeKcCode = kcCode;
     },
-    /**
-     * W4-NAV-FINISH：保留 R-11 兼容别名。
-     * 部分老组件按 `setFieldActiveKc` 命名调用，等价于 `selectKc`。
-     */
+    /** `selectKc` 的兼容别名：部分老组件按 `setFieldActiveKc` 命名调用。 */
     setFieldActiveKc(kcCode: string | null): void {
       this.field.activeKcCode = kcCode;
     },
@@ -375,7 +371,7 @@ export const useLearningStore = defineStore('learning', {
     },
     /**
      * 由 world store 的 `bootstrap()` 一次性下发后调用，避免页面挂载时 N 次串行 GET。
-     * 各字段都是可选：W3-CTRL 后端在某些场景下（例如老用户没有 path）会留空，
+     * 各字段都是可选：后端在某些场景下（例如老用户没有 path）会留空，
      * 此时保持现有 state 不变，等业务侧再触发对应 lazy load。
      */
     setBootstrapData(payload: {
@@ -426,8 +422,7 @@ export const useLearningStore = defineStore('learning', {
         const response = await createWorkshopResource(request);
         this.resources.phase = 'success';
         await this.loadResources();
-        // R-13 §-1 critical fix：触发主线 evidence_type='resource_consumed' 检测，
-        // 修复"工坊生成资源后主线任务永远卡住"的 bug。
+        // 触发主线 evidence_type='resource_consumed' 检测。
         if (typeof window !== 'undefined') {
           void import('@stores/mainQuest').then((mod) => {
             try {
@@ -616,12 +611,11 @@ export const useLearningStore = defineStore('learning', {
         const detail = await getSubmission(created.id);
         this.training.submission = detail;
         this.training.phase = 'done';
-        // ②情绪化小镇：判题结果回来即刷新情绪氛围（streak 同时计入 AC/WA，故无论通过与否都刷）。
+        // 判题结果回来即刷新情绪氛围（streak 同时计入 AC/WA，故无论通过与否都刷）。
         notifyMoodRefresh();
         await this.loadTodayQuests();
-        // P0-c：真题判定通过 → 推进主线「练」子任务，并刷新掌握度联动「测」子任务。
-        const passed =
-          detail.submission.status === 'PASSED' || detail.judgeResult?.verdict === 'AC';
+        // 真题判定通过 → 推进主线「练」子任务，并刷新掌握度联动「测」子任务。
+        const passed = detail.judgeResult?.verdict === 'AC';
         if (passed) {
           const kcCode = this.training.problem?.kcCode;
           notifyMainQuestSubmission(
@@ -634,7 +628,7 @@ export const useLearningStore = defineStore('learning', {
             /* 掌握度刷新失败不阻断提交结果展示 */
           }
         } else if (
-          // ③玩中建画像：服务端判题为「失败」（FAILED/ERROR 或有非 AC 判定）→ 请求 fail_react
+          // 服务端判题为「失败」（FAILED/ERROR 或有非 AC 判定）→ 请求 fail_react
           // 探针。仅置标记、不阻塞；排除 PENDING/RUNNING（尚未判定）误触。
           detail.submission.status === 'FAILED' ||
           detail.submission.status === 'ERROR' ||
@@ -787,7 +781,7 @@ export const useLearningStore = defineStore('learning', {
     },
 
     /**
-     * A7: KC mastery 自然衰减 — 模拟学习遗忘曲线。
+     * KC mastery 自然衰减 — 模拟学习遗忘曲线。
      * sleep 推进 1 天时调用，每个已掌握的 KC mastery 减少 decayAmount。
      * 下限 clamp 到 0，不会变成负数。
      */

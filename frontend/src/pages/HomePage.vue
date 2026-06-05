@@ -104,7 +104,7 @@ onMounted(async () => {
         recommendations.value = recs.slice(0, 3);
       })
       .catch(() => {
-        /* recommendations are optional */
+        /* 推荐为可选数据，加载失败忽略 */
       })
       .finally(() => {
         loadingRecs.value = false;
@@ -117,7 +117,7 @@ onMounted(async () => {
         classroom.value = list.find((c) => c.status === 'ACTIVE') ?? null;
       })
       .catch(() => {
-        /* classroom info is optional */
+        /* 班级信息为可选数据，加载失败忽略 */
       }),
   );
 
@@ -131,7 +131,7 @@ onMounted(async () => {
       class="home-page"
       data-testid="home-page"
     >
-      <!-- ── Authenticated Dashboard ── -->
+      <!-- ── 已登录仪表盘 ── -->
       <template v-if="session.isAuthenticated">
         <section class="welcome-area">
           <div class="welcome-text">
@@ -335,7 +335,7 @@ onMounted(async () => {
         </nav>
       </template>
 
-      <!-- ── Unauthenticated Welcome ── -->
+      <!-- ── 未登录欢迎 ── -->
       <template v-else>
         <div class="guest-area">
           <h1 class="guest-title">
@@ -372,7 +372,7 @@ onMounted(async () => {
   gap: 20px;
 }
 
-/* ── Welcome Area ── */
+/* ── 欢迎区 ── */
 .welcome-area {
   display: flex;
   align-items: center;
@@ -406,7 +406,7 @@ onMounted(async () => {
   color: var(--pyt-color-text-muted);
 }
 
-/* ── Mastery Ring ── */
+/* ── 掌握度环 ── */
 .mastery-ring-wrap {
   flex: 0 0 auto;
   width: 96px;
@@ -435,7 +435,7 @@ onMounted(async () => {
   fill: var(--pyt-color-text-muted);
 }
 
-/* ── Sections ── */
+/* ── 区块 ── */
 .section {
   width: 100%;
   max-width: 720px;
@@ -458,7 +458,7 @@ onMounted(async () => {
   color: var(--pyt-color-text-muted);
 }
 
-/* ── Recommendation Cards ── */
+/* ── 推荐卡片 ── */
 .rec-cards {
   list-style: none;
   margin: 0;
@@ -521,7 +521,7 @@ onMounted(async () => {
   line-height: 1.4;
 }
 
-/* ── Quest Chips ── */
+/* ── 任务标签 ── */
 .quest-chips {
   list-style: none;
   margin: 0;
@@ -567,7 +567,7 @@ onMounted(async () => {
   color: var(--pyt-color-success);
 }
 
-/* ── CTA Row ── */
+/* ── CTA 按钮行 ── */
 .cta-row {
   display: flex;
   gap: 12px;
@@ -575,7 +575,7 @@ onMounted(async () => {
   max-width: 720px;
   justify-content: center;
 }
-/* ── Quick Actions ── */
+/* ── 快速导航 ── */
 .quick-actions {
   display: flex;
   gap: 10px;
@@ -618,7 +618,7 @@ onMounted(async () => {
   font-weight: 700;
 }
 
-/* ── Guest Area ── */
+/* ── 访客区 ── */
 .guest-area {
   display: flex;
   flex-direction: column;
@@ -638,7 +638,7 @@ onMounted(async () => {
   color: var(--pyt-color-text-hint);
 }
 
-/* ── Responsive ── */
+/* ── 响应式 ── */
 @media (max-width: 640px) {
   .home-page {
     padding: 16px 12px;

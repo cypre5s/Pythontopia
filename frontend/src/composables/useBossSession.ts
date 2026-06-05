@@ -1,4 +1,4 @@
-// R-13 §5 Phase 4：Boss 副本前端状态机。
+// Boss 副本前端状态机。
 //
 // 阶段流转：
 //   idle -> loading -> playing
@@ -34,9 +34,8 @@ export interface UseBossSessionOptions {
 }
 
 /**
- * R-13 §-1 续 BossPage 交互深挖：每章 boss 4 个阶段对应 4 个招式名（按 chapter 主题）。
- * 招式名只是文本预告，不实际改变题目；目的：让 boss 战在「玩家提交代码」之外
- * 有"对战"叙事，不再只是一张静态立绘 + 计时器。
+ * 每章 boss 4 个阶段对应 4 个招式名（按 chapter 主题）。
+ * 招式名只是文本预告，不实际改变题目，目的是让 boss 战在「玩家提交代码」之外有"对战"叙事。
  */
 export interface BossMove {
   /** 招式名（中文，带 boss 个性） */
@@ -56,11 +55,11 @@ export interface UseBossSessionReturn {
   lastResult: Ref<BossAttemptResultDto | null>;
   elapsedSec: Ref<number>;
   errorMessage: Ref<string>;
-  /** R-13 §-1 续：boss 当前 HP（满 100，每通过一 stage 扣 25）。 */
+  /** boss 当前 HP（满 100，每通过一 stage 扣 25）。 */
   bossHp: Ref<number>;
-  /** R-13 §-1 续：当前阶段招式预告，由 chapter+stage 查表得到。 */
+  /** 当前阶段招式预告，由 chapter+stage 查表得到。 */
   currentMove: Ref<BossMove | null>;
-  /** R-13 §-1 续：最近一次造成的伤害（用于飘字动画）；null = 未刚扣血。 */
+  /** 最近一次造成的伤害（用于飘字动画）；null = 未刚扣血。 */
   recentDamage: Ref<number | null>;
   startStage: () => Promise<void>;
   submit: () => Promise<void>;
@@ -70,7 +69,7 @@ export interface UseBossSessionReturn {
   advanceStage: () => Promise<void>;
 }
 
-/** R-13 §-1 续：7 章 × 4 阶段招式表（不含校名，与 boss 主题一致）。 */
+/** 7 章 × 4 阶段招式表（与 boss 主题一致）。 */
 const BOSS_MOVES: Record<number, readonly BossMove[]> = {
   1: [
     { name: '算珠初震', preview: '算盘灵抛出一连串横向算珠，需要你识别"什么是计算"。', damageOnDefeat: 25 },
@@ -132,7 +131,6 @@ export function useBossSession(opts: UseBossSessionOptions): UseBossSessionRetur
   const lastResult = ref<BossAttemptResultDto | null>(null);
   const elapsedSec = ref<number>(0);
   const errorMessage = ref<string>('');
-  // R-13 §-1 续 BossPage 交互深挖
   const bossHp = ref<number>(100);
   const currentMove = ref<BossMove | null>(getBossMove(opts.chapter, 1));
   const recentDamage = ref<number | null>(null);
@@ -143,7 +141,7 @@ export function useBossSession(opts: UseBossSessionOptions): UseBossSessionRetur
     phase.value = 'loading';
     lastResult.value = null;
     elapsedSec.value = 0;
-    // R-13 §-1 续：每个 stage 切换招式预告。
+    // 每个 stage 切换招式预告。
     currentMove.value = getBossMove(opts.chapter, stage.value);
     try {
       const fetched = await requestBossProblem(opts.chapter, stage.value);
@@ -200,13 +198,13 @@ export function useBossSession(opts: UseBossSessionOptions): UseBossSessionRetur
         feedback: `后端联通失败，按本地 Pyodide 判定：${msg}`,
       };
     }
-    // 合并：以 backendResult 为准；如本地评测和后端不一致，取「至少一个通过 ⇒ passed」并附说明。
-    const passed = backendResult.passed || localEval.ok;
+    // 后端有隐藏用例与正式判题结果；本地 Pyodide 只跑样例，不能把后端 WA 抬成通过。
+    const passed = backendResult.passed;
     const finalResult: BossAttemptResultDto = {
       ...backendResult,
       passed,
       passedTestCases: passed
-        ? Math.max(backendResult.passedTestCases, p.totalTestCases)
+        ? backendResult.passedTestCases
         : backendResult.passedTestCases,
       feedback: passed
         ? backendResult.feedback || '通过！沙箱与服务端均确认无误。'
@@ -230,13 +228,13 @@ export function useBossSession(opts: UseBossSessionOptions): UseBossSessionRetur
     });
     if (passed) {
       clearedStages.value += 1;
-      // R-13 §-1 critical fix：boss 每个 stage 通过都触发 onSubmissionPassed，
+      // boss 每个 stage 通过都触发 onSubmissionPassed，
       // 让 evidenceRequired.type==='submission' 的主线任务能被 boss 副本通过解锁。
       mainQuest.onSubmissionPassed({
         problemId: p.problemId,
         kcCode: p.kcCode,
       });
-      // R-13 §-1 续：boss HP 真扣血 + 飘字效果
+      // boss HP 真扣血 + 飘字效果
       const move = currentMove.value ?? getBossMove(opts.chapter, stage.value);
       const dmg = move?.damageOnDefeat ?? Math.floor(100 / totalStages);
       bossHp.value = Math.max(0, bossHp.value - dmg);
@@ -289,8 +287,7 @@ export function useBossSession(opts: UseBossSessionOptions): UseBossSessionRetur
     };
   }
 
-  // 当 passed 时手动调用 nextStage：把 stage++ 然后 startStage。
-  // 暴露成 reset / startStage 即可，组件按需调用。
+  // passed 状态下推进到下一 stage：stage++ 后重新 startStage。
   const advanceStage = async (): Promise<void> => {
     if (phase.value !== 'passed') return;
     if (stage.value >= totalStages) return;

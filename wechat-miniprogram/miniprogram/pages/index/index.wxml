@@ -1,0 +1,106 @@
+<view class="page">
+  <view class="card index__hero">
+    <view class="index__greeting">{{greeting}}</view>
+    <view class="muted">公告板 · 今日任务与班级任务</view>
+  </view>
+
+  <view class="login__error" wx:if="{{errorMsg}}">{{errorMsg}}</view>
+
+  <!-- 掌握度概览 -->
+  <view class="card">
+    <view class="row row--between">
+      <view class="section-title">掌握度概览</view>
+      <view class="muted">{{masteredCount}}/{{masteryCount}} 已掌握</view>
+    </view>
+    <view class="index__avg">
+      <text class="index__avg-num">{{masteryAvg}}</text>
+      <text class="muted"> 平均掌握度</text>
+    </view>
+    <block wx:if="{{mastery.length > 0}}">
+      <view class="index__kc" wx:for="{{mastery}}" wx:key="kcCode">
+        <view class="row row--between">
+          <text class="index__kc-code">{{item.kcCode}}</text>
+          <text class="muted">{{item.percent}}</text>
+        </view>
+        <view class="bar"><view class="bar__fill" style="width:{{item.width}}"></view></view>
+      </view>
+    </block>
+    <view class="muted" wx:else>还没有掌握度数据，去练习几道题点亮它吧。</view>
+  </view>
+
+  <!-- 今日任务 -->
+  <view class="card">
+    <view class="section-title">今日任务</view>
+    <view wx:if="{{loading && todayQuests.length === 0}}" class="loading">加载中…</view>
+    <view wx:elif="{{todayQuests.length === 0}}" class="empty">今天暂无个人任务，去课程地图逛逛吧。</view>
+    <view
+      wx:for="{{todayQuests}}"
+      wx:key="id"
+      class="list-item"
+      data-problem-id="{{item.firstProblemId}}"
+      data-quest-id="{{item.id}}"
+      bindtap="onGoPractice"
+    >
+      <view class="row row--between">
+        <text class="list-item__title">{{item.title}}</text>
+        <text class="badge {{item.statusClass}}">{{item.statusLabel}}</text>
+      </view>
+      <view class="muted" wx:if="{{item.kcCode}}">{{item.kcCode}}</view>
+      <view class="quest__desc" wx:if="{{item.description}}">{{item.description}}</view>
+      <view class="quest__actions">
+        <button
+          wx:if="{{item.canStart}}"
+          class="btn btn--sm btn--primary"
+          catchtap="onStart"
+          data-id="{{item.id}}"
+        >开始</button>
+        <button
+          wx:if="{{item.canComplete}}"
+          class="btn btn--sm btn--primary"
+          catchtap="onComplete"
+          data-id="{{item.id}}"
+        >完成</button>
+        <button
+          wx:if="{{item.firstProblemId}}"
+          class="btn btn--sm"
+          catchtap="onGoPractice"
+          data-problem-id="{{item.firstProblemId}}"
+          data-quest-id="{{item.id}}"
+        >去练习</button>
+        <button
+          wx:if="{{item.canSkip}}"
+          class="btn btn--sm btn--ghost"
+          catchtap="onSkip"
+          data-id="{{item.id}}"
+        >跳过</button>
+      </view>
+    </view>
+  </view>
+
+  <!-- 班级任务 -->
+  <view class="card">
+    <view class="section-title">班级任务</view>
+    <view wx:if="{{classQuests.length === 0}}" class="empty">暂无班级任务（加入班级后在此显示）。</view>
+    <view
+      wx:for="{{classQuests}}"
+      wx:key="id"
+      class="list-item"
+      data-problem-id="{{item.firstProblemId}}"
+      bindtap="onGoPractice"
+    >
+      <view class="row row--between">
+        <text class="list-item__title">{{item.title}}</text>
+        <text class="badge">{{item.statusLabel}}</text>
+      </view>
+      <view class="muted" wx:if="{{item.kcText}}">{{item.kcText}}</view>
+      <view class="quest__desc" wx:if="{{item.description}}">{{item.description}}</view>
+      <view class="quest__actions" wx:if="{{item.firstProblemId}}">
+        <button
+          class="btn btn--sm"
+          catchtap="onGoPractice"
+          data-problem-id="{{item.firstProblemId}}"
+        >去练习</button>
+      </view>
+    </view>
+  </view>
+</view>

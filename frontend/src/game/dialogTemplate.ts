@@ -1,5 +1,5 @@
 /**
- * R-12 W2-NPC：NPC 对话模板渲染器。
+ * NPC 对话模板渲染器。
  *
  * data/npcs/<key>/dialog.json 的 text 字段里允许出现四种占位符，
  * 由 {@link renderDialogText} 统一替换为玩家真实数据：

@@ -1,7 +1,5 @@
 <script setup lang="ts">
-// R-13：把 RouterView 包在 Suspense 内，叠加全局错误兜底，避免 chunk 加载失败时
-// 玩家看到纯白屏。同步加 router.onError 监听，对 chunk 失败 emit 友好 toast 并
-// 提供刷新建议。
+// RouterView 包在 Suspense 内并叠加全局错误兜底：chunk 加载失败时给友好 toast，避免纯白屏。
 import { onBeforeUnmount, onErrorCaptured, onMounted, ref } from 'vue';
 import { RouterView, useRouter } from 'vue-router';
 import AppToast from '@/components/system/AppToast.vue';
@@ -18,7 +16,7 @@ const BUG_MINE_ENTRY_TILE = { x: 15, y: 2 };
 
 router.onError((err) => {
   const message = err instanceof Error ? err.message : String(err);
-  // 动态 chunk 加载失败常见提示，给一个温和的中文 toast
+  // 匹配动态 chunk 加载失败的常见报错文案
   if (/Loading chunk|Failed to fetch dynamically imported|Importing a module script failed/.test(message)) {
     toast.push({ kind: 'error', text: '页面资源加载失败，请刷新重试' });
   } else {
@@ -63,8 +61,7 @@ onBeforeUnmount(() => {
 <template>
   <Suspense>
     <template #default>
-      <!-- R-13 Phase 5 迭代 6：路由切换 fade transition。
-           世界场景（/world）不参与 transition，避免每次切场景 Phaser canvas 重建。 -->
+      <!-- 路由切换 fade transition；/world 不参与，避免切场景时 Phaser canvas 重建。 -->
       <!-- WorldPage 用 KeepAlive 缓存：离开 /world 不销毁 Phaser，避免每次返回重跑 BootScene -->
       <RouterView v-slot="{ Component, route }">
         <KeepAlive include="WorldPage">
@@ -74,7 +71,7 @@ onBeforeUnmount(() => {
           >
             <component
               :is="Component"
-              :key="route.name === 'world' ? 'world' : route.fullPath"
+              :key="route.name === 'world' || route.name === 'library' ? String(route.name) : route.fullPath"
             />
           </Transition>
         </KeepAlive>
@@ -143,7 +140,7 @@ onBeforeUnmount(() => {
 </style>
 
 <style>
-/* R-13：路由 fade transition，非 scoped 让全局可用 */
+/* 路由 fade transition；非 scoped 以便全局可用 */
 .route-fade-enter-active,
 .route-fade-leave-active {
   transition: opacity 220ms ease, transform 220ms ease;

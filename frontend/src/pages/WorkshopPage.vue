@@ -1,16 +1,18 @@
 <script setup lang="ts">
 /**
- * 百晓工坊主页（R-13 §-1 合并改造）：
+ * 百晓工坊主页：
  *   - 顶部传送栏（返回小镇 / 快速传送 / 图书馆 / 闯关塔）；
- *   - 主体：左「对话流」WorkshopChat（@ 引用 + / 选工具 + 自动判定 → 问答/6 类资源），
+ *   - 左「对话流」WorkshopChat（@ 引用 + / 选工具 + 自动判定 → 问答 / 6 类资源），
  *     右「书房」StudioDrawer（可收起，列表 + 详情，详情绑路由 ?id）。
- *   - 原三栏（KC 勾选网格 + 书房 + 详情）合并为对话优先单列 + 抽屉。
  */
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import AppLayout from '@/app/AppLayout.vue';
 import WorkshopChat from '@/components/workshop/WorkshopChat.vue';
 import StudioDrawer from '@/components/workshop/StudioDrawer.vue';
+import MarvisPanel from '@/components/workshop/MarvisPanel.vue';
+import ChatHistoryRail from '@/components/workshop/ChatHistoryRail.vue';
+import type { TutorSessionDto } from '@/api/tutor';
 import { FAST_TRAVEL_ROUTES, type FastTravelRoute } from '@/data/fastTravel';
 import { useLearningStore } from '@stores/learning';
 import { useWorldStore } from '@stores/world';
@@ -23,7 +25,15 @@ const toast = useToastStore();
 const router = useRouter();
 const route = useRoute();
 
-const drawerOpen = ref(true);
+// 书房默认收起（窄把手），聊天占满主区；学生需要时点把手展开。
+const drawerOpen = ref(false);
+
+// 左栏「聊天记录」选中某段会话时，把整段会话（多轮问答）回看注入对话流并接着聊
+// （WorkshopChat 暴露 loadConversation）。
+const chatRef = ref<{ loadConversation: (sessions: TutorSessionDto[]) => void } | null>(null);
+function onSelectConversation(sessions: TutorSessionDto[]): void {
+  chatRef.value?.loadConversation(sessions);
+}
 
 const selectedId = computed<number | null>(() => {
   const id = route.query.id;
@@ -153,18 +163,25 @@ function openArena(chapter: number): void {
         class="workshop-body"
         data-testid="workshop-body"
       >
+        <ChatHistoryRail @select="onSelectConversation" />
         <div class="workshop-chat-pane">
-          <WorkshopChat @open-resource="onOpenResource" />
-        </div>
-        <div
-          class="drawer-slot"
-          :class="{ 'drawer-slot--collapsed': !drawerOpen }"
-        >
-          <StudioDrawer
-            v-model:open="drawerOpen"
-            :selected-id="selectedId"
-            @back="onDrawerBack"
+          <WorkshopChat
+            ref="chatRef"
+            @open-resource="onOpenResource"
           />
+        </div>
+        <div class="workshop-rail">
+          <MarvisPanel />
+          <div
+            class="rail-drawer"
+            :class="{ 'rail-drawer--collapsed': !drawerOpen }"
+          >
+            <StudioDrawer
+              v-model:open="drawerOpen"
+              :selected-id="selectedId"
+              @back="onDrawerBack"
+            />
+          </div>
         </div>
       </div>
     </section>
@@ -284,13 +301,23 @@ function openArena(chapter: number): void {
   box-shadow: inset 0 0 0 2px rgba(255, 247, 230, 0.55);
   overflow: hidden;
 }
-.drawer-slot {
-  flex: 0 0 360px;
+.workshop-rail {
+  flex: 0 0 clamp(240px, 24vw, 300px);
+  /* min-width:0 关键：否则书房展开后里面卡片的 min-content 宽度会把整条 rail 撑宽、
+     反过来挤压聊天主区（flex 项默认 min-width:auto 不肯收缩）。 */
+  min-width: 0;
   min-height: 0;
-  transition: flex-basis 160ms ease;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
-.drawer-slot--collapsed {
-  flex: 0 0 44px;
+/* marvis 常驻在上；书房在下，展开时占满剩余高度，收起时仅留把手。 */
+.rail-drawer {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.rail-drawer--collapsed {
+  flex: 0 0 auto;
 }
 
 @media (max-width: 900px) {
@@ -298,9 +325,10 @@ function openArena(chapter: number): void {
     flex-direction: column;
     overflow: auto;
   }
-  .drawer-slot,
-  .drawer-slot--collapsed {
+  .workshop-rail {
     flex: 0 0 auto;
+  }
+  .rail-drawer {
     max-height: 45vh;
   }
 }

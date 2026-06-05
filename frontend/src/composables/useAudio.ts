@@ -31,13 +31,13 @@ const DEFAULT_CROSSFADE_MS = 600;
 let currentBgmKey: BgmKey | null = null;
 let currentBgm: Phaser.Sound.BaseSound | null = null;
 let muted = false;
-// R-13 迭代 11：全局音量倍率，0..1，与 SettingsModal slider 联动
+// 全局音量倍率，0..1，与 SettingsModal slider 联动
 let bgmVolumeMul = 1;
 let sfxVolumeMul = 1;
 
-// W4-BGM：浏览器 autoplay 策略要求音频必须由用户交互触发；
-// 我们在 audioUnlocked=false 期间把 playBgm 入参缓存到 pendingBgm，
-// 等到 unlockAudio() 被调用（用户点击/按键）再补放，sfx 无需排队直接静默跳过。
+// 浏览器 autoplay 策略要求音频必须由用户交互触发：
+// audioUnlocked=false 期间把 playBgm 入参缓存到 pendingBgm，
+// 等 unlockAudio()（用户点击/按键）再补放；sfx 无需排队，直接静默跳过。
 let audioUnlocked = false;
 let pendingBgm: BgmKey | null = null;
 let pendingBgmOptions: PlayBgmOptions | undefined;
@@ -71,8 +71,7 @@ export function useAudio(): {
 }
 
 /**
- * R-13 迭代 11：设置 BGM 音量倍率（0..1）。
- * 立即影响当前正在播放的 BGM；新启动的 BGM 也会按此倍率。
+ * 设置 BGM 音量倍率（0..1）。立即影响当前正在播放的 BGM，新启动的 BGM 也按此倍率。
  */
 export function setBgmVolume(value: number): void {
   bgmVolumeMul = Math.max(0, Math.min(1, value));
@@ -88,8 +87,7 @@ export function setBgmVolume(value: number): void {
 }
 
 /**
- * R-13 迭代 11：设置 SFX 音量倍率（0..1）。
- * 仅影响下次 playSfx 调用，已经发出的 SFX 不被回拨。
+ * 设置 SFX 音量倍率（0..1）。仅影响下次 playSfx 调用，已发出的 SFX 不回拨。
  */
 export function setSfxVolume(value: number): void {
   sfxVolumeMul = Math.max(0, Math.min(1, value));

@@ -1,18 +1,8 @@
 <script setup lang="ts">
-// R-12 美化：WorldCanvas 改为全屏背景式画布。
-//
-// 设计要点：
-//   1. 容器铺满整个 .world-page（position:absolute + inset:0），让地图占据
-//      全部主视觉区域，避免右侧出现大块深绿色无内容空白；
-//   2. 显式声明 image-rendering: pixelated + crisp-edges，让浏览器以最近邻
-//      插值缩放像素，避免低分屏下出现模糊毛刺；
-//   3. ResizeObserver 把容器盒子尺寸推给 Phaser.game.scale.resize，配合
-//      phaserGame.ts 的 Phaser.Scale.RESIZE 模式实现「画布永远 = 视口」；
-//   4. 仍保留 BootScene 加载条遮罩，避免黑屏；
-//   5. 单 Phaser.Game 实例（AGENTS.md 硬约束）。
-//
-// 注意：不再使用 aspect-ratio + max-height，因为父容器已是 100vh，子层只需要
-// 充满父层即可。
+// 全屏背景式画布，承载唯一的 Phaser.Game 实例。关键契约：
+//   - 单 Phaser.Game 实例（AGENTS.md 硬约束），统一经 phaserGame.ts 单例创建；
+//   - ResizeObserver 把容器尺寸推给 game.scale.resize，配合 RESIZE 模式保持「画布 = 视口」；
+//   - canvas 以最近邻像素缩放（image-rendering: pixelated）保持像素风清晰边缘。
 import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref } from 'vue';
 import {
   createPhaserGame,

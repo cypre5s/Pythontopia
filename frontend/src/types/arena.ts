@@ -1,6 +1,6 @@
-// R-13 §-1 续：/arena/:chapter 章节闯关塔类型。
+// /arena/:chapter 章节闯关塔类型。
 //
-// 用户 Q2=A 决策：每章 10 关阶梯，前 9 关知识/技能小关，第 10 关是 boss。
+// 每章 10 关阶梯，前 9 关知识/技能小关，第 10 关是 boss。
 // 70 关 = 7 章 × 10 关；前 9 关复用 EndlessPage 题目机制（按 focusChapter + kc），
 // 第 10 关跳转 BossPage 4 阶段副本。
 //

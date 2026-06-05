@@ -14,7 +14,9 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class EndlessKcDto(
-    val id: Long,
+    // 后端 KcDto 序列化字段为 kcId（默认 Jackson camelCase），不是 id；
+    // 之前用 `id` 会因缺字段反序列化失败，导致 kcCodes() 静默兜底成空列表。
+    val kcId: Long = 0,
     val kcCode: String,
     val kcName: String = "",
 )

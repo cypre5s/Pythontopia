@@ -1,4 +1,4 @@
-// R-13 迭代 13：前端静态节日映射。
+// 前端静态节日映射。
 //
 // 与后端 V118 `world_festival` seed 对齐（11 个里程碑），但因 WorldFestivalService
 // 还没暴露 Controller（后端有服务无端点），前端先用本地静态映射做 HUD ribbon。

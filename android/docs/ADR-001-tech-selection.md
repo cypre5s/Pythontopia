@@ -165,3 +165,44 @@ detekt              = "1.23.7"
 - `.work/thinking/android_research_10.md`（498 行）CI/CD + APK 签名 + 商店合规
 
 > 上述子代理报告位于 `.gitignore` 的 `.work/` 目录，**不入主 commit**；本 ADR-001 已提炼关键结论，原始报告作为留档参考。
+
+---
+
+## 8. 附录（2026-06-05）：实际锁定版本 vs 决策表
+
+> 本附录为**追加**，不改写上文历史决策。骨架落地后，`gradle/libs.versions.toml` 的实锁版本与 §1/§2 的草案/愿景表存在多处差异（多数是为构建稳定而下调到更保守组合，少数是补丁号微升）。**以 `gradle/libs.versions.toml` 为唯一真相源**；下表仅记录差异以备审计。
+
+### 8.1 版本差异表（仅列与上文不一致项）
+
+| 组件 | 上文 ADR（§1/§2 愿景/草案） | 实际锁定（`libs.versions.toml`） | 备注 |
+| --- | --- | --- | --- |
+| KSP | `2.2.0-1.0.24` | `2.2.0-2.0.2` | 跟随 Kotlin 2.2.0 |
+| Hilt | §1 `2.59.2` / §2 `2.52` | `2.57.1` | 取中间稳健版 |
+| Lifecycle | `2.8.6` | `2.8.7` | 补丁微升 |
+| Navigation Compose | `2.8.3` | `2.8.5` | 补丁微升 |
+| Retrofit | §1 `2.12.0` | `2.11.0` | 回退稳定线（与 OkHttp 4 配套） |
+| OkHttp | §1 `5.3.2` | `4.12.0` | **未升 5.x**；保持与 Retrofit 2.11 默认一致 |
+| kotlinx-serialization-json | §1 `1.11.0` | `1.7.3` | 回退 |
+| kotlinx-coroutines | §1 `1.10.2` | `1.9.0` | 回退 |
+| kotlinx-datetime | §1 `0.6.2` | `0.6.1` | 回退 |
+| Room | §2 `2.6.1` | `2.7.1` | 上调 |
+| LibGDX | §1 `1.14.0` | `1.13.1` | 保持稳定线（与 §2 一致） |
+| MockK | `1.13.12` | `1.13.13` | 补丁微升 |
+| Turbine | `1.1.0` | `1.2.0` | 上调 |
+| Material3 / Compose Test | §2 显式 `1.3.0` / `1.7.5` | 由 Compose BOM `2025.04.00` 统一托管，无单独 pin | 改为 BOM 管理 |
+
+**已对齐（无差异）**：AGP `8.7.3`、Kotlin `2.2.0`、Compose BOM `2025.04.00`、compileSdk/minSdk/targetSdk `35/26/35`、JVM `17`、`hilt-navigation-compose 1.2.0`、`security-crypto 1.1.0-alpha06`、`biometric 1.1.0`、`datastore 1.1.1`、JUnit5 `5.10.3`、JUnit4 `4.13.2`、Robolectric `4.13`、MockWebServer `4.12.0`、Kover `0.8.3`、Detekt `1.23.7`。
+
+### 8.2 规划但尚未引入
+
+- **OpenAPI Generator 7.22.0**（§1 决策 14）：版本目录与构建脚本中**均无**；DTO/API 目前为手写（见 §8.3 与 `04-backend-contract-drift.md`）。
+- **Macrobenchmark / Roborazzi**（§1 决策 15）：未进版本目录，无对应模块/用例。
+- **Chaquopy**（§1 决策 6 的 Beta+1 选项）：未引入（符合「Beta 首发仅服务端判题」）。
+- **真实 instrumented 测试**：`androidTest` source set 已声明但无用例。
+
+### 8.3 与上文决策的语义性差异（非版本号）
+
+- **模块拓扑扩张**：§1 决策 2 列了 8 个 feature 模块（profile/fields/workshop/arena/mine/retro/path/classroom）。实际为 **16 个**，另含 `auth/hub/dialog/tutor/library/boss/endless/lecture`。
+- **地图格式**：§1 决策 5 写 `TmxMapLoader` + `.tmx`。实际地图为 **Tiled JSON**（`town_hub.json` 等），由 `WorldMapData` / `TiledMapVisual` 加载。
+- **Refresh Token**：§1 决策 13 称「后端 `/api/auth/refresh` 仍返回 501」。实际后端**已实现**该端点，但它**不是**真正的 refresh token（用未过期的 access token 重签，过期即 401 重登）。详见 `04-backend-contract-drift.md`。
+- **新增依赖**（上文未列）：`androidx-startup`、`androidx-fragment-ktx`、`androidx-profileinstaller`、`androidx-annotation`、`retrofit2-kotlinx-serialization-converter 1.0.0`、`okhttp-logging`、`mockk-android`、`androidx-test-ext-junit`、`espresso-core`。

@@ -145,16 +145,15 @@ class ArenaViewModel @Inject constructor(
     }
 
     /**
-     * 重新拉取排行榜。
+     * 重新拉取“积分榜”。
      *
-     * 当存在 [ArenaUiState.session.classroomId] 时按班级榜请求；否则按全校榜。Beta+1 接
-     * "班级 / 全校"切换 UI 时可再加一个 `scope` 参数。
+     * 后端没有跨用户 / 班级排行榜端点，仓库只能用当前账号自己的 PASSED 提交派生单行个人战绩
+     * （local-only）。Beta+1 若后端补真实排行榜端点，再在此切换数据源。
      */
     fun refreshLeaderboard() {
         _state.update { it.copy(isLoadingLeaderboard = true, errorMessage = null) }
-        val classroomId = state.value.session?.classroomId
         viewModelScope.launch {
-            val result = runCatching { repository.leaderboard(classroomId) }
+            val result = runCatching { repository.leaderboard() }
             result.fold(
                 onSuccess = { list ->
                     _state.update {

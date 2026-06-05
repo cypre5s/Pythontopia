@@ -124,7 +124,7 @@ export async function selfUpdateDimension(
 }
 
 /**
- * ③玩中建画像：提交一次世界内认知探针选择（中性、可跳过）。后端按 probeKey→维度
+ * 玩中建画像：提交一次世界内认知探针选择（中性、可跳过）。后端按 probeKey→维度
  * 累积小增量 + evidence_count（见 PassiveProfileService），成功返回 204 No Content，
  * 故不读取 body；未知 probeKey/choiceId 配对后端返回 400 PROBE_INVALID。
  */
@@ -132,7 +132,7 @@ export async function submitProbe(probeKey: string, choiceId: string): Promise<v
   await http.post('/api/learner/probe', { probeKey, choiceId });
 }
 
-/** ②情绪化小镇：由 emotion_persistence 派生的世界情绪状态。 */
+/** 情绪化小镇：由 emotion_persistence 派生的世界情绪状态。 */
 export interface WorldStateDto {
   /** 直接驱动小镇氛围叠加层（背景级）。 */
   mood: 'sunny' | 'cloudy' | 'rainy';
@@ -143,7 +143,7 @@ export interface WorldStateDto {
 }
 
 /**
- * ②情绪化小镇：拉取学习者当前世界情绪状态。需 STUDENT 鉴权（共享 axios 自动注入 token）。
+ * 情绪化小镇：拉取学习者当前世界情绪状态。需 STUDENT 鉴权（共享 axios 自动注入 token）。
  * 后端可恒返回 200——无情绪信号/冷启动时降级为 sunny，前端据此渲染氛围，绝不阻塞玩家。
  */
 export async function fetchWorldState(): Promise<WorldStateDto> {

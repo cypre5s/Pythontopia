@@ -1,4 +1,4 @@
-// R-12 主线 Phase 2：章节视频讲解前端访问层。
+// 章节视频讲解前端访问层。
 //
 // 后端端点（CourseVideoController，源无关）：
 //   GET /api/course/videos?chapterId=N   → CourseVideoDto[]（读 video_manifest.json）
@@ -30,6 +30,7 @@ export async function listChapterVideos(chapter: number): Promise<CourseVideoDto
   try {
     const res = await http.get<CourseVideoDto[]>('/api/course/videos', {
       params: { chapterId: chapter },
+      suppressNetworkToast: true,
     });
     return Array.isArray(res.data) ? res.data : [];
   } catch {

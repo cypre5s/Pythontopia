@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// M2 重定向桩：/bug-mine 已在路由层 redirect 到 /world（mine_south 由 WorldScene 切换）。
-// 保留组件以备直接挂载场景，避免连锁删除影响仍引用 BugMinePanel 的旁路逻辑。
+// 重定向桩：/bug-mine 已在路由层 redirect 到 /world；保留组件以备直接挂载场景，
+// 避免连锁删除影响仍引用 BugMinePanel 的旁路逻辑。
 import { onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 

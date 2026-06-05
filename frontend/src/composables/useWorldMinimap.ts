@@ -36,7 +36,7 @@ const SUPPORTED_MAP_KEYS = [
 type MapKey = (typeof SUPPORTED_MAP_KEYS)[number];
 
 /**
- * R-13 修复：后端旧数据可能返回 `town-beta` `student-default` 等横杠/旧命名，
+ * 后端旧数据可能返回 `town-beta` `student-default` 等横杠/旧命名，
  * 这里做命名规范化：横杠→下划线，旧 `town-beta` → `town_hub`，未匹配则 fallback。
  */
 function normalizeMapKey(value: unknown): MapKey {
@@ -316,7 +316,7 @@ export function useWorldMinimap(): UseWorldMinimapReturn {
     loading.value = true;
     try {
       const next = await loadMinimapData(mapKey);
-      // R-13 修复：用 normalizeMapKey 后即认为命中，不再要求 strict equal
+      // 用 normalizeMapKey 后即认为命中，不再要求 strict equal
       // （旧后端 town-beta 永远不等于 town_hub，导致 minimap 永远空）
       data.value = next;
     } finally {
@@ -327,7 +327,7 @@ export function useWorldMinimap(): UseWorldMinimapReturn {
   watch(
     () => world.player?.mapKey ?? null,
     (key) => {
-      // R-13 修复：永远 fallback 到合法 mapKey，避免 minimap 在旧后端数据下消失
+      // 永远 fallback 到合法 mapKey，避免 minimap 在旧后端数据下消失
       void refreshForMap(normalizeMapKey(key));
     },
     { immediate: true },

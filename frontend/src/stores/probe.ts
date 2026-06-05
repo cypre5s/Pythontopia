@@ -1,7 +1,7 @@
-// ③玩中建画像：世界内认知探针的本地 UI 状态 store（纯前端 + 一个 fire-and-forget 提交）。
+// 世界内认知探针的本地 UI 状态 store（纯前端 + 一个 fire-and-forget 提交）。
 //
 // 探针是「中性、可跳过、低风险」的世界内选择卡（非表单问卷），从玩家选择推断维度
-// （首发只接 cog_intro → cognitive_style）。设计铁律：探针失败绝不阻塞玩家——
+// （如 cog_intro → cognitive_style）。设计铁律：探针失败绝不阻塞玩家——
 // 网络/未登录/后端 400 时一律本地标记「已答」并静默降级。
 //
 // 持久化：已答 probeKey 集合写 localStorage（pyt_probe_answered，pyt_* 约定），

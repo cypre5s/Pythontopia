@@ -1,4 +1,4 @@
-// W3 Polish：昼夜 tint 通过结构化入口隔离在 adapter。
+// 昼夜 tint 通过结构化入口隔离在 adapter。
 //
 // 实现要点：
 // - 4 段制（morning / noon / evening / night），与课表节奏对齐。

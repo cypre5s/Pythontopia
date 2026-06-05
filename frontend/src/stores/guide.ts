@@ -29,12 +29,10 @@ export interface GuideMessage {
   clarifyingQuestion?: string | null;
   needsUserInput?: boolean;
   profileUpdates?: OrchestratorProfileSignal[];
-  /** 本轮编排 trace（喂 P3 事务所动画）。 */
+  /** 本轮编排 trace（喂事务所动画）。 */
   traces?: OrchestratorTraceStep[];
   done?: boolean;
-  /** 正在流式生成中。 */
   streaming?: boolean;
-  /** 本轮失败。 */
   failed?: boolean;
 }
 
@@ -46,7 +44,7 @@ function genId(): string {
       return crypto.randomUUID();
     }
   } catch {
-    /* ignore */
+    /* 忽略 */
   }
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }

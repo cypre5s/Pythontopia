@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * R-13 D1/D2：原 PDF 页渲染器（pdfjs-dist 4.7）。
+ * 原 PDF 页渲染器（pdfjs-dist 4.7）。
  *
  * 直接 fetch 后端 `/api/course/documents/{docId}/pdf`，按 pageNo 渲染到 canvas。
  *
@@ -9,7 +9,7 @@
  *     会 destroy 旧 task，避免重复下载）；
  *   - 失败时显示带 i18n hint 的 fallback，让 LibraryPage 可以保留 Markdown 视图作为兜底；
  *   - resize 监听仅观察 wrapper 容器宽度变化，重新按 targetWidthPx 渲染，
- *     与 D3 拖拽 resize 兼容；
+ *     与拖拽 resize 兼容；
  *   - 不引入额外 zoom/scroll：让父容器 overflow:auto 控制大页 PDF 滚动；
  *   - 业务层不直接 import pdfjs-dist —— 透过 `@/lib/pdfjsLoader` 适配。
  */

@@ -1,0 +1,41 @@
+.index__hero {
+  background: linear-gradient(180deg, #efdcb8 0%, #fff8ea 100%);
+}
+
+.index__greeting {
+  font-size: 36rpx;
+  font-weight: bold;
+  color: var(--wood-dark);
+}
+
+.index__avg {
+  margin: 12rpx 0 20rpx;
+}
+
+.index__avg-num {
+  font-size: 48rpx;
+  font-weight: bold;
+  color: var(--leaf-deep);
+}
+
+.index__kc {
+  margin-bottom: 14rpx;
+}
+
+.index__kc-code {
+  font-size: 24rpx;
+  color: var(--ink);
+}
+
+.quest__desc {
+  margin: 10rpx 0;
+  font-size: 26rpx;
+  color: var(--ink-soft);
+}
+
+.quest__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14rpx;
+  margin-top: 14rpx;
+}

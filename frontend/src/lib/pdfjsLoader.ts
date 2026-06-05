@@ -1,4 +1,4 @@
-// R-13 D1/D2：pdfjs-dist 4.7 加载适配层。
+// pdfjs-dist 4.7 加载适配层。
 //
 // 业务层不直接 import pdfjs-dist，全部走本文件，方便：
 //   - 在 vitest（jsdom）里 stub worker / 不实际渲染；
@@ -64,7 +64,7 @@ export async function loadPdfPage(options: LoadPdfPageOptions): Promise<LoadedPd
     try {
       await activeTask.destroy();
     } catch {
-      /* swallow: 旧 task 被取消属于正常路径 */
+      /* 旧 task 被取消属于正常路径，忽略 */
     }
     activeTask = null;
   }
@@ -120,7 +120,7 @@ export async function renderPdfPageToCanvas(
     try {
       previous.cancel();
     } catch {
-      /* swallow: 旧 task 已结束属于正常路径 */
+      /* 旧 task 已结束属于正常路径，忽略 */
     }
     canvasRenderTasks.delete(canvas);
   }

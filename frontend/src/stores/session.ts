@@ -22,7 +22,7 @@ export const useSessionStore = defineStore('session', {
       return Date.parse(state.expiresAt) > Date.now();
     },
     displayName: (state): string => state.user?.displayName ?? state.user?.username ?? '学习者',
-    /** R-13 §2.3-6：教师审核页 / 班级面板按角色显示不同视图。 */
+    /** 教师审核页 / 班级面板按角色显示不同视图。 */
     role: (state): UserRole | null => state.user?.role ?? null,
   },
   actions: {

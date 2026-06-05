@@ -1,7 +1,7 @@
-// R-13 §5 Phase 4：Boss 副本前端 API。
+// Boss 副本前端 API。
 //
 // 优先调真后端 `/api/world/boss/...`；后端 404 / 网络失败时降级使用本地 mock 题
-// （saves dev/演示场景，避免阻塞 UI）。Phase 7 接通后这层会移除 mock。
+// （saves dev/演示场景，避免阻塞 UI）。
 //
 // 真后端契约：
 //   POST /api/world/boss/{chapter}/problem  body: { stage }  → BossProblemDto
@@ -81,7 +81,7 @@ function buildGoldenProblem(
     kcCode: findBossByChapter(chapter)?.kcRange.startCode ?? 'PY43-KC-001',
     solution: 'print(input())',
   };
-  // R-13 §-1 续：若 preferredKc 命中本章某 template，优先用之让玩家"刷弱项"有效果。
+  // 若 preferredKc 命中本章某 template，优先用之让玩家"刷弱项"有效果。
   let template: GoldenTemplate;
   if (preferredKc && templates) {
     template = templates.find((t) => t.kcCode === preferredKc) ?? templates[Math.max(0, Math.min(stage - 1, templates.length - 1))] ?? fallback;
@@ -108,7 +108,7 @@ function buildGoldenProblem(
 /**
  * 请求 boss / endless / arena 题目。
  *
- * R-13 §-1 续：第 2 参数可以是 `number`（兼容旧调用，仅 stage）或 `BossProblemRequest`
+ * 第 2 参数可以是 `number`（兼容旧调用，仅 stage）或 `BossProblemRequest`
  * （含 stage + preferredKc + preferredKind + profileSignals）。后者让 PracticeAgent
  * 真正基于学生画像偏好出题，不再随机抽 KC。
  *

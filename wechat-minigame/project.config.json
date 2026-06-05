@@ -1,0 +1,15 @@
+{
+  "appid": "touristappid",
+  "projectname": "pythontopia-minigame",
+  "compileType": "game",
+  "description": "Pythontopia 像素小镇 · 微信原生小游戏。发布前请把 appid 由 touristappid 替换为你自己的小游戏 AppID。",
+  "setting": {
+    "es6": false,
+    "minified": false,
+    "urlCheck": false,
+    "postcss": false,
+    "ignoreUploadUnusedFiles": true
+  },
+  "srcMiniprogramRoot": "./",
+  "miniprogramRoot": "./"
+}

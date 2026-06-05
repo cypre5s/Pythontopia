@@ -1,9 +1,5 @@
 <script setup lang="ts">
-// R-13：catch-all 路由对应的 404 兜底页。
-//
-// 重要原因：之前 router 没有 catch-all，访问 /shop-east 等未注册路径直接渲染
-// 空 RouterView，看起来就是白屏。本组件提供「至少有内容」的兜底，永远不让
-// 用户陷入沉默的白页面。
+// catch-all 路由对应的 404 兜底页：未注册路径不再渲染空白 RouterView。
 
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -15,7 +11,7 @@ const router = useRouter();
 
 const attemptedPath = computed(() => route.fullPath);
 
-// R-13 迭代 24：8 秒自动跳回主世界，倒计时显示，避免玩家迷路
+// 倒计时归零后自动跳回主世界，避免玩家迷路
 const countdown = ref<number>(8);
 let countdownTimer: number | null = null;
 

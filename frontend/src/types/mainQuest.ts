@@ -1,7 +1,6 @@
-// R-13 §5：主线 + AI Boss 共享类型。
+// 主线 + AI Boss 共享类型。
 //
-// 数据持久化策略：所有运行时进度塞进 `save_slot.snapshot.mainQuest` JSONB
-// （无需 V120 migration，向后兼容 + 演示风险低）。
+// 数据持久化策略：所有运行时进度塞进 `save_slot.snapshot.mainQuest` JSONB，无需独立 migration。
 
 export interface MainSubQuest {
   /** 章节+子序号，例如 "1-3"。全局唯一。 */
@@ -107,7 +106,7 @@ export interface MainSubQuestViewItem extends MainSubQuest {
   status: 'locked' | 'available' | 'in_progress' | 'completed';
 }
 
-/** 通过 mainQuestEmptyProgress() 拿到合法的初始 progress。 */
+/** 新存档的初始主线进度（currentChapter=1、各列表为空）。 */
 export function mainQuestEmptyProgress(): MainQuestProgress {
   return {
     currentChapter: 1,

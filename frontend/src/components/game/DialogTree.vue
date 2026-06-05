@@ -1,23 +1,12 @@
 <script setup lang="ts">
 /**
- * DialogTree.vue —— Pythontopia 像素对话树组件。
+ * 像素对话树面板：由 useDialogStore 的 visible / currentNode 驱动（openWithTree 路径），
+ * 渲染 NPC 头像 + 9-slice 面板 + 打字机文本 + 分支选项。
  *
- * 职责：
- *   - 监听 useDialogStore 的对话树状态，渲染 NPC 头像 + 9-slice 面板 + 选项；
- *   - 打字机逐字渲染当前节点 text，期间允许玩家点击 / 回车跳过到完整文本；
- *   - 文本播放完后展示选项按钮，点击调用 store.selectChoice；
- *   - ESC 直接关闭对话（store.close）。
- *
- * 视觉约定：
- *   - 9-slice 面板用 CSS border-image 引用 Kenney UI Pack 的 panel_brown.png，
- *     无该图时退化为深棕色实色 + 金色描边，不会破坏阅读；
- *   - portrait 路径优先取 store.portrait（meta.json 中 portrait 字段），
- *     缺失或加载失败时用空区块占位（保留版面），避免红 X；
- *   - 字体使用 var(--pyt-font-pixel)，与游戏画布统一像素观感。
- *
- * 性能：
- *   - 打字机使用单一 setTimeout 链，组件卸载时清理；
- *   - 切换节点时强制重置 typedText 与 timer，避免上一节点尾音泄露。
+ * 关键约定：
+ *   - 9-slice 面板用 border-image 引 Kenney panel_brown.png，缺图退化为实色 + 金边；
+ *   - portrait 优先取 store.portrait，缺失或加载失败时占位保留版面，避免 broken-image；
+ *   - 打字机为单条 setTimeout 链，切换节点 / 卸载时必须清理，避免上一节点回调泄露。
  */
 import { computed, onUnmounted, ref, watch } from 'vue';
 import { useDialogStore, type DialogNode } from '@stores/dialog';
@@ -78,8 +67,8 @@ let typeTimer: ReturnType<typeof setTimeout> | null = null;
 const TYPE_INTERVAL_MS = 24;
 
 const templateContext = computed(() => {
-  // R-12 W2-NPC：把 {{playerName}} / {{stats.*}} / {{profileAdaptive:..}} / {{giftFavorite:..}}
-  // 全部交给统一渲染器；store.context 缺失时只用 displayName 兜底，stats 取不到走 '—'。
+  // {{playerName}} / {{stats.*}} / {{profileAdaptive:..}} / {{giftFavorite:..}} 交给统一渲染器；
+  // store.context 缺失时用 displayName 兜底，stats 取不到走 '—'。
   const ctx = store.context;
   return createDialogContext({
     playerName: ctx?.playerName ?? session.displayName,
@@ -436,7 +425,6 @@ function onPortraitError(event: Event): void {
   margin-top: 4px;
 }
 
-/* Kenney UI 风按钮：黄棕底 + 深棕粗边，hover 提亮。 */
 .pixel-btn {
   font-family: var(--pyt-font-pixel);
   font-size: 14px;

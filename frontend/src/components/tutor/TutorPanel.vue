@@ -33,8 +33,8 @@ interface TutorStreamResult {
   visual_aids?: TutorVisualAid[];
 }
 
-// R-12 主线 Phase 3/4：可选上下文 props，让本面板可复用到做题页（TrainingPanel）
-// 时带上「当前题目 KC + 题面摘要」，普通 /tutor 页不传则为空，行为不变。
+// 可选上下文 props：让本面板可复用到做题页（TrainingPanel），带上「当前题目 KC + 题面摘要」；
+// 普通 /tutor 页不传则为空，行为不变。
 const props = withDefaults(
   defineProps<{
     kcCodes?: string[];
@@ -52,7 +52,7 @@ const toast = useToastStore();
 const scrollRef = ref<HTMLElement | null>(null);
 const inputRef = ref<HTMLTextAreaElement | null>(null);
 
-// 看图答疑（R-14 多模态B）：仿 Cursor 多图附件，最多 3 张截图 / 手写代码图，
+// 看图答疑：最多 3 张截图 / 手写代码图，
 // 后端逐张经讯飞「图片理解」转描述后交 deepseek 作答。
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 const MAX_IMAGES = 3;
@@ -68,7 +68,7 @@ const mentionGroups = composer.groups;
 const mentionActiveIndex = composer.activeIndex;
 const selectedRefs = composer.selected;
 
-// 路径修正：后端映射 POST /api/tutor/ask（此前前端误用 /ask/stream 会 404）。
+// 答疑 SSE 端点：POST /api/tutor/ask（非 /ask/stream，后者 404）。
 const sse = useSseStream<TutorStreamResult>('/api/tutor/ask');
 
 const isStreaming = computed(() => sse.status.value === 'streaming' || sse.status.value === 'connecting');
@@ -102,7 +102,7 @@ const crewTraces = computed(() => sse.traces.value);
 const crewStatus = computed(() => sse.status.value);
 const lastSentImageCount = ref(0);
 
-// 即时换讲法（①）：记住「上一次实际提交的问题」原样参数（题面 / KC / 上下文 / 图片），
+// 即时换讲法：记住「上一次实际提交的问题」原样参数（题面 / KC / 上下文 / 图片），
 // 以便点「换讲法」时用同一问题、换一种认知风格立刻重发并改写当前答案。
 interface LastAsk {
   question: string;
@@ -266,6 +266,7 @@ async function runAsk(ask: LastAsk, style?: CognitiveStyle): Promise<void> {
       answerMd: result.answerMd,
       evidencePageIds: result.evidencePageIds,
       groundingStatus: result.groundingStatus,
+      conversationId: null,
       createdAt: new Date().toISOString(),
     };
     tutor.onStreamComplete(session);
@@ -341,7 +342,7 @@ function resolveAskForRestyle(): LastAsk | null {
   return { question: session.question, kcCodes: [...props.kcCodes], context: props.context };
 }
 
-// 即时换讲法（①）：(a) 高亮选中风格 → (b) 用同一问题换风格立刻重发、改写当前答案 →
+// 即时换讲法：(a) 高亮选中风格 → (b) 用同一问题换风格立刻重发、改写当前答案 →
 // (c) 同时写回画像（影响后续轮次）。无历史问题时仅写回偏好。
 async function onPickStyle(style: CognitiveStyle): Promise<void> {
   if (isStreaming.value) return; // 流式进行中不打断；避免并发覆盖当前回答
@@ -401,7 +402,7 @@ onMounted(async () => {
       </button>
     </div>
 
-    <!-- Left Sidebar: Session History -->
+    <!-- 左栏：会话记录 -->
     <aside
       v-if="!embedded"
       class="sidebar"
@@ -439,9 +440,9 @@ onMounted(async () => {
       </ul>
     </aside>
 
-    <!-- Right Main: Conversation -->
+    <!-- 右栏主区：对话 -->
     <main class="conversation">
-      <!-- Grounding Status Chip -->
+      <!-- 接地状态徽标 -->
       <div
         v-if="groundingStatus"
         class="grounding-bar"
@@ -470,7 +471,7 @@ onMounted(async () => {
         </span>
       </div>
 
-      <!-- 助教小队：工作流拟人化（看图答疑 / 检索 / 讲解 / 校对 实时可视，借鉴 Marvis 虚拟办公室） -->
+      <!-- 助教小队：工作流拟人化（看图答疑 / 检索 / 讲解 / 校对 实时可视） -->
       <TutorCrew
         v-if="isStreaming || groundingStatus"
         :traces="crewTraces"
@@ -482,7 +483,7 @@ onMounted(async () => {
         @pick-style="onPickStyle"
       />
 
-      <!-- Current Question -->
+      <!-- 当前问题 -->
       <div
         v-if="tutor.currentSession"
         class="msg msg--user"
@@ -493,7 +494,7 @@ onMounted(async () => {
         </p>
       </div>
 
-      <!-- Answer Area -->
+      <!-- 回答区 -->
       <div
         ref="scrollRef"
         class="answer-area"
@@ -521,7 +522,7 @@ onMounted(async () => {
         </p>
       </div>
 
-      <!-- Error -->
+      <!-- 错误 -->
       <p
         v-if="tutor.lastError && tutor.status === 'error'"
         class="error-bar"
@@ -529,7 +530,7 @@ onMounted(async () => {
         ⚠ {{ tutor.lastError }}
       </p>
 
-      <!-- Selected courseware references (@ command) -->
+      <!-- 已选课件引用（@ 命令） -->
       <div
         v-if="selectedRefs.length > 0"
         class="ref-chips"
@@ -553,7 +554,7 @@ onMounted(async () => {
         </button>
       </div>
 
-      <!-- 看图答疑：仿 Cursor 的多图附件缩略图，列在输入框上方 -->
+      <!-- 看图答疑：多图附件缩略图，列在输入框上方 -->
       <div
         v-if="attachedImages.length > 0"
         class="image-attachments"
@@ -580,7 +581,7 @@ onMounted(async () => {
         </div>
       </div>
 
-      <!-- Input Area -->
+      <!-- 输入区 -->
       <div class="input-area">
         <input
           ref="fileInputRef"
@@ -687,7 +688,7 @@ onMounted(async () => {
   font-size: 12px;
 }
 
-/* ── Sidebar ── */
+/* ── 侧栏 ── */
 .sidebar {
   display: flex;
   flex-direction: column;
@@ -774,7 +775,7 @@ onMounted(async () => {
   color: var(--pyt-color-text-muted);
 }
 
-/* ── Conversation ── */
+/* ── 对话区 ── */
 .conversation {
   display: flex;
   flex-direction: column;
@@ -783,7 +784,7 @@ onMounted(async () => {
   gap: 10px;
 }
 
-/* Grounding bar */
+/* 接地状态条 */
 .grounding-bar {
   display: flex;
   align-items: center;
@@ -832,7 +833,7 @@ onMounted(async () => {
   background: #a8cfe6;
 }
 
-/* Messages */
+/* 消息气泡 */
 .msg {
   padding: 8px 12px;
   border-radius: var(--pyt-radius-lg);
@@ -861,7 +862,7 @@ onMounted(async () => {
   line-height: 1.6;
 }
 
-/* Answer area */
+/* 回答区 */
 .answer-area {
   flex: 1 1 auto;
   overflow-y: auto;
@@ -887,7 +888,7 @@ onMounted(async () => {
   50% { opacity: 0; }
 }
 
-/* Error */
+/* 错误提示 */
 .error-bar {
   margin: 0;
   padding: 6px 10px;
@@ -898,7 +899,7 @@ onMounted(async () => {
   color: #b3402a;
 }
 
-/* Selected reference chips (@ command) */
+/* 已选引用标签（@ 命令） */
 .ref-chips {
   display: flex;
   align-items: center;
@@ -949,7 +950,7 @@ onMounted(async () => {
   line-height: 1;
 }
 
-/* Input */
+/* 输入区 */
 .input-area {
   position: relative;
   display: flex;
@@ -1002,7 +1003,7 @@ onMounted(async () => {
   cursor: not-allowed;
 }
 
-/* 看图答疑：附件按钮 + 仿 Cursor 缩略图附件条 */
+/* 看图答疑：附件按钮 + 缩略图附件条 */
 .input-area__attach {
   flex: 0 0 auto;
   font-size: 16px;
@@ -1063,7 +1064,7 @@ onMounted(async () => {
   opacity: 1;
 }
 
-/* ── Responsive ── */
+/* ── 响应式 ── */
 @media (max-width: 768px) {
   .tutor-panel {
     grid-template-columns: 1fr;

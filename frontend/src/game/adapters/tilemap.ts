@@ -1,8 +1,7 @@
 // 隔离原因：保持业务层无 Phaser 依赖，禁止业务代码直接 import phaser。
-// 重构原因：原实现按 30x20 = 600 个 add.image 手撸铺地，性能差且不利于碰撞。
-// 改造为 Phaser.Tilemaps API：make.tilemap + addTilesetImage + createBlankLayer + putTileAt。
-// W1：loadTownMap 进入时立刻盖一层全屏黑色 loading mask，最少显示 200ms 后再 300ms
-// 渐隐，避免地图构图过程中露出底色 / 上一场景残影导致"黑屏 / 闪烁"。
+// 铺地用 Phaser.Tilemaps API：make.tilemap + addTilesetImage + createBlankLayer + putTileAt。
+// loadTownMap 进入时盖一层全屏黑色 loading mask，最少显示 200ms 后再 300ms 渐隐，
+// 避免地图构图过程中露出底色 / 上一场景残影导致黑屏闪烁。
 import Phaser from 'phaser';
 import type { Direction } from '@api/dto/Direction';
 import type { SceneLike } from './sceneTypes';
@@ -49,8 +48,8 @@ export interface TownMapData {
   lowObstacles: boolean[][];
 }
 
-// Kenney tiny-town tilemap_packed.png: 16x16 源 tile。R-12 星露谷改造后渲染按 1:1
-// 保持 16px 网格（原 2x→32px），镜头放大改由 cameraTuning zoom 承担。
+// Kenney tiny-town tilemap_packed.png：16×16 源 tile，渲染按 1:1 保持 16px 网格，
+// 镜头放大由 cameraTuning zoom 承担。
 const TOWN_TILESET_KEY = 'kenney_tiny_town';
 const SOURCE_TILE_SIZE = 16;
 const RENDER_TILE_SIZE = 16;
@@ -210,7 +209,7 @@ export function showLoadingMask(
 export function loadTownMap(scene: SceneLike, mapKey: string): TownMapData {
   void mapKey;
   const phaserScene = scene as unknown as Phaser.Scene;
-  // W1：先盖一层 loading mask，构图过程中不会露出底色或上一场景残影。
+  // 先盖一层 loading mask，构图过程中不会露出底色或上一场景残影。
   showLoadingMask(scene);
 
   const map = phaserScene.make.tilemap({
@@ -359,8 +358,7 @@ export interface NpcInstanceLike {
 }
 
 /**
- * NPC 动画句柄：W2 时期只是静态贴图 + 提示气泡；R-12 动作模组升级为可同步
- * 巡逻位置、按朝向播放行走/待机、并能做对话/工作手势的控制器。
+ * NPC 动画句柄：同步巡逻位置、按朝向播放行走/待机、并做对话/工作手势的控制器。
  */
 export interface NpcSpriteController {
   /** 每帧用 NpcFramework 实例的位置/朝向同步贴图与动画。 */
@@ -384,9 +382,8 @@ export interface NpcSpriteOptions {
   workAction?: CharacterAction;
 }
 
-// R-12 动作模组（方案A）：世界场景把旧的 walk-only NPC 合成图（9×4）升级为官方 ULPC
-// 「全动作」整表（ulpc_*，13×42，scripts/build-ulpc-characters.py 产出）。AgentOfficeScene
-// 仍用原 npc_* 9×4 贴图，故只在此 world 渲染入口做 key 映射，二者互不影响。
+// world 渲染入口把 npc_* 映射到官方 ULPC「全动作」整表（ulpc_*，13×42，
+// scripts/build_ulpc_characters.py 产出）；AgentOfficeScene 仍用原 npc_* 9×4 贴图，二者互不影响。
 const NPC_ACTION_VARIANT: Readonly<Record<string, string>> = {
   npc_mayor: 'ulpc_scholar',
   npc_librarian: 'ulpc_lady',
@@ -417,7 +414,7 @@ export function drawNpcSprite(
   const spriteKey = NPC_ACTION_VARIANT[requestedKey] ?? requestedKey;
   const layout: LpcLayout = spriteLayout(spriteKey);
   registerCharacterAnimations(phaserScene.anims, spriteKey, spriteKey, layout);
-  // C 阶段：手持工具叠加层动画（纹理存在才注册，幂等）。
+  // 手持工具叠加层动画（纹理存在才注册，幂等）。
   const npcTextures = (phaserScene as unknown as { textures?: { exists?: (k: string) => boolean } }).textures;
   for (const texKey of TOOL_TEXTURE_KEYS) {
     if (npcTextures?.exists?.(texKey)) {
@@ -437,7 +434,7 @@ export function drawNpcSprite(
     .setOrigin(0.5, 0.7)
     .setDepth(10)
     .setScale(NPC_SCALE);
-  // 名牌放到头顶上方，避免遮挡身体（ULPC 角色比旧贴图更高）。
+  // 名牌放到头顶上方，避免遮挡身体（ULPC 角色较高）。
   const labelDy = tileSize * 2.6;
   const label = phaserScene.add
     .text(x, y - labelDy, npc.label, {
@@ -523,7 +520,7 @@ export function drawNpcSprite(
     sprite.setFrame(lpcIdleFrame(layout, currentDir));
   }
 
-  // C 阶段：NPC 手持工具叠加层（如农夫浇水）。仅 universal 表 + 有工具映射的动作生效。
+  // NPC 手持工具叠加层（如农夫浇水）。仅 universal 表 + 有工具映射的动作生效。
   let toolFg: Phaser.GameObjects.Sprite | null = null;
   let toolBg: Phaser.GameObjects.Sprite | null = null;
   function ensureTool(sampleTex: string): boolean {

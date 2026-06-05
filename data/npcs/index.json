@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "totalNpcs": 19,
+  "totalNpcs": 12,
   "categories": {
     "educator_core": [
       "mayor_py",
@@ -9,8 +9,6 @@
       "coach_q",
       "sage_review",
       "professor",
-      "tutor_ai",
-      "trainer",
       "mine_keeper",
       "captain_def"
     ],
@@ -19,11 +17,6 @@
     ],
     "life": [
       "class_president",
-      "gardener",
-      "chef",
-      "farmer",
-      "sailor",
-      "miner",
       "workshop_master",
       "arena_guard"
     ]
@@ -40,28 +33,28 @@
       "key": "foreman_bug",
       "name": "矿头 Bug",
       "category": "educator_core",
-      "spawnMap": "mine_south",
+      "spawnMap": "town_hub",
       "portrait": "portrait_foreman_bug.png"
     },
     {
       "key": "librarian_doc",
       "name": "馆长 Doc",
       "category": "educator_core",
-      "spawnMap": "campus_east",
+      "spawnMap": "town_hub",
       "portrait": "portrait_librarian_doc.png"
     },
     {
       "key": "coach_q",
       "name": "教务 Q",
       "category": "educator_core",
-      "spawnMap": "campus_east",
+      "spawnMap": "town_hub",
       "portrait": "portrait_coach_q.png"
     },
     {
       "key": "sage_review",
       "name": "复盘师 Sage",
       "category": "educator_core",
-      "spawnMap": "campus_east",
+      "spawnMap": "town_hub",
       "portrait": "portrait_sage_review.png"
     },
     {
@@ -72,31 +65,17 @@
       "portrait": "portrait_professor.png"
     },
     {
-      "key": "tutor_ai",
-      "name": "AI 导师",
-      "category": "educator_core",
-      "spawnMap": "town_hub",
-      "portrait": "portrait_tutor_ai.png"
-    },
-    {
-      "key": "trainer",
-      "name": "训练师",
-      "category": "educator_core",
-      "spawnMap": "town_hub",
-      "portrait": "portrait_trainer.png"
-    },
-    {
       "key": "mine_keeper",
       "name": "矿洞守矿人",
       "category": "educator_core",
-      "spawnMap": "mine_south",
+      "spawnMap": "town_hub",
       "portrait": "portrait_mine_keeper.png"
     },
     {
       "key": "captain_def",
       "name": "船长 Def",
       "category": "educator_core",
-      "spawnMap": "port_west",
+      "spawnMap": "town_hub",
       "portrait": "portrait_captain_def.png"
     },
     {
@@ -110,43 +89,8 @@
       "key": "class_president",
       "name": "班长",
       "category": "life",
-      "spawnMap": "port_west",
+      "spawnMap": "town_hub",
       "portrait": "portrait_class_president.png"
-    },
-    {
-      "key": "gardener",
-      "name": "园丁",
-      "category": "life",
-      "spawnMap": "town_hub",
-      "portrait": "portrait_gardener.png"
-    },
-    {
-      "key": "chef",
-      "name": "厨师",
-      "category": "life",
-      "spawnMap": "town_hub",
-      "portrait": "portrait_chef.png"
-    },
-    {
-      "key": "farmer",
-      "name": "农场主",
-      "category": "life",
-      "spawnMap": "town_hub",
-      "portrait": "portrait_farmer.png"
-    },
-    {
-      "key": "sailor",
-      "name": "水手",
-      "category": "life",
-      "spawnMap": "town_hub",
-      "portrait": "portrait_sailor.png"
-    },
-    {
-      "key": "miner",
-      "name": "矿工",
-      "category": "life",
-      "spawnMap": "town_hub",
-      "portrait": "portrait_miner.png"
     },
     {
       "key": "workshop_master",

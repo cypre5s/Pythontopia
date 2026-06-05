@@ -1,0 +1,251 @@
+/* Pythontopia 学习伙伴 · 全局像素小镇风格（暖木色调） */
+page {
+  --wood-dark: #5a3e1b;
+  --wood: #8a5a2b;
+  --wood-light: #b07d44;
+  --parchment: #f3e4c7;
+  --parchment-deep: #efdcb8;
+  --ink: #3d2c12;
+  --ink-soft: #6b5836;
+  --leaf: #4f7a35;
+  --leaf-deep: #3c5e28;
+  --berry: #b5462f;
+  --sky: #6b8fb0;
+  --gold: #d9a441;
+
+  background-color: var(--parchment);
+  color: var(--ink);
+  font-family: "Courier New", "PingFang SC", "Microsoft YaHei", monospace;
+  font-size: 28rpx;
+  line-height: 1.5;
+}
+
+.page {
+  min-height: 100vh;
+  padding: 24rpx 24rpx 64rpx;
+  box-sizing: border-box;
+}
+
+/* 像素卡片：直角 + 粗描边 + 偏移阴影模拟 8-bit 立体 */
+.card {
+  background: #fff8ea;
+  border: 4rpx solid var(--wood-dark);
+  box-shadow: 8rpx 8rpx 0 0 rgba(90, 62, 27, 0.35);
+  padding: 24rpx;
+  margin-bottom: 24rpx;
+}
+
+.card--flat {
+  box-shadow: none;
+}
+
+.section-title {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: var(--wood-dark);
+  margin-bottom: 16rpx;
+  letter-spacing: 2rpx;
+}
+
+.muted {
+  color: var(--ink-soft);
+  font-size: 24rpx;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+}
+
+.row--between {
+  justify-content: space-between;
+}
+
+.spacer {
+  flex: 1;
+}
+
+/* 像素按钮 */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 28rpx;
+  height: 76rpx;
+  line-height: 1;
+  font-size: 28rpx;
+  color: #fff8ea;
+  background: var(--wood);
+  border: 4rpx solid var(--wood-dark);
+  box-shadow: 6rpx 6rpx 0 0 rgba(90, 62, 27, 0.45);
+  border-radius: 0;
+}
+
+.btn::after {
+  border: none;
+}
+
+.btn:active {
+  transform: translate(3rpx, 3rpx);
+  box-shadow: 3rpx 3rpx 0 0 rgba(90, 62, 27, 0.45);
+}
+
+.btn--primary {
+  background: var(--leaf);
+}
+
+.btn--danger {
+  background: var(--berry);
+}
+
+.btn--ghost {
+  background: #fff8ea;
+  color: var(--wood-dark);
+}
+
+.btn--block {
+  display: flex;
+  width: 100%;
+}
+
+.btn--sm {
+  height: 60rpx;
+  font-size: 24rpx;
+  padding: 0 20rpx;
+  box-shadow: 4rpx 4rpx 0 0 rgba(90, 62, 27, 0.45);
+}
+
+.btn[disabled] {
+  opacity: 0.5;
+}
+
+/* 输入框 */
+.field {
+  margin-bottom: 20rpx;
+}
+
+.field__label {
+  display: block;
+  font-size: 24rpx;
+  color: var(--ink-soft);
+  margin-bottom: 8rpx;
+}
+
+.input,
+.textarea {
+  width: 100%;
+  box-sizing: border-box;
+  background: #fffdf6;
+  border: 4rpx solid var(--wood);
+  padding: 16rpx;
+  font-size: 28rpx;
+  color: var(--ink);
+  border-radius: 0;
+}
+
+.textarea {
+  min-height: 320rpx;
+  font-family: "Courier New", monospace;
+  line-height: 1.6;
+}
+
+/* 进度条（掌握度 / 画像得分） */
+.bar {
+  position: relative;
+  height: 24rpx;
+  background: #e7d3ac;
+  border: 3rpx solid var(--wood-dark);
+  overflow: hidden;
+}
+
+.bar__fill {
+  height: 100%;
+  background: var(--leaf);
+}
+
+.bar__fill--gold {
+  background: var(--gold);
+}
+
+.bar__fill--sky {
+  background: var(--sky);
+}
+
+/* 标签 / 徽章 */
+.tag {
+  display: inline-block;
+  padding: 4rpx 12rpx;
+  margin: 0 8rpx 8rpx 0;
+  font-size: 22rpx;
+  background: var(--parchment-deep);
+  border: 3rpx solid var(--wood);
+  color: var(--ink-soft);
+}
+
+.badge {
+  display: inline-block;
+  padding: 4rpx 12rpx;
+  font-size: 22rpx;
+  color: #fff8ea;
+  background: var(--wood);
+  border: 3rpx solid var(--wood-dark);
+}
+
+.badge--open { background: var(--sky); }
+.badge--progress { background: var(--gold); color: var(--ink); }
+.badge--done { background: var(--leaf); }
+.badge--skip { background: #9c8b6a; }
+.badge--fail { background: var(--berry); }
+
+/* 列表项 */
+.list-item {
+  padding: 20rpx;
+  border: 4rpx solid var(--wood-dark);
+  background: #fffdf6;
+  margin-bottom: 16rpx;
+  box-shadow: 6rpx 6rpx 0 0 rgba(90, 62, 27, 0.25);
+}
+
+.list-item__title {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: var(--ink);
+}
+
+.empty {
+  text-align: center;
+  color: var(--ink-soft);
+  padding: 48rpx 0;
+  font-size: 26rpx;
+}
+
+.loading {
+  text-align: center;
+  color: var(--ink-soft);
+  padding: 32rpx 0;
+}
+
+/* 代码块（题面 / 样例） */
+.code {
+  background: #2f2417;
+  color: #f1e2c4;
+  border: 4rpx solid var(--wood-dark);
+  padding: 16rpx;
+  font-family: "Courier New", monospace;
+  font-size: 24rpx;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.divider {
+  height: 4rpx;
+  background: repeating-linear-gradient(
+    to right,
+    var(--wood) 0,
+    var(--wood) 12rpx,
+    transparent 12rpx,
+    transparent 24rpx
+  );
+  margin: 20rpx 0;
+}

@@ -1,0 +1,17 @@
+{
+  "name": "pythontopia-wechat-minigame",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pythontopia 像素小镇 · 微信原生小游戏渲染端（town renderer companion to the learning mini-program）",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "watch": "tsc -p tsconfig.json --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf js"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "minigame-api-typings": "^3.8.20",
+    "typescript": "^6.0.3"
+  }
+}

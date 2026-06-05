@@ -1,15 +1,5 @@
 <script setup lang="ts">
-/**
- * PlaceholderPage —— 星露谷风格占位页（R-13 §-1 升级）。
- *
- * 旧版本只是 title + subtitle 裸文字，进入 6 个建筑（民居/灯塔/谷仓/鸡舍）后玩家
- * 一眼就觉得「这不是个游戏页」。本次改造保留路由 props 兼容，
- * 增加：
- *   1. 牛皮纸 9-slice 风格内容板，与 DialogModal / WorkshopPanel 配色统一；
- *   2. 像素插画占位（CSS 绘制门 + 窗 + 装饰物），不依赖额外资源；
- *   3. 返回小镇按钮 + 「下次开放预告」chip；
- *   4. 进入时 0.4s fade-in，避免硬切。
- */
+/** 未开放功能的占位页：由路由 props 传入 title / subtitle。 */
 import { useRouter } from 'vue-router';
 import AppLayout from '@/app/AppLayout.vue';
 

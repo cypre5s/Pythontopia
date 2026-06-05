@@ -1,0 +1,15 @@
+{
+  "name": "pythontopia-wechat-miniprogram",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pythontopia 学习伙伴 · 原生微信小程序（TypeScript + WXML + WXSS）",
+  "scripts": {
+    "tsc": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "miniprogram-api-typings": "^5.2.1",
+    "typescript": "^6.0.3"
+  }
+}

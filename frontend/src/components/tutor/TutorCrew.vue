@@ -1,7 +1,6 @@
 <script setup lang="ts">
-// 「助教小队」工作流拟人化（R-14，借鉴腾讯 Marvis 的「虚拟办公室」多 Agent 可视化）：
-// 把导师答疑的后台流水线（课件检索 → 看图理解 → 导师讲解 → 引用校对）拟人成 4 名像素助教，
-// 由后端 SSE trace 实时驱动状态（待命/摸鱼 → 干活 → 完成），让答疑不再是黑盒聊天框。
+// 「助教小队」工作流拟人化：把导师答疑的后台流水线（课件检索 → 看图理解 → 导师讲解 → 引用校对）
+// 拟人成 4 名像素助教，由后端 SSE trace 实时驱动状态（待命 → 干活 → 完成）。
 import { computed } from 'vue';
 import type { SseTraceEvent } from '@/composables/useSseStream';
 

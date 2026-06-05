@@ -55,7 +55,7 @@ export function useResizableSplitLayout(config: ResizableSplitConfig) {
         rightWidth.value = clamp(parsed.right, config.right.min, config.right.max);
       }
     } catch {
-      /* private mode */
+      /* 隐私模式下 localStorage 不可用，忽略 */
     }
   }
 
@@ -67,7 +67,7 @@ export function useResizableSplitLayout(config: ResizableSplitConfig) {
         : { left: leftWidth.value, right: rightWidth.value };
       window.localStorage.setItem(config.storageKey, JSON.stringify(payload));
     } catch {
-      /* private mode */
+      /* 隐私模式下 localStorage 不可用，忽略 */
     }
   }
 

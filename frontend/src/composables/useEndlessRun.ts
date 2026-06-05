@@ -1,7 +1,7 @@
-// R-13 §5 Phase 8 续：无尽模式状态机。
+// 无尽模式状态机。
 //
 // 玩家进入 /endless 后系统连续出题（来自 graph /agents/boss/problem，回落 golden）。
-// 自适应规则（简化版，R-14 可接学习画像后端）：
+// 自适应规则（简化版）：
 //   * 连胜 1 → 难度 +0.5；连胜 2 → 难度 +1；
 //   * 失败 1 → 难度 -1，下一题 KC 不变；
 //   * 难度 clamp 到 1..5；
@@ -42,9 +42,9 @@ export type EndlessPhase =
 export interface UseEndlessRunOptions {
   /** 锁定章节 1..7；空 = 随机抽章 */
   focusChapter?: Ref<number | null>;
-  /** R-13 §-1 续：锁定 KC（来自 ArenaPage 关卡）；空 = 按 chapter 随机 / 画像 weakKcs 优先 */
+  /** 锁定 KC（来自 ArenaPage 关卡）；空 = 按 chapter 随机 / 画像 weakKcs 优先 */
   focusKc?: Ref<string | null>;
-  /** R-13 §-1 续：偏好题型（来自 ArenaPage 关卡 kind） */
+  /** 偏好题型（来自 ArenaPage 关卡 kind） */
   preferredKind?: Ref<string | null>;
 }
 
@@ -93,7 +93,7 @@ function saveHistory(history: EndlessHistoryEntry[]): void {
   try {
     window.localStorage.setItem(PERSIST_KEY, JSON.stringify(history.slice(0, MAX_HISTORY)));
   } catch {
-    /* private mode */
+    /* 隐私模式禁止写入，忽略 */
   }
 }
 
@@ -107,16 +107,15 @@ function clampDifficulty(d: number): number {
 }
 
 /**
- * R-13 §-1 续：从画像 weakKcs 中按 chapter 过滤出可命中本章的 KC（PY43-KC-XXX）。
- * 章 1 = KC-001..007, 章 2 = KC-008..016, ... 章 7 = KC-054..065 — 与 mainQuests boss
- * kcRange 一致。
+ * 从画像 weakKcs 中按 chapter 过滤出命中本章的 KC（PY43-KC-XXX）。
+ * 章 1 = KC-001..007，章 2 = KC-008..016，…，章 7 = KC-054..065，与 mainQuests boss kcRange 一致。
  */
 function pickWeakKcForChapter(
   weakKcs: readonly string[] | undefined,
   chapter: number,
 ): string | undefined {
   if (!weakKcs || weakKcs.length === 0) return undefined;
-  // 简化：直接找带 chapter 前缀的 KC（如果有定义），否则按编号区间
+  // 按章节编号区间匹配本章 KC
   const ranges: readonly [number, number, number][] = [
     [1, 1, 7], [2, 8, 16], [3, 17, 30], [4, 31, 38], [5, 39, 47], [6, 48, 53], [7, 54, 65],
   ];
@@ -144,7 +143,6 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
   const elapsedSec = ref<number>(0);
   const errorMessage = ref<string>('');
   const history = ref<EndlessHistoryEntry[]>(loadHistory());
-  // R-13 §-1 续：画像信号接入。
   const profileSignals = useProfileSignals();
 
   const failureRate = computed<number>(() => {
@@ -167,7 +165,7 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
       const chapter = pickChapter(opts.focusChapter?.value ?? null);
       const stage = 1 + Math.floor(Math.random() * 4);
 
-      // R-13 §-1 续：构造 BossProblemRequest，深度接入学生画像。
+      // 构造 BossProblemRequest，接入学生画像：
       // - focusKc（来自 ArenaPage 关卡）优先级最高；
       // - 否则按画像 weakKcs 命中本章 KC，让玩家"刷弱项"；
       // - profileSignals 一并传给后端 PracticeAgent 偏好出题；
@@ -236,7 +234,7 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
         stage: p.stage,
         code: code.value,
         elapsedSec: elapsedSec.value,
-        // R-13 §-1 续：上传画像信号供后端 PassiveProfileService 被动更新弱项 KC
+        // 上传画像信号供后端 PassiveProfileService 被动更新弱项 KC
         ...(profileSignals.hasAnySignal.value ? { profileSignals: profileSignals.signals.value } : {}),
       });
     } catch (error) {
@@ -249,12 +247,12 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
         feedback: `后端联通失败，按本地 Pyodide 判定：${error instanceof Error ? error.message : String(error)}`,
       };
     }
-    const passed = backendResult.passed || localEval.ok;
+    const passed = backendResult.passed;
     const finalResult: BossAttemptResultDto = {
       ...backendResult,
       passed,
       passedTestCases: passed
-        ? Math.max(backendResult.passedTestCases, p.totalTestCases)
+        ? backendResult.passedTestCases
         : backendResult.passedTestCases,
       feedback: passed
         ? backendResult.feedback || '通过！下一题难度自适应提升。'

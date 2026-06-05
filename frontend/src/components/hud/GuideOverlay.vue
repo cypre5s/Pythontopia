@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * 伴学向导 overlay（P1-a / P1-d）。
+ * 伴学向导 overlay。
  *
  * - 常驻入口（HudShell Dock 的 ✧ 向导按钮 / G 键）唤起。
  * - 多轮对话线程：气泡历史 + 流式 Markdown + 计划（看/学/练/测）+ 澄清追问 +
@@ -20,6 +20,7 @@ import { useLearningStore } from '@stores/learning';
 import { useSseStream } from '@/composables/useSseStream';
 import { playUiClick, playUiHover } from '@/composables/useStardewFx';
 import MarkdownView from '@/components/common/MarkdownView.vue';
+import { humanizeKcText } from '@/data/kcNames';
 import type {
   OrchestratorPhase,
   OrchestratorResult,
@@ -52,7 +53,7 @@ const PANEL_LABEL: Record<string, string> = {
   library: '去书房',
   training: '去训练场',
   workshop: '去工坊',
-  tutor: '找 AI 助教',
+  tutor: '去百晓工坊',
   problems: '去题库',
   examples: '看例题',
   review: '去复盘厅',
@@ -69,7 +70,7 @@ function panelRoute(panel: string, chapter: number): string | null {
     case 'workshop':
       return '/workshop';
     case 'tutor':
-      return '/tutor';
+      return '/workshop';
     case 'problems':
       return '/problems';
     case 'examples':
@@ -270,7 +271,7 @@ function goToPanel(panel: string | null): void {
 
             <MarkdownView
               v-if="m.content"
-              :source="m.content"
+              :source="humanizeKcText(m.content)"
             />
             <span
               v-else-if="m.streaming"
@@ -293,8 +294,8 @@ function goToPanel(panel: string | null): void {
                   :class="`guide-plan__phase--${step.phase}`"
                 >{{ PHASE_LABEL[step.phase] }}</span>
                 <span class="guide-plan__body">
-                  <span class="guide-plan__title">{{ step.title }}</span>
-                  <small class="guide-plan__detail">{{ step.detail }}</small>
+                  <span class="guide-plan__title">{{ humanizeKcText(step.title) }}</span>
+                  <small class="guide-plan__detail">{{ humanizeKcText(step.detail) }}</small>
                 </span>
                 <button
                   v-if="step.panel"

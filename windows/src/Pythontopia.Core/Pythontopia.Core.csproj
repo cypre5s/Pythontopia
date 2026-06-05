@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Pythontopia.Core</RootNamespace>
+    <AssemblyName>Pythontopia.Core</AssemblyName>
+    <IsTrimmable>false</IsTrimmable>
+  </PropertyGroup>
+
+  <!--
+    No third-party dependencies: System.Text.Json, System.Net.Http and
+    HttpClient ship in the net8.0 BCL. This keeps Core fully buildable from
+    the WSL interop dotnet.exe without any Windows-only workloads.
+  -->
+
+</Project>

@@ -1,4 +1,4 @@
-// W1 技术稳定性：Phaser scene 在 shutdown/destroy 时若不显式清理 tween / timer / input
+// Phaser scene 在 shutdown/destroy 时若不显式清理 tween / timer / input
 // listener，切场景或 HMR 会留下"幽灵 tween 与 ticker"，长时间运行触发内存累积。
 // SceneLifecycle 把清理逻辑收敛到一个 helper：在 scene.events 的 shutdown 与 destroy
 // 上挂钩，shutdown 时统一调用 tweens.killAll / time.removeAllEvents /

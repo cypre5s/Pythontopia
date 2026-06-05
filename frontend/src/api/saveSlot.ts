@@ -1,4 +1,4 @@
-// R-14 S6：玩家存档槽 API 客户端（对齐后端 SaveSlotController `/api/world/saves`）。
+// 玩家存档槽 API 客户端（对齐后端 SaveSlotController `/api/world/saves`）。
 //
 // 主要用途是把主线进度（mainQuest store）同步到后端 `save_slot.snapshot.mainQuest`，
 // 实现跨刷新 / 跨设备进度跟随；localStorage 仍作为离线兜底。

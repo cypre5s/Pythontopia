@@ -1,0 +1,77 @@
+<view class="page">
+  <!-- 课程包统计 -->
+  <view class="card course__pack" wx:if="{{pack}}">
+    <view class="course__pack-name">{{pack.name}}</view>
+    <view class="muted">主语言：{{pack.primaryLanguage}} · packId {{pack.packId}}</view>
+    <view class="course__stats">
+      <view class="course__stat"><text class="course__stat-num">{{pack.documentCount}}</text><text class="muted">文档</text></view>
+      <view class="course__stat"><text class="course__stat-num">{{pack.pageCount}}</text><text class="muted">页</text></view>
+      <view class="course__stat"><text class="course__stat-num">{{pack.chapterCount}}</text><text class="muted">章</text></view>
+      <view class="course__stat"><text class="course__stat-num">{{pack.kcCount}}</text><text class="muted">知识点</text></view>
+      <view class="course__stat"><text class="course__stat-num">{{pack.exampleCount}}</text><text class="muted">示例</text></view>
+      <view class="course__stat"><text class="course__stat-num">{{pack.problemCount}}</text><text class="muted">题目</text></view>
+    </view>
+  </view>
+
+  <view class="login__error" wx:if="{{errorMsg}}">{{errorMsg}}</view>
+  <view wx:if="{{loading && chapters.length === 0}}" class="loading">加载课程地图…</view>
+
+  <!-- 章节 -> 知识点 -> 课件 -->
+  <view class="card course__chapter" wx:for="{{chapters}}" wx:for-item="chapter" wx:for-index="ci" wx:key="chapterId">
+    <view class="course__chapter-head" data-index="{{ci}}" bindtap="toggleChapter">
+      <view class="row row--between">
+        <text class="course__chapter-title">{{chapter.orderIndex}}. {{chapter.title}}</text>
+        <text class="course__caret">{{chapter.expanded ? '▾' : '▸'}}</text>
+      </view>
+    </view>
+
+    <view wx:if="{{chapter.expanded}}" class="course__kcs">
+      <view wx:if="{{chapter.summary}}" class="muted course__chapter-summary">{{chapter.summary}}</view>
+      <view wx:if="{{chapter.kcsLoading}}" class="loading">加载知识点…</view>
+      <view wx:if="{{chapter.kcsLoaded && chapter.kcs.length === 0}}" class="empty">本章暂无知识点</view>
+
+      <view class="course__kc" wx:for="{{chapter.kcs}}" wx:for-item="kc" wx:for-index="ki" wx:key="kcId">
+        <view class="course__kc-head" data-cidx="{{ci}}" data-kidx="{{ki}}" bindtap="toggleKc">
+          <view class="row row--between">
+            <text class="course__kc-name">{{kc.kcCode}} · {{kc.kcName}}</text>
+            <text class="tag" wx:if="{{kc.difficulty}}">{{kc.difficulty}}</text>
+          </view>
+        </view>
+
+        <view wx:if="{{kc.expanded}}" class="course__kc-body">
+          <view wx:if="{{kc.summary}}" class="muted">{{kc.summary}}</view>
+
+          <view class="course__kc-actions">
+            <button class="btn btn--sm btn--primary" catchtap="goPracticeList" data-kc-code="{{kc.kcCode}}">去练习</button>
+            <button
+              class="btn btn--sm"
+              catchtap="loadKcPages"
+              data-cidx="{{ci}}"
+              data-kidx="{{ki}}"
+              data-kc-code="{{kc.kcCode}}"
+              loading="{{kc.pageLoading}}"
+            >{{kc.pagesLoaded ? '重载课件' : '看课件'}}</button>
+          </view>
+
+          <!-- 课件页图片浏览 -->
+          <view wx:if="{{kc.pagesLoaded && kc.pages.length === 0}}" class="empty">该知识点暂无课件页</view>
+          <view wx:if="{{kc.currentPage}}" class="course__page">
+            <view class="course__page-title">{{kc.currentPage.title}}</view>
+            <image
+              class="course__page-img"
+              src="{{kc.currentPage.imageUrl}}"
+              mode="widthFix"
+              lazy-load
+            />
+            <view wx:if="{{kc.currentPage.excerpt}}" class="muted course__page-excerpt">{{kc.currentPage.excerpt}}</view>
+            <view class="course__page-nav" wx:if="{{kc.pages.length > 1}}">
+              <button class="btn btn--sm btn--ghost" catchtap="prevPage" data-cidx="{{ci}}" data-kidx="{{ki}}">上一页</button>
+              <text class="muted">{{kc.pageInfo}}</text>
+              <button class="btn btn--sm btn--ghost" catchtap="nextPage" data-cidx="{{ci}}" data-kidx="{{ki}}">下一页</button>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

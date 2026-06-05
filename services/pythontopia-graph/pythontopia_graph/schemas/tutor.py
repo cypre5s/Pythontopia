@@ -37,6 +37,21 @@ class TutorAskRequest(BaseModel):
     context: str = Field(default="", max_length=2000)
 
 
+class EvidenceCitation(BaseModel):
+    """单条「系统命中的课件证据」，供前端「课件证据」面板展示给学生（仿 Alethicode 引用卡）。
+
+    - ``page_no``：课本页码（学生可读，用于「第 X 页」标签）；
+    - ``page_id``：课件页主键（用于回链 ``/library?pageId=``）；
+    - ``snippet``：RAG 命中的原文片段（已折叠空白 + 截断），让学生看见答案到底依据了哪段课件；
+    - ``score``：检索相关度（0~1），仅作排序/参考。
+    """
+
+    page_id: int
+    page_no: int
+    snippet: str = ""
+    score: float = 0.0
+
+
 class GroundingResult(BaseModel):
     passed: bool
     reasons: list[str] = Field(default_factory=list)
@@ -50,6 +65,9 @@ class SafetyResult(BaseModel):
 class TutorResponse(BaseModel):
     answer_md: str
     evidence_page_ids: list[int] = Field(default_factory=list)
+    # 命中的课件证据明细（页码 + 原文片段），前端据此渲染「课件证据」面板。
+    # 与 evidence_page_ids 同源、同序（page_ids 由 evidence 去重后投影），供旧消费方继续用。
+    evidence: list[EvidenceCitation] = Field(default_factory=list)
     grounding_result: GroundingResult
     safety_result: SafetyResult
     based_on_general_knowledge: bool = False

@@ -42,7 +42,7 @@ export const useWorldStore = defineStore('world', {
     inventoryItems: [] as SaveSlotInventoryItem[],
     bootstrapped: false,
     loading: false,
-    // R-13 §-1 C-FastTravel：Workshop 顶部 5 传送 chip 跳 /world 时把目标 mapKey
+    // Workshop 顶部传送 chip 跳 /world 时把目标 mapKey
     // 暂存在 store；WorldCanvas mount + bootstrap 之后会读取并强制 BootScene 起到
     // 该地图，避免 BootScene 始终硬编码 town_hub。
     pendingTravelMap: null as string | null,
@@ -50,7 +50,7 @@ export const useWorldStore = defineStore('world', {
   }),
   getters: {
     /**
-     * `hasUnlocked('mine_entry')` 用于地图入口门禁判定。读自 W3 save_slot.unlocked_buildings，
+     * `hasUnlocked('mine_entry')` 用于地图入口门禁判定。读自 save_slot.unlocked_buildings，
      * 不读 InventoryStore，避免与背包语义混淆。
      */
     hasUnlocked(state) {
@@ -88,11 +88,11 @@ export const useWorldStore = defineStore('world', {
     /**
      * 一次性拉全量并分发到各子 store，由 WorldCanvas 在挂载时调用。
      *
-     * 与 W3-CTRL POST /api/game/bootstrap 对齐：
+     * 与 POST /api/game/bootstrap 对齐：
      *   - world + player：写到 world store 自身
-     *   - crops / mastery / profile / path / quests：通过 learning.setBootstrapData 分发
+     *   - mastery / profile / path / quests：通过 learning.setBootstrapData 分发
      *   - inventory / skills(+catalog) / calendar(+events) / npcStates：分别下发到各 store
-     *   - currency / activeSlot：保存在 world store（简单标量，不另起 store）
+     *   - activeSlot：保存在 world store（不另起 store）
      *
      * 失败时不抛错（保留 bootstrapped=false），允许 UI 显示降级欢迎页，由 toast 提示原因。
      */
@@ -129,7 +129,7 @@ export const useWorldStore = defineStore('world', {
         path: data.path,
       });
       useSkillStore().setBootstrap(data.skillsCatalog ?? [], data.skills);
-      // R-13：后端实际字段是 pendingEvents（GameBootstrapResponse.java），
+      // 后端实际字段是 pendingEvents（GameBootstrapResponse.java），
       // events 是旧前端别名；兼容两边别名，确保拿得到事件。
       useCalendarStore().setBootstrap(data.calendar, data.events ?? data.pendingEvents ?? []);
       useNpcStore().setBootstrap(data.npcStates ?? []);
@@ -149,26 +149,26 @@ export const useWorldStore = defineStore('world', {
       this.unlockedBuildings = [...slot.unlockedBuildings];
       this.accumulatedPlaySeconds = slot.accumulatedPlaySeconds;
       this.inventoryItems = slot.inventoryItems.map((item) => ({ ...item }));
-      // R-14 S6：用后端存档快照回灌主线进度（跨设备跟随）。空快照 `{}` 或缺失会被
+      // 用后端存档快照回灌主线进度（跨设备跟随）。空快照 `{}` 或缺失会被
       // hydrateFromSnapshot 安全忽略，从而保留本地 localStorage 进度。
       useMainQuestStore().hydrateFromSnapshot(slot.snapshot ?? null);
     },
     /**
-     * 推进一天：触发 mastery decay / 作物枯萎 / NPC 周计划重置。
+     * 推进一天：触发 mastery decay / NPC 周计划重置。
      *
-     * 与 W3-CTRL POST /api/world/sleep 对齐：
+     * 与 POST /api/world/sleep 对齐：
      *   - 后端原子推进 world.dayIndex 并写 world_event 表
      *   - 返回 { world: <patch>, calendar, events? }，由 world store merge 进 session
      *   - UI 通过 toast 提示，详细变化由 WorldScene 自行读取 calendar.unprocessedEvents 弹板
      *
-     * 调用方负责后续刷新 crops / mastery（通常通过 learning.refreshAfterEvent）。
+     * 调用方负责后续刷新 mastery（通常通过 learning.refreshAfterEvent）。
      */
     async sleep(): Promise<void> {
       const response = await postWorldSleep();
       if (this.session) {
         this.session = { ...this.session, ...response.world };
       }
-      // R-13：后端实际字段是 newEvents（WorldAdvanceResponse.java）；calendar 是
+      // 后端实际字段是 newEvents（WorldAdvanceResponse.java）；calendar 是
       // 旧前端兼容字段，新版后端不再返回时就用现有 calendar 兜底。
       const events = response.events ?? response.newEvents ?? [];
       const calendar = response.calendar;
@@ -184,7 +184,7 @@ export const useWorldStore = defineStore('world', {
         weather: response.world.weather ?? 'SUNNY',
       });
 
-      // A7: KC mastery 自然衰减 — 模拟遗忘曲线，sleep 推进 1 天时已掌握 KC 各 -2
+      // KC mastery 自然衰减 — 模拟遗忘曲线，sleep 推进 1 天时已掌握 KC 各 -2
       try {
         const learningStore = (await import('@stores/learning')).useLearningStore();
         if (typeof learningStore.applyMasteryDecay === 'function') {

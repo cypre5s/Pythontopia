@@ -1,0 +1,62 @@
+<view class="page">
+  <!-- 加入班级 -->
+  <view class="card">
+    <view class="section-title">加入班级</view>
+    <view class="muted">向老师索取 6 位邀请码（大写字母 / 数字）。</view>
+    <view class="classroom__join">
+      <input
+        class="input classroom__code"
+        value="{{joinCode}}"
+        placeholder="如 AB12CD"
+        maxlength="6"
+        bindinput="onJoinInput"
+      />
+      <button
+        class="btn btn--primary"
+        loading="{{joining}}"
+        disabled="{{joining}}"
+        bindtap="onJoin"
+      >加入</button>
+    </view>
+  </view>
+
+  <view class="login__error" wx:if="{{errorMsg}}">{{errorMsg}}</view>
+
+  <!-- 我的班级 -->
+  <view class="card">
+    <view class="section-title">我的班级</view>
+    <view wx:if="{{loading && classrooms.length === 0}}" class="loading">加载中…</view>
+    <view wx:elif="{{classrooms.length === 0}}" class="empty">还没有加入任何班级</view>
+    <view class="list-item" wx:for="{{classrooms}}" wx:key="classroomId">
+      <view class="row row--between">
+        <text class="list-item__title">{{item.name}}</text>
+        <text class="badge">{{item.status}}</text>
+      </view>
+      <view wx:if="{{item.description}}" class="muted">{{item.description}}</view>
+      <view wx:if="{{item.joinCode}}" class="muted">邀请码：{{item.joinCode}}</view>
+    </view>
+  </view>
+
+  <!-- 班级任务 -->
+  <view class="card">
+    <view class="section-title">班级任务</view>
+    <view wx:if="{{quests.length === 0}}" class="empty">暂无班级任务</view>
+    <view
+      class="list-item"
+      wx:for="{{quests}}"
+      wx:key="id"
+      data-problem-id="{{item.firstProblemId}}"
+      bindtap="onGoPractice"
+    >
+      <view class="row row--between">
+        <text class="list-item__title">{{item.title}}</text>
+        <text class="badge">{{item.statusLabel}}</text>
+      </view>
+      <view wx:if="{{item.kcText}}" class="muted">{{item.kcText}}</view>
+      <view wx:if="{{item.description}}" class="quest__desc">{{item.description}}</view>
+      <view class="quest__actions" wx:if="{{item.firstProblemId}}">
+        <button class="btn btn--sm" catchtap="onGoPractice" data-problem-id="{{item.firstProblemId}}">去练习</button>
+      </view>
+    </view>
+  </view>
+</view>

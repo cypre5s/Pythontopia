@@ -12,7 +12,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 
 /**
  * 复用的「错误 + 重试」反馈块。
@@ -30,9 +29,9 @@ fun PytErrorRetry(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(16.dp),
+            .padding(PytSpace.s4),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(PytSpace.s3),
     ) {
         Text(
             text = message,
@@ -41,6 +40,7 @@ fun PytErrorRetry(
         )
         Button(
             onClick = onRetry,
+            shape = PytShape.md,
             colors = ButtonDefaults.buttonColors(
                 containerColor = PytColors.primary,
                 contentColor = PytColors.onPrimary,
@@ -60,9 +60,9 @@ fun PytLoading(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(24.dp),
+            .padding(PytSpace.s5),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(PytSpace.s3),
     ) {
         CircularProgressIndicator(color = PytColors.primary)
         Text(

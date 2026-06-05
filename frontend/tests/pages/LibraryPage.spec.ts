@@ -139,6 +139,26 @@ const PAGE_DETAIL: CoursePageDetail = {
   excerpt: '计算思维与人工智能（Python 语言）',
 };
 
+const FLOW_DOC: CourseDocumentSummary = {
+  documentId: 189,
+  packId: 43,
+  sortOrder: 4,
+  filename: '第四章：流程自动化.pptx',
+  title: '第四章：流程自动化',
+  pageCount: 74,
+};
+
+const FLOW_COVER_PAGE: CoursePageDetail = {
+  pageId: 10898,
+  documentId: 189,
+  chapterId: null,
+  pageNo: 1,
+  chunkIndex: 0,
+  title: '计算思维与人工智能\u000b（Python 语言）',
+  contentMarkdown: '计算思维与人工智能',
+  excerpt: '计算思维与人工智能',
+};
+
 function buildKcs(): CourseKcSummary[] {
   return KCS.map((kc) => ({
     kcId: kc.kcId,
@@ -227,8 +247,9 @@ describe('LibraryPage', () => {
     expect(wrapper.find('[data-testid="chapter-doc-1"]').text()).toContain('3 页');
   });
 
-  it('点击章节目录切换 docId，触发新的 getDocumentPage 调用', async () => {
+  it('点击章节目录切换 docId，触发新的 getDocumentPage 调用但不触发路由导航', async () => {
     const router = createTestRouter();
+    const replaceSpy = vi.spyOn(router, 'replace');
     await router.push('/library');
     await router.isReady();
     const wrapper = mount(LibraryPage, {
@@ -243,7 +264,7 @@ describe('LibraryPage', () => {
     await flushPromises();
 
     expect(vi.mocked(getDocumentPage)).toHaveBeenCalledWith(187, 1);
-    expect(router.currentRoute.value.query.docId).toBe('187');
+    expect(replaceSpy).not.toHaveBeenCalled();
   });
 
   it('RAG 检索调用 searchCourseLibrary 并渲染命中片段', async () => {
@@ -279,5 +300,46 @@ describe('LibraryPage', () => {
     pushSpy.mockClear();
     await wrapper.find('[data-testid="library-back"]').trigger('click');
     expect(pushSpy).toHaveBeenCalledWith({ path: '/world' });
+  });
+
+  it('阅读路径使用真实文档、章节、标题和页码，不渲染空占位破折号', async () => {
+    vi.mocked(listCourseDocuments).mockResolvedValue([...DOCUMENTS, FLOW_DOC]);
+    vi.mocked(listDocumentPages).mockResolvedValue([FLOW_COVER_PAGE]);
+    vi.mocked(getDocumentPage).mockResolvedValue(FLOW_COVER_PAGE);
+
+    const router = createTestRouter();
+    await router.push('/library?docId=189&page=1');
+    await router.isReady();
+    const wrapper = mount(LibraryPage, {
+      global: { plugins: [router], stubs: { AppLayout: APP_LAYOUT_STUB } },
+    });
+    await flushPromises();
+
+    const breadcrumb = wrapper.get('nav[aria-label="阅读路径"]').text();
+    expect(breadcrumb).toContain('Pythontopia 图书馆');
+    expect(breadcrumb).toContain('第 4 章');
+    expect(breadcrumb).toContain('流程自动化');
+    expect(breadcrumb).toContain('计算思维与人工智能（Python 语言）');
+    expect(breadcrumb).toContain('第 1 / 74 页');
+    expect(breadcrumb).not.toContain('—');
+  });
+
+  it('上一页、页码输入框、下一页使用同一分页控件尺寸类', async () => {
+    const router = createTestRouter();
+    await router.push('/library');
+    await router.isReady();
+    const wrapper = mount(LibraryPage, {
+      global: { plugins: [router], stubs: { AppLayout: APP_LAYOUT_STUB } },
+    });
+    await flushPromises();
+
+    const prev = wrapper.get('[data-testid="library-prev-page"]');
+    const pageJump = wrapper.find('[data-testid="library-page-jump"]');
+    const next = wrapper.get('[data-testid="library-next-page"]');
+
+    expect(pageJump.exists()).toBe(true);
+    expect(prev.classes()).toContain('page-control');
+    expect(pageJump.classes()).toContain('page-control');
+    expect(next.classes()).toContain('page-control');
   });
 });

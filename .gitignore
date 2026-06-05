@@ -47,3 +47,18 @@ backend/data/
 
 # 素材预览临时目录（本地 scratch，不入库）
 .tmp-preview/
+
+# R-14 多端客户端构建产物（windows/.NET + 微信小程序/小游戏；各端目录由对应 agent 维护）
+# Windows .NET 8 / MonoGame 编译输出
+windows/bin/
+windows/obj/
+windows/**/bin/
+windows/**/obj/
+# 微信小程序：npm 依赖与构建后的 miniprogram_npm
+wechat-miniprogram/node_modules/
+wechat-miniprogram/miniprogram_npm/
+# 微信小游戏：npm 依赖与 TS 编译输出目录
+wechat-minigame/node_modules/
+wechat-minigame/js/
+# Visual Studio 每用户工程配置
+*.user

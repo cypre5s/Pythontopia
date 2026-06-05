@@ -45,6 +45,21 @@ class ProfileRepository @Inject constructor(
     )
 
     /**
+     * GET `/api/learner/profile/dimensions`。
+     *
+     * 后端恒返回 8 维快照（含 score / confidence / evidenceCount / selfEditable / tags），不会 204。
+     * - 200 → `Success(List<ProfileDimensionDto>)`（仪表盘真实数据源，替代旧 placeholder 0.5）
+     * - 4xx/5xx → `Failure(ApiError(httpStatus))`
+     * - I/O 异常 → `Failure(NetworkError)`
+     */
+    suspend fun fetchDimensions(): Result<List<ProfileDimensionDto>> = runCatching {
+        api.getDimensions()
+    }.fold(
+        onSuccess = { Result.Success(it) },
+        onFailure = { Result.Failure(it.toAppError()) },
+    )
+
+    /**
      * PUT `/api/learner/profile/dimensions/{key}`。
      *
      * 调用方负责保证 [dimensionKey] 是 4 主观维度之一（[ProfileDimensions.SELF_EDITABLE]），

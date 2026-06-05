@@ -144,7 +144,7 @@ function isActive(slot: HudQuickSlot): boolean {
   return hud.activeSlot === slot;
 }
 
-// P1-a：伴学向导单一入口（常驻 Dock）。独立 store flag，可与其他面板共存。
+// 伴学向导单一入口（常驻 Dock）。独立 store flag，可与其他面板共存。
 function onClickGuide(): void {
   playUiClick();
   guide.toggle();
@@ -429,7 +429,7 @@ onUnmounted(() => {
       data-testid="hud-bottom"
       aria-label="快捷面板"
     >
-      <!-- P1-a：AI 助教 = 单一入口，常驻 Dock 最左（calm secondary，不计入 .hud-slot） -->
+      <!-- AI 助教 = 单一入口，常驻 Dock 最左（calm secondary，不计入 .hud-slot） -->
       <button
         type="button"
         class="hud-guide-slot"
@@ -1037,7 +1037,7 @@ onUnmounted(() => {
   border-color: var(--pyt-text-accent);
   box-shadow: 0 0 0 1px var(--pyt-text-accent) inset, 0 4px 10px rgba(241, 196, 83, 0.28);
 }
-/* P1-a：AI 助教按钮——单一入口，但保持 calm secondary（不脉冲、不抢主按钮）。 */
+/* AI 助教按钮——单一入口，但保持 calm secondary（不脉冲、不抢主按钮）。 */
 .hud-guide-slot {
   width: 58px;
   height: 58px;

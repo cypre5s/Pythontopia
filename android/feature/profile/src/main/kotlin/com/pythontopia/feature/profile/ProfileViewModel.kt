@@ -7,10 +7,12 @@ import com.pythontopia.core.common.AppError
 import com.pythontopia.core.common.Result
 import com.pythontopia.feature.profile.data.DimensionUpdateRequest
 import com.pythontopia.feature.profile.data.LearnerProfileDto
+import com.pythontopia.feature.profile.data.ProfileDimensionDto
 import com.pythontopia.feature.profile.data.ProfileDimensions
 import com.pythontopia.feature.profile.data.ProfileRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -25,6 +27,12 @@ data class ProfileUiState(
     val isLoading: Boolean = false,
     val isSaving: Boolean = false,
     val profile: LearnerProfileDto? = null,
+    /**
+     * 8 维真实得分快照（GET /api/learner/profile/dimensions）。
+     * 仪表盘 score/confidence/evidenceCount/可自评 全部来自此处，替代旧的 placeholder 0.5。
+     * 恒为 0 或 8 维（后端兜底），空表示尚未加载。
+     */
+    val dimensions: List<ProfileDimensionDto> = emptyList(),
     val error: AppError? = null,
     val savedDimensionKey: String? = null,
 )
@@ -56,19 +64,39 @@ class ProfileViewModel @Inject constructor(
         _state.update { it.copy(error = null) }
     }
 
+    /**
+     * 同时拉取画像主体（GET /profile）与 8 维得分快照（GET /profile/dimensions）。
+     *
+     * 两个独立 GET 用 [async] 并发，缩短首屏等待；任一失败都 surface（profile 是教育核心，
+     * 不静默降级，AGENTS 约束）。注意 GET /profile 的 204→Success(null) 是正常态（未完成访谈），
+     * 此时 dimensions 仍会返回 8 维默认值，仪表盘照常渲染（中性 0.5 + 低置信度）。
+     * 自评 PUT 成功后会再次调用本方法，使仪表盘的 score/证据数随之刷新。
+     */
     fun loadProfile() {
         _state.update { it.copy(isLoading = true, error = null) }
         viewModelScope.launch {
-            when (val result = repository.fetchProfile()) {
-                is Result.Success -> _state.update {
-                    it.copy(isLoading = false, profile = result.data, error = null)
-                }
+            val profileDeferred = async { repository.fetchProfile() }
+            val dimensionsDeferred = async { repository.fetchDimensions() }
+            val profileResult = profileDeferred.await()
+            val dimensionsResult = dimensionsDeferred.await()
+            _state.update { current ->
+                when {
+                    profileResult is Result.Failure ->
+                        current.copy(isLoading = false, error = profileResult.error)
 
-                is Result.Failure -> _state.update {
-                    it.copy(isLoading = false, error = result.error)
-                }
+                    dimensionsResult is Result.Failure ->
+                        current.copy(isLoading = false, error = dimensionsResult.error)
 
-                Result.Loading -> Unit
+                    profileResult is Result.Success && dimensionsResult is Result.Success ->
+                        current.copy(
+                            isLoading = false,
+                            profile = profileResult.data,
+                            dimensions = dimensionsResult.data,
+                            error = null,
+                        )
+
+                    else -> current.copy(isLoading = false)
+                }
             }
         }
     }

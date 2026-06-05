@@ -1,7 +1,7 @@
-// R-13 §-1 续：useArenaStore — 闯关塔关卡进度持久化（localStorage）。
+// 闯关塔关卡进度持久化（localStorage）。
 //
 // 仅记 70 关的「是否通关 + 尝试次数 + 最近用时」简表，不存题目本身（题目由 boss/endless
-// 服务即时生成）。Beta 阶段够用，R-14 接后端 `learning_event` 落库后再迁移。
+// 服务即时生成）。
 //
 // 数据形状（localStorage `pyt_arena_v1`）：
 //   { [levelId]: { cleared, attempts, lastClearedSec, lastClearedAt } }
@@ -33,7 +33,7 @@ function persistProgress(map: ProgressMap): void {
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(map));
   } catch {
-    // 配额超限静默；R-14 接后端兜底
+    // 配额超限静默
   }
 }
 

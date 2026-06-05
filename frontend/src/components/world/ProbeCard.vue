@@ -1,11 +1,11 @@
 <script setup lang="ts">
-// ③玩中建画像：世界内探针卡（中性、可跳过、低风险）。数据驱动 PROBE_CATALOG，
+// 玩中建画像：世界内探针卡（中性、可跳过、低风险）。数据驱动 PROBE_CATALOG，
 // 一张组件承载多类探针，但任一时刻只展示一张：
 //   - cog_intro（trigger 'watch-phase'）：进入主线「看」阶段时弹 → cognitive_style；
 //   - fail_react（trigger 'requested'）：练习失败后由 learning.submitToServer 置 requested
 //     标记（失败发生在训练页、探针卡在世界页，借 store 跨页传信号），玩家回到世界即弹
 //     → emotion_persistence。
-// 设计约束（见 docs/plans/2026-06-04-profile-loop-trilogy-design.md §4.1）：
+// 设计约束：
 //   - 选项美术等价、措辞中性、无优劣暗示；可随时跳过；
 //   - 提交走 fire-and-forget，失败静默降级，绝不阻塞玩家主线。
 // 仅依赖 probe/mainQuest/dialog store（只读主线），不改 dialog/mainQuest 状态。
@@ -16,7 +16,7 @@ import { useDialogStore } from '@stores/dialog';
 import { mainSubQuestPhase } from '@/data/mainQuests';
 import { PROBE_CATALOG, REQUESTED_PROBES } from '@/data/probeCatalog';
 
-// C4：首次引导（帮助弹窗 + 镇长对话）期间由父级 WorldPage 置 hold，避免探针叠成第三层弹窗。
+// 首次引导（帮助弹窗 + 镇长对话）期间由父级 WorldPage 置 hold，避免探针叠成第三层弹窗。
 const props = withDefaults(defineProps<{ hold?: boolean }>(), { hold: false });
 
 // 进入主线「看」阶段触发的探针 key（首发只有 cog_intro）。

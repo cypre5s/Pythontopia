@@ -1,15 +1,9 @@
 <script setup lang="ts">
-// R-13：把 MiniMap.vue 与 useWorldMinimap composable 接到生产 WorldPage 右上角。
-//
-// 设计要点：
-//   1. 自身只负责定位 + 接线，纯 DOM；不创建第二个 Phaser.Game 实例（minimap 走
-//      fetch JSON，不复用 Phaser scene），符合 AGENTS.md「Phaser 单 Game 实例」硬约束。
-//   2. fixed 右上角，安全离开顶部 HUD（top:16px 给 HudShell 顶部状态条预留 ≥60px）；
-//      移动端缩到 120×120 + 半透明，避免遮挡画布关键区。
-//   3. 支持折叠：点击标题切换 collapsed 状态，节省小屏空间；折叠状态下只显示 64×24
-//      指示条 + 当前地图名，再点击展开。
-//   4. 不订阅任何 Phaser tween：完全数据驱动 + reduce-motion 友好。
-//   5. 接管「M」快捷键打开/关闭 minimap（与 HudShell 的 map quickslot 互补）。
+// 把 MiniMap 与 useWorldMinimap 接到 WorldPage 右上角，仅负责定位 + 接线（纯 DOM）。
+// 关键约束：不创建第二个 Phaser.Game 实例（minimap 走 fetch JSON，不复用 Phaser scene），
+//   符合 AGENTS.md「Phaser 单 Game 实例」硬约束；不订阅 Phaser tween，数据驱动 + reduce-motion 友好。
+// fixed 右上角避开顶部 HUD；移动端缩小 + 半透明避免遮挡画布；支持折叠节省小屏空间。
+// Shift+M 折叠/展开（与 HudShell 的 M 地图 quickslot 互补）。
 
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import MiniMap from '@/components/hud/MiniMap.vue';

@@ -3,21 +3,22 @@ package com.pythontopia.feature.arena
 /**
  * Arena 模块 UI DTO 集合。
  *
- * Arena = 班级内 / 全校的练习赛：每日一场（单日多题快速判定），赛后按通过题数 + 通关时长出
- * 积分榜。Beta 首发不做 PVP 实时同步，所以 DTO 只覆盖最小闭环：
+ * Arena = Python 课程训练场：抽取课程题库若干题，做“看题→写码→提交→服务端判题”的快速闭环。
+ * Beta 首发不做 PVP / 跨用户排行榜，所以 DTO 只覆盖最小闭环：
  *
  * - 当日赛事元数据（[ArenaSession]）+ 题目列表（[ArenaProblem]）
- * - 玩家提交（[Submission]）：当前只回三类终态（PASSED / FAILED / RUNTIME_ERROR）+ 是否正
- *   式记分；判题细节交给后端 SubprocessPythonSandbox，前端只做展示
- * - 积分榜条目（[LeaderboardEntry]）：单赛事内的排名快照
+ * - 玩家提交（[Submission]）：服务端判题终态 PASSED / FAILED / ERROR + 本地展示积分；
+ *   判题明细（通过用例数 / 失败原因）来自后端 judgeResult，前端只做展示
+ * - “积分榜”条目（[LeaderboardEntry]）：local-only 个人战绩，非真实多人排名（后端无排行榜端点）
  *
  * 这些类是 Compose/ViewModel 使用的稳定模型；Retrofit wire DTO 留在
  * [ArenaRepository] 内部，避免把后端字段形状扩散到 UI。
  *
- * 对应后端端点（见任务背景）：
- * - GET  /api/course/problems?kcCode=       → [ArenaProblem] 来源
- * - POST /api/submissions                   → [Submission]
- * - GET  /api/submissions?status=PASSED     → 当前账号真实练习统计
+ * 对应后端端点：
+ * - GET  /api/course/problems?kcCode=   → [ArenaProblem] 来源
+ * - POST /api/submissions               → 创建提交（source=TRAINING）
+ * - GET  /api/submissions/{id}          → 轮询判题终态 + judgeResult（[Submission]）
+ * - GET  /api/submissions?status=PASSED → 当前账号真实练习统计（派生本地积分榜）
  */
 
 /**
@@ -51,7 +52,7 @@ data class ArenaSession(
  * @property statementMd 题面 markdown 文本；当前用纯文本 [androidx.compose.material3.Text]
  *           渲染（不引入 Markwon），Beta+1 接 :feature:workshop 的 Markdown renderer。
  * @property starterCode 起始模板代码，进入题目时自动填入 [ProblemRunner] 的编辑器，玩家在此基础上改写。
- * @property scoreReward 通过本题可得积分；用于排行榜累计计算。
+ * @property scoreReward 通过本题的展示积分（local-only，前端按难度换算，后端不下发也不记账）。
  */
 data class ArenaProblem(
     val problemId: Long,
@@ -64,16 +65,15 @@ data class ArenaProblem(
 /**
  * 一次代码提交的判定结果。
  *
- * Arena 走"快速判定"，所以只关心终态，不做 ARENA 模块内的轮询（轮询由后端
- * 一次 POST 同步返回结果；如果后端选择异步则 [ArenaRepository.submit] 内部封装）。
- * Web 端 `:feature:arena` 的 PENDING/POLLING/SUBMITTING 三态在 Android 演示版被压缩成
- * "提交中" → "结果出来" 两步，由 [ArenaViewModel] 的 `isSubmitting` 标志承担。
+ * 判题契约：[ArenaRepository.submit] 先 POST 再轮询 `GET /api/submissions/{id}` 到终态，
+ * 把 PENDING/RUNNING 收敛成此终态模型。UI 侧的 "提交中" → "结果出来" 由
+ * [ArenaViewModel] 的 `isSubmitting` 标志承担。
  *
- * @property submissionId 提交记录 ID，后续看排行榜时按此 ID 关联。
+ * @property submissionId 提交记录 ID（后端 SubmissionDto.id）。
  * @property problemId 关联题目 ID，与 [ArenaProblem.problemId] 对齐。
- * @property status 三类终态字符串：`PASSED` / `FAILED` / `RUNTIME_ERROR`；后端枚举对齐。
- * @property message 给玩家看的人类可读反馈（如 "样例 2 失败：期望 6 实际 5"）。
- * @property scoreAwarded 本次提交实际得分；FAILED / RUNTIME_ERROR 时通常为 0。
+ * @property status 终态字符串：`PASSED` / `FAILED` / `ERROR`（对齐后端 SubmissionStatus 枚举名）。
+ * @property message 给玩家看的人类可读反馈，失败时取后端 judgeResult.failureReason。
+ * @property scoreAwarded 本次提交的展示积分（local-only）；非 PASSED 为 0，后端不记账。
  */
 data class Submission(
     val submissionId: Long,
@@ -84,17 +84,19 @@ data class Submission(
 )
 
 /**
- * 排行榜单行条目。
+ * “积分榜”单行条目。
  *
- * 没有 avatarUrl 字段，因为 Beta 首发用首字母占位头像（见
- * [LeaderboardView]），减小 OkHttp 图片缓存与权限成本；Beta+2 接 :feature:profile
- * 的真实头像 URL 时再扩展。
+ * **local-only**：后端没有跨用户排行榜端点，[ArenaRepository.leaderboard] 只能用当前账号
+ * 自己的 `GET /api/submissions?status=PASSED` 真实数据派生出单行个人战绩，因此这是“我的战绩”
+ * 而非真实多人排名。沿用 [LeaderboardView] 的列表样式展示，Beta+ 若后端补排行榜端点再扩展。
  *
- * @property rank 排名（1 开始）；同分按提交时间升序排前。
- * @property userId 学员 ID，用于跨场对比与高亮"我"的位置。
- * @property displayName 学员显示名（昵称优先，无昵称回退到学号）。
- * @property score 本场累计积分。
- * @property solvedCount 已通过题数，作为同分时的次序参考显示。
+ * 没有 avatarUrl 字段，因为 Beta 首发用首字母占位头像（见 [LeaderboardView]）。
+ *
+ * @property rank 名次（当前恒为 1，单行个人战绩）。
+ * @property userId 学员 ID（取自后端 SubmissionDto.userId），用于高亮“我”的位置。
+ * @property displayName 学员显示名（当前为占位“当前账号”，接登录态后改真实昵称）。
+ * @property score 已解题数换算的展示积分（local-only）。
+ * @property solvedCount 已通过的不同题目数（来自真实 PASSED 提交去重）。
  */
 data class LeaderboardEntry(
     val rank: Int,

@@ -1,0 +1,24 @@
+<view class="page">
+  <view class="card card--flat">
+    <view class="section-title">{{kcCode ? kcCode + ' 的题目' : '全部题目'}}</view>
+    <view class="muted">点击题目进入训练场，提交代码由服务端判题。</view>
+  </view>
+
+  <view class="login__error" wx:if="{{errorMsg}}">{{errorMsg}}</view>
+  <view wx:if="{{loading}}" class="loading">加载题目…</view>
+  <view wx:elif="{{problems.length === 0}}" class="empty">暂无题目</view>
+
+  <view
+    wx:for="{{problems}}"
+    wx:key="problemId"
+    class="list-item"
+    data-id="{{item.problemId}}"
+    bindtap="goDetail"
+  >
+    <view class="row row--between">
+      <text class="list-item__title">{{item.title}}</text>
+      <text class="tag" wx:if="{{item.difficulty}}">{{item.difficulty}}</text>
+    </view>
+    <view class="muted">{{item.kcCode}}<text wx:if="{{item.sourceLabel}}"> · {{item.sourceLabel}}</text></view>
+  </view>
+</view>

@@ -182,14 +182,14 @@ const MANIFEST = [
   },
   {
     // R-12 动作模组（方案A）：官方 ULPC「Expanded」全动作角色表（13×42，含 run/jump/idle/sit），
-    // 由 scripts/build-ulpc-characters.py 用官方 Universal-LPC 素材库合成；主角 + 8 个变体 NPC。
+    // 由 scripts/build_ulpc_characters.py 用官方 Universal-LPC 素材库合成；主角 + 8 个变体 NPC。
     src: 'characters_extra/ulpc_generated',
     dest: 'sprites/ulpc',
     kind: 'dir',
     license: 'CC-BY-SA-3.0',
     author: 'LPC contributors (bluecarrot16, ElizaWy, JaidynReiman, wulax, Redshrike, …，见 CREDITS-ulpc-used.txt)',
     source: 'https://github.com/LiberatedPixelCup/Universal-LPC-Spritesheet-Character-Generator',
-    notes: '官方 ULPC 全动作角色表（player_sara2 + ulpc_*，13×42 expanded，run/jump/idle/sit/emote + 6 基础），scripts/build-ulpc-characters.py 合成',
+    notes: '官方 ULPC 全动作角色表（player_sara2 + ulpc_*，13×42 expanded，run/jump/idle/sit/emote + 6 基础），scripts/build_ulpc_characters.py 合成',
     noSync: true,
   },
   {
@@ -205,14 +205,14 @@ const MANIFEST = [
     noSync: true,
   },
   {
-    // R-12：用 LPC 茅草屋 kit 合成的整屋 sprite（scripts/build-cottages.py），替换世界场景方块拼接建筑。
+    // R-12：用 LPC 茅草屋 kit 合成的整屋 sprite（scripts/build_cottages.py），替换世界场景方块拼接建筑。
     src: 'buildings_npc/lpc_thatched-roof-cottage',
     dest: 'sprites/cottages',
     kind: 'dir',
     license: 'CC-BY-SA-3.0',
     author: 'bluecarrot16 / Daniel Eddeland (daneeklu) / Lanea Zimmerman (Sharm)',
     source: 'https://opengameart.org/content/lpc-thatched-roof-cottage',
-    notes: '茅草屋整屋 sprite（cottage_tan/cream/stone），scripts/build-cottages.py 从 kit 合成，世界场景建筑',
+    notes: '茅草屋整屋 sprite（cottage_tan/cream/stone），scripts/build_cottages.py 从 kit 合成，世界场景建筑',
     noSync: true,
   },
   {

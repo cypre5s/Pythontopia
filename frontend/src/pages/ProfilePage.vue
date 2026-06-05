@@ -27,7 +27,7 @@ const dimensions = ref<ProfileDimensionDto[]>([]);
 const savingKey = ref<string | null>(null);
 
 const COGNITIVE_STYLE_KEY = 'cognitive_style';
-// #1 学生纠偏阀：认知风格 3 选 1（与探针 / 后端 tag 取值对齐：visual / logical / trial）。
+// 学生纠偏：认知风格 3 选 1，取值与探针 / 后端 tag 对齐（visual / logical / trial）。
 const cognitiveStyleChoices = [
   { id: 'visual', label: '先看图解' },
   { id: 'logical', label: '先读推理' },
@@ -79,7 +79,7 @@ async function onSelfRate(dim: ProfileDimensionDto, event: Event): Promise<void>
   }
 }
 
-/** #1 纠偏：把所选风格作为主导 tag 提交（tagsAdd + 小 evidence/score），保存后回读反映选择。 */
+/** 纠偏：把所选风格作为主导 tag 提交（tagsAdd + 小 evidence/score），保存后回读反映选择。 */
 async function onPickCognitiveStyle(choice: string): Promise<void> {
   if (savingCognitiveStyle.value) return;
   savingCognitiveStyle.value = true;

@@ -27,6 +27,13 @@ interface ProfileApi {
     @GET("api/learner/profile")
     suspend fun getProfile(): Response<LearnerProfileDto>
 
+    /**
+     * 8 维画像得分快照。后端恒返回 8 维（[ProfileDimensions.KEYS] 顺序），无 204；
+     * 非 2xx 由 Retrofit 抛 [retrofit2.HttpException]，故直接用 `List` 而非 `Response` 包装。
+     */
+    @GET("api/learner/profile/dimensions")
+    suspend fun getDimensions(): List<ProfileDimensionDto>
+
     @PUT("api/learner/profile/dimensions/{dimensionKey}")
     suspend fun updateDimension(
         @Path("dimensionKey") dimensionKey: String,

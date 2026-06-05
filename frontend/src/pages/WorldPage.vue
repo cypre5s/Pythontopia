@@ -36,12 +36,12 @@ const seasonClass = computed<string>(() => `world-page--season-${calendar.today?
 const FIRST_VISIT_FLAG = 'pyt_first_world_visit';
 const HELP_FLAG = 'pyt_helped_v1';
 const WELCOME_DELAY_MS = 2000;
-// 镇长对话弹出后再多压制几秒探针，给新手留出读对话的时间（C4 不叠弹）。
+// 镇长对话弹出后再多压制几秒探针，给新手留出读对话时间，保证引导不叠弹。
 const WELCOME_HOLD_GRACE_MS = 6000;
 
 // 首次进入时，镇长 Py 的「发任务」对话要等新手帮助弹窗关闭后再弹，避免叠加。
 let pendingWelcome = false;
-// 引导期间（帮助弹窗 / 镇长对话）压制世界内探针卡，保证一次只有一条引导线（C4）。
+// 引导期间（帮助弹窗 / 镇长对话）压制世界内探针卡，保证一次只有一条引导线。
 const onboardingHold = ref(false);
 let welcomeHoldTimer: number | null = null;
 
@@ -122,7 +122,7 @@ onBeforeUnmount(() => {
     :style="{ '--pyt-code-font-size': gameSettings.education.codeFontSize + 'px' }"
   >
     <WorldCanvas />
-    <!-- 历史快捷键提示由 HudShell 各按钮承担，避免文字重复 -->
+    <!-- 快捷键提示由 HudShell 各按钮承担，此处停用避免文字重复 -->
     <OperationHints v-if="false" />
     <DialogModal />
     <FirstTimeHelpModal @dismissed="onHelpDismissed" />
@@ -159,7 +159,7 @@ onBeforeUnmount(() => {
   color: var(--pyt-color-bg-elevated);
 }
 
-/* 季节渐变（地图未加载完时也能看到星露谷感氛围底色） */
+/* 季节渐变：地图未加载完时也能看到氛围底色 */
 .world-page--season-spring { --world-bg-top: #6bbf59; --world-bg-bot: #2f5a36; }
 .world-page--season-summer { --world-bg-top: var(--pyt-color-success); --world-bg-bot: #14401b; }
 .world-page--season-autumn { --world-bg-top: var(--pyt-color-warning); --world-bg-bot: #5b3a10; }
@@ -181,7 +181,7 @@ onBeforeUnmount(() => {
   }
 }
 
-/* ── Settings-driven CSS ── */
+/* ── 设置驱动的样式 ── */
 
 .world-page { --pyt-ui-scale: 1; --pyt-code-font-size: 14px; }
 .world-page[data-ui-scale="small"]  { --pyt-ui-scale: 0.85; font-size: calc(14px * 0.85); }

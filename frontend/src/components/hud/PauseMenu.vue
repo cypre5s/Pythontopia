@@ -41,7 +41,7 @@ function close(): void {
   settings.closePauseMenu();
 }
 
-// R-14 降负荷：把扁平 17 项拆进 4 个分组（继续 / 学习 / 我 / 系统），减少一屏认知负荷。
+// 菜单按 4 组（继续 / 学习 / 我 / 系统）组织，降低一屏认知负荷。
 function go(path: string): void {
   close();
   void router.push(path);
@@ -457,7 +457,7 @@ onUnmounted(() => {
   justify-content: center;
 }
 
-/* ── 减弱动效偏好 ─────────────────────────────────────────── */
+/* ── 矮屏与动效偏好适配 ─────────────────────────────────────── */
 @media (max-height: 500px) {
   .pause-panel {
     padding: 10px 18px 10px;

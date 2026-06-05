@@ -1,17 +1,13 @@
-// M2 重构原因：将 TownScene + FieldScene + BugMineScene 等多个独立 Phaser 实例
-// 合并为单一 WorldScene，通过 sceneKey 切换 5 张大地图（town_hub / farm_north /
-// mine_south / campus_east / port_west），消除多实例资源浪费与状态错乱。
+// WorldScene：单一场景通过 sceneKey 切换 5 张大地图（town_hub / farm_north /
+// mine_south / campus_east / port_west），避免多实例资源浪费与状态错乱。
 //
-// W2 集成：把 NpcFramework + InteractableSystem 真正接入 WorldScene：
-//   - parseObjects 解析出来的 npc 列表统一注册到 NpcFramework，便于后续 patrol /
-//     对话锚点 / faceTowards 等行为复用，而不是各场景再写一遍 dx/dy 巡逻；
-//   - 同一份 npc 列表派生出 InteractableSystem 的 circle trigger，靠 hintRenderer
-//     在屏幕底部气泡区显示 "按 E 与 {NPC 名} 对话"，actionPressed 边沿触发 dialog
-//     store openWithTree；
-//   - 额外注册一个 "公告板" trigger 作为 non-NPC trigger 示例（仍在 hub 喷泉东侧），
-//     验证 InteractableSystem 不仅能服务 NPC；
-//   - scene shutdown 走 attachLifecycle 兜底 tweens/time/input，并显式 clear
-//     framework 实例，避免切场景留下幽灵 trigger。
+// NpcFramework + InteractableSystem 接入：
+//   - parseObjects 解析出的 npc 列表注册到 NpcFramework（patrol / 对话锚点 /
+//     faceTowards），并派生 InteractableSystem 的 circle trigger，由 hintRenderer
+//     在屏幕底部显示「按 E 与 {NPC 名} 对话」，actionPressed 边沿触发 dialog store；
+//   - 另注册一个「公告板」非 NPC trigger；
+//   - scene shutdown 走 attachLifecycle 兜底 tweens/time/input，并 clear framework
+//     实例，避免切场景留下幽灵 trigger。
 //
 // 隔离边界：WorldScene 属于 game adapter 层，允许直接 import phaser；业务层仍
 // 只通过 SceneLike / PlayerSpriteHandle 等结构化接口与本文件交互。
@@ -55,13 +51,10 @@ import { findMainQuestById } from '@/data/mainQuests';
 const TILE_SIZE = 16;
 const RENDER_SCALE = 1;
 const RENDER_TILE_SIZE = TILE_SIZE * RENDER_SCALE;
-// R-12 美化：CAMERA_ZOOM 改为 1.5（整数倍配合 RENDER_SCALE=2 → 屏幕等效 3x 缩放，
-// 16×16 tile → 48×48 像素），符合「整数倍缩放（2x / 3x）」要求，避免过去 1.35
-// 这种非整数缩放导致的子像素接缝；与玩家「像素块太大」反馈相比，48px 既保留
-// 清晰度又比早期 64px 更紧凑，可视范围适中。
+// CAMERA_ZOOM：基准缩放，配合整数倍像素缩放避免子像素接缝。
 const CAMERA_ZOOM = 1.5;
 // 全屏适配 cover 缩放上限：地图小于视口时放大铺满，但不超过此值，避免像素插值毛刺
-// （cameraTuning §5.1：>3.0 单屏 < 10 tile 且毛刺暴露）。
+// （>3.0 时单屏 < 10 tile 且毛刺暴露）。
 const CAMERA_ZOOM_MAX = 3;
 const CAMERA_LERP = 0.15;
 const MOVE_COOLDOWN_MS = 130;
@@ -146,10 +139,9 @@ interface LowObstacleZone {
 }
 
 /**
- * W2 集成：公告板 trigger 在 town_hub 中的中心 tile。
+ * 公告板 trigger 在 town_hub 中的中心 tile。
  * 喷泉位于 tile(24,19)-(25,20) 区域；公告板放在喷泉东侧两格，避开 spawn(25,20)。
- * 5 张地图 hub 默认 50×40，27,20 落在喷泉右下方且在玩家可达范围内。
- * 其他地图（farm/mine/campus/port）暂不挂公告板，留 TODO 给后续 wave。
+ * hub 默认 50×40，27,20 落在喷泉右下方且在玩家可达范围内。
  */
 const BULLETIN_BOARD_TILE_X = 27;
 const BULLETIN_BOARD_TILE_Y = 20;
@@ -188,13 +180,13 @@ interface WorldSceneState {
   switching: boolean;
   weather: WeatherHandle | null;
   weatherKind: WeatherKind;
-  // ②情绪化小镇：氛围叠加层句柄，与 weather 同生命周期（create 应用、init/shutdown 销毁）。
+  // 氛围叠加层句柄，与 weather 同生命周期（create 应用、init/shutdown 销毁）。
   mood: MoodHandle | null;
-  // W2 集成：framework 实例在 create 中构造、shutdown 中 clear；testing 留 null
-  // 默认值，避免 jsdom 单测里 update() 误触发空 framework 时抛 NPE。
+  // framework 实例在 create 中构造、shutdown 中 clear；默认 null，
+  // 避免 jsdom 单测里 update() 误触发空 framework 时抛 NPE。
   interactable: InteractableSystem | null;
   npcFramework: NpcFramework | null;
-  // R-12 动作模组：每个 NPC 的动画控制器，按 npcKey 索引；update() 每帧用
+  // 每个 NPC 的动画控制器，按 npcKey 索引；update() 每帧用
   // NpcFramework 实例位置同步贴图 + 行走/待机/工作手势动画。
   npcSprites: Map<string, NpcSpriteController>;
   hintRendererHandle: PhaserHintRendererHandle | null;
@@ -248,7 +240,7 @@ export const WorldScene = {
       state.weather.destroy();
       state.weather = null;
     }
-    // ②情绪化小镇：上一次 restart 残留的 mood 句柄同样在 init 阶段销毁，保持与 weather 一致。
+    // 上一次 restart 残留的 mood 句柄同样在 init 阶段销毁，保持与 weather 一致。
     if (state.mood) {
       state.mood.destroy();
       state.mood = null;
@@ -355,10 +347,8 @@ export const WorldScene = {
       paintNpcHotspot(phaserScene, npc);
     });
 
-    // W2 集成：NpcFramework 持有逻辑层 NPC（巡逻/朝向/对话状态），
-    // InteractableSystem 持有 trigger（distance + hint）。
-    // 两者从相同的 npcs 列表派生，drawNpcSprite 维持视觉层（不接 patrol 移动，
-    // 等 wave-3 把 Phaser sprite 与 NpcInstance.x/y 双向同步）。
+    // NpcFramework 持有逻辑层 NPC（巡逻/朝向/对话状态），InteractableSystem 持有
+    // trigger（distance + hint）；两者从相同的 npcs 列表派生，drawNpcSprite 维持视觉层。
     state.npcFramework = new NpcFramework(phaserScene);
     state.hintRendererHandle = createPhaserHintRenderer(phaserScene);
     state.interactable = new InteractableSystem(phaserScene, {
@@ -367,9 +357,8 @@ export const WorldScene = {
     npcs.forEach((npc) => {
       state.npcFramework?.register(buildNpcDefinitionFromSpawn(npc, RENDER_TILE_SIZE));
       const trigger = buildNpcTrigger(npc, RENDER_TILE_SIZE, () => {
-        // 占位 dialog text 仍走 dialog store openWithTree，自动 fetch
-        // /data/npcs/{key}/{meta,dialog}.json，失败时 store 内部填 loadError。
-        // NpcDialogService 接通时只需替换 dialog store 拉取实现。
+        // dialog store openWithTree 自动 fetch /data/npcs/{key}/{meta,dialog}.json，
+        // 失败时 store 内部填 loadError。
         openNpcDialog(npc.npcKey);
         state.npcFramework?.startDialog(npc.npcKey);
         state.npcFramework?.faceTowards(
@@ -383,12 +372,10 @@ export const WorldScene = {
       state.interactable?.register(trigger);
     });
 
-    // A5: 异步加载 NPC 日程并更新位置（火后不管，不阻塞场景初始化）
+    // 异步加载 NPC 日程并更新位置（火后不管，不阻塞场景初始化）
     void applyNpcSchedules(npcs, state.npcFramework, state.mapKey, RENDER_TILE_SIZE);
 
-    // town_hub 专属示例 trigger：公告板（非 NPC trigger，验证 InteractableSystem
-    // 不只服务 NPC）。其他地图的 trigger（farm 浇水点 / mine 矿井入口等）留 TODO
-    // 给后续 wave，等地图 JSON 加入 triggers object layer 后批量注册。
+    // 仅 town_hub 注册公告板 trigger（非 NPC trigger 示例）。
     if (state.mapKey === DEFAULT_MAP_KEY) {
       state.interactable.register(
         buildBulletinBoardTrigger({
@@ -436,7 +423,7 @@ export const WorldScene = {
     const bgm = pickBgm(state.entry?.bgm);
     playBgm(bgm);
 
-    // W3 Polish：先应用 weather 粒子，再用 timeOfDay tint 覆盖颜色。两者顺序固定，
+    // 先应用 weather 粒子，再用 timeOfDay tint 覆盖颜色。两者顺序固定，
     // 不要互换，否则 setTint 会被 weather 反覆盖回去。
     const weatherKind = normalizeWeatherKind(worldStore.session?.weather);
     state.weatherKind = weatherKind;
@@ -447,7 +434,7 @@ export const WorldScene = {
     });
     applyTimeOfDay(this, timeOfDay);
 
-    // ②情绪化小镇：在 weather/time 之后叠加「氛围层」（背景级、不抢 tint）。初始从 mood store
+    // 在 weather/time 之后叠加「氛围层」（背景级、不抢 tint）。初始从 mood store
     // 读当前 mood；之后 mood store refresh / 开关变更派发的 window CustomEvent 实时重应用
     // （先销毁旧句柄再重建），实现「画像 emotion_persistence 改了世界」的可见联动。
     const applyMoodKind = (kind: MoodKind): void => {
@@ -477,10 +464,9 @@ export const WorldScene = {
     };
     window.addEventListener('beforeunload', onBeforeUnload);
 
-    // W2 集成：attachLifecycle 兜底 tweens/time/input 清理，避免 HMR / restart
-    // 残留 ticker；onShutdown 闭包负责 clear 业务 framework + 销毁 hint 渲染器。
-    // 业务 state 字段（weather/player/...）仍在 shutdown handler 内 reset，便于
-    // 单步可读。
+    // attachLifecycle 兜底 tweens/time/input 清理，避免 HMR / restart 残留 ticker；
+    // onShutdown 闭包负责 clear 业务 framework + 销毁 hint 渲染器。业务 state 字段
+    // （weather/player/...）仍在 shutdown handler 内 reset，便于单步可读。
     state.lifecycleDetach = attachLifecycle(phaserScene, {
       onShutdown: () => {
         state.interactable?.clear();
@@ -502,7 +488,7 @@ export const WorldScene = {
         state.weather.destroy();
         state.weather = null;
       }
-      // ②情绪化小镇：与 weather 同步销毁氛围层句柄。
+      // 与 weather 同步销毁氛围层句柄。
       if (state.mood) {
         state.mood.destroy();
         state.mood = null;
@@ -574,7 +560,7 @@ export const WorldScene = {
       return;
     }
 
-    // R-12 动作模组：C 键使用工具——按地图主题播放浇水/挖矿/钓鱼/施法/庆祝动画（定身播放）。
+    // C 键使用工具——按地图主题播放浇水/挖矿/钓鱼/施法/庆祝动画（定身播放）。
     const toolIsDown = controller.isToolPressed();
     const toolPressedEdge = toolIsDown && !state.toolWasDown;
     state.toolWasDown = toolIsDown;
@@ -600,10 +586,8 @@ export const WorldScene = {
       if (delta.dx === 0 && delta.dy === 0) {
         return;
       }
-      // R-13 修复：星露谷式 turn-then-walk。如果当前 cardinal 不是玩家朝向，
-      // 第一次按只转身不前进；下一次再按才真正走一格。
-      // 这样玩家从「面朝下站立」按右键，先转脸朝右；再按右键，走一格。
-      // 避免「按一下就强制蹭一步」的笨重感。
+      // 星露谷式 turn-then-walk：当前 cardinal 不是玩家朝向时，第一次按只转身不前进，
+      // 下一次再按才真正走一格，避免「按一下就强制蹭一步」的笨重感。
       if (shouldTurnBeforeMove(player.direction, rawDirection)) {
         player.faceDirection(cardinal);
         // 转身只占用较短的 turn 延迟，而非整段移动冷却：下一帧只要再过 TURN_DELAY_MS
@@ -634,10 +618,9 @@ export const WorldScene = {
       }
     }
 
-    // W2 集成：framework 驱动。actionPressed 用边沿语义传入 InteractableSystem，
-    // 由 trigger.onActivate 取代旧的"曼哈顿 <=1 找 NPC 调 openNpcDialog"。
-    // npcFramework.update 接 deltaMs 推进 patrol；town_hub 当前 NPC 无 patrol
-    // 数据，update() 实际是 no-op，未来 JSON 加 patrol 字段后立刻生效。
+    // actionPressed 用边沿语义传入 InteractableSystem，由 trigger.onActivate 处理交互。
+    // npcFramework.update 接 deltaMs 推进 patrol；town_hub 当前 NPC 无 patrol 数据，
+    // update() 实际是 no-op。
     const actionIsDown = controller.isActionPressed();
     const actionPressedEdge = actionIsDown && !state.actionWasDown;
     state.actionWasDown = actionIsDown;
@@ -649,7 +632,7 @@ export const WorldScene = {
       // 避免 NPC 一次跳超过半屏；clamp 下限 0 防 time.now 偶发抖动出现负数。
       const safeDelta = Math.max(0, Math.min(200, deltaMs));
       state.npcFramework?.update(safeDelta);
-      // R-12 动作模组：用逻辑层实例位置驱动 NPC 贴图（巡逻走动 / 站桩待机 / 工作手势）。
+      // 用逻辑层实例位置驱动 NPC 贴图（巡逻走动 / 站桩待机 / 工作手势）。
       if (state.npcFramework) {
         for (const instance of state.npcFramework.getAll()) {
           state.npcSprites.get(instance.id)?.sync(instance, safeDelta);
@@ -765,9 +748,8 @@ function parseObjects(
         return;
       }
       if (type === 'exit') {
-        // generate-maps.mjs 写出的字段是 `target`/`side`（4 tile 宽矩形,无 toTile*）;
-        // 历史代码读的是 `toMap`/`toTileX`/`toTileY`。这里双向兼容,并优先读新字段。
-        // 当只有 target 没有 toTile* 时,用目标地图 index.spawn 作为玩家落点 fallback。
+        // generate-maps.mjs 写出 `target`/`side`（4 tile 宽矩形,无 toTile*）;同时兼容旧字段
+        // `toMap`/`toTileX`/`toTileY`,优先读新字段。只有 target 时用目标地图 index.spawn 作落点 fallback。
         const target = String(props['target'] ?? props['toMap'] ?? '');
         if (!target) return;
         const targetEntry = index?.maps?.find((m) => m.key === target) ?? null;
@@ -778,7 +760,7 @@ function parseObjects(
           props['toTileY'] ?? targetEntry?.spawn?.tileY ?? 5,
         );
         // 展开 4 tile 宽/高的 exit 区域,让玩家走到任意一格都触发跳转;
-        // 否则只命中左上角,其余 3 格直接穿过去毫无反应(W1 残留 bug)。
+        // 否则只命中左上角,其余格直接穿过去毫无反应。
         const widthTiles = Math.max(
           1,
           Math.round((Number(obj.width ?? TILE_SIZE)) / TILE_SIZE),
@@ -825,7 +807,7 @@ function parseObjects(
       }
       if (type === 'npc') {
         const spriteValue = props['sprite'];
-        // W2 集成：town_hub.json 用 "key" 字段（npc_mayor_py.properties[name=key]
+        // town_hub.json 用 "key" 字段（npc_mayor_py.properties[name=key]
         // value=mayor_py），保留向后兼容 "npcKey"。obj.name fallback 仅用于
         // 兜底，正式 NPC 必须显式声明 key 才能匹配 /data/npcs/<key>/。
         npcs.push({
@@ -852,7 +834,7 @@ function collectProperties(props: unknown): Record<string, unknown> {
   return Object.fromEntries(entries.map((p) => [p.name, p.value]));
 }
 
-// R-12 美化：用 LPC 茅草屋整屋 sprite 替换方块拼接建筑。屋子底沿对齐建筑区位底部、
+// 用 LPC 茅草屋整屋 sprite 替换方块拼接建筑。屋子底沿对齐建筑区位底部、
 // 屋顶向上延伸（星露谷式），整屋遮住底下旧的瓦片建筑；点击进入对应房间。
 const COTTAGE_VARIANTS: ReadonlyArray<string> = ['cottage_tan', 'cottage_cream', 'cottage_stone'];
 const COTTAGE_FALLBACK_W = 200;
@@ -991,7 +973,7 @@ function paintQuestMarkers(
       });
     }
   } catch {
-    // store not available in jsdom / test context — silently skip
+    // store 在 jsdom / 测试环境不可用，静默跳过。
   }
 }
 
@@ -1060,8 +1042,8 @@ function drawFallbackMessage(phaserScene: Phaser.Scene, text: string): void {
 }
 
 // =====================================================================
-// W2 集成辅助导出：把 npc 列表转 NpcDefinition / ITrigger，便于在 jsdom
-// 单测里 mock 调用而无需启动整个 Phaser scene。
+// 辅助导出：把 npc 列表转 NpcDefinition / ITrigger，便于在 jsdom 单测里
+// mock 调用而无需启动整个 Phaser scene。
 // =====================================================================
 
 /** Trigger id 前缀，业务侧调试时容易区分 npc trigger vs 其他类型。 */
@@ -1074,14 +1056,14 @@ export const BULLETIN_BOARD_TRIGGER_ID = 'trigger:bulletin_board';
  * 玩家走到 NPC 旁边时显示的 hint 文本，单独抽出便于本地化与单测。
  */
 export function buildNpcHintText(npcLabel: string): string {
-  // 故意保留中文以贴合 Beta 首批玩家（高校 Python 初学者）。
+  // 故意保留中文以贴合首批玩家（高校 Python 初学者）。
   return `按 E 与 ${npcLabel} 对话`;
 }
 
 /**
  * 由 tilemap parseObjects 返回的 NpcSpawn 推出 NpcFramework 注册用 NpcDefinition。
  *
- * A5 schedule 支持：
+ * schedule 支持：
  *   - 如果 NPC 有 schedule 数据 + 当前有日历信息，
  *     使用 resolveSchedulePosition 计算当前应在的位置；
  *   - 同一地图内多个时段位置自动生成巡逻 waypoints。
@@ -1159,8 +1141,7 @@ export function buildNpcTrigger(
 }
 
 /**
- * 构造公告板 trigger。当前仅 town_hub 注册，其他地图等后续 wave 接入 trigger
- * object layer 后批量生成。
+ * 构造公告板 trigger（当前仅 town_hub 注册）。
  */
 export function buildBulletinBoardTrigger(opts: {
   tileX: number;
@@ -1265,7 +1246,7 @@ function createPhaserHintRenderer(
 }
 
 /**
- * A5: 异步加载 NPC meta.json 获取 schedule，然后通过 NpcFramework.teleport
+ * 异步加载 NPC meta.json 获取 schedule，再通过 NpcFramework.teleport
  * 把 NPC 移动到当前日程位置。
  */
 async function applyNpcSchedules(

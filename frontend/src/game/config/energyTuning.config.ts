@@ -1,8 +1,7 @@
-// R-12 W5 能量与疲劳曲线 (Energy & Fatigue Curve) 调参表骨架。
+// 能量与疲劳曲线调参表。
 //
-// 设计依据：docs/gameplay/r12-deepen/03-energy-fatigue-curve.md。
-// 本文件仅承担"数值与纯函数 helper"职责，不接触 Phaser / Pinia / fetch；
-// 业务层（WorldScene / EnergyHud / API client）按本表读取并通过
+// 仅承担「数值与纯函数 helper」职责，不接触 Phaser / Pinia / fetch；业务层
+// （WorldScene / EnergyHud / API client）读取本表，并通过
 // POST /api/world/energy/{consume,restore} 把结果上报到后端 world_session.energy。
 //
 // 边界约定：
@@ -13,10 +12,7 @@
 
 /**
  * 能量调参字段集合（前端权威配置，后端通过 application.yml 镜像）。
- *
- * 数值口径与设计文档 §3 / §4 / §5 / §6 完全对齐，正值代表"获得能量"，
- * 负值代表"消耗能量"。任何后续 ±20% 内的微调允许直接覆盖默认值，
- * 超出 ±20% 必须经教学策划评审（见设计文档 §11）。
+ * 正值代表「获得能量」，负值代表「消耗能量」。
  */
 export interface EnergyTuningConfig {
   /** 能量硬上限（默认 100）。 */
@@ -62,9 +58,9 @@ export interface EnergyTuningConfig {
     readonly zero: number;
   };
 
-  /** 过劳保护阈值（单位：真实分钟，对应设计文档 §6）。 */
+  /** 过劳保护阈值（单位：真实分钟）。 */
   readonly overworkThresholdsMin: {
-    /** warn：软提醒 toast（设计 120/180 分钟，骨架取首档 120）。 */
+    /** warn：软提醒 toast。 */
     readonly warn: number;
     /** capDown：硬性把 energy_cap 锁到 80。 */
     readonly capDown: number;
@@ -74,10 +70,7 @@ export interface EnergyTuningConfig {
 }
 
 /**
- * 默认能量调参表，凡未在迁移/AB 测试中显式覆写都以本表为准。
- *
- * 仅包含 R-12 W5 骨架阶段必须的字段，更复杂的"食物消耗品递减表 / 节日加成"
- * 等扩展项请在后续 PR 单独追加。
+ * 默认能量调参表，凡未在迁移 / AB 测试中显式覆写都以本表为准。
  */
 export const DEFAULT_ENERGY_TUNING: EnergyTuningConfig = {
   maxEnergy: 100,
@@ -148,7 +141,7 @@ export function applyDelta(currentEnergy: number, delta: number): number {
  * Pyodide 执行倍率：能量越低执行越慢，对应"看课件走神 / 做题反复出错"的教育隐喻。
  *
  * - energy < 30 → 1.5（severe / harden 下半区）
- * - 30 ≤ energy < 50 → 1.3（soft 区，对应设计文档 §5.1 黄色 HUD bar）
+ * - 30 ≤ energy < 50 → 1.3（soft 区，黄色 HUD bar）
  * - energy ≥ 50 → 1.0（正常）
  *
  * 非有限输入按 0 处理（即取 1.5），保持"宁可慢、不可缺判定"的安全侧。
@@ -184,7 +177,7 @@ export function getMovementSpeedMultiplier(energy: number): number {
 /**
  * 把数值能量映射到 5 档状态，供 UI / 玩法层做"功能性递降"。
  *
- * 区间口径（左闭右开，与设计文档 §5.1 对齐）：
+ * 区间口径（左闭右开）：
  *   - energy ≥ 50          → normal
  *   - 30 ≤ energy < 50     → soft
  *   - 10 ≤ energy < 30     → harden

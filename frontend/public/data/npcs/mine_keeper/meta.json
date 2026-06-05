@@ -4,8 +4,8 @@
   "category": "educator_core",
   "sprite": "player_sara",
   "portrait": "portrait_miner.png",
-  "spawnMap": "mine_south",
+  "spawnMap": "town_hub",
   "spawn": { "tileX": 18, "tileY": 5 },
   "tags": ["quest_giver", "chapter_3", "computational_thinking"],
-  "description": "南矿洞的守矿人，靠一盏矿灯和满手煤灰读懂 0 与 1。负责第 3 章「计算工具与计算思维」的开课引导。"
+  "description": "小镇上的守矿人，守着镇角一座小小的矿洞工棚，靠一盏矿灯读懂 0 与 1。负责第 3 章「计算机信息表示及计算」的开课引导，带你认识二进制与进制转换。"
 }

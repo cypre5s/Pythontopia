@@ -52,31 +52,39 @@ internal object WorldMaps {
             TileRect(36, 3, 4, 3),
             TileRect(8, 3, 4, 3),
         ),
-        exits = listOf(
-            WorldExit("farm_north", TileRect(23, 39, 4, 1)),
-            WorldExit("mine_south", TileRect(23, 0, 4, 1)),
-            WorldExit("campus_east", TileRect(49, 18, 1, 4)),
-            WorldExit("port_west", TileRect(0, 18, 1, 4)),
-        ),
+        // R-14「世界收缩方案 A」：收敛为单一中央小镇 hub，移除通往外围 4 图的边缘出口。
+        // 外围图定义仍保留在下方（数据 / 单测约束需要），但正常游玩无法再从 hub 走到它们。
+        exits = emptyList(),
+        // NPC 锚点对齐 Web 端 frontend/public/assets/maps/town_hub.json 的 npc 对象层（y-up = height-1-tiledRow）。
+        // R-14 把原外围图的 mine_keeper / foreman_bug / captain_def / class_president 一并收进 hub，
+        // 使收缩后这些 NPC 仍可达；田老（farmer_kc）按 R-14 移除农场玩法，不再进 hub（仅留在 farm_north 数据里供测试）。
         npcs = listOf(
-            WorldNpc("mayor_py", 25, 30),
-            WorldNpc("librarian_doc", 12, 28),
-            WorldNpc("coach_q", 44, 22),
-            WorldNpc("sage_review", 38, 28),
-            WorldNpc("gardener", 6, 34),
-            WorldNpc("chef", 38, 8),
-            WorldNpc("farmer", 6, 36),
-            WorldNpc("professor", 12, 30),
-            WorldNpc("student_a", 15, 26),
-            WorldNpc("sailor", 4, 12),
-            WorldNpc("miner", 24, 4),
-            WorldNpc("tutor_ai", 30, 24),
-            WorldNpc("workshop_master", 42, 14),
-            WorldNpc("arena_guard", 38, 4),
-            WorldNpc("trainer", 10, 4),
+            WorldNpc("mayor_py", 25, 29),
+            WorldNpc("librarian_doc", 12, 27),
+            WorldNpc("coach_q", 44, 21),
+            WorldNpc("sage_review", 38, 27),
+            WorldNpc("gardener", 6, 33),
+            WorldNpc("chef", 38, 7),
+            WorldNpc("farmer", 6, 35),
+            WorldNpc("professor", 12, 29),
+            WorldNpc("student_a", 15, 25),
+            WorldNpc("sailor", 4, 11),
+            WorldNpc("miner", 24, 3),
+            WorldNpc("tutor_ai", 30, 23),
+            WorldNpc("workshop_master", 42, 13),
+            WorldNpc("arena_guard", 38, 3),
+            WorldNpc("trainer", 10, 3),
+            WorldNpc("mine_keeper", 21, 6),
+            WorldNpc("foreman_bug", 24, 6),
+            WorldNpc("captain_def", 4, 15),
+            WorldNpc("class_president", 16, 23),
         ),
     )
 
+    // --- R-14 起以下 4 张外围图不再作为主线场景（town_hub 已无出口可达）。 ---
+    // 保留定义仅为：① 满足 “5 图 / 20 NPC 锚点” 单测约束；② 让通往 hub 的回程出口存在
+    // （`all exits point at registered maps` 单测要求出口集合非空）。其瓦片 JSON 也仍留在
+    // assets/maps/ 内，但运行时不会被加载（见 WorldRenderScreen.show 强制载入 town_hub）。
     val farmNorth: WorldMapDefinition = WorldMapDefinition(
         key = "farm_north",
         width = 40,

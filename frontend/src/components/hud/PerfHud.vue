@@ -1,13 +1,8 @@
 <script setup lang="ts">
-// 性能诊断框（FPS + min/avg/max + 折线 / 帧时间 / draw call / 对象 / Tween / 纹理 /
-// 画布像素 / 堆 / 渲染后端 / 场景 / Web Vitals / 地图加载耗时）。
-//
-// 用途：在「换引擎 vs 优化现有 Phaser」决策前，先用真实运行时数据定位瓶颈，
-// 避免凭感觉换引擎。F3 切换显隐，默认关闭，不影响正式演示。
-//
-// 隔离取舍：本组件不直接 import phaser，只消费 phaserGame adapter 暴露的纯数据
-// 快照 DTO（getPerfSnapshot / PerfSnapshot）与 perfMonitor 只读报表（Web Vitals /
-// 区段耗时），符合 AGENTS「业务层无 Phaser 依赖」。
+// 性能诊断框：展示 FPS（min/avg/max + 折线）/ 帧时间 / draw call / 对象 / Tween / 纹理 /
+// 画布 / 堆 / 渲染后端 / 场景 / Web Vitals / 地图加载耗时等运行时指标。F3 切换显隐，默认关闭。
+// 隔离约束：不直接 import phaser，只消费 phaserGame adapter 的快照 DTO
+// （getPerfSnapshot / PerfSnapshot）与 perfMonitor 只读报表，符合 AGENTS「业务层无 Phaser 依赖」。
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { getPerfSnapshot, type PerfSnapshot } from '@game/adapters/phaserGame';
 import { perfMonitor, type WebVitalName, type WebVitalRating } from '@/services/perfMonitor';

@@ -1,7 +1,7 @@
 # ULPC 角色合成所用素材署名（focused credits）
 
 来源：官方 Universal-LPC-Spritesheet-Character-Generator（https://github.com/LiberatedPixelCup/Universal-LPC-Spritesheet-Character-Generator）
-合成脚本：scripts/build-ulpc-characters.py。下列为本项目实际使用的各部件署名（取自官方 sheet_definitions 的 credits）。
+合成脚本：scripts/build_ulpc_characters.py。下列为本项目实际使用的各部件署名（取自官方 sheet_definitions 的 credits）。
 
 ## body — Body Color
    - bluecarrot16, JaidynReiman, Benjamin K. Smith (BenCreating), Evert, Eliza Wyatt (ElizaWy), TheraHedwig, MuffinElZangano, Durrani, Johannes Sjölund (wulax), Stephen Challener (Redshrike) | OGA-BY 3.0, CC-BY-SA 3.0, GPL 3.0 | https://opengameart.org/content/liberated-pixel-cup-lpc-base-assets-sprites-map-tiles

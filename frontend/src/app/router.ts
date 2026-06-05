@@ -2,6 +2,7 @@ import { createRouter, createWebHistory, type RouteLocationNormalized } from 'vu
 import LoginPage from '@/pages/LoginPage.vue';
 import { useSessionStore } from '@stores/session';
 import { useToastStore } from '@stores/toast';
+import { useDialogStore } from '@stores/dialog';
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -30,9 +31,9 @@ export const router = createRouter({
       component: () => import('@/pages/WorldPage.vue'),
       meta: { fullscreen: true, requiresAuth: true },
     },
-    // M2 向后兼容：旧的 /town /field /bug-mine 路由保留，但直接 redirect 到 /world，
+    // 向后兼容：旧的 /town /field /bug-mine 路由保留，但直接 redirect 到 /world，
     // 由 WorldScene 内部用 sceneKey 切换 town_hub / farm_north / mine_south。
-    // R-13：/bug-mine 用 function-form 透传 ?side=east|west（mine_south.json 引用过）。
+    // /bug-mine 用 function-form 透传 ?side=east|west（mine_south.json 引用过）。
     { path: '/town', redirect: '/world' },
     { path: '/field', redirect: '/world' },
     {
@@ -63,7 +64,7 @@ export const router = createRouter({
       component: () => import('@/pages/LibraryPage.vue'),
       meta: { requiresAuth: true },
     },
-    // R-12 主线 Phase 2：章节视频讲解页（超星任务点视频 / 无视频时回退到 PPT）。
+    // 章节视频讲解页（超星任务点视频 / 无视频时回退到 PPT）。
     // 由 NPC 对话的 open_panel 效果（route="/lecture/:chapter"）进入。
     {
       path: '/lecture/:chapter(\\d+)',
@@ -102,7 +103,7 @@ export const router = createRouter({
       component: () => import('@/pages/ReviewHallPage.vue'),
       meta: { requiresAuth: true },
     },
-    // R-13 §-1：导师并入「百晓工坊」。/tutor 永久重定向到 /workshop，
+    // 导师并入「百晓工坊」。/tutor 永久重定向到 /workshop，
     // PauseMenu / HomePage / GuideOverlay / NPC 对话等旧入口自动落到合并页。
     { path: '/tutor', redirect: '/workshop' },
     {
@@ -117,16 +118,16 @@ export const router = createRouter({
       component: () => import('@/pages/teacher/ClassroomDetail.vue'),
       meta: { requiresAuth: true },
     },
-    // R-13 §2.3-6：AI 出题教师审核兜底页。
-    // 教师拉一题 → 看 5 重审查结论 → 通过 / 驳回；驳回原因写 LearningEvent
-    // （R-14 后端落库）。Web 演示用 localStorage 兜底。
+    // AI 出题教师审核兜底页。
+    // 教师拉一题 → 看 5 重审查结论 → 通过 / 驳回；驳回原因写 LearningEvent。
+    // Web 演示用 localStorage 兜底。
     {
       path: '/teacher/review',
       name: 'teacher-review',
       component: () => import('@/pages/teacher/TeacherReviewPage.vue'),
       meta: { requiresAuth: true },
     },
-    // R-13 §5 Phase 4：章末 BOSS 副本（4 阶段 AI 出题）。
+    // 章末 BOSS 副本（4 阶段 AI 出题）。
     // chapter param 1..7 对应主线 7 章；进入前必须本章 5 子任务全部完成。
     {
       path: '/boss/:chapter(\\d+)',
@@ -135,7 +136,7 @@ export const router = createRouter({
       meta: { requiresAuth: true },
       props: (route) => ({ chapter: Number(route.params.chapter) }),
     },
-    // R-13 §5 Phase 8 续：无尽模式 — 连续 AI 出题，自适应难度。
+    // 无尽模式 — 连续 AI 出题，自适应难度。
     // 与闯关模式 /boss/:chapter 互补：闯关推主线，无尽刷分练手。
     {
       path: '/endless',
@@ -143,7 +144,7 @@ export const router = createRouter({
       component: () => import('@/pages/EndlessPage.vue'),
       meta: { requiresAuth: true },
     },
-    // R-13 §-1 续（用户 Q2=A）：章节闯关塔，每章 10 关 = 9 知识/技能小关 + 1 章末 boss。
+    // 章节闯关塔，每章 10 关 = 9 知识/技能小关 + 1 章末 boss。
     // 前 9 关跳 /endless?chapter=&kc=；第 10 关跳 /boss/:chapter。
     // 关卡进度由 useArenaStore 持久化到 localStorage。
     {
@@ -152,10 +153,8 @@ export const router = createRouter({
       component: () => import('@/pages/ArenaPage.vue'),
       meta: { requiresAuth: true },
     },
-    // R-13 优化：货币/商店系统已移除，原 /shop-east /shop-west /merchant-ship 路由删除。
-    // R-13：6 个小建筑（民居/灯塔/谷仓/鸡舍）用 PlaceholderPage 兜底，
+    // 6 个小建筑（民居/灯塔/谷仓/鸡舍）用 PlaceholderPage 兜底，
     // 让 town_hub.json / port_west.json / farm_north.json 里的 building.route 全部能 resolve。
-    // 真实功能（NPC 互动 / 道具入库 / 任务节点）等 R-14 接入。
     {
       path: '/lighthouse',
       name: 'lighthouse',
@@ -198,7 +197,7 @@ export const router = createRouter({
       props: { title: '鸡舍', subtitle: '鸡群咯咯叫，但这里还在内测。' },
       meta: { requiresAuth: true },
     },
-    // R-13：catch-all 404 兜底，永不白屏。必须放在最后，避免抢占其它路由。
+    // catch-all 404 兜底，永不白屏。必须放在最后，避免抢占其它路由。
     {
       path: '/:pathMatch(.*)*',
       name: 'not-found',
@@ -219,4 +218,15 @@ router.beforeEach((to: RouteLocationNormalized) => {
     return { name: 'world' };
   }
   return true;
+});
+
+// 切换路由时关闭可能残留的 NPC 对话浮层：DialogTree 全局挂在 App.vue（不随路由卸载），
+// 若用 HUD 等方式离开当前页而对话仍 visible，浮层会残留到下一页。close() 幂等，
+// 由对话选项触发导航时已 close 过，这里再调一次也无副作用。
+router.afterEach(() => {
+  try {
+    useDialogStore().close();
+  } catch {
+    /* pinia 未就绪（极端时序）忽略 */
+  }
 });

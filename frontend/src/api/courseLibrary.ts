@@ -7,7 +7,7 @@
 //   GET /api/course/pages?kcCode=
 //   GET /api/course/problems/{id}
 //
-// 缺失（待 W3-CTRL 后端子代理补齐）的端点已用 fixture fallback：
+// 后端暂未提供、用 fixture fallback 兜底的端点：
 //   GET /api/course/documents                 → fixture: /data/course43/documents.json
 //   GET /api/course/problems                  → fixture: /data/course43/problems.json
 //   GET /api/course/examples[?kcCode=]        → fixture: /data/course43/examples.json

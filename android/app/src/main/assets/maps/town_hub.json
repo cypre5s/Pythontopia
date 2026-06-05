@@ -10,7 +10,7 @@
   "tileheight": 16,
   "infinite": false,
   "nextlayerid": 5,
-  "nextobjectid": 48,
+  "nextobjectid": 45,
   "properties": [
     {
       "name": "mapKey",
@@ -6314,7 +6314,7 @@
             {
               "name": "label",
               "type": "string",
-              "value": "资源工坊"
+              "value": "百晓工坊"
             }
           ]
         },
@@ -7013,7 +7013,7 @@
             {
               "name": "label",
               "type": "string",
-              "value": "图书管理员 Doc"
+              "value": "馆长 Doc"
             },
             {
               "name": "sprite",
@@ -7041,7 +7041,7 @@
             {
               "name": "label",
               "type": "string",
-              "value": "练习教练 Q"
+              "value": "教务 Q"
             },
             {
               "name": "sprite",
@@ -7069,7 +7069,7 @@
             {
               "name": "label",
               "type": "string",
-              "value": "复盘贤者"
+              "value": "复盘师 Sage"
             },
             {
               "name": "sprite",
@@ -7080,90 +7080,6 @@
         },
         {
           "id": 36,
-          "name": "npc_gardener",
-          "type": "npc",
-          "x": 96,
-          "y": 96,
-          "width": 0,
-          "height": 0,
-          "visible": true,
-          "rotation": 0,
-          "properties": [
-            {
-              "name": "key",
-              "type": "string",
-              "value": "gardener"
-            },
-            {
-              "name": "label",
-              "type": "string",
-              "value": "园丁"
-            },
-            {
-              "name": "sprite",
-              "type": "string",
-              "value": "npc_gardener"
-            }
-          ]
-        },
-        {
-          "id": 37,
-          "name": "npc_chef",
-          "type": "npc",
-          "x": 608,
-          "y": 512,
-          "width": 0,
-          "height": 0,
-          "visible": true,
-          "rotation": 0,
-          "properties": [
-            {
-              "name": "key",
-              "type": "string",
-              "value": "chef"
-            },
-            {
-              "name": "label",
-              "type": "string",
-              "value": "厨师"
-            },
-            {
-              "name": "sprite",
-              "type": "string",
-              "value": "npc_chef"
-            }
-          ]
-        },
-        {
-          "id": 38,
-          "name": "npc_farmer",
-          "type": "npc",
-          "x": 96,
-          "y": 64,
-          "width": 0,
-          "height": 0,
-          "visible": true,
-          "rotation": 0,
-          "properties": [
-            {
-              "name": "key",
-              "type": "string",
-              "value": "farmer"
-            },
-            {
-              "name": "label",
-              "type": "string",
-              "value": "农场主"
-            },
-            {
-              "name": "sprite",
-              "type": "string",
-              "value": "npc_farmer"
-            }
-          ]
-        },
-        {
-          "id": 39,
           "name": "npc_professor",
           "type": "npc",
           "x": 192,
@@ -7191,7 +7107,7 @@
           ]
         },
         {
-          "id": 40,
+          "id": 37,
           "name": "npc_student_a",
           "type": "npc",
           "x": 240,
@@ -7219,91 +7135,7 @@
           ]
         },
         {
-          "id": 41,
-          "name": "npc_sailor",
-          "type": "npc",
-          "x": 64,
-          "y": 448,
-          "width": 0,
-          "height": 0,
-          "visible": true,
-          "rotation": 0,
-          "properties": [
-            {
-              "name": "key",
-              "type": "string",
-              "value": "sailor"
-            },
-            {
-              "name": "label",
-              "type": "string",
-              "value": "水手"
-            },
-            {
-              "name": "sprite",
-              "type": "string",
-              "value": "npc_sailor"
-            }
-          ]
-        },
-        {
-          "id": 42,
-          "name": "npc_miner",
-          "type": "npc",
-          "x": 384,
-          "y": 576,
-          "width": 0,
-          "height": 0,
-          "visible": true,
-          "rotation": 0,
-          "properties": [
-            {
-              "name": "key",
-              "type": "string",
-              "value": "miner"
-            },
-            {
-              "name": "label",
-              "type": "string",
-              "value": "矿工"
-            },
-            {
-              "name": "sprite",
-              "type": "string",
-              "value": "npc_miner"
-            }
-          ]
-        },
-        {
-          "id": 43,
-          "name": "npc_tutor_ai",
-          "type": "npc",
-          "x": 480,
-          "y": 256,
-          "width": 0,
-          "height": 0,
-          "visible": true,
-          "rotation": 0,
-          "properties": [
-            {
-              "name": "key",
-              "type": "string",
-              "value": "tutor_ai"
-            },
-            {
-              "name": "label",
-              "type": "string",
-              "value": "AI 导师"
-            },
-            {
-              "name": "sprite",
-              "type": "string",
-              "value": "npc_tutor_ai"
-            }
-          ]
-        },
-        {
-          "id": 44,
+          "id": 38,
           "name": "npc_workshop_master",
           "type": "npc",
           "x": 672,
@@ -7331,7 +7163,7 @@
           ]
         },
         {
-          "id": 45,
+          "id": 39,
           "name": "npc_arena_guard",
           "type": "npc",
           "x": 608,
@@ -7359,11 +7191,11 @@
           ]
         },
         {
-          "id": 46,
-          "name": "npc_trainer",
+          "id": 40,
+          "name": "npc_mine_keeper",
           "type": "npc",
-          "x": 160,
-          "y": 576,
+          "x": 336,
+          "y": 528,
           "width": 0,
           "height": 0,
           "visible": true,
@@ -7372,22 +7204,106 @@
             {
               "name": "key",
               "type": "string",
-              "value": "trainer"
+              "value": "mine_keeper"
             },
             {
               "name": "label",
               "type": "string",
-              "value": "训练师"
+              "value": "守矿人"
             },
             {
               "name": "sprite",
               "type": "string",
-              "value": "npc_trainer"
+              "value": "npc_miner"
             }
           ]
         },
         {
-          "id": 47,
+          "id": 41,
+          "name": "npc_foreman_bug",
+          "type": "npc",
+          "x": 384,
+          "y": 528,
+          "width": 0,
+          "height": 0,
+          "visible": true,
+          "rotation": 0,
+          "properties": [
+            {
+              "name": "key",
+              "type": "string",
+              "value": "foreman_bug"
+            },
+            {
+              "name": "label",
+              "type": "string",
+              "value": "矿头 Bug"
+            },
+            {
+              "name": "sprite",
+              "type": "string",
+              "value": "npc_guard"
+            }
+          ]
+        },
+        {
+          "id": 42,
+          "name": "npc_captain_def",
+          "type": "npc",
+          "x": 64,
+          "y": 384,
+          "width": 0,
+          "height": 0,
+          "visible": true,
+          "rotation": 0,
+          "properties": [
+            {
+              "name": "key",
+              "type": "string",
+              "value": "captain_def"
+            },
+            {
+              "name": "label",
+              "type": "string",
+              "value": "船长 Def"
+            },
+            {
+              "name": "sprite",
+              "type": "string",
+              "value": "npc_sailor"
+            }
+          ]
+        },
+        {
+          "id": 43,
+          "name": "npc_class_president",
+          "type": "npc",
+          "x": 256,
+          "y": 256,
+          "width": 0,
+          "height": 0,
+          "visible": true,
+          "rotation": 0,
+          "properties": [
+            {
+              "name": "key",
+              "type": "string",
+              "value": "class_president"
+            },
+            {
+              "name": "label",
+              "type": "string",
+              "value": "班长"
+            },
+            {
+              "name": "sprite",
+              "type": "string",
+              "value": "npc_student"
+            }
+          ]
+        },
+        {
+          "id": 44,
           "name": "spawn",
           "type": "spawn",
           "x": 400,

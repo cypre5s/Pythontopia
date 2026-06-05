@@ -35,11 +35,11 @@
           "effects": [
             {
               "type": "quest_recommend",
-              "questKey": "6-1"
+              "questKey": "4-1"
             },
             {
               "type": "open_panel",
-              "route": "/lecture/6"
+              "route": "/lecture/4"
             }
           ]
         },

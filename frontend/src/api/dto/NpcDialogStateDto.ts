@@ -13,10 +13,9 @@ export interface NpcTalkRequest {
   effects: NpcDialogEffectPayload[];
 }
 
-// R-13：与后端 `NpcDialogEffectDto(String type, Integer delta, String key, String value)` 对齐。
-// 后端在 SET_FLAG / COMPLETE_NODE 分支只读 `key`/`value`，前端历史字段 itemKey/questKey/
-// flagKey 不会被识别，导致这两类效果实际不生效。这里加 `key`/`value` 为首选，旧字段保留
-// 兜底，避免一次性破坏现有 dialog.json 数据。
+// 与后端 `NpcDialogEffectDto(String type, Integer delta, String key, String value)` 对齐。
+// 后端 SET_FLAG / COMPLETE_NODE 分支只读 key/value；历史字段 itemKey/questKey/flagKey 不被识别，
+// 保留它们仅为兼容现有 dialog.json，新数据请用 key/value。
 export interface NpcDialogEffectPayload {
   type: string;
   delta?: number;

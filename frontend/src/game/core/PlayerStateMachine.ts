@@ -1,6 +1,6 @@
-// PlayerStateMachine：Sara 玩家的状态/朝向有限状态机，集中原本散落在 sprite.ts 里的切换逻辑。
-// state 覆盖 Beta 玩法（idle/walk/run/interact/water/mine/talk），朝向使用与后端
-// PlayerStatePatch 对齐的 8 方向罗盘记号（N/NE/E/SE/S/SW/W/NW）。
+// PlayerStateMachine：玩家状态 / 朝向有限状态机。
+// state 覆盖 idle/walk/run/interact/water/mine/talk；朝向使用与后端 PlayerStatePatch
+// 对齐的 8 方向罗盘记号（N/NE/E/SE/S/SW/W/NW）。
 
 export type PlayerState = 'idle' | 'walk' | 'run' | 'interact' | 'water' | 'mine' | 'talk';
 export type Direction = 'N' | 'NE' | 'E' | 'SE' | 'S' | 'SW' | 'W' | 'NW';

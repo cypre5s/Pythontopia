@@ -172,7 +172,7 @@ describe('DialogModal.vue typewriter (W2-dialog-upgrade)', () => {
     const left = wrapper.find('[data-testid="dialog-portrait-left"] img');
     expect(left.exists()).toBe(true);
     // R-13 §-1 B1 续修 v3：源 portrait 是 LPC sprite sheet，sprite-sheet 整张直接 <img>
-    // 会显示 9 个小头；scripts/crop-portrait-heads.py 已批量切单帧到 portraits/heads/
+    // 会显示 9 个小头；scripts/crop_portrait_heads.py 已批量切单帧到 portraits/heads/
     // *_head.png，DialogModal 改走单帧 PNG 路径。
     expect(left.attributes('src')).toBe('/assets/pixel/portraits/heads/portrait_test_npc_head.png');
     expect(wrapper.find('[data-testid="dialog-portrait-right"]').exists()).toBe(false);

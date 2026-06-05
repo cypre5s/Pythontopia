@@ -1,10 +1,10 @@
 <script setup lang="ts">
 /**
- * BilibiliVideoCards —— 方案 A「B站精选讲解」外部视频卡片网格。
+ * BilibiliVideoCards —— 「B站精选讲解」外部视频卡片网格。
  *
  * 纯展示型外部资源：仅渲染封面缩略图 + 元数据，整卡是跳转 B 站的外链（新标签打开），
  * 不进课件 grounding、不内嵌下载。封面用 `referrerpolicy="no-referrer"` 规避 hdslb 防盗链，
- * 加载失败回退占位。检索失败 / 空结果都降级为占位文案（A-8：不报错、不白屏）。
+ * 加载失败回退占位。检索失败 / 空结果都降级为占位文案（不报错、不白屏）。
  * 点击卡片时 emit('consumed')，供父组件计入多模态学习闭环。
  */
 import { onMounted, ref, watch } from 'vue';
@@ -144,6 +144,10 @@ watch(() => props.keyword, load);
             <span class="bili-card__badge">外部资源·B站</span>
           </div>
           <p class="bili-card__name">{{ v.title }}</p>
+          <p
+            class="bili-card__desc"
+            :class="{ 'bili-card__desc--empty': !v.description }"
+          >{{ v.description || 'UP 主未填写简介' }}</p>
           <div class="bili-card__meta">
             <span class="bili-card__up">UP主 {{ v.author || '—' }}</span>
             <span class="bili-card__play">▶ {{ formatCount(v.play) }}</span>
@@ -209,14 +213,23 @@ watch(() => props.keyword, load);
   margin: 0;
   padding: 0;
   display: grid;
+  /* 等宽列：auto-fill + 1fr 让每行卡片宽度严格相同（不足一行的卡片也不被拉伸成异形）。 */
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  /* 行内卡片拉伸到等高，配合 __link height:100% + meta margin-top:auto 让版式整齐。 */
+  align-items: stretch;
+  /* 跨行等高：固定每行轨道为 1fr，让不同行的卡片也严格同高（消除参差网格）。 */
+  grid-auto-rows: 1fr;
   gap: var(--pyt-space-3);
 }
 
 .bili-card {
   min-width: 0;
+  display: flex;
 }
 .bili-card__link {
+  /* height:100% 吃满 grid 行高 → 同一行卡片等高；flex 列布局把 meta 压到底部对齐。 */
+  flex: 1 1 auto;
+  height: 100%;
   display: flex;
   flex-direction: column;
   gap: var(--pyt-space-1);
@@ -256,6 +269,8 @@ watch(() => props.keyword, load);
   overflow: hidden;
   border-radius: var(--pyt-radius-sm);
   background: var(--pyt-color-terminal-bg);
+  /* 卡片随 grid-auto-rows 拉伸时封面不被压扁：锁定比例，多余空间留给下方 meta。 */
+  flex: 0 0 auto;
 }
 .bili-card__img {
   width: 100%;
@@ -298,13 +313,35 @@ watch(() => props.keyword, load);
   margin: 0;
   font-size: var(--pyt-font-size-sm);
   line-height: 1.35;
+  /* 预留 2 行高度：1 行标题与 2 行标题占位一致，文字行数差异不再撑出参差。 */
+  min-height: calc(2 * 1.35em);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+/* 每个视频的「讲解」：UP 主简介（真实数据），2 行截断保证卡片版式整齐。 */
+.bili-card__desc {
+  margin: 0;
+  font-size: var(--pyt-font-size-xs);
+  line-height: 1.4;
+  /* 预留 2 行高度：与标题同理，简介行数差异不影响卡片高度。 */
+  min-height: calc(2 * 1.4em);
+  color: var(--pyt-color-text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.bili-card__desc--empty {
+  font-style: italic;
+  color: var(--pyt-color-text-hint);
+}
 .bili-card__meta {
+  /* 推到卡片底部，使同一行卡片的 UP主/播放量基线对齐（等高卡片的收尾）。 */
+  margin-top: auto;
   display: flex;
   align-items: center;
   justify-content: space-between;

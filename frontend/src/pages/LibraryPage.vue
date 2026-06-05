@@ -1,6 +1,5 @@
 <script setup lang="ts">
-// LibraryPage —— Pythontopia 校园图书馆 / 课件阅读器（packId=43）。
-// 三栏可拖拽分栏（左导航 | 中阅读 | 右检索），宽度记忆在 localStorage。
+// Pythontopia 课件阅读器（packId=43）：三栏可拖拽分栏（左导航 | 中阅读 | 右检索），宽度记忆于 localStorage。
 // URL query 同步：?docId=&page=&kcCode=
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -35,8 +34,7 @@ import { chapterTitleLabel } from '@/utils/chapterTitleLabel';
 
 const { bodyRef, onSplitterPointerDown, paneStyle } = useLibrarySplitLayout();
 
-// R-13 优化：默认显示原 PDF；第二视图由「文字摘录」改为「课件视频」。
-// localStorage 记忆用户偏好，避免每次都要切回 PDF。
+// 默认显示原 PDF，第二视图为课件视频；localStorage 记忆用户偏好，避免每次切回 PDF。
 type PageViewMode = 'pdf' | 'video';
 const VIEW_MODE_STORAGE_KEY = 'pyt_library_view_mode';
 function readPreferredViewMode(): PageViewMode {
@@ -53,7 +51,7 @@ function persistViewMode(mode: PageViewMode): void {
   try {
     window.localStorage.setItem(VIEW_MODE_STORAGE_KEY, mode);
   } catch {
-    /* private mode */
+    /* 隐私模式 localStorage 不可用 */
   }
 }
 
@@ -97,8 +95,7 @@ function setViewMode(mode: PageViewMode): void {
   persistViewMode(mode);
 }
 
-// R-13 优化：课件视频（替代原「文字摘录」Tab）。按当前章号拉 video_manifest，
-// 优先选第一个已就绪(available)的视频；整章无视频时回退到文字摘录。
+// 课件视频：按当前章号拉 video_manifest，优先选第一个已就绪(available)的视频；整章无视频时回退文字摘录。
 const chapterVideos = ref<CourseVideoDto[]>([]);
 const videosLoading = ref<boolean>(false);
 const selectedVideoId = ref<number | null>(null);
@@ -133,10 +130,13 @@ const currentDocument = computed<CourseDocumentSummary | null>(
   () => documents.value.find((doc) => doc.documentId === currentDocId.value) ?? null,
 );
 const currentChapter = computed<ChapterDto | null>(() => {
-  if (!pageDetail.value || pageDetail.value.chapterId == null) {
-    return null;
+  if (pageDetail.value?.chapterId != null) {
+    return chapters.value.find((ch) => ch.chapterId === pageDetail.value?.chapterId) ?? null;
   }
-  return chapters.value.find((ch) => ch.chapterId === pageDetail.value?.chapterId) ?? null;
+  const docSortOrder = currentDocument.value?.sortOrder;
+  return docSortOrder == null
+    ? null
+    : chapters.value.find((ch) => ch.orderIndex === docSortOrder) ?? null;
 });
 const chapterNoForVideo = computed<number>(
   () => currentChapter.value?.orderIndex ?? currentDocument.value?.sortOrder ?? 1,
@@ -184,6 +184,67 @@ const catalogSidebarTitle = computed<string>(() => {
     return `${ch} 章 · ${kc} KC`;
   }
   return '章节目录';
+});
+
+interface BreadcrumbItem {
+  key: string;
+  label: string;
+}
+
+function cleanBreadcrumbLabel(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const cleaned = value
+    .replace(/[\u000b\f\r\n\t]+/g, ' ') // eslint-disable-line no-control-regex -- OCR 页标题里会带垂直制表符分页符。
+    .replace(/\s+/g, ' ')
+    .replace(/\s+([（(])/g, '$1')
+    .replace(/([）)])\s+/g, '$1')
+    .trim();
+  return cleaned ? cleaned : null;
+}
+
+const breadcrumbItems = computed<BreadcrumbItem[]>(() => {
+  const items: BreadcrumbItem[] = [];
+  const chapter = currentChapter.value;
+  const doc = currentDocument.value;
+  const chapterLabel = chapter
+    ? `第 ${chapter.orderIndex} 章 · ${chapterTitleLabel(cleanBreadcrumbLabel(chapter.title) ?? chapter.title)}`
+    : doc
+      ? `第 ${doc.sortOrder} 章 · ${chapterTitleLabel(cleanBreadcrumbLabel(doc.title) ?? doc.title)}`
+      : indexLoading.value
+        ? '章节索引加载中'
+        : null;
+  if (chapterLabel) {
+    items.push({ key: 'chapter', label: chapterLabel });
+  }
+
+  const documentLabel = doc
+    ? cleanBreadcrumbLabel(doc.title) ?? cleanBreadcrumbLabel(doc.filename)
+    : indexLoading.value
+      ? '课件索引加载中'
+      : currentDocId.value > 0
+        ? `课件 ${currentDocId.value}`
+        : null;
+  if (documentLabel) {
+    items.push({ key: 'document', label: documentLabel });
+  }
+
+  const titleLabel = pageDetail.value
+    ? cleanBreadcrumbLabel(pageDetail.value.title)
+    : pageLoading.value
+      ? '页面加载中'
+      : null;
+  if (titleLabel) {
+    items.push({ key: 'page-title', label: titleLabel });
+  }
+
+  const totalPages = doc?.pageCount;
+  items.push({
+    key: 'page-status',
+    label: totalPages && totalPages > 0
+      ? `第 ${currentPage.value} / ${totalPages} 页`
+      : `第 ${currentPage.value} 页`,
+  });
+  return items;
 });
 
 const relatedProblems = computed<CourseProblemSummary[]>(() => {
@@ -276,7 +337,7 @@ async function loadPage(docId: number, pageNo: number): Promise<void> {
     if (!detail) {
       toast.push({ kind: 'info', text: `课件 ${docId} 第 ${pageNo} 页暂无内容` });
     }
-    await syncQuery();
+    syncQuery();
   } catch (error) {
     pageDetail.value = null;
     const message = error instanceof Error ? error.message : String(error);
@@ -286,16 +347,18 @@ async function loadPage(docId: number, pageNo: number): Promise<void> {
   }
 }
 
-async function syncQuery(): Promise<void> {
-  const next: Record<string, string> = {
-    docId: String(currentDocId.value),
-    page: String(currentPage.value),
-  };
+function syncQuery(): void {
+  if (typeof window === 'undefined') return;
+  const next = new URLSearchParams();
+  next.set('docId', String(currentDocId.value));
+  next.set('page', String(currentPage.value));
   const code = currentKcCode.value ?? autoActiveKc.value?.kcCode ?? null;
   if (code) {
-    next.kcCode = code;
+    next.set('kcCode', code);
   }
-  await router.replace({ path: route.path, query: next });
+  const query = next.toString();
+  const url = query ? `${route.path}?${query}` : route.path;
+  window.history.replaceState(window.history.state, '', url);
 }
 
 function gotoPage(pageNo: number): void {
@@ -374,12 +437,8 @@ async function runRagSearch(): Promise<void> {
 }
 
 /**
- * R-13：把课件 contentMarkdown 用 marked + DOMPurify 渲染成富文本 HTML。
- * 原页 PDF/PPT 需要服务端额外接 pdf.js，本期先把现有 OCR 文本做到漂亮排版：
- * - 章节标题（# / ##）
- * - 代码块（``` 围起 / 行首 4 空格）
- * - 列表 / 引用 / 表格
- * 用 DOMPurify 严格清洗，禁 <script>/<iframe>/onclick 等危险标签。
+ * 把课件 contentMarkdown 用 marked + DOMPurify 渲染成富文本 HTML。
+ * 用 DOMPurify 严格清洗，禁用 <script>/<iframe>/onclick 等危险标签。
  */
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
@@ -490,12 +549,13 @@ watch(chapterNoForVideo, (next) => {
           aria-label="阅读路径"
         >
           <span class="brand">Pythontopia 图书馆</span>
-          <span class="sep">/</span>
-          <span>{{ currentChapter?.title ?? '第 — 章' }}</span>
-          <span class="sep">/</span>
-          <span>{{ currentKc?.kcName ?? '—' }}</span>
-          <span class="sep">/</span>
-          <span>第 {{ currentPage }} 页 / {{ currentDocument?.pageCount ?? '—' }}</span>
+          <template
+            v-for="item in breadcrumbItems"
+            :key="item.key"
+          >
+            <span class="sep">/</span>
+            <span>{{ item.label }}</span>
+          </template>
         </nav>
         <PyButton
           test-id="library-back"
@@ -593,6 +653,7 @@ watch(chapterNoForVideo, (next) => {
             </h2>
             <div class="page-controls">
               <PyButton
+                class="page-control"
                 test-id="library-prev-page"
                 variant="secondary"
                 size="sm"
@@ -602,14 +663,17 @@ watch(chapterNoForVideo, (next) => {
                 ◀ 上一页
               </PyButton>
               <input
-                class="page-jump"
+                class="page-control page-jump"
                 type="number"
                 min="1"
                 :max="currentDocument?.pageCount ?? 1"
                 :value="currentPage"
+                aria-label="跳转页码"
+                data-testid="library-page-jump"
                 @change="(e) => gotoPage(Number((e.target as HTMLInputElement).value))"
               >
               <PyButton
+                class="page-control"
                 test-id="library-next-page"
                 variant="secondary"
                 size="sm"
@@ -625,8 +689,7 @@ watch(chapterNoForVideo, (next) => {
             class="page-content"
             data-testid="library-page-content"
           >
-            <!-- R-13 D1/D2：原 PDF 视图（pdfjs-dist）+ Markdown 摘录视图切换。
-                 默认显示原 PDF（不丢任何图/排版信息）；Markdown 仅做 fallback 与 RAG 命中预览。 -->
+            <!-- 课件视图切换：原 PDF（pdfjs-dist，保留图 / 排版）与课件视频。 -->
             <nav
               class="view-mode-tabs"
               data-testid="library-view-mode-tabs"
@@ -651,18 +714,22 @@ watch(chapterNoForVideo, (next) => {
                 课件视频
               </button>
             </nav>
-            <p
-              v-if="pageLoading"
-              class="muted"
+            <div
+              v-if="viewMode === 'pdf' && currentDocId"
+              class="pdf-stage"
             >
-              翻页中…
-            </p>
-            <PdfPageView
-              v-else-if="viewMode === 'pdf' && currentDocId"
-              :doc-id="currentDocId"
-              :page-no="currentPage"
-            />
-            <!-- R-13 优化：课件视频视图（替代「文字摘录」）。整章无视频时回退到文字摘录。 -->
+              <p
+                v-if="pageLoading"
+                class="muted page-loading-overlay"
+              >
+                翻页中…
+              </p>
+              <PdfPageView
+                :doc-id="currentDocId"
+                :page-no="currentPage"
+              />
+            </div>
+            <!-- 课件视频视图：整章无视频时回退到文字摘录。 -->
             <div
               v-else-if="viewMode === 'video'"
               class="video-pane"
@@ -1082,7 +1149,7 @@ watch(chapterNoForVideo, (next) => {
   border-color: var(--pyt-color-border-strong, var(--pyt-color-text-primary));
 }
 
-/* R-13 优化：课件视频视图 */
+/* 课件视频视图 */
 .video-pane {
   display: flex;
   flex-direction: column;
@@ -1211,6 +1278,18 @@ watch(chapterNoForVideo, (next) => {
   display: flex;
   gap: 6px;
   align-items: center;
+  --library-page-control-width: 98px;
+  --library-page-control-height: 34px;
+}
+.page-controls .page-control {
+  flex: 0 0 var(--library-page-control-width);
+  width: var(--library-page-control-width);
+  min-width: var(--library-page-control-width);
+  height: var(--library-page-control-height);
+  min-height: var(--library-page-control-height);
+  box-sizing: border-box;
+  padding: 0 10px;
+  border-radius: var(--pyt-radius-md, 6px);
 }
 .page-nav {
   min-height: 32px;
@@ -1226,12 +1305,21 @@ watch(chapterNoForVideo, (next) => {
   cursor: not-allowed;
 }
 .page-jump {
-  width: 64px;
   text-align: center;
-  border: 2px solid var(--pyt-color-border-strong, var(--pyt-color-text-primary));
-  background: var(--pyt-color-bg-primary, var(--pyt-color-bg-primary));
-  padding: 2px 6px;
+  border: 2px solid var(--pyt-color-border, var(--pyt-color-border));
+  background: var(--pyt-color-bg-soft, var(--pyt-color-bg-soft));
+  color: var(--pyt-color-text-primary, var(--pyt-color-text-primary));
+  box-shadow: 0 2px 0 var(--pyt-color-border, var(--pyt-color-border));
   font-family: var(--pyt-font-pixel), monospace;
+  font-weight: 700;
+  font-size: var(--pyt-font-size-sm, 12px);
+  line-height: 1;
+  appearance: textfield;
+}
+.page-jump::-webkit-outer-spin-button,
+.page-jump::-webkit-inner-spin-button {
+  margin: 0;
+  appearance: none;
 }
 .page-content {
   overflow: auto;
@@ -1245,7 +1333,7 @@ watch(chapterNoForVideo, (next) => {
   flex: 1;
 }
 
-/* R-13 D1/D2：PDF / Markdown 视图切换 tab */
+/* 课件视图切换 tab */
 .view-mode-tabs {
   display: flex;
   gap: 6px;
@@ -1273,6 +1361,21 @@ watch(chapterNoForVideo, (next) => {
 .view-mode-tab:hover:not(.view-mode-tab--active) {
   background: var(--pyt-color-warning-bg, var(--pyt-color-warning-bg));
 }
+.pdf-stage {
+  position: relative;
+  min-height: 0;
+}
+.page-loading-overlay {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  width: max-content;
+  margin: 0 0 -34px auto;
+  padding: 4px 10px;
+  border: 1px solid var(--pyt-color-border, var(--pyt-color-border));
+  background: rgba(255, 249, 234, 0.94);
+  box-shadow: 2px 2px 0 var(--pyt-color-border, var(--pyt-color-border));
+}
 .page-content pre {
   margin: 0;
   white-space: pre-wrap;
@@ -1280,7 +1383,7 @@ watch(chapterNoForVideo, (next) => {
   font-family: inherit;
 }
 
-/* R-13：page-prose 分段渲染，让 OCR 文本不再像 plaintext 一块 */
+/* page-prose 分段渲染：让 OCR 文本不再是 plaintext 一整块 */
 .page-prose {
   display: flex;
   flex-direction: column;
@@ -1505,4 +1608,3 @@ watch(chapterNoForVideo, (next) => {
   }
 }
 </style>
-

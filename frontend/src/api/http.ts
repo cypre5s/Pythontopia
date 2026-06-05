@@ -1,7 +1,16 @@
 import axios, { AxiosError, type AxiosInstance } from 'axios';
 import type { ApiError } from './dto/ApiError';
 
-// W4-LOGIN-UX：把后端返回的英文 code 映射为中文友好提示，
+// 让「后台/可选」请求（文生图、B站检索、课程视频列表等）可声明跳过全局网络/超时 toast：
+// 这些请求各自有降级（占位/空列表），不该把"请求超时"这种全局提示弹给学生。
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    /** true 时：该请求的网络/超时错误不触发全局 networkErrorHandler（仍照常 reject 供调用方处理）。 */
+    suppressNetworkToast?: boolean;
+  }
+}
+
+// 把后端返回的英文 code 映射为中文友好提示，
 // 便于在登录/注册等用户直面流程中直接展示给学习者。
 const ERROR_CODE_ZH: Record<string, string> = {
   BAD_CREDENTIALS: '用户名或密码错误',
@@ -39,7 +48,7 @@ let tokenProvider: (() => string | null) | null = null;
 let unauthorizedHandler: (() => void) | null = null;
 let networkErrorHandler: ((code: 'NETWORK_ERROR' | 'TIMEOUT') => void) | null = null;
 
-// W4-FINAL-POLISH：避免短时间内大量 NETWORK_ERROR（dev server 重启、wifi 抖动）
+// 避免短时间内大量 NETWORK_ERROR（dev server 重启、wifi 抖动）
 // 反复刷屏 toast。一次提示后冷却 5 秒，期间相同错误静默，到点再放行。
 let lastNetworkToastAt = 0;
 const NETWORK_TOAST_COOLDOWN_MS = 5_000;
@@ -89,7 +98,8 @@ http.interceptors.response.use(
     const isTimeout = error.code === 'ECONNABORTED';
     const code: 'NETWORK_ERROR' | 'TIMEOUT' = isTimeout ? 'TIMEOUT' : 'NETWORK_ERROR';
     const now = Date.now();
-    if (networkErrorHandler && now - lastNetworkToastAt > NETWORK_TOAST_COOLDOWN_MS) {
+    const suppressToast = error.config?.suppressNetworkToast === true;
+    if (!suppressToast && networkErrorHandler && now - lastNetworkToastAt > NETWORK_TOAST_COOLDOWN_MS) {
       lastNetworkToastAt = now;
       try {
         networkErrorHandler(code);

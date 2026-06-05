@@ -23,9 +23,8 @@ session.configureHttp(() => {
   void router.push({ name: 'login' });
 });
 
-// W4-FINAL-POLISH：所有请求拿到 NETWORK_ERROR / TIMEOUT 时给玩家一个温和提示，
-// 而不是页面静默看似一切正常。toast 本身已自带 3s 自动消失 + 5s 冷却（见 http.ts），
-// 避免后端短暂抖动时反复刷屏。
+// 请求遇到 NETWORK_ERROR / TIMEOUT 时给玩家温和提示，而非静默失败；
+// toast 自带 3s 自动消失 + 5s 冷却（见 http.ts），避免后端抖动时反复刷屏。
 const toast = useToastStore();
 setNetworkErrorHandler((code) => {
   const env = (import.meta as ImportMeta & { readonly env?: Parameters<typeof shouldShowNetworkToast>[1] }).env ?? {};

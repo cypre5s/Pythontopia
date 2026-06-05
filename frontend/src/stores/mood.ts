@@ -1,4 +1,4 @@
-// ②情绪化小镇：世界情绪氛围的前端 store（拉取 + 派发 + 可关闭开关）。
+// 世界情绪氛围的前端 store（拉取 + 派发 + 可关闭开关）。
 //
 // 职责：
 //   - refresh()：拉 GET /api/learner/world-state，写入 mood/streak/emotionScore；

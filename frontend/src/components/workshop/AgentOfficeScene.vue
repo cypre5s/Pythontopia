@@ -1,15 +1,12 @@
 <script setup lang="ts">
 /**
- * 像素「智能体事务所」执行动画（P3-a2）。
- *
- * 把多智能体资源生成的 SSE trace 变成可见、可信、低门槛的过场：
- *   - 舞台层：4 个 Agent NPC 在工位演「工作 / 待机」，主管(总管)走位到当前工位派活，
- *     完工的 Agent 打✓汇报；审查官翻书核对。
+ * 像素「智能体事务所」执行动画：把多智能体资源生成的 SSE trace 渲染成可视过场。
+ *   - 舞台层：Agent NPC 在工位演「工作 / 待机」，总管走位到当前工位派活，完工打✓；审查官核对。
  *   - 仪表层（右侧）：整体进度条 + 步骤分解 + 实时执行日志（哪个 Agent 在做什么 / 耗时 / 通过·重试）。
  *   - 交付前硬确认「证据卡」：逐条标注 grounding / safety + 课本页码 / 通识标注，学生确认后才收下。
  *
  * 纯展示组件：消费父级传入的 SSE 状态，通过 emit 把「确认收下 / 取消」交回父级。
- * 美术全部复用已审计的 CC-BY-SA-3.0 LPC npc-composites（9×4 walkcycle，64px），不新增二进制。
+ * 像素美术复用已审计的 LPC npc-composites（9×4 walkcycle，64px），不新增二进制。
  */
 import { computed } from 'vue';
 import type { SsePlan, SseTraceEvent } from '@/composables/useSseStream';
@@ -23,8 +20,8 @@ const props = defineProps<{
   errorMessage: string | null;
   evidence: OfficeEvidence | null;
   /**
-   * R-14「真·按 agent 工作室」开场工位清单（来自资源流的 `plan` SSE 事件）。
-   * 存在时按真实节点动态渲染工位 + 相位驱动；缺省（旧后端）时回退旧 4 工位逻辑。
+   * 工位清单（来自资源流的 `plan` SSE 事件）：存在时按真实节点动态渲染工位 + 相位驱动；
+   * 缺省（旧后端）时回退旧 4 工位逻辑。
    */
   plan?: SsePlan | null;
 }>();
@@ -204,7 +201,35 @@ const stations = computed<StationVm[]>(() => {
 
 const activeIndex = computed<number>(() => stations.value.findIndex((s) => s.state === 'active'));
 
-// 已完成工位（含重试，不含失败）用于进度条；回退模式无 retry，等同旧 doneCount。
+// ── 工位间「接力棒」交接动画（复用 MarvisPanel 语义，横向版） ──
+// 连线 i 连接工位 i → 工位 i+1：上游完工后线点亮；上游完工且下游在干 → 流动 + 接力棒右滑。
+const connectorIndices = computed<number[]>(() =>
+  stations.value.length > 1 ? stations.value.slice(0, -1).map((_, i) => i) : [],
+);
+
+type LinkClass = 'office-link--pending' | 'office-link--filled' | 'office-link--flow';
+function officeLinkClass(i: number): LinkClass {
+  const a = stations.value[i];
+  const b = stations.value[i + 1];
+  if (!a || !b) return 'office-link--pending';
+  const upstreamDone = a.state === 'done' || a.state === 'retry';
+  if (!upstreamDone) return 'office-link--pending';
+  if (b.state === 'active') return 'office-link--flow';
+  return 'office-link--filled';
+}
+
+function officeLinkFlowing(i: number): boolean {
+  return officeLinkClass(i) === 'office-link--flow';
+}
+
+// 连线段在两个工位中心之间：从中心 i 到中心 i+1（按工位数均分整条工位带）。
+function connectorStyle(i: number): Record<string, string> {
+  const count = stations.value.length || 1;
+  const unit = 100 / count;
+  return { left: `${(i + 0.5) * unit}%`, width: `${unit}%` };
+}
+
+// 已完成工位（含重试，不含失败）用于进度条；回退模式无 retry。
 const completedCount = computed<number>(
   () => stations.value.filter((s) => s.state === 'done' || s.state === 'retry').length,
 );
@@ -317,6 +342,24 @@ const groundingText = computed<string>(() => {
           class="office-desks"
           :style="deskGridStyle"
         >
+          <!-- 工位间连线 + 接力棒：上游完工点亮、下游开工流动（贴在工位 sprite 中线高度）。 -->
+          <div
+            class="office-track"
+            aria-hidden="true"
+          >
+            <span
+              v-for="i in connectorIndices"
+              :key="`link-${i}`"
+              class="office-track__seg"
+              :class="officeLinkClass(i)"
+              :style="connectorStyle(i)"
+            >
+              <span
+                v-if="officeLinkFlowing(i)"
+                class="office-track__baton"
+              />
+            </span>
+          </div>
           <div
             v-for="station in stations"
             :key="station.key"
@@ -538,11 +581,60 @@ const groundingText = computed<string>(() => {
   margin-bottom: 1px;
 }
 .office-desks {
+  position: relative;
+  /* z-index:0 建立层叠上下文，让 .office-track(z-index:-1) 落在「地板背景之上、工位 sprite 之下」。 */
+  z-index: 0;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   align-items: end;
   height: 100%;
   gap: 4px;
+}
+
+/* ── 工位间交接连线 + 接力棒（横向，贴 sprite 中线；labels 已定高，bottom 锚点稳定） ── */
+.office-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 70px;
+  height: 3px;
+  z-index: -1;
+  pointer-events: none;
+}
+.office-track__seg {
+  position: absolute;
+  top: 0;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--pyt-color-border);
+}
+.office-track__seg.office-link--pending {
+  background: repeating-linear-gradient(
+    90deg,
+    var(--pyt-color-border) 0 3px,
+    transparent 3px 6px
+  );
+  opacity: 0.6;
+}
+.office-track__seg.office-link--filled {
+  background: #4d6e1d;
+}
+.office-track__seg.office-link--flow {
+  background: linear-gradient(90deg, #4d6e1d 0%, #d4af37 50%, #4d6e1d 100%);
+  background-size: 200% 100%;
+  animation: office-flow 0.9s linear infinite;
+}
+.office-track__baton {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 7px;
+  height: 7px;
+  margin-top: -3.5px;
+  border-radius: 50%;
+  background: #ffe27a;
+  box-shadow: 0 0 6px 2px rgba(212, 175, 55, 0.85);
+  animation: office-baton 0.9s ease-in-out infinite;
 }
 .office-agent {
   position: relative;
@@ -601,11 +693,22 @@ const groundingText = computed<string>(() => {
   text-align: center;
   line-height: 1.15;
   overflow-wrap: anywhere;
+  /* 定高 2 行：让 sprite 底部到地板的距离稳定，连线 bottom 锚点才不会随标签换行漂移。 */
+  height: 24px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .office-agent__role {
   font-size: 9px;
   color: var(--pyt-color-text-hint);
   text-align: center;
+  height: 11px;
+  overflow: hidden;
+  white-space: nowrap;
+  max-width: 100%;
+  text-overflow: ellipsis;
 }
 .office-agent__badge {
   position: absolute;
@@ -896,6 +999,15 @@ const groundingText = computed<string>(() => {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.55; }
 }
+@keyframes office-flow {
+  to { background-position: -200% 0; }
+}
+@keyframes office-baton {
+  0% { left: 0; opacity: 0; }
+  15% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { left: 100%; opacity: 0; }
+}
 @media (max-width: 900px) {
   .office-main {
     grid-template-columns: 1fr;
@@ -908,7 +1020,9 @@ const groundingText = computed<string>(() => {
 @media (prefers-reduced-motion: reduce) {
   .office-sprite,
   .office-step--active,
-  .office-agent__badge--work {
+  .office-agent__badge--work,
+  .office-track__seg.office-link--flow,
+  .office-track__baton {
     animation: none !important;
   }
 }

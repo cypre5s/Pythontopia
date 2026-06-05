@@ -1,15 +1,12 @@
 /**
- * 课件问答 `@/` 引用命令的输入区状态机（仿 Alethicode useChatComposer 的 @ mention，
- * 适配 Pythontopia Vue 3 + TS strict）。
+ * 课件问答 `@` 引用命令的输入区状态机。
  *
  * 设计要点：
- *   - 在 textarea 文本末尾检测 `@<query>` 触发，弹出可引用的课件实体菜单
- *     （章节 / 知识点 KC）。
- *   - 选中后把 token 插入文本，并记录结构化引用 SelectedRef。
- *   - 提交时：KC 引用 → kcCodes（驱动 RAG 过滤检索）；章节/KC 标签 → context
- *     （作为 grounding 上下文透传给导师）。无需后端改动。
+ *   - 在 textarea 文本末尾检测 `@<query>` 触发，弹出可引用的课件实体菜单（章节 / 知识点 KC）；
+ *   - 选中后把 token 插入文本，并记录结构化引用 SelectedRef；
+ *   - 提交时：KC 引用 → kcCodes（驱动 RAG 过滤检索）；章节/KC 标签 → context（作为 grounding 上下文透传给导师）。
  *
- * 纯函数化的触发/插入逻辑便于 Vitest 单测。
+ * 触发/插入逻辑保持纯函数化，便于单测。
  */
 import { computed, ref, type ComputedRef, type Ref } from 'vue';
 
@@ -17,7 +14,7 @@ export type MentionKind = 'chapter' | 'kc';
 
 export interface MentionItem {
   kind: MentionKind;
-  /** 内联插入到问题文本中的引用 token（无空格），如 `@PY43-KC-012`、`@CH3`。 */
+  /** 内联插入到问题文本中的引用 token（无空格），如 `@KC-012`、`@CH3`（已隐藏 PY43 内码）。 */
   token: string;
   /** 菜单展示名，如 `input 函数`。 */
   label: string;
@@ -218,9 +215,11 @@ export function buildMentionItems(
     .sort((a, b) => a.kcCode.localeCompare(b.kcCode))
     .map((kc) => ({
       kind: 'kc',
-      token: `@${kc.kcCode}`,
+      // token 仅作 UI 内联标记，去掉 PY43- 前缀（学生不该看到 PY43-KC-012 这种内码）；
+      // kcCode 仍保留全码用于驱动后端 RAG / 生成，DB 与规范码不变。
+      token: `@${kc.kcCode.replace(/^PY43-/, '')}`,
       label: kc.kcName,
-      desc: kc.summaryMarkdown ?? kc.kcCode,
+      desc: kc.summaryMarkdown ?? kc.kcName,
       kcCode: kc.kcCode,
     }));
   return [...chapterItems, ...kcItems];

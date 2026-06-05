@@ -1,22 +1,12 @@
 <script setup lang="ts">
 /**
- * R-13 §-1 续：/arena/:chapter 章节闯关塔页面（用户 Q2=A 决策实现）。
- *
- * 布局（星露谷牛皮纸风，与 WorkshopPanel / DialogModal 同设计语言）：
- *   ┌──────────────────────────────────────────────┐
- *   │ ← 返回小镇  第 N 章 [章节切换 7 chips]        │
- *   │ 进度 X / 10  连胜 K  累计积分 S               │
- *   ├──────────────────────────────────────────────┤
- *   │ 左：关卡阶梯（10 个卡片纵列，1-9 + boss）     │
- *   │   每卡：关号 / kind 图标 / 标题 / 难度 / 状态  │
- *   │ 右：当前选中关卡详情（hint + KC + 进入按钮）  │
- *   └──────────────────────────────────────────────┘
+ * /arena/:chapter 章节闯关塔页面。
  *
  * 关卡入口：
- *   - 1-9 关：跳转 /endless?chapter=N&kc=K（EndlessPage 锁定章+KC 出题）
+ *   - 1-9 关：跳转 /endless?chapter=N&kc=K（EndlessPage 锁定章 + KC 出题）
  *   - 10 关：跳转 /boss/N（4 阶段副本）
  *
- * 解锁规则：第 1 关常解锁；后续关需要上一关通过（store.isUnlocked）。
+ * 解锁规则：第 1 关常解锁；后续关需上一关通过（store.isUnlocked）。
  * 进度持久化：useArenaStore 写 localStorage `pyt_arena_v1`。
  */
 import { computed, ref, watch } from 'vue';
@@ -32,7 +22,7 @@ import type { ArenaLevel, ArenaLevelKind } from '@/types/arena';
 const route = useRoute();
 const router = useRouter();
 const arena = useArenaStore();
-// R-13 §-1 续：深度接入学生画像 — 在 UI 上标识哪些关卡是「画像推荐」的弱项。
+// 接入学生画像：在 UI 上标识哪些关卡是「画像推荐」的弱项。
 const profileSignals = useProfileSignals();
 
 function isRecommendedByProfile(level: ArenaLevel): boolean {
@@ -62,7 +52,7 @@ const selectedLevel = computed<ArenaLevel | null>(
   () => chapterLevels.value.find((l) => l.id === selectedLevelId.value) ?? null,
 );
 
-// R-14：学生侧不露货币。过滤掉 coin 奖励，只展示掌握进度类奖励（ref 用知识点中文名）。
+// 学生侧不露货币：过滤 coin 奖励，只展示掌握进度类奖励（ref 用知识点中文名）。
 const visibleRewards = computed(() =>
   (selectedLevel.value?.rewards ?? []).filter((r) => r.kind !== 'coin'),
 );
@@ -105,9 +95,8 @@ function enterLevel(level: ArenaLevel): void {
     void router.push(`/boss/${level.chapter}`);
     return;
   }
-  // 1-9 关跳 endless，传 chapter + kc + kind query 让 EndlessPage 锁定章 + KC + 题型
-  // R-13 §-1 续：kind 让 PracticeAgent 走对应题型模板（fill_blank/debug 等），
-  // 真正实现"闯关塔每关都有自己的玩法"而非随机抽题套壳。
+  // 1-9 关跳 endless，传 chapter + kc + kind query 让 EndlessPage 锁定章 + KC + 题型；
+  // kind 决定 PracticeAgent 采用的题型模板（fill_blank / debug 等）。
   const kc = level.kcCodes[0] ?? '';
   void router.push({
     path: '/endless',

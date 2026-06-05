@@ -24,14 +24,14 @@ function readSavedPosition(key: string): SavedPosition | null {
     if (typeof obj.top === 'number' && typeof obj.left === 'number') {
       return { top: obj.top, left: obj.left };
     }
-  } catch { /* corrupted data */ }
+  } catch { /* 数据损坏，忽略 */ }
   return null;
 }
 
 function writeSavedPosition(key: string, pos: SavedPosition): void {
   try {
     localStorage.setItem(key, JSON.stringify(pos));
-  } catch { /* quota exceeded */ }
+  } catch { /* 配额超限，忽略 */ }
 }
 
 function clampToViewport(top: number, left: number, elWidth: number, elHeight: number): SavedPosition {
@@ -43,6 +43,10 @@ function clampToViewport(top: number, left: number, elWidth: number, elHeight: n
   };
 }
 
+/**
+ * 让 `elementRef` 元素可拖拽：位置按 `storageKey` 持久化到 localStorage 并在下次挂载恢复，
+ * 拖拽过程钳制在视口内；点击按钮/链接/表单/canvas 不触发拖拽。
+ */
 export function useDraggable(
   elementRef: Ref<HTMLElement | null>,
   storageKey: string,

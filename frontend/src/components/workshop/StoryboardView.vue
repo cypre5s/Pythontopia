@@ -72,7 +72,7 @@ function coursePageFallback(scene: StoryboardScene): void {
 
 /**
  * 舞台图加载：开启 AI 插画时优先按 image_prompt 文生图（生成一次后缓存），失败回退课件页图，
- * 再回退占位 SVG。关闭 AI 插画时直接走课件页图（旧行为）。
+ * 再回退占位 SVG。关闭 AI 插画时直接走课件页图。
  */
 async function loadSceneImage(scene: StoryboardScene, index: number): Promise<void> {
   if (!useAiIllustration.value) {
@@ -567,7 +567,7 @@ watch(
   font-size: 14px;
 }
 
-/* ── Theater Stage ── */
+/* ── 剧场舞台 ── */
 .theater-stage {
   position: relative;
   width: 100%;
@@ -619,7 +619,7 @@ watch(
   font-family: var(--pyt-font-pixel);
 }
 
-/* ── Multimodal Bar ── */
+/* ── 多模态工具条 ── */
 .multimodal-bar {
   display: flex;
   flex-wrap: wrap;
@@ -676,7 +676,7 @@ watch(
   margin: 0;
 }
 
-/* ── Subtitle Overlay ── */
+/* ── 字幕浮层 ── */
 .subtitle-overlay {
   position: absolute;
   bottom: 0;
@@ -703,7 +703,7 @@ watch(
   transform: translateY(10px);
 }
 
-/* ── Control Bar ── */
+/* ── 播放控制条 ── */
 .control-bar {
   display: flex;
   align-items: center;
@@ -780,7 +780,7 @@ watch(
   cursor: pointer;
 }
 
-/* ── Scene Navigation ── */
+/* ── 分镜导航 ── */
 .scene-nav {
   display: flex;
   gap: 6px;
@@ -807,7 +807,7 @@ watch(
   transform: scale(1.15);
 }
 
-/* ── Scene Cards ── */
+/* ── 分镜卡片 ── */
 .storyboard {
   list-style: none;
   padding: 0;

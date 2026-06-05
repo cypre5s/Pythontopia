@@ -1,13 +1,11 @@
 /**
- * Pythontopia i18n 装载器（最小实现，不依赖 vue-i18n）
- *
- * 设计依据: /home/cypress/Pythontopia/docs/stardew/07-ui-microcopy.md
+ * Pythontopia i18n 装载器（最小实现，不依赖 vue-i18n）。
  *
  * 约束：
- *   - 文案文件以嵌套 JSON 落地（与设计文档 § 9 一致）；
+ *   - 文案文件以嵌套 JSON 落地；
  *   - 对外仅暴露 `Record<Locale, Record<string, string>>` 的扁平化视图，
  *     便于 t/tList 直接索引与 prefix 收集；
- *   - 不引入 vue-i18n / ICU 复数；R-13 接入正式 i18n 后此处可平滑替换。
+ *   - 不引入 vue-i18n / ICU 复数。
  */
 
 import zhCNRaw from './zh-CN.json';

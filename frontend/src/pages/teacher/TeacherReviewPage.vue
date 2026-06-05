@@ -1,18 +1,9 @@
 <script setup lang="ts">
 /**
- * R-13 §2.3-6 教师审核兜底页面。
- *
- * 设计取舍（演示节奏）：
- *   - 不引入新的后端表 / API（R-14 才落 `boss_problem_bank.status='reviewable'`）；
- *   - 兜底用「按需触发 graph 出题」+「在内存里维护审核状态」演示界面流程；
- *   - approve / reject 按钮把 review 决定写入 localStorage（教师跨设备同步留 R-14）。
- *
- * 教师价值：
- *   1. 实时召出 1 道 AI 出题，亲眼看 5 重审查结论（reviewed/aiGenerated badge）；
- *   2. 阅读题面 / 提示，决定是否「上线」给学生；
- *   3. 被 reject 的题写 LearningEvent('AI_PROBLEM_REJECTED')（待 R-14 接入后端）。
- *
- * 路由：/teacher/review，需要 TEACHER 或 ADMIN 角色；视图层不做硬鉴权（路由 meta + JWT 角色）。
+ * 教师审核 AI 出题页（路由 /teacher/review，需 TEACHER / ADMIN 角色）。
+ * 按需触发 graph 出题，审核决定（approve / reject）持久化到 localStorage；
+ * 驳回会写 LearningEvent('AI_PROBLEM_REJECTED')。
+ * 注意：视图层不做硬鉴权，依赖路由 meta + JWT 角色。
  */
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
@@ -67,7 +58,7 @@ function loadPersisted(): void {
       entries.value = parsed.filter((e) => e && typeof e === 'object' && 'problem' in e);
     }
   } catch {
-    // ignore corrupt storage
+    // 忽略损坏的存储数据
   }
 }
 
@@ -76,7 +67,7 @@ function persist(): void {
   try {
     window.localStorage.setItem(PERSIST_KEY, JSON.stringify(entries.value));
   } catch {
-    // private mode etc.
+    // 隐私模式等不可写
   }
 }
 

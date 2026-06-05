@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// M2 重定向桩：/field 已在路由层 redirect 到 /world（farm_north 由 WorldScene 切换）；
-// 保留组件作为旧链接 / 测试入口的兜底，确保不会渲染已被淘汰的 FieldCanvas 副实例。
+// 重定向桩：/field 已在路由层 redirect 到 /world；保留组件作为旧链接 / 测试入口的兜底，
+// 避免渲染已弃用的 FieldCanvas 副实例。
 import { onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 

@@ -1,9 +1,7 @@
 <script setup lang="ts">
 /**
- * R-13 §5 Phase 3：HUD 顶部主线进度 chip。
- *
- * 显示：`第 X 章 · {boss 名} (i/5)` + 整体进度百分比 + 「按 Q」提示。
- * 点击：调 mainQuest.togglePanel()；HudShell 的 Q 键监听做相同事。
+ * HUD 顶部主线进度 chip：显示「第 X 章 · 章节标题 (完成数/5)」+ 整体进度百分比 + 「按 Q」提示。
+ * 点击切换主线面板（与 HudShell 的 Q 键等效）。
  */
 import { computed } from 'vue';
 import { useMainQuestStore } from '@stores/mainQuest';

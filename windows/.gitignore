@@ -1,0 +1,22 @@
+# Build output
+bin/
+obj/
+[Bb]in/
+[Oo]bj/
+
+# Visual Studio / Rider
+.vs/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Publish
+publish/
+*.Appx
+*.msix
+
+# MonoGame content build intermediate
+**/Content/bin/
+**/Content/obj/

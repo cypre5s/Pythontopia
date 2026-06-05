@@ -1,0 +1,63 @@
+.login {
+  padding-top: 64rpx;
+}
+
+.login__hero {
+  text-align: center;
+  background: linear-gradient(180deg, #b07d44 0%, #8a5a2b 100%);
+  border-color: var(--wood-dark);
+}
+
+.login__title {
+  font-size: 56rpx;
+  font-weight: bold;
+  letter-spacing: 8rpx;
+  color: #fff3da;
+  text-shadow: 4rpx 4rpx 0 rgba(60, 40, 18, 0.6);
+}
+
+.login__subtitle {
+  margin-top: 12rpx;
+  color: #fdeccb;
+  font-size: 26rpx;
+}
+
+.login__hint {
+  margin-top: 12rpx;
+  color: #f4dcb2;
+}
+
+.login__tabs {
+  display: flex;
+  margin-bottom: 24rpx;
+  border: 4rpx solid var(--wood-dark);
+}
+
+.login__tab {
+  flex: 1;
+  text-align: center;
+  padding: 18rpx 0;
+  background: #efdcb8;
+  color: var(--ink-soft);
+  font-size: 30rpx;
+}
+
+.login__tab--active {
+  background: var(--wood);
+  color: #fff8ea;
+  font-weight: bold;
+}
+
+.login__error {
+  color: #fff;
+  background: var(--berry);
+  border: 3rpx solid #7c2d1c;
+  padding: 12rpx 16rpx;
+  font-size: 24rpx;
+  margin: 8rpx 0 20rpx;
+}
+
+.login__role {
+  margin-top: 20rpx;
+  text-align: center;
+}

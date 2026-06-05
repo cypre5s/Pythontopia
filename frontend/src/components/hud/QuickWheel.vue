@@ -29,7 +29,7 @@ const items: readonly WheelItem[] = [
 ] as const;
 
 const SECTOR_COUNT = items.length;
-const SECTOR_ANGLE = 360 / SECTOR_COUNT;       // 45°
+const SECTOR_ANGLE = 360 / SECTOR_COUNT;
 const START_ANGLE = 270;                        // 正上方起始
 const ICON_RADIUS = 120;                        // 图标到圆心距离 (px)
 const RING_SIZE = 360;                          // 轮盘容器边长 (px)
@@ -212,7 +212,7 @@ onBeforeUnmount(() => {
           <span v-if="clickMode" class="wheel-center__hint">点击选择</span>
         </div>
 
-        <!-- 8 个扇区按钮 -->
+        <!-- 扇区按钮 -->
         <button
           v-for="(item, i) in items"
           :key="i"

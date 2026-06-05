@@ -1,17 +1,13 @@
-// 隔离原因：
-// 业务层（Vue 组件、Pinia store、HUD chip 等）需要响应式的 i18n 句柄，但
-// `src/i18n/index.ts` 提供的 t/setLocale/getLocale 是普通函数 + 模块级变量，
-// 切换语言时不会自动触发组件刷新。本 composable 是业务层访问 i18n 的唯一入口：
-// 1. 把当前 locale 暴露为模块级 `ref<Locale>`，setLocale 写入后所有组件同步重渲染；
-// 2. 在底层 t() 之上叠加一层 `{name}` 简单插值，避免组件层散装 `.replace`；
-// 3. 提供最小可用的英文复数 `tn()`，R-13 替换为 vue-i18n + ICU 时此处签名保持稳定。
+// 业务层（Vue 组件、Pinia store、HUD chip 等）访问 i18n 的唯一入口：
+// `src/i18n/index.ts` 的 t/setLocale/getLocale 是普通函数 + 模块级变量，切语言不触发组件刷新；
+// 本 composable 把当前 locale 暴露为模块级 ref，setLocale 写入后所有订阅组件同步重渲染，
+// 并在 t() 之上叠加 `{name}` 插值与最小英文复数 tn()。
 //
-// 约束（与 docs/i18n-translation-guide.md 对齐）：
-// - 不引入 vue-i18n / Intl.PluralRules（包体最小化，星露谷 Beta 仅 zh-CN/en-US 两语言）；
+// 约束：
+// - 不引入 vue-i18n / Intl.PluralRules（包体最小化，Beta 仅 zh-CN/en-US 两语言）；
 // - 业务层禁止直接 import `@/i18n` 的 setLocale —— 否则模块级 ref 不会同步；
-// - 占位符语法只支持 `{name}` 单花括号，与底层 i18n 文件保持一致（vue-i18n 默认）；
-// - 复数规则只覆盖"末尾英文名词 +s / +es / +ies"，再复杂的 cases / 不规则单复数
-//   由 R-13 切到 ICU 后处理（本文件输出的 tn 仅给数量类 toast 用，如「2 items in bag」）。
+// - 占位符语法只支持 `{name}` 单花括号，与底层 i18n 文件保持一致；
+// - 复数规则只覆盖"末尾英文名词 +s / +es / +ies"，不规则单复数不在覆盖范围（tn 仅给数量类 toast 用）。
 
 import { ref, type Ref } from 'vue';
 import {

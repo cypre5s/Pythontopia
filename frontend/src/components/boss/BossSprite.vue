@@ -1,18 +1,9 @@
 <script setup lang="ts">
 /**
- * R-13 §-1 BossSprite v3：7 章 boss 立绘 = AI 原创 PNG（高清）+ CSS 像素 fallback。
- *
- * v3 改造（用户 G·B 决策）：
- *   - 主路径：每章用 1024×1024 AI 原创像素 PNG（CC-BY-SA 3.0+ 入库），
- *     主题严格对齐 mainQuests.ts 的 boss 名（算盘灵 / 解释器学徒 / ...）+
- *     风格统一星露谷暖色调，与 LoginPage hero 一致；
- *   - Fallback 路径：PNG 加载失败时回退到 v2 的 CSS pixel-art rect 绘制
- *     （兼容 spec 测试 + 无网络场景）；
- *   - 视觉：image-rendering: pixelated 保持像素感，object-fit: contain
- *     居中放大到 size×size。
- *
- * 状态 phase 控制简单动画：idle 上下浮动 / hurt 红色 shake / angry 抖动 / victory 上扬。
- * 不引入 GSAP（演示 Beta 用纯 CSS keyframes 已够；R-14 接入 GSAP 做更丝滑的 boss 入场转场）。
+ * 7 章 boss 立绘：PNG 优先，加载失败回退 CSS 像素 rect 绘制。
+ * PNG 为 AI 原创（CC-BY-SA 3.0+ 入库），主题对齐 mainQuests.ts 的 boss 名；
+ * fallback 兼容 spec 测试与无网络场景。视觉 image-rendering: pixelated + object-fit: contain。
+ * phase 控制动画：idle 浮动 / hurt 红色 shake / angry 抖动 / victory 上扬（纯 CSS keyframes，不依赖 GSAP）。
  */
 import { computed, ref } from 'vue';
 
@@ -27,7 +18,7 @@ const props = withDefaults(defineProps<Props>(), {
   size: 96,
 });
 
-// R-13 §-1 §G·B：每章 boss 立绘 PNG 路径（CC-BY-SA 3.0+ 原创）。
+// 每章 boss 立绘 PNG 路径（CC-BY-SA 3.0+ 原创）。
 const BOSS_PNG: Record<number, string> = {
   1: '/assets/pixel/bosses/boss-1-abacus-spirit.png',
   2: '/assets/pixel/bosses/boss-2-interpreter-apprentice.png',
@@ -381,7 +372,7 @@ const phaseClass = computed<string>(() => `boss-sprite--${props.phase}`);
 </script>
 
 <template>
-  <!-- v3: PNG 优先；加载失败回退 SVG pixel art。 -->
+  <!-- PNG 优先；加载失败回退 SVG pixel art。 -->
   <img
     v-if="pngSrc && !pngLoadFailed"
     class="boss-sprite boss-sprite--png"

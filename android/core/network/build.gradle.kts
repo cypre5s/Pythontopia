@@ -4,6 +4,8 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
+    // 仅注册可选任务 openApiGenerate；不挂接 sourceSets、不参与常规 build（见文件末尾）。
+    alias(libs.plugins.openapi.generator)
 }
 
 android {
@@ -48,6 +50,33 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
 
+    // 后端地址运行时覆盖的持久层（BaseUrlProvider/NetworkHostStore）。
+    implementation(libs.androidx.datastore.preferences)
+
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
+}
+
+// ── OpenAPI 客户端代码生成（可选、未接入常规构建） ─────────────────────────────
+// `org.openapi.generator` 插件会注册一个独立任务 `openApiGenerate`。这里只做配置，
+// **刻意不**把生成目录加入 sourceSets，也**不**让任何 compile/assemble/test 依赖它，
+// 以保证其它 agent 的常规构建保持为绿。手动触发：
+//   ./gradlew :core:network:openApiGenerate
+// 刷新 spec 的完整流程见 android/openapi/README.md。
+openApiGenerate {
+    generatorName.set("kotlin")
+    library.set("jvm-retrofit2")
+    inputSpec.set("${rootProject.projectDir}/openapi/pythontopia-api.json")
+    outputDir.set(layout.buildDirectory.dir("generated/openapi").get().asFile.path)
+    packageName.set("com.pythontopia.core.network.generated")
+    apiPackage.set("com.pythontopia.core.network.generated.api")
+    modelPackage.set("com.pythontopia.core.network.generated.model")
+    // 与手写 DTO/Api 的运行时保持一致：kotlinx-serialization + 协程 + kotlinx-datetime。
+    configOptions.set(
+        mapOf(
+            "serializationLibrary" to "kotlinx_serialization",
+            "useCoroutines" to "true",
+            "dateLibrary" to "kotlinx-datetime",
+        ),
+    )
 }

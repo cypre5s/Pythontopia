@@ -1,0 +1,20 @@
+// 后端 API 基址。
+//
+// 开发环境：指向本机后端（见 backend application.yml server.port=18080）。
+// 需在微信开发者工具「本地设置 → 不校验合法域名、web-view（业务域名）、TLS 版本以及
+// HTTPS 证书」勾选后才能访问 http://localhost:18080。
+//
+// 生产环境：改为你的后端 HTTPS 域名（例如 https://api.example.com），并在
+// 微信公众平台「开发管理 → 开发设置 → 服务器域名 → request 合法域名」加入该域名。
+export const API_BASE = 'http://localhost:18080';
+
+// 业务接口统一前缀（request 层会自动拼接）。
+export const API_PREFIX = '/api';
+
+// 本地存储 key（JWT 有效期 12h；过期或 401 由 request 层统一清理并重新登录）。
+export const STORAGE_TOKEN = 'pyt_token';
+export const STORAGE_USER = 'pyt_user';
+
+// 路由常量。
+export const LOGIN_ROUTE = '/pages/login/login';
+export const HOME_ROUTE = '/pages/index/index';

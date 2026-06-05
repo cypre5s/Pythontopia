@@ -1,27 +1,24 @@
-// R-13 Phase 3：星露谷风音效层（Tone.js 程序化合成 + Howler 兜底）。
+// 星露谷风音效层（Tone.js 程序化合成）。
 //
 // 设计要点：
 //   1. **零音频文件依赖**：所有 SFX 用 Tone.js Synth 实时合成，避免引入商业像素游戏
-//      官方音源，符合 AGENTS.md「不复制商业像素游戏官方素材」硬约束；
+//      官方音源（许可合规）；
 //   2. **单例 transport**：所有 synth 共用 Tone.start() 触发的 AudioContext，避免
 //      多组件挂载时反复创建上下文导致 iOS Safari unlock 失败；
 //   3. **autoplay 友好**：首次用户交互（click/keydown）才 lazy 启动 Tone，与现有
 //      useAudio 的 unlockAudio 协同；
 //   4. **响应 setMuted**：与 Phaser sound manager 全局静音状态对齐，玩家在 SettingsModal
 //      切静音可一次性关掉所有 SFX；
-//   5. **节流防抖**：脚步声 60ms 最小间隔、UI 点击/hover 80ms，避免乱触发 → 听感乱糟糟；
-//   6. **不依赖 useAudio**：互不耦合，Tone.js 走自己的 AudioContext，演示阶段不抢
-//      Phaser BGM 通道，避免 Howler/Tone/Phaser 三套同时启动导致 iOS 卡死。
-//
-// 教学价值：所有 SFX 都明确服务玩家反馈（脚步=地形识别、点击=操作确认、购买=金币
-// 入袋、任务完成=正向反馈），避免「为了好听加音效」。
+//   5. **节流防抖**：脚步声 60ms 最小间隔、UI 点击/hover 80ms，避免乱触发；
+//   6. **不依赖 useAudio**：Tone.js 走自己的 AudioContext，不抢 Phaser BGM 通道，
+//      避免 Howler/Tone/Phaser 三套同时启动导致 iOS 卡死。
 
 import * as Tone from 'tone';
 
 let unlocked = false;
 let muted = false;
-// R-13 迭代 22：自动检测系统 reduced-motion，激活时把 SFX 节流间隔放大 3 倍，
-// 部分 chime/jingle 直接降级为短促单音。避免动效偏好为「减少」的玩家被音效骚扰。
+// 自动检测系统 reduced-motion，激活时把 SFX 节流间隔放大 3 倍，
+// 避免动效偏好为「减少」的玩家被音效骚扰。
 let reducedMotionMode = false;
 
 let stepSynth: Tone.MembraneSynth | null = null;
@@ -230,7 +227,7 @@ export function playStep(terrain: TerrainKind = 'grass'): void {
   try {
     synth.triggerAttackRelease(TERRAIN_NOTES[terrain], '32n', nextToneStartTime());
   } catch {
-    // ignore
+    // 忽略
   }
 }
 
@@ -242,7 +239,7 @@ export function playUiClick(): void {
   try {
     synth.triggerAttackRelease('32n', nextToneStartTime(), 0.7);
   } catch {
-    // ignore
+    // 忽略
   }
 }
 
@@ -254,7 +251,7 @@ export function playUiHover(): void {
   try {
     synth.triggerAttackRelease('A5', '64n', nextToneStartTime());
   } catch {
-    // ignore
+    // 忽略
   }
 }
 
@@ -269,7 +266,7 @@ export function playCoinJingle(): void {
     synth.triggerAttackRelease('E5', '16n', startAt + 0.09);
     synth.triggerAttackRelease('G5', '16n', startAt + 0.18);
   } catch {
-    // ignore
+    // 忽略
   }
 }
 
@@ -284,7 +281,7 @@ export function playQuestComplete(): void {
     synth.triggerAttackRelease(['F4', 'A4', 'C5'], '8n', now + 0.2);
     synth.triggerAttackRelease(['G4', 'B4', 'D5'], '4n', now + 0.4);
   } catch {
-    // ignore
+    // 忽略
   }
 }
 
@@ -296,7 +293,7 @@ export function playDialogOpen(): void {
   try {
     synth.triggerAttackRelease('A4', '16n', nextToneStartTime());
   } catch {
-    // ignore
+    // 忽略
   }
 }
 
@@ -307,7 +304,7 @@ export function playDialogClose(): void {
   try {
     synth.triggerAttackRelease('E4', '16n', nextToneStartTime());
   } catch {
-    // ignore
+    // 忽略
   }
 }
 
@@ -327,7 +324,7 @@ export function playChime(mood: 'dawn' | 'dusk' | 'season' = 'dawn'): void {
       synth.triggerAttackRelease(note, '8n', now + i * 0.15);
     });
   } catch {
-    // ignore
+    // 忽略
   }
 }
 
@@ -338,7 +335,7 @@ export function disposeStardewFx(): void {
       try {
         s?.dispose();
       } catch {
-        // ignore
+        // 忽略
       }
     },
   );

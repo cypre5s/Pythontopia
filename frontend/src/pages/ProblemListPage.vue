@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// ProblemListPage —— 39 题题库浏览页。支持 KC / 难度 / 玩家状态多重过滤，
-// 排序按章节-KC 或者按通过率，点击行展开题目预览，点击"去做"跳到 /training。
+// 题库浏览页：按 KC / 难度 / 玩家状态过滤，按章节 / 难度 / 尝试次数排序；
+// 点击行展开题目预览，点击「去做」跳到 /training。
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import AppLayout from '@/app/AppLayout.vue';
@@ -646,6 +646,8 @@ onMounted(async () => {
   gap: 8px;
   padding: 8px 12px;
   align-items: center;
+  justify-items: center;
+  text-align: center;
   border-bottom: 2px dashed var(--pyt-color-border, var(--pyt-color-border));
   font-size: 13px;
 }
@@ -661,7 +663,7 @@ onMounted(async () => {
   border: none;
   padding: 0;
   cursor: pointer;
-  text-align: left;
+  text-align: center;
   min-height: auto;
   box-shadow: none;
 }
@@ -671,10 +673,15 @@ onMounted(async () => {
   padding: 0;
   cursor: pointer;
   font: inherit;
-  text-align: left;
-  text-decoration: underline;
+  text-align: center;
+  text-decoration: none;
+  color: var(--pyt-color-text-primary);
   min-height: auto;
   box-shadow: none;
+  transition: color var(--pyt-motion-base);
+}
+.row-title:hover {
+  color: var(--pyt-color-primary);
 }
 .badge {
   display: inline-block;

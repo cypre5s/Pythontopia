@@ -7,6 +7,7 @@ import com.pythontopia.core.common.Result
 import com.pythontopia.feature.profile.data.DimensionUpdateRequest
 import com.pythontopia.feature.profile.data.DimensionUpdateResult
 import com.pythontopia.feature.profile.data.LearnerProfileDto
+import com.pythontopia.feature.profile.data.ProfileDimensionDto
 import com.pythontopia.feature.profile.data.ProfileDimensions
 import com.pythontopia.feature.profile.data.ProfileRepository
 import io.mockk.coEvery
@@ -42,6 +43,9 @@ class ProfileViewModelTest {
     @BeforeEach
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
+        // loadProfile() 现在并发拉 profile + dimensions；默认给 dimensions 一个空成功，
+        // 需要校验维度的用例再各自覆盖。
+        coEvery { repository.fetchDimensions() } returns Result.Success(emptyList())
         viewModel = ProfileViewModel(repository)
     }
 
@@ -107,6 +111,56 @@ class ProfileViewModelTest {
     }
 
     @Test
+    fun `loadProfile populates real 8 dimension snapshot from GET dimensions`() = runTest {
+        val dims = listOf(
+            ProfileDimensionDto(
+                key = ProfileDimensions.LEARNING_GOAL,
+                label = "学习目标",
+                score = 0.72,
+                confidence = 0.5,
+                evidenceCount = 4,
+                selfEditable = true,
+                tags = listOf("exam"),
+            ),
+            ProfileDimensionDto(
+                key = ProfileDimensions.PRACTICAL_ABILITY,
+                label = "实践能力",
+                score = 0.4,
+                confidence = 0.0,
+                evidenceCount = 0,
+                selfEditable = false,
+            ),
+        )
+        coEvery { repository.fetchProfile() } returns Result.Success(LearnerProfileDto(major = "CS"))
+        coEvery { repository.fetchDimensions() } returns Result.Success(dims)
+
+        viewModel.loadProfile()
+
+        val state = viewModel.state.value
+        assertFalse(state.isLoading)
+        assertEquals(2, state.dimensions.size)
+        assertEquals(0.72, state.dimensions.first().score)
+        assertEquals(4, state.dimensions.first().evidenceCount)
+        assertTrue(state.dimensions.first().selfEditable)
+        assertFalse(state.dimensions[1].selfEditable)
+        assertNull(state.error)
+        coVerify(exactly = 1) { repository.fetchDimensions() }
+    }
+
+    @Test
+    fun `loadProfile surfaces error when dimensions fetch fails even if profile ok`() = runTest {
+        coEvery { repository.fetchProfile() } returns Result.Success(LearnerProfileDto(major = "CS"))
+        coEvery { repository.fetchDimensions() } returns Result.Failure(NetworkError(message = "offline"))
+
+        viewModel.loadProfile()
+
+        val state = viewModel.state.value
+        assertFalse(state.isLoading)
+        assertEquals("NETWORK_ERROR", state.error?.code)
+        assertTrue(state.dimensions.isEmpty())
+    }
+
+    @Test
     fun `loadProfile emits intermediate loading=true via state flow`() = runTest {
         // 切到 StandardTestDispatcher 才能观察 isLoading=true 中间帧；
         // UnconfinedTestDispatcher 会把 update 折叠掉。
@@ -156,6 +210,16 @@ class ProfileViewModelTest {
         coEvery { repository.fetchProfile() } returns Result.Success(
             LearnerProfileDto(major = "CS", narrativeSummary = "reloaded"),
         )
+        coEvery { repository.fetchDimensions() } returns Result.Success(
+            listOf(
+                ProfileDimensionDto(
+                    key = ProfileDimensions.LEARNING_GOAL,
+                    score = 0.6,
+                    evidenceCount = 5,
+                    selfEditable = true,
+                ),
+            ),
+        )
 
         viewModel.updateSubjective(
             dimensionKey = ProfileDimensions.LEARNING_GOAL,
@@ -166,8 +230,12 @@ class ProfileViewModelTest {
         assertFalse(state.isSaving)
         assertEquals(ProfileDimensions.LEARNING_GOAL, state.savedDimensionKey)
         assertEquals("reloaded", state.profile?.narrativeSummary)
+        // 自评成功后仪表盘维度随之刷新到最新 score / 证据数。
+        assertEquals(0.6, state.dimensions.first().score)
+        assertEquals(5, state.dimensions.first().evidenceCount)
         coVerify(exactly = 1) { repository.updateDimension(ProfileDimensions.LEARNING_GOAL, any()) }
         coVerify(exactly = 1) { repository.fetchProfile() }
+        coVerify(exactly = 1) { repository.fetchDimensions() }
     }
 
     @Test

@@ -1,18 +1,10 @@
 <script setup lang="ts">
 /**
- * R-13 §5 Phase 8 续：「无尽模式」页面。
+ * 「无尽模式」页面：连续出题、自适应难度，玩家追求 streak / 总分
+ * （区别于 /boss/:chapter 的 4 阶段章节 boss 主线）。
  *
- * 设计目标（与闯关模式 BossPage 区分）：
- *   - 闯关模式 `/boss/:chapter`：4 阶段 + 章节 boss，主线推进；
- *   - 无尽模式 `/endless`：连续出题，自适应难度，玩家追求 streak / 总分。
- *
- * 数据：复用 graph /agents/boss/problem（含 5 重审查 + golden 兜底）+ /agents/boss/evaluate
- *       + 前端 Pyodide 二次校验。题目章节按 focusChapter 锁定，未锁定时随机。
- *
- * UI：单页布局：
- *   - 顶部 status bar：streak / total / 难度 / 当前章 / 失败率
- *   - 左：题面 + 提交 textarea
- *   - 右：最近 8 题历史 + 总览
+ * 数据：graph /agents/boss/problem（5 重审查 + golden 兜底）+ /agents/boss/evaluate
+ *       + 前端 Pyodide 二次校验；题目章节按 focusChapter 锁定，未锁定时随机。
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -28,9 +20,8 @@ const router = useRouter();
 const route = useRoute();
 const arena = useArenaStore();
 
-// R-13 §-1 续：从 query 读 ?chapter & ?arenaLevel 让 EndlessPage 同时承担
-// "随机刷题" 与 "ArenaPage 闯关塔单关入口" 两个角色。
-// arenaLevel 形如 "1-3"，通关后回 ArenaPage 上方 markCleared。
+// 从 query 读 ?chapter & ?arenaLevel：EndlessPage 同时承担「随机刷题」与
+// 「ArenaPage 闯关塔单关入口」两个角色。arenaLevel 形如 "1-3"，通关后回 ArenaPage markCleared。
 const queryChapter = computed<number | null>(() => {
   const raw = Number(route.query.chapter);
   return Number.isInteger(raw) && raw >= 1 && raw <= 7 ? raw : null;
@@ -59,7 +50,7 @@ watch(queryKind, (next) => {
   preferredKind.value = next;
 });
 
-// R-13 §-1 续：作为闯关塔单关入口时，通过 1 题即记 markCleared 并自动回 ArenaPage。
+// 作为闯关塔单关入口时，通过 1 题即记 markCleared 并自动回 ArenaPage。
 watch(
   () => run.phase.value,
   (phase) => {
@@ -120,8 +111,7 @@ const showNextButton = computed<boolean>(() => {
   return ph === 'passed' || ph === 'failed';
 });
 
-// R-13 §-1 续：让闯关塔单关入口显示题型中文名，让玩家直观感受到 9 种关卡的差异
-// （而不是所有关卡走完全一样的 endless 随机抽题流程）。
+// 闯关塔单关入口显示题型中文名，区分 9 种关卡题型。
 const KIND_LABELS: Record<string, string> = {
   pdf_question: 'Rd 课件问答',
   fill_blank:   '▭ 代码填空',

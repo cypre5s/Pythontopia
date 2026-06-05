@@ -64,6 +64,10 @@ services:
     build:
       context: ../services/pythontopia-graph
       dockerfile: Dockerfile
+    # graph 需要访问宿主机本地代理 7892（B站/外网检索）；很多代理只监听
+    # 127.0.0.1，bridge 网络下容器无法连到。开发态让 graph 使用 host 网络，
+    # 保持 http://127.0.0.1:18091 对外入口不变。
+    network_mode: host
     # R-13 §5 Phase 6 续：开发态把 host 源码 mount 进 /app，
     # 容器内 sys.path 优先 /app/pythontopia_graph，因此 hot reload 走这里；
     # site-packages 也保留原 wheel（pyproject 依赖照常工作）。
@@ -87,11 +91,10 @@ services:
       PYT_SPARK_API_KEY: ${PYT_SPARK_API_KEY:-}
       PYT_SPARK_API_SECRET: ${PYT_SPARK_API_SECRET:-}
       PYT_SPARK_MODEL_ID: ${PYT_SPARK_MODEL_ID:-}
-      PYT_RAG_URL: http://pythontopia-rag:18092
+      PYT_RAG_URL: http://127.0.0.1:18092
+      PYT_BILI_PROXY: ${PYT_BILI_PROXY:-http://127.0.0.1:7892}
       NO_PROXY: localhost,127.0.0.1,pythontopia-rag,postgres,redis
       no_proxy: localhost,127.0.0.1,pythontopia-rag,postgres,redis
-    ports:
-      - "127.0.0.1:18091:18091"
 
   pythontopia-rag:
     image: pythontopia-rag:dev

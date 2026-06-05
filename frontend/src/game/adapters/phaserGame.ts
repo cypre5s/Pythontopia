@@ -21,7 +21,7 @@ export function createPhaserGame(rootEl: HTMLElement, scenes: PhaserSceneConfig[
   if (gameInstance) {
     return { destroy: (removeCanvas) => destroyPhaserGame(removeCanvas) };
   }
-  // R-12 fullscreen 沉浸：用 RESIZE 模式让 canvas 永远等于父容器尺寸（WorldCanvas
+  // 全屏沉浸：用 RESIZE 模式让 canvas 永远等于父容器尺寸（WorldCanvas
   // 的 ResizeObserver 会 scale.resize 推送视口变化）。pixelArt + roundPixels 保证
   // 整数倍像素缩放，配合 WorldScene 的 RENDER_SCALE × CAMERA_ZOOM 共同决定 tile
   // 显示尺寸。
@@ -38,8 +38,8 @@ export function createPhaserGame(rootEl: HTMLElement, scenes: PhaserSceneConfig[
     pixelArt: true,
     roundPixels: true,
     scene: scenes,
-    // R-12 FPS：移动用 tween + 手写碰撞网格，全程不使用 Arcade 物理体；
-    // 移除 arcade physics 省掉每帧物理步（弱机可见收益）。world/camera 边界由
+    // 移动用 tween + 手写碰撞网格，全程不使用 Arcade 物理体；
+    // 移除 arcade physics 省掉每帧物理步。world/camera 边界由
     // camera.setBounds 承担，WorldScene 里 this.physics?.world 调用均带 ?. 兜底。
     render: {
       // 提示浏览器优先用独显，减少集显掉帧。

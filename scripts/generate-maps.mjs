@@ -660,23 +660,20 @@ function generateTownHub() {
     makeLandmark('fountain', '镜月喷泉', 24, 19, 2, 2, 'landmark'),
     ...lowPathFences,
     makeLowObstacle('low_tutorial_log', '跳跃练习木桩', 26, 20, 1, 1, 'stump', LOW_FENCE_FRAMES.post),
+    // R-14 精简 NPC：移除与主线/合并后系统重复或失效的居民——
+    //   tutor_ai（导师已并入百晓工坊，与 workshop_master 重复）、trainer（与 coach_q 重复）、
+    //   miner（与守矿人 / 矿头 Bug 重复）、farmer + gardener（农场 / 作物系统已删）、
+    //   chef + sailor（纯装饰 + 已删的商店 / 商船）。保留的每个 NPC 各担一项学习闭环职责。
     makeNpc('npc_mayor_py', 'mayor_py', '镇长 Py', 25, 10, 'npc_mayor'),
-    makeNpc('npc_librarian_doc', 'librarian_doc', '图书管理员 Doc', 12, 12, 'npc_librarian'),
-    makeNpc('npc_coach_q', 'coach_q', '练习教练 Q', 44, 18, 'npc_coach'),
-    makeNpc('npc_sage_review', 'sage_review', '复盘贤者', 38, 12, 'npc_sage'),
-    makeNpc('npc_gardener', 'gardener', '园丁', 6, 6, 'npc_gardener'),
-    makeNpc('npc_chef', 'chef', '厨师', 38, 32, 'npc_chef'),
-    makeNpc('npc_farmer', 'farmer', '农场主', 6, 4, 'npc_farmer'),
+    makeNpc('npc_librarian_doc', 'librarian_doc', '馆长 Doc', 12, 12, 'npc_librarian'),
+    makeNpc('npc_coach_q', 'coach_q', '教务 Q', 44, 18, 'npc_coach'),
+    makeNpc('npc_sage_review', 'sage_review', '复盘师 Sage', 38, 12, 'npc_sage'),
     makeNpc('npc_professor', 'professor', '教授', 12, 10, 'npc_professor'),
     makeNpc('npc_student_a', 'student_a', '学生 A', 15, 14, 'npc_student'),
-    makeNpc('npc_sailor', 'sailor', '水手', 4, 28, 'npc_sailor'),
-    makeNpc('npc_miner', 'miner', '矿工', 24, 36, 'npc_miner'),
-    makeNpc('npc_tutor_ai', 'tutor_ai', 'AI 导师', 30, 16, 'npc_tutor_ai'),
     makeNpc('npc_workshop_master', 'workshop_master', '工坊师傅', 42, 26, 'npc_workshop'),
     makeNpc('npc_arena_guard', 'arena_guard', '竞技场守卫', 38, 36, 'npc_guard'),
-    makeNpc('npc_trainer', 'trainer', '训练师', 10, 36, 'npc_trainer'),
     // R-14 方案A：原外围图的主线 NPC 收进中央小镇，玩家不再跨图就能自然遇见。
-    makeNpc('npc_mine_keeper', 'mine_keeper', '矿洞守矿人', 21, 33, 'npc_miner'),
+    makeNpc('npc_mine_keeper', 'mine_keeper', '守矿人', 21, 33, 'npc_miner'),
     makeNpc('npc_foreman_bug', 'foreman_bug', '矿头 Bug', 24, 33, 'npc_guard'),
     makeNpc('npc_captain_def', 'captain_def', '船长 Def', 4, 24, 'npc_sailor'),
     makeNpc('npc_class_president', 'class_president', '班长', 16, 16, 'npc_student'),

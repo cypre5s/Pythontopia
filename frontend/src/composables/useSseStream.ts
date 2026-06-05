@@ -193,14 +193,14 @@ export function useSseStream<T = unknown>(url: string): {
       case 'plan': {
         try {
           plan.value = JSON.parse(raw) as SsePlan;
-        } catch { /* malformed plan */ }
+        } catch { /* plan 格式错误，忽略 */ }
         break;
       }
       case 'trace': {
         try {
           const t = JSON.parse(raw) as SseTraceEvent;
           traces.value = [...traces.value, t];
-        } catch { /* malformed trace */ }
+        } catch { /* trace 格式错误，忽略 */ }
         break;
       }
       case 'token': {
@@ -215,7 +215,7 @@ export function useSseStream<T = unknown>(url: string): {
       case 'result': {
         try {
           result.value = JSON.parse(raw) as T;
-        } catch { /* malformed result */ }
+        } catch { /* result 格式错误，忽略 */ }
         status.value = 'done';
         break;
       }

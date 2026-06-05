@@ -1,4 +1,4 @@
-// W3 WorldClock：玩法时钟核心，统一管理 6 时段 + 4 天气 + 4 季节 + 事件总线。
+// WorldClock：玩法时钟核心，统一管理 6 时段 + 4 天气 + 4 季节 + 事件总线。
 //
 // 设计边界（与现有渲染层 daynight.ts / weather.ts 区分）：
 // - WorldClock 是纯前端逻辑层：只关心状态机 / 事件，不调用 Phaser、不调用后端 API。

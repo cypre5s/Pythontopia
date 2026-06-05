@@ -1,17 +1,12 @@
 <script setup lang="ts">
 /**
- * R-13 §5 Phase 4：章末 BOSS 副本页。
- *
- * 布局：
- *   - 顶部 stage 进度（1..4）+ 计时器 + 章节 boss 名 + 退出按钮；
- *   - 左侧：题目 + Pyodide 代码编辑器（textarea 就够）+ 提示展开；
- *   - 右侧：Boss 像素动画卡片（CSS draw + 摇晃）+ 上次结果摘要 + 操作按钮。
+ * 章末 BOSS 副本页。
  *
  * 与 useBossSession 对接：
  *   - mounted 时调 startStage（stage 1 自动开始）；
- *   - 编辑器 v-model code；点击 "提交答案" 触发 submit；
- *   - 通过后 stage++ 自动进入下一阶段；4 全胜 → victory；
- *   - 失败时显示「再试一次」+ 提示（按 difficulty 给）。
+ *   - 编辑器 v-model code，点击「提交答案」触发 submit；
+ *   - 通过后 stage++ 进入下一阶段，4 阶段全胜 → victory；
+ *   - 失败时显示「再试一次」+ 按 difficulty 给的提示。
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
@@ -21,6 +16,7 @@ import BossSprite from '@/components/boss/BossSprite.vue';
 import BossMoveEffect from '@/components/boss/BossMoveEffect.vue';
 import { useBossSession } from '@/composables/useBossSession';
 import { findBossByChapter } from '@/data/mainQuests';
+import type { MainSubQuestReward } from '@/types/mainQuest';
 
 const props = defineProps<{ chapter: number }>();
 
@@ -121,6 +117,31 @@ const bossSpritePhase = computed<'idle' | 'hurt' | 'angry' | 'victory'>(() => {
   if (phase === 'failed' || phase === 'evaluating') return 'angry';
   return 'idle';
 });
+
+const REWARD_ITEM_LABELS: Record<string, string> = {
+  'outfit:apprentice': '学徒装',
+  'title:python_speaker': '称号·Python 代言人',
+  'storyboard:binary_dawn': '故事板·二进制黎明',
+  'item:loop_bookmark': '循环书签',
+  'outfit:captain': '船长装',
+  'title:file_keeper': '称号·档案守护者',
+  'outfit:graduate': '毕业袍',
+  'title:pythontopia_alumnus': '称号·Pythontopia 校友',
+};
+
+const visibleRewards = computed<MainSubQuestReward[]>(() =>
+  (boss?.rewards ?? []).filter((r) => r.kind !== 'coin' && r.kind !== 'gem'),
+);
+
+function rewardLabel(r: MainSubQuestReward): string {
+  if (r.kind === 'kc_mastery') {
+    return `掌握进度 +${r.amount}`;
+  }
+  if (r.kind === 'item') {
+    return (r.ref ? REWARD_ITEM_LABELS[r.ref] : undefined) ?? '奖励道具';
+  }
+  return '';
+}
 </script>
 
 <template>
@@ -192,14 +213,14 @@ const bossSpritePhase = computed<'idle' | 'hurt' | 'angry' | 'victory'>(() => {
         data-testid="boss-victory"
       >
         <h2>★ 全 4 阶段通关！</h2>
-        <p>
+        <p v-if="visibleRewards.length">
           解锁奖励：
           <span
-            v-for="r in boss?.rewards ?? []"
+            v-for="r in visibleRewards"
             :key="`${r.kind}-${r.ref ?? r.amount}`"
             class="boss-reward"
           >
-            {{ r.kind }} × {{ r.amount }}{{ r.ref ? ` (${r.ref})` : '' }}
+            {{ rewardLabel(r) }}
           </span>
         </p>
         <p class="boss-storyboard">
@@ -336,7 +357,6 @@ const bossSpritePhase = computed<'idle' | 'hurt' | 'angry' | 'victory'>(() => {
             Stage {{ session.stage.value }} / 4
           </p>
 
-          <!-- R-13 §-1 续：boss HP 血条（不再是 "4 / 4" 静态文字） -->
           <div
             class="boss-hpbar"
             data-testid="boss-hpbar"
@@ -352,7 +372,6 @@ const bossSpritePhase = computed<'idle' | 'hurt' | 'angry' | 'victory'>(() => {
             <span class="boss-hpbar__label">HP {{ session.bossHp.value }} / 100</span>
           </div>
 
-          <!-- R-13 §-1 续：当前阶段招式预告（让玩家有"对战"叙事） -->
           <div
             v-if="session.currentMove.value"
             class="boss-move-card"
@@ -441,7 +460,7 @@ const bossSpritePhase = computed<'idle' | 'hurt' | 'angry' | 'victory'>(() => {
   text-decoration: line-through;
 }
 
-/* R-13 §-1 续 BossPage 交互深挖：血条 / 招式预告 / hurt 飘字 */
+/* 血条 / 招式预告 / 受击飘字 */
 .boss-sprite-wrap {
   position: relative;
   display: inline-block;

@@ -13,16 +13,11 @@ import type { WorldEventDto } from './WorldEventDto';
 import type { WorldSessionDto } from './WorldSessionDto';
 
 /**
- * 一次性返回首次进入世界场景需要的全量状态。
- *
- * 与 W3-CTRL 后端 POST /api/game/bootstrap 对齐：
- *   - world / player：世界与玩家状态（替代旧的 /api/world/session）
- *   - crops / mastery / profile / path / quests：复用 learning 域已有 DTO
- *   - inventory / skills / skillsCatalog / currency：M4 新增 RPG 存档
- *   - calendar / events：天 / 季节 / 待处理事件
- *   - npcStates：已交互过的 NPC 状态（未交互过的不会出现）
- *   - activeSlot / saveSlots：当前存档槽 + 全部存档
- *   - curriculum：可选，仅首次播种时返回
+ * 一次性返回首次进入世界场景所需的全量状态，对齐后端 POST /api/game/bootstrap。
+ * 命名无法表达的字段语义：
+ *   - npcStates：仅含已交互过的 NPC，未交互过的不出现；
+ *   - activeSlot / saveSlots：当前存档槽 + 全部存档；
+ *   - curriculum：可选，仅首次播种课程时返回。
  */
 export interface GameBootstrapResponseDto {
   world: WorldSessionDto;
@@ -30,14 +25,13 @@ export interface GameBootstrapResponseDto {
   quests: QuestDto[];
   mastery: MasterySnapshotDto[];
   profile: LearnerProfileDto | null;
-  // 后端实际返回 LearningPathNodeDto[]，老前端期望 LearningPathDto 整体对象。
-  // 这里保留旧 union，新增 pathNodes 字段承接节点数组，由 world store 解析时择一使用。
+  // 后端实际下发节点数组：path 维持对象 union 形态，节点数组由 pathNodes 承接，world store 解析时二选一。
   path: LearningPathDto | null;
   pathNodes?: unknown[];
   skills: LearnerSkillDto[];
   skillsCatalog?: SkillNodeDto[];
   calendar: WorldCalendarDto;
-  /** R-13：后端实际字段名是 pendingEvents，events 是旧前端别名 */
+  /** 后端实际字段名为 pendingEvents，events 是旧前端别名 */
   events?: WorldEventDto[];
   pendingEvents?: WorldEventDto[];
   npcStates?: NpcDialogStateDto[];
@@ -55,7 +49,7 @@ export interface GameBootstrapResponseDto {
 export interface WorldSleepResponseDto {
   world: Pick<WorldSessionDto, 'worldSessionId' | 'dayIndex' | 'weather' | 'inGameMinutes'>;
   calendar?: WorldCalendarDto;
-  /** R-13：后端实际字段名是 newEvents，events 是旧前端别名 */
+  /** 后端实际字段名为 newEvents，events 是旧前端别名 */
   events?: WorldEventDto[];
   newEvents?: WorldEventDto[];
 }

@@ -1,13 +1,10 @@
-// W2 InteractableSystem：跨场景统一可交互物件框架。
+// InteractableSystem：跨场景统一可交互物件框架。
 //
 // 设计原因：
-//   - 玩家在多张地图（farm / mine / campus / port / hub）需要与 NPC、资源点、矿洞入口、
-//     公告板等交互。原本每个 scene 各自实现"距离判定 + 显示提示气泡 + 监听 E 键"，
-//     代码散落且测试困难。
-//   - InteractableSystem 把"trigger 形状 + 进出回调 + 激活回调 + 气泡 UI"四件事
-//     收敛到同一入口；scene 只需 register() 注册、update() 驱动、shutdown 时 clear()。
+//   - 把「trigger 形状 + 进出回调 + 激活回调 + 气泡 UI」四件事收敛到同一入口；
+//     scene 只需 register() 注册、update() 驱动、shutdown 时 clear()。
 //   - hintRenderer 由 scene 注入，保持 core 层无 UI / 无 Phaser GameObject 依赖，
-//     便于 jsdom 单测；business 端可在 scene 里实现自己的气泡控件 / Vue overlay。
+//     便于 jsdom 单测；业务端可在 scene 里实现自己的气泡控件 / Vue overlay。
 //
 // 隔离边界：本文件属于 game core 层；Phaser 仅 `import type`，运行时不依赖 phaser
 // 模块。scene 实例只作为 TriggerContext.scene 透传给业务回调，框架自身不调任何
@@ -143,7 +140,7 @@ export class InteractableSystem {
     this.lastPlayerX = playerX;
     this.lastPlayerY = playerY;
 
-    // Step 1: 计算本帧新的 activeIds，跳过 enabled=false。
+    // 第 1 步：计算本帧新的 activeIds，跳过 enabled=false。
     const nextActiveIds = new Set<string>();
     for (const [id, trigger] of this.triggers) {
       if (trigger.enabled === false) {
@@ -154,7 +151,7 @@ export class InteractableSystem {
       }
     }
 
-    // Step 2: 触发 onEnter（按注册顺序遍历 triggers，过滤"新进入"的）。
+    // 第 2 步：触发 onEnter（按注册顺序遍历 triggers，过滤"新进入"的）。
     for (const [id, trigger] of this.triggers) {
       if (nextActiveIds.has(id) && !this.activeIds.has(id)) {
         trigger.onEnter?.({
@@ -166,8 +163,8 @@ export class InteractableSystem {
       }
     }
 
-    // Step 3: 触发 onExit（之前 active 但本帧不在）。
-    // 注意：这里要先把 activeIds 的 snapshot 拿下来再遍历，否则下面 Step 4
+    // 第 3 步：触发 onExit（之前 active 但本帧不在）。
+    // 注意：这里要先把 activeIds 的 snapshot 拿下来再遍历，否则下面第 4 步
     // 修改 activeIds 时会影响判定。
     const prevActiveIds = [...this.activeIds];
     for (const id of prevActiveIds) {
@@ -179,13 +176,13 @@ export class InteractableSystem {
       }
     }
 
-    // Step 4: commit activeIds。
+    // 第 4 步：提交 activeIds。
     this.activeIds.clear();
     for (const id of nextActiveIds) {
       this.activeIds.add(id);
     }
 
-    // Step 5: actionPressed 触发 onActivate（按注册顺序遍历 triggers Map，
+    // 第 5 步：actionPressed 触发 onActivate（按注册顺序遍历 triggers Map，
     // 过滤出活跃的，保证多 trigger 触发顺序可预测）。
     if (actionPressed && this.activeIds.size > 0) {
       for (const [id, trigger] of this.triggers) {
@@ -200,7 +197,7 @@ export class InteractableSystem {
       }
     }
 
-    // Step 6: 更新气泡。
+    // 第 6 步：更新气泡。
     this.refreshHint();
   }
 

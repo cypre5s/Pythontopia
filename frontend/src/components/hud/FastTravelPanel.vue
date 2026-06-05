@@ -1,11 +1,9 @@
 <script setup lang="ts">
-// R-13 迭代 18：快速旅行面板（前端静态版）。
-//
-// 触发：玩家在 minimap 上点击「快速旅行」icon 或按快捷键 T。
-// 行为：罗列 5 个核心地图，点击后通过 worldStore.player 直接更新坐标 + scene.restart。
+// 快速旅行面板（前端静态版）。
+// 触发：minimap 上点击「快速旅行」或按快捷键 T。
+// 行为：列出 FAST_TRAVEL_ROUTES 各核心地图，点击后直接更新 worldStore.player 坐标触发场景重建。
 // 注意：后端 FastTravelService 还没 Controller，本组件先在前端直接改 worldStore，
-//       后续接入后改为调 `/api/world/fast-travel` 与服务端原子结算。
-// 视觉：像素风浮窗，与 SettingsModal 共用模板，但用一组按钮替代滑块。
+//       接入后改为调 `/api/world/fast-travel` 与服务端原子结算。
 
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { FAST_TRAVEL_ROUTES, type FastTravelRoute } from '@/data/fastTravel';
@@ -65,7 +63,7 @@ function onExternalOpen(): void {
 onMounted(() => {
   if (typeof window !== 'undefined') {
     window.addEventListener('keydown', onKey);
-    // R-13 迭代 19：HudShell 通过 CustomEvent 触发打开（避免组件互相 import）
+    // HudShell 通过 CustomEvent 触发打开（避免组件互相 import）
     window.addEventListener('pythontopia:fast-travel-open', onExternalOpen);
   }
 });

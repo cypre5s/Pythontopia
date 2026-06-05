@@ -1,4 +1,4 @@
-// W1 SceneSwitcher：把 Phaser 场景切换从「散落各处的 scene.scene.start(key)」
+// SceneSwitcher：把 Phaser 场景切换从「散落各处的 scene.scene.start(key)」
 // 收敛到一条统一管线，强制保证：
 //   fade-out → 等 camerafadeoutcomplete → cleanup(timers/tweens/loader) →
 //   cleanupHooks → 目标 scene 存在性校验 → scene.start。

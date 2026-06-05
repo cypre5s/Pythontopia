@@ -1,12 +1,11 @@
 <script setup lang="ts">
-// R-13 迭代 13：节日 ribbon 横幅，挂在顶部 HUD 下方。
-//
+// 节日 ribbon 横幅，挂在顶部 HUD 下方。
 // 设计要点：
-//   1. 只在「今日节日」当天显示（重要事件 ribbon 闪 + chime SFX 一次）；
-//   2. R-14 降负荷：不再常驻显示「距下个节日还有 N 天」的倒数，避免与中央任务列抢注意力；
-//   3. 数据来自 hud.meta.dayIndex + 前端静态 FESTIVALS（后端 V118 seed 对齐）；
-//   4. 一旦后端 WorldFestivalService 暴露 Controller，可以平滑切换为 fetch；
-//   5. 不挤占小地图（minimap 在 top:72px，ribbon 在 top:50px）。
+//   1. 仅在「今日节日」当天显示，进入时闪一次 + chime SFX；
+//   2. 不常驻倒数提示，避免与中央任务列抢注意力；
+//   3. 数据来自 hud.meta.dayIndex + 前端静态 FESTIVALS（与后端 seed 对齐）；
+//   4. 后端 WorldFestivalService 暴露 Controller 后可平滑切换为 fetch；
+//   5. 固定 top:50px，避免与小地图重叠。
 
 import { computed, ref, watch } from 'vue';
 import { findCurrentFestival } from '@/data/festivals';

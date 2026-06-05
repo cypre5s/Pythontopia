@@ -1,4 +1,4 @@
-// ③玩中建画像：世界内探针目录（中性、可跳过、低风险的世界内选择卡）。
+// 世界内探针目录（中性、可跳过、低风险的世界内选择卡）。
 //
 // 每个探针 = 一张世界内选择卡：从玩家的选择推断某个画像维度，绝不阻塞主线。
 // choiceId 必须与后端 ProbeCatalog（server-authoritative）一一对齐：
@@ -9,8 +9,7 @@
 //   - 'watch-phase'：进入主线「看」阶段时弹（cog_intro，首次进镇）。
 //   - 'requested'  ：由外部事件置 requested 标记后弹（fail_react，练习失败后）。
 //
-// 设计铁律（见 docs/plans/2026-06-04-profile-loop-trilogy-design.md §4.1）：
-//   选项美术等价、措辞中性、无优劣暗示；可随时跳过；提交 fire-and-forget。
+// 设计铁律：选项美术等价、措辞中性、无优劣暗示；可随时跳过；提交 fire-and-forget。
 
 export type ProbeTrigger = 'watch-phase' | 'requested';
 

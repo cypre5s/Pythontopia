@@ -43,7 +43,6 @@ export interface EducationSettings {
 }
 
 export interface ControlSettings {
-  /** 未来可扩展为自定义键位映射 */
   touchSensitivity: number;
 }
 
@@ -150,7 +149,7 @@ export const useGameSettingsStore = defineStore('gameSettings', {
         void pauseMenuOpen;
         void quickWheelOpen;
         localStorage.setItem(STORAGE_KEY, JSON.stringify(rest));
-      } catch { /* privacy mode */ }
+      } catch { /* 隐私模式 */ }
     },
 
     updateAudio(patch: Partial<AudioSettings>): void {

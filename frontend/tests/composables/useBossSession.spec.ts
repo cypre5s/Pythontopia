@@ -105,6 +105,27 @@ describe('useBossSession (R-13 §-1 BossPage 交互深挖)', () => {
     expect(s.recentDamage.value).toBe(25);
   });
 
+  it('后端判定失败时，即使本地样例通过也不扣血不推进', async () => {
+    apiMocks.submitBossAttempt.mockResolvedValue({
+      problemId: 'p-1',
+      passed: false,
+      passedTestCases: 1,
+      totalTestCases: 3,
+      score: 0,
+      feedback: '隐藏用例 WA',
+    });
+    pyodideMock.run.mockResolvedValue({ stdout: '5\n', stderr: '' });
+    const s = useBossSession({ chapter: 1 });
+    await s.startStage();
+    s.code.value = 'print(5)';
+
+    await s.submit();
+
+    expect(s.phase.value).toBe('failed');
+    expect(s.bossHp.value).toBe(100);
+    expect(s.lastResult.value?.passed).toBe(false);
+  });
+
   it('4 阶段全通 bossHp 减到 0 + victory', async () => {
     const s = useBossSession({ chapter: 1 });
     for (let stage = 1; stage <= 4; stage += 1) {

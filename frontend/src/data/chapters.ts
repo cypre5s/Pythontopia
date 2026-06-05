@@ -1,6 +1,6 @@
-// W4-CHAPTER-NAV：恢复 R-11 时 FieldPage 的章节导航数据源。
+// FieldPage 的章节导航数据源。
 //
-// `kcCode` 字段沿用 R-11 命名（含义为「章节 slug」），用作：
+// `kcCode` 字段是历史遗留命名（实为「章节 slug」），用作：
 //   1. 测试 testid 标识符（chapter-nav-<kcCode>）
 //   2. icons_kc/<kcCode>/ 图标资产目录的 key
 //
@@ -9,11 +9,10 @@
 //   ch4=PY43-KC-031~038  ch5=PY43-KC-039~047  ch6=PY43-KC-048~053
 //   ch7=PY43-KC-054~065  （共 65 个 KC，与课程种子 65 KC 一致）
 //
-// 章节显示名已与真实课程 data/course-pack-43/json/course_chapter.json 对齐
-// （取短名以适配侧栏 ~88px 图标按钮）。此前 R-11 旧名（容器结构/条件分支/循环结构…）
-// 与各章真实 KC 内容错位（本课程先讲「流程自动化」后讲「数据结构」），已修正。
-// 注意：`kcCode` slug 是 testid + icons_kc/<slug>/ 资产目录键，必须保持稳定，
-// 故只改 `name`，不改 slug（slug 与新名语义不再字面对应，是已知取舍）。
+// 章节显示名与真实课程 data/course-pack-43/json/course_chapter.json 对齐
+// （取短名以适配侧栏 ~88px 图标按钮）。
+// 注意：`kcCode` slug 是 testid + icons_kc/<slug>/ 资产目录键，必须保持稳定；
+// slug 与显示名语义不再字面对应（已知取舍），改 name 时不要动 slug。
 
 export interface ChapterEntry {
   /** 章节 slug，等价于 icons_kc/<kcCode>/ 资产目录与 testid 标识符。 */
@@ -29,7 +28,7 @@ export interface ChapterEntry {
   /** PY43-KC-NNN 范围终点（含）。 */
   endKc: number;
   /**
-   * P2 动机帧：「为什么先学这个」一句话，缓动机悬崖。课本顺序是 packId=43 硬约束不可改，
+   * 动机帧：「为什么先学这个」一句话，缓动机悬崖。课本顺序是 packId=43 硬约束不可改，
    * 故只用动机帧帮初学者建立「这一章如何支撑后面的程序」的认知。
    */
   motivation: string;
@@ -61,7 +60,7 @@ export const CHAPTERS: ReadonlyArray<ChapterEntry> = [
     order: 3,
     startKc: 17,
     endKc: 30,
-    // P2：第 3 章理论最重（进制/编码），动机帧讲清「为什么先学」，缓动机悬崖。
+    // 第 3 章理论最重（进制/编码），动机帧讲清「为什么先学」，缓动机悬崖。
     motivation:
       '为什么先学「信息表示」？因为计算机只认 0 和 1——先搞懂数字、字符、进制是怎么被编码的，'
       + '后面的分支、循环、数据结构才有「被处理的对象」。这是从「人话」翻译到「机器话」的桥，'
@@ -70,7 +69,7 @@ export const CHAPTERS: ReadonlyArray<ChapterEntry> = [
   {
     kcCode: 'list_tuple_set_dict',
     name: '第 4 章 · 流程自动化',
-    // R-11 spec 用 delapouite__chemical-tank.png，但该图标在 public 资产里不存在；
+    // 原计划的 delapouite__chemical-tank.png 在 public 资产里不存在；
     // 改用 delapouite__stack.png（同目录现存且语义吻合「堆栈/容器」）。
     iconPath: '/assets/pixel/icons_kc/list_tuple_set_dict/delapouite__stack.png',
     order: 4,

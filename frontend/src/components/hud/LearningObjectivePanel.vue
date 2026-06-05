@@ -1,14 +1,7 @@
 <script setup lang="ts">
-// R-12 美化新增：左侧「当前学习目标」面板。
-//
-// 设计目标：
-//   - 让玩家一眼看出这是 Python 编程教学 RPG，而非普通像素地图游戏。
-//     页面顶部 HUD 给「我在哪一章」「整体进度」，本面板补充「当前知识点 /
-//     当前任务 / 学习目标 / 奖励 / 提示」这五项教学语义。
-//   - 数据全部来自 mainQuest store + learning store + chapters 配置，
-//     不引入新接口；缺数据时也能优雅降级到默认文案。
-//   - 可折叠：默认展开，点击标题或按 H 收起；折叠后只剩一根细条，留出主画面视野。
-//   - 视觉与新的顶部 HUD 一致：半透明深色 + 金色细边框 + 圆角 14px。
+// 左侧「当前学习目标」面板：补充 HUD 之外的教学语义（当前知识点 / 任务 / 目标 / 奖励 / 提示）。
+// 数据全部来自 mainQuest / learning store + chapters 配置，不引入新接口；缺数据时降级到默认文案。
+// 默认折叠（只露标题 + 「下一步」CTA），点击标题或按 H 展开/收起。
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useMainQuestStore } from '@stores/mainQuest';
 import { useLearningStore } from '@stores/learning';
@@ -29,7 +22,7 @@ const world = useWorldStore();
 const toast = useToastStore();
 const dialog = useDialogStore();
 
-// B2：有对话/弹窗在前台时，安静下来——下一步只保留为静态提示，不再脉冲，留单一注意力线。
+// 有对话/弹窗在前台时，下一步降为静态提示（不再脉冲），保留单一注意力线。
 const dialogActive = computed<boolean>(() => dialog.visible);
 
 const rootRef = ref<HTMLElement | null>(null);
@@ -46,12 +39,12 @@ const hidden = ref(localStorage.getItem('pyt_lop_hidden') === '1');
 function hide(): void {
   playUiClick();
   hidden.value = true;
-  try { localStorage.setItem('pyt_lop_hidden', '1'); } catch { /* privacy */ }
+  try { localStorage.setItem('pyt_lop_hidden', '1'); } catch { /* 隐私模式忽略 */ }
 }
 function unhide(): void {
   playUiClick();
   hidden.value = false;
-  try { localStorage.removeItem('pyt_lop_hidden'); } catch { /* privacy */ }
+  try { localStorage.removeItem('pyt_lop_hidden'); } catch { /* 隐私模式忽略 */ }
 }
 
 const currentChapter = computed<number>(() => mainQuest.progress.currentChapter);
@@ -75,7 +68,7 @@ const currentKcCode = computed<string | null>(() => {
 });
 
 const currentKcName = computed<string>(() => {
-  // R-12：把 KC code 翻译成 chapters.ts 里的章节名，避免直接暴露 PY43-KC-NNN。
+  // 把 KC code 翻译成 chapters.ts 里的章节名，避免直接暴露 PY43-KC-NNN。
   // 缺数据时退化到默认文案。
   const code = currentKcCode.value;
   if (!code) return '变量与表达式';
@@ -91,9 +84,9 @@ const currentTaskHint = computed<string>(
   () => humanizeKcText(currentSubQuest.value?.hint) || '与 NPC 对话、参与练习，逐步积累 Python 基础。',
 );
 
-// 各章节默认教学要点：当子任务没有显式 objective 字段时（types/mainQuest.ts 暂未定义），
+// 各章节默认教学要点：子任务没有显式 objective 字段时（types/mainQuest.ts 暂未定义），
 // 用本地固定的章节级语义补足，避免硬塞空数组。
-// 章节默认要点已对齐 course_chapter.json 真实主题（与 chapters.ts 同步修正）。
+// 要点已对齐 course_chapter.json 真实主题。
 const CHAPTER_DEFAULT_GOALS: Readonly<Record<number, readonly string[]>> = Object.freeze({
   1: ['理解计算工具与计算思维', '认识算法与问题分解', '建立用程序解决问题的思路'],
   2: ['搭建 Python 环境并运行程序', '掌握变量 / 数据类型 / 运算符', '使用 input / print 与基础函数'],
@@ -110,7 +103,7 @@ const learningGoals = computed<readonly string[]>(() => {
 });
 
 const rewardText = computed<string>(() => {
-  // Phase 6 起移除货币/物品系统：只展示与学习直接相关的掌握度收获，
+  // 移除货币/物品系统：只展示与学习直接相关的掌握度收获，
   // 过滤掉历史遗留的 coin/gem/item 奖励，避免给学生「点了没反应」的虚拟货币暗示。
   const sub = currentSubQuest.value;
   if (sub?.rewards && sub.rewards.length > 0) {
@@ -124,20 +117,36 @@ const rewardText = computed<string>(() => {
 
 const currentMapKey = computed<string>(() => world.player?.mapKey ?? 'town_hub');
 const currentMapLabel = computed<string>(() => {
+  // 仅 town_hub 与支线 Bug 矿洞为实景地图，其余（含已弃用的农场 / 学院 / 港口）回落到小镇。
   switch (currentMapKey.value) {
-    case 'town_hub': return 'Pythontopia 小镇';
-    case 'farm_north': return '知识农场';
-    case 'mine_south': return 'Bug 矿洞';
-    case 'campus_east': return '函数学院';
-    case 'port_west': return '商船港口';
-    default: return currentMapKey.value;
+    case 'mine_south':
+      return 'Bug 矿洞';
+    case 'town_hub':
+    default:
+      return 'Pythontopia 小镇';
   }
 });
 
-// R-13：把当前子任务翻译成「下一步该干什么 + 去找哪个 NPC」。
+// 把当前子任务翻译成「下一步该干什么 + 去找哪个 NPC」。
 const guidance = computed<QuestGuidance | null>(() =>
   currentSubQuest.value ? resolveQuestGuidance(currentSubQuest.value) : null,
 );
+
+// 本章 5 个子任务已全部完成、但章末 Boss 未击败：把「下一步」切换为「去挑战 Boss」，
+// 否则指引会停在已完成的最后一个任务上空转（既不前进也无意义）。
+const bossPending = computed<boolean>(() => {
+  const view = currentChapterView.value;
+  if (!view) return false;
+  return view.subQuests.every((s) => s.status === 'completed') && !view.bossDefeated;
+});
+const bossName = computed<string>(() => currentChapterView.value?.boss.name ?? '章末 Boss');
+
+function goBoss(): void {
+  playUiClick();
+  // 复用主线面板里「带达标门槛校验」的 Boss 入口，不在此重复 gating，避免越级触发。
+  mainQuest.openPanel();
+  toast.show(`本章任务已完成，去主线面板挑战章末 Boss：${bossName.value}`, 'success');
+}
 
 /** 传送到目标地图（带落点）；复用 WorldCanvas 的 world-travel 监听重启场景。 */
 function travelToMap(mapKey: string, tile: { x: number; y: number } | null): void {
@@ -150,10 +159,10 @@ function travelToMap(mapKey: string, tile: { x: number; y: number } | null): voi
 }
 
 /**
- * 「前往」：自动指路到当前任务对应的 NPC / 设施。
+ * 「前往」：自动指路到当前任务对应的 NPC / 设施（NPC、地图与落点由 resolveQuestGuidance 解析）。
  *   - dialog：传送到任务地图（若不同）→ 打开该 NPC 对话（对话完成即交证据）；
- *   - workshop / training：直接打开工坊师傅 / 教务 Q 对话，NPC 对话内 route 进设施；
- *   - practice：传送到知识农场 → 打开田老对话；
+ *   - workshop / training / practice：均在 town_hub 直接打开 NPC 对话、由对话内 route 进设施——
+ *     workshop 找工坊师傅进工坊，training / practice（kc_mastery）找教务 Q 进训练场（多刷题提升掌握进度）；
  *   - building：传送到证据精确点位并标记到点完成。
  * 无当前子任务（待打 Boss）时打开主线面板做引导。
  */
@@ -259,9 +268,38 @@ onUnmounted(() => {
         ✕
       </button>
     </button>
-    <!-- 下一步：唯一注意力线，折叠态也常驻；有对话在前台时静音脉冲（B2） -->
+    <!-- 下一步：唯一注意力线，折叠态也常驻；有对话在前台时静音脉冲 -->
     <div
-      v-if="guidance"
+      v-if="bossPending"
+      class="lop-next"
+      data-testid="lop-next-step"
+    >
+      <div class="lop-next__head">
+        <span
+          class="lop-next__badge"
+          aria-hidden="true"
+        >⚔</span>
+        <span class="lop-next__label">下一步</span>
+      </div>
+      <p class="lop-next__text">
+        本章任务已全部完成，去挑战章末 Boss：{{ bossName }}
+      </p>
+      <button
+        type="button"
+        class="lop-next__cta"
+        data-testid="lop-go-boss"
+        :aria-label="`挑战章末 Boss：${bossName}`"
+        @click="goBoss"
+      >
+        <span
+          class="lop-next__cta-icon"
+          aria-hidden="true"
+        >⚔</span>
+        <span class="lop-next__cta-text">挑战章末 Boss</span>
+      </button>
+    </div>
+    <div
+      v-else-if="guidance"
       class="lop-next"
       :class="{ 'lop-next--quiet': dialogActive }"
       data-testid="lop-next-step"
@@ -481,7 +519,7 @@ onUnmounted(() => {
   border: 1px solid rgba(241, 196, 83, 0.45);
   border-radius: 2px;
 }
-/* B2：前台有对话/弹窗时，下一步降为静态提示（不脉冲），只留一条注意力线。 */
+/* 前台有对话/弹窗时，下一步降为静态提示（不脉冲），只留一条注意力线。 */
 .lop-next--quiet .lop-next__badge {
   animation: none;
 }

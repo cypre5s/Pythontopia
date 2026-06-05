@@ -1,30 +1,37 @@
-"""OrchestratorGraph – hand-rolled async orchestrator for the 学习总管.
+"""OrchestratorGraph – a real LangGraph ``StateGraph`` for the 学习总管.
 
-Mirrors ``graph/resource_graph.py``: a ``GraphTraceStep`` list is the state, each
-node is timed via ``_step``, and ``run_streaming`` emits SSE events. There is no
-real LangGraph ``StateGraph`` here (consistent with the rest of the service).
+R-14: this used to be a hand-rolled async pipeline. It is now a genuine
+``langgraph.graph.StateGraph`` (compiled once per instance). The graph drives all
+control flow via real nodes + **conditional edges**:
 
-Pipeline (non-streaming ``run`` and streaming ``run_streaming`` share
-``_run_core``):
+    START → understand
+      ├─ (ambiguous?)        → clarify → END
+      └─ else → build_plan → dispatch
+                                ├─ (recent failures & not negotiate?) → replan
+                                │                                          ↓
+                                └──────────────────────────────────→ extract_profile
+                                                                          ↓
+                                                                       compose → END
 
-    understand
-      ├─ ambiguous → compose_reply(clarifying) → needs_user_input
-      └─ else:
-           decompose (or, on a 'negotiate' intent, mutate the stored plan)
-           dispatch.<agent> for every step
-           replan: insert a DebugAgent 矿洞/补练 step before assess on failures
-           extract_profile
-           compose_reply
+Each node wraps the existing ``OrchestratorAgent`` methods and emits the SAME SSE
+events as before (``trace`` after each node, ``token`` while composing) through an
+``emit`` callback stored on the instance for the duration of one run, so the
+frontend ``useSseStream`` contract is byte-for-byte unchanged. ``trace`` accumulates
+via an additive channel reducer; multi-turn memory still lives in
+``orchestrator_session``.
 
-Trace node literals: understand, decompose, dispatch.<agent>, replan,
+Trace node literals (unchanged): understand, decompose | replan, dispatch.<agent>,
 extract_profile, compose_reply.
 """
 
 from __future__ import annotations
 
+import operator
 import time
 from collections.abc import Awaitable, Callable
-from typing import Any, TypeVar
+from typing import Annotated, Any, TypedDict
+
+from langgraph.graph import END, START, StateGraph
 
 from pythontopia_graph.agents.orchestrator_agent import OrchestratorAgent
 from pythontopia_graph.graph.orchestrator_session import (
@@ -49,31 +56,87 @@ from pythontopia_graph.schemas.resource import (
     SafetyResult,
 )
 
-T = TypeVar("T")
-
 Emit = Callable[[str, dict[str, Any]], Awaitable[None]]
+
+
+async def _noop_emit(_event: str, _data: dict[str, Any]) -> None:
+    """Default sink for the non-streaming ``run`` path (swallows events)."""
+    return None
+
+
+class OrchestratorState(TypedDict, total=False):
+    """Shared LangGraph state. ``trace`` / ``dispatch_results`` accumulate."""
+
+    # inputs (set once on the initial state)
+    req: OrchestratorRequest
+    allowed_set: set[str]
+    # produced by understand
+    intent: str
+    goal: str
+    ambiguous: bool
+    clarifying: str | None
+    needs_user_input: bool
+    # produced downstream
+    plan: list[PlanStep]
+    dispatch_results: Annotated[list[DispatchResult], operator.add]
+    signals: list[ProfileSignal]
+    reply_md: str
+    trace: Annotated[list[GraphTraceStep], operator.add]
 
 
 class OrchestratorGraph:
     def __init__(self, *, provider: LlmProvider) -> None:
         self._provider = provider
         self._agent = OrchestratorAgent(provider)
+        # Active emit sink for the current run (per-request instance; single run
+        # at a time, so storing it on self is safe and avoids threading it
+        # through every node/config).
+        self._emit_cb: Emit = _noop_emit
+        self._compiled = self._build_compiled()
 
+    # ── public API (unchanged signatures) ─────────────────────────────────
     async def run(self, req: OrchestratorRequest) -> OrchestratorResponse:
-        return await self._run_core(req, None)
+        return await self._invoke(req, _noop_emit)
 
     async def run_streaming(self, req: OrchestratorRequest, emit: Emit) -> None:
         try:
-            response = await self._run_core(req, emit)
+            response = await self._invoke(req, emit)
             await emit("result", response.model_dump(mode="json"))
         except Exception as exc:  # noqa: BLE001 – surface as an SSE error event
             await emit("error", {"code": "ORCHESTRATOR_FAILED", "message": str(exc)})
 
-    # ── shared pipeline ───────────────────────────────────────────────────
-    async def _run_core(
-        self, req: OrchestratorRequest, emit: Emit | None
-    ) -> OrchestratorResponse:
-        trace: list[GraphTraceStep] = []
+    # ── graph construction ────────────────────────────────────────────────
+    def _build_compiled(self) -> Any:
+        graph: StateGraph = StateGraph(OrchestratorState)
+        graph.add_node("understand", self._node_understand)
+        graph.add_node("build_plan", self._node_build_plan)
+        graph.add_node("dispatch", self._node_dispatch)
+        graph.add_node("replan", self._node_replan_failures)
+        graph.add_node("extract_profile", self._node_extract_profile)
+        graph.add_node("compose", self._node_compose)
+        graph.add_node("clarify", self._node_clarify)
+
+        graph.add_edge(START, "understand")
+        graph.add_conditional_edges(
+            "understand",
+            self._route_after_understand,
+            {"clarify": "clarify", "build_plan": "build_plan"},
+        )
+        graph.add_edge("build_plan", "dispatch")
+        graph.add_conditional_edges(
+            "dispatch",
+            self._route_after_dispatch,
+            {"replan": "replan", "extract_profile": "extract_profile"},
+        )
+        graph.add_edge("replan", "extract_profile")
+        graph.add_edge("extract_profile", "compose")
+        graph.add_edge("compose", END)
+        graph.add_edge("clarify", END)
+        return graph.compile()
+
+    # ── orchestration entrypoint ──────────────────────────────────────────
+    async def _invoke(self, req: OrchestratorRequest, emit: Emit) -> OrchestratorResponse:
+        self._emit_cb = emit
 
         # Server memory is the source of truth; client history is the fallback.
         server_history = await get_history(req.session_id)
@@ -81,162 +144,191 @@ class OrchestratorGraph:
         merged_req = req.model_copy(update={"history": merged_history})
         allowed_set = set(req.course_kc_index)
 
-        understanding = await self._timed(
-            trace, emit, "understand", self._agent.understand(merged_req)
-        )
-        intent = understanding["intent"]
-        goal = understanding["goal"]
+        initial: OrchestratorState = {
+            "req": merged_req,
+            "allowed_set": allowed_set,
+            "trace": [],
+            "dispatch_results": [],
+        }
+        final: dict[str, Any] = await self._compiled.ainvoke(initial)
 
-        if understanding["ambiguous"]:
-            return await self._handle_ambiguous(
-                req, merged_req, trace, emit, understanding["clarifying_question"]
-            )
-
-        plan = await self._build_plan(req, merged_req, goal, intent, trace, emit)
-
-        dispatch_results: list[DispatchResult] = []
-        for step in plan:
-            result = await self._timed(
-                trace, emit, f"dispatch.{step.agent}", self._dispatch_step(step)
-            )
-            dispatch_results.append(result)
-
-        if intent != "negotiate" and req.recent_failures:
-            await self._maybe_replan_failures(
-                req, plan, dispatch_results, allowed_set, trace, emit
-            )
-
-        self._activate_first(plan)
-
-        signals = await self._timed(
-            trace, emit, "extract_profile", self._agent.extract_profile(merged_req)
-        )
-
-        reply_md = await self._compose(trace, emit, merged_req, plan, None)
-
-        safety_passed, safety_reasons = OrchestratorAgent.scan_safety(reply_md)
-        grounding = self._grounding(plan, allowed_set)
-        done = bool(plan) and all(step.status in ("done", "skipped") for step in plan)
-
-        response = OrchestratorResponse(
-            reply_md=reply_md,
-            clarifying_question=None,
-            needs_user_input=False,
-            plan=plan,
-            dispatch_results=dispatch_results,
-            profile_updates=signals,
-            trace=trace,
-            done=done,
-            safety_result=SafetyResult(passed=safety_passed, reasons=safety_reasons),
-            grounding_result=grounding,
-        )
-        await self._persist(req, reply_md, plan=plan, signals=signals)
+        response = self._assemble(allowed_set, final)
+        await self._persist(req, response)
         return response
 
-    async def _handle_ambiguous(
-        self,
-        req: OrchestratorRequest,
-        merged_req: OrchestratorRequest,
-        trace: list[GraphTraceStep],
-        emit: Emit | None,
-        clarifying: str | None,
-    ) -> OrchestratorResponse:
-        reply_md = await self._compose(trace, emit, merged_req, [], clarifying)
-        safety_passed, safety_reasons = OrchestratorAgent.scan_safety(reply_md)
-        response = OrchestratorResponse(
-            reply_md=reply_md,
-            clarifying_question=clarifying,
-            needs_user_input=True,
-            plan=[],
-            dispatch_results=[],
-            profile_updates=[],
-            trace=trace,
-            done=False,
-            safety_result=SafetyResult(passed=safety_passed, reasons=safety_reasons),
-            grounding_result=GroundingResult(passed=True),
-        )
-        # Keep any previously stored plan untouched while we wait for clarification.
-        await self._persist(req, reply_md, plan=None, signals=[])
-        return response
+    # ── nodes ──────────────────────────────────────────────────────────────
+    async def _node_understand(self, state: OrchestratorState) -> dict[str, Any]:
+        req = state["req"]
+        started = time.monotonic()
+        understanding = await self._agent.understand(req)
+        step = self._ok_step("understand", started)
+        await self._emit_cb("trace", step.model_dump(mode="json"))
+        return {
+            "intent": understanding["intent"],
+            "goal": understanding["goal"],
+            "ambiguous": understanding["ambiguous"],
+            "clarifying": understanding["clarifying_question"],
+            "trace": [step],
+        }
 
-    async def _build_plan(
-        self,
-        req: OrchestratorRequest,
-        merged_req: OrchestratorRequest,
-        goal: str,
-        intent: str,
-        trace: list[GraphTraceStep],
-        emit: Emit | None,
-    ) -> list[PlanStep]:
-        if intent == "negotiate":
+    async def _node_build_plan(self, state: OrchestratorState) -> dict[str, Any]:
+        req = state["req"]
+        # 'negotiate' mutates the stored plan in place instead of rebuilding it.
+        if state["intent"] == "negotiate":
             stored_plan = await get_plan(req.session_id)
             if stored_plan:
-                plan = self._negotiate(merged_req.user_message, stored_plan)
-                self._record_sync(
-                    trace,
-                    "replan",
-                    True,
-                    note=f"negotiate:{self._negotiation_kind(merged_req.user_message)}",
-                )
-                await self._emit_trace(trace, emit)
-                return plan
-        return await self._timed(
-            trace, emit, "decompose", self._agent.decompose(merged_req, goal)
-        )
+                plan = self._negotiate(req.user_message, stored_plan)
+                note = f"negotiate:{self._negotiation_kind(req.user_message)}"
+                step = self._sync_step("replan", note=note)
+                await self._emit_cb("trace", step.model_dump(mode="json"))
+                return {"plan": plan, "trace": [step]}
+        started = time.monotonic()
+        plan = await self._agent.decompose(req, state["goal"])
+        step = self._ok_step("decompose", started)
+        await self._emit_cb("trace", step.model_dump(mode="json"))
+        return {"plan": plan, "trace": [step]}
 
-    async def _maybe_replan_failures(
-        self,
-        req: OrchestratorRequest,
-        plan: list[PlanStep],
-        dispatch_results: list[DispatchResult],
-        allowed_set: set[str],
-        trace: list[GraphTraceStep],
-        emit: Emit | None,
-    ) -> None:
-        failed = self._ground_failures(req, allowed_set)
-        if not failed or any(step.agent == "DebugAgent" for step in plan):
-            return
+    async def _node_dispatch(self, state: OrchestratorState) -> dict[str, Any]:
+        results: list[DispatchResult] = []
+        traces: list[GraphTraceStep] = []
+        for step in state["plan"]:
+            started = time.monotonic()
+            result = await self._dispatch_step(step)
+            ts = self._ok_step(f"dispatch.{step.agent}", started)
+            await self._emit_cb("trace", ts.model_dump(mode="json"))
+            results.append(result)
+            traces.append(ts)
+        return {"dispatch_results": results, "trace": traces}
+
+    async def _node_replan_failures(self, state: OrchestratorState) -> dict[str, Any]:
+        req = state["req"]
+        plan = list(state["plan"])
+        failed = self._ground_failures(req, state["allowed_set"])
         debug_step = self._build_debug_step(failed)
         self._insert_before_assess(plan, debug_step)
-        self._record_sync(
-            trace, "replan", True, note=f"recent_failures:{','.join(failed[:3])}"
+        replan_step = self._sync_step(
+            "replan", note=f"recent_failures:{','.join(failed[:3])}"
         )
-        await self._emit_trace(trace, emit)
-        result = await self._timed(
-            trace, emit, "dispatch.DebugAgent", self._dispatch_step(debug_step)
-        )
-        dispatch_results.append(result)
+        await self._emit_cb("trace", replan_step.model_dump(mode="json"))
+        started = time.monotonic()
+        result = await self._dispatch_step(debug_step)
+        dispatch_step = self._ok_step("dispatch.DebugAgent", started)
+        await self._emit_cb("trace", dispatch_step.model_dump(mode="json"))
+        return {
+            "plan": plan,
+            "dispatch_results": [result],
+            "trace": [replan_step, dispatch_step],
+        }
 
-    # ── reply composition (streams tokens when emit is set) ───────────────
-    async def _compose(
-        self,
-        trace: list[GraphTraceStep],
-        emit: Emit | None,
-        req: OrchestratorRequest,
-        plan: list[PlanStep],
-        clarifying: str | None,
+    async def _node_extract_profile(self, state: OrchestratorState) -> dict[str, Any]:
+        req = state["req"]
+        plan = list(state["plan"])
+        self._activate_first(plan)
+        started = time.monotonic()
+        signals = await self._agent.extract_profile(req)
+        step = self._ok_step("extract_profile", started)
+        await self._emit_cb("trace", step.model_dump(mode="json"))
+        return {"plan": plan, "signals": signals, "trace": [step]}
+
+    async def _node_compose(self, state: OrchestratorState) -> dict[str, Any]:
+        reply_md = await self._stream_reply(state["req"], state["plan"], None)
+        return {"reply_md": reply_md}
+
+    async def _node_clarify(self, state: OrchestratorState) -> dict[str, Any]:
+        reply_md = await self._stream_reply(state["req"], [], state.get("clarifying"))
+        return {"reply_md": reply_md, "needs_user_input": True}
+
+    # ── conditional routers ───────────────────────────────────────────────
+    @staticmethod
+    def _route_after_understand(state: OrchestratorState) -> str:
+        return "clarify" if state.get("ambiguous") else "build_plan"
+
+    def _route_after_dispatch(self, state: OrchestratorState) -> str:
+        if state["intent"] == "negotiate":
+            return "extract_profile"
+        failed = self._ground_failures(state["req"], state["allowed_set"])
+        if failed and not any(step.agent == "DebugAgent" for step in state["plan"]):
+            return "replan"
+        return "extract_profile"
+
+    # ── reply composition (streams tokens through the emit sink) ───────────
+    async def _stream_reply(
+        self, req: OrchestratorRequest, plan: list[PlanStep], clarifying: str | None
     ) -> str:
         started = time.monotonic()
         parts: list[str] = []
         try:
             async for token in self._agent.reply_stream(req, plan, clarifying):
                 parts.append(token)
-                if emit is not None:
-                    await emit("token", {"delta": token})
-        except Exception as exc:  # noqa: BLE001 – record then re-raise to error event
-            elapsed_ms = int((time.monotonic() - started) * 1000)
-            trace.append(
-                GraphTraceStep(
-                    node="compose_reply", elapsed_ms=elapsed_ms, status="fail", note=str(exc)
-                )
+                await self._emit_cb("token", {"delta": token})
+        except Exception as exc:  # noqa: BLE001 – record fail trace then re-raise
+            fail = GraphTraceStep(
+                node="compose_reply",
+                elapsed_ms=int((time.monotonic() - started) * 1000),
+                status="fail",
+                note=str(exc),
             )
+            await self._emit_cb("trace", fail.model_dump(mode="json"))
             raise
-        elapsed_ms = int((time.monotonic() - started) * 1000)
-        trace.append(GraphTraceStep(node="compose_reply", elapsed_ms=elapsed_ms, status="ok"))
-        await self._emit_trace(trace, emit)
+        step = self._ok_step("compose_reply", started)
+        await self._emit_cb("trace", step.model_dump(mode="json"))
         return "".join(parts)
 
-    # ── dispatch / replan helpers ─────────────────────────────────────────
+    # ── response assembly ─────────────────────────────────────────────────
+    def _assemble(
+        self, allowed_set: set[str], final: dict[str, Any]
+    ) -> OrchestratorResponse:
+        reply_md = final.get("reply_md", "")
+        trace = final.get("trace", [])
+        safety_passed, safety_reasons = OrchestratorAgent.scan_safety(reply_md)
+        safety = SafetyResult(passed=safety_passed, reasons=safety_reasons)
+
+        if final.get("needs_user_input"):
+            return OrchestratorResponse(
+                reply_md=reply_md,
+                clarifying_question=final.get("clarifying"),
+                needs_user_input=True,
+                plan=[],
+                dispatch_results=[],
+                profile_updates=[],
+                trace=trace,
+                done=False,
+                safety_result=safety,
+                grounding_result=GroundingResult(passed=True),
+            )
+
+        plan = final.get("plan", [])
+        done = bool(plan) and all(step.status in ("done", "skipped") for step in plan)
+        return OrchestratorResponse(
+            reply_md=reply_md,
+            clarifying_question=None,
+            needs_user_input=False,
+            plan=plan,
+            dispatch_results=final.get("dispatch_results", []),
+            profile_updates=final.get("signals", []),
+            trace=trace,
+            done=done,
+            safety_result=safety,
+            grounding_result=self._grounding(plan, allowed_set),
+        )
+
+    async def _persist(
+        self, req: OrchestratorRequest, response: OrchestratorResponse
+    ) -> None:
+        await append_turns(
+            req.session_id,
+            [
+                OrchestratorTurn(role="user", content=req.user_message),
+                OrchestratorTurn(role="assistant", content=response.reply_md),
+            ],
+        )
+        # Ambiguous turns keep any previously stored plan untouched.
+        if not response.needs_user_input:
+            await set_plan(req.session_id, response.plan)
+        if response.profile_updates:
+            await merge_profile_signals(req.session_id, response.profile_updates)
+
+    # ── dispatch / replan helpers (unchanged) ─────────────────────────────
     async def _dispatch_step(self, step: PlanStep) -> DispatchResult:
         panel = step.panel or "-"
         if step.agent == "DebugAgent":
@@ -346,68 +438,12 @@ class OrchestratorGraph:
             )
         return GroundingResult(passed=True)
 
-    # ── session persistence ───────────────────────────────────────────────
-    async def _persist(
-        self,
-        req: OrchestratorRequest,
-        reply_md: str,
-        *,
-        plan: list[PlanStep] | None,
-        signals: list[ProfileSignal],
-    ) -> None:
-        await append_turns(
-            req.session_id,
-            [
-                OrchestratorTurn(role="user", content=req.user_message),
-                OrchestratorTurn(role="assistant", content=reply_md),
-            ],
-        )
-        if plan is not None:
-            await set_plan(req.session_id, plan)
-        if signals:
-            await merge_profile_signals(req.session_id, signals)
-
-    # ── trace plumbing (mirrors resource_graph) ───────────────────────────
-    async def _timed(
-        self,
-        trace: list[GraphTraceStep],
-        emit: Emit | None,
-        name: str,
-        awaitable: Awaitable[T],
-    ) -> T:
-        result = await self._step(trace, name, awaitable)
-        await self._emit_trace(trace, emit)
-        return result
-
-    async def _step(
-        self, trace: list[GraphTraceStep], name: str, awaitable: Awaitable[T]
-    ) -> T:
-        started = time.monotonic()
-        try:
-            result = await awaitable
-        except Exception as exc:  # noqa: BLE001 – record fail then re-raise
-            elapsed_ms = int((time.monotonic() - started) * 1000)
-            trace.append(
-                GraphTraceStep(node=name, elapsed_ms=elapsed_ms, status="fail", note=str(exc))
-            )
-            raise
+    # ── trace step builders ───────────────────────────────────────────────
+    @staticmethod
+    def _ok_step(name: str, started: float) -> GraphTraceStep:
         elapsed_ms = int((time.monotonic() - started) * 1000)
-        trace.append(GraphTraceStep(node=name, elapsed_ms=elapsed_ms, status="ok"))
-        return result
-
-    async def _emit_trace(self, trace: list[GraphTraceStep], emit: Emit | None) -> None:
-        if emit is not None:
-            await emit("trace", trace[-1].model_dump(mode="json"))
+        return GraphTraceStep(node=name, elapsed_ms=elapsed_ms, status="ok")
 
     @staticmethod
-    def _record_sync(
-        trace: list[GraphTraceStep], name: str, passed: bool, note: str | None = None
-    ) -> None:
-        trace.append(
-            GraphTraceStep(
-                node=name,
-                elapsed_ms=0,
-                status="ok" if passed else "retry",
-                note=note,
-            )
-        )
+    def _sync_step(name: str, note: str | None = None) -> GraphTraceStep:
+        return GraphTraceStep(node=name, elapsed_ms=0, status="ok", note=note)

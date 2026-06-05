@@ -1,9 +1,9 @@
-// ②情绪化小镇隔离原因：氛围叠加层用 Phaser 3 的 GameObjects.Rectangle 直接渲染，
+// 隔离原因：氛围叠加层用 Phaser 3 的 GameObjects.Rectangle 直接渲染，
 // 业务层（WorldScene、mood store）仍只通过 applyMood + MoodHandle.destroy 两个结构化
 // 入口交互。
 //
 // 设计取舍：
-// - 不使用第三次 camera.setTint —— weather.ts(~128) 与 daynight.ts(~29) 已各调一次，
+// - 不使用第三次 camera.setTint —— weather.ts 与 daynight.ts 已各调一次，
 //   再加会互相覆盖打架。改用全视口 scrollFactor=0 矩形叠加，depth=150 落在
 //   weather(80) 与 hint 气泡(200) 之间，低 alpha、背景级、不打扰操作。
 // - 矩形以视口中心为锚（origin 0.5 + scrollFactor 0），尺寸按视口最大边 ×3 过扫，
@@ -79,7 +79,7 @@ function prefersReducedMotion(): boolean {
 }
 
 function particlesAllowed(): boolean {
-  // adapter 内直接读设置（precedent：WorldScene 直接读 useMainQuestStore）。
+  // adapter 内直接读设置（前例：WorldScene 直接读 useMainQuestStore）。
   // store 不可用（极端测试）时默认放行动效，不阻断渲染。
   try {
     return useGameSettingsStore().display.showParticles;

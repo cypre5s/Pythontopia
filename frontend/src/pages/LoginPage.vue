@@ -1,8 +1,7 @@
 <script setup lang="ts">
-// W4-BGM：登录按钮点击是首次可靠的 user gesture，借此解锁 audio context，
-// 让玩家进入 /world 时 WorldScene 的 BGM 不再被浏览器 autoplay 策略静音。
-// W4-FINAL-POLISH：onMounted 主动 fetch /healthz，提前告知玩家后端是否就绪，
-// 避免登录卡 10 秒才看到"无法连接服务器"。
+// 登录按钮点击是首次可靠的 user gesture，借此解锁 audio context，
+// 让玩家进入 /world 时 WorldScene 的 BGM 不被浏览器 autoplay 策略静音。
+// onMounted 主动 fetch /healthz 预检后端是否就绪，避免登录卡 10 秒才报「无法连接服务器」。
 import { onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import LoginForm from '@/components/auth/LoginForm.vue';

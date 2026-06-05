@@ -1,7 +1,7 @@
-// R-13 迭代 18：前端静态快速旅行路由表。
+// 前端静态快速旅行路由表。
 //
-// 与后端 V119 `fast_travel_route` seed（11 条）对齐，但 FastTravelService 还没暴露
-// Controller，前端先用本地静态映射。真后端接入后改为 useFastTravelStore.fetch。
+// 后端有 FastTravelService 但尚未暴露 Controller，前端先用本地静态映射；
+// 真后端接入后可改为 useFastTravelStore.fetch。
 
 export interface FastTravelRoute {
   /** 路由 key，用作 i18n / 测试稳定 ID */
@@ -19,7 +19,7 @@ export interface FastTravelRoute {
   costCoins: number;
 }
 
-// R-14 方案A：世界收缩为单一中央小镇 hub，所有学习入口与 NPC 都在 town_hub，
+// 世界收缩为单一中央小镇 hub，所有学习入口与 NPC 都在 town_hub，
 // 不再提供前往外围图的快速旅行（外围图已从主线与导航中弃用）。
 export const FAST_TRAVEL_ROUTES: readonly FastTravelRoute[] = [
   { key: 'hub', toMap: 'town_hub', tileX: 25, tileY: 20, label: '小镇中心', description: '回到喷泉广场', costCoins: 0 },

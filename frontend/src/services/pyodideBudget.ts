@@ -1,21 +1,19 @@
 /**
- * Pyodide 预算与防滥用骨架（W4 第一阶段，纯逻辑层）。
+ * Pyodide 预算与防滥用（纯逻辑层）。
  *
- * 参考设计：docs/gameplay/r12-deepen/08-pyodide-budget.md §2 资源预算 / §3 黑名单 / §4 静态扫描。
- * 仅实现"闸门"判定：是否允许执行、命中哪些规则、累计执行次数；不负责 Worker / Pyodide 加载，
- * 那部分由后续 `workerHost.ts` / `audit.ts` 等拆分文件接入（详见设计文档 §12.1）。
+ * 仅实现"闸门"判定：是否允许执行、命中哪些规则、累计执行次数；不负责 Worker / Pyodide 加载。
  *
- * 单一真相由后端 `pyodide_execution` 表保管（V116 迁移），本前端模块只做"本地节流 + 教育提示"。
+ * 单一真相由后端 `pyodide_execution` 表保管，本前端模块只做"本地节流 + 教育提示"。
  */
 
 export interface PyodideBudgetConfig {
-  /** 单次执行最长 CPU 时长，超时由 Worker.terminate 兜底（设计 §2 5s）。 */
+  /** 单次执行最长 CPU 时长，超时由 Worker.terminate 兜底。 */
   cpuTimeoutMs: number;
-  /** 单次执行允许的 Pyodide heap 上限，仅作记录与 OOM 提示使用（设计 §2 64MB）。 */
+  /** 单次执行允许的 Pyodide heap 上限，仅作记录与 OOM 提示使用。 */
   memoryLimitMb: number;
-  /** 滚动 60s 窗口内允许的执行次数（设计 §2 20 次/分钟）。 */
+  /** 滚动 60s 窗口内允许的执行次数。 */
   perMinuteLimit: number;
-  /** UTC+8 自然日允许的执行次数（设计 §2 200 次/日）。 */
+  /** UTC+8 自然日允许的执行次数。 */
   perDayLimit: number;
 }
 
@@ -37,8 +35,8 @@ export interface CanExecuteResult {
 
 /**
  * 静态扫描结果：
- * - `blocked` 命中即拒绝执行，前端在编辑器顶部弹教育模态框。
- * - `warnings` 仍允许执行，但在结果区上方加黄色提示横幅（设计 §4.1 Block / Warn 两档）。
+ * - `blocked` 命中即拒绝执行，前端在编辑器顶部弹教育模态框；
+ * - `warnings` 仍允许执行，但在结果区上方加黄色提示横幅。
  */
 export interface StaticScanResult {
   warnings: string[];
@@ -46,7 +44,7 @@ export interface StaticScanResult {
 }
 
 /**
- * 静态扫描禁用模块的顶级名。设计 §3.2 完整列表更长，骨架仅覆盖任务要求的 5 个高危项；
+ * 静态扫描禁用模块的顶级名；当前覆盖 5 个高危项，
  * 后续补齐 `os` / `multiprocessing` / `asyncio` / `ctypes` 时在此一处追加即可。
  */
 const BLOCKED_TOP_MODULES = new Set<string>([
@@ -68,7 +66,7 @@ interface ExecutionRecord {
 
 /**
  * 把毫秒时间戳折算到 UTC+8 自然日的 `YYYY-MM-DD`。
- * 设计 §2 明确"UTC+8 自然日"，避免按本地时区计数导致海外学生当地凌晨被异常清零。
+ * 固定按 UTC+8 自然日计数，避免按本地时区导致海外学生当地凌晨被异常清零。
  */
 function utcPlus8DayKey(timestampMs: number): string {
   const shifted = new Date(timestampMs + UTC_PLUS_8_OFFSET_MS);
@@ -86,7 +84,7 @@ export class PyodideBudgetGuard {
   private readonly minuteCounter = new Map<number, number>();
   /** key: UTC+8 `YYYY-MM-DD`，value: 当日已执行次数。 */
   private readonly dayCounter = new Map<string, number>();
-  /** 仅供调试与教师 dashboard 后续聚合复用的轻量历史，骨架阶段不持久化。 */
+  /** 仅供调试与教师 dashboard 聚合复用的轻量历史，不持久化。 */
   private readonly history: ExecutionRecord[] = [];
 
   constructor(config?: Partial<PyodideBudgetConfig>) {
@@ -158,7 +156,7 @@ export class PyodideBudgetGuard {
     this.minuteCounter.clear();
   }
 
-  /** 仅供测试与 dashboard 调试用，骨架阶段不在生产代码读取。 */
+  /** 仅供测试与 dashboard 调试用，生产代码不读取。 */
   snapshot(): {
     minuteBuckets: number;
     dayBuckets: number;
@@ -193,8 +191,7 @@ interface WhileTrueOccurrence {
 
 /**
  * 简易抽取 `while True:` 循环体：以头部缩进为基线，连续吃所有缩进更深或空白的行。
- * 不是完整 AST 解析（设计 §4.2 列了 `ast.parse` 完整方案），骨架阶段先用启发式覆盖
- * `while True: pass`、`while True:\n  ...` 两种主流写法即可。
+ * 不做完整 AST 解析，用启发式覆盖 `while True: pass`、`while True:\n  ...` 两种主流写法。
  */
 function findWhileTrueLoops(code: string): WhileTrueOccurrence[] {
   const occurrences: WhileTrueOccurrence[] = [];

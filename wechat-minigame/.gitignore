@@ -1,0 +1,8 @@
+node_modules/
+
+# 编译产物（可选忽略；若希望随仓库提交以便直接在微信开发者工具打开，可注释掉下一行）
+js/
+
+# 微信开发者工具本地缓存
+.DS_Store
+project.private.config.json

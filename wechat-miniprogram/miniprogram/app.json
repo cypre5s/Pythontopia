@@ -1,0 +1,45 @@
+{
+  "pages": [
+    "pages/login/login",
+    "pages/index/index",
+    "pages/course/course",
+    "pages/practice/list",
+    "pages/practice/detail",
+    "pages/profile/profile",
+    "pages/classroom/classroom"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#6b4f2a",
+    "navigationBarTitleText": "Pythontopia 学习伙伴",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#f3e4c7",
+    "backgroundTextStyle": "dark",
+    "enablePullDownRefresh": false
+  },
+  "tabBar": {
+    "color": "#9c7a4d",
+    "selectedColor": "#6b4f2a",
+    "backgroundColor": "#efdcb8",
+    "borderStyle": "white",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "学习"
+      },
+      {
+        "pagePath": "pages/course/course",
+        "text": "课程"
+      },
+      {
+        "pagePath": "pages/profile/profile",
+        "text": "画像"
+      },
+      {
+        "pagePath": "pages/classroom/classroom",
+        "text": "班级"
+      }
+    ]
+  },
+  "sitemapLocation": "sitemap.json",
+  "style": "v2"
+}

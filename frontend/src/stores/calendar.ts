@@ -74,7 +74,7 @@ export const useCalendarStore = defineStore('calendar', {
       this.events = events;
     },
     /**
-     * R-13：增量追加新事件（sleep 推进后若后端只返回 newEvents 没返回 calendar 时使用）。
+     * 增量追加新事件（sleep 推进后若后端只返回 newEvents 没返回 calendar 时使用）。
      * 按 id 去重，避免同一事件被重复入队。
      */
     pushEvents(events: WorldEventDto[]): void {

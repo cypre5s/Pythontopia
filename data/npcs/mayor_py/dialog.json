@@ -16,18 +16,18 @@
     },
     "introduce_town": {
       "id": "introduce_town",
-      "text": "小镇分为五个区域：中央 hub、北农场、南矿洞、东校园、西港口。每个区域都有不同的学习活动：田老在农场种知识、矿头 Bug 在矿洞带你打错误、馆长 Doc 在校园守着 561 页课件。",
+      "text": "整座小镇就是你的学习营地，抬脚就能到各处：百晓工坊能为你生成专属学习资源、还能随时问 AI；训练场让你做题、当场判题；图书馆收着 561 页课件原文随你翻阅；复盘大厅帮你回顾巩固；每章末尾还有一场 BOSS 等你挑战。不用东奔西跑，全在这一座镇里。",
       "conditions": [],
       "choices": [
-        { "label": "好的，我去探索一下", "nextNodeId": null, "effects": [{ "type": "friendship", "delta": 1 }] }
+        { "label": "好的，我去逛逛", "nextNodeId": null, "effects": [{ "type": "friendship", "delta": 1 }] }
       ]
     },
     "where_to_start": {
       "id": "where_to_start",
-      "text": "{{profileAdaptive:你的画像显示偏好实践，建议先去北农场让田老带你解锁第一个 KC。 | 你刚来不久，建议先去校园找馆长 Doc 了解课程结构，再回农场动手做。}}{{styleAdaptive:看课件时可以先看图解和流程图，从整体结构入手。|看课件时可以顺着代码一行行读，先理清每步的逻辑。|看课件时可以边看边在练习区跑一个最小例子，动手验证。}}",
+      "text": "{{profileAdaptive:你的画像显示偏好实践，那就直接在镇上开主线第一章，边做边学最适合你。 | 你刚来不久，建议先去图书馆把课程脉络翻清楚，再跟着主线第一章一步步走。}}{{styleAdaptive:看课件时可以先看图解和流程图，从整体结构入手。|看课件时可以顺着代码一行行读，先理清每步的逻辑。|看课件时可以边看边去训练场跑一个最小例子，动手验证。}}",
       "conditions": [],
       "choices": [
-        { "label": "我懂了", "nextNodeId": null, "effects": [{ "type": "friendship", "delta": 2 }, { "type": "quest_recommend", "questKey": "first_kc_unlock" }] }
+        { "label": "我懂了", "nextNodeId": null, "effects": [{ "type": "friendship", "delta": 2 }, { "type": "quest_recommend", "questKey": "1-1" }] }
       ]
     },
     "chat_progress": {
@@ -40,10 +40,10 @@
     },
     "weekly_recap": {
       "id": "weekly_recap",
-      "text": "上周你解锁了 {{stats.kcUnlockedLastWeek}} 个知识点，做了 {{stats.exercisesLastWeek}} 道练习。复盘师 Sage 在校园等你做本周复盘，去吗？",
+      "text": "上周你解锁了 {{stats.kcUnlockedLastWeek}} 个知识点，做了 {{stats.exercisesLastWeek}} 道练习。复盘师 Sage 在小镇的复盘大厅等你做本周复盘，去吗？",
       "conditions": [{ "type": "first_time_this_week", "key": "weekly_recap" }],
       "choices": [
-        { "label": "现在就去找 Sage", "nextNodeId": null, "effects": [{ "type": "quest_recommend", "questKey": "weekly_review" }, { "type": "friendship", "delta": 1 }] },
+        { "label": "现在就去复盘大厅", "nextNodeId": null, "effects": [{ "type": "open_panel", "route": "/review-hall" }, { "type": "friendship", "delta": 1 }] },
         { "label": "晚点再去", "nextNodeId": null }
       ]
     },

@@ -1,8 +1,8 @@
 <script setup lang="ts">
-// W4-LOGIN-UX：首次进入 /world 时显示操作引导，关闭后写入 localStorage 标记，
-// 避免后续重复打扰。仅在客户端 mounted 后做 storage 检查，SSR 不会触发。
-// W4-BGM：dismiss 是首次进入 /world 后保证发生的 user gesture，必须调用
-// unlockAudio() 让浏览器 autoplay 策略放行，补放 WorldScene 已排队的 BGM。
+// 首次进入 /world 时显示操作引导，关闭后写入 localStorage 标记避免重复打扰；
+// 仅在客户端 mounted 后做 storage 检查，SSR 不会触发。
+// dismiss 是首次进入 /world 后保证发生的 user gesture，必须调用 unlockAudio()
+// 让浏览器 autoplay 策略放行，补放 WorldScene 已排队的 BGM。
 import { onMounted, ref } from 'vue';
 import { unlockAudio } from '@/composables/useAudio';
 

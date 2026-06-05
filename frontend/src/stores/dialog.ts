@@ -7,9 +7,9 @@ import type { DialogContextDto } from '@/api/dto/DialogContextDto';
 /**
  * NPC 对话树 / 节点 / 选项 / 效果类型定义。
  *
- * 字段对齐 W2-NPC 子代理产出的 data/npcs/<key>/dialog.json 结构，
- * 字段名严格保留 npcKey / rootNodeId / nodes / choices / effects / conditions，
- * 任何字段调整都需要双方同步。
+ * 字段对齐 data/npcs/<key>/dialog.json 结构，严格保留
+ * npcKey / rootNodeId / nodes / choices / effects / conditions 字段名，
+ * 调整字段需同步更新数据文件。
  */
 export type DialogEffectType =
   | 'friendship'
@@ -116,7 +116,7 @@ interface DialogState {
   currentNodeId: string | null;
   /** 已访问节点 ids（用于条件判定 / 防回退） */
   history: string[];
-  /** 当前 NPC 的好感度（内存态；后续 R-Live-Friendship 接入持久化时迁移） */
+  /** 当前 NPC 的好感度（内存态） */
   friendship: number;
   /** 加载错误信息（fetch meta/dialog 失败时填充） */
   loadError: string | null;
@@ -166,15 +166,11 @@ const PANEL_ROUTE_MAP: Readonly<Record<string, string>> = Object.freeze({
 });
 
 /**
- * 内存级好感度缓存：dialog store 关闭后仍保留同会话内 NPC 的好感度，
- * 等 R-Live-Friendship 接入后端 /api/npc/friendship 时统一替换为 store 同步。
+ * 内存级好感度缓存：dialog store 关闭后仍保留同会话内 NPC 的好感度。
  */
 const friendshipMemory = new Map<string, number>();
 
-/**
- * 持久化到 localStorage — 让跨刷新也保留。
- * 后端 /api/npc/friendship 接入后可废弃此本地层。
- */
+/** 持久化到 localStorage，让跨刷新也保留好感度。 */
 const FRIENDSHIP_KEY = 'pyt_friendship_v1';
 
 function loadFriendshipFromStorage(): void {
@@ -186,7 +182,7 @@ function loadFriendshipFromStorage(): void {
     for (const [k, v] of Object.entries(obj)) {
       if (typeof v === 'number') friendshipMemory.set(k, v);
     }
-  } catch { /* private mode / corrupt */ }
+  } catch { /* 隐私模式 / 数据损坏 */ }
 }
 
 function persistFriendship(): void {
@@ -195,7 +191,7 @@ function persistFriendship(): void {
     const obj: Record<string, number> = {};
     for (const [k, v] of friendshipMemory) obj[k] = v;
     window.localStorage.setItem(FRIENDSHIP_KEY, JSON.stringify(obj));
-  } catch { /* private mode */ }
+  } catch { /* 隐私模式 */ }
 }
 
 loadFriendshipFromStorage();
@@ -224,12 +220,19 @@ function emitDialogChoice(event: DialogChoiceEvent): void {
   }
 }
 
-async function fetchJson<T>(url: string): Promise<T> {
-  const res = await fetch(url, { headers: { Accept: 'application/json' } });
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status} ${url}`);
+async function fetchJson<T>(url: string, timeoutMs = 8000): Promise<T> {
+  // 加超时：静态 meta/dialog 理应秒回；万一卡住（代理/网络抖动）也不能让对话永远「加载中…」。
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { headers: { Accept: 'application/json' }, signal: controller.signal });
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status} ${url}`);
+    }
+    return (await res.json()) as T;
+  } finally {
+    clearTimeout(timer);
   }
-  return (await res.json()) as T;
 }
 
 export const useDialogStore = defineStore('dialog', {
@@ -301,22 +304,15 @@ export const useDialogStore = defineStore('dialog', {
       this.branchChoices = [];
       this.isTypingDone = false;
       try {
-        // R-12 W2-NPC：除 meta + dialog 静态数据之外，并行拉 context 让模板渲染拿到真实 stats。
-        // context 拉取失败不影响对话本体，渲染器会自动用空 stats 兜底成 '—'。
-        const [meta, tree, context] = await Promise.all([
+        // 只 await meta + dialog（本地静态、秒回）就立即显示对话，避免被 context（走后端
+        // axios，最长 10s 超时）拖成长时间「加载中…」卡住。context 改为后台异步补。
+        const [meta, tree] = await Promise.all([
           fetchJson<NpcMeta>(`${baseUrl}/${npcKey}/meta.json`),
           fetchJson<NpcDialogTree>(`${baseUrl}/${npcKey}/dialog.json`),
-          fetchDialogContext(npcKey).catch((err) => {
-            if (typeof console !== 'undefined' && typeof console.warn === 'function') {
-              console.warn('[dialog] context fetch failed; using fallback', err);
-            }
-            return null;
-          }),
         ]);
         this.npcName = meta.name || npcKey;
         this.portrait = meta.portrait ?? null;
         this.tree = tree;
-        this.context = context;
 
         const gated = this.findBestGatedNode(tree);
         const startNode = gated ?? tree.rootNodeId;
@@ -328,11 +324,28 @@ export const useDialogStore = defineStore('dialog', {
       } finally {
         this.loading = false;
       }
+
+      // 对话本体已显示，后台异步补 context（真实 stats 用于模板渲染）。拉取失败/超时
+      // 不影响对话，渲染器自动用空 stats 兜底成 '—'。只在仍是本次同一 NPC 对话时写入，
+      // 防止玩家快速切换 NPC 时旧 context 覆盖新对话。
+      if (this.tree && !this.loadError) {
+        void fetchDialogContext(npcKey)
+          .then((ctx) => {
+            if (this.visible && this.npcKey === npcKey) {
+              this.context = ctx;
+            }
+          })
+          .catch((err) => {
+            if (typeof console !== 'undefined' && typeof console.warn === 'function') {
+              console.warn('[dialog] context fetch failed; using fallback', err);
+            }
+          });
+      }
     },
 
     /**
      * 选择当前节点的某个选项：
-     *   - 先按顺序应用 effects（目前只 friendship 真正写状态，其他 effect 暂以事件占位）；
+     *   - 先按顺序应用 effects（friendship 写好感、quest_recommend 发主线任务、route/open_panel 触发导航）；
      *   - nextNodeId 为 null 时关闭对话；
      *   - 否则切换到下一节点并写入 history。
      */
@@ -463,7 +476,7 @@ export const useDialogStore = defineStore('dialog', {
 
     /**
      * 评估条件列表是否全部满足（AND 逻辑）。
-     * 当前只实现 friendship_min；其余类型在 R-Live 接入后端后补全。
+     * 当前实现 friendship_min 与 has_failed_submission；其余类型暂按满足处理。
      */
     evaluateConditions(conditions: DialogCondition[]): boolean {
       if (conditions.length === 0) return true;

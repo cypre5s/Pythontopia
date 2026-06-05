@@ -1,12 +1,8 @@
 <script setup lang="ts">
-// W4-GUIDE：屏幕底部常驻操作提示条，配合 NPC 头顶 "!" 气泡，让玩家进入
-// town_hub 时一眼看到核心操作（移动 / 交互 / 关闭 / 任务）。
-//
+// 屏幕底部常驻操作提示条，让玩家进入 town_hub 时一眼看到核心操作（移动 / 交互 / 关闭 / 任务）。
 // 设计要点：
-//   1. v-if 只在 /world 路由显示，避免漏到其他页面遮挡内容；
-//   2. 半透明黑底圆角条 + PythontopiaPixel 字体 + 金色文字，
-//      与 FirstTimeHelpModal、ChapterNavPanel 视觉风格保持一致；
-//   3. 纯展示组件，无 store 依赖，挂载到 WorldPage.vue 即可。
+//   1. v-if 只在 /world 路由显示，避免遮挡其他页面；
+//   2. 纯展示组件，无 store 依赖，挂载到 WorldPage.vue 即可。
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 
@@ -122,7 +118,7 @@ const visible = computed<boolean>(() => route.path === '/world');
   font-size: 14px;
 }
 
-/* R-13 Phase 6：窄屏折叠成单行，节省垂直空间不挤画布 */
+/* 窄屏压缩间距，节省垂直空间不挤画布 */
 @media (max-width: 760px) {
   .operation-hints {
     bottom: 8px;
@@ -144,7 +140,7 @@ const visible = computed<boolean>(() => route.path === '/world');
 
 @media (max-width: 480px) {
   .operation-hints {
-    /* 在 mobile 把次要提示隐掉，只保留移动 + 交互 + ESC 三件套 */
+    /* 移动端改为横向滚动，避免换行占高 */
     flex-wrap: nowrap;
     overflow-x: auto;
     scrollbar-width: none;

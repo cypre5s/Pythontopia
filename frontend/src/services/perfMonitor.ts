@@ -1,7 +1,6 @@
 /**
- * Pythontopia 性能监控埋点（W4 性能基线骨架，纯逻辑层）。
+ * Pythontopia 性能监控埋点（纯逻辑层）。
  *
- * 设计依据：`docs/performance-baseline.md` §3 Web Vitals / §4 Phaser 场景 / §11 工具栈。
  * 仅负责"埋点 + 阈值告警 + 内存报表"三件事：
  *   1. `start/end(label)` 给业务任意区段计时（场景切换 / API 调用 / Pyodide 加载）；
  *   2. `recordWebVital(name, value)` 在收到 Lighthouse / web-vitals 上报或自测脚本回填时入账；
@@ -10,7 +9,7 @@
  * 显式 **不** 做的事：
  *   - 不引入 `web-vitals` / `Sentry` / `OpenTelemetry` 第三方依赖（保持 frontend 体积预算）；
  *   - 不直接读 `PerformanceObserver`（由调用方在 `main.ts` 接入后转发到本模块）；
- *   - 不做持久化（落盘 / 上报后端）；那部分由 R-13 `analyticsBridge.ts` 接管。
+ *   - 不做持久化（落盘 / 上报后端）。
  *
  * 所有阈值与 `frontend/perf-budget.json.webVitals` 单一来源对齐；如改阈值，两处同步。
  */
@@ -30,7 +29,7 @@ export interface WebVitalThreshold {
 
 /**
  * Web Vitals 阈值表，与 `perf-budget.json.webVitals` 同步维护。
- * 数据源：web.dev / Core Web Vitals 官方文档 + W4 plan 教育场景调优（LCP 2.5s / INP 200ms 与官方一致；TTI 取 4G 移动设备 3.8s）。
+ * 数据源：web.dev / Core Web Vitals 官方文档（LCP 2.5s / INP 200ms 与官方一致；TTI 取 4G 移动设备 3.8s）。
  */
 export const WEB_VITAL_THRESHOLDS: Readonly<Record<WebVitalName, WebVitalThreshold>> = Object.freeze({
   LCP: { good: 2500, poor: 4000, unit: 'ms' },

@@ -1,6 +1,6 @@
-// R-13 §5 Phase 2：主线进度 Pinia store。
+// 主线进度 Pinia store。
 //
-// 持久化策略（R-14 S6 起为双写）：
+// 持久化策略（双写）：
 //   - localStorage（`pyt_main_quest_progress_v1`）：离线 / 未登录兜底，跨刷新即时生效。
 //   - 后端 `save_slot.snapshot.mainQuest`（V120 契约）：登录后 debounced 同步，跨设备跟随。
 // 进入世界 bootstrap 时由 world.syncFromSlot 调 hydrateFromSnapshot 回灌后端快照。
@@ -31,7 +31,7 @@ const PERSIST_KEY = 'pyt_main_quest_progress_v1';
 function syncEventToBackend(eventType: string, payload: Record<string, unknown>): void {
   void import('@/api/learningEvent').then((mod) => {
     mod.postLearningEvent({ eventType, payload }).catch(() => {
-      // B3: 后端不可达时静默忽略，前端 localStorage 仍兜底
+      // 后端不可达时静默忽略，localStorage 仍兜底
     });
   });
 }
@@ -75,7 +75,7 @@ function safeParse(raw: string | null): MainQuestProgress | null {
 /**
  * 单调合并两份主线进度（hydrateFromSnapshot 把后端快照并入本地时用）。
  *
- * R-14 S6 风险修复：避免「离线先行的本地进度被后端旧快照覆盖」。教育进度天然只增
+ * 避免「离线先行的本地进度被后端旧快照覆盖」。教育进度天然只增
  * （不会 un-complete 一个任务 / un-defeat 一个 boss），所以合并语义为：
  *   - completed / defeated / milestone / consumedMedia 取并集
  *   - 章节指针取「更靠前」的一方（章号优先，同章取更大子任务序号）
@@ -138,12 +138,12 @@ function persist(progress: MainQuestProgress): void {
   try {
     window.localStorage.setItem(PERSIST_KEY, JSON.stringify(progress));
   } catch {
-    /* private mode */
+    /* 隐私模式 */
   }
   scheduleSnapshotSync(progress);
 }
 
-// ───────────────── R-14 S6：后端存档槽同步（主线进度跨设备跟随） ─────────────────
+// ───────────────── 后端存档槽同步（主线进度跨设备跟随） ─────────────────
 // 每次 persist 都 debounce 推送一次 snapshot 到 `save_slot.snapshot.mainQuest`；
 // 仅在已登录时真正发请求，未登录 / 离线时静默兜底 localStorage（与 syncEventToBackend 一致）。
 // hydrateFromSnapshot 期间用 suppressSnapshotSync 抑制回灌→回写的回声。
@@ -264,7 +264,7 @@ export const useMainQuestStore = defineStore('mainQuest', {
       return total === 0 ? 0 : this.progress.completedSubQuests.length / total;
     },
 
-    // ── R-12 主线 Phase 5：章节达标判定（双条件） ──
+    // ── 章节达标判定（双条件） ──
     /** 某章覆盖的全部 KC code（PY43-KC-NNN，由 chapters.ts 的 start/endKc 推导）。 */
     chapterKcCodes() {
       return (chapter: number): string[] => {
@@ -360,24 +360,17 @@ export const useMainQuestStore = defineStore('mainQuest', {
       this.panelOpen = false;
     },
     /**
-     * R-12 主线：NPC 通过 dialog 的 `quest_recommend` 效果「发任务」。
+     * NPC 通过 dialog 的 `quest_recommend` 效果「发任务」。
      * - `questKey` 对齐 mainQuests id（如 "1-1"）；未知/自由串则仅打开主线面板做引导。
-     * - 找到对应子任务且属于当前章、未完成、且不会让指针回退时，把当前指针指向它（高亮引导）。
-     * - 不借此跳章：指向未来章节时只打开面板，不前移进度，避免越过 boss 闯关。
+     * - 只打开面板做引导、不前移指针，避免借 NPC 对话越过 boss 跳关。
      * - 完成仍由各任务自身的 evidence 钩子负责，本动作只做「接取/聚焦」。
      */
     acceptQuest(questKey: string): MainSubQuest | null {
       syncEventToBackend('quest_accepted', { questKey });
+      // NPC 的 quest_recommend 只做「打开主线面板做引导」，绝不前移指针。
+      // 指针严格由 completeSubQuest（顺序完成）与 defeatBoss（章节）推进，
+      // 杜绝玩家通过和后面章节/后面任务的 NPC 对话「跳关」提前进入下一阶段。
       const quest = findMainQuestById(questKey);
-      if (
-        quest &&
-        quest.chapter === this.progress.currentChapter &&
-        !this.progress.completedSubQuests.includes(quest.id) &&
-        quest.index >= this.progress.currentSubQuest
-      ) {
-        this.progress.currentSubQuest = quest.index;
-        persist(this.progress);
-      }
       this.openPanel();
       return quest ?? null;
     },
@@ -393,14 +386,17 @@ export const useMainQuestStore = defineStore('mainQuest', {
         return quest;
       }
       this.progress.completedSubQuests = [...this.progress.completedSubQuests, id];
-      // 推进当前指针
+      // 指针推进到「本章第一个未完成子任务」（封顶 5，等 boss）：
+      // - 只在完成的是本章任务时重算，跨章的乱序预完成不动当前章指针；
+      // - 只允许前移、跳过乱序已完成的任务，绝不回退，也绝不停在已完成任务上。
       if (this.progress.currentChapter === quest.chapter) {
-        if (this.progress.currentSubQuest === quest.index) {
-          if (quest.index < 5) {
-            this.progress.currentSubQuest = quest.index + 1;
-          } else {
-            this.progress.currentSubQuest = 5;
-          }
+        const done = new Set(this.progress.completedSubQuests);
+        let frontier = 1;
+        while (frontier < 5 && done.has(`${quest.chapter}-${frontier}`)) {
+          frontier += 1;
+        }
+        if (frontier > this.progress.currentSubQuest) {
+          this.progress.currentSubQuest = frontier;
         }
       }
       persist(this.progress);
@@ -418,12 +414,16 @@ export const useMainQuestStore = defineStore('mainQuest', {
       if (!this.progress.defeatedBosses.includes(chapter)) {
         this.progress.defeatedBosses = [...this.progress.defeatedBosses, chapter];
       }
-      if (chapter < 7) {
-        this.progress.currentChapter = chapter + 1;
-        this.progress.currentSubQuest = 1;
-      } else {
-        this.progress.currentChapter = 7;
-        this.progress.currentSubQuest = 5;
+      // 仅当击败的是「当前所在章」的 boss 时才推进章节指针：
+      // 回头重打旧 boss 不会让章节回退，越级打后面 boss 也不会跳章。
+      // （击杀记录 defeatedBosses 与里程碑解锁始终生效，不受此限。）
+      if (chapter === this.progress.currentChapter) {
+        if (chapter < 7) {
+          this.progress.currentChapter = chapter + 1;
+          this.progress.currentSubQuest = 1;
+        } else {
+          this.progress.currentSubQuest = 5;
+        }
       }
       const milestoneRefs = boss.rewards
         .filter((r) => r.kind === 'item')
@@ -436,7 +436,7 @@ export const useMainQuestStore = defineStore('mainQuest', {
       return boss;
     },
     /**
-     * R-12 主线 Phase 5：达标后「跳过进阶」直接进入下一章。
+     * 达标后「跳过进阶」直接进入下一章。
      * 进阶（Boss / 进阶难题 / 工坊）是可选的，不阻塞章节推进；本动作只前移章节指针，
      * 不标记 boss 已击败（boss 仍可日后回来挑战）。仅在已达标时由 Hub 调用。
      */
@@ -455,9 +455,7 @@ export const useMainQuestStore = defineStore('mainQuest', {
       persist(this.progress);
     },
 
-    // ─────────────────── R-13 §-1 critical fix：evidence 自动检测链路 ───────────────────
-    // 此前 completeSubQuest() 无任何外部调用，35 个主线任务的 evidence 触发链路全断 —
-    // 玩家与 NPC 对话、用工坊生成资源、提交代码后任务永远卡住。
+    // ─────────────────── evidence 自动检测链路 ───────────────────
     // 5 类 onXxx 钩子分别由 dialog store / learning store / boss session / world scene 调用，
     // 自动遍历未完成的主线任务找 evidence 匹配项并 markComplete。
 
@@ -497,7 +495,7 @@ export const useMainQuestStore = defineStore('mainQuest', {
         if (this.progress.completedSubQuests.includes(q.id)) continue;
         const ev = q.evidenceRequired;
         if (ev.type !== 'submission') continue;
-        // problemId=0 是 placeholder，命中任一通过即视作完成（早期演示阶段宽松）
+        // problemId=0 是 placeholder，命中任一通过即视作完成
         if (ev.problemId === 0) {
           if (!payload.kcCode || q.kcCodes.includes(payload.kcCode)) {
             return this.completeSubQuest(q.id);

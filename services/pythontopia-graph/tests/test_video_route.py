@@ -23,6 +23,7 @@ SAMPLE_PAYLOAD: dict[str, Any] = {
             "bvid": "BV1xx411c7XD",
             "title": '<em class="keyword">for</em> 循环 &amp; 遍历',
             "author": "UP主小明",
+            "description": '本视频讲解 <em class="keyword">for</em> 循环与 range 的\n用法 &amp; 常见易错',
             "pic": "//i2.hdslb.com/bfs/archive/abc.jpg",
             "duration": "12:34",
             "play": 12345,
@@ -67,6 +68,8 @@ def test_search_maps_and_cleans_sample_payload(monkeypatch: pytest.MonkeyPatch) 
     assert item["bvid"] == "BV1xx411c7XD"
     assert item["title"] == "for 循环 & 遍历"  # <em> 去除 + &amp; 反转义
     assert item["author"] == "UP主小明"
+    # 简介：去 <em> 高亮 + &amp; 反转义 + 折叠换行/空白为单空格
+    assert item["description"] == "本视频讲解 for 循环与 range 的 用法 & 常见易错"
     assert item["cover"] == "https://i2.hdslb.com/bfs/archive/abc.jpg"  # // → https:
     assert item["duration_sec"] == 12 * 60 + 34  # "MM:SS" → 秒
     assert item["play"] == 12345
@@ -93,7 +96,10 @@ def test_limit_is_respected(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
     assert response.status_code == 200
-    assert len(response.json()["items"]) == 3
+    items = response.json()["items"]
+    assert len(items) == 3
+    # 缺 description 字段时降级为空串（前端给中性占位，不伪造简介）。
+    assert all(item["description"] == "" for item in items)
 
 
 def test_empty_results_returns_200_empty_items(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -122,6 +128,23 @@ def test_missing_result_key_returns_200_empty_items(monkeypatch: pytest.MonkeyPa
 
     assert response.status_code == 200
     assert response.json() == {"items": []}
+
+
+def test_missing_bilibili_api_dependency_returns_502(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def missing_dependency(keyword: str, page: int) -> dict[str, Any]:
+        raise ModuleNotFoundError("No module named 'bilibili_api'")
+
+    monkeypatch.setattr(video_route, "_bilibili_search_videos", missing_dependency)
+
+    response = TestClient(app).get(
+        "/agents/video/bilibili/search",
+        params={"keyword": "for循环 Python", "limit": 8},
+    )
+
+    assert response.status_code == 502
+    detail = response.json()["detail"]
+    assert detail["code"] == "VIDEO_SEARCH_FAILED"
+    assert "bilibili-api-python" in detail["message"]
 
 
 def test_search_failure_returns_502_structured_error(monkeypatch: pytest.MonkeyPatch) -> None:

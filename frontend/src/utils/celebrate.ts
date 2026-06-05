@@ -47,7 +47,7 @@ export function celebrateMature(target: HTMLElement | null): void {
   } catch {
     /* sfx 失败不影响视觉反馈 */
   }
-  // R-13：叠加 Tone.js 程序化 fanfare，给 KC 收获/升级一个 3 和弦庆祝，
+  // 叠加 Tone.js 程序化 fanfare，给 KC 收获/升级一个 3 和弦庆祝，
   // 即使 Phaser sfx_jingle_levelup 资源缺失也能保留正向反馈。
   try {
     playQuestComplete();

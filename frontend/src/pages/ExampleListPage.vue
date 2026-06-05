@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// ExampleListPage —— 46 个课件示例的卡片列表。按 KC 过滤，每张卡片显示
-// 代码片段 + 解释，提供"复制代码"和"看上下文"（跳 LibraryPage 对应页）。
+// 课件示例卡片列表：按 KC 过滤，每张卡片显示代码片段 + 解释，
+// 提供「复制代码」「看上下文」（跳 LibraryPage 对应页）。
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import AppLayout from '@/app/AppLayout.vue';

@@ -1,32 +1,16 @@
 <script setup lang="ts">
 /**
- * DialogModal.vue —— Pythontopia 升级版对话模态框（W2-dialog-upgrade）。
+ * 场景内立绘对话模态框（左右立绘 + 居中文本框），由 store.isOpen 驱动（open(npcKey) 路径），
+ * 兼容旧 lines 占位入口，附带打字机 / 分支选项 / 键盘导航。
  *
- * 与 DialogTree.vue 的分工：
- *   - DialogTree.vue：星露谷式 9-slice 底部对话面板，App.vue 全局挂载，
- *     由 store.visible（openWithTree 路径）驱动；
- *   - DialogModal.vue：场景内立绘对话模态框（左右立绘 + 居中文本框），
- *     由 store.isOpen（旧 open(npcKey) 路径）驱动；
- *     兼容旧 lines 占位入口的同时，附带打字机 / 分支选项 / 键盘导航能力。
+ * 与 DialogTree.vue 分工：DialogTree 是 store.visible（openWithTree 路径）驱动的底部 9-slice 面板，
+ * 两者共用同一 dialog store，但入口与版式不同。
  *
- * 核心交互：
- *   1. 打字机：默认 30ms/字符，setTimeout 链式逐字推进；
- *   2. 跳过：玩家按 E / Enter / 点击文本 → store.markTypingDone()，立即全显；
- *   3. 分支：打字机完毕后 store.hasBranches=true 时展开选项列表，
- *      支持 ↑/↓ 或 W/S 键移动高亮，Enter / E / 点击确认，调 store.chooseBranch(label)；
- *   4. ESC：随时关闭对话（store.close）；
- *   5. 无分支时（旧占位入口）保留「知道了」按钮兜底关闭。
- *
- * 立绘：
- *   - portraitLeft / portraitRight 通过 props 显式指定（任意 URL）；
- *   - portraitLeft 未传时若 store.npcKey 有值，回退到 /assets/pixel/portraits/portrait_<key>.png
- *     约定路径，让旧 open(npcKey) 调用方零配置展示头像；
- *   - 图片加载失败时隐藏 <img> 但保留版面，避免出现 broken-image 红 X。
- *
- * 测试友好：
- *   - 不依赖 Phaser sound / playSfx，避免 jsdom 环境额外 mock；
- *   - 打字机使用普通 setTimeout，配合 vi.useFakeTimers + advanceTimersByTime 易于推进；
- *   - 所有可断言节点带 data-testid。
+ * 关键约定：
+ *   - 键盘：E/Enter 跳过打字机或确认选项，↑/↓ 或 W/S 切换高亮，ESC 关闭；
+ *   - 立绘 portraitLeft/Right 经 props 指定；portraitLeft 缺省且有 npcKey 时回退到
+ *     /assets/pixel/portraits/heads/portrait_<key>_head.png，加载失败隐藏 <img> 但保留版面；
+ *   - 打字机用普通 setTimeout（不依赖 Phaser sound），便于 vi.useFakeTimers 推进。
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useDialogStore, type DialogChoice } from '@stores/dialog';
@@ -68,10 +52,8 @@ const effectiveTypingMs = computed(() =>
 );
 
 /**
- * R-12 W2-NPC：与 DialogTree 共用同一个渲染上下文。
- *
- * 旧 placeholder 入口（lines）通常不含 `{{}}` 占位符，但渲染器对纯文本是 no-op，
- * 顺手 pipe 一道也不会改坏；新对话树入口的 stats / profileAdaptive / giftFavorite 会被实际替换。
+ * 与 DialogTree 共用同一渲染上下文：旧 lines 入口多为纯文本，渲染器对其是 no-op；
+ * 新对话树入口的 stats / profileAdaptive / giftFavorite 占位符会被实际替换。
  */
 const templateContext = computed(() => {
   const ctx = dialog.context;
@@ -84,12 +66,7 @@ const templateContext = computed(() => {
   });
 });
 
-/**
- * 文本来源优先级：currentNode.text > 旧 lines 换行合并 > 空串。
- *
- * 这样既覆盖了未来「场景内立绘对话也走 openWithTree 树」的扩展，
- * 也兼容旧的 open(npcKey) + lines 占位入口。
- */
+/** 文本来源优先级：currentNode.text > 旧 lines 换行合并 > 空串（兼容树入口与旧 lines 入口）。 */
 const fullText = computed<string>(() => {
   const node = dialog.currentNode;
   const raw = node ? node.text : dialog.lines.length > 0 ? dialog.lines.join('\n') : '';
@@ -113,10 +90,8 @@ const heartDisplay = computed<string>(() => {
 const resolvedPortraitLeft = computed<string>(() => {
   if (props.portraitLeft) return props.portraitLeft;
   if (dialog.npcKey) {
-    // R-13 §-1 B1 续修：原 portrait 是 LPC sprite sheet（48x72 = 3x3 朝向×动画帧），
-    // 直接 <img> 会一次性显示整张 sheet 的 9 个小头。改走 scripts/crop-portrait-heads.py
-    // 预切的单帧头像 `_head.png`（32x48）。脚本输出在 portraits/heads/ 下，每张图
-    // 都是左上 idle-down 帧 + 2x NEAREST 放大，DialogModal CSS 直接 object-fit: contain。
+    // 原 portrait 是 LPC sprite sheet（48x72，3x3 朝向×帧），直接 <img> 会显示整张 9 个小头；
+    // 改用 crop_portrait_heads.py 预切的单帧头像（heads/*_head.png，左上 idle-down 帧 2x 放大）。
     return `/assets/pixel/portraits/heads/portrait_${dialog.npcKey}_head.png`;
   }
   return '';

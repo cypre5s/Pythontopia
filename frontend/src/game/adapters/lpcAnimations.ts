@@ -6,7 +6,7 @@
 //   - `universal`：13 列 × 21 行标准 LPC 表（旧主角 SaraFullSheet + 工具叠加层）。
 //   - `ulpc`    ：13 列 × 42 行「Expanded Universal LPC」表（官方生成器产出）：
 //                 base 6 动作(0-20) + climb(21)/idle(22)/jump(26)/sit(30)/emote(34)/run(38)。
-//                 由 scripts/build-ulpc-characters.py 用官方 ULPC 素材库合成。
+//                 由 scripts/build_ulpc_characters.py 用官方 ULPC 素材库合成。
 // 偏移与帧数取自官方 sources/state/constants.ts（ANIMATION_OFFSETS / ANIMATION_CONFIGS）。
 import type { Direction } from '@api/dto/Direction';
 
@@ -245,7 +245,7 @@ export const TOOL_TEXTURE_KEYS: readonly string[] = [
   'tool_hoe_bg',
 ];
 
-// ---- 超尺寸武器叠加层（ULPC 192px oversize，与标准 slash 同帧同步）----
+// ---- 超尺寸武器叠加层（ULPC 192px，与标准 slash 同帧同步）----
 // 砍树/挖矿用「斧头挥砍」：身体播标准 slash，斧头用 192px attack_slash 叠加。
 
 export interface WeaponOverlay {
@@ -264,7 +264,7 @@ export function weaponOverlayForAction(action: CharacterAction): WeaponOverlay |
 
 export const WEAPON_TEXTURE_KEYS: readonly string[] = ['weapon_axe', 'weapon_axe_bg'];
 
-/** 192px oversize 武器图：6 列 × 4 行（up/left/down/right），仅 slash。key `<prefix>_slash_<dir>`。 */
+/** 192px 超尺寸武器图：6 列 × 4 行（up/left/down/right），仅 slash。key `<prefix>_slash_<dir>`。 */
 export function registerWeaponSlashAnims(
   anims: AnimsManagerLike,
   textureKey: string,

@@ -143,10 +143,9 @@ class OpenAiCompatProvider:
             raise RuntimeError("OpenAI-compatible LLM env is missing")
 
     async def chat(self, messages: list[dict[str, str]], **kwargs: object) -> LlmResponse:
-        # trust_env=False：忽略容器/宿主注入的 HTTP(S)_PROXY（容器内常被设成失效的
-        # 127.0.0.1:7892）。DeepSeek api.deepseek.com 为境内直连，无需代理，与
-        # evidence_fetcher 的 HTTP 调用保持一致。
-        async with httpx.AsyncClient(timeout=30, trust_env=False) as client:
+        # 宿主 graph 可通过 HTTP(S)_PROXY 走本机 7892 访问 DeepSeek；未设置代理时
+        # httpx 会直连。NO_PROXY 由启动环境负责保护 localhost / RAG 等内网地址。
+        async with httpx.AsyncClient(timeout=30, trust_env=True) as client:
             response = await client.post(
                 f"{self.base_url.rstrip('/')}/chat/completions",
                 headers={"Authorization": f"Bearer {self.api_key}"},
@@ -182,8 +181,8 @@ class OpenAiCompatProvider:
             "stream": True,
             **kwargs,
         }
-        # trust_env=False：同 chat()，绕过容器内失效代理，直连境内 DeepSeek。
-        async with httpx.AsyncClient(timeout=60, trust_env=False) as client:
+        # 同 chat()：信任环境代理，实现有代理走代理、无代理直连。
+        async with httpx.AsyncClient(timeout=60, trust_env=True) as client:
             async with client.stream(
                 "POST",
                 url,

@@ -1,4 +1,4 @@
-// W3 Polish 隔离原因：天气粒子直接使用 Phaser 3.87 的 ParticleEmitter / Camera tint
+// 隔离原因：天气粒子直接使用 Phaser 3.87 的 ParticleEmitter / Camera tint
 // API，无法走 SceneLike 抽象；把粒子相关代码集中在本适配器，业务层 (WorldScene、
 // stores) 仍只通过 applyWeather + WeatherHandle.destroy 两个结构化入口交互。
 //
@@ -120,7 +120,7 @@ export function applyWeather(
       }
     }
   }
-  // 不强行 silence fallbackHeight 警告：保留参数语义，未来 stormy 闪电特效会复用。
+  // 保留 fallbackHeight 参数语义，暂未使用。
   void fallbackHeight;
 
   const weatherTint = WEATHER_TINT[kind];

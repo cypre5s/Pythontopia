@@ -1,8 +1,7 @@
 // 隔离原因：保持业务层无 Phaser 依赖，禁止业务代码直接 import phaser。
-// R-12 动作模组（方案A）：主角改用官方 ULPC「Expanded」整表 player_sara2（13×42），
-//   拥有真实 run / jump / idle / sit + 6 基础动作；帧数学集中在 lpcAnimations.ts。
-//   待机=idle 动画（呼吸），奔跑=run 动画，跳跃=jump 动画 + 位移弧线，
-//   工具动作=thrust + 手持工具叠加层（浇水壶/锄头）。
+// 主角用官方 ULPC「Expanded」整表 player_sara2（13×42）：真实 run / jump / idle / sit
+//   + 6 基础动作；帧数学集中在 lpcAnimations.ts。待机=idle 动画（呼吸），奔跑=run 动画，
+//   跳跃=jump 动画 + 位移弧线，工具动作=thrust + 手持工具叠加层（浇水壶/锄头）。
 import Phaser from 'phaser';
 import type { Direction } from '@api/dto/Direction';
 import type { PlayerSpriteHandle, RectangleLike, SceneLike } from './sceneTypes';
@@ -64,7 +63,7 @@ function ensureAnims(phaserScene: Phaser.Scene): void {
   }
 }
 
-// 192px oversize 武器叠加层的对齐：身体 (0.5,0.75) 锚点在 64px 帧的 (32,48)，
+// 192px 超尺寸武器叠加层的对齐：身体 (0.5,0.75) 锚点在 64px 帧的 (32,48)，
 // 在 192px 帧里对应 (96,112)，故 origin = (0.5, 112/192)。
 const WEAPON_ORIGIN_Y = 112 / 192;
 

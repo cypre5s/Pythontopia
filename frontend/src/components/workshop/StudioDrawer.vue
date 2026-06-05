@@ -40,8 +40,9 @@ function back(): void {
       title="展开书房"
       @click="toggle"
     >
-      <span class="drawer__handle-text">书房</span>
-      <span aria-hidden="true">‹</span>
+      <span aria-hidden="true">📚</span>
+      <span class="drawer__handle-text">我的书房</span>
+      <span aria-hidden="true">▾</span>
     </button>
 
     <template v-else>
@@ -95,18 +96,18 @@ function back(): void {
   font-family: var(--pyt-font-pixel);
 }
 .drawer--collapsed {
+  height: auto;
   background: var(--pyt-color-bg-elevated);
   border-style: dashed;
 }
 .drawer__handle {
-  flex: 1 1 auto;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
   gap: 8px;
   width: 100%;
-  padding: 12px 0;
+  padding: 8px 12px;
   border: none;
   background: transparent;
   cursor: pointer;
@@ -117,8 +118,7 @@ function back(): void {
   background: var(--pyt-color-warning-bg);
 }
 .drawer__handle-text {
-  writing-mode: vertical-rl;
-  letter-spacing: 4px;
+  letter-spacing: 1px;
   font-weight: 700;
   font-size: 13px;
 }

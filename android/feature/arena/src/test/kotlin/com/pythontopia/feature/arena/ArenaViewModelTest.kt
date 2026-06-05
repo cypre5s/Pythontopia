@@ -60,7 +60,7 @@ class ArenaViewModelTest {
     fun setUp() {
         Dispatchers.setMain(dispatcher)
         coEvery { repository.todaysSession() } returns demoSession
-        coEvery { repository.leaderboard(any()) } returns demoLeaderboard
+        coEvery { repository.leaderboard() } returns demoLeaderboard
         coEvery { repository.submit(any(), any()) } returns Submission(
             submissionId = 1L,
             problemId = 1L,
@@ -146,7 +146,7 @@ class ArenaViewModelTest {
         assertEquals(ArenaRepository.STATUS_PASSED, state.lastSubmission!!.status)
         assertEquals(100, state.lastSubmission!!.scoreAwarded)
 
-        coVerify(atLeast = 2) { repository.leaderboard(any()) }
+        coVerify(atLeast = 2) { repository.leaderboard() }
     }
 
     @Test
@@ -165,7 +165,7 @@ class ArenaViewModelTest {
         advanceUntilIdle()
 
         assertEquals(ArenaRepository.STATUS_FAILED, vm.state.value.lastSubmission?.status)
-        coVerify(exactly = 1) { repository.leaderboard(any()) }
+        coVerify(exactly = 1) { repository.leaderboard() }
     }
 
     @Test
@@ -187,15 +187,15 @@ class ArenaViewModelTest {
     }
 
     @Test
-    fun `refreshLeaderboard exposes data and uses classroomId from session`() = runTest {
+    fun `refreshLeaderboard exposes personal stats derived from passed submissions`() = runTest {
         advanceUntilIdle()
-        coEvery { repository.leaderboard(42L) } returns demoLeaderboard.reversed()
+        coEvery { repository.leaderboard() } returns demoLeaderboard.reversed()
 
         vm.refreshLeaderboard()
         advanceUntilIdle()
 
         assertEquals(2, vm.state.value.leaderboard.size)
-        coVerify(atLeast = 1) { repository.leaderboard(42L) }
+        coVerify(atLeast = 1) { repository.leaderboard() }
     }
 
     @Test
@@ -204,7 +204,7 @@ class ArenaViewModelTest {
 
         vm.selectTab(ArenaTab.LEADERBOARD)
         assertEquals(ArenaTab.LEADERBOARD, vm.state.value.selectedTab)
-        coVerify(exactly = 1) { repository.leaderboard(any()) }
+        coVerify(exactly = 1) { repository.leaderboard() }
 
         vm.selectTab(ArenaTab.TODAY)
         assertEquals(ArenaTab.TODAY, vm.state.value.selectedTab)

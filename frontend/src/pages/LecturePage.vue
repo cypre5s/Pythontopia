@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * LecturePage —— 章节「视频讲解」：固定视口 + 右侧学习侧栏，减少整页上下滚动。
+ * 章节「视频讲解」页：固定视口 + 右侧学习侧栏，减少整页上下滚动。
  */
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
@@ -12,7 +12,6 @@ import {
   videoStreamUrl,
   type CourseVideoDto,
 } from '@/api/courseVideo';
-import { generateImage, type MediaAssetDto } from '@/api/media';
 import { kcDisplayName } from '@/data/kcNames';
 import { getWorkshopResource, listWorkshopResources } from '@/api/workshop';
 import { useMainQuestStore } from '@/stores/mainQuest';
@@ -37,14 +36,6 @@ const loading = ref(true);
 const videos = ref<CourseVideoDto[]>([]);
 const activeId = ref<number | null>(null);
 
-interface IllustrationCard {
-  label: string;
-  url: string;
-  degraded: boolean;
-}
-const illustrations = ref<IllustrationCard[]>([]);
-const illustrationsLoading = ref(false);
-const lightbox = ref<IllustrationCard | null>(null);
 let mediaReported = false;
 
 const showPpt = ref(false);
@@ -114,42 +105,6 @@ function onVideoProgress(e: Event): void {
   }
 }
 
-async function loadIllustrations(): Promise<void> {
-  illustrations.value = [];
-  const codes = chapterKcCodes.value.slice(0, 3);
-  if (codes.length === 0) return;
-  illustrationsLoading.value = true;
-  try {
-    const results = await Promise.allSettled(
-      codes.map((kc) =>
-        generateImage(
-          `像素教学插画，${chapterName.value} 知识点 ${kc} 的核心概念示意图，暖色调，无真实人物，无文字水印`,
-          kc,
-          [kc],
-        ),
-      ),
-    );
-    const cards: IllustrationCard[] = [];
-    results.forEach((r, i) => {
-      if (r.status === 'fulfilled') {
-        const asset: MediaAssetDto = r.value;
-        cards.push({ label: kcDisplayName(codes[i]), url: asset.url, degraded: asset.degraded });
-      }
-    });
-    illustrations.value = cards;
-  } finally {
-    illustrationsLoading.value = false;
-  }
-}
-
-function openLightbox(card: IllustrationCard): void {
-  lightbox.value = card;
-  reportMediaConsumed('illustration');
-}
-function closeLightbox(): void {
-  lightbox.value = null;
-}
-
 async function load(): Promise<void> {
   loading.value = true;
   mediaReported = false;
@@ -159,7 +114,6 @@ async function load(): Promise<void> {
   } finally {
     loading.value = false;
   }
-  void loadIllustrations();
 }
 
 function selectVideo(id: number): void {
@@ -198,7 +152,7 @@ async function openTutorAside(): Promise<void> {
 }
 
 function openTutorFullPage(): void {
-  // 导师已并入百晓工坊；直接进 /workshop（WorkshopPage 不消费 from/chapter，故不再传死 query）。
+  // 直接进 /workshop：WorkshopPage 不消费 from/chapter query，故不传。
   void router.push('/workshop');
 }
 function goTraining(): void {
@@ -288,7 +242,7 @@ watch(() => props.chapter, () => {
           </div>
         </main>
 
-        <!-- 侧栏：学习闭环 + 小节 + 图解（内部滚动，页面不滚） -->
+        <!-- 侧栏：学习闭环 + 小节 + B站精选（内部滚动，页面不滚） -->
         <aside
           class="lecture-aside lecture-frame"
           aria-label="本章学习与导航"
@@ -411,51 +365,6 @@ watch(() => props.chapter, () => {
           </section>
 
           <section
-            class="aside-block aside-block--illust"
-            data-testid="lecture-illustrations"
-          >
-            <h2 class="aside-heading">AI 图解</h2>
-            <p
-              v-if="illustrationsLoading"
-              class="aside-muted"
-            >
-              生成中…
-            </p>
-            <ul
-              v-else-if="illustrations.length > 0"
-              class="aside-illust-list"
-            >
-              <li
-                v-for="card in illustrations"
-                :key="card.label"
-              >
-                <button
-                  type="button"
-                  class="aside-illust-item"
-                  @click="openLightbox(card)"
-                >
-                  <img
-                    :src="card.url"
-                    :alt="card.label"
-                    class="aside-illust-thumb"
-                  >
-                  <span class="aside-illust-label">{{ card.label }}</span>
-                  <span
-                    v-if="card.degraded"
-                    class="aside-illust-badge"
-                  >占位</span>
-                </button>
-              </li>
-            </ul>
-            <p
-              v-else
-              class="aside-muted"
-            >
-              暂无图解
-            </p>
-          </section>
-
-          <section
             class="aside-block aside-block--bili"
             data-testid="lecture-bili-aside"
           >
@@ -470,21 +379,6 @@ watch(() => props.chapter, () => {
         </aside>
       </div>
     </section>
-
-    <Teleport to="body">
-      <div
-        v-if="lightbox"
-        class="lecture-lightbox"
-        @click="closeLightbox"
-      >
-        <img
-          :src="lightbox.url"
-          :alt="`知识点图解 ${lightbox.label}`"
-          class="lecture-lightbox-img"
-        >
-        <p class="lecture-lightbox-cap">{{ lightbox.label }} · 点击关闭</p>
-      </div>
-    </Teleport>
 
     <Teleport to="body">
       <div

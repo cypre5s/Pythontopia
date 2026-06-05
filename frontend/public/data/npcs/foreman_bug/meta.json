@@ -4,19 +4,19 @@
   "category": "educator_core",
   "sprite": "lpc_npc_miner",
   "portrait": "portrait_foreman_bug.png",
-  "spawnMap": "mine_south",
+  "spawnMap": "town_hub",
   "spawn": { "tileX": 10, "tileY": 16 },
   "birthday": { "month": 8, "day": 10 },
   "favoriteGifts": ["pickaxe", "lantern", "torch"],
   "schedule": {
-    "monday":    [{ "from": "07:00", "map": "mine_south", "tileX": 10, "tileY": 16 }],
-    "tuesday":   [{ "from": "07:00", "map": "mine_south", "tileX": 10, "tileY": 16 }],
-    "wednesday": [{ "from": "07:00", "map": "mine_south", "tileX": 10, "tileY": 16 }, { "from": "14:00", "map": "mine_south", "tileX": 8, "tileY": 18 }],
-    "thursday":  [{ "from": "07:00", "map": "mine_south", "tileX": 10, "tileY": 16 }],
-    "friday":    [{ "from": "07:00", "map": "mine_south", "tileX": 10, "tileY": 16 }],
+    "monday":    [{ "from": "07:00", "map": "town_hub", "tileX": 10, "tileY": 16 }],
+    "tuesday":   [{ "from": "07:00", "map": "town_hub", "tileX": 10, "tileY": 16 }],
+    "wednesday": [{ "from": "07:00", "map": "town_hub", "tileX": 10, "tileY": 16 }, { "from": "14:00", "map": "town_hub", "tileX": 8, "tileY": 18 }],
+    "thursday":  [{ "from": "07:00", "map": "town_hub", "tileX": 10, "tileY": 16 }],
+    "friday":    [{ "from": "07:00", "map": "town_hub", "tileX": 10, "tileY": 16 }],
     "saturday":  [{ "from": "09:00", "map": "town_hub",  "tileX": 18, "tileY": 11 }],
-    "sunday":    [{ "from": "09:00", "map": "mine_south", "tileX": 10, "tileY": 16 }]
+    "sunday":    [{ "from": "09:00", "map": "town_hub", "tileX": 10, "tileY": 16 }]
   },
   "tags": ["debug_mentor", "failed_submission", "mine_quest"],
-  "description": "Bug 矿洞的工头，沉默寡言但眼睛毒辣。每次你提交失败，他都会从矿洞里翻出对应的 Bug 等你来打。"
+  "description": "守在小镇 Bug 矿洞入口的工头，沉默寡言但眼睛毒辣。每次你提交失败，他都会从矿洞里翻出对应的 Bug 等你来打。"
 }

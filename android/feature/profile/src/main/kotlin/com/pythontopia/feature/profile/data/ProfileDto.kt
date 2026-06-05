@@ -98,6 +98,33 @@ data class DimensionUpdateResult(
 )
 
 /**
+ * `GET /api/learner/profile/dimensions` 列表项：单个维度的对外快照。
+ *
+ * 后端权威：`backend/com/pythontopia/learner/profile/dto/ProfileDimensionDto.java`（Jackson 默认驼峰）。
+ * 该端点**恒返回 8 维**（[ProfileDimensions.KEYS] 顺序），缺失维度由后端按 `score=0.5 / evidence=0` 兜底，
+ * 因此不会出现 204；HTTP 错误由 Retrofit 抛 `HttpException`，在 [ProfileRepository] 归一为 [com.pythontopia.core.common.Result.Failure]。
+ *
+ * 字段语义：
+ *  - [score] 0..1 已做读时 decay 的 effective 值（无信号时为 0.5 中性默认）。
+ *  - [confidence] 0..1 = min(1, evidenceCount / 8)，越低代表信号越弱、越不应强断言。
+ *  - [evidenceCount] 累计证据条数；为 0 表示该维度尚无真实信号。
+ *  - [selfEditable] 学生是否可经 `PUT scoreDelta` 自评直写该维度（权威以后端为准）。
+ *  - [tags] 该维度累积标签（如媒介偏好 video/visual）。
+ *
+ * 全部给默认值是为了在后端偶发省略字段时仍能反序列化（`explicitNulls=false` 容错）。
+ */
+@Serializable
+data class ProfileDimensionDto(
+    val key: String,
+    val label: String = "",
+    val score: Double = 0.5,
+    val confidence: Double = 0.0,
+    val evidenceCount: Int = 0,
+    val selfEditable: Boolean = false,
+    val tags: List<String> = emptyList(),
+)
+
+/**
  * 8 维 key 的 Android 端权威清单，与后端 `PassiveProfileService.DIMENSION_KEYS` 保持一致。
  *
  * - [KEYS]：写 `learner_profile.dimensions` JSONB 使用的 key（snake_case，单数）。

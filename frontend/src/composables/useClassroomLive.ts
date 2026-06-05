@@ -16,8 +16,8 @@ export interface UseClassroomLiveReturn {
 const MAX_EVENTS = 50;
 
 /**
- * C2: SSE-based live feed for teacher classroom view.
- * Connects to GET /api/classroom/{classroomId}/live.
+ * 教师课堂视图的 SSE 实时事件流，连接 GET /api/classroom/{classroomId}/live；
+ * 断线后每 5 秒自动重连。
  */
 export function useClassroomLive(): UseClassroomLiveReturn {
   const connected = ref(false);
@@ -39,7 +39,7 @@ export function useClassroomLive(): UseClassroomLiveReturn {
           { type: 'submission', data, timestamp: new Date().toISOString() },
           ...events.value,
         ].slice(0, MAX_EVENTS);
-      } catch { /* malformed */ }
+      } catch { /* 格式错误，忽略 */ }
     });
 
     source.addEventListener('quest_complete', (e: MessageEvent) => {
@@ -49,7 +49,7 @@ export function useClassroomLive(): UseClassroomLiveReturn {
           { type: 'quest_complete', data, timestamp: new Date().toISOString() },
           ...events.value,
         ].slice(0, MAX_EVENTS);
-      } catch { /* malformed */ }
+      } catch { /* 格式错误，忽略 */ }
     });
 
     source.onerror = () => {

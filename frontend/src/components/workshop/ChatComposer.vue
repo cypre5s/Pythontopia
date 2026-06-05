@@ -7,7 +7,7 @@
  *     WorkshopChat 决定：forcedIntent 为空 → 调 /api/intent/route 自动判定；
  *     否则直接用该工具，再分派到导师 / 工坊 SSE 管线。
  *
- * 本组件只负责输入与候选交互，不含任何网络/分派逻辑（留给 Phase 3）。
+ * 本组件只负责输入与候选交互，不含任何网络/分派逻辑。
  */
 import { computed, nextTick, ref, toRef } from 'vue';
 import CoursewareMentionMenu from '@/components/tutor/CoursewareMentionMenu.vue';

@@ -1,7 +1,6 @@
-// fixture 派生的库阅读器/题库/示例库 DTO。
-// 来源：data/course-pack-43/json/* （由 frontend/scripts/sync-course43.mjs 投影）。
-// 实际后端目前仅暴露 GET /api/course/pack|chapters|kcs|pages|problems/{id}；
-// 文档列表 / 全量题目 / 全量示例 / 按 docId+pageNo 取页 等接口需等 W3-CTRL 后端子代理补齐。
+// 由 fixture 投影出的库阅读器 / 题库 / 示例库 DTO，来源 data/course-pack-43/json/*
+// （经 frontend/scripts/sync-course43.mjs 生成）。
+// 后端目前仅提供 GET /api/course/pack|chapters|kcs|pages|problems/{id}，列表 / 取页接口尚未上线。
 
 export interface CourseDocumentSummary {
   documentId: number;

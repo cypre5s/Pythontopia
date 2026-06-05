@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { createMemoryHistory, createRouter, type Router } from 'vue-router';
 import TrainingPanel from '@/components/training/TrainingPanel.vue';
 import { useLearningStore } from '@stores/learning';
+import { useMainQuestStore } from '@stores/mainQuest';
 import { setPyodideRunner } from '@/game/adapters/pyodide';
 
 vi.mock('@/api/problems', () => ({
@@ -49,12 +50,13 @@ function mountPanel() {
 describe('TrainingPanel', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
+    window.localStorage.removeItem('pyt_main_quest_progress_v1');
     vi.mocked(getPublicProblem).mockResolvedValue({
       id: 476,
       packId: 43,
       kcCode: 'PY43-KC-016',
       title: '圆面积',
-      statementMarkdown: 'demo',
+      statementMarkdown: '### 题目描述\n\n读取半径并使用 `print()` 输出面积。',
       inputDescription: 'r',
       outputDescription: 'area',
       difficulty: 'basic',
@@ -143,5 +145,83 @@ describe('TrainingPanel', () => {
     expect(getSubmission).toHaveBeenCalledWith(1);
     expect(wrapper.find('[data-testid="submission-result"]').exists()).toBe(true);
     expect(wrapper.text()).toContain('AC');
+  });
+
+  it('does not advance main quest when judge verdict is not AC', async () => {
+    vi.mocked(createSubmission).mockResolvedValue({
+      id: 2,
+      userId: 7,
+      problemId: 476,
+      questId: null,
+      source: 'TRAINING',
+      language: 'PYTHON_3_11',
+      code: 'print(0)',
+      submittedAt: '2026-05-21T19:00:00Z',
+      status: 'PASSED',
+      runtimeMs: 12,
+      memoryKb: null,
+    });
+    vi.mocked(getSubmission).mockResolvedValue({
+      submission: {
+        id: 2,
+        userId: 7,
+        problemId: 476,
+        questId: null,
+        source: 'TRAINING',
+        language: 'PYTHON_3_11',
+        code: 'print(0)',
+        submittedAt: '2026-05-21T19:00:00Z',
+        status: 'PASSED',
+        runtimeMs: 12,
+        memoryKb: null,
+      },
+      judgeResult: {
+        id: 12,
+        submissionId: 2,
+        verdict: 'WA',
+        passedCases: 0,
+        totalCases: 3,
+        failureReason: '答案错误',
+        trace: {},
+        createdAt: '2026-05-21T19:00:00Z',
+      },
+    });
+
+    const wrapper = mountPanel();
+    const learning = useLearningStore();
+    const mainQuest = useMainQuestStore();
+    await learning.loadTrainingProblem(476);
+    learning.setTrainingCode('print(0)');
+    await flushPromises();
+
+    await wrapper.find('[data-testid="submit-button"]').trigger('click');
+    await flushPromises();
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('WA');
+    expect(mainQuest.progress.completedSubQuests).not.toContain('2-3');
+  });
+
+  it('renders problem statement as markdown instead of raw text', async () => {
+    const wrapper = mountPanel();
+    const learning = useLearningStore();
+    await learning.loadTrainingProblem(476);
+    await flushPromises();
+
+    const statement = wrapper.get('[data-testid="problem-statement"]');
+    expect(statement.find('h3').text()).toBe('题目描述');
+    expect(statement.find('code').text()).toBe('print()');
+    expect(statement.text()).not.toContain('### 题目描述');
+  });
+
+  it('uses a CodeMirror 6 editor surface for Python code', async () => {
+    const wrapper = mountPanel();
+    const learning = useLearningStore();
+    await learning.loadTrainingProblem(476);
+    await flushPromises();
+
+    const editor = wrapper.get('[data-testid="code-editor"]');
+    expect(editor.find('.cm-editor').exists()).toBe(true);
+    expect(editor.find('textarea').exists()).toBe(false);
   });
 });

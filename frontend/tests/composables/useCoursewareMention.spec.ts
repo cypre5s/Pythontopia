@@ -79,7 +79,7 @@ describe('useCoursewareMention', () => {
     const kc = m.flatItems.value.find((i) => i.kcCode === 'PY43-KC-012');
     expect(kc).toBeDefined();
     m.selectItem(kc as MentionItem);
-    expect(m.text.value).toBe('讲讲 @PY43-KC-012 ');
+    expect(m.text.value).toBe('讲讲 @KC-012 ');
     expect(m.menuVisible.value).toBe(false);
     expect(m.selected.value).toHaveLength(1);
     expect(m.selectedKcCodes.value).toEqual(['PY43-KC-012']);
@@ -129,10 +129,10 @@ describe('useCoursewareMention', () => {
     const kc = items.find((i) => i.kcCode === 'PY43-KC-012') as MentionItem;
     m.updateFromText('讲 @z');
     m.selectItem(kc);
-    expect(m.text.value).toContain('@PY43-KC-012');
-    m.removeRef('@PY43-KC-012');
+    expect(m.text.value).toContain('@KC-012');
+    m.removeRef('@KC-012');
     expect(m.selected.value).toHaveLength(0);
-    expect(m.text.value).not.toContain('@PY43-KC-012');
+    expect(m.text.value).not.toContain('@KC-012');
   });
 
   it('删除 token 文本时自动同步移除引用', () => {
@@ -171,7 +171,7 @@ describe('buildMentionItems', () => {
     expect(items[0]?.kind).toBe('chapter');
   });
 
-  it('KC 按 code 排序、token 为 @<kcCode>', () => {
+  it('KC 按 code 排序、token 去 PY43 前缀为 @KC-<n>，kcCode 仍全码', () => {
     const items = buildMentionItems(
       [],
       [
@@ -179,7 +179,7 @@ describe('buildMentionItems', () => {
         { kcCode: 'PY43-KC-012', kcName: 'input', chapterId: 1, summaryMarkdown: null },
       ],
     );
-    expect(items.map((i) => i.token)).toEqual(['@PY43-KC-012', '@PY43-KC-044']);
+    expect(items.map((i) => i.token)).toEqual(['@KC-012', '@KC-044']);
     expect(items[0]?.kcCode).toBe('PY43-KC-012');
   });
 });

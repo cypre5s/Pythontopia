@@ -120,7 +120,7 @@ license 矩阵无关（它们是 JS 代码，受代码层 MIT 控制），但为
 | `frontend/public/assets/pixel/ui/login-hero-stardew.png` | Pythontopia 原创（AI 辅助生成 + 人工审核） | CC-BY-SA 3.0+ | LoginPage 星露谷风暖色像素小镇 hero；NPC 与建筑均为原创，不复制任何商业像素游戏 |
 | `frontend/public/assets/pixel/bosses/boss-{1..7}-*.png` (7 张) | Pythontopia 原创（AI 辅助生成 + 人工审核 + 原创主题设计） | CC-BY-SA 3.0+ | BossPage / Endless / Arena 第 10 关 Boss 立绘；7 章主题：算盘灵 / 解释器学徒 / 二进制独眼 / 流程钟楼 / 集合棱镜 / 文档守护神 / 归纳之镜；风格统一星露谷暖色像素，与 hero 同调 |
 | `frontend/public/assets/pixel/vendor/ansimuz-mountain-dusk/{5×PNG,LICENSE-CC0.txt}` | ansimuz "Mountain at Dusk Background" (https://opengameart.org/content/mountain-at-dusk-background) | **CC0-1.0** | 备用：4 层 parallax 远山日落剪影，预留 boss 终局 / 章末过场使用 |
-| `frontend/public/assets/pixel/portraits/heads/portrait_*_head.png` (29 张) | `frontend/public/assets/pixel/portraits/portrait_*.png` 子裁切；9 个 R-14 demo NPC 从 `sprites/npc-composites/npc_*.png` 的 down idle 正面帧裁切，由 `scripts/crop-portrait-heads.py` 输出 | 继承原 portrait / composite（CC0 / CC-BY 4.0 / OGA-BY 3.0 分文件） | DialogModal / DialogTree 单帧头像，每张 32×48 |
+| `frontend/public/assets/pixel/portraits/heads/portrait_*_head.png` (29 张) | `frontend/public/assets/pixel/portraits/portrait_*.png` 子裁切；9 个 R-14 demo NPC 从 `sprites/npc-composites/npc_*.png` 的 down idle 正面帧裁切，由 `scripts/crop_portrait_heads.py` 输出 | 继承原 portrait / composite（CC0 / CC-BY 4.0 / OGA-BY 3.0 分文件） | DialogModal / DialogTree 单帧头像，每张 32×48 |
 | `assets/inbox/r13-overworld/pastoral-tileset-db32.png` | Ragnar Random Hat (https://opengameart.org/content/pastoral-overworld) | **CC0-1.0** | 备用：DawnBringer db32 32×32 乡村瓦片，未集成到运行时 |
 | `assets/inbox/r13-lpc-lamp/lpc_lamp_posts_rework-1.0.zip` | Curt, Sharm, William.Thompsonj, mold (LPC) | CC-BY 3.0 / OGA-BY 3.0 / GPL 3.0 | 备用：32×32 路灯柱多色，未集成到运行时；引入时需署名 4 位作者 |
 
@@ -234,7 +234,7 @@ P3-a2「智能体事务所」执行动画复用既有 NPC 行走帧（无新增�
 
 主角与世界 NPC 改用**官方 Universal-LPC-Spritesheet-Character-Generator** 的整套素材库
 合成「Expanded」全动作角色表（13×42：base 6 动作 + climb/idle/jump/sit/emote/run）。
-由 `scripts/build-ulpc-characters.py` 忠实合成（仅用官方像素，非手绘）。源 zip/credits 留存于
+由 `scripts/build_ulpc_characters.py` 忠实合成（仅用官方像素，非手绘）。源 zip/credits 留存于
 `assets/inbox/characters_extra/ulpc_generated/`（`README_SOURCE.md` + `CREDITS-ulpc-used.txt` +
 `LICENSE-ulpc.txt`）。早前 `scripts/build-npc-action-sheets.py` 的本地合成套装（npcact_*）已废弃删除。
 
@@ -261,7 +261,7 @@ P3-a2「智能体事务所」执行动画复用既有 NPC 行走帧（无新增�
 ## R-12 茅草屋建筑（替换方块拼接，2026-05-29）
 
 世界场景的建筑由「方块瓦片拼接」升级为 LPC 茅草屋整屋 sprite（四坡茅草顶 + 半木墙体），
-由 `scripts/build-cottages.py` 从 kit 裁切合成，按建筑区位底沿对齐贴在旧瓦片之上。
+由 `scripts/build_cottages.py` 从 kit 裁切合成，按建筑区位底沿对齐贴在旧瓦片之上。
 
 | 运行时路径 | 来源 | License | 用途 |
 | --- | --- | --- | --- |
@@ -285,4 +285,4 @@ P3-a2「智能体事务所」执行动画复用既有 NPC 行走帧（无新增�
 2. 醒来后可选：手动下载 ansimuz/sunny-land-pixel-game-art + ansimuz/fantasy-weapons-set（itch.io CC0，需浏览器 session）
 3. 真实部署后 `frontend/public/credits/` 全量署名页生成（CC-BY-SA 3.0 + OFL-1.1 必备）
 4. B6 LPC Lamp Posts 下载后集成到 town_hub.json / campus_east.json 的 tileset 层
-5. B6 NPC portraits 批量统一：scripts/crop-portrait-heads.py 已覆盖 29 NPC；后续如新增 NPC，需同步 meta/index 与 heads 裁切
+5. B6 NPC portraits 批量统一：scripts/crop_portrait_heads.py 已覆盖 29 NPC；后续如新增 NPC，需同步 meta/index 与 heads 裁切

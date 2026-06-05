@@ -18,9 +18,9 @@ package com.pythontopia.feature.arena
  * 这样 [ProblemRunner] 不论切换到哪一题都可以在底部展示"我上一次的判题结果"，让玩家
  * 知道刚才到底有没有提交过；切题不清空，但重新提交会覆盖。
  *
- * **演示账号约定**：当前 Android demo 没接登录态时，[myUserId] 取常量 104L（与
- * [ArenaRepository] DEMO_LEADERBOARD 中"我（演示账号）"那行 userId 对齐），方便排行榜
- * 能高亮"我"的位置。R-12 Beta+1 接 SessionRepository 后改为从 JWT 读取真实 userId。
+ * **演示账号约定**：当前 Android demo 未接登录态，[myUserId] 取占位常量 104L。注意真实
+ * “积分榜”行的 userId 来自后端 PASSED 提交（[ArenaRepository.leaderboard]），与该占位值不一定
+ * 相等，故此阶段“我”的高亮可能不命中；Beta+1 接 SessionRepository 从 JWT 读真实 userId 后修复。
  */
 data class ArenaUiState(
     val isLoadingSession: Boolean = false,

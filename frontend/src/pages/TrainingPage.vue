@@ -40,8 +40,9 @@ watch(problemId, async (id) => {
 
 <style scoped>
 .training-page {
-  padding: 16px;
+  height: calc(100vh - 64px);
   min-height: calc(100vh - 64px);
-  background: linear-gradient(180deg, var(--pyt-color-bg-primary) 0%, var(--pyt-color-bg-sunken) 100%);
+  overflow: hidden;
+  background: var(--pyt-color-bg-primary);
 }
 </style>
