@@ -118,6 +118,11 @@ const bossSpritePhase = computed<'idle' | 'hurt' | 'angry' | 'victory'>(() => {
   return 'idle';
 });
 
+// 剩余时间过半 = 暴击窗口（telegraph：抢时间快答）。
+const inCritWindow = computed<boolean>(
+  () => session.timeLeftSec.value >= Math.ceil(session.stageTimeLimit.value / 2),
+);
+
 const REWARD_ITEM_LABELS: Record<string, string> = {
   'outfit:apprentice': '学徒装',
   'title:python_speaker': '称号·Python 代言人',
@@ -161,7 +166,14 @@ function rewardLabel(r: MainSubQuestReward): string {
         </button>
         <div class="boss-title">
           <span class="boss-chapter">第 {{ chapter }} 章 BOSS</span>
-          <span class="boss-name">{{ boss?.name ?? '???' }}</span>
+          <span class="boss-name">
+            {{ boss?.name ?? '???' }}
+            <span
+              v-if="session.bossPhase.value === 2"
+              class="boss-enrage-badge"
+              data-testid="boss-enrage"
+            >狂暴</span>
+          </span>
         </div>
         <div
           class="boss-stage-bar"
@@ -180,9 +192,14 @@ function rewardLabel(r: MainSubQuestReward): string {
         </div>
         <div
           class="boss-timer"
+          :class="{
+            'boss-timer--urgent': session.timeLeftSec.value <= 15,
+            'boss-timer--crit': inCritWindow,
+          }"
           data-testid="boss-timer"
         >
-          ⏱ {{ session.elapsedSec.value }}s
+          ⏱ {{ session.timeLeftSec.value }}s
+          <span class="boss-timer__hint">{{ inCritWindow ? '快答暴击' : '限时作答' }}</span>
         </div>
       </header>
 
@@ -371,6 +388,36 @@ function rewardLabel(r: MainSubQuestReward): string {
             />
             <span class="boss-hpbar__label">HP {{ session.bossHp.value }} / 100</span>
           </div>
+
+          <div
+            class="boss-hpbar boss-hpbar--player"
+            data-testid="player-hpbar"
+            role="progressbar"
+            :aria-valuenow="session.playerHp.value"
+            aria-valuemin="0"
+            aria-valuemax="100"
+          >
+            <div
+              class="boss-hpbar__fill boss-hpbar__fill--player"
+              :style="{ width: `${session.playerHp.value}%` }"
+            />
+            <span class="boss-hpbar__label">你 HP {{ session.playerHp.value }} / 100</span>
+          </div>
+
+          <p
+            v-if="session.lastHitCrit.value && session.phase.value === 'passed'"
+            class="boss-crit"
+            data-testid="boss-crit"
+          >
+            ⚡ 暴击！限时内快答，回血 +12
+          </p>
+          <p
+            v-if="session.recentPlayerDamage.value !== null"
+            class="boss-counter"
+            data-testid="player-dmg-float"
+          >
+            ⚔ boss 反击！你 -{{ session.recentPlayerDamage.value }}
+          </p>
 
           <div
             v-if="session.currentMove.value"
@@ -748,6 +795,68 @@ function rewardLabel(r: MainSubQuestReward): string {
   margin: 0;
   color: #ff7466;
 }
+/* 回合制对攻（A 方案）：玩家血条 / 狂暴 / 暴击 / 反击 / 倒计时 */
+.boss-hpbar--player {
+  margin-top: 6px;
+}
+.boss-hpbar__fill--player {
+  background: linear-gradient(180deg, #6bd06b 0%, #3ca85a 60%, #1d7c3a 100%);
+}
+.boss-enrage-badge {
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 10px;
+  color: #fff;
+  background: #b3402a;
+  border: 1px solid #ff7466;
+  border-radius: 4px;
+  animation: enrage-pulse 0.8s ease-in-out infinite;
+}
+@keyframes enrage-pulse {
+  0%, 100% { box-shadow: 0 0 4px rgba(255, 80, 40, 0.5); }
+  50% { box-shadow: 0 0 12px rgba(255, 80, 40, 0.95); }
+}
+.boss-timer__hint {
+  display: block;
+  font-size: 9px;
+  color: var(--pyt-color-gold);
+}
+.boss-timer--crit .boss-timer__hint {
+  color: #6bd06b;
+}
+.boss-timer--urgent {
+  color: #ff7466;
+  animation: enrage-pulse 0.6s ease-in-out infinite;
+}
+.boss-crit {
+  margin: 8px auto 0;
+  max-width: 280px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: #2a1a08;
+  background: var(--pyt-color-gold-bright);
+  border: 1px solid var(--pyt-color-gold);
+  border-radius: 4px;
+  text-align: center;
+}
+.boss-counter {
+  margin: 8px auto 0;
+  max-width: 280px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: #fff;
+  background: rgba(140, 60, 30, 0.5);
+  border: 1px solid #b3402a;
+  border-radius: 4px;
+  text-align: center;
+}
+@media (prefers-reduced-motion: reduce) {
+  .boss-enrage-badge,
+  .boss-timer--urgent {
+    animation: none;
+  }
+}
+
 @media (max-width: 1024px) {
   .boss-body {
     grid-template-columns: 1fr;

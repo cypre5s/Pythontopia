@@ -165,4 +165,63 @@ describe('useBossSession (R-13 §-1 BossPage 交互深挖)', () => {
     expect(s.currentMove.value?.name).toBe('算珠初震');
     expect(s.recentDamage.value).toBeNull();
   });
+
+  // ── A 方案：回合制对攻（玩家血量 / 反击 / 暴击 / 狂暴阶段） ──
+  it('初始 playerHp 100 + bossPhase 1 + 有限时', () => {
+    const s = useBossSession({ chapter: 1 });
+    expect(s.playerHp.value).toBe(100);
+    expect(s.bossPhase.value).toBe(1);
+    expect(s.timeLeftSec.value).toBeGreaterThan(0);
+  });
+
+  it('答错 → boss 反击扣玩家血，phase=failed', async () => {
+    apiMocks.submitBossAttempt.mockResolvedValue({
+      problemId: 'p-1',
+      passed: false,
+      passedTestCases: 0,
+      totalTestCases: 3,
+      score: 0,
+      feedback: 'WA',
+    });
+    pyodideMock.run.mockResolvedValue({ stdout: 'x\n', stderr: '' });
+    const s = useBossSession({ chapter: 1 });
+    await s.startStage();
+    s.code.value = 'print(1)';
+    await s.submit();
+    expect(s.phase.value).toBe('failed');
+    expect(s.playerHp.value).toBeLessThan(100);
+    expect(s.recentPlayerDamage.value).toBeGreaterThan(0);
+  });
+
+  it('通过 2 阶段后 bossHp≤50 → bossPhase 进入 2（狂暴）', async () => {
+    const s = useBossSession({ chapter: 1 });
+    for (let stage = 1; stage <= 2; stage += 1) {
+      s.stage.value = stage;
+      await s.startStage();
+      s.code.value = 'fake';
+      await s.submit();
+      if (stage < 2) await s.advanceStage();
+    }
+    expect(s.bossHp.value).toBe(50);
+    expect(s.bossPhase.value).toBe(2);
+  });
+
+  it('限时内快答（计时器未走）= 暴击 lastHitCrit', async () => {
+    const s = useBossSession({ chapter: 1 });
+    await s.startStage();
+    s.code.value = 'fake';
+    await s.submit();
+    expect(s.lastHitCrit.value).toBe(true);
+  });
+
+  it('reset 重置 playerHp / lastHitCrit / recentPlayerDamage', async () => {
+    const s = useBossSession({ chapter: 1 });
+    await s.startStage();
+    s.code.value = 'fake';
+    await s.submit();
+    s.reset();
+    expect(s.playerHp.value).toBe(100);
+    expect(s.lastHitCrit.value).toBe(false);
+    expect(s.recentPlayerDamage.value).toBeNull();
+  });
 });

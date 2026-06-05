@@ -8,7 +8,7 @@
 // 评测策略：先在浏览器跑 Pyodide 给玩家即时反馈，再调真后端 submitBossAttempt
 // 把分数 / mastery 同步入库（后端 5xx 时仍以 Pyodide 判定为准）。
 
-import { ref, type Ref } from 'vue';
+import { computed, ref, type Ref } from 'vue';
 import { requestBossProblem, submitBossAttempt } from '@/api/boss';
 import type {
   BossAttemptResultDto,
@@ -61,6 +61,18 @@ export interface UseBossSessionReturn {
   currentMove: Ref<BossMove | null>;
   /** 最近一次造成的伤害（用于飘字动画）；null = 未刚扣血。 */
   recentDamage: Ref<number | null>;
+  /** 玩家 HP（满 100）：答错 / 超时被 boss 反击扣血，归零则「被击倒」重整（低风险，不结束副本）。 */
+  playerHp: Ref<number>;
+  /** boss 阶段：bossHp≤50 进入第 2 阶段（狂暴）——反击更狠、限时更短。 */
+  bossPhase: Ref<number>;
+  /** 最近一次被 boss 反击的伤害（玩家侧飘字）；null = 未刚被击。 */
+  recentPlayerDamage: Ref<number | null>;
+  /** 最近一次作答是否暴击（限时内快答）。 */
+  lastHitCrit: Ref<boolean>;
+  /** 本阶段剩余作答时间（秒，倒计时）：既是 telegraph 压力，也决定暴击。 */
+  timeLeftSec: Ref<number>;
+  /** 本阶段限时（秒），随 boss 阶段缩短。 */
+  stageTimeLimit: Ref<number>;
   startStage: () => Promise<void>;
   submit: () => Promise<void>;
   reset: () => void;
@@ -121,6 +133,19 @@ export function getBossMove(chapter: number, stage: number): BossMove | null {
   return moves[stage - 1] ?? null;
 }
 
+// ── 回合制对攻参数（A 方案）──
+const PLAYER_MAX_HP = 100;
+/** bossHp ≤ 此值进入第 2 阶段（狂暴）。 */
+const BOSS_PHASE2_HP = 50;
+/** 每阶段作答限时：狂暴阶段更短，制造压力。 */
+const STAGE_TIME_PHASE1 = 110;
+const STAGE_TIME_PHASE2 = 75;
+/** boss 反击伤害（答错 / 超时）：狂暴阶段更狠。 */
+const BOSS_ATTACK_PHASE1 = 18;
+const BOSS_ATTACK_PHASE2 = 30;
+/** 暴击（限时过半快答）回血量。 */
+const CRIT_HEAL = 12;
+
 export function useBossSession(opts: UseBossSessionOptions): UseBossSessionReturn {
   const totalStages = opts.totalStages ?? 4;
   const phase = ref<BossPhase>('idle');
@@ -134,6 +159,23 @@ export function useBossSession(opts: UseBossSessionOptions): UseBossSessionRetur
   const bossHp = ref<number>(100);
   const currentMove = ref<BossMove | null>(getBossMove(opts.chapter, 1));
   const recentDamage = ref<number | null>(null);
+  const playerHp = ref<number>(PLAYER_MAX_HP);
+  const recentPlayerDamage = ref<number | null>(null);
+  const lastHitCrit = ref<boolean>(false);
+  // bossPhase 由 bossHp 派生：≤50 进入第 2 阶段（狂暴）。
+  const bossPhase = computed<number>(() => (bossHp.value <= BOSS_PHASE2_HP ? 2 : 1));
+  const stageTimeLimit = computed<number>(() =>
+    bossPhase.value === 2 ? STAGE_TIME_PHASE2 : STAGE_TIME_PHASE1,
+  );
+  const timeLeftSec = ref<number>(STAGE_TIME_PHASE1);
+
+  function clearPlayerDamageSoon(): void {
+    if (typeof window !== 'undefined') {
+      window.setTimeout(() => {
+        recentPlayerDamage.value = null;
+      }, 1200);
+    }
+  }
 
   const mainQuest = useMainQuestStore();
 
@@ -143,6 +185,10 @@ export function useBossSession(opts: UseBossSessionOptions): UseBossSessionRetur
     elapsedSec.value = 0;
     // 每个 stage 切换招式预告。
     currentMove.value = getBossMove(opts.chapter, stage.value);
+    // 重置本阶段倒计时（telegraph：限时内作答才暴击），并清掉上轮暴击 / 反击痕迹。
+    timeLeftSec.value = stageTimeLimit.value;
+    lastHitCrit.value = false;
+    recentPlayerDamage.value = null;
     try {
       const fetched = await requestBossProblem(opts.chapter, stage.value);
       problem.value = fetched;
@@ -234,6 +280,13 @@ export function useBossSession(opts: UseBossSessionOptions): UseBossSessionRetur
         problemId: p.problemId,
         kcCode: p.kcCode,
       });
+      // 限时内快答（剩余时间过半）= 暴击：回血 + 标记，给「抢时间」正反馈。
+      // 刻意不改 boss 扣血量，保证 4 阶段恰好把 boss 打空（与既有契约一致）。
+      const crit = timeLeftSec.value >= Math.ceil(stageTimeLimit.value / 2);
+      lastHitCrit.value = crit;
+      if (crit) {
+        playerHp.value = Math.min(PLAYER_MAX_HP, playerHp.value + CRIT_HEAL);
+      }
       // boss HP 真扣血 + 飘字效果
       const move = currentMove.value ?? getBossMove(opts.chapter, stage.value);
       const dmg = move?.damageOnDefeat ?? Math.floor(100 / totalStages);
@@ -252,6 +305,16 @@ export function useBossSession(opts: UseBossSessionOptions): UseBossSessionRetur
         phase.value = 'passed';
       }
     } else {
+      // 答错 → boss 反击：玩家扣血（狂暴阶段更狠）。归零则「被击倒重整」回满，
+      // 不结束副本（低风险重试，符合教育场景）。
+      lastHitCrit.value = false;
+      const atk = bossPhase.value === 2 ? BOSS_ATTACK_PHASE2 : BOSS_ATTACK_PHASE1;
+      playerHp.value -= atk;
+      recentPlayerDamage.value = atk;
+      if (playerHp.value <= 0) {
+        playerHp.value = PLAYER_MAX_HP;
+      }
+      clearPlayerDamageSoon();
       phase.value = 'failed';
     }
   }
@@ -268,11 +331,26 @@ export function useBossSession(opts: UseBossSessionOptions): UseBossSessionRetur
     bossHp.value = 100;
     currentMove.value = getBossMove(opts.chapter, 1);
     recentDamage.value = null;
+    playerHp.value = PLAYER_MAX_HP;
+    recentPlayerDamage.value = null;
+    lastHitCrit.value = false;
+    timeLeftSec.value = STAGE_TIME_PHASE1;
   }
 
   function tickSecond(): void {
     if (phase.value === 'playing') {
       elapsedSec.value += 1;
+      if (timeLeftSec.value > 0) {
+        timeLeftSec.value -= 1;
+        // 时间耗尽的一刻：boss 趁机出招打一下（一次性，封底保留 1 滴血），
+        // 之后停在 0——仍可作答但不再暴击，制造「快答」压力而非硬性失败。
+        if (timeLeftSec.value === 0) {
+          const atk = bossPhase.value === 2 ? BOSS_ATTACK_PHASE2 : BOSS_ATTACK_PHASE1;
+          playerHp.value = Math.max(1, playerHp.value - atk);
+          recentPlayerDamage.value = atk;
+          clearPlayerDamageSoon();
+        }
+      }
     }
   }
 
@@ -307,6 +385,12 @@ export function useBossSession(opts: UseBossSessionOptions): UseBossSessionRetur
     bossHp,
     currentMove,
     recentDamage,
+    playerHp,
+    bossPhase,
+    recentPlayerDamage,
+    lastHitCrit,
+    timeLeftSec,
+    stageTimeLimit,
     startStage,
     submit,
     reset,
