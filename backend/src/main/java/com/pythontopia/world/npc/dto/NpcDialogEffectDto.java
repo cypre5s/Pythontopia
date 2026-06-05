@@ -1,16 +1,16 @@
 package com.pythontopia.world.npc.dto;
 
 /**
- * Effect payload applied during {@code POST /api/world/npcs/{npcKey}/talk}.
+ * talk 接口（{@code POST /api/world/npcs/{npcKey}/talk}）应用的 effect 载荷。
  *
- * <p>Recognised {@code type}s:
+ * <p>支持的 {@code type}：
  *
  * <ul>
- *   <li>{@code FRIENDSHIP_DELTA} — adjust friendship by {@code delta} (clamped 0..100).
- *   <li>{@code COMPLETE_NODE} — append {@code key} (node id) to {@code completed_node_ids}.
- *   <li>{@code SET_FLAG} — write {@code value} (raw string) into {@code flags[key]}.
+ *   <li>{@code FRIENDSHIP_DELTA} — 按 {@code delta} 调整好感度（钳制到 0..100）。
+ *   <li>{@code COMPLETE_NODE} — 将 {@code key}（节点 id）追加到 {@code completed_node_ids}。
+ *   <li>{@code SET_FLAG} — 将 {@code value}（原始字符串）写入 {@code flags[key]}。
  * </ul>
  *
- * Unknown {@code type}s are silently ignored to keep narrative iteration cheap.
+ * <p>未知 {@code type} 静默忽略以保持前向兼容。
  */
 public record NpcDialogEffectDto(String type, Integer delta, String key, String value) {}

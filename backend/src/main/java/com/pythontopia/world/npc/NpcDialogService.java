@@ -14,10 +14,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * Applies the talk business rules (node progress + friendship + flags) on top of the {@link
- * NpcDialogStateRepository} primitive writes. Item-gifting was removed with the inventory system.
- */
+/** 在 {@link NpcDialogStateRepository} 的原子写之上施加 talk 业务规则（节点进度 + 好感度 + flags）。 */
 @Service
 public class NpcDialogService {
 
@@ -71,7 +68,7 @@ public class NpcDialogService {
           }
         }
         default -> {
-          // ignored for forward compatibility
+          // 忽略未知 effect 类型以保持前向兼容
         }
       }
     }

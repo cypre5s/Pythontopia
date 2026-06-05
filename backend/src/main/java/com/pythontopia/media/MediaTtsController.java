@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/** TTS 端点：{@code POST /api/media/tts}（需登录），按文本合成语音并内联返回 {@code audio/mpeg}(mp3)。 */
 @RestController
 @RequestMapping("/api/media")
 public class MediaTtsController {

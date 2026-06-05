@@ -13,11 +13,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 /**
- * Reads the static {@code world_festival} catalog (seeded in V118) and flips the per-row
- * lifecycle {@code status} column when {@link WorldFestivalService} ticks. Status writes are
- * intentionally schedule-wide (no user_id) because {@code world_festival} is the canonical world
- * configuration table; per-user FESTIVAL_START / FESTIVAL_END emission is owned by
- * {@code WorldEventRepository} and will be wired in by the follow-up R-Live-Festival sub-task.
+ * 读取静态 {@code world_festival} 目录（V118 seed），并在 {@link WorldFestivalService} tick 时翻转每行的
+ * 生命周期 {@code status}。状态写入是全日程级（无 user_id），因为 {@code world_festival} 是世界配置的权威表；
+ * 按用户的 FESTIVAL_START/FESTIVAL_END 发射由 {@code WorldEventRepository} 负责。
  */
 @Repository
 public class WorldFestivalRepository {
@@ -49,10 +47,8 @@ public class WorldFestivalRepository {
   }
 
   /**
-   * Return festivals whose {@code day_index} is strictly greater than {@code currentDay} and at
-   * most {@code currentDay + withinDays}, ordered by ascending {@code day_index}. The current day
-   * is excluded so the HUD can keep "now" and "upcoming" lanes separate; callers wanting today's
-   * festival should use {@link #findByDay(int)} instead.
+   * 返回 {@code day_index} 严格大于 {@code currentDay} 且不超过 {@code currentDay + withinDays} 的节日，按
+   * {@code day_index} 升序。排除当天，使 HUD 能区分「当前」与「即将」；要查当天用 {@link #findByDay(int)}。
    */
   public List<WorldFestival> findUpcoming(int currentDay, int withinDays) {
     return jdbcTemplate.query(
@@ -64,9 +60,8 @@ public class WorldFestivalRepository {
   }
 
   /**
-   * Flip the lifecycle {@code status} of the festival at {@code dayIndex}. No-ops silently when
-   * no row matches (e.g. day without a festival); callers should pre-check via {@link
-   * #findByDay(int)} if they need a hard "festival exists" assertion.
+   * 翻转 {@code dayIndex} 处节日的生命周期 {@code status}。无匹配行时静默 no-op（如无节日的日子）；
+   * 需要硬断言「节日存在」的调用方应先用 {@link #findByDay(int)} 预检。
    */
   public void updateStatus(int dayIndex, String status) {
     jdbcTemplate.update(

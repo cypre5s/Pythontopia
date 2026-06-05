@@ -152,11 +152,11 @@ public class ProfileRepository {
   /**
    * 读取 learner_profile.dimensions JSONB（八维画像聚合字段）。
    *
-   * <p>当 user 尚无 profile 行、列为 NULL、JSON 解析失败时返回 {@link Optional#empty()}。
+   * <p>无 profile 行、{@code dimensions} 为 NULL 或空串时返回 {@link Optional#empty()}；JSON 非法时抛
+   * {@link IllegalStateException}。
    *
-   * <p>当 {@code dimensions} 列尚未由 W2-MIGRATE 创建时，底层 SQL 会抛 {@link
-   * org.springframework.jdbc.BadSqlGrammarException}，本方法不吞掉以便调用方（PassiveProfileService /
-   * PassiveProfileRevisionListener）显式降级。
+   * <p>{@code dimensions} 列尚未创建时底层 SQL 抛 {@link org.springframework.jdbc.BadSqlGrammarException}，
+   * 本方法刻意不吞，以便调用方（PassiveProfileService / PassiveProfileRevisionListener）显式降级。
    */
   public Optional<JsonNode> findDimensions(Long userId) {
     return jdbcTemplate

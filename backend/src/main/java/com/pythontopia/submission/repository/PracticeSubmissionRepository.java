@@ -195,7 +195,7 @@ public class PracticeSubmissionRepository {
   public record PlannerSubmission(Long problemId, String kcCode, boolean passed) {}
 
   /**
-   * 同一题在某次提交之前的失败次数（情绪化小镇②：判定重试/逆袭）。{@code id < beforeSubmissionId}
+   * 同一题在某次提交之前的失败次数，用于判定重试/逆袭。{@code id < beforeSubmissionId}
    * 保证只数「先前」的失败（id 单调递增），不含当前这次。
    */
   public int countPriorFailures(Long userId, Long problemId, Long beforeSubmissionId) {

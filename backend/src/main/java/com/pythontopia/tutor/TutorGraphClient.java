@@ -50,8 +50,8 @@ public class TutorGraphClient {
   }
 
   /**
-   * Streams the tutor ask response via SSE from the Python graph service.
-   * Relays all events through the emitter; calls onResult when the final result arrives.
+   * 从 Python graph 服务以 SSE 流式获取导师解答：所有事件经 {@code emitter} 转发，
+   * 收到最终 {@code result} 事件时回调 {@code onResult}。
    *
    * <p>看图答疑（B）：当 {@code images} 非空且图片理解已启用时，先在 relay 线程内逐张调用讯飞
    * 「图片理解」把图片转成客观描述（每张发一组 {@code trace} 事件，驱动前端「助教小队」拟人化动画），
@@ -76,7 +76,7 @@ public class TutorGraphClient {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("user_id", userId);
         body.put("question", question);
-        // 复数 kc_codes，与 Python schema 对齐（修正此前 kc_code 单复数错配的丢参 bug）。
+        // kc_codes 用复数，与 Python schema 对齐。
         if (kcCodes != null && !kcCodes.isEmpty()) {
           body.put("kc_codes", kcCodes);
         }

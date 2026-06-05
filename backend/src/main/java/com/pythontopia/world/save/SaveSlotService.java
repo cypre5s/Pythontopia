@@ -39,11 +39,9 @@ public class SaveSlotService {
   }
 
   /**
-   * Patch the V114 extension columns of a slot. {@code null} arguments leave the existing values
-   * unchanged so the action endpoint can incrementally update e.g. only the scene_name.
+   * patch slot 的 V114 扩展列。{@code null} 入参保持原值不变，便于增量更新（如仅 scene_name）。
    *
-   * <p>{@code inventoryItems} is serialised here so callers can pass any JSON-friendly value (List
-   * of records, ObjectNode, raw String, ...).
+   * <p>{@code inventoryItems} 在此序列化，调用方可传任意 JSON 友好值（record List、ObjectNode、原始 String 等）。
    */
   public SaveSlotDto updateExtension(
       Long userId,

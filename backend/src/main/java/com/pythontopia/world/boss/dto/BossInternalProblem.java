@@ -5,11 +5,11 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 
 /**
- * R-13 §5 Phase 6 续：graph /agents/boss/problem 完整响应。
+ * graph {@code /agents/boss/problem} 完整响应。
  *
- * <p>与 {@link BossProblemDto} 的区别：本 record 额外携带 {@code testCases} +
- * {@code referenceSolution}，仅在 backend 内部使用（缓存 / 转发给 graph evaluate），
- * 永远 <b>不</b> 序列化返给前端，避免 hidden test 答案泄露。
+ * <p>与 {@link BossProblemDto} 的区别：额外携带 {@code testCases} 与 {@code referenceSolution}，
+ * 仅 backend 内部使用（缓存 / 转发给 graph evaluate），永远 <b>不</b>序列化返给前端，
+ * 避免 hidden test 答案泄露。
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record BossInternalProblem(

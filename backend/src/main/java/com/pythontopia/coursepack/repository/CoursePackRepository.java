@@ -77,7 +77,7 @@ public class CoursePackRepository {
   }
 
   /**
-   * 读取每个 KC 的先修 KC code 列表（{@code course_kc.prerequisite_codes}，由 V125 按教学顺序播种）。
+   * 读取每个 KC 的先修 KC code 列表（{@code course_kc.prerequisite_codes}）。
    * 供 PathPlanner 做 DAG 拓扑排序。
    */
   public java.util.Map<String, List<String>> findKcPrerequisites(Long packId) {
@@ -216,6 +216,22 @@ public class CoursePackRepository {
       return result.toArray(new Long[0]);
     }
     return new Long[0];
+  }
+
+  /** 按 page_id 取单条课件页（含 document_id + page_no），供「页面图片」端点定位 PDF 与页码。 */
+  public Optional<CoursePage> findPageById(Long pageId) {
+    return jdbcClient
+        .sql(
+            """
+            SELECT id, pack_id AS packId, document_id AS documentId,
+                   chapter_id AS chapterId, page_no AS pageNo,
+                   title, content_markdown AS contentMarkdown, excerpt
+            FROM course_page
+            WHERE id = :pageId
+            """)
+        .param("pageId", pageId)
+        .query(CoursePage.class)
+        .optional();
   }
 
   public List<CoursePage> findPagesByKc(Long packId, String kcCode) {

@@ -60,10 +60,7 @@ public class WorkshopGraphClient {
     }
   }
 
-  /**
-   * Streams SSE from the graph service's streaming produce endpoint.
-   * Events are relayed through the emitter; the onResult callback processes the final result event.
-   */
+  /** 从 graph 服务流式 produce 端点转发 SSE：事件经 emitter 透传，onResult 回调处理最终 result 事件。 */
   public void produceStream(
       ResourceProduceRequestDto request,
       SseEmitter emitter,

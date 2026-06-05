@@ -19,21 +19,19 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientException;
 
 /**
- * R-13 §5 Phase 6：Boss 副本服务。
+ * Boss 副本服务。
  *
  * <p>职责：
  *
  * <ul>
  *   <li>把 chapter + stage 翻译成默认 KC 范围（与前端 {@code MAIN_QUEST_BOSSES} 表一致）；
- *   <li>调 {@link BossGraphClient} 拉 AI 出题；失败时退化到 golden test 题；
- *   <li>用 in-memory cache 持有完整 {@link BossInternalProblem}（含 hidden testCases），
- *       在 {@link #evaluateAttempt} 时取出 → 转发给 graph evaluate；
- *   <li>graph 评测失败时返回结构化 fallback，提示前端用 Pyodide 校验。
+ *   <li>调 {@link BossGraphClient} 拉 AI 出题，失败时退化到 golden 兜底题；
+ *   <li>用进程内 cache 持有完整 {@link BossInternalProblem}（含 hidden testCases），
+ *       {@link #evaluateAttempt} 时取出转发给 graph evaluate；
+ *   <li>graph 评测失败时返回结构化兜底，提示前端用 Pyodide 校验。
  * </ul>
  *
- * <p>缓存策略：默认 30 分钟 TTL（覆盖单局 4 阶段平均 8 分钟 + 重连缓冲），超时后
- * 玩家若仍未提交会拿到 {@code feedback="题目已过期"}；这个 case 极少（演示
- * 主流程提交在 30s 内）。
+ * <p>缓存 TTL 30 分钟（覆盖单局 4 阶段时长 + 重连缓冲），超时后未提交的题目失效。
  */
 @Service
 public class BossService {
@@ -50,7 +48,7 @@ public class BossService {
   }
 
   public BossProblemDto fetchProblem(int chapter, BossProblemRequest request, Long userId) {
-    // R-13 §-1 续：preferredKc 优先级高于旧 kcCode（前端 ArenaPage 走 preferredKc）。
+    // preferredKc 优先级高于旧 kcCode（前端 ArenaPage 走 preferredKc）。
     String effectiveKc = request.preferredKc() != null ? request.preferredKc() : request.kcCode();
     String kc = resolveKc(chapter, effectiveKc);
     int difficulty =
@@ -155,7 +153,7 @@ public class BossService {
     }
   }
 
-  /** Reactive cache eviction：用 size 上限 + TTL 双保险，避免无限增长。 */
+  /** 缓存清理：size 上限 + TTL 双保险，避免无限增长。 */
   private void evictExpired() {
     if (cache.size() < 256) {
       return;
@@ -200,7 +198,7 @@ public class BossService {
         false);
   }
 
-  /** 分数公式：通过率 * 100；失败 0 ~ 50 之间按通过用例比例给。 */
+  /** 分数：通过时取 max(80, 通过率*100)；未通过时取 通过率*60。 */
   private int scoreFor(BossEvaluateResultDto r) {
     if (r.totalTestCases() <= 0) {
       return 0;

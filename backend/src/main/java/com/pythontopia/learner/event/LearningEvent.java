@@ -1,11 +1,9 @@
 package com.pythontopia.learner.event;
 
 /**
- * Marker interface for in-process learning events. Concrete events are published when KC mastery
- * may change (profile bootstrap, resource consumption, practice success/fail, debug fix).
+ * 进程内学习事件的标记接口；当 KC 掌握度可能变化时发布（画像初始化、资源消费、练习成功/失败、调试修复）。
  *
- * <p>Stage 05 introduces the contract; downstream stages (07, 09, 10, 13) publish events that the
- * mastery evaluator subscribes to via {@code LearningEventListener}.
+ * <p>掌握度评估器经 {@code LearningEventListener} 订阅这些事件并被动更新学生画像。
  */
 public sealed interface LearningEvent
     permits LearningEvent.ProfileBootstrapped,
@@ -49,14 +47,14 @@ public sealed interface LearningEvent
   record TutorStyleEngaged(Long userId, String style, String kcCode) implements LearningEvent {}
 
   /**
-   * 学生在世界内「探针」中做出中性选择（玩中建画像③）。{@code probeKey}/{@code choiceId} 由服务端
+   * 学生在世界内「探针」中做出中性选择。{@code probeKey}/{@code choiceId} 由服务端
    * {@code ProbeCatalog} 权威解析为维度/score 增量/tag（前端不可篡改信号）；用于把「随玩随选」回流到画像
    * {@code cognitive_style} / {@code emotion_persistence} / {@code learning_preference} 等维度。
    */
   record ProbeChoiceMade(Long userId, String probeKey, String choiceId) implements LearningEvent {}
 
   /**
-   * 学生在同一题失败后再次提交（坚持度行为信号，情绪化小镇②）。回流到画像
+   * 学生在同一题失败后再次提交（坚持度行为信号）。回流到画像
    * {@code emotion_persistence}（轻微正向：愿意重试 = 韧性）。
    */
   record PracticeRetried(Long userId, Long problemId, String kcCode) implements LearningEvent {}
@@ -68,7 +66,7 @@ public sealed interface LearningEvent
 
   /**
    * 逆袭：同一题在累计 {@code priorFails}≥2 次失败后最终通过。回流到 {@code emotion_persistence}
-   * （较强正向：从挫败中坚持并成功），是情绪化小镇「雨转晴」的关键正信号。
+   * （较强正向：从挫败中坚持并成功）。
    */
   record ComebackSolved(Long userId, Long problemId, String kcCode, int priorFails)
       implements LearningEvent {}

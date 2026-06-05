@@ -19,7 +19,7 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 /**
- * R-13 §5 Phase 6：与 pythontopia-graph 服务通信，请求 boss 题目 + 评测。
+ * 与 pythontopia-graph 服务通信，请求 boss 题目与评测。
  *
  * <p>graph 端点：
  *
@@ -28,7 +28,7 @@ import org.springframework.web.client.RestTemplate;
  *   <li>{@code POST /agents/boss/evaluate} → {@link BossEvaluateResultDto}
  * </ul>
  *
- * <p>本类只负责 HTTP 编排 + 失败兜底，不在这里实现题目生成或评测。
+ * <p>本类只负责 HTTP 编排与失败兜底，不实现题目生成或评测。
  */
 @Component
 public class BossGraphClient {
@@ -44,17 +44,16 @@ public class BossGraphClient {
   }
 
   /**
-   * 调 graph 出题。失败抛 {@link RestClientException}，由调用方决定是否降级。
+   * 调 graph 出题（不带画像参数的重载）。失败抛 {@link RestClientException}，由调用方决定是否降级。
    *
-   * <p>R-13 §-1 续：5 参数版本兼容旧 BossService 调用；preferredKc / preferredKind /
-   * profileSignals 透传给 graph 后由 PracticeAgent 决定是否走画像偏好模板。
+   * <p>preferredKc / preferredKind / profileSignals 透传给 graph，由 PracticeAgent 决定是否走画像偏好模板。
    */
   public BossInternalProblem requestProblem(
       Long userId, int chapter, int stage, String kcCode, Integer difficulty) {
     return requestProblem(userId, chapter, stage, kcCode, difficulty, null, null, null);
   }
 
-  /** R-13 §-1 续：8 参数版本，前端透传 profile signals 给 graph。 */
+  /** 完整重载：前端透传 profile signals 给 graph 供画像偏好出题。 */
   public BossInternalProblem requestProblem(
       Long userId,
       int chapter,
@@ -101,9 +100,7 @@ public class BossGraphClient {
         .getBody();
   }
 
-  /**
-   * 调 graph 评测玩家提交的代码。失败抛 {@link RestClientException}。
-   */
+  /** 调 graph 评测玩家提交的代码。失败抛 {@link RestClientException}。 */
   public BossEvaluateResultDto evaluateAttempt(
       String problemId, String code, List<BossTestCasePayload> testCases, int timeoutSec) {
     HttpHeaders headers = new HttpHeaders();

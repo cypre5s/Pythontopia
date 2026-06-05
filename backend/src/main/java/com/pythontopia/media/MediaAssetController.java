@@ -29,7 +29,7 @@ import org.springframework.http.HttpHeaders;
  *
  * <ul>
  *   <li>{@code POST /api/media/image}（需登录）：按 prompt 生成图片，返回 {@link MediaAssetDto}。
- *       无讯飞 apikey 时返回 {@code degraded=true} 的本地占位资产，不阻塞验收。
+ *       无讯飞 apikey 时返回 {@code degraded=true} 的本地占位资产，不阻塞调用链路。
  *   <li>{@code GET /api/media/assets/{id}}（匿名，供 {@code <img>}/{@code <video>} src）：按 id 流式
  *       分发已生成的媒资字节，支持 HTTP Range。
  * </ul>

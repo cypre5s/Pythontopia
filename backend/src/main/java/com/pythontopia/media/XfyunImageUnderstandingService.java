@@ -28,7 +28,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
- * 讯飞星火「图片理解」服务（看图答疑 B）：把学生上传的截图 / 手写代码图转成一段客观文字描述，
+ * 讯飞星火「图片理解」服务（看图答疑）：把学生上传的截图 / 手写代码图转成一段客观文字描述，
  * 再交给文本大模型（deepseek-v4-pro）结合课件 RAG 给出引导式答疑（视觉与文本职责分离）。
  *
  * <p>鉴权与 {@link XfyunTtsService} 同构（HMAC-SHA256，{@code host date request-line}，WebSocket）。

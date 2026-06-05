@@ -17,15 +17,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * R-13 §5 Phase 6：Boss 副本端点。
+ * Boss 副本端点。
  *
  * <ul>
  *   <li>{@code POST /api/world/boss/{chapter}/problem}：根据 chapter / stage 拉取 AI / golden 题；
- *   <li>{@code POST /api/world/boss/{chapter}/attempt}：提交一次解答（当前由前端 Pyodide 兜底）。
+ *   <li>{@code POST /api/world/boss/{chapter}/attempt}：提交解答，服务端 graph 评测，失败时退化到前端 Pyodide。
  * </ul>
  *
- * 鉴权：通过 SecurityConfig 已有的 JwtAuthenticationFilter 强制登录用户，{@link CurrentUserPrincipal}
- * 用于上报 graph 做自适应难度。
+ * <p>鉴权：JwtAuthenticationFilter 强制登录；{@link CurrentUserPrincipal} 用于上报 graph 做自适应难度。
  */
 @Validated
 @RestController

@@ -68,7 +68,7 @@ public class GlobalExceptionHandler {
     return error(HttpStatus.FORBIDDEN, "FORBIDDEN", "Access denied", List.of(), request);
   }
 
-  // R-13 安全加固：客户端用错 HTTP 方法时应返回 405 而不是 500。
+  // 客户端用错 HTTP 方法时返回 405 而非 500。
   @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
   ResponseEntity<ApiError> handleMethodNotAllowed(
       HttpRequestMethodNotSupportedException exception, HttpServletRequest request) {

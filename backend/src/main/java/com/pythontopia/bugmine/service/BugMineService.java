@@ -32,6 +32,12 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Bug 矿洞调试会话服务，维护 OPEN → RESOLVED/ABANDONED 状态机：
+ * {@code open} 仅接受未 PASSED 的提交，收集反例与变量轨迹后由 DebugAgent 生成分层提示卡；
+ * {@code retrySubmit} 受单会话重试上限约束，通过即转 RESOLVED 并发布 DebugResolved 事件；
+ * {@code close} 不可置回 OPEN，置为 ABANDONED 时发布 PracticeAbandoned 事件。
+ */
 @Service
 public class BugMineService {
 
@@ -209,7 +215,7 @@ public class BugMineService {
     }
     repository.updateStatus(session.id(), status);
     if (status == BugMineSessionStatus.ABANDONED) {
-      // 情绪化小镇②：失败后放弃 → emotion_persistence 负向行为信号。
+      // 放弃调试：作为 emotion_persistence 维度的负向行为信号
       String kcCode = problemRepository.findKcCode(session.problemId());
       eventPublisher.publishEvent(
           new LearningEvent.PracticeAbandoned(userId, session.problemId(), kcCode));

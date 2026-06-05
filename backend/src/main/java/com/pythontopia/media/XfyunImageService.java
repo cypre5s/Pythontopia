@@ -36,7 +36,7 @@ import org.springframework.stereotype.Service;
  *
  * <p><b>降级</b>：未配置 apikey（{@link ImageProperties#isEnabled()}=false）或上游失败时，落到
  * {@link MediaPlaceholderFactory} 生成的本地占位 PNG，并以 {@code degraded=true} 落库，保证无密钥时
- * 多模态验收链路不被阻塞。配置真实密钥后自动切换为讯飞真实生成（{@code degraded=false}）。
+ * 多模态链路不被阻塞。配置真实密钥后自动切换为讯飞真实生成（{@code degraded=false}）。
  */
 @Service
 public class XfyunImageService {

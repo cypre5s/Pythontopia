@@ -6,24 +6,24 @@ import jakarta.validation.constraints.Size;
 import java.util.List;
 
 /**
- * 导师问答请求。
+ * 导师问答请求（{@code POST /api/tutor/ask}，SSE 流式）。字段契约：
  *
- * <p>R-12 主线 Phase 3：把单数 {@code kcCode} 升级为复数 {@code kcCodes}（与 Python
- * graph 服务的 {@code kc_codes: list[str]} 契约对齐，此前单复数不一致导致 KC 永远没
- * 传到 RAG）。新增 {@code context}（当前视频标题 / PPT 页 / 题面摘要等），透传给
- * Python 用于增强证据检索与答疑上下文。两者均可空，兼容纯文本提问。
- *
- * <p>R-14 看图答疑（B）：可选 {@code images}（截图 / 手写代码图，可带 data URL 前缀，最多 3 张，
- * 仿 Cursor 多图附件）。非空时后端逐张经讯飞「图片理解」转客观描述并入 context，再交
- * deepseek-v4-pro 作答；单图上限约 8MB 字符（≈ 讯飞 4MB base64），缺省则为纯文本提问。
- *
- * <p>R-14 即时换讲法（①）：可选 {@code style}（{@code visual}/{@code logical}/{@code trial}）。
- * 学生点「换讲法」时带上本次显式选择的认知风格，由 {@code TutorService} 注入 profile_brief 并
- * <b>无视画像置信度门槛</b>，让同一问题立刻按新风格改写当前答案；为空则按画像（门槛内）决定，行为不变。
+ * <ul>
+ *   <li>{@code question}：必填，≤2000 字。
+ *   <li>{@code kcCodes}：关联知识点，转发为 Python graph 的 {@code kc_codes} 做 RAG 过滤检索；可空。
+ *   <li>{@code context}：当前学习上下文（视频标题 / PPT 页 / 题面摘要），透传 graph 增强证据检索；可空。
+ *   <li>{@code images}：可选截图 / 手写代码图，最多 3 张、单图 ≤8MB 字符（≈ 讯飞 4MB base64）；
+ *       非空时后端逐张经讯飞「图片理解」转<b>客观描述</b>并入 {@code context} 再作答，绝不直接解题。
+ *   <li>{@code style}：学生显式选择的认知风格（visual/logical/trial）；非空时<b>无视画像置信度门槛</b>，
+ *       由 {@code TutorService} 注入 profile_brief 即时按该风格改写答案，为空则由画像决定。
+ *   <li>{@code conversationId}：会话窗口 id——同一聊天窗口（一次打开 / 一次「新对话」）内多次提问共享，
+ *       供「聊天记录」按会话分组；仅前端生成 + 后端落库，不下传 graph。
+ * </ul>
  */
 public record TutorAskRequest(
     @NotBlank @Size(max = 2000) String question,
     List<String> kcCodes,
     @Size(max = 2000) String context,
     @Size(max = 3) List<@Size(max = 8_000_000) String> images,
-    @Pattern(regexp = "visual|logical|trial") String style) {}
+    @Pattern(regexp = "visual|logical|trial") String style,
+    @Size(max = 64) String conversationId) {}

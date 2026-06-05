@@ -6,10 +6,7 @@ import jakarta.validation.constraints.Min;
 import java.util.List;
 
 /**
- * 前端请求 boss 题目时 body。
- *
- * <p>R-13 §-1 续：扩展 preferredKc / preferredKind / profileSignals 让 PracticeAgent +
- * ProfileAgent 基于学生画像偏好出题。
+ * 前端请求 boss 题目的 body；画像字段供 PracticeAgent + ProfileAgent 按学生画像偏好出题。
  *
  * <p>stage 1..4；chapter 由 path variable 提供，不在 body。
  *

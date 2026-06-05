@@ -142,7 +142,7 @@ public class QuestService {
           new LearningEvent.DebugResolved(
               quest.userId(), quest.kcCode(), extractProblemId(quest)));
       case PLANT_KC, PROFILE_UPDATE -> {
-        // Stage 08：PLANT_KC 与 PROFILE_UPDATE 不直接驱动 mastery 加分；阶段 13 复盘大厅再处理。
+        // PLANT_KC 与 PROFILE_UPDATE 不直接驱动 mastery 加分，留待复盘大厅处理。
       }
     }
   }

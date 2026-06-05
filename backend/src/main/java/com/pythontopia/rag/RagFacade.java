@@ -6,6 +6,10 @@ import com.pythontopia.rag.dto.RagQueryResponseDto;
 import java.util.List;
 import org.springframework.stereotype.Service;
 
+/**
+ * 课件证据检索门面：封装 {@link RagClient}，按知识点、章节或全开放三种方式检索课件证据，
+ * 统一使用 0.3 相关度阈值，供导师问答、工坊生成等需要 grounding 的服务复用。
+ */
 @Service
 public class RagFacade {
 

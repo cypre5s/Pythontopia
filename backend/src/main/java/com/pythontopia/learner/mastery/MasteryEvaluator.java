@@ -10,10 +10,7 @@ import java.util.Optional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * Authoritative writer for KC mastery snapshots. The front-end is not allowed to compute mastery
- * locally; this service is the single source of truth.
- */
+/** KC 掌握度快照的权威写入方：前端不得本地计算掌握度，一切以此服务为唯一数据源。 */
 @Service
 public class MasteryEvaluator {
 

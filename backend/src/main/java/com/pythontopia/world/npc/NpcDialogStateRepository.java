@@ -16,10 +16,10 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 /**
- * Read + write helpers for the per-learner NPC dialog state.
+ * 按学习者维度的 NPC 对话状态读写助手。
  *
- * <p>All mutations clamp friendship into the {@code [0, 100]} range to honour the V101 CHECK
- * constraint. Flags are merged at the top-level keys (later writes win).
+ * <p>所有写操作都会把 friendship 钳制到 {@code [0, 100]}，以满足 V101 的 CHECK 约束；flags 按顶层 key
+ * 合并（后写覆盖）。
  */
 @Repository
 public class NpcDialogStateRepository {
@@ -61,10 +61,7 @@ public class NpcDialogStateRepository {
         userId);
   }
 
-  /**
-   * Lazily initialise a dialog state row so the caller never has to deal with a missing record.
-   * Returns the existing row when one is already present.
-   */
+  /** 惰性初始化对话状态行，使调用方无需处理记录缺失；已存在则直接返回现有行。 */
   public NpcDialogState findOrInit(Long userId, String npcKey) {
     Optional<NpcDialogState> existing = findOne(userId, npcKey);
     if (existing.isPresent()) {
@@ -81,10 +78,7 @@ public class NpcDialogStateRepository {
     return findOne(userId, npcKey).orElseThrow();
   }
 
-  /**
-   * Upsert the dialog node progress for a specific NPC. {@code completedNodeIds} replaces the
-   * stored array; the caller is responsible for merging.
-   */
+  /** upsert 指定 NPC 的对话节点进度；{@code completedNodeIds} 整体替换已存数组，合并由调用方负责。 */
   public NpcDialogState upsertNodeProgress(
       Long userId, String npcKey, String currentNodeId, List<String> completedNodeIds) {
     String[] nodes =
@@ -109,10 +103,7 @@ public class NpcDialogStateRepository {
     return findOne(userId, npcKey).orElseThrow();
   }
 
-  /**
-   * Adjust friendship by {@code delta}, clamping the persisted value into {@code [0,100]}. Returns
-   * the new friendship value. Lazily inserts the row when missing.
-   */
+  /** 按 {@code delta} 调整 friendship，持久化值钳制到 {@code [0,100]} 并返回新值；行缺失时惰性插入。 */
   public int incrementFriendship(Long userId, String npcKey, int delta) {
     findOrInit(userId, npcKey);
     Integer current =
@@ -131,7 +122,7 @@ public class NpcDialogStateRepository {
     return current == null ? 0 : current;
   }
 
-  /** Shallow-merge JSON keys into the existing {@code flags} object. Existing keys are replaced. */
+  /** 将 JSON key 浅合并进现有 {@code flags} 对象；同名 key 被覆盖。 */
   public NpcDialogState mergeFlags(Long userId, String npcKey, JsonNode patch) {
     if (patch == null || !patch.isObject()) {
       return findOrInit(userId, npcKey);

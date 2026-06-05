@@ -1,5 +1,88 @@
 # Changelog
 
+## 2026-06-05 — 代码规范化：命名审计 + 脚本改名 + 注释优化（进行中）
+
+> 类型：重构（命名）+ 文档。按《命名约束 + 注释规范》优化全项目源码；进度实时记录于
+> `docs/comment-optimization-log.md`。本批仅做命名修正，未改业务逻辑。
+
+- **命名审计**：Vue（117）/ Java（408）/ Kotlin（217）文件名全部合规；Python（129）仅 3 个资产脚本用连字符。
+- **脚本改名（全链路同步，无兼容别名）**：`scripts/build-cottages.py`→`build_cottages.py`、
+  `build-ulpc-characters.py`→`build_ulpc_characters.py`、`crop-portrait-heads.py`→`crop_portrait_heads.py`。
+  同步约 20 处引用（`BootScene.ts`/`tilemap.ts`/`lpcAnimations.ts`/`DialogModal.vue` 及测试、`scripts/README.md`/
+  `sync-assets.mjs`、`LICENSE-ART.md`/`LICENSE.md`/`CREDITS`/各 `README`）。
+- **影响范围**：均为 CLI 一次性资产脚本（不作模块 import），无运行期调用破坏；`py_compile` 通过，无残留旧名。
+- **注释策略**（用户确认）：存量英文注释翻译为简洁中文（技术标识符保原文）；靶向优先（先扫 R-1x 迭代号 /
+  长块 / 中英混排）后穷尽；按模块推进、模块边界汇报。
+- **注释优化 backend 批次 1-4（共 24/408 文件，仅改注释，不影响字节码）**：
+  - `common`（14）：`GlobalExceptionHandler` 去迭代号、`GraphSseConsumer` 压缩 HTTP/1.1 workaround；余 12 文件已合规。
+  - `dialog`（4）：去 R-12、英文转中文，并纠正多处与 SQL 不符的注释。
+  - `world.travel`（3）/`world.festival`（3）：英文 Javadoc 转中文、去「R-12 W5」与文档章节引用、长 TODO 压成单行，保留单事务/短路校验/全日程级写入等契约。
+- **注释优化 backend 并发批次（Wave 1+2，共 20 路子代理，覆盖 backend main 全 346 文件 + 入口类，仅改注释、不影响字节码，`mvn test-compile` exit 0）**：
+  - Wave 1（10 路）：`learner` 全模块（85）+ `world` 的 curriculum/dto/boss/save（34）。
+  - Wave 2（10 路）：`world` 余下（skill/calendar/domain/npc/root 等 32）+ `classroom`(27) + `coursepack`(24) + `submission`(19) + `media`(19) + `auth`(19) + `workshop`(17) + `bugmine`+`agent`(16) + `intent`/`orchestrator`/`rag`/`video`/`tutor` 余(25)。
+  - 统一处理：英文注释译简洁中文（保留技术标识符）、删迭代号/阶段号/设计文档引用/演示叙事、压多行为单行、纠正与实现/SQL 不符的注释、为缺契约的 public API 补 Javadoc；保留跨服务协议映射与安全/一致性/状态机契约。
+- **后续**：frontend（417）→ graph/rag（121）→ android（217）→ scripts（5）→ 各模块测试，逐批更新 `docs/comment-optimization-log.md`。
+
+## 2026-06-05 — 工坊重构 + 侧栏 Marvis 实时工作室 + 答疑五智能体审查 + 课件证据/B站讲解
+
+> 承 2026-06-04 深夜两份计划落地至今日：`docs/plans/2026-06-04-workshop-redesign-and-marvis-plan.md`
+> （工坊布局 / 答案优先不强制@KC / 侧栏 Marvis / PY43 隐藏 / DeepSeek 连通）与
+> `…-bilibili-cards-and-agent-studio-plan.md` 的收尾。**本机验证总账**：graph `pytest` **297 passed**、
+> 前端 `vue-tsc` 干净 + `vitest` **1459 通过 / 128 文件**、后端 `test-compile` + `BilibiliVideoControllerTest` 通过。
+> 本批改动尚处工作区（未 commit）；后端全量 `mvn test` 本会话未重跑（仅编译 + 视频控制器单测）。
+
+### 一、工坊重构 + 侧栏 Marvis 实时工作室
+
+- **布局（WorkshopPage）**：右栏 `workshop-rail` = 上段常驻 **MarvisPanel** + 下段 **我的书房**（`StudioDrawer`，
+  默认收起为窄把手，点开浮出）；聊天占满主区。`StudioDrawer` 详情走「替换式」（列表↔详情 + 「← 返回书房」）。
+- **书房（ResourceListPanel）**：移除「按 KC/标题检索」搜索框；保留「🔁 待复习」（资源对应 KC 掌握度 < 60 置顶，
+  「重温/再练」直达）+ 资源列表，把 resource_consumed 升级为可积累、会回访的复盘闭环。
+- **Marvis（`MarvisPanel.vue` + `stores/workshopActivity.ts`）**：借鉴 Alethicode `QaAgentProgressBar`，把当前 SSE
+  节点映射成人话（正在检索课件证据 / 作答 / 核对课本引用 / 防幻觉核查 / 安全审查 / 生成学习资源），空闲一排像素
+  小人待命、活动态实时活动条「已等 Ns」+ 工位按 `plan` 点亮；复用 LPC `npc-composites`（与 AgentOfficeScene 同源，不新增二进制）。
+- **答案优先 + 不强制 @KC（WorkshopChat）**：合并 答疑+资源生成，intent 自动路由；资源类无 KC 不再报错（兜底 KC 或降级 ASK
+  先把问题答了），答案内嵌「看相关视频 / 生成讲义 / 出练习」入口 + 按视频意图嵌 B站卡片。
+
+### 二、答疑「答后审查」五智能体协同（馆员→导师→审查官→校对官→安全员）
+
+- **新 `nodes/tutor_review.py`**：把资源流水线的三道审查迁到答疑答案上（确定式、零 LLM、不阻塞）——
+  `grounding_review`（答案 `[页 X]` 必须命中证据页，否则=编造引用）/ `hallucination_review`（统计型数字须有据）/
+  `safety_review`（泄答 / 歧视 / PII / 危险代码）。
+- **`routes/tutor.py`**：答疑链路由「馆员(RAG)+导师(LLM)」扩成 馆员→导师(流式)→审查官→校对官→安全员；开场发 `plan`
+  工位清单 + 每节点 `start/finish` `trace`（与资源流同一线协议，驱动 Marvis 实时点亮）。`result` 同时给 snake_case
+  （落库）+ camelCase（前端直读）+ `review` 三审明细。新测试 `test_tutor_review` / `test_tutor_ask_stream`。
+
+### 三、课件证据可见化 + B站每视频讲解（本会话）
+
+- **课件证据**：`TutorResponse.evidence`（`EvidenceCitation`：页码 + RAG 原文片段 + 相关度），`_build_citations` 按
+  `page_id` 去重投影，`evidence_page_ids` 与其同源同序；新 `components/tutor/CoursewareEvidence.vue` 渲染「📖 课件证据 ·
+  系统命中 N 处」，每条「第 X 页」可点回链 `/library?pageId=` + 原文片段，通识知识给中性说明。**修复**：WorkshopChat 此前
+  以 camelCase 读 graph 的 snake_case `result`，导致接地状态/证据**从不渲染**——改为 snake_case 对齐。
+- **B站讲解**：透传 UP 主简介 `description` 三层（graph 去标签/反转义/截断 → Java `BilibiliVideoDto` → 前端 DTO）作为
+  「这个视频讲什么」的真实讲解（不伪造）；`BilibiliVideoCards` 改为**等宽等高**（`align-items:stretch` + 卡片 `height:100%`
+  + meta `margin-top:auto`）+ 简介 2 行截断 + 空态占位；工坊视频气泡与答疑气泡**同宽**。
+
+### 四、训练场代码编辑器 + 编排图重构 + DeepSeek 连通 + PY43 隐藏 + 修复
+
+- **训练场**：`TrainingPanel` 重写 + 新 `components/training/PythonCodeEditor.vue`（CodeMirror 6 Python：行号/折叠/括号匹配/
+  自动补全/搜索 + 深色主题），替换原始 textarea。
+- **编排图重构**：`orchestrator_graph.py` 由命令式 `_run_core` 改为 **LangGraph 节点式**（understand / build_plan / dispatch /
+  replan_failures / extract_profile / compose / clarify + 路由函数 + compiled 图），每节点发 trace。
+- **DeepSeek 连通**：`OpenAiCompatProvider` 由 `trust_env=False` 改 `True`（**有代理走 7892、无代理直连**，`NO_PROXY` 护内网 RAG），
+  打通宿主 graph 调 DeepSeek；新 `test_openai_compat_provider`。
+- **PY43 UI 隐藏**：`useCoursewareMention` / `GuideOverlay` 等改走 `kcDisplayName` / `humanizeKcText`，不外泄 `PY43-KC-xxx` 原码（代码/DB 不动）。
+- **修复**：`router.afterEach` 关闭残留 NPC 对话浮层；`dialog` store 本地 meta/dialog 优先显示、context 后台异步（消除对话卡顿）；
+  `http.ts` `suppressNetworkToast`（B站/文生图/课程视频列表等后台请求各自降级、不弹全局 toast）；LecturePage 精简（去 AI 图解 −106 行）；
+  LibraryPage 证据回链（`?pageId` 解析 page_id → docId+pageNo）。
+
+### 验证与未验证（诚实交付）
+
+- **已验证（代码层，本机）**：graph `pytest` 297；前端 `vue-tsc` 干净 + `vitest` 1459；后端 `test-compile` + 视频控制器单测；
+  新增 Python 视频/证据/答后审查/openai_compat 均有单测覆盖。
+- **未验证（需起栈 / 联网，演示前必做）**：真实 B站检索与浏览器封面防盗链、SSE Marvis 端到端实时动画、DeepSeek 真实出参、
+  答疑五审查端到端、训练场 Pyodide 浏览器实跑；建议 `dev.sh` 起全栈 + 联网做一次端到端。
+- **备注**：本批为工作区改动梳理（**尚未 commit**）；后端全量 `mvn test` 未在本会话重跑。
+
 ## 2026-06-04（晚）— 画像闭环三连融入主链路 · 前端认知负担优化 · B站卡片/智能体工作室
 
 > 本夜横跨两份计划并行推进：`docs/plans/2026-06-04-profile-loop-trilogy-*`（画像闭环三连 + 前端体验）

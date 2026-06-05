@@ -57,10 +57,10 @@ public class ProfileController {
   }
 
   /**
-   * 学生 / 教师对单个维度的直写接口。
+   * 学生 / 教师对单个维度的直写（自评）接口，只作用于调用者本人的画像。
    *
-   * <p>学生（STUDENT）只能直写 {@link PassiveProfileService#SELF_EDITABLE_DIMENSIONS} 中的 4 个主观维度；
-   * 教师（TEACHER）/ 管理员（ADMIN）可对自身画像的所有 8 维直写（教师改学生需走单独后台接口，暂未实现）。
+   * <p>学生（STUDENT）只能直写 {@link PassiveProfileService#SELF_EDITABLE_DIMENSIONS} 内的主观维度；
+   * 教师（TEACHER）/ 管理员（ADMIN）可直写自身画像的全部 8 维。
    */
   @PutMapping("/dimensions/{dimensionKey}")
   DimensionUpdateResult selfUpdate(

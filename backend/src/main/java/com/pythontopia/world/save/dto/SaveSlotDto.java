@@ -18,9 +18,8 @@ public record SaveSlotDto(
     JsonNode inventoryItems) {
 
   /**
-   * Backward-compatible 6-arg constructor used by existing controller tests that predate the V114
-   * extension columns. Delegates to the canonical constructor with the same defaults as the SQL
-   * migration so JSON output stays consistent with a freshly migrated DB row.
+   * 向后兼容的 6 参数构造器，供 V114 扩展列之前的 controller 测试使用。委托到规范构造器并采用与 SQL
+   * migration 相同的默认值，使 JSON 输出与刚迁移的 DB 行保持一致。
    */
   public SaveSlotDto(
       int slotIndex,

@@ -30,6 +30,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
+/**
+ * 讯飞「在线语音合成」(TTS)：经 WebSocket（{@code wss://tts-api.xfyun.cn/v2/tts}，HMAC-SHA256 鉴权，
+ * 签名串 {@code host date request-line}）把文本合成为 mp3（{@code aue=lame}）。{@link XfyunImageService}
+ * 与 {@link XfyunImageUnderstandingService} 复刻同一鉴权范式。
+ */
 @Service
 public class XfyunTtsService {
 
@@ -49,6 +54,14 @@ public class XfyunTtsService {
     this.objectMapper = objectMapper;
   }
 
+  /**
+   * 合成语音并返回 mp3 字节。
+   *
+   * @param userId 每日限流维度
+   * @param voice 讯飞发音人 vcn（如 {@code x4_yezi}）
+   * @throws BusinessException 未配置 {@code TTS_DISABLED}(503)、超每日上限 {@code TTS_RATE_LIMITED}(429)、
+   *     上游失败 {@code TTS_FAILED}(502)
+   */
   public byte[] synthesize(Long userId, String text, String voice) {
     if (!properties.isEnabled()) {
       throw new BusinessException(HttpStatus.SERVICE_UNAVAILABLE, "TTS_DISABLED", "TTS 服务未配置");

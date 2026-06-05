@@ -119,7 +119,7 @@ public class SubmissionService {
       log.warn("Submission {} has no kc_code for problem {}", submissionId, request.problemId());
       return;
     }
-    // 情绪化小镇②：本次提交前同题失败次数，用于判定重试 / 逆袭行为信号。
+    // 本次提交前同题失败次数，用于判定重试 / 逆袭行为信号。
     int priorFails = submissionRepository.countPriorFailures(userId, request.problemId(), submissionId);
     if (outcome.verdict() == Verdict.AC) {
       eventPublisher.publishEvent(

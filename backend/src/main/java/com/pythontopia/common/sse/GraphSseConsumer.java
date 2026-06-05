@@ -21,10 +21,8 @@ import org.slf4j.LoggerFactory;
 public final class GraphSseConsumer {
 
   private static final Logger log = LoggerFactory.getLogger(GraphSseConsumer.class);
-  // Pin HTTP/1.1: the JDK HttpClient defaults to HTTP/2 and tries an h2c cleartext upgrade
-  // (Connection: Upgrade, HTTP2-Settings) on plain http://, which the uvicorn SSE server rejects
-  // as "Unsupported upgrade request / Invalid HTTP request" — the relay then fails (HTTP 400) and
-  // the tutor/workshop stream breaks. SSE is inherently HTTP/1.1, so force it.
+  // 强制 HTTP/1.1：JDK HttpClient 默认 HTTP/2，会对明文 http:// 发起 h2c 升级，被 uvicorn
+  // SSE 服务端拒绝（HTTP 400），导致答疑/工坊流断开；SSE 本就基于 HTTP/1.1。
   private static final HttpClient HTTP_CLIENT =
       HttpClient.newBuilder()
           .version(HttpClient.Version.HTTP_1_1)

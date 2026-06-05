@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""build-ulpc-characters.py — Pythontopia R-12 动作模组（方案A）。
+"""build_ulpc_characters.py — Pythontopia R-12 动作模组（方案A）。
 
 用**官方 Universal-LPC-Spritesheet-Character-Generator** 的整套素材库 + sheet_definitions
 （z 序/路径/动画清单）+ 官方 expanded 表布局（sources/state/constants.ts 的

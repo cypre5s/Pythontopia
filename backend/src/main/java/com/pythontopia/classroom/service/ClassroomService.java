@@ -33,7 +33,7 @@ public class ClassroomService {
       try {
         return toDto(repository.create(request.name(), request.description(), user.userId(), joinCode()), true);
       } catch (DuplicateKeyException ignored) {
-        // retry join code collision
+        // join_code 唯一冲突，重试生成新码
       }
     }
     throw new BusinessException(HttpStatus.CONFLICT, "JOIN_CODE_CONFLICT", "Could not allocate join code");
@@ -89,7 +89,7 @@ public class ClassroomService {
         Classroom refreshed = repository.findById(classroom.id()).orElseThrow();
         return toDto(refreshed, true);
       } catch (DuplicateKeyException ignored) {
-        // retry on join code collision
+        // join_code 唯一冲突，重试生成新码
       }
     }
     throw new BusinessException(

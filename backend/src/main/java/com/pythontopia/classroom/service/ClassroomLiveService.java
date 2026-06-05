@@ -10,9 +10,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
- * C2: SSE-based live feed for teacher classroom view.
- * Teachers subscribe via GET /api/classroom/{id}/live (SSE stream).
- * Student events are pushed via {@link #broadcast}.
+ * 教师班级视图的 SSE 实时推送：教师通过 GET /api/classroom/{id}/live 订阅 SSE 流，
+ * 学生事件经 {@link #broadcast} 推送。
  */
 @Service
 public class ClassroomLiveService {

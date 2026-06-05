@@ -23,13 +23,14 @@ public class TutorSessionRepository {
   }
 
   public Long insert(Long userId, String question, String answerMd,
-      List<Integer> evidencePageIds, String groundingStatus) {
+      List<Integer> evidencePageIds, String groundingStatus, String conversationId) {
     GeneratedKeyHolder keyHolder = new GeneratedKeyHolder();
     jdbcTemplate.update(connection -> {
       PreparedStatement ps = connection.prepareStatement(
           """
-          INSERT INTO tutor_session (user_id, question, answer_md, evidence_page_ids, grounding_status)
-          VALUES (?, ?, ?, ?, ?)
+          INSERT INTO tutor_session
+            (user_id, question, answer_md, evidence_page_ids, grounding_status, conversation_id)
+          VALUES (?, ?, ?, ?, ?, ?)
           """,
           new String[]{"id"});
       ps.setLong(1, userId);
@@ -42,6 +43,7 @@ public class TutorSessionRepository {
         ps.setNull(4, java.sql.Types.ARRAY);
       }
       ps.setString(5, groundingStatus);
+      ps.setString(6, conversationId);
       return ps;
     }, keyHolder);
     Number key = keyHolder.getKey();
@@ -55,7 +57,7 @@ public class TutorSessionRepository {
     int safeLimit = Math.max(1, Math.min(limit, 50));
     return jdbcTemplate.query(
         """
-        SELECT id, question, answer_md, evidence_page_ids, grounding_status, created_at
+        SELECT id, question, answer_md, evidence_page_ids, grounding_status, conversation_id, created_at
         FROM tutor_session
         WHERE user_id = ?
         ORDER BY created_at DESC
@@ -72,6 +74,7 @@ public class TutorSessionRepository {
         rs.getString("answer_md"),
         readIntArray(rs.getArray("evidence_page_ids")),
         rs.getString("grounding_status"),
+        rs.getString("conversation_id"),
         toInstant(rs, "created_at"));
   }
 

@@ -16,11 +16,7 @@ public class QuestExpirationScheduler {
     this.questService = questService;
   }
 
-  /**
-   * Scans overdue quests every 30 minutes (1,800,000 ms) and flips them to EXPIRED so the
-   * board panel never shows stale items. Scheduling is enabled via Spring's default scheduling
-   * support that the application already activates.
-   */
+  /** 每 30 分钟扫描逾期任务并置为 EXPIRED，避免公告板显示过期项。 */
   @Scheduled(fixedDelay = 1_800_000L, initialDelay = 60_000L)
   public void expireOverdue() {
     try {

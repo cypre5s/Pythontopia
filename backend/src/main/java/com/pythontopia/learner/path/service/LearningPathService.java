@@ -117,8 +117,8 @@ public class LearningPathService {
   }
 
   /**
-   * 阶段 13: 评估服务调用此方法生成 DRAFT 路径，不归档当前 ACTIVE，不发布 quest。
-   * 学生在复盘大厅点击 "接受新路径" 后，通过 {@link #promoteDraft(Long, Long)} 才会真正激活。
+   * 生成 DRAFT 路径：不归档当前 ACTIVE，也不发布 quest。
+   * 学生在复盘大厅点击"接受新路径"后，须经 {@link #promoteDraft(Long, Long)} 才会真正激活。
    */
   @Transactional
   public LearningPathDto planDraft(Long userId) {
@@ -139,7 +139,7 @@ public class LearningPathService {
                     "DRAFT 路径写入后未能读回"));
   }
 
-  /** 阶段 13: DRAFT → ACTIVE，归档当前 ACTIVE 并按 DRAFT 节点重新生成 quest。 */
+  /** 将 DRAFT 提升为 ACTIVE：归档当前 ACTIVE，并按 DRAFT 节点重新生成 quest。 */
   @Transactional
   public LearningPathDto promoteDraft(Long userId, Long draftPathId) {
     LearningPathDto draft =
@@ -199,7 +199,7 @@ public class LearningPathService {
                     "DRAFT 路径激活后未能读回"));
   }
 
-  /** 阶段 13: 学生放弃 DRAFT 路径 → 标 ARCHIVED；当前 ACTIVE 不变。 */
+  /** 学生放弃 DRAFT 路径：标记为 ARCHIVED，当前 ACTIVE 不受影响。 */
   @Transactional
   public LearningPathDto archiveDraft(Long userId, Long draftPathId) {
     LearningPathDto draft =
@@ -455,7 +455,7 @@ public class LearningPathService {
       pythonLevel = profile.baseLevel().pythonSelfRatedLevel();
     }
     String major = profile.major() == null ? "OTHER" : profile.major();
-    // Stage 08 默认使用画像创建后 7 天即触发 PROFILE_UPDATE 节点；后续阶段可改为读取 updated_at。
+    // 末位恒传 7：让 planner 将画像视为已满 7 天，从而触发 PROFILE_UPDATE 节点。
     return new PathPlannerGraphRequest.ProfileSnapshot(true, major, pythonLevel, 7);
   }
 

@@ -11,9 +11,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 /**
- * Reads the {@code game_bootstrap_view} created in V100/V107 to assemble the 1:1 world+player slice
- * in a single round-trip. Callers add the 1:N collections (crops, quests, mastery, inventory, …)
- * separately because the view intentionally only joins one-to-one relations.
+ * 读取 {@code game_bootstrap_view}，一次往返取回 1:1 的 world+player 切片。视图只 join 一对一关系，
+ * 任务、掌握度、技能、NPC 状态等 1:N 集合由调用方另行查询。
  */
 @Repository
 public class GameBootstrapRepository {

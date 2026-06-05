@@ -9,9 +9,8 @@ import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
 
 /**
- * JDBC-backed read access for the {@code fast_travel_route} static table. The table is treated as
- * write-only by Flyway seeds; mutations happen exclusively through migrations to keep the route
- * graph reproducible across environments.
+ * {@code fast_travel_route} 静态表的 JDBC 只读访问。该表仅由 Flyway seed 写入，变更只走迁移，
+ * 以保证路线图在各环境可复现。
  */
 @Repository
 public class FastTravelRepository {

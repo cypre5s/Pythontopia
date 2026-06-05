@@ -31,8 +31,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
- * R-12 W2-NPC：把 NPC 对话模板里出现的 {@code {{stats.*}}} / {@code {{profileAdaptive:..}}} /
- * {@code {{giftFavorite:..}}} 全部用真实数据填充。
+ * 把 NPC 对话模板里的 {@code {{stats.*}}} / {@code {{profileAdaptive:..}}} /
+ * {@code {{giftFavorite:..}}} 占位符全部用真实数据填充。
  *
  * <p>聚合源：
  *
@@ -46,8 +46,8 @@ import org.springframework.stereotype.Service;
  *   <li>{@link UserRepository} — display_name 兜底。
  * </ul>
  *
- * <p>所有字段缺数据时回退到空字符串或合理零值，模板渲染器在拿到字符串后即可直接拼接，
- * 不会再出现 {@code {{stats.xxx}}} 字面量泄露到 UI 的情况。
+ * <p>所有字段缺数据时回退到空字符串或合理零值，模板渲染器拿到字符串即可直接拼接，
+ * 不会出现 {@code {{stats.xxx}}} 字面量泄露到 UI。
  */
 @Service
 public class DialogContextService {
@@ -265,7 +265,7 @@ public class DialogContextService {
     stats.put("energyCurrent", Integer.toString(energy.current()));
     stats.put("energyMax", Integer.toString(energy.max()));
 
-    // 商店周限购：3 本基础 - 本周已购买（暂无库存表，按本周 mastery 事件粗估）
+    // 商店周限购：3 本基础减本周已购；无库存表，按本周 mastery 事件粗估
     stats.put(
         "merchantWeeklySpecialLeft",
         Integer.toString(Math.max(0, 3 - Math.min(3, kcThisWeek / 2))));
@@ -347,17 +347,16 @@ public class DialogContextService {
       }
     }
 
-    // 玩家显示名
     String displayName = resolveDisplayName(userId, username);
 
-    // profile 类型 + gift just given
+    // 画像与礼物状态：驱动 profileAdaptive / styleAdaptive / giftFavorite 分支
     LearnerProfileDto profile = profileRepository.findProfile(userId).orElse(null);
     String profileType = inferProfileType(profile);
     String cognitiveStyle = inferCognitiveStyle(userId);
     boolean giftJustGiven =
         npcKey != null && repository.hasFavoriteGiftRecently(userId, npcKey, GIFT_RECENT_HOURS);
 
-    // 把 profileType / cognitiveStyle 同步暴露到 stats（少数对话直接引用 stats.* 字面量）
+    // profileType / cognitiveStyle 同步暴露到 stats：少数对话直接引用 stats.* 字面量
     stats.put("profileType", profileType);
     stats.put("cognitiveStyle", cognitiveStyle);
 
@@ -387,9 +386,8 @@ public class DialogContextService {
   }
 
   /**
-   * 用 learner_profile.cognitive_style 判定。{@code sequentialVsHolistic ≥ 0.55} 偏整体 / 实践型；
-   * {@code ≤ 0.45} 偏序列 / 谨慎型；其余落入 balanced 但仍归为 cautious（保守走 B 分支，模板中 B
-   * 通常是更稳的入门建议）。profile 缺失同样按 cautious 处理。
+   * 按 learner_profile.cognitive_style 判定画像类型：{@code sequentialVsHolistic ≥ 0.55} 归实践型，
+   * 其余（含 balanced 与缺失 profile）归谨慎型（保守走 B 分支，通常是更稳的入门建议）。
    */
   private String inferProfileType(LearnerProfileDto profile) {
     if (profile == null) {
@@ -408,9 +406,9 @@ public class DialogContextService {
 
   /**
    * 三态认知风格推断：读 {@code learner_profile.dimensions} 的 {@code cognitive_style.tags}，取最新/主导
-   * 标签（数组末元素，与 TutorCrew 因材施教取风格的口径一致）并归一化为 {@code visual/logical/trial}；
-   * 无 profile、无 tags、标签不可识别、或 dimensions 列尚未迁移（DataAccessException）均回退 {@code
-   * unknown}。整段防御性吞掉运行时异常，保证 {@code /api/dialog/context} 不因画像缺失而 500。
+   * 标签（数组末元素，与 TutorCrew 取风格口径一致）归一化为 {@code visual/logical/trial}；无 profile、
+   * 无 tags、标签不可识别、或 dimensions 列未迁移（DataAccessException）均回退 {@code unknown}。
+   * 整段防御性吞运行时异常，保证 {@code /api/dialog/context} 不因画像缺失而 500。
    */
   private String inferCognitiveStyle(Long userId) {
     try {
@@ -432,9 +430,8 @@ public class DialogContextService {
   }
 
   /**
-   * 把画像里的 cognitive_style 标签归一化到三态。主用法是 ProbeCatalog / TutorCrew 写入的
-   * {@code visual/logical/trial}；同时容忍设计文档里出现过的别名（verbal-logical、trial-and-error 等），
-   * 不可识别一律 {@code unknown}，避免把脏标签泄露成对话分支。
+   * 把 cognitive_style 标签归一化到三态：主用 ProbeCatalog / TutorCrew 写入的 {@code visual/logical/trial}，
+   * 并容忍别名（verbal-logical、trial-and-error 等）；不可识别一律 {@code unknown}，避免脏标签泄露成对话分支。
    */
   private static String normalizeCognitiveStyle(String tag) {
     if (tag == null || tag.isBlank()) {
@@ -492,7 +489,7 @@ public class DialogContextService {
     };
   }
 
-  /** 班级排名段位：T1 头部 / T2 上半 / T3 中段 / T4 末段。 */
+  /** 班级排名段位：前 25% / 前 50% / 后 50% / 后 25%。 */
   private static String rankBand(int rank, int total) {
     if (total <= 0) {
       return "—";

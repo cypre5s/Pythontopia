@@ -20,6 +20,10 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+/**
+ * 导师问答对外入口。{@code POST /ask} 以 SSE 流式返回导师解答、{@code POST /style-engaged} 上报
+ * 学生采纳的讲法（因材施教闭环，返回 204）——两者仅学生可用；{@code GET /sessions} 拉取当前用户的历史会话。
+ */
 @RestController
 @RequestMapping("/api/tutor")
 public class TutorController {

@@ -20,14 +20,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * R-13 D1/D2：把 7 章原始课件 PDF 暴露给 pdfjs-dist。
+ * 把 7 章原始课件 PDF 暴露给 pdfjs-dist。
  *
  * <p>PDF 不存进 Git（单文件最大 ~80MB），由本地 {@code data/course-pack-43/pdfs/{docId}.pdf}
  * 提供。配置项 {@code pythontopia.coursepack.pdfDir} 控制根目录，可被环境变量
  * {@code PYT_COURSEPACK_PDF_DIR} 覆盖；缺失 PDF 时返回 404，让前端降级到 Markdown 视图。
  *
  * <p>故意不绑库，避免 documents 表无相对路径字段（仅 originalFilename / canonicalPath）时
- * 后端逻辑被字符串拼接搞乱；R-14 接 fileService 后可统一收敛。
+ * 后端逻辑被字符串拼接搞乱。
  */
 @Validated
 @RestController

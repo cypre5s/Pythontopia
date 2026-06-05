@@ -5,10 +5,10 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 
 /**
- * R-13 §5 Phase 6 续：graph /agents/boss/evaluate 响应。
+ * graph {@code /agents/boss/evaluate} 响应。
  *
- * <p>Backend 在 {@link com.pythontopia.world.boss.BossService} 拿到后转成对前端的
- * {@link BossAttemptResultDto}（部分字段重命名 + score 由 backend 重新计算）。
+ * <p>{@link com.pythontopia.world.boss.BossService} 拿到后转成对前端的 {@link BossAttemptResultDto}
+ * （部分字段重命名，score 由 backend 重新计算）。
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record BossEvaluateResultDto(

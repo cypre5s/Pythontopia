@@ -11,12 +11,17 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * （{@code "cover"} / {@code "duration_sec"}），又要以前端期望的 camelCase
  * （{@code coverUrl} / {@code durationSec}）**序列化输出**。因此对这两个发散字段用
  * {@link JsonProperty} 固定输出名为 camelCase，并用 {@link JsonAlias} 额外接受 graph 的
- * snake_case 输入；其余字段两端同名（{@code bvid/title/author/play/danmaku/pubdate/url}），无需注解。
+ * snake_case 输入；其余字段两端同名（{@code bvid/title/author/description/play/danmaku/pubdate/url}），
+ * 无需注解。
+ *
+ * <p>{@code description} 是 UP 主填写的视频简介（graph 已去标签/反转义/截断），作为「这个视频讲什么」
+ * 的真实讲解透传给前端卡片；UP 主未填写时为空串（前端给中性占位，不伪造内容）。
  */
 public record BilibiliVideoDto(
     String bvid,
     String title,
     String author,
+    String description,
     @JsonProperty("coverUrl") @JsonAlias("cover") String coverUrl,
     @JsonProperty("durationSec") @JsonAlias("duration_sec") int durationSec,
     long play,

@@ -1,7 +1,7 @@
 package com.pythontopia.learner.worldstate.dto;
 
 /**
- * 情绪化小镇②对外快照：小镇当前心情天气由学生情绪与坚持度画像派生。
+ * 对外快照：小镇当前心情天气，由学生情绪与坚持度画像派生。
  *
  * @param mood 心情天气：{@code sunny} / {@code cloudy} / {@code rainy}
  * @param streak 最近连续成败势头：正=连胜，负=连挫，0=无数据/中性

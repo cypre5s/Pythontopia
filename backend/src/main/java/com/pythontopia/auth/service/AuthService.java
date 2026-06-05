@@ -71,9 +71,8 @@ public class AuthService {
   }
 
   /**
-   * Reissue an access token from an existing valid token. The contract intentionally treats the
-   * access token as the refresh source — Stage 02 has not separated the two — so callers must hand
-   * back a non-expired access token. Invalid / expired tokens fail with {@code 401 UNAUTHORIZED}.
+   * 用现有有效 token 重新签发 access token。当前契约有意把 access token 兼作 refresh 源，
+   * 故调用方须回传未过期的 access token；非法或过期 token 抛 {@code 401 UNAUTHORIZED}。
    */
   public LoginResponse refresh(String token) {
     CurrentUserPrincipal principal;

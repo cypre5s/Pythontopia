@@ -18,13 +18,11 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Save slot read + write helpers. Honours the V108 partial unique index ({@code is_active=true}
- * exists for at most one slot per user) by always deactivating siblings inside a transaction
- * before activating a target slot.
+ * save_slot 读写辅助。遵守 V108 partial unique index（每个 user 至多一个 {@code is_active=true} slot）：
+ * 激活目标 slot 前先在同一事务内停用其它 slot。
  *
- * <p>V114 introduced four extension columns (scene_name, unlocked_buildings,
- * accumulated_play_seconds, inventory_items) for the W3 RPG save state. All read paths include
- * them; writes accept defaults from the DB unless callers go through {@link #updateExtension}.
+ * <p>V114 新增四个扩展列（scene_name、unlocked_buildings、accumulated_play_seconds、inventory_items）
+ * 承载 RPG 存档状态。所有读路径都包含它们；写入取 DB 默认值，除非调用方走 {@link #updateExtension}。
  */
 @Repository
 public class SaveSlotRepository {
@@ -71,12 +69,11 @@ public class SaveSlotRepository {
   }
 
   /**
-   * Insert a fresh slot at {@code slotIndex}. Marked active only when the learner has no other
-   * slots, otherwise the caller must explicitly {@link #activateSlot}.
+   * 在 {@code slotIndex} 插入新 slot。仅当该 user 尚无其它 slot 时标记为 active，否则调用方需显式
+   * {@link #activateSlot}。
    *
-   * <p>The V114 extension columns (scene_name / unlocked_buildings / accumulated_play_seconds /
-   * inventory_items) intentionally fall back to DB defaults here. Callers that need to seed them
-   * upfront should call {@link #updateExtension} right after this.
+   * <p>V114 扩展列（scene_name / unlocked_buildings / accumulated_play_seconds / inventory_items）
+   * 此处刻意回退到 DB 默认值；需预置的调用方应在此后调 {@link #updateExtension}。
    */
   public SaveSlot createSlot(Long userId, int slotIndex, String displayName) {
     requireValidIndex(slotIndex);
@@ -97,10 +94,7 @@ public class SaveSlotRepository {
     return findOne(userId, slotIndex).orElseThrow();
   }
 
-  /**
-   * Deactivate every slot of the user, then activate the target slot atomically. Throws when the
-   * target slot does not exist.
-   */
+  /** 原子地停用该 user 全部 slot 再激活目标 slot；目标 slot 不存在时抛异常。 */
   @Transactional
   public SaveSlot activateSlot(Long userId, int slotIndex) {
     requireValidIndex(slotIndex);
@@ -121,7 +115,7 @@ public class SaveSlotRepository {
     return findOne(userId, slotIndex).orElseThrow();
   }
 
-  /** Replace the snapshot blob for an existing slot and bump {@code last_played_at}. */
+  /** 替换已存在 slot 的 snapshot，并刷新 {@code last_played_at}。 */
   public SaveSlot updateSnapshot(Long userId, int slotIndex, String snapshotJson) {
     requireValidIndex(slotIndex);
     if (findOne(userId, slotIndex).isEmpty()) {
@@ -142,8 +136,8 @@ public class SaveSlotRepository {
   }
 
   /**
-   * Update only the V114 extension columns of an existing slot. Any {@code null} argument leaves
-   * the corresponding column untouched (COALESCE) so callers can patch a subset at a time.
+   * 仅更新已存在 slot 的 V114 扩展列。任一 {@code null} 入参保持对应列不变（COALESCE），
+   * 便于调用方分批 patch。
    */
   public SaveSlot updateExtension(
       Long userId,

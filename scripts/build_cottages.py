@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""build-cottages.py — 从 LPC 茅草屋 preview 裁出「作者已正确装配」的整屋 sprite。
+"""build_cottages.py — 从 LPC 茅草屋 preview 裁出「作者已正确装配」的整屋 sprite。
 
 来源：assets/inbox/buildings_npc/lpc_thatched-roof-cottage/preview.png（CC-BY-SA 3.0，
 作者 bluecarrot16 / daneeklu / Sharm）。preview 里的房屋由原作者按正确 3/4 透视装配，
 直接裁切并把草绿底色 key 成透明 + 去边，得到透视一致、观感正确的整屋（不再是
 「平面墙 + 俯视屋顶」的拼接错位）。
 
-用法：python3 scripts/build-cottages.py
+用法：python3 scripts/build_cottages.py
 """
 from __future__ import annotations
 

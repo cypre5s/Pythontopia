@@ -11,11 +11,10 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 /**
- * R-12 W2-NPC 对话上下文聚合查询。
+ * 对话上下文聚合查询。
  *
- * <p>所有 SQL 都按 (user_id 范围 / classroom_id 范围) 做了 owner filter，禁止跨用户跨班级泄露；
- * 各方法返回值统一用 {@link Optional} 或空集合，调用方（{@link DialogContextService}）负责兜底，
- * 不把空数据当异常抛。
+ * <p>所有 SQL 都按 user_id / classroom_id 做了 owner filter，禁止跨用户跨班级泄露；各方法返回值
+ * 统一用 {@link Optional} 或空集合，调用方（{@link DialogContextService}）负责兜底，不把空数据当异常抛。
  */
 @Repository
 class DialogContextRepository {
@@ -69,7 +68,7 @@ class DialogContextRepository {
     return count == null ? 0 : count;
   }
 
-  /** Total problems attempted + total passed (for first-attempt rate proxy). */
+  /** 全部提交数，用于估算 firstAttemptRate（首次通过率 proxy）。 */
   int countAllSubmissions(Long userId) {
     Integer count =
         jdbcTemplate.queryForObject(
@@ -88,7 +87,7 @@ class DialogContextRepository {
     return count == null ? 0 : count;
   }
 
-  /** KC code -> kc_name lookup limited to course pack 43. */
+  /** 按 kc_code 查 kc_name，限定 pack_id = 43。 */
   Optional<String> findKcName(String kcCode) {
     if (kcCode == null || kcCode.isBlank()) {
       return Optional.empty();
@@ -105,7 +104,7 @@ class DialogContextRepository {
     }
   }
 
-  /** kc 的章节 order + chapter title + page range（最低与最高 page_no）。 */
+  /** 查 KC 所属章节：chapter_order、标题、page_no 范围、首个示例页。 */
   Optional<KcChapterRow> findKcChapter(String kcCode) {
     if (kcCode == null || kcCode.isBlank()) {
       return Optional.empty();
@@ -215,7 +214,7 @@ class DialogContextRepository {
     return count == null ? 0 : count;
   }
 
-  /** 已解锁、未成熟的下一个 KC（按章节序后第一个未解锁的 KC）。 */
+  /** 下一个未解锁的 KC（unlocked = FALSE，按 chapter_order 取最靠前）。 */
   Optional<String> findNextLockedKc(Long userId) {
     return jdbcTemplate
         .query(
@@ -301,7 +300,7 @@ class DialogContextRepository {
         limit);
   }
 
-  /** 全用户 mastery 排序后取最低，用于 lowestMasteryKcName。 */
+  /** 该用户所有 KC 中 mastery 最低的一个（lowestMasteryKcName 用）。 */
   Optional<KcMasteryRow> findLowestMasteryKc(Long userId) {
     return jdbcTemplate
         .query(
@@ -347,7 +346,7 @@ class DialogContextRepository {
             until));
   }
 
-  /** 用户当前最高 mastery KC 所在章节 order（currentChapterOrder 用）。 */
+  /** 当前章节序：mastery ≥ 0.5 的 KC 中最大的 chapter_order。 */
   Optional<Integer> findCurrentChapterOrder(Long userId) {
     return jdbcTemplate
         .query(
@@ -474,7 +473,7 @@ class DialogContextRepository {
     return Optional.of(ids.get(index));
   }
 
-  /** 取用户当前所在第一个 ACTIVE 班级（学生视角，按 join 时间最早）。 */
+  /** 学生当前第一个 ACTIVE 班级（按 classroom id 升序取第一个）。 */
   Optional<Long> findStudentPrimaryClassroom(Long userId) {
     return jdbcTemplate
         .query(
@@ -669,7 +668,7 @@ class DialogContextRepository {
         .findFirst();
   }
 
-  /** world_session 上的 energy / energy_cap（R-12 W5 加的列）；不存在或 SQL 失败时返回 empty。 */
+  /** world_session 的 energy / energy_cap；列不存在或 SQL 失败时返回 empty。 */
   Optional<EnergyRow> findEnergy(Long userId) {
     try {
       return jdbcTemplate

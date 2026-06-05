@@ -25,17 +25,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Implements the "sleep -> advance one day" loop. Each tick:
+ * 实现「睡觉 → 推进一天」循环。每次 tick：
  *
  * <ol>
- *   <li>bumps {@code day_index}, rotates {@code weekday}, advances {@code season/month_index} when
- *       the 28-day quarter rolls over;
- *   <li>chooses a new weather string (seeded for reproducibility in tests);
- *   <li>asks {@link MasteryEvaluator#decayAll} to apply forgetting curves to every KC mastery;
- *   <li>asks {@link PassiveProfileService} to bump {@code emotion_persistence.score} by +0.01 to
- *       reward daily play;
- *   <li>writes optional {@link WorldEvent} rows for the new day (weather change, classroom hints)
- *       so the UI calendar can surface them.
+ *   <li>{@code day_index} +1，轮转 {@code weekday}；当 28 天的季度翻页时推进 {@code season/month_index}；
+ *   <li>随机选择新天气（测试中按种子可复现）；
+ *   <li>调用 {@link MasteryEvaluator#decayAll} 对每个 KC 掌握度应用遗忘曲线；
+ *   <li>调用 {@link PassiveProfileService} 将 {@code emotion_persistence.score} +0.01 以奖励每日游玩；
+ *   <li>为新一天写入可选的 {@link WorldEvent}（天气变化、课堂提示）供 UI 日历展示。
  * </ol>
  */
 @Service

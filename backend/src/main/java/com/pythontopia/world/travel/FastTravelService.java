@@ -4,25 +4,20 @@ import java.util.Optional;
 import org.springframework.stereotype.Service;
 
 /**
- * Validation-only skeleton for R-12 W5 fast travel. This service deliberately does <strong>not</strong>
- * touch {@code world_session} / {@code save_slot} / {@code learner_wallet}; persistence is owned by
- * the caller (e.g. a future {@code FastTravelController}) so that the cost deltas computed here can
- * be composed with the world clock and wallet transactions inside a single outer @Transactional.
+ * 快速旅行的纯校验服务：只计算花费增量，<strong>不</strong>写 {@code world_session} /
+ * {@code save_slot} / {@code learner_wallet}；持久化由调用方负责，以便把这里算出的 cost delta 与世界
+ * 时钟、钱包事务放进同一个外层 @Transactional。
  *
- * <p>Hard checks (in short-circuit order):
+ * <p>硬校验（按短路顺序）：
  *
  * <ol>
- *   <li>route must exist for {@code (fromScene, toScene)}
+ *   <li>{@code (fromScene, toScene)} 必须存在路线
  *   <li>{@code route.unlockPhase <= currentPhase}
  *   <li>{@code currentPythoco >= route.costPythoco}
  *   <li>{@code currentEnergy >= route.costEnergy}
- *   <li>{@code currentEnergy >= 10} (low-energy lockout, avoids "fast travel exhaustion" abuse)
- *   <li>{@code dailyUsedCount < 10} (daily cap, only enforced by {@link #travel})
+ *   <li>{@code currentEnergy >= 10}（低能量锁定，防「快速旅行耗竭」滥用）
+ *   <li>{@code dailyUsedCount < 10}（每日上限，仅 {@link #travel} 强制）
  * </ol>
- *
- * See {@code docs/gameplay/r12-deepen/07-fast-travel-network.md} §5 for the priority table that
- * the production controller will eventually layer on top (story / combat / festival / deep-mine
- * locks live above this service and short-circuit before it is even consulted).
  */
 @Service
 public class FastTravelService {
@@ -37,10 +32,8 @@ public class FastTravelService {
   }
 
   /**
-   * Returns {@code true} when the player satisfies every non-daily precondition for the route.
-   * Daily usage is intentionally excluded so the read-only "can I show the button as enabled"
-   * query stays cheap; {@link #travel(long, String, String, int, int, int, int)} re-validates
-   * everything before committing.
+   * 满足该路线除「每日上限」外的全部前置条件时返回 {@code true}。每日用量故意不查，使「按钮是否可点」这种
+   * 只读查询保持廉价；{@link #travel(long, String, String, int, int, int, int)} 提交前会重新校验全部条件。
    */
   public boolean canTravel(
       long userId,
@@ -70,9 +63,8 @@ public class FastTravelService {
   }
 
   /**
-   * Computes the post-travel deltas without mutating any aggregate. Callers must apply the
-   * returned {@code newPythoco}/{@code newEnergy} to {@code learner_wallet}/{@code player_state}
-   * and advance the world clock by {@code minutesPassed}, all inside one transaction.
+   * 计算旅行后的增量，不修改任何聚合。调用方须把返回的 {@code newPythoco}/{@code newEnergy} 落到
+   * {@code learner_wallet}/{@code player_state}，并按 {@code minutesPassed} 推进世界时钟，全部在同一事务内。
    */
   public FastTravelResult travel(
       long userId,
@@ -108,9 +100,8 @@ public class FastTravelService {
   }
 
   /**
-   * Outcome of a {@link FastTravelService#travel} call. On failure, {@code newPythoco} /
-   * {@code newEnergy} mirror the inputs (no deduction) and {@code minutesPassed} is {@code 0},
-   * so a naive caller that ignores {@code success} will at worst no-op.
+   * {@link FastTravelService#travel} 的结果。失败时 {@code newPythoco}/{@code newEnergy} 原样回传（不扣减）、
+   * {@code minutesPassed} 为 {@code 0}，因此忽略 {@code success} 的简单调用方最坏也只是 no-op。
    */
   public record FastTravelResult(
       boolean success, String reason, int newPythoco, int newEnergy, int minutesPassed) {}

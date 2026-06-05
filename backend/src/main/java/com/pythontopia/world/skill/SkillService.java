@@ -16,7 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Skill tree read + unlock workflow. Unlock conditions are stored as JSONB with the schema
+ * 技能树查询与解锁流程。解锁条件以 JSONB 存储，schema 如下
  *
  * <pre>{
  *   "type":"KC_MASTERY",
@@ -24,7 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
  *   "min":0.6
  * }</pre>
  *
- * or a {@code "type":"ALL"} composite with a {@code "conditions":[...]} array.
+ * 也可以是 {@code "type":"ALL"} 组合条件，配合 {@code "conditions":[...]} 数组。
  */
 @Service
 public class SkillService {

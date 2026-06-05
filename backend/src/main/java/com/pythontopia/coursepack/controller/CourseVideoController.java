@@ -32,7 +32,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * R-12 Phase 2：把任务点视频按章节列出（读 {@code video_manifest.json}）并按 id 流式分发，支持
+ * 把任务点视频按章节列出（读 {@code video_manifest.json}）并按 id 流式分发，支持
  * HTTP Range（{@code <video>} 拖动进度需要 206 + Content-Range）。
  *
  * <p>清单 schema 见 {@link CourseVideoManifestEntry}。当前内置课程无任务点视频，清单为空数组，
@@ -52,7 +52,7 @@ public class CourseVideoController {
 
   private static final String BYTES_PREFIX = "bytes=";
 
-  /** Sentinel returned by {@link #parseRange}: the range cannot be satisfied (answer 416). */
+  /** {@link #parseRange} 的哨兵返回值：Range 无法满足（上层回 416）。 */
   private static final long[] NOT_SATISFIABLE = new long[0];
 
   private final CourseVideoService service;

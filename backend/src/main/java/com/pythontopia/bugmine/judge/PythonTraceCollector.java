@@ -12,9 +12,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
- * Collects a bounded per-line variable trace by re-running the student's code inside the sandbox
- * with a small wrapper that uses {@code sys.settrace}. Trace records are emitted as a fenced JSON
- * block on stdout so the caller can parse them without affecting the sandbox interface.
+ * 在沙箱中重跑学生代码以收集有上限的逐行变量轨迹：注入使用 {@code sys.settrace} 的小型包装器，
+ * 把轨迹以带围栏标记的 JSON 块写入 stdout，供调用方解析而不影响沙箱接口。
  */
 @Component
 public class PythonTraceCollector {

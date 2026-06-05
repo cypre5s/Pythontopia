@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/** 课件证据检索的对外端点：仅教师 / 管理员可直接查询课件证据（{@code POST /api/rag/query}）。 */
 @RestController
 @RequestMapping("/api/rag")
 public class RagController {

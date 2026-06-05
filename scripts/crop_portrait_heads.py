@@ -29,7 +29,7 @@ from pathlib import Path
 try:
     from PIL import Image
 except ImportError:
-    print("[crop-portrait-heads] 缺少 Pillow，请 pip install Pillow", file=sys.stderr)
+    print("[crop_portrait_heads] 缺少 Pillow，请 pip install Pillow", file=sys.stderr)
     sys.exit(1)
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -92,10 +92,10 @@ def crop_composite_head(img: Image.Image) -> Image.Image:
 def main() -> int:
     files = sorted(p for p in PORTRAITS_DIR.iterdir() if p.suffix == ".png" and p.is_file())
     if not files:
-        print(f"[crop-portrait-heads] 目录为空: {PORTRAITS_DIR}", file=sys.stderr)
+        print(f"[crop_portrait_heads] 目录为空: {PORTRAITS_DIR}", file=sys.stderr)
         return 1
 
-    print(f"[crop-portrait-heads] 处理 {len(files)} 张 portrait")
+    print(f"[crop_portrait_heads] 处理 {len(files)} 张 portrait")
     for src in files:
         composite_name = COMPOSITE_SOURCES.get(src.name)
         composite_path = COMPOSITE_DIR / composite_name if composite_name else None
@@ -119,7 +119,7 @@ def main() -> int:
         head.save(out)
         print(f"  {src.name:48s} {w}x{h:<4d} → {kind:14s} → {out.name} ({TARGET_W}x{TARGET_H})")
 
-    print(f"[crop-portrait-heads] 完成，输出目录: {OUT_DIR}")
+    print(f"[crop_portrait_heads] 完成，输出目录: {OUT_DIR}")
     return 0
 
 

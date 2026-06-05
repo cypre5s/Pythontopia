@@ -21,6 +21,7 @@ public class ResourceRunRecorder {
     this.objectMapper = objectMapper;
   }
 
+  /** 便捷重载：省略 graph_trace 与 correlation_id，且不返回 run id。 */
   public void record(
       Long userId,
       String agentName,
@@ -45,6 +46,10 @@ public class ResourceRunRecorder {
         status);
   }
 
+  /**
+   * 持久化一次 agent 运行到 resource_run 表（agent_name、evidence_page_ids、safety_result、
+   * grounding_result 等契约字段），返回自增主键 id 作为 run id。
+   */
   public Long record(
       Long userId,
       String agentName,

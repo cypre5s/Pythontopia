@@ -8,10 +8,9 @@ import jakarta.validation.constraints.Size;
 import java.util.List;
 
 /**
- * Create-slot request payload. The four W3 extension fields are optional: omitting them lets the
- * V114 DB defaults take effect (scene=WorldScene, no unlocked buildings, 0 seconds, empty
- * inventory). The controller currently only forwards {@code displayName}; the extension fields are
- * accepted for future-proofing and to keep this DTO aligned with the matching frontend payload.
+ * 建 slot 请求 body。四个扩展字段可选：省略时由 V114 DB 默认值生效
+ * （scene=WorldScene、无 unlocked buildings、0 秒、空 inventory）。controller 当前只转发
+ * {@code displayName}，扩展字段保留以与前端 payload 形状对齐。
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record SaveSlotCreateRequest(

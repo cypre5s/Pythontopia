@@ -3,12 +3,12 @@ package com.pythontopia.world.calendar;
 import java.util.List;
 
 /**
- * Pure helpers for the in-game calendar tick. Centralised so {@code WorldAdvanceService} and
- * future cron jobs share identical week/season rotation logic.
+ * 游戏内日历推进的纯函数工具，集中放置以便 {@code WorldAdvanceService} 与后续定时任务共用
+ * 同一套星期/季节轮转逻辑。
  */
 public final class CalendarMath {
 
-  /** Index 0 = sunday … 6 = saturday, mirroring the {@code available_days} convention from V106. */
+  /** 下标 0=sunday … 6=saturday，与 V106 中 {@code available_days} 的约定一致。 */
   static final List<String> WEEKDAYS =
       List.of("sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday");
 
@@ -16,22 +16,21 @@ public final class CalendarMath {
 
   private CalendarMath() {}
 
-  /** Advance the weekday by one calendar day. Unknown inputs roll over to {@code monday}. */
+  /** 将星期向后推进一天；无法识别的输入回退为 {@code monday}。 */
   public static String nextWeekday(String current) {
     int idx = Math.max(0, WEEKDAYS.indexOf(safe(current, "monday")));
     return WEEKDAYS.get((idx + 1) % WEEKDAYS.size());
   }
 
-  /** Zero-based index for use with the V106 {@code available_days} integer array. */
+  /** 返回从 0 开始的下标，对应 V106 {@code available_days} 整型数组。 */
   public static int weekdayIndex(String weekday) {
     int idx = WEEKDAYS.indexOf(safe(weekday, "monday"));
     return idx < 0 ? 1 : idx;
   }
 
   /**
-   * Roll the season once every 28 in-game days (4-month year, 7-day weeks). When the season rolls,
-   * the month index also bumps; otherwise it stays. Returns {@code [newMonthIndex, newSeason]} as a
-   * 2-element array of strings to keep the call site terse.
+   * 每 28 个游戏内日期换一次季节（spring→summer→autumn→winter 循环）；换季时月份索引一并 +1
+   * （超过 12 回绕到 1），否则月份与季节保持不变。
    */
   public static SeasonRoll advanceSeason(int currentDayIndex, int currentMonthIndex, String currentSeason) {
     int newDay = currentDayIndex + 1;

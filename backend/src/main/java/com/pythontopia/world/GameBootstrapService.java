@@ -26,9 +26,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Assembles {@link GameBootstrapResponse} in a single transaction so the front-end pixel town can
- * hydrate after login with one round-trip. Lazily provisions the world session + player rows when
- * they are missing so freshly-registered learners always get a non-null payload.
+ * 在单个事务内组装 {@link GameBootstrapResponse}，让前端像素小镇登录后一次往返即可水合。当 world session
+ * 与 player 行缺失时惰性创建，保证新注册学习者总能拿到非空载荷。
  */
 @Service
 public class GameBootstrapService {

@@ -54,7 +54,7 @@ public class TutorService {
         emitter,
         resultJson -> {
           try {
-            persistSession(userId, request.question(), resultJson);
+            persistSession(userId, request.question(), request.conversationId(), resultJson);
           } catch (Exception e) {
             log.warn("Failed to persist tutor session", e);
           }
@@ -127,7 +127,7 @@ public class TutorService {
     return sessionRepository.findByUser(userId, limit);
   }
 
-  private void persistSession(Long userId, String question, String resultJson) {
+  private void persistSession(Long userId, String question, String conversationId, String resultJson) {
     try {
       JsonNode root = objectMapper.readTree(resultJson);
       String answerMd = textField(root, "answer_md");
@@ -141,7 +141,8 @@ public class TutorService {
         }
       }
 
-      sessionRepository.insert(userId, question, answerMd, evidencePageIds, groundingStatus);
+      sessionRepository.insert(
+          userId, question, answerMd, evidencePageIds, groundingStatus, conversationId);
     } catch (Exception e) {
       log.warn("Failed to parse tutor result for persistence", e);
     }

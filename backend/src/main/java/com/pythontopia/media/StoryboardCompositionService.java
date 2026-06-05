@@ -260,11 +260,11 @@ public class StoryboardCompositionService {
                 try {
                   Files.deleteIfExists(p);
                 } catch (IOException ignored) {
-                  // best-effort temp cleanup
+                  // 临时目录尽力清理，失败忽略
                 }
               });
     } catch (IOException ignored) {
-      // best-effort temp cleanup
+      // 临时目录尽力清理，失败忽略
     }
   }
 }

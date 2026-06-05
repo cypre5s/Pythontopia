@@ -18,8 +18,7 @@ import org.springframework.http.ResponseEntity;
 
 /**
  * 文件字节流式响应工具，支持 HTTP Range（{@code <video>}/{@code <audio>} 拖动进度需要 206 +
- * Content-Range）。从 {@code CourseVideoController} 抽出的通用逻辑，供 {@code MediaAssetController}
- * 服务生成的图/音/视频媒资复用。
+ * Content-Range），供 {@code MediaAssetController} 流式分发生成的图/音/视频媒资。
  */
 public final class ByteRangeResponder {
 

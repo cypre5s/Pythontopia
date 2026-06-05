@@ -358,7 +358,7 @@ public class ResourceWorkshopService {
 
   private ResourceProduceRequestDto.ProfileSnapshotDto profileSnapshot(
       LearnerProfileDto profile, List<ProfileDimensionDto> dims) {
-    // 学①扩展：把认知风格 + 易错点下传给资源生成 graph，让讲义/导图/示例随画像自适应。
+    // 把认知风格 + 易错点下传给资源生成 graph，让讲义/导图/示例随画像自适应。
     String cognitiveStyle = cognitiveStyleTag(dims);
     List<String> errorTags = errorTags(dims);
     if (profile == null) {

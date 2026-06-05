@@ -22,10 +22,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Teacher-facing classroom administration endpoints.
- *
- * <p>All endpoints require teacher (or admin) role plus classroom ownership; both checks happen
- * in {@code ClassroomService}/{@code ClassroomGuard}.
+ * 教师端班级管理接口：所有端点要求教师/管理员角色且为班级归属者，
+ * 鉴权在 {@code ClassroomService}/{@code ClassroomGuard} 中完成。
  */
 @Validated
 @RestController

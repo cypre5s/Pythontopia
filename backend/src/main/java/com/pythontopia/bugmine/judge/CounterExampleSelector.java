@@ -21,6 +21,10 @@ public class CounterExampleSelector {
     this.sandbox = sandbox;
   }
 
+  /**
+   * 返回首个未通过的测试用例作为反例：优先取隐藏用例（其 stdin 会脱敏以防泄题），否则取样例；
+   * 无用例或全部通过时返回 {@link Optional#empty()}。
+   */
   public Optional<CounterExample> findFirstFailing(Long problemId, String code) {
     Optional<PublicProblemRepository.JudgeTestCases> testCasesOpt =
         problemRepository.findTestCases(problemId);

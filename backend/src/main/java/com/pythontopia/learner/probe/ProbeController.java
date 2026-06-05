@@ -16,9 +16,8 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 世界内探针上报入口（玩中建画像③）。学生在 town_hub 看阶段做出中性选择 → 经服务端权威
- * {@link ProbeCatalog} 校验后发 {@link LearningEvent.ProbeChoiceMade}，由
- * {@code PassiveProfileRevisionListener} 回流到画像维度。命中赛题「对话式动态画像、摒弃表单、随学随新」。
+ * 世界内探针上报入口。学生做出的中性选择经服务端权威 {@link ProbeCatalog} 校验后发布
+ * {@link LearningEvent.ProbeChoiceMade}，由 {@code PassiveProfileRevisionListener} 回流到画像维度。
  */
 @RestController
 @RequestMapping("/api/learner/probe")

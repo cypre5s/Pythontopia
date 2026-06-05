@@ -52,9 +52,7 @@ public class WorldRepository {
   }
 
   /**
-   * Advance the world by one in-game day. {@code newWeather} replaces the weather string, {@code
-   * newWeekday/newSeason/newMonthIndex/newTimeOfDay} apply the calendar tick computed by the
-   * service layer. Returns the post-tick session.
+   * 将世界推进一个游戏内日（day_index +1），写入服务层算好的天气/星期/季节/月份/时段；返回 tick 后的 session。
    */
   public WorldSession advanceDay(
       Long userId,

@@ -23,10 +23,10 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 /**
- * Aggregates classroom dashboard data from existing event tables.
+ * 从既有事件表聚合班级看板数据。
  *
- * <p>Caller is the {@link com.pythontopia.classroom.dashboard.service.ClassroomDashboardService},
- * which adds caching via the classroom_kc_snapshot table.
+ * <p>调用方 {@link com.pythontopia.classroom.dashboard.service.ClassroomDashboardService}
+ * 通过 classroom_kc_snapshot 表补充缓存。
  */
 @Repository
 public class ClassroomDashboardRepository {
@@ -278,7 +278,7 @@ public class ClassroomDashboardRepository {
     return ts == null ? null : ts.toInstant().atOffset(ZoneOffset.UTC);
   }
 
-  // Unused but kept for diagnostic-friendly raw access; not part of the public dashboard API.
+  // 暂未使用，保留用于诊断时读取原始数组；不属于对外看板 API。
   @SuppressWarnings("unused")
   private List<Long> readBigintArray(Array array) throws SQLException {
     if (array == null) {

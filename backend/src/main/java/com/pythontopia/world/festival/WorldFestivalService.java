@@ -7,18 +7,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
- * Read + lifecycle entry-point for the V118 festival catalog. Reads expose the schedule to
- * {@code CalendarController} and class dashboards; the {@link #onDayAdvanced(int)} /
- * {@link #onDayEnded(int)} hooks are designed to be called from
- * {@code WorldAdvanceService.sleep()} inside the same transaction that bumps
- * {@code world_session.day_index}, so the festival lifecycle is always consistent with the world
- * clock.
+ * 节日目录（V118）的读取 + 生命周期入口。读接口把日程暴露给 {@code CalendarController} 与班级看板；
+ * {@link #onDayAdvanced(int)} / {@link #onDayEnded(int)} 须在 {@code WorldAdvanceService.sleep()} 内、
+ * 与 {@code world_session.day_index} 自增同一事务调用，使节日生命周期始终与世界时钟一致。
  *
- * <p>This R-12 W5 skeleton intentionally <strong>does not</strong> write the per-user
- * {@code FESTIVAL_START} / {@code FESTIVAL_END} rows into {@code world_event} yet — that is
- * owned by the follow-up R-Live-Festival sub-task once the per-user dispatcher
- * ({@code FestivalRewardDispatcher} in §8.3 of the design doc) is in place. See the TODO markers
- * below for the exact hook points.
+ * <p>状态写入是全日程级（无 user_id）；按用户的 {@code FESTIVAL_START}/{@code FESTIVAL_END} 事件目前
+ * 不在此发出。
  */
 @Service
 public class WorldFestivalService {
@@ -43,9 +37,8 @@ public class WorldFestivalService {
   }
 
   /**
-   * Called by {@code WorldAdvanceService.sleep()} after {@code world_session.day_index} flips to
-   * {@code newDay}. When the new day matches a seeded festival, marks it {@code 'active'} so the
-   * HUD / classroom dashboards reflect the live state. Non-festival days are a no-op.
+   * 由 {@code WorldAdvanceService.sleep()} 在 {@code world_session.day_index} 翻到 {@code newDay} 后调用。
+   * 新一天命中已 seed 的节日时置为 {@code 'active'}，让 HUD/班级看板反映实时状态；非节日日 no-op。
    */
   public void onDayAdvanced(int newDay) {
     Optional<WorldFestival> festival = repository.findByDay(newDay);
@@ -55,16 +48,12 @@ public class WorldFestivalService {
     repository.updateStatus(newDay, "active");
     log.info(
         "Festival entered: day_index={} name_key={}", newDay, festival.get().nameKey());
-    // TODO(R-Live-Festival): emit FESTIVAL_START into world_event per active user once the
-    // per-user dispatcher (FestivalRewardDispatcher, design doc §8.3) lands. Payload schema is
-    // {name_key, theme, npcs[], rewards{}, started_at} — see §8.2 of
-    // docs/gameplay/r12-deepen/05-festival-events.md.
+    // 按用户维度的 FESTIVAL_START 事件目前不在此发出（待 per-user dispatcher 落地）。
   }
 
   /**
-   * Called by {@code WorldAdvanceService.sleep()} the day after a festival, i.e. when {@code
-   * world_session.day_index} has already moved past the festival day. Marks the festival
-   * {@code 'completed'} so dashboards can render it as a closed timeline entry.
+   * 由 {@code WorldAdvanceService.sleep()} 在节日次日（{@code world_session.day_index} 已越过节日当天）调用，
+   * 置节日为 {@code 'completed'}，使看板按已结束的时间线条目渲染。
    */
   public void onDayEnded(int day) {
     if (repository.findByDay(day).isEmpty()) {
@@ -72,7 +61,6 @@ public class WorldFestivalService {
     }
     repository.updateStatus(day, "completed");
     log.info("Festival ended: day_index={}", day);
-    // TODO(R-Live-Festival): emit FESTIVAL_END into world_event with payload
-    // {name_key, ended_at, participate_count}.
+    // 按用户维度的 FESTIVAL_END 事件目前不在此发出（待 per-user dispatcher 落地）。
   }
 }

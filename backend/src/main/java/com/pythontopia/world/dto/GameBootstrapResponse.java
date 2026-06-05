@@ -11,9 +11,8 @@ import com.pythontopia.world.skill.dto.LearnerSkillDto;
 import java.util.List;
 
 /**
- * Aggregated payload returned by {@code POST /api/game/bootstrap}. Mirrors the {@code
- * game_bootstrap_view} 1:1 fields plus the 1:N collections the front-end pixel town needs to
- * hydrate in one round-trip.
+ * {@code POST /api/game/bootstrap} 返回的聚合载荷：与 {@code game_bootstrap_view} 视图字段 1:1 对应，
+ * 另含前端像素小镇一次性加载所需的 1:N 集合。
  */
 public record GameBootstrapResponse(
     WorldSnapshotDto world,

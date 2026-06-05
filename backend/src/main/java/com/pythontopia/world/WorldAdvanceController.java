@@ -18,8 +18,8 @@ public class WorldAdvanceController {
   }
 
   /**
-   * Advance the world by one in-game day: bump day_index, rotate weekday/season/weather, decay
-   * mastery, bump emotion_persistence, and queue calendar events for the new day.
+   * 推进世界一个游戏内日：day_index +1，轮转 weekday/season/weather，衰减掌握度，提升 emotion_persistence，
+   * 并为新一天排入日历事件。
    */
   @PostMapping("/sleep")
   public WorldAdvanceResponse sleep(@CurrentUser CurrentUserPrincipal user) {

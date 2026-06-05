@@ -22,6 +22,7 @@ public class DebugAgentClient {
     this.properties = properties;
   }
 
+  /** 调用 graph 微服务的 DebugAgent 分析失败提交；服务不可达时抛出 {@link BusinessException}（BAD_GATEWAY）。 */
   public DebugAgentResponse analyse(DebugAgentRequest request) {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);

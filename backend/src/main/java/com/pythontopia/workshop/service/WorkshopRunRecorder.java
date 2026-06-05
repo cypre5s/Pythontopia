@@ -9,9 +9,8 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Thin wrapper around {@link ResourceRunRecorder} that records a run in a NEW transaction. This
- * guarantees that a failed workshop run is still persisted for audit even when the parent
- * transaction must roll back the resource creation.
+ * {@link ResourceRunRecorder} 的薄封装：在新事务（REQUIRES_NEW）中记录运行，
+ * 确保失败的工坊运行即便父事务回滚也仍落库可审计。
  */
 @Component
 public class WorkshopRunRecorder {

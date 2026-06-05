@@ -14,20 +14,14 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Component;
 
 /**
- * 阶段 M4 - 学习事件 → 八维画像被动更新。
+ * 监听 {@link LearningEvent}，把每类学习事件映射为一个画像维度的被动增量更新。
  *
- * <p>每个事件映射到一个主维度的 {@link PassiveProfileService#applyDimensionUpdate} 调用，由 service
- * 内部统一写 {@code learner_profile.dimensions} 字段 + 追加 {@code profile_revision} 审计行；
- * V091 限制的 source 枚举（PRACTICE_PASS / PRACTICE_FAIL / DEBUG_FIX / RESOURCE_FEEDBACK 等）由本监听器显式透传。
+ * <p>每个事件转成一次 {@link PassiveProfileService#applyDimensionUpdate} 调用，由 service 统一写
+ * {@code learner_profile.dimensions} 并追加 {@code profile_revision} 审计；透传的 source 必须落在
+ * profile_revision 允许的枚举内（PRACTICE_PASS / PRACTICE_FAIL / DEBUG_FIX / RESOURCE_FEEDBACK 等）。
  *
- * <p>降级策略：捕获 {@link DataAccessException}（典型场景：{@code dimensions} 列尚未由 W2-MIGRATE 创建），
- * 仅记录 warn 日志，保证 mastery 评估等下游链路不受影响。
- *
- * <p>已接入数据源：练习成败、Debug 修复、资源消费（knowledge_base）、多模态消费（learning_preference）、
- * 讲法采纳（cognitive_style，用①）、世界内探针（cognitive_style/emotion/learning_preference，玩中建画像③）、
- * 练习重试/放弃/逆袭（emotion_persistence，情绪化小镇②）。
- *
- * <p>TODO(M4-后续)：课件页阅读完成 → knowledge_base（应在 PageReadService / Library 模块接入）。
+ * <p>降级：捕获 {@link DataAccessException}（如 {@code dimensions} 列尚未创建）时仅记录 warn 日志，
+ * 不影响 mastery 评估等下游链路。
  */
 @Component
 public class PassiveProfileRevisionListener {
@@ -79,8 +73,8 @@ public class PassiveProfileRevisionListener {
   }
 
   /**
-   * 多模态消费（章节视频 / AI 动画 / 知识点图解）→ learning_preference（媒介偏好）。把 mediaType 作为
-   * tag 累积，配合 score 微增，使推荐服务的媒介优先级能反映「学生确实在看视觉/视频内容」。
+   * 多模态消费（视频 / 动画 / 图解）→ learning_preference：mediaType 作为 tag 累积、score 微增，
+   * 使推荐服务的媒介优先级能反映学生实际偏好的媒介。
    */
   @EventListener
   public void onMediaConsumed(LearningEvent.MediaConsumed event) {
@@ -95,8 +89,8 @@ public class PassiveProfileRevisionListener {
   }
 
   /**
-   * 答疑/讲解中学生采纳某讲法（视觉/逻辑/试错）→ cognitive_style 回测（闭环，补「认知风格死维」缺口）。
-   * style 作为 tag 累积 + evidence+1 + 微小 score；多次累积才稳；source 复用 RESOURCE_FEEDBACK 枚举。
+   * 学生采纳某讲法（视觉/逻辑/试错）→ cognitive_style：style 作为 tag 累积、evidence+1、score 微增，
+   * 多次累积才稳定；source 复用 RESOURCE_FEEDBACK 枚举。
    */
   @EventListener
   public void onTutorStyleEngaged(LearningEvent.TutorStyleEngaged event) {
@@ -113,8 +107,8 @@ public class PassiveProfileRevisionListener {
   }
 
   /**
-   * 世界内探针选择（玩中建画像③）→ 由服务端权威 {@link ProbeCatalog} 解析出维度/score/tag 后回写。
-   * choiceId 不在目录内时跳过（防伪造信号）；source 复用 RESOURCE_FEEDBACK 枚举，evidence+1，tag 累积。
+   * 世界内探针选择 → 由服务端权威 {@link ProbeCatalog} 解析出维度/score/tag 后回写；
+   * choiceId 不在目录内时跳过（防伪造信号）；source 复用 RESOURCE_FEEDBACK 枚举。
    */
   @EventListener
   public void onProbeChoiceMade(LearningEvent.ProbeChoiceMade event) {
@@ -131,9 +125,7 @@ public class PassiveProfileRevisionListener {
             });
   }
 
-  /**
-   * 失败后重试（情绪化小镇②）→ emotion_persistence 轻微正向（愿意重试=韧性）。tag=retry，evidence+1。
-   */
+  /** 失败后重试 → emotion_persistence 轻微正向（愿意重试=韧性）；tag=retry，evidence+1。 */
   @EventListener
   public void onPracticeRetried(LearningEvent.PracticeRetried event) {
     DimensionDelta delta =

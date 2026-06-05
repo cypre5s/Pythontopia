@@ -11,9 +11,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
-/**
- * Classroom ownership guard used both as a @PreAuthorize SpEL bean and from services.
- */
+/** 班级归属鉴权：既作为 @PreAuthorize SpEL bean 使用，也供 service 直接调用，校验教师/管理员对班级的归属。 */
 @Component("classroomGuard")
 public class ClassroomGuard {
 

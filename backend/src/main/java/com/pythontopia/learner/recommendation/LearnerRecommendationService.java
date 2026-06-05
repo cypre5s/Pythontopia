@@ -77,8 +77,7 @@ public class LearnerRecommendationService {
   /**
    * 媒介优先级 = 画像结构化偏好 + 多模态消费/评估回流信号（learning_preference 维度 tags）。
    *
-   * <p>把 Phase2 的「看视频/动画/图解 → learning_preference tag」与评估写入的偏好回灌到推荐：
-   * 学生最近多消费哪类媒介，推荐就把该媒介的资源排在前面，闭合「消费/评估 → 推送策略」回路。
+   * <p>学生最近多消费哪类媒介，就把该媒介的资源排在前面，形成「消费/评估 → 推送策略」的闭环。
    */
   private List<String> resolveMediaPriority(Long userId) {
     LinkedHashSet<String> priority = new LinkedHashSet<>();

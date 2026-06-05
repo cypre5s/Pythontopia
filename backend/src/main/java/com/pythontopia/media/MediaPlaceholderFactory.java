@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * 无 apikey 时的「文生图」本地占位生成器：用 AWT 在内存里画一张星露谷像素风的占位卡（确定式，
- * 同一 prompt 永远得到同一张图，便于缓存与演示）。文字用 ASCII 标签避免无 CJK 字体时的豆腐块，
+ * 同一 prompt 永远得到同一张图，便于缓存）。文字用 ASCII 标签避免无 CJK 字体时的豆腐块，
  * 真正的中文说明由前端卡片在图外渲染。
  *
  * <p>这是降级路径产物，{@code degraded=true}；配置讯飞文生图密钥后由 {@code XfyunImageService}

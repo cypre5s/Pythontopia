@@ -11,10 +11,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
- * 情绪化小镇②：把 {@code emotion_persistence} 画像 + 最近练习势头派生为「小镇心情天气」。
+ * 把 {@code emotion_persistence} 画像与最近练习势头派生为「小镇心情天气」。
  *
- * <p>读时计算、纯派生、不入库；任何下游失败都降级为中性（sunny / streak 0 / 0.5），保证演示不翻车
- * （冷启动空画像 = 晴天）。心情服务因材施教：把抽象画像变成「30 秒内屏幕可见」的世界状态。
+ * <p>读时计算、纯派生、不入库；任何下游失败均降级为中性（sunny / streak 0 / 0.5），冷启动空画像为晴天。
  */
 @Service
 public class WorldStateService {
@@ -77,8 +76,8 @@ public class WorldStateService {
   }
 
   /**
-   * 心情派生：连胜/连挫优先（快反应，演示 30 秒铁律），再看 emotion_persistence 慢分（随学随新）。
-   * 连胜≥2 或慢分≥0.6 → 晴；连挫≥2 或慢分&lt;0.4 → 雨；其余多云。
+   * 心情派生：连胜/连挫优先，其次看 emotion_persistence 得分。
+   * 连胜≥2 或得分≥0.6 → 晴；连挫≥2 或得分&lt;0.4 → 雨；其余多云。
    */
   static String moodOf(double emotionScore, int streak) {
     if (streak >= 2) {

@@ -15,8 +15,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 /**
- * Skill tree static catalog + per-learner unlocked skill records. The unlock condition itself is
- * stored as JSONB and evaluated by {@code SkillService} against {@code kc_mastery_snapshot}.
+ * 技能树静态目录与每位学习者的已解锁技能记录。解锁条件以 JSONB 存储，由 {@code SkillService}
+ * 对照 {@code kc_mastery_snapshot} 求值。
  */
 @Repository
 public class SkillRepository {
@@ -82,7 +82,7 @@ public class SkillRepository {
         .findFirst();
   }
 
-  /** Idempotent insert — returns the row whether it was already present or just created. */
+  /** 幂等插入：无论该行原本已存在还是本次新建，都返回该行。 */
   public LearnerSkill unlockSkill(Long userId, String skillKey) {
     jdbcTemplate.update(
         """
@@ -96,8 +96,7 @@ public class SkillRepository {
   }
 
   /**
-   * Adjust the proficiency of an already-unlocked skill, clamping into {@code [0, 100]}. Returns
-   * the new proficiency. Throws when the learner has not unlocked the skill yet.
+   * 调整已解锁技能的熟练度，结果钳制在 {@code [0, 100]} 并返回新值；学习者尚未解锁该技能时抛出异常。
    */
   public int updateProficiency(Long userId, String skillKey, int delta) {
     Integer updated =

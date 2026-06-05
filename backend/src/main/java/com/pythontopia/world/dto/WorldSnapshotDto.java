@@ -3,9 +3,8 @@ package com.pythontopia.world.dto;
 import java.time.OffsetDateTime;
 
 /**
- * Calendar-aware world snapshot used by {@code /api/game/bootstrap} and {@code /api/world/sleep}.
- * The narrower {@link WorldSessionDto} is kept untouched for legacy {@code /api/world/session}
- * callers.
+ * 含日历信息的世界快照，供 {@code /api/game/bootstrap} 与 {@code /api/world/sleep} 使用；
+ * 旧端点 {@code /api/world/session} 仍使用更精简的 {@link WorldSessionDto}。
  */
 public record WorldSnapshotDto(
     Long worldSessionId,

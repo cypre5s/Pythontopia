@@ -17,9 +17,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 /**
- * World-event log writes + reads. Events are produced by the daily {@code WorldAdvanceService}
- * tick (birthdays, classroom announcements, weather changes) and consumed by the in-game calendar
- * UI.
+ * world_event 事件日志的读写。事件由每日 {@code WorldAdvanceService} 推进产生（生日、班级公告、
+ * 天气变化），供游戏内日历 UI 消费。
  */
 @Repository
 public class WorldEventRepository {

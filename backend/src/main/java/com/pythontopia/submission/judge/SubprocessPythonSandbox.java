@@ -13,10 +13,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
- * Subprocess-based Python sandbox used as the Beta default; this implementation does not require
- * Docker but enforces deterministic resource limits via {@code python -I} (isolated mode) plus an
- * explicit wallclock timeout. Docker-based sandbox is intentionally deferred until stage 14 once
- * the deploy pipeline is finalised. The implementation never leaks host paths in its outputs.
+ * 基于子进程的 Python 沙箱：无需 Docker，通过 {@code python -I}（隔离模式）加显式墙钟超时
+ * 施加确定性资源限制；输出经脱敏，绝不泄露宿主机路径。
  */
 @Component
 public class SubprocessPythonSandbox implements PythonSandbox {
@@ -58,7 +56,7 @@ public class SubprocessPythonSandbox implements PythonSandbox {
       try (OutputStream stdin = process.getOutputStream()) {
         stdin.write(testCase.input().getBytes(StandardCharsets.UTF_8));
       } catch (IOException ignored) {
-        // Some short submissions close stdin before reading anything; ignore.
+        // 部分短代码未读取 stdin 即结束，忽略此异常。
       }
       boolean finished =
           process.waitFor(Math.max(100, testCase.timeoutMs()), TimeUnit.MILLISECONDS);
@@ -83,14 +81,14 @@ public class SubprocessPythonSandbox implements PythonSandbox {
         try {
           Files.deleteIfExists(scriptFile);
         } catch (IOException ignored) {
-          // best effort cleanup
+          // 尽力清理临时文件，忽略失败。
         }
       }
       if (workingDir != null) {
         try {
           Files.deleteIfExists(workingDir);
         } catch (IOException ignored) {
-          // best effort cleanup
+          // 尽力清理临时文件，忽略失败。
         }
       }
     }

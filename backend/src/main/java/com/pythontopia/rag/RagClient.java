@@ -11,6 +11,10 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
+/**
+ * 课件 RAG 检索的 HTTP 客户端：POST 到 pythontopia-rag 的 {@code /rag/query}；
+ * 服务不可达时抛 {@link RagUnavailableException}（HTTP 502）。
+ */
 @Component
 public class RagClient {
 

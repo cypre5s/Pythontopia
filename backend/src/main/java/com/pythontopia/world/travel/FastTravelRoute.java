@@ -1,11 +1,8 @@
 package com.pythontopia.world.travel;
 
 /**
- * R-12 W5 fast travel network: a single static row from {@code fast_travel_route} (migration
- * V119). Costs are pre-deducted at travel time; {@code costMinutes} is forwarded to the world
- * clock so a teleport still consumes in-game time, which preserves the day/night cadence.
- *
- * <p>See {@code docs/gameplay/r12-deepen/07-fast-travel-network.md} §3 for the design rationale.
+ * 快速旅行路线：{@code fast_travel_route}（迁移 V119）的一条静态行。花费在旅行时预扣；
+ * {@code costMinutes} 转给世界时钟，使传送也消耗游戏内时间、保持昼夜节奏。
  */
 public record FastTravelRoute(
     Long id,

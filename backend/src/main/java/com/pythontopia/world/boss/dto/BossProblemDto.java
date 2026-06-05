@@ -4,10 +4,10 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 
 /**
- * R-13 §5 Phase 6：Boss 题目 DTO，与前端 {@code BossProblemDto} 一一对应。
+ * Boss 题目 DTO，与前端 {@code BossProblemDto} 一一对应。
  *
- * <p>graph 服务返回的 JSON 字段为 {@code camelCase}（见 schemas.BossProblem.to_payload），
- * 这里同样用 camelCase，无需 @JsonProperty 转换。
+ * <p>graph 返回 JSON 字段为 {@code camelCase}（见 schemas.BossProblem.to_payload），与此处字段名一致，
+ * {@code @JsonProperty} 仅显式标注、无重命名。
  */
 public record BossProblemDto(
     @JsonProperty("problemId") String problemId,

@@ -8,7 +8,7 @@ import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
-/** Read-only helpers for the in-game calendar UI. */
+/** 面向游戏内日历 UI 的只读查询。 */
 @Service
 public class CalendarService {
 

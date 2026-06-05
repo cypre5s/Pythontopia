@@ -9,4 +9,5 @@ public record TutorSessionDto(
     String answerMd,
     List<Integer> evidencePageIds,
     String groundingStatus,
+    String conversationId,
     Instant createdAt) {}

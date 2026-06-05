@@ -8,10 +8,9 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 /**
- * R-13 安全加固：username + displayName 拒绝 HTML 元字符（&lt; &gt; &amp; "" '
- * 等），防止字段直传到其他端（Android / 邮件通知 / OpenAPI 文档）时被原样渲染
- * 触发 XSS。Web 前端 Vue 模板有兜底转义，但后端层依旧应该做净化。
- * username 进一步限制为：字母/数字/下划线/连字符/点，避开特殊字符。
+ * username 与 displayName 拒绝 HTML 元字符（&lt; &gt; &amp; " '），避免字段在其他端
+ * （Android / 邮件通知 / OpenAPI 文档）被原样渲染触发 XSS；username 进一步限定为
+ * 字母/数字/下划线/连字符/点。
  */
 public record RegisterRequest(
     @NotBlank

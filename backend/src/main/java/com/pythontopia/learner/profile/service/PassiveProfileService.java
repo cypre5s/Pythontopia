@@ -20,12 +20,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 阶段 M4 - 被动画像更新服务。
+ * 被动画像更新服务：将练习提交、Debug 修复、资源消费、班级任务完成等学习事件转化为 8 维画像
+ * {@code learner_profile.dimensions} JSONB 字段的真实增量，并保留 {@code profile_revision} 审计。
  *
- * <p>将练习提交、Debug 修复、资源消费、班级任务完成等学习事件转化为 8 维画像 {@code
- * learner_profile.dimensions} JSONB 字段的真实增量，并保留 {@code profile_revision} 审计。
- *
- * <p>八维 key（英文 snake_case，与任务规格 PassiveProfile JSON Schema 对齐）：
+ * <p>八维 key（英文 snake_case）：
  *
  * <ul>
  *   <li>{@code professional_background} 专业背景
@@ -38,13 +36,11 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li>{@code emotion_persistence} 情绪与坚持度
  * </ul>
  *
- * <p>设计说明：
- *
  * <ul>
- *   <li>{@link #applyDimensionUpdate} 是事务级方法，先读 dimensions JSONB，再应用 delta，最后写回并追加 profile_revision；
- *   <li>当 {@link DimensionDelta#source()} 不在 V091 定义的 CHECK 枚举内时，会跳过 revision 写入但仍执行 dimension 更新；
- *   <li>当 {@code learner_profile.dimensions} 列在 W2-MIGRATE 完成前尚未存在时，{@link ProfileRepository#findDimensions}
- *       会返回 {@link java.util.Optional#empty()}，调用方负责吞掉异常或上层 Listener 做降级。
+ *   <li>{@link #applyDimensionUpdate} 为事务方法：读 dimensions JSONB → 应用 delta → 写回并追加 profile_revision；
+ *   <li>{@link DimensionDelta#source()} 不在 profile_revision 允许的 source 枚举内时，跳过 revision 写入但仍更新 dimension；
+ *   <li>{@code learner_profile.dimensions} 列尚未创建时 {@link ProfileRepository#findDimensions} 返回
+ *       {@link java.util.Optional#empty()}，由调用方或上层 Listener 做降级。
  * </ul>
  */
 @Service
@@ -52,7 +48,7 @@ public class PassiveProfileService {
 
   private static final Logger log = LoggerFactory.getLogger(PassiveProfileService.class);
 
-  /** 八维 key 的权威清单，顺序与 AGENTS.md「画像至少包含 8 维」保持一致。 */
+  /** 八维 key 的权威清单（决定 getDimensions 返回与雷达图的维度顺序）。 */
   public static final List<String> DIMENSION_KEYS =
       List.of(
           "professional_background",
@@ -65,10 +61,9 @@ public class PassiveProfileService {
           "emotion_persistence");
 
   /**
-   * 学生 PUT 自评接口允许直写的偏主观维度；其余只读，由 PassiveProfileService 被动改。
+   * 学生 PUT 自评接口允许直写的主观维度；其余维度只读，仅由本服务被动更新。
    *
-   * <p>#1 学生纠偏阀：{@code cognitive_style} 纳入自评，让学生可在画像屋纠正认知风格
-   * （防幻觉 / 不贴死标签，见 trilogy 设计 §3 设计原则、§5 数据模型）。
+   * <p>纳入 {@code cognitive_style} 是为了让学生在画像屋纠正被推断的认知风格（防幻觉、不贴死标签）。
    */
   public static final Set<String> SELF_EDITABLE_DIMENSIONS =
       Set.of(
@@ -78,7 +73,7 @@ public class PassiveProfileService {
           "learning_preference",
           "emotion_persistence");
 
-  /** V091 profile_revision_source_check 允许的 source 枚举。 */
+  /** profile_revision_source_check 约束允许的 source 枚举。 */
   private static final Set<String> ALLOWED_REVISION_SOURCES =
       Set.of(
           "INTERVIEW",
@@ -97,7 +92,7 @@ public class PassiveProfileService {
   /** confidence 饱和证据数：evidence_count 达到该值时置信度=1（读时派生，不入库）。 */
   private static final int EVIDENCE_SATURATION = 8;
 
-  /** 读时 decay 半衰期（天）：久未更新的维度得分向中性 0.5 回归，落实「随学随新」。 */
+  /** 读时 decay 半衰期（天）：久未更新的维度得分向中性 0.5 回归。 */
   private static final double DECAY_HALF_LIFE_DAYS = 14.0;
 
   private final ProfileRepository profileRepository;
@@ -164,10 +159,9 @@ public class PassiveProfileService {
       } else {
         tagsArray = dimensionObj.putArray("tags");
       }
-      // 学生纠偏阀（#1）：deliberate 自评（source=INTERVIEW，仅 ProfileController 自评路径）
-      // 把所选 tag 提升到末尾，使其成为「末尾=主导」信号——即便该 tag 早先已出现，也移到末尾，
-      // 让纠偏 decisively 覆盖旧推断（消费方 TutorService / ResourceWorkshopService 取末尾 tag）。
-      // 被动累积（其它 source）保持首见去重，避免扰动 learning_preference 媒介排序等既有行为。
+      // INTERVIEW 自评（仅 ProfileController 自评路径）把所选 tag 移到数组末尾，使其成为主导信号：
+      // 即便该 tag 早先已出现也移到末尾，让纠偏覆盖旧推断（消费方 TutorService / ResourceWorkshopService 取末尾 tag）。
+      // 其它 source 的被动累积保持首见去重，避免扰动 learning_preference 媒介排序等既有行为。
       boolean authoritativeSelfReport = "INTERVIEW".equals(delta.source());
       for (String tag : delta.tagsAdd()) {
         if (tag == null || tag.isBlank()) {
@@ -261,8 +255,8 @@ public class PassiveProfileService {
   }
 
   /**
-   * 读时半衰期 decay：久未更新的维度得分向中性 {@value #DEFAULT_SCORE} 轻微回归，落实「随学随新」；
-   * raw 分不入库改动。{@code last_updated} 缺失或不可解析时不衰减。
+   * 读时半衰期 decay：久未更新的维度得分向中性 {@value #DEFAULT_SCORE} 轻微回归，raw 分不写库；
+   * {@code last_updated} 缺失或不可解析时不衰减。
    */
   private static double applyDecay(double score, String lastUpdatedIso) {
     if (lastUpdatedIso == null || lastUpdatedIso.isBlank()) {
