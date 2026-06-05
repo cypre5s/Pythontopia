@@ -1187,19 +1187,8 @@ function buildIndex() {
         height: 40,
         bgm: 'bgm_town_day',
         tileset: 'kenney_tiny_town',
-        exits: ['farm_north', 'mine_south', 'campus_east', 'port_west'],
+        exits: ['mine_south'],
         spawn: { tileX: 25, tileY: 20 },
-      },
-      {
-        key: 'farm_north',
-        file: 'farm_north.json',
-        label: '北农场 · 棉麻试验田',
-        width: 40,
-        height: 40,
-        bgm: 'bgm_town_day',
-        tileset: 'kenney_tiny_town',
-        exits: ['town_hub'],
-        spawn: { tileX: 20, tileY: 37 },
       },
       {
         key: 'mine_south',
@@ -1211,28 +1200,6 @@ function buildIndex() {
         tileset: 'kenney_tiny_dungeon',
         exits: ['town_hub'],
         spawn: { tileX: 15, tileY: 2 },
-      },
-      {
-        key: 'campus_east',
-        file: 'campus_east.json',
-        label: '校园',
-        width: 40,
-        height: 30,
-        bgm: 'bgm_quest',
-        tileset: 'kenney_tiny_town',
-        exits: ['town_hub'],
-        spawn: { tileX: 2, tileY: 15 },
-      },
-      {
-        key: 'port_west',
-        file: 'port_west.json',
-        label: '西港 · 棉布商埠',
-        width: 35,
-        height: 25,
-        bgm: 'bgm_town_eve',
-        tileset: 'kenney_tiny_town',
-        exits: ['town_hub'],
-        spawn: { tileX: 33, tileY: 12 },
       },
     ],
   };
@@ -1382,12 +1349,10 @@ node scripts/generate-maps.mjs
 async function main() {
   await fs.mkdir(MAPS_DIR, { recursive: true });
 
+  // R-14 方案A：只生成中央小镇 + Bug 矿洞支线；farm_north / campus_east / port_west 已废弃。
   const generators = [
     { name: 'town_hub.json', build: generateTownHub },
-    { name: 'farm_north.json', build: generateFarmNorth },
     { name: 'mine_south.json', build: generateMineSouth },
-    { name: 'campus_east.json', build: generateCampusEast },
-    { name: 'port_west.json', build: generatePortWest },
   ];
 
   const dryRun = process.argv.includes('--dry-run');

@@ -61,13 +61,11 @@ interface BootSceneCreateContext {
   input?: { removeAllListeners(): unknown };
 }
 
-// WorldScene 需要的 5 张大地图：BootScene 一次性预加载，切场景时直接命中缓存。
+// R-14 方案A：世界收缩为单一中央小镇 + Bug 矿洞支线，其余外围图已删除。
+// BootScene 只预加载这两张实景地图，切场景时直接命中缓存。
 const WORLD_MAP_KEYS: ReadonlyArray<string> = [
   'town_hub',
-  'farm_north',
   'mine_south',
-  'campus_east',
-  'port_west',
 ];
 
 const SFX_LIST: ReadonlyArray<[string, string]> = [

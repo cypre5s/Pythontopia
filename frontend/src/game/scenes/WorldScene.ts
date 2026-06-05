@@ -61,14 +61,10 @@ const MOVE_COOLDOWN_MS = 130;
 // 奔跑时缩短逐格移动冷却（手感更快），与 run 动画帧率配合。
 const RUN_COOLDOWN_FACTOR = 0.62;
 
-// 每张地图按主题映射一个「工具动作」（按 C 触发）：
-//   farm 浇水 / mine 挖矿 / campus 施法（钻研）/ port 钓鱼 / hub 庆祝挥手。
+// 每张地图按主题映射一个「工具动作」（按 C 触发）：hub 庆祝挥手 / mine 挖矿。
 const MAP_TOOL_ACTION: Readonly<Record<string, CharacterAction>> = {
   town_hub: 'celebrate',
-  farm_north: 'water',
   mine_south: 'mine',
-  campus_east: 'cast',
-  port_west: 'fish',
 };
 function toolActionForMap(mapKey: string): CharacterAction {
   return MAP_TOOL_ACTION[mapKey] ?? 'celebrate';
@@ -79,12 +75,10 @@ const TURN_DELAY_MS = 70;
 const RAIN_SLOWDOWN = 1.25;
 const FADE_DURATION_MS = 280;
 
+// R-14 方案A：仅中央小镇 town_hub 与 Bug 矿洞支线 mine_south 为实景地图。
 const SUPPORTED_MAP_KEYS: ReadonlySet<string> = new Set([
   'town_hub',
-  'farm_north',
   'mine_south',
-  'campus_east',
-  'port_west',
 ]);
 const DEFAULT_MAP_KEY = 'town_hub';
 

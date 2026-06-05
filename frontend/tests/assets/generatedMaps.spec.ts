@@ -33,12 +33,10 @@ describe('generated Tiled maps', () => {
       execFileSync('node', [tempScript], { stdio: 'pipe' });
 
       const generatedMapsDir = path.join(tempRoot, 'frontend', 'public', 'assets', 'maps');
+      // R-14 方案A：世界收缩为单一中央小镇 + Bug 矿洞支线，外围图已删除。
       const files = [
         'town_hub.json',
-        'farm_north.json',
         'mine_south.json',
-        'campus_east.json',
-        'port_west.json',
         'index.json',
       ];
 
@@ -53,7 +51,8 @@ describe('generated Tiled maps', () => {
   });
 
   test('committed maps include low_obstacle objects for jumpable terrain', () => {
-    const mapFiles = ['town_hub.json', 'farm_north.json', 'campus_east.json', 'port_west.json'];
+    // R-14：外围图已删除，仅校验中央小镇仍有可跳越的低障碍（栅栏 / 树桩）。
+    const mapFiles = ['town_hub.json'];
     const counts = mapFiles.map((file) => {
       const map = JSON.parse(readFileSync(path.join(actualMapsDir, file), 'utf-8')) as {
         layers: Array<{ type: string; objects?: Array<{ type?: string }> }>;

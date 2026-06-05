@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-05T13:54:12.497Z",
+  "generatedAt": "2026-06-05T14:02:32.715Z",
   "maps": [
     {
       "key": "town_hub",
@@ -11,30 +11,11 @@
       "bgm": "bgm_town_day",
       "tileset": "kenney_tiny_town",
       "exits": [
-        "farm_north",
-        "mine_south",
-        "campus_east",
-        "port_west"
+        "mine_south"
       ],
       "spawn": {
         "tileX": 25,
         "tileY": 20
-      }
-    },
-    {
-      "key": "farm_north",
-      "file": "farm_north.json",
-      "label": "北农场 · 棉麻试验田",
-      "width": 40,
-      "height": 40,
-      "bgm": "bgm_town_day",
-      "tileset": "kenney_tiny_town",
-      "exits": [
-        "town_hub"
-      ],
-      "spawn": {
-        "tileX": 20,
-        "tileY": 37
       }
     },
     {
@@ -51,38 +32,6 @@
       "spawn": {
         "tileX": 15,
         "tileY": 2
-      }
-    },
-    {
-      "key": "campus_east",
-      "file": "campus_east.json",
-      "label": "校园",
-      "width": 40,
-      "height": 30,
-      "bgm": "bgm_quest",
-      "tileset": "kenney_tiny_town",
-      "exits": [
-        "town_hub"
-      ],
-      "spawn": {
-        "tileX": 2,
-        "tileY": 15
-      }
-    },
-    {
-      "key": "port_west",
-      "file": "port_west.json",
-      "label": "西港 · 棉布商埠",
-      "width": 35,
-      "height": 25,
-      "bgm": "bgm_town_eve",
-      "tileset": "kenney_tiny_town",
-      "exits": [
-        "town_hub"
-      ],
-      "spawn": {
-        "tileX": 33,
-        "tileY": 12
       }
     }
   ]
