@@ -2,6 +2,7 @@ export type SubmissionSource =
   | 'TRAINING'
   | 'PATH_QUEST'
   | 'BUG_MINE_RETRY'
+  | 'BUG_MINE_VARIANT'
   | 'CLASSROOM';
 
 export type SubmissionStatus =

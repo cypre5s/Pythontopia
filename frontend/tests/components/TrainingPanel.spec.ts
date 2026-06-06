@@ -38,7 +38,10 @@ import { getTodayQuests } from '@/api/quests';
 function mountPanel() {
   const router: Router = createRouter({
     history: createMemoryHistory(),
-    routes: [{ path: '/training', name: 'training', component: { template: '<div />' } }],
+    routes: [
+      { path: '/training', name: 'training', component: { template: '<div />' } },
+      { path: '/bug-mine', name: 'bug-mine', component: { template: '<div />' } },
+    ],
   });
   return mount(TrainingPanel, {
     global: {
@@ -145,6 +148,69 @@ describe('TrainingPanel', () => {
     expect(getSubmission).toHaveBeenCalledWith(1);
     expect(wrapper.find('[data-testid="submission-result"]').exists()).toBe(true);
     expect(wrapper.text()).toContain('AC');
+  });
+
+  it('offers bug mine entry after failed official training submission', async () => {
+    vi.mocked(createSubmission).mockResolvedValue({
+      id: 3,
+      userId: 7,
+      problemId: 476,
+      questId: null,
+      source: 'TRAINING',
+      language: 'PYTHON_3_11',
+      code: 'print(0)',
+      submittedAt: '2026-05-21T19:00:00Z',
+      status: 'FAILED',
+      runtimeMs: 12,
+      memoryKb: null,
+    });
+    vi.mocked(getSubmission).mockResolvedValue({
+      submission: {
+        id: 3,
+        userId: 7,
+        problemId: 476,
+        questId: null,
+        source: 'TRAINING',
+        language: 'PYTHON_3_11',
+        code: 'print(0)',
+        submittedAt: '2026-05-21T19:00:00Z',
+        status: 'FAILED',
+        runtimeMs: 12,
+        memoryKb: null,
+      },
+      judgeResult: {
+        id: 13,
+        submissionId: 3,
+        verdict: 'WA',
+        passedCases: 0,
+        totalCases: 3,
+        failureReason: '答案错误',
+        trace: {},
+        createdAt: '2026-05-21T19:00:00Z',
+      },
+    });
+
+    const wrapper = mountPanel();
+    const router = wrapper.vm.$router;
+    const pushSpy = vi.spyOn(router, 'push');
+    const learning = useLearningStore();
+    await learning.loadTrainingProblem(476);
+    learning.setTrainingCode('print(0)');
+    await flushPromises();
+
+    await wrapper.find('[data-testid="submit-button"]').trigger('click');
+    await flushPromises();
+
+    const bugMineButton = wrapper.get('[data-testid="bug-mine-button"]');
+    expect(bugMineButton.text()).toContain('进入 Bug 矿洞');
+
+    await bugMineButton.trigger('click');
+    await flushPromises();
+
+    expect(pushSpy).toHaveBeenCalledWith({
+      path: '/bug-mine',
+      query: { submissionId: '3' },
+    });
   });
 
   it('does not advance main quest when judge verdict is not AC', async () => {

@@ -126,14 +126,14 @@ describe('loadTownMap', () => {
     expect(map.spawn).toEqual({ tileX: 15, tileY: 11 });
   });
 
-  it('seeds 6 buildings and 3 npcs by default', () => {
+  it('seeds 5 R-14 hub buildings and 3 npcs by default', () => {
     const { scene } = createScene();
 
     const map = loadTownMap(scene, 'town_main');
 
-    expect(map.buildings).toHaveLength(6);
+    expect(map.buildings).toHaveLength(5);
     expect(map.buildings.map((b) => b.key)).toEqual(
-      expect.arrayContaining(['profile-room', 'workshop', 'knowledge-field', 'board', 'training', 'teacher']),
+      expect.arrayContaining(['profile-room', 'workshop', 'board', 'training', 'teacher']),
     );
     expect(map.npcs).toHaveLength(3);
     expect(map.npcs.map((n) => n.npcKey)).toEqual(

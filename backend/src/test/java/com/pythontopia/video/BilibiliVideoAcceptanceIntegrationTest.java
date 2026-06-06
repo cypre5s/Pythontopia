@@ -3,6 +3,7 @@ package com.pythontopia.video;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.pythontopia.PythontopiaApplication;
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -80,7 +81,15 @@ class BilibiliVideoAcceptanceIntegrationTest {
             .timeout(Duration.ofSeconds(5))
             .GET()
             .build();
-    HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+    HttpResponse<String> response;
+    try {
+      response = client.send(request, HttpResponse.BodyHandlers.ofString());
+    } catch (IOException exception) {
+      Assumptions.assumeTrue(
+          false,
+          () -> "graph 未就绪（" + GRAPH_E2E_URL + "），跳过 B站 e2e: " + exception.getMessage());
+      return;
+    }
     Assumptions.assumeTrue(
         response.statusCode() == 200,
         () -> "graph 未就绪（" + GRAPH_E2E_URL + "），跳过 B站 e2e");
