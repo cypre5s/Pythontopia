@@ -2,6 +2,9 @@ package com.pythontopia.tutor;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pythontopia.auth.security.CurrentUserPrincipal;
+import com.pythontopia.auth.security.Role;
+import com.pythontopia.classroom.dashboard.service.ClassroomDashboardService;
 import com.pythontopia.learner.event.LearningEvent;
 import com.pythontopia.learner.profile.dto.ProfileDimensionDto;
 import com.pythontopia.learner.profile.service.PassiveProfileService;
@@ -25,30 +28,36 @@ public class TutorService {
   private final ObjectMapper objectMapper;
   private final PassiveProfileService passiveProfileService;
   private final ApplicationEventPublisher eventPublisher;
+  private final ClassroomDashboardService classroomDashboardService;
 
   public TutorService(
       TutorGraphClient graphClient,
       TutorSessionRepository sessionRepository,
       ObjectMapper objectMapper,
       PassiveProfileService passiveProfileService,
-      ApplicationEventPublisher eventPublisher) {
+      ApplicationEventPublisher eventPublisher,
+      ClassroomDashboardService classroomDashboardService) {
     this.graphClient = graphClient;
     this.sessionRepository = sessionRepository;
     this.objectMapper = objectMapper;
     this.passiveProfileService = passiveProfileService;
     this.eventPublisher = eventPublisher;
+    this.classroomDashboardService = classroomDashboardService;
   }
 
-  public SseEmitter ask(Long userId, TutorAskRequest request) {
+  public SseEmitter ask(CurrentUserPrincipal user, TutorAskRequest request) {
+    Long userId = user.userId();
     SseEmitter emitter = new SseEmitter(120_000L);
 
     String profileBrief = resolveProfileBrief(userId, request.style());
+    String classroomBrief = resolveClassroomBrief(user, request.classroomId());
+    String effectiveContext = mergeContext(classroomBrief, request.context());
 
     graphClient.askStream(
         userId,
         request.question(),
         request.kcCodes(),
-        request.context(),
+        effectiveContext,
         request.images(),
         profileBrief,
         emitter,
@@ -61,6 +70,37 @@ public class TutorService {
         });
 
     return emitter;
+  }
+
+  /**
+   * 教师 copilot 班级学情注入（数据级）。<b>红线</b>：仅当{@code classroomId}非空且角色为教师/管理员时
+   * 才向 {@link ClassroomDashboardService#copilotBrief} 取数——学生角色一律早退，<b>绝不触达班级聚合</b>；
+   * 取数自带 {@code requireOwner} 归属校验，非归属或取数异常一律降级为空串（不破坏答疑）。
+   */
+  String resolveClassroomBrief(CurrentUserPrincipal user, Long classroomId) {
+    if (classroomId == null) {
+      return "";
+    }
+    if (user == null || (user.role() != Role.TEACHER && user.role() != Role.ADMIN)) {
+      // 学生（及任何非教师角色）：忽略 classroomId，绝不读取班级聚合数据。
+      return "";
+    }
+    try {
+      return classroomDashboardService.copilotBrief(user, classroomId);
+    } catch (RuntimeException ex) {
+      log.warn("Classroom copilot brief degraded for classroom {}: {}", classroomId, ex.getMessage());
+      return "";
+    }
+  }
+
+  /** 班级学情摘要前置到原始上下文（教师 copilot）；摘要为空时原样返回 context。 */
+  static String mergeContext(String classroomBrief, String context) {
+    String brief = classroomBrief == null ? "" : classroomBrief.trim();
+    String base = context == null ? "" : context.trim();
+    if (brief.isEmpty()) {
+      return context;
+    }
+    return base.isEmpty() ? brief : brief + "\n\n" + base;
   }
 
   /** 学生采纳某讲法 → 发 TutorStyleEngaged，回流画像 cognitive_style（因材施教闭环）。 */

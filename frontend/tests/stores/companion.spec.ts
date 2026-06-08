@@ -79,6 +79,23 @@ describe('companion store', () => {
     expect((startSpy.mock.calls[0][0] as { images: string[] }).images).toHaveLength(3);
   });
 
+  it('forwards a numeric classroomId for teacher copilot context', async () => {
+    const store = useCompanionStore();
+    await store.ask('本班哪个知识点最弱', {
+      kcCodes: [],
+      surface: 'classroom',
+      context: '教师视角',
+      classroomId: '12',
+    });
+    expect(startSpy.mock.calls[0][0]).toMatchObject({ classroomId: 12 });
+  });
+
+  it('omits classroomId when absent (student / non-classroom)', async () => {
+    const store = useCompanionStore();
+    await store.ask('什么是字典', { kcCodes: [], surface: 'world', context: '', classroomId: null });
+    expect(startSpy.mock.calls[0][0]).not.toHaveProperty('classroomId');
+  });
+
   it('builds a nudge from the top due echo', async () => {
     vi.mocked(getBugMineEchoes).mockResolvedValue([makeEcho()]);
     const store = useCompanionStore();

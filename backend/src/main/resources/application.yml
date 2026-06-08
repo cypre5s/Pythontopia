@@ -10,6 +10,11 @@ spring:
     baseline-on-migrate: false
   jpa:
     open-in-view: false
+  servlet:
+    multipart:
+      # 随身助教语音输入回退（/api/media/asr）上传短录音；放宽到 8MB 容纳 ~60s 录音，余量足够。
+      max-file-size: 8MB
+      max-request-size: 12MB
 
 server:
   port: 18080
@@ -62,6 +67,14 @@ pythontopia:
     domain: ${PYT_SPARK_IMAGE_UNDERSTANDING_DOMAIN:imagev3}
     maxTokens: 1024
     dailyLimitPerUser: 50
+  asr:
+    # 讯飞「语音听写」(IAT)：随身助教语音输入在浏览器 Web Speech 不可用时的服务端回退；复用同一套讯飞凭据。
+    # 任一缺失则返回 degraded（前端提示改用键盘），不阻塞答疑。需服务端 ffmpeg 把上传音频转 16k 单声道 PCM。
+    appId: ${PYT_SPARK_APP_ID:}
+    apiKey: ${PYT_SPARK_API_KEY:}
+    apiSecret: ${PYT_SPARK_API_SECRET:}
+    baseUrl: ${PYT_SPARK_IAT_URL:wss://iat-api.xfyun.cn/v2/iat}
+    dailyLimitPerUser: 100
   media:
     # 多模态生成产物（文生图/合成短视频）本地落盘目录，不入 git（见 .gitignore），可重生。
     generatedDir: ${PYT_MEDIA_GENERATED_DIR:./data/course-pack-43/generated-media}

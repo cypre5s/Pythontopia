@@ -61,6 +61,12 @@ class ClassroomDashboardAuthorizationTest {
     assertForbidden(() -> service.recentActivity(student, 9L, 20));
   }
 
+  @Test
+  void studentCannotReadCopilotBrief() {
+    // 教师 copilot 的班级学情摘要走同一道归属闸：学生答疑即便携带 classroomId 也读不到任何聚合。
+    assertForbidden(() -> service.copilotBrief(student, 9L));
+  }
+
   private void assertForbidden(ThrowingCallable call) {
     assertThatThrownBy(call)
         .isInstanceOfSatisfying(

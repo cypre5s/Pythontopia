@@ -21,8 +21,10 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
- * 导师问答对外入口。{@code POST /ask} 以 SSE 流式返回导师解答、{@code POST /style-engaged} 上报
- * 学生采纳的讲法（因材施教闭环，返回 204）——两者仅学生可用；{@code GET /sessions} 拉取当前用户的历史会话。
+ * 导师问答对外入口。{@code POST /ask} 以 SSE 流式返回导师解答——<b>学生与教师/管理员均可用</b>（教师在自己
+ * 班级页带 {@code classroomId} 即触发 copilot，由 {@code TutorService} 注入本班只读学情；学生传了也被忽略）。
+ * {@code POST /style-engaged} 上报学生采纳的讲法（因材施教闭环，返回 204，<b>仅学生</b>）；{@code GET /sessions}
+ * 拉取当前用户的历史会话。
  */
 @RestController
 @RequestMapping("/api/tutor")
@@ -38,8 +40,9 @@ public class TutorController {
   public SseEmitter ask(
       @CurrentUser CurrentUserPrincipal user,
       @Valid @RequestBody TutorAskRequest request) {
-    requireStudent(user);
-    return service.ask(user.userId(), request);
+    // 学生与教师/管理员均可答疑；教师 copilot 的班级数据注入仅对「归属教师 + classroomId」生效，
+    // 学生即便传 classroomId 也被 TutorService 忽略（绝不触达班级聚合），见 TutorService#resolveClassroomBrief。
+    return service.ask(user, request);
   }
 
   @PostMapping("/style-engaged")

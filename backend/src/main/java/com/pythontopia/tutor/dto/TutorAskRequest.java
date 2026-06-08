@@ -2,6 +2,7 @@ package com.pythontopia.tutor.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import java.util.List;
 
@@ -18,6 +19,9 @@ import java.util.List;
  *       由 {@code TutorService} 注入 profile_brief 即时按该风格改写答案，为空则由画像决定。
  *   <li>{@code conversationId}：会话窗口 id——同一聊天窗口（一次打开 / 一次「新对话」）内多次提问共享，
  *       供「聊天记录」按会话分组；仅前端生成 + 后端落库，不下传 graph。
+ *   <li>{@code classroomId}：<b>教师 copilot</b> 专用——教师在自己班级页提问时带上班级 id，后端校验归属
+ *       （{@code ClassroomGuard.requireOwner}）后注入本班<b>只读</b>学情（最弱 KC / 高频误区）增强作答。
+ *       <b>红线</b>：学生角色一律忽略此字段，绝不触达任何班级聚合数据。
  * </ul>
  */
 public record TutorAskRequest(
@@ -26,4 +30,5 @@ public record TutorAskRequest(
     @Size(max = 2000) String context,
     @Size(max = 3) List<@Size(max = 8_000_000) String> images,
     @Pattern(regexp = "visual|logical|trial") String style,
-    @Size(max = 64) String conversationId) {}
+    @Size(max = 64) String conversationId,
+    @Positive Long classroomId) {}

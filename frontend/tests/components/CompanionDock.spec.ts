@@ -39,6 +39,25 @@ vi.mock('@/composables/useVoiceInput', () => ({
   }),
 }));
 
+const recorderSupported = ref(true);
+const recorderRecording = ref(false);
+const recorderStartSpy = vi.fn(async () => true);
+const recorderStopSpy = vi.fn(async () => new Blob(['a'], { type: 'audio/webm' }));
+
+vi.mock('@/composables/useAudioRecorder', () => ({
+  useAudioRecorder: () => ({
+    supported: recorderSupported,
+    recording: recorderRecording,
+    start: recorderStartSpy,
+    stop: recorderStopSpy,
+  }),
+}));
+
+const transcribeAudioSpy = vi.fn(async () => ({ text: '录音转写的问题', degraded: false }));
+vi.mock('@/api/media', () => ({
+  transcribeAudio: (...args: unknown[]) => transcribeAudioSpy(...args),
+}));
+
 vi.mock('@/api/bugMine', () => ({
   getBugMineEchoes: vi.fn(async () => [] as BugMineEchoCandidateDto[]),
 }));
@@ -91,6 +110,11 @@ describe('CompanionDock', () => {
     voiceTranscript.value = '';
     voiceStartSpy.mockClear();
     voiceStopSpy.mockClear();
+    recorderSupported.value = true;
+    recorderRecording.value = false;
+    recorderStartSpy.mockClear();
+    recorderStopSpy.mockClear();
+    transcribeAudioSpy.mockClear();
     vi.mocked(getBugMineEchoes).mockResolvedValue([]);
   });
 
@@ -197,6 +221,34 @@ describe('CompanionDock', () => {
     expect(wrapper.find('[data-testid="companion-nudge"]').exists()).toBe(true);
     await wrapper.find('[data-testid="companion-nudge-close"]').trigger('click');
     expect(wrapper.find('[data-testid="companion-nudge"]').exists()).toBe(false);
+  });
+
+  it('falls back to server ASR recording when Web Speech is unsupported', async () => {
+    voiceSupported.value = false;
+    const wrapper = mountDock();
+    const store = useCompanionStore();
+    store.open = true;
+    await flushPromises();
+
+    // Web Speech 不支持：隐藏「说」按钮，露出录音回退「录」按钮。
+    expect(wrapper.find('[data-testid="companion-mic"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="companion-record"]').exists()).toBe(true);
+
+    // 第一次点击：开始录音。
+    await wrapper.find('[data-testid="companion-record"]').trigger('click');
+    expect(recorderStartSpy).toHaveBeenCalledTimes(1);
+
+    // 进入录音态后再次点击：停止 → 转写 → 回填输入框。
+    recorderRecording.value = true;
+    await nextTick();
+    await wrapper.find('[data-testid="companion-record"]').trigger('click');
+    await flushPromises();
+
+    expect(recorderStopSpy).toHaveBeenCalledTimes(1);
+    expect(transcribeAudioSpy).toHaveBeenCalledTimes(1);
+    expect(
+      (wrapper.find('[data-testid="companion-input"]').element as HTMLInputElement).value,
+    ).toBe('录音转写的问题');
   });
 
   it('shows a verified badge when code_runner finishes', async () => {

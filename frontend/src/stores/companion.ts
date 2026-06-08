@@ -14,6 +14,11 @@ export interface CompanionAskContext {
   kcCodes: string[];
   surface: string;
   context: string;
+  /**
+   * 教师 copilot：教师在自己班级页时的班级 id（来自 useCompanionContext，学生恒为 null）。
+   * 非空时透传 /api/tutor/ask 让后端注入本班只读学情；学生即便传了后端也会忽略（红线在服务端）。
+   */
+  classroomId?: string | null;
 }
 
 // 对齐 /api/tutor/ask 的 result 事件载荷（与 TutorPanel 同源）。
@@ -72,11 +77,13 @@ export const useCompanionStore = defineStore('companion', () => {
     if (!trimmed || busy.value) return;
     messages.value.push({ role: 'user', content: trimmed, evidencePageIds: [] });
     messages.value.push({ role: 'assistant', content: '', evidencePageIds: [] });
+    const classroomId = ctx.classroomId ? Number(ctx.classroomId) : NaN;
     const body = {
       question: trimmed,
       kcCodes: ctx.kcCodes,
       context: ctx.context,
       ...(images && images.length > 0 ? { images: images.slice(0, 3) } : {}),
+      ...(Number.isFinite(classroomId) && classroomId > 0 ? { classroomId } : {}),
     };
     await sse.start(body);
   }

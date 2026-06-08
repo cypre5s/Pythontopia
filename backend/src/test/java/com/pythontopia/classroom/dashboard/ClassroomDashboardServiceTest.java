@@ -92,4 +92,38 @@ class ClassroomDashboardServiceTest {
     List<RecentActivityDto> rows = service.recentActivity(teacher, 9L, 999);
     assertThat(rows).hasSize(1);
   }
+
+  @Test
+  void copilotBriefRendersWeakestKcsAndErrorsForOwner() {
+    when(classroomGuard.requireOwner(teacher, 9L))
+        .thenReturn(new Classroom(9L, "DemoClass", "", 42L, 43L, "ABC123", "ACTIVE"));
+    KcHeatmapEntryDto strong =
+        new KcHeatmapEntryDto("PY43-KC-001", "变量与赋值", 1L, 1, new BigDecimal("0.910"), 5, 5, 0, 0);
+    KcHeatmapEntryDto weak =
+        new KcHeatmapEntryDto("PY43-KC-016", "列表推导式", 2L, 5, new BigDecimal("0.220"), 5, 0, 1, 4);
+    when(repository.findKcHeatmap(9L)).thenReturn(List.of(strong, weak));
+    when(repository.findErrorHotspots(eq(9L), any(Integer.class)))
+        .thenReturn(List.of(new ErrorHotspotDto("PY43-KC-016", "列表推导式", 12, 5, List.of())));
+
+    String brief = service.copilotBrief(teacher, 9L);
+
+    assertThat(brief).contains("列表推导式").contains("4人挣扎").contains("12次失败");
+    // 最弱知识点应优先列出挣扎人数最高的 KC，而非掌握度高的 KC。
+    assertThat(brief).contains("最弱知识点").contains("高频错误");
+    // 红线：摘要必须自带「只读 + 不泄题」声明。
+    assertThat(brief).contains("泄题");
+    // 只读：copilotBrief 绝不写快照。
+    verify(repository, org.mockito.Mockito.never()).upsertSnapshot(any(), any());
+  }
+
+  @Test
+  void copilotBriefReturnsPlaceholderWhenNoData() {
+    when(classroomGuard.requireOwner(teacher, 9L))
+        .thenReturn(new Classroom(9L, "DemoClass", "", 42L, 43L, "ABC123", "ACTIVE"));
+    when(repository.findKcHeatmap(9L)).thenReturn(List.of());
+    when(repository.findErrorHotspots(eq(9L), any(Integer.class))).thenReturn(List.of());
+
+    String brief = service.copilotBrief(teacher, 9L);
+    assertThat(brief).contains("暂无足够学情数据").contains("泄题");
+  }
 }
