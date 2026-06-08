@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ref, nextTick } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
+import type { BugMineEchoCandidateDto } from '@/api/dto/BugMine';
 
 const startSpy = vi.fn(async () => {});
 const tokens = ref('');
@@ -20,7 +21,26 @@ vi.mock('@/composables/useSseStream', () => ({
   }),
 }));
 
+vi.mock('@/api/bugMine', () => ({
+  getBugMineEchoes: vi.fn(async () => [] as BugMineEchoCandidateDto[]),
+}));
+
 import { useCompanionStore } from '@/stores/companion';
+import { getBugMineEchoes } from '@/api/bugMine';
+
+function makeEcho(over: Partial<BugMineEchoCandidateDto> = {}): BugMineEchoCandidateDto {
+  return {
+    kcCode: 'PY43-KC-016',
+    problemId: 5,
+    problemTitle: '圆面积',
+    masteryScore: 0.4,
+    confidence: 0.5,
+    decayRisk: 0.7,
+    minePriority: 0.8,
+    recommendationReason: '到期复习',
+    ...over,
+  };
+}
 
 describe('companion store', () => {
   beforeEach(() => {
@@ -29,6 +49,7 @@ describe('companion store', () => {
     tokens.value = '';
     result.value = null;
     status.value = 'idle';
+    vi.mocked(getBugMineEchoes).mockResolvedValue([]);
   });
 
   it('sends question + kcCodes + context to /api/tutor/ask', async () => {
@@ -56,5 +77,32 @@ describe('companion store', () => {
     const store = useCompanionStore();
     await store.ask('看图', { kcCodes: [], surface: 'world', context: '' }, ['a', 'b', 'c', 'd']);
     expect((startSpy.mock.calls[0][0] as { images: string[] }).images).toHaveLength(3);
+  });
+
+  it('builds a nudge from the top due echo', async () => {
+    vi.mocked(getBugMineEchoes).mockResolvedValue([makeEcho()]);
+    const store = useCompanionStore();
+    await store.loadNudge();
+    expect(store.nudge?.kcCode).toBe('PY43-KC-016');
+    expect(store.nudge?.text).toContain('复习');
+    expect(store.nudge?.text).toContain('圆面积');
+    store.dismissNudge();
+    expect(store.nudge).toBeNull();
+  });
+
+  it('shows no nudge when nothing is due', async () => {
+    vi.mocked(getBugMineEchoes).mockResolvedValue([]);
+    const store = useCompanionStore();
+    await store.loadNudge();
+    expect(store.nudge).toBeNull();
+  });
+
+  it('does not re-pop a nudge after it was dismissed', async () => {
+    vi.mocked(getBugMineEchoes).mockResolvedValue([makeEcho()]);
+    const store = useCompanionStore();
+    await store.loadNudge();
+    store.dismissNudge();
+    await store.loadNudge();
+    expect(store.nudge).toBeNull();
   });
 });

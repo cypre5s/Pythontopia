@@ -39,8 +39,28 @@ vi.mock('@/composables/useVoiceInput', () => ({
   }),
 }));
 
+vi.mock('@/api/bugMine', () => ({
+  getBugMineEchoes: vi.fn(async () => [] as BugMineEchoCandidateDto[]),
+}));
+
 import CompanionDock from '@/components/companion/CompanionDock.vue';
 import { useCompanionStore } from '@/stores/companion';
+import { getBugMineEchoes } from '@/api/bugMine';
+import type { BugMineEchoCandidateDto } from '@/api/dto/BugMine';
+
+function makeEcho(over: Partial<BugMineEchoCandidateDto> = {}): BugMineEchoCandidateDto {
+  return {
+    kcCode: 'PY43-KC-016',
+    problemId: 5,
+    problemTitle: '圆面积',
+    masteryScore: 0.4,
+    confidence: 0.5,
+    decayRisk: 0.7,
+    minePriority: 0.8,
+    recommendationReason: '到期复习',
+    ...over,
+  };
+}
 
 let pinia: Pinia;
 
@@ -71,6 +91,7 @@ describe('CompanionDock', () => {
     voiceTranscript.value = '';
     voiceStartSpy.mockClear();
     voiceStopSpy.mockClear();
+    vi.mocked(getBugMineEchoes).mockResolvedValue([]);
   });
 
   it('shows the fab collapsed and opens the panel on click', async () => {
@@ -152,6 +173,30 @@ describe('CompanionDock', () => {
       images: ['data:image/png;base64,abc'],
     });
     vi.unstubAllGlobals();
+  });
+
+  it('pops a dismissable review nudge and routes to the bug mine', async () => {
+    vi.mocked(getBugMineEchoes).mockResolvedValue([makeEcho()]);
+    const wrapper = mountDock();
+    await flushPromises();
+
+    const nudge = wrapper.find('[data-testid="companion-nudge"]');
+    expect(nudge.exists()).toBe(true);
+    expect(nudge.text()).toContain('圆面积');
+
+    const router = wrapper.vm.$router;
+    const pushSpy = vi.spyOn(router, 'push');
+    await wrapper.find('[data-testid="companion-nudge-go"]').trigger('click');
+    expect(pushSpy).toHaveBeenCalledWith({ path: '/bug-mine' });
+  });
+
+  it('dismisses the nudge on close', async () => {
+    vi.mocked(getBugMineEchoes).mockResolvedValue([makeEcho()]);
+    const wrapper = mountDock();
+    await flushPromises();
+    expect(wrapper.find('[data-testid="companion-nudge"]').exists()).toBe(true);
+    await wrapper.find('[data-testid="companion-nudge-close"]').trigger('click');
+    expect(wrapper.find('[data-testid="companion-nudge"]').exists()).toBe(false);
   });
 
   it('shows a verified badge when code_runner finishes', async () => {

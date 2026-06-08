@@ -4,7 +4,7 @@
  * 复用现有 /api/tutor/ask（companion store）+ MarkdownView + 当前页面上下文，
  * 答案下方给「去练 / 看课件 / 进矿洞」动作芯片，把答疑接回看→学→练→测主线。
  */
-import { computed, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import MarkdownView from '@/components/common/MarkdownView.vue';
 import { useCompanionStore } from '@/stores/companion';
@@ -116,10 +116,43 @@ function goLibrary(): void {
 function goMine(): void {
   void router.push({ path: '/bug-mine' });
 }
+
+function openNudge(): void {
+  store.dismissNudge();
+  void router.push({ path: '/bug-mine' });
+}
+
+onMounted(() => {
+  void store.loadNudge();
+});
 </script>
 
 <template>
   <div class="companion">
+    <div
+      v-if="!store.open && store.nudge"
+      class="companion__nudge"
+      data-testid="companion-nudge"
+    >
+      <button
+        type="button"
+        class="companion__nudge-body"
+        data-testid="companion-nudge-go"
+        @click="openNudge"
+      >
+        {{ store.nudge.text }}
+      </button>
+      <button
+        type="button"
+        class="companion__nudge-close"
+        data-testid="companion-nudge-close"
+        aria-label="关闭提醒"
+        @click="store.dismissNudge()"
+      >
+        ×
+      </button>
+    </div>
+
     <button
       v-if="!store.open"
       type="button"
@@ -292,6 +325,46 @@ function goMine(): void {
   right: 16px;
   bottom: 16px;
   z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--pyt-space-2);
+}
+
+.companion__nudge {
+  display: flex;
+  align-items: stretch;
+  max-width: min(280px, calc(100vw - 32px));
+  background: var(--pyt-color-bg-elevated);
+  border: 2px solid var(--pyt-color-primary);
+  border-radius: var(--pyt-radius-lg);
+  box-shadow: 0 3px 0 var(--pyt-color-primary);
+  overflow: hidden;
+}
+.companion__nudge-body {
+  flex: 1 1 auto;
+  text-align: left;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  color: var(--pyt-color-text-primary);
+  font-size: var(--pyt-font-size-sm);
+  line-height: 1.4;
+  cursor: pointer;
+}
+.companion__nudge-body:hover {
+  background: var(--pyt-color-warning-bg);
+}
+.companion__nudge-close {
+  flex: 0 0 auto;
+  width: 26px;
+  border: none;
+  border-left: 1px solid var(--pyt-color-border-soft);
+  background: var(--pyt-color-bg-soft);
+  color: var(--pyt-color-text-hint);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
 }
 
 .companion__fab {

@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { computed, ref, watch } from 'vue';
 import { useSseStream } from '@/composables/useSseStream';
+import { getBugMineEchoes } from '@/api/bugMine';
 
 export interface CompanionMessage {
   role: 'user' | 'assistant';
@@ -22,10 +23,19 @@ interface TutorStreamResult {
   groundingStatus?: string;
 }
 
+/** 主动陪伴气泡：到期复习提醒（来自 FSRS 记忆矿脉 echoes 的最高优先项）。 */
+export interface CompanionNudge {
+  kcCode: string;
+  text: string;
+}
+
 export const useCompanionStore = defineStore('companion', () => {
   const open = ref(false);
   const busy = ref(false);
   const messages = ref<CompanionMessage[]>([]);
+  const nudge = ref<CompanionNudge | null>(null);
+  // 关闭后本次会话不再打扰：dismiss 即置位，loadNudge 直接早退。
+  let nudgeDismissed = false;
   const sse = useSseStream<TutorStreamResult>('/api/tutor/ask');
 
   watch(sse.tokens, (text) => {
@@ -75,5 +85,35 @@ export const useCompanionStore = defineStore('companion', () => {
     open.value = !open.value;
   }
 
-  return { open, busy, messages, sse, ask, toggle, codeVerified };
+  /** 取最高优先到期 echo 拼一条复习提醒；无到期或已被关闭则不打扰。best-effort，失败静默。 */
+  async function loadNudge(): Promise<void> {
+    if (nudgeDismissed) return;
+    try {
+      const echoes = await getBugMineEchoes();
+      const top = echoes[0];
+      nudge.value = top
+        ? { kcCode: top.kcCode, text: `该复习「${top.problemTitle}」了，要去矿洞看看吗？` }
+        : null;
+    } catch {
+      nudge.value = null;
+    }
+  }
+
+  function dismissNudge(): void {
+    nudge.value = null;
+    nudgeDismissed = true;
+  }
+
+  return {
+    open,
+    busy,
+    messages,
+    nudge,
+    sse,
+    ask,
+    toggle,
+    codeVerified,
+    loadNudge,
+    dismissNudge,
+  };
 });
