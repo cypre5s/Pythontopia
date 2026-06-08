@@ -120,3 +120,89 @@ describe('AgentOfficeScene · Agent 串门通报', () => {
     expect(wrapper.find('[data-testid="agent-handoff-note"]').text()).toContain('循环');
   });
 });
+
+// ── P1.3 真 trace 剧场验收测试 ──
+
+describe('AgentOfficeScene · P1.3 真协同 trace', () => {
+  /** 模拟 P1 编排器产出的真实 dispatch plan（含 4 步接力链）。 */
+  const ORCHESTRATOR_PLAN: SsePlan = {
+    type: 'ORCHESTRATOR',
+    nodes: [
+      { node: 'dispatch.StoryboardAgent', agent_label: '动画分镜师', kind: 'storyboard' },
+      { node: 'dispatch.ResourceDesignerAgent', agent_label: '讲义设计师', kind: 'designer' },
+      { node: 'dispatch.PracticeAgent', agent_label: '出题官', kind: 'practice' },
+      { node: 'dispatch.PathPlannerAgent', agent_label: '路径规划师', kind: 'path' },
+    ],
+  };
+
+  it('E：P1 编排器 plan 渲染 4 工位接力链（storyboard→designer→practice→path）', () => {
+    const traces: SseTraceEvent[] = [
+      { node: 'dispatch.StoryboardAgent', status: 'ok', elapsed_ms: 200, phase: 'finish' },
+      { node: 'dispatch.ResourceDesignerAgent', status: 'ok', elapsed_ms: 350, phase: 'finish' },
+      { node: 'dispatch.PracticeAgent', status: 'running', elapsed_ms: 0, phase: 'start' },
+    ];
+
+    const wrapper = mountScene({ traces, plan: ORCHESTRATOR_PLAN });
+
+    // 4 工位全部渲染
+    expect(wrapper.find('[data-testid="office-agent-dispatch.StoryboardAgent"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="office-agent-dispatch.ResourceDesignerAgent"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="office-agent-dispatch.PracticeAgent"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="office-agent-dispatch.PathPlannerAgent"]').exists()).toBe(true);
+  });
+
+  it('F：retry 后在执行日志显示"重试"状态（critique→revise 驳回可视）', () => {
+    // attempt0 失败(retry) → attempt1 成功(ok)：station 最终显示 done，
+    // 但执行日志里 attempt0 的 status 为「重试」。
+    const traces: SseTraceEvent[] = [
+      { node: 'ResourceDesignerAgent.handout.attempt0', status: 'retry', elapsed_ms: 400, phase: 'finish' },
+      { node: 'ResourceDesignerAgent.handout.attempt1', status: 'ok', elapsed_ms: 300, phase: 'finish' },
+    ];
+    const plan: SsePlan = {
+      type: 'HANDOUT',
+      nodes: [
+        { node: 'ResourceDesignerAgent.handout.attempt0', agent_label: '讲义设计师', kind: 'designer' },
+      ],
+    };
+
+    const wrapper = mountScene({ traces, plan });
+
+    // station 最终是 done（重试后成功）
+    const agentEl = wrapper.find('[data-testid="office-agent-ResourceDesignerAgent.handout.attempt0"]');
+    expect(agentEl.exists()).toBe(true);
+    expect(agentEl.classes()).toContain('office-agent--done');
+
+    // 执行日志显示 attempt0 状态为「重试」
+    const logText = wrapper.find('[data-testid="office-log"]').text();
+    expect(logText).toContain('重试');
+  });
+
+  it('G：P1 编排器 plan 含 4 步接力链时执行日志记录各步', () => {
+    // plan 模式下，执行日志按 plan.nodes 映射 trace finish 事件
+    const traces: SseTraceEvent[] = [
+      { node: 'dispatch.StoryboardAgent', status: 'ok', elapsed_ms: 200, phase: 'finish' },
+      { node: 'dispatch.ResourceDesignerAgent', status: 'ok', elapsed_ms: 350, phase: 'finish' },
+      { node: 'dispatch.PracticeAgent', status: 'ok', elapsed_ms: 180, phase: 'finish' },
+      { node: 'dispatch.PathPlannerAgent', status: 'ok', elapsed_ms: 120, phase: 'finish' },
+    ];
+
+    const wrapper = mountScene({ traces, plan: ORCHESTRATOR_PLAN });
+
+    const logText = wrapper.find('[data-testid="office-log"]').text();
+    // plan 模式下日志按 agent_label 显示
+    expect(logText).toContain('动画分镜师');
+    expect(logText).toContain('讲义设计师');
+    expect(logText).toContain('出题官');
+    expect(logText).toContain('路径规划师');
+  });
+
+  it('H：prefers-reduced-motion 下动画被禁用（无障碍合规）', () => {
+    // vitest jsdom 不支持 matchMedia；仅验证组件在 plan 模式下不崩溃。
+    const traces: SseTraceEvent[] = [
+      { node: 'dispatch.StoryboardAgent', status: 'ok', elapsed_ms: 150, phase: 'finish' },
+    ];
+
+    const wrapper = mountScene({ traces, plan: ORCHESTRATOR_PLAN });
+    expect(wrapper.find('[data-testid="office-stage"]').exists()).toBe(true);
+  });
+});

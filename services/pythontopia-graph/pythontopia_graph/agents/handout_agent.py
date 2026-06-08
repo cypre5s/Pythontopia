@@ -21,14 +21,20 @@ class HandoutAgent:
         self.provider = provider
 
     async def design(
-        self, request: ResourceProduceRequest, evidence: EvidenceBundle
+        self,
+        request: ResourceProduceRequest,
+        evidence: EvidenceBundle,
+        revision_notes: list[str] | None = None,
     ) -> ResourceDraft:
-        messages = self._prompt(request, evidence)
+        messages = self._prompt(request, evidence, revision_notes)
         response = await self.provider.chat(messages)
         return self._build_from_response(request, evidence, response.content_json)
 
     def _prompt(
-        self, request: ResourceProduceRequest, evidence: EvidenceBundle
+        self,
+        request: ResourceProduceRequest,
+        evidence: EvidenceBundle,
+        revision_notes: list[str] | None = None,
     ) -> list[dict[str, str]]:
         evidence_summary = "\n".join(
             f"page_id={hit.page_id} page_no={hit.page_no} kc={','.join(hit.kc_codes)} text={hit.text[:200]}"
@@ -53,6 +59,11 @@ class HandoutAgent:
                     "page_refs 留空并在正文标注'基于通识知识'。"
                 ),
             },
+            *([{
+                "role": "system",
+                "content": f"上一稿被打回原因：\n" + "\n".join(f"- {r}" for r in revision_notes)
+                + "\n请针对性修订，修正上述问题后重新生成。",
+            }] if revision_notes else []),
             {
                 "role": "system",
                 "content": (

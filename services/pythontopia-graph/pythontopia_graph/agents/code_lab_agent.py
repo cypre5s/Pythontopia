@@ -24,13 +24,18 @@ class CodeLabAgent:
         self.provider = provider
 
     async def design(
-        self, request: ResourceProduceRequest, evidence: EvidenceBundle
+        self,
+        request: ResourceProduceRequest,
+        evidence: EvidenceBundle,
+        revision_notes: list[str] | None = None,
     ) -> ResourceDraft:
-        messages = self._prompt(request)
+        messages = self._prompt(request, revision_notes)
         response = await self.provider.chat(messages)
         return self._build(request, response.content_json)
 
-    def _prompt(self, request: ResourceProduceRequest) -> list[dict[str, str]]:
+    def _prompt(
+        self, request: ResourceProduceRequest, revision_notes: list[str] | None = None,
+    ) -> list[dict[str, str]]:
         return [
             {
                 "role": "system",
@@ -39,6 +44,11 @@ class CodeLabAgent:
                     "必须是合法 Python 3.11 语法，并附 common_mistakes。"
                 ),
             },
+            *([{
+                "role": "system",
+                "content": f"上一稿被打回原因：\n" + "\n".join(f"- {r}" for r in revision_notes)
+                + "\n请针对性修订，修正上述问题后重新生成。",
+            }] if revision_notes else []),
             *personalization_messages(request.profile_snapshot),
             {"role": "user", "content": ",".join(request.kc_codes)},
         ]

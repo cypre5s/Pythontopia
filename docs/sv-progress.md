@@ -2,7 +2,18 @@
 
 > 计划来源：`.cursor/plans/pythontopia_星露谷改造_298df045.plan.md`
 > 启动时间：2026-05-22
-> 当前 R 标识：**R-12（星露谷改造，从 R-11 解冻）**
+> 当前 R 标识：**R-14 世界收缩（方案 A）Phase 0 完成** —— ⚠️ 本文档是 R-12 星露谷改造的历史记录，已被 R-14 推翻并校正。Phase 0 地基止血（双 V135 + 跨服务韧性 + 判题加固 + 文档对齐）已完成。
+
+## ⚠️ R-14 现实校正（2026-06-08 · 方案 A 世界收缩）
+
+> 本文档是 **R-12 星露谷改造**的历史执行记录。R-14（方案 A）已**废弃「5 图分块大世界」**，收敛为**单一中央小镇 `town_hub`**（+ `mine_south` Bug 矿洞支线），并移除农场 / 作物 / 货币 / 商店。
+> 因此下文一切「5 张地图 / 20 NPC / farm_north·campus_east·port_west」均为 **R-12 历史计划，已不代表磁盘现实**。
+
+**当前磁盘现实**（以 `frontend/public/assets/maps/` 与 `frontend/public/data/npcs/` 真实文件为准）：
+
+- 地图：**2 张** —— `town_hub.json`（50×40，主玩图）+ `mine_south.json`（30×30，Bug 矿洞支线）；连同 `index.json` 共 **3 个 JSON 文件**。
+- NPC：**12 个** —— arena_guard / captain_def / class_president / coach_q / foreman_bug / librarian_doc / mayor_py / mine_keeper / professor / sage_review / student_a / workshop_master（目录数，不含 `index.json`）。
+- `town_hub.json` 无对外 `exit` 对象；`index.json` 的 `town_hub.exits` 已从 `["mine_south"]` 修正为 `[]`（契约自洽）。进 Bug 矿洞经 building → `/bug-mine` 路由，不走地图边缘 walk-exit。
 
 ## 摸排结论（执行前）
 
@@ -257,6 +268,7 @@ curl 端到端验证（demo 账号）：
 - ✅ **W4-DEMO-DOC**（本子代理收尾）：
   - 扩展 `docs/beta_demo_checklist.md` 加入 D 节「已知遗留」7 条（Android 覆盖度 / RAG 学生权限 / 班级实时大屏 / 多语言 iOS / 8 方向 DTO / 教师 quest 表单 / 自动化烟雾测试），与 `docs/r12_release_notes.md` 遗留段对齐。
   - 交付 `scripts/r12-smoke-test.sh`（可执行）：backend `mvn test -DskipITs -q` + frontend typecheck + vitest "Test Files" 行 + 3 关键像素资产 + maps=6 + npcs=20 + migrations≥35，共 7 项断言 `set -e` fail-fast。
+    > ⚠️ **R-14 失效**：`maps=6` / `npcs=20` 两条断言在 R-14 单 hub 现实下（2 图 / 12 NPC）会**失败**；该 root 脚本需后续随 R-14 更新（详见顶部「R-14 现实校正」与 `docs/release/known_issues.md`）。
   - `CHANGELOG.md` R-12 段「已知遗留」`r12-smoke-test.sh` 条目翻转为已交付。
 
 ## R-12 最终自测（Wave-4 末态）
@@ -266,7 +278,7 @@ curl 端到端验证（demo 账号）：
 | frontend typecheck | 0 错误 |
 | frontend vitest | 45 文件 / 162 顶层 `it/test` 用例（44+ 文件 / 150+ 用例底线已超） |
 | backend mvn test | 34 测试类 / 140 `@Test` 0 失败 |
-| 资产 / 地图 / NPC / migration | tilemap_packed.png + SaraFullSheet.png + ark-pixel-12px-mono-zh_cn.woff2 / 5 地图 + index.json / 20 NPC / 40 个 Flyway migration（≥35） 全部到位 |
+| 资产 / 地图 / NPC / migration | tilemap_packed.png + SaraFullSheet.png + ark-pixel-12px-mono-zh_cn.woff2 / ~~R-12: 5 地图 + index.json / 20 NPC~~ → **R-14 现实：2 地图（town_hub + mine_south）+ index.json / 12 NPC** / Flyway migration（R-12 时 40，现已随后端推进增长，详见 backend）全部到位 |
 | `scripts/r12-smoke-test.sh` | 已交付且可执行；演示前一键确认环境健全 |
 
 ## 推延项（R-13+）
@@ -306,9 +318,9 @@ curl 端到端验证（demo 账号）：
 | backend mvn test（不含 IT） | 34 测试类 / 140 `@Test` 全过 | smoke step 1 输出末 3 行（详见 smoke log） | `mvn test -DskipITs -q` |
 | scripts/r12-smoke-test.sh | 7 项断言全过 | 详见 `/tmp/r12-smoke-test-output.log` 末 30 行（演示前再跑一次确认） | `bash scripts/r12-smoke-test.sh` |
 | 关键资产 | tilemap_packed.png + SaraFullSheet.png + ark-pixel-12px-mono-zh_cn.woff2 | 三资产均在仓（smoke step 4 通过） | `ls public/assets/pixel/...` |
-| 5 张 Tiled 地图 + index.json | 6 个 JSON | 6（smoke step 5 通过） | `ls public/assets/maps/*.json` |
-| 20 NPC 目录 | 20（不含 index.json） | 20（smoke step 6 通过） | `ls data/npcs/ \| grep -v index` |
-| Flyway migration | ≥ 35 | 40（V001-V113 中 R-12 新增 V100-V113 共 14 个，合计 40） | `ls backend/src/main/resources/db/migration/V*.sql` |
+| Tiled 地图 + index.json | R-14：3 个 JSON（town_hub + mine_south + index.json） | **3**（R-14 单 hub 收敛；5 图已废弃） | `ls public/assets/maps/*.json` |
+| NPC 目录 | R-14：12（不含 index.json） | **12** | `ls data/npcs/ \| grep -v index` |
+| Flyway migration | ≥ 40 | **40+**（V001-V136，Phase 0 已修复双 V135） | `ls backend/src/main/resources/db/migration/V*.sql` |
 
 ## 推延项（重派后再次确认 / R-13+）
 

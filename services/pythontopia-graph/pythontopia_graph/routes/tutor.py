@@ -147,6 +147,7 @@ async def tutor_ask_stream(
                 debate_result: DebateResult | None = None
                 pending_node: str | None = None
                 node_started = time.monotonic()
+                debate_started = time.monotonic()
                 async for kind, payload in debate.run_events(
                     agent_question, evidence.chunks, body.profile_brief,
                 ):
@@ -164,6 +165,12 @@ async def tutor_ask_stream(
                 # 仅当复核产出非空定稿时采用；否则（含异常/空答）回退普通答疑，绝不让难题崩答疑。
                 if debate_result is not None and debate_result.answer.strip():
                     answer = debate_result.answer
+                    # P1.4: 辩论完成后发复合 debate trace（前端可视为"两个 agent 争论"）
+                    yield _trace_finish(
+                        "debate", "ok",
+                        int((time.monotonic() - debate_started) * 1000),
+                        note=f"confidence={debate_result.confidence:.2f}",
+                    )
                     for piece in _stream_pieces(answer):
                         collected.append(piece)
                         yield _format_sse("token", {"delta": piece})

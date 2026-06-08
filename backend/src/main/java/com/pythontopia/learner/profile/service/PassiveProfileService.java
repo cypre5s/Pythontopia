@@ -73,7 +73,7 @@ public class PassiveProfileService {
           "learning_preference",
           "emotion_persistence");
 
-  /** profile_revision_source_check 约束允许的 source 枚举（须与 V135 迁移保持一致）。 */
+  /** profile_revision_source_check 约束允许的 source 枚举（须与 V136 迁移保持一致）。 */
   private static final Set<String> ALLOWED_REVISION_SOURCES =
       Set.of(
           "INTERVIEW",

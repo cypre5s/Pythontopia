@@ -639,11 +639,10 @@ function generateTownHub() {
   paintBuilding(buildings, W, training.x, training.y, training.w, training.h);
 
   // objects ---------- (no exits, single map)
+  // R-14 Phase 0: 纺织展馆与南面民居仅保留视觉瓦片（paintBuilding），移除无路由的点击对象；
+  // 避免玩家点击后进入死路 placeholder 页面。视觉房屋仍参与碰撞（buildings layer）。
   const objects = [
     makeBuilding(mayorHall.name, mayorHall.label, mayorHall.route, mayorHall.x, mayorHall.y, mayorHall.w, mayorHall.h),
-    makeBuilding(textileWest.name, textileWest.label, textileWest.route, textileWest.x, textileWest.y, textileWest.w, textileWest.h),
-    makeBuilding(textileEast.name, textileEast.label, textileEast.route, textileEast.x, textileEast.y, textileEast.w, textileEast.h),
-    ...housesSouth.map((h) => makeBuilding(h.name, h.label, h.route, h.x, h.y, h.w, h.h)),
     makeBuilding(library.name, library.label, library.route, library.x, library.y, library.w, library.h),
     makeBuilding(reviewHall.name, reviewHall.label, reviewHall.route, reviewHall.x, reviewHall.y, reviewHall.w, reviewHall.h),
     makeBuilding(workshop.name, workshop.label, workshop.route, workshop.x, workshop.y, workshop.w, workshop.h),
@@ -792,7 +791,9 @@ function buildIndex() {
         height: 40,
         bgm: 'bgm_town_day',
         tileset: 'kenney_tiny_town',
-        exits: ['mine_south'],
+        // R-14 单中央 hub：town_hub.json 不含任何 exit 对象，index 出口声明须与地图一致（空）。
+        // 进入 Bug 矿洞经 building → /bug-mine 路由，不走地图边缘 walk-exit。
+        exits: [],
         spawn: { tileX: 25, tileY: 20 },
       },
       {
@@ -832,7 +833,7 @@ ${rows}
 
 ## town_hub.json（50×40）
 
-- 出口：south→mine_south
+- 出口：无（R-14 单中央 hub，外围图已移除；Bug 矿洞经 building → /bug-mine 路由进入）
 - 学习建筑：图书馆 / 工坊 / 训练场 / 竞技场 / 复盘大厅 / Bug 矿洞入口等
 - 12 主线 NPC 贴近建筑入口排布（见 \`scripts/generate-maps.mjs\` 内 \`makeNpc\` 列表）
 

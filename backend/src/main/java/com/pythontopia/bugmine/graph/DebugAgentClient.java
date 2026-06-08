@@ -2,6 +2,7 @@ package com.pythontopia.bugmine.graph;
 
 import com.pythontopia.common.config.GraphServiceProperties;
 import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.common.web.GraphInternalTokenSupport;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -26,6 +27,7 @@ public class DebugAgentClient {
   public DebugAgentResponse analyse(DebugAgentRequest request) {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
+    GraphInternalTokenSupport.apply(headers, properties);
     try {
       return restTemplate
           .exchange(

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.common.config.GraphServiceProperties;
 import com.pythontopia.common.sse.GraphSseConsumer;
 import com.pythontopia.common.sse.SseRelayExecutor;
+import com.pythontopia.common.web.GraphInternalTokenSupport;
 import com.pythontopia.media.XfyunImageUnderstandingService;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -88,7 +89,12 @@ public class TutorGraphClient {
           body.put("profile_brief", profileBrief);
         }
 
-        GraphSseConsumer.consume(url, body, objectMapper, (event, data) -> {
+        GraphSseConsumer.consume(
+            url,
+            body,
+            objectMapper,
+            GraphInternalTokenSupport.tokenOrNull(properties),
+            (event, data) -> {
           try {
             emitter.send(SseEmitter.event().name(event).data(data));
             if ("result".equals(event)) {

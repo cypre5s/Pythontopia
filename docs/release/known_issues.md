@@ -2,6 +2,15 @@
 
 > 阶段 15 起，所有未修复缺陷必须列入本文件并标注影响范围。
 
+> **R-14 对齐（2026-06-08 · 世界收缩方案 A）**：本文件部分条目写于 R-12「5 图 + 20 NPC」星露谷世界；R-14 已收敛为**单一中央小镇 `town_hub`**（+ `mine_south` Bug 矿洞支线），移除农场 / 作物 / 货币 / 商店。**磁盘现实：2 张地图（+ index.json，共 3 个 JSON）/ 12 NPC**。
+
+## 0. R-14 世界收缩遗留（2026-06-08）
+
+- **过时烟雾断言（已修复）**：`scripts/r12-smoke-test.sh` 原断言 `maps=6` 与 `npcs=20`，在 R-14 单 hub 现实（2 图 / 12 NPC）下会失败。**Phase 0 已修正**为 `maps=3`（含 `index.json`）/ `npcs=12` / `migrations>=36`。
+- **`town_hub` 占位 building 已移除点击路由（已修复）**：原 5 个指向不存在路由的占位 building（纺织展馆×2 + 南面民居×3，路由 `/house-*`）。**Phase 0 已移除**其 building 点击对象，视觉房屋瓦片保留以维持小镇氛围（仍参与碰撞）。
+- **`town_hub` 出口契约已修正（R-14 已修复）**：`index.json` 的 `town_hub.exits` 由 `["mine_south"]`（与地图不符）改为 `[]`，与「`town_hub.json` 无 `exit` 对象」一致。
+- **`mine_south`（WorldScene 地图）步行可达性**（建议后续评估）：`town_hub` 无 walk-exit 通向 `mine_south`，`FAST_TRAVEL_ROUTES` 亦仅剩 `town_hub`；Bug 矿洞主要经 building → `/bug-mine`（`BugMinePage`）进入。WorldScene 版 `mine_south` 地图当前在主流程中基本不可步行抵达，属既有设计现状。
+
 ## 1. 演示阻断（必须在发布前修复）
 
 目前无演示阻断项。

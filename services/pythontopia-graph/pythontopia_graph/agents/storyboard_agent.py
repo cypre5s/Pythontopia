@@ -23,14 +23,20 @@ class StoryboardAgent:
         self.provider = provider
 
     async def design(
-        self, request: ResourceProduceRequest, evidence: EvidenceBundle
+        self,
+        request: ResourceProduceRequest,
+        evidence: EvidenceBundle,
+        revision_notes: list[str] | None = None,
     ) -> ResourceDraft:
-        messages = self._prompt(request, evidence)
+        messages = self._prompt(request, evidence, revision_notes)
         response = await self.provider.chat(messages)
         return self._build(request, response.content_json, evidence)
 
     def _prompt(
-        self, request: ResourceProduceRequest, evidence: EvidenceBundle,
+        self,
+        request: ResourceProduceRequest,
+        evidence: EvidenceBundle,
+        revision_notes: list[str] | None = None,
     ) -> list[dict[str, str]]:
         evidence_hint = ""
         if evidence.chunks:
@@ -50,6 +56,11 @@ class StoryboardAgent:
                     + evidence_hint
                 ),
             },
+            *([{
+                "role": "system",
+                "content": f"上一稿被打回原因：\n" + "\n".join(f"- {r}" for r in revision_notes)
+                + "\n请针对性修订，修正上述问题后重新生成。",
+            }] if revision_notes else []),
             *personalization_messages(request.profile_snapshot),
             {"role": "user", "content": ",".join(request.kc_codes)},
         ]

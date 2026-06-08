@@ -7,6 +7,7 @@ import com.pythontopia.common.config.GraphServiceProperties;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.sse.GraphSseConsumer;
 import com.pythontopia.common.sse.SseRelayExecutor;
+import com.pythontopia.common.web.GraphInternalTokenSupport;
 import com.pythontopia.coursepack.repository.CoursePackRepository;
 import com.pythontopia.learner.profile.dto.*;
 import com.pythontopia.learner.profile.repository.ProfileRepository;
@@ -15,7 +16,10 @@ import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -74,10 +78,13 @@ public class ProfileService {
             coursePackRepository.findKcs(43L, null).stream()
                 .map(kc -> new KcIndexItemDto(kc.kcCode(), kc.kcName()))
                 .toList());
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.APPLICATION_JSON);
+    GraphInternalTokenSupport.apply(headers, graphProperties);
     ProfileTurnResponse response =
         graphRestTemplate.postForObject(
             graphProperties.graphUrl() + "/agents/profile/turn",
-            agentRequest,
+            new HttpEntity<>(agentRequest, headers),
             ProfileTurnResponse.class);
     if (response == null) {
       throw new BusinessException(HttpStatus.BAD_GATEWAY, "PROFILE_AGENT_EMPTY_RESPONSE", "ProfileAgent returned empty response");
@@ -121,7 +128,12 @@ public class ProfileService {
 
     sseRelayExecutor.submit(() -> {
       try {
-        GraphSseConsumer.consume(url, agentRequest, objectMapper, (event, data) -> {
+        GraphSseConsumer.consume(
+            url,
+            agentRequest,
+            objectMapper,
+            GraphInternalTokenSupport.tokenOrNull(graphProperties),
+            (event, data) -> {
           try {
             emitter.send(SseEmitter.event().name(event).data(data));
             if ("result".equals(event)) {

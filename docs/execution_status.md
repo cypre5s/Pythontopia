@@ -25,12 +25,16 @@
 | 15 | Beta 验收、视频、PPT | 已完成（文档/脚本/checklist） | 视频/PPT 本体需真人产出 |
 | R-10 | 10 轮代码质量审查与性能优化 | 已完成 | 最终 234 测试通过 |
 | R-11 | 根 README 重写为成熟教学游戏作品门面 | 已完成 | 单文件 30 → 147 行；R-0 baseline commit `59761c5` 建立 |
-| R-12 ~ R-100 | Web 端持续小步成熟度迭代 | **冻结** | Web 端代码冻结在 R-11；用户决策转入 Android 化路线 |
+| R-12 | 星露谷改造（Web 端从 R-11 解冻） | 已完成 | Phaser 像素小镇改造；原 5 图分块 + 20 NPC（**已被 R-14 收缩推翻**，见 R-14 行） |
+| R-13 | 主线 35 任务 + 章末 Boss + 竞技场 + AI 出题审核 | 已完成 | 详见 `docs/r13-*` |
+| R-14 | 世界收缩方案 A：废弃 5 图大世界，收敛为单一中央 `town_hub` | 已完成 Phase 0 | 2 地图（`town_hub` 主玩图 + `mine_south` 支线）/ 12 NPC / 5 占位 building 已去路由；Phase 0 地基止血完成（双 V135 修复 + 跨服务韧性 + 判题沙箱加固 + 文档对齐） |
 | Android-R0 | Android 客户端启动：10 subagent 调研 + ADR-001 + roadmap | 已完成 | 详见 `android/docs/ADR-001-tech-selection.md` 与 `android/docs/roadmap.md` |
 | Android-R1 | 多模块 Gradle 骨架 + 真实可构建 + 28 测试通过 + 11MB APK 产出 | 已完成 | commit `8a49643`；本机已装 Android SDK 35 / JDK 17 toolchain / Gradle 8.11.1 |
 | Android-R2 ~ R17 | Android 客户端从骨架到 Beta | 进行中 | 详见 `android/docs/roadmap.md` |
 
-## 当前状态：Android-R1 已交付（真实可构建 APK + 28/28 测试），等待 Android-R2 启动
+## 当前状态：R-14 世界收缩（方案 A）进行中 — Web 端已从 R-11 解冻并收敛为单一中央小镇 `town_hub`（外围图弃用）；Android 侧 Android-R1 已交付（真实可构建 APK + 28/28 测试），R-2 待启
+
+> 注：下方「最近进度汇报记录」为历史时间线（含 R-10/R-11 期一度暂停 Web、转 Android 的旧决策），R-12 起 Web 已解冻、R-14 收缩为单 hub，以本表与本行为准。
 
 ## 阶段 15 — Beta 验收、演示视频与 PPT 收尾（文档与脚本部分已完成）
 
@@ -42,17 +46,9 @@
 5. 全量回归报告 `docs/release/regression_report.md`：4 套件 + demo_smoke 退出码 + 耗时。
 6. 已知缺陷 `docs/release/known_issues.md`：分演示阻断 / 非阻断两类。
 
-### 还要做
-- [ ] `docs/beta_acceptance_checklist.md` 全勾。
-- [ ] `docs/release/known_issues.md` 列已知缺陷与未来工作。
-- [ ] `docs/release/regression_report.md` 4 套件命令 + 退出码 + 耗时快照。
-- [ ] `docs/release/README.md` 提交包导览。
-- [ ] R-10 启动 10 轮小步迭代（阶段 15 完成后立即并入）。
-
 ### 卡点 / 注意
 - 比赛文件中不得包含真实 LLM 密钥；PPT/视频中不得包含真实学生姓名。
 - 演示前 24 小时冻结代码，只允许文档与演示数据修改。
-- R-10 必须遵守 AGENTS.md 边界，不擅自加大功能模块；每轮迭代要小步、可验证、可回滚。
 
 ## 最近进度汇报记录
 

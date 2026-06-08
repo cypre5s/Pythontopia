@@ -17,6 +17,7 @@ import { useGuideStore } from '@stores/guide';
 import { useHudStore } from '@stores/hud';
 import { useMainQuestStore } from '@stores/mainQuest';
 import { useLearningStore } from '@stores/learning';
+import { useWorkshopActivityStore } from '@stores/workshopActivity';
 import { useSseStream } from '@/composables/useSseStream';
 import { playUiClick, playUiHover } from '@/composables/useStardewFx';
 import MarkdownView from '@/components/common/MarkdownView.vue';
@@ -32,6 +33,7 @@ const guide = useGuideStore();
 const hud = useHudStore();
 const mainQuest = useMainQuestStore();
 const learning = useLearningStore();
+const activity = useWorkshopActivityStore();
 const router = useRouter();
 
 const sse = useSseStream<OrchestratorResult>('/api/orchestrator/turn/stream');
@@ -126,6 +128,15 @@ watch(
     if (currentAssistantId.value) {
       guide.updateAssistantStream(currentAssistantId.value, sse.tokens.value, tr);
     }
+    // Mirror orchestrator dispatch traces into workshopActivity for MarvisPanel
+    activity.syncTraces('orchestrator', tr);
+  },
+);
+watch(
+  () => sse.plan.value,
+  (p) => {
+    // Mirror orchestrator plan into workshopActivity for MarvisPanel
+    activity.syncPlan('orchestrator', p);
   },
 );
 
@@ -156,6 +167,9 @@ async function send(raw: string): Promise<void> {
 
   const aid = guide.beginAssistant();
   currentAssistantId.value = aid;
+
+  // Start orchestrator activity in workshopActivity for MarvisPanel
+  activity.start('orchestrator', `协同规划：${text.slice(0, 24)}`);
 
   const body: OrchestratorTurnRequest = {
     sessionId: guide.sessionId,
@@ -195,6 +209,8 @@ async function send(raw: string): Promise<void> {
       sse.tokens.value,
     );
   }
+  // Finish orchestrator activity — MarvisPanel displays result
+  activity.finish(sse.status.value === 'done');
   currentAssistantId.value = null;
   await scrollToBottom();
 }

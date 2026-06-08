@@ -24,20 +24,28 @@ public class JudgeService {
   private final PythonSandbox sandbox;
   private final StaticCodeChecker staticChecker;
   private final ObjectMapper objectMapper;
+  private final JudgeWorkerPool judgeWorkerPool;
 
   public JudgeService(
       PracticeSubmissionRepository submissionRepository,
       PublicProblemRepository problemRepository,
       PythonSandbox sandbox,
       StaticCodeChecker staticChecker,
-      ObjectMapper objectMapper) {
+      ObjectMapper objectMapper,
+      JudgeWorkerPool judgeWorkerPool) {
     this.submissionRepository = submissionRepository;
     this.problemRepository = problemRepository;
     this.sandbox = sandbox;
     this.staticChecker = staticChecker;
     this.objectMapper = objectMapper;
+    this.judgeWorkerPool = judgeWorkerPool;
   }
 
+  /**
+   * 在判题工作线程池上执行 Python 子进程调用（避免占用 Tomcat 请求线程），
+   * 但 DB 事务仍在调用线程上管理（由上层 {@code @Transactional} 控制）。
+   * 内部用 {@link JudgeWorkerPool#submitAndWait} 限制并发子进程数。
+   */
   @Transactional
   public JudgeOutcome judge(Long submissionId, Long problemId, String code) {
     submissionRepository.markStatus(submissionId, SubmissionStatus.RUNNING, null, null);
@@ -67,6 +75,25 @@ public class JudgeService {
       return new JudgeOutcome(Verdict.SYSTEM_ERROR, 0, 0, "题目没有可用测试用例");
     }
 
+    // 沙箱子进程在工作线程跑；DB 写入留在调用线程的事务里，避免 FK 竞态。
+    CaseEvaluation evaluation =
+        judgeWorkerPool.submitAndWait(() -> evaluateCases(code, cases));
+    persistEvaluation(submissionId, cases.size(), evaluation);
+    SubmissionStatus status =
+        evaluation.finalVerdict() == Verdict.AC
+            ? SubmissionStatus.PASSED
+            : SubmissionStatus.FAILED;
+    submissionRepository.markStatus(
+        submissionId, status, evaluation.totalRuntimeMs(), null);
+    return new JudgeOutcome(
+        evaluation.finalVerdict(),
+        evaluation.passedCases(),
+        cases.size(),
+        evaluation.failureReason());
+  }
+
+  /** 纯沙箱评测（无 DB），供工作线程调用。 */
+  private CaseEvaluation evaluateCases(String code, List<JudgeTestCase> cases) {
     int passed = 0;
     Verdict finalVerdict = Verdict.AC;
     String failureReason = null;
@@ -99,12 +126,26 @@ public class JudgeService {
     trace.put("sandbox", sandbox.name());
     trace.put("totalRuntimeMs", totalRuntime);
     trace.set("cases", caseTrace);
-    submissionRepository.insertJudgeResult(
-        submissionId, finalVerdict, passed, cases.size(), failureReason, trace);
-    SubmissionStatus status = finalVerdict == Verdict.AC ? SubmissionStatus.PASSED : SubmissionStatus.FAILED;
-    submissionRepository.markStatus(submissionId, status, totalRuntime, null);
-    return new JudgeOutcome(finalVerdict, passed, cases.size(), failureReason);
+    return new CaseEvaluation(finalVerdict, passed, totalRuntime, failureReason, trace);
   }
+
+  private void persistEvaluation(
+      Long submissionId, int totalCases, CaseEvaluation evaluation) {
+    submissionRepository.insertJudgeResult(
+        submissionId,
+        evaluation.finalVerdict(),
+        evaluation.passedCases(),
+        totalCases,
+        evaluation.failureReason(),
+        evaluation.trace());
+  }
+
+  private record CaseEvaluation(
+      Verdict finalVerdict,
+      int passedCases,
+      int totalRuntimeMs,
+      String failureReason,
+      ObjectNode trace) {}
 
   private List<JudgeTestCase> extractCases(PublicProblemRepository.JudgeTestCases tc) {
     List<JudgeTestCase> result = new ArrayList<>();

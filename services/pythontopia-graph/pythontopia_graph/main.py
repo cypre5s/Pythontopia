@@ -25,6 +25,7 @@ from pythontopia_graph.routes.streaming import router as streaming_router
 from pythontopia_graph.routes.tutor import router as tutor_router
 from pythontopia_graph.routes.video import router as video_router
 from pythontopia_graph.schemas.curriculum import MapperInput, MapperOutput
+from pythontopia_graph.internal_auth import InternalTokenMiddleware
 from pythontopia_graph.schemas.profile import ProfileAgentInput, ProfileAgentOutput
 
 
@@ -50,6 +51,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="Pythontopia Graph", version="0.1.0", lifespan=lifespan)
+app.add_middleware(InternalTokenMiddleware)
 app.include_router(resource_router)
 app.include_router(path_router)
 app.include_router(debug_router)

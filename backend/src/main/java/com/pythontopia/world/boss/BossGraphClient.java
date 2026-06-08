@@ -1,6 +1,7 @@
 package com.pythontopia.world.boss;
 
 import com.pythontopia.common.config.GraphServiceProperties;
+import com.pythontopia.common.web.GraphClientRetryHelper;
 import com.pythontopia.world.boss.dto.BossEvaluateResultDto;
 import com.pythontopia.world.boss.dto.BossInternalProblem;
 import com.pythontopia.world.boss.dto.BossProblemRequest.ProfileSignalsPayload;
@@ -34,6 +35,7 @@ import org.springframework.web.client.RestTemplate;
 public class BossGraphClient {
 
   private static final Logger LOG = LoggerFactory.getLogger(BossGraphClient.class);
+  private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
 
   private final RestTemplate restTemplate;
   private final GraphServiceProperties properties;
@@ -91,13 +93,17 @@ public class BossGraphClient {
         body.put("profileSignals", sig);
       }
     }
-    return restTemplate
-        .exchange(
-            properties.graphUrl() + "/agents/boss/problem",
-            HttpMethod.POST,
-            new HttpEntity<>(body, headers),
-            BossInternalProblem.class)
-        .getBody();
+    setInternalToken(headers);
+    return GraphClientRetryHelper.withRetry(
+        "boss-problem",
+        () ->
+            restTemplate
+                .exchange(
+                    properties.graphUrl() + "/agents/boss/problem",
+                    HttpMethod.POST,
+                    new HttpEntity<>(body, headers),
+                    BossInternalProblem.class)
+                .getBody());
   }
 
   /** 调 graph 评测玩家提交的代码。失败抛 {@link RestClientException}。 */
@@ -105,6 +111,7 @@ public class BossGraphClient {
       String problemId, String code, List<BossTestCasePayload> testCases, int timeoutSec) {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
+    setInternalToken(headers);
     List<Map<String, Object>> cases =
         testCases.stream()
             .<Map<String, Object>>map(
@@ -119,13 +126,16 @@ public class BossGraphClient {
     body.put("code", code);
     body.put("testCases", cases);
     body.put("timeoutSec", timeoutSec);
-    return restTemplate
-        .exchange(
-            properties.graphUrl() + "/agents/boss/evaluate",
-            HttpMethod.POST,
-            new HttpEntity<>(body, headers),
-            BossEvaluateResultDto.class)
-        .getBody();
+    return GraphClientRetryHelper.withRetry(
+        "boss-evaluate",
+        () ->
+            restTemplate
+                .exchange(
+                    properties.graphUrl() + "/agents/boss/evaluate",
+                    HttpMethod.POST,
+                    new HttpEntity<>(body, headers),
+                    BossEvaluateResultDto.class)
+                .getBody());
   }
 
   /** 用于运维探活。失败返回 false，永不抛。 */
@@ -136,6 +146,13 @@ public class BossGraphClient {
     } catch (RestClientException ex) {
       LOG.debug("graph boss health failed: {}", ex.getMessage());
       return false;
+    }
+  }
+
+  private void setInternalToken(HttpHeaders headers) {
+    String token = properties.ragAdminToken();
+    if (token != null && !token.isBlank()) {
+      headers.set(INTERNAL_TOKEN_HEADER, token);
     }
   }
 }

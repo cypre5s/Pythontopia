@@ -31,14 +31,20 @@ class PracticeAgent:
         self.provider = provider
 
     async def design(
-        self, request: ResourceProduceRequest, evidence: EvidenceBundle
+        self,
+        request: ResourceProduceRequest,
+        evidence: EvidenceBundle,
+        revision_notes: list[str] | None = None,
     ) -> ResourceDraft:
-        messages = self._prompt(request, evidence)
+        messages = self._prompt(request, evidence, revision_notes)
         response = await self.provider.chat(messages)
         return self._build(request, response.content_json)
 
     def _prompt(
-        self, request: ResourceProduceRequest, evidence: EvidenceBundle
+        self,
+        request: ResourceProduceRequest,
+        evidence: EvidenceBundle,
+        revision_notes: list[str] | None = None,
     ) -> list[dict[str, str]]:
         return [
             {
@@ -49,6 +55,11 @@ class PracticeAgent:
                     "禁止给出完整答案；如需提示请放 hints 字段。"
                 ),
             },
+            *([{
+                "role": "system",
+                "content": f"上一稿被打回原因：\n" + "\n".join(f"- {r}" for r in revision_notes)
+                + "\n请针对性修订，修正上述问题后重新生成。",
+            }] if revision_notes else []),
             *personalization_messages(request.profile_snapshot),
             {
                 "role": "user",

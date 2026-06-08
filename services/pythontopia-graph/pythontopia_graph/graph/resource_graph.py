@@ -40,7 +40,7 @@ class ResourceGraphConfig:
 
 
 class ResourceGraph:
-    MAX_RETRIES = 1
+    MAX_RETRIES = 2
 
     # 设计师工位的中文 label（仅用于线上 `plan` 事件，零 LLM 成本）。键对应
     # ResourceProduceRequest.type，与 _select_agent 选出的设计师 AGENT_NAME 配对。
@@ -79,11 +79,12 @@ class ResourceGraph:
         last_grounding: GroundingResult | None = None
         last_safety: SafetyResult | None = None
         draft: ResourceDraft | None = None
+        revision_notes: list[str] | None = None
         while attempt <= self.MAX_RETRIES:
             draft = await self._step(
                 trace,
                 f"{agent.AGENT_NAME}.attempt{attempt}",
-                agent.design(request, evidence),
+                agent.design(request, evidence, revision_notes=revision_notes),
             )
 
             grounding = grounding_critic(draft, evidence)
@@ -127,6 +128,10 @@ class ResourceGraph:
                     graph_trace=trace,
                     status=status,
                 )
+            # 收集失败原因供下一轮 revision_notes 回灌设计师
+            revision_notes = list(grounding.reasons) + list(hallucination.reasons)
+            if not revision_notes:
+                revision_notes = ["引用审查或防幻觉核查未通过，请检查证据引用与内容准确性。"]
             attempt += 1
 
         assert draft is not None and last_grounding is not None and last_safety is not None
@@ -169,12 +174,13 @@ class ResourceGraph:
             last_grounding: GroundingResult | None = None
             last_safety: SafetyResult | None = None
             draft: ResourceDraft | None = None
+            revision_notes: list[str] | None = None
             while attempt <= self.MAX_RETRIES:
                 draft = await self._step_streaming(
                     emit,
                     trace,
                     f"{agent.AGENT_NAME}.attempt{attempt}",
-                    agent.design(request, evidence),
+                    agent.design(request, evidence, revision_notes=revision_notes),
                 )
 
                 grounding = grounding_critic(draft, evidence)
@@ -234,6 +240,10 @@ class ResourceGraph:
                     )
                     await emit("result", resp.model_dump(mode="json"))
                     return
+                # 收集失败原因供下一轮 revision_notes 回灌设计师
+                revision_notes = list(grounding.reasons) + list(hallucination.reasons)
+                if not revision_notes:
+                    revision_notes = ["引用审查或防幻觉核查未通过，请检查证据引用与内容准确性。"]
                 attempt += 1
 
             assert draft is not None and last_grounding is not None and last_safety is not None

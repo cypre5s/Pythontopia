@@ -1,6 +1,7 @@
 package com.pythontopia.world.curriculum;
 
 import com.pythontopia.common.config.GraphServiceProperties;
+import com.pythontopia.common.web.GraphInternalTokenSupport;
 import com.pythontopia.world.curriculum.dto.MapperRequest;
 import com.pythontopia.world.curriculum.dto.MapperResponse;
 import org.springframework.http.HttpEntity;
@@ -24,6 +25,7 @@ public class CurriculumMapperClient {
   public MapperResponse callMap(MapperRequest request) {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
+    GraphInternalTokenSupport.apply(headers, properties);
     HttpEntity<MapperRequest> entity = new HttpEntity<>(request, headers);
     return restTemplate
         .exchange(

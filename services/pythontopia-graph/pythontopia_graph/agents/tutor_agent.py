@@ -57,9 +57,9 @@ VERIFY_TRIGGERS = ("为什么", "输出不对", "报错", "error", "不对", "wr
 # 抽取问题里第一个围栏代码块的内容（``` 或 ```python）。
 _CODE_FENCE_RE = re.compile(r"```(?:python)?\s*\n?(.*?)```", re.DOTALL)
 
-# 「辩论复核」触发词：仅在明确「难/需严谨论证/权衡比较」的问题上路由进 Solver→Critic→Referee。
-# 刻意取窄词，避免误伤普通答疑（如裸「为什么」不触发，须「为什么不能」这类强论证诉求）。
+# 「辩论复核」触发词：在原有「难/需严谨论证/权衡比较」基础上，P1.4 扩展至关键教学决策。
 DEBATE_TRIGGERS = (
+    # 原有：需严谨论证
     "辩论",
     "复核",
     "严谨",
@@ -73,6 +73,22 @@ DEBATE_TRIGGERS = (
     "一定对吗",
     "真的吗",
     "区别与联系",
+    # P1.4 扩展：关键教学决策
+    "难度",       # 出题难度选择
+    "怎么讲",     # 讲法选择
+    "怎么教",
+    "哪种讲法",
+    "用什么方式教",
+    "跳过",       # 是否跳关
+    "跳关",
+    "先学哪个",   # 学习顺序
+    "学习顺序",
+    "先学什么",
+    "适合什么难度",
+    "太难",
+    "太简单",
+    "应该先",
+    "应该怎么",
 )
 
 
@@ -134,12 +150,22 @@ class TutorAgent:
 
     @staticmethod
     def should_debate(question: str) -> bool:
-        """是否路由进辩论复核子图：命中窄触发词（难题 / 需严谨论证 / 权衡比较）即为是。
-
-        刻意取窄，保证普通答疑（含 code 验证类）仍走单次流式答疑，不被双倍 LLM 成本拖慢演示。
-        """
+        """是否路由进辩论复核子图：命中触发词（需严谨论证/权衡比较/教学决策）即为是。"""
         lowered = (question or "").lower()
         return any(trigger in lowered for trigger in DEBATE_TRIGGERS)
+
+    # P1.4 教学决策触发词（出题难度/讲法选择/是否跳关）
+    _DECISION_TRIGGERS = (
+        "难度", "怎么讲", "怎么教", "哪种讲法", "用什么方式教",
+        "跳过", "跳关", "先学哪个", "学习顺序", "先学什么",
+        "适合什么难度", "太难", "太简单", "应该先", "应该怎么",
+    )
+
+    @staticmethod
+    def should_debate_decision(question: str) -> bool:
+        """是否触发教学决策辩论（出题难度/讲法选择/是否跳关）。"""
+        lowered = (question or "").lower()
+        return any(trigger in lowered for trigger in TutorAgent._DECISION_TRIGGERS)
 
     @staticmethod
     def _extract_code_block(question: str) -> str:

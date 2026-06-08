@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.common.config.GraphServiceProperties;
 import com.pythontopia.common.sse.GraphSseConsumer;
 import com.pythontopia.common.sse.SseRelayExecutor;
+import com.pythontopia.common.web.GraphInternalTokenSupport;
 import com.pythontopia.orchestrator.dto.OrchestratorTurnMessage;
 import com.pythontopia.orchestrator.dto.OrchestratorTurnRequest;
 import java.io.IOException;
@@ -91,6 +92,7 @@ public class OrchestratorGraphClient {
                 url,
                 body,
                 objectMapper,
+                GraphInternalTokenSupport.tokenOrNull(properties),
                 (event, data) -> {
                   try {
                     emitter.send(SseEmitter.event().name(event).data(data));

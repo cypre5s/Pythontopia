@@ -24,6 +24,7 @@ from typing import Annotated, Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
+from pythontopia_graph.agents.dispatch import AgentDispatcher, DispatchContext
 from pythontopia_graph.agents.orchestrator_agent import OrchestratorAgent
 from pythontopia_graph.graph.orchestrator_session import (
     append_turns,
@@ -33,6 +34,7 @@ from pythontopia_graph.graph.orchestrator_session import (
     set_plan,
 )
 from pythontopia_graph.llm.provider import LlmProvider
+from pythontopia_graph.nodes.evidence_fetcher import EvidenceFetcher, StaticEvidenceFetcher
 from pythontopia_graph.schemas.orchestrator import (
     DispatchResult,
     OrchestratorRequest,
@@ -76,9 +78,24 @@ class OrchestratorState(TypedDict, total=False):
 
 
 class OrchestratorGraph:
-    def __init__(self, *, provider: LlmProvider) -> None:
+    def __init__(
+        self,
+        *,
+        provider: LlmProvider,
+        evidence_fetcher: EvidenceFetcher | None = None,
+        valid_kc_codes: set[str] | None = None,
+    ) -> None:
         self._provider = provider
         self._agent = OrchestratorAgent(provider)
+        self._evidence_fetcher = evidence_fetcher or StaticEvidenceFetcher([])
+        self._valid_kc_codes = valid_kc_codes or set()
+        self._dispatcher = AgentDispatcher(
+            DispatchContext(
+                provider=provider,
+                evidence_fetcher=self._evidence_fetcher,
+                valid_kc_codes=self._valid_kc_codes,
+            )
+        )
         # 当前 run 的 emit 回调（单 run 存 self，免逐节点传参）
         self._emit_cb: Emit = _noop_emit
         self._compiled = self._build_compiled()
@@ -176,11 +193,77 @@ class OrchestratorGraph:
     async def _node_dispatch(self, state: OrchestratorState) -> dict[str, Any]:
         results: list[DispatchResult] = []
         traces: list[GraphTraceStep] = []
-        for step in state["plan"]:
+        req = state["req"]
+        plan = state["plan"]
+
+        # Emit plan SSE event listing all dispatch steps as nodes
+        plan_nodes = [
+            {
+                "node": f"dispatch.{step.agent}",
+                "agent_label": self._agent_display_name(step.agent),
+                "kind": self._infer_kind(step),
+            }
+            for step in plan
+        ]
+        await self._emit_cb(
+            "plan",
+            {"type": "orchestrator", "nodes": plan_nodes},
+        )
+
+        for step in plan:
+            # emit trace start for this dispatch
+            await self._emit_cb(
+                "trace",
+                {
+                    "node": f"dispatch.{step.agent}",
+                    "phase": "start",
+                    "status": "running",
+                    "elapsed_ms": 0,
+                    "agent_label": self._agent_display_name(step.agent),
+                    "note": step.title,
+                },
+            )
             started = time.monotonic()
-            result = await self._dispatch_step(step)
-            ts = self._ok_step(f"dispatch.{step.agent}", started)
-            await self._emit_cb("trace", ts.model_dump(mode="json"))
+            try:
+                result = await self._dispatch_step(step, req.user_id)
+            except Exception as exc:
+                elapsed_ms = int((time.monotonic() - started) * 1000)
+                # fail-fast: provider error propagates → SSE error event
+                await self._emit_cb(
+                    "error",
+                    {
+                        "code": "DISPATCH_FAILED",
+                        "agent": step.agent,
+                        "message": str(exc),
+                    },
+                )
+                result = DispatchResult(
+                    step_id=step.id,
+                    agent=step.agent,
+                    ok=False,
+                    summary=f"{self._agent_display_name(step.agent)} 执行失败: {exc}",
+                    note=str(exc),
+                    elapsed_ms=elapsed_ms,
+                )
+            elapsed_ms = int((time.monotonic() - started) * 1000)
+            ts = GraphTraceStep(
+                node=f"dispatch.{step.agent}",
+                elapsed_ms=elapsed_ms,
+                status="ok" if result.ok else "fail",
+                note=result.summary,
+            )
+            # emit trace finish
+            await self._emit_cb(
+                "trace",
+                {
+                    "node": f"dispatch.{step.agent}",
+                    "phase": "finish",
+                    "status": "ok" if result.ok else "fail",
+                    "elapsed_ms": elapsed_ms,
+                    "agent_label": self._agent_display_name(step.agent),
+                    "note": result.summary,
+                },
+            )
             results.append(result)
             traces.append(ts)
         return {"dispatch_results": results, "trace": traces}
@@ -195,10 +278,38 @@ class OrchestratorGraph:
             "replan", note=f"recent_failures:{','.join(failed[:3])}"
         )
         await self._emit_cb("trace", replan_step.model_dump(mode="json"))
+        # emit trace start for DebugAgent dispatch
+        await self._emit_cb(
+            "trace",
+            {
+                "node": "dispatch.DebugAgent",
+                "phase": "start",
+                "status": "running",
+                "elapsed_ms": 0,
+                "agent_label": "DebugAgent",
+                "note": debug_step.title,
+            },
+        )
         started = time.monotonic()
-        result = await self._dispatch_step(debug_step)
-        dispatch_step = self._ok_step("dispatch.DebugAgent", started)
-        await self._emit_cb("trace", dispatch_step.model_dump(mode="json"))
+        result = await self._dispatch_step(debug_step, req.user_id)
+        elapsed_ms = int((time.monotonic() - started) * 1000)
+        dispatch_step = GraphTraceStep(
+            node="dispatch.DebugAgent",
+            elapsed_ms=elapsed_ms,
+            status="ok" if result.ok else "fail",
+            note=result.summary,
+        )
+        await self._emit_cb(
+            "trace",
+            {
+                "node": "dispatch.DebugAgent",
+                "phase": "finish",
+                "status": "ok" if result.ok else "fail",
+                "elapsed_ms": elapsed_ms,
+                "agent_label": "DebugAgent",
+                "note": result.summary,
+            },
+        )
         return {
             "plan": plan,
             "dispatch_results": [result],
@@ -310,15 +421,9 @@ class OrchestratorGraph:
         if response.profile_updates:
             await merge_profile_signals(req.session_id, response.profile_updates)
 
-    async def _dispatch_step(self, step: PlanStep) -> DispatchResult:
-        panel = step.panel or "-"
-        if step.agent == "DebugAgent":
-            summary = f"已将「{step.title}」分派给 DebugAgent，前往矿洞补练并复盘（面板: {panel}）"
-        else:
-            summary = f"已将「{step.title}」分派给 {step.agent}（面板: {panel}）"
-        return DispatchResult(
-            step_id=step.id, agent=step.agent, ok=True, summary=summary, note=None
-        )
+    async def _dispatch_step(self, step: PlanStep, user_id: int = 1) -> DispatchResult:
+        """真正 await 子 agent（经 AgentDispatcher），不再只回文本摘要。"""
+        return await self._dispatcher.dispatch(step, user_id=user_id)
 
     @staticmethod
     def _ground_failures(req: OrchestratorRequest, allowed_set: set[str]) -> list[str]:
@@ -416,6 +521,46 @@ class OrchestratorGraph:
                 passed=False, reasons=[f"UNKNOWN_KC:{code}" for code in invalid]
             )
         return GroundingResult(passed=True)
+
+    @staticmethod
+    def _agent_display_name(agent: str) -> str:
+        """把内部 agent 类名映射为中文工位名（前端 MarvisPanel / 向导气泡展示）。"""
+        _AGENT_DISPLAY: dict[str, str] = {
+            "StoryboardAgent": "故事板导演",
+            "ResourceDesignerAgent": "讲义设计师",
+            "PracticeAgent": "练习设计师",
+            "PathPlannerAgent": "路径规划师",
+            "DebugAgent": "矿洞诊断师",
+            "TutorAgent": "百晓助教",
+            "HandoutAgent": "讲义写手",
+            "MindMapAgent": "导图绘制师",
+            "CodeLabAgent": "代码实验室",
+            "ReadingAgent": "阅读向导",
+        }
+        return _AGENT_DISPLAY.get(agent, agent)
+
+    @staticmethod
+    def _infer_kind(step: PlanStep) -> str:
+        """从 PlanStep 的 phase 和 resource_type 推断 multi-agent workflow 节点类型。"""
+        if step.agent == "DebugAgent":
+            return "debug"
+        if step.agent == "PathPlannerAgent":
+            return "plan"
+        if step.agent == "TutorAgent":
+            return "ask"
+        resource_type = (step.resource_type or "").upper()
+        if resource_type in ("STORYBOARD",):
+            return "storyboard"
+        if resource_type in ("PRACTICE", "CODE_LAB"):
+            return "practice"
+        if resource_type in ("HANDOUT", "READING", "MINDMAP"):
+            return "resource"
+        # fallback by phase
+        if step.phase == "watch":
+            return "storyboard"
+        if step.phase == "practice":
+            return "practice"
+        return "resource"
 
     @staticmethod
     def _ok_step(name: str, started: float) -> GraphTraceStep:

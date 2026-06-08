@@ -76,6 +76,11 @@ class WorkshopGraphClientTest {
   @Test
   void produceWrapsUpstreamFailure() {
     MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+    // 重试一次 + 熔断前初始调用 = 最多 2 次请求
+    server
+        .expect(MockRestRequestMatchers.requestTo("http://graph.test/agents/resource/produce"))
+        .andRespond(
+            MockRestResponseCreators.withStatus(HttpStatus.SERVICE_UNAVAILABLE).body("down"));
     server
         .expect(MockRestRequestMatchers.requestTo("http://graph.test/agents/resource/produce"))
         .andRespond(
@@ -92,6 +97,7 @@ class WorkshopGraphClientTest {
                         new ResourceProduceRequestDto.ProfileSnapshotDto(
                             "OTHER", 2, List.of(), "", List.of(), "", List.of()))))
         .isInstanceOf(BusinessException.class)
-        .hasMessageContaining("资源生成服务暂不可用");
+        .hasMessageContaining("workshop 服务暂不可用");
+    server.verify(Duration.ofSeconds(2));
   }
 }

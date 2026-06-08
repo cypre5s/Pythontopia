@@ -85,4 +85,38 @@ class RagClientIntegrationTest {
             () -> client.query(new RagQueryRequestDto("query", 5, null, null, 0.3)))
         .isInstanceOf(RagUnavailableException.class);
   }
+
+  @Test
+  void queryCarriesInternalTokenWhenConfigured() {
+    MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+    server
+        .expect(MockRestRequestMatchers.requestTo("http://rag.test/rag/query"))
+        .andExpect(MockRestRequestMatchers.header("X-Internal-Token", "secret"))
+        .andRespond(
+            MockRestResponseCreators.withSuccess(
+                "{\"hits\": [], \"no_evidence_found\": true}", MediaType.APPLICATION_JSON));
+
+    client.query(new RagQueryRequestDto("input 函数", 5, null, null, 0.3));
+
+    server.verify(Duration.ofSeconds(2));
+  }
+
+  @Test
+  void queryOmitsInternalTokenWhenBlank() {
+    RagClient noTokenClient =
+        new RagClient(
+            restTemplate,
+            new GraphServiceProperties("http://graph.test", "http://rag.test", ""));
+    MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+    server
+        .expect(MockRestRequestMatchers.requestTo("http://rag.test/rag/query"))
+        .andExpect(MockRestRequestMatchers.headerDoesNotExist("X-Internal-Token"))
+        .andRespond(
+            MockRestResponseCreators.withSuccess(
+                "{\"hits\": [], \"no_evidence_found\": true}", MediaType.APPLICATION_JSON));
+
+    noTokenClient.query(new RagQueryRequestDto("input 函数", 5, null, null, 0.3));
+
+    server.verify(Duration.ofSeconds(2));
+  }
 }

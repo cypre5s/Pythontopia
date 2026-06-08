@@ -2,9 +2,10 @@ package com.pythontopia.workshop.graph;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.common.config.GraphServiceProperties;
-import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.sse.GraphSseConsumer;
 import com.pythontopia.common.sse.SseRelayExecutor;
+import com.pythontopia.common.web.GraphClientRetryHelper;
+import com.pythontopia.common.web.GraphInternalTokenSupport;
 import java.io.IOException;
 import java.util.Map;
 import java.util.function.Function;
@@ -13,10 +14,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -24,6 +23,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 public class WorkshopGraphClient {
 
   private static final Logger log = LoggerFactory.getLogger(WorkshopGraphClient.class);
+  private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
 
   private final RestTemplate restTemplate;
   private final GraphServiceProperties properties;
@@ -44,20 +44,21 @@ public class WorkshopGraphClient {
   public ResourceProduceResponseDto produce(ResourceProduceRequestDto request) {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
-    try {
-      return restTemplate
-          .exchange(
-              properties.graphUrl() + "/agents/resource/produce",
-              HttpMethod.POST,
-              new HttpEntity<>(request, headers),
-              ResourceProduceResponseDto.class)
-          .getBody();
-    } catch (RestClientException exception) {
-      throw new BusinessException(
-          HttpStatus.BAD_GATEWAY,
-          "RESOURCE_GRAPH_UNAVAILABLE",
-          "资源生成服务暂不可用");
-    }
+    setInternalToken(headers);
+    return GraphClientRetryHelper.withRetry(
+        "workshop",
+        () ->
+            restTemplate
+                .exchange(
+                    properties.graphUrl() + "/agents/resource/produce",
+                    HttpMethod.POST,
+                    new HttpEntity<>(request, headers),
+                    ResourceProduceResponseDto.class)
+                .getBody());
+  }
+
+  private void setInternalToken(HttpHeaders headers) {
+    GraphInternalTokenSupport.apply(headers, properties);
   }
 
   /** 从 graph 服务流式 produce 端点转发 SSE：事件经 emitter 透传，onResult 回调处理最终 result 事件。 */
@@ -68,7 +69,12 @@ public class WorkshopGraphClient {
     String url = properties.graphUrl() + "/agents/resource/produce/stream";
     sseRelayExecutor.submit(() -> {
       try {
-        GraphSseConsumer.consume(url, request, objectMapper, (event, data) -> {
+        GraphSseConsumer.consume(
+            url,
+            request,
+            objectMapper,
+            GraphInternalTokenSupport.tokenOrNull(properties),
+            (event, data) -> {
           try {
             String outboundData = data;
             if ("result".equals(event)) {

@@ -157,50 +157,6 @@ export const router = createRouter({
       component: () => import('@/pages/ArenaPage.vue'),
       meta: { requiresAuth: true },
     },
-    // 6 个小建筑（民居/灯塔/谷仓/鸡舍）用 PlaceholderPage 兜底，
-    // 让 town_hub.json 里的 building.route 全部能 resolve。
-    {
-      path: '/lighthouse',
-      name: 'lighthouse',
-      component: () => import('@/pages/PlaceholderPage.vue'),
-      props: { title: '灯塔', subtitle: '夜晚为远航者守望，但这里目前还在筹建中。' },
-      meta: { requiresAuth: true },
-    },
-    {
-      path: '/house-east',
-      name: 'house-east',
-      component: () => import('@/pages/PlaceholderPage.vue'),
-      props: { title: '东侧民居', subtitle: '居民正在午睡，请稍后再访。' },
-      meta: { requiresAuth: true },
-    },
-    {
-      path: '/house-mid',
-      name: 'house-mid',
-      component: () => import('@/pages/PlaceholderPage.vue'),
-      props: { title: '中央民居', subtitle: '门后传来读书声，等小镇正式开放将允许进入。' },
-      meta: { requiresAuth: true },
-    },
-    {
-      path: '/house-west',
-      name: 'house-west',
-      component: () => import('@/pages/PlaceholderPage.vue'),
-      props: { title: '西侧民居', subtitle: '老人在炉边喝茶，今日不待客。' },
-      meta: { requiresAuth: true },
-    },
-    {
-      path: '/storage',
-      name: 'storage',
-      component: () => import('@/pages/PlaceholderPage.vue'),
-      props: { title: '谷仓', subtitle: '稻香满仓，仓门暂未对玩家开放。' },
-      meta: { requiresAuth: true },
-    },
-    {
-      path: '/coop',
-      name: 'coop',
-      component: () => import('@/pages/PlaceholderPage.vue'),
-      props: { title: '鸡舍', subtitle: '鸡群咯咯叫，但这里还在内测。' },
-      meta: { requiresAuth: true },
-    },
     // catch-all 404 兜底，永不白屏。必须放在最后，避免抢占其它路由。
     {
       path: '/:pathMatch(.*)*',

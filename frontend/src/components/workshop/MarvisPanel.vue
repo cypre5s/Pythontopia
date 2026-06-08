@@ -33,6 +33,14 @@ function nodeSprite(node: string): string {
   if (node === 'hallucination_detector') return 'npc_student';
   if (node === 'safety_critic') return 'npc_guard';
   if (node === 'TutorAgent' || node === 'image_understanding') return 'npc_tutor_ai';
+  // P1 真协同节点
+  if (node.startsWith('dispatch.StoryboardAgent')) return 'npc_gardener';
+  if (node.startsWith('dispatch.ResourceDesignerAgent')) return 'npc_workshop';
+  if (node.startsWith('dispatch.PracticeAgent')) return 'npc_trainer';
+  if (node.startsWith('dispatch.PathPlannerAgent')) return 'npc_professor';
+  if (node.startsWith('dispatch.DebugAgent')) return 'npc_coach';
+  if (node === 'replan' || node.startsWith('replan')) return 'npc_mayor';
+  if (node === 'debate' || node.startsWith('debate')) return 'npc_sage';
   if (/attempt/i.test(node) || /agent/i.test(node)) return 'npc_workshop';
   return 'npc_tutor_ai';
 }
@@ -44,6 +52,13 @@ const KIND_SPRITE: Record<string, string> = {
   grounding: 'npc_sage',
   hallucination: 'npc_student',
   safety: 'npc_guard',
+  // P1 真协同新增工位类型
+  storyboard: 'npc_gardener',
+  practice: 'npc_trainer',
+  path: 'npc_professor',
+  debug: 'npc_coach',
+  replan: 'npc_mayor',
+  debate: 'npc_sage',
 };
 
 const activeSprite = computed<string>(() => nodeSprite(activity.activeNode));
@@ -56,6 +71,14 @@ function nodeLabel(node: string): string {
   if (node === 'hallucination_detector') return '正在防幻觉核查';
   if (node === 'safety_critic') return '正在安全审查';
   if (node === 'TutorAgent' || node === 'image_understanding') return '正在作答（课件 RAG）';
+  // P1 真协同节点
+  if (node.startsWith('dispatch.StoryboardAgent')) return '正在制作教学动画';
+  if (node.startsWith('dispatch.ResourceDesignerAgent')) return '正在生成学习资源';
+  if (node.startsWith('dispatch.PracticeAgent')) return '正在出练习题';
+  if (node.startsWith('dispatch.PathPlannerAgent')) return '正在规划学习路径';
+  if (node.startsWith('dispatch.DebugAgent')) return '正在分析调试（矿洞补练）';
+  if (node === 'replan' || node.startsWith('replan')) return '总管重规划中';
+  if (node === 'debate' || node.startsWith('debate')) return '正在辩论复核';
   if (/attempt/i.test(node) || /agent/i.test(node)) return '正在生成学习资源';
   return '处理中';
 }

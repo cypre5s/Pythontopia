@@ -77,10 +77,6 @@ describe('security.integration · 路由权限', () => {
     '/board',
     '/review-hall',
     '/teacher',
-    '/lighthouse',
-    '/house-east',
-    '/storage',
-    '/coop',
   ])('未登录访问 %s 必须跳 /login + 带 redirect', async (target) => {
     // 不设置 session，确保未登录
     await appRouter.push(target);

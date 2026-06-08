@@ -17,6 +17,7 @@ import com.pythontopia.submission.judge.JudgeService.JudgeOutcome;
 import com.pythontopia.submission.repository.PracticeSubmissionRepository;
 import com.pythontopia.submission.repository.PublicProblemRepository;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class JudgeServiceTest {
@@ -24,9 +25,15 @@ class JudgeServiceTest {
   private final PracticeSubmissionRepository submissions = mock(PracticeSubmissionRepository.class);
   private final PublicProblemRepository problems = mock(PublicProblemRepository.class);
   private final PythonSandbox sandbox = mock(PythonSandbox.class);
-  private final StaticCodeChecker checker = new StaticCodeChecker();
+  private final StaticCodeChecker checker = new StaticCodeChecker("python3");
   private final ObjectMapper mapper = new ObjectMapper();
-  private final JudgeService judge = new JudgeService(submissions, problems, sandbox, checker, mapper);
+  private final JudgeWorkerPool workerPool = new JudgeWorkerPool();
+  private JudgeService judge;
+
+  @BeforeEach
+  void setUp() {
+    judge = new JudgeService(submissions, problems, sandbox, checker, mapper, workerPool);
+  }
 
   @Test
   void ceWhenStaticCheckFails() {

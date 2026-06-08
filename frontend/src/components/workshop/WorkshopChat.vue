@@ -210,12 +210,18 @@ const pendingResource = ref<{
   kcCodes: string[];
 } | null>(null);
 
+// orchestrator 协同活动：当 GuideOverlay 写入 workshopActivity 时，AgentOfficeScene 也渲染
+const isOrchestratorActive = computed(
+  () => activity.kind === 'orchestrator' && activity.status === 'streaming',
+);
+
 const busy = computed(
   () =>
     routing.value ||
     tutorSse.status.value === 'streaming' ||
     tutorSse.status.value === 'connecting' ||
-    officeStreamState.value === 'streaming',
+    officeStreamState.value === 'streaming' ||
+    isOrchestratorActive.value,
 );
 
 const GROUNDING_LABELS: Record<string, { text: string; cls: string }> = {
@@ -865,7 +871,7 @@ onMounted(async () => {
 
       <!-- 资源生成：智能体事务所动画 + 证据卡 -->
       <AgentOfficeScene
-        v-if="officeStreamState !== 'idle'"
+        v-if="officeStreamState !== 'idle' && !isOrchestratorActive"
         :traces="workshopSse.traces.value"
         :status="officeStreamState"
         :token-preview="officeTokenPreview"
@@ -874,6 +880,18 @@ onMounted(async () => {
         :plan="workshopSse.plan.value"
         @confirm="onOfficeConfirm"
         @cancel="onOfficeCancel"
+      />
+      <!-- orchestrator 协同：学习总管多智能体 dispatch 流水线 -->
+      <AgentOfficeScene
+        v-if="isOrchestratorActive"
+        :traces="activity.traces"
+        :status="activity.status"
+        :token-preview="activity.label"
+        :error-message="null"
+        :evidence="null"
+        :plan="activity.plan"
+        @confirm="() => {}"
+        @cancel="() => {}"
       />
     </div>
 

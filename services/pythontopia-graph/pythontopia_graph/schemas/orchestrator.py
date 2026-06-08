@@ -45,6 +45,8 @@ class DispatchResult(BaseModel):
     ok: bool
     summary: str
     note: str | None = None
+    elapsed_ms: int = 0
+    artifact: dict | None = None
 
 
 class ProfileSignal(BaseModel):

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-05T15:06:47.251Z",
+  "generatedAt": "2026-06-08T13:16:33.514Z",
   "maps": [
     {
       "key": "town_hub",
@@ -10,9 +10,7 @@
       "height": 40,
       "bgm": "bgm_town_day",
       "tileset": "kenney_tiny_town",
-      "exits": [
-        "mine_south"
-      ],
+      "exits": [],
       "spawn": {
         "tileX": 25,
         "tileY": 20

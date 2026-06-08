@@ -6,12 +6,12 @@ R-14 方案 A：仅生成 **town_hub**（中央小镇）与 **mine_south**（Bug
 
 | key | 中文名 | 尺寸（列×行） | tileset | BGM | 出口 | spawn |
 | --- | --- | --- | --- | --- | --- | --- |
-| town_hub | Pythontopia 小镇 | 50×40 | kenney_tiny_town | bgm_town_day | mine_south | (25, 20) |
+| town_hub | Pythontopia 小镇 | 50×40 | kenney_tiny_town | bgm_town_day |  | (25, 20) |
 | mine_south | Bug 矿洞 · 织丝走廊 | 30×30 | kenney_tiny_dungeon | bgm_bug_mine | town_hub | (15, 2) |
 
 ## town_hub.json（50×40）
 
-- 出口：south→mine_south
+- 出口：无（R-14 单中央 hub，外围图已移除；Bug 矿洞经 building → /bug-mine 路由进入）
 - 学习建筑：图书馆 / 工坊 / 训练场 / 竞技场 / 复盘大厅 / Bug 矿洞入口等
 - 12 主线 NPC 贴近建筑入口排布（见 `scripts/generate-maps.mjs` 内 `makeNpc` 列表）
 

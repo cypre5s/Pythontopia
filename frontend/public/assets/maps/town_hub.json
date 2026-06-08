@@ -10,7 +10,7 @@
   "tileheight": 16,
   "infinite": false,
   "nextlayerid": 5,
-  "nextobjectid": 44,
+  "nextobjectid": 39,
   "properties": [
     {
       "name": "mapKey",
@@ -6113,121 +6113,6 @@
         },
         {
           "id": 18,
-          "name": "building_textile_pavilion_w",
-          "type": "building",
-          "x": 256,
-          "y": 80,
-          "width": 64,
-          "height": 64,
-          "visible": true,
-          "rotation": 0,
-          "properties": [
-            {
-              "name": "route",
-              "type": "string",
-              "value": "/house-west"
-            },
-            {
-              "name": "label",
-              "type": "string",
-              "value": "纺织展馆·西"
-            }
-          ]
-        },
-        {
-          "id": 19,
-          "name": "building_textile_pavilion_e",
-          "type": "building",
-          "x": 480,
-          "y": 80,
-          "width": 64,
-          "height": 64,
-          "visible": true,
-          "rotation": 0,
-          "properties": [
-            {
-              "name": "route",
-              "type": "string",
-              "value": "/house-east"
-            },
-            {
-              "name": "label",
-              "type": "string",
-              "value": "纺织展馆·东"
-            }
-          ]
-        },
-        {
-          "id": 20,
-          "name": "building_house_a",
-          "type": "building",
-          "x": 128,
-          "y": 448,
-          "width": 64,
-          "height": 64,
-          "visible": true,
-          "rotation": 0,
-          "properties": [
-            {
-              "name": "route",
-              "type": "string",
-              "value": "/house-east"
-            },
-            {
-              "name": "label",
-              "type": "string",
-              "value": "民居·东"
-            }
-          ]
-        },
-        {
-          "id": 21,
-          "name": "building_house_b",
-          "type": "building",
-          "x": 352,
-          "y": 448,
-          "width": 64,
-          "height": 64,
-          "visible": true,
-          "rotation": 0,
-          "properties": [
-            {
-              "name": "route",
-              "type": "string",
-              "value": "/house-mid"
-            },
-            {
-              "name": "label",
-              "type": "string",
-              "value": "民居·中"
-            }
-          ]
-        },
-        {
-          "id": 22,
-          "name": "building_house_c",
-          "type": "building",
-          "x": 576,
-          "y": 448,
-          "width": 64,
-          "height": 64,
-          "visible": true,
-          "rotation": 0,
-          "properties": [
-            {
-              "name": "route",
-              "type": "string",
-              "value": "/house-west"
-            },
-            {
-              "name": "label",
-              "type": "string",
-              "value": "民居·西"
-            }
-          ]
-        },
-        {
-          "id": 23,
           "name": "building_library",
           "type": "building",
           "x": 160,
@@ -6250,7 +6135,7 @@
           ]
         },
         {
-          "id": 24,
+          "id": 19,
           "name": "building_review_hall",
           "type": "building",
           "x": 576,
@@ -6273,7 +6158,7 @@
           ]
         },
         {
-          "id": 25,
+          "id": 20,
           "name": "building_workshop",
           "type": "building",
           "x": 640,
@@ -6296,7 +6181,7 @@
           ]
         },
         {
-          "id": 26,
+          "id": 21,
           "name": "building_mine",
           "type": "building",
           "x": 352,
@@ -6319,7 +6204,7 @@
           ]
         },
         {
-          "id": 27,
+          "id": 22,
           "name": "building_arena",
           "type": "building",
           "x": 576,
@@ -6342,7 +6227,7 @@
           ]
         },
         {
-          "id": 28,
+          "id": 23,
           "name": "building_training",
           "type": "building",
           "x": 128,
@@ -6365,7 +6250,7 @@
           ]
         },
         {
-          "id": 29,
+          "id": 24,
           "name": "fountain",
           "type": "landmark",
           "x": 384,
@@ -6911,7 +6796,7 @@
           ]
         },
         {
-          "id": 30,
+          "id": 25,
           "name": "low_tutorial_log",
           "type": "low_obstacle",
           "x": 416,
@@ -6944,7 +6829,7 @@
           ]
         },
         {
-          "id": 31,
+          "id": 26,
           "name": "npc_mayor_py",
           "type": "npc",
           "x": 400,
@@ -6972,7 +6857,7 @@
           ]
         },
         {
-          "id": 32,
+          "id": 27,
           "name": "npc_librarian_doc",
           "type": "npc",
           "x": 176,
@@ -7000,7 +6885,7 @@
           ]
         },
         {
-          "id": 33,
+          "id": 28,
           "name": "npc_professor",
           "type": "npc",
           "x": 224,
@@ -7028,7 +6913,7 @@
           ]
         },
         {
-          "id": 34,
+          "id": 29,
           "name": "npc_coach_q",
           "type": "npc",
           "x": 160,
@@ -7056,7 +6941,7 @@
           ]
         },
         {
-          "id": 35,
+          "id": 30,
           "name": "npc_sage_review",
           "type": "npc",
           "x": 592,
@@ -7084,7 +6969,7 @@
           ]
         },
         {
-          "id": 36,
+          "id": 31,
           "name": "npc_student_a",
           "type": "npc",
           "x": 352,
@@ -7112,7 +6997,7 @@
           ]
         },
         {
-          "id": 37,
+          "id": 32,
           "name": "npc_workshop_master",
           "type": "npc",
           "x": 672,
@@ -7140,7 +7025,7 @@
           ]
         },
         {
-          "id": 38,
+          "id": 33,
           "name": "npc_arena_guard",
           "type": "npc",
           "x": 592,
@@ -7168,7 +7053,7 @@
           ]
         },
         {
-          "id": 39,
+          "id": 34,
           "name": "npc_mine_keeper",
           "type": "npc",
           "x": 336,
@@ -7196,7 +7081,7 @@
           ]
         },
         {
-          "id": 40,
+          "id": 35,
           "name": "npc_foreman_bug",
           "type": "npc",
           "x": 400,
@@ -7224,7 +7109,7 @@
           ]
         },
         {
-          "id": 41,
+          "id": 36,
           "name": "npc_captain_def",
           "type": "npc",
           "x": 80,
@@ -7252,7 +7137,7 @@
           ]
         },
         {
-          "id": 42,
+          "id": 37,
           "name": "npc_class_president",
           "type": "npc",
           "x": 288,
@@ -7280,7 +7165,7 @@
           ]
         },
         {
-          "id": 43,
+          "id": 38,
           "name": "spawn",
           "type": "spawn",
           "x": 400,

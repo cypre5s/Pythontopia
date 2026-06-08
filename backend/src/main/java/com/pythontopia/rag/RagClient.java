@@ -18,6 +18,8 @@ import org.springframework.web.client.RestTemplate;
 @Component
 public class RagClient {
 
+  private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
+
   private final RestTemplate restTemplate;
   private final GraphServiceProperties properties;
 
@@ -29,6 +31,10 @@ public class RagClient {
   public RagQueryResponseDto query(RagQueryRequestDto request) {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
+    String ragAdminToken = properties.ragAdminToken();
+    if (ragAdminToken != null && !ragAdminToken.isBlank()) {
+      headers.set(INTERNAL_TOKEN_HEADER, ragAdminToken);
+    }
     HttpEntity<RagQueryRequestDto> entity = new HttpEntity<>(request, headers);
     try {
       return restTemplate

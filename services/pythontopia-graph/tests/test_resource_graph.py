@@ -112,8 +112,9 @@ async def test_resource_graph_grounding_failure_retries_then_fails() -> None:
             ]
         ).model_dump(),
     }
+    # MAX_RETRIES=2 → 3 attempts (0, 1, 2)，全部失败后抛 ResourceGraphError
     graph = ResourceGraph(
-        provider=StubProvider([bad_payload, bad_payload]),
+        provider=StubProvider([bad_payload, bad_payload, bad_payload]),
         evidence_fetcher=StaticEvidenceFetcher([HIT]),
         config=ResourceGraphConfig(valid_kc_codes={"PY43-KC-001"}),
     )

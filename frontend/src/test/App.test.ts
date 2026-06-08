@@ -5,8 +5,8 @@ import App from '@/App.vue';
 import { router } from '@/app/router';
 import { useWorldStore } from '@stores/world';
 
-vi.mock('@/components/game/GameCanvas.vue', () => ({
-  default: { template: '<div class="game-canvas-mock" />' },
+vi.mock('@/components/game/WorldCanvas.vue', () => ({
+  default: { template: '<div class="world-canvas-mock" />' },
 }));
 
 vi.mock('@/pages/WorkshopPage.vue', () => ({

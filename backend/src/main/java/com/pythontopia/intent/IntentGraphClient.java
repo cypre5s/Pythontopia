@@ -1,6 +1,7 @@
 package com.pythontopia.intent;
 
 import com.pythontopia.common.config.GraphServiceProperties;
+import com.pythontopia.common.web.GraphClientRetryHelper;
 import com.pythontopia.intent.dto.IntentGraphResponse;
 import com.pythontopia.intent.dto.IntentRouteRequest;
 import com.pythontopia.intent.dto.IntentRouteResponse;
@@ -23,6 +24,8 @@ import org.springframework.web.client.RestTemplate;
  */
 @Component
 public class IntentGraphClient {
+
+  private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
 
   private final RestTemplate restTemplate;
   private final GraphServiceProperties properties;
@@ -51,16 +54,20 @@ public class IntentGraphClient {
 
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
+    setInternalToken(headers);
     HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
 
     IntentGraphResponse graph =
-        restTemplate
-            .exchange(
-                properties.graphUrl() + "/agents/intent/route",
-                HttpMethod.POST,
-                entity,
-                IntentGraphResponse.class)
-            .getBody();
+        GraphClientRetryHelper.withRetry(
+            "intent",
+            () ->
+                restTemplate
+                    .exchange(
+                        properties.graphUrl() + "/agents/intent/route",
+                        HttpMethod.POST,
+                        entity,
+                        IntentGraphResponse.class)
+                    .getBody());
 
     if (graph == null || graph.intent() == null) {
       // graph 异常兜底：回落到答疑，避免前端拿到 null intent。
@@ -72,6 +79,13 @@ public class IntentGraphClient {
         graph.focusHint() != null ? graph.focusHint() : "",
         graph.confidence(),
         graph.reason() != null ? graph.reason() : "");
+  }
+
+  private void setInternalToken(HttpHeaders headers) {
+    String token = properties.ragAdminToken();
+    if (token != null && !token.isBlank()) {
+      headers.set(INTERNAL_TOKEN_HEADER, token);
+    }
   }
 
   private List<Map<String, Object>> buildCourseKcs(List<IntentRouteRequest.CourseKc> kcs) {

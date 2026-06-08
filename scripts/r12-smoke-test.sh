@@ -33,23 +33,23 @@ ls public/assets/pixel/sprites/lpc-sara/SaraFullSheet.png
 ls public/assets/pixel/fonts/ark-pixel-12px-mono-zh_cn.woff2
 echo "✓ tileset + sara + font"
 
-echo "== 5. 5 张地图 + index.json (应为 6) =="
+echo "== 5. R-14 地图 (town_hub + mine_south + index.json = 3) =="
 MAP_COUNT=$(ls public/assets/maps/*.json | wc -l)
 echo "maps json count: ${MAP_COUNT}"
-test "${MAP_COUNT}" -eq 6
-echo "✓ maps == 6"
+test "${MAP_COUNT}" -eq 3
+echo "✓ maps == 3"
 
-echo "== 6. 20 NPC (data/npcs 去除 index.json) =="
+echo "== 6. R-14 NPC (data/npcs 去除 index.json = 12) =="
 NPC_COUNT=$(ls ../data/npcs | grep -v index | wc -l)
 echo "npc count: ${NPC_COUNT}"
-test "${NPC_COUNT}" -eq 20
-echo "✓ npcs == 20"
+test "${NPC_COUNT}" -eq 12
+echo "✓ npcs == 12"
 
-echo "== 7. backend Flyway migration (应 >= 35) =="
+echo "== 7. backend Flyway migration (应 >= 36) =="
 MIG_COUNT=$(ls ../backend/src/main/resources/db/migration/V*.sql | wc -l)
 echo "migration count: ${MIG_COUNT}"
-test "${MIG_COUNT}" -ge 35
-echo "✓ migrations >= 35"
+test "${MIG_COUNT}" -ge 36
+echo "✓ migrations >= 36"
 
 echo ""
 echo "All smoke checks passed."

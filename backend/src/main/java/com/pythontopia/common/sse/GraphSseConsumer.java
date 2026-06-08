@@ -45,6 +45,19 @@ public final class GraphSseConsumer {
       Object body,
       ObjectMapper mapper,
       BiConsumer<String, String> onEvent) throws IOException {
+    consume(url, body, mapper, null, onEvent);
+  }
+
+  /**
+   * Opens a POST SSE connection and relays every (event, data) pair to the callback.
+   * When {@code internalToken} is non-blank, sends {@code X-Internal-Token} for graph auth.
+   */
+  public static void consume(
+      String url,
+      Object body,
+      ObjectMapper mapper,
+      String internalToken,
+      BiConsumer<String, String> onEvent) throws IOException {
     String json;
     try {
       json = mapper.writeValueAsString(body);
@@ -52,14 +65,17 @@ public final class GraphSseConsumer {
       throw new IOException("Failed to serialize SSE request body", e);
     }
 
-    HttpRequest request =
+    HttpRequest.Builder requestBuilder =
         HttpRequest.newBuilder()
             .uri(URI.create(url))
             .header("Content-Type", "application/json")
             .header("Accept", "text/event-stream")
-            .timeout(Duration.ofMinutes(3))
-            .POST(HttpRequest.BodyPublishers.ofString(json, StandardCharsets.UTF_8))
-            .build();
+            .timeout(Duration.ofMinutes(3));
+    if (internalToken != null && !internalToken.isBlank()) {
+      requestBuilder.header("X-Internal-Token", internalToken);
+    }
+    HttpRequest request =
+        requestBuilder.POST(HttpRequest.BodyPublishers.ofString(json, StandardCharsets.UTF_8)).build();
 
     HttpResponse<java.io.InputStream> response;
     try {

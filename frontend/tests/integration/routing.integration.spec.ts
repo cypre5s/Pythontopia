@@ -42,12 +42,6 @@ describe('routing.integration: 完整路由表（R-13 大爆炸）', () => {
     ['/review-hall', 'review-hall'],
     ['/teacher', 'teacher'],
     ['/teacher/classroom/42', 'teacher-classroom'],
-    ['/lighthouse', 'lighthouse'],
-    ['/house-east', 'house-east'],
-    ['/house-mid', 'house-mid'],
-    ['/house-west', 'house-west'],
-    ['/storage', 'storage'],
-    ['/coop', 'coop'],
   ])('path %s 命中 name=%s', (path, name) => {
     const r = router.resolve(path);
     expect(r.name).toBe(name);
@@ -83,18 +77,4 @@ describe('routing.integration: 完整路由表（R-13 大爆炸）', () => {
     expect(router.currentRoute.value.query.submissionId).toBe('42');
   });
 
-  it.each([
-    ['/lighthouse', '灯塔'],
-    ['/house-east', '东侧民居'],
-    ['/house-mid', '中央民居'],
-    ['/house-west', '西侧民居'],
-    ['/storage', '谷仓'],
-    ['/coop', '鸡舍'],
-  ])('placeholder %s 静态 props.title = %s', (path, title) => {
-    const matched = router.resolve(path).matched[0];
-    expect(matched).toBeDefined();
-    if (!matched) return;
-    const props = matched.props.default ?? {};
-    expect((props as { title?: string }).title).toBe(title);
-  });
 });

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from collections.abc import AsyncIterator
 from typing import Any, cast
 
@@ -20,6 +21,10 @@ from fastapi.responses import StreamingResponse
 
 from pythontopia_graph.graph.orchestrator_graph import OrchestratorGraph
 from pythontopia_graph.llm.provider import LlmProvider, provider_from_env
+from pythontopia_graph.nodes.evidence_fetcher import (
+    EvidenceFetcher,
+    HttpRagEvidenceFetcher,
+)
 from pythontopia_graph.schemas.orchestrator import (
     OrchestratorRequest,
     OrchestratorResponse,
@@ -35,6 +40,20 @@ def _provider(request: Request) -> LlmProvider:
     return provider_from_env()
 
 
+def _evidence_fetcher(request: Request) -> EvidenceFetcher:
+    fetcher = getattr(request.app.state, "evidence_fetcher", None)
+    if fetcher is not None:
+        return cast(EvidenceFetcher, fetcher)
+    return HttpRagEvidenceFetcher(os.environ.get("PYT_RAG_URL"))
+
+
+def _valid_kc_codes(request: Request) -> set[str]:
+    codes = getattr(request.app.state, "valid_kc_codes", None)
+    if codes is not None:
+        return cast(set[str], codes)
+    return set()
+
+
 def _format_sse(event: str, data: dict[str, Any]) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
@@ -43,21 +62,33 @@ def _format_sse(event: str, data: dict[str, Any]) -> str:
 async def orchestrator_turn(
     body: OrchestratorRequest,
     provider: LlmProvider = Depends(_provider),
+    evidence_fetcher: EvidenceFetcher = Depends(_evidence_fetcher),
+    valid_kc_codes: set[str] = Depends(_valid_kc_codes),
 ) -> OrchestratorResponse:
-    graph = OrchestratorGraph(provider=provider)
+    graph = OrchestratorGraph(
+        provider=provider,
+        evidence_fetcher=evidence_fetcher,
+        valid_kc_codes=valid_kc_codes,
+    )
     return await graph.run(body)
 
 
 async def _orchestrator_stream_generator(
     body: OrchestratorRequest,
     provider: LlmProvider,
+    evidence_fetcher: EvidenceFetcher,
+    valid_kc_codes: set[str],
 ) -> AsyncIterator[str]:
     queue: asyncio.Queue[str | None] = asyncio.Queue()
 
     async def emit(event: str, data: dict[str, Any]) -> None:
         await queue.put(_format_sse(event, data))
 
-    graph = OrchestratorGraph(provider=provider)
+    graph = OrchestratorGraph(
+        provider=provider,
+        evidence_fetcher=evidence_fetcher,
+        valid_kc_codes=valid_kc_codes,
+    )
 
     async def run_graph() -> None:
         try:
@@ -81,9 +112,11 @@ async def _orchestrator_stream_generator(
 async def orchestrator_turn_stream(
     body: OrchestratorRequest,
     provider: LlmProvider = Depends(_provider),
+    evidence_fetcher: EvidenceFetcher = Depends(_evidence_fetcher),
+    valid_kc_codes: set[str] = Depends(_valid_kc_codes),
 ) -> StreamingResponse:
     return StreamingResponse(
-        _orchestrator_stream_generator(body, provider),
+        _orchestrator_stream_generator(body, provider, evidence_fetcher, valid_kc_codes),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

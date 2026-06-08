@@ -1,4 +1,4 @@
-// FieldPage 的章节导航数据源。
+// 章节导航数据源（主线任务面板 MainQuestPanel / ChapterNavPanel / LecturePage 等消费）。
 //
 // `kcCode` 字段是历史遗留命名（实为「章节 slug」），用作：
 //   1. 测试 testid 标识符（chapter-nav-<kcCode>）
