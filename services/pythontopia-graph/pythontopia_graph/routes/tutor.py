@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 
 from pythontopia_graph.agents.tutor_agent import TutorAgent
+from pythontopia_graph.graph.debate_graph import DebateGraph, DebateResult
 from pythontopia_graph.llm.provider import LlmProvider, provider_from_env
 from pythontopia_graph.nodes.evidence_fetcher import (
     EvidenceFetcher,
@@ -67,6 +68,13 @@ def _evidence_fetcher(request: Request) -> EvidenceFetcher:
 
 def _format_sse(event: str, data: dict[str, Any]) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+def _stream_pieces(text: str, size: int = 24) -> list[str]:
+    """把（非流式产出的）辩论定稿切成 token 分片，复用前端 token 累积逻辑、保留流式观感。"""
+    if not text:
+        return []
+    return [text[i : i + size] for i in range(0, len(text), size)]
 
 
 def _trace_start(node: str) -> str:
@@ -121,26 +129,72 @@ async def tutor_ask_stream(
             history = [{"role": t.role, "content": t.content} for t in body.conversation_history]
             collected: list[str] = []
 
-            yield _trace_start("TutorAgent")
-            tutor_started = time.monotonic()
             # 上下文随题面一并给到 agent，让引导贴合「学生当前在看/在做什么」。
             agent_question = (
                 f"【当前学习上下文】{context}\n\n【学生问题】{base_question}"
                 if context
                 else base_question
             )
-            async for token in agent.ask_stream(
-                question=agent_question,
-                profile_brief=body.profile_brief,
-                conversation_history=history,
-                evidence_chunks=evidence.chunks,
-            ):
-                collected.append(token)
-                yield _format_sse("token", {"delta": token})
-            answer = "".join(collected)
-            yield _trace_finish(
-                "TutorAgent", "ok", int((time.monotonic() - tutor_started) * 1000)
-            )
+            # 与 TutorAgent 同一判定：带 ```python 片段 + 追问错误/输出时，附加 code_runner
+            # trace（前端据此渲染「已验证」徽标）。判定串须与传入 ask_stream 的完全一致。
+            verify = TutorAgent.should_verify(agent_question)
+            # 难题 / 需严谨论证的问题路由进 Solver→Critic→Referee 复核（与 code 验证互斥优先）。
+            debate_mode = (not verify) and TutorAgent.should_debate(base_question)
+
+            answer = ""
+            if debate_mode:
+                debate = DebateGraph(provider)
+                debate_result: DebateResult | None = None
+                pending_node: str | None = None
+                node_started = time.monotonic()
+                async for kind, payload in debate.run_events(
+                    agent_question, evidence.chunks, body.profile_brief,
+                ):
+                    if kind == "node_start" and isinstance(payload, str):
+                        pending_node = payload
+                        node_started = time.monotonic()
+                        yield _trace_start(payload)
+                    elif kind == "node_finish" and isinstance(payload, str):
+                        pending_node = None
+                        yield _trace_finish(
+                            payload, "ok", int((time.monotonic() - node_started) * 1000),
+                        )
+                    elif kind == "result":
+                        debate_result = payload if isinstance(payload, DebateResult) else None
+                # 仅当复核产出非空定稿时采用；否则（含异常/空答）回退普通答疑，绝不让难题崩答疑。
+                if debate_result is not None and debate_result.answer.strip():
+                    answer = debate_result.answer
+                    for piece in _stream_pieces(answer):
+                        collected.append(piece)
+                        yield _format_sse("token", {"delta": piece})
+                else:
+                    if pending_node is not None:
+                        yield _trace_finish(pending_node, "error", 0)
+                    debate_mode = False
+
+            if not debate_mode:
+                yield _trace_start("TutorAgent")
+                tutor_started = time.monotonic()
+                code_started = tutor_started
+                if verify:
+                    yield _trace_start("code_runner")
+                    code_started = time.monotonic()
+                async for token in agent.ask_stream(
+                    question=agent_question,
+                    profile_brief=body.profile_brief,
+                    conversation_history=history,
+                    evidence_chunks=evidence.chunks,
+                ):
+                    collected.append(token)
+                    yield _format_sse("token", {"delta": token})
+                answer = "".join(collected)
+                if verify:
+                    yield _trace_finish(
+                        "code_runner", "ok", int((time.monotonic() - code_started) * 1000)
+                    )
+                yield _trace_finish(
+                    "TutorAgent", "ok", int((time.monotonic() - tutor_started) * 1000)
+                )
 
             # ── 审查官：引用审查（答案 [页 X] 是否命中证据页） ──
             yield _trace_start("grounding_critic")

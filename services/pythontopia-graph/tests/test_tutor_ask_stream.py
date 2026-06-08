@@ -134,3 +134,22 @@ async def test_ask_stream_general_knowledge_when_no_evidence() -> None:
     result = events[-1][1]
     assert result["groundingStatus"] == "NO_EVIDENCE"
     assert result["based_on_general_knowledge"] is True
+
+
+@pytest.mark.asyncio
+async def test_ask_stream_emits_code_runner_trace_for_verification() -> None:
+    # 带 ```python 片段 + 追问「为什么输出不对」→ 触发代码运行验证，附 code_runner trace（前端「已验证」徽标）。
+    question = "这段代码为什么输出不对？\n```python\nprint(2 * 3)\n```"
+    events = await _run(question, ["PY43-KC-001"], "参考 [页 12]，对照真实输出定位问题。")
+    trace_nodes = [data["node"] for (event, data) in events if event == "trace"]
+    assert "code_runner" in trace_nodes
+
+
+@pytest.mark.asyncio
+async def test_ask_stream_routes_hard_question_through_debate() -> None:
+    # 「哪个更…为什么不能…」触发辩论复核 → 流水线出现 solver/critic/referee 三步 trace。
+    question = "列表和元组哪个更好，为什么不能混用？"
+    events = await _run(question, ["PY43-KC-001"], "参考 [页 12]，二者语义不同。")
+    trace_nodes = [data["node"] for (event, data) in events if event == "trace"]
+    for node in ("solver", "critic", "referee"):
+        assert node in trace_nodes, f"debate trace missing node: {node}"

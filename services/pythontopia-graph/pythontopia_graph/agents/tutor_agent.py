@@ -6,6 +6,7 @@ import re
 from collections.abc import AsyncIterator
 
 from pythontopia_graph.llm.provider import LlmProvider
+from pythontopia_graph.nodes.code_runner import CodeRunResult, run_python
 from pythontopia_graph.nodes.evidence_fetcher import RagHit
 from pythontopia_graph.schemas.tutor import (
     EvidenceCitation,
@@ -50,6 +51,30 @@ DIAGRAM_KEYWORDS = (
     "mermaid",
 )
 
+# 「代码运行验证」触发词：仅在学生追问「为什么/报错/不对…」时才考虑跑沙箱（大小写不敏感）。
+VERIFY_TRIGGERS = ("为什么", "输出不对", "报错", "error", "不对", "wrong")
+
+# 抽取问题里第一个围栏代码块的内容（``` 或 ```python）。
+_CODE_FENCE_RE = re.compile(r"```(?:python)?\s*\n?(.*?)```", re.DOTALL)
+
+# 「辩论复核」触发词：仅在明确「难/需严谨论证/权衡比较」的问题上路由进 Solver→Critic→Referee。
+# 刻意取窄词，避免误伤普通答疑（如裸「为什么」不触发，须「为什么不能」这类强论证诉求）。
+DEBATE_TRIGGERS = (
+    "辩论",
+    "复核",
+    "严谨",
+    "证明",
+    "推导",
+    "哪个更",
+    "优劣",
+    "权衡",
+    "trade-off",
+    "为什么不能",
+    "一定对吗",
+    "真的吗",
+    "区别与联系",
+)
+
 
 class TutorAgent:
     """RAG 答疑助教：流式/非流式问答，按需附加 mermaid 图解；泄答关键词触发 safety 失败。"""
@@ -86,8 +111,57 @@ class TutorAgent:
         messages = self._build_messages(
             question, profile_brief, conversation_history, evidence_chunks,
         )
+        # 工具增强：仅当「带 ```python 片段 + 在追问错误/输出」时，于受限沙箱实跑一次拿真实输出，
+        # 把结果作为 system 提示注入，引导导师据实定位问题；绝不据此直接给出完整答案代码。
+        if self.should_verify(question):
+            code = self._extract_code_block(question)
+            if code:
+                result = run_python(code)
+                messages.append(
+                    {"role": "system", "content": self._build_verification_note(result)},
+                )
         async for token in self.provider.chat_stream(messages):
             yield token
+
+    @staticmethod
+    def should_verify(question: str) -> bool:
+        """是否触发「代码运行验证」：含触发词（为什么/报错/不对…，大小写不敏感）且带可抽取的代码块。"""
+        text = question or ""
+        lowered = text.lower()
+        if not any(trigger in lowered for trigger in VERIFY_TRIGGERS):
+            return False
+        return bool(TutorAgent._extract_code_block(text))
+
+    @staticmethod
+    def should_debate(question: str) -> bool:
+        """是否路由进辩论复核子图：命中窄触发词（难题 / 需严谨论证 / 权衡比较）即为是。
+
+        刻意取窄，保证普通答疑（含 code 验证类）仍走单次流式答疑，不被双倍 LLM 成本拖慢演示。
+        """
+        lowered = (question or "").lower()
+        return any(trigger in lowered for trigger in DEBATE_TRIGGERS)
+
+    @staticmethod
+    def _extract_code_block(question: str) -> str:
+        """抽取问题中第一个围栏代码块的内容（去首尾空白）；无代码块返回空串。"""
+        match = _CODE_FENCE_RE.search(question or "")
+        return match.group(1).strip() if match else ""
+
+    @staticmethod
+    def _build_verification_note(result: CodeRunResult) -> str:
+        """把沙箱真实运行结果包装成 system 提示，供导师据实定位（非正式判题、严禁给完整答案）。"""
+        notes = [
+            "代码运行验证（在受限沙箱实跑学生片段，仅供你定位问题，非正式判题）：",
+            f"stdout={result.stdout.strip()}",
+            f"stderr={result.stderr.strip()}",
+            f"exit_code={result.exit_code}",
+        ]
+        if result.timed_out:
+            notes.append("注意：运行超时被强制结束。")
+        if result.truncated:
+            notes.append("注意：输出过长已被截断。")
+        notes.append("请据这份真实输出引导学生发现并修正错误，切勿直接给出完整答案代码。")
+        return "\n".join(notes)
 
     def _build_messages(
         self,
