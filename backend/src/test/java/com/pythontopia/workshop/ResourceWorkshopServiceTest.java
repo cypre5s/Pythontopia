@@ -21,12 +21,15 @@ import com.pythontopia.coursepack.repository.CoursePackRepository;
 import com.pythontopia.learner.mastery.MasteryEvaluator;
 import com.pythontopia.learner.mastery.MasterySnapshot;
 import com.pythontopia.learner.mastery.MasterySource;
+import com.pythontopia.learner.memory.MemoryRetrievalService;
+import com.pythontopia.learner.memory.dto.MemoryItemDto;
 import com.pythontopia.learner.profile.dto.BaseLevelDto;
 import com.pythontopia.learner.profile.dto.LearnerProfileDto;
 import com.pythontopia.learner.profile.dto.LearningPreferenceDto;
 import com.pythontopia.learner.profile.dto.ProfileDimensionDto;
 import com.pythontopia.learner.profile.service.PassiveProfileService;
 import com.pythontopia.learner.profile.service.ProfileService;
+import com.pythontopia.learner.reflection.LearnerInsightRepository;
 import com.pythontopia.workshop.config.WorkshopProperties;
 import com.pythontopia.workshop.dto.ResourceCreateRequest;
 import com.pythontopia.workshop.dto.ResourceCreateResponse;
@@ -59,6 +62,8 @@ class ResourceWorkshopServiceTest {
   private MasteryEvaluator masteryEvaluator;
   private ProfileService profileService;
   private PassiveProfileService passiveProfileService;
+  private LearnerInsightRepository insightRepository;
+  private MemoryRetrievalService memoryRetrievalService;
   private ObjectMapper objectMapper;
   private ResourceWorkshopService service;
 
@@ -72,6 +77,8 @@ class ResourceWorkshopServiceTest {
     masteryEvaluator = Mockito.mock(MasteryEvaluator.class);
     profileService = Mockito.mock(ProfileService.class);
     passiveProfileService = Mockito.mock(PassiveProfileService.class);
+    insightRepository = Mockito.mock(LearnerInsightRepository.class);
+    memoryRetrievalService = Mockito.mock(MemoryRetrievalService.class);
     objectMapper = new ObjectMapper();
     service =
         new ResourceWorkshopService(
@@ -83,6 +90,8 @@ class ResourceWorkshopServiceTest {
             masteryEvaluator,
             profileService,
             passiveProfileService,
+            insightRepository,
+            memoryRetrievalService,
             objectMapper);
 
     when(coursePackRepository.findKcs(eq(43L), eq(null)))
@@ -91,6 +100,8 @@ class ResourceWorkshopServiceTest {
                 new CourseKc(1L, 43L, "PY43-KC-001", "输入输出", 11L, 1, "basic", "summary")));
     when(profileService.findProfile(anyLong())).thenReturn(Optional.empty());
     when(passiveProfileService.getDimensions(anyLong())).thenReturn(List.of());
+    when(insightRepository.findLatestText(anyLong())).thenReturn(Optional.empty());
+    when(memoryRetrievalService.retrieve(anyLong(), any(), anyInt())).thenReturn(List.of());
     when(resourceRepository.countCreatedAfter(anyLong(), any())).thenReturn(0);
     when(resourceRepository.sumMasteryRewardsToday(anyLong(), anyString(), any()))
         .thenReturn(BigDecimal.ZERO);
@@ -204,6 +215,8 @@ class ResourceWorkshopServiceTest {
             masteryEvaluator,
             profileService,
             passiveProfileService,
+            insightRepository,
+            memoryRetrievalService,
             objectMapper);
     when(graphClient.produce(any())).thenReturn(successResponse());
     when(resourceRepository.countCreatedAfter(anyLong(), any())).thenReturn(5);
@@ -264,6 +277,37 @@ class ResourceWorkshopServiceTest {
     verify(graphClient).produce(captor.capture());
     assertThat(captor.getValue().profileSnapshot().cognitiveStyle()).isEqualTo("visual");
     assertThat(captor.getValue().profileSnapshot().errorPatterns()).containsExactly("缩进", "冒号");
+  }
+
+  @Test
+  void createFoldsRecentInsightAndMemoryHighlightsIntoSnapshot() {
+    when(graphClient.produce(any())).thenReturn(successResponse());
+    when(insightRepository.findLatestText(1L)).thenReturn(Optional.of("可变对象别名反复出错"));
+    when(memoryRetrievalService.retrieve(eq(1L), eq("PY43-KC-001"), anyInt()))
+        .thenReturn(
+            List.of(
+                new MemoryItemDto(
+                    9L,
+                    "practice_failed",
+                    "练习失败：PY43-KC-001（WA）",
+                    List.of("PY43-KC-001"),
+                    "2026-06-08T00:00:00Z",
+                    4,
+                    1.0,
+                    0.8,
+                    1.0,
+                    0.9)));
+
+    service.create(1L, new ResourceCreateRequest(List.of("PY43-KC-001"), ResourceType.HANDOUT, null));
+
+    ArgumentCaptor<ResourceProduceRequestDto> captor =
+        ArgumentCaptor.forClass(ResourceProduceRequestDto.class);
+    verify(graphClient).produce(captor.capture());
+    assertThat(captor.getValue().profileSnapshot().recentInsight()).isEqualTo("可变对象别名反复出错");
+    assertThat(captor.getValue().profileSnapshot().memoryHighlights())
+        .containsExactly("练习失败：PY43-KC-001（WA）");
+    // 记忆检索须以首个 KC 作为聚焦点。
+    verify(memoryRetrievalService).retrieve(eq(1L), eq("PY43-KC-001"), anyInt());
   }
 
   @Test

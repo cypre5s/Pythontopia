@@ -73,7 +73,7 @@ public class PassiveProfileService {
           "learning_preference",
           "emotion_persistence");
 
-  /** profile_revision_source_check 约束允许的 source 枚举。 */
+  /** profile_revision_source_check 约束允许的 source 枚举（须与 V135 迁移保持一致）。 */
   private static final Set<String> ALLOWED_REVISION_SOURCES =
       Set.of(
           "INTERVIEW",
@@ -85,7 +85,8 @@ public class PassiveProfileService {
           "EVALUATION",
           "PRACTICE_PASS",
           "PRACTICE_FAIL",
-          "DEBUG_FIX");
+          "DEBUG_FIX",
+          "REFLECTION");
 
   private static final double DEFAULT_SCORE = 0.5;
 

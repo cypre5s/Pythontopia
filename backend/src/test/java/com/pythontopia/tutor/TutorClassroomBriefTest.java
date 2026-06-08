@@ -35,7 +35,8 @@ class TutorClassroomBriefTest {
           new ObjectMapper(),
           mock(PassiveProfileService.class),
           mock(ApplicationEventPublisher.class),
-          dashboard);
+          dashboard,
+          mock(com.pythontopia.learner.memory.MemoryRetrievalService.class));
 
   private static CurrentUserPrincipal student() {
     return new CurrentUserPrincipal(7L, "stu01", Role.STUDENT);

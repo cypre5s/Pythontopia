@@ -16,6 +16,8 @@
                 <NavigationViewItem Content="任务公告板" Tag="QuestsPage" Icon="List" />
                 <NavigationViewItem Content="课程" Tag="CoursePage" Icon="Library" />
                 <NavigationViewItem Content="训练场" Tag="PracticePage" Icon="Play" />
+                <NavigationViewItem Content="百晓工坊" Tag="WorkshopPage" Icon="Message" />
+                <NavigationViewItem Content="Bug 矿洞" Tag="BugMinePage" Icon="Repair" />
                 <NavigationViewItem Content="班级" Tag="ClassroomPage" Icon="People" />
             </NavigationView.MenuItems>
             <NavigationView.FooterMenuItems>

@@ -5,6 +5,9 @@
     "pages/course/course",
     "pages/practice/list",
     "pages/practice/detail",
+    "pages/workshop/workshop",
+    "pages/mine/mine",
+    "pages/mine/session",
     "pages/profile/profile",
     "pages/classroom/classroom"
   ],
@@ -29,6 +32,10 @@
       {
         "pagePath": "pages/course/course",
         "text": "课程"
+      },
+      {
+        "pagePath": "pages/workshop/workshop",
+        "text": "工坊"
       },
       {
         "pagePath": "pages/profile/profile",

@@ -170,7 +170,6 @@ describe('world store', () => {
           npcKey: 'mayor_py',
           currentNodeId: null,
           completedNodeIds: [],
-          friendship: 5,
           lastTalkedAt: null,
           flags: {},
         },
@@ -198,7 +197,7 @@ describe('world store', () => {
     expect(useSkillStore().catalog).toHaveLength(2);
     expect(useSkillStore().isUnlocked('SK-LOOP')).toBe(true);
     expect(useCalendarStore().today?.dayIndex).toBe(3);
-    expect(useNpcStore().friendship('mayor_py')).toBe(5);
+    expect(useNpcStore().isMet('mayor_py')).toBe(true);
     expect(useLearningStore().field.masterySnapshot).toHaveLength(1);
   });
 

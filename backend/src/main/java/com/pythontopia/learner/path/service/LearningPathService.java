@@ -21,6 +21,8 @@ import com.pythontopia.learner.path.repository.LearningPathRepository;
 import com.pythontopia.learner.path.repository.LearningPathRepository.LearningPathNodeDraft;
 import com.pythontopia.learner.profile.dto.LearnerProfileDto;
 import com.pythontopia.learner.profile.service.ProfileService;
+import com.pythontopia.learner.reflection.LearnerInsightRepository;
+import com.pythontopia.learner.reflection.dto.LearnerInsightDto;
 import com.pythontopia.learner.quest.dto.QuestNodeType;
 import com.pythontopia.learner.quest.dto.QuestSource;
 import com.pythontopia.learner.quest.dto.QuestStatus;
@@ -34,10 +36,15 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -47,6 +54,11 @@ public class LearningPathService {
 
   static final Long DEFAULT_PACK_ID = 43L;
   static final int ARCHIVED_HISTORY_LIMIT = 10;
+
+  private static final Logger log = LoggerFactory.getLogger(LearningPathService.class);
+
+  /** 反思洞察扫描条数，用于提取 error_pattern 高频坑 KC。 */
+  static final int INSIGHT_SCAN_LIMIT = 20;
 
   private final LearningPathRepository pathRepository;
   private final QuestRepository questRepository;
@@ -58,6 +70,7 @@ public class LearningPathService {
   private final ObjectMapper objectMapper;
   private final PracticeSubmissionRepository submissionRepository;
   private final LearningResourceRepository learningResourceRepository;
+  private final LearnerInsightRepository insightRepository;
 
   static final int RECENT_SUBMISSION_LIMIT = 30;
   static final int RECENT_RESOURCE_LIMIT = 30;
@@ -72,7 +85,8 @@ public class LearningPathService {
       PathPlannerGraphClient graphClient,
       ObjectMapper objectMapper,
       PracticeSubmissionRepository submissionRepository,
-      LearningResourceRepository learningResourceRepository) {
+      LearningResourceRepository learningResourceRepository,
+      LearnerInsightRepository insightRepository) {
     this.pathRepository = pathRepository;
     this.questRepository = questRepository;
     this.classroomQuestRepository = classroomQuestRepository;
@@ -83,6 +97,7 @@ public class LearningPathService {
     this.objectMapper = objectMapper;
     this.submissionRepository = submissionRepository;
     this.learningResourceRepository = learningResourceRepository;
+    this.insightRepository = insightRepository;
   }
 
   @Transactional
@@ -253,7 +268,8 @@ public class LearningPathService {
             buildKcSnapshots(kcs, snapshotIndex, prerequisiteIndex),
             buildRecentResources(userId),
             buildRecentSubmissions(userId),
-            buildClassroomQuests(activeClassroomQuests));
+            buildClassroomQuests(activeClassroomQuests),
+            buildErrorPatternKcs(userId, kcs));
 
     PathPlannerGraphResponse response = graphClient.plan(graphRequest);
     if (response == null) {
@@ -519,6 +535,35 @@ public class LearningPathService {
       }
     }
     return out;
+  }
+
+  /**
+   * 提取反思洞察标记的高频易错 KC（Task 2.2）：取最近 error_pattern 洞察的 tags，过滤到课程包已知 KC
+   * code，去重保序。让 planner 把这些坑的「练/复盘」节点前置。任何失败降级为空（不阻断规划）。
+   */
+  private List<String> buildErrorPatternKcs(Long userId, List<CourseKc> kcs) {
+    Set<String> knownKcCodes =
+        kcs.stream().map(CourseKc::kcCode).collect(Collectors.toSet());
+    if (knownKcCodes.isEmpty()) {
+      return List.of();
+    }
+    try {
+      LinkedHashSet<String> flagged = new LinkedHashSet<>();
+      for (LearnerInsightDto insight : insightRepository.findByUser(userId, INSIGHT_SCAN_LIMIT)) {
+        if (!"error_pattern".equals(insight.dimensionKey()) || insight.tags() == null) {
+          continue;
+        }
+        for (String tag : insight.tags()) {
+          if (tag != null && knownKcCodes.contains(tag)) {
+            flagged.add(tag);
+          }
+        }
+      }
+      return new ArrayList<>(flagged);
+    } catch (RuntimeException ex) {
+      log.warn("error_pattern KC extraction degraded for user {}: {}", userId, ex.getMessage());
+      return List.of();
+    }
   }
 
   private List<PathPlannerGraphRequest.ClassroomQuestSnapshot> buildClassroomQuests(

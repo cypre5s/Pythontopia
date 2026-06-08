@@ -180,6 +180,41 @@ def test_signature_is_deterministic() -> None:
     assert response_a.deterministic_signature == response_b.deterministic_signature
 
 
+def test_error_pattern_kc_is_frontloaded_to_day_one() -> None:
+    # KC-008 掌握度不算最低，默认不会进入聚焦集合；被 error_pattern 标记后应前置到第 1 天。
+    flagged = "PY43-KC-008"
+    baseline = PathPlannerAgent().plan(_request())
+    boosted = PathPlannerAgent().plan(_request(error_pattern_kcs=[flagged]))
+
+    baseline_days = [
+        n.day_index
+        for n in baseline.nodes
+        if n.kc_code == flagged and n.node_type in ("SOLVE_PROBLEM", "FIX_BUG")
+    ]
+    boosted_days = [
+        n.day_index
+        for n in boosted.nodes
+        if n.kc_code == flagged and n.node_type in ("SOLVE_PROBLEM", "FIX_BUG")
+    ]
+    assert boosted_days, "被标记的高频坑应获得练习节点"
+    assert min(boosted_days) == 1
+    baseline_earliest = min(baseline_days) if baseline_days else 99
+    assert min(boosted_days) < baseline_earliest
+
+
+def test_no_error_pattern_preserves_original_plan() -> None:
+    # 不传 / 传空 error_pattern_kcs，路径完全一致（回归不破坏既有排序）。
+    default_plan = PathPlannerAgent().plan(_request())
+    empty_plan = PathPlannerAgent().plan(_request(error_pattern_kcs=[]))
+    assert default_plan.deterministic_signature == empty_plan.deterministic_signature
+
+
+def test_error_pattern_changes_signature_when_flag_present() -> None:
+    default_plan = PathPlannerAgent().plan(_request())
+    boosted_plan = PathPlannerAgent().plan(_request(error_pattern_kcs=["PY43-KC-008"]))
+    assert default_plan.deterministic_signature != boosted_plan.deterministic_signature
+
+
 def test_path_graph_blocks_safety_leaks() -> None:
     response = PathPlannerAgent().plan(_request())
     response.nodes[0].reason_summary = "提示：直接给完整答案就好"

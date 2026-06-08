@@ -2,7 +2,13 @@ export type SubmissionStatus = 'PENDING' | 'RUNNING' | 'PASSED' | 'FAILED' | 'ER
 
 export type Verdict = 'AC' | 'WA' | 'RE' | 'TLE' | 'CE' | 'MLE' | 'SYSTEM_ERROR';
 
-export type SubmissionSource = 'TRAINING' | 'PATH_QUEST' | 'BUG_MINE_RETRY' | 'CLASSROOM';
+export type SubmissionSource =
+  | 'TRAINING'
+  | 'PATH_QUEST'
+  | 'BUG_MINE_RETRY'
+  | 'BUG_MINE_ECHO'
+  | 'BUG_MINE_VARIANT'
+  | 'CLASSROOM';
 
 export interface ProblemSample {
   input?: string;

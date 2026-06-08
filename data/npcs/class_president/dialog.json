@@ -7,10 +7,22 @@
       "text": "{{playerName}}，公告板今天有 {{stats.classQuestNewCount}} 条新任务，你要看一下吗？",
       "conditions": [],
       "choices": [
-        { "label": "看公告板", "nextNodeId": "board_today" },
-        { "label": "我们班最近进度怎样？", "nextNodeId": "class_status" },
-        { "label": "我有问题想问老师", "nextNodeId": "ask_teacher" },
-        { "label": "稍后", "nextNodeId": null }
+        {
+          "label": "看公告板",
+          "nextNodeId": "board_today"
+        },
+        {
+          "label": "我们班最近进度怎样？",
+          "nextNodeId": "class_status"
+        },
+        {
+          "label": "我有问题想问老师",
+          "nextNodeId": "ask_teacher"
+        },
+        {
+          "label": "稍后",
+          "nextNodeId": null
+        }
       ]
     },
     "board_today": {
@@ -18,7 +30,16 @@
       "text": "今天最重要的两条：1) 老师贴出本周指定 KC \"{{stats.classFocusKcName}}\"；2) 周五前提交综合题 #{{stats.classFinalProblemNo}}。要领任务吗？",
       "conditions": [],
       "choices": [
-        { "label": "领", "nextNodeId": null, "effects": [{ "type": "quest_recommend", "questKey": "claim_class_quest" }, { "type": "friendship", "delta": 2 }] }
+        {
+          "label": "领",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "quest_recommend",
+              "questKey": "claim_class_quest"
+            }
+          ]
+        }
       ]
     },
     "class_status": {
@@ -26,7 +47,10 @@
       "text": "全班 {{stats.classmateCount}} 人里，{{stats.classmatesOnTrack}} 人按节奏走。你处在 {{stats.classRankBand}} 段位。别气馁，按 Sage 那套来。",
       "conditions": [],
       "choices": [
-        { "label": "我跟上", "nextNodeId": null, "effects": [{ "type": "friendship", "delta": 1 }] }
+        {
+          "label": "我跟上",
+          "nextNodeId": null
+        }
       ]
     },
     "ask_teacher": {
@@ -34,31 +58,38 @@
       "text": "{{profileAdaptive:你的画像里有 \"主动提问\" 项，老师等你写问题进她的信箱呢。 | 你最近问题不少，先组团问 — 同一个 KC 多人问，更快有答复。}}",
       "conditions": [],
       "choices": [
-        { "label": "去找邮差寄一封", "nextNodeId": null, "effects": [{ "type": "quest_recommend", "questKey": "send_question_to_teacher" }, { "type": "friendship", "delta": 1 }] }
+        {
+          "label": "去找邮差寄一封",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "quest_recommend",
+              "questKey": "send_question_to_teacher"
+            }
+          ]
+        }
       ]
     },
     "weekly_class_report": {
       "id": "weekly_class_report",
       "text": "本周班级 KC 热力图刷新了：高频卡点是 \"{{stats.classWeeklyHotspotKc}}\"。要不要我帮你把热力图拓一份？",
-      "conditions": [{ "type": "first_time_this_week", "key": "weekly_class_report" }],
+      "conditions": [
+        {
+          "type": "first_time_this_week",
+          "key": "weekly_class_report"
+        }
+      ],
       "choices": [
-        { "label": "要", "nextNodeId": null, "effects": [{ "type": "give_item", "itemKey": "class_heatmap" }, { "type": "friendship", "delta": 2 }] }
-      ]
-    },
-    "gift_received": {
-      "id": "gift_received",
-      "text": "{{giftFavorite:谢谢，挂办公室用。 | 谢，我收着。}}",
-      "conditions": [{ "type": "gift_just_given" }],
-      "choices": [
-        { "label": "辛苦了", "nextNodeId": null, "effects": [{ "type": "friendship", "delta": 3 }] }
-      ]
-    },
-    "friendship_max": {
-      "id": "friendship_max",
-      "text": "{{playerName}}，这学期你给班级帮了不少忙。这枚 \"副班长\" 别针挂你身上 — 同学们再有问题可以直接找你。",
-      "conditions": [{ "type": "friendship_min", "value": 80 }],
-      "choices": [
-        { "label": "我会负责", "nextNodeId": null, "effects": [{ "type": "give_item", "itemKey": "vice_president_pin" }, { "type": "set_flag", "flagKey": "class_president_max_friend" }] }
+        {
+          "label": "要",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "give_item",
+              "itemKey": "class_heatmap"
+            }
+          ]
+        }
       ]
     }
   }

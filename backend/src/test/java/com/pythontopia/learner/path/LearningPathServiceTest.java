@@ -55,6 +55,8 @@ class LearningPathServiceTest {
   private final com.pythontopia.workshop.repository.LearningResourceRepository
       learningResourceRepository =
           mock(com.pythontopia.workshop.repository.LearningResourceRepository.class);
+  private final com.pythontopia.learner.reflection.LearnerInsightRepository insightRepository =
+      mock(com.pythontopia.learner.reflection.LearnerInsightRepository.class);
 
   private final LearningPathService service =
       new LearningPathService(
@@ -67,7 +69,8 @@ class LearningPathServiceTest {
           graphClient,
           objectMapper,
           submissionRepository,
-          learningResourceRepository);
+          learningResourceRepository,
+          insightRepository);
 
   @Test
   void planRequiresProfile() {
@@ -141,6 +144,53 @@ class LearningPathServiceTest {
         .extracting(exception -> ((BusinessException) exception).code())
         .isEqualTo("PATH_PLANNING_FAILED");
     verify(pathRepository, never()).insertPath(anyLong(), anyLong(), anyInt(), any(), any(), any());
+  }
+
+  @Test
+  void planForwardsErrorPatternKcsFilteredToKnownKcs() {
+    when(profileService.findProfile(7L)).thenReturn(Optional.of(profile()));
+    when(coursePackRepository.findKcs(eq(43L), eq(null)))
+        .thenReturn(
+            List.of(
+                new CourseKc(1L, 43L, "PY43-KC-001", "变量", 1L, 1, "basic", "summary"),
+                new CourseKc(2L, 43L, "PY43-KC-002", "字符串", 1L, 2, "basic", "summary")));
+    when(masteryEvaluator.snapshots(7L)).thenReturn(List.of());
+    when(classroomQuestRepository.listActiveForStudent(eq(7L), any())).thenReturn(List.of());
+    when(insightRepository.findByUser(eq(7L), anyInt()))
+        .thenReturn(
+            List.of(
+                new com.pythontopia.learner.reflection.dto.LearnerInsightDto(
+                    1L,
+                    "近期在 PY43-KC-002 上反复失败",
+                    "error_pattern",
+                    List.of("PY43-KC-002", "WA"),
+                    List.of(10L, 11L),
+                    0.4,
+                    "RULE",
+                    "2026-06-08T00:00:00Z"),
+                new com.pythontopia.learner.reflection.dto.LearnerInsightDto(
+                    2L,
+                    "认知风格偏视觉",
+                    "cognitive_style",
+                    List.of("PY43-KC-001"),
+                    List.of(12L),
+                    0.5,
+                    "GRAPH",
+                    "2026-06-08T00:00:00Z")));
+    when(graphClient.plan(any(PathPlannerGraphRequest.class))).thenReturn(graphResponse());
+    when(pathRepository.archiveActivePaths(7L, 43L)).thenReturn(List.of());
+    when(pathRepository.nextVersion(7L, 43L)).thenReturn(1);
+    when(pathRepository.insertPath(eq(7L), eq(43L), eq(1), any(), any(), any())).thenReturn(50L);
+    when(pathRepository.insertNode(eq(50L), any())).thenReturn(500L).thenReturn(501L);
+    when(pathRepository.findById(7L, 50L)).thenReturn(Optional.of(samplePath(50L, 1)));
+
+    service.plan(7L);
+
+    org.mockito.ArgumentCaptor<PathPlannerGraphRequest> captor =
+        org.mockito.ArgumentCaptor.forClass(PathPlannerGraphRequest.class);
+    verify(graphClient).plan(captor.capture());
+    // 仅保留命中已知 KC 的 error_pattern tag：WA 被滤掉，cognitive_style 维度不计入。
+    assertThat(captor.getValue().errorPatternKcs()).containsExactly("PY43-KC-002");
   }
 
   private PathPlannerGraphResponse graphResponse() {

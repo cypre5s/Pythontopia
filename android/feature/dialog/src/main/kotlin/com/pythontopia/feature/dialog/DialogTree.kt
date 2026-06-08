@@ -4,7 +4,6 @@ package com.pythontopia.feature.dialog
 data class DialogChoice(
     val label: String,
     val nextNodeId: String?,
-    val friendshipDelta: Int = 0,
     val setFlagKey: String? = null,
     val setFlagValue: String? = null,
 )
@@ -70,7 +69,6 @@ object DemoDialogTree {
                 DialogChoice(
                     label = "好的，我去探索一下",
                     nextNodeId = null,
-                    friendshipDelta = 1,
                 ),
             ),
         ),
@@ -82,7 +80,6 @@ object DemoDialogTree {
                 DialogChoice(
                     label = "我懂了",
                     nextNodeId = null,
-                    friendshipDelta = 2,
                 ),
             ),
         ),
@@ -93,12 +90,10 @@ object DemoDialogTree {
                 DialogChoice(
                     label = "谢谢镇长",
                     nextNodeId = null,
-                    friendshipDelta = 1,
                 ),
                 DialogChoice(
                     label = "记一下：我已经开始探索",
                     nextNodeId = null,
-                    friendshipDelta = 0,
                     setFlagKey = "android_native_hub_played",
                     setFlagValue = "true",
                 ),
@@ -133,7 +128,6 @@ object DemoDialogTree {
                     DialogChoice(
                         label = "明白了",
                         nextNodeId = null,
-                        friendshipDelta = 1,
                         setFlagKey = "${npcKey}_met",
                         setFlagValue = "true",
                     ),

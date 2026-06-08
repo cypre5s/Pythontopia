@@ -33,10 +33,12 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.pythontopia.core.design.PytColors
 import com.pythontopia.feature.auth.AuthDestination
 import com.pythontopia.feature.auth.authGraph
@@ -49,11 +51,13 @@ import com.pythontopia.feature.endless.EndlessScreen
 import com.pythontopia.feature.hub.HubScreen
 import com.pythontopia.feature.lecture.LectureScreen
 import com.pythontopia.feature.library.LibraryScreen
-import com.pythontopia.feature.mine.MineScreen
+import com.pythontopia.feature.mine.MineEchoesScreen
+import com.pythontopia.feature.mine.MineSessionScreen
 import com.pythontopia.feature.path.PathScreen
 import com.pythontopia.feature.profile.ProfileScreen
 import com.pythontopia.feature.retro.RetroScreen
 import com.pythontopia.feature.tutor.TutorScreen
+import com.pythontopia.feature.workshop.IntentRouterScreen
 import com.pythontopia.feature.workshop.WorkshopScreen
 
 /**
@@ -115,6 +119,7 @@ private val APP_DESTINATIONS = listOf(
     AppDestination("profile", "画像", PytColors.info),
     AppDestination("fields", "知识田", PytColors.success),
     AppDestination("workshop", "工坊", PytColors.warning),
+    AppDestination("intent", "百晓", PytColors.warning),
     AppDestination("library", "图书馆", PytColors.info),
     AppDestination("arena", "训练场", PytColors.danger),
     AppDestination("boss", "BOSS战", PytColors.danger),
@@ -148,13 +153,33 @@ private fun AppShell(onLogout: () -> Unit) {
             composable("profile") { ProfileScreen() }
             composable("fields") { FieldsScreen() }
             composable("workshop") { WorkshopScreen() }
+            composable("intent") {
+                IntentRouterScreen(
+                    onOpenReview = { featureNav.navigate("mine") },
+                    onOpenTutor = { featureNav.navigate("tutor") },
+                    onOpenGenerate = { _, _ -> featureNav.navigate("workshop") },
+                )
+            }
             composable("library") { LibraryScreen() }
             composable("arena") { ArenaScreen() }
             composable("boss") { BossScreen() }
             composable("endless") { EndlessScreen() }
             composable("lecture") { LectureScreen() }
             composable("tower") { ChapterTowerScreen() }
-            composable("mine") { MineScreen() }
+            composable("mine") {
+                MineEchoesScreen(
+                    onOpenSession = { sessionId -> featureNav.navigate("mine/session/$sessionId") },
+                )
+            }
+            composable(
+                route = "mine/session/{sessionId}",
+                arguments = listOf(navArgument("sessionId") { type = NavType.LongType }),
+            ) { backStackEntry ->
+                MineSessionScreen(
+                    sessionId = backStackEntry.arguments?.getLong("sessionId") ?: 0L,
+                    onExit = { featureNav.popBackStack() },
+                )
+            }
             composable("retro") { RetroScreen() }
             composable("path") { PathScreen() }
             composable("classroom") { ClassroomScreen() }

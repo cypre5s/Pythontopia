@@ -8,7 +8,6 @@ data class NpcDialogStateDto(
     val npcKey: String,
     val currentNodeId: String? = null,
     val completedNodeIds: List<String> = emptyList(),
-    val friendship: Int = 0,
     val lastTalkedAt: String? = null,
     val flags: JsonElement? = null,
 )

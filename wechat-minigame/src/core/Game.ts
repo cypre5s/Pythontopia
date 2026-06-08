@@ -1,4 +1,5 @@
 // 游戏主控：建画布与上下文、加载资源、装配子系统、跑 requestAnimationFrame 主循环。
+// 同时编排「交互（NPC/建筑对话）」「bootstrap HUD」「跳转配套学习小程序」三条新链路。
 import {
   cancelFrame,
   get2dContext,
@@ -6,18 +7,23 @@ import {
   getScreenInfo,
   logError,
   logInfo,
+  navigateToMiniProgram,
   requestFrame,
   type Ctx2D,
   type GameCanvas,
   type GameImage,
 } from '../runtime/wx';
-import { fetchBootstrapSpawn } from '../api';
+import { COMPANION, companionEnabled } from '../config';
+import { fetchBootstrap } from '../api';
 import { loadImage, loadTownMapJson, MAP_PATH, TILESET_PATH } from './assets';
 import { Camera } from './Camera';
-import { Input } from './Input';
+import { Dialog } from './Dialog';
+import { buildDialogView, loadNpcLineBook, NpcLineBook } from './dialogContent';
+import { Input, type InputAction } from './Input';
+import { computeDialogLayout, rectContains } from './layout';
 import { Player } from './Player';
-import { Renderer } from './Renderer';
-import { TileMap, type TilePoint } from './TileMap';
+import { Renderer, type HudFrame, type HudStatus, type InteractPrompt } from './Renderer';
+import { TileMap, type Interactable, type TilePoint } from './TileMap';
 
 const SOURCE_TILE = 16;
 const FALLBACK_SPAWN: TilePoint = { tileX: 25, tileY: 20 };
@@ -37,6 +43,11 @@ export class Game {
   private camera: Camera | null = null;
   private input: Input | null = null;
   private renderer: Renderer | null = null;
+
+  private readonly dialog = new Dialog();
+  private lineBook: NpcLineBook = new NpcLineBook(new Map());
+  private nearby: Interactable | null = null;
+  private hudStatus: HudStatus | null = null;
 
   private rafHandle = 0;
   private lastTimestamp = 0;
@@ -61,6 +72,7 @@ export class Game {
   }
 
   async start(): Promise<void> {
+    this.lineBook = loadNpcLineBook();
     const rawMap = loadTownMapJson(MAP_PATH);
     this.tileset = await loadImage(TILESET_PATH);
 
@@ -88,7 +100,7 @@ export class Game {
     const loop = (timestamp: number): void => this.frame(timestamp, loop);
     this.rafHandle = requestFrame(loop);
 
-    void this.applyBackendSpawn();
+    void this.applyBootstrap();
     logInfo('[pythontopia] 小镇渲染端已启动');
   }
 
@@ -100,20 +112,29 @@ export class Game {
     }
   }
 
-  private async applyBackendSpawn(): Promise<void> {
+  /** 后端 bootstrap（非阻塞）：成功则覆盖落点并点亮 HUD；失败安静回退。 */
+  private async applyBootstrap(): Promise<void> {
     try {
-      const spawn = await fetchBootstrapSpawn();
-      if (!spawn || !this.map || !this.player) {
+      const result = await fetchBootstrap();
+      if (!result) {
         return;
       }
-      if (this.map.isBlocked(spawn.tileX, spawn.tileY)) {
-        return;
+      if (result.hud) {
+        this.hudStatus = {
+          day: result.hud.dayIndex,
+          weather: result.hud.weather,
+          weekday: result.hud.weekday,
+          questCount: result.hud.questCount,
+        };
       }
-      this.player.placeAt(spawn.tileX, spawn.tileY);
-      this.centerCameraOnPlayer();
-      logInfo(`[pythontopia] 后端落点生效: (${spawn.tileX}, ${spawn.tileY})`);
+      const spawn = result.spawn;
+      if (spawn && this.map && this.player && !this.map.isBlocked(spawn.tileX, spawn.tileY)) {
+        this.player.placeAt(spawn.tileX, spawn.tileY);
+        this.centerCameraOnPlayer();
+        logInfo(`[pythontopia] 后端落点生效: (${spawn.tileX}, ${spawn.tileY})`);
+      }
     } catch (err) {
-      logError('[pythontopia] bootstrap 落点获取失败（已忽略）', err);
+      logError('[pythontopia] bootstrap 获取失败（已忽略）', err);
     }
   }
 
@@ -140,6 +161,71 @@ export class Game {
     }
     player.update(deltaMs, input.getDirection(), map);
     this.centerCameraOnPlayer();
+
+    this.nearby = map.findInteractableNear(player.tileX, player.tileY);
+    const openTarget = this.dialog.currentTarget();
+    if (
+      this.dialog.isOpen() &&
+      openTarget &&
+      !map.isInteractableAdjacent(openTarget, player.tileX, player.tileY)
+    ) {
+      this.dialog.close();
+    }
+
+    for (const action of input.consumeActions()) {
+      this.handleAction(action);
+    }
+  }
+
+  private handleAction(action: InputAction): void {
+    if (this.dialog.isOpen()) {
+      if (action.type === 'tap') {
+        if (this.dialog.hasDeepLink() && this.tapHitsDeepLink(action.x, action.y)) {
+          this.triggerDeepLink();
+        } else {
+          this.dialog.close();
+        }
+        return;
+      }
+      // 交互键：有深链则前往，否则关闭。
+      if (this.dialog.hasDeepLink()) {
+        this.triggerDeepLink();
+      } else {
+        this.dialog.close();
+      }
+      return;
+    }
+
+    if (this.nearby) {
+      this.dialog.open(buildDialogView(this.nearby, this.lineBook), this.nearby);
+    }
+  }
+
+  private tapHitsDeepLink(x: number, y: number): boolean {
+    const { action } = computeDialogLayout(this.viewWidth, this.viewHeight);
+    return rectContains(action, x, y);
+  }
+
+  private triggerDeepLink(): void {
+    const deepLink = this.dialog.deepLink();
+    this.dialog.close();
+    if (!deepLink) {
+      return;
+    }
+    if (!companionEnabled()) {
+      logInfo(`[pythontopia] 配套学习小程序未配置，跳过跳转：${deepLink.route}`);
+      return;
+    }
+    void navigateToMiniProgram({
+      appId: COMPANION.appId,
+      path: COMPANION.path || undefined,
+      envVersion: COMPANION.envVersion,
+      extraData: { route: deepLink.route, from: 'minigame_town' },
+    }).then((ok) => {
+      if (!ok) {
+        logError(`[pythontopia] 跳转学习小程序失败：${deepLink.route}`);
+      }
+    });
   }
 
   private render(): void {
@@ -147,11 +233,40 @@ export class Game {
     if (!map || !player || !input || !camera || !renderer || !tileset) {
       return;
     }
-    const banner = map.findInteractableNear(player.tileX, player.tileY);
+    const highlight = this.dialog.isOpen() ? this.dialog.currentTarget() : this.nearby;
     renderer.beginFrame();
-    renderer.drawWorld(map, tileset, camera, player);
-    renderer.drawHud(input.getDpad(), input.getHeldButton(), banner);
+    renderer.drawWorld(map, tileset, camera, player, highlight);
+    renderer.drawHud(this.buildHudFrame(input));
     renderer.endFrame();
+  }
+
+  private buildHudFrame(input: Input): HudFrame {
+    const dialog = this.dialog.currentView();
+    const prompt: InteractPrompt | null =
+      !dialog && this.nearby
+        ? { title: this.nearby.title, badge: badgeFor(this.nearby) }
+        : null;
+    return {
+      dpad: input.getDpad(),
+      heldDir: input.getHeldButton(),
+      interactLabel: this.interactLabel(),
+      interactActive: input.getInteractHeld(),
+      interactEnabled: dialog !== null || this.nearby !== null,
+      status: this.hudStatus,
+      prompt,
+      dialog,
+    };
+  }
+
+  private interactLabel(): string {
+    const dialog = this.dialog.currentView();
+    if (dialog) {
+      return dialog.deepLink ? '前往' : '关闭';
+    }
+    if (!this.nearby) {
+      return '·';
+    }
+    return this.nearby.kind === 'npc' ? '对话' : '查看';
   }
 
   private centerCameraOnPlayer(): void {
@@ -162,6 +277,16 @@ export class Game {
     const { fx, fy } = player.fractionalTile();
     camera.follow((fx + 0.5) * this.drawTile, (fy + 0.5) * this.drawTile);
   }
+}
+
+function badgeFor(item: Interactable): string {
+  if (item.kind === 'npc') {
+    return 'NPC';
+  }
+  if (item.kind === 'landmark') {
+    return '地标';
+  }
+  return '建筑';
 }
 
 function clampInt(value: number, min: number, max: number): number {

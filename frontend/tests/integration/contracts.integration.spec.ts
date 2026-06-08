@@ -95,14 +95,6 @@ describe('contracts.integration: DTO 字段 + store 边界', () => {
     expect(eff.key).toBe('node_001');
   });
 
-  it('NpcDialogEffectPayload FRIENDSHIP_DELTA 用 delta 字段', () => {
-    const eff: NpcDialogEffectPayload = {
-      type: 'FRIENDSHIP_DELTA',
-      delta: 10,
-    };
-    expect(eff.delta).toBe(10);
-  });
-
   it('NpcDialogEffectPayload 历史字段 flagKey/itemKey/questKey 仍可选（向后兼容）', () => {
     const eff: NpcDialogEffectPayload = {
       type: 'CUSTOM',

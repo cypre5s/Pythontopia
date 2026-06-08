@@ -15,5 +15,7 @@ public record ResourceProduceRequestDto(
       @JsonProperty("python_self_rated_level") int pythonSelfRatedLevel,
       @JsonProperty("media_priority") List<String> mediaPriority,
       @JsonProperty("cognitive_style") String cognitiveStyle,
-      @JsonProperty("error_patterns") List<String> errorPatterns) {}
+      @JsonProperty("error_patterns") List<String> errorPatterns,
+      @JsonProperty("recent_insight") String recentInsight,
+      @JsonProperty("memory_highlights") List<String> memoryHighlights) {}
 }

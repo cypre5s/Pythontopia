@@ -53,7 +53,7 @@ const effectiveTypingMs = computed(() =>
 
 /**
  * 与 DialogTree 共用同一渲染上下文：旧 lines 入口多为纯文本，渲染器对其是 no-op；
- * 新对话树入口的 stats / profileAdaptive / giftFavorite 占位符会被实际替换。
+ * 新对话树入口的 stats / profileAdaptive 占位符会被实际替换。
  */
 const templateContext = computed(() => {
   const ctx = dialog.context;
@@ -61,7 +61,6 @@ const templateContext = computed(() => {
     playerName: ctx?.playerName ?? session.displayName,
     profileType: ctx?.profileType ?? 'cautious',
     cognitiveStyle: ctx?.cognitiveStyle ?? 'unknown',
-    giftJustGiven: ctx?.giftJustGiven ?? false,
     stats: ctx?.stats ?? {},
   });
 });
@@ -77,15 +76,6 @@ const fullText = computed<string>(() => {
 const renderedBranchLabels = computed<string[]>(() =>
   dialog.branchChoices.map((c) => renderDialogText(c.label, templateContext.value)),
 );
-
-const heartDisplay = computed<string>(() => {
-  const f = dialog.friendship;
-  if (f <= 0) return '';
-  const full = Math.min(Math.floor(f / 10), 10);
-  const remainder = f % 10;
-  if (full >= 10) return '<3'.repeat(10);
-  return '<3'.repeat(full) + (remainder > 0 ? ` +${remainder}` : '');
-});
 
 const resolvedPortraitLeft = computed<string>(() => {
   if (props.portraitLeft) return props.portraitLeft;
@@ -308,14 +298,6 @@ onBeforeUnmount(() => {
         <span
           class="name-tag"
         >{{ dialog.npcName || dialog.npcKey }}</span>
-        <span
-          v-if="dialog.friendship > 0"
-          class="friendship-badge"
-          :aria-label="`好感度 ${dialog.friendship}`"
-          data-testid="dialog-friendship"
-        >
-          <span class="hearts">{{ heartDisplay }}</span>
-        </span>
       </header>
 
       <p
@@ -472,19 +454,6 @@ onBeforeUnmount(() => {
 
 .name-tag {
   font-weight: 600;
-}
-
-.friendship-badge {
-  font-size: 13px;
-  color: var(--pyt-text-primary);
-  background: rgba(0, 0, 0, 0.2);
-  padding: 2px 8px;
-  border-radius: 2px;
-  letter-spacing: 1px;
-}
-
-.hearts {
-  font-size: 12px;
 }
 
 .dialog-text {

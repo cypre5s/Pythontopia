@@ -22,7 +22,6 @@ import DialogModal from '@/components/game/DialogModal.vue';
 import {
   useDialogStore,
   __resetChoiceListenersForTests,
-  __resetFriendshipMemoryForTests,
   type NpcDialogTree,
 } from '@/stores/dialog';
 
@@ -80,7 +79,6 @@ function visibleText(wrapper: ReturnType<typeof mount>): string {
 describe('DialogModal.vue typewriter (W2-dialog-upgrade)', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
-    __resetFriendshipMemoryForTests();
     __resetChoiceListenersForTests();
     vi.useFakeTimers();
   });
@@ -178,17 +176,15 @@ describe('DialogModal.vue typewriter (W2-dialog-upgrade)', () => {
     expect(wrapper.find('[data-testid="dialog-portrait-right"]').exists()).toBe(false);
   });
 
-  it('renders npc name, dialog copy and friendship badge under the pixel theme', () => {
+  it('renders npc name and dialog copy under the pixel theme', () => {
     // R-12 主题化：对话面板由「浅底黑字」改为像素主题（cream-on-dark，CSS 变量
     // --pyt-text-* 控制），不再用内联 color:#111。此处改为校验结构 + 主题 class。
-    const store = primeLegacy();
-    store.friendship = 2;
+    primeLegacy();
     const wrapper = mount(DialogModal, { props: { typingSpeedMs: 0 } });
 
     expect(wrapper.get('.dialog-panel').classes()).toContain('pyt-pixel-text');
     expect(wrapper.get('.name-tag').text()).toBe('Test NPC');
     expect(wrapper.find('[data-testid="dialog-text"]').exists()).toBe(true);
-    expect(wrapper.find('[data-testid="dialog-friendship"]').exists()).toBe(true);
   });
 
   it('renders branch buttons when hasBranches=true and clicking one calls store.chooseBranch', async () => {

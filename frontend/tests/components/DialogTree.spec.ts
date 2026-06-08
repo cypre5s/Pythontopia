@@ -54,7 +54,7 @@ function makeTree(): NpcDialogTree {
         id: 'more',
         text: 'next',
         conditions: [],
-        choices: [{ label: '收到', nextNodeId: null, effects: [{ type: 'friendship', delta: 2 }] }],
+        choices: [{ label: '收到', nextNodeId: null }],
       },
     },
   };
@@ -136,14 +136,13 @@ describe('DialogTree.vue', () => {
     expect(text).toBe('欢迎来到 Pythontopia，小七！');
   });
 
-  it('substitutes stats / profileAdaptive / giftFavorite from store.context (R-12 W2-NPC)', async () => {
+  it('substitutes stats / profileAdaptive from store.context (R-12 W2-NPC)', async () => {
     const store = primeStore(
-      '本周做了 {{stats.exercisesThisWeek}} 道题。{{profileAdaptive:实践型 | 谨慎型}}。{{giftFavorite:谢谢礼物 | 收下了}}',
+      '本周做了 {{stats.exercisesThisWeek}} 道题。{{profileAdaptive:实践型 | 谨慎型}}。',
     );
     store.context = {
       playerName: '小七',
       profileType: 'practical',
-      giftJustGiven: true,
       stats: { exercisesThisWeek: '7' },
     };
     const wrapper = mount(DialogTree);
@@ -151,7 +150,7 @@ describe('DialogTree.vue', () => {
     await vi.advanceTimersByTimeAsync(1500);
 
     const text = wrapper.find('[data-testid="dialog-text"]').text().replace(/▏/g, '').trim();
-    expect(text).toBe('本周做了 7 道题。实践型。谢谢礼物');
+    expect(text).toBe('本周做了 7 道题。实践型。');
   });
 
   it('falls back to "—" for unresolved stats so the {{...}} literal never leaks to UI', async () => {
@@ -167,15 +166,11 @@ describe('DialogTree.vue', () => {
   });
 
   it('uses black ink for npc name and dialog copy on the parchment panel', () => {
-    const store = primeStore();
-    store.friendship = 2;
+    primeStore();
     const wrapper = mount(DialogTree, { attachTo: document.body });
 
     expect(getComputedStyle(wrapper.get('.dialog-head').element).color).toBe('rgb(17, 17, 17)');
     expect(getComputedStyle(wrapper.get('[data-testid="dialog-text"]').element).color).toBe(
-      'rgb(17, 17, 17)',
-    );
-    expect(getComputedStyle(wrapper.get('[data-testid="dialog-friendship"]').element).color).toBe(
       'rgb(17, 17, 17)',
     );
 

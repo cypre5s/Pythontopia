@@ -4,7 +4,6 @@
  *   - profileType：基于 learner_profile.cognitive_style 推断；
  *   - cognitiveStyle：基于 dimensions.cognitive_style.tags 主导标签推断，驱动
  *     {{styleAdaptive:..|..|..}} 三分支因材施教；
- *   - giftJustGiven：玩家近 24h 内是否给该 NPC 送过 like/love 礼物；
  *   - stats：所有 {{stats.xxx}} 占位符来源，统一为 string。
  *
  * 枚举字段额外允许 string，是为了后端新增取值时不触发前端 typecheck 失败（渲染器拿不到 key
@@ -18,6 +17,5 @@ export interface DialogContextDto {
   playerName: string;
   profileType: DialogProfileType | string;
   cognitiveStyle?: DialogCognitiveStyle | string;
-  giftJustGiven: boolean;
   stats: Record<string, string>;
 }

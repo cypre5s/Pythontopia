@@ -124,6 +124,74 @@ def test_personalization_messages_empty_when_no_signal() -> None:
     assert personalization_messages(_snapshot("")) == []
 
 
+# 学情洞察（Task 1.3：ProfileSnapshot.recent_insight）
+
+
+def test_recent_insight_included_in_directive() -> None:
+    snap = ProfileSnapshot(recent_insight="可变对象别名反复出错")
+    directive = resource_personalization_directive(snap)
+    assert directive is not None
+    assert "学情洞察" in directive
+    assert "可变对象别名反复出错" in directive
+
+
+def test_recent_insight_empty_not_included() -> None:
+    assert resource_personalization_directive(ProfileSnapshot(recent_insight="")) is None
+    assert resource_personalization_directive(ProfileSnapshot(recent_insight="   ")) is None
+
+
+def test_recent_insight_combines_with_style() -> None:
+    snap = ProfileSnapshot(cognitive_style="visual", recent_insight="缩进易错")
+    directive = resource_personalization_directive(snap)
+    assert directive is not None
+    assert "图解" in directive
+    assert "学情洞察" in directive
+    assert "缩进易错" in directive
+
+
+# 记忆要点（Task 2.1：memory_highlights）
+
+
+def test_memory_highlights_param_included() -> None:
+    directive = resource_personalization_directive(
+        ProfileSnapshot(), memory_highlights=["练习失败：PY43-KC-016（WA）", "调试修复：PY43-KC-016"]
+    )
+    assert directive is not None
+    assert "近期学情" in directive
+    assert "练习失败：PY43-KC-016（WA）" in directive
+    assert "调试修复：PY43-KC-016" in directive
+
+
+def test_memory_highlights_via_snapshot_field() -> None:
+    snap = ProfileSnapshot(memory_highlights=["逆袭通过：PY43-KC-010"])
+    directive = resource_personalization_directive(snap)
+    assert directive is not None
+    assert "近期学情" in directive
+    assert "逆袭通过：PY43-KC-010" in directive
+
+
+def test_memory_highlights_param_overrides_snapshot() -> None:
+    snap = ProfileSnapshot(memory_highlights=["旧要点"])
+    directive = resource_personalization_directive(snap, memory_highlights=["新要点"])
+    assert directive is not None
+    assert "新要点" in directive
+    assert "旧要点" not in directive
+
+
+def test_memory_highlights_empty_not_included() -> None:
+    assert resource_personalization_directive(ProfileSnapshot(memory_highlights=[])) is None
+    assert (
+        resource_personalization_directive(ProfileSnapshot(), memory_highlights=["", "  "]) is None
+    )
+
+
+def test_personalization_messages_passes_memory_highlights() -> None:
+    msgs = personalization_messages(ProfileSnapshot(), memory_highlights=["练习失败：PY43-KC-016"])
+    assert len(msgs) == 1
+    assert msgs[0]["role"] == "system"
+    assert "近期学情" in msgs[0]["content"]
+
+
 # 集成：个性化 system 须在最终 user 消息之前
 
 

@@ -10,7 +10,6 @@ public sealed class TownNpc
     public string? Sprite { get; init; }         // "sprite" property, e.g. npc_mayor
     public string? Label { get; init; }          // localized label (not drawn by the ASCII HUD font)
     public Point Tile { get; init; }
-    public int Friendship { get; set; }          // overlaid from backend npcStates when available
 }
 
 /// <summary>A building / landmark footprint parsed from a Tiled object.</summary>

@@ -54,7 +54,6 @@ fun NpcDialogPanel(
         ) {
             DialogHeader(
                 npcName = state.npcDisplayName,
-                friendship = state.friendship,
                 onClose = {
                     viewModel.close()
                     onDismissed()
@@ -93,7 +92,6 @@ fun NpcDialogPanel(
 @Composable
 private fun DialogHeader(
     npcName: String,
-    friendship: Int,
     onClose: () -> Unit,
 ) {
     Row(
@@ -115,11 +113,6 @@ private fun DialogHeader(
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(text = npcName, style = MaterialTheme.typography.titleMedium)
-            Text(
-                text = "好感度 $friendship / 100",
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                style = MaterialTheme.typography.labelSmall,
-            )
         }
         TextButton(onClick = onClose) { Text("关闭") }
     }

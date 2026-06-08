@@ -12,7 +12,7 @@ import { useSessionStore } from '@stores/session';
 import { useWorldStore } from '@stores/world';
 import { useHudStore } from '@stores/hud';
 import { useCalendarStore } from '@stores/calendar';
-import { useDialogStore, __resetFriendshipMemoryForTests, __resetChoiceListenersForTests } from '@stores/dialog';
+import { useDialogStore, __resetChoiceListenersForTests } from '@stores/dialog';
 import FestivalRibbon from '@/components/hud/FestivalRibbon.vue';
 import FastTravelPanel from '@/components/hud/FastTravelPanel.vue';
 import { router as appRouter } from '@/app/router';
@@ -39,7 +39,6 @@ vi.mock('@/composables/useAudio', () => ({
 
 beforeEach(() => {
   setActivePinia(createPinia());
-  __resetFriendshipMemoryForTests();
   __resetChoiceListenersForTests();
 });
 
@@ -131,7 +130,7 @@ describe('demo-smoke.integration · 完整演示链路', () => {
     wrapper.unmount();
   });
 
-  it('STEP 8 NPC 对话 → friendship 积累', async () => {
+  it('STEP 8 NPC 对话 → 选择后关闭', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input.toString();
       if (url.endsWith('/meta.json')) {
@@ -148,7 +147,7 @@ describe('demo-smoke.integration · 完整演示链路', () => {
               text: 'hi',
               conditions: [],
               choices: [
-                { label: '问候', nextNodeId: null, effects: [{ type: 'friendship', delta: 10 }] },
+                { label: '问候', nextNodeId: null },
               ],
             },
           },
@@ -158,7 +157,6 @@ describe('demo-smoke.integration · 完整演示链路', () => {
     const dlg = useDialogStore();
     await dlg.openWithTree('mayor_py');
     dlg.selectChoice(0);
-    expect(dlg.friendship).toBe(10);
     expect(dlg.visible).toBe(false);
     vi.restoreAllMocks();
   });

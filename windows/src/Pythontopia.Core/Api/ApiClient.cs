@@ -154,7 +154,12 @@ public sealed class ApiClient : IApiClient
     {
         progress?.Report("提交中…");
         var created = await CreateSubmissionAsync(new SubmissionCreateRequest(problemId, code), ct).ConfigureAwait(false);
+        return await PollSubmissionAsync(created.Id, progress, ct).ConfigureAwait(false);
+    }
 
+    public async Task<SubmissionDetailDto> PollSubmissionAsync(
+        long submissionId, IProgress<string>? progress = null, CancellationToken ct = default)
+    {
         var terminal = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "PASSED", "FAILED", "ERROR" };
         const int maxAttempts = 60;
         var delay = TimeSpan.FromMilliseconds(800);
@@ -162,7 +167,7 @@ public sealed class ApiClient : IApiClient
         for (var attempt = 0; attempt < maxAttempts; attempt++)
         {
             ct.ThrowIfCancellationRequested();
-            var detail = await GetSubmissionAsync(created.Id, ct).ConfigureAwait(false);
+            var detail = await GetSubmissionAsync(submissionId, ct).ConfigureAwait(false);
             var status = detail.Submission.Status;
             progress?.Report($"判题状态：{status ?? "?"}");
             if (status is not null && terminal.Contains(status))
@@ -174,9 +179,70 @@ public sealed class ApiClient : IApiClient
 
         throw new ApiException(
             HttpStatusCode.RequestTimeout,
-            $"提交 {created.Id} 在 {maxAttempts} 次轮询后仍未判完",
+            $"提交 {submissionId} 在 {maxAttempts} 次轮询后仍未判完",
             code: "SUBMISSION_POLL_TIMEOUT");
     }
+
+    // ---------------------------------------------------------------- bug mine ----
+
+    public async Task<IReadOnlyList<BugMineErrorBookItemDto>> GetBugMineErrorBookAsync(CancellationToken ct = default) =>
+        await SendJsonAsync<List<BugMineErrorBookItemDto>>(HttpMethod.Get, "/api/bug-mine/errorbook", null, ct).ConfigureAwait(false);
+
+    public async Task<IReadOnlyList<BugMineEchoCandidateDto>> GetBugMineEchoesAsync(CancellationToken ct = default) =>
+        await SendJsonAsync<List<BugMineEchoCandidateDto>>(HttpMethod.Get, "/api/bug-mine/echoes", null, ct).ConfigureAwait(false);
+
+    public Task<BugMineSessionDto> OpenBugMineEchoAsync(string kcCode, CancellationToken ct = default) =>
+        SendJsonAsync<BugMineSessionDto>(HttpMethod.Post, "/api/bug-mine/echoes", new BugMineEchoOpenRequest(kcCode), ct);
+
+    public Task<BugMineSessionDto> OpenBugMineSessionAsync(long submissionId, CancellationToken ct = default) =>
+        SendJsonAsync<BugMineSessionDto>(HttpMethod.Post, "/api/bug-mine/sessions", new BugMineOpenRequest(submissionId), ct);
+
+    public Task<BugMineSessionDto> GetBugMineSessionAsync(long sessionId, CancellationToken ct = default) =>
+        SendJsonAsync<BugMineSessionDto>(HttpMethod.Get, $"/api/bug-mine/sessions/{sessionId}", null, ct);
+
+    public Task<BugMineCardDto> RevealBugMineCardAsync(long sessionId, long cardId, CancellationToken ct = default) =>
+        SendJsonAsync<BugMineCardDto>(HttpMethod.Post, $"/api/bug-mine/sessions/{sessionId}/cards/{cardId}/reveal", null, ct);
+
+    public Task<SubmissionDto> BugMineRetrySubmitAsync(long sessionId, string code, CancellationToken ct = default) =>
+        SendJsonAsync<SubmissionDto>(HttpMethod.Post, $"/api/bug-mine/sessions/{sessionId}/retry-submit", new BugMineRetryRequest(code), ct);
+
+    public Task<SubmissionDto> BugMineVariantSubmitAsync(long sessionId, string code, CancellationToken ct = default) =>
+        SendJsonAsync<SubmissionDto>(HttpMethod.Post, $"/api/bug-mine/sessions/{sessionId}/variant-submit", new BugMineRetryRequest(code), ct);
+
+    public Task<BugMineSessionDto> CloseBugMineSessionAsync(long sessionId, string status, CancellationToken ct = default)
+    {
+        var path = $"/api/bug-mine/sessions/{sessionId}/close?status={Uri.EscapeDataString(status)}";
+        return SendJsonAsync<BugMineSessionDto>(HttpMethod.Post, path, null, ct);
+    }
+
+    // ----------------------------------------------- intent router / workshop ----
+
+    public Task<IntentRouteResponse> RouteIntentAsync(IntentRouteRequest request, CancellationToken ct = default) =>
+        SendJsonAsync<IntentRouteResponse>(HttpMethod.Post, "/api/intent/route", request, ct);
+
+    public Task<ResourceCreateResponse> CreateResourceAsync(ResourceCreateRequest request, CancellationToken ct = default) =>
+        SendJsonAsync<ResourceCreateResponse>(HttpMethod.Post, "/api/workshop/resources", request, ct);
+
+    public async Task<IReadOnlyList<ResourceListItemDto>> GetResourcesAsync(
+        string? type = null, string? kcCode = null, int limit = 20, int offset = 0, CancellationToken ct = default)
+    {
+        var query = new QueryBuilder()
+            .Add("type", type)
+            .Add("kcCode", kcCode)
+            .Add("limit", limit)
+            .Add("offset", offset)
+            .Build();
+        return await SendJsonAsync<List<ResourceListItemDto>>(HttpMethod.Get, "/api/workshop/resources" + query, null, ct).ConfigureAwait(false);
+    }
+
+    public Task<LearningResourceDto> GetResourceAsync(long resourceId, CancellationToken ct = default) =>
+        SendJsonAsync<LearningResourceDto>(HttpMethod.Get, $"/api/workshop/resources/{resourceId}", null, ct);
+
+    public IAsyncEnumerable<SseEvent> StreamResourceAsync(ResourceCreateRequest request, CancellationToken ct = default) =>
+        StreamEventsAsync("/api/workshop/resources/stream", request, ct);
+
+    public IAsyncEnumerable<SseEvent> StreamOrchestratorTurnAsync(OrchestratorTurnRequest request, CancellationToken ct = default) =>
+        StreamEventsAsync("/api/orchestrator/turn/stream", request, ct);
 
     // ----------------------------------------------------------- classrooms ----
 
@@ -194,7 +260,20 @@ public sealed class ApiClient : IApiClient
     public async IAsyncEnumerable<string> AskTutorStreamAsync(
         TutorAskRequest request, [EnumeratorCancellation] CancellationToken ct = default)
     {
-        using var response = await SendAsync(HttpMethod.Post, "/api/tutor/ask", request, ct, acceptSse: true)
+        await foreach (var evt in StreamEventsAsync("/api/tutor/ask", request, ct).ConfigureAwait(false))
+        {
+            yield return evt.Data;
+        }
+    }
+
+    /// <summary>
+    /// Reads a POST SSE stream, yielding one <see cref="SseEvent"/> per frame in arrival order. An
+    /// <c>error</c> frame throws an <see cref="ApiException"/> instead of being yielded.
+    /// </summary>
+    private async IAsyncEnumerable<SseEvent> StreamEventsAsync(
+        string path, object? body, [EnumeratorCancellation] CancellationToken ct)
+    {
+        using var response = await SendAsync(HttpMethod.Post, path, body, ct, acceptSse: true)
             .ConfigureAwait(false);
         await EnsureSuccessAsync(response, ct).ConfigureAwait(false);
 
@@ -227,11 +306,11 @@ public sealed class ApiClient : IApiClient
                     {
                         throw new ApiException(
                             HttpStatusCode.BadGateway,
-                            string.IsNullOrWhiteSpace(payload) ? "导师服务返回错误" : payload,
-                            code: "TUTOR_STREAM_ERROR");
+                            string.IsNullOrWhiteSpace(payload) ? "流式服务返回错误" : payload,
+                            code: "SSE_STREAM_ERROR");
                     }
 
-                    yield return payload;
+                    yield return new SseEvent(name, payload);
                 }
                 continue;
             }

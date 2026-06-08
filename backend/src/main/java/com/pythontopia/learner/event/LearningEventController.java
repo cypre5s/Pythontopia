@@ -39,7 +39,8 @@ public class LearningEventController {
         user.userId(),
         dto.eventType(),
         dto.payload() != null ? dto.payload() : Map.of(),
-        "frontend");
+        "frontend",
+        EventImportance.of(dto.eventType()));
     maybePublishDomainEvent(user.userId(), dto);
   }
 
@@ -57,7 +58,8 @@ public class LearningEventController {
           user.userId(),
           dto.eventType(),
           dto.payload() != null ? dto.payload() : Map.of(),
-          "frontend");
+          "frontend",
+          EventImportance.of(dto.eventType()));
       maybePublishDomainEvent(user.userId(), dto);
     }
   }

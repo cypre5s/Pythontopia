@@ -9,10 +9,13 @@ import com.pythontopia.coursepack.domain.CourseKc;
 import com.pythontopia.coursepack.repository.CoursePackRepository;
 import com.pythontopia.learner.mastery.MasteryEvaluator;
 import com.pythontopia.learner.mastery.MasterySource;
+import com.pythontopia.learner.memory.MemoryRetrievalService;
+import com.pythontopia.learner.memory.dto.MemoryItemDto;
 import com.pythontopia.learner.profile.dto.LearnerProfileDto;
 import com.pythontopia.learner.profile.dto.ProfileDimensionDto;
 import com.pythontopia.learner.profile.service.PassiveProfileService;
 import com.pythontopia.learner.profile.service.ProfileService;
+import com.pythontopia.learner.reflection.LearnerInsightRepository;
 import com.pythontopia.workshop.config.WorkshopProperties;
 import com.pythontopia.workshop.dto.ContentFormat;
 import com.pythontopia.workshop.dto.LearningResourceDto;
@@ -58,6 +61,9 @@ public class ResourceWorkshopService {
   /** cognitive_style 注入资源生成的置信度门控（与答疑 profile_brief 一致，信号不足不下传）。 */
   private static final double STYLE_CONFIDENCE_GATE = 0.3;
 
+  /** 注入资源 prompt 的近期记忆要点条数（Task 2.1）。 */
+  private static final int MEMORY_HIGHLIGHT_LIMIT = 5;
+
   private final WorkshopProperties properties;
   private final WorkshopGraphClient graphClient;
   private final LearningResourceRepository resourceRepository;
@@ -66,6 +72,8 @@ public class ResourceWorkshopService {
   private final MasteryEvaluator masteryEvaluator;
   private final ProfileService profileService;
   private final PassiveProfileService passiveProfileService;
+  private final LearnerInsightRepository insightRepository;
+  private final MemoryRetrievalService memoryRetrievalService;
   private final ObjectMapper objectMapper;
 
   public ResourceWorkshopService(
@@ -77,6 +85,8 @@ public class ResourceWorkshopService {
       MasteryEvaluator masteryEvaluator,
       ProfileService profileService,
       PassiveProfileService passiveProfileService,
+      LearnerInsightRepository insightRepository,
+      MemoryRetrievalService memoryRetrievalService,
       ObjectMapper objectMapper) {
     this.properties = properties;
     this.graphClient = graphClient;
@@ -86,6 +96,8 @@ public class ResourceWorkshopService {
     this.masteryEvaluator = masteryEvaluator;
     this.profileService = profileService;
     this.passiveProfileService = passiveProfileService;
+    this.insightRepository = insightRepository;
+    this.memoryRetrievalService = memoryRetrievalService;
     this.objectMapper = objectMapper;
   }
 
@@ -104,7 +116,7 @@ public class ResourceWorkshopService {
             validatedKcCodes,
             request.type().name(),
             request.focusHint(),
-            profileSnapshot(profile, safeDimensions(userId)));
+            profileSnapshot(userId, focusKc(validatedKcCodes), profile, safeDimensions(userId)));
     ResourceProduceResponseDto graphResponse = graphClient.produce(graphRequest);
     if (graphResponse == null) {
       throw new BusinessException(
@@ -180,7 +192,7 @@ public class ResourceWorkshopService {
             validatedKcCodes,
             request.type().name(),
             request.focusHint(),
-            profileSnapshot(profile, safeDimensions(userId)));
+            profileSnapshot(userId, focusKc(validatedKcCodes), profile, safeDimensions(userId)));
 
     SseEmitter emitter = new SseEmitter(120_000L);
     Long chapterId = pickChapterId(validatedKcCodes, kcIdx);
@@ -357,13 +369,15 @@ public class ResourceWorkshopService {
   }
 
   private ResourceProduceRequestDto.ProfileSnapshotDto profileSnapshot(
-      LearnerProfileDto profile, List<ProfileDimensionDto> dims) {
-    // 把认知风格 + 易错点下传给资源生成 graph，让讲义/导图/示例随画像自适应。
+      Long userId, String focusKc, LearnerProfileDto profile, List<ProfileDimensionDto> dims) {
+    // 把认知风格 + 易错点 + 最新洞察 + 近期记忆要点下传给资源生成 graph，让产物随真实学情自适应。
     String cognitiveStyle = cognitiveStyleTag(dims);
     List<String> errorTags = errorTags(dims);
+    String recentInsight = safeRecentInsight(userId);
+    List<String> memoryHighlights = safeMemoryHighlights(userId, focusKc);
     if (profile == null) {
       return new ResourceProduceRequestDto.ProfileSnapshotDto(
-          "OTHER", 2, List.of(), cognitiveStyle, errorTags);
+          "OTHER", 2, List.of(), cognitiveStyle, errorTags, recentInsight, memoryHighlights);
     }
     String major = graphMajor(profile.major());
     int level =
@@ -375,7 +389,35 @@ public class ResourceWorkshopService {
             ? List.of()
             : List.copyOf(profile.learningPreference().mediaPriority());
     return new ResourceProduceRequestDto.ProfileSnapshotDto(
-        major, level, media, cognitiveStyle, errorTags);
+        major, level, media, cognitiveStyle, errorTags, recentInsight, memoryHighlights);
+  }
+
+  /** 取最新一条学情洞察文本注入资源生成（Task 1.3）；任何失败降级为空（不阻断生成）。 */
+  private String safeRecentInsight(Long userId) {
+    try {
+      return insightRepository.findLatestText(userId).orElse("");
+    } catch (RuntimeException ex) {
+      log.warn("workshop recent insight degraded for user {}: {}", userId, ex.getMessage());
+      return "";
+    }
+  }
+
+  /** 取近期记忆 topK 中文摘要注入资源生成（Task 2.1）；任何失败降级为空（不阻断生成）。 */
+  private List<String> safeMemoryHighlights(Long userId, String focusKc) {
+    try {
+      return memoryRetrievalService.retrieve(userId, focusKc, MEMORY_HIGHLIGHT_LIMIT).stream()
+          .map(MemoryItemDto::summaryZh)
+          .filter(s -> s != null && !s.isBlank())
+          .toList();
+    } catch (RuntimeException ex) {
+      log.warn("workshop memory highlights degraded for user {}: {}", userId, ex.getMessage());
+      return List.of();
+    }
+  }
+
+  /** 取首个有效 KC 作为记忆检索的聚焦点；无则 null（按 recency+importance 检索）。 */
+  private static String focusKc(List<String> kcCodes) {
+    return kcCodes == null || kcCodes.isEmpty() ? null : kcCodes.get(0);
   }
 
   /** 取画像维度，任何失败降级为空（资源生成不因画像读失败而中断）。 */

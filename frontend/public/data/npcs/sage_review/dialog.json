@@ -68,10 +68,6 @@
               "flagKey": "weekly_retro_done"
             },
             {
-              "type": "friendship",
-              "delta": 3
-            },
-            {
               "type": "quest_recommend",
               "questKey": "weekly_retro_submit"
             }
@@ -95,10 +91,6 @@
             {
               "type": "give_item",
               "itemKey": "retro_seal"
-            },
-            {
-              "type": "friendship",
-              "delta": 2
             }
           ]
         }
@@ -111,13 +103,7 @@
       "choices": [
         {
           "label": "了解",
-          "nextNodeId": null,
-          "effects": [
-            {
-              "type": "friendship",
-              "delta": 1
-            }
-          ]
+          "nextNodeId": null
         }
       ]
     },
@@ -128,60 +114,7 @@
       "choices": [
         {
           "label": "谢谢",
-          "nextNodeId": null,
-          "effects": [
-            {
-              "type": "friendship",
-              "delta": 1
-            }
-          ]
-        }
-      ]
-    },
-    "gift_received": {
-      "id": "gift_received",
-      "text": "{{giftFavorite:这茶味，是老味道。 | 收下了，茶我请。}}",
-      "conditions": [
-        {
-          "type": "gift_just_given"
-        }
-      ],
-      "choices": [
-        {
-          "label": "应该的",
-          "nextNodeId": null,
-          "effects": [
-            {
-              "type": "friendship",
-              "delta": 3
-            }
-          ]
-        }
-      ]
-    },
-    "friendship_max": {
-      "id": "friendship_max",
-      "text": "{{playerName}}，复盘满四十次，是为大成。这本《学问之静》给你，比 39 道题更值。",
-      "conditions": [
-        {
-          "type": "friendship_min",
-          "value": 80
-        }
-      ],
-      "choices": [
-        {
-          "label": "受教",
-          "nextNodeId": null,
-          "effects": [
-            {
-              "type": "give_item",
-              "itemKey": "stillness_book"
-            },
-            {
-              "type": "set_flag",
-              "flagKey": "sage_review_max_friend"
-            }
-          ]
+          "nextNodeId": null
         }
       ]
     }

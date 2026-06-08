@@ -11,8 +11,14 @@
           "label": "听课 · 从算盘到 ENIAC（计算工具史）",
           "nextNodeId": null,
           "effects": [
-            { "type": "quest_recommend", "questKey": "1-2" },
-            { "type": "open_panel", "route": "/lecture/1" }
+            {
+              "type": "quest_recommend",
+              "questKey": "1-2"
+            },
+            {
+              "type": "open_panel",
+              "route": "/lecture/1"
+            }
           ]
         },
         {

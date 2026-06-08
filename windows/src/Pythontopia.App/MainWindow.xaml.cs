@@ -57,6 +57,8 @@ public sealed partial class MainWindow : Window
             "QuestsPage" => typeof(QuestsPage),
             "CoursePage" => typeof(CoursePage),
             "PracticePage" => typeof(PracticePage),
+            "WorkshopPage" => typeof(WorkshopPage),
+            "BugMinePage" => typeof(BugMinePage),
             "ClassroomPage" => typeof(ClassroomPage),
             _ => null,
         };

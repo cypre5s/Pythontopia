@@ -5,9 +5,8 @@
  * 新 API 用例覆盖：
  *   - openWithTree 成功路径（fetch 双 json，状态完整填充）
  *   - openWithTree fetch 失败时 loadError 填充
- *   - selectChoice 应用 friendship effect 并切换节点
+ *   - selectChoice 切换节点
  *   - selectChoice 选到 nextNodeId=null 关闭对话
- *   - 同 NPC 再次 open 时 friendship 从内存还原
  *
  * W2-dialog-upgrade 追加覆盖：
  *   - branchChoices / isTypingDone 初值
@@ -24,7 +23,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   useDialogStore,
   __resetChoiceListenersForTests,
-  __resetFriendshipMemoryForTests,
   type DialogChoiceEvent,
   type NpcDialogTree,
   type NpcMeta,
@@ -37,7 +35,6 @@ vi.mock('@/api/dialog', () => ({
   fetchDialogContext: vi.fn(async () => ({
     playerName: '测试者',
     profileType: 'cautious',
-    giftJustGiven: false,
     stats: { exercisesThisWeek: '5' },
   })),
 }));
@@ -53,14 +50,14 @@ function makeTree(): NpcDialogTree {
         conditions: [],
         choices: [
           { label: '了解小镇', nextNodeId: 'intro' },
-          { label: '再见', nextNodeId: null, effects: [{ type: 'friendship', delta: 1 }] },
+          { label: '再见', nextNodeId: null },
         ],
       },
       intro: {
         id: 'intro',
         text: '小镇分五区',
         conditions: [],
-        choices: [{ label: '懂了', nextNodeId: null, effects: [{ type: 'friendship', delta: 3 }] }],
+        choices: [{ label: '懂了', nextNodeId: null }],
       },
     },
   };
@@ -89,7 +86,6 @@ function installFetchMock(handler: (url: string) => Promise<unknown>): void {
 describe('dialog store - legacy placeholder API', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
-    __resetFriendshipMemoryForTests();
     __resetChoiceListenersForTests();
   });
 
@@ -106,7 +102,6 @@ describe('dialog store - legacy placeholder API', () => {
 describe('dialog store - tree API', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
-    __resetFriendshipMemoryForTests();
     __resetChoiceListenersForTests();
   });
 
@@ -145,7 +140,7 @@ describe('dialog store - tree API', () => {
     expect(store.tree).toBeNull();
   });
 
-  it('selectChoice applies friendship effect and navigates to nextNodeId', async () => {
+  it('selectChoice navigates to nextNodeId then closes when nextNodeId is null', async () => {
     installFetchMock(async (url) => {
       if (url.endsWith('/meta.json')) return makeMeta();
       if (url.endsWith('/dialog.json')) return makeTree();
@@ -156,25 +151,9 @@ describe('dialog store - tree API', () => {
     store.selectChoice(0);
     expect(store.currentNodeId).toBe('intro');
     expect(store.history).toEqual(['greet', 'intro']);
-    expect(store.friendship).toBe(0);
     store.selectChoice(0);
     expect(store.visible).toBe(false);
     expect(store.currentNodeId).toBeNull();
-  });
-
-  it('friendship persists in memory across reopen of same npc', async () => {
-    installFetchMock(async (url) => {
-      if (url.endsWith('/meta.json')) return makeMeta();
-      if (url.endsWith('/dialog.json')) return makeTree();
-      throw new Error(`unexpected url ${url}`);
-    });
-    const store = useDialogStore();
-    await store.openWithTree('mayor_py');
-    store.selectChoice(1);
-    expect(store.friendship).toBe(1);
-    expect(store.visible).toBe(false);
-    await store.openWithTree('mayor_py');
-    expect(store.friendship).toBe(1);
   });
 
   it('close resets both legacy and tree state', async () => {
@@ -201,7 +180,6 @@ describe('dialog store - tree API', () => {
 describe('dialog store - typewriter & branch API (W2-dialog-upgrade)', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
-    __resetFriendshipMemoryForTests();
     __resetChoiceListenersForTests();
   });
 
@@ -276,7 +254,7 @@ describe('dialog store - typewriter & branch API (W2-dialog-upgrade)', () => {
     expect(store.isTypingDone).toBe(false);
   });
 
-  it('chooseBranch applies friendship effect via selectChoice and closes when nextNodeId is null', async () => {
+  it('chooseBranch delegates to selectChoice and closes when nextNodeId is null', async () => {
     installFetchMock(async (url) => {
       if (url.endsWith('/meta.json')) return makeMeta();
       if (url.endsWith('/dialog.json')) return makeTree();
@@ -288,7 +266,6 @@ describe('dialog store - typewriter & branch API (W2-dialog-upgrade)', () => {
 
     store.chooseBranch('再见');
 
-    expect(store.friendship).toBe(1);
     expect(store.visible).toBe(false);
     expect(store.currentNodeId).toBeNull();
   });

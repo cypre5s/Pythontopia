@@ -36,6 +36,10 @@ export interface Interactable {
   title: string;
   /** 副标题：建筑 route、NPC key，地标为空。 */
   subtitle: string;
+  /** 建筑/地标的 route（如 /workshop）；NPC 为空串。 */
+  route: string;
+  /** NPC 的 key（如 mayor_py）；建筑/地标为空串。 */
+  npcKey: string;
   centerX: number;
   centerY: number;
   tiles: FootTile[];
@@ -149,6 +153,8 @@ export class TileMap {
       kind,
       title: label,
       subtitle: route,
+      route,
+      npcKey: '',
       centerX: center.x,
       centerY: center.y,
       tiles,
@@ -167,6 +173,8 @@ export class TileMap {
       kind: 'npc',
       title: label,
       subtitle: key,
+      route: '',
+      npcKey: key,
       centerX: tileX + 0.5,
       centerY: tileY + 0.5,
       tiles: [{ x: tileX, y: tileY }],
@@ -229,19 +237,7 @@ export class TileMap {
     let best: Interactable | null = null;
     let bestDist = Number.POSITIVE_INFINITY;
     for (const item of this.interactables) {
-      let adjacent = false;
-      let onFootprint = false;
-      for (const tile of item.tiles) {
-        const dx = Math.abs(tile.x - playerTileX);
-        const dy = Math.abs(tile.y - playerTileY);
-        if (dx === 0 && dy === 0) {
-          onFootprint = true;
-        }
-        if (Math.max(dx, dy) <= 1) {
-          adjacent = true;
-        }
-      }
-      if (!adjacent || onFootprint) {
+      if (!this.isInteractableAdjacent(item, playerTileX, playerTileY)) {
         continue;
       }
       const dist =
@@ -253,6 +249,26 @@ export class TileMap {
       }
     }
     return best;
+  }
+
+  /** 玩家是否与该对象八邻接且不站在其 footprint 内（交互/对话保持的判定）。 */
+  isInteractableAdjacent(
+    item: Interactable,
+    playerTileX: number,
+    playerTileY: number,
+  ): boolean {
+    let adjacent = false;
+    for (const tile of item.tiles) {
+      const dx = Math.abs(tile.x - playerTileX);
+      const dy = Math.abs(tile.y - playerTileY);
+      if (dx === 0 && dy === 0) {
+        return false;
+      }
+      if (Math.max(dx, dy) <= 1) {
+        adjacent = true;
+      }
+    }
+    return adjacent;
   }
 }
 

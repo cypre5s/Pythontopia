@@ -37,7 +37,7 @@ class DialogContextServiceTest {
       new DialogContextService(repository, profileRepository, calendarService, userRepository);
 
   private DialogContextDto build() {
-    return service.buildContext(USER_ID, "tester", null);
+    return service.buildContext(USER_ID, "tester");
   }
 
   /** 桩定 cognitive_style.tags（按声明顺序 append，末元素=最新/主导）。 */

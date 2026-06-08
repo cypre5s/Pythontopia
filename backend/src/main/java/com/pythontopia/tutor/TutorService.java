@@ -6,6 +6,8 @@ import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.classroom.dashboard.service.ClassroomDashboardService;
 import com.pythontopia.learner.event.LearningEvent;
+import com.pythontopia.learner.memory.MemoryRetrievalService;
+import com.pythontopia.learner.memory.dto.MemoryItemDto;
 import com.pythontopia.learner.profile.dto.ProfileDimensionDto;
 import com.pythontopia.learner.profile.service.PassiveProfileService;
 import com.pythontopia.tutor.dto.TutorAskRequest;
@@ -23,12 +25,16 @@ public class TutorService {
 
   private static final Logger log = LoggerFactory.getLogger(TutorService.class);
 
+  /** 注入答疑上下文的近期记忆要点条数（Task 2.1）。 */
+  private static final int MEMORY_HIGHLIGHT_LIMIT = 5;
+
   private final TutorGraphClient graphClient;
   private final TutorSessionRepository sessionRepository;
   private final ObjectMapper objectMapper;
   private final PassiveProfileService passiveProfileService;
   private final ApplicationEventPublisher eventPublisher;
   private final ClassroomDashboardService classroomDashboardService;
+  private final MemoryRetrievalService memoryRetrievalService;
 
   public TutorService(
       TutorGraphClient graphClient,
@@ -36,13 +42,15 @@ public class TutorService {
       ObjectMapper objectMapper,
       PassiveProfileService passiveProfileService,
       ApplicationEventPublisher eventPublisher,
-      ClassroomDashboardService classroomDashboardService) {
+      ClassroomDashboardService classroomDashboardService,
+      MemoryRetrievalService memoryRetrievalService) {
     this.graphClient = graphClient;
     this.sessionRepository = sessionRepository;
     this.objectMapper = objectMapper;
     this.passiveProfileService = passiveProfileService;
     this.eventPublisher = eventPublisher;
     this.classroomDashboardService = classroomDashboardService;
+    this.memoryRetrievalService = memoryRetrievalService;
   }
 
   public SseEmitter ask(CurrentUserPrincipal user, TutorAskRequest request) {
@@ -51,7 +59,10 @@ public class TutorService {
 
     String profileBrief = resolveProfileBrief(userId, request.style());
     String classroomBrief = resolveClassroomBrief(user, request.classroomId());
-    String effectiveContext = mergeContext(classroomBrief, request.context());
+    String memoryBrief = resolveMemoryBrief(userId, request.kcCodes());
+    // 顺序：班级学情（教师）→ 个人近期记忆 → 原始上下文，逐层前置增强证据检索与作答贴合度。
+    String effectiveContext =
+        mergeContext(classroomBrief, mergeContext(memoryBrief, request.context()));
 
     graphClient.askStream(
         userId,
@@ -106,6 +117,36 @@ public class TutorService {
   /** 学生采纳某讲法 → 发 TutorStyleEngaged，回流画像 cognitive_style（因材施教闭环）。 */
   public void recordStyleEngaged(Long userId, String style, String kcCode) {
     eventPublisher.publishEvent(new LearningEvent.TutorStyleEngaged(userId, style, kcCode));
+  }
+
+  /**
+   * 取学生近期记忆要点组装 memory_brief 注入答疑上下文（Task 2.1）；以首个 KC 为聚焦点，
+   * 任何失败降级为空串（不破坏答疑）。
+   */
+  private String resolveMemoryBrief(Long userId, List<String> kcCodes) {
+    String focusKc = (kcCodes == null || kcCodes.isEmpty()) ? null : kcCodes.get(0);
+    try {
+      return buildMemoryBrief(
+          memoryRetrievalService.retrieve(userId, focusKc, MEMORY_HIGHLIGHT_LIMIT));
+    } catch (RuntimeException ex) {
+      log.warn("resolveMemoryBrief degraded for user {}: {}", userId, ex.getMessage());
+      return "";
+    }
+  }
+
+  /** 由记忆条目组装 "近期学情: A；B；C"；空则空串。 */
+  static String buildMemoryBrief(List<MemoryItemDto> memories) {
+    if (memories == null || memories.isEmpty()) {
+      return "";
+    }
+    List<String> parts = new ArrayList<>();
+    for (MemoryItemDto memory : memories) {
+      String summary = memory.summaryZh();
+      if (summary != null && !summary.isBlank()) {
+        parts.add(summary.trim());
+      }
+    }
+    return parts.isEmpty() ? "" : "近期学情: " + String.join("；", parts);
   }
 
   /**

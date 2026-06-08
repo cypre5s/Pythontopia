@@ -8,7 +8,7 @@
 //   - 所有 delta 取整后参与运算；外部传入 NaN / Infinity / 非数字一律视为 0；
 //   - 上限封顶 100、下限 0，超出区间通过 applyDelta clamp 处理；
 //   - 能量状态仅 5 档（normal / soft / harden / severe / zero），用于驱动
-//     UI 颜色、Pyodide 倍率、移动速度等下游表现，不直接扣 mastery / 不掉好感。
+//     UI 颜色、Pyodide 倍率、移动速度等下游表现，不直接扣 mastery。
 
 /**
  * 能量调参字段集合（前端权威配置，后端通过 application.yml 镜像）。

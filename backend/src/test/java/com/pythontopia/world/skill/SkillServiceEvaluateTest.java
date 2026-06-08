@@ -99,7 +99,7 @@ class SkillServiceEvaluateTest {
 
   @Test
   void unknownTypeRejectsUnlock() throws Exception {
-    assertThat(SkillService.evaluate(json("{\"type\":\"FRIENDSHIP\"}"), snapshots)).isFalse();
+    assertThat(SkillService.evaluate(json("{\"type\":\"UNKNOWN_TYPE\"}"), snapshots)).isFalse();
     assertThat(SkillService.evaluate(json("{\"type\":\"ALWAYS_OPEN\"}"), snapshots)).isFalse();
   }
 

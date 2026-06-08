@@ -26,14 +26,6 @@ class DialogRepository @Inject constructor(
         choice: DialogChoice,
     ): NpcDialogStateDto {
         val effects = buildList {
-            if (choice.friendshipDelta != 0) {
-                add(
-                    NpcDialogEffectDto(
-                        type = EFFECT_FRIENDSHIP,
-                        delta = choice.friendshipDelta,
-                    ),
-                )
-            }
             if (choice.setFlagKey != null) {
                 add(
                     NpcDialogEffectDto(
@@ -67,7 +59,6 @@ class DialogRepository @Inject constructor(
         npcKey = npcKey,
         currentNodeId = choice.nextNodeId,
         completedNodeIds = listOf(fromNodeId),
-        friendship = choice.friendshipDelta.coerceAtLeast(0),
         lastTalkedAt = null,
         flags = null,
     )
@@ -77,13 +68,11 @@ class DialogRepository @Inject constructor(
             npcKey = npcKey,
             currentNodeId = rootNodeId,
             completedNodeIds = emptyList(),
-            friendship = 0,
             lastTalkedAt = null,
             flags = null,
         )
 
     private companion object {
-        const val EFFECT_FRIENDSHIP = "FRIENDSHIP_DELTA"
         const val EFFECT_COMPLETE_NODE = "COMPLETE_NODE"
         const val EFFECT_SET_FLAG = "SET_FLAG"
     }

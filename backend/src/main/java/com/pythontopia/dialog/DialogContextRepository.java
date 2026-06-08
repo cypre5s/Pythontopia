@@ -689,30 +689,6 @@ class DialogContextRepository {
     }
   }
 
-  /** 用户最近 24h 是否给某 NPC 送过 like/love 礼物（giftJustGiven 判定）。 */
-  boolean hasFavoriteGiftRecently(Long userId, String npcKey, int hoursWindow) {
-    if (npcKey == null || npcKey.isBlank()) {
-      return false;
-    }
-    try {
-      Integer count =
-          jdbcTemplate.queryForObject(
-              """
-              SELECT COUNT(*) FROM npc_gift_log
-              WHERE user_id = ? AND npc_key = ?
-                AND gift_tier IN ('like', 'love')
-                AND given_at >= now() - make_interval(hours => ?)
-              """,
-              Integer.class,
-              userId,
-              npcKey,
-              hoursWindow);
-      return count != null && count > 0;
-    } catch (org.springframework.jdbc.BadSqlGrammarException ignored) {
-      return false;
-    }
-  }
-
   record KcChapterRow(Integer chapterOrder, String title, Integer pageMin, Integer pageMax, Integer examplePage) {}
 
   record KcFailureRow(String kcCode, String kcName, int failedCount) {}

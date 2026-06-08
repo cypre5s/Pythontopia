@@ -18,3 +18,6 @@ export const STORAGE_USER = 'pyt_user';
 // 路由常量。
 export const LOGIN_ROUTE = '/pages/login/login';
 export const HOME_ROUTE = '/pages/index/index';
+export const WORKSHOP_ROUTE = '/pages/workshop/workshop';
+export const MINE_ROUTE = '/pages/mine/mine';
+export const MINE_SESSION_ROUTE = '/pages/mine/session';

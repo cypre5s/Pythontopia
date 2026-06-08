@@ -48,13 +48,7 @@
       "choices": [
         {
           "label": "记住了",
-          "nextNodeId": null,
-          "effects": [
-            {
-              "type": "friendship",
-              "delta": 1
-            }
-          ]
+          "nextNodeId": null
         }
       ]
     },
@@ -65,60 +59,7 @@
       "choices": [
         {
           "label": "知道了",
-          "nextNodeId": null,
-          "effects": [
-            {
-              "type": "friendship",
-              "delta": 1
-            }
-          ]
-        }
-      ]
-    },
-    "gift_received": {
-      "id": "gift_received",
-      "text": "{{giftFavorite:口哨给力，谢了。 | 收着。}}",
-      "conditions": [
-        {
-          "type": "gift_just_given"
-        }
-      ],
-      "choices": [
-        {
-          "label": "应该的",
-          "nextNodeId": null,
-          "effects": [
-            {
-              "type": "friendship",
-              "delta": 3
-            }
-          ]
-        }
-      ]
-    },
-    "friendship_max": {
-      "id": "friendship_max",
-      "text": "{{playerName}}，39 道你打了大半，手稳了心也稳。训练场随时为你留着位置，掌握度的事，咱一题一题磨上去。",
-      "conditions": [
-        {
-          "type": "friendship_min",
-          "value": 80
-        }
-      ],
-      "choices": [
-        {
-          "label": "谢老 Q",
-          "nextNodeId": null,
-          "effects": [
-            {
-              "type": "friendship",
-              "delta": 1
-            },
-            {
-              "type": "set_flag",
-              "flagKey": "coach_q_max_friend"
-            }
-          ]
+          "nextNodeId": null
         }
       ]
     }

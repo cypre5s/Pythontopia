@@ -18,6 +18,7 @@ from pythontopia_graph.routes.debug import router as debug_router
 from pythontopia_graph.routes.intent import router as intent_router
 from pythontopia_graph.routes.orchestrator import router as orchestrator_router
 from pythontopia_graph.routes.path import router as path_router
+from pythontopia_graph.routes.reflection import router as reflection_router
 from pythontopia_graph.routes.evaluation import router as evaluation_router
 from pythontopia_graph.routes.resource import router as resource_router
 from pythontopia_graph.routes.streaming import router as streaming_router
@@ -58,6 +59,7 @@ app.include_router(streaming_router)
 app.include_router(tutor_router)
 app.include_router(orchestrator_router)
 app.include_router(intent_router)
+app.include_router(reflection_router)
 app.include_router(video_router)
 
 

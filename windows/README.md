@@ -29,7 +29,7 @@ windows/
     └── Pythontopia.App/         # net8.0-windows10.0.19041.0 WinUI 3（需 Windows 构建）
         ├── App.xaml(.cs)                    # DI（Microsoft.Extensions.DependencyInjection）
         ├── MainWindow.xaml(.cs)             # NavigationView 外壳 + 登录门禁
-        ├── Views/*.xaml(.cs)                # Login / Profile / Quests / Course / Practice / Classroom / Town
+        ├── Views/*.xaml(.cs)                # Login / Profile / Quests / Course / Practice / Workshop / BugMine / Classroom / Town
         ├── ViewModels/*.cs                  # MVVM（CommunityToolkit.Mvvm）
         └── Converters/Converters.cs
 ```
@@ -122,16 +122,20 @@ Game 通过 `Texture2D.FromStream` + 直接读取 JSON 在**运行期**加载 `A
 - 画像/掌握度：`GET /learner/profile`(204=无)、`GET /learner/profile/dimensions`、`PUT /learner/profile/dimensions/{key}`、`GET /learner/mastery`
 - 任务：`GET /quests/today`、`GET /quests?status=&limit=`、`POST /quests/{id}/start|complete|skip`
 - 课程：`GET /course/pack|chapters|kcs?chapterId|pages?kcCode|problems?kcCode|videos?chapterId`、`GET /course/pages/{id}/image`、`GET /course/videos/{id}`
-- 题目/判题：`GET /problems/{id}/public`、`POST /submissions`、`GET /submissions/{id}`（`SubmitAndPollAsync` 轮询至 PASSED/FAILED/ERROR）
+- 题目/判题：`GET /problems/{id}/public`、`POST /submissions`、`GET /submissions/{id}`（`SubmitAndPollAsync` 轮询至 PASSED/FAILED/ERROR；`PollSubmissionAsync` 跟进外部创建的提交）
 - 班级：`GET /classrooms/mine`、`POST /classrooms/join`、`GET /classroom/quests/mine`
 - 导师：`POST /tutor/ask`（SSE：plan/trace/token/result/error，`AskTutorStreamAsync` 暴露为 `IAsyncEnumerable<string>`）
+- 百晓工坊（`WorkshopPage`）：`POST /intent/route`（意图分类分派）、`POST /workshop/resources`（非流式生成）+ `GET /workshop/resources/{id}`、`GET /workshop/resources?type=&kcCode=`、`POST /workshop/resources/stream`（SSE）、`POST /orchestrator/turn/stream`（学习总管 SSE，`StreamOrchestratorTurnAsync`）。ASK→导师 SSE；REVIEW→Bug 矿洞；6 类资源→工坊生成
+- Bug 矿洞（`BugMinePage`）：`GET /bug-mine/errorbook`、`GET /bug-mine/echoes`、`POST /bug-mine/echoes`、`GET /bug-mine/sessions/{id}`、`POST .../cards/{cardId}/reveal`、`POST .../retry-submit`、`POST .../variant-submit`、`POST .../close?status=`（错题/遗忘回声列表 + 5 层逐解锁卡片 + 原题/变式重试服务端判题）
 
 ## 设计说明 / 后续项
 
 - **真实数据**：所有数据均来自后端真实接口，无 mock。
 - **小镇嵌入**：MVP 中小镇以独立窗口（独立进程）从 `TownPage` 启动；将 MonoGame 渲染到 WinUI `SwapChainPanel` 内嵌为后续项。
 - **HUD 字体**：内置 ASCII 5x7 位图字体，HUD/提示使用对象的 ASCII 标识（如 `npc_mayor_py`、`/profile-room`）；地图里的中文 `label` 不由该字体渲染。
-- **导师 SSE**：`ApiClient.AskTutorStreamAsync` 已实现，暂未单独做页面。
+- **导师 SSE**：`ApiClient.AskTutorStreamAsync` 已实现，并由 `WorkshopPage` 的 ASK 意图分派消费（逐 `delta` 拼接答案）。
+- **SSE 复用**：`tutor/ask`、`workshop/resources/stream`、`orchestrator/turn/stream` 共用一个 `StreamEventsAsync` 解析器；`AskTutorStreamAsync` 产出 `data` 字符串，资源/总管流产出带事件名的 `SseEvent`。
+- **资源渲染**：`WorkshopPage` 当前用非流式 `POST /workshop/resources` + `GET /workshop/resources/{id}` 取回并渲染（markdown / mermaid / struct json 文本）；流式 `StreamResourceAsync` 已在客户端暴露备用。
 
 ## 资源与许可
 

@@ -98,6 +98,13 @@ export const MAIN_QUEST_BOSSES: readonly MainQuestBoss[] = [
   },
 ] as const;
 
+// ───────────────────────── 统一不变式（R-14，单局可通） ─────────────────────────
+// 每个可测章（2–7）锚定「一个有判题真题的 KC」：该章的「练」(submission) 与「测」(kc_mastery)
+// 指向同一个锚 KC，玩家「练完即测」——做 2 次 AC（+0.20 ×2 = 0.40）即过统一阈值 40。
+//   ch2→KC-016 / ch3→KC-025 / ch4→KC-035 / ch5→KC-041 / ch6→KC-049 / ch7→KC-064
+// 这修掉了旧 5-4/6-4/7-5 把「测」挂在题库 0 题 KC(045/052/065) 上、单局不可达的死点。
+// 第 1 章为纯理论导入（packId=43 题库对其 7 个 KC 0 题，受 39 题硬约束不可新增），故无「练/测」，
+// 是唯一例外。其余章内非锚 KC 由「看/学」子任务覆盖广度。
 export const MAIN_QUESTS: readonly MainSubQuest[] = [
   // ───── 第 1 章 计算工具与计算思维：小镇 town_hub 启程 ─────
   {
@@ -234,12 +241,12 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     id: '3-2',
     chapter: 3,
     index: 2,
-    title: '数值类型与运算（KC-019）',
+    title: '整数位数提取（KC-025）',
     hint: '在小镇训练场完成真题「数位提取」：用 // 和 % 做整数运算（problem #477）。',
     mapKey: 'town_hub',
-    kcCodes: ['PY43-KC-019'],
+    kcCodes: ['PY43-KC-025'],
     evidenceRequired: { type: 'submission', problemId: 477 },
-    rewards: [{ kind: 'kc_mastery', amount: 8, ref: 'PY43-KC-019' }],
+    rewards: [{ kind: 'kc_mastery', amount: 8, ref: 'PY43-KC-025' }],
   },
   {
     id: '3-3',
@@ -256,12 +263,14 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     id: '3-4',
     chapter: 3,
     index: 4,
-    title: '字符串索引与切片（KC-024）',
-    hint: 'KC-023 + KC-024 共同推到 35 以上，能熟练用 s[1:-1]。',
+    // 统一不变式：本章「练」(3-2 #477) 与「测」(3-4) 锚定同一个有判题真题的 KC-025，
+    // 玩家练完即测，单局可达阈值（2 次 AC ≈ 0.40）。
+    title: '整数位数提取·达标（KC-025）',
+    hint: '把刚练的「整数位数提取」掌握度刷到 40：在训练场对 #477 再 AC 一次即达标。',
     mapKey: 'town_hub',
-    kcCodes: ['PY43-KC-023', 'PY43-KC-024'],
-    evidenceRequired: { type: 'kc_mastery', kcCode: 'PY43-KC-024', thresholdScore: 35 },
-    rewards: [{ kind: 'kc_mastery', amount: 10, ref: 'PY43-KC-023' }],
+    kcCodes: ['PY43-KC-025'],
+    evidenceRequired: { type: 'kc_mastery', kcCode: 'PY43-KC-025', thresholdScore: 40 },
+    rewards: [{ kind: 'kc_mastery', amount: 10, ref: 'PY43-KC-025' }],
   },
   {
     id: '3-5',
@@ -314,12 +323,13 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     id: '4-4',
     chapter: 4,
     index: 4,
-    title: 'while 与循环控制（KC-032 + KC-037）',
-    hint: 'KC-032 + KC-037 共同推到 45 以上，掌握 break / continue。',
+    // 锚定同一有题 KC-035（练 4-2 #487 三角形判断）；循环控制 KC-037 仍由 4-3/4-5「学」覆盖。
+    title: '多条件判断·达标（KC-035）',
+    hint: '把刚练的「多条件判断与逻辑运算」掌握度刷到 40：在训练场对 #487 再 AC 一次即达标。',
     mapKey: 'town_hub',
-    kcCodes: ['PY43-KC-032', 'PY43-KC-037'],
-    evidenceRequired: { type: 'kc_mastery', kcCode: 'PY43-KC-037', thresholdScore: 45 },
-    rewards: [{ kind: 'kc_mastery', amount: 10, ref: 'PY43-KC-032' }],
+    kcCodes: ['PY43-KC-035'],
+    evidenceRequired: { type: 'kc_mastery', kcCode: 'PY43-KC-035', thresholdScore: 40 },
+    rewards: [{ kind: 'kc_mastery', amount: 10, ref: 'PY43-KC-035' }],
   },
   {
     id: '4-5',
@@ -361,23 +371,24 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     id: '5-3',
     chapter: 5,
     index: 3,
-    title: '字典基本操作（KC-042）',
-    hint: '在小镇训练场完成真题「通讯录」：增删查改一气呵成，体会字典 CRUD（problem #499）。',
+    title: '字典应用·通讯录（KC-041）',
+    hint: '在小镇训练场完成真题「通讯录」：增删查改一气呵成，体会字典在实际问题中的应用（problem #499）。',
     mapKey: 'town_hub',
-    kcCodes: ['PY43-KC-042'],
+    kcCodes: ['PY43-KC-041'],
     evidenceRequired: { type: 'submission', problemId: 499 },
-    rewards: [{ kind: 'kc_mastery', amount: 8, ref: 'PY43-KC-042' }],
+    rewards: [{ kind: 'kc_mastery', amount: 8, ref: 'PY43-KC-041' }],
   },
   {
     id: '5-4',
     chapter: 5,
     index: 4,
-    title: '序列共性（KC-044 + KC-045）',
-    hint: 'KC-045 掌握度推到 45 — 理解 list / tuple / str 都是序列。',
+    // 修复+对齐：原测点 KC-045「序列类型」题库 0 题，单局不可达。改锚定有题 KC-041（练 5-3 #499）。
+    title: '字典应用·达标（KC-041）',
+    hint: '把刚练的「字典在实际问题中的应用」掌握度刷到 40：在训练场对通讯录题 #499 再 AC 一次即达标。',
     mapKey: 'town_hub',
-    kcCodes: ['PY43-KC-044', 'PY43-KC-045'],
-    evidenceRequired: { type: 'kc_mastery', kcCode: 'PY43-KC-045', thresholdScore: 45 },
-    rewards: [{ kind: 'kc_mastery', amount: 10, ref: 'PY43-KC-044' }],
+    kcCodes: ['PY43-KC-041'],
+    evidenceRequired: { type: 'kc_mastery', kcCode: 'PY43-KC-041', thresholdScore: 40 },
+    rewards: [{ kind: 'kc_mastery', amount: 10, ref: 'PY43-KC-041' }],
   },
   {
     id: '5-5',
@@ -407,12 +418,12 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     id: '6-2',
     chapter: 6,
     index: 2,
-    title: '文件读写四步（KC-048）',
+    title: '基于文件的数据分析（KC-049）',
     hint: '在小镇训练场完成真题「学科等级」：读入数据并按规则处理输出（problem #508）。',
     mapKey: 'town_hub',
-    kcCodes: ['PY43-KC-048'],
+    kcCodes: ['PY43-KC-049'],
     evidenceRequired: { type: 'submission', problemId: 508 },
-    rewards: [{ kind: 'kc_mastery', amount: 8, ref: 'PY43-KC-048' }],
+    rewards: [{ kind: 'kc_mastery', amount: 8, ref: 'PY43-KC-049' }],
   },
   {
     id: '6-3',
@@ -429,12 +440,13 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     id: '6-4',
     chapter: 6,
     index: 4,
-    title: '文件读取数据处理（KC-052）',
-    hint: 'KC-052 推到 50：把一份 CSV 读进来并求和。',
+    // 修复+对齐：原测点 KC-052「文件读取与数据处理」题库 0 题。改锚定有题 KC-049（练 6-2 #508）。
+    title: '文件数据分析·达标（KC-049）',
+    hint: '把刚练的「基于文件的数据分析」掌握度刷到 40：在训练场对 #508 再 AC 一次即达标。',
     mapKey: 'town_hub',
-    kcCodes: ['PY43-KC-052'],
-    evidenceRequired: { type: 'kc_mastery', kcCode: 'PY43-KC-052', thresholdScore: 50 },
-    rewards: [{ kind: 'kc_mastery', amount: 10, ref: 'PY43-KC-052' }],
+    kcCodes: ['PY43-KC-049'],
+    evidenceRequired: { type: 'kc_mastery', kcCode: 'PY43-KC-049', thresholdScore: 40 },
+    rewards: [{ kind: 'kc_mastery', amount: 10, ref: 'PY43-KC-049' }],
   },
   {
     id: '6-5',
@@ -476,35 +488,38 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     id: '7-3',
     chapter: 7,
     index: 3,
-    title: '函数递归（KC-061）',
-    hint: '到训练场完成真题「计算阶乘」：用递归实现 N!（problem #511）。',
+    // OOP 终章脊柱：练 7-3 与测 7-5 锚定同一有题 KC-064「类和对象基础」(#510)。
+    title: '类和对象实战（KC-064）',
+    hint: '到训练场完成真题「类和对象的创建」：用 class 定义 Dog / Cat 并调用方法（problem #510）。',
     mapKey: 'town_hub',
-    kcCodes: ['PY43-KC-061'],
-    evidenceRequired: { type: 'submission', problemId: 511 },
-    rewards: [{ kind: 'kc_mastery', amount: 8, ref: 'PY43-KC-061' }],
+    kcCodes: ['PY43-KC-064'],
+    evidenceRequired: { type: 'submission', problemId: 510 },
+    rewards: [{ kind: 'kc_mastery', amount: 8, ref: 'PY43-KC-064' }],
   },
   {
     id: '7-4',
     chapter: 7,
     index: 4,
-    title: '模块化编程（KC-063）',
-    hint: '工坊生成 KC-063 的 CODE_LAB，把一段长程序拆成多个模块。',
+    // 递归 KC-061 从原 7-3「练」降为此处「学」（OOP 脊柱让位）；与模块化 KC-063 合并为一份 CODE_LAB。
+    title: '递归与模块化（KC-061 + KC-063）',
+    hint: '工坊生成一份 CODE_LAB，把递归（如阶乘 #511）与模块化拆分一起学懂。',
     mapKey: 'town_hub',
-    kcCodes: ['PY43-KC-063'],
+    kcCodes: ['PY43-KC-061', 'PY43-KC-063'],
     evidenceRequired: { type: 'resource_consumed', resourceType: 'CODE_LAB' },
-    rewards: [{ kind: 'kc_mastery', amount: 6, ref: 'PY43-KC-063' }],
+    rewards: [{ kind: 'kc_mastery', amount: 6, ref: 'PY43-KC-061' }],
   },
   {
     id: '7-5',
     chapter: 7,
     index: 5,
+    // 修复+对齐：原测点 KC-065「面向对象特征」题库 0 题。改锚定有题 KC-064（练 7-3 #510）；标题叙事不变。
     title: '类与面向对象（KC-064 + KC-065）',
-    hint: 'KC-064 + KC-065 都到 60，触发毕业典礼。',
+    hint: '把刚练的「类和对象基础」掌握度刷到 40：在训练场对 #510 再 AC 一次即触发毕业典礼。',
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-064', 'PY43-KC-065'],
-    evidenceRequired: { type: 'kc_mastery', kcCode: 'PY43-KC-065', thresholdScore: 60 },
+    evidenceRequired: { type: 'kc_mastery', kcCode: 'PY43-KC-064', thresholdScore: 40 },
     rewards: [
-      { kind: 'kc_mastery', amount: 15, ref: 'PY43-KC-065' },
+      { kind: 'kc_mastery', amount: 15, ref: 'PY43-KC-064' },
       { kind: 'item', amount: 1, ref: 'outfit:graduate' },
     ],
   },

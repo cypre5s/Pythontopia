@@ -170,6 +170,60 @@ export function httpGetJson(options: HttpGetOptions): Promise<HttpResult | null>
   });
 }
 
+export interface HttpPostOptions {
+  url: string;
+  header?: Record<string, string>;
+  body?: Record<string, unknown>;
+  timeoutMs?: number;
+}
+
+/** 极简 POST(JSON)：成功 resolve HttpResult，任何失败 resolve null（绝不抛出，便于「非阻塞」用法）。 */
+export function httpPostJson(options: HttpPostOptions): Promise<HttpResult | null> {
+  return new Promise<HttpResult | null>((resolve) => {
+    wx.request({
+      url: options.url,
+      method: 'POST',
+      data: options.body ?? {},
+      header: { 'content-type': 'application/json', ...(options.header ?? {}) },
+      timeout: options.timeoutMs ?? 4000,
+      success: (res) => {
+        resolve({ statusCode: res.statusCode, data: res.data });
+      },
+      fail: () => resolve(null),
+    });
+  });
+}
+
+export interface NavigateMiniProgramOptions {
+  appId: string;
+  /** 目标页路径，留空打开首页。 */
+  path?: string;
+  /** 透传给目标小程序（其 onShow / getLaunchOptionsSync 可取）。 */
+  extraData?: Record<string, unknown>;
+  envVersion?: 'develop' | 'trial' | 'release';
+}
+
+/**
+ * 跳转到另一个小程序（配套学习小程序）。成功 resolve true，失败/不支持 resolve false（绝不抛出）。
+ * 调用方负责在 appId 为空时不要调用（见 config.companionEnabled）。
+ */
+export function navigateToMiniProgram(options: NavigateMiniProgramOptions): Promise<boolean> {
+  return new Promise<boolean>((resolve) => {
+    try {
+      wx.navigateToMiniProgram({
+        appId: options.appId,
+        path: options.path,
+        extraData: options.extraData,
+        envVersion: options.envVersion,
+        success: () => resolve(true),
+        fail: () => resolve(false),
+      });
+    } catch {
+      resolve(false);
+    }
+  });
+}
+
 export function requestFrame(callback: (timestampMs: number) => void): number {
   return requestAnimationFrame(callback);
 }

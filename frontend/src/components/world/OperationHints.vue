@@ -30,11 +30,6 @@ const visible = computed<boolean>(() => route.path === '/world');
     </span>
     <span class="hint-dot">·</span>
     <span class="hint-item">
-      <span class="hint-key">B</span>
-      <span class="hint-text">背包</span>
-    </span>
-    <span class="hint-dot">·</span>
-    <span class="hint-item">
       <span class="hint-key">M</span>
       <span class="hint-text">地图</span>
     </span>

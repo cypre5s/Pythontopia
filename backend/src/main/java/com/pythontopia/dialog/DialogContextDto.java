@@ -11,8 +11,7 @@ import java.util.Map;
  *   <li>{@code {{playerName}}} — 玩家显示名；
  *   <li>{@code {{stats.xxx}}} — 各种统计字段（本周练习数、最难 KC、班级数据……），由
  *       {@link DialogContextService} 从 mastery / submission / classroom / world 等模块实时聚合；
- *   <li>{@code {{profileAdaptive:A | B}}} 与 {@code {{giftFavorite:A | B}}} — 二分支模板，
- *       由 {@link #profileType} 与 {@link #giftJustGiven} 决策走哪个文案；
+ *   <li>{@code {{profileAdaptive:A | B}}} — 二分支模板，由 {@link #profileType} 决策走哪个文案；
  *   <li>{@code {{styleAdaptive:视觉|逻辑|试错}}} — 三分支模板，由 {@link #cognitiveStyle}
  *       （visual / logical / trial / unknown）决策走哪个文案，用于「看阶段」按认知风格因材施教。
  * </ul>
@@ -24,7 +23,6 @@ public record DialogContextDto(
     String playerName,
     String profileType,
     String cognitiveStyle,
-    boolean giftJustGiven,
     Map<String, String> stats) {
 
   /** Profile 类型常量：{@code practical} 走实践型分支，{@code cautious} 走谨慎型分支。 */

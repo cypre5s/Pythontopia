@@ -8,8 +8,7 @@
  * 2. `{{stats.xxx}}` —— DialogContext.stats[xxx]，未提供时回退到 '—'，
  *    保证 UI 不会出现 `{{stats.xxx}}` 字面量泄露。
  * 3. `{{profileAdaptive:A | B}}` —— profileType === 'practical' 走 A，否则走 B。
- * 4. `{{giftFavorite:A | B}}` —— giftJustGiven === true 走 A，否则走 B。
- * 5. `{{styleAdaptive:视觉文案|逻辑文案|试错文案}}` —— 按 cognitiveStyle 三分支选择
+ * 4. `{{styleAdaptive:视觉文案|逻辑文案|试错文案}}` —— 按 cognitiveStyle 三分支选择
  *    （'visual' 走第 1 段、'logical' 走第 2 段、'trial' 走第 3 段，'unknown'/其它兜底首段视觉文案），
  *    用于「看阶段」按认知风格因材施教。
  *
@@ -30,8 +29,6 @@ export interface DialogTemplateContext {
    * 缺省 'unknown' 时按视觉型首分支兜底。
    */
   cognitiveStyle: string;
-  /** true 走 giftFavorite 的 A 分支。 */
-  giftJustGiven: boolean;
   /** 各类 stats key → 真实字符串。 */
   stats: Record<string, string>;
 }
@@ -87,7 +84,7 @@ function evaluatePlaceholder(
     return '';
   }
 
-  // 二分支语法：profileAdaptive: / giftFavorite:
+  // 二分支语法：profileAdaptive:
   const branchMatch = /^([a-zA-Z][a-zA-Z0-9]*)\s*:\s*(.*)$/s.exec(trimmed);
   if (branchMatch) {
     const tag = branchMatch[1] ?? '';
@@ -95,10 +92,6 @@ function evaluatePlaceholder(
     if (tag === 'profileAdaptive') {
       const [a, b] = splitFirstPipe(payload);
       return ctx.profileType === 'practical' ? a : b;
-    }
-    if (tag === 'giftFavorite') {
-      const [a, b] = splitFirstPipe(payload);
-      return ctx.giftJustGiven ? a : b;
     }
     if (tag === 'styleAdaptive') {
       // 三分支：视觉 | 逻辑 | 试错。未知/缺省（unknown）回退首段视觉文案；
@@ -146,7 +139,7 @@ function evaluatePlaceholder(
 /**
  * 在第一个 `|` 处把字符串切成两段。
  *
- * profileAdaptive / giftFavorite 的 payload 形如 `A | B`，其中 A、B 都可能
+ * profileAdaptive 的 payload 形如 `A | B`，其中 A、B 都可能
  * 已经被内层 pass 替换为含有数字 / 中文逗号的真实文本；只有最外层一道 `|`
  * 是分隔符，所以这里只切第一个，保留 B 内部出现的所有 `|`（极少见但允许）。
  */
@@ -188,7 +181,6 @@ export function createDialogContext(input: Partial<DialogTemplateContext>): Dial
     playerName: input.playerName ?? '学习者',
     profileType: input.profileType ?? 'cautious',
     cognitiveStyle: input.cognitiveStyle ?? 'unknown',
-    giftJustGiven: input.giftJustGiven === true,
     stats: input.stats ?? {},
   };
 }

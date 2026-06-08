@@ -37,11 +37,31 @@ internal interface MineApi {
         @Body request: MineAttemptRequest,
     ): MineSubmissionWireDto
 
+    @POST("api/bug-mine/sessions/{id}/variant-submit")
+    suspend fun variantSubmit(
+        @Path("id") sessionId: Long,
+        @Body request: MineAttemptRequest,
+    ): MineSubmissionWireDto
+
     @POST("api/bug-mine/sessions/{id}/close")
     suspend fun close(
         @Path("id") sessionId: Long,
         @Query("status") status: String,
-    ): BugMineSessionWireDto
+    ): BugMineSessionDetailWireDto
+
+    // —— 记忆矿脉「遗忘回声」闭环（contract §4.7）——
+
+    @GET("api/bug-mine/echoes")
+    suspend fun echoes(): List<BugMineEchoCandidateWireDto>
+
+    @POST("api/bug-mine/echoes")
+    suspend fun openEcho(@Body request: MineEchoOpenRequest): BugMineSessionDetailWireDto
+
+    @GET("api/bug-mine/errorbook")
+    suspend fun errorbook(): List<BugMineErrorBookItemWireDto>
+
+    @GET("api/bug-mine/sessions/{id}")
+    suspend fun sessionDetail(@Path("id") sessionId: Long): BugMineSessionDetailWireDto
 }
 
 @Module
@@ -77,6 +97,34 @@ class MineRepository @Inject internal constructor(
         val next = session.cards.firstOrNull { !it.revealed } ?: return null
         return api.reveal(sessionId, next.id).toMineCard(session.cards.indexOf(next))
     }
+
+    // —— 记忆矿脉「遗忘回声」闭环 ——
+
+    /** FSRS 到期遗忘回声候选 KC（按入矿优先级降序，后端已过滤+排序）。 */
+    suspend fun echoes(): List<EchoCandidate> = api.echoes().map { it.toDomain() }
+
+    /** 未关闭矿洞 session 错题本（含 minePriority / decayRisk / recommendationReason）。 */
+    suspend fun errorBook(): List<ErrorBookItem> = api.errorbook().map { it.toDomain() }
+
+    /** 由遗忘回声 KC 打开矿洞 session，返回富会话详情。 */
+    suspend fun openEcho(kcCode: String): MineSessionDetail =
+        api.openEcho(MineEchoOpenRequest(kcCode = kcCode)).toDomain()
+
+    /** 富会话详情（题干 + depthSteps + reveal 卡 + 变式）。 */
+    suspend fun sessionDetail(sessionId: Long): MineSessionDetail =
+        api.sessionDetail(sessionId).toDomain()
+
+    /** 解锁当前深度允许的卡片；深度不足由后端返回 409，向上游抛出。 */
+    suspend fun revealCard(sessionId: Long, cardId: Long): MineSessionCard =
+        api.reveal(sessionId, cardId).toSessionCard()
+
+    /** L5 同 KC 变式提交。 */
+    suspend fun variantAttempt(sessionId: Long, code: String): MineAttempt =
+        api.variantSubmit(sessionId, MineAttemptRequest(code = code)).toMineAttempt()
+
+    /** 关闭 session（RESOLVED / ABANDONED）。 */
+    suspend fun close(sessionId: Long, status: String): MineSessionDetail =
+        api.close(sessionId, status).toDomain()
 }
 
 @Serializable

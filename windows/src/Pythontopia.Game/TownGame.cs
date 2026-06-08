@@ -52,7 +52,6 @@ public sealed class TownGame : Microsoft.Xna.Framework.Game
     private bool _offline = true;
     private string _worldLine = string.Empty;
     private int _questCount;
-    private Dictionary<string, int> _friendship = new();
     private Point? _pendingTeleport;
 
     public TownGame(AppConfig config, string? token)
@@ -363,15 +362,7 @@ public sealed class TownGame : Microsoft.Xna.Framework.Game
     {
         if (_nearNpc is { } npc)
         {
-            int? friendship = null;
-            lock (_sync)
-            {
-                if (npc.Key is not null && _friendship.TryGetValue(npc.Key, out var value))
-                {
-                    friendship = value;
-                }
-            }
-            _dialog = $"{npc.Name}  SPRITE:{npc.Sprite ?? "-"}  FRIENDSHIP:{(friendship?.ToString() ?? "-")}";
+            _dialog = $"{npc.Name}  SPRITE:{npc.Sprite ?? "-"}";
         }
         else if (_nearBuilding is { } building)
         {
@@ -551,11 +542,6 @@ public sealed class TownGame : Microsoft.Xna.Framework.Game
             api.AuthToken = _token;
             var boot = await api.BootstrapGameAsync().ConfigureAwait(false);
 
-            var friendship = boot.NpcStates?
-                .Where(n => !string.IsNullOrEmpty(n.NpcKey))
-                .GroupBy(n => n.NpcKey)
-                .ToDictionary(g => g.Key, g => g.First().Friendship) ?? new Dictionary<string, int>();
-
             Point? teleport = null;
             if (boot.Player is { } player
                 && string.Equals(player.MapKey, "town_hub", StringComparison.OrdinalIgnoreCase)
@@ -569,7 +555,6 @@ public sealed class TownGame : Microsoft.Xna.Framework.Game
                 _offline = false;
                 _questCount = boot.Quests?.Count ?? 0;
                 _worldLine = BuildWorldLine(boot.World);
-                _friendship = friendship;
                 _pendingTeleport = teleport;
             }
         }

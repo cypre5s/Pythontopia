@@ -7,7 +7,6 @@
   "spawnMap": "town_hub",
   "spawn": { "tileX": 11, "tileY": 12 },
   "birthday": { "month": 10, "day": 11 },
-  "favoriteGifts": ["python_book", "bookmark", "tea"],
   "schedule": {
     "monday":    [{ "from": "08:00", "map": "town_hub", "tileX": 11, "tileY": 12 }],
     "tuesday":   [{ "from": "08:00", "map": "town_hub", "tileX": 11, "tileY": 12 }],

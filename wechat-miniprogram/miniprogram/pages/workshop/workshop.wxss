@@ -1,0 +1,43 @@
+.ws-input {
+  min-height: 180rpx;
+}
+
+.ws-answer {
+  font-size: 28rpx;
+  color: var(--ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin-top: 8rpx;
+}
+
+.ws-res-title {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: var(--wood-dark);
+  margin-bottom: 8rpx;
+}
+
+.ws-tags {
+  margin: 8rpx 0 12rpx;
+}
+
+.md-heading {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: var(--wood-dark);
+  margin: 16rpx 0 8rpx;
+}
+
+.md-p {
+  font-size: 28rpx;
+  color: var(--ink);
+  margin: 8rpx 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.md-list {
+  font-size: 28rpx;
+  color: var(--ink);
+  margin: 6rpx 0 6rpx 12rpx;
+}

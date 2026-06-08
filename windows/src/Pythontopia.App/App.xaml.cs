@@ -43,6 +43,8 @@ public partial class App : Application
         services.AddTransient<QuestsViewModel>();
         services.AddTransient<CourseViewModel>();
         services.AddTransient<PracticeViewModel>();
+        services.AddTransient<WorkshopViewModel>();
+        services.AddTransient<BugMineViewModel>();
         services.AddTransient<ClassroomViewModel>();
         services.AddTransient<TownViewModel>();
 

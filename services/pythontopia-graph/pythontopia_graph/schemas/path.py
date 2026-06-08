@@ -71,6 +71,9 @@ class PathPlannerRequest(BaseModel):
     recent_resources: list[PlannerResourceUsage] = Field(default_factory=list)
     recent_submissions: list[PlannerProblemSubmission] = Field(default_factory=list)
     classroom_quests: list[PlannerClassroomQuest] = Field(default_factory=list)
+    # 反思洞察标记的高频易错 KC（error_pattern）；命中者在聚焦排序里前置/加权，
+    # 让「练/复盘」节点优先安排（Task 2.2）。空列表 = 不影响原排序（回归安全）。
+    error_pattern_kcs: list[str] = Field(default_factory=list)
     target_days: int = Field(default=7, ge=1, le=7)
 
 

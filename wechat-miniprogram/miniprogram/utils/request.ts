@@ -56,7 +56,7 @@ function buildQuery(query?: Record<string, QueryValue>): string {
 // 避免 401 并发时重复 reLaunch。
 let reloginInFlight = false;
 
-function handleUnauthorized(): void {
+export function handleUnauthorized(): void {
   try {
     wx.removeStorageSync(STORAGE_TOKEN);
     wx.removeStorageSync(STORAGE_USER);

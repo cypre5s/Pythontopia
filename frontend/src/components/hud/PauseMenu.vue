@@ -153,7 +153,6 @@ const HOTKEYS: readonly { key: string; desc: string }[] = [
   { key: 'ESC', desc: '暂停菜单' },
   { key: 'Q', desc: '任务' },
   { key: 'J', desc: '对话' },
-  { key: 'I', desc: '背包' },
   { key: 'M', desc: '地图' },
   { key: 'K', desc: '技能' },
   { key: 'L', desc: '课程' },

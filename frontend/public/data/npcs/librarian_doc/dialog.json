@@ -61,10 +61,6 @@
             {
               "type": "quest_recommend",
               "questKey": "read_chapter_today"
-            },
-            {
-              "type": "friendship",
-              "delta": 2
             }
           ]
         },
@@ -86,10 +82,6 @@
             {
               "type": "give_item",
               "itemKey": "evidence_slip"
-            },
-            {
-              "type": "friendship",
-              "delta": 1
             }
           ]
         },
@@ -106,13 +98,7 @@
       "choices": [
         {
           "label": "了解了",
-          "nextNodeId": null,
-          "effects": [
-            {
-              "type": "friendship",
-              "delta": 1
-            }
-          ]
+          "nextNodeId": null
         }
       ]
     },
@@ -133,53 +119,6 @@
             {
               "type": "set_flag",
               "flagKey": "evidence_aware"
-            }
-          ]
-        }
-      ]
-    },
-    "gift_received": {
-      "id": "gift_received",
-      "text": "{{giftFavorite:谢谢，这本会进我私藏架。 | 谢，我收着。}}",
-      "conditions": [
-        {
-          "type": "gift_just_given"
-        }
-      ],
-      "choices": [
-        {
-          "label": "客气",
-          "nextNodeId": null,
-          "effects": [
-            {
-              "type": "friendship",
-              "delta": 3
-            }
-          ]
-        }
-      ]
-    },
-    "friendship_max": {
-      "id": "friendship_max",
-      "text": "{{playerName}}，给你一张终身借阅证：任何 KC 我直接帮你翻到页码，外加一本 Python 之父手稿副本。",
-      "conditions": [
-        {
-          "type": "friendship_min",
-          "value": 80
-        }
-      ],
-      "choices": [
-        {
-          "label": "谢谢馆长",
-          "nextNodeId": null,
-          "effects": [
-            {
-              "type": "give_item",
-              "itemKey": "library_lifetime_pass"
-            },
-            {
-              "type": "set_flag",
-              "flagKey": "librarian_doc_max_friend"
             }
           ]
         }

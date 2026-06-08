@@ -24,20 +24,26 @@ wechat-minigame/
 ├── tsconfig.json           # 编译 src/**/*.ts -> js/（CommonJS, strict）
 ├── assets/
 │   ├── maps/town_hub.json          # Tiled 地图（50x40，16px tile），从 frontend 复制
-│   └── tilesets/tilemap_packed.png # Kenney Tiny Town tileset（192x176，12 列 132 帧）
+│   ├── tilesets/tilemap_packed.png # Kenney Tiny Town tileset（192x176，12 列 132 帧）
+│   └── data/
+│       ├── npcs.json               # 随包 NPC 名字 + 一句对白（由 data/npcs 精简而来）
+│       └── LICENSE.md              # 随包数据授权说明
 └── src/
     ├── main.ts             # 入口逻辑：new Game().start()
-    ├── api.ts              # 可选后端 bootstrap（受保护、非阻塞）
+    ├── config.ts           # 后端 / 跳转配套学习小程序 的可调配置
+    ├── api.ts              # 可选后端 bootstrap（POST、受保护、非阻塞）→ 落点 + HUD
     ├── runtime/wx.ts       # 原生运行时适配层（唯一与 wx 全局交互的边界）
     ├── types/tiled.ts      # Tiled JSON DTO 类型
     └── core/
         ├── assets.ts       # 读取地图 JSON + 加载 tileset 图片
         ├── TileMap.ts      # 解析 Tiled → 渲染层 / 碰撞网格 / 可交互对象
-        ├── Renderer.ts     # 瓦片层 + NPC + 玩家 + HUD 渲染
+        ├── dialogContent.ts# NPC 对白本 + 学习站点表 + 对话视图组装
+        ├── Dialog.ts       # 对话框运行时状态机（开/关 + 当前内容）
+        ├── Renderer.ts     # 瓦片层 + NPC + 玩家 + HUD（状态栏 / 对话框 / 交互键）渲染
         ├── Camera.ts       # 跟随玩家 + 边界夹紧
         ├── Player.ts       # 按格移动 + 缓动插值
-        ├── Input.ts        # 方向键 + 滑动摇杆
-        └── layout.ts       # HUD 几何（方向键命中区）
+        ├── Input.ts        # 方向键 + 滑动摇杆 + 交互键 / 轻点（离散动作）
+        └── layout.ts       # HUD 几何（方向键 / 交互键 / 对话框命中区）
 ```
 
 ## 构建
@@ -75,21 +81,57 @@ npm run typecheck    # 仅类型检查（tsc --noEmit）
 ## 玩法 / 控制
 
 - **移动**：左下角十字**方向键**，或在屏幕任意处**滑动**（虚拟摇杆，按住持续移动）。玩家按瓦片网格移动，格间做缓动插值。
-- **交互提示**：走到建筑 / NPC / 地标**相邻格**时，屏幕上方出现信息横幅（建筑显示中文名 + route，NPC 显示名字 + key）。NPC 头顶有「!」提示气泡。
+- **交互提示**：走到建筑 / NPC / 地标**相邻格**时，该对象会被淡金色高亮，屏幕上方出现提示条「轻点或按右下键交互」。NPC 头顶仍有「!」气泡。
+- **交互（对话/信息框）**：靠近后**轻点屏幕**或按**右下角交互键**，弹出对话框：
+  - **NPC**：显示名字 + 一句对白（取自随包 `assets/data/npcs.json`，缺数据则退化为地图标签 + key）。
+  - **建筑**：显示学习站点中文名 + 简介（工坊 / 图书馆 / 训练场 / 矿洞 / 复盘大厅 / 竞技场 / 镇长大厅）。
+  - **地标**：显示名字 + 一句风味文案。
+  - 再次轻点空白处或按交互键**关闭**；走出相邻格会自动关闭。
+- **跳转配套学习小程序**（可选，见下）：在**学习类建筑**对话框里，若已配置配套小程序 AppID，会出现「前往学习小程序 ›」按钮；轻点它或按交互键即跳转。未配置则只在对话里提示「学习内容在配套学习小程序中」，不显示按钮。
 
 ## 渲染要点
 
 - **瓦片地图**：读取 Tiled JSON 的 `ground` / `buildings` / `decoration` 三个 tilelayer，按 `gid → 帧号`（`gid - firstgid`，并剥离 flip 高位）映射到 tileset 的 12 列网格，按镜头视口裁剪后逐格 `drawImage`。
 - **玩家**：方块小人（阴影 + 身体 + 头 + 朝向眼睛），按格移动并平滑插值，走动时上下轻微 bob。
 - **镜头**：跟随玩家中心，按世界边界夹紧；世界比视口小则居中。
-- **交互**：解析 object 层的 `building` / `landmark` / `low_obstacle` / `npc`，构建碰撞网格与可交互列表；每帧按「与玩家八邻接且玩家不在其footprint内」选出最近对象显示横幅。
+- **交互**：解析 object 层的 `building` / `landmark` / `low_obstacle` / `npc`，构建碰撞网格与可交互列表；每帧按「与玩家八邻接且玩家不在其 footprint 内」选出最近对象作为交互目标。交互动作（轻点 / 交互键）为**边沿触发**事件，由 `Dialog` 状态机驱动对话框开关。
+- **HUD 状态栏**：左上角显示「Pythontopia · 小镇」标题；若 bootstrap 成功，下方再加一条「第 N 天 · 周X · 天气 · 今日任务 n」（天气码 `SUNNY/CLOUDY/RAIN/WIND…` 本地化为中文；离线则不显示这条）。
 - **像素清晰**：`imageSmoothingEnabled = false`，并按 `devicePixelRatio` 提升画布分辨率。
 - **出生点**：地图缺省出生点 `tile(25,20)`；若被占用则就近螺旋搜索可通行格。后端 bootstrap 成功且落点可通行时覆盖为后端位置（失败则保持地图出生点，全程非阻塞）。
 
 ## 后端联动（可选、非阻塞）
 
-`src/api.ts` 用 `wx.request` GET `http://localhost:18080/api/game/bootstrap`，若 `wx.getStorageSync('pyt_token')` 存在则带 `Authorization: Bearer <token>`。返回 `player.tileX/tileY` 时把玩家放到该格；任何失败（无网络、超时、非 2xx）都安静回退到地图出生点，**不阻塞**游戏启动与运行。
+`src/api.ts` 用 `wx.request` **POST** `http://localhost:18080/api/game/bootstrap`（端点为 POST，见 `docs/clients/api-contract.md` §4.1 与后端 `GameBootstrapController`；早期文档里的 GET 已不适用）。若 `wx.getStorageSync('pyt_token')` 存在则带 `Authorization: Bearer <token>`。
+
+一次往返同时取两样东西：
+
+- **落点**：返回 `player.tileX/tileY` 且该格可通行时，把玩家放到该格。
+- **HUD**：读取 `world.dayIndex / world.weather / world.weekday` 与 `quests.length`，点亮左上角状态栏。
+
+任何失败（未登录、无网络、超时、非 2xx）都安静回退：保持地图出生点、隐藏 HUD 状态条，**不阻塞**游戏启动与运行。
+
+> Base URL / 端点 / token key / 超时都在 `src/config.ts` 的 `BACKEND` 里集中配置。
+
+## 跳转配套学习小程序（可选，deep-link）
+
+本工程只渲染像素小镇；**画像 / 课件 / 练习等学习面板在另一个独立小程序里**，此处刻意不内置任何学习 UI。在学习类建筑前确认后，可用 `wx.navigateToMiniProgram` 跳到那个小程序。
+
+开发者需在 `src/config.ts` 的 `COMPANION` 里配置：
+
+```ts
+export const COMPANION: CompanionConfig = {
+  appId: '',          // 填配套学习小程序真实 AppID 才启用跳转；留空则禁用
+  path: '',           // 目标入口页路径，留空打开首页；可带 query
+  envVersion: 'release',
+};
+```
+
+- `appId` **留空（默认）**：对话框不显示跳转按钮，仅提示「学习内容在配套学习小程序中」，按交互键只是关闭（不跳转、不报错）。
+- `appId` **已填**：学习建筑对话框出现「前往学习小程序 ›」，跳转时把 `{ route, from: 'minigame_town' }` 透传给目标小程序（其 `wx.onShow` / `wx.getLaunchOptionsSync` 可取）。
+- 所有 `wx.navigateToMiniProgram` 调用都封装在 `runtime/wx.ts`，失败安静返回（仅 log）。
 
 ## 资源授权
 
-`assets/tilesets/tilemap_packed.png` 为 Kenney「Tiny Town」像素素材（CC0），随包附带 `assets/tilesets/License.txt`。地图 `town_hub.json` 由 Pythontopia 前端程序化生成并复制而来。
+- `assets/tilesets/tilemap_packed.png`：Kenney「Tiny Town」像素素材（CC0），随包附带 `assets/tilesets/License.txt`。
+- `assets/maps/town_hub.json`：由 Pythontopia 前端程序化生成并复制而来。
+- `assets/data/npcs.json`：Pythontopia 项目自有文本内容，由仓库 `data/npcs/*` 的对白精简改写而来（CC-BY-SA-4.0），详见 `assets/data/LICENSE.md`。

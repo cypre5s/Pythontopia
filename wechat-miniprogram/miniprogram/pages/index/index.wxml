@@ -6,6 +6,17 @@
 
   <view class="login__error" wx:if="{{errorMsg}}">{{errorMsg}}</view>
 
+  <!-- Bug 矿洞入口 -->
+  <view class="card">
+    <view class="row row--between">
+      <view class="index__entry-text">
+        <view class="section-title">Bug 矿洞</view>
+        <view class="muted">错题复盘 · 遗忘回声（FSRS 到期复习）</view>
+      </view>
+      <button class="btn btn--sm" bindtap="goMine">进入</button>
+    </view>
+  </view>
+
   <!-- 掌握度概览 -->
   <view class="card">
     <view class="row row--between">

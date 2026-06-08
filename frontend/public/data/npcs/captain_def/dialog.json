@@ -7,10 +7,22 @@
       "text": "踩稳跳板，{{playerName}}。我这艘商船就泊在镇子边上，早不出海喽——如今既当路标，也当讲台。来看我这本货箱清单：一格一格码得齐整，这就是 Python 里的『列表』。",
       "conditions": [],
       "choices": [
-        { "label": "列表和抽奖箱有什么关系？", "nextNodeId": "about_list" },
-        { "label": "列表、字典、集合都怎么分？", "nextNodeId": "about_ds" },
-        { "label": "我想领第 5 章的第一个任务", "nextNodeId": "about_quest" },
-        { "label": "先到处看看", "nextNodeId": null }
+        {
+          "label": "列表和抽奖箱有什么关系？",
+          "nextNodeId": "about_list"
+        },
+        {
+          "label": "列表、字典、集合都怎么分？",
+          "nextNodeId": "about_ds"
+        },
+        {
+          "label": "我想领第 5 章的第一个任务",
+          "nextNodeId": "about_quest"
+        },
+        {
+          "label": "先到处看看",
+          "nextNodeId": null
+        }
       ]
     },
     "about_list": {
@@ -18,9 +30,18 @@
       "text": "瞧这只抽奖箱，里头按 0、1、2…… 编了号的签，就是一条列表；我闭眼往里一摸，便是 random 随机抽一张。第 5 章一开篇，你就用列表装东西、用 random 抽东西，{{styleAdaptive:像翻图册一样一格格看过去|顺着下标的规律慢慢推|干脆自己写两行随机抽签的代码}}最容易上手。",
       "conditions": [],
       "choices": [
-        { "label": "字典、集合又是干嘛的？", "nextNodeId": "about_ds" },
-        { "label": "明白，去领任务", "nextNodeId": "about_quest", "effects": [{ "type": "friendship", "delta": 2 }] },
-        { "label": "我再想想", "nextNodeId": null }
+        {
+          "label": "字典、集合又是干嘛的？",
+          "nextNodeId": "about_ds"
+        },
+        {
+          "label": "明白，去领任务",
+          "nextNodeId": "about_quest"
+        },
+        {
+          "label": "我再想想",
+          "nextNodeId": null
+        }
       ]
     },
     "about_ds": {
@@ -28,9 +49,18 @@
       "text": "同样是装货，门道各不同：列表按顺序排号，取第几个一找就着；字典像挂牌，凭名字（键）取对应的货（值）；集合最干脆，一样的东西只留一份，专治重复。一船家当，全靠这三样收拾利落。",
       "conditions": [],
       "choices": [
-        { "label": "再讲讲列表和 random", "nextNodeId": "about_list" },
-        { "label": "好，去领任务", "nextNodeId": "about_quest", "effects": [{ "type": "friendship", "delta": 2 }] },
-        { "label": "先记下了", "nextNodeId": null }
+        {
+          "label": "再讲讲列表和 random",
+          "nextNodeId": "about_list"
+        },
+        {
+          "label": "好，去领任务",
+          "nextNodeId": "about_quest"
+        },
+        {
+          "label": "先记下了",
+          "nextNodeId": null
+        }
       ]
     },
     "about_quest": {
@@ -38,8 +68,24 @@
       "text": "头一桩活儿叫「列表与 Random」。你眼下掌握度在 {{stats.masteryAvg}} 上下，{{profileAdaptive:不急，先把列表摸顺再说|底子够了，正好拿这关练练手}}。先去听一课，回头到训练场亲手抽它几把，这一章就算扬帆了。",
       "conditions": [],
       "choices": [
-        { "label": "好，开始第 5 章·这就去上课", "nextNodeId": null, "effects": [{ "type": "friendship", "delta": 3 }, { "type": "quest_recommend", "questKey": "5-1" }, { "type": "open_panel", "route": "/lecture/5" }] },
-        { "label": "我再准备准备", "nextNodeId": null }
+        {
+          "label": "好，开始第 5 章·这就去上课",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "quest_recommend",
+              "questKey": "5-1"
+            },
+            {
+              "type": "open_panel",
+              "route": "/lecture/5"
+            }
+          ]
+        },
+        {
+          "label": "我再准备准备",
+          "nextNodeId": null
+        }
       ]
     }
   }

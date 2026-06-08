@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { onMounted } from 'vue';
+import { onMounted, ref } from 'vue';
 import AppLayout from '@/app/AppLayout.vue';
 import ProfileInterviewPanel from '@/components/profile/ProfileInterviewPanel.vue';
+import AgentNotebook from '@/components/agents/AgentNotebook.vue';
 import { useLearningStore } from '@/stores/learning';
 
 const learning = useLearningStore();
+const showNotebook = ref(false);
 
 onMounted(async () => {
   if (!learning.profileInterview.sessionId) {

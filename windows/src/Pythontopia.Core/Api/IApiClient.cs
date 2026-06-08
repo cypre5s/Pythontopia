@@ -57,6 +57,33 @@ public interface IApiClient
     /// reaches PASSED / FAILED / ERROR (or the call is cancelled / times out).
     /// </summary>
     Task<SubmissionDetailDto> SubmitAndPollAsync(long problemId, string code, IProgress<string>? progress = null, CancellationToken ct = default);
+    /// <summary>
+    /// Polls GET /api/submissions/{id} until the status reaches PASSED / FAILED / ERROR. Used to
+    /// follow up submissions created out-of-band (e.g. Bug 矿洞 retry / variant submits).
+    /// </summary>
+    Task<SubmissionDetailDto> PollSubmissionAsync(long submissionId, IProgress<string>? progress = null, CancellationToken ct = default);
+
+    // ---- bug mine (错题矿洞 / 遗忘回声) ----
+    Task<IReadOnlyList<BugMineErrorBookItemDto>> GetBugMineErrorBookAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<BugMineEchoCandidateDto>> GetBugMineEchoesAsync(CancellationToken ct = default);
+    Task<BugMineSessionDto> OpenBugMineEchoAsync(string kcCode, CancellationToken ct = default);
+    Task<BugMineSessionDto> OpenBugMineSessionAsync(long submissionId, CancellationToken ct = default);
+    Task<BugMineSessionDto> GetBugMineSessionAsync(long sessionId, CancellationToken ct = default);
+    Task<BugMineCardDto> RevealBugMineCardAsync(long sessionId, long cardId, CancellationToken ct = default);
+    Task<SubmissionDto> BugMineRetrySubmitAsync(long sessionId, string code, CancellationToken ct = default);
+    Task<SubmissionDto> BugMineVariantSubmitAsync(long sessionId, string code, CancellationToken ct = default);
+    /// <summary><paramref name="status"/> is RESOLVED or ABANDONED.</summary>
+    Task<BugMineSessionDto> CloseBugMineSessionAsync(long sessionId, string status, CancellationToken ct = default);
+
+    // ---- intent router / resource workshop (百晓工坊) ----
+    Task<IntentRouteResponse> RouteIntentAsync(IntentRouteRequest request, CancellationToken ct = default);
+    Task<ResourceCreateResponse> CreateResourceAsync(ResourceCreateRequest request, CancellationToken ct = default);
+    Task<IReadOnlyList<ResourceListItemDto>> GetResourcesAsync(string? type = null, string? kcCode = null, int limit = 20, int offset = 0, CancellationToken ct = default);
+    Task<LearningResourceDto> GetResourceAsync(long resourceId, CancellationToken ct = default);
+    /// <summary>Streams resource generation (POST /api/workshop/resources/stream) as <c>plan</c>/<c>trace</c>/<c>result</c> SSE frames.</summary>
+    IAsyncEnumerable<SseEvent> StreamResourceAsync(ResourceCreateRequest request, CancellationToken ct = default);
+    /// <summary>Streams the 学习总管 (POST /api/orchestrator/turn/stream) as <c>trace</c>/<c>token</c>/<c>result</c> SSE frames.</summary>
+    IAsyncEnumerable<SseEvent> StreamOrchestratorTurnAsync(OrchestratorTurnRequest request, CancellationToken ct = default);
 
     // ---- classrooms ----
     Task<IReadOnlyList<ClassroomDto>> GetMyClassroomsAsync(CancellationToken ct = default);

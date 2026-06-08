@@ -24,12 +24,11 @@ public sealed record PlayerState(
     int? TileY,
     string? Direction);
 
-/// <summary>Per-NPC dialog progress + friendship.</summary>
+/// <summary>Per-NPC dialog progress.</summary>
 public sealed record NpcDialogState(
     string NpcKey,
     string? CurrentNodeId,
     IReadOnlyList<string>? CompletedNodeIds,
-    int Friendship,
     DateTimeOffset? LastTalkedAt,
     JsonElement? Flags);
 

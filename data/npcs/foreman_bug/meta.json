@@ -7,7 +7,6 @@
   "spawnMap": "town_hub",
   "spawn": { "tileX": 25, "tileY": 33 },
   "birthday": { "month": 8, "day": 10 },
-  "favoriteGifts": ["pickaxe", "lantern", "torch"],
   "schedule": {
     "monday":    [{ "from": "07:00", "map": "town_hub", "tileX": 25, "tileY": 33 }],
     "tuesday":   [{ "from": "07:00", "map": "town_hub", "tileX": 25, "tileY": 33 }],

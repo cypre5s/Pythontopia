@@ -10,7 +10,6 @@ public record NpcDialogState(
     String npcKey,
     String currentNodeId,
     List<String> completedNodeIds,
-    Integer friendship,
     OffsetDateTime lastTalkedAt,
     JsonNode flags,
     OffsetDateTime createdAt,

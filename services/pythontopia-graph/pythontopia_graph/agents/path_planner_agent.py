@@ -93,8 +93,13 @@ class PathPlannerAgent:
                     source_classroom_quest_id=classroom_quest.classroom_quest_id,
                 )
 
+        error_pattern_kcs = {code for code in request.error_pattern_kcs if code}
         focus_candidates = self._select_focus_kcs(
-            unlocked_kcs, request.recent_resources, request.recent_submissions, classroom_kcs
+            unlocked_kcs,
+            request.recent_resources,
+            request.recent_submissions,
+            classroom_kcs,
+            error_pattern_kcs,
         )
         # DAG：按先修关系拓扑排序，先修 KC 排到更靠前的天，保证「先学先修再学依赖」。
         focus_candidates = self._topological_order(focus_candidates)
@@ -201,12 +206,22 @@ class PathPlannerAgent:
         resources: list[PlannerResourceUsage],
         submissions: list[PlannerProblemSubmission],
         classroom_kcs: set[str],
+        error_pattern_kcs: set[str],
     ) -> list[_CandidateKc]:
-        def score(kc: PlannerKcSnapshot) -> tuple[float, int, int, str]:
+        def score(kc: PlannerKcSnapshot) -> tuple[int, float, int, int, str]:
+            # error_pattern 命中作为最高优先键：把反思标记的高频坑前置（其余信号不变）。
+            # 无命中时该键恒为 0，排序退化为原 (mastery_distance, classroom+failed, hash) 顺序（回归安全）。
+            error_boost = 1 if kc.kc_code in error_pattern_kcs else 0
             mastery_distance = max(0.0, LOW_MASTERY_THRESHOLD - kc.mastery_score)
             classroom_boost = 1 if kc.kc_code in classroom_kcs else 0
             recent_failed = 1 if self._failed_recently(kc.kc_code, submissions) else 0
-            return (-mastery_distance, -classroom_boost - recent_failed, hash_to_int(kc.kc_code), kc.kc_code)
+            return (
+                -error_boost,
+                -mastery_distance,
+                -classroom_boost - recent_failed,
+                hash_to_int(kc.kc_code),
+                kc.kc_code,
+            )
 
         ordered = sorted(unlocked, key=score)
         focus = ordered[:TARGET_FOCUS_KCS]

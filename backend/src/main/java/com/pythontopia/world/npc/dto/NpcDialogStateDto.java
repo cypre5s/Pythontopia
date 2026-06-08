@@ -9,7 +9,6 @@ public record NpcDialogStateDto(
     String npcKey,
     String currentNodeId,
     List<String> completedNodeIds,
-    int friendship,
     OffsetDateTime lastTalkedAt,
     JsonNode flags) {
 
@@ -18,7 +17,6 @@ public record NpcDialogStateDto(
         state.npcKey(),
         state.currentNodeId(),
         state.completedNodeIds(),
-        state.friendship() == null ? 0 : state.friendship(),
         state.lastTalkedAt(),
         state.flags());
   }

@@ -7,6 +7,7 @@ import { Quest, QuestStatus } from '../../api/dto/quests';
 import { isLoggedIn, getUser } from '../../store/session';
 import { ApiError } from '../../utils/request';
 import { percentWidth, toPercent } from '../../utils/format';
+import { MINE_ROUTE } from '../../config';
 
 const STATUS_LABEL: Record<QuestStatus, string> = {
   OPEN: '待开始',
@@ -213,5 +214,9 @@ Page({
     const questId = dataset.questId ? Number(dataset.questId) : null;
     const query = questId ? `?problemId=${problemId}&questId=${questId}` : `?problemId=${problemId}`;
     wx.navigateTo({ url: `/pages/practice/detail${query}` });
+  },
+
+  goMine() {
+    wx.navigateTo({ url: MINE_ROUTE });
   },
 });

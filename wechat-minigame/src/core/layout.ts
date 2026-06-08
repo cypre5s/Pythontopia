@@ -41,6 +41,39 @@ export function computeDpad(viewWidth: number, viewHeight: number): DpadLayout {
   };
 }
 
+/** 右下角圆形交互键，按视口尺寸自适应（与左下方向键镜像，便于右手拇指够到）。 */
+export function computeInteractButton(viewWidth: number, viewHeight: number): Rect {
+  const size = clamp(Math.round(Math.min(viewWidth, viewHeight) * 0.17), 56, 96);
+  const margin = Math.round(size * 0.7);
+  return {
+    x: viewWidth - margin - size,
+    y: viewHeight - margin - size - Math.round(size * 0.6),
+    w: size,
+    h: size,
+  };
+}
+
+export interface DialogLayout {
+  /** 对话框外框。 */
+  box: Rect;
+  /** 深链动作按钮（仅学习站点 + 已配置配套小程序时绘制/命中）。 */
+  action: Rect;
+}
+
+/** 对话框几何：上中部一块面板，避开底部方向键/交互键；动作按钮贴近面板底边。 */
+export function computeDialogLayout(viewWidth: number, viewHeight: number): DialogLayout {
+  const w = Math.min(viewWidth - 24, 540);
+  const h = clamp(Math.round(viewHeight * 0.27), 140, 210);
+  const x = Math.round((viewWidth - w) / 2);
+  const y = Math.round(Math.min(84, viewHeight * 0.12));
+  const pad = 16;
+  const actionH = 40;
+  return {
+    box: { x, y, w, h },
+    action: { x: x + pad, y: y + h - 14 - actionH, w: w - pad * 2, h: actionH },
+  };
+}
+
 export function directionAtPoint(dpad: DpadLayout, px: number, py: number): Direction | null {
   if (rectContains(dpad.up, px, py)) {
     return 'up';

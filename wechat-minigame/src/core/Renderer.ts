@@ -4,7 +4,40 @@ import type { Ctx2D, GameImage } from '../runtime/wx';
 import type { Camera } from './Camera';
 import type { Interactable, NpcSpawn, TileMap } from './TileMap';
 import type { Player } from './Player';
-import type { Direction, DpadLayout, Rect } from './layout';
+import type { DialogView } from './dialogContent';
+import {
+  computeDialogLayout,
+  computeInteractButton,
+  type Direction,
+  type DpadLayout,
+  type Rect,
+} from './layout';
+
+/** 进入小镇后从 bootstrap 取得的 HUD 摘要（任一字段缺失即省略）。 */
+export interface HudStatus {
+  day: number | null;
+  weather: string | null;
+  weekday: string | null;
+  questCount: number | null;
+}
+
+/** 靠近某对象但尚未打开对话时的提示。 */
+export interface InteractPrompt {
+  title: string;
+  badge: string;
+}
+
+/** 一帧 HUD 所需的全部信息（屏幕坐标层）。 */
+export interface HudFrame {
+  dpad: DpadLayout;
+  heldDir: Direction | null;
+  interactLabel: string;
+  interactActive: boolean;
+  interactEnabled: boolean;
+  status: HudStatus | null;
+  prompt: InteractPrompt | null;
+  dialog: DialogView | null;
+}
 
 const NPC_PALETTE: ReadonlyArray<string> = [
   '#e76f51',
@@ -53,13 +86,35 @@ export class Renderer {
     tileset: GameImage,
     camera: Camera,
     player: Player,
+    nearby: Interactable | null,
   ): void {
     const ctx = this.ctx;
     ctx.save();
     ctx.translate(-camera.x, -camera.y);
     this.drawTileLayers(map, tileset, camera);
+    if (nearby) {
+      this.drawNearbyHighlight(nearby);
+    }
     this.drawNpcs(map.npcs, camera);
     this.drawPlayer(player);
+    ctx.restore();
+  }
+
+  /** 在当前可交互对象的 footprint 上画一圈淡金色高亮，提示「这个可以交互」。 */
+  private drawNearbyHighlight(item: Interactable): void {
+    const ctx = this.ctx;
+    const draw = this.drawTile;
+    ctx.save();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(255,209,102,0.9)';
+    ctx.fillStyle = 'rgba(255,209,102,0.14)';
+    for (const tile of item.tiles) {
+      const x = tile.x * draw + 2;
+      const y = tile.y * draw + 2;
+      const s = draw - 4;
+      ctx.fillRect(x, y, s, s);
+      ctx.strokeRect(x, y, s, s);
+    }
     ctx.restore();
   }
 
@@ -214,45 +269,72 @@ export class Renderer {
 
   // ── HUD（屏幕坐标，不随镜头平移）──
 
-  drawHud(dpad: DpadLayout, held: Direction | null, banner: Interactable | null): void {
-    this.drawTitleChip();
-    if (banner) {
-      this.drawBanner(banner);
+  drawHud(frame: HudFrame): void {
+    this.drawStatusBar(frame.status);
+    if (frame.dialog) {
+      this.drawDialog(frame.dialog);
+    } else if (frame.prompt) {
+      this.drawPrompt(frame.prompt);
     } else {
       this.drawHelp();
     }
-    this.drawDpad(dpad, held);
+    this.drawDpad(frame.dpad, frame.heldDir);
+    this.drawInteractButton(frame.interactLabel, frame.interactActive, frame.interactEnabled);
   }
 
-  private drawTitleChip(): void {
+  private drawStatusBar(status: HudStatus | null): void {
     const ctx = this.ctx;
-    const text = 'Pythontopia · 小镇';
-    const fontPx = 13;
-    ctx.font = `${fontPx}px sans-serif`;
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    const w = ctx.measureText(text).width + 20;
     const h = 26;
     const x = 12;
     const y = 14;
-    roundRect(ctx, x, y, w, h, 8);
-    ctx.fillStyle = 'rgba(20,16,12,0.62)';
-    ctx.fill();
+
+    const title = 'Pythontopia · 小镇';
+    ctx.font = '13px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    const titleW = ctx.measureText(title).width + 20;
+    this.chip(x, y, titleW, h);
     ctx.fillStyle = '#ffd166';
-    ctx.fillText(text, x + 10, y + h / 2 + 1);
+    ctx.fillText(title, x + 10, y + h / 2 + 1);
+
+    const statusText = status ? this.statusText(status) : '';
+    if (statusText) {
+      ctx.font = '12px sans-serif';
+      const w = ctx.measureText(statusText).width + 20;
+      const y2 = y + h + 6;
+      this.chip(x, y2, w, h);
+      ctx.fillStyle = '#e9f0d9';
+      ctx.fillText(statusText, x + 10, y2 + h / 2 + 1);
+    }
+  }
+
+  private statusText(status: HudStatus): string {
+    const parts: string[] = [];
+    if (status.day !== null) {
+      parts.push(`第 ${status.day} 天`);
+    }
+    if (status.weekday) {
+      parts.push(weekdayLabel(status.weekday));
+    }
+    if (status.weather) {
+      parts.push(weatherLabel(status.weather));
+    }
+    if (status.questCount !== null) {
+      parts.push(`今日任务 ${status.questCount}`);
+    }
+    return parts.join(' · ');
   }
 
   private drawHelp(): void {
     const ctx = this.ctx;
-    const text = '方向键或滑动屏幕移动 · 靠近建筑/NPC 查看信息';
-    const fontPx = 12;
-    ctx.font = `${fontPx}px sans-serif`;
+    const text = '方向键 / 滑动移动 · 靠近建筑或 NPC 轻点交互';
+    ctx.font = '12px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
     const w = ctx.measureText(text).width + 24;
     const h = 26;
     const x = this.viewWidth / 2 - w / 2;
-    const y = 52;
+    const y = 70;
     roundRect(ctx, x, y, w, h, 8);
     ctx.fillStyle = 'rgba(20,16,12,0.5)';
     ctx.fill();
@@ -260,40 +342,141 @@ export class Renderer {
     ctx.fillText(text, this.viewWidth / 2, y + 7);
   }
 
-  private drawBanner(item: Interactable): void {
+  private drawPrompt(prompt: InteractPrompt): void {
     const ctx = this.ctx;
-    const titleFont = 18;
-    const subFont = 12;
-    const kindLabel = item.kind === 'npc' ? 'NPC' : item.kind === 'landmark' ? '地标' : '建筑';
-    const subtitle = item.subtitle ? `${kindLabel} · ${item.subtitle}` : kindLabel;
-
-    ctx.font = `${titleFont}px sans-serif`;
-    const titleW = ctx.measureText(item.title).width;
-    ctx.font = `${subFont}px sans-serif`;
-    const subW = ctx.measureText(subtitle).width;
-
-    const contentW = Math.max(titleW, subW);
-    const w = Math.min(this.viewWidth - 24, contentW + 32);
-    const h = 58;
+    const verb = prompt.badge === 'NPC' ? '交谈' : '查看';
+    const text = `${prompt.badge} · ${prompt.title} — 轻点或按右下键${verb}`;
+    ctx.font = '13px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const w = Math.min(this.viewWidth - 24, ctx.measureText(text).width + 28);
+    const h = 30;
     const x = this.viewWidth / 2 - w / 2;
-    const y = 44;
-
-    roundRect(ctx, x, y, w, h, 12);
-    ctx.fillStyle = 'rgba(24,18,12,0.82)';
+    const y = 66;
+    roundRect(ctx, x, y, w, h, 9);
+    ctx.fillStyle = 'rgba(24,18,12,0.78)';
     ctx.fill();
     ctx.lineWidth = 2;
     ctx.strokeStyle = '#ffd166';
-    roundRect(ctx, x, y, w, h, 12);
+    roundRect(ctx, x, y, w, h, 9);
+    ctx.stroke();
+    ctx.fillStyle = '#fff8e1';
+    ctx.fillText(text, this.viewWidth / 2, y + h / 2 + 1);
+  }
+
+  private drawDialog(view: DialogView): void {
+    const ctx = this.ctx;
+    const layout = computeDialogLayout(this.viewWidth, this.viewHeight);
+    const { box, action } = layout;
+    const pad = 16;
+    const hasAction = view.deepLink !== null;
+
+    roundRect(ctx, box.x, box.y, box.w, box.h, 14);
+    ctx.fillStyle = 'rgba(24,18,12,0.9)';
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#ffd166';
+    roundRect(ctx, box.x, box.y, box.w, box.h, 14);
     ctx.stroke();
 
-    ctx.textAlign = 'center';
+    const innerX = box.x + pad;
+    // 徽标
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#fff8e1';
-    ctx.font = `${titleFont}px sans-serif`;
-    ctx.fillText(item.title, this.viewWidth / 2, y + 22);
+    const badgeW = ctx.measureText(view.badge).width + 14;
+    roundRect(ctx, innerX, box.y + pad, badgeW, 18, 6);
+    ctx.fillStyle = 'rgba(255,209,102,0.22)';
+    ctx.fill();
     ctx.fillStyle = '#ffd166';
-    ctx.font = `${subFont}px sans-serif`;
-    ctx.fillText(subtitle, this.viewWidth / 2, y + 42);
+    ctx.fillText(view.badge, innerX + 7, box.y + pad + 10);
+
+    // 标题
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = '#fff8e1';
+    ctx.font = '18px sans-serif';
+    ctx.fillText(view.title, innerX, box.y + pad + 24);
+
+    // 正文（按字符换行）
+    const bodyTop = box.y + pad + 24 + 26;
+    const bodyBottom = (hasAction ? action.y : box.y + box.h - 30) - 8;
+    const lineH = 20;
+    ctx.font = '14px sans-serif';
+    ctx.fillStyle = '#e7ddca';
+    const maxWidth = box.w - pad * 2;
+    let lines = this.wrapText(view.body, maxWidth);
+    const maxLines = Math.max(1, Math.floor((bodyBottom - bodyTop) / lineH));
+    if (lines.length > maxLines) {
+      lines = lines.slice(0, maxLines);
+      const last = lines[maxLines - 1] ?? '';
+      lines[maxLines - 1] = `${last.slice(0, Math.max(0, last.length - 1))}…`;
+    }
+    let cursorY = bodyTop;
+    for (const line of lines) {
+      ctx.fillText(line, innerX, cursorY);
+      cursorY += lineH;
+    }
+
+    // 小字脚注（如「学习内容在配套学习小程序中」）
+    if (view.footnote) {
+      ctx.font = '11px sans-serif';
+      ctx.fillStyle = 'rgba(255,248,225,0.55)';
+      ctx.fillText(view.footnote, innerX, cursorY + 2);
+    }
+
+    // 深链动作按钮 + 关闭提示
+    if (hasAction && view.deepLink) {
+      roundRect(ctx, action.x, action.y, action.w, action.h, 10);
+      ctx.fillStyle = 'rgba(255,209,102,0.92)';
+      ctx.fill();
+      ctx.fillStyle = '#3a2a12';
+      ctx.font = '14px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(view.deepLink.label, action.x + action.w / 2, action.y + action.h / 2 + 1);
+    }
+    this.drawDialogHint(box, hasAction);
+  }
+
+  private drawDialogHint(box: Rect, hasAction: boolean): void {
+    const ctx = this.ctx;
+    const text = hasAction ? '轻点空白处关闭 · 右下键前往' : '轻点空白处或按右下键关闭';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillStyle = 'rgba(255,248,225,0.5)';
+    ctx.fillText(text, box.x + box.w / 2, box.y + box.h - 8);
+  }
+
+  private wrapText(text: string, maxWidth: number): string[] {
+    const ctx = this.ctx;
+    const lines: string[] = [];
+    let current = '';
+    for (const ch of text) {
+      if (ch === '\n') {
+        lines.push(current);
+        current = '';
+        continue;
+      }
+      const candidate = current + ch;
+      if (current && ctx.measureText(candidate).width > maxWidth) {
+        lines.push(current);
+        current = ch;
+      } else {
+        current = candidate;
+      }
+    }
+    if (current) {
+      lines.push(current);
+    }
+    return lines;
+  }
+
+  private chip(x: number, y: number, w: number, h: number): void {
+    const ctx = this.ctx;
+    roundRect(ctx, x, y, w, h, 8);
+    ctx.fillStyle = 'rgba(20,16,12,0.62)';
+    ctx.fill();
   }
 
   private drawDpad(dpad: DpadLayout, held: Direction | null): void {
@@ -317,6 +500,84 @@ export class Renderer {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(glyph, rect.x + rect.w / 2, rect.y + rect.h / 2 + 1);
+  }
+
+  private drawInteractButton(label: string, active: boolean, enabled: boolean): void {
+    const ctx = this.ctx;
+    const rect = computeInteractButton(this.viewWidth, this.viewHeight);
+    const r = Math.min(rect.w, rect.h) / 2;
+    const cx = rect.x + rect.w / 2;
+    const cy = rect.y + rect.h / 2;
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.closePath();
+    if (active) {
+      ctx.fillStyle = 'rgba(255,209,102,0.92)';
+    } else if (enabled) {
+      ctx.fillStyle = 'rgba(231,111,81,0.85)';
+    } else {
+      ctx.fillStyle = 'rgba(20,16,12,0.4)';
+    }
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(255,248,225,0.6)';
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.stroke();
+
+    ctx.fillStyle = active ? '#3a2a12' : enabled ? '#fff8e1' : 'rgba(243,237,225,0.6)';
+    ctx.font = `${Math.round(r * 0.5)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, cx, cy + 1);
+  }
+}
+
+function weatherLabel(code: string): string {
+  switch (code.toLowerCase()) {
+    case 'sunny':
+    case 'sun':
+      return '晴';
+    case 'cloudy':
+    case 'cloud':
+      return '多云';
+    case 'rain':
+    case 'rainy':
+      return '雨';
+    case 'wind':
+    case 'windy':
+      return '风';
+    case 'snow':
+    case 'snowy':
+      return '雪';
+    case 'storm':
+    case 'stormy':
+      return '雷雨';
+    default:
+      return code;
+  }
+}
+
+function weekdayLabel(code: string): string {
+  switch (code.toLowerCase()) {
+    case 'monday':
+      return '周一';
+    case 'tuesday':
+      return '周二';
+    case 'wednesday':
+      return '周三';
+    case 'thursday':
+      return '周四';
+    case 'friday':
+      return '周五';
+    case 'saturday':
+      return '周六';
+    case 'sunday':
+      return '周日';
+    default:
+      return code;
   }
 }
 

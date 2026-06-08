@@ -18,8 +18,7 @@ import org.springframework.stereotype.Repository;
 /**
  * 按学习者维度的 NPC 对话状态读写助手。
  *
- * <p>所有写操作都会把 friendship 钳制到 {@code [0, 100]}，以满足 V101 的 CHECK 约束；flags 按顶层 key
- * 合并（后写覆盖）。
+ * <p>flags 按顶层 key 合并（后写覆盖）。
  */
 @Repository
 public class NpcDialogStateRepository {
@@ -37,7 +36,7 @@ public class NpcDialogStateRepository {
         .query(
             """
             SELECT id, user_id, npc_key, current_node_id, completed_node_ids,
-                   friendship, last_talked_at, flags, created_at, updated_at
+                   last_talked_at, flags, created_at, updated_at
             FROM npc_dialog_state
             WHERE user_id = ? AND npc_key = ?
             """,
@@ -52,7 +51,7 @@ public class NpcDialogStateRepository {
     return jdbcTemplate.query(
         """
         SELECT id, user_id, npc_key, current_node_id, completed_node_ids,
-               friendship, last_talked_at, flags, created_at, updated_at
+               last_talked_at, flags, created_at, updated_at
         FROM npc_dialog_state
         WHERE user_id = ?
         ORDER BY npc_key
@@ -103,25 +102,6 @@ public class NpcDialogStateRepository {
     return findOne(userId, npcKey).orElseThrow();
   }
 
-  /** 按 {@code delta} 调整 friendship，持久化值钳制到 {@code [0,100]} 并返回新值；行缺失时惰性插入。 */
-  public int incrementFriendship(Long userId, String npcKey, int delta) {
-    findOrInit(userId, npcKey);
-    Integer current =
-        jdbcTemplate.queryForObject(
-            """
-            UPDATE npc_dialog_state
-            SET friendship = LEAST(100, GREATEST(0, friendship + ?)),
-                updated_at = now()
-            WHERE user_id = ? AND npc_key = ?
-            RETURNING friendship
-            """,
-            Integer.class,
-            delta,
-            userId,
-            npcKey);
-    return current == null ? 0 : current;
-  }
-
   /** 将 JSON key 浅合并进现有 {@code flags} 对象；同名 key 被覆盖。 */
   public NpcDialogState mergeFlags(Long userId, String npcKey, JsonNode patch) {
     if (patch == null || !patch.isObject()) {
@@ -155,7 +135,6 @@ public class NpcDialogStateRepository {
         rs.getString("npc_key"),
         rs.getString("current_node_id"),
         readStringArray(rs.getArray("completed_node_ids")),
-        rs.getInt("friendship"),
         offset(rs, "last_talked_at"),
         readJson(rs.getString("flags")),
         offset(rs, "created_at"),

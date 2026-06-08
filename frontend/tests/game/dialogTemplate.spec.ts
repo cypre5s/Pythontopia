@@ -5,10 +5,9 @@
  *   1. {{playerName}} 替换 + 缺省兜底；
  *   2. {{stats.xxx}} 替换 + 未提供时 '—' 兜底，UI 不泄露字面量；
  *   3. {{profileAdaptive:A | B}} 按 profileType 选分支；
- *   4. {{giftFavorite:A | B}} 按 giftJustGiven 选分支；
- *   5. 嵌套（profileAdaptive 内含 stats）正确解析；
- *   6. 残余无法解析的占位符兜底成 '—'，不漏到 UI；
- *   7. createDialogContext 默认值合理。
+ *   4. 嵌套（profileAdaptive 内含 stats）正确解析；
+ *   5. 残余无法解析的占位符兜底成 '—'，不漏到 UI；
+ *   6. createDialogContext 默认值合理。
  */
 import { describe, expect, it } from 'vitest';
 import { createDialogContext, renderDialogText } from '@/game/dialogTemplate';
@@ -59,17 +58,6 @@ describe('renderDialogText', () => {
     expect(
       renderDialogText('{{profileAdaptive:先动手 | 先看课件}}', unknown),
     ).toBe('先看课件');
-  });
-
-  it('honours giftJustGiven when picking giftFavorite branch', () => {
-    const happy = createDialogContext({ giftJustGiven: true });
-    expect(renderDialogText('{{giftFavorite:这茶味，是老味道。 | 收下了。}}', happy)).toBe(
-      '这茶味，是老味道。',
-    );
-    const plain = createDialogContext({ giftJustGiven: false });
-    expect(renderDialogText('{{giftFavorite:这茶味，是老味道。 | 收下了。}}', plain)).toBe(
-      '收下了。',
-    );
   });
 
   it('resolves nested placeholders (inner stats inside profileAdaptive)', () => {
@@ -166,7 +154,6 @@ describe('createDialogContext', () => {
     expect(ctx.playerName).toBe('学习者');
     expect(ctx.profileType).toBe('cautious');
     expect(ctx.cognitiveStyle).toBe('unknown');
-    expect(ctx.giftJustGiven).toBe(false);
     expect(ctx.stats).toEqual({});
   });
 
@@ -175,13 +162,11 @@ describe('createDialogContext', () => {
       playerName: '阿杰',
       profileType: 'practical',
       cognitiveStyle: 'logical',
-      giftJustGiven: true,
       stats: { foo: 'bar' },
     });
     expect(ctx.playerName).toBe('阿杰');
     expect(ctx.profileType).toBe('practical');
     expect(ctx.cognitiveStyle).toBe('logical');
-    expect(ctx.giftJustGiven).toBe(true);
     expect(ctx.stats).toEqual({ foo: 'bar' });
   });
 });

@@ -22,15 +22,6 @@ const currentNode = computed<DialogNode | null>(() => store.currentNode);
 const loading = computed<boolean>(() => store.loading);
 const loadError = computed<string | null>(() => store.loadError);
 
-const heartDisplay = computed<string>(() => {
-  const f = store.friendship;
-  if (f <= 0) return '';
-  const full = Math.min(Math.floor(f / 10), 10);
-  const remainder = f % 10;
-  if (full >= 10) return '<3'.repeat(10);
-  return '<3'.repeat(full) + (remainder > 0 ? ` +${remainder}` : '');
-});
-
 const useFullPortraitFallback = ref(false);
 
 const portraitFileName = computed<string | null>(() => {
@@ -67,14 +58,13 @@ let typeTimer: ReturnType<typeof setTimeout> | null = null;
 const TYPE_INTERVAL_MS = 24;
 
 const templateContext = computed(() => {
-  // {{playerName}} / {{stats.*}} / {{profileAdaptive:..}} / {{giftFavorite:..}} 交给统一渲染器；
+  // {{playerName}} / {{stats.*}} / {{profileAdaptive:..}} 交给统一渲染器；
   // store.context 缺失时用 displayName 兜底，stats 取不到走 '—'。
   const ctx = store.context;
   return createDialogContext({
     playerName: ctx?.playerName ?? session.displayName,
     profileType: ctx?.profileType ?? 'cautious',
     cognitiveStyle: ctx?.cognitiveStyle ?? 'unknown',
-    giftJustGiven: ctx?.giftJustGiven ?? false,
     stats: ctx?.stats ?? {},
   });
 });
@@ -227,12 +217,6 @@ function onPortraitError(event: Event): void {
               class="name-tag"
               style="color: #111111;"
             >{{ store.npcName || '???' }}</span>
-            <span
-              v-if="store.friendship > 0"
-              class="friendship"
-              :aria-label="`好感度 ${store.friendship}`"
-              data-testid="dialog-friendship"
-            >{{ heartDisplay }}</span>
           </header>
 
           <p
@@ -374,14 +358,6 @@ function onPortraitError(event: Event): void {
 
 .name-tag {
   font-weight: 600;
-}
-
-.friendship {
-  font-size: 13px;
-  color: #111111;
-  background: rgba(17, 17, 17, 0.08);
-  padding: 2px 8px;
-  border-radius: 999px;
 }
 
 .dialog-text {

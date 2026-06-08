@@ -64,7 +64,6 @@ class NpcDialogControllerTest {
             "mayor_py",
             "intro_1",
             List.of("intro_0"),
-            5,
             OffsetDateTime.parse("2026-05-22T08:00:00Z"),
             objectMapper.createObjectNode().put("met", true));
     when(service.getOrInit(eq(7L), eq("mayor_py"))).thenReturn(dto);
@@ -73,7 +72,6 @@ class NpcDialogControllerTest {
         .perform(get("/api/world/npcs/mayor_py/state"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.npcKey").value("mayor_py"))
-        .andExpect(jsonPath("$.friendship").value(5))
         .andExpect(jsonPath("$.flags.met").value(true));
   }
 
@@ -84,7 +82,6 @@ class NpcDialogControllerTest {
             "mayor_py",
             "intro_2",
             List.of("intro_0", "intro_1"),
-            13,
             OffsetDateTime.parse("2026-05-22T08:05:00Z"),
             objectMapper.createObjectNode());
     when(service.talk(eq(7L), eq("mayor_py"), any(NpcTalkRequest.class))).thenReturn(dto);
@@ -94,7 +91,7 @@ class NpcDialogControllerTest {
                 "nodeId", "intro_1",
                 "nextNodeId", "intro_2",
                 "effects",
-                    List.of(Map.of("type", "FRIENDSHIP_DELTA", "delta", 8))));
+                    List.of(Map.of("type", "COMPLETE_NODE", "key", "intro_1"))));
 
     mockMvc
         .perform(
@@ -103,7 +100,6 @@ class NpcDialogControllerTest {
                 .content(body))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.currentNodeId").value("intro_2"))
-        .andExpect(jsonPath("$.completedNodeIds.length()").value(2))
-        .andExpect(jsonPath("$.friendship").value(13));
+        .andExpect(jsonPath("$.completedNodeIds.length()").value(2));
   }
 }

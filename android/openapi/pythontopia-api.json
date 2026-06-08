@@ -102,12 +102,11 @@
       },
       "NpcDialogStateDto": {
         "type": "object",
-        "required": ["npcKey", "completedNodeIds", "friendship"],
+        "required": ["npcKey", "completedNodeIds"],
         "properties": {
           "npcKey": { "type": "string" },
           "currentNodeId": { "type": "string", "nullable": true },
           "completedNodeIds": { "type": "array", "items": { "type": "string" } },
-          "friendship": { "type": "integer" },
           "lastTalkedAt": { "type": "string", "format": "date-time", "nullable": true },
           "flags": {
             "type": "object",
@@ -122,9 +121,8 @@
         "properties": {
           "type": {
             "type": "string",
-            "enum": ["FRIENDSHIP_DELTA", "COMPLETE_NODE", "SET_FLAG"]
+            "enum": ["COMPLETE_NODE", "SET_FLAG"]
           },
-          "delta": { "type": "integer", "nullable": true },
           "key": { "type": "string", "nullable": true },
           "value": { "type": "string", "nullable": true }
         }

@@ -12,7 +12,6 @@ import type { DialogContextDto } from '@/api/dto/DialogContextDto';
  * 调整字段需同步更新数据文件。
  */
 export type DialogEffectType =
-  | 'friendship'
   | 'give_item'
   | 'quest_recommend'
   | 'set_flag'
@@ -21,7 +20,6 @@ export type DialogEffectType =
 
 export interface DialogEffect {
   type: DialogEffectType;
-  delta?: number;
   itemKey?: string;
   questKey?: string;
   flagKey?: string;
@@ -56,11 +54,9 @@ export interface DialogChoiceEvent {
 export type DialogChoiceListener = (event: DialogChoiceEvent) => void;
 
 export type DialogConditionType =
-  | 'friendship_min'
   | 'first_time_this_week'
   | 'kc_mastered'
   | 'flag_set'
-  | 'gift_just_given'
   | 'has_failed_submission';
 
 export interface DialogCondition {
@@ -86,7 +82,7 @@ export interface NpcDialogTree {
 
 /**
  * NPC 元数据（meta.json 中我们当前组件用到的字段子集）。
- * 其余字段（schedule / favoriteGifts / spawn / tags...）后续可扩展，
+ * 其余字段（schedule / spawn / tags...）后续可扩展，
  * 此处只声明 DialogTree 实际用到的，避免类型膨胀。
  */
 export interface NpcMeta {
@@ -116,8 +112,6 @@ interface DialogState {
   currentNodeId: string | null;
   /** 已访问节点 ids（用于条件判定 / 防回退） */
   history: string[];
-  /** 当前 NPC 的好感度（内存态） */
-  friendship: number;
   /** 加载错误信息（fetch meta/dialog 失败时填充） */
   loadError: string | null;
   /** 加载中（fetch 进行中） */
@@ -141,7 +135,7 @@ interface DialogState {
    * - 拉取失败 / 未登录时保留为 null，DialogTree / DialogModal 渲染器自动用空 stats + 'cautious'
    *   profile 兜底，所有 {{stats.xxx}} 走 '—' 占位，不会暴露字面量；
    * - 同一玩家在同一 NPC 间切换时复用上一次 context，避免每次对话都打一次接口造成抖动；
-   * - 任意 NPC `openWithTree` 触发首次拉取（context 与 NPC 的 giftJustGiven 强相关，
+   * - 任意 NPC `openWithTree` 触发首次拉取（context 可能随 NPC / 玩家实时数据变化，
    *   所以每次开新 NPC 都重拉一次）。
    */
   context: DialogContextDto | null;
@@ -164,37 +158,6 @@ const PANEL_ROUTE_MAP: Readonly<Record<string, string>> = Object.freeze({
   examples: '/examples',
   problems: '/problems',
 });
-
-/**
- * 内存级好感度缓存：dialog store 关闭后仍保留同会话内 NPC 的好感度。
- */
-const friendshipMemory = new Map<string, number>();
-
-/** 持久化到 localStorage，让跨刷新也保留好感度。 */
-const FRIENDSHIP_KEY = 'pyt_friendship_v1';
-
-function loadFriendshipFromStorage(): void {
-  if (typeof window === 'undefined') return;
-  try {
-    const raw = window.localStorage.getItem(FRIENDSHIP_KEY);
-    if (!raw) return;
-    const obj = JSON.parse(raw) as Record<string, number>;
-    for (const [k, v] of Object.entries(obj)) {
-      if (typeof v === 'number') friendshipMemory.set(k, v);
-    }
-  } catch { /* 隐私模式 / 数据损坏 */ }
-}
-
-function persistFriendship(): void {
-  if (typeof window === 'undefined') return;
-  try {
-    const obj: Record<string, number> = {};
-    for (const [k, v] of friendshipMemory) obj[k] = v;
-    window.localStorage.setItem(FRIENDSHIP_KEY, JSON.stringify(obj));
-  } catch { /* 隐私模式 */ }
-}
-
-loadFriendshipFromStorage();
 
 /**
  * 模块级 `dialog:choice` 事件监听集合。
@@ -246,7 +209,6 @@ export const useDialogStore = defineStore('dialog', {
     tree: null,
     currentNodeId: null,
     history: [],
-    friendship: 0,
     loadError: null,
     loading: false,
     branchChoices: [],
@@ -284,7 +246,6 @@ export const useDialogStore = defineStore('dialog', {
      *   1. 立即 visible=true 并显示 loading（让 UI 不闪烁）；
      *   2. 并行 fetch meta.json + dialog.json；
      *   3. 失败时填充 loadError，UI 自行降级展示；
-     *   4. 成功时 friendship 从内存缓存还原（默认 0）。
      *
      * @param npcKey NPC 标识，例如 mayor_py / librarian_doc
      * @param baseUrl 可选 base，便于测试 mock，默认 /data/npcs
@@ -300,7 +261,6 @@ export const useDialogStore = defineStore('dialog', {
       this.currentNodeId = null;
       this.npcName = npcKey;
       this.portrait = null;
-      this.friendship = friendshipMemory.get(npcKey) ?? 0;
       this.branchChoices = [];
       this.isTypingDone = false;
       try {
@@ -314,10 +274,8 @@ export const useDialogStore = defineStore('dialog', {
         this.portrait = meta.portrait ?? null;
         this.tree = tree;
 
-        const gated = this.findBestGatedNode(tree);
-        const startNode = gated ?? tree.rootNodeId;
-        this.currentNodeId = startNode;
-        this.history = startNode ? [startNode] : [];
+        this.currentNodeId = tree.rootNodeId;
+        this.history = tree.rootNodeId ? [tree.rootNodeId] : [];
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         this.loadError = `NPC 数据加载失败：${npcKey}（${message}）`;
@@ -345,7 +303,7 @@ export const useDialogStore = defineStore('dialog', {
 
     /**
      * 选择当前节点的某个选项：
-     *   - 先按顺序应用 effects（friendship 写好感、quest_recommend 发主线任务、route/open_panel 触发导航）；
+     *   - 先按顺序应用 effects（quest_recommend 发主线任务、route/open_panel 触发导航）；
      *   - nextNodeId 为 null 时关闭对话；
      *   - 否则切换到下一节点并写入 history。
      */
@@ -358,11 +316,6 @@ export const useDialogStore = defineStore('dialog', {
       let routeToNavigate: string | null = null;
       if (choice.effects && this.npcKey) {
         for (const effect of choice.effects) {
-          if (effect.type === 'friendship' && typeof effect.delta === 'number') {
-            this.friendship += effect.delta;
-            friendshipMemory.set(this.npcKey, this.friendship);
-            persistFriendship();
-          }
           // 主线发任务：NPC 推荐/激活一个主线子任务（questKey 对齐 mainQuests id，如 "1-1"）。
           // 用 lazy import 规避与 mainQuest store 的循环依赖（同 close() 的做法）。
           if (effect.type === 'quest_recommend' && effect.questKey) {
@@ -476,15 +429,12 @@ export const useDialogStore = defineStore('dialog', {
 
     /**
      * 评估条件列表是否全部满足（AND 逻辑）。
-     * 当前实现 friendship_min 与 has_failed_submission；其余类型暂按满足处理。
+     * 当前实现 has_failed_submission；其余类型暂按满足处理。
      */
     evaluateConditions(conditions: DialogCondition[]): boolean {
       if (conditions.length === 0) return true;
       for (const cond of conditions) {
         switch (cond.type) {
-          case 'friendship_min':
-            if (this.friendship < (cond.value ?? 0)) return false;
-            break;
           case 'has_failed_submission': {
             const title = this.context?.stats?.lastFailedProblemTitle;
             if (!title || title === '—' || title === '-') return false;
@@ -493,7 +443,6 @@ export const useDialogStore = defineStore('dialog', {
           case 'flag_set':
           case 'kc_mastered':
           case 'first_time_this_week':
-          case 'gift_just_given':
             break;
         }
       }
@@ -501,40 +450,13 @@ export const useDialogStore = defineStore('dialog', {
     },
 
     /**
-     * 在对话树中找 friendship-gated 特殊节点（如 friendship_max）。
-     * 优先选 friendship_min 值最高且当前满足的节点。
-     */
-    findBestGatedNode(tree: NpcDialogTree): string | null {
-      let best: { nodeId: string; threshold: number } | null = null;
-      for (const [nodeId, node] of Object.entries(tree.nodes)) {
-        if (nodeId === tree.rootNodeId) continue;
-        const friendshipCond = node.conditions.find((c) => c.type === 'friendship_min');
-        if (!friendshipCond) continue;
-        const threshold = friendshipCond.value ?? 0;
-        if (this.friendship >= threshold) {
-          if (!best || threshold > best.threshold) {
-            best = { nodeId, threshold };
-          }
-        }
-      }
-      return best?.nodeId ?? null;
-    },
-
-    /**
      * 关闭对话：
-     *   - 同时清理旧 API 状态，确保 DialogModal 也会跟着收起；
-     *   - friendship 不重置（写入 friendshipMemory，下次打开同 NPC 还原）；
-     *   - 有过实质互动（history > 1）时自动 +1 好感。
+     *   - 同时清理旧 API 状态，确保 DialogModal 也会跟着收起。
      */
     close(): void {
       const wasOpen = this.visible || this.openNpcKey !== null;
       const closingNpcKey = this.npcKey ?? this.openNpcKey;
 
-      if (closingNpcKey && this.history.length > 1) {
-        this.friendship += 1;
-        friendshipMemory.set(closingNpcKey, this.friendship);
-        persistFriendship();
-      }
       this.openNpcKey = null;
       this.lines = [];
       this.visible = false;
@@ -567,11 +489,6 @@ export const useDialogStore = defineStore('dialog', {
     },
   },
 });
-
-/** 内部测试钩子：清空 friendship 内存缓存，仅供 vitest 使用。 */
-export function __resetFriendshipMemoryForTests(): void {
-  friendshipMemory.clear();
-}
 
 /** 内部测试钩子：清空 `dialog:choice` 监听集合，仅供 vitest 使用。 */
 export function __resetChoiceListenersForTests(): void {

@@ -15,7 +15,6 @@ data class DialogUiState(
     val npcKey: String = DemoDialogTree.NPC_KEY,
     val npcDisplayName: String = DemoDialogTree.displayNameFor(DemoDialogTree.NPC_KEY),
     val currentNode: DialogNode? = null,
-    val friendship: Int = 0,
     val isAdvancing: Boolean = false,
     val errorMessage: String? = null,
 )
@@ -47,7 +46,6 @@ class DialogViewModel @Inject constructor(
             _state.update {
                 it.copy(
                     currentNode = node,
-                    friendship = remote.friendship,
                     isAdvancing = false,
                 )
             }
@@ -79,11 +77,10 @@ class DialogViewModel @Inject constructor(
         }
         _state.update { it.copy(isAdvancing = true, errorMessage = null) }
         viewModelScope.launch {
-            val updated = repository.advance(_state.value.npcKey, fromNodeId, choice)
+            repository.advance(_state.value.npcKey, fromNodeId, choice)
             _state.update {
                 it.copy(
                     currentNode = next,
-                    friendship = updated.friendship,
                     isAdvancing = false,
                 )
             }

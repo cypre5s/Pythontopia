@@ -10,7 +10,8 @@ public record PathPlannerGraphRequest(
     @JsonProperty("kcs") List<KcSnapshot> kcs,
     @JsonProperty("recent_resources") List<ResourceUsage> recentResources,
     @JsonProperty("recent_submissions") List<ProblemSubmission> recentSubmissions,
-    @JsonProperty("classroom_quests") List<ClassroomQuestSnapshot> classroomQuests) {
+    @JsonProperty("classroom_quests") List<ClassroomQuestSnapshot> classroomQuests,
+    @JsonProperty("error_pattern_kcs") List<String> errorPatternKcs) {
 
   public record ProfileSnapshot(
       @JsonProperty("has_profile") boolean hasProfile,

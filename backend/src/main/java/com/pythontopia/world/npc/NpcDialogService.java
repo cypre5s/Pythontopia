@@ -14,7 +14,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 在 {@link NpcDialogStateRepository} 的原子写之上施加 talk 业务规则（节点进度 + 好感度 + flags）。 */
+/** 在 {@link NpcDialogStateRepository} 的原子写之上施加 talk 业务规则（节点进度 + flags）。 */
 @Service
 public class NpcDialogService {
 
@@ -47,7 +47,6 @@ public class NpcDialogService {
       completed.add(request.nodeId());
     }
 
-    int friendshipDelta = 0;
     ObjectNode flagsPatch = objectMapper.createObjectNode();
     List<NpcDialogEffectDto> effects =
         request.effects() == null ? List.of() : request.effects();
@@ -56,7 +55,6 @@ public class NpcDialogService {
         continue;
       }
       switch (effect.type()) {
-        case "FRIENDSHIP_DELTA" -> friendshipDelta += effect.delta() == null ? 0 : effect.delta();
         case "COMPLETE_NODE" -> {
           if (effect.key() != null && !effect.key().isBlank()) {
             completed.add(effect.key());
@@ -79,9 +77,6 @@ public class NpcDialogService {
     }
     stateRepository.upsertNodeProgress(
         userId, npcKey, nextNodeId, new ArrayList<>(completed));
-    if (friendshipDelta != 0) {
-      stateRepository.incrementFriendship(userId, npcKey, friendshipDelta);
-    }
     if (flagsPatch.size() > 0) {
       stateRepository.mergeFlags(userId, npcKey, flagsPatch);
     }

@@ -2,7 +2,7 @@
 //
 // 覆盖：
 //   - openWithTree fetch 流程（成功 / 失败 / 加载中）
-//   - selectChoice 路径切换 / friendship effect / 关闭流程
+//   - selectChoice 路径切换 / 关闭流程
 //   - chooseBranch 触发 dialog:choice 事件
 //   - 多次 open / close 状态机
 //   - 内存友好度跨实例存活
@@ -10,7 +10,6 @@ import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   useDialogStore,
-  __resetFriendshipMemoryForTests,
   __resetChoiceListenersForTests,
   type NpcDialogTree,
 } from '@stores/dialog';
@@ -24,7 +23,7 @@ const TREE_MAYOR: NpcDialogTree = {
       text: '欢迎来到 Pythontopia',
       conditions: [],
       choices: [
-        { label: '谢谢', nextNodeId: 'thanks', effects: [{ type: 'friendship', delta: 5 }] },
+        { label: '谢谢', nextNodeId: 'thanks' },
         { label: '介绍一下', nextNodeId: 'intro' },
         { label: '再见', nextNodeId: null },
       ],
@@ -35,7 +34,7 @@ const TREE_MAYOR: NpcDialogTree = {
       conditions: [],
       choices: [
         { label: '继续聊', nextNodeId: 'intro' },
-        { label: '告辞', nextNodeId: null, effects: [{ type: 'friendship', delta: 1 }] },
+        { label: '告辞', nextNodeId: null },
       ],
     },
     intro: {
@@ -53,7 +52,6 @@ const META = { key: 'mayor_py', name: '镇长 Py', portrait: 'mayor.png' };
 
 beforeEach(() => {
   setActivePinia(createPinia());
-  __resetFriendshipMemoryForTests();
   __resetChoiceListenersForTests();
   // 给 fetch 加 mock：根据 url 返回 meta 或 tree
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: RequestInfo | URL) => {
@@ -111,20 +109,18 @@ describe('dialog-tree.integration · openWithTree fetch', () => {
 });
 
 describe('dialog-tree.integration · selectChoice 状态机', () => {
-  it('选「谢谢」→ friendship +5 + 跳 thanks 节点', async () => {
+  it('选「谢谢」→ 跳 thanks 节点', async () => {
     const d = useDialogStore();
     await d.openWithTree('mayor_py');
     d.selectChoice(0);
-    expect(d.friendship).toBe(5);
     expect(d.currentNodeId).toBe('thanks');
     expect(d.history).toEqual(['root', 'thanks']);
   });
 
-  it('选「介绍一下」→ 跳 intro，无 friendship 变化', async () => {
+  it('选「介绍一下」→ 跳 intro', async () => {
     const d = useDialogStore();
     await d.openWithTree('mayor_py');
     d.selectChoice(1);
-    expect(d.friendship).toBe(0);
     expect(d.currentNodeId).toBe('intro');
   });
 
@@ -136,13 +132,13 @@ describe('dialog-tree.integration · selectChoice 状态机', () => {
     expect(d.npcKey).toBeNull();
   });
 
-  it('连续走 root → thanks → 告辞：friendship 累加 7（5+1+1auto）', async () => {
+  it('连续走 root → thanks → 告辞：关闭对话', async () => {
     const d = useDialogStore();
     await d.openWithTree('mayor_py');
-    d.selectChoice(0); // root → thanks, +5
-    d.selectChoice(1); // thanks → 告辞 null, +1 effect; close() auto +1 (history>1)
-    expect(d.friendship).toBe(7);
+    d.selectChoice(0); // root → thanks
+    d.selectChoice(1); // thanks → 告辞 null → close
     expect(d.visible).toBe(false);
+    expect(d.npcKey).toBeNull();
   });
 
   it('选择非法 choice index → 静默', async () => {
@@ -174,27 +170,6 @@ describe('dialog-tree.integration · selectChoice 状态机', () => {
     await d.openWithTree('broken');
     d.selectChoice(0);
     expect(d.loadError).toContain('ghost');
-  });
-});
-
-describe('dialog-tree.integration · 内存友好度跨实例', () => {
-  it('close 后再 open 同 NPC：friendship 从 memory 还原（含 auto +1）', async () => {
-    const d = useDialogStore();
-    await d.openWithTree('mayor_py');
-    d.selectChoice(0); // +5
-    d.selectChoice(0); // thanks → 继续聊 → intro
-    d.close(); // history.length > 1 → auto +1
-    await d.openWithTree('mayor_py');
-    expect(d.friendship).toBe(6); // 5 + 1 auto
-  });
-
-  it('close 后再 open 不同 NPC：friendship 重置为 0', async () => {
-    const d = useDialogStore();
-    await d.openWithTree('mayor_py');
-    d.selectChoice(0);
-    d.close();
-    await d.openWithTree('mine_keeper');
-    expect(d.friendship).toBe(0);
   });
 });
 

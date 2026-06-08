@@ -31,16 +31,14 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
- * 把 NPC 对话模板里的 {@code {{stats.*}}} / {@code {{profileAdaptive:..}}} /
- * {@code {{giftFavorite:..}}} 占位符全部用真实数据填充。
+ * 把 NPC 对话模板里的 {@code {{stats.*}}} / {@code {{profileAdaptive:..}}} 占位符全部用真实数据填充。
  *
  * <p>聚合源：
  *
  * <ul>
  *   <li>{@link DialogContextRepository} — practice_submission / judge_result / kc_mastery /
  *       kc_mastery_event / crop_tile_state / course_kc / course_chapter / course_page /
- *       course_problem / classrooms / classroom_members / classroom_quest / world_session /
- *       npc_gift_log；
+ *       course_problem / classrooms / classroom_members / classroom_quest / world_session；
  *   <li>{@link ProfileRepository} — learner_profile（推断 {@code profileType}）；
  *   <li>{@link CalendarService} — 当前 in-game day / season（季节中文化、daily problem 种子）；
  *   <li>{@link UserRepository} — display_name 兜底。
@@ -56,9 +54,6 @@ public class DialogContextService {
 
   /** 班级"按节奏走"阈值：平均掌握度 ≥ 0.5。 */
   private static final BigDecimal ON_TRACK_THRESHOLD = new BigDecimal("0.5");
-
-  /** giftJustGiven 判定窗口：近 24 小时给该 NPC 送过 like / love。 */
-  private static final int GIFT_RECENT_HOURS = 24;
 
   private final DialogContextRepository repository;
   private final ProfileRepository profileRepository;
@@ -76,11 +71,8 @@ public class DialogContextService {
     this.userRepository = userRepository;
   }
 
-  /**
-   * 聚合对话上下文。{@code npcKey} 仅用于 {@code giftJustGiven} 判定，可选；
-   * 缺省则按 false 处理（保守走 B 分支）。
-   */
-  public DialogContextDto buildContext(Long userId, String username, String npcKey) {
+  /** 聚合对话上下文。 */
+  public DialogContextDto buildContext(Long userId, String username) {
     OffsetDateTime now = OffsetDateTime.now();
     OffsetDateTime weekStart = now.minusDays(7);
     OffsetDateTime twoWeeksAgo = now.minusDays(14);
@@ -349,19 +341,17 @@ public class DialogContextService {
 
     String displayName = resolveDisplayName(userId, username);
 
-    // 画像与礼物状态：驱动 profileAdaptive / styleAdaptive / giftFavorite 分支
+    // 画像状态：驱动 profileAdaptive / styleAdaptive 分支
     LearnerProfileDto profile = profileRepository.findProfile(userId).orElse(null);
     String profileType = inferProfileType(profile);
     String cognitiveStyle = inferCognitiveStyle(userId);
-    boolean giftJustGiven =
-        npcKey != null && repository.hasFavoriteGiftRecently(userId, npcKey, GIFT_RECENT_HOURS);
 
     // profileType / cognitiveStyle 同步暴露到 stats：少数对话直接引用 stats.* 字面量
     stats.put("profileType", profileType);
     stats.put("cognitiveStyle", cognitiveStyle);
 
     return new DialogContextDto(
-        displayName, profileType, cognitiveStyle, giftJustGiven, Map.copyOf(stats));
+        displayName, profileType, cognitiveStyle, Map.copyOf(stats));
   }
 
   private String resolveDisplayName(Long userId, String fallbackUsername) {

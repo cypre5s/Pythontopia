@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "source": "Pythontopia project content, condensed from data/npcs/<key>/dialog.json greet nodes + index.json names (templates resolved to plain text).",
+  "license": "CC-BY-SA-4.0 (Pythontopia project content; not third-party art)",
+  "npcs": {
+    "mayor_py": {
+      "name": "镇长 Py",
+      "line": "欢迎来到 Pythontopia！我是镇长 Py，Python 之父的化身。整座小镇就是你的学习营地。"
+    },
+    "librarian_doc": {
+      "name": "馆长 Doc",
+      "line": "图书馆里 561 页课件随你翻。带证据页码出门，别带通识幻觉。"
+    },
+    "coach_q": {
+      "name": "教务 Q",
+      "line": "这里是训练场。真题由我来判，掌握度靠你多刷题往上顶。"
+    },
+    "sage_review": {
+      "name": "复盘师 Sage",
+      "line": "茶刚煮好，坐下歇会儿。把本周的事说一遍，咱们一起复盘。"
+    },
+    "professor": {
+      "name": "教授",
+      "line": "有什么 Python 问题想讨论吗？Python 由 Guido 于 1991 年发布，最重代码可读性。"
+    },
+    "student_a": {
+      "name": "学生 A",
+      "line": "嗨！你学到哪了？我刚搞懂 for 循环，感觉打开了新世界！"
+    },
+    "foreman_bug": {
+      "name": "矿头 Bug",
+      "line": "新人来了？矿洞里全是你提交失败时掉下来的 Bug，挑一只下去打。"
+    },
+    "mine_keeper": {
+      "name": "守矿人",
+      "line": "矿灯往这边照。我挖的不是煤，是世界最底下的两块石头：亮的记 1，暗的记 0。"
+    },
+    "captain_def": {
+      "name": "船长 Def",
+      "line": "踩稳跳板。商船泊在镇边，货箱一格格码得齐整——这就是 Python 里的『列表』。"
+    },
+    "class_president": {
+      "name": "班长",
+      "line": "公告板今天又有新任务，要看一下吗？有问题也能组团去问老师。"
+    },
+    "workshop_master": {
+      "name": "工坊师傅",
+      "line": "欢迎来百晓工坊！提问我当 AI 助教答疑，要材料我帮你生成六类学习资源。"
+    },
+    "arena_guard": {
+      "name": "竞技场守卫",
+      "line": "竞技场大门已开。做完每章子任务，就能挑战章末 Boss，准备好了吗？"
+    }
+  }
+}

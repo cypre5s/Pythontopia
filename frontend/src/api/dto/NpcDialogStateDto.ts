@@ -2,7 +2,6 @@ export interface NpcDialogStateDto {
   npcKey: string;
   currentNodeId: string | null;
   completedNodeIds: string[];
-  friendship: number;
   lastTalkedAt: string | null;
   flags: Record<string, unknown>;
 }
@@ -18,7 +17,6 @@ export interface NpcTalkRequest {
 // 保留它们仅为兼容现有 dialog.json，新数据请用 key/value。
 export interface NpcDialogEffectPayload {
   type: string;
-  delta?: number;
   /** 后端 NpcDialogService.SET_FLAG / COMPLETE_NODE 实际读的字段 */
   key?: string;
   /** 后端 SET_FLAG 写入 npc_dialog_state.flags 的 value */
@@ -34,21 +32,5 @@ export interface NpcTalkResponseDto {
   npcKey: string;
   currentNodeId: string | null;
   completedNodeIds: string[];
-  friendship: number;
   lastTalkedAt: string | null;
-}
-
-export interface NpcGiftRequest {
-  itemKey: string;
-  qty: number;
-}
-
-export type NpcGiftTier = 'LOVE' | 'LIKE' | 'NEUTRAL' | 'DISLIKE' | 'HATE';
-
-export interface NpcGiftResponseDto {
-  npcKey: string;
-  itemKey: string;
-  giftTier: NpcGiftTier;
-  friendshipDelta: number;
-  newFriendship: number;
 }

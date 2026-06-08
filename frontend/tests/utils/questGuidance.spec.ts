@@ -33,13 +33,13 @@ describe('resolveQuestGuidance（学习目标面板「下一步」指路）', ()
   });
 
   it('submission → 指路到教务 Q（训练场）', () => {
-    // 7-3（KC-061 递归，problem #511）是 submission 子任务；1-4 已回归为「学」里程碑。
+    // 7-3（KC-064 类和对象，problem #510）是 submission 子任务；1-4 已回归为「学」里程碑。
     const g = resolveQuestGuidance(findMainQuestById('7-3')!);
     expect(g.kind).toBe('training');
     expect(g.npcKey).toBe('coach_q');
     expect(g.mapKey).toBe('town_hub');
     expect(g.stepText).toContain('训练场');
-    expect(g.stepText).not.toContain('KC-061');
+    expect(g.stepText).not.toContain('KC-064');
   });
 
   it('kc_mastery → 指路到训练场（教务 Q），文案含目标掌握度', () => {

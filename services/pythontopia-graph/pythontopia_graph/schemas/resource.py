@@ -124,6 +124,10 @@ class ProfileSnapshot(BaseModel):
     # 学阶段资源生成用的认知风格（visual/logical/trial）与易错点；默认空，调用方可不传。
     cognitive_style: str = ""
     error_patterns: list[str] = Field(default_factory=list)
+    # 最新一条学情洞察文本（反思产物）；非空时折进个性化 directive，对症补强（Task 1.3）。
+    recent_insight: str = ""
+    # 近期记忆要点（recency×importance×relevance topK 的中文摘要）；非空时折进 directive（Task 2.1）。
+    memory_highlights: list[str] = Field(default_factory=list)
 
 
 class ResourceProduceRequest(BaseModel):
