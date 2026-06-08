@@ -12,22 +12,8 @@ import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.min
 
-/**
- * 原生像素世界主屏：Kenney 瓦片地图 + 官方 LPC/ULPC 角色精灵，镜头跟随玩家。
- *
- * 取代旧 [HubScreen] 的 `ShapeRenderer` 色块渲染：
- * - 真实瓦片：解析 [TiledMapVisual]（R-14 收缩后只渲染单中央小镇 town_hub）按层渲染 + 视锥剔除；
- * - 真实角色：主角 ULPC 行走/待机动画 + 平滑插值移动，19 个 hub NPC 用 LPC 合成图；
- * - 镜头：跟随玩家 + 边界 clamp + 拉近缩放，告别"小镇缩成一团、玩家是个点"。
- *
- * R-14「世界收缩方案 A」：只有 town_hub 作为主线场景，[show] 强制载入 hub，且 hub 已无边缘出口；
- * 外围 4 图（farm/mine/campus/port）的定义与 JSON 仍在仓库，但正常游玩不可达。
- *
- * 对外契约与 [HubScreen] 完全一致（同一 [HubGameBridge] 事件），因此 `:feature:hub`
- * 的 Compose HUD / 对话面板无需改动。碰撞优先取自瓦片 `buildings` 层（与可见建筑一致），
- * 缺图时回退 [WorldMapData] 矩形；NPC 锚点仍用 [WorldMaps]（被 20-NPC 测试约束）。
- */
-@Suppress("TooManyFunctions") // 渲染屏编排器：地图/输入/镜头/绘制各拆成小而单一职责的私有函数。
+/** LibGDX 主渲染屏：Kenney 瓦片 + LPC/ULPC 精灵，镜头跟随玩家；对外事件契约与 [HubScreen] 相同（[HubGameBridge]）。 */
+@Suppress("TooManyFunctions") // 地图/输入/镜头/绘制拆分为私有函数。
 class WorldRenderScreen(
     private val bridge: HubGameBridge,
     private val onPlayerMoved: ((tileX: Int, tileY: Int, direction: String) -> Unit)? = null,
@@ -56,8 +42,7 @@ class WorldRenderScreen(
             viewportHeightProvider = { Gdx.graphics?.height ?: 0 },
         ).also { Gdx.input?.inputProcessor = it }
 
-        // R-14 单中央小镇：始终从 town_hub 进入。若历史存档停在已弃用的外围图，
-        // 仅在 mapKey 仍是 town_hub 时沿用其 tile 坐标，否则回退到 hub 默认出生点。
+        // 始终从 town_hub 进入；存档 mapKey 非 hub 时回退默认出生点。
         val seed = bridge.latestPlayerTile()
         val onHub = seed.mapKey == WorldMaps.townHub.key
         loadMap(
@@ -110,8 +95,6 @@ class WorldRenderScreen(
         shape = null
         assets = null
     }
-
-    // --- world / map ---
 
     private fun loadMap(map: WorldMapDefinition, spawnX: Int = map.spawnX, spawnY: Int = map.spawnY) {
         currentMap = map
@@ -168,8 +151,6 @@ class WorldRenderScreen(
         return null
     }
 
-    // --- input / movement ---
-
     private fun handleInput(delta: Float) {
         val player = player ?: return
         val input = input ?: return
@@ -203,9 +184,7 @@ class WorldRenderScreen(
         val nextX = player.tileX + dx
         val nextY = player.tileY + dy
 
-        // R-14 单中央小镇：仅允许回到 town_hub 的出口；通往外围 4 图的出口一律忽略。
-        // 当前 town_hub 已无任何出口，故正常游玩不会触发本分支，这里作防御性约束，
-        // 防止日后数据回退后玩家又能走出 hub。
+        // 仅允许切回 town_hub；外围图出口忽略（防御性约束，防止数据回退后误切图）。
         val exit = currentMap.exits.firstOrNull { it.area.contains(nextX, nextY) }
         if (exit != null && exit.targetMap == DEFAULT_WORLD_MAP_KEY) {
             switchMap(exit.targetMap)
@@ -221,7 +200,7 @@ class WorldRenderScreen(
     }
 
     private fun onStepComplete() {
-        // 视觉抵达；逻辑事件已在 beginStep 上报，这里仅保留扩展点（脚步音效等）。
+        // 逻辑事件已在 beginStep 上报；此处可挂脚步音效等扩展。
     }
 
     private fun publishPlayerPosition() {
@@ -249,8 +228,6 @@ class WorldRenderScreen(
         }
     }
 
-    // --- camera ---
-
     private fun configureCamera(width: Int, height: Int) {
         val w = width.coerceAtLeast(1)
         val h = height.coerceAtLeast(1)
@@ -273,8 +250,6 @@ class WorldRenderScreen(
         camera.update()
     }
 
-    // --- draw ---
-
     private fun drawWorld(batch: SpriteBatch, assets: GameAssets) {
         val visual = visual
         val halfW = camera.viewportWidth / 2f
@@ -285,7 +260,7 @@ class WorldRenderScreen(
         val minY = floor((camera.position.y - halfH) / tile).toInt() - 1
         val maxY = ceil((camera.position.y + halfH) / tile).toInt() + 1
         if (visual != null) {
-            // 地面层不透明 → 关混合省 fill-rate；建筑/装饰/角色层需 alpha → 开混合。
+            // 地面层关混合省 fill-rate；上层需 alpha 再开混合。
             batch.disableBlending()
             visual.render(batch, assets, minX, minY, maxX, maxY, fromLayer = 0, toLayer = 1)
             batch.enableBlending()
@@ -311,7 +286,7 @@ class WorldRenderScreen(
     }
 
     private fun drawCharacters(batch: SpriteBatch, assets: GameAssets) {
-        // 视口剔除：屏外 NPC 不绘制（省 draw call + 纹理绑定）；玩家恒在视口内。
+        // 屏外 NPC 剔除；玩家恒绘制。
         visibleChars.clear()
         for (n in npcs) {
             if (isOnScreen(n.character)) visibleChars += n.character
@@ -319,9 +294,9 @@ class WorldRenderScreen(
         player?.let { visibleChars += it }
 
         batch.setColor(1f, 1f, 1f, 1f)
-        // 阴影同纹理 → 先一次性批量画完（1 次 flush），再画本体。
+        // 阴影同纹理，先批量画阴影再画本体（减少 flush）。
         for (c in visibleChars) c.drawShadow(batch, assets)
-        // 南（feetY 小）后画 → 盖在北边角色之上，形成正确的前后遮挡。
+        // feetY 小者后画，保证 y-up 前后遮挡正确。
         visibleChars.sortByDescending { it.feetY }
         for (c in visibleChars) c.drawBody(batch)
     }

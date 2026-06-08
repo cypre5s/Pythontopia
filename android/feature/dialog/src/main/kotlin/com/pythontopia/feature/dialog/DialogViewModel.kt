@@ -20,6 +20,7 @@ data class DialogUiState(
     val errorMessage: String? = null,
 )
 
+/** NPC 对话状态机：openFor 加载节点，choose 推进或终结分支，close 重置。 */
 @HiltViewModel
 class DialogViewModel @Inject constructor(
     private val repository: DialogRepository,
@@ -60,7 +61,7 @@ class DialogViewModel @Inject constructor(
     fun choose(choice: DialogChoice) {
         val fromNodeId = _state.value.currentNode?.id ?: return
         if (choice.nextNodeId == null) {
-            // 终结分支：本地先关闭，后台 fire-and-forget 推进，避免 UI 卡帧
+            // 终结分支（nextNodeId==null）：先关 UI，后台异步 advance，避免阻塞
             _state.update { it.copy(isAdvancing = true) }
             viewModelScope.launch {
                 runCatching { repository.advance(_state.value.npcKey, fromNodeId, choice) }

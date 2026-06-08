@@ -21,13 +21,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import retrofit2.Retrofit
 
-/**
- * 用 [MockWebServer] 跑真的 OkHttp + Retrofit + kotlinx-serialization-converter，
- * 端到端验证 [ProfileApi] 的 GET / PUT 与 [ProfileRepository] 的错误归一。
- *
- * 不用 mockk 是因为 JSON 解析层是 Repository 失败的高频源头（snake/camel 不匹配、
- * `explicitNulls=false`、204 → null 等），用真实 Retrofit 才能锁住。
- */
+/** 用 MockWebServer + 真实 Retrofit 验证 [ProfileApi]/[ProfileRepository] 序列化与错误归一（含 204→null）。 */
 class ProfileRepositoryTest {
 
     private lateinit var server: MockWebServer

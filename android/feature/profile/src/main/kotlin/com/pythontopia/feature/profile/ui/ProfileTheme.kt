@@ -19,12 +19,7 @@ import com.pythontopia.core.design.PytColors
 import com.pythontopia.core.design.PytShape
 import com.pythontopia.core.design.PytSpace
 
-/**
- * Feature-local 像素风组件：保持 R-12 demo 视觉与 `frontend/src/components/{component}` 像素镇风格一致。
- *
- * 没有上提到 core/design 的原因：profile 是首个深度使用 dashboard 卡片的 feature，
- * 等 classroom / path 也需要再抽象，避免过早抽象（AGENTS.md "外科手术式修改"）。
- */
+/** profile feature 本地像素风组件，尚未上提到 core/design。 */
 
 private val PixelBorderWidth = 2.dp
 
@@ -48,15 +43,7 @@ fun PixelCard(
     }
 }
 
-/**
- * 维度仪表条：左标题、右数值百分比、下方进度条 + 元信息行（可自评徽标 / 置信度 / 证据数）。
- *
- * 所有数值都来自后端 `GET /api/learner/profile/dimensions`：
- *  - [score] `[0,1]` effective 分（含读时 decay）；超界会被 clamp 防异常。
- *  - [confidence] `[0,1]` 置信度；为 null 时不展示该项。
- *  - [evidenceCount] 累计证据条数；为 0 表示无真实信号（配合 [hasSignal] 灰显，提醒 0.5 是中性默认而非测量值）。
- *  - [selfEditable] 来自 DTO 的权威可编辑标志，决定徽标显示「可自评」还是「系统聚合」。
- */
+/** 维度仪表条；[score]/[confidence]/[evidenceCount]/[selfEditable] 均来自 dimensions 快照，score 超界会 clamp。 */
 @Composable
 fun DimensionProgressBar(
     title: String,

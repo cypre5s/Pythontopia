@@ -29,28 +29,8 @@ import kotlin.math.ceil
 import kotlin.math.sqrt
 
 /**
- * 教师视角：65 KC 班级掌握度热力图（Compose Canvas 自绘）。
- *
- * 渲染策略：
- *  - 65 个 KC 排成接近正方形的网格（默认 9×8 = 72 格，最后 7 格空白），每格按
- *    [KcHeatmapEntry.avgMastery] 映射颜色：≥0.80 绿（[PytColors.success]）、
- *    [0.40, 0.80) 黄（[PytColors.warning]）、<0.40 红（[PytColors.danger]）；
- *  - 65 × class size ≤ 60 = 3900 格的精细矩阵留给 R-13 deep dive；
- *    Beta 阶段只渲染 KC 维度的平均色块，已足以让教师快速识别"哪个 KC 整体落后"；
- *  - 单次 `drawRect` 调用，无嵌套布局，性能预算 < 16ms 即使 65 格全更新；
- *  - 网格上方画图例（红/黄/绿色块 + 文字），下方留空让外层 [ClassroomScreen]
- *    叠加"点击 KC → 一键发任务"行为（本组件保持纯渲染，不处理交互）。
- *
- * 取舍：
- *  - 不依赖 `androidx.compose.foundation.lazy.grid.LazyVerticalGrid`，因为 65 格
- *    全可视，不需要 lazy；
- *  - 文字（KC 名称）不在 Canvas 内绘制，避免引入 nativeCanvas + Paint 跨平台差异；
- *    KC 名展示由外层列表（"红色 KC 详情"）承担。
- *  - `avgMastery` 后端是 BigDecimal 字符串（如 "0.62"）；本组件用 `toDoubleOrNull()`
- *    解析，失败按 0.0 处理（视觉上呈红色，提示"该 KC 无数据"）。
- *
- * @param entries 班级 KC 热力图数据；列表为空时显示"暂无数据"占位。
- * @param modifier 外层布局修饰符；建议传 `.fillMaxWidth().aspectRatio(1.2f)`。
+ * 教师 KC 掌握度热力图（Compose Canvas）；按 [KcHeatmapEntry.avgMastery] 映射绿/黄/红，
+ * 纯渲染，不处理交互。
  */
 @Composable
 fun KcHeatmapView(

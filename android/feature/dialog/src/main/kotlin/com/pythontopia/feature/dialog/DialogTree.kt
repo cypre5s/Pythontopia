@@ -1,6 +1,6 @@
 package com.pythontopia.feature.dialog
 
-/** Native NPC dialog catalog used when the backend has not returned a specific node yet. */
+/** 对话选项；后端尚未返回节点时由本地 DemoDialogTree 驱动。 */
 data class DialogChoice(
     val label: String,
     val nextNodeId: String?,
@@ -20,25 +20,18 @@ object DemoDialogTree {
     const val NPC_KEY: String = "mayor_py"
     const val ROOT_NODE_ID: String = "greet"
 
+    /** R-14：中央小镇 12 个主线 NPC（与 data/npcs/index.json 对齐）。 */
     val allNpcKeys: List<String> = listOf(
         "mayor_py",
         "librarian_doc",
         "coach_q",
         "sage_review",
-        "gardener",
-        "chef",
-        "farmer",
         "professor",
         "student_a",
-        "sailor",
-        "miner",
-        "tutor_ai",
         "workshop_master",
         "arena_guard",
-        "trainer",
-        "farmer_kc",
-        "foreman_bug",
         "mine_keeper",
+        "foreman_bug",
         "class_president",
         "captain_def",
     )
@@ -48,20 +41,12 @@ object DemoDialogTree {
         "librarian_doc" to "馆长 Doc",
         "coach_q" to "教务 Q",
         "sage_review" to "复盘师 Sage",
-        "gardener" to "园丁",
-        "chef" to "厨师",
-        "farmer" to "农场主",
         "professor" to "教授",
         "student_a" to "学生 A",
-        "sailor" to "水手",
-        "miner" to "矿工",
-        "tutor_ai" to "AI 导师",
         "workshop_master" to "工坊师傅",
         "arena_guard" to "竞技场守卫",
-        "trainer" to "训练师",
-        "farmer_kc" to "田老",
-        "foreman_bug" to "矿头 Bug",
         "mine_keeper" to "矿洞守矿人",
+        "foreman_bug" to "矿头 Bug",
         "class_president" to "班长",
         "captain_def" to "船长 Def",
     )
@@ -79,8 +64,8 @@ object DemoDialogTree {
         ),
         DialogNode(
             id = "introduce_town",
-            text = "小镇分为 5 个区域：中央 hub、北农场、南矿洞、东校园、西港口。" +
-                "每个区域都有对应的学习任务、练习反馈和复盘线索。",
+            text = "R-14 起，所有学习入口都收进这座中央小镇：图书馆、工坊、训练场、竞技场、" +
+                "复盘大厅和 Bug 矿洞入口都在步行范围内，不必再跨图奔波。",
             choices = listOf(
                 DialogChoice(
                     label = "好的，我去探索一下",
@@ -91,7 +76,8 @@ object DemoDialogTree {
         ),
         DialogNode(
             id = "where_to_start",
-            text = "你刚来不久，建议先在小镇里熟悉走位，再去农场让田老带你解锁第一个 KC。",
+            text = "你刚来不久，建议先在喷泉广场熟悉走位，再去图书馆找 Doc 看课件，" +
+                "或在训练场提交第一道练习。",
             choices = listOf(
                 DialogChoice(
                     label = "我懂了",
@@ -158,11 +144,10 @@ object DemoDialogTree {
 
     private fun focusFor(npcKey: String): String = when (npcKey) {
         "librarian_doc" -> "课件引用和资料阅读"
-        "coach_q", "trainer", "arena_guard" -> "练习挑战与闯关"
+        "coach_q", "arena_guard" -> "练习挑战与闯关"
         "sage_review" -> "周复盘和遗忘提醒"
-        "farmer", "farmer_kc", "gardener" -> "KC 知识田和掌握度成长"
-        "foreman_bug", "mine_keeper", "miner" -> "Bug 矿洞和失败提交修复"
-        "workshop_master", "tutor_ai" -> "个性化资源生成"
+        "foreman_bug", "mine_keeper" -> "Bug 矿洞和失败提交修复"
+        "workshop_master" -> "个性化资源生成"
         "class_president", "captain_def" -> "班级任务和协作路线"
         else -> "Python 学习路径"
     }

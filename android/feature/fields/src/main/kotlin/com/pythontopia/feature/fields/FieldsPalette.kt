@@ -2,18 +2,7 @@ package com.pythontopia.feature.fields
 
 import androidx.compose.ui.graphics.Color
 
-/**
- * Fields feature 的本地像素调色板。
- *
- * 设计原则：与 `:core:design/PytColors` 全局 token 保持色相一致（暖琥珀 + 深棕背景），
- * 但作物 4 状态需要更强的色彩区分度，因此在 feature 内单独定义而非污染全局 token。
- *
- * 4 状态色彩教学意图：
- *  - SEED（深棕翻土色）：刚撒种、未发芽，提醒"需要先浇 1-2 次水"；
- *  - GROWING（嫩绿）：幼苗在长，与"成长"心智图同色；
- *  - MATURE（金黄）：成熟可收，与 PytColors.warning 同色但更鲜艳，吸引玩家点击收获；
- *  - HARVESTED（中性灰棕）：已收获留空地，弱化避免与活跃作物混淆。
- */
+/** Fields 本地调色板：色相对齐 `PytColors`，KC 四态单独设色以保证区分度。 */
 internal object FieldsPalette {
 
     val tileSeed = Color(0xFF6B4F2C)

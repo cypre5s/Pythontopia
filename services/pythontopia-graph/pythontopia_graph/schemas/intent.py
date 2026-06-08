@@ -1,15 +1,8 @@
-"""Schemas for the IntentRouterAgent（百晓工坊 意图路由）.
+"""IntentRouterAgent（百晓工坊意图路由）的结构化输出 schema。
 
-The router picks ONE tool for a single composer message — Q&A (``ASK``), a B站
-video lookup (``VIDEO``, an external-resource fetch, not generation), or one of
-the 6 resource generators — and grounds suggested KC codes to the course catalog
-the frontend already loaded for its ``@`` mention menu.
-
-It does NOT generate content: the frontend dispatches the chosen intent to the
-existing tutor (``/api/tutor/ask``) or workshop (``/api/workshop/resources/stream``)
-SSE pipelines. KC suggestions are advisory — the workshop generation endpoint
-re-validates codes against the real course DB, so grounding integrity is enforced
-at the (persisted) generation layer regardless of this advisory step.
+单条消息选定一种 intent：ASK（答疑）、VIDEO（B站检索，非生成）或 6 类资源生成器之一；
+KC 建议锚定前端已加载的 course_kcs（@ 菜单同源）。不生成内容，前端再分发到
+/api/tutor/ask 或 /api/workshop/resources/stream；KC 为建议值，持久化生成层会二次校验。
 """
 
 from __future__ import annotations
@@ -19,10 +12,12 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 # ASK = 答疑问答（导师管线）；VIDEO = B站精选讲解视频（外部资源检索，非生成）；
+# REVIEW = 记忆矿脉回声复习（引导到错题矿洞按 FSRS 到期 KC 复盘，非生成）；
 # 其余 6 个对应资源工坊的 6 类资源。
 IntentKind = Literal[
     "ASK",
     "VIDEO",
+    "REVIEW",
     "HANDOUT",
     "MINDMAP",
     "PRACTICE",
@@ -33,7 +28,7 @@ IntentKind = Literal[
 
 
 class CourseKc(BaseModel):
-    """A single KC catalog entry (code + display name) for grounding suggestions."""
+    """课程 KC 目录项（code + 展示名），供意图锚定建议。"""
 
     code: str = Field(min_length=1, max_length=64)
     name: str = Field(default="", max_length=200)

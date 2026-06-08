@@ -40,7 +40,7 @@ class HubLibGdxFragment : AndroidFragmentApplication() {
 
     override fun onDestroyView() {
         super.onDestroyView()
-        // libGDX 自身会在 Activity 销毁时清理；显式 dispose 由 :feature:hub 在 onDispose 时安排。
+        // 显式 dispose 由 :feature:hub 在 onDispose 时安排。
     }
 
     companion object {

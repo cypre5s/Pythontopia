@@ -33,6 +33,7 @@ async def rag_query(
     body: RagQueryRequest,
     state: AppState = Depends(_state),
 ) -> RagQueryResponse:
+    """课件向量检索；命中须满足 min_score，否则 no_evidence_found=True 防幻觉。"""
     if is_forbidden(body.query):
         return RagQueryResponse(hits=[], no_evidence_found=True)
     vectors = await state.embedder.embed([body.query])
@@ -74,19 +75,11 @@ def _require_admin_token(x_internal_token: str | None) -> None:
 
 
 def _resolve_rebuild_source(request: Request) -> InMemoryPageSource:
-    """Re-fetch course pages from the DB so a rebuild reflects the latest seed.
-
-    The previous behaviour re-used the snapshot captured at startup, which is
-    empty when the RAG service boots before the course pack is seeded (it only
-    waits on Postgres health, not the backend Flyway). Re-reading the DB here is
-    what makes ``deploy/scripts/init_rag_index.sh`` actually populate the index.
-    Falls back to the startup snapshot (or empty) when the DB is unreachable so
-    offline/CI runs keep working.
-    """
+    """重建前从 DB 重读课程页，确保索引反映最新种子；DB 不可用时回退启动快照。"""
     db_url = os.environ.get("PYT_DB_URL", DEFAULT_DB_URL)
     try:
         pages = page_records_to_indexable(fetch_pages(db_url))
-    except Exception as exc:  # fail-soft: keep the admin endpoint usable offline
+    except Exception as exc:  # fail-soft：DB 不可用时回退启动快照
         logger.warning("RAG rebuild DB fetch failed; using startup snapshot: %s", exc)
         pages = None
     if pages:

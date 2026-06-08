@@ -38,6 +38,13 @@ class DialogTreeTest {
     }
 
     @Test
+    fun `allNpcKeys matches R14 twelve main npc roster`() {
+        assertEquals(12, DemoDialogTree.allNpcKeys.size)
+        assertTrue(DemoDialogTree.allNpcKeys.contains("foreman_bug"))
+        assertTrue(DemoDialogTree.allNpcKeys.none { it == "farmer_kc" })
+    }
+
+    @Test
     fun `chat_progress includes a SET_FLAG choice for native hub progress`() {
         val node = DemoDialogTree.nodes.getValue("chat_progress")
         val flagged = node.choices.firstOrNull { it.setFlagKey == "android_native_hub_played" }

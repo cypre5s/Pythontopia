@@ -8,6 +8,7 @@ import com.pythontopia.bugmine.dto.BugMineCardType;
 import com.pythontopia.bugmine.dto.BugMineSessionDto;
 import com.pythontopia.bugmine.dto.BugMineSessionStatus;
 import com.pythontopia.bugmine.dto.BugMineVariantProblemDto;
+import com.pythontopia.submission.dto.SubmissionSource;
 import java.math.BigDecimal;
 import java.sql.Array;
 import java.sql.PreparedStatement;
@@ -310,6 +311,11 @@ public class BugMineRepository {
                p.kc_code,
                p.title AS problem_title,
                COALESCE(km.mastery_score, 0.000) AS mastery_score,
+               COALESCE(km.confidence, 0.000) AS confidence,
+               km.last_event_at,
+               rs.stability AS review_stability,
+               rs.last_review_at AS review_last_review_at,
+               rs.due_at AS review_due_at,
                COALESCE(profile_tags.tags, ARRAY[]::text[]) AS mistake_patterns,
                EXISTS (
                  SELECT 1
@@ -325,6 +331,7 @@ public class BugMineRepository {
         JOIN course_problem p ON p.id = s.problem_id
         LEFT JOIN course_problem vp ON vp.id = s.variant_problem_id
         LEFT JOIN kc_mastery km ON km.user_id = s.user_id AND km.kc_code = p.kc_code
+        LEFT JOIN kc_review_state rs ON rs.user_id = s.user_id AND rs.kc_code = p.kc_code
         LEFT JOIN judge_result jr ON jr.submission_id = s.submission_id
         LEFT JOIN LATERAL (
           SELECT ARRAY(
@@ -376,12 +383,92 @@ public class BugMineRepository {
                 rs.getInt("depth_layer"),
                 rs.getInt("profile_depth_target"),
                 rs.getBigDecimal("mastery_score"),
+                rs.getBigDecimal("confidence"),
+                offset(rs, "last_event_at"),
                 readTextArray(rs, "mistake_patterns"),
                 rs.getBoolean("pattern_matched"),
                 offset(rs, "opened_at"),
                 (Long) rs.getObject("variant_problem_id"),
-                rs.getString("variant_problem_title")),
+                rs.getString("variant_problem_title"),
+                doubleOrNull(rs, "review_stability"),
+                offset(rs, "review_last_review_at"),
+                offset(rs, "review_due_at")),
         userId);
+  }
+
+  public List<EchoCandidateRow> findEchoCandidates(Long userId) {
+    // 召回"曾经会、现在到期该复查"的 KC：门槛由 FSRS-lite 到期时间决定（无 review_state 时按掌握度播种，
+    // 与 V133 回填/ReviewScheduler.seedStability 同口径），不再对所有 KC 一刀切 14 天。
+    // 入矿题（E）按掌握度选恰当难度：0.45–0.75 偏 MEDIUM，>=0.75 偏 HARD。
+    return jdbcTemplate.query(
+        """
+        SELECT DISTINCT ON (km.kc_code)
+               km.kc_code,
+               p.id AS problem_id,
+               p.title AS problem_title,
+               COALESCE(km.mastery_score, 0.000) AS mastery_score,
+               COALESCE(km.confidence, 0.000) AS confidence,
+               km.last_event_at,
+               rs.stability AS review_stability,
+               rs.last_review_at AS review_last_review_at,
+               rs.due_at AS review_due_at
+        FROM kc_mastery km
+        JOIN course_problem p ON p.kc_code = km.kc_code
+        LEFT JOIN kc_review_state rs ON rs.user_id = km.user_id AND rs.kc_code = km.kc_code
+        WHERE km.user_id = ?
+          AND km.kc_code <> ''
+          AND km.last_event_at IS NOT NULL
+          AND COALESCE(km.mastery_score, 0.000) >= 0.450
+          AND now() > COALESCE(
+                rs.due_at,
+                km.last_event_at
+                  + (GREATEST(0.5, LEAST(14.0, 1.0 + 13.0 * COALESCE(km.mastery_score, 0)))
+                     || ' days')::interval)
+          AND NOT EXISTS (
+            SELECT 1
+            FROM bug_mine_session s
+            JOIN course_problem sp ON sp.id = s.problem_id
+            WHERE s.user_id = km.user_id
+              AND s.status = 'OPEN'
+              AND sp.kc_code = km.kc_code
+          )
+        ORDER BY km.kc_code,
+          CASE
+            WHEN COALESCE(km.mastery_score, 0) >= 0.75
+              THEN CASE p.difficulty WHEN 'HARD' THEN 0 WHEN 'MEDIUM' THEN 1 ELSE 2 END
+            ELSE CASE p.difficulty WHEN 'MEDIUM' THEN 0 WHEN 'EASY' THEN 1 ELSE 2 END
+          END,
+          p.id
+        """,
+        (rs, rowNum) ->
+            new EchoCandidateRow(
+                rs.getString("kc_code"),
+                rs.getLong("problem_id"),
+                rs.getString("problem_title"),
+                rs.getBigDecimal("mastery_score"),
+                rs.getBigDecimal("confidence"),
+                offset(rs, "last_event_at"),
+                doubleOrNull(rs, "review_stability"),
+                offset(rs, "review_last_review_at"),
+                offset(rs, "review_due_at")),
+        userId);
+  }
+
+  public void updateProfileDepthTarget(Long sessionId, int profileDepthTarget) {
+    jdbcTemplate.update(
+        "UPDATE bug_mine_session SET profile_depth_target = ? WHERE id = ?",
+        profileDepthTarget,
+        sessionId);
+  }
+
+  public Optional<SubmissionSource> findSubmissionSource(Long submissionId) {
+    return jdbcTemplate
+        .query(
+            "SELECT source FROM practice_submission WHERE id = ?",
+            (rs, rowNum) -> SubmissionSource.valueOf(rs.getString("source")),
+            submissionId)
+        .stream()
+        .findFirst();
   }
 
   public int retryCount(Long sessionId) {
@@ -412,7 +499,8 @@ public class BugMineRepository {
         session.variantProblem(),
         session.profileGuidance(),
         session.depthSteps(),
-        cards);
+        cards,
+        session.problem());
   }
 
   private BugMineSessionDto mapSession(ResultSet rs) throws SQLException {
@@ -438,7 +526,8 @@ public class BugMineRepository {
         variant,
         null,
         List.of(),
-        List.of());
+        List.of(),
+        null);
   }
 
   private BugMineCardDto mapCard(ResultSet rs) throws SQLException {
@@ -454,6 +543,11 @@ public class BugMineRepository {
   private OffsetDateTime offset(ResultSet rs, String column) throws SQLException {
     java.sql.Timestamp ts = rs.getTimestamp(column);
     return ts == null ? null : ts.toInstant().atOffset(ZoneOffset.UTC);
+  }
+
+  private Double doubleOrNull(ResultSet rs, String column) throws SQLException {
+    BigDecimal value = rs.getBigDecimal(column);
+    return value == null ? null : value.doubleValue();
   }
 
   private List<String> readTextArray(ResultSet rs, String column) throws SQLException {
@@ -499,9 +593,25 @@ public class BugMineRepository {
       int depthLayer,
       int profileDepthTarget,
       BigDecimal masteryScore,
+      BigDecimal confidence,
+      OffsetDateTime lastEventAt,
       List<String> mistakePatterns,
       boolean patternMatched,
       OffsetDateTime openedAt,
       Long variantProblemId,
-      String variantProblemTitle) {}
+      String variantProblemTitle,
+      Double reviewStability,
+      OffsetDateTime reviewLastReviewAt,
+      OffsetDateTime reviewDueAt) {}
+
+  public record EchoCandidateRow(
+      String kcCode,
+      Long problemId,
+      String problemTitle,
+      BigDecimal masteryScore,
+      BigDecimal confidence,
+      OffsetDateTime lastEventAt,
+      Double reviewStability,
+      OffsetDateTime reviewLastReviewAt,
+      OffsetDateTime reviewDueAt) {}
 }

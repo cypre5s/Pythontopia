@@ -88,10 +88,6 @@ const BGM_LIST: ReadonlyArray<[string, string]> = [
 ];
 
 const TILESET_LIST: ReadonlyArray<[string, string]> = [
-  ['tileset_farm', '/assets/pixel/vendor/opengameart/tileset_farm.png'],
-  ['vegetables', '/assets/pixel/vendor/opengameart/vegetables.png'],
-  ['cereals', '/assets/pixel/vendor/opengameart/cereals.png'],
-  ['crates_and_sacks', '/assets/pixel/vendor/opengameart/crates_and_sacks.png'],
   ['kenney_tiny_dungeon', '/assets/pixel/tilesets/kenney-tiny-dungeon/Tilemap/tilemap_packed.png'],
 ];
 
@@ -127,7 +123,6 @@ const KC_ICONS: ReadonlyArray<[string, string]> = [
 ];
 
 const NPC_SPRITE_BASE = '/assets/pixel/sprites/npc-composites';
-const TOOL_BASE = '/assets/pixel/sprites/lpc-tools';
 // 用 LPC 茅草屋整屋 sprite 替换方块拼接建筑（scripts/build_cottages.py 合成）。
 const COTTAGE_IMAGES: ReadonlyArray<[string, string]> = [
   ['cottage_tan', '/assets/pixel/sprites/cottages/cottage_tan.png'],
@@ -154,12 +149,6 @@ const CHARACTER_SHEETS: ReadonlyArray<[string, string, number, number]> = [
   // 主角：ULPC 全动作表。
   ['player_sara2', `${ULPC_BASE}/player_sara2.png`, 64, 64],
   ...ULPC_NPC_SHEETS.map((k): [string, string, number, number] => [k, `${ULPC_BASE}/${k}.png`, 64, 64]),
-  // 星露谷味手持工具叠加层（LPC Hand Tools，universal 13×21）。
-  // 与角色同帧布局，叠在主角/NPC 之上即「手持工具」，浇水=thrust 倒水动作。
-  ['tool_watering_can', `${TOOL_BASE}/watering-can.png`, 64, 64],
-  ['tool_watering_can_bg', `${TOOL_BASE}/watering-can-bg.png`, 64, 64],
-  ['tool_hoe', `${TOOL_BASE}/hoe.png`, 64, 64],
-  ['tool_hoe_bg', `${TOOL_BASE}/hoe-bg.png`, 64, 64],
   ['npc_mayor', `${NPC_SPRITE_BASE}/npc_mayor.png`, 64, 64],
   ['npc_librarian', `${NPC_SPRITE_BASE}/npc_librarian.png`, 64, 64],
   ['npc_coach', `${NPC_SPRITE_BASE}/npc_coach.png`, 64, 64],
@@ -167,9 +156,7 @@ const CHARACTER_SHEETS: ReadonlyArray<[string, string, number, number]> = [
   ['npc_guard', `${NPC_SPRITE_BASE}/npc_guard.png`, 64, 64],
   ['npc_miner', `${NPC_SPRITE_BASE}/npc_miner.png`, 64, 64],
   ['npc_professor', `${NPC_SPRITE_BASE}/npc_professor.png`, 64, 64],
-  ['npc_farmer', `${NPC_SPRITE_BASE}/npc_farmer.png`, 64, 64],
   ['npc_sailor', `${NPC_SPRITE_BASE}/npc_sailor.png`, 64, 64],
-  ['npc_chef', `${NPC_SPRITE_BASE}/npc_chef.png`, 64, 64],
   ['npc_student', `${NPC_SPRITE_BASE}/npc_student.png`, 64, 64],
   ['npc_trainer', `${NPC_SPRITE_BASE}/npc_trainer.png`, 64, 64],
   ['npc_workshop', `${NPC_SPRITE_BASE}/npc_workshop.png`, 64, 64],
@@ -242,7 +229,7 @@ export const BootScene = {
     // listener 不会再泄漏到下一次 Game 实例。
     attachLifecycle(this as unknown as Phaser.Scene);
     // 初始地图从 world.player.mapKey 读取（传送 / 重连恢复存档），而非硬编码 town_hub。
-    // 兜底：worldStore 未初始化或 mapKey 不在 5 张地图中时仍走 town_hub。
+    // 兜底：worldStore 未初始化或 mapKey 不在支持列表中时仍走 town_hub。
     const initialMap = resolveInitialMapKey();
     this.scene.start('WorldScene', { mapKey: initialMap });
   },
@@ -250,10 +237,7 @@ export const BootScene = {
 
 const ALLOWED_INITIAL_MAPS = new Set([
   'town_hub',
-  'farm_north',
   'mine_south',
-  'campus_east',
-  'port_west',
 ]);
 
 function resolveInitialMapKey(): string {

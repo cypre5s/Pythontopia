@@ -13,7 +13,7 @@ from pythontopia_graph.schemas.resource import (
 
 
 class HandoutAgent:
-    """Generates a handout backed by evidence page references."""
+    """据 RAG 证据页生成结构化讲义；page_refs 仅可引用证据中的 page_id/page_no，禁止编造页码。"""
 
     AGENT_NAME = "ResourceDesignerAgent.handout"
 
@@ -34,9 +34,7 @@ class HandoutAgent:
             f"page_id={hit.page_id} page_no={hit.page_no} kc={','.join(hit.kc_codes)} text={hit.text[:200]}"
             for hit in evidence.chunks[:6]
         )
-        # 显式给出目标 JSON schema：真实 LLM（DeepSeek）虽返回 JSON，但若缺少顶层 handout
-        # 键，_build_from_response 会回落「自动兜底讲义」。page_refs 只能引用下方证据出现过
-        # 的 page_id/page_no，杜绝伪造页码（对齐 AGENTS 防幻觉约束）。
+        # 约束顶层 handout 键与 page_refs 来源；缺键或校验失败时回落确定式兜底讲义。
         schema_hint = (
             '{"title": "字符串", "summary": "一句话摘要", '
             '"handout": {"sections": [{"heading": "小节标题", '

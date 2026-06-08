@@ -6,6 +6,8 @@ from pythontopia_graph.schemas.profile import ProfileAgentInput, ProfileAgentOut
 
 
 class ProfileAgent:
+    """画像访谈 Agent 门面；委托 run_profile_graph 完成结构化画像抽取。"""
+
     def __init__(self, provider: LlmProvider) -> None:
         self.provider = provider
 

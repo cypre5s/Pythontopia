@@ -229,21 +229,14 @@ export interface ToolOverlay {
   bg: string;
 }
 
-const ACTION_TOOL: Partial<Record<CharacterAction, ToolOverlay>> = {
-  water: { fg: 'tool_watering_can', bg: 'tool_watering_can_bg' },
-  hoe: { fg: 'tool_hoe', bg: 'tool_hoe_bg' },
-};
+// R-14：农场浇水/锄头玩法已移除，不再挂载作物工具叠加层。
+const ACTION_TOOL: Partial<Record<CharacterAction, ToolOverlay>> = {};
 
 export function toolOverlayForAction(action: CharacterAction): ToolOverlay | null {
   return ACTION_TOOL[action] ?? null;
 }
 
-export const TOOL_TEXTURE_KEYS: readonly string[] = [
-  'tool_watering_can',
-  'tool_watering_can_bg',
-  'tool_hoe',
-  'tool_hoe_bg',
-];
+export const TOOL_TEXTURE_KEYS: readonly string[] = [];
 
 // ---- 超尺寸武器叠加层（ULPC 192px，与标准 slash 同帧同步）----
 // 砍树/挖矿用「斧头挥砍」：身体播标准 slash，斧头用 192px attack_slash 叠加。

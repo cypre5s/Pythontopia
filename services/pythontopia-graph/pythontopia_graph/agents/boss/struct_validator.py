@@ -1,8 +1,4 @@
-"""R-13 §5 Phase 5 审查 1：题目对象结构校验。
-
-参考 R13_OPTIMIZATION_PLAN.md §2.3-1：必填字段 / KC code 格式 / difficulty 范围
-/ 至少 3 条 test_cases / 题面长度上限。
-"""
+"""题目对象结构校验：必填字段、KC 格式、难度范围、test_cases 数量与题面长度上限。"""
 
 from __future__ import annotations
 
@@ -11,12 +7,13 @@ import re
 from .schemas import BossProblem, ReviewIssue, ReviewVerdict
 
 KC_CODE_RE = re.compile(r"^PY43-KC-\d{3}$")
-MAX_STATEMENT_LEN = 1500  # 略放宽以兼容中文题面（每汉字 1.5x ascii）
+MAX_STATEMENT_LEN = 1500  # 中文题面按字符计，上限略宽于纯 ASCII
 MIN_TEST_CASES = 3
 MAX_HINTS = 3
 
 
 def validate_problem_struct(problem: BossProblem) -> ReviewVerdict:
+    """校验 ``BossProblem`` 结构与字段约束，不通过则 reject。"""
     issues: list[ReviewIssue] = []
 
     if not problem.title or not problem.title.strip():

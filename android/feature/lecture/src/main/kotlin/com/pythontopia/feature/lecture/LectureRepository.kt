@@ -13,6 +13,7 @@ import retrofit2.http.GET
 import retrofit2.http.Path
 import retrofit2.http.Query
 
+/** `GET /api/workshop/resources` 列表；`GET /api/workshop/resources/{id}` 详情。 */
 interface LectureApi {
 
     @GET("api/workshop/resources")
@@ -25,10 +26,7 @@ interface LectureApi {
     suspend fun findOne(@Path("id") id: Long): LectureResourceDto
 }
 
-/**
- * 讲义阅读仓库：列出 HANDOUT 资源 + 读取详情，并把多态 content 宽松解码为 [HandoutContent]。
- * 列表静默兜底；详情失败上抛（[Result]）以提示用户。
- */
+/** HANDOUT 列表失败静默空表；详情失败上抛 [Result]；多态 content 宽松解码为 [HandoutContent]。 */
 @Singleton
 class LectureRepository @Inject constructor(
     private val api: LectureApi,

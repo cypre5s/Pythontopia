@@ -1,9 +1,6 @@
-"""Deterministic narrative generator for the review hall (stage 13).
+"""复盘大厅确定性叙事生成器。
 
-Per AGENTS.md, this agent **never invents numbers or KC codes**: every number
-referenced in narrative_md must appear in `metrics`, and every KC code referenced
-must appear in `top_kcs`. The grounding step rejects responses that violate
-either rule.
+叙事引用的数值须来自 metrics，KC code 须来自 top_kcs；grounding 校验不通过则 status=FAILED。
 """
 
 from __future__ import annotations
@@ -35,6 +32,8 @@ class _AllowedSet:
 
 
 class EvaluationNarrativeAgent:
+    """将 metrics/top_kcs 编排为复盘叙事；grounding 与 safety 不通过时 status=FAILED。"""
+
     AGENT_NAME = AGENT_NAME
 
     def narrate(self, request: EvaluationNarrativeRequest) -> EvaluationNarrativeResponse:
@@ -116,8 +115,7 @@ class EvaluationNarrativeAgent:
         allowed: _AllowedSet,
     ) -> tuple[str, list[str], str, GroundingResult]:
         text = "\n".join([narrative, diff, *recommendations])
-        # First validate KC codes against allow-list, then redact them so embedded digits
-        # (e.g. `PY43-KC-001` → `43`, `-001`) are not double-counted as narrative numbers.
+        # 先校验 KC 白名单，再抹除 KC 文本，避免嵌入数字（如 PY43-KC-001 中的 43）被重复计为叙事数字。
         unknown_kc: list[str] = []
         for kc in KC_PATTERN.findall(text):
             if kc not in allowed.kc_codes:
@@ -167,7 +165,7 @@ class EvaluationNarrativeAgent:
         )
 
     def _number_aliases(self, value: float) -> list[str]:
-        """Return both the f-string-friendly `0.10` form and the trimmed `0.1` form."""
+        """返回 f-string 用的 `0.10` 与去尾零的 `0.1` 两种数字字符串形式。"""
         if value == int(value):
             return [str(int(value))]
         return [f"{value:.2f}", f"{value:.2f}".rstrip("0").rstrip(".")]

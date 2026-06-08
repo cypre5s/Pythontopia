@@ -9,20 +9,8 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * 玩家输入路由：实现 [InputProcessor]（外接键盘 / Chromebook） + 自绘屏幕左下角的虚拟摇杆
- * （Touchpad-style，dead-zone 8%，行为对齐 `docs/android/03-rendering-libgdx-vs-compose.md` §7）。
- *
- * 设计取舍：
- * - 内部状态全部存在普通字段（没有 GL handle），渲染线程读写；
- *   [resolveStep] 把 8 向输入降级成 4 向 dx/dy（与后端 PlayerStateDto 对齐），8 向动画选帧
- *   是 R-13 议题，这里先固化 4 向。
- * - 不实现 `Stage + Touchpad` actor，因为 R-12 demo 不引入 scene2d 依赖；自绘摇杆只需
- *   `ShapeRenderer.Filled`，足够直观。
- * - 触摸坐标由 LibGDX 以 `Gdx.input.x/y` 给出（屏幕像素，y 向下），本类不直接读 Gdx；
- *   外部调用方调用 [setPointer] / [clearPointer] 通报触摸状态，便于在 headless 测试中
- *   模拟手指。
- * - `keyDown` 仅用于 ESC / SPACE 这种"边沿触发"事件；持续移动靠 [isKeyHeld] 由调用方
- *   每帧调用 `Gdx.input.isKeyPressed` 决定，避免输入处理器吞按键事件。
+ * 玩家输入路由：[InputProcessor] + 左下虚拟摇杆（dead-zone 18%）。
+ * [resolveStep] 将 8 向降级为 4 向（对齐后端 direction）；持续移动由调用方每帧轮询键态。
  */
 class InputController(
     private val viewportWidthProvider: () -> Int = { 0 },
@@ -120,8 +108,7 @@ class InputController(
      * 绘制虚拟摇杆（圆底 + 当前手指位置点）。
      * 调用方负责 `shape.begin(Filled)` / `shape.end()`。
      *
-     * 注意：用 [ShapeRenderer.setColor]`(r,g,b,a)` 而非 `shape.color = X; shape.color.a = ...`，
-     * 否则后者会修改 [PixelTheme] 单例 Color 对象的 alpha，污染其它 Screen 的渲染。
+     * 须用 setColor(r,g,b,a)，勿改 shape.color.a，否则会污染 [PixelTheme] 单例 alpha。
      */
     fun drawJoystick(shape: ShapeRenderer) {
         if (joystickRadius <= 0f) return

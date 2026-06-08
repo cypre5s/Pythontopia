@@ -10,12 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/**
- * 章末 BOSS 战 ViewModel。
- *
- * 流程：选章 → 阶段 1..4 逐关 → 每关取题(graph)、写码、服务端判题；
- * 通关进下一阶段，4 阶段全过 → VICTORY。
- */
+/** 章末 BOSS：选章 → 4 阶段逐关出题、写码、服务端判题；全过 → VICTORY。 */
 @HiltViewModel
 class BossViewModel @Inject constructor(
     private val repository: BossRepository,
@@ -74,7 +69,7 @@ class BossViewModel @Inject constructor(
         }
     }
 
-    /** 通关后推进；末阶段通关 → 胜利。 */
+    /** 末阶段通关 → VICTORY，否则 stage+1 并 loadStage。 */
     fun advance() {
         val s = _state.value
         if (s.result?.passed != true) return
@@ -86,7 +81,7 @@ class BossViewModel @Inject constructor(
         }
     }
 
-    /** 未通过 → 同阶段重试（保留题目，清结果）。 */
+    /** 未通过时清 result，保留题目重试。 */
     fun retry() {
         _state.update { it.copy(result = null) }
     }

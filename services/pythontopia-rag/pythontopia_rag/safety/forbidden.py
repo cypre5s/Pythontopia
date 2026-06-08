@@ -10,6 +10,7 @@ DEFAULT_FORBIDDEN = (
 
 
 def is_forbidden(query: str, forbidden: tuple[str, ...] = DEFAULT_FORBIDDEN) -> bool:
+    """安全过滤：空查询或命中禁用词时返回 True，调用方应置 no_evidence_found。"""
     lowered = query.strip().lower()
     if not lowered:
         return True

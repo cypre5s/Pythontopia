@@ -11,7 +11,7 @@ VALID_FINISH_STATUSES = {"ok", "retry", "fail"}
 
 
 class StubProvider(LlmProvider):
-    """Returns canned payloads (or None to exercise deterministic fallbacks)."""
+    """按序返回预设 payload；None 时走确定性 fallback。"""
 
     def __init__(self, payloads: list[dict | None]) -> None:
         self._payloads = list(payloads)
@@ -107,7 +107,7 @@ async def test_stream_phase_payloads_are_well_formed_and_result_terminal() -> No
     for finish in finishes:
         assert finish["status"] in VALID_FINISH_STATUSES
 
-    # HANDOUT backed by static evidence resolves on attempt0 → terminal `result`.
+    # HANDOUT + 静态证据在 attempt0 即成功，流以 result 终止。
     assert events[-1][0] == "result"
 
 

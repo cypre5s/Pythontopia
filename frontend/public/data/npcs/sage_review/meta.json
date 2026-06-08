@@ -5,17 +5,17 @@
   "sprite": "lpc_npc_sage",
   "portrait": "portrait_sage_review.png",
   "spawnMap": "town_hub",
-  "spawn": { "tileX": 18, "tileY": 8 },
+  "spawn": { "tileX": 37, "tileY": 12 },
   "birthday": { "month": 12, "day": 31 },
   "favoriteGifts": ["tea", "review_journal", "incense"],
   "schedule": {
-    "monday":    [{ "from": "10:00", "map": "town_hub", "tileX": 18, "tileY": 8 }],
-    "tuesday":   [{ "from": "10:00", "map": "town_hub", "tileX": 18, "tileY": 8 }],
-    "wednesday": [{ "from": "10:00", "map": "town_hub", "tileX": 18, "tileY": 8 }],
-    "thursday":  [{ "from": "10:00", "map": "town_hub", "tileX": 18, "tileY": 8 }],
-    "friday":    [{ "from": "10:00", "map": "town_hub", "tileX": 18, "tileY": 8 }, { "from": "20:00", "map": "town_hub", "tileX": 20, "tileY": 10 }],
-    "saturday":  [{ "from": "10:00", "map": "town_hub", "tileX": 18, "tileY": 8 }],
-    "sunday":    [{ "from": "10:00", "map": "town_hub", "tileX": 18, "tileY": 8 }]
+    "monday":    [{ "from": "10:00", "map": "town_hub", "tileX": 37, "tileY": 12 }],
+    "tuesday":   [{ "from": "10:00", "map": "town_hub", "tileX": 37, "tileY": 12 }],
+    "wednesday": [{ "from": "10:00", "map": "town_hub", "tileX": 37, "tileY": 12 }],
+    "thursday":  [{ "from": "10:00", "map": "town_hub", "tileX": 37, "tileY": 12 }],
+    "friday":    [{ "from": "10:00", "map": "town_hub", "tileX": 37, "tileY": 12 }, { "from": "20:00", "map": "town_hub", "tileX": 20, "tileY": 10 }],
+    "saturday":  [{ "from": "10:00", "map": "town_hub", "tileX": 37, "tileY": 12 }],
+    "sunday":    [{ "from": "10:00", "map": "town_hub", "tileX": 37, "tileY": 12 }]
   },
   "tags": ["weekly_review", "retro_quest", "mistake_pattern"],
   "description": "小镇复盘大厅的清茶老者，每周五晚开堂复盘。会把你本周的失败、KC 掌握变化、易错模式做成一段总结，让你写下一句心得再继续。"

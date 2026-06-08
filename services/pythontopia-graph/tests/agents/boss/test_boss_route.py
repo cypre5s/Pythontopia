@@ -1,7 +1,4 @@
-"""R-13 §5 Phase 6 续：/agents/boss/* 端点集成测试。
-
-用 FastAPI TestClient + monkeypatch 屏蔽真 LLM 调用，只测路由层 + 编排回退逻辑。
-"""
+"""/agents/boss/* 端点集成测试：TestClient + monkeypatch 屏蔽真 LLM，覆盖路由与 golden 回退。"""
 
 from __future__ import annotations
 
@@ -18,14 +15,14 @@ def client() -> TestClient:
     return TestClient(app)
 
 
-# ─────────────────────────── /agents/boss/problem ───────────────────────────
+# /agents/boss/problem
 
 
 def test_problem_endpoint_returns_golden_when_llm_unavailable(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.delenv("PYT_LLM_PROVIDER", raising=False)
-    # 删除全部 OPENAI_/LLM_/PYT_OPENAI_ 凭证，强制 provider_from_env() 回落 dryrun（无 LLM）
+    # 清除 LLM 凭证，强制 provider_from_env() 回落 dryrun
     for key in [
         "OPENAI_BASE_URL", "OPENAI_API_KEY", "OPENAI_MODEL",
         "LLM_BASE_URL", "LLM_API_KEY", "LLM_MODEL",
@@ -38,7 +35,7 @@ def test_problem_endpoint_returns_golden_when_llm_unavailable(
     )
     assert response.status_code == 200
     body = response.json()
-    # 当 LLM 不可用时，aiGenerated 应为 False（走 golden / dryrun 路径）
+    # LLM 不可用时走 golden/dryrun 路径
     assert body["chapter"] == 1
     assert body["stage"] == 1
     assert body["totalTestCases"] >= 3
@@ -85,7 +82,7 @@ def test_problem_endpoint_rejects_invalid_stage(client: TestClient) -> None:
     assert response.status_code == 422
 
 
-# ─────────────────────────── /agents/boss/evaluate ───────────────────────────
+# /agents/boss/evaluate
 
 
 def test_evaluate_endpoint_full_pass(client: TestClient) -> None:
@@ -119,7 +116,7 @@ def test_evaluate_endpoint_partial_pass_reports_first_failure(client: TestClient
             "code": "n = int(input())\nprint(n + 1)",
             "testCases": [
                 {"input": "1", "expectedOutput": "2", "isSample": True},
-                {"input": "5", "expectedOutput": "7"},  # expects 7, code prints 6
+                {"input": "5", "expectedOutput": "7"},  # 期望 7，代码输出 6
                 {"input": "9", "expectedOutput": "10"},
             ],
         },
@@ -182,13 +179,13 @@ def test_evaluate_endpoint_propagates_problem_id(client: TestClient) -> None:
     assert response.json()["problemId"] == "ai-c1-s1-py43_kc_001"
 
 
-# ─────────────────────────── 真 LLM 路径（用 stub provider）───────────────────────
+# stub provider 模拟 LLM 路径
 
 
 def test_problem_endpoint_uses_llm_provider_when_available(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """patch provider_from_env 返回 stub provider；验证 problem 来自 LLM。"""
+    """stub provider 注入时 problem 应标记为 LLM 生成。"""
 
     class _StubProvider:
         async def chat(self, messages, **kwargs):  # type: ignore[no-untyped-def]

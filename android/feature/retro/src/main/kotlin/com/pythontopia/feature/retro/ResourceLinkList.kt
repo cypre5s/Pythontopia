@@ -27,16 +27,7 @@ import androidx.compose.ui.unit.dp
 import com.pythontopia.core.design.PytColors
 import com.pythontopia.core.design.PytSpace
 
-/**
- * 周复盘期间多智能体生成的学习资源列表。
- *
- * 点击行为：
- *  - 调用者传入的 [onResourceClick] 优先；
- *  - 默认实现是「资源有 url 就走系统浏览器」，没 url 就回调一次让上层做 toast 提示。
- *
- * 视觉规范：左侧类型徽标用 [PytColors.bgSoft] 背景 + 类型缩写文本；
- * 主体两行文本（标题 + 创建时间）；空列表给学生明确说明。
- */
+/** 复盘资源列表；优先 [onResourceClick]，否则有 url 时打开系统浏览器。 */
 @Composable
 fun ResourceLinkList(
     resources: List<ResourceDto>,

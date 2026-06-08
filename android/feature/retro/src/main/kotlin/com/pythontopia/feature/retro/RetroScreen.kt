@@ -31,17 +31,7 @@ import com.pythontopia.core.design.PytSpace
 
 private const val DEFAULT_USER_ID: String = "demo-student"
 
-/**
- * 复盘大厅入口屏。
- *
- * 布局：
- *  - 顶部固定：标题 + 副标题 + 一行历史周 [FilterChip]（含「本周」高亮）；
- *  - 主体 [LazyColumn]：当前选中周报告卡片，可上下滚动；
- *  - 加载 / 错误 / 空报告均给学生明确文案，避免直接展示空白。
- *
- * `userId` 默认走 demo 占位 [DEFAULT_USER_ID]；接入 R-12 之后应由 NavGraph
- * 从 SessionRepository 注入真实 userId，目前留参数位以方便测试驱动。
- */
+/** 复盘大厅入口；`userId` 默认 demo 占位，应由 NavGraph 注入真实会话用户。 */
 @Composable
 fun RetroScreen(
     userId: String = DEFAULT_USER_ID,

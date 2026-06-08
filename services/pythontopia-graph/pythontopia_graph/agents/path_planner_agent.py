@@ -1,10 +1,4 @@
-"""Deterministic 7-day learning path planner.
-
-The planner is intentionally rule-based to guarantee reproducibility for tests and
-audit. Optional LLM calls may decorate ``reason_summary`` strings in the future,
-but the structural choices (which KC, which node type, which day) are always
-controlled by deterministic rules.
-"""
+"""确定性 7 日学习路径规划器；KC/节点类型/排期均由规则控制，保证可复现与可审计。"""
 
 from __future__ import annotations
 
@@ -42,7 +36,7 @@ class _CandidateKc:
 
 
 class PathPlannerAgent:
-    """Builds a personalised 7-day plan from the request snapshot."""
+    """据画像快照、掌握度与班级任务生成个性化 7 日路径节点；缺画像或未解锁 KC 时 fail fast。"""
 
     AGENT_NAME = AGENT_NAME
 

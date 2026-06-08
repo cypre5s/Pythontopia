@@ -12,15 +12,7 @@ data class TutorMessage(
     enum class Role { USER, ASSISTANT }
 }
 
-/**
- * 导师问答 UI 状态（MVI 单一状态）。
- *
- * - [messages] 当前会话气泡（user / assistant 交替）。
- * - [input] 输入框文本。
- * - [sending] 正在等待/接收流式回答（禁用发送、显示进度）。
- * - [error] 流式失败提示。
- * - [history] 历史会话（GET /api/tutor/sessions）。
- */
+/** 导师问答 MVI 状态；[history] 来自 `GET /api/tutor/sessions`。 */
 data class TutorUiState(
     val messages: List<TutorMessage> = emptyList(),
     val input: String = "",

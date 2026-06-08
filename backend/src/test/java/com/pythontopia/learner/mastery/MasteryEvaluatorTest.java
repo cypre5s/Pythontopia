@@ -23,11 +23,14 @@ class MasteryEvaluatorTest {
 
   private MasteryRepository repository;
   private MasteryProperties properties;
+  private com.pythontopia.learner.mastery.review.ReviewStateService reviewStateService;
   private MasteryEvaluator evaluator;
 
   @BeforeEach
   void setUp() {
     repository = Mockito.mock(MasteryRepository.class);
+    reviewStateService =
+        Mockito.mock(com.pythontopia.learner.mastery.review.ReviewStateService.class);
     properties =
         new MasteryProperties(
             14,
@@ -41,7 +44,7 @@ class MasteryEvaluatorTest {
                 "MANUAL_OVERRIDE", BigDecimal.ZERO,
                 "DECAY", BigDecimal.ZERO,
                 "BOOTSTRAP", BigDecimal.ZERO));
-    evaluator = new MasteryEvaluator(repository, properties);
+    evaluator = new MasteryEvaluator(repository, properties, reviewStateService);
   }
 
   @Test

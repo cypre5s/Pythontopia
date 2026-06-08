@@ -16,17 +16,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import retrofit2.Retrofit
 
-/**
- * MockWebServer 集成测试：直接对 [WorkshopRepository] + [WorkshopApi] 做 HTTP wire 级验证。
- *
- * 覆盖：
- *  - `GET /api/course/problems?kcCode=` 列表反序列化（包括嵌套 [ProblemSampleDto]）；
- *  - 列表请求异常时仓库静默返回空表（仓库容错合同）；
- *  - `POST /api/submissions` 把 [SubmissionCreateRequest] 序列化为正确 JSON；
- *  - `pollStatus` 在 MockWebServer 上多次入队 PENDING → RUNNING → PASSED，
- *    验证轮询正好发起 3 次请求并在终态停止；
- *  - `history` 反序列化。
- */
+/** MockWebServer 集成测试：验证题目列表容错、提交序列化、轮询终态停止与历史反序列化。 */
 @OptIn(ExperimentalCoroutinesApi::class)
 class WorkshopRepositoryTest {
 

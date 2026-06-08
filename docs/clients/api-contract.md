@@ -161,7 +161,7 @@ Authorization: Bearer <token>
 ```
 
 - `problemId` 必填、`code` 必填（≤ 8192 字符）；`questId`、`source` 可选。
-- `source ∈ {TRAINING, PATH_QUEST, BUG_MINE_RETRY, CLASSROOM}`。
+- `source ∈ {TRAINING, PATH_QUEST, BUG_MINE_RETRY, BUG_MINE_ECHO, BUG_MINE_VARIANT, CLASSROOM}`。
 
 **判题轮询模型**：`status` 由 `PENDING → RUNNING` 流转到终态之一 `{PASSED, FAILED, ERROR}`。终态后 `GET /api/submissions/{id}` 的 `judgeResult` 给出 verdict：
 
@@ -177,7 +177,38 @@ Authorization: Bearer <token>
 
 `verdict ∈ {AC, WA, RE, TLE, CE, MLE, SYSTEM_ERROR}`（AC=全部通过；WA=答案错误；RE=运行时错误；TLE=超时；CE=未过静态检查/超长/为空；MLE=超内存；SYSTEM_ERROR=判题系统异常）。轮询建议固定间隔（如 1s）+ 上限退避，命中终态即停。
 
-### 4.7 班级（学生侧）
+### 4.7 Bug 矿洞（仅学生）
+
+Bug 矿洞是错题复习支线：已有失败提交可进入矿洞；遗忘回声则由后端用 **FSRS-lite 复习引擎**（`kc_review_state`，见 `docs/mastery_formula.md`）召回**当下到期**（`now > due_at`）的 KC，并写入真实 `practice_submission(source=BUG_MINE_ECHO)` 后生成同一套分层卡片。`decayRisk = 1 − R`（R 为可提取性），不再用全局 14 天半衰期。
+
+| 方法 | 路径 | 鉴权 | 说明 |
+| --- | --- | --- | --- |
+| GET | `/api/bug-mine/errorbook` | STUDENT | 当前未关闭矿洞 session 列表，含 `minePriority`、`decayRisk`、`recommendationReason` |
+| GET | `/api/bug-mine/echoes` | STUDENT | 遗忘回声候选 KC 列表（仅 FSRS 到期项，按入矿优先级降序） |
+| POST | `/api/bug-mine/echoes` | STUDENT | body `{ "kcCode": "PY43-KC-016" }`，打开遗忘回声矿洞 session |
+| POST | `/api/bug-mine/sessions` | STUDENT | body `{ "submissionId": 123 }`，由失败提交打开矿洞 |
+| GET | `/api/bug-mine/sessions/{id}` | STUDENT | 矿洞 session 详情与卡片 |
+| POST | `/api/bug-mine/sessions/{id}/cards/{cardId}/reveal` | STUDENT | 解锁当前深度允许的卡片 |
+| POST | `/api/bug-mine/sessions/{id}/retry-submit` | STUDENT | 原题重试，body `{ "code": "..." }` |
+| POST | `/api/bug-mine/sessions/{id}/variant-submit` | STUDENT | L5 同 KC 变式提交，body `{ "code": "..." }` |
+| POST | `/api/bug-mine/sessions/{id}/close?status=ABANDONED` | STUDENT | 关闭 session；`status` 可为 `RESOLVED` / `ABANDONED` |
+
+`BugMineEchoCandidateDto` 核心字段：
+
+```json
+{
+  "kcCode": "PY43-KC-016",
+  "problemId": 476,
+  "problemTitle": "圆面积调试",
+  "masteryScore": 0.72,
+  "confidence": 0.25,
+  "decayRisk": 0.86,
+  "minePriority": 0.71,
+  "recommendationReason": "遗忘回声 · 置信度低 · 建议入矿"
+}
+```
+
+### 4.8 班级（学生侧）
 
 | 方法 | 路径 | 鉴权 | 说明 |
 | --- | --- | --- | --- |
@@ -198,6 +229,10 @@ Authorization: Bearer <token>
 | POST | `/api/tutor/ask` | `plan` → `trace`* → `token`* → `result` → (`error`) | 导师答疑流（含课件证据 + 防幻觉/安全审查） |
 | POST | `/api/orchestrator/turn/stream` | `trace`* → `token`* → `result` → (`error`) | 学习总管多智能体编排流 |
 | POST | `/api/workshop/resources/stream` | `plan` → `trace`* → `result` → (`error`) | 资源工坊生成流（`*` 表示可重复多次） |
+
+> **学习总管的记忆矿脉增强（Phase 2）**：`/api/orchestrator/turn/stream` 由后端**服务端注入** `decaying_kcs`
+> （当下 FSRS 到期、最该复盘的 KC，取自 Bug 矿洞遗忘回声），客户端**无需也不应**自己上送；总管据此把
+> 看/学/练/测计划优先锚定到待复习知识点。取数失败时降级为空、不阻断对话。
 
 SSE 帧格式（标准）：
 
@@ -224,6 +259,39 @@ data: <json>
 - 微信小程序/小游戏：用 `wx.request({ enableChunked: true })` 接收分块，自行按 SSE 帧切分。
 
 非流式配套端点（同模块，按需使用）：`POST /api/tutor/style-engaged`（上报采纳讲法，`204`）、`GET /api/tutor/sessions?limit=20`、`POST /api/workshop/resources`（非流式生成）、`GET /api/workshop/resources?type=&kcCode=&limit=&offset=`、`GET /api/workshop/resources/{id}`、`POST /api/workshop/resources/{id}/feedback`。
+
+### 5.1 意图路由（百晓工坊，非流式）
+
+工坊对话框把一句话先送意图路由分类，客户端据 `intent` 分派到对应管线（非流式，单次调用）。
+
+| 方法 | 路径 | 鉴权 | 说明 |
+| --- | --- | --- | --- |
+| POST | `/api/intent/route` | STUDENT | 单句意图分类 + KC 锚定，返回 `IntentRouteResponse` |
+
+请求体 `IntentRouteRequest`（除 `message` 外均可空）：
+
+```json
+{
+  "message": "我想复习一下 for 循环",
+  "manualKcCodes": ["PY43-KC-001"],
+  "courseKcs": [{ "code": "PY43-KC-001", "name": "for 循环" }],
+  "currentChapter": 3,
+  "recentKcCodes": ["PY43-KC-001"]
+}
+```
+
+响应 `IntentRouteResponse`：
+
+```json
+{ "intent": "REVIEW", "kcCodes": ["PY43-KC-001"], "focusHint": "复盘 for 循环", "confidence": 0.7, "reason": "用户想复习巩固" }
+```
+
+`intent ∈ {ASK, VIDEO, REVIEW, HANDOUT, MINDMAP, PRACTICE, CODE_LAB, READING, STORYBOARD}`，客户端分派：
+
+- `ASK` → 导师答疑（`POST /api/tutor/ask` SSE）。
+- `VIDEO` → B站精选讲解视频卡片（外部检索，非生成）。
+- `REVIEW` → **记忆矿脉回声复习**：引导去 Bug 矿洞按 FSRS 到期 KC 复盘（非生成，不调工坊生成管线）。
+- 其余 6 个 = 资源类型 → 工坊生成（`POST /api/workshop/resources/stream` SSE）。
 
 ---
 

@@ -10,15 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/**
- * 复盘大厅 ViewModel。
- *
- * 状态机：
- *  - `load(userId)` 串联 [RetroRepository.thisWeek] + [RetroRepository.pastWeeks]，
- *    本周报告就绪即写入 `currentReport`，过往周再叠加，避免学生看两次 spinner；
- *  - `selectWeek(weekIndex)` 在已加载的报告池里挑选，无需触发网络；
- *  - `markRead(reportId)` 触发已读回执，失败静默（不阻塞 UI，下次 thisWeek 仍会带最新 read 标记）。
- */
+/** 复盘大厅 ViewModel；`load` 串联本周与历史，`selectWeek` 本地切换，`markRead` 失败静默。 */
 @HiltViewModel
 class RetroViewModel @Inject constructor(
     private val repository: RetroRepository,
@@ -60,10 +52,7 @@ class RetroViewModel @Inject constructor(
         }
     }
 
-    /**
-     * 在已加载的本周 + 历史报告池里切换主视图；不发起网络。
-     * 切换到未加载的周（理论上不发生，chip 只渲染已加载周）则原样返回。
-     */
+    /** 在已加载报告池内切换周视图，不发起网络；未加载的 weekIndex 直接返回。 */
     fun selectWeek(weekIndex: Long) {
         val current = _state.value.currentReport
         if (current?.weekIndex == weekIndex) return

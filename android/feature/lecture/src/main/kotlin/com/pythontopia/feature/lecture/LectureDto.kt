@@ -4,14 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 
-/**
- * 讲义阅读 DTO，对齐后端 ResourceWorkshopController（/api/workshop/resources）：
- *  - GET /api/workshop/resources?type=HANDOUT → [LectureListItemDto]
- *  - GET /api/workshop/resources/{id}         → [LectureResourceDto]
- *
- * content 为多态 JSON（HANDOUT/MINDMAP/...），用 [JsonElement] 承接后再宽松解码为 [HandoutContent]。
- * handout 结构对齐 graph 输出（snake_case：code_snippets / page_refs），与 Web HandoutView 一致。
- */
+/** 讲义 DTO：`/api/workshop/resources?type=HANDOUT` 列表与 `/{id}` 详情；content 多态 JSON，handout 段 snake_case 对齐 graph。 */
 
 @Serializable
 data class LectureListItemDto(

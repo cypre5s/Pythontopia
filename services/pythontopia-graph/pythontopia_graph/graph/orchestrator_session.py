@@ -1,15 +1,7 @@
-"""In-process, single-worker session memory for the OrchestratorAgent.
+"""OrchestratorAgent 进程内单 worker 会话记忆。
 
-AGENTS.md guarantees the graph service runs with a single worker, so a plain
-module-level ``dict`` guarded by an ``asyncio.Lock`` is a correct (and minimal)
-way to keep *real* server-side multi-turn memory: accumulated dialogue turns,
-the last plan, and the running profile signals — all keyed by ``session_id``.
-
-The server is the source of truth; the client may still resend ``history`` which
-the graph merges in as a fallback when the server has no record yet.
-
-All accessors return deep copies so callers cannot mutate stored state by
-reference; every mutation goes through a lock-guarded helper.
+单 worker 下模块级 dict + asyncio.Lock；按 session_id 存多轮对话、plan、画像信号。
+服务端为权威，客户端 history 仅冷启动回退。访问器返回深拷贝，写路径经锁保护。
 """
 
 from __future__ import annotations

@@ -14,11 +14,7 @@ class PythontopiaApplication : Application() {
         }
     }
 
-    /**
-     * 仅 debug 启用：把主线程磁盘/网络 I/O、泄漏的 Closable / SharedPreferences 等
-     * 当作可观测违规打到 logcat（penaltyLog），便于在开发期抓出会卡 UI 的隐患
-     * （如 EncryptedSharedPreferences 误在主线程访问）。release 不启用，零开销。
-     */
+    /** debug 启用 StrictMode，主线程磁盘/网络 I/O 等违规打 logcat；release 不启用。 */
     private fun enableStrictMode() {
         StrictMode.setThreadPolicy(
             StrictMode.ThreadPolicy.Builder()

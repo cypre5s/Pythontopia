@@ -1,7 +1,4 @@
-"""R-13 §5 Phase 5：Boss 出题数据模型。
-
-不引入 pydantic 以避免与 langgraph 0.2 状态字段冲突；用普通 dataclass 即可。
-"""
+"""Boss 出题数据模型（dataclass，避免与 langgraph 状态字段冲突）。"""
 
 from __future__ import annotations
 
@@ -29,7 +26,7 @@ class ReviewIssue:
 
 @dataclass
 class TestCase:
-    """单条测试用例。Boss 出题至少 3 条；隐藏 vs 公开由 caller 控制。"""
+    """单条测试用例；至少 3 条。``is_sample`` 标记公开样例，非样例不暴露给玩家（禁止输出隐藏测试）。"""
 
     input: str
     expected_output: str
@@ -56,12 +53,7 @@ class BossProblem:
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_payload(self) -> dict[str, Any]:
-        """转成 BossProblemDto 兼容的 dict（前端 / backend 共用）。
-
-        额外把 ``testCases`` + ``referenceSolution`` 附在响应里给 backend 缓存
-        （前端 BossProblemDto 不解析这俩字段，但后端 BossInternalProblem record
-        会反序列化 → 用作 graph evaluate 输入）。
-        """
+        """转为 BossProblemDto 兼容 dict；``testCases`` 与 ``referenceSolution`` 仅后端缓存与评测用。"""
         sample = next((tc for tc in self.test_cases if tc.is_sample), self.test_cases[0])
         return {
             "problemId": self.problem_id,
@@ -76,7 +68,7 @@ class BossProblem:
             "totalTestCases": len(self.test_cases),
             "reviewed": True,
             "aiGenerated": True,
-            # 下面两个字段 backend 专用，前端 DTO 不展示：
+            # backend 专用，前端 DTO 不展示
             "testCases": [
                 {
                     "input": tc.input,
@@ -99,7 +91,7 @@ class ReviewVerdict:
 
 @dataclass
 class BossProblemReview:
-    """5 重审查链汇总结果。``passed=True`` 才允许入库 / 返给前端。"""
+    """五重审查汇总；仅 ``passed=True`` 可入库或返回前端。"""
 
     problem: BossProblem
     verdicts: list[ReviewVerdict]

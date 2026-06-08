@@ -23,19 +23,7 @@ import androidx.compose.ui.unit.dp
 import com.pythontopia.core.design.PytColors
 import com.pythontopia.core.design.PytSpace
 
-/**
- * 单张谜题卡 Composable。
- *
- * 视觉层级（从上到下）：
- *  1. 顶部色带（[layerColor]）+ 卡牌业务编号 deckCardId（如 `B1-01`） + KC 编号 chip
- *  2. 大字标题 [MineCard.title]
- *  3. 错误代码片段 [MineCard.snippet]（等宽字体、深底浅字、自适应高度）
- *  4. 期望输出 [MineCard.expectedOutput]（绿色高亮，与代码段视觉区分）
- *  5. 奖励 / 难度系数小字脚注
- *
- * 不接收 onClick：卡片本身是只读展示，交互由父级的 Submit 按钮与编辑器承担，避免
- * 玩家误点卡片触发副作用。
- */
+/** 谜题卡只读展示；交互由父级编辑器与提交按钮承担。 */
 @Composable
 fun MineCardView(
     card: MineCard,
@@ -133,11 +121,7 @@ private fun CodeBlock(label: String, content: String, accent: Color) {
     }
 }
 
-/**
- * B1..B5 难度色映射，配合卡牌库 §2 难度系数：
- * - B1 = 入门绿（success）；B2 = 浅蓝；B3 = 警戒黄；B4 = 警示橙；B5 = 危险红。
- * 超出范围回退到 [PytColors.border]，避免脏数据让 UI 渲染异常。
- */
+/** B1..B5 难度色；越界回退 [PytColors.border]。 */
 internal fun layerColor(layer: Int): Color = when (layer) {
     1 -> PytColors.success
     2 -> PytColors.info

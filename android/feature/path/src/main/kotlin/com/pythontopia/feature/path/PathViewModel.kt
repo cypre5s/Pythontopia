@@ -10,15 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/**
- * 学习路径 ViewModel：单一 [StateFlow] 持有 [PathUiState]，对外暴露
- *  - [load]          初次进入 / 下拉刷新
- *  - [toggleStatusFilter] / [toggleTypeFilter] / [clearFilters]   用户筛选
- *  - [startNode] / [completeNode]   节点状态机推进
- *
- * MVVM；节点 ≤ 30 个，无需 MVI。同一时刻只允许一个节点 inflight（由 [PathUiState.advancingNodeId] 保护），
- * 防止用户狂点导致后端 conflict。
- */
+/** 学习路径 ViewModel；[PathUiState.advancingNodeId] 保证同一时刻仅一个节点 inflight。 */
 @HiltViewModel
 class PathViewModel @Inject constructor(
     private val repository: PathRepository,
@@ -27,12 +19,7 @@ class PathViewModel @Inject constructor(
     private val _state = MutableStateFlow(PathUiState())
     val state: StateFlow<PathUiState> = _state.asStateFlow()
 
-    /**
-     * 拉取活跃路径。
-     *
-     * @param userId 学习者 ID；调用方传入（一般由 host Activity 从 session 注入）。
-     * @param packId 课程包；默认 [PathRepository.DEFAULT_PACK_ID]（=43，`Python语言基础`）。
-     */
+    /** 拉取活跃路径；[packId] 默认 pack 43（`Python语言基础`）。 */
     fun load(userId: Long, packId: Long = PathRepository.DEFAULT_PACK_ID) {
         _state.update { it.copy(isLoading = true, error = null) }
         viewModelScope.launch {
@@ -76,12 +63,7 @@ class PathViewModel @Inject constructor(
         _state.update { it.copy(statusFilter = emptySet(), typeFilter = emptySet()) }
     }
 
-    /**
-     * 把节点状态机推进一步：未开始 -> 开始；进行中 -> 完成。
-     * LOCKED / DONE 节点的点击交由 UI 自行处理（如展示前置 / 跳转复习）。
-     *
-     * 同一时刻只允许一个 inflight；重复点直接 no-op。
-     */
+    /** UNLOCKED→开始、IN_PROGRESS→完成；LOCKED/DONE 与 inflight 中重复点击为 no-op。 */
     fun advanceNode(node: PathNodeDto) {
         val pathId = _state.value.pathId ?: return
         if (_state.value.advancingNodeId != null) return
@@ -134,7 +116,7 @@ class PathViewModel @Inject constructor(
         }
     }
 
-    /** 清错提示，由 UI 在 snackbar dismiss 等场景调用。 */
+    /** 清除 [PathUiState.error]。 */
     fun consumeError() {
         _state.update { it.copy(error = null) }
     }

@@ -1,18 +1,6 @@
-"""IntentRouterAgent（百晓工坊 意图路由）.
+"""IntentRouterAgent（百晓工坊意图路由）。
 
-Picks ONE tool for a single composer message and grounds suggested KC codes to
-the course catalog. Mirrors ``OrchestratorAgent`` provider plumbing (content_json
-→ fenced content_text fallback) and degrades to a *deterministic keyword*
-baseline when the provider returns nothing usable — it never degrades to
-free-form chat, so a structured intent is always returned.
-
-Output contract (``IntentRouteResponse``):
-  * ``intent``      – one of ASK / HANDOUT / MINDMAP / PRACTICE / CODE_LAB /
-    READING / STORYBOARD;
-  * ``kc_codes``    – manual ``@`` codes first, then grounded LLM suggestions,
-    then a name-substring / recent fallback (all clamped to the catalog);
-  * ``focus_hint``  – one-line learning focus extracted from the message;
-  * ``confidence`` / ``reason`` – for the frontend preview / debug.
+为单条消息选定一个工具并将 KC 锚定到课程目录；provider 不可用时关键词兜底，始终返回结构化 IntentRouteResponse，不退化为自由对话。
 """
 
 from __future__ import annotations
@@ -35,8 +23,9 @@ RESOURCE_INTENTS: tuple[str, ...] = (
     "READING",
     "STORYBOARD",
 )
-# VIDEO = B站精选讲解视频（外部资源检索，非生成），与 ASK 一样不走工坊生成管线。
-ALL_INTENTS: tuple[str, ...] = ("ASK", "VIDEO", *RESOURCE_INTENTS)
+# VIDEO = B站精选讲解视频（外部资源检索，非生成）；REVIEW = 记忆矿脉回声复习（引导去错题矿洞
+# 按 FSRS 到期 KC 复盘，非生成）。两者与 ASK 一样不走工坊 6 类资源生成管线。
+ALL_INTENTS: tuple[str, ...] = ("ASK", "VIDEO", "REVIEW", *RESOURCE_INTENTS)
 
 # 确定性关键词 → 工具映射（顺序敏感：靠前先命中）。仅 provider 不可用时兜底。
 # VIDEO 放在 STORYBOARD 之后，使「视频脚本/动画分镜」仍判 STORYBOARD，「看视频/B站」才判 VIDEO。
@@ -47,6 +36,9 @@ _INTENT_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("CODE_LAB", ("代码", "示例代码", "敲代码", "实操", "动手", "跑一下", "运行", "code", "demo")),
     ("PRACTICE", ("练习", "练一练", "做题", "习题", "题目", "出题", "练题", "practice", "quiz")),
     ("READING", ("拓展", "延伸", "扩展阅读", "延伸阅读", "课外", "拓展阅读", "reading")),
+    # REVIEW 放在 HANDOUT（兜底）之前：明确的资源词（导图/练习题/讲义…）先命中各自意图，
+    # 仅「复习/复盘/温习」这类纯复习诉求才落到 REVIEW，引导回错题矿洞按到期 KC 复盘。
+    ("REVIEW", ("复习", "复盘", "温习", "回顾", "查漏", "补漏", "遗忘", "快忘", "忘光", "review")),
     ("HANDOUT", ("讲义", "笔记", "总结", "梳理", "讲解", "概念", "整理", "handout")),
 )
 
@@ -72,13 +64,15 @@ _MAX_KC = 3
 
 
 def _strip_json_fence(text: str) -> str:
-    """Strip an optional ```json … ``` fence before json.loads (LLM habit)."""
+    """剥离可选的 ```json … ``` 围栏后再 json.loads。"""
 
     fence = re.match(r"^\s*```(?:json)?\s*(.+?)\s*```\s*$", text, re.DOTALL)
     return fence.group(1) if fence else text
 
 
 class IntentRouterAgent:
+    """百晓工坊单消息意图路由；KC 锚定课程目录，输出 IntentRouteResponse。"""
+
     AGENT_NAME = AGENT_NAME
 
     def __init__(self, provider: LlmProvider) -> None:
@@ -109,7 +103,6 @@ class IntentRouterAgent:
             reason=reason,
         )
 
-    # ── provider plumbing (mirrors OrchestratorAgent._chat_json) ───────────
     async def _chat_json(self, messages: list[dict[str, str]]) -> dict[str, Any]:
         try:
             response = await self.provider.chat(
@@ -135,7 +128,6 @@ class IntentRouterAgent:
                 return parsed
         return {}
 
-    # ── prompt builder ─────────────────────────────────────────────────────
     def _messages(self, req: IntentRouteRequest) -> list[dict[str, str]]:
         catalog = (
             "\n".join(f"{kc.code} = {kc.name}".strip() for kc in req.course_kcs[:80])
@@ -144,10 +136,11 @@ class IntentRouterAgent:
         system = (
             "你是 Pythontopia「百晓工坊」的意图路由器，只输出 JSON 对象。"
             "从学生这一句话判断该调用哪个工具，并从课程知识点目录里挑出最相关的 KC。schema:"
-            '{"intent":"ASK|VIDEO|HANDOUT|MINDMAP|PRACTICE|CODE_LAB|READING|STORYBOARD",'
+            '{"intent":"ASK|VIDEO|REVIEW|HANDOUT|MINDMAP|PRACTICE|CODE_LAB|READING|STORYBOARD",'
             '"kc_codes":["…"],"focus_hint":"一句话学习重点","confidence":0~1,"reason":"简短理由"}。'
             "工具语义：ASK=直接答疑/解释/回答提问；VIDEO=想看视频讲解时按主题检索B站精选视频卡片"
-            "（外部资源，非生成）；HANDOUT=讲义笔记；MINDMAP=思维导图；"
+            "（外部资源，非生成）；REVIEW=想复习/复盘/巩固已学过但快遗忘的旧知识点时，"
+            "引导去错题矿洞按到期知识点复盘（非生成）；HANDOUT=讲义笔记；MINDMAP=思维导图；"
             "PRACTICE=练习题；CODE_LAB=可运行代码案例；READING=拓展阅读；STORYBOARD=动画分镜脚本。"
             f"kc_codes 只能取自下方目录里的 code，最多 {_MAX_KC} 个；目录找不到就留空数组，禁止编造。"
         )
@@ -170,7 +163,6 @@ class IntentRouterAgent:
         messages.append({"role": "user", "content": req.message})
         return messages
 
-    # ── deterministic helpers ──────────────────────────────────────────────
     @staticmethod
     def _coerce_intent(raw: Any) -> str | None:
         if isinstance(raw, str):

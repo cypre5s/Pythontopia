@@ -1,16 +1,13 @@
 #!/usr/bin/env node
 /**
- * generate-maps.mjs — Pythontopia 五张分块大地图生成脚本（M2-W2-MAPS 子代理产出）
+ * generate-maps.mjs — Pythontopia R-14 地图生成脚本
  *
  * @file 程序化生成 Phaser/Tiled 兼容的 JSON tilemap，覆盖：
  *   - town_hub   (50×40) 中央小镇
- *   - farm_north (40×40) 北农场
- *   - mine_south (30×30) 南矿洞（kenney_tiny_dungeon tileset）
- *   - campus_east(40×30) 东校园
- *   - port_west  (35×25) 西港口
+ *   - mine_south (30×30) Bug 矿洞支线（kenney_tiny_dungeon tileset）
  *
  * @summary
- *   - 单一脚本一次性生成 5 个 .json + 1 个 index.json + 1 个 README.md。
+ *   - 生成 2 个 .json + index.json + README.md（外围图生成器已移除）。
  *   - 全部基于 16×16 源 tile；Phaser 渲染时统一 2× 放大（与 M1-B tilemap.ts 一致）。
  *   - tilemap_packed.png 132 frame 中我们仅使用确认存在的视觉安全帧；frame → gid = frame + 1。
  *   - 决策性数据全部在 MAPS 数组里维护；要新增/调整地图，编辑 MAPS 即可。
@@ -623,10 +620,7 @@ function generateTownHub() {
     makeLowObstacle('low_path_fence_gate_e', '主街低木桩', 26, 20, 1, 1, 'stump', LOW_FENCE_FRAMES.post),
   );
 
-  // 来自其他地图的建筑（统一到小镇）
-  // farm_north 建筑
-  const farmHouse = { x: 4, y: 3, w: 4, h: 4, label: '农舍', route: '/field', name: 'building_farmhouse' };
-  paintBuilding(buildings, W, farmHouse.x, farmHouse.y, farmHouse.w, farmHouse.h);
+  // 原外围图建筑收进中央小镇（R-14 不再保留农场/作物玩法）
   // campus_east 建筑
   const library = { x: 10, y: 8, w: 5, h: 4, label: '图书馆', route: '/library', name: 'building_library' };
   const reviewHall = { x: 36, y: 8, w: 4, h: 4, label: '复盘大厅', route: '/review-hall', name: 'building_review_hall' };
@@ -650,7 +644,6 @@ function generateTownHub() {
     makeBuilding(textileWest.name, textileWest.label, textileWest.route, textileWest.x, textileWest.y, textileWest.w, textileWest.h),
     makeBuilding(textileEast.name, textileEast.label, textileEast.route, textileEast.x, textileEast.y, textileEast.w, textileEast.h),
     ...housesSouth.map((h) => makeBuilding(h.name, h.label, h.route, h.x, h.y, h.w, h.h)),
-    makeBuilding(farmHouse.name, farmHouse.label, farmHouse.route, farmHouse.x, farmHouse.y, farmHouse.w, farmHouse.h),
     makeBuilding(library.name, library.label, library.route, library.x, library.y, library.w, library.h),
     makeBuilding(reviewHall.name, reviewHall.label, reviewHall.route, reviewHall.x, reviewHall.y, reviewHall.w, reviewHall.h),
     makeBuilding(workshop.name, workshop.label, workshop.route, workshop.x, workshop.y, workshop.w, workshop.h),
@@ -664,148 +657,25 @@ function generateTownHub() {
     //   tutor_ai（导师已并入百晓工坊，与 workshop_master 重复）、trainer（与 coach_q 重复）、
     //   miner（与守矿人 / 矿头 Bug 重复）、farmer + gardener（农场 / 作物系统已删）、
     //   chef + sailor（纯装饰 + 已删的商店 / 商船）。保留的每个 NPC 各担一项学习闭环职责。
+    // 站位：贴近对应建筑入口，彼此错开 ≥2 tile，避免重叠。
     makeNpc('npc_mayor_py', 'mayor_py', '镇长 Py', 25, 10, 'npc_mayor'),
-    makeNpc('npc_librarian_doc', 'librarian_doc', '馆长 Doc', 12, 12, 'npc_librarian'),
-    makeNpc('npc_coach_q', 'coach_q', '教务 Q', 44, 18, 'npc_coach'),
-    makeNpc('npc_sage_review', 'sage_review', '复盘师 Sage', 38, 12, 'npc_sage'),
-    makeNpc('npc_professor', 'professor', '教授', 12, 10, 'npc_professor'),
-    makeNpc('npc_student_a', 'student_a', '学生 A', 15, 14, 'npc_student'),
-    makeNpc('npc_workshop_master', 'workshop_master', '工坊师傅', 42, 26, 'npc_workshop'),
-    makeNpc('npc_arena_guard', 'arena_guard', '竞技场守卫', 38, 36, 'npc_guard'),
-    // R-14 方案A：原外围图的主线 NPC 收进中央小镇，玩家不再跨图就能自然遇见。
+    makeNpc('npc_librarian_doc', 'librarian_doc', '馆长 Doc', 11, 12, 'npc_librarian'),
+    makeNpc('npc_professor', 'professor', '教授', 14, 12, 'npc_professor'),
+    makeNpc('npc_coach_q', 'coach_q', '教务 Q', 10, 33, 'npc_coach'),
+    makeNpc('npc_sage_review', 'sage_review', '复盘师 Sage', 37, 12, 'npc_sage'),
+    makeNpc('npc_student_a', 'student_a', '学生 A', 22, 22, 'npc_student'),
+    makeNpc('npc_workshop_master', 'workshop_master', '工坊师傅', 42, 28, 'npc_workshop'),
+    makeNpc('npc_arena_guard', 'arena_guard', '竞技场守卫', 37, 37, 'npc_guard'),
     makeNpc('npc_mine_keeper', 'mine_keeper', '守矿人', 21, 33, 'npc_miner'),
-    makeNpc('npc_foreman_bug', 'foreman_bug', '矿头 Bug', 24, 33, 'npc_guard'),
-    makeNpc('npc_captain_def', 'captain_def', '船长 Def', 4, 24, 'npc_sailor'),
-    makeNpc('npc_class_president', 'class_president', '班长', 16, 16, 'npc_student'),
+    makeNpc('npc_foreman_bug', 'foreman_bug', '矿头 Bug', 25, 33, 'npc_guard'),
+    makeNpc('npc_captain_def', 'captain_def', '船长 Def', 5, 24, 'npc_sailor'),
+    makeNpc('npc_class_president', 'class_president', '班长', 18, 21, 'npc_student'),
     makeSpawn(25, 20),
   ];
 
   return buildMapJson({
     key: 'town_hub',
     label: 'Pythontopia 小镇',
-    width: W,
-    height: H,
-    tileset: 'kenney_tiny_town',
-    ground,
-    buildings,
-    decoration,
-    objects,
-  });
-}
-
-// ============================================================
-// farm_north (40×40)
-// ============================================================
-function generateFarmNorth() {
-  const W = 40;
-  const H = 40;
-  const ground = emptyData(W, H);
-  const buildings = emptyData(W, H);
-  const decoration = emptyData(W, H);
-  resetObjectIds();
-
-  fillAll(ground, TOWN_GIDS.grass);
-
-  // R-13 §-1 续：farm_north 叙事改为「北农场 · 棉麻试验田」，呼应松江历史文化名镇
-  // 的棉布纺织传统 + 东华纺织学院的试验田（不出现校名）。
-  // 7 块知识田 = 棉/麻/丝/桑 4 种纺织原料田 + 3 块 Python 概念田。
-  const fieldOrigins = [
-    { x: 3, y: 5, kc: 'chapter_basics' },
-    { x: 10, y: 5, kc: 'variable' },
-    { x: 17, y: 5, kc: 'data_types' },
-    { x: 3, y: 14, kc: 'control_flow' },
-    { x: 10, y: 14, kc: 'loop' },
-    { x: 17, y: 14, kc: 'function' },
-    { x: 10, y: 23, kc: 'class' },
-  ];
-  fieldOrigins.forEach((f) => {
-    // 田块内填带花草地，标记 ground
-    fillRect(ground, W, f.x, f.y, 5, 5, TOWN_GIDS.grassFlower);
-    // 围栏在 decoration 层
-    paintFenceRect(decoration, W, f.x, f.y, 5, 5);
-  });
-
-  // 谷仓：东侧 (26,8)，5×4 — 叙事上是「棉麻仓」
-  const barn = { x: 26, y: 8, w: 5, h: 4, label: '棉麻仓', route: '/storage', name: 'building_barn' };
-  paintBuilding(buildings, W, barn.x, barn.y, barn.w, barn.h);
-
-  // 鸡舍：东侧 (28,18)，4×3 — 叙事上是「丝蚕房」（养蚕）
-  const coop = { x: 28, y: 18, w: 4, h: 3, label: '丝蚕房', route: '/coop', name: 'building_chicken_coop' };
-  paintBuilding(buildings, W, coop.x, coop.y, coop.w, coop.h);
-
-  // 水井：单 tile (32, 25) — 叙事上是「染坊井」（漂染用井水）
-  setTile(decoration, W, 32, 25, TOWN_GIDS.water);
-  setTile(decoration, W, 32, 24, TOWN_GIDS.waterEdgeTop);
-
-  // R-13 §-1 续：在田块边缘撒密集 grassFlower 模拟「桑园」蚕食叶痕迹（不增帧号）
-  for (let i = 0; i < 6; i += 1) {
-    setTile(decoration, W, 22, 24 + i, TOWN_GIDS.grassFlower);
-    setTile(decoration, W, 24, 24 + i, TOWN_GIDS.bushSmall);
-    setTile(decoration, W, 36, 24 + i, TOWN_GIDS.grassFlower);
-  }
-
-  // 边界树林（北/东两侧），南边留给出口
-  for (let x = 1; x < W - 1; x += 2) {
-    setTile(decoration, W, x, 1, TOWN_GIDS.bushBig);
-  }
-  for (let y = 2; y < H - 6; y += 2) {
-    setTile(decoration, W, W - 2, y, TOWN_GIDS.bushBig);
-    setTile(decoration, W, 1, y, TOWN_GIDS.bushBig);
-  }
-
-  // 田间小路：从南出口走到中心田
-  for (let y = 30; y < H - 1; y += 1) {
-    setTile(ground, W, 19, y, TOWN_GIDS.sandPath);
-    setTile(ground, W, 20, y, TOWN_GIDS.sandPath);
-  }
-  // 田间小跨栏：装饰与 low_obstacle 对象配对，给农场路径提供跳跃练习。
-  setTile(decoration, W, 20, 34, TOWN_GIDS.fenceWoodH);
-
-  const rng = mulberry32(0x20202);
-
-  // 地面变种
-  for (let i = 0; i < ground.length; i += 1) {
-    if (ground[i] === TOWN_GIDS.grass && rng() < 0.15) {
-      ground[i] = rng() < 0.6 ? TOWN_GIDS.grassFlower : TOWN_GIDS.grassAlt;
-    }
-  }
-
-  scatterDecoration(decoration, buildings, W, H, 400, [
-    TOWN_GIDS.bushSmall,
-    TOWN_GIDS.bushSmall,
-    TOWN_GIDS.bushBig,
-    TOWN_GIDS.flowerYellow,
-    TOWN_GIDS.flowerPink,
-    TOWN_GIDS.flowerBlue,
-    TOWN_GIDS.treeStump,
-    TOWN_GIDS.grassFlower,
-    TOWN_GIDS.grassTall,
-    TOWN_GIDS.rockSmall,
-    TOWN_GIDS.mushroom,
-    TOWN_GIDS.treePine,
-  ], rng, {
-    x: 0,
-    y: 5,
-    w: W,
-    h: 25,
-  });
-
-  // objects ----------
-  const objects = [
-    makeExit('exit_south', 'south', W, H, 'town_hub'),
-    makeBuilding(barn.name, barn.label, barn.route, barn.x, barn.y, barn.w, barn.h),
-    makeBuilding(coop.name, coop.label, coop.route, coop.x, coop.y, coop.w, coop.h),
-    makeLandmark('well', '染坊井', 32, 24, 1, 2, 'landmark'),
-    makeLowObstacle('low_field_hurdle', '田间小跨栏', 20, 34, 1, 1, 'fence'),
-    ...fieldOrigins.map((f) =>
-      makeLandmark(`field_${f.kc}`, `知识田·${f.kc}`, f.x, f.y, 5, 5, 'field'),
-    ),
-    makeSpawn(20, 37),
-  ];
-
-  return buildMapJson({
-    key: 'farm_north',
-    label: '北农场 · 棉麻试验田',
     width: W,
     height: H,
     tileset: 'kenney_tiny_town',
@@ -907,271 +777,6 @@ function generateMineSouth() {
   });
 }
 
-// ============================================================
-// campus_east (40×30)
-// ============================================================
-function generateCampusEast() {
-  const W = 40;
-  const H = 30;
-  const ground = emptyData(W, H);
-  const buildings = emptyData(W, H);
-  const decoration = emptyData(W, H);
-  resetObjectIds();
-
-  fillAll(ground, TOWN_GIDS.grass);
-
-  // R-13 §-1 续：campus_east 改造为「东华松江校区」风格（不含校名）：
-  //   - 中央镜月湖（核心生态水域，6×4 椭圆形）
-  //   - 图文信息中心（圆柱形标志建筑 5×4，位于湖东岸）
-  //   - 北行三栋教学楼（图书馆/教室/复盘大厅）— 沿用，对应纺织/服装/材料 3 院
-  //   - 南行工坊
-  //   - 樱花大道（中轴步道两侧密集粉花，对应校园樱花季）
-  //
-  // 镜月湖（rows 12-16，cols 8-15），椭圆形：rows 12/16 用 waterEdge，
-  // rows 13-15 用 water/waterDeep（中央深蓝）。
-  for (let y = 12; y <= 16; y += 1) {
-    for (let x = 8; x <= 15; x += 1) {
-      if (y === 12) {
-        setTile(ground, W, x, y, TOWN_GIDS.waterEdgeTop);
-      } else if (y === 16) {
-        setTile(ground, W, x, y, TOWN_GIDS.waterEdgeBottom);
-      } else if (y === 14 && x >= 10 && x <= 13) {
-        setTile(ground, W, x, y, TOWN_GIDS.waterDeep);
-      } else {
-        setTile(ground, W, x, y, TOWN_GIDS.water);
-      }
-    }
-  }
-
-  // 樱花大道：中心步道（rows 14-15）仅在湖东延伸（cols 18..W-2）
-  for (let x = 18; x < W - 1; x += 1) {
-    setTile(ground, W, x, 14, TOWN_GIDS.sandPath);
-    setTile(ground, W, x, 15, TOWN_GIDS.sandPath);
-  }
-  // 湖西短步道（cols 2..7）
-  for (let x = 2; x <= 7; x += 1) {
-    setTile(ground, W, x, 14, TOWN_GIDS.sandPath);
-    setTile(ground, W, x, 15, TOWN_GIDS.sandPath);
-  }
-  // 樱花大道两侧密集粉花（模拟樱花瓣）
-  for (let x = 19; x < W - 2; x += 1) {
-    if (x % 3 === 0) {
-      setTile(decoration, W, x, 12, TOWN_GIDS.flowerPink);
-      setTile(decoration, W, x, 13, TOWN_GIDS.flowerPink);
-      setTile(decoration, W, x, 17, TOWN_GIDS.flowerPink);
-    }
-  }
-
-  // 图文信息中心（圆柱体标志建筑，5×4，位于湖东岸 cols 16-20, rows 18-21）
-  const infoCenter = { x: 16, y: 18, w: 5, h: 4, label: '图文信息中心', route: '/library', name: 'building_info_center' };
-  paintBuilding(buildings, W, infoCenter.x, infoCenter.y, infoCenter.w, infoCenter.h);
-
-  // 北行三栋教学楼 5×4（沿用旧布局，作为纺织/服装/材料 3 院）
-  const library = { x: 8, y: 4, w: 5, h: 4, label: '图书馆（藏书 95 万册）', route: '/library', name: 'building_library' };
-  const classroom = { x: 18, y: 4, w: 5, h: 4, label: '教室（题库）', route: '/problems', name: 'building_classroom' };
-  const reviewHall = { x: 28, y: 4, w: 5, h: 4, label: '复盘大厅', route: '/review-hall', name: 'building_review_hall' };
-  paintBuilding(buildings, W, library.x, library.y, library.w, library.h);
-  paintBuilding(buildings, W, classroom.x, classroom.y, classroom.w, classroom.h);
-  paintBuilding(buildings, W, reviewHall.x, reviewHall.y, reviewHall.w, reviewHall.h);
-
-  // 南行工坊 4×3
-  const workshop = { x: 26, y: 22, w: 4, h: 3, label: '百晓工坊', route: '/workshop', name: 'building_workshop' };
-  paintBuilding(buildings, W, workshop.x, workshop.y, workshop.w, workshop.h);
-
-  // 工坊周围花坛
-  setTile(decoration, W, workshop.x - 1, workshop.y, TOWN_GIDS.flowerPink);
-  setTile(decoration, W, workshop.x + workshop.w, workshop.y, TOWN_GIDS.flowerPink);
-
-  // 北侧围栏（图书馆群屋前小道）
-  for (let x = 7; x < 34; x += 1) {
-    setTile(decoration, W, x, 9, TOWN_GIDS.fenceWoodH);
-  }
-
-  // 湖周围围栏 + 4 角灯柱
-  for (let x = 7; x <= 16; x += 1) {
-    setTile(decoration, W, x, 11, TOWN_GIDS.fenceWoodH);
-    setTile(decoration, W, x, 17, TOWN_GIDS.fenceWoodH);
-  }
-  setTile(decoration, W, 7, 12, TOWN_GIDS.fenceWoodV);
-  setTile(decoration, W, 7, 16, TOWN_GIDS.fenceWoodV);
-  setTile(decoration, W, 16, 12, TOWN_GIDS.fenceWoodV);
-  setTile(decoration, W, 16, 16, TOWN_GIDS.fenceWoodV);
-  setTile(decoration, W, 7, 11, TOWN_GIDS.treeStump);
-  setTile(decoration, W, 16, 11, TOWN_GIDS.treeStump);
-  setTile(decoration, W, 7, 17, TOWN_GIDS.treeStump);
-  setTile(decoration, W, 16, 17, TOWN_GIDS.treeStump);
-  // 校园步道低栅栏：从出生点向东走会遇到，可用 Space 跨过。
-  setTile(decoration, W, 4, 15, TOWN_GIDS.fenceWoodH);
-
-  // 边界树
-  for (let x = 2; x < W - 2; x += 3) {
-    setTile(decoration, W, x, 1, TOWN_GIDS.bushBig);
-    setTile(decoration, W, x, H - 2, TOWN_GIDS.bushBig);
-  }
-
-  const rng = mulberry32(0x40404);
-
-  for (let i = 0; i < ground.length; i += 1) {
-    if (ground[i] === TOWN_GIDS.grass && rng() < 0.1) {
-      ground[i] = rng() < 0.5 ? TOWN_GIDS.grassFlower : TOWN_GIDS.grassAlt;
-    }
-  }
-
-  scatterDecoration(decoration, buildings, W, H, 350, [
-    TOWN_GIDS.bushSmall,
-    TOWN_GIDS.bushSmall,
-    TOWN_GIDS.bushBig,
-    TOWN_GIDS.flowerYellow,
-    TOWN_GIDS.flowerPink,
-    TOWN_GIDS.flowerBlue,
-    TOWN_GIDS.treeStump,
-    TOWN_GIDS.grassFlower,
-    TOWN_GIDS.grassTall,
-    TOWN_GIDS.rockSmall,
-    TOWN_GIDS.benchH,
-    TOWN_GIDS.lamp,
-    TOWN_GIDS.treePine,
-    TOWN_GIDS.signPost,
-  ], rng, {
-    x: 7,
-    y: 11,
-    w: 10,
-    h: 7,
-  });
-
-  // objects ----------
-  const objects = [
-    makeExit('exit_west', 'west', W, H, 'town_hub'),
-    makeBuilding(library.name, library.label, library.route, library.x, library.y, library.w, library.h),
-    makeBuilding(classroom.name, classroom.label, classroom.route, classroom.x, classroom.y, classroom.w, classroom.h),
-    makeBuilding(reviewHall.name, reviewHall.label, reviewHall.route, reviewHall.x, reviewHall.y, reviewHall.w, reviewHall.h),
-    makeBuilding(workshop.name, workshop.label, workshop.route, workshop.x, workshop.y, workshop.w, workshop.h),
-    makeBuilding(infoCenter.name, infoCenter.label, infoCenter.route, infoCenter.x, infoCenter.y, infoCenter.w, infoCenter.h),
-    makeLandmark('mirror_moon_lake', '镜月湖', 8, 12, 8, 5, 'landmark'),
-    makeLandmark('cherry_avenue', '樱花大道', 19, 14, 19, 2, 'landmark'),
-    makeLowObstacle('low_campus_rail', '湖畔低栅栏', 4, 15, 1, 1, 'fence'),
-    makeNpc('npc_librarian_doc', 'librarian_doc', '图书管理员 Doc', 10, 9),
-    makeNpc('npc_coach_q', 'coach_q', '练习教练 Q', 20, 9),
-    makeNpc('npc_sage_review', 'sage_review', '复盘贤者', 30, 9),
-    makeSpawn(2, 15),
-  ];
-
-  return buildMapJson({
-    key: 'campus_east',
-    label: '东校园（镜月湖畔）',
-    width: W,
-    height: H,
-    tileset: 'kenney_tiny_town',
-    ground,
-    buildings,
-    decoration,
-    objects,
-  });
-}
-
-// ============================================================
-// port_west (35×25)
-// ============================================================
-function generatePortWest() {
-  const W = 35;
-  const H = 25;
-  const ground = emptyData(W, H);
-  const buildings = emptyData(W, H);
-  const decoration = emptyData(W, H);
-  resetObjectIds();
-
-  fillAll(ground, TOWN_GIDS.grass);
-
-  // 南侧 5 行海水（rows 20-24）
-  for (let y = 20; y < H; y += 1) {
-    for (let x = 0; x < W; x += 1) {
-      if (y === 20) {
-        setTile(ground, W, x, y, TOWN_GIDS.waterEdgeTop);
-      } else if (y === H - 1) {
-        setTile(ground, W, x, y, TOWN_GIDS.waterDeep);
-      } else {
-        setTile(ground, W, x, y, TOWN_GIDS.water);
-      }
-    }
-  }
-
-  // 码头沙地（rows 18-19）
-  for (let x = 8; x < 22; x += 1) {
-    setTile(ground, W, x, 18, TOWN_GIDS.sandPath);
-    setTile(ground, W, x, 19, TOWN_GIDS.sandPath);
-  }
-
-  // 灯塔（2×4，西北角）
-  const lighthouse = { x: 3, y: 4, w: 2, h: 4, label: '灯塔', route: '/lighthouse', name: 'building_lighthouse' };
-  paintBuilding(buildings, W, lighthouse.x, lighthouse.y, lighthouse.w, lighthouse.h);
-
-  // R-13 优化：货币/商店系统移除 —— 删除 商船（/merchant-ship 店铺）。
-
-  // 班级广场：5×5 围栏空地（坐标 24, 8）
-  paintFenceRect(decoration, W, 22, 6, 6, 6);
-
-  // 北边树木
-  for (let x = 2; x < W - 2; x += 2) {
-    setTile(decoration, W, x, 1, TOWN_GIDS.bushBig);
-  }
-  // 港口货箱低障碍：视觉上用木桩/货箱占位，跳过后仍可到讲坛。
-  setTile(decoration, W, 29, 12, TOWN_GIDS.treeStump);
-
-  const rng = mulberry32(0x50505);
-
-  for (let i = 0; i < ground.length; i += 1) {
-    if (ground[i] === TOWN_GIDS.grass && rng() < 0.08) {
-      ground[i] = rng() < 0.4 ? TOWN_GIDS.grassFlower : TOWN_GIDS.grassAlt;
-    }
-  }
-
-  scatterDecoration(decoration, buildings, W, H, 280, [
-    TOWN_GIDS.bushSmall,
-    TOWN_GIDS.bushSmall,
-    TOWN_GIDS.bushBig,
-    TOWN_GIDS.flowerYellow,
-    TOWN_GIDS.flowerPink,
-    TOWN_GIDS.flowerBlue,
-    TOWN_GIDS.treeStump,
-    TOWN_GIDS.grassFlower,
-    TOWN_GIDS.grassTall,
-    TOWN_GIDS.rockSmall,
-    TOWN_GIDS.barrel,
-    TOWN_GIDS.crate,
-    TOWN_GIDS.sandPath,
-    TOWN_GIDS.lamp,
-  ], rng, {
-    x: 0,
-    y: 18,
-    w: W,
-    h: H - 18,
-  });
-
-  // objects ----------
-  // R-13 §-1 续：port_west 叙事改为「西港 · 棉布商埠」：呼应松江古代是
-  // "衣被天下" 的棉布出海大港。班级广场叙事为「锦绣讲坛」（不含校名）。
-  const objects = [
-    makeExit('exit_east', 'east', W, H, 'town_hub'),
-    makeBuilding(lighthouse.name, lighthouse.label, lighthouse.route, lighthouse.x, lighthouse.y, lighthouse.w, lighthouse.h),
-    makeLandmark('silk_plaza', '锦绣讲坛', 22, 6, 6, 6, 'plaza'),
-    makeLowObstacle('low_port_crate', '码头矮货箱', 29, 12, 1, 1, 'crate'),
-    makeNpc('npc_class_president', 'class_president', '班长', 25, 9),
-    makeSpawn(33, 12),
-  ];
-
-  return buildMapJson({
-    key: 'port_west',
-    label: '西港 · 棉布商埠',
-    width: W,
-    height: H,
-    tileset: 'kenney_tiny_town',
-    ground,
-    buildings,
-    decoration,
-    objects,
-  });
-}
-
 // ---------- index.json ----------
 
 function buildIndex() {
@@ -1215,9 +820,9 @@ function buildReadme(indexObj) {
     )
     .join('\n');
 
-  return `# Pythontopia 地图（W2-MAPS 子代理输出）
+  return `# Pythontopia 地图（R-14 世界收缩）
 
-Pythontopia M2 阶段的 5 张分块大地图，全部以 16×16 源 tile 渲染，Phaser 端按 2× 放大到 32×32 实际像素。
+R-14 方案 A：仅生成 **town_hub**（中央小镇）与 **mine_south**（Bug 矿洞支线）。外围图已从主线移除。
 
 ## 概览
 
@@ -1225,64 +830,26 @@ Pythontopia M2 阶段的 5 张分块大地图，全部以 16×16 源 tile 渲染
 | --- | --- | --- | --- | --- | --- | --- |
 ${rows}
 
-> 出口列说明：当前地图边缘门洞会切换到列出的目标地图；M2-ROUTER 子代理读取 \`exits\` 解析跳转。
+## town_hub.json（50×40）
 
-## 每张地图的细节
+- 出口：south→mine_south
+- 学习建筑：图书馆 / 工坊 / 训练场 / 竞技场 / 复盘大厅 / Bug 矿洞入口等
+- 12 主线 NPC 贴近建筑入口排布（见 \`scripts/generate-maps.mjs\` 内 \`makeNpc\` 列表）
 
-### town_hub.json（50×40，中央小镇）
-
-- 4 边都有出口：north→farm_north / south→mine_south / east→campus_east / west→port_west
-- 建筑（6 栋）：
-  - \`building_mayor_hall\`（4×5）→ \`/profile-room\`
-  - \`building_shop_west\`（4×4）→ \`/shop-west\`
-  - \`building_shop_east\`（4×4）→ \`/shop-east\`
-  - \`building_house_a / b / c\`（4×4 三栋住宅）
-- 中央喷泉：(24, 19) 起 2×2 粉色花坛
-- NPC：\`mayor_py\`, \`librarian_doc\`, \`coach_q\`, \`sage_review\`, \`gardener\`, \`chef\`
-
-### farm_north.json（40×40，知识农场）
-
-- 出口：south→town_hub
-- 7 个知识田（5×5 一块）：basics / variable / data_types / control_flow / loop / function / class
-- 建筑：\`building_barn\`（谷仓 5×4）、\`building_chicken_coop\`（鸡舍 4×3）
-- 装饰：水井 (32, 25)、田间小路、围栏
-- NPC：\`farmer_kc\`
-
-### mine_south.json（30×30，Bug 矿洞）
+## mine_south.json（30×30）
 
 - 出口：north→town_hub
-- 使用 **kenney_tiny_dungeon** tileset（其它地图均使用 kenney_tiny_town）
-- 两个矿洞入口（2×2 黑色 void）：东侧 (8, 12)、西侧 (20, 12)，分别打开 \`/bug-mine?side=east|west\`
-- 外围一圈深色墙壁，矿石与宝箱散布在地板上
-- NPC：\`foreman_bug\`
-
-### campus_east.json（40×30，校园）
-
-- 出口：west→town_hub
-- 北行 3 栋教学楼：图书馆（→ \`/library\`）、教室（题库，→ \`/problems\`）、复盘大厅（→ \`/review-hall\`）
-- 南行 1 栋工坊（→ \`/workshop\`）
-- 中央东西向砂石步道
-- NPC：\`librarian_doc\`, \`coach_q\`, \`sage_review\`
-
-### port_west.json（35×25，码头港口）
-
-- 出口：east→town_hub
-- 南侧 5 行海水（rows 20–24），中间 12 格沙地码头
-- 灯塔（2×4，西北角）+ 商船（4×2，水边）
-- 班级广场（22, 6 起 6×6 围栏空地）
-- NPC：\`merchant\`, \`class_president\`
+- tileset：**kenney_tiny_dungeon**
+- 矿洞入口 + \`foreman_bug\` NPC
 
 ## 文件结构
 
 \`\`\`
 frontend/public/assets/maps/
-├── index.json        # 5 张地图的 metadata 索引（M2-ROUTER 入口）
-├── README.md         # 本文件
-├── town_hub.json     # 50×40
-├── farm_north.json   # 40×40
-├── mine_south.json   # 30×30（dungeon tileset）
-├── campus_east.json  # 40×30
-└── port_west.json    # 35×25
+├── index.json
+├── README.md
+├── town_hub.json
+└── mine_south.json
 \`\`\`
 
 ## 字段约定

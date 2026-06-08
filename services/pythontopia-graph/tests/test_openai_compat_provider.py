@@ -1,4 +1,4 @@
-"""OpenAI-compatible LLM provider tests."""
+"""OpenAiCompatProvider 单元测试。"""
 
 from __future__ import annotations
 

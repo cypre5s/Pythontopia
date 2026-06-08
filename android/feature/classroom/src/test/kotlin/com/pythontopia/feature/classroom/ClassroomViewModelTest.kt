@@ -18,16 +18,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
-/**
- * 测试 [ClassroomViewModel] 三条核心路径：
- *  1. 学生 bind 后 myClassrooms → quests 顺序拉取，state 装配到 [ClassroomUiState.StudentState]
- *  2. 加入新班级 join → 班级追加 + 自动选中 + 触发该班 quests 拉取
- *  3. 提交 evidence 成功 → 对应 quest 更新 + `message` 置位 + `submittingQuestId` 清空
- *  4. 提交 evidence 失败 → state 退化到 [ClassroomUiState.Failure]，不影响其他 quest
- *
- * 测试用 [UnconfinedTestDispatcher] 接管 `Dispatchers.Main`，让 `viewModelScope.launch`
- * 在测试线程同步执行，避免引入 advanceUntilIdle 噪音。
- */
+/** [ClassroomViewModel] bind/join/submitEvidence 核心路径单测。 */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ClassroomViewModelTest {
 

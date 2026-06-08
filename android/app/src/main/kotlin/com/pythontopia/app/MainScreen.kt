@@ -57,12 +57,8 @@ import com.pythontopia.feature.tutor.TutorScreen
 import com.pythontopia.feature.workshop.WorkshopScreen
 
 /**
- * 顶层导航：Login → 原生功能工作台。
- *
- * Android 端当前已经拥有 11 个 feature module；旧入口只把登录成功导到 Hub，导致其它
- * 原生功能虽能构建却不可达。这里把成功登录后的 [AuthDestination.HOME] 注册为
- * [AppShell]，由内部 NavHost 懒加载各 feature 屏，保证首屏只创建当前目的地，避免一次性
- * compose 全部页面造成冷启动和内存压力。
+ * 顶层导航：Login → [AppShell] 功能工作台；
+ * [AuthDestination.HOME] 内 NavHost 懒加载各 feature，减轻冷启动压力。
  */
 @Composable
 fun MainScreen(entryViewModel: AppEntryViewModel = hiltViewModel()) {

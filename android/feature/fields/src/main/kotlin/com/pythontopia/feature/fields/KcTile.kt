@@ -25,20 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.Canvas as ComposeCanvas
 
-/**
- * 单个 KC 格子。占据 64dp × 64dp，由四部分组成：
- *
- *  - 外层 [Box]：圆角 + 边框（被选中时边框换成亮色）；
- *  - [ComposeCanvas]：按 [KcTileState.status] 绘制 4 种像素风格小图——
- *      * SEED：3 颗深色种子嵌在翻土上；
- *      * GROWING：双层圆形象征"嫩苗+土壤"；
- *      * MATURE：金色十字"麦穗"+ 边角光点；
- *      * HARVESTED：留 4 个钉孔表示已收割的空地；
- *  - 顶部 [Text]：显示 KC code 末尾 3 位（如 `001`），让网格保持课程结构可识别；
- *  - 底部进度条：mastery 百分比微指示，便于玩家一眼看到 `growing` 中 KC 的成长度。
- *
- * 单独把渲染逻辑（[drawKcGlyph]）做成纯函数，方便在 [KcTileTest] 中校验它对各 status 的分支。
- */
+/** 64dp KC 格；[drawKcGlyph] 按 [KcStatus] 绘制像素 glyph，供单测覆盖。 */
 @Composable
 fun KcTile(
     tile: KcTileState,
@@ -80,13 +67,7 @@ fun KcTile(
     }
 }
 
-/**
- * 仅按 status 绘制核心 glyph；不依赖 KC 内容，纯像素风：
- *  - SEED：3 颗 4dp 圆点排成三角形；
- *  - GROWING：1 颗外径 12dp + 内径 6dp 的双层圆；
- *  - MATURE：5 颗 5dp 圆形成"+"号；
- *  - HARVESTED：4 个 2dp 钉孔分布四角。
- */
+/** 按 [KcStatus] 绘制核心 glyph（纯 Canvas，不依赖 KC 内容）。 */
 internal fun DrawScope.drawKcGlyph(status: KcStatus, inner: Color) {
     val w = size.width
     val h = size.height
@@ -121,7 +102,7 @@ internal fun DrawScope.drawKcGlyph(status: KcStatus, inner: Color) {
     }
 }
 
-/** mastery 进度条画在格子底部 3dp 高的窄带，宽度 = mastery × 100%。 */
+/** 底部 mastery 窄条，宽度按掌握度比例。 */
 internal fun DrawScope.drawMasteryBar(mastery: Double) {
     val barHeight = size.height * 0.06f
     val barY = size.height * 0.94f
@@ -137,7 +118,7 @@ internal fun DrawScope.drawMasteryBar(mastery: Double) {
     )
 }
 
-/** pending 浮层：四边外描边，提示当前 KC 正在执行 water/harvest。 */
+/** pending 外描边，提示当前格正在执行 water/harvest。 */
 internal fun DrawScope.drawPendingOverlay() {
     drawRect(
         color = FieldsPalette.tileBorderActive.copy(alpha = 0.6f),

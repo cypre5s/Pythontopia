@@ -1,8 +1,4 @@
-"""OrchestratorAgent（学习总管）+ OrchestratorGraph unit tests.
-
-Mirrors the StubProvider style of tests/test_resource_graph.py and
-tests/test_profile_agent.py. asyncio_mode is "auto" (see pyproject).
-"""
+"""OrchestratorAgent（学习总管）与 OrchestratorGraph 单元测试。"""
 
 from __future__ import annotations
 
@@ -22,7 +18,7 @@ from pythontopia_graph.schemas.orchestrator import OrchestratorRequest
 
 
 class StubProvider(LlmProvider):
-    """Queues content_json payloads for chat(); chat_stream() yields a fixed reply."""
+    """chat() 按队列返回 content_json；chat_stream() 固定分片回复。"""
 
     def __init__(self, payloads: list[dict | None] | None = None, reply: str = "好的，我们开始。") -> None:
         self._payloads = list(payloads or [])
@@ -48,7 +44,7 @@ def request_of(message: str, session_id: str, **overrides) -> OrchestratorReques
     return OrchestratorRequest(**payload)
 
 
-# ─────────────────────────── (a) decomposition ──────────────────────────────
+# 任务分解
 
 
 @pytest.mark.asyncio
@@ -65,12 +61,11 @@ async def test_decompose_produces_ordered_watch_learn_practice_assess() -> None:
         "PracticeAgent",
         "PathPlannerAgent",
     ]
-    # Every step has a frontend panel deep-link.
     assert all(step.panel for step in plan)
-    # Grounding: KC codes only ever come from course_kc_index.
+    # KC 锚定仅允许 course_kc_index 内的编码。
     allowed = set(req.course_kc_index)
     assert all(set(step.kc_codes) <= allowed for step in plan)
-    # learn carries a resource_type from the allowed enum; other phases do not.
+    # 仅 learn 步携带 resource_type，且须在 RESOURCE_TYPES 内。
     learn = next(step for step in plan if step.phase == "learn")
     assert learn.resource_type in RESOURCE_TYPES
     assert all(step.resource_type is None for step in plan if step.phase != "learn")
@@ -97,13 +92,33 @@ async def test_decompose_uses_llm_fields_and_filters_unknown_kc() -> None:
     learn = next(step for step in plan if step.phase == "learn")
     assert learn.title == "自定义学一学"
     assert learn.resource_type == "MINDMAP"
-    # BOGUS-KC is dropped because it is not in course_kc_index.
+    # BOGUS-KC 不在 course_kc_index 内故丢弃。
     assert learn.kc_codes == ["PY43-KC-001"]
-    # Ordering is still enforced deterministically even if the LLM omits phases.
+    # LLM 缺相时仍强制 watch→learn→practice→assess 顺序。
     assert [step.phase for step in plan] == ["watch", "learn", "practice", "assess"]
 
 
-# ─────────────────────────── (b) ambiguous goal ─────────────────────────────
+@pytest.mark.asyncio
+async def test_decaying_kcs_prioritised_in_plan_kc_selection() -> None:
+    """记忆矿脉到期的 decaying_kcs 应优先于 recent_kc_codes 成为计划锚定 KC（FSRS → 总管 → 资源）。"""
+    agent = OrchestratorAgent(StubProvider([]))  # LLM 空 → 各步回退到 _select_kcs 默认 KC
+    req = request_of(
+        "复习一下",
+        "t-decay",
+        course_kc_index=["PY43-KC-001", "PY43-KC-003", "PY43-KC-016"],
+        recent_kc_codes=["PY43-KC-003"],
+        decaying_kcs=["PY43-KC-016", "BOGUS-KC"],
+    )
+
+    plan = await agent.decompose(req, "复盘快遗忘的知识点")
+
+    # 到期 KC 排在最前；目录外的 BOGUS-KC 被过滤。
+    for step in plan:
+        assert step.kc_codes[0] == "PY43-KC-016"
+        assert "BOGUS-KC" not in step.kc_codes
+
+
+# 目标歧义
 
 
 @pytest.mark.asyncio
@@ -127,7 +142,7 @@ async def test_ambiguous_goal_returns_clarifying_question() -> None:
     assert any(step.node == "understand" for step in resp.trace)
 
 
-# ─────────────────────────── (c) failure replan ─────────────────────────────
+# 失败重规划
 
 
 @pytest.mark.asyncio
@@ -149,7 +164,7 @@ async def test_recent_failures_insert_debug_replan_step_before_assess() -> None:
     assert any(d.agent == "DebugAgent" for d in resp.dispatch_results)
 
 
-# ─────────────────────────── (d) extract_profile ────────────────────────────
+# 画像抽取
 
 
 @pytest.mark.asyncio
@@ -179,7 +194,7 @@ async def test_extract_profile_heuristic_fallback_on_empty_llm() -> None:
     assert all(signal.dimension in PROFILE_DIMENSION_KEYS for signal in signals)
 
 
-# ─────────────────────────── (e) multi-turn memory ──────────────────────────
+# 多轮记忆
 
 
 @pytest.mark.asyncio
@@ -199,7 +214,7 @@ async def test_multi_turn_accumulates_history_in_session_store() -> None:
     assert second[2].content == "第二句"
 
 
-# ─────────────────────────── (f) plan negotiation ───────────────────────────
+# 计划协商
 
 
 @pytest.mark.asyncio
@@ -215,7 +230,7 @@ async def test_negotiation_mutates_stored_plan_instead_of_rebuilding() -> None:
     second = await graph.run(request_of("太难了", "t-f"))
     ids_second = [step.id for step in second.plan]
 
-    # Same step ids → the stored plan was mutated, not rebuilt from scratch.
+    # step id 不变说明就地改写 plan，而非重建。
     assert ids_second == ids_first
     assert len(second.plan) == 4
     learn_second = next(step for step in second.plan if step.phase == "learn")

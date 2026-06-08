@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+/** 中央小镇 UI 状态；驱动 LibGDX 渲染与 HUD 覆盖层。 */
 data class HubUiState(
     val isBootstrapping: Boolean = true,
     val world: GameBootstrapResponseDto? = null,
@@ -29,26 +30,20 @@ data class HubUiState(
     val errorMessage: String? = null,
 )
 
+/** 中央小镇 ViewModel；聚合 GameBootstrap、日历与 LibGDX 桥事件。 */
 @HiltViewModel
 class HubViewModel @Inject constructor(
     private val repository: HubRepository,
     private val sessionState: SessionState = SessionState(),
 ) : ViewModel() {
 
-    /**
-     * 单实例桥，跟随 ViewModel 生命周期；LibGDX Fragment 与 Compose UI 都通过它通信。
-     * ViewModel 销毁时 Hilt 会回收，桥对象自然失效；渲染线程检测到 null 也能优雅退出。
-     */
+    /** 单实例 LibGDX 桥，生命周期跟随 ViewModel。 */
     val bridge: HubGameBridge = HubGameBridge()
 
     private val _state = MutableStateFlow(HubUiState())
     val state: StateFlow<HubUiState> = _state.asStateFlow()
 
-    /**
-     * 玩家移动上报请求。LibGDX 渲染线程每走一格都会冒泡一个 PlayerMoved，若逐格 POST
-     * 会造成网络/电量风暴（连续行走每秒最多 ~6 次请求）。这里用 debounce 合流：只在
-     * 移动停顿 [MOVE_REPORT_DEBOUNCE_MS] 后把**最终落点**上报一次，存档语义不变、请求量骤降。
-     */
+    /** 玩家移动上报；debounce 合流，停顿 [MOVE_REPORT_DEBOUNCE_MS] 后上报最终落点。 */
     private val moveRequests = MutableSharedFlow<PlayerMovePatch>(
         extraBufferCapacity = MOVE_BUFFER_CAPACITY,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
@@ -70,7 +65,7 @@ class HubViewModel @Inject constructor(
 
     private fun bootstrap() {
         if (sessionState.isGuest) {
-            // 游客无令牌：跳过必失败的后端 bootstrap，直接进入可自由探索的小镇。
+            // 游客无令牌，跳过 bootstrap，进入自由探索模式
             _state.update {
                 it.copy(
                     isBootstrapping = false,
@@ -108,7 +103,7 @@ class HubViewModel @Inject constructor(
         }
     }
 
-    /** 错误态重试：清错误、置加载，重新走 bootstrap（游客模式则刷新游客提示）。 */
+    /** 错误态重试；清错误后重新 bootstrap。 */
     fun retry() {
         _state.update { it.copy(isBootstrapping = true, errorMessage = null) }
         bootstrap()

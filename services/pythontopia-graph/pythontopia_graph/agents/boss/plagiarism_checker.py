@@ -1,10 +1,4 @@
-"""R-13 §5 Phase 5 审查 5：反抄袭 + 重复检查。
-
-策略：
-    - 与课程包既有 39 题 / 玩家最近 N 道做题 做 SequenceMatcher 相似度比较；
-    - 阈值 0.8（可配置）；
-    - 同时简单扫敏感词（与 SafetyAgent 互补，不替代）。
-"""
+"""查重与敏感词审查：与既有题库及玩家近期做题做相似度比对，并扫描敏感词。"""
 
 from __future__ import annotations
 
@@ -36,6 +30,7 @@ def is_too_similar_to_existing(
     existing: Sequence[ExistingProblem],
     threshold: float = DEFAULT_SIMILARITY_THRESHOLD,
 ) -> ReviewVerdict:
+    """``SequenceMatcher`` 相似度达阈值或含敏感词则 reject；默认阈值 0.8。"""
     issues: list[ReviewIssue] = []
     metadata: dict[str, object] = {"checked": len(existing), "threshold": threshold}
     high_sim: list[tuple[str, float]] = []

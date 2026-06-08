@@ -17,18 +17,7 @@ import com.pythontopia.feature.profile.data.LearnerProfileDto
 import com.pythontopia.feature.profile.data.PracticeCapabilityDto
 import com.pythontopia.feature.profile.data.ProfileDimensions
 
-/**
- * 4 个被动维度（系统聚合，学生只读）的展示区。
- *
- * 后端 8 维中以下 4 维不在 [ProfileDimensions.SELF_EDITABLE] 中：
- *  - `knowledge_base`（程序设计年限 / 已掌握语言 / Python 自评水平）
- *  - `cognitive_style`（场依存 / 顺序-整体）
- *  - `error_pattern`（频繁错的 KC / 错误类别）
- *  - `practical_ability`（平均尝试次数 / 通过率）
- *
- * 这些数据来源是访谈 + 提交 + 调试事件，由 `PassiveProfileService` 被动写入；
- * UI 这里只解释成果，附带教学语境，让学生理解"为什么"。
- */
+/** 4 个被动维度（非 [ProfileDimensions.SELF_EDITABLE]）只读展示；由 PassiveProfileService 被动聚合。 */
 @Composable
 fun PassiveDimensionView(
     profile: LearnerProfileDto?,

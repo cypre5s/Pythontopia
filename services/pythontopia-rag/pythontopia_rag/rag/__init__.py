@@ -1,1 +1,1 @@
-"""RAG index and retrieval implementation is added in phase 06."""
+"""RAG 索引与检索实现模块。"""

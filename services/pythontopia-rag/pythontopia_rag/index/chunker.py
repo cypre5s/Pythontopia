@@ -69,13 +69,7 @@ def chunk_page(
     target_chars: int = DEFAULT_TARGET_CHARS,
     overlap: int = DEFAULT_OVERLAP,
 ) -> list[Chunk]:
-    """Split a single page into Chunk records.
-
-    Strategy:
-    1. Split on markdown headings.
-    2. For each section, slide a window of ``target_chars`` characters with ``overlap`` overlap.
-    3. Merge windows shorter than ``min_chars`` into the previous window when possible.
-    """
+    """按 markdown 标题切分，再滑动窗口（target_chars/overlap）分块，短于 min_chars 的片段并入前块。"""
     headings = _split_by_heading(text)
     flat_pieces: list[str] = []
     for section in headings:

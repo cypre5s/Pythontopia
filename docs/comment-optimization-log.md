@@ -49,9 +49,9 @@
 | `frontend` | 290(src)+127(test) | ✅ src 全 290 完成（Wave 3，10 路并发；`npm run typecheck` exit 0）；上一轮 8 待审已并入；tests 127 未做 |
 | `backend` | 346(main)+64(test) | ✅ main 全 346 完成（prev 24 + Wave1 119 + Wave2 198 + 入口类已审）；`mvn test-compile` exit 0；测试 64 未做 |
 | `android` | 217 | 未开始 |
-| `services/pythontopia-graph` | 96 | 部分（上一轮已审若干）|
-| `services/pythontopia-rag` | 25 | 未开始 |
-| `scripts` | 5 | 未开始 |
+| `services/pythontopia-graph` | 65 src + 36 test | ✅ 完成（Wave 4；`pytest` 297 passed）|
+| `services/pythontopia-rag` | 19 src + 6 test | ✅ 完成（Wave 4；`pytest` 21 passed）|
+| `scripts` | 3 py + 2 mjs | py 3 ✅（Wave 4）；2 个 `.mjs` 与资产 WIP 交织，暂留 |
 
 ## 文件级明细
 
@@ -173,3 +173,23 @@
 > ⚠️ 注意：`stores/mainQuest.ts` 编辑期间被**外部进程**并发改动（acceptQuest/completeSubQuest/defeatBoss 逻辑），子代理据当前代码仅调整了注释，建议复核合并。
 > ⚠️ frontend 改动与未提交的工坊 feature WIP 在同文件内交织，无法像 backend 那样干净单独 commit。
 > 剩余：`frontend/tests`（127）、`services/pythontopia-graph`、`services/pythontopia-rag`、`android`、`scripts`、backend 测试（64）。
+
+## 全项目扩展 · 并发批次（Wave 4 · Python，2026-06-05）
+
+> ⚠️ 本波 10 路子代理以默认模型派发时**全部因「API usage limit reached」未启动**；先用单探针确认 `composer-2.5-fast` 可启动后，改用该模型重新派发，全部成功。`pytest`：graph 297 passed、rag 21 passed。
+
+| 批次 | 范围 | 文件 | 有改动 | 要点 |
+|---|---|---|---|---|
+| W4-P1 | graph/agents/boss | 11 | 11 | 去 R-13/Phase；补 docstring；强化 grounding 防幻觉 + 禁隐藏测试契约 |
+| W4-P2 | graph/agents 顶层 | 16 | 15 | 11 个默认 Agent 补结构化输出/fail-fast/防泄答 docstring；英译中 |
+| W4-P3 | graph/routes + 根 | 13 | 12 | 去迭代号；保留 SSE/协议映射/错误码跨服务契约 |
+| W4-P4 | graph/nodes + graph | 13 | 11 | grounding/hallucination/safety/`no_evidence_found` 审查契约英译中保留 |
+| W4-P5 | graph/schemas + llm | 12 | 9 | 去 stage 号；保留字段契约/snake_case 对齐/provider workaround |
+| W4-P6 | rag 源码 | 19 | 15 | 补检索/`no_evidence_found` 防幻觉/安全过滤契约；英译中 |
+| W4-P7 | graph/tests/agents（boss 单测） | 12 | 10 | 去迭代号、英译中、删冗余复述；不改断言 |
+| W4-P8 | graph/tests 顶层 A | 12 | 9 | 同上；保留 TestClient/lifespan 等非显见测试约束 |
+| W4-P9 | graph/tests 顶层 B | 12 | 4 | 同上；多数已合规 |
+| W4-P10 | rag/tests + scripts(py×3) | 9 | 3 | rag 测试无注释合规；3 个 CLI 脚本去 R-1x、精简 docstring（探针批次）|
+
+> Python 全模块覆盖（graph 65 src + 36 tests、rag 19 src + 6 tests、scripts 3 py）；`pytest` graph 297 / rag 21 全通过。
+> 剩余：`android`（217）、`frontend/tests`（127）、backend 测试（64）、scripts 2 个 `.mjs`。

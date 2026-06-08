@@ -13,7 +13,7 @@ export interface MainSubQuest {
   title: string;
   /** 一句话提示，会在 HUD chip / 主线面板中显示。 */
   hint: string;
-  /** 触发任务的地图 key（town_hub / farm_north / mine_south / campus_east / port_west）。 */
+  /** 触发任务的地图 key（R-14：town_hub / mine_south）。 */
   mapKey: MainQuestMapKey;
   /** 与之对话的 NPC（可选）。 */
   npcKey?: string;
@@ -25,12 +25,7 @@ export interface MainSubQuest {
   rewards: MainSubQuestReward[];
 }
 
-export type MainQuestMapKey =
-  | 'town_hub'
-  | 'farm_north'
-  | 'mine_south'
-  | 'campus_east'
-  | 'port_west';
+export type MainQuestMapKey = 'town_hub' | 'mine_south';
 
 export type MainSubQuestEvidence =
   | { type: 'dialog_complete'; npcKey: string }

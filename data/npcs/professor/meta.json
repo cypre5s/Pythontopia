@@ -6,8 +6,8 @@
   "portrait": "portrait_professor.png",
   "spawnMap": "town_hub",
   "spawn": {
-    "tileX": 12,
-    "tileY": 10
+    "tileX": 14,
+    "tileY": 12
   },
   "birthday": {
     "month": 9,
@@ -22,56 +22,56 @@
       {
         "from": "08:00",
         "map": "town_hub",
-        "tileX": 12,
-        "tileY": 10
+        "tileX": 14,
+        "tileY": 12
       }
     ],
     "tuesday": [
       {
         "from": "08:00",
         "map": "town_hub",
-        "tileX": 12,
-        "tileY": 10
+        "tileX": 14,
+        "tileY": 12
       }
     ],
     "wednesday": [
       {
         "from": "08:00",
         "map": "town_hub",
-        "tileX": 12,
-        "tileY": 10
+        "tileX": 14,
+        "tileY": 12
       }
     ],
     "thursday": [
       {
         "from": "08:00",
         "map": "town_hub",
-        "tileX": 12,
-        "tileY": 10
+        "tileX": 14,
+        "tileY": 12
       }
     ],
     "friday": [
       {
         "from": "08:00",
         "map": "town_hub",
-        "tileX": 12,
-        "tileY": 10
+        "tileX": 14,
+        "tileY": 12
       }
     ],
     "saturday": [
       {
         "from": "08:00",
         "map": "town_hub",
-        "tileX": 12,
-        "tileY": 10
+        "tileX": 14,
+        "tileY": 12
       }
     ],
     "sunday": [
       {
         "from": "08:00",
         "map": "town_hub",
-        "tileX": 12,
-        "tileY": 10
+        "tileX": 14,
+        "tileY": 12
       }
     ]
   },

@@ -3,12 +3,8 @@ package com.pythontopia.feature.boss
 import kotlinx.serialization.Serializable
 
 /**
- * 章末 BOSS 战 DTO，对齐后端 BossController（/api/world/boss）：
- *  - POST /{chapter}/problem  body=[BossProblemRequestBody] → [BossProblemDto]
- *  - POST /{chapter}/attempt  body=[BossAttemptRequestBody] → [BossAttemptResultDto]
- *
- * graph 返回 camelCase，与字段名一致，无需 @SerialName。
- * 请求体仅必填 stage；其余 null 由 kotlinx 默认（encodeDefaults=false）省略，后端按 stage 推断。
+ * BOSS 战 DTO，对齐 `/api/world/boss/{chapter}/problem` 与 `/attempt`。
+ * 请求体仅 stage 必填；其余 null 由 encodeDefaults=false 省略，后端按 stage 推断。
  */
 
 @Serializable

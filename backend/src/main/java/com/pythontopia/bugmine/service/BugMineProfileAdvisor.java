@@ -34,4 +34,9 @@ public class BugMineProfileAdvisor {
         ? "易错模式已命中，卡住时按阶梯逐层解锁，不要跳层抄答案。"
         : "掌握度中等，先 L1 独立重试，卡住再逐层下探。";
   }
+
+  public String echoGuidanceLabel(int depthTarget) {
+    int target = Math.max(4, depthTarget);
+    return "遗忘回声：久未复习，建议下探到 L" + target + " 再确认。";
+  }
 }

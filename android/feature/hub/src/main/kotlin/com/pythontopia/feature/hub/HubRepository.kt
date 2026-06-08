@@ -11,7 +11,7 @@ import com.pythontopia.core.network.api.CalendarApi
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** Network repository for the native hub. It never fabricates a bootstrap snapshot. */
+/** 中央小镇数据仓库；bootstrap 不伪造快照。 */
 @Singleton
 class HubRepository @Inject constructor(
     private val bootstrapApi: BootstrapApi,
@@ -21,10 +21,7 @@ class HubRepository @Inject constructor(
 
     suspend fun bootstrap(): GameBootstrapResponseDto = bootstrapApi.bootstrap()
 
-    /**
-     * 日历：优先网络（成功则写入 Room 缓存），失败回退最近一次缓存（离线/抖动仍有内容）。
-     * 二者皆无返回 null（首启离线场景）。
-     */
+    /** 日历：网络优先并写 Room 缓存，失败回退缓存，皆无则 null。 */
     suspend fun today(): CalendarTodayResponse? {
         val fromNetwork = runCatching { calendarApi.today() }.getOrNull()
         if (fromNetwork != null) {

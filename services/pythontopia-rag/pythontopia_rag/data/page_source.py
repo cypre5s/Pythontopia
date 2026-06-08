@@ -31,7 +31,7 @@ class InMemoryPageSource:
 
 
 def page_records_to_indexable(records: list[PageRecord]) -> list[IndexablePage]:
-    """Adapter from the existing dry-run loader records to IndexablePage."""
+    """将 loader 的 PageRecord 转为可索引的 IndexablePage。"""
 
     indexable: list[IndexablePage] = []
     for record in records:

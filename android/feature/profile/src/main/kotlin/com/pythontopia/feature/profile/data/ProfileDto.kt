@@ -4,16 +4,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 
-/**
- * Pythontopia 学生画像 (Android 端) DTO。
- *
- * 后端权威：`backend/com/pythontopia/learner/profile/dto/LearnerProfileDto.java`
- * + `BaseLevelDto/LearningGoalDto/...`，字段名经 Jackson 默认驼峰序列化。
- *
- * 8 维 `dimensions` JSONB（被动聚合，PUT 走的是这套 key）与 8 个结构化子字段
- * （interview agent 生成，GET 直接返回）是两层；本文件覆盖后者，前者通过
- * [DimensionUpdateRequest] / [DimensionUpdateResult] + [ProfileDimensions] 操作。
- */
+/** 学生画像 DTO（对照后端 LearnerProfileDto）；结构化子字段与 dimensions JSONB 是两层，本文件覆盖前者。 */
 @Serializable
 data class BaseLevelDto(
     val programmingYears: Int? = null,
@@ -98,20 +89,8 @@ data class DimensionUpdateResult(
 )
 
 /**
- * `GET /api/learner/profile/dimensions` 列表项：单个维度的对外快照。
- *
- * 后端权威：`backend/com/pythontopia/learner/profile/dto/ProfileDimensionDto.java`（Jackson 默认驼峰）。
- * 该端点**恒返回 8 维**（[ProfileDimensions.KEYS] 顺序），缺失维度由后端按 `score=0.5 / evidence=0` 兜底，
- * 因此不会出现 204；HTTP 错误由 Retrofit 抛 `HttpException`，在 [ProfileRepository] 归一为 [com.pythontopia.core.common.Result.Failure]。
- *
- * 字段语义：
- *  - [score] 0..1 已做读时 decay 的 effective 值（无信号时为 0.5 中性默认）。
- *  - [confidence] 0..1 = min(1, evidenceCount / 8)，越低代表信号越弱、越不应强断言。
- *  - [evidenceCount] 累计证据条数；为 0 表示该维度尚无真实信号。
- *  - [selfEditable] 学生是否可经 `PUT scoreDelta` 自评直写该维度（权威以后端为准）。
- *  - [tags] 该维度累积标签（如媒介偏好 video/visual）。
- *
- * 全部给默认值是为了在后端偶发省略字段时仍能反序列化（`explicitNulls=false` 容错）。
+ * GET /api/learner/profile/dimensions 单项；恒 8 维，缺失由后端 score=0.5/evidence=0 兜底。
+ * [confidence]=min(1, evidenceCount/8)；[selfEditable] 决定可否 PUT 自评；默认值用于反序列化容错。
  */
 @Serializable
 data class ProfileDimensionDto(

@@ -23,6 +23,7 @@ class RagQueryRequest(BaseModel):
 
 class RagQueryResponse(BaseModel):
     hits: list[RagHit] = Field(default_factory=list)
+    # 无有效证据时为 True，下游不得伪造 page_id/页码引用
     no_evidence_found: bool = False
     rewritten_query: str | None = None
 

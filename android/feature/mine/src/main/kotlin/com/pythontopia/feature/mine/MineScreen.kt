@@ -32,18 +32,10 @@ import com.pythontopia.core.design.PytColors
 import com.pythontopia.core.design.PytSpace
 
 /**
- * Bug 矿洞副本主屏。
+ * Bug 矿洞副本主屏；连续失败 [MineUiState.ESCAPE_THRESHOLD] 次弹 [MineEscapeDialog]。
  *
- * 垂直三段式布局：
- *  1. 顶部：[MineLayerProgress] 5 层进度条 + 当前卡的小标题
- *  2. 中部：[MineCardView] 单卡 + 代码编辑器（[OutlinedTextField] 多行）
- *  3. 底部：Submit / Next / Escape 操作按钮 + 最近一次结果反馈
- *
- * 「失败 3 次」自动弹 [MineEscapeDialog]；副本通关后切换到完结态卡片。
- *
- * @param sourceSubmissionId 触发副本的失败提交 ID；从 arena/复盘屏跳进来时透传，
- *   主动从 hub 入口进入时传 null（[MineRepository] 走 IDLE_RECOMMEND 选卡）。
- * @param onExit 玩家点退出按钮 / 副本完结确认时回调；通常 NavController.popBackStack。
+ * @param sourceSubmissionId 失败提交 ID，[MineRepository.startSession] 必填。
+ * @param onExit 退出或通关确认回调。
  */
 @Composable
 fun MineScreen(

@@ -1,12 +1,7 @@
-"""R-13 §5 Phase 5：5 重审查链编排 + Boss 出题入口。
+"""Boss 出题入口与五重审查链编排。
 
-`generate_boss_problem(...)` 流程：
-    1. 调 `problem_factory` 生成候选题（默认 fallback 到 golden 题模板）；
-    2. 串行跑 struct / self_test / grounding / difficulty / plagiarism；
-    3. 任一审查失败 → 重试（最多 3 次，难度向估算靠拢）；
-    4. 仍失败 → 用 golden fallback 返回 + 全审查通过；调用方据此决定是否打 reject 标。
-
-任何阶段失败的 review 都会出现在 ``BossProblemReview.verdicts`` 里，便于运维诊断。
+``generate_boss_problem`` 调用 factory 出题后串行审查；失败则重试，耗尽后可选 golden 兜底。
+各阶段 ``ReviewVerdict`` 汇总于 ``BossProblemReview.verdicts`` 供诊断。
 """
 
 from __future__ import annotations
@@ -60,7 +55,6 @@ def run_all_reviews(
     return BossProblemReview(problem=problem, verdicts=verdicts)
 
 
-# 类型别名：异步 factory（接 chapter / stage / kc / difficulty / temperature 返回 BossProblem）
 ProblemFactory = Callable[..., Awaitable[BossProblem]]
 
 
@@ -79,15 +73,13 @@ async def generate_boss_problem(
     preferred_kind: str | None = None,
     profile_signals: Mapping[str, object] | None = None,
 ) -> BossProblemReview:
-    """编排 5 重审查链。
+    """编排五重审查链并返回 ``BossProblemReview``。
 
     Args:
-        problem_factory: 异步出题函数，签名 ``(chapter, stage, kc_code, difficulty,
-            temperature, [preferred_kind], [profile_signals]) -> BossProblem``。
-        golden_fallback: 重试用完仍失败时使用的兜底题（必须保证 5 重审查通过；
-            如未提供，最后返回最后一次的 review，passed=False 由调用方处理）。
-        preferred_kind: 关卡题型偏好（ArenaPage 关卡 kind）。
-        profile_signals: 学生画像信号 dict。R-13 §-1 新增。
+        problem_factory: 异步出题函数；可选接收 ``preferred_kind``、``profile_signals``。
+        golden_fallback: 重试耗尽后的兜底题，须能通过全部审查。
+        preferred_kind: ArenaPage 关卡题型偏好。
+        profile_signals: 学生画像信号，透传给 factory 以个性化出题。
     """
 
     temperature_base = 0.4
@@ -96,8 +88,7 @@ async def generate_boss_problem(
     for attempt in range(1, max_retries + 1):
         temperature = temperature_base + 0.1 * (attempt - 1)
         try:
-            # R-13 §-1：把 preferred_kind / profile_signals 透传给 factory。
-            # 旧 factory 签名只有 5 个 kwargs 时，TypeError 兜底丢掉新参数。
+            # 兼容仅接受基础 kwargs 的旧 factory 签名
             try:
                 problem = await problem_factory(
                     chapter=chapter,
@@ -156,7 +147,7 @@ async def generate_boss_problem(
         return fallback_review
 
     if last_review is None:
-        # 极端：factory 全程 raise，返回一个最小化的 failed review
+        # factory 全程异常时返回最小 failed review
         empty = BossProblem(
             problem_id="invalid",
             chapter=chapter,
@@ -174,6 +165,6 @@ async def generate_boss_problem(
 
 
 def build_test_case(input_text: str, expected_output: str, *, is_sample: bool = False) -> TestCase:
-    """便利构造器，避免外部代码 import TestCase 时还要写 dataclass kwargs。"""
+    """构造 ``TestCase`` 的便捷入口。"""
 
     return TestCase(input=input_text, expected_output=expected_output, is_sample=is_sample)

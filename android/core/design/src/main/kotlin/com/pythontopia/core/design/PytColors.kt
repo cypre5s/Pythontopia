@@ -3,14 +3,8 @@ package com.pythontopia.core.design
 import androidx.compose.ui.graphics.Color
 
 /**
- * Pythontopia 设计令牌 · 配色。
- *
- * 主题基调：星露谷式「黄昏木屋」暖色像素小镇——深胡桃木背景 + 黄铜描边 + 羊皮纸暖白文字 + 故事书系强调色。
- * 全局沿用**深色方案**（深木底 + 暖白字），以保证所有 feature 既有的「浅字深底」对比度不被破坏。
- *
- * 约定：
- *  - 既有令牌名一律保留（被各 feature 直接引用），仅微调取值以增强协调感，绝不改名。
- *  - 「羊皮纸 / 木质框架 / 次要强调」为新增追加令牌，供浅色菜单、木框面板与 Material 次要角色按需取用。
+ * 设计令牌 · 配色：「黄昏木屋」暖色像素小镇——深木底、黄铜描边、羊皮纸暖白字。
+ * 默认深色方案，保证浅字深底对比度。
  */
 object PytColors {
 
@@ -43,18 +37,18 @@ object PytColors {
     val surface = bgElevated
     val onSurface = textPrimary
 
-    // —— 新增 · 羊皮纸表面族（浅色菜单 / 提示气泡 / 浅色主题 / Material inverseSurface）——
+    // —— 羊皮纸表面族（浅色菜单 / 提示气泡 / Material inverseSurface）——
     val parchment = Color(0xFFF3E2BD)
     val parchmentSunken = Color(0xFFE6D2A6)
     val onParchment = Color(0xFF3A2A16)
     val onParchmentMuted = Color(0xFF6E5630)
 
-    // —— 新增 · 木质框架族（深浅木纹，供面板 / 边框分层）——
+    // —— 木质框架族（面板 / 边框分层）——
     val woodLight = Color(0xFF8C6336)
     val wood = Color(0xFF6B4A28)
     val woodDark = Color(0xFF38240F)
 
-    // —— 新增 · 次要 / 第三强调（供 Material secondary / tertiary 角色，避免到处复用 primary 金）——
+    // —— 次要 / 第三强调（Material secondary / tertiary）——
     val secondary = Color(0xFF8FB36B)
     val onSecondary = Color(0xFF1C140B)
     val tertiary = Color(0xFFCBA0B6)

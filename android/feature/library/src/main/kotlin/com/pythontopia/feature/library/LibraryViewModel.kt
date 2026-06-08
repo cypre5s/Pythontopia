@@ -10,10 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/**
- * 课程图书馆 ViewModel：章 → KC → 页 → 阅读 的钻取导航。
- * 每级懒加载；[back] 逐级返回。
- */
+/** 课程图书馆钻取导航（章→KC→页→阅读）；每级懒加载，[back] 逐级返回。 */
 @HiltViewModel
 class LibraryViewModel @Inject constructor(
     private val repository: LibraryRepository,

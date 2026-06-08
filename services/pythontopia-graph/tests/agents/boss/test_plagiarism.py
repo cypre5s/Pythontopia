@@ -1,4 +1,4 @@
-"""R-13 §5 Phase 5：plagiarism / 敏感词测试。"""
+"""plagiarism_checker 查重与敏感词单元测试。"""
 
 from __future__ import annotations
 
@@ -55,7 +55,7 @@ def test_threshold_override_loosens() -> None:
     v = is_too_similar_to_existing(
         _problem("请输出 hello world"), existing, threshold=1.01
     )
-    # threshold > 1 让任何相似度都不触发 — 简单冒烟
+    # threshold > 1 时任何相似度均不触发
     assert v.passed
 
 
@@ -82,7 +82,7 @@ def test_multiple_existing_problems_picks_max() -> None:
     ]
     v = is_too_similar_to_existing(_problem("请输出 hello world"), existing)
     assert not v.passed
-    # high_sim metadata 应包含 p2 命中
+    # high_sim 应记录 p2 为最高相似
     high = v.metadata["high_sim"]
     assert any(pid == "p2" for pid, _ in high)
 

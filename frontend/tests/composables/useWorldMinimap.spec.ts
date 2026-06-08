@@ -36,7 +36,7 @@ function mountHost(): TestHandle {
 const sampleIndex = {
   maps: [
     { key: 'town_hub', label: 'Pythontopia 小镇', spawn: { tileX: 25, tileY: 20 } },
-    { key: 'farm_north', label: '知识农场', spawn: { tileX: 20, tileY: 37 } },
+    { key: 'mine_south', label: 'Bug 矿洞', spawn: { tileX: 15, tileY: 2 } },
   ],
 };
 
@@ -52,8 +52,8 @@ const sampleTownHubMap = {
       type: 'objectgroup',
       name: 'objects',
       objects: [
-        // 北门 exit -> farm_north：(x=16, y=0, w=64, h=16) 在地图上边
-        { id: 1, type: 'exit', x: 16, y: 0, width: 64, height: 16, properties: [{ name: 'target', type: 'string', value: 'farm_north' }] },
+        // 南门 exit -> mine_south
+        { id: 1, type: 'exit', x: 16, y: 48, width: 64, height: 16, properties: [{ name: 'target', type: 'string', value: 'mine_south' }] },
         // 一个 NPC：mayor_py at tile (2, 1)
         { id: 2, type: 'npc', x: 32, y: 16, properties: [{ name: 'key', type: 'string', value: 'mayor_py' }] },
       ],
@@ -118,9 +118,9 @@ describe('useWorldMinimap', () => {
     // exit 推断 side=north + label 取自 index
     expect(hook.data.value?.exits).toHaveLength(1);
     expect(hook.data.value?.exits[0]).toMatchObject({
-      side: 'north',
-      toMap: 'farm_north',
-      label: '知识农场',
+      side: 'south',
+      toMap: 'mine_south',
+      label: 'Bug 矿洞',
     });
   });
 
@@ -159,6 +159,22 @@ describe('useWorldMinimap', () => {
     await flushPromises();
     await flushPromises();
     // 旧 spec 期望 null；R-13 修复后改为 fallback town_hub，避免后端旧数据让 minimap 消失
+    expect(hook.data.value?.mapKey).toBe('town_hub');
+  });
+
+  it('R-14 废弃外围图别名 farm_north → town_hub', async () => {
+    const world = useWorldStore();
+    world.player = {
+      playerStateId: 1,
+      avatarKey: 'student_default',
+      mapKey: 'farm_north',
+      tileX: 0,
+      tileY: 0,
+      direction: 'DOWN',
+    };
+    const { hook } = mountHost();
+    await flushPromises();
+    await flushPromises();
     expect(hook.data.value?.mapKey).toBe('town_hub');
   });
 

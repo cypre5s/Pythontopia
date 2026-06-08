@@ -1,7 +1,6 @@
-"""DebugAgent: deterministic, education-first hint builder.
+"""DebugAgent：教育导向的确定性调试提示生成器。
 
-The agent never composes complete copy-paste solutions. Hint layer 3 always emits prose +
-short pseudo-code at most one line; safety_critic enforces this invariant.
+不输出可复制粘贴的完整解答；第 3 层提示最多 prose + 单行伪代码，由 safety 审查强制约束。
 """
 
 from __future__ import annotations
@@ -23,6 +22,8 @@ AGENT_NAME = "DebugAgent"
 
 
 class DebugAgent:
+    """据判题反例与变量轨迹生成三层渐进提示；泄答检测失败时降级第 3 层。"""
+
     AGENT_NAME = AGENT_NAME
 
     def analyse(self, payload: DebugAgentInput) -> DebugAgentOutput:
@@ -174,6 +175,7 @@ class DebugAgent:
 def counter_example_from_payload(
     *, stdin: str, expected: str, actual: str, redacted: bool = False
 ) -> CounterExampleCard:
+    """从 stdin/期望/实际输出构造 CounterExampleCard，含差异摘要。"""
     diff_summary = _diff_summary(expected, actual)
     return CounterExampleCard(
         stdin=stdin,

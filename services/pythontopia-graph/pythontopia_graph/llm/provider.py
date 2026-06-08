@@ -49,10 +49,7 @@ def load_alethicode_env(path: str = "/home/cypress/Alethicode/backend/.env") -> 
 
 
 def _default_deploy_env_path() -> Path:
-    # 向上查找最近的 <ancestor>/deploy/.env：host 直跑能命中仓库根的 deploy/.env；
-    # 容器内 provider.py 位于 /app/pythontopia_graph/llm/ 仅 3 层父目录且无 deploy 挂载，
-    # 此前写死 parents[4] 会越界 IndexError 导致启动崩溃。未命中即返回占位路径，
-    # 由 load_pythontopia_env fail-soft（容器内环境变量已由 compose 注入）。
+    # 沿父目录向上查找 deploy/.env（避免写死 parents[n] 在容器内越界 IndexError）；未命中返回占位路径，由 load_pythontopia_env fail-soft。
     here = Path(__file__).resolve()
     for parent in here.parents:
         candidate = parent / "deploy" / ".env"
@@ -64,9 +61,7 @@ def _default_deploy_env_path() -> Path:
 def load_pythontopia_env(path: str | None = None) -> EnvLoadResult:
     """加载 <repo>/deploy/.env（PYT_LLM_PROVIDER / PYT_OPENAI_* 等）。
 
-    让 graph 服务在「直接 uvicorn 跑、未经 docker-compose 注入环境变量」时也能拿到
-    DeepSeek 凭证，从而所有 LLM 调用默认接入真实大模型而非 dryrun。容器内（compose
-    已注入 env）找不到该文件时返回 exists=False，无副作用。
+    供 graph 直跑 uvicorn、未经 compose 注入时读取 DeepSeek 凭证；容器内找不到则 exists=False 无副作用。
     """
     env_path = Path(path) if path else _default_deploy_env_path()
     if not env_path.exists():
@@ -116,10 +111,7 @@ class DryRunProvider:
     async def chat_stream(
         self, messages: list[dict[str, str]], **kwargs: object
     ) -> AsyncIterator[str]:
-        # 重要：dry-run 模式严禁回显 system / 证据等内部 message —— 否则会把内置
-        # SYSTEM_PROMPT 当成「答案」泄露到答疑气泡里（曾出现「你是 Pythontopia 智能
-        # 答疑助教… 规则 1~6」直接出现在导师回复中的 bug）。这里只依据最后一条 user
-        # 问题产出离线占位答复。
+        # dry-run 禁止回显 system/证据消息，否则 SYSTEM_PROMPT 会泄露到答疑气泡；仅依据最后一条 user 问题生成占位答复。
         user_turns = [
             str(m.get("content", "")) for m in messages if m.get("role") == "user"
         ]
@@ -143,8 +135,7 @@ class OpenAiCompatProvider:
             raise RuntimeError("OpenAI-compatible LLM env is missing")
 
     async def chat(self, messages: list[dict[str, str]], **kwargs: object) -> LlmResponse:
-        # 宿主 graph 可通过 HTTP(S)_PROXY 走本机 7892 访问 DeepSeek；未设置代理时
-        # httpx 会直连。NO_PROXY 由启动环境负责保护 localhost / RAG 等内网地址。
+        # trust_env=True：有 HTTP(S)_PROXY 则走代理，否则直连；NO_PROXY 保护 localhost/RAG。
         async with httpx.AsyncClient(timeout=30, trust_env=True) as client:
             response = await client.post(
                 f"{self.base_url.rstrip('/')}/chat/completions",
@@ -159,9 +150,7 @@ class OpenAiCompatProvider:
             response.raise_for_status()
         data = response.json()
         content = data["choices"][0]["message"]["content"]
-        # response_format=json_object 时模型返回 JSON 字符串。资源类 Agent 统一读
-        # content_json（原为 DryRunProvider 的形态），故这里解析一次，避免真实 LLM
-        # 输出被当成 None 而回落到离线占位草稿。解析失败时仅保留 content_text。
+        # response_format=json_object 时解析 JSON 到 content_json；失败则仅保留 content_text，避免回落离线草稿。
         content_json: dict[str, Any] | None = None
         try:
             parsed = _json.loads(content)
@@ -181,7 +170,7 @@ class OpenAiCompatProvider:
             "stream": True,
             **kwargs,
         }
-        # 同 chat()：信任环境代理，实现有代理走代理、无代理直连。
+        # 同 chat()：trust_env 代理策略。
         async with httpx.AsyncClient(timeout=60, trust_env=True) as client:
             async with client.stream(
                 "POST",
@@ -204,7 +193,7 @@ class OpenAiCompatProvider:
 
 
 class LlmProviderError(RuntimeError):
-    """Raised when an upstream provider returns a hard failure (rate limit / 余额不足等)."""
+    """上游 Provider 硬性失败（限流、余额不足等）时抛出。"""
 
     def __init__(self, message: str, *, kind: str, retryable: bool = False) -> None:
         super().__init__(message)
@@ -213,12 +202,7 @@ class LlmProviderError(RuntimeError):
 
 
 class SparkProvider:
-    """讯飞 Spark OpenAI-compatible Provider.
-
-    讯飞官方为 Spark 模型提供 OpenAI 兼容接口（`https://spark-api-open.xf-yun.com/v1/chat/completions`），
-    鉴权使用 `Authorization: Bearer {api_key}:{api_secret}`。本类只关心 HTTP 调用与限流/欠费翻译；
-    高阶节点继续通过 ``LlmProvider`` 协议获取结构化输出。
-    """
+    """讯飞 Spark OpenAI 兼容 Provider（/v1/chat/completions，Bearer api_key:api_secret）；负责 HTTP 调用与限流/欠费翻译。"""
 
     DEFAULT_BASE_URL = "https://spark-api-open.xf-yun.com/v1"
     RATE_LIMIT_STATUSES = {429}
@@ -351,8 +335,7 @@ class SparkProvider:
 def provider_from_env() -> LlmProvider:
     provider_name = (os.environ.get("PYT_LLM_PROVIDER") or "").strip().lower()
     if not provider_name:
-        # 未显式指定时：有 OpenAI 兼容（DeepSeek）凭证就默认走 openai_compat（真实大模型），
-        # 否则回落 dryrun（本地离线占位）。满足「除多模态外其余全部接入 DeepSeek」。
+        # 未指定 PYT_LLM_PROVIDER 时：有 OpenAI 兼容凭证默认 openai_compat，否则 dryrun。
         _, api_key, _ = _openai_compat_env()
         provider_name = "openai_compat" if api_key else "dryrun"
     if provider_name == "dryrun":

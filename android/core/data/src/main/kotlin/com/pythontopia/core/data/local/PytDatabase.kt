@@ -11,11 +11,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
-/**
- * Pythontopia 本地缓存库。当前仅含日历缓存（最小离线切片）；新增可缓存实体时
- * 加进 `entities` 并升 `version`。`exportSchema = false`：演示期不导出 schema 文件，
- * 上架前应改 true 并入 `schemas/` 以支持可审计迁移。
- */
+/** Room 本地库；当前仅 calendar_cache。扩展实体时加入 entities 并升 version；exportSchema=false。 */
 @Database(
     entities = [CalendarCacheEntity::class],
     version = 1,

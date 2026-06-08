@@ -8,21 +8,7 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
-/**
- * KcTile 与配套数据/调色板的本地单测。
- *
- * 由于 R-12 demo 阶段 fields 模块未启用 `compose-ui-test-junit4 + robolectric`
- * （AGENTS.md 不允许引入新依赖），无法做 `composeTestRule.setContent { KcTile(...) }`
- * 的运行时渲染断言；这里改为对 KcTile **支撑的纯逻辑**做断言，间接覆盖 4 状态渲染分支：
- *
- *  - [KcTileState.statusFor]：mastery → KcStatus 映射；
- *  - [FieldsPalette.statusFill] / [FieldsPalette.statusInner]：每个 status 必须有独立颜色；
- *  - [tileContentDescription]：4 状态分别生成可读语义标签（包含状态名）；
- *  - [KcMasteryDto.toTileState]：DTO 反序列化路径。
- *
- * Compose UI 渲染层的截图回归留给 R-13 接入 Roborazzi 后补齐，文件名规划：
- * `KcTileScreenshotTest.kt`，本次不创建以避免引入 Roborazzi 新依赖。
- */
+/** KcTile 支撑逻辑单测：status 映射、调色板、a11y 文案、DTO 转换（无 Compose 运行时）。 */
 class KcTileTest {
 
     @Test
@@ -169,12 +155,12 @@ class KcTileTest {
 
     @Test
     fun `tile fill color differs from inner color for visual contrast`() {
-        // 抽样 GROWING：fill 暗绿，inner 浅绿，必须不同
+        // GROWING：fill 与 inner 须有色相对比
         assertNotEquals(
             FieldsPalette.statusFill(KcStatus.GROWING),
             FieldsPalette.statusInner(KcStatus.GROWING),
         )
-        // MATURE 同样
+        // MATURE 同样须有色相对比
         assertNotEquals(
             FieldsPalette.statusFill(KcStatus.MATURE),
             FieldsPalette.statusInner(KcStatus.MATURE),

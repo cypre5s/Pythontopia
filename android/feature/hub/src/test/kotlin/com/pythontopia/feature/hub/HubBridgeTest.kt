@@ -18,11 +18,7 @@ import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
-/**
- * [HubBridge] 是 Compose ↔ LibGDX 的核心双向通道，所有断言都跑在 JVM 单测里，
- * 不触碰 LibGDX 类型；raw [HubGameBridge] 用 MockK 替身验证转发契约，
- * 状态流转用 Turbine 断言 [StateFlow] / [SharedFlow] 行为。
- */
+/** [HubBridge] JVM 单测；MockK 验证 raw bridge 转发，Turbine 断言 Flow 行为。 */
 @OptIn(ExperimentalCoroutinesApi::class)
 class HubBridgeTest {
 
@@ -81,11 +77,11 @@ class HubBridgeTest {
         val bridge = HubBridge(raw)
         bridge.events.test {
             bridge.start(backgroundScope)
-            // UnconfinedTestDispatcher 下 start 的协程立即跑到第一个挂起点：drainOnce → emit → delay。
+            // UnconfinedTestDispatcher 下协程立即执行至 delay 挂起点
             val first = awaitItem()
             assertTrue(first is HubEvent.NpcInRange)
 
-            // 推进 ≥3 个 poll 周期，验证后续 drain 拿到 null 不再 emit。
+            // 推进多个 poll 周期，验证无新事件
             advanceTimeBy(HubBridge.POLL_INTERVAL_MS * 3 + 1)
             bridge.stop()
             expectNoEvents()

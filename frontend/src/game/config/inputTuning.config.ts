@@ -25,8 +25,6 @@ export interface InputTuningConfig {
   readonly stopLagBudgetMs: number;
   /** 各地图速度倍率：mine_south 0.8× 给玩家更多时间看 traceback。 */
   readonly sceneSpeedMultiplier: Readonly<Record<string, number>>;
-  /** port_west 跑步额外加成，给远海视觉物理代偿。 */
-  readonly runSpeedMultiplierPort: number;
 }
 
 export const DEFAULT_INPUT_TUNING: InputTuningConfig = Object.freeze({
@@ -41,12 +39,8 @@ export const DEFAULT_INPUT_TUNING: InputTuningConfig = Object.freeze({
   stopLagBudgetMs: 80,
   sceneSpeedMultiplier: Object.freeze({
     town_hub: 1.0,
-    farm_north: 1.0,
     mine_south: 0.8,
-    campus_east: 1.0,
-    port_west: 1.0,
   }),
-  runSpeedMultiplierPort: 1.1,
 });
 
 /**
@@ -95,8 +89,7 @@ export function smoothLerp(
  * 按地图与是否跑步派生 vTarget 的标量速度（px/s）。
  * 规则：
  *   1. 基速 = isRunning ? runSpeed : walkSpeed
- *   2. 若 isRunning 且 sceneKey === 'port_west'，额外 × runSpeedMultiplierPort
- *   3. 最终 × sceneSpeedMultiplier[sceneKey]（未知地图按 1.0 兜底）
+ *   2. 最终 × sceneSpeedMultiplier[sceneKey]（未知地图按 1.0 兜底）
  * 速度倍率只缩放 vTarget，不改 tauAccelMs / tauBrakeMs，确保延迟目标在各地图均一致，
  * 避免进矿洞时手感「黏」一下。
  */
@@ -106,10 +99,7 @@ export function getSpeedForScene(
   config: InputTuningConfig = DEFAULT_INPUT_TUNING,
 ): number {
   const multiplier = config.sceneSpeedMultiplier[sceneKey] ?? 1.0;
-  let baseSpeed = isRunning ? config.runSpeed : config.walkSpeed;
-  if (isRunning && sceneKey === 'port_west') {
-    baseSpeed *= config.runSpeedMultiplierPort;
-  }
+  const baseSpeed = isRunning ? config.runSpeed : config.walkSpeed;
   return baseSpeed * multiplier;
 }
 

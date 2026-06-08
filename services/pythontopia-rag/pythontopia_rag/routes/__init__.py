@@ -1,1 +1,1 @@
-"""HTTP route modules for the Pythontopia RAG service."""
+"""Pythontopia RAG HTTP 路由模块。"""

@@ -1,11 +1,4 @@
-"""R-13 §5 Phase 6 续：LLM 出题工厂单元测试。
-
-不调真 LLM，用 stub provider 喂结构化 JSON / 各种坏数据，确保：
-    * 正常 JSON → 正确转换成 BossProblem；
-    * fence-wrapped JSON 也能解析；
-    * 缺失 test_cases / 非法 JSON / 嵌套 problem 字段 / 不带 response_format kwarg 的旧 provider 兼容；
-    * problem_id / metadata 标记正确。
-"""
+"""LLM 出题工厂单元测试：stub provider 覆盖正常/畸形 JSON、fence 包裹、嵌套 problem 字段及旧 provider 兼容。"""
 
 from __future__ import annotations
 
@@ -123,7 +116,7 @@ async def test_factory_raises_when_no_test_cases() -> None:
 
 @pytest.mark.asyncio
 async def test_factory_retries_without_response_format_kwarg() -> None:
-    """旧 provider（如 spark adapter 早期版本）不支持 response_format kwarg 时应回落。"""
+    """不支持 response_format kwarg 的旧 provider 应自动回落重试。"""
 
     provider = _StubProvider(
         LlmResponse(content_json=_good_payload()),
@@ -132,5 +125,5 @@ async def test_factory_retries_without_response_format_kwarg() -> None:
     factory = build_llm_problem_factory(provider)
     problem = await factory(chapter=1, stage=1, kc_code="PY43-KC-001", difficulty=1)
     assert problem.title == "测试题"
-    # 第二次调用应已剔除 response_format kwarg
+    # 回落重试后不再传入 response_format
     assert "response_format" not in provider.last_kwargs

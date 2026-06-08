@@ -32,20 +32,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/**
- * 训练场"今日赛事"tab 的核心组件：依次显示题目 + 简化 CodeEditor + 提交按钮。
- *
- * 布局（自上而下垂直可滚）：
- *  1. 题目切换 chip row（LazyRow，按题目数横向滚）
- *  2. 题面卡片（题目标题 + 积分 + statementMd）
- *  3. 代码编辑器（BasicTextField 包一层等宽字体 + 边框，**不做语法高亮**——
- *     Beta 首发简化版避免引入 KotlinSyntaxHighlighter / VisualTransformation 复杂度）
- *  4. 提交按钮 + 上次判题结果卡片
- *
- * 故意把 problem 列表用 LazyRow 而非 TabRow 渲染：
- *  - Material3 的 TabRow 在 5+ tab 时会强制拉伸或溢出，体验差
- *  - LazyRow + FilterChip 更接近"题号面板"的语义，能容纳任意题目数量
- */
+/** 今日赛事 tab：题号选择、题面、代码编辑、提交与上次判题结果。 */
 @Composable
 fun ProblemRunner(
     state: ArenaUiState,
@@ -141,18 +128,7 @@ private fun ProblemStatementCard(problem: ArenaProblem) {
     }
 }
 
-/**
- * 简化版代码编辑器。
- *
- * Beta 首发故意 **不做** 语法高亮与自动缩进：
- *  - 不引入 KotlinSyntaxHighlighter / VisualTransformation 复杂度
- *  - 训练场的题目代码量普遍 5-15 行，BasicTextField + 等宽字体已足够
- *  - 自动缩进会与 IME 联想冲突，引入更多 corner case
- *
- * 用外层 [Surface] + [border] 控制视觉，是因为 BasicTextField 的默认背景属性会拦截
- * 点击；外层包一层 Surface + border 视觉上等价于 OutlinedTextField，但不会强制施加
- * Material3 多余 padding，对小屏更友好。
- */
+/** 无语法高亮；Surface+border 包 BasicTextField 避免默认背景拦截点击。 */
 @Composable
 private fun CodeEditor(
     code: String,

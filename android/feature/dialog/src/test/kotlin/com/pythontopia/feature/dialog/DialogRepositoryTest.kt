@@ -65,7 +65,7 @@ class DialogRepositoryTest {
         assertEquals("chat_progress", complete.key)
         assertEquals("android_r12_demo_played", flag.key)
         assertEquals("true", flag.value)
-        // 验证 nextNodeId 透传：终结分支为 null
+        // 终结分支 nextNodeId 应为 null
         assertTrue(request.captured.nextNodeId == null)
     }
 
@@ -78,8 +78,7 @@ class DialogRepositoryTest {
         assertEquals("mayor_py", result.npcKey)
         assertEquals("where_to_start", result.currentNodeId)
         assertEquals(listOf("greet"), result.completedNodeIds)
-        // 没有友善度增量时 effects 不应包含 FRIENDSHIP_DELTA，但本地 fallback 不发请求
-        // 这里仅验证 fallback 路径成功 + 字段映射正确
+        // 验证 offline fallback 路径的节点与 completedNodeIds 映射
     }
 
     @Test
@@ -94,7 +93,7 @@ class DialogRepositoryTest {
         repository.advance("mayor_py", "greet", choice)
 
         val effects: List<NpcDialogEffectDto> = request.captured.effects.orEmpty()
-        // 至少包含 COMPLETE_NODE 一条；不含 FRIENDSHIP_DELTA / SET_FLAG
+        // 无 friendship/flag 时仅含 COMPLETE_NODE
         assertTrue(effects.any { it.type == "COMPLETE_NODE" && it.key == "greet" })
         assertTrue(effects.none { it.type == "FRIENDSHIP_DELTA" })
         assertTrue(effects.none { it.type == "SET_FLAG" })

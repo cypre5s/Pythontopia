@@ -13,12 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 
-/**
- * 复用的「错误 + 重试」反馈块。
- *
- * 目标：消灭各 feature 里 `runCatching{}.getOrNull()` 静默吞错导致的白屏——失败时给出
- * 明确文案 + 重试按钮。任何屏的错误态都应改用本组件，统一交互与视觉（星露谷棕金）。
- */
+/** 统一错误态：展示 [message] 与 [onRetry] 重试按钮，供各屏失败反馈复用。 */
 @Composable
 fun PytErrorRetry(
     message: String,
@@ -51,7 +46,7 @@ fun PytErrorRetry(
     }
 }
 
-/** 复用的加载占位块。 */
+/** 统一加载占位（进度圈 + 可选 [label]）。 */
 @Composable
 fun PytLoading(
     modifier: Modifier = Modifier,

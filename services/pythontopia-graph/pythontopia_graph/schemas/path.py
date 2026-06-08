@@ -1,4 +1,4 @@
-"""Schemas for the PathPlannerAgent (stage 08)."""
+"""PathPlannerAgent 结构化输出 schema。"""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ ResourceTypeHint = Literal[
 
 
 class PlannerKcSnapshot(BaseModel):
-    """Minimal KC snapshot fed into the planner."""
+    """规划器输入的最小 KC 快照。"""
 
     kc_code: str = Field(min_length=1, max_length=64)
     mastery_score: float = Field(ge=0.0, le=1.0, default=0.0)

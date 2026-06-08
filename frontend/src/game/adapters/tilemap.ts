@@ -69,7 +69,6 @@ const BUILDING_FRAMES: ReadonlyArray<ReadonlyArray<number>> = [
 const DEFAULT_BUILDINGS: ReadonlyArray<MapZone> = [
   { key: 'profile-room', label: '画像屋', route: '/profile-room', tileX: 3, tileY: 3, width: 4, height: 3 },
   { key: 'workshop', label: '百晓工坊', route: '/workshop', tileX: 12, tileY: 2, width: 5, height: 3 },
-  { key: 'knowledge-field', label: '知识田', route: '/field', tileX: 22, tileY: 3, width: 5, height: 4 },
   { key: 'board', label: '公告板', route: '/board', tileX: 13, tileY: 13, width: 4, height: 3 },
   { key: 'training', label: '训练场', route: '/training', tileX: 5, tileY: 13, width: 5, height: 3 },
   { key: 'teacher', label: '教师屋', route: '/teacher', tileX: 22, tileY: 13, width: 4, height: 3 },
@@ -395,7 +394,6 @@ const NPC_ACTION_VARIANT: Readonly<Record<string, string>> = {
   npc_student: 'ulpc_youth',
   npc_merchant: 'ulpc_villager_m',
   npc_sailor: 'ulpc_worker',
-  npc_farmer: 'ulpc_worker',
   npc_gardener: 'ulpc_villager_f',
   npc_miner: 'ulpc_villager_m',
   npc_coach: 'ulpc_guard',

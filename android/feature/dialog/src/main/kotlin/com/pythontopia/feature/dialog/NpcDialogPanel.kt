@@ -29,12 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
-/**
- * NPC 对话面板：占满分配给它的容器（在 :feature:hub 里通常是屏幕下半部分 50%）。
- *
- * 可见性由 [DialogViewModel.state.visible] 控制，UI 永远存在但隐藏时返回空 Box，
- * 避免渲染节点频繁挂载/卸载导致动画断续。
- */
+/** NPC 对话面板；由 [DialogViewModel.state.visible] 控制显隐，隐藏时返回空 Box 避免反复挂载。 */
 @Composable
 fun NpcDialogPanel(
     modifier: Modifier = Modifier,

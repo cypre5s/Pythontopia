@@ -1,19 +1,7 @@
-"""OrchestratorAgent（学习总管）.
+"""OrchestratorAgent（学习总管）：多智能体对话入口，不直接生成课件内容。
 
-The 学习总管 is the conversational head of the multi-agent service. It does NOT
-generate course content itself; instead it:
-
-* ``understand``      – classify intent + detect ambiguity (profile-driven);
-* ``decompose``       – build an ordered 看→学→练→测 plan, KC-grounded to the
-  course index, personalised by the profile brief;
-* ``extract_profile`` – pull profile signals out of the dialogue（对话即画像）;
-* ``reply_stream``    – stream the natural-language Markdown reply.
-
-Every JSON-producing method calls the provider once and parses the response with
-the content_json → fenced content_text fallback (mirrors ``boss/llm_factory``).
-When the provider returns nothing usable the agent degrades to a *deterministic
-structured* baseline (like ``PathPlannerAgent`` / ``CurriculumMapperAgent``) — it
-never degrades to free-form chat, so structured output is always guaranteed.
+职责：understand（意图/歧义）、decompose（看→学→练→测计划）、extract_profile（对话即画像）、reply_stream（Markdown 回复）。
+JSON 方法经 content_json→围栏文本回落解析；provider 不可用时确定性结构化兜底，不退化为自由对话。
 """
 
 from __future__ import annotations
@@ -33,10 +21,10 @@ from pythontopia_graph.schemas.orchestrator import (
 
 AGENT_NAME = "OrchestratorAgent"
 
-# Post-hoc leak scan on the final reply (same keywords as the TutorAgent).
+# 对最终回复做泄答关键词扫描（与 TutorAgent 同词表）。
 SAFETY_KEYWORDS = ("answer_key", "hidden_test", "完整答案", "直接给我代码")
 
-# The 8 backend learner_profile.dimensions JSONB keys.
+# 后端 learner_profile.dimensions 的 8 个 JSONB 维度 key。
 PROFILE_DIMENSION_KEYS = (
     "professional_background",
     "knowledge_base",
@@ -48,7 +36,7 @@ PROFILE_DIMENSION_KEYS = (
     "emotion_persistence",
 )
 
-# Tolerate ProfileDraft-style aliases coming back from the LLM.
+# 容忍 LLM 返回的 ProfileDraft 风格维度别名。
 _DIMENSION_ALIASES = {
     "major": "professional_background",
     "base_level": "knowledge_base",
@@ -61,7 +49,7 @@ _DIMENSION_ALIASES = {
 
 PHASE_ORDER: tuple[Phase, ...] = ("watch", "learn", "practice", "assess")
 
-# Each phase maps to a specialist agent + a frontend panel deep-link.
+# 各阶段映射到专职 Agent 与前端面板深链。
 _PHASE_AGENT: dict[Phase, str] = {
     "watch": "StoryboardAgent",
     "learn": "ResourceDesignerAgent",
@@ -96,7 +84,7 @@ RESOURCE_TYPES = (
     "STORYBOARD",
 )
 
-# Keyword sets for the deterministic (provider-independent) fallbacks.
+# provider 不可用时的确定性关键词兜底集合。
 _NEGOTIATE_KEYWORDS = (
     "太难",
     "好难",
@@ -137,7 +125,7 @@ class Understanding(TypedDict):
 
 
 def _strip_json_fence(text: str) -> str:
-    """Strip an optional ```json … ``` fence before json.loads (LLM habit)."""
+    """剥离可选的 ```json … ``` 围栏后再 json.loads。"""
 
     fence = re.match(r"^\s*```(?:json)?\s*(.+?)\s*```\s*$", text, re.DOTALL)
     if fence:
@@ -146,6 +134,8 @@ def _strip_json_fence(text: str) -> str:
 
 
 class OrchestratorAgent:
+    """学习总管：意图理解、路径拆解、画像抽取与流式回复；JSON 输出始终结构化。"""
+
     AGENT_NAME = AGENT_NAME
 
     def __init__(self, provider: LlmProvider) -> None:
@@ -163,8 +153,7 @@ class OrchestratorAgent:
         clarifying_raw = data.get("clarifying_question")
         clarifying = str(clarifying_raw).strip() if isinstance(clarifying_raw, str) else None
 
-        # Deterministic overrides: keyword negotiation detection is reliable and
-        # must win over a stale / offline provider answer.
+        # 关键词协商检测优先于可能过时/离线的 provider 判定。
         if self._looks_like_negotiation(req.user_message):
             intent = "negotiate"
             ambiguous = False
@@ -429,7 +418,8 @@ class OrchestratorAgent:
             return []
         allowed_set = set(allowed)
         chosen: list[str] = []
-        for code in [*req.recent_failures, *req.recent_kc_codes]:
+        # 优先级：记忆矿脉到期的 decaying_kcs（最该复习）> 最近失败 > 最近接触。
+        for code in [*req.decaying_kcs, *req.recent_failures, *req.recent_kc_codes]:
             if code in allowed_set and code not in chosen:
                 chosen.append(code)
         if not chosen:

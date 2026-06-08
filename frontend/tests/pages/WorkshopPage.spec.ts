@@ -146,7 +146,7 @@ describe('WorkshopPage R-13 改造', () => {
     const world = useWorldStore();
     // R-14 单 hub：玩家位于（历史遗留的）外围图时，点击 hub chip 把 player 拉回 town_hub。
     world.player = {
-      mapKey: 'campus_east',
+      mapKey: 'port_west',
       tileX: 2,
       tileY: 15,
       direction: 'DOWN',

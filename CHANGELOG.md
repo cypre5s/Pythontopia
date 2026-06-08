@@ -22,7 +22,8 @@
   - Wave 2（10 路）：`world` 余下（skill/calendar/domain/npc/root 等 32）+ `classroom`(27) + `coursepack`(24) + `submission`(19) + `media`(19) + `auth`(19) + `workshop`(17) + `bugmine`+`agent`(16) + `intent`/`orchestrator`/`rag`/`video`/`tutor` 余(25)。
   - 统一处理：英文注释译简洁中文（保留技术标识符）、删迭代号/阶段号/设计文档引用/演示叙事、压多行为单行、纠正与实现/SQL 不符的注释、为缺契约的 public API 补 Javadoc；保留跨服务协议映射与安全/一致性/状态机契约。
 - **注释优化 frontend src（Wave 3，10 路并发，覆盖 `frontend/src` 全 290 个 `.vue`/`.ts`，仅改注释，`npm run typecheck` exit 0）**：components/api/game/pages/stores/composables 等全量；统一去迭代号（R-1x/Phase/W*/§）与外部产品演示叙事、英文 catch 译中、删复述、纠正多处失实注释；保留 Phaser 隔离/单 Game 实例/8 向降级、SSE/证据接地、DOMPurify 安全、Pinia 状态/持久化、i18n key 等契约。注：frontend 改动与未提交的工坊 feature WIP 同文件交织，未单独 commit。
-- **后续**：`services/pythontopia-graph`（96，部分已审）+ rag（25）→ android（217）→ scripts（5）→ 各模块测试，逐批更新 `docs/comment-optimization-log.md`。
+- **注释优化 Python services（Wave 4，10 路并发，graph 65 src+36 tests / rag 19 src+6 tests / scripts 3 py，仅改注释，`pytest` graph 297 + rag 21 全通过）**：补全多智能体/RAG/审查节点 docstring（结构化输出、fail-fast、grounding/`no_evidence_found` 防幻觉、安全过滤、禁隐藏测试等契约），英译中、去 stage/迭代号；测试文件保留意图说明不改断言。注：本波默认模型派发触发「API usage limit」全部未启动，改用 `composer-2.5-fast` 重派后成功。
+- **后续**：android（217）→ 测试（frontend 127 + backend 64）→ scripts 2 mjs，逐批更新 `docs/comment-optimization-log.md`。
 
 ## 2026-06-05 — 工坊重构 + 侧栏 Marvis 实时工作室 + 答疑五智能体审查 + 课件证据/B站讲解
 

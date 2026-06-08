@@ -7,10 +7,7 @@ import androidx.room.Query
 import androidx.room.Upsert
 import com.pythontopia.core.data.dto.world.CalendarTodayResponse
 
-/**
- * 日历缓存（单行）。离线/网络抖动时，hub HUD 仍能显示上次的季节/时段/天气，
- * 而不是空白或报错。是「离线缓存」模式的最小落地切片，其它 feature 可照此扩展。
- */
+/** 日历单行缓存；离线或网络抖动时 hub HUD 显示上次季节/时段/天气。 */
 @Entity(tableName = "calendar_cache")
 data class CalendarCacheEntity(
     @PrimaryKey val id: Int = SINGLETON_ID,
@@ -36,7 +33,7 @@ interface CalendarDao {
     suspend fun latest(): CalendarCacheEntity?
 }
 
-/** 纯映射（无 Android 依赖，可 JVM 单测）。 */
+/** DTO↔Entity 映射，无 Android 依赖（可 JVM 单测）。 */
 fun CalendarTodayResponse.toCacheEntity(): CalendarCacheEntity = CalendarCacheEntity(
     dayIndex = dayIndex,
     monthIndex = monthIndex,

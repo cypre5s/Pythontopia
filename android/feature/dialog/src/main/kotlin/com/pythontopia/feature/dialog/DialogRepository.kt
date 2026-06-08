@@ -8,12 +8,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * 把 [NpcDialogApi] 包装成 demo 友好的接口：
- *  - [loadState] 拉取首次状态（404 即视为新会话，本地以 [DemoDialogTree.ROOT_NODE_ID] 启动）。
- *  - [advance] 推进对话节点，effects 由 [DialogChoice] 翻译为后端枚举 type。
- *
- * 离线/未登录场景下，本仓库捕获网络异常并返回纯本地 [NpcDialogStateDto]，
- * 让 demo 不依赖 backend 正常跑通；线上联调时如果接口 200 就走真实状态。
+ * NPC 对话仓库；[loadState] 拉取会话状态，[advance] 将 [DialogChoice] 译为 effects 并推进节点。
+ * 网络异常时 fallback 为本地 [NpcDialogStateDto]，保证离线可跑通。
  */
 @Singleton
 class DialogRepository @Inject constructor(

@@ -13,5 +13,5 @@ fun NavGraphBuilder.hubGraph(onLogout: () -> Unit) {
     }
 }
 
-/** Legacy no-op logout entry point kept for old app graph callers. */
+/** 旧 NavGraph 兼容入口，logout 为空操作。 */
 fun NavGraphBuilder.hubGraphLegacy() = hubGraph { /* no-op */ }

@@ -14,7 +14,6 @@ data class LibraryUiState(
     val loading: Boolean = false,
     val error: String? = null,
 ) {
-    /** 顶部面包屑文案。 */
     val crumb: String
         get() = when (level) {
             LibraryLevel.CHAPTERS -> "课程图书馆"

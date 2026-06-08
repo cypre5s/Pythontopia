@@ -36,9 +36,7 @@ LOG = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    # 启动时加载 <repo>/deploy/.env（DeepSeek 凭证）+ Alethicode .env 兜底，并构建一个
-    # 共享 LLM provider 供 tutor / streaming 等路由复用。这样「直接 uvicorn 跑」也会
-    # 默认接入真实 DeepSeek，而不是回显 prompt 的 dryrun。失败不阻塞启动。
+    # 启动时加载 deploy/.env 与 Alethicode .env，构建共享 LLM provider 供各路由复用；失败不阻塞启动。
     load_pythontopia_env()
     load_alethicode_env()
     try:

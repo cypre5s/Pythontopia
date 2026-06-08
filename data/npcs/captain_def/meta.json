@@ -5,7 +5,7 @@
   "sprite": "player_sara",
   "portrait": "portrait_sailor.png",
   "spawnMap": "town_hub",
-  "spawn": { "tileX": 23, "tileY": 9 },
+  "spawn": { "tileX": 5, "tileY": 24 },
   "tags": ["quest_giver", "chapter_5", "data_structures"],
   "description": "停泊在小镇边的商船船长，船舱里列表、字典、集合各分一格。负责第 5 章「数据结构」的开课引导，用货箱清单与抽奖箱教你认识列表与 random。"
 }

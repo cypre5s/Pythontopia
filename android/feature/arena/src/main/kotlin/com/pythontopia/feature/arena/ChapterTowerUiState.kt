@@ -13,6 +13,7 @@ data class ChapterTowerLevel(
     val unlocked: Boolean = false,
 )
 
+/** 章节塔 UI 状态；每章 10 关，[chapterCleared] 为已通关数。 */
 data class ChapterTowerUiState(
     val selectedChapter: Int = 1,
     val levels: List<ChapterTowerLevel> = emptyList(),

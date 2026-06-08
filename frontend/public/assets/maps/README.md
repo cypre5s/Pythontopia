@@ -1,6 +1,6 @@
-# Pythontopia 地图（W2-MAPS 子代理输出）
+# Pythontopia 地图（R-14 世界收缩）
 
-Pythontopia M2 阶段的 5 张分块大地图，全部以 16×16 源 tile 渲染，Phaser 端按 2× 放大到 32×32 实际像素。
+R-14 方案 A：仅生成 **town_hub**（中央小镇）与 **mine_south**（Bug 矿洞支线）。外围图已从主线移除。
 
 ## 概览
 
@@ -9,64 +9,26 @@ Pythontopia M2 阶段的 5 张分块大地图，全部以 16×16 源 tile 渲染
 | town_hub | Pythontopia 小镇 | 50×40 | kenney_tiny_town | bgm_town_day | mine_south | (25, 20) |
 | mine_south | Bug 矿洞 · 织丝走廊 | 30×30 | kenney_tiny_dungeon | bgm_bug_mine | town_hub | (15, 2) |
 
-> 出口列说明：当前地图边缘门洞会切换到列出的目标地图；M2-ROUTER 子代理读取 `exits` 解析跳转。
+## town_hub.json（50×40）
 
-## 每张地图的细节
+- 出口：south→mine_south
+- 学习建筑：图书馆 / 工坊 / 训练场 / 竞技场 / 复盘大厅 / Bug 矿洞入口等
+- 12 主线 NPC 贴近建筑入口排布（见 `scripts/generate-maps.mjs` 内 `makeNpc` 列表）
 
-### town_hub.json（50×40，中央小镇）
-
-- 4 边都有出口：north→farm_north / south→mine_south / east→campus_east / west→port_west
-- 建筑（6 栋）：
-  - `building_mayor_hall`（4×5）→ `/profile-room`
-  - `building_shop_west`（4×4）→ `/shop-west`
-  - `building_shop_east`（4×4）→ `/shop-east`
-  - `building_house_a / b / c`（4×4 三栋住宅）
-- 中央喷泉：(24, 19) 起 2×2 粉色花坛
-- NPC：`mayor_py`, `librarian_doc`, `coach_q`, `sage_review`, `gardener`, `chef`
-
-### farm_north.json（40×40，知识农场）
-
-- 出口：south→town_hub
-- 7 个知识田（5×5 一块）：basics / variable / data_types / control_flow / loop / function / class
-- 建筑：`building_barn`（谷仓 5×4）、`building_chicken_coop`（鸡舍 4×3）
-- 装饰：水井 (32, 25)、田间小路、围栏
-- NPC：`farmer_kc`
-
-### mine_south.json（30×30，Bug 矿洞）
+## mine_south.json（30×30）
 
 - 出口：north→town_hub
-- 使用 **kenney_tiny_dungeon** tileset（其它地图均使用 kenney_tiny_town）
-- 两个矿洞入口（2×2 黑色 void）：东侧 (8, 12)、西侧 (20, 12)，分别打开 `/bug-mine?side=east|west`
-- 外围一圈深色墙壁，矿石与宝箱散布在地板上
-- NPC：`foreman_bug`
-
-### campus_east.json（40×30，校园）
-
-- 出口：west→town_hub
-- 北行 3 栋教学楼：图书馆（→ `/library`）、教室（题库，→ `/problems`）、复盘大厅（→ `/review-hall`）
-- 南行 1 栋工坊（→ `/workshop`）
-- 中央东西向砂石步道
-- NPC：`librarian_doc`, `coach_q`, `sage_review`
-
-### port_west.json（35×25，码头港口）
-
-- 出口：east→town_hub
-- 南侧 5 行海水（rows 20–24），中间 12 格沙地码头
-- 灯塔（2×4，西北角）+ 商船（4×2，水边）
-- 班级广场（22, 6 起 6×6 围栏空地）
-- NPC：`merchant`, `class_president`
+- tileset：**kenney_tiny_dungeon**
+- 矿洞入口 + `foreman_bug` NPC
 
 ## 文件结构
 
 ```
 frontend/public/assets/maps/
-├── index.json        # 5 张地图的 metadata 索引（M2-ROUTER 入口）
-├── README.md         # 本文件
-├── town_hub.json     # 50×40
-├── farm_north.json   # 40×40
-├── mine_south.json   # 30×30（dungeon tileset）
-├── campus_east.json  # 40×30
-└── port_west.json    # 35×25
+├── index.json
+├── README.md
+├── town_hub.json
+└── mine_south.json
 ```
 
 ## 字段约定

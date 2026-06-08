@@ -1,12 +1,11 @@
-"""R-13 §5 Phase 6 续：Boss 副本 HTTP 端点。
+"""Boss 副本 HTTP 端点。
 
-提供两条端点，对接 backend ``BossGraphClient``：
+对接 backend ``BossGraphClient``：
 
-* ``POST /agents/boss/problem``：编排 LLM 出题 + 5 重审查，失败回落 golden；
-* ``POST /agents/boss/evaluate``：跑玩家代码 vs test_cases，返回通过统计 + 首条失败 hint。
+* ``POST /agents/boss/problem``：LLM 出题 + 5 重审查，失败回落 golden；
+* ``POST /agents/boss/evaluate``：玩家代码 vs test_cases，返回通过统计 + 首条失败 hint。
 
-任何上游异常都翻成 5xx + 结构化 detail，让 backend 能区分「LLM 余额不足」/
-「沙箱崩」/「JSON 解析失败」三类故障。
+上游异常 → 5xx + 结构化 detail，供 backend 区分 LLM 余额不足 / 沙箱崩溃 / JSON 解析失败。
 """
 
 from __future__ import annotations
@@ -35,11 +34,10 @@ router = APIRouter()
 
 
 class ProfileSignalsPayload(BaseModel):
-    """R-13 §-1 续：学生画像信号（与前端 ProfileSignalsDto + 后端 ProfileSignalsPayload 形状一致）。
+    """学生画像信号（与前端 ProfileSignalsDto、后端 ProfileSignalsPayload 字段对齐）。
 
-    用于让 PracticeAgent + ProfileAgent 在 LLM 出题阶段基于画像偏好走不同 prompt
-    模板：weak KC 命中本章时优先出该 KC，successRate < 0.3 时拉低难度，
-    mediaPriority 含 DIAGRAM 时让题面带 mermaid 等可视化片段。
+    供 PracticeAgent + ProfileAgent 在 LLM 出题阶段选择 prompt 模板：weak KC 命中本章时优先该 KC，
+    successRate < 0.3 时拉低难度，mediaPriority 含 DIAGRAM 时题面可带 mermaid 等可视化。
     """
 
     weakKcCodes: list[str] | None = Field(default=None, description="弱项 KC 编码")
@@ -56,8 +54,6 @@ class BossProblemRequest(BaseModel):
     stage: int = Field(ge=1, le=4)
     kcCode: str = Field(default="", description="目标 KC 代码；空则用 chapter 默认 KC")
     difficulty: int | None = Field(default=None, ge=1, le=5)
-    # R-13 §-1 续：扩展 preferredKc / preferredKind / profileSignals 让 PracticeAgent
-    # 基于学生画像偏好出题；目前仅记录到 LOG，等真 LLM 接入后由 prompt builder 消费。
     preferredKc: str | None = Field(default=None)
     preferredKind: str | None = Field(default=None)
     profileSignals: ProfileSignalsPayload | None = Field(default=None)
@@ -103,12 +99,9 @@ def _resolve_kc(chapter: int, override: str) -> str:
 
 
 def _safe_provider() -> LlmProvider:
-    """R-13 §-1 续：provider 不可用时回落到 DryRun，保证 problem 路由永不 500。
+    """provider 不可用时回落 DryRun，保证 problem 路由可用。
 
-    优先级：
-      1. PYT_LLM_PROVIDER 显式指定 → 走 provider_from_env；
-      2. 未指定但已 load Alethicode .env 拿到 OPENAI_API_KEY → 优先 OpenAiCompat；
-      3. 其他情况 → DryRun（确保路由可用）。
+    优先级：PYT_LLM_PROVIDER 显式指定 → provider_from_env；有 OPENAI_API_KEY 时尝试 OpenAiCompat；否则 DryRun。
     """
 
     import os
@@ -129,14 +122,10 @@ def _safe_provider() -> LlmProvider:
 
 @router.post("/agents/boss/problem")
 async def request_boss_problem(body: BossProblemRequest) -> dict[str, Any]:
-    """返回 BossProblemDto（与前端 BossProblemDto.ts 对齐的扁平结构）。
-
-    R-13 §-1 续：preferredKc 优先于 kcCode；profileSignals 写 LOG 供后续 LLM prompt builder 消费。
-    """
+    """返回 BossProblemDto 扁平结构（与前端 BossProblemDto.ts 对齐）。preferredKc 优先于 kcCode。"""
 
     chapter = body.chapter
     stage = body.stage
-    # preferredKc 优先级最高
     effective_kc_input = body.preferredKc if body.preferredKc else body.kcCode
     kc_code = _resolve_kc(chapter, effective_kc_input)
     difficulty = body.difficulty if body.difficulty is not None else min(5, stage)
@@ -153,8 +142,7 @@ async def request_boss_problem(body: BossProblemRequest) -> dict[str, Any]:
     golden = get_golden_problem(chapter, stage)
 
     factory = build_llm_problem_factory(provider)
-    # R-13 §-1：把 preferredKind + profileSignals 透传给 orchestrator，
-    # 让 PracticeAgent 真正按画像出题（不是只 LOG 字段后丢掉）。
+    # preferredKind + profileSignals 透传 orchestrator，供 PracticeAgent 按画像出题。
     profile_signals_dict = (
         body.profileSignals.model_dump(exclude_none=True) if body.profileSignals else None
     )

@@ -7,14 +7,7 @@ import com.badlogic.gdx.graphics.OrthographicCamera
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer
 import com.badlogic.gdx.math.Matrix4
 
-/**
- * Native LibGDX town screen backed by five lightweight map definitions.
- *
- * The renderer intentionally stays rectangle-based for the Android beta: it is fast on low-end
- * devices, deterministic in JVM tests, and avoids shipping unaudited sprite copies. The gameplay
- * surface is no longer a browser shell or a one-map placeholder: exits switch between the hub,
- * farm, mine, campus, and port, and all 20 NPC anchors are present as native interaction targets.
- */
+/** LibGDX 小镇屏：ShapeRenderer 矩形渲染五张轻量地图；出口切图，20 个 NPC 锚点为交互目标。 */
 class HubScreen(
     private val bridge: HubGameBridge,
     private val onPlayerMoved: ((tileX: Int, tileY: Int, direction: String) -> Unit)? = null,

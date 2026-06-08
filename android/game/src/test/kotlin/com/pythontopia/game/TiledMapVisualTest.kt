@@ -9,8 +9,7 @@ class TiledMapVisualTest {
 
     @Test
     fun `parses dimensions and flips tiled rows into y-up grid`() {
-        // 2x2 map. Tiled data is row-major from TOP-LEFT.
-        // buildings top row = [0,5] (a solid tile at top-right), bottom row = [0,0].
+        // 2×2 地图：Tiled 行优先自顶向下；顶行 buildings 含实心格，验证 y-up 翻转。
         val json = """
             {
               "width": 2, "height": 2,
@@ -27,7 +26,7 @@ class TiledMapVisualTest {
         assertEquals(2, map.width)
         assertEquals(2, map.height)
         assertFalse(map.usesDungeon)
-        // Tiled top row (north) must map to the highest y in y-up space (y = height-1 = 1).
+        // Tiled 顶行（北）应对应 y-up 最高行 y=1。
         assertTrue(map.isSolid(1, 1), "top-right solid tile should land at y-up (x=1, y=1)")
         assertFalse(map.isSolid(0, 1))
         assertFalse(map.isSolid(0, 0))

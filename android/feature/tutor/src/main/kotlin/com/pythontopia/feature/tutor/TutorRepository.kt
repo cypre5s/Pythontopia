@@ -20,13 +20,7 @@ import retrofit2.http.POST
 import retrofit2.http.Query
 import retrofit2.http.Streaming
 
-/**
- * 导师问答 Retrofit 端点。
- *
- * `POST /api/tutor/ask` 是 `text/event-stream`：用 [Streaming] 拿原始 [ResponseBody]，
- * 由 [TutorRepository.askStream] 手动按 SSE 协议逐行解析（避免引入 okhttp-sse 依赖，
- * 与后端 GraphSseConsumer 的 event/data 帧格式对齐）。
- */
+/** `POST /api/tutor/ask` 返回 `text/event-stream`；[askStream] 手动解析 SSE event/data 帧，与 GraphSseConsumer 对齐。 */
 interface TutorApi {
 
     @Streaming
@@ -39,15 +33,8 @@ interface TutorApi {
 }
 
 /**
- * 导师问答仓库：把 SSE 流解析为 [TutorStreamEvent] 序列。
- *
- * 事件帧（后端原样转发 Python graph）：
- *  - `event: token` / `data: {"delta": "..."}`  → [TutorStreamEvent.Token]
- *  - `event: result` / `data: {"answer_md","evidence_page_ids","grounding_status"}` → [TutorStreamEvent.Result]
- *  - `event: error` / `data: {"code","message"}` → [TutorStreamEvent.Failed]
- *  - `event: trace` 等 → 忽略（仅进度，无 UI 文本）。
- *
- * 网络/解析异常向上游抛出，由 ViewModel 兜底为错误态（不静默吞，便于学生看到失败）。
+ * SSE 事件映射：token→[TutorStreamEvent.Token]、result→Result（含 evidence/grounding）、error→Failed；trace 等进度帧忽略。
+ * 网络/解析异常向上游抛出，不静默吞。
  */
 @Singleton
 class TutorRepository @Inject constructor(

@@ -25,13 +25,7 @@ import com.pythontopia.feature.dialog.DemoDialogTree
 import com.pythontopia.feature.dialog.DialogViewModel
 import com.pythontopia.feature.dialog.NpcDialogPanel
 
-/**
- * Hub 主屏：LibGDX 渲染（[HubLibGdxView]）铺满整个视口，Compose 只负责 HUD 与
- * 底部操作面板覆盖层。
- *
- * UI 状态完全由 [HubViewModel] 驱动；LibGDX 渲染线程通过 [HubViewModel.bridge] 单向
- * 上报事件，Compose collect bridge 的 Flow 把事件灌进 ViewModel。
- */
+/** 中央小镇主屏；LibGDX 铺满视口，Compose 负责 HUD 与底部面板，事件经 [HubViewModel.bridge] 上报。 */
 @Composable
 fun HubScreen(
     onLogout: () -> Unit = {},

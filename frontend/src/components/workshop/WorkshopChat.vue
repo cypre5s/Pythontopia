@@ -373,6 +373,8 @@ async function onSubmit(payload: ComposerSubmitPayload): Promise<void> {
     await runAsk(payload.text, kcCodes, payload.contextHint);
   } else if (intent === 'VIDEO') {
     runVideo(kcCodes, focusHint || payload.text);
+  } else if (intent === 'REVIEW') {
+    runReview(kcCodes);
   } else if (kcCodes.length === 0) {
     // 不强制 @KC：资源类意图但没锚定到知识点时，不再报错，先把学生的问题答了（答案优先）。
     // 答疑走课件 RAG，检索不到再 LLM。
@@ -420,6 +422,20 @@ function runVideo(kcCodes: string[], focus: string): void {
     toolIcon: meta.icon,
     toolLabel: meta.label,
   });
+}
+
+/**
+ * REVIEW 意图：记忆矿脉回声复习。不走生成/SSE，引导学生去错题矿洞按 FSRS 到期 KC 复盘；
+ * kcCodes 为后端 ReviewSignal 算出的待复习知识点（可空），仅用于提示，矿洞页自取到期排序。
+ */
+function runReview(kcCodes: string[]): void {
+  playSfx('sfx_success');
+  const names = kcCodes.map((c) => kcDisplayName(c)).filter(Boolean);
+  const tip = names.length
+    ? `记忆矿脉回声：「${names.join('、')}」快遗忘了，带你去错题矿洞复盘。`
+    : '记忆矿脉回声：带你去错题矿洞复盘最该巩固的知识点。';
+  toast.show(tip, 'info');
+  void router.push('/bug-mine');
 }
 
 /** 答疑答案内「看相关视频」入口：按答案主题 / KC 出一条 B站视频气泡。 */

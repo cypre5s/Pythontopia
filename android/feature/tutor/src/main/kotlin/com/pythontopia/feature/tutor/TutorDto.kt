@@ -3,13 +3,7 @@ package com.pythontopia.feature.tutor
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-/**
- * 导师问答 DTO。
- *
- * 两套命名来源（务必区分）：
- *  - `POST /api/tutor/ask` 请求体 + `GET /api/tutor/sessions` 响应：后端 Java record → camelCase。
- *  - SSE `result` 事件 data：直接来自 Python graph `response.model_dump()` → snake_case。
- */
+/** 导师问答 DTO：REST 走 camelCase（Java record）；SSE `result` 走 snake_case（Python graph）。 */
 
 /** 提问请求体（后端 [TutorAskRequest] record，camelCase）。 */
 @Serializable

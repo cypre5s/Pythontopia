@@ -25,30 +25,7 @@ import androidx.compose.ui.unit.dp
 import com.pythontopia.core.design.PytColors
 import com.pythontopia.core.design.PytSpace
 
-/**
- * 一条班级任务卡片，同时服务学生公告板与教师任务列表。
- *
- * 学生视角：
- *  - 顶部显示班级任务标题 + 截止日期；
- *  - 中间显示 KC chips + evidence 类型 chip；
- *  - 底部"提交完成"按钮：根据 [ClassroomQuest.studentQuestStatus] 切换文案 / 启用态。
- *
- * 教师视角：
- *  - 同样布局，但底部按钮被替换为"归档"占位文案（[onSubmit] 传 null 即学生模式
- *    隐藏按钮以教师只读展示）。
- *
- * 教师 / 学生分支由 [showSubmitButton] 控制，不在卡片内做角色判定（外层 [ClassroomScreen]
- * 已经按 role 分发了不同的 quests 列表，按钮可见性自然不同）。
- *
- * @param quest 一条班级任务 DTO。
- * @param showSubmitButton true = 展示底部"提交完成"按钮（学生公告板 tab）；
- *                         false = 隐藏（教师任务列表，仅展示）。
- * @param isSubmitting 当前卡片是否处于提交中（来自
- *        [ClassroomUiState.StudentState.submittingQuestId] == quest.studentQuestId）；
- *        为 true 时按钮替换为环形 loading。
- * @param onSubmit 提交按钮点击回调，外层负责弹出"提交 evidence"二级 sheet 或直接
- *                 传一条空 [QuestEvidence]。
- */
+/** 班级任务卡片；学生/教师共用，[showSubmitButton] 控制提交按钮可见性。 */
 @Composable
 fun ClassroomQuestCard(
     quest: ClassroomQuest,

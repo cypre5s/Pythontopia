@@ -2,20 +2,11 @@ package com.pythontopia.feature.endless
 
 import kotlinx.serialization.Serializable
 
-/**
- * 无尽练习 DTO。
- *
- * 复用既有课程题库 + 提交判题端点（无专用 endless 接口）：
- *  - GET  /api/course/kcs               → [EndlessKcDto]（KC 池）
- *  - GET  /api/course/problems?kcCode=  → [EndlessProblemDto]
- *  - POST /api/submissions              → [EndlessSubmissionDto]（source=TRAINING）
- *  - GET  /api/submissions/{id}         → [EndlessSubmissionDetail]（轮询直到终态）
- */
+/** 无尽练习 DTO；复用课程题库与提交判题端点（无专用 endless 接口）。 */
 
 @Serializable
 data class EndlessKcDto(
-    // 后端 KcDto 序列化字段为 kcId（默认 Jackson camelCase），不是 id；
-    // 之前用 `id` 会因缺字段反序列化失败，导致 kcCodes() 静默兜底成空列表。
+    // 后端字段为 kcId 非 id，错名会导致反序列化失败、kcCodes() 静默返回空列表
     val kcId: Long = 0,
     val kcCode: String,
     val kcName: String = "",

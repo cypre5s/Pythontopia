@@ -1,4 +1,4 @@
-"""Path planner orchestration: input -> planner -> grounding -> safety -> response."""
+"""路径规划编排：request → planner → safety → response。"""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from pythontopia_graph.schemas.path import (
 
 
 class PathGraph:
-    """Wrapper combining the agent with validation and post-processing."""
+    """PathPlannerAgent 封装：规划后安全校验与状态回写。"""
 
     def __init__(self, *, agent: PathPlannerAgent | None = None) -> None:
         self._agent = agent or PathPlannerAgent()

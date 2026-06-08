@@ -1,7 +1,4 @@
-"""R-13 §5 Phase 5：self_tester 沙箱测试。
-
-包含正常题、解法错题、超时题、forbidden import 等多类。
-"""
+"""self_tester 沙箱单元测试：覆盖正常题、解法错误、超时与 forbidden import。"""
 
 from __future__ import annotations
 
@@ -68,7 +65,7 @@ def test_reference_nonzero_exit_fails() -> None:
 
 
 def test_reference_syntax_error_caught_by_forbidden_scan() -> None:
-    # SyntaxError 时 _scan_forbidden_imports 返回 ['syntax_error:...']
+    # SyntaxError 时 _scan_forbidden_imports 返回 syntax_error
     problem = _make(
         "def broken(",
         [TestCase("", "", is_sample=True), TestCase("", ""), TestCase("", "")],
@@ -110,15 +107,12 @@ def test_forbidden_imports_rejected(code: str) -> None:
 
 
 def test_dangerous_os_system_through_subprocess_is_rejected() -> None:
-    """R-13 §-1 plan §2.5 风险表：恶意 'os.system' 必须被沙箱拦截。"""
+    """os.system 类调用：os 不在 forbidden 名单，仅冒烟断言 verdict 类型。"""
     problem = _make(
         "import os; os.system('echo HACK')\nprint('x')",
         [TestCase("", "x", is_sample=True), TestCase("", "x"), TestCase("", "x")],
     )
-    # os 本身不在 forbidden 名单，但 os.system 在生产环境受 RLIMIT 限制；这里我们至少
-    # 通过 import 扫描+ stderr 不触发严格 fail；assertion 改为：执行能完成且符合 expected
     verdict = self_test_problem(problem, python_executable=sys.executable)
-    # 不强制 fail，但若沙箱阻止则 verdict.passed=False
     assert isinstance(verdict.passed, bool)
 
 

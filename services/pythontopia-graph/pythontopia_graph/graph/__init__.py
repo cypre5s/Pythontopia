@@ -1,1 +1,1 @@
-"""LangGraph wiring is added in later phases."""
+"""LangGraph 工作流图定义。"""

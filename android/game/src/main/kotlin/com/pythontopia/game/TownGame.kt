@@ -5,9 +5,9 @@ import com.badlogic.gdx.Gdx
 import com.badlogic.gdx.ScreenAdapter
 import com.badlogic.gdx.graphics.GL20
 
+/** :app 占位 [Game]；[create] 挂载纯色清屏屏。 */
 class TownGame : Game() {
     override fun create() {
-        // TODO(Android-R6): 切换为实际 TownScene (town_main.tmx + 5 建筑 + 3 NPC); R1 仅占位
         setScreen(PlaceholderScreen())
     }
 }

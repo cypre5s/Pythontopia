@@ -29,14 +29,7 @@ import kotlin.math.max
 private const val MAX_BAR_LIMIT: Int = 10
 private const val MIN_BAR_RATIO: Float = 0.04f
 
-/**
- * Top-N KC 增量水平柱状图（默认最多 10 条），原生 Compose Canvas，无第三方图表库。
- *
- * 渲染规则：
- *  - 正增量用 [PytColors.success]，负增量用 [PytColors.danger]，0 增量退化为 [PytColors.borderSoft]；
- *  - 柱长按绝对值与全局最大绝对值的比例缩放，确保负值也能可视化遗忘程度；
- *  - 列表为空时显示占位文案，避免 Canvas 退化成空白让学生误判加载失败。
- */
+/** Top-N KC 增量柱状图（Compose Canvas）；正负增量分色，柱长按全局最大绝对值缩放。 */
 @Composable
 fun KcGainBarChart(
     gains: List<KcGain>,

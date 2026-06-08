@@ -1,4 +1,4 @@
-"""Tests for the statistic-number grounding check in hallucination_detector."""
+"""hallucination_detector 统计数字 grounding 检查单元测试。"""
 
 from __future__ import annotations
 

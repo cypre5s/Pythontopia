@@ -27,11 +27,7 @@ interface BossApi {
 }
 
 /**
- * BOSS 战仓库。
- *
- * 与图书馆/答疑不同：BOSS 出题依赖 graph PracticeAgent，失败不能静默兜空，
- * 必须把异常上抛给 UI（[Result]），让玩家知道"召唤 BOSS 失败"，而非误以为没题。
- * 判题统一服务端（Android 无 Pyodide），attempt 直接返回判定结果。
+ * BOSS 战仓库：出题依赖 graph PracticeAgent，失败须上抛 [Result] 而非静默兜空；判题走服务端。
  */
 @Singleton
 class BossRepository @Inject constructor(

@@ -39,7 +39,9 @@ import { getPyodideRunner, type PyodideRunResult } from '@/game/adapters/pyodide
 import {
   openBugMineSession,
   getBugMineErrorBook,
+  getBugMineEchoes,
   getBugMineSession,
+  openBugMineEcho,
   revealBugMineCard,
   retryBugMineSubmit,
   variantBugMineSubmit,
@@ -61,6 +63,7 @@ import type {
   SubmissionDto,
 } from '@/api/dto/Submission';
 import type {
+  BugMineEchoCandidateDto,
   BugMineErrorBookItemDto,
   BugMineSessionDto,
 } from '@/api/dto/BugMine';
@@ -203,9 +206,16 @@ export interface TrainingState {
 
 export interface BugMineState {
   session: BugMineSessionDto | null;
+  /** 当前会话对应的完整题干（按 session.problemId 独立拉取，与训练页 training.problem 解耦）。 */
+  problem: PublicProblemDto | null;
+  problemLoading: boolean;
+  problemError: string | null;
   errorBook: BugMineErrorBookItemDto[];
   errorBookLoading: boolean;
   errorBookError: string | null;
+  echoes: BugMineEchoCandidateDto[];
+  echoesLoading: boolean;
+  echoesError: string | null;
   pendingVariantSessionId: number | null;
   loading: boolean;
   lastError: string | null;
@@ -277,9 +287,15 @@ export const useLearningStore = defineStore('learning', {
     } as TrainingState,
     bugMine: {
       session: null as BugMineSessionDto | null,
+      problem: null as PublicProblemDto | null,
+      problemLoading: false,
+      problemError: null as string | null,
       errorBook: [] as BugMineErrorBookItemDto[],
       errorBookLoading: false,
       errorBookError: null as string | null,
+      echoes: [] as BugMineEchoCandidateDto[],
+      echoesLoading: false,
+      echoesError: null as string | null,
       pendingVariantSessionId: null as number | null,
       loading: false,
       lastError: null as string | null,
@@ -674,6 +690,20 @@ export const useLearningStore = defineStore('learning', {
         this.bugMine.loading = false;
       }
     },
+    async loadBugMineProblem(problemId: number): Promise<void> {
+      // 矿洞会话的「题干上下文中心」：拉取完整 PublicProblemDto（含样例），
+      // 失败不阻断会话调试，仅记录 problemError 由面板降级展示。
+      this.bugMine.problemLoading = true;
+      this.bugMine.problemError = null;
+      try {
+        this.bugMine.problem = await getPublicProblem(problemId);
+      } catch (error) {
+        this.bugMine.problemError = error instanceof Error ? error.message : String(error);
+        this.bugMine.problem = null;
+      } finally {
+        this.bugMine.problemLoading = false;
+      }
+    },
     async loadBugMineErrorBook(): Promise<void> {
       this.bugMine.errorBookLoading = true;
       this.bugMine.errorBookError = null;
@@ -683,6 +713,33 @@ export const useLearningStore = defineStore('learning', {
         this.bugMine.errorBookError = error instanceof Error ? error.message : String(error);
       } finally {
         this.bugMine.errorBookLoading = false;
+      }
+    },
+    async loadBugMineEchoes(): Promise<void> {
+      this.bugMine.echoesLoading = true;
+      this.bugMine.echoesError = null;
+      try {
+        this.bugMine.echoes = await getBugMineEchoes();
+      } catch (error) {
+        this.bugMine.echoesError = error instanceof Error ? error.message : String(error);
+      } finally {
+        this.bugMine.echoesLoading = false;
+      }
+    },
+    async openBugMineEchoByKc(kcCode: string): Promise<BugMineSessionDto | null> {
+      this.bugMine.loading = true;
+      this.bugMine.lastError = null;
+      try {
+        const session = await openBugMineEcho({ kcCode });
+        this.bugMine.session = session;
+        await this.loadBugMineErrorBook();
+        await this.loadBugMineEchoes();
+        return session;
+      } catch (error) {
+        this.bugMine.lastError = error instanceof Error ? error.message : String(error);
+        return null;
+      } finally {
+        this.bugMine.loading = false;
       }
     },
     async loadBugMine(sessionId: number): Promise<void> {

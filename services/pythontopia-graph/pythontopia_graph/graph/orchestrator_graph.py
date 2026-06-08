@@ -1,27 +1,18 @@
-"""OrchestratorGraph – a real LangGraph ``StateGraph`` for the 学习总管.
+"""OrchestratorGraph：学习总管的 LangGraph StateGraph 编排。
 
-R-14: this used to be a hand-rolled async pipeline. It is now a genuine
-``langgraph.graph.StateGraph`` (compiled once per instance). The graph drives all
-control flow via real nodes + **conditional edges**:
+控制流（条件边）::
 
     START → understand
-      ├─ (ambiguous?)        → clarify → END
+      ├─ (ambiguous?) → clarify → END
       └─ else → build_plan → dispatch
                                 ├─ (recent failures & not negotiate?) → replan
-                                │                                          ↓
-                                └──────────────────────────────────→ extract_profile
-                                                                          ↓
-                                                                       compose → END
+                                └─ else → extract_profile → compose → END
 
-Each node wraps the existing ``OrchestratorAgent`` methods and emits the SAME SSE
-events as before (``trace`` after each node, ``token`` while composing) through an
-``emit`` callback stored on the instance for the duration of one run, so the
-frontend ``useSseStream`` contract is byte-for-byte unchanged. ``trace`` accumulates
-via an additive channel reducer; multi-turn memory still lives in
-``orchestrator_session``.
+各节点封装 OrchestratorAgent 既有方法；经实例 emit 回调发出与原先相同的 SSE
+（每节点 trace、compose 时 token），前端 useSseStream 契约不变。trace 经 reducer
+累加；多轮记忆在 orchestrator_session。
 
-Trace node literals (unchanged): understand, decompose | replan, dispatch.<agent>,
-extract_profile, compose_reply.
+trace 节点名：understand, decompose | replan, dispatch.<agent>, extract_profile, compose_reply。
 """
 
 from __future__ import annotations
@@ -60,23 +51,23 @@ Emit = Callable[[str, dict[str, Any]], Awaitable[None]]
 
 
 async def _noop_emit(_event: str, _data: dict[str, Any]) -> None:
-    """Default sink for the non-streaming ``run`` path (swallows events)."""
+    """非流式 run 路径的默认 emit sink（丢弃事件）。"""
     return None
 
 
 class OrchestratorState(TypedDict, total=False):
-    """Shared LangGraph state. ``trace`` / ``dispatch_results`` accumulate."""
+    """LangGraph 共享状态；trace / dispatch_results 经 reducer 累加。"""
 
-    # inputs (set once on the initial state)
+    # 输入（初始 state 一次性写入）
     req: OrchestratorRequest
     allowed_set: set[str]
-    # produced by understand
+    # understand 产出
     intent: str
     goal: str
     ambiguous: bool
     clarifying: str | None
     needs_user_input: bool
-    # produced downstream
+    # 下游产出
     plan: list[PlanStep]
     dispatch_results: Annotated[list[DispatchResult], operator.add]
     signals: list[ProfileSignal]
@@ -88,13 +79,10 @@ class OrchestratorGraph:
     def __init__(self, *, provider: LlmProvider) -> None:
         self._provider = provider
         self._agent = OrchestratorAgent(provider)
-        # Active emit sink for the current run (per-request instance; single run
-        # at a time, so storing it on self is safe and avoids threading it
-        # through every node/config).
+        # 当前 run 的 emit 回调（单 run 存 self，免逐节点传参）
         self._emit_cb: Emit = _noop_emit
         self._compiled = self._build_compiled()
 
-    # ── public API (unchanged signatures) ─────────────────────────────────
     async def run(self, req: OrchestratorRequest) -> OrchestratorResponse:
         return await self._invoke(req, _noop_emit)
 
@@ -105,7 +93,6 @@ class OrchestratorGraph:
         except Exception as exc:  # noqa: BLE001 – surface as an SSE error event
             await emit("error", {"code": "ORCHESTRATOR_FAILED", "message": str(exc)})
 
-    # ── graph construction ────────────────────────────────────────────────
     def _build_compiled(self) -> Any:
         graph: StateGraph = StateGraph(OrchestratorState)
         graph.add_node("understand", self._node_understand)
@@ -134,11 +121,10 @@ class OrchestratorGraph:
         graph.add_edge("clarify", END)
         return graph.compile()
 
-    # ── orchestration entrypoint ──────────────────────────────────────────
     async def _invoke(self, req: OrchestratorRequest, emit: Emit) -> OrchestratorResponse:
         self._emit_cb = emit
 
-        # Server memory is the source of truth; client history is the fallback.
+        # 服务端记忆为权威；客户端 history 仅冷启动回退
         server_history = await get_history(req.session_id)
         merged_history = server_history if server_history else list(req.history)
         merged_req = req.model_copy(update={"history": merged_history})
@@ -156,7 +142,6 @@ class OrchestratorGraph:
         await self._persist(req, response)
         return response
 
-    # ── nodes ──────────────────────────────────────────────────────────────
     async def _node_understand(self, state: OrchestratorState) -> dict[str, Any]:
         req = state["req"]
         started = time.monotonic()
@@ -173,7 +158,7 @@ class OrchestratorGraph:
 
     async def _node_build_plan(self, state: OrchestratorState) -> dict[str, Any]:
         req = state["req"]
-        # 'negotiate' mutates the stored plan in place instead of rebuilding it.
+        # negotiate 意图就地改 stored plan，不重建
         if state["intent"] == "negotiate":
             stored_plan = await get_plan(req.session_id)
             if stored_plan:
@@ -238,7 +223,6 @@ class OrchestratorGraph:
         reply_md = await self._stream_reply(state["req"], [], state.get("clarifying"))
         return {"reply_md": reply_md, "needs_user_input": True}
 
-    # ── conditional routers ───────────────────────────────────────────────
     @staticmethod
     def _route_after_understand(state: OrchestratorState) -> str:
         return "clarify" if state.get("ambiguous") else "build_plan"
@@ -251,7 +235,6 @@ class OrchestratorGraph:
             return "replan"
         return "extract_profile"
 
-    # ── reply composition (streams tokens through the emit sink) ───────────
     async def _stream_reply(
         self, req: OrchestratorRequest, plan: list[PlanStep], clarifying: str | None
     ) -> str:
@@ -274,7 +257,6 @@ class OrchestratorGraph:
         await self._emit_cb("trace", step.model_dump(mode="json"))
         return "".join(parts)
 
-    # ── response assembly ─────────────────────────────────────────────────
     def _assemble(
         self, allowed_set: set[str], final: dict[str, Any]
     ) -> OrchestratorResponse:
@@ -322,13 +304,12 @@ class OrchestratorGraph:
                 OrchestratorTurn(role="assistant", content=response.reply_md),
             ],
         )
-        # Ambiguous turns keep any previously stored plan untouched.
+        # 歧义澄清轮不覆盖已存 plan
         if not response.needs_user_input:
             await set_plan(req.session_id, response.plan)
         if response.profile_updates:
             await merge_profile_signals(req.session_id, response.profile_updates)
 
-    # ── dispatch / replan helpers (unchanged) ─────────────────────────────
     async def _dispatch_step(self, step: PlanStep) -> DispatchResult:
         panel = step.panel or "-"
         if step.agent == "DebugAgent":
@@ -383,7 +364,6 @@ class OrchestratorGraph:
                 step.status = "active"
                 return
 
-    # ── plan negotiation (mutate, do not rebuild) ─────────────────────────
     def _negotiate(self, message: str, stored_plan: list[PlanStep]) -> list[PlanStep]:
         kind = self._negotiation_kind(message)
         plan = [step.model_copy(deep=True) for step in stored_plan]
@@ -422,7 +402,6 @@ class OrchestratorGraph:
     def _annotate(detail: str, marker: str) -> str:
         return detail if marker in detail else f"{detail}{marker}"
 
-    # ── grounding ─────────────────────────────────────────────────────────
     @staticmethod
     def _grounding(plan: list[PlanStep], allowed_set: set[str]) -> GroundingResult:
         if not allowed_set:
@@ -438,7 +417,6 @@ class OrchestratorGraph:
             )
         return GroundingResult(passed=True)
 
-    # ── trace step builders ───────────────────────────────────────────────
     @staticmethod
     def _ok_step(name: str, started: float) -> GraphTraceStep:
         elapsed_ms = int((time.monotonic() - started) * 1000)

@@ -56,7 +56,7 @@ class TutorRepositoryTest {
 
         val events = repository.askStream("for 和 while 区别？", listOf("PY43-KC-031")).toList()
 
-        // trace 被忽略；token×2 + result×1
+        // trace 忽略，期望 token×2 + result×1
         assertEquals(3, events.size)
         assertTrue(events[0] is TutorStreamEvent.Token)
         assertEquals("你好", (events[0] as TutorStreamEvent.Token).delta)

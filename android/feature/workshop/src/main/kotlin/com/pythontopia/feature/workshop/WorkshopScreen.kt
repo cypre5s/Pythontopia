@@ -32,15 +32,8 @@ import com.pythontopia.core.design.PytColors
 import com.pythontopia.core.design.PytSpace
 
 /**
- * Workshop（代码工坊）主屏。
- *
- * 布局（任务 5：3 段竖向布局，对应工坊「题目 / 编辑 / 状态」三步流程）：
- *  - 顶部 [ProblemHeader]：题面摘要 + 「选题」按钮 + 难度 chip
- *  - 中部 [CodeEditor]：等宽多行 TextField，weight(1f) 撑满
- *  - 底部 [SubmissionResultPanel]：状态 chip + traceback + 通过用例 + 历史 chip
- *
- * 所有状态由 [WorkshopViewModel] 单向写入；本 Composable 只 collect + 转发事件，
- * 不持有任何本地 [androidx.compose.runtime.mutableStateOf]。
+ * 代码工坊主屏：题面 / 编辑器 / 判题结果三段竖向布局。
+ * 状态由 [WorkshopViewModel] 单向写入，本 Composable 仅 collect 并转发事件。
  */
 @Composable
 fun WorkshopScreen(

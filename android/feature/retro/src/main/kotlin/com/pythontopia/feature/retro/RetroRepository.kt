@@ -31,11 +31,7 @@ object RetroNetworkModule {
     fun provideRetroApi(retrofit: Retrofit): RetroApi = retrofit.create(RetroApi::class.java)
 }
 
-/**
- * 复盘数据仓库。
- *
- * Android 端对齐后端 LearnerEvaluation API：读取最近评估，若没有则触发一次 7 天评估。
- */
+/** 复盘数据仓库；对齐 LearnerEvaluation API，无最近评估时触发 7 天计算。 */
 @Singleton
 class RetroRepository @Inject constructor(
     private val api: RetroApi,

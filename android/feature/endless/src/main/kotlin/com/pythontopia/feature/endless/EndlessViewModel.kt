@@ -10,9 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/**
- * 无尽练习 ViewModel：随机抽题 → 判题 → 累计连胜/已解/积分，无限循环。
- */
+/** 无尽练习：随机抽题 → 判题 → 累计连胜/已解/积分。 */
 @HiltViewModel
 class EndlessViewModel @Inject constructor(
     private val repository: EndlessRepository,

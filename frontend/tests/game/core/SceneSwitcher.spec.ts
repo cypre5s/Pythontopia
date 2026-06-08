@@ -142,7 +142,7 @@ describe('SceneSwitcher', () => {
   it('data 透传到 scene.start', async () => {
     const fake = makeFakeScene();
     const switcher = new SceneSwitcher();
-    const data: Record<string, unknown> = { mapKey: 'farm_north', spawnTileX: 5 };
+    const data: Record<string, unknown> = { mapKey: 'mine_south', spawnTileX: 5 };
     const promise = switcher.switchTo(asPhaserScene(fake), 'TownScene', { data });
     fake.cameras.main.emit('camerafadeoutcomplete');
     await promise;

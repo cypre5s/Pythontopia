@@ -15,11 +15,7 @@ import javax.inject.Provider
 import javax.inject.Singleton
 import retrofit2.Retrofit
 
-/**
- * 全局 JWT 持有者：登录后 [setToken]，后续 Retrofit 调用经 [AuthInterceptor] 携带 Bearer。
- * 单进程内 demo 用 in-memory 即可；持久化（EncryptedSharedPreferences）在 Android-R4 已规划，
- * Android-R12 demo 阶段不强制启用。
- */
+/** 进程内 JWT 持有者：登录后 [setToken]，[AuthInterceptor] 为请求附加 Bearer；磁盘持久化由 :feature:auth（EncryptedSharedPreferences/Keystore）负责。 */
 @Singleton
 class AuthTokenHolder @Inject constructor() {
     @Volatile private var token: String? = null

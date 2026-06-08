@@ -1,4 +1,7 @@
-"""HTTP route for the EvaluationNarrativeAgent (stage 13)."""
+"""EvaluationNarrativeAgent HTTP 路由。
+
+* ``POST /agents/evaluation/narrative`` → ``EvaluationNarrativeResponse``；审查失败 → HTTP 422 结构化 detail。
+"""
 
 from __future__ import annotations
 

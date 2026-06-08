@@ -31,10 +31,7 @@ interface EndlessApi {
     suspend fun status(@Path("id") id: Long): EndlessSubmissionDetail
 }
 
-/**
- * 无尽练习仓库：随机抽 KC → 抽题 → 服务端判题轮询。
- * 读路径静默兜底；提交/轮询沿用 workshop 的轮询策略。
- */
+/** 无尽练习仓库：抽 KC/题目、提交判题、轮询终态；读路径失败静默兜底。 */
 @Singleton
 class EndlessRepository @Inject constructor(
     private val api: EndlessApi,

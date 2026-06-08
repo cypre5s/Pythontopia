@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.pythontopia.bugmine.dto.BugMineCardDto;
 import com.pythontopia.bugmine.dto.BugMineCardType;
 import com.pythontopia.bugmine.dto.BugMineDepthStepDto;
+import com.pythontopia.bugmine.dto.BugMineEchoCandidateDto;
 import com.pythontopia.bugmine.dto.BugMineErrorBookItemDto;
 import com.pythontopia.bugmine.dto.BugMineSessionDto;
 import com.pythontopia.bugmine.dto.BugMineSessionStatus;
@@ -20,6 +21,9 @@ import com.pythontopia.bugmine.repository.BugMineRepository;
 import com.pythontopia.bugmine.repository.BugMineRepository.SessionContextRow;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.learner.event.LearningEvent;
+import com.pythontopia.learner.mastery.review.ReviewSignal;
+import com.pythontopia.learner.mastery.review.ReviewStateService;
+import com.pythontopia.submission.dto.PublicProblemDto;
 import com.pythontopia.submission.dto.SubmissionCreateRequest;
 import com.pythontopia.submission.dto.SubmissionDto;
 import com.pythontopia.submission.dto.SubmissionSource;
@@ -29,6 +33,11 @@ import com.pythontopia.submission.repository.PracticeSubmissionRepository;
 import com.pythontopia.submission.repository.PublicProblemRepository;
 import com.pythontopia.submission.service.SubmissionService;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.Duration;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.beans.factory.annotation.Value;
@@ -47,6 +56,16 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class BugMineService {
 
+  private static final double MASTERY_WEIGHT = 0.35;
+  private static final double DECAY_WEIGHT = 0.20;
+  private static final double RECENT_FAIL_WEIGHT = 0.20;
+  private static final double PROFILE_PATTERN_WEIGHT = 0.15;
+  private static final double LOW_CONFIDENCE_WEIGHT = 0.10;
+  private static final int ECHO_CANDIDATE_LIMIT = 5;
+  private static final long COURSE_PACK_ID = 43L;
+  private static final String ECHO_ENTRY_CODE =
+      "# 遗忘回声入口：重新读题后独立完成同知识点练习\nprint(\"\")\n";
+
   private final BugMineRepository repository;
   private final PracticeSubmissionRepository submissionRepository;
   private final PublicProblemRepository problemRepository;
@@ -57,6 +76,7 @@ public class BugMineService {
   private final ApplicationEventPublisher eventPublisher;
   private final ObjectMapper objectMapper;
   private final BugMineProfileAdvisor profileAdvisor;
+  private final ReviewStateService reviewStateService;
   private final int maxRetries;
 
   public BugMineService(
@@ -70,6 +90,7 @@ public class BugMineService {
       ApplicationEventPublisher eventPublisher,
       ObjectMapper objectMapper,
       BugMineProfileAdvisor profileAdvisor,
+      ReviewStateService reviewStateService,
       @Value("${pythontopia.bugMine.maxRetriesPerSession:3}") int maxRetries) {
     this.repository = repository;
     this.submissionRepository = submissionRepository;
@@ -81,6 +102,7 @@ public class BugMineService {
     this.eventPublisher = eventPublisher;
     this.objectMapper = objectMapper;
     this.profileAdvisor = profileAdvisor;
+    this.reviewStateService = reviewStateService;
     this.maxRetries = maxRetries;
   }
 
@@ -194,8 +216,120 @@ public class BugMineService {
   @Transactional(readOnly = true)
   public List<BugMineErrorBookItemDto> errorBook(Long userId) {
     return repository.findOpenErrorBook(userId).stream()
-        .map(this::toErrorBookItem)
+        .map(row -> new ScoredError(row, errorSignal(row)))
+        .sorted(
+            Comparator
+                .comparingDouble((ScoredError scored) -> minePriority(scored.row(), scored.signal()))
+                .reversed()
+                .thenComparing(
+                    scored -> scored.row().openedAt(),
+                    Comparator.nullsLast(Comparator.reverseOrder())))
+        .map(scored -> toErrorBookItem(scored.row(), scored.signal()))
         .toList();
+  }
+
+  @Transactional(readOnly = true)
+  public List<BugMineEchoCandidateDto> echoCandidates(Long userId) {
+    return repository.findEchoCandidates(userId).stream()
+        .map(row -> new ScoredEcho(row, echoSignal(row)))
+        .filter(scored -> scored.signal().due())
+        .sorted(
+            Comparator
+                .comparingDouble((ScoredEcho scored) -> echoPriority(scored.row(), scored.signal()))
+                .reversed()
+                .thenComparing(scored -> scored.row().kcCode()))
+        .limit(ECHO_CANDIDATE_LIMIT)
+        .map(scored -> toEchoCandidate(scored.row(), scored.signal()))
+        .toList();
+  }
+
+  /**
+   * 暴露「记忆矿脉」当下到期（decaying）的 KC 编码，按入矿优先级降序取前 {@code limit} 个。
+   *
+   * <p>复用 {@link #echoCandidates} 的 FSRS 到期判定与排序作为单一事实来源，供学习总管
+   * （OrchestratorAgent）把看/学/练/测计划优先锚定到这些待复习知识点（{@code decaying_kcs} 透传），
+   * 形成「记忆矿脉回声 → 总管 → 资源生成」闭环。仅读，不产生副作用。
+   */
+  @Transactional(readOnly = true)
+  public List<String> decayingKcCodes(Long userId, int limit) {
+    if (limit <= 0) {
+      return List.of();
+    }
+    return echoCandidates(userId).stream()
+        .map(BugMineEchoCandidateDto::kcCode)
+        .distinct()
+        .limit(limit)
+        .toList();
+  }
+
+  private ReviewSignal errorSignal(BugMineRepository.ErrorBookRow row) {
+    return reviewStateService.evaluate(
+        row.kcCode(),
+        row.reviewStability(),
+        row.reviewLastReviewAt(),
+        row.reviewDueAt(),
+        doubleValue(row.masteryScore()),
+        row.lastEventAt(),
+        0,
+        0,
+        OffsetDateTime.now(ZoneOffset.UTC));
+  }
+
+  private ReviewSignal echoSignal(BugMineRepository.EchoCandidateRow row) {
+    return reviewStateService.evaluate(
+        row.kcCode(),
+        row.reviewStability(),
+        row.reviewLastReviewAt(),
+        row.reviewDueAt(),
+        doubleValue(row.masteryScore()),
+        row.lastEventAt(),
+        0,
+        0,
+        OffsetDateTime.now(ZoneOffset.UTC));
+  }
+
+  private static double doubleValue(BigDecimal value) {
+    return value == null ? 0.0 : value.doubleValue();
+  }
+
+  private record ScoredError(BugMineRepository.ErrorBookRow row, ReviewSignal signal) {}
+
+  private record ScoredEcho(BugMineRepository.EchoCandidateRow row, ReviewSignal signal) {}
+
+  @Transactional
+  public BugMineSessionDto openEcho(Long userId, String kcCode) {
+    BugMineRepository.EchoCandidateRow candidate =
+        repository.findEchoCandidates(userId).stream()
+            .filter(row -> row.kcCode().equals(kcCode))
+            .findFirst()
+            .orElseThrow(
+                () ->
+                    new BusinessException(
+                        HttpStatus.NOT_FOUND,
+                        "BUG_MINE_ECHO_NOT_FOUND",
+                        "没有可入矿的遗忘回声 KC"));
+    Long submissionId =
+        submissionRepository.insertSubmission(
+            userId,
+            candidate.problemId(),
+            null,
+            SubmissionSource.BUG_MINE_ECHO,
+            ECHO_ENTRY_CODE);
+    submissionRepository.markStatus(submissionId, SubmissionStatus.FAILED, null, null);
+    ObjectNode trace = emptyTraceSummary();
+    trace.put("kcCode", candidate.kcCode());
+    trace.put("reason", "forgetting_echo");
+    submissionRepository.insertJudgeResult(
+        submissionId,
+        Verdict.WA,
+        0,
+        1,
+        "遗忘回声复习入口，需要重新确认该 KC。",
+        trace);
+
+    BugMineSessionDto opened = open(userId, submissionId);
+    repository.updateProfileDepthTarget(opened.id(), Math.max(opened.profileDepthTarget(), 4));
+    return find(userId, opened.id());
   }
 
   @Transactional
@@ -326,10 +460,13 @@ public class BugMineService {
     }
   }
 
-  private BugMineErrorBookItemDto toErrorBookItem(BugMineRepository.ErrorBookRow row) {
+  private BugMineErrorBookItemDto toErrorBookItem(
+      BugMineRepository.ErrorBookRow row, ReviewSignal signal) {
     String guidance =
         profileAdvisor.guidanceLabel(row.profileDepthTarget(), row.patternMatched());
     BugMineVariantProblemDto variant = toVariant(row.variantProblemId(), row.variantProblemTitle());
+    double decayRisk = decayRisk(signal);
+    double priority = minePriority(row, signal);
     return new BugMineErrorBookItemDto(
         row.sessionId(),
         row.submissionId(),
@@ -343,11 +480,122 @@ public class BugMineService {
         row.profileDepthTarget(),
         guidance,
         row.masteryScore(),
+        scaled(priority),
+        scaled(decayRisk),
+        recommendationReason(row, signal),
         row.mistakePatterns(),
         row.patternMatched(),
         row.openedAt(),
         variant,
         depthSteps(row.depthLayer()));
+  }
+
+  private double minePriority(BugMineRepository.ErrorBookRow row, ReviewSignal signal) {
+    double mastery = clamp(row.masteryScore() == null ? 0.0 : row.masteryScore().doubleValue());
+    double confidence = clamp(row.confidence() == null ? 0.0 : row.confidence().doubleValue());
+    double recentFail = recentFailWeight(row.openedAt());
+    return clamp(
+        MASTERY_WEIGHT * (1.0 - mastery)
+            + DECAY_WEIGHT * decayRisk(signal)
+            + RECENT_FAIL_WEIGHT * recentFail
+            + PROFILE_PATTERN_WEIGHT * (row.patternMatched() ? 1.0 : 0.0)
+            + LOW_CONFIDENCE_WEIGHT * (1.0 - confidence));
+  }
+
+  /** 遗忘风险 = 1 - 可提取性 R（FSRS-lite），替换原先全局 14 天半衰期。 */
+  private double decayRisk(ReviewSignal signal) {
+    return clamp(1.0 - signal.retrievability());
+  }
+
+  private BugMineEchoCandidateDto toEchoCandidate(
+      BugMineRepository.EchoCandidateRow row, ReviewSignal signal) {
+    double decayRisk = decayRisk(signal);
+    double priority = echoPriority(row, signal);
+    return new BugMineEchoCandidateDto(
+        row.kcCode(),
+        row.problemId(),
+        row.problemTitle(),
+        row.masteryScore(),
+        row.confidence(),
+        scaled(decayRisk),
+        scaled(priority),
+        echoRecommendationReason(row, signal));
+  }
+
+  private double echoPriority(BugMineRepository.EchoCandidateRow row, ReviewSignal signal) {
+    double mastery = clamp(row.masteryScore() == null ? 0.0 : row.masteryScore().doubleValue());
+    double confidence = clamp(row.confidence() == null ? 0.0 : row.confidence().doubleValue());
+    return clamp(
+        0.45 * decayRisk(signal)
+            + 0.25 * (1.0 - confidence)
+            + 0.20 * (1.0 - mastery)
+            + 0.10);
+  }
+
+  private String echoRecommendationReason(
+      BugMineRepository.EchoCandidateRow row, ReviewSignal signal) {
+    double confidence = clamp(row.confidence() == null ? 0.0 : row.confidence().doubleValue());
+    StringBuilder reason = new StringBuilder("遗忘回声");
+    if (confidence < 0.40) {
+      reason.append(" · 置信度低");
+    }
+    if (decayRisk(signal) >= 0.50) {
+      reason.append(" · 间隔过久");
+    }
+    reason.append(" · 建议入矿");
+    return reason.toString();
+  }
+
+  private double recentFailWeight(OffsetDateTime openedAt) {
+    if (openedAt == null) {
+      return 0.0;
+    }
+    double hours =
+        Math.max(
+            0.0,
+            Duration.between(openedAt, OffsetDateTime.now(ZoneOffset.UTC)).toMinutes() / 60.0);
+    if (hours <= 24.0) {
+      return 1.0;
+    }
+    if (hours >= 168.0) {
+      return 0.0;
+    }
+    return clamp(1.0 - ((hours - 24.0) / 144.0));
+  }
+
+  private String recommendationReason(BugMineRepository.ErrorBookRow row, ReviewSignal signal) {
+    double mastery = clamp(row.masteryScore() == null ? 0.0 : row.masteryScore().doubleValue());
+    double confidence = clamp(row.confidence() == null ? 0.0 : row.confidence().doubleValue());
+    boolean due = signal.due();
+    StringBuilder reason = new StringBuilder();
+    if (mastery < 0.45) {
+      reason.append("掌握薄弱");
+    } else if (due) {
+      reason.append("遗忘回声");
+    } else if (row.patternMatched()) {
+      reason.append("画像命中");
+    } else {
+      reason.append("近期失败");
+    }
+    if (row.patternMatched() && reason.indexOf("画像命中") < 0) {
+      reason.append(" · 画像命中");
+    }
+    if (confidence < 0.40) {
+      reason.append(" · 置信度低");
+    }
+    if (due && reason.indexOf("遗忘回声") < 0) {
+      reason.append(" · 遗忘回声");
+    }
+    reason.append(" · 建议目标 L").append(row.profileDepthTarget());
+    return reason.toString();
+  }
+
+  private BigDecimal scaled(double value) {
+    return BigDecimal.valueOf(value).setScale(3, RoundingMode.HALF_UP);
+  }
+
+  private double clamp(double value) {
+    return Math.max(0.0, Math.min(1.0, value));
   }
 
   private BugMineSessionDto enrichSession(BugMineSessionDto session) {
@@ -358,7 +606,18 @@ public class BugMineService {
             ? session.profileDepthTarget()
             : profileAdvisor.recommendedDepthTarget(
                 context.masteryScore(), context.patternMatched());
-    String guidance = profileAdvisor.guidanceLabel(depthTarget, context.patternMatched());
+    boolean echoSession =
+        repository
+            .findSubmissionSource(session.submissionId())
+            .filter(source -> source == SubmissionSource.BUG_MINE_ECHO)
+            .isPresent();
+    String guidance =
+        echoSession
+            ? profileAdvisor.echoGuidanceLabel(depthTarget)
+            : profileAdvisor.guidanceLabel(depthTarget, context.patternMatched());
+    // 题干上下文随会话一次性下发：客户端无需再请求 /api/problems/{id}/public。
+    PublicProblemDto problem =
+        problemRepository.findPublic(COURSE_PACK_ID, session.problemId()).orElse(null);
     return new BugMineSessionDto(
         session.id(),
         session.userId(),
@@ -376,7 +635,8 @@ public class BugMineService {
         session.variantProblem(),
         guidance,
         depthSteps(session.depthLayer()),
-        session.cards());
+        session.cards(),
+        problem);
   }
 
   private SessionContextRow resolveContext(Long userId, Long problemId, Long submissionId) {

@@ -9,7 +9,7 @@ import { computed, ref } from 'vue';
 
 interface Props {
   chapter: number;
-  phase?: 'idle' | 'hurt' | 'angry' | 'victory';
+  phase?: 'idle' | 'hurt' | 'angry' | 'victory' | 'enrage';
   size?: number;
 }
 
@@ -425,6 +425,10 @@ const phaseClass = computed<string>(() => `boss-sprite--${props.phase}`);
 .boss-sprite--angry {
   animation: boss-sprite-angry 0.32s ease-out infinite;
 }
+.boss-sprite--enrage {
+  animation: boss-sprite-enrage 0.45s ease-in-out infinite;
+  filter: drop-shadow(0 0 14px rgba(255, 40, 40, 0.85)) saturate(1.35);
+}
 .boss-sprite--victory {
   animation: boss-sprite-victory 1.4s ease-out 1;
 }
@@ -458,6 +462,15 @@ const phaseClass = computed<string>(() => `boss-sprite--${props.phase}`);
   }
   75% {
     transform: translateX(4px) rotate(2deg);
+  }
+}
+@keyframes boss-sprite-enrage {
+  0%,
+  100% {
+    transform: scale(1.08) translateY(-2px);
+  }
+  50% {
+    transform: scale(1.14) translateY(-8px) rotate(2deg);
   }
 }
 @keyframes boss-sprite-victory {

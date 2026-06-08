@@ -11,22 +11,7 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
-/**
- * Hub 场景：程序化绘制 50×40 网格（草地 + 6 个建筑 + 4 个门洞 + 1 个 NPC 点）。
- *
- * 渲染策略：
- * - 使用 [ShapeRenderer] 画矩形（草地/路/建筑/边界/NPC/玩家），不依赖外部 PNG，
- *   保证在缺少素材打包的环境下也能跑起 demo。
- * - 真正的瓦片素材接入留给 Android-R13+：那时换成 [SpriteBatch] + [TextureAtlas]。
- *
- * 输入处理：
- * - 键盘 WASD / 方向键：每按一次走一格（按住每 120ms 走一格）。
- * - 屏幕触摸：在屏幕中心方向 D-Pad 风格落点位置走对应方向（[touchToDirection]）。
- *
- * NPC 交互检测：
- * - 当玩家与某个 NPC 的曼哈顿距离 ≤ 1 时，往 bridge 写一个 [HubEvent.NpcInRange]。
- * - 若 bridge 的 `consumeInteractRequest()` 返回 true（Compose 侧点了交互按钮），就再发一次。
- */
+/** 早期 demo 场景：ShapeRenderer 程序化绘制 50×40 hub；键盘/触摸走格，曼哈顿距离 ≤1 触发 [HubEvent.NpcInRange]。 */
 class HubScene(
     private val bridge: HubGameBridge,
 ) : ScreenAdapter() {
@@ -47,7 +32,7 @@ class HubScene(
     override fun resize(width: Int, height: Int) {
         val targetAspect = WORLD_PIXEL_WIDTH.toFloat() / WORLD_PIXEL_HEIGHT
         val actualAspect = width.toFloat() / height
-        // 简单 letterbox：保持纵横比，由 GL 视口 fit。
+        // letterbox 保持纵横比。
         val viewportWidth: Float
         val viewportHeight: Float
         if (actualAspect >= targetAspect) {
@@ -163,9 +148,7 @@ class HubScene(
 
     private fun drawPathways() {
         shapeRenderer.color = Color(0.82f, 0.74f, 0.45f, 1f)
-        // 中央竖向主路 (tile x = 25)
         rectTile(25, 0, 1, MAP_HEIGHT)
-        // 中央横向主路 (tile y = 20)
         rectTile(0, 20, MAP_WIDTH, 1)
     }
 
@@ -174,7 +157,6 @@ class HubScene(
             val (cr, cg, cb) = b.color
             shapeRenderer.color = Color(cr, cg, cb, 1f)
             rectTile(b.x, b.y, b.w, b.h)
-            // 屋顶高光
             shapeRenderer.color = Color(min(cr + 0.10f, 1f), min(cg + 0.10f, 1f), min(cb + 0.10f, 1f), 1f)
             rectTile(b.x, b.y, b.w, max(b.h / 2, 1))
         }
@@ -182,13 +164,9 @@ class HubScene(
 
     private fun drawExits() {
         shapeRenderer.color = Color(0.96f, 0.86f, 0.30f, 1f)
-        // 北门 (顶部)
         rectTile(MAP_WIDTH / 2 - 2, 0, 4, 1)
-        // 南门 (底部)
         rectTile(MAP_WIDTH / 2 - 2, MAP_HEIGHT - 1, 4, 1)
-        // 东门 (右)
         rectTile(MAP_WIDTH - 1, MAP_HEIGHT / 2 - 2, 1, 4)
-        // 西门 (左)
         rectTile(0, MAP_HEIGHT / 2 - 2, 1, 4)
     }
 
@@ -225,24 +203,17 @@ class HubScene(
         private const val BG_G = 0.05f
         private const val BG_B = 0.04f
 
-        // 6 个建筑，参考 frontend town_hub.json 的 building 对象大致位置（按 tile 坐标缩放）。
+        // 建筑位置对齐 frontend town_hub.json building 层。
         private val BUILDINGS = listOf(
-            // 镇长大厅（mayor_hall）位置 tile x=23..27 y=4..8
             Building(23, 4, 5, 5, Triple(0.55f, 0.30f, 0.20f)),
-            // 民居·东 (house_a): tile 8..12, 28..32
             Building(8, 28, 4, 4, Triple(0.65f, 0.40f, 0.25f)),
-            // 民居·中 (house_b): tile 22..26, 28..32
             Building(22, 28, 4, 4, Triple(0.65f, 0.40f, 0.25f)),
-            // 民居·西 (house_c): tile 36..40, 28..32
             Building(36, 28, 4, 4, Triple(0.65f, 0.40f, 0.25f)),
-            // 杂货铺 (shop_west): tile 4..8, 14..18
             Building(4, 14, 4, 4, Triple(0.30f, 0.45f, 0.65f)),
-            // 工具铺 (shop_east): tile 42..46, 14..18
             Building(42, 14, 4, 4, Triple(0.30f, 0.45f, 0.65f)),
         )
 
-        // demo 仅启用 mayor_py（其它 NPC 留给 Android-R13+ 扩展）。
-        // 坐标参考 frontend town_hub.json id=12 的 npc_mayor_py（x=400/16=25, y=160/16=10）。
+        // demo 仅启用 mayor_py。
         private val NPCS = listOf(
             Npc("mayor_py", 25, 10),
         )

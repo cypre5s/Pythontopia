@@ -1,17 +1,6 @@
 package com.pythontopia.feature.path
 
-/**
- * 学习路径 UI 状态。
- *
- * MVVM 单一 [PathUiState] 持有：
- *  - 网络拉取过程（[isLoading]、[error]）
- *  - 路径数据（[pathId]、[nodes]、[currentNodeId]）
- *  - 用户筛选偏好（[statusFilter]、[typeFilter]）
- *  - 节点动作 inflight 标记（[advancingNodeId]）：避免重复点
- *
- * [filteredNodes] 由 [nodes] / [statusFilter] / [typeFilter] 派生，避免在 Composable 内重复算。
- * 节点顺序遵循后端返回顺序；前端不参与拓扑排序，由 backend `PathPlannerAgent` 保证。
- */
+/** 学习路径 UI 状态；[filteredNodes] 由筛选集派生，节点顺序由后端 `PathPlannerAgent` 保证。 */
 data class PathUiState(
     val isLoading: Boolean = false,
     val pathId: String? = null,

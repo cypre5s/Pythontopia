@@ -243,27 +243,15 @@ describe('MiniMap', () => {
         playerY: 0,
         mapName: 'town_hub',
         exits: [
-          { side: 'north', toMap: 'farm_north', label: '知识农场' },
           { side: 'south', toMap: 'mine_south', label: 'Bug 矿洞' },
-          { side: 'east', toMap: 'campus_east', label: '校园' },
-          { side: 'west', toMap: 'port_west' },
         ],
       },
     });
-    const north = wrapper.find('[data-testid="mini-map-exit-north"]');
     const south = wrapper.find('[data-testid="mini-map-exit-south"]');
-    const east = wrapper.find('[data-testid="mini-map-exit-east"]');
-    const west = wrapper.find('[data-testid="mini-map-exit-west"]');
-    expect(north.exists()).toBe(true);
     expect(south.exists()).toBe(true);
-    expect(east.exists()).toBe(true);
-    expect(west.exists()).toBe(true);
-    expect(north.text()).toBe('▲');
+    expect(wrapper.find('[data-testid="mini-map-exit-north"]').exists()).toBe(false);
     expect(south.text()).toBe('▼');
-    expect(east.text()).toBe('▶');
-    expect(west.text()).toBe('◀');
-    expect(north.attributes('title')).toContain('知识农场');
-    expect(west.attributes('title')).toBe('port_west');
-    expect(north.attributes('aria-label')).toContain('north');
+    expect(south.attributes('title')).toContain('Bug 矿洞');
+    expect(south.attributes('aria-label')).toContain('south');
   });
 });

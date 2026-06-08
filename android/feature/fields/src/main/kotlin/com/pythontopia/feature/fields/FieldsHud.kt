@@ -16,16 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 
-/**
- * Fields 顶部简版 HUD。
- *
- *  - 第一行：标题 + season / weather chip（与 Hub HUD 风格一致）；
- *  - 第二行：4 个数字徽章 = 总 KC 数 / 成熟 / 幼苗 / 已收获，便于玩家一眼看到田地分布；
- *  - 第三行：errorMessage 若存在则用红色高亮（来自 [MaterialTheme.colorScheme.error]）。
- *
- * 与 Hub 端 `HubHud` 解耦：fields 不需要"附近 NPC"、"退出登录"按钮，
- * 顶 HUD 只承担"环境概览 + 田地汇总"两个职责。
- */
+/** 知识田顶部 HUD：环境概览与 KC 状态汇总。 */
 @Composable
 fun FieldsHud(
     state: FieldsUiState,

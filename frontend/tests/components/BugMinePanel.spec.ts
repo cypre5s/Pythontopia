@@ -8,6 +8,8 @@ import { useLearningStore } from '@stores/learning';
 vi.mock('@/api/bugMine', () => ({
   openBugMineSession: vi.fn(),
   getBugMineErrorBook: vi.fn(),
+  getBugMineEchoes: vi.fn(),
+  openBugMineEcho: vi.fn(),
   getBugMineSession: vi.fn(),
   revealBugMineCard: vi.fn(),
   retryBugMineSubmit: vi.fn(),
@@ -27,7 +29,9 @@ vi.mock('@/api/problems', () => ({
 
 import {
   getBugMineErrorBook,
+  getBugMineEchoes,
   getBugMineSession,
+  openBugMineEcho,
   revealBugMineCard,
   retryBugMineSubmit,
 } from '@/api/bugMine';
@@ -36,6 +40,7 @@ import { getPublicProblem } from '@/api/problems';
 import type {
   BugMineCardDto,
   BugMineDepthStepDto,
+  BugMineEchoCandidateDto,
   BugMineErrorBookItemDto,
   BugMineSessionDto,
 } from '@/api/dto/BugMine';
@@ -120,6 +125,7 @@ function buildSession(overrides: Partial<BugMineSessionDto> = {}): BugMineSessio
     profileGuidance: '画像命中易错模式，建议逐层下探。',
     depthSteps: buildDepthSteps(depthLayer),
     cards,
+    problem: null,
     ...overrides,
   };
 }
@@ -140,11 +146,30 @@ function buildErrorBookItem(
     profileDepthTarget: 4,
     profileGuidance: '掌握度中等，先 L1 独立重试。',
     masteryScore: 0.42,
+    minePriority: 0.68,
+    decayRisk: 0.72,
+    recommendationReason: '遗忘回声 · 置信度低 · 建议目标 L4',
     mistakePatterns: ['变量覆盖', '输出格式'],
     patternMatched: true,
     openedAt: '2026-05-21T19:50:00Z',
     variantProblem: null,
     depthSteps: buildDepthSteps(3),
+    ...overrides,
+  };
+}
+
+function buildEchoCandidate(
+  overrides: Partial<BugMineEchoCandidateDto> = {},
+): BugMineEchoCandidateDto {
+  return {
+    kcCode: 'PY43-KC-016',
+    problemId: 476,
+    problemTitle: '圆面积调试',
+    masteryScore: 0.72,
+    confidence: 0.25,
+    decayRisk: 0.86,
+    minePriority: 0.71,
+    recommendationReason: '遗忘回声 · 置信度低 · 建议入矿',
     ...overrides,
   };
 }
@@ -165,7 +190,12 @@ function mountPanel() {
 describe('BugMinePanel', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
+    vi.clearAllMocks();
     vi.mocked(getBugMineErrorBook).mockResolvedValue([buildErrorBookItem()]);
+    vi.mocked(getBugMineEchoes).mockResolvedValue([]);
+    vi.mocked(openBugMineEcho).mockResolvedValue(buildSession({
+      profileGuidance: '遗忘回声：久未复习，建议下探到 L4 再确认。',
+    }));
     vi.mocked(getBugMineSession).mockImplementation(async () => buildSession({ depthLayer: 4 }));
     vi.mocked(revealBugMineCard).mockResolvedValue({
       id: 5,
@@ -185,13 +215,49 @@ describe('BugMinePanel', () => {
     expect(getBugMineErrorBook).toHaveBeenCalledTimes(1);
     expect(wrapper.text()).toContain('错题矿洞');
     expect(wrapper.text()).toContain('圆面积调试');
-    expect(wrapper.text()).toContain('掌握度中等');
+    expect(wrapper.text()).toContain('遗忘回声');
 
     await wrapper.find('[data-testid="error-book-item-100"]').trigger('click');
     await flushPromises();
 
     expect(getBugMineSession).toHaveBeenCalledWith(100);
     expect(wrapper.text()).toContain('会话 #100');
+    expect(wrapper.text()).toContain('画像命中易错模式');
+  });
+
+  it('shows compact recommendation reason without depth microcopy in the error book list', async () => {
+    vi.mocked(getBugMineErrorBook).mockResolvedValue([
+      buildErrorBookItem({
+        recommendationReason: '遗忘回声 · 置信度低 · 建议目标 L4',
+        depthSteps: buildDepthSteps(4),
+      }),
+    ]);
+
+    const wrapper = mountPanel();
+    await flushPromises();
+
+    const item = wrapper.find('[data-testid="error-book-item-100"]');
+    expect(item.text()).toContain('遗忘回声');
+    expect(item.text()).toContain('推荐 68%');
+    expect(wrapper.find('[data-testid="depth-steps-100"]').text()).not.toContain('step-1');
+  });
+
+  it('shows forgetting echoes as compact mine entries and opens one', async () => {
+    vi.mocked(getBugMineEchoes).mockResolvedValue([buildEchoCandidate()]);
+
+    const wrapper = mountPanel();
+    await flushPromises();
+
+    expect(getBugMineEchoes).toHaveBeenCalledTimes(1);
+    expect(wrapper.find('[data-testid="echo-board"]').text()).toContain('遗忘回声');
+    expect(wrapper.find('[data-testid="echo-candidate-PY43-KC-016"]').text()).toContain('推荐 71%');
+
+    await wrapper.find('[data-testid="open-echo-PY43-KC-016"]').trigger('click');
+    await flushPromises();
+
+    expect(openBugMineEcho).toHaveBeenCalledWith({ kcCode: 'PY43-KC-016' });
+    expect(wrapper.text()).toContain('会话 #100');
+    expect(wrapper.text()).toContain('久未复习');
   });
 
   it('locks L4 cards when depth is below requirement', async () => {

@@ -1,10 +1,7 @@
-"""R-13 §5 Phase 6 续：7 章 × 4 阶段 fallback Boss 题。
+"""7 章 × 4 阶段 golden 兜底题库。
 
-当 LLM 出题失败 / 5 重审查全部 reject 时，``orchestrator.generate_boss_problem``
-会调用本模块的 ``get_golden_problem(chapter, stage)`` 拿到一道保底题。
-
-每章一个主题，4 个 stage 同主题 + 难度递增（参数 / 输入规模 / 边界条件）。
-所有 golden 题已离线跑过 5 重审查通过；如修改后请重跑 ``tests/agents/boss/test_golden_problems.py``。
+LLM 出题或审查失败时由 ``get_golden_problem`` 提供保底题；每章同主题、stage 难度递增。
+修改后须重跑 ``tests/agents/boss/test_golden_problems.py`` 验证审查通过。
 """
 
 from __future__ import annotations
@@ -93,7 +90,7 @@ def _chapter1(stage: int) -> BossProblem:
             ],
             hints=["input().split() 拆出两段字符串", "map(int, ...) 转 int"],
         )
-    # stage 4 — 章 1 没有循环 / 条件，难度 3 用「3 变量拼接 + 注释格式」
+    # stage 4：章 1 无循环/条件，用三变量拼接提难度
     return _problem(
         chapter=1,
         stage=4,
@@ -173,7 +170,7 @@ def _chapter2(stage: int) -> BossProblem:
             ],
             hints=["s[-k:] 取末尾 k 个", "k 可能等于 len(s)"],
         )
-    # stage 4 — 章 2 没有循环 / import，用「读一行 3 浮点求平均」
+    # stage 4：章 2 无循环/import，用三浮点求平均
     return _problem(
         chapter=2,
         stage=4,
@@ -257,7 +254,6 @@ def _chapter3(stage: int) -> BossProblem:
             ],
             hints=["布尔表达式可以括号组合", "and / or 优先级"],
         )
-    # stage 4
     return _problem(
         chapter=3,
         stage=4,
@@ -339,7 +335,6 @@ def _chapter4(stage: int) -> BossProblem:
             ],
             hints=["continue 跳过本次迭代", "偶数 x % 2 == 0"],
         )
-    # stage 4
     return _problem(
         chapter=4,
         stage=4,
@@ -415,7 +410,6 @@ def _chapter5(stage: int) -> BossProblem:
             ],
             hints=["默认参数 discount=0.9", "f-string 保留 2 位小数"],
         )
-    # stage 4
     return _problem(
         chapter=5,
         stage=4,
@@ -507,7 +501,6 @@ def _chapter6(stage: int) -> BossProblem:
             ],
             hints=["class Sub(Parent) 表示继承", "子类可重写方法"],
         )
-    # stage 4
     return _problem(
         chapter=6,
         stage=4,
@@ -587,7 +580,6 @@ def _chapter7(stage: int) -> BossProblem:
             ],
             hints=["try / except ValueError", "int() 不能转字符串时抛 ValueError"],
         )
-    # stage 4
     return _problem(
         chapter=7,
         stage=4,
@@ -623,10 +615,7 @@ _CHAPTER_BUILDERS: dict[int, Callable[[int], BossProblem]] = {
 
 
 def get_golden_problem(chapter: int, stage: int) -> BossProblem:
-    """章号 1..7 / stage 1..4 → 对应 golden BossProblem。
-
-    越界时 clamp 到 chapter 1 stage 1，保证调用方不需要处理 KeyError。
-    """
+    """按章号 1..7、stage 1..4 返回 golden 题；越界 clamp 至第 1 章第 1 关。"""
 
     c = max(1, min(7, chapter))
     s = max(1, min(4, stage))
@@ -635,7 +624,7 @@ def get_golden_problem(chapter: int, stage: int) -> BossProblem:
 
 
 def all_golden_problems() -> list[BossProblem]:
-    """7×4=28 条 golden 题，供测试 / 演示 / 离线审查使用。"""
+    """返回全部 28 道 golden 题，供测试与离线审查。"""
 
     out: list[BossProblem] = []
     for chapter in range(1, 8):

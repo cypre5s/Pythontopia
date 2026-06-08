@@ -17,16 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
-/**
- * 路径筛选区：两行 chip
- *
- *  - 上：状态 (LOCKED/UNLOCKED/IN_PROGRESS/DONE) 多选
- *  - 下：类型 (READ/PRACTICE/QUEST/DEBUG) 多选
- *
- * 空集合视为"全选"，与 [PathUiState.filteredNodes] 的派生逻辑对齐。
- *
- * 不引入 FlowRow（Material3 1.4 才稳定），用 [Row] + [horizontalScroll] 满足横向滚动。
- */
+/** 状态/类型多选筛选；空集合视为全选，与 [PathUiState.filteredNodes] 一致。横向滚动因 FlowRow 尚未稳定。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PathFilters(
@@ -95,7 +86,7 @@ private fun FilterChipRow(
     }
 }
 
-/** 状态中文 label，集中在此避免散落到多个 Composable。 */
+/** 状态中文标签。 */
 internal fun PathNodeStatus.labelZh(): String = when (this) {
     PathNodeStatus.LOCKED -> "未解锁"
     PathNodeStatus.UNLOCKED -> "待开始"
@@ -103,7 +94,7 @@ internal fun PathNodeStatus.labelZh(): String = when (this) {
     PathNodeStatus.DONE -> "已完成"
 }
 
-/** 类型中文 label，集中在此避免散落到多个 Composable。 */
+/** 类型中文标签。 */
 internal fun PathNodeType.labelZh(): String = when (this) {
     PathNodeType.READ -> "阅读"
     PathNodeType.PRACTICE -> "练习"

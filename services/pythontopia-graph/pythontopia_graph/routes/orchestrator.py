@@ -1,13 +1,11 @@
-"""HTTP + SSE endpoints for the OrchestratorAgent（学习总管）.
+"""OrchestratorAgent HTTP + SSE 端点（学习总管）。
 
-* ``POST /agents/orchestrator/turn``        – non-streaming ``OrchestratorResponse``.
-* ``POST /agents/orchestrator/turn/stream`` – SSE stream emitting ``trace`` /
-  ``token`` / ``result`` / ``error`` events (matches the frontend useSseStream
-  contract: each event is ``event: <name>\\ndata: <json>\\n\\n``).
+* ``POST /agents/orchestrator/turn`` → 非流式 ``OrchestratorResponse``；
+* ``POST /agents/orchestrator/turn/stream`` → SSE（``trace`` / ``token`` / ``result`` / ``error``），
+  线格式 ``event: <name>\\ndata: <json>\\n\\n``（与前端 useSseStream 契约一致）。
 
-The SSE generator follows ``routes/streaming.py``: an ``asyncio.Queue`` fed by an
-``emit`` callback, a background task running the graph that always enqueues a
-``None`` sentinel in ``finally``, then a drain loop yielding queued chunks.
+SSE 生成器沿用 ``routes/streaming.py`` 模式：``asyncio.Queue`` + ``emit`` 回调 + 后台图任务，
+``finally`` 入队 ``None`` 哨兵后 drain 产出 chunk。
 """
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-"""R-13 §5 Phase 6 续：evaluate_student_code 单元测试。"""
+"""evaluate_student_code 单元测试。"""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ def test_partial_pass_records_first_failure() -> None:
     code = "n = int(input())\nprint(n + 1)"
     cases = [
         _tc("1", "2", sample=True),
-        _tc("3", "5"),  # wrong: should be 4
+        _tc("3", "5"),  # 期望 5，实际输出 4
         _tc("4", "5"),
     ]
     result = evaluate_student_code(code, cases)
@@ -62,7 +62,7 @@ def test_syntax_error_reported_as_first_failure() -> None:
     assert not result.passed
     assert result.passed_count == 0
     assert result.first_failure is not None
-    assert result.first_failure.stderr  # python should write parse error
+    assert result.first_failure.stderr  # 语法错误应写入 stderr
 
 
 @pytest.mark.parametrize("timeout_sec", [1])

@@ -1,4 +1,4 @@
-"""R-13 §5 Phase 5：struct_validator 单元测试。"""
+"""struct_validator 单元测试。"""
 
 from __future__ import annotations
 
@@ -95,6 +95,6 @@ def test_statement_length_limit() -> None:
 
 def test_too_many_hints_warning_only() -> None:
     verdict = validate_problem_struct(_valid_problem(hints=["a", "b", "c", "d", "e"]))
-    # 仍然 passed=True（warning 不阻断），但 issues 含 too_many_hints
+    # warning 不阻断，issues 仍含 too_many_hints
     assert verdict.passed
     assert any(i.code == "too_many_hints" for i in verdict.issues)

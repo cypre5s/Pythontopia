@@ -11,16 +11,7 @@ import com.pythontopia.game.PlayerActor.Direction
 import kotlin.math.sqrt
 import com.badlogic.gdx.utils.Array as GdxArray
 
-/**
- * 拥有像素世界渲染所需的全部 GPU 纹理，并把它们切成「原汁原味」的：
- * - Kenney 16px 瓦片区域（town / dungeon 两套图集，各 12×11=132 块）；
- * - 官方 ULPC 主角整表（13×42，64px）→ 4 向 walk/idle 动画；
- * - LPC walk9 NPC 合成图（9×4，64px）→ 4 向 walk + 站立帧。
- *
- * 必须在 GL 线程创建（[WorldRenderScreen.show]），并在 [dispose] 释放，避免纹理泄漏。
- * 纯渲染资源，不含任何业务逻辑；NPC key→精灵文件映射对齐 web 端
- * `frontend/src/game/scenes/BootScene.ts` 的 npc-composites 列表。
- */
+/** GL 线程创建的 GPU 纹理与动画切片；须在 [WorldRenderScreen.show] 创建、[dispose] 释放。NPC key 映射对齐 web BootScene npc-composites。 */
 class GameAssets : Disposable {
 
     private val disposables = mutableListOf<Disposable>()
@@ -294,27 +285,20 @@ class GameAssets : Disposable {
         }
 
         /** 对话 NPC key → npc-composites 精灵文件名（无扩展名）。对齐 web 端贴图清单。 */
+        /** R-14：12 主线 NPC 精灵映射（与 Web town_hub 对齐）。 */
         private val NPC_SPRITE_FILE: Map<String, String> = mapOf(
             "mayor_py" to "npc_mayor",
             "librarian_doc" to "npc_librarian",
             "coach_q" to "npc_coach",
             "sage_review" to "npc_sage",
-            "gardener" to "npc_gardener",
-            "chef" to "npc_chef",
-            "farmer" to "npc_farmer",
-            "farmer_kc" to "npc_farmer",
             "professor" to "npc_professor",
             "student_a" to "npc_student",
             "class_president" to "npc_student",
-            "sailor" to "npc_sailor",
             "captain_def" to "npc_sailor",
-            "miner" to "npc_miner",
             "mine_keeper" to "npc_miner",
-            "foreman_bug" to "npc_miner",
-            "tutor_ai" to "npc_tutor_ai",
+            "foreman_bug" to "npc_guard",
             "workshop_master" to "npc_workshop",
             "arena_guard" to "npc_guard",
-            "trainer" to "npc_trainer",
         )
     }
 }

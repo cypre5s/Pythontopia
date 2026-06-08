@@ -11,13 +11,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/**
- * 导师问答 ViewModel（MVI）。
- *
- * 发问流程：追加「用户气泡 + 空的助手气泡(streaming)」→ 订阅 [TutorRepository.askStream]
- * 增量回填助手气泡 → 终态落 grounding/证据页 → 结束后刷新历史。
- * 错误不静默：失败时写 [TutorUiState.error] 并把流式气泡收尾。
- */
+/** 发问后追加流式助手气泡，增量回填 token，终态写入 grounding/证据页并刷新历史；失败写入 [TutorUiState.error]。 */
 @HiltViewModel
 class TutorViewModel @Inject constructor(
     private val repository: TutorRepository,

@@ -19,7 +19,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** R-12 demo 顶层 tab：左边看 8 维仪表，右边自评 4 主观。 */
+/** 画像页顶层 tab：仪表盘展示 8 维，自评 tab 编辑 4 主观维。 */
 enum class ProfileTab { DASHBOARD, SUBJECTIVE }
 
 data class ProfileUiState(
@@ -27,23 +27,13 @@ data class ProfileUiState(
     val isLoading: Boolean = false,
     val isSaving: Boolean = false,
     val profile: LearnerProfileDto? = null,
-    /**
-     * 8 维真实得分快照（GET /api/learner/profile/dimensions）。
-     * 仪表盘 score/confidence/evidenceCount/可自评 全部来自此处，替代旧的 placeholder 0.5。
-     * 恒为 0 或 8 维（后端兜底），空表示尚未加载。
-     */
+    /** 8 维得分快照（GET /api/learner/profile/dimensions）；空表示尚未加载。 */
     val dimensions: List<ProfileDimensionDto> = emptyList(),
     val error: AppError? = null,
     val savedDimensionKey: String? = null,
 )
 
-/**
- * Profile feature 的 ViewModel。
- *
- * MVI 单一 [StateFlow]：所有 action 通过 mutate state 反映。
- * 这里没用 sealed Intent，因为 demo 阶段只 2 个 action（loadProfile / updateSubjective），
- * 直接暴露 public 函数比 dispatch(intent) 更省样板，等接入访谈 / 自评 dialog 再升级。
- */
+/** 画像 feature ViewModel；单一 [StateFlow] 承载 UI 状态。 */
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
     private val repository: ProfileRepository,
@@ -65,12 +55,8 @@ class ProfileViewModel @Inject constructor(
     }
 
     /**
-     * 同时拉取画像主体（GET /profile）与 8 维得分快照（GET /profile/dimensions）。
-     *
-     * 两个独立 GET 用 [async] 并发，缩短首屏等待；任一失败都 surface（profile 是教育核心，
-     * 不静默降级，AGENTS 约束）。注意 GET /profile 的 204→Success(null) 是正常态（未完成访谈），
-     * 此时 dimensions 仍会返回 8 维默认值，仪表盘照常渲染（中性 0.5 + 低置信度）。
-     * 自评 PUT 成功后会再次调用本方法，使仪表盘的 score/证据数随之刷新。
+     * 并发拉取画像主体（GET /profile）与 8 维快照（GET /profile/dimensions）；任一失败均上报错误。
+     * GET /profile 返回 204 时映射为 Success(null)（未完成访谈），dimensions 仍返回 8 维默认快照。
      */
     fun loadProfile() {
         _state.update { it.copy(isLoading = true, error = null) }
@@ -101,13 +87,7 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    /**
-     * 学生 PUT 自评。
-     *
-     * 在调 repo 前先在客户端校验 [dimensionKey] 是否在 [ProfileDimensions.SELF_EDITABLE]，
-     * 这样可以省一次 403 round-trip（后端仍有强校验，是底线）。
-     * 成功后立刻刷新 GET，把后端写完的 `final_dimension` 同步到 UI。
-     */
+    /** 学生 PUT 自评；客户端先校验 [ProfileDimensions.SELF_EDITABLE]，成功后刷新快照。 */
     fun updateSubjective(dimensionKey: String, request: DimensionUpdateRequest) {
         if (!ProfileDimensions.isSelfEditable(dimensionKey)) {
             _state.update {

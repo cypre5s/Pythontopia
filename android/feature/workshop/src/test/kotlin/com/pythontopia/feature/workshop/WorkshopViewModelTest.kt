@@ -258,7 +258,7 @@ class WorkshopViewModelTest {
         viewModel.updateCode("print(1)")
         assertTrue(viewModel.state.value.canSubmit)
 
-        // Simulate that submit started and polling is in progress.
+        // 模拟提交后进入轮询中
         coEvery { repository.submit(sampleProblem.id, any()) } returns SubmissionDto(
             id = 1L, problemId = sampleProblem.id, code = "print(1)",
             status = SubmissionStatus.PENDING,

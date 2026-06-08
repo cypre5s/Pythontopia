@@ -65,7 +65,7 @@ class FieldsViewModelTest {
         val vm = FieldsViewModel(repository)
         vm.state.test {
             val initial = awaitItem()
-            // init { refresh() } 已写过一次 isLoading=true，因此第一帧必然在 loading 态
+            // init { refresh() } 首帧应在 loading 态
             assertTrue(initial.isLoading)
             assertTrue(initial.tiles.isEmpty())
 
@@ -187,8 +187,7 @@ class FieldsViewModelTest {
     fun `pendingActionKc blocks second concurrent water call`() = runTest {
         coEvery { repository.fetchKcGrid() } returns sampleGrid()
         val gate = CompletableDeferred<Unit>()
-        // 用 CompletableDeferred 把第一次 water 阻塞在 gate.await()，
-        // 这样第二次 water 调用时 pending 槽位仍非空，必然被 ViewModel 直接 return。
+        // 阻塞首次 water，验证 pending 槽位互斥
         coEvery { repository.waterKc("PY43-KC-001") } coAnswers {
             gate.await()
             KcTileState("PY43-KC-001", "中国计算机发展成就", 1, 0.1, KcStatus.SEED)
@@ -197,10 +196,10 @@ class FieldsViewModelTest {
         advanceUntilIdle()
 
         vm.water("PY43-KC-001")
-        // 第一次已进入 pending；此时 pendingActionKc 必须不为 null
+        // 第一次 water 后 pending 非空
         assertEquals("PY43-KC-001", vm.state.value.pendingActionKc)
         vm.water("PY43-KC-002")
-        // 第二次因 pending 占位被立即拒绝（早返回，不抛错也不写 errorMessage）
+        // 第二次 water 因 pending 被早返回
         assertEquals("PY43-KC-001", vm.state.value.pendingActionKc)
 
         gate.complete(Unit)

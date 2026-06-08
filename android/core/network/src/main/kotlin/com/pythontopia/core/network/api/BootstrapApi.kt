@@ -8,13 +8,7 @@ import retrofit2.http.Body
 import retrofit2.http.PATCH
 import retrofit2.http.POST
 
-/**
- * R-12 新增端点：单次聚合 bootstrap + 玩家移动上报 + 一夜推进。
- *
- * 不属于这里：
- *  - `/api/world/npcs/...` 见 [NpcDialogApi]
- *  - `/api/world/calendar/...` 见 [CalendarApi]
- */
+/** 世界 bootstrap 与玩家状态 API：[bootstrap] 聚合初始化，[updatePlayer] 上报移动，[sleep] 推进一夜；NPC 见 [NpcDialogApi]，日历见 [CalendarApi]。 */
 interface BootstrapApi {
 
     @POST("api/game/bootstrap")

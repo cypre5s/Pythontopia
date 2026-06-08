@@ -1,4 +1,4 @@
-"""Schemas for the EvaluationNarrativeAgent (stage 13)."""
+"""EvaluationNarrativeAgent 结构化输出 schema。"""
 
 from __future__ import annotations
 

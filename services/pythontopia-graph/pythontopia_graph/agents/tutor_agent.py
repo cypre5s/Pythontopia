@@ -1,4 +1,4 @@
-"""TutorAgent – conversational Q&A with RAG evidence and streaming."""
+"""TutorAgent：基于 RAG 课件证据的流式答疑；无证据须标注通识来源，禁止伪造页码与完整答案。"""
 
 from __future__ import annotations
 
@@ -52,6 +52,8 @@ DIAGRAM_KEYWORDS = (
 
 
 class TutorAgent:
+    """RAG 答疑助教：流式/非流式问答，按需附加 mermaid 图解；泄答关键词触发 safety 失败。"""
+
     AGENT_NAME = "TutorAgent"
 
     def __init__(self, provider: LlmProvider) -> None:

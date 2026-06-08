@@ -1,9 +1,6 @@
-"""Stage 13 - EvaluationNarrativeAgent unit tests.
+"""EvaluationNarrativeAgent 单元测试。
 
-These tests pin down the deterministic narrative + grounding contract:
-- 数字与 KC 必须来自输入 metrics / top_kcs
-- 安全词命中 → 直接 FAIL
-- 全 0 输入 → PARTIAL（近期无活动模板）
+契约：数字与 KC 须来自输入 metrics / top_kcs；安全词命中 → FAIL；全 0 输入 → PARTIAL（近期无活动模板）。
 """
 
 from __future__ import annotations
@@ -107,12 +104,12 @@ def test_safety_rejects_forbidden_word() -> None:
     request = _full_request()
     request.profile_brief = ProfileBrief(major="杀马特", python_level=3)
     response = EvaluationNarrativeAgent().narrate(request)
-    # major 不进入 narrative，所以正常 SUCCESS。下面验证 safety 在 narrative 出现禁词时的行为：
+    # major 不写入 narrative，故仍 SUCCESS；此处仅确认 safety 未误拦。
     assert response.safety_result.passed is True
 
 
 def test_route_returns_422_when_grounding_fails(monkeypatch: pytest.MonkeyPatch) -> None:
-    # Inject a stub agent that flags grounding as failed to verify route translation.
+    # 注入 grounding 失败的 stub，验证路由映射为 422。
     from pythontopia_graph.routes import evaluation as evaluation_route
     from pythontopia_graph.schemas.evaluation import (
         EvaluationNarrativeResponse,

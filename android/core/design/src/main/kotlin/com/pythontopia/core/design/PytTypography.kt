@@ -8,21 +8,14 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
 
 /**
- * Pythontopia 设计令牌 · 字体。
- *
- * 像素小镇的「故事书 UI」观感主要靠：标题更扎实的字重 + 标签略宽的字距。正文（含大量中文）保持默认字距，
- * 避免 CJK 逐字拉开影响可读性。
- *
- * [pixelFontFamily] 是接入真实点阵字体的**唯一切换点**：把审计通过的像素字体（如 Fusion Pixel / 缝合像素，
- * OFL-1.1）放入 `core/design` 的 `res/font/` 后，将此处替换为 `FontFamily(Font(R.font.xxx))` 即可全局生效；
- * 当前为零资产可编译而回退到 [FontFamily.SansSerif]。
+ * 设计令牌 · 字体：标题加字重、标签略增字距；正文保持默认字距以利 CJK 阅读。
+ * [pixelFontFamily] 为点阵字体接入点（`res/font/` 内 OFL 字体），当前回退 [FontFamily.SansSerif]。
  */
 object PytTypography {
 
-    /** 像素字体族——全局唯一切换点（详见类注释）。 */
     val pixelFontFamily: FontFamily = FontFamily.SansSerif
 
-    /** 等宽字体族——代码编辑器 / traceback 等场景统一取用，避免各 feature 直接散用 [FontFamily.Monospace]。 */
+    /** 等宽字体族，供代码编辑器与 traceback 等场景统一取用。 */
     val monoFontFamily: FontFamily = FontFamily.Monospace
 
     private val base = Typography()

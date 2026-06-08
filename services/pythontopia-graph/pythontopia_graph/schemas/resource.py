@@ -97,10 +97,9 @@ class StoryboardScene(BaseModel):
     duration_seconds: int = Field(ge=5, le=90)
     evidence_page_id: int | None = None
     narration_tts_voice: str = "x4_yezi"
-    # 文生图提示词（讯飞 TTI）：把 visual_hint 细化为可直接喂给文生图模型的画面描述。
-    # 前端据此调 /api/media/image 生成分镜插画；后端合成短视频时按此生成图序列。
+    # 文生图提示词（讯飞 TTI），前端调 /api/media/image；后端合成短视频时按此出图。
     image_prompt: str = ""
-    # 该分镜对应的已生成插画 media_asset id（由后端填充；前端可缓存）。
+    # 已生成插画 media_asset id（后端填充，前端可缓存）。
     image_asset_id: int | None = None
 
 
@@ -122,8 +121,7 @@ class ProfileSnapshot(BaseModel):
     major: Literal["CS", "NON_CS_STEM", "NON_CS_HUMANITIES", "OTHER"] = "OTHER"
     python_self_rated_level: int = Field(default=2, ge=1, le=5)
     media_priority: list[str] = Field(default_factory=list)
-    # 因材施教扩展到「学」阶段资源生成：认知风格（visual/logical/trial）与易错点标签。
-    # 留默认空值，旧调用方无需改造仍可校验通过。
+    # 学阶段资源生成用的认知风格（visual/logical/trial）与易错点；默认空，调用方可不传。
     cognitive_style: str = ""
     error_patterns: list[str] = Field(default_factory=list)
 

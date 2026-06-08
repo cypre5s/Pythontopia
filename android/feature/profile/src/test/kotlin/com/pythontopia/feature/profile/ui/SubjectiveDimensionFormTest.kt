@@ -14,17 +14,7 @@ import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
-/**
- * Compose 表单交互测试。
- *
- * 用户实际"交互的最小单元"是 [DimensionFormState]：每次点 RadioButton 都通过
- * `setScore(...)` 返回新 state，提交按钮可见性 = `isFilled(spec)`，提交载荷 =
- * `buildRequestFor(spec)`。验证这一层就完整覆盖了 Composable 的所有用户路径，
- * 而不需要 androidx.compose.ui.test 在 JVM 端的 Robolectric 适配（avoid 新依赖）。
- *
- * 当 R-13 引入 Roborazzi 时，可在 androidTest 里加 createComposeRule 跑像素截图回归；
- * 当前 demo 阶段先用 stateholder 单元测试锁住行为。
- */
+/** 通过 [DimensionFormState] 单测覆盖自评表单交互路径，无需 Compose UI 测试框架。 */
 class SubjectiveDimensionFormTest {
 
     @Test

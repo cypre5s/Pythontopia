@@ -21,7 +21,7 @@ def hallucination_detector(
     evidence: EvidenceBundle,
     valid_kc_codes: set[str],
 ) -> GroundingResult:
-    """Run rule based checks that complement the evidence-grounded critic."""
+    """规则式防幻觉检查，与 grounding_critic 互补：KC 合法性、CodeLab 语法、Practice sample_io、统计型数字。"""
 
     reasons: list[str] = []
     referenced_kcs: list[str] = []

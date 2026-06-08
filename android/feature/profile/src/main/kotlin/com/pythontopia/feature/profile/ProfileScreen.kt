@@ -175,14 +175,7 @@ private fun InterviewPendingHint() {
     }
 }
 
-/**
- * 8 维仪表盘：每维一行 [DimensionProgressBar]，数据全部来自后端
- * `GET /api/learner/profile/dimensions`（[ProfileDimensionDto]）。
- *
- * 每维直接读真实 `score` / `confidence` / `evidenceCount`，并用 DTO 权威的 `selfEditable`
- * 决定「可自评 / 系统聚合」徽标——不再用前端 placeholder 0.5 倒推。`evidenceCount == 0` 时
- * 灰显，提示 0.5 为中性默认而非测量值。
- */
+/** 8 维仪表盘；数据来自 GET /api/learner/profile/dimensions，evidenceCount==0 时灰显（0.5 为中性默认）。 */
 @Composable
 private fun EightDimensionDashboard(dimensions: List<ProfileDimensionDto>) {
     PixelCard(modifier = Modifier.fillMaxWidth()) {

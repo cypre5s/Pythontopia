@@ -32,7 +32,7 @@ export const router = createRouter({
       meta: { fullscreen: true, requiresAuth: true },
     },
     // 向后兼容：旧的 /town /field /bug-mine 路由保留，但直接 redirect 到 /world，
-    // 由 WorldScene 内部用 sceneKey 切换 town_hub / farm_north / mine_south。
+    // 由 WorldScene 内部用 sceneKey 切换 town_hub / mine_south（R-14 单 hub）。
     // /bug-mine 用 function-form 透传 ?side=east|west（mine_south.json 引用过）。
     { path: '/town', redirect: '/world' },
     { path: '/field', redirect: '/world' },
@@ -156,7 +156,7 @@ export const router = createRouter({
       meta: { requiresAuth: true },
     },
     // 6 个小建筑（民居/灯塔/谷仓/鸡舍）用 PlaceholderPage 兜底，
-    // 让 town_hub.json / port_west.json / farm_north.json 里的 building.route 全部能 resolve。
+    // 让 town_hub.json 里的 building.route 全部能 resolve。
     {
       path: '/lighthouse',
       name: 'lighthouse',

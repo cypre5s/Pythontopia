@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
-"""build_cottages.py — 从 LPC 茅草屋 preview 裁出「作者已正确装配」的整屋 sprite。
+"""从 LPC 茅草屋 preview 裁出整屋 sprite。
 
-来源：assets/inbox/buildings_npc/lpc_thatched-roof-cottage/preview.png（CC-BY-SA 3.0，
-作者 bluecarrot16 / daneeklu / Sharm）。preview 里的房屋由原作者按正确 3/4 透视装配，
-直接裁切并把草绿底色 key 成透明 + 去边，得到透视一致、观感正确的整屋（不再是
-「平面墙 + 俯视屋顶」的拼接错位）。
+来源：assets/inbox/buildings_npc/lpc_thatched-roof-cottage/preview.png（CC-BY-SA 3.0）。
+preview 已按 3/4 透视装配，脚本裁切、草绿底色抠透明并去边。
 
 用法：python3 scripts/build_cottages.py
 """
@@ -22,11 +20,11 @@ REPO = Path(__file__).resolve().parent.parent
 SRC = REPO / "assets/inbox/buildings_npc/lpc_thatched-roof-cottage/preview.png"
 OUT = REPO / "frontend/public/assets/pixel/sprites/cottages"
 
-# 从 preview 裁出的整屋框（x0,y0,x1,y1），坐标经屋顶投影自动定位后人工微调。
+# preview 裁切框（x0,y0,x1,y1），坐标经屋顶投影定位后人工微调。
 RECIPES: dict[str, tuple[int, int, int, int]] = {
-    "cottage_tan": (538, 52, 742, 332),    # 经典正面尖顶茅草屋
-    "cottage_cream": (203, 70, 410, 332),  # 宽体平顶茅草屋
-    "cottage_stone": (873, 60, 1042, 332), # 棕顶白墙屋
+    "cottage_tan": (538, 52, 742, 332),
+    "cottage_cream": (203, 70, 410, 332),
+    "cottage_stone": (873, 60, 1042, 332),
 }
 
 

@@ -1,12 +1,4 @@
-"""R-13 §5 Phase 6 续：LLM 出题工厂。
-
-封装：
-    * 系统提示 + 用户提示模板（中文，强调输出 JSON / 沙箱限制 / KC 范围）；
-    * 与 ``LlmProvider`` 抽象的对接（OpenAiCompat / Spark / DryRun 均可）；
-    * JSON 解析容错（content_json 优先 / content_text 兜底 fence 剥离）。
-
-不在这里跑 5 重审查；交给 ``orchestrator.generate_boss_problem``。
-"""
+"""LLM 出题工厂：提示模板、``LlmProvider`` 对接与 JSON 解析；审查由 orchestrator 负责。"""
 
 from __future__ import annotations
 
@@ -57,7 +49,7 @@ PROBLEM_GEN_SYSTEM_PROMPT = """你是 Python 编程题命题官，专注「Pytho
 
 
 def _strip_json_fence(text: str) -> str:
-    """LLM 偶尔会包 ```json ... ``` 围栏，剥掉再 json.loads。"""
+    """剥离 ```json``` 围栏后再 ``json.loads``。"""
 
     fence = re.match(r"^\s*```(?:json)?\s*(.+?)\s*```\s*$", text, re.DOTALL)
     if fence:
@@ -97,11 +89,7 @@ ProblemFactory = Callable[..., Awaitable[BossProblem]]
 
 
 def build_llm_problem_factory(provider: LlmProvider) -> ProblemFactory:
-    """返回一个异步 factory，签名 ``(chapter, stage, kc_code, difficulty, temperature)``。
-
-    这个 factory 直接调 LLM 一次，把响应转成 ``BossProblem``。任何解析失败抛
-    ``ValueError``；orchestrator 会捕获后退到下一次重试，最终回落到 golden。
-    """
+    """构建异步出题 factory；解析失败抛 ``ValueError``，由 orchestrator 重试或回落 golden。"""
 
     async def factory(
         *,
@@ -113,8 +101,7 @@ def build_llm_problem_factory(provider: LlmProvider) -> ProblemFactory:
         preferred_kind: str | None = None,
         profile_signals: dict[str, Any] | None = None,
     ) -> BossProblem:
-        # R-13 §-1 续：把学生画像信号 + 关卡题型偏好嵌入 prompt，
-        # 让 LLM 真正按画像出题（不再只是 LOG 记录字段后丢掉）。
+        # 将画像信号与关卡题型偏好写入 prompt。
         extras: list[str] = []
         if preferred_kind:
             kind_map = {
@@ -176,7 +163,7 @@ def build_llm_problem_factory(provider: LlmProvider) -> ProblemFactory:
             )
 
         data = _coerce_problem_payload(response)
-        # LLM 可能把 problem 字段嵌套在 problem / boss 里，挖一下
+        # 兼容嵌套在 problem 键下的响应体
         if "title" not in data and isinstance(data.get("problem"), dict):
             data = data["problem"]
 

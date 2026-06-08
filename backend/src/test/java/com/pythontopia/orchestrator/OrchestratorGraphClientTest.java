@@ -74,7 +74,7 @@ class OrchestratorGraphClientTest {
             "偏好示例驱动",
             List.of("PY43-KC-001", "PY43-KC-010"));
 
-    client.turnStream(7L, request, emitter);
+    client.turnStream(7L, request, List.of("PY43-KC-016", "PY43-KC-022"), emitter);
 
     String body = capturedBody.get(5, TimeUnit.SECONDS);
     assertThat(capturedPath.get(5, TimeUnit.SECONDS))
@@ -91,6 +91,8 @@ class OrchestratorGraphClientTest {
     assertThat(json.get("recent_kc_codes").get(0).asText()).isEqualTo("PY43-KC-010");
     assertThat(json.get("recent_failures").get(0).asText()).isEqualTo("sub-99");
     assertThat(json.get("course_kc_index")).hasSize(2);
+    assertThat(json.get("decaying_kcs")).hasSize(2);
+    assertThat(json.get("decaying_kcs").get(0).asText()).isEqualTo("PY43-KC-016");
     assertThat(json.get("history")).hasSize(2);
     assertThat(json.get("history").get(0).get("role").asText()).isEqualTo("user");
     assertThat(json.get("history").get(0).get("content").asText()).isEqualTo("你好");
@@ -115,7 +117,7 @@ class OrchestratorGraphClientTest {
     OrchestratorTurnRequest request =
         new OrchestratorTurnRequest("hi", "sess-abc", null, null, null, null, null, null);
 
-    client.turnStream(42L, request, emitter);
+    client.turnStream(42L, request, List.of(), emitter);
 
     String body = capturedBody.get(5, TimeUnit.SECONDS);
     JsonNode json = new ObjectMapper().readTree(body);
@@ -129,6 +131,7 @@ class OrchestratorGraphClientTest {
     assertThat(json.has("recent_kc_codes")).isFalse();
     assertThat(json.has("recent_failures")).isFalse();
     assertThat(json.has("course_kc_index")).isFalse();
+    assertThat(json.has("decaying_kcs")).isFalse();
 
     awaitEvent(emitter, "event:result");
   }

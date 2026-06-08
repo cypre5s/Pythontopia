@@ -15,6 +15,8 @@ BANNED_VISUAL_HINTS = ("真实人物", "真人头像", "知名品牌")
 
 
 class StoryboardAgent:
+    """生成分镜脚本（3–5 镜）；visual_hint 禁真实人物/品牌，缺 image_prompt 时由 visual_hint 派生。"""
+
     AGENT_NAME = "StoryboardAgent"
 
     def __init__(self, provider: LlmProvider) -> None:

@@ -5,17 +5,17 @@
   "sprite": "lpc_npc_president",
   "portrait": "portrait_class_president.png",
   "spawnMap": "town_hub",
-  "spawn": { "tileX": 14, "tileY": 12 },
+  "spawn": { "tileX": 18, "tileY": 21 },
   "birthday": { "month": 9, "day": 10 },
   "favoriteGifts": ["clipboard", "tea", "class_pin"],
   "schedule": {
-    "monday":    [{ "from": "08:00", "map": "town_hub", "tileX": 14, "tileY": 12 }],
-    "tuesday":   [{ "from": "08:00", "map": "town_hub", "tileX": 14, "tileY": 12 }],
-    "wednesday": [{ "from": "08:00", "map": "town_hub", "tileX": 14, "tileY": 12 }],
-    "thursday":  [{ "from": "08:00", "map": "town_hub", "tileX": 14, "tileY": 12 }],
-    "friday":    [{ "from": "08:00", "map": "town_hub", "tileX": 14, "tileY": 12 }],
-    "saturday":  [{ "from": "10:00", "map": "town_hub", "tileX": 14, "tileY": 12 }],
-    "sunday":    [{ "from": "10:00", "map": "town_hub", "tileX": 14, "tileY": 12 }]
+    "monday":    [{ "from": "08:00", "map": "town_hub", "tileX": 18, "tileY": 21 }],
+    "tuesday":   [{ "from": "08:00", "map": "town_hub", "tileX": 18, "tileY": 21 }],
+    "wednesday": [{ "from": "08:00", "map": "town_hub", "tileX": 18, "tileY": 21 }],
+    "thursday":  [{ "from": "08:00", "map": "town_hub", "tileX": 18, "tileY": 21 }],
+    "friday":    [{ "from": "08:00", "map": "town_hub", "tileX": 18, "tileY": 21 }],
+    "saturday":  [{ "from": "10:00", "map": "town_hub", "tileX": 18, "tileY": 21 }],
+    "sunday":    [{ "from": "10:00", "map": "town_hub", "tileX": 18, "tileY": 21 }]
   },
   "tags": ["class_board", "class_quests", "classmate_status"],
   "description": "守在小镇公告板前的班长，对接公告板与班级任务。所有教师发布的班级任务都先经她手贴上公告板。"

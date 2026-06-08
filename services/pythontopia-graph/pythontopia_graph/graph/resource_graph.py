@@ -146,14 +146,10 @@ class ResourceGraph:
         request: ResourceProduceRequest,
         emit: Callable[[str, dict[str, Any]], Awaitable[None]],
     ) -> None:
-        """Run the graph with SSE callbacks for each step.
+        """流式执行图：每步 SSE 回调。
 
-        Wire protocol is a superset of the persisted trace: an opening
-        ``plan`` event lists the deterministic stations, and every node emits
-        a ``start`` then a ``finish`` ``trace`` event carrying an extra
-        ``phase`` field so the frontend studio can animate per-agent progress.
-        The persisted ``trace`` list (and the terminal ``result``/``error``
-        events) stay byte-for-byte identical to ``run``.
+        协议为落库 trace 超集：开场 plan 列出确定性工位；每节点先发 start 再 finish trace
+        （含 phase 供前端动画）。落库 trace 与终端 result/error 与 run() 字节级一致。
         """
         trace: list[GraphTraceStep] = []
 
@@ -304,7 +300,7 @@ class ResourceGraph:
             )
         )
 
-    # ── 流式专用私有助手（不影响同步 run() 与落库 trace） ──
+    # 流式专用助手（不影响同步 run() 与落库 trace）
 
     def _build_plan(
         self, request: ResourceProduceRequest, agent: Any
@@ -346,7 +342,7 @@ class ResourceGraph:
         try:
             result = await self._step(trace, name, awaitable)
         except Exception:
-            # _step 已追加 fail 步骤；发出 finish(fail) 后再抛给外层统一转 error。
+            # _step 已写 fail 步骤；发 finish(fail) 后抛给外层转 error
             await self._emit_finish(emit, trace[-1])
             raise
         await self._emit_finish(emit, trace[-1])

@@ -3,6 +3,8 @@ package com.pythontopia.bugmine.controller;
 import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.bugmine.dto.BugMineCardDto;
+import com.pythontopia.bugmine.dto.BugMineEchoCandidateDto;
+import com.pythontopia.bugmine.dto.BugMineEchoOpenRequest;
 import com.pythontopia.bugmine.dto.BugMineErrorBookItemDto;
 import com.pythontopia.bugmine.dto.BugMineOpenRequest;
 import com.pythontopia.bugmine.dto.BugMineRetryRequest;
@@ -51,6 +53,20 @@ public class BugMineController {
   public List<BugMineErrorBookItemDto> errorBook(@CurrentUser CurrentUserPrincipal user) {
     requireStudent(user);
     return service.errorBook(user.userId());
+  }
+
+  @GetMapping("/echoes")
+  public List<BugMineEchoCandidateDto> echoes(@CurrentUser CurrentUserPrincipal user) {
+    requireStudent(user);
+    return service.echoCandidates(user.userId());
+  }
+
+  @PostMapping("/echoes")
+  public BugMineSessionDto openEcho(
+      @CurrentUser CurrentUserPrincipal user,
+      @Valid @RequestBody BugMineEchoOpenRequest request) {
+    requireStudent(user);
+    return service.openEcho(user.userId(), request.kcCode());
   }
 
   @PostMapping("/sessions/{id}/cards/{cardId}/reveal")

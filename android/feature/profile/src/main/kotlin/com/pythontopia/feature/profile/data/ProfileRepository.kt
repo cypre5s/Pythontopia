@@ -10,26 +10,13 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import retrofit2.HttpException
 
-/**
- * 包装 [ProfileApi]，把 throwable 收敛成 [Result] 让 ViewModel 走单一 sealed 分支。
- *
- * 与 `DialogRepository` 的 "fail-silent + 本地 fallback" 不同：profile 是教育核心
- * （多智能体输出 + 防幻觉），失败要 surface 给用户，不允许静默降级。
- * 这里只做错误归一，不做 fallback 数据。
- */
+/** 包装 [ProfileApi] 并将异常归一为 [Result]；失败须上报，不做静默 fallback（对照 DialogRepository）。 */
 @Singleton
 class ProfileRepository @Inject constructor(
     private val api: ProfileApi,
 ) {
 
-    /**
-     * GET `/api/learner/profile`。
-     *
-     * - 200 → `Success(LearnerProfileDto)`
-     * - 204 → `Success(null)`（学生未完成访谈，画像未生成；UI 引导去访谈）
-     * - 4xx/5xx → `Failure(ApiError(httpStatus))`
-     * - I/O 异常 → `Failure(NetworkError)`
-     */
+    /** GET `/api/learner/profile`；204 映射 Success(null)（未完成访谈）。 */
     suspend fun fetchProfile(): Result<LearnerProfileDto?> = runCatching {
         val response = api.getProfile()
         if (response.code() == HTTP_NO_CONTENT) {
@@ -44,14 +31,7 @@ class ProfileRepository @Inject constructor(
         onFailure = { Result.Failure(it.toAppError()) },
     )
 
-    /**
-     * GET `/api/learner/profile/dimensions`。
-     *
-     * 后端恒返回 8 维快照（含 score / confidence / evidenceCount / selfEditable / tags），不会 204。
-     * - 200 → `Success(List<ProfileDimensionDto>)`（仪表盘真实数据源，替代旧 placeholder 0.5）
-     * - 4xx/5xx → `Failure(ApiError(httpStatus))`
-     * - I/O 异常 → `Failure(NetworkError)`
-     */
+    /** GET `/api/learner/profile/dimensions`；恒返回 8 维快照，不会 204。 */
     suspend fun fetchDimensions(): Result<List<ProfileDimensionDto>> = runCatching {
         api.getDimensions()
     }.fold(

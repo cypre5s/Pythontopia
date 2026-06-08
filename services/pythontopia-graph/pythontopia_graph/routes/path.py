@@ -1,4 +1,7 @@
-"""HTTP route for the path planner graph."""
+"""PathPlanner 图 HTTP 路由。
+
+* ``POST /agents/path/plan`` → ``PathPlannerResponse``；画像未完成 → HTTP 400；安全/引用审查失败 → HTTP 422。
+"""
 
 from __future__ import annotations
 

@@ -28,16 +28,7 @@ import androidx.compose.ui.unit.dp
 import com.pythontopia.core.design.PytColors
 import com.pythontopia.core.design.PytSpace
 
-/**
- * Workshop（代码工坊）选题对话框。
- *
- * 关键交互：
- *   - 顶部 OutlinedTextField 让用户改 KC 过滤码（例如 PY43-KC-016 → PY43-KC-022），
- *     onValueChange 直通 [onKcChange]，由 ViewModel 决定是否触发 [WorkshopViewModel.loadProblems]；
- *   - 中部 LazyColumn 列出当前 KC 下的题目；
- *   - 加载中显示 spinner，空列表显示占位文案；
- *   - 点击单条 → [onSelect]，对话框由 ViewModel 关闭，不在这里 dismiss 自己。
- */
+/** KC 过滤选题对话框；KC 变更与选题结果由 ViewModel 驱动，本组件不自行关闭。 */
 @Composable
 fun ProblemPicker(
     isOpen: Boolean,

@@ -9,6 +9,7 @@
  *   - 失败时显示「再试一次」+ 按 difficulty 给的提示。
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import gsap from 'gsap';
 import { useRouter } from 'vue-router';
 import AppLayout from '@/app/AppLayout.vue';
 import { kcDisplayName } from '@/data/kcNames';
@@ -102,19 +103,47 @@ watch(
 );
 
 const effectTrigger = ref(0);
+const playerHpBarRef = ref<HTMLElement | null>(null);
+const bossSpriteWrapRef = ref<HTMLElement | null>(null);
+
 watch(
   () => session.stage.value,
   () => { effectTrigger.value += 1; },
+);
+watch(
+  () => session.bossPhase.value,
+  (phase, prev) => {
+    if (phase === 2 && prev === 1) {
+      effectTrigger.value += 1;
+    }
+  },
+);
+watch(
+  () => session.playerKnockedDown.value,
+  async (knocked) => {
+    if (!knocked || typeof window === 'undefined') return;
+    await Promise.resolve();
+    const hpEl = playerHpBarRef.value;
+    const wrapEl = bossSpriteWrapRef.value;
+    if (hpEl) {
+      gsap.fromTo(hpEl, { x: 0 }, { x: -8, duration: 0.06, repeat: 5, yoyo: true, ease: 'power1.inOut' });
+      gsap.fromTo(hpEl, { filter: 'brightness(1)' }, { filter: 'brightness(2.2)', duration: 0.12, yoyo: true, repeat: 3 });
+    }
+    if (wrapEl) {
+      gsap.fromTo(wrapEl, { scale: 1 }, { scale: 0.92, duration: 0.18, yoyo: true, repeat: 1, ease: 'power2.out' });
+    }
+  },
 );
 watch(
   () => session.lastResult.value,
   (r) => { if (r) effectTrigger.value += 1; },
 );
 
-const bossSpritePhase = computed<'idle' | 'hurt' | 'angry' | 'victory'>(() => {
+const bossSpritePhase = computed<'idle' | 'hurt' | 'angry' | 'victory' | 'enrage'>(() => {
   const phase = session.phase.value;
   if (phase === 'passed' || phase === 'victory') return 'hurt';
   if (phase === 'failed' || phase === 'evaluating') return 'angry';
+  if (session.bossPhase.value === 2) return 'enrage';
   return 'idle';
 });
 
@@ -194,12 +223,21 @@ function rewardLabel(r: MainSubQuestReward): string {
           class="boss-timer"
           :class="{
             'boss-timer--urgent': session.timeLeftSec.value <= 15,
-            'boss-timer--crit': inCritWindow,
+            'boss-timer--crit': inCritWindow && !session.stageTimedOut.value,
+            'boss-timer--expired': session.stageTimedOut.value,
           }"
           data-testid="boss-timer"
         >
           ⏱ {{ session.timeLeftSec.value }}s
-          <span class="boss-timer__hint">{{ inCritWindow ? '快答暴击' : '限时作答' }}</span>
+          <span class="boss-timer__hint">
+            {{
+              session.stageTimedOut.value
+                ? '超时！仍可作答但无法暴击'
+                : inCritWindow
+                  ? '快答暴击'
+                  : '限时作答'
+            }}
+          </span>
         </div>
       </header>
 
@@ -348,12 +386,14 @@ function rewardLabel(r: MainSubQuestReward): string {
         </article>
         <article class="boss-sprite">
           <div
+            ref="bossSpriteWrapRef"
             class="boss-sprite-wrap"
             data-testid="boss-sprite-wrap"
           >
             <BossMoveEffect
               :stage="session.stage.value"
               :trigger="effectTrigger"
+              :enraged="session.bossPhase.value === 2"
             />
             <BossSprite
               :chapter="chapter"
@@ -368,6 +408,15 @@ function rewardLabel(r: MainSubQuestReward): string {
               >
                 -{{ session.recentDamage.value }}
               </span>
+            </transition>
+            <transition name="knockdown-fade">
+              <div
+                v-if="session.playerKnockedDown.value"
+                class="boss-knockdown"
+                data-testid="boss-knockdown"
+              >
+                被击倒！重整旗鼓…
+              </div>
             </transition>
           </div>
           <p class="boss-sprite__stage">
@@ -390,7 +439,9 @@ function rewardLabel(r: MainSubQuestReward): string {
           </div>
 
           <div
+            ref="playerHpBarRef"
             class="boss-hpbar boss-hpbar--player"
+            :class="{ 'boss-hpbar--knocked': session.playerKnockedDown.value }"
             data-testid="player-hpbar"
             role="progressbar"
             :aria-valuenow="session.playerHp.value"
@@ -418,6 +469,13 @@ function rewardLabel(r: MainSubQuestReward): string {
           >
             ⚔ boss 反击！你 -{{ session.recentPlayerDamage.value }}
           </p>
+          <p
+            v-if="session.stageTimedOut.value"
+            class="boss-timeout"
+            data-testid="boss-timeout-banner"
+          >
+            ⏳ 作答超时：仍可提交，但本阶段无法暴击回血
+          </p>
 
           <div
             v-if="session.currentMove.value"
@@ -425,7 +483,9 @@ function rewardLabel(r: MainSubQuestReward): string {
             data-testid="boss-move-card"
           >
             <header class="boss-move-card__head">
-              <span class="boss-move-card__label">招式预告 · Stage {{ session.stage.value }}</span>
+              <span class="boss-move-card__label">
+                {{ session.bossPhase.value === 2 ? '狂暴招式' : '招式预告' }} · Stage {{ session.stage.value }}
+              </span>
             </header>
             <h3 class="boss-move-card__name">
               ★ {{ session.currentMove.value.name }}
@@ -799,6 +859,20 @@ function rewardLabel(r: MainSubQuestReward): string {
 .boss-hpbar--player {
   margin-top: 6px;
 }
+.boss-hpbar--knocked {
+  box-shadow: 0 0 14px rgba(255, 80, 40, 0.85);
+}
+.boss-timeout {
+  margin: 8px auto 0;
+  max-width: 280px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: #fff;
+  background: rgba(90, 30, 8, 0.65);
+  border: 1px solid #ff7466;
+  border-radius: 4px;
+  text-align: center;
+}
 .boss-hpbar__fill--player {
   background: linear-gradient(180deg, #6bd06b 0%, #3ca85a 60%, #1d7c3a 100%);
 }
@@ -849,6 +923,30 @@ function rewardLabel(r: MainSubQuestReward): string {
   border: 1px solid #b3402a;
   border-radius: 4px;
   text-align: center;
+}
+.boss-knockdown {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  background: rgba(20, 4, 0, 0.72);
+  border: 2px solid #b3402a;
+  border-radius: 8px;
+  pointer-events: none;
+}
+.knockdown-fade-enter-active,
+.knockdown-fade-leave-active {
+  transition: opacity 0.35s ease;
+}
+.knockdown-fade-enter-from,
+.knockdown-fade-leave-to {
+  opacity: 0;
+}
+.boss-timer--expired .boss-timer__hint {
+  color: #ff7466;
 }
 @media (prefers-reduced-motion: reduce) {
   .boss-enrage-badge,

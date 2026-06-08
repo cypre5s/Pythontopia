@@ -21,18 +21,7 @@ import androidx.compose.ui.unit.dp
 import com.pythontopia.core.design.PytColors
 import com.pythontopia.core.design.PytSpace
 
-/**
- * 5 层副本进度条。
- *
- * 横排 5 个等宽段（B1..B5），每段三态：
- *  - 已通过（layer < currentLayer）：填充对应 [layerColor]
- *  - 当前（layer == currentLayer）：边框加粗 + 半填充，标签加粗
- *  - 未解锁（layer > currentLayer）：低饱和虚拟边框
- *
- * 与卡牌库 §2 表格的 layer 顺序一致：B1 NameError → B5 RecursionError。
- *
- * @param currentLayer 当前所在层 1..5；越界（如 0 或 6+）会自动 coerce 到 1..5。
- */
+/** 5 层副本进度条 B1..B5（NameError→RecursionError）；[currentLayer] 越界时 coerce 到 1..5。 */
 @Composable
 fun MineLayerProgress(
     currentLayer: Int,
@@ -132,7 +121,7 @@ private data class SegmentStyle(
 
 private enum class SegmentState { COMPLETED, CURRENT, LOCKED }
 
-/** 5 层错误大类名称（对齐卡牌库 §2 表格主题列）。 */
+/** B1..B5 错误大类名称。 */
 private fun layerName(layer: Int): String = when (layer) {
     1 -> "NameError / 未定义变量"
     2 -> "IndentationError / 缩进"

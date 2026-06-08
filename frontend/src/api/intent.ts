@@ -6,9 +6,10 @@ import type { WorkshopResourceType } from './dto/Workshop';
 
 /**
  * ASK = 答疑（导师管线）；VIDEO = B站精选讲解视频（外部检索，非生成）；
+ * REVIEW = 记忆矿脉回声复习（引导去错题矿洞按 FSRS 到期 KC 复盘，非生成）；
  * 其余 6 个与 WorkshopResourceType 一一对应（工坊生成管线）。
  */
-export type IntentKind = 'ASK' | 'VIDEO' | WorkshopResourceType;
+export type IntentKind = 'ASK' | 'VIDEO' | 'REVIEW' | WorkshopResourceType;
 
 /** 课程 KC 目录条目：前端为 @ 提及菜单本就全量加载，路由时透传给后端做语义锚定。 */
 export interface CourseKcRef {
@@ -33,9 +34,9 @@ export interface IntentRouteResponse {
   reason: string;
 }
 
-/** ASK / VIDEO 之外的 6 个意图即资源类型，可直接喂给工坊生成接口。 */
+/** ASK / VIDEO / REVIEW 之外的 6 个意图即资源类型，可直接喂给工坊生成接口。 */
 export function isResourceIntent(intent: IntentKind): intent is WorkshopResourceType {
-  return intent !== 'ASK' && intent !== 'VIDEO';
+  return intent !== 'ASK' && intent !== 'VIDEO' && intent !== 'REVIEW';
 }
 
 export async function routeIntent(

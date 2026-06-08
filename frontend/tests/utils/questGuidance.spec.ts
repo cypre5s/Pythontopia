@@ -4,10 +4,7 @@ import { resolveQuestGuidance } from '@/utils/questGuidance';
 
 const VALID_MAPS = new Set([
   'town_hub',
-  'farm_north',
   'mine_south',
-  'campus_east',
-  'port_west',
 ]);
 
 describe('resolveQuestGuidance（学习目标面板「下一步」指路）', () => {

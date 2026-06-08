@@ -1,4 +1,4 @@
-"""Schemas for the DebugAgent (stage 10)."""
+"""DebugAgent 结构化输出 schema。"""
 
 from __future__ import annotations
 

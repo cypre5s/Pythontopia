@@ -1,5 +1,6 @@
 package com.pythontopia.core.common
 
+/** 应用层统一错误；[code] 供分类与日志，[message] 为用户可读文案。 */
 sealed interface AppError {
     val code: String
     val message: String

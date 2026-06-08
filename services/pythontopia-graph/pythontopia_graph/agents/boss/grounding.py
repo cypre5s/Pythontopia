@@ -1,10 +1,6 @@
-"""R-13 §5 Phase 5 审查 3：KC grounding + 超纲 syntax 拒绝。
+"""KC 接地审查：关键词命中与超纲语法拒绝（纯静态，防幻觉与超纲出题）。
 
-策略：
-    1. 看题面 / reference_solution 是否包含 KC 关键词（中文 + 英文同义词都接受）；
-    2. 用 ast.walk 检查 reference_solution 是否出现「超纲」AST 节点（每章白名单）。
-
-注意：本审查不依赖外部 LLM；纯静态分析。
+校验题面与 ``reference_solution`` 是否含 KC 关键词，并用 ``ast.walk`` 对照章节语法白名单。
 """
 
 from __future__ import annotations
@@ -103,11 +99,12 @@ def verify_kc_grounding(
     kc_keywords: Mapping[str, Iterable[str]] | None = None,
     min_keyword_hits: int = 1,
 ) -> ReviewVerdict:
+    """校验 KC 关键词接地与章节语法白名单，未命中或超纲则 reject。"""
     issues: list[ReviewIssue] = []
 
     keywords = list(_resolve_keywords(problem.kc_code, kc_keywords))
     if not keywords:
-        # 没给 KC 关键词时只做超纲检查，警告 grounding 弱化。
+        # 无 KC 关键词列表时仅做超纲检查
         issues.append(
             ReviewIssue(
                 review="grounding",
@@ -156,7 +153,7 @@ def _resolve_keywords(
 ) -> list[str]:
     if kc_keywords and kc_code in kc_keywords:
         return list(kc_keywords[kc_code])
-    # 兜底：用 kc_code 末段数字 + 默认中文关键字（PLACEHOLDER：教师可补）
+    # 无外部词表时按 kc_code 推断章节默认关键词
     return _default_keywords(kc_code)
 
 
@@ -206,10 +203,8 @@ def _scan_unsupported_syntax(chapter: int, source: str) -> list[str]:
         name = type(node).__name__
         if name in allowed:
             continue
-        # context 不影响白名单
         if name in {"Load", "Store", "Del", "Param"}:
             continue
-        # 常见无害节点（无副作用）放过
         if name in {"USub", "UAdd", "UnaryOp", "BoolOp", "keyword", "Tuple"}:
             continue
         if name not in allowed:

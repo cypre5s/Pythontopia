@@ -3,16 +3,7 @@ package com.pythontopia.feature.fields
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-/**
- * 后端 `GET /api/learner/mastery` 单条返回结构。
- *
- * 与 Alethicode `LearnerKcMastery` JSON 对齐：
- *  - [kcCode] = `PY43-KC-001` 形式，唯一稳定标识；
- *  - [mastery] ∈ [0.0, 1.0]，由后端基于提交 + 阅读 + 评估事件聚合；
- *  - [status] 是显式的"作物状态"枚举字符串。后端若仅返回 mastery 数值而未显式标 status，
- *    Repository 会用 [KcTileState.statusFor] 做本地推导。
- *  - [chapterOrder] 1..7 对应 Alethicode packId=43 的 7 章，Repository 排序与网格分组都依赖它。
- */
+/** `GET /api/learner/mastery` 单条；[status] 缺省时由 [KcTileState.statusFor] 按 mastery 推导。 */
 @Serializable
 data class KcMasteryDto(
     @SerialName("kcCode") val kcCode: String,
@@ -22,21 +13,10 @@ data class KcMasteryDto(
     @SerialName("status") val status: String? = null,
 )
 
-/**
- * 作物状态枚举。教育语义：种子未发芽 → 苗在长 → 成熟可收 → 已收获留空地。
- *
- * 边界由 [KcTileState.statusFor] 定义，确保前后端语义一致：
- *  - SEED：mastery ∈ [0, 0.2)，对应"刚撒种"，需要先浇 1-2 次水才能发芽；
- *  - GROWING：mastery ∈ [0.2, 0.8)，对应"幼苗在长"，正常浇水继续推进；
- *  - MATURE：mastery ∈ [0.8, 1.0]，对应"成熟可收获"，必须显式 [FieldsRepository.harvestKc]；
- *  - HARVESTED：终态，玩家已点收获按钮，留空地等待下一轮种植（Beta+1 起接入 reseed）。
- */
+/** KC 四态；阈值见 [KcTileState.statusFor]，HARVESTED 须后端显式枚举。 */
 enum class KcStatus { SEED, GROWING, MATURE, HARVESTED }
 
-/**
- * 单格 KC 在 UI 层的状态视图。是 [KcMasteryDto] 经 Repository 转换后的纯本地模型，
- * 不直接序列化回后端，所有"种子-苗-成熟-收获"的可视化都从这里取数据。
- */
+/** 单格 KC UI 状态；由 [KcMasteryDto.toTileState] 转换，不直接序列化回后端。 */
 data class KcTileState(
     val kcCode: String,
     val title: String,
@@ -45,10 +25,7 @@ data class KcTileState(
     val status: KcStatus,
 ) {
     companion object {
-        /**
-         * 推导规则：后端若已显式给 [KcMasteryDto.status]，直接尊重；否则按 mastery 区间映射。
-         * HARVESTED 必须由显式枚举触发，避免 0.99 误判为已收。
-         */
+        /** 优先尊重显式 [status]；否则按 mastery 区间映射，避免高 mastery 误判 HARVESTED。 */
         fun statusFor(mastery: Double, explicit: String?): KcStatus {
             explicit?.let { raw ->
                 runCatching { return KcStatus.valueOf(raw.uppercase()) }
@@ -60,17 +37,14 @@ data class KcTileState(
             }
         }
 
-        /** 成熟门槛，与 `docs/gameplay/economy-system.md` §1.2"收获作物 mastery≥0.8"一致。 */
+        /** 成熟门槛 mastery ≥ 0.8。 */
         const val MATURE_THRESHOLD: Double = 0.8
 
-        /** 发芽门槛，避免 0.0 即显示绿叶；与浇水反馈节奏匹配（约 2-3 次浇水越过）。 */
+        /** 发芽门槛 mastery ≥ 0.2。 */
         const val GROWING_THRESHOLD: Double = 0.2
     }
 }
 
-/**
- * 将 DTO 转换为 UI 层瓦片状态，集中转换路径避免重复推导。
- */
 fun KcMasteryDto.toTileState(): KcTileState = KcTileState(
     kcCode = kcCode,
     title = title,
@@ -79,19 +53,9 @@ fun KcMasteryDto.toTileState(): KcTileState = KcTileState(
     status = KcTileState.statusFor(mastery, status),
 )
 
-/**
- * Alethicode `packId=43`《Python语言基础》7 章 65 KC 的本地种子目录。
- *
- * 数据来源：`/home/cypress/Pythontopia/data/course-pack-43/json/course_kc.json`（已审计 65 条），
- * 这里只截取 `kc_code / kc_name / chapter_order` 三列，供以下两种场景使用：
- *  1. 后端只返回已产生 snapshot 的 KC 时，Repository 用本目录补齐其余 KC 为 0；
- *  2. 后端只返回 mastery 数值，未带 title/chapterOrder 时，Repository 用本目录补齐。
- *
- * **禁止修改 KC 排序或漏项**，与 `AGENTS.md` "项目硬约束"段的 7 章 / 65 KC 验证一致。
- */
+/** packId=43 共 65 KC 种子目录；后端缺项时补 title/chapterOrder，条目数须与课程包一致。 */
 internal object KcSeedCatalog {
 
-    /** 顺序与 chapter_order ASC、kc_code ASC 严格一致，便于 8×9 网格按章节分组渲染。 */
     val entries: List<KcSeed> = listOf(
         KcSeed("PY43-KC-001", "中国计算机发展成就", 1),
         KcSeed("PY43-KC-002", "计算工具的演变", 1),

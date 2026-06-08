@@ -6,15 +6,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerialName
 
 /**
- * Workshop（代码工坊）线上协议层。
- *
- * 为了让 Android 端解耦于后端 `SubmissionStatus + Verdict` 的双层枚举，
- * Android 仅采用 [SubmissionStatus] 一个扁平枚举：
- *   - PENDING / RUNNING 为非终态，会被 [WorkshopRepository.pollStatus] 持续轮询；
- *   - ACCEPTED / WRONG_ANSWER / TIME_LIMIT / RUNTIME_ERROR 为终态，停止轮询。
- *
- * 后端如需对接，按 ADR-001 §3 决定由 OpenAPI Generator 生成 Wire 层 +
- * 手工补丁层做枚举映射；Android-R9 demo 阶段直接信任后端返回该扁平枚举。
+ * 判题协议层：Android 使用扁平 [SubmissionStatus]，与后端 `SubmissionStatus + Verdict` 双层枚举解耦。
+ * PENDING/RUNNING 非终态，由 [WorkshopRepository.pollStatus] 轮询；ACCEPTED/WRONG_ANSWER/TIME_LIMIT/RUNTIME_ERROR 等终态停止轮询。
  */
 
 @Serializable

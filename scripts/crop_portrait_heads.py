@@ -1,25 +1,17 @@
 #!/usr/bin/env python3
 # coding: utf-8
-"""
-R-13 §-1 B1 续修：批量把 NPC portrait 切出单帧头像，
-统一输出 32x48 单帧 PNG 到 `portraits/heads/portrait_<key>_head.png`，
-然后 DialogModal.vue / DialogTree.vue 走 `_head.png` 路径，CSS 简化到不再处理 sprite sheet。
+"""批量裁切 NPC portrait 为单帧头像。
 
-策略：
-  1. 所有 48 宽 portrait（48x64/72/76/80/96）按 LPC 3 列 spritesheet 处理：取左上 16x24
-     （idle 朝下第一帧），输出 32x48（2x scale 保留像素感）；
-  2. 异类大尺寸 portrait（153~187 x 128）取左上 32x32（这些不是 LPC sheet，多为
-     拼接装饰物或 portrait + body 混排），输出 32x48 时按比例适配；
-  3. 直接覆盖原文件不安全（CDN 缓存），所以输出到 heads/ 子目录，DialogModal
-     用 `${portrait}` 路径 → `${portrait_head}` 路径。
-  4. R-14 新增的 9 个 64x64 composite NPC 原 portrait 误取了 up/背面 idle 帧。
-     这类头像从 sprites/npc-composites/npc_*.png 的 down/正面 idle 帧重裁：先刷新
-     `portrait_<key>.png`，再输出对应 `_head.png`，保证对话框看到正脸。
+输出 32×48 PNG 到 portraits/heads/portrait_<key>_head.png，
+供 DialogModal / DialogTree 使用 _head.png 路径。
 
-约束：
-  - 仅依赖 PIL（已被 Pythontopia services 用于截图 / 头像，无新依赖）；
-  - 切完打印每张图的 source vs head 尺寸，方便人眼校验；
-  - 输出文件 LICENSE 继承原文件（CC-BY-SA 3.0 / CC-BY 4.0，归类 LPC LiberatedPixelCup）。
+裁切策略：
+  - 48 宽 portrait（LPC 3 列 sheet）：取 idle 朝下首帧 16×24，2x 放大至 32×48；
+  - 大尺寸异类 portrait（153~187×128）：取左上 32×32 适配至 32×48；
+  - 64×64 composite NPC：从 sprites/npc-composites 取 down/正面 idle 帧，
+    刷新 portrait_<key>.png 后再输出 _head.png。
+
+输出至 heads/ 子目录，避免覆盖原文件引发 CDN 缓存问题。依赖 PIL。
 """
 from __future__ import annotations
 

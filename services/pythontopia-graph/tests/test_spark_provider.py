@@ -1,4 +1,4 @@
-"""Unit tests for the Spark LLM provider (stage 11)."""
+"""SparkProvider 单元测试：HTTP 翻译、环境变量选型与错误映射。"""
 
 from __future__ import annotations
 

@@ -23,6 +23,8 @@ FORBIDDEN_TOKENS = (
 
 
 class PracticeAgent:
+    """生成练习题资源（STRUCT_JSON）；禁止 hidden_test/answer_key 等泄答 token，否则回落确定式兜底。"""
+
     AGENT_NAME = "PracticeAgent"
 
     def __init__(self, provider: LlmProvider) -> None:

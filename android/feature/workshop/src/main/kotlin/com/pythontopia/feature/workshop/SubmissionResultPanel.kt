@@ -26,16 +26,7 @@ import androidx.compose.ui.unit.sp
 import com.pythontopia.core.design.PytColors
 import com.pythontopia.core.design.PytSpace
 
-/**
- * Workshop（代码工坊）判题结果面板：屏幕底部的状态显示区。
- *
- * 三种状态：
- *   1. 还没提交：[EmptyState] 提示用户先选题；
- *   2. 提交中或轮询中：[StatusChip] + [CircularProgressIndicator]，traceback 区为空；
- *   3. 已拿到 [SubmissionDto]：[StatusChip] + 通过用例 + runtime + traceback（仅失败时显示）。
- *
- * traceback 区使用等宽字体 + 水平/垂直双滚动，方便阅读 Python traceback 多缩进结构。
- */
+/** 判题结果面板：按提交/轮询/终态展示状态 chip、用例与耗时；失败时以等宽双轴滚动显示 traceback。 */
 @Composable
 fun SubmissionResultPanel(
     submission: SubmissionDto?,

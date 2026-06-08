@@ -15,11 +15,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * 应用启动入口决策：冷启动时尝试恢复加密持久化的会话，决定首屏去 [AuthDestination.HOME]
- * 还是 [AuthDestination.LOGIN]，避免每次启动都强制重登。
- *
- * 解析在 IO 线程（EncryptedSharedPreferences 首访是磁盘 + Keystore I/O，不能卡主线程）；
- * 解析期间 [startDestination] 为 null，UI 显示极简启动占位。
+ * 冷启动会话恢复：决定首屏 [AuthDestination.HOME] 或 [AuthDestination.LOGIN]；
+ * 解析在 IO 线程，期间 [startDestination] 为 null 显示启动占位。
  */
 @HiltViewModel
 class AppEntryViewModel @Inject constructor(

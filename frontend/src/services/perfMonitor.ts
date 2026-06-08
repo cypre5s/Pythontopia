@@ -41,7 +41,7 @@ export const WEB_VITAL_THRESHOLDS: Readonly<Record<WebVitalName, WebVitalThresho
 });
 
 export interface DurationRecord {
-  /** 业务标签，例如 `scene_transition:town_hub→farm_north` */
+  /** 业务标签，例如 `scene_transition:town_hub→mine_south` */
   label: string;
   /** 毫秒 */
   durationMs: number;
@@ -128,9 +128,9 @@ function computeP95(sorted: number[]): number {
  * 单例用法（业务侧）：
  * ```ts
  * import { perfMonitor } from '@/services/perfMonitor';
- * perfMonitor.start('scene_transition:town_hub→farm_north');
+ * perfMonitor.start('scene_transition:town_hub→mine_south');
  * await switchScene();
- * perfMonitor.end('scene_transition:town_hub→farm_north');
+ * perfMonitor.end('scene_transition:town_hub→mine_south');
  * ```
  *
  * 多实例用法（测试 / 隔离场景）：直接 `new PerfMonitor({ now: fakeNow })`。

@@ -30,6 +30,7 @@ DISCRIMINATION_KEYWORDS = [
 
 
 def safety_critic(draft: ResourceDraft) -> SafetyResult:
+    """安全审查：泄答关键词、歧视内容、PII、Practice hint 泄答、Handout 危险代码。"""
     reasons: list[str] = []
     payload = _flatten(draft)
     lowered = payload.lower()

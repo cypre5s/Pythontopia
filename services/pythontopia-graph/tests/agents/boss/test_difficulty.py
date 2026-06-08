@@ -1,4 +1,4 @@
-"""R-13 §5 Phase 5：难度估算器测试。"""
+"""difficulty_estimator 单元测试。"""
 
 from __future__ import annotations
 
@@ -107,8 +107,7 @@ def test_max_complexity_solution_estimated_high() -> None:
 def test_syntax_error_solution_still_yields_features() -> None:
     p = _problem("def broken(", declared=1)
     v = estimate_difficulty(p)
-    # difficulty 估算不会因为 SyntaxError 直接 reject（self_test 才负责），但
-    # 估算应当回退到不含 AST 节点的 features，仍能给出 score。
+    # SyntaxError 不直接 reject；无 AST 时仍应给出 estimated score
     assert "estimated" in v.metadata
 
 

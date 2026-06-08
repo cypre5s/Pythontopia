@@ -19,18 +19,8 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 /**
- * [ArenaViewModel] 单元测试。
- *
- * 覆盖维度（对应任务"题目切换 / 提交 / 排行刷新"三个口径）：
- *  - bootstrap：init 后 session / leaderboard 都填充，加载 flag 复位
- *  - selectProblem：边界（越界忽略）+ 合法切换
- *  - updateCode：写入到 [ArenaUiState.codeBuffers]，并体现在 currentCode
- *  - submitCurrent：三类终态分别落到 [ArenaUiState.lastSubmission]，且仅 PASSED 会再刷一次排行榜
- *  - refreshLeaderboard：显式调用即可
- *  - selectTab：切到 LEADERBOARD 触发懒加载（在 leaderboard 已有数据时不重复请求）
- *
- * 仍然使用 [UnconfinedTestDispatcher] + `Dispatchers.setMain` 套件，与
- * `HubViewModelTest` 保持一致，避免协程在 init/调用时延迟到 advanceUntilIdle 才执行。
+ * [ArenaViewModel] 单测：bootstrap、选题边界、codeBuffers、三类提交终态、积分榜懒加载与 [myRank]。
+ * 使用 [UnconfinedTestDispatcher] 使 init 内协程同步执行。
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ArenaViewModelTest {

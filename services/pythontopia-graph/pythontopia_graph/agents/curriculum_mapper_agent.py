@@ -13,12 +13,7 @@ from pythontopia_graph.schemas.curriculum import (
 
 
 class CurriculumMapperAgent:
-    """Deterministic KC -> field tile mapper.
-
-    This agent **does not** call the LLM. It exists as a LangGraph-style single
-    node so that future iterations may layer optional LLM optimization on top
-    while keeping the deterministic baseline reproducible.
-    """
+    """确定性 KC→知识田 tile 映射；不调用 LLM，输出可复现的 plan_steps、tile_assignments 与 deterministic_signature。"""
 
     DEFAULT_UNLOCK_COUNT = 8
 

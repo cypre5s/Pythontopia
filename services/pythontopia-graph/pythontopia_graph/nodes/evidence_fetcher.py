@@ -44,7 +44,7 @@ class EvidenceFetcher(Protocol):
 
 
 class StaticEvidenceFetcher:
-    """Deterministic fetcher backed by an in-memory list; used in tests."""
+    """测试用确定性 fetcher，基于内存 RagHit 列表。"""
 
     def __init__(self, hits: list[RagHit]) -> None:
         self._hits = hits
@@ -57,7 +57,7 @@ class StaticEvidenceFetcher:
 
 
 class HttpRagEvidenceFetcher:
-    """Fetcher that calls the Pythontopia RAG service over HTTP."""
+    """经 HTTP 调用 Pythontopia RAG 服务的 EvidenceFetcher。"""
 
     def __init__(self, base_url: str | None = None, timeout: float = 5.0) -> None:
         self._base_url = (base_url or os.environ.get("PYT_RAG_URL", "http://localhost:18092")).rstrip("/")
@@ -66,10 +66,7 @@ class HttpRagEvidenceFetcher:
     async def fetch(
         self, *, kc_codes: list[str], query: str, top_k: int = 6
     ) -> EvidenceBundle:
-        # 命中 KC 过滤时（资源工坊按 KC 生成）候选已被限定在该 KC，精度由过滤保证，
-        # 故阈值放到 0 以确保该 KC 的页面一定作为证据返回（hash 向量对会话式 query
-        # 余弦偏低，0.3 会把相关页全部过滤成 NO_EVIDENCE）。无 KC（自由答疑）时用
-        # 适中阈值 0.15 抑制噪声页被误引。
+        # 有 kc_codes 时 min_score=0（KC 已过滤，hash 向量对会话 query 余弦偏低，高阈值会误成 no_evidence）；无 KC 时用 0.15 抑噪。
         min_score = 0.0 if kc_codes else 0.15
         payload = {
             "query": query,

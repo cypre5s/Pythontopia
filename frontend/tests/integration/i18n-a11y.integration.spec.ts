@@ -170,7 +170,7 @@ describe('a11y.integration · MiniMap 出口箭头 aria-label', () => {
         playerX: 0,
         playerY: 0,
         tilemap: { width: 4, height: 4 },
-        exits: [{ side, toMap: 'farm_north', label: '知识农场' }],
+        exits: [{ side, toMap: 'mine_south', label: 'Bug 矿洞' }],
       },
     });
     const el = wrapper.get(`[data-testid="mini-map-exit-${side}"]`);

@@ -43,7 +43,11 @@ public class OrchestratorGraphClient {
    * 打开到 Python graph 服务的 SSE 连接并把每个事件按名字转发给 {@code emitter}。
    * 仅把非空的可选字段写入 body，避免给下游传一堆 null。
    */
-  public void turnStream(Long userId, OrchestratorTurnRequest request, SseEmitter emitter) {
+  public void turnStream(
+      Long userId,
+      OrchestratorTurnRequest request,
+      List<String> decayingKcs,
+      SseEmitter emitter) {
     String url = properties.graphUrl() + "/agents/orchestrator/turn/stream";
 
     String sessionId = request.sessionId();
@@ -74,6 +78,10 @@ public class OrchestratorGraphClient {
     }
     if (request.courseKcCodes() != null && !request.courseKcCodes().isEmpty()) {
       body.put("course_kc_index", request.courseKcCodes());
+    }
+    // 记忆矿脉回声：服务端从 ReviewSignal 算出的到期 KC，供总管把计划优先锚定到待复习知识点。
+    if (decayingKcs != null && !decayingKcs.isEmpty()) {
+      body.put("decaying_kcs", decayingKcs);
     }
 
     sseRelayExecutor.submit(

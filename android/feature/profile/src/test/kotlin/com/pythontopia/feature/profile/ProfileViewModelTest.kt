@@ -43,8 +43,7 @@ class ProfileViewModelTest {
     @BeforeEach
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
-        // loadProfile() 现在并发拉 profile + dimensions；默认给 dimensions 一个空成功，
-        // 需要校验维度的用例再各自覆盖。
+        // loadProfile 并发拉 profile + dimensions；默认 dimensions 成功，需校验维度的用例自行覆盖。
         coEvery { repository.fetchDimensions() } returns Result.Success(emptyList())
         viewModel = ProfileViewModel(repository)
     }
@@ -162,8 +161,7 @@ class ProfileViewModelTest {
 
     @Test
     fun `loadProfile emits intermediate loading=true via state flow`() = runTest {
-        // 切到 StandardTestDispatcher 才能观察 isLoading=true 中间帧；
-        // UnconfinedTestDispatcher 会把 update 折叠掉。
+        // StandardTestDispatcher 可观察 isLoading 中间态；UnconfinedTestDispatcher 会折叠 update。
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         val scopedViewModel = ProfileViewModel(repository)
         val gate = CompletableDeferred<Result<LearnerProfileDto?>>()
@@ -230,7 +228,7 @@ class ProfileViewModelTest {
         assertFalse(state.isSaving)
         assertEquals(ProfileDimensions.LEARNING_GOAL, state.savedDimensionKey)
         assertEquals("reloaded", state.profile?.narrativeSummary)
-        // 自评成功后仪表盘维度随之刷新到最新 score / 证据数。
+        // 自评成功后 dimensions 应刷新为最新 score / evidenceCount。
         assertEquals(0.6, state.dimensions.first().score)
         assertEquals(5, state.dimensions.first().evidenceCount)
         coVerify(exactly = 1) { repository.updateDimension(ProfileDimensions.LEARNING_GOAL, any()) }

@@ -15,17 +15,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 /**
- * [PythontopiaGame] 单元测试。
- *
- * 关于 headless 测试的取舍：
- * `gdx-backend-headless`（或 lwjgl3）在本仓库 R-12 阶段未引入（详见 `:game/build.gradle.kts`
- * 与 `gradle/libs.versions.toml`，AGENTS.md 禁止本期新增依赖）。因此本测试用 MockK 把
- * [Gdx] 的 `graphics` / `input` / `gl` 静态字段塞入 relaxed mock，再用 mocked [Screen]
- * 替代 [HubScreen]（后者构造时就 `new ShapeRenderer()` 需要真实 GL 上下文），
- * 验证 [PythontopiaGame.switchScreen] / [PythontopiaGame.dispose] 的生命周期契约。
- *
- * 真实的 OpenGL 帧绘制回归留给 R-13 接入 `gdx-backend-headless` 后的 Roborazzi 截图测试
- * （docs/android/03-rendering-libgdx-vs-compose.md §9.1）。
+ * [PythontopiaGame] 生命周期测试：MockK 伪造 [Gdx] 静态字段，mock [Screen] 替代需 GL 的 [HubScreen]。
  */
 class PythontopiaGameTest {
 
@@ -125,7 +115,7 @@ class PythontopiaGameTest {
         game.dispose()
 
         verify(exactly = 1) { mockScreen.dispose() }
-        // 双 dispose 不应再次触发，验证 Game 内部"夹钳"住单次 dispose 不重复。
+        // 双 dispose 不应再次触发。
         game.dispose()
         verify(exactly = 1) { mockScreen.dispose() }
     }

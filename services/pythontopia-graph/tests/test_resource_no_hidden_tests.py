@@ -1,4 +1,4 @@
-"""Sanity test: the practice agent never leaks hidden tests in any branch."""
+"""PracticeAgent 各分支输出不得泄露 hidden test 相关字段。"""
 from __future__ import annotations
 
 import json

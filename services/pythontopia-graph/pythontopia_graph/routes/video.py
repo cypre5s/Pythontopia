@@ -1,4 +1,4 @@
-"""B站视频检索路由（方案 A · 取数层）。
+"""B站视频检索路由（取数层）。
 
 * ``GET /agents/video/bilibili/search?keyword=...&limit=8`` → :class:`BilibiliSearchResponse`
 

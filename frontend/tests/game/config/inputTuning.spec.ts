@@ -17,7 +17,8 @@ describe('DEFAULT_INPUT_TUNING', () => {
     expect(DEFAULT_INPUT_TUNING.touchJoystickRadius).toBe(60);
     expect(DEFAULT_INPUT_TUNING.inputLagBudgetMs).toBe(50);
     expect(DEFAULT_INPUT_TUNING.stopLagBudgetMs).toBe(80);
-    expect(DEFAULT_INPUT_TUNING.runSpeedMultiplierPort).toBeCloseTo(1.1, 5);
+    expect(DEFAULT_INPUT_TUNING.sceneSpeedMultiplier.town_hub).toBe(1.0);
+    expect(DEFAULT_INPUT_TUNING.sceneSpeedMultiplier.mine_south).toBe(0.8);
   });
 
   it('freezes the config and nested sceneSpeedMultiplier (附录 A.1 兜底)', () => {
@@ -97,27 +98,12 @@ describe('getSpeedForScene', () => {
     expect(getSpeedForScene('town_hub', true)).toBe(180);
   });
 
-  it('keeps farm_north at baseline (1.0× walk/run)', () => {
-    expect(getSpeedForScene('farm_north', false)).toBe(120);
-    expect(getSpeedForScene('farm_north', true)).toBe(180);
-  });
-
-  it('keeps campus_east at baseline (1.0× walk/run)', () => {
-    expect(getSpeedForScene('campus_east', false)).toBe(120);
-    expect(getSpeedForScene('campus_east', true)).toBe(180);
-  });
-
   it('applies the mine_south 0.8× slowdown for both walk and run', () => {
     expect(getSpeedForScene('mine_south', false)).toBeCloseTo(96, 5);
     expect(getSpeedForScene('mine_south', true)).toBeCloseTo(144, 5);
     expect(getSpeedForScene('mine_south', false)).toBeLessThan(
       getSpeedForScene('town_hub', false),
     );
-  });
-
-  it('applies port_west run bonus 1.10× on top of base run speed', () => {
-    expect(getSpeedForScene('port_west', false)).toBe(120);
-    expect(getSpeedForScene('port_west', true)).toBeCloseTo(198, 5);
   });
 
   it('defaults unknown scene keys to multiplier 1.0 (forward-compat for new maps)', () => {

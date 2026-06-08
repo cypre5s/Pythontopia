@@ -21,17 +21,7 @@ import androidx.compose.ui.unit.dp
 import com.pythontopia.core.design.PytColors
 import com.pythontopia.core.design.PytSpace
 
-/**
- * 学习路径"小地图"：Compose Canvas 画纵向链式节点 + 连接线。
- *
- * 设计取舍：
- *  - 不在 Canvas 内做点击 / 拖拽（Compose Canvas 无 pointerInput per-shape API），
- *    交互由下方 [PathNodeCard] 列表承担；本视图只做"路径全貌可视化"。
- *  - 节点按 [nodes] 顺序均匀排布，连接线根据 [PathNodeDto.nextIds] 在节点之间画直线；
- *    后端拓扑保证 nextIds 节点存在，UI 不做合法性校验，缺失节点的连线跳过。
- *  - 当前节点（[currentNodeId]）外圈加 PytColors.primary 高亮 ring，用户能一眼定位。
- *  - 节点为空时整个视图退化为占位 Text，避免 Canvas 0 高度崩。
- */
+/** 学习路径纵向链式小地图；仅可视化，点击交互由 [PathNodeCard] 列表承担。缺失 [PathNodeDto.nextIds] 目标时跳过连线。 */
 @Composable
 fun PathGraphView(
     nodes: List<PathNodeDto>,

@@ -25,18 +25,7 @@ import androidx.compose.ui.unit.dp
 import com.pythontopia.core.design.PytColors
 import com.pythontopia.core.design.PytSpace
 
-/**
- * 单周复盘报告卡片。
- *
- * 视觉分区：
- *  1. 顶部标题（第 N 周复盘 + 时间范围 + 已读标识）；
- *  2. 三组指标 chip（提交数 / Bug 矿洞通关数 / KC 进步数）；
- *  3. KC 增量柱状图（[KcGainBarChart] 默认 Top 10）；
- *  4. 复盘资源链接（[ResourceLinkList]）。
- *
- * 卡片是「展示组件」：不持有状态、不发起请求；点击资源由 [onResourceClick] 透传，
- * 由上层（ViewModel / Activity）决定打开方式。
- */
+/** 单周复盘报告卡片；无状态展示组件，资源点击由 [onResourceClick] 透传。 */
 @Composable
 fun WeeklyReportCard(
     report: RetroReport,

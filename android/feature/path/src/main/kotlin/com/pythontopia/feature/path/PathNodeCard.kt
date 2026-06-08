@@ -31,19 +31,7 @@ import androidx.compose.ui.unit.dp
 import com.pythontopia.core.design.PytColors
 import com.pythontopia.core.design.PytSpace
 
-/**
- * 单节点卡片。
- *
- * 视觉规则：
- *  - LOCKED        : 灰底 + 锁图标"🔒"前缀；不可点
- *  - UNLOCKED      : 暖色边框 + "开始"行动 hint；可点 → advanceNode → IN_PROGRESS
- *  - IN_PROGRESS   : 高对比边框 + "进行中"高亮 + 行动 hint"完成"；可点 → advanceNode → DONE
- *  - DONE          : 浅绿边框 + "✓"前缀；可点（复习）
- *
- * 当前节点（[isCurrent] = true）在状态色基础上叠加左侧 6dp 主色 ribbon，强化定位。
- *
- * 不在卡片内做跳转逻辑：[onClick] 由 [PathScreen] 持有，根据 [PathNodeDto.type] 决定 navController.navigate。
- */
+/** 单路径节点卡片；LOCKED 不可点，跳转由 [PathScreen] 经 [onClick] 处理。 */
 @Composable
 fun PathNodeCard(
     node: PathNodeDto,
@@ -172,9 +160,6 @@ private fun ActionHint(status: PathNodeStatus, color: Color) {
     }
 }
 
-/**
- * 4 状态对应的色板，复用 design module 的语义色。
- */
 private data class StatusPalette(
     val background: Color,
     val border: Color,

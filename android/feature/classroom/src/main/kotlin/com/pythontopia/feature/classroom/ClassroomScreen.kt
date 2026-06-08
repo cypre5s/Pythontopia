@@ -41,21 +41,9 @@ import com.pythontopia.core.design.PytColors
 import com.pythontopia.core.design.PytSpace
 
 /**
- * `:feature:classroom` 主屏：学生 + 教师视角统一入口。
+ * 班级主屏：学生（我的班级/公告板）与教师（我的班级/教师看板）共用入口。
  *
- * 双视角共用顶部 [TabRow]，标签按 [role] 动态裁剪：
- *  - 学生：`我的班级` + `公告板`
- *  - 教师：`我的班级` + `教师看板`
- *
- * 学生与教师的"我的班级" tab UI 一致（列出班级 + 选中态），所以 [ClassroomListPanel]
- * 同时服务两边；公告板 / 看板各自独立 panel。
- *
- * Role 判定：当前未持有 SessionRepository，role 由外层导航在 NavGraph 里通过参数注入，
- * 调用方写 `ClassroomScreen(role = currentRole)`。默认 [StudentRole.STUDENT] 让
- * R-12 演示能直接 `ClassroomScreen()` 跑起来。
- *
- * @param role 当前用户角色；驱动 ViewModel `bind()` 选择哪条分支。
- * @param viewModel Hilt 注入的 [ClassroomViewModel]，测试时可手动传 mock。
+ * @param role 由外层导航注入，驱动 [ClassroomViewModel.bind] 分支。
  */
 @Composable
 fun ClassroomScreen(

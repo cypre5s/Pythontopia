@@ -20,12 +20,7 @@ interface LearningPathApi {
     suspend fun plan(): PlanPathResponseWireDto
 }
 
-/**
- * 学习路径仓库。
- *
- * 后端以当前登录用户为边界：Android 不再上传 demo userId，也不在本地伪造完成进度。
- * 当用户尚未生成路径时，仓库会调用 `/api/learner/path/plan` 生成一次真实路径。
- */
+/** 学习路径仓库：身份由 JWT 界定；`active` 404 时调用 `/api/learner/path/plan` 生成路径；节点进度仅由后端 evidence 更新。 */
 @Singleton
 class PathRepository @Inject constructor(
     private val api: LearningPathApi,

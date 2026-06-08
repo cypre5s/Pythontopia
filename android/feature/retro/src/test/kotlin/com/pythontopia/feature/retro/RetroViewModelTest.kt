@@ -120,9 +120,9 @@ class RetroViewModelTest {
 
         val s = viewModel.state.value
         assertEquals("wk-1", s.currentReport?.reportId)
-        // 旧的 currentReport 现在出现在 pastReports 里，按 weekIndex 降序排序
+        // 原 currentReport 归入 pastReports，按 weekIndex 降序
         assertEquals(listOf("this-week", "wk-2"), s.pastReports.map { it.reportId })
-        // thisWeekIndex 保持指向真正的本周，便于 chip 标识「本周」
+        // thisWeekIndex 仍指向真实本周，供 chip 标「本周」
         assertEquals(2812L, s.thisWeekIndex)
     }
 

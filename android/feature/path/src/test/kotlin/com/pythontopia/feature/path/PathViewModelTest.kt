@@ -198,15 +198,14 @@ class PathViewModelTest {
         viewModel.load(42L)
         advanceUntilIdle()
 
-        // Simulate in-flight by setting state directly via first advance call.
+        // 首笔 advance 挂起，模拟 inflight
         coEvery { repository.markNodeStarted("p-1", "n-003") } coAnswers {
-            // Never returns within this test window
             kotlinx.coroutines.delay(10_000)
             samplePath
         }
         val unlocked = samplePath.nodes.first { it.id == "n-003" }
         viewModel.advanceNode(unlocked)
-        // Second call must be ignored while first one is pending.
+        // inflight 期间重复点击应被忽略
         viewModel.advanceNode(unlocked)
 
         coVerify(exactly = 1) { repository.markNodeStarted("p-1", "n-003") }

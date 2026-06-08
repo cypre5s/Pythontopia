@@ -6,8 +6,8 @@
   "portrait": "portrait_arena_guard.png",
   "spawnMap": "town_hub",
   "spawn": {
-    "tileX": 38,
-    "tileY": 36
+    "tileX": 37,
+    "tileY": 37
   },
   "birthday": {
     "month": 10,
@@ -21,56 +21,56 @@
       {
         "from": "06:00",
         "map": "town_hub",
-        "tileX": 38,
-        "tileY": 36
+        "tileX": 37,
+        "tileY": 37
       }
     ],
     "tuesday": [
       {
         "from": "06:00",
         "map": "town_hub",
-        "tileX": 38,
-        "tileY": 36
+        "tileX": 37,
+        "tileY": 37
       }
     ],
     "wednesday": [
       {
         "from": "06:00",
         "map": "town_hub",
-        "tileX": 38,
-        "tileY": 36
+        "tileX": 37,
+        "tileY": 37
       }
     ],
     "thursday": [
       {
         "from": "06:00",
         "map": "town_hub",
-        "tileX": 38,
-        "tileY": 36
+        "tileX": 37,
+        "tileY": 37
       }
     ],
     "friday": [
       {
         "from": "06:00",
         "map": "town_hub",
-        "tileX": 38,
-        "tileY": 36
+        "tileX": 37,
+        "tileY": 37
       }
     ],
     "saturday": [
       {
         "from": "06:00",
         "map": "town_hub",
-        "tileX": 38,
-        "tileY": 36
+        "tileX": 37,
+        "tileY": 37
       }
     ],
     "sunday": [
       {
         "from": "06:00",
         "map": "town_hub",
-        "tileX": 38,
-        "tileY": 36
+        "tileX": 37,
+        "tileY": 37
       }
     ]
   },

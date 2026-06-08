@@ -79,7 +79,7 @@ class HubViewModelTest {
 
     @Test
     fun `requestInteract requires nearby NPC and opens dialog`() = runTest {
-        // No NPC nearby → no-op
+        // 附近无 NPC 时不操作
         viewModel.requestInteract()
         assertNull(viewModel.state.value.dialogOpenedFor)
 

@@ -23,12 +23,10 @@ class HealthResponse(BaseModel):
 async def _self_heal_empty_index(
     app: FastAPI, db_url: str, *, attempts: int = 60, delay_s: float = 5.0
 ) -> None:
-    """索引为空时后台轮询 DB，等课程种子落库后自动重建一次。
+    """索引为空时后台轮询 DB，课程种子落库后自动重建一次。
 
-    根因：RAG 服务（docker-compose 里）只 ``depends_on postgres healthy``，不等后端
-    Flyway 把课程包种子写入。若 RAG 先于种子启动，初始索引为空，之后所有按 KC 的检索
-    都会 NO_EVIDENCE，使资源讲义回落「课件检索未命中」兜底。这里让 RAG 自愈：发现空
-    索引就轮询，课程页一旦出现立即重建一次，免去人工 ``init_rag_index.sh``。
+    RAG 启动可能早于 Flyway 种子写入，初始空索引会导致检索均返回 no_evidence_found。
+    轮询到课程页后立即重建，避免人工执行 init_rag_index.sh。
     """
     for _ in range(attempts):
         await asyncio.sleep(delay_s)
@@ -57,7 +55,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     db_url = os.environ.get("PYT_DB_URL", DEFAULT_DB_URL)
     try:
         pages = page_records_to_indexable(fetch_pages(db_url))
-    except Exception as exc:  # fail-soft: keep booting even when the DB is unavailable
+    except Exception as exc:  # fail-soft：DB 不可用时仍启动，索引为空
         logger.warning("RAG page load failed; starting with empty index: %s", exc)
         pages = []
     app.state.rag_page_source = InMemoryPageSource(pages=pages)

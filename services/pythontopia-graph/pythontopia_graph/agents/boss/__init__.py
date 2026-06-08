@@ -1,13 +1,6 @@
-"""R-13 §5 Phase 5：Boss 副本 AI 出题模块。
+"""Boss 副本 AI 出题模块。
 
-入口：``generate_boss_problem(chapter, stage, kc_code, difficulty, ...)``，编排 5 重审查。
-
-子模块：
-    struct_validator        题目对象结构合法性
-    self_tester             reference_solution 在沙箱内必须通过自带 test_cases
-    grounding               KC 关键词命中 + 超纲 syntax 拒绝
-    difficulty_estimator    AI 自报 difficulty 与估算的差距
-    plagiarism_checker      与课程包既有 39 题 + 玩家最近做题去重
+入口 ``generate_boss_problem`` 编排结构校验、自测、KC 接地、难度校准与查重五道审查。
 """
 
 from .schemas import BossProblem, BossProblemReview, ReviewIssue, ReviewVerdict

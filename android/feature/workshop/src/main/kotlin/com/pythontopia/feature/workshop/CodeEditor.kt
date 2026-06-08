@@ -35,15 +35,8 @@ import com.pythontopia.core.design.PytColors
 import com.pythontopia.core.design.PytSpace
 
 /**
- * Workshop（代码工坊）极简代码编辑器。
- *
- * 设计取舍（参见任务 6）：
- *   - 不引入 Markwon / Codeview 等 IDE 组件，避免依赖膨胀；
- *   - 仅做「等宽字体 + 左侧行号 + 共享纵向滚动」，已能满足 60-200 行 Python 题；
- *   - 行号列宽随行数动态扩展（最少 3 个字符，最多 5），避免 1000 行时挤压代码列；
- *   - 行号列与代码列共用同一个 [ScrollState]，让滚动严格同步。
- *
- * 后续 Android-R10 如需语法高亮，可在不破坏此 API 的前提下替换内部实现。
+ * 极简代码编辑器：等宽字体 + 行号 + 共享纵向 [ScrollState]；不引入 IDE 级依赖。
+ * 行号列宽随行数在 3–5 位间伸缩，避免超长文件挤压代码区。
  */
 @Composable
 fun CodeEditor(
@@ -160,9 +153,7 @@ private const val CODE_MIN_WIDTH_DP: Int = 720
 private const val CODE_MAX_WIDTH_DP: Int = 1800
 private const val CODE_PLACEHOLDER: String = "# 在这里编写你的解答"
 
-/**
- * 暴露给 UI 测试的常量，方便 Compose UI Test 断言占位 / 字号。
- */
+/** UI 测试可引用的占位文案与字号常量。 */
 object CodeEditorDefaults {
     const val PLACEHOLDER: String = CODE_PLACEHOLDER
     const val FONT_SIZE_SP: Int = CODE_FONT_SIZE

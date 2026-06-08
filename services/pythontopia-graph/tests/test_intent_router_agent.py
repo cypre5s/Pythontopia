@@ -1,8 +1,4 @@
-"""IntentRouterAgent（百晓工坊 意图路由）unit tests.
-
-Mirrors the StubProvider style of tests/test_orchestrator_agent.py. asyncio_mode
-is "auto" (see pyproject), but the markers are kept explicit for clarity.
-"""
+"""IntentRouterAgent（百晓工坊意图路由）单元测试。"""
 
 from __future__ import annotations
 
@@ -20,7 +16,7 @@ from pythontopia_graph.schemas.intent import CourseKc, IntentRouteRequest
 
 
 class StubProvider(LlmProvider):
-    """Returns a single queued content_json payload for chat(); empty → None."""
+    """chat() 返回预设 content_json；空则 None。"""
 
     def __init__(self, payload: dict | None = None) -> None:
         self._payload = payload
@@ -45,7 +41,7 @@ def request_of(message: str, **overrides) -> IntentRouteRequest:
     return IntentRouteRequest(**payload)
 
 
-# ─────────────────────────── (a) LLM-driven routing ─────────────────────────
+# LLM 路由
 
 
 @pytest.mark.asyncio
@@ -89,6 +85,27 @@ async def test_llm_video_intent_routes_and_grounds_kc() -> None:
 
 
 @pytest.mark.asyncio
+async def test_llm_review_intent_routes_and_grounds_kc() -> None:
+    """REVIEW 与 ASK/VIDEO 一样是非生成意图，引导去错题矿洞按到期 KC 复盘，需被 LLM 路由识别。"""
+    payload = {
+        "intent": "review",
+        "kc_codes": ["PY43-KC-003"],
+        "focus_hint": "复盘 while 循环",
+        "confidence": 0.7,
+        "reason": "用户想复习巩固",
+    }
+    agent = IntentRouterAgent(StubProvider(payload))
+
+    resp = await agent.route(request_of("我想复习一下 while 循环"))
+
+    assert resp.intent == "REVIEW"
+    assert resp.kc_codes == ["PY43-KC-003"]
+    assert "REVIEW" in ALL_INTENTS
+    # REVIEW 不是工坊 6 类资源，不能走生成管线。
+    assert "REVIEW" not in RESOURCE_INTENTS
+
+
+@pytest.mark.asyncio
 async def test_confidence_is_clamped_to_unit_interval() -> None:
     agent = IntentRouterAgent(StubProvider({"intent": "ASK", "confidence": 1.7}))
 
@@ -98,7 +115,7 @@ async def test_confidence_is_clamped_to_unit_interval() -> None:
     assert resp.confidence == pytest.approx(1.0)
 
 
-# ─────────────────────────── (b) keyword fallback ───────────────────────────
+# 关键词兜底
 
 
 @pytest.mark.asyncio
@@ -112,6 +129,8 @@ async def test_confidence_is_clamped_to_unit_interval() -> None:
         ("做个循环的动画分镜脚本", "STORYBOARD"),
         ("我想看看 for 循环的视频讲解", "VIDEO"),
         ("有没有 B站 上讲列表的视频", "VIDEO"),
+        ("复习一下快忘了的知识点", "REVIEW"),
+        ("帮我复盘一下之前学过的循环", "REVIEW"),
         ("梳理一下循环的讲义", "HANDOUT"),
         ("为什么我的循环会报错", "ASK"),
         ("随便看看列表", "HANDOUT"),
@@ -138,7 +157,7 @@ async def test_name_substring_grounds_kc_when_no_manual_or_llm() -> None:
     assert resp.kc_codes == ["PY43-KC-001"]
 
 
-# ─────────────────────────── (c) manual KC handling ─────────────────────────
+# 手动 KC
 
 
 @pytest.mark.asyncio

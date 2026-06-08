@@ -53,12 +53,7 @@ internal object MineApiModule {
     fun provideMineApi(retrofit: Retrofit): MineApi = retrofit.create(MineApi::class.java)
 }
 
-/**
- * Bug 矿洞仓库。
- *
- * 后端真实入口要求 `submissionId`：矿洞是失败提交的调试副本，不再支持 Android 本地
- * 随机/主动生成卡牌。重试提交走服务端 `/retry-submit`，通过后由后端写入 DebugResolved。
- */
+/** Bug 矿洞仓库：须带失败 `submissionId` 开副本；判题走 `/retry-submit`，通过后由后端写入 DebugResolved。 */
 @Singleton
 class MineRepository @Inject internal constructor(
     private val api: MineApi,

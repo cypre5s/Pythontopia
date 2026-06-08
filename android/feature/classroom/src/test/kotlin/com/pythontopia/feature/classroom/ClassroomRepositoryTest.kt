@@ -14,17 +14,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import retrofit2.Retrofit
 
-/**
- * 把 [ClassroomRepository] 接到 [MockWebServer]，验证：
- *  1. 4 个 GET / 1 个 POST 端点的 path / method / body 严格对齐后端契约
- *  2. JSON 反序列化字段映射正确（[ClassroomQuest.requiredEvidenceType] 等）
- *  3. fallback 路径：HTTP 5xx / 网络异常时 [myClassrooms] / [quests] / [heatmap] /
- *     [errorHotspots] 退化为空 list 不抛
- *  4. fail-fast 路径：[join] / [submitEvidence] 拿到 4xx 时直接抛 [Throwable]
- *
- * 不引入 Hilt 容器，直接用 [RetrofitFactory] 的相同 [Json] 配置 + asConverterFactory；
- * 端口由 [MockWebServer.start] 自动分配，避免与本地真实端口冲突。
- */
+/** [ClassroomRepository] MockWebServer 契约与 fallback/fail-fast 路径单测。 */
 class ClassroomRepositoryTest {
 
     private lateinit var server: MockWebServer

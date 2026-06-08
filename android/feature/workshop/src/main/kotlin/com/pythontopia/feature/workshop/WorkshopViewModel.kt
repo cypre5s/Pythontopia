@@ -16,18 +16,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * Workshop（代码工坊）ViewModel：协调 [WorkshopRepository] 与 [WorkshopUiState]。
- *
- * 关键流程：
- *  1. [openPicker] / [loadProblems]：按 [WorkshopUiState.kcCodeFilter] 拉题目列表；
- *  2. [selectProblem]：把题目装入状态并重置代码编辑器（同题保留代码）；
- *  3. [updateCode]：纯本地状态写入，不触发网络；
- *  4. [submit]：先 POST 拿到初始 [SubmissionDto]，再启动轮询 [Job] 跟新 latestStatus，
- *     终态后自动刷新 [WorkshopUiState.history]；
- *  5. 用户连续 [submit] 会先 cancel 已有的轮询 Job，避免两个 polling 串扰。
- *
- * 历史归属：服务端 `/api/submissions` 走 CurrentUser 鉴权，Android 不再传 demo userId，
- * 避免把本地占位身份冒充正式业务数据。
+ * 代码工坊 ViewModel：选题 → 编辑 → POST 提交 → 轮询终态 → 刷新历史。
+ * 重复提交会先取消进行中的轮询 Job；同题重选保留用户代码。
+ * 历史列表走 `/api/submissions` CurrentUser 鉴权，客户端不传 userId。
  */
 @HiltViewModel
 class WorkshopViewModel @Inject constructor(

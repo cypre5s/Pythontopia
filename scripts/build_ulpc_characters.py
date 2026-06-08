@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
-"""build_ulpc_characters.py — Pythontopia R-12 动作模组（方案A）。
+"""合成 ULPC 全动作角色精灵表。
 
-用**官方 Universal-LPC-Spritesheet-Character-Generator** 的整套素材库 + sheet_definitions
-（z 序/路径/动画清单）+ 官方 expanded 表布局（sources/state/constants.ts 的
-ANIMATION_OFFSETS），合成「全动作」角色精灵表（含 run/jump/idle/sit/emote + 基础 6 动作）。
+用官方 Universal-LPC-Spritesheet-Character-Generator 素材库、sheet_definitions
+（z 序/路径/动画清单）与 ANIMATION_OFFSETS 布局，合成含 run/jump/idle/sit/emote
+及基础 6 动作的精灵表。像素来自官方 ULPC 库（许可见各 sheet_definition credits），
+按 zPos 叠层、官方 y 偏移忠实合成。
 
-非手搓美术：所有像素来自官方 ULPC 素材库（CC-BY-SA / CC-BY / OGA-BY / GPL，见各
-sheet_definition 的 credits）。本脚本只做忠实合成（按 zPos 叠层、按官方 y 偏移摆放）。
-
-依赖：Pillow。源仓库默认 /home/cypress/ulpc-gen（git clone 官方仓库）。
+依赖：Pillow。源仓库默认 /home/cypress/ulpc-gen。
 输出：frontend/public/assets/pixel/sprites/ulpc/<name>.png（832×2688，13列×42行，64px）。
 """
 from __future__ import annotations
@@ -31,7 +29,7 @@ OUT = REPO / "frontend/public/assets/pixel/sprites/ulpc"
 CELL = 64
 WIDTH = 13 * CELL  # 832
 
-# 取官方 constants.ts 的 ANIMATION_OFFSETS（像素 y）。仅用到这批（不含 combat/1h）。
+# constants.ts ANIMATION_OFFSETS（像素 y），不含 combat/1h。
 ANIM_ROWS = {
     "spellcast": 0,
     "thrust": 4,
@@ -46,12 +44,12 @@ ANIM_ROWS = {
     "emote": 34,
     "run": 38,
 }
-# 每个动画占多少行（多向=4，单向=1）。决定画布总高与是否越界。
+# 各动画占行数（多向 4、单向 1），决定画布高度。
 ANIM_DIRROWS = {
     "hurt": 1,
     "climb": 1,
 }
-SHEET_ROWS = 42  # run(38)+4
+SHEET_ROWS = 42
 HEIGHT = SHEET_ROWS * CELL  # 2688
 
 
@@ -112,23 +110,21 @@ def build(def_names: list[str], body_type: str, tints: dict[str, tuple[int, int,
             img = Image.open(png).convert("RGBA")
             if cat in tints:
                 img = tint_multiply(img, tints[cat])
-            # 防越界：贴图不能超出画布。
             if y + img.height > HEIGHT or img.width > WIDTH:
                 img = img.crop((0, 0, min(img.width, WIDTH), min(img.height, HEIGHT - y)))
             canvas.alpha_composite(img, (0, y))
     return canvas
 
 
-# 角色配方：def 名按「从底到顶」无所谓（脚本按 zPos 排序），列出即可。
-# 主角 Sara 风：女性体 + 长发 + 长袖 + 裤 + 鞋（均支持 expanded 动画）。
+# 角色配方：sheet_definition 列出顺序无关，按 zPos 叠层。
 RECIPES: dict[str, dict] = {
-    # 主角 Sara 风：女性体 + 长发 + 长袖 + 裤 + 鞋（全 expanded 动画）。蓝裙金棕发。
+    # Sara 主角：女性体 + 长发 + 长袖 + 裤 + 鞋，蓝裙金棕发。
     "player_sara2": {
         "body": "female",
         "defs": ["body", "heads_human_female", "hair_long", "torso_clothes_longsleeve", "legs_leggings", "feet_shoes_sara"],
         "tints": {"torso": (95, 140, 210), "legs": (70, 85, 120), "hair": (190, 140, 70)},
     },
-    # 8 个变体 NPC：不同体型/发型/头型/衣裤 + 逐图层正片叠底着色 → 外观各不相同。
+    # 8 个 NPC 变体：不同体型/发型/衣裤 + 逐层正片叠底着色。
     "ulpc_villager_f": {"body": "female", "defs": ["body", "heads_human_female", "hair_bob", "torso_clothes_tshirt", "legs_pants", "feet_slippers"],
         "tints": {"torso": (215, 120, 150), "legs": (105, 95, 140), "hair": (150, 95, 55)}},
     "ulpc_villager_m": {"body": "male", "defs": ["body", "heads_human_male", "hair_relm_short", "torso_clothes_shortsleeve", "legs_pants2", "feet_boots_basic"],

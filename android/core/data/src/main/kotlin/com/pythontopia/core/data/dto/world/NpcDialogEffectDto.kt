@@ -2,13 +2,7 @@ package com.pythontopia.core.data.dto.world
 
 import kotlinx.serialization.Serializable
 
-/**
- * 后端 NpcDialogEffectDto 等价物，type 取值见
- * `backend/src/main/java/com/pythontopia/world/npc/dto/NpcDialogEffectDto.java`：
- * - FRIENDSHIP_DELTA：好感度增减
- * - COMPLETE_NODE：将 key 写入 completed_node_ids
- * - SET_FLAG：在 flags JSON 里写 key=value
- */
+/** NPC 对话效果；type：FRIENDSHIP_DELTA（好感度）、COMPLETE_NODE（完成节点）、SET_FLAG（flags 键值）。 */
 @Serializable
 data class NpcDialogEffectDto(
     val type: String,

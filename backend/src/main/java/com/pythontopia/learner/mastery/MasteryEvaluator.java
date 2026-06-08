@@ -19,10 +19,15 @@ public class MasteryEvaluator {
 
   private final MasteryRepository repository;
   private final MasteryProperties properties;
+  private final com.pythontopia.learner.mastery.review.ReviewStateService reviewStateService;
 
-  public MasteryEvaluator(MasteryRepository repository, MasteryProperties properties) {
+  public MasteryEvaluator(
+      MasteryRepository repository,
+      MasteryProperties properties,
+      com.pythontopia.learner.mastery.review.ReviewStateService reviewStateService) {
     this.repository = repository;
     this.properties = properties;
+    this.reviewStateService = reviewStateService;
   }
 
   @Transactional
@@ -48,6 +53,8 @@ public class MasteryEvaluator {
     OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
     repository.upsertSnapshot(userId, kcCode, scale(newScore), scale(newConfidence), now);
     repository.insertEvent(userId, kcCode, source, scale(effectiveDelta), reason);
+    // 同事务演化 FSRS-lite 复习状态（成功/失败/重学）；DECAY/BOOTSTRAP/MANUAL 在 service 内被忽略。
+    reviewStateService.onMasteryEvent(userId, kcCode, source, now);
     return new MasterySnapshot(
         existing.map(MasterySnapshot::id).orElse(null),
         userId,

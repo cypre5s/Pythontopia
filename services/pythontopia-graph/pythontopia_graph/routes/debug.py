@@ -1,4 +1,4 @@
-"""HTTP route for the DebugAgent."""
+"""DebugAgent HTTP 路由。"""
 
 from __future__ import annotations
 

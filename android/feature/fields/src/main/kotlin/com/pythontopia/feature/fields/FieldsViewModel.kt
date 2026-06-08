@@ -11,14 +11,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * Fields 屏幕 ViewModel：负责把 [FieldsRepository] 拉到的 65 KC 网格暴露给 Compose 层，
- * 并把 UI 层"浇水 / 收获 / 选择 KC"三类意图翻译成仓库调用。
- *
- *  - 启动时自动 [refresh] 一次；UI 完全由 [state] 单一 [StateFlow] 驱动；
- *  - 操作期间通过 [FieldsUiState.pendingActionKc] 互斥，避免双击触发同一 KC 同时浇水 + 收获；
- *  - 业务规则在 [water] / [harvest] 内做最小校验：只有 MATURE 才允许收获，HARVESTED 不允许再浇水。
- *
- * MVVM 而非 MVI：状态字段 6 个、动作 4 个，未触发 ADR-001 §1 决策 10 走 MVI 的复杂度门槛。
+ * 知识田 ViewModel：暴露 65 KC 网格，处理选择/浇水/收获；
+ * [pendingActionKc] 互斥防并发，仅 MATURE 可收获、HARVESTED 不可再浇水。
  */
 @HiltViewModel
 class FieldsViewModel @Inject constructor(
@@ -32,9 +26,7 @@ class FieldsViewModel @Inject constructor(
         refresh()
     }
 
-    /**
-     * 拉一次完整网格。重复触发会忽略当前 inflight 请求结果，让最后一次刷新 win。
-     */
+    /** 重复触发时以最后一次刷新结果为准。 */
     fun refresh() {
         _state.update { it.copy(isLoading = true, errorMessage = null) }
         viewModelScope.launch {
@@ -54,7 +46,7 @@ class FieldsViewModel @Inject constructor(
         }
     }
 
-    /** UI 层点击格子 → 高亮 + 弹出操作栏；再次点击同一 KC 取消选择。 */
+    /** 点击切换选中 KC；再次点击同一格取消选择。 */
     fun selectKc(kcCode: String?) {
         _state.update { current ->
             val next = if (current.selectedKc == kcCode) null else kcCode
@@ -62,14 +54,7 @@ class FieldsViewModel @Inject constructor(
         }
     }
 
-    /**
-     * 浇水动作。前置校验：
-     *  - 必须存在 inflight 槽位空闲（[FieldsUiState.pendingActionKc] == null）；
-     *  - 目标 KC 已在网格中（防止意外传入未知 code）；
-     *  - 状态非 HARVESTED（已收获的田不可再浇水，玩家应等 reseed）。
-     *
-     * 成功后用 Repository 返回值替换网格中对应 KC；失败则写 errorMessage 让 UI 提示。
-     */
+    /** 浇水；[pendingActionKc] 占用中或 HARVESTED 时拒绝。 */
     fun water(kcCode: String) {
         val current = _state.value
         if (current.pendingActionKc != null) return
@@ -95,9 +80,7 @@ class FieldsViewModel @Inject constructor(
         }
     }
 
-    /**
-     * 收获动作。仅 MATURE 状态合法；否则写 errorMessage 提示玩家等成熟。
-     */
+    /** 收获；仅 MATURE 合法。 */
     fun harvest(kcCode: String) {
         val current = _state.value
         if (current.pendingActionKc != null) return
@@ -125,12 +108,12 @@ class FieldsViewModel @Inject constructor(
         }
     }
 
-    /** UI 层渲染完 errorMessage 后调用，避免下一次重组继续看到旧错误。 */
+    /** 清除一次性 [errorMessage]。 */
     fun dismissError() {
         _state.update { it.copy(errorMessage = null) }
     }
 }
 
-/** 在网格内用 kcCode 替换单个瓦片，保持顺序稳定，避免重组时整列重排。 */
+/** 按 kcCode 替换单格，保持列表顺序稳定。 */
 private fun List<KcTileState>.replace(updated: KcTileState): List<KcTileState> =
     map { if (it.kcCode == updated.kcCode) updated else it }

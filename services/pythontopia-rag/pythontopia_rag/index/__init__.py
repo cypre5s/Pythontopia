@@ -1,1 +1,1 @@
-"""RAG index building primitives."""
+"""RAG 索引构建基础模块。"""

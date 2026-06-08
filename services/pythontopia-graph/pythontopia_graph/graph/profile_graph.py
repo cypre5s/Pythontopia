@@ -80,12 +80,12 @@ def node_question_planner(input_data: ProfileAgentInput) -> list[dict[str, str]]
         },
         {"role": "system", "content": f"课程 KC 列表: {kc_summary}"},
     ]
-    # 把多轮对话历史并入上下文，让 ProfileAgent 具备记忆（此前只发当前单轮，等于无记忆）。
+    # 并入多轮 history 供 ProfileAgent 记忆（此前仅单轮等于无记忆）
     turns = input_data.last_turn_history
     for turn in turns[-13:]:
         role = "assistant" if turn.role == "assistant" else "user"
         messages.append({"role": role, "content": turn.content})
-    # 后端的 history 末尾通常已含当前消息；仅当历史为空或末尾非当前消息时再补一条，避免重复。
+    # history 末尾通常已含当前消息；末尾非当前 user 消息时再补，避免重复
     last_is_current = (
         bool(turns)
         and turns[-1].role == "user"

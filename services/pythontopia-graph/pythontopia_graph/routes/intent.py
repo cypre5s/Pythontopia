@@ -1,12 +1,9 @@
-"""HTTP endpoint for the IntentRouterAgent（百晓工坊 意图路由）.
+"""IntentRouterAgent HTTP 端点（百晓工坊意图路由）。
 
-* ``POST /agents/intent/route`` – non-streaming ``IntentRouteResponse``.
+* ``POST /agents/intent/route`` → 非流式 ``IntentRouteResponse``。
 
-Unlike the orchestrator / tutor routes this is NOT an SSE stream: it is a quick,
-single LLM classification the frontend calls *before* dispatching the chosen tool
-to the existing tutor / workshop SSE pipelines. Provider is taken from
-``app.state`` (shared instance) with a per-request env fallback, matching the
-other agent routes.
+非 SSE：前端在分流到 tutor/workshop SSE 流水线之前做一次性 LLM 分类。
+Provider 优先 ``app.state`` 共享实例，按请求回退 env，与其它 agent 路由一致。
 """
 
 from __future__ import annotations

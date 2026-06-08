@@ -1,13 +1,4 @@
-"""R-13 §5 Phase 5 审查 4：难度 calibration。
-
-AI 自报 ``difficulty`` 与基于 AST 特征估算的差距：
-    - 差距 <= 1：通过（标 warning 记录）；
-    - 差距 == 2：通过（用估算值覆盖，warning）；
-    - 差距 > 2：reject（error）。
-
-特征：题面长度 / 解法行数 / AST 深度 / 循环数 / if 数 / 函数+类 数。
-公式按 R13_OPTIMIZATION_PLAN §2.3-4 给定。
-"""
+"""难度校准：比对 AI 自报 ``difficulty`` 与 AST 特征估算值，偏差过大则 reject。"""
 
 from __future__ import annotations
 
@@ -38,6 +29,7 @@ class DifficultyFeatures:
 
 
 def estimate_difficulty(problem: BossProblem) -> ReviewVerdict:
+    """偏差 ≤1 通过；=2 以估算值覆盖；>2 reject。"""
     issues: list[ReviewIssue] = []
     features = _extract_features(problem)
     score = features.score()

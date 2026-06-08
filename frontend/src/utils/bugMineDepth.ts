@@ -33,5 +33,5 @@ export function depthLockMessage(depthLayer: number, cardType: BugMineCardType):
   if (depthLayer >= required) {
     return '';
   }
-  return `需先下探到 ${DEPTH_LAYER_LABELS[required]}（当前 L${depthLayer}）。卡住时重试失败会自动加深一层。`;
+  return `需先下探到 L${required}（当前 L${depthLayer}）`;
 }

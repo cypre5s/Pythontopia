@@ -7,6 +7,7 @@ import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
 
+/** NPC 对话：[state] 查询状态，[talk] 提交交互。 */
 interface NpcDialogApi {
 
     @GET("api/world/npcs/{npcKey}/state")

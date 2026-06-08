@@ -1,1 +1,1 @@
-"""LangGraph-style nodes for the resource workshop pipeline."""
+"""资源工坊流水线的 LangGraph 风格节点。"""

@@ -7,7 +7,7 @@
   "spawnMap": "town_hub",
   "spawn": {
     "tileX": 42,
-    "tileY": 26
+    "tileY": 28
   },
   "birthday": {
     "month": 8,
@@ -23,7 +23,7 @@
         "from": "08:00",
         "map": "town_hub",
         "tileX": 42,
-        "tileY": 26
+        "tileY": 28
       }
     ],
     "tuesday": [
@@ -31,7 +31,7 @@
         "from": "08:00",
         "map": "town_hub",
         "tileX": 42,
-        "tileY": 26
+        "tileY": 28
       }
     ],
     "wednesday": [
@@ -39,7 +39,7 @@
         "from": "08:00",
         "map": "town_hub",
         "tileX": 42,
-        "tileY": 26
+        "tileY": 28
       }
     ],
     "thursday": [
@@ -47,7 +47,7 @@
         "from": "08:00",
         "map": "town_hub",
         "tileX": 42,
-        "tileY": 26
+        "tileY": 28
       }
     ],
     "friday": [
@@ -55,7 +55,7 @@
         "from": "08:00",
         "map": "town_hub",
         "tileX": 42,
-        "tileY": 26
+        "tileY": 28
       }
     ],
     "saturday": [
@@ -63,7 +63,7 @@
         "from": "08:00",
         "map": "town_hub",
         "tileX": 42,
-        "tileY": 26
+        "tileY": 28
       }
     ],
     "sunday": [
@@ -71,7 +71,7 @@
         "from": "08:00",
         "map": "town_hub",
         "tileX": 42,
-        "tileY": 26
+        "tileY": 28
       }
     ]
   },

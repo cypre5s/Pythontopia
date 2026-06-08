@@ -29,13 +29,10 @@ describe('R-13 §5 主线 + Boss 静态数据', () => {
     }
   });
 
-  it('mapKey 只能是 5 张地图之一', () => {
+  it('mapKey 只能是 town_hub 或 mine_south', () => {
     const validMaps = new Set([
       'town_hub',
-      'farm_north',
       'mine_south',
-      'campus_east',
-      'port_west',
     ]);
     for (const quest of MAIN_QUESTS) {
       expect(validMaps.has(quest.mapKey)).toBe(true);

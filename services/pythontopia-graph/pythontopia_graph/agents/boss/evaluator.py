@@ -1,11 +1,7 @@
-"""R-13 §5 Phase 6 续：Boss 副本玩家答案评测沙箱。
+"""Boss 副本玩家答案评测沙箱。
 
-与 ``self_tester`` 区别：
-    * ``self_tester`` 跑出题方的 ``reference_solution``，确保题目自洽；
-    * 本模块跑玩家提交的代码，统计通过用例数 + 首条失败信息，供前端展示。
-
-实现复用 self_tester 的 forbidden 扫描 + rlimit 沙箱（POSIX）+ subprocess timeout，
-保持与出题侧同款安全模型，避免「reference 能跑 / 玩家代码不能跑」的语义差。
+``self_tester`` 校验 ``reference_solution`` 自洽；本模块评测玩家提交，返回通过数与首条失败信息。
+复用 forbidden 扫描与 rlimit 沙箱，与出题侧安全模型一致。
 """
 
 from __future__ import annotations
@@ -47,8 +43,7 @@ class EvaluationResult:
     passed_count: int
     total_count: int
     first_failure: CaseResult | None = None
-    runtime_error: str | None = None
-    """非用例级别失败（forbidden import / syntax error）写在这里。"""
+    runtime_error: str | None = None  # 非用例级失败（禁 import、语法错误等）
 
     failed_indices: list[int] = field(default_factory=list)
 
@@ -60,10 +55,7 @@ def evaluate_student_code(
     timeout_sec: int = DEFAULT_TIMEOUT_SEC,
     python_executable: str | None = None,
 ) -> EvaluationResult:
-    """跑玩家代码，逐个 test_case 比对 stdout（rstrip 比较）。
-
-    返回 ``EvaluationResult``。任何失败都不会抛异常。
-    """
+    """逐条比对玩家 stdout（rstrip）；失败不抛异常，写入 ``EvaluationResult``。"""
 
     total = len(test_cases)
     if total == 0:
@@ -152,11 +144,7 @@ def evaluate_student_code(
 
 
 def build_failure_hint(result: EvaluationResult) -> str | None:
-    """把 first_failure 渲染成单行 hint，给前端 BossPage 展示。
-
-    例：``"用例 2 期望 '5' 实际 '6'"``；
-    如果 runtime_error 不为空，优先返回 runtime_error。
-    """
+    """将首条失败或 ``runtime_error`` 渲染为单行提示，供 BossPage 展示。"""
 
     if result.runtime_error:
         return result.runtime_error

@@ -5,6 +5,8 @@ import gsap from 'gsap';
 const props = defineProps<{
   stage: number;
   trigger: number;
+  /** boss HP≤50 时使用狂暴粒子配色 */
+  enraged?: boolean;
 }>();
 
 const effectRef = ref<HTMLDivElement | null>(null);
@@ -92,6 +94,26 @@ function playFrost(): void {
   });
 }
 
+function playEnrageBurst(): void {
+  const el = effectRef.value;
+  if (!el) return;
+  spawnParticles(16, '#ff4d2e');
+  gsap.fromTo(el, { scale: 0.6, opacity: 0 }, { scale: 1.15, opacity: 1, duration: 0.25, ease: 'back.out(3)' });
+  const ring = el.querySelector('.effect-ring');
+  if (ring) {
+    gsap.fromTo(ring,
+      { scale: 0.2, opacity: 1, rotation: 0 },
+      { scale: 3.5, opacity: 0, rotation: 240, duration: 1.1, ease: 'power3.out' },
+    );
+  }
+  el.querySelectorAll('.effect-particle').forEach((p, i) => {
+    gsap.fromTo(p,
+      { scale: 1.4, opacity: 1 },
+      { scale: 0, opacity: 0, x: (Math.random() - 0.5) * 120, y: (Math.random() - 0.5) * 100, duration: 0.9 + i * 0.04, ease: 'power2.out' },
+    );
+  });
+}
+
 function playLightning(): void {
   const el = effectRef.value;
   if (!el) return;
@@ -114,9 +136,13 @@ function playLightning(): void {
 }
 
 watch(
-  () => props.trigger,
+  () => [props.trigger, props.enraged] as const,
   async () => {
     await nextTick();
+    if (props.enraged) {
+      playEnrageBurst();
+      return;
+    }
     switch (props.stage) {
       case 1: playWave(); break;
       case 2: playFire(); break;
@@ -127,7 +153,9 @@ watch(
   },
 );
 
-const effect = STAGE_EFFECTS[props.stage] ?? STAGE_EFFECTS[1]!;
+const effect = props.enraged
+  ? { name: 'enrage', color: '#ff4d2e', glow: 'rgba(255,77,46,0.75)' }
+  : (STAGE_EFFECTS[props.stage] ?? STAGE_EFFECTS[1]!);
 </script>
 
 <template>

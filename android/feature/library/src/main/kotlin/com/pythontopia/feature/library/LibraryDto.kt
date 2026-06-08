@@ -2,12 +2,7 @@ package com.pythontopia.feature.library
 
 import kotlinx.serialization.Serializable
 
-/**
- * 课程图书馆 DTO，对齐后端 CoursePackController（camelCase Java record）：
- *  - GET /api/course/chapters → [LibraryChapterDto]
- *  - GET /api/course/kcs?chapterId= → [LibraryKcDto]
- *  - GET /api/course/pages?kcCode= → [LibraryPageDto]（含 contentMarkdown 课件原文）
- */
+/** 课程图书馆 DTO，对齐后端 CoursePackController（camelCase）；pages 含 contentMarkdown 课件原文。 */
 
 @Serializable
 data class LibraryChapterDto(

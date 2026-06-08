@@ -1,9 +1,8 @@
-"""SSE streaming endpoint for the TutorAgent.
+"""TutorAgent SSE 流式答疑端点。
 
-答疑链路（R-14 真协同）：不再只有 馆员(RAG)+导师(LLM)，而是把资源流水线里的
-三道审查迁到答案上，让答疑真正经过 馆员 → 导师 → 审查官 → 校对官 → 安全员。
-开场发一个 ``plan`` 工位清单 + 每个智能体 ``start``/``finish`` 的 ``trace`` 事件，
-驱动侧栏 marvis「智能体工作室」实时点亮工位与交接动画（与资源流同一套线协议）。
+答疑链路：馆员(RAG) → 导师(LLM) → 审查官 → 校对官 → 安全员（资源流水线同款三道审查）。
+开场发 ``plan`` 工位清单 + 各智能体 ``trace`` start/finish，驱动侧栏 marvis「智能体工作室」
+（与资源流同一套 SSE 线协议）。
 """
 
 from __future__ import annotations

@@ -35,20 +35,8 @@ import com.pythontopia.core.design.PytSpace
 /**
  * 学习路径主屏。
  *
- * 布局（从上到下）：
- *  - Header：标题 + 当前路径 id
- *  - [PathGraphView]：纵向链式可视化
- *  - [PathFilters]：状态 / 类型多选 chip
- *  - LazyColumn of [PathNodeCard]：详细节点列表，可点
- *  - Snackbar：错误提示，可手动 dismiss
- *
- * 跳转策略：节点点击优先 advance（UNLOCKED -> IN_PROGRESS 或 IN_PROGRESS -> DONE），
- * 顺带通过 [onOpenNodeTarget] 通知 host nav graph 跳到对应 feature（READ/PRACTICE/QUEST/DEBUG）。
- *
- * @param userId        保留给测试和未来 SessionRepository 注入；真实请求由 JWT 当前用户决定，
- *                      不再把本地 userId 发送给后端。
- * @param onOpenNodeTarget 节点点击副作用回调；feature/path 本身不持有 NavController，
- *                      由 :app navGraph 决定跳到 :feature:workshop / :feature:arena 等。
+ * @param userId 测试/注入用；真实请求身份来自 JWT，不随请求体上传。
+ * @param onOpenNodeTarget 节点点击后由 host nav graph 按 [PathNodeDto.type] 跳转对应 feature。
  */
 @Composable
 fun PathScreen(

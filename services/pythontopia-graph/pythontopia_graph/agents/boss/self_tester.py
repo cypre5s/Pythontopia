@@ -1,13 +1,7 @@
-"""R-13 §5 Phase 5 审查 2：reference_solution 自洽检查。
+"""reference_solution 自洽审查：沙箱内须在超时内通过全部 test_cases。
 
-AI 给的 reference_solution 必须能在 5 秒内跑过自带所有 test_cases。
-沙箱：subprocess + resource.setrlimit（POSIX）。
-
-注意：
-    - 不允许网络（不引入 socket）— 只靠 RLIMIT_AS 限内存 + RLIMIT_CPU 限 CPU，
-      并显式 ``env={}`` 清干净环境变量；网络隔离靠系统级 firejail / seccomp
-      （部署文档说明），代码里仅静态扫描 forbidden imports 作为补充防线。
-    - Windows 上 ``resource`` 不可用，会自动跳过 setrlimit，仅靠 subprocess timeout。
+POSIX 用 ``resource.setrlimit`` 限 CPU/内存；禁网依赖部署层隔离，代码侧扫描 forbidden imports。
+Windows 无 ``resource`` 时仅依赖 subprocess 超时。
 """
 
 from __future__ import annotations
@@ -46,6 +40,7 @@ def self_test_problem(
     python_executable: str | None = None,
     timeout_sec: int = DEFAULT_TIMEOUT_SEC,
 ) -> ReviewVerdict:
+    """在沙箱中运行 ``reference_solution`` 并逐条比对 test_cases。"""
     issues: list[ReviewIssue] = []
     forbidden = _scan_forbidden_imports(problem.reference_solution)
     if forbidden:
@@ -183,6 +178,6 @@ def _maybe_rlimit_preexec():
 
 
 def list_forbidden_imports() -> Iterable[str]:
-    """For tests / docs reference."""
+    """返回禁止 import 模块列表，供测试与文档引用。"""
 
     return FORBIDDEN_IMPORTS

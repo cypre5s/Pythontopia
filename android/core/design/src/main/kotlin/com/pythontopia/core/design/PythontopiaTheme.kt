@@ -5,6 +5,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 
+/** Pythontopia Material 3 主题入口；[darkTheme] 默认 true（深色「黄昏木屋」）。 */
 @Composable
 fun PythontopiaTheme(
     darkTheme: Boolean = true,
@@ -45,7 +46,7 @@ private fun darkPythontopiaColorScheme() = darkColorScheme(
     inverseOnSurface = PytColors.onParchment,
 )
 
-/** 浅色「羊皮纸」方案：暖米纸底 + 深木字（默认 darkTheme=true，故此路径罕用，但保持自洽以备白天 / 打印态）。 */
+/** 浅色「羊皮纸」方案：暖米纸底 + 深木字。 */
 private fun lightPythontopiaColorScheme() = lightColorScheme(
     primary = PytColors.wood,
     onPrimary = PytColors.parchment,

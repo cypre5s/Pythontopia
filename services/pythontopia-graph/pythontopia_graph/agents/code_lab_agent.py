@@ -14,6 +14,8 @@ from pythontopia_graph.schemas.resource import (
 
 
 class CodeLabAgent:
+    """生成含走读与常见错误的代码实验室资源（STRUCT_JSON）；LLM 输出须语法合法且行数合规，否则回落确定式兜底。"""
+
     AGENT_NAME = "CodeLabAgent"
 
     MAX_LINES = 50

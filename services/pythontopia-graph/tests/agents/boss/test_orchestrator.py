@@ -1,4 +1,4 @@
-"""R-13 §5 Phase 5：编排链单测。"""
+"""orchestrator 编排链单元测试。"""
 
 from __future__ import annotations
 
@@ -44,16 +44,15 @@ def test_run_all_reviews_fails_struct_early() -> None:
     p.title = ""
     review = run_all_reviews(p)
     assert not review.passed
-    # 结构错就早退，self_test 之后的不跑
+    # 结构校验失败则早退，后续审查不执行
     assert review.verdicts[0].review == "struct"
 
 
 def test_run_all_reviews_skip_self_test_param() -> None:
     p = _good_problem()
-    # 把 reference 改坏 — 但 skip_self_test 之后不跑沙箱
+    # reference 故意错误；skip_self_test 跳过沙箱
     p.reference_solution = "print('always 0')"
     review = run_all_reviews(p, skip_self_test=True)
-    # struct ok / grounding ok / difficulty ok / plagiarism ok
     assert review.passed
 
 
@@ -91,7 +90,7 @@ def test_generate_boss_problem_retries_then_fallback() -> None:
     async def bad_factory(**kwargs) -> BossProblem:
         call_count["n"] += 1
         p = _good_problem()
-        p.title = ""  # struct error 永远失败
+        p.title = ""  # title 为空导致 struct 永远失败
         return p
 
     golden = _good_problem()
@@ -108,7 +107,7 @@ def test_generate_boss_problem_retries_then_fallback() -> None:
         )
     )
     assert call_count["n"] == 3
-    assert review.passed  # fallback 通过
+    assert review.passed  # golden fallback 后仍通过
     assert review.problem.title == golden.title
 
 
@@ -161,7 +160,7 @@ def test_generate_boss_problem_passes_temperature_bump_to_factory() -> None:
     async def recording_factory(**kwargs) -> BossProblem:
         seen_temperatures.append(kwargs["temperature"])
         p = _good_problem()
-        p.title = ""  # 永远 struct fail，便于触发完整重试
+        p.title = ""  # 触发完整重试以记录 temperature
         return p
 
     asyncio.run(
@@ -175,7 +174,7 @@ def test_generate_boss_problem_passes_temperature_bump_to_factory() -> None:
             skip_self_test=True,
         )
     )
-    # 每次 attempt temperature 增加 0.1
+    # 每次重试 temperature +0.1
     assert len(seen_temperatures) == 3
     assert seen_temperatures[1] > seen_temperatures[0]
     assert seen_temperatures[2] > seen_temperatures[1]
@@ -183,7 +182,7 @@ def test_generate_boss_problem_passes_temperature_bump_to_factory() -> None:
 
 def test_run_all_reviews_real_self_test_succeeds() -> None:
     p = _good_problem()
-    # Real self test — relies on python interpreter
+    # 真实 Python 解释器自测
     review = run_all_reviews(p)
     assert review.passed
     assert any(v.review == "self_test" and v.passed for v in review.verdicts)
@@ -192,16 +191,16 @@ def test_run_all_reviews_real_self_test_succeeds() -> None:
 def test_run_all_reviews_with_unsupported_chapter_syntax_fails() -> None:
     p = _good_problem()
     p.chapter = 1
-    # 第一章不允许 for 循环，把 reference 改成 for 触发 grounding fail
+    # 第 1 章禁止 for，reference 含 for 应 grounding 失败
     p.reference_solution = "for i in range(3):\n    print(i)"
-    # 让 test cases 与新解法匹配
+    # 用例与 for 解法对齐
     p.test_cases = [
         build_test_case("", "0\n1\n2", is_sample=True),
         build_test_case("", "0\n1\n2"),
         build_test_case("", "0\n1\n2"),
     ]
     review = run_all_reviews(p, skip_self_test=False)
-    # self_test 通过（解法跑得通），但 grounding 拒绝
+    # self_test 通过但 grounding 拒绝
     grounding = next(v for v in review.verdicts if v.review == "grounding")
     assert not grounding.passed
     assert not review.passed

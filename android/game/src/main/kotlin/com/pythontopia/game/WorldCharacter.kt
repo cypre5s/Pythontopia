@@ -3,16 +3,7 @@ package com.pythontopia.game
 import com.badlogic.gdx.graphics.g2d.SpriteBatch
 import com.pythontopia.game.PlayerActor.Direction
 
-/**
- * 像素世界里的一个可渲染角色（玩家或 NPC）。
- *
- * 与旧 [PlayerActor]（纯逻辑、瞬时格子跳变）的差异：本类把渲染像素位置 [feetX]/[feetY]
- * 在两格之间**平滑插值**（对齐 web 端 `sprite.ts` 的 140ms tween 手感），并按
- * 朝向 + 是否移动选择 walk/idle 帧，外加一枚软阴影。坐标全程 y-up（与本项目统一）。
- *
- * 逻辑格子（[tileX]/[tileY]）在一步**开始**时即更新（用于碰撞 / 邻近判定的提前量），
- * 像素位置随后追赶；这样 NPC 邻近触发与 web 的"踏入格子即触发"一致。
- */
+/** 可渲染角色：逻辑格在 beginStep 时更新，[feetX]/[feetY] 平滑插值；y-up 坐标。 */
 class WorldCharacter(
     private val anim: CharacterAnimSet,
     startTileX: Int,

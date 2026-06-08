@@ -6,15 +6,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
 
-/**
- * LibGDX 渲染线程 ←→ Compose 主线程 单向桥。
- *
- * - 渲染线程把"进入 NPC 交互范围"作为 [HubEvent.NpcInRange] 推到 [events]。
- * - Compose 线程 collect [events] 拿事件，并通过 [interactRequest] 标志请求"点了交互按钮"。
- * - [latestPlayerTile] 用 AtomicReference 暴露玩家当前 tile 坐标，给 Compose UI HUD 显示。
- *
- * 该类不依赖 Android / Phaser / Compose；事件推送走 kotlinx.coroutines core，避免 UI 固定轮询。
- */
+/** LibGDX 渲染线程与 Compose 主线程单向桥；事件经 Channel 推送，玩家坐标经 AtomicReference 共享。 */
 class HubGameBridge {
 
     /** 渲染线程产出的事件流；Compose 线程消费。 */

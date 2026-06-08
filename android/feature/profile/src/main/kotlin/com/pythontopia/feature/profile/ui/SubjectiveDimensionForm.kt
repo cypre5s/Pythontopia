@@ -40,12 +40,7 @@ data class LikertItem(
     val prompt: String,
 )
 
-/**
- * 4 主观维度的 Likert 题目库；每维 3-5 个 1-5 评分。
- *
- * 题目设计参考 `docs/profile_schema.md` 的 8 维定义；非临床心理量表，
- * 仅作为 demo 自评信号源，由后端 metadata 落库供 ResourceDesignerAgent 引用。
- */
+/** 4 主观维度的 Likert 题库（每维 3–5 题）；metadata 落库供 Agent 引用，非临床量表。 */
 val SUBJECTIVE_DIMENSIONS: List<SubjectiveDimensionSpec> = listOf(
     SubjectiveDimensionSpec(
         key = ProfileDimensions.PROFESSIONAL_BACKGROUND,
@@ -99,12 +94,7 @@ data class SubjectiveDimensionSpec(
     val items: List<LikertItem>,
 )
 
-/**
- * 表单状态：单维度的 Likert 评分缓冲区。
- *
- * 设计成"纯数据 + 工厂方法 + 转换函数"3 层，是为了让 [SubjectiveDimensionFormTest] 在 JVM
- * 里可以脱开 Compose 测交互逻辑——这是 R-12 测试栈选 Robolectric 之前的折中（ADR-001 §1）。
- */
+/** 单维度 Likert 表单状态；纯数据层便于 JVM 单测，与 Compose UI 解耦。 */
 data class DimensionFormState(
     val scores: Map<String, Int> = emptyMap(),
 ) {
@@ -146,13 +136,7 @@ data class DimensionFormState(
     }
 }
 
-/**
- * 4 主观维度的可滚动自评表单。
- *
- * 状态不进 ViewModel：每张卡是一个独立小表单，提交后 UI 弹"已保存"提示并清空。
- * 保留在 Composable 本地是为了让状态结构与 ViewModel 完全解耦，避免 dispatch 多次 update；
- * R-13 接入 Saver 后可升级为 rememberSaveable 防 process death。
- */
+/** 4 主观维度自评表单；表单状态保存在 Composable 本地，与 ViewModel 解耦。 */
 @Composable
 fun SubjectiveDimensionForm(
     isSaving: Boolean,

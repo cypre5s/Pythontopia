@@ -1,1 +1,1 @@
-"""RAG builder placeholder for phase 06."""
+"""RAG builder 占位模块。"""

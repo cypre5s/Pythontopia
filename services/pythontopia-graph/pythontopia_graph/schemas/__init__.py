@@ -1,1 +1,1 @@
-"""Structured agent schemas are added in later phases."""
+"""各 Agent 结构化输出的 Pydantic schema 包。"""

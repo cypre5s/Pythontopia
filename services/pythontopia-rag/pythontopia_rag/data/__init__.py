@@ -1,1 +1,1 @@
-"""Course-pack data loading helpers."""
+"""课程包数据加载辅助模块。"""

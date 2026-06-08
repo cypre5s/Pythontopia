@@ -241,11 +241,11 @@ describe('workflows.integration · FastTravel + World player 联动', () => {
   // R-14 方案A：世界收缩为单一 town_hub，快速旅行只剩 hub 一条路线。
   // 验证点击 hub 路线会把 player 写回 town_hub（FastTravel ↔ worldStore 联动）。
   it.each([
-    'campus_east',
     'mine_south',
-    'port_west',
     'farm_north',
-  ])('从 %s 通过 FastTravel 回到 town_hub', async (from) => {
+    'campus_east',
+    'port_west',
+  ])('从 %s（含旧存档别名）通过 FastTravel 回到 town_hub', async (from) => {
     const world = useWorldStore();
     world.player = {
       playerStateId: 1,
@@ -289,8 +289,8 @@ describe('workflows.integration · Dialog store 状态机', () => {
   it('open 后再 open 另一个 NPC', () => {
     const dlg = useDialogStore();
     dlg.open('mayor_py');
-    dlg.open('farmer_kc');
-    expect(dlg.openNpcKey).toBe('farmer_kc');
+    dlg.open('foreman_bug');
+    expect(dlg.openNpcKey).toBe('foreman_bug');
   });
 
   it('markTypingDone 后再 chooseBranch（无 tree 时 close）', () => {

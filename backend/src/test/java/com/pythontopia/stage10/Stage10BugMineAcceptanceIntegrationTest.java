@@ -345,6 +345,157 @@ class Stage10BugMineAcceptanceIntegrationTest {
   }
 
   @Test
+  void errorBookRanksStaleLowConfidenceItemsAsForgettingEchoes() throws Exception {
+    String token = registerAndLogin("mine-stu06b");
+    Long userId = userId("mine-stu06b");
+    List<Map<String, Object>> problems =
+        jdbcTemplate.queryForList(
+            """
+            SELECT DISTINCT ON (kc_code) id, kc_code
+            FROM course_problem
+            WHERE kc_code <> ''
+            ORDER BY kc_code, id
+            LIMIT 2
+            """);
+    assertThat(problems).hasSizeGreaterThanOrEqualTo(2);
+
+    Map<String, Object> staleProblem = problems.get(0);
+    Map<String, Object> freshProblem = problems.get(1);
+    Long staleProblemId = ((Number) staleProblem.get("id")).longValue();
+    Long freshProblemId = ((Number) freshProblem.get("id")).longValue();
+    String staleKc = (String) staleProblem.get("kc_code");
+    String freshKc = (String) freshProblem.get("kc_code");
+
+    Long staleSubmissionId = seedFailedSubmission(userId, staleProblemId);
+    Long freshSubmissionId = seedFailedSubmission(userId, freshProblemId);
+    Long staleSessionId = seedOpenBugMineSession(userId, staleSubmissionId, staleProblemId, 1);
+    Long freshSessionId = seedOpenBugMineSession(userId, freshSubmissionId, freshProblemId, 1);
+    jdbcTemplate.update(
+        "UPDATE bug_mine_session SET opened_at = now() - interval '1 day' WHERE id = ?",
+        staleSessionId);
+
+    jdbcTemplate.update(
+        """
+        INSERT INTO kc_mastery (user_id, kc_code, mastery_score, confidence, last_event_at)
+        VALUES
+          (?, ?, 0.620, 0.200, now() - interval '35 days'),
+          (?, ?, 0.620, 0.900, now())
+        ON CONFLICT (user_id, kc_code) DO UPDATE SET
+          mastery_score = EXCLUDED.mastery_score,
+          confidence = EXCLUDED.confidence,
+          last_event_at = EXCLUDED.last_event_at,
+          updated_at = now()
+        """,
+        userId,
+        staleKc,
+        userId,
+        freshKc);
+
+    ResponseEntity<List> response =
+        restTemplate.exchange(
+            "/api/bug-mine/errorbook",
+            HttpMethod.GET,
+            bearer(token, null),
+            List.class);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> items = response.getBody();
+    assertThat(items).hasSize(2);
+    assertThat(((Number) items.get(0).get("sessionId")).longValue()).isEqualTo(staleSessionId);
+    assertThat(((Number) items.get(1).get("sessionId")).longValue()).isEqualTo(freshSessionId);
+
+    Map<String, Object> first = items.get(0);
+    assertThat(first.get("kcCode")).isEqualTo(staleKc);
+    // FSRS-lite：decayRisk = 1 - 可提取性 R；久未复习的项风险应显著高于刚复习的项。
+    assertThat(((Number) first.get("decayRisk")).doubleValue()).isGreaterThan(0.2);
+    assertThat(((Number) first.get("decayRisk")).doubleValue())
+        .isGreaterThan(((Number) items.get(1).get("decayRisk")).doubleValue());
+    assertThat(((Number) first.get("minePriority")).doubleValue()).isGreaterThan(0.3);
+    assertThat(first.get("recommendationReason").toString()).contains("遗忘回声");
+  }
+
+  @Test
+  void staleMasteryCanOpenForgettingEchoBugMineSession() throws Exception {
+    MockRestServiceServer graphServer = MockRestServiceServer.bindTo(graphRestTemplate).build();
+    String token = registerAndLogin("mine-stu06c");
+    Long userId = userId("mine-stu06c");
+    Map<String, Object> problem =
+        jdbcTemplate.queryForMap(
+            """
+            SELECT id, kc_code
+            FROM course_problem
+            WHERE kc_code <> ''
+            ORDER BY id
+            LIMIT 1
+            """);
+    String kcCode = (String) problem.get("kc_code");
+
+    jdbcTemplate.update(
+        """
+        INSERT INTO kc_mastery (user_id, kc_code, mastery_score, confidence, last_event_at)
+        VALUES (?, ?, 0.720, 0.250, now() - interval '40 days')
+        ON CONFLICT (user_id, kc_code) DO UPDATE SET
+          mastery_score = EXCLUDED.mastery_score,
+          confidence = EXCLUDED.confidence,
+          last_event_at = EXCLUDED.last_event_at,
+          updated_at = now()
+        """,
+        userId,
+        kcCode);
+
+    ResponseEntity<List> echoes =
+        restTemplate.exchange(
+            "/api/bug-mine/echoes",
+            HttpMethod.GET,
+            bearer(token, null),
+            List.class);
+    assertThat(echoes.getStatusCode()).isEqualTo(HttpStatus.OK);
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> candidates = echoes.getBody();
+    assertThat(candidates).isNotEmpty();
+    assertThat(candidates.get(0).get("kcCode")).isEqualTo(kcCode);
+    assertThat(candidates.get(0).get("recommendationReason").toString()).contains("遗忘回声");
+
+    graphServer
+        .expect(MockRestRequestMatchers.requestTo("http://graph.test/agents/debug/analyze"))
+        .andRespond(
+            MockRestResponseCreators.withSuccess(
+                graphDebugResponse(), MediaType.APPLICATION_JSON));
+
+    ResponseEntity<Map> opened =
+        restTemplate.exchange(
+            "/api/bug-mine/echoes",
+            HttpMethod.POST,
+            bearer(token, Map.of("kcCode", kcCode)),
+            Map.class);
+    assertThat(opened.getStatusCode()).isEqualTo(HttpStatus.OK);
+    Long sessionId = ((Number) opened.getBody().get("id")).longValue();
+    Long submissionId = ((Number) opened.getBody().get("submissionId")).longValue();
+    // E：入矿题按掌握度选恰当难度，未必是最小 id 的题，但必属同一 KC。
+    Long openedProblemId = ((Number) opened.getBody().get("problemId")).longValue();
+    String openedKc =
+        jdbcTemplate.queryForObject(
+            "SELECT kc_code FROM course_problem WHERE id = ?", String.class, openedProblemId);
+    assertThat(openedKc).isEqualTo(kcCode);
+    assertThat(opened.getBody().get("profileGuidance").toString()).contains("遗忘");
+
+    String source =
+        jdbcTemplate.queryForObject(
+            "SELECT source FROM practice_submission WHERE id = ?",
+            String.class,
+            submissionId);
+    assertThat(source).isEqualTo("BUG_MINE_ECHO");
+    Integer cards =
+        jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM bug_mine_card WHERE session_id = ?",
+            Integer.class,
+            sessionId);
+    assertThat(cards).isEqualTo(6);
+    graphServer.verify(Duration.ofSeconds(2));
+  }
+
+  @Test
   void failedRetryAdvancesDepthLayer() throws Exception {
     MockRestServiceServer graphServer = MockRestServiceServer.bindTo(graphRestTemplate).build();
     String token = registerAndLogin("mine-stu07");

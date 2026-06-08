@@ -23,12 +23,11 @@ internal interface ArenaApi {
     @POST("api/submissions")
     suspend fun submit(@Body request: ArenaSubmissionCreateRequest): ArenaSubmissionWireDto
 
-    // 判题契约：POST 后轮询此端点直到 submission.status 进入终态。
+    // POST 后轮询直至 submission.status 进入终态
     @GET("api/submissions/{id}")
     suspend fun submissionDetail(@Path("id") id: Long): ArenaSubmissionDetailWireDto
 
-    // 后端 GET /api/submissions 仅支持 problemId / status / limit / offset；
-    // 不存在 classroomId 过滤，也没有跨用户排行榜端点。
+    // 仅支持 problemId/status/limit/offset，无 classroomId 过滤与跨用户排行榜
     @GET("api/submissions")
     suspend fun submissions(
         @Query("status") status: String? = null,
@@ -36,12 +35,7 @@ internal interface ArenaApi {
     ): List<ArenaSubmissionWireDto>
 }
 
-/**
- * 训练场仓库。
- *
- * Android 端不再本地模拟判题：题目来自 pack 43 课程题库，提交统一走后端
- * `/api/submissions`，确保正式练习、画像事件、班级统计与 Web/后端同源。
- */
+/** 训练场仓库：题目来自 pack 43，提交走 `/api/submissions` 与服务端判题同源。 */
 @Singleton
 class ArenaRepository @Inject internal constructor(
     private val api: ArenaApi,
@@ -64,12 +58,8 @@ class ArenaRepository @Inject internal constructor(
     }
 
     /**
-     * 提交并按判题契约轮询到终态。
-     *
-     * 后端 `POST /api/submissions` 返回的 status 可能是 PENDING/RUNNING（判题异步），
-     * 客户端须轮询 `GET /api/submissions/{id}` 直到 status ∈ {PASSED, FAILED, ERROR}。
-     * 当前后端为同步判题，首个 detail 通常已是终态；轮询同时取回 judgeResult 用于真实反馈
-     * （通过用例数 / 失败原因），而 POST 响应的 SubmissionDto 本身不含判题明细。
+     * 提交并轮询终态：status ∈ {PASSED, FAILED, ERROR}。
+     * detail 含 judgeResult 判题明细，POST 响应本身不含。
      */
     suspend fun submit(problemId: Long, code: String): Submission {
         val created = api.submit(
@@ -93,11 +83,7 @@ class ArenaRepository @Inject internal constructor(
         }
     }
 
-    /**
-     * 本地“积分榜”：后端没有跨用户排行榜端点，这里只能用当前账号自己的
-     * `GET /api/submissions?status=PASSED` 真实数据派生出单行个人战绩（已解题数 + 本地积分），
-     * 属于 local-only UI，不是真实多人排名。积分为前端展示用换算（[SCORE_PER_SOLVED]）。
-     */
+    /** local-only 个人战绩：由 PASSED 提交去重已解题数，[SCORE_PER_SOLVED] 换算展示积分。 */
     suspend fun leaderboard(): List<LeaderboardEntry> {
         val accepted = api.submissions(status = STATUS_PASSED)
         val solved = accepted.map { it.problemId }.distinct().size
@@ -173,8 +159,7 @@ internal data class ArenaSubmissionCreateRequest(
     val source: String,
 )
 
-// 对齐后端 SubmissionDto（camelCase）：id / userId / problemId / status 必用，其余字段
-// （questId / source / language / code / submittedAt / memoryKb）由 ignoreUnknownKeys 丢弃。
+// 对齐后端 SubmissionDto（camelCase）；其余字段由 ignoreUnknownKeys 丢弃
 @Serializable
 internal data class ArenaSubmissionWireDto(
     val id: Long,
@@ -185,7 +170,7 @@ internal data class ArenaSubmissionWireDto(
     val runtimeMs: Int? = null,
 )
 
-// 对齐后端 SubmissionDetailDto：{ submission: SubmissionDto, judgeResult: JudgeResultDto? }。
+// 对齐 SubmissionDetailDto：{ submission, judgeResult? }
 @Serializable
 internal data class ArenaSubmissionDetailWireDto(
     val submission: ArenaSubmissionWireDto,
@@ -218,8 +203,7 @@ internal data class ArenaSubmissionDetailWireDto(
     }
 }
 
-// 对齐后端 JudgeResultDto：verdict ∈ {AC,WA,RE,TLE,CE,MLE,SYSTEM_ERROR}；trace(JsonNode)/id 等
-// 字段这里用不到，由 ignoreUnknownKeys 丢弃。failureReason 用作可读失败信息。
+// 对齐 JudgeResultDto；failureReason 用作可读失败信息
 @Serializable
 internal data class ArenaJudgeResultWireDto(
     val verdict: String? = null,

@@ -11,13 +11,8 @@ data class CharPalette(
 )
 
 /**
- * 程序化美术：当仓库内缺少二进制瓦片集 / 角色精灵（Kenney/LPC PNG 未落地）时，
- * 在代码里按「Kenney tiny-town/dungeon 帧语义」生成等价配色，保证 5 张地图能忠实渲染、
- * 角色可见，且全程 CC0（纯算法生成，无任何商业素材）。
- *
- * 帧号约定与 `scripts/generate-maps.mjs` 一致：`frame = gid - 1`（firstgid=1）。
- * 这里只是颜色与调色板的**纯函数**（仅依赖 libGDX [Color]，无 GL / 无 native），
- * 方便 JVM 单测；真正的像素绘制（Pixmap→Texture）在 [GameAssets] 内运行时完成。
+ * 缺 Kenney/LPC 素材时的程序化配色（CC0）；帧号约定 `frame = gid - 1`（firstgid=1）。
+ * 纯函数供 JVM 单测；Pixmap→Texture 绘制在 [GameAssets] 运行时完成。
  */
 internal object ProceduralArt {
 

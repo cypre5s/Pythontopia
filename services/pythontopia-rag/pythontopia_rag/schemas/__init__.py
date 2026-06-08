@@ -1,1 +1,1 @@
-"""Public pydantic schemas for the Pythontopia RAG service."""
+"""Pythontopia RAG 对外 Pydantic 模式定义。"""

@@ -224,4 +224,51 @@ describe('useBossSession (R-13 §-1 BossPage 交互深挖)', () => {
     expect(s.lastHitCrit.value).toBe(false);
     expect(s.recentPlayerDamage.value).toBeNull();
   });
+
+  it('getBossMove bossPhase=2 返回狂暴二阶段文案', () => {
+    const phase1 = getBossMove(1, 1, 1);
+    const phase2 = getBossMove(1, 1, 2);
+    expect(phase1?.name).toBe('算珠初震');
+    expect(phase2?.name).toBe('算珠崩裂');
+    expect(phase2?.preview).toContain('算珠');
+  });
+
+  it('bossHp≤50 后 currentMove 响应式切换狂暴文案（无需等 startStage）', async () => {
+    const s = useBossSession({ chapter: 1 });
+    await s.startStage();
+    s.bossHp.value = 50;
+    expect(s.bossPhase.value).toBe(2);
+    expect(s.currentMove.value?.name).toBe('算珠崩裂');
+  });
+
+  it('答错致 HP 归零触发 playerKnockedDown 并回满血', async () => {
+    vi.useFakeTimers();
+    apiMocks.submitBossAttempt.mockResolvedValue({
+      problemId: 'p-1',
+      passed: false,
+      passedTestCases: 0,
+      totalTestCases: 3,
+      score: 0,
+      feedback: 'WA',
+    });
+    pyodideMock.run.mockResolvedValue({ stdout: 'x\n', stderr: '' });
+    const s = useBossSession({ chapter: 1 });
+    await s.startStage();
+    s.playerHp.value = 10;
+    s.code.value = 'print(1)';
+    await s.submit();
+    expect(s.playerHp.value).toBe(100);
+    expect(s.playerKnockedDown.value).toBe(true);
+    await vi.advanceTimersByTimeAsync(1700);
+    expect(s.playerKnockedDown.value).toBe(false);
+  });
+
+  it('倒计时归零设置 stageTimedOut', async () => {
+    const s = useBossSession({ chapter: 1 });
+    await s.startStage();
+    s.timeLeftSec.value = 1;
+    s.tickSecond();
+    expect(s.stageTimedOut.value).toBe(true);
+    expect(s.timeLeftSec.value).toBe(0);
+  });
 });

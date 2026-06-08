@@ -22,7 +22,10 @@ def _collect_refs(draft: ResourceDraft) -> list[PageRef]:
 
 
 def grounding_critic(draft: ResourceDraft, evidence: EvidenceBundle) -> GroundingResult:
-    """Verify that every PageRef in the draft sits inside the RAG hit set."""
+    """引用审查：草稿中每个 PageRef 须落在 RAG 命中集合内。
+
+    no_evidence_found 或无 chunks 时视为通识知识，通过并标注 no_evidence_found=True。
+    """
 
     if evidence.no_evidence_found:
         return GroundingResult(passed=True, no_evidence_found=True)

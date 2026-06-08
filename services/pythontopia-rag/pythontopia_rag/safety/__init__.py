@@ -1,1 +1,1 @@
-"""Safety guard primitives for RAG queries."""
+"""RAG 查询安全过滤模块。"""

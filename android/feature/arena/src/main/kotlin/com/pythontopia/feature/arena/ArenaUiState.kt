@@ -1,26 +1,10 @@
 package com.pythontopia.feature.arena
 
 /**
- * Arena 模块 UI 状态。
+ * 训练场 UI 状态（MVVM + `StateFlow<ArenaUiState>` 单对象）。
  *
- * 状态字段较多（≥ 4），按 ADR-001 §1 决策 10 的口径其实应走 MVI；但本期 Beta 首发
- * "简化版"约束不要复杂的 PVP 实时同步，所以保留 MVVM + `StateFlow<ArenaUiState>` 的
- * 单状态对象写法，等真正接 PVP / 异步判题轮询时再升级到 Intent/Reducer。
- *
- * **状态总览**：
- * - 加载态：[isLoadingSession] / [isLoadingLeaderboard] / [isSubmitting]
- * - 数据态：[session] / [leaderboard] / [lastSubmission]
- * - 交互态：[selectedTab] / [currentProblemIdx] / [codeBuffers]
- * - 反馈态：[errorMessage]
- * - 派生量：[myRank]（从 leaderboard 中挑 [myUserId] 的行，避免 UI 层重复 find）
- *
- * `lastSubmission` 故意按"全局最近一次"语义保存，而不是 `Map<problemId, Submission>`，
- * 这样 [ProblemRunner] 不论切换到哪一题都可以在底部展示"我上一次的判题结果"，让玩家
- * 知道刚才到底有没有提交过；切题不清空，但重新提交会覆盖。
- *
- * **演示账号约定**：当前 Android demo 未接登录态，[myUserId] 取占位常量 104L。注意真实
- * “积分榜”行的 userId 来自后端 PASSED 提交（[ArenaRepository.leaderboard]），与该占位值不一定
- * 相等，故此阶段“我”的高亮可能不命中；Beta+1 接 SessionRepository 从 JWT 读真实 userId 后修复。
+ * [lastSubmission] 按全局最近一次提交保存（非 `Map<problemId, Submission>`），切题不清空，重新提交会覆盖。
+ * [myUserId] 当前为演示占位 [DEMO_USER_ID]；积分榜行的 userId 来自后端 PASSED 提交，高亮可能不命中，接登录态后改 JWT 真实 id。
  */
 data class ArenaUiState(
     val isLoadingSession: Boolean = false,
@@ -35,21 +19,18 @@ data class ArenaUiState(
     val myUserId: Long = DEMO_USER_ID,
     val errorMessage: String? = null,
 ) {
-    /** 当前选中的题目；session 未加载或题目列表为空时返回 null。 */
+    /** session 未加载或题目列表为空时返回 null。 */
     val currentProblem: ArenaProblem?
         get() = session?.problems?.getOrNull(currentProblemIdx)
 
-    /**
-     * 当前选中题目的代码缓冲；优先取玩家已编辑的版本，否则回退到 [ArenaProblem.starterCode]。
-     * 让玩家在 tab 间切换 / 提交后回到题目时保留编辑内容。
-     */
+    /** 优先取 [codeBuffers]，否则回退 [ArenaProblem.starterCode]。 */
     val currentCode: String
         get() {
             val problem = currentProblem ?: return ""
             return codeBuffers[problem.problemId] ?: problem.starterCode
         }
 
-    /** "我"在当前排行榜中的排名条目；找不到（如还没提交）返回 null。 */
+    /** 排行榜中 userId 匹配 [myUserId] 的条目；未上榜返回 null。 */
     val myRank: LeaderboardEntry?
         get() = leaderboard.firstOrNull { it.userId == myUserId }
 
@@ -58,12 +39,7 @@ data class ArenaUiState(
     }
 }
 
-/**
- * 屏幕顶部的两个 tab。
- *
- * 用 enum 而非 sealed class，因为 tab 集合是封闭的（演示版只有两个），且不需要每个 tab
- * 自带 payload。Compose 端可直接 `ArenaTab.values()` 渲染 TabRow。
- */
+/** 顶部 tab：今日赛事 / 积分榜。 */
 enum class ArenaTab(val label: String) {
     TODAY("今日赛事"),
     LEADERBOARD("积分榜"),

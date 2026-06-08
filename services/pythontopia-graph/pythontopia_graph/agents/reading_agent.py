@@ -13,6 +13,8 @@ from pythontopia_graph.schemas.resource import (
 
 
 class ReadingAgent:
+    """生成拓展阅读卡片（至少 2 项）；每项须含 summary_md 与 page_refs，否则回落证据/通识兜底。"""
+
     AGENT_NAME = "ResourceDesignerAgent.reading"
 
     def __init__(self, provider: LlmProvider) -> None:

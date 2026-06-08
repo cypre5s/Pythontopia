@@ -22,26 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
-/**
- * 训练场（Arena）入口屏。
- *
- * 布局：
- * ```
- * ┌───────────────────────────────────────┐
- * │   赛事标题 + 倒计时 (CountdownTimer)   │
- * ├───────────────────────────────────────┤
- * │   TabRow [今日赛事] [积分榜]           │
- * ├───────────────────────────────────────┤
- * │                                       │
- * │   今日赛事 → ProblemRunner             │
- * │   积分榜  → LeaderboardView            │
- * │                                       │
- * └───────────────────────────────────────┘
- * ```
- *
- * 顶部头部和 TabRow 始终可见；底部 tab 内容随 [ArenaUiState.selectedTab] 切换。这种
- * 布局对 Beta 首发的"赛事 + 排名 = 两件事"叙事最直接，不需要 BottomSheet / Drawer。
- */
+/** 训练场入口：头部 + TabRow，底部按 [ArenaUiState.selectedTab] 切换 ProblemRunner / LeaderboardView。 */
 @Composable
 fun ArenaScreen(viewModel: ArenaViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -86,11 +67,6 @@ fun ArenaScreen(viewModel: ArenaViewModel = hiltViewModel()) {
     }
 }
 
-/**
- * 屏幕顶部头：标题 + 倒计时 + 刷新按钮。
- *
- * 抽出来主要是 Preview / Roborazzi 时单独截图方便；ArenaScreen 主体保持顺序读写。
- */
 @Composable
 private fun ArenaHeader(state: ArenaUiState, onRefresh: () -> Unit) {
     Row(

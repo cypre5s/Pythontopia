@@ -1,13 +1,7 @@
-"""Schemas for the OrchestratorAgent（学习总管）conversational orchestration endpoint.
+"""OrchestratorAgent（学习总管）对话编排端点的结构化输出 schema。
 
-The 学习总管 sits above the specialist agents (ResourceDesigner / Practice /
-PathPlanner / Tutor / Debug …). It understands the learner's goal, decomposes it
-into an ordered 看→学→练→测 (watch→learn→practice→assess) plan, dispatches each
-step to a named specialist, dynamically replans on recent failures, and keeps a
-running profile from the dialogue.
-
-`GraphTraceStep`, `GroundingResult` and `SafetyResult` are reused from
-``schemas.resource`` so the trace / guardrail shapes stay identical across graphs.
+位于专家 Agent 之上，拆解看→学→练→测计划并调度 ResourceDesigner/Practice/PathPlanner/Tutor/Debug 等；
+失败时动态重规划，对话中提取画像。GraphTraceStep/GroundingResult/SafetyResult 复用 resource schema。
 """
 
 from __future__ import annotations
@@ -32,7 +26,7 @@ class OrchestratorTurn(BaseModel):
 
 
 class PlanStep(BaseModel):
-    """One ordered step of the 看/学/练/测 plan, routed to a single specialist."""
+    """看/学/练/测计划中的单步，路由到一个专家 Agent。"""
 
     id: str
     phase: Phase
@@ -54,11 +48,7 @@ class DispatchResult(BaseModel):
 
 
 class ProfileSignal(BaseModel):
-    """A single profile feature extracted from the dialogue（对话即画像）.
-
-    ``dimension`` is restricted to the 8 backend ``learner_profile.dimensions``
-    JSONB keys.
-    """
+    """从对话提取的单条画像信号（对话即画像）；dimension 限定为 learner_profile.dimensions 的 8 个 snake_case key。"""
 
     dimension: str
     value: str
@@ -74,6 +64,9 @@ class OrchestratorRequest(BaseModel):
     current_chapter: int | None = Field(default=None, ge=1, le=7)
     recent_kc_codes: list[str] = Field(default_factory=list)
     recent_failures: list[str] = Field(default_factory=list)
+    # FSRS 引擎判定「快遗忘 / 已到期」的 KC（记忆矿脉回声），由后端从 ReviewSignal 透传；
+    # 学习总管据此把看/学/练/测计划优先锚定到这些待复习知识点。
+    decaying_kcs: list[str] = Field(default_factory=list)
     course_kc_index: list[str] = Field(default_factory=list)
 
 

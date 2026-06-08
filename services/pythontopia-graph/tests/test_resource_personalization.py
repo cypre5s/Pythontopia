@@ -44,7 +44,7 @@ def _request(style: str, patterns: list[str]) -> ResourceProduceRequest:
     )
 
 
-# ---- directive 映射 -------------------------------------------------------
+# directive 映射
 
 
 def test_visual_directive_has_keyword() -> None:
@@ -78,7 +78,7 @@ def test_chinese_style_aliases_match() -> None:
     assert "最小可运行" in (resource_personalization_directive(_snapshot("试错")) or "")
 
 
-# ---- 空 / 未知风格 -------------------------------------------------------
+# 空 / 未知风格
 
 
 def test_empty_snapshot_returns_none() -> None:
@@ -91,7 +91,7 @@ def test_blank_error_patterns_ignored() -> None:
     assert resource_personalization_directive(_snapshot("", ["", "  "])) is None
 
 
-# ---- 易错点 --------------------------------------------------------------
+# 易错点
 
 
 def test_error_patterns_included_with_style() -> None:
@@ -110,7 +110,7 @@ def test_error_patterns_alone_yield_directive() -> None:
     assert "缩进" in directive
 
 
-# ---- personalization_messages -------------------------------------------
+# personalization_messages
 
 
 def test_personalization_messages_shape() -> None:
@@ -124,7 +124,7 @@ def test_personalization_messages_empty_when_no_signal() -> None:
     assert personalization_messages(_snapshot("")) == []
 
 
-# ---- 集成：注入位置在最终 user 消息之前 ----------------------------------
+# 集成：个性化 system 须在最终 user 消息之前
 
 
 def test_handout_prompt_injects_personalization_before_user() -> None:

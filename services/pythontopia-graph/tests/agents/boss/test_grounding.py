@@ -1,4 +1,4 @@
-"""R-13 §5 Phase 5：grounding 单元测试。"""
+"""verify_kc_grounding 单元测试。"""
 
 from __future__ import annotations
 
@@ -38,9 +38,9 @@ def test_chapter_1_no_keyword_fails() -> None:
         "解决一道算法题",
         "x=1\nx=x+1\nprint(x)",
     )
-    # 没命中第一章关键词（print 没出现在 statement，仅在代码）—— 代码也有 print 命中
+    # statement 无关键词时，code 内 print 仍可命中
     v = verify_kc_grounding(p)
-    assert v.passed  # print 仍然在 code 内被检索到
+    assert v.passed
 
 
 def test_chapter_2_dict_keyword_in_statement_passes() -> None:

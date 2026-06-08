@@ -1,5 +1,5 @@
-// WorldScene：单一场景通过 sceneKey 切换 5 张大地图（town_hub / farm_north /
-// mine_south / campus_east / port_west），避免多实例资源浪费与状态错乱。
+// WorldScene：单一场景通过 sceneKey 切换 town_hub / mine_south 两张实景地图，
+// 避免多实例资源浪费与状态错乱（R-14 外围图已从主线移除）。
 //
 // NpcFramework + InteractableSystem 接入：
 //   - parseObjects 解析出的 npc 列表注册到 NpcFramework（patrol / 对话锚点 /

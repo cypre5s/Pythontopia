@@ -1,9 +1,7 @@
-"""IntentRouterAgent HTTP route tests (FastAPI TestClient).
+"""IntentRouterAgent HTTP 路由测试。
 
-Injects ``app.state.llm_provider`` with a StubProvider so no real LLM is called.
-The client is created WITHOUT the ``with`` context manager so the app lifespan
-(which would overwrite ``llm_provider`` via ``provider_from_env``) does not run —
-matching tests/test_orchestrator_route.py.
+注入 ``app.state.llm_provider`` 的 StubProvider 以避免真实 LLM；TestClient 不用 ``with``，
+以免 lifespan 经 ``provider_from_env`` 覆盖 ``llm_provider``（与 orchestrator_route 测试一致）。
 """
 
 from __future__ import annotations

@@ -28,16 +28,8 @@ import com.pythontopia.core.design.PytColors
 import com.pythontopia.core.design.PytSpace
 
 /**
- * Hub HUD 覆盖层：透明 [Box] 铺满 LibGDX 渲染区，顶端横幅显示季节 / 天数 / 时段 / 天气，
- * 底端 5 个像素方框作为道具/技能快捷栏占位（R-13 接入真实背包后绑定 KC / 道具 slot）。
- *
- * 设计取舍：
- * - 完全透明背景，让 LibGDX 渲染穿透显示；只有顶/底两条像素半透明带；
- * - 顶栏 4 个 chip + 底栏 5 个 slot，全部用 [PixelHudChip] / [QuickSlotBox] 自绘
- *   像素描边 + tonal 颜色，匹配 `docs/stardew/02-frames-9slice-spec.md` 的"硬边 1px 描边"；
- * - 不响应触摸（[Modifier.fillMaxSize] 不带 clickable），让 LibGDX 的虚拟摇杆 + Compose
- *   下方面板正常接收点击（`docs/android/03-rendering-libgdx-vs-compose.md` §7.2 红线 1）。
- * - 不持有 ViewModel；状态全部由 [HubScreen] 通过参数传入，方便 Preview 与单测。
+ * Hub HUD 覆盖层；透明背景不拦截触摸，状态由 [HubScreen] 参数传入。
+ * 顶栏显示日历，底栏为快捷栏占位。
  */
 @Composable
 fun HudOverlay(
@@ -65,10 +57,6 @@ fun HudOverlay(
     }
 }
 
-/**
- * HUD 顶部状态条：季节 / 天数 / 时段 / 天气 四个 chip。
- * calendar 为 null 时（未联网 demo）显示 "—" 占位。
- */
 @Composable
 private fun TopStatusBar(
     calendar: CalendarTodayResponse?,
@@ -89,10 +77,6 @@ private fun TopStatusBar(
     }
 }
 
-/**
- * 底部 5 个 quickslot；highlight 命中（如 NPC 在范围内）时第 1 个 slot 高亮成金边，
- * 提示玩家"按交互键 / 点 slot 1 触发对话"。
- */
 @Composable
 private fun BottomQuickslotBar(
     slots: List<HudQuickSlot>,
@@ -178,10 +162,7 @@ private fun QuickSlotBox(
     }
 }
 
-/**
- * Quickslot 数据；R-12 demo 用 hardcoded 5 项占位（对话 / 背包 / 农具 / 复盘 / 地图），
- * R-13 接入背包系统后由 ViewModel 提供动态列表。
- */
+/** 快捷栏槽位数据。 */
 data class HudQuickSlot(
     val key: String,
     val glyph: String,

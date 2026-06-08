@@ -1,4 +1,4 @@
-"""Tests for the DebugAgent."""
+"""DebugAgent 单元测试。"""
 
 from __future__ import annotations
 

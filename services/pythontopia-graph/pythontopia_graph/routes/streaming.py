@@ -1,4 +1,4 @@
-"""SSE streaming endpoints for resource graph and profile interview."""
+"""资源图与画像访谈的 SSE 流式端点。"""
 
 from __future__ import annotations
 
@@ -106,11 +106,7 @@ async def profile_turn_stream(
     body: dict[str, Any],
     provider: LlmProvider = Depends(_provider),
 ) -> StreamingResponse:
-    """Stub SSE endpoint for profile interview streaming.
-
-    Wraps the existing profile turn in SSE format. Full streaming
-    (token-by-token) will be implemented when ProfileGraph supports it.
-    """
+    """画像访谈 SSE 桩端点：将现有 profile turn 包装为 SSE；token 级流式待 ProfileGraph 支持后实现。"""
     from pythontopia_graph.agents.profile_agent import ProfileAgent
     from pythontopia_graph.schemas.profile import ProfileAgentInput
 

@@ -1,3 +1,5 @@
+import type { PublicProblemDto } from './Submission';
+
 export type BugMineSessionStatus = 'OPEN' | 'RESOLVED' | 'ABANDONED';
 
 export type BugMineCardType =
@@ -40,6 +42,8 @@ export interface BugMineSessionDto {
   profileGuidance: string;
   depthSteps: BugMineDepthStepDto[];
   cards: BugMineCardDto[];
+  /** 后端随会话一次性下发的完整题干（含样例）；旧会话或题目缺失时为 null。 */
+  problem: PublicProblemDto | null;
 }
 
 export interface BugMineDepthStepDto {
@@ -63,6 +67,9 @@ export interface BugMineErrorBookItemDto {
   profileDepthTarget: number;
   profileGuidance: string;
   masteryScore: number;
+  minePriority: number;
+  decayRisk: number;
+  recommendationReason: string;
   mistakePatterns: string[];
   patternMatched: boolean;
   openedAt: string;
@@ -70,8 +77,23 @@ export interface BugMineErrorBookItemDto {
   depthSteps: BugMineDepthStepDto[];
 }
 
+export interface BugMineEchoCandidateDto {
+  kcCode: string;
+  problemId: number;
+  problemTitle: string;
+  masteryScore: number;
+  confidence: number;
+  decayRisk: number;
+  minePriority: number;
+  recommendationReason: string;
+}
+
 export interface BugMineOpenRequest {
   submissionId: number;
+}
+
+export interface BugMineEchoOpenRequest {
+  kcCode: string;
 }
 
 export interface BugMineRetryRequest {

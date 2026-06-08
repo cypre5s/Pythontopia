@@ -76,6 +76,6 @@ watch([submissionId, sessionId], () => {
   min-height: calc(100vh - 64px);
   overflow: auto;
   padding: 16px;
-  background: linear-gradient(180deg, #1c1208 0%, #2a1d10 100%);
+  background: linear-gradient(180deg, var(--pyt-color-bg-primary) 0%, var(--pyt-color-bg-sunken) 100%);
 }
 </style>

@@ -11,6 +11,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 import java.util.Locale
 
+/** 章节塔关卡列表；第 1 关默认解锁，第 10 关为 boss。 */
 @HiltViewModel
 class ChapterTowerViewModel @Inject constructor() : ViewModel() {
 

@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test
 class WorldMapDataTest {
 
     @Test
-    fun `native town exposes five maps`() {
+    fun `native town exposes five maps for compat`() {
         assertEquals(
             setOf("town_hub", "farm_north", "mine_south", "campus_east", "port_west"),
             WorldMaps.all.map { it.key }.toSet(),
@@ -15,11 +15,11 @@ class WorldMapDataTest {
     }
 
     @Test
-    fun `native town contains twenty unique npc anchors`() {
-        val npcKeys = WorldMaps.all.flatMap { it.npcs }.map { it.key }.toSet()
+    fun `town hub aligns twelve main npc anchors with web town_hub json`() {
+        val npcKeys = WorldMaps.townHub.npcs.map { it.key }.toSet()
 
-        assertEquals(DemoNpcKeys.expected, npcKeys)
-        assertEquals(20, npcKeys.size)
+        assertEquals(TownHubNpcKeys.expected, npcKeys)
+        assertEquals(12, npcKeys.size)
     }
 
     @Test
@@ -32,27 +32,19 @@ class WorldMapDataTest {
     }
 }
 
-private object DemoNpcKeys {
+private object TownHubNpcKeys {
     val expected: Set<String> = setOf(
         "mayor_py",
         "librarian_doc",
+        "professor",
         "coach_q",
         "sage_review",
-        "gardener",
-        "chef",
-        "farmer",
-        "professor",
         "student_a",
-        "sailor",
-        "miner",
-        "tutor_ai",
         "workshop_master",
         "arena_guard",
-        "trainer",
-        "farmer_kc",
-        "foreman_bug",
         "mine_keeper",
-        "class_president",
+        "foreman_bug",
         "captain_def",
+        "class_president",
     )
 }

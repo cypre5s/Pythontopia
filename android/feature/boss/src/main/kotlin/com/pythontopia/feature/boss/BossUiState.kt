@@ -2,6 +2,7 @@ package com.pythontopia.feature.boss
 
 enum class BossPhase { PICK_CHAPTER, BATTLE, VICTORY }
 
+/** BOSS 战 UI 状态；[clearedStages] = stage-1，[isLastStage] 当 stage ≥ [TOTAL_STAGES]。 */
 data class BossUiState(
     val phase: BossPhase = BossPhase.PICK_CHAPTER,
     val chapter: Int = 0,

@@ -1,10 +1,4 @@
-"""R-13 §5 Phase 6 续：28 道 golden 题完整性校验。
-
-每章 4 个 stage = 28 道题；本测试确保：
-    * get_golden_problem(1..7, 1..4) 返回有效 BossProblem；
-    * 越界 chapter / stage 不抛异常（clamp）；
-    * 全部 28 道题通过 5 重审查链（structure / self_test / grounding / difficulty / plagiarism）。
-"""
+"""golden 题库完整性：28 道题（7 章×4 stage）须通过五重审查链，越界 chapter/stage 应 clamp。"""
 
 from __future__ import annotations
 

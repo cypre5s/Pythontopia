@@ -3,19 +3,7 @@ package com.pythontopia.game
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer
 import kotlin.math.abs
 
-/**
- * 玩家角色：tile 坐标 + 4 向朝向 + 简单步进冷却 + 自绘像素体。
- *
- * 不持有任何 GL handle（[ShapeRenderer] 由调用方传入并由调用方负责 begin/end），
- * 因此可以在 headless 环境单测全部逻辑分支（移动、阻挡、朝向、邻近判定）。
- *
- * 设计取舍：
- * - tile 单位最小步长 = 1 格，每步固定 [PlayerActor.STEP_INTERVAL] 秒冷却；
- *   匹配 web 端 `frontend/src/game/scenes/WorldScene.ts` 的 grid-based 移动。
- * - 朝向用 4 向枚举（与后端 `/api/world/player` 的 direction 字段一致），8 向降级
- *   在 [InputController] 层处理后传入。
- * - 当玩家与 NPC 曼哈顿距离 ≤ 1 时视为「相邻」，与 [HubScreen] 的对话触发距离一致。
- */
+/** 玩家逻辑：tile 坐标、4 向朝向、步进冷却；无 GL handle，可 headless 单测。 */
 class PlayerActor(
     spawnTileX: Int = HubGameBridge.SPAWN_TILE_X,
     spawnTileY: Int = HubGameBridge.SPAWN_TILE_Y,

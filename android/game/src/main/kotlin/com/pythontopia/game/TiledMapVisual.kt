@@ -5,17 +5,7 @@ import com.badlogic.gdx.graphics.g2d.SpriteBatch
 import com.badlogic.gdx.utils.JsonReader
 import com.badlogic.gdx.utils.JsonValue
 
-/**
- * 解析 Tiled（`town_hub.json` 等）的瓦片层并在 LibGDX y-up 世界里渲染。
- *
- * 坐标系对齐：Tiled 数据是 y-down（第 0 行在最上＝北），而本项目 Android 端
- * （[WorldMapData] / [PlayerActor] / 出口）沿用 y-up（tileY 越大越靠北）。
- * 因此解析时把每一行翻转：`grid[ty][tx] = data[(height-1-ty)*width + tx]`，
- * 渲染、碰撞、精灵坐标从此统一在 y-up，无需再做二次翻转。
- *
- * 碰撞从 `buildings` 瓦片层推导（非空格＝实心），与可见建筑像素级一致；
- * 解析失败时回退为全草地（仅 [WorldMapData] 的矩形建筑兜底），保证永不崩。
- */
+/** 解析 Tiled JSON 并在 y-up 世界渲染；解析时将 Tiled y-down 翻转为 y-up；碰撞取自 buildings 层。 */
 class TiledMapVisual private constructor(
     val key: String,
     val width: Int,

@@ -3,22 +3,7 @@ package com.pythontopia.feature.arena
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
-/**
- * [CountdownTimer] 的可测部分：纯函数 [formatRemaining] / [classifyPhase] / [phaseLabel]。
- *
- * **关于"Compose UI Test"**：模块 `:feature:arena` 的 build.gradle.kts 当前没有声明
- * `ui-test-junit4` / `compose-ui-test-manifest` 等 androidTest 依赖，且任务硬约束
- * "不引入新依赖"。所以此处对 Composable [CountdownTimer] 本身的渲染断言被降级为对其
- * 内部纯函数的 JVM 单测：
- *
- * - [formatRemaining]：mm:ss 的边界（0、< 1 分、99 分、99 分以上溢出兜底）
- * - [classifyPhase]：UPCOMING / RUNNING / ENDED 三阶段在边界点的归类
- * - [phaseLabel]：三阶段的中文描述前缀正确
- *
- * 当后续引入 Compose UI Test 依赖（按 ADR-001 §1 决策 8 的 Beta+1 计划），可在
- * `src/androidTest/kotlin/com/pythontopia/feature/arena/CountdownTimerUiTest.kt` 中补
- * 充 `composeTestRule.setContent { CountdownTimer(...) }` + 截图断言，无需改本文件。
- */
+/** [CountdownTimer] 纯函数单测：[formatRemaining]、[classifyPhase]、[phaseLabel]（Composable 渲染未覆盖）。 */
 class CountdownTimerTest {
 
     @Test

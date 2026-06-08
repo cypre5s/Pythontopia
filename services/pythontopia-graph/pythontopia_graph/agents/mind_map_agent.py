@@ -16,6 +16,8 @@ MERMAID_HEADER_PATTERN = re.compile(r"^(graph|flowchart)\s+(TD|LR|RL|BT)", re.MU
 
 
 class MindMapAgent:
+    """生成 Mermaid 思维导图资源；mermaid 须通过 syntax_valid，否则回落确定式兜底。"""
+
     AGENT_NAME = "MindMapAgent"
 
     def __init__(self, provider: LlmProvider) -> None:
@@ -89,9 +91,7 @@ class MindMapAgent:
                 lines.append(f"  note{index}({code} 详解)")
                 lines.append(f"  {node} --> note{index}")
         else:
-            # 单 KC 时用通用概念子节点（非 KC code），避免编造 KC code 触发
-            # hallucination_detector 的 "Unknown KC"（此前 -extend-N 会让单 KC 思维导图
-            # 必定 grounding 失败）。
+            # 单 KC 时用通用概念子节点（非 KC code），避免编造 KC 触发 grounding 的 Unknown KC。
             for index, label in enumerate(("核心概念", "典型用法", "常见误区")):
                 lines.append(f"  {self._node_id(root)} --> concept{index}[{label}]")
         mermaid = "\n".join(lines)

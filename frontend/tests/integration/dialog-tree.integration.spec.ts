@@ -193,7 +193,7 @@ describe('dialog-tree.integration · 内存友好度跨实例', () => {
     await d.openWithTree('mayor_py');
     d.selectChoice(0);
     d.close();
-    await d.openWithTree('farmer_kc');
+    await d.openWithTree('mine_keeper');
     expect(d.friendship).toBe(0);
   });
 });

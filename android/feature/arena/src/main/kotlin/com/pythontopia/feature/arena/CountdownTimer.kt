@@ -16,21 +16,8 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 
 /**
- * 赛事倒计时 Composable。
- *
- * 三种显示状态由 [classifyPhase] 计算：
- *  - [TimerPhase.UPCOMING]  : 还没开始（now < start），显示 "未开始"
- *  - [TimerPhase.RUNNING]   : 进行中（start ≤ now < end），显示 mm:ss 剩余时间
- *  - [TimerPhase.ENDED]     : 已结束（now ≥ end），显示 "已结束"
- *
- * **为什么不用 [System.currentTimeMillis] 直接驱动 UI？**
- *  - 直接读 wallclock 会被 Compose 当成"静态值"，不会自动重组
- *  - 用 `MutableLongState` + `LaunchedEffect { delay(1_000) }` 形成 1 Hz 重组节奏，
- *    刚好满足 mm:ss 显示精度，又不会浪费帧率
- *  - 当组件离开屏幕时 LaunchedEffect 自动取消，无后台泄漏
- *
- * **可测性**：核心格式逻辑下沉到三个纯函数 [formatRemaining] / [classifyPhase]
- * / [phaseLabel]，便于 [CountdownTimerTest] 用 JVM 单测覆盖，不依赖 Compose Runtime。
+ * 赛事倒计时；用 `MutableLongState` + 1 Hz 轮询驱动重组（wallclock 不会自动触发重组）。
+ * 格式逻辑下沉到 [formatRemaining] / [classifyPhase] / [phaseLabel] 便于 JVM 单测。
  */
 @Composable
 fun CountdownTimer(
@@ -63,29 +50,16 @@ fun CountdownTimer(
     )
 }
 
-/** 倒计时三阶段。 */
 enum class TimerPhase { UPCOMING, RUNNING, ENDED }
 
-/**
- * 把当前时间与赛事起止时间分类。
- *
- * 边界口径：`now == end` 视为已结束（含右端点收 0）；`now == start` 视为进行中。
- */
+/** `now == end` 视为已结束；`now == start` 视为进行中。 */
 internal fun classifyPhase(now: Long, startEpochMs: Long, endEpochMs: Long): TimerPhase = when {
     now < startEpochMs -> TimerPhase.UPCOMING
     now >= endEpochMs -> TimerPhase.ENDED
     else -> TimerPhase.RUNNING
 }
 
-/**
- * 把毫秒级剩余时间格式化成 `mm:ss` 字符串。
- *
- * - 输入负数或 0 → "00:00"
- * - 99 分 59 秒以上 → "99:59+"（避免演示初期题目时长超过两小时时显示成 120:00 不直观）
- *
- * 故意不依赖 [java.text.SimpleDateFormat] / [java.time.Duration.toString]：纯字符串拼接
- * 更便于在 Roborazzi/jvm-only 测试中跑。
- */
+/** 负数或 0 → `00:00`；超过 99 分 → `99:59+`。 */
 internal fun formatRemaining(remainingMs: Long): String {
     if (remainingMs <= 0L) return "00:00"
     val totalSeconds = remainingMs / 1_000L
@@ -98,12 +72,6 @@ internal fun formatRemaining(remainingMs: Long): String {
     }
 }
 
-/**
- * 根据阶段拼出 chip 上的最终文案。
- *
- * 提取成纯函数，[CountdownTimerTest] 可以直接传 (now, start, end) 三元组断言显示文案，
- * 不需要 Compose UI Test。
- */
 internal fun phaseLabel(
     phase: TimerPhase,
     now: Long,

@@ -17,14 +17,7 @@ class Embedder(Protocol):
 
 
 class HashEmbedder:
-    """Deterministic embedding without external dependencies.
-
-    Each text is hashed into a fixed-dimension unit vector using char n-gram features.
-    Chinese two-character terms such as "列表" get CJK bigrams, while longer mixed
-    code/courseware text still uses trigrams and whitespace-delimited words. This is
-    sufficient for stable tests and offline CI use. Real production should use
-    ``BgeSmallEmbedder``.
-    """
+    """无外部依赖的确定性嵌入：字符 n-gram 哈希为固定维单位向量，供测试与离线 CI；生产环境用 BgeSmallEmbedder。"""
 
     name = "hash-bow-1024"
     dim = DEFAULT_DIM
@@ -64,11 +57,7 @@ def _cjk_bigrams(text: str) -> list[str]:
 
 
 class BgeSmallEmbedder:
-    """Optional BGE small Chinese embedder; requires ``sentence-transformers``.
-
-    Construction lazily imports the dependency and downloads ``BAAI/bge-small-zh-v1.5``.
-    Disabled by default in CI. Used in production by setting ``PYT_RAG_EMBEDDER=bge``.
-    """
+    """可选 BGE 中文嵌入，依赖 sentence-transformers；生产环境设 PYT_RAG_EMBEDDER=bge 启用。"""
 
     name = "bge-small-zh-v1.5"
     dim = 512
@@ -84,7 +73,7 @@ class BgeSmallEmbedder:
 
 
 class IflytekSparkEmbedder:
-    """Phase 11 placeholder; intentionally raises until iFlytek provider is wired."""
+    """讯飞嵌入占位实现，接入前调用即抛 NotImplementedError。"""
 
     name = "iflytek-spark-embedding"
     dim = 1024

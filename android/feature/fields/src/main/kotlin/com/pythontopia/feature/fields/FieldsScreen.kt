@@ -29,17 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
-/**
- * Fields 主屏：3 段式布局。
- *
- *  - 顶部 [FieldsHud]：环境信息 + 田地汇总；
- *  - 中部 [LazyVerticalGrid]：固定 8 列，恰好把 65 KC 平铺成 9 行（最后 1 行 1 个），
- *    "格"是 64dp 像素方块（[KcTile]）；
- *  - 底部 [FieldsActionBar]：被选中 KC 才显示，提供"浇水 / 收获 / 取消"三键。
- *
- * 与 Hub 端不同，这里**不嵌 LibGDX**——65 KC 网格用纯 Compose Canvas 绘制更简洁，
- * 也符合 R-12 检查表 §4.4"作物图块尺寸固定，无需大世界相机"的简化决策。
- */
+/** 知识田主屏：HUD + 8 列 KC 网格 + 选中格操作栏；纯 Compose，不嵌 LibGDX。 */
 @Composable
 fun FieldsScreen(viewModel: FieldsViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -53,9 +43,7 @@ fun FieldsScreen(viewModel: FieldsViewModel = hiltViewModel()) {
     )
 }
 
-/**
- * 拆出无 ViewModel 依赖的纯 Composable，方便 Preview 与未来 Roborazzi 截图测试复用。
- */
+/** 无 ViewModel 依赖的内容层，便于 Preview 与截图测试复用。 */
 @Composable
 internal fun FieldsScreenContent(
     state: FieldsUiState,

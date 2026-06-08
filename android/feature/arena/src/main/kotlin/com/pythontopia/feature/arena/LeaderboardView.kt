@@ -27,17 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
-/**
- * 积分榜 tab 主组件：用 [LazyColumn] 渲染当前排行榜。
- *
- * 视觉规则：
- *  - 前 3 名用金 / 银 / 铜底色环高亮 [RankBadge]
- *  - "我"那一行用 [MaterialTheme.colorScheme.secondaryContainer] 高亮（即使不在前 3）
- *  - 头像占位：用 [displayName] 首字符 + 圆形底色，不引入图片加载库
- *
- * 顶部固定一个"我的当前排名"摘要条；用户上拉只会滚动 LazyColumn 内部；空状态用占位
- * 文案，避免一片空白。
- */
+/** 积分榜 tab；前 3 名徽章色环，[myUserId] 匹配行用 secondaryContainer 高亮。 */
 @Composable
 fun LeaderboardView(
     state: ArenaUiState,

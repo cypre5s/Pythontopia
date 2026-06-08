@@ -247,4 +247,39 @@ describe('BossPage', () => {
     await flushPromises();
     expect(wrapper.text()).toContain('用 input()');
   });
+
+  it('倒计时归零后显示超时横幅', async () => {
+    vi.useFakeTimers();
+    await router.push('/boss/1');
+    const wrapper = mountAt(1);
+    await flushPromises();
+    await vi.advanceTimersByTimeAsync(111_000);
+    await flushPromises();
+    expect(wrapper.find('[data-testid="boss-timeout-banner"]').exists()).toBe(true);
+    vi.useRealTimers();
+  });
+
+  it('bossHp≤50 时显示狂暴 badge 与狂暴招式卡', async () => {
+    apiMocks.requestBossProblem.mockResolvedValueOnce(SAMPLE_PROBLEM)
+      .mockResolvedValueOnce({ ...SAMPLE_PROBLEM, stage: 2 })
+      .mockResolvedValueOnce({ ...SAMPLE_PROBLEM, stage: 3, problemId: 'ai-test-3' });
+
+    await router.push('/boss/1');
+    const wrapper = mountAt(1);
+    await flushPromises();
+
+    for (let i = 0; i < 2; i += 1) {
+      await wrapper.find('[data-testid="boss-code-input"]').setValue('print(5)');
+      await wrapper.find('[data-testid="boss-submit"]').trigger('click');
+      await flushPromises();
+      const nextBtn = wrapper.find('[data-testid="boss-next"]');
+      if (nextBtn.exists()) {
+        await nextBtn.trigger('click');
+        await flushPromises();
+      }
+    }
+
+    expect(wrapper.find('[data-testid="boss-enrage"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="boss-move-card"]').text()).toContain('狂暴招式');
+  });
 });
