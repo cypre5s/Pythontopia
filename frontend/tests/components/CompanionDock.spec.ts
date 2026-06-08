@@ -62,10 +62,14 @@ vi.mock('@/api/bugMine', () => ({
   getBugMineEchoes: vi.fn(async () => [] as BugMineEchoCandidateDto[]),
 }));
 
+vi.mock('@/api/insight', () => ({ getInsights: vi.fn() }));
+
 import CompanionDock from '@/components/companion/CompanionDock.vue';
 import { useCompanionStore } from '@/stores/companion';
 import { getBugMineEchoes } from '@/api/bugMine';
+import { getInsights } from '@/api/insight';
 import type { BugMineEchoCandidateDto } from '@/api/dto/BugMine';
+import type { LearnerInsightDto } from '@/api/dto/Insight';
 
 function makeEcho(over: Partial<BugMineEchoCandidateDto> = {}): BugMineEchoCandidateDto {
   return {
@@ -77,6 +81,20 @@ function makeEcho(over: Partial<BugMineEchoCandidateDto> = {}): BugMineEchoCandi
     decayRisk: 0.7,
     minePriority: 0.8,
     recommendationReason: '到期复习',
+    ...over,
+  };
+}
+
+function makeInsight(over: Partial<LearnerInsightDto> = {}): LearnerInsightDto {
+  return {
+    id: 101,
+    text: '列表别名可变性反复出错',
+    dimensionKey: 'error_pattern',
+    tags: ['list', 'mutability'],
+    evidenceEventIds: [9001, 9002],
+    confidence: 0.82,
+    source: 'GRAPH',
+    createdAt: '2026-06-08T10:00:00Z',
     ...over,
   };
 }
@@ -116,6 +134,7 @@ describe('CompanionDock', () => {
     recorderStopSpy.mockClear();
     transcribeAudioSpy.mockClear();
     vi.mocked(getBugMineEchoes).mockResolvedValue([]);
+    vi.mocked(getInsights).mockResolvedValue([]);
   });
 
   it('shows the fab collapsed and opens the panel on click', async () => {
@@ -260,5 +279,39 @@ describe('CompanionDock', () => {
     await nextTick();
 
     expect(wrapper.find('[data-testid="companion-verified"]').exists()).toBe(true);
+  });
+
+  it('pops an insight bubble and reveals evidence clues on demand', async () => {
+    vi.mocked(getInsights).mockResolvedValue([makeInsight()]);
+    const wrapper = mountDock();
+    await flushPromises();
+
+    const insight = wrapper.find('[data-testid="companion-insight"]');
+    expect(insight.exists()).toBe(true);
+    expect(insight.text()).toContain('列表别名可变性反复出错');
+
+    // 证据默认收起，点开后才出现并带上 evidenceEventId 线索。
+    expect(wrapper.find('[data-testid="companion-insight-evidence"]').exists()).toBe(false);
+    await wrapper.find('[data-testid="companion-insight-evidence-toggle"]').trigger('click');
+    const evidence = wrapper.find('[data-testid="companion-insight-evidence"]');
+    expect(evidence.exists()).toBe(true);
+    expect(evidence.text()).toContain('9001');
+  });
+
+  it('dismisses the insight bubble on close', async () => {
+    vi.mocked(getInsights).mockResolvedValue([makeInsight()]);
+    const wrapper = mountDock();
+    await flushPromises();
+    expect(wrapper.find('[data-testid="companion-insight"]').exists()).toBe(true);
+
+    await wrapper.find('[data-testid="companion-insight-close"]').trigger('click');
+    expect(wrapper.find('[data-testid="companion-insight"]').exists()).toBe(false);
+  });
+
+  it('shows no insight bubble when none is available', async () => {
+    vi.mocked(getInsights).mockResolvedValue([]);
+    const wrapper = mountDock();
+    await flushPromises();
+    expect(wrapper.find('[data-testid="companion-insight"]').exists()).toBe(false);
   });
 });

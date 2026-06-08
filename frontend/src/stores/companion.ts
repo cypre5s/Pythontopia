@@ -2,6 +2,8 @@ import { defineStore } from 'pinia';
 import { computed, ref, watch } from 'vue';
 import { useSseStream } from '@/composables/useSseStream';
 import { getBugMineEchoes } from '@/api/bugMine';
+import { getInsights } from '@/api/insight';
+import type { LearnerInsightDto } from '@/api/dto/Insight';
 
 export interface CompanionMessage {
   role: 'user' | 'assistant';
@@ -41,6 +43,10 @@ export const useCompanionStore = defineStore('companion', () => {
   const nudge = ref<CompanionNudge | null>(null);
   // 关闭后本次会话不再打扰：dismiss 即置位，loadNudge 直接早退。
   let nudgeDismissed = false;
+  // 顿悟洞察气泡：被动画像沉淀出的「我发现你在…」最新结论。
+  const latestInsight = ref<LearnerInsightDto | null>(null);
+  // 同一洞察被 dismiss 后本次会话不再复弹；仅内存、不暴露。
+  const dismissedIds = new Set<number>();
   const sse = useSseStream<TutorStreamResult>('/api/tutor/ask');
 
   watch(sse.tokens, (text) => {
@@ -111,16 +117,39 @@ export const useCompanionStore = defineStore('companion', () => {
     nudgeDismissed = true;
   }
 
+  /** 取最新一条学情洞察弹「顿悟气泡」；已被 dismiss 的同一洞察不复弹。best-effort，失败静默。 */
+  async function loadInsight(): Promise<void> {
+    try {
+      const list = await getInsights(1);
+      const top = list[0];
+      latestInsight.value = top && !dismissedIds.has(top.id) ? top : null;
+    } catch {
+      latestInsight.value = null;
+    }
+  }
+
+  /** 关闭当前洞察气泡：先记住其 id 进忽略集合，再清空，确保同一洞察不再打扰。 */
+  function dismissInsight(): void {
+    const current = latestInsight.value;
+    if (current) {
+      dismissedIds.add(current.id);
+    }
+    latestInsight.value = null;
+  }
+
   return {
     open,
     busy,
     messages,
     nudge,
+    latestInsight,
     sse,
     ask,
     toggle,
     codeVerified,
     loadNudge,
     dismissNudge,
+    loadInsight,
+    dismissInsight,
   };
 });

@@ -51,6 +51,8 @@ interface StationVm {
 
 const SPRITE_BASE = '/assets/pixel/sprites/npc-composites';
 const SUPERVISOR = { sprite: 'npc_mayor', name: '总管 Py' };
+// Agent 串门（涌现协作）：反思/交接 NPC 走到同事工位通报「需要重点照顾」的学生。
+const VISIT = { sprite: 'npc_tutor_ai', name: '导学 AI' };
 
 function spriteUrl(sprite: string): string {
   return `url(${SPRITE_BASE}/${sprite}.png)`;
@@ -94,6 +96,17 @@ function designerSprite(type: string): string {
 /** 去掉设计师节点的 `.attemptN` 后缀，使 attempt0/1（重试）映射到同一工位。 */
 function nodeBase(node: string): string {
   return node.replace(/\.attempt\d+$/, '');
+}
+
+/** SseTraceEvent 未声明 note（反思/交接 trace 透传字段）：按可选字段安全读取，不引入 any。 */
+function traceNote(t: SseTraceEvent): string | undefined {
+  return (t as SseTraceEvent & { note?: string }).note;
+}
+
+/** 反思 / 交接类节点：触发「串门」过场，且不计入工位与执行日志流水线。 */
+const HANDOFF_NODES = new Set(['reflection', 'handoff']);
+function isHandoffTrace(t: SseTraceEvent): boolean {
+  return HANDOFF_NODES.has(nodeBase(t.node));
 }
 
 /** plan 模式：取某工位「最新一条」trace（按 base 名匹配，兼容重试）。 */
@@ -201,6 +214,17 @@ const stations = computed<StationVm[]>(() => {
 
 const activeIndex = computed<number>(() => stations.value.findIndex((s) => s.state === 'active'));
 
+// ── Agent 串门（涌现协作可视）：反思/交接 trace → 一名 NPC 走到同事工位通报 ──
+// 取最后一条反思/交接 trace；其 note 文本回退到含「照顾」的合理默认文案。
+const visit = computed<{ note: string } | null>(() => {
+  let found: SseTraceEvent | null = null;
+  for (const t of props.traces) {
+    if (isHandoffTrace(t)) found = t;
+  }
+  if (!found) return null;
+  return { note: traceNote(found) ?? '这位同学需要重点照顾' };
+});
+
 // ── 工位间「接力棒」交接动画（复用 MarvisPanel 语义，横向版） ──
 // 连线 i 连接工位 i → 工位 i+1：上游完工后线点亮；上游完工且下游在干 → 流动 + 接力棒右滑。
 const connectorIndices = computed<number[]>(() =>
@@ -271,15 +295,16 @@ const logLines = computed<LogLine[]>(() => {
       return match ? match.agent_label : node;
     };
     // plan 模式日志：每节点「完工」时记一条（agent_label · 状态 · 耗时）。
+    // 反思/交接节点无 phase 已天然排除，这里显式再过滤一遍以稳妥（串门只走过场，不进日志）。
     return props.traces
-      .filter((t) => t.phase === 'finish')
+      .filter((t) => t.phase === 'finish' && !isHandoffTrace(t))
       .map((t) => ({
         stage: labelOf(t.node),
         status: statusZh(t.status),
         elapsedMs: t.elapsed_ms ?? 0,
       }));
   }
-  return props.traces.map((t) => {
+  return props.traces.filter((t) => !isHandoffTrace(t)).map((t) => {
     const stage = stageOf(t.node);
     const label = stage ? STAGE_LABEL[stage] : t.node;
     const agent = stage ? LEGACY_AGENTS.find((a) => a.stage === stage) : null;
@@ -395,6 +420,27 @@ const groundingText = computed<string>(() => {
             <span class="office-agent__name">{{ station.label }}</span>
             <span class="office-agent__role">{{ station.role }}</span>
           </div>
+        </div>
+
+        <!-- ── Agent 串门（涌现协作）：导学 NPC 走到工位通报「需要重点照顾」 ── -->
+        <div
+          v-if="visit"
+          class="office-visit"
+          data-testid="agent-handoff-visit"
+        >
+          <span
+            class="office-sprite office-sprite--walk office-visit__sprite"
+            :style="{ backgroundImage: spriteUrl(VISIT.sprite) }"
+            :title="VISIT.name"
+            aria-hidden="true"
+          />
+          <span class="office-visit__bubble">
+            <span class="office-visit__tag">串门通报</span>
+            <span
+              class="office-visit__note"
+              data-testid="agent-handoff-note"
+            >{{ visit.note }}</span>
+          </span>
         </div>
       </div>
 
@@ -896,6 +942,45 @@ const groundingText = computed<string>(() => {
   font-size: 11px;
   color: #b3402a;
 }
+/* ── Agent 串门（涌现协作可视）：反思/交接 NPC 走到工位通报 ── */
+.office-visit {
+  position: absolute;
+  left: 8px;
+  top: 26px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: calc(100% - 16px);
+  z-index: 4;
+  pointer-events: none;
+  animation: office-visit-in 460ms ease-out;
+}
+.office-visit__sprite {
+  flex: 0 0 auto;
+}
+.office-visit__bubble {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 220px;
+  background: #fffbe9;
+  border: 2px solid #8c6a23;
+  border-radius: 8px;
+  padding: 4px 8px;
+  box-shadow: 0 2px 0 #8c6a23;
+}
+.office-visit__tag {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #8c6a23;
+}
+.office-visit__note {
+  font-size: 11px;
+  line-height: 1.3;
+  color: #3a2a14;
+  overflow-wrap: anywhere;
+}
 /* ── 证据卡 ── */
 .office-evidence {
   position: absolute;
@@ -1008,6 +1093,10 @@ const groundingText = computed<string>(() => {
   85% { opacity: 1; }
   100% { left: 100%; opacity: 0; }
 }
+@keyframes office-visit-in {
+  0% { transform: translateX(-14px); opacity: 0; }
+  100% { transform: translateX(0); opacity: 1; }
+}
 @media (max-width: 900px) {
   .office-main {
     grid-template-columns: 1fr;
@@ -1022,7 +1111,8 @@ const groundingText = computed<string>(() => {
   .office-step--active,
   .office-agent__badge--work,
   .office-track__seg.office-link--flow,
-  .office-track__baton {
+  .office-track__baton,
+  .office-visit {
     animation: none !important;
   }
 }

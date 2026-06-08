@@ -24,7 +24,7 @@
 ### 二、生成式教学智能体 P0–P2（记忆流 + 反思飞轮，随基线快照入库）
 
 > 落地 `docs/plans/2026-06-08-generative-teaching-agents.md` 的 Phase 0–2（后端 + graph + 前端 API/笔记本）。
-> Phase 3（小镇涌现协作四件套）尚未完成，留作后续（见同名计划 P3）。
+> Phase 3（小镇涌现协作四件套）见下「八」节本会话补齐。
 
 - **记忆流底座（Phase 0）**：`learning_event_log` 加 `importance`（V134，1–5 确定性打分）+ `EventImportance` +
   `MemoryStreamMirror`（进程内 `LearningEvent` 镜像入表，异常吞掉不阻塞主链路）；`MemoryScorer`
@@ -82,6 +82,13 @@
   `docs/plans/2026-06-08-generative-teaching-agents.md`（记忆流/反思实施详版）。
 - **已知问题（原样记录）**：迁移版本 135 重复（`V135__drop_npc_friendship_and_gift.sql` 与
   `V135__learner_insight_and_reflection_source.sql`），Flyway 启动会报「Found more than one migration with version 135」→ 留 infinity P0.1 修复。
+
+### 八、生成式教学智能体 P3 · 小镇涌现协作（本会话补齐，多 subagent 并发）
+
+- 3.1「Agent 笔记本」与 3.4「复习 nudge」已随基线落地（`AgentNotebook.vue` 挂画像屋、companion 复习气泡）；本会话以两路并发 subagent（文件域互不重叠）补齐余下两件：
+- **3.2 顿悟洞察气泡**：companion store 新增 `latestInsight` / `loadInsight()`（以 1 调 `getInsights`、空/异常静默降级、同一已忽略 id 不复弹、不同 id 仍弹）/ `dismissInsight()`；`CompanionDock` 折叠态在小人上方冒「💡 我发现你在…」气泡（`companion-insight`，可展开 `evidenceEventIds` 溯源、可关闭）。
+- **3.3 Agent 串门通报**：`AgentOfficeScene` 据 `reflection` / `handoff` trace 渲染「串门」元素（`agent-handoff-visit` + `agent-handoff-note`，缺省文案兜底；reflection/handoff 不进执行日志；reduced-motion 友好），普通流水线无回归。
+- 验证：前端 `npm run typecheck` 0 错；P3 四个 spec（`AgentNotebook` 5 / `AgentOfficeScene` 4 / `companion` 13 / `CompanionDock` 12）全绿；改动文件 `eslint` 0 错。
 
 ## 2026-06-06 — Bug 矿洞验证基线稳定化（`c7979dc6`）
 

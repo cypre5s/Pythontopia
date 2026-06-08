@@ -19,6 +19,8 @@ const route = useRoute();
 const ctx = useCompanionContext(() => ({ path: route.path, query: route.query }));
 const draft = ref<string>('');
 const pendingImages = ref<string[]>([]);
+// 洞察气泡内「查看证据」展开态；切到另一条洞察时重置。
+const insightEvidenceOpen = ref<boolean>(false);
 const voice = useVoiceInput();
 // Web Speech 不可用时（如 Firefox）回退到「录音 → 服务端讯飞听写」。
 const recorder = useAudioRecorder();
@@ -157,13 +159,61 @@ function openNudge(): void {
   void router.push({ path: '/bug-mine' });
 }
 
+// 切到新洞察（或被关闭）时收起证据，避免残留上一条的展开态。
+watch(
+  () => store.latestInsight?.id,
+  () => {
+    insightEvidenceOpen.value = false;
+  },
+);
+
 onMounted(() => {
   void store.loadNudge();
+  void store.loadInsight();
 });
 </script>
 
 <template>
   <div class="companion">
+    <div
+      v-if="!store.open && store.latestInsight"
+      class="companion__insight"
+      data-testid="companion-insight"
+    >
+      <button
+        type="button"
+        class="companion__insight-close"
+        data-testid="companion-insight-close"
+        aria-label="关闭洞察"
+        @click="store.dismissInsight()"
+      >
+        ×
+      </button>
+      <p class="companion__insight-text">
+        💡 我发现你在「{{ store.latestInsight.text }}」上反复栽，要一起看看吗？
+      </p>
+      <button
+        type="button"
+        class="companion__insight-evidence-toggle"
+        data-testid="companion-insight-evidence-toggle"
+        :aria-expanded="insightEvidenceOpen"
+        @click="insightEvidenceOpen = !insightEvidenceOpen"
+      >
+        {{ insightEvidenceOpen ? '收起线索' : '看看线索' }}
+      </button>
+      <p
+        v-if="insightEvidenceOpen"
+        class="companion__insight-evidence"
+        data-testid="companion-insight-evidence"
+      >
+        线索<span
+          v-for="eid in store.latestInsight.evidenceEventIds"
+          :key="eid"
+          class="companion__insight-clue"
+        >#{{ eid }}</span>
+      </p>
+    </div>
+
     <div
       v-if="!store.open && store.nudge"
       class="companion__nudge"
@@ -419,6 +469,83 @@ onMounted(() => {
   font-size: 16px;
   line-height: 1;
   cursor: pointer;
+}
+
+.companion__insight {
+  position: relative;
+  max-width: min(280px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--pyt-color-bg-elevated);
+  border: 2px solid var(--pyt-color-gold);
+  border-radius: var(--pyt-radius-lg);
+  box-shadow: 0 3px 0 var(--pyt-color-primary);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .companion__insight {
+    animation: companion-insight-pop 160ms ease-out;
+  }
+}
+.companion__insight-close {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: var(--pyt-color-text-hint);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.companion__insight-text {
+  margin: 0;
+  padding-right: 16px;
+  font-size: var(--pyt-font-size-sm);
+  line-height: 1.4;
+  color: var(--pyt-color-text-primary);
+}
+.companion__insight-evidence-toggle {
+  align-self: flex-start;
+  padding: 2px 10px;
+  border: 1px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-full);
+  background: var(--pyt-color-bg-soft);
+  color: var(--pyt-color-text-hint);
+  font-size: var(--pyt-font-size-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+.companion__insight-evidence-toggle:hover {
+  background: var(--pyt-color-warning-bg);
+}
+.companion__insight-evidence {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  font-size: var(--pyt-font-size-xs);
+  color: var(--pyt-color-text-hint);
+}
+.companion__insight-clue {
+  padding: 0 6px;
+  background: var(--pyt-color-bg-sunken);
+  border: 1px solid var(--pyt-color-border-soft);
+  border-radius: var(--pyt-radius-full);
+}
+@keyframes companion-insight-pop {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .companion__fab {
