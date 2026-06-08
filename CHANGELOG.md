@@ -1,5 +1,93 @@
 # Changelog
 
+## 2026-06-08 — 生成式教学智能体（记忆流+反思）+ 随身助教 + 真协同答疑工具化 + 工作区基线固化
+
+> 一天内跨多会话推进多条线，最后用一次基线快照把所有在途工作区改动固化为安全回滚点。
+> **诚实交付**：本日大量改动以「工作区在途（WIP）」形式存在，按各自提交信息分别在代码层自测；
+> 末尾 `10be35b5` 基线快照**一次性纳入**六端（含 android / wechat / windows）与 graph 的全部未提交 WIP，
+> 该快照内的跨端改动未逐一重验，且**遗留一处已知问题：双 V135 迁移冲突**（见末条，留 infinity P0.1 修复）。
+
+### 一、记忆矿脉 · FSRS 复习引擎（`d319ecb4`，Phase 1+2 + 错题矿洞 UI 统一）
+
+- **引擎（确定性、不调 LLM）**：新表 `kc_review_state`（V133，空库从 `kc_mastery` 回填）+ `ReviewScheduler`
+  （FSRS-lite DSR：幂律遗忘 `R(t)`、间隔、稳定度演化）+ `ReviewState/Outcome/Signal/Repository/Service`；
+  `MasteryEvaluator.applyEvent` 同事务挂钩，按成功/失败/重学演化稳定度。
+- **回声闭环**：BugMine 入矿门槛改 FSRS 到期（`now>due_at`，无状态按掌握度播种），`decayRisk` 改 `1−R`，
+  入矿题按掌握度选恰当难度。graph 新增 `REVIEW` 意图（IntentRouter 关键词+LLM）；`OrchestratorRequest`
+  加 `decaying_kcs`，`OrchestratorAgent._select_kcs` 把到期 KC 提到最高优先级；后端每轮取前 5 经
+  `OrchestratorGraphClient` 透传（取数失败降级空列表）；前端 `intent.ts` 加 REVIEW 且排除资源生成、
+  `WorkshopChat` 把 REVIEW 引导进错题矿洞。
+- **错题矿洞 UI 统一**：全高 master-detail + `--pyt-color-*` token + PyButton/PyEmptyState + chips/stepper，
+  自适应视口、精简文案。文档：`mastery_formula.md`（14 天半衰期 → FSRS R）、`clients/api-contract.md`。
+- 验证（提交所述）：ReviewScheduler 8/8、Stage10BugMine 12/12、orchestrator 单测、graph pytest 301、前端 typecheck + 相关 spec 绿。
+
+### 二、生成式教学智能体 P0–P2（记忆流 + 反思飞轮，随基线快照入库）
+
+> 落地 `docs/plans/2026-06-08-generative-teaching-agents.md` 的 Phase 0–2（后端 + graph + 前端 API/笔记本）。
+> Phase 3（小镇涌现协作四件套）尚未完成，留作后续（见同名计划 P3）。
+
+- **记忆流底座（Phase 0）**：`learning_event_log` 加 `importance`（V134，1–5 确定性打分）+ `EventImportance` +
+  `MemoryStreamMirror`（进程内 `LearningEvent` 镜像入表，异常吞掉不阻塞主链路）；`MemoryScorer`
+  （recency×importance×relevance，权重 0.4/0.3/0.3，半衰期 14 天）+ `MemoryRetrievalService` +
+  `GET /api/learner/memory`（topK + 三项分数分解，仅本人，limit clamp 1..30）。
+- **反思飞轮（Phase 1）**：graph `ReflectionAgent`（单次有界 LLM、grounded、强制引用 event id、维度白名单、
+  fail-fast）+ `routes/reflection.py`；后端 `learner_insight`（V136）+ `ReflectionTrigger`（进程内阈值 8/冷却 60min）+
+  `ReflectionService`（回写画像 `source=REFLECTION` + 落 `learner_insight`，graph 不可用走规则兜底不抛）+
+  `GET /api/learner/insights`；`ProfileSnapshot.recent_insight` 折进个性化 directive。
+- **记忆条件化生成（Phase 2）**：topK 记忆要点注入资源/答疑 prompt；洞察驱动路径重排。
+- **前端 API/组件**：`api/memory.ts` + `api/insight.ts` + DTO；`components/agents/AgentNotebook.vue`
+  （记忆流可视：中文摘要 + 重要度星级 + 可展开 recency/importance/relevance 分数条 + 空态/失败降级），
+  挂入画像屋 `ProfileRoomPage`。
+
+### 三、随身助教 CompanionDock（`f8f0950b`/`ebbd38f8`/`47c4f157`/`0af48028`）
+
+- **脊柱（Phase 0/1）**：全局浮动像素小人 + 折叠 ask 栏，复用 `/api/tutor/ask`（SSE）+ MarkdownView + 当前页面
+  上下文 + 证据页芯片，答案下方给「去练/看课件/进矿洞」动作芯片；`useCompanionContext` / `useVoiceInput`
+  （Web Speech ASR）+ 拍照/粘贴 `images[]`（≤3）；`code_runner` 完工 trace 驱动「已验证」角标。
+- **主动复习 nudge（Phase 3.2）**：折叠态在小人上方冒一条可关闭复习气泡（取记忆矿脉 echoes 最高优先到期项，
+  点击一键进矿洞；无到期不打扰；当次关闭后不再弹）。
+- **教师 copilot（Phase 3.3，前后端两道闸）**：前端仅在教师/管理员 `/teacher/classroom/:id` 注入只读班级上下文
+  （KC 热力/高频误区/完成率）；后端 `/api/tutor/ask` 放开教师/管理员，`TutorService` 对**归属**教师注入
+  `copilotBrief`（最弱 KC + 高频误区，`requireOwner` + 只读），学生即便携 `classroomId` 也一律忽略、零触达班级聚合
+  （新增 `ClassroomDashboardAuthorizationTest` / `TutorClassroomBriefTest` 锁红线）。
+- **服务端 ASR 回退（Phase 1.4）**：`XfyunIatService`（讯飞语音听写 WS+HMAC + ffmpeg 转 16k PCM）+
+  `POST /api/media/asr` + 前端 `useAudioRecorder`/`transcribeAudio`；无凭据 / 无 ffmpeg / 班级无数据均优雅降级。
+
+### 四、graph 真协同与工具化答疑（`76b54568`/`f4314aff`）
+
+- **辩论复核子图（Phase 3.1）**：`graph/debate_graph.py`（Solver→Critic→Referee，critic 无异议时 Referee 直接采纳省一次 LLM；
+  任一步异常回退 None 走普通答疑；逐节点 `run_events` 供真实 solver/critic/referee trace）。
+- **工具化导师（Phase 2.1/2.2/2.3）**：`nodes/code_runner.py`（受限子进程跑学生片段、关 stdin、超时 kill、截断输出，仅供答疑「验证」）；
+  `TutorAgent.should_verify`（带 Python 代码片段且追问错误/输出时先实跑注入真实 stdout/stderr，引导据实定位、绝不据此给完整答案）+
+  `should_debate`（窄触发词路由进辩论复核，与 code 验证互斥优先）；答疑 SSE 新增 `code_runner` + `solver/critic/referee` 真实 start/finish trace。
+- 验证（提交所述）：debate 3/3、code_runner 4、tutor_verify 2、tutor_ask_stream（含 code/ debate）6，graph 全量 312 绿。
+
+### 五、工坊内联 Pyodide（`974268c4`，Phase 2.4）
+
+- CodeLab 讲解可「运行」看本地 Pyodide 输出；Practice 可写解法本地试跑（通过→推进主线「练」`mainQuest.onSubmissionPassed`，
+  未通过→「进矿洞调试」入口）。复用 `learning.runPyodidePreview`，严守红线：**本地预览 ≠ 正式判题**（每处显式标注）。测试 workshop 4/4。
+
+### 六、后端测试锁定（`eac6686a`，Phase 2.3/3.3 BE，无业务源改动）
+
+- `TutorGraphClientSseTest`：起本地假 graph，断言导师答疑代理把上游未知 trace 节点（`code_runner`，含 `phase/status/elapsed_ms`）
+  **原样透传**到浏览器、不被节点白名单过滤/改写 → 前端「已验证」徽标可靠。
+- `ClassroomDashboardAuthorizationTest`：用真实 `ClassroomGuard` 串 `ClassroomDashboardService`，断言学生读 KC 热力/高频误区/
+  完成率/资源使用/最近活动一律 FORBIDDEN 且**零触达**聚合仓储。
+
+### 七、工作区基线快照 + 远景蓝图文档（`10be35b5`）
+
+- 把六端（backend / frontend / android / wechat-miniprogram / wechat-minigame / windows）+ graph 的全部在途 WIP 一次性
+  固化为 P0 稳定化前的安全回滚点：含上文记忆流/反思、随身助教、intent-router、记忆矿脉回声等跨端改动。
+- 新增远景规划文档 `docs/plans/2026-06-08-pythontopia-infinity-living-world.md`（教育内核收敛版蓝图，对标软件杯 A3）与
+  `docs/plans/2026-06-08-generative-teaching-agents.md`（记忆流/反思实施详版）。
+- **已知问题（原样记录）**：迁移版本 135 重复（`V135__drop_npc_friendship_and_gift.sql` 与
+  `V135__learner_insight_and_reflection_source.sql`），Flyway 启动会报「Found more than one migration with version 135」→ 留 infinity P0.1 修复。
+
+## 2026-06-06 — Bug 矿洞验证基线稳定化（`c7979dc6`）
+
+- 稳定错题矿洞相关验证门槛：`BilibiliVideoAcceptanceIntegrationTest` 收紧、`Submission` DTO 补字段、
+  `TrainingPanel.spec` 扩 68 行用例、`tilemap.spec` 对齐；纯测试/契约层加固，无业务回归。
+
 ## 2026-06-05 — 代码规范化：命名审计 + 脚本改名 + 注释优化（进行中）
 
 > 类型：重构（命名）+ 文档。按《命名约束 + 注释规范》优化全项目源码；进度实时记录于
