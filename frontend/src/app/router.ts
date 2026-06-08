@@ -40,7 +40,8 @@ export const router = createRouter({
       path: '/bug-mine',
       name: 'bug-mine',
       component: () => import('@/pages/BugMinePage.vue'),
-      meta: { requiresAuth: true },
+      // 错题矿洞本身是聚焦调试场景，不挂随身助教（避免与逐层下探干扰）。
+      meta: { requiresAuth: true, hideCompanion: true },
     },
     {
       path: '/profile-room',
@@ -91,7 +92,8 @@ export const router = createRouter({
       path: '/training',
       name: 'training',
       component: () => import('@/pages/TrainingPage.vue'),
-      meta: { requiresAuth: true },
+      // 做题页已有自带「AI 助教」入口，不重复挂随身助教。
+      meta: { requiresAuth: true, hideCompanion: true },
     },
     {
       path: '/board',
