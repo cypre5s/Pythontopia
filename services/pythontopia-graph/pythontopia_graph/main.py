@@ -15,6 +15,7 @@ from pythontopia_graph.llm.provider import (
 )
 from pythontopia_graph.routes.boss import router as boss_router
 from pythontopia_graph.routes.debug import router as debug_router
+from pythontopia_graph.routes.feynman import router as feynman_router
 from pythontopia_graph.routes.intent import router as intent_router
 from pythontopia_graph.routes.npc_dialog import router as npc_dialog_router
 from pythontopia_graph.routes.orchestrator import router as orchestrator_router
@@ -65,6 +66,7 @@ app.include_router(intent_router)
 app.include_router(reflection_router)
 app.include_router(video_router)
 app.include_router(npc_dialog_router)
+app.include_router(feynman_router)
 
 
 @app.get("/healthz", response_model=HealthResponse)
