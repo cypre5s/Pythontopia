@@ -1,9 +1,11 @@
 package com.pythontopia.learner.event;
 
 import com.pythontopia.learner.memory.MemoryEmbeddingWriter;
+import com.pythontopia.npc.NpcMemoryService;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
@@ -31,11 +33,15 @@ public class MemoryStreamMirror {
 
   private final LearningEventLogRepository repository;
   private final MemoryEmbeddingWriter embeddingWriter;
+  private final NpcMemoryService npcMemoryService;
 
   public MemoryStreamMirror(
-      LearningEventLogRepository repository, MemoryEmbeddingWriter embeddingWriter) {
+      LearningEventLogRepository repository,
+      MemoryEmbeddingWriter embeddingWriter,
+      NpcMemoryService npcMemoryService) {
     this.repository = repository;
     this.embeddingWriter = embeddingWriter;
+    this.npcMemoryService = npcMemoryService;
   }
 
   @EventListener
@@ -132,6 +138,7 @@ public class MemoryStreamMirror {
     try {
       long eventId = repository.insert(userId, eventType, payload, SOURCE, EventImportance.of(eventType));
       embeddingWriter.embedAndStore(eventId, eventType, payload);
+      npcKeyFor(eventType).ifPresent(npcKey -> npcMemoryService.remember(userId, npcKey, eventId, 0.5));
     } catch (RuntimeException ex) {
       log.warn(
           "MemoryStreamMirror skip event userId={} type={}: {}",
@@ -145,5 +152,20 @@ public class MemoryStreamMirror {
     if (value != null) {
       payload.put(key, value);
     }
+  }
+
+  private static Optional<String> npcKeyFor(String eventType) {
+    if (eventType == null) {
+      return Optional.empty();
+    }
+    if (eventType.startsWith("practice_") || "comeback_solved".equals(eventType)) {
+      return Optional.of("coach_q");
+    }
+    return switch (eventType) {
+      case "resource_consumed", "media_consumed" -> Optional.of("librarian_doc");
+      case "debug_resolved" -> Optional.of("foreman_bug");
+      case "profile_bootstrapped" -> Optional.of("mayor_py");
+      default -> Optional.empty();
+    };
   }
 }
