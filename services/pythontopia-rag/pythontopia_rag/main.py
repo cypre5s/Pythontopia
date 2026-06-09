@@ -11,6 +11,7 @@ from pythontopia_rag.app_state import create_default_state
 from pythontopia_rag.data.loader import DEFAULT_DB_URL, fetch_pages
 from pythontopia_rag.data.page_source import InMemoryPageSource, page_records_to_indexable
 from pythontopia_rag.index.builder import rebuild_index
+from pythontopia_rag.routes.embed import router as embed_router
 from pythontopia_rag.routes.query import router as query_router
 
 logger = logging.getLogger(__name__)
@@ -78,6 +79,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title="Pythontopia RAG", version="0.1.0", lifespan=lifespan)
 app.state.rag = create_default_state()
 app.include_router(query_router)
+app.include_router(embed_router)
 
 
 @app.get("/healthz", response_model=HealthResponse)
