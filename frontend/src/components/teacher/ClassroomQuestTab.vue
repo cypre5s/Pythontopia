@@ -75,6 +75,12 @@ function findCompletion(id: number): QuestCompletionDto | null {
 function fmtRate(value: number): string {
   return (value * 100).toFixed(0) + '%';
 }
+
+function rateColor(value: number): string {
+  if (value >= 0.8) return 'var(--pyt-color-success)';
+  if (value >= 0.4) return 'var(--pyt-color-warning)';
+  return 'var(--pyt-color-danger)';
+}
 </script>
 
 <template>
@@ -88,65 +94,84 @@ function fmtRate(value: number): string {
       @submit.prevent="submit"
     >
       <h3>发布班级任务</h3>
-      <label>
-        标题
-        <input
-          v-model="form.title"
-          maxlength="64"
-          required
-        >
-      </label>
-      <label>
-        描述
-        <textarea
-          v-model="form.description"
-          maxlength="256"
-        />
-      </label>
-      <label>
-        KC 代码（用空格或逗号分隔）
-        <input
-          v-model="kcInput"
-          required
-          placeholder="例如 PY43-KC-001 PY43-KC-002"
-        >
-      </label>
-      <label>
-        题目 ID（与资源类型二选一）
-        <input
-          :value="form.targetProblemId ?? ''"
-          type="number"
-          min="1"
-          @input="onProblemInput(($event.target as HTMLInputElement).value)"
-        >
-      </label>
-      <label>
-        资源类型
-        <select v-model="form.targetResourceType">
-          <option :value="null">不绑定资源</option>
-          <option
-            v-for="type in resourceTypes"
-            :key="type"
-            :value="type"
+
+      <!-- 基础信息 -->
+      <fieldset class="form-section">
+        <legend>基础信息</legend>
+        <label>
+          标题
+          <input
+            v-model="form.title"
+            maxlength="64"
+            placeholder="例如 第 2 章随堂练习"
+            required
           >
-            {{ type }}
-          </option>
-        </select>
-      </label>
-      <label>
-        截止日期
-        <input
-          v-model="form.dueDate"
-          type="date"
-          required
+        </label>
+        <label>
+          描述（选填）
+          <textarea
+            v-model="form.description"
+            maxlength="256"
+            placeholder="补充任务说明、提交要求"
+          />
+        </label>
+        <label>
+          KC 代码（空格或逗号分隔）
+          <input
+            v-model="kcInput"
+            required
+            placeholder="例如 PY43-KC-001 PY43-KC-002"
+          >
+        </label>
+      </fieldset>
+
+      <!-- 绑定目标 -->
+      <fieldset class="form-section">
+        <legend>绑定目标（题目 / 资源二选一，可留空）</legend>
+        <div class="form-row">
+          <label>
+            题目 ID
+            <input
+              :value="form.targetProblemId ?? ''"
+              type="number"
+              min="1"
+              placeholder="如 1024"
+              @input="onProblemInput(($event.target as HTMLInputElement).value)"
+            >
+          </label>
+          <label>
+            资源类型
+            <select v-model="form.targetResourceType">
+              <option :value="null">不绑定资源</option>
+              <option
+                v-for="type in resourceTypes"
+                :key="type"
+                :value="type"
+              >
+                {{ type }}
+              </option>
+            </select>
+          </label>
+        </div>
+      </fieldset>
+
+      <!-- 截止 + 提交 -->
+      <div class="form-foot">
+        <label class="form-foot__due">
+          截止日期
+          <input
+            v-model="form.dueDate"
+            type="date"
+            required
+          >
+        </label>
+        <PyButton
+          type="submit"
+          variant="primary"
         >
-      </label>
-      <PyButton
-        type="submit"
-        variant="primary"
-      >
-        发布
-      </PyButton>
+          发布任务
+        </PyButton>
+      </div>
     </form>
 
     <h3>班级任务列表</h3>
@@ -180,13 +205,22 @@ function fmtRate(value: number): string {
           <td>{{ quest.dueDate }}</td>
           <td>{{ quest.status }}</td>
           <td>
-            <template v-if="findCompletion(quest.id)">
-              {{ findCompletion(quest.id)!.completedCount }}/{{ findCompletion(quest.id)!.totalStudents }}
-              ({{ fmtRate(findCompletion(quest.id)!.completionRate) }})
-            </template>
-            <template v-else>
-              ——
-            </template>
+            <div
+              v-if="findCompletion(quest.id)"
+              class="rate-cell"
+            >
+              <div class="rate-bar">
+                <span
+                  class="rate-bar__fill"
+                  :style="{ width: fmtRate(findCompletion(quest.id)!.completionRate), background: rateColor(findCompletion(quest.id)!.completionRate) }"
+                />
+              </div>
+              <span class="rate-text">
+                {{ findCompletion(quest.id)!.completedCount }}/{{ findCompletion(quest.id)!.totalStudents }}
+                · {{ fmtRate(findCompletion(quest.id)!.completionRate) }}
+              </span>
+            </div>
+            <span v-else class="rate-na">——</span>
           </td>
           <td>
             <PyButton
@@ -215,6 +249,34 @@ function fmtRate(value: number): string {
   padding: 16px;
 }
 .publish-form h3 { margin: 0; font-size: var(--pyt-font-size-base); font-family: var(--pyt-font-pixel); }
+/* ─── 表单分区 ─── */
+.form-section {
+  border: 1px solid var(--pyt-color-border-soft);
+  border-radius: var(--pyt-radius-md);
+  padding: 12px 14px;
+  margin: 0;
+  display: grid;
+  gap: 10px;
+}
+.form-section legend {
+  padding: 0 6px;
+  font-size: var(--pyt-font-size-xs);
+  font-weight: 700;
+  color: var(--pyt-color-text-muted);
+}
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.form-foot {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.form-foot__due { flex: 0 0 auto; }
 .publish-form label {
   display: grid;
   gap: 4px;
@@ -270,4 +332,21 @@ function fmtRate(value: number): string {
 }
 .quest-table tbody tr:hover { background: var(--pyt-color-warning-bg); }
 .quest-table tbody tr:last-child td { border-bottom: none; }
+
+/* ─── 完成率进度条 ─── */
+.rate-cell { display: grid; gap: 3px; min-width: 120px; }
+.rate-bar {
+  height: 6px;
+  background: var(--pyt-color-bg-sunken);
+  border-radius: var(--pyt-radius-full);
+  overflow: hidden;
+}
+.rate-bar__fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--pyt-radius-full);
+  transition: width var(--pyt-motion-slow);
+}
+.rate-text { font-size: var(--pyt-font-size-xs); color: var(--pyt-color-text-muted); }
+.rate-na { color: var(--pyt-color-text-muted); }
 </style>

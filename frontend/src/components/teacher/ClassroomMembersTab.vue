@@ -1,9 +1,21 @@
 <script setup lang="ts">
 import type { ClassroomMemberDto } from '@/api/dto/ClassroomMemberDto';
 import PyButton from '@/components/ui/PyButton.vue';
+import PyTable from '@/components/ui/PyTable.vue';
 
-defineProps<{ members: ClassroomMemberDto[] }>();
+const props = defineProps<{ members: ClassroomMemberDto[] }>();
 const emit = defineEmits<{ (event: 'remove', studentId: number): void }>();
+
+const columns = [
+  { key: 'studentId', label: '学号' },
+  { key: 'username', label: '用户名' },
+  { key: 'displayName', label: '显示名' },
+  { key: 'status', label: '状态' },
+  { key: 'action', label: '操作', align: 'right' as const },
+];
+
+// PyTable rows 接受 Record<string, unknown>[]，ClassroomMemberDto 结构兼容；显式标注便于读。
+const rows = props.members as unknown as Record<string, unknown>[];
 
 function handleRemove(studentId: number) {
   if (typeof window !== 'undefined') {
@@ -25,41 +37,31 @@ function handleRemove(studentId: number) {
     >
       暂无成员，分享加入码邀请学生。
     </p>
-    <table
+    <PyTable
       v-else
-      class="member-table"
+      :columns="columns"
+      :rows="rows"
+      row-key="studentId"
     >
-      <thead>
-        <tr>
-          <th>学号</th>
-          <th>用户名</th>
-          <th>显示名</th>
-          <th>状态</th>
-          <th>操作</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr
-          v-for="member in members"
-          :key="member.studentId"
+      <template #status="{ value }">
+        <span
+          class="member-status"
+          :class="value === 'ACTIVE' ? 'member-status--active' : 'member-status--removed'"
         >
-          <td>{{ member.studentId }}</td>
-          <td>{{ member.username }}</td>
-          <td>{{ member.displayName }}</td>
-          <td>{{ member.status }}</td>
-          <td>
-            <PyButton
-              variant="ghost"
-              size="sm"
-              :disabled="member.status !== 'ACTIVE'"
-              @click="handleRemove(member.studentId)"
-            >
-              移除
-            </PyButton>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+          {{ value === 'ACTIVE' ? '在班' : '已移除' }}
+        </span>
+      </template>
+      <template #action="{ row }">
+        <PyButton
+          variant="ghost"
+          size="sm"
+          :disabled="row.status !== 'ACTIVE'"
+          @click="handleRemove(row.studentId as number)"
+        >
+          移除
+        </PyButton>
+      </template>
+    </PyTable>
   </section>
 </template>
 
@@ -72,27 +74,22 @@ function handleRemove(studentId: number) {
   text-align: center;
   color: var(--pyt-color-text-hint);
 }
-.member-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--pyt-font-size-sm);
-  border: 2px solid var(--pyt-color-border);
-  border-radius: var(--pyt-radius-md);
-  overflow: hidden;
-}
-.member-table th,
-.member-table td {
-  border-bottom: 1px solid var(--pyt-color-border-soft);
-  padding: 8px 12px;
-  text-align: left;
-}
-.member-table th {
-  background: var(--pyt-color-bg-sunken);
-  color: var(--pyt-color-text-hint);
-  font-weight: 700;
+.member-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 10px;
+  border-radius: var(--pyt-radius-full);
   font-size: var(--pyt-font-size-xs);
-  border-bottom: 2px solid var(--pyt-color-border);
+  font-weight: 600;
+  border: 1px solid var(--pyt-color-border);
 }
-.member-table tbody tr:hover { background: var(--pyt-color-warning-bg); }
-.member-table tbody tr:last-child td { border-bottom: none; }
+.member-status--active {
+  background: var(--pyt-color-success-bg);
+  color: var(--pyt-color-success);
+  border-color: var(--pyt-color-success);
+}
+.member-status--removed {
+  background: var(--pyt-color-bg-sunken);
+  color: var(--pyt-color-text-muted);
+}
 </style>
