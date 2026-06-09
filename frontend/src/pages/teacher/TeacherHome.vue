@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import AppLayout from '@/app/AppLayout.vue';
+import PyButton from '@/components/ui/PyButton.vue';
 import { useTeacherStore } from '@stores/teacher';
 import { useSessionStore } from '@stores/session';
 import { useToastStore } from '@stores/toast';
@@ -59,12 +60,13 @@ async function createClassroom() {
       </header>
 
       <div class="actions">
-        <button
-          class="primary"
+        <PyButton
+          variant="primary"
+          test-id="teacher-new-classroom"
           @click="formOpen = !formOpen"
         >
           {{ formOpen ? '收起表单' : '+ 新建班级' }}
-        </button>
+        </PyButton>
       </div>
 
       <form
@@ -90,13 +92,13 @@ async function createClassroom() {
             placeholder="简要说明用途、面向学员、上课频率"
           />
         </label>
-        <button
+        <PyButton
           type="submit"
-          class="primary"
+          variant="primary"
           :disabled="creating"
         >
           {{ creating ? '创建中...' : '创建班级' }}
-        </button>
+        </PyButton>
       </form>
 
       <p
@@ -130,12 +132,13 @@ async function createClassroom() {
           </p>
           <footer>
             <span class="code">加入码：<code>{{ classroom.joinCode ?? '——' }}</code></span>
-            <button
-              class="secondary"
+            <PyButton
+              variant="secondary"
+              size="sm"
               @click="open(classroom.classroomId)"
             >
               进入看板
-            </button>
+            </PyButton>
           </footer>
         </li>
       </ul>
@@ -148,56 +151,56 @@ async function createClassroom() {
   padding: 24px;
   display: grid;
   gap: 18px;
-  color: #3b2a13;
+  color: var(--pyt-color-text-primary);
+  max-width: 1100px;
 }
 header h1 {
-  margin: 0 0 6px;
+  margin: 0 0 4px;
   font-size: 22px;
-  font-family: 'Noto Sans SC', 'Source Han Sans SC', system-ui, sans-serif;
+  font-family: var(--pyt-font-pixel);
+  color: var(--pyt-color-text-primary);
+}
+header p {
+  margin: 0;
+  font-size: var(--pyt-font-size-sm);
+  color: var(--pyt-color-text-muted);
 }
 .actions {
   display: flex;
   justify-content: flex-end;
 }
-.primary {
-  background: #2f5b8a;
-  color: var(--pyt-color-bg-elevated);
-  border: 2px solid #1b3a5a;
-  border-radius: var(--pyt-radius-lg);
-  padding: 8px 18px;
-  cursor: pointer;
-}
-.primary:hover {
-  background: #3a6da4;
-}
-.secondary {
-  background: transparent;
-  color: #2f5b8a;
-  border: 2px solid #2f5b8a;
-  border-radius: 6px;
-  padding: 6px 14px;
-  cursor: pointer;
-}
 .create-form {
   display: grid;
   gap: 12px;
-  background: #fffbe9;
+  background: var(--pyt-color-bg-elevated);
   border: 2px solid var(--pyt-color-border);
   border-radius: var(--pyt-radius-lg);
   padding: 16px;
+}
+.create-form label {
+  display: grid;
+  gap: 4px;
+  font-size: var(--pyt-font-size-sm);
+  font-weight: 600;
+  color: var(--pyt-color-text-primary);
 }
 .create-form input,
 .create-form textarea {
   width: 100%;
   padding: 8px 10px;
-  border: 1px solid var(--pyt-color-border);
-  border-radius: 6px;
-  background: #fff;
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-md);
+  background: var(--pyt-color-bg-primary);
+  color: var(--pyt-color-text-primary);
   font-family: inherit;
+  font-size: var(--pyt-font-size-base);
 }
-.create-form textarea {
-  min-height: 60px;
+.create-form input:focus,
+.create-form textarea:focus {
+  outline: none;
+  border-color: var(--pyt-color-gold);
 }
+.create-form textarea { min-height: 60px; resize: vertical; }
 .empty {
   padding: 16px;
   background: var(--pyt-color-bg-soft);
@@ -205,52 +208,72 @@ header h1 {
   text-align: center;
   color: var(--pyt-color-text-hint);
 }
+/* ─── shadcn SectionCards-style classroom card grid ─── */
 .classroom-list {
   list-style: none;
   padding: 0;
   margin: 0;
   display: grid;
   gap: 14px;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
 }
 .classroom-card {
-  background: #fffbe9;
+  background: var(--pyt-color-bg-elevated);
   border: 2px solid var(--pyt-color-border);
   border-radius: var(--pyt-radius-lg);
-  padding: 14px;
+  padding: 16px;
   display: grid;
-  gap: 8px;
+  gap: 10px;
+  box-shadow: var(--pyt-shadow-card);
+  transition: border-color var(--pyt-motion-base), box-shadow var(--pyt-motion-base);
+}
+.classroom-card:hover {
+  border-color: var(--pyt-color-gold);
+  box-shadow: 0 4px 0 var(--pyt-color-border);
 }
 .classroom-card header {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: flex-start;
+  gap: 8px;
 }
 .classroom-card h3 {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--pyt-font-size-lg);
+  font-family: var(--pyt-font-pixel);
+  color: var(--pyt-color-text-primary);
+  line-height: 1.2;
 }
 .badge {
-  background: #2f5b8a;
-  color: var(--pyt-color-bg-elevated);
-  border-radius: 999px;
+  background: var(--pyt-color-info-bg);
+  color: var(--pyt-color-info);
+  border: 1px solid var(--pyt-color-info);
+  border-radius: var(--pyt-radius-full);
   padding: 2px 10px;
-  font-size: 12px;
+  font-size: var(--pyt-font-size-xs);
+  font-weight: 600;
+  white-space: nowrap;
 }
 .classroom-card .desc {
   margin: 0;
-  color: var(--pyt-color-text-primary);
-  font-size: 13px;
+  color: var(--pyt-color-text-muted);
+  font-size: var(--pyt-font-size-sm);
   line-height: 1.55;
 }
 .classroom-card footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 6px;
+  gap: 8px;
+  padding-top: 4px;
+  border-top: 1px solid var(--pyt-color-border-soft);
 }
 .code {
-  font-size: 13px;
+  font-size: var(--pyt-font-size-xs);
   color: var(--pyt-color-text-hint);
+}
+.code code {
+  font-family: var(--pyt-font-mono);
+  color: var(--pyt-color-text-primary);
 }
 </style>

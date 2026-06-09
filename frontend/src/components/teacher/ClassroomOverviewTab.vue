@@ -115,74 +115,73 @@ function fmtRate(value: number): string {
 </template>
 
 <style scoped>
-.overview {
-  display: grid;
-  gap: 16px;
-}
+.overview { display: grid; gap: 20px; }
+
+/* SectionCards-style stat row */
 .cards {
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
 }
 .card {
-  background: #fffbe9;
+  background: var(--pyt-color-bg-elevated);
   border: 2px solid var(--pyt-color-border);
   border-radius: var(--pyt-radius-lg);
-  padding: 12px;
+  padding: 14px 12px;
+  box-shadow: var(--pyt-shadow-card);
 }
 .card h4 {
-  margin: 0 0 6px;
-  font-size: 13px;
-  color: var(--pyt-color-text-primary);
+  margin: 0 0 8px;
+  font-size: var(--pyt-font-size-sm);
+  color: var(--pyt-color-text-muted);
+  font-weight: 600;
 }
 .card .value {
   margin: 0 0 4px;
-  font-size: 22px;
-  color: #2f5b8a;
+  font-size: 24px;
+  color: var(--pyt-color-primary-dark);
   font-weight: 700;
+  font-family: var(--pyt-font-pixel);
 }
 .card .value.mono {
-  font-family: 'JetBrains Mono', 'Menlo', monospace;
+  font-family: var(--pyt-font-mono);
   font-size: 18px;
+  letter-spacing: 1px;
 }
-.card small {
-  color: var(--pyt-color-text-hint);
-  font-size: 11px;
-}
+.card small { color: var(--pyt-color-text-hint); font-size: var(--pyt-font-size-xs); }
+
+/* Activity table */
 .activity {
   list-style: none;
   padding: 0;
   margin: 0;
   display: grid;
-  gap: 6px;
+  gap: 0;
+  border: 1px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-lg);
+  overflow: hidden;
 }
 .activity li {
   display: grid;
-  grid-template-columns: 150px 100px 100px 110px 1fr;
+  grid-template-columns: 140px 90px 90px 100px 1fr;
   gap: 8px;
-  padding: 6px 10px;
-  border-bottom: 1px dashed var(--pyt-color-border);
-  font-size: 12px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--pyt-color-border-soft);
+  font-size: var(--pyt-font-size-xs);
+  background: var(--pyt-color-bg-elevated);
 }
-.activity .time {
-  color: var(--pyt-color-text-hint);
-}
-.activity .student {
-  font-weight: 600;
-}
-.activity .kind {
-  color: #2f5b8a;
-}
-.activity .kc {
-  font-family: 'JetBrains Mono', monospace;
-}
-.activity .detail {
-  color: var(--pyt-color-text-primary);
-}
+.activity li:last-child { border-bottom: none; }
+.activity li:nth-child(even) { background: var(--pyt-color-bg-soft); }
+.activity .time { color: var(--pyt-color-text-hint); }
+.activity .student { font-weight: 600; color: var(--pyt-color-text-primary); }
+.activity .kind { color: var(--pyt-color-info); font-weight: 600; }
+.activity .kc { font-family: var(--pyt-font-mono); color: var(--pyt-color-text-hint); }
+.activity .detail { color: var(--pyt-color-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .empty {
   padding: 16px;
   background: var(--pyt-color-bg-soft);
   border-radius: var(--pyt-radius-lg);
   text-align: center;
+  color: var(--pyt-color-text-hint);
 }
 </style>

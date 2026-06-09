@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import AppLayout from '@/app/AppLayout.vue';
+import PyButton from '@/components/ui/PyButton.vue';
 import KcHeatmap from '@/components/teacher/KcHeatmap.vue';
 import ResourceUsageChart from '@/components/teacher/ResourceUsageChart.vue';
 import ClassroomOverviewTab from '@/components/teacher/ClassroomOverviewTab.vue';
@@ -118,318 +119,350 @@ function back() {
 
 <template>
   <AppLayout>
-    <section
-      class="teacher-detail"
+    <!-- dashboard-01 pattern: sidebar + inset -->
+    <div
+      class="cd-shell"
       data-testid="teacher-detail"
     >
-      <header>
-        <button
-          class="back"
-          @click="back"
-        >
-          ← 返回班级列表
-        </button>
-        <h1>{{ classroom?.name ?? '正在加载...' }}</h1>
-        <div class="toolbar">
-          <span class="badge">{{ classroom?.status }}</span>
-          <span class="code">加入码：<code>{{ classroom?.joinCode ?? '——' }}</code></span>
+      <!-- ─── Left sidebar nav ─── -->
+      <aside class="cd-nav">
+        <div class="cd-nav__head">
           <button
-            class="secondary"
+            class="cd-back"
+            @click="back"
+          >
+            ← 班级列表
+          </button>
+          <h2 class="cd-nav__name">
+            {{ classroom?.name ?? '正在加载...' }}
+          </h2>
+          <div class="cd-nav__meta">
+            <span class="cd-badge">{{ classroom?.status }}</span>
+            <code class="cd-code">{{ classroom?.joinCode ?? '——' }}</code>
+          </div>
+        </div>
+
+        <nav class="cd-nav__list">
+          <button
+            v-for="tab in tabs"
+            :key="tab.id"
+            class="cd-nav__item"
+            :class="{ 'cd-nav__item--active': tab.id === activeTab }"
+            @click="activeTab = tab.id"
+          >
+            {{ tab.label }}
+          </button>
+        </nav>
+
+        <div class="cd-nav__foot">
+          <PyButton
+            variant="secondary"
+            size="sm"
             @click="regenerate"
           >
             重置加入码
-          </button>
-        </div>
-      </header>
-
-      <!-- ── 一键补救包（P6.1）：全班薄弱 KC → 针对性补救资源 ── -->
-      <section
-        class="remediation"
-        data-testid="remediation-panel"
-      >
-        <div class="remediation__head">
-          <button
-            type="button"
-            class="remediation__btn"
-            data-testid="remediation-trigger"
+          </PyButton>
+          <PyButton
+            variant="primary"
+            size="sm"
             :disabled="remediationLoading"
+            data-testid="remediation-trigger"
             @click="generateRemediation"
           >
-            {{ remediationLoading ? '生成中…' : '一键生成补救包' }}
-          </button>
-          <span class="remediation__hint">
-            基于全班薄弱 KC 自动生成针对性补救资源（含课件证据页）
-          </span>
+            {{ remediationLoading ? '生成中…' : '生成补救包' }}
+          </PyButton>
         </div>
+      </aside>
 
+      <!-- ─── Main content (SidebarInset pattern) ─── -->
+      <main class="cd-main">
         <p
-          v-if="remediationError"
-          class="error"
-          data-testid="remediation-error"
+          v-if="dashboard.lastError"
+          class="cd-banner cd-banner--error"
         >
-          补救包生成失败：{{ remediationError }}
+          看板加载失败：{{ dashboard.lastError }}
         </p>
-        <template v-else-if="remediationResult">
-          <p class="remediation__summary">
-            共发现 {{ remediationResult.weakKcCount }} 个薄弱知识点
-          </p>
-          <p
-            v-if="remediationResult.packs.length === 0"
-            class="empty"
-            data-testid="remediation-empty"
-          >
-            全班暂无明显薄弱知识点，无需补救。
-          </p>
-          <ul
-            v-else
-            class="remediation__packs"
-            data-testid="remediation-packs"
-          >
-            <li
-              v-for="pack in remediationResult.packs"
-              :key="pack.kcCode"
-              class="remediation__pack"
-              :data-testid="`remediation-pack-${pack.kcCode}`"
-            >
-              <span class="remediation__kc">{{ pack.kcName }}</span>
-              <span class="remediation__count">{{ pack.resourceIds.length }} 个补救资源</span>
-              <span class="remediation__pages">
-                证据页：{{ pack.evidencePageIds.length > 0 ? pack.evidencePageIds.join('、') : '—' }}
-              </span>
-            </li>
-          </ul>
-        </template>
-      </section>
-
-      <nav class="tabs">
-        <button
-          v-for="tab in tabs"
-          :key="tab.id"
-          :class="{ active: tab.id === activeTab }"
-          @click="activeTab = tab.id"
+        <p
+          v-else-if="dashboard.loading"
+          class="cd-banner"
         >
-          {{ tab.label }}
-        </button>
-      </nav>
+          看板加载中...
+        </p>
 
-      <p
-        v-if="dashboard.lastError"
-        class="error"
-      >
-        看板加载失败：{{ dashboard.lastError }}
-      </p>
-      <p
-        v-else-if="dashboard.loading"
-        class="empty"
-      >
-        看板加载中...
-      </p>
-
-      <ClassroomOverviewTab
-        v-show="activeTab === 'overview'"
-        :classroom="classroom"
-        :members-count="members.length"
-        :quest-summary="dashboard.questSummary"
-        :kc-heatmap="dashboard.kcHeatmap"
-        :recent-activity="dashboard.recentActivity"
-      />
-
-      <section
-        v-show="activeTab === 'live'"
-        class="live-tab"
-        data-testid="classroom-live-tab"
-      >
-        <div class="live-header">
-          <span :class="['live-dot', { 'live-dot--on': live.connected.value }]" />
-          <span>{{ live.connected.value ? '已连接直播' : '未连接' }}</span>
-          <button
-            v-if="!live.connected.value"
-            class="secondary"
-            @click="live.connect(classroomId)"
+        <section
+          v-if="remediationError || remediationResult"
+          class="cd-remediation"
+          data-testid="remediation-panel"
+        >
+          <p
+            v-if="remediationError"
+            class="cd-remediation__error"
+            data-testid="remediation-error"
           >
-            开始直播
-          </button>
-          <button
-            v-else
-            class="secondary"
-            @click="live.disconnect()"
+            补救包生成失败：{{ remediationError }}
+          </p>
+          <template v-else-if="remediationResult">
+            <p class="cd-remediation__summary">
+              共发现 {{ remediationResult.weakKcCount }} 个薄弱知识点
+            </p>
+            <p
+              v-if="remediationResult.packs.length === 0"
+              class="cd-empty"
+              data-testid="remediation-empty"
+            >
+              全班暂无明显薄弱知识点，无需补救。
+            </p>
+            <ul
+              v-else
+              class="cd-remediation__packs"
+              data-testid="remediation-packs"
+            >
+              <li
+                v-for="pack in remediationResult.packs"
+                :key="pack.kcCode"
+                class="cd-remediation__pack"
+                :data-testid="`remediation-pack-${pack.kcCode}`"
+              >
+                <span class="cd-remediation__kc">{{ pack.kcName }}</span>
+                <span class="cd-remediation__count">{{ pack.resourceIds.length }} 个资源</span>
+                <span class="cd-remediation__pages">证据页：{{ pack.evidencePageIds.length > 0 ? pack.evidencePageIds.join('、') : '—' }}</span>
+              </li>
+            </ul>
+          </template>
+        </section>
+
+        <div class="cd-content">
+          <ClassroomOverviewTab
+            v-show="activeTab === 'overview'"
+            :classroom="classroom"
+            :members-count="members.length"
+            :quest-summary="dashboard.questSummary"
+            :kc-heatmap="dashboard.kcHeatmap"
+            :recent-activity="dashboard.recentActivity"
+          />
+
+          <section
+            v-show="activeTab === 'live'"
+            class="live-tab"
+            data-testid="classroom-live-tab"
           >
-            断开
-          </button>
+            <div class="live-header">
+              <span :class="['live-dot', { 'live-dot--on': live.connected.value }]" />
+              <span>{{ live.connected.value ? '已连接直播' : '未连接' }}</span>
+              <PyButton
+                v-if="!live.connected.value"
+                variant="secondary"
+                size="sm"
+                @click="live.connect(classroomId)"
+              >
+                开始直播
+              </PyButton>
+              <PyButton
+                v-else
+                variant="secondary"
+                size="sm"
+                @click="live.disconnect()"
+              >
+                断开
+              </PyButton>
+            </div>
+            <div v-if="live.events.value.length === 0" class="cd-empty">
+              等待学生提交事件…
+            </div>
+            <ul v-else class="live-events">
+              <li
+                v-for="(evt, i) in live.events.value"
+                :key="i"
+                class="live-event"
+              >
+                <span class="live-event__type">{{ evt.type }}</span>
+                <span class="live-event__time">{{ new Date(evt.timestamp).toLocaleTimeString() }}</span>
+                <pre class="live-event__data">{{ JSON.stringify(evt.data, null, 2) }}</pre>
+              </li>
+            </ul>
+          </section>
+
+          <ClassroomQuestTab
+            v-show="activeTab === 'quests'"
+            :quests="quests"
+            :quest-summary="dashboard.questSummary"
+            @publish="publishQuest"
+            @archive="archiveQuest"
+          />
+
+          <KcHeatmap
+            v-show="activeTab === 'heatmap'"
+            :entries="dashboard.kcHeatmap"
+          />
+
+          <ClassroomHotspotsTab
+            v-show="activeTab === 'hotspots'"
+            :hotspots="dashboard.errorHotspots"
+          />
+
+          <ResourceUsageChart
+            v-show="activeTab === 'resources'"
+            :usage="dashboard.resourceUsage"
+          />
+
+          <ClassroomMembersTab
+            v-show="activeTab === 'members'"
+            :members="members"
+            @remove="removeMember"
+          />
         </div>
-        <div v-if="live.events.value.length === 0" class="empty">
-          等待学生提交事件…
-        </div>
-        <ul v-else class="live-events">
-          <li
-            v-for="(evt, i) in live.events.value"
-            :key="i"
-            class="live-event"
-          >
-            <span class="live-event__type">{{ evt.type }}</span>
-            <span class="live-event__time">{{ new Date(evt.timestamp).toLocaleTimeString() }}</span>
-            <pre class="live-event__data">{{ JSON.stringify(evt.data, null, 2) }}</pre>
-          </li>
-        </ul>
-      </section>
-
-      <ClassroomQuestTab
-        v-show="activeTab === 'quests'"
-        :quests="quests"
-        :quest-summary="dashboard.questSummary"
-        @publish="publishQuest"
-        @archive="archiveQuest"
-      />
-
-      <KcHeatmap
-        v-show="activeTab === 'heatmap'"
-        :entries="dashboard.kcHeatmap"
-      />
-
-      <ClassroomHotspotsTab
-        v-show="activeTab === 'hotspots'"
-        :hotspots="dashboard.errorHotspots"
-      />
-
-      <ResourceUsageChart
-        v-show="activeTab === 'resources'"
-        :usage="dashboard.resourceUsage"
-      />
-
-      <ClassroomMembersTab
-        v-show="activeTab === 'members'"
-        :members="members"
-        @remove="removeMember"
-      />
-    </section>
+      </main>
+    </div>
   </AppLayout>
 </template>
 
 <style scoped>
-.teacher-detail {
-  padding: 20px 24px;
+/* ─── dashboard-01 shell: sidebar + inset ─── */
+.cd-shell {
   display: grid;
-  gap: 16px;
+  grid-template-columns: 220px 1fr;
+  min-height: calc(100vh - 48px);
+  background: var(--pyt-color-bg-primary);
 }
-.back {
-  background: transparent;
+
+/* ─── Left sidebar ─── */
+.cd-nav {
+  display: flex;
+  flex-direction: column;
+  border-right: 2px solid var(--pyt-color-border);
+  background: var(--pyt-color-bg-elevated);
+}
+.cd-nav__head {
+  padding: 16px 14px 12px;
+  border-bottom: 1px solid var(--pyt-color-border-soft);
+  display: grid;
+  gap: 6px;
+}
+.cd-back {
+  background: none;
   border: none;
-  color: #2f5b8a;
+  color: var(--pyt-color-info);
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--pyt-font-size-sm);
   padding: 0;
-  margin-bottom: 6px;
+  text-align: left;
 }
-header h1 {
-  margin: 0 0 6px;
-  font-size: 22px;
-}
-.toolbar {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-.badge {
-  background: #2f5b8a;
-  color: var(--pyt-color-bg-elevated);
-  border-radius: 999px;
-  padding: 2px 10px;
-  font-size: 12px;
-}
-.code {
-  font-size: 13px;
+.cd-back:hover { color: var(--pyt-color-text-primary); }
+.cd-nav__name {
+  margin: 0;
+  font-size: var(--pyt-font-size-lg);
+  font-family: var(--pyt-font-pixel);
   color: var(--pyt-color-text-primary);
+  line-height: 1.3;
+  word-break: break-all;
 }
-.secondary {
-  background: transparent;
-  color: #2f5b8a;
-  border: 2px solid #2f5b8a;
-  border-radius: 6px;
-  padding: 4px 10px;
-  cursor: pointer;
-}
-.tabs {
+.cd-nav__meta {
   display: flex;
+  align-items: center;
   gap: 6px;
   flex-wrap: wrap;
-  border-bottom: 2px solid var(--pyt-color-border);
-  padding-bottom: 4px;
 }
-.tabs button {
-  border: none;
-  background: transparent;
-  padding: 6px 14px;
-  cursor: pointer;
-  color: var(--pyt-color-text-primary);
-  font-weight: 500;
-  border-bottom: 3px solid transparent;
+.cd-badge {
+  background: var(--pyt-color-info-bg);
+  color: var(--pyt-color-info);
+  border: 1px solid var(--pyt-color-info);
+  border-radius: var(--pyt-radius-full);
+  padding: 1px 8px;
+  font-size: var(--pyt-font-size-xs);
+  font-weight: 600;
 }
-.tabs button.active {
-  color: #2f5b8a;
-  border-bottom-color: #2f5b8a;
-}
-.error {
-  background: #fbe9d7;
-  border: 2px solid #c97f3a;
-  border-radius: var(--pyt-radius-lg);
-  padding: 10px;
+.cd-code {
+  font-family: var(--pyt-font-mono);
+  font-size: var(--pyt-font-size-xs);
   color: var(--pyt-color-text-hint);
+  letter-spacing: 0.5px;
 }
-.empty {
+.cd-nav__list {
+  flex: 1 1 auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cd-nav__item {
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-left: 3px solid transparent;
+  border-radius: var(--pyt-radius-md);
+  padding: 7px 10px;
+  font-size: var(--pyt-font-size-base);
+  font-family: var(--pyt-font-read);
+  color: var(--pyt-color-text-muted);
+  cursor: pointer;
+  transition: background var(--pyt-motion-base), color var(--pyt-motion-base);
+}
+.cd-nav__item:hover {
+  background: var(--pyt-color-bg-soft);
+  color: var(--pyt-color-text-primary);
+}
+.cd-nav__item--active {
+  background: var(--pyt-color-warning-bg);
+  color: var(--pyt-color-primary-dark);
+  font-weight: 700;
+  border-left-color: var(--pyt-color-gold);
+}
+.cd-nav__foot {
+  padding: 12px 14px;
+  border-top: 1px solid var(--pyt-color-border-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ─── Main content ─── */
+.cd-main {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.cd-banner {
+  padding: 10px 20px;
+  background: var(--pyt-color-bg-soft);
+  border-bottom: 1px solid var(--pyt-color-border-soft);
+  font-size: var(--pyt-font-size-sm);
+  color: var(--pyt-color-text-muted);
+  margin: 0;
+}
+.cd-banner--error {
+  background: var(--pyt-color-danger-bg);
+  border-color: var(--pyt-color-danger);
+  color: var(--pyt-color-danger);
+}
+.cd-content {
+  flex: 1 1 auto;
+  padding: 20px 24px;
+  overflow-y: auto;
+}
+.cd-empty {
   padding: 16px;
   background: var(--pyt-color-bg-soft);
   border-radius: var(--pyt-radius-lg);
   text-align: center;
+  color: var(--pyt-color-text-hint);
 }
 
-/* ── 一键补救包 ── */
-.remediation {
-  display: grid;
-  gap: 10px;
+/* ─── Remediation panel ─── */
+.cd-remediation {
+  margin: 12px 20px 0;
   padding: 12px 14px;
   background: var(--pyt-color-bg-soft);
   border: 2px solid var(--pyt-color-border);
   border-radius: var(--pyt-radius-lg);
-}
-.remediation__head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-.remediation__btn {
-  background: #2f5b8a;
-  color: var(--pyt-color-bg-elevated);
-  border: none;
-  border-radius: 6px;
-  padding: 8px 16px;
-  cursor: pointer;
-  font-weight: 600;
-  font-size: 14px;
-}
-.remediation__btn:disabled {
-  opacity: 0.6;
-  cursor: progress;
-}
-.remediation__hint {
-  font-size: 12px;
-  color: var(--pyt-color-text-hint);
-}
-.remediation__summary {
-  margin: 0;
-  font-size: 13px;
-  color: var(--pyt-color-text-primary);
-  font-weight: 600;
-}
-.remediation__packs {
-  list-style: none;
-  margin: 0;
-  padding: 0;
   display: grid;
-  gap: 6px;
+  gap: 8px;
 }
-.remediation__pack {
+.cd-remediation__error { margin: 0; color: var(--pyt-color-danger); font-size: var(--pyt-font-size-sm); }
+.cd-remediation__summary { margin: 0; font-size: 13px; font-weight: 600; color: var(--pyt-color-text-primary); }
+.cd-remediation__packs { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.cd-remediation__pack {
   display: grid;
   grid-template-columns: 1fr auto auto;
   gap: 10px;
@@ -440,21 +473,11 @@ header h1 {
   border-radius: 6px;
   font-size: 13px;
 }
-.remediation__kc {
-  font-weight: 600;
-  color: var(--pyt-color-text-primary);
-}
-.remediation__count {
-  font-size: 12px;
-  color: #2f5b8a;
-  white-space: nowrap;
-}
-.remediation__pages {
-  font-size: 12px;
-  color: var(--pyt-color-text-hint);
-  white-space: nowrap;
-}
+.cd-remediation__kc { font-weight: 600; color: var(--pyt-color-text-primary); }
+.cd-remediation__count { font-size: 12px; color: var(--pyt-color-info); white-space: nowrap; }
+.cd-remediation__pages { font-size: 12px; color: var(--pyt-color-text-hint); white-space: nowrap; }
 
+/* ─── Live tab ─── */
 .live-tab { display: grid; gap: 12px; }
 .live-header { display: flex; align-items: center; gap: 10px; padding: 8px; background: var(--pyt-color-bg-soft); border-radius: 6px; font-size: 13px; }
 .live-dot { width: 10px; height: 10px; border-radius: 50%; background: #ccc; }
@@ -462,7 +485,15 @@ header h1 {
 @keyframes pulse-live { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 .live-events { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; max-height: 400px; overflow: auto; }
 .live-event { padding: 8px; background: var(--pyt-color-bg-elevated); border: 1px solid var(--pyt-color-border); border-radius: 4px; display: grid; grid-template-columns: auto 1fr; gap: 6px; font-size: 12px; }
-.live-event__type { font-weight: 600; color: #2f5b8a; text-transform: uppercase; font-size: 10px; padding: 2px 6px; background: #e0eaf5; border-radius: 3px; }
+.live-event__type { font-weight: 600; color: var(--pyt-color-info); text-transform: uppercase; font-size: 10px; padding: 2px 6px; background: var(--pyt-color-info-bg); border-radius: 3px; }
 .live-event__time { color: var(--pyt-color-text-hint); font-size: 11px; text-align: right; }
 .live-event__data { grid-column: 1 / -1; margin: 0; padding: 6px; background: var(--pyt-color-bg-soft); border: 1px solid var(--pyt-color-border); font-size: 11px; white-space: pre-wrap; max-height: 100px; overflow: auto; }
+
+/* ─── Responsive ─── */
+@media (max-width: 900px) {
+  .cd-shell { grid-template-columns: 1fr; }
+  .cd-nav { border-right: none; border-bottom: 2px solid var(--pyt-color-border); }
+  .cd-nav__list { flex-direction: row; flex-wrap: wrap; }
+  .cd-nav__item { width: auto; }
+}
 </style>

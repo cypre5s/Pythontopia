@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue';
+import PyButton from '@/components/ui/PyButton.vue';
 import type {
   ClassroomQuestCreateRequest,
   ClassroomQuestDto,
@@ -140,12 +141,12 @@ function fmtRate(value: number): string {
           required
         >
       </label>
-      <button
+      <PyButton
         type="submit"
-        class="primary"
+        variant="primary"
       >
         发布
-      </button>
+      </PyButton>
     </form>
 
     <h3>班级任务列表</h3>
@@ -188,13 +189,14 @@ function fmtRate(value: number): string {
             </template>
           </td>
           <td>
-            <button
+            <PyButton
               v-if="quest.status === 'ACTIVE'"
-              class="secondary"
+              variant="secondary"
+              size="sm"
               @click="emit('archive', quest.id)"
             >
               归档
-            </button>
+            </PyButton>
           </td>
         </tr>
       </tbody>
@@ -203,61 +205,69 @@ function fmtRate(value: number): string {
 </template>
 
 <style scoped>
-.quest-tab {
-  display: grid;
-  gap: 16px;
-}
+.quest-tab { display: grid; gap: 16px; }
 .publish-form {
   display: grid;
-  gap: 8px;
-  background: #fffbe9;
+  gap: 10px;
+  background: var(--pyt-color-bg-elevated);
   border: 2px solid var(--pyt-color-border);
   border-radius: var(--pyt-radius-lg);
-  padding: 14px;
+  padding: 16px;
+}
+.publish-form h3 { margin: 0; font-size: var(--pyt-font-size-base); font-family: var(--pyt-font-pixel); }
+.publish-form label {
+  display: grid;
+  gap: 4px;
+  font-size: var(--pyt-font-size-sm);
+  font-weight: 600;
+  color: var(--pyt-color-text-primary);
 }
 .publish-form input,
 .publish-form textarea,
 .publish-form select {
   width: 100%;
-  padding: 6px 8px;
-  border: 1px solid var(--pyt-color-border);
-  border-radius: 6px;
-  background: #fff;
+  padding: 6px 10px;
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-md);
+  background: var(--pyt-color-bg-primary);
+  color: var(--pyt-color-text-primary);
+  font-family: inherit;
+  font-size: var(--pyt-font-size-base);
 }
-.primary {
-  background: #2f5b8a;
-  color: var(--pyt-color-bg-elevated);
-  border: 2px solid #1b3a5a;
-  border-radius: var(--pyt-radius-lg);
-  padding: 8px 18px;
-  cursor: pointer;
-}
-.secondary {
-  background: transparent;
-  color: #2f5b8a;
-  border: 2px solid #2f5b8a;
-  border-radius: 6px;
-  padding: 4px 10px;
-  cursor: pointer;
+.publish-form input:focus,
+.publish-form textarea:focus,
+.publish-form select:focus {
+  outline: none;
+  border-color: var(--pyt-color-gold);
 }
 .empty {
   padding: 16px;
   background: var(--pyt-color-bg-soft);
   border-radius: var(--pyt-radius-lg);
   text-align: center;
+  color: var(--pyt-color-text-hint);
 }
 .quest-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: var(--pyt-font-size-sm);
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-md);
+  overflow: hidden;
 }
 .quest-table th,
 .quest-table td {
-  border: 1px solid var(--pyt-color-border);
-  padding: 6px 8px;
-  text-align: center;
+  border-bottom: 1px solid var(--pyt-color-border-soft);
+  padding: 8px 10px;
+  text-align: left;
 }
 .quest-table th {
-  background: var(--pyt-color-bg-soft);
+  background: var(--pyt-color-bg-sunken);
+  color: var(--pyt-color-text-hint);
+  font-weight: 700;
+  font-size: var(--pyt-font-size-xs);
+  border-bottom: 2px solid var(--pyt-color-border);
 }
+.quest-table tbody tr:hover { background: var(--pyt-color-warning-bg); }
+.quest-table tbody tr:last-child td { border-bottom: none; }
 </style>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { ClassroomMemberDto } from '@/api/dto/ClassroomMemberDto';
+import PyButton from '@/components/ui/PyButton.vue';
 
 defineProps<{ members: ClassroomMemberDto[] }>();
 const emit = defineEmits<{ (event: 'remove', studentId: number): void }>();
@@ -47,13 +48,14 @@ function handleRemove(studentId: number) {
           <td>{{ member.displayName }}</td>
           <td>{{ member.status }}</td>
           <td>
-            <button
-              class="danger"
+            <PyButton
+              variant="ghost"
+              size="sm"
               :disabled="member.status !== 'ACTIVE'"
               @click="handleRemove(member.studentId)"
             >
               移除
-            </button>
+            </PyButton>
           </td>
         </tr>
       </tbody>
@@ -62,40 +64,35 @@ function handleRemove(studentId: number) {
 </template>
 
 <style scoped>
-.members-tab {
-  display: grid;
-  gap: 12px;
-}
+.members-tab { display: grid; gap: 12px; }
 .empty {
   padding: 16px;
   background: var(--pyt-color-bg-soft);
   border-radius: var(--pyt-radius-lg);
   text-align: center;
+  color: var(--pyt-color-text-hint);
 }
 .member-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: var(--pyt-font-size-sm);
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-md);
+  overflow: hidden;
 }
 .member-table th,
 .member-table td {
-  border: 1px solid var(--pyt-color-border);
-  padding: 6px 10px;
-  text-align: center;
+  border-bottom: 1px solid var(--pyt-color-border-soft);
+  padding: 8px 12px;
+  text-align: left;
 }
 .member-table th {
-  background: var(--pyt-color-bg-soft);
+  background: var(--pyt-color-bg-sunken);
+  color: var(--pyt-color-text-hint);
+  font-weight: 700;
+  font-size: var(--pyt-font-size-xs);
+  border-bottom: 2px solid var(--pyt-color-border);
 }
-.danger {
-  background: #f4a261;
-  color: var(--pyt-color-bg-elevated);
-  border: 2px solid #c97f3a;
-  border-radius: 6px;
-  padding: 4px 12px;
-  cursor: pointer;
-}
-.danger[disabled] {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
+.member-table tbody tr:hover { background: var(--pyt-color-warning-bg); }
+.member-table tbody tr:last-child td { border-bottom: none; }
 </style>
