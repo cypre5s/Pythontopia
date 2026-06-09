@@ -10,7 +10,6 @@ import time
 from dataclasses import dataclass
 
 from pythontopia_graph.agents.code_lab_agent import CodeLabAgent
-from pythontopia_graph.agents.debug_agent import DebugAgent
 from pythontopia_graph.agents.handout_agent import HandoutAgent
 from pythontopia_graph.agents.mind_map_agent import MindMapAgent
 from pythontopia_graph.agents.path_planner_agent import PathPlannerAgent
@@ -18,16 +17,12 @@ from pythontopia_graph.agents.practice_agent import PracticeAgent
 from pythontopia_graph.agents.reading_agent import ReadingAgent
 from pythontopia_graph.agents.storyboard_agent import StoryboardAgent
 from pythontopia_graph.llm.provider import LlmProvider
-from pythontopia_graph.nodes.evidence_fetcher import EvidenceBundle, EvidenceFetcher
+from pythontopia_graph.nodes.evidence_fetcher import EvidenceFetcher
 from pythontopia_graph.schemas.orchestrator import DispatchResult, PlanStep
-from pythontopia_graph.schemas.resource import (
-    ResourceDraft,
-    ResourceProduceRequest,
-    ResourceType,
-)
+from pythontopia_graph.schemas.resource import ResourceDraft, ResourceProduceRequest, ResourceType
 
 # PlanStep.agent → 确定性子 agent 映射。
-_AGENT_MAP: dict[str, str] = {
+_AGENT_MAP: dict[str, str | None] = {
     "StoryboardAgent": "STORYBOARD",
     "ResourceDesignerAgent": None,  # 由 step.resource_type 决定
     "PracticeAgent": "PRACTICE",
@@ -67,10 +62,10 @@ class AgentDispatcher:
         if agent_name == "TutorAgent":
             return await self._dispatch_tutor(step, started)
         # 资源类 agent：StoryboardAgent / ResourceDesignerAgent / PracticeAgent
-        return await self._dispatch_resource(step, started)
+        return await self._dispatch_resource(step, user_id, started)
 
     async def _dispatch_resource(
-        self, step: PlanStep, started: float
+        self, step: PlanStep, user_id: int, started: float
     ) -> DispatchResult:
         """资源生成类 agent：StoryboardAgent / ResourceDesignerAgent / PracticeAgent。"""
         resource_type = self._resolve_resource_type(step)
@@ -90,7 +85,7 @@ class AgentDispatcher:
             query=step.title,
         )
         request = ResourceProduceRequest(
-            user_id=1,
+            user_id=user_id,
             kc_codes=step.kc_codes if step.kc_codes else ["PY43-KC-001"],
             type=resource_type,
             focus_hint=step.title,
@@ -124,39 +119,31 @@ class AgentDispatcher:
     async def _dispatch_debug(
         self, step: PlanStep, started: float
     ) -> DispatchResult:
-        """DebugAgent：确定性分析，不需要 LLM。"""
-        agent = DebugAgent()
-        # 无真实判题数据时产出占位输出（不抛异常）。
-        from pythontopia_graph.schemas.debug import (
-            DebugAgentInput,
-            DebugAgentOutput,
-        )
+        """DebugAgent 编排步：产出确定性的调试补练规划。
 
-        try:
-            payload = DebugAgentInput(
-                user_id=1,
-                kc_codes=step.kc_codes if step.kc_codes else ["PY43-KC-001"],
-                task_description=step.detail,
-            )
-            output: DebugAgentOutput = agent.analyse(payload)
-            elapsed_ms = int((time.monotonic() - started) * 1000)
-            return DispatchResult(
-                step_id=step.id,
-                agent="DebugAgent",
-                ok=True,
-                summary=f"调试分析完成，{len(output.hint_layers)} 层提示",
-                note=output.retry_advice.summary if output.retry_advice else None,
-                elapsed_ms=elapsed_ms,
-            )
-        except Exception:
-            elapsed_ms = int((time.monotonic() - started) * 1000)
-            return DispatchResult(
-                step_id=step.id,
-                agent="DebugAgent",
-                ok=True,
-                summary=f"已将「{step.title}」分派给 DebugAgent（面板: {step.panel or '-'}）",
-                elapsed_ms=elapsed_ms,
-            )
+        说明：完整 `DebugAgent.analyse` 需要真实失败提交（submission_id/problem_id/
+        verdict/code/counter_example），编排规划阶段并无这些数据，**不得**伪造
+        counter_example 去硬调 analyse（违反「无假数据」红线，旧实现因此恒抛
+        ValidationError 又被吞成假 ok）。这里返回如实的「去矿洞针对 KC 补练」确定性
+        规划结果：ok=True、有实质摘要、不谎称已分析代码。学生进入矿洞产生真实失败
+        提交后，再由 DebugAgent 走真实分析链。
+        """
+        kc_codes = step.kc_codes if step.kc_codes else ["PY43-KC-001"]
+        elapsed_ms = int((time.monotonic() - started) * 1000)
+        kc_label = "、".join(kc_codes)
+        return DispatchResult(
+            step_id=step.id,
+            agent="DebugAgent",
+            ok=True,
+            summary=f"已规划调试补练：进入错题矿洞针对 {kc_label} 修 Bug（{len(kc_codes)} 个 KC）",
+            note=step.detail or None,
+            elapsed_ms=elapsed_ms,
+            artifact={
+                "kind": "debug_plan",
+                "kc_codes": kc_codes,
+                "panel": step.panel or "workshop",
+            },
+        )
 
     async def _dispatch_path_planner(
         self, step: PlanStep, started: float

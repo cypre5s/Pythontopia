@@ -13,6 +13,7 @@ import string
 import sys
 import urllib.error
 import urllib.request
+from datetime import date, timedelta
 from pathlib import Path
 
 
@@ -69,27 +70,23 @@ def login(username: str, password: str) -> str:
     return payload["token"]
 
 
-def ensure_classroom(token: str, classroom_payload: dict) -> int:
-    list_payload = _request("GET", "/api/teacher/classrooms", token=token)
+def ensure_classroom(token: str, classroom_payload: dict) -> dict:
+    # 班级创建/列举统一走 /api/classrooms（ClassroomController），教师视角返回的
+    # ClassroomDto 含 classroomId + joinCode；/api/teacher/classrooms 仅承载
+    # 改名/重置码/成员等子资源，无根级 list/create。
+    list_payload = _request("GET", "/api/classrooms/mine", token=token)
     for entry in list_payload:
         if entry["name"] == classroom_payload["name"]:
-            return entry["id"]
-    created = _request(
+            return entry
+    return _request(
         "POST",
-        "/api/teacher/classrooms",
+        "/api/classrooms",
         token=token,
         body={
             "name": classroom_payload["name"],
             "description": classroom_payload["description"],
-            "packId": classroom_payload["packId"],
         },
     )
-    return created["id"]
-
-
-def get_join_code(token: str, classroom_id: int) -> str:
-    detail = _request("GET", f"/api/teacher/classrooms/{classroom_id}", token=token)
-    return detail["joinCode"]
 
 
 def join_classroom(token: str, code: str) -> None:
@@ -102,14 +99,17 @@ def join_classroom(token: str, code: str) -> None:
 
 
 def publish_quest(token: str, classroom_id: int, quest: dict) -> None:
+    # ClassroomQuestCreateRequest 接受 title/description/kcCodes/targetProblemId/
+    # targetResourceType/dueDate(LocalDate)；nodeType 由后端按 target* 推导，不在请求体。
+    # 演示 JSON 用相对天数 dueOffsetDays，这里换算成后端要求的 ISO 绝对日期。
+    due_date = (date.today() + timedelta(days=int(quest["dueOffsetDays"]))).isoformat()
     body = {
         "title": quest["title"],
         "description": quest["description"],
         "kcCodes": quest["kcCodes"],
-        "nodeType": quest["nodeType"],
         "targetProblemId": quest.get("targetProblemId"),
         "targetResourceType": quest.get("targetResourceType"),
-        "dueOffsetDays": quest["dueOffsetDays"],
+        "dueDate": due_date,
     }
     _request(
         "POST",
@@ -130,8 +130,9 @@ def main() -> int:
     teacher = users["teacher"]
     register(teacher["username"], teacher["displayName"], "TEACHER", teacher_password)
     teacher_token = login(teacher["username"], teacher_password)
-    classroom_id = ensure_classroom(teacher_token, classroom_payload)
-    code = get_join_code(teacher_token, classroom_id)
+    classroom = ensure_classroom(teacher_token, classroom_payload)
+    classroom_id = classroom["classroomId"]
+    code = classroom["joinCode"]
     print(f"[seed] 班级 ID = {classroom_id}, join code = {code}")
 
     for student in users["students"]:

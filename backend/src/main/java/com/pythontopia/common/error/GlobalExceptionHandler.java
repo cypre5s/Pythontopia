@@ -16,6 +16,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -98,6 +99,20 @@ public class GlobalExceptionHandler {
         HttpStatus.NOT_FOUND,
         "NOT_FOUND",
         "Endpoint " + exception.getRequestURL() + " not found",
+        List.of(),
+        request);
+  }
+
+  // Spring Boot 3.2+ 默认由 ResourceHttpRequestHandler 处理无映射的 /api/** 路径，
+  // 抛 NoResourceFoundException（而非 NoHandlerFoundException）。若被通用 Exception 兜底
+  // 会错误返回 500，掩盖“路径不存在”的真实语义，前端也无法据此识别 404。这里显式映射 404。
+  @ExceptionHandler(NoResourceFoundException.class)
+  ResponseEntity<ApiError> handleNoResource(
+      NoResourceFoundException exception, HttpServletRequest request) {
+    return error(
+        HttpStatus.NOT_FOUND,
+        "NOT_FOUND",
+        "Endpoint " + request.getRequestURI() + " not found",
         List.of(),
         request);
   }

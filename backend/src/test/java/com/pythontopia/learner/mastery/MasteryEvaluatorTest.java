@@ -161,4 +161,79 @@ class MasteryEvaluatorTest {
     return new MasterySnapshot(
         1L, 1L, kcCode, new BigDecimal("0.600"), new BigDecimal("0.400"), stale, stale);
   }
+
+  @Test
+  void hardPassGainsMoreThanEasyPass() {
+    when(repository.findSnapshot(1L, "KC01")).thenReturn(Optional.empty());
+    MasterySnapshot hard = evaluator.applyEventWithDifficulty(
+        1L, "KC01", MasterySource.PRACTICE_PASS, null, "hard", "high");
+    MasterySnapshot easy = evaluator.applyEventWithDifficulty(
+        1L, "KC01", MasterySource.PRACTICE_PASS, null, "easy", "low");
+    assertThat(hard.masteryScore()).isGreaterThan(easy.masteryScore());
+  }
+
+  @Test
+  void easyFailPenalizesMoreThanHardFail() {
+    when(repository.findSnapshot(1L, "KC02"))
+        .thenReturn(Optional.of(new MasterySnapshot(1L, 1L, "KC02",
+            new BigDecimal("0.700"), new BigDecimal("0.500"),
+            OffsetDateTime.now(ZoneOffset.UTC), OffsetDateTime.now(ZoneOffset.UTC))));
+    MasterySnapshot easyFail = evaluator.applyEventWithDifficulty(
+        1L, "KC02", MasterySource.PRACTICE_FAIL, null, "easy", "low");
+    MasterySnapshot hardFail = evaluator.applyEventWithDifficulty(
+        1L, "KC02", MasterySource.PRACTICE_FAIL, null, "hard", "high");
+    assertThat(easyFail.masteryScore()).isLessThan(hardFail.masteryScore());
+  }
+
+  @Test
+  void nullDifficultySameAsMedium() {
+    when(repository.findSnapshot(1L, "KC03")).thenReturn(Optional.empty());
+    MasterySnapshot a = evaluator.applyEvent(1L, "KC03", MasterySource.PRACTICE_PASS, null, "no");
+    MasterySnapshot b = evaluator.applyEventWithDifficulty(
+        1L, "KC03", MasterySource.PRACTICE_PASS, null, "med", "medium");
+    assertThat(a.masteryScore()).isEqualByComparingTo(b.masteryScore());
+  }
+
+  @Test
+  void consecutiveHardFailuresDecreaseMastery() {
+    when(repository.findSnapshot(1L, "KC04"))
+        .thenReturn(Optional.of(new MasterySnapshot(1L, 1L, "KC04",
+            new BigDecimal("0.800"), new BigDecimal("0.600"),
+            OffsetDateTime.now(ZoneOffset.UTC), OffsetDateTime.now(ZoneOffset.UTC))));
+    MasterySnapshot after1 = evaluator.applyEventWithDifficulty(
+        1L, "KC04", MasterySource.PRACTICE_FAIL, null, "fail1", "hard");
+    assertThat(after1.masteryScore()).isLessThan(new BigDecimal("0.800"));
+    // 第二次失败：分数继续降
+    when(repository.findSnapshot(1L, "KC04")).thenReturn(Optional.of(after1));
+    MasterySnapshot after2 = evaluator.applyEventWithDifficulty(
+        1L, "KC04", MasterySource.PRACTICE_FAIL, null, "fail2", "hard");
+    assertThat(after2.masteryScore()).isLessThan(after1.masteryScore());
+  }
+
+  @Test
+  void consecutiveFailuresDecreaseConfidence() {
+    // 验收硬指标：连续失败 → 置信度下降（修复「越失败越自信」缺陷）。
+    when(repository.findSnapshot(1L, "KC05"))
+        .thenReturn(Optional.of(new MasterySnapshot(1L, 1L, "KC05",
+            new BigDecimal("0.800"), new BigDecimal("0.600"),
+            OffsetDateTime.now(ZoneOffset.UTC), OffsetDateTime.now(ZoneOffset.UTC))));
+    MasterySnapshot after1 = evaluator.applyEventWithDifficulty(
+        1L, "KC05", MasterySource.PRACTICE_FAIL, null, "fail1", "hard");
+    assertThat(after1.confidence()).isLessThan(new BigDecimal("0.600"));
+    when(repository.findSnapshot(1L, "KC05")).thenReturn(Optional.of(after1));
+    MasterySnapshot after2 = evaluator.applyEventWithDifficulty(
+        1L, "KC05", MasterySource.PRACTICE_FAIL, null, "fail2", "hard");
+    assertThat(after2.confidence()).isLessThan(after1.confidence());
+  }
+
+  @Test
+  void passStillIncreasesConfidence() {
+    when(repository.findSnapshot(1L, "KC06"))
+        .thenReturn(Optional.of(new MasterySnapshot(1L, 1L, "KC06",
+            new BigDecimal("0.300"), new BigDecimal("0.200"),
+            OffsetDateTime.now(ZoneOffset.UTC), OffsetDateTime.now(ZoneOffset.UTC))));
+    MasterySnapshot after = evaluator.applyEventWithDifficulty(
+        1L, "KC06", MasterySource.PRACTICE_PASS, null, "pass", "medium");
+    assertThat(after.confidence()).isGreaterThan(new BigDecimal("0.200"));
+  }
 }

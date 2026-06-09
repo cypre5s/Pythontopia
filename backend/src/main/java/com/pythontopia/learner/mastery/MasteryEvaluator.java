@@ -33,7 +33,18 @@ public class MasteryEvaluator {
   @Transactional
   public MasterySnapshot applyEvent(
       Long userId, String kcCode, MasterySource source, BigDecimal delta, String reason) {
+    return applyEventWithDifficulty(userId, kcCode, source, delta, reason, null);
+  }
+
+  /** 难度加权：难题通过增益大（×1.5），易题失败惩罚重（÷0.7）。difficulty 为空时退化为普通模式。 */
+  @Transactional
+  public MasterySnapshot applyEventWithDifficulty(
+      Long userId, String kcCode, MasterySource source,
+      BigDecimal delta, String reason, String difficulty) {
     BigDecimal effectiveDelta = delta != null ? delta : properties.defaultDelta(source);
+    if (difficulty != null && !difficulty.isBlank()) {
+      effectiveDelta = MasteryProperties.difficultyWeightedDelta(effectiveDelta, difficulty);
+    }
     Optional<MasterySnapshot> existing = repository.findSnapshot(userId, kcCode);
     BigDecimal previousScore =
         existing.map(MasterySnapshot::masteryScore).orElse(BigDecimal.ZERO);
@@ -46,6 +57,10 @@ public class MasteryEvaluator {
       newConfidence = clamp(previousConfidence.subtract(properties.confidenceLossPerDecay()));
     } else if (source == MasterySource.BOOTSTRAP) {
       newConfidence = previousConfidence;
+    } else if (effectiveDelta.signum() < 0) {
+      // 失败/挫折（如 PRACTICE_FAIL，effectiveDelta<0）置信度应下降，而非上升。
+      // 修复前所有非 DECAY/BOOTSTRAP 事件一律加分，导致「越失败越自信」与验收冲突。
+      newConfidence = clamp(previousConfidence.subtract(properties.confidenceLossPerDecay()));
     } else {
       newConfidence = clamp(previousConfidence.add(properties.confidenceGainPerEvent()));
     }
