@@ -33,15 +33,33 @@ public final class MemoryScorer {
   }
 
   /**
-   * 完整打分。
+   * 完整打分（纯 KC 相关性，无语义向量）。
    *
    * @param sameChapterKcCodes focusKc 所在章节的全部 KC code（含自身），用于「同章 → 0.5」判定；空集表示无同章加权。
    */
   public static ScoreBreakdown score(
       MemoryRow row, String focusKc, Set<String> sameChapterKcCodes, Instant now) {
+    return score(row, focusKc, sameChapterKcCodes, 0.0, now);
+  }
+
+  /**
+   * 完整打分（语义增强）：{@code relevance = max(KC 匹配分, clamp01(semanticSim))}，recency/importance
+   * 权重与公式不变（0.4/0.3/0.3）。
+   *
+   * @param sameChapterKcCodes focusKc 所在章节的全部 KC code（含自身），用于「同章 → 0.5」判定；空集表示无同章加权。
+   * @param semanticSim 查询向量与该记忆向量的余弦相似度（建议 0..1，越界自动裁剪到 [0,1]）；无向量/离线传
+   *     {@code 0} 即退化为纯 KC 匹配，向后兼容现状（零回归）。
+   */
+  public static ScoreBreakdown score(
+      MemoryRow row,
+      String focusKc,
+      Set<String> sameChapterKcCodes,
+      double semanticSim,
+      Instant now) {
     double recency = recency(row.createdAt(), now);
     double importance = clamp01(row.importance() / MAX_IMPORTANCE);
-    double relevance = relevance(row.kcCodes(), focusKc, sameChapterKcCodes);
+    double kcRelevance = relevance(row.kcCodes(), focusKc, sameChapterKcCodes);
+    double relevance = Math.max(kcRelevance, clamp01(semanticSim));
     double total =
         RECENCY_WEIGHT * recency + IMPORTANCE_WEIGHT * importance + RELEVANCE_WEIGHT * relevance;
     return new ScoreBreakdown(recency, importance, relevance, total);
