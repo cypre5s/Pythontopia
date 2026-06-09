@@ -134,6 +134,22 @@ public class MemoryStreamMirror {
     mirror(event.userId(), "comeback_solved", payload);
   }
 
+  @EventListener
+  public void onTaughtAiSucceeded(LearningEvent.TaughtAiSucceeded event) {
+    Map<String, Object> payload = new LinkedHashMap<>();
+    put(payload, "kcCode", event.kcCode());
+    put(payload, "sessionId", event.sessionId());
+    mirror(event.userId(), "taught_ai_succeeded", payload);
+  }
+
+  @EventListener
+  public void onTaughtAiFailed(LearningEvent.TaughtAiFailed event) {
+    Map<String, Object> payload = new LinkedHashMap<>();
+    put(payload, "kcCode", event.kcCode());
+    put(payload, "sessionId", event.sessionId());
+    mirror(event.userId(), "taught_ai_failed", payload);
+  }
+
   private void mirror(Long userId, String eventType, Map<String, Object> payload) {
     try {
       long eventId = repository.insert(userId, eventType, payload, SOURCE, EventImportance.of(eventType));
@@ -160,6 +176,9 @@ public class MemoryStreamMirror {
     }
     if (eventType.startsWith("practice_") || "comeback_solved".equals(eventType)) {
       return Optional.of("coach_q");
+    }
+    if (eventType.startsWith("taught_ai_")) {
+      return Optional.of("student_a");
     }
     return switch (eventType) {
       case "resource_consumed", "media_consumed" -> Optional.of("librarian_doc");

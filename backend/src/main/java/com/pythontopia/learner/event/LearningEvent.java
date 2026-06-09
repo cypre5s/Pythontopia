@@ -16,7 +16,9 @@ public sealed interface LearningEvent
         LearningEvent.ProbeChoiceMade,
         LearningEvent.PracticeRetried,
         LearningEvent.PracticeAbandoned,
-        LearningEvent.ComebackSolved {
+        LearningEvent.ComebackSolved,
+        LearningEvent.TaughtAiSucceeded,
+        LearningEvent.TaughtAiFailed {
 
   Long userId();
 
@@ -70,4 +72,8 @@ public sealed interface LearningEvent
    */
   record ComebackSolved(Long userId, Long problemId, String kcCode, int priorFails)
       implements LearningEvent {}
+
+  record TaughtAiSucceeded(Long userId, String kcCode, Long sessionId) implements LearningEvent {}
+
+  record TaughtAiFailed(Long userId, String kcCode, Long sessionId) implements LearningEvent {}
 }

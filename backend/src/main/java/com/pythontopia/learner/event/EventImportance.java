@@ -16,10 +16,12 @@ public final class EventImportance {
 
   private static final Map<String, Integer> SCORES =
       Map.ofEntries(
+          Map.entry("taught_ai_succeeded", 5),
           Map.entry("comeback_solved", 5),
           Map.entry("debug_resolved", 5),
           Map.entry("practice_failed", 4),
           Map.entry("practice_abandoned", 4),
+          Map.entry("taught_ai_failed", 3),
           Map.entry("practice_succeeded", 3),
           Map.entry("tutor_style_engaged", 2),
           Map.entry("probe_choice_made", 2),

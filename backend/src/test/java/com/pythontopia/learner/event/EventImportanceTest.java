@@ -13,6 +13,8 @@ class EventImportanceTest {
     assertThat(EventImportance.of("practice_abandoned")).isEqualTo(4);
     assertThat(EventImportance.of("comeback_solved")).isEqualTo(5);
     assertThat(EventImportance.of("debug_resolved")).isEqualTo(5);
+    assertThat(EventImportance.of("taught_ai_succeeded")).isEqualTo(5);
+    assertThat(EventImportance.of("taught_ai_failed")).isEqualTo(3);
     assertThat(EventImportance.of("practice_succeeded")).isEqualTo(3);
     assertThat(EventImportance.of("tutor_style_engaged")).isEqualTo(2);
     assertThat(EventImportance.of("probe_choice_made")).isEqualTo(2);
