@@ -33,14 +33,6 @@ class TestDebateTriggers:
         assert TutorAgent.should_debate("太难了，能不能简单点")
         assert TutorAgent.should_debate("应该先学for还是while")
 
-    def test_should_debate_decision_specifically(self) -> None:
-        """should_debate_decision 只对教学决策触发。"""
-        assert TutorAgent.should_debate_decision("出题难度怎么选")
-        assert TutorAgent.should_debate_decision("怎么讲这个概念")
-        assert TutorAgent.should_debate_decision("应该先学什么")
-        # 非教学决策词不触发
-        assert not TutorAgent.should_debate_decision("什么是列表")
-
     def test_ordinary_questions_still_no_debate(self) -> None:
         """普通答疑仍不触发辩论（成本守恒）。"""
         assert not TutorAgent.should_debate("什么是 for 循环")
@@ -51,7 +43,6 @@ class TestDebateTriggers:
     def test_empty_and_none_safe(self) -> None:
         """空输入安全。"""
         assert not TutorAgent.should_debate("")
-        assert not TutorAgent.should_debate_decision("")
 
 
 class ScriptedProvider:
@@ -78,16 +69,13 @@ async def test_debate_on_teaching_decision() -> None:
     """教学决策（出题难度怎么选）触发辩论，critic 意见进 referee。
 
     验证：
-    1. should_debate_decision 返回 True
-    2. should_debate 也识别为辩论场景
-    3. DebateGraph 端到端运行产出 3 LLM 调用（solver→critic→referee）
-    4. 辩论结果包含三轮角色（solver, critic, referee）
+    1. should_debate 识别教学决策为辩论场景（"难度" 在 DEBATE_TRIGGERS 中）
+    2. DebateGraph 端到端运行产出 3 LLM 调用（solver→critic→referee）
+    3. 辩论结果包含三轮角色（solver, critic, referee）
     """
     question = "出题难度怎么选"
 
-    # 教学决策触发词应命中
-    assert TutorAgent.should_debate_decision(question)
-    # should_debate 也应命中（"难度" 在通用触发词中）
+    # should_debate 应命中（"难度" 在通用触发词中）→ 路由进辩论复核
     assert TutorAgent.should_debate(question)
 
     # 端到端：Solver→Critic→Referee

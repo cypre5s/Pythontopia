@@ -3,6 +3,7 @@ package com.pythontopia.workshop;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -14,6 +15,7 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pythontopia.agent.run.MetaReflectionService;
 import com.pythontopia.agent.run.RunStatus;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.coursepack.domain.CourseKc;
@@ -31,13 +33,19 @@ import com.pythontopia.learner.profile.service.PassiveProfileService;
 import com.pythontopia.learner.profile.service.ProfileService;
 import com.pythontopia.learner.reflection.LearnerInsightRepository;
 import com.pythontopia.workshop.config.WorkshopProperties;
+import com.pythontopia.workshop.dto.ContentFormat;
+import com.pythontopia.workshop.dto.LearningResourceDto;
 import com.pythontopia.workshop.dto.ResourceCreateRequest;
 import com.pythontopia.workshop.dto.ResourceCreateResponse;
+import com.pythontopia.workshop.dto.ResourceFeedbackRequest;
+import com.pythontopia.workshop.dto.ResourceFeedbackStatus;
+import com.pythontopia.workshop.dto.ResourceStatusFlag;
 import com.pythontopia.workshop.dto.ResourceType;
 import com.pythontopia.workshop.graph.ResourceProduceRequestDto;
 import com.pythontopia.workshop.graph.ResourceProduceResponseDto;
 import com.pythontopia.workshop.graph.WorkshopGraphClient;
 import com.pythontopia.workshop.repository.LearningResourceRepository;
+import com.pythontopia.workshop.repository.ResourceFeedbackRepository;
 import com.pythontopia.workshop.service.ResourceWorkshopService;
 import com.pythontopia.workshop.service.WorkshopRunRecorder;
 import java.math.BigDecimal;
@@ -64,6 +72,8 @@ class ResourceWorkshopServiceTest {
   private PassiveProfileService passiveProfileService;
   private LearnerInsightRepository insightRepository;
   private MemoryRetrievalService memoryRetrievalService;
+  private MetaReflectionService metaReflectionService;
+  private ResourceFeedbackRepository resourceFeedbackRepository;
   private ObjectMapper objectMapper;
   private ResourceWorkshopService service;
 
@@ -79,6 +89,8 @@ class ResourceWorkshopServiceTest {
     passiveProfileService = Mockito.mock(PassiveProfileService.class);
     insightRepository = Mockito.mock(LearnerInsightRepository.class);
     memoryRetrievalService = Mockito.mock(MemoryRetrievalService.class);
+    metaReflectionService = Mockito.mock(MetaReflectionService.class);
+    resourceFeedbackRepository = Mockito.mock(ResourceFeedbackRepository.class);
     objectMapper = new ObjectMapper();
     service =
         new ResourceWorkshopService(
@@ -92,6 +104,8 @@ class ResourceWorkshopServiceTest {
             passiveProfileService,
             insightRepository,
             memoryRetrievalService,
+            metaReflectionService,
+            resourceFeedbackRepository,
             objectMapper);
 
     when(coursePackRepository.findKcs(eq(43L), eq(null)))
@@ -217,6 +231,8 @@ class ResourceWorkshopServiceTest {
             passiveProfileService,
             insightRepository,
             memoryRetrievalService,
+            metaReflectionService,
+            resourceFeedbackRepository,
             objectMapper);
     when(graphClient.produce(any())).thenReturn(successResponse());
     when(resourceRepository.countCreatedAfter(anyLong(), any())).thenReturn(5);
@@ -331,6 +347,117 @@ class ResourceWorkshopServiceTest {
         .insert(anyLong(), anyLong(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
     verify(masteryEvaluator, times(1))
         .applyEvent(eq(1L), eq("PY43-KC-001"), eq(MasterySource.RESOURCE_READ), any(), anyString());
+  }
+
+  @Test
+  void targetDifficultyEasierForLowMastery() {
+    when(graphClient.produce(any())).thenReturn(successResponse());
+    when(masteryEvaluator.snapshot(1L, "PY43-KC-001"))
+        .thenReturn(
+            Optional.of(
+                new MasterySnapshot(
+                    1L, 1L, "PY43-KC-001", new BigDecimal("0.20"), new BigDecimal("0.80"),
+                    OffsetDateTime.now(), OffsetDateTime.now())));
+
+    service.create(1L, new ResourceCreateRequest(List.of("PY43-KC-001"), ResourceType.HANDOUT, null));
+
+    ArgumentCaptor<ResourceProduceRequestDto> captor =
+        ArgumentCaptor.forClass(ResourceProduceRequestDto.class);
+    verify(graphClient).produce(captor.capture());
+    assertThat(captor.getValue().targetDifficulty()).isEqualTo("basic");
+  }
+
+  @Test
+  void targetDifficultyHarderForHighMasteryHighConfidence() {
+    when(graphClient.produce(any())).thenReturn(successResponse());
+    when(masteryEvaluator.snapshot(1L, "PY43-KC-001"))
+        .thenReturn(
+            Optional.of(
+                new MasterySnapshot(
+                    1L, 1L, "PY43-KC-001", new BigDecimal("0.85"), new BigDecimal("0.80"),
+                    OffsetDateTime.now(), OffsetDateTime.now())));
+
+    service.create(1L, new ResourceCreateRequest(List.of("PY43-KC-001"), ResourceType.HANDOUT, null));
+
+    ArgumentCaptor<ResourceProduceRequestDto> captor =
+        ArgumentCaptor.forClass(ResourceProduceRequestDto.class);
+    verify(graphClient).produce(captor.capture());
+    assertThat(captor.getValue().targetDifficulty()).isEqualTo("hard");
+  }
+
+  @Test
+  void targetDifficultyLowConfidenceEasesBand() {
+    // 临界掌握(0.5)但低置信(0.2)：信号不足 → 由 medium 降一档为 basic（先建立信心）。
+    when(graphClient.produce(any())).thenReturn(successResponse());
+    when(masteryEvaluator.snapshot(1L, "PY43-KC-001"))
+        .thenReturn(
+            Optional.of(
+                new MasterySnapshot(
+                    1L, 1L, "PY43-KC-001", new BigDecimal("0.50"), new BigDecimal("0.20"),
+                    OffsetDateTime.now(), OffsetDateTime.now())));
+
+    service.create(1L, new ResourceCreateRequest(List.of("PY43-KC-001"), ResourceType.HANDOUT, null));
+
+    ArgumentCaptor<ResourceProduceRequestDto> captor =
+        ArgumentCaptor.forClass(ResourceProduceRequestDto.class);
+    verify(graphClient).produce(captor.capture());
+    assertThat(captor.getValue().targetDifficulty()).isEqualTo("basic");
+  }
+
+  @Test
+  void injectsAgentStrategyDirectiveIntoGraphRequest() {
+    when(graphClient.produce(any())).thenReturn(successResponse());
+    when(metaReflectionService.latestDirective("ResourceDesignerAgent.handout"))
+        .thenReturn("complexity=basic; example_density=high");
+
+    service.create(1L, new ResourceCreateRequest(List.of("PY43-KC-001"), ResourceType.HANDOUT, null));
+
+    ArgumentCaptor<ResourceProduceRequestDto> captor =
+        ArgumentCaptor.forClass(ResourceProduceRequestDto.class);
+    verify(graphClient).produce(captor.capture());
+    assertThat(captor.getValue().agentStrategyDirective())
+        .isEqualTo("complexity=basic; example_density=high");
+  }
+
+  @Test
+  void submitFeedbackLikedWritesResourceFeedbackForGeneratingAgent() {
+    when(resourceRepository.findById(eq(1L), eq(7L))).thenReturn(Optional.of(feedbackResourceDto()));
+    when(resourceFeedbackRepository.findAgentForResource(7L)).thenReturn("PracticeAgent");
+
+    service.submitFeedback(
+        1L, 7L, new ResourceFeedbackRequest(ResourceFeedbackStatus.LIKED, "好用"));
+
+    verify(resourceFeedbackRepository).insert(eq(1L), eq(7L), eq("PracticeAgent"), eq(5), eq(true));
+  }
+
+  @Test
+  void submitFeedbackNoneDoesNotWriteResourceFeedback() {
+    when(resourceRepository.findById(eq(1L), eq(7L))).thenReturn(Optional.of(feedbackResourceDto()));
+
+    service.submitFeedback(1L, 7L, new ResourceFeedbackRequest(ResourceFeedbackStatus.NONE, null));
+
+    verify(resourceFeedbackRepository, Mockito.never())
+        .insert(anyLong(), anyLong(), anyString(), any(), anyBoolean());
+  }
+
+  private LearningResourceDto feedbackResourceDto() {
+    return new LearningResourceDto(
+        7L,
+        1L,
+        43L,
+        List.of("PY43-KC-001"),
+        11L,
+        ResourceType.HANDOUT,
+        "讲义",
+        ContentFormat.MARKDOWN,
+        objectMapper.createObjectNode(),
+        List.of(101L),
+        "summary",
+        ResourceStatusFlag.PASSED,
+        ResourceStatusFlag.PASSED,
+        ResourceFeedbackStatus.NONE,
+        null,
+        OffsetDateTime.now());
   }
 
   private ResourceProduceResponseDto successResponse() {

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from pythontopia_graph.agents.personalization import personalization_messages
+from pythontopia_graph.agents.personalization import (
+    agent_strategy_messages,
+    personalization_messages,
+)
 from pythontopia_graph.llm.provider import LlmProvider
 from pythontopia_graph.nodes.evidence_fetcher import EvidenceBundle
 from pythontopia_graph.schemas.resource import (
@@ -61,7 +64,7 @@ class HandoutAgent:
             },
             *([{
                 "role": "system",
-                "content": f"上一稿被打回原因：\n" + "\n".join(f"- {r}" for r in revision_notes)
+                "content": "上一稿被打回原因：\n" + "\n".join(f"- {r}" for r in revision_notes)
                 + "\n请针对性修订，修正上述问题后重新生成。",
             }] if revision_notes else []),
             {
@@ -72,6 +75,7 @@ class HandoutAgent:
                 ),
             },
             *personalization_messages(request.profile_snapshot),
+            *agent_strategy_messages(request.agent_strategy_directive),
             {
                 "role": "user",
                 "content": request.focus_hint or "请围绕目标 KC，结合上述证据页生成一份讲义",

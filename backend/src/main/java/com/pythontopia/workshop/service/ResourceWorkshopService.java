@@ -3,6 +3,7 @@ package com.pythontopia.workshop.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.pythontopia.agent.run.MetaReflectionService;
 import com.pythontopia.agent.run.RunStatus;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.coursepack.domain.CourseKc;
@@ -22,6 +23,7 @@ import com.pythontopia.workshop.dto.LearningResourceDto;
 import com.pythontopia.workshop.dto.ResourceCreateRequest;
 import com.pythontopia.workshop.dto.ResourceCreateResponse;
 import com.pythontopia.workshop.dto.ResourceFeedbackRequest;
+import com.pythontopia.workshop.dto.ResourceFeedbackStatus;
 import com.pythontopia.workshop.dto.ResourceListItemDto;
 import com.pythontopia.workshop.dto.ResourceStatusFlag;
 import com.pythontopia.workshop.dto.ResourceType;
@@ -29,6 +31,7 @@ import com.pythontopia.workshop.graph.ResourceProduceRequestDto;
 import com.pythontopia.workshop.graph.ResourceProduceResponseDto;
 import com.pythontopia.workshop.graph.WorkshopGraphClient;
 import com.pythontopia.workshop.repository.LearningResourceRepository;
+import com.pythontopia.workshop.repository.ResourceFeedbackRepository;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -74,6 +77,8 @@ public class ResourceWorkshopService {
   private final PassiveProfileService passiveProfileService;
   private final LearnerInsightRepository insightRepository;
   private final MemoryRetrievalService memoryRetrievalService;
+  private final MetaReflectionService metaReflectionService;
+  private final ResourceFeedbackRepository resourceFeedbackRepository;
   private final ObjectMapper objectMapper;
 
   public ResourceWorkshopService(
@@ -87,6 +92,8 @@ public class ResourceWorkshopService {
       PassiveProfileService passiveProfileService,
       LearnerInsightRepository insightRepository,
       MemoryRetrievalService memoryRetrievalService,
+      MetaReflectionService metaReflectionService,
+      ResourceFeedbackRepository resourceFeedbackRepository,
       ObjectMapper objectMapper) {
     this.properties = properties;
     this.graphClient = graphClient;
@@ -98,6 +105,8 @@ public class ResourceWorkshopService {
     this.passiveProfileService = passiveProfileService;
     this.insightRepository = insightRepository;
     this.memoryRetrievalService = memoryRetrievalService;
+    this.metaReflectionService = metaReflectionService;
+    this.resourceFeedbackRepository = resourceFeedbackRepository;
     this.objectMapper = objectMapper;
   }
 
@@ -110,13 +119,16 @@ public class ResourceWorkshopService {
     LearnerProfileDto profile =
         profileService.findProfile(userId).orElse(null);
 
+    String targetDifficulty = computeTargetDifficulty(userId, validatedKcCodes);
     ResourceProduceRequestDto graphRequest =
         new ResourceProduceRequestDto(
             userId,
             validatedKcCodes,
             request.type().name(),
             request.focusHint(),
-            profileSnapshot(userId, focusKc(validatedKcCodes), profile, safeDimensions(userId)));
+            profileSnapshot(userId, focusKc(validatedKcCodes), profile, safeDimensions(userId)),
+            targetDifficulty,
+            agentStrategyDirective(request.type()));
     ResourceProduceResponseDto graphResponse = graphClient.produce(graphRequest);
     if (graphResponse == null) {
       throw new BusinessException(
@@ -186,13 +198,16 @@ public class ResourceWorkshopService {
     List<String> validatedKcCodes = validateKcCodes(request.kcCodes(), kcIdx);
     LearnerProfileDto profile = profileService.findProfile(userId).orElse(null);
 
+    String targetDifficulty = computeTargetDifficulty(userId, validatedKcCodes);
     ResourceProduceRequestDto graphRequest =
         new ResourceProduceRequestDto(
             userId,
             validatedKcCodes,
             request.type().name(),
             request.focusHint(),
-            profileSnapshot(userId, focusKc(validatedKcCodes), profile, safeDimensions(userId)));
+            profileSnapshot(userId, focusKc(validatedKcCodes), profile, safeDimensions(userId)),
+            targetDifficulty,
+            agentStrategyDirective(request.type()));
 
     SseEmitter emitter = new SseEmitter(120_000L);
     Long chapterId = pickChapterId(validatedKcCodes, kcIdx);
@@ -301,9 +316,11 @@ public class ResourceWorkshopService {
   public void submitFeedback(Long userId, Long resourceId, ResourceFeedbackRequest request) {
     LearningResourceDto resource = findOne(userId, resourceId);
     resourceRepository.updateFeedback(userId, resource.id(), request.status(), request.note());
-    if (request.status() == com.pythontopia.workshop.dto.ResourceFeedbackStatus.NONE) {
+    if (request.status() == ResourceFeedbackStatus.NONE) {
       return;
     }
+    // P4.1：把采纳/评分落 resource_feedback（按生成它的 agent 归类），供 meta-reflection 据真实反馈进化策略。
+    recordResourceFeedback(userId, resource, request.status());
     java.util.LinkedHashMap<String, Object> diff = new java.util.LinkedHashMap<>();
     diff.put("resourceId", resource.id());
     diff.put("status", request.status().name());
@@ -430,6 +447,78 @@ public class ResourceWorkshopService {
     }
   }
 
+  /** 自适应难度的置信度门控：低于此值视为「信号不足」，降一档建立信心。 */
+  private static final double LOW_CONFIDENCE = 0.4;
+
+  /** 自适应难度的高置信门控：达到此值且逼近本档上沿时升一档促成长。 */
+  private static final double HIGH_CONFIDENCE = 0.7;
+
+  /** confidence 缺失时的中性默认值（既不降档也不升档）。 */
+  private static final double NEUTRAL_CONFIDENCE = 0.5;
+
+  /**
+   * 据首要 KC 的<b>掌握度 + 置信度</b>计算自适应难度目标。基础档由掌握度划分（薄弱→basic、临界→medium、
+   * 强→hard）；置信度做二次调节：置信度低（信号不足）则降一档建立信心，置信度高且逼近本档上沿则升一档
+   * 促成长。无快照时返回 {@code null}（由 graph 自行决定难度）。
+   */
+  private String computeTargetDifficulty(Long userId, List<String> kcCodes) {
+    if (kcCodes == null || kcCodes.isEmpty()) return null;
+    try {
+      var snap = masteryEvaluator.snapshot(userId, kcCodes.get(0));
+      if (snap.isEmpty() || snap.get().masteryScore() == null) return null;
+      double score = snap.get().masteryScore().doubleValue();
+      double confidence =
+          snap.get().confidence() == null
+              ? NEUTRAL_CONFIDENCE
+              : snap.get().confidence().doubleValue();
+      return difficultyBand(score, confidence);
+    } catch (RuntimeException e) {
+      log.debug("targetDifficulty degraded for user {}", userId);
+      return null;
+    }
+  }
+
+  /**
+   * 掌握度 + 置信度 → 难度档（basic/medium/hard）的纯函数，便于直接单测。
+   *
+   * <ul>
+   *   <li>基础档：score&lt;0.4→basic，&lt;0.7→medium，否则 hard；
+   *   <li>低置信度（&lt;{@value #LOW_CONFIDENCE}）：信号不足，降一档（hard→medium→basic，basic 保持）；
+   *   <li>高置信度（≥{@value #HIGH_CONFIDENCE}）且逼近本档上沿：升一档（basic→medium→hard，hard 保持）。
+   * </ul>
+   */
+  static String difficultyBand(double score, double confidence) {
+    String band = score < 0.4 ? "basic" : (score < 0.7 ? "medium" : "hard");
+    if (confidence < LOW_CONFIDENCE) {
+      return ease(band);
+    }
+    if (confidence >= HIGH_CONFIDENCE && nearUpperThreshold(score)) {
+      return harder(band);
+    }
+    return band;
+  }
+
+  /** 逼近本档上沿：basic 档 [0.3,0.4) 或 medium 档 [0.6,0.7)（hard 档无上沿可升）。 */
+  private static boolean nearUpperThreshold(double score) {
+    return (score >= 0.3 && score < 0.4) || (score >= 0.6 && score < 0.7);
+  }
+
+  private static String ease(String band) {
+    return switch (band) {
+      case "hard" -> "medium";
+      case "medium" -> "basic";
+      default -> "basic";
+    };
+  }
+
+  private static String harder(String band) {
+    return switch (band) {
+      case "basic" -> "medium";
+      case "medium" -> "hard";
+      default -> "hard";
+    };
+  }
+
   /** 认知风格主 tag：仅在 cognitive_style 置信度≥门控时给出（信号不足不下传，防幻觉）。 */
   static String cognitiveStyleTag(List<ProfileDimensionDto> dims) {
     if (dims == null) {
@@ -526,6 +615,29 @@ public class ResourceWorkshopService {
 
   private String scenarioForType(ResourceType type) {
     return "RESOURCE_" + type.name();
+  }
+
+  /** 取目标 agent（按资源类型映射的 canonical 名）最新策略 directive，闭合自我进化闭环；无策略/异常返回 null。 */
+  private String agentStrategyDirective(ResourceType type) {
+    try {
+      return metaReflectionService.latestDirective(agentName(type));
+    } catch (RuntimeException ex) {
+      log.debug("agent strategy directive degraded for type {}: {}", type, ex.getMessage());
+      return null;
+    }
+  }
+
+  /** 把一次采纳/评分落 resource_feedback，归类到生成该资源的 agent（供 meta-reflection 进化）。 */
+  private void recordResourceFeedback(
+      Long userId, LearningResourceDto resource, ResourceFeedbackStatus status) {
+    String agent = resourceFeedbackRepository.findAgentForResource(resource.id());
+    if (agent == null) {
+      log.debug("resource {} has no generating agent run; skip resource_feedback", resource.id());
+      return;
+    }
+    boolean adopted = status == ResourceFeedbackStatus.LIKED;
+    int rating = adopted ? 5 : 2;
+    resourceFeedbackRepository.insert(userId, resource.id(), agent, rating, adopted);
   }
 
   private String agentName(ResourceType type) {

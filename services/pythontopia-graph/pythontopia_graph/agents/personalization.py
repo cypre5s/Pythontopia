@@ -62,3 +62,14 @@ def personalization_messages(
     if directive is None:
         return []
     return [{"role": "system", "content": directive}]
+
+
+def agent_strategy_messages(directive: str | None) -> list[dict[str, str]]:
+    """后端注入的团队/自进化策略提示（agent_strategy_directive）包成单条 system message。
+
+    为空（None/空白）时返回空列表 → `*解包` 后不改变 prompt，行为不变（Task 4.1 契约）。
+    """
+    text = (directive or "").strip()
+    if not text:
+        return []
+    return [{"role": "system", "content": f"团队策略提示：{text}"}]

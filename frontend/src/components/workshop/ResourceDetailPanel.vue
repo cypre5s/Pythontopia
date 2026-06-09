@@ -9,6 +9,7 @@ import CodeLabView from './CodeLabView.vue';
 import ReadingList from './ReadingList.vue';
 import StoryboardView from './StoryboardView.vue';
 import PptView from './PptView.vue';
+import GlassBox from '@/components/companion/GlassBox.vue';
 import { kcDisplayName } from '@/data/kcNames';
 import type {
   CodeLabContent,
@@ -186,6 +187,17 @@ async function submitFeedback(status: 'LIKED' | 'DISLIKED'): Promise<void> {
         </span>
       </div>
     </section>
+    <!-- ── 决策玻璃盒：任意决策点可展开「为什么这样生成」（GET /api/learner/decisions） ── -->
+    <section
+      class="decision-box"
+      data-testid="resource-decision-box"
+    >
+      <h4>为什么这样生成</h4>
+      <p class="decision-box__hint">
+        展开查看各智能体在生成本资源时的关键决策与课件证据依据。
+      </p>
+      <GlassBox />
+    </section>
     <Teleport to="body">
       <div
         v-if="showPpt"
@@ -288,6 +300,18 @@ header h2 {
 }
 .feedback h4 {
   margin: 0 0 6px;
+}
+.decision-box {
+  border-top: 1px dashed var(--pyt-color-border);
+  padding-top: 10px;
+}
+.decision-box h4 {
+  margin: 0 0 4px;
+}
+.decision-box__hint {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--pyt-color-text-hint);
 }
 .feedback textarea {
   width: 100%;

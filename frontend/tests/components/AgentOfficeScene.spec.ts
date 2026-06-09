@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import type { SsePlan, SseTraceEvent } from '@/composables/useSseStream';
 import type { OfficeEvidence } from '@/components/workshop/agentOffice';
@@ -42,6 +42,34 @@ function mountScene(overrides: Partial<SceneProps> = {}): ReturnType<typeof moun
   };
   return mount(AgentOfficeScene, { props });
 }
+
+/** 桩掉 window.matchMedia：对 `(prefers-reduced-motion: reduce)` 返回指定 matches。 */
+function stubReduceMatchMedia(matches: boolean): void {
+  const matchMediaMock = vi.fn((query: string) => ({
+    matches: query.includes('reduce') ? matches : false,
+    media: query,
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(() => true),
+  }));
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    writable: true,
+    value: matchMediaMock,
+  });
+}
+
+afterEach(() => {
+  // 复位：jsdom 默认无 matchMedia；避免 reduce 桩泄漏到其它用例（默认非 reduce）。
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    writable: true,
+    value: undefined,
+  });
+});
 
 describe('AgentOfficeScene · Agent 串门通报', () => {
   it('A：注入 reflection trace → 渲染串门通报元素并带通报文本（普通流水线仍在）', () => {
@@ -196,13 +224,79 @@ describe('AgentOfficeScene · P1.3 真协同 trace', () => {
     expect(logText).toContain('路径规划师');
   });
 
-  it('H：prefers-reduced-motion 下动画被禁用（无障碍合规）', () => {
-    // vitest jsdom 不支持 matchMedia；仅验证组件在 plan 模式下不崩溃。
+  it('H：prefers-reduced-motion=reduce → 禁用动画（无接力棒动画元素、连线降级 filled、根节点 reduced 类）', () => {
+    // 上游完工 + 下游进行中 → 默认会产生「流动连线 + 接力棒」动画元素。
+    const flowTraces: SseTraceEvent[] = [
+      { node: 'dispatch.StoryboardAgent', status: 'ok', elapsed_ms: 200, phase: 'finish' },
+      { node: 'dispatch.ResourceDesignerAgent', status: 'ok', elapsed_ms: 350, phase: 'finish' },
+      { node: 'dispatch.PracticeAgent', status: 'running', elapsed_ms: 0, phase: 'start' },
+    ];
+
+    // 控制组：未开启 reduce（jsdom 默认无 matchMedia → useReducedMotion=false）
+    // → 接力棒动画元素 + 流动连线确实存在，证明行为非「恒为空」。
+    const normal = mountScene({ traces: flowTraces, plan: ORCHESTRATOR_PLAN });
+    expect(normal.findAll('.office-track__baton').length).toBeGreaterThan(0);
+    expect(normal.findAll('.office-link--flow').length).toBeGreaterThan(0);
+    expect(normal.find('[data-testid="agent-office"]').classes()).not.toContain('office--reduced');
+    expect(normal.find('.office-sprite--boss').classes()).toContain('office-sprite--walk');
+
+    // 实验组：stub matchMedia 对 `(prefers-reduced-motion: reduce)` 返回 matches:true。
+    stubReduceMatchMedia(true);
+    const reduced = mountScene({ traces: flowTraces, plan: ORCHESTRATOR_PLAN });
+
+    // 纯动画元素被禁用：无接力棒；连线不再 flow（降级为静态 filled，仍表达已连接）。
+    expect(reduced.findAll('.office-track__baton').length).toBe(0);
+    expect(reduced.findAll('.office-link--flow').length).toBe(0);
+    expect(reduced.findAll('.office-link--filled').length).toBeGreaterThan(0);
+    // 根节点带 reduced 修饰类（CSS 据此整体停用动效）。
+    expect(reduced.find('[data-testid="agent-office"]').classes()).toContain('office--reduced');
+    // 总管行走动画类被移除（静止）。
+    const boss = reduced.find('.office-sprite--boss');
+    expect(boss.exists()).toBe(true);
+    expect(boss.classes()).not.toContain('office-sprite--walk');
+    // 组件仍正常渲染（不崩）。
+    expect(reduced.find('[data-testid="office-stage"]').exists()).toBe(true);
+  });
+
+  it('I：编排器 replan（退回修订）trace → 渲染退回修订通报，且不泄漏进执行日志', () => {
+    // P1 编排器在 critique→revise 驳回时发 `replan`（退回重做）；先前节点集不识别它，
+    // 退回动画从不播放。修复后应触发「退回修订」通报（复用串门走位/气泡过场）。
     const traces: SseTraceEvent[] = [
-      { node: 'dispatch.StoryboardAgent', status: 'ok', elapsed_ms: 150, phase: 'finish' },
+      { node: 'dispatch.StoryboardAgent', status: 'ok', elapsed_ms: 200, phase: 'finish' },
+      { node: 'replan', status: 'ok', elapsed_ms: 0 },
+      { node: 'dispatch.ResourceDesignerAgent', status: 'running', elapsed_ms: 0, phase: 'start' },
     ];
 
     const wrapper = mountScene({ traces, plan: ORCHESTRATOR_PLAN });
-    expect(wrapper.find('[data-testid="office-stage"]').exists()).toBe(true);
+
+    const visit = wrapper.find('[data-testid="agent-handoff-visit"]');
+    expect(visit.exists()).toBe(true);
+    // 「退回修订」语义（区别于普通「串门通报」）。
+    expect(visit.find('.office-visit__tag').text()).toContain('退回修订');
+    expect(wrapper.find('.office-visit--retreat').exists()).toBe(true);
+    // 默认退回文案合理（含「退回」）。
+    expect(wrapper.find('[data-testid="agent-handoff-note"]').text()).toContain('退回');
+    // replan 属 out-of-band 节点，不应进入「执行日志」流水线。
+    expect(wrapper.find('[data-testid="office-log"]').text()).not.toContain('退回修订');
+    // 既有工位流水线无回归：plan 工位仍渲染。
+    expect(wrapper.find('[data-testid="office-agent-dispatch.StoryboardAgent"]').exists()).toBe(true);
+  });
+
+  it('J：replan trace 携带 note → 退回通报展示该退回原因文本', () => {
+    const replanTrace: SseTraceEvent & { note: string } = {
+      node: 'replan',
+      status: 'ok',
+      elapsed_ms: 0,
+      note: '讲义与出题难度不匹配，退回重做',
+    };
+    const traces: SseTraceEvent[] = [
+      { node: 'dispatch.StoryboardAgent', status: 'ok', elapsed_ms: 120, phase: 'finish' },
+      replanTrace,
+    ];
+
+    const wrapper = mountScene({ traces, plan: ORCHESTRATOR_PLAN });
+
+    expect(wrapper.find('[data-testid="agent-handoff-note"]').text()).toContain('难度不匹配');
+    expect(wrapper.find('.office-visit--retreat').exists()).toBe(true);
   });
 });

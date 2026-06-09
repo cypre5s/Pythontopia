@@ -18,6 +18,10 @@ from pythontopia_graph.nodes.grounding_critic import grounding_critic
 from pythontopia_graph.nodes.hallucination_detector import hallucination_detector
 from pythontopia_graph.nodes.output_persistor import build_response
 from pythontopia_graph.nodes.safety_critic import safety_critic
+from pythontopia_graph.nodes.semantic_grounding_verifier import (
+    verify_entailment,
+    verify_semantic_grounding,
+)
 from pythontopia_graph.schemas.resource import (
     GraphTraceStep,
     GroundingResult,
@@ -95,6 +99,9 @@ class ResourceGraph:
                 trace, "hallucination_detector", hallucination.passed, note=str(hallucination.reasons)
             )
 
+            sg_ok, sg_reasons = await self._semantic_grounding(draft, evidence)
+            self._record_sync(trace, "semantic_grounding", sg_ok, note=str(sg_reasons))
+
             safety = safety_critic(draft)
             self._record_sync(trace, "safety_critic", safety.passed, note=str(safety.reasons))
 
@@ -111,8 +118,8 @@ class ResourceGraph:
                 raise ResourceGraphError("safety failed", response)
 
             combined = GroundingResult(
-                passed=grounding.passed and hallucination.passed,
-                reasons=list(grounding.reasons) + list(hallucination.reasons),
+                passed=grounding.passed and hallucination.passed and sg_ok,
+                reasons=list(grounding.reasons) + list(hallucination.reasons) + list(sg_reasons),
                 no_evidence_found=grounding.no_evidence_found,
                 retried=attempt > 0,
             )
@@ -128,8 +135,8 @@ class ResourceGraph:
                     graph_trace=trace,
                     status=status,
                 )
-            # 收集失败原因供下一轮 revision_notes 回灌设计师
-            revision_notes = list(grounding.reasons) + list(hallucination.reasons)
+            # 收集失败原因供下一轮 revision_notes 回灌设计师（含语义接地）
+            revision_notes = list(grounding.reasons) + list(hallucination.reasons) + list(sg_reasons)
             if not revision_notes:
                 revision_notes = ["引用审查或防幻觉核查未通过，请检查证据引用与内容准确性。"]
             attempt += 1
@@ -198,6 +205,12 @@ class ResourceGraph:
                 )
                 await asyncio.sleep(0.05)
 
+                sg_ok, sg_reasons = await self._semantic_grounding(draft, evidence)
+                await self._record_sync_streaming(
+                    emit, trace, "semantic_grounding", sg_ok, note=str(sg_reasons),
+                )
+                await asyncio.sleep(0.05)
+
                 safety = safety_critic(draft)
                 await self._record_sync_streaming(
                     emit, trace, "safety_critic", safety.passed, note=str(safety.reasons),
@@ -205,7 +218,7 @@ class ResourceGraph:
                 await asyncio.sleep(0.05)
 
                 if not safety.passed:
-                    response = build_response(
+                    build_response(
                         artifact=draft,
                         resource_type=request.type,
                         evidence_page_ids=evidence.page_ids,
@@ -221,8 +234,8 @@ class ResourceGraph:
                     return
 
                 combined = GroundingResult(
-                    passed=grounding.passed and hallucination.passed,
-                    reasons=list(grounding.reasons) + list(hallucination.reasons),
+                    passed=grounding.passed and hallucination.passed and sg_ok,
+                    reasons=list(grounding.reasons) + list(hallucination.reasons) + list(sg_reasons),
                     no_evidence_found=grounding.no_evidence_found,
                     retried=attempt > 0,
                 )
@@ -240,8 +253,8 @@ class ResourceGraph:
                     )
                     await emit("result", resp.model_dump(mode="json"))
                     return
-                # 收集失败原因供下一轮 revision_notes 回灌设计师
-                revision_notes = list(grounding.reasons) + list(hallucination.reasons)
+                # 收集失败原因供下一轮 revision_notes 回灌设计师（含语义接地）
+                revision_notes = list(grounding.reasons) + list(hallucination.reasons) + list(sg_reasons)
                 if not revision_notes:
                     revision_notes = ["引用审查或防幻觉核查未通过，请检查证据引用与内容准确性。"]
                 attempt += 1
@@ -284,6 +297,25 @@ class ResourceGraph:
     async def _fetch_evidence(self, request: ResourceProduceRequest) -> EvidenceBundle:
         query = request.focus_hint or " ".join(request.kc_codes)
         return await self._evidence_fetcher.fetch(kc_codes=request.kc_codes, query=query)
+
+    async def _semantic_grounding(
+        self, draft: ResourceDraft, evidence: EvidenceBundle
+    ) -> tuple[bool, list[str]]:
+        """语义接地双轨：规则查 page_ref 合法性/强断言引用；规则通过且有证据时，
+        再用 LLM entailment 判「页码对但论述歪曲证据」——规则查不出的最大漏洞（plan 3.4）。
+
+        规则已失败则直接返回（不再花 LLM）；无证据/通识知识跳过 entailment；
+        verify_entailment 在无 provider/无强断言/异常时自降级，成本守恒（仅强断言句核验）。
+        """
+        sg_ok, sg_reasons = verify_semantic_grounding(draft, evidence)
+        if not sg_ok:
+            return sg_ok, sg_reasons
+        if not evidence.chunks or evidence.no_evidence_found:
+            return sg_ok, sg_reasons
+        ent_ok, ent_reasons = await verify_entailment(draft, evidence, self._provider)
+        if ent_ok:
+            return True, sg_reasons
+        return False, list(sg_reasons) + list(ent_reasons)
 
     async def _step(self, trace: list[GraphTraceStep], name: str, awaitable):
         started = time.monotonic()
@@ -336,6 +368,7 @@ class ResourceGraph:
                     "agent_label": "防幻觉核查·校对官",
                     "kind": "hallucination",
                 },
+                {"node": "semantic_grounding", "agent_label": "语义接地·核验官", "kind": "grounding"},
                 {"node": "safety_critic", "agent_label": "安全审查·安全员", "kind": "safety"},
             ],
         }

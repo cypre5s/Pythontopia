@@ -11,6 +11,7 @@
 import { computed } from 'vue';
 import type { SsePlan, SseTraceEvent } from '@/composables/useSseStream';
 import { playUiClick, playUiHover } from '@/composables/useStardewFx';
+import { useReducedMotion } from '@/composables/useReducedMotion';
 import type { OfficeEvidence } from './agentOffice';
 
 const props = defineProps<{
@@ -30,6 +31,10 @@ const emit = defineEmits<{
   (e: 'confirm'): void;
   (e: 'cancel'): void;
 }>();
+
+// 无障碍：`prefers-reduced-motion: reduce` 时禁用过场动效（接力棒流动、走位、串门入场）。
+// 既驱动模板（不渲染纯动画元素 / 去掉行走类），又通过根节点 `office--reduced` 让 CSS 整体停用动画。
+const prefersReducedMotion = useReducedMotion();
 
 type StationState = 'pending' | 'active' | 'done' | 'retry' | 'error';
 
@@ -103,10 +108,19 @@ function traceNote(t: SseTraceEvent): string | undefined {
   return (t as SseTraceEvent & { note?: string }).note;
 }
 
-/** 反思 / 交接类节点：触发「串门」过场，且不计入工位与执行日志流水线。 */
-const HANDOFF_NODES = new Set(['reflection', 'handoff']);
+/**
+ * 反思 / 交接 / 退回修订类节点：触发「串门 / 退回」过场，且不计入工位与执行日志流水线。
+ * `replan` 是 P1 编排器「退回修订」(critique→revise 驳回 / 退回重做) 节点；先前未被识别，
+ * 导致真实编排 trace 的退回动画从不播放——本次修复将其纳入识别集。
+ */
+const HANDOFF_NODES = new Set(['reflection', 'handoff', 'replan']);
+/** 其中「退回修订」类（编排器 retreat）：用于把通报文案 / 视觉切换为「退回」语义。 */
+const RETREAT_NODES = new Set(['replan']);
 function isHandoffTrace(t: SseTraceEvent): boolean {
   return HANDOFF_NODES.has(nodeBase(t.node));
+}
+function isRetreatTrace(t: SseTraceEvent): boolean {
+  return RETREAT_NODES.has(nodeBase(t.node));
 }
 
 /** plan 模式：取某工位「最新一条」trace（按 base 名匹配，兼容重试）。 */
@@ -214,16 +228,33 @@ const stations = computed<StationVm[]>(() => {
 
 const activeIndex = computed<number>(() => stations.value.findIndex((s) => s.state === 'active'));
 
-// ── Agent 串门（涌现协作可视）：反思/交接 trace → 一名 NPC 走到同事工位通报 ──
-// 取最后一条反思/交接 trace；其 note 文本回退到含「照顾」的合理默认文案。
-const visit = computed<{ note: string } | null>(() => {
+// ── Agent 串门（涌现协作可视）/ 退回修订：反思·交接·replan trace → 一名 NPC 走到工位通报 ──
+// 取最后一条命中 trace；reflection/handoff = 串门通报；replan = 退回修订（总管退回重做）。
+// note 文本回退到与语义匹配的合理默认文案。
+type VisitKind = 'reflection' | 'retreat';
+const visit = computed<{ kind: VisitKind; note: string } | null>(() => {
   let found: SseTraceEvent | null = null;
   for (const t of props.traces) {
     if (isHandoffTrace(t)) found = t;
   }
   if (!found) return null;
-  return { note: traceNote(found) ?? '这位同学需要重点照顾' };
+  const retreat = isRetreatTrace(found);
+  return {
+    kind: retreat ? 'retreat' : 'reflection',
+    note:
+      traceNote(found)
+      ?? (retreat
+        ? '退回修订：上一步未达标，编排器退回重做'
+        : '这位同学需要重点照顾'),
+  };
 });
+// 退回修订用总管立绘（npc_mayor，与 MarvisPanel 的 replan→总管一致）；串门用导学 AI。
+const visitSprite = computed<string>(() =>
+  visit.value?.kind === 'retreat' ? SUPERVISOR.sprite : VISIT.sprite,
+);
+const visitName = computed<string>(() =>
+  visit.value?.kind === 'retreat' ? SUPERVISOR.name : VISIT.name,
+);
 
 // ── 工位间「接力棒」交接动画（复用 MarvisPanel 语义，横向版） ──
 // 连线 i 连接工位 i → 工位 i+1：上游完工后线点亮；上游完工且下游在干 → 流动 + 接力棒右滑。
@@ -238,7 +269,8 @@ function officeLinkClass(i: number): LinkClass {
   if (!a || !b) return 'office-link--pending';
   const upstreamDone = a.state === 'done' || a.state === 'retry';
   if (!upstreamDone) return 'office-link--pending';
-  if (b.state === 'active') return 'office-link--flow';
+  // reduce 动效：交接连线不再「流动」，降级为静态 filled（仍表达已连接，但无动画 / 不出接力棒）。
+  if (b.state === 'active' && !prefersReducedMotion.value) return 'office-link--flow';
   return 'office-link--filled';
 }
 
@@ -341,6 +373,7 @@ const groundingText = computed<string>(() => {
 <template>
   <section
     class="office"
+    :class="{ 'office--reduced': prefersReducedMotion }"
     data-testid="agent-office"
   >
     <div class="office-main">
@@ -357,7 +390,7 @@ const groundingText = computed<string>(() => {
           <span class="office-bubble">{{ supervisorLine }}</span>
           <span
             class="office-sprite office-sprite--boss"
-            :class="{ 'office-sprite--walk': status === 'streaming' }"
+            :class="{ 'office-sprite--walk': status === 'streaming' && !prefersReducedMotion }"
             :style="{ backgroundImage: spriteUrl(SUPERVISOR.sprite) }"
             :title="SUPERVISOR.name"
           />
@@ -422,20 +455,22 @@ const groundingText = computed<string>(() => {
           </div>
         </div>
 
-        <!-- ── Agent 串门（涌现协作）：导学 NPC 走到工位通报「需要重点照顾」 ── -->
+        <!-- ── Agent 串门（涌现协作）/ 退回修订：NPC 走到工位通报；replan = 总管退回重做 ── -->
         <div
           v-if="visit"
           class="office-visit"
+          :class="{ 'office-visit--retreat': visit.kind === 'retreat' }"
           data-testid="agent-handoff-visit"
         >
           <span
-            class="office-sprite office-sprite--walk office-visit__sprite"
-            :style="{ backgroundImage: spriteUrl(VISIT.sprite) }"
-            :title="VISIT.name"
+            class="office-sprite office-visit__sprite"
+            :class="{ 'office-sprite--walk': !prefersReducedMotion }"
+            :style="{ backgroundImage: spriteUrl(visitSprite) }"
+            :title="visitName"
             aria-hidden="true"
           />
           <span class="office-visit__bubble">
-            <span class="office-visit__tag">串门通报</span>
+            <span class="office-visit__tag">{{ visit.kind === 'retreat' ? '退回修订' : '串门通报' }}</span>
             <span
               class="office-visit__note"
               data-testid="agent-handoff-note"
@@ -981,6 +1016,14 @@ const groundingText = computed<string>(() => {
   color: #3a2a14;
   overflow-wrap: anywhere;
 }
+/* 退回修订（replan）：红调气泡，区别于普通串门通报。 */
+.office-visit--retreat .office-visit__bubble {
+  border-color: #b3402a;
+  box-shadow: 0 2px 0 #b3402a;
+}
+.office-visit--retreat .office-visit__tag {
+  color: #b3402a;
+}
 /* ── 证据卡 ── */
 .office-evidence {
   position: absolute;
@@ -1115,5 +1158,15 @@ const groundingText = computed<string>(() => {
   .office-visit {
     animation: none !important;
   }
+}
+/* JS 侧 reduce（useReducedMotion → 根节点 .office--reduced）强制降级：与上方 @media 等效，
+   用于无法依赖系统媒体查询的运行时场景，整体停用过场动效。 */
+.office--reduced .office-sprite,
+.office--reduced .office-step--active,
+.office--reduced .office-agent__badge--work,
+.office--reduced .office-track__seg.office-link--flow,
+.office--reduced .office-track__baton,
+.office--reduced .office-visit {
+  animation: none !important;
 }
 </style>

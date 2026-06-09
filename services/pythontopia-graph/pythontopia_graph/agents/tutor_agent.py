@@ -154,19 +154,6 @@ class TutorAgent:
         lowered = (question or "").lower()
         return any(trigger in lowered for trigger in DEBATE_TRIGGERS)
 
-    # P1.4 教学决策触发词（出题难度/讲法选择/是否跳关）
-    _DECISION_TRIGGERS = (
-        "难度", "怎么讲", "怎么教", "哪种讲法", "用什么方式教",
-        "跳过", "跳关", "先学哪个", "学习顺序", "先学什么",
-        "适合什么难度", "太难", "太简单", "应该先", "应该怎么",
-    )
-
-    @staticmethod
-    def should_debate_decision(question: str) -> bool:
-        """是否触发教学决策辩论（出题难度/讲法选择/是否跳关）。"""
-        lowered = (question or "").lower()
-        return any(trigger in lowered for trigger in TutorAgent._DECISION_TRIGGERS)
-
     @staticmethod
     def _extract_code_block(question: str) -> str:
         """抽取问题中第一个围栏代码块的内容（去首尾空白）；无代码块返回空串。"""

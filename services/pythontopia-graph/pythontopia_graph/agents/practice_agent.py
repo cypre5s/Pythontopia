@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from pythontopia_graph.agents.personalization import personalization_messages
+from pythontopia_graph.agents.personalization import (
+    agent_strategy_messages,
+    personalization_messages,
+)
 from pythontopia_graph.llm.provider import LlmProvider
 from pythontopia_graph.nodes.evidence_fetcher import EvidenceBundle
 from pythontopia_graph.schemas.resource import (
@@ -57,14 +60,19 @@ class PracticeAgent:
             },
             *([{
                 "role": "system",
-                "content": f"上一稿被打回原因：\n" + "\n".join(f"- {r}" for r in revision_notes)
+                "content": "上一稿被打回原因：\n" + "\n".join(f"- {r}" for r in revision_notes)
                 + "\n请针对性修订，修正上述问题后重新生成。",
             }] if revision_notes else []),
             *personalization_messages(request.profile_snapshot),
+            *agent_strategy_messages(request.agent_strategy_directive),
             {
                 "role": "user",
                 "content": (
                     f"KC: {','.join(request.kc_codes)}; 自评等级: {request.profile_snapshot.python_self_rated_level}"
+                    + (
+                        f"; 目标难度: {request.target_difficulty}（低掌握→basic建信心，高掌握→hard促成长）"
+                        if request.target_difficulty else ""
+                    )
                 ),
             },
         ]
@@ -100,7 +108,9 @@ class PracticeAgent:
     def _fallback(self, request: ResourceProduceRequest) -> PracticeContent:
         kc = request.kc_codes[0]
         difficulty: str
-        if request.profile_snapshot.python_self_rated_level <= 2:
+        if request.target_difficulty:
+            difficulty = request.target_difficulty
+        elif request.profile_snapshot.python_self_rated_level <= 2:
             difficulty = "basic"
         elif request.profile_snapshot.python_self_rated_level == 3:
             difficulty = "medium"

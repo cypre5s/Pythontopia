@@ -1,5 +1,9 @@
 package com.pythontopia.world.boss;
 
+import com.pythontopia.coursepack.domain.CourseKc;
+import com.pythontopia.coursepack.repository.CoursePackRepository;
+import com.pythontopia.learner.mastery.MasteryRepository;
+import com.pythontopia.learner.mastery.MasterySnapshot;
 import com.pythontopia.world.boss.dto.BossAttemptRequest;
 import com.pythontopia.world.boss.dto.BossAttemptResultDto;
 import com.pythontopia.world.boss.dto.BossEvaluateResultDto;
@@ -9,8 +13,10 @@ import com.pythontopia.world.boss.dto.BossProblemRequest;
 import com.pythontopia.world.boss.dto.BossTestCasePayload;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import org.slf4j.Logger;
@@ -39,20 +45,31 @@ public class BossService {
   private static final Logger LOG = LoggerFactory.getLogger(BossService.class);
   private static final Duration CACHE_TTL = Duration.ofMinutes(30);
   private static final int EVAL_TIMEOUT_SEC = 5;
+  private static final long DEFAULT_PACK_ID = 43L;
 
   private final BossGraphClient graphClient;
+  private final MasteryRepository masteryRepository;
+  private final CoursePackRepository coursePackRepository;
   private final ConcurrentMap<String, CachedProblem> cache = new ConcurrentHashMap<>();
 
-  public BossService(BossGraphClient graphClient) {
+  public BossService(
+      BossGraphClient graphClient,
+      MasteryRepository masteryRepository,
+      CoursePackRepository coursePackRepository) {
     this.graphClient = graphClient;
+    this.masteryRepository = masteryRepository;
+    this.coursePackRepository = coursePackRepository;
   }
 
   public BossProblemDto fetchProblem(int chapter, BossProblemRequest request, Long userId) {
     // preferredKc 优先级高于旧 kcCode（前端 ArenaPage 走 preferredKc）。
     String effectiveKc = request.preferredKc() != null ? request.preferredKc() : request.kcCode();
     String kc = resolveKc(chapter, effectiveKc);
+    // 难度优先取前端显式请求；否则据该章 KC 的真实掌握度 + 置信度推断（学情驱动），而非仅按 stage。
     int difficulty =
-        request.difficulty() == null ? Math.min(5, request.stage()) : request.difficulty();
+        request.difficulty() != null
+            ? request.difficulty()
+            : computeTargetDifficulty(userId, kc, request.stage());
     try {
       BossInternalProblem fromGraph =
           graphClient.requestProblem(
@@ -160,6 +177,75 @@ public class BossService {
     }
     Instant now = Instant.now();
     cache.entrySet().removeIf(e -> Duration.between(e.getValue().cachedAt(), now).compareTo(CACHE_TTL) > 0);
+  }
+
+  /**
+   * Boss 目标难度 1..5：据锚定 KC 所在章节的真实掌握度 + 置信度推断（学情驱动出题）。无任何学情
+   * （新生 / 该章无掌握记录 / 课程包读失败）时退化为按 stage 的旧逻辑，保证演示链路不断。
+   */
+  int computeTargetDifficulty(Long userId, String anchorKc, int stage) {
+    int stageFallback = Math.min(5, Math.max(1, stage));
+    if (userId == null || anchorKc == null) {
+      return stageFallback;
+    }
+    try {
+      List<CourseKc> kcs = coursePackRepository.findKcs(DEFAULT_PACK_ID, null);
+      Long chapterId = null;
+      for (CourseKc kc : kcs) {
+        if (anchorKc.equals(kc.kcCode())) {
+          chapterId = kc.chapterId();
+          break;
+        }
+      }
+      if (chapterId == null) {
+        return stageFallback;
+      }
+      Set<String> chapterKcCodes = new HashSet<>();
+      for (CourseKc kc : kcs) {
+        if (chapterId.equals(kc.chapterId()) && kc.kcCode() != null) {
+          chapterKcCodes.add(kc.kcCode());
+        }
+      }
+      double scoreSum = 0.0;
+      double confSum = 0.0;
+      int n = 0;
+      for (MasterySnapshot s : masteryRepository.findAll(userId)) {
+        if (s.masteryScore() == null || !chapterKcCodes.contains(s.kcCode())) {
+          continue;
+        }
+        scoreSum += s.masteryScore().doubleValue();
+        confSum += s.confidence() == null ? 0.5 : s.confidence().doubleValue();
+        n++;
+      }
+      if (n == 0) {
+        return stageFallback;
+      }
+      return bossDifficulty(scoreSum / n, confSum / n);
+    } catch (RuntimeException ex) {
+      LOG.debug("boss target difficulty degraded for user {}: {}", userId, ex.getMessage());
+      return stageFallback;
+    }
+  }
+
+  /**
+   * 掌握度 + 置信度 → 难度 1..5 的纯函数（便于直接单测）：低掌握→易（建立信心），
+   * 高掌握 + 高置信且逼近本档上沿→难（促成长）；低置信度降一档。
+   */
+  static int bossDifficulty(double score, double confidence) {
+    int base = score < 0.2 ? 1 : score < 0.4 ? 2 : score < 0.6 ? 3 : score < 0.8 ? 4 : 5;
+    if (confidence < 0.4) {
+      return Math.max(1, base - 1);
+    }
+    if (confidence >= 0.7 && nearBandTop(score)) {
+      return Math.min(5, base + 1);
+    }
+    return base;
+  }
+
+  /** 逼近本 0.2 宽难度档上沿（本档后 1/4 区间）。 */
+  private static boolean nearBandTop(double score) {
+    double fraction = score * 5.0 - Math.floor(score * 5.0);
+    return fraction >= 0.75;
   }
 
   /** 章号 1..7 → 默认 KC 起始码（与 MainQuest data 表对齐）。 */

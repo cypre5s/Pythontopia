@@ -11,6 +11,7 @@ import ClassroomHotspotsTab from '@/components/teacher/ClassroomHotspotsTab.vue'
 import { useTeacherStore } from '@stores/teacher';
 import { useToastStore } from '@stores/toast';
 import { useClassroomLive } from '@/composables/useClassroomLive';
+import { triggerRemediation, type RemediationResultDto } from '@/api/teacher';
 import type { ClassroomQuestCreateRequest } from '@/api/dto/ClassroomQuest';
 
 const route = useRoute();
@@ -38,6 +39,23 @@ const classroom = computed(() => teacher.current.classroom);
 const dashboard = computed(() => teacher.current.dashboard);
 const members = computed(() => teacher.current.members);
 const quests = computed(() => teacher.current.quests);
+
+// ── 一键补救包（P6.1）：基于全班薄弱 KC 生成针对性补救资源 ──
+const remediationLoading = ref(false);
+const remediationError = ref<string | null>(null);
+const remediationResult = ref<RemediationResultDto | null>(null);
+
+async function generateRemediation(): Promise<void> {
+  remediationLoading.value = true;
+  remediationError.value = null;
+  try {
+    remediationResult.value = await triggerRemediation(classroomId.value);
+  } catch (error) {
+    remediationError.value = error instanceof Error ? error.message : '补救包生成失败';
+  } finally {
+    remediationLoading.value = false;
+  }
+}
 
 onMounted(async () => {
   await teacher.openClassroom(classroomId.value);
@@ -123,6 +141,65 @@ function back() {
           </button>
         </div>
       </header>
+
+      <!-- ── 一键补救包（P6.1）：全班薄弱 KC → 针对性补救资源 ── -->
+      <section
+        class="remediation"
+        data-testid="remediation-panel"
+      >
+        <div class="remediation__head">
+          <button
+            type="button"
+            class="remediation__btn"
+            data-testid="remediation-trigger"
+            :disabled="remediationLoading"
+            @click="generateRemediation"
+          >
+            {{ remediationLoading ? '生成中…' : '一键生成补救包' }}
+          </button>
+          <span class="remediation__hint">
+            基于全班薄弱 KC 自动生成针对性补救资源（含课件证据页）
+          </span>
+        </div>
+
+        <p
+          v-if="remediationError"
+          class="error"
+          data-testid="remediation-error"
+        >
+          补救包生成失败：{{ remediationError }}
+        </p>
+        <template v-else-if="remediationResult">
+          <p class="remediation__summary">
+            共发现 {{ remediationResult.weakKcCount }} 个薄弱知识点
+          </p>
+          <p
+            v-if="remediationResult.packs.length === 0"
+            class="empty"
+            data-testid="remediation-empty"
+          >
+            全班暂无明显薄弱知识点，无需补救。
+          </p>
+          <ul
+            v-else
+            class="remediation__packs"
+            data-testid="remediation-packs"
+          >
+            <li
+              v-for="pack in remediationResult.packs"
+              :key="pack.kcCode"
+              class="remediation__pack"
+              :data-testid="`remediation-pack-${pack.kcCode}`"
+            >
+              <span class="remediation__kc">{{ pack.kcName }}</span>
+              <span class="remediation__count">{{ pack.resourceIds.length }} 个补救资源</span>
+              <span class="remediation__pages">
+                证据页：{{ pack.evidencePageIds.length > 0 ? pack.evidencePageIds.join('、') : '—' }}
+              </span>
+            </li>
+          </ul>
+        </template>
+      </section>
 
       <nav class="tabs">
         <button
@@ -304,6 +381,78 @@ header h1 {
   background: var(--pyt-color-bg-soft);
   border-radius: var(--pyt-radius-lg);
   text-align: center;
+}
+
+/* ── 一键补救包 ── */
+.remediation {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--pyt-color-bg-soft);
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-lg);
+}
+.remediation__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.remediation__btn {
+  background: #2f5b8a;
+  color: var(--pyt-color-bg-elevated);
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+}
+.remediation__btn:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+.remediation__hint {
+  font-size: 12px;
+  color: var(--pyt-color-text-hint);
+}
+.remediation__summary {
+  margin: 0;
+  font-size: 13px;
+  color: var(--pyt-color-text-primary);
+  font-weight: 600;
+}
+.remediation__packs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.remediation__pack {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  background: var(--pyt-color-bg-elevated);
+  border: 1px solid var(--pyt-color-border);
+  border-radius: 6px;
+  font-size: 13px;
+}
+.remediation__kc {
+  font-weight: 600;
+  color: var(--pyt-color-text-primary);
+}
+.remediation__count {
+  font-size: 12px;
+  color: #2f5b8a;
+  white-space: nowrap;
+}
+.remediation__pages {
+  font-size: 12px;
+  color: var(--pyt-color-text-hint);
+  white-space: nowrap;
 }
 
 .live-tab { display: grid; gap: 12px; }

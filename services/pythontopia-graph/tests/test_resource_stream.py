@@ -6,6 +6,7 @@ from pythontopia_graph.graph.resource_graph import ResourceGraph, ResourceGraphC
 from pythontopia_graph.llm.provider import LlmProvider, LlmResponse
 from pythontopia_graph.nodes.evidence_fetcher import RagHit, StaticEvidenceFetcher
 from pythontopia_graph.schemas.resource import ResourceProduceRequest
+from pythontopia_graph.schemas.resource import HandoutContent, PageRef
 
 VALID_FINISH_STATUSES = {"ok", "retry", "fail"}
 
@@ -57,7 +58,7 @@ async def _collect(
 
 
 @pytest.mark.asyncio
-async def test_stream_first_event_is_plan_with_five_nodes() -> None:
+async def test_stream_first_event_is_plan_with_six_nodes() -> None:
     events = await _collect(_graph(), request_of("HANDOUT"))
 
     assert events, "expected at least one streamed event"
@@ -66,12 +67,13 @@ async def test_stream_first_event_is_plan_with_five_nodes() -> None:
     assert first_data["type"] == "HANDOUT"
 
     nodes = first_data["nodes"]
-    assert len(nodes) == 5
+    assert len(nodes) == 6
     assert [n["kind"] for n in nodes] == [
         "evidence",
         "designer",
         "grounding",
         "hallucination",
+        "grounding",
         "safety",
     ]
     designer = next(n for n in nodes if n["kind"] == "designer")
@@ -128,3 +130,41 @@ async def test_stream_storyboard_designer_node_is_real_agent() -> None:
     ]
     assert "start" in designer_phases
     assert "finish" in designer_phases
+
+
+@pytest.mark.asyncio
+async def test_stream_semantic_grounding_failure_retries_and_ends_error() -> None:
+    bad_payload = {
+        "title": "讲义",
+        "summary": "包含未经证据支持的强断言",
+        "handout": HandoutContent(
+            sections=[
+                {
+                    "heading": "section",
+                    "paragraphs": ["根据第 999 页可知 input 函数总是运行 3 秒。"],
+                    "page_refs": [
+                        PageRef(page_id=999, page_no=999, chapter_id=3).model_dump()
+                    ],
+                }
+            ]
+        ).model_dump(),
+    }
+    graph = ResourceGraph(
+        provider=StubProvider([bad_payload, bad_payload, bad_payload]),
+        evidence_fetcher=StaticEvidenceFetcher([HIT]),
+        config=ResourceGraphConfig(valid_kc_codes={"PY43-KC-001"}),
+    )
+
+    events = await _collect(graph, request_of("HANDOUT"))
+
+    semantic_finishes = [
+        data
+        for event, data in events
+        if event == "trace"
+        and data["node"] == "semantic_grounding"
+        and data["phase"] == "finish"
+    ]
+    assert semantic_finishes
+    assert all(data["status"] == "retry" for data in semantic_finishes)
+    assert events[-1][0] == "error"
+    assert events[-1][1]["code"] == "RESOURCE_GRAPH_FAILED"

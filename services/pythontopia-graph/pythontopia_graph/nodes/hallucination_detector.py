@@ -59,8 +59,57 @@ def hallucination_detector(
                 reasons.append(f"Practice '{problem.title}' missing sample_io")
 
     _check_ungrounded_numbers(draft, evidence, reasons)
+    _check_difficulty_declarations(draft, reasons)
 
     return GroundingResult(passed=not reasons, reasons=reasons)
+
+
+# 难度合法集合（与 ProblemSpec.difficulty Literal 对齐）。
+_VALID_DIFFICULTIES = {"basic", "medium", "hard"}
+
+# 题面/标题里的中英文难度词 → 规范标签，用于比对文本声明与 difficulty 字段。
+_DIFFICULTY_ALIASES: dict[str, str] = {
+    "basic": "basic", "简单": "basic", "基础": "basic", "入门": "basic", "容易": "basic",
+    "medium": "medium", "中等": "medium", "中级": "medium", "进阶": "medium",
+    "hard": "hard", "困难": "hard", "高级": "hard", "挑战": "hard",
+}
+
+# 显式难度声明：「难度：X」「难度 为 X」「difficulty: X」（须带分隔符，避免误伤「难度较高」等行文）。
+# 中文捕 1-2 字（基础/困难/中等…），英文捕单词，其后由 token 边界天然截断。
+_DIFFICULTY_DECL_PATTERN = re.compile(
+    r"(?:难度\s*[:：为]\s*|difficulty\s*[:=]\s*)([A-Za-z]+|[\u4e00-\u9fff]{1,2})",
+    re.IGNORECASE,
+)
+
+
+def _check_difficulty_declarations(draft: ResourceDraft, reasons: list[str]) -> None:
+    """校验练习题的难度声明（plan 3.2 step 2）：
+
+    - difficulty 字段必须属于 {basic, medium, hard}（schema 已约束，留作纵深防御）；
+    - 题面/标题/提示里的显式难度声明（「难度：X」）须是已知标签，且与 difficulty 字段一致，
+      拦截「未知标签」与「字段与题面自相矛盾」两类幻觉。
+    """
+    if not isinstance(draft.practice, PracticeContent):
+        return
+    for problem in draft.practice.problems:
+        declared = str(getattr(problem, "difficulty", "") or "").strip().lower()
+        if declared and declared not in _VALID_DIFFICULTIES:
+            reasons.append(
+                f"Practice '{problem.title}' invalid difficulty label: {declared}"
+            )
+        text = " ".join([problem.title, problem.statement_md, *problem.hints])
+        for raw in _DIFFICULTY_DECL_PATTERN.findall(text):
+            token = raw.strip().lower()
+            mapped = _DIFFICULTY_ALIASES.get(token)
+            if mapped is None:
+                reasons.append(
+                    f"Practice '{problem.title}' unknown difficulty declaration: {raw}"
+                )
+            elif declared in _VALID_DIFFICULTIES and mapped != declared:
+                reasons.append(
+                    f"Practice '{problem.title}' contradictory difficulty: "
+                    f"declared={declared}, text says {raw}"
+                )
 
 
 # 统计型「数字幻觉」高发模式：百分比 与 4 位及以上整数（年份/大额统计）。

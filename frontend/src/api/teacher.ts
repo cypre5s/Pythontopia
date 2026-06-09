@@ -116,3 +116,31 @@ export async function fetchRecentActivity(
   );
   return response.data;
 }
+
+/** 单个薄弱 KC 的补救包：针对该 KC 生成的补救资源 + 命中的课件证据页。 */
+export interface RemediationPackDto {
+  kcCode: string;
+  kcName: string;
+  resourceIds: number[];
+  evidencePageIds: number[];
+}
+
+/** 班级「一键补救」结果：全班薄弱 KC 数 + 每个薄弱 KC 的补救包。 */
+export interface RemediationResultDto {
+  classroomId: number;
+  weakKcCount: number;
+  packs: RemediationPackDto[];
+}
+
+/**
+ * 一键生成班级补救包：基于全班薄弱 KC 为每个薄弱点生成针对性补救资源。
+ * 契约：POST /api/teacher/classrooms/{classroomId}/remediation（教师 JWT）。
+ */
+export async function triggerRemediation(
+  classroomId: number,
+): Promise<RemediationResultDto> {
+  const response = await http.post<RemediationResultDto>(
+    `/api/teacher/classrooms/${classroomId}/remediation`,
+  );
+  return response.data;
+}

@@ -9,9 +9,13 @@
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
 from pythontopia_graph.nodes.evidence_fetcher import RagHit
 from pythontopia_graph.schemas.tutor import GroundingResult, SafetyResult
+
+if TYPE_CHECKING:
+    from pythontopia_graph.llm.provider import LlmProvider
 
 # 答案里的课件引用标记：`[页 12]` / `[页12]`（SYSTEM_PROMPT 要求有证据时必须这样引用）。
 _CITATION_PATTERN = re.compile(r"\[页\s*(\d+)\]")
@@ -97,3 +101,28 @@ def safety_review(answer_md: str) -> SafetyResult:
             reasons.append("DANGEROUS_CODE")
             break
     return SafetyResult(passed=not reasons, reasons=reasons)
+
+
+async def semantic_review(
+    answer_md: str,
+    evidence_chunks: list[RagHit],
+    provider: LlmProvider | None = None,
+) -> GroundingResult:
+    """语义接地·核验官：规则查引用页码+强断言支撑；规则通过且有 provider/证据时，
+
+    再用 LLM entailment 判「页码对但论述歪曲证据」——规则查不出的最大漏洞（plan 3.4）。
+    规则已失败直接返回（不再花 LLM）；无 provider/无证据/异常 降级纯规则，成本守恒。
+    """
+    from pythontopia_graph.nodes.semantic_grounding_verifier import (
+        verify_answer_entailment,
+        verify_answer_grounding,
+    )
+    ok, reasons = verify_answer_grounding(answer_md, evidence_chunks)
+    if not ok or provider is None or not evidence_chunks:
+        return GroundingResult(passed=ok, reasons=reasons)
+    ent_ok, ent_reasons = await verify_answer_entailment(
+        answer_md, evidence_chunks, provider
+    )
+    if ent_ok:
+        return GroundingResult(passed=True, reasons=reasons)
+    return GroundingResult(passed=False, reasons=list(reasons) + list(ent_reasons))

@@ -6,12 +6,18 @@ directive 映射对齐 TutorAgent._cognitive_style_directive；集成断言走 _
 
 from __future__ import annotations
 
+import pytest
+
 from pythontopia_graph.agents.code_lab_agent import CodeLabAgent
 from pythontopia_graph.agents.handout_agent import HandoutAgent
+from pythontopia_graph.agents.mind_map_agent import MindMapAgent
 from pythontopia_graph.agents.personalization import (
     personalization_messages,
     resource_personalization_directive,
 )
+from pythontopia_graph.agents.practice_agent import PracticeAgent
+from pythontopia_graph.agents.reading_agent import ReadingAgent
+from pythontopia_graph.agents.storyboard_agent import StoryboardAgent
 from pythontopia_graph.nodes.evidence_fetcher import EvidenceBundle, RagHit
 from pythontopia_graph.schemas.resource import ProfileSnapshot, ResourceProduceRequest
 
@@ -222,3 +228,62 @@ def test_handout_prompt_skips_personalization_when_empty() -> None:
     assert messages[-1]["role"] == "user"
     system_text = " ".join(m["content"] for m in messages if m["role"] == "system")
     assert "易错点" not in system_text
+
+
+# 团队策略 directive（Task 4.1：agent_strategy_directive，与后端 snake_case 契约对齐）
+
+_STRATEGY_DIRECTIVE = "多给可运行示例，少堆术语；先讲直觉再上代码。"
+_RESOURCE_AGENTS = [
+    HandoutAgent,
+    MindMapAgent,
+    PracticeAgent,
+    CodeLabAgent,
+    ReadingAgent,
+    StoryboardAgent,
+]
+
+
+def _strategy_request(directive: str | None) -> ResourceProduceRequest:
+    return ResourceProduceRequest(
+        user_id=1,
+        kc_codes=["PY43-KC-001"],
+        type="HANDOUT",  # type: ignore[arg-type]
+        agent_strategy_directive=directive,
+    )
+
+
+def _build_prompt(agent: object, request: ResourceProduceRequest) -> list[dict[str, str]]:
+    # CodeLabAgent._prompt 不收 evidence；其余资源 Agent 收 evidence。
+    if isinstance(agent, CodeLabAgent):
+        return agent._prompt(request)  # type: ignore[attr-defined]
+    return agent._prompt(request, EVIDENCE)  # type: ignore[attr-defined]
+
+
+@pytest.mark.parametrize("agent_cls", _RESOURCE_AGENTS)
+def test_agent_strategy_directive_injected_when_present(agent_cls) -> None:
+    agent = agent_cls(provider=None)
+    messages = _build_prompt(agent, _strategy_request(_STRATEGY_DIRECTIVE))
+    text = " ".join(m["content"] for m in messages)
+    assert _STRATEGY_DIRECTIVE in text
+    assert "团队策略提示" in text
+
+
+@pytest.mark.parametrize("agent_cls", _RESOURCE_AGENTS)
+def test_agent_strategy_directive_absent_when_none(agent_cls) -> None:
+    agent = agent_cls(provider=None)
+    messages = _build_prompt(agent, _strategy_request(None))
+    text = " ".join(m["content"] for m in messages)
+    assert "团队策略提示" not in text
+
+
+def test_agent_strategy_directive_is_snake_case_contract() -> None:
+    # 后端按 snake_case 下发；字段名必须正好是 agent_strategy_directive。
+    request = ResourceProduceRequest.model_validate(
+        {
+            "user_id": 1,
+            "kc_codes": ["PY43-KC-001"],
+            "type": "HANDOUT",
+            "agent_strategy_directive": _STRATEGY_DIRECTIVE,
+        }
+    )
+    assert request.agent_strategy_directive == _STRATEGY_DIRECTIVE

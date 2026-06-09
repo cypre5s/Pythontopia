@@ -212,6 +212,16 @@ public class PracticeSubmissionRepository {
     return count == null ? 0 : count;
   }
 
+  /**
+   * 取「该用户提交」级别的 Postgres 事务咨询锁（{@code pg_advisory_xact_lock}）。锁随当前事务提交/回滚
+   * 自动释放，故必须在 {@code @Transactional} 方法内调用。用途：让同一 userId 的并发正式提交在同一事务
+   * 内串行化，消除「先 count 再 insert」的 TOCTOU 限频竞态（P0.3）。本仓库咨询锁空间仅此一处使用，
+   * 直接以 userId 作为 bigint 锁键，无命名空间冲突。
+   */
+  public void acquireUserSubmitLock(Long userId) {
+    jdbcTemplate.queryForObject("SELECT pg_advisory_xact_lock(?)", Object.class, userId);
+  }
+
   public int countSubmittedAfter(Long userId, OffsetDateTime since) {
     Integer count =
         jdbcTemplate.queryForObject(

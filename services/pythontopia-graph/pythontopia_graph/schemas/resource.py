@@ -136,6 +136,13 @@ class ResourceProduceRequest(BaseModel):
     type: ResourceType
     focus_hint: str | None = Field(default=None, max_length=512)
     profile_snapshot: ProfileSnapshot = Field(default_factory=ProfileSnapshot)
+    target_difficulty: str | None = Field(
+        default=None,
+        description="难度目标(basic/medium/hard)，弱→稍易建立信心，临界→略高促成长",
+    )
+    # 后端注入的团队/自进化策略提示（snake_case 契约：agent_strategy_directive，固定不可改名）；
+    # 为空时各资源 Agent 行为不变，非空时折进 _prompt（「团队策略提示：…」）。
+    agent_strategy_directive: str | None = Field(default=None, max_length=2000)
 
 
 class GroundingResult(BaseModel):

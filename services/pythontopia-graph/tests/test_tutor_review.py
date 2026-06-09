@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+
+import pytest
+
+from pythontopia_graph.llm.provider import LlmProvider, LlmResponse
 from pythontopia_graph.nodes.evidence_fetcher import RagHit
 from pythontopia_graph.nodes.tutor_review import (
     grounding_review,
     hallucination_review,
     safety_review,
+    semantic_review,
 )
 
 
@@ -78,3 +84,49 @@ def test_safety_flags_pii() -> None:
 
 def test_safety_passes_clean_answer() -> None:
     assert safety_review("for 循环可以遍历列表，先想想边界条件。").passed is True
+
+
+# ── 语义接地（P3.4：规则 + LLM entailment 双轨） ──
+class _AnswerEntailmentStub(LlmProvider):
+    """按预设裁决返回 entailment 结果，记录调用次数。"""
+
+    def __init__(self, verdict: dict) -> None:
+        self._verdict = verdict
+        self.calls = 0
+
+    async def chat(self, messages, **kwargs):  # type: ignore[override]
+        self.calls += 1
+        return LlmResponse(content_json=self._verdict)
+
+    async def chat_stream(self, messages, **kwargs) -> AsyncIterator[str]:  # type: ignore[override]
+        yield ""
+
+
+@pytest.mark.asyncio
+async def test_semantic_review_entailment_flags_distortion() -> None:
+    """页码合法但论述歪曲证据 → entailment 判 unsupported（规则查不出）。"""
+    hits = [_hit(12, "for 循环遍历可迭代对象。")]
+    answer = "参考 [页 12]，根据第12页 for 循环只能遍历列表。"  # 引用合法但歪曲
+    provider = _AnswerEntailmentStub({"supported": False, "reason": "歪曲证据"})
+    result = await semantic_review(answer, hits, provider)
+    assert result.passed is False
+    assert any("歪曲" in r for r in result.reasons)
+    assert provider.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_semantic_review_rule_only_without_provider() -> None:
+    """无 provider 时降级纯规则（引用合法 → 通过），不调用 LLM。"""
+    hits = [_hit(12, "for 循环遍历可迭代对象。")]
+    result = await semantic_review("参考 [页 12] 可知 for 循环遍历。", hits, None)
+    assert result.passed is True
+
+
+@pytest.mark.asyncio
+async def test_semantic_review_rule_failure_short_circuits_entailment() -> None:
+    """规则已判编造页码失败时直接返回，不再花费 LLM。"""
+    hits = [_hit(12, "for 循环遍历可迭代对象。")]
+    provider = _AnswerEntailmentStub({"supported": True})
+    result = await semantic_review("见 [页 99]。", hits, provider)
+    assert result.passed is False
+    assert provider.calls == 0

@@ -34,7 +34,7 @@ public class MasteryRepository {
         .findFirst();
   }
 
-  List<MasterySnapshot> findAll(Long userId) {
+  public List<MasterySnapshot> findAll(Long userId) {
     return jdbcTemplate.query(
         """
         SELECT id, user_id, kc_code, mastery_score, confidence, last_event_at, updated_at
@@ -88,7 +88,7 @@ public class MasteryRepository {
         reason);
   }
 
-  List<MasteryEventRecord> recentEvents(Long userId, String kcCode, int limit) {
+  public List<MasteryEventRecord> recentEvents(Long userId, String kcCode, int limit) {
     return jdbcTemplate.query(
         """
         SELECT id, user_id, kc_code, source, delta, reason, created_at

@@ -57,6 +57,9 @@ public class SubmissionService {
       throw new BusinessException(
           HttpStatus.BAD_REQUEST, "SUBMISSION_CODE_EMPTY", "代码不能为空");
     }
+    // 先取每用户事务咨询锁，让同一 userId 的并发提交串行化；之后的「count + insert」整体原子，
+    // 消除限频 TOCTOU 竞态。锁在本事务提交/回滚时自动释放。
+    submissionRepository.acquireUserSubmitLock(userId);
     enforceRateLimit(userId);
     problemRepository
         .findPublic(43L, request.problemId())

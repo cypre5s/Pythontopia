@@ -7,7 +7,10 @@ from pythontopia_graph.nodes.hallucination_detector import hallucination_detecto
 from pythontopia_graph.schemas.resource import (
     HandoutContent,
     HandoutSection,
+    PracticeContent,
+    ProblemSpec,
     ResourceDraft,
+    SampleIo,
 )
 
 VALID_KCS = {"PY43-KC-001"}
@@ -66,3 +69,82 @@ def test_skips_when_no_evidence() -> None:
         draft, EvidenceBundle(chunks=[], no_evidence_found=True), VALID_KCS
     )
     assert result.passed
+
+
+# ── P3.2 难度声明校验（plan 3.2 step 2） ──
+
+
+def _practice(statement: str, *, difficulty: str = "basic", title: str = "练习题") -> ResourceDraft:
+    return ResourceDraft(
+        title="练习",
+        summary="t",
+        content_format="STRUCT_JSON",
+        practice=PracticeContent(
+            problems=[
+                ProblemSpec(
+                    title=title,
+                    statement_md=statement,
+                    sample_io=[SampleIo(input="1", output="1")],
+                    kc_codes=["PY43-KC-001"],
+                    difficulty=difficulty,  # type: ignore[arg-type]
+                )
+            ]
+        ),
+    )
+
+
+def test_contradictory_difficulty_declaration_flagged() -> None:
+    # 字段标 basic，但题面声明「难度：困难」→ 矛盾，必须拦截。
+    draft = _practice("请完成以下任务。难度：困难。", difficulty="basic")
+    result = hallucination_detector(draft, _evidence("任务说明。"), VALID_KCS)
+    assert not result.passed
+    assert any("difficulty" in r.lower() for r in result.reasons)
+
+
+def test_unknown_difficulty_declaration_flagged() -> None:
+    # 题面声明未知难度标签「专家」（不属于 basic/medium/hard）→ 拦截。
+    draft = _practice("请完成任务。难度：专家。", difficulty="basic")
+    result = hallucination_detector(draft, _evidence("任务说明。"), VALID_KCS)
+    assert not result.passed
+    assert any("difficulty" in r.lower() for r in result.reasons)
+
+
+def test_consistent_difficulty_declaration_passes() -> None:
+    # 字段 hard 且题面「难度：困难」一致 → 通过。
+    draft = _practice("挑战任务。难度：困难。", difficulty="hard")
+    result = hallucination_detector(draft, _evidence("任务说明。"), VALID_KCS)
+    assert result.passed, result.reasons
+
+
+def test_no_difficulty_declaration_passes() -> None:
+    # 题面无显式难度声明 → 不触发难度校验。
+    draft = _practice("请读入数据并输出求和结果。", difficulty="medium")
+    result = hallucination_detector(draft, _evidence("求和说明。"), VALID_KCS)
+    assert result.passed, result.reasons
+
+
+def test_invalid_difficulty_field_flagged() -> None:
+    # 纵深防御：即便绕过 schema 注入非法 difficulty 字段，detector 也拦截。
+    problem = ProblemSpec.model_construct(
+        title="练习题",
+        statement_md="完成任务。",
+        hints=[],
+        sample_io=[SampleIo(input="1", output="1")],
+        kc_codes=["PY43-KC-001"],
+        difficulty="expert",
+    )
+    practice = PracticeContent.model_construct(problems=[problem])
+    draft = ResourceDraft.model_construct(
+        title="练习",
+        summary="t",
+        content_format="STRUCT_JSON",
+        handout=None,
+        mindmap=None,
+        practice=practice,
+        code_lab=None,
+        reading=None,
+        storyboard=None,
+    )
+    result = hallucination_detector(draft, _evidence("任务说明。"), VALID_KCS)
+    assert not result.passed
+    assert any("invalid difficulty" in r.lower() for r in result.reasons)
