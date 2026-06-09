@@ -1,9 +1,11 @@
 package com.pythontopia.learner.memory;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -14,6 +16,7 @@ import com.pythontopia.learner.memory.dto.MemoryItemDto;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 /** 记忆检索服务单测：打分排序、limit clamp、DTO 分数分解、中文摘要、同章相关性解析。 */
@@ -24,8 +27,12 @@ class MemoryRetrievalServiceTest {
 
   private final LearningEventLogRepository eventRepo = mock(LearningEventLogRepository.class);
   private final CoursePackRepository coursePackRepository = mock(CoursePackRepository.class);
+  private final EmbeddingClient embeddingClient = mock(EmbeddingClient.class);
+  private final MemoryEmbeddingRepository memoryEmbeddingRepository =
+      mock(MemoryEmbeddingRepository.class);
   private final MemoryRetrievalService service =
-      new MemoryRetrievalService(eventRepo, coursePackRepository);
+      new MemoryRetrievalService(
+          eventRepo, coursePackRepository, embeddingClient, memoryEmbeddingRepository);
 
   private static MemoryRow row(
       long id, String type, List<String> kcCodes, int importance, Instant createdAt) {
@@ -160,5 +167,39 @@ class MemoryRetrievalServiceTest {
     List<MemoryItemDto> items = service.retrieve(7L, "PY43-KC-016", 8);
     assertThat(items).hasSize(1);
     assertThat(items.get(0).relevanceScore()).isEqualTo(0.0);
+  }
+
+  @Test
+  void queryTextBlendsSemanticSimilarityIntoRelevance() {
+    // KC 不命中但语义相近：借 queryText 余弦召回，relevance 提升。
+    when(eventRepo.findRecentForMemory(eq(7L), anyInt()))
+        .thenReturn(
+            List.of(
+                row(10, "practice_failed", List.of("PY43-KC-099"), 3, NOW),
+                row(11, "practice_failed", List.of("PY43-KC-001"), 3, NOW)));
+    when(coursePackRepository.findKcs(eq(43L), eq(null))).thenReturn(List.of());
+    when(embeddingClient.embed("列表别名")).thenReturn(Optional.of(new float[] {1f, 0f}));
+    when(memoryEmbeddingRepository.searchByCosine(eq(7L), any(), anyInt()))
+        .thenReturn(List.of(new MemoryEmbeddingRepository.ScoredEvent(10L, 0.9)));
+
+    List<MemoryItemDto> items = service.retrieve(7L, "PY43-KC-016", "列表别名", 8);
+
+    MemoryItemDto event10 =
+        items.stream().filter(item -> item.eventId() == 10L).findFirst().orElseThrow();
+    assertThat(event10.relevanceScore()).isEqualTo(0.9);
+  }
+
+  @Test
+  void queryTextWithoutVectorFallsBackToKcMatch() {
+    // embedding 离线（embed 返回空）→ 不触达向量库，退化为纯 KC 匹配（零回归）。
+    when(eventRepo.findRecentForMemory(eq(7L), anyInt()))
+        .thenReturn(List.of(row(10, "practice_failed", List.of("PY43-KC-099"), 3, NOW)));
+    when(coursePackRepository.findKcs(eq(43L), eq(null))).thenReturn(List.of());
+    when(embeddingClient.embed(any())).thenReturn(Optional.empty());
+
+    List<MemoryItemDto> items = service.retrieve(7L, "PY43-KC-016", "任意查询", 8);
+
+    assertThat(items.get(0).relevanceScore()).isEqualTo(0.0);
+    verifyNoInteractions(memoryEmbeddingRepository);
   }
 }

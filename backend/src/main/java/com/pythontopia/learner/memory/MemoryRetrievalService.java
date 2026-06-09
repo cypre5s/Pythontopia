@@ -7,8 +7,11 @@ import com.pythontopia.learner.event.LearningEventLogRepository;
 import com.pythontopia.learner.memory.dto.MemoryItemDto;
 import java.time.Instant;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,11 +42,18 @@ public class MemoryRetrievalService {
 
   private final LearningEventLogRepository eventRepository;
   private final CoursePackRepository coursePackRepository;
+  private final EmbeddingClient embeddingClient;
+  private final MemoryEmbeddingRepository memoryEmbeddingRepository;
 
   public MemoryRetrievalService(
-      LearningEventLogRepository eventRepository, CoursePackRepository coursePackRepository) {
+      LearningEventLogRepository eventRepository,
+      CoursePackRepository coursePackRepository,
+      EmbeddingClient embeddingClient,
+      MemoryEmbeddingRepository memoryEmbeddingRepository) {
     this.eventRepository = eventRepository;
     this.coursePackRepository = coursePackRepository;
+    this.embeddingClient = embeddingClient;
+    this.memoryEmbeddingRepository = memoryEmbeddingRepository;
   }
 
   /**
@@ -54,18 +64,60 @@ public class MemoryRetrievalService {
    */
   @Transactional(readOnly = true)
   public List<MemoryItemDto> retrieve(Long userId, String focusKc, int limit) {
+    return retrieve(userId, focusKc, null, limit);
+  }
+
+  /**
+   * 取该生 topK 记忆，支持可选语义查询。
+   *
+   * @param queryText 可空；非空且 embedding 可用时按余弦相似度并入 relevance（{@code max(KC 匹配, 余弦)}）；
+   *     embedding 离线 / 返回空时静默退化为纯 KC 匹配（零回归）。
+   */
+  @Transactional(readOnly = true)
+  public List<MemoryItemDto> retrieve(Long userId, String focusKc, String queryText, int limit) {
     int safeLimit = clampLimit(limit);
     List<MemoryRow> rows = eventRepository.findRecentForMemory(userId, SCAN_WINDOW);
     if (rows.isEmpty()) {
       return List.of();
     }
     Set<String> sameChapterKcCodes = resolveSameChapterKcCodes(focusKc);
+    Map<Long, Double> semanticSims = resolveSemanticSims(userId, queryText);
     Instant now = Instant.now();
     return rows.stream()
-        .map(row -> toDto(row, MemoryScorer.score(row, focusKc, sameChapterKcCodes, now)))
+        .map(
+            row ->
+                toDto(
+                    row,
+                    MemoryScorer.score(
+                        row,
+                        focusKc,
+                        sameChapterKcCodes,
+                        semanticSims.getOrDefault(row.eventId(), 0.0),
+                        now)))
         .sorted(Comparator.comparingDouble(MemoryItemDto::totalScore).reversed())
         .limit(safeLimit)
         .toList();
+  }
+
+  /**
+   * queryText → 查询向量 → 该用户记忆余弦相似度 {@code map(eventId→sim)}。无 queryText / embedding 离线
+   * / 无命中 → 空 map（检索退化为纯 KC 匹配，不抛、不调向量库）。
+   */
+  private Map<Long, Double> resolveSemanticSims(Long userId, String queryText) {
+    if (queryText == null || queryText.isBlank()) {
+      return Map.of();
+    }
+    Optional<float[]> queryVector = embeddingClient.embed(queryText);
+    if (queryVector.isEmpty()) {
+      return Map.of();
+    }
+    List<MemoryEmbeddingRepository.ScoredEvent> hits =
+        memoryEmbeddingRepository.searchByCosine(userId, queryVector.get(), SCAN_WINDOW);
+    Map<Long, Double> sims = new HashMap<>();
+    for (MemoryEmbeddingRepository.ScoredEvent hit : hits) {
+      sims.put(hit.eventId(), hit.similarity());
+    }
+    return sims;
   }
 
   private static int clampLimit(int limit) {

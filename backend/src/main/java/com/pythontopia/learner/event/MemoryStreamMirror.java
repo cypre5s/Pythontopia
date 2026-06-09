@@ -1,5 +1,6 @@
 package com.pythontopia.learner.event;
 
+import com.pythontopia.learner.memory.MemoryEmbeddingWriter;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,9 +30,12 @@ public class MemoryStreamMirror {
   private static final Logger log = LoggerFactory.getLogger(MemoryStreamMirror.class);
 
   private final LearningEventLogRepository repository;
+  private final MemoryEmbeddingWriter embeddingWriter;
 
-  public MemoryStreamMirror(LearningEventLogRepository repository) {
+  public MemoryStreamMirror(
+      LearningEventLogRepository repository, MemoryEmbeddingWriter embeddingWriter) {
     this.repository = repository;
+    this.embeddingWriter = embeddingWriter;
   }
 
   @EventListener
@@ -126,7 +130,8 @@ public class MemoryStreamMirror {
 
   private void mirror(Long userId, String eventType, Map<String, Object> payload) {
     try {
-      repository.insert(userId, eventType, payload, SOURCE, EventImportance.of(eventType));
+      long eventId = repository.insert(userId, eventType, payload, SOURCE, EventImportance.of(eventType));
+      embeddingWriter.embedAndStore(eventId, eventType, payload);
     } catch (RuntimeException ex) {
       log.warn(
           "MemoryStreamMirror skip event userId={} type={}: {}",

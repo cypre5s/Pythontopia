@@ -9,7 +9,9 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
+import com.pythontopia.learner.memory.MemoryEmbeddingWriter;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -18,7 +20,8 @@ import org.mockito.ArgumentCaptor;
 class MemoryStreamMirrorTest {
 
   private final LearningEventLogRepository repository = mock(LearningEventLogRepository.class);
-  private final MemoryStreamMirror mirror = new MemoryStreamMirror(repository);
+  private final MemoryEmbeddingWriter embeddingWriter = mock(MemoryEmbeddingWriter.class);
+  private final MemoryStreamMirror mirror = new MemoryStreamMirror(repository, embeddingWriter);
 
   @Test
   @SuppressWarnings("unchecked")
@@ -32,6 +35,7 @@ class MemoryStreamMirrorTest {
     assertThat(payload).containsEntry("kcCode", "PY43-KC-016");
     assertThat(payload).containsEntry("problemId", 5L);
     assertThat(payload).containsEntry("failureKind", "WA");
+    verify(embeddingWriter).embedAndStore(eq(0L), eq("practice_failed"), payloadCaptor.getValue());
   }
 
   @Test
@@ -56,5 +60,6 @@ class MemoryStreamMirrorTest {
 
     // 镜像写表抛异常时不得向上传播，否则会中断事件发布与 mastery/画像回写主链路。
     mirror.onPracticeFailed(new LearningEvent.PracticeFailed(7L, "K", 1L, "WA"));
+    verifyNoInteractions(embeddingWriter);
   }
 }

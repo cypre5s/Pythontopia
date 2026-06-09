@@ -23,7 +23,7 @@ public class LearningEventLogRepository {
     this.objectMapper = objectMapper;
   }
 
-  public void insert(
+  public long insert(
       Long userId, String eventType, Map<String, Object> payload, String source, int importance) {
     String payloadJson;
     try {
@@ -31,9 +31,17 @@ public class LearningEventLogRepository {
     } catch (JsonProcessingException e) {
       payloadJson = "{}";
     }
-    jdbc.update(
-        "INSERT INTO learning_event_log (user_id, event_type, payload, source, importance) VALUES (?, ?, ?::jsonb, ?, ?)",
-        userId, eventType, payloadJson, source, importance);
+    Long id =
+        jdbc.queryForObject(
+            "INSERT INTO learning_event_log (user_id, event_type, payload, source, importance) "
+                + "VALUES (?, ?, ?::jsonb, ?, ?) RETURNING id",
+            Long.class,
+            userId,
+            eventType,
+            payloadJson,
+            source,
+            importance);
+    return id == null ? 0L : id;
   }
 
   public List<Map<String, Object>> findByUser(Long userId, int limit) {
