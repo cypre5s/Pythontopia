@@ -3,6 +3,7 @@ import { ref } from 'vue';
 import { useLearningStore } from '@stores/learning';
 import { useToastStore } from '@stores/toast';
 import PyButton from '@/components/ui/PyButton.vue';
+import PyTabs from '@/components/ui/PyTabs.vue';
 import TodayQuestsTab from './TodayQuestsTab.vue';
 import PathTreeTab from './PathTreeTab.vue';
 import ClassroomQuestsTab from './ClassroomQuestsTab.vue';
@@ -36,6 +37,10 @@ async function planNow(): Promise<void> {
     planning.value = false;
   }
 }
+
+function selectTab(key: string): void {
+  activeTab.value = key as TabKey;
+}
 </script>
 
 <template>
@@ -44,13 +49,7 @@ async function planNow(): Promise<void> {
     data-testid="board-panel"
   >
     <header class="header">
-      <div>
-        <h2>公告板</h2>
-        <p class="hint">
-          公告板是教育闭环的"播种 → 浇水"调度站：今日任务、本周路径与班级任务全部真实落库；
-          点击"规划本周路径"由 PathPlannerAgent 基于你的画像 + KC mastery 即时生成。
-        </p>
-      </div>
+      <h2>公告板</h2>
       <PyButton
         variant="primary"
         test-id="board-plan"
@@ -61,18 +60,12 @@ async function planNow(): Promise<void> {
       </PyButton>
     </header>
 
-    <nav class="tabs">
-      <button
-        v-for="tab in TABS"
-        :key="tab.key"
-        type="button"
-        :class="['tab', { active: activeTab === tab.key }]"
-        :data-testid="`tab-${tab.key}`"
-        @click="activeTab = tab.key"
-      >
-        {{ tab.label }}
-      </button>
-    </nav>
+    <PyTabs
+      :tabs="TABS"
+      :model-value="activeTab"
+      test-id-prefix="tab"
+      @update:model-value="selectTab"
+    />
 
     <TodayQuestsTab v-if="activeTab === 'today'" />
     <PathTreeTab v-else-if="activeTab === 'path'" />
@@ -98,29 +91,5 @@ async function planNow(): Promise<void> {
 }
 .header h2 {
   margin: 0;
-}
-.hint {
-  margin: 4px 0 0;
-  color: var(--pyt-color-text-hint);
-  font-size: 12px;
-}
-.tabs {
-  display: flex;
-  gap: 6px;
-  border-bottom: 2px solid var(--pyt-color-border);
-}
-.tab {
-  background: var(--pyt-color-bg-elevated);
-  border: 1px solid var(--pyt-color-border);
-  border-bottom: none;
-  padding: 6px 12px;
-  cursor: pointer;
-  border-radius: 6px 6px 0 0;
-  font-weight: 600;
-  color: var(--pyt-color-text-primary);
-}
-.tab.active {
-  background: var(--pyt-color-text-hint);
-  color: var(--pyt-color-bg-elevated);
 }
 </style>
