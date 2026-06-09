@@ -14,7 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /** NPC 对话服务：回忆该 NPC 视角的记忆，调用 graph 个性化回复，失败时静态脚本兜底。 */
-@Service
+@Service("memoryNpcDialogService")
 public class NpcDialogService {
 
   private static final double TALK_AFFINITY_DELTA = 0.05;
