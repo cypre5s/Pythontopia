@@ -21,16 +21,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /**
- * NPC 首句个性化寒暄服务（R-15 §8）。
- *
- * <p>组装该生 {@link MemoryRetrievalService} 近期记忆摘要 + 8 维画像 brief，复用既有 graph
- * {@code NpcDialogAgent}（{@code /agents/npc/dialog}）产出 1–2 句记忆感知寒暄，按 npc×学生
- * 缓存 30 分钟。
- *
- * <p><b>Fail-fast（AGENTS.md 防幻觉/安全）</b>：记忆或 agent 任一环节失败 → 返回结构化降级标志
- * （{@link NpcGreetingResponse#serviceUnavailable()}），<b>绝不伪造个性化内容</b>；前端据此显示
- * 「（记忆服务暂不可用）」并照常走脚本对话。新玩家无可引用记忆时返回 {@link NpcGreetingResponse#none()}
- * （非故障，不展示寒暄也不报故障）。
+ * NPC 首句个性化寒暄服务（§8）：组装近期记忆摘要 + 8 维画像 brief，复用 graph NpcDialogAgent 产出 1–2 句，
+ * 按 npc×学生缓存 30 分钟。fail-fast：记忆/agent 失败 → 结构化降级（不伪造）；新玩家无记忆 → none。
  */
 @Service
 public class NpcGreetingService {

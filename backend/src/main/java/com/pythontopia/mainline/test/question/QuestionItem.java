@@ -6,20 +6,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import java.util.List;
 
 /**
- * 章测单题<b>完整内部模型</b>（含答案/解析/证据页/隐藏用例），对齐 r15 计划 §3 题面 JSON 契约。
- *
- * <p>生成端 = pythontopia-graph；判分端 = backend（本类）。<b>绝不</b>整体序列化给前端：下发题面时由
- * {@code ChapterTestPaperMapper} 去答案投影（§4.2「下发去答案题面」）。
- *
- * <p>字段按题型可空：
- *
- * <ul>
- *   <li>CHOICE：{@code stem} / {@code options} / {@code answer}(选项标识，如 "B") / {@code evidencePageIds}
- *   <li>JUDGE：{@code stem} / {@code answer}(布尔)
- *   <li>FILL：{@code stem} / {@code answers}(候选集) / {@code match}("normalized")
- *   <li>CODING：{@code title} / {@code statementMarkdown} / {@code samples} / {@code hiddenTestCases} /
- *       {@code referenceSolution}
- * </ul>
+ * 章测单题完整内部模型（含答案/解析/证据页/隐藏用例，§3 题面 JSON）。生成端=graph，判分端=backend。
+ * 绝不整体下发前端：由 ChapterTestPaperMapper 去答案投影（§4.2）。字段按题型可空（CHOICE/JUDGE/FILL/CODING）。
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record QuestionItem(

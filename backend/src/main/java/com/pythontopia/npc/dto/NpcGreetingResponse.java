@@ -3,22 +3,9 @@ package com.pythontopia.npc.dto;
 import java.util.List;
 
 /**
- * NPC 首句个性化寒暄响应。
- *
- * <p>语义（遵守 AGENTS.md fail-fast / 防幻觉：不伪造个性化内容）：
- *
- * <ul>
- *   <li>{@code available=true}：graph {@code NpcDialogAgent} 基于真实记忆产出了寒暄，前端插入脚本首节点之前；
- *   <li>{@code available=false && degraded=true}：记忆 / agent 服务不可用 —— 前端显示「（记忆服务暂不可用）」并照常走脚本；
- *   <li>{@code available=false && degraded=false}：该生暂无可引用记忆（如新玩家）—— 不显示寒暄也不显示故障提示，直接走脚本。
- * </ul>
- *
- * @param greeting 个性化寒暄文本（{@code available=false} 时为空串）
- * @param available 是否产出了可展示的个性化寒暄
- * @param grounded 寒暄是否落在被引用的记忆证据上（防幻觉透明度）
- * @param citedEventIds 引用到的学习事件 id（来自记忆流，可空集）
- * @param degraded 记忆 / agent 下游是否降级（true 时前端展示「记忆服务暂不可用」）
- * @param cached 是否命中 30 分钟 npc×学生 缓存
+ * NPC 首句寒暄响应（fail-fast，不伪造内容）：
+ * available=true 产出寒暄；available=false&degraded=true 记忆/agent 不可用（前端示「记忆服务暂不可用」）；
+ * 均 false 则无可引用记忆（新玩家，直接走脚本）。
  */
 public record NpcGreetingResponse(
     String greeting,
