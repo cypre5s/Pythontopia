@@ -124,7 +124,10 @@ public class SubmissionService {
       return;
     }
     String difficulty =
-        problemRepository.findPublic(43L, request.problemId()).map(PublicProblemDto::difficulty).orElse(null);
+        problemRepository
+            .findPublic(43L, request.problemId())
+            .map(PublicProblemDto::difficulty)
+            .orElse(null);
     // 本次提交前同题失败次数，用于判定重试 / 逆袭行为信号。
     int priorFails = submissionRepository.countPriorFailures(userId, request.problemId(), submissionId);
     if (outcome.verdict() == Verdict.AC) {

@@ -66,7 +66,10 @@ public class FeynmanJudgeService {
       return new Verdict(
           sessionId,
           false,
-          "学弟代码未通过代表题隐藏用例：" + (evaluation.failureReason() == null ? evaluation.finalVerdict().name() : evaluation.failureReason()));
+          "学弟代码未通过代表题隐藏用例："
+              + (evaluation.failureReason() == null
+                  ? evaluation.finalVerdict().name()
+                  : evaluation.failureReason()));
     }
     jdbc.update("UPDATE feynman_session SET status = 'JUDGED_PASS' WHERE id = ?", sessionId);
     masteryEvaluator.applyEvent(

@@ -29,7 +29,8 @@ public sealed interface LearningEvent
   record PracticeSucceeded(Long userId, String kcCode, Long problemId, String difficulty)
       implements LearningEvent {}
 
-  record PracticeFailed(Long userId, String kcCode, Long problemId, String failureKind, String difficulty)
+  record PracticeFailed(
+      Long userId, String kcCode, Long problemId, String failureKind, String difficulty)
       implements LearningEvent {}
 
   record DebugResolved(Long userId, String kcCode, Long problemId) implements LearningEvent {}
