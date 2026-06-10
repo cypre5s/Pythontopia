@@ -36,9 +36,9 @@ const code = defineModel<string>('code', { required: true });
 .card-head { display: flex; align-items: center; gap: 8px; }
 .card-icon { font-size: 20px; }
 .card-head h3 { margin: 0; font-size: 16px; color: var(--pyt-color-gold-bright); }
-.badge-grounding { margin-left: auto; font-size: 11px; color: #b8d99a; padding: 2px 8px; background: rgba(120,220,120,0.2); border: 1px solid #6bbf59; border-radius: 3px; }
-.question { margin: 0; padding: 12px; background: #0a1428; border: 2px solid #4a90e2; white-space: pre-wrap; font-size: 14px; line-height: 1.7; color: #e5e7eb; }
+.badge-grounding { margin-left: auto; font-size: 11px; color: var(--pyt-color-success); padding: 2px 8px; background: var(--pyt-color-success-bg); border: 1px solid var(--pyt-color-success); border-radius: 3px; }
+.question { margin: 0; padding: 12px; background: var(--pyt-color-terminal-bg); border: 2px solid var(--pyt-color-border-strong); white-space: pre-wrap; font-size: 14px; line-height: 1.7; color: var(--pyt-color-terminal-text); }
 .answer-editor { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
-.answer-editor textarea { font-family: inherit; font-size: 14px; background: #0a1428; color: #f0f9ff; border: 2px solid #6bbf59; padding: 10px; resize: vertical; min-height: 100px; line-height: 1.6; }
-.hint { font-size: 12px; color: rgba(255,247,230,0.5); margin: 0; }
+.answer-editor textarea { font-family: inherit; font-size: 14px; background: var(--pyt-color-terminal-bg); color: var(--pyt-color-terminal-text); border: 2px solid var(--pyt-color-success); padding: 10px; resize: vertical; min-height: 100px; line-height: 1.6; }
+.hint { font-size: 12px; color: var(--pyt-color-text-muted); margin: 0; }
 </style>

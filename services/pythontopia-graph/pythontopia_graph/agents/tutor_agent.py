@@ -49,6 +49,11 @@ DIAGRAM_KEYWORDS = (
     "用图",
     "diagram",
     "mermaid",
+    # 学生点名特定图形式时同样触发（kind 由 LLM 选型遵循点名）。
+    "ascii",
+    "字符画",
+    "svg",
+    "矢量图",
 )
 
 # 「代码运行验证」触发词：仅在学生追问「为什么/报错/不对…」时才考虑跑沙箱（大小写不敏感）。
@@ -307,43 +312,60 @@ class TutorAgent:
     async def build_diagram(
         self, question: str, evidence_chunks: list[RagHit] | None = None,
     ) -> list[TutorVisualAid]:
-        """按需生成一张**针对该主题**的 mermaid 结构图（LLM + 课件证据，确定式兜底）。
+        """按需生成一张**针对该主题**的图解，形式由 LLM 按问题选型（mermaid/ascii/svg）。
 
-        不再生成易失败、且「泛泛而谈」的文生图插画；只产出一张结构清晰、贴合主题的
-        mermaid。LLM 失败/产出不合法时回退到确定式结构，保证永远可渲染、不报「生成失败」。
+        - 流程/结构/对比 → mermaid；内存布局/索引下标/逐格演示 → ascii 字符画；
+          几何/坐标/图形位置 → 自包含 svg（服务端消毒，禁脚本/事件/外链）。
+        - 学生点名形式（如「用 ascii 画」）时遵循点名。
+        - LLM 失败 / 产出不合法（含恶意 svg）一律回退确定式 mermaid，
+          保证永远可渲染、不报「生成失败」、绝不透传未消毒内容。
         """
         topic = self._short_topic(question)
-        mermaid = await self._llm_mermaid(question, evidence_chunks or [])
-        if not mermaid:
-            mermaid = self._fallback_mermaid(topic)
-        return [
-            TutorVisualAid(
+        aid = await self._llm_diagram(question, evidence_chunks or [])
+        if aid is None:
+            aid = TutorVisualAid(
                 kind="mermaid",
                 caption=f"知识结构图：{topic}",
-                mermaid=mermaid,
+                mermaid=self._fallback_mermaid(topic),
                 kc_codes=[],
             )
-        ]
+        elif not aid.caption:
+            captions = {
+                "mermaid": f"知识结构图：{topic}",
+                "ascii": f"字符示意图：{topic}",
+                "svg": f"图形示意：{topic}",
+            }
+            aid.caption = captions.get(aid.kind, f"图解：{topic}")
+        return [aid]
 
-    async def _llm_mermaid(
+    async def _llm_diagram(
         self, question: str, evidence_chunks: list[RagHit],
-    ) -> str | None:
-        """调 LLM 产出一段贴合主题的 mermaid flowchart；非法/失败回 None。
+    ) -> TutorVisualAid | None:
+        """调 LLM 产出 `{kind, source}` 并按 kind 消毒校验；非法/失败回 None（由上层兜底）。
 
         provider.chat() 走的是 JSON 模式（DeepSeek 等要求 prompt 含 "json" 且输出 JSON），
-        故让模型把 mermaid 源码放进 ``{"mermaid": "..."}`` 返回，再抽取 + 校验。
+        故让模型把图源码放进 ``{"kind": "...", "source": "..."}`` 返回，再抽取 + 校验。
         """
         messages: list[dict[str, str]] = [
             {
                 "role": "system",
                 "content": (
                     "你是 Python 教学图解生成器，只输出 JSON 对象，"
-                    'schema: {"mermaid": "<Mermaid flowchart 源码>"}。要求：\n'
-                    "1) mermaid 第一行必须是 `flowchart TD`，换行用 \\n；\n"
-                    "2) 紧扣主题画出**具体**的知识结构 / 执行流程（5-9 个节点，简洁中文）；\n"
-                    "3) 严禁泛泛而谈——不要只写「核心概念 / 典型示例 / 常见易错」这类空话，"
-                    "要写出该主题真正的步骤、分支或对比项；\n"
-                    "4) 若有课件证据，结构与证据一致，不要编造。"
+                    'schema: {"kind": "mermaid|ascii|svg", "source": "<图源码>"}。'
+                    "按问题内容选**最合适的一种**形式：\n"
+                    "- 流程 / 知识结构 / 分类 / 对比关系 → kind=mermaid："
+                    "source 第一行必须是 `flowchart TD`，5-9 个节点，简洁中文；\n"
+                    "- 内存布局 / 索引下标 / 切片逐格演示 / 字符对齐表 → kind=ascii："
+                    "source 为等宽字符画（可用 │─┌┐└┘├┤ 框线），≤30 行、每行 ≤80 字符，"
+                    "不要 Markdown 围栏；\n"
+                    "- 几何 / 坐标系 / 图形位置示意 → kind=svg："
+                    'source 为自包含 <svg viewBox="..."> 源码，只用基本形状与 <text>，'
+                    "禁止 <script>/<image>/<foreignObject>/<style>/事件属性/外部链接，"
+                    "≤4000 字符。\n"
+                    "通用要求：\n"
+                    "1) 紧扣主题画出**具体**内容，严禁「核心概念/典型示例/常见易错」式空话；\n"
+                    "2) 学生若点名了图形式（ascii/svg/流程图等），kind 必须遵循点名；\n"
+                    "3) 若有课件证据，内容与证据一致，不要编造。"
                 ),
             }
         ]
@@ -358,9 +380,39 @@ class TutorAgent:
         except Exception:  # noqa: BLE001 - 失败回退确定式，不阻塞答疑
             return None
         data = response.content_json
-        if isinstance(data, dict) and isinstance(data.get("mermaid"), str):
-            return self._sanitize_mermaid(data["mermaid"])
-        return self._sanitize_mermaid(response.content_text or "")
+        kind = ""
+        source = ""
+        if isinstance(data, dict):
+            kind = str(data.get("kind", "") or "").strip().lower()
+            raw_source = data.get("source")
+            # 兼容旧 schema {"mermaid": "..."}（提示词升级前的模型缓存/旧 provider）。
+            if not isinstance(raw_source, str) and isinstance(data.get("mermaid"), str):
+                kind = "mermaid"
+                raw_source = data.get("mermaid")
+            source = raw_source if isinstance(raw_source, str) else ""
+        if not source:
+            # 非 JSON 输出：按 mermaid 尝试抽取（历史行为），失败由上层兜底。
+            kind = "mermaid"
+            source = response.content_text or ""
+        return self._validated_aid(kind, source)
+
+    @classmethod
+    def _validated_aid(cls, kind: str, source: str) -> TutorVisualAid | None:
+        """按 kind 消毒校验出 TutorVisualAid；不合法返回 None。未知 kind 按 mermaid 兜底解析。"""
+        if kind == "ascii":
+            ascii_art = cls._sanitize_ascii(source)
+            if ascii_art:
+                return TutorVisualAid(kind="ascii", ascii_art=ascii_art, kc_codes=[])
+            return None
+        if kind == "svg":
+            svg = cls._sanitize_svg(source)
+            if svg:
+                return TutorVisualAid(kind="svg", svg=svg, kc_codes=[])
+            return None
+        mermaid = cls._sanitize_mermaid(source)
+        if mermaid:
+            return TutorVisualAid(kind="mermaid", mermaid=mermaid, kc_codes=[])
+        return None
 
     @staticmethod
     def _sanitize_mermaid(text: str) -> str | None:
@@ -395,6 +447,70 @@ class TutorAgent:
         if "-->" not in cleaned and "---" not in cleaned:
             return None
         return cleaned
+
+    # ascii 字符画上限：防止 LLM 吐超长内容撑爆卡片。
+    _ASCII_MAX_LINES = 30
+    _ASCII_MAX_LINE_CHARS = 120
+    # svg 源码上限与危险特征（出现任意一个即整体拒绝，由上层回退 mermaid）。
+    _SVG_MAX_CHARS = 6000
+    _SVG_BANNED = re.compile(
+        r"<\s*(script|foreignobject|image|iframe|embed|link|style)\b"
+        r"|javascript:"
+        r"|\bon[a-z]+\s*="
+        r"|(xlink:)?href\s*=\s*[\"'](?!#)",
+        re.IGNORECASE,
+    )
+    _SVG_EXTRACT = re.compile(r"<svg\b[^>]*>.*?</svg>", re.IGNORECASE | re.DOTALL)
+
+    @classmethod
+    def _sanitize_ascii(cls, text: str) -> str | None:
+        """清洗 ascii 字符画：去围栏/推理段，限行数与行宽；空或超限返回 None。"""
+        cleaned = (text or "").strip()
+        if not cleaned:
+            return None
+        cleaned = re.sub(r"<think>.*?</think>", "", cleaned, flags=re.DOTALL).strip()
+        fence = re.search(r"```(?:text|ascii)?\s*\n?(.+?)```", cleaned, re.DOTALL)
+        if fence:
+            cleaned = fence.group(1)
+        # 防 LLM 形式混淆：ascii 里夹 HTML/SVG 标签一律拒绝（不冒险透传标记语言）。
+        if "<" in cleaned and re.search(r"<\s*[a-zA-Z]", cleaned):
+            return None
+        lines = [line.rstrip() for line in cleaned.splitlines()]
+        while lines and not lines[0]:
+            lines.pop(0)
+        while lines and not lines[-1]:
+            lines.pop()
+        if not lines or len(lines) > cls._ASCII_MAX_LINES:
+            return None
+        if any(len(line) > cls._ASCII_MAX_LINE_CHARS for line in lines):
+            return None
+        return "\n".join(lines)
+
+    @classmethod
+    def _sanitize_svg(cls, text: str) -> str | None:
+        """抽取并校验自包含 <svg>：长度封顶 + 黑名单（脚本/事件/外链/嵌入），不合法返回 None。
+
+        前端仍会用 DOMPurify 的 svg profile 再消毒一次（纵深防御），但服务端先把明显
+        恶意/越界的产出整体拒绝、回退 mermaid，绝不下发带毒源码。
+        """
+        cleaned = (text or "").strip()
+        if not cleaned:
+            return None
+        cleaned = re.sub(r"<think>.*?</think>", "", cleaned, flags=re.DOTALL).strip()
+        fence = re.search(r"```(?:svg|xml|html)?\s*\n?(.+?)```", cleaned, re.DOTALL)
+        if fence:
+            cleaned = fence.group(1).strip()
+        match = cls._SVG_EXTRACT.search(cleaned)
+        if not match:
+            return None
+        svg = match.group(0).strip()
+        if len(svg) > cls._SVG_MAX_CHARS:
+            return None
+        if cls._SVG_BANNED.search(svg):
+            return None
+        if "viewbox" not in svg.lower():
+            return None
+        return svg
 
     @staticmethod
     def _cognitive_style_directive(profile_brief: str | None) -> str | None:

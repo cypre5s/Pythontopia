@@ -87,17 +87,17 @@ function advanceStep(): void {
 .closed-loop-card { display: grid; gap: 12px; }
 .card-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .card-icon { font-size: 20px; }
-.card-head h3 { margin: 0; font-size: 16px; color: var(--pyt-color-gold-bright); }
+.card-head h3 { margin: 0; font-size: 16px; color: var(--pyt-color-text-primary); }
 .steps { display: flex; align-items: center; gap: 4px; margin-left: auto; font-size: 11px; }
-.step-dot { padding: 2px 8px; border-radius: 3px; background: rgba(74,144,226,0.15); color: #93c5fd; border: 1px solid transparent; }
-.step-dot.active { background: rgba(241,196,83,0.3); color: var(--pyt-color-gold-bright); border-color: var(--pyt-color-gold); }
-.step-arrow { color: #4a90e2; }
+.step-dot { padding: 2px 8px; border-radius: 3px; background: var(--pyt-color-info-bg); color: var(--pyt-color-info); border: 1px solid transparent; }
+.step-dot.active { background: var(--pyt-color-warning-bg); color: var(--pyt-color-warning); border-color: var(--pyt-color-gold); }
+.step-arrow { color: var(--pyt-color-text-muted); }
 .phase-panel { display: grid; gap: 10px; }
-.phase-panel h4 { margin: 0; color: var(--pyt-color-gold); font-size: 14px; }
-.trace { margin: 0; padding: 10px; background: #0a1428; border: 2px solid #b3402a; white-space: pre-wrap; font-size: 12px; line-height: 1.6; color: #ff7466; font-family: 'JetBrains Mono', monospace; }
-.trace--dim { opacity: 0.6; border-color: #4a90e2; }
-.locate-input { font-family: inherit; font-size: 13px; background: #0a1428; color: #f0f9ff; border: 2px solid var(--pyt-color-gold); padding: 8px; resize: vertical; }
-.advance-btn { align-self: flex-start; font-family: inherit; font-size: 12px; padding: 6px 14px; background: #1e3a8a; color: var(--pyt-color-bg-elevated); border: 2px solid #4a90e2; border-radius: 4px; cursor: pointer; }
-.advance-btn:hover { background: #2a4a9e; }
-.fix-textarea { font-family: 'JetBrains Mono', monospace; font-size: 13px; background: #0a1428; color: #f0f9ff; border: 2px solid #6bbf59; padding: 8px; resize: vertical; min-height: 160px; }
+.phase-panel h4 { margin: 0; color: var(--pyt-color-text-hint); font-size: 14px; }
+.trace { margin: 0; padding: 10px; background: var(--pyt-color-terminal-stderr-bg); border: 2px solid var(--pyt-color-danger); border-radius: var(--pyt-radius-sm); white-space: pre-wrap; font-size: 12px; line-height: 1.6; color: var(--pyt-color-terminal-stderr-text); font-family: var(--pyt-font-mono, monospace); }
+.trace--dim { opacity: 0.6; border-color: var(--pyt-color-border); }
+.locate-input { font-family: inherit; font-size: 13px; background: var(--pyt-color-terminal-bg); color: var(--pyt-color-terminal-text); border: 2px solid var(--pyt-color-gold); border-radius: var(--pyt-radius-sm); padding: 8px; resize: vertical; }
+.advance-btn { align-self: flex-start; font-family: inherit; font-size: 12px; padding: 6px 14px; background: var(--pyt-color-info-bg); color: var(--pyt-color-info); border: 2px solid var(--pyt-color-info); border-radius: 4px; cursor: pointer; box-shadow: 2px 2px 0 rgba(42, 111, 151, 0.35); }
+.advance-btn:hover { background: #c2dcee; }
+.fix-textarea { font-family: var(--pyt-font-mono, monospace); font-size: 13px; background: var(--pyt-color-terminal-bg); color: var(--pyt-color-terminal-text); border: 2px solid var(--pyt-color-success); border-radius: var(--pyt-radius-sm); padding: 8px; resize: vertical; min-height: 160px; }
 </style>

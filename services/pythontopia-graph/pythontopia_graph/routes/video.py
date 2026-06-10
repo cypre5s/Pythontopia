@@ -30,6 +30,7 @@ from __future__ import annotations
 import asyncio
 import html
 import json as _json
+import logging
 import os
 import re
 from typing import Any
@@ -39,6 +40,8 @@ from pydantic import BaseModel, Field
 from pythontopia_graph.llm.provider import LlmProvider, LlmResponse, provider_from_env
 
 router = APIRouter()
+
+_LOG = logging.getLogger(__name__)
 
 # 代理只配一次（幂等）。B站在部分网络环境需经代理；优先 PYT_BILI_PROXY，回退 HTTPS_PROXY。
 _proxy_configured = False
@@ -97,6 +100,13 @@ _OFFTOPIC_TERMS = (
 
 # 标题里出现这些 = 强 Python 相关，排序时优先。
 _PY_AFFINITY = ("python", "py", "派森", "蟒蛇")
+
+
+def _ensure_python_context(keyword: str) -> str:
+    """课程为纯 Python：检索词未含 python 时补前缀，避免短中文词（如「循环」「列表」）
+    检索到全站泛结果（歌曲/生物/汽车）。已含 python 则原样返回（前端工坊本就带前缀，幂等）。
+    """
+    return keyword if "python" in keyword.lower() else f"python {keyword}"
 
 
 def _is_offtopic(title_lower: str, keyword_lower: str) -> bool:
@@ -362,8 +372,10 @@ async def search_bilibili(
     # 是否生成每张卡的「AI 速览」一句话（默认开；为 false 跳过 LLM 调用，省时）。
     with_summary: bool = Query(True),
 ) -> BilibiliSearchResponse:
+    # 检索词统一锚定 Python 语境（幂等）：调用方没带 python 时补前缀。
+    effective_keyword = _ensure_python_context(keyword.strip())
     try:
-        raw = await _bilibili_search_videos(keyword, page=1)
+        raw = await _bilibili_search_videos(effective_keyword, page=1)
     except ModuleNotFoundError as exc:
         if "bilibili_api" not in str(exc):
             raise
@@ -383,7 +395,17 @@ async def search_bilibili(
             status_code=502,
             detail={"code": "VIDEO_SEARCH_FAILED", "message": str(exc)},
         ) from exc
-    items = _map_items(raw, limit, keyword, max_duration_sec)
+    items = _map_items(raw, limit, effective_keyword, max_duration_sec)
+    # 渐进放宽兜底：严格过滤后为空 ≠ B站真没有结果。质量底线（付费过滤、跑题过滤）保留，
+    # 只放宽时长上限（长讲解好过没有）。仍为空才如实返回空列表（前端显示「暂无」）。
+    if not items and max_duration_sec > 0:
+        items = _map_items(raw, limit, effective_keyword, 0)
+        if items:
+            _LOG.info(
+                "bilibili search '%s': duration filter relaxed -> %d items",
+                effective_keyword,
+                len(items),
+            )
     if with_summary:
         await _summarize_videos(items)
     return BilibiliSearchResponse(items=items)

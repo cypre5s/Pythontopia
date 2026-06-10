@@ -60,13 +60,13 @@ const code = defineModel<string>('code', { required: true });
 .card-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .card-icon { font-size: 20px; }
 .card-head h3 { margin: 0; font-size: 16px; color: var(--pyt-color-gold-bright); }
-.pdf-link { margin-left: auto; font-size: 12px; color: #93c5fd; text-decoration: none; padding: 2px 10px; background: rgba(74,144,226,0.2); border: 1px solid #4a90e2; border-radius: 3px; }
-.pdf-link:hover { background: rgba(74,144,226,0.35); }
-.page-ref { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px; color: #93c5fd; }
-.page-chip { display: inline-block; padding: 2px 8px; background: #1e3a8a; color: #93c5fd; border: 1px solid #4a90e2; border-radius: 3px; font-size: 11px; text-decoration: none; }
-.page-chip:hover { background: #2a4a9e; }
-.question { margin: 0; padding: 12px; background: #0a1428; border: 2px solid #4a90e2; white-space: pre-wrap; font-size: 14px; line-height: 1.7; color: #e5e7eb; }
+.pdf-link { margin-left: auto; font-size: 12px; color: var(--pyt-color-info); text-decoration: none; padding: 2px 10px; background: var(--pyt-color-info-bg); border: 1px solid var(--pyt-color-info); border-radius: 3px; }
+.pdf-link:hover { background: #c2dcee; }
+.page-ref { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px; color: var(--pyt-color-text-hint); }
+.page-chip { display: inline-block; padding: 2px 8px; background: var(--pyt-color-info-bg); color: var(--pyt-color-info); border: 1px solid var(--pyt-color-info); border-radius: 3px; font-size: 11px; text-decoration: none; }
+.page-chip:hover { background: #c2dcee; }
+.question { margin: 0; padding: 12px; background: var(--pyt-color-terminal-bg); border: 2px solid var(--pyt-color-border-strong); white-space: pre-wrap; font-size: 14px; line-height: 1.7; color: var(--pyt-color-terminal-text); }
 .answer-editor { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
-.answer-editor textarea { font-family: inherit; font-size: 14px; background: #0a1428; color: #f0f9ff; border: 2px solid #4a90e2; padding: 10px; resize: vertical; min-height: 100px; line-height: 1.6; }
-.hint { font-size: 12px; color: rgba(255,247,230,0.5); margin: 0; }
+.answer-editor textarea { font-family: inherit; font-size: 14px; background: var(--pyt-color-terminal-bg); color: var(--pyt-color-terminal-text); border: 2px solid var(--pyt-color-gold); padding: 10px; resize: vertical; min-height: 100px; line-height: 1.6; }
+.hint { font-size: 12px; color: var(--pyt-color-text-muted); margin: 0; }
 </style>

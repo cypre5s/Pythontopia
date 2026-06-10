@@ -66,10 +66,9 @@ describe('searchBilibili', () => {
     expect(httpMock.get).not.toHaveBeenCalled();
   });
 
-  it('degrades to [] on generic request failure (no throw)', async () => {
+  it('rethrows generic request failures (fail-fast, no silent degrade)', async () => {
     httpMock.get.mockRejectedValueOnce(new Error('network'));
-    const videos = await searchBilibili('for循环');
-    expect(videos).toEqual([]);
+    await expect(searchBilibili('for循环')).rejects.toThrow('network');
   });
 
   it('rethrows VIDEO_SEARCH_UNAVAILABLE so the UI can show service error', async () => {

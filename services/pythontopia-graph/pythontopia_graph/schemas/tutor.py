@@ -13,12 +13,20 @@ class TutorTurn(BaseModel):
 
 
 class TutorVisualAid(BaseModel):
-    """答疑图解：kind=mermaid 时 ``mermaid`` 可渲染结构图；kind=image 时 ``image_prompt`` 供 /api/media/image 文生图。"""
+    """答疑图解（按问题选型，常见图形式全覆盖）：
 
-    kind: Literal["mermaid", "image"]
+    - kind=mermaid：``mermaid`` 为 flowchart 源码（流程/结构/对比）；
+    - kind=ascii：``ascii_art`` 为等宽字符画（内存布局/索引下标/逐格演示）；
+    - kind=svg：``svg`` 为自包含、已服务端消毒的 ``<svg>`` 源码（几何/坐标/图形示意）；
+    - kind=image：``image_prompt`` 供 /api/media/image 文生图（保留兼容，当前不主动产出）。
+    """
+
+    kind: Literal["mermaid", "image", "ascii", "svg"]
     caption: str = ""
     mermaid: str | None = None
     image_prompt: str | None = None
+    ascii_art: str | None = None
+    svg: str | None = None
     kc_codes: list[str] = Field(default_factory=list)
 
 

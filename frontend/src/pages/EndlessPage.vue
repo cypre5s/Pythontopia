@@ -389,14 +389,18 @@ watch(
 </template>
 
 <style scoped>
+/* 白色/羊皮纸亮色主题：与练习场（TrainingPanel / tokens.css）同语言；
+   仅题面/样例/代码编辑区保留终端深色例外（与训练场 stdout 块一致）。 */
 .endless-page {
   display: flex;
   flex-direction: column;
   gap: 12px;
   padding: 14px;
   min-height: calc(100dvh - 56px);
-  background: radial-gradient(ellipse at top, #1a3a6e 0%, #0a0a1a 80%);
-  color: var(--pyt-color-bg-elevated);
+  background:
+    linear-gradient(180deg, rgba(243, 220, 157, 0.26), rgba(122, 93, 48, 0.1)),
+    var(--pyt-color-bg-primary);
+  color: var(--pyt-color-text-primary);
   font-family: var(--pyt-font-pixel);
 }
 .endless-head {
@@ -405,15 +409,15 @@ watch(
   align-items: center;
   gap: 12px;
   padding: 8px 14px;
-  background: rgba(15, 25, 45, 0.85);
-  border: 3px solid #4a90e2;
-  box-shadow: 0 0 12px rgba(74, 144, 226, 0.45);
+  background: rgba(255, 249, 234, 0.94);
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-md);
+  box-shadow: 3px 3px 0 rgba(74, 54, 29, 0.35);
 }
 .endless-title {
   margin: 0;
   font-size: 18px;
-  color: var(--pyt-color-gold-bright);
-  text-shadow: 2px 2px 0 #1a0e04;
+  color: var(--pyt-color-text-primary);
 }
 .endless-stats {
   display: flex;
@@ -427,32 +431,35 @@ watch(
 }
 .stat-label {
   font-size: 10px;
-  color: #94a3b8;
+  color: var(--pyt-color-text-muted);
 }
 .stat-value {
   font-size: 16px;
-  color: var(--pyt-color-gold);
+  color: var(--pyt-color-warning);
+  font-weight: 700;
 }
 .endless-toolbar {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 6px 12px;
-  background: rgba(15, 25, 45, 0.6);
-  border: 2px solid #4a90e2;
-  border-radius: 4px;
+  background: var(--pyt-color-bg-soft);
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-md);
 }
 .toolbar-field {
   display: flex;
   align-items: center;
   gap: 6px;
   font-size: 12px;
+  color: var(--pyt-color-text-hint);
 }
 .toolbar-field select {
   font-family: inherit;
-  background: #1a2a4a;
-  color: var(--pyt-color-bg-elevated);
-  border: 2px solid #4a90e2;
+  background: var(--pyt-color-bg-elevated);
+  color: var(--pyt-color-text-primary);
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-sm);
   padding: 2px 6px;
 }
 .endless-btn {
@@ -460,28 +467,24 @@ watch(
   cursor: pointer;
   font-size: 13px;
   padding: 6px 14px;
-  background: #1e3a8a;
-  color: var(--pyt-color-bg-elevated);
-  border: 2px solid #4a90e2;
-  border-radius: 4px;
-  box-shadow: 0 2px 0 #1a2a6e;
+  background: var(--pyt-color-bg-soft);
+  color: var(--pyt-color-text-primary);
+  border: 2px solid var(--pyt-color-text-primary);
+  border-radius: var(--pyt-radius-md);
+  box-shadow: 2px 2px 0 var(--pyt-color-shadow);
 }
 .endless-btn--exit {
-  background: var(--pyt-color-text-hint);
-  border-color: var(--pyt-color-text-primary);
-  box-shadow: 0 2px 0 var(--pyt-color-text-primary);
+  background: var(--pyt-color-warning-bg);
 }
 .endless-btn--primary {
   background: var(--pyt-color-gold);
   color: #2a1a08;
-  border-color: var(--pyt-color-text-hint);
-  box-shadow: 0 2px 0 var(--pyt-color-text-hint);
 }
 .endless-btn--next {
-  background: #6bbf59;
-  color: #1f3a14;
-  border-color: #2d5b1b;
-  box-shadow: 0 2px 0 #2d5b1b;
+  background: var(--pyt-color-success-bg);
+  color: var(--pyt-color-success);
+  border-color: var(--pyt-color-success);
+  box-shadow: 2px 2px 0 rgba(47, 143, 60, 0.45);
 }
 .endless-btn:disabled {
   opacity: 0.55;
@@ -489,11 +492,11 @@ watch(
   box-shadow: none;
 }
 .endless-btn:active:not(:disabled) {
-  transform: translateY(1px);
+  transform: translate(2px, 2px);
   box-shadow: none;
 }
 .endless-rate {
-  color: var(--pyt-color-gold);
+  color: var(--pyt-color-warning);
   font-size: 12px;
 }
 .endless-empty,
@@ -507,12 +510,13 @@ watch(
   gap: 12px;
   text-align: center;
   padding: 24px;
+  color: var(--pyt-color-text-hint);
 }
 .endless-error {
-  color: #ff7466;
+  color: var(--pyt-color-danger);
 }
 .endless-hint {
-  color: rgba(255, 247, 230, 0.6);
+  color: var(--pyt-color-text-muted);
   font-size: 12px;
 }
 .endless-body {
@@ -524,8 +528,10 @@ watch(
 }
 .endless-problem,
 .endless-side {
-  background: rgba(15, 25, 45, 0.8);
-  border: 2px solid #4a90e2;
+  background: rgba(255, 249, 234, 0.94);
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-md);
+  box-shadow: 3px 3px 0 rgba(74, 54, 29, 0.25);
   padding: 12px;
   display: flex;
   flex-direction: column;
@@ -546,47 +552,50 @@ watch(
 .timer {
   display: inline-block;
   padding: 2px 8px;
-  background: rgba(74, 144, 226, 0.2);
-  border: 1px solid #4a90e2;
-  border-radius: 3px;
+  background: var(--pyt-color-info-bg);
+  border: 1px solid var(--pyt-color-info);
+  border-radius: var(--pyt-radius-sm);
   font-size: 11px;
-  color: #93c5fd;
+  color: var(--pyt-color-info);
 }
 .badge--ai {
-  background: rgba(120, 220, 120, 0.25);
-  border-color: #6bbf59;
-  color: #b8d99a;
+  background: var(--pyt-color-success-bg);
+  border-color: var(--pyt-color-success);
+  color: var(--pyt-color-success);
 }
 .badge--golden {
-  background: rgba(241, 196, 83, 0.2);
-  border-color: var(--pyt-color-gold);
-  color: var(--pyt-color-gold);
+  background: var(--pyt-color-warning-bg);
+  border-color: var(--pyt-color-warning);
+  color: var(--pyt-color-warning);
 }
 .timer {
   margin-left: auto;
-  background: rgba(241, 196, 83, 0.18);
-  border-color: var(--pyt-color-gold);
-  color: var(--pyt-color-gold);
+  background: var(--pyt-color-warning-bg);
+  border-color: var(--pyt-color-warning);
+  color: var(--pyt-color-warning);
 }
+/* 题面/样例/编辑器：保留终端深色例外（与训练场代码输出块一致），其余全亮色。 */
 .endless-problem__statement {
   margin: 0;
   padding: 10px;
-  background: #0a1428;
-  border: 1px solid #4a90e2;
+  background: var(--pyt-color-terminal-bg);
+  border: 1px solid var(--pyt-color-border-strong);
+  border-radius: var(--pyt-radius-sm);
   white-space: pre-wrap;
   font-size: 13px;
   line-height: 1.7;
-  color: #e5e7eb;
+  color: var(--pyt-color-terminal-text);
 }
 .endless-sample {
-  background: #0a1428;
-  border: 1px solid #4a90e2;
+  background: var(--pyt-color-bg-soft);
+  border: 1px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-sm);
   padding: 6px 10px;
 }
 .endless-sample summary {
   cursor: pointer;
   font-size: 12px;
-  color: #93c5fd;
+  color: var(--pyt-color-info);
 }
 .endless-sample__pair {
   display: grid;
@@ -597,23 +606,26 @@ watch(
 .endless-sample__pair pre {
   margin: 0;
   padding: 6px;
-  background: #1a2a4a;
-  border: 1px solid #4a90e2;
+  background: var(--pyt-color-terminal-bg);
+  border: 1px solid var(--pyt-color-border-strong);
+  border-radius: var(--pyt-radius-sm);
   font-size: 12px;
-  color: var(--pyt-color-bg-elevated);
+  color: var(--pyt-color-terminal-text);
 }
 .endless-editor {
   display: flex;
   flex-direction: column;
   gap: 4px;
   font-size: 12px;
+  color: var(--pyt-color-text-hint);
 }
 .endless-editor textarea {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--pyt-font-mono, 'JetBrains Mono', monospace);
   font-size: 13px;
-  background: #0a1428;
-  color: #f0f9ff;
-  border: 2px solid #4a90e2;
+  background: var(--pyt-color-terminal-bg);
+  color: var(--pyt-color-terminal-text);
+  border: 2px solid var(--pyt-color-border-strong);
+  border-radius: var(--pyt-radius-sm);
   padding: 8px;
   resize: vertical;
   min-height: 160px;
@@ -624,29 +636,30 @@ watch(
 }
 .endless-result {
   padding: 8px 12px;
-  border-radius: 3px;
+  border-radius: var(--pyt-radius-sm);
   font-size: 12px;
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid #4a90e2;
+  background: var(--pyt-color-bg-soft);
+  border: 1px solid var(--pyt-color-border);
+  color: var(--pyt-color-text-primary);
 }
 .endless-result--passed {
-  background: rgba(60, 140, 50, 0.25);
-  border-color: #6bbf59;
+  background: var(--pyt-color-success-bg);
+  border-color: var(--pyt-color-success);
 }
 .endless-result--failed {
-  background: rgba(140, 60, 30, 0.3);
-  border-color: #b3402a;
+  background: var(--pyt-color-danger-bg);
+  border-color: var(--pyt-color-danger);
 }
 .endless-result p {
   margin: 4px 0 0;
 }
 .hint {
   font-style: italic;
-  color: var(--pyt-color-gold);
+  color: var(--pyt-color-warning);
 }
 .endless-side h3 {
   margin: 0;
-  color: var(--pyt-color-gold-bright);
+  color: var(--pyt-color-text-primary);
   font-size: 14px;
 }
 .history-list {
@@ -658,16 +671,17 @@ watch(
 }
 .history-item {
   padding: 6px 8px;
-  background: rgba(74, 144, 226, 0.1);
-  border: 1px solid #4a90e2;
+  background: var(--pyt-color-bg-soft);
+  border: 1px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-sm);
 }
 .history-item--passed {
-  border-color: #6bbf59;
-  background: rgba(107, 191, 89, 0.18);
+  border-color: var(--pyt-color-success);
+  background: var(--pyt-color-success-bg);
 }
 .history-item--failed {
-  border-color: #b3402a;
-  background: rgba(179, 64, 42, 0.18);
+  border-color: var(--pyt-color-danger);
+  background: var(--pyt-color-danger-bg);
 }
 .history-item header {
   display: flex;
@@ -677,7 +691,7 @@ watch(
 .history-item small {
   display: block;
   margin-top: 2px;
-  color: #cbd5e1;
+  color: var(--pyt-color-text-muted);
 }
 
 @media (max-width: 900px) {

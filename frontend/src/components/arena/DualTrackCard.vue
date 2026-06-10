@@ -85,19 +85,19 @@ async function runLocal(): Promise<void> {
 .dual-track-card { display: grid; gap: 12px; }
 .card-head { display: flex; align-items: center; gap: 8px; }
 .card-icon { font-size: 20px; }
-.card-head h3 { margin: 0; font-size: 16px; color: var(--pyt-color-gold-bright); }
-.badge-dual { margin-left: auto; font-size: 11px; color: #93c5fd; padding: 2px 8px; background: rgba(74,144,226,0.2); border: 1px solid #4a90e2; border-radius: 3px; }
-.question { margin: 0; padding: 10px; background: #0a1428; border: 2px solid #4a90e2; white-space: pre-wrap; font-size: 13px; line-height: 1.7; color: #e5e7eb; }
+.card-head h3 { margin: 0; font-size: 16px; color: var(--pyt-color-text-primary); }
+.badge-dual { margin-left: auto; font-size: 11px; color: var(--pyt-color-info); padding: 2px 8px; background: var(--pyt-color-info-bg); border: 1px solid var(--pyt-color-info); border-radius: 3px; }
+.question { margin: 0; padding: 10px; background: var(--pyt-color-bg-soft); border: 2px solid var(--pyt-color-border); border-radius: var(--pyt-radius-sm); white-space: pre-wrap; font-size: 13px; line-height: 1.7; color: var(--pyt-color-text-primary); }
 .dual-panels { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.panel { background: rgba(10,20,40,0.6); border: 2px solid #4a90e2; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
-.panel h4 { margin: 0; font-size: 13px; color: #93c5fd; }
-.panel textarea { font-family: 'JetBrains Mono', monospace; font-size: 13px; background: #0a1428; color: #f0f9ff; border: 1px solid #4a90e2; padding: 8px; resize: vertical; flex: 1; min-height: 140px; }
-.run-btn { font-family: inherit; font-size: 12px; padding: 6px 12px; background: #6bbf59; color: #1f3a14; border: 2px solid #2d5b1b; border-radius: 3px; cursor: pointer; }
+.panel { background: var(--pyt-color-bg-soft); border: 2px solid var(--pyt-color-border); border-radius: var(--pyt-radius-sm); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.panel h4 { margin: 0; font-size: 13px; color: var(--pyt-color-info); }
+.panel textarea { font-family: var(--pyt-font-mono, monospace); font-size: 13px; background: var(--pyt-color-terminal-bg); color: var(--pyt-color-terminal-text); border: 1px solid var(--pyt-color-border-strong); border-radius: var(--pyt-radius-sm); padding: 8px; resize: vertical; flex: 1; min-height: 140px; }
+.run-btn { font-family: inherit; font-size: 12px; padding: 6px 12px; background: var(--pyt-color-success-bg); color: var(--pyt-color-success); border: 2px solid var(--pyt-color-success); border-radius: 3px; cursor: pointer; box-shadow: 2px 2px 0 rgba(47, 143, 60, 0.35); }
 .run-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.output { margin: 0; padding: 8px; background: #0a1428; border: 1px solid #4a90e2; font-size: 12px; white-space: pre-wrap; }
-.output--stdout { color: #b8d99a; border-color: #6bbf59; }
-.output--stderr { color: #ff7466; border-color: #b3402a; }
-.output-placeholder { color: rgba(255,247,230,0.4); font-size: 12px; margin: 0; }
-.dual-hint { font-size: 11px; color: rgba(255,247,230,0.4); margin: 0; margin-top: auto; }
+.output { margin: 0; padding: 8px; background: var(--pyt-color-terminal-bg); border: 1px solid var(--pyt-color-border-strong); border-radius: var(--pyt-radius-sm); font-size: 12px; white-space: pre-wrap; color: var(--pyt-color-terminal-text); }
+.output--stdout { color: var(--pyt-color-terminal-stdout); border-color: var(--pyt-color-success); }
+.output--stderr { color: var(--pyt-color-terminal-stderr-text); border-color: var(--pyt-color-danger); background: var(--pyt-color-terminal-stderr-bg); }
+.output-placeholder { color: var(--pyt-color-text-muted); font-size: 12px; margin: 0; }
+.dual-hint { font-size: 11px; color: var(--pyt-color-text-muted); margin: 0; margin-top: auto; }
 @media (max-width: 700px) { .dual-panels { grid-template-columns: 1fr; } }
 </style>

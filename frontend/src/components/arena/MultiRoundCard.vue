@@ -103,12 +103,12 @@ function prevRound(): void {
 .card-icon { font-size: 18px; color: var(--pyt-color-gold); }
 .card-head h3 { margin: 0; font-size: 16px; color: var(--pyt-color-gold-bright); }
 .round-dots { display: flex; gap: 4px; margin-left: auto; }
-.round-dot { width: 26px; height: 26px; border-radius: 50%; border: 2px solid #4a90e2; background: rgba(74,144,226,0.1); color: #93c5fd; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-.round-dot.active { background: var(--pyt-color-gold); color: #2a1a08; border-color: var(--pyt-color-text-hint); }
-.round-dot.done { background: #6bbf59; color: #fff; border-color: #2d5b1b; }
-.round-nav { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: #93c5fd; }
-.round-nav button { font-family: inherit; font-size: 12px; padding: 4px 10px; background: #1e3a8a; color: var(--pyt-color-bg-elevated); border: 1px solid #4a90e2; border-radius: 3px; cursor: pointer; }
+.round-dot { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--pyt-color-info); background: var(--pyt-color-info-bg); color: var(--pyt-color-info); font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.round-dot.active { background: var(--pyt-color-gold); color: var(--pyt-color-shadow); border-color: var(--pyt-color-text-hint); }
+.round-dot.done { background: var(--pyt-color-success); color: #fff; border-color: var(--pyt-color-success); }
+.round-nav { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--pyt-color-text-hint); }
+.round-nav button { font-family: inherit; font-size: 12px; padding: 4px 10px; background: var(--pyt-color-info-bg); color: var(--pyt-color-info); border: 1px solid var(--pyt-color-info); border-radius: 3px; cursor: pointer; }
 .round-nav button:disabled { opacity: 0.4; cursor: not-allowed; }
-.question { margin: 0; padding: 10px; background: #0a1428; border: 2px solid #4a90e2; white-space: pre-wrap; font-size: 13px; line-height: 1.7; color: #e5e7eb; }
-.round-editor { font-family: 'JetBrains Mono', monospace; font-size: 13px; background: #0a1428; color: #f0f9ff; border: 2px solid #4a90e2; padding: 8px; resize: vertical; min-height: 120px; }
+.question { margin: 0; padding: 10px; background: var(--pyt-color-terminal-bg); border: 2px solid var(--pyt-color-border-strong); white-space: pre-wrap; font-size: 13px; line-height: 1.7; color: var(--pyt-color-terminal-text); }
+.round-editor { font-family: 'JetBrains Mono', monospace; font-size: 13px; background: var(--pyt-color-terminal-bg); color: var(--pyt-color-terminal-text); border: 2px solid var(--pyt-color-gold); padding: 8px; resize: vertical; min-height: 120px; }
 </style>

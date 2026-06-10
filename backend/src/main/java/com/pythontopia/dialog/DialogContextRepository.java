@@ -198,14 +198,21 @@ class DialogContextRepository {
         .findFirst();
   }
 
-  int countUnlockedCropsInRange(Long userId, OffsetDateTime since, OffsetDateTime until) {
+  // R-14 收缩后作物系统退役（V126 已 DROP crop_tile_state），以下「解锁/枯萎/成熟」
+  // 语义统一改读 kc_mastery：达标阈值 0.4 与主线「测·达标」一致。
+
+  /**
+   * 时间段内「新达标」的 KC 数（近似口径：当前掌握度 ≥ 0.4 且最近一次学习事件落在该区间）。
+   * 仅用于 NPC 对话的周报文案，不参与任何判定/奖励，近似可接受。
+   */
+  int countKcReachedThresholdInRange(Long userId, OffsetDateTime since, OffsetDateTime until) {
     Integer count =
         jdbcTemplate.queryForObject(
             """
-            SELECT COUNT(*) FROM crop_tile_state
-            WHERE user_id = ? AND pack_id = 43 AND unlocked = TRUE
-              AND unlocked_at IS NOT NULL
-              AND unlocked_at >= ? AND unlocked_at < ?
+            SELECT COUNT(*) FROM kc_mastery
+            WHERE user_id = ? AND mastery_score >= 0.4
+              AND last_event_at IS NOT NULL
+              AND last_event_at >= ? AND last_event_at < ?
             """,
             Integer.class,
             userId,
@@ -214,16 +221,16 @@ class DialogContextRepository {
     return count == null ? 0 : count;
   }
 
-  /** 下一个未解锁的 KC（unlocked = FALSE，按 chapter_order 取最靠前）。 */
+  /** 下一个未达标 KC（含从未练过的，按 chapter_order 取最靠前）。 */
   Optional<String> findNextLockedKc(Long userId) {
     return jdbcTemplate
         .query(
             """
-            SELECT COALESCE(kc.kc_name, cts.kc_code) AS kc_name
-            FROM crop_tile_state cts
-            LEFT JOIN course_kc kc ON kc.kc_code = cts.kc_code AND kc.pack_id = 43
-            WHERE cts.user_id = ? AND cts.pack_id = 43 AND cts.unlocked = FALSE
-            ORDER BY COALESCE(kc.chapter_order, 99), cts.kc_code
+            SELECT COALESCE(kc.kc_name, kc.kc_code) AS kc_name
+            FROM course_kc kc
+            LEFT JOIN kc_mastery m ON m.kc_code = kc.kc_code AND m.user_id = ?
+            WHERE kc.pack_id = 43 AND COALESCE(m.mastery_score, 0) < 0.4
+            ORDER BY COALESCE(kc.chapter_order, 99), kc.kc_code
             LIMIT 1
             """,
             (rs, rowNum) -> rs.getString("kc_name"),
@@ -232,16 +239,17 @@ class DialogContextRepository {
         .findFirst();
   }
 
+  /** 最近一个达标的 KC（按最近学习事件时间倒序）。 */
   Optional<String> findLatestUnlockedKcName(Long userId) {
     return jdbcTemplate
         .query(
             """
-            SELECT COALESCE(kc.kc_name, cts.kc_code) AS kc_name
-            FROM crop_tile_state cts
-            LEFT JOIN course_kc kc ON kc.kc_code = cts.kc_code AND kc.pack_id = 43
-            WHERE cts.user_id = ? AND cts.pack_id = 43 AND cts.unlocked = TRUE
-              AND cts.unlocked_at IS NOT NULL
-            ORDER BY cts.unlocked_at DESC
+            SELECT COALESCE(kc.kc_name, m.kc_code) AS kc_name
+            FROM kc_mastery m
+            LEFT JOIN course_kc kc ON kc.kc_code = m.kc_code AND kc.pack_id = 43
+            WHERE m.user_id = ? AND m.mastery_score >= 0.4
+              AND m.last_event_at IS NOT NULL
+            ORDER BY m.last_event_at DESC
             LIMIT 1
             """,
             (rs, rowNum) -> rs.getString("kc_name"),
@@ -250,15 +258,16 @@ class DialogContextRepository {
         .findFirst();
   }
 
+  /** 「枯萎」语义：有进度但未达标（0 < mastery < 0.4），最近更新的一个 —— 复习提醒文案用。 */
   Optional<String> findWitheredKcName(Long userId) {
     return jdbcTemplate
         .query(
             """
-            SELECT COALESCE(kc.kc_name, cts.kc_code) AS kc_name
-            FROM crop_tile_state cts
-            LEFT JOIN course_kc kc ON kc.kc_code = cts.kc_code AND kc.pack_id = 43
-            WHERE cts.user_id = ? AND cts.pack_id = 43 AND cts.status = 'WITHERED'
-            ORDER BY cts.updated_at DESC
+            SELECT COALESCE(kc.kc_name, m.kc_code) AS kc_name
+            FROM kc_mastery m
+            LEFT JOIN course_kc kc ON kc.kc_code = m.kc_code AND kc.pack_id = 43
+            WHERE m.user_id = ? AND m.mastery_score > 0 AND m.mastery_score < 0.4
+            ORDER BY m.updated_at DESC
             LIMIT 1
             """,
             (rs, rowNum) -> rs.getString("kc_name"),
@@ -267,15 +276,16 @@ class DialogContextRepository {
         .findFirst();
   }
 
+  /** 「成熟待收」语义：达标 KC 中掌握度最高的一个。 */
   Optional<String> findHarvestKcName(Long userId) {
     return jdbcTemplate
         .query(
             """
-            SELECT COALESCE(kc.kc_name, cts.kc_code) AS kc_name
-            FROM crop_tile_state cts
-            LEFT JOIN course_kc kc ON kc.kc_code = cts.kc_code AND kc.pack_id = 43
-            WHERE cts.user_id = ? AND cts.pack_id = 43 AND cts.status = 'MATURE'
-            ORDER BY cts.mastery_score DESC
+            SELECT COALESCE(kc.kc_name, m.kc_code) AS kc_name
+            FROM kc_mastery m
+            LEFT JOIN course_kc kc ON kc.kc_code = m.kc_code AND kc.pack_id = 43
+            WHERE m.user_id = ? AND m.mastery_score >= 0.4
+            ORDER BY m.mastery_score DESC
             LIMIT 1
             """,
             (rs, rowNum) -> rs.getString("kc_name"),
@@ -284,15 +294,15 @@ class DialogContextRepository {
         .findFirst();
   }
 
-  /** 已解锁 KC 名（前 N 个，按章节顺序）。 */
+  /** 已达标 KC 名（前 N 个，按章节顺序）。 */
   List<String> findUnlockedKcNames(Long userId, int limit) {
     return jdbcTemplate.query(
         """
-        SELECT COALESCE(kc.kc_name, cts.kc_code) AS kc_name
-        FROM crop_tile_state cts
-        LEFT JOIN course_kc kc ON kc.kc_code = cts.kc_code AND kc.pack_id = 43
-        WHERE cts.user_id = ? AND cts.pack_id = 43 AND cts.unlocked = TRUE
-        ORDER BY COALESCE(kc.chapter_order, 99), cts.kc_code
+        SELECT COALESCE(kc.kc_name, m.kc_code) AS kc_name
+        FROM kc_mastery m
+        LEFT JOIN course_kc kc ON kc.kc_code = m.kc_code AND kc.pack_id = 43
+        WHERE m.user_id = ? AND m.mastery_score >= 0.4
+        ORDER BY COALESCE(kc.chapter_order, 99), m.kc_code
         LIMIT ?
         """,
         (rs, rowNum) -> rs.getString("kc_name"),

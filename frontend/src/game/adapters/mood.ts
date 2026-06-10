@@ -102,7 +102,13 @@ export function applyMood(
   }
 
   const phaserScene = scene as unknown as PhaserMoodScene;
-  const cam = phaserScene.cameras.main;
+  // 场景可能已被销毁/正在重启（如 WorldCanvas 卸载后残留的 mood-changed 监听
+  // 在异步 refresh 里触发）：cameras/add 已不可用时直接 no-op，氛围层纯装饰，
+  // 宁可缺一帧也不能抛错打断调用链。
+  const cam = phaserScene.cameras?.main;
+  if (!cam || typeof phaserScene.add?.rectangle !== 'function') {
+    return { destroy(): void {} };
+  }
   const viewW = cam.width ?? 960;
   const viewH = cam.height ?? 640;
   const span = Math.max(viewW, viewH) * OVERSCAN;

@@ -37,7 +37,7 @@ import org.springframework.stereotype.Service;
  *
  * <ul>
  *   <li>{@link DialogContextRepository} — practice_submission / judge_result / kc_mastery /
- *       kc_mastery_event / crop_tile_state / course_kc / course_chapter / course_page /
+ *       kc_mastery_event / course_kc / course_chapter / course_page /
  *       course_problem / classrooms / classroom_members / classroom_quest / world_session；
  *   <li>{@link ProfileRepository} — learner_profile（推断 {@code profileType}）；
  *   <li>{@link CalendarService} — 当前 in-game day / season（季节中文化、daily problem 种子）；
@@ -91,8 +91,8 @@ public class DialogContextService {
     stats.put("failedSubmissionsThisWeek", Integer.toString(failedThisWeek));
 
     // 解锁 KC 统计
-    int kcThisWeek = repository.countUnlockedCropsInRange(userId, weekStart, now);
-    int kcLastWeek = repository.countUnlockedCropsInRange(userId, twoWeeksAgo, weekStart);
+    int kcThisWeek = repository.countKcReachedThresholdInRange(userId, weekStart, now);
+    int kcLastWeek = repository.countKcReachedThresholdInRange(userId, twoWeeksAgo, weekStart);
     stats.put("kcUnlockedThisWeek", Integer.toString(kcThisWeek));
     stats.put("kcUnlockedLastWeek", Integer.toString(kcLastWeek));
 

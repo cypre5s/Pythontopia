@@ -253,6 +253,73 @@ def test_empty_results_returns_200_empty_items(monkeypatch: pytest.MonkeyPatch) 
     assert response.json() == {"items": []}
 
 
+def test_duration_filter_relaxed_when_strict_result_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """渐进放宽①：默认 ≤10 分钟过滤把结果清空时，自动放开时长上限兜底（长讲解好过没有）。"""
+    payload: dict[str, Any] = {
+        "result": [
+            {"type": "video", "bvid": "BVlong001", "title": "Python 列表 45 分钟精讲", "duration": "45:00"},
+        ]
+    }
+
+    async def fake_search(keyword: str, page: int) -> dict[str, Any]:
+        return payload
+
+    monkeypatch.setattr(video_route, "_bilibili_search_videos", fake_search)
+
+    response = TestClient(app).get(
+        "/agents/video/bilibili/search", params={"keyword": "python 列表"}
+    )
+
+    assert response.status_code == 200
+    items = response.json()["items"]
+    assert [it["bvid"] for it in items] == ["BVlong001"]
+
+
+def test_keyword_without_python_gets_python_prefix(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """课程为纯 Python：检索词没提 python 时统一补前缀，避免短中文词检索到全站泛结果。"""
+    calls: list[str] = []
+
+    async def fake_search(keyword: str, page: int) -> dict[str, Any]:
+        calls.append(keyword)
+        return {
+            "result": [
+                {"type": "video", "bvid": "BVgood0001", "title": "Python 循环 7 分钟入门", "duration": "07:00"},
+            ]
+        }
+
+    monkeypatch.setattr(video_route, "_bilibili_search_videos", fake_search)
+
+    response = TestClient(app).get(
+        "/agents/video/bilibili/search", params={"keyword": "循环怎么用"}
+    )
+
+    assert response.status_code == 200
+    assert [it["bvid"] for it in response.json()["items"]] == ["BVgood0001"]
+    assert calls == ["python 循环怎么用"]
+
+
+def test_keyword_with_python_not_double_prefixed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """前端工坊本就发「Python … 教程」：已含 python 的关键词原样透传（幂等，不重复加前缀）。"""
+    calls: list[str] = []
+
+    async def fake_search(keyword: str, page: int) -> dict[str, Any]:
+        calls.append(keyword)
+        return {"result": []}
+
+    monkeypatch.setattr(video_route, "_bilibili_search_videos", fake_search)
+
+    response = TestClient(app).get(
+        "/agents/video/bilibili/search", params={"keyword": "Python 循环怎么用 教程"}
+    )
+
+    assert response.status_code == 200
+    assert calls == ["Python 循环怎么用 教程"]
+
+
 def test_missing_result_key_returns_200_empty_items(monkeypatch: pytest.MonkeyPatch) -> None:
     async def fake_search(keyword: str, page: int) -> dict[str, Any]:
         return {"numResults": 0}  # B站无结果时可能不带 result 键

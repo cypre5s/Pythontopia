@@ -94,21 +94,21 @@ const showTips = ref(false);
 .card-head { display: flex; align-items: center; gap: 8px; }
 .card-icon { font-size: 20px; }
 .card-head h3 { margin: 0; font-size: 16px; color: var(--pyt-color-gold-bright); }
-.badge-teach { margin-left: auto; font-size: 11px; color: #c4b5fd; padding: 2px 8px; background: rgba(196,181,253,0.15); border: 1px solid #8b5cf6; border-radius: 3px; }
-.scenario { padding: 12px; background: rgba(10,20,40,0.5); border: 2px solid #4a90e2; border-radius: 6px; }
+.badge-teach { margin-left: auto; font-size: 11px; color: var(--pyt-color-accent); padding: 2px 8px; background: var(--pyt-color-accent-bg); border: 1px solid var(--pyt-color-accent); border-radius: 3px; }
+.scenario { padding: 12px; background: var(--pyt-color-bg-soft); border: 2px solid var(--pyt-color-info); border-radius: 6px; }
 .npc-bubble { display: flex; gap: 12px; align-items: flex-start; }
-.npc-avatar { width: 48px; height: 48px; image-rendering: pixelated; border: 2px solid #d4af37; border-radius: 4px; flex-shrink: 0; }
+.npc-avatar { width: 48px; height: 48px; image-rendering: pixelated; border: 2px solid var(--pyt-color-gold); border-radius: 4px; flex-shrink: 0; }
 .bubble-text { flex: 1; }
 .npc-says { margin: 0 0 8px; font-style: italic; color: #111111; font-size: 13px; }
-.concept-prompt { margin: 0; padding: 8px; background: #0a1428; border: 1px solid #4a90e2; white-space: pre-wrap; font-size: 13px; color: #e5e7eb; }
+.concept-prompt { margin: 0; padding: 8px; background: var(--pyt-color-terminal-bg); border: 1px solid var(--pyt-color-border-strong); white-space: pre-wrap; font-size: 13px; color: var(--pyt-color-terminal-text); }
 .teach-editor { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
-.teach-editor textarea { font-family: inherit; font-size: 14px; background: #0a1428; color: #f0f9ff; border: 2px solid #8b5cf6; padding: 10px; resize: vertical; min-height: 120px; line-height: 1.6; }
+.teach-editor textarea { font-family: inherit; font-size: 14px; background: var(--pyt-color-terminal-bg); color: var(--pyt-color-terminal-text); border: 2px solid var(--pyt-color-accent); padding: 10px; resize: vertical; min-height: 120px; line-height: 1.6; }
 .teach-footer { display: flex; align-items: center; justify-content: space-between; }
 .word-badge { font-size: 11px; padding: 2px 8px; border-radius: 3px; }
-.word-badge--short { color: #ffb3b3; background: rgba(179,64,42,0.2); }
-.word-badge--ok { color: var(--pyt-color-gold); background: rgba(241,196,83,0.15); }
-.word-badge--good { color: #b8d99a; background: rgba(120,220,120,0.15); }
-.tips-btn { font-family: inherit; font-size: 11px; padding: 4px 10px; background: transparent; color: #93c5fd; border: 1px solid #4a90e2; border-radius: 3px; cursor: pointer; }
-.tips-list { margin: 0; padding: 0 0 0 18px; font-size: 12px; color: rgba(255,247,230,0.6); }
+.word-badge--short { color: var(--pyt-color-danger); background: var(--pyt-color-danger-bg); }
+.word-badge--ok { color: var(--pyt-color-gold); background: var(--pyt-color-warning-bg); }
+.word-badge--good { color: var(--pyt-color-success); background: var(--pyt-color-success-bg); }
+.tips-btn { font-family: inherit; font-size: 11px; padding: 4px 10px; background: transparent; color: var(--pyt-color-info); border: 1px solid var(--pyt-color-info); border-radius: 3px; cursor: pointer; }
+.tips-list { margin: 0; padding: 0 0 0 18px; font-size: 12px; color: var(--pyt-color-text-muted); }
 .tips-list li { margin: 2px 0; }
 </style>

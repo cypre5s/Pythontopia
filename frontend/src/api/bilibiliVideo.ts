@@ -4,10 +4,11 @@
 //   GET /api/videos/bilibili?keyword=...&limit=8  → BilibiliVideoDto[]
 // 取数实现在 pythontopia-graph（bilibili-api-python，GPL，隔离在 Python 服务）。
 //
-// 设计：纯展示型外部资源（封面缩略图 + 跳转 B 站），不进课件 grounding。任何失败
-// （网络 / 风控 / 后端未起）都降级成空数组，调用方据此显示占位文案、绝不白屏。
+// 设计：纯展示型外部资源（封面缩略图 + 跳转 B 站），不进课件 grounding。
+// 失败语义：空关键词 → []；其余任何失败（网络 / 鉴权过期 / 风控 / 后端未起）一律抛错，
+// 由卡片显示「检索暂不可用 + 重试」。绝不把失败伪装成「暂无结果」（吞错会误导学生换关键词）。
 
-import { ApiClientError, http } from './http';
+import { http } from './http';
 
 export interface BilibiliVideoDto {
   /** B 站视频稳定标识，如 `BV1xx411c7XD`。 */
@@ -40,23 +41,15 @@ export interface BilibiliVideoDto {
   url: string;
 }
 
-/** 按关键词检索 B 站视频；空关键词返回 []；服务不可用抛错供卡片展示错误占位。 */
+/** 按关键词检索 B 站视频；空关键词返回 []；任何失败抛错（卡片显示错误占位 + 重试）。 */
 export async function searchBilibili(keyword: string, limit = 8): Promise<BilibiliVideoDto[]> {
   const trimmed = keyword.trim();
   if (!trimmed) {
     return [];
   }
-  try {
-    const res = await http.get<BilibiliVideoDto[]>('/api/videos/bilibili', {
-      params: { keyword: trimmed, limit },
-      suppressNetworkToast: true,
-    });
-    return Array.isArray(res.data) ? res.data : [];
-  } catch (err) {
-    // 检索服务明确不可用时不要静默伪装成「暂无结果」。
-    if (err instanceof ApiClientError && err.code === 'VIDEO_SEARCH_UNAVAILABLE') {
-      throw err;
-    }
-    return [];
-  }
+  const res = await http.get<BilibiliVideoDto[]>('/api/videos/bilibili', {
+    params: { keyword: trimmed, limit },
+    suppressNetworkToast: true,
+  });
+  return Array.isArray(res.data) ? res.data : [];
 }

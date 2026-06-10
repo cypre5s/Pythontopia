@@ -61,15 +61,15 @@ function selectLine(idx: number): void {
 .card-head { display: flex; align-items: center; gap: 8px; }
 .card-icon { font-size: 20px; }
 .card-head h3 { margin: 0; font-size: 16px; color: var(--pyt-color-gold-bright); }
-.badge-bug { margin-left: auto; font-size: 11px; color: #ffb3b3; padding: 2px 8px; background: rgba(179,64,42,0.3); border: 1px solid #b3402a; border-radius: 3px; }
-.buggy-code { background: #0a1428; border: 2px solid #b3402a; padding: 8px; font-family: 'JetBrains Mono', monospace; font-size: 13px; }
+.badge-bug { margin-left: auto; font-size: 11px; color: var(--pyt-color-danger); padding: 2px 8px; background: var(--pyt-color-danger-bg); border: 1px solid var(--pyt-color-danger); border-radius: 3px; }
+.buggy-code { background: var(--pyt-color-terminal-bg); border: 2px solid var(--pyt-color-danger); padding: 8px; font-family: 'JetBrains Mono', monospace; font-size: 13px; }
 .code-line { display: flex; align-items: center; gap: 8px; padding: 2px 4px; cursor: pointer; border-radius: 2px; transition: background 0.15s; }
-.code-line:hover { background: rgba(179,64,42,0.15); }
-.code-line--selected { background: rgba(179,64,42,0.3); border-left: 3px solid #ff7466; }
-.line-num { color: #4a90e2; min-width: 24px; text-align: right; font-size: 11px; user-select: none; }
-.line-text { white-space: pre; color: #e5e7eb; }
-.bug-marker { color: #ff7466; font-size: 12px; margin-left: auto; }
+.code-line:hover { background: rgba(184,68,45,0.15); }
+.code-line--selected { background: rgba(184,68,45,0.3); border-left: 3px solid var(--pyt-color-terminal-stderr-text); }
+.line-num { color: var(--pyt-color-gold); min-width: 24px; text-align: right; font-size: 11px; user-select: none; }
+.line-text { white-space: pre; color: var(--pyt-color-terminal-text); }
+.bug-marker { color: var(--pyt-color-terminal-stderr-text); font-size: 12px; margin-left: auto; }
 .fix-editor { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
-.fix-editor textarea { font-family: 'JetBrains Mono', monospace; font-size: 13px; background: #0a1428; color: #f0f9ff; border: 2px solid #4a90e2; padding: 8px; resize: vertical; min-height: 120px; }
-.hint { font-size: 12px; color: rgba(255,247,230,0.5); margin: 0; }
+.fix-editor textarea { font-family: 'JetBrains Mono', monospace; font-size: 13px; background: var(--pyt-color-terminal-bg); color: var(--pyt-color-terminal-text); border: 2px solid var(--pyt-color-gold); padding: 8px; resize: vertical; min-height: 120px; }
+.hint { font-size: 12px; color: var(--pyt-color-text-muted); margin: 0; }
 </style>

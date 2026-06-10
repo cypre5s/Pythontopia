@@ -3,13 +3,15 @@
  * 百晓工坊主页：
  *   - 顶部传送栏（返回小镇 / 快速传送 / 图书馆 / 闯关塔）；
  *   - 左「对话流」WorkshopChat（@ 引用 + / 选工具 + 自动判定 → 问答 / 6 类资源；
- *     S2：生成时智能体协同只由对话内 ThinkingStream「思考文字」单一呈现，不再叠加侧栏像素流水线），
- *     右「书房」StudioDrawer（可收起，列表 + 详情；详情由 store 持有的 openResourceId 驱动，不进 URL）。
+ *     生成时对话内 ThinkingStream「思考文字」与右栏 MarvisPanel「多智能体工作室」双呈现），
+ *     右栏：MarvisPanel（智能体工作室，常驻可视化协同流水线）+ StudioDrawer（书房，可收起，
+ *     列表 + 详情；详情由 store 持有的 openResourceId 驱动，不进 URL）。
  */
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import AppLayout from '@/app/AppLayout.vue';
 import WorkshopChat from '@/components/workshop/WorkshopChat.vue';
+import MarvisPanel from '@/components/workshop/MarvisPanel.vue';
 import StudioDrawer from '@/components/workshop/StudioDrawer.vue';
 import ResourceDetailPanel from '@/components/workshop/ResourceDetailPanel.vue';
 import ChatHistoryRail from '@/components/workshop/ChatHistoryRail.vue';
@@ -184,7 +186,8 @@ function openArena(chapter: number): void {
           />
         </div>
         <div class="workshop-rail">
-          <!-- S2：生成时「思考」只由对话内 ThinkingStream 呈现，侧栏只保留书房。 -->
+          <!-- 多智能体工作室：常驻像素协同流水线（答疑/生成两条流都会点亮工位）。 -->
+          <MarvisPanel />
           <div
             class="rail-drawer"
             :class="{ 'rail-drawer--collapsed': !drawerOpen }"

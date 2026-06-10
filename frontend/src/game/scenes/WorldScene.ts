@@ -190,6 +190,10 @@ interface WorldSceneState {
   // 毫秒时钟，记录上一帧的值在本帧相减即可。0 表示首帧，跳过 NPC tick 防止
   // dt 巨大跳变。
   prevUpdateTimeMs: number;
+  // 主线标记（NPC 头顶「!」/ 目标点光圈）的显示对象句柄：每次重绘先销毁旧句柄。
+  // 配合 mainQuest store 订阅做响应式重绘——修复「感叹号画一次永不消失」。
+  questMarkerObjects: Phaser.GameObjects.GameObject[];
+  questMarkerUnsubscribe: (() => void) | null;
 }
 
 const state: WorldSceneState = {
@@ -220,6 +224,8 @@ const state: WorldSceneState = {
   hintRendererHandle: null,
   lifecycleDetach: null,
   prevUpdateTimeMs: 0,
+  questMarkerObjects: [],
+  questMarkerUnsubscribe: null,
 };
 
 export const WorldScene = {
@@ -472,6 +478,16 @@ export const WorldScene = {
     window.addEventListener('pythontopia:mood-changed', onMoodChanged);
 
     paintQuestMarkers(phaserScene, state.mapKey, state.npcs, RENDER_TILE_SIZE);
+    // 任务推进（完成对话 / 资源 / 提交 / 跨章）即重绘标记：旧「!」与光圈先销毁再按
+    // 最新 activeQuest 画。订阅句柄在 shutdown 解绑，防 restart 叠加多份监听。
+    try {
+      const mqStore = useMainQuestStore();
+      state.questMarkerUnsubscribe = mqStore.$subscribe(() => {
+        paintQuestMarkers(phaserScene, state.mapKey, state.npcs, RENDER_TILE_SIZE);
+      });
+    } catch {
+      // store 在 jsdom / 单测环境不可用时跳过订阅（初次绘制同样会静默跳过）。
+    }
 
     const onBeforeUnload = (): void => {
       void worldStore.flushPlayerUpdate();
@@ -499,6 +515,12 @@ export const WorldScene = {
     this.events?.on('shutdown', () => {
       window.removeEventListener('beforeunload', onBeforeUnload);
       window.removeEventListener('pythontopia:mood-changed', onMoodChanged);
+      if (state.questMarkerUnsubscribe) {
+        state.questMarkerUnsubscribe();
+        state.questMarkerUnsubscribe = null;
+      }
+      // 显示对象随场景销毁，这里只清引用，避免 restart 时对旧对象重复 destroy。
+      state.questMarkerObjects = [];
       if (state.weather) {
         state.weather.destroy();
         state.weather = null;
@@ -943,6 +965,19 @@ function paintLowObstacleSprite(phaserScene: Phaser.Scene, obstacle: LowObstacle
   }
 }
 
+/** 销毁当前主线标记（连带 tween），供重绘 / 任务完成清除复用。 */
+function clearQuestMarkers(phaserScene: Phaser.Scene): void {
+  state.questMarkerObjects.forEach((obj) => {
+    try {
+      phaserScene.tweens?.killTweensOf?.(obj);
+      obj.destroy();
+    } catch {
+      // 场景切换竞态下对象可能已被 Phaser 回收，忽略。
+    }
+  });
+  state.questMarkerObjects = [];
+}
+
 function paintQuestMarkers(
   phaserScene: Phaser.Scene,
   mapKey: string,
@@ -950,6 +985,8 @@ function paintQuestMarkers(
   tileSize: number,
 ): void {
   try {
+    // 先清旧标记再按最新任务画：任务完成 / 推进后旧「!」立刻消失（修复常驻感叹号）。
+    clearQuestMarkers(phaserScene);
     const mqStore = useMainQuestStore();
     // 单一事实源：地图标记消费 store.activeQuest（与左侧面板 / 进度条同源），
     // 不再用 currentChapter-currentSubQuest 指针自拼 id，避免乱序时标记指向别的任务。
@@ -970,6 +1007,7 @@ function paintQuestMarkers(
         repeat: -1,
         ease: 'Sine.easeInOut',
       });
+      state.questMarkerObjects.push(circle);
     } else if (evidence.type === 'dialog_complete') {
       const npcSpawn = npcs.find((n) => n.npcKey === evidence.npcKey);
       if (!npcSpawn) return;
@@ -992,6 +1030,7 @@ function paintQuestMarkers(
         repeat: -1,
         ease: 'Sine.easeInOut',
       });
+      state.questMarkerObjects.push(excl);
     }
   } catch {
     // store 在 jsdom / 测试环境不可用，静默跳过。

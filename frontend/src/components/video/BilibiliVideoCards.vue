@@ -181,9 +181,21 @@ watch(() => props.keyword, load);
       class="bili-cards__hint"
       data-testid="bili-cards-empty"
     >
-      {{ status === 'error'
-        ? 'B 站检索暂不可用，可稍后再试或回到课件问答。'
-        : '暂无相关 B 站讲解，可换个关键词或使用课件问答。' }}
+      <template v-if="status === 'error'">
+        B 站检索暂不可用（网络 / 登录态 / 风控均可能导致），可
+        <button
+          type="button"
+          class="bili-cards__retry"
+          data-testid="bili-cards-retry"
+          @click="load"
+        >
+          重试
+        </button>
+        或回到课件问答。
+      </template>
+      <template v-else>
+        暂无相关 B 站讲解，可换个关键词或使用课件问答。
+      </template>
     </p>
   </section>
 </template>
@@ -233,6 +245,23 @@ watch(() => props.keyword, load);
   background: var(--pyt-color-bg-soft);
   border: 1px dashed var(--pyt-color-border);
   border-radius: var(--pyt-radius-md);
+}
+/* 错误占位里的「重试」：像素小按钮，与 travel-chip 同语言。 */
+.bili-cards__retry {
+  font-family: inherit;
+  font-size: var(--pyt-font-size-xs);
+  padding: 2px 10px;
+  margin: 0 2px;
+  background: var(--pyt-color-warning-bg);
+  border: 2px solid var(--pyt-color-text-primary);
+  border-radius: var(--pyt-radius-sm);
+  color: var(--pyt-color-text-primary);
+  cursor: pointer;
+  box-shadow: 2px 2px 0 var(--pyt-color-shadow);
+}
+.bili-cards__retry:active {
+  transform: translate(2px, 2px);
+  box-shadow: none;
 }
 
 .bili-cards__grid {

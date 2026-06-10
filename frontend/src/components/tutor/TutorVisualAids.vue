@@ -2,27 +2,34 @@
 /**
  * 答疑多模态图解：把 TutorAgent 返回的 visual_aids 渲染为
  * - mermaid 结构图（用 mermaid 渲染 SVG，失败回退源码）
+ * - ascii 字符画（等宽 <pre>，内存布局/索引演示类）
+ * - svg 矢量示意（服务端已校验 + 前端 DOMPurify svg profile 双重消毒）
  * - AI 插画（调 /api/media/image 文生图，无 key 占位 degraded）
  * 卡片化展示，配合文字答案构成「文字 + 图解」的多模态答疑。
  */
 import { onMounted, ref, watch } from 'vue';
 import { generateImage } from '@/api/media';
+import { sanitizeSvgMarkup } from '@/utils/sanitizeSvg';
 
 export interface TutorVisualAid {
-  kind: 'mermaid' | 'image';
+  kind: 'mermaid' | 'image' | 'ascii' | 'svg';
   caption?: string;
   mermaid?: string | null;
   image_prompt?: string | null;
+  ascii_art?: string | null;
+  svg?: string | null;
   kc_codes?: string[];
 }
 
 const props = defineProps<{ aids: TutorVisualAid[] }>();
 
 interface RenderedAid {
-  kind: 'mermaid' | 'image';
+  kind: 'mermaid' | 'image' | 'ascii' | 'svg';
   caption: string;
+  /** mermaid 渲染产物或已消毒的后端 svg 源码。 */
   svg?: string;
   rawMermaid?: string;
+  ascii?: string;
   imageUrl?: string;
   degraded?: boolean;
   loading?: boolean;
@@ -60,6 +67,14 @@ async function build(): Promise<void> {
       const card = await renderMermaid(aid.mermaid, i);
       card.caption = aid.caption ?? '';
       out.push(card);
+    } else if (aid.kind === 'ascii' && aid.ascii_art) {
+      out.push({ kind: 'ascii', caption: aid.caption ?? '', ascii: aid.ascii_art });
+    } else if (aid.kind === 'svg' && aid.svg) {
+      // 消毒后必须仍是 <svg…>，否则视为不可信整体丢弃（不渲染半截残骸）。
+      const clean = sanitizeSvgMarkup(aid.svg);
+      if (clean.includes('<svg')) {
+        out.push({ kind: 'svg', caption: aid.caption ?? '', svg: clean });
+      }
     } else if (aid.kind === 'image' && aid.image_prompt) {
       const card = await renderImage(aid.image_prompt, aid.kc_codes ?? []);
       card.caption = aid.caption ?? '';
@@ -88,7 +103,8 @@ watch(() => props.aids, build);
         :key="i"
         class="aid-card"
       >
-        <!-- eslint-disable vue/no-v-html — mermaid 以 securityLevel:'strict' 渲染，输出无脚本/事件 SVG，已审阅 -->
+        <!-- eslint-disable vue/no-v-html — mermaid 以 securityLevel:'strict' 渲染；
+             kind=svg 经 服务端黑名单 + DOMPurify svg profile 双重消毒，均无脚本/事件，已审阅 -->
         <div
           v-if="card.kind === 'mermaid' && card.svg"
           class="aid-mermaid"
@@ -98,6 +114,17 @@ watch(() => props.aids, build);
           v-else-if="card.kind === 'mermaid'"
           class="aid-mermaid-raw"
         >{{ card.rawMermaid }}</pre>
+        <pre
+          v-else-if="card.kind === 'ascii'"
+          class="aid-ascii"
+          data-testid="aid-ascii"
+        >{{ card.ascii }}</pre>
+        <div
+          v-else-if="card.kind === 'svg' && card.svg"
+          class="aid-svg"
+          data-testid="aid-svg"
+          v-html="card.svg"
+        />
         <template v-else-if="card.kind === 'image'">
           <img
             v-if="card.imageUrl"
@@ -168,6 +195,31 @@ watch(() => props.aids, build);
   word-break: break-word;
   color: #5e4923;
   font-family: var(--pyt-font-pixel);
+}
+/* ascii 字符画：等宽 + 终端深色块（与代码输出块同语言），保持逐格对齐不换行。 */
+.aid-ascii {
+  margin: 0;
+  padding: 8px 10px;
+  font-family: var(--pyt-font-mono, monospace);
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: pre;
+  overflow: auto;
+  color: var(--pyt-color-terminal-text, #f1e5c8);
+  background: var(--pyt-color-terminal-bg, #2e2417);
+  border-radius: 4px;
+}
+/* 后端 svg 示意：限宽自适应，浅色底衬托线条。 */
+.aid-svg {
+  overflow: auto;
+  background: #fffdf4;
+  border-radius: 4px;
+}
+.aid-svg :deep(svg) {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0 auto;
 }
 .aid-image {
   width: 100%;
