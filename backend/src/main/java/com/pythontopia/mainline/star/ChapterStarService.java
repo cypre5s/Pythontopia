@@ -175,16 +175,49 @@ public class ChapterStarService {
   }
 
   /**
-   * TODO(Wave 2 · 子代理 B1)：补星发放钩子（错题复盘 / 无尽挑战，每途径至多 +1，封顶 3★，幂等）。
+   * 补星发放（错题复盘 / 无尽挑战，每途径至多 +1，封顶 3★，幂等；r15 §5，Wave 2 B1）。
    *
-   * <p>实现要点（B1）：校验补星条件（bug-mine RESOLVED ≥ 3 / 无尽单轮答对 ≥ 8 且正确率 ≥ 80%），
-   * 将 {@code source} 写入 chapter_star.breakdown.recovered（去重），插入 star_award_event(delta=+1)，
-   * 然后调用 {@link #recalc} 收口。本核心服务已保证 recalc 保留既有 recovered，不会覆盖补星。
-   *
-   * <p>当前未接线，调用即 fail-fast（不静默降级，遵守 AGENTS.md）。
+   * <p>条件校验由 {@link com.pythontopia.mainline.MainlineRecoveryService} 负责；本方法只把 {@code source}
+   * 记入 {@code breakdown.recovered}（去重，封顶 2 途径）并按 §5 重算（核心星 + 补星，封顶 3★，只升不降）。
+   * <b>幂等</b>：该 source 已在 recovered 内则不重复加星、不记事件。
    */
+  @Transactional
   public ChapterStar applyRecoveryStar(long userId, int chapter, StarSource source) {
-    throw new UnsupportedOperationException(
-        "补星发放（" + source + "）由 Wave 2 子代理 B1 实现；A1 仅交付核心星级 recalc 钩子");
+    if (!ChapterCatalog.isValidChapter(chapter)) {
+      throw new IllegalArgumentException("chapter out of range 1..7: " + chapter);
+    }
+    if (source != StarSource.ERRORBOOK_RECOVERY && source != StarSource.ENDLESS_RECOVERY) {
+      throw new IllegalArgumentException("applyRecoveryStar 仅用于补星途径: " + source);
+    }
+    ChapterStar existing = starRepository.find(userId, chapter).orElse(null);
+    List<String> recovered = existingRecovered(existing);
+    if (recovered.contains(source.name())) {
+      return existing; // 幂等：本途径已发放，不重复加星 / 不记事件（existing 必非 null）。
+    }
+    List<String> newRecovered =
+        java.util.stream.Stream.concat(recovered.stream(), java.util.stream.Stream.of(source.name()))
+            .distinct()
+            .limit(2)
+            .toList();
+    int existingStars = existing == null ? 0 : existing.stars();
+    Integer bestScore = chapterTestRepository.findBestScore(userId, chapter).orElse(null);
+    CoreStars core =
+        StarFormula.evaluate(
+            bestScore, allStagesComplete(userId, chapter), averageMastery(userId, chapter));
+    int computed = Math.min(StarFormula.MAX_STARS, core.total() + newRecovered.size());
+    int finalStars = Math.max(existingStars, computed);
+    starRepository.upsert(userId, chapter, finalStars, bestScore, breakdownJson(core, newRecovered));
+    if (finalStars > existingStars) {
+      starRepository.insertEvent(
+          userId,
+          chapter,
+          finalStars - existingStars,
+          source.name(),
+          "recovery " + source + " recovered=" + newRecovered.size());
+      log.info(
+          "chapter recovery star user={} ch={} {}→{} source={}",
+          userId, chapter, existingStars, finalStars, source);
+    }
+    return starRepository.find(userId, chapter).orElseThrow();
   }
 }

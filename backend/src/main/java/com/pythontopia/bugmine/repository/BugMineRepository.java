@@ -471,6 +471,33 @@ public class BugMineRepository {
         .findFirst();
   }
 
+  /**
+   * 本人在给定 KC 集合上「已解决」的 Bug 矿洞 session 数（错题复盘补星条件：本章 RESOLVED ≥ 3，r15 §5）。
+   * kcCodes 为空时返回 0。
+   */
+  public int countResolvedByKcCodes(long userId, List<String> kcCodes) {
+    if (kcCodes.isEmpty()) {
+      return 0;
+    }
+    String placeholders = String.join(",", java.util.Collections.nCopies(kcCodes.size(), "?"));
+    Object[] args = new Object[kcCodes.size() + 1];
+    args[0] = userId;
+    for (int i = 0; i < kcCodes.size(); i++) {
+      args[i + 1] = kcCodes.get(i);
+    }
+    Integer count =
+        jdbcTemplate.queryForObject(
+            "SELECT count(*) FROM bug_mine_session s"
+                + " JOIN course_problem p ON p.id = s.problem_id"
+                + " WHERE s.user_id = ? AND s.status = 'RESOLVED'"
+                + " AND p.kc_code IN ("
+                + placeholders
+                + ")",
+            Integer.class,
+            args);
+    return count == null ? 0 : count;
+  }
+
   public int retryCount(Long sessionId) {
     Integer count =
         jdbcTemplate.queryForObject(

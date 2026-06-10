@@ -79,6 +79,20 @@ public class ChapterStarRepository {
         reason);
   }
 
+  /** 当日（服务器时区）某途径补星事件数（无尽补星防刷：每日每章至多 1 次有效判定，§7）。 */
+  public int countEventsToday(long userId, int chapter, String source) {
+    Integer count =
+        jdbcTemplate.queryForObject(
+            "SELECT count(*) FROM star_award_event"
+                + " WHERE user_id = ? AND chapter = ? AND source = ?"
+                + " AND created_at >= date_trunc('day', now())",
+            Integer.class,
+            userId,
+            chapter,
+            source);
+    return count == null ? 0 : count;
+  }
+
   private ChapterStar map(ResultSet rs, int rowNum) throws SQLException {
     return new ChapterStar(
         rs.getLong("id"),

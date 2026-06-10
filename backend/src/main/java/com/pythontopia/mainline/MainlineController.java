@@ -3,11 +3,13 @@ package com.pythontopia.mainline;
 import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
+import com.pythontopia.mainline.dto.EndlessSummaryRequest;
 import com.pythontopia.mainline.dto.ExampleDoneRequest;
 import com.pythontopia.mainline.dto.MainlineOverviewDto;
 import com.pythontopia.mainline.dto.PageReadRequest;
 import com.pythontopia.mainline.dto.StageDetailDto;
 import com.pythontopia.mainline.dto.StageProgressDto;
+import com.pythontopia.mainline.dto.StarAwardResultDto;
 import com.pythontopia.mainline.dto.VideoProgressRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
@@ -30,9 +32,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class MainlineController {
 
   private final MainlineService service;
+  private final MainlineRecoveryService recoveryService;
 
-  public MainlineController(MainlineService service) {
+  public MainlineController(MainlineService service, MainlineRecoveryService recoveryService) {
     this.service = service;
+    this.recoveryService = recoveryService;
   }
 
   @GetMapping("/overview")
@@ -69,6 +73,26 @@ public class MainlineController {
       @CurrentUser CurrentUserPrincipal user) {
     return service.reportExampleDone(
         requireUserId(user), stageId, request.problemId(), request.submissionId());
+  }
+
+  @PostMapping("/endless/summary")
+  public StarAwardResultDto endlessSummary(
+      @Valid @RequestBody EndlessSummaryRequest request, @CurrentUser CurrentUserPrincipal user) {
+    boolean awarded =
+        recoveryService.recordEndlessSummary(
+            requireUserId(user),
+            request.chapter(),
+            request.correct(),
+            request.total(),
+            request.streak());
+    return new StarAwardResultDto(awarded);
+  }
+
+  @PostMapping("/chapters/{chapter}/recovery/errorbook")
+  public StarAwardResultDto recoveryErrorbook(
+      @PathVariable @Positive int chapter, @CurrentUser CurrentUserPrincipal user) {
+    return new StarAwardResultDto(
+        recoveryService.claimErrorbookRecovery(requireUserId(user), chapter));
   }
 
   private long requireUserId(CurrentUserPrincipal user) {
