@@ -37,7 +37,7 @@ export type MainSubQuestEvidence =
   | { type: 'building_visit'; mapKey: MainQuestMapKey; tileX: number; tileY: number }
   | { type: 'kc_mastery'; kcCode: string; thresholdScore: number };
 
-export type MainSubQuestRewardKind = 'coin' | 'gem' | 'item' | 'kc_mastery';
+export type MainSubQuestRewardKind = 'item' | 'kc_mastery';
 
 export interface MainSubQuestReward {
   kind: MainSubQuestRewardKind;

@@ -277,12 +277,12 @@ async function loadIndex(): Promise<void> {
   try {
     const [docs, chs, kcDtos, problems, examples, kcFallback] = await Promise.all([
       listCourseDocuments(),
-      listChapters(43).catch((error: unknown) => {
+      listChapters().catch((error: unknown) => {
         toast.push({ kind: 'error', text: '章节索引接口失败，已切到 fixture 兜底。' });
         void error;
         return [] as ChapterDto[];
       }),
-      listKnowledgeComponents(43).catch((error: unknown) => {
+      listKnowledgeComponents().catch((error: unknown) => {
         void error;
         return [] as KcDto[];
       }),

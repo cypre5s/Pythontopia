@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
+import { useRoute } from 'vue-router';
 import { useLearningStore } from '@stores/learning';
 import { useToastStore } from '@stores/toast';
 import PyButton from '@/components/ui/PyButton.vue';
@@ -18,7 +19,21 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: 'archived', label: '历史路径' },
 ];
 
-const activeTab = ref<TabKey>('today');
+const TAB_KEYS = new Set<string>(TABS.map((t) => t.key));
+
+/** 支持 /board?tab=classroom 深链：班长对话「领班级任务」直接落到班级任务页签。 */
+function initialTab(): TabKey {
+  try {
+    const q = useRoute().query['tab'];
+    const key = typeof q === 'string' ? q : null;
+    if (key && TAB_KEYS.has(key)) return key as TabKey;
+  } catch {
+    /* 无路由上下文（独立挂载测试）时走默认 */
+  }
+  return 'today';
+}
+
+const activeTab = ref<TabKey>(initialTab());
 const planning = ref<boolean>(false);
 
 const learning = useLearningStore();

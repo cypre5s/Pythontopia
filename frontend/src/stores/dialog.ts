@@ -1,7 +1,8 @@
 import { defineStore } from 'pinia';
-import { npcDialog } from '@/game/data/npcDialog';
 import { playDialogClose, playDialogOpen } from '@/composables/useStardewFx';
 import { fetchDialogContext } from '@/api/dialog';
+import { useLearningStore } from '@stores/learning';
+import { useToastStore } from '@stores/toast';
 import type { DialogContextDto } from '@/api/dto/DialogContextDto';
 
 /**
@@ -57,7 +58,8 @@ export type DialogConditionType =
   | 'first_time_this_week'
   | 'kc_mastered'
   | 'flag_set'
-  | 'has_failed_submission';
+  | 'has_failed_submission'
+  | 'no_failed_submission';
 
 export interface DialogCondition {
   type: DialogConditionType;
@@ -183,6 +185,90 @@ function emitDialogChoice(event: DialogChoiceEvent): void {
   }
 }
 
+// ─────────────────── 对话 flag / 每周一次 持久化 ───────────────────
+// set_flag 效果与 flag_set / first_time_this_week 条件共用的轻量持久层：
+// 走 localStorage（与主线进度同策略），SSR / 隐私模式下读写失败一律静默降级。
+
+const FLAGS_STORAGE_KEY = 'pythontopia.dialogFlags';
+const WEEKLY_STORAGE_KEY = 'pythontopia.dialogWeeklySeen';
+
+function readStorageMap(storageKey: string): Record<string, string> {
+  if (typeof localStorage === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem(storageKey);
+    const parsed: unknown = raw ? JSON.parse(raw) : {};
+    if (typeof parsed === 'object' && parsed !== null) {
+      return parsed as Record<string, string>;
+    }
+  } catch {
+    /* 损坏数据按空处理 */
+  }
+  return {};
+}
+
+function writeStorageMap(storageKey: string, map: Record<string, string>): void {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(map));
+  } catch {
+    /* 配额/隐私模式失败静默 */
+  }
+}
+
+/** ISO 周标识（如 2026-W24），first_time_this_week 以它为「本周」边界。 */
+export function isoWeekOf(date: Date): string {
+  // ISO 8601：周四所在的年/周。先把日期移到本周四，再算它是当年第几周。
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const day = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  return `${d.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+}
+
+export function setDialogFlag(flagKey: string): void {
+  const flags = readStorageMap(FLAGS_STORAGE_KEY);
+  flags[flagKey] = '1';
+  writeStorageMap(FLAGS_STORAGE_KEY, flags);
+}
+
+export function hasDialogFlag(flagKey: string): boolean {
+  return readStorageMap(FLAGS_STORAGE_KEY)[flagKey] === '1';
+}
+
+function weeklySeenThisWeek(key: string): boolean {
+  return readStorageMap(WEEKLY_STORAGE_KEY)[key] === isoWeekOf(new Date());
+}
+
+function markWeeklySeen(key: string): void {
+  const map = readStorageMap(WEEKLY_STORAGE_KEY);
+  map[key] = isoWeekOf(new Date());
+  writeStorageMap(WEEKLY_STORAGE_KEY, map);
+}
+
+/** 入口插话节点的「本周已抢占过」记录 key。 */
+function entrySeenKey(npcKey: string, nodeId: string): string {
+  return `entry:${npcKey}:${nodeId}`;
+}
+
+/** give_item 道具的展示名（R-14 后无背包，发放=flag 记录 + toast 反馈）。 */
+const DIALOG_ITEM_LABELS: Readonly<Record<string, string>> = Object.freeze({
+  retro_seal: '复盘印章',
+  class_heatmap: '班级热力图',
+  evidence_slip: '证据条',
+});
+
+/** 内部测试钩子：清空对话 flag / 每周记录，仅供 vitest 使用。 */
+export function __resetDialogFlagsForTests(): void {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.removeItem(FLAGS_STORAGE_KEY);
+    localStorage.removeItem(WEEKLY_STORAGE_KEY);
+  } catch {
+    /* 忽略 */
+  }
+}
+
 async function fetchJson<T>(url: string, timeoutMs = 8000): Promise<T> {
   // 加超时：静态 meta/dialog 理应秒回；万一卡住（代理/网络抖动）也不能让对话永远「加载中…」。
   const controller = new AbortController();
@@ -228,18 +314,6 @@ export const useDialogStore = defineStore('dialog', {
   },
   actions: {
     /**
-     * 旧 API：保留占位对话能力，让现有 TownScene / DialogModal 测试无须改动。
-     * 新代码请改用 openWithTree。
-     */
-    open(npcKey: string): void {
-      this.openNpcKey = npcKey;
-      this.lines = npcDialog[npcKey] ?? ['[占位] 这位居民还没有准备好对话。'];
-      this.branchChoices = [];
-      this.isTypingDone = false;
-      playDialogOpen();
-    },
-
-    /**
      * 加载并打开 NPC 对话树。
      *
      * 流程：
@@ -274,8 +348,17 @@ export const useDialogStore = defineStore('dialog', {
         this.portrait = meta.portrait ?? null;
         this.tree = tree;
 
-        this.currentNodeId = tree.rootNodeId;
-        this.history = tree.rootNodeId ? [tree.rootNodeId] : [];
+        // 入口可能被「插话」节点抢占（每周复盘/班级周报等条件内容），否则走 root。
+        const entryId = this.pickEntryNodeId(tree);
+        this.currentNodeId = entryId;
+        this.history = entryId ? [entryId] : [];
+        const entryNode = entryId ? tree.nodes[entryId] : undefined;
+        if (entryNode) {
+          this.markNodeShown(entryNode);
+          if (entryId !== tree.rootNodeId) {
+            markWeeklySeen(entrySeenKey(tree.npcKey, entryId));
+          }
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         this.loadError = `NPC 数据加载失败：${npcKey}（${message}）`;
@@ -320,13 +403,37 @@ export const useDialogStore = defineStore('dialog', {
           // 用 lazy import 规避与 mainQuest store 的循环依赖（同 close() 的做法）。
           if (effect.type === 'quest_recommend' && effect.questKey) {
             const questKey = effect.questKey;
-            void import('@stores/mainQuest').then((mod) => {
-              try {
-                mod.useMainQuestStore().acceptQuest(questKey);
-              } catch {
-                /* mainQuest store 未挂载（test / 极端环境）忽略 */
-              }
-            });
+            if (questKey === 'claim_class_quest') {
+              // 班长「领班级任务」：班级任务不在主线里，直接带到公告板·班级任务页签，
+              // 学生在那里真实领取教师发布的任务（此前只开主线面板，引导落空）。
+              routeToNavigate = '/board?tab=classroom';
+            } else {
+              void import('@stores/mainQuest').then((mod) => {
+                try {
+                  mod.useMainQuestStore().acceptQuest(questKey);
+                } catch {
+                  /* mainQuest store 未挂载（test / 极端环境）忽略 */
+                }
+              });
+            }
+          }
+          // set_flag：落持久 flag，供 flag_set 条件与后续内容解锁使用。
+          if (effect.type === 'set_flag' && effect.flagKey) {
+            setDialogFlag(effect.flagKey);
+          }
+          // give_item：R-14 后无背包系统，发放 = flag 记录（item:<key>）+ toast 反馈，
+          // 既不静默丢弃也不引入无教育目的的库存 UI。
+          if (effect.type === 'give_item' && effect.itemKey) {
+            const itemKey = effect.itemKey;
+            setDialogFlag(`item:${itemKey}`);
+            try {
+              useToastStore().show(
+                `获得「${DIALOG_ITEM_LABELS[itemKey] ?? itemKey}」`,
+                'success',
+              );
+            } catch {
+              /* toast store 未挂载（test / 极端环境）忽略 */
+            }
           }
           // 打开学习面板：复用 route 的 pythontopia:dialog-navigate 机制，
           // 既支持 effect.route 带参路由（/lecture/1），也支持 effect.panel 简称。
@@ -359,6 +466,8 @@ export const useDialogStore = defineStore('dialog', {
       }
       this.currentNodeId = choice.nextNodeId;
       this.history.push(choice.nextNodeId);
+      // 进入条件节点（如 weekly_retro）即记录展示，「每周一次」从此刻起算。
+      this.markNodeShown(next);
       // 切换节点必须把上一节点的分支快照和打字机状态归零，
       // 否则 UI 会在下一段文字还没滚完时就把旧选项渲染出来。
       this.branchChoices = [];
@@ -379,7 +488,14 @@ export const useDialogStore = defineStore('dialog', {
       this.isTypingDone = true;
       const node = this.currentNode;
       if (node) {
-        this.branchChoices = node.choices.slice();
+        // 过滤掉「目标节点条件不满足」的选项：例如没有失败提交时隐藏
+        // 「上次失败的提交是什么？」、本周已复盘过时隐藏「开始本周复盘」。
+        this.branchChoices = node.choices.filter((choice) => {
+          if (!choice.nextNodeId || !this.tree) return true;
+          const target = this.tree.nodes[choice.nextNodeId];
+          if (!target) return true;
+          return this.evaluateConditions(target.conditions ?? []);
+        });
       }
     },
 
@@ -429,24 +545,97 @@ export const useDialogStore = defineStore('dialog', {
 
     /**
      * 评估条件列表是否全部满足（AND 逻辑）。
-     * 当前实现 has_failed_submission；其余类型暂按满足处理。
+     *
+     * - first_time_this_week：该 key 本 ISO 周尚未展示过（展示时由 markNodeShown 记录）；
+     * - flag_set：set_flag 效果落过对应 flagKey；
+     * - kc_mastered：learning store 掌握度快照中该 KC ≥ 阈值（默认 0.4，与「测·达标」一致）；
+     * - has_failed_submission / no_failed_submission：基于对话 context 的最近失败提交；
+     *   context 尚未到达（后台异步拉取中）时按「无失败记录」处理，保证新玩家路径可见。
      */
     evaluateConditions(conditions: DialogCondition[]): boolean {
       if (conditions.length === 0) return true;
+      const hasFailed = (): boolean => {
+        const title = this.context?.stats?.['lastFailedProblemTitle'];
+        return Boolean(title) && title !== '—' && title !== '-';
+      };
       for (const cond of conditions) {
         switch (cond.type) {
-          case 'has_failed_submission': {
-            const title = this.context?.stats?.lastFailedProblemTitle;
-            if (!title || title === '—' || title === '-') return false;
+          case 'has_failed_submission':
+            if (!hasFailed()) return false;
+            break;
+          case 'no_failed_submission':
+            if (hasFailed()) return false;
+            break;
+          case 'first_time_this_week': {
+            const key = cond.key ?? cond.flagKey;
+            if (key && weeklySeenThisWeek(key)) return false;
             break;
           }
-          case 'flag_set':
-          case 'kc_mastered':
-          case 'first_time_this_week':
+          case 'flag_set': {
+            const key = cond.flagKey ?? cond.key;
+            if (key && !hasDialogFlag(key)) return false;
             break;
+          }
+          case 'kc_mastered': {
+            if (!cond.kcCode) break;
+            try {
+              const learning = useLearningStore();
+              const snap = learning.field.masterySnapshot.find(
+                (entry) => entry.kcCode === cond.kcCode,
+              );
+              const threshold = cond.value ?? 0.4;
+              if (!snap || snap.masteryScore < threshold) return false;
+            } catch {
+              // learning store 不可用（极端测试环境）→ 视为未达成，隐藏增益内容。
+              return false;
+            }
+            break;
+          }
         }
       }
       return true;
+    },
+
+    /**
+     * 节点真正展示给玩家时调用：first_time_this_week 类条件记下「本周已看过」，
+     * 下次评估即不满足，实现「每周一次」的插话语义。
+     */
+    markNodeShown(node: DialogNode): void {
+      for (const cond of node.conditions ?? []) {
+        if (cond.type === 'first_time_this_week') {
+          const key = cond.key ?? cond.flagKey;
+          if (key) markWeeklySeen(key);
+        }
+      }
+    },
+
+    /**
+     * 选择对话入口节点：优先「插话」节点，否则 rootNodeId。
+     *
+     * 插话节点 = 不被任何 choice 引用、且自带非空 conditions 的节点
+     * （如每周复盘 / 班级周报 / 防幻觉告诫 / 矿洞 boss 提示）。按数据声明顺序
+     * 取第一个条件满足的；条件全不满足时回落到 rootNodeId。
+     *
+     * 入口抢占统一带「每周一次」阻尼（entry:<npc>:<node> 周记录）：
+     * kc_mastered 这类「一旦达成永远为真」的条件不会永久劫持 greet 主菜单。
+     */
+    pickEntryNodeId(tree: NpcDialogTree): string {
+      const referenced = new Set<string>();
+      for (const node of Object.values(tree.nodes)) {
+        for (const choice of node.choices ?? []) {
+          if (choice.nextNodeId) referenced.add(choice.nextNodeId);
+        }
+      }
+      for (const [id, node] of Object.entries(tree.nodes)) {
+        if (id === tree.rootNodeId || referenced.has(id)) continue;
+        const conds = node.conditions ?? [];
+        if (conds.length === 0) continue;
+        if (weeklySeenThisWeek(entrySeenKey(tree.npcKey, id))) continue;
+        if (this.evaluateConditions(conds)) {
+          return id;
+        }
+      }
+      return tree.rootNodeId;
     },
 
     /**

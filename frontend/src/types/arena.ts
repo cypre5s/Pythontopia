@@ -37,7 +37,7 @@ export interface ArenaLevel {
   /** 1..5 难度，与 boss problem 接的 difficulty 对齐。 */
   difficulty: 1 | 2 | 3 | 4 | 5;
   /** 通过后奖励。 */
-  rewards: readonly { kind: 'coin' | 'kc_mastery'; amount: number; ref?: string }[];
+  rewards: readonly { kind: 'kc_mastery'; amount: number; ref?: string }[];
 }
 
 /** ArenaLevel 在 store 中持有的进度。 */

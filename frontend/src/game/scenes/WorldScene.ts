@@ -391,6 +391,18 @@ export const WorldScene = {
       );
     }
 
+    // 建筑入口键盘链路：建筑体被碰撞层挡住，玩家站到门口一圈内按 E 即可进入，
+    // 与鼠标点击整屋等效——键盘玩家不再依赖 NPC 对话 route 兜底
+    // （/profile-room、/board 等恰好没有对话兜底）。注册顺序在 NPC trigger 之后，
+    // 玩家同时贴近 NPC 和建筑时优先提示 NPC 对话。
+    buildings.forEach((building) => {
+      state.interactable?.register(
+        buildBuildingTrigger(building, RENDER_TILE_SIZE, () => {
+          void router.push(building.route);
+        }),
+      );
+    });
+
     const worldWidth = state.width * RENDER_TILE_SIZE;
     const worldHeight = state.height * RENDER_TILE_SIZE;
     this.cameras.main.setBounds(0, 0, worldWidth, worldHeight);
@@ -1057,6 +1069,7 @@ function drawFallbackMessage(phaserScene: Phaser.Scene, text: string): void {
 
 /** Trigger id 前缀，业务侧调试时容易区分 npc trigger vs 其他类型。 */
 export const NPC_TRIGGER_ID_PREFIX = 'npc:';
+export const BUILDING_TRIGGER_ID_PREFIX = 'building:';
 
 /** 公告板 trigger 固定 id，导出便于单测断言。 */
 export const BULLETIN_BOARD_TRIGGER_ID = 'trigger:bulletin_board';
@@ -1148,6 +1161,32 @@ export function buildNpcTrigger(
       radius: tileSize * TRIGGER_RADIUS_TILES,
     },
     hint: buildNpcHintText(npc.label || npc.npcKey),
+    onActivate,
+  };
+}
+
+/**
+ * 由 BuildingZone 构造建筑入口 trigger（E 键进入，与鼠标点击等效）。
+ *
+ * - id 用 `building:<route>` 前缀，route 在同图内唯一；
+ * - 形状取建筑地基矩形向四周外扩 1 tile：建筑本体在碰撞层内不可站立，
+ *   外扩一圈即「门口」，玩家贴墙任意一侧都能按 E 进入。
+ */
+export function buildBuildingTrigger(
+  building: { route: string; label: string; tileX: number; tileY: number; width: number; height: number },
+  tileSize: number,
+  onActivate: () => void,
+): ITrigger {
+  return {
+    id: `${BUILDING_TRIGGER_ID_PREFIX}${building.route}`,
+    shape: {
+      type: 'rect',
+      x: (building.tileX - 1) * tileSize,
+      y: (building.tileY - 1) * tileSize,
+      width: (building.width + 2) * tileSize,
+      height: (building.height + 2) * tileSize,
+    },
+    hint: `按 E 进入${building.label || '建筑'}`,
     onActivate,
   };
 }

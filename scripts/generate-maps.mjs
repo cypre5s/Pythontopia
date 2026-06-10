@@ -73,24 +73,6 @@ const TOWN_GIDS = {
   benchH: 89, // frame 88 = 横向长椅
 };
 
-// Kenney tiny-dungeon 132 帧采样（用于矿洞）
-const DUNG_GIDS = {
-  floor: 1, // frame 0 = 灰石地板
-  floorAlt: 13, // frame 12 = 地板变种 1
-  floorAlt2: 25, // frame 24 = 地板变种 2
-  voidDark: 10, // frame 9 = 黑色虚空（用作矿洞入口）
-  voidDark2: 11, // frame 10
-  voidDark3: 12, // frame 11
-  wallBrown: 22, // frame 21 = 棕黑色墙（矿洞墙体）
-  wallBrown2: 23, // frame 22
-  wallBrown3: 24, // frame 23
-  wallStone: 34, // frame 33 = 灰墙
-  wallStone2: 35, // frame 34
-  oreBlue: 96, // frame 95 = 蓝色矿石（深蓝点缀）
-  chest: 110, // frame 109 = 宝箱 / 矿车
-  pillar: 46, // frame 45 = 立柱
-};
-
 // ---------- 通用工具 ----------
 
 /** 生成 w*h 的零填充数组（gid 0 = 空 tile） */

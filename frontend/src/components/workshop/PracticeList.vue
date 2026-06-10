@@ -2,7 +2,6 @@
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useLearningStore } from '@stores/learning';
-import { useMainQuestStore } from '@stores/mainQuest';
 import { kcDisplayName } from '@/data/kcNames';
 import type { PracticeContent, ProblemSpec } from '@/api/dto/Workshop';
 import type { PyodideRunResult } from '@/game/adapters/pyodide';
@@ -62,12 +61,11 @@ async function runProblem(index: number): Promise<void> {
     const preview = learning.training.preview;
     runError.value[index] = lastError;
     results.value[index] = lastError ? null : preview;
+    // 硬红线：Pyodide 本地预览 ≠ 正式判题。这里只更新本地 UI 状态，
+    // 不调 mainQuest.onSubmissionPassed（其会向后端上报 submission_passed
+    // 事件，污染画像/事件流）；主线「练」由训练场正式判题推进。
     const passed = isPassing(problem, preview, lastError);
     status.value[index] = passed ? 'passed' : 'failed';
-    if (passed) {
-      const kc = problem.kc_codes[0];
-      useMainQuestStore().onSubmissionPassed(kc ? { kcCode: kc } : {});
-    }
   } finally {
     running.value[index] = false;
   }

@@ -16,8 +16,9 @@ export interface SaveSlotSnapshot {
 
 /**
  * 玩家存档槽。后端始终下发 sceneName / unlockedBuildings / accumulatedPlaySeconds /
- * inventoryItems 这 4 个 RPG 扩展字段（NOT NULL DEFAULT），故全部必填；inventoryItems 为
- * 背包快照，仅供存档恢复，不替代 InventoryStore 运行时态。
+ * inventoryItems 这 4 个 RPG 扩展字段（NOT NULL DEFAULT），故全部必填。
+ * R-14 收缩后前端无背包/建筑解锁玩法，unlockedBuildings/inventoryItems 仅作为
+ * 后端契约字段透传，前端不消费。
  */
 export interface SaveSlotDto {
   slotIndex: number;

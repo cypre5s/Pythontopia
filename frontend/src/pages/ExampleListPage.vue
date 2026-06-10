@@ -111,7 +111,7 @@ onMounted(async () => {
   try {
     const [exList, kcDtos] = await Promise.all([
       listAllExamples(),
-      listKnowledgeComponents(43).catch(() => [] as KcDto[]),
+      listKnowledgeComponents().catch(() => [] as KcDto[]),
     ]);
     examples.value = exList;
 

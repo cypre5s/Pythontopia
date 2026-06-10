@@ -307,8 +307,8 @@ onMounted(async () => {
   // 加载课程包 43 的章节 + KC 作为 `@` 引用候选；失败不影响普通问答。
   try {
     const [chapters, kcs] = await Promise.all([
-      listChapters(43),
-      listKnowledgeComponents(43),
+      listChapters(),
+      listKnowledgeComponents(),
     ]);
     mentionItems.value = buildMentionItems(chapters, kcs);
   } catch {

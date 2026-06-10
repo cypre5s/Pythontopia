@@ -645,8 +645,8 @@ function goToPage(pageId: number): void {
 onMounted(async () => {
   try {
     const [chapters, kcs] = await Promise.all([
-      listChapters(43),
-      listKnowledgeComponents(43),
+      listChapters(),
+      listKnowledgeComponents(),
     ]);
     mentionItems.value = buildMentionItems(chapters, kcs);
     courseKcs.value = kcs.map((kc) => ({ code: kc.kcCode, name: kc.kcName }));

@@ -1,6 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSessionStore } from '@/stores/session';
+import { refresh } from '@/api/auth';
 
 vi.mock('@/api/auth', () => ({
   login: vi.fn(async () => ({
@@ -14,15 +15,27 @@ vi.mock('@/api/auth', () => ({
     displayName: '学生一号',
     role: 'STUDENT',
   })),
+  refresh: vi.fn(async () => ({
+    token: 'jwt-token-renewed',
+    expiresAt: '2099-06-01T00:00:00Z',
+    user: { id: 2, username: 'tea01', displayName: '王老师', role: 'TEACHER' },
+  })),
 }));
+
+const refreshMock = vi.mocked(refresh);
+
+async function flushAsync(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
 
 describe('session store', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     localStorage.clear();
+    refreshMock.mockClear();
   });
 
-  it('stores token and expiry after login', async () => {
+  it('stores token / expiry / user snapshot after login', async () => {
     const store = useSessionStore();
 
     await store.login({ username: 'stu01', password: 'P@ssw0rd1' });
@@ -31,16 +44,22 @@ describe('session store', () => {
     expect(store.displayName).toBe('学生一号');
     expect(localStorage.getItem('pythontopia.token')).toBe('jwt-token');
     expect(localStorage.getItem('pythontopia.expiresAt')).toBe('2099-01-01T00:00:00Z');
+    expect(JSON.parse(localStorage.getItem('pythontopia.user') ?? '{}')).toMatchObject({
+      username: 'stu01',
+      role: 'STUDENT',
+    });
   });
 
-  it('clears token and expiry on logout', async () => {
+  it('clears token / expiry / user on logout', async () => {
     const store = useSessionStore();
     await store.login({ username: 'stu01', password: 'P@ssw0rd1' });
 
     store.logout();
 
     expect(store.token).toBeNull();
+    expect(store.user).toBeNull();
     expect(localStorage.getItem('pythontopia.token')).toBeNull();
+    expect(localStorage.getItem('pythontopia.user')).toBeNull();
   });
 
   it('logs out when hydrating an expired token', () => {
@@ -52,5 +71,64 @@ describe('session store', () => {
 
     expect(store.isAuthenticated).toBe(false);
     expect(localStorage.getItem('pythontopia.token')).toBeNull();
+    expect(refreshMock).not.toHaveBeenCalled();
+  });
+
+  it('hydrate restores user/role synchronously from snapshot (teacher keeps role after F5)', () => {
+    localStorage.setItem('pythontopia.token', 'valid');
+    localStorage.setItem('pythontopia.expiresAt', '2099-01-01T00:00:00Z');
+    localStorage.setItem(
+      'pythontopia.user',
+      JSON.stringify({ id: 2, username: 'tea01', displayName: '王老师', role: 'TEACHER' }),
+    );
+    const store = useSessionStore();
+
+    store.hydrateFromStorage();
+
+    expect(store.role).toBe('TEACHER');
+    expect(store.displayName).toBe('王老师');
+  });
+
+  it('hydrate with valid token refreshes session and applies server-authoritative user', async () => {
+    localStorage.setItem('pythontopia.token', 'valid');
+    localStorage.setItem('pythontopia.expiresAt', '2099-01-01T00:00:00Z');
+    const store = useSessionStore();
+
+    store.hydrateFromStorage();
+    await flushAsync();
+
+    expect(refreshMock).toHaveBeenCalledWith('valid');
+    expect(store.token).toBe('jwt-token-renewed');
+    expect(store.role).toBe('TEACHER');
+    expect(localStorage.getItem('pythontopia.token')).toBe('jwt-token-renewed');
+  });
+
+  it('hydrate keeps local session when refresh fails with a network error', async () => {
+    refreshMock.mockRejectedValueOnce(new Error('network down'));
+    localStorage.setItem('pythontopia.token', 'valid');
+    localStorage.setItem('pythontopia.expiresAt', '2099-01-01T00:00:00Z');
+    localStorage.setItem(
+      'pythontopia.user',
+      JSON.stringify({ id: 2, username: 'tea01', displayName: '王老师', role: 'TEACHER' }),
+    );
+    const store = useSessionStore();
+
+    store.hydrateFromStorage();
+    await flushAsync();
+
+    expect(store.isAuthenticated).toBe(true);
+    expect(store.role).toBe('TEACHER');
+  });
+
+  it('hydrate tolerates a corrupted user snapshot', () => {
+    localStorage.setItem('pythontopia.token', 'valid');
+    localStorage.setItem('pythontopia.expiresAt', '2099-01-01T00:00:00Z');
+    localStorage.setItem('pythontopia.user', '{not-json');
+    const store = useSessionStore();
+
+    store.hydrateFromStorage();
+
+    expect(store.user).toBeNull();
+    expect(store.isAuthenticated).toBe(true);
   });
 });

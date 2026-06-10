@@ -172,6 +172,14 @@ export const router = createRouter({
       meta: { requiresAuth: true },
       props: (route) => ({ chapter: Number(route.params.chapter) }),
     },
+    // 毕业典礼（主线终局演出）：boss7 通关后由 BossPage 跳入；
+    // 未通关经 URL 直入时页面内守卫重定向回 /world。
+    {
+      path: '/graduation',
+      name: 'graduation',
+      component: () => import('@/pages/GraduationPage.vue'),
+      meta: { requiresAuth: true },
+    },
     // 无尽模式 — 连续 AI 出题，自适应难度。
     // 与闯关模式 /boss/:chapter 互补：闯关推主线，无尽刷分练手。
     {

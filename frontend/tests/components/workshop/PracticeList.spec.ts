@@ -70,8 +70,8 @@ describe('PracticeList 内联运行', () => {
     // 用第一组样例输入作为 stdin 跑本地预览。
     expect(fakeRunner.run).toHaveBeenCalledWith('print(1 + 2)', '1 2');
 
-    // 通过 → 推进主线「练」（submission 类 evidence 的钩子）。
-    expect(advanceSpy).toHaveBeenCalledWith({ kcCode: 'PY43-KC-011' });
+    // 硬红线：本地预览通过也不推进主线/不上报后端（submission_passed 只能来自正式判题）。
+    expect(advanceSpy).not.toHaveBeenCalled();
 
     const output = wrapper.find('[data-testid="practice-output-0"]');
     expect(output.exists()).toBe(true);

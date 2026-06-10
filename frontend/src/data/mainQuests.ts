@@ -520,7 +520,7 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     index: 5,
     // 修复+对齐：原测点 KC-065「面向对象特征」题库 0 题。改锚定有题 KC-064（练 7-3 #510）；标题叙事不变。
     title: '类与面向对象（KC-064 + KC-065）',
-    hint: '把刚练的「类和对象基础」掌握度刷到 40：在训练场对 #510 再 AC 两次（每次 +14）即触发毕业典礼。',
+    hint: '把刚练的「类和对象基础」掌握度刷到 40：在训练场对 #510 再 AC 两次（每次 +14）即达标。然后挑战第 7 章章末 BOSS——通关即举行毕业典礼。',
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-064', 'PY43-KC-065'],
     evidenceRequired: { type: 'kc_mastery', kcCode: 'PY43-KC-064', thresholdScore: 40 },

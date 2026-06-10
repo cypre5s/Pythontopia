@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   BULLETIN_BOARD_TRIGGER_ID,
   NPC_TRIGGER_ID_PREFIX,
+  buildBuildingTrigger,
   buildBulletinBoardTrigger,
   buildNpcDefinitionFromSpawn,
   buildNpcHintText,
@@ -165,6 +166,46 @@ describe('WorldScene.buildBulletinBoardTrigger', () => {
     sys.update(cx, cy, true);
 
     expect(onActivate).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('WorldScene.buildBuildingTrigger', () => {
+  const building = { route: '/library', label: '图书馆', tileX: 10, tileY: 8, width: 4, height: 3 };
+
+  it('builds a rect trigger expanded 1 tile beyond the footprint with an enter hint', () => {
+    const trigger = buildBuildingTrigger(building, TILE_SIZE, vi.fn());
+
+    expect(trigger.id).toBe('building:/library');
+    expect(trigger.hint).toBe('按 E 进入图书馆');
+    expect(trigger.shape.type).toBe('rect');
+    if (trigger.shape.type === 'rect') {
+      expect(trigger.shape.x).toBe(9 * TILE_SIZE);
+      expect(trigger.shape.y).toBe(7 * TILE_SIZE);
+      expect(trigger.shape.width).toBe(6 * TILE_SIZE);
+      expect(trigger.shape.height).toBe(5 * TILE_SIZE);
+    }
+  });
+
+  it('activates with E when the player stands at the doorway (1 tile below footprint)', () => {
+    const onActivate = vi.fn();
+    const sys = new InteractableSystem(makeScene());
+    sys.register(buildBuildingTrigger(building, TILE_SIZE, onActivate));
+
+    // 门口：地基下沿外 1 tile 内。
+    const doorX = 12 * TILE_SIZE;
+    const doorY = (8 + 3) * TILE_SIZE + TILE_SIZE / 2;
+    sys.update(doorX, doorY, true);
+    expect(onActivate).toHaveBeenCalledTimes(1);
+
+    // 远离建筑两格以上不触发。
+    onActivate.mockClear();
+    sys.update(doorX, (8 + 3 + 2) * TILE_SIZE + TILE_SIZE / 2, true);
+    expect(onActivate).not.toHaveBeenCalled();
+  });
+
+  it('falls back to a generic hint when the label is empty', () => {
+    const trigger = buildBuildingTrigger({ ...building, label: '' }, TILE_SIZE, vi.fn());
+    expect(trigger.hint).toBe('按 E 进入建筑');
   });
 });
 

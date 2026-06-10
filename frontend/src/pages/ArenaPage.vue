@@ -52,10 +52,8 @@ const selectedLevel = computed<ArenaLevel | null>(
   () => chapterLevels.value.find((l) => l.id === selectedLevelId.value) ?? null,
 );
 
-// 学生侧不露货币：过滤 coin 奖励，只展示掌握进度类奖励（ref 用知识点中文名）。
-const visibleRewards = computed(() =>
-  (selectedLevel.value?.rewards ?? []).filter((r) => r.kind !== 'coin'),
-);
+// R-14 已移除货币系统：关卡奖励只剩掌握进度类（ref 用知识点中文名）。
+const visibleRewards = computed(() => selectedLevel.value?.rewards ?? []);
 
 const KIND_ICON: Record<ArenaLevelKind, string> = {
   pdf_question: '▤',

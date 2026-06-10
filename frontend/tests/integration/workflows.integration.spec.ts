@@ -270,32 +270,25 @@ describe('workflows.integration · Dialog store 状态机', () => {
     setActivePinia(createPinia());
   });
 
-  it('open(npcKey) → visible=false 但 openNpcKey 有值（旧 API）', () => {
+  it('openNpcKey 有值即 isOpen=true（visible 仍受树加载控制）', () => {
     const dlg = useDialogStore();
-    dlg.open('mayor_py');
-    expect(dlg.openNpcKey).toBe('mayor_py');
+    dlg.openNpcKey = 'mayor_py';
     expect(dlg.isOpen).toBe(true);
+    expect(dlg.visible).toBe(false);
   });
 
   it('close 后 openNpcKey/visible/tree 全部清空', () => {
     const dlg = useDialogStore();
-    dlg.open('mayor_py');
+    dlg.openNpcKey = 'mayor_py';
     dlg.close();
     expect(dlg.openNpcKey).toBeNull();
     expect(dlg.visible).toBe(false);
     expect(dlg.tree).toBeNull();
   });
 
-  it('open 后再 open 另一个 NPC', () => {
+  it('markTypingDone 后 chooseBranch 未知 choiceId 是 no-op', () => {
     const dlg = useDialogStore();
-    dlg.open('mayor_py');
-    dlg.open('foreman_bug');
-    expect(dlg.openNpcKey).toBe('foreman_bug');
-  });
-
-  it('markTypingDone 后再 chooseBranch（无 tree 时 close）', () => {
-    const dlg = useDialogStore();
-    dlg.open('mayor_py');
+    dlg.openNpcKey = 'mayor_py';
     dlg.markTypingDone();
     dlg.chooseBranch('any');
     // 没有 currentNode，chooseBranch 会找不到 → 不抛错

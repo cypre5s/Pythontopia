@@ -96,7 +96,8 @@ watch(
   (next) => {
     if (next === 'victory' && typeof window !== 'undefined') {
       window.setTimeout(() => {
-        void router.push('/world');
+        // 第 7 章终极 BOSS 通关 → 毕业典礼（主线终局演出）；其余章节回小镇。
+        void router.push(props.chapter === 7 ? '/graduation' : '/world');
       }, 4000);
     }
   },
@@ -163,9 +164,7 @@ const REWARD_ITEM_LABELS: Record<string, string> = {
   'title:pythontopia_alumnus': '称号·Pythontopia 校友',
 };
 
-const visibleRewards = computed<MainSubQuestReward[]>(() =>
-  (boss?.rewards ?? []).filter((r) => r.kind !== 'coin' && r.kind !== 'gem'),
-);
+const visibleRewards = computed<MainSubQuestReward[]>(() => [...(boss?.rewards ?? [])]);
 
 function rewardLabel(r: MainSubQuestReward): string {
   if (r.kind === 'kc_mastery') {
@@ -282,7 +281,7 @@ function rewardLabel(r: MainSubQuestReward): string {
           {{ boss?.storyboardCue }}
         </p>
         <p class="boss-tip">
-          4 秒后自动返回小镇…
+          {{ props.chapter === 7 ? '4 秒后进入毕业典礼…' : '4 秒后自动返回小镇…' }}
         </p>
       </div>
       <div

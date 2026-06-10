@@ -128,9 +128,6 @@
     },
     "class_president": {
       "greeting": "老师让我转给你"
-    },
-    "chef": {
-      "greeting": "今天新出列表沙拉"
     }
   },
   "tpl": {

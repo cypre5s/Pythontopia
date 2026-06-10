@@ -263,42 +263,15 @@ describe('world store', () => {
       ],
     };
 
-    it('syncFromSlot copies all 4 extension fields into store state', () => {
+    it('syncFromSlot copies consumed extension fields into store state', () => {
       vi.useRealTimers();
       const store = useWorldStore();
 
       store.syncFromSlot(slotWithExtension);
 
       expect(store.sceneName).toBe('MineSouthScene');
-      expect(store.unlockedBuildings).toEqual(['library', 'mine_entry', 'shop_main']);
       expect(store.accumulatedPlaySeconds).toBe(7325);
-      expect(store.inventoryItems).toHaveLength(2);
-      expect(store.inventoryItems[0]).toEqual({ itemId: 'seed_print', qty: 5, slot: 0 });
       expect(store.activeSlot).toEqual(slotWithExtension);
-    });
-
-    it('syncFromSlot defends against shared references', () => {
-      vi.useRealTimers();
-      const store = useWorldStore();
-
-      store.syncFromSlot(slotWithExtension);
-      store.unlockedBuildings.push('extra_mutation');
-      store.inventoryItems[0]!.qty = 999;
-
-      expect(slotWithExtension.unlockedBuildings).toEqual(['library', 'mine_entry', 'shop_main']);
-      expect(slotWithExtension.inventoryItems[0]?.qty).toBe(5);
-    });
-
-    it('hasUnlocked getter reflects unlockedBuildings (true / false / case-sensitive)', () => {
-      vi.useRealTimers();
-      const store = useWorldStore();
-
-      store.syncFromSlot(slotWithExtension);
-
-      expect(store.hasUnlocked('mine_entry')).toBe(true);
-      expect(store.hasUnlocked('library')).toBe(true);
-      expect(store.hasUnlocked('arena_dome')).toBe(false);
-      expect(store.hasUnlocked('Mine_Entry')).toBe(false);
     });
 
     it('applyBootstrap with activeSlot=null resets extension fields to defaults', () => {
@@ -354,9 +327,7 @@ describe('world store', () => {
 
       expect(store.activeSlot).toBeNull();
       expect(store.sceneName).toBe('WorldScene');
-      expect(store.unlockedBuildings).toEqual([]);
       expect(store.accumulatedPlaySeconds).toBe(0);
-      expect(store.inventoryItems).toEqual([]);
     });
   });
 });

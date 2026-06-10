@@ -244,7 +244,7 @@ function buildLevels(): ArenaLevel[] {
         hint: tpl.titlesAndHints[i]?.hint ?? '',
         kcCodes: tpl.kcByLevel[i] ?? [],
         difficulty: tpl.difficulties[i] ?? 2,
-        rewards: [{ kind: 'coin', amount: 30 + idx * 5 }],
+        rewards: [],
       });
     }
     // 第 10 关：boss
@@ -258,10 +258,7 @@ function buildLevels(): ArenaLevel[] {
       hint: '通关前 9 关后挑战，4 阶段副本，AI 五重审查出题。',
       kcCodes: tpl.allKcs,
       difficulty: 5,
-      rewards: [
-        { kind: 'coin', amount: 200 + tpl.chapter * 50 },
-        { kind: 'kc_mastery', amount: 15, ref: bossKcRef },
-      ],
+      rewards: [{ kind: 'kc_mastery', amount: 15, ref: bossKcRef }],
     });
   }
   return out;

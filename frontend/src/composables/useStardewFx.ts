@@ -24,7 +24,6 @@ let reducedMotionMode = false;
 let stepSynth: Tone.MembraneSynth | null = null;
 let clickSynth: Tone.MetalSynth | null = null;
 let hoverSynth: Tone.Synth | null = null;
-let coinSynth: Tone.PluckSynth | null = null;
 let questSynth: Tone.PolySynth | null = null;
 let dialogSynth: Tone.Synth | null = null;
 let chimeSynth: Tone.PolySynth | null = null;
@@ -148,22 +147,6 @@ function ensureHoverSynth(): Tone.Synth | null {
   return hoverSynth;
 }
 
-function ensureCoinSynth(): Tone.PluckSynth | null {
-  if (!coinSynth && unlocked) {
-    try {
-      coinSynth = new Tone.PluckSynth({
-        attackNoise: 1,
-        dampening: 4500,
-        resonance: 0.7,
-        volume: -16,
-      }).toDestination();
-    } catch {
-      coinSynth = null;
-    }
-  }
-  return coinSynth;
-}
-
 function ensureQuestSynth(): Tone.PolySynth | null {
   if (!questSynth && unlocked) {
     try {
@@ -255,21 +238,6 @@ export function playUiHover(): void {
   }
 }
 
-/** 购买成功金币声（3 拨弦) */
-export function playCoinJingle(): void {
-  if (!shouldFire('coin', 200)) return;
-  const synth = ensureCoinSynth();
-  if (!synth) return;
-  try {
-    const startAt = nextToneStartTime();
-    synth.triggerAttackRelease('C5', '16n', startAt);
-    synth.triggerAttackRelease('E5', '16n', startAt + 0.09);
-    synth.triggerAttackRelease('G5', '16n', startAt + 0.18);
-  } catch {
-    // 忽略
-  }
-}
-
 /** 任务完成 fanfare（3 和弦） */
 export function playQuestComplete(): void {
   if (!shouldFire('quest', 400)) return;
@@ -330,7 +298,7 @@ export function playChime(mood: 'dawn' | 'dusk' | 'season' = 'dawn'): void {
 
 /** 释放所有 synth（测试 / SSR / 切页清理） */
 export function disposeStardewFx(): void {
-  [stepSynth, clickSynth, hoverSynth, coinSynth, questSynth, dialogSynth, chimeSynth].forEach(
+  [stepSynth, clickSynth, hoverSynth, questSynth, dialogSynth, chimeSynth].forEach(
     (s) => {
       try {
         s?.dispose();
@@ -342,7 +310,6 @@ export function disposeStardewFx(): void {
   stepSynth = null;
   clickSynth = null;
   hoverSynth = null;
-  coinSynth = null;
   questSynth = null;
   dialogSynth = null;
   chimeSynth = null;

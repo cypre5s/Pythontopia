@@ -13,7 +13,7 @@ import type { Direction } from '@api/dto/Direction';
 import type { GameBootstrapResponseDto } from '@api/dto/GameBootstrapResponseDto';
 import type { NpcStateDto } from '@api/dto/NpcStateDto';
 import type { PlayerStateDto } from '@api/dto/PlayerStateDto';
-import type { SaveSlotDto, SaveSlotInventoryItem } from '@api/dto/SaveSlotDto';
+import type { SaveSlotDto } from '@api/dto/SaveSlotDto';
 import type { WorldSessionDto } from '@api/dto/WorldSessionDto';
 
 export type { Direction };
@@ -37,9 +37,7 @@ export const useWorldStore = defineStore('world', {
     npcStates: [] as NpcStateDto[],
     activeSlot: null as SaveSlotDto | null,
     sceneName: DEFAULT_SCENE_NAME as string,
-    unlockedBuildings: [] as string[],
     accumulatedPlaySeconds: 0 as number,
-    inventoryItems: [] as SaveSlotInventoryItem[],
     bootstrapped: false,
     loading: false,
     // Workshop 顶部传送 chip 跳 /world 时把目标 mapKey
@@ -48,15 +46,6 @@ export const useWorldStore = defineStore('world', {
     pendingTravelMap: null as string | null,
     pendingTravelTile: null as { x: number; y: number } | null,
   }),
-  getters: {
-    /**
-     * `hasUnlocked('mine_entry')` 用于地图入口门禁判定。读自 save_slot.unlocked_buildings，
-     * 不读 InventoryStore，避免与背包语义混淆。
-     */
-    hasUnlocked(state) {
-      return (buildingKey: string): boolean => state.unlockedBuildings.includes(buildingKey);
-    },
-  },
   actions: {
     async loadSession(): Promise<void> {
       this.loading = true;
@@ -91,7 +80,7 @@ export const useWorldStore = defineStore('world', {
      * 与 POST /api/game/bootstrap 对齐：
      *   - world + player：写到 world store 自身
      *   - mastery / profile / path / quests：通过 learning.setBootstrapData 分发
-     *   - inventory / skills(+catalog) / calendar(+events) / npcStates：分别下发到各 store
+     *   - skills(+catalog) / calendar(+events) / npcStates：分别下发到各 store
      *   - activeSlot：保存在 world store（不另起 store）
      *
      * 失败时不抛错（保留 bootstrapped=false），允许 UI 显示降级欢迎页，由 toast 提示原因。
@@ -140,15 +129,15 @@ export const useWorldStore = defineStore('world', {
       });
     },
     /**
-     * 把后端最新的 SaveSlotDto 同步到 world store 的 RPG 扩展字段上。WorldScene 切换 / 解锁建筑 /
-     * 累计时长 / 背包快照 都从这里读，避免 component 各自 patch state。
+     * 把后端最新的 SaveSlotDto 同步到 world store 的 RPG 扩展字段上。WorldScene 切换 /
+     * 累计时长 都从这里读，避免 component 各自 patch state。
+     * （R-14 收缩后无背包/建筑解锁玩法，slot 的 inventoryItems/unlockedBuildings
+     * 仅是后端 NOT NULL 契约字段，前端不再落 store。）
      */
     syncFromSlot(slot: SaveSlotDto): void {
       this.activeSlot = slot;
       this.sceneName = slot.sceneName || DEFAULT_SCENE_NAME;
-      this.unlockedBuildings = [...slot.unlockedBuildings];
       this.accumulatedPlaySeconds = slot.accumulatedPlaySeconds;
-      this.inventoryItems = slot.inventoryItems.map((item) => ({ ...item }));
       // 用后端存档快照回灌主线进度（跨设备跟随）。空快照 `{}` 或缺失会被
       // hydrateFromSnapshot 安全忽略，从而保留本地 localStorage 进度。
       useMainQuestStore().hydrateFromSnapshot(slot.snapshot ?? null);
@@ -203,7 +192,7 @@ export const useWorldStore = defineStore('world', {
       this.player = {
         playerStateId: this.player?.playerStateId ?? 0,
         avatarKey: this.player?.avatarKey ?? 'student_default',
-        mapKey: this.player?.mapKey ?? 'town_main',
+        mapKey: this.player?.mapKey ?? 'town_hub',
         ...update,
       };
       const elapsed = Date.now() - lastSentAt;
@@ -234,9 +223,7 @@ export const useWorldStore = defineStore('world', {
     },
     resetSlotState(): void {
       this.sceneName = DEFAULT_SCENE_NAME;
-      this.unlockedBuildings = [];
       this.accumulatedPlaySeconds = 0;
-      this.inventoryItems = [];
     },
   },
 });

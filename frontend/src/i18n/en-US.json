@@ -128,9 +128,6 @@
     },
     "class_president": {
       "greeting": "From the teacher, for you."
-    },
-    "chef": {
-      "greeting": "New list salad today."
     }
   },
   "tpl": {

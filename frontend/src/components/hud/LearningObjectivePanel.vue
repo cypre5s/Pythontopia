@@ -96,8 +96,7 @@ const learningGoals = computed<readonly string[]>(() => {
 });
 
 const rewardText = computed<string>(() => {
-  // 移除货币/物品系统：只展示与学习直接相关的掌握度收获，
-  // 过滤掉历史遗留的 coin/gem/item 奖励，避免给学生「点了没反应」的虚拟货币暗示。
+  // 只展示与学习直接相关的掌握度收获（item 类装扮奖励不在此面板展示）。
   const sub = currentSubQuest.value;
   if (sub?.rewards && sub.rewards.length > 0) {
     const masteryRewards = sub.rewards

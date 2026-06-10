@@ -59,11 +59,6 @@ export async function listTutorSessions(limit = 50): Promise<TutorSessionDto[]> 
   return response.data;
 }
 
-export async function getTutorSession(id: number): Promise<TutorSessionDto> {
-  const response = await http.get<TutorSessionDto>(`/api/tutor/sessions/${id}`);
-  return response.data;
-}
-
 /** 取某会话窗口内的全部问答（按时间升序），用于多轮 thread 展示与历史回拉。 */
 export async function listConversation(conversationId: string): Promise<TutorSessionDto[]> {
   const response = await http.get<TutorSessionDto[]>(

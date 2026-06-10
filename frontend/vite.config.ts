@@ -17,7 +17,7 @@ export default defineConfig({
     },
   },
   build: {
-    // R-13 Phase 5 迭代 1：把 phaser / tone / howler 单独切 chunk，
+    // R-13 Phase 5 迭代 1：把 phaser / tone 单独切 chunk，
     // 避免主 bundle 1.88MB（其中 ~700KB 是 Phaser）影响首屏 LCP。
     chunkSizeWarningLimit: 1600,
     rollupOptions: {
@@ -25,7 +25,6 @@ export default defineConfig({
         manualChunks: {
           phaser: ['phaser'],
           'audio-tone': ['tone'],
-          'audio-howler': ['howler'],
           'vendor-vue': ['vue', 'vue-router', 'pinia'],
           'vendor-axios': ['axios'],
         },

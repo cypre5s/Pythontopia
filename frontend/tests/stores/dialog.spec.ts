@@ -23,6 +23,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   useDialogStore,
   __resetChoiceListenersForTests,
+  __resetDialogFlagsForTests,
+  hasDialogFlag,
+  isoWeekOf,
   type DialogChoiceEvent,
   type NpcDialogTree,
   type NpcMeta,
@@ -83,22 +86,6 @@ function installFetchMock(handler: (url: string) => Promise<unknown>): void {
   vi.stubGlobal('fetch', fn);
 }
 
-describe('dialog store - legacy placeholder API', () => {
-  beforeEach(() => {
-    setActivePinia(createPinia());
-    __resetChoiceListenersForTests();
-  });
-
-  it('opens known placeholder NPC dialog and closes it', () => {
-    const store = useDialogStore();
-    store.open('mayor_py');
-    expect(store.isOpen).toBe(true);
-    expect(store.lines[0]).toContain('[占位]');
-    store.close();
-    expect(store.isOpen).toBe(false);
-  });
-});
-
 describe('dialog store - tree API', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -156,14 +143,13 @@ describe('dialog store - tree API', () => {
     expect(store.currentNodeId).toBeNull();
   });
 
-  it('close resets both legacy and tree state', async () => {
+  it('close resets tree state', async () => {
     installFetchMock(async (url) => {
       if (url.endsWith('/meta.json')) return makeMeta();
       if (url.endsWith('/dialog.json')) return makeTree();
       throw new Error(`unexpected url ${url}`);
     });
     const store = useDialogStore();
-    store.open('mayor_py');
     await store.openWithTree('mayor_py');
     store.close();
     expect(store.visible).toBe(false);
@@ -272,7 +258,7 @@ describe('dialog store - typewriter & branch API (W2-dialog-upgrade)', () => {
 
   it('chooseBranch on injected branchChoices without tree falls back to close', () => {
     const store = useDialogStore();
-    store.open('mayor_py');
+    store.openNpcKey = 'mayor_py';
     store.branchChoices = [{ label: '继续', nextNodeId: null }];
     const received: DialogChoiceEvent[] = [];
     store.onChoice((ev) => received.push(ev));
@@ -338,5 +324,247 @@ describe('dialog store - typewriter & branch API (W2-dialog-upgrade)', () => {
     expect(store.branchChoices).toEqual([]);
     expect(store.isTypingDone).toBe(false);
     expect(store.hasBranches).toBe(false);
+  });
+});
+
+describe('dialog store - condition system (P3 接通)', () => {
+  function makeConditionalTree(): NpcDialogTree {
+    return {
+      npcKey: 'sage_review',
+      rootNodeId: 'greet',
+      nodes: {
+        greet: {
+          id: 'greet',
+          text: '坐一坐',
+          conditions: [],
+          choices: [
+            { label: '开始本周复盘', nextNodeId: 'weekly_retro' },
+            { label: '上次失败的提交？', nextNodeId: 'last_failed' },
+            { label: '再见', nextNodeId: null },
+          ],
+        },
+        weekly_retro: {
+          id: 'weekly_retro',
+          text: '本周复盘…',
+          conditions: [{ type: 'first_time_this_week', key: 'weekly_retro' }],
+          choices: [
+            {
+              label: '写下心得',
+              nextNodeId: null,
+              effects: [{ type: 'set_flag', flagKey: 'weekly_retro_done' }],
+            },
+          ],
+        },
+        last_failed: {
+          id: 'last_failed',
+          text: '你最近一次失败…',
+          conditions: [{ type: 'has_failed_submission' }],
+          choices: [{ label: '下去打', nextNodeId: null }],
+        },
+        weekly_recap: {
+          id: 'weekly_recap',
+          text: '上周你解锁了…',
+          conditions: [{ type: 'first_time_this_week', key: 'weekly_recap' }],
+          choices: [
+            { label: '现在就去', nextNodeId: null },
+            {
+              label: '给我热力图',
+              nextNodeId: null,
+              effects: [{ type: 'give_item', itemKey: 'class_heatmap' }],
+            },
+          ],
+        },
+      },
+    };
+  }
+
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    __resetChoiceListenersForTests();
+    __resetDialogFlagsForTests();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    __resetDialogFlagsForTests();
+  });
+
+  it('isoWeekOf 返回 ISO 周标识', () => {
+    expect(isoWeekOf(new Date('2026-06-10T00:00:00Z'))).toMatch(/^2026-W\d{2}$/);
+  });
+
+  it('每周插话节点抢占入口，且本周第二次打开回落 root', async () => {
+    installFetchMock(async (url) => {
+      if (url.endsWith('/meta.json')) return makeMeta();
+      if (url.endsWith('/dialog.json')) return makeConditionalTree();
+      throw new Error(`unexpected url ${url}`);
+    });
+    const store = useDialogStore();
+
+    await store.openWithTree('sage_review');
+    expect(store.currentNodeId).toBe('weekly_recap');
+    store.close();
+
+    await store.openWithTree('sage_review');
+    expect(store.currentNodeId).toBe('greet');
+  });
+
+  it('markTypingDone 过滤条件不满足的分支（无失败提交 → 隐藏 last_failed 入口）', async () => {
+    installFetchMock(async (url) => {
+      if (url.endsWith('/meta.json')) return makeMeta();
+      if (url.endsWith('/dialog.json')) return makeConditionalTree();
+      throw new Error(`unexpected url ${url}`);
+    });
+    const store = useDialogStore();
+    await store.openWithTree('sage_review');
+    // 第一次入口是 weekly_recap；先关再开走 greet。
+    store.close();
+    await store.openWithTree('sage_review');
+    expect(store.currentNodeId).toBe('greet');
+
+    store.markTypingDone();
+    const labels = store.branchChoices.map((c) => c.label);
+    expect(labels).toContain('开始本周复盘');
+    expect(labels).not.toContain('上次失败的提交？');
+    expect(labels).toContain('再见');
+  });
+
+  it('进入过 weekly_retro 后，本周内该分支被隐藏', async () => {
+    installFetchMock(async (url) => {
+      if (url.endsWith('/meta.json')) return makeMeta();
+      if (url.endsWith('/dialog.json')) return makeConditionalTree();
+      throw new Error(`unexpected url ${url}`);
+    });
+    const store = useDialogStore();
+    await store.openWithTree('sage_review');
+    store.close();
+    await store.openWithTree('sage_review');
+    store.markTypingDone();
+    store.chooseBranch('开始本周复盘');
+    expect(store.currentNodeId).toBe('weekly_retro');
+    store.close();
+
+    await store.openWithTree('sage_review');
+    store.markTypingDone();
+    expect(store.branchChoices.map((c) => c.label)).not.toContain('开始本周复盘');
+  });
+
+  it('set_flag / give_item 效果落持久 flag（不再被静默丢弃）', async () => {
+    installFetchMock(async (url) => {
+      if (url.endsWith('/meta.json')) return makeMeta();
+      if (url.endsWith('/dialog.json')) return makeConditionalTree();
+      throw new Error(`unexpected url ${url}`);
+    });
+    const store = useDialogStore();
+    await store.openWithTree('sage_review');
+    // 入口是 weekly_recap，选 give_item 分支。
+    store.markTypingDone();
+    store.chooseBranch('给我热力图');
+    expect(hasDialogFlag('item:class_heatmap')).toBe(true);
+
+    await store.openWithTree('sage_review');
+    store.markTypingDone();
+    store.chooseBranch('开始本周复盘');
+    store.markTypingDone();
+    store.chooseBranch('写下心得');
+    expect(hasDialogFlag('weekly_retro_done')).toBe(true);
+  });
+
+  it('quest_recommend claim_class_quest 导航到公告板班级任务页签', async () => {
+    installFetchMock(async (url) => {
+      if (url.endsWith('/meta.json')) return makeMeta();
+      if (url.endsWith('/dialog.json')) {
+        const tree: NpcDialogTree = {
+          npcKey: 'class_president',
+          rootNodeId: 'greet',
+          nodes: {
+            greet: {
+              id: 'greet',
+              text: '公告板今天有新任务',
+              conditions: [],
+              choices: [
+                {
+                  label: '领班级任务',
+                  nextNodeId: null,
+                  effects: [{ type: 'quest_recommend', questKey: 'claim_class_quest' }],
+                },
+              ],
+            },
+          },
+        };
+        return tree;
+      }
+      throw new Error(`unexpected url ${url}`);
+    });
+    const events: string[] = [];
+    const onNavigate = (e: Event): void => {
+      events.push(String((e as CustomEvent<{ route: string }>).detail.route));
+    };
+    window.addEventListener('pythontopia:dialog-navigate', onNavigate);
+    try {
+      const store = useDialogStore();
+      await store.openWithTree('class_president');
+      expect(store.currentNodeId).toBe('greet');
+      store.markTypingDone();
+      store.chooseBranch('领班级任务');
+      expect(events).toEqual(['/board?tab=classroom']);
+      expect(store.visible).toBe(false);
+    } finally {
+      window.removeEventListener('pythontopia:dialog-navigate', onNavigate);
+    }
+  });
+});
+
+describe('dialog store - 入口插话每周阻尼（kc_mastered 不永久劫持 greet）', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    __resetChoiceListenersForTests();
+    __resetDialogFlagsForTests();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    __resetDialogFlagsForTests();
+  });
+
+  it('kc_mastered 插话节点本周只抢占一次入口', async () => {
+    const tree: NpcDialogTree = {
+      npcKey: 'foreman_bug',
+      rootNodeId: 'greet',
+      nodes: {
+        greet: {
+          id: 'greet',
+          text: '矿洞欢迎你',
+          conditions: [],
+          choices: [{ label: '再见', nextNodeId: null }],
+        },
+        mine_boss_hint: {
+          id: 'mine_boss_hint',
+          text: 'B5 层那只 IndentationError…',
+          conditions: [{ type: 'kc_mastered', kcCode: 'PY43-KC-019' }],
+          choices: [{ label: '学到了', nextNodeId: null }],
+        },
+      },
+    };
+    installFetchMock(async (url) => {
+      if (url.endsWith('/meta.json')) return makeMeta();
+      if (url.endsWith('/dialog.json')) return tree;
+      throw new Error(`unexpected url ${url}`);
+    });
+
+    const { useLearningStore } = await import('@/stores/learning');
+    const learning = useLearningStore();
+    learning.field.masterySnapshot = [
+      { kcCode: 'PY43-KC-019', masteryScore: 0.6 },
+    ] as never;
+
+    const store = useDialogStore();
+    await store.openWithTree('foreman_bug');
+    expect(store.currentNodeId).toBe('mine_boss_hint');
+    store.close();
+
+    // 条件仍为真（掌握度不会消失），但本周已插话过 → 回落 greet 主菜单。
+    await store.openWithTree('foreman_bug');
+    expect(store.currentNodeId).toBe('greet');
   });
 });
