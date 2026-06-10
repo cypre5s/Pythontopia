@@ -3,6 +3,7 @@ import LoginPage from '@/pages/LoginPage.vue';
 import { useSessionStore } from '@stores/session';
 import { useToastStore } from '@stores/toast';
 import { useDialogStore } from '@stores/dialog';
+import { isExamActive, isExamBlockedPath } from '@/components/chaptertest';
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -197,6 +198,27 @@ export const router = createRouter({
       component: () => import('@/pages/ArenaPage.vue'),
       meta: { requiresAuth: true },
     },
+    // R-15 主线：关卡地图（冒险地图）/ 小节三件套学习页 / 章末大测试。
+    {
+      path: '/mainline-map',
+      name: 'mainline-map',
+      component: () => import('@/pages/MainlineMapPage.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/mainline/stage/:stageId(\\d+)',
+      name: 'stage-learn',
+      component: () => import('@/pages/StageLearnPage.vue'),
+      meta: { requiresAuth: true },
+    },
+    // 章末大测试：考试期禁挂随身助教（防 AI 协助），路由守卫另禁跳 AI 页。
+    {
+      path: '/chapter-test/:chapter(\\d+)',
+      name: 'chapter-test',
+      component: () => import('@/pages/ChapterTestPage.vue'),
+      meta: { requiresAuth: true, hideCompanion: true },
+      props: (route) => ({ chapter: Number(route.params.chapter) }),
+    },
     // catch-all 404 兜底，永不白屏。必须放在最后，避免抢占其它路由。
     {
       path: '/:pathMatch(.*)*',
@@ -216,6 +238,12 @@ router.beforeEach((to: RouteLocationNormalized) => {
   }
   if (to.meta.guestOnly && session.isAuthenticated) {
     return { name: 'world' };
+  }
+  // 章末大测试进行中：全局拦截跳转到 AI / 答疑类页面（防作弊，§4.3）。
+  // examActive 单例由 ChapterTestPage 维护；blocked 前缀见 useExamRouteGuard。
+  if (isExamActive() && isExamBlockedPath(to.path)) {
+    toast.show('考试进行中，禁止前往该页面。', 'error');
+    return false;
   }
   return true;
 });

@@ -42,6 +42,42 @@ vi.mock('@/api/dialog', () => ({
   })),
 }));
 
+// R-15 §8：openWithTree 现在还并行拉 GET /api/npc/{key}/greeting（走 axios http 实例）。
+// 统一 mock 该实例，避免真实网络并让寒暄状态在断言里可控；默认返回「无记忆」(none)，
+// 具体寒暄用例按需用 mockResolvedValueOnce / mockRejectedValueOnce 覆盖首个调用。
+const httpMocks = vi.hoisted(() => ({ get: vi.fn() }));
+vi.mock('@/api/http', () => ({ http: httpMocks }));
+
+interface GreetingDtoLike {
+  greeting: string;
+  available: boolean;
+  grounded: boolean;
+  citedEventIds: number[];
+  degraded: boolean;
+  cached: boolean;
+}
+
+function greetingDto(partial: Partial<GreetingDtoLike> = {}): GreetingDtoLike {
+  return {
+    greeting: '',
+    available: false,
+    grounded: false,
+    citedEventIds: [],
+    degraded: false,
+    cached: false,
+    ...partial,
+  };
+}
+
+/** 推进微任务，让 openWithTree 内非阻塞的 void fetchGreeting 落定。 */
+const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
+// 每个用例前重置 http mock 默认值为「无记忆」，避免上一例残留 once 影响其它（含旧 openWithTree 用例）。
+beforeEach(() => {
+  httpMocks.get.mockReset();
+  httpMocks.get.mockResolvedValue({ data: greetingDto() });
+});
+
 function makeTree(): NpcDialogTree {
   return {
     npcKey: 'mayor_py',
@@ -566,5 +602,133 @@ describe('dialog store - 入口插话每周阻尼（kc_mastered 不永久劫持 
     // 条件仍为真（掌握度不会消失），但本周已插话过 → 回落 greet 主菜单。
     await store.openWithTree('foreman_bug');
     expect(store.currentNodeId).toBe('greet');
+  });
+});
+
+describe('dialog store - NPC greeting (R-15 §8)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    __resetChoiceListenersForTests();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('fetchGreeting sets ready with personalized text when available', async () => {
+    httpMocks.get.mockResolvedValueOnce({
+      data: greetingDto({
+        greeting: '上次 for 循环错了 3 次，今天去矿洞复盘？',
+        available: true,
+        grounded: true,
+        citedEventIds: [9],
+      }),
+    });
+    const store = useDialogStore();
+    store.visible = true;
+    store.npcKey = 'foreman_bug';
+
+    await store.fetchGreeting('foreman_bug');
+
+    expect(httpMocks.get).toHaveBeenCalledWith('/api/npc/foreman_bug/greeting', {
+      suppressNetworkToast: true,
+    });
+    expect(store.greetingStatus).toBe('ready');
+    expect(store.greetingText).toContain('for 循环错了 3 次');
+    expect(store.greetingGrounded).toBe(true);
+  });
+
+  it('fetchGreeting falls back to memory-unavailable on request failure', async () => {
+    httpMocks.get.mockRejectedValueOnce(new Error('network down'));
+    const store = useDialogStore();
+    store.visible = true;
+    store.npcKey = 'foreman_bug';
+
+    await store.fetchGreeting('foreman_bug');
+
+    expect(store.greetingStatus).toBe('fallback');
+    expect(store.greetingText).toBe('');
+  });
+
+  it('fetchGreeting maps degraded=true to fallback (service unavailable)', async () => {
+    httpMocks.get.mockResolvedValueOnce({ data: greetingDto({ degraded: true }) });
+    const store = useDialogStore();
+    store.visible = true;
+    store.npcKey = 'foreman_bug';
+
+    await store.fetchGreeting('foreman_bug');
+
+    expect(store.greetingStatus).toBe('fallback');
+  });
+
+  it('fetchGreeting maps no-memory (available=false, degraded=false) to none', async () => {
+    httpMocks.get.mockResolvedValueOnce({ data: greetingDto() });
+    const store = useDialogStore();
+    store.visible = true;
+    store.npcKey = 'foreman_bug';
+
+    await store.fetchGreeting('foreman_bug');
+
+    expect(store.greetingStatus).toBe('none');
+    expect(store.greetingText).toBe('');
+  });
+
+  it('ignores a stale greeting result after switching NPC', async () => {
+    let resolveGreeting!: (value: { data: GreetingDtoLike }) => void;
+    httpMocks.get.mockReturnValueOnce(
+      new Promise((res) => {
+        resolveGreeting = res;
+      }),
+    );
+    const store = useDialogStore();
+    store.visible = true;
+    store.npcKey = 'npc_a';
+
+    const pending = store.fetchGreeting('npc_a');
+    expect(store.greetingStatus).toBe('loading');
+    // 玩家在响应回来前切到了别的 NPC。
+    store.npcKey = 'npc_b';
+    resolveGreeting({ data: greetingDto({ greeting: 'A 的寒暄', available: true }) });
+    await pending;
+
+    // 旧 NPC 的结果被守卫丢弃，不回写覆盖新对话。
+    expect(store.greetingText).toBe('');
+    expect(store.greetingStatus).toBe('loading');
+  });
+
+  it('openWithTree fires the greeting fetch in parallel and resolves to ready', async () => {
+    httpMocks.get.mockResolvedValue({ data: greetingDto({ greeting: '嗨，同学', available: true }) });
+    installFetchMock(async (url) => {
+      if (url.endsWith('/meta.json')) return makeMeta();
+      if (url.endsWith('/dialog.json')) return makeTree();
+      throw new Error(`unexpected url ${url}`);
+    });
+    const store = useDialogStore();
+
+    await store.openWithTree('mayor_py');
+    // 寒暄不阻塞对话：脚本入口节点已就绪。
+    expect(store.currentNodeId).toBe('greet');
+    expect(httpMocks.get).toHaveBeenCalledWith('/api/npc/mayor_py/greeting', {
+      suppressNetworkToast: true,
+    });
+
+    await flush();
+    expect(store.greetingStatus).toBe('ready');
+    expect(store.greetingText).toContain('嗨');
+  });
+
+  it('close resets greeting state', () => {
+    const store = useDialogStore();
+    store.visible = true;
+    store.npcKey = 'foreman_bug';
+    store.greetingStatus = 'ready';
+    store.greetingText = '你好';
+    store.greetingGrounded = true;
+
+    store.close();
+
+    expect(store.greetingStatus).toBe('idle');
+    expect(store.greetingText).toBe('');
+    expect(store.greetingGrounded).toBe(false);
   });
 });

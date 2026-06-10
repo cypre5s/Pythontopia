@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { playDialogClose, playDialogOpen } from '@/composables/useStardewFx';
 import { fetchDialogContext } from '@/api/dialog';
+import { http } from '@/api/http';
 import { useLearningStore } from '@stores/learning';
 import { useToastStore } from '@stores/toast';
 import type { DialogContextDto } from '@/api/dto/DialogContextDto';
@@ -94,6 +95,26 @@ export interface NpcMeta {
   description?: string;
 }
 
+/** `GET /api/npc/{key}/greeting` 响应（对齐后端 NpcGreetingResponse；TS strict 显式 DTO，禁 any）。 */
+export interface NpcGreetingDto {
+  greeting: string;
+  available: boolean;
+  grounded: boolean;
+  citedEventIds: number[];
+  degraded: boolean;
+  cached: boolean;
+}
+
+/**
+ * NPC 首句个性化寒暄状态机（R-15 §8）：
+ *   - `idle`：未发起 / 已重置；
+ *   - `loading`：与 meta/dialog 并行拉取中；
+ *   - `ready`：拿到记忆感知寒暄，插入脚本对话首节点之前展示；
+ *   - `fallback`：记忆 / agent 服务不可用 → 显示「（记忆服务暂不可用）」并照常走脚本（不伪造内容）；
+ *   - `none`：该生暂无可引用记忆（如新玩家），既不寒暄也不报故障，直接走脚本。
+ */
+export type GreetingStatus = 'idle' | 'loading' | 'ready' | 'fallback' | 'none';
+
 interface DialogState {
   /** 旧 API：占位对话用，保留向后兼容 */
   openNpcKey: string | null;
@@ -141,6 +162,13 @@ interface DialogState {
    *   所以每次开新 NPC 都重拉一次）。
    */
   context: DialogContextDto | null;
+
+  /** NPC 首句个性化寒暄状态（R-15 §8，详见 {@link GreetingStatus}）。 */
+  greetingStatus: GreetingStatus;
+  /** `ready` 时的个性化寒暄文本（展示在脚本对话首节点之前）。 */
+  greetingText: string;
+  /** 寒暄是否落在被引用的记忆证据上（防幻觉透明度，供 UI 可选标注）。 */
+  greetingGrounded: boolean;
 }
 
 /** NPC 数据目录前缀，可被测试 mock 覆写。 */
@@ -284,6 +312,19 @@ async function fetchJson<T>(url: string, timeoutMs = 8000): Promise<T> {
   }
 }
 
+/**
+ * 拉取 NPC 首句个性化寒暄（JWT 经 axios http 实例自动注入 Authorization）。
+ *
+ * 该请求是「可选 / 后台」性质：失败已有降级（fallback 提示 + 照常走脚本），故 `suppressNetworkToast=true`，
+ * 不弹全局网络错误 toast。按 collision 约定，寒暄 API 内联在 dialog store，不进共享 api index。
+ */
+async function fetchNpcGreeting(npcKey: string): Promise<NpcGreetingDto> {
+  const res = await http.get<NpcGreetingDto>(`/api/npc/${encodeURIComponent(npcKey)}/greeting`, {
+    suppressNetworkToast: true,
+  });
+  return res.data;
+}
+
 export const useDialogStore = defineStore('dialog', {
   state: (): DialogState => ({
     openNpcKey: null,
@@ -300,6 +341,9 @@ export const useDialogStore = defineStore('dialog', {
     branchChoices: [],
     isTypingDone: false,
     context: null,
+    greetingStatus: 'idle',
+    greetingText: '',
+    greetingGrounded: false,
   }),
   getters: {
     /** 旧 API：兼容 DialogModal.vue 与已有测试。 */
@@ -337,6 +381,11 @@ export const useDialogStore = defineStore('dialog', {
       this.portrait = null;
       this.branchChoices = [];
       this.isTypingDone = false;
+      this.greetingStatus = 'idle';
+      this.greetingText = '';
+      this.greetingGrounded = false;
+      // R-15 §8：与 meta/dialog 并行拉取首句个性化寒暄（非阻塞），结果展示在脚本对话首节点之前。
+      void this.fetchGreeting(npcKey);
       try {
         // 只 await meta + dialog（本地静态、秒回）就立即显示对话，避免被 context（走后端
         // axios，最长 10s 超时）拖成长时间「加载中…」卡住。context 改为后台异步补。
@@ -381,6 +430,39 @@ export const useDialogStore = defineStore('dialog', {
               console.warn('[dialog] context fetch failed; using fallback', err);
             }
           });
+      }
+    },
+
+    /**
+     * 并行拉取 NPC 首句个性化寒暄并落 store（由 openWithTree 触发，非阻塞）。
+     *
+     * <b>fail-fast</b>：端点失败（网络/超时/4xx/5xx）一律落 `fallback`（前端显示「（记忆服务暂不可用）」），
+     * 绝不伪造个性化内容；后端「无记忆」确定态落 `none`（既不寒暄也不报故障）。仅当仍是本次同一 NPC 对话时
+     * 才写入，避免玩家快速切换 NPC 时旧结果回写覆盖新对话。
+     */
+    async fetchGreeting(npcKey: string): Promise<void> {
+      this.greetingStatus = 'loading';
+      this.greetingText = '';
+      this.greetingGrounded = false;
+      try {
+        const dto = await fetchNpcGreeting(npcKey);
+        if (!(this.visible && this.npcKey === npcKey)) return;
+        if (dto.available && dto.greeting.trim().length > 0) {
+          this.greetingText = dto.greeting;
+          this.greetingGrounded = dto.grounded;
+          this.greetingStatus = 'ready';
+        } else if (dto.degraded) {
+          this.greetingStatus = 'fallback';
+        } else {
+          this.greetingStatus = 'none';
+        }
+      } catch (err) {
+        if (!(this.visible && this.npcKey === npcKey)) return;
+        // 记忆/agent 下游不可用 → 展示「（记忆服务暂不可用）」并照常走脚本（不伪造个性化内容）。
+        this.greetingStatus = 'fallback';
+        if (typeof console !== 'undefined' && typeof console.warn === 'function') {
+          console.warn('[dialog] greeting fetch failed; showing memory-unavailable notice', err);
+        }
       }
     },
 
@@ -661,6 +743,10 @@ export const useDialogStore = defineStore('dialog', {
       this.isTypingDone = false;
       // 关闭时清掉 context，下次再开走最新数据；避免本周练习数 / 班级数据等过期。
       this.context = null;
+      // 寒暄随对话关闭复位，下次开新 NPC 重新拉取。
+      this.greetingStatus = 'idle';
+      this.greetingText = '';
+      this.greetingGrounded = false;
       if (wasOpen) {
         playDialogClose();
         // Lazy import 避免与 mainQuest store 循环依赖（dialog store 不在 mainQuest

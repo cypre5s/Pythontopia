@@ -1,0 +1,92 @@
+{
+  "_placeholder": true,
+  "_todo": "占位 golden 兜底题组（通用 Python 通识，非课件内容、无 evidence_page_ids）。TODO(课程策划/教师授权)：每章人工备一套「证据接地」的真实章测兜底题，按章替换为 chapter-<n>.json；当前所有章共用本默认占位组。",
+  "items": [
+    {
+      "qid": "c1", "type": "CHOICE", "score": 8,
+      "stem": "【占位题·需教师授权】Python 中用于在控制台输出内容的内置函数是？",
+      "options": ["A. input()", "B. print()", "C. len()", "D. open()"],
+      "answer": "B", "kc_code": "", "evidence_page_ids": [],
+      "explain": "占位解析：print() 用于标准输出。"
+    },
+    {
+      "qid": "c2", "type": "CHOICE", "score": 8,
+      "stem": "【占位题·需教师授权】下列哪个是合法的 Python 变量名？",
+      "options": ["A. 1abc", "B. a-b", "C. _value", "D. for"],
+      "answer": "C", "kc_code": "", "evidence_page_ids": [],
+      "explain": "占位解析：变量名不能以数字开头、不能含连字符、不能用关键字。"
+    },
+    {
+      "qid": "c3", "type": "CHOICE", "score": 8,
+      "stem": "【占位题·需教师授权】range(3) 依次产生的整数是？",
+      "options": ["A. 0 1 2", "B. 1 2 3", "C. 0 1 2 3", "D. 1 2"],
+      "answer": "A", "kc_code": "", "evidence_page_ids": [],
+      "explain": "占位解析：range(n) 为左闭右开 [0, n)。"
+    },
+    {
+      "qid": "c4", "type": "CHOICE", "score": 8,
+      "stem": "【占位题·需教师授权】len('abc') 的结果是？",
+      "options": ["A. 2", "B. 3", "C. 4", "D. 报错"],
+      "answer": "B", "kc_code": "", "evidence_page_ids": [],
+      "explain": "占位解析：字符串长度为字符数 3。"
+    },
+    {
+      "qid": "c5", "type": "CHOICE", "score": 8,
+      "stem": "【占位题·需教师授权】下列哪种内置类型是不可变（immutable）的？",
+      "options": ["A. list", "B. dict", "C. set", "D. tuple"],
+      "answer": "D", "kc_code": "", "evidence_page_ids": [],
+      "explain": "占位解析：tuple 不可变。"
+    },
+    {
+      "qid": "j1", "type": "JUDGE", "score": 5,
+      "stem": "【占位题·需教师授权】Python 是大小写敏感的语言。",
+      "answer": true, "kc_code": "", "evidence_page_ids": [],
+      "explain": "占位解析：标识符区分大小写。"
+    },
+    {
+      "qid": "j2", "type": "JUDGE", "score": 5,
+      "stem": "【占位题·需教师授权】列表 list 是不可变类型。",
+      "answer": false, "kc_code": "", "evidence_page_ids": [],
+      "explain": "占位解析：list 可变。"
+    },
+    {
+      "qid": "j3", "type": "JUDGE", "score": 5,
+      "stem": "【占位题·需教师授权】input() 的返回值类型是字符串。",
+      "answer": true, "kc_code": "", "evidence_page_ids": [],
+      "explain": "占位解析：input() 总是返回 str。"
+    },
+    {
+      "qid": "f1", "type": "FILL", "score": 5, "match": "normalized",
+      "stem": "【占位题·需教师授权】把字符串转换成整数的内置函数是 ____ 。",
+      "answers": ["int", "int()"], "kc_code": "", "evidence_page_ids": [],
+      "explain": "占位解析：int()。"
+    },
+    {
+      "qid": "f2", "type": "FILL", "score": 5, "match": "normalized",
+      "stem": "【占位题·需教师授权】Python 中表示「空值」的关键字是 ____ 。",
+      "answers": ["None"], "kc_code": "", "evidence_page_ids": [],
+      "explain": "占位解析：None。"
+    },
+    {
+      "qid": "f3", "type": "FILL", "score": 5, "match": "normalized",
+      "stem": "【占位题·需教师授权】定义函数使用的关键字是 ____ 。",
+      "answers": ["def"], "kc_code": "", "evidence_page_ids": [],
+      "explain": "占位解析：def。"
+    },
+    {
+      "qid": "p1", "type": "CODING", "score": 30,
+      "title": "【占位题·需教师授权】两数之和",
+      "statement_markdown": "读入两个整数（同一行、空格分隔），输出它们的和。",
+      "samples": [{ "input": "2 3", "output": "5" }],
+      "hidden_test_cases": [
+        { "input": "2 3", "output": "5" },
+        { "input": "10 20", "output": "30" },
+        { "input": "-1 1", "output": "0" },
+        { "input": "100 -50", "output": "50" }
+      ],
+      "reference_solution": "a, b = map(int, input().split())\nprint(a + b)",
+      "kc_code": "", "evidence_page_ids": [],
+      "explain": "占位解析：拆分输入转 int 后求和。"
+    }
+  ]
+}

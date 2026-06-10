@@ -9,6 +9,10 @@ import ClassroomOverviewTab from '@/components/teacher/ClassroomOverviewTab.vue'
 import ClassroomQuestTab from '@/components/teacher/ClassroomQuestTab.vue';
 import ClassroomMembersTab from '@/components/teacher/ClassroomMembersTab.vue';
 import ClassroomHotspotsTab from '@/components/teacher/ClassroomHotspotsTab.vue';
+import MainlineStarsTab from '@/components/teacher/MainlineStarsTab.vue';
+import ChapterTestsTab from '@/components/teacher/ChapterTestsTab.vue';
+import EndlessActivityTab from '@/components/teacher/EndlessActivityTab.vue';
+import MainlineProgressTab from '@/components/teacher/MainlineProgressTab.vue';
 import { useTeacherStore } from '@stores/teacher';
 import { useToastStore } from '@stores/toast';
 import { useClassroomLive } from '@/composables/useClassroomLive';
@@ -29,6 +33,10 @@ const tabs = [
   { id: 'hotspots', label: '高频误区' },
   { id: 'resources', label: '资源使用' },
   { id: 'members', label: '成员' },
+  { id: 'ml-stars', label: '主线星级' },
+  { id: 'ml-tests', label: '章测成绩' },
+  { id: 'ml-endless', label: '无尽活跃' },
+  { id: 'ml-progress', label: '主线进度' },
 ] as const;
 
 type TabId = (typeof tabs)[number]['id'];
@@ -323,6 +331,24 @@ function back() {
             v-show="activeTab === 'members'"
             :members="members"
             @remove="removeMember"
+          />
+
+          <!-- R-15 主线看板（自取数 Tab，仅依赖 classroomId；v-if 首次激活才拉取） -->
+          <MainlineStarsTab
+            v-if="activeTab === 'ml-stars'"
+            :classroom-id="classroomId"
+          />
+          <ChapterTestsTab
+            v-if="activeTab === 'ml-tests'"
+            :classroom-id="classroomId"
+          />
+          <EndlessActivityTab
+            v-if="activeTab === 'ml-endless'"
+            :classroom-id="classroomId"
+          />
+          <MainlineProgressTab
+            v-if="activeTab === 'ml-progress'"
+            :classroom-id="classroomId"
           />
         </div>
       </main>

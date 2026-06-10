@@ -14,6 +14,7 @@ from pythontopia_graph.llm.provider import (
     provider_label,
 )
 from pythontopia_graph.routes.boss import router as boss_router
+from pythontopia_graph.routes.chapter_test import router as chapter_test_router
 from pythontopia_graph.routes.debug import router as debug_router
 from pythontopia_graph.routes.feynman import router as feynman_router
 from pythontopia_graph.routes.intent import router as intent_router
@@ -59,6 +60,7 @@ app.include_router(path_router)
 app.include_router(debug_router)
 app.include_router(evaluation_router)
 app.include_router(boss_router)
+app.include_router(chapter_test_router)
 app.include_router(streaming_router)
 app.include_router(tutor_router)
 app.include_router(orchestrator_router)

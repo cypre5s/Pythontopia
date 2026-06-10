@@ -11,6 +11,7 @@
 import { computed, onUnmounted, ref, watch } from 'vue';
 import { useDialogStore, type DialogNode } from '@stores/dialog';
 import { useSessionStore } from '@stores/session';
+import NpcGreetingBanner from '@/components/dialog/NpcGreetingBanner.vue';
 import { playSfx } from '@/composables/useAudio';
 import { createDialogContext, renderDialogText } from '@/game/dialogTemplate';
 
@@ -218,6 +219,8 @@ function onPortraitError(event: Event): void {
               style="color: #111111;"
             >{{ store.npcName || '???' }}</span>
           </header>
+
+          <NpcGreetingBanner />
 
           <p
             v-if="loading"
