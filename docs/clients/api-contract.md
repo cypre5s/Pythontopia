@@ -220,6 +220,47 @@ Bug 矿洞是错题复习支线：已有失败提交可进入矿洞；遗忘回�
 
 ---
 
+### 4.9 主线冒险地图与章末测试（since R-15，仅学生）
+
+> **R-15「主线完全重构」**：旧前端权威 `mainQuest` 存档（写 `save_slot.snapshot.mainQuest`）已**整体废弃**，
+> 主线进度改为**后端权威 mainline 域**（按 `user_id` 独立表 `mainline_stage_progress` / `chapter_star` /
+> `chapter_test`，迁移 V156/V157）。客户端只读 `overview` 渲染冒险地图，并通过下列写接口打点；星级公式、
+> 解锁、补星判定全在后端。**客户端不应再实现** mainQuest 子任务 / 任务面板 / 背包 / 货币 / 商店。
+
+| 方法 | 路径 | 鉴权 | 说明 |
+| --- | --- | --- | --- |
+| GET | `/api/mainline/overview` | STUDENT | 冒险地图一次拉齐 `MainlineOverviewDto`：`{ totalStars, chapters:[{ chapter,title,unlocked,stars,bestTestScore, stages:[{ id,index,title,videoWatchedSec,requiredVideoSec,pagesRead,requiredPages,examplesDone,requiredExamples,completed }], testStatus, starBreakdown, recovery }] }` |
+| GET | `/api/mainline/stages/{stageId}` | STUDENT | 单个小节学习页详情（静态定义 + 当前用户三件套已完成 id 集合）→ `StageDetailDto` |
+| POST | `/api/mainline/stages/{stageId}/video-progress` | STUDENT | 「看」打点，body `{ "deltaSec": <int> }`（服务端硬限频：单次 ≤120s、每分钟 ≤2 次，防挂机刷）→ `StageProgressDto` |
+| POST | `/api/mainline/stages/{stageId}/page-read` | STUDENT | 「学」打点，body `{ "pageId": <int> }`（幂等，重复同页只记一次）→ `StageProgressDto` |
+| POST | `/api/mainline/stages/{stageId}/example-done` | STUDENT | 「练」打点，body `{ "problemId": <int>, "submissionId"?: <int> }`（带 submissionId 则须本人且 PASSED）→ `StageProgressDto` |
+| POST | `/api/mainline/chapters/{chapter}/test/prepare` | STUDENT | 触发章末大测试**异步预生成**（画像驱动、考试期零 LLM 调用）→ `{ status }` |
+| POST | `/api/mainline/chapters/{chapter}/test/start` | STUDENT | 开考：下发**去答案**题面 + 截止时间（同章未提交只允许一份）→ `ChapterTestPaperDto` |
+| POST | `/api/mainline/chapters/{chapter}/test/{testId}/submit` | STUDENT | 交卷判分（选/判/填服务端比对，编程走判题沙箱跑隐藏用例），body `{ answers, integrity }` → `ChapterTestResultDto` |
+| GET | `/api/mainline/chapters/{chapter}/test/latest` | STUDENT | 本章最近一次测试结果（解析仅提交后返回）→ `ChapterTestResultDto?` |
+| POST | `/api/mainline/endless/summary` | STUDENT | 无尽一轮小结 → `ENDLESS_RECOVERY` 补星判定（防刷：每日每章至多记 1 次），body `{ chapter, correct, total, streak }` → `{ starAwarded }` |
+| POST | `/api/mainline/chapters/{chapter}/recovery/errorbook` | STUDENT | 申领错题复盘补星（校验本章 bug-mine RESOLVED ≥ 3，幂等）→ `{ starAwarded }` |
+
+> **星级（`chapter_star` 权威，0–3★）**：1★ = 章末测试最高分 ≥ 60；2★ = 1★ 且本章全部 stage 三件套（看+学+练）过线；
+> 3★ = 2★ 且（本章 KC 平均掌握度 ≥ 0.80 且测试最高分 ≥ 85）。补星每章每途径至多 +1、封顶 3★、幂等、只升不降。
+
+#### NPC 记忆个性化寒暄（since R-15，仅学生）
+
+| 方法 | 路径 | 鉴权 | 说明 |
+| --- | --- | --- | --- |
+| GET | `/api/npc/{npcKey}/greeting` | STUDENT | 打开 NPC 对话时拉取「记忆感知 + 画像」个性化寒暄（1–2 句，插入脚本对话首节点之前）→ `NpcGreetingResponse`；agent 失败时返回降级语义（不伪造个性化内容） |
+
+#### 教师看板（since R-15，TEACHER/ADMIN + 班级归属校验；属 Web 教师视角，非学生客户端链路）
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/api/teacher/classrooms/{classroomId}/dashboard/mainline-stars` | 每章 0/1/2/3★ 人数矩阵 + 总星 TopN |
+| GET | `/api/teacher/classrooms/{classroomId}/dashboard/chapter-tests` | 每章参试数 / 通过率 / 分数分布 |
+| GET | `/api/teacher/classrooms/{classroomId}/dashboard/endless-activity` | 近 7 日无尽轮次 / 正确率 / 补星数 |
+| GET | `/api/teacher/classrooms/{classroomId}/dashboard/mainline-progress` | 成员 × 章节 stage 完成度矩阵 |
+
+---
+
 ## 5. SSE 流式端点（多智能体）
 
 三个长流式端点均为 **`POST` + `produces: text/event-stream`**，**仅 `STUDENT`**，须带 `Authorization` 头。后端把请求转发到 Python graph 服务并把事件原样回放。
