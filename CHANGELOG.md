@@ -1,5 +1,79 @@
 # Changelog
 
+## 2026-06-10 — 真隐藏用例判题收口 + 画像难度加权回流 + @Async embedding flaky 修复 + 世界收敛收尾 + 工程整洁
+
+> 单会话围绕「真判题红线 + 既有缺陷/flaky + 工程整洁」收口，并对仓库做体检式整理。
+> **诚实交付**：本会话所有验证均实跑（命令与结果见各节「验证」）。期间检测到仓库内**另有并行 Codex 验收 agent**在持续改前端文件，
+> 本会话只提交自身已验证改动，未触碰其在途文件（如 `LearningObjectivePanel.vue`/`arenaLevels.ts`/`BossPage.vue` 等的并行改动未纳入）。
+
+### 一、真隐藏用例判题（`d3f34338`，「真判题」红线深层项）
+
+- **Feynman 真判题**：`feynman_session` 新增 `problem_id`（`V153`，按 KC 回填代表题，优先有隐藏用例者），
+  `FeynmanJudgeService` 改为复用 `JudgeCaseEvaluator` **比对代表题隐藏/样例用例**，而非旧的「空输入能跑通即过」；
+  缺题 / 缺用例 fail-fast。新增 `FeynmanJudgeServiceTest`（隐藏输出不匹配必判失败）。
+- **画像回流补全**：`PassiveProfileRevisionListener` 新增 `TaughtAiSucceeded→practical_ability↑` /
+  `TaughtAiFailed→error_pattern`（带 `teach_back_failed` tag + sessionId 审计）。
+- **判题掌握度难度加权落地**：`LearningEvent.Practice{Succeeded,Failed}` 携带 `difficulty`，`SubmissionService`
+  从题目 DTO 取难度透传，`LearningEventListener` 优先用事件难度（缺失再查库）→ 难题通过增益大、易题失败惩罚重真正生效。
+
+### 二、@Async embedding 时序 flaky 修复（`d3f34338`，根因隔离）
+
+- 现象：`Stage05/08/10` 集成测试偶发「`No further requests expected: POST /embed`」。用 `git stash` 还原到提交基线对照，
+  **同样 4 个失败原样复现** → 确证为既有问题（记忆向量化 `@Async` 抢进 `MockRestServiceServer(graphRestTemplate)` 窗口）。
+- 修复：新增独立 `ragRestTemplate` bean，`RagEmbeddingClient` 改用之，与 graph 调用**物理隔离**；异步 `/embed` 不再被
+  绑定 graph 模板的集成测试拦截。修复后 `Stage05/08/10` 转绿。
+
+### 三、世界收敛收尾 + URL 隐藏 id + 归属映射（`d3f34338`/`093a8d08`）
+
+- **fast-travel `mine_south` 退役**：`V154` 删除已删风景图相关路线；`FastTravelService(Boundary)Test` 改为「无路线」断言。
+- **URL 隐藏私有 id**：`ResourceListPanel` 资源详情改走 `workshopUi` store，不再写 `/workshop?id=`。
+- **`evaluation→sage_review` 引导映射**：`questGuidance` 增 `EVALUATION` 资源类型 → 复盘师 Sage。
+- **前端掌握度对齐难度加权**：`MainQuestPanel`/`TrainingPanel` `MASTERY_PER_PASS 20→14`（Low 难度 ×0.7 ⇒ 单次 AC +0.14）；
+  主线 2-3 锚 KC `PY43-KC-011→PY43-KC-016`（#476 实际 kc_code）并同步 `mainQuest.evidence.spec`。
+
+### 四、工程整洁（lint / 死代码 / 格式 / 根目录）
+
+- **前端 eslint 790 → 0**：`eslint --fix` 清 448 项 Vue 模板排版；对已 `DOMPurify` 消毒 / mermaid `strict` 的 `v-html`
+  与测试桩组件加**带理由的豁免注释**；修 `LearningObjectivePanel` button 嵌套（改 `div[role=button]` + 键盘可达）。
+- **死代码清理**：删 `AgentOfficeScene.vue + agentOffice.ts + spec`（孤儿，工坊已收敛为单一 `ThinkingStream`）；
+  `MainQuestChip` / `MarvisPanel` 等于本周内移除。
+- **后端格式**：本会话新增的 3 处超长行按 Google Java Format 折行 ≤100 列（`77d5a154`；spotless 工具因网络受限不可达，离线手修）。
+- **仓库整理**（`2fa2497e`/`b1d6bd13`）：`.gitignore` 忽略本地 agent/工具产物（`.claude/ .playwright-mcp/ test.md`）；
+  删垃圾文件 `nul`；根目录计划文档归位——`plan/`（阶段00–15+总览）→ `docs/plan/`，`R13_OPTIMIZATION_PLAN.md`/`plan.md`/`主线改造进度.md` → `docs/`；
+  清理纯本地缓存目录（保留 `secrets/`、`qa-screens/`）。
+
+- **验证（实跑）**：后端 `mvn test` BUILD SUCCESS（exit 0，含全部 Testcontainers IT）；前端 `vitest` 144 文件 1519 全绿；
+  `vue-tsc` typecheck 通过；`eslint` 0 warning；`vite build` 成功。
+
+## 2026-06-09 — 记忆语义化地基（pgvector）+ 记忆化 NPC 对话 + 费曼 AI 学弟 + 教师端 dashboard 重构 + 验收修复
+
+> 据提交信息记录（本条非本会话亲自实跑，验证以各提交所述为准）。围绕「生成式教学智能体」后续 Phase 与验收修复多线推进。
+
+### 一、记忆语义化地基 P0（`4e2ce63b`/`9e49ac85`/`e04136f5`/`4a6aed2f`/`1066d7ec`/`e94856fc`）
+
+- rag 新增**批量 `/embed` 向量化端点**；后端 `EmbeddingClient` 调用之；`MemoryScorer` 增**语义相关性**重载；
+  `V141` 建 `pgvector` 的 `memory_embedding` 表 + 余弦检索仓储；记忆写入异步化 + 语义检索接入（P0 收尾）。
+
+### 二、记忆化 NPC 对话 P1–P3（`c3f2a741`/`810899d2`/`1066d7ec`/`00a11c43`/`fee7a948`）
+
+- NPC **记忆作用域 / 人设 / 关系规则**（P1-P2）+ graph **grounded NPC dialog agent** + 记忆化对话后端（P3）+
+  前端**记忆徽章 glassbox**；修复记忆 NPC 对话 bean 与世界 NPC 控制器的 bean 冲突。
+
+### 三、费曼 AI 学弟 P4–P5（`f4945769`/`5fd84133`/`14d600f7`）
+
+- graph **Feynman tutee agent**（镜像学生真实误区的 AI 学弟）+ 前端 **teach-back 面板** + 后端**会话与判题回流**（P4-P5）。
+  > 注：本日判题仍为「能跑通 + 反作弊」，「真隐藏用例比对」在 2026-06-10 `V153` 收口（见上）。
+
+### 四、教师端 UI 重构（`b2d4295d`/`fd274ebd`/`3b5b65ad`）
+
+- **dashboard-01 侧栏布局** + 像素主题 + Py-native 组件（PyButton/PyTable/PyToggleGroup/PyTabs/PyRadioGroup/PyScrollArea/PyPopover）；
+  成员表 PyTable 化、KC 热力图卡片化、任务发布分区 + 完成率进度条；公告板去冗余。
+
+### 五、验收修复 Wave1 / Wave2（`8956541f`/`cec502f3`）
+
+- Wave1：404 语义 / seed 契约 / 掌握置信度 / dispatch 吞异常 / 周报 status。
+- Wave2 三 lane：P0.3 / P1.3-1.4 / P3.2-3.4 / P4.1 / P5.1 / P6.1 / P7.1（数字人 P8 除外）。
+
 ## 2026-06-08 — 生成式教学智能体（记忆流+反思）+ 随身助教 + 真协同答疑工具化 + 工作区基线固化
 
 > 一天内跨多会话推进多条线，最后用一次基线快照把所有在途工作区改动固化为安全回滚点。
