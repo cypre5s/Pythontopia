@@ -71,7 +71,10 @@ async function markDone(problemId: number, submissionId?: number): Promise<void>
   >
     <header class="stage-practice__head">
       <h3 class="stage-practice__title">
-        <span class="stage-practice__icon" aria-hidden="true">⌨</span> 练 · 例题实战
+        <span
+          class="stage-practice__icon"
+          aria-hidden="true"
+        >⌨</span> 练 · 例题实战
       </h3>
       <span
         v-if="passed"
@@ -107,7 +110,10 @@ async function markDone(problemId: number, submissionId?: number): Promise<void>
         :class="{ 'stage-practice__item--done': isDone(problemId) }"
       >
         <span class="stage-practice__name">
-          <span class="stage-practice__check" aria-hidden="true">{{ isDone(problemId) ? '✓' : '○' }}</span>
+          <span
+            class="stage-practice__check"
+            aria-hidden="true"
+          >{{ isDone(problemId) ? '✓' : '○' }}</span>
           例题 {{ idx + 1 }}（#{{ problemId }}）
         </span>
         <span class="stage-practice__actions">

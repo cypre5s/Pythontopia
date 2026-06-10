@@ -59,7 +59,7 @@ function mmss(sec: number): string {
   return `${m}:${String(r).padStart(2, '0')}`;
 }
 
-function currentVisibility(): DocumentVisibilityState {
+function currentVisibility(): 'hidden' | 'visible' {
   return typeof document !== 'undefined' ? document.visibilityState : 'visible';
 }
 
@@ -172,7 +172,10 @@ onBeforeUnmount(() => {
   >
     <header class="stage-video__head">
       <h3 class="stage-video__title">
-        <span class="stage-video__icon" aria-hidden="true">▶</span> 看 · 视频讲解
+        <span
+          class="stage-video__icon"
+          aria-hidden="true"
+        >▶</span> 看 · 视频讲解
       </h3>
       <span
         v-if="crossed"
@@ -220,7 +223,9 @@ onBeforeUnmount(() => {
           class="stage-video__retry"
           data-testid="stage-video-retry"
           @click="loadVideo"
-        >重试</button>
+        >
+          重试
+        </button>
         或先去「学」与「练」。
       </template>
       <template v-else>

@@ -247,6 +247,7 @@ export function renderChapterMap(ctx: ChapterMapSceneContext, nodes: ChapterMapN
 export const ChapterMapScene = {
   key: CHAPTER_MAP_SCENE_KEY,
   create(this: ChapterMapSceneContext): void {
+    // eslint-disable-next-line @typescript-eslint/no-this-alias -- 缓存当前 Phaser 场景上下文，供外部 setChapterMapData 重绘；shutdown 时清除。
     liveScene = this;
     renderChapterMap(this, currentNodes);
     this.events?.on('shutdown', () => {

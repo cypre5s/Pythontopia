@@ -17,6 +17,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /**
@@ -57,6 +58,7 @@ public class NpcGreetingService {
   /** npc×学生 → 缓存条目；仅缓存成功寒暄与「无记忆」确定态，不缓存下游故障（保证可恢复）。 */
   private final Map<String, CacheEntry> cache = new ConcurrentHashMap<>();
 
+  @Autowired
   public NpcGreetingService(
       MemoryRetrievalService memoryRetrievalService,
       PassiveProfileService passiveProfileService,

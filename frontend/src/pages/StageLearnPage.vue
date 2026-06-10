@@ -176,7 +176,9 @@ onMounted(load);
           class="stage-learn__retry"
           data-testid="stage-learn-retry"
           @click="load"
-        >重试</button>。
+        >
+          重试
+        </button>。
       </p>
 
       <template v-else-if="stage">

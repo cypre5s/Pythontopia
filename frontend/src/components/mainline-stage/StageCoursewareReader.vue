@@ -68,7 +68,10 @@ function openAndMark(pageId: number): void {
   >
     <header class="stage-courseware__head">
       <h3 class="stage-courseware__title">
-        <span class="stage-courseware__icon" aria-hidden="true">📖</span> 学 · 课件精读
+        <span
+          class="stage-courseware__icon"
+          aria-hidden="true"
+        >📖</span> 学 · 课件精读
       </h3>
       <span
         v-if="done"
@@ -98,7 +101,10 @@ function openAndMark(pageId: number): void {
         :class="{ 'stage-courseware__item--read': isRead(pageId) }"
       >
         <span class="stage-courseware__page">
-          <span class="stage-courseware__check" aria-hidden="true">{{ isRead(pageId) ? '✓' : '○' }}</span>
+          <span
+            class="stage-courseware__check"
+            aria-hidden="true"
+          >{{ isRead(pageId) ? '✓' : '○' }}</span>
           课件页 {{ idx + 1 }}（#{{ pageId }}）
         </span>
         <span class="stage-courseware__actions">
