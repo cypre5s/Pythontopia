@@ -5,13 +5,8 @@ import com.pythontopia.mainline.domain.MainlineStageProgress;
 import java.util.HashSet;
 
 /**
- * stage 三件套（看/学/练）过线判定——纯函数，overview 展示与「完成即重算」共用，便于单测。
- *
- * <ul>
- *   <li>看：{@code video_watched_sec ≥ required_video_sec}。
- *   <li>学：{@code required_pages>0} 时按去重页数达标；否则需读全 {@code courseware_page_ids}（空集视为已读，占位期）。
- *   <li>练：去重例题数 ≥ {@code required_example_count}。
- * </ul>
+ * stage 三件套过线判定（纯函数，便于单测）：看=video_watched_sec≥required；
+ * 学=required_pages>0 按去重页数，否则需读全 courseware_page_ids（空集占位视为已读）；练=去重例题数≥required。
  */
 public final class StageCompletion {
 

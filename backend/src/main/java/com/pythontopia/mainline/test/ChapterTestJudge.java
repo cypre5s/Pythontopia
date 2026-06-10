@@ -15,15 +15,8 @@ import java.util.Map;
 import org.springframework.stereotype.Service;
 
 /**
- * 章末大测试<b>服务端判分</b>（r15 计划 §4.2，全本地、零 LLM）：
- *
- * <ul>
- *   <li>CHOICE / JUDGE：精确比对（CHOICE 接受「选项标识」或「选项原文」，JUDGE 接受多种真假写法）。
- *   <li>FILL：归一化比对（NFKC 全/半角统一 + trim + 大小写 + 去空白 + 候选集任一命中）。
- *   <li>CODING：复用既有 {@link JudgeCaseEvaluator} 沙箱跑 {@code hidden_test_cases}，按通过用例比例给分。
- * </ul>
- *
- * <p>纯逻辑（客观题）可脱离沙箱单测；CODING 通过注入的 {@link JudgeWorkerPool} 串到既有判题并发池。
+ * 章测服务端判分（§4.2，全本地零 LLM）：CHOICE/JUDGE 精确比对；FILL 归一化(NFKC+去空白+大小写+候选集)；
+ * CODING 走 JudgeCaseEvaluator 沙箱跑 hidden_test_cases 按通过比例给分（经 JudgeWorkerPool 并发池）。
  */
 @Service
 public class ChapterTestJudge {
