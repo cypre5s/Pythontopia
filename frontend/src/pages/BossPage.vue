@@ -16,8 +16,7 @@ import { kcDisplayName } from '@/data/kcNames';
 import BossSprite from '@/components/boss/BossSprite.vue';
 import BossMoveEffect from '@/components/boss/BossMoveEffect.vue';
 import { useBossSession } from '@/composables/useBossSession';
-import { findBossByChapter } from '@/data/mainQuests';
-import type { MainSubQuestReward } from '@/types/mainQuest';
+import { findBossByChapter, type MainSubQuestReward } from '@/data/bossCatalog';
 
 const props = defineProps<{ chapter: number }>();
 

@@ -14,7 +14,7 @@ import { useRoute, useRouter } from 'vue-router';
 import AppLayout from '@/app/AppLayout.vue';
 import { useArenaStore } from '@stores/arena';
 import { arenaLevelsByChapter } from '@/data/arenaLevels';
-import { findBossByChapter } from '@/data/mainQuests';
+import { findBossByChapter } from '@/data/bossCatalog';
 import { kcDisplayName } from '@/data/kcNames';
 import { useProfileSignals } from '@/composables/useProfileSignals';
 import type { ArenaLevel, ArenaLevelKind } from '@/types/arena';

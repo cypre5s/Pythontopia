@@ -8,12 +8,10 @@
 // 设计约束：
 //   - 选项美术等价、措辞中性、无优劣暗示；可随时跳过；
 //   - 提交走 fire-and-forget，失败静默降级，绝不阻塞玩家主线。
-// 仅依赖 probe/mainQuest/dialog store（只读主线），不改 dialog/mainQuest 状态。
+// 仅依赖 probe/dialog store；R-15 退役 mainQuest 后，「看」阶段认知风格探针改为进入世界时一次性触发。
 import { computed, ref, watch } from 'vue';
-import { useMainQuestStore } from '@stores/mainQuest';
 import { useProbeStore } from '@stores/probe';
 import { useDialogStore } from '@stores/dialog';
-import { mainSubQuestPhase } from '@/data/mainQuests';
 import { PROBE_CATALOG, REQUESTED_PROBES } from '@/data/probeCatalog';
 
 // 首次引导（帮助弹窗 + 镇长对话）期间由父级 WorldPage 置 hold，避免探针叠成第三层弹窗。
@@ -22,7 +20,6 @@ const props = withDefaults(defineProps<{ hold?: boolean }>(), { hold: false });
 // 进入主线「看」阶段触发的探针 key（首发只有 cog_intro）。
 const WATCH_PROBE_KEY = 'cog_intro';
 
-const mainQuest = useMainQuestStore();
 const probe = useProbeStore();
 const dialog = useDialogStore();
 
@@ -49,16 +46,16 @@ function reevaluate(): void {
       return;
     }
   }
-  // 2) 主线「看」阶段触发的探针（cog_intro）。
-  const quest = mainQuest.currentSubQuest;
-  if (quest && mainSubQuestPhase(quest).phase === 'watch' && probe.shouldShow(WATCH_PROBE_KEY)) {
+  // 2) 进入世界时一次性触发「看」阶段认知风格探针（cog_intro），不再绑定旧主线子任务阶段。
+  if (probe.shouldShow(WATCH_PROBE_KEY)) {
     show(WATCH_PROBE_KEY);
   }
 }
 
-// 主线推进 / 引导结束 / 对话关闭 / 探针被请求后都复评一次。
-// immediate：进入世界即评估首个「看」阶段任务，并兜底「回到世界时已有 requested 探针待弹」。
-watch(() => mainQuest.currentSubQuest, reevaluate, { immediate: true });
+// 同步初评一次（首个「看」阶段认知风格探针 + 兜底已有 requested 探针待弹），
+// 在首帧渲染前置好 activeKey，保证进入世界即可见（与旧 immediate watch 行为一致）。
+reevaluate();
+// 引导结束 / 对话关闭 / 探针被请求后都复评一次。
 watch(() => props.hold, reevaluate);
 watch(() => dialog.visible, reevaluate);
 // requested 在已挂载期间被置位时（如停留世界内时收到失败信号）也即时复评。

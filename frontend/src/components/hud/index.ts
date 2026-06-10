@@ -6,7 +6,6 @@ export { default as QuickslotPanelHost } from './QuickslotPanelHost.vue';
 export { default as SettingsModal } from './SettingsModal.vue';
 export { default as FestivalRibbon } from './FestivalRibbon.vue';
 export { default as FastTravelPanel } from './FastTravelPanel.vue';
-export { default as MainQuestPanel } from './MainQuestPanel.vue';
 export { default as LearningObjectivePanel } from './LearningObjectivePanel.vue';
 export { default as PauseMenu } from './PauseMenu.vue';
 export { default as QuickWheel } from './QuickWheel.vue';

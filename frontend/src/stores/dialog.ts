@@ -481,22 +481,14 @@ export const useDialogStore = defineStore('dialog', {
       let routeToNavigate: string | null = null;
       if (choice.effects && this.npcKey) {
         for (const effect of choice.effects) {
-          // 主线发任务：NPC 推荐/激活一个主线子任务（questKey 对齐 mainQuests id，如 "1-1"）。
-          // 用 lazy import 规避与 mainQuest store 的循环依赖（同 close() 的做法）。
+          // NPC「推荐主线」：R-15 退役旧 mainQuest acceptQuest 后，统一引导到冒险地图入口。
           if (effect.type === 'quest_recommend' && effect.questKey) {
-            const questKey = effect.questKey;
-            if (questKey === 'claim_class_quest') {
+            if (effect.questKey === 'claim_class_quest') {
               // 班长「领班级任务」：班级任务不在主线里，直接带到公告板·班级任务页签，
-              // 学生在那里真实领取教师发布的任务（此前只开主线面板，引导落空）。
+              // 学生在那里真实领取教师发布的任务。
               routeToNavigate = '/board?tab=classroom';
             } else {
-              void import('@stores/mainQuest').then((mod) => {
-                try {
-                  mod.useMainQuestStore().acceptQuest(questKey);
-                } catch {
-                  /* mainQuest store 未挂载（test / 极端环境）忽略 */
-                }
-              });
+              routeToNavigate = '/mainline-map';
             }
           }
           // set_flag：落持久 flag，供 flag_set 条件与后续内容解锁使用。
@@ -726,7 +718,6 @@ export const useDialogStore = defineStore('dialog', {
      */
     close(): void {
       const wasOpen = this.visible || this.openNpcKey !== null;
-      const closingNpcKey = this.npcKey ?? this.openNpcKey;
 
       this.openNpcKey = null;
       this.lines = [];
@@ -749,17 +740,7 @@ export const useDialogStore = defineStore('dialog', {
       this.greetingGrounded = false;
       if (wasOpen) {
         playDialogClose();
-        // Lazy import 避免与 mainQuest store 循环依赖（dialog store 不在 mainQuest
-        // 加载之前初始化）。仅当真有 npcKey 时通知主线。
-        if (closingNpcKey && typeof window !== 'undefined') {
-          void import('@stores/mainQuest').then((mod) => {
-            try {
-              mod.useMainQuestStore().onDialogClose(closingNpcKey);
-            } catch {
-              // 忽略：mainQuest store 未挂载（test / 极端环境）
-            }
-          });
-        }
+        // R-15：旧 mainQuest onDialogClose（dialog_complete 子任务推进）已退役，对话关闭不再通知主线。
       }
     },
   },

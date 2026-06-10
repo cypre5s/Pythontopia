@@ -8,7 +8,6 @@ import { createQuestsSlice } from './learning/questsSlice';
 import { createTrainingSlice } from './learning/trainingSlice';
 import { createBugMineSlice } from './learning/bugMineSlice';
 import { createEvaluationSlice } from './learning/evaluationSlice';
-import { notifyMainQuestMastery } from './learning/notify';
 import type { LearnerProfileDto } from '@/api/dto/LearnerProfileDto';
 import type { MasterySnapshotDto } from '@/api/dto/MasterySnapshotDto';
 import type { LearningPathDto } from '@/api/dto/Path';
@@ -75,7 +74,6 @@ export const useLearningStore = defineStore('learning', () => {
   }): void {
     if (payload.mastery) {
       fieldSlice.field.value.masterySnapshot = payload.mastery;
-      notifyMainQuestMastery(payload.mastery);
     }
     if (payload.profile !== undefined) {
       profileSlice.profile.value = payload.profile;

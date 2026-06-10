@@ -4,14 +4,12 @@ import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useGameSettingsStore } from '@stores/gameSettings';
 import { useHudStore } from '@stores/hud';
-import { useMainQuestStore } from '@stores/mainQuest';
 import { useToastStore } from '@stores/toast';
 import { useSessionStore } from '@stores/session';
 import { playUiClick } from '@/composables/useStardewFx';
 
 const settings = useGameSettingsStore();
 const hud = useHudStore();
-const mainQuest = useMainQuestStore();
 const toast = useToastStore();
 const session = useSessionStore();
 const router = useRouter();
@@ -77,11 +75,8 @@ const menuSections: MenuSection[] = [
       {
         id: 'quest',
         icon: `${ICON_BASE}/flag.svg`,
-        label: '任务日志',
-        action: () => {
-          close();
-          mainQuest.togglePanel();
-        },
+        label: '冒险地图',
+        action: () => go('/mainline-map'),
       },
       {
         id: 'skill',

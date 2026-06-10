@@ -5,7 +5,6 @@ import {
   listWorkshopResources,
   submitWorkshopFeedback,
 } from '@/api/workshop';
-import { notifyMainQuestResource } from './notify';
 import type {
   WorkshopCreateRequest,
   WorkshopCreateResponse,
@@ -70,8 +69,6 @@ export function createWorkshopSlice() {
       const response = await createWorkshopResource(request);
       resources.value.phase = 'success';
       await loadResources();
-      // 触发主线 evidence_type='resource_consumed' 检测。
-      notifyMainQuestResource(request.type, request.kcCodes);
       return response;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

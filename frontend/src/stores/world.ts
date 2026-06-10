@@ -7,7 +7,6 @@ import { useNpcStore } from '@stores/npc';
 import { useSkillStore } from '@stores/skill';
 import { useHudStore } from '@stores/hud';
 import { useToastStore } from '@stores/toast';
-import { useMainQuestStore } from '@stores/mainQuest';
 import { playChime } from '@/composables/useStardewFx';
 import type { Direction } from '@api/dto/Direction';
 import type { GameBootstrapResponseDto } from '@api/dto/GameBootstrapResponseDto';
@@ -138,9 +137,8 @@ export const useWorldStore = defineStore('world', {
       this.activeSlot = slot;
       this.sceneName = slot.sceneName || DEFAULT_SCENE_NAME;
       this.accumulatedPlaySeconds = slot.accumulatedPlaySeconds;
-      // 用后端存档快照回灌主线进度（跨设备跟随）。空快照 `{}` 或缺失会被
-      // hydrateFromSnapshot 安全忽略，从而保留本地 localStorage 进度。
-      useMainQuestStore().hydrateFromSnapshot(slot.snapshot ?? null);
+      // R-15：旧 mainQuest 存档快照已作废——主线进度改由后端权威 mainline 域（按 user_id 独立表），
+      // 不再回灌 snapshot.mainQuest。slot 的 RPG 扩展字段仍透传到 store（见上）。
     },
     /**
      * 推进一天：触发 mastery decay / NPC 周计划重置。

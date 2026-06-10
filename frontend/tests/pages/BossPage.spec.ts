@@ -26,7 +26,6 @@ vi.mock('@/game/adapters/pyodide', () => ({
 }));
 
 import BossPage from '@/pages/BossPage.vue';
-import { useMainQuestStore } from '@stores/mainQuest';
 
 const APP_LAYOUT_STUB = { template: '<div data-testid="layout-stub"><slot /></div>' };
 
@@ -211,7 +210,7 @@ describe('BossPage', () => {
     expect(wrapper.find('[data-testid="boss-error"]').exists()).toBe(true);
   });
 
-  it('通关 4 stage 后进 victory 状态并写主线 store', async () => {
+  it('通关 4 stage 后进 victory 状态', async () => {
     apiMocks.requestBossProblem.mockResolvedValue({ ...SAMPLE_PROBLEM });
 
     await router.push('/boss/1');
@@ -229,8 +228,6 @@ describe('BossPage', () => {
       }
     }
     expect(wrapper.find('[data-testid="boss-victory"]').exists()).toBe(true);
-    const mainQuest = useMainQuestStore();
-    expect(mainQuest.progress.defeatedBosses).toContain(1);
   });
 
   it('计时器随秒数推进（手动 tick）', async () => {

@@ -3,7 +3,6 @@ import { mount, flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { createMemoryHistory, createRouter, type Router } from 'vue-router';
 import PracticeList from '@/components/workshop/PracticeList.vue';
-import { useMainQuestStore } from '@stores/mainQuest';
 import { setPyodideRunner } from '@/game/adapters/pyodide';
 import type { PracticeContent } from '@/api/dto/Workshop';
 
@@ -59,8 +58,6 @@ describe('PracticeList 内联运行', () => {
     setPyodideRunner(fakeRunner);
 
     const { wrapper } = mountList();
-    const mainQuest = useMainQuestStore();
-    const advanceSpy = vi.spyOn(mainQuest, 'onSubmissionPassed').mockReturnValue(null);
 
     await wrapper.find('[data-testid="practice-code-0"]').setValue('print(1 + 2)');
     await wrapper.find('[data-testid="practice-run-0"]').trigger('click');
@@ -69,9 +66,6 @@ describe('PracticeList 内联运行', () => {
     expect(fakeRunner.run).toHaveBeenCalledTimes(1);
     // 用第一组样例输入作为 stdin 跑本地预览。
     expect(fakeRunner.run).toHaveBeenCalledWith('print(1 + 2)', '1 2');
-
-    // 硬红线：本地预览通过也不推进主线/不上报后端（submission_passed 只能来自正式判题）。
-    expect(advanceSpy).not.toHaveBeenCalled();
 
     const output = wrapper.find('[data-testid="practice-output-0"]');
     expect(output.exists()).toBe(true);
@@ -98,15 +92,10 @@ describe('PracticeList 内联运行', () => {
 
     const { wrapper, router } = mountList();
     const pushSpy = vi.spyOn(router, 'push');
-    const mainQuest = useMainQuestStore();
-    const advanceSpy = vi.spyOn(mainQuest, 'onSubmissionPassed').mockReturnValue(null);
 
     await wrapper.find('[data-testid="practice-code-0"]').setValue('print(999)');
     await wrapper.find('[data-testid="practice-run-0"]').trigger('click');
     await flushPromises();
-
-    // 输出与预期不符 → 视为未通过，不推进主线。
-    expect(advanceSpy).not.toHaveBeenCalled();
 
     const mineChip = wrapper.find('[data-testid="practice-mine-0"]');
     expect(mineChip.exists()).toBe(true);

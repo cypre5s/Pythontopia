@@ -15,7 +15,6 @@ import {
   SettingsModal,
   FestivalRibbon,
   FastTravelPanel,
-  MainQuestPanel,
   QuickslotPanelHost,
   LearningObjectivePanel,
   PauseMenu,
@@ -134,7 +133,6 @@ onBeforeUnmount(() => {
     <SettingsModal />
     <FestivalRibbon />
     <FastTravelPanel />
-    <MainQuestPanel />
     <QuickslotPanelHost />
     <PauseMenu />
     <QuickWheel />

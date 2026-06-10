@@ -11,11 +11,12 @@
  * 数据源：POST /api/orchestrator/turn/stream（Java 代理 → Python 学习总管），
  * SSE 事件 trace/token/result/error 由 useSseStream 解析。
  */
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useGuideStore } from '@stores/guide';
 import { useHudStore } from '@stores/hud';
-import { useMainQuestStore } from '@stores/mainQuest';
+import { useMainlineStore } from '@stores/mainline';
+import { CHAPTERS, formatKcNumber } from '@/data/chapters';
 import { useLearningStore } from '@stores/learning';
 import { useWorkshopActivityStore } from '@stores/workshopActivity';
 import { useSseStream } from '@/composables/useSseStream';
@@ -31,12 +32,28 @@ import type { LearnerProfileDto } from '@/api/dto/LearnerProfileDto';
 
 const guide = useGuideStore();
 const hud = useHudStore();
-const mainQuest = useMainQuestStore();
+const mainline = useMainlineStore();
 const learning = useLearningStore();
+
+/** 本章覆盖的 KC code 集合（由 chapters.ts 的 start/endKc 推导，替代旧 mainQuest store getter）。 */
+function chapterKcCodes(chapter: number): string[] {
+  const ch = CHAPTERS.find((c) => c.order === chapter);
+  if (!ch) return [];
+  const out: string[] = [];
+  for (let n = ch.startKc; n <= ch.endKc; n += 1) {
+    out.push(formatKcNumber(n));
+  }
+  return out;
+}
 const activity = useWorkshopActivityStore();
 const router = useRouter();
 
 const sse = useSseStream<OrchestratorResult>('/api/orchestrator/turn/stream');
+
+// 进入时拉一次主线总览，保证 firstActionableChapter 反映真实进度（失败由 store 静默兜底）。
+onMounted(() => {
+  void mainline.load();
+});
 
 const visible = computed(() => guide.open);
 const inputText = ref('');
@@ -157,8 +174,8 @@ async function send(raw: string): Promise<void> {
   if (!text || guide.isStreaming) return;
   playUiClick();
 
-  const chapter = mainQuest.progress.currentChapter;
-  const chapterKcs = mainQuest.chapterKcCodes(chapter);
+  const chapter = mainline.firstActionableChapter;
+  const chapterKcs = chapterKcCodes(chapter);
   // 在 push 用户消息之前取历史（不含本轮）。historyForRequest 是 getter（属性访问）。
   const history = guide.historyForRequest;
   guide.pushUserMessage(text);
@@ -229,7 +246,7 @@ function onKeydown(e: KeyboardEvent): void {
 }
 function goToPanel(panel: string | null): void {
   if (!panel) return;
-  const route = panelRoute(panel, mainQuest.progress.currentChapter);
+  const route = panelRoute(panel, mainline.firstActionableChapter);
   if (!route) return;
   playUiClick();
   guide.closePanel();

@@ -1,7 +1,8 @@
 // 玩家存档槽 API 客户端（对齐后端 SaveSlotController `/api/world/saves`）。
 //
-// 主要用途是把主线进度（mainQuest store）同步到后端 `save_slot.snapshot.mainQuest`，
-// 实现跨刷新 / 跨设备进度跟随；localStorage 仍作为离线兜底。
+// R-15：旧「把 mainQuest 主线进度写入 save_slot.snapshot.mainQuest」用途已退役
+// （主线进度迁至后端权威 mainline 域，按 user_id 独立表）。本模块保留通用的存档槽
+// 创建 / 激活 / 列表 / 快照写入 API 客户端，供其它存档相关功能按需调用。
 
 import { http } from './http';
 import type { SaveSlotDto, SaveSlotSnapshot } from './dto/SaveSlotDto';

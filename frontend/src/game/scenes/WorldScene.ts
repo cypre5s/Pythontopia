@@ -44,7 +44,6 @@ import {
   type NpcSchedule,
 } from '@game/core/npcSchedule';
 import { useWorldStore } from '@stores/world';
-import { useMainQuestStore } from '@stores/mainQuest';
 import { useMoodStore } from '@stores/mood';
 
 const TILE_SIZE = 16;
@@ -143,6 +142,15 @@ const TRIGGER_RADIUS_TILES = 1.4;
 const BULLETIN_BOARD_ROUTE = '/board';
 
 /**
+ * 「冒险地图」告示牌 trigger 在 town_hub 中的中心 tile。
+ * 与公告板（喷泉东侧两格 27,20）对称放在喷泉西侧两格 22,20，作为 R-15 主线唯一入口告示牌。
+ */
+const ADVENTURE_MAP_TILE_X = 22;
+const ADVENTURE_MAP_TILE_Y = 20;
+/** 「冒险地图」告示牌 trigger 跳转的目标路由（R-15 主线地图）。 */
+const ADVENTURE_MAP_ROUTE = '/mainline-map';
+
+/**
  * Phaser hint 气泡渲染器句柄：scene 端注入到 InteractableSystem，
  * 由 InteractableSystem 在 enter/exit/clear 时调用 show/hide。
  * destroy 在 shutdown 时由 scene 主动调用，回收 Phaser GameObject。
@@ -190,10 +198,9 @@ interface WorldSceneState {
   // 毫秒时钟，记录上一帧的值在本帧相减即可。0 表示首帧，跳过 NPC tick 防止
   // dt 巨大跳变。
   prevUpdateTimeMs: number;
-  // 主线标记（NPC 头顶「!」/ 目标点光圈）的显示对象句柄：每次重绘先销毁旧句柄。
-  // 配合 mainQuest store 订阅做响应式重绘——修复「感叹号画一次永不消失」。
+  // 「冒险地图」告示牌上的持久引导标记（「!」+ 标签）显示对象句柄：场景销毁时清理。
+  // R-15 退役旧 mainQuest 后，标记不再按 activeQuest 动态重绘，改为单一静态引导。
   questMarkerObjects: Phaser.GameObjects.GameObject[];
-  questMarkerUnsubscribe: (() => void) | null;
 }
 
 const state: WorldSceneState = {
@@ -225,7 +232,6 @@ const state: WorldSceneState = {
   lifecycleDetach: null,
   prevUpdateTimeMs: 0,
   questMarkerObjects: [],
-  questMarkerUnsubscribe: null,
 };
 
 export const WorldScene = {
@@ -395,6 +401,17 @@ export const WorldScene = {
           },
         }),
       );
+      // R-15 主线唯一入口：「冒险地图」告示牌 → /mainline-map（与 HUD 按钮 / 公告板·班级任务并列）。
+      state.interactable.register(
+        buildAdventureMapTrigger({
+          tileX: ADVENTURE_MAP_TILE_X,
+          tileY: ADVENTURE_MAP_TILE_Y,
+          tileSize: RENDER_TILE_SIZE,
+          onActivate: () => {
+            void router.push(ADVENTURE_MAP_ROUTE);
+          },
+        }),
+      );
     }
 
     // 建筑入口键盘链路：建筑体被碰撞层挡住，玩家站到门口一圈内按 E 即可进入，
@@ -477,17 +494,9 @@ export const WorldScene = {
     };
     window.addEventListener('pythontopia:mood-changed', onMoodChanged);
 
-    paintQuestMarkers(phaserScene, state.mapKey, state.npcs, RENDER_TILE_SIZE);
-    // 任务推进（完成对话 / 资源 / 提交 / 跨章）即重绘标记：旧「!」与光圈先销毁再按
-    // 最新 activeQuest 画。订阅句柄在 shutdown 解绑，防 restart 叠加多份监听。
-    try {
-      const mqStore = useMainQuestStore();
-      state.questMarkerUnsubscribe = mqStore.$subscribe(() => {
-        paintQuestMarkers(phaserScene, state.mapKey, state.npcs, RENDER_TILE_SIZE);
-      });
-    } catch {
-      // store 在 jsdom / 单测环境不可用时跳过订阅（初次绘制同样会静默跳过）。
-    }
+    // R-15：单一引导——在 town_hub「冒险地图」告示牌上画一次持久「!」标记，指引玩家去
+    // /mainline-map（主线 = 后端权威 mainline 域）。不再按旧 mainQuest activeQuest 动态重绘。
+    paintAdventureMapMarker(phaserScene, state.mapKey, RENDER_TILE_SIZE);
 
     const onBeforeUnload = (): void => {
       void worldStore.flushPlayerUpdate();
@@ -515,10 +524,6 @@ export const WorldScene = {
     this.events?.on('shutdown', () => {
       window.removeEventListener('beforeunload', onBeforeUnload);
       window.removeEventListener('pythontopia:mood-changed', onMoodChanged);
-      if (state.questMarkerUnsubscribe) {
-        state.questMarkerUnsubscribe();
-        state.questMarkerUnsubscribe = null;
-      }
       // 显示对象随场景销毁，这里只清引用，避免 restart 时对旧对象重复 destroy。
       state.questMarkerObjects = [];
       if (state.weather) {
@@ -978,62 +983,48 @@ function clearQuestMarkers(phaserScene: Phaser.Scene): void {
   state.questMarkerObjects = [];
 }
 
-function paintQuestMarkers(
+function paintAdventureMapMarker(
   phaserScene: Phaser.Scene,
   mapKey: string,
-  npcs: readonly NpcSpawn[],
   tileSize: number,
 ): void {
   try {
-    // 先清旧标记再按最新任务画：任务完成 / 推进后旧「!」立刻消失（修复常驻感叹号）。
+    // 先清旧标记再画：场景 restart 不叠加多份。
     clearQuestMarkers(phaserScene);
-    const mqStore = useMainQuestStore();
-    // 单一事实源：地图标记消费 store.activeQuest（与左侧面板 / 进度条同源），
-    // 不再用 currentChapter-currentSubQuest 指针自拼 id，避免乱序时标记指向别的任务。
-    const subQuest = mqStore.activeQuest;
-    if (!subQuest || subQuest.mapKey !== mapKey) return;
-
-    const evidence = subQuest.evidenceRequired;
-    if (evidence.type === 'building_visit') {
-      const cx = evidence.tileX * tileSize + tileSize / 2;
-      const cy = evidence.tileY * tileSize + tileSize / 2;
-      const circle = phaserScene.add.circle(cx, cy, tileSize * 0.6, 0xffd166, 0.3);
-      circle.setDepth(6).setStrokeStyle(2, 0xffd166, 0.6);
-      phaserScene.tweens.add({
-        targets: circle,
-        alpha: { from: 0.3, to: 0.8 },
-        duration: 1200,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut',
-      });
-      state.questMarkerObjects.push(circle);
-    } else if (evidence.type === 'dialog_complete') {
-      const npcSpawn = npcs.find((n) => n.npcKey === evidence.npcKey);
-      if (!npcSpawn) return;
-      const nx = npcSpawn.tileX * tileSize + tileSize / 2;
-      const ny = npcSpawn.tileY * tileSize - 4;
-      const excl = phaserScene.add
-        .text(nx, ny, '!', {
-          fontFamily: 'monospace',
-          fontSize: '16px',
-          color: '#ffd166',
-          fontStyle: 'bold',
-        })
-        .setOrigin(0.5, 1)
-        .setDepth(15);
-      phaserScene.tweens.add({
-        targets: excl,
-        y: ny - 6,
-        duration: 800,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut',
-      });
-      state.questMarkerObjects.push(excl);
-    }
+    if (mapKey !== DEFAULT_MAP_KEY) return;
+    const cx = ADVENTURE_MAP_TILE_X * tileSize + tileSize / 2;
+    const topY = ADVENTURE_MAP_TILE_Y * tileSize - 4;
+    // 持久「!」+「冒险地图」标签：单一引导玩家走到告示牌按 E 进 /mainline-map（主线后端权威）。
+    const excl = phaserScene.add
+      .text(cx, topY, '!', {
+        fontFamily: 'monospace',
+        fontSize: '16px',
+        color: '#ffd166',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5, 1)
+      .setDepth(15);
+    phaserScene.tweens.add({
+      targets: excl,
+      y: topY - 6,
+      duration: 800,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+    const label = phaserScene.add
+      .text(cx, ADVENTURE_MAP_TILE_Y * tileSize + tileSize * 0.6, '冒险地图', {
+        fontFamily: 'monospace',
+        fontSize: '10px',
+        color: '#fff8e1',
+        backgroundColor: '#4d3613',
+        padding: { x: 4, y: 2 },
+      })
+      .setOrigin(0.5, 0)
+      .setDepth(15);
+    state.questMarkerObjects.push(excl, label);
   } catch {
-    // store 在 jsdom / 测试环境不可用，静默跳过。
+    // jsdom / 测试环境无 phaser add，静默跳过。
   }
 }
 
@@ -1112,6 +1103,9 @@ export const BUILDING_TRIGGER_ID_PREFIX = 'building:';
 
 /** 公告板 trigger 固定 id，导出便于单测断言。 */
 export const BULLETIN_BOARD_TRIGGER_ID = 'trigger:bulletin_board';
+
+/** 「冒险地图」告示牌 trigger 固定 id，导出便于单测断言。 */
+export const ADVENTURE_MAP_TRIGGER_ID = 'trigger:adventure_map';
 
 /**
  * 玩家走到 NPC 旁边时显示的 hint 文本，单独抽出便于本地化与单测。
@@ -1250,6 +1244,31 @@ export function buildBulletinBoardTrigger(opts: {
       radius: opts.tileSize * TRIGGER_RADIUS_TILES,
     },
     hint: '按 E 查看公告板',
+    onActivate: opts.onActivate,
+  };
+}
+
+/**
+ * 构造「冒险地图」告示牌 trigger（当前仅 town_hub 注册）→ /mainline-map。
+ * R-15 主线退役旧 mainQuest 后，世界内对主线的唯一引导入口。
+ */
+export function buildAdventureMapTrigger(opts: {
+  tileX: number;
+  tileY: number;
+  tileSize: number;
+  onActivate: () => void;
+}): ITrigger {
+  const cx = opts.tileX * opts.tileSize + opts.tileSize / 2;
+  const cy = opts.tileY * opts.tileSize + opts.tileSize / 2;
+  return {
+    id: ADVENTURE_MAP_TRIGGER_ID,
+    shape: {
+      type: 'circle',
+      x: cx,
+      y: cy,
+      radius: opts.tileSize * TRIGGER_RADIUS_TILES,
+    },
+    hint: '按 E 打开冒险地图',
     onActivate: opts.onActivate,
   };
 }

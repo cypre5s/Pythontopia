@@ -17,7 +17,6 @@ import type {
 } from '@/api/dto/Boss';
 import { getPyodideRunner } from '@/game/adapters/pyodide';
 import { BOSS_MOVES_ENRAGE } from '@/data/bossMovesEnrage';
-import { useMainQuestStore } from '@stores/mainQuest';
 
 export type BossPhase =
   | 'idle'
@@ -195,8 +194,6 @@ export function useBossSession(opts: UseBossSessionOptions): UseBossSessionRetur
     }
   }
 
-  const mainQuest = useMainQuestStore();
-
   async function startStage(): Promise<void> {
     phase.value = 'loading';
     lastResult.value = null;
@@ -282,22 +279,9 @@ export function useBossSession(opts: UseBossSessionOptions): UseBossSessionRetur
         : {}),
     };
     lastResult.value = finalResult;
-    // 写主线 AI 出题历史日志（用于自适应难度）
-    mainQuest.recordAiProblem({
-      problemId: p.problemId,
-      kc: p.kcCode,
-      difficulty: p.difficulty,
-      succeededInSec: passed ? elapsedSec.value : null,
-      timestamp: new Date().toISOString(),
-    });
+    // R-15：boss 自适应难度由后端 BossService 据掌握度推断；不再写客户端 mainQuest 出题日志。
     if (passed) {
       clearedStages.value += 1;
-      // boss 每个 stage 通过都触发 onSubmissionPassed，
-      // 让 evidenceRequired.type==='submission' 的主线任务能被 boss 副本通过解锁。
-      mainQuest.onSubmissionPassed({
-        problemId: p.problemId,
-        kcCode: p.kcCode,
-      });
       // 限时内快答（剩余时间过半）= 暴击：回血 + 标记，给「抢时间」正反馈。
       // 刻意不改 boss 扣血量，保证 4 阶段恰好把 boss 打空（与既有契约一致）。
       const crit = timeLeftSec.value >= Math.ceil(stageTimeLimit.value / 2);
@@ -317,8 +301,8 @@ export function useBossSession(opts: UseBossSessionOptions): UseBossSessionRetur
         }, 1200);
       }
       if (stage.value >= totalStages) {
+        // R-15：boss 通关不再推进旧主线（mainQuest 已退役）；毕业以 mainline 章末测试星级为准。
         phase.value = 'victory';
-        mainQuest.defeatBoss(opts.chapter);
       } else {
         phase.value = 'passed';
       }

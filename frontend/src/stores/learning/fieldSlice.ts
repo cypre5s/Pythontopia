@@ -1,6 +1,5 @@
 import { computed, ref } from 'vue';
 import { bootstrapCurriculum, fetchMastery } from '@/api/field';
-import { notifyMainQuestMastery } from './notify';
 import type { CurriculumBootstrapResult } from '@/api/dto/CurriculumBootstrapResult';
 import type { MasterySnapshotDto } from '@/api/dto/MasterySnapshotDto';
 
@@ -39,7 +38,6 @@ export function createFieldSlice() {
       field.value.masterySnapshot = mastery;
       field.value.bootstrapped = mastery.length > 0;
       field.value.hydrated = true;
-      notifyMainQuestMastery(mastery);
     } finally {
       field.value.loading = false;
     }
@@ -69,7 +67,6 @@ export function createFieldSlice() {
     if (kcCode) {
       field.value.activeKcCode = kcCode;
     }
-    notifyMainQuestMastery(mastery);
   }
 
   /**

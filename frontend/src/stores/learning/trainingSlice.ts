@@ -3,7 +3,6 @@ import { getPublicProblem } from '@/api/problems';
 import { createSubmission, getSubmission } from '@/api/submissions';
 import { getPyodideRunner, type PyodideRunResult } from '@/game/adapters/pyodide';
 import {
-  notifyMainQuestSubmission,
   notifyMoodRefresh,
   notifyProbeRequest,
 } from './notify';
@@ -96,15 +95,12 @@ export function createTrainingSlice(deps: TrainingSliceDeps) {
       // 判题结果回来即刷新情绪氛围（streak 同时计入 AC/WA，故无论通过与否都刷）。
       notifyMoodRefresh();
       await deps.loadTodayQuests();
-      // 真题判定通过 → 推进主线「练」子任务，并刷新掌握度联动「测」子任务。
+      // 真题判定通过 → 刷新掌握度快照（供训练页提示 / 闯关塔 / 画像即时反映）。
+      // R-15：主线「练」进度改由后端 stage 三件套 example-done API 记录，不再走客户端钩子。
       const passed = detail.judgeResult?.verdict === 'AC';
       if (passed) {
         const kcCode = training.value.problem?.kcCode;
-        notifyMainQuestSubmission(
-          kcCode ? { problemId: payload.problemId, kcCode } : { problemId: payload.problemId },
-        );
         try {
-          // 后端在 AC 时按难度加权掌握度；刷新快照后 refreshAfterEvent 会触发 kc_mastery 联动。
           await deps.refreshAfterEvent(kcCode ?? '');
         } catch {
           /* 掌握度刷新失败不阻断提交结果展示 */

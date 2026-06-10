@@ -4,7 +4,6 @@ import { createPinia, setActivePinia } from 'pinia';
 import { createMemoryHistory, createRouter, type Router } from 'vue-router';
 import TrainingPanel from '@/components/training/TrainingPanel.vue';
 import { useLearningStore } from '@stores/learning';
-import { useMainQuestStore } from '@stores/mainQuest';
 import { setPyodideRunner } from '@/game/adapters/pyodide';
 
 vi.mock('@/api/problems', () => ({
@@ -212,7 +211,7 @@ describe('TrainingPanel', () => {
     expect(pushSpy).toHaveBeenCalledWith('/bug-mine');
   });
 
-  it('does not advance main quest when judge verdict is not AC', async () => {
+  it('shows WA verdict for a non-AC judge result', async () => {
     vi.mocked(createSubmission).mockResolvedValue({
       id: 2,
       userId: 7,
@@ -254,7 +253,6 @@ describe('TrainingPanel', () => {
 
     const wrapper = mountPanel();
     const learning = useLearningStore();
-    const mainQuest = useMainQuestStore();
     await learning.loadTrainingProblem(476);
     learning.setTrainingCode('print(0)');
     await flushPromises();
@@ -264,7 +262,6 @@ describe('TrainingPanel', () => {
     await flushPromises();
 
     expect(wrapper.text()).toContain('WA');
-    expect(mainQuest.progress.completedSubQuests).not.toContain('2-3');
   });
 
   it('renders problem statement as markdown instead of raw text', async () => {

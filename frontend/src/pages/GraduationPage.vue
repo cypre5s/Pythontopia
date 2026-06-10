@@ -1,31 +1,37 @@
 <script setup lang="ts">
-// 毕业典礼页（主线终局演出）：打赢第 7 章 BOSS 后由 BossPage 跳入。
-// 这是主线唯一的收尾仪式——镇徽授予 + 学习数据回顾，落实 7-5 与
-// boss7 storyboard 里承诺的「毕业典礼」实体。
+// 毕业典礼页（主线终局演出）。
+// R-15：以「7 章全部 ≥1★（全部通过章末测试）」为毕业条件，星级取后端权威 mainline overview；
+// 旧 mainQuest「击败第 7 章 BOSS」判定已退役。
 import { computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { useMainQuestStore } from '@stores/mainQuest';
+import { useMainlineStore } from '@stores/mainline';
 import { useLearningStore } from '@stores/learning';
-import { MAIN_QUEST_BOSSES } from '@/data/mainQuests';
+import { MAIN_QUEST_BOSSES } from '@/data/bossCatalog';
 import { celebrateLevelUp } from '@/utils/celebrate';
 import PyButton from '@/components/ui/PyButton.vue';
 
 const router = useRouter();
-const mainQuest = useMainQuestStore();
+const mainline = useMainlineStore();
 const learning = useLearningStore();
 
-const graduated = computed<boolean>(() => mainQuest.progress.defeatedBosses.includes(7));
-
+// 终章故事一句话：复用第 7 章 boss 的 storyboardCue 作为毕业致辞文案。
 const finalBoss = MAIN_QUEST_BOSSES.find((b) => b.chapter === 7) ?? null;
 
-const completedQuestCount = computed<number>(() => mainQuest.progress.completedSubQuests.length);
-const defeatedBossCount = computed<number>(() => mainQuest.progress.defeatedBosses.length);
+const totalStars = computed<number>(() => mainline.totalStars);
+const clearedChapters = computed<number>(
+  () => mainline.chapters.filter((c) => c.stars >= 1).length,
+);
+// 毕业条件：7 章全部 ≥1★（全部通过章末测试）。
+const graduated = computed<boolean>(
+  () => mainline.chapters.length >= 7 && mainline.chapters.every((c) => c.stars >= 1),
+);
 const masteredKcCount = computed<number>(
   () => learning.field.masterySnapshot.filter((entry) => entry.masteryScore >= 0.4).length,
 );
 
-onMounted(() => {
-  // 终局演出不可经 URL 提前进入：boss7 未通关时回小镇。
+onMounted(async () => {
+  // 终局演出依赖后端权威星级：先拉总览，未达毕业条件回小镇（防经 URL 提前进入）。
+  await mainline.load();
   if (!graduated.value) {
     void router.replace('/world');
     return;
@@ -65,15 +71,15 @@ function reviewMastery(): void {
 
       <dl class="graduation__stats">
         <div class="stat">
-          <dt>主线任务</dt>
-          <dd data-testid="graduation-quests">
-            {{ completedQuestCount }} / 35
+          <dt>总星数</dt>
+          <dd data-testid="graduation-stars">
+            {{ totalStars }} / 21
           </dd>
         </div>
         <div class="stat">
-          <dt>章末 BOSS</dt>
-          <dd data-testid="graduation-bosses">
-            {{ defeatedBossCount }} / 7
+          <dt>通关章节</dt>
+          <dd data-testid="graduation-chapters">
+            {{ clearedChapters }} / 7
           </dd>
         </div>
         <div class="stat">

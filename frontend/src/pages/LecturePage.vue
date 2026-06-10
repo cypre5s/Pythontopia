@@ -14,7 +14,6 @@ import {
 } from '@/api/courseVideo';
 import { kcDisplayName } from '@/data/kcNames';
 import { getWorkshopResource, listWorkshopResources } from '@/api/workshop';
-import { useMainQuestStore } from '@/stores/mainQuest';
 import { useToastStore } from '@/stores/toast';
 import PptView from '@/components/workshop/PptView.vue';
 import BilibiliVideoCards from '@/components/video/BilibiliVideoCards.vue';
@@ -26,7 +25,6 @@ type AsideMode = 'guide' | 'tutor';
 
 const props = defineProps<{ chapter: number }>();
 const router = useRouter();
-const mainQuest = useMainQuestStore();
 const toast = useToastStore();
 const tutor = useTutorStore();
 
@@ -61,7 +59,8 @@ const biliKeyword = computed<string>(
   () => `${chapterName.value} Python ${kcDisplayName(chapterKcCodes.value[0] ?? '')}`,
 );
 
-const mediaConsumed = computed<boolean>(() => mainQuest.chapterMediaConsumed(props.chapter));
+// R-15：旧 mainQuest 媒体消费打点已退役。本页只做会话内「已学习」标记（不再写主线进度）。
+const mediaConsumed = ref(false);
 
 const chapterDocId = computed<number>(() => 185 + props.chapter);
 
@@ -89,14 +88,10 @@ function formatDuration(sec: number | null): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-function reportMediaConsumed(mediaType: string): void {
+function reportMediaConsumed(_mediaType: string): void {
   if (mediaReported) return;
   mediaReported = true;
-  mainQuest.onMediaConsumed({
-    mediaType,
-    chapter: props.chapter,
-    kcCodes: chapterKcCodes.value,
-  });
+  mediaConsumed.value = true;
   toast.show('已记录本章多模态讲解学习', 'success');
 }
 
@@ -111,6 +106,7 @@ function onVideoProgress(e: Event): void {
 async function load(): Promise<void> {
   loading.value = true;
   mediaReported = false;
+  mediaConsumed.value = false;
   try {
     videos.value = await listChapterVideos(props.chapter);
     activeId.value = playable.value[0]?.id ?? null;

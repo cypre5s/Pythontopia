@@ -4,7 +4,6 @@ import { useRoute, useRouter } from 'vue-router';
 import { useLearningStore } from '@stores/learning';
 import { useToastStore } from '@stores/toast';
 import { playSfx } from '@/composables/useAudio';
-import { MAIN_QUESTS } from '@/data/mainQuests';
 import { kcDisplayName } from '@/data/kcNames';
 import MarkdownView from '@/components/common/MarkdownView.vue';
 import PyButton from '@/components/ui/PyButton.vue';
@@ -24,31 +23,17 @@ const isVariantMode = computed<boolean>(() => route.query.variant === '1' && var
 
 const problem = computed(() => learning.training.problem);
 
-// 掌握度透明化：把本题 KC 的隐藏掌握度翻成「当前/100 + 做对一题约 +14」，
-// 若该 KC 是某主线 kc_mastery「测」子任务目标，再显式给出目标分与还差几题。
-// +14 来源：后端 PRACTICE_PASS(+0.20) 对 Low 难度锚题按 ×0.7 加权 ⇒ 单次 AC +0.14。
-const MASTERY_PER_PASS = 14;
+// 掌握度透明化：把本题 KC 的隐藏掌握度翻成「当前/100」直观显示。
+// R-15 退役旧 mainQuest 后不再读每 KC 的主线阈值；章末测试才是达标判据（mainline 域）。
 interface KcMasteryHint {
   current: number;
-  target: number | null;
-  remaining: number | null;
 }
 const kcMasteryHint = computed<KcMasteryHint | null>(() => {
   const kc = problem.value?.kcCode;
   if (!kc) return null;
   const snap = learning.field.masterySnapshot.find((s) => s.kcCode === kc);
   const current = Math.round((snap?.masteryScore ?? 0) * 100);
-  let target: number | null = null;
-  for (const q of MAIN_QUESTS) {
-    const ev = q.evidenceRequired;
-    if (ev.type === 'kc_mastery' && ev.kcCode === kc) {
-      target = ev.thresholdScore;
-      break;
-    }
-  }
-  const remaining =
-    target === null ? null : current >= target ? 0 : Math.ceil((target - current) / MASTERY_PER_PASS);
-  return { current, target, remaining };
+  return { current };
 });
 const sampleStdin = computed(() => {
   const samples = problem.value?.samples ?? [];
@@ -232,11 +217,6 @@ const tutorContext = computed<string>(() => {
               title="掌握进度：做对题目会涨，达到目标就过关"
             >
               掌握进度 <strong>{{ kcMasteryHint.current }}/100</strong>
-              <template v-if="kcMasteryHint.target !== null">
-                · 目标 {{ kcMasteryHint.target }}
-                <span v-if="kcMasteryHint.remaining"> · 约 {{ kcMasteryHint.remaining }} 题达标</span>
-                <span v-else> · 已达标</span>
-              </template>
             </p>
           </header>
 

@@ -1,29 +1,16 @@
 <script setup lang="ts">
-// 左侧「当前学习目标」面板：补充 HUD 之外的教学语义（当前知识点 / 任务 / 目标 / 奖励 / 提示）。
-// 数据全部来自 mainQuest / learning store + chapters 配置，不引入新接口；缺数据时降级到默认文案。
-// 默认折叠（只露标题 + 「下一步」CTA），点击标题或按 H 展开/收起。
+// 左侧「当前学习目标」面板（R-15 精简）：
+// 旧 mainQuest 子任务 / 指路（questGuidance）/ 章末 Boss 逻辑已退役。本面板改为读后端权威
+// mainline overview，展示「当前章 + 星级 + 学习要点」，并提供唯一「去冒险地图」引导入口。
+// 默认折叠（只露标题 + CTA），点击标题或按 H 展开/收起。
 import { computed, onMounted, onUnmounted, ref } from 'vue';
-import { useMainQuestStore } from '@stores/mainQuest';
-import { useLearningStore } from '@stores/learning';
-import { useWorldStore } from '@stores/world';
-import { useToastStore } from '@stores/toast';
-import { useDialogStore } from '@stores/dialog';
-import { findChapterByKcCode } from '@/data/chapters';
-import { humanizeKcText } from '@/data/kcNames';
-import { FAST_TRAVEL_ROUTES } from '@/data/fastTravel';
-import { resolveQuestGuidance, type QuestGuidance } from '@/utils/questGuidance';
-import { openNpcDialog } from '@game/adapters/dialog';
+import { useRouter } from 'vue-router';
+import { useMainlineStore, clampStars } from '@stores/mainline';
 import { useDraggable } from '@/composables/useDraggable';
 import { playUiClick } from '@/composables/useStardewFx';
 
-const mainQuest = useMainQuestStore();
-const learning = useLearningStore();
-const world = useWorldStore();
-const toast = useToastStore();
-const dialog = useDialogStore();
-
-// 有对话/弹窗在前台时，下一步降为静态提示（不再脉冲），保留单一注意力线。
-const dialogActive = computed<boolean>(() => dialog.visible);
+const router = useRouter();
+const mainline = useMainlineStore();
 
 const rootRef = ref<HTMLElement | null>(null);
 const { style: dragStyle, onPointerDown: onDragStart } = useDraggable(
@@ -32,7 +19,7 @@ const { style: dragStyle, onPointerDown: onDragStart } = useDraggable(
   { top: 96, left: 24 },
 );
 
-// 渐进披露：默认折叠，只露标题 + 单一「下一步」CTA；其余细节按需展开。
+// 渐进披露：默认折叠，只露标题 + 单一「去冒险地图」CTA；其余细节按需展开。
 const collapsed = ref(true);
 const hidden = ref(localStorage.getItem('pyt_lop_hidden') === '1');
 
@@ -47,39 +34,21 @@ function unhide(): void {
   try { localStorage.removeItem('pyt_lop_hidden'); } catch { /* 隐私模式忽略 */ }
 }
 
-const currentChapter = computed<number>(() => mainQuest.progress.currentChapter);
-const currentChapterView = computed(() => mainQuest.chapterViews[currentChapter.value - 1] ?? null);
-
-// 单一事实源：直接消费 store.activeQuest，不再自算「状态扫描」
-// （杜绝左侧面板与地图标记 / 进度条乱序时指向不同任务）。
-const currentSubQuest = computed(() => mainQuest.activeQuest);
-
-const currentKcCode = computed<string | null>(() => {
-  // 优先级：learning.field.activeKcCode > 当前子任务首个 kcCode
-  if (learning.field.activeKcCode) return learning.field.activeKcCode;
-  return currentSubQuest.value?.kcCodes?.[0] ?? null;
-});
-
-const currentKcName = computed<string>(() => {
-  // 把 KC code 翻译成 chapters.ts 里的章节名，避免直接暴露 PY43-KC-NNN。
-  // 缺数据时退化到默认文案。
-  const code = currentKcCode.value;
-  if (!code) return '变量与表达式';
-  const chapter = findChapterByKcCode(code);
-  if (chapter) return chapter.name;
-  return code;
-});
-
-const currentTaskTitle = computed<string>(
-  () => humanizeKcText(currentSubQuest.value?.title) || '探索 Pythontopia 小镇',
+const currentChapter = computed<number>(() => mainline.firstActionableChapter);
+const currentChapterView = computed(() => mainline.chapterByNumber(currentChapter.value));
+const currentChapterTitle = computed<string>(
+  () => currentChapterView.value?.title ?? 'Python 学习之旅',
 );
-const currentTaskHint = computed<string>(
-  () => humanizeKcText(currentSubQuest.value?.hint) || '与 NPC 对话、参与练习，逐步积累 Python 基础。',
+const chapterStars = computed<number>(() => clampStars(currentChapterView.value?.stars ?? 0));
+const chapterStarText = computed<string>(
+  () => '★'.repeat(chapterStars.value) + '☆'.repeat(3 - chapterStars.value),
 );
+const totalStars = computed<number>(() => mainline.totalStars);
 
-// 各章节默认教学要点：子任务没有显式 objective 字段时（types/mainQuest.ts 暂未定义），
-// 用本地固定的章节级语义补足，避免硬塞空数组。
-// 要点已对齐 course_chapter.json 真实主题。
+// 世界收缩为单一中央小镇 town_hub，面板标题副标签恒为「小镇」。
+const currentMapLabel = 'Pythontopia 小镇';
+
+// 各章节默认教学要点（对齐 course_chapter.json 真实主题），用于面板展开态。
 const CHAPTER_DEFAULT_GOALS: Readonly<Record<number, readonly string[]>> = Object.freeze({
   1: ['理解计算工具与计算思维', '认识算法与问题分解', '建立用程序解决问题的思路'],
   2: ['搭建 Python 环境并运行程序', '掌握变量 / 数据类型 / 运算符', '使用 input / print 与基础函数'],
@@ -95,80 +64,9 @@ const learningGoals = computed<readonly string[]>(() => {
   return CHAPTER_DEFAULT_GOALS[ch] ?? CHAPTER_DEFAULT_GOALS[1] ?? [];
 });
 
-const rewardText = computed<string>(() => {
-  // 只展示与学习直接相关的掌握度收获（item 类装扮奖励不在此面板展示）。
-  const sub = currentSubQuest.value;
-  if (sub?.rewards && sub.rewards.length > 0) {
-    const masteryRewards = sub.rewards
-      .filter((r) => r.kind === 'kc_mastery')
-      .map((r) => `掌握进度 +${r.amount}${r.ref ? `（${r.ref}）` : ''}`);
-    if (masteryRewards.length > 0) return masteryRewards.join('，');
-  }
-  return '掌握进度 +5';
-});
-
-// R-14：世界收缩为单一中央小镇 town_hub（mine_south 风景图已删，Bug 矿洞改 /bug-mine 页面）；
-// 任何 mapKey（含已弃用外围图 / 旧存档别名）都回落到「Pythontopia 小镇」标签。
-const currentMapLabel = computed<string>(() => 'Pythontopia 小镇');
-
-// 把当前子任务翻译成「下一步该干什么 + 去找哪个 NPC」。
-const guidance = computed<QuestGuidance | null>(() =>
-  currentSubQuest.value ? resolveQuestGuidance(currentSubQuest.value) : null,
-);
-
-// 本章 5 个子任务已全部完成、但章末 Boss 未击败：把「下一步」切换为「去挑战 Boss」，
-// 否则指引会停在已完成的最后一个任务上空转（既不前进也无意义）。
-const bossPending = computed<boolean>(() => mainQuest.bossPending);
-const bossName = computed<string>(() => currentChapterView.value?.boss.name ?? '章末 Boss');
-
-function goBoss(): void {
+function goMap(): void {
   playUiClick();
-  // 复用主线面板里「带达标门槛校验」的 Boss 入口，不在此重复 gating，避免越级触发。
-  mainQuest.openPanel();
-  toast.show(`本章任务已完成，去主线面板挑战章末 Boss：${bossName.value}`, 'success');
-}
-
-/** 传送到目标地图（带落点）；复用 WorldCanvas 的 world-travel 监听重启场景。 */
-function travelToMap(mapKey: string, tile: { x: number; y: number } | null): void {
-  const route = FAST_TRAVEL_ROUTES.find((r) => r.toMap === mapKey);
-  const landing = tile ?? (route ? { x: route.tileX, y: route.tileY } : undefined);
-  world.setPendingTravel(mapKey, landing);
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('pythontopia:world-travel'));
-  }
-}
-
-/**
- * 「前往」：自动指路到当前任务对应的 NPC / 设施（NPC、地图与落点由 resolveQuestGuidance 解析）。
- *   - dialog：传送到任务地图（若不同）→ 打开该 NPC 对话（对话完成即交证据）；
- *   - workshop / training / practice：均在 town_hub 直接打开 NPC 对话、由对话内 route 进设施——
- *     workshop 找工坊师傅进工坊，training / practice（kc_mastery）找教务 Q 进训练场（多刷题提升掌握进度）；
- *   - building：传送到证据精确点位并标记到点完成。
- * 无当前子任务（待打 Boss）时打开主线面板做引导。
- */
-function goNext(): void {
-  playUiClick();
-  const g = guidance.value;
-  if (!g) {
-    mainQuest.openPanel();
-    return;
-  }
-  const playerMap = world.player?.mapKey ?? null;
-
-  if (g.kind === 'building' && g.tile) {
-    travelToMap(g.mapKey, g.tile);
-    mainQuest.onBuildingVisited(g.mapKey, g.tile.x, g.tile.y);
-  } else if (g.teleport && playerMap !== g.mapKey) {
-    travelToMap(g.mapKey, null);
-    if (g.openDialog) {
-      // 地图重建后再唤起 NPC 对话，避免与 BootScene 加载抢镜。
-      window.setTimeout(() => openNpcDialog(g.npcKey), 900);
-    }
-  } else if (g.openDialog) {
-    openNpcDialog(g.npcKey);
-  }
-
-  toast.show(`已为你指路：${g.stepText}`, 'info');
+  void router.push('/mainline-map');
 }
 
 function toggleCollapsed(): void {
@@ -195,6 +93,7 @@ function onKey(event: KeyboardEvent): void {
 }
 
 onMounted(() => {
+  void mainline.load();
   if (typeof window !== 'undefined') {
     window.addEventListener('keydown', onKey);
   }
@@ -251,40 +150,9 @@ onUnmounted(() => {
         ✕
       </button>
     </div>
-    <!-- 下一步：唯一注意力线，折叠态也常驻；有对话在前台时静音脉冲 -->
+    <!-- 唯一注意力线：去冒险地图（折叠态也常驻） -->
     <div
-      v-if="bossPending"
       class="lop-next"
-      data-testid="lop-next-step"
-    >
-      <div class="lop-next__head">
-        <span
-          class="lop-next__badge"
-          aria-hidden="true"
-        >⚔</span>
-        <span class="lop-next__label">下一步</span>
-      </div>
-      <p class="lop-next__text">
-        本章任务已全部完成，去挑战章末 Boss：{{ bossName }}
-      </p>
-      <button
-        type="button"
-        class="lop-next__cta"
-        data-testid="lop-go-boss"
-        :aria-label="`挑战章末 Boss：${bossName}`"
-        @click="goBoss"
-      >
-        <span
-          class="lop-next__cta-icon"
-          aria-hidden="true"
-        >⚔</span>
-        <span class="lop-next__cta-text">挑战章末 Boss</span>
-      </button>
-    </div>
-    <div
-      v-else-if="guidance"
-      class="lop-next"
-      :class="{ 'lop-next--quiet': dialogActive }"
       data-testid="lop-next-step"
     >
       <div class="lop-next__head">
@@ -295,20 +163,20 @@ onUnmounted(() => {
         <span class="lop-next__label">下一步</span>
       </div>
       <p class="lop-next__text">
-        {{ guidance.stepText }}
+        前往「冒险地图」按章闯关：看视频 · 读课件 · 做例题，章末测试拿星。
       </p>
       <button
         type="button"
         class="lop-next__cta"
         data-testid="lop-go-next"
-        :aria-label="`前往：${guidance.stepText}`"
-        @click="goNext"
+        aria-label="前往冒险地图"
+        @click="goMap"
       >
         <span
           class="lop-next__cta-icon"
           aria-hidden="true"
         >▶</span>
-        <span class="lop-next__cta-text">{{ guidance.ctaText }}</span>
+        <span class="lop-next__cta-text">去冒险地图</span>
       </button>
     </div>
     <div
@@ -316,12 +184,12 @@ onUnmounted(() => {
       class="lop-body"
     >
       <div class="lop-row">
-        <span class="lop-row__label">当前知识点</span>
-        <span class="lop-row__value lop-row__value--accent">{{ currentKcName }}</span>
+        <span class="lop-row__label">当前章节</span>
+        <span class="lop-row__value lop-row__value--accent">第{{ currentChapter }}章 · {{ currentChapterTitle }}</span>
       </div>
       <div class="lop-row">
-        <span class="lop-row__label">当前任务</span>
-        <span class="lop-row__value">{{ currentTaskTitle }}</span>
+        <span class="lop-row__label">本章星级</span>
+        <span class="lop-row__value lop-row__value--reward">{{ chapterStarText }} · 总星 {{ totalStars }} / 21</span>
       </div>
       <div class="lop-section">
         <span class="lop-section__label">学习目标</span>
@@ -339,12 +207,8 @@ onUnmounted(() => {
           </li>
         </ul>
       </div>
-      <div class="lop-row">
-        <span class="lop-row__label">奖励</span>
-        <span class="lop-row__value lop-row__value--reward">{{ rewardText }}</span>
-      </div>
       <p class="lop-tip">
-        [TIP] 提示：{{ currentTaskHint }}
+        [TIP] 在冒险地图里完成每个小节的「看 / 学 / 练」，再挑战章末测试即可获得星星。
       </p>
     </div>
   </aside>

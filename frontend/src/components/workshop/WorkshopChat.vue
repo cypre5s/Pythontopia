@@ -575,16 +575,7 @@ async function runResource(
     officeTokenPreview.value = '';
     officeStreamLabel.value = '';
 
-    // 记一次「学」里程碑（与原证据卡确认等价；仅调用 mainQuest，不修改其 store）。
-    if (typeof window !== 'undefined') {
-      void import('@stores/mainQuest').then((mod) => {
-        try {
-          mod.useMainQuestStore().onResourceCreated(type, kcCodes);
-        } catch {
-          /* mainQuest store 不可用，忽略 */
-        }
-      });
-    }
+    // R-15：旧 mainQuest「学」里程碑钩子已退役（主线进度由后端 mainline stage 三件套权威）。
     toast.show('已生成并收入「我的书房」', 'success');
   } else {
     officeStreamState.value = 'error';

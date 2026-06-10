@@ -5,13 +5,12 @@ export interface SaveSlotInventoryItem {
 }
 
 /**
- * 后端 `save_slot.snapshot` JSONB blob，形如
- * `{ version, mainQuest: { currentChapter, currentSubQuest, completedSubQuests, ... } }`。
- * 主线进度跨设备同步读写此字段；mainQuest 用 unknown，由 mainQuest store 自行 safeParse。
+ * 后端 `save_slot.snapshot` JSONB blob。
+ * R-15 起旧 `mainQuest` 子键已弃用（主线进度改由后端权威 mainline 域，按 user_id 独立表存储），
+ * 前端不再读写它；保留 `version` 以兼容快照版本协商。历史快照里的 `mainQuest` 字段会被自然忽略。
  */
 export interface SaveSlotSnapshot {
   version?: number;
-  mainQuest?: unknown;
 }
 
 /**
@@ -27,8 +26,8 @@ export interface SaveSlotDto {
   createdAt: string;
   lastPlayedAt: string;
   /**
-   * 存档快照（后端始终下发，至少是 `{}`）。设为可选以兼容历史 DTO mock，
-   * 消费方（mainQuest.hydrateFromSnapshot）对缺失 / 空对象做安全忽略。
+   * 存档快照（后端始终下发，至少是 `{}`）。设为可选以兼容历史 DTO mock。
+   * R-15 起前端不消费 snapshot 内的主线进度（已迁出到 mainline 域）。
    */
   snapshot?: SaveSlotSnapshot | null;
   sceneName: string;

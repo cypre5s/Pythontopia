@@ -25,7 +25,7 @@ const SLOT: SaveSlotDto = {
   isActive: true,
   createdAt: '2026-06-04T00:00:00Z',
   lastPlayedAt: '2026-06-04T00:00:00Z',
-  snapshot: { version: 1, mainQuest: {} },
+  snapshot: { version: 1 },
   sceneName: 'WorldScene',
   unlockedBuildings: [],
   accumulatedPlaySeconds: 0,
@@ -65,7 +65,7 @@ describe('saveSlot api client', () => {
 
   it('saveSlotSnapshot POSTs serialized JSON text + application/json header', async () => {
     httpMock.post.mockResolvedValueOnce({ data: SLOT });
-    const snap = { version: 1, mainQuest: { currentChapter: 2 } };
+    const snap = { version: 1 };
     await saveSlotSnapshot(0, snap);
     expect(httpMock.post).toHaveBeenCalledWith(
       '/api/world/saves/0/snapshot',
@@ -76,7 +76,7 @@ describe('saveSlot api client', () => {
 
   it('saveSlotSnapshot body is a string (not an object) so backend ?::jsonb binds', async () => {
     httpMock.post.mockResolvedValueOnce({ data: SLOT });
-    await saveSlotSnapshot(1, { version: 1, mainQuest: {} });
+    await saveSlotSnapshot(1, { version: 1 });
     const body = httpMock.post.mock.calls[0]?.[1];
     expect(typeof body).toBe('string');
   });

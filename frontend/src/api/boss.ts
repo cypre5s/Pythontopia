@@ -14,7 +14,7 @@ import type {
   BossProblemDto,
   BossProblemRequest,
 } from './dto/Boss';
-import { findBossByChapter } from '@/data/mainQuests';
+import { findBossByChapter } from '@/data/bossCatalog';
 
 const GOLDEN_TEMPLATES: Record<number, GoldenTemplate[]> = {
   1: [

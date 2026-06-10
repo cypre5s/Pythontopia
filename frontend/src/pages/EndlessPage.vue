@@ -13,7 +13,7 @@ import { kcDisplayName } from '@/data/kcNames';
 import BossSprite from '@/components/boss/BossSprite.vue';
 import { KindRouter } from '@/components/arena';
 import { useEndlessRun } from '@/composables/useEndlessRun';
-import { MAIN_QUEST_BOSSES } from '@/data/mainQuests';
+import { MAIN_QUEST_BOSSES } from '@/data/bossCatalog';
 import { useArenaStore } from '@stores/arena';
 
 const router = useRouter();

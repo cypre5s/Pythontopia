@@ -5,7 +5,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useHudStore, type HudQuickSlot, bgmLabel } from '@stores/hud';
 import { useWorldStore } from '@stores/world';
 import { useToastStore } from '@stores/toast';
-import { useMainQuestStore } from '@stores/mainQuest';
+import { useMainlineStore, clampStars } from '@stores/mainline';
 import { useSessionStore } from '@stores/session';
 import { useGameSettingsStore } from '@stores/gameSettings';
 import { useGuideStore } from '@stores/guide';
@@ -35,7 +35,7 @@ const router = useRouter();
 const audio = useAudio();
 const world = useWorldStore();
 const toast = useToastStore();
-const mainQuest = useMainQuestStore();
+const mainline = useMainlineStore();
 const session = useSessionStore();
 const gameSettings = useGameSettingsStore();
 const guide = useGuideStore();
@@ -60,32 +60,22 @@ const masteryPct = computed(() => clamp(hud.meta.masteryAvg));
 const timeClass = computed(() => `pyt-time--${hud.meta.timeOfDay.toLowerCase()}`);
 const seasonClass = computed(() => `pyt-season--${hud.meta.season.toLowerCase()}`);
 
-// 主线进度信息（中间列展示）
-const currentChapter = computed<number>(() => mainQuest.progress.currentChapter);
+// 主线星级信息（中间列星星条展示，后端权威 mainline overview）。
+const MAX_TOTAL_STARS = 21; // 7 章 × 3★
+const currentChapter = computed<number>(() => mainline.firstActionableChapter);
 const chapterTitle = computed<string>(() => {
-  const view = mainQuest.chapterViews[currentChapter.value - 1];
+  const view = mainline.chapterByNumber(currentChapter.value);
   return view?.title ?? 'Python 学习之旅';
 });
-const chapterSubsCompleted = computed<number>(() => {
-  const view = mainQuest.chapterViews[currentChapter.value - 1];
-  if (!view) return 0;
-  return view.subQuests.filter((s) => s.status === 'completed').length;
-});
-const chapterSubsTotal = computed<number>(() => {
-  const view = mainQuest.chapterViews[currentChapter.value - 1];
-  return view ? view.subQuests.length : 5;
-});
-// 修正显示：completed 永远不大于 total，避免反直觉的 "8/5"
-const chapterCountText = computed<string>(() => {
-  const done = Math.min(chapterSubsCompleted.value, chapterSubsTotal.value);
-  return `${done} / ${chapterSubsTotal.value}`;
-});
-const chapterPct = computed<number>(() => {
-  const total = chapterSubsTotal.value || 1;
-  const done = Math.min(chapterSubsCompleted.value, total);
-  return Math.round((done / total) * 100);
-});
-const overallPct = computed<number>(() => Math.round(mainQuest.overallProgress * 100));
+const chapterStars = computed<number>(() => clampStars(mainline.chapterByNumber(currentChapter.value)?.stars ?? 0));
+const chapterStarText = computed<string>(
+  () => '★'.repeat(chapterStars.value) + '☆'.repeat(3 - chapterStars.value),
+);
+const totalStars = computed<number>(() => mainline.totalStars);
+const totalStarText = computed<string>(() => `${totalStars.value} / ${MAX_TOTAL_STARS}`);
+const overallPct = computed<number>(() =>
+  Math.round((totalStars.value / MAX_TOTAL_STARS) * 100),
+);
 
 function clamp(value: number): number {
   if (!Number.isFinite(value)) return 0;
@@ -136,7 +126,8 @@ function onClickSlot(slot: HudQuickSlot): void {
   playUiClick();
   hud.toggleSlot(slot);
   if (slot === 'quest') {
-    mainQuest.togglePanel();
+    // R-15：旧主线面板已退役，「任务」改为直达冒险地图（后端权威 mainline）。
+    void router.push('/mainline-map');
   }
 }
 
@@ -204,7 +195,7 @@ function onLogout(): void {
 
 function onClickQuestSummary(): void {
   playUiClick();
-  mainQuest.togglePanel();
+  void router.push('/mainline-map');
 }
 
 function isEditableTarget(target: EventTarget | null): boolean {
@@ -286,7 +277,7 @@ function onKey(event: KeyboardEvent): void {
   if (target && !event.shiftKey && hud.canToggleSlot) {
     hud.toggleSlot(target);
     if (target === 'quest') {
-      mainQuest.togglePanel();
+      void router.push('/mainline-map');
     }
     event.preventDefault();
     return;
@@ -317,6 +308,8 @@ function onKey(event: KeyboardEvent): void {
 }
 
 onMounted(() => {
+  // 拉取后端权威主线总览，填充 HUD 星星条（失败由 store 内部静默兜底）。
+  void mainline.load();
   if (typeof window !== 'undefined') {
     window.addEventListener('keydown', onKey);
     bgmPollTimer = window.setInterval(pollBgm, 1000);
@@ -481,22 +474,26 @@ onUnmounted(() => {
       </div>
       <span data-testid="hud-bgm">{{ currentBgm }}</span>
     </div>
-    <!-- 中间顶部：主线进度条（紧凑一行） -->
+    <!-- 中间顶部：主线星星条（紧凑一行，点击进冒险地图） -->
     <button
       v-if="topBarVisible"
       type="button"
       class="hud-quest-bar"
       data-testid="hud-quest-summary"
-      :aria-label="`主线进度：第 ${currentChapter} 章 ${chapterTitle}（${chapterCountText}），总进度 ${overallPct}%`"
+      :aria-label="`主线星级：第 ${currentChapter} 章 ${chapterTitle}（本章 ${chapterStarText}），总星 ${totalStarText}`"
       @click="onClickQuestSummary"
     >
       <span class="hud-quest-bar__chapter">第{{ currentChapter }}章</span>
       <span class="hud-quest-bar__title">{{ chapterTitle }}</span>
       <span
+        class="hud-quest-bar__stars"
+        aria-hidden="true"
+      >{{ chapterStarText }}</span>
+      <span
         class="hud-quest-bar__fill"
-        :style="{ width: `${chapterPct}%` }"
+        :style="{ width: `${overallPct}%` }"
       />
-      <span class="hud-quest-bar__count">{{ chapterCountText }}</span>
+      <span class="hud-quest-bar__count">★ {{ totalStarText }}</span>
     </button>
 
     <nav
@@ -759,6 +756,12 @@ onUnmounted(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
   flex: 1;
+}
+.hud-quest-bar__stars {
+  color: var(--pyt-text-accent, var(--pyt-color-gold-bright));
+  font-size: 11px;
+  letter-spacing: 1px;
+  white-space: nowrap;
 }
 .hud-quest-bar__fill {
   position: absolute;
