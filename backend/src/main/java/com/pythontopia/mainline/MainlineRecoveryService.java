@@ -11,15 +11,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 补星条件校验 + 发放收口（r15 §5/§7，Wave 2 B1）。
- *
- * <ul>
- *   <li><b>错题复盘补星</b>：本章 KC 的 Bug 矿洞 RESOLVED ≥ 3 → {@code ERRORBOOK_RECOVERY} +1。
- *   <li><b>无尽挑战补星</b>：本章范围单轮答对 ≥ 8 且正确率 ≥ 80% → {@code ENDLESS_RECOVERY} +1
- *       （每日每章至多 1 次有效判定，防刷）。
- * </ul>
- *
- * <p>实际加星 / 幂等 / 封顶 3★ 由 {@link ChapterStarService#applyRecoveryStar} 收口；本服务只做条件校验。
+ * 补星条件校验（§5/§7）：错题复盘（本章 RESOLVED≥3 → ERRORBOOK_RECOVERY）、
+ * 无尽（单轮答对≥8 且正确率≥80%，每日每章 1 次 → ENDLESS_RECOVERY）。
+ * 加星/幂等/封顶由 ChapterStarService.applyRecoveryStar 收口。
  */
 @Service
 public class MainlineRecoveryService {

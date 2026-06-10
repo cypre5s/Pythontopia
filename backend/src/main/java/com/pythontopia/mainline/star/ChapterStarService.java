@@ -24,20 +24,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 章末星级统一收口（r15 计划 §5）。{@link #recalc} 是<b>唯一</b>写 chapter_star 的入口，
- * 由测试提交 / stage 完成 / 掌握度刷新 / 补星事件统一触发。
- *
- * <p>性质：
- *
- * <ul>
- *   <li><b>幂等</b>：相同输入重复 recalc 不改变 stars、不新增 star_award_event（仅当星数上升才记一条 delta）。
- *   <li><b>只升不降</b>：{@code stars = GREATEST(existing, computed)}（DB 层 GREATEST，§5）。
- *   <li><b>构成可溯</b>：breakdown 记 {@code {test,stage,mastery,recovered}}。
- * </ul>
- *
- * <p>补星（ERRORBOOK_RECOVERY / ENDLESS_RECOVERY）+ 无尽 summary 校验 + recovery 端点由 Wave 2 子代理
- * B1 负责（见 {@link #applyRecoveryStar}）。本服务在 recalc 时<b>保留</b> existing.breakdown.recovered，
- * 确保 B1 已发放的补星不被核心重算覆盖。
+ * 章末星级统一收口（§5）：recalc 是唯一写 chapter_star 的入口（测试/stage/掌握度/补星触发）。
+ * 幂等、只升不降（GREATEST）、breakdown 记 {test,stage,mastery,recovered}；recalc 保留既有 recovered 不覆盖补星。
  */
 @Service
 public class ChapterStarService {
@@ -66,12 +54,7 @@ public class ChapterStarService {
     this.objectMapper = objectMapper;
   }
 
-  /**
-   * 重算并持久化某学生某章的核心星级（幂等、只升不降）。
-   *
-   * @param source 触发来源（仅核心路径 TEST / STAGE_COMPLETE / MASTERY 在此使用）。
-   * @return 重算后的 {@link ChapterStar}。
-   */
+  /** 重算并持久化核心星级（幂等、只升不降）。source：TEST / STAGE_COMPLETE / MASTERY。 */
   @Transactional
   public ChapterStar recalc(long userId, int chapter, StarSource source) {
     if (!ChapterCatalog.isValidChapter(chapter)) {
@@ -174,13 +157,7 @@ public class ChapterStarService {
     }
   }
 
-  /**
-   * 补星发放（错题复盘 / 无尽挑战，每途径至多 +1，封顶 3★，幂等；r15 §5，Wave 2 B1）。
-   *
-   * <p>条件校验由 {@link com.pythontopia.mainline.MainlineRecoveryService} 负责；本方法只把 {@code source}
-   * 记入 {@code breakdown.recovered}（去重，封顶 2 途径）并按 §5 重算（核心星 + 补星，封顶 3★，只升不降）。
-   * <b>幂等</b>：该 source 已在 recovered 内则不重复加星、不记事件。
-   */
+  /** 补星发放（§5）：source 记入 breakdown.recovered（去重，封顶 2 途径）+ 重算；幂等（已发放不重复加星）。 */
   @Transactional
   public ChapterStar applyRecoveryStar(long userId, int chapter, StarSource source) {
     if (!ChapterCatalog.isValidChapter(chapter)) {

@@ -32,11 +32,7 @@ import org.springframework.stereotype.Service;
 
 /**
  * 主线域核心服务：关卡地图总览 + stage 三件套打点。
- *
- * <p>总览（{@link #overview}）按 user <b>一次取齐</b> stage / 进度 / 星级 / 章测状态 4 类数据后内存拼装，
- * 不在章/ stage 维度发起循环查询（§11.4 avoid N+1）。
- *
- * <p>打点全部<b>幂等</b>：视频累加（钳制 + 限频）、课件页/例题并集去重；三件套齐全则原子置完成并触发一次星级重算。
+ * overview 一次取齐 stage/进度/星级/章测状态内存拼装（§11.4 避免 N+1）；打点幂等，三件套齐全则置完成并重算星级。
  */
 @Service
 public class MainlineService {
