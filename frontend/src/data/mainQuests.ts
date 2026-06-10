@@ -196,12 +196,14 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     id: '2-3',
     chapter: 2,
     index: 3,
-    title: '基本数据类型（KC-011）',
+    // 标签修正：种子 course_problem.json 中 #476「圆面积计算」的 kc_code 是 PY43-KC-016
+    // （程序运行原理，本章锚 KC），并非 KC-011；练 2-3 与测 2-5 锚定同一 KC-016，练完即测。
+    title: '圆面积计算实战（KC-016）',
     hint: '到训练场完成真题「圆面积」：用 float() 把输入转成数值再计算（problem #476）。',
     mapKey: 'town_hub',
-    kcCodes: ['PY43-KC-011'],
+    kcCodes: ['PY43-KC-016'],
     evidenceRequired: { type: 'submission', problemId: 476 },
-    rewards: [{ kind: 'kc_mastery', amount: 8, ref: 'PY43-KC-011' }],
+    rewards: [{ kind: 'kc_mastery', amount: 8, ref: 'PY43-KC-016' }],
   },
   {
     id: '2-4',

@@ -28,8 +28,9 @@ const router = useRouter();
 
 const visible = computed(() => mainQuest.panelOpen);
 
-// 每个 PRACTICE_PASS 后端 +0.20 掌握度（0..1）== 0..100 标度的 +20。
-const MASTERY_PER_PASS = 20;
+// 锚题均为 Low 难度：后端 PRACTICE_PASS(+0.20) 经难度系数 ×0.7 加权，单次 AC 实际 +0.14
+// （0..1 标度），换算到 0..100 标度即每次 AC +14。阈值 40 ⇒ 含「练」共需约 3 次 AC。
+const MASTERY_PER_PASS = 14;
 
 function phaseOf(sub: MainSubQuestViewItem): MainQuestPhaseMeta {
   return mainSubQuestPhase(sub);

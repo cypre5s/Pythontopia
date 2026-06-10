@@ -24,9 +24,10 @@ const isVariantMode = computed<boolean>(() => route.query.variant === '1' && var
 
 const problem = computed(() => learning.training.problem);
 
-// 掌握度透明化：把本题 KC 的隐藏掌握度翻成「当前/100 + 做对一题约 +20」，
+// 掌握度透明化：把本题 KC 的隐藏掌握度翻成「当前/100 + 做对一题约 +14」，
 // 若该 KC 是某主线 kc_mastery「测」子任务目标，再显式给出目标分与还差几题。
-const MASTERY_PER_PASS = 20;
+// +14 来源：后端 PRACTICE_PASS(+0.20) 对 Low 难度锚题按 ×0.7 加权 ⇒ 单次 AC +0.14。
+const MASTERY_PER_PASS = 14;
 interface KcMasteryHint {
   current: number;
   target: number | null;

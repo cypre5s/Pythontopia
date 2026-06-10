@@ -68,7 +68,7 @@ describe('useMainQuestStore evidence hooks (单一事实源 · 仅完成 activeQ
     const mq = useMainQuestStore();
     // 4-1 dialog(librarian_doc) / 2-3 submission(#476) / 2-5 mastery(KC-016)
     expect(mq.onDialogClose('librarian_doc')).toBeNull();
-    expect(mq.onSubmissionPassed({ problemId: 476, kcCode: 'PY43-KC-011' })).toBeNull();
+    expect(mq.onSubmissionPassed({ problemId: 476, kcCode: 'PY43-KC-016' })).toBeNull();
     expect(mq.onMasteryReached('PY43-KC-016', 45)).toBeNull();
     expect(mq.progress.completedSubQuests).toEqual([]);
   });
@@ -101,7 +101,7 @@ describe('useMainQuestStore evidence hooks (单一事实源 · 仅完成 activeQ
     advanceToChapterStart(mq, 2);
     mq.completeSubQuest('2-1');
     mq.completeSubQuest('2-2'); // → activeQuest=2-3
-    const completed = mq.onSubmissionPassed({ problemId: 476, kcCode: 'PY43-KC-011' });
+    const completed = mq.onSubmissionPassed({ problemId: 476, kcCode: 'PY43-KC-016' });
     expect(completed?.id).toBe('2-3');
   });
 
