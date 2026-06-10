@@ -16,6 +16,7 @@ import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -50,15 +51,18 @@ public class BossService {
   private final BossGraphClient graphClient;
   private final MasteryRepository masteryRepository;
   private final CoursePackRepository coursePackRepository;
+  private final EndlessPregenService pregenService;
   private final ConcurrentMap<String, CachedProblem> cache = new ConcurrentHashMap<>();
 
   public BossService(
       BossGraphClient graphClient,
       MasteryRepository masteryRepository,
-      CoursePackRepository coursePackRepository) {
+      CoursePackRepository coursePackRepository,
+      EndlessPregenService pregenService) {
     this.graphClient = graphClient;
     this.masteryRepository = masteryRepository;
     this.coursePackRepository = coursePackRepository;
+    this.pregenService = pregenService;
   }
 
   public BossProblemDto fetchProblem(int chapter, BossProblemRequest request, Long userId) {
@@ -70,6 +74,35 @@ public class BossService {
         request.difficulty() != null
             ? request.difficulty()
             : computeTargetDifficulty(userId, kc, request.stage());
+
+    // 1) 优先复用「已预生成未做」(READY) 的同维度题：命中即原子标 CONSUMED，省去现场等 LLM。
+    //    这条同时实现「学生中途退出，下次登入复用已生成未做的题」——上次会话预取留下的 READY 行。
+    Optional<BossInternalProblem> reused =
+        pregenService.claimReady(userId, chapter, kc, request.preferredKind(), request.arenaLevel());
+    if (reused.isPresent()) {
+      BossInternalProblem p = reused.get();
+      // 回灌内存缓存（用题目原 problemId 作键），供随后的 evaluateAttempt 直接取 hidden testCases。
+      cache.put(p.problemId(), new CachedProblem(p, Instant.now()));
+      evictExpired();
+      LOG.info("boss reuse pregenerated problemId={} user={} ch={}", p.problemId(), userId, chapter);
+      // 展示时套用「本次请求」的 stage + 本次推断难度：预取时的 stage/难度不串到当前上下文
+      // （也避免共享端点下复用题把异常 stage 显示给主线 boss）。
+      return new BossProblemDto(
+          p.problemId(),
+          chapter,
+          request.stage(),
+          difficulty,
+          p.kcCode(),
+          p.statement(),
+          p.hints(),
+          p.sampleInput(),
+          p.sampleOutput(),
+          p.totalTestCases(),
+          p.reviewed(),
+          p.aiGenerated());
+    }
+
+    // 2) 未命中 → 现场走 graph 出题（失败回退 golden）。
     try {
       BossInternalProblem fromGraph =
           graphClient.requestProblem(
@@ -83,6 +116,10 @@ public class BossService {
               request.profileSignals());
       if (fromGraph != null && fromGraph.problemId() != null) {
         cache.put(fromGraph.problemId(), new CachedProblem(fromGraph, Instant.now()));
+        // 现场题也落库 (CONSUMED)，供内存缓存过期 / 进程重启后判题兜底取回 testCases（best-effort）。
+        pregenService.persistConsumed(
+            userId, chapter, kc, request.preferredKind(), request.arenaLevel(), difficulty,
+            fromGraph);
         evictExpired();
         return fromGraph.toPublic();
       }
@@ -95,10 +132,37 @@ public class BossService {
     return buildGoldenProblem(chapter, request.stage(), kc, difficulty);
   }
 
-  public BossAttemptResultDto evaluateAttempt(BossAttemptRequest request) {
-    CachedProblem cached = cache.get(request.problemId());
-    if (cached == null) {
-      LOG.info("boss attempt problemId={} not in cache, returning Pyodide-only fallback",
+  /**
+   * 触发后台预生成「下一题」：按同维度 + 当前难度异步生成并落 {@code pregenerated_problem} (READY)。
+   * 立即返回，真正生成在 {@link EndlessPregenService#pregenerate} 的 {@code @Async} 线程进行；
+   * 幂等 + best-effort。前端在 phase='playing' 后 fire-and-forget 调用，玩家做题时后台备好下一题。
+   */
+  public void prefetch(int chapter, BossProblemRequest request, Long userId) {
+    String effectiveKc = request.preferredKc() != null ? request.preferredKc() : request.kcCode();
+    String kc = resolveKc(chapter, effectiveKc);
+    int difficulty =
+        request.difficulty() != null
+            ? request.difficulty()
+            : computeTargetDifficulty(userId, kc, request.stage());
+    pregenService.pregenerate(
+        userId,
+        chapter,
+        request.stage(),
+        kc,
+        difficulty,
+        request.preferredKc(),
+        request.preferredKind(),
+        request.arenaLevel(),
+        request.profileSignals());
+  }
+
+  public BossAttemptResultDto evaluateAttempt(BossAttemptRequest request, Long userId) {
+    // 判题取题：先内存缓存（TTL 内有效），过期 / 缺失再回退 pregenerated_problem 凭 problemId 取回，
+    // 修复「内存缓存过期 / 进程重启 → 判题失效」。
+    BossInternalProblem problem = resolveProblemForEval(request.problemId(), userId);
+    if (problem == null) {
+      LOG.info(
+          "boss attempt problemId={} not in cache nor persisted, returning Pyodide-only fallback",
           request.problemId());
       return new BossAttemptResultDto(
           request.problemId(),
@@ -107,27 +171,16 @@ public class BossService {
           3,
           null,
           0,
-          "题目缓存过期或服务重启；请用前端 Pyodide 校验后再次提交。");
+          "题目缓存过期且无持久化记录；请用前端 Pyodide 校验后再次提交，或重新生成题目。");
     }
-    if (Duration.between(cached.cachedAt(), Instant.now()).compareTo(CACHE_TTL) > 0) {
-      cache.remove(request.problemId());
-      return new BossAttemptResultDto(
-          request.problemId(),
-          false,
-          0,
-          cached.problem().totalTestCases(),
-          null,
-          0,
-          "题目缓存已超 30 分钟，请重新生成题目。");
-    }
-    List<BossTestCasePayload> testCases = cached.problem().testCases();
+    List<BossTestCasePayload> testCases = problem.testCases();
     if (testCases.isEmpty()) {
-      LOG.warn("cached problem {} has empty testCases (graph schema drift?)", request.problemId());
+      LOG.warn("problem {} has empty testCases (graph schema drift?)", request.problemId());
       return new BossAttemptResultDto(
           request.problemId(),
           false,
           0,
-          cached.problem().totalTestCases(),
+          problem.totalTestCases(),
           null,
           0,
           "题目缓存数据异常（缺 testCases），请重试生成题目。");
@@ -163,11 +216,31 @@ public class BossService {
           request.problemId(),
           false,
           0,
-          cached.problem().totalTestCases(),
+          problem.totalTestCases(),
           null,
           0,
           "graph 评测服务不可用，请用前端 Pyodide 校验后再次提交。");
     }
+  }
+
+  /**
+   * 取判题所需完整题（含 hidden testCases）：先查进程内缓存（TTL 内有效）；过期 / 未命中再回退
+   * {@code pregenerated_problem} 凭 user + problemId 取最新一条 payload，命中后回灌缓存。
+   * 二者皆空返回 {@code null}（题目已无法判，调用方给 Pyodide 兜底提示）。
+   */
+  private BossInternalProblem resolveProblemForEval(String problemId, Long userId) {
+    CachedProblem cached = cache.get(problemId);
+    if (cached != null) {
+      if (Duration.between(cached.cachedAt(), Instant.now()).compareTo(CACHE_TTL) <= 0) {
+        return cached.problem();
+      }
+      cache.remove(problemId); // 过期，落 DB 再取
+    }
+    BossInternalProblem fromDb = pregenService.findByProblemId(userId, problemId).orElse(null);
+    if (fromDb != null) {
+      cache.put(problemId, new CachedProblem(fromDb, Instant.now())); // 回灌缓存避免重复查库
+    }
+    return fromDb;
   }
 
   /** 缓存清理：size 上限 + TTL 双保险，避免无限增长。 */

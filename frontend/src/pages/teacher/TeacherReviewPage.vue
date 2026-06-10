@@ -234,7 +234,10 @@ const currentEntry = computed<ReviewEntry | null>(() => {
         >
           {{ loading ? '拉题中…' : '调 graph 出 1 道题' }}
         </button>
-        <span class="counts" data-testid="teacher-review-counts">
+        <span
+          class="counts"
+          data-testid="teacher-review-counts"
+        >
           总 {{ counts.total }} · 待审 {{ counts.pending }} ·
           <span class="ok">通过 {{ counts.approved }}</span> ·
           <span class="bad">驳回 {{ counts.rejected }}</span>

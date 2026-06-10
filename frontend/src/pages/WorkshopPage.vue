@@ -2,28 +2,30 @@
 /**
  * 百晓工坊主页：
  *   - 顶部传送栏（返回小镇 / 快速传送 / 图书馆 / 闯关塔）；
- *   - 左「对话流」WorkshopChat（@ 引用 + / 选工具 + 自动判定 → 问答 / 6 类资源），
- *     右「书房」StudioDrawer（可收起，列表 + 详情，详情绑路由 ?id）。
+ *   - 左「对话流」WorkshopChat（@ 引用 + / 选工具 + 自动判定 → 问答 / 6 类资源；
+ *     S2：生成时智能体协同只由对话内 ThinkingStream「思考文字」单一呈现，不再叠加侧栏像素流水线），
+ *     右「书房」StudioDrawer（可收起，列表 + 详情；详情由 store 持有的 openResourceId 驱动，不进 URL）。
  */
-import { computed, onMounted, ref } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import AppLayout from '@/app/AppLayout.vue';
 import WorkshopChat from '@/components/workshop/WorkshopChat.vue';
 import StudioDrawer from '@/components/workshop/StudioDrawer.vue';
-import MarvisPanel from '@/components/workshop/MarvisPanel.vue';
+import ResourceDetailPanel from '@/components/workshop/ResourceDetailPanel.vue';
 import ChatHistoryRail from '@/components/workshop/ChatHistoryRail.vue';
 import type { TutorSessionDto } from '@/api/tutor';
 import { FAST_TRAVEL_ROUTES, type FastTravelRoute } from '@/data/fastTravel';
 import { useLearningStore } from '@stores/learning';
 import { useWorldStore } from '@stores/world';
 import { useToastStore } from '@stores/toast';
+import { useWorkshopUiStore } from '@stores/workshopUi';
 import { playUiClick, playChime } from '@/composables/useStardewFx';
 
 const learning = useLearningStore();
 const world = useWorldStore();
 const toast = useToastStore();
+const workshopUi = useWorkshopUiStore();
 const router = useRouter();
-const route = useRoute();
 
 // 书房默认收起（窄把手），聊天占满主区；学生需要时点把手展开。
 const drawerOpen = ref(false);
@@ -35,17 +37,20 @@ function onSelectConversation(sessions: TutorSessionDto[]): void {
   chatRef.value?.loadConversation(sessions);
 }
 
-const selectedId = computed<number | null>(() => {
-  const id = route.query.id;
-  if (typeof id === 'string' && /^\d+$/.test(id)) {
-    return Number(id);
-  }
-  return null;
-});
+// R-14 域1④：书房当前打开的资源 id 由 store 持有，不再进 URL（避免暴露可枚举 id）。
+const selectedId = computed<number | null>(() => workshopUi.openResourceId);
 
 const currentMapKey = computed<string | null>(() => world.player?.mapKey ?? null);
 
+// Esc 关闭资源详情弹窗（仅在弹窗打开时拦截）。
+function onKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape' && selectedId.value !== null) {
+    onDrawerBack();
+  }
+}
+
 onMounted(async () => {
+  window.addEventListener('keydown', onKeydown);
   if (learning.field.masterySnapshot.length === 0) {
     await learning.loadField();
   }
@@ -54,13 +59,21 @@ onMounted(async () => {
   }
 });
 
+onUnmounted(() => {
+  window.removeEventListener('keydown', onKeydown);
+  // 离开工坊清空书房选中，避免下次进入残留旧资源弹窗。
+  workshopUi.closeResource();
+});
+
 function onOpenResource(id: number): void {
   drawerOpen.value = true;
-  void router.push({ path: '/workshop', query: { id: String(id) } });
+  // R-14 域1④：资源 id 不进 URL，改存 store（避免学生改网址枚举他人资源；后端本就归属校验）。
+  workshopUi.openResource(id);
 }
 
+// 关闭资源详情弹窗：清空 store 选中（selectedId 随之变 null，弹窗消失）。
 function onDrawerBack(): void {
-  void router.push({ path: '/workshop' });
+  workshopUi.closeResource();
 }
 
 async function travelTo(route_: FastTravelRoute): Promise<void> {
@@ -171,19 +184,47 @@ function openArena(chapter: number): void {
           />
         </div>
         <div class="workshop-rail">
-          <MarvisPanel />
+          <!-- S2：生成时「思考」只由对话内 ThinkingStream 呈现，侧栏只保留书房。 -->
           <div
             class="rail-drawer"
             :class="{ 'rail-drawer--collapsed': !drawerOpen }"
           >
-            <StudioDrawer
-              v-model:open="drawerOpen"
-              :selected-id="selectedId"
-              @back="onDrawerBack"
-            />
+            <StudioDrawer v-model:open="drawerOpen" />
           </div>
         </div>
       </div>
+
+      <!-- 书房资源详情弹窗：列表点击某行（或聊天「在书房查看」）写入 store openResourceId 后弹出，
+           展示讲义 / 思维导图 / 练习等内容；点遮罩、点 ✕ 或按 Esc 关闭。 -->
+      <Teleport to="body">
+        <div
+          v-if="selectedId !== null"
+          class="resource-modal-overlay"
+          data-testid="resource-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label="书房资源详情"
+          @click.self="onDrawerBack"
+        >
+          <div class="resource-modal">
+            <header class="resource-modal__bar">
+              <span class="resource-modal__title">📄 讲义 / 资源详情</span>
+              <button
+                type="button"
+                class="resource-modal__close"
+                data-testid="resource-modal-close"
+                title="关闭（Esc）"
+                @click="onDrawerBack"
+              >
+                ✕
+              </button>
+            </header>
+            <div class="resource-modal__body">
+              <ResourceDetailPanel :resource-id="selectedId" />
+            </div>
+          </div>
+        </div>
+      </Teleport>
     </section>
   </AppLayout>
 </template>
@@ -311,13 +352,75 @@ function openArena(chapter: number): void {
   flex-direction: column;
   gap: 10px;
 }
-/* marvis 常驻在上；书房在下，展开时占满剩余高度，收起时仅留把手。 */
+/* 书房占满侧栏：展开时占满剩余高度，收起时仅留把手。 */
 .rail-drawer {
   flex: 1 1 auto;
   min-height: 0;
 }
 .rail-drawer--collapsed {
   flex: 0 0 auto;
+}
+
+/* ── 书房资源详情弹窗（Teleport 到 body，仍受本组件 scoped 作用域约束） ── */
+.resource-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--pyt-z-modal);
+  background: rgba(42, 26, 5, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.resource-modal {
+  width: min(760px, 94vw);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #f9e7bc 0%, #f1d896 100%);
+  border: 3px solid var(--pyt-color-text-primary);
+  border-radius: var(--pyt-radius-lg);
+  box-shadow: 6px 6px 0 var(--pyt-color-text-primary);
+  overflow: hidden;
+  font-family: var(--pyt-font-pixel);
+}
+.resource-modal__bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 2px dashed rgba(110, 79, 29, 0.4);
+}
+.resource-modal__title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--pyt-color-text-primary);
+}
+.resource-modal__close {
+  flex: 0 0 auto;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1;
+  width: 28px;
+  height: 28px;
+  background: var(--pyt-color-warning-bg);
+  border: 2px solid var(--pyt-color-text-primary);
+  border-radius: 4px;
+  cursor: pointer;
+  box-shadow: 2px 2px 0 var(--pyt-color-text-primary);
+  color: var(--pyt-color-text-primary);
+}
+.resource-modal__close:active {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+.resource-modal__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
 }
 
 @media (max-width: 900px) {

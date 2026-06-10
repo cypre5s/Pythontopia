@@ -14,7 +14,10 @@ function advanceStep(): void {
 </script>
 
 <template>
-  <div class="closed-loop-card" data-testid="closed-loop-card">
+  <div
+    class="closed-loop-card"
+    data-testid="closed-loop-card"
+  >
     <header class="card-head">
       <span class="card-icon">⟲</span>
       <h3>调试闭环</h3>
@@ -27,15 +30,25 @@ function advanceStep(): void {
       </div>
     </header>
 
-    <div v-if="step === 'read'" class="phase-panel">
+    <div
+      v-if="step === 'read'"
+      class="phase-panel"
+    >
       <h4>阶段 1：阅读报错信息</h4>
       <pre class="trace">{{ problem.statement }}</pre>
-      <button type="button" class="advance-btn" @click="advanceStep">
+      <button
+        type="button"
+        class="advance-btn"
+        @click="advanceStep"
+      >
         我看懂了，进入定位 →
       </button>
     </div>
 
-    <div v-else-if="step === 'locate'" class="phase-panel">
+    <div
+      v-else-if="step === 'locate'"
+      class="phase-panel"
+    >
       <h4>阶段 2：定位错误根源</h4>
       <pre class="trace trace--dim">{{ problem.statement }}</pre>
       <textarea
@@ -44,12 +57,19 @@ function advanceStep(): void {
         rows="3"
         placeholder="写出你认为出错的行号和原因，例如：第 5 行 IndexError，因为列表只有 3 个元素…"
       />
-      <button type="button" class="advance-btn" @click="advanceStep">
+      <button
+        type="button"
+        class="advance-btn"
+        @click="advanceStep"
+      >
         已定位，开始修复 →
       </button>
     </div>
 
-    <div v-else class="phase-panel">
+    <div
+      v-else
+      class="phase-panel"
+    >
       <h4>阶段 3：编写修复代码</h4>
       <textarea
         v-model="code"

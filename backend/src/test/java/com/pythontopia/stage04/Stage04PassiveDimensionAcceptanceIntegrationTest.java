@@ -107,7 +107,7 @@ class Stage04PassiveDimensionAcceptanceIntegrationTest {
   void practiceSucceededIncrementsPracticalAbilityAndAuditsRevision() throws Exception {
     Long userId = insertUserWithProfile("dim-stu-01");
 
-    publisher.publishEvent(new LearningEvent.PracticeSucceeded(userId, "PY43-KC-001", 101L));
+    publisher.publishEvent(new LearningEvent.PracticeSucceeded(userId, "PY43-KC-001", 101L, "medium"));
 
     JsonNode dimensions = readDimensions(userId);
     JsonNode practical = dimensions.path("practical_ability");
@@ -145,7 +145,7 @@ class Stage04PassiveDimensionAcceptanceIntegrationTest {
   void practiceFailedAppendsErrorPatternTagAndAuditsRevision() throws Exception {
     Long userId = insertUserWithProfile("dim-stu-02");
 
-    publisher.publishEvent(new LearningEvent.PracticeFailed(userId, "PY43-KC-002", 102L, "WA"));
+    publisher.publishEvent(new LearningEvent.PracticeFailed(userId, "PY43-KC-002", 102L, "WA", "medium"));
 
     JsonNode dimensions = readDimensions(userId);
     JsonNode err = dimensions.path("error_pattern");

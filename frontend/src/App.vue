@@ -6,13 +6,14 @@ import AppToast from '@/components/system/AppToast.vue';
 import DialogTree from '@/components/game/DialogTree.vue';
 import PerfHud from '@/components/hud/PerfHud.vue';
 import { useToastStore } from '@stores/toast';
-import { useWorldStore } from '@stores/world';
 
 const router = useRouter();
 const toast = useToastStore();
-const world = useWorldStore();
 const fatalError = ref<string | null>(null);
-const BUG_MINE_ENTRY_TILE = { x: 15, y: 2 };
+
+// 这些路由自身用 watch/computed 响应式处理 query/param 变化（如 /library?pageId=、/lecture/:chapter），
+// 因此按 route.name 取稳定 :key，避免仅 query/param 变化时整页组件 remount（点讲义/切章的"重载感"根因）。
+const STABLE_NAME_ROUTES = new Set(['world', 'library', 'workshop', 'lecture']);
 
 router.onError((err) => {
   const message = err instanceof Error ? err.message : String(err);
@@ -40,12 +41,7 @@ function onDialogNavigate(e: Event): void {
   if (typeof route !== 'string' || route.length === 0) {
     return;
   }
-  if (route.startsWith('/bug-mine')) {
-    world.setPendingTravel('mine_south', BUG_MINE_ENTRY_TILE);
-    window.dispatchEvent(new CustomEvent('pythontopia:world-travel'));
-    void router.push(route);
-    return;
-  }
+  // R-14：Bug 矿洞功能为 /bug-mine 页面（mine_south 风景地图已删），不再切 Phaser 场景，直接进页面。
   void router.push(route);
 }
 
@@ -71,7 +67,7 @@ onBeforeUnmount(() => {
           >
             <component
               :is="Component"
-              :key="route.name === 'world' || route.name === 'library' ? String(route.name) : route.fullPath"
+              :key="STABLE_NAME_ROUTES.has(route.name as string) ? String(route.name) : route.fullPath"
             />
           </Transition>
         </KeepAlive>

@@ -360,7 +360,7 @@ public class LearningPathService {
           params.put("kcCode", kcCode);
         }
       }
-      case FIX_BUG -> params.put("goto", "mine_south");
+      case FIX_BUG -> params.put("goto", "town_hub"); // R-14：mine_south 已删，停小镇经 building → /bug-mine
       case PLANT_KC -> {
         if (kcCode != null) {
           params.put("focus", "kc_" + kcCode.toLowerCase(Locale.ROOT));

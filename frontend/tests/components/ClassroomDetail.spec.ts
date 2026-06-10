@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMemoryHistory, createRouter, type Router } from 'vue-router';
 import ClassroomDetail from '@/pages/teacher/ClassroomDetail.vue';
 import { useTeacherStore } from '@stores/teacher';
+import { useSessionStore } from '@stores/session';
 import type { RemediationResultDto } from '@/api/teacher';
 
 const apiMocks = vi.hoisted(() => ({
@@ -113,6 +114,7 @@ describe('ClassroomDetail', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it('renders tabs and switches active panel', async () => {
@@ -121,8 +123,10 @@ describe('ClassroomDetail', () => {
     await flushPromises();
 
     expect(wrapper.text()).toContain('Stage12 Demo');
-    const tabButtons = wrapper.findAll('.tabs button');
+    // 重构为侧栏导航（dashboard-01）：tab 现为 .cd-nav__item，共 7 个。
+    const tabButtons = wrapper.findAll('.cd-nav__item');
     expect(tabButtons.length).toBeGreaterThanOrEqual(7);
+    // index 2 = 任务 tab（overview/live/quests/...）。
     await tabButtons[2]!.trigger('click');
     expect(wrapper.find('[data-testid="quest-tab"]').isVisible()).toBe(true);
   });
@@ -177,7 +181,7 @@ describe('ClassroomDetail', () => {
 
     const packs = wrapper.find('[data-testid="remediation-packs"]');
     expect(packs.exists()).toBe(true);
-    expect(wrapper.findAll('.remediation__pack').length).toBe(2);
+    expect(wrapper.findAll('.cd-remediation__pack').length).toBe(2);
 
     const forLoop = wrapper.find('[data-testid="remediation-pack-PY43-KC-012"]');
     expect(forLoop.text()).toContain('for 循环');
@@ -252,5 +256,65 @@ describe('ClassroomDetail', () => {
 
     expect(wrapper.find('[data-testid="remediation-trigger"]').text()).toContain('一键生成补救包');
     expect(wrapper.find('[data-testid="remediation-trigger"]').attributes('disabled')).toBeUndefined();
+  });
+
+  // ── 直播 Tab：useClassroomLive 改为 fetch + Bearer token 订阅 SSE ──
+  it('直播 Tab：点击「开始直播」用带 Authorization 的 fetch 订阅，并渲染事件', async () => {
+    const session = useSessionStore();
+    session.token = 'teacher-token';
+
+    const encoder = new TextEncoder();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('event: connected\ndata: {}\n\n'));
+        controller.enqueue(
+          encoder.encode('event: submission\ndata: {"studentId":11,"status":"PASSED"}\n\n'),
+        );
+        // 保持流打开，避免触发 5 秒重连定时器。
+      },
+    });
+    const fetchMock = vi.fn(async () => new Response(body, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await router.push('/teacher/classroom/9');
+    const wrapper = mount(ClassroomDetail, { global: { plugins: [router] } });
+    await flushPromises();
+
+    const liveTab = wrapper.find('[data-testid="classroom-live-tab"]');
+    const startBtn = liveTab.findAll('button').find((b) => b.text().includes('开始直播'));
+    expect(startBtn).toBeTruthy();
+    await startBtn!.trigger('click');
+
+    await vi.waitFor(() => {
+      expect(wrapper.find('[data-testid="classroom-live-tab"]').text()).toContain('已连接直播');
+    });
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('/api/classroom/9/live');
+    expect((init.headers as Record<string, string>)['Authorization']).toBe('Bearer teacher-token');
+
+    expect(wrapper.find('[data-testid="classroom-live-tab"]').text()).toContain('submission');
+    wrapper.unmount();
+  });
+
+  it('直播 Tab：订阅遭 401 → 显示权限错误且不再重连', async () => {
+    const fetchMock = vi.fn(async () => new Response(null, { status: 401 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await router.push('/teacher/classroom/9');
+    const wrapper = mount(ClassroomDetail, { global: { plugins: [router] } });
+    await flushPromises();
+
+    const liveTab = wrapper.find('[data-testid="classroom-live-tab"]');
+    const startBtn = liveTab.findAll('button').find((b) => b.text().includes('开始直播'));
+    await startBtn!.trigger('click');
+
+    await vi.waitFor(() => {
+      expect(wrapper.find('[data-testid="live-error"]').exists()).toBe(true);
+    });
+    expect(wrapper.find('[data-testid="live-error"]').text()).toContain('无权订阅课堂直播');
+    expect(fetchMock).toHaveBeenCalledOnce();
+    wrapper.unmount();
   });
 });

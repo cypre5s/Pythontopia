@@ -1,23 +1,23 @@
-# Pythontopia Beta 演示 Checklist (R-12)
+# Pythontopia Beta 演示 Checklist (R-14)
 
-> 子代理 **W4-E2E** 产出。配合 `docs/r12_release_notes.md`、`docs/demo_script.md`、`docs/beta_acceptance_checklist.md` 使用。
+> 当前演示以 R-14「世界收缩方案 A」为准：主线只跑单一中央小镇 `town_hub`，`mine_south` 仅作为 Bug 矿洞支线；历史 R-12 的 5 图大世界、农场/作物、背包/货币/商店不再作为演示验收项。
 >
-> - 本 checklist 覆盖 **R-12 星露谷改造**之后的端到端 QA 路径（5 张分块地图 + 20 NPC + RPG 存档）。
-> - 自动化烟雾测试见 `scripts/r12-smoke-test.sh`；本文件用于人工演示前最终走查。
+> - 本 checklist 覆盖 **R-14 单 hub** 端到端 QA 路径（town_hub + Bug 矿洞支线 + 真实学习闭环）。
+> - 自动化烟雾测试以根目录 `./dev.sh`、后端/前端/graph/rag 测试命令和真实浏览器走查为准；本文件用于人工演示前最终走查。
 > - 所有 ✓ 项请用 `[x]` 标记；遇到偏离请补充 `备注:` 说明实际行为，**不要静默通过**。
 
 ---
 
 ## 0. 前置条件
 
-- [ ] 数据库已迁移：`cd backend && mvn flyway:info`，输出包含 `V001 … V113` 全部 `Success`（实际 40 条迁移，含 V001-V006 / V010-V013 / V020-V091 / V100-V113）。
-- [ ] 后端启动：`cd backend && mvn spring-boot:run`，等待 stdout `Started PythontopiaApplication`，端口 `:8080` 可访问。
+- [ ] 数据库已迁移：`cd backend && mvn -s .mvn/settings.xml test` 能在空库 Testcontainers 上跑通 Flyway（当前迁移至 V139）。
+- [ ] 后端启动：`cd backend && mvn -s .mvn/settings.xml spring-boot:run`，等待 stdout `Started PythontopiaApplication`，端口按本地配置可访问。
 - [ ] 前端启动：`cd frontend && npm run dev`，等待 `VITE ready at http://localhost:5173`（`predev` 钩子会同步 NPC 与 course43 数据，请确认无 sync 报错）。
 - [ ] 测试账号已就绪：
   - 学生：`student@demo / P@ssw0rd1`（首次需 `/register` 创建，或运行 `bash deploy/scripts/seed_demo_classroom.sh`）。
   - 教师：`teacher@demo / P@ssw0rd1`（同上）。
 - [ ] 浏览器：Chrome / Edge 最新版；DevTools Network / Console 全开；建议宽度 ≥1366。
-- [ ] 资产同步：`frontend/public/data/npcs/` 共 20 个 NPC 目录 + `index.json`（与 `data/npcs/` 一致）。
+- [ ] 资产同步：`frontend/public/data/npcs/` 与 `data/npcs/` 一致；R-14 主线 NPC 均能在 `town_hub` 内触达。
 
 ---
 
@@ -32,7 +32,7 @@
 - [ ] Vue 路由稳定在 `/world`；地址栏 URL 不再变动。
 - [ ] DevTools Network 看到关键请求：
   - `POST /api/auth/login` → 200，返回 `accessToken`。
-  - `POST /api/game/bootstrap` → 200，body 含 `world / playerState / crops / quests / kcMastery / profile / learningPath / inventory / skills / currency / npcStates / activeSaveSlot`。
+  - `POST /api/game/bootstrap` → 200，body 含 `world / player / quests / mastery / profile / path / skills / calendar / pendingEvents / npcStates / activeSlot / saveSlots`，不要求 crops / currency / shop。
 - [ ] Phaser 单 Game 实例创建：DevTools Elements 中只有 1 个 `<canvas>` 元素。
 - [ ] BGM 起：BGM `town_theme` 淡入（参考 `frontend/src/utils/celebrate.ts` 或 BGM adapter）。
 - [ ] Sara 角色在 `town_hub` 像素 (400, 320) ≈ tile (25, 20) spawn，阴影 ellipse 跟随。
@@ -56,20 +56,18 @@
 - [ ] 点选项后切到下一个对话节点；若分支带 `effects: friendship +1` 则右上 ❤ icon +1（实际持久化到 `npc_dialog_state.friendship`）。
 - [ ] 按 `ESC` 关闭对话 → 角色控制权回到 Phaser，背景输入恢复。
 
-### A4. 走 5 张地图
+### A4. R-14 单 hub 与 Bug 矿洞支线
 
-> 边缘 fade out → switch scene → fade in。
+> 主线不再要求跨 5 图奔波；所有学习入口与 NPC 收进 `town_hub`，Bug 矿洞作为 `mine_south` 支线入口。
 
-- [ ] 北门：`town_hub` 北侧出口 → `farm_north`。看到知识田 + 谷仓 + `farmer_kc`（spawn tile (12, 8)）。
-- [ ] 返回：在 `farm_north` 南门走出 → 回 `town_hub`，spawn 位为返回锚点（非默认 spawn）。
-- [ ] 南门：`town_hub` → `mine_south`，BGM crossfade 切到 `bug_mine` 紧张曲，环境 tint 偏暗。
-- [ ] 东门：`town_hub` → `campus_east`，看到图书馆 / 教室 / 复盘大厅 3 栋建筑 + `librarian_doc` / `coach_q` / `sage_review`。
-- [ ] 西门：`town_hub` → `port_west`，看到码头 + 灯塔 + `class_president` + `merchant`。
-- [ ] 每次切图都触发 1 次 `POST /api/world/player`（map 字段变更），无 404 / 5xx。
+- [ ] `frontend/public/assets/maps/index.json` 只有 `town_hub` 与 `mine_south`；`town_hub` 宽高为 50×40 且无主线出口。
+- [ ] `town_hub` 内可以进入画像屋、图书馆、复盘大厅、资源工坊、Bug 矿洞、竞技场、训练场等主线建筑。
+- [ ] 从 Bug 矿洞入口进入 `mine_south` 支线，BGM crossfade 切到 `bug_mine` 紧张曲，环境 tint 偏暗。
+- [ ] 返回小镇后仍保持单 Phaser Game 实例，无 404 / 5xx。
 
 ### A5. 图书馆阅读 561 页课件
 
-- [ ] 在 `campus_east` 走近图书馆 tile → 按 `F` 或鼠标点击建筑 → `router.push('/library')`。
+- [ ] 在 `town_hub` 走近图书馆建筑 → 按 `F` 或鼠标点击建筑 → `router.push('/library')`。
 - [ ] `LibraryPage` 三栏布局：左 7 章树 / 中 页内容 / 右 RAG 检索框。
 - [ ] 切换第 5 章「控制流」→ 树节点高亮 + 中栏跳到该章首页。
 - [ ] 翻页：`▶` / `◀` 翻页流畅，页码计数从 1 递增直至 561。
@@ -77,7 +75,7 @@
 
 ### A6. 题库做题
 
-- [ ] 回 `/world` → `campus_east` 进入教室建筑 → `router.push('/problems')`。
+- [ ] 回 `/world` → 在 `town_hub` 进入训练场/教室入口 → `router.push('/training')` 或题目入口。
 - [ ] `ProblemListPage` 渲染 39 题；过滤器：KC / 难度 / 状态（通过/失败/未做）。
 - [ ] 选 KC `loop_for_while` → 列表只显示绑定该 KC 的题。
 - [ ] 点 `去做` → `router.push('/training?problemId=<id>')`。
@@ -94,8 +92,8 @@
 ### A8. 任务完成 with evidence 强校验
 
 - [ ] 回 `/board`：`PathTreeTab` + `ClassroomQuestsTab` 两个 tab 均渲染（无白屏）。
-- [ ] `PathTreeTab` 中点击任一 KC 节点 → deep link 跳到：
-  - KC 田地（`/world` farm_north 对应 crop tile）/ 题库（`/problems?kcId=...`）/ 课件页（`/library?page=...`）。
+- [ ] `PathTreeTab` 中点击任一 KC 节点 → deep link 到 R-14 学习入口：
+  - 课件页（`/library?page=...`）/ 资源工坊（`/workshop?kc=...`）/ 训练场（`/training?...`）/ 复盘大厅。
 - [ ] 切到 `ClassroomQuestsTab`，选一条 `IN_PROGRESS` 任务 → 点 `提交完成`。
 - [ ] 弹出 `evidence` 选择面板：
   - 必选类型与任务 `required_evidence_type` 匹配（submission / resource / page_read / kc_mastery_delta）。
@@ -119,7 +117,7 @@
 - [ ] 角色阴影 ellipse 始终跟随脚下；不随 `setDepth` 错位。
 - [ ] camera setZoom(2)，平滑跟随；切图时 camera 复位无瑕疵。
 - [ ] 中文像素字体 `PythontopiaPixel` 在 Phaser Text、Vue 顶栏、对话框中全部应用，无回退到默认 sans。
-- [ ] BGM crossfade：`town_theme ↔ farm_theme ↔ bug_mine_theme ↔ campus_theme ↔ port_theme`，过渡时长 ~1.5s，无爆音。
+- [ ] BGM crossfade：`town_theme ↔ bug_mine_theme`，过渡时长 ~1.5s，无爆音。
 - [ ] SFX：脚步、点击、对话推进、任务完成 jingle 各就各位（参考 `frontend/public/assets/pixel/sfx/`）。
 
 ---

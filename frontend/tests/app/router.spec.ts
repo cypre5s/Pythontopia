@@ -22,10 +22,9 @@ describe('app router building routes', () => {
     }
   });
 
-  it('R-14: /bug-mine 为独立错题矿洞页并保留 query', () => {
-    const resolved = router.resolve('/bug-mine?submissionId=99');
+  it('R-14: /bug-mine 为独立错题矿洞页', () => {
+    const resolved = router.resolve('/bug-mine');
     expect(resolved.name).toBe('bug-mine');
-    expect(resolved.query.submissionId).toBe('99');
   });
 
   it('R-13: catch-all 404 命中未注册路径', () => {

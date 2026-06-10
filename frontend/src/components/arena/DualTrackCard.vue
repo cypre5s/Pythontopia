@@ -28,7 +28,10 @@ async function runLocal(): Promise<void> {
 </script>
 
 <template>
-  <div class="dual-track-card" data-testid="dual-track-card">
+  <div
+    class="dual-track-card"
+    data-testid="dual-track-card"
+  >
     <header class="card-head">
       <span class="card-icon">⇆</span>
       <h3>双轨判题</h3>
@@ -56,12 +59,23 @@ async function runLocal(): Promise<void> {
       </div>
       <div class="panel panel--output">
         <h4>本地输出</h4>
-        <pre v-if="localOutput" class="output output--stdout">{{ localOutput }}</pre>
-        <pre v-if="localError" class="output output--stderr">{{ localError }}</pre>
-        <p v-if="!localOutput && !localError" class="output-placeholder">
+        <pre
+          v-if="localOutput"
+          class="output output--stdout"
+        >{{ localOutput }}</pre>
+        <pre
+          v-if="localError"
+          class="output output--stderr"
+        >{{ localError }}</pre>
+        <p
+          v-if="!localOutput && !localError"
+          class="output-placeholder"
+        >
           点击"本地预览"查看 Pyodide 运行结果
         </p>
-        <p class="dual-hint">提交后由后端正式判题，本地预览仅供参考。</p>
+        <p class="dual-hint">
+          提交后由后端正式判题，本地预览仅供参考。
+        </p>
       </div>
     </div>
   </div>

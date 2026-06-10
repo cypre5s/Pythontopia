@@ -6,6 +6,7 @@ import com.pythontopia.learner.quest.dto.QuestCompleteRequest;
 import com.pythontopia.learner.quest.dto.QuestDto;
 import com.pythontopia.learner.quest.service.QuestService;
 import com.pythontopia.submission.dto.JudgeResultDto;
+import com.pythontopia.submission.dto.PublicProblemDto;
 import com.pythontopia.submission.dto.SubmissionCreateRequest;
 import com.pythontopia.submission.dto.SubmissionDetailDto;
 import com.pythontopia.submission.dto.SubmissionDto;
@@ -122,11 +123,13 @@ public class SubmissionService {
       log.warn("Submission {} has no kc_code for problem {}", submissionId, request.problemId());
       return;
     }
+    String difficulty =
+        problemRepository.findPublic(43L, request.problemId()).map(PublicProblemDto::difficulty).orElse(null);
     // 本次提交前同题失败次数，用于判定重试 / 逆袭行为信号。
     int priorFails = submissionRepository.countPriorFailures(userId, request.problemId(), submissionId);
     if (outcome.verdict() == Verdict.AC) {
       eventPublisher.publishEvent(
-          new LearningEvent.PracticeSucceeded(userId, kcCode, request.problemId()));
+          new LearningEvent.PracticeSucceeded(userId, kcCode, request.problemId(), difficulty));
       if (priorFails >= 2) {
         eventPublisher.publishEvent(
             new LearningEvent.ComebackSolved(userId, request.problemId(), kcCode, priorFails));
@@ -149,7 +152,7 @@ public class SubmissionService {
     } else {
       eventPublisher.publishEvent(
           new LearningEvent.PracticeFailed(
-              userId, kcCode, request.problemId(), outcome.verdict().name()));
+              userId, kcCode, request.problemId(), outcome.verdict().name(), difficulty));
       if (priorFails >= 1) {
         eventPublisher.publishEvent(
             new LearningEvent.PracticeRetried(userId, request.problemId(), kcCode));

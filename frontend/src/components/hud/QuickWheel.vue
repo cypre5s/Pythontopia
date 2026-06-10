@@ -209,7 +209,10 @@ onBeforeUnmount(() => {
         <div class="wheel-center">
           <span class="wheel-center__icon">{{ selectedIcon }}</span>
           <span class="wheel-center__label">{{ selectedLabel }}</span>
-          <span v-if="clickMode" class="wheel-center__hint">点击选择</span>
+          <span
+            v-if="clickMode"
+            class="wheel-center__hint"
+          >点击选择</span>
         </div>
 
         <!-- 扇区按钮 -->

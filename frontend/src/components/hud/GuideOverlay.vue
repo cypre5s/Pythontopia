@@ -128,14 +128,14 @@ watch(
     if (currentAssistantId.value) {
       guide.updateAssistantStream(currentAssistantId.value, sse.tokens.value, tr);
     }
-    // Mirror orchestrator dispatch traces into workshopActivity for MarvisPanel
+    // Mirror orchestrator dispatch traces into workshopActivity for ThinkingStream.
     activity.syncTraces('orchestrator', tr);
   },
 );
 watch(
   () => sse.plan.value,
   (p) => {
-    // Mirror orchestrator plan into workshopActivity for MarvisPanel
+    // Mirror orchestrator plan into workshopActivity for ThinkingStream.
     activity.syncPlan('orchestrator', p);
   },
 );
@@ -168,7 +168,7 @@ async function send(raw: string): Promise<void> {
   const aid = guide.beginAssistant();
   currentAssistantId.value = aid;
 
-  // Start orchestrator activity in workshopActivity for MarvisPanel
+  // Start orchestrator activity in workshopActivity for ThinkingStream.
   activity.start('orchestrator', `协同规划：${text.slice(0, 24)}`);
 
   const body: OrchestratorTurnRequest = {
@@ -209,7 +209,7 @@ async function send(raw: string): Promise<void> {
       sse.tokens.value,
     );
   }
-  // Finish orchestrator activity — MarvisPanel displays result
+  // Finish orchestrator activity.
   activity.finish(sse.status.value === 'done');
   currentAssistantId.value = null;
   await scrollToBottom();

@@ -26,7 +26,7 @@ class PassiveProfileRevisionListenerTest {
   @Test
   void practiceSucceededUpdatesPracticalAbility() {
     listener.onPracticeSucceeded(
-        new LearningEvent.PracticeSucceeded(7L, "PY43-KC-001", 101L));
+        new LearningEvent.PracticeSucceeded(7L, "PY43-KC-001", 101L, "hard"));
 
     ArgumentCaptor<DimensionDelta> captor = ArgumentCaptor.forClass(DimensionDelta.class);
     verify(passiveProfileService)
@@ -42,7 +42,7 @@ class PassiveProfileRevisionListenerTest {
   @Test
   void practiceFailedUpdatesErrorPatternWithTag() {
     listener.onPracticeFailed(
-        new LearningEvent.PracticeFailed(7L, "PY43-KC-002", 102L, "WA"));
+        new LearningEvent.PracticeFailed(7L, "PY43-KC-002", 102L, "WA", "medium"));
 
     ArgumentCaptor<DimensionDelta> captor = ArgumentCaptor.forClass(DimensionDelta.class);
     verify(passiveProfileService)
@@ -83,8 +83,8 @@ class PassiveProfileRevisionListenerTest {
 
   @Test
   void emitsFourDimensionUpdatesForFourEvents() {
-    listener.onPracticeSucceeded(new LearningEvent.PracticeSucceeded(7L, "K1", 1L));
-    listener.onPracticeFailed(new LearningEvent.PracticeFailed(7L, "K2", 2L, "RE"));
+    listener.onPracticeSucceeded(new LearningEvent.PracticeSucceeded(7L, "K1", 1L, "medium"));
+    listener.onPracticeFailed(new LearningEvent.PracticeFailed(7L, "K2", 2L, "RE", "medium"));
     listener.onDebugResolved(new LearningEvent.DebugResolved(7L, "K3", 3L));
     listener.onResourceConsumed(new LearningEvent.ResourceConsumed(7L, "K4", "ARTICLE"));
 
@@ -98,10 +98,39 @@ class PassiveProfileRevisionListenerTest {
         .when(passiveProfileService)
         .applyDimensionUpdate(anyLong(), anyString(), any(DimensionDelta.class));
 
-    listener.onPracticeSucceeded(new LearningEvent.PracticeSucceeded(7L, "K1", 1L));
+    listener.onPracticeSucceeded(new LearningEvent.PracticeSucceeded(7L, "K1", 1L, "medium"));
     listener.onResourceConsumed(new LearningEvent.ResourceConsumed(7L, "K2", "VIDEO"));
 
     verify(passiveProfileService, times(2))
         .applyDimensionUpdate(anyLong(), anyString(), any(DimensionDelta.class));
+  }
+
+  @Test
+  void taughtAiSucceededUpdatesPracticalAbility() {
+    listener.onTaughtAiSucceeded(new LearningEvent.TaughtAiSucceeded(7L, "PY43-KC-010", 33L));
+
+    ArgumentCaptor<DimensionDelta> captor = ArgumentCaptor.forClass(DimensionDelta.class);
+    verify(passiveProfileService)
+        .applyDimensionUpdate(eq(7L), eq("practical_ability"), captor.capture());
+    DimensionDelta delta = captor.getValue();
+    assertThat(delta.scoreDelta()).isEqualTo(0.03);
+    assertThat(delta.evidenceIncrement()).isEqualTo(1);
+    assertThat(delta.source()).isEqualTo("PRACTICE_PASS");
+    assertThat(delta.metadata()).containsEntry("sessionId", 33L);
+    assertThat(delta.metadata()).containsEntry("kcCode", "PY43-KC-010");
+  }
+
+  @Test
+  void taughtAiFailedUpdatesErrorPattern() {
+    listener.onTaughtAiFailed(new LearningEvent.TaughtAiFailed(7L, "PY43-KC-011", 34L));
+
+    ArgumentCaptor<DimensionDelta> captor = ArgumentCaptor.forClass(DimensionDelta.class);
+    verify(passiveProfileService)
+        .applyDimensionUpdate(eq(7L), eq("error_pattern"), captor.capture());
+    DimensionDelta delta = captor.getValue();
+    assertThat(delta.scoreDelta()).isEqualTo(0.015);
+    assertThat(delta.tagsAdd()).containsExactly("teach_back_failed");
+    assertThat(delta.source()).isEqualTo("PRACTICE_FAIL");
+    assertThat(delta.metadata()).containsEntry("sessionId", 34L);
   }
 }

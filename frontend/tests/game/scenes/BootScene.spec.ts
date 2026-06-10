@@ -307,7 +307,7 @@ describe('BootScene loading UX', () => {
 });
 
 describe('BootScene create() lifecycle wiring', () => {
-  it('attaches the SceneLifecycle hooks (events.on shutdown + destroy) before starting WorldScene', () => {
+  it('attaches the SceneLifecycle hooks (events.on shutdown + destroy) before starting WorldScene', async () => {
     const start = vi.fn();
     const eventsOn = vi.fn();
     const eventsOff = vi.fn();
@@ -322,9 +322,14 @@ describe('BootScene create() lifecycle wiring', () => {
 
     BootScene.create.call(ctx);
 
+    // 生命周期钩子在 create() 内同步挂载，先于异步进入世界。
     expect(eventsOn).toHaveBeenCalledWith('shutdown', expect.any(Function));
     expect(eventsOn).toHaveBeenCalledWith('destroy', expect.any(Function));
-    expect(start).toHaveBeenCalledWith('WorldScene', { mapKey: 'town_hub' });
+    // 字体竞态修复后 create() 改为 await ensurePixelFontLoaded() 再 scene.start，
+    // 故 start 在字体 Promise 落定的微任务里调用，需 waitFor 等待。
+    await vi.waitFor(() => {
+      expect(start).toHaveBeenCalledWith('WorldScene', { mapKey: 'town_hub' });
+    });
   });
 
   it('emits a final progress=1 event so the outer WorldCanvas progress bar can fade out', () => {

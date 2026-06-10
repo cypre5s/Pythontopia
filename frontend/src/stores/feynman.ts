@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import {
+  judgeFeynmanSession,
   startFeynmanSession,
   teachFeynmanSession,
   type FeynmanJudgeResultDto,
@@ -12,6 +13,7 @@ interface FeynmanState {
   turns: FeynmanTurnDto[];
   loading: boolean;
   teaching: boolean;
+  judging: boolean;
   error: string | null;
   latestProducedCode: string;
   latestJudgeResult: FeynmanJudgeResultDto | null;
@@ -27,6 +29,7 @@ export const useFeynmanStore = defineStore('feynman', {
     turns: [],
     loading: false,
     teaching: false,
+    judging: false,
     error: null,
     latestProducedCode: '',
     latestJudgeResult: null,
@@ -65,8 +68,10 @@ export const useFeynmanStore = defineStore('feynman', {
       try {
         const turn = await teachFeynmanSession(sessionId, explanation);
         this.turns = [...this.turns, turn];
-        if (turn.producedCode !== undefined && turn.producedCode !== null) {
-          this.latestProducedCode = turn.producedCode;
+        // 后端 TurnResponse 用 taughtFix 承载学弟产出的代码；前端 DTO 另有可选 producedCode。
+        const produced = turn.producedCode ?? turn.taughtFix;
+        if (produced !== undefined && produced !== null) {
+          this.latestProducedCode = produced;
         }
         if (turn.judgeResult !== undefined) {
           this.latestJudgeResult = turn.judgeResult;
@@ -77,6 +82,31 @@ export const useFeynmanStore = defineStore('feynman', {
         throw error;
       } finally {
         this.teaching = false;
+      }
+    },
+    async judge(): Promise<FeynmanJudgeResultDto> {
+      const sessionId = this.currentSession?.id;
+      if (sessionId === undefined) {
+        throw new Error('请先开始费曼反演会话');
+      }
+
+      this.judging = true;
+      this.error = null;
+      try {
+        const verdict = await judgeFeynmanSession(sessionId);
+        const result: FeynmanJudgeResultDto = {
+          status: verdict.passed ? 'PASSED' : 'FAILED',
+          messageZh: verdict.message,
+          // 判题证据回链到学弟当前误解的真实 event_id（零合成）。
+          evidenceEventIds: this.misconceptions.flatMap((item) => item.evidenceEventIds),
+        };
+        this.latestJudgeResult = result;
+        return result;
+      } catch (error) {
+        this.error = errorMessage(error);
+        throw error;
+      } finally {
+        this.judging = false;
       }
     },
   },

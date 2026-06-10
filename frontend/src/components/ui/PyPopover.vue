@@ -47,7 +47,11 @@ const emit = defineEmits<{ (event: 'update:open', value: boolean): void }>();
         :side-offset="sideOffset"
       >
         <slot />
-        <PopoverArrow class="py-popover__arrow" :width="12" :height="6" />
+        <PopoverArrow
+          class="py-popover__arrow"
+          :width="12"
+          :height="6"
+        />
       </PopoverContent>
     </PopoverPortal>
   </PopoverRoot>

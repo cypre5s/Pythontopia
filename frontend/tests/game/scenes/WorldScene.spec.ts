@@ -58,7 +58,7 @@ describe('WorldScene.buildNpcHintText', () => {
 });
 
 describe('WorldScene map routing', () => {
-  it('keeps mine_south instead of falling back to town_hub', () => {
+  it('falls back to town_hub for removed/unsupported map keys (R-14: mine_south deleted)', () => {
     const scene = {
       cache: {
         json: { exists: vi.fn(() => true) },
@@ -74,7 +74,7 @@ describe('WorldScene map routing', () => {
     WorldScene.preload.call(scene);
 
     expect((scene.load as unknown as { tilemapTiledJSON: ReturnType<typeof vi.fn> }).tilemapTiledJSON)
-      .toHaveBeenCalledWith('map_mine_south', '/assets/maps/mine_south.json');
+      .toHaveBeenCalledWith('map_town_hub', '/assets/maps/town_hub.json');
   });
 });
 

@@ -58,6 +58,32 @@ public class PublicProblemRepository {
         "SELECT kc_code FROM course_problem WHERE id = ?", String.class, problemId);
   }
 
+  public Optional<RepresentativeProblem> findRepresentativeProblem(Long packId, String kcCode) {
+    if (kcCode == null || kcCode.isBlank()) {
+      return Optional.empty();
+    }
+    return jdbcTemplate
+        .query(
+            """
+            SELECT id, difficulty
+            FROM course_problem
+            WHERE pack_id = ? AND kc_code = ?
+            ORDER BY
+              CASE
+                WHEN jsonb_typeof(hidden_test_cases) = 'array' THEN
+                  CASE WHEN jsonb_array_length(hidden_test_cases) > 0 THEN 0 ELSE 1 END
+                ELSE 1
+              END,
+              id
+            LIMIT 1
+            """,
+            (rs, rowNum) -> new RepresentativeProblem(rs.getLong("id"), rs.getString("difficulty")),
+            packId,
+            kcCode)
+        .stream()
+        .findFirst();
+  }
+
   public Optional<VariantProblem> findVariantProblem(Long userId, Long problemId, String kcCode) {
     if (kcCode == null || kcCode.isBlank()) {
       return Optional.empty();
@@ -105,6 +131,8 @@ public class PublicProblemRepository {
   }
 
   public record VariantProblem(Long id, String title) {}
+
+  public record RepresentativeProblem(Long id, String difficulty) {}
 
   private PublicProblemDto map(ResultSet rs) throws SQLException {
     return new PublicProblemDto(

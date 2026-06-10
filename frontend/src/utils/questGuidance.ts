@@ -39,18 +39,17 @@ export interface QuestGuidance {
   ctaText: string;
 }
 
-// 世界收敛为单一中央小镇 town_hub，外围图（农场 / 学院 / 港口）已从主线与导航弃用；
-// 学生侧只保留「小镇」与作为支线的「Bug 矿洞」，其余地图不再作为可前往目的地。
+// 世界收敛为单一中央小镇 town_hub，外围图与 mine_south 风景图已从主线与导航弃用；
+// 学生侧只保留「小镇」作为可前往目的地（Bug 矿洞改为 /bug-mine 页面，非地图目的地）。
 const MAP_LABELS: Readonly<Partial<Record<MainQuestMapKey, string>>> = Object.freeze({
   town_hub: 'Pythontopia 小镇',
-  mine_south: 'Bug 矿洞',
 });
 
 // 与 data/npcs/index.json 对齐的中文名（只列引导会用到的 NPC）。
 const NPC_NAMES: Readonly<Record<string, string>> = Object.freeze({
   mayor_py: '镇长 Py',
   mine_keeper: '矿洞守矿人',
-  captain_def: '船长 Def',
+  // 船长 Def（captain_def）已随 R-14 删除，5-1 改派 coach_q（见 mainQuests.ts）。
   workshop_master: '工坊师傅',
   coach_q: '教务 Q',
   librarian_doc: '馆长 Doc',
@@ -66,6 +65,7 @@ const RESOURCE_LABELS: Readonly<Record<string, string>> = Object.freeze({
   MINDMAP: '思维导图',
   PRACTICE: '练习题',
   CODE_LAB: '代码案例',
+  EVALUATION: '复盘评估',
 });
 
 export function mapLabelOf(mapKey: MainQuestMapKey): string {
@@ -119,18 +119,24 @@ export function resolveQuestGuidance(sub: MainSubQuest): QuestGuidance {
   }
 
   if (ev.type === 'resource_consumed') {
-    const name = npcNameOf('workshop_master');
+    const npcKey = ev.resourceType === 'EVALUATION' ? 'sage_review' : 'workshop_master';
+    const name = npcNameOf(npcKey);
+    const ctaText = npcKey === 'sage_review' ? '去找复盘师 Sage' : '去工坊找工坊师傅';
+    const stepText =
+      npcKey === 'sage_review'
+        ? `在「小镇」找${name}，完成一份${resourceLabelOf(ev.resourceType)}`
+        : `在「小镇」工坊找${name}，为${kc}生成一份${resourceLabelOf(ev.resourceType)}并学完`;
     return {
       kind: 'workshop',
-      npcKey: 'workshop_master',
+      npcKey,
       npcName: name,
       mapKey: 'town_hub',
       mapLabel: mapLabelOf('town_hub'),
       tile: null,
       teleport: false,
       openDialog: true,
-      stepText: `在「小镇」工坊找${name}，为${kc}生成一份${resourceLabelOf(ev.resourceType)}并学完`,
-      ctaText: '去工坊找工坊师傅',
+      stepText,
+      ctaText,
     };
   }
 

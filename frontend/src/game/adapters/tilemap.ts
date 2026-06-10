@@ -71,7 +71,7 @@ export interface NpcSpriteOptions {
 }
 
 // world 渲染入口把 npc_* 映射到官方 ULPC「全动作」整表（ulpc_*，13×42，
-// scripts/build_ulpc_characters.py 产出）；AgentOfficeScene 仍用原 npc_* 9×4 贴图，二者互不影响。
+// scripts/build_ulpc_characters.py 产出）；其余 npc_* 9×4 贴图按原样使用，二者互不影响。
 const NPC_ACTION_VARIANT: Readonly<Record<string, string>> = {
   npc_mayor: 'ulpc_scholar',
   npc_librarian: 'ulpc_lady',

@@ -1,9 +1,7 @@
-// 工坊「智能体活动」共享状态：把 WorkshopChat / GuideOverlay 的 SSE 实时状态
-//（答疑 / 资源生成 / orchestrator 协同）抬到 store，供侧栏 MarvisPanel 常驻展示
-//「现在在做什么」。
+// 工坊「智能体活动」共享状态：GuideOverlay 的 orchestrator SSE 状态写入这里，
+// WorkshopChat 读取后用 ThinkingStream 呈现同一份「正在协同」文字。
 //
-// 写入方：WorkshopChat（ask / resource）、GuideOverlay（orchestrator）。
-// MarvisPanel 只读。不新增 SSE 管线，仅镜像现有 useSseStream 的 status/plan/traces。
+// 不新增 SSE 管线，只镜像现有 useSseStream 的 status/plan/traces。
 import { defineStore } from 'pinia';
 import type { SsePlan, SseTraceEvent } from '@/composables/useSseStream';
 
@@ -35,7 +33,7 @@ export const useWorkshopActivityStore = defineStore('workshopActivity', {
   }),
   getters: {
     isBusy: (state): boolean => state.status === 'streaming',
-    /** 是否有进行中或刚完工的任务（驱动 marvis 显示工位流水线而非待命名单）。 */
+    /** 是否有进行中或刚完工的任务（驱动 ThinkingStream 显示协同状态）。 */
     hasRun: (state): boolean => state.status !== 'idle',
     /** 最新活动节点（用于映射成人话标签）。 */
     activeNode: (state): string => {

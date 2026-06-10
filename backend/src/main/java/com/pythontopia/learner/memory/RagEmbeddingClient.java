@@ -17,8 +17,9 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 /**
- * {@link EmbeddingClient} 的 HTTP 实现：POST 到 pythontopia-rag 的 {@code /embed}，复用 graph/rag 共用的
- * {@code graphRestTemplate}（已配 connect/read 超时，下游不可达时阈值内 fail-fast）。
+ * {@link EmbeddingClient} 的 HTTP 实现：POST 到 pythontopia-rag 的 {@code /embed}，走<strong>独立</strong>的
+ * {@code ragRestTemplate}（已配 connect/read 超时，下游不可达时阈值内 fail-fast）。与 graph 调用物理隔离，
+ * 避免 {@code @Async} embedding 旁路被绑定 graph 模板的集成测试 mock 拦截成「未预期请求」。
  *
  * <p>所有异常路径（服务不可达、超时、响应缺向量）一律降级为 empty 并 {@code log.warn}，绝不向调用方抛出，
  * 确保记忆 embedding 写入失败不影响学习事件主链路。
@@ -32,8 +33,8 @@ public class RagEmbeddingClient implements EmbeddingClient {
   private final RestTemplate restTemplate;
   private final GraphServiceProperties properties;
 
-  public RagEmbeddingClient(RestTemplate graphRestTemplate, GraphServiceProperties properties) {
-    this.restTemplate = graphRestTemplate;
+  public RagEmbeddingClient(RestTemplate ragRestTemplate, GraphServiceProperties properties) {
+    this.restTemplate = ragRestTemplate;
     this.properties = properties;
   }
 

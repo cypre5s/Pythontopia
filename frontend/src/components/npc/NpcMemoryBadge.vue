@@ -37,10 +37,16 @@ function formatDate(createdAt: string | null): string {
     data-testid="npc-memory-badge"
     aria-label="NPC 记忆玻璃盒"
   >
-    <details class="npc-memory-badge__details" :open="memories.length > 0">
+    <details
+      class="npc-memory-badge__details"
+      :open="memories.length > 0"
+    >
       <summary class="npc-memory-badge__summary">
         <span class="npc-memory-badge__title">{{ npcName }} 记得你</span>
-        <span class="npc-memory-badge__count" data-testid="npc-memory-count">
+        <span
+          class="npc-memory-badge__count"
+          data-testid="npc-memory-count"
+        >
           {{ memories.length }} 条
         </span>
       </summary>
@@ -54,7 +60,10 @@ function formatDate(createdAt: string | null): string {
         还没有可引用的真实记忆。继续看、学、练、测后，NPC 会把相关事件写进这里。
       </p>
 
-      <ol v-else class="npc-memory-badge__list">
+      <ol
+        v-else
+        class="npc-memory-badge__list"
+      >
         <li
           v-for="memory in memories"
           :key="memory.eventId"
@@ -67,13 +76,19 @@ function formatDate(createdAt: string | null): string {
             <span class="npc-memory-badge__event">{{ eventLabel(memory) }}</span>
           </div>
 
-          <div class="npc-memory-badge__meta" aria-label="事件来源">
+          <div
+            class="npc-memory-badge__meta"
+            aria-label="事件来源"
+          >
             <span>{{ memory.eventType }}</span>
             <span>{{ formatDate(memory.createdAt) }}</span>
             <span>重要度 {{ memory.importance }}/5</span>
           </div>
 
-          <div class="npc-memory-badge__kc-list" aria-label="关联知识点">
+          <div
+            class="npc-memory-badge__kc-list"
+            aria-label="关联知识点"
+          >
             <span
               v-for="kcCode in memory.kcCodes"
               :key="kcCode"
@@ -83,7 +98,10 @@ function formatDate(createdAt: string | null): string {
             </span>
           </div>
 
-          <dl class="npc-memory-badge__scores" aria-label="记忆检索打分分解">
+          <dl
+            class="npc-memory-badge__scores"
+            aria-label="记忆检索打分分解"
+          >
             <div>
               <dt>近期</dt>
               <dd>{{ ` ${percent(memory.recencyScore)}` }}</dd>

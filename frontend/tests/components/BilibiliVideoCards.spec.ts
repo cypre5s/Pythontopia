@@ -12,6 +12,8 @@ const SAMPLE: BilibiliVideoDto[] = [
     bvid: 'BV1xx411c7XD',
     title: 'for 循环讲解',
     author: 'UP主小明',
+    description: 'UP 主原始简介（仅作 AI 速览素材，不展示）',
+    aiSummary: '一句话速览：讲 for 循环与 range 的写法',
     coverUrl: 'https://i2.hdslb.com/x.jpg',
     durationSec: 754,
     play: 123456,
@@ -43,6 +45,12 @@ describe('BilibiliVideoCards', () => {
     expect(wrapper.find('.bili-card__img').attributes('referrerpolicy')).toBe('no-referrer');
     expect(wrapper.find('.bili-card__dur').text()).toBe('12:34');
     expect(wrapper.find('.bili-card__play').text()).toContain('万');
+
+    // 卡片展示「AI 速览」（带 AI 标记），不再展示 UP 主原始简介。
+    const desc = wrapper.find('.bili-card__desc');
+    expect(desc.find('.bili-card__ai-tag').text()).toBe('AI');
+    expect(desc.text()).toContain('讲 for 循环与 range 的写法');
+    expect(desc.text()).not.toContain('UP 主原始简介');
   });
 
   it('emits "consumed" when a card is opened', async () => {

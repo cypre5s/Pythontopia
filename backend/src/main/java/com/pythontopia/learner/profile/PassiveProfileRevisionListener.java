@@ -55,6 +55,23 @@ public class PassiveProfileRevisionListener {
   }
 
   @EventListener
+  public void onTaughtAiSucceeded(LearningEvent.TaughtAiSucceeded event) {
+    Map<String, Object> meta = contextOf(event.kcCode(), null, null);
+    meta.put("sessionId", event.sessionId());
+    DimensionDelta delta = new DimensionDelta(0.03, 1, null, meta, "PRACTICE_PASS");
+    safeApply(event.userId(), "practical_ability", delta);
+  }
+
+  @EventListener
+  public void onTaughtAiFailed(LearningEvent.TaughtAiFailed event) {
+    Map<String, Object> meta = contextOf(event.kcCode(), null, null);
+    meta.put("sessionId", event.sessionId());
+    DimensionDelta delta =
+        new DimensionDelta(0.015, 1, List.of("teach_back_failed"), meta, "PRACTICE_FAIL");
+    safeApply(event.userId(), "error_pattern", delta);
+  }
+
+  @EventListener
   public void onDebugResolved(LearningEvent.DebugResolved event) {
     DimensionDelta delta =
         new DimensionDelta(

@@ -6,11 +6,10 @@
  *   1. ChatComposer 给出 { text, manualKcCodes, contextHint, forcedIntent }；
  *   2. forcedIntent 为空 → 调 /api/intent/route 自动判定工具 + 锚定 KC；否则直接用；
  *   3. ASK → 复用 /api/tutor/ask SSE，答案内联成气泡（grounding + 证据页 + 图解）；
- *   4. 6 类资源 → 复用 /api/workshop/resources/stream SSE + 事务所动画 + 证据卡，
+ *   4. 6 类资源 → 复用 /api/workshop/resources/stream SSE + ThinkingStream 思考文字，
  *      确认后出一张「资源卡」气泡，并 loadResources 刷新右侧书房抽屉。
  *
- * 不自己渲染 6 类资源全文——资源详情仍由抽屉里的 ResourceDetailPanel（`?id` 驱动）负责，
- * 资源卡上的「在书房查看」emit('open-resource', id) 让父级打开抽屉并定位。
+ * 资源详情由父级 WorkshopPage 的 store openResourceId 打开弹窗，不再把资源 id 写进 URL。
  */
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
@@ -22,8 +21,13 @@ import { useSseStream } from '@/composables/useSseStream';
 import ChatComposer, {
   type ComposerSubmitPayload,
 } from '@/components/workshop/ChatComposer.vue';
-import AgentOfficeScene from '@/components/workshop/AgentOfficeScene.vue';
-import type { OfficeEvidence } from '@/components/workshop/agentOffice';
+import ThinkingStream from '@/components/workshop/ThinkingStream.vue';
+import HandoutView from '@/components/workshop/HandoutView.vue';
+import MindMapView from '@/components/workshop/MindMapView.vue';
+import PracticeList from '@/components/workshop/PracticeList.vue';
+import CodeLabView from '@/components/workshop/CodeLabView.vue';
+import ReadingList from '@/components/workshop/ReadingList.vue';
+import StoryboardView from '@/components/workshop/StoryboardView.vue';
 import MarkdownView from '@/components/common/MarkdownView.vue';
 import TutorVisualAids, { type TutorVisualAid } from '@/components/tutor/TutorVisualAids.vue';
 import CoursewareEvidence from '@/components/tutor/CoursewareEvidence.vue';
@@ -43,6 +47,13 @@ import type {
   WorkshopContent,
   WorkshopCreateResponse,
   WorkshopResourceType,
+  WorkshopResourceDto,
+  HandoutContent,
+  MindMapContent,
+  PracticeContent,
+  CodeLabContent,
+  ReadingContent,
+  StoryboardContent,
 } from '@/api/dto/Workshop';
 
 /** 单道审查结果（与 graph `_build_result` 的 review.* 同形：passed + reasons）。 */
@@ -130,6 +141,21 @@ interface ChatMessage {
   resourceType?: WorkshopResourceType;
   resourceTitle?: string;
   resourceGrounding?: string;
+  /** kind==='resource' 就地内联浏览：安全审查状态（PASSED/FAILED/NO_EVIDENCE）。 */
+  resourceSafety?: string;
+  /** kind==='resource' 就地内联浏览：资源摘要（可空）。 */
+  resourceSummary?: string;
+  /** kind==='resource' 就地内联浏览：关联知识点（可空）。 */
+  resourceKcCodes?: string[];
+  /**
+   * kind==='resource' 就地内联浏览：完整 content。由 getWorkshopResource 取回后**直传**子视图渲染，
+   * 绝不复用 learning.resources.current 单槽——同屏多份资源若共用单槽会互相覆盖。
+   */
+  resourceContent?: WorkshopContent;
+  /** kind==='resource'：内联是否展开（生成完那条默认展开全文；历史卡可点开）。 */
+  resourceExpanded?: boolean;
+  /** kind==='resource'：历史资源卡懒取 content 时的载入态。 */
+  resourceLoading?: boolean;
 }
 
 const emit = defineEmits<{
@@ -200,17 +226,13 @@ function loadConversation(sessions: TutorSessionDto[]): void {
 }
 defineExpose({ loadConversation, newChat });
 
-// 资源生成「智能体事务所」覆盖层状态。
+// 资源生成「实时思考」状态：驱动 ThinkingStream（替代旧的像素事务所动画 + 证据卡覆盖层）。
+// 仅 'streaming' 时显示思考流；完成即就地内联展示资源，出错即出错误气泡，随后归 'idle'。
 const officeStreamState = ref<'idle' | 'streaming' | 'done' | 'error'>('idle');
 const officeTokenPreview = ref('');
-const officeEvidence = ref<OfficeEvidence | null>(null);
-const pendingResource = ref<{
-  resourceId: number;
-  type: WorkshopResourceType;
-  kcCodes: string[];
-} | null>(null);
+const officeStreamLabel = ref('');
 
-// orchestrator 协同活动：当 GuideOverlay 写入 workshopActivity 时，AgentOfficeScene 也渲染
+// orchestrator 协同活动：当 GuideOverlay 写入 workshopActivity 时，ThinkingStream 也渲染思考文字
 const isOrchestratorActive = computed(
   () => activity.kind === 'orchestrator' && activity.status === 'streaming',
 );
@@ -300,25 +322,6 @@ function scrollToBottom(): void {
   });
 }
 
-// 从资源内容里递归收集 page_no（用于证据卡「课本第 X 页」）。
-function collectPageNos(content: WorkshopContent | undefined): number[] {
-  const set = new Set<number>();
-  const walk = (node: unknown): void => {
-    if (Array.isArray(node)) {
-      node.forEach(walk);
-      return;
-    }
-    if (node && typeof node === 'object') {
-      for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
-        if (key === 'page_no' && typeof value === 'number') set.add(value);
-        else walk(value);
-      }
-    }
-  };
-  walk(content);
-  return [...set].sort((a, b) => a - b);
-}
-
 watch(tutorSse.tokens, (t) => {
   if (streamingAskId.value) updateMessage(streamingAskId.value, { text: t });
   scrollToBottom();
@@ -327,13 +330,6 @@ watch(tutorSse.tokens, (t) => {
 watch(workshopSse.tokens, (t) => {
   officeTokenPreview.value = t.slice(0, 200);
 });
-
-// 把 SSE 实时状态镜像给侧栏 marvis（只在对应 kind 活跃时同步，避免两条流串台）。
-watch(tutorSse.traces, (t) => activity.syncTraces('ask', t));
-// 答疑流也发 plan（馆员→导师→审查官→校对官→安全员），镜像给 marvis 点亮工位与交接动画。
-watch(tutorSse.plan, (p) => activity.syncPlan('ask', p));
-watch(workshopSse.traces, (t) => activity.syncTraces('resource', t));
-watch(workshopSse.plan, (p) => activity.syncPlan('resource', p));
 
 async function onSubmit(payload: ComposerSubmitPayload): Promise<void> {
   playSfx('sfx_click');
@@ -355,7 +351,14 @@ async function onSubmit(payload: ComposerSubmitPayload): Promise<void> {
   let kcCodes: string[] = [...payload.manualKcCodes];
   let focusHint = '';
 
-  if (!intent) {
+  // 资源类意图（讲义/思维导图/练习/代码/阅读/动画）需要锚定 KC 设计师才能接活。
+  const isResourceIntent =
+    intent !== null && intent !== 'ASK' && intent !== 'VIDEO' && intent !== 'REVIEW';
+
+  // 两种情况都跑意图路由：①完全未指定意图；②已选资源类型但没 @ 锚定 KC——
+  // 后者过去会静默退回答疑（导师），表现为「选了讲义却出答疑、设计师从不工作」。
+  // 这里改为先从问句解析 KC + focusHint，让设计师真正参与资源生成；解析不到 KC 时才回退答疑。
+  if (!intent || (isResourceIntent && kcCodes.length === 0)) {
     routing.value = true;
     try {
       const res = await routeIntent({
@@ -363,13 +366,12 @@ async function onSubmit(payload: ComposerSubmitPayload): Promise<void> {
         manualKcCodes: payload.manualKcCodes,
         courseKcs: courseKcs.value,
       });
-      intent = res.intent;
-      kcCodes = res.kcCodes;
+      if (!intent) intent = res.intent; // 仅未强制时采用路由判定的意图
+      if (kcCodes.length === 0) kcCodes = res.kcCodes; // 没手动 KC 时用路由解析的 KC
       focusHint = res.focusHint;
     } catch {
       // 分类失败兜底：按答疑处理（不需要 KC，永远可用）。
-      intent = 'ASK';
-      kcCodes = [...payload.manualKcCodes];
+      if (!intent) intent = 'ASK';
     } finally {
       routing.value = false;
     }
@@ -465,14 +467,10 @@ async function runAsk(question: string, kcCodes: string[], context: string): Pro
     streaming: true,
   });
   streamingAskId.value = id;
-  activity.start('ask', `答疑：${question.trim().slice(0, 24)}`);
 
   await tutorSse.start({ question, kcCodes, context, conversationId: conversationId.value });
 
   streamingAskId.value = null;
-  activity.finish(tutorSse.status.value === 'done');
-  // 完工后「智能体工作室」保持终态（全部工位打勾 / 协同完成）常驻，不自动收回待命名单；
-  // 直到学生下一次提问（activity.start 重置）才换成新一轮流水线。
   if (tutorSse.status.value === 'done' && tutorSse.result.value) {
     playSfx('sfx_success');
     const r = tutorSse.result.value;
@@ -519,8 +517,7 @@ async function runResource(
 
   officeStreamState.value = 'streaming';
   officeTokenPreview.value = '';
-  officeEvidence.value = null;
-  activity.start('resource', `生成${commandOf(type).label}`);
+  officeStreamLabel.value = `生成${commandOf(type).label}`;
 
   const trimmed = focusHint.trim();
   const reqPayload =
@@ -530,33 +527,65 @@ async function runResource(
   await workshopSse.start(reqPayload);
 
   if (workshopSse.status.value === 'done' && workshopSse.result.value) {
-    officeStreamState.value = 'done';
     playSfx('sfx_success');
     const result = workshopSse.result.value;
-    pendingResource.value = { resourceId: result.resourceId, type, kcCodes };
+
+    // 取回完整资源（含 content）用于「在对话里就地浏览」：content 直传子视图，
+    // 绝不写入 learning.resources.current 单槽（同屏多份资源会互相覆盖）。
+    let detail: WorkshopResourceDto | null = null;
     try {
-      const detail = await getWorkshopResource(result.resourceId);
-      officeEvidence.value = {
-        resourceId: result.resourceId,
-        runId: result.runId,
-        status: result.status,
-        groundingStatus: detail.groundingStatus,
-        safetyStatus: detail.safetyStatus,
-        pageNos: collectPageNos(detail.content),
-        basedOnGeneral: detail.groundingStatus === 'NO_EVIDENCE',
-      };
+      detail = await getWorkshopResource(result.resourceId);
     } catch {
-      officeEvidence.value = {
-        resourceId: result.resourceId,
-        runId: result.runId,
-        status: result.status,
-        groundingStatus: result.status === 'FAILED' ? 'FAILED' : 'PASSED',
-        safetyStatus: 'PASSED',
-        pageNos: [],
-        basedOnGeneral: result.status === 'PARTIAL',
-      };
+      detail = null;
     }
-    activity.finish(true);
+
+    // 同步「我的书房」列表（历史资源库入口保留），但不依赖单槽。
+    await learning.loadResources();
+    const listItem = learning.resources.list.find((r) => r.id === result.resourceId);
+    const meta = commandOf(type);
+    const grounding: string =
+      detail?.groundingStatus ??
+      listItem?.groundingStatus ??
+      (result.status === 'FAILED' ? 'FAILED' : 'PASSED');
+
+    const msg: ChatMessage = {
+      id: genId(),
+      role: 'assistant',
+      kind: 'resource',
+      intent: type,
+      text: '',
+      resourceId: result.resourceId,
+      resourceType: type,
+      resourceTitle: detail?.title ?? listItem?.title ?? meta.label,
+      resourceGrounding: grounding,
+      toolIcon: meta.icon,
+      toolLabel: meta.label,
+      // 生成完那条默认展开 → 直接在对话气泡内联展示全文。
+      resourceExpanded: true,
+    };
+    if (detail) {
+      msg.resourceContent = detail.content;
+      msg.resourceSafety = detail.safetyStatus;
+      msg.resourceKcCodes = detail.kcCodes;
+      if (detail.summary) msg.resourceSummary = detail.summary;
+    }
+    pushMessage(msg);
+
+    officeStreamState.value = 'idle';
+    officeTokenPreview.value = '';
+    officeStreamLabel.value = '';
+
+    // 记一次「学」里程碑（与原证据卡确认等价；仅调用 mainQuest，不修改其 store）。
+    if (typeof window !== 'undefined') {
+      void import('@stores/mainQuest').then((mod) => {
+        try {
+          mod.useMainQuestStore().onResourceCreated(type, kcCodes);
+        } catch {
+          /* mainQuest store 不可用，忽略 */
+        }
+      });
+    }
+    toast.show('已生成并收入「我的书房」', 'success');
   } else {
     officeStreamState.value = 'error';
     playSfx('sfx_error');
@@ -567,54 +596,40 @@ async function runResource(
       text: workshopSse.error.value?.message ?? '资源生成失败，请稍后重试。',
     });
     officeStreamState.value = 'idle';
-    activity.idle();
+    officeTokenPreview.value = '';
+    officeStreamLabel.value = '';
   }
 }
 
-async function onOfficeConfirm(): Promise<void> {
-  const pending = pendingResource.value;
-  const evidence = officeEvidence.value;
-  officeEvidence.value = null;
-  officeStreamState.value = 'idle';
-  activity.idle();
-  if (!pending) return;
-  playSfx('sfx_coin');
-  await learning.loadResources();
-
-  const detail = learning.resources.list.find((r) => r.id === pending.resourceId);
-  const meta = commandOf(pending.type);
-  pushMessage({
-    id: genId(),
-    role: 'assistant',
-    kind: 'resource',
-    intent: pending.type,
-    text: '',
-    resourceId: pending.resourceId,
-    resourceType: pending.type,
-    resourceTitle: detail?.title ?? meta.label,
-    resourceGrounding: evidence?.groundingStatus ?? detail?.groundingStatus ?? 'PASSED',
-    toolIcon: meta.icon,
-    toolLabel: meta.label,
-  });
-
-  if (typeof window !== 'undefined') {
-    void import('@stores/mainQuest').then((mod) => {
-      try {
-        mod.useMainQuestStore().onResourceCreated(pending.type, pending.kcCodes);
-      } catch {
-        /* mainQuest store 不可用，忽略 */
-      }
-    });
+/**
+ * 资源卡内联展开/收起。历史资源卡（无 content）首次展开时按 resourceId 懒取详情，
+ * content 直传子视图——绝不复用 learning.resources.current 单槽。
+ */
+async function toggleResource(m: ChatMessage): Promise<void> {
+  playSfx('sfx_click');
+  const next = !m.resourceExpanded;
+  if (next && !m.resourceContent && m.resourceId && !m.resourceLoading) {
+    updateMessage(m.id, { resourceExpanded: true, resourceLoading: true });
+    try {
+      const detail = await getWorkshopResource(m.resourceId);
+      const patch: Partial<ChatMessage> = {
+        resourceLoading: false,
+        resourceContent: detail.content,
+        resourceType: detail.type,
+        resourceTitle: detail.title,
+        resourceGrounding: detail.groundingStatus,
+        resourceSafety: detail.safetyStatus,
+        resourceKcCodes: detail.kcCodes,
+      };
+      if (detail.summary) patch.resourceSummary = detail.summary;
+      updateMessage(m.id, patch);
+    } catch {
+      updateMessage(m.id, { resourceLoading: false, resourceExpanded: false });
+      toast.show('资源载入失败，请到「我的书房」查看', 'error');
+    }
+    return;
   }
-  toast.show('已收入「我的书房」', 'success');
-  pendingResource.value = null;
-}
-
-function onOfficeCancel(): void {
-  officeEvidence.value = null;
-  officeStreamState.value = 'idle';
-  pendingResource.value = null;
-  activity.idle();
+  updateMessage(m.id, { resourceExpanded: next });
 }
 
 function openResource(resourceId: number): void {
@@ -790,18 +805,18 @@ onMounted(async () => {
                 type="button"
                 class="tool-chip"
                 @click="onAnswerVideo(m)"
-              >▶ 看相关视频</button>
+              >
+                ▶ 看相关视频
+              </button>
+              <!-- R-14 讲义解耦：去掉「出练习」入口，讲义不再直接挂练习；练习走训练场。 -->
               <template v-if="m.kcCodes && m.kcCodes.length">
                 <button
                   type="button"
                   class="tool-chip"
                   @click="onAnswerGenerate(m, 'HANDOUT')"
-                >✎ 生成讲义</button>
-                <button
-                  type="button"
-                  class="tool-chip"
-                  @click="onAnswerGenerate(m, 'PRACTICE')"
-                >✪ 出练习</button>
+                >
+                  ✎ 生成讲义
+                </button>
               </template>
             </div>
             <BilibiliVideoCards
@@ -815,23 +830,99 @@ onMounted(async () => {
         </div>
 
         <!-- 助手：资源卡 -->
-        <button
+        <!-- 助手：资源卡（就地内联浏览全文 + 「我的书房」历史库入口） -->
+        <div
           v-else-if="m.kind === 'resource'"
-          type="button"
-          class="msg msg--assistant resource-card"
+          class="msg msg--assistant msg--resource"
           data-testid="resource-card"
-          @click="openResource(m.resourceId as number)"
         >
-          <span class="resource-card__icon">{{ m.toolIcon }}</span>
-          <span class="resource-card__body">
-            <span class="resource-card__title">{{ m.resourceTitle }}</span>
-            <span class="resource-card__meta">
-              {{ m.toolLabel }} ·
-              {{ groundingInfo(m.resourceGrounding ?? '').text }} · 已收入书房
+          <div class="resource-head">
+            <span class="resource-head__icon">{{ m.toolIcon }}</span>
+            <button
+              type="button"
+              class="resource-head__body"
+              :title="m.resourceExpanded ? '收起全文' : '展开全文'"
+              @click="toggleResource(m)"
+            >
+              <span class="resource-head__title">{{ m.resourceTitle }}</span>
+              <span class="resource-head__meta">
+                {{ m.toolLabel }} · {{ groundingInfo(m.resourceGrounding ?? '').text }}
+                <template v-if="m.resourceSafety">
+                  · 安全{{ m.resourceSafety === 'PASSED' ? '通过' : '注意' }}
+                </template>
+              </span>
+            </button>
+            <span class="resource-head__actions">
+              <button
+                type="button"
+                class="resource-head__toggle"
+                data-testid="resource-toggle"
+                @click="toggleResource(m)"
+              >
+                {{ m.resourceExpanded ? '收起 ▲' : '展开 ▼' }}
+              </button>
+              <button
+                type="button"
+                class="resource-head__open"
+                title="在「我的书房」打开（独立大图浏览）"
+                @click="openResource(m.resourceId as number)"
+              >
+                书房 →
+              </button>
             </span>
-          </span>
-          <span class="resource-card__cta">在书房查看 →</span>
-        </button>
+          </div>
+
+          <div
+            v-if="m.resourceExpanded"
+            class="resource-body"
+            data-testid="resource-inline"
+          >
+            <p
+              v-if="m.resourceSummary"
+              class="resource-body__summary"
+            >
+              {{ m.resourceSummary }}
+            </p>
+            <p
+              v-if="m.resourceLoading"
+              class="resource-body__loading"
+            >
+              正在载入资源全文…
+            </p>
+            <template v-else-if="m.resourceContent && m.resourceType">
+              <HandoutView
+                v-if="m.resourceType === 'HANDOUT'"
+                :content="(m.resourceContent as HandoutContent)"
+              />
+              <MindMapView
+                v-else-if="m.resourceType === 'MINDMAP'"
+                :content="(m.resourceContent as MindMapContent)"
+              />
+              <PracticeList
+                v-else-if="m.resourceType === 'PRACTICE'"
+                :content="(m.resourceContent as PracticeContent)"
+              />
+              <CodeLabView
+                v-else-if="m.resourceType === 'CODE_LAB'"
+                :content="(m.resourceContent as CodeLabContent)"
+              />
+              <ReadingList
+                v-else-if="m.resourceType === 'READING'"
+                :content="(m.resourceContent as ReadingContent)"
+              />
+              <StoryboardView
+                v-else-if="m.resourceType === 'STORYBOARD'"
+                :content="(m.resourceContent as StoryboardContent)"
+              />
+            </template>
+            <p
+              v-else
+              class="resource-body__empty"
+            >
+              暂无法在此内联展示，请点「书房 →」查看。
+            </p>
+          </div>
+        </div>
 
         <!-- 助手：B站视频卡片（外部资源，按意图检索，不走生成） -->
         <div
@@ -869,29 +960,23 @@ onMounted(async () => {
         正在判断该用哪个工具…
       </div>
 
-      <!-- 资源生成：智能体事务所动画 + 证据卡 -->
-      <AgentOfficeScene
-        v-if="officeStreamState !== 'idle' && !isOrchestratorActive"
+      <!-- 资源生成：Claude Code 式实时思考文字（替代旧像素事务所动画 + 证据卡） -->
+      <ThinkingStream
+        v-if="officeStreamState === 'streaming' && !isOrchestratorActive"
         :traces="workshopSse.traces.value"
         :status="officeStreamState"
         :token-preview="officeTokenPreview"
-        :error-message="workshopSse.error.value?.message ?? null"
-        :evidence="officeEvidence"
         :plan="workshopSse.plan.value"
-        @confirm="onOfficeConfirm"
-        @cancel="onOfficeCancel"
+        :error-message="workshopSse.error.value?.message ?? null"
+        :label="officeStreamLabel || '智能体协同生成中'"
       />
-      <!-- orchestrator 协同：学习总管多智能体 dispatch 流水线 -->
-      <AgentOfficeScene
+      <!-- orchestrator 协同：学习总管多智能体 dispatch 流水线（同样渲染思考文字） -->
+      <ThinkingStream
         v-if="isOrchestratorActive"
         :traces="activity.traces"
         :status="activity.status"
-        :token-preview="activity.label"
-        :error-message="null"
-        :evidence="null"
         :plan="activity.plan"
-        @confirm="() => {}"
-        @cancel="() => {}"
+        :label="activity.label || '学习总管协同中'"
       />
     </div>
 
@@ -1212,51 +1297,97 @@ onMounted(async () => {
   50% { opacity: 0; }
 }
 
-/* 资源卡 */
-.resource-card {
-  display: grid;
-  grid-template-columns: 32px 1fr auto;
-  gap: 10px;
-  align-items: center;
-  cursor: pointer;
-  text-align: left;
-  font: inherit;
+/* 资源卡：就地内联浏览（生成完直接展开全文；可折叠；「书房 →」仍作历史库大图入口） */
+.msg--resource {
+  align-self: flex-start;
+  width: 100%;
+  max-width: 90%;
   background: #fff8df;
-  transition: background 120ms, transform 80ms;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
-.resource-card:hover {
-  background: #fff2c9;
+.resource-head {
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  gap: 8px;
+  align-items: center;
 }
-.resource-card:active {
-  transform: translateY(1px);
-}
-.resource-card__icon {
+.resource-head__icon {
   font-size: 20px;
   text-align: center;
   color: #8c6a23;
 }
-.resource-card__body {
+.resource-head__body {
   display: flex;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+  text-align: left;
+  font: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: inherit;
 }
-.resource-card__title {
+.resource-head__title {
   font-weight: 700;
   font-size: 14px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.resource-card__meta {
+.resource-head__meta {
   font-size: 11px;
   color: var(--pyt-color-text-muted);
 }
-.resource-card__cta {
-  font-size: 12px;
-  font-weight: 700;
-  color: #1b4a6b;
+.resource-head__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   white-space: nowrap;
+}
+.resource-head__toggle,
+.resource-head__open {
+  font-family: inherit;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.resource-head__toggle {
+  background: #fff8df;
+  border: 1px solid #8c6a23;
+  color: #2a1a08;
+}
+.resource-head__toggle:hover {
+  background: #ffe098;
+}
+.resource-head__open {
+  background: var(--pyt-color-info-bg);
+  border: 1px solid var(--pyt-color-info);
+  color: #1b4a6b;
+  font-weight: 700;
+}
+.resource-head__open:hover {
+  background: #fff;
+}
+.resource-body {
+  border-top: 1px dashed rgba(110, 79, 29, 0.35);
+  padding-top: 8px;
+}
+.resource-body__summary {
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #2b1c0b;
+}
+.resource-body__loading,
+.resource-body__empty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--pyt-color-text-muted);
 }
 
 /* 意图分流提示 */

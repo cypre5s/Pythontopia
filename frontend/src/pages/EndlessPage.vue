@@ -38,7 +38,8 @@ const arenaLevelId = computed<string | null>(() =>
 const focusChapter = ref<number | null>(queryChapter.value);
 const focusKc = ref<string | null>(queryKc.value);
 const preferredKind = ref<string | null>(queryKind.value);
-const run = useEndlessRun({ focusChapter, focusKc, preferredKind });
+const arenaLevel = ref<string | null>(arenaLevelId.value);
+const run = useEndlessRun({ focusChapter, focusKc, preferredKind, arenaLevel });
 
 watch(queryChapter, (next) => {
   focusChapter.value = next;
@@ -48,6 +49,9 @@ watch(queryKc, (next) => {
 });
 watch(queryKind, (next) => {
   preferredKind.value = next;
+});
+watch(arenaLevelId, (next) => {
+  arenaLevel.value = next;
 });
 
 // 作为闯关塔单关入口时，通过 1 题即记 markCleared 并自动回 ArenaPage。

@@ -203,7 +203,9 @@ onUnmounted(() => {
       @click.self="close"
     >
       <div class="pause-panel pyt-panel">
-        <h1 class="pause-title">PYTHONTOPIA</h1>
+        <h1 class="pause-title">
+          PYTHONTOPIA
+        </h1>
         <div class="pause-player">
           {{ session.displayName }} · 第{{ hud.meta.dayIndex }}天
         </div>
@@ -214,7 +216,9 @@ onUnmounted(() => {
             :key="section.id"
             class="pause-section"
           >
-            <h2 class="pause-section__title">{{ section.title }}</h2>
+            <h2 class="pause-section__title">
+              {{ section.title }}
+            </h2>
             <div class="pause-section__items">
               <button
                 v-for="item in section.items"
@@ -223,7 +227,12 @@ onUnmounted(() => {
                 :data-testid="`pause-${item.id}`"
                 @click="onMenuClick(item)"
               >
-                <img :src="item.icon" :alt="item.label" class="pause-item__icon-img" aria-hidden="true">
+                <img
+                  :src="item.icon"
+                  :alt="item.label"
+                  class="pause-item__icon-img"
+                  aria-hidden="true"
+                >
                 <span class="pause-item__label">{{ item.label }}</span>
               </button>
             </div>
@@ -232,10 +241,18 @@ onUnmounted(() => {
 
         <!-- 快捷键速查卡 -->
         <transition name="pyt-fade">
-          <div v-if="showHelp" class="pause-help pyt-panel--inset">
-            <h2 class="pause-help__title">快捷键速查</h2>
+          <div
+            v-if="showHelp"
+            class="pause-help pyt-panel--inset"
+          >
+            <h2 class="pause-help__title">
+              快捷键速查
+            </h2>
             <div class="pause-help__grid">
-              <template v-for="hk in HOTKEYS" :key="hk.key">
+              <template
+                v-for="hk in HOTKEYS"
+                :key="hk.key"
+              >
                 <kbd class="pause-help__key">{{ hk.key }}</kbd>
                 <span class="pause-help__desc">{{ hk.desc }}</span>
               </template>
@@ -245,11 +262,26 @@ onUnmounted(() => {
 
         <!-- 退出确认对话框 -->
         <transition name="pyt-fade">
-          <div v-if="showQuitConfirm" class="pause-confirm pyt-panel--inset">
-            <p class="pause-confirm__text">确定要返回主菜单吗？<br>未保存的进度将丢失。</p>
+          <div
+            v-if="showQuitConfirm"
+            class="pause-confirm pyt-panel--inset"
+          >
+            <p class="pause-confirm__text">
+              确定要返回主菜单吗？<br>未保存的进度将丢失。
+            </p>
             <div class="pause-confirm__actions">
-              <button class="pyt-btn pyt-btn--danger" @click="confirmQuit">确认退出</button>
-              <button class="pyt-btn" @click="cancelQuit">取消</button>
+              <button
+                class="pyt-btn pyt-btn--danger"
+                @click="confirmQuit"
+              >
+                确认退出
+              </button>
+              <button
+                class="pyt-btn"
+                @click="cancelQuit"
+              >
+                取消
+              </button>
             </div>
           </div>
         </transition>

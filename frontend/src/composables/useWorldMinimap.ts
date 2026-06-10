@@ -1,7 +1,7 @@
 // 隔离原因：
 // MiniMap.vue 是纯展示组件（不依赖 Phaser / store），上层 Page 必须自行准备
 // `{ tilemap, playerX, playerY, npcs, mapName, exits }`。本 composable 是
-// 业务层与 town_hub / mine_south Tiled JSON 之间的唯一桥，负责把：
+// 业务层与 town_hub Tiled JSON 之间的唯一桥（R-14 单 hub），负责把：
 //   - 仓库根 `frontend/public/assets/maps/<mapKey>.json` 的 4 层 tilemap +
 //     objects（exit / npc）转成 MiniMap 需要的 `MiniMapTilemap` + `NpcMarker[]`
 //     + `MinimapExitMarker[]`；
@@ -10,7 +10,7 @@
 // 落地约束：
 // 1. 不创建第二个 Phaser.Game 实例：MiniMap 走纯 fetch + DOM canvas，绝不复用
 //    BootScene/WorldScene 的资源加载链；
-// 2. 两张地图 JSON 解析后的缩略 ground/collision 数组每张 ≤ 50×40 =
+// 2. 地图 JSON 解析后的缩略 ground/collision 数组 ≤ 50×40 =
 //    2000 个 cell，足够轻量；fetch 结果走模块级 Map 缓存，整个会话每张图最多拉一次；
 // 3. fail-safe：fetch 失败 / JSON 结构异常 / SSR window 缺失时静默退化为 null
 //    tilemap，MiniMap 自然降级到「无地图数据」占位；
@@ -28,7 +28,6 @@ const TILE_SIZE = 16;
 
 const SUPPORTED_MAP_KEYS = [
   'town_hub',
-  'mine_south',
 ] as const;
 type MapKey = (typeof SUPPORTED_MAP_KEYS)[number];
 
@@ -45,7 +44,7 @@ function normalizeMapKey(value: unknown): MapKey {
     town_main: 'town_hub',
     farm: 'town_hub',
     farm_north: 'town_hub',
-    mine: 'mine_south',
+    mine: 'town_hub',
     campus: 'town_hub',
     campus_east: 'town_hub',
     port: 'town_hub',

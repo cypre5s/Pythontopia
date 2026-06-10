@@ -4,10 +4,9 @@
  *
  * @file 程序化生成 Phaser/Tiled 兼容的 JSON tilemap，覆盖：
  *   - town_hub   (50×40) 中央小镇
- *   - mine_south (30×30) Bug 矿洞支线（kenney_tiny_dungeon tileset）
  *
  * @summary
- *   - 生成 2 个 .json + index.json + README.md（外围图生成器已移除）。
+ *   - 生成 1 个 .json + index.json + README.md（外围图与 Bug 矿洞风景图均已移除）。
  *   - 全部基于 16×16 源 tile；Phaser 渲染时统一 2× 放大（与 M1-B tilemap.ts 一致）。
  *   - tilemap_packed.png 132 frame 中我们仅使用确认存在的视觉安全帧；frame → gid = frame + 1。
  *   - 决策性数据全部在 MAPS 数组里维护；要新增/调整地图，编辑 MAPS 即可。
@@ -628,7 +627,7 @@ function generateTownHub() {
   paintBuilding(buildings, W, library.x, library.y, library.w, library.h);
   paintBuilding(buildings, W, reviewHall.x, reviewHall.y, reviewHall.w, reviewHall.h);
   paintBuilding(buildings, W, workshop.x, workshop.y, workshop.w, workshop.h);
-  // mine_south 入口
+  // Bug 矿洞功能入口（点击 → /bug-mine 页面；R-14 已删除 mine_south 风景地图，此处仅作功能入口、不做地图传送）
   const mine = { x: 22, y: 34, w: 3, h: 2, label: 'Bug 矿洞', route: '/bug-mine', name: 'building_mine' };
   paintBuilding(buildings, W, mine.x, mine.y, mine.w, mine.h);
   // 竞技场
@@ -667,7 +666,6 @@ function generateTownHub() {
     makeNpc('npc_arena_guard', 'arena_guard', '竞技场守卫', 37, 37, 'npc_guard'),
     makeNpc('npc_mine_keeper', 'mine_keeper', '守矿人', 21, 33, 'npc_miner'),
     makeNpc('npc_foreman_bug', 'foreman_bug', '矿头 Bug', 25, 33, 'npc_guard'),
-    makeNpc('npc_captain_def', 'captain_def', '船长 Def', 5, 24, 'npc_sailor'),
     makeNpc('npc_class_president', 'class_president', '班长', 18, 21, 'npc_student'),
     makeSpawn(25, 20),
   ];
@@ -678,97 +676,6 @@ function generateTownHub() {
     width: W,
     height: H,
     tileset: 'kenney_tiny_town',
-    ground,
-    buildings,
-    decoration,
-    objects,
-  });
-}
-
-// ============================================================
-// mine_south (30×30) —— 使用 dungeon tileset
-// ============================================================
-function generateMineSouth() {
-  const W = 30;
-  const H = 30;
-  const ground = emptyData(W, H);
-  const buildings = emptyData(W, H);
-  const decoration = emptyData(W, H);
-  resetObjectIds();
-
-  // ground = 地牢石地板
-  fillAll(ground, DUNG_GIDS.floor);
-
-  // 在矿洞内随机点缀地板变种，让地表不要太死
-  for (let y = 0; y < H; y += 1) {
-    for (let x = 0; x < W; x += 1) {
-      if ((x * 13 + y * 7) % 19 === 0) {
-        setTile(ground, W, x, y, DUNG_GIDS.floorAlt);
-      } else if ((x * 11 + y * 5) % 23 === 0) {
-        setTile(ground, W, x, y, DUNG_GIDS.floorAlt2);
-      }
-    }
-  }
-
-  // 外围一圈墙体，让矿洞看起来像封闭洞穴；北边中段留出口（出口处用 floor 不放墙）
-  for (let x = 0; x < W; x += 1) {
-    if (x < W / 2 - 2 || x > W / 2 + 1) {
-      setTile(buildings, W, x, 0, DUNG_GIDS.wallBrown);
-    }
-    setTile(buildings, W, x, H - 1, DUNG_GIDS.wallBrown);
-  }
-  for (let y = 1; y < H - 1; y += 1) {
-    setTile(buildings, W, 0, y, DUNG_GIDS.wallBrown2);
-    setTile(buildings, W, W - 1, y, DUNG_GIDS.wallBrown2);
-  }
-
-  // 两个矿洞入口（黑色虚空 2×2）—— 在 buildings 层标记为不可走
-  const mine1 = { x: 8, y: 12, w: 2, h: 2, label: 'Bug 矿洞·东', route: '/bug-mine?side=east', name: 'building_mine_east' };
-  const mine2 = { x: 20, y: 12, w: 2, h: 2, label: 'Bug 矿洞·西', route: '/bug-mine?side=west', name: 'building_mine_west' };
-  fillRect(buildings, W, mine1.x, mine1.y, mine1.w, mine1.h, DUNG_GIDS.voidDark);
-  fillRect(buildings, W, mine2.x, mine2.y, mine2.w, mine2.h, DUNG_GIDS.voidDark);
-
-  // 矿洞入口前的灯柱（pillar）
-  setTile(decoration, W, mine1.x - 1, mine1.y + 1, DUNG_GIDS.pillar);
-  setTile(decoration, W, mine1.x + 2, mine1.y + 1, DUNG_GIDS.pillar);
-  setTile(decoration, W, mine2.x - 1, mine2.y + 1, DUNG_GIDS.pillar);
-  setTile(decoration, W, mine2.x + 2, mine2.y + 1, DUNG_GIDS.pillar);
-
-  // 散落矿石（蓝色）+ 宝箱
-  const rng = mulberry32(0x30303);
-  // R-13 §-1 后续：矿洞密度 60→160，让"二进制矿洞"看起来真有矿
-  scatterDecoration(decoration, buildings, W, H, 160, [
-    DUNG_GIDS.oreBlue,
-    DUNG_GIDS.chest,
-    DUNG_GIDS.pillar,
-    DUNG_GIDS.wallStone,
-    DUNG_GIDS.wallStone2,
-    DUNG_GIDS.floorAlt,
-    DUNG_GIDS.floorAlt2,
-  ], rng);
-  // 矿洞碎石：只允许跳过，不允许直接穿越。
-  setTile(decoration, W, 15, 4, DUNG_GIDS.wallStone);
-
-  // objects ----------
-  // R-13 §-1 续：矿洞叙事改为「二进制矿洞 · 织丝走廊」：呼应纺织文化里
-  // "丝线在织机上像 0/1 一样穿梭"的视觉双关；不出现校名。
-  // 蓝色 oreBlue 同时象征 "蓝染" 工艺；pillar 充当织机立柱。
-  const objects = [
-    makeExit('exit_north', 'north', W, H, 'town_hub'),
-    makeBuilding(mine1.name, mine1.label, mine1.route, mine1.x, mine1.y, mine1.w, mine1.h),
-    makeBuilding(mine2.name, mine2.label, mine2.route, mine2.x, mine2.y, mine2.w, mine2.h),
-    makeLandmark('loom_pillar', '织机立柱', 15, 8, 1, 4, 'landmark'),
-    makeLowObstacle('low_mine_rubble', '可跨越碎石', 15, 4, 1, 1, 'rubble'),
-    makeNpc('npc_foreman_bug', 'foreman_bug', '矿洞工头 Bug', 14, 5, 'player_sara'),
-    makeSpawn(15, 2),
-  ];
-
-  return buildMapJson({
-    key: 'mine_south',
-    label: 'Bug 矿洞 · 织丝走廊',
-    width: W,
-    height: H,
-    tileset: 'kenney_tiny_dungeon',
     ground,
     buildings,
     decoration,
@@ -796,17 +703,6 @@ function buildIndex() {
         exits: [],
         spawn: { tileX: 25, tileY: 20 },
       },
-      {
-        key: 'mine_south',
-        file: 'mine_south.json',
-        label: 'Bug 矿洞 · 织丝走廊',
-        width: 30,
-        height: 30,
-        bgm: 'bgm_bug_mine',
-        tileset: 'kenney_tiny_dungeon',
-        exits: ['town_hub'],
-        spawn: { tileX: 15, tileY: 2 },
-      },
     ],
   };
 }
@@ -823,7 +719,7 @@ function buildReadme(indexObj) {
 
   return `# Pythontopia 地图（R-14 世界收缩）
 
-R-14 方案 A：仅生成 **town_hub**（中央小镇）与 **mine_south**（Bug 矿洞支线）。外围图已从主线移除。
+R-14 方案 A：仅生成 **town_hub**（中央小镇）。外围图与 Bug 矿洞风景图（mine_south）均已移除；Bug 矿洞功能仍在，经 town_hub building → /bug-mine 进入。
 
 ## 概览
 
@@ -835,13 +731,7 @@ ${rows}
 
 - 出口：无（R-14 单中央 hub，外围图已移除；Bug 矿洞经 building → /bug-mine 路由进入）
 - 学习建筑：图书馆 / 工坊 / 训练场 / 竞技场 / 复盘大厅 / Bug 矿洞入口等
-- 12 主线 NPC 贴近建筑入口排布（见 \`scripts/generate-maps.mjs\` 内 \`makeNpc\` 列表）
-
-## mine_south.json（30×30）
-
-- 出口：north→town_hub
-- tileset：**kenney_tiny_dungeon**
-- 矿洞入口 + \`foreman_bug\` NPC
+- 11 主线 NPC 贴近建筑入口排布（见 \`scripts/generate-maps.mjs\` 内 \`makeNpc\` 列表）
 
 ## 文件结构
 
@@ -849,8 +739,7 @@ ${rows}
 frontend/public/assets/maps/
 ├── index.json
 ├── README.md
-├── town_hub.json
-└── mine_south.json
+└── town_hub.json
 \`\`\`
 
 ## 字段约定
@@ -907,7 +796,6 @@ node scripts/generate-maps.mjs
 
 - decoration 层目前只散布 bush / flower / fence 三类瓷砖；后续 W2-MAPS 二期会引入更精细的 Tiled object（NPC 走路路径、商铺货架、矿洞机关等）。
 - 各地图碰撞规则现在由 buildings 层 + 边界 implicit 阻挡推断；M2-ROUTER 子代理可能需要额外的 \`collision\` 数据层来标记不可穿越的装饰（例如树木）。
-- mine_south 暂未铺设矿洞内部副本——副本场景由独立 Phaser scene 处理，本 JSON 仅负责矿洞外景与入口判定。
 - 字段 \`spawn\` 在 index.json 与 map.objects 内重复出现：runtime 默认读 index.json，地图内的 \`spawn\` 对象作为权威覆盖。
 `;
 }
@@ -917,10 +805,9 @@ node scripts/generate-maps.mjs
 async function main() {
   await fs.mkdir(MAPS_DIR, { recursive: true });
 
-  // R-14 方案A：只生成中央小镇 + Bug 矿洞支线；farm_north / campus_east / port_west 已废弃。
+  // R-14 方案A：只生成中央小镇 town_hub；farm_north / campus_east / port_west / mine_south 风景图均已废弃。
   const generators = [
     { name: 'town_hub.json', build: generateTownHub },
-    { name: 'mine_south.json', build: generateMineSouth },
   ];
 
   const dryRun = process.argv.includes('--dry-run');

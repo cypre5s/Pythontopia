@@ -45,7 +45,10 @@ function prevRound(): void {
 </script>
 
 <template>
-  <div class="multi-round-card" data-testid="multi-round-card">
+  <div
+    class="multi-round-card"
+    data-testid="multi-round-card"
+  >
     <header class="card-head">
       <span class="card-icon">◉◉◉</span>
       <h3>{{ rounds.length }} 题组合</h3>
@@ -63,9 +66,21 @@ function prevRound(): void {
     </header>
 
     <div class="round-nav">
-      <button type="button" :disabled="currentRound === 0" @click="prevRound">← 上一题</button>
+      <button
+        type="button"
+        :disabled="currentRound === 0"
+        @click="prevRound"
+      >
+        ← 上一题
+      </button>
       <span>第 {{ currentRound + 1 }} / {{ rounds.length }} 题</span>
-      <button type="button" :disabled="currentRound === rounds.length - 1" @click="nextRound">下一题 →</button>
+      <button
+        type="button"
+        :disabled="currentRound === rounds.length - 1"
+        @click="nextRound"
+      >
+        下一题 →
+      </button>
     </div>
 
     <pre class="question">{{ rounds[currentRound] }}</pre>
@@ -73,11 +88,11 @@ function prevRound(): void {
     <textarea
       :value="answers[currentRound] ?? ''"
       :data-testid="`multi-round-answer-${currentRound}`"
-      @input="answers[currentRound] = ($event.target as HTMLTextAreaElement).value"
       rows="8"
       placeholder="# 本轮答案"
       spellcheck="false"
       class="round-editor"
+      @input="answers[currentRound] = ($event.target as HTMLTextAreaElement).value"
     />
   </div>
 </template>

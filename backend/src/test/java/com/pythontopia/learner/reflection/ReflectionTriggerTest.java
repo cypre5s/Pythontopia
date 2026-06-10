@@ -37,7 +37,7 @@ class ReflectionTriggerTest {
   }
 
   private void fire(long userId) {
-    trigger.onLearningEvent(new LearningEvent.PracticeFailed(userId, "PY43-KC-016", 5L, "WA"));
+    trigger.onLearningEvent(new LearningEvent.PracticeFailed(userId, "PY43-KC-016", 5L, "WA", "medium"));
   }
 
   @Test
@@ -83,7 +83,7 @@ class ReflectionTriggerTest {
   @Test
   void ignoresEventsWithoutUserId() {
     // userId 为空的事件不计数、不触发（防 NPE）。
-    trigger.onLearningEvent(new LearningEvent.PracticeFailed(null, "K", 1L, "WA"));
+    trigger.onLearningEvent(new LearningEvent.PracticeFailed(null, "K", 1L, "WA", "medium"));
     verify(reflectionService, never()).reflect(any());
   }
 }

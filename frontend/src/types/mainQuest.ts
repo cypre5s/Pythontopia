@@ -13,7 +13,7 @@ export interface MainSubQuest {
   title: string;
   /** 一句话提示，会在 HUD chip / 主线面板中显示。 */
   hint: string;
-  /** 触发任务的地图 key（R-14：town_hub / mine_south）。 */
+  /** 触发任务的地图 key（R-14 单 hub：town_hub）。 */
   mapKey: MainQuestMapKey;
   /** 与之对话的 NPC（可选）。 */
   npcKey?: string;
@@ -21,11 +21,14 @@ export interface MainSubQuest {
   kcCodes: string[];
   /** 完成证据需求；CSR 与 boss 服务都依赖此校验。 */
   evidenceRequired: MainSubQuestEvidence;
-  /** 完成后奖励（写 inventory / currency / mastery）。 */
-  rewards: MainSubQuestReward[];
+  /**
+   * 完成后奖励（写 mastery）。可选：HANDOUT「讲义」类任务已随「讲义解耦」去掉奖励，
+   * 故此字段允许缺省，所有消费方需对 undefined 兜底。
+   */
+  rewards?: MainSubQuestReward[];
 }
 
-export type MainQuestMapKey = 'town_hub' | 'mine_south';
+export type MainQuestMapKey = 'town_hub';
 
 export type MainSubQuestEvidence =
   | { type: 'dialog_complete'; npcKey: string }

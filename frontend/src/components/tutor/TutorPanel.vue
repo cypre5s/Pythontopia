@@ -8,7 +8,6 @@ import { playSfx } from '@/composables/useAudio';
 import MarkdownView from '@/components/common/MarkdownView.vue';
 import CoursewareMentionMenu from '@/components/tutor/CoursewareMentionMenu.vue';
 import TutorVisualAids, { type TutorVisualAid } from '@/components/tutor/TutorVisualAids.vue';
-import TutorCrew from '@/components/tutor/TutorCrew.vue';
 import { listChapters, listKnowledgeComponents } from '@/api/course';
 import {
   buildMentionItems,
@@ -16,12 +15,9 @@ import {
   type MentionItem,
 } from '@/composables/useCoursewareMention';
 import {
-  styleEngaged,
-  type CognitiveStyle,
   type TutorAskRequest,
   type TutorSessionDto,
 } from '@/api/tutor';
-import { getProfileDimensions } from '@/api/learner';
 
 interface TutorStreamResult {
   sessionId: number;
@@ -41,8 +37,12 @@ const props = withDefaults(
     context?: string;
     /** 内嵌模式：隐藏左侧会话列表，单列对话（讲解页/做题页侧栏） */
     embedded?: boolean;
+    /** 看课页视频 RAG：当前视频 id（提问时随附，后端合成视频上下文）。 */
+    videoId?: number;
+    /** 看课页视频 RAG：当前播放时刻（秒）。 */
+    videoTimeSec?: number;
   }>(),
-  { kcCodes: () => [], context: '', embedded: false },
+  { kcCodes: () => [], context: '', embedded: false, videoId: undefined, videoTimeSec: undefined },
 );
 
 const router = useRouter();
@@ -97,24 +97,13 @@ const visualAids = computed<TutorVisualAid[]>(
   () => sse.result.value?.visual_aids ?? [],
 );
 
-// 助教小队（工作流拟人化）数据源：透出 SSE trace/status，并记录本次发送的图片数。
-const crewTraces = computed(() => sse.traces.value);
-const crewStatus = computed(() => sse.status.value);
-const lastSentImageCount = ref(0);
-
-// 即时换讲法：记住「上一次实际提交的问题」原样参数（题面 / KC / 上下文 / 图片），
-// 以便点「换讲法」时用同一问题、换一种认知风格立刻重发并改写当前答案。
-interface LastAsk {
+// 一次提问的原样参数（题面 / KC / 上下文 / 图片），供 runAsk 复用。
+interface AskParams {
   question: string;
   kcCodes: string[];
   context: string;
   images?: string[];
 }
-const lastAsk = ref<LastAsk | null>(null);
-
-// 因材施教：当前认知风格 + 易错点（来自画像），传给助教小队并支持"换讲法"。
-const cognitiveStyle = ref<CognitiveStyle | ''>('');
-const errorTags = ref<string[]>([]);
 
 const GROUNDING_LABELS: Record<string, { text: string; cls: string }> = {
   PASSED: { text: '引用充分', cls: 'grounding--passed' },
@@ -139,10 +128,9 @@ watch(
 function selectSession(session: TutorSessionDto): void {
   playSfx('sfx_click');
   sse.abort();
-  tutor.selectSession(session);
+  void tutor.loadConversation(session);
   composer.reset();
   clearAttachedImages();
-  lastSentImageCount.value = 0;
 }
 
 function startNew(): void {
@@ -151,7 +139,6 @@ function startNew(): void {
   tutor.startNewSession();
   composer.reset();
   clearAttachedImages();
-  lastSentImageCount.value = 0;
   toast.show('新对话已开始，输入 @ 可引用课件章节/知识点', 'info');
   void nextTick(() => {
     inputRef.value?.focus();
@@ -243,17 +230,18 @@ function clearAttachedImages(): void {
 
 // 发起一次答疑流并处理流终态；被首次提交 submit 与「换讲法」即时重问共用。
 // style 仅在显式换讲法时传入（无视后端画像置信度门槛）；首次提交不传，保持原行为。
-async function runAsk(ask: LastAsk, style?: CognitiveStyle): Promise<void> {
+async function runAsk(ask: AskParams): Promise<void> {
   tutor.setStatus('streaming');
   tutor.setStreamingAnswer('');
-  lastSentImageCount.value = ask.images?.length ?? 0;
 
   const body: TutorAskRequest = {
     question: ask.question,
     kcCodes: ask.kcCodes,
     context: ask.context,
+    conversationId: tutor.ensureConversationId(),
+    ...(props.videoId != null ? { videoId: props.videoId } : {}),
+    ...(props.videoTimeSec != null ? { videoTimeSec: props.videoTimeSec } : {}),
     ...(ask.images ? { images: ask.images } : {}),
-    ...(style ? { style } : {}),
   };
   await sse.start(body);
 
@@ -266,7 +254,7 @@ async function runAsk(ask: LastAsk, style?: CognitiveStyle): Promise<void> {
       answerMd: result.answerMd,
       evidencePageIds: result.evidencePageIds,
       groundingStatus: result.groundingStatus,
-      conversationId: null,
+      conversationId: tutor.conversationId,
       createdAt: new Date().toISOString(),
     };
     tutor.onStreamComplete(session);
@@ -296,14 +284,12 @@ async function submit(): Promise<void> {
   composer.reset();
 
   const images = attachedImages.value.length > 0 ? [...attachedImages.value] : undefined;
-  // 记住本次问题原样参数，供「换讲法」即时重问复用同一题面。
-  const ask: LastAsk = {
+  const ask: AskParams = {
     question: q,
     kcCodes: mergedKcCodes,
     context,
     ...(images ? { images } : {}),
   };
-  lastAsk.value = ask;
   await runAsk(ask);
   clearAttachedImages();
 }
@@ -315,58 +301,9 @@ function goToPage(pageId: number): void {
   void router.push({ path: '/library', query: { pageId: String(pageId) } });
 }
 
-async function loadProfileSignals(): Promise<void> {
-  try {
-    const dims = await getProfileDimensions();
-    const cog = dims.find((d) => d.key === 'cognitive_style');
-    if (cog && cog.confidence >= 0.3 && cog.tags.length > 0) {
-      const last = cog.tags[cog.tags.length - 1];
-      if (last === 'visual' || last === 'logical' || last === 'trial') {
-        cognitiveStyle.value = last;
-      }
-    }
-    const err = dims.find((d) => d.key === 'error_pattern');
-    if (err) {
-      errorTags.value = err.tags.slice(-3);
-    }
-  } catch {
-    /* 画像不可用不影响答疑 */
-  }
-}
-
-// 重建「上一次问题」：换讲法时若 lastAsk 已失（如从侧栏选中历史会话），退回用当前会话题面 + props 上下文。
-function resolveAskForRestyle(): LastAsk | null {
-  if (lastAsk.value) return lastAsk.value;
-  const session = tutor.currentSession;
-  if (!session) return null;
-  return { question: session.question, kcCodes: [...props.kcCodes], context: props.context };
-}
-
-// 即时换讲法：(a) 高亮选中风格 → (b) 用同一问题换风格立刻重发、改写当前答案 →
-// (c) 同时写回画像（影响后续轮次）。无历史问题时仅写回偏好。
-async function onPickStyle(style: CognitiveStyle): Promise<void> {
-  if (isStreaming.value) return; // 流式进行中不打断；避免并发覆盖当前回答
-  cognitiveStyle.value = style;
-  playSfx('sfx_click');
-
-  // (c) 写回画像 cognitive_style（影响后续轮次，非本次），与重问解耦、失败不阻塞重问。
-  void styleEngaged(style, props.kcCodes[0]).catch(() => {
-    toast.show('讲法偏好记录失败', 'error');
-  });
-
-  const label = style === 'visual' ? '图解' : style === 'logical' ? '推理' : '示例';
-  const ask = resolveAskForRestyle();
-  if (!ask) {
-    toast.show(`已记录：之后 AI 助教更偏「${label}」`, 'info');
-    return;
-  }
-  // (b) 同一问题、换风格立刻重问，流式改写当前答案。
-  lastAsk.value = ask;
-  toast.show(`换「${label}」讲法重讲本题…`, 'info');
-  await runAsk(ask, style);
-}
-
 onMounted(async () => {
+  // 进入面板即确保有会话窗口 id（首问起就归属同一 conversation，支撑多轮记忆）。
+  tutor.ensureConversationId();
   // 加载课程包 43 的章节 + KC 作为 `@` 引用候选；失败不影响普通问答。
   try {
     const [chapters, kcs] = await Promise.all([
@@ -377,7 +314,6 @@ onMounted(async () => {
   } catch {
     mentionItems.value = [];
   }
-  void loadProfileSignals();
 });
 </script>
 
@@ -442,63 +378,65 @@ onMounted(async () => {
 
     <!-- 右栏主区：对话 -->
     <main class="conversation">
-      <!-- 接地状态徽标 -->
-      <div
-        v-if="groundingStatus"
-        class="grounding-bar"
-      >
-        <span
-          class="grounding-chip"
-          :class="groundingInfo(groundingStatus).cls"
-          data-testid="grounding-chip"
-        >
-          {{ groundingInfo(groundingStatus).text }}
-        </span>
-        <span
-          v-if="evidencePageIds.length > 0"
-          class="evidence-badges"
-        >
-          <button
-            v-for="pid in evidencePageIds"
-            :key="pid"
-            type="button"
-            class="evidence-badge"
-            :title="`跳转到课件第 ${pid} 页`"
-            @click="goToPage(pid)"
-          >
-            p.{{ pid }}
-          </button>
-        </span>
-      </div>
-
-      <!-- 助教小队：工作流拟人化（看图答疑 / 检索 / 讲解 / 校对 实时可视） -->
-      <TutorCrew
-        v-if="isStreaming || groundingStatus"
-        :traces="crewTraces"
-        :status="crewStatus"
-        :image-count="lastSentImageCount"
-        :grounding="groundingStatus"
-        :cognitive-style="cognitiveStyle"
-        :error-tags="errorTags"
-        @pick-style="onPickStyle"
-      />
-
-      <!-- 当前问题 -->
-      <div
-        v-if="tutor.currentSession"
-        class="msg msg--user"
-      >
-        <span class="msg__role">你</span>
-        <p class="msg__text">
-          {{ tutor.currentSession.question }}
-        </p>
-      </div>
-
-      <!-- 回答区 -->
+      <!-- 多轮对话 thread：历史轮次（当前轮之前，只读）+ 当前轮（含接地状态与证据回链） -->
       <div
         ref="scrollRef"
         class="answer-area"
       >
+        <template
+          v-for="turn in tutor.turns"
+          :key="turn.id"
+        >
+          <div class="msg msg--user">
+            <span class="msg__role">你</span>
+            <p class="msg__text">
+              {{ turn.question }}
+            </p>
+          </div>
+          <div class="msg msg--tutor">
+            <span class="msg__role">AI 助教</span>
+            <MarkdownView :source="turn.answerMd ?? ''" />
+            <div
+              v-if="turn.groundingStatus"
+              class="grounding-bar"
+            >
+              <span
+                class="grounding-chip"
+                :class="groundingInfo(turn.groundingStatus).cls"
+              >
+                {{ groundingInfo(turn.groundingStatus).text }}
+              </span>
+              <span
+                v-if="turn.evidencePageIds.length > 0"
+                class="evidence-badges"
+              >
+                <button
+                  v-for="pid in turn.evidencePageIds"
+                  :key="pid"
+                  type="button"
+                  class="evidence-badge"
+                  :title="`跳转到课件第 ${pid} 页`"
+                  @click="goToPage(pid)"
+                >
+                  p.{{ pid }}
+                </button>
+              </span>
+            </div>
+          </div>
+        </template>
+
+        <!-- 当前问题 -->
+        <div
+          v-if="tutor.currentSession"
+          class="msg msg--user"
+        >
+          <span class="msg__role">你</span>
+          <p class="msg__text">
+            {{ tutor.currentSession.question }}
+          </p>
+        </div>
+
+        <!-- 当前回答（含接地状态与证据回链） -->
         <div
           v-if="displayedAnswer"
           class="msg msg--tutor"
@@ -513,9 +451,36 @@ onMounted(async () => {
             v-if="!isStreaming && visualAids.length > 0"
             :aids="visualAids"
           />
+          <div
+            v-if="groundingStatus"
+            class="grounding-bar"
+          >
+            <span
+              class="grounding-chip"
+              :class="groundingInfo(groundingStatus).cls"
+              data-testid="grounding-chip"
+            >
+              {{ groundingInfo(groundingStatus).text }}
+            </span>
+            <span
+              v-if="evidencePageIds.length > 0"
+              class="evidence-badges"
+            >
+              <button
+                v-for="pid in evidencePageIds"
+                :key="pid"
+                type="button"
+                class="evidence-badge"
+                :title="`跳转到课件第 ${pid} 页`"
+                @click="goToPage(pid)"
+              >
+                p.{{ pid }}
+              </button>
+            </span>
+          </div>
         </div>
         <p
-          v-else-if="!tutor.currentSession && !isStreaming"
+          v-else-if="tutor.turns.length === 0 && !tutor.currentSession && !isStreaming"
           class="answer-placeholder"
         >
           {{ embedded ? '边看视频边问：输入 @ 可引用本章知识点' : '有什么 Python 问题？问问 AI 助教' }}

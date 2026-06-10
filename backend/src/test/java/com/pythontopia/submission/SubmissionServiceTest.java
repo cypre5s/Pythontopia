@@ -29,6 +29,7 @@ import java.time.ZoneOffset;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationEventPublisher;
+import org.mockito.ArgumentCaptor;
 
 class SubmissionServiceTest {
 
@@ -66,7 +67,10 @@ class SubmissionServiceTest {
     SubmissionDto result =
         service.submit(7L, new SubmissionCreateRequest(101L, "print(1)", null, SubmissionSource.TRAINING));
     assertThat(result.status()).isEqualTo(SubmissionStatus.PASSED);
-    verify(publisher).publishEvent(any(LearningEvent.PracticeSucceeded.class));
+    ArgumentCaptor<LearningEvent.PracticeSucceeded> eventCaptor =
+        ArgumentCaptor.forClass(LearningEvent.PracticeSucceeded.class);
+    verify(publisher).publishEvent(eventCaptor.capture());
+    assertThat(eventCaptor.getValue().difficulty()).isEqualTo("basic");
   }
 
   @Test
@@ -93,7 +97,10 @@ class SubmissionServiceTest {
         .thenReturn(Optional.of(sampleSubmission(901L, SubmissionStatus.FAILED)));
 
     service.submit(7L, new SubmissionCreateRequest(101L, "print(1)", null, SubmissionSource.TRAINING));
-    verify(publisher).publishEvent(any(LearningEvent.PracticeFailed.class));
+    ArgumentCaptor<LearningEvent.PracticeFailed> eventCaptor =
+        ArgumentCaptor.forClass(LearningEvent.PracticeFailed.class);
+    verify(publisher).publishEvent(eventCaptor.capture());
+    assertThat(eventCaptor.getValue().difficulty()).isEqualTo("basic");
   }
 
   @Test

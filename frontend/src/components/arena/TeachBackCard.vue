@@ -21,7 +21,10 @@ const showTips = ref(false);
 </script>
 
 <template>
-  <div class="teach-back-card" data-testid="teach-back-card">
+  <div
+    class="teach-back-card"
+    data-testid="teach-back-card"
+  >
     <header class="card-head">
       <span class="card-icon">[T]</span>
       <h3>教学反转</h3>
@@ -30,12 +33,19 @@ const showTips = ref(false);
 
     <div class="scenario">
       <div class="npc-bubble">
-        <img src="/assets/pixel/portraits/heads/portrait_student_anxious_head.png" alt="NPC" class="npc-avatar" @error="($event.target as HTMLImageElement).style.display='none'">
+        <img
+          src="/assets/pixel/portraits/heads/portrait_student_anxious_head.png"
+          alt="NPC"
+          class="npc-avatar"
+          @error="($event.target as HTMLImageElement).style.display='none'"
+        >
         <div class="bubble-text">
           <p
             class="npc-says"
             style="color: #111111;"
-          >"同学，我不太理解这个概念，你能用简单的话给我解释一下吗？"</p>
+          >
+            "同学，我不太理解这个概念，你能用简单的话给我解释一下吗？"
+          </p>
           <pre class="concept-prompt">{{ problem.statement }}</pre>
         </div>
       </div>
@@ -58,12 +68,19 @@ const showTips = ref(false);
         <template v-else-if="quality === 'ok'">（长度适中）</template>
         <template v-else>（内容充实）</template>
       </span>
-      <button type="button" class="tips-btn" @click="showTips = !showTips">
+      <button
+        type="button"
+        class="tips-btn"
+        @click="showTips = !showTips"
+      >
         {{ showTips ? '收起提示' : '写作提示' }}
       </button>
     </div>
 
-    <ul v-if="showTips" class="tips-list">
+    <ul
+      v-if="showTips"
+      class="tips-list"
+    >
       <li>先用一句话概括核心含义</li>
       <li>举一个具体的代码例子</li>
       <li>提醒常见的初学者误区</li>

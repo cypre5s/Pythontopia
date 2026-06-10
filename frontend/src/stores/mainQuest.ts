@@ -207,11 +207,31 @@ export const useMainQuestStore = defineStore('mainQuest', {
   }),
 
   getters: {
-    /** 当前要做的子任务（如果当前章有 boss 击败且 currentSubQuest>5，则提示进入下一章）。 */
+    /**
+     * 单一事实源：当前应聚焦的子任务 = 「当前章第一个未完成子任务」。
+     * 全章 5 任务都完成时返回 null（=「全章完成 → 挑战 boss」兜底，见 bossPending）。
+     * 左侧学习目标面板、HUD 进度条、地图标记、ProbeCard 全部消费此 getter，
+     * 杜绝旧实现「指引用状态扫描、地图/进度条用指针」两套逻辑乱序时指向不同任务。
+     */
+    activeQuest(): MainSubQuest | null {
+      const chapter = this.progress.currentChapter;
+      if (chapter < 1 || chapter > 7) return null;
+      const done = new Set(this.progress.completedSubQuests);
+      return listSubQuestsByChapter(chapter).find((s) => !done.has(s.id)) ?? null;
+    },
+    /** 本章 5 任务全部完成、但章末 boss 未击败 → 该挑战 boss（activeQuest 为 null 时的兜底语义）。 */
+    bossPending(): boolean {
+      const chapter = this.progress.currentChapter;
+      if (chapter < 1 || chapter > 7) return false;
+      const done = new Set(this.progress.completedSubQuests);
+      return (
+        listSubQuestsByChapter(chapter).every((s) => done.has(s.id))
+        && !this.progress.defeatedBosses.includes(chapter)
+      );
+    },
+    /** `activeQuest` 的兼容别名（旧组件 / 测试按此名读取当前子任务）。 */
     currentSubQuest(): MainSubQuest | null {
-      const { currentChapter, currentSubQuest } = this.progress;
-      if (currentChapter < 1) return null;
-      return findMainQuestById(`${currentChapter}-${currentSubQuest}`);
+      return this.activeQuest;
     },
     isCompleted(): (id: string) => boolean {
       return (id: string) => this.progress.completedSubQuests.includes(id);
@@ -225,32 +245,36 @@ export const useMainQuestStore = defineStore('mainQuest', {
      */
     chapterViews(): MainQuestChapterView[] {
       const chapters: MainQuestChapterView[] = [];
+      const cur = this.progress.currentChapter;
+      const done = new Set(this.progress.completedSubQuests);
+      // 状态判定与 activeQuest 同源：当前章焦点 = activeQuest，其之前可做、之后锁定。
+      const active = this.activeQuest;
+      const activeId = active?.id ?? null;
+      const activeIndex = active?.index ?? Number.POSITIVE_INFINITY;
       for (let chapter = 1; chapter <= 7; chapter += 1) {
         const subs = listSubQuestsByChapter(chapter);
         const items: MainSubQuestViewItem[] = subs.map((s) => {
           let status: MainSubQuestViewItem['status'] = 'locked';
-          if (this.progress.completedSubQuests.includes(s.id)) {
+          if (done.has(s.id)) {
             status = 'completed';
-          } else if (
-            this.progress.currentChapter === chapter &&
-            this.progress.currentSubQuest === s.index
-          ) {
-            status = 'in_progress';
-          } else if (
-            chapter < this.progress.currentChapter ||
-            (chapter === this.progress.currentChapter &&
-              s.index <= this.progress.currentSubQuest)
-          ) {
+          } else if (chapter < cur) {
+            // 已通关旧章里残留的未完成项（理论上罕见）→ 可回头补做。
             status = 'available';
+          } else if (chapter === cur) {
+            if (s.id === activeId) status = 'in_progress';
+            else if (s.index < activeIndex) status = 'available';
+            else status = 'locked';
           }
           return { ...s, status };
         });
         const completed = items.filter((s) => s.status === 'completed').length;
         const boss = MAIN_QUEST_BOSSES.find((b) => b.chapter === chapter);
         if (!boss) continue;
+        // 命名统一：章节标题用 chapters.ts 章节名（非 boss 名）；boss 名只在 boss 区域出现。
+        const chapterName = CHAPTERS.find((c) => c.order === chapter)?.name ?? boss.name;
         chapters.push({
           chapter,
-          title: boss.name,
+          title: chapterName,
           subQuests: items,
           boss,
           progress: completed / Math.max(1, items.length),
@@ -278,35 +302,73 @@ export const useMainQuestStore = defineStore('mainQuest', {
       };
     },
     /**
-     * 本章 KC 平均掌握度（0..1）。分母用「本章全部 KC 数」，缺快照的 KC 记 0，
-     * 避免「只练了 2 个 KC 就平均达标」的虚高。掌握度读 learning store 的 masterySnapshot
-     * （来自 GET /api/learner/mastery / bootstrap）。
+     * 本章「测」锚点：来自 kc_mastery 子任务的 { kcCode, target(0..1) }。
+     * 每个可测章（2–7）只锚定 1 个有判题真题的 KC（与「练」同一 KC，练完即测）；
+     * 第 1 章为理论导入章，无锚点（返回空数组）。
      */
-    chapterMasteryAvg() {
-      return (chapter: number): number => {
-        const codes = this.chapterKcCodes(chapter);
-        if (codes.length === 0) return 0;
-        const wanted = new Set(codes);
-        const snaps = useLearningStore().field.masterySnapshot.filter((s) =>
-          wanted.has(s.kcCode),
-        );
-        const sum = snaps.reduce((acc, s) => acc + (s.masteryScore ?? 0), 0);
-        return sum / codes.length;
+    chapterMasteryAnchors() {
+      return (chapter: number): { kcCode: string; target: number }[] => {
+        const out: { kcCode: string; target: number }[] = [];
+        for (const q of MAIN_QUESTS) {
+          if (q.chapter !== chapter) continue;
+          if (q.evidenceRequired.type !== 'kc_mastery') continue;
+          out.push({
+            kcCode: q.evidenceRequired.kcCode,
+            target: q.evidenceRequired.thresholdScore / 100,
+          });
+        }
+        return out;
       };
     },
     /**
-     * 章节达标：本章「必做题」（submission 类子任务）全过 且 本章 KC 平均掌握度 ≥ 0.7。
-     * 达标后解锁进阶 Hub（Boss / 进阶难题 / 工坊），也可直接跳过进下一章。
+     * 本章锚点 KC 平均掌握度（0..1）。分母改为「本章主线锚点 KC」（而非全章 KC）：
+     * 旧实现用全章 KC 做分母，但每章只刷 1 个锚点 KC，平均永远到不了 0.7，
+     * 导致「测·70%」恒红、advanceChapter 基本失效。无锚点（第 1 章理论章）→ 1（视为无需测）。
+     * 掌握度读 learning store 的 masterySnapshot（GET /api/learner/mastery / bootstrap）。
+     */
+    chapterMasteryAvg() {
+      return (chapter: number): number => {
+        const anchors = this.chapterMasteryAnchors(chapter);
+        if (anchors.length === 0) return 1;
+        const snaps = useLearningStore().field.masterySnapshot;
+        const sum = anchors.reduce((acc, a) => {
+          const snap = snaps.find((s) => s.kcCode === a.kcCode);
+          return acc + (snap?.masteryScore ?? 0);
+        }, 0);
+        return sum / anchors.length;
+      };
+    },
+    /** 本章「测」达标目标（0..1）：取锚点阈值最大值；无锚点（第 1 章）→ 0。 */
+    chapterMasteryTarget() {
+      return (chapter: number): number => {
+        const anchors = this.chapterMasteryAnchors(chapter);
+        if (anchors.length === 0) return 0;
+        return Math.max(...anchors.map((a) => a.target));
+      };
+    },
+    /**
+     * 章节达标：本章「必做题」（submission）全过 且 锚点 KC 平均掌握度 ≥ 锚点阈值。
+     * 第 1 章（无 submission、无锚点的纯理论章）以「5 任务全完成」为达标，
+     * 避免被判恒达标后被空跳过。达标后解锁进阶 Hub（Boss / 进阶难题 / 工坊），也可跳过进下一章。
      */
     chapterStandardMet() {
       return (chapter: number): boolean => {
         const required = MAIN_QUESTS.filter(
           (q) => q.chapter === chapter && q.evidenceRequired.type === 'submission',
         );
+        const anchors = this.chapterMasteryAnchors(chapter);
+        if (required.length === 0 && anchors.length === 0) {
+          return listSubQuestsByChapter(chapter).every((q) =>
+            this.progress.completedSubQuests.includes(q.id),
+          );
+        }
         const allRequiredDone = required.every((q) =>
           this.progress.completedSubQuests.includes(q.id),
         );
-        return allRequiredDone && this.chapterMasteryAvg(chapter) >= 0.7;
+        return (
+          allRequiredDone
+          && this.chapterMasteryAvg(chapter) >= this.chapterMasteryTarget(chapter)
+        );
       };
     },
     /** 当前章是否达标（HUD/面板便捷读取）。 */
@@ -455,54 +517,57 @@ export const useMainQuestStore = defineStore('mainQuest', {
       persist(this.progress);
     },
 
-    // ─────────────────── evidence 自动检测链路 ───────────────────
-    // 5 类 onXxx 钩子分别由 dialog store / learning store / boss session / world scene 调用，
-    // 自动遍历未完成的主线任务找 evidence 匹配项并 markComplete。
+    // ─────────────────── evidence 自动检测链路（单一事实源） ───────────────────
+    // 5 类 onXxx 钩子只允许命中「当前 activeQuest」（=当前章第一个未完成子任务）：
+    //   - 杜绝跨章预完成：旧实现遍历全部 35 任务命中即完成，使钩子在 bootstrap/刷新时
+    //     批量 onMasteryReached 跨章乱序完成、整体进度虚高、与指针/左侧脱节；
+    //   - 杜绝章内乱序跳跃：只推进当前焦点任务，指引=进度=地图标记三者天然一致。
+    // 全章完成（activeQuest 为 null，boss 待打）时一律不再前移，等 defeatBoss 推进章节。
 
-    /** dialog store close 时调：找 evidenceRequired.type==='dialog_complete' 且 npcKey 匹配的子任务。 */
+    /** dialog store close 时调：当前 activeQuest 为 dialog_complete 且 npcKey 匹配 → 完成。 */
     onDialogClose(npcKey: string): MainSubQuest | null {
       syncEventToBackend('dialog_complete', { npcKey });
-      for (const q of MAIN_QUESTS) {
-        if (this.progress.completedSubQuests.includes(q.id)) continue;
-        const ev = q.evidenceRequired;
-        if (ev.type === 'dialog_complete' && ev.npcKey === npcKey) {
-          return this.completeSubQuest(q.id);
-        }
+      const q = this.activeQuest;
+      if (!q) return null;
+      const ev = q.evidenceRequired;
+      if (ev.type === 'dialog_complete' && ev.npcKey === npcKey) {
+        return this.completeSubQuest(q.id);
       }
       return null;
     },
 
-    /** learning store createResource 成功时调：找 evidenceRequired.type==='resource_consumed' 匹配的子任务。 */
+    /** learning store createResource 成功时调：当前 activeQuest 为 resource_consumed 且类型 / KC 匹配 → 完成。 */
     onResourceCreated(resourceType: string, kcCodes: readonly string[]): MainSubQuest | null {
       syncEventToBackend('resource_consumed', { resourceType, kcCodes: [...kcCodes] });
-      for (const q of MAIN_QUESTS) {
-        if (this.progress.completedSubQuests.includes(q.id)) continue;
-        const ev = q.evidenceRequired;
-        if (ev.type !== 'resource_consumed') continue;
-        if (ev.resourceType !== resourceType) continue;
-        // 资源 KC 与子任务 kcCodes 任一重合即可
-        if (q.kcCodes.some((c) => kcCodes.includes(c))) {
-          return this.completeSubQuest(q.id);
-        }
-      }
-      return null;
+      const q = this.activeQuest;
+      if (!q) return null;
+      const ev = q.evidenceRequired;
+      if (ev.type !== 'resource_consumed') return null;
+      if (ev.resourceType !== resourceType) return null;
+      // 资源 KC 与子任务 kcCodes 任一重合即可。
+      if (!q.kcCodes.some((c) => kcCodes.includes(c))) return null;
+      return this.completeSubQuest(q.id);
     },
 
-    /** Arena/Endless/Boss submission 通过时调：找 evidenceRequired.type==='submission' 匹配的子任务。 */
+    /** Arena/Endless/Boss/训练 submission 通过时调：当前 activeQuest 为 submission 且 problemId / KC 匹配 → 完成。 */
     onSubmissionPassed(payload: { problemId?: number | string; kcCode?: string }): MainSubQuest | null {
       syncEventToBackend('submission_passed', payload);
-      for (const q of MAIN_QUESTS) {
-        if (this.progress.completedSubQuests.includes(q.id)) continue;
-        const ev = q.evidenceRequired;
-        if (ev.type !== 'submission') continue;
-        // problemId=0 是 placeholder，命中任一通过即视作完成
-        if (ev.problemId === 0) {
-          if (!payload.kcCode || q.kcCodes.includes(payload.kcCode)) {
-            return this.completeSubQuest(q.id);
-          }
-        } else if (typeof payload.problemId !== 'undefined' && String(ev.problemId) === String(payload.problemId)) {
+      const q = this.activeQuest;
+      if (!q) return null;
+      const ev = q.evidenceRequired;
+      if (ev.type !== 'submission') return null;
+      // problemId=0 是 placeholder，命中任一通过即视作完成（带 KC 时更精确）。
+      if (ev.problemId === 0) {
+        if (!payload.kcCode || q.kcCodes.includes(payload.kcCode)) {
           return this.completeSubQuest(q.id);
         }
+        return null;
+      }
+      if (
+        typeof payload.problemId !== 'undefined'
+        && String(ev.problemId) === String(payload.problemId)
+      ) {
+        return this.completeSubQuest(q.id);
       }
       return null;
     },
@@ -530,30 +595,26 @@ export const useMainQuestStore = defineStore('mainQuest', {
       }
     },
 
-    /** 学习掌握度达阈值时调：找 evidenceRequired.type==='kc_mastery' 匹配。 */
+    /** 掌握度达阈值时调：当前 activeQuest 为 kc_mastery 且 KC / 阈值匹配 → 完成。 */
     onMasteryReached(kcCode: string, score: number): MainSubQuest | null {
-      for (const q of MAIN_QUESTS) {
-        if (this.progress.completedSubQuests.includes(q.id)) continue;
-        const ev = q.evidenceRequired;
-        if (ev.type !== 'kc_mastery') continue;
-        if (ev.kcCode !== kcCode) continue;
-        if (score >= ev.thresholdScore) {
-          return this.completeSubQuest(q.id);
-        }
-      }
-      return null;
+      const q = this.activeQuest;
+      if (!q) return null;
+      const ev = q.evidenceRequired;
+      if (ev.type !== 'kc_mastery') return null;
+      if (ev.kcCode !== kcCode) return null;
+      if (score < ev.thresholdScore) return null;
+      return this.completeSubQuest(q.id);
     },
 
-    /** WorldScene 玩家走到指定 tile 时调（容差 ±1 tile）。 */
+    /** WorldScene 玩家走到指定 tile 时调（容差 ±1 tile）：当前 activeQuest 为 building_visit 且到点 → 完成。 */
     onBuildingVisited(mapKey: string, tileX: number, tileY: number): MainSubQuest | null {
-      for (const q of MAIN_QUESTS) {
-        if (this.progress.completedSubQuests.includes(q.id)) continue;
-        const ev = q.evidenceRequired;
-        if (ev.type !== 'building_visit') continue;
-        if (ev.mapKey !== mapKey) continue;
-        if (Math.abs(ev.tileX - tileX) <= 1 && Math.abs(ev.tileY - tileY) <= 1) {
-          return this.completeSubQuest(q.id);
-        }
+      const q = this.activeQuest;
+      if (!q) return null;
+      const ev = q.evidenceRequired;
+      if (ev.type !== 'building_visit') return null;
+      if (ev.mapKey !== mapKey) return null;
+      if (Math.abs(ev.tileX - tileX) <= 1 && Math.abs(ev.tileY - tileY) <= 1) {
+        return this.completeSubQuest(q.id);
       }
       return null;
     },

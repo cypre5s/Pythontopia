@@ -217,6 +217,9 @@ export interface BugMineState {
   echoesLoading: boolean;
   echoesError: string | null;
   pendingVariantSessionId: number | null;
+  /** S1：训练场 → 错题矿洞入口的私有 id 经 store 传递（不写进 URL）。 */
+  pendingEntrySubmissionId: number | null;
+  pendingEntrySessionId: number | null;
   loading: boolean;
   lastError: string | null;
   lastRetry: SubmissionDto | null;
@@ -297,6 +300,8 @@ export const useLearningStore = defineStore('learning', {
       echoesLoading: false,
       echoesError: null as string | null,
       pendingVariantSessionId: null as number | null,
+      pendingEntrySubmissionId: null as number | null,
+      pendingEntrySessionId: null as number | null,
       loading: false,
       lastError: null as string | null,
       lastRetry: null as SubmissionDto | null,
@@ -762,6 +767,24 @@ export const useLearningStore = defineStore('learning', {
     },
     setPendingVariantSession(sessionId: number | null): void {
       this.bugMine.pendingVariantSessionId = sessionId;
+    },
+    /**
+     * S1：训练场 → 错题矿洞「入口」私有 id 改走 store（不写进 URL）。
+     * 设置后 BugMinePage 监听并 consume，避免地址栏暴露/篡改 submissionId / sessionId。
+     */
+    setPendingBugMineEntry(entry: { submissionId?: number | null; sessionId?: number | null }): void {
+      this.bugMine.pendingEntrySubmissionId = entry.submissionId ?? null;
+      this.bugMine.pendingEntrySessionId = entry.sessionId ?? null;
+    },
+    /** consume 并清空入口私有 id（读后即清，避免残留触发二次进入）。 */
+    consumePendingBugMineEntry(): { submissionId: number | null; sessionId: number | null } {
+      const out = {
+        submissionId: this.bugMine.pendingEntrySubmissionId,
+        sessionId: this.bugMine.pendingEntrySessionId,
+      };
+      this.bugMine.pendingEntrySubmissionId = null;
+      this.bugMine.pendingEntrySessionId = null;
+      return out;
     },
     async submitBugMineVariant(code: string, sessionId?: number): Promise<SubmissionDto | null> {
       const targetSessionId = sessionId ?? this.bugMine.pendingVariantSessionId ?? this.bugMine.session?.id;

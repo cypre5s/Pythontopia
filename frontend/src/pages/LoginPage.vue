@@ -20,7 +20,7 @@ const loading = ref(false);
 const backendReady = ref<boolean | null>(null);
 const loginFormRef = ref<InstanceType<typeof LoginForm> | null>(null);
 
-const DEMO_USERNAME = 'demo';
+const DEMO_USERNAME = 'demo-stu-01';
 const DEMO_PASSWORD = 'P@ssw0rd1';
 
 async function checkBackendHealth(): Promise<void> {
@@ -90,132 +90,597 @@ function fillAndSubmitDemo(): void {
         shape-rendering="crispEdges"
       >
         <!-- 草地 3 层（深→浅做日光感） -->
-        <rect x="0" y="130" width="480" height="90" fill="#a8d088" />
-        <rect x="0" y="150" width="480" height="70" fill="#82b56a" />
-        <rect x="0" y="180" width="480" height="40" fill="#6ba059" />
+        <rect
+          x="0"
+          y="130"
+          width="480"
+          height="90"
+          fill="#a8d088"
+        />
+        <rect
+          x="0"
+          y="150"
+          width="480"
+          height="70"
+          fill="#82b56a"
+        />
+        <rect
+          x="0"
+          y="180"
+          width="480"
+          height="40"
+          fill="#6ba059"
+        />
         <!-- 远栏栅 -->
-        <g stroke="#6e4f1d" stroke-width="1.5">
-          <line x1="0" y1="148" x2="480" y2="148" />
-          <line x1="0" y1="146" x2="480" y2="146" />
+        <g
+          stroke="#6e4f1d"
+          stroke-width="1.5"
+        >
+          <line
+            x1="0"
+            y1="148"
+            x2="480"
+            y2="148"
+          />
+          <line
+            x1="0"
+            y1="146"
+            x2="480"
+            y2="146"
+          />
         </g>
         <g fill="#8a6c2c">
-          <rect x="20" y="142" width="2" height="14" />
-          <rect x="60" y="142" width="2" height="14" />
-          <rect x="100" y="142" width="2" height="14" />
-          <rect x="140" y="142" width="2" height="14" />
-          <rect x="180" y="142" width="2" height="14" />
-          <rect x="220" y="142" width="2" height="14" />
-          <rect x="260" y="142" width="2" height="14" />
-          <rect x="300" y="142" width="2" height="14" />
-          <rect x="340" y="142" width="2" height="14" />
-          <rect x="380" y="142" width="2" height="14" />
-          <rect x="420" y="142" width="2" height="14" />
-          <rect x="460" y="142" width="2" height="14" />
+          <rect
+            x="20"
+            y="142"
+            width="2"
+            height="14"
+          />
+          <rect
+            x="60"
+            y="142"
+            width="2"
+            height="14"
+          />
+          <rect
+            x="100"
+            y="142"
+            width="2"
+            height="14"
+          />
+          <rect
+            x="140"
+            y="142"
+            width="2"
+            height="14"
+          />
+          <rect
+            x="180"
+            y="142"
+            width="2"
+            height="14"
+          />
+          <rect
+            x="220"
+            y="142"
+            width="2"
+            height="14"
+          />
+          <rect
+            x="260"
+            y="142"
+            width="2"
+            height="14"
+          />
+          <rect
+            x="300"
+            y="142"
+            width="2"
+            height="14"
+          />
+          <rect
+            x="340"
+            y="142"
+            width="2"
+            height="14"
+          />
+          <rect
+            x="380"
+            y="142"
+            width="2"
+            height="14"
+          />
+          <rect
+            x="420"
+            y="142"
+            width="2"
+            height="14"
+          />
+          <rect
+            x="460"
+            y="142"
+            width="2"
+            height="14"
+          />
         </g>
         <!-- 房子 1：红屋顶 -->
-        <rect x="30" y="100" width="50" height="45" fill="#c9a86b" />
-        <polygon points="25,100 55,72 85,100" fill="#b8442d" />
-        <rect x="50" y="118" width="10" height="27" fill="#4d3613" />
-        <rect x="36" y="110" width="6" height="6" fill="#fff7e6" />
-        <rect x="68" y="110" width="6" height="6" fill="#fff7e6" />
+        <rect
+          x="30"
+          y="100"
+          width="50"
+          height="45"
+          fill="#c9a86b"
+        />
+        <polygon
+          points="25,100 55,72 85,100"
+          fill="#b8442d"
+        />
+        <rect
+          x="50"
+          y="118"
+          width="10"
+          height="27"
+          fill="#4d3613"
+        />
+        <rect
+          x="36"
+          y="110"
+          width="6"
+          height="6"
+          fill="#fff7e6"
+        />
+        <rect
+          x="68"
+          y="110"
+          width="6"
+          height="6"
+          fill="#fff7e6"
+        />
         <!-- 烟囱 -->
-        <rect x="70" y="80" width="6" height="14" fill="#6e4f1d" />
+        <rect
+          x="70"
+          y="80"
+          width="6"
+          height="14"
+          fill="#6e4f1d"
+        />
         <!-- 烟 -->
-        <ellipse cx="73" cy="76" rx="6" ry="3" fill="#fff7e6" opacity="0.6" />
-        <ellipse cx="76" cy="68" rx="5" ry="3" fill="#fff7e6" opacity="0.4" />
+        <ellipse
+          cx="73"
+          cy="76"
+          rx="6"
+          ry="3"
+          fill="#fff7e6"
+          opacity="0.6"
+        />
+        <ellipse
+          cx="76"
+          cy="68"
+          rx="5"
+          ry="3"
+          fill="#fff7e6"
+          opacity="0.4"
+        />
 
         <!-- 房子 2：蓝屋顶（镇长 Py 镇厅，最高最大） -->
-        <rect x="195" y="78" width="60" height="68" fill="#fff7e6" />
-        <polygon points="185,78 225,40 265,78" fill="#2a6f97" />
-        <rect x="210" y="108" width="20" height="38" fill="#4d3613" />
-        <rect x="215" y="116" width="10" height="14" fill="#ffd166" />
-        <rect x="200" y="92" width="8" height="8" fill="#9bc1d4" />
-        <rect x="242" y="92" width="8" height="8" fill="#9bc1d4" />
+        <rect
+          x="195"
+          y="78"
+          width="60"
+          height="68"
+          fill="#fff7e6"
+        />
+        <polygon
+          points="185,78 225,40 265,78"
+          fill="#2a6f97"
+        />
+        <rect
+          x="210"
+          y="108"
+          width="20"
+          height="38"
+          fill="#4d3613"
+        />
+        <rect
+          x="215"
+          y="116"
+          width="10"
+          height="14"
+          fill="#ffd166"
+        />
+        <rect
+          x="200"
+          y="92"
+          width="8"
+          height="8"
+          fill="#9bc1d4"
+        />
+        <rect
+          x="242"
+          y="92"
+          width="8"
+          height="8"
+          fill="#9bc1d4"
+        />
         <!-- 大门匾额：Pythontopia 镇厅 -->
-        <rect x="206" y="100" width="38" height="6" fill="#d4af37" />
+        <rect
+          x="206"
+          y="100"
+          width="38"
+          height="6"
+          fill="#d4af37"
+        />
         <!-- 钟塔顶上小金球 -->
-        <circle cx="225" cy="36" r="4" fill="#ffd166" />
+        <circle
+          cx="225"
+          cy="36"
+          r="4"
+          fill="#ffd166"
+        />
 
         <!-- 房子 3：黄屋顶 -->
-        <rect x="305" y="105" width="44" height="40" fill="#f1c453" />
-        <polygon points="298,105 327,80 356,105" fill="#8a6c2c" />
-        <rect x="320" y="120" width="12" height="25" fill="#4d3613" />
+        <rect
+          x="305"
+          y="105"
+          width="44"
+          height="40"
+          fill="#f1c453"
+        />
+        <polygon
+          points="298,105 327,80 356,105"
+          fill="#8a6c2c"
+        />
+        <rect
+          x="320"
+          y="120"
+          width="12"
+          height="25"
+          fill="#4d3613"
+        />
 
         <!-- 房子 4：橘屋顶 -->
-        <rect x="385" y="108" width="42" height="38" fill="#c2871f" />
-        <polygon points="378,108 406,82 434,108" fill="#6e4f1d" />
-        <rect x="396" y="124" width="12" height="22" fill="#4d3613" />
+        <rect
+          x="385"
+          y="108"
+          width="42"
+          height="38"
+          fill="#c2871f"
+        />
+        <polygon
+          points="378,108 406,82 434,108"
+          fill="#6e4f1d"
+        />
+        <rect
+          x="396"
+          y="124"
+          width="12"
+          height="22"
+          fill="#4d3613"
+        />
 
         <!-- 树 4 棵 -->
         <g>
-          <rect x="115" y="118" width="6" height="22" fill="#6e4f1d" />
-          <circle cx="118" cy="112" r="14" fill="#5fa54a" />
-          <circle cx="111" cy="118" r="9" fill="#73b66a" />
+          <rect
+            x="115"
+            y="118"
+            width="6"
+            height="22"
+            fill="#6e4f1d"
+          />
+          <circle
+            cx="118"
+            cy="112"
+            r="14"
+            fill="#5fa54a"
+          />
+          <circle
+            cx="111"
+            cy="118"
+            r="9"
+            fill="#73b66a"
+          />
         </g>
         <g>
-          <rect x="160" y="120" width="6" height="20" fill="#6e4f1d" />
-          <circle cx="163" cy="115" r="12" fill="#73b66a" />
+          <rect
+            x="160"
+            y="120"
+            width="6"
+            height="20"
+            fill="#6e4f1d"
+          />
+          <circle
+            cx="163"
+            cy="115"
+            r="12"
+            fill="#73b66a"
+          />
         </g>
         <g>
-          <rect x="275" y="120" width="6" height="22" fill="#6e4f1d" />
-          <circle cx="278" cy="114" r="13" fill="#5fa54a" />
+          <rect
+            x="275"
+            y="120"
+            width="6"
+            height="22"
+            fill="#6e4f1d"
+          />
+          <circle
+            cx="278"
+            cy="114"
+            r="13"
+            fill="#5fa54a"
+          />
         </g>
         <g>
-          <rect x="365" y="124" width="5" height="18" fill="#6e4f1d" />
-          <circle cx="367" cy="118" r="10" fill="#73b66a" />
+          <rect
+            x="365"
+            y="124"
+            width="5"
+            height="18"
+            fill="#6e4f1d"
+          />
+          <circle
+            cx="367"
+            cy="118"
+            r="10"
+            fill="#73b66a"
+          />
         </g>
 
         <!-- 灯柱（点亮） -->
-        <rect x="90" y="120" width="2" height="28" fill="#4d3613" />
-        <rect x="86" y="116" width="10" height="6" fill="#ffd166" />
-        <rect x="340" y="120" width="2" height="28" fill="#4d3613" />
-        <rect x="336" y="116" width="10" height="6" fill="#ffd166" />
+        <rect
+          x="90"
+          y="120"
+          width="2"
+          height="28"
+          fill="#4d3613"
+        />
+        <rect
+          x="86"
+          y="116"
+          width="10"
+          height="6"
+          fill="#ffd166"
+        />
+        <rect
+          x="340"
+          y="120"
+          width="2"
+          height="28"
+          fill="#4d3613"
+        />
+        <rect
+          x="336"
+          y="116"
+          width="10"
+          height="6"
+          fill="#ffd166"
+        />
 
         <!-- 田地（橙色 patch + 多色小花） -->
-        <rect x="0" y="160" width="36" height="28" fill="#c08a55" />
-        <circle cx="6" cy="166" r="2" fill="#f06" />
-        <circle cx="14" cy="174" r="2" fill="#fc0" />
-        <circle cx="24" cy="168" r="2" fill="#9cf" />
-        <circle cx="30" cy="180" r="2" fill="#f06" />
-        <rect x="448" y="168" width="32" height="24" fill="#c08a55" />
-        <circle cx="456" cy="176" r="2" fill="#fc0" />
-        <circle cx="468" cy="184" r="2" fill="#f06" />
+        <rect
+          x="0"
+          y="160"
+          width="36"
+          height="28"
+          fill="#c08a55"
+        />
+        <circle
+          cx="6"
+          cy="166"
+          r="2"
+          fill="#f06"
+        />
+        <circle
+          cx="14"
+          cy="174"
+          r="2"
+          fill="#fc0"
+        />
+        <circle
+          cx="24"
+          cy="168"
+          r="2"
+          fill="#9cf"
+        />
+        <circle
+          cx="30"
+          cy="180"
+          r="2"
+          fill="#f06"
+        />
+        <rect
+          x="448"
+          y="168"
+          width="32"
+          height="24"
+          fill="#c08a55"
+        />
+        <circle
+          cx="456"
+          cy="176"
+          r="2"
+          fill="#fc0"
+        />
+        <circle
+          cx="468"
+          cy="184"
+          r="2"
+          fill="#f06"
+        />
 
         <!-- 镇长 Py 像素角色（站在镇厅门口） -->
         <g transform="translate(220,116)">
           <!-- 头 -->
-          <rect x="0" y="0" width="10" height="10" fill="#f4caa5" />
+          <rect
+            x="0"
+            y="0"
+            width="10"
+            height="10"
+            fill="#f4caa5"
+          />
           <!-- 头发：紫色 Python 头巾 -->
-          <rect x="0" y="-2" width="10" height="4" fill="#3776ab" />
-          <rect x="-1" y="0" width="2" height="3" fill="#3776ab" />
-          <rect x="9" y="0" width="2" height="3" fill="#3776ab" />
+          <rect
+            x="0"
+            y="-2"
+            width="10"
+            height="4"
+            fill="#3776ab"
+          />
+          <rect
+            x="-1"
+            y="0"
+            width="2"
+            height="3"
+            fill="#3776ab"
+          />
+          <rect
+            x="9"
+            y="0"
+            width="2"
+            height="3"
+            fill="#3776ab"
+          />
           <!-- 眼 -->
-          <rect x="2" y="4" width="1" height="2" fill="#000" />
-          <rect x="7" y="4" width="1" height="2" fill="#000" />
+          <rect
+            x="2"
+            y="4"
+            width="1"
+            height="2"
+            fill="#000"
+          />
+          <rect
+            x="7"
+            y="4"
+            width="1"
+            height="2"
+            fill="#000"
+          />
           <!-- 身体：黄色围巾 + 蓝衣 -->
-          <rect x="0" y="10" width="10" height="2" fill="#ffd166" />
-          <rect x="0" y="12" width="10" height="12" fill="#3776ab" />
+          <rect
+            x="0"
+            y="10"
+            width="10"
+            height="2"
+            fill="#ffd166"
+          />
+          <rect
+            x="0"
+            y="12"
+            width="10"
+            height="12"
+            fill="#3776ab"
+          />
           <!-- 腿 -->
-          <rect x="1" y="24" width="3" height="6" fill="#4d3613" />
-          <rect x="6" y="24" width="3" height="6" fill="#4d3613" />
+          <rect
+            x="1"
+            y="24"
+            width="3"
+            height="6"
+            fill="#4d3613"
+          />
+          <rect
+            x="6"
+            y="24"
+            width="3"
+            height="6"
+            fill="#4d3613"
+          />
         </g>
 
         <!-- Python 蛇 logo（小镇厅前盘旋的小蛇，主题元素） -->
         <g transform="translate(168,144)">
-          <rect x="0" y="0" width="3" height="3" fill="#3776ab" />
-          <rect x="3" y="0" width="3" height="3" fill="#3776ab" />
-          <rect x="6" y="0" width="3" height="3" fill="#3776ab" />
-          <rect x="9" y="0" width="3" height="3" fill="#ffd166" />
-          <rect x="12" y="0" width="3" height="3" fill="#ffd166" />
-          <rect x="12" y="3" width="3" height="3" fill="#ffd166" />
-          <rect x="9" y="3" width="3" height="3" fill="#ffd166" />
-          <rect x="6" y="3" width="3" height="3" fill="#ffd166" />
-          <rect x="0" y="3" width="3" height="3" fill="#3776ab" />
-          <rect x="0" y="6" width="3" height="3" fill="#ffd166" />
-          <rect x="0" y="6" width="3" height="3" fill="#3776ab" />
+          <rect
+            x="0"
+            y="0"
+            width="3"
+            height="3"
+            fill="#3776ab"
+          />
+          <rect
+            x="3"
+            y="0"
+            width="3"
+            height="3"
+            fill="#3776ab"
+          />
+          <rect
+            x="6"
+            y="0"
+            width="3"
+            height="3"
+            fill="#3776ab"
+          />
+          <rect
+            x="9"
+            y="0"
+            width="3"
+            height="3"
+            fill="#ffd166"
+          />
+          <rect
+            x="12"
+            y="0"
+            width="3"
+            height="3"
+            fill="#ffd166"
+          />
+          <rect
+            x="12"
+            y="3"
+            width="3"
+            height="3"
+            fill="#ffd166"
+          />
+          <rect
+            x="9"
+            y="3"
+            width="3"
+            height="3"
+            fill="#ffd166"
+          />
+          <rect
+            x="6"
+            y="3"
+            width="3"
+            height="3"
+            fill="#ffd166"
+          />
+          <rect
+            x="0"
+            y="3"
+            width="3"
+            height="3"
+            fill="#3776ab"
+          />
+          <rect
+            x="0"
+            y="6"
+            width="3"
+            height="3"
+            fill="#ffd166"
+          />
+          <rect
+            x="0"
+            y="6"
+            width="3"
+            height="3"
+            fill="#3776ab"
+          />
           <!-- 蛇眼 -->
-          <rect x="1" y="1" width="1" height="1" fill="#fff" />
-          <rect x="13" y="1" width="1" height="1" fill="#fff" />
+          <rect
+            x="1"
+            y="1"
+            width="1"
+            height="1"
+            fill="#fff"
+          />
+          <rect
+            x="13"
+            y="1"
+            width="1"
+            height="1"
+            fill="#fff"
+          />
         </g>
       </svg>
     </div>
@@ -229,7 +694,10 @@ function fillAndSubmitDemo(): void {
       <p class="auth-subtitle">
         Python 学习像素小镇 · 35 主线 + 7 章 boss + 无尽闯关
       </p>
-      <ul class="auth-feature-pills" aria-label="特色">
+      <ul
+        class="auth-feature-pills"
+        aria-label="特色"
+      >
         <li>5 重审查 AI 出题</li>
         <li>真课件 PDF 渲染</li>
         <li>65 KC 自适应路径</li>
@@ -256,7 +724,7 @@ function fillAndSubmitDemo(): void {
         :disabled="loading"
         @click="fillAndSubmitDemo"
       >
-        快速体验：演示账号 demo / P@ssw0rd1
+        快速体验：演示学生 demo-stu-01 / P@ssw0rd1
       </button>
       <RouterLink
         to="/register"

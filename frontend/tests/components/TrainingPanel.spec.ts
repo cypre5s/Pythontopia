@@ -207,10 +207,9 @@ describe('TrainingPanel', () => {
     await bugMineButton.trigger('click');
     await flushPromises();
 
-    expect(pushSpy).toHaveBeenCalledWith({
-      path: '/bug-mine',
-      query: { submissionId: '3' },
-    });
+    // S1：私有 submissionId 改走 store 入口（不写进 URL），仅按路径导航。
+    expect(learning.bugMine.pendingEntrySubmissionId).toBe(3);
+    expect(pushSpy).toHaveBeenCalledWith('/bug-mine');
   });
 
   it('does not advance main quest when judge verdict is not AC', async () => {

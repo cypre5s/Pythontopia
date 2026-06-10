@@ -169,7 +169,7 @@ function back() {
             data-testid="remediation-trigger"
             @click="generateRemediation"
           >
-            {{ remediationLoading ? '生成中…' : '生成补救包' }}
+            {{ remediationLoading ? '生成中…' : '一键生成补救包' }}
           </PyButton>
         </div>
       </aside>
@@ -224,7 +224,7 @@ function back() {
                 :data-testid="`remediation-pack-${pack.kcCode}`"
               >
                 <span class="cd-remediation__kc">{{ pack.kcName }}</span>
-                <span class="cd-remediation__count">{{ pack.resourceIds.length }} 个资源</span>
+                <span class="cd-remediation__count">{{ pack.resourceIds.length }} 个补救资源</span>
                 <span class="cd-remediation__pages">证据页：{{ pack.evidencePageIds.length > 0 ? pack.evidencePageIds.join('、') : '—' }}</span>
               </li>
             </ul>
@@ -266,10 +266,23 @@ function back() {
                 断开
               </PyButton>
             </div>
-            <div v-if="live.events.value.length === 0" class="cd-empty">
+            <p
+              v-if="live.error.value"
+              class="cd-banner cd-banner--error"
+              data-testid="live-error"
+            >
+              {{ live.error.value }}
+            </p>
+            <div
+              v-if="live.events.value.length === 0"
+              class="cd-empty"
+            >
               等待学生提交事件…
             </div>
-            <ul v-else class="live-events">
+            <ul
+              v-else
+              class="live-events"
+            >
               <li
                 v-for="(evt, i) in live.events.value"
                 :key="i"
@@ -284,6 +297,7 @@ function back() {
 
           <ClassroomQuestTab
             v-show="activeTab === 'quests'"
+            data-testid="quest-tab"
             :quests="quests"
             :quest-summary="dashboard.questSummary"
             @publish="publishQuest"

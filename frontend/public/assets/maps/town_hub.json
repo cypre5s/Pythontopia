@@ -10,7 +10,7 @@
   "tileheight": 16,
   "infinite": false,
   "nextlayerid": 5,
-  "nextobjectid": 39,
+  "nextobjectid": 38,
   "properties": [
     {
       "name": "mapKey",
@@ -7110,34 +7110,6 @@
         },
         {
           "id": 36,
-          "name": "npc_captain_def",
-          "type": "npc",
-          "x": 80,
-          "y": 384,
-          "width": 0,
-          "height": 0,
-          "visible": true,
-          "rotation": 0,
-          "properties": [
-            {
-              "name": "key",
-              "type": "string",
-              "value": "captain_def"
-            },
-            {
-              "name": "label",
-              "type": "string",
-              "value": "船长 Def"
-            },
-            {
-              "name": "sprite",
-              "type": "string",
-              "value": "npc_sailor"
-            }
-          ]
-        },
-        {
-          "id": 37,
           "name": "npc_class_president",
           "type": "npc",
           "x": 288,
@@ -7165,7 +7137,7 @@
           ]
         },
         {
-          "id": 38,
+          "id": 37,
           "name": "spawn",
           "type": "spawn",
           "x": 400,

@@ -54,7 +54,7 @@ test('handles NPC dialog route navigation globally', async () => {
   wrapper.unmount();
 });
 
-test('routes legacy bug mine dialog navigation into the mine map', async () => {
+test('routes bug mine dialog navigation straight to the /bug-mine page (R-14: no pendingTravel)', async () => {
   const pinia = createPinia();
   setActivePinia(pinia);
   const world = useWorldStore();
@@ -68,8 +68,9 @@ test('routes legacy bug mine dialog navigation into the mine map', async () => {
 
   window.dispatchEvent(new CustomEvent('pythontopia:dialog-navigate', { detail: { route: '/bug-mine' } }));
 
-  expect(world.pendingTravelMap).toBe('mine_south');
-  expect(world.pendingTravelTile).toEqual({ x: 15, y: 2 });
+  // R-14：mine_south 风景地图已删，对话导航不再写 pendingTravel，直接 router.push 进页面。
+  expect(world.pendingTravelMap).toBeNull();
+  expect(world.pendingTravelTile).toBeNull();
   expect(pushSpy).toHaveBeenCalledWith('/bug-mine');
   pushSpy.mockRestore();
   wrapper.unmount();

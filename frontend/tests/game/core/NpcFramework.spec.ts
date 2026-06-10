@@ -309,6 +309,70 @@ describe('NpcFramework', () => {
     });
   });
 
+  describe('wander 自由游走（R-14 需求8b）', () => {
+    function makeSeqRng(seq: number[]): () => number {
+      let i = 0;
+      return () => {
+        const v = seq[i % seq.length] ?? 0;
+        i += 1;
+        return v;
+      };
+    }
+
+    it('无 patrol + wander 配置：朝随机选点移动（注入 rng 确定化）', () => {
+      // rng 序列 [0, 0.5]：angle=0(向东) + r=0.5×40=20 → 目标 (120,100)。
+      const f = new NpcFramework(makeScene(), { rng: makeSeqRng([0, 0.5]) });
+      const npc = f.register(
+        baseDef({ id: 'w', spawnX: 100, spawnY: 100, wander: { radiusPx: 40 }, speed: 100 }),
+      );
+      // step=100×0.1=10 → 向东推进 10px（未到达，目标保留）。
+      f.update(100);
+      expect(npc.x).toBeCloseTo(110);
+      expect(npc.y).toBeCloseTo(100);
+      expect(npc.direction).toBe('E');
+    });
+
+    it('碰撞避障：下一步落点被挡 → 放弃目标原地等待，不穿墙', () => {
+      // 目标 (140,100) 本身可达，但 x∈[105,135] 是墙带，向东第一步 110 会撞墙。
+      const f = new NpcFramework(makeScene(), { rng: makeSeqRng([0, 1]) });
+      f.setCollisionChecker((x) => x >= 105 && x <= 135);
+      const npc = f.register(
+        baseDef({ id: 'w', spawnX: 100, spawnY: 100, wander: { radiusPx: 40 }, speed: 100 }),
+      );
+      f.update(100);
+      expect(npc.x).toBe(100);
+      expect(npc.y).toBe(100);
+    });
+
+    it('patrol 优先于 wander：两者都配时只走 patrol', () => {
+      const f = new NpcFramework(makeScene(), { rng: () => 0.5 });
+      const npc = f.register(
+        baseDef({
+          id: 'p',
+          spawnX: 0,
+          spawnY: 0,
+          patrol: [{ x: 50, y: 0 }],
+          wander: { radiusPx: 40 },
+          speed: 100,
+        }),
+      );
+      f.update(100);
+      expect(npc.x).toBeCloseTo(10);
+      expect(npc.y).toBe(0);
+    });
+
+    it('inDialog 时 wander 暂停', () => {
+      const f = new NpcFramework(makeScene(), { rng: makeSeqRng([0, 0.5]) });
+      const npc = f.register(
+        baseDef({ id: 'w', spawnX: 100, spawnY: 100, wander: { radiusPx: 40 }, speed: 100 }),
+      );
+      f.startDialog('w');
+      f.update(100);
+      expect(npc.x).toBe(100);
+      expect(npc.y).toBe(100);
+    });
+  });
+
   describe('startDialog / endDialog', () => {
     it('未注册 id 返回 false 且不影响已有 NPC', () => {
       const f = new NpcFramework(makeScene());

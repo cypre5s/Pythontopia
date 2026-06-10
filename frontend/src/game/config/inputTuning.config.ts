@@ -23,7 +23,8 @@ export interface InputTuningConfig {
   readonly inputLagBudgetMs: number;
   /** 松开方向键 → 速度归 0 的延迟硬上限（ms）。 */
   readonly stopLagBudgetMs: number;
-  /** 各地图速度倍率：mine_south 0.8× 给玩家更多时间看 traceback。 */
+  /** 各地图速度倍率（未列出的地图按 1.0 兜底）。R-14 单 hub 下仅 town_hub=1.0；
+   * 原 mine_south 0.8× 减速随风景图删除一并移除，机制保留以备将来新增地图。 */
   readonly sceneSpeedMultiplier: Readonly<Record<string, number>>;
 }
 
@@ -39,7 +40,6 @@ export const DEFAULT_INPUT_TUNING: InputTuningConfig = Object.freeze({
   stopLagBudgetMs: 80,
   sceneSpeedMultiplier: Object.freeze({
     town_hub: 1.0,
-    mine_south: 0.8,
   }),
 });
 

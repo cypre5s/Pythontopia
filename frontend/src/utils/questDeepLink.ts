@@ -8,7 +8,7 @@ import type { ClassroomQuestDto } from '@/api/dto/ClassroomQuest';
  *
  * - 后端写入 deep_link_route + deep_link_params 时优先使用后端版本，
  *   只在历史 quest 上兜底用 node_type / payload 推导（不破坏旧数据）。
- * - WorldScene 自身解析 `focus=kc_xxx` / `goto=mine_south` 等 query，
+ * - WorldScene 自身解析 `focus=kc_xxx` 等 query，
  *   这里只负责"把人送到那个 URL"。
  */
 

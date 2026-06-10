@@ -5,10 +5,12 @@ import { useEndlessRun } from '@/composables/useEndlessRun';
 const apiMocks = vi.hoisted(() => ({
   requestBossProblem: vi.fn(),
   submitBossAttempt: vi.fn(),
+  prefetchBossProblem: vi.fn(),
 }));
 vi.mock('@/api/boss', () => ({
   requestBossProblem: apiMocks.requestBossProblem,
   submitBossAttempt: apiMocks.submitBossAttempt,
+  prefetchBossProblem: apiMocks.prefetchBossProblem,
 }));
 
 const pyodideMock = vi.hoisted(() => ({ run: vi.fn() }));
@@ -40,6 +42,7 @@ describe('useEndlessRun', () => {
     setActivePinia(createPinia());
     window.localStorage.clear();
     apiMocks.requestBossProblem.mockReset().mockResolvedValue(PROBLEM);
+    apiMocks.prefetchBossProblem.mockReset().mockResolvedValue(undefined);
     apiMocks.submitBossAttempt.mockReset().mockResolvedValue({
       problemId: 'p-endless-1',
       passed: false,

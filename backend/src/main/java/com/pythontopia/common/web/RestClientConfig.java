@@ -22,4 +22,19 @@ public class RestClientConfig {
         .setReadTimeout(Duration.ofMillis(httpProperties.readTimeoutMs()))
         .build();
   }
+
+  /**
+   * 记忆向量化（{@code RagEmbeddingClient} → pythontopia-rag {@code /embed}）专用的 {@link RestTemplate}，
+   * 与 {@link #graphRestTemplate} 物理隔离。embedding 走 {@code @Async} 旁路，若复用 graph 实例，集成测试里
+   * {@code MockRestServiceServer.bindTo(graphRestTemplate)} 会拦到这条异步请求并因「未预期」判失败（时序 flaky）。
+   * 独立 bean 后，绑定 graph 模板的测试不再受 embedding 异步调用干扰。
+   */
+  @Bean
+  RestTemplate ragRestTemplate(
+      RestTemplateBuilder builder, GraphHttpClientProperties httpProperties) {
+    return builder
+        .setConnectTimeout(Duration.ofMillis(httpProperties.connectTimeoutMs()))
+        .setReadTimeout(Duration.ofMillis(httpProperties.readTimeoutMs()))
+        .build();
+  }
 }

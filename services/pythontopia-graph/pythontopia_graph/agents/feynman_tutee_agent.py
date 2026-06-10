@@ -28,8 +28,8 @@ class FeynmanTuteeAgent:
         self.provider = provider
 
     async def step(self, inp: FeynmanTuteeInput) -> FeynmanTuteeOutput:
-        if inp.student_teaching is not None:
-            return self._rule_step(inp)
+        # 初始暴露与「被教学」回合都先走真 LLM（让学弟真正评估教学是否纠正了误解），
+        # 无网 / 无 key / DryRun（空回复或非法 JSON）时统一回退确定性规则脚本。
         try:
             data = await self._chat_json(self._messages(inp))
         except Exception:  # noqa: BLE001 - 无网/无 key 时必须规则兜底
@@ -72,6 +72,7 @@ class FeynmanTuteeAgent:
         raw_updated = data.get("updated_misconceptions")
         if not isinstance(raw_updated, list):
             return None
+        is_initial = inp.student_teaching is None
         updated: list[Misconception] = []
         for item in raw_updated:
             if not isinstance(item, dict):
@@ -86,6 +87,9 @@ class FeynmanTuteeAgent:
                 set(allowed[misconception.tag].evidence_event_ids)
             ):
                 continue
+            if is_initial and misconception.resolved:
+                # 初始暴露阶段不允许「未教先解」：误解必须保持未解决。
+                misconception = misconception.model_copy(update={"resolved": False})
             updated.append(misconception)
         if not updated:
             return None

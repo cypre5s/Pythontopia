@@ -3,6 +3,7 @@ package com.pythontopia.tutor.dto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import java.util.List;
 
@@ -31,4 +32,8 @@ public record TutorAskRequest(
     @Size(max = 3) List<@Size(max = 8_000_000) String> images,
     @Pattern(regexp = "visual|logical|trial") String style,
     @Size(max = 64) String conversationId,
-    @Positive Long classroomId) {}
+    @Positive Long classroomId,
+    // 看课页视频 RAG 脚手架：学生提问时回传当前视频 id + 播放时刻（秒）。后端据此合成「视频上下文」
+    // 锚定讲解片段（真字幕转写检索为占位 seam，后续按 ±窗口检索接入）；其余页不传则行为不变。
+    @Positive Long videoId,
+    @PositiveOrZero Integer videoTimeSec) {}

@@ -35,6 +35,10 @@ export interface TutorAskRequest {
    * 用于「聊天记录」按会话分组而非每问一条。前端生成、后端落库，不下传 graph。
    */
   conversationId?: string;
+  /** 看课页视频 RAG 脚手架：当前视频 id，后端据此合成「视频上下文」（字幕转写检索为占位）。 */
+  videoId?: number;
+  /** 看课页视频 RAG 脚手架：当前播放时刻（秒），后端按时间锚点贴合作答。 */
+  videoTimeSec?: number;
 }
 
 export interface TutorSessionDto {
@@ -57,6 +61,14 @@ export async function listTutorSessions(limit = 50): Promise<TutorSessionDto[]> 
 
 export async function getTutorSession(id: number): Promise<TutorSessionDto> {
   const response = await http.get<TutorSessionDto>(`/api/tutor/sessions/${id}`);
+  return response.data;
+}
+
+/** 取某会话窗口内的全部问答（按时间升序），用于多轮 thread 展示与历史回拉。 */
+export async function listConversation(conversationId: string): Promise<TutorSessionDto[]> {
+  const response = await http.get<TutorSessionDto[]>(
+    `/api/tutor/conversations/${encodeURIComponent(conversationId)}`,
+  );
   return response.data;
 }
 

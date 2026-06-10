@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-08T13:16:33.514Z",
+  "generatedAt": "2026-06-09T13:19:15.711Z",
   "maps": [
     {
       "key": "town_hub",
@@ -14,22 +14,6 @@
       "spawn": {
         "tileX": 25,
         "tileY": 20
-      }
-    },
-    {
-      "key": "mine_south",
-      "file": "mine_south.json",
-      "label": "Bug 矿洞 · 织丝走廊",
-      "width": 30,
-      "height": 30,
-      "bgm": "bgm_bug_mine",
-      "tileset": "kenney_tiny_dungeon",
-      "exits": [
-        "town_hub"
-      ],
-      "spawn": {
-        "tileX": 15,
-        "tileY": 2
       }
     }
   ]

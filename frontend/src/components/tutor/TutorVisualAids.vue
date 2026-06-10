@@ -79,13 +79,16 @@ watch(() => props.aids, build);
     class="visual-aids"
     data-testid="tutor-visual-aids"
   >
-    <h4 class="visual-aids__title">图解说明</h4>
+    <h4 class="visual-aids__title">
+      图解说明
+    </h4>
     <div class="visual-aids__grid">
       <figure
         v-for="(card, i) in rendered"
         :key="i"
         class="aid-card"
       >
+        <!-- eslint-disable vue/no-v-html — mermaid 以 securityLevel:'strict' 渲染，输出无脚本/事件 SVG，已审阅 -->
         <div
           v-if="card.kind === 'mermaid' && card.svg"
           class="aid-mermaid"
@@ -113,6 +116,7 @@ watch(() => props.aids, build);
             图解生成失败
           </p>
         </template>
+        <!-- eslint-enable vue/no-v-html -->
         <figcaption
           v-if="card.caption"
           class="aid-caption"

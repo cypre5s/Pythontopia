@@ -6,8 +6,8 @@
 export interface FastTravelRoute {
   /** 路由 key，用作 i18n / 测试稳定 ID */
   key: string;
-  /** 目标地图 key（必须在 SUPPORTED_MAP_KEYS 中） */
-  toMap: 'town_hub' | 'mine_south';
+  /** 目标地图 key（R-14 单 hub：仅 town_hub） */
+  toMap: 'town_hub';
   /** 落点 tile，与 index.json spawn 一致 */
   tileX: number;
   tileY: number;

@@ -20,8 +20,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
 /**
- * Isolated JDBC test for R-14 shrunk fast travel: V119 seed + V131 cleanup leaves only
- * {@code town_hub ↔ mine_south}. Mirrors production Flyway chain without booting Spring.
+ * Isolated JDBC test for R-14 shrunk fast travel: V119 seed + V131 cleanup + V154 retire
+ * all removed map routes. Mirrors production Flyway chain without booting Spring.
  */
 @Testcontainers
 class FastTravelServiceTest {
@@ -49,6 +49,7 @@ class FastTravelServiceTest {
     jdbcTemplate = new JdbcTemplate(dataSource);
     runScript(readMigration("V119__fast_travel_route.sql"));
     runScript(readMigration("V131__fast_travel_r14_shrink.sql"));
+    runScript(readMigration("V154__retire_mine_south_fast_travel.sql"));
 
     repository = new FastTravelRepository(jdbcTemplate);
     service = new FastTravelService(repository);
@@ -77,36 +78,27 @@ class FastTravelServiceTest {
   }
 
   @Test
-  void r14SeedKeepsOnlyHubMineRoutes() {
-    assertThat(repository.findAll()).hasSize(2);
-    assertThat(repository.find("town_hub", "mine_south")).isPresent();
-    assertThat(repository.find("mine_south", "town_hub")).isPresent();
+  void r14SeedRetiresAllFastTravelRoutes() {
+    assertThat(repository.findAll()).isEmpty();
+    assertThat(repository.find("town_hub", "mine_south")).isEmpty();
+    assertThat(repository.find("mine_south", "town_hub")).isEmpty();
     assertThat(repository.find("town_hub", "farm_north")).isEmpty();
   }
 
   @Test
-  void findReturnsKnownTownHubToMineSouthRoute() {
-    FastTravelRoute route = repository.find("town_hub", "mine_south").orElseThrow();
-
-    assertThat(route.fromScene()).isEqualTo("town_hub");
-    assertThat(route.toScene()).isEqualTo("mine_south");
-    assertThat(route.unlockPhase()).isEqualTo(1);
-    assertThat(route.costPythoco()).isEqualTo(10);
-    assertThat(route.costEnergy()).isEqualTo(5);
-    assertThat(route.costMinutes()).isEqualTo(60);
+  void findRejectsRetiredTownHubToMineSouthRoute() {
+    assertThat(repository.find("town_hub", "mine_south")).isEmpty();
   }
 
   @Test
-  void findUnlockedFromTownHubAtPhase1OnlyMineSouth() {
+  void findUnlockedFromTownHubAtPhase1ReturnsNoRoutes() {
     assertThat(repository.findUnlockedFromScene("town_hub", 0)).isEmpty();
-    assertThat(repository.findUnlockedFromScene("town_hub", 1))
-        .extracting(FastTravelRoute::toScene)
-        .containsExactly("mine_south");
+    assertThat(repository.findUnlockedFromScene("town_hub", 1)).isEmpty();
   }
 
   @Test
-  void canTravelAcceptsTownHubToMineSouthAtPhase1() {
-    assertThat(service.canTravel(TEST_USER_ID, "town_hub", "mine_south", 1, 100, 50)).isTrue();
+  void canTravelRejectsTownHubToMineSouthAtPhase1() {
+    assertThat(service.canTravel(TEST_USER_ID, "town_hub", "mine_south", 1, 100, 50)).isFalse();
   }
 
   @Test
@@ -115,34 +107,34 @@ class FastTravelServiceTest {
   }
 
   @Test
-  void canTravelRejectsWhenPythocoBelowCost() {
+  void canTravelRejectsRetiredRouteBeforeCostChecks() {
     assertThat(service.canTravel(TEST_USER_ID, "town_hub", "mine_south", 1, 5, 50)).isFalse();
   }
 
   @Test
-  void canTravelRejectsWhenEnergyBelowFloor() {
+  void canTravelRejectsRetiredRouteBeforeEnergyChecks() {
     assertThat(service.canTravel(TEST_USER_ID, "town_hub", "mine_south", 1, 100, 9)).isFalse();
   }
 
   @Test
-  void travelDeductsCostsOnSuccess() {
+  void travelRejectsRetiredMineSouthRouteWithoutDeductingCosts() {
     FastTravelResult result =
         service.travel(TEST_USER_ID, "town_hub", "mine_south", 1, 100, 50, 0);
 
-    assertThat(result.success()).isTrue();
-    assertThat(result.reason()).isEqualTo("OK");
-    assertThat(result.newPythoco()).isEqualTo(90);
-    assertThat(result.newEnergy()).isEqualTo(45);
-    assertThat(result.minutesPassed()).isEqualTo(60);
+    assertThat(result.success()).isFalse();
+    assertThat(result.reason()).isEqualTo("ROUTE_NOT_FOUND");
+    assertThat(result.newPythoco()).isEqualTo(100);
+    assertThat(result.newEnergy()).isEqualTo(50);
+    assertThat(result.minutesPassed()).isZero();
   }
 
   @Test
-  void travelRejectsAtDailyCapTen() {
+  void travelRejectsMissingRouteBeforeDailyCap() {
     FastTravelResult result =
-        service.travel(TEST_USER_ID, "town_hub", "mine_south", 1, 100, 50, 10);
+        service.travel(TEST_USER_ID, "town_hub", "atlantis", 1, 100, 50, 10);
 
     assertThat(result.success()).isFalse();
-    assertThat(result.reason()).isEqualTo("DAILY_CAP");
+    assertThat(result.reason()).isEqualTo("ROUTE_NOT_FOUND");
     assertThat(result.newPythoco()).isEqualTo(100);
     assertThat(result.newEnergy()).isEqualTo(50);
     assertThat(result.minutesPassed()).isZero();

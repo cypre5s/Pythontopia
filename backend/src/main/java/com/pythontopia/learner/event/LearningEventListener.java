@@ -30,7 +30,7 @@ public class LearningEventListener {
   public void onPracticePass(LearningEvent.PracticeSucceeded event) {
     masteryEvaluator.applyEventWithDifficulty(event.userId(), event.kcCode(),
         MasterySource.PRACTICE_PASS, null, "problem:" + event.problemId(),
-        loadDifficulty(event.problemId()));
+        event.difficulty() == null ? loadDifficulty(event.problemId()) : event.difficulty());
   }
 
   @EventListener
@@ -38,7 +38,7 @@ public class LearningEventListener {
     masteryEvaluator.applyEventWithDifficulty(event.userId(), event.kcCode(),
         MasterySource.PRACTICE_FAIL, null,
         "problem:" + event.problemId() + ":" + event.failureKind(),
-        loadDifficulty(event.problemId()));
+        event.difficulty() == null ? loadDifficulty(event.problemId()) : event.difficulty());
   }
 
   @EventListener

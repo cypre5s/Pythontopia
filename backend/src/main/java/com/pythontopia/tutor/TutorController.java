@@ -12,6 +12,7 @@ import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -59,6 +60,14 @@ public class TutorController {
       @CurrentUser CurrentUserPrincipal user,
       @RequestParam(defaultValue = "20") int limit) {
     return service.listSessions(user.userId(), limit);
+  }
+
+  /** 取某会话窗口内的全部问答（按时间升序），用于前端多轮 thread。按当前用户过滤防越权。 */
+  @GetMapping("/conversations/{conversationId}")
+  public List<TutorSessionDto> listConversation(
+      @CurrentUser CurrentUserPrincipal user,
+      @PathVariable String conversationId) {
+    return service.listConversation(user.userId(), conversationId);
   }
 
   private void requireStudent(CurrentUserPrincipal user) {

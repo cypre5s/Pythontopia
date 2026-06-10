@@ -61,11 +61,11 @@ interface BootSceneCreateContext {
   input?: { removeAllListeners(): unknown };
 }
 
-// R-14 方案A：世界收缩为单一中央小镇 + Bug 矿洞支线，其余外围图已删除。
-// BootScene 只预加载这两张实景地图，切场景时直接命中缓存。
+// R-14 方案A：世界收缩为单一中央小镇 town_hub；Bug 矿洞风景地图(mine_south)已删除，
+// Bug 矿洞功能改为 town_hub building → /bug-mine 页面，不再是 Phaser 实景地图。
+// BootScene 只预加载 town_hub，切场景时直接命中缓存。
 const WORLD_MAP_KEYS: ReadonlyArray<string> = [
   'town_hub',
-  'mine_south',
 ];
 
 const SFX_LIST: ReadonlyArray<[string, string]> = [
@@ -215,7 +215,7 @@ export const BootScene = {
     for (const [key, url] of SFX_LIST) loader.audio(key, url);
     for (const [key, url] of BGM_LIST) loader.audio(key, url);
 
-    // 地图清单 + 5 张 Tiled JSON：loader 桩可能未实现这两个方法，因此使用 ?.()。
+    // 地图清单 + Tiled JSON（R-14 单 hub，仅 town_hub）：loader 桩可能未实现这两个方法，因此使用 ?.()。
     loader.json?.('map_index', '/assets/maps/index.json');
     for (const mapKey of WORLD_MAP_KEYS) {
       loader.tilemapTiledJSON?.(`map_${mapKey}`, `/assets/maps/${mapKey}.json`);
@@ -231,13 +231,16 @@ export const BootScene = {
     // 初始地图从 world.player.mapKey 读取（传送 / 重连恢复存档），而非硬编码 town_hub。
     // 兜底：worldStore 未初始化或 mapKey 不在支持列表中时仍走 town_hub。
     const initialMap = resolveInitialMapKey();
-    this.scene.start('WorldScene', { mapKey: initialMap });
+    // 等中文像素字体真正就绪再进入世界，避免 NPC 名牌/气泡用回退字体测宽导致文字溢出背景。
+    const startWorld = (): void => {
+      this.scene.start('WorldScene', { mapKey: initialMap });
+    };
+    void ensurePixelFontLoaded().then(startWorld).catch(startWorld);
   },
 };
 
 const ALLOWED_INITIAL_MAPS = new Set([
   'town_hub',
-  'mine_south',
 ]);
 
 function resolveInitialMapKey(): string {

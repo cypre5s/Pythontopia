@@ -40,14 +40,20 @@ watch(
 </script>
 
 <template>
-  <div class="fill-blank-card" data-testid="fill-blank-card">
+  <div
+    class="fill-blank-card"
+    data-testid="fill-blank-card"
+  >
     <header class="card-head">
       <span class="card-icon">▭</span>
       <h3>代码填空</h3>
       <span class="blank-count">{{ blankCount }} 处待填</span>
     </header>
     <div class="code-body">
-      <template v-for="(seg, i) in segments" :key="i">
+      <template
+        v-for="(seg, i) in segments"
+        :key="i"
+      >
         <span class="code-seg">{{ seg }}</span>
         <input
           v-if="i < blankCount"
@@ -60,7 +66,9 @@ watch(
         >
       </template>
     </div>
-    <p class="hint">在高亮空位填入正确代码，使程序按预期输出。</p>
+    <p class="hint">
+      在高亮空位填入正确代码，使程序按预期输出。
+    </p>
   </div>
 </template>
 

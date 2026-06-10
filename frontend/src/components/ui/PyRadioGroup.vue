@@ -95,7 +95,10 @@ function onKeydown(event: KeyboardEvent, index: number): void {
       @click="select(option)"
       @keydown="onKeydown($event, index)"
     >
-      <span class="py-radio__dot" aria-hidden="true" />
+      <span
+        class="py-radio__dot"
+        aria-hidden="true"
+      />
       <span class="py-radio__label">{{ option.label }}</span>
     </button>
   </div>

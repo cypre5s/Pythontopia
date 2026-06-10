@@ -31,15 +31,35 @@ export const router = createRouter({
       component: () => import('@/pages/WorldPage.vue'),
       meta: { fullscreen: true, requiresAuth: true },
     },
-    // 向后兼容：旧的 /town /field /bug-mine 路由保留，但直接 redirect 到 /world，
-    // 由 WorldScene 内部用 sceneKey 切换 town_hub / mine_south（R-14 单 hub）。
-    // /bug-mine 用 function-form 透传 ?side=east|west（mine_south.json 引用过）。
+    // 向后兼容：旧的 /town /field 路由 redirect 到 /world（R-14 单中央 hub）。
+    // /bug-mine 现为独立页面（mine_south 风景地图已删），不再 redirect、不切 Phaser 场景。
     { path: '/town', redirect: '/world' },
     { path: '/field', redirect: '/world' },
     {
       path: '/bug-mine',
       name: 'bug-mine',
       component: () => import('@/pages/BugMinePage.vue'),
+      beforeEnter: (to) => {
+        const {
+          submissionId,
+          sessionId,
+          bugMineSessionId,
+          ...safeQuery
+        } = to.query;
+        if (
+          submissionId !== undefined
+          || sessionId !== undefined
+          || bugMineSessionId !== undefined
+        ) {
+          return {
+            path: '/bug-mine',
+            query: safeQuery,
+            hash: to.hash,
+            replace: true,
+          };
+        }
+        return true;
+      },
       // 错题矿洞本身是聚焦调试场景，不挂随身助教（避免与逐层下探干扰）。
       meta: { requiresAuth: true, hideCompanion: true },
     },
@@ -58,14 +78,17 @@ export const router = createRouter({
     {
       path: '/workshop',
       name: 'workshop',
+      // 百晓工坊本身就是 AI 答疑/资源生成主面板，右下角再挂「随身助教」浮层属重复入口，
+      // 故 hideCompanion 关掉工坊内的随身助教快捷按钮（与 /training、/bug-mine 同理）。
+      meta: { requiresAuth: true, hideCompanion: true },
       component: () => import('@/pages/WorkshopPage.vue'),
-      meta: { requiresAuth: true },
     },
     {
       path: '/library',
       name: 'library',
       component: () => import('@/pages/LibraryPage.vue'),
-      meta: { requiresAuth: true },
+      // 课件阅读器右侧已有 RAG 检索与阅读区，不重复挂右下角「随身助教」。
+      meta: { requiresAuth: true, hideCompanion: true },
     },
     // 章节视频讲解页（超星任务点视频 / 无视频时回退到 PPT）。
     // 由 NPC 对话的 open_panel 效果（route="/lecture/:chapter"）进入。
@@ -73,7 +96,8 @@ export const router = createRouter({
       path: '/lecture/:chapter(\\d+)',
       name: 'lecture',
       component: () => import('@/pages/LecturePage.vue'),
-      meta: { requiresAuth: true },
+      // 视频讲解页右侧已有 AI 助教侧栏，不重复挂随身助教浮层。
+      meta: { requiresAuth: true, hideCompanion: true },
       props: (route) => ({ chapter: Number(route.params.chapter) }),
     },
     {
@@ -106,6 +130,14 @@ export const router = createRouter({
       name: 'review-hall',
       component: () => import('@/pages/ReviewHallPage.vue'),
       meta: { requiresAuth: true },
+    },
+    // 费曼反演（创新点 C）：教会会犯你同款错的 AI 学弟 → 真判题回流。
+    // 复盘大厅「测」入口与 NPC 对话可跳转 /feynman?kc=...。
+    {
+      path: '/feynman',
+      name: 'feynman',
+      component: () => import('@/pages/FeynmanPage.vue'),
+      meta: { requiresAuth: true, hideCompanion: true },
     },
     // 导师并入「百晓工坊」。/tutor 永久重定向到 /workshop，
     // PauseMenu / HomePage / GuideOverlay / NPC 对话等旧入口自动落到合并页。

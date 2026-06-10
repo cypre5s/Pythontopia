@@ -67,6 +67,24 @@ public class TutorSessionRepository {
         userId, safeLimit);
   }
 
+  /**
+   * 取某会话窗口内的全部问答（按时间升序），用于多轮 thread 展示与「真·多轮记忆」上下文注入。
+   * 同时按 user_id 过滤，杜绝跨用户读他人会话。
+   */
+  public List<TutorSessionDto> findByConversation(Long userId, String conversationId, int limit) {
+    int safeLimit = Math.max(1, Math.min(limit, 50));
+    return jdbcTemplate.query(
+        """
+        SELECT id, question, answer_md, evidence_page_ids, grounding_status, conversation_id, created_at
+        FROM tutor_session
+        WHERE user_id = ? AND conversation_id = ?
+        ORDER BY created_at ASC
+        LIMIT ?
+        """,
+        this::mapDto,
+        userId, conversationId, safeLimit);
+  }
+
   private TutorSessionDto mapDto(ResultSet rs, int rowNum) throws SQLException {
     return new TutorSessionDto(
         rs.getLong("id"),

@@ -66,6 +66,10 @@ export interface BossProblemRequest {
   preferredKc?: string;
   /** 题型偏好（fill_blank / debug / multi_round 等）。 */
   preferredKind?: string;
+  /** 闯关塔单关 id（形如 "1-3"）：作为预生成 / 复用题的维度之一，后端按维度匹配 READY 行。 */
+  arenaLevel?: string;
+  /** 期望难度 1..5：用于「预取按当前难度」；普通出题留空由后端按学情推断。 */
+  difficulty?: number;
   profileSignals?: ProfileSignalsDto;
 }
 

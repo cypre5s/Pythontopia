@@ -33,10 +33,9 @@ describe('generated Tiled maps', () => {
       execFileSync('node', [tempScript], { stdio: 'pipe' });
 
       const generatedMapsDir = path.join(tempRoot, 'frontend', 'public', 'assets', 'maps');
-      // R-14 方案A：世界收缩为单一中央小镇 + Bug 矿洞支线，外围图已删除。
+      // R-14 方案A：世界收缩为单一中央小镇 town_hub；外围图与 mine_south 风景图均已删除。
       const files = [
         'town_hub.json',
-        'mine_south.json',
         'index.json',
       ];
 

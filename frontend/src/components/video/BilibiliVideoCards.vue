@@ -15,10 +15,14 @@ const props = withDefaults(
     keyword: string;
     limit?: number;
     heading?: string;
+    /** 版块说明：解释这些是外部资源、如何使用、时长定位（空串则不显示）。 */
+    caption?: string;
   }>(),
   {
     limit: 8,
     heading: 'B站精选讲解',
+    caption:
+      '外部资源 · 点击卡片前往 B 站观看。已为初学者优先精选 10 分钟以内的短视频，作为课件之外的补充讲解。',
   },
 );
 
@@ -91,9 +95,19 @@ watch(() => props.keyword, load);
     data-testid="bili-cards"
   >
     <header class="bili-cards__head">
-      <h3 class="bili-cards__title">{{ heading }}</h3>
+      <h3 class="bili-cards__title">
+        {{ heading }}
+      </h3>
       <span class="bili-cards__src">外部资源·B站</span>
     </header>
+
+    <p
+      v-if="caption"
+      class="bili-cards__caption"
+      data-testid="bili-cards-caption"
+    >
+      {{ caption }}
+    </p>
 
     <p
       v-if="status === 'loading'"
@@ -146,8 +160,14 @@ watch(() => props.keyword, load);
           <p class="bili-card__name">{{ v.title }}</p>
           <p
             class="bili-card__desc"
-            :class="{ 'bili-card__desc--empty': !v.description }"
-          >{{ v.description || 'UP 主未填写简介' }}</p>
+            :class="{ 'bili-card__desc--empty': !v.aiSummary }"
+          >
+            <span
+              class="bili-card__ai-tag"
+              :title="v.aiSummary ? 'AI 依据标题/简介/时长生成的速览，仅供参考' : 'AI 速览暂不可用'"
+            >AI</span>
+            <span class="bili-card__ai-text">{{ v.aiSummary || '点击前往 B 站观看' }}</span>
+          </p>
           <div class="bili-card__meta">
             <span class="bili-card__up">UP主 {{ v.author || '—' }}</span>
             <span class="bili-card__play">▶ {{ formatCount(v.play) }}</span>
@@ -195,6 +215,13 @@ watch(() => props.keyword, load);
   border: 1px solid var(--pyt-color-border);
   border-radius: var(--pyt-radius-full);
   white-space: nowrap;
+}
+/* 版块说明：让学生知道这些是外部 B站 资源、时长定位与用法（而非课件内容）。 */
+.bili-cards__caption {
+  margin: 0;
+  font-size: var(--pyt-font-size-xs);
+  line-height: 1.5;
+  color: var(--pyt-color-text-muted);
 }
 .bili-cards__hint {
   margin: 0;
@@ -265,22 +292,30 @@ watch(() => props.keyword, load);
 .bili-card__cover {
   position: relative;
   width: 100%;
-  aspect-ratio: 16 / 10;
+  /* 用 padding 比例盒（16:10 → 10/16=62.5%）而非 aspect-ratio：
+     在弹性列 / 不同浏览器里都严格按「宽度 × 62.5%」定高，
+     无论 B站封面原始尺寸如何，所有卡片封面都等高（彻底消除参差）。 */
+  height: 0;
+  padding-top: 62.5%;
   overflow: hidden;
   border-radius: var(--pyt-radius-sm);
   background: var(--pyt-color-terminal-bg);
   /* 卡片随 grid-auto-rows 拉伸时封面不被压扁：锁定比例，多余空间留给下方 meta。 */
   flex: 0 0 auto;
 }
-.bili-card__img {
+/* 封面图 / 占位都绝对铺满比例盒，object-fit:cover 裁切到统一画幅。 */
+.bili-card__img,
+.bili-card__cover-fallback {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
+}
+.bili-card__img {
   object-fit: cover;
   display: block;
 }
 .bili-card__cover-fallback {
-  width: 100%;
-  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -321,12 +356,12 @@ watch(() => props.keyword, load);
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-/* 每个视频的「讲解」：UP 主简介（真实数据），2 行截断保证卡片版式整齐。 */
+/* 每个视频的「AI 速览」：后端 LLM 依据标题+简介+时长生成的一句话，标注 AI、2 行截断。 */
 .bili-card__desc {
   margin: 0;
   font-size: var(--pyt-font-size-xs);
   line-height: 1.4;
-  /* 预留 2 行高度：与标题同理，简介行数差异不影响卡片高度。 */
+  /* 预留 2 行高度：与标题同理，速览行数差异不影响卡片高度。 */
   min-height: calc(2 * 1.4em);
   color: var(--pyt-color-text-muted);
   display: -webkit-box;
@@ -335,9 +370,26 @@ watch(() => props.keyword, load);
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+/* 「AI」小标记：明示这句是 AI 生成（防幻觉/可信度提示），随文字行内排布、被 line-clamp 一起截断。 */
+.bili-card__ai-tag {
+  display: inline-block;
+  margin-right: 4px;
+  padding: 0 4px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.4;
+  vertical-align: text-top;
+  color: var(--pyt-color-info);
+  background: var(--pyt-color-info-bg);
+  border: 1px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-sm);
+}
 .bili-card__desc--empty {
   font-style: italic;
   color: var(--pyt-color-text-hint);
+}
+.bili-card__desc--empty .bili-card__ai-text {
+  font-style: italic;
 }
 .bili-card__meta {
   /* 推到卡片底部，使同一行卡片的 UP主/播放量基线对齐（等高卡片的收尾）。 */

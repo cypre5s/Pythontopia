@@ -1,3 +1,4 @@
+/* eslint-disable vue/one-component-per-file -- 本测试文件内联多个最小桩组件用于 i18n 用例，非生产组件 */
 import { mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { computed, defineComponent, h, nextTick } from 'vue';

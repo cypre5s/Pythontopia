@@ -4,7 +4,6 @@ import { resolveQuestGuidance } from '@/utils/questGuidance';
 
 const VALID_MAPS = new Set([
   'town_hub',
-  'mine_south',
 ]);
 
 describe('resolveQuestGuidance（学习目标面板「下一步」指路）', () => {
@@ -30,6 +29,24 @@ describe('resolveQuestGuidance（学习目标面板「下一步」指路）', ()
     expect(g.stepText).not.toContain('KC-008');
     expect(g.stepText).toContain('STORYBOARD');
     expect(g.stepText).toContain('历史故事板');
+  });
+
+  it('EVALUATION resource → 指路到复盘师 Sage', () => {
+    const g = resolveQuestGuidance({
+      id: 'test-evaluation',
+      chapter: 7,
+      index: 99,
+      title: '复盘评估',
+      hint: '找 Sage 复盘',
+      mapKey: 'town_hub',
+      kcCodes: ['PY43-KC-060'],
+      evidenceRequired: { type: 'resource_consumed', resourceType: 'EVALUATION' },
+      rewards: [],
+    });
+
+    expect(g.npcKey).toBe('sage_review');
+    expect(g.npcName).toBe('复盘师 Sage');
+    expect(g.stepText).toContain('复盘评估');
   });
 
   it('submission → 指路到教务 Q（训练场）', () => {

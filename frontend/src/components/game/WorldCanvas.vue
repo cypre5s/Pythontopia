@@ -208,7 +208,10 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <div class="world-frame" :class="{ 'world-frame--smooth': !gameSettings.display.pixelPerfect }">
+  <div
+    class="world-frame"
+    :class="{ 'world-frame--smooth': !gameSettings.display.pixelPerfect }"
+  >
     <div
       ref="root"
       class="world-root"

@@ -48,7 +48,7 @@ class BossControllerTest {
         .perform(
             post("/api/world/boss/1/problem")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(new BossProblemRequest(1, null, 2, null, null, null))))
+                .content(objectMapper.writeValueAsString(new BossProblemRequest(1, null, 2, null, null, null, null))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.problemId").value("ai-1"))
         .andExpect(jsonPath("$.aiGenerated").value(true))
@@ -61,7 +61,7 @@ class BossControllerTest {
         .perform(
             post("/api/world/boss/1/problem")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(new BossProblemRequest(99, null, 2, null, null, null))))
+                .content(objectMapper.writeValueAsString(new BossProblemRequest(99, null, 2, null, null, null, null))))
         .andExpect(status().isBadRequest());
   }
 
@@ -71,13 +71,13 @@ class BossControllerTest {
         .perform(
             post("/api/world/boss/0/problem")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(new BossProblemRequest(1, null, 1, null, null, null))))
+                .content(objectMapper.writeValueAsString(new BossProblemRequest(1, null, 1, null, null, null, null))))
         .andExpect(status().isBadRequest());
     mockMvc
         .perform(
             post("/api/world/boss/8/problem")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(new BossProblemRequest(1, null, 1, null, null, null))))
+                .content(objectMapper.writeValueAsString(new BossProblemRequest(1, null, 1, null, null, null, null))))
         .andExpect(status().isBadRequest());
   }
 
@@ -86,7 +86,7 @@ class BossControllerTest {
     BossAttemptResultDto result =
         new BossAttemptResultDto(
             "ai-1", true, 3, 3, null, 95, "通过");
-    when(service.evaluateAttempt(any())).thenReturn(result);
+    when(service.evaluateAttempt(any(), any())).thenReturn(result);
 
     mockMvc
         .perform(

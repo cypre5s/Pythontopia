@@ -62,3 +62,17 @@ export async function teachFeynmanSession(
   );
   return response.data;
 }
+
+export interface FeynmanVerdictDto {
+  sessionId: number;
+  passed: boolean;
+  message: string;
+}
+
+export async function judgeFeynmanSession(sessionId: number): Promise<FeynmanVerdictDto> {
+  const response = await http.post<FeynmanVerdictDto>(
+    `/api/feynman/sessions/${encodeURIComponent(String(sessionId))}/judge`,
+    {},
+  );
+  return response.data;
+}

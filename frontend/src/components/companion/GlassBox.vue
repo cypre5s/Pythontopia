@@ -38,16 +38,37 @@ function expanded(t: string): string {
 </script>
 <template>
   <div class="gb">
-    <div v-if="busy" class="gb__l">...</div>
-    <details v-for="(d,i) in items" :key="i" class="gb__i">
+    <div
+      v-if="busy"
+      class="gb__l"
+    >
+      ...
+    </div>
+    <details
+      v-for="(d,i) in items"
+      :key="i"
+      class="gb__i"
+    >
       <summary>
         <b>{{ d.agent_name }}</b> {{ d.scenario }}
-        <span class="gb__b" :class="{ok:d.status==='SUCCESS'}">{{ d.status }}</span>
+        <span
+          class="gb__b"
+          :class="{ok:d.status==='SUCCESS'}"
+        >{{ d.status }}</span>
       </summary>
       <div class="gb__d">
-        <p v-if="d.evidence_page_ids?.length">📄 证据页: {{ d.evidence_page_ids.join(', ') }}</p>
-        <p v-else>通识知识</p>
-        <p v-if="d.trace" class="gb__t">{{ expanded(d.trace) }}</p>
+        <p v-if="d.evidence_page_ids?.length">
+          📄 证据页: {{ d.evidence_page_ids.join(', ') }}
+        </p>
+        <p v-else>
+          通识知识
+        </p>
+        <p
+          v-if="d.trace"
+          class="gb__t"
+        >
+          {{ expanded(d.trace) }}
+        </p>
       </div>
     </details>
   </div>

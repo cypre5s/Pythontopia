@@ -17,10 +17,15 @@ export interface BilibiliVideoDto {
   /** UP 主昵称。 */
   author: string;
   /**
-   * UP 主填写的视频简介（后端已去标签 / 反转义 / 截断），作为「这个视频讲什么」的真实讲解。
-   * UP 主未填写时为空串（卡片给中性占位，不伪造内容）。
+   * UP 主填写的视频简介（后端已去标签 / 反转义 / 截断）。仅作为后端生成 `aiSummary` 的素材，
+   * **前端不再直接展示**（保留字段以备调试）。
    */
   description: string;
+  /**
+   * 「AI 速览」一句话：后端按 标题 + 简介 + 时长 让 LLM 概括「这视频讲了啥 / 为什么值得看」，
+   * 只概括已有信息、防幻觉。LLM 不可用 / 超时时为空串（卡片给中性占位并标注 AI，不伪造）。
+   */
+  aiSummary: string;
   /** 封面缩略图（已统一 `https:`，配合 `referrerpolicy=no-referrer` 规避防盗链）。 */
   coverUrl: string;
   /** 时长（秒）。 */

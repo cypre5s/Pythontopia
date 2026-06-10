@@ -789,6 +789,7 @@ watch(chapterNoForVideo, (next) => {
                 <p class="muted video-fallback-note">
                   本章暂无课件视频，以下为文字摘录：
                 </p>
+                <!-- eslint-disable vue/no-v-html — renderPageHtml 内部 DOMPurify.sanitize 严格白名单清洗，已审阅 -->
                 <div
                   v-if="pageDetail && (pageDetail.contentMarkdown || pageDetail.excerpt)"
                   class="page-prose page-prose--md"
@@ -800,6 +801,7 @@ watch(chapterNoForVideo, (next) => {
                 >
                   （本页暂无可读文本）
                 </p>
+                <!-- eslint-enable vue/no-v-html -->
               </template>
             </div>
             <p

@@ -28,11 +28,14 @@ class JudgeServiceTest {
   private final StaticCodeChecker checker = new StaticCodeChecker("python3");
   private final ObjectMapper mapper = new ObjectMapper();
   private final JudgeWorkerPool workerPool = new JudgeWorkerPool();
+  private final JudgeCaseEvaluator caseEvaluator = new JudgeCaseEvaluator(sandbox, mapper);
   private JudgeService judge;
 
   @BeforeEach
   void setUp() {
-    judge = new JudgeService(submissions, problems, sandbox, checker, mapper, workerPool);
+    judge =
+        new JudgeService(
+            submissions, problems, sandbox, checker, mapper, workerPool, caseEvaluator);
   }
 
   @Test

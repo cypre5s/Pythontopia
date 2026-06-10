@@ -171,3 +171,26 @@ export async function submitBossAttempt(
     score: 0,
   };
 }
+
+/**
+ * 触发后台「预生成下一题」：POST /api/world/boss/{chapter}/prefetch。
+ *
+ * best-effort fire-and-forget——后端异步生成并落库 (status=READY)，本调用立即 resolve；任何失败
+ * （4xx/5xx/网络）只 warn 不抛、不弹全局 toast（suppressNetworkToast），因为 nextProblem 会自然回退
+ * 现场出题，预取仅为加速、非必需。
+ */
+export async function prefetchBossProblem(
+  chapter: number,
+  req: BossProblemRequest,
+): Promise<void> {
+  try {
+    await http.post(`/api/world/boss/${chapter}/prefetch`, req, {
+      suppressNetworkToast: true,
+    });
+  } catch (error) {
+    if (typeof console !== 'undefined') {
+      const msg = error instanceof Error ? error.message : String(error);
+      console.warn('[boss] prefetch failed (ignored):', msg);
+    }
+  }
+}

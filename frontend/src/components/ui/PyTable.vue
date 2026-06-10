@@ -43,7 +43,12 @@ function cellText(value: unknown): string {
     </thead>
     <tbody>
       <tr v-if="rows.length === 0">
-        <td class="py-table__empty" :colspan="columns.length">{{ empty }}</td>
+        <td
+          class="py-table__empty"
+          :colspan="columns.length"
+        >
+          {{ empty }}
+        </td>
       </tr>
       <tr
         v-for="(row, index) in rows"
@@ -60,7 +65,9 @@ function cellText(value: unknown): string {
             :name="col.key"
             :row="row"
             :value="row[col.key]"
-          >{{ cellText(row[col.key]) }}</slot>
+          >
+            {{ cellText(row[col.key]) }}
+          </slot>
         </td>
       </tr>
     </tbody>

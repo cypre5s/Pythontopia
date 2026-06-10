@@ -309,12 +309,12 @@ describe('BugMinePanel', () => {
     await wrapper.find('[data-testid="variant-problem-button"]').trigger('click');
     await flushPromises();
     expect(getPublicProblem).toHaveBeenCalledWith(501);
+    // S1：变式会话私有 id 改走 store（pendingVariantSessionId），不写进 URL（bugMineSessionId 已移除）。
     expect(learning.bugMine.pendingVariantSessionId).toBe(100);
     expect(pushSpy).toHaveBeenCalledWith({
       path: '/training',
       query: {
         problemId: '501',
-        bugMineSessionId: '100',
         variant: '1',
       },
     });

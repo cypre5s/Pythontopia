@@ -1,16 +1,16 @@
 # Pythontopia
 
 > 面向高校 Python 初学者的网页版像素学习小镇。
-> 学生在小镇里通过对话画像、知识种植、资源工坊、训练场提交、Bug 矿洞调试和复盘大厅，把一门完整的《Python 语言基础》课程走完一遍。教育优先，游戏承载。
+> 学生在单一中央小镇 `town_hub` 中通过对话画像、课件阅读、资源工坊、训练场提交、Bug 矿洞调试和复盘大厅，把一门完整的《Python 语言基础》课程走完一遍。教育优先，游戏承载。
 
-测试基线：backend 101 + graph 59 + rag 18 + frontend 56 = **234 / 234 通过**（详见 `docs/release/regression_report.md`）。
+当前验收以本仓库测试命令为准：frontend lint / typecheck / test / build，backend compile / test / package，graph/rag pytest，以及真实浏览器走查。
 
 ---
 
 ## 1. 项目定位
 
 - **课程底座**：`packId=43`《Python 语言基础》，7 文档 / 561 页 / 7 章 / 65 KC / 46 示例 / 39 题，全部内置在 `data/course-pack-43/`。
-- **教学闭环**：画像 → 知识田 → 资源工坊 → 训练场 → Bug 矿洞 → 复盘大厅 → 路径重排，全部以真实数据驱动，不做纯前端假数据。
+- **教学闭环**：画像 → 看课件/视频/RAG → 资源工坊 → 训练场 → Bug 矿洞 → 复盘大厅 → 路径重排，全部以真实数据驱动，不做纯前端假数据。
 - **多智能体**：11 个 Agent（Profile / CurriculumMapper / ResourceDesigner / MindMap / Practice / CodeLab / Storyboard / PathPlanner / Debug / GroundingCritic / Safety），全部结构化输出 + 课件证据审查。
 - **轻量班级**：教师创建班级 / 发布班级任务 / 班级 KC 热力图 / 高频误区 / 资源使用看板。
 - **双轨执行**：Pyodide 即时预览 + 服务端正式判题（subprocess 沙箱 + 静态检查 + 限频 + 隐藏用例不下发）。
@@ -19,13 +19,13 @@
 
 | 游戏元素 | 教育语义 |
 | --- | --- |
-| 知识种子 | KC（Knowledge Component） |
-| 浇水 / 施肥 | 学习资源消费 |
-| 除草 | 完成练习题 |
+| KC 任务 | Knowledge Component 学习目标 |
+| 看 | 课程视频 / PPT / 课件问答（RAG） |
+| 学 | 资源工坊生成并消费学习资源 |
+| 练 | 训练场提交真实题目判题 |
+| 测 | 掌握度达到阈值 |
 | 病害 / 矿洞事件 | 提交失败 → 进 Bug 矿洞 |
-| 作物成长 | KC 掌握度上升 |
-| 枯萎 | 长期遗忘衰减 |
-| 收获 / 再播种 | 复盘 → 路径重排 |
+| 复盘大厅 | 周期评估 → 路径重排 |
 
 每个玩法都对应教育闭环中的一个动作，没有纯装饰系统。详见 `AGENTS.md`「游戏化规则」。
 
@@ -35,7 +35,7 @@
 | --- | --- | --- |
 | 后端 | Java 21 + Spring Boot 3.3 + Maven + Flyway + PostgreSQL 15 + Redis | DTO 严格分离，统一 `ApiError`，Testcontainers 集成测试 |
 | 前端 | Vue 3 + Vite + TypeScript strict + Pinia + Vitest | 业务层禁 `any`；Phaser 3 隔离在 adapter 层 |
-| 游戏渲染 | Phaser 3 | 30×20 像素地图 + NPC + 建筑交互 |
+| 游戏渲染 | Phaser 3 | R-14 单一中央 `town_hub`（50×40）+ `mine_south` Bug 支线 + NPC + 建筑交互 |
 | Agent 服务 | Python 3.11 + FastAPI + LangGraph | 全部 pydantic 结构化输出，不启用 ReAct |
 | RAG 服务 | Python 3.11 + FastAPI + 向量检索 + pgvector | `X-Internal-Token` 保护重建端点 |
 | 部署 | Docker Compose（6 服务） + 5 个一键脚本 | 演示数据自带，幂等可重入 |
@@ -109,13 +109,15 @@ cd services/pythontopia-rag && python -m pip install -e ".[dev]" && python -m py
 
 ## 6. 测试与质量基线
 
+> 基线随 Infinity Living World 验收（2026-06-09）更新；旧版「234」已严重过时。
+
 | 套件 | 通过 / 总数 | 备注 |
 | --- | --- | --- |
-| Backend（Spring Boot） | 101 / 101 | 含 Testcontainers 端到端 acceptance |
-| Graph（FastAPI + LangGraph） | 59 / 59 | 含 11 Agent 单测 + Spark provider 8 |
-| RAG（FastAPI + 向量） | 18 / 18 | 含 chunker / embedder / 索引重建 / 安全词 |
-| Frontend（Vue + Vitest） | 56 / 56 | 26 文件，含 Pinia store / API client / 组件 spec |
-| **合计** | **234 / 234** | 0 失败 / 0 错误 |
+| Backend（Spring Boot） | 464 / 464 | 含 Testcontainers 端到端 acceptance + 限频并发/补救/预言家/反思等 |
+| Graph（FastAPI + LangGraph） | 380 / 380 | 含 11 Agent 单测 + 编排真接力 + 语义接地 entailment |
+| RAG（FastAPI + 向量） | 21 / 21 | 含 chunker / embedder / 索引重建 / 安全词 |
+| Frontend（Vue + Vitest） | 1514 / 1514 | 142 文件，含 Pinia store / API client / 组件 spec |
+| **合计** | **2379 / 2379** | 0 失败 / 0 错误（typecheck 0 / lint 0 error） |
 
 完整命令矩阵见 `docs/test_report.md`，最新一轮回归见 `docs/release/regression_report.md`。
 
@@ -124,7 +126,7 @@ cd services/pythontopia-rag && python -m pip install -e ".[dev]" && python -m py
 | 文档 | 用途 |
 | --- | --- |
 | [`AGENTS.md`](./AGENTS.md) | 项目硬约束 + 目录约定 + 防幻觉规则 + 不做事项 |
-| [`docs/system_design.md`](./docs/system_design.md) | 总体架构 mermaid + 11 Agent 关系 + 5 个关键时序 |
+| [`docs/system_design.md`](./docs/system_design.md) | 总体架构 mermaid + 11 Agent 关系 + R-14 单 hub 关键时序 |
 | [`docs/demo_script.md`](./docs/demo_script.md) | 7 分钟分段演示脚本 + 风险与备用计划 |
 | [`docs/test_report.md`](./docs/test_report.md) | 4 套件命令矩阵 + 覆盖与未覆盖项 + 性能基线 |
 | [`docs/beta_acceptance_checklist.md`](./docs/beta_acceptance_checklist.md) | 27 项 Beta 验收清单 |
@@ -148,21 +150,23 @@ cd services/pythontopia-rag && python -m pip install -e ".[dev]" && python -m py
 | 00 ~ 15 | 仓库骨架 → Beta 验收 / PPT 收尾 | 已交付，见 `CHANGELOG.md` |
 | R-10 | 10 轮 Web 端代码质量与性能小步迭代 | 已完成，见 `docs/release/r10_summary.md` |
 | R-11 | 根 README 重写为成熟教学游戏作品门面 | 已完成，见 `docs/release/r100_iterations.md` |
-| R-12 ~ R-100 | Web 端持续小步成熟度迭代 | **冻结**：Web 端代码冻结在 R-11，资源转入 Android 化路线 |
+| R-12 | 星露谷化 Web 改造 | 已完成；5 图/作物旧方案已被 R-14 推翻 |
+| R-14 | 世界收缩方案 A | 进行中：主线收敛为单一 `town_hub`，外围图与农场/作物/货币/商店从主线移除 |
 | Android-R0 | Android 客户端启动：10 subagent 调研 + ADR-001 + roadmap | 已完成，见 `android/docs/` |
 | Android-R1 ~ R17 | Android 客户端从骨架到 Beta | 进行中，见 `android/docs/roadmap.md` |
 
 视频与 PPT 物件由真人按 `docs/demo_script.md` 与 `docs/release/demo_v1.md` 录制制作，不入 git。
 
-## 9.1 双端架构（重要）
+## 9.1 多端架构（重要）
 
-自 2026-05-22 起，Pythontopia 从单端 Web 项目演进为 **Web + Android 双客户端**：
+自 R-14 起，Pythontopia 从单端 Web 项目演进为 **Web / Android / Windows / 微信** 多端共用后端：
 
-- **Web 端**（`frontend/`）：Vue 3 + Phaser 3，已完成 15 阶段 + R-11，234 / 234 测试通过；**冻结**，不再迭代。
-- **Android 端**（`android/`）：Kotlin + Jetpack Compose + LibGDX，**新增**路线，复用后端 / Agent / RAG。
-- **后端**（`backend/` + `services/`）：双端共用唯一真理源，作为 REST API 提供方继续演进。
-- **比赛 Beta 日期**：用户已确认接受推迟（详见 `android/docs/roadmap.md` 时间预估）。
-- **详见**：`android/README.md` + `android/docs/ADR-001-tech-selection.md`。
+- **Web 端**（`frontend/`）：Vue 3 + Phaser 3，当前主线演示端；R-14 收敛为 `town_hub` 单 hub。
+- **Android 端**（`android/`）：Kotlin + Jetpack Compose + LibGDX，复用后端 / Agent / RAG。
+- **Windows 端**（`windows/`）：.NET 8 + WinUI 3 + MonoGame，建设中。
+- **微信端**（`wechat-miniprogram/` + `wechat-minigame/`）：小程序做学习陪伴，小游戏做像素小镇。
+- **后端**（`backend/` + `services/`）：多端共用唯一真理源，作为 REST API 提供方继续演进。
+- **详见**：`docs/clients/api-contract.md`、`docs/clients/README.md`、`android/README.md`、`android/docs/ADR-001-tech-selection.md`。
 
 ## 10. 许可
 

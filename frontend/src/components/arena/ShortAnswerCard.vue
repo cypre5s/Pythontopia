@@ -6,7 +6,10 @@ const code = defineModel<string>('code', { required: true });
 </script>
 
 <template>
-  <div class="short-answer-card" data-testid="short-answer-card">
+  <div
+    class="short-answer-card"
+    data-testid="short-answer-card"
+  >
     <header class="card-head">
       <span class="card-icon">✎</span>
       <h3>简答题</h3>
@@ -22,7 +25,9 @@ const code = defineModel<string>('code', { required: true });
         placeholder="用自己的话回答问题，AI 会根据课件内容评分…"
       />
     </label>
-    <p class="hint">回答将由 AI 对照课件真实内容（packId=43）进行 grounding 评分。</p>
+    <p class="hint">
+      回答将由 AI 对照课件真实内容（packId=43）进行 grounding 评分。
+    </p>
   </div>
 </template>
 

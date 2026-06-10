@@ -29,7 +29,7 @@ class MemoryStreamMirrorTest {
   @Test
   @SuppressWarnings("unchecked")
   void practiceFailedMirroredWithImportanceAndPayload() {
-    mirror.onPracticeFailed(new LearningEvent.PracticeFailed(7L, "PY43-KC-016", 5L, "WA"));
+    mirror.onPracticeFailed(new LearningEvent.PracticeFailed(7L, "PY43-KC-016", 5L, "WA", "medium"));
 
     ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.forClass(Map.class);
     verify(repository)
@@ -63,7 +63,7 @@ class MemoryStreamMirrorTest {
         .insert(anyLong(), anyString(), anyMap(), anyString(), anyInt());
 
     // 镜像写表抛异常时不得向上传播，否则会中断事件发布与 mastery/画像回写主链路。
-    mirror.onPracticeFailed(new LearningEvent.PracticeFailed(7L, "K", 1L, "WA"));
+    mirror.onPracticeFailed(new LearningEvent.PracticeFailed(7L, "K", 1L, "WA", "medium"));
     verifyNoInteractions(embeddingWriter);
     verifyNoInteractions(npcMemoryService);
   }

@@ -350,8 +350,17 @@ onUnmounted(() => {
       aria-label="展开 HUD"
       @click="onToggleTopBar"
     >
-      <svg class="hud-reveal-strip__arrow" width="16" height="6" viewBox="0 0 16 6" aria-hidden="true">
-        <path d="M4 0h8v1H4zM3 2h10v1H3zM2 4h12v1H2z" fill="currentColor"/>
+      <svg
+        class="hud-reveal-strip__arrow"
+        width="16"
+        height="6"
+        viewBox="0 0 16 6"
+        aria-hidden="true"
+      >
+        <path
+          d="M4 0h8v1H4zM3 2h10v1H3zM2 4h12v1H2z"
+          fill="currentColor"
+        />
       </svg>
     </button>
 
@@ -364,23 +373,60 @@ onUnmounted(() => {
       aria-label="状态条"
     >
       <div class="hud-status-left">
-        <button type="button" class="hud-chip hud-chip--btn" data-testid="hud-weather" :title="`天气：${hud.meta.weather}`" @click="onSleep">
+        <button
+          type="button"
+          class="hud-chip hud-chip--btn"
+          data-testid="hud-weather"
+          :title="`天气：${hud.meta.weather}`"
+          @click="onSleep"
+        >
           <span class="hud-chip__icon">{{ weatherIcon(hud.meta.weather) }}</span>
           <span class="hud-chip__value">{{ hud.meta.weather }}</span>
         </button>
-        <button type="button" class="hud-chip hud-chip--btn" data-testid="hud-day" title="点击推进时间" @click="onSleep">
+        <button
+          type="button"
+          class="hud-chip hud-chip--btn"
+          data-testid="hud-day"
+          title="点击推进时间"
+          @click="onSleep"
+        >
           <span class="hud-chip__value">Day {{ hud.meta.dayIndex }}</span>
         </button>
-        <button type="button" class="hud-chip hud-chip--btn" data-testid="hud-time" :title="`时段：${hud.meta.timeOfDay}`" @click="onSleep">
+        <button
+          type="button"
+          class="hud-chip hud-chip--btn"
+          data-testid="hud-time"
+          :title="`时段：${hud.meta.timeOfDay}`"
+          @click="onSleep"
+        >
           <span class="hud-chip__icon">{{ timeIcon(hud.meta.timeOfDay) }}</span>
         </button>
-        <button type="button" class="hud-chip hud-chip--btn" data-testid="hud-season" :title="`季节：${hud.meta.season}`" @click="onClickQuestSummary">
+        <button
+          type="button"
+          class="hud-chip hud-chip--btn"
+          data-testid="hud-season"
+          :title="`季节：${hud.meta.season}`"
+          @click="onClickQuestSummary"
+        >
           <span class="hud-chip__icon">{{ seasonIcon(hud.meta.season) }}</span>
         </button>
       </div>
       <div class="hud-status-right">
-        <button type="button" class="hud-status-name hud-chip--btn" title="点击查看画像" @click="playUiClick(); router.push('/profile')">{{ session.displayName }}</button>
-        <button type="button" class="hud-logout" data-testid="hud-logout" aria-label="退出登录" @click="onLogout">
+        <button
+          type="button"
+          class="hud-status-name hud-chip--btn"
+          title="点击查看画像"
+          @click="playUiClick(); router.push('/profile')"
+        >
+          {{ session.displayName }}
+        </button>
+        <button
+          type="button"
+          class="hud-logout"
+          data-testid="hud-logout"
+          aria-label="退出登录"
+          @click="onLogout"
+        >
           退出
         </button>
         <button
@@ -391,18 +437,46 @@ onUnmounted(() => {
           aria-label="隐藏 HUD"
           @click="onToggleTopBar"
         >
-          <svg width="10" height="6" viewBox="0 0 10 6" aria-hidden="true">
-            <path d="M1 5h8v-1H1zM2 3h6v-1H2zM3 1h4v-1H3z" fill="currentColor"/>
+          <svg
+            width="10"
+            height="6"
+            viewBox="0 0 10 6"
+            aria-hidden="true"
+          >
+            <path
+              d="M1 5h8v-1H1zM2 3h6v-1H2zM3 1h4v-1H3z"
+              fill="currentColor"
+            />
           </svg>
         </button>
       </div>
     </div>
     <!-- 能量/掌握/BGM/番茄钟 保留为隐藏的 a11y 元素 -->
-    <div class="hud-meta-hidden" aria-hidden="false" style="position:absolute;top:-9999px;">
-      <div class="hud-bar" data-testid="hud-energy" :aria-valuenow="energyPct" aria-valuemin="0" aria-valuemax="100" role="progressbar" aria-label="能量">
+    <div
+      class="hud-meta-hidden"
+      aria-hidden="false"
+      style="position:absolute;top:-9999px;"
+    >
+      <div
+        class="hud-bar"
+        data-testid="hud-energy"
+        :aria-valuenow="energyPct"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        role="progressbar"
+        aria-label="能量"
+      >
         <span class="hud-bar__value">{{ energyPct }}</span>
       </div>
-      <div class="hud-bar" data-testid="hud-mastery" :aria-valuenow="masteryPct" aria-valuemin="0" aria-valuemax="100" role="progressbar" aria-label="平均掌握度">
+      <div
+        class="hud-bar"
+        data-testid="hud-mastery"
+        :aria-valuenow="masteryPct"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        role="progressbar"
+        aria-label="平均掌握度"
+      >
         <span class="hud-bar__value">{{ masteryPct }}</span>
       </div>
       <span data-testid="hud-bgm">{{ currentBgm }}</span>
@@ -418,7 +492,10 @@ onUnmounted(() => {
     >
       <span class="hud-quest-bar__chapter">第{{ currentChapter }}章</span>
       <span class="hud-quest-bar__title">{{ chapterTitle }}</span>
-      <span class="hud-quest-bar__fill" :style="{ width: `${chapterPct}%` }" />
+      <span
+        class="hud-quest-bar__fill"
+        :style="{ width: `${chapterPct}%` }"
+      />
       <span class="hud-quest-bar__count">{{ chapterCountText }}</span>
     </button>
 

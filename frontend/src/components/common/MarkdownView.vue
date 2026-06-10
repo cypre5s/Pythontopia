@@ -30,6 +30,7 @@ const rendered = computed(() => {
 </script>
 
 <template>
+  <!-- eslint-disable vue/no-v-html — rendered 已经 marked + DOMPurify.sanitize 白名单清洗，无 XSS 风险，已审阅 -->
   <div
     v-if="!inline"
     class="md-view"
@@ -40,6 +41,7 @@ const rendered = computed(() => {
     class="md-view md-view--inline"
     v-html="rendered"
   />
+  <!-- eslint-enable vue/no-v-html -->
 </template>
 
 <style scoped>

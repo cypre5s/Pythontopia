@@ -1,5 +1,5 @@
-// WorldScene：单一场景通过 sceneKey 切换 town_hub / mine_south 两张实景地图，
-// 避免多实例资源浪费与状态错乱（R-14 外围图已从主线移除）。
+// WorldScene：R-14 世界收缩后仅 town_hub 一张实景地图（外围图与 mine_south 风景图已移除）。
+// 保留 sceneKey 切换 / 场景过渡机制以备将来扩展，但当前单 hub 下无跨图传送。
 //
 // NpcFramework + InteractableSystem 接入：
 //   - parseObjects 解析出的 npc 列表注册到 NpcFramework（patrol / 对话锚点 /
@@ -46,7 +46,6 @@ import {
 import { useWorldStore } from '@stores/world';
 import { useMainQuestStore } from '@stores/mainQuest';
 import { useMoodStore } from '@stores/mood';
-import { findMainQuestById } from '@/data/mainQuests';
 
 const TILE_SIZE = 16;
 const RENDER_SCALE = 1;
@@ -61,10 +60,10 @@ const MOVE_COOLDOWN_MS = 130;
 // 奔跑时缩短逐格移动冷却（手感更快），与 run 动画帧率配合。
 const RUN_COOLDOWN_FACTOR = 0.62;
 
-// 每张地图按主题映射一个「工具动作」（按 C 触发）：hub 庆祝挥手 / mine 挖矿。
+// 每张地图按主题映射一个「工具动作」（按 C 触发）：hub 庆祝挥手。
+// R-14：mine_south 风景图已删（Bug 矿洞改 /bug-mine 页面），未列地图按默认 celebrate 兜底。
 const MAP_TOOL_ACTION: Readonly<Record<string, CharacterAction>> = {
   town_hub: 'celebrate',
-  mine_south: 'mine',
 };
 function toolActionForMap(mapKey: string): CharacterAction {
   return MAP_TOOL_ACTION[mapKey] ?? 'celebrate';
@@ -75,10 +74,9 @@ const TURN_DELAY_MS = 70;
 const RAIN_SLOWDOWN = 1.25;
 const FADE_DURATION_MS = 280;
 
-// R-14 方案A：仅中央小镇 town_hub 与 Bug 矿洞支线 mine_south 为实景地图。
+// R-14 方案A：仅中央小镇 town_hub 为实景地图（mine_south 风景图已删，Bug 矿洞改 /bug-mine 页面）。
 const SUPPORTED_MAP_KEYS: ReadonlySet<string> = new Set([
   'town_hub',
-  'mine_south',
 ]);
 const DEFAULT_MAP_KEY = 'town_hub';
 
@@ -183,6 +181,9 @@ interface WorldSceneState {
   // 每个 NPC 的动画控制器，按 npcKey 索引；update() 每帧用
   // NpcFramework 实例位置同步贴图 + 行走/待机/工作手势动画。
   npcSprites: Map<string, NpcSpriteController>;
+  // 每个 NPC 的「按 E 对话」trigger 引用：wander 时每帧把 trigger 圆心同步到 NPC 当前
+  // 位置，让交互区跟随移动的 NPC（InteractableSystem 每帧读 shape，直接改 shape 即可）。
+  npcTriggers: Map<string, ITrigger>;
   hintRendererHandle: PhaserHintRendererHandle | null;
   lifecycleDetach: (() => void) | null;
   // npcFramework.update 需要 deltaMs。Phaser scene 的 this.time.now 是单调递增
@@ -215,6 +216,7 @@ const state: WorldSceneState = {
   interactable: null,
   npcFramework: null,
   npcSprites: new Map(),
+  npcTriggers: new Map(),
   hintRendererHandle: null,
   lifecycleDetach: null,
   prevUpdateTimeMs: 0,
@@ -344,6 +346,11 @@ export const WorldScene = {
     // NpcFramework 持有逻辑层 NPC（巡逻/朝向/对话状态），InteractableSystem 持有
     // trigger（distance + hint）；两者从相同的 npcs 列表派生，drawNpcSprite 维持视觉层。
     state.npcFramework = new NpcFramework(phaserScene);
+    // wander 避障：把 tile 级碰撞判定（含越界）暴露给 NpcFramework（世界像素坐标 → tile）。
+    state.npcFramework.setCollisionChecker((px, py) =>
+      isBlocked(Math.floor(px / RENDER_TILE_SIZE), Math.floor(py / RENDER_TILE_SIZE)),
+    );
+    state.npcTriggers.clear();
     state.hintRendererHandle = createPhaserHintRenderer(phaserScene);
     state.interactable = new InteractableSystem(phaserScene, {
       hintRenderer: state.hintRendererHandle.renderer,
@@ -363,6 +370,7 @@ export const WorldScene = {
         // 对话开始：NPC 朝向玩家并做一次点头/施法手势。
         state.npcSprites.get(npc.npcKey)?.playGesture('talk');
       });
+      state.npcTriggers.set(npc.npcKey, trigger);
       state.interactable?.register(trigger);
     });
 
@@ -469,6 +477,7 @@ export const WorldScene = {
         state.npcFramework = null;
         state.npcSprites.forEach((controller) => controller.destroy());
         state.npcSprites.clear();
+        state.npcTriggers.clear();
         state.hintRendererHandle?.destroy();
         state.hintRendererHandle = null;
         state.prevUpdateTimeMs = 0;
@@ -630,6 +639,12 @@ export const WorldScene = {
       if (state.npcFramework) {
         for (const instance of state.npcFramework.getAll()) {
           state.npcSprites.get(instance.id)?.sync(instance, safeDelta);
+          // wander 时把「按 E」trigger 圆心同步到 NPC 当前位置，交互区随之移动。
+          const trig = state.npcTriggers.get(instance.id);
+          if (trig && trig.shape.type === 'circle') {
+            trig.shape.x = instance.x;
+            trig.shape.y = instance.y;
+          }
         }
       }
     }
@@ -924,9 +939,9 @@ function paintQuestMarkers(
 ): void {
   try {
     const mqStore = useMainQuestStore();
-    const progress = mqStore.progress;
-    const questId = `${progress.currentChapter}-${progress.currentSubQuest}`;
-    const subQuest = findMainQuestById(questId);
+    // 单一事实源：地图标记消费 store.activeQuest（与左侧面板 / 进度条同源），
+    // 不再用 currentChapter-currentSubQuest 指针自拼 id，避免乱序时标记指向别的任务。
+    const subQuest = mqStore.activeQuest;
     if (!subQuest || subQuest.mapKey !== mapKey) return;
 
     const evidence = subQuest.evidenceRequired;
@@ -1103,6 +1118,9 @@ export function buildNpcDefinitionFromSpawn(
     spawnX,
     spawnY,
     patrol,
+    // 无 patrol（无日程巡逻）的 NPC 自由游走，半径 2 tile，避免「呆在原地」（R-14 需求8b）；
+    // wander 时 WorldScene 每帧同步对话 trigger 圆心，保证「按 E」交互不脱节。
+    wander: patrol ? undefined : { radiusPx: tileSize * 2 },
   };
 }
 

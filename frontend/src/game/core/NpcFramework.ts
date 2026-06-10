@@ -22,6 +22,18 @@ export interface NpcWaypoint {
   dwellMs?: number;
 }
 
+/** 自由游走配置：以 NPC spawn 为锚点，在半径内随机选点。 */
+export interface NpcWanderConfig {
+  /** 游走半径（px），以 spawn 为圆心。 */
+  radiusPx: number;
+  /** 游走速度 px/s（默认取 def.speed 或 32）。 */
+  speed?: number;
+  /** 到点最短停留毫秒（默认 1500）。 */
+  minDwellMs?: number;
+  /** 到点最长停留毫秒（默认 4500）。 */
+  maxDwellMs?: number;
+}
+
 export interface NpcDefinition {
   /** 唯一 ID，对应后端 npc_id 与 frontend/public/data/npcs/<key>/。 */
   id: string;
@@ -36,6 +48,11 @@ export interface NpcDefinition {
   patrol?: NpcWaypoint[] | undefined;
   /** 巡逻移动速度 px/s（默认 32）。 */
   speed?: number;
+  /**
+   * 自由游走（R-14 需求8b「所有 NPC 不呆在原地」）：无 patrol 的 NPC 在 spawn 周围
+   * radiusPx 内随机选可达点行走、到点随机 dwell。patrol 优先级高于 wander。
+   */
+  wander?: NpcWanderConfig | undefined;
   /** 任务发布器：true 表示该 NPC 可发布任务，scene 在交互时拉取任务列表。 */
   questPublisher?: boolean;
   /** 对话锚点偏移：玩家走到 (spawnX + dialogAnchor.x, spawnY + dialogAnchor.y) 时
@@ -56,10 +73,17 @@ export interface NpcInstance {
 interface NpcRuntime extends NpcInstance {
   /** dwell 剩余毫秒：到达 waypoint 时填入 dwellMs，按 deltaMs 倒计时。 */
   dwellRemainingMs: number;
+  /** 当前 wander 目标（null=需重新选点）。 */
+  wanderTargetX: number | null;
+  wanderTargetY: number | null;
 }
 
 const DEFAULT_SPEED_PX_PER_S = 32;
 const DEFAULT_DIRECTION: Direction = 'S';
+const DEFAULT_WANDER_MIN_DWELL_MS = 1500;
+const DEFAULT_WANDER_MAX_DWELL_MS = 4500;
+// pickWanderTarget 最多尝试候选点次数（全被碰撞挡住则本轮放弃，dwell 后重试）。
+const WANDER_CANDIDATE_TRIES = 8;
 // 浮点累积容差：sub-pixel 误差也算到达，避免 NPC 在 waypoint 周围抖。
 const ARRIVE_EPSILON = 1e-3;
 // faceTowards：玩家几乎站在 NPC 位置时不改朝向（避免 atan2(0,0) 退化）。
@@ -70,9 +94,19 @@ export class NpcFramework {
   // 仅保存引用以备未来扩展（如 scene.events 钩 shutdown 自动 clear）；
   // 当前实现不直接调用 scene API，因此单测用最小 stub 即可。
   private readonly scene: Phaser.Scene;
+  // 随机源（可注入便于单测确定化）。
+  private readonly rng: () => number;
+  // 碰撞判定（世界像素坐标 → 是否阻挡）；未注入时 wander 不做避障。
+  private collides: ((x: number, y: number) => boolean) | null = null;
 
-  constructor(scene: Phaser.Scene) {
+  constructor(scene: Phaser.Scene, opts?: { rng?: () => number }) {
     this.scene = scene;
+    this.rng = opts?.rng ?? Math.random;
+  }
+
+  /** 注入碰撞判定（世界像素坐标）；wander 据此避开建筑/障碍/越界。 */
+  setCollisionChecker(fn: (x: number, y: number) => boolean): void {
+    this.collides = fn;
   }
 
   register(def: NpcDefinition): NpcInstance {
@@ -85,6 +119,8 @@ export class NpcFramework {
       currentWaypoint: 0,
       inDialog: false,
       dwellRemainingMs: 0,
+      wanderTargetX: null,
+      wanderTargetY: null,
     };
     this.npcs.set(def.id, runtime);
     return runtime;
@@ -135,6 +171,8 @@ export class NpcFramework {
     npc.y = y;
     npc.currentWaypoint = 0;
     npc.dwellRemainingMs = 0;
+    npc.wanderTargetX = null;
+    npc.wanderTargetY = null;
     if (patrol !== undefined) {
       (npc.def as { patrol?: NpcWaypoint[] }).patrol = patrol;
     }
@@ -165,6 +203,10 @@ export class NpcFramework {
     }
     const patrol = npc.def.patrol;
     if (!patrol || patrol.length === 0) {
+      // 无 patrol：若配置了 wander 则自由游走，否则站桩。
+      if (npc.def.wander) {
+        this.tickWander(npc, npc.def.wander, deltaMs);
+      }
       return;
     }
 
@@ -209,6 +251,82 @@ export class NpcFramework {
 
     npc.x += (dx / dist) * step;
     npc.y += (dy / dist) * step;
+  }
+
+  private tickWander(npc: NpcRuntime, cfg: NpcWanderConfig, deltaMs: number): void {
+    if (npc.dwellRemainingMs > 0) {
+      npc.dwellRemainingMs = Math.max(0, npc.dwellRemainingMs - deltaMs);
+      return;
+    }
+    if (npc.wanderTargetX === null || npc.wanderTargetY === null) {
+      const target = this.pickWanderTarget(npc, cfg);
+      if (!target) {
+        // 周围都被挡住：歇一会再试，避免每帧空转。
+        npc.dwellRemainingMs = this.randomDwell(cfg);
+        return;
+      }
+      npc.wanderTargetX = target.x;
+      npc.wanderTargetY = target.y;
+    }
+
+    const dx = npc.wanderTargetX - npc.x;
+    const dy = npc.wanderTargetY - npc.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist <= ARRIVE_EPSILON) {
+      npc.dwellRemainingMs = this.randomDwell(cfg);
+      npc.wanderTargetX = null;
+      npc.wanderTargetY = null;
+      return;
+    }
+
+    const speed = cfg.speed ?? npc.def.speed ?? DEFAULT_SPEED_PX_PER_S;
+    const step = (speed * deltaMs) / 1000;
+    npc.direction = directionFromVector(dx, dy);
+
+    const arriving = step >= dist;
+    const nextX = arriving ? npc.wanderTargetX : npc.x + (dx / dist) * step;
+    const nextY = arriving ? npc.wanderTargetY : npc.y + (dy / dist) * step;
+
+    // 避障：下一步落点被挡则放弃当前目标，dwell 后重选，避免穿墙/越界。
+    if (this.collides && this.collides(nextX, nextY)) {
+      npc.wanderTargetX = null;
+      npc.wanderTargetY = null;
+      npc.dwellRemainingMs = this.randomDwell(cfg);
+      return;
+    }
+
+    npc.x = nextX;
+    npc.y = nextY;
+    if (arriving) {
+      npc.dwellRemainingMs = this.randomDwell(cfg);
+      npc.wanderTargetX = null;
+      npc.wanderTargetY = null;
+    }
+  }
+
+  /** 在 spawn 锚点周围半径内随机选一个未被碰撞阻挡的点；全失败返回 null。 */
+  private pickWanderTarget(
+    npc: NpcRuntime,
+    cfg: NpcWanderConfig,
+  ): { x: number; y: number } | null {
+    const radius = Math.max(0, cfg.radiusPx);
+    for (let i = 0; i < WANDER_CANDIDATE_TRIES; i += 1) {
+      const angle = this.rng() * Math.PI * 2;
+      const r = this.rng() * radius;
+      const x = npc.def.spawnX + Math.cos(angle) * r;
+      const y = npc.def.spawnY + Math.sin(angle) * r;
+      if (!this.collides || !this.collides(x, y)) {
+        return { x, y };
+      }
+    }
+    return null;
+  }
+
+  private randomDwell(cfg: NpcWanderConfig): number {
+    const min = cfg.minDwellMs ?? DEFAULT_WANDER_MIN_DWELL_MS;
+    const max = cfg.maxDwellMs ?? DEFAULT_WANDER_MAX_DWELL_MS;
+    if (max <= min) return min;
+    return min + this.rng() * (max - min);
   }
 }
 

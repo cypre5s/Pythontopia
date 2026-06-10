@@ -276,21 +276,31 @@ onUnmounted(() => {
     aria-label="设置"
     @click="onMaskClick"
   >
-    <section class="settings-card pyt-panel" data-testid="settings-card">
+    <section
+      class="settings-card pyt-panel"
+      data-testid="settings-card"
+    >
       <!-- 标题栏 -->
       <header class="settings-card__head pyt-panel-header">
-        <h2 class="pyt-panel-header__title">设置</h2>
+        <h2 class="pyt-panel-header__title">
+          设置
+        </h2>
         <button
           type="button"
           class="settings-card__close pyt-btn pyt-btn--ghost"
           data-testid="settings-close"
           aria-label="关闭设置"
           @click="close"
-        >✕</button>
+        >
+          ✕
+        </button>
       </header>
 
       <!-- 标签栏 -->
-      <nav class="settings-tabs" role="tablist">
+      <nav
+        class="settings-tabs"
+        role="tablist"
+      >
         <button
           v-for="tab in tabs"
           :key="tab.key"
@@ -309,7 +319,10 @@ onUnmounted(() => {
       <!-- 内容区 -->
       <div class="settings-content pyt-scroll">
         <!-- ═══ 音频 ═══ -->
-        <div v-if="activeTab === 'audio'" class="settings-pane">
+        <div
+          v-if="activeTab === 'audio'"
+          class="settings-pane"
+        >
           <label class="settings-row">
             <span class="settings-row__label">全局静音</span>
             <span class="settings-row__control">
@@ -325,51 +338,94 @@ onUnmounted(() => {
           <label class="settings-row">
             <span class="settings-row__label">BGM 音量</span>
             <span class="settings-row__control settings-row__control--slider">
-              <input v-model.number="bgmVolume" type="range" min="0" max="100" class="pyt-slider" data-testid="settings-bgm">
+              <input
+                v-model.number="bgmVolume"
+                type="range"
+                min="0"
+                max="100"
+                class="pyt-slider"
+                data-testid="settings-bgm"
+              >
               <span class="settings-row__value">{{ bgmVolume }}</span>
             </span>
           </label>
           <label class="settings-row">
             <span class="settings-row__label">SFX 音量</span>
             <span class="settings-row__control settings-row__control--slider">
-              <input v-model.number="sfxVolume" type="range" min="0" max="100" class="pyt-slider" data-testid="settings-sfx">
+              <input
+                v-model.number="sfxVolume"
+                type="range"
+                min="0"
+                max="100"
+                class="pyt-slider"
+                data-testid="settings-sfx"
+              >
               <span class="settings-row__value">{{ sfxVolume }}</span>
             </span>
           </label>
           <label class="settings-row">
             <span class="settings-row__label">环境音量</span>
             <span class="settings-row__control settings-row__control--slider">
-              <input v-model.number="ambientVolume" type="range" min="0" max="100" class="pyt-slider">
+              <input
+                v-model.number="ambientVolume"
+                type="range"
+                min="0"
+                max="100"
+                class="pyt-slider"
+              >
               <span class="settings-row__value">{{ ambientVolume }}</span>
             </span>
           </label>
           <label class="settings-row">
             <span class="settings-row__label">UI 音效</span>
             <span class="settings-row__control settings-row__control--slider">
-              <input v-model.number="uiSfxVolume" type="range" min="0" max="100" class="pyt-slider">
+              <input
+                v-model.number="uiSfxVolume"
+                type="range"
+                min="0"
+                max="100"
+                class="pyt-slider"
+              >
               <span class="settings-row__value">{{ uiSfxVolume }}</span>
             </span>
           </label>
         </div>
 
         <!-- ═══ 显示 ═══ -->
-        <div v-else-if="activeTab === 'display'" class="settings-pane">
+        <div
+          v-else-if="activeTab === 'display'"
+          class="settings-pane"
+        >
           <label class="settings-row">
             <span class="settings-row__label">全屏</span>
             <span class="settings-row__control">
-              <input type="checkbox" class="pyt-toggle" :checked="settings.display.fullscreen" @change="toggleFullscreen">
+              <input
+                type="checkbox"
+                class="pyt-toggle"
+                :checked="settings.display.fullscreen"
+                @change="toggleFullscreen"
+              >
             </span>
           </label>
           <label class="settings-row">
             <span class="settings-row__label">像素锐化</span>
             <span class="settings-row__control">
-              <input type="checkbox" class="pyt-toggle" :checked="settings.display.pixelPerfect" @change="setPixelPerfect">
+              <input
+                type="checkbox"
+                class="pyt-toggle"
+                :checked="settings.display.pixelPerfect"
+                @change="setPixelPerfect"
+              >
             </span>
           </label>
           <label class="settings-row">
             <span class="settings-row__label">UI 缩放</span>
             <span class="settings-row__control">
-              <select class="pyt-select" :value="settings.display.uiScale" @change="setUiScale">
+              <select
+                class="pyt-select"
+                :value="settings.display.uiScale"
+                @change="setUiScale"
+              >
                 <option value="small">小</option>
                 <option value="medium">中</option>
                 <option value="large">大</option>
@@ -379,7 +435,11 @@ onUnmounted(() => {
           <label class="settings-row">
             <span class="settings-row__label">色彩模式</span>
             <span class="settings-row__control">
-              <select class="pyt-select" :value="settings.display.colorMode" @change="setColorMode">
+              <select
+                class="pyt-select"
+                :value="settings.display.colorMode"
+                @change="setColorMode"
+              >
                 <option value="default">默认</option>
                 <option value="high-contrast">高对比</option>
                 <option value="colorblind">色盲友好</option>
@@ -389,24 +449,46 @@ onUnmounted(() => {
           <label class="settings-row">
             <span class="settings-row__label">暗角效果</span>
             <span class="settings-row__control">
-              <input type="checkbox" class="pyt-toggle" :checked="settings.display.showVignette" @change="setShowVignette">
+              <input
+                type="checkbox"
+                class="pyt-toggle"
+                :checked="settings.display.showVignette"
+                @change="setShowVignette"
+              >
             </span>
           </label>
           <label class="settings-row">
             <span class="settings-row__label">粒子效果</span>
             <span class="settings-row__control">
-              <input type="checkbox" class="pyt-toggle" :checked="settings.display.showParticles" @change="setShowParticles">
+              <input
+                type="checkbox"
+                class="pyt-toggle"
+                :checked="settings.display.showParticles"
+                @change="setShowParticles"
+              >
             </span>
           </label>
           <label class="settings-row">
             <span class="settings-row__label">语言</span>
             <span class="settings-row__control">
-              <select class="pyt-select" :value="locale" data-testid="settings-locale" @change="onChangeLocale">
-                <option v-for="opt in localeOptions" :key="opt.code" :value="opt.code">{{ opt.label }}</option>
+              <select
+                class="pyt-select"
+                :value="locale"
+                data-testid="settings-locale"
+                @change="onChangeLocale"
+              >
+                <option
+                  v-for="opt in localeOptions"
+                  :key="opt.code"
+                  :value="opt.code"
+                >{{ opt.label }}</option>
               </select>
             </span>
           </label>
-          <div class="settings-row settings-row--info" data-testid="settings-reduced-motion">
+          <div
+            class="settings-row settings-row--info"
+            data-testid="settings-reduced-motion"
+          >
             <span class="settings-row__label">动效偏好</span>
             <span class="settings-row__value settings-row__value--info">
               {{ reducedMotion ? '已减少（来自系统设置）' : '正常' }}
@@ -415,11 +497,18 @@ onUnmounted(() => {
         </div>
 
         <!-- ═══ 学习 ═══ -->
-        <div v-else-if="activeTab === 'education'" class="settings-pane">
+        <div
+          v-else-if="activeTab === 'education'"
+          class="settings-pane"
+        >
           <label class="settings-row">
             <span class="settings-row__label">文字速度</span>
             <span class="settings-row__control">
-              <select class="pyt-select" :value="settings.education.textSpeed" @change="setTextSpeed">
+              <select
+                class="pyt-select"
+                :value="settings.education.textSpeed"
+                @change="setTextSpeed"
+              >
                 <option value="slow">慢</option>
                 <option value="normal">中</option>
                 <option value="fast">快</option>
@@ -430,10 +519,18 @@ onUnmounted(() => {
           <label class="settings-row">
             <span class="settings-row__label">自动推进对话</span>
             <span class="settings-row__control">
-              <input type="checkbox" class="pyt-toggle" :checked="settings.education.autoAdvanceDialog" @change="setAutoAdvanceDialog">
+              <input
+                type="checkbox"
+                class="pyt-toggle"
+                :checked="settings.education.autoAdvanceDialog"
+                @change="setAutoAdvanceDialog"
+              >
             </span>
           </label>
-          <label v-if="settings.education.autoAdvanceDialog" class="settings-row settings-row--sub">
+          <label
+            v-if="settings.education.autoAdvanceDialog"
+            class="settings-row settings-row--sub"
+          >
             <span class="settings-row__label">推进延迟</span>
             <span class="settings-row__control settings-row__control--slider">
               <input
@@ -451,14 +548,25 @@ onUnmounted(() => {
           <label class="settings-row">
             <span class="settings-row__label">代码字体大小</span>
             <span class="settings-row__control settings-row__control--slider">
-              <input v-model.number="codeFontSize" type="range" min="12" max="20" step="1" class="pyt-slider">
+              <input
+                v-model.number="codeFontSize"
+                type="range"
+                min="12"
+                max="20"
+                step="1"
+                class="pyt-slider"
+              >
               <span class="settings-row__value">{{ codeFontSize }}px</span>
             </span>
           </label>
           <label class="settings-row">
             <span class="settings-row__label">难度偏好</span>
             <span class="settings-row__control">
-              <select class="pyt-select" :value="settings.education.difficulty" @change="setDifficulty">
+              <select
+                class="pyt-select"
+                :value="settings.education.difficulty"
+                @change="setDifficulty"
+              >
                 <option value="easy">轻松</option>
                 <option value="normal">标准</option>
                 <option value="hard">挑战</option>
@@ -468,7 +576,11 @@ onUnmounted(() => {
           <label class="settings-row">
             <span class="settings-row__label">提示频率</span>
             <span class="settings-row__control">
-              <select class="pyt-select" :value="settings.education.hintFrequency" @change="setHintFrequency">
+              <select
+                class="pyt-select"
+                :value="settings.education.hintFrequency"
+                @change="setHintFrequency"
+              >
                 <option value="never">从不</option>
                 <option value="sometimes">偶尔</option>
                 <option value="always">频繁</option>
@@ -478,31 +590,58 @@ onUnmounted(() => {
           <label class="settings-row">
             <span class="settings-row__label">专注模式</span>
             <span class="settings-row__control">
-              <input type="checkbox" class="pyt-toggle" :checked="settings.education.focusMode" @change="setFocusMode">
+              <input
+                type="checkbox"
+                class="pyt-toggle"
+                :checked="settings.education.focusMode"
+                @change="setFocusMode"
+              >
             </span>
           </label>
         </div>
 
         <!-- ═══ 节奏 ═══ -->
-        <div v-else-if="activeTab === 'rhythm'" class="settings-pane">
+        <div
+          v-else-if="activeTab === 'rhythm'"
+          class="settings-pane"
+        >
           <label class="settings-row">
             <span class="settings-row__label">番茄钟</span>
             <span class="settings-row__control">
-              <input type="checkbox" class="pyt-toggle" :checked="settings.education.pomodoroEnabled" @change="setPomodoroEnabled">
+              <input
+                type="checkbox"
+                class="pyt-toggle"
+                :checked="settings.education.pomodoroEnabled"
+                @change="setPomodoroEnabled"
+              >
             </span>
           </label>
           <template v-if="settings.education.pomodoroEnabled">
             <label class="settings-row settings-row--sub">
               <span class="settings-row__label">工作时长</span>
               <span class="settings-row__control settings-row__control--slider">
-                <input v-model.number="pomodoroWork" type="range" min="5" max="120" step="5" class="pyt-slider">
+                <input
+                  v-model.number="pomodoroWork"
+                  type="range"
+                  min="5"
+                  max="120"
+                  step="5"
+                  class="pyt-slider"
+                >
                 <span class="settings-row__value">{{ pomodoroWork }}min</span>
               </span>
             </label>
             <label class="settings-row settings-row--sub">
               <span class="settings-row__label">休息时长</span>
               <span class="settings-row__control settings-row__control--slider">
-                <input v-model.number="pomodoroBreak" type="range" min="1" max="30" step="1" class="pyt-slider">
+                <input
+                  v-model.number="pomodoroBreak"
+                  type="range"
+                  min="1"
+                  max="30"
+                  step="1"
+                  class="pyt-slider"
+                >
                 <span class="settings-row__value">{{ pomodoroBreak }}min</span>
               </span>
             </label>
@@ -511,49 +650,92 @@ onUnmounted(() => {
           <label class="settings-row">
             <span class="settings-row__label">学习提醒</span>
             <span class="settings-row__control">
-              <input type="checkbox" class="pyt-toggle" :checked="settings.education.studyReminder" @change="setStudyReminder">
+              <input
+                type="checkbox"
+                class="pyt-toggle"
+                :checked="settings.education.studyReminder"
+                @change="setStudyReminder"
+              >
             </span>
           </label>
-          <label v-if="settings.education.studyReminder" class="settings-row settings-row--sub">
+          <label
+            v-if="settings.education.studyReminder"
+            class="settings-row settings-row--sub"
+          >
             <span class="settings-row__label">提醒间隔</span>
             <span class="settings-row__control settings-row__control--slider">
-              <input v-model.number="studyReminderInterval" type="range" min="10" max="240" step="10" class="pyt-slider">
+              <input
+                v-model.number="studyReminderInterval"
+                type="range"
+                min="10"
+                max="240"
+                step="10"
+                class="pyt-slider"
+              >
               <span class="settings-row__value">{{ studyReminderInterval }}min</span>
             </span>
           </label>
         </div>
 
         <!-- ═══ 通知 ═══ -->
-        <div v-else-if="activeTab === 'notifications'" class="settings-pane">
+        <div
+          v-else-if="activeTab === 'notifications'"
+          class="settings-pane"
+        >
           <label class="settings-row">
             <span class="settings-row__label">成就弹窗</span>
             <span class="settings-row__control">
-              <input type="checkbox" class="pyt-toggle" :checked="settings.notifications.achievementPopup" @change="setNotification('achievementPopup', $event)">
+              <input
+                type="checkbox"
+                class="pyt-toggle"
+                :checked="settings.notifications.achievementPopup"
+                @change="setNotification('achievementPopup', $event)"
+              >
             </span>
           </label>
           <label class="settings-row">
             <span class="settings-row__label">任务完成提示</span>
             <span class="settings-row__control">
-              <input type="checkbox" class="pyt-toggle" :checked="settings.notifications.questComplete" @change="setNotification('questComplete', $event)">
+              <input
+                type="checkbox"
+                class="pyt-toggle"
+                :checked="settings.notifications.questComplete"
+                @change="setNotification('questComplete', $event)"
+              >
             </span>
           </label>
           <label class="settings-row">
             <span class="settings-row__label">NPC 提醒</span>
             <span class="settings-row__control">
-              <input type="checkbox" class="pyt-toggle" :checked="settings.notifications.npcReminder" @change="setNotification('npcReminder', $event)">
+              <input
+                type="checkbox"
+                class="pyt-toggle"
+                :checked="settings.notifications.npcReminder"
+                @change="setNotification('npcReminder', $event)"
+              >
             </span>
           </label>
           <hr class="pyt-divider">
           <label class="settings-row">
             <span class="settings-row__label">进度对老师可见</span>
             <span class="settings-row__control">
-              <input type="checkbox" class="pyt-toggle" :checked="settings.notifications.progressShareWithTeacher" @change="setNotification('progressShareWithTeacher', $event)">
+              <input
+                type="checkbox"
+                class="pyt-toggle"
+                :checked="settings.notifications.progressShareWithTeacher"
+                @change="setNotification('progressShareWithTeacher', $event)"
+              >
             </span>
           </label>
           <label class="settings-row">
             <span class="settings-row__label">进度对同学可见</span>
             <span class="settings-row__control">
-              <input type="checkbox" class="pyt-toggle" :checked="settings.notifications.progressShareWithClassmates" @change="setNotification('progressShareWithClassmates', $event)">
+              <input
+                type="checkbox"
+                class="pyt-toggle"
+                :checked="settings.notifications.progressShareWithClassmates"
+                @change="setNotification('progressShareWithClassmates', $event)"
+              >
             </span>
           </label>
         </div>
@@ -561,10 +743,37 @@ onUnmounted(() => {
 
       <!-- 底部操作栏 -->
       <footer class="settings-card__foot">
-        <button type="button" class="pyt-btn" data-testid="settings-reset-help" @click="onResetHelp">重看引导</button>
-        <button type="button" class="pyt-btn" @click="onResetAll">重置设置</button>
-        <button type="button" class="pyt-btn pyt-btn--danger" data-testid="settings-logout" @click="onLogout">退出登录</button>
-        <button type="button" class="pyt-btn pyt-btn--primary settings-card__ok" data-testid="settings-ok" @click="close">完成</button>
+        <button
+          type="button"
+          class="pyt-btn"
+          data-testid="settings-reset-help"
+          @click="onResetHelp"
+        >
+          重看引导
+        </button>
+        <button
+          type="button"
+          class="pyt-btn"
+          @click="onResetAll"
+        >
+          重置设置
+        </button>
+        <button
+          type="button"
+          class="pyt-btn pyt-btn--danger"
+          data-testid="settings-logout"
+          @click="onLogout"
+        >
+          退出登录
+        </button>
+        <button
+          type="button"
+          class="pyt-btn pyt-btn--primary settings-card__ok"
+          data-testid="settings-ok"
+          @click="close"
+        >
+          完成
+        </button>
       </footer>
     </section>
   </div>

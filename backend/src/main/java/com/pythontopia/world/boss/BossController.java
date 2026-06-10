@@ -9,11 +9,13 @@ import com.pythontopia.world.boss.dto.BossProblemRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import org.springframework.http.HttpStatus;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -46,13 +48,29 @@ public class BossController {
     return service.fetchProblem(chapter, request, userId);
   }
 
+  /**
+   * 触发后台预生成「下一题」（同维度 + 当前难度），立即返回 202；真正生成异步进行。
+   * 前端在进入答题后 fire-and-forget 调用，玩家做题时后台备好下一题落 READY。
+   */
+  @PostMapping("/{chapter}/prefetch")
+  @ResponseStatus(HttpStatus.ACCEPTED)
+  public void prefetchProblem(
+      @PathVariable @Min(1) @Max(7) int chapter,
+      @Valid @RequestBody BossProblemRequest request,
+      @CurrentUser CurrentUserPrincipal user) {
+    Long userId = user == null ? null : user.userId();
+    service.prefetch(chapter, request, userId);
+  }
+
   @PostMapping("/{chapter}/attempt")
   public BossAttemptResultDto submitAttempt(
       @PathVariable @Min(1) @Max(7) int chapter,
-      @Valid @RequestBody BossAttemptRequest request) {
+      @Valid @RequestBody BossAttemptRequest request,
+      @CurrentUser CurrentUserPrincipal user) {
     if (request.chapter() != chapter) {
       throw new IllegalArgumentException("chapter param mismatch with body");
     }
-    return service.evaluateAttempt(request);
+    Long userId = user == null ? null : user.userId();
+    return service.evaluateAttempt(request, userId);
   }
 }

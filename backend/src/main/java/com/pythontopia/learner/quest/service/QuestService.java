@@ -137,7 +137,7 @@ public class QuestService {
           new LearningEvent.ResourceConsumed(quest.userId(), quest.kcCode(), "quest"));
       case SOLVE_PROBLEM -> eventPublisher.publishEvent(
           new LearningEvent.PracticeSucceeded(
-              quest.userId(), quest.kcCode(), extractProblemId(quest)));
+              quest.userId(), quest.kcCode(), extractProblemId(quest), null));
       case FIX_BUG -> eventPublisher.publishEvent(
           new LearningEvent.DebugResolved(
               quest.userId(), quest.kcCode(), extractProblemId(quest)));

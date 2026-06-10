@@ -50,16 +50,9 @@ function unhide(): void {
 const currentChapter = computed<number>(() => mainQuest.progress.currentChapter);
 const currentChapterView = computed(() => mainQuest.chapterViews[currentChapter.value - 1] ?? null);
 
-const currentSubQuest = computed(() => {
-  const view = currentChapterView.value;
-  if (!view) return null;
-  return (
-    view.subQuests.find((s) => s.status === 'in_progress')
-    ?? view.subQuests.find((s) => s.status === 'available')
-    ?? view.subQuests[view.subQuests.length - 1]
-    ?? null
-  );
-});
+// 单一事实源：直接消费 store.activeQuest，不再自算「状态扫描」
+// （杜绝左侧面板与地图标记 / 进度条乱序时指向不同任务）。
+const currentSubQuest = computed(() => mainQuest.activeQuest);
 
 const currentKcCode = computed<string | null>(() => {
   // 优先级：learning.field.activeKcCode > 当前子任务首个 kcCode
@@ -115,17 +108,9 @@ const rewardText = computed<string>(() => {
   return '掌握进度 +5';
 });
 
-const currentMapKey = computed<string>(() => world.player?.mapKey ?? 'town_hub');
-const currentMapLabel = computed<string>(() => {
-  // 仅 town_hub 与支线 Bug 矿洞为实景地图，其余（含已弃用的农场 / 学院 / 港口）回落到小镇。
-  switch (currentMapKey.value) {
-    case 'mine_south':
-      return 'Bug 矿洞';
-    case 'town_hub':
-    default:
-      return 'Pythontopia 小镇';
-  }
-});
+// R-14：世界收缩为单一中央小镇 town_hub（mine_south 风景图已删，Bug 矿洞改 /bug-mine 页面）；
+// 任何 mapKey（含已弃用外围图 / 旧存档别名）都回落到「Pythontopia 小镇」标签。
+const currentMapLabel = computed<string>(() => 'Pythontopia 小镇');
 
 // 把当前子任务翻译成「下一步该干什么 + 去找哪个 NPC」。
 const guidance = computed<QuestGuidance | null>(() =>
@@ -134,11 +119,7 @@ const guidance = computed<QuestGuidance | null>(() =>
 
 // 本章 5 个子任务已全部完成、但章末 Boss 未击败：把「下一步」切换为「去挑战 Boss」，
 // 否则指引会停在已完成的最后一个任务上空转（既不前进也无意义）。
-const bossPending = computed<boolean>(() => {
-  const view = currentChapterView.value;
-  if (!view) return false;
-  return view.subQuests.every((s) => s.status === 'completed') && !view.bossDefeated;
-});
+const bossPending = computed<boolean>(() => mainQuest.bossPending);
 const bossName = computed<string>(() => currentChapterView.value?.boss.name ?? '章末 Boss');
 
 function goBoss(): void {
@@ -249,12 +230,15 @@ onUnmounted(() => {
     aria-label="当前学习目标"
     @pointerdown="onDragStart"
   >
-    <button
-      type="button"
+    <div
       class="lop-header"
+      role="button"
+      tabindex="0"
       :aria-expanded="!collapsed"
       :aria-label="collapsed ? '展开学习目标（H）' : '折叠学习目标（H）'"
       @click="toggleCollapsed"
+      @keydown.enter.prevent="toggleCollapsed"
+      @keydown.space.prevent="toggleCollapsed"
     >
       <span class="lop-header__title">学习目标</span>
       <span class="lop-header__hint">{{ currentMapLabel }} · H</span>
@@ -267,7 +251,7 @@ onUnmounted(() => {
       >
         ✕
       </button>
-    </button>
+    </div>
     <!-- 下一步：唯一注意力线，折叠态也常驻；有对话在前台时静音脉冲 -->
     <div
       v-if="bossPending"

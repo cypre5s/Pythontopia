@@ -10,13 +10,26 @@ const props = defineProps<{
 }>();
 
 const store = useFeynmanStore();
-const { currentSession, turns, loading, teaching, error, latestProducedCode, latestJudgeResult } =
-  storeToRefs(store);
+const {
+  currentSession,
+  turns,
+  loading,
+  teaching,
+  judging,
+  error,
+  latestProducedCode,
+  latestJudgeResult,
+} = storeToRefs(store);
 const teachingText = ref('');
 const prefersReducedMotion = useReducedMotion();
 
 const canTeach = computed(
   () => currentSession.value !== null && teachingText.value.trim().length > 0 && !teaching.value,
+);
+
+const canJudge = computed(
+  () =>
+    currentSession.value !== null && latestProducedCode.value.trim().length > 0 && !judging.value,
 );
 
 const misconceptions = computed(() => currentSession.value?.tuteeState.misconceptions ?? []);
@@ -53,7 +66,11 @@ function judgeClass(result: FeynmanJudgeResultDto | null): string {
 }
 
 async function start(): Promise<void> {
-  await store.startSession(props.kcCode);
+  try {
+    await store.startSession(props.kcCode);
+  } catch {
+    // 错误已写入 store.error 并在面板内提示。
+  }
 }
 
 async function submitTeaching(): Promise<void> {
@@ -61,7 +78,22 @@ async function submitTeaching(): Promise<void> {
   if (!canTeach.value || explanation.length === 0) {
     return;
   }
-  await store.teach(explanation);
+  try {
+    await store.teach(explanation);
+  } catch {
+    // 错误已写入 store.error 并在面板内提示，这里吞掉以避免未处理的 promise rejection。
+  }
+}
+
+async function submitJudge(): Promise<void> {
+  if (!canJudge.value) {
+    return;
+  }
+  try {
+    await store.judge();
+  } catch {
+    // 同上：错误经 store.error 呈现。
+  }
 }
 </script>
 
@@ -74,7 +106,9 @@ async function submitTeaching(): Promise<void> {
   >
     <header class="feynman-panel__header">
       <div>
-        <p class="feynman-panel__eyebrow">费曼反演</p>
+        <p class="feynman-panel__eyebrow">
+          费曼反演
+        </p>
         <h2>教会 AI 学弟：{{ kcCode }}</h2>
       </div>
       <button
@@ -88,26 +122,55 @@ async function submitTeaching(): Promise<void> {
       </button>
     </header>
 
-    <p v-if="error" class="feynman-panel__error" role="alert">{{ error }}</p>
+    <p
+      v-if="error"
+      class="feynman-panel__error"
+      role="alert"
+    >
+      {{ error }}
+    </p>
 
     <div class="feynman-panel__grid">
-      <article class="feynman-panel__card" data-testid="feynman-tutee-state">
+      <article
+        class="feynman-panel__card"
+        data-testid="feynman-tutee-state"
+      >
         <h3>学弟状态</h3>
-        <p v-if="!currentSession" class="feynman-panel__muted">
+        <p
+          v-if="!currentSession"
+          class="feynman-panel__muted"
+        >
           先开启会话，后端会用你的真实错题和事件生成学弟的误解。
         </p>
-        <ul v-else-if="misconceptions.length > 0" class="feynman-panel__misconceptions">
-          <li v-for="misconception in misconceptions" :key="misconception.tag">
+        <ul
+          v-else-if="misconceptions.length > 0"
+          class="feynman-panel__misconceptions"
+        >
+          <li
+            v-for="misconception in misconceptions"
+            :key="misconception.tag"
+          >
             <span>{{ misconception.tag }}</span>
             <small>{{ misconception.resolved ? '已讲通' : '待讲清' }}</small>
           </li>
         </ul>
-        <p v-else class="feynman-panel__muted">这个 KC 暂无真实错误史，不生成虚构误解。</p>
+        <p
+          v-else
+          class="feynman-panel__muted"
+        >
+          这个 KC 暂无真实错误史，不生成虚构误解。
+        </p>
       </article>
 
-      <article class="feynman-panel__card feynman-panel__dialog" data-testid="feynman-dialog">
+      <article
+        class="feynman-panel__card feynman-panel__dialog"
+        data-testid="feynman-dialog"
+      >
         <h3>学弟对话</h3>
-        <p v-if="turns.length === 0" class="feynman-panel__muted">
+        <p
+          v-if="turns.length === 0"
+          class="feynman-panel__muted"
+        >
           学弟会在你讲解后复述自己的理解。
         </p>
         <div
@@ -142,7 +205,10 @@ async function submitTeaching(): Promise<void> {
 
       <article class="feynman-panel__card">
         <h3>学弟代码</h3>
-        <pre class="feynman-panel__code" data-testid="feynman-code"><code>{{ latestProducedCode || '等待学弟写出可判题代码' }}</code></pre>
+        <pre
+          class="feynman-panel__code"
+          data-testid="feynman-code"
+        ><code>{{ latestProducedCode || '等待学弟写出可判题代码' }}</code></pre>
       </article>
 
       <article
@@ -152,16 +218,38 @@ async function submitTeaching(): Promise<void> {
       >
         <h3>判题结果</h3>
         <p>{{ judgeText }}</p>
+        <button
+          type="button"
+          class="feynman-panel__teach-submit"
+          data-testid="feynman-judge-submit"
+          :disabled="!canJudge"
+          @click="submitJudge"
+        >
+          {{ judging ? '判题中...' : '真判题裁定' }}
+        </button>
       </article>
 
-      <article class="feynman-panel__card" data-testid="feynman-fix">
+      <article
+        class="feynman-panel__card"
+        data-testid="feynman-fix"
+      >
         <h3>修正点</h3>
-        <p v-if="turns.at(-1)?.taughtFix">{{ turns.at(-1)?.taughtFix }}</p>
-        <p v-else class="feynman-panel__muted">提交教学后，这里展示学弟吸收了哪一个修正点。</p>
+        <p v-if="turns.at(-1)?.taughtFix">
+          {{ turns.at(-1)?.taughtFix }}
+        </p>
+        <p
+          v-else
+          class="feynman-panel__muted"
+        >
+          提交教学后，这里展示学弟吸收了哪一个修正点。
+        </p>
       </article>
     </div>
 
-    <aside class="feynman-panel__evidence" data-testid="feynman-evidence-chain">
+    <aside
+      class="feynman-panel__evidence"
+      data-testid="feynman-evidence-chain"
+    >
       <h3>玻璃盒证据链</h3>
       <ol>
         <li>

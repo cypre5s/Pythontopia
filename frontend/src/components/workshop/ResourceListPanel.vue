@@ -9,12 +9,14 @@
 import { computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useLearningStore } from '@stores/learning';
+import { useWorkshopUiStore } from '@stores/workshopUi';
 import { playUiClick } from '@/composables/useStardewFx';
 import { kcDisplayName } from '@/data/kcNames';
 import type { WorkshopResourceListItemDto } from '@/api/dto/Workshop';
 
 const learning = useLearningStore();
 const router = useRouter();
+const workshopUi = useWorkshopUiStore();
 
 // 掌握度低于此值（0..100）的资源进入「待复习」。
 const REVIEW_THRESHOLD = 60;
@@ -87,7 +89,7 @@ onMounted(async () => {
 
 function openDetail(id: number): void {
   playUiClick();
-  void router.push({ path: '/workshop', query: { id: String(id) } });
+  workshopUi.openResource(id);
 }
 
 function practiceKc(kcCode: string): void {

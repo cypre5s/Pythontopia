@@ -36,11 +36,12 @@ class BossServiceTest {
   @Mock BossGraphClient graphClient;
   @Mock MasteryRepository masteryRepository;
   @Mock CoursePackRepository coursePackRepository;
+  @Mock EndlessPregenService pregenService;
   private BossService service;
 
   @BeforeEach
   void setUp() {
-    service = new BossService(graphClient, masteryRepository, coursePackRepository);
+    service = new BossService(graphClient, masteryRepository, coursePackRepository, pregenService);
   }
 
   @Test
@@ -69,7 +70,7 @@ class BossServiceTest {
 
     // stage=4：旧逻辑会出难度 4；学情驱动应据低掌握出更易的题。
     service.fetchProblem(
-        1, new BossProblemRequest(4, null, null, null, null, null), 7L);
+        1, new BossProblemRequest(4, null, null, null, null, null, null), 7L);
 
     int difficulty = capturedDifficulty();
     assertThat(difficulty).isEqualTo(1);
@@ -90,7 +91,7 @@ class BossServiceTest {
         .thenReturn(internalProblem());
 
     service.fetchProblem(
-        1, new BossProblemRequest(2, null, null, null, null, null), 7L);
+        1, new BossProblemRequest(2, null, null, null, null, null, null), 7L);
 
     assertThat(capturedDifficulty()).isEqualTo(5);
   }
@@ -103,7 +104,7 @@ class BossServiceTest {
         .thenReturn(internalProblem());
 
     service.fetchProblem(
-        1, new BossProblemRequest(2, null, 3, null, null, null), 7L);
+        1, new BossProblemRequest(2, null, 3, null, null, null, null), 7L);
 
     assertThat(capturedDifficulty()).isEqualTo(3);
     verifyNoInteractions(masteryRepository);

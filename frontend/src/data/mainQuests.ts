@@ -100,7 +100,9 @@ export const MAIN_QUEST_BOSSES: readonly MainQuestBoss[] = [
 
 // ───────────────────────── 统一不变式（R-14，单局可通） ─────────────────────────
 // 每个可测章（2–7）锚定「一个有判题真题的 KC」：该章的「练」(submission) 与「测」(kc_mastery)
-// 指向同一个锚 KC，玩家「练完即测」——做 2 次 AC（+0.20 ×2 = 0.40）即过统一阈值 40。
+// 指向同一个锚 KC，玩家「练完即测」。6 道锚题均为 Low 难度，后端 MasteryEvaluator 对
+// PRACTICE_PASS（+0.20）按难度加权 ×0.7，单次 AC 实际 +0.14：做 3 次 AC（0.14×3=0.42）
+// 即过统一阈值 40（=0.40）——「练」占 1 次，「测」还需再 AC 两次。
 //   ch2→KC-016 / ch3→KC-025 / ch4→KC-035 / ch5→KC-041 / ch6→KC-049 / ch7→KC-064
 // 这修掉了旧 5-4/6-4/7-5 把「测」挂在题库 0 题 KC(045/052/065) 上、单局不可达的死点。
 // 第 1 章为纯理论导入（packId=43 题库对其 7 个 KC 0 题，受 39 题硬约束不可新增），故无「练/测」，
@@ -139,8 +141,8 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     hint: '工坊里给 KC-003 生成讲义，把「发现 → 抽象 → 算法 → 实现 → 评价」记牢。',
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-003'],
+    // 讲义解耦：HANDOUT「讲义」类任务去掉 rewards（不再给掌握度奖励）。
     evidenceRequired: { type: 'resource_consumed', resourceType: 'HANDOUT' },
-    rewards: [{ kind: 'kc_mastery', amount: 5, ref: 'PY43-KC-003' }],
   },
   {
     id: '1-4',
@@ -217,7 +219,7 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     chapter: 2,
     index: 5,
     title: '理解程序运行方式（KC-014）',
-    hint: 'KC-014 + KC-016 共同推到 40 以上，搞清楚解释执行 vs 编译执行。',
+    hint: '把 KC-016 掌握度刷到 40：在训练场对 #476 再 AC 两次（每次 +14）即达标，顺便搞清楚解释执行 vs 编译执行。',
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-014', 'PY43-KC-016'],
     evidenceRequired: { type: 'kc_mastery', kcCode: 'PY43-KC-016', thresholdScore: 40 },
@@ -264,9 +266,9 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     chapter: 3,
     index: 4,
     // 统一不变式：本章「练」(3-2 #477) 与「测」(3-4) 锚定同一个有判题真题的 KC-025，
-    // 玩家练完即测，单局可达阈值（2 次 AC ≈ 0.40）。
+    // 玩家练完即测，单局可达阈值（Low 题单次 AC +0.14，3 次 AC = 0.42 ≥ 0.40）。
     title: '整数位数提取·达标（KC-025）',
-    hint: '把刚练的「整数位数提取」掌握度刷到 40：在训练场对 #477 再 AC 一次即达标。',
+    hint: '把刚练的「整数位数提取」掌握度刷到 40：在训练场对 #477 再 AC 两次（每次 +14）即达标。',
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-025'],
     evidenceRequired: { type: 'kc_mastery', kcCode: 'PY43-KC-025', thresholdScore: 40 },
@@ -325,7 +327,7 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     index: 4,
     // 锚定同一有题 KC-035（练 4-2 #487 三角形判断）；循环控制 KC-037 仍由 4-3/4-5「学」覆盖。
     title: '多条件判断·达标（KC-035）',
-    hint: '把刚练的「多条件判断与逻辑运算」掌握度刷到 40：在训练场对 #487 再 AC 一次即达标。',
+    hint: '把刚练的「多条件判断与逻辑运算」掌握度刷到 40：在训练场对 #487 再 AC 两次（每次 +14）即达标。',
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-035'],
     evidenceRequired: { type: 'kc_mastery', kcCode: 'PY43-KC-035', thresholdScore: 40 },
@@ -339,8 +341,8 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     hint: '工坊生成 KC-036 的 HANDOUT，理解二维问题里的循环嵌套。',
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-036'],
+    // 讲义解耦：HANDOUT「讲义」类任务去掉 rewards（不再给掌握度奖励）。
     evidenceRequired: { type: 'resource_consumed', resourceType: 'HANDOUT' },
-    rewards: [{ kind: 'kc_mastery', amount: 12, ref: 'PY43-KC-036' }],
   },
 
   // ───── 第 5 章 数据结构：小镇 town_hub 集合工坊 ─────
@@ -349,11 +351,13 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     chapter: 5,
     index: 1,
     title: '列表与 Random（KC-039）',
-    hint: '在小镇找船长 Def 对话，他给你一个抽奖箱演示列表 + random。',
+    // 原派给 captain_def（船长 Def）已随 R-14 删除；改派 town_hub 现存的教务 Q，
+    // 由训练场教练用「抽奖箱」演示列表 + random，与本章「练/测」闭环衔接更顺。
+    hint: '在小镇训练场找教务 Q 对话，他用一个抽奖箱给你演示列表 + random 的玩法。',
     mapKey: 'town_hub',
-    npcKey: 'captain_def',
+    npcKey: 'coach_q',
     kcCodes: ['PY43-KC-039'],
-    evidenceRequired: { type: 'dialog_complete', npcKey: 'captain_def' },
+    evidenceRequired: { type: 'dialog_complete', npcKey: 'coach_q' },
     rewards: [{ kind: 'kc_mastery', amount: 5, ref: 'PY43-KC-039' }],
   },
   {
@@ -384,7 +388,7 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     index: 4,
     // 修复+对齐：原测点 KC-045「序列类型」题库 0 题，单局不可达。改锚定有题 KC-041（练 5-3 #499）。
     title: '字典应用·达标（KC-041）',
-    hint: '把刚练的「字典在实际问题中的应用」掌握度刷到 40：在训练场对通讯录题 #499 再 AC 一次即达标。',
+    hint: '把刚练的「字典在实际问题中的应用」掌握度刷到 40：在训练场对通讯录题 #499 再 AC 两次（每次 +14）即达标。',
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-041'],
     evidenceRequired: { type: 'kc_mastery', kcCode: 'PY43-KC-041', thresholdScore: 40 },
@@ -411,8 +415,8 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     hint: '工坊生成 KC-051 的 HANDOUT，搞清 abs path vs relative path。',
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-051'],
+    // 讲义解耦：HANDOUT「讲义」类任务去掉 rewards（不再给掌握度奖励）。
     evidenceRequired: { type: 'resource_consumed', resourceType: 'HANDOUT' },
-    rewards: [{ kind: 'kc_mastery', amount: 6, ref: 'PY43-KC-051' }],
   },
   {
     id: '6-2',
@@ -442,7 +446,7 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     index: 4,
     // 修复+对齐：原测点 KC-052「文件读取与数据处理」题库 0 题。改锚定有题 KC-049（练 6-2 #508）。
     title: '文件数据分析·达标（KC-049）',
-    hint: '把刚练的「基于文件的数据分析」掌握度刷到 40：在训练场对 #508 再 AC 一次即达标。',
+    hint: '把刚练的「基于文件的数据分析」掌握度刷到 40：在训练场对 #508 再 AC 两次（每次 +14）即达标。',
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-049'],
     evidenceRequired: { type: 'kc_mastery', kcCode: 'PY43-KC-049', thresholdScore: 40 },
@@ -514,7 +518,7 @@ export const MAIN_QUESTS: readonly MainSubQuest[] = [
     index: 5,
     // 修复+对齐：原测点 KC-065「面向对象特征」题库 0 题。改锚定有题 KC-064（练 7-3 #510）；标题叙事不变。
     title: '类与面向对象（KC-064 + KC-065）',
-    hint: '把刚练的「类和对象基础」掌握度刷到 40：在训练场对 #510 再 AC 一次即触发毕业典礼。',
+    hint: '把刚练的「类和对象基础」掌握度刷到 40：在训练场对 #510 再 AC 两次（每次 +14）即触发毕业典礼。',
     mapKey: 'town_hub',
     kcCodes: ['PY43-KC-064', 'PY43-KC-065'],
     evidenceRequired: { type: 'kc_mastery', kcCode: 'PY43-KC-064', thresholdScore: 40 },

@@ -16,13 +16,10 @@ const toast = useToastStore();
 const router = useRouter();
 const route = useRoute();
 
-const variantBugMineSessionId = computed<number | null>(() => {
-  const raw = route.query.bugMineSessionId;
-  if (typeof raw === 'string' && /^\d+$/.test(raw)) {
-    return Number(raw);
-  }
-  return null;
-});
+// S1：变式会话 id 改读 store（pendingVariantSessionId），不再从 URL 取私有 id。
+// variant（URL 模式标志，非私有 id）仍作变式模式「门闸」：刷新丢 store 即安全降级为普通做题，
+// 残留 store 在普通做题导航（无 variant 标志）下也不会误触发变式提交。
+const variantBugMineSessionId = computed<number | null>(() => learning.bugMine.pendingVariantSessionId);
 const isVariantMode = computed<boolean>(() => route.query.variant === '1' && variantBugMineSessionId.value != null);
 
 const problem = computed(() => learning.training.problem);
@@ -91,7 +88,10 @@ async function submit(): Promise<void> {
   }
   try {
     if (isVariantMode.value && variantBugMineSessionId.value != null) {
-      const result = await learning.submitBugMineVariant(code, variantBugMineSessionId.value);
+      // submitBugMineVariant 在 PASSED 时会清空 store 的 pendingVariantSessionId，
+      // 故先把会话 id 捕获到局部，供成功后回错题矿洞用。
+      const variantSessionId = variantBugMineSessionId.value;
+      const result = await learning.submitBugMineVariant(code, variantSessionId);
       if (!result) {
         playSfx('sfx_error');
         toast.show(learning.bugMine.lastError ?? '变式提交失败', 'error');
@@ -100,10 +100,9 @@ async function submit(): Promise<void> {
       if (result.status === 'PASSED') {
         playSfx('sfx_jingle_complete');
         toast.show('L5 变式掌握确认通过，错题矿洞会话已关闭。', 'success');
-        await router.push({
-          path: '/bug-mine',
-          query: { sessionId: String(variantBugMineSessionId.value) },
-        });
+        // S1：私有 sessionId 不写进 URL，改走 store 入口（BugMinePage consume 后加载会话）。
+        learning.setPendingBugMineEntry({ sessionId: variantSessionId });
+        await router.push('/bug-mine');
       } else {
         playSfx('sfx_error');
         toast.show('变式仍未通过，请继续调整。', 'error');
@@ -167,10 +166,9 @@ const judgeTone = computed<'idle' | 'success' | 'danger' | 'warning'>(() => {
 async function enterBugMine(): Promise<void> {
   const submission = learning.training.submission;
   if (!submission) return;
-  await router.push({
-    path: '/bug-mine',
-    query: { submissionId: String(submission.submission.id) },
-  });
+  // S1：私有 submissionId 不写进 URL，改走 store 入口（BugMinePage consume 后开矿洞会话）。
+  learning.setPendingBugMineEntry({ submissionId: submission.submission.id });
+  await router.push('/bug-mine');
 }
 
 // 做题页内嵌 AI 导学助手：复用 TutorPanel，把「当前题目 KC + 题面 + 最近判定」
@@ -254,7 +252,9 @@ const tutorContext = computed<string>(() => {
               v-if="problem.inputDescription"
               class="statement-section"
             >
-              <h3 class="section-title">输入</h3>
+              <h3 class="section-title">
+                输入
+              </h3>
               <MarkdownView
                 class="statement-markdown"
                 :source="problem.inputDescription"
@@ -265,7 +265,9 @@ const tutorContext = computed<string>(() => {
               v-if="problem.outputDescription"
               class="statement-section"
             >
-              <h3 class="section-title">输出</h3>
+              <h3 class="section-title">
+                输出
+              </h3>
               <MarkdownView
                 class="statement-markdown"
                 :source="problem.outputDescription"
@@ -273,7 +275,9 @@ const tutorContext = computed<string>(() => {
             </section>
 
             <section class="statement-section">
-              <h3 class="section-title">输入输出样例</h3>
+              <h3 class="section-title">
+                输入输出样例
+              </h3>
               <div
                 v-for="(sample, i) in problem.samples"
                 :key="i"
@@ -281,11 +285,15 @@ const tutorContext = computed<string>(() => {
                 @mouseenter="onSampleHover"
               >
                 <div class="sample-item">
-                  <div class="sample-title">输入 {{ i + 1 }}</div>
+                  <div class="sample-title">
+                    输入 {{ i + 1 }}
+                  </div>
                   <pre><code>{{ sample.input || '(空)' }}</code></pre>
                 </div>
                 <div class="sample-item">
-                  <div class="sample-title">输出 {{ i + 1 }}</div>
+                  <div class="sample-title">
+                    输出 {{ i + 1 }}
+                  </div>
                   <pre><code>{{ sample.output || '(空)' }}</code></pre>
                 </div>
               </div>

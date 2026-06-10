@@ -14,11 +14,12 @@ export function ensurePixelFontLoaded(): Promise<void> {
     return Promise.resolve();
   }
   const injectedWindow = window as unknown as InjectedWindow;
-  if (injectedWindow[FONT_INJECTED_FLAG]) {
-    return Promise.resolve();
-  }
-  const style = document.createElement('style');
-  style.textContent = `
+  // 注入 @font-face 只做一次（幂等）；等待字体就绪每次都执行，
+  // 这样调用方（如 BootScene.create）可以 await 到真正可用的中文像素字体，
+  // 避免字体加载完成前用回退字体测量中文宽度，导致 NPC 名牌/气泡背景偏小、文字溢出边框。
+  if (!injectedWindow[FONT_INJECTED_FLAG]) {
+    const style = document.createElement('style');
+    style.textContent = `
 @font-face {
   font-family: 'PythontopiaPixel';
   src: url('/assets/pixel/fonts/ark-pixel-12px-mono-zh_cn.woff2') format('woff2');
@@ -30,11 +31,15 @@ export function ensurePixelFontLoaded(): Promise<void> {
   unicode-range: U+0000-007F;
   font-display: block;
 }`;
-  document.head.appendChild(style);
-  injectedWindow[FONT_INJECTED_FLAG] = true;
+    document.head.appendChild(style);
+    injectedWindow[FONT_INJECTED_FLAG] = true;
+  }
   if ('fonts' in document) {
-    return document.fonts
-      .load('12px PythontopiaPixel')
+    // 同时预热名牌(11px)与正文(12px)两档字号，确保两者测宽都使用真实字形。
+    return Promise.all([
+      document.fonts.load('11px PythontopiaPixel'),
+      document.fonts.load('12px PythontopiaPixel'),
+    ])
       .then(() => undefined)
       .catch(() => undefined);
   }

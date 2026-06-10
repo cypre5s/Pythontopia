@@ -5,6 +5,7 @@ import AppLayout from '@/app/AppLayout.vue';
 import PyButton from '@/components/ui/PyButton.vue';
 import { useSessionStore } from '@stores/session';
 import { useLearningStore } from '@stores/learning';
+import { useWorkshopUiStore } from '@stores/workshopUi';
 import { listMyClassrooms } from '@/api/classroom';
 import { getRecommendations, type RecommendationDto } from '@/api/recommendations';
 import { playSfx } from '@/composables/useAudio';
@@ -13,6 +14,7 @@ import type { ClassroomDto } from '@/api/dto/ClassroomDto';
 const router = useRouter();
 const session = useSessionStore();
 const learning = useLearningStore();
+const workshopUi = useWorkshopUiStore();
 
 const classroom = ref<ClassroomDto | null>(null);
 const recommendations = ref<RecommendationDto[]>([]);
@@ -59,7 +61,9 @@ function questStatusLabel(status: string): string {
 
 function onRecommendClick(rec: RecommendationDto): void {
   playSfx('sfx_click');
-  void router.push({ path: '/workshop', query: { id: String(rec.resourceId) } });
+  // R-14 域1④：资源 id 不进 URL，先存 store 再跳干净的 /workshop（不暴露可枚举资源 id）。
+  workshopUi.openResource(rec.resourceId);
+  void router.push('/workshop');
 }
 
 function goWorld(): void {

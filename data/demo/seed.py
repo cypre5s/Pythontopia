@@ -124,8 +124,10 @@ def main() -> int:
     classroom_payload = json.loads((HERE / "demo_classroom.json").read_text(encoding="utf-8"))
     quests = json.loads((HERE / "demo_quests.json").read_text(encoding="utf-8"))
 
-    teacher_password = _random_password()
-    student_password = _random_password()
+    # 幂等可重入：若提供 PYT_DEMO_*_PASSWORD 环境变量则用固定密码，二次运行（用户已存在、
+    # 跳过注册）仍能用同一密码登录；缺省回退随机密码（首跑安全，但二次跑无法登录已存在账号）。
+    teacher_password = os.environ.get("PYT_DEMO_TEACHER_PASSWORD") or _random_password()
+    student_password = os.environ.get("PYT_DEMO_STUDENT_PASSWORD") or _random_password()
 
     teacher = users["teacher"]
     register(teacher["username"], teacher["displayName"], "TEACHER", teacher_password)

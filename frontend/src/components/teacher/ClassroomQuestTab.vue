@@ -220,7 +220,10 @@ function rateColor(value: number): string {
                 · {{ fmtRate(findCompletion(quest.id)!.completionRate) }}
               </span>
             </div>
-            <span v-else class="rate-na">——</span>
+            <span
+              v-else
+              class="rate-na"
+            >——</span>
           </td>
           <td>
             <PyButton

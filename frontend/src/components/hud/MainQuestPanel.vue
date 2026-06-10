@@ -70,6 +70,8 @@ interface ChapterGate {
   requiredTotal: number;
   masteryPct: number;
   masteryTargetPct: number;
+  /** 本章是否有「测」锚点（第 1 章为纯理论导入章，无锚点）。 */
+  hasAssessment: boolean;
   practiceMet: boolean;
   masteryMet: boolean;
   met: boolean;
@@ -82,17 +84,21 @@ const chapterGates = computed<Map<number, ChapterGate>>(() => {
   for (const ch of mainQuest.chapterViews) {
     const required = ch.subQuests.filter((s) => s.evidenceRequired.type === 'submission');
     const requiredDone = required.filter((s) => s.status === 'completed').length;
-    const masteryPct = Math.round(mainQuest.chapterMasteryAvg(ch.chapter) * 100);
+    // 「测」改为锚点 KC 制：分母 = 本章锚点 KC、目标 = 锚点阈值（练完即测，可达）；第 1 章无锚点。
+    const hasAssessment = mainQuest.chapterMasteryAnchors(ch.chapter).length > 0;
+    const masteryRatio = mainQuest.chapterMasteryAvg(ch.chapter);
+    const targetRatio = mainQuest.chapterMasteryTarget(ch.chapter);
     const practiceMet = requiredDone >= required.length;
-    const masteryMet = masteryPct >= 70;
+    const masteryMet = masteryRatio >= targetRatio;
     map.set(ch.chapter, {
       requiredDone,
       requiredTotal: required.length,
-      masteryPct,
-      masteryTargetPct: 70,
+      masteryPct: Math.round(masteryRatio * 100),
+      masteryTargetPct: Math.round(targetRatio * 100),
+      hasAssessment,
       practiceMet,
       masteryMet,
-      met: practiceMet && masteryMet,
+      met: mainQuest.chapterStandardMet(ch.chapter),
       mediaConsumed: mainQuest.chapterMediaConsumed(ch.chapter),
     });
   }
@@ -333,7 +339,12 @@ function skipToNext(chapter: number): void {
               class="mq-gate__item"
               :class="{ 'mq-gate__item--ok': chapterGates.get(ch.chapter)?.masteryMet }"
             >
-              测 · 本章知识点均掌握 {{ chapterGates.get(ch.chapter)?.masteryPct ?? 0 }}%/70%
+              <template v-if="chapterGates.get(ch.chapter)?.hasAssessment">
+                测 · 锚点知识点掌握 {{ chapterGates.get(ch.chapter)?.masteryPct ?? 0 }}%/{{ chapterGates.get(ch.chapter)?.masteryTargetPct ?? 0 }}%
+              </template>
+              <template v-else>
+                测 · 理论导入章（无需达标）
+              </template>
             </span>
             <span
               class="mq-gate__item mq-gate__item--soft"

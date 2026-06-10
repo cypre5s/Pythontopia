@@ -32,10 +32,11 @@ describe('KcHeatmap', () => {
     const wrapper = mount(KcHeatmap, { props: { entries } });
     const cells = wrapper.findAll('.cell');
     expect(cells).toHaveLength(2);
-    const firstStyle = cells[0]!.attributes('style') ?? '';
-    expect(firstStyle).toContain('background-color: rgb(231, 111, 81)');
-    const secondStyle = cells[1]!.attributes('style') ?? '';
-    expect(secondStyle).toContain('background-color: rgb(42, 157, 143)');
+    // 卡片式重构后热力色加在掌握度数值上：低分桶 #c0392b、高分桶 #2f8f6f。
+    const values = wrapper.findAll('.cell__value');
+    expect(values).toHaveLength(2);
+    expect(values[0]!.attributes('style') ?? '').toContain('color: rgb(192, 57, 43)');
+    expect(values[1]!.attributes('style') ?? '').toContain('color: rgb(47, 143, 111)');
   });
 
   it('shows empty hint when no data', () => {

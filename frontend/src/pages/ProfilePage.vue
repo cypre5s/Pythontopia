@@ -191,7 +191,10 @@ const dimensionCards = computed(() => {
 
 <template>
   <AppLayout>
-    <section class="profile-page" data-testid="profile-page">
+    <section
+      class="profile-page"
+      data-testid="profile-page"
+    >
       <nav class="profile-nav">
         <PyButton
           test-id="profile-back"
@@ -208,7 +211,9 @@ const dimensionCards = computed(() => {
           <span class="avatar-tag">Lv</span>
         </div>
         <div class="profile-info">
-          <h1 class="profile-name">{{ session.displayName }}</h1>
+          <h1 class="profile-name">
+            {{ session.displayName }}
+          </h1>
           <span class="profile-subtitle">Pythontopia 学习者画像</span>
         </div>
       </header>
@@ -217,13 +222,17 @@ const dimensionCards = computed(() => {
         v-if="dimensions.length > 0"
         class="radar-section"
       >
-        <h2 class="summary-title">8 维画像雷达</h2>
+        <h2 class="summary-title">
+          8 维画像雷达
+        </h2>
         <ProfileRadar :dimensions="dimensions" />
         <div
           v-if="selfEditable.length > 0"
           class="self-rate"
         >
-          <h3 class="self-rate__title">自评（仅主观维度，随时调整）</h3>
+          <h3 class="self-rate__title">
+            自评（仅主观维度，随时调整）
+          </h3>
           <div
             v-for="dim in selfEditable"
             :key="dim.key"
@@ -246,7 +255,10 @@ const dimensionCards = computed(() => {
         </div>
       </PyPanel>
 
-      <div v-if="p" class="dimension-grid">
+      <div
+        v-if="p"
+        class="dimension-grid"
+      >
         <article
           v-for="dim in dimensionCards"
           :key="dim.key"
@@ -254,10 +266,19 @@ const dimensionCards = computed(() => {
           :data-testid="`dim-${dim.key}`"
         >
           <div class="dim-card__header">
-            <h3 class="dim-card__title">{{ dim.title }}</h3>
+            <h3 class="dim-card__title">
+              {{ dim.title }}
+            </h3>
           </div>
-          <p class="dim-card__value">{{ dim.value }}</p>
-          <p v-if="dim.detail" class="dim-card__detail">{{ dim.detail }}</p>
+          <p class="dim-card__value">
+            {{ dim.value }}
+          </p>
+          <p
+            v-if="dim.detail"
+            class="dim-card__detail"
+          >
+            {{ dim.detail }}
+          </p>
           <div
             v-if="dim.key === 'cognitiveStyle'"
             class="cog-correct"
@@ -282,7 +303,9 @@ const dimensionCards = computed(() => {
       </div>
 
       <PyPanel v-if="p?.narrativeSummary">
-        <h2 class="summary-title">综合总结</h2>
+        <h2 class="summary-title">
+          综合总结
+        </h2>
         <MarkdownView :source="p.narrativeSummary" />
       </PyPanel>
 

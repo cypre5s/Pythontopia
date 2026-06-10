@@ -1,25 +1,18 @@
 # Pythontopia 地图（R-14 世界收缩）
 
-R-14 方案 A：仅生成 **town_hub**（中央小镇）与 **mine_south**（Bug 矿洞支线）。外围图已从主线移除。
+R-14 方案 A：仅生成 **town_hub**（中央小镇）。外围图与 Bug 矿洞风景图（mine_south）均已移除；Bug 矿洞功能仍在，经 town_hub building → /bug-mine 进入。
 
 ## 概览
 
 | key | 中文名 | 尺寸（列×行） | tileset | BGM | 出口 | spawn |
 | --- | --- | --- | --- | --- | --- | --- |
 | town_hub | Pythontopia 小镇 | 50×40 | kenney_tiny_town | bgm_town_day |  | (25, 20) |
-| mine_south | Bug 矿洞 · 织丝走廊 | 30×30 | kenney_tiny_dungeon | bgm_bug_mine | town_hub | (15, 2) |
 
 ## town_hub.json（50×40）
 
 - 出口：无（R-14 单中央 hub，外围图已移除；Bug 矿洞经 building → /bug-mine 路由进入）
 - 学习建筑：图书馆 / 工坊 / 训练场 / 竞技场 / 复盘大厅 / Bug 矿洞入口等
-- 12 主线 NPC 贴近建筑入口排布（见 `scripts/generate-maps.mjs` 内 `makeNpc` 列表）
-
-## mine_south.json（30×30）
-
-- 出口：north→town_hub
-- tileset：**kenney_tiny_dungeon**
-- 矿洞入口 + `foreman_bug` NPC
+- 11 主线 NPC 贴近建筑入口排布（见 `scripts/generate-maps.mjs` 内 `makeNpc` 列表）
 
 ## 文件结构
 
@@ -27,8 +20,7 @@ R-14 方案 A：仅生成 **town_hub**（中央小镇）与 **mine_south**（Bug
 frontend/public/assets/maps/
 ├── index.json
 ├── README.md
-├── town_hub.json
-└── mine_south.json
+└── town_hub.json
 ```
 
 ## 字段约定
@@ -85,5 +77,4 @@ node scripts/generate-maps.mjs
 
 - decoration 层目前只散布 bush / flower / fence 三类瓷砖；后续 W2-MAPS 二期会引入更精细的 Tiled object（NPC 走路路径、商铺货架、矿洞机关等）。
 - 各地图碰撞规则现在由 buildings 层 + 边界 implicit 阻挡推断；M2-ROUTER 子代理可能需要额外的 `collision` 数据层来标记不可穿越的装饰（例如树木）。
-- mine_south 暂未铺设矿洞内部副本——副本场景由独立 Phaser scene 处理，本 JSON 仅负责矿洞外景与入口判定。
 - 字段 `spawn` 在 index.json 与 map.objects 内重复出现：runtime 默认读 index.json，地图内的 `spawn` 对象作为权威覆盖。

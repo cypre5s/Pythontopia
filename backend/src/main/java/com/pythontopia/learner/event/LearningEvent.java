@@ -26,9 +26,10 @@ public sealed interface LearningEvent
 
   record ResourceConsumed(Long userId, String kcCode, String resourceKind) implements LearningEvent {}
 
-  record PracticeSucceeded(Long userId, String kcCode, Long problemId) implements LearningEvent {}
+  record PracticeSucceeded(Long userId, String kcCode, Long problemId, String difficulty)
+      implements LearningEvent {}
 
-  record PracticeFailed(Long userId, String kcCode, Long problemId, String failureKind)
+  record PracticeFailed(Long userId, String kcCode, Long problemId, String failureKind, String difficulty)
       implements LearningEvent {}
 
   record DebugResolved(Long userId, String kcCode, Long problemId) implements LearningEvent {}

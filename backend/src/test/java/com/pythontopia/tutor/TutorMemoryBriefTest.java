@@ -68,7 +68,8 @@ class TutorMemoryBriefTest {
     service.ask(
         student,
         new TutorAskRequest(
-            "为什么我的循环不对", List.of("PY43-KC-001"), "原始上下文", null, null, null, null));
+            "为什么我的循环不对", List.of("PY43-KC-001"), "原始上下文", null, null, null, null, null,
+            null));
 
     ArgumentCaptor<String> contextCaptor = ArgumentCaptor.forClass(String.class);
     verify(graphClient)
@@ -95,7 +96,8 @@ class TutorMemoryBriefTest {
     when(memoryRetrievalService.retrieve(eq(7L), isNull(), anyInt())).thenReturn(List.of());
 
     service.ask(
-        student, new TutorAskRequest("什么是闭包", List.of(), null, null, null, null, null));
+        student,
+        new TutorAskRequest("什么是闭包", List.of(), null, null, null, null, null, null, null));
 
     verify(memoryRetrievalService).retrieve(eq(7L), isNull(), anyInt());
   }

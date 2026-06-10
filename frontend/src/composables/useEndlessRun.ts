@@ -10,7 +10,7 @@
 //   * 失败结束当前局，玩家可继续无尽，但 streak 清零。
 
 import { computed, ref, type Ref } from 'vue';
-import { requestBossProblem, submitBossAttempt } from '@/api/boss';
+import { prefetchBossProblem, requestBossProblem, submitBossAttempt } from '@/api/boss';
 import { getPyodideRunner } from '@/game/adapters/pyodide';
 import { useProfileSignals, computeAdaptiveDifficulty } from '@/composables/useProfileSignals';
 import type {
@@ -46,6 +46,8 @@ export interface UseEndlessRunOptions {
   focusKc?: Ref<string | null>;
   /** 偏好题型（来自 ArenaPage 关卡 kind） */
   preferredKind?: Ref<string | null>;
+  /** 闯关塔单关 id（形如 "1-3"）：作为预生成 / 复用题的维度之一 */
+  arenaLevel?: Ref<string | null>;
 }
 
 export interface UseEndlessRunReturn {
@@ -187,6 +189,7 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
         stage,
         ...(preferredKc ? { preferredKc } : {}),
         ...(opts.preferredKind?.value ? { preferredKind: opts.preferredKind.value } : {}),
+        ...(opts.arenaLevel?.value ? { arenaLevel: opts.arenaLevel.value } : {}),
         ...(profileSignals.hasAnySignal.value ? { profileSignals: profileSignals.signals.value } : {}),
       };
       const fetched = await requestBossProblem(chapter, req);
@@ -195,6 +198,9 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
         difficulty: clampDifficulty(adaptiveDiff),
       };
       phase.value = 'playing';
+      // 进入答题即后台预生成「下一题」（不 await）：玩家做题时后端把下一题落 READY，
+      // nextProblem 时后端 claimReady 近乎瞬时返回；预取失败静默、nextProblem 回退现场出题。
+      void prefetchNext();
     } catch (error) {
       phase.value = 'error';
       errorMessage.value = error instanceof Error ? error.message : String(error);
@@ -291,7 +297,29 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
     saveHistory(history.value);
   }
 
+  /**
+   * 预取「下一题」（不 await）。维度用「当前题」的 chapter + kc + kind + arenaLevel：锁定章节 /
+   * arena 单关 / 聚焦弱项时与下一次取题维度一致 → 后端 claimReady 命中复用；随机 7 章模式下章节会变
+   * 可能 miss → nextProblem 回退现场出题（best-effort，可接受）。
+   */
+  async function prefetchNext(): Promise<void> {
+    const p = problem.value;
+    if (!p) return;
+    const req: BossProblemRequest = {
+      stage: 1 + Math.floor(Math.random() * 4),
+      preferredKc: p.kcCode,
+      ...(opts.preferredKind?.value ? { preferredKind: opts.preferredKind.value } : {}),
+      ...(opts.arenaLevel?.value ? { arenaLevel: opts.arenaLevel.value } : {}),
+      // 预取按「当前难度」生成（不假定本题通过；过 / 挂后难度再变，后端维度匹配忽略难度仍可复用）。
+      difficulty: clampDifficulty(currentDifficulty.value),
+      ...(profileSignals.hasAnySignal.value ? { profileSignals: profileSignals.signals.value } : {}),
+    };
+    await prefetchBossProblem(p.chapter, req);
+  }
+
   async function nextProblem(): Promise<void> {
+    // 「就绪预取」存于后端 pregenerated_problem (READY)：_fetchAndStart → 后端 fetchProblem 优先
+    // claimReady，命中即瞬时返回（省去等 LLM），未命中自然回退现场出题。无需前端缓存题目本体。
     await _fetchAndStart();
   }
 

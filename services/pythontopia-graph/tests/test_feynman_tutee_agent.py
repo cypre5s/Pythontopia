@@ -99,6 +99,47 @@ async def test_provider_failure_uses_rule_fallback() -> None:
     assert out.updated_misconceptions[0].resolved is False
 
 
+async def test_teaching_is_evaluated_by_llm_for_arbitrary_tag() -> None:
+    # 任意真实误解标签（非规则脚本硬编码的 3 个）在「被教学」回合也必须经 LLM 评估，
+    # 否则学弟永远学不会该误解（修复前 teach 回合恒走规则脚本，未知 tag 永不 resolved）。
+    provider = JsonProvider(
+        {
+            "reply_md": "我懂了：默认可变参数只会创建一次。",
+            "updated_misconceptions": [
+                {"tag": "mutable_default_arg", "evidence_event_ids": [777], "resolved": True}
+            ],
+            "produced_code": "def f(x, acc=None):\n    acc = acc or []",
+        }
+    )
+    inp = _input(
+        misconceptions=[Misconception(tag="mutable_default_arg", evidence_event_ids=[777])],
+        teaching="默认参数在函数定义时只创建一次，所以应当用 None 哨兵再在函数体内新建列表。",
+    )
+
+    out = await FeynmanTuteeAgent(provider).step(inp)
+
+    assert provider.calls == 1
+    assert out.updated_misconceptions[0].tag == "mutable_default_arg"
+    assert out.updated_misconceptions[0].resolved is True
+
+
+async def test_initial_step_forces_misconception_unresolved() -> None:
+    # 初始暴露阶段（无教学）即使 LLM 误标 resolved=true，也必须被强制改回 false。
+    provider = JsonProvider(
+        {
+            "reply_md": "我以为 range(1, 5) 会包含 5。",
+            "updated_misconceptions": [
+                {"tag": "off_by_one_range", "evidence_event_ids": [501], "resolved": True}
+            ],
+            "produced_code": "for i in range(1, 5):\n    print(i)",
+        }
+    )
+
+    out = await FeynmanTuteeAgent(provider).step(_input())
+
+    assert out.updated_misconceptions[0].resolved is False
+
+
 def test_feynman_route_is_registered() -> None:
     app.state.llm_provider = JsonProvider(
         {

@@ -126,6 +126,24 @@ flowchart TB
 | **P7** | 决策玻璃盒（可信） | 创新/可信 | 每个决策可展开 agent 讨论 + 课件证据链 |
 | **P8** | 多模态数字人讲师 | ②④ | 数字人讲解短视频；无 key 降级字幕；演示不断 |
 
+### 验收状态（2026-06-09 · Infinity Living World 验收）
+
+> 基于真实测试命令 + 跨服务联调 + 真实浏览器 live 游玩判定（非 checkbox）。基线：backend 464 / graph 380 / rag 21 / frontend 1514 全绿，typecheck 0 / lint 0 error，空库迁移至 V140 成功。
+
+| 阶段 | 验收结论 | 关键证据 / 残留 |
+| --- | --- | --- |
+| P0 | ✅ 通过 | 双 V135 已修；0.3 限频改 advisory-lock + 50 并发测试；0.4 删孤儿 |
+| P1 | ✅ 通过 | 浏览器 live 工坊真协同（馆员→导师→审查官→校对官重试通过→安全员，真页码引用）；1.1 顺带修复 DebugAgent 潜伏死路径 |
+| P2 | ✅ 通过 | 2.4 周报 status 假绿已修 + masteryDeltas 渲染 + 越权测试 |
+| P3 | ✅ 通过 | 3.1 confidence 反升已修；3.4 真 LLM entailment 接主链；（BKT 概率 + 置信区间作非阻塞增强收尾中） |
+| P4 | ✅ 通过 | resource_feedback 写+读闭环 + agent_strategy_directive 注入 + 写审计测试 |
+| P5 | ✅ 通过 | V140 prevention_pack + @Async 预生成 + 依赖路径证据 + 溯源测试 |
+| P6 | ✅ 通过 | RemediationController + ClassroomGuard 真校验 + evidence；浏览器 live 教师按钮通过 |
+| P7 | ◐ 有条件通过 | GlassBox 已挂载 + decision_kind/conclusion；（push/remediation 独立 trace 落库作非阻塞收尾中） |
+| P8 | ⬜ 未实现 | 数字人/口型未做（仅图+TTS 幻灯片），降级链路在；**本轮验收按指示明确排除** |
+
+完整记录见验收对话与提交 `8956541f`（Wave1）、`cec502f3`（三 lane）。
+
 **全局 DoD（每阶段都要满足）**：四端不受影响；`mvn -q -DskipTests compile` + 相关 `mvn test`、`python -m pytest -q`、`npm run typecheck` + 相关 `vitest`、`npx eslint` 全绿；业务层无 `any` 扩散；新增周期性 LLM 调用必须有“无网/无 key 规则兜底”，演示链路不断；每条 AI 产出可溯源（event id / evidence_page_ids）。
 
 ---

@@ -4,7 +4,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.feynman.dto.FeynmanDtos.SessionResponse;
 import com.pythontopia.feynman.dto.FeynmanDtos.TurnResponse;
+import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.submission.repository.PublicProblemRepository;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,29 +21,42 @@ public class FeynmanSessionService {
   private final ObjectMapper objectMapper;
   private final MisconceptionExtractor extractor;
   private final FeynmanGraphClient graphClient;
+  private final PublicProblemRepository problemRepository;
 
   public FeynmanSessionService(
       JdbcTemplate jdbc,
       ObjectMapper objectMapper,
       MisconceptionExtractor extractor,
-      FeynmanGraphClient graphClient) {
+      FeynmanGraphClient graphClient,
+      PublicProblemRepository problemRepository) {
     this.jdbc = jdbc;
     this.objectMapper = objectMapper;
     this.extractor = extractor;
     this.graphClient = graphClient;
+    this.problemRepository = problemRepository;
   }
 
   @Transactional
   public SessionResponse start(long userId, String kcCode) {
     List<Misconception> misconceptions = extractor.extract(userId, kcCode);
-    String state = toJson(misconceptions);
+    String state = toState(misconceptions);
+    PublicProblemRepository.RepresentativeProblem representative =
+        problemRepository
+            .findRepresentativeProblem(43L, kcCode)
+            .orElseThrow(
+                () ->
+                    new BusinessException(
+                        HttpStatus.NOT_FOUND,
+                        "FEYNMAN_PROBLEM_NOT_FOUND",
+                        "该知识点暂无可用于费曼判题的代表题"));
     Long id =
         jdbc.queryForObject(
-            "INSERT INTO feynman_session (user_id, kc_code, tutee_state, status) "
-                + "VALUES (?, ?, ?::jsonb, 'OPEN') RETURNING id",
+            "INSERT INTO feynman_session (user_id, kc_code, problem_id, tutee_state, status) "
+                + "VALUES (?, ?, ?, ?::jsonb, 'OPEN') RETURNING id",
             Long.class,
             userId,
             kcCode,
+            representative.id(),
             state);
     return new SessionResponse(id == null ? 0L : id, userId, kcCode, "OPEN", readJson(state));
   }
@@ -47,11 +65,23 @@ public class FeynmanSessionService {
   public TurnResponse teach(long sessionId, String explanation) {
     SessionData session = loadSession(sessionId);
     List<Misconception> misconceptions = parseMisconceptions(session.tuteeState());
+
+    // 学生本回合的教学先落库为 STUDENT 轮，支撑「误解→你的教学→判题→证据」玻璃盒可溯源。
+    jdbc.update(
+        "INSERT INTO feynman_turn (session_id, role, content, taught_fix) VALUES (?, 'STUDENT', ?, NULL)",
+        sessionId,
+        explanation == null ? "" : explanation);
+
+    // 防作弊红线：贴 answer_key/完整代码不算「教会」，学弟拒收且误解不解除。
+    if (FeynmanAntiCheat.looksLikeAnswerDump(explanation)) {
+      return refuseAnswerDump(sessionId, misconceptions);
+    }
+
     FeynmanGraphClient.FeynmanOutput output =
         graphClient
             .step(session.kcCode(), misconceptions, explanation)
             .orElseGet(() -> fallbackStep(misconceptions, explanation));
-    String nextState = toJson(output.updatedMisconceptions());
+    String nextState = toState(output.updatedMisconceptions());
     Long turnId =
         jdbc.queryForObject(
             "INSERT INTO feynman_turn (session_id, role, content, taught_fix) "
@@ -69,14 +99,33 @@ public class FeynmanSessionService {
         turnId == null ? 0L : turnId, "TUTEE", output.replyMd(), output.producedCode());
   }
 
+  private TurnResponse refuseAnswerDump(long sessionId, List<Misconception> misconceptions) {
+    String reply = "请不要直接把完整代码或答案贴给我——讲讲「为什么」这样改，用反例点出我原来的错误规则。";
+    Long turnId =
+        jdbc.queryForObject(
+            "INSERT INTO feynman_turn (session_id, role, content, taught_fix) "
+                + "VALUES (?, 'TUTEE', ?, NULL) RETURNING id",
+            Long.class,
+            sessionId,
+            reply);
+    // 误解保持不变（不解除），状态保持 OPEN。
+    jdbc.update(
+        "UPDATE feynman_session SET tutee_state = ?::jsonb, status = 'OPEN' WHERE id = ?",
+        toState(misconceptions),
+        sessionId);
+    return new TurnResponse(turnId == null ? 0L : turnId, "TUTEE", reply, null);
+  }
+
   SessionData loadSession(long sessionId) {
     return jdbc.queryForObject(
-        "SELECT id, user_id, kc_code, status, tutee_state::text AS state FROM feynman_session WHERE id = ?",
+        "SELECT id, user_id, kc_code, problem_id, status, tutee_state::text AS state "
+            + "FROM feynman_session WHERE id = ?",
         (rs, rowNum) ->
             new SessionData(
                 rs.getLong("id"),
                 rs.getLong("user_id"),
                 rs.getString("kc_code"),
+                rs.getObject("problem_id", Long.class),
                 rs.getString("status"),
                 rs.getString("state")),
         sessionId);
@@ -84,7 +133,8 @@ public class FeynmanSessionService {
 
   private FeynmanGraphClient.FeynmanOutput fallbackStep(
       List<Misconception> misconceptions, String explanation) {
-    boolean correct = explanation != null && explanation.length() >= 12 && !looksLikeAnswerDump(explanation);
+    // 仅离线兜底：要求解释足够具体（且已通过防作弊），否则视为「没讲清原因」。
+    boolean correct = explanation != null && explanation.length() >= 12;
     List<Misconception> updated =
         misconceptions.stream()
             .map(m -> correct ? new Misconception(m.tag(), m.evidenceEventIds(), true) : m)
@@ -97,20 +147,22 @@ public class FeynmanSessionService {
     return new FeynmanGraphClient.FeynmanOutput(reply, updated, code);
   }
 
-  private static boolean looksLikeAnswerDump(String explanation) {
-    String text = explanation == null ? "" : explanation.toLowerCase();
-    return text.contains("answer_key") || text.contains("```python");
-  }
-
   private static boolean allResolved(List<Misconception> misconceptions) {
     return misconceptions != null && misconceptions.stream().allMatch(Misconception::resolved);
+  }
+
+  /** 持久化形态对齐迁移注释 {@code {misconceptions:[...]}} 与前端 FeynmanTuteeStateDto。 */
+  private String toState(List<Misconception> misconceptions) {
+    Map<String, Object> state = new LinkedHashMap<>();
+    state.put("misconceptions", misconceptions == null ? List.of() : misconceptions);
+    return toJson(state);
   }
 
   private String toJson(Object value) {
     try {
       return objectMapper.writeValueAsString(value);
     } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
-      return "[]";
+      return "{\"misconceptions\":[]}";
     }
   }
 
@@ -118,17 +170,23 @@ public class FeynmanSessionService {
     try {
       return objectMapper.readTree(json);
     } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
-      return objectMapper.createArrayNode();
+      return objectMapper.createObjectNode().set("misconceptions", objectMapper.createArrayNode());
     }
   }
 
   private List<Misconception> parseMisconceptions(String json) {
     try {
-      return objectMapper.readerForListOf(Misconception.class).readValue(json);
-    } catch (java.io.IOException ex) {
+      JsonNode root = objectMapper.readTree(json);
+      JsonNode arr = root.isArray() ? root : root.path("misconceptions");
+      if (!arr.isArray()) {
+        return List.of();
+      }
+      return objectMapper.convertValue(
+          arr, objectMapper.getTypeFactory().constructCollectionType(List.class, Misconception.class));
+    } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
       return List.of();
     }
   }
 
-  record SessionData(long id, long userId, String kcCode, String status, String tuteeState) {}
+  record SessionData(long id, long userId, String kcCode, Long problemId, String status, String tuteeState) {}
 }

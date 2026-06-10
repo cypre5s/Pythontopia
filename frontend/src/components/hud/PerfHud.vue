@@ -238,14 +238,23 @@ onUnmounted(() => {
         <span>画布</span><b>{{ canvasText }}</b>
       </li>
       <li><span>DPR</span><b>{{ dprText }}</b></li>
-      <li v-if="heapMB !== null"><span>堆</span><b>{{ heapMB }} MB</b></li>
+      <li v-if="heapMB !== null">
+        <span>堆</span><b>{{ heapMB }} MB</b>
+      </li>
       <li><span>后端</span><b>{{ rendererText }}</b></li>
-      <li v-if="scenesText"><span>场景</span><b>{{ scenesText }}</b></li>
+      <li v-if="scenesText">
+        <span>场景</span><b>{{ scenesText }}</b>
+      </li>
     </ul>
 
     <template v-if="vitals.length">
-      <div class="perf-hud__section">Web Vitals</div>
-      <ul class="perf-hud__rows" data-testid="perf-hud-vitals">
+      <div class="perf-hud__section">
+        Web Vitals
+      </div>
+      <ul
+        class="perf-hud__rows"
+        data-testid="perf-hud-vitals"
+      >
         <li
           v-for="v in vitals"
           :key="v.name"
@@ -257,8 +266,13 @@ onUnmounted(() => {
     </template>
 
     <template v-if="mapLoads.length">
-      <div class="perf-hud__section">地图加载 avg/max</div>
-      <ul class="perf-hud__rows" data-testid="perf-hud-maploads">
+      <div class="perf-hud__section">
+        地图加载 avg/max
+      </div>
+      <ul
+        class="perf-hud__rows"
+        data-testid="perf-hud-maploads"
+      >
         <li
           v-for="m in mapLoads"
           :key="m.map"
@@ -268,7 +282,10 @@ onUnmounted(() => {
       </ul>
     </template>
 
-    <p v-if="fillWarn" class="perf-hud__hint">
+    <p
+      v-if="fillWarn"
+      class="perf-hud__hint"
+    >
       画布像素偏高，疑似填充率瓶颈：可降低 DPR / 渲染分辨率
     </p>
   </div>

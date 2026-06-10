@@ -18,7 +18,8 @@ describe('DEFAULT_INPUT_TUNING', () => {
     expect(DEFAULT_INPUT_TUNING.inputLagBudgetMs).toBe(50);
     expect(DEFAULT_INPUT_TUNING.stopLagBudgetMs).toBe(80);
     expect(DEFAULT_INPUT_TUNING.sceneSpeedMultiplier.town_hub).toBe(1.0);
-    expect(DEFAULT_INPUT_TUNING.sceneSpeedMultiplier.mine_south).toBe(0.8);
+    // R-14：mine_south 风景图已删，其 0.8× 减速项一并移除（仅保留 town_hub）。
+    expect(DEFAULT_INPUT_TUNING.sceneSpeedMultiplier.mine_south).toBeUndefined();
   });
 
   it('freezes the config and nested sceneSpeedMultiplier (附录 A.1 兜底)', () => {
@@ -96,14 +97,6 @@ describe('getSpeedForScene', () => {
   it('returns base walkSpeed for town_hub (baseline 1.0×)', () => {
     expect(getSpeedForScene('town_hub', false)).toBe(120);
     expect(getSpeedForScene('town_hub', true)).toBe(180);
-  });
-
-  it('applies the mine_south 0.8× slowdown for both walk and run', () => {
-    expect(getSpeedForScene('mine_south', false)).toBeCloseTo(96, 5);
-    expect(getSpeedForScene('mine_south', true)).toBeCloseTo(144, 5);
-    expect(getSpeedForScene('mine_south', false)).toBeLessThan(
-      getSpeedForScene('town_hub', false),
-    );
   });
 
   it('defaults unknown scene keys to multiplier 1.0 (forward-compat for new maps)', () => {

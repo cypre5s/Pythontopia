@@ -34,27 +34,57 @@ public class NpcDialogGraphClient {
       String npcKey, String personaCore, List<MemoryItemDto> memories, String message) {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
+    List<RecalledMemoryPayload> projected =
+        (memories == null ? List.<MemoryItemDto>of() : memories).stream()
+            .map(RecalledMemoryPayload::from)
+            .toList();
     HttpEntity<NpcDialogGraphRequest> entity =
-        new HttpEntity<>(new NpcDialogGraphRequest(npcKey, personaCore, memories, message), headers);
+        new HttpEntity<>(
+            new NpcDialogGraphRequest(npcKey, personaCore, projected, message), headers);
     try {
-      NpcDialogResponse body =
+      NpcDialogGraphResponse body =
           restTemplate
               .exchange(
-                  properties.graphUrl() + "/npc/dialog",
+                  // graph 路由统一挂在 /agents 前缀下（见 routes/npc_dialog.py）。
+                  properties.graphUrl() + "/agents/npc/dialog",
                   HttpMethod.POST,
                   entity,
-                  NpcDialogResponse.class)
+                  NpcDialogGraphResponse.class)
               .getBody();
-      return Optional.ofNullable(body);
+      return Optional.ofNullable(body).map(NpcDialogGraphResponse::toDomain);
     } catch (RestClientException ex) {
       log.warn("npc dialog graph unavailable for npcKey={}: {}", npcKey, ex.getMessage());
       return Optional.empty();
     }
   }
 
+  /** 请求体：字段对齐 graph schemas.npc_dialog.NpcDialogInput（snake_case）。 */
   record NpcDialogGraphRequest(
       @JsonProperty("npc_key") String npcKey,
       @JsonProperty("persona_core") String personaCore,
-      List<MemoryItemDto> memories,
+      @JsonProperty("memories") List<RecalledMemoryPayload> memories,
       @JsonProperty("user_message") String userMessage) {}
+
+  /** 记忆投影：对齐 graph schemas.npc_dialog.RecalledMemory（event_id 必填，summary/kc_codes）。 */
+  record RecalledMemoryPayload(
+      @JsonProperty("event_id") long eventId,
+      @JsonProperty("summary") String summary,
+      @JsonProperty("kc_codes") List<String> kcCodes) {
+    static RecalledMemoryPayload from(MemoryItemDto memory) {
+      return new RecalledMemoryPayload(
+          memory.eventId(),
+          memory.summaryZh() == null ? "" : memory.summaryZh(),
+          memory.kcCodes() == null ? List.of() : memory.kcCodes());
+    }
+  }
+
+  /** 响应体：对齐 graph schemas.npc_dialog.NpcDialogOutput（snake_case）。 */
+  record NpcDialogGraphResponse(
+      @JsonProperty("reply_md") String replyMd,
+      @JsonProperty("cited_event_ids") List<Long> citedEventIds,
+      @JsonProperty("grounded") boolean grounded) {
+    NpcDialogResponse toDomain() {
+      return new NpcDialogResponse(replyMd, citedEventIds, grounded);
+    }
+  }
 }

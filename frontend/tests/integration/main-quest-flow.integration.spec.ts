@@ -2,7 +2,7 @@
  * R-13 §5 Phase 7：主线 + Boss 完整闭环集成测试。
  *
  * 不启 dev server / Phaser，纯组件级 mount + 状态机断言。
- * 覆盖：HUD chip → 打开 panel → 接任务 → 推进进度 → 章 boss 解锁 → 进入 BossPage → 通关 → 主线推进。
+ * 覆盖：HudShell 主线入口 → 打开 panel → 接任务 → 推进进度 → 章 boss 解锁 → 进入 BossPage → 通关 → 主线推进。
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -10,7 +10,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { flushPromises, mount } from '@vue/test-utils';
 import { createMemoryHistory, createRouter, type Router } from 'vue-router';
 
-import MainQuestChip from '@/components/hud/MainQuestChip.vue';
+import HudShell from '@/components/hud/HudShell.vue';
 import MainQuestPanel from '@/components/hud/MainQuestPanel.vue';
 import { useMainQuestStore } from '@stores/mainQuest';
 import { useWorldStore } from '@stores/world';
@@ -28,10 +28,17 @@ function setupRouter(): Router {
   return createRouter({
     history: createMemoryHistory(),
     routes: [
-      { path: '/world', component: { template: '<div data-testid="world-stub" />' } },
-      { path: '/boss/:chapter', component: { template: '<div data-testid="boss-stub" />' } },
+      { path: '/world', name: 'world', component: { template: '<div data-testid="world-stub" />' } },
+      { path: '/boss/:chapter', name: 'boss', component: { template: '<div data-testid="boss-stub" />' } },
+      { path: '/profile', name: 'profile', component: { template: '<div data-testid="profile-stub" />' } },
+      { path: '/library', name: 'library', component: { template: '<div data-testid="library-stub" />' } },
+      { path: '/arena/:chapter', name: 'arena', component: { template: '<div data-testid="arena-stub" />' } },
     ],
   });
+}
+
+function mountHud() {
+  return mount(HudShell, { global: { plugins: [router] } });
 }
 
 beforeEach(() => {
@@ -41,15 +48,15 @@ beforeEach(() => {
 });
 
 describe('R-13 §5 主线 + Boss 端到端集成', () => {
-  it('chip 显示初始章节 1/5', async () => {
-    const wrapper = mount(MainQuestChip);
+  it('HudShell 主线摘要显示初始章节 0/5', async () => {
+    const wrapper = mountHud();
     expect(wrapper.text()).toContain('第 1 章');
-    expect(wrapper.text()).toContain('0/5');
+    expect(wrapper.get('[data-testid="hud-quest-summary"]').text()).toContain('0 / 5');
   });
 
-  it('点击 chip 打开 panel，panel 默认渲染 7 章 35 任务', async () => {
-    const chip = mount(MainQuestChip);
-    await chip.find('[data-testid="main-quest-chip"]').trigger('click');
+  it('点击 HudShell 任务入口打开 panel，panel 默认渲染 7 章 35 任务', async () => {
+    const hud = mountHud();
+    await hud.find('[data-testid="hud-slot-quest"]').trigger('click');
 
     const panel = mount(MainQuestPanel, { global: { plugins: [router] } });
     await flushPromises();
@@ -118,14 +125,15 @@ describe('R-13 §5 主线 + Boss 端到端集成', () => {
     expect(router.currentRoute.value.path).toBe('/world');
   });
 
-  it('整体进度从 0 → 1/35 → 2/35 时 chip 显示 3 / 6%', async () => {
+  it('整体进度从 0 → 1/35 → 2/35 时 HudShell 显示 3 / 6%', async () => {
     const store = useMainQuestStore();
     store.completeSubQuest('1-1');
-    let chip = mount(MainQuestChip);
-    expect(chip.text()).toContain('3%');
+    let hud = mountHud();
+    expect(hud.get('[data-testid="hud-quest-summary"]').attributes('aria-label')).toContain('总进度 3%');
+    hud.unmount();
     store.completeSubQuest('1-2');
-    chip = mount(MainQuestChip);
-    expect(chip.text()).toContain('6%');
+    hud = mountHud();
+    expect(hud.get('[data-testid="hud-quest-summary"]').attributes('aria-label')).toContain('总进度 6%');
   });
 
   it('章节面板状态切换：completed / in_progress / available / locked', async () => {
@@ -163,8 +171,8 @@ describe('R-13 §5 主线 + Boss 端到端集成', () => {
     });
     expect(store.progress.currentChapter).toBe(3);
     expect(store.progress.completedSubQuests.length).toBe(6);
-    const chip = mount(MainQuestChip);
-    expect(chip.text()).toContain('第 3 章');
+    const hud = mountHud();
+    expect(hud.get('[data-testid="hud-quest-summary"]').text()).toContain('第3章');
   });
 
   it('defeatBoss 解锁 milestone 写入 unlockedMilestones', async () => {
@@ -253,7 +261,7 @@ describe('R-13 §5 主线 + Boss 端到端集成', () => {
     expect(store.progress.defeatedBosses).toEqual([]);
   });
 
-  it('chip 反映自适应 AI 出题历史长度（仅日志，不影响 UI）', async () => {
+  it('HudShell 主线摘要不受自适应 AI 出题历史长度影响', async () => {
     const store = useMainQuestStore();
     store.recordAiProblem({
       problemId: 'p1',
@@ -262,9 +270,9 @@ describe('R-13 §5 主线 + Boss 端到端集成', () => {
       succeededInSec: 12,
       timestamp: new Date().toISOString(),
     });
-    const chip = mount(MainQuestChip);
-    // chip 不显示历史，但断言 store 已写
+    const hud = mountHud();
+    // HUD 不显示历史，但断言 store 已写
     expect(store.progress.recentAiProblems.length).toBe(1);
-    expect(chip.text()).toContain('第 1 章');
+    expect(hud.get('[data-testid="hud-quest-summary"]').text()).toContain('第1章');
   });
 });

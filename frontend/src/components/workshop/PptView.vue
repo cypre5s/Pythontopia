@@ -137,7 +137,9 @@ function exportMarpMd(): void {
             v-for="(p, j) in section.paragraphs"
             :key="j"
             class="slide-paragraph"
-          >{{ p }}</p>
+          >
+            {{ p }}
+          </p>
           <pre
             v-for="(code, k) in section.code_snippets"
             :key="`c-${k}`"

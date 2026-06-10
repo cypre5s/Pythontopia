@@ -1,28 +1,21 @@
 <script setup lang="ts">
 /**
- * 百晓工坊右侧「书房」抽屉：可收起，内含 ResourceListPanel（书房列表）+
- * ResourceDetailPanel（详情）。详情走「替换式」——选中资源后用详情替换列表，顶部给
- * 「← 返回书房」。open / selectedId 由父级（WorkshopPage，绑路由 ?id）控制。
+ * 百晓工坊右侧「书房」抽屉：可收起。展开时**常驻**资源列表（ResourceListPanel）——
+ * 学生点击某一行不再「替换式」打开详情，而是由父级（WorkshopPage，store openResourceId）
+ * 弹出资源详情弹窗（ResourceDetailPanel）。本组件只负责列表 + 收起/展开。
  */
 import ResourceListPanel from '@/components/workshop/ResourceListPanel.vue';
-import ResourceDetailPanel from '@/components/workshop/ResourceDetailPanel.vue';
 
 const props = defineProps<{
   open: boolean;
-  selectedId: number | null;
 }>();
 
 const emit = defineEmits<{
   (event: 'update:open', value: boolean): void;
-  (event: 'back'): void;
 }>();
 
 function toggle(): void {
   emit('update:open', !props.open);
-}
-
-function back(): void {
-  emit('back');
 }
 </script>
 
@@ -47,19 +40,7 @@ function back(): void {
 
     <template v-else>
       <header class="drawer__bar">
-        <button
-          v-if="props.selectedId !== null"
-          type="button"
-          class="drawer__back"
-          data-testid="studio-drawer-back"
-          @click="back"
-        >
-          ← 返回书房
-        </button>
-        <span
-          v-else
-          class="drawer__title"
-        >我的书房</span>
+        <span class="drawer__title">我的书房</span>
         <button
           type="button"
           class="drawer__collapse"
@@ -72,11 +53,7 @@ function back(): void {
       </header>
 
       <div class="drawer__body">
-        <ResourceDetailPanel
-          v-if="props.selectedId !== null"
-          :resource-id="props.selectedId"
-        />
-        <ResourceListPanel v-else />
+        <ResourceListPanel />
       </div>
     </template>
   </aside>
@@ -135,20 +112,6 @@ function back(): void {
   font-size: 13px;
   font-weight: 700;
   color: var(--pyt-color-text-primary);
-}
-.drawer__back {
-  font-family: inherit;
-  font-size: 12px;
-  padding: 3px 10px;
-  background: var(--pyt-color-warning-bg);
-  border: 2px solid var(--pyt-color-text-primary);
-  border-radius: 4px;
-  cursor: pointer;
-  box-shadow: 2px 2px 0 var(--pyt-color-text-primary);
-}
-.drawer__back:active {
-  transform: translate(2px, 2px);
-  box-shadow: none;
 }
 .drawer__collapse {
   flex: 0 0 auto;

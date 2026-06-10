@@ -233,11 +233,12 @@ async function openVariantProblem(): Promise<void> {
     toast.show(learning.training.lastError, 'error');
     return;
   }
+  // S1：私有 bugMineSessionId 不写进 URL，改由 store 承载（上方 setPendingVariantSession 已设）。
+  // problemId（共享课程题）与 variant（模式标志，非 id）非私有，保留在 URL 以支持刷新可达 / 自清。
   await router.push({
     path: '/training',
     query: {
       problemId: String(variant.id),
-      bugMineSessionId: String(activeSessionId),
       variant: '1',
     },
   });

@@ -51,6 +51,7 @@ class BilibiliVideoControllerTest {
                     "for 循环 & 遍历",
                     "UP主小明",
                     "讲解 for 循环与 range 的用法",
+                    "1 分钟速览 for 循环与 range 的写法",
                     "https://i2.hdslb.com/bfs/archive/abc.jpg",
                     754,
                     12345L,
@@ -66,6 +67,7 @@ class BilibiliVideoControllerTest {
         .andExpect(jsonPath("$[0].title").value("for 循环 & 遍历"))
         .andExpect(jsonPath("$[0].author").value("UP主小明"))
         .andExpect(jsonPath("$[0].description").value("讲解 for 循环与 range 的用法"))
+        .andExpect(jsonPath("$[0].aiSummary").value("1 分钟速览 for 循环与 range 的写法"))
         .andExpect(jsonPath("$[0].coverUrl").value("https://i2.hdslb.com/bfs/archive/abc.jpg"))
         .andExpect(jsonPath("$[0].durationSec").value(754))
         .andExpect(jsonPath("$[0].play").value(12345))

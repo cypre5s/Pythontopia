@@ -35,6 +35,8 @@ const asideMode = ref<AsideMode>('guide');
 const loading = ref(true);
 const videos = ref<CourseVideoDto[]>([]);
 const activeId = ref<number | null>(null);
+// 看课页视频 RAG：跟踪当前播放时刻（秒），提问时随 videoId 回传后端合成「视频上下文」。
+const videoTimeSec = ref(0);
 
 let mediaReported = false;
 
@@ -100,6 +102,7 @@ function reportMediaConsumed(mediaType: string): void {
 
 function onVideoProgress(e: Event): void {
   const v = e.target as HTMLVideoElement;
+  videoTimeSec.value = Math.floor(v.currentTime);
   if (v.duration > 0 && v.currentTime / v.duration >= 0.9) {
     reportMediaConsumed('video');
   }
@@ -177,7 +180,9 @@ watch(() => props.chapter, () => {
     >
       <header class="lecture-top">
         <div class="lecture-top__title">
-          <h1 class="lecture-title">{{ chapterName }}</h1>
+          <h1 class="lecture-title">
+            {{ chapterName }}
+          </h1>
           <span
             v-if="mediaConsumed"
             class="lecture-done"
@@ -221,7 +226,9 @@ watch(() => props.chapter, () => {
             >
               你的浏览器不支持内嵌视频播放。
             </video>
-            <p class="lecture-vtitle">{{ activeVideo.title }}</p>
+            <p class="lecture-vtitle">
+              {{ activeVideo.title }}
+            </p>
           </template>
 
           <div
@@ -229,7 +236,9 @@ watch(() => props.chapter, () => {
             class="lecture-empty"
             data-testid="lecture-empty"
           >
-            <p class="lecture-empty-title">本章暂无在线视频</p>
+            <p class="lecture-empty-title">
+              本章暂无在线视频
+            </p>
             <p class="lecture-empty-sub">
               可直接在右侧：看 PPT、问 AI 助教或做题。下面是 B 站精选讲解（外部资源）：
             </p>
@@ -285,6 +294,8 @@ watch(() => props.chapter, () => {
               embedded
               :kc-codes="chapterKcCodes"
               :context="tutorContext"
+              :video-id="activeVideo?.id"
+              :video-time-sec="videoTimeSec"
             />
             <button
               type="button"
@@ -296,85 +307,89 @@ watch(() => props.chapter, () => {
           </div>
 
           <template v-else>
-          <nav
-            class="aside-block aside-block--actions"
-            aria-label="本章学习闭环"
-          >
-            <h2 class="aside-heading">学习闭环</h2>
-            <div class="aside-actions">
-              <PyButton
-                class="aside-span2"
-                variant="primary"
-                block
-                test-id="lecture-goto-training"
-                @click="goTraining"
-              >
-                看完去做题
-              </PyButton>
-              <PyButton
-                variant="secondary"
-                block
-                test-id="lecture-goto-ppt"
-                :disabled="pptLoading"
-                @click="goPpt"
-              >
-                {{ pptLoading ? '加载…' : 'PPT' }}
-              </PyButton>
-              <PyButton
-                variant="secondary"
-                block
-                @click="openTutorAside"
-              >
-                AI 助教
-              </PyButton>
-              <PyButton
-                class="aside-span2"
-                variant="secondary"
-                block
-                @click="goWorld"
-              >
-                小镇
-              </PyButton>
-            </div>
-          </nav>
-
-          <section
-            v-if="playable.length > 0"
-            class="aside-block aside-block--videos"
-          >
-            <h2 class="aside-heading">本章小节（{{ playable.length }}）</h2>
-            <ul class="aside-video-list">
-              <li
-                v-for="v in playable"
-                :key="v.id"
-              >
-                <button
-                  type="button"
-                  class="aside-video-item"
-                  :class="{ 'is-active': activeVideo && v.id === activeVideo.id }"
-                  @click="selectVideo(v.id)"
+            <nav
+              class="aside-block aside-block--actions"
+              aria-label="本章学习闭环"
+            >
+              <h2 class="aside-heading">
+                学习闭环
+              </h2>
+              <div class="aside-actions">
+                <PyButton
+                  class="aside-span2"
+                  variant="primary"
+                  block
+                  test-id="lecture-goto-training"
+                  @click="goTraining"
                 >
-                  <span class="aside-video-name">{{ v.title }}</span>
-                  <span
-                    v-if="formatDuration(v.durationSec)"
-                    class="aside-video-dur"
-                  >{{ formatDuration(v.durationSec) }}</span>
-                </button>
-              </li>
-            </ul>
-          </section>
+                  看完去做题
+                </PyButton>
+                <PyButton
+                  variant="secondary"
+                  block
+                  test-id="lecture-goto-ppt"
+                  :disabled="pptLoading"
+                  @click="goPpt"
+                >
+                  {{ pptLoading ? '加载…' : 'PPT' }}
+                </PyButton>
+                <PyButton
+                  variant="secondary"
+                  block
+                  @click="openTutorAside"
+                >
+                  AI 助教
+                </PyButton>
+                <PyButton
+                  class="aside-span2"
+                  variant="secondary"
+                  block
+                  @click="goWorld"
+                >
+                  小镇
+                </PyButton>
+              </div>
+            </nav>
 
-          <section
-            class="aside-block aside-block--bili"
-            data-testid="lecture-bili-aside"
-          >
-            <BilibiliVideoCards
-              :keyword="biliKeyword"
-              :limit="6"
-              heading="本章 B站精选"
-              @consumed="reportMediaConsumed('video')"
-            />
-          </section>
+            <section
+              v-if="playable.length > 0"
+              class="aside-block aside-block--videos"
+            >
+              <h2 class="aside-heading">
+                本章小节（{{ playable.length }}）
+              </h2>
+              <ul class="aside-video-list">
+                <li
+                  v-for="v in playable"
+                  :key="v.id"
+                >
+                  <button
+                    type="button"
+                    class="aside-video-item"
+                    :class="{ 'is-active': activeVideo && v.id === activeVideo.id }"
+                    @click="selectVideo(v.id)"
+                  >
+                    <span class="aside-video-name">{{ v.title }}</span>
+                    <span
+                      v-if="formatDuration(v.durationSec)"
+                      class="aside-video-dur"
+                    >{{ formatDuration(v.durationSec) }}</span>
+                  </button>
+                </li>
+              </ul>
+            </section>
+
+            <section
+              class="aside-block aside-block--bili"
+              data-testid="lecture-bili-aside"
+            >
+              <BilibiliVideoCards
+                :keyword="biliKeyword"
+                :limit="6"
+                heading="本章 B站精选"
+                @consumed="reportMediaConsumed('video')"
+              />
+            </section>
           </template>
         </aside>
       </div>

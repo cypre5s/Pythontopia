@@ -15,7 +15,10 @@ function selectLine(idx: number): void {
 </script>
 
 <template>
-  <div class="debug-card" data-testid="debug-card">
+  <div
+    class="debug-card"
+    data-testid="debug-card"
+  >
     <header class="card-head">
       <span class="card-icon">⚠</span>
       <h3>改错题</h3>
@@ -31,7 +34,10 @@ function selectLine(idx: number): void {
       >
         <span class="line-num">{{ idx + 1 }}</span>
         <span class="line-text">{{ line }}</span>
-        <span v-if="selectedLine === idx" class="bug-marker">&lt;- BUG?</span>
+        <span
+          v-if="selectedLine === idx"
+          class="bug-marker"
+        >&lt;- BUG?</span>
       </div>
     </div>
     <label class="fix-editor">
@@ -44,7 +50,9 @@ function selectLine(idx: number): void {
         spellcheck="false"
       />
     </label>
-    <p class="hint">点击可疑行标记，在下方写出修复后的完整代码。</p>
+    <p class="hint">
+      点击可疑行标记，在下方写出修复后的完整代码。
+    </p>
   </div>
 </template>
 

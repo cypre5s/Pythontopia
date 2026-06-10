@@ -71,7 +71,10 @@ function pct(value: number): string {
           :key="step.label"
           class="legend-item"
         >
-          <span class="swatch" :style="{ background: step.color }" />{{ step.label }}
+          <span
+            class="swatch"
+            :style="{ background: step.color }"
+          />{{ step.label }}
         </span>
       </div>
       <div
@@ -91,7 +94,10 @@ function pct(value: number): string {
             :title="cell.kcName + '\n' + cell.kcCode + '\n平均掌握 ' + fmt(cell.avgMastery) + '\n已掌握 ' + cell.masteredCount + '/' + cell.studentCount"
           >
             <span class="cell__code">{{ cell.kcCode }}</span>
-            <span class="cell__value" :style="{ color: color(cell.avgMastery) }">{{ pct(cell.avgMastery) }}</span>
+            <span
+              class="cell__value"
+              :style="{ color: color(cell.avgMastery) }"
+            >{{ pct(cell.avgMastery) }}</span>
             <span class="cell__bar">
               <span
                 class="cell__bar-fill"

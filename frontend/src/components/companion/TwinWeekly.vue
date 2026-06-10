@@ -33,10 +33,28 @@ function agentIcon(n: string): string {
 </script>
 
 <template>
-  <div class="tw" :class="{ empty: !report && !busy }">
-    <div v-if="busy" class="tw__load">...</div>
-    <div v-else-if="error" class="tw__err">{{ error }}</div>
-    <div v-else-if="!report" class="tw__nil">本周暂无数据</div>
+  <div
+    class="tw"
+    :class="{ empty: !report && !busy }"
+  >
+    <div
+      v-if="busy"
+      class="tw__load"
+    >
+      ...
+    </div>
+    <div
+      v-else-if="error"
+      class="tw__err"
+    >
+      {{ error }}
+    </div>
+    <div
+      v-else-if="!report"
+      class="tw__nil"
+    >
+      本周暂无数据
+    </div>
     <template v-else>
       <div class="tw__hd">
         <span class="tw__ttl">本周回顾</span>
@@ -50,30 +68,48 @@ function agentIcon(n: string): string {
           <span class="ng">{{ report.memoryBrief.failedPractices }}</span> 未过
         </span>
       </div>
-      <div v-for="i in report.insights" :key="i.id" class="tw__card">
+      <div
+        v-for="i in report.insights"
+        :key="i.id"
+        class="tw__card"
+      >
         <span class="tw__ic">💡</span>
         <span class="tw__tx">
           <span class="tw__badge">{{ dimLabel[i.dimensionKey] ?? i.dimensionKey }}</span>
           {{ i.text }}
         </span>
       </div>
-      <div v-for="d in report.masteryDeltas" :key="'m-' + d.kcCode" class="tw__card">
+      <div
+        v-for="d in report.masteryDeltas"
+        :key="'m-' + d.kcCode"
+        class="tw__card"
+      >
         <span class="tw__ic">📈</span>
         <span class="tw__tx">
           <span class="tw__badge">{{ d.kcCode }}</span>
           掌握 {{ (d.currentScore * 100).toFixed(0) }}% · 置信 {{ (d.confidence * 100).toFixed(0) }}%
         </span>
       </div>
-      <div v-for="r in report.resourceRuns" :key="r.createdAt + r.agentName" class="tw__card">
+      <div
+        v-for="r in report.resourceRuns"
+        :key="r.createdAt + r.agentName"
+        class="tw__card"
+      >
         <span class="tw__ic">{{ agentIcon(r.agentName) }}</span>
         <span class="tw__tx">
           {{ r.scenario }}
-          <span class="tw__badge" :class="{ ok: r.status === 'SUCCESS' }">
+          <span
+            class="tw__badge"
+            :class="{ ok: r.status === 'SUCCESS' }"
+          >
             {{ r.status === 'SUCCESS' ? '✓' : r.status }}
           </span>
         </span>
       </div>
-      <div v-if="report.resourceRuns.length === 0" class="tw__card">
+      <div
+        v-if="report.resourceRuns.length === 0"
+        class="tw__card"
+      >
         <span class="tw__ic">🤖</span>
         <span class="tw__tx">本周 AI 团队待命中</span>
       </div>

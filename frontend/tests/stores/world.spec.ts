@@ -71,12 +71,12 @@ describe('world store', () => {
     expect(patchPlayerState).toHaveBeenLastCalledWith({ tileX: 16, tileY: 12, direction: 'RIGHT' });
   });
 
-  it('preserves the local map after persisting movement from a travelled map', async () => {
+  it('preserves the local map after persisting movement (mapKey not clobbered by patch response)', async () => {
     const store = useWorldStore();
     store.player = {
       playerStateId: 2,
       avatarKey: 'student_default',
-      mapKey: 'mine_south',
+      mapKey: 'town_hub',
       tileX: 15,
       tileY: 2,
       direction: 'DOWN',
@@ -85,7 +85,8 @@ describe('world store', () => {
     await store.updatePlayerTile({ tileX: 16, tileY: 2, direction: 'RIGHT' });
     await store.flushPlayerUpdate();
 
-    expect(store.player?.mapKey).toBe('mine_south');
+    // patchPlayerState mock 返回 mapKey:'town_main'，flushPlayerUpdate 必须保留本地 town_hub。
+    expect(store.player?.mapKey).toBe('town_hub');
     expect(store.player?.tileX).toBe(16);
     expect(store.player?.direction).toBe('RIGHT');
   });

@@ -16,6 +16,7 @@ import java.util.List;
  * @param preferredKc 偏好锚定 KC（覆盖 kcCode；前端 ArenaPage 关卡传）
  * @param preferredKind 关卡题型（fill_blank/debug/multi_round 等），用于 LLM 模板选择
  * @param profileSignals 学生画像信号，{@link ProfileSignalsPayload}
+ * @param arenaLevel 闯关塔单关 id（如 "1-3"）：预生成 / 复用题的维度之一（endless / arena 传）
  */
 public record BossProblemRequest(
     @Min(1) @Max(4) @JsonProperty("stage") int stage,
@@ -23,7 +24,8 @@ public record BossProblemRequest(
     @JsonProperty("difficulty") Integer difficulty,
     @JsonProperty("preferredKc") String preferredKc,
     @JsonProperty("preferredKind") String preferredKind,
-    @JsonProperty("profileSignals") ProfileSignalsPayload profileSignals) {
+    @JsonProperty("profileSignals") ProfileSignalsPayload profileSignals,
+    @JsonProperty("arenaLevel") String arenaLevel) {
 
   public BossProblemRequest {
     if (kcCode != null && kcCode.isBlank()) {
@@ -34,6 +36,9 @@ public record BossProblemRequest(
     }
     if (preferredKind != null && preferredKind.isBlank()) {
       preferredKind = null;
+    }
+    if (arenaLevel != null && arenaLevel.isBlank()) {
+      arenaLevel = null;
     }
   }
 

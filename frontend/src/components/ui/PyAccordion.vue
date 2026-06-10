@@ -44,7 +44,10 @@ withDefaults(
       <AccordionHeader class="py-accordion__header">
         <AccordionTrigger class="py-accordion__trigger">
           <span class="py-accordion__title">{{ item.title }}</span>
-          <span class="py-accordion__chevron" aria-hidden="true">▾</span>
+          <span
+            class="py-accordion__chevron"
+            aria-hidden="true"
+          >▾</span>
         </AccordionTrigger>
       </AccordionHeader>
       <AccordionContent class="py-accordion__content">
@@ -52,7 +55,9 @@ withDefaults(
           :name="item.value"
           :item="item"
         >
-          <div class="py-accordion__body">{{ item.content }}</div>
+          <div class="py-accordion__body">
+            {{ item.content }}
+          </div>
         </slot>
       </AccordionContent>
     </AccordionItem>

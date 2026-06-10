@@ -20,7 +20,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
 /**
- * Boundary tests for R-14 shrunk fast travel ({@code town_hub ↔ mine_south} only).
+ * Boundary tests for R-14 single-hub fast travel: removed map routes are no longer valid.
  */
 @Testcontainers
 class FastTravelServiceBoundaryTest {
@@ -48,6 +48,7 @@ class FastTravelServiceBoundaryTest {
     jdbcTemplate = new JdbcTemplate(dataSource);
     runScript(readMigration("V119__fast_travel_route.sql"));
     runScript(readMigration("V131__fast_travel_r14_shrink.sql"));
+    runScript(readMigration("V154__retire_mine_south_fast_travel.sql"));
 
     repository = new FastTravelRepository(jdbcTemplate);
     service = new FastTravelService(repository);
@@ -76,8 +77,8 @@ class FastTravelServiceBoundaryTest {
   }
 
   @Test
-  void canTravelAcceptsPythocoAtExactCost() {
-    assertThat(service.canTravel(TEST_USER_ID, "town_hub", "mine_south", 1, 10, 50)).isTrue();
+  void canTravelRejectsMineSouthEvenWhenPythocoAtOldExactCost() {
+    assertThat(service.canTravel(TEST_USER_ID, "town_hub", "mine_south", 1, 10, 50)).isFalse();
   }
 
   @Test
@@ -86,8 +87,8 @@ class FastTravelServiceBoundaryTest {
   }
 
   @Test
-  void canTravelAcceptsEnergyAtExactMinimumFloor() {
-    assertThat(service.canTravel(TEST_USER_ID, "town_hub", "mine_south", 1, 100, 10)).isTrue();
+  void canTravelRejectsMineSouthEvenWhenEnergyAtOldExactMinimumFloor() {
+    assertThat(service.canTravel(TEST_USER_ID, "town_hub", "mine_south", 1, 100, 10)).isFalse();
   }
 
   @Test
@@ -102,9 +103,9 @@ class FastTravelServiceBoundaryTest {
   }
 
   @Test
-  void canTravelAcceptsHubMineAtPhaseOne() {
-    assertThat(service.canTravel(TEST_USER_ID, "town_hub", "mine_south", 1, 1_000, 100)).isTrue();
-    assertThat(service.canTravel(TEST_USER_ID, "mine_south", "town_hub", 1, 1_000, 100)).isTrue();
+  void canTravelRejectsHubMineAtPhaseOne() {
+    assertThat(service.canTravel(TEST_USER_ID, "town_hub", "mine_south", 1, 1_000, 100)).isFalse();
+    assertThat(service.canTravel(TEST_USER_ID, "mine_south", "town_hub", 1, 1_000, 100)).isFalse();
   }
 
   @Test
@@ -124,7 +125,7 @@ class FastTravelServiceBoundaryTest {
         service.travel(TEST_USER_ID, "town_hub", "mine_south", 1, 0, 0, 0);
 
     assertThat(result.success()).isFalse();
-    assertThat(result.reason()).isEqualTo("INSUFFICIENT_FUND");
+    assertThat(result.reason()).isEqualTo("ROUTE_NOT_FOUND");
   }
 
   @Test
@@ -133,7 +134,7 @@ class FastTravelServiceBoundaryTest {
         service.travel(TEST_USER_ID, "town_hub", "mine_south", 1, 100, 4, 0);
 
     assertThat(result.success()).isFalse();
-    assertThat(result.reason()).isEqualTo("INSUFFICIENT_ENERGY");
+    assertThat(result.reason()).isEqualTo("ROUTE_NOT_FOUND");
   }
 
   @Test
@@ -142,7 +143,7 @@ class FastTravelServiceBoundaryTest {
         service.travel(TEST_USER_ID, "town_hub", "mine_south", 1, 100, 5, 0);
 
     assertThat(result.success()).isFalse();
-    assertThat(result.reason()).isEqualTo("LOW_ENERGY");
+    assertThat(result.reason()).isEqualTo("ROUTE_NOT_FOUND");
   }
 
   @Test
@@ -152,19 +153,20 @@ class FastTravelServiceBoundaryTest {
     FastTravelResult tenRejected =
         service.travel(TEST_USER_ID, "town_hub", "mine_south", 1, 100, 50, 10);
 
-    assertThat(nineAcceptable.success()).isTrue();
+    assertThat(nineAcceptable.success()).isFalse();
+    assertThat(nineAcceptable.reason()).isEqualTo("ROUTE_NOT_FOUND");
     assertThat(tenRejected.success()).isFalse();
-    assertThat(tenRejected.reason()).isEqualTo("DAILY_CAP");
+    assertThat(tenRejected.reason()).isEqualTo("ROUTE_NOT_FOUND");
   }
 
   @Test
   void canTravelIgnoresDailyCapWhileTravelEnforcesIt() {
-    assertThat(service.canTravel(TEST_USER_ID, "town_hub", "mine_south", 1, 100, 50)).isTrue();
+    assertThat(service.canTravel(TEST_USER_ID, "town_hub", "mine_south", 1, 100, 50)).isFalse();
     FastTravelResult travelResult =
         service.travel(TEST_USER_ID, "town_hub", "mine_south", 1, 100, 50, 10);
 
     assertThat(travelResult.success()).isFalse();
-    assertThat(travelResult.reason()).isEqualTo("DAILY_CAP");
+    assertThat(travelResult.reason()).isEqualTo("ROUTE_NOT_FOUND");
   }
 
   @Test
@@ -172,16 +174,15 @@ class FastTravelServiceBoundaryTest {
     FastTravelResult result =
         service.travel(TEST_USER_ID, "town_hub", "mine_south", 1, 10, 10, 0);
 
-    assertThat(result.success()).isTrue();
-    assertThat(result.newPythoco()).isZero();
-    assertThat(result.newEnergy()).isEqualTo(5);
-    assertThat(result.minutesPassed()).isEqualTo(60);
+    assertThat(result.success()).isFalse();
+    assertThat(result.reason()).isEqualTo("ROUTE_NOT_FOUND");
+    assertThat(result.newPythoco()).isEqualTo(10);
+    assertThat(result.newEnergy()).isEqualTo(10);
+    assertThat(result.minutesPassed()).isZero();
   }
 
   @Test
-  void findUnlockedFromTownHubOnlyMineSouthAfterR14Shrink() {
-    assertThat(repository.findUnlockedFromScene("town_hub", 1))
-        .extracting(FastTravelRoute::toScene)
-        .containsExactly("mine_south");
+  void findUnlockedFromTownHubEmptyAfterR14Shrink() {
+    assertThat(repository.findUnlockedFromScene("town_hub", 1)).isEmpty();
   }
 }

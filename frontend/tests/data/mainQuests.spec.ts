@@ -29,10 +29,9 @@ describe('R-13 §5 主线 + Boss 静态数据', () => {
     }
   });
 
-  it('mapKey 只能是 town_hub 或 mine_south', () => {
+  it('mapKey 只能是 town_hub（R-14 单中央 hub，mine_south 风景图已删）', () => {
     const validMaps = new Set([
       'town_hub',
-      'mine_south',
     ]);
     for (const quest of MAIN_QUESTS) {
       expect(validMaps.has(quest.mapKey)).toBe(true);
@@ -111,10 +110,17 @@ describe('R-13 §5 主线 + Boss 静态数据', () => {
     expect(findMainQuestById('99-99')).toBeNull();
   });
 
-  it('每个子任务都至少给 1 个 reward', () => {
+  it('rewards 可选：非讲义任务有奖励、HANDOUT 讲义任务无奖励（讲义解耦），有则 amount>0', () => {
     for (const quest of MAIN_QUESTS) {
-      expect(quest.rewards.length).toBeGreaterThan(0);
-      for (const reward of quest.rewards) {
+      const isHandout =
+        quest.evidenceRequired.type === 'resource_consumed' &&
+        quest.evidenceRequired.resourceType === 'HANDOUT';
+      if (isHandout) {
+        expect(quest.rewards ?? []).toHaveLength(0);
+      } else {
+        expect((quest.rewards ?? []).length).toBeGreaterThan(0);
+      }
+      for (const reward of quest.rewards ?? []) {
         expect(reward.amount).toBeGreaterThan(0);
       }
     }

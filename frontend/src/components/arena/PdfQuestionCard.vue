@@ -6,7 +6,10 @@ const code = defineModel<string>('code', { required: true });
 </script>
 
 <template>
-  <div class="pdf-question-card" data-testid="pdf-question-card">
+  <div
+    class="pdf-question-card"
+    data-testid="pdf-question-card"
+  >
     <header class="card-head">
       <span class="card-icon">[R]</span>
       <h3>课件问答</h3>
@@ -19,7 +22,10 @@ const code = defineModel<string>('code', { required: true });
       </router-link>
     </header>
 
-    <div v-if="problem.evidencePageIds && problem.evidencePageIds.length > 0" class="page-ref">
+    <div
+      v-if="problem.evidencePageIds && problem.evidencePageIds.length > 0"
+      class="page-ref"
+    >
       <span>参考页码：</span>
       <router-link
         v-for="pid in problem.evidencePageIds"
@@ -43,7 +49,9 @@ const code = defineModel<string>('code', { required: true });
       />
     </label>
 
-    <p class="hint">建议先点击上方链接查看对应课件页面，再作答。</p>
+    <p class="hint">
+      建议先点击上方链接查看对应课件页面，再作答。
+    </p>
   </div>
 </template>
 

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "totalNpcs": 12,
+  "totalNpcs": 11,
   "categories": {
     "educator_core": [
       "mayor_py",
@@ -9,8 +9,7 @@
       "coach_q",
       "sage_review",
       "professor",
-      "mine_keeper",
-      "captain_def"
+      "mine_keeper"
     ],
     "student": [
       "student_a"
@@ -70,13 +69,6 @@
       "category": "educator_core",
       "spawnMap": "town_hub",
       "portrait": "portrait_mine_keeper.png"
-    },
-    {
-      "key": "captain_def",
-      "name": "船长 Def",
-      "category": "educator_core",
-      "spawnMap": "town_hub",
-      "portrait": "portrait_captain_def.png"
     },
     {
       "key": "student_a",

@@ -13,6 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import pythontopia_graph.routes.video as video_route
+from pythontopia_graph.llm.provider import LlmResponse
 from pythontopia_graph.main import app
 
 # 一份混合样例：1 条正常视频 + 1 条付费课程（应过滤）+ 1 条缺 bvid（应丢弃）。
@@ -25,7 +26,7 @@ SAMPLE_PAYLOAD: dict[str, Any] = {
             "author": "UP主小明",
             "description": '本视频讲解 <em class="keyword">for</em> 循环与 range 的\n用法 &amp; 常见易错',
             "pic": "//i2.hdslb.com/bfs/archive/abc.jpg",
-            "duration": "12:34",
+            "duration": "08:34",
             "play": 12345,
             "video_review": 678,
             "pubdate": 1600000000,
@@ -71,7 +72,7 @@ def test_search_maps_and_cleans_sample_payload(monkeypatch: pytest.MonkeyPatch) 
     # 简介：去 <em> 高亮 + &amp; 反转义 + 折叠换行/空白为单空格
     assert item["description"] == "本视频讲解 for 循环与 range 的 用法 & 常见易错"
     assert item["cover"] == "https://i2.hdslb.com/bfs/archive/abc.jpg"  # // → https:
-    assert item["duration_sec"] == 12 * 60 + 34  # "MM:SS" → 秒
+    assert item["duration_sec"] == 8 * 60 + 34  # "MM:SS" → 秒（≤10 分钟，未被过滤）
     assert item["play"] == 12345
     assert item["danmaku"] == 678  # video_review → danmaku
     assert item["pubdate"] == 1600000000
@@ -100,6 +101,142 @@ def test_limit_is_respected(monkeypatch: pytest.MonkeyPatch) -> None:
     assert len(items) == 3
     # 缺 description 字段时降级为空串（前端给中性占位，不伪造简介）。
     assert all(item["description"] == "" for item in items)
+
+
+def test_filters_videos_over_ten_minutes_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """默认 max_duration_sec=600：丢弃超 10 分钟的「课程合集」，保留短视频与未知时长。"""
+    payload: dict[str, Any] = {
+        "result": [
+            {"type": "video", "bvid": "BVshort01", "title": "5 分钟讲清 input", "duration": "05:00"},
+            {"type": "video", "bvid": "BVlong001", "title": "全748集 Python 合集", "duration": "39:58:14"},
+            {"type": "video", "bvid": "BVnodur01", "title": "未知时长", "pic": "//h/p.jpg"},
+            {"type": "video", "bvid": "BVexact10", "title": "刚好 10 分钟", "duration": "10:00"},
+        ]
+    }
+
+    async def fake_search(keyword: str, page: int) -> dict[str, Any]:
+        return payload
+
+    monkeypatch.setattr(video_route, "_bilibili_search_videos", fake_search)
+
+    response = TestClient(app).get(
+        "/agents/video/bilibili/search", params={"keyword": "input Python"}
+    )
+
+    assert response.status_code == 200
+    bvids = {item["bvid"] for item in response.json()["items"]}
+    # 5 分钟、未知时长、刚好 10 分钟保留；39 小时合集被过滤。
+    assert bvids == {"BVshort01", "BVnodur01", "BVexact10"}
+
+
+def test_max_duration_zero_disables_filter(monkeypatch: pytest.MonkeyPatch) -> None:
+    """显式 max_duration_sec=0 关闭过滤：长合集也返回。"""
+    payload: dict[str, Any] = {
+        "result": [
+            {"type": "video", "bvid": "BVlong001", "title": "全748集 Python 合集", "duration": "39:58:14"},
+        ]
+    }
+
+    async def fake_search(keyword: str, page: int) -> dict[str, Any]:
+        return payload
+
+    monkeypatch.setattr(video_route, "_bilibili_search_videos", fake_search)
+
+    response = TestClient(app).get(
+        "/agents/video/bilibili/search",
+        params={"keyword": "Python", "max_duration_sec": 0},
+    )
+
+    assert response.status_code == 200
+    items = response.json()["items"]
+    assert len(items) == 1
+    assert items[0]["bvid"] == "BVlong001"
+
+
+def test_ai_summary_attached_when_provider_available(monkeypatch: pytest.MonkeyPatch) -> None:
+    """provider 返回结构化 summaries 时，按下标就地填到每个视频的 ai_summary。"""
+    payload: dict[str, Any] = {
+        "result": [
+            {"type": "video", "bvid": "BVa", "title": "5分钟讲清 input", "duration": "05:00"},
+            {"type": "video", "bvid": "BVb", "title": "8分钟讲 for 循环", "duration": "08:00"},
+        ]
+    }
+
+    async def fake_search(keyword: str, page: int) -> dict[str, Any]:
+        return payload
+
+    monkeypatch.setattr(video_route, "_bilibili_search_videos", fake_search)
+
+    class FakeProvider:
+        async def chat(self, messages: list[dict[str, str]], **kwargs: object) -> LlmResponse:
+            return LlmResponse(
+                content_json={
+                    "summaries": [
+                        {"i": 0, "summary": "5 分钟速览 input 输入用法"},
+                        {"i": 1, "summary": "8 分钟讲清 for 循环与 range"},
+                    ]
+                }
+            )
+
+    monkeypatch.setattr(video_route, "provider_from_env", lambda: FakeProvider())
+
+    response = TestClient(app).get(
+        "/agents/video/bilibili/search", params={"keyword": "input Python"}
+    )
+
+    assert response.status_code == 200
+    by_bvid = {it["bvid"]: it["ai_summary"] for it in response.json()["items"]}
+    assert by_bvid["BVa"] == "5 分钟速览 input 输入用法"
+    assert by_bvid["BVb"] == "8 分钟讲清 for 循环与 range"
+
+
+def test_ai_summary_disabled_by_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    """with_summary=false 时跳过 LLM，ai_summary 为空（provider 不应被调用）。"""
+    payload: dict[str, Any] = {
+        "result": [{"type": "video", "bvid": "BVa", "title": "5分钟讲 input", "duration": "05:00"}]
+    }
+
+    async def fake_search(keyword: str, page: int) -> dict[str, Any]:
+        return payload
+
+    monkeypatch.setattr(video_route, "_bilibili_search_videos", fake_search)
+
+    def boom() -> object:
+        raise AssertionError("provider_from_env 不应在 with_summary=false 时被调用")
+
+    monkeypatch.setattr(video_route, "provider_from_env", boom)
+
+    response = TestClient(app).get(
+        "/agents/video/bilibili/search",
+        params={"keyword": "input", "with_summary": "false"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["items"][0]["ai_summary"] == ""
+
+
+def test_ai_summary_empty_when_provider_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
+    """provider 构造失败时 best-effort 降级：ai_summary 空串、检索仍 200。"""
+    payload: dict[str, Any] = {
+        "result": [{"type": "video", "bvid": "BVa", "title": "x", "duration": "05:00"}]
+    }
+
+    async def fake_search(keyword: str, page: int) -> dict[str, Any]:
+        return payload
+
+    monkeypatch.setattr(video_route, "_bilibili_search_videos", fake_search)
+
+    def boom() -> object:
+        raise RuntimeError("no llm configured")
+
+    monkeypatch.setattr(video_route, "provider_from_env", boom)
+
+    response = TestClient(app).get(
+        "/agents/video/bilibili/search", params={"keyword": "x"}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["items"][0]["ai_summary"] == ""
 
 
 def test_empty_results_returns_200_empty_items(monkeypatch: pytest.MonkeyPatch) -> None:
