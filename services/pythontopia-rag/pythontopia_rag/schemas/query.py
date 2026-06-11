@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -26,6 +28,8 @@ class RagQueryResponse(BaseModel):
     # 无有效证据时为 True，下游不得伪造 page_id/页码引用
     no_evidence_found: bool = False
     rewritten_query: str | None = None
+    # 新增可选字段：hybrid（BM25+向量 RRF 融合）或 vector_only（BM25 索引缺失自动回退）。
+    retrieval_mode: Literal["hybrid", "vector_only"] | None = None
 
 
 class RagIndexStatus(BaseModel):

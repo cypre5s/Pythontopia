@@ -43,6 +43,7 @@ async def _self_heal_empty_index(
             source=app.state.rag_page_source,
             embedder=app.state.rag.embedder,
             store=app.state.rag.store,
+            bm25=app.state.rag.bm25,
         )
         logger.info(
             "RAG self-heal 成功：课程种子就绪后重建索引，built_chunks=%d", result.built_chunks
@@ -64,6 +65,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         source=app.state.rag_page_source,
         embedder=app.state.rag.embedder,
         store=app.state.rag.store,
+        bm25=app.state.rag.bm25,
     )
     heal_task: asyncio.Task[None] | None = None
     if not pages:

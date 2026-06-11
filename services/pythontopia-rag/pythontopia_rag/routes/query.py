@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from pythontopia_rag.app_state import AppState
 from pythontopia_rag.data.loader import DEFAULT_DB_URL, fetch_pages
 from pythontopia_rag.index.builder import rebuild_index
+from pythontopia_rag.index.fusion import hybrid_search
 from pythontopia_rag.data.page_source import InMemoryPageSource, page_records_to_indexable
 from pythontopia_rag.safety.forbidden import is_forbidden
 from pythontopia_rag.schemas.query import (
@@ -33,21 +34,25 @@ async def rag_query(
     body: RagQueryRequest,
     state: AppState = Depends(_state),
 ) -> RagQueryResponse:
-    """课件向量检索；命中须满足 min_score，否则 no_evidence_found=True 防幻觉。"""
+    """课件混合检索（BM25+向量 RRF 融合，BM25 缺失退回纯向量）。
+
+    防幻觉门控在 fusion 层完成：向量候选按 min_score（余弦）过滤、BM25 候选须正分，
+    两路皆空则 no_evidence_found=True。hit.text 始终是课件原文片段（不含上下文前缀）。
+    """
     if is_forbidden(body.query):
         return RagQueryResponse(hits=[], no_evidence_found=True)
-    vectors = await state.embedder.embed([body.query])
-    if not vectors:
-        return RagQueryResponse(hits=[], no_evidence_found=True)
-    hits = await state.store.search(
-        vectors[0],
-        body.top_k,
+    hits, mode = await hybrid_search(
+        query=body.query,
+        embedder=state.embedder,
+        store=state.store,
+        bm25=state.bm25,
+        top_k=body.top_k,
+        min_score=body.min_score,
         kc_codes=body.kc_codes,
         chapter_ids=body.chapter_ids,
     )
-    filtered = [hit for hit in hits if hit.score >= body.min_score]
-    if not filtered:
-        return RagQueryResponse(hits=[], no_evidence_found=True)
+    if not hits:
+        return RagQueryResponse(hits=[], no_evidence_found=True, retrieval_mode=mode)
     response_hits = [
         RagHit(
             chunk_id=hit.chunk.chunk_id,
@@ -58,9 +63,9 @@ async def rag_query(
             text=hit.chunk.text,
             score=round(hit.score, 4),
         )
-        for hit in filtered
+        for hit in hits
     ]
-    return RagQueryResponse(hits=response_hits, no_evidence_found=False)
+    return RagQueryResponse(hits=response_hits, no_evidence_found=False, retrieval_mode=mode)
 
 
 def _require_admin_token(x_internal_token: str | None) -> None:
@@ -98,7 +103,9 @@ async def rag_rebuild(
     _require_admin_token(x_internal_token)
     state: AppState = request.app.state.rag
     source = _resolve_rebuild_source(request)
-    result = await rebuild_index(source=source, embedder=state.embedder, store=state.store)
+    result = await rebuild_index(
+        source=source, embedder=state.embedder, store=state.store, bm25=state.bm25
+    )
     return RagRebuildResponse(
         built_chunks=result.built_chunks,
         elapsed_ms=result.elapsed_ms,

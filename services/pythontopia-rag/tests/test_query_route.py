@@ -173,3 +173,59 @@ def test_status_returns_default_when_empty() -> None:
     body = response.json()
     assert body["built_chunks"] == 0
     assert body["embed_model"] == HashEmbedder.name
+
+
+@pytest.mark.asyncio
+async def test_query_uses_hybrid_mode_when_bm25_built() -> None:
+    state = app.state.rag
+    await rebuild_index(
+        source=_seed_pages(), embedder=state.embedder, store=state.store, bm25=state.bm25
+    )
+
+    client = TestClient(app)
+    response = client.post(
+        "/rag/query", json={"query": "input 函数", "top_k": 5, "min_score": 0.1}
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["retrieval_mode"] == "hybrid"
+    assert body["no_evidence_found"] is False
+    assert body["hits"][0]["page_id"] == 11
+    for hit in body["hits"]:
+        assert 0.0 < hit["score"] <= 1.0
+
+
+@pytest.mark.asyncio
+async def test_query_falls_back_to_vector_only_without_bm25_index() -> None:
+    state = app.state.rag
+    # 只建向量索引，不建 BM25：模拟 BM25 索引缺失时的向后安全回退
+    await rebuild_index(source=_seed_pages(), embedder=state.embedder, store=state.store)
+
+    client = TestClient(app)
+    response = client.post(
+        "/rag/query", json={"query": "input 函数", "top_k": 5, "min_score": 0.1}
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["retrieval_mode"] == "vector_only"
+    assert body["no_evidence_found"] is False
+    assert body["hits"][0]["page_id"] == 11
+
+
+@pytest.mark.asyncio
+async def test_query_text_never_leaks_context_prefix() -> None:
+    state = app.state.rag
+    await rebuild_index(
+        source=_seed_pages(), embedder=state.embedder, store=state.store, bm25=state.bm25
+    )
+
+    client = TestClient(app)
+    response = client.post(
+        "/rag/query", json={"query": "for循环", "top_k": 8, "min_score": 0.0}
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["hits"]
+    for hit in body["hits"]:
+        assert "《Python语言基础》" not in hit["text"]
+        assert "第20页：" not in hit["text"]

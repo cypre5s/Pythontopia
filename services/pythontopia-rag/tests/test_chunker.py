@@ -97,3 +97,44 @@ def test_chunker_emits_at_least_one_chunk(text: str) -> None:
         text=text,
     )
     assert chunks
+
+
+def test_chunker_context_prefix_only_in_embed_text() -> None:
+    prefix = "《Python语言基础》第四章：流程自动化 第48页：遍历循环: for语句"
+    text = "for 循环用于遍历序列，循环体重复执行。" * 30
+    chunks = chunk_page(
+        page_id=48,
+        page_no=48,
+        document_id=4,
+        chapter_id=4,
+        kc_codes=["PY43-KC-020"],
+        text=text,
+        target_chars=200,
+        overlap=40,
+        min_chars=80,
+        context_prefix=prefix,
+    )
+    assert len(chunks) >= 2
+    for chunk in chunks:
+        # 展示原文不得泄漏前缀
+        assert prefix not in chunk.text
+        assert "《Python语言基础》" not in chunk.text
+        # 检索文本以前缀开头且包含原文
+        assert chunk.embed_text.startswith(prefix)
+        assert chunk.text in chunk.embed_text
+        assert chunk.index_text == chunk.embed_text
+
+
+def test_chunker_without_prefix_embed_text_equals_text() -> None:
+    chunks = chunk_page(
+        page_id=2,
+        page_no=2,
+        document_id=1,
+        chapter_id=None,
+        kc_codes=[],
+        text="input() 函数从键盘读取一行字符串。" * 20,
+    )
+    assert chunks
+    for chunk in chunks:
+        assert chunk.embed_text == chunk.text
+        assert chunk.index_text == chunk.text

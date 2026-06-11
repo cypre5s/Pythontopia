@@ -22,6 +22,9 @@ class PageRecord(BaseModel):
     page_no: int
     title: str
     content_markdown: str
+    # 章序号与章标题供上下文化分块前缀；老数据/老调用缺省为空。
+    chapter_no: int | None = None
+    chapter_title: str = ""
 
 
 class LoadResult(BaseModel):
@@ -48,13 +51,18 @@ def fetch_pages(db_url: str) -> list[PageRecord]:
                p.chapter_id AS chapter_id,
                p.page_no AS page_no,
                COALESCE(p.title, '') AS title,
-               p.content_markdown AS content_markdown
+               p.content_markdown AS content_markdown,
+               ch.order_index AS chapter_no,
+               COALESCE(ch.title, '') AS chapter_title
         FROM course_page p
+        LEFT JOIN course_chapter ch
+          ON ch.id = p.chapter_id
         LEFT JOIN course_kc kc
           ON kc.pack_id = p.pack_id
          AND p.id = ANY(kc.page_refs)
         WHERE p.pack_id = 43
-        GROUP BY p.id, p.document_id, p.chapter_id, p.page_no, p.title, p.content_markdown
+        GROUP BY p.id, p.document_id, p.chapter_id, p.page_no, p.title, p.content_markdown,
+                 ch.order_index, ch.title
         ORDER BY p.document_id, p.page_no, p.chunk_index, p.id
     """
     with psycopg.connect(normalize_db_url(db_url), row_factory=dict_row) as conn:

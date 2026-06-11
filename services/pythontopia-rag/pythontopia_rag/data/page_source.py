@@ -15,6 +15,9 @@ class IndexablePage:
     kc_codes: list[str]
     title: str
     text: str
+    # 章序号与章标题用于上下文化分块的页级前缀（缺省为空，向后兼容旧构造）。
+    chapter_no: int | None = None
+    chapter_title: str = ""
 
 
 class PageSource(Protocol):
@@ -44,6 +47,8 @@ def page_records_to_indexable(records: list[PageRecord]) -> list[IndexablePage]:
                 kc_codes=list(record.kc_codes),
                 title=record.title,
                 text=record.content_markdown,
+                chapter_no=record.chapter_no,
+                chapter_title=record.chapter_title,
             )
         )
     return indexable
