@@ -51,7 +51,7 @@ class ChapterStarServiceTest {
 
   private MainlineStageProgress completed(long stageId) {
     return new MainlineStageProgress(
-        stageId, USER, stageId, 240, List.of(), List.of(1L, 2L),
+        stageId, USER, stageId, 240, List.of(), List.of(1L, 2L), List.of(),
         OffsetDateTime.now(), OffsetDateTime.now());
   }
 

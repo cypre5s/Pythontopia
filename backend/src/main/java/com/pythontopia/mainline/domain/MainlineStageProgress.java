@@ -11,6 +11,7 @@ public record MainlineStageProgress(
     int videoWatchedSec,
     List<Long> pagesRead,
     List<Long> examplesDone,
+    List<Long> questionsCorrect,
     OffsetDateTime completedAt,
     OffsetDateTime updatedAt) {
 

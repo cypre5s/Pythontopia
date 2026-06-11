@@ -1,11 +1,13 @@
 package com.pythontopia.mainline;
 
 import com.pythontopia.mainline.domain.MainlineStageProgress;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -22,7 +24,8 @@ import org.springframework.stereotype.Repository;
 public class MainlineStageProgressRepository {
 
   private static final String SELECT_COLUMNS =
-      "id, user_id, stage_id, video_watched_sec, pages_read, examples_done, completed_at, updated_at";
+      "id, user_id, stage_id, video_watched_sec, pages_read, examples_done, questions_correct,"
+          + " completed_at, updated_at";
 
   private final JdbcTemplate jdbcTemplate;
 
@@ -84,6 +87,36 @@ public class MainlineStageProgressRepository {
     return find(userId, stageId).orElseThrow();
   }
 
+  /**
+   * 课件页批量阅读打点：并集去重（幂等）。整章 PPT 一次上报多页，{@code pageIds} 去重后作为 bigint[]
+   * 并集合并；空集合也走 UPSERT（确保行存在，状态不变）。
+   */
+  public MainlineStageProgress addPagesRead(long userId, long stageId, List<Long> pageIds) {
+    List<Long> distinct =
+        pageIds == null
+            ? List.of()
+            : pageIds.stream().filter(Objects::nonNull).distinct().toList();
+    jdbcTemplate.update(
+        con -> {
+          PreparedStatement ps =
+              con.prepareStatement(
+                  """
+                  INSERT INTO mainline_stage_progress (user_id, stage_id, pages_read, updated_at)
+                  VALUES (?, ?, ?, now())
+                  ON CONFLICT (user_id, stage_id) DO UPDATE SET
+                    pages_read = ARRAY(
+                      SELECT DISTINCT unnest(
+                        mainline_stage_progress.pages_read || EXCLUDED.pages_read)),
+                    updated_at = now()
+                  """);
+          ps.setLong(1, userId);
+          ps.setLong(2, stageId);
+          ps.setArray(3, con.createArrayOf("bigint", distinct.toArray()));
+          return ps;
+        });
+    return find(userId, stageId).orElseThrow();
+  }
+
   /** 例题完成打点：并集去重（幂等）。 */
   public MainlineStageProgress addExampleDone(long userId, long stageId, long problemId) {
     jdbcTemplate.update(
@@ -127,6 +160,7 @@ public class MainlineStageProgressRepository {
         rs.getInt("video_watched_sec"),
         MainlineStageRepository.readLongArray(rs.getArray("pages_read")),
         MainlineStageRepository.readLongArray(rs.getArray("examples_done")),
+        MainlineStageRepository.readLongArray(rs.getArray("questions_correct")),
         offset(rs, "completed_at"),
         offset(rs, "updated_at"));
   }

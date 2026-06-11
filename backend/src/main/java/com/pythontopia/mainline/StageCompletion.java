@@ -39,10 +39,21 @@ public final class StageCompletion {
     return distinctExamples(progress) >= stage.requiredExampleCount();
   }
 
-  public static boolean allComplete(MainlineStage stage, MainlineStageProgress progress) {
+  /**
+   * 三件套全过线（R-14：看 + 学 + 练）。练含两维：OJ 例题（{@link #examplesComplete}）与客观题
+   * （{@code questionsComplete}，由 {@code MainlinePracticePort} 判定，题库 bean 缺失时降级为 true）。
+   */
+  public static boolean allComplete(
+      MainlineStage stage, MainlineStageProgress progress, boolean questionsComplete) {
     return videoComplete(stage, progress)
         && pagesComplete(stage, progress)
-        && examplesComplete(stage, progress);
+        && examplesComplete(stage, progress)
+        && questionsComplete;
+  }
+
+  /** 兼容旧调用：不带客观题维度（视为「无客观题要求 / 已完成」）。 */
+  public static boolean allComplete(MainlineStage stage, MainlineStageProgress progress) {
+    return allComplete(stage, progress, true);
   }
 
   /** overview 展示用的「目标页数」：requiredPages>0 取之，否则取 courseware_page_ids 总数。 */

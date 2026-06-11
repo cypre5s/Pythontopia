@@ -234,6 +234,44 @@ public class CoursePackRepository {
         .optional();
   }
 
+  /**
+   * 按 pack 内 {@code sort_order, id} 顺位取第 N 份文档 id（1-based）。供主线「章 → 文档」
+   * 动态解析（R1）：7 份课件文档按 sort_order 与 7 章一一对应，重灌库 id 漂移不再取错文档。
+   */
+  public Optional<Long> findDocumentIdByPackOrder(long packId, int position) {
+    return jdbcClient
+        .sql(
+            """
+            SELECT id
+            FROM course_document
+            WHERE pack_id = :packId
+            ORDER BY sort_order, id
+            OFFSET :skip LIMIT 1
+            """)
+        .param("packId", packId)
+        .param("skip", position - 1)
+        .query(Long.class)
+        .optional();
+  }
+
+  /**
+   * 某文档的全部课件页 id（按页序 page_no, chunk_index）。供主线「学=整章 PPT 全部页」过线口径：
+   * 章 → documentId 由 {@code findDocumentIdByPackOrder} 动态解析（未命中回退 185 + chapter）。
+   */
+  public List<Long> findPageIdsByDocument(long documentId) {
+    return jdbcClient
+        .sql(
+            """
+            SELECT id
+            FROM course_page
+            WHERE document_id = :documentId
+            ORDER BY page_no, chunk_index
+            """)
+        .param("documentId", documentId)
+        .query((rs, rowNum) -> rs.getLong("id"))
+        .list();
+  }
+
   public List<CoursePage> findPagesByKc(Long packId, String kcCode) {
     return jdbcClient
         .sql(

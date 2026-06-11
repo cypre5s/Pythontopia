@@ -168,7 +168,7 @@ class ChapterTestServiceTest {
 
     ChapterTestSubmitRequest req =
         new ChapterTestSubmitRequest(
-            Map.of("c1", "A"), new ChapterTestSubmitRequest.IntegrityReport(2, 1));
+            Map.of("c1", "A"), new ChapterTestSubmitRequest.IntegrityReport(2, 1, false));
 
     assertThatThrownBy(() -> service.submit(USER, CH, TEST_ID, req))
         .isInstanceOf(BusinessException.class)

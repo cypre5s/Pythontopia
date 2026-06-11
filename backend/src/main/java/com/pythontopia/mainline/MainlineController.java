@@ -7,6 +7,7 @@ import com.pythontopia.mainline.dto.EndlessSummaryRequest;
 import com.pythontopia.mainline.dto.ExampleDoneRequest;
 import com.pythontopia.mainline.dto.MainlineOverviewDto;
 import com.pythontopia.mainline.dto.PageReadRequest;
+import com.pythontopia.mainline.dto.PagesReadRequest;
 import com.pythontopia.mainline.dto.StageDetailDto;
 import com.pythontopia.mainline.dto.StageProgressDto;
 import com.pythontopia.mainline.dto.StarAwardResultDto;
@@ -64,6 +65,14 @@ public class MainlineController {
       @Valid @RequestBody PageReadRequest request,
       @CurrentUser CurrentUserPrincipal user) {
     return service.reportPageRead(requireUserId(user), stageId, request.pageId());
+  }
+
+  @PostMapping("/stages/{stageId}/pages-read")
+  public StageProgressDto pagesRead(
+      @PathVariable @Positive long stageId,
+      @Valid @RequestBody PagesReadRequest request,
+      @CurrentUser CurrentUserPrincipal user) {
+    return service.reportPagesRead(requireUserId(user), stageId, request.pageIds());
   }
 
   @PostMapping("/stages/{stageId}/example-done")

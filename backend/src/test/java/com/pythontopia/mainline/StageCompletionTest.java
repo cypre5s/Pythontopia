@@ -18,7 +18,7 @@ class StageCompletionTest {
   }
 
   private MainlineStageProgress progress(int videoSec, List<Long> pages, List<Long> examples) {
-    return new MainlineStageProgress(1L, 7L, 10L, videoSec, pages, examples, null, null);
+    return new MainlineStageProgress(1L, 7L, 10L, videoSec, pages, examples, List.of(), null, null);
   }
 
   @Test
@@ -67,6 +67,18 @@ class StageCompletionTest {
     assertThat(StageCompletion.allComplete(s, progress(239, List.of(), List.of(1L, 2L)))).isFalse();
     // 例题不足 → 未完成。
     assertThat(StageCompletion.allComplete(s, progress(240, List.of(), List.of(1L)))).isFalse();
+  }
+
+  @Test
+  void questionsDimensionGatesCompletionInOverload() {
+    // 看/学/练-OJ 三项齐全。
+    MainlineStage s = stage(240, 0, 2, List.of());
+    MainlineStageProgress p = progress(240, List.of(), List.of(1L, 2L));
+    // 客观题未全对 → 未完成；全对 → 完成。
+    assertThat(StageCompletion.allComplete(s, p, false)).isFalse();
+    assertThat(StageCompletion.allComplete(s, p, true)).isTrue();
+    // 旧签名 = 「无客观题要求 / 视为已完成」。
+    assertThat(StageCompletion.allComplete(s, p)).isTrue();
   }
 
   @Test

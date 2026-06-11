@@ -221,13 +221,17 @@ public class ChapterTestService {
     ObjectNode node = objectMapper.createObjectNode();
     int paste = 0;
     int blur = 0;
+    boolean clientOvertime = false;
     if (request != null && request.integrity() != null) {
       paste = request.integrity().pasteBlocked() == null ? 0 : request.integrity().pasteBlocked();
       blur = request.integrity().blurEvents() == null ? 0 : request.integrity().blurEvents();
+      // R4：客户端自报「倒计时归零自动交卷」。按时送达的自动交卷服务端不超时，
+      // 仅靠服务端拒收口径教师端看不到；两口径取并集供教师参考。
+      clientOvertime = Boolean.TRUE.equals(request.integrity().overtime());
     }
     node.put("paste_blocked", paste);
     node.put("blur_events", blur);
-    node.put("overtime", overtime);
+    node.put("overtime", overtime || clientOvertime);
     return node;
   }
 
