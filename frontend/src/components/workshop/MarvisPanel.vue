@@ -3,7 +3,8 @@
  * MarvisPanel —— 工坊侧栏常驻「智能体工作室」面板。
  *
  * 多 Agent 可视化 + 实时「正在做什么」活动条：
- *   - 空闲态：一排像素智能体小人待命名单（馆员/导师/审查官/校对官/安全员/设计师）。
+ *   - 空闲态：像素智能体待命名单（R-16 阵容 12 人：百晓分诊/馆员/导师/考官/调试员/设计师/
+ *     辩论官/审查官/校对官/安全员/学习总管/规划师）。
  *   - 运行态：一条**纵向工位流水线**，按真实 SSE `plan` + `trace` 实时驱动：
  *       · 顶部「实时活动条」展示当前在岗小人 + 人话标签 + spinner + 已等 Ns；
  *       · 下方每个工位有状态圈（待命/进行中/完成/重试/未过）；
@@ -32,6 +33,13 @@ function nodeSprite(node: string): string {
   if (node === 'grounding_critic') return 'npc_sage';
   if (node === 'hallucination_detector') return 'npc_student';
   if (node === 'safety_critic') return 'npc_guard';
+  // R-16 答疑管线新工位（注意放在 TutorAgent 精确匹配之前/同级，revise 是带后缀节点名）。
+  if (node === 'TutorAgent.revise') return 'npc_professor';
+  if (node === 'code_runner') return 'npc_miner';
+  if (node === 'tutor_diagram') return 'npc_gardener';
+  if (node === 'solver') return 'npc_student';
+  if (node === 'critic') return 'npc_sage';
+  if (node === 'referee') return 'npc_mayor';
   if (node === 'TutorAgent' || node === 'image_understanding') return 'npc_tutor_ai';
   // P1 真协同节点
   if (node.startsWith('dispatch.StoryboardAgent')) return 'npc_gardener';
@@ -70,6 +78,13 @@ function nodeLabel(node: string): string {
   if (node === 'grounding_critic') return '正在核对课本引用';
   if (node === 'hallucination_detector') return '正在防幻觉核查';
   if (node === 'safety_critic') return '正在安全审查';
+  // R-16 答疑管线新工位
+  if (node === 'TutorAgent.revise') return '审查打回，导师返工修订中';
+  if (node === 'code_runner') return '正在沙箱实跑验证代码';
+  if (node === 'tutor_diagram') return '正在绘制图解';
+  if (node === 'solver') return '辩论·正方正在给出解法';
+  if (node === 'critic') return '辩论·反方正在挑错质疑';
+  if (node === 'referee') return '辩论·裁判正在裁决定稿';
   if (node === 'TutorAgent' || node === 'image_understanding') return '正在作答（课件 RAG）';
   // P1 真协同节点
   if (node.startsWith('dispatch.StoryboardAgent')) return '正在制作教学动画';
@@ -208,13 +223,20 @@ interface RosterMember {
   role: string;
   sprite: string;
 }
+// R-16 阵容 6→12：跟上 16 工具 + 协作管线（考官/调试员/辩论官/总管/规划师/分诊）。
 const IDLE_ROSTER: readonly RosterMember[] = [
+  { name: '百晓', role: '意图分诊', sprite: 'npc_tutor_ai' },
   { name: '馆员', role: '证据检索', sprite: 'npc_librarian' },
-  { name: '导师', role: '答疑作答', sprite: 'npc_tutor_ai' },
-  { name: '设计师', role: '内容生成', sprite: 'npc_workshop' },
-  { name: '审查官', role: '引用审查', sprite: 'npc_sage' },
+  { name: '导师', role: '答疑作答', sprite: 'npc_professor' },
+  { name: '考官', role: '考考我·口试', sprite: 'npc_trainer' },
+  { name: '调试员', role: '沙箱验证·修报错', sprite: 'npc_miner' },
+  { name: '设计师', role: '六类资源生成', sprite: 'npc_workshop' },
+  { name: '辩论官', role: '难题三方复核', sprite: 'npc_merchant' },
+  { name: '审查官', role: '引用审查·打回返工', sprite: 'npc_sage' },
   { name: '校对官', role: '防幻觉', sprite: 'npc_student' },
   { name: '安全员', role: '安全审查', sprite: 'npc_guard' },
+  { name: '学习总管', role: '看学练测编排', sprite: 'npc_mayor' },
+  { name: '规划师', role: '学习路径规划', sprite: 'npc_sailor' },
 ];
 </script>
 
