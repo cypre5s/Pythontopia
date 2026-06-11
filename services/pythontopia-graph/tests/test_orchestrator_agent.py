@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 
 import pytest
 
@@ -15,6 +15,15 @@ from pythontopia_graph.graph.orchestrator_graph import OrchestratorGraph
 from pythontopia_graph.graph.orchestrator_session import get_history, reset_session
 from pythontopia_graph.llm.provider import LlmProvider, LlmResponse
 from pythontopia_graph.schemas.orchestrator import OrchestratorRequest
+from pythontopia_graph.tools.harness import reset_harness_state
+
+
+@pytest.fixture(autouse=True)
+def _clean_harness() -> Iterator[None]:
+    """隔离进程级熔断器/统计（dispatch 内 LLM 子调用经治理包装）。"""
+    reset_harness_state()
+    yield
+    reset_harness_state()
 
 
 class StubProvider(LlmProvider):
@@ -192,6 +201,61 @@ async def test_extract_profile_heuristic_fallback_on_empty_llm() -> None:
 
     assert any(signal.dimension == "emotion_persistence" for signal in signals)
     assert all(signal.dimension in PROFILE_DIMENSION_KEYS for signal in signals)
+
+
+# 真画像透传（请求 → DispatchContext → 子 agent）
+
+
+@pytest.mark.asyncio
+async def test_request_profile_brief_flows_into_tutor_dispatch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """OrchestratorRequest.profile_brief 经 DispatchContext 注入，TutorAgent 编排步真实收到。"""
+    await reset_session("t-pb")
+
+    from pythontopia_graph.agents.tutor_agent import TutorAgent
+    from pythontopia_graph.graph.orchestrator_session import set_plan
+    from pythontopia_graph.schemas.orchestrator import PlanStep
+    from pythontopia_graph.schemas.tutor import (
+        GroundingResult,
+        SafetyResult,
+        TutorResponse,
+    )
+
+    captured: dict[str, str] = {}
+
+    async def fake_ask(self, question, profile_brief, conversation_history, evidence_chunks):  # type: ignore[no-untyped-def]
+        captured["profile_brief"] = profile_brief
+        return TutorResponse(
+            answer_md="我们先回顾 range 的用法。",
+            grounding_result=GroundingResult(passed=True),
+            safety_result=SafetyResult(passed=True),
+        )
+
+    monkeypatch.setattr(TutorAgent, "ask", fake_ask)
+
+    # 预存含 TutorAgent 步的 plan；「太难了」触发 negotiate 就地改写并真调度该步
+    await set_plan(
+        "t-pb",
+        [
+            PlanStep(
+                id="s1-learn",
+                phase="learn",
+                title="for 循环答疑",
+                detail="解释 range 的步长用法",
+                agent="TutorAgent",
+                kc_codes=["PY43-KC-001"],
+                panel="workshop",
+            )
+        ],
+    )
+
+    graph = OrchestratorGraph(provider=StubProvider([], reply="收到"))
+    req = request_of("太难了", "t-pb", profile_brief="认知风格: visual; 情绪: 需鼓励")
+    resp = await graph.run(req)
+
+    assert captured["profile_brief"] == "认知风格: visual; 情绪: 需鼓励"
+    assert any(d.agent == "TutorAgent" for d in resp.dispatch_results)
 
 
 # 多轮记忆

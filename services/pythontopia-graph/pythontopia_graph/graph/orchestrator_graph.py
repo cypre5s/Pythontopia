@@ -12,11 +12,16 @@
 （每节点 trace、compose 时 token），前端 useSseStream 契约不变。trace 经 reducer
 累加；多轮记忆在 orchestrator_session。
 
+dispatch 节点两批有界并发（Semaphore=3）：无依赖的 watch/learn/assess 先并发执行，
+practice 依赖 learn 工件（讲义 title/summary 注入 focus_hint）随后执行；
+start/finish trace 逐 step 上报并携带 step_id 对齐（完成顺序可乱）。
+
 trace 节点名：understand, decompose | replan, dispatch.<agent>, extract_profile, compose_reply。
 """
 
 from __future__ import annotations
 
+import asyncio
 import operator
 import time
 from collections.abc import Awaitable, Callable
@@ -50,6 +55,9 @@ from pythontopia_graph.schemas.resource import (
 )
 
 Emit = Callable[[str, dict[str, Any]], Awaitable[None]]
+
+# dispatch 节点单批最大并发子 agent 数（有界并发，防 provider 限流雪崩）。
+_DISPATCH_CONCURRENCY = 3
 
 
 async def _noop_emit(_event: str, _data: dict[str, Any]) -> None:
@@ -147,6 +155,16 @@ class OrchestratorGraph:
         merged_req = req.model_copy(update={"history": merged_history})
         allowed_set = set(req.course_kc_index)
 
+        # 每轮重建调度上下文：把本轮请求的真实画像注入 DispatchContext（真画像透传）。
+        self._dispatcher = AgentDispatcher(
+            DispatchContext(
+                provider=self._provider,
+                evidence_fetcher=self._evidence_fetcher,
+                valid_kc_codes=self._valid_kc_codes,
+                profile_brief=merged_req.profile_brief or "",
+            )
+        )
+
         initial: OrchestratorState = {
             "req": merged_req,
             "allowed_set": allowed_set,
@@ -191,8 +209,6 @@ class OrchestratorGraph:
         return {"plan": plan, "trace": [step]}
 
     async def _node_dispatch(self, state: OrchestratorState) -> dict[str, Any]:
-        results: list[DispatchResult] = []
-        traces: list[GraphTraceStep] = []
         req = state["req"]
         plan = state["plan"]
 
@@ -210,63 +226,118 @@ class OrchestratorGraph:
             {"type": "orchestrator", "nodes": plan_nodes},
         )
 
-        for step in plan:
-            # emit trace start for this dispatch
-            await self._emit_cb(
-                "trace",
-                {
-                    "node": f"dispatch.{step.agent}",
-                    "phase": "start",
-                    "status": "running",
-                    "elapsed_ms": 0,
-                    "agent_label": self._agent_display_name(step.agent),
-                    "note": step.title,
-                },
-            )
-            started = time.monotonic()
-            try:
-                result = await self._dispatch_step(step, req.user_id)
-            except Exception as exc:
-                elapsed_ms = int((time.monotonic() - started) * 1000)
-                # fail-fast: provider error propagates → SSE error event
+        # 两批有界并发：watch/learn/assess 无依赖先并发；practice 依赖 learn 工件随后执行。
+        first_batch = [step for step in plan if step.phase != "practice"]
+        second_batch = [step for step in plan if step.phase == "practice"]
+        semaphore = asyncio.Semaphore(_DISPATCH_CONCURRENCY)
+        results_by_id: dict[str, DispatchResult] = {}
+        traces_by_id: dict[str, GraphTraceStep] = {}
+
+        async def _run_step(step: PlanStep, focus_hint_extra: str = "") -> None:
+            """单 step 全生命周期：start trace → dispatch → error/finish trace（失败不外抛）。"""
+            async with semaphore:
                 await self._emit_cb(
-                    "error",
+                    "trace",
                     {
-                        "code": "DISPATCH_FAILED",
-                        "agent": step.agent,
-                        "message": str(exc),
+                        "node": f"dispatch.{step.agent}",
+                        "step_id": step.id,
+                        "phase": "start",
+                        "status": "running",
+                        "elapsed_ms": 0,
+                        "agent_label": self._agent_display_name(step.agent),
+                        "note": step.title,
                     },
                 )
-                result = DispatchResult(
-                    step_id=step.id,
-                    agent=step.agent,
-                    ok=False,
-                    summary=f"{self._agent_display_name(step.agent)} 执行失败: {exc}",
-                    note=str(exc),
-                    elapsed_ms=elapsed_ms,
+                started = time.monotonic()
+                try:
+                    result = await self._dispatch_step(step, req.user_id, focus_hint_extra)
+                except Exception as exc:  # noqa: BLE001 – 单步失败不拖垮全局
+                    elapsed_ms = int((time.monotonic() - started) * 1000)
+                    await self._emit_cb(
+                        "error",
+                        {
+                            "code": "DISPATCH_FAILED",
+                            "agent": step.agent,
+                            "message": str(exc),
+                        },
+                    )
+                    result = DispatchResult(
+                        step_id=step.id,
+                        agent=step.agent,
+                        ok=False,
+                        summary=f"{self._agent_display_name(step.agent)} 执行失败: {exc}",
+                        note=str(exc),
+                        elapsed_ms=elapsed_ms,
+                    )
+                else:
+                    # 治理观测失败（dispatch 内已转 ok=False）沿用 SSE error + ok=False 模式
+                    if not result.ok and self._is_dispatch_failure(result):
+                        await self._emit_cb(
+                            "error",
+                            {
+                                "code": "DISPATCH_FAILED",
+                                "agent": step.agent,
+                                "message": result.summary,
+                            },
+                        )
+                elapsed_ms = int((time.monotonic() - started) * 1000)
+                await self._emit_cb(
+                    "trace",
+                    {
+                        "node": f"dispatch.{step.agent}",
+                        "step_id": step.id,
+                        "phase": "finish",
+                        "status": "ok" if result.ok else "fail",
+                        "elapsed_ms": elapsed_ms,
+                        "agent_label": self._agent_display_name(step.agent),
+                        "note": result.summary,
+                    },
                 )
-            elapsed_ms = int((time.monotonic() - started) * 1000)
-            ts = GraphTraceStep(
-                node=f"dispatch.{step.agent}",
-                elapsed_ms=elapsed_ms,
-                status="ok" if result.ok else "fail",
-                note=result.summary,
-            )
-            # emit trace finish
-            await self._emit_cb(
-                "trace",
-                {
-                    "node": f"dispatch.{step.agent}",
-                    "phase": "finish",
-                    "status": "ok" if result.ok else "fail",
-                    "elapsed_ms": elapsed_ms,
-                    "agent_label": self._agent_display_name(step.agent),
-                    "note": result.summary,
-                },
-            )
-            results.append(result)
-            traces.append(ts)
+                results_by_id[step.id] = result
+                traces_by_id[step.id] = GraphTraceStep(
+                    node=f"dispatch.{step.agent}",
+                    elapsed_ms=elapsed_ms,
+                    status="ok" if result.ok else "fail",
+                    note=result.summary,
+                )
+
+        if first_batch:
+            await asyncio.gather(*(_run_step(step) for step in first_batch))
+        learn_hint = self._learn_artifact_hint(plan, results_by_id)
+        if second_batch:
+            await asyncio.gather(*(_run_step(step, learn_hint) for step in second_batch))
+
+        # 聚合结果按 plan 原序输出（SSE 事件完成顺序可乱，step_id 已对齐）。
+        results = [results_by_id[step.id] for step in plan if step.id in results_by_id]
+        traces = [traces_by_id[step.id] for step in plan if step.id in traces_by_id]
         return {"dispatch_results": results, "trace": traces}
+
+    @staticmethod
+    def _learn_artifact_hint(
+        plan: list[PlanStep], results_by_id: dict[str, DispatchResult]
+    ) -> str:
+        """工件链协作：learn 步真产物摘要 → practice 步 focus_hint 追加句。"""
+        for step in plan:
+            if step.phase != "learn":
+                continue
+            result = results_by_id.get(step.id)
+            if result is None or not result.ok or not result.artifact:
+                continue
+            title = str(result.artifact.get("title") or "").strip()
+            if not title:
+                continue
+            summary = str(result.artifact.get("summary") or "").strip()
+            hint = f"；练习紧扣讲义《{title}》要点"
+            if summary:
+                hint = f"{hint}：{summary[:80]}"
+            return hint
+        return ""
+
+    @staticmethod
+    def _is_dispatch_failure(result: DispatchResult) -> bool:
+        """是否为执行类失败（治理观测失败），区别于子 agent 诚实的业务性 FAILED。"""
+        artifact = result.artifact or {}
+        return artifact.get("kind") == "dispatch_failure"
 
     async def _node_replan_failures(self, state: OrchestratorState) -> dict[str, Any]:
         req = state["req"]
@@ -283,6 +354,7 @@ class OrchestratorGraph:
             "trace",
             {
                 "node": "dispatch.DebugAgent",
+                "step_id": debug_step.id,
                 "phase": "start",
                 "status": "running",
                 "elapsed_ms": 0,
@@ -303,6 +375,7 @@ class OrchestratorGraph:
             "trace",
             {
                 "node": "dispatch.DebugAgent",
+                "step_id": debug_step.id,
                 "phase": "finish",
                 "status": "ok" if result.ok else "fail",
                 "elapsed_ms": elapsed_ms,
@@ -421,9 +494,13 @@ class OrchestratorGraph:
         if response.profile_updates:
             await merge_profile_signals(req.session_id, response.profile_updates)
 
-    async def _dispatch_step(self, step: PlanStep, user_id: int = 1) -> DispatchResult:
+    async def _dispatch_step(
+        self, step: PlanStep, user_id: int = 1, focus_hint_extra: str = ""
+    ) -> DispatchResult:
         """真正 await 子 agent（经 AgentDispatcher），不再只回文本摘要。"""
-        return await self._dispatcher.dispatch(step, user_id=user_id)
+        return await self._dispatcher.dispatch(
+            step, user_id=user_id, focus_hint_extra=focus_hint_extra
+        )
 
     @staticmethod
     def _ground_failures(req: OrchestratorRequest, allowed_set: set[str]) -> list[str]:

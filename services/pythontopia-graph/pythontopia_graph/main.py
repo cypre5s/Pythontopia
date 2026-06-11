@@ -27,6 +27,7 @@ from pythontopia_graph.routes.resource import router as resource_router
 from pythontopia_graph.routes.streaming import router as streaming_router
 from pythontopia_graph.routes.tutor import router as tutor_router
 from pythontopia_graph.routes.video import router as video_router
+from pythontopia_graph.routes.video_insight import router as video_insight_router
 from pythontopia_graph.schemas.curriculum import MapperInput, MapperOutput
 from pythontopia_graph.internal_auth import InternalTokenMiddleware
 from pythontopia_graph.schemas.profile import ProfileAgentInput, ProfileAgentOutput
@@ -67,6 +68,7 @@ app.include_router(orchestrator_router)
 app.include_router(intent_router)
 app.include_router(reflection_router)
 app.include_router(video_router)
+app.include_router(video_insight_router)
 app.include_router(npc_dialog_router)
 app.include_router(feynman_router)
 

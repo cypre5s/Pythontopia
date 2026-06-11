@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from pythontopia_graph.agents.personalization import personalization_messages
@@ -74,8 +75,8 @@ class PaperDesignerAgent:
             "kc_code,evidence_page_ids:[int],score}\n"
             "- JUDGE: {qid,type:'JUDGE',stem,answer(true/false),explain,kc_code,"
             "evidence_page_ids:[int],score}\n"
-            "- FILL: {qid,type:'FILL',stem(含 ____),answers:[候选答案],match:'normalized',"
-            "explain,kc_code,evidence_page_ids:[int],score}\n"
+            "- FILL: {qid,type:'FILL',stem(恰好含一个 ____ 空位),answers:[该空的候选答案],"
+            "match:'normalized',explain,kc_code,evidence_page_ids:[int],score}\n"
             "- CODING: {qid,type:'CODING',title,statement_markdown,samples:[{input,output}],"
             "hidden_test_cases:[{input,output}],reference_solution,kc_code,score}\n"
             "硬约束：\n"
@@ -84,7 +85,8 @@ class PaperDesignerAgent:
             "2) CODING 的 reference_solution 必须能对 samples 与 hidden_test_cases 全部产生正确输出"
             "（程序从标准输入读、标准输出写），且只用本章及以前的语法，禁止 import 网络/子进程类模块。\n"
             "3) 不得在题面/选项/样例中出现 hidden_test_cases / answer_key / secret_test 等内部字段名。\n"
-            "4) 严格按下方题量出题，qid 全局唯一。"
+            "4) 严格按下方题量出题，qid 全局唯一。\n"
+            "5) FILL 题面必须**恰好一个**空位（一段连续下划线）；多个空请拆成多道单空题。"
         )
         whitelist = (
             "证据页白名单(evidence_page_ids 只能取这些): "
@@ -197,3 +199,20 @@ class PaperDesignerAgent:
         qids = [item.qid for item in paper.items]
         if len(set(qids)) != len(qids):
             raise PaperDesignError("duplicate qid in paper")
+        PaperDesignerAgent._assert_fill_single_blank(paper)
+
+    # 一段连续下划线（≥2 个 _）即一个空位；后端 judgeFill 为单空归一化比对语义（R5）。
+    _FILL_BLANK_RE = re.compile(r"_{2,}")
+
+    @staticmethod
+    def _assert_fill_single_blank(paper: QuestionPaper) -> None:
+        """FILL 题面必须恰好一个空位：多空与后端单空判分语义冲突，fail-fast 触发重试/兜底。"""
+        for item in paper.items:
+            if getattr(item, "type", None) != "FILL":
+                continue
+            stem = getattr(item, "stem", "") or ""
+            blanks = len(PaperDesignerAgent._FILL_BLANK_RE.findall(stem))
+            if blanks != 1:
+                raise PaperDesignError(
+                    f"FILL stem must contain exactly one blank, got {blanks} (qid={item.qid})"
+                )

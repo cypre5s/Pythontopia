@@ -54,9 +54,14 @@ class NpcDialogAgent:
         return self._parse_output(data, inp)
 
     async def _chat_json(self, messages: list[dict[str, str]]) -> dict[str, Any]:
+        # model_tier="fast"：寒暄/对话走快档模型（如 deepseek-v4-flash），低延迟优先；
+        # 答疑/工坊等其余 agent 不传该参数，沿用默认档（如 deepseek-v4-pro）。
         try:
             response = await self.provider.chat(
-                messages, response_format={"type": "json_object"}, temperature=0.3
+                messages,
+                response_format={"type": "json_object"},
+                temperature=0.3,
+                model_tier="fast",
             )
         except TypeError:
             try:

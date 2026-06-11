@@ -97,6 +97,19 @@ def _openai_compat_env() -> tuple[str | None, str | None, str | None]:
     return base_url, api_key, model
 
 
+def _openai_fast_model() -> str | None:
+    """快档模型名（NPC 寒暄/对话用，低延迟、少推理 token）。
+
+    兼容三种命名：OPENAI_MODEL_FAST / LLM_MODEL_FAST（docker-compose 注入）与
+    PYT_OPENAI_MODEL_FAST（deploy/.env 原始名）。未配置则返回 None，由调用方回落默认档。
+    """
+    return (
+        os.environ.get("OPENAI_MODEL_FAST")
+        or os.environ.get("LLM_MODEL_FAST")
+        or os.environ.get("PYT_OPENAI_MODEL_FAST")
+    )
+
+
 class DryRunProvider:
     async def chat(self, messages: list[dict[str, str]], **kwargs: object) -> LlmResponse:
         text = "\n".join(message["content"] for message in messages)
@@ -133,15 +146,26 @@ class OpenAiCompatProvider:
         self.base_url, self.api_key, self.model = _openai_compat_env()
         if not self.base_url or not self.api_key or not self.model:
             raise RuntimeError("OpenAI-compatible LLM env is missing")
+        # 快档模型（NPC 寒暄/对话）未配置时回落默认档，行为零回归。
+        self.fast_model = _openai_fast_model() or self.model
+
+    def _resolve_model(self, kwargs: dict[str, object]) -> str:
+        """按调用方声明的 model_tier 选模型：fast→快档（寒暄/对话），其余→默认档（答疑/工坊）。
+
+        从 kwargs 弹出 model_tier，避免它被透传进 OpenAI 兼容请求体。
+        """
+        tier = kwargs.pop("model_tier", None)
+        return self.fast_model if tier == "fast" else self.model
 
     async def chat(self, messages: list[dict[str, str]], **kwargs: object) -> LlmResponse:
+        model = self._resolve_model(kwargs)
         # trust_env=True：有 HTTP(S)_PROXY 则走代理，否则直连；NO_PROXY 保护 localhost/RAG。
         async with httpx.AsyncClient(timeout=30, trust_env=True) as client:
             response = await client.post(
                 f"{self.base_url.rstrip('/')}/chat/completions",
                 headers={"Authorization": f"Bearer {self.api_key}"},
                 json={
-                    "model": self.model,
+                    "model": model,
                     "messages": messages,
                     "response_format": {"type": "json_object"},
                     **kwargs,
@@ -163,9 +187,10 @@ class OpenAiCompatProvider:
     async def chat_stream(
         self, messages: list[dict[str, str]], **kwargs: object
     ) -> AsyncIterator[str]:
+        model = self._resolve_model(kwargs)
         url = f"{self.base_url.rstrip('/')}/chat/completions"
         payload: dict[str, object] = {
-            "model": self.model,
+            "model": model,
             "messages": messages,
             "stream": True,
             **kwargs,
@@ -359,5 +384,7 @@ def provider_label() -> str:
         return f"spark:{model}"
     if name in {"openai_compat", "openai-compatible", "openaicompat"}:
         _, _, model = _openai_compat_env()
-        return f"openai_compat:{model or 'unknown'}"
+        fast = _openai_fast_model()
+        suffix = f" (fast={fast})" if fast and fast != model else ""
+        return f"openai_compat:{model or 'unknown'}{suffix}"
     return name

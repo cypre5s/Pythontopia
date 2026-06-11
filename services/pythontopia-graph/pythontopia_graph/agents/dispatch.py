@@ -1,7 +1,9 @@
 """内部调度层：把子 agent 暴露为进程内可 await 的协程，不经 HTTP 自调。
 
 供 OrchestratorGraph._dispatch_step 真实调用子 agent，产物写入 DispatchResult，
-替代旧「播报式」纯文本分派。
+替代旧「播报式」纯文本分派。dispatch 内的 LLM 子调用（资源 design / tutor ask）
+一律经 :func:`run_with_governance` 包装：超时/异常/熔断/预算失败转 ok=False 的
+DispatchResult（artifact.kind=dispatch_failure），不抛裸异常打断编排。
 """
 
 from __future__ import annotations
@@ -20,6 +22,10 @@ from pythontopia_graph.llm.provider import LlmProvider
 from pythontopia_graph.nodes.evidence_fetcher import EvidenceFetcher
 from pythontopia_graph.schemas.orchestrator import DispatchResult, PlanStep
 from pythontopia_graph.schemas.resource import ResourceDraft, ResourceProduceRequest, ResourceType
+from pythontopia_graph.tools.harness import ToolObservation, run_with_governance
+
+# 编排内 LLM 子调用的治理参数：单步上限 120s、不重试（失败转 ok=False 由总管聚合）。
+_GOVERNANCE_TIMEOUT_S = 120.0
 
 # PlanStep.agent → 确定性子 agent 映射。
 _AGENT_MAP: dict[str, str | None] = {
@@ -39,6 +45,8 @@ class DispatchContext:
     provider: LlmProvider
     evidence_fetcher: EvidenceFetcher
     valid_kc_codes: set[str]
+    # 本轮请求的学生画像简报（OrchestratorRequest.profile_brief），真实透传给子 agent。
+    profile_brief: str = ""
 
 
 class AgentDispatcher:
@@ -47,11 +55,15 @@ class AgentDispatcher:
     def __init__(self, ctx: DispatchContext) -> None:
         self._ctx = ctx
 
-    async def dispatch(self, step: PlanStep, user_id: int = 1) -> DispatchResult:
+    async def dispatch(
+        self, step: PlanStep, user_id: int = 1, focus_hint_extra: str = ""
+    ) -> DispatchResult:
         """真正 await 子 agent，产物写入 DispatchResult.artifact。
 
-        Provider 错误不在此层捕获 —— 向上 propagate（fail-fast），
-        由 OrchestratorGraph._node_dispatch 逐 step 捕获并转 SSE error + ok=False。
+        ``focus_hint_extra``：前序步骤工件摘要（如 learn 讲义要点），追加进资源类
+        步骤的 focus_hint 实现步骤间协作。LLM 子调用经 run_with_governance 包装，
+        观测失败转 ok=False；其余意外异常仍向上抛，由
+        OrchestratorGraph._node_dispatch 逐 step 捕获并转 SSE error + ok=False。
         """
         started = time.monotonic()
         agent_name = step.agent
@@ -62,10 +74,10 @@ class AgentDispatcher:
         if agent_name == "TutorAgent":
             return await self._dispatch_tutor(step, started)
         # 资源类 agent：StoryboardAgent / ResourceDesignerAgent / PracticeAgent
-        return await self._dispatch_resource(step, user_id, started)
+        return await self._dispatch_resource(step, user_id, started, focus_hint_extra)
 
     async def _dispatch_resource(
-        self, step: PlanStep, user_id: int, started: float
+        self, step: PlanStep, user_id: int, started: float, focus_hint_extra: str = ""
     ) -> DispatchResult:
         """资源生成类 agent：StoryboardAgent / ResourceDesignerAgent / PracticeAgent。"""
         resource_type = self._resolve_resource_type(step)
@@ -88,9 +100,18 @@ class AgentDispatcher:
             user_id=user_id,
             kc_codes=step.kc_codes if step.kc_codes else ["PY43-KC-001"],
             type=resource_type,
-            focus_hint=step.title,
+            focus_hint=f"{step.title}{focus_hint_extra}"[:512],
         )
-        draft: ResourceDraft = await agent.design(request, evidence)
+        observation = await run_with_governance(
+            tool=f"orchestrator.{step.agent}",
+            factory=lambda: agent.design(request, evidence),
+            breaker_key="provider",
+            timeout_s=_GOVERNANCE_TIMEOUT_S,
+            max_retries=0,
+        )
+        if not observation.ok:
+            return self._governed_failure(step, observation, started)
+        draft: ResourceDraft = observation.value
         elapsed_ms = int((time.monotonic() - started) * 1000)
         section_count = (
             len(draft.handout.sections) if draft.handout
@@ -199,27 +220,40 @@ class AgentDispatcher:
     async def _dispatch_tutor(
         self, step: PlanStep, started: float
     ) -> DispatchResult:
-        """TutorAgent：真调用 ask() 产出答疑草稿，作为编排内协同一步。"""
+        """TutorAgent：真调用 ask() 产出答疑草稿，作为编排内协同一步。
+
+        画像经 DispatchContext.profile_brief 真实透传（不再写死空串）。
+        """
         from pythontopia_graph.agents.tutor_agent import TutorAgent
 
         evidence = await self._ctx.evidence_fetcher.fetch(
             kc_codes=step.kc_codes,
             query=step.title,
         )
+        chunks = list(evidence.chunks)
         question = f"{step.title}\n\n{step.detail}" if step.detail else step.title
         agent = TutorAgent(self._ctx.provider)
-        response = await agent.ask(
-            question=question,
-            profile_brief="",  # orchestrator 无完整画像
-            conversation_history=[],
-            evidence_chunks=list(evidence) if evidence else [],
+        observation = await run_with_governance(
+            tool=f"orchestrator.{step.agent}",
+            factory=lambda: agent.ask(
+                question=question,
+                profile_brief=self._ctx.profile_brief,
+                conversation_history=[],
+                evidence_chunks=chunks,
+            ),
+            breaker_key="provider",
+            timeout_s=_GOVERNANCE_TIMEOUT_S,
+            max_retries=0,
         )
+        if not observation.ok:
+            return self._governed_failure(step, observation, started)
+        response = observation.value
         elapsed_ms = int((time.monotonic() - started) * 1000)
         return DispatchResult(
             step_id=step.id,
             agent="TutorAgent",
             ok=response.safety_result.passed,
-            summary=f"答疑完成：{step.title}（{len(evidence)} 条课件证据"
+            summary=f"答疑完成：{step.title}（{len(chunks)} 条课件证据"
                     + ("，已标注通识来源" if response.based_on_general_knowledge else "")
                     + "）",
             note=response.answer_md[:200] if response.answer_md else None,
@@ -227,9 +261,33 @@ class AgentDispatcher:
             artifact={
                 "kind": "tutor_answer",
                 "topic": step.title,
-                "evidence_count": len(evidence),
+                "evidence_count": len(chunks),
                 "based_on_general_knowledge": response.based_on_general_knowledge,
                 "safety_passed": response.safety_result.passed,
+            },
+        )
+
+    @staticmethod
+    def _governed_failure(
+        step: PlanStep, observation: ToolObservation, started: float
+    ) -> DispatchResult:
+        """治理观测失败（timeout/error/circuit_open/budget_skipped）→ ok=False 结构化结果。
+
+        artifact.kind=dispatch_failure 供 OrchestratorGraph 识别为「执行类失败」
+        （区别于子 agent 诚实返回的业务性 FAILED），沿用 SSE error + ok=False 上报模式。
+        """
+        elapsed_ms = int((time.monotonic() - started) * 1000)
+        return DispatchResult(
+            step_id=step.id,
+            agent=step.agent,
+            ok=False,
+            summary=f"{step.title} 执行失败（{observation.status}）",
+            note=observation.error_class,
+            elapsed_ms=elapsed_ms,
+            artifact={
+                "kind": "dispatch_failure",
+                "status": observation.status,
+                "error_class": observation.error_class,
             },
         )
 

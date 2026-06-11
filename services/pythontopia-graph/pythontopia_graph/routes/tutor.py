@@ -7,10 +7,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request
@@ -20,6 +21,7 @@ from pythontopia_graph.agents.tutor_agent import TutorAgent
 from pythontopia_graph.graph.debate_graph import DebateGraph, DebateResult
 from pythontopia_graph.llm.provider import LlmProvider, provider_from_env
 from pythontopia_graph.nodes.evidence_fetcher import (
+    EvidenceBundle,
     EvidenceFetcher,
     HttpRagEvidenceFetcher,
 )
@@ -28,11 +30,28 @@ from pythontopia_graph.nodes.tutor_review import (
     hallucination_review,
     safety_review,
 )
-from pythontopia_graph.schemas.tutor import TutorAskRequest
+from pythontopia_graph.schemas.tutor import TutorAskRequest, TutorResponse, TutorVisualAid
+from pythontopia_graph.tools.harness import (
+    BudgetGuard,
+    ToolObservation,
+    run_with_governance,
+)
 
 router = APIRouter()
 
 _TOP_K = 5
+
+# 每请求 LLM 子调用预算（修订/图解/证据注等；主作答流式调用不计入）。
+# 预算不足时低优先级步骤（图解、证据注）先被砍，trace 标 budget_skipped。
+_MAX_LLM_CALLS = 6
+
+# RAG 检索治理：15s 超时 + 1 次重试 + rag 熔断；失败回空证据（自然落入「通识知识标注」路径）。
+_RAG_TIMEOUT_S = 15.0
+
+# SSE 心跳：距上次向客户端发送超过该秒数则补一行注释 ping（EventSource 解析器自动忽略），
+# 防止修订/图解等非流式长等待阶段被代理/浏览器判定空闲断连。
+_HEARTBEAT_S = 10.0
+_PING = ": ping\n\n"
 
 # 答疑开场工位清单：与资源流 `plan` 同形状，让侧栏 marvis 复用同一套渲染 + 交接动画。
 # 忠实反映真实节点：evidence_fetcher / TutorAgent / 三道审查，绝不摆假 agent。
@@ -95,33 +114,115 @@ def _trace_finish(node: str, status: str, elapsed_ms: int, **extra: Any) -> str:
     return _format_sse("trace", payload)
 
 
+class _SseHeartbeat:
+    """SSE 发送计时器：外层发送出口每出一个 chunk 调 :meth:`mark_sent` 刷新时间戳；
+
+    修订/图解等非流式长等待阶段用 :meth:`due` / :meth:`seconds_until_due` 决定何时补
+    ping 注释行。时钟可注入，便于测试用假时钟直接断言节奏逻辑。
+    """
+
+    def __init__(
+        self,
+        heartbeat_s: float = _HEARTBEAT_S,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self.heartbeat_s = heartbeat_s
+        self._clock = clock
+        self._last_sent = clock()
+
+    def mark_sent(self) -> None:
+        self._last_sent = self._clock()
+
+    def idle_s(self) -> float:
+        return self._clock() - self._last_sent
+
+    def due(self) -> bool:
+        return self.idle_s() >= self.heartbeat_s
+
+    def seconds_until_due(self) -> float:
+        """距下一次心跳应触发的秒数；已逾期时返回小下限（尽快触发、避免零超时空转）。"""
+        return max(0.05, self.heartbeat_s - self.idle_s())
+
+
+async def _pings_while(
+    task: asyncio.Future[Any], heartbeat: _SseHeartbeat
+) -> AsyncIterator[str]:
+    """task 完成前按心跳节奏产出 ping 注释行（不消费 task 结果，结果由调用方 await）。"""
+    while not task.done():
+        await asyncio.wait({task}, timeout=heartbeat.seconds_until_due())
+        if not task.done() and heartbeat.due():
+            yield _PING
+
+
+def _build_revise_prompt(question: str, answer: str, reasons: list[str]) -> str:
+    """构造 critique→revise 修订提示：原问题 + 原回答 + 审查意见 + 修订要求。"""
+    reason_lines = "\n".join(f"- {reason}" for reason in reasons)
+    return (
+        "你刚才的回答未通过证据审查，请修订。\n\n"
+        f"【原问题】\n{question}\n\n"
+        f"【你的原回答】\n{answer}\n\n"
+        f"【审查意见】\n{reason_lines}\n\n"
+        "【修订要求】\n"
+        "1. 只修正审查意见指出的问题：删除或更正编造的页码引用与无证据支撑的统计数字；\n"
+        "2. 引用页码必须严格来自课件证据，不得新增证据之外的页码或数字；\n"
+        "3. 其余内容保持原回答的结构与语气，仍然不给完整答案代码。\n"
+        "直接输出修订后的完整回答（Markdown）。"
+    )
+
+
 @router.post("/agents/tutor/ask/stream")
 async def tutor_ask_stream(
     body: TutorAskRequest,
     provider: LlmProvider = Depends(_provider),
     evidence_fetcher: EvidenceFetcher = Depends(_evidence_fetcher),
 ) -> StreamingResponse:
-    async def generate() -> AsyncIterator[str]:
+    heartbeat = _SseHeartbeat(heartbeat_s=_HEARTBEAT_S)
+
+    async def stages() -> AsyncIterator[str]:
         try:
             base_question = body.question
             context = (body.context or "").strip()
             # 上下文存在时，把它并入检索 query，让证据更贴合当前视频/PPT/题目。
             query = f"{context}\n{base_question}".strip() if context else base_question
             kc_codes = body.kc_codes or []
+            # 每请求 LLM 子调用预算：修订先用、图解/证据注优先级最低后用（预算不足先被砍）。
+            guard = BudgetGuard(max_llm_calls=_MAX_LLM_CALLS)
 
             # 开场工位清单（零 LLM 成本，在任何节点运行前发出）。
             yield _format_sse("plan", _ASK_PLAN)
 
-            # ── 馆员：课件 RAG 检索 ──
+            # ── 馆员：课件 RAG 检索（治理：超时 + 重试 + rag 熔断；失败回空证据 → 通识标注路径） ──
             started = time.monotonic()
-            evidence = await evidence_fetcher.fetch(
-                kc_codes=kc_codes, query=query, top_k=_TOP_K,
+
+            async def _fetch_evidence() -> EvidenceBundle:
+                return await evidence_fetcher.fetch(
+                    kc_codes=kc_codes, query=query, top_k=_TOP_K,
+                )
+
+            async def _empty_evidence() -> EvidenceBundle:
+                return EvidenceBundle(chunks=[], no_evidence_found=True)
+
+            fetch_obs = await run_with_governance(
+                "evidence_fetch",
+                _fetch_evidence,
+                timeout_s=_RAG_TIMEOUT_S,
+                max_retries=1,
+                fallback=_empty_evidence,
+                breaker_key="rag",
             )
+            evidence = (
+                fetch_obs.value
+                if isinstance(fetch_obs.value, EvidenceBundle)
+                else EvidenceBundle(chunks=[], no_evidence_found=True)
+            )
+            fetch_extra: dict[str, Any] = {"chunks": len(evidence.chunks)}
+            if fetch_obs.status != "ok":
+                fetch_extra["note"] = fetch_obs.as_trace_note()
             yield _trace_finish(
                 "evidence_fetcher",
-                "ok",
+                "ok" if fetch_obs.status == "ok" else "retry",
                 int((time.monotonic() - started) * 1000),
-                chunks=len(evidence.chunks),
+                **fetch_extra,
             )
 
             # ── 导师：流式作答 ──
@@ -236,6 +337,66 @@ async def tutor_ask_stream(
                 note=str(safety.reasons),
             )
 
+            # ── critique→revise 闭环：grounding/hallucination 未过 → 注入审查意见做一轮有界修订 ──
+            # 修订发生在 token 流之后（非流式），前端以 result.answer_md 终值渲染（契约本就支持）。
+            revised = False
+            if not (grounding.passed and hallucination.passed):
+                if heartbeat.due():
+                    yield _PING
+                yield _trace_start("TutorAgent.revise")
+                revise_started = time.monotonic()
+                revise_reasons = list(grounding.reasons) + list(hallucination.reasons)
+                revise_prompt = _build_revise_prompt(agent_question, answer, revise_reasons)
+
+                async def _revise() -> TutorResponse:
+                    return await agent.ask(
+                        question=revise_prompt,
+                        profile_brief=body.profile_brief,
+                        conversation_history=history,
+                        evidence_chunks=evidence.chunks,
+                        allow_diagram=False,
+                    )
+
+                revise_task = asyncio.ensure_future(
+                    run_with_governance(
+                        "tutor_revise", _revise, breaker_key="provider", budget=guard,
+                    )
+                )
+                async for ping in _pings_while(revise_task, heartbeat):
+                    yield ping
+                revise_obs = await revise_task
+                revise_elapsed = int((time.monotonic() - revise_started) * 1000)
+                if revise_obs.status == "budget_skipped":
+                    yield _trace_finish(
+                        "TutorAgent.revise", "skipped", revise_elapsed, note="budget_skipped",
+                    )
+                else:
+                    candidate = ""
+                    if revise_obs.ok and isinstance(revise_obs.value, TutorResponse):
+                        candidate = (revise_obs.value.answer_md or "").strip()
+                    if candidate:
+                        # 修订稿重跑三道审查：全过才替换；最多 1 轮，修订失败或仍未过则
+                        # 保留原答案与原审查结果（答案优先不丢弃）。
+                        revised_grounding = grounding_review(candidate, evidence.chunks)
+                        revised_hallucination = hallucination_review(candidate, evidence.chunks)
+                        revised_safety = safety_review(candidate)
+                        if (
+                            revised_grounding.passed
+                            and revised_hallucination.passed
+                            and revised_safety.passed
+                        ):
+                            answer = candidate
+                            grounding = revised_grounding
+                            hallucination = revised_hallucination
+                            safety = revised_safety
+                            revised = True
+                    yield _trace_finish(
+                        "TutorAgent.revise",
+                        "ok" if revised else "retry",
+                        revise_elapsed,
+                        note="revised" if revised else "kept_original",
+                    )
+
             # ── 汇总结果（答案优先：审查只标注、不丢弃答案；安全失败时不再附图解） ──
             based_on_general = not evidence.chunks
             # 命中证据按 page_id 去重投影成可展示引用卡（页码 + 原文片段），page_ids 同源同序，
@@ -251,17 +412,62 @@ async def tutor_ask_stream(
             else:
                 grounding_status = "FAILED"
 
-            # 图解按需触发：仅当学生语句明确「要图/流程/结构」且安全通过时生成一张
-            # 贴合该主题的 mermaid 结构图（LLM + 课件证据，确定式兜底）。
+            # ── 尾部并行：图解 ∥ 证据注（asyncio.gather；各自经 provider 熔断 + 预算治理） ──
+            # 图解按需触发：仅当学生语句明确「要图/流程/结构」且安全通过时生成；
+            # 证据注仅在有证据时生成。两者优先级最低，预算不足先被砍（trace 标 budget_skipped）。
+            want_diagram = safety.passed and TutorAgent.wants_diagram(base_question)
+
+            async def _make_diagram() -> list[TutorVisualAid]:
+                return await agent.build_diagram(base_question, evidence.chunks)
+
+            async def _make_evidence_note() -> str:
+                return await agent.summarize_evidence(
+                    base_question, context, body.profile_brief, evidence.chunks,
+                )
+
+            async def _skip() -> None:
+                return None
+
+            diagram_coro = (
+                run_with_governance(
+                    "tutor_diagram", _make_diagram, breaker_key="provider", budget=guard,
+                )
+                if want_diagram
+                else _skip()
+            )
+            note_coro = (
+                run_with_governance(
+                    "tutor_evidence_note",
+                    _make_evidence_note,
+                    breaker_key="provider",
+                    budget=guard,
+                )
+                if evidence.chunks
+                else _skip()
+            )
+            if heartbeat.due():
+                yield _PING
+            tail_task = asyncio.ensure_future(asyncio.gather(diagram_coro, note_coro))
+            async for ping in _pings_while(tail_task, heartbeat):
+                yield ping
+            diagram_obs, note_obs = await tail_task
+
             visual_aids: list[dict[str, Any]] = []
-            if safety.passed and TutorAgent.wants_diagram(base_question):
-                aids = await agent.build_diagram(base_question, evidence.chunks)
-                visual_aids = [aid.model_dump(mode="json") for aid in aids]
+            if isinstance(diagram_obs, ToolObservation):
+                if diagram_obs.status == "budget_skipped":
+                    yield _trace_finish("tutor_diagram", "skipped", 0, note="budget_skipped")
+                elif diagram_obs.ok and isinstance(diagram_obs.value, list):
+                    visual_aids = [aid.model_dump(mode="json") for aid in diagram_obs.value]
 
             # 「课件证据」整组一句话总览说明（结合提问/上下文/画像）；best-effort，失败回空串。
-            evidence_note = await agent.summarize_evidence(
-                base_question, context, body.profile_brief, evidence.chunks,
-            )
+            evidence_note = ""
+            if isinstance(note_obs, ToolObservation):
+                if note_obs.status == "budget_skipped":
+                    yield _trace_finish(
+                        "tutor_evidence_note", "skipped", 0, note="budget_skipped",
+                    )
+                elif note_obs.ok and isinstance(note_obs.value, str):
+                    evidence_note = note_obs.value
 
             yield _format_sse("result", _build_result(
                 answer=answer,
@@ -275,9 +481,17 @@ async def tutor_ask_stream(
                 based_on_general=based_on_general,
                 visual_aids=visual_aids,
                 evidence_note=evidence_note,
+                revised=revised,
+                personalization_note=TutorAgent.personalization_note(body.profile_brief),
             ))
         except Exception as exc:
             yield _format_sse("error", {"code": "TUTOR_FAILED", "message": str(exc)})
+
+    async def generate() -> AsyncIterator[str]:
+        # 统一发送出口：每个 chunk 出站即刷新心跳时间戳（ping 本身也经此出站）。
+        async for chunk in stages():
+            heartbeat.mark_sent()
+            yield chunk
 
     return StreamingResponse(
         generate(),
@@ -299,6 +513,8 @@ def _build_result(
     based_on_general: bool,
     visual_aids: list[dict[str, Any]],
     evidence_note: str = "",
+    revised: bool = False,
+    personalization_note: str = "",
 ) -> dict[str, Any]:
     """组装答疑结果 payload。
 
@@ -306,7 +522,8 @@ def _build_result(
       - Java ``TutorService.persistSession`` 读 snake_case（``answer_md`` /
         ``evidence_page_ids`` / ``grounding_status``）落库；
       - 前端 ``useSseStream`` 直接 ``JSON.parse`` 后按 camelCase 读（``answerMd`` /
-        ``evidencePageIds`` / ``groundingStatus``，``visual_aids`` 历史沿用 snake）。
+        ``evidencePageIds`` / ``groundingStatus``，``visual_aids`` 历史沿用 snake，
+        ``personalization_note`` 按 §0 契约前端直读 snake_case）。
     另附 ``review`` 三道审查明细，供答案气泡展示「已过审查官/校对官/安全员」。
     """
     return {
@@ -324,6 +541,10 @@ def _build_result(
         "visual_aids": visual_aids,
         # 「课件证据」整组总览说明（结合提问/上下文/画像；无证据或生成失败时为空串）。
         "evidence_note": evidence_note,
+        # critique→revise 闭环是否替换过答案（修订稿通过重跑三审才替换）。
+        "revised": revised,
+        # 「为你定制」一句话说明（确定性拼接画像信号，零 LLM 成本；brief 空则空串）。
+        "personalization_note": personalization_note,
         # camelCase（前端直读）
         "answerMd": answer,
         "evidencePageIds": page_ids,

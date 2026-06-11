@@ -27,10 +27,34 @@ SYSTEM_PROMPT = (
     '3. 如果没有课件证据，回答开头必须注明「基于通识知识」。\n'
     "4. 禁止伪造页码或章节。\n"
     "5. 根据学生画像调整语言难度。\n"
-    "6. 不输出完整答案代码，只给引导和关键片段。"
+    "6. 不输出完整答案代码，只给引导和关键片段。\n"
+    "7. 苏格拉底式阶梯提示：引导按「①换述问题，帮学生理清自己究竟在问什么 → "
+    "②把问题拆解成可上手的小步骤 → ③点出关键方向」的顺序逐级推进；"
+    "经过这三级引导之后才允许给出关键代码片段，且任何时候都禁止给完整答案。"
 )
 
 SAFETY_KEYWORDS = ("answer_key", "hidden_test", "完整答案", "直接给我代码")
+
+# 认知风格 → 首屏讲法指令（三型映射沿用既有文案；旧式非结构化 brief 同样可命中）。
+_STYLE_DIRECTIVES: dict[str, str] = {
+    "visual": "该生为视觉型：先用图解/结构图（可给 mermaid 思路）建立直观，再配简短文字说明。",
+    "logical": "该生为逻辑型：先给清晰的推理链/步骤拆解，再总结要点。",
+    "trial": "该生为试错型：先给一个最小可运行的示例片段（非完整答案）让其上手，再点拨原理。",
+}
+
+# 认知风格 → personalization_note 里的人话标签。
+_STYLE_NOTE_LABELS: dict[str, str] = {
+    "visual": "视觉型偏好",
+    "logical": "逻辑型偏好",
+    "trial": "试错型偏好",
+}
+
+# 知识基础档位 → 难度指令（WP4 富化 brief：<0.45→入门/偏弱、0.45-0.7→进阶/一般、>0.7→扎实/较强）。
+_KNOWLEDGE_DIRECTIVES: dict[str, str] = {
+    "入门": "该生知识基础尚在入门：避免术语堆砌，多打比方、用生活化示例帮助理解。",
+    "进阶": "该生知识基础进阶中：可在巩固基础上适度引入新概念，保持循序渐进。",
+    "扎实": "该生知识基础扎实：可以直击要点、适当上难度，不必过多铺垫。",
+}
 
 # 「要图解」的语句触发词（多字 token，避免裸「图」误伤「图书馆」等）。
 DIAGRAM_KEYWORDS = (
@@ -111,6 +135,8 @@ class TutorAgent:
         profile_brief: str,
         conversation_history: list[dict[str, str]],
         evidence_chunks: list[RagHit],
+        *,
+        allow_diagram: bool = True,
     ) -> TutorResponse:
         messages = self._build_messages(
             question, profile_brief, conversation_history, evidence_chunks,
@@ -118,7 +144,8 @@ class TutorAgent:
         response = await self.provider.chat(messages)
         answer = response.content_text or ""
         built = self._build_response(answer, evidence_chunks)
-        if built.safety_result.passed and self.wants_diagram(question):
+        # allow_diagram=False 供修订等内部调用关闭图解附加（保证恰好一次 LLM 调用）。
+        if allow_diagram and built.safety_result.passed and self.wants_diagram(question):
             built.visual_aids = await self.build_diagram(question, evidence_chunks)
         return built
 
@@ -191,8 +218,8 @@ class TutorAgent:
         messages: list[dict[str, str]] = [{"role": "system", "content": SYSTEM_PROMPT}]
         if profile_brief:
             messages.append({"role": "system", "content": f"学生画像: {profile_brief}"})
-            directive = self._cognitive_style_directive(profile_brief)
-            if directive:
+            # 因材施教指令组：按 brief 里实际存在的信号逐条注入 system 消息。
+            for directive in self._personalization_directives(profile_brief):
                 messages.append({"role": "system", "content": directive})
         if evidence_chunks:
             evidence_text = "\n---\n".join(
@@ -513,21 +540,117 @@ class TutorAgent:
         return svg
 
     @staticmethod
-    def _cognitive_style_directive(profile_brief: str | None) -> str | None:
-        """因材施教：从 profile_brief 解析认知风格 → 首屏讲法指令（视觉/逻辑/试错）；无命中返回 None。
+    def _detect_cognitive_style(profile_brief: str | None) -> str | None:
+        """从 brief 全文识别认知风格 key（visual/logical/trial）；无命中返回 None。
 
-        最终仍受 SYSTEM_PROMPT 防泄答约束（不给完整答案，只给引导/关键片段）。
+        故意做全文关键词匹配而非仅解析「认知风格:」键值，以兼容旧式非结构化 brief。
         """
         if not profile_brief:
             return None
         text = profile_brief.lower()
         if "visual" in text or "视觉" in text:
-            return "该生为视觉型：先用图解/结构图（可给 mermaid 思路）建立直观，再配简短文字说明。"
+            return "visual"
         if "logical" in text or "逻辑" in text:
-            return "该生为逻辑型：先给清晰的推理链/步骤拆解，再总结要点。"
+            return "logical"
         if "trial" in text or "试错" in text:
-            return "该生为试错型：先给一个最小可运行的示例片段（非完整答案）让其上手，再点拨原理。"
+            return "trial"
         return None
+
+    @classmethod
+    def _cognitive_style_directive(cls, profile_brief: str | None) -> str | None:
+        """因材施教（兼容旧调用方的薄包装）：认知风格 → 首屏讲法指令；无命中返回 None。
+
+        最终仍受 SYSTEM_PROMPT 防泄答约束（不给完整答案，只给引导/关键片段）。
+        """
+        style = cls._detect_cognitive_style(profile_brief)
+        return _STYLE_DIRECTIVES[style] if style else None
+
+    @staticmethod
+    def _parse_profile_brief(profile_brief: str | None) -> dict[str, str]:
+        """把富化画像 brief（``维度: 值; 维度: 值``）解析成 {维度: 值}。
+
+        容忍全/半角分号与冒号、键值两侧空白；不成键值对的片段直接忽略。
+        """
+        signals: dict[str, str] = {}
+        for segment in re.split(r"[;；]", profile_brief or ""):
+            matched = re.match(r"^\s*([^:：]+?)\s*[:：]\s*(.+?)\s*$", segment)
+            if matched:
+                signals[matched.group(1)] = matched.group(2)
+        return signals
+
+    @staticmethod
+    def _knowledge_level(value: str) -> str | None:
+        """把知识基础描述（如「入门(0.4)」「扎实/较强」）归一到 入门/进阶/扎实 三档。"""
+        if any(token in value for token in ("入门", "偏弱")):
+            return "入门"
+        if any(token in value for token in ("扎实", "较强")):
+            return "扎实"
+        if any(token in value for token in ("进阶", "一般")):
+            return "进阶"
+        return None
+
+    @classmethod
+    def _personalization_directives(cls, profile_brief: str | None) -> list[str]:
+        """按 brief 里实际存在的信号产出多条因材施教指令（每条独立注入 system 消息）。
+
+        覆盖信号：认知风格（沿用三型映射）/ 知识基础（难度调节）/ 目标（举例贴场景）/
+        偏好（媒介倾向）/ 易错（主动预警）/ 情绪（先肯定再纠错）；brief 为空返回 []。
+        """
+        if not profile_brief:
+            return []
+        directives: list[str] = []
+        style_directive = cls._cognitive_style_directive(profile_brief)
+        if style_directive:
+            directives.append(style_directive)
+        signals = cls._parse_profile_brief(profile_brief)
+        level = cls._knowledge_level(signals.get("知识基础", ""))
+        if level:
+            directives.append(_KNOWLEDGE_DIRECTIVES[level])
+        goal = signals.get("目标") or signals.get("学习目标")
+        if goal:
+            directives.append(f"该生学习目标是「{goal}」：举例与讲解尽量贴合这一场景。")
+        preference = signals.get("偏好") or signals.get("学习偏好")
+        if preference:
+            directives.append(
+                f"该生学习偏好「{preference}」：讲解方式贴近这些媒介倾向，可在合适处建议对应形式的资源。"
+            )
+        mistakes = signals.get("易错") or signals.get("易错模式")
+        if mistakes:
+            directives.append(f"该生易错点：{mistakes}。讲解涉及相关内容时请主动预警这些坑。")
+        if "鼓励" in signals.get("情绪", ""):
+            directives.append("该生情绪上需要鼓励：先肯定其思路里正确的部分，再温和指出问题，语气友善。")
+        return directives
+
+    @classmethod
+    def personalization_note(cls, profile_brief: str | None) -> str:
+        """确定性拼接「为你定制」说明（零 LLM 成本）：列出本回答用到的画像信号。
+
+        与 :meth:`_personalization_directives` 共用同一套信号解析；brief 为空或无可识别
+        信号时返回空串。示例：「本回答按你的【视觉型偏好、期末备考目标】定制」。
+        """
+        if not profile_brief:
+            return ""
+        parts: list[str] = []
+        style = cls._detect_cognitive_style(profile_brief)
+        if style:
+            parts.append(_STYLE_NOTE_LABELS[style])
+        signals = cls._parse_profile_brief(profile_brief)
+        level = cls._knowledge_level(signals.get("知识基础", ""))
+        if level:
+            parts.append(f"{level}基础")
+        goal = signals.get("目标") or signals.get("学习目标")
+        if goal:
+            parts.append(f"{goal}目标")
+        preference = signals.get("偏好") or signals.get("学习偏好")
+        if preference:
+            parts.append(f"{preference.replace(',', '、').replace('，', '、')}偏好")
+        if signals.get("易错") or signals.get("易错模式"):
+            parts.append("易错点预警")
+        if "鼓励" in signals.get("情绪", ""):
+            parts.append("鼓励式讲解")
+        if not parts:
+            return ""
+        return f"本回答按你的【{'、'.join(parts)}】定制"
 
     @staticmethod
     def _short_topic(question: str) -> str:

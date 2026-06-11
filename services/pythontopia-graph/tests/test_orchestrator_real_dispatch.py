@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 
 import pytest
 
@@ -21,6 +21,15 @@ from pythontopia_graph.schemas.orchestrator import (
     OrchestratorRequest,
     PlanStep,
 )
+from pythontopia_graph.tools.harness import reset_harness_state
+
+
+@pytest.fixture(autouse=True)
+def _clean_harness() -> Iterator[None]:
+    """隔离进程级熔断器/统计：dispatch 内 LLM 子调用经治理包装（breaker=provider）。"""
+    reset_harness_state()
+    yield
+    reset_harness_state()
 
 
 class StubProvider(LlmProvider):
@@ -349,8 +358,8 @@ async def test_dryrun_provider_does_not_crash_dispatch() -> None:
 
 
 @pytest.mark.asyncio
-async def test_dispatcher_provider_error_propagates_fail_fast() -> None:
-    """Provider 异常从 dispatcher 向上 propagate（fail-fast），不经内部 catch 软降级。"""
+async def test_dispatcher_provider_error_converts_to_governed_failure() -> None:
+    """Provider 异常经 run_with_governance 转 ok=False（summary 带 status），不抛裸异常。"""
 
     class BoomProvider(LlmProvider):
         async def chat(self, messages, **kwargs):  # type: ignore[override]
@@ -378,14 +387,145 @@ async def test_dispatcher_provider_error_propagates_fail_fast() -> None:
         resource_type="HANDOUT",
     )
 
-    # fail-fast: dispatcher 不再内部 catch，异常向上 propagate
-    with pytest.raises(RuntimeError, match="upstream down"):
-        await dispatcher.dispatch(step, user_id=1)
+    # 治理包装：异常转结构化 ok=False 结果，summary 携带观测 status
+    result = await dispatcher.dispatch(step, user_id=1)
+    assert result.ok is False
+    assert "error" in result.summary
+    assert result.artifact is not None
+    assert result.artifact["kind"] == "dispatch_failure"
+    assert result.artifact["error_class"] == "RuntimeError"
+
+
+@pytest.mark.asyncio
+async def test_dispatcher_tutor_receives_profile_brief(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """真画像：DispatchContext.profile_brief 真实透传给 TutorAgent.ask（不再写死空串）。"""
+    from pythontopia_graph.agents.tutor_agent import TutorAgent
+    from pythontopia_graph.schemas.tutor import (
+        GroundingResult,
+        SafetyResult,
+        TutorResponse,
+    )
+
+    captured: dict[str, object] = {}
+
+    async def fake_ask(self, question, profile_brief, conversation_history, evidence_chunks):  # type: ignore[no-untyped-def]
+        captured["profile_brief"] = profile_brief
+        captured["evidence_count"] = len(evidence_chunks)
+        return TutorResponse(
+            answer_md="for 循环用于遍历可迭代对象。",
+            grounding_result=GroundingResult(passed=True),
+            safety_result=SafetyResult(passed=True),
+        )
+
+    monkeypatch.setattr(TutorAgent, "ask", fake_ask)
+
+    ctx = DispatchContext(
+        provider=StubProvider([]),
+        evidence_fetcher=StaticEvidenceFetcher([HIT]),
+        valid_kc_codes={"PY43-KC-001"},
+        profile_brief="认知风格: visual; 目标: 期末备考",
+    )
+    dispatcher = AgentDispatcher(ctx)
+    step = PlanStep(
+        id="s-ask",
+        phase="learn",
+        title="for 循环答疑",
+        detail="解释 range 的步长用法",
+        agent="TutorAgent",
+        kc_codes=["PY43-KC-001"],
+        panel="workshop",
+    )
+
+    result = await dispatcher.dispatch(step, user_id=1)
+
+    assert result.ok is True
+    assert captured["profile_brief"] == "认知风格: visual; 目标: 期末备考"
+    # evidence_chunks 是真 RagHit 列表（EvidenceBundle.chunks），非 pydantic 字段元组
+    assert captured["evidence_count"] == 1
+    assert result.artifact is not None
+    assert result.artifact["kind"] == "tutor_answer"
+    assert result.artifact["evidence_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_practice_focus_hint_carries_learn_artifact(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """工件链协作：learn 讲义产物（title/summary）注入 practice 步的 focus_hint。"""
+    await reset_session("t-chain")
+
+    from pythontopia_graph.agents.handout_agent import HandoutAgent
+    from pythontopia_graph.agents.practice_agent import PracticeAgent
+    from pythontopia_graph.schemas.resource import (
+        HandoutContent,
+        HandoutSection,
+        PracticeContent,
+        ProblemSpec,
+        ResourceDraft,
+        SampleIo,
+    )
+
+    async def fake_handout_design(self, request, evidence, revision_notes=None):  # type: ignore[no-untyped-def]
+        return ResourceDraft(
+            title="for 循环精讲讲义",
+            summary="覆盖 for 语法、range 用法与缩进陷阱",
+            content_format="MARKDOWN",
+            handout=HandoutContent(
+                sections=[
+                    HandoutSection(
+                        heading="for 循环",
+                        paragraphs=["for 循环用于遍历可迭代对象。"],
+                    )
+                ]
+            ),
+        )
+
+    captured: dict[str, object] = {}
+
+    async def fake_practice_design(self, request, evidence, revision_notes=None):  # type: ignore[no-untyped-def]
+        captured["focus_hint"] = request.focus_hint
+        return ResourceDraft(
+            title="for 循环练习",
+            content_format="STRUCT_JSON",
+            practice=PracticeContent(
+                problems=[
+                    ProblemSpec(
+                        title="遍历列表",
+                        statement_md="用 for 循环遍历 [1,2,3] 并打印每个元素。",
+                        sample_io=[SampleIo(input="", output="1\n2\n3")],
+                        kc_codes=["PY43-KC-001"],
+                    )
+                ]
+            ),
+        )
+
+    monkeypatch.setattr(HandoutAgent, "design", fake_handout_design)
+    monkeypatch.setattr(PracticeAgent, "design", fake_practice_design)
+
+    # understand/decompose 走规则兜底（None payload）→ learn 默认 HANDOUT
+    provider = StubProvider([], reply="安排好了。")
+    graph = OrchestratorGraph(
+        provider=provider,
+        evidence_fetcher=StaticEvidenceFetcher([HIT]),
+        valid_kc_codes={"PY43-KC-001"},
+    )
+
+    response = await graph.run(request_of("我想学 for 循环", "t-chain"))
+
+    focus_hint = str(captured["focus_hint"])
+    assert "练习紧扣讲义《for 循环精讲讲义》" in focus_hint
+    assert "覆盖 for 语法" in focus_hint  # summary 前 80 字注入
+    practice_result = next(
+        dr for dr in response.dispatch_results if dr.agent == "PracticeAgent"
+    )
+    assert practice_result.ok is True
 
 
 @pytest.mark.asyncio
 async def test_orchestrator_node_dispatch_catches_per_step_and_emits_error() -> None:
-    """Orchestrator _node_dispatch 逐 step 捕获异常，转 SSE error + ok=False 继续。"""
+    """单步 provider 爆炸（经治理转 ok=False）→ SSE error 上报，其余 step 继续。"""
     await reset_session("t-failfast")
 
     # understand + decompose 先用 None（规则兜底），dispatch 阶段第一个 agent 爆炸

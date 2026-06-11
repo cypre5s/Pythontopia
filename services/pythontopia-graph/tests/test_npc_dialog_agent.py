@@ -17,9 +17,11 @@ class JsonProvider(LlmProvider):
     def __init__(self, payload: dict) -> None:
         self.payload = payload
         self.calls = 0
+        self.last_kwargs: dict = {}
 
     async def chat(self, messages, **kwargs):  # type: ignore[override]
         self.calls += 1
+        self.last_kwargs = dict(kwargs)
         return LlmResponse(content_json=self.payload)
 
     async def chat_stream(self, messages, **kwargs) -> AsyncIterator[str]:  # type: ignore[override]
@@ -65,6 +67,8 @@ async def test_uses_memories_and_cites_event_ids() -> None:
     assert out.cited_event_ids == [101]
     assert out.grounded is True
     assert provider.calls == 1
+    # 寒暄/对话必须声明快档：低延迟优先（答疑/工坊不传该参数，沿用默认档）。
+    assert provider.last_kwargs.get("model_tier") == "fast"
 
 
 async def test_empty_memories_returns_generic_reply_without_llm() -> None:
