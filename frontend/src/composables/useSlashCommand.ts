@@ -4,9 +4,9 @@
  * 设计要点：
  *   - 斜杠命令是「模式」不是「内联引用」：选中后不往文本里插 token，而是抹掉末尾
  *     `/query`、把 forcedIntent 设为对应工具，由调用方渲染成一枚可移除的「工具」徽标。
- *   - 8 个命令 = 问答（ASK，走导师管线）+ 6 类资源（走工坊生成管线）+ B站视频（VIDEO，外部
- *     检索非生成，渲染视频卡片）；intent 直接对齐 api/intent.ts 的 IntentKind，6 类资源即
- *     WorkshopResourceType。
+ *   - 16 个命令对齐 api/intent.ts 的 IntentKind 全集（16 工具分发表）：
+ *     AI 助教（ASK/ASKME/EXPLAIN_CODE/FIX_BUG，导师管线）+ 6 类资源（工坊生成管线）+
+ *     看讲解（VIDEO，外部检索非生成）+ 学习管家（PLAN/PROGRESS/NAVIGATE/MY_STUDY/REVIEW）。
  *   - 触发/替换正则与文本所有权解耦：text 由 useCoursewareMention 持有，本组合式只读它做
  *     检测、并在选中时写回（剥离 /query），便于和 `@` 共用同一个 textarea。
  *
@@ -21,7 +21,7 @@ export interface SlashCommand {
   token: string;
   label: string;
   hint: string;
-  /** 分组名：AI 助教 / 生成资源。 */
+  /** 分组名：AI 助教 / 生成资源 / 看讲解 / 学习管家。 */
   group: string;
   icon: string;
   /** 额外可被 query 命中的别名（英文 / 拼音 / 同义词）。 */
@@ -36,7 +36,8 @@ export interface SlashCommandGroup {
 const GROUP_ASK = 'AI 助教';
 const GROUP_RESOURCE = '生成资源';
 const GROUP_WATCH = '看讲解';
-const GROUP_ORDER = [GROUP_ASK, GROUP_RESOURCE, GROUP_WATCH];
+const GROUP_STEWARD = '学习管家';
+const GROUP_ORDER = [GROUP_ASK, GROUP_RESOURCE, GROUP_WATCH, GROUP_STEWARD];
 
 // 单一事实来源：WorkshopChat 也从这里取命令表，避免标签 / 图标重复定义。
 export const SLASH_COMMANDS: readonly SlashCommand[] = [
@@ -48,6 +49,33 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
     group: GROUP_ASK,
     icon: '?',
     aliases: ['ask', 'wenda', '答疑', '提问', 'qa'],
+  },
+  {
+    intent: 'ASKME',
+    token: '/考考我',
+    label: '考考我',
+    hint: '3 轮口头小测，边考边评',
+    group: GROUP_ASK,
+    icon: '✓',
+    aliases: ['askme', 'kaokaowo', '考核', '小测', '测我', '检验'],
+  },
+  {
+    intent: 'EXPLAIN_CODE',
+    token: '/讲代码',
+    label: '讲代码',
+    hint: '逐行解释这段代码在干嘛',
+    group: GROUP_ASK,
+    icon: '⌨',
+    aliases: ['explain', 'jiangdaima', '解释代码', '看懂代码', '逐行'],
+  },
+  {
+    intent: 'FIX_BUG',
+    token: '/修报错',
+    label: '修报错',
+    hint: '定位报错根因，引导你自己修',
+    group: GROUP_ASK,
+    icon: '⚠',
+    aliases: ['fixbug', 'xiubaocuo', 'bug', 'debug', '报错', '调试'],
   },
   {
     intent: 'HANDOUT',
@@ -111,6 +139,51 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
     group: GROUP_WATCH,
     icon: '▶',
     aliases: ['video', 'shipin', 'b站', 'bilibili', '视频', '讲解视频', '哔哩'],
+  },
+  {
+    intent: 'PLAN',
+    token: '/学习规划',
+    label: '学习规划',
+    hint: '学习总管定制看学练测计划',
+    group: GROUP_STEWARD,
+    icon: '☷',
+    aliases: ['plan', 'guihua', '规划', '计划', '路线', '安排'],
+  },
+  {
+    intent: 'PROGRESS',
+    token: '/学情报告',
+    label: '学情报告',
+    hint: '看掌握度强弱项一图速览',
+    group: GROUP_STEWARD,
+    icon: '◉',
+    aliases: ['progress', 'xueqing', '学情', '报告', '掌握度', '薄弱'],
+  },
+  {
+    intent: 'NAVIGATE',
+    token: '/带路',
+    label: '带路',
+    hint: '带你去小镇各处学习地点',
+    group: GROUP_STEWARD,
+    icon: '➤',
+    aliases: ['navigate', 'dailu', '带我去', '导航', '去哪', '传送'],
+  },
+  {
+    intent: 'MY_STUDY',
+    token: '/找资料',
+    label: '找资料',
+    hint: '翻出你书房里生成过的资源',
+    group: GROUP_STEWARD,
+    icon: '⌕',
+    aliases: ['mystudy', 'zhaoziliao', '资料', '我的资源', '书房', '之前生成'],
+  },
+  {
+    intent: 'REVIEW',
+    token: '/复习',
+    label: '复习',
+    hint: '按记忆曲线去错题矿洞复盘',
+    group: GROUP_STEWARD,
+    icon: '⟳',
+    aliases: ['review', 'fuxi', '复盘', '回顾', '巩固', '矿洞'],
   },
 ];
 

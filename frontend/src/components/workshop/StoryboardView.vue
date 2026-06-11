@@ -1,9 +1,23 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import gsap from 'gsap';
 import { useSessionStore } from '@/stores/session';
 import { useToastStore } from '@/stores/toast';
-import { composeStoryboardVideo, generateImage } from '@/api/media';
+import { ApiClientError } from '@/api/http';
+import {
+  createStoryboardVideoJob,
+  generateImage,
+  getMediaJob,
+  type MediaJobResult,
+  type StoryboardSceneSpec,
+} from '@/api/media';
+import {
+  useSseStream,
+  type SsePlan,
+  type SseStreamState,
+  type SseTraceEvent,
+} from '@/composables/useSseStream';
+import AgentStudioStream from '@/components/workshop/AgentStudioStream.vue';
 import { kcDisplayName } from '@/data/kcNames';
 import BilibiliVideoCards from '@/components/video/BilibiliVideoCards.vue';
 import type { StoryboardContent, StoryboardScene } from '@/api/dto/Workshop';
@@ -30,10 +44,24 @@ const imageGenerating = ref(false);
 const imageDegraded = ref(false);
 const sceneImageCache = new Map<number, { url: string; degraded: boolean }>();
 
-// 多模态：合成短视频（图序列 + TTS → ffmpeg mp4）。无 ffmpeg 时后端降级，回退实时剧场。
+// 多模态：异步合成短视频（图序列 + TTS → ffmpeg mp4）。走 media job：创建作业 → 订阅 SSE 进度
+// （插画师/配音师/剪辑师）→ result 拿到成片 assetId 内联播放。无 ffmpeg 时降级，保留实时剧场。
 const composedVideoUrl = ref('');
-const composedDegraded = ref(false);
 const composing = ref(false);
+const composeError = ref<string | null>(null);
+type JobStream = SseStreamState<MediaJobResult> & {
+  start: (body: unknown) => Promise<void>;
+};
+const jobStream = shallowRef<JobStream | null>(null);
+const studioTraces = computed<SseTraceEvent[]>(() => jobStream.value?.traces.value ?? []);
+const studioPlan = computed<SsePlan | null>(() => jobStream.value?.plan.value ?? null);
+const studioStatus = computed<'idle' | 'streaming' | 'done' | 'error'>(() => {
+  const s = jobStream.value?.status.value;
+  if (s === 'connecting' || s === 'streaming') return 'streaming';
+  if (s === 'done') return 'done';
+  if (s === 'error') return 'error';
+  return 'idle';
+});
 let imageRequestToken = 0;
 
 const scenes = computed(() => props.content.scenes);
@@ -108,37 +136,100 @@ async function loadSceneImage(scene: StoryboardScene, index: number): Promise<vo
   }
 }
 
+// 失败码 → 学生可读提示（降级保留实时剧场）。
+const COMPOSE_ERROR_ZH: Record<string, string> = {
+  VIDEO_COMPOSE_UNAVAILABLE: '服务端未装 ffmpeg，暂时无法合成视频（已保留实时剧场播放）',
+  VIDEO_COMPOSE_FAILED: '视频合成失败，请稍后重试（已保留实时剧场播放）',
+};
+
+function friendlyComposeError(code: string | undefined, fallback: string): string {
+  const mapped = code === undefined ? undefined : COMPOSE_ERROR_ZH[code];
+  return mapped ?? fallback;
+}
+
+function assetUrl(assetId: number): string {
+  return `/api/media/assets/${assetId}`;
+}
+
+function enterPlayback(assetId: number, url?: string): void {
+  composedVideoUrl.value = url !== undefined && url.length > 0 ? url : assetUrl(assetId);
+  composeError.value = null;
+}
+
+function toSceneSpec(s: StoryboardScene): StoryboardSceneSpec {
+  return {
+    imagePrompt: (s.image_prompt ?? s.visual_hint ?? '').trim(),
+    narration: s.narration,
+    voice: s.narration_tts_voice ?? 'x4_yezi',
+    durationSeconds: s.duration_seconds,
+    kcCodes: s.kc_codes,
+  };
+}
+
+/** 一键合成：创建合成作业；命中缓存直接播放，否则订阅 SSE 进度。 */
 async function composeVideo(): Promise<void> {
   if (composing.value || scenes.value.length === 0) return;
   pause();
   composing.value = true;
+  composeError.value = null;
+  composedVideoUrl.value = '';
+  jobStream.value?.abort();
+  jobStream.value = null;
   try {
-    const asset = await composeStoryboardVideo(
-      scenes.value.map((s) => ({
-        imagePrompt: (s.image_prompt ?? s.visual_hint ?? '').trim(),
-        narration: s.narration,
-        voice: s.narration_tts_voice ?? 'x4_yezi',
-        durationSeconds: s.duration_seconds,
-        kcCodes: s.kc_codes,
-      })),
-    );
-    composedVideoUrl.value = asset.url;
-    composedDegraded.value = asset.degraded;
-    toast.show(
-      asset.degraded ? '已合成短视频（含占位素材，未接入真实模型）' : '短视频合成完成',
-      'success',
-    );
+    const job = await createStoryboardVideoJob(scenes.value.map(toSceneSpec));
+    if (job.cached && job.assetId !== undefined) {
+      enterPlayback(job.assetId);
+      composing.value = false;
+      toast.show('已命中合成缓存，直接播放', 'success');
+      return;
+    }
+    await subscribeJob(job.jobId);
   } catch (error) {
-    const message = error instanceof Error ? error.message : '短视频合成失败';
-    // 无 ffmpeg/未配置等降级：保留实时剧场，不阻塞。
-    toast.show(`${message}，已保留实时剧场播放`, 'info');
-  } finally {
+    const code = error instanceof ApiClientError ? error.code : undefined;
+    const fallback = error instanceof Error ? error.message : '短视频合成失败';
+    composeError.value = friendlyComposeError(code, fallback);
     composing.value = false;
+  }
+}
+
+/** 订阅合成作业 SSE 进度；流终止后据 result/error 决定播放或报错（必要时轮询兜底）。 */
+async function subscribeJob(jobId: number): Promise<void> {
+  const stream = useSseStream<MediaJobResult>(`/api/media/jobs/${jobId}/stream`);
+  jobStream.value = stream;
+  await stream.start({});
+  composing.value = false;
+  const failure = stream.error.value;
+  if (failure) {
+    composeError.value = friendlyComposeError(failure.code, failure.message || '视频合成失败');
+    return;
+  }
+  const ready = stream.result.value;
+  if (ready && ready.assetId !== undefined) {
+    enterPlayback(ready.assetId, ready.url);
+    return;
+  }
+  // SSE 正常结束却未拿到成片：轮询一次真实作业状态兜底（不伪造结果）。
+  await recoverViaPoll(jobId);
+}
+
+async function recoverViaPoll(jobId: number): Promise<void> {
+  try {
+    const job = await getMediaJob(jobId);
+    if (job.status === 'SUCCESS' && job.assetId !== undefined) {
+      enterPlayback(job.assetId, job.url);
+    } else if (job.status === 'FAILED') {
+      composeError.value = friendlyComposeError(job.errorCode, '视频合成失败，请稍后重试');
+    } else {
+      composeError.value = '合成尚未完成，请稍后重试';
+    }
+  } catch (error) {
+    composeError.value = error instanceof Error ? error.message : '无法获取合成结果';
   }
 }
 
 function closeComposedVideo(): void {
   composedVideoUrl.value = '';
+  composeError.value = null;
 }
 
 function toggleAiIllustration(): void {
@@ -310,6 +401,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   stopCurrentAudio();
+  jobStream.value?.abort();
 });
 
 watch(
@@ -319,6 +411,10 @@ watch(
     currentScene.value = 0;
     sceneImageCache.clear();
     composedVideoUrl.value = '';
+    composeError.value = null;
+    composing.value = false;
+    jobStream.value?.abort();
+    jobStream.value = null;
     await nextTick();
     const first = scenes.value[0];
     if (first) {
@@ -440,23 +536,39 @@ watch(
           data-testid="storyboard-compose"
           @click="composeVideo"
         >
-          {{ composing ? '合成中…' : '（较慢）🎬 合成讲解视频' }}
+          {{ composing ? '合成中…' : '🎬 一键合成短视频' }}
         </button>
-        <template v-else>
-          <span
-            v-if="composedDegraded"
-            class="degraded-pill"
-          >占位合成</span>
-          <button
-            type="button"
-            class="mm-btn"
-            data-testid="storyboard-back-theater"
-            @click="closeComposedVideo"
-          >
-            ← 返回实时剧场
-          </button>
-        </template>
+        <button
+          v-else
+          type="button"
+          class="mm-btn"
+          data-testid="storyboard-back-theater"
+          @click="closeComposedVideo"
+        >
+          ← 返回实时剧场
+        </button>
       </div>
+
+      <div
+        v-if="composing && jobStream"
+        class="compose-studio"
+        data-testid="storyboard-studio"
+      >
+        <AgentStudioStream
+          :traces="studioTraces"
+          :status="studioStatus"
+          :plan="studioPlan"
+          :error-message="composeError"
+          label="合成讲解短视频"
+        />
+      </div>
+      <p
+        v-if="composeError && !composedVideoUrl"
+        class="compose-error"
+        data-testid="storyboard-compose-error"
+      >
+        ⚠ {{ composeError }}
+      </p>
 
       <div class="control-bar">
         <div class="playback-controls">
@@ -650,12 +762,20 @@ watch(
   color: var(--pyt-color-shadow);
 }
 .compose-btn:hover:not(:disabled) { background: #e6c14a; }
-.degraded-pill {
-  padding: 3px 10px;
-  background: #b39554;
-  color: var(--pyt-color-bg-elevated);
-  border-radius: 999px;
-  font-size: 11px;
+
+/* ── 合成进度 / 降级提示 ── */
+.compose-studio {
+  margin-top: 2px;
+}
+.compose-error {
+  margin: 0;
+  padding: 8px 12px;
+  background: #fbe2dc;
+  border: 2px solid #d98c76;
+  border-radius: var(--pyt-radius-md);
+  color: #8a3a26;
+  font-size: 13px;
+  line-height: 1.5;
   font-family: var(--pyt-font-pixel);
 }
 .stage-placeholder {

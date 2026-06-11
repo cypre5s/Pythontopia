@@ -1,53 +1,86 @@
 <script setup lang="ts">
 /**
- * 百晓工坊对话流（合并 导师问答 + 资源生成）。
+ * 百晓工坊对话流（合并 导师问答 + 资源生成 + 学习管家），16 工具分发中枢。
  *
  * 一条消息进来：
  *   1. ChatComposer 给出 { text, manualKcCodes, contextHint, forcedIntent }；
- *   2. forcedIntent 为空 → 调 /api/intent/route 自动判定工具 + 锚定 KC；否则直接用；
- *   3. ASK → 复用 /api/tutor/ask SSE，答案内联成气泡（grounding + 证据页 + 图解）；
- *   4. 6 类资源 → 复用 /api/workshop/resources/stream SSE + ThinkingStream 思考文字，
- *      确认后出一张「资源卡」气泡，并 loadResources 刷新右侧书房抽屉。
+ *   2. forcedIntent 为空 → 调 /api/intent/route（带最近 6 轮摘要 / 上轮意图 / 本会话纠错 / scope）
+ *      自动判定工具 + 锚定 KC；否则直接用；
+ *   3. 按 16 工具分发表执行（蓝本 §0）：
+ *      - tutor_sse：ASK / ASKME / EXPLAIN_CODE / FIX_BUG（共用 /api/tutor/ask，差异在 context 前缀 directive）；
+ *      - workshop_sse：6 类资源 → /api/workshop/resources/stream + AgentStudioStream 思考链；
+ *      - orchestrator_sse：PLAN → /api/orchestrator/turn/stream（点亮 MarvisPanel）；
+ *      - frontend 零 LLM：VIDEO / REVIEW / PROGRESS / NAVIGATE / MY_STUDY。
+ *   4. 置信分档：<0.45 出澄清气泡（ClarifyBubble）；0.45~0.7 正常执行 + 答后纠错 chips。
  *
  * 资源详情由父级 WorkshopPage 的 store openResourceId 打开弹窗，不再把资源 id 写进 URL。
  */
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useLearningStore } from '@stores/learning';
+import { useMainlineStore } from '@stores/mainline';
 import { useToastStore } from '@stores/toast';
 import { useWorkshopActivityStore } from '@stores/workshopActivity';
 import { playSfx } from '@/composables/useAudio';
-import { useSseStream } from '@/composables/useSseStream';
+import { useSseStream, type SseTraceEvent } from '@/composables/useSseStream';
 import ChatComposer, {
   type ComposerSubmitPayload,
 } from '@/components/workshop/ChatComposer.vue';
-import ThinkingStream from '@/components/workshop/ThinkingStream.vue';
+import AgentStudioStream from '@/components/workshop/AgentStudioStream.vue';
 import HandoutView from '@/components/workshop/HandoutView.vue';
 import MindMapView from '@/components/workshop/MindMapView.vue';
 import PracticeList from '@/components/workshop/PracticeList.vue';
 import CodeLabView from '@/components/workshop/CodeLabView.vue';
 import ReadingList from '@/components/workshop/ReadingList.vue';
 import StoryboardView from '@/components/workshop/StoryboardView.vue';
+import WorkshopAvatar from '@/components/workshop/WorkshopAvatar.vue';
+import WelcomePanel from '@/components/workshop/WelcomePanel.vue';
+import ClarifyBubble from '@/components/workshop/ClarifyBubble.vue';
+import QuizModeBar from '@/components/workshop/QuizModeBar.vue';
+import ProgressCard from '@/components/workshop/ProgressCard.vue';
+import PlanCard from '@/components/workshop/PlanCard.vue';
+import ToolTraceLine from '@/components/workshop/ToolTraceLine.vue';
+import AnswerFeedback from '@/components/workshop/AnswerFeedback.vue';
 import MarkdownView from '@/components/common/MarkdownView.vue';
 import TutorVisualAids, { type TutorVisualAid } from '@/components/tutor/TutorVisualAids.vue';
 import CoursewareEvidence from '@/components/tutor/CoursewareEvidence.vue';
 import BilibiliVideoCards from '@/components/video/BilibiliVideoCards.vue';
-import type { EvidenceCitation } from '@/api/tutor';
+import {
+  styleEngaged,
+  type CognitiveStyle,
+  type EvidenceCitation,
+  type TutorAskRequest,
+  type TutorSessionDto,
+} from '@/api/tutor';
 import { kcDisplayName } from '@/data/kcNames';
 import { listChapters, listKnowledgeComponents } from '@/api/course';
 import { getWorkshopResource } from '@/api/workshop';
+import { postLearningEvent } from '@/api/learningEvent';
 import {
   buildMentionItems,
   type MentionItem,
 } from '@/composables/useCoursewareMention';
 import { SLASH_COMMANDS } from '@/composables/useSlashCommand';
-import { routeIntent, type CourseKcRef, type IntentKind } from '@/api/intent';
-import { type TutorSessionDto } from '@/api/tutor';
+import {
+  isResourceIntent,
+  routeIntent,
+  type CourseKcRef,
+  type IntentCorrectionRef,
+  type IntentKind,
+  type IntentRouteRequest,
+  type IntentTurnRef,
+} from '@/api/intent';
+import type {
+  OrchestratorPlanStep,
+  OrchestratorResult,
+  OrchestratorTurnRequest,
+} from '@/api/orchestrator';
 import type {
   WorkshopContent,
   WorkshopCreateResponse,
   WorkshopResourceType,
   WorkshopResourceDto,
+  WorkshopResourceListItemDto,
   HandoutContent,
   MindMapContent,
   PracticeContent,
@@ -86,6 +119,8 @@ interface TutorStreamResult {
   review?: TutorReview;
   /** 「课件证据」整组一句话总览说明（结合提问/上下文/画像；可空）。 */
   evidence_note?: string;
+  /** 一句话说明本答用了哪些画像信号（「✨ 为你定制」标签 title；可空）。 */
+  personalization_note?: string;
 }
 
 /** 由 graph 的 grounding_result / based_on_general_knowledge 归一成前端 g-chip 用的状态串。 */
@@ -109,10 +144,46 @@ function toCitations(r: TutorStreamResult): EvidenceCitation[] {
   });
 }
 
+/** 一次工具执行所需的全部上下文：澄清 pick / 纠错改派 / 「接着」chip 据此重放。 */
+interface DispatchContext {
+  text: string;
+  kcCodes: string[];
+  focusHint: string;
+  contextHint: string;
+  /** NAVIGATE 专用地标（路由响应的 target）。 */
+  target: string;
+}
+
+/** tutor_sse 工具族的差异化选项（同一 /api/tutor/ask 管线）。 */
+interface AskOptions {
+  /** 气泡徽标 / lastIntent 归档用：ASKME / EXPLAIN_CODE / FIX_BUG，缺省 ASK。 */
+  intent?: IntentKind;
+  /** 蓝本 §0 的 context 前缀 directive（考官 / 讲代码 / 修报错），graph 不感知新端点。 */
+  directive?: string;
+  /** 即时换讲法：带 style 字段重问同一问题。 */
+  style?: CognitiveStyle;
+}
+
+/** 错误气泡「重试」chip 的参数缓存（重放上次 runAsk / runResource）。 */
+type RetryInfo =
+  | { mode: 'ask'; question: string; kcCodes: string[]; context: string; opts: AskOptions }
+  | { mode: 'resource'; type: WorkshopResourceType; kcCodes: string[]; focusHint: string };
+
 interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
-  kind: 'text' | 'answer' | 'resource' | 'video' | 'error';
+  kind:
+    | 'text'
+    | 'answer'
+    | 'resource'
+    | 'video'
+    | 'error'
+    | 'clarify'
+    | 'plan'
+    | 'progress'
+    | 'mystudy'
+    | 'navigate'
+    | 'secondary';
   text: string;
   streaming?: boolean;
   intent?: IntentKind;
@@ -135,6 +206,10 @@ interface ChatMessage {
    */
   review?: TutorReview;
   visualAids?: TutorVisualAid[];
+  /** kind==='answer' 且 live：本次答疑 trace 快照，渲染为折叠「⚙ 工具调用」行。 */
+  traces?: SseTraceEvent[];
+  /** kind==='answer' 且 live：画像个性化说明 → 气泡顶「✨ 为你定制」小标签的 title。 */
+  personalizationNote?: string;
   /** kind==='answer'：用于答案内自动嵌入工具（相关 B站视频检索词 / 生成入口）。 */
   suggestTopic?: string;
   resourceId?: number;
@@ -156,6 +231,29 @@ interface ChatMessage {
   resourceExpanded?: boolean;
   /** kind==='resource'：历史资源卡懒取 content 时的载入态。 */
   resourceLoading?: boolean;
+  /** kind==='clarify'：低置信路由的候选工具（ClarifyBubble options）。 */
+  clarifyOptions?: Array<{ intent: string; label: string; icon: string }>;
+  /** kind==='clarify'：路由器给出的犹豫原因。 */
+  clarifyReason?: string;
+  /** kind==='clarify'：已 pick 过（防重复执行）。 */
+  clarifyResolved?: boolean;
+  /** 中置信纠错 chips（「不是想要这个？」），点击改派执行。 */
+  correctionOptions?: Array<{ intent: string; label: string; icon: string }>;
+  /** 澄清 pick / 纠错改派 / 「接着」chip 重放执行所需的上下文。 */
+  dispatchCtx?: DispatchContext;
+  /** kind==='secondary'：组合意图的次级动作（「接着：xx →」chip）。 */
+  secondaryIntent?: IntentKind;
+  /** kind==='secondary'：chip 已点击执行过。 */
+  secondaryUsed?: boolean;
+  /** kind==='plan'：学习总管产出的看学练测步骤（PlanCard steps）。 */
+  planSteps?: OrchestratorPlanStep[];
+  /** kind==='mystudy'：书房命中的资源（≤5 张卡）。 */
+  mystudyItems?: WorkshopResourceListItemDto[];
+  /** kind==='navigate'：确认气泡的目标路由 / 人话地名。 */
+  navRoute?: string;
+  navLabel?: string;
+  /** kind==='error'：「重试」chip 的参数缓存。 */
+  retry?: RetryInfo;
 }
 
 const emit = defineEmits<{
@@ -164,6 +262,7 @@ const emit = defineEmits<{
 
 const router = useRouter();
 const learning = useLearningStore();
+const mainline = useMainlineStore();
 const toast = useToastStore();
 const activity = useWorkshopActivityStore();
 
@@ -175,8 +274,12 @@ const scrollRef = ref<HTMLElement | null>(null);
 
 const tutorSse = useSseStream<TutorStreamResult>('/api/tutor/ask');
 const workshopSse = useSseStream<WorkshopCreateResponse>('/api/workshop/resources/stream');
+// PLAN 专用：学习总管 orchestrator 流（与 GuideOverlay 同端点，独立实例避免串台）。
+const orchestratorSse = useSseStream<OrchestratorResult>('/api/orchestrator/turn/stream');
 
 const streamingAskId = ref<string | null>(null);
+// 学生点了「⏹ 停止」：runAsk 收尾时据此跳过错误兜底（气泡已标「（已中断）」）。
+const askInterrupted = ref(false);
 
 // 会话窗口 id：本组件挂载（= 新开窗口）即生成；同一窗口内的多次提问共享同一值，
 // 让「聊天记录」按会话分组而非每问一条。「新对话」或回看历史会话时会切换它。
@@ -186,14 +289,23 @@ const conversationId = ref<string>(genId());
 // 「新对话」或全新窗口为 false。仅作 UI 提示，落库的归并由 conversationId 决定。
 const continuing = ref(false);
 
+// 考核模式状态机（ASKME）：开考后 1-3 轮，普通输入即作答；QuizModeBar 驻顶。
+const quiz = ref<{ kcCodes: string[]; round: number; total: 3 } | null>(null);
+
+// 本会话纠错记录（≤3 条 FIFO）：学生点纠错 chips 改派后记入，随路由请求上送，
+// 让 IntentRouterAgent 学会该学生的口头习惯。
+const sessionCorrections = ref<IntentCorrectionRef[]>([]);
+
 /** 开新对话窗口：清空当前对话流并换一个会话 id（此后提问归入新会话）。 */
 function newChat(): void {
   playSfx('sfx_click');
   messages.value = [];
   streamingAskId.value = null;
+  quiz.value = null;
+  sessionCorrections.value = [];
   conversationId.value = genId();
   continuing.value = false;
-  scrollToBottom();
+  scrollToBottom(true);
 }
 
 /**
@@ -218,21 +330,23 @@ function loadConversation(sessions: TutorSessionDto[]): void {
     });
   }
   messages.value = replay;
+  quiz.value = null;
   const existing = ordered.find((s) => s.conversationId)?.conversationId;
   conversationId.value = existing ?? genId();
   // 仅当这段历史真有 conversationId 才算「可续聊」；旧数据（null）续问会另起会话，不提示并入。
   continuing.value = Boolean(existing);
-  scrollToBottom();
+  scrollToBottom(true);
 }
 defineExpose({ loadConversation, newChat });
 
-// 资源生成「实时思考」状态：驱动 ThinkingStream（替代旧的像素事务所动画 + 证据卡覆盖层）。
-// 仅 'streaming' 时显示思考流；完成即就地内联展示资源，出错即出错误气泡，随后归 'idle'。
+// 资源生成「实时思考」状态：驱动 AgentStudioStream（替代旧的像素事务所动画 + 证据卡覆盖层）。
+// 仅 'streaming' 时显示思考链；完成即就地内联展示资源，出错即出错误气泡，随后归 'idle'。
 const officeStreamState = ref<'idle' | 'streaming' | 'done' | 'error'>('idle');
 const officeTokenPreview = ref('');
 const officeStreamLabel = ref('');
 
-// orchestrator 协同活动：当 GuideOverlay 写入 workshopActivity 时，ThinkingStream 也渲染思考文字
+// orchestrator 协同活动：GuideOverlay 或本组件 PLAN 写入 workshopActivity 时，
+// AgentStudioStream 渲染思考链（MarvisPanel 同步点亮）。
 const isOrchestratorActive = computed(
   () => activity.kind === 'orchestrator' && activity.status === 'streaming',
 );
@@ -242,6 +356,8 @@ const busy = computed(
     routing.value ||
     tutorSse.status.value === 'streaming' ||
     tutorSse.status.value === 'connecting' ||
+    orchestratorSse.status.value === 'streaming' ||
+    orchestratorSse.status.value === 'connecting' ||
     officeStreamState.value === 'streaming' ||
     isOrchestratorActive.value,
 );
@@ -296,6 +412,17 @@ function commandOf(intent: IntentKind): { label: string; icon: string } {
   return { label: cmd?.label ?? intent, icon: cmd?.icon ?? '•' };
 }
 
+// ============ tutor_sse 工具族的 context 前缀 directive（蓝本 §0 固定文案） ============
+const ASKME_START_DIRECTIVE =
+  '【考核模式·第1/3轮】你是考官。就知识点出一道口头小题（不要给答案），等待学生作答。';
+function askmeJudgeDirective(round: number): string {
+  return `【考核模式·第${round}/3轮·评卷】先点评学生上一答（对/不对/差在哪），再出下一题；第3轮后给小结+掌握度建议。`;
+}
+const EXPLAIN_CODE_DIRECTIVE =
+  '【讲代码】逐行解释下面代码的执行过程与每行意图，标出常见陷阱；不要重写或优化成完整答案。';
+const FIX_BUG_DIRECTIVE =
+  '【修报错】定位报错根因，引导学生自己修复（阶梯提示：换述→拆解→指方向），绝不直接给完整修正代码。';
+
 function genId(): string {
   try {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -316,23 +443,212 @@ function updateMessage(id: string, patch: Partial<ChatMessage>): void {
   messages.value = messages.value.map((m) => (m.id === id ? { ...m, ...patch } : m));
 }
 
-function scrollToBottom(): void {
+// ============ 滚动权归用户：仅当学生位于底部 ±40px 时才自动跟随 ============
+const atBottom = ref(true);
+
+function onScroll(): void {
+  const el = scrollRef.value;
+  if (!el) return;
+  atBottom.value = el.scrollTop + el.clientHeight >= el.scrollHeight - 40;
+}
+
+function scrollToBottom(force = false): void {
+  if (!force && !atBottom.value) return;
   void nextTick(() => {
     scrollRef.value?.scrollTo({ top: scrollRef.value.scrollHeight, behavior: 'smooth' });
   });
 }
 
+// ============ token 渲染 rAF 节流：合帧批量 flush，避免高频 token 抖动 ============
+let pendingTokens: string | null = null;
+let tokenRafId: number | null = null;
+
+function flushPendingTokens(): void {
+  if (tokenRafId !== null) {
+    cancelAnimationFrame(tokenRafId);
+    tokenRafId = null;
+  }
+  if (pendingTokens !== null && streamingAskId.value) {
+    updateMessage(streamingAskId.value, { text: pendingTokens });
+  }
+  pendingTokens = null;
+}
+
 watch(tutorSse.tokens, (t) => {
-  if (streamingAskId.value) updateMessage(streamingAskId.value, { text: t });
-  scrollToBottom();
+  if (!streamingAskId.value) return;
+  pendingTokens = t;
+  if (tokenRafId !== null) return;
+  tokenRafId = requestAnimationFrame(() => {
+    tokenRafId = null;
+    if (pendingTokens !== null && streamingAskId.value) {
+      updateMessage(streamingAskId.value, { text: pendingTokens });
+      pendingTokens = null;
+      scrollToBottom();
+    }
+  });
+});
+
+onUnmounted(() => {
+  if (tokenRafId !== null) cancelAnimationFrame(tokenRafId);
 });
 
 watch(workshopSse.tokens, (t) => {
   officeTokenPreview.value = t.slice(0, 200);
 });
 
+// PLAN：orchestrator 流的 traces/plan 镜像进 workshopActivity（MarvisPanel / 思考链自动点亮）。
+watch(orchestratorSse.traces, (tr) => {
+  activity.syncTraces('orchestrator', tr);
+});
+watch(orchestratorSse.plan, (p) => {
+  activity.syncPlan('orchestrator', p);
+});
+
+// ============ 多轮路由上下文 ============
+/** 计入路由上下文的消息 kind（错误 / 澄清 / 「接着」chip 是 UI 噪音，不上送）。 */
+const ROUTE_TURN_KINDS = new Set<ChatMessage['kind']>([
+  'text',
+  'answer',
+  'resource',
+  'video',
+  'plan',
+  'progress',
+  'mystudy',
+  'navigate',
+]);
+
+/** 一条消息的路由摘要：user 原文截 200 字；assistant 取 kind + 标题/前 120 字。 */
+function turnSummary(m: ChatMessage): string {
+  if (m.role === 'user') return m.text.slice(0, 200);
+  const body = m.resourceTitle ?? (m.text || m.toolLabel || m.videoKeyword || '');
+  return `[${m.kind}] ${body}`.slice(0, 120);
+}
+
+/** 最近 ≤6 条消息摘要（时间正序），供路由器做指代消解。 */
+function buildRecentTurns(): IntentTurnRef[] {
+  return messages.value
+    .filter((m) => ROUTE_TURN_KINDS.has(m.kind))
+    .slice(-6)
+    .map((m) => ({ role: m.role, content: turnSummary(m) }));
+}
+
+/** 最近一条已执行意图的 assistant 消息 → lastIntent / lastKcCodes。 */
+function lastExecutedIntent(): { intent: IntentKind; kcCodes: string[] } | null {
+  for (let i = messages.value.length - 1; i >= 0; i -= 1) {
+    const m = messages.value[i];
+    if (m && m.role === 'assistant' && m.intent) {
+      return { intent: m.intent, kcCodes: m.kcCodes ?? m.resourceKcCodes ?? [] };
+    }
+  }
+  return null;
+}
+
+/** 纠错记录入队（≤3 条 FIFO）。 */
+function pushCorrection(message: string, correctedIntent: string): void {
+  const next = [...sessionCorrections.value, { message, correctedIntent }];
+  while (next.length > 3) next.shift();
+  sessionCorrections.value = next;
+}
+
+// ============ 置信分档：澄清气泡 / 纠错 chips ============
+/** 澄清候选：路由猜测的意图置顶 + SLASH_COMMANDS 前排常用工具，共 5 个。 */
+function buildClarifyOptions(
+  guess: IntentKind,
+): Array<{ intent: string; label: string; icon: string }> {
+  const picks: Array<{ intent: string; label: string; icon: string }> = [];
+  const seen = new Set<string>();
+  const add = (intent: IntentKind): void => {
+    if (seen.has(intent) || picks.length >= 5) return;
+    const meta = commandOf(intent);
+    seen.add(intent);
+    picks.push({ intent, label: meta.label, icon: meta.icon });
+  };
+  add(guess);
+  for (const cmd of SLASH_COMMANDS) {
+    if (picks.length >= 5) break;
+    add(cmd.intent);
+  }
+  return picks;
+}
+
+function pushClarify(guess: IntentKind, ctx: DispatchContext, reason: string): void {
+  pushMessage({
+    id: genId(),
+    role: 'assistant',
+    kind: 'clarify',
+    text: '',
+    clarifyOptions: buildClarifyOptions(guess),
+    clarifyReason: reason,
+    dispatchCtx: ctx,
+  });
+}
+
+function onClarifyPick(m: ChatMessage, intentStr: string): void {
+  if (m.clarifyResolved || !m.dispatchCtx) return;
+  const cmd = SLASH_COMMANDS.find((c) => c.intent === intentStr);
+  if (!cmd) return;
+  playSfx('sfx_click');
+  updateMessage(m.id, { clarifyResolved: true });
+  void dispatchIntent(cmd.intent, m.dispatchCtx);
+}
+
+/** 纠错备选池：通用兜底工具（执行过的意图除外，取 3 个）。 */
+const CORRECTION_POOL: IntentKind[] = ['ASK', 'HANDOUT', 'PRACTICE', 'VIDEO'];
+
+function attachCorrections(messageId: string, executed: IntentKind, ctx: DispatchContext): void {
+  const options = CORRECTION_POOL.filter((k) => k !== executed)
+    .slice(0, 3)
+    .map((k) => {
+      const meta = commandOf(k);
+      return { intent: k, label: meta.label, icon: meta.icon };
+    });
+  updateMessage(messageId, { correctionOptions: options, dispatchCtx: ctx });
+}
+
+function onCorrectionPick(m: ChatMessage, intentStr: string): void {
+  const cmd = SLASH_COMMANDS.find((c) => c.intent === intentStr);
+  if (!cmd || !m.dispatchCtx) return;
+  playSfx('sfx_click');
+  pushCorrection(m.dispatchCtx.text, cmd.intent);
+  updateMessage(m.id, { correctionOptions: [] });
+  void dispatchIntent(cmd.intent, m.dispatchCtx);
+}
+
+// ============ 组合意图：「接着：xx →」chip ============
+function pushSecondary(intent: IntentKind, ctx: DispatchContext): void {
+  pushMessage({
+    id: genId(),
+    role: 'assistant',
+    kind: 'secondary',
+    text: '',
+    secondaryIntent: intent,
+    dispatchCtx: ctx,
+  });
+}
+
+function onSecondaryPick(m: ChatMessage): void {
+  if (!m.secondaryIntent || !m.dispatchCtx || m.secondaryUsed) return;
+  playSfx('sfx_click');
+  updateMessage(m.id, { secondaryUsed: true });
+  void dispatchIntent(m.secondaryIntent, m.dispatchCtx);
+}
+
+// ============ 主入口：一条消息 → 路由 → 分发 ============
 async function onSubmit(payload: ComposerSubmitPayload): Promise<void> {
   playSfx('sfx_click');
+
+  // 考核模式：普通输入即作答（不再路由，直接评卷下一轮）；/ 强制工具仍可临时打断（逃生门）。
+  if (quiz.value && !payload.forcedIntent) {
+    pushMessage({ id: genId(), role: 'user', kind: 'text', text: payload.text });
+    scrollToBottom(true);
+    await runQuizAnswer(payload.text);
+    return;
+  }
+
+  // 多轮路由上下文取「本条消息之前」的历史 → 在 push 用户气泡前先行计算。
+  const recentTurns = buildRecentTurns();
+  const last = lastExecutedIntent();
+
   const userMsg: ChatMessage = {
     id: genId(),
     role: 'user',
@@ -346,29 +662,49 @@ async function onSubmit(payload: ComposerSubmitPayload): Promise<void> {
   }
   if (payload.manualKcCodes.length > 0) userMsg.kcCodes = payload.manualKcCodes;
   pushMessage(userMsg);
+  scrollToBottom(true);
 
   let intent: IntentKind | null = payload.forcedIntent;
   let kcCodes: string[] = [...payload.manualKcCodes];
   let focusHint = '';
+  let target = '';
+  let confidence: number | null = null;
+  let secondary: IntentKind | null = null;
+  let routeReason = '';
 
-  // 资源类意图（讲义/思维导图/练习/代码/阅读/动画）需要锚定 KC 设计师才能接活。
-  const isResourceIntent =
-    intent !== null && intent !== 'ASK' && intent !== 'VIDEO' && intent !== 'REVIEW';
+  // 需要路由的三种情况：①未强制工具；②资源类强制但没 @ 锚定 KC（解析 KC + focusHint，
+  // 否则设计师接不了活、过去会静默退回答疑）；③强制带路（需要解析地标 target）。
+  const needRoute =
+    !intent || (isResourceIntent(intent) && kcCodes.length === 0) || intent === 'NAVIGATE';
 
-  // 两种情况都跑意图路由：①完全未指定意图；②已选资源类型但没 @ 锚定 KC——
-  // 后者过去会静默退回答疑（导师），表现为「选了讲义却出答疑、设计师从不工作」。
-  // 这里改为先从问句解析 KC + focusHint，让设计师真正参与资源生成；解析不到 KC 时才回退答疑。
-  if (!intent || (isResourceIntent && kcCodes.length === 0)) {
+  if (needRoute) {
     routing.value = true;
     try {
-      const res = await routeIntent({
+      const req: IntentRouteRequest = {
         message: payload.text,
         manualKcCodes: payload.manualKcCodes,
         courseKcs: courseKcs.value,
-      });
+        scope: quiz.value ? 'quiz' : 'default',
+      };
+      if (recentTurns.length > 0) req.recentTurns = recentTurns;
+      if (last) {
+        req.lastIntent = last.intent;
+        req.lastKcCodes = last.kcCodes;
+      }
+      if (sessionCorrections.value.length > 0) {
+        req.sessionCorrections = [...sessionCorrections.value];
+      }
+      const res = await routeIntent(req);
       if (!intent) intent = res.intent; // 仅未强制时采用路由判定的意图
       if (kcCodes.length === 0) kcCodes = res.kcCodes; // 没手动 KC 时用路由解析的 KC
       focusHint = res.focusHint;
+      target = typeof res.target === 'string' ? res.target : '';
+      if (!payload.forcedIntent) {
+        // 置信分档与组合意图只对「自动判定」生效；强制工具永远直接执行。
+        confidence = typeof res.confidence === 'number' ? res.confidence : null;
+        secondary = res.secondaryIntent ?? null;
+        routeReason = res.reason ?? '';
+      }
     } catch {
       // 分类失败兜底：按答疑处理（不需要 KC，永远可用）。
       if (!intent) intent = 'ASK';
@@ -376,20 +712,134 @@ async function onSubmit(payload: ComposerSubmitPayload): Promise<void> {
       routing.value = false;
     }
   }
+  if (!intent) intent = 'ASK';
 
-  if (intent === 'ASK') {
-    await runAsk(payload.text, kcCodes, payload.contextHint);
-  } else if (intent === 'VIDEO') {
-    runVideo(kcCodes, focusHint || payload.text);
-  } else if (intent === 'REVIEW') {
-    runReview(kcCodes);
-  } else if (kcCodes.length === 0) {
-    // 不强制 @KC：资源类意图但没锚定到知识点时，不再报错，先把学生的问题答了（答案优先）。
-    // 答疑走课件 RAG，检索不到再 LLM。
-    await runAsk(payload.text, kcCodes, payload.contextHint);
-  } else {
-    await runResource(intent, kcCodes, focusHint || payload.text);
+  const ctx: DispatchContext = {
+    text: payload.text,
+    kcCodes,
+    focusHint,
+    contextHint: payload.contextHint,
+    target,
+  };
+
+  // 低置信（<0.45 且非强制）：不直接执行，出澄清气泡让学生自己点工具。
+  if (confidence !== null && confidence < 0.45) {
+    pushClarify(intent, ctx, routeReason);
+    return;
   }
+
+  const msgId = await dispatchIntent(intent, ctx);
+
+  // 中置信（0.45~0.7）：已正常执行，答后在该 assistant 消息挂纠错 chips。
+  if (msgId && confidence !== null && confidence < 0.7) {
+    attachCorrections(msgId, intent, ctx);
+  }
+
+  // 组合意图：主动作完成后出「接着：xx →」chip（考核模式中不打扰）。
+  if (secondary && secondary !== intent && !quiz.value) {
+    pushSecondary(secondary, ctx);
+  }
+}
+
+/** 16 工具分发表（蓝本 §0）：按 execMode 分派到 tutor / workshop / orchestrator / 纯前端。 */
+async function dispatchIntent(intent: IntentKind, ctx: DispatchContext): Promise<string | null> {
+  if (intent === 'ASK') {
+    return runAsk(ctx.text, ctx.kcCodes, ctx.contextHint);
+  }
+  if (intent === 'ASKME') {
+    return startQuiz(ctx);
+  }
+  if (intent === 'EXPLAIN_CODE') {
+    return runAsk(ctx.text, ctx.kcCodes, ctx.contextHint, {
+      intent: 'EXPLAIN_CODE',
+      directive: EXPLAIN_CODE_DIRECTIVE,
+    });
+  }
+  if (intent === 'FIX_BUG') {
+    return runAsk(ctx.text, ctx.kcCodes, ctx.contextHint, {
+      intent: 'FIX_BUG',
+      directive: FIX_BUG_DIRECTIVE,
+    });
+  }
+  if (intent === 'VIDEO') {
+    return runVideo(ctx.kcCodes, ctx.focusHint || ctx.text);
+  }
+  if (intent === 'REVIEW') {
+    runReview(ctx.kcCodes);
+    return null;
+  }
+  if (intent === 'PLAN') {
+    return runPlan(ctx.text);
+  }
+  if (intent === 'PROGRESS') {
+    return runProgress();
+  }
+  if (intent === 'NAVIGATE') {
+    return runNavigate(ctx);
+  }
+  if (intent === 'MY_STUDY') {
+    return runMyStudy(ctx);
+  }
+  if (ctx.kcCodes.length === 0) {
+    // 不强制 @KC：资源类意图但没锚定到知识点时，不报错，先把学生的问题答了（答案优先）。
+    return runAsk(ctx.text, ctx.kcCodes, ctx.contextHint);
+  }
+  return runResource(intent, ctx.kcCodes, ctx.focusHint || ctx.text);
+}
+
+// ============ ASKME 考核模式状态机 ============
+const quizKcLabel = computed<string>(() => {
+  const code = quiz.value?.kcCodes[0];
+  return code ? kcDisplayName(code) : '';
+});
+
+/** 开考：进入 quiz 模式（第 1/3 轮），考官 directive 走 runAsk 出第一题。 */
+async function startQuiz(ctx: DispatchContext): Promise<string> {
+  quiz.value = { kcCodes: [...ctx.kcCodes], round: 1, total: 3 };
+  toast.show('进入考核模式：共 3 轮口头小测，直接在输入框作答', 'info');
+  return runAsk(ctx.text, ctx.kcCodes, ctx.contextHint, {
+    intent: 'ASKME',
+    directive: ASKME_START_DIRECTIVE,
+  });
+}
+
+/** 考核模式中的普通输入：视为答题 → 评卷 directive 走 runAsk；3 轮后退出模式。 */
+async function runQuizAnswer(answer: string): Promise<void> {
+  const q = quiz.value;
+  if (!q) return;
+  await runAsk(answer, q.kcCodes, '', {
+    intent: 'ASKME',
+    directive: askmeJudgeDirective(q.round),
+  });
+  if (!quiz.value) return; // 评卷途中学生手动退出
+  if (q.round >= q.total) {
+    finishQuiz();
+  } else {
+    quiz.value = { ...q, round: q.round + 1 };
+  }
+}
+
+function finishQuiz(): void {
+  const q = quiz.value;
+  quiz.value = null;
+  playSfx('sfx_success');
+  toast.show('考核结束：3 轮小测完成，小结与掌握度建议见上方点评', 'success');
+  // 考核完成回流学习事件（后端通用审计落库）。
+  // TODO(LearningEvent)：后续由后端把 quiz_finished 消费进画像「知识基础/情绪坚持」维度与任务 evidence。
+  if (q) {
+    void postLearningEvent({
+      eventType: 'quiz_finished',
+      payload: { kcCodes: q.kcCodes, rounds: q.total },
+    }).catch(() => {
+      /* 回流失败静默，不打扰学生 */
+    });
+  }
+}
+
+function exitQuiz(): void {
+  playSfx('sfx_click');
+  quiz.value = null;
+  toast.show('已退出考核模式', 'info');
 }
 
 // 面向「非科班 Python 初学者」：B站检索词一律以「Python」打头、并加「教程」偏向入门讲解；
@@ -416,12 +866,13 @@ function wantsVideo(text: string): boolean {
  * VIDEO 意图：不走生成/SSE，直接出一条「视频卡片」气泡，由 BilibiliVideoCards 按关键词
  * 现取现渲染（外部资源）。关键词 = Python + KC 显示名 + 学习重点（去重去空、限长）。
  */
-function runVideo(kcCodes: string[], focus: string): void {
+function runVideo(kcCodes: string[], focus: string): string {
   const meta = commandOf('VIDEO');
   const keyword = buildVideoKeyword(focus, kcCodes);
   playSfx('sfx_success');
+  const id = genId();
   pushMessage({
-    id: genId(),
+    id,
     role: 'assistant',
     kind: 'video',
     intent: 'VIDEO',
@@ -430,6 +881,7 @@ function runVideo(kcCodes: string[], focus: string): void {
     toolIcon: meta.icon,
     toolLabel: meta.label,
   });
+  return id;
 }
 
 /**
@@ -456,21 +908,58 @@ function onAnswerGenerate(m: ChatMessage, type: WorkshopResourceType): void {
   void runResource(type, m.kcCodes ?? [], m.suggestTopic ?? '');
 }
 
-async function runAsk(question: string, kcCodes: string[], context: string): Promise<void> {
+// ============ tutor_sse：ASK / ASKME / EXPLAIN_CODE / FIX_BUG 共用管线 ============
+async function runAsk(
+  question: string,
+  kcCodes: string[],
+  context: string,
+  opts: AskOptions = {},
+): Promise<string> {
   const id = genId();
-  pushMessage({
+  const intent: IntentKind = opts.intent ?? 'ASK';
+  const initial: ChatMessage = {
     id,
     role: 'assistant',
     kind: 'answer',
-    intent: 'ASK',
+    intent,
     text: '',
     streaming: true,
-  });
+  };
+  if (intent !== 'ASK') {
+    // 非默认答疑的 tutor 工具（考考我/讲代码/修报错）：气泡带工具徽标。
+    const meta = commandOf(intent);
+    initial.toolLabel = meta.label;
+    initial.toolIcon = meta.icon;
+  }
+  pushMessage(initial);
   streamingAskId.value = id;
+  askInterrupted.value = false;
 
-  await tutorSse.start({ question, kcCodes, context, conversationId: conversationId.value });
+  // 工具差异以 context 前缀 directive 注入（蓝本 §0），graph 不需要新端点。
+  const mergedContext = opts.directive
+    ? context
+      ? `${opts.directive}\n${context}`
+      : opts.directive
+    : context;
+  const body: TutorAskRequest = {
+    question,
+    kcCodes,
+    context: mergedContext,
+    conversationId: conversationId.value,
+  };
+  if (opts.style) body.style = opts.style;
 
+  await tutorSse.start(body);
+  // 收尾：把 rAF 攒着的最后一段 token 落进消息（中断/出错时也能看到已生成部分）。
+  flushPendingTokens();
   streamingAskId.value = null;
+
+  if (askInterrupted.value) {
+    // 学生手动「⏹ 停止」：气泡已由 onStopStream 标记（已中断），不按错误处理。
+    askInterrupted.value = false;
+    return id;
+  }
+
   if (tutorSse.status.value === 'done' && tutorSse.result.value) {
     playSfx('sfx_success');
     const r = tutorSse.result.value;
@@ -483,9 +972,13 @@ async function runAsk(question: string, kcCodes: string[], context: string): Pro
       ...(r.review ? { review: r.review } : {}),
       // 课件证据总览说明（live 才有；为空则不写）。
       ...(r.evidence_note ? { evidenceNote: r.evidence_note } : {}),
+      // 画像个性化说明 →「✨ 为你定制」小标签（live 才有；为空则不写）。
+      ...(r.personalization_note ? { personalizationNote: r.personalization_note } : {}),
       visualAids: r.visual_aids ?? [],
+      // 工具调用轨迹快照 → 折叠「⚙ 工具调用」行（ToolTraceLine）。
+      traces: [...tutorSse.traces.value],
       streaming: false,
-      // 工具产出按需触发：「看相关视频/生成讲义/出练习」按钮常驻为手动入口；
+      // 工具产出按需触发：「看相关视频/生成讲义」按钮常驻为手动入口；
       // 「相关 B站讲解」仅当学生语句表达视频意图（wantsVideo）时才自动内嵌。
       // 图解由后端按「要图」意图返回（visual_aids 为空则不显示），无需前端再判。
       suggestTopic: question.trim(),
@@ -499,20 +992,265 @@ async function runAsk(question: string, kcCodes: string[], context: string): Pro
       kind: 'error',
       text: tutorSse.error.value?.message ?? 'AI 助教暂时没答上来，再试一次',
       streaming: false,
+      retry: { mode: 'ask', question, kcCodes, context, opts },
     });
   }
   scrollToBottom();
+  return id;
 }
 
+/** 「⏹ 停止」：中断导师流，保留已生成部分并标注（已中断）。 */
+function onStopStream(m: ChatMessage): void {
+  if (!m.streaming) return;
+  playSfx('sfx_click');
+  askInterrupted.value = true;
+  tutorSse.abort();
+  flushPendingTokens();
+  const base = tutorSse.tokens.value;
+  updateMessage(m.id, {
+    streaming: false,
+    text: base ? `${base}\n\n（已中断）` : '（已中断）',
+  });
+}
+
+/** 错误气泡「↻ 重试」：重放缓存的上次 runAsk / runResource 参数。 */
+function onRetry(m: ChatMessage): void {
+  const r = m.retry;
+  if (!r || busy.value) return;
+  playSfx('sfx_click');
+  if (r.mode === 'ask') {
+    void runAsk(r.question, r.kcCodes, r.context, r.opts);
+  } else {
+    void runResource(r.type, r.kcCodes, r.focusHint);
+  }
+}
+
+// ============ 换讲法闭环：图解 / 逻辑链 / 示例上手 ============
+const STYLE_CHIPS: Array<{ style: CognitiveStyle; label: string }> = [
+  { style: 'visual', label: '✦ 图解' },
+  { style: 'logical', label: '⛓ 逻辑链' },
+  { style: 'trial', label: '⚒ 示例上手' },
+];
+
+function onStyleChip(m: ChatMessage, style: CognitiveStyle): void {
+  playSfx('sfx_click');
+  // 因材施教闭环：学生显式采纳某讲法 → 回流画像 cognitive_style（失败静默）。
+  void styleEngaged(style, m.kcCodes?.[0]).catch(() => {
+    /* 画像回流失败静默 */
+  });
+  void runAsk(m.suggestTopic ?? m.text.slice(0, 200), m.kcCodes ?? [], '', { style });
+}
+
+// ============ orchestrator_sse：PLAN 学习规划 ============
+const PLAN_PANEL_ROUTES: Record<string, string> = {
+  library: '/library',
+  training: '/training',
+  problems: '/arena/1',
+  workshop: '/workshop',
+  tutor: '/workshop',
+  examples: '/examples',
+  review: '/review-hall',
+};
+
+async function runPlan(text: string): Promise<string> {
+  activity.start('orchestrator', '学习规划');
+
+  // history 取最近 6 条 role/content；当前这条消息已在 onSubmit push，须从历史中剔除。
+  const turns = buildRecentTurns();
+  const tail = turns[turns.length - 1];
+  const history =
+    tail && tail.role === 'user' && tail.content === text.slice(0, 200)
+      ? turns.slice(0, -1)
+      : turns;
+
+  const body: OrchestratorTurnRequest = {
+    sessionId: conversationId.value,
+    message: text,
+    history,
+    courseKcCodes: courseKcs.value.map((k) => k.code),
+  };
+  await orchestratorSse.start(body);
+
+  const result = orchestratorSse.result.value;
+  const ok = orchestratorSse.status.value === 'done' && result !== null;
+  activity.finish(ok);
+
+  if (!ok || !result) {
+    playSfx('sfx_error');
+    const id = genId();
+    pushMessage({
+      id,
+      role: 'assistant',
+      kind: 'error',
+      text: orchestratorSse.error.value?.message ?? '学习规划暂时没排出来，再试一次',
+    });
+    return id;
+  }
+
+  playSfx('sfx_success');
+  const meta = commandOf('PLAN');
+  const id = genId();
+  pushMessage({
+    id,
+    role: 'assistant',
+    kind: 'plan',
+    intent: 'PLAN',
+    text: result.reply_md || orchestratorSse.tokens.value,
+    planSteps: result.plan ?? [],
+    toolIcon: meta.icon,
+    toolLabel: meta.label,
+  });
+  return id;
+}
+
+/** PlanCard「前往」：panel 简称 → 实际路由（以路由表为准；lecture 需要章号）。 */
+function onPlanOpen(panel: string): void {
+  playSfx('sfx_click');
+  if (panel === 'lecture') {
+    void router.push(`/lecture/${mainline.firstActionableChapter}`);
+    return;
+  }
+  if (panel === 'training') {
+    toast.show('去训练场练一练', 'info');
+  }
+  void router.push(PLAN_PANEL_ROUTES[panel] ?? '/world');
+}
+
+// ============ 纯前端：PROGRESS 学情报告 ============
+async function runProgress(): Promise<string> {
+  if (learning.field.masterySnapshot.length === 0) {
+    try {
+      await learning.loadField();
+    } catch {
+      /* 学情拉取失败：仍出卡，由卡内空态兜底 */
+    }
+  }
+  playSfx('sfx_success');
+  const meta = commandOf('PROGRESS');
+  const id = genId();
+  pushMessage({
+    id,
+    role: 'assistant',
+    kind: 'progress',
+    intent: 'PROGRESS',
+    text: '',
+    toolIcon: meta.icon,
+    toolLabel: meta.label,
+  });
+  return id;
+}
+
+/** ProgressCard「去练」：toast 提示后直达训练场。 */
+function onPracticeKc(kcCode: string): void {
+  playSfx('sfx_click');
+  toast.show(`去训练场练「${kcDisplayName(kcCode)}」`, 'info');
+  void router.push('/training');
+}
+
+// ============ 纯前端：NAVIGATE 带路 ============
+const NAV_TARGETS: Record<string, { route: string; label: string }> = {
+  library: { route: '/library', label: '图书馆' },
+  arena: { route: '/arena/1', label: '闯关塔' },
+  bugmine: { route: '/bug-mine', label: '错题矿洞' },
+  world: { route: '/world', label: '小镇广场' },
+  workshop: { route: '/workshop', label: '百晓工坊' },
+};
+
+async function runNavigate(ctx: DispatchContext): Promise<string> {
+  const hit = ctx.target ? NAV_TARGETS[ctx.target] : undefined;
+  if (!hit) {
+    // 未知地标：回退答疑，把学生的话正常答掉。
+    return runAsk(ctx.text, ctx.kcCodes, ctx.contextHint);
+  }
+  playSfx('sfx_success');
+  const meta = commandOf('NAVIGATE');
+  const id = genId();
+  pushMessage({
+    id,
+    role: 'assistant',
+    kind: 'navigate',
+    intent: 'NAVIGATE',
+    text: `带你去${hit.label}`,
+    navRoute: hit.route,
+    navLabel: hit.label,
+    toolIcon: meta.icon,
+    toolLabel: meta.label,
+  });
+  return id;
+}
+
+function onNavigateGo(m: ChatMessage): void {
+  if (!m.navRoute) return;
+  playSfx('sfx_click');
+  void router.push(m.navRoute);
+}
+
+// ============ 纯前端：MY_STUDY 找我的资料 ============
+async function runMyStudy(ctx: DispatchContext): Promise<string> {
+  try {
+    await learning.loadResources();
+  } catch {
+    /* 列表拉取失败：按现有缓存过滤 */
+  }
+
+  // 过滤词：focusHint 整句 + 空白切分（≥2 字）+ 路由锚定 KC 的 code / 显示名。
+  const terms: string[] = [];
+  const hint = ctx.focusHint.trim();
+  if (hint) {
+    terms.push(hint.toLowerCase());
+    for (const part of hint.split(/\s+/)) {
+      if (part.length >= 2) terms.push(part.toLowerCase());
+    }
+  }
+  for (const code of ctx.kcCodes) {
+    terms.push(code.toLowerCase());
+    const name = kcDisplayName(code);
+    if (name && name !== code) terms.push(name.toLowerCase());
+  }
+
+  const list = learning.resources.list;
+  const textLower = ctx.text.toLowerCase();
+  const matched =
+    terms.length === 0
+      ? list
+      : list.filter((item) => {
+          // 标题反向包含：学生消息里直接提到了某资源标题。
+          const titleLower = item.title.toLowerCase();
+          if (titleLower.length >= 2 && textLower.includes(titleLower)) return true;
+          const kcNames = item.kcCodes.map((c) => kcDisplayName(c)).join(' ');
+          const hay = `${item.title} ${commandOf(item.type).label} ${item.kcCodes.join(' ')} ${kcNames}`.toLowerCase();
+          return terms.some((t) => hay.includes(t));
+        });
+  const shown = matched.slice(0, 5);
+
+  playSfx('sfx_success');
+  const meta = commandOf('MY_STUDY');
+  const id = genId();
+  pushMessage({
+    id,
+    role: 'assistant',
+    kind: 'mystudy',
+    intent: 'MY_STUDY',
+    text:
+      shown.length > 0
+        ? ''
+        : '书房里还没找到相关的资源。直接说想学什么，或用 /讲义 /练习题 现做一份？',
+    mystudyItems: shown,
+    toolIcon: meta.icon,
+    toolLabel: meta.label,
+  });
+  return id;
+}
+
+// ============ workshop_sse：6 类资源生成 ============
 async function runResource(
   type: WorkshopResourceType,
   kcCodes: string[],
   focusHint: string,
-): Promise<void> {
-  // 不强制 @KC：调用方（onSubmit）已保证无 KC 时改走答疑；这里仅作防御性兜底。
+): Promise<string> {
+  // 不强制 @KC：调用方（dispatchIntent）已保证无 KC 时改走答疑；这里仅作防御性兜底。
   if (kcCodes.length === 0) {
-    await runAsk(focusHint, kcCodes, '');
-    return;
+    return runAsk(focusHint, kcCodes, '');
   }
 
   officeStreamState.value = 'streaming';
@@ -577,19 +1315,23 @@ async function runResource(
 
     // R-15：旧 mainQuest「学」里程碑钩子已退役（主线进度由后端 mainline stage 三件套权威）。
     toast.show('已生成并收入「我的书房」', 'success');
-  } else {
-    officeStreamState.value = 'error';
-    playSfx('sfx_error');
-    pushMessage({
-      id: genId(),
-      role: 'assistant',
-      kind: 'error',
-      text: workshopSse.error.value?.message ?? '资源生成失败，请稍后重试。',
-    });
-    officeStreamState.value = 'idle';
-    officeTokenPreview.value = '';
-    officeStreamLabel.value = '';
+    return msg.id;
   }
+
+  officeStreamState.value = 'error';
+  playSfx('sfx_error');
+  const errId = genId();
+  pushMessage({
+    id: errId,
+    role: 'assistant',
+    kind: 'error',
+    text: workshopSse.error.value?.message ?? '资源生成失败，请稍后重试。',
+    retry: { mode: 'resource', type, kcCodes, focusHint },
+  });
+  officeStreamState.value = 'idle';
+  officeTokenPreview.value = '';
+  officeStreamLabel.value = '';
+  return errId;
 }
 
 /**
@@ -633,6 +1375,17 @@ function goToPage(pageId: number): void {
   void router.push({ path: '/library', query: { pageId: String(pageId) } });
 }
 
+// ============ 角色化：欢迎屏快捷语 / 轻反馈 ============
+function onWelcomeQuick(text: string): void {
+  void onSubmit({ text, manualKcCodes: [], contextHint: '', forcedIntent: null });
+}
+
+function onAnswerFeedback(m: ChatMessage, up: boolean): void {
+  // TODO(LearningEvent)：后续把 👍/👎 作为 tutor_feedback 学习事件回流画像（偏好/易错维度）。
+  console.debug('[workshop] answer feedback', { messageId: m.id, up });
+  toast.show('已记录反馈', 'success');
+}
+
 onMounted(async () => {
   try {
     const [chapters, kcs] = await Promise.all([
@@ -665,9 +1418,22 @@ onMounted(async () => {
         ＋ 新对话
       </button>
     </div>
+
+    <!-- 考核模式驻顶条（ASKME）：第 N/3 轮 + 退出。 -->
+    <QuizModeBar
+      v-if="quiz"
+      class="chat__quizbar"
+      data-testid="quiz-mode-bar"
+      :round="quiz.round"
+      :total="quiz.total"
+      :kc-label="quizKcLabel"
+      @exit="exitQuiz"
+    />
+
     <div
       ref="scrollRef"
       class="chat__scroll"
+      @scroll.passive="onScroll"
     >
       <!-- 续聊提示：回看历史会话后，明确告诉学生「接着问会并入这段会话」。 -->
       <div
@@ -689,32 +1455,13 @@ onMounted(async () => {
           开新对话
         </button>
       </div>
-      <div
+
+      <!-- 欢迎屏：百晓立绘 + 快捷提问 chips + 能力一览（点快捷语即发送）。 -->
+      <WelcomePanel
         v-if="messages.length === 0"
-        class="chat__welcome"
-      >
-        <p class="chat__welcome-title">
-          想学什么直接说
-        </p>
-        <p class="chat__welcome-body">
-          比如「循环怎么用」，AI 助教来帮你
-        </p>
-        <details
-          class="chat__more"
-          data-testid="workshop-welcome-more"
-        >
-          <summary class="chat__more-summary">
-            更多用法
-          </summary>
-          <div class="chat__more-body">
-            <p>输入 <b>@</b> 引用知识点</p>
-            <p>输入 <b>/</b> 选讲解方式</p>
-            <p class="chat__more-kinds">
-              讲义、思维导图、练习、代码、阅读、动画、B站视频
-            </p>
-          </div>
-        </details>
-      </div>
+        data-testid="workshop-welcome"
+        @quick="onWelcomeQuick"
+      />
 
       <template
         v-for="m in messages"
@@ -743,203 +1490,450 @@ onMounted(async () => {
           </p>
         </div>
 
-        <!-- 助手：答疑 -->
+        <!-- 助手消息行：左侧百晓像素头像 + 右侧气泡 -->
         <div
-          v-else-if="m.kind === 'answer'"
-          class="msg msg--assistant"
+          v-else
+          class="msg-row"
+          :data-kind="m.kind"
         >
-          <div
-            v-if="m.groundingStatus || (m.review && !m.streaming)"
-            class="msg__grounding"
-          >
-            <span
-              v-if="m.groundingStatus"
-              class="g-chip"
-              :class="groundingInfo(m.groundingStatus).cls"
-            >{{ groundingInfo(m.groundingStatus).text }}</span>
-            <!-- 三审徽章：仅 live 答疑（带 review）显示；历史回放无 review → 不显示。 -->
-            <template v-if="m.review && !m.streaming">
-              <span
-                v-for="b in reviewBadges(m.review)"
-                :key="b.key"
-                class="r-badge"
-                :class="b.passed ? 'r-badge--ok' : 'r-badge--no'"
-                :title="b.title"
-              >{{ b.passed ? '✓' : '✗' }} {{ b.label }}</span>
-            </template>
+          <div class="msg-row__avatar">
+            <WorkshopAvatar :streaming="m.streaming === true" />
           </div>
-          <MarkdownView :source="m.text" />
-          <span
-            v-if="m.streaming"
-            class="cursor"
-          >▌</span>
-          <!-- 课件证据：让学生看见系统命中了哪段课件原文（点页码回链图书馆核对）。 -->
-          <CoursewareEvidence
-            v-if="!m.streaming"
-            :citations="m.evidence ?? []"
-            :grounding-status="m.groundingStatus ?? ''"
-            :evidence-note="m.evidenceNote ?? ''"
-            @open-page="goToPage"
-          />
-          <TutorVisualAids
-            v-if="!m.streaming && m.visualAids && m.visualAids.length"
-            :aids="m.visualAids"
-          />
-          <!-- 工具产出按需触发：动作按钮常驻（手动入口）；B站讲解仅在视频意图下自动内嵌。 -->
-          <div
-            v-if="!m.streaming && m.suggestTopic"
-            class="msg__tools"
-          >
-            <div class="msg__tool-actions">
-              <span class="msg__tool-hint">接下来</span>
-              <button
-                type="button"
-                class="tool-chip"
-                @click="onAnswerVideo(m)"
+          <div class="msg-row__body">
+            <!-- 助手：答疑（ASK / ASKME / EXPLAIN_CODE / FIX_BUG 共用） -->
+            <div
+              v-if="m.kind === 'answer'"
+              class="msg msg--assistant"
+            >
+              <div
+                v-if="m.personalizationNote"
+                class="msg__pnote"
+                :title="m.personalizationNote"
               >
-                ▶ 看相关视频
-              </button>
-              <!-- R-14 讲义解耦：去掉「出练习」入口，讲义不再直接挂练习；练习走训练场。 -->
-              <template v-if="m.kcCodes && m.kcCodes.length">
+                ✨ 为你定制
+              </div>
+              <div
+                v-if="m.toolLabel"
+                class="msg__tags"
+              >
+                <span class="msg__tool">{{ m.toolIcon }} {{ m.toolLabel }}</span>
+              </div>
+              <div
+                v-if="m.groundingStatus || (m.review && !m.streaming)"
+                class="msg__grounding"
+              >
+                <span
+                  v-if="m.groundingStatus"
+                  class="g-chip"
+                  :class="groundingInfo(m.groundingStatus).cls"
+                >{{ groundingInfo(m.groundingStatus).text }}</span>
+                <!-- 三审徽章：仅 live 答疑（带 review）显示；历史回放无 review → 不显示。 -->
+                <template v-if="m.review && !m.streaming">
+                  <span
+                    v-for="b in reviewBadges(m.review)"
+                    :key="b.key"
+                    class="r-badge"
+                    :class="b.passed ? 'r-badge--ok' : 'r-badge--no'"
+                    :title="b.title"
+                  >{{ b.passed ? '✓' : '✗' }} {{ b.label }}</span>
+                </template>
+                <!-- 折叠「⚙ 工具调用」轨迹（渐进披露），挂在三审徽章行尾部。 -->
+                <ToolTraceLine
+                  v-if="!m.streaming && m.traces && m.traces.length"
+                  class="msg__traceline"
+                  :traces="m.traces"
+                />
+              </div>
+              <MarkdownView :source="m.text" />
+              <span
+                v-if="m.streaming"
+                class="cursor"
+              >▌</span>
+              <div
+                v-if="m.streaming"
+                class="msg__stoprow"
+              >
                 <button
                   type="button"
-                  class="tool-chip"
-                  @click="onAnswerGenerate(m, 'HANDOUT')"
+                  class="stop-chip"
+                  data-testid="stop-stream"
+                  @click="onStopStream(m)"
                 >
-                  ✎ 生成讲义
+                  ⏹ 停止
                 </button>
-              </template>
+              </div>
+              <!-- 课件证据：让学生看见系统命中了哪段课件原文（点页码回链图书馆核对）。 -->
+              <CoursewareEvidence
+                v-if="!m.streaming"
+                :citations="m.evidence ?? []"
+                :grounding-status="m.groundingStatus ?? ''"
+                :evidence-note="m.evidenceNote ?? ''"
+                @open-page="goToPage"
+              />
+              <TutorVisualAids
+                v-if="!m.streaming && m.visualAids && m.visualAids.length"
+                :aids="m.visualAids"
+              />
+              <!-- 工具产出按需触发：动作按钮常驻（手动入口）；B站讲解仅在视频意图下自动内嵌。 -->
+              <div
+                v-if="!m.streaming && m.suggestTopic"
+                class="msg__tools"
+              >
+                <div class="msg__tool-actions">
+                  <span class="msg__tool-hint">接下来</span>
+                  <button
+                    type="button"
+                    class="tool-chip"
+                    @click="onAnswerVideo(m)"
+                  >
+                    ▶ 看相关视频
+                  </button>
+                  <!-- R-14 讲义解耦：去掉「出练习」入口，讲义不再直接挂练习；练习走训练场。 -->
+                  <template v-if="m.kcCodes && m.kcCodes.length">
+                    <button
+                      type="button"
+                      class="tool-chip"
+                      @click="onAnswerGenerate(m, 'HANDOUT')"
+                    >
+                      ✎ 生成讲义
+                    </button>
+                  </template>
+                </div>
+                <BilibiliVideoCards
+                  v-if="m.showVideo"
+                  class="msg__tool-videos"
+                  :keyword="m.videoKeyword ?? ''"
+                  :limit="3"
+                  heading="相关 B站讲解"
+                />
+              </div>
+              <!-- 换讲法闭环：图解 / 逻辑链 / 示例上手 → 带 style 重问 + styleEngaged 回流。 -->
+              <div
+                v-if="!m.streaming && m.intent === 'ASK' && m.suggestTopic"
+                class="msg__styles"
+                data-testid="style-chips"
+              >
+                <span class="msg__tool-hint">换个讲法</span>
+                <button
+                  v-for="c in STYLE_CHIPS"
+                  :key="c.style"
+                  type="button"
+                  class="tool-chip"
+                  :disabled="busy"
+                  @click="onStyleChip(m, c.style)"
+                >
+                  {{ c.label }}
+                </button>
+              </div>
+              <!-- 👍/👎 轻反馈（仅完成后）。 -->
+              <AnswerFeedback
+                v-if="!m.streaming"
+                class="msg__feedback"
+                :message-id="m.id"
+                @feedback="onAnswerFeedback(m, $event)"
+              />
             </div>
-            <BilibiliVideoCards
-              v-if="m.showVideo"
-              class="msg__tool-videos"
-              :keyword="m.videoKeyword ?? ''"
-              :limit="3"
-              heading="相关 B站讲解"
-            />
-          </div>
-        </div>
 
-        <!-- 助手：资源卡 -->
-        <!-- 助手：资源卡（就地内联浏览全文 + 「我的书房」历史库入口） -->
-        <div
-          v-else-if="m.kind === 'resource'"
-          class="msg msg--assistant msg--resource"
-          data-testid="resource-card"
-        >
-          <div class="resource-head">
-            <span class="resource-head__icon">{{ m.toolIcon }}</span>
-            <button
-              type="button"
-              class="resource-head__body"
-              :title="m.resourceExpanded ? '收起全文' : '展开全文'"
-              @click="toggleResource(m)"
+            <!-- 助手：资源卡（就地内联浏览全文 + 「我的书房」历史库入口） -->
+            <div
+              v-else-if="m.kind === 'resource'"
+              class="msg msg--assistant msg--resource"
+              data-testid="resource-card"
             >
-              <span class="resource-head__title">{{ m.resourceTitle }}</span>
-              <span class="resource-head__meta">
-                {{ m.toolLabel }} · {{ groundingInfo(m.resourceGrounding ?? '').text }}
-                <template v-if="m.resourceSafety">
-                  · 安全{{ m.resourceSafety === 'PASSED' ? '通过' : '注意' }}
+              <div class="resource-head">
+                <span class="resource-head__icon">{{ m.toolIcon }}</span>
+                <button
+                  type="button"
+                  class="resource-head__body"
+                  :title="m.resourceExpanded ? '收起全文' : '展开全文'"
+                  @click="toggleResource(m)"
+                >
+                  <span class="resource-head__title">{{ m.resourceTitle }}</span>
+                  <span class="resource-head__meta">
+                    {{ m.toolLabel }} · {{ groundingInfo(m.resourceGrounding ?? '').text }}
+                    <template v-if="m.resourceSafety">
+                      · 安全{{ m.resourceSafety === 'PASSED' ? '通过' : '注意' }}
+                    </template>
+                  </span>
+                </button>
+                <span class="resource-head__actions">
+                  <button
+                    type="button"
+                    class="resource-head__toggle"
+                    data-testid="resource-toggle"
+                    @click="toggleResource(m)"
+                  >
+                    {{ m.resourceExpanded ? '收起 ▲' : '展开 ▼' }}
+                  </button>
+                  <button
+                    type="button"
+                    class="resource-head__open"
+                    title="在「我的书房」打开（独立大图浏览）"
+                    @click="openResource(m.resourceId as number)"
+                  >
+                    书房 →
+                  </button>
+                </span>
+              </div>
+
+              <div
+                v-if="m.resourceExpanded"
+                class="resource-body"
+                data-testid="resource-inline"
+              >
+                <p
+                  v-if="m.resourceSummary"
+                  class="resource-body__summary"
+                >
+                  {{ m.resourceSummary }}
+                </p>
+                <p
+                  v-if="m.resourceLoading"
+                  class="resource-body__loading"
+                >
+                  正在载入资源全文…
+                </p>
+                <template v-else-if="m.resourceContent && m.resourceType">
+                  <HandoutView
+                    v-if="m.resourceType === 'HANDOUT'"
+                    :content="(m.resourceContent as HandoutContent)"
+                  />
+                  <MindMapView
+                    v-else-if="m.resourceType === 'MINDMAP'"
+                    :content="(m.resourceContent as MindMapContent)"
+                  />
+                  <PracticeList
+                    v-else-if="m.resourceType === 'PRACTICE'"
+                    :content="(m.resourceContent as PracticeContent)"
+                  />
+                  <CodeLabView
+                    v-else-if="m.resourceType === 'CODE_LAB'"
+                    :content="(m.resourceContent as CodeLabContent)"
+                  />
+                  <ReadingList
+                    v-else-if="m.resourceType === 'READING'"
+                    :content="(m.resourceContent as ReadingContent)"
+                  />
+                  <StoryboardView
+                    v-else-if="m.resourceType === 'STORYBOARD'"
+                    :content="(m.resourceContent as StoryboardContent)"
+                  />
                 </template>
-              </span>
-            </button>
-            <span class="resource-head__actions">
+                <p
+                  v-else
+                  class="resource-body__empty"
+                >
+                  暂无法在此内联展示，请点「书房 →」查看。
+                </p>
+              </div>
+            </div>
+
+            <!-- 助手：B站视频卡片（外部资源，按意图检索，不走生成） -->
+            <div
+              v-else-if="m.kind === 'video'"
+              class="msg msg--assistant msg--video"
+            >
+              <div
+                v-if="m.toolLabel"
+                class="msg__tags"
+              >
+                <span class="msg__tool">{{ m.toolIcon }} {{ m.toolLabel }}</span>
+              </div>
+              <BilibiliVideoCards
+                :keyword="m.videoKeyword ?? ''"
+                heading="B站精选讲解"
+              />
+            </div>
+
+            <!-- 助手：学习计划卡（PLAN，orchestrator 产出 看/学/练/测 步骤） -->
+            <div
+              v-else-if="m.kind === 'plan'"
+              class="msg msg--assistant msg--plan"
+              data-testid="plan-card-msg"
+            >
+              <div
+                v-if="m.toolLabel"
+                class="msg__tags"
+              >
+                <span class="msg__tool">{{ m.toolIcon }} {{ m.toolLabel }}</span>
+              </div>
+              <MarkdownView
+                v-if="m.text"
+                :source="m.text"
+              />
+              <PlanCard
+                :steps="m.planSteps ?? []"
+                @open="onPlanOpen"
+              />
+            </div>
+
+            <!-- 助手：学情卡（PROGRESS，纯前端读 masterySnapshot） -->
+            <div
+              v-else-if="m.kind === 'progress'"
+              class="msg msg--assistant msg--progress"
+              data-testid="progress-card-msg"
+            >
+              <div
+                v-if="m.toolLabel"
+                class="msg__tags"
+              >
+                <span class="msg__tool">{{ m.toolIcon }} {{ m.toolLabel }}</span>
+              </div>
+              <ProgressCard
+                :snapshot="learning.field.masterySnapshot"
+                @practice="onPracticeKc"
+              />
+            </div>
+
+            <!-- 助手：书房检索结果（MY_STUDY，≤5 张资源卡，复用资源卡头样式） -->
+            <div
+              v-else-if="m.kind === 'mystudy'"
+              class="msg msg--assistant msg--mystudy"
+              data-testid="mystudy-msg"
+            >
+              <div
+                v-if="m.toolLabel"
+                class="msg__tags"
+              >
+                <span class="msg__tool">{{ m.toolIcon }} {{ m.toolLabel }}</span>
+              </div>
+              <p
+                v-if="m.text"
+                class="msg__text"
+              >
+                {{ m.text }}
+              </p>
+              <div
+                v-for="item in m.mystudyItems ?? []"
+                :key="item.id"
+                class="resource-head mystudy-item"
+                data-testid="mystudy-item"
+              >
+                <span class="resource-head__icon">{{ commandOf(item.type).icon }}</span>
+                <button
+                  type="button"
+                  class="resource-head__body"
+                  title="在「我的书房」打开"
+                  @click="openResource(item.id)"
+                >
+                  <span class="resource-head__title">{{ item.title }}</span>
+                  <span class="resource-head__meta">
+                    {{ commandOf(item.type).label }} · {{ groundingInfo(item.groundingStatus).text }}
+                  </span>
+                </button>
+                <span class="resource-head__actions">
+                  <button
+                    type="button"
+                    class="resource-head__open"
+                    @click="openResource(item.id)"
+                  >
+                    打开 →
+                  </button>
+                </span>
+              </div>
+            </div>
+
+            <!-- 助手：带路确认（NAVIGATE，纯前端路由跳转） -->
+            <div
+              v-else-if="m.kind === 'navigate'"
+              class="msg msg--assistant msg--navigate"
+              data-testid="navigate-msg"
+            >
+              <div
+                v-if="m.toolLabel"
+                class="msg__tags"
+              >
+                <span class="msg__tool">{{ m.toolIcon }} {{ m.toolLabel }}</span>
+              </div>
+              <p class="msg__text">
+                {{ m.text }}
+              </p>
               <button
                 type="button"
-                class="resource-head__toggle"
-                data-testid="resource-toggle"
-                @click="toggleResource(m)"
+                class="tool-chip tool-chip--go"
+                data-testid="navigate-go"
+                @click="onNavigateGo(m)"
               >
-                {{ m.resourceExpanded ? '收起 ▲' : '展开 ▼' }}
+                ➤ 前往{{ m.navLabel }}
               </button>
+            </div>
+
+            <!-- 助手：低置信澄清气泡（点选项即按该工具执行原话） -->
+            <div
+              v-else-if="m.kind === 'clarify'"
+              class="msg msg--assistant msg--clarify"
+              data-testid="clarify-msg"
+            >
+              <ClarifyBubble
+                :options="m.clarifyOptions ?? []"
+                :reason="m.clarifyReason ?? ''"
+                @pick="onClarifyPick(m, $event)"
+              />
+            </div>
+
+            <!-- 助手：组合意图「接着：xx →」chip -->
+            <div
+              v-else-if="m.kind === 'secondary'"
+              class="msg--secondary"
+              data-testid="secondary-chip"
+            >
               <button
+                v-if="!m.secondaryUsed"
                 type="button"
-                class="resource-head__open"
-                title="在「我的书房」打开（独立大图浏览）"
-                @click="openResource(m.resourceId as number)"
+                class="tool-chip tool-chip--secondary"
+                :disabled="busy"
+                data-testid="secondary-go"
+                @click="onSecondaryPick(m)"
               >
-                书房 →
+                接着：{{ commandOf(m.secondaryIntent ?? 'ASK').label }} →
               </button>
-            </span>
-          </div>
+              <p
+                v-else
+                class="msg__text msg__text--dim"
+              >
+                已接着执行：{{ commandOf(m.secondaryIntent ?? 'ASK').label }}
+              </p>
+            </div>
 
-          <div
-            v-if="m.resourceExpanded"
-            class="resource-body"
-            data-testid="resource-inline"
-          >
-            <p
-              v-if="m.resourceSummary"
-              class="resource-body__summary"
+            <!-- 助手：错误（带「↻ 重试」参数重放） -->
+            <div
+              v-else-if="m.kind === 'error'"
+              class="msg msg--assistant msg--error"
             >
-              {{ m.resourceSummary }}
-            </p>
-            <p
-              v-if="m.resourceLoading"
-              class="resource-body__loading"
-            >
-              正在载入资源全文…
-            </p>
-            <template v-else-if="m.resourceContent && m.resourceType">
-              <HandoutView
-                v-if="m.resourceType === 'HANDOUT'"
-                :content="(m.resourceContent as HandoutContent)"
-              />
-              <MindMapView
-                v-else-if="m.resourceType === 'MINDMAP'"
-                :content="(m.resourceContent as MindMapContent)"
-              />
-              <PracticeList
-                v-else-if="m.resourceType === 'PRACTICE'"
-                :content="(m.resourceContent as PracticeContent)"
-              />
-              <CodeLabView
-                v-else-if="m.resourceType === 'CODE_LAB'"
-                :content="(m.resourceContent as CodeLabContent)"
-              />
-              <ReadingList
-                v-else-if="m.resourceType === 'READING'"
-                :content="(m.resourceContent as ReadingContent)"
-              />
-              <StoryboardView
-                v-else-if="m.resourceType === 'STORYBOARD'"
-                :content="(m.resourceContent as StoryboardContent)"
-              />
-            </template>
-            <p
-              v-else
-              class="resource-body__empty"
-            >
-              暂无法在此内联展示，请点「书房 →」查看。
-            </p>
-          </div>
-        </div>
+              <p class="msg__text">
+                {{ m.text }}
+              </p>
+              <button
+                v-if="m.retry"
+                type="button"
+                class="tool-chip tool-chip--retry"
+                :disabled="busy"
+                data-testid="retry-chip"
+                @click="onRetry(m)"
+              >
+                ↻ 重试
+              </button>
+            </div>
 
-        <!-- 助手：B站视频卡片（外部资源，按意图检索，不走生成） -->
-        <div
-          v-else-if="m.kind === 'video'"
-          class="msg msg--assistant msg--video"
-        >
-          <div
-            v-if="m.toolLabel"
-            class="msg__tags"
-          >
-            <span class="msg__tool">{{ m.toolIcon }} {{ m.toolLabel }}</span>
+            <!-- 纠错 chips：中置信执行后挂在该 assistant 消息下（点击改派执行）。 -->
+            <div
+              v-if="!m.streaming && m.correctionOptions && m.correctionOptions.length"
+              class="msg-followup"
+              data-testid="correction-chips"
+            >
+              <span class="msg__tool-hint">不是想要这个？</span>
+              <button
+                v-for="opt in m.correctionOptions"
+                :key="opt.intent"
+                type="button"
+                class="tool-chip"
+                :disabled="busy"
+                @click="onCorrectionPick(m, opt.intent)"
+              >
+                {{ opt.icon }} {{ opt.label }}
+              </button>
+            </div>
           </div>
-          <BilibiliVideoCards
-            :keyword="m.videoKeyword ?? ''"
-            heading="B站精选讲解"
-          />
-        </div>
-
-        <!-- 助手：错误 / 澄清 -->
-        <div
-          v-else-if="m.kind === 'error'"
-          class="msg msg--assistant msg--error"
-        >
-          <p class="msg__text">
-            {{ m.text }}
-          </p>
         </div>
       </template>
 
@@ -951,8 +1945,8 @@ onMounted(async () => {
         正在判断该用哪个工具…
       </div>
 
-      <!-- 资源生成：Claude Code 式实时思考文字（替代旧像素事务所动画 + 证据卡） -->
-      <ThinkingStream
+      <!-- 资源生成：多智能体「工作室」双层思考链（缩略=当前人物，点击=全员流水线） -->
+      <AgentStudioStream
         v-if="officeStreamState === 'streaming' && !isOrchestratorActive"
         :traces="workshopSse.traces.value"
         :status="officeStreamState"
@@ -961,8 +1955,8 @@ onMounted(async () => {
         :error-message="workshopSse.error.value?.message ?? null"
         :label="officeStreamLabel || '智能体协同生成中'"
       />
-      <!-- orchestrator 协同：学习总管多智能体 dispatch 流水线（同样渲染思考文字） -->
-      <ThinkingStream
+      <!-- orchestrator 协同：学习总管多智能体 dispatch 流水线（同一双层思考链） -->
+      <AgentStudioStream
         v-if="isOrchestratorActive"
         :traces="activity.traces"
         :status="activity.status"
@@ -1024,6 +2018,9 @@ onMounted(async () => {
   transform: translate(2px, 2px);
   box-shadow: none;
 }
+.chat__quizbar {
+  flex: 0 0 auto;
+}
 .chat__scroll {
   flex: 1 1 auto;
   min-height: 0;
@@ -1077,56 +2074,28 @@ onMounted(async () => {
   background: #fff;
 }
 
-/* 欢迎区 */
-.chat__welcome {
-  margin: auto;
-  max-width: 460px;
-  text-align: center;
-  padding: 24px 16px;
-  color: var(--pyt-color-text-muted);
+/* 助手消息行：左侧头像 + 右侧气泡列 */
+.msg-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  align-self: flex-start;
+  width: 100%;
+  max-width: 92%;
 }
-.chat__welcome-title {
-  margin: 0 0 8px;
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--pyt-color-text-primary);
+.msg-row__avatar {
+  flex: 0 0 auto;
 }
-.chat__welcome-body {
-  margin: 0 0 14px;
-  font-size: 13px;
-  line-height: 1.6;
-}
-.chat__more {
-  max-width: 260px;
-  margin: 0 auto;
-  font-size: 12px;
-  text-align: left;
-}
-.chat__more-summary {
-  text-align: center;
-  font-weight: 700;
-  color: var(--pyt-color-text-hint);
-  cursor: pointer;
-  list-style: none;
-}
-.chat__more-summary::-webkit-details-marker {
-  display: none;
-}
-.chat__more-summary:hover {
-  color: var(--pyt-color-text-primary);
-}
-.chat__more-body {
+.msg-row__body {
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-top: 8px;
-  line-height: 1.6;
+  gap: 6px;
 }
-.chat__more-body p {
-  margin: 0;
-}
-.chat__more-kinds {
-  color: var(--pyt-color-text-muted);
+.msg-row__body > .msg {
+  align-self: flex-start;
+  max-width: 100%;
 }
 
 /* 消息气泡 */
@@ -1150,12 +2119,33 @@ onMounted(async () => {
   border-color: var(--pyt-color-danger);
   color: #b3402a;
 }
-/* 视频卡片气泡与答疑气泡同宽（同为 90% + 左对齐），避免比上方回答更宽显得突兀。 */
+/* 视频卡片气泡与答疑气泡同宽（同为撑满行 + 左对齐），避免比上方回答更宽显得突兀。 */
 .msg--video {
   align-self: flex-start;
-  max-width: 90%;
   width: 100%;
   background: #f5ecd4;
+}
+/* 计划 / 学情 / 书房检索卡：撑满行，像素卡片底色。 */
+.msg--plan,
+.msg--progress,
+.msg--mystudy {
+  width: 100%;
+  background: #fff8df;
+}
+.msg--navigate {
+  background: #f5ecd4;
+}
+.msg--clarify {
+  background: #fff8df;
+  border-style: dashed;
+}
+/* 「接着：xx →」chip：无气泡边框，仅一枚胶囊按钮。 */
+.msg--secondary {
+  align-self: flex-start;
+}
+.msg__text--dim {
+  color: var(--pyt-color-text-muted);
+  font-size: 12px;
 }
 /* 答案内嵌的工具入口 + 相关 B站讲解。 */
 .msg__tools {
@@ -1181,6 +2171,28 @@ onMounted(async () => {
 .msg__tool-videos {
   margin-top: 2px;
 }
+/* 换讲法 chips 行（图解 / 逻辑链 / 示例上手）。 */
+.msg__styles {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  border-top: 1px dashed rgba(110, 79, 29, 0.35);
+  padding-top: 8px;
+}
+/* 轻反馈挂在答案尾部。 */
+.msg__feedback {
+  margin-top: 6px;
+}
+/* 纠错 chips：贴在气泡正下方的无框小行。 */
+.msg-followup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding-left: 4px;
+}
 .tool-chip {
   font-family: inherit;
   font-size: 11px;
@@ -1193,6 +2205,61 @@ onMounted(async () => {
 }
 .tool-chip:hover {
   background: #ffe098;
+}
+.tool-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.tool-chip--secondary {
+  font-size: 12px;
+  padding: 5px 14px;
+  background: #fff3c4;
+  border: 2px solid #8c6a23;
+  box-shadow: 2px 2px 0 rgba(140, 106, 35, 0.45);
+}
+.tool-chip--secondary:active {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+.tool-chip--go {
+  margin-top: 6px;
+  font-weight: 700;
+}
+.tool-chip--retry {
+  margin-top: 6px;
+  border-color: var(--pyt-color-danger);
+  color: #b3402a;
+  background: #fff;
+}
+/* 「⏹ 停止」：流式中可中断。 */
+.msg__stoprow {
+  margin-top: 6px;
+}
+.stop-chip {
+  font-family: inherit;
+  font-size: 11px;
+  padding: 3px 10px;
+  background: #fff;
+  border: 1px solid var(--pyt-color-danger);
+  border-radius: 999px;
+  color: #b3402a;
+  cursor: pointer;
+}
+.stop-chip:hover {
+  background: #f8d7d0;
+}
+/* 「✨ 为你定制」画像个性化小标签。 */
+.msg__pnote {
+  display: inline-block;
+  margin-bottom: 4px;
+  padding: 1px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #7a5b12;
+  background: #fff3c4;
+  border: 1px solid #d4af37;
+  border-radius: 999px;
+  cursor: help;
 }
 .msg__tags {
   display: flex;
@@ -1232,6 +2299,10 @@ onMounted(async () => {
   gap: 8px;
   flex-wrap: wrap;
   margin-bottom: 6px;
+}
+/* 工具调用轨迹折叠行挂在徽章行尾部。 */
+.msg__traceline {
+  margin-left: auto;
 }
 .g-chip {
   display: inline-block;
@@ -1292,7 +2363,6 @@ onMounted(async () => {
 .msg--resource {
   align-self: flex-start;
   width: 100%;
-  max-width: 90%;
   background: #fff8df;
   display: flex;
   flex-direction: column;
@@ -1379,6 +2449,12 @@ onMounted(async () => {
   margin: 0;
   font-size: 12px;
   color: var(--pyt-color-text-muted);
+}
+/* MY_STUDY 命中资源行（复用资源卡头样式）。 */
+.mystudy-item {
+  border-top: 1px dashed rgba(110, 79, 29, 0.25);
+  padding-top: 6px;
+  margin-top: 6px;
 }
 
 /* 意图分流提示 */
