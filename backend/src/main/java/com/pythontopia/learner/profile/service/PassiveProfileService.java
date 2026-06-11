@@ -255,6 +255,134 @@ public class PassiveProfileService {
     return out;
   }
 
+  /** profile_brief 注入的常规维度置信度门槛（信号不足不贴标签，防幻觉）。 */
+  private static final double BRIEF_CONFIDENCE_FLOOR = 0.3;
+
+  /** 情绪维门槛更低（宁可敏感）：低落信号尽早进入 brief，让下游及时调成鼓励语气。 */
+  private static final double BRIEF_EMOTION_CONFIDENCE_FLOOR = 0.25;
+
+  /** 每个维度注入 brief 的 tag 上限（取最近 N 个）。 */
+  private static final int BRIEF_TAG_LIMIT = 3;
+
+  /**
+   * 8 维全量组装紧凑中文画像摘要（profile_brief），供答疑 / 意图路由等下游 prompt 注入。
+   *
+   * <p>规则：常规维度置信度 ≥{@value #BRIEF_CONFIDENCE_FLOOR} 才注入；{@code emotion_persistence}
+   * ≥{@value #BRIEF_EMOTION_CONFIDENCE_FLOOR} 即注入。score 分档：&lt;0.45 →「入门/偏弱」、0.45~0.7 →
+   * 「进阶/一般」、&gt;0.7 →「扎实/较强」。tag 维度取最近 ≤{@value #BRIEF_TAG_LIMIT} 个逗号拼接。
+   *
+   * <p>输出（分号+空格分隔，只含有信号的维度，全空返回 ""）形如：
+   * {@code 认知风格: visual; 知识基础: 入门(0.4); 目标: 期末备考; 偏好: 视频,实例; 易错: off-by-one,缩进;
+   * 情绪: 需鼓励; 实践: 偏弱(0.4); 专业: 文科}
+   *
+   * <p>任何取数异常降级返回 ""（不破坏调用方）。
+   */
+  @Transactional(readOnly = true)
+  public String profileBrief(Long userId) {
+    try {
+      return assembleBrief(getDimensions(userId));
+    } catch (RuntimeException ex) {
+      log.warn("profileBrief degraded for user {}: {}", userId, ex.getMessage());
+      return "";
+    }
+  }
+
+  /** 按固定顺序（认知风格→知识基础→目标→偏好→易错→情绪→实践→专业）拼装有信号的维度段。 */
+  private static String assembleBrief(
+      List<com.pythontopia.learner.profile.dto.ProfileDimensionDto> dims) {
+    Map<String, com.pythontopia.learner.profile.dto.ProfileDimensionDto> byKey =
+        new LinkedHashMap<>();
+    if (dims != null) {
+      for (com.pythontopia.learner.profile.dto.ProfileDimensionDto d : dims) {
+        byKey.put(d.key(), d);
+      }
+    }
+    List<String> parts = new java.util.ArrayList<>();
+
+    // 认知风格：取最后一个 tag（最近主导信号）。
+    var cognitive = byKey.get("cognitive_style");
+    if (passesFloor(cognitive, BRIEF_CONFIDENCE_FLOOR)) {
+      List<String> tags = recentTags(cognitive);
+      if (!tags.isEmpty()) {
+        parts.add("认知风格: " + tags.get(tags.size() - 1));
+      }
+    }
+
+    // 知识基础：分档词 + 保留一位小数的 score。
+    var knowledge = byKey.get("knowledge_base");
+    if (passesFloor(knowledge, BRIEF_CONFIDENCE_FLOOR)) {
+      parts.add("知识基础: " + bandWord(knowledge.score(), "入门", "进阶", "扎实")
+          + "(" + formatScore(knowledge.score()) + ")");
+    }
+
+    appendTagPart(parts, "目标", byKey.get("learning_goal"));
+    appendTagPart(parts, "偏好", byKey.get("learning_preference"));
+    appendTagPart(parts, "易错", byKey.get("error_pattern"));
+
+    // 情绪：低于 0.5 视为需鼓励（门槛更低，宁可敏感）。
+    var emotion = byKey.get("emotion_persistence");
+    if (passesFloor(emotion, BRIEF_EMOTION_CONFIDENCE_FLOOR)) {
+      parts.add("情绪: " + (emotion.score() < 0.5 ? "需鼓励" : "稳定"));
+    }
+
+    // 实践：分档词 + 保留一位小数的 score。
+    var practical = byKey.get("practical_ability");
+    if (passesFloor(practical, BRIEF_CONFIDENCE_FLOOR)) {
+      parts.add("实践: " + bandWord(practical.score(), "偏弱", "一般", "较强")
+          + "(" + formatScore(practical.score()) + ")");
+    }
+
+    appendTagPart(parts, "专业", byKey.get("professional_background"));
+
+    return String.join("; ", parts);
+  }
+
+  private static boolean passesFloor(
+      com.pythontopia.learner.profile.dto.ProfileDimensionDto dim, double floor) {
+    return dim != null && dim.confidence() >= floor;
+  }
+
+  /** tag 类维度段：过门槛且有 tag 才注入，取最近 ≤{@value #BRIEF_TAG_LIMIT} 个逗号拼接。 */
+  private static void appendTagPart(
+      List<String> parts, String label, com.pythontopia.learner.profile.dto.ProfileDimensionDto dim) {
+    if (!passesFloor(dim, BRIEF_CONFIDENCE_FLOOR)) {
+      return;
+    }
+    List<String> tags = recentTags(dim);
+    if (!tags.isEmpty()) {
+      parts.add(label + ": " + String.join(",", tags));
+    }
+  }
+
+  /** 取该维最近 ≤{@value #BRIEF_TAG_LIMIT} 个非空 tag（保持时间正序）。 */
+  private static List<String> recentTags(
+      com.pythontopia.learner.profile.dto.ProfileDimensionDto dim) {
+    if (dim == null || dim.tags() == null || dim.tags().isEmpty()) {
+      return List.of();
+    }
+    List<String> clean = new java.util.ArrayList<>();
+    for (String tag : dim.tags()) {
+      if (tag != null && !tag.isBlank()) {
+        clean.add(tag.trim());
+      }
+    }
+    return clean.size() > BRIEF_TAG_LIMIT
+        ? List.copyOf(clean.subList(clean.size() - BRIEF_TAG_LIMIT, clean.size()))
+        : clean;
+  }
+
+  /** score 分档：&lt;0.45 → low、0.45~0.7 → mid、&gt;0.7 → high。 */
+  private static String bandWord(double score, String low, String mid, String high) {
+    if (score < 0.45) {
+      return low;
+    }
+    return score <= 0.7 ? mid : high;
+  }
+
+  private static String formatScore(double score) {
+    return String.format(java.util.Locale.ROOT, "%.1f", score);
+  }
+
   /**
    * 读时半衰期 decay：久未更新的维度得分向中性 {@value #DEFAULT_SCORE} 轻微回归，raw 分不写库；
    * {@code last_updated} 缺失或不可解析时不衰减。

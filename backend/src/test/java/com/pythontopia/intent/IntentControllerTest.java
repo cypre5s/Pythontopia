@@ -21,7 +21,16 @@ class IntentControllerTest {
 
   private static IntentRouteRequest sampleRequest() {
     return new IntentRouteRequest(
-        "帮我做个 for 循环的思维导图", List.of(), List.of(), null, List.of());
+        "帮我做个 for 循环的思维导图",
+        List.of(),
+        List.of(),
+        null,
+        List.of(),
+        List.of(),
+        null,
+        List.of(),
+        List.of(),
+        null);
   }
 
   @Test
@@ -43,11 +52,11 @@ class IntentControllerTest {
   void studentDelegatesToService() {
     IntentService service = mock(IntentService.class);
     IntentRouteRequest request = sampleRequest();
-    IntentRouteResponse expected =
-        new IntentRouteResponse("MINDMAP", List.of("PY43-KC-001"), "for 循环", 0.9, "ok");
-    when(service.route(eq(request))).thenReturn(expected);
-    IntentController controller = new IntentController(service);
     CurrentUserPrincipal student = new CurrentUserPrincipal(7L, "stu", Role.STUDENT);
+    IntentRouteResponse expected =
+        new IntentRouteResponse("MINDMAP", List.of("PY43-KC-001"), "for 循环", 0.9, "ok", "", null);
+    when(service.route(eq(student), eq(request))).thenReturn(expected);
+    IntentController controller = new IntentController(service);
 
     IntentRouteResponse actual = controller.route(student, request);
 

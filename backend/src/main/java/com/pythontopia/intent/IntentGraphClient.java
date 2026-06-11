@@ -35,7 +35,10 @@ public class IntentGraphClient {
     this.properties = properties;
   }
 
-  public IntentRouteResponse route(IntentRouteRequest request) {
+  /**
+   * @param profileBrief 学生 8 维画像摘要（由 {@link IntentService} 注入，前端不传）；空白时不写入 body。
+   */
+  public IntentRouteResponse route(IntentRouteRequest request, String profileBrief) {
     Map<String, Object> body = new LinkedHashMap<>();
     body.put("message", request.message());
     if (request.manualKcCodes() != null && !request.manualKcCodes().isEmpty()) {
@@ -50,6 +53,30 @@ public class IntentGraphClient {
     }
     if (request.recentKcCodes() != null && !request.recentKcCodes().isEmpty()) {
       body.put("recent_kc_codes", request.recentKcCodes());
+    }
+    // ── R-16 多轮意图理解透传（snake_case 契约见百晓深度优化蓝本 §0）──
+    List<Map<String, Object>> recentTurns = buildRecentTurns(request.recentTurns());
+    if (!recentTurns.isEmpty()) {
+      body.put("recent_turns", recentTurns);
+    }
+    if (request.lastIntent() != null && !request.lastIntent().isBlank()) {
+      body.put("last_intent", request.lastIntent());
+    }
+    if (request.lastKcCodes() != null && !request.lastKcCodes().isEmpty()) {
+      body.put("last_kc_codes", request.lastKcCodes());
+    }
+    List<Map<String, Object>> corrections = buildSessionCorrections(request.sessionCorrections());
+    if (!corrections.isEmpty()) {
+      body.put("session_corrections", corrections);
+    }
+    body.put(
+        "scope",
+        request.scope() == null || request.scope().isBlank() ? "default" : request.scope());
+    if (profileBrief != null && !profileBrief.isBlank()) {
+      // graph 契约 profile_brief max_length=1000：超长截断，避免极端 tag 长度导致 422 断送路由。
+      body.put(
+          "profile_brief",
+          profileBrief.length() > 1000 ? profileBrief.substring(0, 1000) : profileBrief);
     }
 
     HttpHeaders headers = new HttpHeaders();
@@ -71,14 +98,18 @@ public class IntentGraphClient {
 
     if (graph == null || graph.intent() == null) {
       // graph 异常兜底：回落到答疑，避免前端拿到 null intent。
-      return new IntentRouteResponse("ASK", List.of(), request.message(), 0.0, "graph 无响应");
+      return new IntentRouteResponse(
+          "ASK", List.of(), request.message(), 0.0, "graph 无响应", "", null);
     }
     return new IntentRouteResponse(
         graph.intent(),
         graph.kcCodes() != null ? graph.kcCodes() : List.of(),
         graph.focusHint() != null ? graph.focusHint() : "",
         graph.confidence(),
-        graph.reason() != null ? graph.reason() : "");
+        graph.reason() != null ? graph.reason() : "",
+        graph.target() != null ? graph.target() : "",
+        // 无次级意图时 graph 返回 null，保持 null 让前端按「无组合动作」处理。
+        graph.secondaryIntent());
   }
 
   private void setInternalToken(HttpHeaders headers) {
@@ -86,6 +117,45 @@ public class IntentGraphClient {
     if (token != null && !token.isBlank()) {
       headers.set(INTERNAL_TOKEN_HEADER, token);
     }
+  }
+
+  /** 近期对话轮 → snake_case 条目（role 缺失的脏数据条目直接跳过，不污染 graph 校验）。 */
+  private List<Map<String, Object>> buildRecentTurns(List<IntentRouteRequest.Turn> turns) {
+    List<Map<String, Object>> payload = new ArrayList<>();
+    if (turns == null) {
+      return payload;
+    }
+    for (IntentRouteRequest.Turn turn : turns) {
+      if (turn == null || turn.role() == null || turn.role().isBlank()) {
+        continue;
+      }
+      Map<String, Object> entry = new LinkedHashMap<>();
+      entry.put("role", turn.role());
+      entry.put("content", turn.content() != null ? turn.content() : "");
+      payload.add(entry);
+    }
+    return payload;
+  }
+
+  /** 会话内纠错记忆 → snake_case 条目（corrected_intent 缺失的条目无路由价值，跳过）。 */
+  private List<Map<String, Object>> buildSessionCorrections(
+      List<IntentRouteRequest.Correction> corrections) {
+    List<Map<String, Object>> payload = new ArrayList<>();
+    if (corrections == null) {
+      return payload;
+    }
+    for (IntentRouteRequest.Correction correction : corrections) {
+      if (correction == null
+          || correction.correctedIntent() == null
+          || correction.correctedIntent().isBlank()) {
+        continue;
+      }
+      Map<String, Object> entry = new LinkedHashMap<>();
+      entry.put("message", correction.message() != null ? correction.message() : "");
+      entry.put("corrected_intent", correction.correctedIntent());
+      payload.add(entry);
+    }
+    return payload;
   }
 
   private List<Map<String, Object>> buildCourseKcs(List<IntentRouteRequest.CourseKc> kcs) {

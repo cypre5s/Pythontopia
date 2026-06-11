@@ -5,11 +5,21 @@ import java.util.List;
 /**
  * 百晓工坊「意图路由」响应（对前端 camelCase）。
  *
- * <p>{@code intent} 取值：ASK / VIDEO / HANDOUT / MINDMAP / PRACTICE / CODE_LAB / READING /
- * STORYBOARD。前端据此分派：ASK→导师（{@code /api/tutor/ask}）；VIDEO→B站视频卡片
- * （{@code /api/videos/bilibili}，外部检索非生成）；6 类资源→工坊
- * （{@code /api/workshop/resources/stream}）SSE 管线。{@code kcCodes} 为建议知识点（手动 @ 优先），
- * {@code focusHint} 为一句话学习重点。Java 仅透传，{@code intent} 是 String，无需随枚举改动。
+ * <p>{@code intent} 取值即 graph 的 IntentKind 16 值：ASK / VIDEO / REVIEW / HANDOUT / MINDMAP /
+ * PRACTICE / CODE_LAB / READING / STORYBOARD / ASKME / EXPLAIN_CODE / FIX_BUG / PLAN / PROGRESS /
+ * NAVIGATE / MY_STUDY。前端据此分派到导师 / 工坊 / 总管 SSE 或纯前端动作。{@code kcCodes} 为建议
+ * 知识点（手动 @ 优先），{@code focusHint} 为一句话学习重点。Java 仅透传，{@code intent} 是
+ * String，无需随枚举改动。
+ *
+ * <p>R-16 新增：{@code target}（仅 NAVIGATE 给出跳转地标 library/arena/bugmine/world/workshop，
+ * 其余意图为空串）、{@code secondaryIntent}（一句话含两个诉求时的次级意图，无则 null——前端在主
+ * 动作完成后出「接着…」一键 chip）。
  */
 public record IntentRouteResponse(
-    String intent, List<String> kcCodes, String focusHint, double confidence, String reason) {}
+    String intent,
+    List<String> kcCodes,
+    String focusHint,
+    double confidence,
+    String reason,
+    String target,
+    String secondaryIntent) {}

@@ -230,22 +230,56 @@ public class TutorService {
   }
 
   /**
-   * 取学生画像（认知风格 + 易错点）组装 profile_brief；任何失败降级（仅显式 style 仍生效）。
+   * 取学生 8 维富化画像摘要（{@link PassiveProfileService#profileBrief(Long)}）作答疑 profile_brief；
+   * 任何失败降级（仅显式 style 仍生效）。
    *
    * @param styleOverride 学生本次显式选择的讲法（{@code visual}/{@code logical}/{@code trial}），可空；
    *     非空时无视画像置信度门槛，用于「换讲法即时改写当前答案」。
    */
-  private String resolveProfileBrief(Long userId, String styleOverride) {
+  String resolveProfileBrief(Long userId, String styleOverride) {
+    String brief;
     try {
-      return buildProfileBrief(passiveProfileService.getDimensions(userId), styleOverride);
+      brief = passiveProfileService.profileBrief(userId);
     } catch (RuntimeException ex) {
       log.warn("resolveProfileBrief degraded for user {}: {}", userId, ex.getMessage());
-      // 画像取数失败时，仍尊重学生的显式换讲法选择（无画像维度，仅靠 override）。
-      return buildProfileBrief(null, styleOverride);
+      // 画像取数失败时，仍尊重学生的显式换讲法选择（无画像 brief，仅靠 override）。
+      brief = "";
     }
+    return applyStyleOverride(brief, styleOverride);
   }
 
-  /** 兼容旧签名：无显式换讲法时，按画像（含置信度门槛）组装 profile_brief。 */
+  /**
+   * 学生显式换讲法时改写 brief 的认知风格段：brief 含「认知风格: 」段则替换其值为 override，
+   * 否则在最前面插入「认知风格: {override}」；override 空白时原样返回 brief。
+   */
+  static String applyStyleOverride(String brief, String styleOverride) {
+    String base = brief == null ? "" : brief;
+    String style = styleOverride == null ? "" : styleOverride.trim();
+    if (style.isEmpty()) {
+      return base;
+    }
+    String styleSegment = "认知风格: " + style;
+    if (base.isEmpty()) {
+      return styleSegment;
+    }
+    List<String> segments = new ArrayList<>(List.of(base.split("; ")));
+    for (int i = 0; i < segments.size(); i++) {
+      if (segments.get(i).startsWith("认知风格: ")) {
+        segments.set(i, styleSegment);
+        return String.join("; ", segments);
+      }
+    }
+    segments.add(0, styleSegment);
+    return String.join("; ", segments);
+  }
+
+  /**
+   * 兼容旧签名：无显式换讲法时，按画像（含置信度门槛）组装 profile_brief。
+   *
+   * @deprecated R-16 起答疑 brief 改用 {@link PassiveProfileService#profileBrief(Long)} 的 8 维富化
+   *     组装（{@link #resolveProfileBrief}），本两维（认知风格+易错）旧版仅保留兼容既有调用方/测试。
+   */
+  @Deprecated
   static String buildProfileBrief(List<ProfileDimensionDto> dims) {
     return buildProfileBrief(dims, null);
   }
@@ -255,7 +289,11 @@ public class TutorService {
    * 「换讲法」，无视置信度门槛）→ 否则取 cognitive_style 且置信度≥0.3（防幻觉，信号不足不贴标签）。
    * 易错点取 error_pattern 最近至多 3 个 tag，无论是否有 override 都照常附带。
    * 格式："认知风格: &lt;tag&gt;; 易错: &lt;a,b,c&gt;"，无信号则空串。
+   *
+   * @deprecated R-16 起答疑 brief 改用 {@link PassiveProfileService#profileBrief(Long)} 的 8 维富化
+   *     组装（{@link #resolveProfileBrief}），本两维（认知风格+易错）旧版仅保留兼容既有调用方/测试。
    */
+  @Deprecated
   static String buildProfileBrief(List<ProfileDimensionDto> dims, String styleOverride) {
     // 显式换讲法：学生的主动选择，绕过画像置信度门槛。
     String style =

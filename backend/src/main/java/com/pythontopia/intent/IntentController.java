@@ -32,7 +32,7 @@ public class IntentController {
   public IntentRouteResponse route(
       @CurrentUser CurrentUserPrincipal user, @Valid @RequestBody IntentRouteRequest request) {
     requireStudent(user);
-    return service.route(request);
+    return service.route(user, request);
   }
 
   private void requireStudent(CurrentUserPrincipal user) {
