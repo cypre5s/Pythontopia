@@ -19,7 +19,7 @@ ARG NO_PROXY
 ENV HTTP_PROXY=${HTTP_PROXY} HTTPS_PROXY=${HTTPS_PROXY} NO_PROXY=${NO_PROXY}
 RUN useradd --system --create-home --shell /sbin/nologin pythontopia \
     && apt-get update \
-    && apt-get install -y --no-install-recommends curl python3-minimal \
+    && apt-get install -y --no-install-recommends curl python3-minimal ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=builder /workspace/target/*.jar /app/app.jar

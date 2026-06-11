@@ -76,6 +76,46 @@ cd .. && ./dev.sh
 - 改 `PYT_DB_PASSWORD` 后：要么执行上面的 `ALTER USER`，要么 `down -v` 重建卷；
 - `./dev.sh` 在启动后端前会做一次**宿主密码探测**，失败则尝试 `ALTER USER` 与 `.env` 对齐（见 `dev.sh` 内 `verify_postgres_password_from_host`）。
 
+## 踩坑记录：讯飞多模态连不通（fake-ip DNS）
+
+### 现象
+
+百晓工坊「合成短视频」一直降级：文生图出占位图（`media_asset.source=PLACEHOLDER`），
+TTS 配音卡住，最终 `media_job` 失败或停在「配音师朗读」。但 `scripts/verify_xfyun.py`
+（Python）却能成功合成音频/图片。
+
+### 根因
+
+部分本机网络用 **fake-ip DNS**（如 Clash/代理软件把讯飞域名解析到 `198.18.x.x`，
+属基准测试保留段），直连这个假 IP 必然超时。Python 的 `urllib`/`websockets` 会自动读
+`HTTPS_PROXY` 环境变量走代理，**但 Java `HttpClient` 默认不读环境代理**，于是
+`XfyunImageService`(TTI) / `XfyunTtsService`(TTS) connect timeout → 恒降级。
+
+判断方法：`getent ahosts spark-api.cn-huabei-1.xf-yun.com` 若返回 `198.18.x.x` 即 fake-ip。
+
+### 修复
+
+后端 JVM 必须带代理参数（讯飞走代理、本地服务直连）：
+
+- `./dev.sh`：已内置，由 `PYT_XFYUN_PROXY`（默认回退 `PYT_BILI_PROXY`=7892）转成
+  `-Dhttps.proxyHost/Port` 注入；直连网络可在 `deploy/.env` 设 `PYT_XFYUN_PROXY=`（空）。
+- `docker compose`：backend 的 `JAVA_OPTS` 已内置，经 `host.docker.internal:7892` 走宿主代理
+  （`PYT_XFYUN_PROXY_HOST/PORT` 可覆盖）；直连网络设 `PYT_XFYUN_PROXY_PORT=`（空）。
+
+验证（拿到 token 后提交合成作业，应 `source=XFYUN/degraded=false`、最终 mp4）：
+
+```bash
+python3 scripts/verify_xfyun.py   # 独立验证讯飞凭据/服务（走系统代理）
+```
+
+## 踩坑记录：合成短视频需 ffmpeg
+
+`media_job` 合成依赖 ffmpeg；缺失时作业置 `FAILED`(`VIDEO_COMPOSE_UNAVAILABLE`)，其它链路不受影响。
+
+- compose：后端镜像已内置 ffmpeg（`backend/Dockerfile`）。
+- `./dev.sh`：本机需自备。`sudo apt install ffmpeg`；无 root 时
+  `pip install imageio-ffmpeg` 后 `ln -sf $(python3 -c 'import imageio_ffmpeg;print(imageio_ffmpeg.get_ffmpeg_exe())') ~/.local/bin/ffmpeg`。
+
 ## 可选初始化（首次或 RAG 为空）
 
 ```bash

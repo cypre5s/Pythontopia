@@ -177,6 +177,27 @@ export PYT_SPARK_APP_ID="${PYT_SPARK_APP_ID:-}"
 export PYT_SPARK_API_KEY="${PYT_SPARK_API_KEY:-}"
 export PYT_SPARK_API_SECRET="${PYT_SPARK_API_SECRET:-}"
 
+# 讯飞代理（关键踩坑）：部分本机网络用 fake-ip DNS（如 198.18.x.x），Java HttpClient
+# 默认不读 HTTPS_PROXY 环境变量，会导致文生图(TTI)/语音合成(TTS) connect timeout 而恒降级。
+# 这里把 PYT_BILI_PROXY（默认 7892）转成 JVM 代理参数注入后端，并用 nonProxyHosts 排除
+# 本地 PG/graph/rag，使「讯飞走代理、本地直连」。代理留空则不注入（直连网络无需代理）。
+# 详见 docs/dev-startup.md「讯飞多模态连不通（fake-ip DNS）」。
+XFYUN_PROXY="${PYT_XFYUN_PROXY:-${PYT_BILI_PROXY:-http://127.0.0.1:7892}}"
+BACKEND_JAVA_PROXY_OPTS=""
+if [[ -n "$XFYUN_PROXY" ]]; then
+  proxy_hostport="${XFYUN_PROXY#http://}"; proxy_hostport="${proxy_hostport#https://}"
+  proxy_host="${proxy_hostport%%:*}"; proxy_port="${proxy_hostport##*:}"
+  BACKEND_JAVA_PROXY_OPTS="-Dhttps.proxyHost=${proxy_host} -Dhttps.proxyPort=${proxy_port} -Dhttp.proxyHost=${proxy_host} -Dhttp.proxyPort=${proxy_port} -Dhttp.nonProxyHosts=localhost|127.0.0.1|::1"
+  c_info "后端讯飞调用经代理 ${proxy_host}:${proxy_port}（本地服务直连）"
+fi
+
+# ffmpeg：合成短视频(Track B media job)依赖。缺失则合成作业置 FAILED(VIDEO_COMPOSE_UNAVAILABLE)，
+# 其它链路不受影响。仅提示，不强制（无 root 可 pip install imageio-ffmpeg 后软链进 PATH）。
+if ! command -v ffmpeg >/dev/null 2>&1; then
+  c_warn "未检测到 ffmpeg：百晓工坊「合成短视频」会降级为 VIDEO_COMPOSE_UNAVAILABLE。"
+  c_warn "  安装：sudo apt install ffmpeg  或  pip install imageio-ffmpeg 后软链进 PATH。"
+fi
+
 verify_postgres_password_from_host || exit 1
 
 trap cleanup_on_exit INT TERM EXIT
@@ -186,7 +207,8 @@ if wait_http_ok "http://127.0.0.1:18080/healthz" 1 1; then
 else
   c_info "启动后端 (mvn spring-boot:run)，日志: $BACKEND_LOG"
   : > "$BACKEND_LOG"
-  ( cd "$BACKEND_DIR" && setsid mvn -q -s .mvn/settings.xml spring-boot:run >>"$BACKEND_LOG" 2>&1 ) &
+  # JAVA_TOOL_OPTIONS 注入讯飞代理参数（spring-boot:run 派生的 JVM 会继承）；为空则不影响。
+  ( cd "$BACKEND_DIR" && JAVA_TOOL_OPTIONS="$BACKEND_JAVA_PROXY_OPTS" setsid mvn -q -s .mvn/settings.xml spring-boot:run >>"$BACKEND_LOG" 2>&1 ) &
   echo "$!" > "$BACKEND_PID_FILE"
 
   c_info "等待后端健康 (:18080/healthz)…最长 ~3 分钟（首次编译较慢）"
