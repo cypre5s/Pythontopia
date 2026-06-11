@@ -17,6 +17,17 @@ export interface SseTraceEvent {
   total?: number;
   /** image_understanding：识别描述字符数。 */
   chars?: number;
+  /**
+   * 「工作室人物」契约（阶段0 冻结，向后兼容可选）：
+   * role_key 映射 agentActors 角色/头像；actor_label 后端直给的角色名；
+   * message 该步人话动作；percent 该步/整体百分比；note 中间产物摘要。
+   * 旧流不发这些字段时，前端 AgentStudioStream 用 node 名回退推断角色。
+   */
+  role_key?: string;
+  actor_label?: string;
+  message?: string;
+  percent?: number;
+  note?: string;
 }
 
 /** 资源流开场「工位清单」事件（仅资源流发送）。 */
@@ -24,6 +35,8 @@ export interface SsePlanNode {
   node: string;
   agent_label: string;
   kind: string;
+  /** 「工作室人物」契约（阶段0 冻结，可选）：映射 agentActors 角色卡/头像。 */
+  role_key?: string;
 }
 
 export interface SsePlan {

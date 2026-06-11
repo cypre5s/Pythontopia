@@ -59,6 +59,8 @@ export interface UseEndlessRunReturn {
   bestStreak: Ref<number>;
   totalScore: Ref<number>;
   attempts: Ref<number>;
+  /** 本轮（startRun 起）累计答对题数，供无尽补星小结上报（§7）。 */
+  passedCount: Ref<number>;
   currentDifficulty: Ref<number>;
   history: Ref<EndlessHistoryEntry[]>;
   elapsedSec: Ref<number>;
@@ -141,6 +143,7 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
   const bestStreak = ref<number>(0);
   const totalScore = ref<number>(0);
   const attempts = ref<number>(0);
+  const passedCount = ref<number>(0);
   const currentDifficulty = ref<number>(2);
   const elapsedSec = ref<number>(0);
   const errorMessage = ref<string>('');
@@ -211,6 +214,7 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
     streak.value = 0;
     totalScore.value = 0;
     attempts.value = 0;
+    passedCount.value = 0;
     currentDifficulty.value = 2;
     await _fetchAndStart();
   }
@@ -272,6 +276,7 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
 
     if (passed) {
       streak.value += 1;
+      passedCount.value += 1;
       if (streak.value > bestStreak.value) bestStreak.value = streak.value;
       // 连胜自适应：连 1 → +0.5；连 2+ → +1
       const bump = streak.value >= 2 ? 1 : 0.5;
@@ -343,6 +348,7 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
     bestStreak,
     totalScore,
     attempts,
+    passedCount,
     currentDifficulty,
     history,
     elapsedSec,

@@ -15,6 +15,8 @@ export interface StageTaskProgress {
   videoWatchedSec?: number;
   /** 「学」：当前已读 page_id 集合。 */
   readPageIds?: number[];
-  /** 「练」：当前已完成 problem_id 集合。 */
+  /** 「练-OJ」：当前已完成 problem_id 集合。 */
   doneProblemIds?: number[];
+  /** 「练-客观题」：当前已答对 question_id 集合（R-14 新增）。 */
+  correctQuestionIds?: number[];
 }

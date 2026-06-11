@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { playDialogClose, playDialogOpen } from '@/composables/useStardewFx';
 import { fetchDialogContext } from '@/api/dialog';
-import { http } from '@/api/http';
+import { http, ApiClientError } from '@/api/http';
 import { useLearningStore } from '@stores/learning';
 import { useToastStore } from '@stores/toast';
 import type { DialogContextDto } from '@/api/dto/DialogContextDto';
@@ -313,16 +313,54 @@ async function fetchJson<T>(url: string, timeoutMs = 8000): Promise<T> {
 }
 
 /**
+ * 寒暄请求的独立超时（ms）：比全局 axios（10s）更短，让真正的慢链路更快落 fallback，
+ * 少让玩家对着「正在回忆…」干等。快档模型（flash）寒暄实测约 3s，8s 对正常调用绰绰有余。
+ */
+const GREETING_TIMEOUT_MS = 8_000;
+
+/** 寒暄请求最大尝试次数：瞬时快失败重试一次；慢调用（＝超时）不重试，避免叠加等待。 */
+const GREETING_MAX_ATTEMPTS = 2;
+
+/**
+ * 是否值得重试：仅对「通常很快返回」的瞬时故障重试——后端 5xx 或网络错误（如 graph 短暂抖动）。
+ * 超时（TIMEOUT）说明本就慢，再试只会叠加等待；4xx 是确定性错误，重试无意义——两者一律不重试。
+ *
+ * <b>依赖后端「失败不缓存」</b>：重试会触发后端一次全新计算（fresh graph 调用），故瞬时抖动可被自愈；
+ * 若后端缓存了失败，这里的重试将永远拿到同一份降级结果而无法恢复。
+ */
+function isRetryableGreetingError(err: unknown): boolean {
+  if (err instanceof ApiClientError) {
+    if (err.code === 'NETWORK_ERROR') return true;
+    if (typeof err.status === 'number' && err.status >= 500) return true;
+  }
+  return false;
+}
+
+/**
  * 拉取 NPC 首句个性化寒暄（JWT 经 axios http 实例自动注入 Authorization）。
  *
  * 该请求是「可选 / 后台」性质：失败已有降级（fallback 提示 + 照常走脚本），故 `suppressNetworkToast=true`，
- * 不弹全局网络错误 toast。按 collision 约定，寒暄 API 内联在 dialog store，不进共享 api index。
+ * 不弹全局网络错误 toast。叠加独立超时 + 瞬时快失败重试一次（见 {@link isRetryableGreetingError}），
+ * 避免下游一次性抖动就闪「记忆服务暂不可用」。按 collision 约定，寒暄 API 内联在 dialog store，不进共享 api index。
  */
 async function fetchNpcGreeting(npcKey: string): Promise<NpcGreetingDto> {
-  const res = await http.get<NpcGreetingDto>(`/api/npc/${encodeURIComponent(npcKey)}/greeting`, {
-    suppressNetworkToast: true,
-  });
-  return res.data;
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= GREETING_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      const res = await http.get<NpcGreetingDto>(`/api/npc/${encodeURIComponent(npcKey)}/greeting`, {
+        suppressNetworkToast: true,
+        timeout: GREETING_TIMEOUT_MS,
+      });
+      return res.data;
+    } catch (err) {
+      lastError = err;
+      if (attempt < GREETING_MAX_ATTEMPTS && isRetryableGreetingError(err)) {
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastError;
 }
 
 export const useDialogStore = defineStore('dialog', {

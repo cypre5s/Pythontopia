@@ -25,6 +25,7 @@ import {
   ensureChapterMapSceneStarted,
   onChapterMapSelect,
   setChapterMapData,
+  setChapterMapSelection,
   stopChapterMapScene,
   type ChapterMapNode,
   type MainlineGameLike,
@@ -44,12 +45,24 @@ let createdGame = false;
 let borrowedCanvas: HTMLCanvasElement | null = null;
 let originalCanvasParent: HTMLElement | null = null;
 
+// 章节学习目标（点击节点后才在地图上弹出显示）：通识性概述，非课件原文引用。
+const CHAPTER_OBJECTIVES: Record<number, string> = {
+  1: '认识计算思维，了解计算机与计算工具的发展。',
+  2: '搭好 Python 环境，掌握变量、数据类型与输入输出。',
+  3: '看懂进制与编码，玩转数值与字符串处理。',
+  4: '用顺序、分支与循环，让程序自动跑起来。',
+  5: '用列表、字典、集合组织与处理数据。',
+  6: '学会读写文件，做简单的数据存取与分析。',
+  7: '用函数、递归、模块与面向对象封装复杂度。',
+};
+
 const nodes = computed<ChapterMapNode[]>(() =>
   store.chapters.map((ch) => ({
     chapter: ch.chapter,
     title: ch.title,
     state: chapterNodeState(ch),
     stars: ch.stars,
+    objective: CHAPTER_OBJECTIVES[ch.chapter],
   })),
 );
 
@@ -58,6 +71,8 @@ const selectedView = computed(() => store.selectedChapterView);
 
 // 节点数据变化 → 喂给场景（setChapterMapData 在场景未就绪时只缓存，就绪后自动重绘）。
 watch(nodes, (next) => setChapterMapData(next), { immediate: true });
+// 选中章节变化 → 同步给场景高亮 + 弹出该节点目标说明牌。
+watch(selectedChapter, (ch) => setChapterMapSelection(ch), { immediate: true });
 
 function onSelect(chapter: number): void {
   store.selectChapter(chapter);
@@ -144,6 +159,10 @@ async function onClaimErrorbook(chapter: number): Promise<void> {
   }
 }
 
+function closeDrawer(): void {
+  store.selectChapter(null);
+}
+
 function back(): void {
   void router.push('/world');
 }
@@ -154,7 +173,10 @@ function retry(): void {
 
 onMounted(async () => {
   onChapterMapSelect((chapter) => store.selectChapter(chapter));
-  await store.load();
+  // 强制刷新：stage 学习页的三件套打点不经 mainline store（组件直连 API），
+  // 返回地图时缓存的 overview 已过期；force 拉权威快照（有缓存时不闪 loading，
+  // 页面 loading 态仅在 !isLoaded 时展示）。
+  await store.load(true);
   mountScene();
   setChapterMapData(nodes.value);
 });
@@ -224,30 +246,46 @@ onBeforeUnmount(() => {
         v-else
         class="map-body"
       >
-        <aside class="map-nodes">
+        <!-- 键盘可达 / 测试可达的章节选择镜像：视觉隐藏，地图节点为主交互。 -->
+        <aside class="map-nodes-a11y">
           <ChapterNodeList
             :chapters="store.chapters"
             :selected="selectedChapter"
             @select="onSelect"
           />
         </aside>
-        <div class="map-detail">
-          <ChapterStagePanel
+
+        <transition name="map-drawer">
+          <aside
             v-if="selectedView"
-            :chapter="selectedView"
-            @enter-stage="goEnterStage"
-            @open-test="goOpenTest"
-            @open-endless="goOpenEndless"
-            @claim-errorbook="onClaimErrorbook"
-          />
-          <p
-            v-else
-            class="map-state"
-            data-testid="mainline-empty"
+            class="map-drawer"
           >
-            点击左侧章节查看小节进度。
-          </p>
-        </div>
+            <button
+              type="button"
+              class="map-drawer__close"
+              data-testid="mainline-drawer-close"
+              aria-label="收起详情，查看完整地图"
+              @click="closeDrawer"
+            >
+              ✕
+            </button>
+            <ChapterStagePanel
+              :chapter="selectedView"
+              @enter-stage="goEnterStage"
+              @open-test="goOpenTest"
+              @open-endless="goOpenEndless"
+              @claim-errorbook="onClaimErrorbook"
+            />
+          </aside>
+        </transition>
+
+        <p
+          v-if="!selectedView"
+          class="map-hint"
+          data-testid="mainline-empty"
+        >
+          🪧 点击地图上的章节牌子，查看小节进度与目标
+        </p>
       </div>
     </div>
   </section>
@@ -328,28 +366,94 @@ onBeforeUnmount(() => {
   border-color: var(--pyt-color-danger);
   color: var(--pyt-color-danger);
 }
+/* 地图当主角：body 本身不拦截指针（让点击穿透到 Phaser 地图节点），
+   仅抽屉 / 提示 / 隐藏镜像各自接管自己的指针区域。 */
 .map-body {
-  display: grid;
-  grid-template-columns: minmax(240px, 320px) 1fr;
-  gap: var(--pyt-space-3);
-  align-items: start;
+  position: relative;
+  flex: 1 1 auto;
   min-height: 0;
+  pointer-events: none;
 }
-.map-nodes {
-  background: var(--pyt-color-bg-soft);
-  border: 3px solid var(--pyt-color-border-strong);
-  border-radius: var(--pyt-radius-lg);
-  padding: var(--pyt-space-3);
-  box-shadow: var(--pyt-shadow-card);
-  max-height: calc(100dvh - 120px);
+/* 章节列表镜像：视觉隐藏但保留在无障碍树 / DOM（键盘与测试可达）。 */
+.map-nodes-a11y {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+/* 右侧玻璃抽屉：点击节点浮出，承载小节三件套与入口。 */
+.map-drawer {
+  pointer-events: auto;
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: clamp(320px, 38vw, 480px);
   overflow: auto;
+  padding-left: var(--pyt-space-1);
 }
-.map-detail {
-  min-width: 0;
+.map-drawer :deep(.stage-panel) {
+  background: rgba(255, 248, 226, 0.92);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  padding-top: var(--pyt-space-5);
+}
+.map-drawer__close {
+  position: absolute;
+  top: var(--pyt-space-2);
+  right: var(--pyt-space-2);
+  z-index: 2;
+  width: 28px;
+  height: 28px;
+  font-family: var(--pyt-font-pixel);
+  font-size: var(--pyt-font-size-sm);
+  line-height: 1;
+  color: var(--pyt-color-text-primary);
+  background: var(--pyt-color-warning-bg);
+  border: 2px solid var(--pyt-color-text-primary);
+  border-radius: var(--pyt-radius-md);
+  box-shadow: var(--pyt-shadow-card);
+  cursor: pointer;
+}
+.map-drawer__close:active {
+  transform: translate(1px, 1px);
+  box-shadow: none;
+}
+.map-drawer-enter-active,
+.map-drawer-leave-active {
+  transition: transform var(--pyt-motion-base), opacity var(--pyt-motion-base);
+}
+.map-drawer-enter-from,
+.map-drawer-leave-to {
+  transform: translateX(16px);
+  opacity: 0;
+}
+/* 未选中时的浮动提示。 */
+.map-hint {
+  pointer-events: auto;
+  position: absolute;
+  left: 50%;
+  bottom: var(--pyt-space-5);
+  transform: translateX(-50%);
+  margin: 0;
+  padding: var(--pyt-space-2) var(--pyt-space-4);
+  font-size: var(--pyt-font-size-sm);
+  color: var(--pyt-color-text-primary);
+  background: rgba(255, 248, 226, 0.92);
+  border: 2px solid var(--pyt-color-border-strong);
+  border-radius: var(--pyt-radius-full);
+  box-shadow: var(--pyt-shadow-card);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
 }
 @media (max-width: 760px) {
-  .map-body {
-    grid-template-columns: 1fr;
+  .map-drawer {
+    width: min(92vw, 480px);
   }
 }
 </style>

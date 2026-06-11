@@ -210,7 +210,7 @@ describe('BossPage', () => {
     expect(wrapper.find('[data-testid="boss-error"]').exists()).toBe(true);
   });
 
-  it('通关 4 stage 后进 victory 状态', async () => {
+  it('通关 4 stage 后进 victory 状态，并把闯关塔第 10 关记为 cleared', async () => {
     apiMocks.requestBossProblem.mockResolvedValue({ ...SAMPLE_PROBLEM });
 
     await router.push('/boss/1');
@@ -228,6 +228,9 @@ describe('BossPage', () => {
       }
     }
     expect(wrapper.find('[data-testid="boss-victory"]').exists()).toBe(true);
+    // 章 BOSS = 闯关塔第 10 关：victory 必须闭合 70 关进度链。
+    const { useArenaStore } = await import('@stores/arena');
+    expect(useArenaStore().getProgress('1-10').cleared).toBe(true);
   });
 
   it('计时器随秒数推进（手动 tick）', async () => {

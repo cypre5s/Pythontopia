@@ -53,3 +53,95 @@ export async function searchBilibili(keyword: string, limit = 8): Promise<Bilibi
   });
   return Array.isArray(res.data) ? res.data : [];
 }
+
+// ───────────────────────────── 视频「概述 + 关键时间点」 ─────────────────────────────
+//
+// 后端端点（BilibiliInsightController，需鉴权 / axios 带 JWT）：
+//   POST /api/videos/bilibili/insight  body={bvid,question,kcCodes} → BilibiliInsightDto
+// 取数与 LLM 概述在 pythontopia-graph（VideoInsightAgent + timeline_grounding）。
+//
+// 防幻觉红线（与「不伪造课件页码」同级）：`keyPoints[].tSec` 只能来自真实
+// outline / 分 P 时间轴，后端 `timeline_grounding` 已强校验剔除非法点；这里再做一层防御性
+// 归一（丢弃 tSec 非法 / label 为空的脏数据），确保前端**绝不**渲染编造或坏掉的跳转点。
+
+/** 关键时间点来源（审计用）：`ai_conclusion`=官方 AI 总结；`pages`=分 P 时间轴。 */
+export type BilibiliKeyPointSource = 'ai_conclusion' | 'pages';
+
+/** 概述依据：`ai_conclusion` / `pages` / `metadata_only`（仅标题简介、无可用时间轴）。 */
+export type BilibiliInsightBasis = 'ai_conclusion' | 'pages' | 'metadata_only';
+
+export interface BilibiliKeyPoint {
+  /** 跳转秒数：来自真实 outline / 分 P 时间轴（后端强校验，前端再过滤一层防脏）。 */
+  tSec: number;
+  /** 该时间点讲了什么（基于真实 outline 概括，不编造）。 */
+  label: string;
+  /** 时间点来源（审计用）。 */
+  source: BilibiliKeyPointSource;
+}
+
+export interface BilibiliInsightDto {
+  /** B 站视频稳定标识。 */
+  bvid: string;
+  /** 针对学生问题的简要概述；LLM 不可用 / 取数失败时可能为空串（前端给中性占位、不伪造）。 */
+  overview: string;
+  /** 关键时间点（真实时间轴；拿不到则为空，**绝不编造秒数**）。 */
+  keyPoints: BilibiliKeyPoint[];
+  /** 概述依据（审计用）。 */
+  basedOn: BilibiliInsightBasis;
+  /** best-effort 降级标记：true 时前端只显示概述 + 中性提示，不伪造时间点。 */
+  degraded: boolean;
+}
+
+function asPlainObject(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
+}
+
+function normalizeKeyPoint(raw: unknown): BilibiliKeyPoint | null {
+  const obj = asPlainObject(raw);
+  const tSec = obj.tSec;
+  const label = obj.label;
+  // 防御性过滤：tSec 必须是 ≥0 的有限数，label 必须非空。否则丢弃（不渲染坏跳转点）。
+  if (typeof tSec !== 'number' || !Number.isFinite(tSec) || tSec < 0) return null;
+  if (typeof label !== 'string' || label.trim().length === 0) return null;
+  const source: BilibiliKeyPointSource = obj.source === 'ai_conclusion' ? 'ai_conclusion' : 'pages';
+  return { tSec: Math.floor(tSec), label: label.trim(), source };
+}
+
+function normalizeInsight(bvid: string, raw: unknown): BilibiliInsightDto {
+  const obj = asPlainObject(raw);
+  const keyPointsRaw = Array.isArray(obj.keyPoints) ? obj.keyPoints : [];
+  const keyPoints = keyPointsRaw
+    .map(normalizeKeyPoint)
+    .filter((kp): kp is BilibiliKeyPoint => kp !== null);
+  const basedOnRaw = obj.basedOn;
+  const basedOn: BilibiliInsightBasis =
+    basedOnRaw === 'ai_conclusion' || basedOnRaw === 'pages' ? basedOnRaw : 'metadata_only';
+  return {
+    bvid: typeof obj.bvid === 'string' && obj.bvid.length > 0 ? obj.bvid : bvid,
+    overview: typeof obj.overview === 'string' ? obj.overview : '',
+    keyPoints,
+    basedOn,
+    degraded: obj.degraded === true,
+  };
+}
+
+/**
+ * 拉取单个 B 站视频的「基于学生问题的概述 + 关键时间点」。
+ *
+ * - `question` 缺省时由调用方用关键词兜底（见 `BilibiliVideoCards`）。
+ * - 失败语义：任何失败抛错，由调用方显示「AI 讲解暂不可用 + 重试」内联占位；
+ *   不把失败伪装成「空概述」（吞错会误导学生以为视频没内容）。
+ * - 用 `suppressNetworkToast`：本请求自带内联降级，不该把全局网络 toast 弹给学生。
+ */
+export async function fetchBilibiliInsight(
+  bvid: string,
+  question = '',
+  kcCodes: string[] = [],
+): Promise<BilibiliInsightDto> {
+  const res = await http.post<unknown>(
+    '/api/videos/bilibili/insight',
+    { bvid, question, kcCodes },
+    { suppressNetworkToast: true },
+  );
+  return normalizeInsight(bvid, res.data);
+}

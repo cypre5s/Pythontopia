@@ -20,6 +20,7 @@
  */
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ApiClientError } from '@/api/http';
 import {
   useDialogStore,
   __resetChoiceListenersForTests,
@@ -46,7 +47,21 @@ vi.mock('@/api/dialog', () => ({
 // 统一 mock 该实例，避免真实网络并让寒暄状态在断言里可控；默认返回「无记忆」(none)，
 // 具体寒暄用例按需用 mockResolvedValueOnce / mockRejectedValueOnce 覆盖首个调用。
 const httpMocks = vi.hoisted(() => ({ get: vi.fn() }));
-vi.mock('@/api/http', () => ({ http: httpMocks }));
+// 同时导出 ApiClientError：dialog store 现在按其 code/status 判定寒暄是否值得重试，
+// 真实类在被 mock 的模块里不可用，这里提供等价最小实现供测试构造可重试/不可重试错误。
+vi.mock('@/api/http', () => ({
+  http: httpMocks,
+  ApiClientError: class ApiClientError extends Error {
+    code: string;
+    status: number | undefined;
+    constructor(error: { code: string; message?: string }, status?: number) {
+      super(error.message ?? error.code);
+      this.name = 'ApiClientError';
+      this.code = error.code;
+      this.status = status;
+    }
+  },
+}));
 
 interface GreetingDtoLike {
   greeting: string;
@@ -632,6 +647,7 @@ describe('dialog store - NPC greeting (R-15 §8)', () => {
 
     expect(httpMocks.get).toHaveBeenCalledWith('/api/npc/foreman_bug/greeting', {
       suppressNetworkToast: true,
+      timeout: 8_000,
     });
     expect(store.greetingStatus).toBe('ready');
     expect(store.greetingText).toContain('for 循环错了 3 次');
@@ -710,11 +726,41 @@ describe('dialog store - NPC greeting (R-15 §8)', () => {
     expect(store.currentNodeId).toBe('greet');
     expect(httpMocks.get).toHaveBeenCalledWith('/api/npc/mayor_py/greeting', {
       suppressNetworkToast: true,
+      timeout: 8_000,
     });
 
     await flush();
     expect(store.greetingStatus).toBe('ready');
     expect(store.greetingText).toContain('嗨');
+  });
+
+  it('fetchGreeting retries once on a transient 5xx then resolves ready (no fallback flash)', async () => {
+    httpMocks.get
+      .mockRejectedValueOnce(new ApiClientError({ code: 'INTERNAL_ERROR', message: 'boom' }, 503))
+      .mockResolvedValueOnce({
+        data: greetingDto({ greeting: '嗨，同学', available: true, grounded: true }),
+      });
+    const store = useDialogStore();
+    store.visible = true;
+    store.npcKey = 'foreman_bug';
+
+    await store.fetchGreeting('foreman_bug');
+
+    expect(httpMocks.get).toHaveBeenCalledTimes(2);
+    expect(store.greetingStatus).toBe('ready');
+    expect(store.greetingText).toContain('嗨');
+  });
+
+  it('fetchGreeting does not retry on timeout (slow call) and falls back', async () => {
+    httpMocks.get.mockRejectedValueOnce(new ApiClientError({ code: 'TIMEOUT', message: 'timeout' }));
+    const store = useDialogStore();
+    store.visible = true;
+    store.npcKey = 'foreman_bug';
+
+    await store.fetchGreeting('foreman_bug');
+
+    expect(httpMocks.get).toHaveBeenCalledTimes(1);
+    expect(store.greetingStatus).toBe('fallback');
   });
 
   it('close resets greeting state', () => {

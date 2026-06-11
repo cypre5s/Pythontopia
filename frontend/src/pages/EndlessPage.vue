@@ -15,10 +15,14 @@ import { KindRouter } from '@/components/arena';
 import { useEndlessRun } from '@/composables/useEndlessRun';
 import { MAIN_QUEST_BOSSES } from '@/data/bossCatalog';
 import { useArenaStore } from '@stores/arena';
+import { useMainlineStore } from '@stores/mainline';
+import { useToastStore } from '@stores/toast';
 
 const router = useRouter();
 const route = useRoute();
 const arena = useArenaStore();
+const mainline = useMainlineStore();
+const toast = useToastStore();
 
 // 从 query 读 ?chapter & ?arenaLevel：EndlessPage 同时承担「随机刷题」与
 // 「ArenaPage 闯关塔单关入口」两个角色。arenaLevel 形如 "1-3"，通关后回 ArenaPage markCleared。
@@ -71,6 +75,36 @@ watch(
   },
 );
 
+// 无尽补星小结上报（r15 §7：锁定本章 + 单轮答对 ≥8 且正确率 ≥80%）。
+// 达标即上报一次（每轮至多一次，失败可在下次达标变化时重试）；门槛与
+// 后端 MainlineRecoveryService 常量一致，服务端会重新校验 + 每日每章防刷。
+const ENDLESS_STAR_MIN_CORRECT = 8;
+const ENDLESS_STAR_MIN_ACCURACY = 0.8;
+const summaryReported = ref<boolean>(false);
+
+watch(
+  () => [run.passedCount.value, run.attempts.value] as const,
+  async ([correct, total]) => {
+    const chapter = focusChapter.value;
+    if (summaryReported.value || chapter === null || total <= 0) return;
+    if (correct < ENDLESS_STAR_MIN_CORRECT || correct / total < ENDLESS_STAR_MIN_ACCURACY) return;
+    summaryReported.value = true;
+    try {
+      const awarded = await mainline.submitEndlessSummary({
+        chapter,
+        correct,
+        total,
+        streak: run.streak.value,
+      });
+      if (awarded) {
+        toast.show(`第 ${chapter} 章无尽挑战补星 +1 ★`, 'success');
+      }
+    } catch {
+      summaryReported.value = false; // 上报失败：允许继续答题后重试。
+    }
+  },
+);
+
 let secondTimer: number | null = null;
 
 onMounted(() => {
@@ -86,6 +120,7 @@ onBeforeUnmount(() => {
 });
 
 async function onStartRun(): Promise<void> {
+  summaryReported.value = false; // 新一轮重新累计补星小结
   await run.startRun();
 }
 async function onSubmit(): Promise<void> {

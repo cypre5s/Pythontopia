@@ -41,14 +41,16 @@ export function clampStars(stars: number, max = 3): number {
   return Math.max(0, Math.min(max, Math.floor(stars)));
 }
 
-/** 某 stage 三件套是否全部过线（看 + 学 + 练），用于进度条与「可考试」提示。 */
+/**
+ * 某 stage 三件套是否全部过线（看 + 学 + 练），用于进度条与「可考试」提示。
+ *
+ * 只信后端 `completed`：服务端的完成判定还包含 overview 里没有的「客观题全对」维度
+ * （MainlinePracticePort），本地用 video/pages/examples 三个计数推导会出现
+ * 「显示 ✓ 但 2★ 永远不发」的假完成。overview 与打点回包的 completed 均为服务端实时计算，
+ * 无滞后，不需要本地兜底推导。
+ */
 export function isStageComplete(stage: MainlineStageDto): boolean {
-  return (
-    stage.completed
-    || (stage.videoWatchedSec >= stage.requiredVideoSec
-      && stage.pagesRead >= stage.requiredPages
-      && stage.examplesDone >= stage.requiredExamples)
-  );
+  return stage.completed;
 }
 
 /** 本章 stage 完成数 / 总数（地图与章节面板共用）。 */

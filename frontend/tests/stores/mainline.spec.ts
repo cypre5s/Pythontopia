@@ -93,13 +93,14 @@ describe('mainline pure helpers', () => {
     expect(clampStars(5, 5)).toBe(5);
   });
 
-  it('isStageComplete = completed flag OR all three thresholds met', () => {
+  it('isStageComplete 只信后端 completed（本地三计数达标但客观题未全对时不得显示完成）', () => {
     expect(isStageComplete(stage({ completed: true }))).toBe(true);
+    // 三个计数全达标但服务端判未完成（客观题维度 overview 不下发）→ 仍未完成。
     expect(
       isStageComplete(
         stage({ videoWatchedSec: 240, pagesRead: 2, examplesDone: 2, completed: false }),
       ),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       isStageComplete(
         stage({ videoWatchedSec: 120, pagesRead: 2, examplesDone: 2, completed: false }),

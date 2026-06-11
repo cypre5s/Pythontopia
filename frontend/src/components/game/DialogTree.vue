@@ -76,6 +76,22 @@ const currentText = computed<string>(() => {
   return renderDialogText(rawText, templateContext.value);
 });
 
+/** 当前是否停在对话首节点（脚本 root）。首节点的脚本首句常与 AI 寒暄内容重叠。 */
+const isRootNode = computed<boolean>(
+  () => !!store.tree && store.currentNodeId === store.tree.rootNodeId,
+);
+
+/**
+ * 首节点遇到 AI 个性化寒暄时，隐藏脚本首句（只保留 ✦ 寒暄 + 分支选项），避免「寒暄 + 脚本首句」
+ * 两段重复把右侧撑出框（R-15 反馈）。仅 loading/ready 隐藏（loading 先不显脚本，避免「先显脚本再隐藏」
+ * 的闪烁）；fallback/none/idle 时仍显示脚本首句兜底，保证内容不空。非首节点恒显示（知识内容不重复）。
+ */
+const hideScriptText = computed<boolean>(
+  () =>
+    isRootNode.value &&
+    (store.greetingStatus === 'loading' || store.greetingStatus === 'ready'),
+);
+
 const renderedChoices = computed(() => {
   const node = currentNode.value;
   if (!node) return [] as Array<{ label: string; rawIndex: number }>;
@@ -126,9 +142,10 @@ function finishTypewriter(): void {
 }
 
 watch(
-  currentText,
-  (text) => {
-    if (currentNode.value) {
+  [currentText, hideScriptText],
+  ([text, hide]) => {
+    // 隐藏脚本首句（让位给 AI 寒暄）时不启动打字机，分支选项立即可选（typing=false）。
+    if (currentNode.value && !hide) {
       startTypewriter(text);
     } else {
       clearTypeTimer();
@@ -239,7 +256,7 @@ function onPortraitError(event: Event): void {
           </p>
 
           <p
-            v-else-if="currentNode"
+            v-else-if="currentNode && !hideScriptText"
             class="dialog-text"
             style="color: #111111;"
             data-testid="dialog-text"

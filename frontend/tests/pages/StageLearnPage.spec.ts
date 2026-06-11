@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createPinia, setActivePinia } from 'pinia';
 import { flushPromises, mount } from '@vue/test-utils';
 import { createMemoryHistory, createRouter, type Router } from 'vue-router';
 
@@ -6,18 +7,15 @@ vi.mock('@/api/mainline', () => ({
   getStageDetail: vi.fn(),
   postVideoProgress: vi.fn(),
   postPageRead: vi.fn(),
+  postPagesRead: vi.fn(),
   postExampleDone: vi.fn(),
-}));
-// StageVideoWatcher 子组件挂载时会检索 B 站；返回空数组以中性化（不计时、不上报）。
-vi.mock('@/api/bilibiliVideo', () => ({
-  searchBilibili: vi.fn(),
+  answerPracticeQuestion: vi.fn(),
 }));
 
 import StageLearnPage from '@/pages/StageLearnPage.vue';
 import { getStageDetail, postExampleDone } from '@/api/mainline';
 import type { StageDetailDto, StageProgressDto } from '@/api/mainline';
 import { ApiClientError } from '@/api/http';
-import { searchBilibili } from '@/api/bilibiliVideo';
 
 const APP_LAYOUT_STUB = { template: '<div data-testid="layout-stub"><slot /></div>' };
 
@@ -34,11 +32,16 @@ function makeStageDetail(over: Partial<StageDetailDto> = {}): StageDetailDto {
     coursewarePageIds: [101, 102],
     exampleProblemIds: [201],
     requiredVideoSec: 240,
-    requiredPages: 0,
+    requiredPages: 2,
     requiredExamples: 1,
+    requiredQuestions: 0,
+    videos: [],
+    examples: [{ id: 201, displayNo: 'OJ-01', displayName: '圆面积计算', kcCode: 'PY43-KC-016' }],
+    questions: [],
     videoWatchedSec: 0,
     pagesReadIds: [],
     examplesDoneIds: [],
+    questionsCorrectIds: [],
     completed: false,
     ...over,
   };
@@ -93,7 +96,8 @@ async function mountAt(
 
 describe('StageLearnPage（小节学习页 · 三件套编排）', () => {
   beforeEach(() => {
-    vi.mocked(searchBilibili).mockResolvedValue([]);
+    // 内嵌 StageExamplePractice 的 useToastStore（R2 evidence 拒绝提示）需要活动 Pinia。
+    setActivePinia(createPinia());
     vi.mocked(getStageDetail).mockResolvedValue(makeStageDetail());
     vi.mocked(postExampleDone).mockResolvedValue(
       makeStageProgress({ examplesDone: 1, examplesDoneIds: [201] }),
@@ -119,7 +123,7 @@ describe('StageLearnPage（小节学习页 · 三件套编排）', () => {
 
     expect(wrapper.find('[data-testid="summary-video-val"]').text()).toBe('0:00 / 4:00');
     expect(wrapper.find('[data-testid="summary-courseware-val"]').text()).toContain('0 / 2');
-    expect(wrapper.find('[data-testid="summary-practice-val"]').text()).toContain('0 / 1');
+    expect(wrapper.find('[data-testid="summary-practice-val"]').text()).toContain('0/1 OJ');
 
     wrapper.unmount();
   });
@@ -127,13 +131,13 @@ describe('StageLearnPage（小节学习页 · 三件套编排）', () => {
   it('子组件「练」打点后，本页合并服务端进度并刷新总览', async () => {
     const { wrapper } = await mountAt(7);
 
-    expect(wrapper.find('[data-testid="summary-practice-val"]').text()).toContain('0 / 1');
+    expect(wrapper.find('[data-testid="summary-practice-val"]').text()).toContain('0/1 OJ');
 
     await wrapper.find('[data-testid="ex-mark-201"]').trigger('click');
     await flushPromises();
 
     expect(vi.mocked(postExampleDone)).toHaveBeenCalledWith(7, 201);
-    expect(wrapper.find('[data-testid="summary-practice-val"]').text()).toContain('1 / 1');
+    expect(wrapper.find('[data-testid="summary-practice-val"]').text()).toContain('1/1 OJ');
 
     wrapper.unmount();
   });

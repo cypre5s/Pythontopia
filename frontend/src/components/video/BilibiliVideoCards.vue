@@ -7,8 +7,14 @@
  * 加载失败回退占位。检索失败 / 空结果都降级为占位文案（不报错、不白屏）。
  * 点击卡片时 emit('consumed')，供父组件计入多模态学习闭环。
  */
-import { onMounted, ref, watch } from 'vue';
-import { searchBilibili, type BilibiliVideoDto } from '@/api/bilibiliVideo';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
+import {
+  fetchBilibiliInsight,
+  searchBilibili,
+  type BilibiliInsightDto,
+  type BilibiliVideoDto,
+} from '@/api/bilibiliVideo';
+import VideoInsightView from '@/components/video/VideoInsightView.vue';
 
 const props = withDefaults(
   defineProps<{
@@ -17,12 +23,21 @@ const props = withDefaults(
     heading?: string;
     /** 版块说明：解释这些是外部资源、如何使用、时长定位（空串则不显示）。 */
     caption?: string;
+    /**
+     * 学生问题 / 学习意图：传给 AI 讲解概述与看点排序（默认空串）。
+     * 缺省时用 `keyword` 兜底，**不破坏**只传 `:keyword` 的现有调用方。
+     */
+    question?: string;
+    /** 关联 KC 编码，影响概述与看点优先级（默认空数组）。 */
+    kcCodes?: string[];
   }>(),
   {
     limit: 8,
     heading: 'B站精选讲解',
     caption:
       '外部资源 · 点击卡片前往 B 站观看。已为初学者优先精选 10 分钟以内的短视频，作为课件之外的补充讲解。',
+    question: '',
+    kcCodes: () => [],
   },
 );
 
@@ -35,6 +50,62 @@ const status = ref<LoadStatus>('loading');
 const coverErrored = ref<Set<string>>(new Set());
 
 let loadToken = 0;
+
+// ───────────────────────────── AI 讲解 / 看点（概述 + 关键时间点） ─────────────────────────────
+//
+// 每张卡有「AI 讲解 / 看点」按钮，点开后在网格下方展开**全宽** insight 面板（单卡展开，
+// 切换其它卡会替换面板，保持卡片网格等高不被撑乱）。拉取生命周期（loading/error）在此处理，
+// VideoInsightView 只吃最终数据并渲染 overview + 可点击时间点。
+
+type InsightStatus = 'loading' | 'ready' | 'error';
+interface InsightEntry {
+  status: InsightStatus;
+  data: BilibiliInsightDto | null;
+}
+
+// 按 bvid 缓存 insight（reactive Map：get/has 读追踪、set 写触发，避免重复请求）。
+const insightByBvid = reactive(new Map<string, InsightEntry>());
+const expandedBvid = ref<string | null>(null);
+
+const expandedVideo = computed<BilibiliVideoDto | null>(
+  () => videos.value.find((v) => v.bvid === expandedBvid.value) ?? null,
+);
+const expandedEntry = computed<InsightEntry | null>(() =>
+  expandedBvid.value ? insightByBvid.get(expandedBvid.value) ?? null : null,
+);
+
+async function loadInsight(video: BilibiliVideoDto): Promise<void> {
+  const bvid = video.bvid;
+  insightByBvid.set(bvid, { status: 'loading', data: null });
+  // question 缺省 → 用关键词兜底（兼容只传 :keyword 的旧调用方）。
+  const question = (props.question ?? '').trim() || props.keyword.trim();
+  try {
+    const data = await fetchBilibiliInsight(bvid, question, props.kcCodes ?? []);
+    insightByBvid.set(bvid, { status: 'ready', data });
+  } catch {
+    insightByBvid.set(bvid, { status: 'error', data: null });
+  }
+}
+
+async function toggleInsight(video: BilibiliVideoDto): Promise<void> {
+  if (expandedBvid.value === video.bvid) {
+    expandedBvid.value = null;
+    return;
+  }
+  expandedBvid.value = video.bvid;
+  const existing = insightByBvid.get(video.bvid);
+  if (existing && existing.status === 'ready') return; // 已成功拉取过，直接复用缓存
+  await loadInsight(video);
+}
+
+function collapseInsight(): void {
+  expandedBvid.value = null;
+}
+
+function retryExpandedInsight(): void {
+  const video = expandedVideo.value;
+  if (video) void loadInsight(video);
+}
 
 function formatDuration(sec: number): string {
   if (!sec || sec <= 0) return '';
@@ -66,6 +137,9 @@ function onOpen(): void {
 async function load(): Promise<void> {
   const keyword = props.keyword.trim();
   coverErrored.value = new Set();
+  // 关键词变化 → 旧视频的 insight / 展开态全部作废，避免串台。
+  expandedBvid.value = null;
+  insightByBvid.clear();
   if (!keyword) {
     videos.value = [];
     status.value = 'empty';
@@ -173,6 +247,19 @@ watch(() => props.keyword, load);
             <span class="bili-card__play">▶ {{ formatCount(v.play) }}</span>
           </div>
         </a>
+        <div class="bili-card__actions">
+          <button
+            type="button"
+            class="bili-card__insight-btn"
+            :class="{ 'bili-card__insight-btn--active': expandedBvid === v.bvid }"
+            :aria-expanded="expandedBvid === v.bvid"
+            data-testid="bili-insight-toggle"
+            @click="toggleInsight(v)"
+          >
+            <span class="bili-card__insight-tag">AI</span>
+            <span>{{ expandedBvid === v.bvid ? '收起看点' : '讲解 / 看点' }}</span>
+          </button>
+        </div>
       </li>
     </ul>
 
@@ -197,6 +284,60 @@ watch(() => props.keyword, load);
         暂无相关 B 站讲解，可换个关键词或使用课件问答。
       </template>
     </p>
+
+    <!-- AI 讲解 / 看点：全宽内联面板（单卡展开，不撑乱上方等高网格）。 -->
+    <section
+      v-if="expandedVideo"
+      class="bili-insight-panel"
+      data-testid="bili-insight-panel"
+    >
+      <header class="bili-insight-panel__head">
+        <span class="bili-insight-panel__title">
+          <span class="bili-card__insight-tag">AI</span>
+          讲解 / 看点 · {{ expandedVideo?.title }}
+        </span>
+        <button
+          type="button"
+          class="bili-insight-panel__close"
+          data-testid="bili-insight-close"
+          @click="collapseInsight"
+        >
+          收起
+        </button>
+      </header>
+
+      <p
+        v-if="!expandedEntry || expandedEntry.status === 'loading'"
+        class="bili-cards__hint"
+        data-testid="bili-insight-loading"
+      >
+        正在生成 AI 讲解 / 看点…
+      </p>
+      <p
+        v-else-if="expandedEntry.status === 'error'"
+        class="bili-cards__hint"
+        data-testid="bili-insight-error"
+      >
+        AI 讲解暂不可用（网络 / 登录态 / 模型均可能导致），可
+        <button
+          type="button"
+          class="bili-cards__retry"
+          data-testid="bili-insight-retry"
+          @click="retryExpandedInsight"
+        >
+          重试
+        </button>
+        或直接前往 B 站观看。
+      </p>
+      <VideoInsightView
+        v-else-if="expandedEntry.data"
+        :bvid="expandedEntry.data.bvid"
+        :overview="expandedEntry.data.overview"
+        :key-points="expandedEntry.data.keyPoints"
+        :degraded="expandedEntry.data.degraded"
+        @jump="onOpen"
+      />
+    </section>
   </section>
 </template>
 
@@ -280,12 +421,14 @@ watch(() => props.keyword, load);
 
 .bili-card {
   min-width: 0;
+  /* 列布局：封面/标题链接在上，「AI 讲解/看点」按钮在下；网格等高仍靠 grid-auto-rows:1fr。 */
   display: flex;
+  flex-direction: column;
 }
 .bili-card__link {
-  /* height:100% 吃满 grid 行高 → 同一行卡片等高；flex 列布局把 meta 压到底部对齐。 */
+  /* flex:1 撑满卡片（减去底部按钮）高度，配合 meta margin-top:auto 把元信息压到底部；
+     卡片等高由 .bili-card 吃满 grid-auto-rows:1fr 保证（无需再 height:100%）。 */
   flex: 1 1 auto;
-  height: 100%;
   display: flex;
   flex-direction: column;
   gap: var(--pyt-space-1);
@@ -438,5 +581,101 @@ watch(() => props.keyword, load);
 }
 .bili-card__play {
   flex: none;
+}
+
+/* 「AI 讲解 / 看点」按钮区：在卡片链接下方，独立于外链 <a>（避免嵌套交互元素）。 */
+.bili-card__actions {
+  flex: 0 0 auto;
+  margin-top: var(--pyt-space-1);
+  display: flex;
+}
+.bili-card__insight-btn {
+  flex: 1 1 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  font-family: inherit;
+  font-size: var(--pyt-font-size-xs);
+  font-weight: 700;
+  padding: 4px 8px;
+  color: var(--pyt-color-text-primary);
+  background: var(--pyt-color-bg-soft);
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-sm);
+  box-shadow: 2px 2px 0 var(--pyt-color-shadow);
+  cursor: pointer;
+  transition: transform var(--pyt-motion-base), box-shadow var(--pyt-motion-base),
+    border-color var(--pyt-motion-base), background var(--pyt-motion-base);
+}
+.bili-card__insight-btn:hover {
+  border-color: var(--pyt-color-text-primary);
+}
+.bili-card__insight-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+.bili-card__insight-btn--active {
+  background: var(--pyt-color-info-bg);
+  border-color: var(--pyt-color-text-primary);
+}
+@media (prefers-reduced-motion: reduce) {
+  .bili-card__insight-btn {
+    transition: none;
+  }
+}
+.bili-card__insight-tag {
+  display: inline-block;
+  padding: 0 4px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.5;
+  color: var(--pyt-color-info);
+  background: var(--pyt-color-bg-elevated);
+  border: 1px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-sm);
+}
+
+/* 全宽 insight 面板：单卡展开，承载 overview + 关键时间点（不挤压上方等高网格）。 */
+.bili-insight-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pyt-space-3);
+  padding: var(--pyt-space-3);
+  background: var(--pyt-color-bg-elevated);
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-md);
+  box-shadow: 2px 2px 0 var(--pyt-color-shadow);
+}
+.bili-insight-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pyt-space-2);
+}
+.bili-insight-panel__title {
+  min-width: 0;
+  font-size: var(--pyt-font-size-sm);
+  font-weight: 700;
+  color: var(--pyt-color-text-hint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bili-insight-panel__close {
+  flex: none;
+  font-family: inherit;
+  font-size: var(--pyt-font-size-xs);
+  padding: 2px 10px;
+  color: var(--pyt-color-text-primary);
+  background: var(--pyt-color-bg-soft);
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-sm);
+  box-shadow: 2px 2px 0 var(--pyt-color-shadow);
+  cursor: pointer;
+}
+.bili-insight-panel__close:active {
+  transform: translate(2px, 2px);
+  box-shadow: none;
 }
 </style>

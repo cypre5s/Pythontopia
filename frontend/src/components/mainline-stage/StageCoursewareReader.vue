@@ -1,63 +1,126 @@
 <script setup lang="ts">
 /**
- * StageCoursewareReader —— 主线小章节「学」：阅读 stage 的 courseware_page_ids。
+ * StageCoursewareReader —— 主线小章节「学」：站内内置 PPT（PDF）整章精读。
  *
- * 复用图书馆阅读器：每页提供「阅读」外链（新标签打开 `/library?pageId=...`，由图书馆
- * 自行把 page_id 解析成 docId+pageNo），打开即触发 `postPageRead(stageId, pageId)` 打点；
- * 另给「标记已读」按钮兜底（在别处读完后回来补打点）。读满 required_pages（0=全部）即「学」过线。
+ * R-14 改造（推翻旧「跳 /library 外链逐页标记」）：改为站内嵌入 pdfjs 阅读器
+ * （复用 `@/components/library/PdfPageView`，pdfjs 动态对象隔离在 `@/lib/pdfjsLoader`），
+ * 按【整章】展示本章 PPT（course_document id = 185 + chapter，即 docId）。
+ *
+ * 看完判定：整章页数可能很多（最多 116 页），逐页打点不现实 → 学生用「上一页 /
+ * 下一页 / 末页」在章内翻阅；浏览到末页后启用「✅ 标记整章课件已读」按钮，点击
+ * 一次性批量上报本章全部 pageIds（`postPagesRead`，后端并集去重幂等），本地置
+ * 「已过线 ✓」并向上 emit 进度。过线 = 读满整章（readPageIds ∩ pageIds 数 ≥ requiredPages）。
  */
 import { computed, ref } from 'vue';
-import { useRouter } from 'vue-router';
-import { postPageRead } from '@/api/mainline';
+import PdfPageView from '@/components/library/PdfPageView.vue';
+import StageContextTutor from './StageContextTutor.vue';
+import { postPagesRead } from '@/api/mainline';
+import { getDocumentPage } from '@/api/courseLibrary';
 import type { StageTaskProgress } from './stageTypes';
 
 const props = defineProps<{
   stageId: number;
+  chapter: number;
+  /** course_document.id（= 185 + chapter）。 */
+  docId: number;
+  /** 本章文档全部页 id（用于计数与批量打点）。 */
   pageIds: number[];
+  /** 本章页数（全部看完过线）。 */
   requiredPages: number;
+  /** 已读页 id。 */
   readPageIds: number[];
+  /** 本节知识点（传给锚定问答，收敛课件 RAG 检索范围）。 */
+  kcCodes?: string[];
 }>();
 
 const emit = defineEmits<{ (e: 'progress', p: StageTaskProgress): void }>();
 
-const router = useRouter();
-const read = ref<Set<number>>(new Set(props.readPageIds));
-const pending = ref<Set<number>>(new Set());
+/** 本章 PPT 总页数（= 关联 pageIds 数，与 PDF numPages 对齐，作章内翻页上界）。 */
+const totalPages = computed<number>(() => props.pageIds.length);
 
+/** 已读 page_id 集合（本地乐观维护：初始来自后端，标记整章后并入全部 pageIds）。 */
+const readSet = ref<Set<number>>(new Set(props.readPageIds));
+
+/** 过线计数分母：本章页数（requiredPages 缺省 0 时退化为页数）。 */
 const requiredCount = computed<number>(() =>
-  props.requiredPages > 0 ? props.requiredPages : props.pageIds.length,
+  props.requiredPages > 0 ? props.requiredPages : totalPages.value,
 );
-const readCount = computed<number>(() => props.pageIds.filter((id) => read.value.has(id)).length);
-const done = computed<boolean>(() => requiredCount.value > 0 && readCount.value >= requiredCount.value);
 
-function libraryHref(pageId: number): string {
-  return router.resolve({ path: '/library', query: { pageId: String(pageId) } }).href;
-}
+/** 已读页数 = readSet 与本章 pageIds 的交集数（仅本章页计入）。 */
+const readCount = computed<number>(() => props.pageIds.filter((id) => readSet.value.has(id)).length);
 
-function isRead(pageId: number): boolean {
-  return read.value.has(pageId);
-}
+/** 过线：读满整章。 */
+const passed = computed<boolean>(
+  () => requiredCount.value > 0 && readCount.value >= requiredCount.value,
+);
 
-async function markRead(pageId: number): Promise<void> {
-  if (read.value.has(pageId) || pending.value.has(pageId)) return;
-  pending.value = new Set(pending.value).add(pageId);
-  try {
-    // 只 await 成功；用已知 pageId 乐观更新（不读返回体，规避 DTO 形状差异）。
-    await postPageRead(props.stageId, pageId);
-    read.value = new Set(read.value).add(pageId);
-    emit('progress', { stageId: props.stageId, readPageIds: [...read.value] });
-  } catch {
-    // 打点失败静默：用户可再次「标记已读」重试（服务端幂等）。
-  } finally {
-    const next = new Set(pending.value);
-    next.delete(pageId);
-    pending.value = next;
+/** 当前浏览页（1-based，章内页号，驱动 PdfPageView）。 */
+const currentPage = ref<number>(1);
+/** 已浏览到的最大页号（到达末页才允许标记完成）。 */
+const maxVisited = ref<number>(1);
+/** 是否已翻到/浏览到末页。 */
+const reachedEnd = computed<boolean>(
+  () => totalPages.value > 0 && maxVisited.value >= totalPages.value,
+);
+
+/** 批量上报进行中（防重复点击）。 */
+const marking = ref<boolean>(false);
+
+function goTo(page: number): void {
+  if (totalPages.value === 0) return;
+  const clamped = Math.min(Math.max(1, page), totalPages.value);
+  currentPage.value = clamped;
+  if (clamped > maxVisited.value) {
+    maxVisited.value = clamped;
   }
 }
 
-/** 打开图书馆阅读器（新标签）并记一次阅读打点。 */
-function openAndMark(pageId: number): void {
-  void markRead(pageId);
+function goPrev(): void {
+  goTo(currentPage.value - 1);
+}
+
+function goNext(): void {
+  goTo(currentPage.value + 1);
+}
+
+function goLast(): void {
+  goTo(totalPages.value);
+}
+
+/** 一次性上报本章全部 pageIds（并集去重幂等），本地置已过线并 emit 进度。 */
+async function markAllRead(): Promise<void> {
+  if (passed.value || marking.value || props.pageIds.length === 0) return;
+  if (!reachedEnd.value) return; // 防御：必须确实翻到末页再标记
+  const allIds = Array.from(new Set(props.pageIds));
+  marking.value = true;
+  try {
+    // 只 await 成功；用已知 pageIds 乐观更新（不读返回体，规避 DTO 形状差异）。
+    await postPagesRead(props.stageId, allIds);
+    readSet.value = new Set([...readSet.value, ...allIds]);
+    emit('progress', { stageId: props.stageId, readPageIds: [...readSet.value] });
+  } catch {
+    // 打点失败静默：用户可再次点击重试（服务端幂等）。
+  } finally {
+    marking.value = false;
+  }
+}
+
+// ── 锚定当前页的「百晓助教」问答（R-15 反馈：升级原关键词检索）──
+// 把当前正在看的这一页 PPT 文本作为 context 喂给 /api/tutor/ask，让助教紧扣这一页作答。
+// contextProvider 是函数：提交问答的「此刻」才懒取当前页文本（翻页后自动变），失败回退空串。
+const ctxKcCodes = computed<string[]>(() => props.kcCodes ?? []);
+const PAGE_CTX_MAX = 1600;
+
+async function currentPageContext(): Promise<string> {
+  try {
+    const detail = await getDocumentPage(props.docId, currentPage.value);
+    const body = (detail?.contentMarkdown || detail?.excerpt || '').trim();
+    if (!body) return `（第 ${currentPage.value} 页课件，暂无可读文本）`;
+    const head = detail?.title ? `【第 ${currentPage.value} 页·${detail.title}】\n` : `【第 ${currentPage.value} 页课件】\n`;
+    return (head + body).slice(0, PAGE_CTX_MAX);
+  } catch {
+    return `（第 ${currentPage.value} 页课件）`;
+  }
 }
 </script>
 
@@ -74,7 +137,7 @@ function openAndMark(pageId: number): void {
         >📖</span> 学 · 课件精读
       </h3>
       <span
-        v-if="done"
+        v-if="passed"
         class="stage-courseware__passed"
         data-testid="stage-courseware-passed"
       >已过线 ✓</span>
@@ -82,55 +145,94 @@ function openAndMark(pageId: number): void {
         v-else
         class="stage-courseware__count"
         data-testid="stage-courseware-count"
-      >{{ readCount }} / {{ requiredCount }} 页</span>
+      >已读 {{ readCount }} / {{ requiredCount }} 页</span>
     </header>
 
-    <p class="stage-courseware__hint">
-      点开课件页在图书馆阅读器中精读（新标签打开），打开即记一次阅读；读满
-      {{ requiredCount }} 页过线。
-    </p>
+    <template v-if="pageIds.length > 0">
+      <p class="stage-courseware__hint">
+        站内精读本章 PPT 课件（共 {{ totalPages }} 页）。用下方按钮逐页翻阅，
+        浏览到最后一页后即可「标记整章课件已读」过线。
+      </p>
 
-    <ul
-      v-if="pageIds.length > 0"
-      class="stage-courseware__list"
-    >
-      <li
-        v-for="(pageId, idx) in pageIds"
-        :key="pageId"
-        class="stage-courseware__item"
-        :class="{ 'stage-courseware__item--read': isRead(pageId) }"
+      <!-- 锚定当前页的「百晓助教」问答（升级原关键词检索）：基于这一页 PPT 内容作答 -->
+      <StageContextTutor
+        :kc-codes="ctxKcCodes"
+        scope-label="这一页课件"
+        :context-provider="currentPageContext"
+      />
+
+      <div
+        class="stage-courseware__viewer"
+        data-testid="stage-courseware-viewer"
       >
-        <span class="stage-courseware__page">
-          <span
-            class="stage-courseware__check"
-            aria-hidden="true"
-          >{{ isRead(pageId) ? '✓' : '○' }}</span>
-          课件页 {{ idx + 1 }}（#{{ pageId }}）
-        </span>
-        <span class="stage-courseware__actions">
-          <a
-            class="stage-courseware__open"
-            :data-testid="`cw-open-${pageId}`"
-            :href="libraryHref(pageId)"
-            target="_blank"
-            rel="noopener noreferrer"
-            @click="openAndMark(pageId)"
-          >阅读 →</a>
-          <button
-            type="button"
-            class="stage-courseware__mark"
-            :data-testid="`cw-mark-${pageId}`"
-            :disabled="isRead(pageId)"
-            @click="markRead(pageId)"
-          >标记已读</button>
-        </span>
-      </li>
-    </ul>
+        <PdfPageView
+          :doc-id="docId"
+          :page-no="currentPage"
+        />
+      </div>
+
+      <div class="stage-courseware__nav">
+        <button
+          type="button"
+          class="stage-courseware__navbtn"
+          data-testid="stage-courseware-prev"
+          :disabled="currentPage <= 1"
+          @click="goPrev"
+        >
+          ← 上一页
+        </button>
+        <span
+          class="stage-courseware__pageno"
+          data-testid="stage-courseware-pageno"
+        >第 {{ currentPage }} / {{ totalPages }} 页</span>
+        <button
+          type="button"
+          class="stage-courseware__navbtn"
+          data-testid="stage-courseware-next"
+          :disabled="currentPage >= totalPages"
+          @click="goNext"
+        >
+          下一页 →
+        </button>
+        <button
+          type="button"
+          class="stage-courseware__navbtn stage-courseware__navbtn--ghost"
+          data-testid="stage-courseware-last"
+          :disabled="currentPage >= totalPages"
+          @click="goLast"
+        >
+          末页 ⇥
+        </button>
+      </div>
+
+      <div class="stage-courseware__foot">
+        <button
+          v-if="!passed"
+          type="button"
+          class="stage-courseware__mark"
+          data-testid="stage-courseware-mark-all"
+          :disabled="!reachedEnd || marking"
+          @click="markAllRead"
+        >
+          {{ marking ? '标记中…' : '✅ 标记整章课件已读' }}
+        </button>
+        <span
+          v-else
+          class="stage-courseware__done"
+          data-testid="stage-courseware-done"
+        >本章课件已读完 ✓</span>
+        <span
+          v-if="!passed && !reachedEnd"
+          class="stage-courseware__tip"
+        >翻到最后一页后可标记 ✓</span>
+      </div>
+    </template>
+
     <p
       v-else
       class="stage-courseware__empty"
     >
-      本小节暂未关联课件页。
+      本小节暂未关联课件。
     </p>
   </section>
 </template>
@@ -176,51 +278,26 @@ function openAndMark(pageId: number): void {
   line-height: 1.5;
   color: var(--pyt-color-text-muted);
 }
-.stage-courseware__list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: var(--pyt-space-1);
+.stage-courseware__viewer {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  max-height: 70vh;
+  overflow: auto;
+  padding: var(--pyt-space-2);
+  background: var(--pyt-color-bg-sunken);
+  border: 2px solid var(--pyt-color-border-strong);
+  border-radius: var(--pyt-radius-sm);
+  box-shadow: inset 0 0 0 2px var(--pyt-color-bg-soft);
 }
-.stage-courseware__item {
+.stage-courseware__nav {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   gap: var(--pyt-space-2);
-  padding: var(--pyt-space-2);
-  background: var(--pyt-color-bg-soft);
-  border: 2px solid var(--pyt-color-border);
-  border-radius: var(--pyt-radius-sm);
+  flex-wrap: wrap;
 }
-.stage-courseware__item--read {
-  background: var(--pyt-color-success-bg);
-  border-color: var(--pyt-color-success);
-}
-.stage-courseware__page {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--pyt-space-2);
-  min-width: 0;
-  font-size: var(--pyt-font-size-sm);
-  color: var(--pyt-color-text-primary);
-}
-.stage-courseware__check {
-  font-family: var(--pyt-font-pixel-mono), monospace;
-  color: var(--pyt-color-success);
-}
-.stage-courseware__actions {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--pyt-space-2);
-  flex: 0 0 auto;
-}
-.stage-courseware__open {
-  font-size: var(--pyt-font-size-xs);
-  text-decoration: underline;
-  color: var(--pyt-color-info);
-}
-.stage-courseware__mark {
+.stage-courseware__navbtn {
   font-family: var(--pyt-font-pixel), monospace;
   font-size: var(--pyt-font-size-xs);
   padding: 2px 10px;
@@ -231,14 +308,164 @@ function openAndMark(pageId: number): void {
   cursor: pointer;
   box-shadow: 0 2px 0 var(--pyt-color-border);
 }
-.stage-courseware__mark:disabled {
+.stage-courseware__navbtn--ghost {
+  background: var(--pyt-color-bg-soft);
+}
+.stage-courseware__navbtn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
   box-shadow: none;
 }
+.stage-courseware__navbtn:not(:disabled):active {
+  transform: translateY(2px);
+  box-shadow: none;
+}
+.stage-courseware__pageno {
+  font-size: var(--pyt-font-size-xs);
+  font-family: var(--pyt-font-pixel-mono), monospace;
+  color: var(--pyt-color-text-muted);
+  min-width: 8ch;
+  text-align: center;
+}
+.stage-courseware__foot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--pyt-space-2);
+  flex-wrap: wrap;
+}
+.stage-courseware__mark {
+  font-family: var(--pyt-font-pixel), monospace;
+  font-size: var(--pyt-font-size-sm);
+  padding: 4px 16px;
+  background: var(--pyt-color-success-bg);
+  border: 2px solid var(--pyt-color-success);
+  border-radius: var(--pyt-radius-sm);
+  color: var(--pyt-color-success);
+  cursor: pointer;
+  box-shadow: 0 2px 0 var(--pyt-color-border);
+}
+.stage-courseware__mark:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+  background: var(--pyt-color-bg-elevated);
+  border-color: var(--pyt-color-border);
+  color: var(--pyt-color-text-muted);
+}
 .stage-courseware__mark:not(:disabled):active {
   transform: translateY(2px);
   box-shadow: none;
+}
+.stage-courseware__done {
+  font-size: var(--pyt-font-size-sm);
+  font-family: var(--pyt-font-pixel), monospace;
+  color: var(--pyt-color-success);
+}
+.stage-courseware__tip {
+  font-size: var(--pyt-font-size-xs);
+  color: var(--pyt-color-text-hint);
+}
+
+/* ── 本章课件检索（弱化版工坊）── */
+.stage-courseware__search {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pyt-space-2);
+  padding: var(--pyt-space-2);
+  background: var(--pyt-color-bg-soft);
+  border: 2px dashed var(--pyt-color-border);
+  border-radius: var(--pyt-radius-sm);
+}
+.stage-courseware__search-toggle {
+  align-self: flex-start;
+  font-family: var(--pyt-font-pixel), monospace;
+  font-size: var(--pyt-font-size-xs);
+  padding: 2px 10px;
+  background: var(--pyt-color-bg-elevated);
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-full);
+  color: var(--pyt-color-text-primary);
+  cursor: pointer;
+}
+.stage-courseware__search-toggle:hover {
+  background: var(--pyt-color-warning-bg);
+}
+.stage-courseware__search-form {
+  display: flex;
+  gap: var(--pyt-space-2);
+}
+.stage-courseware__search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 4px 8px;
+  font: inherit;
+  background: var(--pyt-color-bg-primary);
+  border: 2px solid var(--pyt-color-border-strong);
+  border-radius: var(--pyt-radius-sm);
+  color: var(--pyt-color-text-primary);
+}
+.stage-courseware__search-submit {
+  flex: 0 0 auto;
+  font-family: var(--pyt-font-pixel), monospace;
+  font-size: var(--pyt-font-size-xs);
+  padding: 4px 12px;
+  background: var(--pyt-color-info-bg);
+  border: 2px solid var(--pyt-color-border-strong);
+  border-radius: var(--pyt-radius-sm);
+  color: var(--pyt-color-text-primary);
+  cursor: pointer;
+}
+.stage-courseware__search-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.stage-courseware__search-hint {
+  margin: 0;
+  font-size: var(--pyt-font-size-xs);
+  color: var(--pyt-color-text-muted);
+}
+.stage-courseware__search-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pyt-space-1);
+  max-height: 30vh;
+  overflow: auto;
+}
+.stage-courseware__search-hit {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 6px 8px;
+  text-align: left;
+  background: var(--pyt-color-bg-elevated);
+  border: 1px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-sm);
+  cursor: pointer;
+  font: inherit;
+}
+.stage-courseware__search-hit:hover {
+  border-color: var(--pyt-color-gold);
+  background: var(--pyt-color-warning-bg);
+}
+.stage-courseware__search-hit-page {
+  font-family: var(--pyt-font-pixel-mono), monospace;
+  font-size: var(--pyt-font-size-xs);
+  color: var(--pyt-color-info);
+}
+.stage-courseware__search-hit-snippet {
+  font-size: var(--pyt-font-size-xs);
+  line-height: 1.45;
+  color: var(--pyt-color-text-primary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .stage-courseware__empty {
   margin: 0;

@@ -22,8 +22,9 @@ interface SlotDescriptor {
 
 const ICON_BASE = '/assets/pixel/icons/dock';
 
+// R-15：删「任务」槽（与冒险地图重复）；「地图」改为直达冒险地图（/mainline-map），
+// 不再切 activeSlot（小地图 HUD 常驻右上角，无需 dock 再开一份）。
 const SLOTS: readonly SlotDescriptor[] = [
-  { key: 'quest', label: '任务', icon: '✦', iconImg: `${ICON_BASE}/checkered-flag.png`, shortcut: 'Q' },
   { key: 'dialog', label: '对话', icon: '✉', iconImg: `${ICON_BASE}/speech-bubble.svg`, shortcut: 'J' },
   { key: 'map', label: '地图', icon: '◰', iconImg: `${ICON_BASE}/treasure-map.svg`, shortcut: 'M' },
   { key: 'skill', label: '技能', icon: '★', iconImg: `${ICON_BASE}/star-formation.png`, shortcut: 'K' },
@@ -124,11 +125,12 @@ function seasonIcon(s: string): string {
 
 function onClickSlot(slot: HudQuickSlot): void {
   playUiClick();
-  hud.toggleSlot(slot);
-  if (slot === 'quest') {
-    // R-15：旧主线面板已退役，「任务」改为直达冒险地图（后端权威 mainline）。
+  // R-15：「地图」直达冒险地图（不切 activeSlot 面板）；其余槽走原 toggle 逻辑。
+  if (slot === 'map') {
     void router.push('/mainline-map');
+    return;
   }
+  hud.toggleSlot(slot);
 }
 
 function isActive(slot: HudQuickSlot): boolean {
@@ -267,18 +269,19 @@ function onKey(event: KeyboardEvent): void {
   }
   if (canvasOwned) return;
   const lowered = event.key.toLowerCase();
+  // M（地图）直达冒险地图；不再占用 Q（任务槽已删）。
+  if (lowered === 'm' && !event.shiftKey && hud.canToggleSlot) {
+    void router.push('/mainline-map');
+    event.preventDefault();
+    return;
+  }
   const slotByLetter: Record<string, HudQuickSlot | undefined> = {
-    q: 'quest',
     j: 'dialog',
-    m: 'map',
     k: 'skill',
   };
   const target = slotByLetter[lowered];
   if (target && !event.shiftKey && hud.canToggleSlot) {
     hud.toggleSlot(target);
-    if (target === 'quest') {
-      void router.push('/mainline-map');
-    }
     event.preventDefault();
     return;
   }

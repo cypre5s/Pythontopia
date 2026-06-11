@@ -195,7 +195,7 @@ const dimensionCards = computed(() => {
       class="profile-page"
       data-testid="profile-page"
     >
-      <nav class="profile-nav">
+      <header class="profile-topbar">
         <PyButton
           test-id="profile-back"
           variant="secondary"
@@ -204,166 +204,211 @@ const dimensionCards = computed(() => {
         >
           ← 返回小镇
         </PyButton>
+        <div class="profile-identity">
+          <div class="profile-avatar">
+            <span class="avatar-tag">Lv</span>
+          </div>
+          <div class="profile-info">
+            <h1 class="profile-name">
+              {{ session.displayName }}
+            </h1>
+            <span class="profile-subtitle">Pythontopia 学习者画像</span>
+          </div>
+        </div>
         <span class="nav-breadcrumb">我的画像</span>
-      </nav>
-      <header class="profile-header">
-        <div class="profile-avatar">
-          <span class="avatar-tag">Lv</span>
-        </div>
-        <div class="profile-info">
-          <h1 class="profile-name">
-            {{ session.displayName }}
-          </h1>
-          <span class="profile-subtitle">Pythontopia 学习者画像</span>
-        </div>
       </header>
 
-      <PyPanel
-        v-if="dimensions.length > 0"
-        class="radar-section"
-      >
-        <h2 class="summary-title">
-          8 维画像雷达
-        </h2>
-        <ProfileRadar :dimensions="dimensions" />
-        <div
-          v-if="selfEditable.length > 0"
-          class="self-rate"
+      <div class="profile-body">
+        <aside
+          v-if="dimensions.length > 0"
+          class="profile-col profile-col--left"
         >
-          <h3 class="self-rate__title">
-            自评（仅主观维度，随时调整）
-          </h3>
-          <div
-            v-for="dim in selfEditable"
-            :key="dim.key"
-            class="self-rate__row"
-            :data-testid="`self-rate-${dim.key}`"
-          >
-            <span class="self-rate__label">{{ dim.label }}</span>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              step="5"
-              :value="Math.round(dim.score * 100)"
-              :disabled="savingKey === dim.key"
-              class="self-rate__slider"
-              @change="onSelfRate(dim, $event)"
+          <PyPanel class="radar-section">
+            <h2 class="summary-title">
+              8 维画像雷达
+            </h2>
+            <ProfileRadar :dimensions="dimensions" />
+            <div
+              v-if="selfEditable.length > 0"
+              class="self-rate"
             >
-            <span class="self-rate__value">{{ Math.round(dim.score * 100) }}%</span>
-          </div>
-        </div>
-      </PyPanel>
-
-      <div
-        v-if="p"
-        class="dimension-grid"
-      >
-        <article
-          v-for="dim in dimensionCards"
-          :key="dim.key"
-          class="dim-card"
-          :data-testid="`dim-${dim.key}`"
-        >
-          <div class="dim-card__header">
-            <h3 class="dim-card__title">
-              {{ dim.title }}
-            </h3>
-          </div>
-          <p class="dim-card__value">
-            {{ dim.value }}
-          </p>
-          <p
-            v-if="dim.detail"
-            class="dim-card__detail"
-          >
-            {{ dim.detail }}
-          </p>
-          <div
-            v-if="dim.key === 'cognitiveStyle'"
-            class="cog-correct"
-            data-testid="cognitive-style-correct"
-          >
-            <span class="cog-correct__hint">选最顺手的，随时可改</span>
-            <div class="cog-correct__options">
-              <PyButton
-                v-for="opt in cognitiveStyleChoices"
-                :key="opt.id"
-                :variant="currentCognitiveStyle === opt.id ? 'primary' : 'secondary'"
-                size="sm"
-                :disabled="savingCognitiveStyle"
-                :test-id="`cog-style-${opt.id}`"
-                @click="onPickCognitiveStyle(opt.id)"
+              <h3 class="self-rate__title">
+                自评（仅主观维度，随时调整）
+              </h3>
+              <div
+                v-for="dim in selfEditable"
+                :key="dim.key"
+                class="self-rate__row"
+                :data-testid="`self-rate-${dim.key}`"
               >
-                {{ opt.label }}
-              </PyButton>
+                <span class="self-rate__label">{{ dim.label }}</span>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="5"
+                  :value="Math.round(dim.score * 100)"
+                  :disabled="savingKey === dim.key"
+                  class="self-rate__slider"
+                  @change="onSelfRate(dim, $event)"
+                >
+                <span class="self-rate__value">{{ Math.round(dim.score * 100) }}%</span>
+              </div>
             </div>
-          </div>
-        </article>
-      </div>
+          </PyPanel>
+        </aside>
 
-      <PyPanel v-if="p?.narrativeSummary">
-        <h2 class="summary-title">
-          综合总结
-        </h2>
-        <MarkdownView :source="p.narrativeSummary" />
-      </PyPanel>
-
-      <PyEmptyState
-        v-if="!p"
-        title="画像尚未生成"
-        description="先完成入学访谈，或在小镇开始学习，系统会据此生成你的画像。"
-        icon="🧭"
-      >
-        <PyButton
-          variant="primary"
-          size="sm"
-          @click="goBack"
+        <div
+          v-if="p"
+          class="profile-col profile-col--right"
         >
-          去小镇学习
-        </PyButton>
-      </PyEmptyState>
+          <div class="dimension-grid">
+            <article
+              v-for="dim in dimensionCards"
+              :key="dim.key"
+              class="dim-card"
+              :data-testid="`dim-${dim.key}`"
+            >
+              <div class="dim-card__header">
+                <h3 class="dim-card__title">
+                  {{ dim.title }}
+                </h3>
+              </div>
+              <p class="dim-card__value">
+                {{ dim.value }}
+              </p>
+              <p
+                v-if="dim.detail"
+                class="dim-card__detail"
+              >
+                {{ dim.detail }}
+              </p>
+              <div
+                v-if="dim.key === 'cognitiveStyle'"
+                class="cog-correct"
+                data-testid="cognitive-style-correct"
+              >
+                <span class="cog-correct__hint">选最顺手的，随时可改</span>
+                <div class="cog-correct__options">
+                  <PyButton
+                    v-for="opt in cognitiveStyleChoices"
+                    :key="opt.id"
+                    :variant="currentCognitiveStyle === opt.id ? 'primary' : 'secondary'"
+                    size="sm"
+                    :disabled="savingCognitiveStyle"
+                    :test-id="`cog-style-${opt.id}`"
+                    @click="onPickCognitiveStyle(opt.id)"
+                  >
+                    {{ opt.label }}
+                  </PyButton>
+                </div>
+              </div>
+            </article>
+          </div>
+
+          <PyPanel v-if="p?.narrativeSummary">
+            <h2 class="summary-title">
+              综合总结
+            </h2>
+            <MarkdownView :source="p.narrativeSummary" />
+          </PyPanel>
+        </div>
+
+        <PyEmptyState
+          v-if="!p"
+          class="profile-empty"
+          title="画像尚未生成"
+          description="先完成入学访谈，或在小镇开始学习，系统会据此生成你的画像。"
+          icon="🧭"
+        >
+          <PyButton
+            variant="primary"
+            size="sm"
+            @click="goBack"
+          >
+            去小镇学习
+          </PyButton>
+        </PyEmptyState>
+      </div>
     </section>
   </AppLayout>
 </template>
 
 <style scoped>
 .profile-page {
-  padding: 24px 16px;
-  min-height: calc(100vh - 64px);
-  background: linear-gradient(180deg, var(--pyt-color-bg-primary) 0%, var(--pyt-color-bg-sunken) 100%);
-  max-width: 960px;
-  margin: 0 auto;
-}
-
-.profile-nav {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 12px;
-  margin-bottom: 16px;
+  height: 100%;
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 16px;
+  background: linear-gradient(180deg, var(--pyt-color-bg-primary) 0%, var(--pyt-color-bg-sunken) 100%);
+  overflow: hidden;
 }
 
-.nav-breadcrumb {
-  font-family: var(--pyt-font-pixel);
-  font-size: 12px;
-  color: var(--pyt-color-text-muted, var(--pyt-color-text-muted));
-}
-
-.profile-header {
+/* 顶栏：返回 + 身份 + 面包屑，单行常驻不滚动 */
+.profile-topbar {
   display: flex;
   align-items: center;
   gap: 16px;
-  margin-bottom: 24px;
-  padding: 16px;
+  flex: 0 0 auto;
+  padding: 10px 14px;
   background: var(--pyt-color-bg-elevated);
   border: 2px solid var(--pyt-color-border-strong);
   border-radius: 2px;
   box-shadow: var(--pyt-shadow-card);
 }
 
+.profile-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.nav-breadcrumb {
+  font-family: var(--pyt-font-pixel);
+  font-size: 12px;
+  color: var(--pyt-color-text-muted, var(--pyt-color-text-muted));
+  flex: 0 0 auto;
+}
+
+/* 主体两栏：左雷达 / 右卡片，各自内部滚动，整页不上下滑动 */
+.profile-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 16px;
+}
+
+.profile-col {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.profile-col--left {
+  flex: 0 0 clamp(320px, 32%, 420px);
+}
+
+.profile-col--right {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.profile-empty {
+  margin: auto;
+}
+
 .profile-avatar {
-  width: 56px;
-  height: 56px;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -372,7 +417,7 @@ const dimensionCards = computed(() => {
   border-radius: 2px;
   color: var(--pyt-color-bg-elevated);
   font-family: var(--pyt-font-pixel);
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
   image-rendering: pixelated;
 }
@@ -388,7 +433,7 @@ const dimensionCards = computed(() => {
 .profile-name {
   margin: 0;
   font-family: var(--pyt-font-pixel);
-  font-size: 22px;
+  font-size: 18px;
   color: var(--pyt-color-text-primary);
   letter-spacing: 1px;
 }
@@ -401,9 +446,8 @@ const dimensionCards = computed(() => {
 
 .dimension-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 12px;
-  margin-bottom: 24px;
 }
 
 .dim-card {
@@ -472,7 +516,7 @@ const dimensionCards = computed(() => {
 }
 
 .radar-section {
-  margin-bottom: var(--pyt-space-5);
+  margin-bottom: 0;
 }
 .self-rate {
   margin-top: 12px;
@@ -515,13 +559,55 @@ const dimensionCards = computed(() => {
   color: var(--pyt-color-text-primary);
 }
 
+/* 窄屏（含手机）：两栏降级为单列纵向流，放开整页滚动 */
+@media (max-width: 900px) {
+  .profile-page {
+    height: auto;
+    overflow: visible;
+  }
+  .profile-body {
+    flex-direction: column;
+    overflow: visible;
+  }
+  .profile-col {
+    overflow-y: visible;
+  }
+  .profile-col--left {
+    flex: 0 0 auto;
+  }
+}
+
 @media (max-width: 640px) {
   .dimension-grid {
     grid-template-columns: 1fr;
   }
-  .profile-header {
-    flex-direction: column;
-    text-align: center;
+  .profile-topbar {
+    flex-wrap: wrap;
+  }
+}
+</style>
+
+<!-- 画像页占满 app-main 剩余视口，桌面端两栏各自滚动、整页不上下滑动（与图书馆页同约定） -->
+<style>
+.app-main:has(.profile-page) {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100dvh - 56px);
+  max-height: calc(100dvh - 56px);
+  overflow: hidden;
+}
+@supports not (height: 100dvh) {
+  .app-main:has(.profile-page) {
+    min-height: calc(100vh - 56px);
+    max-height: calc(100vh - 56px);
+  }
+}
+/* 窄屏放开高度锁，让内容自然纵向滚动 */
+@media (max-width: 900px) {
+  .app-main:has(.profile-page) {
+    min-height: calc(100dvh - 56px);
+    max-height: none;
+    overflow: visible;
   }
 }
 </style>

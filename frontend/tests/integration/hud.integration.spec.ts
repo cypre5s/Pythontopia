@@ -23,6 +23,7 @@ function makeRouter(): Router {
     routes: [
       { path: '/world', name: 'world', component: { template: '<div />' } },
       { path: '/library', name: 'library', component: { template: '<div />' } },
+      { path: '/mainline-map', name: 'mainline-map', component: { template: '<div />' } },
     ],
   });
 }
@@ -37,7 +38,8 @@ describe('hud.integration: 全键位 + 工具区 + 边界', () => {
     setActivePinia(createPinia());
   });
 
-  it.each(['quest', 'dialog', 'map', 'skill'] as const)(
+  // R-15：dock 删「任务」槽；「地图」改为跳冒险地图（见下方单独用例），故仅 dialog/skill 切 activeSlot。
+  it.each(['dialog', 'skill'] as const)(
     '点击 %s slot：activeSlot 切换',
     async (slot) => {
       const hud = useHudStore();
@@ -49,16 +51,21 @@ describe('hud.integration: 全键位 + 工具区 + 边界', () => {
   );
 
   it.each([
-    ['q', 'quest'],
-    ['Q', 'quest'],
     ['j', 'dialog'],
-    ['m', 'map'],
     ['k', 'skill'],
-  ])('window keydown "%s" 切换到 %s', async (key, slot) => {
+  ] as const)('window keydown "%s" 切换到 %s', async (key, slot) => {
     const hud = useHudStore();
     const wrapper = mountShell();
     window.dispatchEvent(new KeyboardEvent('keydown', { key }));
     expect(hud.activeSlot).toBe(slot);
+    wrapper.unmount();
+  });
+
+  it('keydown "m" 直达冒险地图，不切 activeSlot', async () => {
+    const hud = useHudStore();
+    const wrapper = mountShell();
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'm' }));
+    expect(hud.activeSlot).toBeNull();
     wrapper.unmount();
   });
 

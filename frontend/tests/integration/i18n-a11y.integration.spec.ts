@@ -124,10 +124,11 @@ describe('a11y.integration · HudShell aria + 按钮可达性', () => {
     setActivePinia(createPinia());
   });
 
-  it('HudShell 4 quickslot 都有 aria-label 与 aria-pressed', () => {
+  it('HudShell 3 quickslot 都有 aria-label 与 aria-pressed', () => {
+    // R-15 主线巡检：删「任务」槽（与冒险地图重复）→ dock 收敛为 对话/地图/技能 3 槽。
     const wrapper = mount(HudShell, { global: { plugins: [makeRouter()] }, attachTo: document.body });
     const slots = wrapper.findAll('.hud-slot');
-    expect(slots.length).toBe(4);
+    expect(slots.length).toBe(3);
     for (const s of slots) {
       expect(s.attributes('aria-label')).toBeDefined();
       expect(s.attributes('aria-pressed')).toBeDefined();

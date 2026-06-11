@@ -1,24 +1,34 @@
 <script setup lang="ts">
 /**
- * StageVideoWatcher —— 主线小章节「看」：站内嵌入 B 站播放器 + 可见性计时。
+ * StageVideoWatcher —— 主线小章节「看」：站内内置课程视频播放 + 真实观看计时。
  *
- * 取数：用 stage 的 video_keyword 经 `searchBilibili` 取首个精选短视频 → 取其 bvid →
- *       嵌入 `player.bilibili.com` iframe（跨域，无法读取真实播放态）。
- * 计时：跨域 iframe 无法监听 play/pause，故以「标签页可见 + 本地 watching 开关」近似
- *       「正在播放」（plan §14 已接受可被挂机刷的风险，由服务端限频/封顶兜底）。
- *       每秒累加 1，攒满 10 秒（或失焦/卸载/过线时）批量 `postVideoProgress(stageId, deltaSec)`。
- * 过线：累计达 requiredVideoSec 即停表、发 'passed'，不再上报。
+ * 取数：父级（StageLearnPage）传入本章全部内置视频 `videos`（StageVideoDto[]）与
+ *       过线阈值 `requiredVideoSec`（=本章视频总时长×80%）。视频字节流用
+ *       `videoStreamUrl(id)` 直连后端 `/api/course/videos/{id}`（支持 Range，匿名放行）。
+ * 计时：监听 `<video>` 的 `timeupdate`，按「每次前进量」累加真实观看秒数（forward-delta）：
+ *       - 仅在标签页可见且未过线时计；
+ *       - 单次前进 >MAX_TICK_GAP_SEC（拖动/快进/切视频）视为跳转，不计入、只对齐基准；
+ *       - totalWatched 跨视频累加，封顶 requiredVideoSec。
+ *       该模型天然规避「拖到末尾秒过」（快进不计）与后台挂机刷（不可见不计）。
+ * 打点：每攒满 BATCH_SECONDS 秒批量 `postVideoProgress(stageId, deltaSec)` 一次；
+ *       切后台 / 暂停 / 切视频 / 卸载时 flush 已攒秒数。成功后 emit('progress')；
+ *       失败退回 pending，下一批重试（服务端打点幂等 + 限频兜底）。
+ * 过线：累计达 requiredVideoSec 即停表、flush 收尾、emit('passed')，并显示「已过线 ✓」。
  */
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-import { searchBilibili } from '@/api/bilibiliVideo';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { postVideoProgress } from '@/api/mainline';
+import type { StageVideoDto } from '@/api/mainline';
+import { videoStreamUrl } from '@/api/courseVideo';
+import StageContextTutor from './StageContextTutor.vue';
 import type { StageTaskProgress } from './stageTypes';
 
 const props = defineProps<{
   stageId: number;
-  videoKeyword: string;
+  videos: StageVideoDto[];
   requiredVideoSec: number;
   initialWatchedSec: number;
+  /** 本节知识点（传给锚定问答，收敛课件 RAG 检索范围）。 */
+  kcCodes?: string[];
 }>();
 
 const emit = defineEmits<{
@@ -26,30 +36,54 @@ const emit = defineEmits<{
   (e: 'passed'): void;
 }>();
 
-/** 攒够多少秒批量上报一次（plan §11.5 / §9：前端 10s 批量）。 */
-const BATCH_SECONDS = 10;
+/**
+ * 攒够多少秒批量上报一次。后端限频为「每 stage 每分钟至多 2 次**有效**计入」（超频静默 no-op
+ * 且不报错，见 VideoProgressThrottle）——批间隔必须 ≥30s，否则多余批次会被服务端丢弃、
+ * 本地却已清零 pending，导致服务端累计时长慢于真实观看（刷新后进度回退）。
+ */
+const BATCH_SECONDS = 30;
+/** 单次 timeupdate 前进上限：超过即视为拖动/快进/换源，不计入观看时长（防刷）。 */
+const MAX_TICK_GAP_SEC = 2;
 
-type LoadStatus = 'loading' | 'ready' | 'empty' | 'error';
+/** 过线阈值取整（父级按总时长×80% 传入，可能为小数；取整避免 floor 永不达标）。 */
+const requiredSec = computed<number>(() => Math.max(0, Math.round(props.requiredVideoSec)));
 
-const bvid = ref<string | null>(null);
-const status = ref<LoadStatus>('loading');
-const watchedSec = ref<number>(Math.min(props.initialWatchedSec, props.requiredVideoSec));
+function clampInitial(): number {
+  const init = Math.max(0, Math.floor(props.initialWatchedSec));
+  return Math.min(init, requiredSec.value);
+}
+
+/** 当前累计已观看秒数（权威展示值，封顶 requiredSec）。 */
+const watchedSec = ref<number>(clampInitial());
+/** 已攒、尚未成功上报的秒数（上报成功清零；失败退回重试）。 */
 const pendingDelta = ref<number>(0);
-const crossed = ref<boolean>(props.initialWatchedSec >= props.requiredVideoSec);
-/** 本地「正在观看」开关（近似播放态）：视频就绪后默认开，可手动暂停计时。 */
-const watching = ref<boolean>(false);
+/** 是否已过线（达标后停表、不再上报）。 */
+const crossed = ref<boolean>(clampInitial() >= requiredSec.value);
+/** 当前播放的视频 id（默认清单第 1 个）。 */
+const currentId = ref<number | null>(props.videos[0]?.id ?? null);
 
-let tickHandle: number | null = null;
+/** 上一帧 timeupdate 的 currentTime，用于求前进量；切视频/换源时归零。 */
+let lastTime = 0;
+/** 不足 1 秒的前进量累加器（攒满 1 秒进位到 watchedSec）。 */
+let carry = 0;
 
-const embedUrl = computed<string>(() =>
-  bvid.value
-    ? `https://player.bilibili.com/player.html?bvid=${bvid.value}&autoplay=0&danmaku=0&high_quality=1&p=1`
-    : '',
+const currentStreamUrl = computed<string>(() =>
+  currentId.value !== null ? videoStreamUrl(currentId.value) : '',
 );
 
+// 锚定「这段视频」的百晓助教问答：站内视频无字幕文本，context 用 视频标题 + 本节 KC，
+// 由助教结合课件 RAG 作答。contextProvider 取「此刻」所选视频标题（切片后变化）。
+const ctxKcCodes = computed<string[]>(() => props.kcCodes ?? []);
+function currentVideoContext(): string {
+  const v = props.videos.find((x) => x.id === currentId.value);
+  const title = v?.title ? `当前视频：《${v.title}》` : '当前课程视频';
+  const kc = ctxKcCodes.value.length ? `；本节知识点：${ctxKcCodes.value.join('、')}` : '';
+  return `${title}${kc}`;
+}
+
 const progressPct = computed<number>(() => {
-  if (props.requiredVideoSec <= 0) return 100;
-  return Math.min(100, Math.round((watchedSec.value / props.requiredVideoSec) * 100));
+  if (requiredSec.value <= 0) return 100;
+  return Math.min(100, Math.round((watchedSec.value / requiredSec.value) * 100));
 });
 
 function mmss(sec: number): string {
@@ -59,16 +93,13 @@ function mmss(sec: number): string {
   return `${m}:${String(r).padStart(2, '0')}`;
 }
 
-function currentVisibility(): 'hidden' | 'visible' {
-  return typeof document !== 'undefined' ? document.visibilityState : 'visible';
-}
-
-function countable(): boolean {
-  return watching.value && !crossed.value && currentVisibility() === 'visible';
+function isVisible(): boolean {
+  return typeof document === 'undefined' || document.visibilityState === 'visible';
 }
 
 async function flush(): Promise<void> {
   if (pendingDelta.value <= 0) return;
+  // 同步清零再 await：并发 flush 看到 0 直接返回，杜绝重复上报；失败再退回。
   const delta = pendingDelta.value;
   pendingDelta.value = 0;
   try {
@@ -76,19 +107,20 @@ async function flush(): Promise<void> {
     await postVideoProgress(props.stageId, delta);
     emit('progress', { stageId: props.stageId, videoWatchedSec: watchedSec.value });
   } catch {
-    // 失败不丢量：退回 pending，下一批重试（服务端打点幂等 + 限频）。
     pendingDelta.value += delta;
   }
 }
 
-function tick(): void {
-  if (!countable()) return;
-  watchedSec.value = Math.min(watchedSec.value + 1, props.requiredVideoSec);
-  pendingDelta.value += 1;
-  if (watchedSec.value >= props.requiredVideoSec) {
+function accumulate(delta: number): void {
+  carry += delta;
+  while (carry >= 1 && watchedSec.value < requiredSec.value) {
+    carry -= 1;
+    watchedSec.value += 1;
+    pendingDelta.value += 1;
+  }
+  if (watchedSec.value >= requiredSec.value) {
     crossed.value = true;
-    watching.value = false;
-    stopTick();
+    carry = 0;
     void flush();
     emit('passed');
     return;
@@ -98,66 +130,54 @@ function tick(): void {
   }
 }
 
-function startTick(): void {
-  if (tickHandle !== null) return;
-  tickHandle = window.setInterval(tick, 1000);
+function onTimeUpdate(e: Event): void {
+  const el = e.target as HTMLVideoElement | null;
+  if (!el) return;
+  const now = el.currentTime;
+  const delta = now - lastTime;
+  // 无论是否计入，都对齐基准，避免「不可见期间播放」在切回后被一次性补算。
+  lastTime = now;
+  if (crossed.value || !isVisible()) return;
+  // 负前进（回拖）或超阈（拖动/快进/换源）只对齐基准、不计观看时长。
+  if (!(delta > 0) || delta > MAX_TICK_GAP_SEC) return;
+  accumulate(delta);
 }
 
-function stopTick(): void {
-  if (tickHandle !== null) {
-    window.clearInterval(tickHandle);
-    tickHandle = null;
-  }
+function onPause(): void {
+  void flush();
 }
 
-function toggleWatching(): void {
-  if (crossed.value) return;
-  watching.value = !watching.value;
-  if (!watching.value) {
-    // 主动暂停：把已攒的秒数先报上去，避免暂停期间丢量。
-    void flush();
-  }
+function selectVideo(id: number): void {
+  if (id === currentId.value) return;
+  // 切视频前把已攒秒数报上去；新源 currentTime 归零，重置基准与小数累加器。
+  void flush();
+  currentId.value = id;
+  lastTime = 0;
+  carry = 0;
 }
 
 function onVisibilityChange(): void {
-  // 切到后台：先把已观看秒数报上去（计时本身由 countable() 自动暂停）。
-  if (currentVisibility() === 'hidden') {
-    void flush();
-  }
+  if (!isVisible()) void flush();
 }
 
-async function loadVideo(): Promise<void> {
-  const keyword = props.videoKeyword.trim();
-  if (!keyword) {
-    status.value = 'empty';
-    return;
-  }
-  status.value = 'loading';
-  try {
-    const list = await searchBilibili(keyword, 1);
-    const first = list[0];
-    if (first) {
-      bvid.value = first.bvid;
-      status.value = 'ready';
-      if (!crossed.value) watching.value = true;
-    } else {
-      status.value = 'empty';
+watch(
+  () => props.videos,
+  (list) => {
+    if (currentId.value === null || !list.some((v) => v.id === currentId.value)) {
+      currentId.value = list[0]?.id ?? null;
+      lastTime = 0;
+      carry = 0;
     }
-  } catch {
-    status.value = 'error';
-  }
-}
+  },
+);
 
 onMounted(() => {
   if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', onVisibilityChange);
   }
-  startTick();
-  void loadVideo();
 });
 
 onBeforeUnmount(() => {
-  stopTick();
   if (typeof document !== 'undefined') {
     document.removeEventListener('visibilitychange', onVisibilityChange);
   }
@@ -185,53 +205,67 @@ onBeforeUnmount(() => {
     </header>
 
     <p class="stage-video__hint">
-      站内嵌入 B 站精选短视频（关键词「{{ videoKeyword }}」）。仅在本页可见时计时，
-      累计观看 {{ mmss(requiredVideoSec) }} 即过线。
+      站内课程视频，按本章学习；仅在本页可见时计时，累计观看
+      {{ mmss(requiredSec) }} 即过线。
     </p>
 
     <div
-      v-if="status === 'ready' && embedUrl"
-      class="stage-video__frame"
+      v-if="videos.length > 0"
+      class="stage-video__player"
     >
-      <iframe
-        class="stage-video__iframe"
-        data-testid="stage-video-iframe"
-        :src="embedUrl"
-        title="B 站精选讲解"
-        allowfullscreen
-        referrerpolicy="no-referrer"
-        scrolling="no"
-        frameborder="0"
-      />
+      <div class="stage-video__frame">
+        <video
+          :key="currentId ?? 'none'"
+          class="stage-video__el"
+          data-testid="stage-video-el"
+          :src="currentStreamUrl"
+          controls
+          playsinline
+          preload="metadata"
+          @timeupdate="onTimeUpdate"
+          @pause="onPause"
+        />
+      </div>
+
+      <ul class="stage-video__list">
+        <li
+          v-for="(v, idx) in videos"
+          :key="v.id"
+          class="stage-video__item"
+          :class="{ 'stage-video__item--current': v.id === currentId }"
+          :data-testid="`stage-video-item-${v.id}`"
+        >
+          <button
+            type="button"
+            class="stage-video__pick"
+            :aria-current="v.id === currentId ? 'true' : undefined"
+            @click="selectVideo(v.id)"
+          >
+            <span
+              class="stage-video__no"
+              aria-hidden="true"
+            >{{ idx + 1 }}</span>
+            <span class="stage-video__name">{{ v.title }}</span>
+            <span class="stage-video__dur">{{ mmss(v.durationSec) }}</span>
+          </button>
+        </li>
+      </ul>
     </div>
     <p
-      v-else-if="status === 'loading'"
-      class="stage-video__placeholder"
-      data-testid="stage-video-loading"
-    >
-      正在检索精选讲解视频…
-    </p>
-    <p
       v-else
-      class="stage-video__placeholder"
+      class="stage-video__empty"
       data-testid="stage-video-empty"
     >
-      <template v-if="status === 'error'">
-        视频检索暂不可用（网络 / 风控），可
-        <button
-          type="button"
-          class="stage-video__retry"
-          data-testid="stage-video-retry"
-          @click="loadVideo"
-        >
-          重试
-        </button>
-        或先去「学」与「练」。
-      </template>
-      <template v-else>
-        暂无匹配的精选短视频，可先完成「学」与「练」。
-      </template>
+      本章暂无内置视频，可先完成「学」与「练」。
     </p>
+
+    <!-- 锚定「这段视频」的百晓助教问答（基于视频标题 + 本节 KC + 课件 RAG 作答） -->
+    <StageContextTutor
+      v-if="videos.length > 0"
+      :kc-codes="ctxKcCodes"
+      scope-label="这段视频"
+      :context-provider="currentVideoContext"
+    />
 
     <div class="stage-video__bar">
       <div
@@ -243,16 +277,7 @@ onBeforeUnmount(() => {
       <span
         class="stage-video__count"
         data-testid="stage-video-count"
-      >已观看 {{ mmss(watchedSec) }} / {{ mmss(requiredVideoSec) }}</span>
-      <button
-        v-if="status === 'ready' && !crossed"
-        type="button"
-        class="stage-video__toggle"
-        data-testid="stage-video-toggle"
-        @click="toggleWatching"
-      >
-        {{ watching ? '⏸ 暂停计时' : '▶ 继续计时' }}
-      </button>
+      >已观看 {{ mmss(watchedSec) }} / {{ mmss(requiredSec) }}</span>
     </div>
   </section>
 </template>
@@ -293,6 +318,12 @@ onBeforeUnmount(() => {
   line-height: 1.5;
   color: var(--pyt-color-text-muted);
 }
+.stage-video__player {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+  gap: var(--pyt-space-2);
+  align-items: start;
+}
 .stage-video__frame {
   position: relative;
   width: 100%;
@@ -303,14 +334,75 @@ onBeforeUnmount(() => {
   border: 2px solid var(--pyt-color-border-strong);
   box-shadow: 3px 3px 0 var(--pyt-color-shadow);
 }
-.stage-video__iframe {
+.stage-video__el {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   display: block;
+  background: #000;
 }
-.stage-video__placeholder {
+.stage-video__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--pyt-space-1);
+  max-height: 240px;
+  overflow-y: auto;
+}
+.stage-video__item {
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-sm);
+  background: var(--pyt-color-bg-soft);
+}
+.stage-video__item--current {
+  border-color: var(--pyt-color-gold);
+  background: var(--pyt-color-bg-elevated);
+}
+.stage-video__pick {
+  display: flex;
+  align-items: center;
+  gap: var(--pyt-space-2);
+  width: 100%;
+  padding: var(--pyt-space-2);
+  background: transparent;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+  color: var(--pyt-color-text-primary);
+}
+.stage-video__no {
+  flex: 0 0 auto;
+  width: 1.4em;
+  height: 1.4em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--pyt-font-pixel-mono), monospace;
+  font-size: var(--pyt-font-size-xs);
+  color: var(--pyt-color-text-muted);
+  background: var(--pyt-color-bg-sunken);
+  border-radius: var(--pyt-radius-sm);
+}
+.stage-video__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--pyt-font-size-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stage-video__item--current .stage-video__name {
+  font-weight: 600;
+}
+.stage-video__dur {
+  flex: 0 0 auto;
+  font-family: var(--pyt-font-pixel-mono), monospace;
+  font-size: var(--pyt-font-size-xs);
+  color: var(--pyt-color-text-muted);
+}
+.stage-video__empty {
   margin: 0;
   padding: var(--pyt-space-4);
   text-align: center;
@@ -320,22 +412,6 @@ onBeforeUnmount(() => {
   background: var(--pyt-color-bg-soft);
   border: 1px dashed var(--pyt-color-border);
   border-radius: var(--pyt-radius-md);
-}
-.stage-video__retry {
-  font-family: inherit;
-  font-size: var(--pyt-font-size-xs);
-  padding: 2px 10px;
-  margin: 0 2px;
-  background: var(--pyt-color-warning-bg);
-  border: 2px solid var(--pyt-color-text-primary);
-  border-radius: var(--pyt-radius-sm);
-  color: var(--pyt-color-text-primary);
-  cursor: pointer;
-  box-shadow: 2px 2px 0 var(--pyt-color-shadow);
-}
-.stage-video__retry:active {
-  transform: translate(2px, 2px);
-  box-shadow: none;
 }
 .stage-video__bar {
   width: 100%;
@@ -361,20 +437,13 @@ onBeforeUnmount(() => {
   font-family: var(--pyt-font-pixel-mono), monospace;
   color: var(--pyt-color-text-muted);
 }
-.stage-video__toggle {
-  font-family: var(--pyt-font-pixel), monospace;
-  font-size: var(--pyt-font-size-xs);
-  padding: 2px 10px;
-  background: var(--pyt-color-bg-soft);
-  border: 2px solid var(--pyt-color-border);
-  border-radius: var(--pyt-radius-sm);
-  color: var(--pyt-color-text-primary);
-  cursor: pointer;
-  box-shadow: 0 2px 0 var(--pyt-color-border);
-}
-.stage-video__toggle:active {
-  transform: translateY(2px);
-  box-shadow: none;
+@media (max-width: 640px) {
+  .stage-video__player {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .stage-video__list {
+    max-height: 180px;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .stage-video__bar-fill {

@@ -2,7 +2,7 @@
 //
 // 职责：拉考卷 / 维护本地作答状态 / 统计防作弊计数 / 组装并提交 {answers, integrity} / 持有判分结果。
 // 不做任何答案校验（判分在服务端），也绝不在提交前展示答案。
-import { computed, reactive, ref } from 'vue';
+import { computed, onScopeDispose, reactive, ref } from 'vue';
 import type { ComputedRef, Ref } from 'vue';
 import {
   getLatestTest,
@@ -178,19 +178,62 @@ export function useChapterTestExam(chapter: number): ChapterTestExam {
     }
   }
 
+  // R3：GENERATING 期间轮询 prepare（后端幂等只返回状态，不重复触发生成），
+  // 个性化卷就绪即转 ready——避免学生在生成窗口点「开始」直接吃 golden 兜底卷。
+  // 上限 ~24s（8 次 × 3s），到点仍未就绪则停留 preparing（start 自然走 golden 兜底，不卡考试）。
+  const PREPARE_POLL_MAX = 8;
+  const PREPARE_POLL_INTERVAL_MS = 3000;
+  let preparePollTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function stopPreparePoll(): void {
+    if (preparePollTimer !== null) {
+      clearTimeout(preparePollTimer);
+      preparePollTimer = null;
+    }
+  }
+
+  function schedulePreparePoll(attempt: number): void {
+    if (attempt > PREPARE_POLL_MAX) return;
+    stopPreparePoll();
+    preparePollTimer = setTimeout(() => {
+      void (async () => {
+        // 学生已手动开考/离开准备态则停止轮询。
+        if (phase.value !== 'preparing') return;
+        try {
+          const res = await prepareTest(chapter);
+          prepareStatus.value = res.status;
+          if (res.status === 'READY') {
+            phase.value = 'ready';
+            return;
+          }
+        } catch {
+          // 轮询失败静默（best-effort）：保持 preparing，start 仍可走兜底。
+        }
+        schedulePreparePoll(attempt + 1);
+      })();
+    }, PREPARE_POLL_INTERVAL_MS);
+  }
+
   async function prepare(): Promise<void> {
     phase.value = 'preparing';
     try {
       const res = await prepareTest(chapter);
       prepareStatus.value = res.status;
       phase.value = res.status === 'READY' ? 'ready' : 'preparing';
+      if (phase.value === 'preparing') {
+        schedulePreparePoll(1);
+      }
     } catch (error) {
       errorMessage.value = errText(error);
       phase.value = 'error';
     }
   }
 
+  // 调用方组件卸载时清理轮询定时器（composable 随 effectScope 销毁）。
+  onScopeDispose(stopPreparePoll);
+
   async function start(): Promise<void> {
+    stopPreparePoll();
     phase.value = 'starting';
     try {
       const p = await startTest(chapter);

@@ -691,17 +691,6 @@ function fillAndSubmitDemo(): void {
           Pythontopia
         </h1>
       </div>
-      <p class="auth-subtitle">
-        Python 学习像素小镇 · 35 主线 + 7 章 boss + 无尽闯关
-      </p>
-      <ul
-        class="auth-feature-pills"
-        aria-label="特色"
-      >
-        <li>5 重审查 AI 出题</li>
-        <li>真课件 PDF 渲染</li>
-        <li>65 KC 自适应路径</li>
-      </ul>
     </section>
     <section class="auth-card auth-card--pixel">
       <h2>登录</h2>

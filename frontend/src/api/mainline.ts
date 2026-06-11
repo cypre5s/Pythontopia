@@ -84,11 +84,59 @@ export interface MainlineOverviewDto {
   chapters: MainlineChapterDto[];
 }
 
+/** 小节「练」客观题题型（与后端 `PracticeQuestionType` 对齐；OJ 编程题不在此）。 */
+export type PracticeQuestionType = 'CHOICE' | 'JUDGE' | 'FILL';
+
+/** 小节「看」内置课程视频条目（来自 video_manifest，按章聚合；字节流走 /api/course/videos/{id}）。 */
+export interface StageVideoDto {
+  id: number;
+  title: string;
+  durationSec: number;
+}
+
+/** 小节「练」OJ 编程题展示条目（统一编号/命名/KC 覆盖层；id 为 course_problem.id，走训练场判题）。 */
+export interface StageExampleDto {
+  id: number;
+  displayNo: string;
+  displayName: string;
+  kcCode: string;
+}
+
+/**
+ * 小节「练」客观题题面（下发学生端，**不含正确答案**；判分走 answerPracticeQuestion）。
+ * - CHOICE：options 为选项文本（单选）；
+ * - JUDGE：options 为空（前端用「正确 / 错误」）；
+ * - FILL：blankCount 个填空，options 为空。
+ */
+export interface StagePracticeQuestionDto {
+  id: number;
+  kcCode: string;
+  type: PracticeQuestionType;
+  ordinal: number;
+  stem: string;
+  options: string[];
+  blankCount: number;
+}
+
+/** 客观题判分结果（作答后回传正确答案 + 讲解，供自检；不提前泄题）。 */
+export interface PracticeAnswerResultDto {
+  questionId: number;
+  correct: boolean;
+  correctAnswers: string[];
+  explanation: string;
+}
+
 /**
  * stage 学习页详情（`GET /api/mainline/stages/{stageId}`，§9 集成补充）。
  * overview 故意轻量不带静态定义（§11.4），学习页按需取本 DTO 渲染三件套（看/学/练）：
  * 静态定义（kcCodes / videoKeyword / coursewarePageIds / exampleProblemIds）+ 当前用户已完成 id 集合。
  * `pagesReadIds` / `examplesDoneIds` 与 `StageProgressDto` 命名一致（id 集合，非计数）。
+ *
+ * R-14 三件套契约新增字段（Phase 0 冻结，Phase 1 填充真实值；过渡期可选以兼容旧测试 fixture）：
+ * - 看：`videos`（本章内置视频）+ `requiredVideoSec`（=本章总时长×80%）。
+ * - 学：`coursewarePageIds`=本章 PPT 全部页，`requiredPages`=页数（全部看完过线）。
+ * - 练：`questions`（选/判/填，`requiredQuestions` 道全对）+ `questionsCorrectIds`（已答对）
+ *   + OJ：`exampleProblemIds` / `requiredExamples`（走训练场判题）。
  */
 export interface StageDetailDto {
   id: number;
@@ -107,6 +155,16 @@ export interface StageDetailDto {
   pagesReadIds: number[];
   examplesDoneIds: number[];
   completed: boolean;
+  /** 看：本章内置课程视频（Phase 1 P3 填充）。 */
+  videos?: StageVideoDto[];
+  /** 练：本小节 OJ 编程题（统一编号/命名/KC；Phase 1 P3 填充）。 */
+  examples?: StageExampleDto[];
+  /** 练：本小节客观题题面（Phase 1 P2/P3 填充）。 */
+  questions?: StagePracticeQuestionDto[];
+  /** 练：需答对的客观题数（mix4=4）。 */
+  requiredQuestions?: number;
+  /** 练：已答对的客观题 id 集合。 */
+  questionsCorrectIds?: number[];
 }
 
 /**
@@ -181,6 +239,21 @@ export async function postPageRead(stageId: number, pageId: number): Promise<Sta
 }
 
 /**
+ * 批量上报课件页阅读（「学」打点，并集去重幂等）。内置 PPT 整章页数多（最多 116 页），
+ * 逐页打点不现实；阅读器读到末页 / 翻页时按批上报已看过的 pageIds（Phase 1 P3 实现端点）。
+ */
+export async function postPagesRead(
+  stageId: number,
+  pageIds: number[],
+): Promise<StageProgressDto> {
+  const response = await http.post<StageProgressDto>(
+    `/api/mainline/stages/${stageId}/pages-read`,
+    { pageIds },
+  );
+  return response.data;
+}
+
+/**
  * 上报例题完成（「练」打点）。
  * 若带 submissionId：后端校验该提交 PASSED 且属本人，否则拒收。
  */
@@ -196,6 +269,22 @@ export async function postExampleDone(
   const response = await http.post<StageProgressDto>(
     `/api/mainline/stages/${stageId}/example-done`,
     body,
+  );
+  return response.data;
+}
+
+/**
+ * 提交一道小节客观题作答，返回判分结果（Phase 1 P2 实现后端端点）。
+ * `answers` 长度按题型：CHOICE/JUDGE 为 1；FILL 为 blankCount（按空位顺序）。
+ */
+export async function answerPracticeQuestion(
+  stageId: number,
+  questionId: number,
+  answers: string[],
+): Promise<PracticeAnswerResultDto> {
+  const response = await http.post<PracticeAnswerResultDto>(
+    `/api/mainline/stages/${stageId}/practice/${questionId}/answer`,
+    { answers },
   );
   return response.data;
 }

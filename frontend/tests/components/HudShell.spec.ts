@@ -7,8 +7,8 @@ import QuickslotPanelHost from '@/components/hud/QuickslotPanelHost.vue';
 import { useDialogStore } from '@stores/dialog';
 import { useHudStore, type HudQuickSlot } from '@stores/hud';
 
+// R-15：dock 删「任务」槽（与冒险地图重复）→ 仅剩 dialog/map/skill 三槽。
 const SLOT_KEYS: readonly HudQuickSlot[] = [
-  'quest',
   'dialog',
   'map',
   'skill',
@@ -19,6 +19,7 @@ const router = createRouter({
   routes: [
     { path: '/world', name: 'world', component: { template: '<div/>' } },
     { path: '/workshop', name: 'workshop', component: { template: '<div/>' } },
+    { path: '/mainline-map', name: 'mainline-map', component: { template: '<div/>' } },
   ],
 });
 
@@ -32,7 +33,7 @@ describe('HudShell', () => {
     setActivePinia(createPinia());
   });
 
-  it('挂载后渲染 4 个 quickslot 按钮（quest/dialog/map/skill）', () => {
+  it('挂载后渲染 3 个 quickslot 按钮（dialog/map/skill），不再有「任务」槽', () => {
     const wrapper = mountShell();
     for (const key of SLOT_KEYS) {
       const btn = wrapper.find(`[data-testid="hud-slot-${key}"]`);
@@ -40,6 +41,18 @@ describe('HudShell', () => {
       expect(btn.element.tagName).toBe('BUTTON');
     }
     expect(wrapper.findAll('button.hud-slot')).toHaveLength(SLOT_KEYS.length);
+    // 「任务」槽已删除。
+    expect(wrapper.find('[data-testid="hud-slot-quest"]').exists()).toBe(false);
+  });
+
+  it('点击「地图」槽直达冒险地图(/mainline-map)，不切 activeSlot 面板', async () => {
+    const hud = useHudStore();
+    const push = vi.spyOn(router, 'push');
+    const wrapper = mountShell();
+    await wrapper.get('[data-testid="hud-slot-map"]').trigger('click');
+    expect(push).toHaveBeenCalledWith('/mainline-map');
+    expect(hud.activeSlot).toBeNull();
+    push.mockRestore();
   });
 
   it('顶部状态条按 store.meta 渲染：天气 / Day / 时段 / 季节', () => {
@@ -58,12 +71,12 @@ describe('HudShell', () => {
     expect(wrapper.get('[data-testid="hud-season"]').attributes('title')).toContain('AUTUMN');
   });
 
-  it('点击 quest 按钮：store.activeSlot === "quest" 且按钮带 active class + aria-pressed', async () => {
+  it('点击 dialog 按钮：store.activeSlot === "dialog" 且按钮带 active class + aria-pressed', async () => {
     const hud = useHudStore();
     const wrapper = mountShell();
-    const btn = wrapper.get('[data-testid="hud-slot-quest"]');
+    const btn = wrapper.get('[data-testid="hud-slot-dialog"]');
     await btn.trigger('click');
-    expect(hud.activeSlot).toBe('quest');
+    expect(hud.activeSlot).toBe('dialog');
     expect(btn.classes()).toContain('hud-slot--active');
     expect(btn.attributes('aria-pressed')).toBe('true');
   });
@@ -122,14 +135,14 @@ describe('HudShell', () => {
   it('依次点击不同 slot：互斥单选，只有最后一个按钮 active', async () => {
     const hud = useHudStore();
     const wrapper = mountShell();
-    await wrapper.get('[data-testid="hud-slot-quest"]').trigger('click');
-    await wrapper.get('[data-testid="hud-slot-map"]').trigger('click');
-    expect(hud.activeSlot).toBe('map');
+    await wrapper.get('[data-testid="hud-slot-dialog"]').trigger('click');
+    await wrapper.get('[data-testid="hud-slot-skill"]').trigger('click');
+    expect(hud.activeSlot).toBe('skill');
     expect(
-      wrapper.get('[data-testid="hud-slot-quest"]').classes(),
+      wrapper.get('[data-testid="hud-slot-dialog"]').classes(),
     ).not.toContain('hud-slot--active');
     expect(
-      wrapper.get('[data-testid="hud-slot-map"]').classes(),
+      wrapper.get('[data-testid="hud-slot-skill"]').classes(),
     ).toContain('hud-slot--active');
   });
 
