@@ -17,16 +17,28 @@ practice 依赖 learn 工件（讲义 title/summary 注入 focus_hint）随后�
 start/finish trace 逐 step 上报并携带 step_id 对齐（完成顺序可乱）。
 
 trace 节点名：understand, decompose | replan, dispatch.<agent>, extract_profile, compose_reply。
+
+LangGraph v1 checkpointer（R-16 升级，https://docs.langchain.com/oss/python/migrate/langgraph-v1）：
+- ``thread_id = "<session_id>:turn-<轮次>"``——**每轮独立 thread**。理由：``trace`` /
+  ``dispatch_results`` 用 ``operator.add`` reducer，若跨轮共用 thread，次轮 ainvoke 会把上一轮
+  快照里的列表继续累加（结果污染、SSE 行为变化）；跨轮记忆本就由 orchestrator_session 权威承担，
+  checkpoint 的价值定位为「单轮内逐节点快照」：崩溃点可查、按轮回放排错（time-travel）。
+- checkpointer 经 ``PYT_ORCH_CHECKPOINT`` 选型（``memory`` 默认 / ``postgres`` 需自装
+  langgraph-checkpoint-postgres）；降级只发生在**构造期**（postgres 不可用 → memory + 告警），
+  运行时不做失败重跑——节点有真实 LLM 副作用，重跑会重复调用并重发 SSE trace。
 """
 
 from __future__ import annotations
 
 import asyncio
+import logging
 import operator
+import os
 import time
 from collections.abc import Awaitable, Callable
 from typing import Annotated, Any, TypedDict
 
+from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 
 from pythontopia_graph.agents.dispatch import AgentDispatcher, DispatchContext
@@ -56,8 +68,33 @@ from pythontopia_graph.schemas.resource import (
 
 Emit = Callable[[str, dict[str, Any]], Awaitable[None]]
 
+LOG = logging.getLogger(__name__)
+
 # dispatch 节点单批最大并发子 agent 数（有界并发，防 provider 限流雪崩）。
 _DISPATCH_CONCURRENCY = 3
+
+
+def default_checkpointer() -> Any:
+    """按 ``PYT_ORCH_CHECKPOINT`` 构建 checkpointer：memory（默认）/ postgres（可选）。
+
+    postgres 分支需要自行安装 ``langgraph-checkpoint-postgres`` 并配置
+    ``PYT_ORCH_CHECKPOINT_PG_URL``；任何失败降级 MemorySaver + 告警，
+    绝不让 orchestrator 整体不可用（单 worker 下 MemorySaver 线程安全足够）。
+    """
+    kind = (os.environ.get("PYT_ORCH_CHECKPOINT") or "memory").strip().lower()
+    if kind == "postgres":
+        try:
+            from langgraph.checkpoint.postgres.aio import (  # type: ignore[import-not-found]
+                AsyncPostgresSaver,
+            )
+
+            url = os.environ.get("PYT_ORCH_CHECKPOINT_PG_URL", "")
+            if url:
+                return AsyncPostgresSaver.from_conn_string(url)
+            LOG.warning("PYT_ORCH_CHECKPOINT=postgres 但未配 PG_URL，降级 MemorySaver")
+        except Exception as exc:  # noqa: BLE001 - 缺包/连不上一律降级
+            LOG.warning("Postgres checkpointer 不可用（%s），降级 MemorySaver", exc)
+    return MemorySaver()
 
 
 async def _noop_emit(_event: str, _data: dict[str, Any]) -> None:
@@ -92,6 +129,7 @@ class OrchestratorGraph:
         provider: LlmProvider,
         evidence_fetcher: EvidenceFetcher | None = None,
         valid_kc_codes: set[str] | None = None,
+        checkpointer: Any | None = None,
     ) -> None:
         self._provider = provider
         self._agent = OrchestratorAgent(provider)
@@ -106,7 +144,10 @@ class OrchestratorGraph:
         )
         # 当前 run 的 emit 回调（单 run 存 self，免逐节点传参）
         self._emit_cb: Emit = _noop_emit
-        self._compiled = self._build_compiled()
+        # checkpointer 降级发生在**构造期**（default_checkpointer：postgres 不可用→memory）。
+        # 运行时不做"失败重跑降级"——节点有真实 LLM 副作用，重跑会重复调用并重发 SSE trace。
+        self._checkpointer = checkpointer if checkpointer is not None else default_checkpointer()
+        self._compiled = self._build_compiled(self._checkpointer)
 
     async def run(self, req: OrchestratorRequest) -> OrchestratorResponse:
         return await self._invoke(req, _noop_emit)
@@ -118,7 +159,7 @@ class OrchestratorGraph:
         except Exception as exc:  # noqa: BLE001 – surface as an SSE error event
             await emit("error", {"code": "ORCHESTRATOR_FAILED", "message": str(exc)})
 
-    def _build_compiled(self) -> Any:
+    def _build_compiled(self, checkpointer: Any | None) -> Any:
         graph: StateGraph = StateGraph(OrchestratorState)
         graph.add_node("understand", self._node_understand)
         graph.add_node("build_plan", self._node_build_plan)
@@ -144,7 +185,21 @@ class OrchestratorGraph:
         graph.add_edge("extract_profile", "compose")
         graph.add_edge("compose", END)
         graph.add_edge("clarify", END)
+        if checkpointer is not None:
+            return graph.compile(checkpointer=checkpointer)
         return graph.compile()
+
+    @staticmethod
+    def turn_thread_id(session_id: str, turn_no: int) -> str:
+        """每轮独立 checkpoint thread（见模块 docstring：防 add reducer 跨轮污染）。"""
+        return f"{session_id}:turn-{turn_no}"
+
+    async def get_turn_state(self, session_id: str, turn_no: int) -> dict[str, Any]:
+        """按轮读取 checkpoint 快照 values（排错 / time-travel / 测试用；无快照返回空 dict）。"""
+        config = {"configurable": {"thread_id": self.turn_thread_id(session_id, turn_no)}}
+        snapshot = await self._compiled.aget_state(config)
+        values = getattr(snapshot, "values", None)
+        return dict(values) if values else {}
 
     async def _invoke(self, req: OrchestratorRequest, emit: Emit) -> OrchestratorResponse:
         self._emit_cb = emit
@@ -171,7 +226,10 @@ class OrchestratorGraph:
             "trace": [],
             "dispatch_results": [],
         }
-        final: dict[str, Any] = await self._compiled.ainvoke(initial)
+        # 轮次 = 服务端已存对话轮数（user+assistant 成对，半开容忍）；thread 按轮独立。
+        turn_no = len(server_history) // 2
+        config = {"configurable": {"thread_id": self.turn_thread_id(req.session_id, turn_no)}}
+        final: dict[str, Any] = await self._compiled.ainvoke(initial, config)
 
         response = self._assemble(allowed_set, final)
         await self._persist(req, response)

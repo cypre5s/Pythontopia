@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-06-11（晚）— LangGraph 0.2 → 1.x 升级 + orchestrator checkpointer 接入
+
+> 按 `docs/plans/2026-06-11-langgraph-1x-upgrade-prompt.md` 执行。官方迁移指南确认 v1 核心图 API
+> 与 0.2 兼容（graph primitives 不变），主要废弃项 `create_react_agent` 本项目从未使用（禁 ReAct 红线）。
+
+- `pyproject.toml`：`langgraph>=0.2,<0.3` → `>=1,<2`（本机环境实测 1.1.8 下全量绿）。
+- **orchestrator checkpointer 接入**（`MemorySaver` 默认，`PYT_ORCH_CHECKPOINT=postgres` 可选、
+  构造期降级）：`thread_id = "<session>:turn-<N>"` **逐轮独立**——`trace`/`dispatch_results` 用
+  `operator.add` reducer，跨轮共 thread 会把上一轮快照继续累加（结果污染），故 checkpoint 定位为
+  「单轮内逐节点快照 + 按轮回放排错」，跨轮记忆仍由 orchestrator_session 权威承担（SSE 行为零变化）；
+  新增 `get_turn_state(session_id, turn_no)` 快照查询接口。**不做运行时失败重跑降级**——节点有真实
+  LLM 副作用，重跑会重复调用并重发 trace。
+- 测试：新增 `test_orchestrator_checkpoint.py` 4 用例（单轮快照完整性 / 逐轮 thread 隔离零污染 /
+  session 隔离 / postgres 构造期降级），graph 全量 **525 passed**；Java orchestrator 契约 6/6。
+- 真栈冒烟（实跑）：同 sessionId 两轮 `/api/orchestrator/turn/stream`——轮 1 plan+12 trace+806
+  token+result；轮 2 回复明确续接轮 1 计划（「把第三步【练】拆得更细」），SSE 契约不变，耗时同量级。
+- **遗留**：graph 容器镜像仍 0.2.76（rebuild 被构建期 apt 代理 127.0.0.1:7892 容器内不可达阻断）；
+  新代码在 0.2.76 兼容带实测可跑（checkpoint import/compile API 0.2 起一致），待网络具备后
+  `docker compose build pythontopia-graph` 即完成容器侧 1.x 切换。
+
 ## 2026-06-11 — 多模态/课件显示环境修复 + 百晓工坊深度优化（R-16）启动
 
 > 上午两笔环境级修复已提交；下午启动**百晓工坊深度优化（R-16）**：地基契约已落盘，

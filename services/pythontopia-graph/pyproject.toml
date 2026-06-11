@@ -11,7 +11,10 @@ dependencies = [
   "fastapi>=0.115,<0.116",
   "uvicorn[standard]>=0.34,<0.35",
   "pydantic>=2,<3",
-  "langgraph>=0.2,<0.3",
+  # LangGraph v1：核心图 API 与 0.2 兼容（官方迁移指南确认 graph primitives 不变），
+  # checkpointer（MemorySaver）一等公民。环境实测 1.1.8 下全量测试绿。
+  # https://docs.langchain.com/oss/python/migrate/langgraph-v1
+  "langgraph>=1,<2",
   "httpx>=0.28,<0.29",
   "structlog>=24.4,<25",
   "tenacity>=9,<10",
