@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-06-11（夜）— KC 图谱感知检索（GraphRAG 思想·零抽取自建版）
+
+> 业界 GraphRAG/LightRAG 最贵的一步是「LLM 从文本抽实体关系」；本项目 65 KC 的前置边
+> 在 `course_kc.prerequisite_codes`（V125 seed，64/65 有前置）是人工标注的结构化数据——
+> 直接加载即得课程知识图谱，零抽取成本拿到图谱检索核心收益：**学生的困惑常源于前置 KC**。
+
+- RAG 服务新增 `index/kc_graph.py`：KcGraph（BFS 1 跳前置闭包、visited 防环、fail-soft 空图退化）；
+  lifespan/self-heal/rebuild 三处与课程页同源加载刷新。
+- `fusion.hybrid_search` 升级**加权 RRF + 前置扩展路**：锚定 kc_codes 时沿前置边追加一对
+  低权重（0.5）召回路；前置命中带 `via_prerequisite=True`，**预留席位制配额 top_k//3**
+  （前置是补充证据：有候选时为其保留席位，否则低权重排名永远进不了 top_k）。
+  vector_only 退化路径不扩展（历史位级兼容）；请求新增 `expand_prerequisites`（默认开）。
+- graph 消费端透传：evidence_fetcher `RagHit.via_prerequisite` → tutor prompt 证据行标注
+  「·前置知识」并提示导师先回填基础再讲主题 → `EvidenceCitation.via_prerequisite`
+  （前端「课件证据」面板将来可标前置徽章）。
+- 测试：新增 13 用例（图扩展/防环/席位配额/开关/空图/vector_only 不扩展/fail-soft），
+  rag **68 passed**、graph **525 passed** 零回归。
+- 真栈实测：锚定 KC-032（while 循环）查「怎么遍历」→ 4 主题页 + **2 前置页**（KC-031
+  for 循环遍历，页 48/49）带标注进入证据——「遍历」困惑正是前置 for 概念，命中教育语义。
+
 ## 2026-06-11（晚）— LangGraph 0.2 → 1.x 升级 + orchestrator checkpointer 接入
 
 > 按 `docs/plans/2026-06-11-langgraph-1x-upgrade-prompt.md` 执行。官方迁移指南确认 v1 核心图 API

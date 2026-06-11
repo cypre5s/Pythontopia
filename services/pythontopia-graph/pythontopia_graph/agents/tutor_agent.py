@@ -222,11 +222,20 @@ class TutorAgent:
             for directive in self._personalization_directives(profile_brief):
                 messages.append({"role": "system", "content": directive})
         if evidence_chunks:
+            # KC 图谱感知扩展：来自前置 KC 的证据显式标注，提示导师「学生的困惑
+            # 可能源于前置知识没掌握」——引导时可先回填前置概念再讲当前主题。
             evidence_text = "\n---\n".join(
-                f"[页 {c.page_no}] (page_id={c.page_id}): {c.text}"
+                f"[页 {c.page_no}{'·前置知识' if c.via_prerequisite else ''}]"
+                f" (page_id={c.page_id}): {c.text}"
                 for c in evidence_chunks
             )
-            messages.append({"role": "system", "content": f"课件证据:\n{evidence_text}"})
+            note = (
+                "（标注「前置知识」的页来自当前知识点的前置 KC：若学生连前置概念都模糊，"
+                "请先用它回填基础，再讲当前主题。）"
+                if any(c.via_prerequisite for c in evidence_chunks)
+                else ""
+            )
+            messages.append({"role": "system", "content": f"课件证据:\n{evidence_text}\n{note}"})
         else:
             messages.append({"role": "system", "content": "无课件证据可用，请标注「基于通识知识」。"})
         for turn in conversation_history:
@@ -278,6 +287,7 @@ class TutorAgent:
                     page_no=chunk.page_no,
                     snippet=snippet,
                     score=round(float(chunk.score), 3),
+                    via_prerequisite=chunk.via_prerequisite,
                 )
             )
         return citations

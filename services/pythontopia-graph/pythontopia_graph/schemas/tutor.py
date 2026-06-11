@@ -50,6 +50,8 @@ class EvidenceCitation(BaseModel):
     page_no: int
     snippet: str = ""
     score: float = 0.0
+    # KC 图谱感知扩展（R-16）：该证据页来自前置 KC（前端可标「前置知识」）。
+    via_prerequisite: bool = False
 
 
 class GroundingResult(BaseModel):

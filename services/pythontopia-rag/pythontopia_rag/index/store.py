@@ -11,6 +11,8 @@ from pythontopia_rag.index.chunker import Chunk
 class Hit:
     chunk: Chunk
     score: float
+    # KC 图谱感知扩展：命中来自「前置 KC 召回路」而非主题 KC（融合层判定并标注）。
+    via_prerequisite: bool = False
 
 
 @dataclass

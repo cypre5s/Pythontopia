@@ -9,6 +9,7 @@ from pythontopia_rag.app_state import AppState
 from pythontopia_rag.data.loader import DEFAULT_DB_URL, fetch_pages
 from pythontopia_rag.index.builder import rebuild_index
 from pythontopia_rag.index.fusion import hybrid_search
+from pythontopia_rag.index.kc_graph import fetch_kc_graph
 from pythontopia_rag.data.page_source import InMemoryPageSource, page_records_to_indexable
 from pythontopia_rag.safety.forbidden import is_forbidden
 from pythontopia_rag.schemas.query import (
@@ -50,6 +51,8 @@ async def rag_query(
         min_score=body.min_score,
         kc_codes=body.kc_codes,
         chapter_ids=body.chapter_ids,
+        kc_graph=state.kc_graph,
+        expand_prerequisites=body.expand_prerequisites,
     )
     if not hits:
         return RagQueryResponse(hits=[], no_evidence_found=True, retrieval_mode=mode)
@@ -62,6 +65,7 @@ async def rag_query(
             kc_codes=hit.chunk.kc_codes,
             text=hit.chunk.text,
             score=round(hit.score, 4),
+            via_prerequisite=hit.via_prerequisite,
         )
         for hit in hits
     ]
@@ -106,6 +110,10 @@ async def rag_rebuild(
     result = await rebuild_index(
         source=source, embedder=state.embedder, store=state.store, bm25=state.bm25
     )
+    # 重建顺带刷新 KC 前置图（重灌库后前置关系可能变化；失败保留旧图）。
+    refreshed = fetch_kc_graph(os.environ.get("PYT_DB_URL", DEFAULT_DB_URL))
+    if refreshed.size > 0:
+        state.kc_graph = refreshed
     return RagRebuildResponse(
         built_chunks=result.built_chunks,
         elapsed_ms=result.elapsed_ms,

@@ -123,7 +123,14 @@ async def test_ask_stream_tokens_and_result_payload() -> None:
     assert result["review"]["safety"]["passed"] is True
     # 课件证据明细（供前端「课件证据」面板渲染）：页码 + 原文片段。
     assert result["evidence"] == [
-        {"page_id": 112, "page_no": 12, "snippet": "第 12 页讲解 for 循环遍历列表。", "score": 0.82}
+        {
+            "page_id": 112,
+            "page_no": 12,
+            "snippet": "第 12 页讲解 for 循环遍历列表。",
+            "score": 0.82,
+            # KC 图谱感知扩展（R-16）：非前置证据默认 False。
+            "via_prerequisite": False,
+        }
     ]
 
 

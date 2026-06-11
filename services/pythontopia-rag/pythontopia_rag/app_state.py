@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 
 from pythontopia_rag.index.bm25 import Bm25Index
 from pythontopia_rag.index.embedder import Embedder, select_embedder
+from pythontopia_rag.index.kc_graph import KcGraph
 from pythontopia_rag.index.store import InMemoryVectorStore, VectorStore
 
 
@@ -12,6 +13,8 @@ class AppState:
     embedder: Embedder
     store: VectorStore
     bm25: Bm25Index = field(default_factory=Bm25Index)
+    # KC 前置关系图（空图 = 不做图谱扩展，行为退化为纯混合检索）。
+    kc_graph: KcGraph = field(default_factory=KcGraph)
 
 
 def create_default_state() -> AppState:

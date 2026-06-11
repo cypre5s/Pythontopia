@@ -15,6 +15,8 @@ class RagHit(BaseModel):
     kc_codes: list[str] = Field(default_factory=list)
     text: str
     score: float
+    # KC 图谱感知扩展（R-16）：该证据来自前置 KC 召回路（学生困惑可能源于前置知识）。
+    via_prerequisite: bool = False
 
 
 class EvidenceBundle(BaseModel):

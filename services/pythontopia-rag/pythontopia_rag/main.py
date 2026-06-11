@@ -11,6 +11,7 @@ from pythontopia_rag.app_state import create_default_state
 from pythontopia_rag.data.loader import DEFAULT_DB_URL, fetch_pages
 from pythontopia_rag.data.page_source import InMemoryPageSource, page_records_to_indexable
 from pythontopia_rag.index.builder import rebuild_index
+from pythontopia_rag.index.kc_graph import fetch_kc_graph
 from pythontopia_rag.routes.embed import router as embed_router
 from pythontopia_rag.routes.query import router as query_router
 
@@ -45,6 +46,8 @@ async def _self_heal_empty_index(
             store=app.state.rag.store,
             bm25=app.state.rag.bm25,
         )
+        # 种子就绪后顺带补载 KC 前置图（启动时 DB 不可用则此前为空图）。
+        app.state.rag.kc_graph = fetch_kc_graph(db_url)
         logger.info(
             "RAG self-heal 成功：课程种子就绪后重建索引，built_chunks=%d", result.built_chunks
         )
@@ -67,6 +70,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         store=app.state.rag.store,
         bm25=app.state.rag.bm25,
     )
+    # KC 前置图：与课程页同源加载；失败为空图（检索退化为不扩展，fail-soft）。
+    app.state.rag.kc_graph = fetch_kc_graph(db_url)
     heal_task: asyncio.Task[None] | None = None
     if not pages:
         logger.warning("RAG 启动时索引为空（课程种子可能尚未落库），启动后台自愈轮询")

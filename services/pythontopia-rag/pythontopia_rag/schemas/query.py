@@ -13,6 +13,9 @@ class RagHit(BaseModel):
     kc_codes: list[str] = Field(default_factory=list)
     text: str
     score: float
+    # KC 图谱感知扩展（R-16）：True = 命中来自前置 KC 召回路（「困惑根源在前置知识」），
+    # 下游可据此把该页标注为「前置知识」。向后兼容追加，默认 False。
+    via_prerequisite: bool = False
 
 
 class RagQueryRequest(BaseModel):
@@ -21,6 +24,8 @@ class RagQueryRequest(BaseModel):
     kc_codes: list[str] | None = None
     chapter_ids: list[int] | None = None
     min_score: float = Field(default=0.3, ge=0.0, le=1.0)
+    # KC 图谱感知扩展开关（默认开）：锚定 kc_codes 时沿前置边追加低权重召回路。
+    expand_prerequisites: bool = True
 
 
 class RagQueryResponse(BaseModel):
