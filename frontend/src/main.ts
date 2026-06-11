@@ -1,3 +1,5 @@
+// 运行时 polyfill 必须最先执行（早于 pdfjs-dist 等依赖 Promise.withResolvers 的模块）。
+import './polyfills';
 import { createPinia } from 'pinia';
 import { createApp } from 'vue';
 import App from './App.vue';

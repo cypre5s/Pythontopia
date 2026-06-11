@@ -28,10 +28,12 @@ async function ensureWorker(): Promise<void> {
   if (workerInitialised) return;
   if (typeof window === 'undefined') return;
   const mod = await getPdfModule();
-  mod.GlobalWorkerOptions.workerSrc = new URL(
-    'pdfjs-dist/build/pdf.worker.mjs',
-    import.meta.url,
-  ).toString();
+  // 用自定义 worker 入口（内部先打 Promise.withResolvers polyfill 再加载 pdfjs 官方 worker）：
+  // worker 线程全局独立于主线程 polyfill，必须在 worker 内单独注入，否则
+  // 「Promise.withResolvers is not a function」在 worker 内（getPdfManager）触发，PDF 解析失败。
+  // 标准 Web Worker 写法（new URL + import.meta.url），Vite 会把入口打包成独立 worker chunk。
+  const worker = new Worker(new URL('./pdfWorker.ts', import.meta.url), { type: 'module' });
+  mod.GlobalWorkerOptions.workerPort = worker;
   workerInitialised = true;
 }
 
