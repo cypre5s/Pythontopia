@@ -1,5 +1,113 @@
 # Changelog
 
+## 2026-06-11 — 多模态/课件显示环境修复 + 百晓工坊深度优化（R-16）启动
+
+> 上午两笔环境级修复已提交；下午启动**百晓工坊深度优化（R-16）**：地基契约已落盘，
+> 8 个工作包按零交叠文件所有权**并发施工中**（标注「在途」的条目尚未合入/验证，完工后另行补记）。
+
+### 一、环境级修复（已提交）
+
+- **课件 PDF 全线打不开**（`d3d632d8`）：pdfjs-dist 4.x 在 Web Worker 内用 ES2024 `Promise.withResolvers`，
+  旧 Chromium/Electron 环境 worker 无此方法 → 图书馆 / stage 课件 / 工坊故事板 PDF 全挂。
+  双重注入修复：`src/polyfills.ts`（主线程，`main.ts` 最前 import）+ `src/lib/pdfWorker.ts`
+  （自定义 worker 入口先打 polyfill 再载 pdfjs worker，经 `workerPort` 注入）。
+- **讯飞多模态恒降级**（`2f10d31a`）：部分环境 DNS 把讯飞解析到 fake-ip(198.18.x.x)，Java HttpClient
+  默认不读 `HTTPS_PROXY` → 文生图/TTS connect timeout 恒降级。`dev.sh` 注入 JVM 代理参数（讯飞走代理、
+  本地直连）；compose backend `JAVA_OPTS` 经 `host.docker.internal` 走宿主代理；backend 镜像内置 ffmpeg；
+  `.env.example` / `docs/dev-startup.md` 补踩坑记录。
+
+### 二、百晓工坊深度优化 R-16 启动（在途）
+
+> 目标七条：可视性美观 / 意图理解 / 画像个性化 / 工具调用 / Agent 协作 / 并发 / 稳定性。
+> 执行蓝本：`docs/plans/2026-06-11-baixiao-deep-optimization.md`（含跨层契约与文件所有权切分）。
+
+- **地基已落盘**（本仓已改，graph 服务）：
+  - `pythontopia_graph/tools/registry.py`：**16 工具注册表**单一事实源（9 既有 + 新增 考考我 ASKME /
+    讲代码 EXPLAIN_CODE / 修报错 FIX_BUG / 学习规划 PLAN / 学情报告 PROGRESS / 带路 NAVIGATE / 找资料 MY_STUDY），
+    含风险分级 / 超时 / 重试 / 降级 / 作用域（考核模式动态收缩），意图路由 prompt 工具目录自动生成；
+  - `pythontopia_graph/tools/harness.py`：执行治理 harness——超时 / 指数退避重试 / **熔断器** / **预算守卫** /
+    结构化 `ToolObservation`（绝无悬空）/ JSON 审计日志 / `harness_stats()` 统计；
+  - `schemas/intent.py`：IntentKind 扩 16 值；请求增 `recent_turns / last_intent / last_kc_codes /
+    profile_brief / session_corrections / scope`，响应增 `target / secondary_intent`（多轮指代消解 + 组合意图契约）。
+- **8 个工作包已全部完成并通过三层全量终验**（主代理集成缝合后实跑）：
+  - WP1 graph 意图路由：多轮指代消解（recent_turns/last_intent/纠错记忆）、贴代码确定性预判
+    （FIX_BUG/EXPLAIN_CODE 零 LLM 命中）、默认兜底 HANDOUT→ASK、70 条黄金语料评测、
+    `GET /agents/intent/tools` + `GET /agents/harness/stats`；
+  - WP2 答疑管线：8 维个性化指令组 + 苏格拉底阶梯提示、**critique→revise 自纠闭环**（审查打回→
+    导师返工→重审）、图解+证据注 `asyncio.gather` 并行、SSE 心跳、`personalization_note`「为你定制」；
+  - WP3 orchestrator：dispatch 真画像透传、learn→practice **工件链**（练习紧扣讲义产物）、
+    无依赖步骤 `Semaphore(3)` 有界并发；
+  - WP4 Java：`PassiveProfileService.profileBrief` 8 维全量（置信门槛+score 分档）、intent 链路
+    R-16 字段透传（recentTurns/lastIntent/sessionCorrections/scope/target/secondaryIntent）；
+  - WP5+WP6 前端：聊天核心 16 工具分发（考考我 3 轮考核模式 / 讲代码 / 修报错 / 学习规划直连
+    orchestrator / 学情卡 / 带路 / 找资料）、低置信澄清气泡 + 纠错 chips、换讲法 chips 闭环
+    （styleEngaged 回流）、停止/重试、滚动权归用户；8 个像素风新组件（百晓头像/欢迎屏/学情卡/
+    计划卡/澄清/考核条/工具调用透明行/👍👎）；
+  - WP7 主线巡检：**修复主线 P0 硬断**（章测交卷契约断裂致 1★ 永不可得、第 2 章起全锁）+
+    视频计时 3 倍慢 + 无尽补星断链 + 闯关塔第 10 关断链 + 假完成显示 + 地图缓存过期，
+    审计报告 `docs/plans/2026-06-11-mainline-audit.md`（含 7 条未修风险记录）；
+  - WP8 RAG：**BM25+RRF 混合检索**（hybrid Recall@5 = 0.983 vs 纯向量 0.966）+ 上下文化分块
+    （embed 文本前置章页摘要、展示原文不带前缀）+ 59 条检索黄金集 + 「input函数/for循环/列表」
+    三查询验收，BM25 缺失自动回退 vector_only。
+- **终验（实跑）**：graph pytest **518 passed**（基线 422）；rag pytest **55 passed**（基线 26）；
+  Java surefire **653/0/0**（基线 595）；前端 `vue-tsc` ✓、eslint 0 warning ✓、vitest **1674/1674** ✓。
+- 主代理集成缝合修复：意图路由 last_kc_codes 锚点两处丢失（贴代码/追问场景）、harness Python 3.10
+  `asyncio.TimeoutError` 捕获、HudShell 删任务槽后的 a11y 集成测试断言。
+- **全栈真 LLM 端到端冒烟（./dev.sh，全部实测通过）**：四端健康 ✓；意图路由真 LLM 四连测
+  （「再来两道」沿用上轮 PRACTICE+KC ✓、「带我去闯关塔练练」→ NAVIGATE+target=arena+
+  secondaryIntent=PRACTICE 组合意图 ✓、贴代码报错零 LLM 确定性 FIX_BUG ✓、学情句 → PROGRESS ✓）；
+  真答疑 SSE 全链（plan/9×trace/603×token/result，三审+证据+evidence_note 诚实标注课件不匹配）✓；
+  RAG 混合检索三查询（input函数/for循环/列表，mode=hybrid 引用页合理）✓；mainline overview 7 章 +
+  章测 prepare GENERATING ✓；浏览器 UI 冒烟（新欢迎屏/快捷 chips/能力一览 16 工具/学情卡渲染）✓。
+- **主线审计 R1-R5 风险项全部修复**（R6 计划内取舍保留，R7 已随 WP5 解决）：
+  - R1 课件文档 id 去魔数：`CoursePackRepository.findDocumentIdByPackOrder`（pack 内 sort_order 顺位）
+    动态解析章→文档，命中缓存、未命中回退 185+chapter 并告警（重灌库 id 漂移不再取错文档）；
+  - R2 OJ 打点 evidence 收紧：不带 submissionId 的「标记完成」要求该生该题已有 PASSED 提交，
+    否则 400 `EXAMPLE_EVIDENCE_REQUIRED`；前端 toast 展示拒绝原因引导先去训练场判题；
+  - R3 章测 prepare 轮询：GENERATING 时前端每 3s 幂等轮询（≤8 次），个性化卷就绪即开考，
+    不再因生成窗口点开始而错过个性化卷（超时仍走 golden 兜底不卡考试）；
+  - R4 integrity.overtime 客户端自报：DTO 增字段 + 前端上送「倒计时归零自动交卷」标志，
+    与服务端拒收口径取并集落库，教师端可见；
+  - R5 FILL 单空硬约束：paper_designer prompt 明确「恰好一个空位」+ `_assert_fill_single_blank`
+    fail-fast 校验（多空与后端单空归一化判分语义冲突），golden 兜底链路不受影响。
+- **R1-R5 修复后三层全量回归（实跑）**：graph pytest **521 passed**；Java surefire **658/0/0**；
+  前端 vitest **1674/1674** ✓（含 StageExamplePractice/StageLearnPage spec 补 Pinia 装配、
+  章测 api spec 对齐 overtime 透传）。
+
+## 2026-06-10 — R-15 §12 B2：彻底退役旧 mainQuest 前端主线（破坏性，可 revert）+ 客户端契约补录
+
+> 单会话执行 R-15 计划 §12 **B2「旧主线退役」**（方案 A 最小退役）：前端权威 `mainQuest` 主线系统整体下线，
+> 主线进度统一由**后端权威 mainline 域**（`stores/mainline`）承载。**诚实交付**：本节所有验证均实跑（命令+结果见「验证」）。
+> 期间仓库另有并行会话在做后端「注释精简」提交（`914b4a3b`/`51779ec1`/`e3075105`，仅 backend），
+> 本会话仅提交自身 frontend + docs 改动（`537005bc`/`6657bc2c`），与其零重叠、干净叠加其上。
+
+### 一、退役旧 mainQuest 系统（`537005bc`，破坏性单独 commit 便于回滚）
+
+- **抽取中立数据**：新建 `data/bossCatalog.ts`（`MAIN_QUEST_BOSSES`/`findBossByChapter` + `MainQuestBoss`/`MainSubQuestReward` 类型），
+  `BossPage`/`ArenaPage`/`EndlessPage`/`api/boss.ts` repoint；`TrainingPanel` 掌握度提示去 quest 阈值依赖（仅显示当前进度）。
+- **删除**（合计 ~4100 行）：`stores/mainQuest.ts`、`data/mainQuests.ts`、`types/mainQuest.ts`、`utils/questGuidance.ts`、`components/hud/MainQuestPanel.vue`。
+- **世界/HUD 重接线**：`WorldScene` 去 activeQuest 动态标记 + store 订阅 → 单一「冒险地图」告示牌 trigger（tile 22,20 → `/mainline-map`）+ 持久「!」引导；
+  `HudShell` 顶部进度条改**星星条**（读 mainline overview，本章 ★★☆ + 总星 N/21）；任务槽/摘要/`PauseMenu`/`LearningObjectivePanel` CTA 统一跳 `/mainline-map`；
+  `ProbeCard` 去 quest 相位（cog_intro 改「进世界一次性触发」）；`GuideOverlay` 改读 mainline + `chapters.ts` 推导章 KC。
+- **判定迁移**：`GraduationPage` 毕业判定改为 **7 章全部 ≥1★**（后端权威 overview）；`LecturePage` 去 mainQuest 媒体打点（改会话内「已学习」标记）；
+  `learning notify`/`field`/`training`/`workshop` 切片 + `WorkshopChat`/`useBossSession` 去全部 evidence 钩子；
+  `dialog.ts` `quest_recommend`→`/mainline-map`、移除 `onDialogClose` 主线通知。
+- **存档**：`world.syncFromSlot` 不再回灌 `snapshot.mainQuest`；`SaveSlotSnapshot` 去 `mainQuest` 字段（前端停读写；DB/`V120` 零破坏、无新迁移；旧快照自然作废）。
+- **测试**：删 6 个 mainQuest-only 套件（store/evidence/MainQuestPanel/questGuidance/mainQuests/main-quest-flow），修 `GraduationPage`/`PracticeList`/`TrainingPanel`/`BossPage`/`saveSlot` 规格。
+
+### 二、客户端契约补录（`6657bc2c`）
+
+- `docs/clients/api-contract.md` 新增 §4.9（since R-15）：mainline overview / stage 详情 + 三件套打点 / 章末测试 prepare·start·{testId}/submit·latest /
+  endless·summary / recovery·errorbook / `npc/{npcKey}/greeting` / 教师看板 4 个；路径与后端 controller **实测一致**；标注旧 `mainQuest` 存档快照已废弃。
+
+### 验证（实跑）
+
+- 前端：`vue-tsc` typecheck ✓；`eslint` 0 warning ✓；`vitest` **161 文件 / 1551 用例**全绿 ✓；`vite build` 成功 ✓。
+- 后端：`mvn test` **BUILD SUCCESS（Tests run: 595, Failures: 0, Errors: 0）**，含全部 Testcontainers 集成 + Flyway 全链（含 `V156`/`V157`）+ 课程包 seed 43 + `NpcGreetingServiceTest`(12/0，确认 `@SpringBootTest` 上下文加载通过)。
+- 微服务：graph `pytest` **422 passed**；rag `pytest` **26 passed**。
+- seed 计数（manifest + 集成测试佐证）：7 文档 / 561 页 / 7 章 / 65 KC / 46 例 / 39 题 ✓。
+- 浏览器端到端冒烟：本会话随后执行（见后续补记）。
+
 ## 2026-06-10 — 真隐藏用例判题收口 + 画像难度加权回流 + @Async embedding flaky 修复 + 世界收敛收尾 + 工程整洁
 
 > 单会话围绕「真判题红线 + 既有缺陷/flaky + 工程整洁」收口，并对仓库做体检式整理。
