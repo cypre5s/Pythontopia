@@ -57,7 +57,21 @@ def _parse_events(chunks: list[str]) -> list[tuple[str, dict]]:
                 event = line[len("event:"):].strip()
             elif line.startswith("data:"):
                 data_lines.append(line[len("data:"):].strip())
-        events.append((event, json.loads("\n".join(data_lines))))
+        _ev = event
+        _payload = json.loads("\n".join(data_lines))
+        # 迁移后 tutor 发 AG-UI 官方名；反归一化回历史语义，保持下方断言不变
+        # （AG-UI 命名正确性由 test_sse_agui 的 translate 单测覆盖）。
+        if _ev in ("STEP_STARTED", "STEP_FINISHED"):
+            _ev = "trace"
+        elif _ev == "TEXT_MESSAGE_CONTENT":
+            _ev = "token"
+        elif _ev == "RUN_FINISHED":
+            _ev, _payload = "result", _payload.get("result", _payload)
+        elif _ev == "RUN_ERROR":
+            _ev = "error"
+        elif _ev == "CUSTOM":
+            _ev, _payload = str(_payload.get("name", "custom")), _payload.get("value", _payload)
+        events.append((_ev, _payload))
     return events
 
 

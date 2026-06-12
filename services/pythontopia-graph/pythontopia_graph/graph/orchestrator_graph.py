@@ -284,6 +284,21 @@ class OrchestratorGraph:
             {"type": "orchestrator", "nodes": plan_nodes},
         )
 
+        # AG-UI STATE_DELTA：plan 步骤进度的累积状态映射（step_id → pending/active/done/failed），
+        # 随 dispatch 真实推进实时同步前端。区别于离散 trace 日志，这是「当前完整状态」快照，前端
+        # useSseStream.state 浅合并即得最新全量、可直接绑定计划卡，无需自行从 trace 流累积。
+        step_status: dict[str, str] = {step.id: "pending" for step in plan}
+
+        async def _emit_plan_progress() -> None:
+            # 发完整步骤视图（真实 PlanStep 字段 + 实时 status），前端 state.plan_steps 可直接渲染
+            # 计划卡并实时点亮——比最终 result.plan（status 多停在 pending）更准。
+            steps_view = [
+                {**step.model_dump(mode="json"), "status": step_status[step.id]} for step in plan
+            ]
+            await self._emit_cb("STATE_DELTA", {"delta": {"plan_steps": steps_view}})
+
+        await _emit_plan_progress()
+
         # 两批有界并发：watch/learn/assess 无依赖先并发；practice 依赖 learn 工件随后执行。
         first_batch = [step for step in plan if step.phase != "practice"]
         second_batch = [step for step in plan if step.phase == "practice"]
@@ -294,6 +309,8 @@ class OrchestratorGraph:
         async def _run_step(step: PlanStep, focus_hint_extra: str = "") -> None:
             """单 step 全生命周期：start trace → dispatch → error/finish trace（失败不外抛）。"""
             async with semaphore:
+                step_status[step.id] = "active"
+                await _emit_plan_progress()
                 await self._emit_cb(
                     "trace",
                     {
@@ -351,6 +368,8 @@ class OrchestratorGraph:
                         "note": result.summary,
                     },
                 )
+                step_status[step.id] = "done" if result.ok else "failed"
+                await _emit_plan_progress()
                 results_by_id[step.id] = result
                 traces_by_id[step.id] = GraphTraceStep(
                     node=f"dispatch.{step.agent}",

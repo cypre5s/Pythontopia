@@ -80,3 +80,28 @@ def test_orchestrator_stream_emits_trace_token_and_result_events() -> None:
     assert "event: error" not in text
 
     del app.state.llm_provider
+
+
+def test_orchestrator_stream_emits_state_delta_plan_progress() -> None:
+    """dispatch 经 AG-UI STATE_DELTA 实时推送 plan 步骤进度（真实产出，不造假）。"""
+    app.state.llm_provider = StubProvider([], reply="进度同步演示。")
+    client = TestClient(app)
+    body = {
+        "user_id": 1,
+        "session_id": "route-state-delta",
+        "user_message": "我想学 for 循环",
+        "course_kc_index": ["PY43-KC-001", "PY43-KC-003"],
+    }
+
+    response = client.post("/agents/orchestrator/turn/stream", json=body)
+
+    assert response.status_code == 200
+    text = response.text
+    # AG-UI 官方事件名 + plan 进度袋，前端 useSseStream 双语兼容层可直接归一化进 state。
+    assert "event: STATE_DELTA" in text
+    assert "plan_steps" in text
+    # 开场全 pending 快照 + 每步真实推进到 active（done/failed 视 dispatch 结果）。
+    assert '"pending"' in text
+    assert '"active"' in text
+
+    del app.state.llm_provider

@@ -17,7 +17,8 @@ export interface OrchestratorPlanStep {
   kc_codes: string[];
   /** 直达学习面板的简称：lecture/library/training/workshop/tutor/problems/examples/review。 */
   panel: string | null;
-  status: 'pending' | 'active' | 'done' | 'skipped';
+  /** 运行态：dispatch 中可达 'failed'（STATE_DELTA 实时进度）；result.plan 仅前四态。 */
+  status: 'pending' | 'active' | 'done' | 'skipped' | 'failed';
   /** phase=learn 时的资源类型（HANDOUT/MINDMAP/...）。 */
   resource_type: string | null;
 }

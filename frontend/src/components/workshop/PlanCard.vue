@@ -12,6 +12,11 @@ interface PlanStep {
   title: string;
   detail: string;
   panel: string | null;
+  /**
+   * 运行态进度（orchestrator dispatch 经 AG-UI STATE_DELTA 实时推送）：
+   * pending / active / done / failed / skipped；缺省按 pending（历史回放/静态卡无此字段）。
+   */
+  status?: string;
 }
 
 defineProps<{ steps: PlanStep[] }>();
@@ -30,8 +35,24 @@ const PHASE_META: Record<string, PhaseMeta> = {
   assess: { label: '测', cls: 'assess' },
 };
 
+/** 进度图标：done 打勾、active 进行、failed 叉、skipped 跳过；pending 不显示。 */
+const STATUS_ICON: Record<string, string> = {
+  done: '✓',
+  active: '▶',
+  failed: '✗',
+  skipped: '⊘',
+};
+
 function phaseMeta(phase: string): PhaseMeta {
   return PHASE_META[phase] ?? { label: phase, cls: 'other' };
+}
+
+function stepStatus(step: PlanStep): string {
+  return step.status ?? 'pending';
+}
+
+function statusIcon(step: PlanStep): string {
+  return STATUS_ICON[stepStatus(step)] ?? '';
 }
 
 function onOpen(step: PlanStep): void {
@@ -52,6 +73,7 @@ function onOpen(step: PlanStep): void {
         v-for="(s, i) in steps"
         :key="s.id"
         class="plan__step"
+        :class="`plan__step--${stepStatus(s)}`"
         data-testid="plan-step"
       >
         <span class="plan__rail">
@@ -66,7 +88,16 @@ function onOpen(step: PlanStep): void {
           >{{ phaseMeta(s.phase).label }}</span>
         </span>
         <span class="plan__body">
-          <span class="plan__step-title">{{ s.title }}</span>
+          <span class="plan__step-title">
+            <span
+              v-if="statusIcon(s)"
+              class="plan__status"
+              :class="`plan__status--${stepStatus(s)}`"
+              data-testid="plan-step-status"
+              aria-hidden="true"
+            >{{ statusIcon(s) }}</span>
+            {{ s.title }}
+          </span>
           <span class="plan__detail">{{ s.detail }}</span>
           <button
             v-if="s.panel"
@@ -179,6 +210,45 @@ function onOpen(step: PlanStep): void {
   font-weight: 700;
   line-height: 1.4;
   word-break: break-word;
+}
+/* 运行态进度视觉：dispatch 经 AG-UI STATE_DELTA 实时点亮。done 降权、active 徽章脉冲。 */
+.plan__step--done {
+  opacity: 0.6;
+}
+.plan__step--active .plan__badge {
+  box-shadow: 0 0 0 2px #ffd770;
+  animation: plan-pulse 1.1s ease-in-out infinite;
+}
+@keyframes plan-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 2px rgba(255, 215, 112, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 3px rgba(255, 215, 112, 0.95);
+  }
+}
+.plan__status {
+  display: inline-flex;
+  margin-right: 4px;
+  font-weight: 700;
+}
+.plan__status--done {
+  color: #4d6e1d;
+}
+.plan__status--active {
+  color: #c2871f;
+}
+.plan__status--failed {
+  color: #b3261e;
+}
+.plan__status--skipped {
+  color: var(--pyt-color-text-muted);
+}
+@media (prefers-reduced-motion: reduce) {
+  .plan__step--active .plan__badge {
+    animation: none;
+  }
 }
 .plan__detail {
   font-size: 11px;

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 from collections.abc import AsyncIterator
 from typing import Any
@@ -11,6 +10,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 
+from pythontopia_graph import sse_agui
 from pythontopia_graph.graph.resource_graph import (
     ResourceGraph,
     ResourceGraphConfig,
@@ -47,7 +47,8 @@ def _valid_kc_codes(request: Request) -> set[str]:
 
 
 def _format_sse(event: str, data: dict[str, Any]) -> str:
-    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+    # 统一经 AG-UI 语义编码（见 sse_agui.translate）；调用点零改动迁移到 AG-UI 命名。
+    return sse_agui.translate(event, data)
 
 
 async def _resource_stream_generator(

@@ -42,6 +42,7 @@ import PlanCard from '@/components/workshop/PlanCard.vue';
 import ToolTraceLine from '@/components/workshop/ToolTraceLine.vue';
 import AnswerFeedback from '@/components/workshop/AnswerFeedback.vue';
 import MarkdownView from '@/components/common/MarkdownView.vue';
+import { annotateCitations } from '@/utils/citations';
 import TutorVisualAids, { type TutorVisualAid } from '@/components/tutor/TutorVisualAids.vue';
 import CoursewareEvidence from '@/components/tutor/CoursewareEvidence.vue';
 import BilibiliVideoCards from '@/components/video/BilibiliVideoCards.vue';
@@ -278,6 +279,8 @@ const workshopSse = useSseStream<WorkshopCreateResponse>('/api/workshop/resource
 const orchestratorSse = useSseStream<OrchestratorResult>('/api/orchestrator/turn/stream');
 
 const streamingAskId = ref<string | null>(null);
+// PLAN 流式：当前正被 STATE_DELTA 实时点亮步骤的 plan 卡 id（dispatch 进度写入它）。
+const streamingPlanId = ref<string | null>(null);
 // 学生点了「⏹ 停止」：runAsk 收尾时据此跳过错误兜底（气泡已标「（已中断）」）。
 const askInterrupted = ref(false);
 
@@ -502,6 +505,15 @@ watch(orchestratorSse.traces, (tr) => {
 });
 watch(orchestratorSse.plan, (p) => {
   activity.syncPlan('orchestrator', p);
+});
+// PLAN 流式：dispatch 经 AG-UI STATE_DELTA 推送的真实 plan 步骤进度，实时写入当前 plan 卡点亮步骤。
+watch(orchestratorSse.state, (st) => {
+  if (!streamingPlanId.value) return;
+  const steps = st.plan_steps;
+  if (Array.isArray(steps)) {
+    updateMessage(streamingPlanId.value, { planSteps: steps as OrchestratorPlanStep[] });
+    scrollToBottom();
+  }
 });
 
 // ============ 多轮路由上下文 ============
@@ -1069,7 +1081,25 @@ async function runPlan(text: string): Promise<string> {
     history,
     courseKcCodes: courseKcs.value.map((k) => k.code),
   };
+
+  // 先落一张流式 plan 卡：dispatch 进度经 STATE_DELTA → watch(orchestratorSse.state) 实时点亮步骤。
+  const meta = commandOf('PLAN');
+  const id = genId();
+  streamingPlanId.value = id;
+  pushMessage({
+    id,
+    role: 'assistant',
+    kind: 'plan',
+    intent: 'PLAN',
+    text: '',
+    planSteps: [],
+    streaming: true,
+    toolIcon: meta.icon,
+    toolLabel: meta.label,
+  });
+
   await orchestratorSse.start(body);
+  streamingPlanId.value = null;
 
   const result = orchestratorSse.result.value;
   const ok = orchestratorSse.status.value === 'done' && result !== null;
@@ -1077,28 +1107,25 @@ async function runPlan(text: string): Promise<string> {
 
   if (!ok || !result) {
     playSfx('sfx_error');
-    const id = genId();
-    pushMessage({
-      id,
-      role: 'assistant',
+    updateMessage(id, {
       kind: 'error',
       text: orchestratorSse.error.value?.message ?? '学习规划暂时没排出来，再试一次',
+      streaming: false,
     });
     return id;
   }
 
   playSfx('sfx_success');
-  const meta = commandOf('PLAN');
-  const id = genId();
-  pushMessage({
-    id,
-    role: 'assistant',
-    kind: 'plan',
-    intent: 'PLAN',
+  // 最终态：用 STATE_DELTA 累积的真实进度（status 准确）覆盖；state 缺失时回退 result.plan。
+  const liveSteps = orchestratorSse.state.value.plan_steps;
+  const finalSteps =
+    Array.isArray(liveSteps) && liveSteps.length > 0
+      ? (liveSteps as OrchestratorPlanStep[])
+      : (result.plan ?? []);
+  updateMessage(id, {
     text: result.reply_md || orchestratorSse.tokens.value,
-    planSteps: result.plan ?? [],
-    toolIcon: meta.icon,
-    toolLabel: meta.label,
+    planSteps: finalSteps,
+    streaming: false,
   });
   return id;
 }
@@ -1544,7 +1571,7 @@ onMounted(async () => {
                   :traces="m.traces"
                 />
               </div>
-              <MarkdownView :source="m.text" />
+              <MarkdownView :source="annotateCitations(m.text, m.evidence ?? [])" />
               <span
                 v-if="m.streaming"
                 class="cursor"

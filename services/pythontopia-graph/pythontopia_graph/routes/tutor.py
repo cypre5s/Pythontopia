@@ -8,7 +8,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import time
 from collections.abc import AsyncIterator, Callable
@@ -17,6 +16,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 
+from pythontopia_graph import sse_agui
 from pythontopia_graph.agents.tutor_agent import TutorAgent
 from pythontopia_graph.graph.debate_graph import DebateGraph, DebateResult
 from pythontopia_graph.llm.provider import LlmProvider, provider_from_env
@@ -86,7 +86,9 @@ def _evidence_fetcher(request: Request) -> EvidenceFetcher:
 
 
 def _format_sse(event: str, data: dict[str, Any]) -> str:
-    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+    # 统一经 AG-UI 语义编码：历史名 trace/token/result/error/plan → AG-UI 官方事件，
+    # 调用点（含 _trace_start/_trace_finish）零改动全量迁移。见 sse_agui.translate。
+    return sse_agui.translate(event, data)
 
 
 def _stream_pieces(text: str, size: int = 24) -> list[str]:

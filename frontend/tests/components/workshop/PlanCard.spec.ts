@@ -60,4 +60,38 @@ describe('PlanCard', () => {
     expect(wrapper.find('[data-testid="plan-card"]').exists()).toBe(true);
     expect(wrapper.findAll('[data-testid="plan-step"]')).toHaveLength(0);
   });
+
+  it('按 status 点亮步骤：done 打勾降权 / active 进行 / failed 叉 / pending 无图标', () => {
+    const wrapper = mount(PlanCard, {
+      props: {
+        steps: [
+          { id: 's1', phase: 'watch', title: '看视频', detail: '', panel: null, status: 'done' },
+          { id: 's2', phase: 'learn', title: '生成讲义', detail: '', panel: null, status: 'active' },
+          { id: 's3', phase: 'practice', title: '做题', detail: '', panel: null, status: 'failed' },
+          { id: 's4', phase: 'assess', title: '小测', detail: '', panel: null, status: 'pending' },
+        ],
+      },
+    });
+
+    const steps = wrapper.findAll('[data-testid="plan-step"]');
+    expect(steps[0]?.classes()).toContain('plan__step--done');
+    expect(steps[1]?.classes()).toContain('plan__step--active');
+    expect(steps[2]?.classes()).toContain('plan__step--failed');
+    expect(steps[3]?.classes()).toContain('plan__step--pending');
+
+    // pending 不出图标 → 仅 done/active/failed 三个进度图标。
+    const icons = wrapper.findAll('[data-testid="plan-step-status"]');
+    expect(icons).toHaveLength(3);
+    expect(steps[0]?.text()).toContain('✓');
+    expect(steps[1]?.text()).toContain('▶');
+    expect(steps[2]?.text()).toContain('✗');
+  });
+
+  it('无 status 字段（历史/静态卡）默认 pending、不出进度图标', () => {
+    const wrapper = mount(PlanCard, { props: { steps: STEPS } });
+
+    const steps = wrapper.findAll('[data-testid="plan-step"]');
+    expect(steps[0]?.classes()).toContain('plan__step--pending');
+    expect(wrapper.findAll('[data-testid="plan-step-status"]')).toHaveLength(0);
+  });
 });

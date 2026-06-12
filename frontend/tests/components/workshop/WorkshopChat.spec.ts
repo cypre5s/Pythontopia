@@ -44,6 +44,8 @@ vi.mock('@/composables/useSseStream', async () => {
         error: ref<{ code: string; message: string } | null>(null),
         status: ref('idle'),
         plan: ref<unknown>(null),
+        events: ref<Array<Record<string, unknown>>>([]),
+        state: ref<Record<string, unknown>>({}),
         abort: vi.fn(),
         start: vi.fn(),
       };
@@ -263,6 +265,8 @@ interface FakeSse {
   error: { value: { code: string; message: string } | null };
   status: { value: string };
   plan: { value: unknown };
+  events: { value: Array<Record<string, unknown>> };
+  state: { value: Record<string, unknown> };
   abort: ReturnType<typeof vi.fn>;
   start: ReturnType<typeof vi.fn>;
 }

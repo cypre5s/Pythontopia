@@ -1,5 +1,6 @@
 import { ref, type Ref } from 'vue';
 import { useSessionStore } from '@stores/session';
+import { toAguiEvent, type AguiEvent } from './agui';
 
 export interface SseTraceEvent {
   node: string;
@@ -59,6 +60,10 @@ type SseStatus = 'idle' | 'connecting' | 'streaming' | 'done' | 'error';
 
 export function useSseStream<T = unknown>(url: string): {
   start: (body: unknown) => Promise<void>;
+  /** 类型化 AG-UI 事件流（按到达顺序累积；新名/旧名统一归一化）。 */
+  events: Ref<AguiEvent[]>;
+  /** STATE_SNAPSHOT/STATE_DELTA 累积的运行态状态袋（模块 D：HUD 实时同步）。 */
+  state: Ref<Record<string, unknown>>;
 } & SseStreamState<T> {
   const traces = ref<SseTraceEvent[]>([]) as Ref<SseTraceEvent[]>;
   const tokens = ref('');
@@ -66,6 +71,8 @@ export function useSseStream<T = unknown>(url: string): {
   const error = ref<{ code: string; message: string } | null>(null);
   const status = ref<SseStatus>('idle');
   const plan = ref<SsePlan | null>(null);
+  const events = ref<AguiEvent[]>([]) as Ref<AguiEvent[]>;
+  const state = ref<Record<string, unknown>>({});
 
   let controller: AbortController | null = null;
 
@@ -89,6 +96,8 @@ export function useSseStream<T = unknown>(url: string): {
     result.value = null;
     error.value = null;
     plan.value = null;
+    events.value = [];
+    state.value = {};
     status.value = 'connecting';
 
     controller = new AbortController();
@@ -140,7 +149,7 @@ export function useSseStream<T = unknown>(url: string): {
     let buffer = '';
 
     try {
-      for (;;) {
+      for (; ;) {
         const { done, value } = await reader.read();
         if (done) break;
 
@@ -201,49 +210,48 @@ export function useSseStream<T = unknown>(url: string): {
     return { event, data: dataLines.join('\n') };
   }
 
-  function dispatch(event: string, raw: string): void {
-    switch (event) {
-      case 'plan': {
-        try {
-          plan.value = JSON.parse(raw) as SsePlan;
-        } catch { /* plan 格式错误，忽略 */ }
+  function dispatch(eventName: string, raw: string): void {
+    const ev = toAguiEvent(eventName, raw);
+    if (!ev) return;
+    events.value = [...events.value, ev];
+    projectEvent(ev);
+  }
+
+  /** 把归一化后的 AguiEvent 投影回既有 refs（向后兼容）+ 累积运行态 state（模块 D）。 */
+  function projectEvent(ev: AguiEvent): void {
+    switch (ev.type) {
+      case 'RUN_STARTED':
+        if (status.value === 'connecting') status.value = 'streaming';
         break;
-      }
-      case 'trace': {
-        try {
-          const t = JSON.parse(raw) as SseTraceEvent;
-          traces.value = [...traces.value, t];
-        } catch { /* trace 格式错误，忽略 */ }
+      case 'TEXT_MESSAGE_CONTENT':
+        tokens.value += ev.delta;
         break;
-      }
-      case 'token': {
-        try {
-          const parsed = JSON.parse(raw) as { delta: string };
-          tokens.value += parsed.delta;
-        } catch {
-          tokens.value += raw;
-        }
+      case 'STEP_STARTED':
+      case 'STEP_FINISHED':
+        traces.value = [...traces.value, ev.step];
         break;
-      }
-      case 'result': {
-        try {
-          result.value = JSON.parse(raw) as T;
-        } catch { /* result 格式错误，忽略 */ }
+      case 'RUN_FINISHED':
+        result.value = ev.result as T;
         status.value = 'done';
         break;
-      }
-      case 'error': {
-        try {
-          const parsed = JSON.parse(raw) as { code: string; message: string };
-          error.value = parsed;
-        } catch {
-          error.value = { code: 'UNKNOWN', message: raw };
-        }
+      case 'RUN_ERROR':
+        error.value = { code: ev.code, message: ev.message };
         status.value = 'error';
         break;
-      }
+      case 'STATE_SNAPSHOT':
+        state.value = { ...ev.snapshot };
+        break;
+      case 'STATE_DELTA':
+        state.value = { ...state.value, ...ev.delta };
+        break;
+      case 'CUSTOM':
+        if (ev.name === 'plan') plan.value = ev.value as SsePlan;
+        break;
+      // TEXT_MESSAGE_START/END、TOOL_CALL_* 仅进 events 流，无既有 refs 投影（留给模块 C/B）。
+      default:
+        break;
     }
   }
 
-  return { traces, tokens, result, error, status, plan, abort, start };
+  return { traces, tokens, result, error, status, plan, events, state, abort, start };
 }
