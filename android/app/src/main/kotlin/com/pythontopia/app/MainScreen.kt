@@ -168,6 +168,7 @@ private fun AppShell(onLogout: () -> Unit) {
                 MainlineMapScreen(
                     onOpenStage = { stageId -> featureNav.navigate("mainline/stage/$stageId") },
                     onOpenTest = { chapter -> featureNav.navigate("mainline/chapter-test/$chapter") },
+                    onOpenEndless = { chapter -> featureNav.navigate("endless?chapter=$chapter") },
                 )
             }
             composable(
@@ -224,7 +225,13 @@ private fun AppShell(onLogout: () -> Unit) {
             composable("library") { LibraryScreen() }
             composable("arena") { ArenaScreen() }
             composable("boss") { BossScreen() }
-            composable("endless") { EndlessScreen() }
+            composable(
+                route = "endless?chapter={chapter}",
+                arguments = listOf(navArgument("chapter") { type = NavType.IntType; defaultValue = -1 }),
+            ) { backStackEntry ->
+                val ch = backStackEntry.arguments?.getInt("chapter")?.takeIf { it > 0 }
+                EndlessScreen(chapter = ch)
+            }
             composable("lecture") { LectureScreen() }
             composable("tower") { ChapterTowerScreen() }
             composable("mine") {

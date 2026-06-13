@@ -1,5 +1,8 @@
 package com.pythontopia.feature.endless
 
+import com.pythontopia.core.data.dto.mainline.EndlessSummaryRequest
+import com.pythontopia.core.data.dto.mainline.StarAwardResultDto
+import com.pythontopia.core.network.api.MainlineApi
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -35,9 +38,20 @@ interface EndlessApi {
 @Singleton
 class EndlessRepository @Inject constructor(
     private val api: EndlessApi,
+    private val mainlineApi: MainlineApi,
 ) {
     suspend fun kcCodes(): List<String> =
         runCatching { api.kcs().map { it.kcCode } }.getOrElse { emptyList() }
+
+    /** 无尽一轮小结 → ENDLESS_RECOVERY 补星判定（防刷：每日每章至多记 1 次）；失败返回 null。 */
+    suspend fun submitEndlessSummary(
+        chapter: Int,
+        correct: Int,
+        total: Int,
+        streak: Int,
+    ): StarAwardResultDto? = runCatching {
+        mainlineApi.endlessSummary(EndlessSummaryRequest(chapter, correct, total, streak))
+    }.getOrNull()
 
     suspend fun problems(kcCode: String): List<EndlessProblemDto> =
         runCatching { api.problems(kcCode) }.getOrElse { emptyList() }

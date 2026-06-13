@@ -1,6 +1,7 @@
 package com.pythontopia.feature.endless
 
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
+import com.pythontopia.core.network.api.MainlineApi
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
@@ -23,12 +24,14 @@ class EndlessRepositoryTest {
     fun setUp() {
         server = MockWebServer().apply { start() }
         val json = Json { ignoreUnknownKeys = true }
-        val api = Retrofit.Builder()
+        val retrofit = Retrofit.Builder()
             .baseUrl(server.url("/"))
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
-            .create(EndlessApi::class.java)
-        repository = EndlessRepository(api)
+        repository = EndlessRepository(
+            retrofit.create(EndlessApi::class.java),
+            retrofit.create(MainlineApi::class.java),
+        )
     }
 
     @AfterEach

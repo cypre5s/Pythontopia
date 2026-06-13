@@ -4,6 +4,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -34,6 +36,7 @@ private const val MAX_CHAPTER_STARS = 3
 fun MainlineMapScreen(
     onOpenStage: (Long) -> Unit = {},
     onOpenTest: (Int) -> Unit = {},
+    onOpenEndless: (Int) -> Unit = {},
     viewModel: MainlineMapViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -51,6 +54,7 @@ fun MainlineMapScreen(
                 onOpenStage = onOpenStage,
                 onOpenTest = onOpenTest,
                 onClaimRecovery = viewModel::claimErrorbookRecovery,
+                onOpenEndless = onOpenEndless,
             )
         }
     }
@@ -71,6 +75,7 @@ private fun MapContent(
     onOpenStage: (Long) -> Unit,
     onOpenTest: (Int) -> Unit,
     onClaimRecovery: (Int) -> Unit,
+    onOpenEndless: (Int) -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 12.dp),
@@ -115,17 +120,20 @@ private fun MapContent(
                 onOpenStage = onOpenStage,
                 onOpenTest = onOpenTest,
                 onClaimRecovery = onClaimRecovery,
+                onOpenEndless = onOpenEndless,
             )
         }
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ChapterCard(
     chapter: ChapterOverviewDto,
     onOpenStage: (Long) -> Unit,
     onOpenTest: (Int) -> Unit,
     onClaimRecovery: (Int) -> Unit,
+    onOpenEndless: (Int) -> Unit,
 ) {
     Surface(
         color = MaterialTheme.colorScheme.surface,
@@ -152,10 +160,13 @@ private fun ChapterCard(
                 chapter.stages.forEach { stage ->
                     StageRow(stage = stage, onClick = { onOpenStage(stage.id) })
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     TextButton(onClick = { onOpenTest(chapter.chapter) }) { Text("章末测试 ›") }
                     if (chapter.recovery?.errorbookDone != true) {
                         TextButton(onClick = { onClaimRecovery(chapter.chapter) }) { Text("错题补星") }
+                    }
+                    if (chapter.recovery?.endlessDone != true) {
+                        TextButton(onClick = { onOpenEndless(chapter.chapter) }) { Text("无尽挑战") }
                     }
                 }
             } else {

@@ -12,6 +12,10 @@ data class EndlessUiState(
     val solved: Int = 0,
     val attempts: Int = 0,
     val score: Int = 0,
+    /** 非空表示本轮无尽锚定到主线某章，可结算 ENDLESS_RECOVERY 补星。 */
+    val chapter: Int? = null,
+    val settling: Boolean = false,
+    val recoveryMessage: String? = null,
     val error: String? = null,
 ) {
     val solvedThisProblem: Boolean get() = result?.status == EndlessStatus.PASSED

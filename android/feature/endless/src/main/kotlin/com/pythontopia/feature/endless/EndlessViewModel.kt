@@ -25,6 +25,30 @@ class EndlessViewModel @Inject constructor(
         bootstrap()
     }
 
+    /** 由 chapter-scoped 入口（主线地图「无尽挑战」）绑定本轮锚定章节，启用补星结算。 */
+    fun bindChapter(chapter: Int?) {
+        if (chapter != null && chapter > 0 && _state.value.chapter != chapter) {
+            _state.update { it.copy(chapter = chapter) }
+        }
+    }
+
+    /** 结算本轮无尽 → 上报 endless summary 触发补星判定。 */
+    fun settleRound() {
+        val s = _state.value
+        val chapter = s.chapter ?: return
+        if (s.settling || s.attempts == 0) return
+        _state.update { it.copy(settling = true, recoveryMessage = null) }
+        viewModelScope.launch {
+            val result = repository.submitEndlessSummary(chapter, s.solved, s.attempts, s.bestStreak)
+            val message = when {
+                result == null -> "结算失败，请稍后重试"
+                result.starAwarded -> "无尽挑战补星成功 +1★"
+                else -> "本轮未达补星条件（或今日已补 / 已封顶）"
+            }
+            _state.update { it.copy(settling = false, recoveryMessage = message) }
+        }
+    }
+
     private fun bootstrap() {
         _state.update { it.copy(loadingProblem = true, error = null) }
         viewModelScope.launch {

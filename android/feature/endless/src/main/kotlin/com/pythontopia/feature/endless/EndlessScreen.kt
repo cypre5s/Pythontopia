@@ -19,6 +19,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -33,13 +34,10 @@ import com.pythontopia.core.design.PytColors
 import com.pythontopia.core.design.PytLoading
 import com.pythontopia.core.design.PytSpace
 
-object EndlessDestination {
-    const val ROUTE = "endless"
-}
-
 @Composable
-fun EndlessScreen(viewModel: EndlessViewModel = hiltViewModel()) {
+fun EndlessScreen(chapter: Int? = null, viewModel: EndlessViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsState()
+    LaunchedEffect(chapter) { viewModel.bindChapter(chapter) }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -49,6 +47,9 @@ fun EndlessScreen(viewModel: EndlessViewModel = hiltViewModel()) {
         verticalArrangement = Arrangement.spacedBy(PytSpace.s3),
     ) {
         StatsBar(state)
+        if (state.chapter != null) {
+            ChapterChallengeBar(state = state, onSettle = viewModel::settleRound)
+        }
 
         when {
             state.loadingProblem -> PytLoading()
@@ -112,6 +113,38 @@ private fun StatsBar(state: EndlessUiState) {
             Stat("最佳", state.bestStreak.toString(), PytColors.success)
             Stat("已解", state.solved.toString(), PytColors.info)
             Stat("积分", state.score.toString(), PytColors.textPrimary)
+        }
+    }
+}
+
+@Composable
+private fun ChapterChallengeBar(state: EndlessUiState, onSettle: () -> Unit) {
+    Surface(
+        color = PytColors.bgElevated,
+        shape = RoundedCornerShape(6.dp),
+        border = BorderStroke(2.dp, PytColors.warning),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(PytSpace.s3),
+            verticalArrangement = Arrangement.spacedBy(PytSpace.s2),
+        ) {
+            Text("第 ${state.chapter} 章 · 无尽挑战补星", color = PytColors.warning, fontSize = 13.sp)
+            Button(
+                onClick = onSettle,
+                enabled = !state.settling && state.attempts > 0,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = PytColors.warning,
+                    contentColor = PytColors.bgPrimary,
+                ),
+                shape = RoundedCornerShape(6.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(if (state.settling) "结算中…" else "结算本轮补星")
+            }
+            state.recoveryMessage?.let {
+                Text(it, color = PytColors.success, fontSize = 12.sp)
+            }
         }
     }
 }
