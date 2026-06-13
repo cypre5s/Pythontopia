@@ -116,23 +116,30 @@ private data class AppDestination(
     val accent: androidx.compose.ui.graphics.Color,
 )
 
+// dock 顺序对齐 Web 学习流（小镇 → 主线冒险 → 看/学 → 练/测 → 支线复盘 → 画像/路径/班级），
+// 把 R-15 主线「冒险」摆在最显眼位置。各 feature 仍全部可达（M1 收敛保持功能不缩水）。
 private val APP_DESTINATIONS = listOf(
     AppDestination("hub", "小镇", PytColors.success),
     AppDestination("mainline", "冒险", PytColors.primary),
-    AppDestination("tutor", "答疑", PytColors.info),
-    AppDestination("profile", "画像", PytColors.info),
-    AppDestination("fields", "知识田", PytColors.success),
+    // 学 / AI 工坊
     AppDestination("workshop", "工坊", PytColors.warning),
     AppDestination("intent", "百晓", PytColors.warning),
+    AppDestination("tutor", "答疑", PytColors.info),
+    // 看 · 课件与讲义
     AppDestination("library", "图书馆", PytColors.info),
-    AppDestination("arena", "训练场", PytColors.danger),
-    AppDestination("boss", "BOSS战", PytColors.danger),
-    AppDestination("endless", "无尽练习", PytColors.warning),
     AppDestination("lecture", "讲义", PytColors.success),
+    // 练 / 测
+    AppDestination("arena", "训练场", PytColors.danger),
     AppDestination("tower", "闯关塔", PytColors.warning),
+    AppDestination("endless", "无尽练习", PytColors.warning),
+    AppDestination("boss", "BOSS战", PytColors.danger),
+    // 支线 · 复盘
     AppDestination("mine", "矿洞", PytColors.textMuted),
     AppDestination("retro", "复盘", PytColors.info),
+    // 画像 / 路径 / 知识田 / 班级
+    AppDestination("profile", "画像", PytColors.info),
     AppDestination("path", "路径", PytColors.success),
+    AppDestination("fields", "知识田", PytColors.success),
     AppDestination("classroom", "班级", PytColors.danger),
 )
 
