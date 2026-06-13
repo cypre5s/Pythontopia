@@ -60,6 +60,10 @@ fun NpcDialogPanel(
                 },
             )
             Spacer(modifier = Modifier.height(8.dp))
+            state.greeting?.let { greet ->
+                GreetingBanner(greeting = greet)
+                Spacer(modifier = Modifier.height(8.dp))
+            }
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -115,6 +119,23 @@ private fun DialogHeader(
             Text(text = npcName, style = MaterialTheme.typography.titleMedium)
         }
         TextButton(onClick = onClose) { Text("关闭") }
+    }
+}
+
+/** R-15 记忆感知寒暄横幅：插在脚本对话首节点之前，区别于脚本正文。 */
+@Composable
+private fun GreetingBanner(greeting: String) {
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        shape = MaterialTheme.shapes.small,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(
+            text = "「$greeting」",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSecondaryContainer,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+        )
     }
 }
 

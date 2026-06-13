@@ -15,6 +15,8 @@ data class DialogUiState(
     val npcKey: String = DemoDialogTree.NPC_KEY,
     val npcDisplayName: String = DemoDialogTree.displayNameFor(DemoDialogTree.NPC_KEY),
     val currentNode: DialogNode? = null,
+    /** R-15 记忆感知个性化寒暄（插在脚本首节点之前）；无可用记忆时为 null。 */
+    val greeting: String? = null,
     val isAdvancing: Boolean = false,
     val errorMessage: String? = null,
 )
@@ -35,17 +37,23 @@ class DialogViewModel @Inject constructor(
                 visible = true,
                 npcKey = npcKey,
                 npcDisplayName = DemoDialogTree.displayNameFor(npcKey),
+                currentNode = null,
+                greeting = null,
                 isAdvancing = true,
                 errorMessage = null,
             )
         }
         viewModelScope.launch {
             val remote = repository.loadState(npcKey)
+            val greeting = repository.fetchGreeting(npcKey)
+                ?.takeIf { it.available && it.greeting.isNotBlank() }
+                ?.greeting
             val nodeId = remote.currentNodeId ?: DemoDialogTree.ROOT_NODE_ID
             val node = nodes[nodeId] ?: nodes.getValue(DemoDialogTree.ROOT_NODE_ID)
             _state.update {
                 it.copy(
                     currentNode = node,
+                    greeting = greeting,
                     isAdvancing = false,
                 )
             }

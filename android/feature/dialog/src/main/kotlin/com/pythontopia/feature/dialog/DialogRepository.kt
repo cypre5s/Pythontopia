@@ -2,6 +2,7 @@ package com.pythontopia.feature.dialog
 
 import com.pythontopia.core.data.dto.world.NpcDialogEffectDto
 import com.pythontopia.core.data.dto.world.NpcDialogStateDto
+import com.pythontopia.core.data.dto.world.NpcGreetingResponse
 import com.pythontopia.core.data.dto.world.NpcTalkRequest
 import com.pythontopia.core.network.api.NpcDialogApi
 import javax.inject.Inject
@@ -19,6 +20,10 @@ class DialogRepository @Inject constructor(
     suspend fun loadState(npcKey: String): NpcDialogStateDto =
         runCatching { api.state(npcKey) }
             .getOrElse { emptyState(npcKey, DemoDialogTree.ROOT_NODE_ID) }
+
+    /** 记忆感知个性化寒暄；失败/降级时返回 null，交由脚本对话兜底（不伪造内容）。 */
+    suspend fun fetchGreeting(npcKey: String): NpcGreetingResponse? =
+        runCatching { api.greeting(npcKey) }.getOrNull()
 
     suspend fun advance(
         npcKey: String,

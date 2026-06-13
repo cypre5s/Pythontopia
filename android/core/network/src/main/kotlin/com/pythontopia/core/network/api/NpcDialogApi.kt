@@ -1,13 +1,14 @@
 package com.pythontopia.core.network.api
 
 import com.pythontopia.core.data.dto.world.NpcDialogStateDto
+import com.pythontopia.core.data.dto.world.NpcGreetingResponse
 import com.pythontopia.core.data.dto.world.NpcTalkRequest
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
 
-/** NPC 对话：[state] 查询状态，[talk] 提交交互。 */
+/** NPC 对话：[state] 查询状态，[talk] 提交交互，[greeting] 记忆感知个性化寒暄（R-15）。 */
 interface NpcDialogApi {
 
     @GET("api/world/npcs/{npcKey}/state")
@@ -18,4 +19,7 @@ interface NpcDialogApi {
         @Path("npcKey") npcKey: String,
         @Body request: NpcTalkRequest,
     ): NpcDialogStateDto
+
+    @GET("api/npc/{npcKey}/greeting")
+    suspend fun greeting(@Path("npcKey") npcKey: String): NpcGreetingResponse
 }
