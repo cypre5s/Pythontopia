@@ -1,6 +1,8 @@
 import { isLoggedIn, login, redirectHome, register } from '../../store/session';
 import { ApiError } from '../../utils/request';
 
+const USERNAME_RE = /^[A-Za-z0-9_.-]+$/;
+
 type AuthMode = 'login' | 'register';
 
 interface LoginData {
@@ -49,10 +51,11 @@ Page({
 
   validate(): string | null {
     const { mode, username, password, displayName } = this.data;
-    if (username.trim().length < 3) {
+    const trimmedUser = username.trim();
+    if (trimmedUser.length < 3) {
       return '用户名至少 3 位';
     }
-    if (!/^[A-Za-z0-9_.-]+$/.test(username.trim())) {
+    if (!USERNAME_RE.test(trimmedUser)) {
       return '用户名仅允许 字母 / 数字 / _ . -';
     }
     if (password.length < 8) {

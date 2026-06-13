@@ -3,6 +3,8 @@ import { Classroom, ClassroomQuest } from '../../api/dto/classroom';
 import { isLoggedIn } from '../../store/session';
 import { ApiError } from '../../utils/request';
 
+const JOIN_CODE_RE = /^[A-Z0-9]{6}$/;
+
 interface ClassQuestVM {
   id: number;
   title: string;
@@ -80,7 +82,7 @@ Page({
 
   async onJoin() {
     const joinCode = this.data.joinCode.trim();
-    if (!/^[A-Z0-9]{6}$/.test(joinCode)) {
+    if (!JOIN_CODE_RE.test(joinCode)) {
       wx.showToast({ title: '邀请码为 6 位大写字母/数字', icon: 'none' });
       return;
     }

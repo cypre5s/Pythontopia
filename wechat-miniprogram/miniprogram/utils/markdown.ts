@@ -5,6 +5,17 @@ export interface MarkdownBlock {
   text: string;
 }
 
+// 预编译正则（模块级常量，避免每次解析 / 每个块重复编译）。
+const CRLF_RE = /\r\n/g;
+const HEADING_RE = /^#{1,6}\s+/;
+const LIST_RE = /^(-|\*|\+|\d+\.)\s+/;
+const INLINE_CODE_RE = /`([^`]+)`/g;
+const BOLD_RE = /\*\*([^*]+)\*\*/g;
+const ITALIC_RE = /\*([^*]+)\*/g;
+const UNDERLINE_BOLD_RE = /__([^_]+)__/g;
+const LINK_RE = /\[([^\]]+)\]\([^)]*\)/g;
+const QUOTE_RE = /^>\s?/;
+
 /**
  * 极简 Markdown → 可读文本块。不引入完整解析器：把题面 / 章节简介切成
  * 标题 / 段落 / 代码块 / 列表四类，页面据此渲染（代码块用等宽深色框）。
@@ -14,7 +25,7 @@ export function parseMarkdown(markdown: string | null | undefined): MarkdownBloc
   if (!markdown) {
     return [];
   }
-  const lines = markdown.replace(/\r\n/g, '\n').split('\n');
+  const lines = markdown.replace(CRLF_RE, '\n').split('\n');
   const blocks: MarkdownBlock[] = [];
   let inFence = false;
   let codeBuffer: string[] = [];
@@ -48,14 +59,14 @@ export function parseMarkdown(markdown: string | null | undefined): MarkdownBloc
       flushParagraph();
       return;
     }
-    if (/^#{1,6}\s+/.test(trimmed)) {
+    if (HEADING_RE.test(trimmed)) {
       flushParagraph();
-      blocks.push({ type: 'heading', text: stripInline(trimmed.replace(/^#{1,6}\s+/, '')) });
+      blocks.push({ type: 'heading', text: stripInline(trimmed.replace(HEADING_RE, '')) });
       return;
     }
-    if (/^(-|\*|\+|\d+\.)\s+/.test(trimmed)) {
+    if (LIST_RE.test(trimmed)) {
       flushParagraph();
-      blocks.push({ type: 'list', text: stripInline(trimmed.replace(/^(-|\*|\+|\d+\.)\s+/, '')) });
+      blocks.push({ type: 'list', text: stripInline(trimmed.replace(LIST_RE, '')) });
       return;
     }
     paragraphBuffer.push(trimmed);
@@ -70,10 +81,10 @@ export function parseMarkdown(markdown: string | null | undefined): MarkdownBloc
 
 function stripInline(text: string): string {
   return text
-    .replace(/`([^`]+)`/g, '$1')
-    .replace(/\*\*([^*]+)\*\*/g, '$1')
-    .replace(/\*([^*]+)\*/g, '$1')
-    .replace(/__([^_]+)__/g, '$1')
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-    .replace(/^>\s?/, '');
+    .replace(INLINE_CODE_RE, '$1')
+    .replace(BOLD_RE, '$1')
+    .replace(ITALIC_RE, '$1')
+    .replace(UNDERLINE_BOLD_RE, '$1')
+    .replace(LINK_RE, '$1')
+    .replace(QUOTE_RE, '');
 }

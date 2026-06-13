@@ -1,6 +1,9 @@
 import { API_BASE, API_PREFIX, STORAGE_TOKEN } from '../config';
 import { ApiError, handleUnauthorized } from './request';
 
+const CR_RE = /\r$/;
+const LEADING_SPACE_RE = /^ /;
+
 /** 解析后的单个 SSE 帧。 */
 export interface SseMessage {
   event: string;
@@ -67,15 +70,15 @@ function parseFrame(frame: string): SseMessage | null {
   const dataLines: string[] = [];
   let sawField = false;
   lines.forEach((raw) => {
-    const line = raw.replace(/\r$/, '');
+    const line = raw.replace(CR_RE, '');
     if (line === '' || line.charAt(0) === ':') {
       return;
     }
     if (line.indexOf('event:') === 0) {
-      event = line.slice(6).replace(/^ /, '');
+      event = line.slice(6).replace(LEADING_SPACE_RE, '');
       sawField = true;
     } else if (line.indexOf('data:') === 0) {
-      dataLines.push(line.slice(5).replace(/^ /, ''));
+      dataLines.push(line.slice(5).replace(LEADING_SPACE_RE, ''));
       sawField = true;
     }
   });

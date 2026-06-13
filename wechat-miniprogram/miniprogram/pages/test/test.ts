@@ -94,8 +94,10 @@ interface TestData {
   resultStars: number;
 }
 
+const BLANK_RE = /_{2,}/g;
+
 function countBlanks(stem: string): number {
-  const matches = stem.match(/_{2,}/g);
+  const matches = stem.match(BLANK_RE);
   return matches && matches.length > 0 ? matches.length : 1;
 }
 
