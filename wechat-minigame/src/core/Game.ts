@@ -14,7 +14,7 @@ import {
   type GameImage,
 } from '../runtime/wx';
 import { COMPANION, companionEnabled } from '../config';
-import { fetchBootstrap } from '../api';
+import { fetchBootstrap, fetchMainlineSummary, fetchNpcGreeting } from '../api';
 import { loadImage, loadTownMapJson, MAP_PATH, TILESET_PATH } from './assets';
 import { Camera } from './Camera';
 import { Dialog } from './Dialog';
@@ -101,6 +101,7 @@ export class Game {
     this.rafHandle = requestFrame(loop);
 
     void this.applyBootstrap();
+    void this.applyMainline();
     logInfo('[pythontopia] 小镇渲染端已启动');
   }
 
@@ -120,12 +121,12 @@ export class Game {
         return;
       }
       if (result.hud) {
-        this.hudStatus = {
+        this.patchHud({
           day: result.hud.dayIndex,
           weather: result.hud.weather,
           weekday: result.hud.weekday,
           questCount: result.hud.questCount,
-        };
+        });
       }
       const spawn = result.spawn;
       if (spawn && this.map && this.player && !this.map.isBlocked(spawn.tileX, spawn.tileY)) {
@@ -135,6 +136,30 @@ export class Game {
       }
     } catch (err) {
       logError('[pythontopia] bootstrap 获取失败（已忽略）', err);
+    }
+  }
+
+  /** 合并式更新 HUD 状态（bootstrap 与 mainline 两条链路各更新一部分字段）。 */
+  private patchHud(patch: Partial<HudStatus>): void {
+    const base: HudStatus = this.hudStatus ?? {
+      day: null,
+      weather: null,
+      weekday: null,
+      questCount: null,
+      stars: null,
+    };
+    this.hudStatus = { ...base, ...patch };
+  }
+
+  /** 主线总星（非阻塞）：成功则点亮 HUD「⭐ N 星」；失败安静忽略。 */
+  private async applyMainline(): Promise<void> {
+    try {
+      const summary = await fetchMainlineSummary();
+      if (summary) {
+        this.patchHud({ stars: summary.totalStars });
+      }
+    } catch (err) {
+      logError('[pythontopia] 主线进度获取失败（已忽略）', err);
     }
   }
 
@@ -197,7 +222,23 @@ export class Game {
     }
 
     if (this.nearby) {
-      this.dialog.open(buildDialogView(this.nearby, this.lineBook), this.nearby);
+      const target = this.nearby;
+      this.dialog.open(buildDialogView(target, this.lineBook), target);
+      if (target.kind === 'npc' && target.npcKey) {
+        void this.loadGreeting(target.npcKey);
+      }
+    }
+  }
+
+  /** 拉取 NPC 个性化寒暄（非阻塞）：成功且仍是同一 NPC 时回填到对话框；失败安静忽略。 */
+  private async loadGreeting(npcKey: string): Promise<void> {
+    try {
+      const result = await fetchNpcGreeting(npcKey);
+      if (result && result.available && !result.degraded && result.greeting.trim().length > 0) {
+        this.dialog.applyNpcGreeting(npcKey, result.greeting);
+      }
+    } catch (err) {
+      logError('[pythontopia] NPC 寒暄获取失败（已忽略）', err);
     }
   }
 

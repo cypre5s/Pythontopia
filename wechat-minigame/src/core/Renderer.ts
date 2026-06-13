@@ -13,12 +13,14 @@ import {
   type Rect,
 } from './layout';
 
-/** 进入小镇后从 bootstrap 取得的 HUD 摘要（任一字段缺失即省略）。 */
+/** 进入小镇后从 bootstrap / mainline 取得的 HUD 摘要（任一字段缺失即省略）。 */
 export interface HudStatus {
   day: number | null;
   weather: string | null;
   weekday: string | null;
   questCount: number | null;
+  /** 主线总星（GET /api/mainline/overview.totalStars）。 */
+  stars: number | null;
 }
 
 /** 靠近某对象但尚未打开对话时的提示。 */
@@ -95,9 +97,43 @@ export class Renderer {
     if (nearby) {
       this.drawNearbyHighlight(nearby);
     }
+    this.drawPlaceLabels(map, camera);
     this.drawNpcs(map.npcs, camera);
     this.drawPlayer(player);
     ctx.restore();
+  }
+
+  /** 给建筑/地标画常驻名牌（NPC 名牌走 drawNpcs），让小镇一眼可读、对齐 web 的可识别建筑。 */
+  private drawPlaceLabels(map: TileMap, camera: Camera): void {
+    const draw = this.drawTile;
+    for (const item of map.interactables) {
+      if (item.kind === 'npc' || item.tiles.length === 0) {
+        continue;
+      }
+      let minX = Number.POSITIVE_INFINITY;
+      let maxX = Number.NEGATIVE_INFINITY;
+      let minY = Number.POSITIVE_INFINITY;
+      for (const tile of item.tiles) {
+        if (tile.x < minX) {
+          minX = tile.x;
+        }
+        if (tile.x > maxX) {
+          maxX = tile.x;
+        }
+        if (tile.y < minY) {
+          minY = tile.y;
+        }
+      }
+      if (!Number.isFinite(minX)) {
+        continue;
+      }
+      const cx = ((minX + maxX) / 2 + 0.5) * draw;
+      const topY = minY * draw;
+      if (!this.isVisible(cx, topY, camera, draw * 4)) {
+        continue;
+      }
+      this.drawNameTag(item.title, cx, topY - 2);
+    }
   }
 
   /** 在当前可交互对象的 footprint 上画一圈淡金色高亮，提示「这个可以交互」。 */
@@ -310,6 +346,9 @@ export class Renderer {
 
   private statusText(status: HudStatus): string {
     const parts: string[] = [];
+    if (status.stars !== null) {
+      parts.push(`⭐ ${status.stars} 星`);
+    }
     if (status.day !== null) {
       parts.push(`第 ${status.day} 天`);
     }
@@ -398,12 +437,28 @@ export class Renderer {
     ctx.fillText(view.title, innerX, box.y + pad + 24);
 
     // 正文（按字符换行）
-    const bodyTop = box.y + pad + 24 + 26;
+    let bodyTop = box.y + pad + 24 + 26;
     const bodyBottom = (hasAction ? action.y : box.y + box.h - 30) - 8;
     const lineH = 20;
+    const maxWidth = box.w - pad * 2;
+
+    // NPC 记忆感知个性化寒暄（金色 ✦，置于正文之前；越界即停，绝不挤掉正文）
+    if (view.greeting) {
+      ctx.font = '13px sans-serif';
+      ctx.fillStyle = '#ffd166';
+      const greetingLines = this.wrapText(`✦ ${view.greeting}`, maxWidth);
+      for (const gline of greetingLines) {
+        if (bodyTop + lineH > bodyBottom) {
+          break;
+        }
+        ctx.fillText(gline, innerX, bodyTop);
+        bodyTop += lineH;
+      }
+      bodyTop += 4;
+    }
+
     ctx.font = '14px sans-serif';
     ctx.fillStyle = '#e7ddca';
-    const maxWidth = box.w - pad * 2;
     let lines = this.wrapText(view.body, maxWidth);
     const maxLines = Math.max(1, Math.floor((bodyBottom - bodyTop) / lineH));
     if (lines.length > maxLines) {

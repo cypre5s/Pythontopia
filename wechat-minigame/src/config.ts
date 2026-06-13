@@ -3,8 +3,8 @@
 
 /** 后端联动（可选、非阻塞）。详见 docs/clients/api-contract.md。 */
 export const BACKEND = {
-  /** Base URL：微信开发者工具本地调试用 localhost（需勾选「不校验合法域名」）。 */
-  baseUrl: 'http://localhost:18080',
+  /** Base URL：默认公网 ECS 后端（nginx :80 反代内部 :18080，实测 2026-06-13 在线）；微信开发者工具需勾选「不校验合法域名」。本机联调改回 http://localhost:18080。 */
+  baseUrl: 'http://47.120.29.62',
   /** 聚合启动端点；后端为 POST（见契约 §4.1），返回 world/player/quests 等。 */
   bootstrapPath: '/api/game/bootstrap',
   /** 登录态 token 在本地存储里的 key（与配套学习小程序共享约定）。 */

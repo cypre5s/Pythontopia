@@ -249,3 +249,90 @@ page {
   );
   margin: 20rpx 0;
 }
+
+/* 客观题选项 / 填空（小节练习 + 章末测试共用） */
+.stage-opts {
+  margin: 14rpx 0 6rpx;
+}
+
+.stage-opt {
+  display: flex;
+  align-items: flex-start;
+  gap: 14rpx;
+  padding: 14rpx 16rpx;
+  margin-bottom: 10rpx;
+  background: #fffdf6;
+  border: 4rpx solid var(--wood);
+}
+
+.stage-opt__mark {
+  flex: 0 0 auto;
+  width: 40rpx;
+  height: 40rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 3rpx solid var(--wood);
+  background: var(--parchment-deep);
+  color: var(--ink-soft);
+  font-size: 24rpx;
+}
+
+.stage-opt__text {
+  flex: 1;
+}
+
+.stage-opt.is-picked {
+  border-color: var(--sky);
+  background: #eaf2fa;
+}
+
+.stage-opt.is-picked .stage-opt__mark {
+  background: var(--sky);
+  color: #fff8ea;
+  border-color: var(--sky);
+}
+
+.stage-opt.is-correct {
+  border-color: var(--leaf);
+  background: #eef6e8;
+}
+
+.stage-opt.is-correct .stage-opt__mark {
+  background: var(--leaf);
+  color: #fff8ea;
+  border-color: var(--leaf);
+}
+
+.stage-opt.is-wrong {
+  border-color: var(--berry);
+  background: #f8e8e4;
+}
+
+.stage-opt.is-wrong .stage-opt__mark {
+  background: var(--berry);
+  color: #fff8ea;
+  border-color: var(--berry);
+}
+
+.stage-fills {
+  margin: 14rpx 0 6rpx;
+}
+
+.stage-fill {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  margin-bottom: 12rpx;
+}
+
+.stage-fill__label {
+  flex: 0 0 auto;
+  font-size: 24rpx;
+  color: var(--ink-soft);
+}
+
+.stage-fill__input {
+  flex: 1;
+  margin-bottom: 0;
+}

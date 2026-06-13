@@ -5,6 +5,8 @@
     "pages/course/course",
     "pages/practice/list",
     "pages/practice/detail",
+    "pages/stage/stage",
+    "pages/test/test",
     "pages/workshop/workshop",
     "pages/mine/mine",
     "pages/mine/session",

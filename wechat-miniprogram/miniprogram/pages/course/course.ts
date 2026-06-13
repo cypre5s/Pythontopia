@@ -237,4 +237,20 @@ Page({
     }
     wx.navigateTo({ url: `/pages/practice/list?kcCode=${kcCode}` });
   },
+
+  // 课件页点按全屏预览（可缩放/左右滑动整套页），对齐 web 查看课件证据大图的体验。
+  previewPage(e: WechatMiniprogram.CustomEvent) {
+    const ds = e.currentTarget.dataset as { cidx?: string | number; kidx?: string | number };
+    const chapter = this.data.chapters[Number(ds.cidx)];
+    if (!chapter) {
+      return;
+    }
+    const kc = chapter.kcs[Number(ds.kidx)];
+    if (!kc || kc.pages.length === 0) {
+      return;
+    }
+    const urls = kc.pages.map((p) => p.imageUrl);
+    const current = kc.currentPage ? kc.currentPage.imageUrl : urls[0];
+    wx.previewImage({ urls, current });
+  },
 });

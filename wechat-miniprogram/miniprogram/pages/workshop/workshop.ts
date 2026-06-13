@@ -1,7 +1,7 @@
 import { listKcs } from '../../api/course';
 import { routeIntent } from '../../api/intent';
 import { askTutorStream } from '../../api/tutor';
-import { createResource, getResource } from '../../api/workshop';
+import { getResource, streamResources } from '../../api/workshop';
 import { IntentCourseKc, IntentRouteResponse, IntentType } from '../../api/dto/intent';
 import { TutorAskRequest } from '../../api/dto/tutor';
 import { LearningResource, ResourceStatusFlag, WorkshopResourceType } from '../../api/dto/workshop';
@@ -75,6 +75,8 @@ interface WorkshopData {
   askTraceCount: number;
   resourceLoading: boolean;
   resourceError: string;
+  resourceStatus: string;
+  resourceTraceCount: number;
   resource: ResourceVM | null;
   reviewKcText: string;
   videoFocus: string;
@@ -93,6 +95,11 @@ function asRecord(data: string): Record<string, unknown> {
 function readDelta(data: string): string {
   const delta = asRecord(data).delta;
   return typeof delta === 'string' ? delta : '';
+}
+
+function readResourceId(data: string): number {
+  const value = asRecord(data).resourceId;
+  return typeof value === 'number' ? value : 0;
 }
 
 function readAnswer(data: string): string {
@@ -135,6 +142,7 @@ Page({
   lastMessage: '',
   courseKcs: [] as IntentCourseKc[],
   askTask: null as WechatMiniprogram.RequestTask | null,
+  resourceTask: null as WechatMiniprogram.RequestTask | null,
 
   data: {
     input: '',
@@ -150,6 +158,8 @@ Page({
     askTraceCount: 0,
     resourceLoading: false,
     resourceError: '',
+    resourceStatus: '',
+    resourceTraceCount: 0,
     resource: null,
     reviewKcText: '',
     videoFocus: '',
@@ -170,6 +180,7 @@ Page({
   onUnload() {
     this.cancelled = true;
     this.abortAsk();
+    this.abortResource();
   },
 
   async loadKcs() {
@@ -196,6 +207,17 @@ Page({
     }
   },
 
+  abortResource() {
+    if (this.resourceTask) {
+      try {
+        this.resourceTask.abort();
+      } catch {
+        // 忽略中断异常。
+      }
+      this.resourceTask = null;
+    }
+  },
+
   resetResults() {
     this.setData({
       dispatchKind: '',
@@ -207,6 +229,8 @@ Page({
       askTraceCount: 0,
       resourceLoading: false,
       resourceError: '',
+      resourceStatus: '',
+      resourceTraceCount: 0,
       resource: null,
       reviewKcText: '',
       videoFocus: '',
@@ -224,6 +248,7 @@ Page({
       return;
     }
     this.abortAsk();
+    this.abortResource();
     this.lastMessage = message;
     this.setData({ routing: true, route: null, errorMsg: '' });
     this.resetResults();
@@ -332,7 +357,7 @@ Page({
     });
   },
 
-  async runResource(route: IntentRouteResponse) {
+  runResource(route: IntentRouteResponse) {
     const type = route.intent as WorkshopResourceType;
     if (route.kcCodes.length === 0) {
       this.setData({
@@ -343,18 +368,68 @@ Page({
       });
       return;
     }
-    this.setData({ dispatchKind: 'resource', resourceLoading: true, resourceError: '', resource: null });
+    this.setData({
+      dispatchKind: 'resource',
+      resourceLoading: true,
+      resourceError: '',
+      resource: null,
+      resourceStatus: '连接中…',
+      resourceTraceCount: 0,
+    });
+    this.abortResource();
+    this.resourceTask = streamResources(
+      { kcCodes: route.kcCodes, type, focusHint: route.focusHint || undefined },
+      {
+        onMessage: (msg) => {
+          if (this.cancelled) {
+            return;
+          }
+          if (msg.event === 'plan') {
+            this.setData({ resourceStatus: '已规划，多智能体生成中…' });
+          } else if (msg.event === 'trace') {
+            const next = this.data.resourceTraceCount + 1;
+            this.setData({ resourceTraceCount: next, resourceStatus: `生成中…（${next} 步）` });
+          } else if (msg.event === 'result') {
+            const resourceId = readResourceId(msg.data);
+            if (resourceId > 0) {
+              this.setData({ resourceStatus: '证据审查通过，拉取内容…' });
+              this.fetchResource(resourceId);
+            }
+          } else if (msg.event === 'error') {
+            this.setData({
+              resourceLoading: false,
+              resourceStatus: '',
+              resourceError: readErrorMessage(msg.data) || '资源生成失败',
+            });
+          }
+        },
+        onError: (err) => {
+          if (this.cancelled) {
+            return;
+          }
+          this.setData({ resourceLoading: false, resourceStatus: '', resourceError: err.message });
+        },
+        onComplete: () => {
+          if (this.cancelled) {
+            return;
+          }
+          // 流结束但未拿到 result（既无资源也无错误）时给个兜底提示。
+          if (this.data.resourceLoading && !this.data.resource && !this.data.resourceError) {
+            this.setData({ resourceLoading: false, resourceStatus: '', resourceError: '资源生成未完成，请重试' });
+          }
+        },
+      },
+    );
+  },
+
+  async fetchResource(resourceId: number) {
     try {
-      const created = await createResource({
-        kcCodes: route.kcCodes,
-        type,
-        focusHint: route.focusHint || undefined,
-      });
-      const resource = await getResource(created.resourceId);
+      const resource = await getResource(resourceId);
       this.applyResource(resource);
+      this.setData({ resourceStatus: '' });
     } catch (e) {
-      const msg = e instanceof ApiError ? e.message : '资源生成失败';
-      this.setData({ resourceLoading: false, resourceError: msg });
+      const msg = e instanceof ApiError ? e.message : '资源拉取失败';
+      this.setData({ resourceLoading: false, resourceStatus: '', resourceError: msg });
     }
   },
 

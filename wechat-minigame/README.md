@@ -72,7 +72,7 @@ npm run typecheck    # 仅类型检查（tsc --noEmit）
 
 ### 调用后端时（可选）
 
-本工程可选地请求本地后端 `http://localhost:18080/api/game/bootstrap`。开发者工具默认会校验合法域名，本地调试需关闭：
+本工程默认请求**公网**后端 `http://47.120.29.62`（阿里云 ECS，nginx `:80` 反代内部 `:18080`，实测 2026-06-13 在线；本机联调改 `src/config.ts` 的 `BACKEND.baseUrl` 回 `http://localhost:18080`）。开发者工具默认会校验合法域名，调试需关闭：
 
 - **微信开发者工具 → 右上角「详情」→「本地设置」→ 勾选「不校验合法域名、web-view（业务域名）、TLS 版本以及 HTTPS 证书」**。
 
@@ -83,7 +83,7 @@ npm run typecheck    # 仅类型检查（tsc --noEmit）
 - **移动**：左下角十字**方向键**，或在屏幕任意处**滑动**（虚拟摇杆，按住持续移动）。玩家按瓦片网格移动，格间做缓动插值。
 - **交互提示**：走到建筑 / NPC / 地标**相邻格**时，该对象会被淡金色高亮，屏幕上方出现提示条「轻点或按右下键交互」。NPC 头顶仍有「!」气泡。
 - **交互（对话/信息框）**：靠近后**轻点屏幕**或按**右下角交互键**，弹出对话框：
-  - **NPC**：显示名字 + 一句对白（取自随包 `assets/data/npcs.json`，缺数据则退化为地图标签 + key）。
+  - **NPC**：显示名字 + 一句对白（取自随包 `assets/data/npcs.json`，缺数据则退化为地图标签 + key）；登录态下会异步拉取 `GET /api/npc/{key}/greeting`，在对白上方插入金色「✦ 个性化寒暄」（记忆感知，失败安静回退到随包脚本，不伪造内容）。
   - **建筑**：显示学习站点中文名 + 简介（工坊 / 图书馆 / 训练场 / 矿洞 / 复盘大厅 / 竞技场 / 镇长大厅）。
   - **地标**：显示名字 + 一句风味文案。
   - 再次轻点空白处或按交互键**关闭**；走出相邻格会自动关闭。
@@ -95,13 +95,13 @@ npm run typecheck    # 仅类型检查（tsc --noEmit）
 - **玩家**：方块小人（阴影 + 身体 + 头 + 朝向眼睛），按格移动并平滑插值，走动时上下轻微 bob。
 - **镜头**：跟随玩家中心，按世界边界夹紧；世界比视口小则居中。
 - **交互**：解析 object 层的 `building` / `landmark` / `low_obstacle` / `npc`，构建碰撞网格与可交互列表；每帧按「与玩家八邻接且玩家不在其 footprint 内」选出最近对象作为交互目标。交互动作（轻点 / 交互键）为**边沿触发**事件，由 `Dialog` 状态机驱动对话框开关。
-- **HUD 状态栏**：左上角显示「Pythontopia · 小镇」标题；若 bootstrap 成功，下方再加一条「第 N 天 · 周X · 天气 · 今日任务 n」（天气码 `SUNNY/CLOUDY/RAIN/WIND…` 本地化为中文；离线则不显示这条）。
+- **HUD 状态栏**：左上角显示「Pythontopia · 小镇」标题；若 bootstrap / 主线进度拉取成功，下方再加一条「⭐ N 星 · 第 N 天 · 周X · 天气 · 今日任务 n」（主线总星取自 `GET /api/mainline/overview`；天气码 `SUNNY/CLOUDY/RAIN/WIND…` 本地化为中文；离线则不显示这条）。
 - **像素清晰**：`imageSmoothingEnabled = false`，并按 `devicePixelRatio` 提升画布分辨率。
 - **出生点**：地图缺省出生点 `tile(25,20)`；若被占用则就近螺旋搜索可通行格。后端 bootstrap 成功且落点可通行时覆盖为后端位置（失败则保持地图出生点，全程非阻塞）。
 
 ## 后端联动（可选、非阻塞）
 
-`src/api.ts` 用 `wx.request` **POST** `http://localhost:18080/api/game/bootstrap`（端点为 POST，见 `docs/clients/api-contract.md` §4.1 与后端 `GameBootstrapController`；早期文档里的 GET 已不适用）。若 `wx.getStorageSync('pyt_token')` 存在则带 `Authorization: Bearer <token>`。
+`src/api.ts` 用 `wx.request` **POST** `${BACKEND.baseUrl}/api/game/bootstrap`（端点为 POST，见 `docs/clients/api-contract.md` §4.1 与后端 `GameBootstrapController`）。若 `wx.getStorageSync('pyt_token')` 存在则带 `Authorization: Bearer <token>`；并额外 **GET** `/api/mainline/overview` 取主线总星，点亮 HUD「⭐ N 星」（需登录态，任何失败安静忽略，不阻塞渲染）。
 
 一次往返同时取两样东西：
 

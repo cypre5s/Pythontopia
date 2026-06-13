@@ -1,13 +1,20 @@
+// 学习首页 = 主线冒险地图 hub（R-15，镜像 web MainlineMapPage + 公告板）。
+//
+// 一屏聚合：主线章节冒险地图（星级 / 解锁 / 小节三件套进度 → 跳小节学习页 / 章末测试）、
+// 今日任务、掌握度概览、Bug 矿洞入口、班级任务。主线进度后端权威，本页只读渲染 + 入口跳转。
+
+import { getMainlineOverview } from '../../api/mainline';
 import { getMastery } from '../../api/learner';
 import { completeQuest, getTodayQuests, skipQuest, startQuest } from '../../api/quests';
 import { getMyClassroomQuests } from '../../api/classroom';
+import { MainlineChapterDto, MainlineStageDto, ChapterTestStatus } from '../../api/dto/mainline';
 import { ClassroomQuest } from '../../api/dto/classroom';
 import { MasterySnapshot } from '../../api/dto/learner';
 import { Quest, QuestStatus } from '../../api/dto/quests';
 import { isLoggedIn, getUser } from '../../store/session';
 import { ApiError } from '../../utils/request';
 import { percentWidth, toPercent } from '../../utils/format';
-import { MINE_ROUTE } from '../../config';
+import { MINE_ROUTE, STAGE_ROUTE, TEST_ROUTE } from '../../config';
 
 const STATUS_LABEL: Record<QuestStatus, string> = {
   OPEN: '待开始',
@@ -24,6 +31,38 @@ const STATUS_CLASS: Record<QuestStatus, string> = {
   SKIPPED: 'badge--skip',
   EXPIRED: 'badge--fail',
 };
+
+const TEST_STATUS_LABEL: Record<ChapterTestStatus, string> = {
+  NONE: '未测试',
+  PENDING: '生成中',
+  GENERATING: '生成中',
+  READY: '可开考',
+  IN_PROGRESS: '进行中',
+  SUBMITTED: '已交卷',
+  EXPIRED: '已过期',
+  FAILED: '生成失败',
+};
+
+interface StageRowVM {
+  id: number;
+  indexNo: number;
+  title: string;
+  completed: boolean;
+  progress: string;
+}
+
+interface ChapterVM {
+  chapter: number;
+  title: string;
+  unlocked: boolean;
+  stars: number;
+  starsText: string;
+  bestText: string;
+  testLabel: string;
+  stageDoneText: string;
+  expanded: boolean;
+  stages: StageRowVM[];
+}
 
 interface QuestVM {
   id: number;
@@ -57,12 +96,49 @@ interface IndexData {
   greeting: string;
   loading: boolean;
   errorMsg: string;
+  totalStars: number;
+  chapters: ChapterVM[];
   todayQuests: QuestVM[];
   classQuests: ClassQuestVM[];
   mastery: MasteryVM[];
   masteryAvg: string;
   masteryCount: number;
   masteredCount: number;
+}
+
+function starsText(stars: number): string {
+  const n = Math.max(0, Math.min(3, stars));
+  return '★'.repeat(n) + '☆'.repeat(3 - n);
+}
+
+function stageProgress(s: MainlineStageDto): string {
+  const watch = s.requiredVideoSec > 0 && s.videoWatchedSec >= s.requiredVideoSec ? '看✓' : '看·';
+  const read = s.requiredPages === 0 || s.pagesRead >= s.requiredPages ? '学✓' : `学${s.pagesRead}/${s.requiredPages}`;
+  const ex = s.requiredExamples === 0 || s.examplesDone >= s.requiredExamples ? '练✓' : `练${s.examplesDone}/${s.requiredExamples}`;
+  return `${watch} · ${read} · ${ex}`;
+}
+
+function toChapterVM(c: MainlineChapterDto): ChapterVM {
+  const stages: StageRowVM[] = c.stages.map((s) => ({
+    id: s.id,
+    indexNo: s.index,
+    title: s.title,
+    completed: s.completed,
+    progress: stageProgress(s),
+  }));
+  const doneCount = stages.filter((s) => s.completed).length;
+  return {
+    chapter: c.chapter,
+    title: c.title,
+    unlocked: c.unlocked,
+    stars: c.stars,
+    starsText: starsText(c.stars),
+    bestText: c.bestTestScore === null ? '未测试' : `测试最高 ${c.bestTestScore}`,
+    testLabel: TEST_STATUS_LABEL[c.testStatus],
+    stageDoneText: `${doneCount}/${stages.length} 小节`,
+    expanded: false,
+    stages,
+  };
 }
 
 function toQuestVM(quest: Quest): QuestVM {
@@ -124,6 +200,8 @@ Page({
     greeting: '',
     loading: false,
     errorMsg: '',
+    totalStars: 0,
+    chapters: [],
     todayQuests: [],
     classQuests: [],
     mastery: [],
@@ -148,13 +226,18 @@ Page({
 
   async loadAll() {
     this.setData({ loading: true, errorMsg: '' });
-    const [todayRes, classRes, masteryRes] = await Promise.allSettled([
+    const [overviewRes, todayRes, classRes, masteryRes] = await Promise.allSettled([
+      getMainlineOverview(),
       getTodayQuests(),
       getMyClassroomQuests(),
       getMastery(),
     ]);
 
     const patch: Partial<IndexData> = { loading: false };
+    if (overviewRes.status === 'fulfilled') {
+      patch.totalStars = overviewRes.value.totalStars;
+      patch.chapters = overviewRes.value.chapters.map(toChapterVM);
+    }
     if (todayRes.status === 'fulfilled') {
       patch.todayQuests = todayRes.value.map(toQuestVM);
     }
@@ -169,12 +252,42 @@ Page({
       patch.masteredCount = summary.masteredCount;
     }
 
-    const failed = [todayRes, classRes, masteryRes].find((r) => r.status === 'rejected');
+    const failed = [overviewRes, todayRes, classRes, masteryRes].find((r) => r.status === 'rejected');
     if (failed && failed.status === 'rejected') {
       const reason: unknown = failed.reason;
       patch.errorMsg = reason instanceof ApiError ? reason.message : '部分内容加载失败';
     }
     this.setData(patch);
+  },
+
+  onToggleChapter(e: WechatMiniprogram.CustomEvent) {
+    const dataset = e.currentTarget.dataset as { idx?: string | number };
+    const idx = Number(dataset.idx);
+    const chapters = this.data.chapters.slice();
+    const cur = chapters[idx];
+    if (!cur || !cur.unlocked) {
+      return;
+    }
+    chapters[idx] = { ...cur, expanded: !cur.expanded };
+    this.setData({ chapters });
+  },
+
+  onGoStage(e: WechatMiniprogram.CustomEvent) {
+    const dataset = e.currentTarget.dataset as { id?: string | number };
+    const stageId = Number(dataset.id);
+    if (!stageId) {
+      return;
+    }
+    wx.navigateTo({ url: `${STAGE_ROUTE}?stageId=${stageId}` });
+  },
+
+  onGoTest(e: WechatMiniprogram.CustomEvent) {
+    const dataset = e.currentTarget.dataset as { chapter?: string | number };
+    const chapter = Number(dataset.chapter);
+    if (!chapter) {
+      return;
+    }
+    wx.navigateTo({ url: `${TEST_ROUTE}?chapter=${chapter}` });
   },
 
   questIdFrom(e: WechatMiniprogram.CustomEvent): number {

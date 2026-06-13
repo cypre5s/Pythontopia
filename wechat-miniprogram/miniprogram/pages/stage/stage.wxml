@@ -1,0 +1,172 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="loading">加载中…</view>
+  <view wx:if="{{errorMsg}}" class="login__error">{{errorMsg}}</view>
+
+  <block wx:if="{{!loading && !errorMsg}}">
+    <!-- 小节头 -->
+    <view class="card stage__hero">
+      <view class="muted">第 {{chapter}} 章 · {{chapterTitle}}</view>
+      <view class="stage__title">{{indexNo}}. {{title}}</view>
+      <view class="stage__flags">
+        <text class="badge {{videoDone ? 'badge--done' : 'badge--open'}}">看 {{videoPct}}</text>
+        <text class="badge {{studyDone ? 'badge--done' : 'badge--open'}}">学 {{studyPct}}</text>
+        <text class="badge {{practiceDone && examplesDone ? 'badge--done' : 'badge--open'}}">练</text>
+        <text wx:if="{{completed}}" class="badge badge--done">本节已完成 ✓</text>
+      </view>
+    </view>
+
+    <!-- 看 -->
+    <view class="card">
+      <view class="row row--between">
+        <view class="section-title">① 看 · 课程视频</view>
+        <text class="muted">{{videoPct}}</text>
+      </view>
+      <view class="bar"><view class="bar__fill bar__fill--sky" style="width:{{videoWidth}}"></view></view>
+      <view wx:if="{{videos.length === 0}}" class="muted stage__hint">本节暂无内置视频，可在「学」中阅读课件。</view>
+      <view wx:for="{{videos}}" wx:key="id" wx:for-index="vi" class="stage-video">
+        <view class="row row--between">
+          <text class="stage-video__title">{{item.title}}</text>
+          <text class="muted">{{item.durationLabel}}</text>
+        </view>
+        <video
+          class="stage-video__player"
+          src="{{item.url}}"
+          data-idx="{{vi}}"
+          bindtimeupdate="onVideoTimeUpdate"
+          bindpause="onVideoPause"
+          bindended="onVideoEnded"
+          show-center-play-btn="{{true}}"
+          enable-progress-gesture="{{true}}"
+        ></video>
+      </view>
+    </view>
+
+    <!-- 学 -->
+    <view class="card">
+      <view class="row row--between">
+        <view class="section-title">② 学 · 课件阅读</view>
+        <text class="muted">{{studyPct}}</text>
+      </view>
+      <view class="bar"><view class="bar__fill bar__fill--gold" style="width:{{studyWidth}}"></view></view>
+      <view wx:if="{{pages.length === 0}}" class="muted stage__hint">本节暂无课件页。</view>
+      <view wx:if="{{pages.length > 0}}" class="stage__study-actions">
+        <button class="btn btn--sm btn--primary" bindtap="onMarkAllPages" disabled="{{studyDone}}">
+          {{studyDone ? '已全部读完' : '一键标记全部已读'}}
+        </button>
+      </view>
+      <view wx:for="{{pages}}" wx:key="pageId" class="stage-page">
+        <image class="stage-page__img" src="{{item.imageUrl}}" mode="widthFix" lazy-load="{{true}}" data-url="{{item.imageUrl}}" bindtap="previewPage"></image>
+        <view class="row row--between stage-page__foot">
+          <text class="muted">第 {{item.pageId}} 页</text>
+          <text wx:if="{{item.read}}" class="badge badge--done">已读 ✓</text>
+          <button
+            wx:else
+            class="btn btn--sm"
+            data-page-id="{{item.pageId}}"
+            bindtap="onMarkPage"
+          >标记已读</button>
+        </view>
+      </view>
+    </view>
+
+    <!-- 练 · 客观题 -->
+    <view class="card" wx:if="{{questions.length > 0}}">
+      <view class="row row--between">
+        <view class="section-title">③ 练 · 随堂客观题</view>
+        <text class="muted">答对 {{questionsCorrect}} / {{requiredQuestions}}</text>
+      </view>
+      <view wx:for="{{questions}}" wx:key="id" wx:for-item="q" wx:for-index="qi" class="stage-q">
+        <view class="stage-q__stem">
+          <text class="stage-q__no">{{q.no}}.</text>
+          <text class="stage-q__kind">({{q.typeLabel}})</text>
+          <text>{{q.stem}}</text>
+          <text wx:if="{{q.answeredCorrect}}" class="stage-q__tick">✓</text>
+        </view>
+
+        <!-- CHOICE -->
+        <view wx:if="{{q.type === 'CHOICE'}}" class="stage-opts">
+          <view
+            wx:for="{{q.options}}"
+            wx:key="letter"
+            wx:for-item="opt"
+            wx:for-index="oi"
+            class="stage-opt {{opt.cls}}"
+            data-q="{{qi}}"
+            data-opt="{{oi}}"
+            bindtap="onPickChoice"
+          >
+            <text class="stage-opt__mark">{{opt.letter}}</text>
+            <text class="stage-opt__text">{{opt.text}}</text>
+          </view>
+        </view>
+
+        <!-- JUDGE -->
+        <view wx:elif="{{q.type === 'JUDGE'}}" class="stage-opts">
+          <view class="stage-opt {{q.judgeTrueCls}}" data-q="{{qi}}" data-val="T" bindtap="onPickJudge">
+            <text class="stage-opt__mark">A</text><text class="stage-opt__text">正确 ✓</text>
+          </view>
+          <view class="stage-opt {{q.judgeFalseCls}}" data-q="{{qi}}" data-val="F" bindtap="onPickJudge">
+            <text class="stage-opt__mark">B</text><text class="stage-opt__text">错误 ✗</text>
+          </view>
+        </view>
+
+        <!-- FILL -->
+        <view wx:else class="stage-fills">
+          <view wx:for="{{q.blanks}}" wx:key="i" wx:for-item="bk" class="stage-fill">
+            <text class="stage-fill__label">第 {{bk.i + 1}} 空</text>
+            <input
+              class="input stage-fill__input"
+              value="{{bk.value}}"
+              data-q="{{qi}}"
+              data-blank="{{bk.i}}"
+              bindinput="onBlankInput"
+              disabled="{{q.answeredCorrect}}"
+            />
+          </view>
+        </view>
+
+        <view class="stage-q__foot">
+          <button
+            class="btn btn--sm btn--primary"
+            data-q="{{qi}}"
+            bindtap="onSubmitQuestion"
+            disabled="{{!q.canSubmit}}"
+          >{{q.pending ? '判分中…' : (q.answeredCorrect ? '已答对' : '提交')}}</button>
+        </view>
+
+        <view wx:if="{{q.showResult}}" class="stage-result {{q.resultOk ? 'stage-result--ok' : 'stage-result--bad'}}">
+          <view class="stage-result__verdict">{{q.resultOk ? '✓ 答对了' : '✗ 答错了'}}</view>
+          <view wx:if="{{q.correctAnswersText}}" class="stage-result__line">正确答案：{{q.correctAnswersText}}</view>
+          <view wx:if="{{q.explanation}}" class="stage-result__line muted">解析：{{q.explanation}}</view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 练 · OJ 例题 -->
+    <view class="card" wx:if="{{examples.length > 0}}">
+      <view class="row row--between">
+        <view class="section-title">③ 练 · 编程例题</view>
+        <text class="muted">通过 {{examplesDoneCount}} / {{requiredExamples}}</text>
+      </view>
+      <view
+        wx:for="{{examples}}"
+        wx:key="id"
+        class="list-item"
+        data-id="{{item.id}}"
+        bindtap="onGoExample"
+      >
+        <view class="row row--between">
+          <text class="list-item__title">{{item.displayNo}} {{item.displayName}}</text>
+          <text wx:if="{{item.done}}" class="badge badge--done">已通过 ✓</text>
+          <text wx:else class="badge badge--open">去训练场</text>
+        </view>
+        <text class="muted">{{item.kcCode}}</text>
+      </view>
+    </view>
+
+    <!-- 章末测试入口 -->
+    <view class="card card--flat stage__test-entry">
+      <button class="btn btn--block" bindtap="goTest">前往第 {{chapter}} 章 · 章末大测试 ›</button>
+    </view>
+  </block>
+</view>

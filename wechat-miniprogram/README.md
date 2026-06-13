@@ -2,7 +2,8 @@
 
 面向高校 Python 初学者的「学习伙伴」端，使用 **原生微信小程序框架**（TypeScript + WXML + WXSS）开发，
 **不是** uni-app / Taro / mpvue 等跨端框架。它复用 Pythontopia 现有后端（Spring Boot），覆盖
-「看 → 学 → 练 → 测」学习闭环：今日任务、课程知识地图、服务端判题训练场、八维画像、班级。
+「看 → 学 → 练 → 测」学习闭环：**主线冒险地图（首页）+ 看/学/练小节 + 章末大测试**、今日任务、
+课程知识地图、服务端判题训练场、百晓工坊（意图路由 + 答疑/资源 SSE）、八维画像、Bug 矿洞、班级。
 
 > 像素小镇（Phaser 网页端 / LibGDX Android 端的星露谷式地图）是**独立的小游戏**，刻意**不**包含在本小程序里。
 > 本小程序聚焦学习伙伴本身（公告板 / 课程 / 练习 / 画像 / 班级），保持轻量、可读、可上架。
@@ -38,17 +39,21 @@ wechat-miniprogram/
     ├── store/session.ts         # token + user 内存态 + 本地存储；login/register/logout/hydrate
     └── pages/
         ├── login/               # 登录 + 注册切换（入口页，成功后进入学习 tab）
-        ├── index/      [tab 学习] # 今日任务 + 班级任务 + 掌握度概览
+        ├── index/      [tab 学习] # 主线冒险地图 hub（章节/星级/小节）+ 今日任务 + 掌握度 + Bug矿洞入口 + 班级任务
+        ├── stage/                # 小节学习页：看（视频时长打点）/ 学（课件页已读）/ 练（客观题 + OJ 例题）
+        ├── test/                 # 章末大测试：prepare→start→答题（倒计时/防作弊）→submit→解析
         ├── course/     [tab 课程] # 课程包统计 + 章节 → 知识点 → 课件页图片 / 去练习
         ├── practice/list         # 按 kcCode 列题
-        ├── practice/detail       # 题面 + 代码 textarea + 提交 → 轮询服务端判题结果
-        ├── profile/    [tab 画像] # 八维画像得分条 + 可自评维度 PUT + 退出登录
+        ├── practice/detail       # 题面 + 代码 textarea + 提交 → 轮询判题（由小节跳入时回写 example-done）
+        ├── workshop/   [tab 工坊] # 百晓工坊：意图路由 → 答疑 SSE / 资源生成 SSE / 复盘 / 视频
+        ├── mine/                 # Bug 矿洞：错题本 + 遗忘回声 session
+        ├── profile/    [tab 画像] # 八维雷达图（canvas 2d）+ 得分/置信度条 + 可自评维度 PUT + 退出登录
         └── classroom/  [tab 班级] # 我的班级 + 邀请码加入 + 班级任务
 ```
 
 ## 后端契约
 
-- 基址在 `miniprogram/config.ts`：`API_BASE`，默认 `http://localhost:18080`，统一前缀 `/api`。
+- 基址在 `miniprogram/config.ts`：`API_BASE`，默认 **公网** `http://47.120.29.62`（阿里云 ECS，nginx `:80` 反代内部 `:18080`；实测 2026-06-13 `GET /api/course/pack` 在线，`:18080` 不对外开放，故用 `:80`。本机联调改回 `http://localhost:18080`），统一前缀 `/api`。
 - 鉴权：登录后保存 JWT（`wx.setStorageSync('pyt_token', ...)`，后端 TTL 12h）；
   每次请求注入 `Authorization: Bearer <token>`；收到 `401` 时清除 token 并 `wx.reLaunch` 回登录页。
 - 统一错误信封：`{ code, message, details[], traceId, timestamp }`，由 `utils/request.ts` 解析成 `ApiError`。
@@ -65,6 +70,9 @@ wechat-miniprogram/
 | 题目 | `GET /problems/{id}/public` |
 | 提交 | `POST /submissions`（`source: "TRAINING"`）、轮询 `GET /submissions/{id}` 直至 `PASSED/FAILED/ERROR` |
 | 班级 | `GET /classrooms/mine`、`POST /classrooms/join`、`GET /classroom/quests/mine` |
+| 主线 | `GET /mainline/overview`、`GET /mainline/stages/{id}`、`POST .../video-progress｜page-read｜pages-read｜example-done｜practice/{qid}/answer`、`POST /mainline/endless/summary`、`POST /mainline/chapters/{c}/recovery/errorbook` |
+| 章末测试 | `POST /mainline/chapters/{c}/test/prepare｜start｜{id}/submit`、`GET /mainline/chapters/{c}/test/latest` |
+| 工坊 | 意图 `POST /intent/route`、答疑 `POST /tutor/ask`(SSE)、资源 `POST /workshop/resources/stream`(SSE) + `GET /workshop/resources/{id}` |
 
 ## 本地开发：在微信开发者工具中打开
 

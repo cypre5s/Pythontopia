@@ -62,6 +62,9 @@
               src="{{kc.currentPage.imageUrl}}"
               mode="widthFix"
               lazy-load
+              data-cidx="{{ci}}"
+              data-kidx="{{ki}}"
+              bindtap="previewPage"
             />
             <view wx:if="{{kc.currentPage.excerpt}}" class="muted course__page-excerpt">{{kc.currentPage.excerpt}}</view>
             <view class="course__page-nav" wx:if="{{kc.pages.length > 1}}">

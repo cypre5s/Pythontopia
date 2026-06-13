@@ -30,6 +30,21 @@ export class Dialog {
     return this.target;
   }
 
+  /**
+   * 异步回填 NPC 个性化寒暄：仅当当前对话仍是同一个 NPC 时生效（玩家可能已走开/换对象）。
+   * 非阻塞链路的收尾，绝不强行打开/覆盖其它对话。
+   */
+  applyNpcGreeting(npcKey: string, greeting: string): void {
+    if (
+      this.view &&
+      this.view.kind === 'npc' &&
+      this.target?.npcKey === npcKey &&
+      greeting.trim().length > 0
+    ) {
+      this.view = { ...this.view, greeting };
+    }
+  }
+
   hasDeepLink(): boolean {
     return this.view?.deepLink != null;
   }

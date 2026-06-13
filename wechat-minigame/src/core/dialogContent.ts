@@ -72,6 +72,8 @@ export interface DialogView {
   footnote: string;
   /** 跳转配套学习小程序的入口；未配置或非学习站点为 null。 */
   deepLink: DialogDeepLink | null;
+  /** NPC 记忆感知个性化寒暄（R-15 §8）；异步拉取成功后回填，展示在正文之前。 */
+  greeting?: string;
 }
 
 /** 把可交互对象组装成对话框视图：NPC 取对白，建筑取学习站点，地标取风味文案。 */

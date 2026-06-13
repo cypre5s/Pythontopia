@@ -48,7 +48,7 @@
   <!-- 资源生成 -->
   <view class="card" wx:if="{{dispatchKind === 'resource'}}">
     <view class="section-title">工坊资源</view>
-    <view wx:if="{{resourceLoading}}" class="loading">生成中（服务端多智能体 + 证据审查）…</view>
+    <view wx:if="{{resourceLoading}}" class="loading">{{resourceStatus || '生成中（服务端多智能体 + 证据审查）…'}}</view>
     <view class="login__error" wx:if="{{resourceError}}">{{resourceError}}</view>
     <block wx:if="{{resource}}">
       <view class="ws-res-title">{{resource.title}}</view>

@@ -5,7 +5,7 @@
 // 端点为 POST（见 docs/clients/api-contract.md §4.1 与后端 GameBootstrapController）；
 // 鉴权用 wx 本地存储里的 token（与配套学习小程序共享）。
 import { BACKEND } from './config';
-import { getStorageString, httpPostJson } from './runtime/wx';
+import { getStorageString, httpGetJson, httpPostJson } from './runtime/wx';
 
 export interface SpawnTile {
   tileX: number;
@@ -41,6 +41,89 @@ export async function fetchBootstrap(): Promise<BootstrapResult | null> {
     return null;
   }
   return { spawn: extractSpawn(result.data), hud: extractHud(result.data) };
+}
+
+/** 主线学习进度摘要（GET /api/mainline/overview，需 STUDENT 登录态）。 */
+export interface MainlineSummary {
+  totalStars: number;
+  unlockedChapters: number;
+}
+
+/**
+ * 拉取主线总星与已解锁章数（用于在小镇 HUD 展示学习进度）。
+ * 端点需要 STUDENT 鉴权；未登录或任何失败都安静返回 null（非阻塞）。
+ */
+export async function fetchMainlineSummary(): Promise<MainlineSummary | null> {
+  const token = getStorageString(BACKEND.tokenKey);
+  if (!token) {
+    return null;
+  }
+  const result = await httpGetJson({
+    url: BACKEND.baseUrl + '/api/mainline/overview',
+    header: { Authorization: `Bearer ${token}` },
+    timeoutMs: BACKEND.timeoutMs,
+  });
+  if (!result || result.statusCode < 200 || result.statusCode >= 300) {
+    return null;
+  }
+  return extractMainlineSummary(result.data);
+}
+
+function extractMainlineSummary(data: unknown): MainlineSummary | null {
+  if (!isRecord(data)) {
+    return null;
+  }
+  const totalStars = typeof data['totalStars'] === 'number' ? data['totalStars'] : 0;
+  const chapters = data['chapters'];
+  let unlocked = 0;
+  if (Array.isArray(chapters)) {
+    for (const chapter of chapters) {
+      if (isRecord(chapter) && chapter['unlocked'] === true) {
+        unlocked += 1;
+      }
+    }
+  }
+  return { totalStars, unlockedChapters: unlocked };
+}
+
+/** NPC 个性化寒暄（GET /api/npc/{key}/greeting，对齐后端 NpcGreetingResponse / web dialog store）。 */
+export interface NpcGreeting {
+  greeting: string;
+  available: boolean;
+  grounded: boolean;
+  /** agent / 记忆下游不可用时为 true（此时不展示伪造寒暄）。 */
+  degraded?: boolean;
+}
+
+/**
+ * 拉取某 NPC 的记忆感知个性化寒暄（需 STUDENT 登录态）。
+ * 未登录 / 任何失败 / 非 2xx 都安静返回 null（对话照常走随包脚本对白，绝不伪造个性化内容）。
+ */
+export async function fetchNpcGreeting(npcKey: string): Promise<NpcGreeting | null> {
+  const token = getStorageString(BACKEND.tokenKey);
+  if (!token) {
+    return null;
+  }
+  const result = await httpGetJson({
+    url: `${BACKEND.baseUrl}/api/npc/${encodeURIComponent(npcKey)}/greeting`,
+    header: { Authorization: `Bearer ${token}` },
+    timeoutMs: BACKEND.timeoutMs,
+  });
+  if (!result || result.statusCode < 200 || result.statusCode >= 300) {
+    return null;
+  }
+  return extractGreeting(result.data);
+}
+
+function extractGreeting(data: unknown): NpcGreeting | null {
+  if (!isRecord(data)) {
+    return null;
+  }
+  const greeting = typeof data['greeting'] === 'string' ? data['greeting'] : '';
+  const available = data['available'] === true;
+  const grounded = data['grounded'] === true;
+  const degraded = data['degraded'] === true;
+  return { greeting, available, grounded, degraded };
 }
 
 function extractSpawn(data: unknown): SpawnTile | null {

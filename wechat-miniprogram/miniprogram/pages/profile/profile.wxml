@@ -20,6 +20,10 @@
     <view class="section-title">八维画像</view>
     <view class="muted profile__legend">绿色=得分 · 金色=置信度。可自评维度可手动微调。</view>
 
+    <view wx:if="{{dimensions.length > 0}}" class="profile__radar-wrap">
+      <canvas type="2d" id="profileRadar" style="width:100%;height:480rpx;display:block"></canvas>
+    </view>
+
     <view class="profile__dim" wx:for="{{dimensions}}" wx:key="key">
       <view class="row row--between">
         <text class="profile__dim-label">{{item.label}}</text>

@@ -1,4 +1,5 @@
 import { completeQuest } from '../../api/quests';
+import { postExampleDone } from '../../api/mainline';
 import { createSubmission, getPublicProblem, getSubmission } from '../../api/submissions';
 import { PublicProblem, SubmissionDetail, SubmissionStatus, Verdict } from '../../api/dto/submissions';
 import { ApiError } from '../../utils/request';
@@ -17,6 +18,7 @@ interface SampleVM {
 interface DetailData {
   problemId: number;
   questId: number | null;
+  stageId: number | null;
   loading: boolean;
   errorMsg: string;
   problem: PublicProblem | null;
@@ -64,6 +66,7 @@ Page({
   data: {
     problemId: 0,
     questId: null,
+    stageId: null,
     loading: false,
     errorMsg: '',
     problem: null,
@@ -85,7 +88,8 @@ Page({
     this.cancelled = false;
     const problemId = Number(query.problemId);
     const questId = query.questId ? Number(query.questId) : null;
-    this.setData({ problemId, questId });
+    const stageId = query.stageId ? Number(query.stageId) : null;
+    this.setData({ problemId, questId, stageId });
     if (!problemId) {
       this.setData({ errorMsg: '缺少题目 ID' });
       return;
@@ -186,6 +190,16 @@ Page({
       failureReason: judge && judge.failureReason ? judge.failureReason : '',
       resultClass: status === 'PASSED' ? 'result--pass' : 'result--fail',
     });
+    // 由小节「练」跳入且本题通过：回写 example-done 三件套打点（后端再次校验 PASSED+本人）。
+    if (status === 'PASSED' && this.data.stageId) {
+      postExampleDone(this.data.stageId, detail.submission.problemId, detail.submission.id)
+        .then(() => {
+          wx.showToast({ title: '已计入小节练习', icon: 'success' });
+        })
+        .catch(() => {
+          // 打点失败静默，不影响判题展示。
+        });
+    }
   },
 
   async onCompleteQuest() {

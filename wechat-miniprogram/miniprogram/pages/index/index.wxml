@@ -1,19 +1,81 @@
 <view class="page">
   <view class="card index__hero">
-    <view class="index__greeting">{{greeting}}</view>
-    <view class="muted">公告板 · 今日任务与班级任务</view>
+    <view class="row row--between">
+      <view class="index__greeting">{{greeting}}</view>
+      <view class="index__stars">⭐ {{totalStars}}</view>
+    </view>
+    <view class="muted">Pythontopia 小镇 · 主线冒险</view>
   </view>
 
   <view class="login__error" wx:if="{{errorMsg}}">{{errorMsg}}</view>
 
-  <!-- Bug 矿洞入口 -->
+  <!-- 主线冒险地图 -->
   <view class="card">
-    <view class="row row--between">
-      <view class="index__entry-text">
-        <view class="section-title">Bug 矿洞</view>
-        <view class="muted">错题复盘 · 遗忘回声（FSRS 到期复习）</view>
+    <view class="section-title">主线冒险地图</view>
+    <view wx:if="{{loading && chapters.length === 0}}" class="loading">加载中…</view>
+    <view wx:elif="{{chapters.length === 0}}" class="empty">暂无主线数据，稍后再试。</view>
+
+    <view wx:for="{{chapters}}" wx:key="chapter" wx:for-index="ci" class="chapter {{item.unlocked ? '' : 'chapter--locked'}}">
+      <view class="chapter__head" data-idx="{{ci}}" bindtap="onToggleChapter">
+        <view class="chapter__title-row">
+          <text class="chapter__no">第{{item.chapter}}章</text>
+          <text class="chapter__title">{{item.title}}</text>
+        </view>
+        <view class="chapter__meta">
+          <text class="chapter__stars">{{item.starsText}}</text>
+          <text wx:if="{{!item.unlocked}}" class="badge badge--skip">🔒 未解锁</text>
+          <text wx:else class="muted">{{item.stageDoneText}}</text>
+        </view>
       </view>
-      <button class="btn btn--sm" bindtap="goMine">进入</button>
+
+      <view wx:if="{{item.expanded && item.unlocked}}" class="chapter__body">
+        <view class="muted chapter__best">{{item.bestText}}</view>
+        <view
+          wx:for="{{item.stages}}"
+          wx:key="id"
+          wx:for-item="st"
+          class="stage-row"
+          data-id="{{st.id}}"
+          bindtap="onGoStage"
+        >
+          <view class="row row--between">
+            <text class="stage-row__title">{{st.indexNo}}. {{st.title}}</text>
+            <text class="badge {{st.completed ? 'badge--done' : 'badge--open'}}">{{st.completed ? '已通关 ✓' : '去学习'}}</text>
+          </view>
+          <text class="muted stage-row__progress">{{st.progress}}</text>
+        </view>
+        <button class="btn btn--sm btn--block chapter__test" data-chapter="{{item.chapter}}" catchtap="onGoTest">
+          章末大测试 · {{item.testLabel}} ›
+        </button>
+      </view>
+    </view>
+  </view>
+
+  <!-- 今日任务 -->
+  <view class="card">
+    <view class="section-title">今日任务</view>
+    <view wx:if="{{loading && todayQuests.length === 0}}" class="loading">加载中…</view>
+    <view wx:elif="{{todayQuests.length === 0}}" class="empty">今天暂无个人任务，去冒险地图推进主线吧。</view>
+    <view
+      wx:for="{{todayQuests}}"
+      wx:key="id"
+      class="list-item"
+      data-problem-id="{{item.firstProblemId}}"
+      data-quest-id="{{item.id}}"
+      bindtap="onGoPractice"
+    >
+      <view class="row row--between">
+        <text class="list-item__title">{{item.title}}</text>
+        <text class="badge {{item.statusClass}}">{{item.statusLabel}}</text>
+      </view>
+      <view class="muted" wx:if="{{item.kcCode}}">{{item.kcCode}}</view>
+      <view class="quest__desc" wx:if="{{item.description}}">{{item.description}}</view>
+      <view class="quest__actions">
+        <button wx:if="{{item.canStart}}" class="btn btn--sm btn--primary" catchtap="onStart" data-id="{{item.id}}">开始</button>
+        <button wx:if="{{item.canComplete}}" class="btn btn--sm btn--primary" catchtap="onComplete" data-id="{{item.id}}">完成</button>
+        <button wx:if="{{item.firstProblemId}}" class="btn btn--sm" catchtap="onGoPractice" data-problem-id="{{item.firstProblemId}}" data-quest-id="{{item.id}}">去练习</button>
+        <button wx:if="{{item.canSkip}}" class="btn btn--sm btn--ghost" catchtap="onSkip" data-id="{{item.id}}">跳过</button>
+      </view>
     </view>
   </view>
 
@@ -39,52 +101,14 @@
     <view class="muted" wx:else>还没有掌握度数据，去练习几道题点亮它吧。</view>
   </view>
 
-  <!-- 今日任务 -->
+  <!-- Bug 矿洞入口 -->
   <view class="card">
-    <view class="section-title">今日任务</view>
-    <view wx:if="{{loading && todayQuests.length === 0}}" class="loading">加载中…</view>
-    <view wx:elif="{{todayQuests.length === 0}}" class="empty">今天暂无个人任务，去课程地图逛逛吧。</view>
-    <view
-      wx:for="{{todayQuests}}"
-      wx:key="id"
-      class="list-item"
-      data-problem-id="{{item.firstProblemId}}"
-      data-quest-id="{{item.id}}"
-      bindtap="onGoPractice"
-    >
-      <view class="row row--between">
-        <text class="list-item__title">{{item.title}}</text>
-        <text class="badge {{item.statusClass}}">{{item.statusLabel}}</text>
+    <view class="row row--between">
+      <view class="index__entry-text">
+        <view class="section-title">Bug 矿洞</view>
+        <view class="muted">错题复盘 · 遗忘回声（FSRS 到期复习）</view>
       </view>
-      <view class="muted" wx:if="{{item.kcCode}}">{{item.kcCode}}</view>
-      <view class="quest__desc" wx:if="{{item.description}}">{{item.description}}</view>
-      <view class="quest__actions">
-        <button
-          wx:if="{{item.canStart}}"
-          class="btn btn--sm btn--primary"
-          catchtap="onStart"
-          data-id="{{item.id}}"
-        >开始</button>
-        <button
-          wx:if="{{item.canComplete}}"
-          class="btn btn--sm btn--primary"
-          catchtap="onComplete"
-          data-id="{{item.id}}"
-        >完成</button>
-        <button
-          wx:if="{{item.firstProblemId}}"
-          class="btn btn--sm"
-          catchtap="onGoPractice"
-          data-problem-id="{{item.firstProblemId}}"
-          data-quest-id="{{item.id}}"
-        >去练习</button>
-        <button
-          wx:if="{{item.canSkip}}"
-          class="btn btn--sm btn--ghost"
-          catchtap="onSkip"
-          data-id="{{item.id}}"
-        >跳过</button>
-      </view>
+      <button class="btn btn--sm" bindtap="goMine">进入</button>
     </view>
   </view>
 
@@ -106,11 +130,7 @@
       <view class="muted" wx:if="{{item.kcText}}">{{item.kcText}}</view>
       <view class="quest__desc" wx:if="{{item.description}}">{{item.description}}</view>
       <view class="quest__actions" wx:if="{{item.firstProblemId}}">
-        <button
-          class="btn btn--sm"
-          catchtap="onGoPractice"
-          data-problem-id="{{item.firstProblemId}}"
-        >去练习</button>
+        <button class="btn btn--sm" catchtap="onGoPractice" data-problem-id="{{item.firstProblemId}}">去练习</button>
       </view>
     </view>
   </view>
