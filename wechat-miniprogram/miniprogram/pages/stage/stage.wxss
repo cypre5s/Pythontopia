@@ -24,6 +24,27 @@
 }
 
 /* 看 · 视频 */
+.stage-video__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10rpx;
+  margin: 14rpx 0;
+}
+
+.stage-video__tab {
+  padding: 8rpx 16rpx;
+  font-size: 24rpx;
+  background: var(--parchment-deep);
+  border: 3rpx solid var(--wood);
+  color: var(--ink-soft);
+}
+
+.stage-video__tab.is-active {
+  background: var(--sky);
+  color: #fff8ea;
+  border-color: var(--sky);
+}
+
 .stage-video {
   margin-top: 16rpx;
 }

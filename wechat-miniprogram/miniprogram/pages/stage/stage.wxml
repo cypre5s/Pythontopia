@@ -23,15 +23,25 @@
       </view>
       <view class="bar"><view class="bar__fill bar__fill--sky" style="width:{{videoWidth}}"></view></view>
       <view wx:if="{{videos.length === 0}}" class="muted stage__hint">本节暂无内置视频，可在「学」中阅读课件。</view>
-      <view wx:for="{{videos}}" wx:key="id" wx:for-index="vi" class="stage-video">
+      <view wx:if="{{videos.length > 1}}" class="stage-video__tabs">
+        <text
+          wx:for="{{videos}}"
+          wx:key="id"
+          wx:for-index="vi"
+          class="stage-video__tab {{vi === activeVideoIndex ? 'is-active' : ''}}"
+          data-idx="{{vi}}"
+          bindtap="onPickVideo"
+        >{{vi + 1}}. {{item.title}}</text>
+      </view>
+      <view wx:if="{{activeVideo}}" class="stage-video">
         <view class="row row--between">
-          <text class="stage-video__title">{{item.title}}</text>
-          <text class="muted">{{item.durationLabel}}</text>
+          <text class="stage-video__title">{{activeVideo.title}}</text>
+          <text class="muted">{{activeVideo.durationLabel}}</text>
         </view>
         <video
           class="stage-video__player"
-          src="{{item.url}}"
-          data-idx="{{vi}}"
+          src="{{activeVideo.url}}"
+          data-idx="{{activeVideoIndex}}"
           bindtimeupdate="onVideoTimeUpdate"
           bindpause="onVideoPause"
           bindended="onVideoEnded"

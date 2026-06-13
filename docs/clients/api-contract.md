@@ -265,6 +265,18 @@ Bug 矿洞是错题复习支线：已有失败提交可进入矿洞；遗忘回�
 
 三个长流式端点均为 **`POST` + `produces: text/event-stream`**，**仅 `STUDENT`**，须带 `Authorization` 头。后端把请求转发到 Python graph 服务并把事件原样回放。
 
+> **⚠️ 实测 2026-06-13（重要，历史事件名已不准确）**：线上 SSE 已迁移到 **AG-UI 语义事件协议**，
+> 实际事件名为 `RUN_STARTED / RUN_FINISHED / RUN_ERROR / STEP_STARTED / STEP_FINISHED /
+> TEXT_MESSAGE_START / TEXT_MESSAGE_CONTENT / TEXT_MESSAGE_END / TOOL_CALL_* /
+> STATE_SNAPSHOT / STATE_DELTA / CUSTOM`，**而非**下表里的历史名 `plan/trace/token/result/error`
+> （历史名仅作兼容，后端可能不再发送）。客户端须做「双语归一」：`TEXT_MESSAGE_CONTENT.delta` 拼答案、
+> `STEP_*` 当思考链、`RUN_FINISHED.result`（常再包一层 `{ "result": { ... } }`）为终态、`RUN_ERROR` 为错误、
+> `CUSTOM{name:"plan"}` 为工位清单。参考实现：`frontend/src/composables/agui.ts`、
+> `wechat-miniprogram/miniprogram/utils/agui.ts`。
+> 另：资源工坊流 `/api/workshop/resources/stream` 的 `RUN_FINISHED.result` 只含 graph 内联
+> `artifact`（**无 `resourceId`**，`status` 可能为 `PARTIAL`）；要拿可渲染的**持久化**资源，请用非流式
+> `POST /api/workshop/resources`（返回 `resourceId`）→ `GET /api/workshop/resources/{id}`（返回 `LearningResource`）。
+
 | 方法 | 路径 | 事件序列 | 说明 |
 | --- | --- | --- | --- |
 | POST | `/api/tutor/ask` | `plan` → `trace`* → `token`* → `result` → (`error`) | 导师答疑流（含课件证据 + 防幻觉/安全审查） |

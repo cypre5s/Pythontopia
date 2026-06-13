@@ -133,18 +133,25 @@ Page({
   },
 
   patchChapter(idx: number, patch: Partial<ChapterVM>) {
-    const chapters = this.data.chapters.map((c, i) => (i === idx ? { ...c, ...patch } : c));
-    this.setData({ chapters });
+    const cur = this.data.chapters[idx];
+    if (!cur) {
+      return;
+    }
+    // 路径化 setData：只下发被改的那一章（含其 kcs），避免整个嵌套章节数组重序列化。
+    this.setData({ [`chapters[${idx}]`]: { ...cur, ...patch } });
   },
 
   patchKc(cidx: number, kidx: number, updater: (kc: KcVM) => KcVM) {
-    const chapters = this.data.chapters.map((c, i) => {
-      if (i !== cidx) {
-        return c;
-      }
-      return { ...c, kcs: c.kcs.map((k, j) => (j === kidx ? updater(k) : k)) };
-    });
-    this.setData({ chapters });
+    const chapter = this.data.chapters[cidx];
+    if (!chapter) {
+      return;
+    }
+    const cur = chapter.kcs[kidx];
+    if (!cur) {
+      return;
+    }
+    // 路径化 setData：只下发被改的那一个 KC（含其课件页），课程页嵌套深，收益明显。
+    this.setData({ [`chapters[${cidx}].kcs[${kidx}]`]: updater(cur) });
   },
 
   async toggleChapter(e: WechatMiniprogram.CustomEvent) {

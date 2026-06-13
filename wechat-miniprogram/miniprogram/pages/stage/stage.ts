@@ -92,6 +92,8 @@ interface StageData {
   completed: boolean;
   // 看
   videos: VideoVM[];
+  activeVideoIndex: number;
+  activeVideo: VideoVM | null;
   videoWatchedSec: number;
   requiredVideoSec: number;
   videoPct: string;
@@ -155,6 +157,7 @@ function buildQuestionVM(q: StagePracticeQuestionDto, no: number, correct: boole
 
 Page({
   reloadOnShow: false,
+  cancelled: false,
 
   data: {
     stageId: 0,
@@ -166,6 +169,8 @@ Page({
     indexNo: 0,
     completed: false,
     videos: [],
+    activeVideoIndex: 0,
+    activeVideo: null,
     videoWatchedSec: 0,
     requiredVideoSec: 0,
     videoPct: '0%',
@@ -210,7 +215,13 @@ Page({
     }
   },
 
+  onHide() {
+    // 切后台 / 离开页面：把累积的观看时长落一次，避免丢「看」进度。
+    this.flushVideo();
+  },
+
   onUnload() {
+    this.cancelled = true;
     this.flushVideo();
   },
 
@@ -219,6 +230,9 @@ Page({
     this.setData({ loading: true, errorMsg: '' });
     try {
       const d = await getStageDetail(stageId);
+      if (this.cancelled) {
+        return;
+      }
       this.applyDetail(d);
       this.setData({ loading: false });
       wx.setNavigationBarTitle({ title: `${d.index}. ${d.title}` });
@@ -267,6 +281,8 @@ Page({
       indexNo: d.index,
       completed: d.completed,
       videos,
+      activeVideoIndex: 0,
+      activeVideo: videos.length > 0 ? videos[0] : null,
       videoWatchedSec: d.videoWatchedSec,
       requiredVideoSec: d.requiredVideoSec,
       videoPct: this.ratio(d.videoWatchedSec, d.requiredVideoSec),
@@ -304,6 +320,16 @@ Page({
   },
 
   // --- 看：视频时长节流上报 -------------------------------------------------
+
+  onPickVideo(e: WechatMiniprogram.CustomEvent) {
+    const dataset = e.currentTarget.dataset as { idx?: string | number };
+    const idx = Number(dataset.idx);
+    const video = this.data.videos[idx];
+    if (!video) {
+      return;
+    }
+    this.setData({ activeVideoIndex: idx, activeVideo: video });
+  },
 
   onVideoTimeUpdate(e: WechatMiniprogram.CustomEvent<{ currentTime: number }>) {
     const dataset = e.currentTarget.dataset as { idx?: string | number };
@@ -346,7 +372,11 @@ Page({
     this.videoPending -= deltaSec;
     this.videoFlushTimes.push(now);
     postVideoProgress(this.data.stageId, deltaSec)
-      .then((p) => this.applyProgress(p))
+      .then((p) => {
+        if (!this.cancelled) {
+          this.applyProgress(p);
+        }
+      })
       .catch(() => {
         // 打点失败静默，不打断观看。
       });
@@ -362,6 +392,9 @@ Page({
     }
     postPageRead(this.data.stageId, pageId)
       .then((p) => {
+        if (this.cancelled) {
+          return;
+        }
         this.markPageRead(pageId);
         this.applyProgress(p);
       })
@@ -388,6 +421,9 @@ Page({
     }
     postPagesRead(this.data.stageId, ids)
       .then((p) => {
+        if (this.cancelled) {
+          return;
+        }
         const pages = this.data.pages.map((pg) => ({ ...pg, read: true }));
         this.setData({ pages });
         this.applyProgress(p);
@@ -489,6 +525,9 @@ Page({
     this.patchQuestion(qi, { pending: true });
     try {
       const res = await answerPracticeQuestion(this.data.stageId, q.id, this.buildAnswers(q));
+      if (this.cancelled) {
+        return;
+      }
       const patch: Partial<QuestionVM> = {
         pending: false,
         showResult: true,
@@ -521,9 +560,12 @@ Page({
   },
 
   patchQuestion(qi: number, patch: Partial<QuestionVM>) {
-    const questions = this.data.questions.slice();
-    questions[qi] = { ...questions[qi], ...patch };
-    this.setData({ questions });
+    const cur = this.data.questions[qi];
+    if (!cur) {
+      return;
+    }
+    // 路径化 setData：每次作答只下发被改的那道题，避免全数组重序列化。
+    this.setData({ [`questions[${qi}]`]: { ...cur, ...patch } });
   },
 
   recomputePractice() {

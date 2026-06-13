@@ -263,13 +263,12 @@ Page({
   onToggleChapter(e: WechatMiniprogram.CustomEvent) {
     const dataset = e.currentTarget.dataset as { idx?: string | number };
     const idx = Number(dataset.idx);
-    const chapters = this.data.chapters.slice();
-    const cur = chapters[idx];
+    const cur = this.data.chapters[idx];
     if (!cur || !cur.unlocked) {
       return;
     }
-    chapters[idx] = { ...cur, expanded: !cur.expanded };
-    this.setData({ chapters });
+    // 路径化 setData：只翻转该章 expanded，不重序列化整个章节数组。
+    this.setData({ [`chapters[${idx}].expanded`]: !cur.expanded });
   },
 
   onGoStage(e: WechatMiniprogram.CustomEvent) {

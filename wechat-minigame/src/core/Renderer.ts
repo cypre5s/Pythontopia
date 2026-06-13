@@ -56,6 +56,12 @@ const PLAYER_BODY = '#3a86ff';
 const PLAYER_SKIN = '#ffd9a0';
 const PLAYER_HAIR = '#5a3a29';
 
+interface PlaceLabel {
+  title: string;
+  cx: number;
+  topY: number;
+}
+
 export class Renderer {
   constructor(
     private readonly ctx: Ctx2D,
@@ -64,6 +70,10 @@ export class Renderer {
     private readonly pixelRatio: number,
     private readonly drawTile: number,
   ) {}
+
+  // 建筑/地标名牌锚点缓存：仅在地图引用变化时重算，避免每帧扫描 interactables 算 min/max。
+  private placeLabelMap: TileMap | null = null;
+  private placeLabels: PlaceLabel[] = [];
 
   resize(viewWidth: number, viewHeight: number): void {
     this.viewWidth = viewWidth;
@@ -105,7 +115,21 @@ export class Renderer {
 
   /** 给建筑/地标画常驻名牌（NPC 名牌走 drawNpcs），让小镇一眼可读、对齐 web 的可识别建筑。 */
   private drawPlaceLabels(map: TileMap, camera: Camera): void {
+    if (this.placeLabelMap !== map) {
+      this.placeLabelMap = map;
+      this.placeLabels = this.computePlaceLabels(map);
+    }
+    const margin = this.drawTile * 4;
+    for (const label of this.placeLabels) {
+      if (this.isVisible(label.cx, label.topY, camera, margin)) {
+        this.drawNameTag(label.title, label.cx, label.topY - 2);
+      }
+    }
+  }
+
+  private computePlaceLabels(map: TileMap): PlaceLabel[] {
     const draw = this.drawTile;
+    const labels: PlaceLabel[] = [];
     for (const item of map.interactables) {
       if (item.kind === 'npc' || item.tiles.length === 0) {
         continue;
@@ -127,13 +151,9 @@ export class Renderer {
       if (!Number.isFinite(minX)) {
         continue;
       }
-      const cx = ((minX + maxX) / 2 + 0.5) * draw;
-      const topY = minY * draw;
-      if (!this.isVisible(cx, topY, camera, draw * 4)) {
-        continue;
-      }
-      this.drawNameTag(item.title, cx, topY - 2);
+      labels.push({ title: item.title, cx: ((minX + maxX) / 2 + 0.5) * draw, topY: minY * draw });
     }
+    return labels;
   }
 
   /** 在当前可交互对象的 footprint 上画一圈淡金色高亮，提示「这个可以交互」。 */

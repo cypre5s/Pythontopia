@@ -1,12 +1,13 @@
 import { listKcs } from '../../api/course';
 import { routeIntent } from '../../api/intent';
 import { askTutorStream } from '../../api/tutor';
-import { getResource, streamResources } from '../../api/workshop';
+import { createResource, getResource } from '../../api/workshop';
 import { IntentCourseKc, IntentRouteResponse, IntentType } from '../../api/dto/intent';
 import { TutorAskRequest } from '../../api/dto/tutor';
 import { LearningResource, ResourceStatusFlag, WorkshopResourceType } from '../../api/dto/workshop';
 import { LOGIN_ROUTE, MINE_ROUTE } from '../../config';
 import { isLoggedIn } from '../../store/session';
+import { toAguiEvent } from '../../utils/agui';
 import { toPercent } from '../../utils/format';
 import { MarkdownBlock, parseMarkdown } from '../../utils/markdown';
 import { ApiError } from '../../utils/request';
@@ -83,34 +84,15 @@ interface WorkshopData {
   videoKcText: string;
 }
 
-function asRecord(data: string): Record<string, unknown> {
-  try {
-    const value: unknown = JSON.parse(data);
-    return value !== null && typeof value === 'object' ? (value as Record<string, unknown>) : {};
-  } catch {
-    return {};
-  }
+function toRecord(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
 
-function readDelta(data: string): string {
-  const delta = asRecord(data).delta;
-  return typeof delta === 'string' ? delta : '';
-}
-
-function readResourceId(data: string): number {
-  const value = asRecord(data).resourceId;
-  return typeof value === 'number' ? value : 0;
-}
-
-function readAnswer(data: string): string {
-  const record = asRecord(data);
-  const candidate = record.answer ?? record.content ?? record.text;
+/** 导师答疑 RUN_FINISHED 结果里取答案文本（graph 结果 snake_case，answer_md 优先）。 */
+function extractTutorAnswer(result: unknown): string {
+  const r = toRecord(result);
+  const candidate = r.answer_md ?? r.answer ?? r.content ?? r.text;
   return typeof candidate === 'string' ? candidate : '';
-}
-
-function readErrorMessage(data: string): string {
-  const message = asRecord(data).message;
-  return typeof message === 'string' ? message : '';
 }
 
 function isResourceIntent(intent: IntentType): boolean {
@@ -142,7 +124,9 @@ Page({
   lastMessage: '',
   courseKcs: [] as IntentCourseKc[],
   askTask: null as WechatMiniprogram.RequestTask | null,
-  resourceTask: null as WechatMiniprogram.RequestTask | null,
+  // 导师答疑流式文本节流：累积增量、80ms 合并一次 setData，避免每 token 全量回传。
+  askBuffer: '',
+  askFlushTimer: 0,
 
   data: {
     input: '',
@@ -159,7 +143,6 @@ Page({
     resourceLoading: false,
     resourceError: '',
     resourceStatus: '',
-    resourceTraceCount: 0,
     resource: null,
     reviewKcText: '',
     videoFocus: '',
@@ -180,7 +163,10 @@ Page({
   onUnload() {
     this.cancelled = true;
     this.abortAsk();
-    this.abortResource();
+    if (this.askFlushTimer) {
+      clearTimeout(this.askFlushTimer);
+      this.askFlushTimer = 0;
+    }
   },
 
   async loadKcs() {
@@ -207,15 +193,31 @@ Page({
     }
   },
 
-  abortResource() {
-    if (this.resourceTask) {
-      try {
-        this.resourceTask.abort();
-      } catch {
-        // 忽略中断异常。
-      }
-      this.resourceTask = null;
+  scheduleAskFlush() {
+    if (this.askFlushTimer) {
+      return;
     }
+    this.askFlushTimer = setTimeout(() => {
+      this.askFlushTimer = 0;
+      this.flushAsk();
+    }, 80) as unknown as number;
+  },
+
+  flushAsk() {
+    if (this.askBuffer.length === 0) {
+      return;
+    }
+    const buffered = this.askBuffer;
+    this.askBuffer = '';
+    this.setData({ askText: this.data.askText + buffered });
+  },
+
+  flushAskNow() {
+    if (this.askFlushTimer) {
+      clearTimeout(this.askFlushTimer);
+      this.askFlushTimer = 0;
+    }
+    this.flushAsk();
   },
 
   resetResults() {
@@ -230,7 +232,6 @@ Page({
       resourceLoading: false,
       resourceError: '',
       resourceStatus: '',
-      resourceTraceCount: 0,
       resource: null,
       reviewKcText: '',
       videoFocus: '',
@@ -248,7 +249,6 @@ Page({
       return;
     }
     this.abortAsk();
-    this.abortResource();
     this.lastMessage = message;
     this.setData({ routing: true, route: null, errorMsg: '' });
     this.resetResults();
@@ -299,6 +299,11 @@ Page({
   },
 
   runAsk(route: IntentRouteResponse) {
+    this.askBuffer = '';
+    if (this.askFlushTimer) {
+      clearTimeout(this.askFlushTimer);
+      this.askFlushTimer = 0;
+    }
     this.setData({
       dispatchKind: 'ask',
       askStreaming: true,
@@ -318,46 +323,52 @@ Page({
         if (this.cancelled) {
           return;
         }
-        if (msg.event === 'token') {
-          const delta = readDelta(msg.data);
-          if (delta) {
-            this.setData({ askText: this.data.askText + delta });
+        const ev = toAguiEvent(msg.event, msg.data);
+        if (!ev) {
+          return;
+        }
+        if (ev.type === 'TEXT_MESSAGE_CONTENT') {
+          if (ev.delta) {
+            this.askBuffer += ev.delta;
+            this.scheduleAskFlush();
           }
-        } else if (msg.event === 'plan') {
-          this.setData({ askStatus: '已规划，生成中…' });
-        } else if (msg.event === 'trace') {
+        } else if (ev.type === 'RUN_STARTED') {
+          this.setData({ askStatus: '生成中…' });
+        } else if (ev.type === 'STEP_STARTED' || ev.type === 'STEP_FINISHED') {
           const next = this.data.askTraceCount + 1;
           this.setData({ askTraceCount: next, askStatus: `思考中…（${next} 步）` });
-        } else if (msg.event === 'result') {
-          const answer = readAnswer(msg.data);
+        } else if (ev.type === 'CUSTOM' && ev.name === 'plan') {
+          this.setData({ askStatus: '已规划，生成中…' });
+        } else if (ev.type === 'RUN_FINISHED') {
+          this.flushAskNow();
+          const answer = extractTutorAnswer(ev.result);
           if (this.data.askText.trim().length === 0 && answer) {
             this.setData({ askText: answer });
           }
           this.setData({ askStreaming: false, askDone: true, askStatus: '' });
-        } else if (msg.event === 'error') {
-          this.setData({
-            askStreaming: false,
-            askError: readErrorMessage(msg.data) || '答疑失败',
-            askStatus: '',
-          });
+        } else if (ev.type === 'RUN_ERROR') {
+          this.flushAskNow();
+          this.setData({ askStreaming: false, askError: ev.message || '答疑失败', askStatus: '' });
         }
       },
       onError: (err) => {
         if (this.cancelled) {
           return;
         }
+        this.flushAskNow();
         this.setData({ askStreaming: false, askError: err.message, askStatus: '' });
       },
       onComplete: () => {
         if (this.cancelled) {
           return;
         }
+        this.flushAskNow();
         this.setData({ askStreaming: false, askStatus: '' });
       },
     });
   },
 
-  runResource(route: IntentRouteResponse) {
+  async runResource(route: IntentRouteResponse) {
     const type = route.intent as WorkshopResourceType;
     if (route.kcCodes.length === 0) {
       this.setData({
@@ -368,67 +379,33 @@ Page({
       });
       return;
     }
+    // 工坊资源走非流式 create（持久化 → 返回 resourceId），再 getResource 取干净的
+    // LearningResource 渲染。流式端点 /resources/stream 仅回 graph 内联 artifact（无 resourceId，
+    // 难直接渲染），故此处用非流式以保证产物可读、契约稳定（实测 2026-06-13 在公网验证）。
     this.setData({
       dispatchKind: 'resource',
       resourceLoading: true,
       resourceError: '',
       resource: null,
-      resourceStatus: '连接中…',
-      resourceTraceCount: 0,
+      resourceStatus: '多智能体生成中（含证据审查），约十几秒…',
     });
-    this.abortResource();
-    this.resourceTask = streamResources(
-      { kcCodes: route.kcCodes, type, focusHint: route.focusHint || undefined },
-      {
-        onMessage: (msg) => {
-          if (this.cancelled) {
-            return;
-          }
-          if (msg.event === 'plan') {
-            this.setData({ resourceStatus: '已规划，多智能体生成中…' });
-          } else if (msg.event === 'trace') {
-            const next = this.data.resourceTraceCount + 1;
-            this.setData({ resourceTraceCount: next, resourceStatus: `生成中…（${next} 步）` });
-          } else if (msg.event === 'result') {
-            const resourceId = readResourceId(msg.data);
-            if (resourceId > 0) {
-              this.setData({ resourceStatus: '证据审查通过，拉取内容…' });
-              this.fetchResource(resourceId);
-            }
-          } else if (msg.event === 'error') {
-            this.setData({
-              resourceLoading: false,
-              resourceStatus: '',
-              resourceError: readErrorMessage(msg.data) || '资源生成失败',
-            });
-          }
-        },
-        onError: (err) => {
-          if (this.cancelled) {
-            return;
-          }
-          this.setData({ resourceLoading: false, resourceStatus: '', resourceError: err.message });
-        },
-        onComplete: () => {
-          if (this.cancelled) {
-            return;
-          }
-          // 流结束但未拿到 result（既无资源也无错误）时给个兜底提示。
-          if (this.data.resourceLoading && !this.data.resource && !this.data.resourceError) {
-            this.setData({ resourceLoading: false, resourceStatus: '', resourceError: '资源生成未完成，请重试' });
-          }
-        },
-      },
-    );
-  },
-
-  async fetchResource(resourceId: number) {
     try {
-      const resource = await getResource(resourceId);
+      const created = await createResource({
+        kcCodes: route.kcCodes,
+        type,
+        focusHint: route.focusHint || undefined,
+      });
+      const resource = await getResource(created.resourceId);
+      if (this.cancelled) {
+        return;
+      }
       this.applyResource(resource);
       this.setData({ resourceStatus: '' });
     } catch (e) {
-      const msg = e instanceof ApiError ? e.message : '资源拉取失败';
+      if (this.cancelled) {
+        return;
+      }
+      const msg = e instanceof ApiError ? e.message : '资源生成失败';
       this.setData({ resourceLoading: false, resourceStatus: '', resourceError: msg });
     }
   },

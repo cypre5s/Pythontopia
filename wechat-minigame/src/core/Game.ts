@@ -47,10 +47,14 @@ export class Game {
   private readonly dialog = new Dialog();
   private lineBook: NpcLineBook = new NpcLineBook(new Map());
   private nearby: Interactable | null = null;
+  // 交互目标只随玩家所在格变化而变（地图对象静态），缓存上次格号避免每帧全量扫描。
+  private lastNearbyTileX = -1;
+  private lastNearbyTileY = -1;
   private hudStatus: HudStatus | null = null;
 
   private rafHandle = 0;
   private lastTimestamp = 0;
+  private accumMs = 0;
   private running = false;
 
   constructor() {
@@ -58,7 +62,8 @@ export class Game {
     const screen = getScreenInfo();
     this.viewWidth = screen.windowWidth;
     this.viewHeight = screen.windowHeight;
-    this.pixelRatio = screen.pixelRatio;
+    // 像素美术无需超高 DPR：封顶 2x，省高分屏的填充/绘制开销。
+    this.pixelRatio = Math.min(2, screen.pixelRatio);
     this.canvas.width = Math.floor(this.viewWidth * this.pixelRatio);
     this.canvas.height = Math.floor(this.viewHeight * this.pixelRatio);
     this.ctx = get2dContext(this.canvas);
@@ -173,8 +178,14 @@ export class Game {
         : Math.min(MAX_FRAME_DELTA_MS, timestamp - this.lastTimestamp);
     this.lastTimestamp = timestamp;
 
-    this.update(delta);
-    this.render();
+    // 像素步行小游戏无需 60fps：累积到 ~33ms 跑一次 update+render（≈30fps），省一半绘制与电量；
+    // movement 基于 delta 积分，30fps 下速度保持一致。
+    this.accumMs += delta;
+    if (this.accumMs >= 30) {
+      this.update(this.accumMs);
+      this.render();
+      this.accumMs = 0;
+    }
 
     this.rafHandle = requestFrame(loop);
   }
@@ -187,7 +198,11 @@ export class Game {
     player.update(deltaMs, input.getDirection(), map);
     this.centerCameraOnPlayer();
 
-    this.nearby = map.findInteractableNear(player.tileX, player.tileY);
+    if (player.tileX !== this.lastNearbyTileX || player.tileY !== this.lastNearbyTileY) {
+      this.lastNearbyTileX = player.tileX;
+      this.lastNearbyTileY = player.tileY;
+      this.nearby = map.findInteractableNear(player.tileX, player.tileY);
+    }
     const openTarget = this.dialog.currentTarget();
     if (
       this.dialog.isOpen() &&

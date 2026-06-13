@@ -155,6 +155,7 @@ Page({
   timer: 0,
   deadlineMs: 0,
   blurEvents: 0,
+  cancelled: false,
 
   data: {
     chapter: 0,
@@ -196,6 +197,7 @@ Page({
   },
 
   onUnload() {
+    this.cancelled = true;
     this.clearTimer();
   },
 
@@ -209,6 +211,9 @@ Page({
   async loadLatest() {
     try {
       const latest = await getLatestTest(this.data.chapter);
+      if (this.cancelled) {
+        return;
+      }
       if (latest) {
         this.setData({
           hasLatest: true,
@@ -231,6 +236,9 @@ Page({
     try {
       await this.prepareUntilReady();
       const paper = await startTest(this.data.chapter);
+      if (this.cancelled) {
+        return;
+      }
       this.beginExam(paper);
     } catch (e) {
       const msg = e instanceof ApiError ? e.message : '试卷准备失败，请稍后重试';
@@ -331,13 +339,12 @@ Page({
   },
 
   patchItem(qi: number, patch: Partial<ItemVM>) {
-    const items = this.data.items.slice();
-    const cur = items[qi];
+    const cur = this.data.items[qi];
     if (!cur) {
       return;
     }
-    items[qi] = { ...cur, ...patch };
-    this.setData({ items });
+    // 路径化 setData：只下发被改的那道题，避免全卷重序列化。
+    this.setData({ [`items[${qi}]`]: { ...cur, ...patch } });
   },
 
   buildAnswer(item: ItemVM): ChapterTestAnswerDto {
@@ -386,6 +393,9 @@ Page({
           overtime: overtime || this.data.overtime,
         },
       });
+      if (this.cancelled) {
+        return;
+      }
       this.applyResult(result);
     } catch (e) {
       const msg = e instanceof ApiError ? e.message : '交卷失败，请重试';
