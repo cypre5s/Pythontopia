@@ -34,6 +34,8 @@ export type InputAction = { type: 'interact' } | { type: 'tap'; x: number; y: nu
 const JOYSTICK_DEADZONE = 18;
 // 位移超过此阈值即视为「滑动」（摇杆），不再算作轻点。
 const TAP_SLOP = 12;
+// 无动作时复用同一个空数组，避免每帧 consumeActions 分配新数组（主循环逐帧调用）。
+const EMPTY_ACTIONS: readonly InputAction[] = [];
 
 export class Input {
   private dpad: DpadLayout;
@@ -94,9 +96,9 @@ export class Input {
   }
 
   /** 取走自上次调用以来累计的交互动作（边沿触发，取走即清空）。 */
-  consumeActions(): InputAction[] {
+  consumeActions(): readonly InputAction[] {
     if (this.actions.length === 0) {
-      return [];
+      return EMPTY_ACTIONS;
     }
     const taken = this.actions;
     this.actions = [];
