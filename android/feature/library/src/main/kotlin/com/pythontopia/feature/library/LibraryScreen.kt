@@ -27,10 +27,6 @@ import com.pythontopia.core.design.PytColors
 import com.pythontopia.core.design.PytLoading
 import com.pythontopia.core.design.PytSpace
 
-object LibraryDestination {
-    const val ROUTE = "library"
-}
-
 @Composable
 fun LibraryScreen(viewModel: LibraryViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsState()
@@ -72,7 +68,12 @@ private fun CrumbBar(crumb: String, canBack: Boolean, onBack: () -> Unit) {
                 border = BorderStroke(2.dp, PytColors.borderStrong),
                 modifier = Modifier.clickable(onClick = onBack),
             ) {
-                Text("← 返回", color = PytColors.textMuted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
+                Text(
+                    "← 返回",
+                    color = PytColors.textMuted,
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                )
             }
         }
         Text(crumb, color = PytColors.textPrimary, fontSize = 16.sp)

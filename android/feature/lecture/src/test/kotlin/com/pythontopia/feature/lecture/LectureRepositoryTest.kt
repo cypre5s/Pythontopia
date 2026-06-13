@@ -13,6 +13,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import retrofit2.Retrofit
 
+@Suppress("MaxLineLength") // MockWebServer JSON 夹具单行更易读，豁免行宽
 class LectureRepositoryTest {
 
     private lateinit var server: MockWebServer

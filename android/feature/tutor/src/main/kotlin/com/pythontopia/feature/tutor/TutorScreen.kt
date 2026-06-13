@@ -38,10 +38,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.pythontopia.core.design.PytColors
 import com.pythontopia.core.design.PytSpace
 
-object TutorDestination {
-    const val ROUTE = "tutor"
-}
-
 @Composable
 fun TutorScreen(viewModel: TutorViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsState()

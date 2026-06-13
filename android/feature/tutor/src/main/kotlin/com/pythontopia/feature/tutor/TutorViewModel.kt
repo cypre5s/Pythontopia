@@ -28,6 +28,7 @@ class TutorViewModel @Inject constructor(
         _state.update { it.copy(input = text) }
     }
 
+    @Suppress("TooGenericExceptionCaught") // 流式网络/解析异常种类多，统一兜底为错误态（CancellationException 已先重抛）
     fun ask() {
         val question = _state.value.input.trim()
         if (question.isEmpty() || _state.value.sending) return

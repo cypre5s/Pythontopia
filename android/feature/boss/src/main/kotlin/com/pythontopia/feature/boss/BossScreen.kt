@@ -36,10 +36,6 @@ import com.pythontopia.core.design.PytColors
 import com.pythontopia.core.design.PytLoading
 import com.pythontopia.core.design.PytSpace
 
-object BossDestination {
-    const val ROUTE = "boss"
-}
-
 @Composable
 fun BossScreen(viewModel: BossViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsState()
@@ -67,7 +63,7 @@ private fun ChapterPicker(onPick: (Int) -> Unit) {
         color = PytColors.textHint,
         fontSize = 13.sp,
     )
-    (1..7).forEach { ch ->
+    for (ch in 1..7) {
         Surface(
             color = PytColors.bgElevated,
             shape = RoundedCornerShape(6.dp),
@@ -156,7 +152,7 @@ private fun BattleView(state: BossUiState, vm: BossViewModel) {
 @Composable
 private fun StageBar(stage: Int, total: Int) {
     Row(horizontalArrangement = Arrangement.spacedBy(PytSpace.s2), verticalAlignment = Alignment.CenterVertically) {
-        (1..total).forEach { i ->
+        for (i in 1..total) {
             val color = when {
                 i < stage -> PytColors.success
                 i == stage -> PytColors.warning

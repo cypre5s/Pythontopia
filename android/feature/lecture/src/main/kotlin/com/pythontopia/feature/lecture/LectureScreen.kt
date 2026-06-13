@@ -29,10 +29,6 @@ import com.pythontopia.core.design.PytColors
 import com.pythontopia.core.design.PytLoading
 import com.pythontopia.core.design.PytSpace
 
-object LectureDestination {
-    const val ROUTE = "lecture"
-}
-
 @Composable
 fun LectureScreen(viewModel: LectureViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsState()
@@ -54,7 +50,12 @@ fun LectureScreen(viewModel: LectureViewModel = hiltViewModel()) {
                     border = BorderStroke(2.dp, PytColors.borderStrong),
                     modifier = Modifier.clickable(onClick = viewModel::back),
                 ) {
-                    Text("← 讲义列表", color = PytColors.textMuted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
+                    Text(
+                        "← 讲义列表",
+                        color = PytColors.textMuted,
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    )
                 }
             }
             Text(
@@ -88,14 +89,24 @@ private fun ListView(state: LectureUiState, vm: LectureViewModel) {
             ) {
                 Column(modifier = Modifier.padding(PytSpace.s3)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(PytSpace.s2), verticalAlignment = Alignment.CenterVertically) {
-                        Text(item.title.ifBlank { "讲义 #${item.id}" }, color = PytColors.textPrimary, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                        Text(
+                            item.title.ifBlank { "讲义 #${item.id}" },
+                            color = PytColors.textPrimary,
+                            fontSize = 15.sp,
+                            modifier = Modifier.weight(1f),
+                        )
                         GroundingBadge(item.groundingStatus)
                     }
                     if (item.summary.isNotBlank()) {
                         Text(item.summary, color = PytColors.textHint, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
                     }
                     if (item.kcCodes.isNotEmpty()) {
-                        Text(item.kcCodes.joinToString(" · "), color = PytColors.textMuted, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+                        Text(
+                            item.kcCodes.joinToString(" · "),
+                            color = PytColors.textMuted,
+                            fontSize = 11.sp,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
                     }
                 }
             }
