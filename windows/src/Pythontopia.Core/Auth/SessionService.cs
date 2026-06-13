@@ -17,9 +17,18 @@ public sealed class SessionService
     private PersistedSession? _session;
 
     public SessionService(IApiClient api)
+        : this(api, ResolveSessionFilePath())
+    {
+    }
+
+    /// <summary>
+    /// Test seam: targets an explicit session file (or <c>null</c> for memory-only). The public
+    /// constructor resolves the real <c>%LOCALAPPDATA%</c> path.
+    /// </summary>
+    internal SessionService(IApiClient api, string? sessionFilePath)
     {
         _api = api ?? throw new ArgumentNullException(nameof(api));
-        _sessionFilePath = ResolveSessionFilePath();
+        _sessionFilePath = sessionFilePath;
         TryLoad();
     }
 

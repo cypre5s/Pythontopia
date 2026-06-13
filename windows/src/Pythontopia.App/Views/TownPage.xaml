@@ -6,14 +6,11 @@
 
     <Grid Padding="24">
         <Border
+            Style="{StaticResource PytCardBorderStyle}"
             MaxWidth="560"
             Padding="28"
             VerticalAlignment="Center"
-            HorizontalAlignment="Center"
-            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-            BorderThickness="1"
-            CornerRadius="12">
+            HorizontalAlignment="Center">
             <StackPanel Spacing="14">
                 <TextBlock Text="像素小镇 · Town Hub" FontSize="24" FontWeight="Bold" />
                 <TextBlock
@@ -28,7 +25,8 @@
                     Content="启动像素小镇"
                     Style="{ThemeResource AccentButtonStyle}"
                     HorizontalAlignment="Left"
-                    Command="{x:Bind ViewModel.LaunchTownCommand}" />
+                    Command="{x:Bind ViewModel.LaunchTownCommand}"
+                    IsEnabled="{x:Bind ViewModel.IsTownRunning, Mode=OneWay, Converter={StaticResource InverseBool}}" />
                 <TextBlock Text="{x:Bind ViewModel.Status, Mode=OneWay}" TextWrapping="Wrap" Opacity="0.85" />
                 <StackPanel Orientation="Horizontal" Spacing="6" Opacity="0.6">
                     <TextBlock Text="后端：" FontSize="12" />

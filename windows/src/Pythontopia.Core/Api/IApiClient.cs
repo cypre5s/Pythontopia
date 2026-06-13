@@ -19,6 +19,100 @@ public interface IApiClient
     // ---- game ----
     Task<GameBootstrapResponse> BootstrapGameAsync(CancellationToken ct = default);
 
+    // ---- mainline (主线地图) ----
+    /// <summary>GET /api/mainline/overview — the chapter/stage learning map with看/学/练 progress and stars.</summary>
+    Task<MainlineOverviewDto> GetMainlineOverviewAsync(CancellationToken ct = default);
+    /// <summary>GET /api/mainline/stages/{id} — full stage detail (videos / examples / questions + progress).</summary>
+    Task<StageDetailDto> GetStageDetailAsync(long stageId, CancellationToken ct = default);
+    /// <summary>POST /api/mainline/stages/{id}/video-progress — add watched seconds; returns updated progress.</summary>
+    Task<StageProgressDto> ReportVideoProgressAsync(long stageId, int deltaSec, CancellationToken ct = default);
+    /// <summary>POST /api/mainline/stages/{id}/pages-read — mark courseware pages read; returns updated progress.</summary>
+    Task<StageProgressDto> ReportPagesReadAsync(long stageId, IReadOnlyList<long> pageIds, CancellationToken ct = default);
+
+    // ---- review hall (复盘大厅) ----
+    /// <summary>GET /api/learner/twin/weekly — 数字孪生周报 (memory brief / insights / mastery deltas / resource runs).</summary>
+    Task<WeeklyReportDto> GetWeeklyReportAsync(CancellationToken ct = default);
+    /// <summary>GET /api/learner/oracle/risk — per-KC forgetting/failure risk predictions.</summary>
+    Task<IReadOnlyList<RiskPredictionDto>> GetRiskPredictionsAsync(CancellationToken ct = default);
+
+    // ---- chapter test (章节测验) ----
+    /// <summary>GET /api/mainline/chapters/{chapter}/test/latest — latest chapter test result (chapter 1-7).</summary>
+    Task<ChapterTestResultDto> GetLatestChapterTestAsync(int chapter, CancellationToken ct = default);
+    /// <summary>POST /api/mainline/chapters/{chapter}/test/prepare — trigger paper generation.</summary>
+    Task<TestPrepareResponse> PrepareChapterTestAsync(int chapter, CancellationToken ct = default);
+    /// <summary>POST /api/mainline/chapters/{chapter}/test/start — fetch the answer-stripped paper.</summary>
+    Task<ChapterTestPaperDto> StartChapterTestAsync(int chapter, CancellationToken ct = default);
+    /// <summary>POST /api/mainline/chapters/{chapter}/test/{testId}/submit — submit answers; server-side scored.</summary>
+    Task<ChapterTestResultDto> SubmitChapterTestAsync(int chapter, long testId, IReadOnlyDictionary<string, string> answers, CancellationToken ct = default);
+
+    // ---- course examples (例题库) ----
+    /// <summary>GET /api/course/examples — worked examples, optionally filtered by KC code.</summary>
+    Task<IReadOnlyList<CourseExampleDto>> GetExamplesAsync(string? kcCode = null, CancellationToken ct = default);
+    /// <summary>GET /api/course/examples/{id} — a single worked example.</summary>
+    Task<CourseExampleDto> GetExampleAsync(long exampleId, CancellationToken ct = default);
+
+    // ---- world calendar (世界日历) ----
+    /// <summary>GET /api/world/calendar/today — in-game date / season / weather snapshot.</summary>
+    Task<CalendarTodayDto> GetCalendarTodayAsync(CancellationToken ct = default);
+    /// <summary>GET /api/world/calendar/events — pending world events.</summary>
+    Task<IReadOnlyList<WorldEventDto>> GetWorldEventsAsync(CancellationToken ct = default);
+
+    // ---- learner reflection (学情洞察 / 记忆) ----
+    /// <summary>GET /api/learner/insights — reflective insights (student-only).</summary>
+    Task<IReadOnlyList<LearnerInsightDto>> GetInsightsAsync(int limit = 10, CancellationToken ct = default);
+    /// <summary>GET /api/learner/memory — agent-notebook memory items (student-only).</summary>
+    Task<IReadOnlyList<MemoryItemDto>> GetMemoryAsync(string? focusKc = null, int limit = 8, CancellationToken ct = default);
+
+    // ---- bilibili videos (B 站精选) ----
+    /// <summary>GET /api/videos/bilibili?keyword= — external Bilibili explainer videos.</summary>
+    Task<IReadOnlyList<BilibiliVideoDto>> SearchBilibiliVideosAsync(string keyword, int limit = 8, CancellationToken ct = default);
+
+    // ---- save slots (存档) ----
+    /// <summary>GET /api/world/saves — the learner's RPG save slots (0-5).</summary>
+    Task<IReadOnlyList<SaveSlotDto>> GetSaveSlotsAsync(CancellationToken ct = default);
+    /// <summary>POST /api/world/saves/{slotIndex}/activate — activate a save slot.</summary>
+    Task<SaveSlotDto> ActivateSaveSlotAsync(int slotIndex, CancellationToken ct = default);
+
+    // ---- feynman (费曼学弟 teach-back) ----
+    /// <summary>POST /api/feynman/sessions — start a teach-back session for a KC (student-only).</summary>
+    Task<FeynmanSessionDto> StartFeynmanAsync(string kcCode, CancellationToken ct = default);
+    /// <summary>POST /api/feynman/sessions/{id}/teach — submit an explanation; returns the tutee's turn.</summary>
+    Task<FeynmanTurnDto> FeynmanTeachAsync(long sessionId, string explanation, CancellationToken ct = default);
+    /// <summary>POST /api/feynman/sessions/{id}/judge — judge the teach-back; returns the verdict.</summary>
+    Task<FeynmanVerdictDto> FeynmanJudgeAsync(long sessionId, CancellationToken ct = default);
+
+    // ---- boss battle (Boss 副本) ----
+    /// <summary>POST /api/world/boss/{chapter}/problem — fetch a boss problem for chapter (1-7) / stage (1-4).</summary>
+    Task<BossProblemDto> RequestBossProblemAsync(int chapter, int stage, string? kcCode = null, int? difficulty = null, CancellationToken ct = default);
+    /// <summary>POST /api/world/boss/{chapter}/attempt — submit a solution; server-side judged.</summary>
+    Task<BossAttemptResultDto> SubmitBossAttemptAsync(int chapter, int stage, string problemId, string code, int elapsedSec, CancellationToken ct = default);
+
+    // ---- endless (无尽模式) ----
+    /// <summary>POST /api/mainline/endless/summary — report an endless-run result; returns whether a star was awarded.</summary>
+    Task<StarAwardResultDto> SubmitEndlessSummaryAsync(int chapter, int correct, int total, int streak, CancellationToken ct = default);
+
+    // ---- skills (技能树) ----
+    /// <summary>GET /api/world/skills — the skill tree plus the learner's unlocked skills.</summary>
+    Task<SkillsResponse> GetSkillsAsync(CancellationToken ct = default);
+    /// <summary>POST /api/world/skills/{skillKey}/unlock — unlock a skill (409 SKILL_LOCKED if condition unmet).</summary>
+    Task<LearnerSkillDto> UnlockSkillAsync(string skillKey, CancellationToken ct = default);
+
+    // ---- npc (NPC 互动) ----
+    /// <summary>GET /api/npc/{npcKey}/greeting — the NPC's grounded greeting.</summary>
+    Task<NpcGreetingDto> GetNpcGreetingAsync(string npcKey, CancellationToken ct = default);
+    /// <summary>POST /api/npc/{npcKey}/dialog — talk to an NPC (student-only).</summary>
+    Task<NpcDialogResponseDto> TalkToNpcAsync(string npcKey, string message, CancellationToken ct = default);
+
+    // ---- course documents (课件库 PDF) ----
+    /// <summary>GET /api/course/documents/{docId}/pdf — raw PDF bytes (doc 186-192); fetch with bearer then render locally.</summary>
+    Task<byte[]> GetCourseDocumentPdfAsync(long docId, CancellationToken ct = default);
+
+    // ---- learning path (学习路径) ----
+    /// <summary>GET /api/learner/path/active — the active personalized path (throws 404 PATH_NOT_FOUND if none).</summary>
+    Task<LearningPathDto> GetActiveLearningPathAsync(CancellationToken ct = default);
+    /// <summary>POST /api/learner/path/plan — (re)plan the personalized path (student-only).</summary>
+    Task<PlanPathResponse> PlanLearningPathAsync(CancellationToken ct = default);
+
     // ---- learner profile / mastery ----
     /// <summary>Returns null when the backend responds 204 (no profile yet).</summary>
     Task<LearnerProfileDto?> GetProfileAsync(CancellationToken ct = default);

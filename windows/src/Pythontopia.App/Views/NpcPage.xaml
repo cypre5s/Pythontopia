@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="Pythontopia.App.Views.NpcPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Grid Padding="24" RowSpacing="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Spacing="6">
+            <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                <TextBlock Text="NPC 互动" FontSize="24" FontWeight="Bold" VerticalAlignment="Center" />
+                <ComboBox
+                    MinWidth="160"
+                    ItemsSource="{x:Bind ViewModel.Npcs}"
+                    DisplayMemberPath="Name"
+                    SelectedItem="{x:Bind ViewModel.SelectedNpc, Mode=TwoWay}" />
+                <Button
+                    Content="打招呼"
+                    Style="{ThemeResource AccentButtonStyle}"
+                    Command="{x:Bind ViewModel.GreetCommand}"
+                    IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBool}}" />
+                <ProgressRing IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}" Width="22" Height="22" />
+            </StackPanel>
+            <Border Style="{StaticResource PytCardBorderStyle}" Padding="14">
+                <TextBlock Text="{x:Bind ViewModel.Greeting, Mode=OneWay}" TextWrapping="Wrap" />
+            </Border>
+            <InfoBar
+                IsOpen="{x:Bind ViewModel.HasError, Mode=OneWay}"
+                Severity="Error"
+                IsClosable="False"
+                Message="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}" />
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="1">
+            <ItemsControl ItemsSource="{x:Bind ViewModel.Transcript, Mode=OneWay}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Style="{StaticResource PytCardBorderStyle}" Padding="12" Margin="0,0,0,8">
+                            <StackPanel Spacing="2">
+                                <TextBlock Text="{Binding Speaker}" FontWeight="SemiBold" FontSize="12" Opacity="0.7" />
+                                <TextBlock Text="{Binding Content}" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="12">
+            <TextBox
+                Width="520"
+                PlaceholderText="对 NPC 说点什么…"
+                Text="{x:Bind ViewModel.Message, Mode=TwoWay}" />
+            <Button
+                Content="对话"
+                Style="{ThemeResource AccentButtonStyle}"
+                Command="{x:Bind ViewModel.SendCommand}"
+                IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBool}}" />
+        </StackPanel>
+    </Grid>
+</Page>

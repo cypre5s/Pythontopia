@@ -12,7 +12,7 @@
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0" Spacing="4">
-            <TextBlock Text="百晓工坊" FontSize="22" FontWeight="Bold" />
+            <TextBlock Text="百晓工坊" FontSize="24" FontWeight="Bold" />
             <TextBlock Text="一句话描述你的需求，自动识别意图并分派到答疑 / 复盘 / 资源生成。" Opacity="0.75" TextWrapping="Wrap" />
         </StackPanel>
 
@@ -45,7 +45,7 @@
         <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
             <StackPanel Spacing="12" Padding="0,0,12,0">
                 <!-- Intent result -->
-                <Border Padding="12" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                <Border Style="{StaticResource PytCardBorderStyle}" Padding="12"
                         Visibility="{x:Bind ViewModel.HasIntent, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
                     <StackPanel Spacing="6">
                         <TextBlock Text="{x:Bind ViewModel.IntentSummary, Mode=OneWay}" FontWeight="SemiBold" TextWrapping="Wrap" />

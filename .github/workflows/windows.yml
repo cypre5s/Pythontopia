@@ -1,0 +1,56 @@
+name: windows
+
+on:
+  pull_request:
+    paths:
+      - 'windows/**'
+      - '.github/workflows/windows.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'windows/**'
+      - '.github/workflows/windows.yml'
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: windows
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      # Core + Game target plain net8.0 and carry no Windows-only workloads.
+      - name: Build Core (net8.0)
+        run: dotnet build src/Pythontopia.Core/Pythontopia.Core.csproj -c Release
+
+      - name: Unit tests (Core)
+        run: >
+          dotnet test tests/Pythontopia.Core.Tests/Pythontopia.Core.Tests.csproj
+          -c Release
+          --logger "trx;LogFileName=core-tests.trx"
+          --results-directory TestResults
+
+      - name: Build Game (MonoGame DesktopGL)
+        run: dotnet build src/Pythontopia.Game/Pythontopia.Game.csproj -c Release
+
+      # WinUI 3 (Windows App SDK) compiles its XAML only on Windows; unpackaged x64.
+      - name: Build WinUI App (x64, unpackaged)
+        run: dotnet build src/Pythontopia.App/Pythontopia.App.csproj -c Release -p:Platform=x64
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-core-tests-${{ github.sha }}
+          path: windows/TestResults/*.trx
+          retention-days: 7

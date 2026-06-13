@@ -6,17 +6,21 @@
 
     <Grid>
         <Border
+            Style="{StaticResource PytCardBorderStyle}"
             MaxWidth="380"
             Padding="32"
             VerticalAlignment="Center"
-            HorizontalAlignment="Center"
-            Background="{ThemeResource LayerFillColorDefaultBrush}"
-            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-            BorderThickness="1"
-            CornerRadius="12">
+            HorizontalAlignment="Center">
             <StackPanel Spacing="14">
-                <TextBlock Text="Pythontopia" FontSize="30" FontWeight="Bold" />
-                <TextBlock Text="像素学习小镇 · 桌面端" Opacity="0.7" Margin="0,-8,0,8" />
+                <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,0,0,4">
+                    <Border Width="44" Height="44" CornerRadius="10" Background="{StaticResource BrandHeaderBrush}">
+                        <FontIcon Glyph="&#xE80F;" FontSize="22" Foreground="White" />
+                    </Border>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="Pythontopia" FontSize="26" FontWeight="Bold" />
+                        <TextBlock Text="像素学习小镇 · 桌面端" Opacity="0.7" FontSize="12" />
+                    </StackPanel>
+                </StackPanel>
 
                 <TextBox
                     Header="用户名"

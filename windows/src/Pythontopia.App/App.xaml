@@ -16,6 +16,24 @@
             <conv:NullToVisibilityConverter x:Key="NullToVisibility" />
             <conv:StringToVisibilityConverter x:Key="StringToVisibility" />
             <conv:PercentConverter x:Key="Percent" />
+
+            <!-- Brand palette: a cozy pixel-town green, used by the shell and entry page. -->
+            <Color x:Key="BrandPrimaryColor">#2F8F5B</Color>
+            <Color x:Key="BrandPrimaryDarkColor">#1F6B43</Color>
+            <SolidColorBrush x:Key="BrandPrimaryBrush" Color="{StaticResource BrandPrimaryColor}" />
+            <LinearGradientBrush x:Key="BrandHeaderBrush" StartPoint="0,0" EndPoint="1,1">
+                <GradientStop Color="{StaticResource BrandPrimaryColor}" Offset="0" />
+                <GradientStop Color="{StaticResource BrandPrimaryDarkColor}" Offset="1" />
+            </LinearGradientBrush>
+
+            <!-- Reusable surface card so pages stay visually consistent over the Mica backdrop. -->
+            <Style x:Key="PytCardBorderStyle" TargetType="Border">
+                <Setter Property="Background" Value="{ThemeResource LayerFillColorDefaultBrush}" />
+                <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="CornerRadius" Value="12" />
+                <Setter Property="Padding" Value="20" />
+            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

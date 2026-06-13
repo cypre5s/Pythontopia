@@ -97,12 +97,7 @@
             <ScrollViewer Grid.Column="3" Padding="8,0,0,0">
                 <StackPanel Spacing="10">
                     <TextBlock Text="{x:Bind ViewModel.SelectedPage.Title, Mode=OneWay}" FontWeight="SemiBold" FontSize="16" TextWrapping="Wrap" />
-                    <Border
-                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                        BorderThickness="1"
-                        CornerRadius="8"
-                        Padding="8">
+                    <Border Style="{StaticResource PytCardBorderStyle}" Padding="8">
                         <Image Source="{x:Bind ViewModel.PageImage, Mode=OneWay}" Stretch="Uniform" HorizontalAlignment="Left" />
                     </Border>
                     <TextBlock Text="{x:Bind ViewModel.SelectedPage.Excerpt, Mode=OneWay}" TextWrapping="Wrap" Opacity="0.8" />

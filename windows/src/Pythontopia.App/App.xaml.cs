@@ -39,6 +39,21 @@ public partial class App : Application
         services.AddSingleton<SessionService>();
 
         services.AddTransient<LoginViewModel>();
+        services.AddTransient<MainlineViewModel>();
+        services.AddTransient<ReviewViewModel>();
+        services.AddTransient<ChapterTestViewModel>();
+        services.AddTransient<ExamplesViewModel>();
+        services.AddTransient<CalendarViewModel>();
+        services.AddTransient<InsightsViewModel>();
+        services.AddTransient<BilibiliViewModel>();
+        services.AddTransient<SavesViewModel>();
+        services.AddTransient<FeynmanViewModel>();
+        services.AddTransient<BossViewModel>();
+        services.AddTransient<EndlessViewModel>();
+        services.AddTransient<SkillsViewModel>();
+        services.AddTransient<NpcViewModel>();
+        services.AddTransient<LibraryViewModel>();
+        services.AddTransient<LearningPathViewModel>();
         services.AddTransient<ProfileViewModel>();
         services.AddTransient<QuestsViewModel>();
         services.AddTransient<CourseViewModel>();

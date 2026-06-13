@@ -11,7 +11,7 @@
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-            <TextBlock Text="Bug 矿洞" FontSize="22" FontWeight="Bold" />
+            <TextBlock Text="Bug 矿洞" FontSize="24" FontWeight="Bold" />
             <Button Content="刷新" Command="{x:Bind ViewModel.RefreshCommand}" />
             <ProgressRing IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}" Width="20" Height="20" />
             <TextBlock
@@ -120,7 +120,7 @@
                     TextWrapping="Wrap" Opacity="0.8" FontStyle="Italic"
                     Visibility="{x:Bind ViewModel.Session.ProfileGuidance, Mode=OneWay, Converter={StaticResource StringToVisibility}}" />
 
-                <Border Padding="12" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                <Border Style="{StaticResource PytCardBorderStyle}" Padding="12">
                     <StackPanel Spacing="6">
                         <TextBlock Text="{x:Bind ViewModel.ProblemTitle, Mode=OneWay}" FontSize="16" FontWeight="Bold" TextWrapping="Wrap" />
                         <TextBlock Text="{x:Bind ViewModel.ProblemStatement, Mode=OneWay}" TextWrapping="Wrap" />
@@ -210,7 +210,7 @@
                     </StackPanel>
                 </Border>
 
-                <Border Padding="12" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                <Border Style="{StaticResource PytCardBorderStyle}" Padding="12"
                         Visibility="{x:Bind ViewModel.VariantDetail, Mode=OneWay, Converter={StaticResource NullToVisibility}}">
                     <StackPanel Spacing="6">
                         <TextBlock Text="{x:Bind ViewModel.VariantDetail.Title, Mode=OneWay}" FontWeight="Bold" TextWrapping="Wrap" />

@@ -1,13 +1,14 @@
 namespace Pythontopia.Core.Config;
 
 /// <summary>
-/// Runtime configuration for the desktop client. The backend base URL defaults
-/// to <c>http://localhost:18080</c> and can be overridden with the
-/// <c>PYT_BACKEND_URL</c> environment variable.
+/// Runtime configuration for the desktop client. The backend base URL defaults to the
+/// public Pythontopia server and can be overridden with the <c>PYT_BACKEND_URL</c>
+/// environment variable (e.g. <c>http://localhost:18080</c> for local development).
 /// </summary>
 public sealed class AppConfig
 {
-    public const string DefaultBackendBaseUrl = "http://localhost:18080";
+    /// <summary>Public Pythontopia backend (阿里云 ECS, see AGENTS.md). Override locally via env var.</summary>
+    public const string DefaultBackendBaseUrl = "http://47.120.29.62:18080";
     public const string BackendUrlEnvironmentVariable = "PYT_BACKEND_URL";
 
     /// <summary>Base URL without a trailing slash, e.g. <c>http://localhost:18080</c>.</summary>

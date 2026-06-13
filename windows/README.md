@@ -10,13 +10,14 @@ windows/
 ├── Directory.Build.props        # Nullable / LangVersion latest / ImplicitUsings
 ├── .gitignore
 ├── README.md
-└── src/
+├── src/
     ├── Pythontopia.Core/        # net8.0 类库（跨平台，WSL 互操作可构建）
-    │   ├── Config/AppConfig.cs              # BackendBaseUrl，默认 http://localhost:18080，可用 PYT_BACKEND_URL 覆盖
+    │   ├── Config/AppConfig.cs              # BackendBaseUrl，默认公网 ECS http://47.120.29.62:18080，可用 PYT_BACKEND_URL 覆盖
     │   ├── Json/PytJson.cs                  # System.Text.Json，camelCase
     │   ├── Dto/*.cs                         # 与后端 record 1:1 的 C# record
     │   ├── Api/ApiException.cs              # 解析 {code,message,details,traceId,timestamp}
     │   ├── Api/IApiClient.cs / ApiClient.cs # HttpClient；注入 Bearer；SubmitAndPollAsync；AskTutorStreamAsync(SSE)
+    │   ├── Api/SseParser.cs                 # 可单测的 SSE 帧解析器（ApiClient 流式委托给它）
     │   └── Auth/SessionService.cs           # 登录/注册/登出，token 持久化到 %LOCALAPPDATA%/Pythontopia/session.json
     ├── Pythontopia.Game/        # net8.0 MonoGame DesktopGL（跨平台，WSL 互操作可构建）
     │   ├── TownGame.cs                      # 加载 town_hub.json + tilemap_packed.png，渲染地面/建筑/装饰层 + 玩家 + NPC + HUD
@@ -27,11 +28,13 @@ windows/
     │       ├── maps/town_hub.json
     │       └── tilesets/tilemap_packed.png  (+ Kenney License)
     └── Pythontopia.App/         # net8.0-windows10.0.19041.0 WinUI 3（需 Windows 构建）
-        ├── App.xaml(.cs)                    # DI（Microsoft.Extensions.DependencyInjection）
-        ├── MainWindow.xaml(.cs)             # NavigationView 外壳 + 登录门禁
-        ├── Views/*.xaml(.cs)                # Login / Profile / Quests / Course / Practice / Workshop / BugMine / Classroom / Town
+        ├── App.xaml(.cs)                    # DI + 品牌主题资源（Brand* 画刷 / PytCardBorderStyle）
+        ├── MainWindow.xaml(.cs)             # 原生外壳：Mica 背景 + 自定义标题栏 + NavigationView + 登录门禁
+        ├── Views/*.xaml(.cs)                # Login / Mainline / Path / Profile / Quests / Course / Examples / Library / Bilibili / Practice / ChapterTest / Feynman / Workshop / BugMine / Boss / Endless / ReviewHall / Insights / Classroom / Calendar / Saves / Skills / Npc / Town
         ├── ViewModels/*.cs                  # MVVM（CommunityToolkit.Mvvm）
         └── Converters/Converters.cs
+└── tests/
+    └── Pythontopia.Core.Tests/  # net8.0 xUnit（29 个单测；跨平台，WSL 互操作可运行）
 ```
 
 ## 先决条件
@@ -44,13 +47,13 @@ windows/
 
 ## 后端地址配置
 
-- 默认 `http://localhost:18080`。
-- 覆盖方式（对 App 与 Game 进程同时生效）：
+- 默认指向**公网** Pythontopia 后端（阿里云 ECS）：`http://47.120.29.62:18080`，开箱即用。
+- 本地联调可用 `PYT_BACKEND_URL` 覆盖为 `http://localhost:18080`（对 App 与 Game 进程同时生效）：
 
 ```powershell
-setx PYT_BACKEND_URL "http://192.168.1.10:18080"   # 永久
+setx PYT_BACKEND_URL "http://localhost:18080"   # 永久
 # 或当前会话：
-$env:PYT_BACKEND_URL = "http://192.168.1.10:18080"
+$env:PYT_BACKEND_URL = "http://localhost:18080"
 ```
 
 - 像素小镇进程额外读取 `PYT_TOKEN`（由 App 启动时自动注入），用于叠加真实世界快照。
@@ -108,6 +111,7 @@ dotnet publish src/Pythontopia.App/Pythontopia.App.csproj -c Release -p:Platform
 | Pythontopia.Core | net8.0 | ✅ 构建通过（0 警告 0 错误） |
 | Pythontopia.Game | net8.0 (DesktopGL) | ✅ 构建通过（仅 “No Content References” 提示，见下） |
 | Pythontopia.App | net8.0-windows10.0.19041.0 | ✅ 本次互操作下也构建通过（XAML 已编译）；**正式开发/运行仍建议在 Windows** |
+| Pythontopia.Core.Tests | net8.0 (xUnit) | ✅ `dotnet test` 通过：29 个测试全绿 |
 
 > WinUI 的 XAML 编译依赖 Windows 专用工具链；本机能过是因为调用的是 Windows 侧 `dotnet.exe`。若在纯 Linux .NET 上则无法构建 App。
 
@@ -115,10 +119,39 @@ dotnet publish src/Pythontopia.App/Pythontopia.App.csproj -c Release -p:Platform
 
 Game 通过 `Texture2D.FromStream` + 直接读取 JSON 在**运行期**加载 `Assets/`（`CopyToOutputDirectory=PreserveNewest`），**不使用** MGCB/`.xnb` 内容管线。因此构建时 `MonoGame.Content.Builder.Task` 会提示 `No Content References Found`——这是**预期**的、无害的。
 
+## 测试与 CI
+
+`Pythontopia.Core.Tests`（net8.0 / xUnit）覆盖：SSE 帧解析（`SseParser`）、错误信封解析（`ApiException.FromResponse`）、配置解析（`AppConfig`）、`ApiClient`（Bearer 鉴权头 / 错误码映射 / 204 空响应 / 网络失败 / 查询串拼装 / 提交轮询，使用桩 `HttpMessageHandler`）、`SessionService`（登录/登出/持久化回载/过期判定，使用临时会话文件）。Core 与测试均为纯 net8.0，可在 WSL 互操作 dotnet 下运行：
+
+```powershell
+dotnet test tests/Pythontopia.Core.Tests/Pythontopia.Core.Tests.csproj -c Debug
+# 已通过：失败 0，通过 29，跳过 0
+```
+
+GitHub Actions `.github/workflows/windows.yml` 在 `windows-latest` 上构建 Core / Game / WinUI App（x64）并运行上述测试，仅当 `windows/**` 或该工作流变更时触发。
+
 ## 已接线的后端端点（前缀 /api，JWT Bearer，401 触发重新登录）
 
 - 认证：`POST /auth/login`、`POST /auth/register`
 - 小镇：`POST /game/bootstrap`
+- 主线地图（新增，对齐 web `MainlineMapPage`）：`GET /mainline/overview`（章 / 关卡 + 看学练进度 + 星数，`MainlinePage` 只读渲染，章节用 Expander 折叠）
+- 复盘大厅（新增，对齐 web `ReviewHallPage`）：`GET /learner/twin/weekly`（数字孪生周报）、`GET /learner/oracle/risk`（遗忘/失败风险预测）
+- 章节测验（新增，对齐 web `ChapterTestPage`）：`GET /mainline/chapters/{chapter}/test/latest`（某章最近一次大测试判分，只读）
+- 主线关卡详情（新增，对齐 web `StageLearnPage`）：`GET /mainline/stages/{id}`（视频/例题/练习 + 看学练进度，主线页内详情面板）
+- 例题库（新增，对齐 web `ExampleListPage`）：`GET /course/examples`、`GET /course/examples/{id}`
+- 世界日历（新增）：`GET /world/calendar/today`、`GET /world/calendar/events`
+- 学情洞察（新增）：`GET /learner/insights`、`GET /learner/memory`（仅学生，反思洞察 + 记忆笔记本）
+- B 站精选（新增）：`GET /videos/bilibili?keyword=`（关键词检索外部讲解视频卡片）
+- 存档（新增）：`GET /world/saves`、`POST /world/saves/{slotIndex}/activate`（RPG 存档槽列表 + 激活）
+- 主线看/学/练打点（新增）：`POST /mainline/stages/{id}/video-progress`、`.../pages-read`（关卡详情面板内打点 + 刷新进度）
+- 费曼学弟（新增，对齐 web `FeynmanPanel`）：`POST /feynman/sessions`、`.../teach`、`.../judge`（teach-back 讲解 + 评判）
+- Boss 副本（新增，对齐 web `BossPage`）：`POST /world/boss/{chapter}/problem`、`.../attempt`（取题 + 服务端判题）
+- 章测作答闭环（新增，对齐 web `ChapterTestPage`）：`POST .../test/prepare|start|{testId}/submit`（出卷 → 答题 → 判分）
+- 无尽模式（新增，对齐 web `EndlessPage`）：复用 `POST /world/boss/{chapter}/problem|attempt` + `POST /mainline/endless/summary`（连续闯关 + 结算补星）
+- 技能树（新增，对齐 web 技能）：`GET /world/skills`、`POST /world/skills/{key}/unlock`（节点列表 + 解锁状态 + 解锁）
+- NPC 互动（新增，对齐 web NPC）：`GET /npc/{key}/greeting`、`POST /npc/{key}/dialog`（NPC 名册取自静态 town_hub 目录）
+- 课件库 PDF（新增，对齐 web `LibraryPage`）：`GET /course/documents/{id}/pdf`（携 JWT 取字节 → 临时文件 → WebView2 渲染）
+- 学习路径（新增，对齐 web `PathTreeTab`）：`GET /learner/path/active`、`POST /learner/path/plan`（个性化路径 + 重新规划）
 - 画像/掌握度：`GET /learner/profile`(204=无)、`GET /learner/profile/dimensions`、`PUT /learner/profile/dimensions/{key}`、`GET /learner/mastery`
 - 任务：`GET /quests/today`、`GET /quests?status=&limit=`、`POST /quests/{id}/start|complete|skip`
 - 课程：`GET /course/pack|chapters|kcs?chapterId|pages?kcCode|problems?kcCode|videos?chapterId`、`GET /course/pages/{id}/image`、`GET /course/videos/{id}`
@@ -128,10 +161,22 @@ Game 通过 `Texture2D.FromStream` + 直接读取 JSON 在**运行期**加载 `A
 - 百晓工坊（`WorkshopPage`）：`POST /intent/route`（意图分类分派）、`POST /workshop/resources`（非流式生成）+ `GET /workshop/resources/{id}`、`GET /workshop/resources?type=&kcCode=`、`POST /workshop/resources/stream`（SSE）、`POST /orchestrator/turn/stream`（学习总管 SSE，`StreamOrchestratorTurnAsync`）。ASK→导师 SSE；REVIEW→Bug 矿洞；6 类资源→工坊生成
 - Bug 矿洞（`BugMinePage`）：`GET /bug-mine/errorbook`、`GET /bug-mine/echoes`、`POST /bug-mine/echoes`、`GET /bug-mine/sessions/{id}`、`POST .../cards/{cardId}/reveal`、`POST .../retry-submit`、`POST .../variant-submit`、`POST .../close?status=`（错题/遗忘回声列表 + 5 层逐解锁卡片 + 原题/变式重试服务端判题）
 
+## 功能对齐清单（对标 web `frontend/`，分批推进）
+
+目标：把 web 端全部学生功能逐步搬到 Windows 端。下表追踪进度（教师端与纯运营页暂不在学生客户端范围内）。
+
+**已对齐**：登录/注册 · 像素小镇(town_hub) · 学习画像(8 维 + 掌握度) · 任务公告板 · 课程(章/KC/课件页+图) · 训练场(服务端判题) · 百晓工坊(意图路由/答疑/资源/学习总管 SSE) · Bug 矿洞 · 班级(加入/班级任务) · **主线地图** · **主线关卡详情** · **主线看学练打点** · **复盘大厅(周报+风险)** · **章节测验(最近成绩)** · **章测作答闭环** · **例题库** · **世界日历** · **学情洞察(洞察+记忆)** · **B站精选视频** · **存档(列表+激活)** · **费曼学弟(teach-back)** · **Boss 副本** · **无尽模式** · **技能树** · **NPC 互动** · **课件库 PDF** · **学习路径**。
+
+**待对齐（后续批次）**：
+- 媒体生成 storyboard/tts/image（`/api/media`）— 异步任务 + SSE + 媒体渲染，需 Windows 运行期验证
+- 新手引导（`GuidePage`）— 静态 onboarding 内容，无后端端点（可改为内置静态引导页）
+- 仅教师/管理员（学生客户端不适用）：RAG 课件直查 `/api/rag/query`、教师班级看板 `/api/teacher/*`
+
 ## 设计说明 / 后续项
 
 - **真实数据**：所有数据均来自后端真实接口，无 mock。
-- **小镇嵌入**：MVP 中小镇以独立窗口（独立进程）从 `TownPage` 启动；将 MonoGame 渲染到 WinUI `SwapChainPanel` 内嵌为后续项。
+- **小镇嵌入（决策）**：小镇以独立窗口（独立进程）从 `TownPage` 启动，`TownViewModel` 现做单实例生命周期管理（运行中禁用启动按钮、进程退出后自动复位状态）。**真正的窗口内嵌**需把 `Pythontopia.Game` 的 MonoGame 后端从 `DesktopGL`（SDL/OpenGL，自带窗口）切到 `WindowsDX` + `SwapChainPanel`——这会让 Game 变为**仅 Windows 可构建**，破坏当前「Core/Game 跨平台、WSL 互操作可构建」的设计属性，且无法在本机运行期验证；故保留为需在 Windows 上落地与回归验证的显式后续决策，不在本次盲改。
+- **原生外壳**：`MainWindow` 启用 Mica 系统背景（`MicaBackdrop`，Win11 生效、旧系统优雅降级）+ `ExtendsContentIntoTitleBar` 自定义标题栏（品牌徽标），并按导航项设置页头标题、在导航面板展示当前用户。品牌色板与卡片样式集中在 `App.xaml`（`BrandPrimaryBrush` / `BrandHeaderBrush` / `PytCardBorderStyle`）。
 - **HUD 字体**：内置 ASCII 5x7 位图字体，HUD/提示使用对象的 ASCII 标识（如 `npc_mayor_py`、`/profile-room`）；地图里的中文 `label` 不由该字体渲染。
 - **导师 SSE**：`ApiClient.AskTutorStreamAsync` 已实现，并由 `WorkshopPage` 的 ASK 意图分派消费（逐 `delta` 拼接答案）。
 - **SSE 复用**：`tutor/ask`、`workshop/resources/stream`、`orchestrator/turn/stream` 共用一个 `StreamEventsAsync` 解析器；`AskTutorStreamAsync` 产出 `data` 字符串，资源/总管流产出带事件名的 `SseEvent`。

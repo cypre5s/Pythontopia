@@ -13,4 +13,8 @@
     the WSL interop dotnet.exe without any Windows-only workloads.
   -->
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Pythontopia.Core.Tests" />
+  </ItemGroup>
+
 </Project>
