@@ -16,7 +16,7 @@
  * 资源详情由父级 WorkshopPage 的 store openResourceId 打开弹窗，不再把资源 id 写进 URL。
  */
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { useLearningStore } from '@stores/learning';
 import { useMainlineStore } from '@stores/mainline';
 import { useToastStore } from '@stores/toast';
@@ -26,7 +26,6 @@ import { useSseStream, type SseTraceEvent } from '@/composables/useSseStream';
 import ChatComposer, {
   type ComposerSubmitPayload,
 } from '@/components/workshop/ChatComposer.vue';
-import AgentStudioStream from '@/components/workshop/AgentStudioStream.vue';
 import HandoutView from '@/components/workshop/HandoutView.vue';
 import MindMapView from '@/components/workshop/MindMapView.vue';
 import PracticeList from '@/components/workshop/PracticeList.vue';
@@ -40,7 +39,7 @@ import QuizModeBar from '@/components/workshop/QuizModeBar.vue';
 import ProgressCard from '@/components/workshop/ProgressCard.vue';
 import PlanCard from '@/components/workshop/PlanCard.vue';
 import ToolTraceLine from '@/components/workshop/ToolTraceLine.vue';
-import AnswerFeedback from '@/components/workshop/AnswerFeedback.vue';
+import ToolCallTimeline from '@/components/workshop/ToolCallTimeline.vue';
 import MarkdownView from '@/components/common/MarkdownView.vue';
 import { annotateCitations } from '@/utils/citations';
 import TutorVisualAids, { type TutorVisualAid } from '@/components/tutor/TutorVisualAids.vue';
@@ -57,6 +56,12 @@ import { kcDisplayName } from '@/data/kcNames';
 import { listChapters, listKnowledgeComponents } from '@/api/course';
 import { getWorkshopResource } from '@/api/workshop';
 import { postLearningEvent } from '@/api/learningEvent';
+import {
+  attachmentIcon,
+  buildUploadInjection,
+  mergeUploadContext,
+  type UploadAttachmentRef,
+} from '@/api/upload';
 import {
   buildMentionItems,
   type MentionItem,
@@ -122,6 +127,19 @@ interface TutorStreamResult {
   evidence_note?: string;
   /** 一句话说明本答用了哪些画像信号（「✨ 为你定制」标签 title；可空）。 */
   personalization_note?: string;
+  /**
+   * 考考我（多轮填空，契约 C4）：
+   * 出题 phase='ask' → {round, stem(含 (1)(2) 空位), blanks:[{index,hint}], cite_evidence:false}；
+   * 评卷 phase='judge' → {verdict:'correct|partial|wrong', cite_evidence}（命中课件才引 PPT）。
+   */
+  quiz?: {
+    phase: string;
+    round?: number;
+    stem?: string;
+    blanks?: Array<{ index: number; hint?: string }>;
+    verdict?: string;
+    cite_evidence?: boolean;
+  };
 }
 
 /** 由 graph 的 grounding_result / based_on_general_knowledge 归一成前端 g-chip 用的状态串。 */
@@ -133,7 +151,7 @@ function deriveGroundingStatus(r: TutorStreamResult): string {
 
 /** 把 result.evidence（snake_case）投影成「课件证据」面板用的 EvidenceCitation（camelCase）。 */
 function toCitations(r: TutorStreamResult): EvidenceCitation[] {
-  return (r.evidence ?? []).map((e) => {
+  const fromEvidence = (r.evidence ?? []).map((e) => {
     const citation: EvidenceCitation = {
       pageId: e.page_id,
       pageNo: e.page_no,
@@ -143,6 +161,14 @@ function toCitations(r: TutorStreamResult): EvidenceCitation[] {
     if (typeof e.score === 'number') citation.score = e.score;
     return citation;
   });
+  if (fromEvidence.length > 0) return fromEvidence;
+  // 仅有 page_ids（无明细，如部分流程）时用页 id 兜底合成，至少能展示课件页图 + 回链。
+  return pageIdsToCitations(r.evidence_page_ids);
+}
+
+/** 仅有课件页 id（无页码/片段，如历史回放）时合成证据项：页图按 pageId 取，页码缺省 0（面板显示「课件页」）。 */
+function pageIdsToCitations(pageIds: number[] | undefined): EvidenceCitation[] {
+  return (pageIds ?? []).map((pid) => ({ pageId: pid, pageNo: 0, snippet: '' }));
 }
 
 /** 一次工具执行所需的全部上下文：澄清 pick / 纠错改派 / 「接着」chip 据此重放。 */
@@ -191,6 +217,8 @@ interface ChatMessage {
   toolLabel?: string;
   toolIcon?: string;
   kcCodes?: string[];
+  /** role==='user'：本轮随发的上传附件（仿 Claude Code），在用户气泡上方渲染。 */
+  attachments?: UploadAttachmentRef[];
   /** kind==='video' / kind==='answer'：B站卡片检索关键词（Python 优先、清洗后）。 */
   videoKeyword?: string;
   /** kind==='answer'：是否自动内嵌「相关 B站讲解」（按学生语句的视频意图判断）。 */
@@ -211,6 +239,8 @@ interface ChatMessage {
   traces?: SseTraceEvent[];
   /** kind==='answer' 且 live：画像个性化说明 → 气泡顶「✨ 为你定制」小标签的 title。 */
   personalizationNote?: string;
+  /** kind==='answer'：考考我出题（多轮填空）→ 气泡内渲染可填空输入 + 提交作答按钮。 */
+  quiz?: { round: number; stem: string; blanks: Array<{ index: number; hint: string }> };
   /** kind==='answer'：用于答案内自动嵌入工具（相关 B站视频检索词 / 生成入口）。 */
   suggestTopic?: string;
   resourceId?: number;
@@ -262,6 +292,7 @@ const emit = defineEmits<{
 }>();
 
 const router = useRouter();
+const route = useRoute();
 const learning = useLearningStore();
 const mainline = useMainlineStore();
 const toast = useToastStore();
@@ -278,9 +309,15 @@ const workshopSse = useSseStream<WorkshopCreateResponse>('/api/workshop/resource
 // PLAN 专用：学习总管 orchestrator 流（与 GuideOverlay 同端点，独立实例避免串台）。
 const orchestratorSse = useSseStream<OrchestratorResult>('/api/orchestrator/turn/stream');
 
+// 答疑流式期间「工具调用生命周期」时间轴的数据源（证据检索→作答→三审，实时 trace）。
+const liveAskTraces = computed(() => tutorSse.traces.value);
+
 const streamingAskId = ref<string | null>(null);
 // PLAN 流式：当前正被 STATE_DELTA 实时点亮步骤的 plan 卡 id（dispatch 进度写入它）。
 const streamingPlanId = ref<string | null>(null);
+// 本组件正在跑的 orchestrator 活动「运行令牌」（activity.start 返回值）。
+// 镜像/收尾都持它写 store：向导（GuideOverlay）接管开新活动后，本组件过期流的数据被 store 忽略。
+const planRunToken = ref<number | null>(null);
 // 学生点了「⏹ 停止」：runAsk 收尾时据此跳过错误兜底（气泡已标「（已中断）」）。
 const askInterrupted = ref(false);
 
@@ -292,8 +329,22 @@ const conversationId = ref<string>(genId());
 // 「新对话」或全新窗口为 false。仅作 UI 提示，落库的归并由 conversationId 决定。
 const continuing = ref(false);
 
-// 考核模式状态机（ASKME）：开考后 1-3 轮，普通输入即作答；QuizModeBar 驻顶。
-const quiz = ref<{ kcCodes: string[]; round: number; total: 3 } | null>(null);
+// 本会话累计的全部上传 id（含本轮）：B 通路 scoped 检索据此限定范围；
+// 「新对话」/ 回看历史会话即清空（新会话视为无上传）。
+const sessionUploadIds = ref<number[]>([]);
+
+/** 记住本轮就绪附件的上传 id（去重），供后续轮次 scoped 检索。 */
+function rememberUploads(atts: UploadAttachmentRef[]): void {
+  if (atts.length === 0) return;
+  const merged = new Set(sessionUploadIds.value);
+  for (const a of atts) merged.add(a.id);
+  sessionUploadIds.value = [...merged];
+}
+
+// 考核模式状态机（ASKME · 多轮填空）：开考后 1-3 轮，每轮出填空题、学生气泡内填空提交；QuizModeBar 驻顶。
+const quiz = ref<{ kcCodes: string[]; round: number; total: 3; topic: string } | null>(null);
+// 每条填空题（按消息 id）的学生填空草稿，提交时拼成作答串送评卷。
+const quizDrafts = ref<Record<string, string[]>>({});
 
 // 本会话纠错记录（≤3 条 FIFO）：学生点纠错 chips 改派后记入，随路由请求上送，
 // 让 IntentRouterAgent 学会该学生的口头习惯。
@@ -306,6 +357,7 @@ function newChat(): void {
   streamingAskId.value = null;
   quiz.value = null;
   sessionCorrections.value = [];
+  sessionUploadIds.value = [];
   conversationId.value = genId();
   continuing.value = false;
   scrollToBottom(true);
@@ -329,11 +381,14 @@ function loadConversation(sessions: TutorSessionDto[]): void {
       text: s.answerMd ?? '（这条历史问答没有保存答案）',
       groundingStatus: s.groundingStatus,
       evidencePageIds: s.evidencePageIds,
+      // 历史回放只存了 page_ids：用它兜底合成课件证据，让旧会话也能看到课件页图 + 回链。
+      evidence: pageIdsToCitations(s.evidencePageIds),
       streaming: false,
     });
   }
   messages.value = replay;
   quiz.value = null;
+  sessionUploadIds.value = [];
   const existing = ordered.find((s) => s.conversationId)?.conversationId;
   conversationId.value = existing ?? genId();
   // 仅当这段历史真有 conversationId 才算「可续聊」；旧数据（null）续问会另起会话，不提示并入。
@@ -415,11 +470,37 @@ function commandOf(intent: IntentKind): { label: string; icon: string } {
   return { label: cmd?.label ?? intent, icon: cmd?.icon ?? '•' };
 }
 
+/**
+ * 文本以已知斜杠命令 token 起手（如欢迎屏快捷语「/考考我 循环」，或手敲 / 命令但没走下拉菜单选中），
+ * 解析出强制意图并剥离 token——否则「/考考我 循环」会被当普通文本送进意图路由器，置信不足而兜底澄清。
+ */
+function parseLeadingSlashCommand(text: string): { intent: IntentKind; text: string } | null {
+  const trimmed = text.trimStart();
+  if (!trimmed.startsWith('/')) return null;
+  for (const cmd of SLASH_COMMANDS) {
+    if (trimmed === cmd.token || trimmed.startsWith(`${cmd.token} `)) {
+      return { intent: cmd.intent, text: trimmed.slice(cmd.token.length).trim() };
+    }
+  }
+  return null;
+}
+
 // ============ tutor_sse 工具族的 context 前缀 directive（蓝本 §0 固定文案） ============
-const ASKME_START_DIRECTIVE =
-  '【考核模式·第1/3轮】你是考官。就知识点出一道口头小题（不要给答案），等待学生作答。';
-function askmeJudgeDirective(round: number): string {
-  return `【考核模式·第${round}/3轮·评卷】先点评学生上一答（对/不对/差在哪），再出下一题；第3轮后给小结+掌握度建议。`;
+// 考考我（多轮填空，契约 C4）：QUIZ_TURN_<n> 触发后端出填空题（不引课件）；
+// QUIZ_JUDGE 触发评卷（仅命中课件才引 PPT）。标记须在 context 内供 graph 识别。
+function quizAskDirective(round: number): string {
+  return (
+    `QUIZ_TURN_${round}\n` +
+    `【考核·第${round}/3轮】你是考官。就该知识点出一道"填空题"：题干用 (1) (2) 标出 1~3 个空，` +
+    `循序渐进引导学生掌握；本轮不要给答案、不要引用课件。`
+  );
+}
+function quizJudgeDirective(round: number): string {
+  return (
+    `QUIZ_JUDGE\n` +
+    `【考核·第${round}/3轮·评卷】判断学生填空对/部分对/错并简短点评；` +
+    `仅当命中课件时才引用 PPT 帮其巩固或弄清错因，未命中则不要提及课件。`
+  );
 }
 const EXPLAIN_CODE_DIRECTIVE =
   '【讲代码】逐行解释下面代码的执行过程与每行意图，标出常见陷阱；不要重写或优化成完整答案。';
@@ -500,11 +581,14 @@ watch(workshopSse.tokens, (t) => {
 });
 
 // PLAN：orchestrator 流的 traces/plan 镜像进 workshopActivity（MarvisPanel / 思考链自动点亮）。
+// 仅当本组件持有运行令牌时镜像——过期的流（如向导已开新活动）不得覆盖共享状态。
 watch(orchestratorSse.traces, (tr) => {
-  activity.syncTraces('orchestrator', tr);
+  if (planRunToken.value === null) return;
+  activity.syncTraces('orchestrator', tr, planRunToken.value);
 });
 watch(orchestratorSse.plan, (p) => {
-  activity.syncPlan('orchestrator', p);
+  if (planRunToken.value === null) return;
+  activity.syncPlan('orchestrator', p, planRunToken.value);
 });
 // PLAN 流式：dispatch 经 AG-UI STATE_DELTA 推送的真实 plan 步骤进度，实时写入当前 plan 卡点亮步骤。
 watch(orchestratorSse.state, (st) => {
@@ -649,9 +733,24 @@ function onSecondaryPick(m: ChatMessage): void {
 async function onSubmit(payload: ComposerSubmitPayload): Promise<void> {
   playSfx('sfx_click');
 
+  // 快捷语 / 手敲未走菜单的斜杠命令（如「/考考我 循环」）：解析成强制意图 + 剥离 token，
+  // 否则会被当普通文本送进路由器，置信不足而兜底澄清。
+  if (!payload.forcedIntent) {
+    const parsed = parseLeadingSlashCommand(payload.text);
+    if (parsed) {
+      payload = { ...payload, forcedIntent: parsed.intent, text: parsed.text };
+    }
+  }
+
+  // 本轮随发的已就绪上传附件（向后兼容：旧调用无此字段时取空数组）。
+  const attachments = payload.attachments ?? [];
+  rememberUploads(attachments);
+
   // 考核模式：普通输入即作答（不再路由，直接评卷下一轮）；/ 强制工具仍可临时打断（逃生门）。
   if (quiz.value && !payload.forcedIntent) {
-    pushMessage({ id: genId(), role: 'user', kind: 'text', text: payload.text });
+    const quizUserMsg: ChatMessage = { id: genId(), role: 'user', kind: 'text', text: payload.text };
+    if (attachments.length > 0) quizUserMsg.attachments = attachments;
+    pushMessage(quizUserMsg);
     scrollToBottom(true);
     await runQuizAnswer(payload.text);
     return;
@@ -673,6 +772,7 @@ async function onSubmit(payload: ComposerSubmitPayload): Promise<void> {
     userMsg.toolIcon = meta.icon;
   }
   if (payload.manualKcCodes.length > 0) userMsg.kcCodes = payload.manualKcCodes;
+  if (attachments.length > 0) userMsg.attachments = attachments;
   pushMessage(userMsg);
   scrollToBottom(true);
 
@@ -726,11 +826,21 @@ async function onSubmit(payload: ComposerSubmitPayload): Promise<void> {
   }
   if (!intent) intent = 'ASK';
 
+  // 上传注入（契约 §3.5，红线：只进带标签 context、绝不当课件证据）：
+  //   A 通路 = 本轮附件全文（截断）；B 通路 = scoped 检索本会话早先上传（默认不每问都检索）。
+  // 仅 tutor_sse 工具族（ASK/ASKME/EXPLAIN_CODE/FIX_BUG）消费 contextHint；其余意图忽略，无副作用。
+  // 无附件且本会话无早先上传时返回空串、不发任何网络请求。
+  const uploadInjection = await buildUploadInjection(
+    payload.text,
+    attachments,
+    sessionUploadIds.value,
+  );
+
   const ctx: DispatchContext = {
     text: payload.text,
     kcCodes,
     focusHint,
-    contextHint: payload.contextHint,
+    contextHint: mergeUploadContext(payload.contextHint, uploadInjection),
     target,
   };
 
@@ -805,30 +915,54 @@ const quizKcLabel = computed<string>(() => {
   return code ? kcDisplayName(code) : '';
 });
 
-/** 开考：进入 quiz 模式（第 1/3 轮），考官 directive 走 runAsk 出第一题。 */
+/** 开考：进入 quiz 模式（第 1/3 轮），考官出第一道填空题（不引课件）。 */
 async function startQuiz(ctx: DispatchContext): Promise<string> {
-  quiz.value = { kcCodes: [...ctx.kcCodes], round: 1, total: 3 };
-  toast.show('进入考核模式：共 3 轮口头小测，直接在输入框作答', 'info');
+  quiz.value = { kcCodes: [...ctx.kcCodes], round: 1, total: 3, topic: ctx.text };
+  toast.show('进入考核模式：共 3 轮填空小测，在题目气泡里直接填空提交', 'info');
   return runAsk(ctx.text, ctx.kcCodes, ctx.contextHint, {
     intent: 'ASKME',
-    directive: ASKME_START_DIRECTIVE,
+    directive: quizAskDirective(1),
   });
 }
 
-/** 考核模式中的普通输入：视为答题 → 评卷 directive 走 runAsk；3 轮后退出模式。 */
+/** 学生作答（来自气泡填空或输入框）：先评卷（命中课件才引 PPT），再出下一轮填空题；3 轮后收尾。 */
 async function runQuizAnswer(answer: string): Promise<void> {
   const q = quiz.value;
   if (!q) return;
   await runAsk(answer, q.kcCodes, '', {
     intent: 'ASKME',
-    directive: askmeJudgeDirective(q.round),
+    directive: quizJudgeDirective(q.round),
   });
   if (!quiz.value) return; // 评卷途中学生手动退出
   if (q.round >= q.total) {
     finishQuiz();
-  } else {
-    quiz.value = { ...q, round: q.round + 1 };
+    return;
   }
+  const nextRound = q.round + 1;
+  quiz.value = { ...q, round: nextRound };
+  // 出下一轮填空题（沿用本次考核主题）。
+  await runAsk(q.topic, q.kcCodes, '', {
+    intent: 'ASKME',
+    directive: quizAskDirective(nextRound),
+  });
+}
+
+/** 记录某题某空的填写草稿（ref 深响应，嵌套赋值即触发更新）。 */
+function setQuizDraft(id: string, index: number, value: string): void {
+  if (!quizDrafts.value[id]) quizDrafts.value[id] = [];
+  quizDrafts.value[id][index] = value;
+}
+
+/** 气泡内「提交作答」：把该题各空草稿拼成作答串，作为用户气泡推入并触发评卷。 */
+async function submitQuizFill(m: ChatMessage): Promise<void> {
+  if (!quiz.value || !m.quiz) return;
+  const draft = quizDrafts.value[m.id] ?? [];
+  const answer = m.quiz.blanks
+    .map((b, i) => `(${b.index}) ${(draft[i] ?? '').trim()}`)
+    .join('  ');
+  pushMessage({ id: genId(), role: 'user', kind: 'text', text: answer });
+  scrollToBottom(true);
+  await runQuizAnswer(answer);
 }
 
 function finishQuiz(): void {
@@ -986,6 +1120,16 @@ async function runAsk(
       ...(r.evidence_note ? { evidenceNote: r.evidence_note } : {}),
       // 画像个性化说明 →「✨ 为你定制」小标签（live 才有；为空则不写）。
       ...(r.personalization_note ? { personalizationNote: r.personalization_note } : {}),
+      // 考考我出题（多轮填空）：带 blanks 时气泡内渲染填空 input + 提交作答。
+      ...(r.quiz && r.quiz.phase === 'ask' && Array.isArray(r.quiz.blanks) && r.quiz.blanks.length > 0
+        ? {
+            quiz: {
+              round: r.quiz.round ?? quiz.value?.round ?? 1,
+              stem: r.quiz.stem ?? r.answer_md ?? '',
+              blanks: r.quiz.blanks.map((b) => ({ index: b.index, hint: b.hint ?? '' })),
+            },
+          }
+        : {}),
       visualAids: r.visual_aids ?? [],
       // 工具调用轨迹快照 → 折叠「⚙ 工具调用」行（ToolTraceLine）。
       traces: [...tutorSse.traces.value],
@@ -1065,7 +1209,8 @@ const PLAN_PANEL_ROUTES: Record<string, string> = {
 };
 
 async function runPlan(text: string): Promise<string> {
-  activity.start('orchestrator', '学习规划');
+  const runToken = activity.start('orchestrator', '学习规划');
+  planRunToken.value = runToken;
 
   // history 取最近 6 条 role/content；当前这条消息已在 onSubmit push，须从历史中剔除。
   const turns = buildRecentTurns();
@@ -1103,7 +1248,9 @@ async function runPlan(text: string): Promise<string> {
 
   const result = orchestratorSse.result.value;
   const ok = orchestratorSse.status.value === 'done' && result !== null;
-  activity.finish(ok);
+  // 持令牌收尾：若向导（GuideOverlay）已开新活动，本次过期收尾被 store 忽略。
+  activity.finish(ok, runToken);
+  if (planRunToken.value === runToken) planRunToken.value = null;
 
   if (!ok || !result) {
     playSfx('sfx_error');
@@ -1130,17 +1277,36 @@ async function runPlan(text: string): Promise<string> {
   return id;
 }
 
-/** PlanCard「前往」：panel 简称 → 实际路由（以路由表为准；lecture 需要章号）。 */
-function onPlanOpen(panel: string): void {
+/** PlanCard open-step 载荷（与 PlanCard 的 PlanStep 结构兼容，只取深链所需字段）。 */
+interface PlanOpenStep {
+  panel: string | null;
+  kc_codes?: string[];
+  resource_type?: string | null;
+}
+
+/**
+ * PlanCard「前往」：panel 简称 → 实际路由（以路由表为准；lecture 需要章号）。
+ * 深链上下文：步骤锚定的 KC 以 `kc` query 随行（练习/图书馆/复盘/训练场等保留 KC 上下文）；
+ * 去工坊（workshop/tutor）再带 `type`（resource_type），落地后可一键接着生成。
+ */
+function onPlanOpen(step: PlanOpenStep): void {
   playSfx('sfx_click');
+  const panel = step.panel ?? '';
+  if (!panel) return;
+  const kcCodes = step.kc_codes ?? [];
+  const query: Record<string, string> = {};
+  if (kcCodes.length > 0) query.kc = kcCodes.join(',');
+  if ((panel === 'workshop' || panel === 'tutor') && step.resource_type) {
+    query.type = step.resource_type;
+  }
   if (panel === 'lecture') {
-    void router.push(`/lecture/${mainline.firstActionableChapter}`);
+    void router.push({ path: `/lecture/${mainline.firstActionableChapter}`, query });
     return;
   }
   if (panel === 'training') {
     toast.show('去训练场练一练', 'info');
   }
-  void router.push(PLAN_PANEL_ROUTES[panel] ?? '/world');
+  void router.push({ path: PLAN_PANEL_ROUTES[panel] ?? '/world', query });
 }
 
 // ============ 纯前端：PROGRESS 学情报告 ============
@@ -1402,18 +1568,57 @@ function goToPage(pageId: number): void {
   void router.push({ path: '/library', query: { pageId: String(pageId) } });
 }
 
-// ============ 角色化：欢迎屏快捷语 / 轻反馈 ============
-function onWelcomeQuick(text: string): void {
-  void onSubmit({ text, manualKcCodes: [], contextHint: '', forcedIntent: null });
+// ============ 深链落地：/workshop?kc=...&type=...（向导计划「前往工坊」带来的上下文） ============
+/** query 值归一成单个非空字符串（vue-router 的 LocationQueryValue 可能是数组/null）。 */
+function firstQueryValue(value: unknown): string | null {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return typeof raw === 'string' && raw.trim().length > 0 ? raw.trim() : null;
 }
 
-function onAnswerFeedback(m: ChatMessage, up: boolean): void {
-  // TODO(LearningEvent)：后续把 👍/👎 作为 tutor_feedback 学习事件回流画像（偏好/易错维度）。
-  console.debug('[workshop] answer feedback', { messageId: m.id, up });
-  toast.show('已记录反馈', 'success');
+/**
+ * 把深链携带的 kc + 资源类型化作一枚「接着」chip：点击才按该上下文生成，绝不自动开火，
+ * 也绝不触发 orchestrator 重新规划——向导的计划留在共享活动状态里原样不动，
+ * 学生从工坊返回或反复进出也不会重复生成向导计划。
+ */
+function consumeDeepLink(): void {
+  const kcStr = firstQueryValue(route.query.kc);
+  if (!kcStr) return;
+  const kcCodes = kcStr
+    .split(',')
+    .map((code) => code.trim())
+    .filter((code) => code.length > 0);
+  if (kcCodes.length === 0) return;
+
+  const typeStr = firstQueryValue(route.query.type);
+  if (!typeStr) return;
+  const intent = typeStr as IntentKind;
+  if (!isResourceIntent(intent)) return;
+
+  pushSecondary(intent, {
+    text: '',
+    kcCodes,
+    focusHint: '',
+    contextHint: '',
+    target: '',
+  });
+}
+
+// 深链签名（kc|type）：挂载后 query 才就位（如路由异步恢复），或人在工坊内点计划
+// 「前往工坊」就地换上下文（组件不重挂）时，靠签名变化补消费；无效签名由 consumeDeepLink 自滤。
+const deepLinkSignature = computed(
+  () => `${firstQueryValue(route.query.kc) ?? ''}|${firstQueryValue(route.query.type) ?? ''}`,
+);
+watch(deepLinkSignature, () => {
+  consumeDeepLink();
+});
+
+// ============ 角色化：欢迎屏快捷语 / 轻反馈 ============
+function onWelcomeQuick(text: string): void {
+  void onSubmit({ text, manualKcCodes: [], contextHint: '', forcedIntent: null, attachments: [] });
 }
 
 onMounted(async () => {
+  consumeDeepLink();
   try {
     const [chapters, kcs] = await Promise.all([
       listChapters(),
@@ -1494,28 +1699,46 @@ onMounted(async () => {
         v-for="m in messages"
         :key="m.id"
       >
-        <!-- 用户气泡 -->
-        <div
-          v-if="m.role === 'user'"
-          class="msg msg--user"
-        >
+        <!-- 用户气泡（附件 pill 渲染在气泡上方） -->
+        <template v-if="m.role === 'user'">
           <div
-            v-if="m.toolLabel || (m.kcCodes && m.kcCodes.length)"
-            class="msg__tags"
+            v-if="m.attachments && m.attachments.length"
+            class="user-attachments"
+            data-testid="user-attachments"
           >
             <span
-              v-if="m.toolLabel"
-              class="msg__tool"
-            >{{ m.toolIcon }} {{ m.toolLabel }}</span>
-            <span
-              v-if="m.kcCodes && m.kcCodes.length"
-              class="msg__kc"
-            >@{{ m.kcCodes.length }} 知识点</span>
+              v-for="a in m.attachments"
+              :key="a.id"
+              class="user-attach"
+              :title="a.filename"
+            >
+              <span
+                class="user-attach__icon"
+                aria-hidden="true"
+              >{{ attachmentIcon(a.ext) }}</span>
+              <span class="user-attach__name">{{ a.filename }}</span>
+              <span class="user-attach__meta">{{ a.charCount }} 字</span>
+            </span>
           </div>
-          <p class="msg__text">
-            {{ m.text }}
-          </p>
-        </div>
+          <div class="msg msg--user">
+            <div
+              v-if="m.toolLabel || (m.kcCodes && m.kcCodes.length)"
+              class="msg__tags"
+            >
+              <span
+                v-if="m.toolLabel"
+                class="msg__tool"
+              >{{ m.toolIcon }} {{ m.toolLabel }}</span>
+              <span
+                v-if="m.kcCodes && m.kcCodes.length"
+                class="msg__kc"
+              >@{{ m.kcCodes.length }} 知识点</span>
+            </div>
+            <p class="msg__text">
+              {{ m.text }}
+            </p>
+          </div>
+        </template>
 
         <!-- 助手消息行：左侧百晓像素头像 + 右侧气泡 -->
         <div
@@ -1571,11 +1794,51 @@ onMounted(async () => {
                   :traces="m.traces"
                 />
               </div>
-              <MarkdownView :source="annotateCitations(m.text, m.evidence ?? [])" />
+              <MarkdownView
+                :source="annotateCitations(m.text, m.evidence ?? [])"
+                @cite-click="(p) => goToPage(p.pageId)"
+              />
+              <!-- 考考我·填空作答（多轮）：题干见上方，每个空一个输入框，提交即评卷并出下一轮。 -->
+              <div
+                v-if="m.quiz && !m.streaming"
+                class="quiz-fill"
+                data-testid="quiz-fill"
+              >
+                <div
+                  v-for="(b, i) in m.quiz.blanks"
+                  :key="b.index"
+                  class="quiz-fill__row"
+                >
+                  <label class="quiz-fill__label">({{ b.index }})</label>
+                  <input
+                    class="quiz-fill__input"
+                    type="text"
+                    :placeholder="b.hint || '在此填空'"
+                    :value="quizDrafts[m.id]?.[i] || ''"
+                    :disabled="!quiz || busy"
+                    @input="setQuizDraft(m.id, i, ($event.target as HTMLInputElement).value)"
+                    @keydown.enter.prevent="submitQuizFill(m)"
+                  >
+                </div>
+                <button
+                  type="button"
+                  class="quiz-fill__submit"
+                  :disabled="!quiz || busy"
+                  @click="submitQuizFill(m)"
+                >
+                  提交作答
+                </button>
+              </div>
               <span
                 v-if="m.streaming"
                 class="cursor"
               >▌</span>
+              <!-- 流式期间：工具调用生命周期实时时间轴（证据检索 → 作答 → 三审）。 -->
+              <ToolCallTimeline
+                v-if="m.streaming"
+                :traces="liveAskTraces"
+                live
+              />
               <div
                 v-if="m.streaming"
                 class="msg__stoprow"
@@ -1652,13 +1915,6 @@ onMounted(async () => {
                   {{ c.label }}
                 </button>
               </div>
-              <!-- 👍/👎 轻反馈（仅完成后）。 -->
-              <AnswerFeedback
-                v-if="!m.streaming"
-                class="msg__feedback"
-                :message-id="m.id"
-                @feedback="onAnswerFeedback(m, $event)"
-              />
             </div>
 
             <!-- 助手：资源卡（就地内联浏览全文 + 「我的书房」历史库入口） -->
@@ -1790,7 +2046,7 @@ onMounted(async () => {
               />
               <PlanCard
                 :steps="m.planSteps ?? []"
-                @open="onPlanOpen"
+                @open-step="onPlanOpen"
               />
             </div>
 
@@ -1972,23 +2228,17 @@ onMounted(async () => {
         正在判断该用哪个工具…
       </div>
 
-      <!-- 资源生成：多智能体「工作室」双层思考链（缩略=当前人物，点击=全员流水线） -->
-      <AgentStudioStream
+      <!-- 统一思考过程动画：资源生成 / 学习总管协同 都改用与「提问」一致的工具调用时间轴
+           （右侧 MarvisPanel 仍同步点亮全员流水线，避免重复的双层卡片）。 -->
+      <ToolCallTimeline
         v-if="officeStreamState === 'streaming' && !isOrchestratorActive"
         :traces="workshopSse.traces.value"
-        :status="officeStreamState"
-        :token-preview="officeTokenPreview"
-        :plan="workshopSse.plan.value"
-        :error-message="workshopSse.error.value?.message ?? null"
-        :label="officeStreamLabel || '智能体协同生成中'"
+        :live="true"
       />
-      <!-- orchestrator 协同：学习总管多智能体 dispatch 流水线（同一双层思考链） -->
-      <AgentStudioStream
+      <ToolCallTimeline
         v-if="isOrchestratorActive"
         :traces="activity.traces"
-        :status="activity.status"
-        :plan="activity.plan"
-        :label="activity.label || '学习总管协同中'"
+        :live="true"
       />
     </div>
 
@@ -2137,6 +2387,37 @@ onMounted(async () => {
   align-self: flex-end;
   max-width: 80%;
 }
+/* 用户气泡上方的附件 pill 行（右对齐贴合气泡）。 */
+.user-attachments {
+  align-self: flex-end;
+  max-width: 80%;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+.user-attach {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 2px 8px;
+  font-size: 10px;
+  border-radius: 999px;
+  background: #fff8df;
+  border: 1px solid #8c6a23;
+  color: #2a1a08;
+}
+.user-attach__name {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+}
+.user-attach__meta {
+  color: var(--pyt-color-text-muted);
+}
 .msg--assistant {
   background: #f5ecd4;
   align-self: flex-start;
@@ -2207,10 +2488,6 @@ onMounted(async () => {
   gap: 6px;
   border-top: 1px dashed rgba(110, 79, 29, 0.35);
   padding-top: 8px;
-}
-/* 轻反馈挂在答案尾部。 */
-.msg__feedback {
-  margin-top: 6px;
 }
 /* 纠错 chips：贴在气泡正下方的无框小行。 */
 .msg-followup {
@@ -2375,6 +2652,59 @@ onMounted(async () => {
   background: #f8d7d0;
   color: #b3402a;
   border-color: var(--pyt-color-danger);
+}
+/* 考考我·填空作答 */
+.quiz-fill {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: rgba(255, 247, 230, 0.7);
+  border: 1px dashed var(--pyt-color-info, #2a6f97);
+  border-radius: var(--pyt-radius-md, 6px);
+}
+.quiz-fill__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.quiz-fill__label {
+  flex: 0 0 auto;
+  font-weight: 700;
+  color: var(--pyt-color-info, #1b4a6b);
+  font-size: 13px;
+}
+.quiz-fill__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 5px 8px;
+  font: inherit;
+  font-size: 13px;
+  border: 2px solid var(--pyt-color-border, #c9a86b);
+  border-radius: 4px;
+  background: var(--pyt-color-bg-primary, #fffdf6);
+  color: var(--pyt-color-text-primary, #3a2a14);
+}
+.quiz-fill__input:focus {
+  outline: none;
+  border-color: var(--pyt-color-info, #2a6f97);
+}
+.quiz-fill__submit {
+  justify-self: start;
+  margin-top: 2px;
+  padding: 5px 14px;
+  font-family: var(--pyt-font-pixel);
+  font-size: 13px;
+  cursor: pointer;
+  background: var(--pyt-color-info, #2a6f97);
+  color: #fff;
+  border: 2px solid var(--pyt-color-border-strong, #2a1a05);
+  border-radius: 4px;
+  box-shadow: 2px 2px 0 var(--pyt-color-border-strong, #2a1a05);
+}
+.quiz-fill__submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 .cursor {
   animation: blink 0.8s steps(2) infinite;

@@ -46,6 +46,11 @@ class ResourceGraphConfig:
 class ResourceGraph:
     MAX_RETRIES = 2
 
+    # A1 无进展/震荡检测：相邻两轮 revision_notes 等价时提前终止所用的 trace 标记与说明。
+    # run() 与 run_streaming() 共用同一组常量，保证两条路径的落库 trace 与判定一致。
+    _OSCILLATION_NODE = "oscillation_detected"
+    _OSCILLATION_NOTE = "no_progress: 连续两轮修订失败原因一致，提前终止"
+
     # 设计师工位的中文 label（仅用于线上 `plan` 事件，零 LLM 成本）。键对应
     # ResourceProduceRequest.type，与 _select_agent 选出的设计师 AGENT_NAME 配对。
     _DESIGNER_LABELS: dict[str, str] = {
@@ -55,6 +60,17 @@ class ResourceGraph:
         "CODE_LAB": "代码教练",
         "READING": "阅读策展人",
         "STORYBOARD": "动画分镜师",
+    }
+
+    # 检索/审查工位的中文 label（与 _build_plan 一致；用于流式 trace 的 agent_label·C1）。
+    # 设计师工位 `{AGENT_NAME}.attempt{N}`（含点号）走 _DESIGNER_LABELS。
+    _STATIC_NODE_LABELS: dict[str, str] = {
+        "evidence_fetcher": "证据检索·馆员",
+        "grounding_critic": "引用审查·审查官",
+        "hallucination_detector": "防幻觉核查·校对官",
+        "semantic_grounding": "语义接地·核验官",
+        "safety_critic": "安全审查·安全员",
+        _OSCILLATION_NODE: "震荡熔断·哨兵",
     }
 
     def __init__(
@@ -136,9 +152,18 @@ class ResourceGraph:
                     status=status,
                 )
             # 收集失败原因供下一轮 revision_notes 回灌设计师（含语义接地）
-            revision_notes = list(grounding.reasons) + list(hallucination.reasons) + list(sg_reasons)
-            if not revision_notes:
-                revision_notes = ["引用审查或防幻觉核查未通过，请检查证据引用与内容准确性。"]
+            new_notes = list(grounding.reasons) + list(hallucination.reasons) + list(sg_reasons)
+            if not new_notes:
+                new_notes = ["引用审查或防幻觉核查未通过，请检查证据引用与内容准确性。"]
+            # A1 无进展/震荡检测：本轮失败原因与上一轮回灌的 revision_notes 等价，说明设计师
+            # 修订后原地打转，提前终止——不再发起下一次 design（省一次 LLM），直接走 FAILED。
+            if self._notes_equivalent(revision_notes, new_notes):
+                self._record_sync(
+                    trace, self._OSCILLATION_NODE, False, note=self._OSCILLATION_NOTE
+                )
+                last_grounding = self._oscillation_grounding(combined)
+                break
+            revision_notes = new_notes
             attempt += 1
 
         assert draft is not None and last_grounding is not None and last_safety is not None
@@ -175,6 +200,7 @@ class ResourceGraph:
                 trace,
                 "evidence_fetcher",
                 self._fetch_evidence(request),
+                agent_label=self._label_for("evidence_fetcher", request),
             )
 
             attempt = 0
@@ -183,16 +209,19 @@ class ResourceGraph:
             draft: ResourceDraft | None = None
             revision_notes: list[str] | None = None
             while attempt <= self.MAX_RETRIES:
+                designer_node = f"{agent.AGENT_NAME}.attempt{attempt}"
                 draft = await self._step_streaming(
                     emit,
                     trace,
-                    f"{agent.AGENT_NAME}.attempt{attempt}",
+                    designer_node,
                     agent.design(request, evidence, revision_notes=revision_notes),
+                    agent_label=self._label_for(designer_node, request),
                 )
 
                 grounding = grounding_critic(draft, evidence)
                 await self._record_sync_streaming(
                     emit, trace, "grounding_critic", grounding.passed,
+                    agent_label=self._label_for("grounding_critic", request),
                 )
                 await asyncio.sleep(0.05)
 
@@ -202,18 +231,21 @@ class ResourceGraph:
                 await self._record_sync_streaming(
                     emit, trace, "hallucination_detector", hallucination.passed,
                     note=str(hallucination.reasons),
+                    agent_label=self._label_for("hallucination_detector", request),
                 )
                 await asyncio.sleep(0.05)
 
                 sg_ok, sg_reasons = await self._semantic_grounding(draft, evidence)
                 await self._record_sync_streaming(
                     emit, trace, "semantic_grounding", sg_ok, note=str(sg_reasons),
+                    agent_label=self._label_for("semantic_grounding", request),
                 )
                 await asyncio.sleep(0.05)
 
                 safety = safety_critic(draft)
                 await self._record_sync_streaming(
                     emit, trace, "safety_critic", safety.passed, note=str(safety.reasons),
+                    agent_label=self._label_for("safety_critic", request),
                 )
                 await asyncio.sleep(0.05)
 
@@ -254,9 +286,23 @@ class ResourceGraph:
                     await emit("result", resp.model_dump(mode="json"))
                     return
                 # 收集失败原因供下一轮 revision_notes 回灌设计师（含语义接地）
-                revision_notes = list(grounding.reasons) + list(hallucination.reasons) + list(sg_reasons)
-                if not revision_notes:
-                    revision_notes = ["引用审查或防幻觉核查未通过，请检查证据引用与内容准确性。"]
+                new_notes = list(grounding.reasons) + list(hallucination.reasons) + list(sg_reasons)
+                if not new_notes:
+                    new_notes = ["引用审查或防幻觉核查未通过，请检查证据引用与内容准确性。"]
+                # A1 无进展/震荡检测：与 run() 同义——等价即提前终止，不再发起下一次 design，
+                # 直接走 FAILED 分支（SSE 仅多一条 oscillation_detected 的 start/finish trace）。
+                if self._notes_equivalent(revision_notes, new_notes):
+                    await self._record_sync_streaming(
+                        emit,
+                        trace,
+                        self._OSCILLATION_NODE,
+                        False,
+                        note=self._OSCILLATION_NOTE,
+                        agent_label=self._label_for(self._OSCILLATION_NODE, request),
+                    )
+                    last_grounding = self._oscillation_grounding(combined)
+                    break
+                revision_notes = new_notes
                 attempt += 1
 
             assert draft is not None and last_grounding is not None and last_safety is not None
@@ -342,6 +388,35 @@ class ResourceGraph:
             )
         )
 
+    @staticmethod
+    def _notes_equivalent(
+        previous: list[str] | None, current: list[str] | None
+    ) -> bool:
+        """判断相邻两轮 revision_notes 是否等价（归一：去空白后比较集合，与顺序无关）。
+
+        A1 无进展/震荡检测：设计师据上一轮 notes 修订后失败原因集合不变，再喂同样的
+        notes 也只会原地打转；首轮（previous 为 None）不构成震荡。
+        """
+        if previous is None or current is None:
+            return False
+        prev_set = {"".join(note.split()) for note in previous}
+        curr_set = {"".join(note.split()) for note in current}
+        return prev_set == curr_set
+
+    @staticmethod
+    def _oscillation_grounding(combined: GroundingResult) -> GroundingResult:
+        """在末轮失败 grounding 上叠加震荡说明，使 FAILED 返回的 grounding reasons
+        解释「因连续两轮无进展而提前终止」；其余字段沿用末轮结果。"""
+        return GroundingResult(
+            passed=False,
+            reasons=[
+                "OSCILLATION_DETECTED: 连续两轮修订未改变失败原因，提前终止以省一次 LLM 调用"
+            ]
+            + list(combined.reasons),
+            no_evidence_found=combined.no_evidence_found,
+            retried=combined.retried,
+        )
+
     # 流式专用助手（不影响同步 run() 与落库 trace）
 
     def _build_plan(
@@ -373,22 +448,31 @@ class ResourceGraph:
             ],
         }
 
+    def _label_for(self, node: str, request: ResourceProduceRequest) -> str:
+        """节点 → 中文工位名（C1）：审查/检索查静态表；设计师工位（含点号）按资源类型取设计师名。"""
+        if node in self._STATIC_NODE_LABELS:
+            return self._STATIC_NODE_LABELS[node]
+        if "." in node:
+            return self._DESIGNER_LABELS.get(request.type, request.type)
+        return node
+
     async def _step_streaming(
         self,
         emit: Callable[[str, dict[str, Any]], Awaitable[None]],
         trace: list[GraphTraceStep],
         name: str,
         awaitable,
+        agent_label: str | None = None,
     ):
         """异步节点：先发 ``start``，跑既有 ``_step``，再用落库的步骤发 ``finish``。"""
-        await self._emit_start(emit, name)
+        await self._emit_start(emit, name, agent_label)
         try:
             result = await self._step(trace, name, awaitable)
         except Exception:
             # _step 已写 fail 步骤；发 finish(fail) 后抛给外层转 error
-            await self._emit_finish(emit, trace[-1])
+            await self._emit_finish(emit, trace[-1], agent_label)
             raise
-        await self._emit_finish(emit, trace[-1])
+        await self._emit_finish(emit, trace[-1], agent_label)
         return result
 
     async def _record_sync_streaming(
@@ -398,25 +482,38 @@ class ResourceGraph:
         name: str,
         passed: bool,
         note: str | None = None,
+        agent_label: str | None = None,
     ) -> None:
         """同步审查节点：先发 ``start``，跑既有 ``_record_sync``，再发 ``finish``。"""
-        await self._emit_start(emit, name)
+        await self._emit_start(emit, name, agent_label)
         self._record_sync(trace, name, passed, note=note)
-        await self._emit_finish(emit, trace[-1])
+        await self._emit_finish(emit, trace[-1], agent_label)
 
     @staticmethod
     async def _emit_start(
-        emit: Callable[[str, dict[str, Any]], Awaitable[None]], name: str
+        emit: Callable[[str, dict[str, Any]], Awaitable[None]],
+        name: str,
+        agent_label: str | None = None,
     ) -> None:
         await emit(
             "trace",
-            {"node": name, "phase": "start", "status": "running", "elapsed_ms": 0, "note": None},
+            {
+                "node": name,
+                "phase": "start",
+                "status": "running",
+                "elapsed_ms": 0,
+                "note": None,
+                "agent_label": agent_label or name,
+            },
         )
 
     @staticmethod
     async def _emit_finish(
-        emit: Callable[[str, dict[str, Any]], Awaitable[None]], step: GraphTraceStep
+        emit: Callable[[str, dict[str, Any]], Awaitable[None]],
+        step: GraphTraceStep,
+        agent_label: str | None = None,
     ) -> None:
         payload = step.model_dump(mode="json")
         payload["phase"] = "finish"
+        payload["agent_label"] = agent_label or step.node
         await emit("trace", payload)

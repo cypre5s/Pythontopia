@@ -1,6 +1,7 @@
-"""P1.4 辩论提质放大验收测试。
+"""辩论提质放大验收测试（R-14 收窄触发词后）。
 
-验证：难度/讲法决策触发辩论且 critic 意见进 referee；cost 守恒（无异议跳 referee）。
+验证：严谨论证/权衡比较类问题触发辩论且 critic 意见进 referee；
+教学决策类（难度/怎么讲/太难/应该先）已不再触发辩论，改走 ask_stream；cost 守恒（无异议跳 referee）。
 """
 
 from __future__ import annotations
@@ -25,13 +26,12 @@ class TestDebateTriggers:
         assert TutorAgent.should_debate("真的吗")
         assert TutorAgent.should_debate("权衡利弊")
 
-    def test_teaching_decision_triggers_added(self) -> None:
-        """P1.4 新增教学决策触发词生效。"""
-        assert TutorAgent.should_debate("这个知识点适合什么难度")
-        assert TutorAgent.should_debate("怎么讲列表推导式比较好")
-        assert TutorAgent.should_debate("先学哪个更合适")
-        assert TutorAgent.should_debate("太难了，能不能简单点")
-        assert TutorAgent.should_debate("应该先学for还是while")
+    def test_teaching_decision_no_longer_triggers(self) -> None:
+        """R-14 收窄：教学决策类（难度/怎么讲/太难/应该先）不再触发辩论，改走 ask_stream。"""
+        assert not TutorAgent.should_debate("这个知识点适合什么难度")
+        assert not TutorAgent.should_debate("怎么讲这个比较好")
+        assert not TutorAgent.should_debate("太难了，能不能简单点")
+        assert not TutorAgent.should_debate("应该先学for还是while")
 
     def test_ordinary_questions_still_no_debate(self) -> None:
         """普通答疑仍不触发辩论（成本守恒）。"""
@@ -65,17 +65,17 @@ class ScriptedProvider:
 
 
 @pytest.mark.asyncio
-async def test_debate_on_teaching_decision() -> None:
-    """教学决策（出题难度怎么选）触发辩论，critic 意见进 referee。
+async def test_debate_on_rigorous_question() -> None:
+    """严谨/权衡类问题（含「哪个更」）触发辩论，critic 意见进 referee。
 
     验证：
-    1. should_debate 识别教学决策为辩论场景（"难度" 在 DEBATE_TRIGGERS 中）
+    1. should_debate 识别权衡比较为辩论场景（"哪个更" 在 DEBATE_TRIGGERS 中）
     2. DebateGraph 端到端运行产出 3 LLM 调用（solver→critic→referee）
     3. 辩论结果包含三轮角色（solver, critic, referee）
     """
-    question = "出题难度怎么选"
+    question = "出基础题还是难题，哪个更好"
 
-    # should_debate 应命中（"难度" 在通用触发词中）→ 路由进辩论复核
+    # should_debate 应命中（"哪个更" 在触发词中）→ 路由进辩论复核
     assert TutorAgent.should_debate(question)
 
     # 端到端：Solver→Critic→Referee

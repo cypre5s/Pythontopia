@@ -65,11 +65,18 @@
       <artifactId>lombok</artifactId>
       <optional>true</optional>
     </dependency>
-    <!-- 课件证据「页面图片」：用 PDFBox 把原版 PDF 指定页渲染成 PNG（服务端渲染 + 磁盘缓存）。 -->
+    <!-- 课件证据「页面图片」：用 PDFBox 把原版 PDF 指定页渲染成 PNG（服务端渲染 + 磁盘缓存）。
+         资源工坊上传解析复用 PDFBox 抽取 .pdf 纯文本（workshop/upload）。 -->
     <dependency>
       <groupId>org.apache.pdfbox</groupId>
       <artifactId>pdfbox</artifactId>
       <version>3.0.4</version>
+    </dependency>
+    <!-- 资源工坊上传解析 .docx 纯文本：Apache POI（poi-ooxml 含 XWPFWordExtractor，传递引入 poi 核心）。 -->
+    <dependency>
+      <groupId>org.apache.poi</groupId>
+      <artifactId>poi-ooxml</artifactId>
+      <version>5.5.1</version>
     </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>

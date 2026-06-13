@@ -27,6 +27,13 @@ from pythontopia_graph.tools.harness import ToolObservation, run_with_governance
 # 编排内 LLM 子调用的治理参数：单步上限 120s、不重试（失败转 ok=False 由总管聚合）。
 _GOVERNANCE_TIMEOUT_S = 120.0
 
+# learn 阶段「有界反思」（OrchestratorGraph reflect 节点，N=1）的资源类型降级链：
+# 复杂 → 简单。链尾 READING 不再降级（返回 None → 不重派，杜绝无界重试）。
+_LEARN_DOWNGRADE_CHAIN: dict[str, str] = {
+    "CODE_LAB": "HANDOUT",
+    "HANDOUT": "READING",
+}
+
 # PlanStep.agent → 确定性子 agent 映射。
 _AGENT_MAP: dict[str, str | None] = {
     "StoryboardAgent": "STORYBOARD",
@@ -307,6 +314,22 @@ class AgentDispatcher:
         if step.phase == "practice":
             return "PRACTICE"
         return "HANDOUT"  # learn 默认讲义
+
+    def downgraded_learn_step(self, step: PlanStep) -> PlanStep | None:
+        """把一个 learn 资源步沿 CODE_LAB→HANDOUT→READING 降一档后返回副本。
+
+        供 OrchestratorGraph 的有界反思（A3 · N=1）使用：learn 步执行类失败时以更
+        简单的资源类型经本 dispatcher 重派一次。降级源取**已解析**的资源类型
+        （``_resolve_resource_type``），故 ``resource_type=None`` 的 learn 步按其默认
+        （HANDOUT）入链。已是链尾 READING、或解析结果不在降级链上（如 STORYBOARD /
+        PRACTICE / MINDMAP）→ 返回 ``None``（不重派）。仅改 ``resource_type``，
+        ``agent`` 等其余字段保持不变（沿用原步身份与 step_id）。
+        """
+        current = self._resolve_resource_type(step)
+        downgraded = _LEARN_DOWNGRADE_CHAIN.get(current) if current else None
+        if downgraded is None:
+            return None
+        return step.model_copy(update={"resource_type": downgraded})
 
     def _select_resource_agent(
         self, resource_type: ResourceType

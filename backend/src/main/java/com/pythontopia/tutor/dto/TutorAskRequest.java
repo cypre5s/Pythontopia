@@ -28,7 +28,9 @@ import java.util.List;
 public record TutorAskRequest(
     @NotBlank @Size(max = 2000) String question,
     List<String> kcCodes,
-    @Size(max = 2000) String context,
+    // 放宽至 20000：除视频/PPT 摘要外，还承载工坊「上传文件解析文本」带标签注入（每文件 ~6000 字，
+    // 多文件拼接），仍有界防滥用。上传内容是用户提供上下文，绝不当课件 evidence。
+    @Size(max = 20000) String context,
     @Size(max = 3) List<@Size(max = 8_000_000) String> images,
     @Pattern(regexp = "visual|logical|trial") String style,
     @Size(max = 64) String conversationId,

@@ -196,21 +196,26 @@ async def test_critique_revise_reasons_injected_into_prompt() -> None:
 @pytest.mark.asyncio
 async def test_critique_revise_all_fail_still_errors() -> None:
     """全部 attempt 失败仍抛 ResourceGraphError（不静默降级）。"""
-    bad_draft = {
-        "title": "讲义",
-        "handout": HandoutContent(
-            sections=[
-                {
-                    "heading": "section",
-                    "paragraphs": ["始终引用越界页码"],
-                    "page_refs": [PageRef(page_id=999, page_no=999, chapter_id=3).model_dump()],
-                }
-            ]
-        ).model_dump(),
-    }
+
+    def bad_draft(page_id: int) -> dict:
+        # 每轮引用不同越界页码 → 失败原因不同，规避震荡早停，正常耗尽 MAX_RETRIES。
+        return {
+            "title": "讲义",
+            "handout": HandoutContent(
+                sections=[
+                    {
+                        "heading": "section",
+                        "paragraphs": ["始终引用越界页码"],
+                        "page_refs": [
+                            PageRef(page_id=page_id, page_no=page_id, chapter_id=3).model_dump()
+                        ],
+                    }
+                ]
+            ).model_dump(),
+        }
 
     # MAX_RETRIES=2 → 3 次全部失败
-    provider = CallCountingProvider([bad_draft, bad_draft, bad_draft])
+    provider = CallCountingProvider([bad_draft(999), bad_draft(998), bad_draft(997)])
     graph = ResourceGraph(
         provider=provider,
         evidence_fetcher=StaticEvidenceFetcher([HIT]),

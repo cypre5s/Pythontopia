@@ -111,6 +111,14 @@ export const router = createRouter({
       path: '/examples',
       name: 'examples',
       component: () => import('@/pages/ExampleListPage.vue'),
+      // 方案 C：隐藏独立「示例库」画廊，统一收敛到「题目列表 /problems」。
+      // 站内零散入口（图书馆关联示例 / 工坊 PLAN / NPC open_panel 等）与直接 URL 访问
+      // 都在此重定向到 /problems（保留 kcCode 过滤），ExampleListPage 不再被渲染。
+      beforeEnter: (to) => ({
+        path: '/problems',
+        query: typeof to.query.kcCode === 'string' ? { kcCode: to.query.kcCode } : {},
+        replace: true,
+      }),
       meta: { requiresAuth: true },
     },
     {
@@ -131,6 +139,21 @@ export const router = createRouter({
       name: 'review-hall',
       component: () => import('@/pages/ReviewHallPage.vue'),
       meta: { requiresAuth: true },
+    },
+    // 操作指南：文档式长页，PauseMenu「系统 → 操作帮助」跳转到这里。
+    {
+      path: '/guide',
+      name: 'guide',
+      component: () => import('@/pages/GuidePage.vue'),
+      meta: { requiresAuth: true },
+    },
+    // 代码剧场（机关广场）：写真实 Python → 看傀儡走执行过程 + 世界条件反馈。
+    // 「只有游戏能做」的具身执行可视化（notional machine 可见化）。
+    {
+      path: '/code-theater',
+      name: 'code-theater',
+      component: () => import('@/pages/CodeTheaterPage.vue'),
+      meta: { requiresAuth: true, hideCompanion: true },
     },
     // 费曼反演（创新点 C）：教会会犯你同款错的 AI 学弟 → 真判题回流。
     // 复盘大厅「测」入口与 NPC 对话可跳转 /feynman?kc=...。
@@ -209,7 +232,9 @@ export const router = createRouter({
       path: '/mainline/stage/:stageId(\\d+)',
       name: 'stage-learn',
       component: () => import('@/pages/StageLearnPage.vue'),
-      meta: { requiresAuth: true },
+      // 主线小节学习页（看/学/练）自带 StageContextTutor 面板，
+      // 不再重复挂右下角「随身助教」浮窗（与 /workshop、/library 等同理）。
+      meta: { requiresAuth: true, hideCompanion: true },
     },
     // 章末大测试：考试期禁挂随身助教（防 AI 协助），路由守卫另禁跳 AI 页。
     {

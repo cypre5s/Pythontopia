@@ -26,12 +26,21 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# 可观测性（OpenTelemetry GenAI 语义约定）。可选：缺包时 observability 模块全链路降级
+# 为 no-op（见 pythontopia_graph/observability/otel.py），故不入核心 dependencies。
+# API/SDK 同发布列车，最新稳定版 1.42.1（2026-06 pip index 实测）；<2 锁主版本。
+observability = [
+  "opentelemetry-api>=1.42,<2",
+  "opentelemetry-sdk>=1.42,<2",
+]
 dev = [
   "pytest>=8,<9",
   "pytest-asyncio>=0.25,<0.26",
   "pytest-cov>=6,<7",
   "ruff>=0.8,<0.9",
   "mypy>=1.14,<2",
+  # 开发/CI 默认装上 otel，让 observability 的 span 分支测试真正执行而非跳过。
+  "pythontopia-graph[observability]",
 ]
 
 [tool.setuptools.packages.find]

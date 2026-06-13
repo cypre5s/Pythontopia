@@ -4,9 +4,9 @@
 
     START → understand
       ├─ (ambiguous?) → clarify → END
-      └─ else → build_plan → dispatch
-                                ├─ (recent failures & not negotiate?) → replan
-                                └─ else → extract_profile → compose → END
+      └─ else → build_plan → dispatch → reflect
+                                          ├─ (recent failures & not negotiate?) → replan
+                                          └─ else → extract_profile → compose → END
 
 各节点封装 OrchestratorAgent 既有方法；经实例 emit 回调发出与原先相同的 SSE
 （每节点 trace、compose 时 token），前端 useSseStream 契约不变。trace 经 reducer
@@ -16,7 +16,16 @@ dispatch 节点两批有界并发（Semaphore=3）：无依赖的 watch/learn/as
 practice 依赖 learn 工件（讲义 title/summary 注入 focus_hint）随后执行；
 start/finish trace 逐 step 上报并携带 step_id 对齐（完成顺序可乱）。
 
-trace 节点名：understand, decompose | replan, dispatch.<agent>, extract_profile, compose_reply。
+reflect 节点（A3 有界反思 · N=1）：dispatch 之后、既有路由之前补一次**有界恢复**——
+learn 阶段资源步若为执行类失败（``ok=False`` 且 ``artifact.kind=="dispatch_failure"``），
+对该步降级资源类型（CODE_LAB→HANDOUT→READING）后经 dispatcher 仅重派一次；已是 READING /
+不可降级则不重派，重派仍失败则保留失败结果。严格 N=1（非无界 ReAct），重派复用现有治理
+（受 harness 熔断/超时约束）。reflect 仅补派、不改写 plan，故对 negotiate 与
+recent_failures→replan 既有路由零影响（``_route_after_dispatch`` 原样接在其后）。
+重派结果经 reducer 累加，由 ``_assemble`` 按 step_id 收敛为该步最终结果。
+
+trace 节点名：understand, decompose | replan, dispatch.<agent>, reflect, extract_profile,
+compose_reply（反思重派的 note 以 ``reflect_retry:learn`` 开头）。
 
 LangGraph v1 checkpointer（R-16 升级，https://docs.langchain.com/oss/python/migrate/langgraph-v1）：
 - ``thread_id = "<session_id>:turn-<轮次>"``——**每轮独立 thread**。理由：``trace`` /
@@ -164,6 +173,7 @@ class OrchestratorGraph:
         graph.add_node("understand", self._node_understand)
         graph.add_node("build_plan", self._node_build_plan)
         graph.add_node("dispatch", self._node_dispatch)
+        graph.add_node("reflect", self._node_reflect)
         graph.add_node("replan", self._node_replan_failures)
         graph.add_node("extract_profile", self._node_extract_profile)
         graph.add_node("compose", self._node_compose)
@@ -176,8 +186,12 @@ class OrchestratorGraph:
             {"clarify": "clarify", "build_plan": "build_plan"},
         )
         graph.add_edge("build_plan", "dispatch")
+        # dispatch 后无条件进入有界反思（A3 · N=1）；reflect 无可恢复项时为 no-op。
+        graph.add_edge("dispatch", "reflect")
+        # 既有 replan/negotiate 路由原样接在 reflect 之后（reflect 不改 plan/intent/
+        # recent_failures，路由决策与接在 dispatch 后完全一致）。
         graph.add_conditional_edges(
-            "dispatch",
+            "reflect",
             self._route_after_dispatch,
             {"replan": "replan", "extract_profile": "extract_profile"},
         )
@@ -328,11 +342,15 @@ class OrchestratorGraph:
                     result = await self._dispatch_step(step, req.user_id, focus_hint_extra)
                 except Exception as exc:  # noqa: BLE001 – 单步失败不拖垮全局
                     elapsed_ms = int((time.monotonic() - started) * 1000)
+                    # 用 step_error（非终止）而非 error：下游 SSE 中继与前端都把 error
+                    # 视为整轮终止事件，单步失败若发 error 会把后续 STATE_DELTA/result
+                    # 全部截断，导致「一个 agent 失败 → 整个学习计划丢失」。
                     await self._emit_cb(
-                        "error",
+                        "step_error",
                         {
                             "code": "DISPATCH_FAILED",
                             "agent": step.agent,
+                            "step_id": step.id,
                             "message": str(exc),
                         },
                     )
@@ -345,13 +363,14 @@ class OrchestratorGraph:
                         elapsed_ms=elapsed_ms,
                     )
                 else:
-                    # 治理观测失败（dispatch 内已转 ok=False）沿用 SSE error + ok=False 模式
+                    # 治理观测失败（dispatch 内已转 ok=False）沿用 step_error + ok=False 模式
                     if not result.ok and self._is_dispatch_failure(result):
                         await self._emit_cb(
-                            "error",
+                            "step_error",
                             {
                                 "code": "DISPATCH_FAILED",
                                 "agent": step.agent,
+                                "step_id": step.id,
                                 "message": result.summary,
                             },
                         )
@@ -416,6 +435,115 @@ class OrchestratorGraph:
         artifact = result.artifact or {}
         return artifact.get("kind") == "dispatch_failure"
 
+    @staticmethod
+    def _collapse_redispatched_results(
+        results: list[DispatchResult],
+    ) -> list[DispatchResult]:
+        """同一 step_id 多次派发（learn 有界反思重派）→ 收敛为该步**最新一次**结果，
+        保持首次出现的原序位置。无重复 step_id 时为恒等映射（对既有路径零影响）。"""
+        latest: dict[str, DispatchResult] = {}
+        order: list[str] = []
+        for result in results:
+            if result.step_id not in latest:
+                order.append(result.step_id)
+            latest[result.step_id] = result
+        return [latest[step_id] for step_id in order]
+
+    async def _node_reflect(self, state: OrchestratorState) -> dict[str, Any]:
+        """有界反思（A3 · N=1）：learn 阶段执行类失败的资源步降级后经 dispatcher 重派一次。
+
+        触发条件：learn 阶段、``ok=False`` 且 ``artifact.kind=="dispatch_failure"``
+        （治理观测失败；子 agent 诚实的业务性 FAILED 不在此列）。命中后将 ``resource_type``
+        沿 CODE_LAB→HANDOUT→READING 降一档，经 ``_dispatch_step``（→ dispatcher →
+        ``run_with_governance``，复用既有熔断/超时治理）**仅重派一次**：
+
+        - 已是链尾 READING / 不可降级 → 不重派；
+        - 重派仍失败 → 保留失败结果走完；
+        - **严格 N=1**：每步至多一次反思重派，不构成无界 ReAct 循环。
+
+        本节点只追加重派结果与 trace，不改写 plan / intent / recent_failures，故对
+        negotiate 与 recent_failures→replan 既有路由零影响。重派结果与原失败共享 step_id，
+        由 ``_assemble`` 的 ``_collapse_redispatched_results`` 收敛为该步最终结果。
+        """
+        req = state["req"]
+        plan = state.get("plan", [])
+        # dispatch 节点已按 plan 原序写入；step_id → 最近一次结果。
+        latest_by_id: dict[str, DispatchResult] = {
+            result.step_id: result for result in state.get("dispatch_results", [])
+        }
+        retry_results: list[DispatchResult] = []
+        retry_traces: list[GraphTraceStep] = []
+        for step in plan:
+            if step.phase != "learn":
+                continue
+            result = latest_by_id.get(step.id)
+            if result is None or result.ok or not self._is_dispatch_failure(result):
+                continue
+            downgraded = self._dispatcher.downgraded_learn_step(step)
+            if downgraded is None:
+                # 已是 READING / 不可降级 → 保留失败结果，不重派（杜绝无界重试）。
+                continue
+
+            note = (
+                f"reflect_retry:learn {step.resource_type or '-'}"
+                f"→{downgraded.resource_type}"
+            )
+            reflect_step = GraphTraceStep(
+                node="reflect", elapsed_ms=0, status="retry", note=note
+            )
+            await self._emit_cb("trace", reflect_step.model_dump(mode="json"))
+            await self._emit_cb(
+                "trace",
+                {
+                    "node": f"dispatch.{downgraded.agent}",
+                    "step_id": downgraded.id,
+                    "phase": "start",
+                    "status": "running",
+                    "elapsed_ms": 0,
+                    "agent_label": self._agent_display_name(downgraded.agent),
+                    "note": f"反思重派（降级为 {downgraded.resource_type}）：{downgraded.title}",
+                },
+            )
+            started = time.monotonic()
+            retry = await self._dispatch_step(downgraded, req.user_id)
+            elapsed_ms = int((time.monotonic() - started) * 1000)
+            if not retry.ok and self._is_dispatch_failure(retry):
+                await self._emit_cb(
+                    "step_error",
+                    {
+                        "code": "DISPATCH_FAILED",
+                        "agent": downgraded.agent,
+                        "step_id": downgraded.id,
+                        "message": retry.summary,
+                    },
+                )
+            await self._emit_cb(
+                "trace",
+                {
+                    "node": f"dispatch.{downgraded.agent}",
+                    "step_id": downgraded.id,
+                    "phase": "finish",
+                    "status": "ok" if retry.ok else "fail",
+                    "elapsed_ms": elapsed_ms,
+                    "agent_label": self._agent_display_name(downgraded.agent),
+                    "note": retry.summary,
+                },
+            )
+            retry_results.append(retry)
+            retry_traces.append(reflect_step)
+            retry_traces.append(
+                GraphTraceStep(
+                    node=f"dispatch.{downgraded.agent}",
+                    elapsed_ms=elapsed_ms,
+                    status="ok" if retry.ok else "fail",
+                    note=f"reflect_retry:learn {retry.summary}",
+                )
+            )
+
+        if not retry_results:
+            return {}
+        return {"dispatch_results": retry_results, "trace": retry_traces}
+
     async def _node_replan_failures(self, state: OrchestratorState) -> dict[str, Any]:
         req = state["req"]
         plan = list(state["plan"])
@@ -477,12 +605,12 @@ class OrchestratorGraph:
         return {"plan": plan, "signals": signals, "trace": [step]}
 
     async def _node_compose(self, state: OrchestratorState) -> dict[str, Any]:
-        reply_md = await self._stream_reply(state["req"], state["plan"], None)
-        return {"reply_md": reply_md}
+        reply_md, step = await self._stream_reply(state["req"], state["plan"], None)
+        return {"reply_md": reply_md, "trace": [step]}
 
     async def _node_clarify(self, state: OrchestratorState) -> dict[str, Any]:
-        reply_md = await self._stream_reply(state["req"], [], state.get("clarifying"))
-        return {"reply_md": reply_md, "needs_user_input": True}
+        reply_md, step = await self._stream_reply(state["req"], [], state.get("clarifying"))
+        return {"reply_md": reply_md, "trace": [step], "needs_user_input": True}
 
     @staticmethod
     def _route_after_understand(state: OrchestratorState) -> str:
@@ -498,25 +626,34 @@ class OrchestratorGraph:
 
     async def _stream_reply(
         self, req: OrchestratorRequest, plan: list[PlanStep], clarifying: str | None
-    ) -> str:
+    ) -> tuple[str, GraphTraceStep]:
+        """流式产出回复并返回 (reply_md, compose_reply trace 步)。
+
+        provider 不可用时不抛裸异常：改用 OrchestratorAgent.fallback_reply 的确定性
+        教学兜底（结构化 plan 清单 / 单个澄清问题），trace note 标注 deterministic_fallback，
+        最终仍经 _assemble 的 safety/grounding 审查——绝不静默降级成自由聊天。
+        """
         started = time.monotonic()
         parts: list[str] = []
         try:
             async for token in self._agent.reply_stream(req, plan, clarifying):
                 parts.append(token)
                 await self._emit_cb("token", {"delta": token})
-        except Exception as exc:  # noqa: BLE001 – record fail trace then re-raise
-            fail = GraphTraceStep(
+        except Exception as exc:  # noqa: BLE001 – provider 不可用：确定性教学兜底
+            LOG.warning("compose_reply 流式失败（%s），改用确定性教学兜底回复", exc)
+            fallback_md = self._agent.fallback_reply(req, plan, clarifying)
+            await self._emit_cb("token", {"delta": fallback_md})
+            step = GraphTraceStep(
                 node="compose_reply",
                 elapsed_ms=int((time.monotonic() - started) * 1000),
-                status="fail",
-                note=str(exc),
+                status="ok",
+                note=f"deterministic_fallback:{type(exc).__name__}",
             )
-            await self._emit_cb("trace", fail.model_dump(mode="json"))
-            raise
+            await self._emit_cb("trace", step.model_dump(mode="json"))
+            return fallback_md, step
         step = self._ok_step("compose_reply", started)
         await self._emit_cb("trace", step.model_dump(mode="json"))
-        return "".join(parts)
+        return "".join(parts), step
 
     def _assemble(
         self, allowed_set: set[str], final: dict[str, Any]
@@ -547,7 +684,9 @@ class OrchestratorGraph:
             clarifying_question=None,
             needs_user_input=False,
             plan=plan,
-            dispatch_results=final.get("dispatch_results", []),
+            dispatch_results=self._collapse_redispatched_results(
+                final.get("dispatch_results", [])
+            ),
             profile_updates=final.get("signals", []),
             trace=trace,
             done=done,
