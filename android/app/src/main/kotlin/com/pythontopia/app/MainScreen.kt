@@ -61,7 +61,10 @@ import com.pythontopia.feature.profile.ProfileScreen
 import com.pythontopia.feature.retro.RetroScreen
 import com.pythontopia.feature.tutor.TutorScreen
 import com.pythontopia.feature.workshop.IntentRouterScreen
+import com.pythontopia.feature.workshop.WorkshopGenScreen
+import com.pythontopia.feature.workshop.WorkshopResourceType
 import com.pythontopia.feature.workshop.WorkshopScreen
+import com.pythontopia.feature.workshop.toResourceType
 
 /**
  * 顶层导航：Login → [AppShell] 功能工作台；
@@ -124,6 +127,7 @@ private val APP_DESTINATIONS = listOf(
     // 学 / AI 工坊
     AppDestination("workshop", "工坊", PytColors.warning),
     AppDestination("intent", "百晓", PytColors.warning),
+    AppDestination("workshop/generate", "生成", PytColors.warning),
     AppDestination("tutor", "答疑", PytColors.info),
     // 看 · 课件与讲义
     AppDestination("library", "图书馆", PytColors.info),
@@ -192,7 +196,29 @@ private fun AppShell(onLogout: () -> Unit) {
                 IntentRouterScreen(
                     onOpenReview = { featureNav.navigate("mine") },
                     onOpenTutor = { featureNav.navigate("tutor") },
-                    onOpenGenerate = { _, _ -> featureNav.navigate("workshop") },
+                    onOpenGenerate = { kind, kcCodes ->
+                        val typeArg = kind.toResourceType()?.name.orEmpty()
+                        val kcArg = kcCodes.joinToString(",")
+                        featureNav.navigate("workshop/generate?type=$typeArg&kc=$kcArg")
+                    },
+                )
+            }
+            composable(
+                route = "workshop/generate?type={type}&kc={kc}",
+                arguments = listOf(
+                    navArgument("type") { type = NavType.StringType; nullable = true; defaultValue = null },
+                    navArgument("kc") { type = NavType.StringType; nullable = true; defaultValue = null },
+                ),
+            ) { backStackEntry ->
+                val typeArg = backStackEntry.arguments?.getString("type")
+                val kcArg = backStackEntry.arguments?.getString("kc")
+                WorkshopGenScreen(
+                    prefillType = WorkshopResourceType.fromOrNull(typeArg),
+                    prefillKcCodes = kcArg
+                        ?.split(",")
+                        ?.map { it.trim() }
+                        ?.filter { it.isNotEmpty() }
+                        .orEmpty(),
                 )
             }
             composable("library") { LibraryScreen() }
