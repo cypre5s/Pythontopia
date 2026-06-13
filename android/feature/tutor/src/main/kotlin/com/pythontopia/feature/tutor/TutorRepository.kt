@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 import okhttp3.ResponseBody
 import retrofit2.Retrofit
 import retrofit2.http.Body
@@ -78,22 +79,35 @@ class TutorRepository @Inject constructor(
         }
     }.flowOn(Dispatchers.IO)
 
+    /**
+     * AG-UI 双语解析：同时接受项目历史事件名（token/result/error）与 AG-UI 官方名
+     * （TEXT_MESSAGE_CONTENT/RUN_FINISHED/RUN_ERROR），与前端 `agui.ts#toAguiEvent` 对齐，
+     * 使后端灰度迁移到 AG-UI 命名后 Android 流不回归。RUN_FINISHED 的结果在 `data.result` 内需拆包。
+     */
     private fun parseEvent(event: String, data: String): TutorStreamEvent? = runCatching {
         when (event) {
-            "token" -> TutorStreamEvent.Token(json.decodeFromString<TutorTokenData>(data).delta)
-            "result" -> json.decodeFromString<TutorResultData>(data).let {
-                TutorStreamEvent.Result(
-                    answerMd = it.answerMd.orEmpty(),
-                    evidencePageIds = it.evidencePageIds,
-                    groundingStatus = it.groundingStatus,
-                )
-            }
-            "error" -> TutorStreamEvent.Failed(
-                json.decodeFromString<TutorErrorData>(data).message ?: "导师服务出错",
-            )
+            "token", "TEXT_MESSAGE_CONTENT" ->
+                TutorStreamEvent.Token(json.decodeFromString<TutorTokenData>(data).delta)
+            "result" -> toResult(data)
+            "RUN_FINISHED" -> toResult(unwrap(data, "result"))
+            "error", "RUN_ERROR" ->
+                TutorStreamEvent.Failed(json.decodeFromString<TutorErrorData>(data).message ?: "导师服务出错")
             else -> null
         }
     }.getOrNull()
+
+    private fun toResult(data: String): TutorStreamEvent =
+        json.decodeFromString<TutorResultData>(data).let {
+            TutorStreamEvent.Result(
+                answerMd = it.answerMd.orEmpty(),
+                evidencePageIds = it.evidencePageIds,
+                groundingStatus = it.groundingStatus,
+            )
+        }
+
+    /** 拆出 AG-UI 包装事件的内层对象（如 RUN_FINISHED 的 data.result）；缺失则回退原文。 */
+    private fun unwrap(data: String, key: String): String =
+        json.parseToJsonElement(data).jsonObject[key]?.toString() ?: data
 
     suspend fun sessions(limit: Int = 20): List<TutorSessionDto> =
         runCatching { api.sessions(limit) }.getOrElse { emptyList() }

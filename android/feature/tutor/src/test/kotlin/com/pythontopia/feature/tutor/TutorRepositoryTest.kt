@@ -82,6 +82,46 @@ class TutorRepositoryTest {
     }
 
     @Test
+    fun `askStream 兼容 AG-UI 官方事件名 TEXT_MESSAGE_CONTENT 与 RUN_FINISHED`() = runTest {
+        val sse = buildString {
+            append("event: STEP_STARTED\ndata: {\"node\":\"TutorAgent\",\"status\":\"running\"}\n\n")
+            append("event: TEXT_MESSAGE_CONTENT\ndata: {\"delta\":\"你好\"}\n\n")
+            append("event: TEXT_MESSAGE_CONTENT\ndata: {\"delta\":\"，AG-UI\"}\n\n")
+            append(
+                "event: RUN_FINISHED\ndata: {\"result\":{\"answer_md\":\"你好，AG-UI\"," +
+                    "\"evidence_page_ids\":[1],\"grounding_status\":\"PASSED\"}}\n\n",
+            )
+        }
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "text/event-stream").setBody(sse),
+        )
+
+        val events = repository.askStream("x").toList()
+
+        // STEP_STARTED 忽略，期望 token×2 + result×1
+        assertEquals(3, events.size)
+        assertEquals("你好", (events[0] as TutorStreamEvent.Token).delta)
+        assertEquals("，AG-UI", (events[1] as TutorStreamEvent.Token).delta)
+        val result = events[2] as TutorStreamEvent.Result
+        assertEquals("你好，AG-UI", result.answerMd)
+        assertEquals(listOf(1), result.evidencePageIds)
+        assertEquals("PASSED", result.groundingStatus)
+    }
+
+    @Test
+    fun `askStream 解析 AG-UI RUN_ERROR 为 Failed`() = runTest {
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "text/event-stream")
+                .setBody("event: RUN_ERROR\ndata: {\"code\":\"TUTOR_FAILED\",\"message\":\"AG-UI 上游错误\"}\n\n"),
+        )
+
+        val events = repository.askStream("x").toList()
+
+        assertEquals(1, events.size)
+        assertEquals("AG-UI 上游错误", (events[0] as TutorStreamEvent.Failed).message)
+    }
+
+    @Test
     fun `sessions 网络失败兜底空列表`() = runTest {
         server.enqueue(MockResponse().setResponseCode(500))
         assertEquals(emptyList<TutorSessionDto>(), repository.sessions())

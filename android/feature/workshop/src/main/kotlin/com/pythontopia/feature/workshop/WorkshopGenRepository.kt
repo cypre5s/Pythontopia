@@ -11,6 +11,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.ResponseBody
 import retrofit2.Retrofit
 import retrofit2.http.Body
@@ -73,29 +77,68 @@ class WorkshopGenRepository @Inject constructor(
         }
     }.flowOn(Dispatchers.IO)
 
+    /**
+     * AG-UI 双语解析：历史名（plan/trace/result/error）与 AG-UI 官方名
+     * （CUSTOM(name=plan)/STEP_STARTED|FINISHED/RUN_FINISHED/RUN_ERROR/STATE_DELTA）均消费，
+     * 与前端 `agui.ts#toAguiEvent` 对齐。RUN_FINISHED 结果在 `data.result` 内需拆包；
+     * STATE_DELTA 取增量可读字段作为一条进度（HUD 实时同步的轻量映射）。
+     */
     private fun parseEvent(event: String, data: String): WorkshopGenEvent? = runCatching {
         when (event) {
-            "plan" -> json.decodeFromString<WorkshopGenPlanData>(data).let {
-                WorkshopGenEvent.Plan(steps = it.steps, message = it.message)
-            }
-            "trace" -> json.decodeFromString<WorkshopGenTraceData>(data).let {
-                val label = it.label ?: it.summary ?: it.agent ?: it.node ?: "生成中…"
-                WorkshopGenEvent.Trace(label = label, status = it.status)
-            }
-            "result" -> json.decodeFromString<WorkshopGenResultData>(data).let {
-                WorkshopGenEvent.Result(
-                    title = it.title.orEmpty().ifBlank { "已生成资源" },
-                    summary = it.summary.orEmpty(),
-                    resourceId = it.resourceId ?: it.id,
-                    groundingStatus = it.groundingStatus,
-                )
-            }
-            "error" -> WorkshopGenEvent.Failed(
-                json.decodeFromString<WorkshopGenErrorData>(data).message ?: "资源生成失败",
-            )
+            "plan" -> toPlan(data)
+            "CUSTOM" -> toCustom(data)
+            "trace", "STEP_STARTED", "STEP_FINISHED" -> toTrace(data)
+            "STATE_DELTA" -> toStateDelta(data)
+            "result" -> toResult(data)
+            "RUN_FINISHED" -> toResult(unwrap(data, "result"))
+            "error", "RUN_ERROR" ->
+                WorkshopGenEvent.Failed(json.decodeFromString<WorkshopGenErrorData>(data).message ?: "资源生成失败")
             else -> null
         }
     }.getOrNull()
+
+    private fun toPlan(data: String): WorkshopGenEvent =
+        json.decodeFromString<WorkshopGenPlanData>(data).let {
+            WorkshopGenEvent.Plan(steps = it.steps, message = it.message)
+        }
+
+    private fun toCustom(data: String): WorkshopGenEvent? {
+        val obj = json.parseToJsonElement(data).jsonObject
+        val name = obj["name"]?.jsonPrimitive?.contentOrNull
+        return if (name == "plan") toPlan(obj["value"]?.toString() ?: "{}") else null
+    }
+
+    private fun toTrace(data: String): WorkshopGenEvent =
+        json.decodeFromString<WorkshopGenTraceData>(data).let {
+            val label = it.label ?: it.summary ?: it.agent ?: it.node ?: "生成中…"
+            WorkshopGenEvent.Trace(label = label, status = it.status)
+        }
+
+    private fun toStateDelta(data: String): WorkshopGenEvent? {
+        val delta = json.parseToJsonElement(data).jsonObject["delta"] as? JsonObject ?: return null
+        val label = STATE_DELTA_LABEL_KEYS
+            .firstNotNullOfOrNull { key -> delta[key]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } }
+            ?: return null
+        return WorkshopGenEvent.Trace(label = label, status = null)
+    }
+
+    private fun toResult(data: String): WorkshopGenEvent =
+        json.decodeFromString<WorkshopGenResultData>(data).let {
+            WorkshopGenEvent.Result(
+                title = it.title.orEmpty().ifBlank { "已生成资源" },
+                summary = it.summary.orEmpty(),
+                resourceId = it.resourceId ?: it.id,
+                groundingStatus = it.groundingStatus,
+            )
+        }
+
+    /** 拆出 AG-UI 包装事件的内层对象（如 RUN_FINISHED 的 data.result）；缺失则回退原文。 */
+    private fun unwrap(data: String, key: String): String =
+        json.parseToJsonElement(data).jsonObject[key]?.toString() ?: data
+
+    private companion object {
+        val STATE_DELTA_LABEL_KEYS = listOf("note", "message", "phase", "stage", "status")
+    }
 }
 
 @Module
