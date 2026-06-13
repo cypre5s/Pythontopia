@@ -30,7 +30,7 @@ windows/
     └── Pythontopia.App/         # net8.0-windows10.0.19041.0 WinUI 3（需 Windows 构建）
         ├── App.xaml(.cs)                    # DI + 品牌主题资源（Brand* 画刷 / PytCardBorderStyle）
         ├── MainWindow.xaml(.cs)             # 原生外壳：Mica 背景 + 自定义标题栏 + NavigationView + 登录门禁
-        ├── Views/*.xaml(.cs)                # Login / Mainline / Path / Profile / Quests / Course / Examples / Library / Bilibili / Practice / ChapterTest / Feynman / Workshop / BugMine / Boss / Endless / ReviewHall / Insights / Classroom / Calendar / Saves / Skills / Npc / Town
+        ├── Views/*.xaml(.cs)                # Login / Guide / Mainline / Path / Profile / Quests / Course / Examples / Library / Bilibili / Practice / ChapterTest / Feynman / Workshop / Media / BugMine / Boss / Endless / ReviewHall / Insights / Classroom / Calendar / Saves / Skills / Npc / Town
         ├── ViewModels/*.cs                  # MVVM（CommunityToolkit.Mvvm）
         └── Converters/Converters.cs
 └── tests/
@@ -152,6 +152,7 @@ GitHub Actions `.github/workflows/windows.yml` 在 `windows-latest` 上构建 Co
 - NPC 互动（新增，对齐 web NPC）：`GET /npc/{key}/greeting`、`POST /npc/{key}/dialog`（NPC 名册取自静态 town_hub 目录）
 - 课件库 PDF（新增，对齐 web `LibraryPage`）：`GET /course/documents/{id}/pdf`（携 JWT 取字节 → 临时文件 → WebView2 渲染）
 - 学习路径（新增，对齐 web `PathTreeTab`）：`GET /learner/path/active`、`POST /learner/path/plan`（个性化路径 + 重新规划）
+- AI 配图（新增，对齐 web 媒体）：`POST /media/image`（按 prompt 生成插图，`/media/assets/{id}` 匿名直链显示；无 key 时降级占位）
 - 画像/掌握度：`GET /learner/profile`(204=无)、`GET /learner/profile/dimensions`、`PUT /learner/profile/dimensions/{key}`、`GET /learner/mastery`
 - 任务：`GET /quests/today`、`GET /quests?status=&limit=`、`POST /quests/{id}/start|complete|skip`
 - 课程：`GET /course/pack|chapters|kcs?chapterId|pages?kcCode|problems?kcCode|videos?chapterId`、`GET /course/pages/{id}/image`、`GET /course/videos/{id}`
@@ -165,11 +166,10 @@ GitHub Actions `.github/workflows/windows.yml` 在 `windows-latest` 上构建 Co
 
 目标：把 web 端全部学生功能逐步搬到 Windows 端。下表追踪进度（教师端与纯运营页暂不在学生客户端范围内）。
 
-**已对齐**：登录/注册 · 像素小镇(town_hub) · 学习画像(8 维 + 掌握度) · 任务公告板 · 课程(章/KC/课件页+图) · 训练场(服务端判题) · 百晓工坊(意图路由/答疑/资源/学习总管 SSE) · Bug 矿洞 · 班级(加入/班级任务) · **主线地图** · **主线关卡详情** · **主线看学练打点** · **复盘大厅(周报+风险)** · **章节测验(最近成绩)** · **章测作答闭环** · **例题库** · **世界日历** · **学情洞察(洞察+记忆)** · **B站精选视频** · **存档(列表+激活)** · **费曼学弟(teach-back)** · **Boss 副本** · **无尽模式** · **技能树** · **NPC 互动** · **课件库 PDF** · **学习路径**。
+**已对齐**：登录/注册 · 像素小镇(town_hub) · 学习画像(8 维 + 掌握度) · 任务公告板 · 课程(章/KC/课件页+图) · 训练场(服务端判题) · 百晓工坊(意图路由/答疑/资源/学习总管 SSE) · Bug 矿洞 · 班级(加入/班级任务) · **主线地图** · **主线关卡详情** · **主线看学练打点** · **复盘大厅(周报+风险)** · **章节测验(最近成绩)** · **章测作答闭环** · **例题库** · **世界日历** · **学情洞察(洞察+记忆)** · **B站精选视频** · **存档(列表+激活)** · **费曼学弟(teach-back)** · **Boss 副本** · **无尽模式** · **技能树** · **NPC 互动** · **课件库 PDF** · **学习路径** · **新手引导** · **AI 配图**。
 
 **待对齐（后续批次）**：
-- 媒体生成 storyboard/tts/image（`/api/media`）— 异步任务 + SSE + 媒体渲染，需 Windows 运行期验证
-- 新手引导（`GuidePage`）— 静态 onboarding 内容，无后端端点（可改为内置静态引导页）
+- 媒体生成 storyboard 视频 / TTS 语音（`/api/media/storyboard/video`、`/api/media/tts`）— 异步合成 + 媒体渲染，需 Windows 运行期验证（配图 image 已接入）
 - 仅教师/管理员（学生客户端不适用）：RAG 课件直查 `/api/rag/query`、教师班级看板 `/api/teacher/*`
 
 ## 设计说明 / 后续项

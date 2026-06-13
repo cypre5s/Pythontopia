@@ -54,6 +54,7 @@ public partial class App : Application
         services.AddTransient<NpcViewModel>();
         services.AddTransient<LibraryViewModel>();
         services.AddTransient<LearningPathViewModel>();
+        services.AddTransient<MediaViewModel>();
         services.AddTransient<ProfileViewModel>();
         services.AddTransient<QuestsViewModel>();
         services.AddTransient<CourseViewModel>();

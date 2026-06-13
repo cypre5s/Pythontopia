@@ -30,6 +30,7 @@
             PaneDisplayMode="Left"
             ItemInvoked="Nav_ItemInvoked">
             <NavigationView.MenuItems>
+                <NavigationViewItem Content="新手引导" Tag="GuidePage" Icon="Help" />
                 <NavigationViewItem Content="小镇" Tag="TownPage" Icon="Home" />
                 <NavigationViewItem Content="主线" Tag="MainlinePage" Icon="Map" />
                 <NavigationViewItem Content="学习路径" Tag="PathPage" Icon="Flag" />
@@ -43,6 +44,7 @@
                 <NavigationViewItem Content="章节测验" Tag="ChapterTestPage" Icon="Document" />
                 <NavigationViewItem Content="费曼学弟" Tag="FeynmanPage" Icon="Microphone" />
                 <NavigationViewItem Content="百晓工坊" Tag="WorkshopPage" Icon="Message" />
+                <NavigationViewItem Content="AI 配图" Tag="MediaPage" Icon="Camera" />
                 <NavigationViewItem Content="Bug 矿洞" Tag="BugMinePage" Icon="Repair" />
                 <NavigationViewItem Content="Boss 副本" Tag="BossPage" Icon="Important" />
                 <NavigationViewItem Content="无尽模式" Tag="EndlessPage" Icon="Sync" />

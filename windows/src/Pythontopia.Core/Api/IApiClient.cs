@@ -113,6 +113,12 @@ public interface IApiClient
     /// <summary>POST /api/learner/path/plan — (re)plan the personalized path (student-only).</summary>
     Task<PlanPathResponse> PlanLearningPathAsync(CancellationToken ct = default);
 
+    // ---- media (AI 配图) ----
+    /// <summary>POST /api/media/image — generate an illustration; returns the asset (degrades to a placeholder).</summary>
+    Task<MediaAssetDto> GenerateImageAsync(string prompt, string? label = null, CancellationToken ct = default);
+    /// <summary>Absolute URL for a media asset relative path (e.g. <c>/api/media/assets/{id}</c>, anonymous).</summary>
+    Uri GetMediaAssetUri(string relativeUrl);
+
     // ---- learner profile / mastery ----
     /// <summary>Returns null when the backend responds 204 (no profile yet).</summary>
     Task<LearnerProfileDto?> GetProfileAsync(CancellationToken ct = default);

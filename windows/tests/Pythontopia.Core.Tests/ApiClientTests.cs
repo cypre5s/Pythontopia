@@ -729,6 +729,38 @@ public class ApiClientTests
     }
 
     [Fact]
+    public async Task GenerateImage_PostsPrompt_AndDeserializesAsset()
+    {
+        HttpRequestMessage? captured = null;
+        string? body = null;
+        var api = ClientReturning(req =>
+        {
+            captured = req;
+            body = req.Content?.ReadAsStringAsync().GetAwaiter().GetResult();
+            return StubHttpMessageHandler.Json(HttpStatusCode.OK, """
+            {"id":7,"kind":"IMAGE","url":"/api/media/assets/7","mimeType":"image/png",
+             "degraded":true,"source":"local","prompt":"小镇","kcCodes":[]}
+            """);
+        }, out _);
+
+        var asset = await api.GenerateImageAsync("像素小镇");
+
+        Assert.Equal("http://test.local/api/media/image", captured!.RequestUri!.ToString());
+        Assert.Contains("\"prompt\":", body);
+        Assert.Equal(7, asset.Id);
+        Assert.True(asset.Degraded);
+        Assert.Equal("/api/media/assets/7", asset.Url);
+    }
+
+    [Fact]
+    public void GetMediaAssetUri_BuildsAbsoluteUrl()
+    {
+        var api = ClientReturning(_ => StubHttpMessageHandler.Json(HttpStatusCode.OK, "{}"), out _);
+
+        Assert.Equal("http://test.local/api/media/assets/7", api.GetMediaAssetUri("/api/media/assets/7").ToString());
+    }
+
+    [Fact]
     public async Task SubmitAndPoll_PollsUntilTerminalStatus()
     {
         var statuses = new Queue<string>(new[] { "QUEUED", "RUNNING", "PASSED" });

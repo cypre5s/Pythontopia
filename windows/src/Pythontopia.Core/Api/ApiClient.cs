@@ -195,6 +195,14 @@ public sealed class ApiClient : IApiClient
     public Task<PlanPathResponse> PlanLearningPathAsync(CancellationToken ct = default) =>
         SendJsonAsync<PlanPathResponse>(HttpMethod.Post, "/api/learner/path/plan", null, ct);
 
+    // ------------------------------------------------------------------ media ----
+
+    public Task<MediaAssetDto> GenerateImageAsync(string prompt, string? label = null, CancellationToken ct = default) =>
+        SendJsonAsync<MediaAssetDto>(HttpMethod.Post, "/api/media/image", new ImageGenerationRequest(prompt, label), ct);
+
+    public Uri GetMediaAssetUri(string relativeUrl) =>
+        new(relativeUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? relativeUrl : _baseUrl + relativeUrl);
+
     // ----------------------------------------------------- profile / mastery ----
 
     public async Task<LearnerProfileDto?> GetProfileAsync(CancellationToken ct = default)

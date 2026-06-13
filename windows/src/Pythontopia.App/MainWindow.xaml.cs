@@ -13,6 +13,7 @@ public sealed partial class MainWindow : Window
     /// <summary>Navigation tag -> page type + header title shown in the shell.</summary>
     private static readonly (string Tag, Type Page, string Title)[] Destinations =
     {
+        ("GuidePage", typeof(GuidePage), "新手引导"),
         ("TownPage", typeof(TownPage), "像素小镇"),
         ("MainlinePage", typeof(MainlinePage), "主线地图"),
         ("PathPage", typeof(PathPage), "学习路径"),
@@ -26,6 +27,7 @@ public sealed partial class MainWindow : Window
         ("ChapterTestPage", typeof(ChapterTestPage), "章节测验"),
         ("FeynmanPage", typeof(FeynmanPage), "费曼学弟"),
         ("WorkshopPage", typeof(WorkshopPage), "百晓工坊"),
+        ("MediaPage", typeof(MediaPage), "AI 配图"),
         ("BugMinePage", typeof(BugMinePage), "Bug 矿洞"),
         ("BossPage", typeof(BossPage), "Boss 副本"),
         ("EndlessPage", typeof(EndlessPage), "无尽模式"),
