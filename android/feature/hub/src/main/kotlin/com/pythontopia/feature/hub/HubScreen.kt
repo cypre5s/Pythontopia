@@ -123,11 +123,6 @@ private fun HubHud(
             HudChip(label = "时段", value = state.calendar?.timeOfDay ?: "—")
             HudChip(label = "天气", value = state.calendar?.weather ?: "—")
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            HudChip(label = "背包", value = "${state.world?.inventory?.sumOf { it.qty } ?: 0}")
-            HudChip(label = "金币", value = "${state.world?.currency?.coins ?: 0}")
-            HudChip(label = "宝石", value = "${state.world?.currency?.gems ?: 0}")
-        }
         if (state.isBootstrapping) {
             Text("正在加载世界...", style = MaterialTheme.typography.bodyMedium)
         }
@@ -146,7 +141,7 @@ private fun HubHud(
             }
         } else {
             Text(
-                text = "用 WASD / 方向键 / 触摸方向探索 5 张地图，走到 NPC 旁即可对话。",
+                text = "用 WASD / 方向键 / 触摸方向探索像素小镇，走到 NPC 旁即可对话。",
                 style = MaterialTheme.typography.bodyMedium,
             )
         }

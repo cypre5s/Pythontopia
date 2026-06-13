@@ -9,7 +9,7 @@ import javax.inject.Singleton
  * 后端 baseUrl 的运行时单一真源。
  *
  * 解析优先级：DataStore 覆盖值（测试人员手填，见 [NetworkHostStore]）
- * > [NetworkConfig.DEFAULT_BASE_URL]（即 BuildConfig.BASE_URL，模拟器默认 `http://10.0.2.2:18080/`）。
+ * > [NetworkConfig.DEFAULT_BASE_URL]（即 BuildConfig.BASE_URL，debug 默认公网 `http://47.120.29.62:18080/`）。
  *
  * - [current] 由 [HostSelectionInterceptor] 在每次请求时（OkHttp 后台线程）读取，
  *   因此修改覆盖值后**无需重建/重启**即可对后续请求生效。

@@ -16,7 +16,7 @@
 | `:core:network` | Retrofit/OkHttp + AuthInterceptor + SessionState + 4 个 API | ✅ 已落地（API 覆盖不全，见下） |
 | `:core:data` | 手写 `@Serializable` DTO + Room（PytDatabase/CalendarCache） | ✅ 已落地（**手写**，未走 codegen） |
 | `:feature:auth` | 登录/注册 + JWT 加密存储（EncryptedSharedPreferences） | ✅ 已落地 |
-| `:game` | LibGDX 1.13.1 像素小镇 + `AndroidFragmentApplication` 嵌入 + 程序化美术兜底 | ✅ 可运行（5 图待收敛，见 R-14） |
+| `:game` | LibGDX 1.13.1 像素小镇 + `AndroidFragmentApplication` 嵌入 + 程序化美术兜底 | ✅ 可运行（R-14 已收敛单 town_hub） |
 | 16 个学习面板 | hub/dialog/profile/fields/workshop/arena/mine/retro/path/classroom/tutor/library/boss/endless/lecture | ✅ 脚手架 + ViewModel + Repository + 单测均在 |
 | Compose 导航壳 | 登录 → AppShell（15 页顶部 dock） | ✅ 已落地 |
 | JVM 单测 | 39 个用例（JUnit5 + MockK + Robolectric + Turbine） | ✅ 全模块覆盖 ViewModel/Repository |
@@ -26,9 +26,9 @@
 
 | 优先级 | 事项 | 说明 | 状态 |
 | --- | --- | --- | --- |
-| 高 | **R-14 单中央 hub 收敛** | `:game` 仍带 5 张地图 JSON 与「5 图」注释/launcher，需收敛到单一 `town_hub`（根 `AGENTS.md` R-14 方案 A） | 🚧 进行中 |
+| 高 | **R-14 单中央 hub 收敛** | ✅ `WorldMaps` 仅留 `townHub`，外围 4 图定义与 `mine_south.json` 资产移除，单测/注释/地图 README 同步收敛（根 `AGENTS.md` R-14 方案 A） | ✅ 已完成 |
 | 高 | **OpenAPI 代码生成接线** | 用后端 `/v3/api-docs` 全量生成 Kotlin Retrofit2 client，替换手写 DTO/API；现仅有手写最小子集 `openapi/pythontopia-api.json` | 🚧 进行中 |
-| 高 | **后端契约对齐** | 移除客户端虚构的 inventory/currency；修正 `/api/auth/refresh` 语义与存档槽位范围（详见 `04-backend-contract-drift.md`） | 🚧 待办 |
+| 高 | **后端契约对齐** | ✅ 移除虚构 inventory/currency（D-1/D-2）+ `GameBootstrapResponseDto` 补齐真实字段（D-3，新增 `:core:data` 学习域 DTO）；⏳ `/api/auth/refresh` 语义（D-4）与存档槽位（D-5）随会话/存档层处理（详见 `04-backend-contract-drift.md`） | 🟡 进行中 |
 | 中 | **真实像素素材 vendoring** | 补齐审计过的 CC0/CC-BY 瓦片与精灵，减少 `ProceduralArt` 兜底；同步 `LICENSE-ART.md` | 🚧 进行中 |
 | 中 | **网络层补全** | `:core:network` 目前仅 4 个 API（auth/bootstrap/npc/calendar）；profile/fields/workshop/arena/mine/retro/path/classroom/boss/endless/lecture 等端点需要补齐（部分 feature 现自带内联接口） | 🚧 待办 |
 | 中 | **instrumented 测试** | `androidTest` source set 已声明但**无任何用例**；Compose UI / 真机链路未覆盖 | ❌ 未开始 |

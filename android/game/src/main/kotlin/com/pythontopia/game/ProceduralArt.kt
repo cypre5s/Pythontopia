@@ -25,8 +25,15 @@ internal object ProceduralArt {
 
     fun rgb(hex: Int): Color = Color((hex shl 8) or 0xFF)
 
-    /** Kenney tiny-town 帧 → 语义配色。未列出的帧按草地处理（地图未用到）。 */
-    fun townTileColor(frame: Int): Color = when (frame) {
+    /**
+     * Kenney tiny-town 帧 → 语义配色。未列出的帧按草地处理（地图未用到）。
+     * 按「自然/水 → 建筑墙体 → 道具装饰」分组委托，保持帧→色映射不变（便于通过复杂度门禁）。
+     */
+    fun townTileColor(frame: Int): Color =
+        townNatureColor(frame) ?: townBuildingColor(frame) ?: townPropColor(frame) ?: rgb(0x5BA64B)
+
+    /** 自然地表与水体帧。 */
+    private fun townNatureColor(frame: Int): Color? = when (frame) {
         1 -> rgb(0x6CB45A) // grassAlt
         2 -> rgb(0x7BBE57) // grassFlower
         3 -> rgb(0x4E9942) // grassTall
@@ -36,19 +43,29 @@ internal object ProceduralArt {
         7 -> rgb(0x9B6B3A) // logPile
         8 -> rgb(0xC0552F) // mushroom
         12 -> rgb(0xD9C18B) // sandPath
+        48, 50 -> rgb(0x4C86C0) // waterEdge
+        49 -> rgb(0x3F77B5) // water
+        61 -> rgb(0x2E5C97) // waterDeep
+        else -> null
+    }
+
+    /** 建筑墙体/屋顶/门帧。 */
+    private fun townBuildingColor(frame: Int): Color? = when (frame) {
         13, 14, 15 -> rgb(0xC0533B) // 屋顶
         16, 17, 18 -> rgb(0xD8B98C) // 上层墙
         19, 20, 21 -> rgb(0xCBA877) // 中层墙
         22, 24 -> rgb(0xCBA877) // 底层墙
         23 -> rgb(0x6B4A2B) // 门
+        else -> null
+    }
+
+    /** 道具/装饰/树木帧。 */
+    private fun townPropColor(frame: Int): Color? = when (frame) {
         25 -> rgb(0xD86F9C) // flowerPink
         26 -> rgb(0x5A78C0) // flowerBlue
         27 -> rgb(0x8A5A2E) // barrel
         28 -> rgb(0xA9763C) // crate
         29 -> rgb(0x7A7A86) // well
-        48, 50 -> rgb(0x4C86C0) // waterEdge
-        49 -> rgb(0x3F77B5) // water
-        61 -> rgb(0x2E5C97) // waterDeep
         68, 80 -> rgb(0x8A5A2E) // 木栅栏
         69 -> rgb(0x7A4F28) // 栅栏柱
         84 -> rgb(0x6B4A2B) // treeStump
@@ -56,7 +73,7 @@ internal object ProceduralArt {
         86 -> rgb(0x8A5A2E) // signPost
         87 -> rgb(0xE0C341) // lamp
         88 -> rgb(0x9B6B3A) // benchH
-        else -> rgb(0x5BA64B) // grass（含 frame 0）
+        else -> null
     }
 
     /** Kenney tiny-dungeon 帧 → 语义配色。未列出按石地板处理。 */

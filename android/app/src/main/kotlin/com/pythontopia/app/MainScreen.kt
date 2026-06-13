@@ -50,6 +50,9 @@ import com.pythontopia.feature.boss.BossScreen
 import com.pythontopia.feature.endless.EndlessScreen
 import com.pythontopia.feature.hub.HubScreen
 import com.pythontopia.feature.lecture.LectureScreen
+import com.pythontopia.feature.mainline.ChapterTestScreen
+import com.pythontopia.feature.mainline.MainlineMapScreen
+import com.pythontopia.feature.mainline.MainlineStageScreen
 import com.pythontopia.feature.library.LibraryScreen
 import com.pythontopia.feature.mine.MineEchoesScreen
 import com.pythontopia.feature.mine.MineSessionScreen
@@ -115,6 +118,7 @@ private data class AppDestination(
 
 private val APP_DESTINATIONS = listOf(
     AppDestination("hub", "小镇", PytColors.success),
+    AppDestination("mainline", "冒险", PytColors.primary),
     AppDestination("tutor", "答疑", PytColors.info),
     AppDestination("profile", "画像", PytColors.info),
     AppDestination("fields", "知识田", PytColors.success),
@@ -149,6 +153,30 @@ private fun AppShell(onLogout: () -> Unit) {
             modifier = Modifier.padding(padding),
         ) {
             composable("hub") { HubScreen(onLogout = onLogout) }
+            composable("mainline") {
+                MainlineMapScreen(
+                    onOpenStage = { stageId -> featureNav.navigate("mainline/stage/$stageId") },
+                    onOpenTest = { chapter -> featureNav.navigate("mainline/chapter-test/$chapter") },
+                )
+            }
+            composable(
+                route = "mainline/stage/{stageId}",
+                arguments = listOf(navArgument("stageId") { type = NavType.LongType }),
+            ) { backStackEntry ->
+                MainlineStageScreen(
+                    stageId = backStackEntry.arguments?.getLong("stageId") ?: 0L,
+                    onBack = { featureNav.popBackStack() },
+                )
+            }
+            composable(
+                route = "mainline/chapter-test/{chapter}",
+                arguments = listOf(navArgument("chapter") { type = NavType.IntType }),
+            ) { backStackEntry ->
+                ChapterTestScreen(
+                    chapter = backStackEntry.arguments?.getInt("chapter") ?: 1,
+                    onBack = { featureNav.popBackStack() },
+                )
+            }
             composable("tutor") { TutorScreen() }
             composable("profile") { ProfileScreen() }
             composable("fields") { FieldsScreen() }

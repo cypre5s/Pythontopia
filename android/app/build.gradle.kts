@@ -110,6 +110,7 @@ dependencies {
     implementation(project(":feature:mine"))
     implementation(project(":feature:retro"))
     implementation(project(":feature:path"))
+    implementation(project(":feature:mainline"))
     implementation(project(":feature:classroom"))
     implementation(project(":feature:tutor"))
     implementation(project(":feature:library"))

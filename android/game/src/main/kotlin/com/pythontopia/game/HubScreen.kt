@@ -7,7 +7,7 @@ import com.badlogic.gdx.graphics.OrthographicCamera
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer
 import com.badlogic.gdx.math.Matrix4
 
-/** LibGDX 小镇屏：ShapeRenderer 矩形渲染五张轻量地图；出口切图，20 个 NPC 锚点为交互目标。 */
+/** LibGDX 小镇屏（ShapeRenderer 兜底渲染）：单中央小镇 town_hub，12 个 NPC 锚点为交互目标。 */
 class HubScreen(
     private val bridge: HubGameBridge,
     private val onPlayerMoved: ((tileX: Int, tileY: Int, direction: String) -> Unit)? = null,

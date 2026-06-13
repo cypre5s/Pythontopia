@@ -14,8 +14,9 @@ android {
 
     defaultConfig {
         minSdk = libs.versions.minSdk.get().toInt()
-        // debug 连本地后端（明文，network_security_config 白名单放行）。
-        buildConfigField("String", "BASE_URL", "\"http://10.0.2.2:18080/\"")
+        // debug 默认指向公网 ECS 后端（明文，network_security_config 白名单放行）；
+        // 模拟器/局域网联调可经 BaseUrlProvider 运行时覆盖为 10.0.2.2 等地址。
+        buildConfigField("String", "BASE_URL", "\"http://47.120.29.62:18080/\"")
     }
 
     buildFeatures {

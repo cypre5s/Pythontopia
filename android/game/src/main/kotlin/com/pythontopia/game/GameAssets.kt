@@ -16,7 +16,7 @@ class GameAssets : Disposable {
 
     private val disposables = mutableListOf<Disposable>()
 
-    // 真素材优先；缺失则程序化生成（CC0，无需二进制资产），保证 5 张地图永不因缺图崩溃。
+    // 真素材优先；缺失则程序化生成（CC0，无需二进制资产），保证地图永不因缺图崩溃。
     val townTiles: Texture =
         loadTextureOrNull("tilesets/town.png") ?: buildTilesetTexture { ProceduralArt.townTileColor(it) }
     val dungeonTiles: Texture =

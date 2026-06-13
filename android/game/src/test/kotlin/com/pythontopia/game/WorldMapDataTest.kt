@@ -7,11 +7,8 @@ import org.junit.jupiter.api.Test
 class WorldMapDataTest {
 
     @Test
-    fun `native town exposes five maps for compat`() {
-        assertEquals(
-            setOf("town_hub", "farm_north", "mine_south", "campus_east", "port_west"),
-            WorldMaps.all.map { it.key }.toSet(),
-        )
+    fun `native town exposes only town_hub after R-14 single-hub convergence`() {
+        assertEquals(listOf("town_hub"), WorldMaps.all.map { it.key })
     }
 
     @Test
@@ -23,12 +20,11 @@ class WorldMapDataTest {
     }
 
     @Test
-    fun `all exits point at registered maps`() {
-        val mapKeys = WorldMaps.all.map { it.key }.toSet()
-        val targets = WorldMaps.all.flatMap { it.exits }.map { it.targetMap }
-
-        assertTrue(targets.isNotEmpty())
-        assertTrue(targets.all { it in mapKeys }, "Unknown map target in $targets")
+    fun `town hub is a single self-contained map and byKey falls back to it`() {
+        assertTrue(WorldMaps.townHub.exits.isEmpty())
+        // 历史存档若停在已删除的外围图，byKey 回落到 town_hub。
+        assertEquals(WorldMaps.townHub, WorldMaps.byKey("mine_south"))
+        assertEquals(WorldMaps.townHub, WorldMaps.byKey(null))
     }
 }
 

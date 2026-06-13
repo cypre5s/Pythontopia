@@ -83,17 +83,17 @@
 - 入口/嵌入：`HubLibGdxFragment`（`AndroidFragmentApplication`）、`HubGameLauncher` / `TownGameLauncher`、`HubGameBridge`（与 Compose 通信）。
 - 渲染：`PythontopiaGame` / `TownGame` / `HubGame` / `WorldRenderScreen` / `HubScene` / `TiledMapVisual` / `WorldMapData` / `PlayerActor` / `WorldCharacter` / `InputController`（8 向输入）/ `GameAssets` / `PixelTheme`。
 - 素材：`ProceduralArt` 在二进制瓦片/精灵缺失时按 Kenney tiny-town 帧语义**程序化生成**等价配色（纯算法、CC0），保证地图与角色可见。
-- 已 vendored 的真实素材：`app/src/main/assets/`（Kenney tiny-town `tilemap_packed.png`、`dungeon.png`、`player*.png` 与 16 个 `npc/*.png`，附 `LICENSE-kenney-tiny-town.txt`）；地图为 **Tiled JSON**（`town_hub.json` + 4 张外围图 `farm_north/mine_south/campus_east/port_west`）。
+- 已 vendored 的真实素材：`app/src/main/assets/`（Kenney tiny-town `tilemap_packed.png`、`dungeon.png`、`player*.png` 与 16 个 `npc/*.png`，附 `LICENSE-kenney-tiny-town.txt`）；地图为单一 **Tiled JSON** `town_hub.json`（R-14 已收敛，外围 4 图已移除）。
 - LibGDX native：`.so` 已 vendored 到 `app/src/main/jniLibs/<abi>/`（见该目录 README）。
 
 ## 6. 剩余工作（诚实清单）
 
-- **R-14 单中央 hub 收敛**［进行中］：`:game` 仍带 5 张地图 JSON 与「5 图」注释，需收敛到单一 `town_hub`（参见根 `AGENTS.md` R-14 方案 A）。
+- **R-14 单中央 hub 收敛**［✅ 已完成］：`:game` 已收敛到单一 `town_hub`（`WorldMaps.all = [townHub]`，外围 4 图定义与 `mine_south.json` 资产移除，`byKey` 防御性回落 hub）。
 - **OpenAPI 代码生成接线**［进行中］：`openapi/pythontopia-api.json` 是手写的最小子集，DTO/API 仍是手写；目标是从后端 `/v3/api-docs` 全量生成（见 §7 与 `openapi/README.md`）。
 - **真实像素素材 vendoring**［进行中］：部分帧/精灵已落地，缺失部分目前由 `ProceduralArt` 兜底，仍需补齐审计过的 CC0/CC-BY 素材并同步 `LICENSE-ART.md`。
 - **instrumented 测试缺失**：`androidTest` source set 已声明但**无任何用例**；Compose UI / 真机链路目前未覆盖。
 - **手写 DTO**：`:core:data` 与各 feature 的 DTO 为手写，存在与后端契约漂移的风险（详见 [`docs/04-backend-contract-drift.md`](docs/04-backend-contract-drift.md)）。
-- **契约对齐**：客户端虚构的 inventory/currency、对 `/api/auth/refresh` 的误解、存档槽位范围等需按真实后端修正（同上文档）。
+- **契约对齐**：✅ 已移除虚构 inventory/currency，并按真实后端补齐 `GameBootstrapResponseDto`（profile/quests/mastery/path/skills/activeSlot/pendingEvents，新增 `:core:data/dto/learner` 学习域 DTO）；⏳ `/api/auth/refresh` 语义与存档槽位范围随会话/存档层重构处理（同上文档）。
 - **CI / release 签名**：`assembleRelease` 在无 `keystore.properties` 时回退 debug 签名；正式 CI workflow 与签名密钥尚未接入。
 
 ## 7. 开发命令

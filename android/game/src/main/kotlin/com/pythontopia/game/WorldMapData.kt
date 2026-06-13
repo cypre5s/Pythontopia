@@ -52,7 +52,7 @@ internal object WorldMaps {
             TileRect(36, 3, 4, 3),
             TileRect(8, 3, 4, 3),
         ),
-        // 主线仅 town_hub，无边缘出口；外围图定义保留下方供单测。
+        // R-14 世界收缩（方案 A）：主线仅 town_hub，单图世界、无边缘出口。
         exits = emptyList(),
         // R-14：12 主线 NPC 锚点对齐 frontend/public/assets/maps/town_hub.json（y-up = height-1-tiledRow）。
         npcs = listOf(
@@ -71,95 +71,11 @@ internal object WorldMaps {
         ),
     )
 
-    // 外围 4 图非主线；保留定义满足 5 图/20 NPC 单测及回程出口约束，运行时由 WorldRenderScreen 强制载入 town_hub。
-    val farmNorth: WorldMapDefinition = WorldMapDefinition(
-        key = "farm_north",
-        width = 40,
-        height = 40,
-        spawnX = 20,
-        spawnY = 3,
-        groundColor = PixelTheme.success,
-        pathColor = PixelTheme.primary100,
-        buildings = listOf(
-            TileRect(26, 28, 5, 4),
-            TileRect(28, 19, 4, 3),
-        ),
-        exits = listOf(
-            WorldExit(DEFAULT_WORLD_MAP_KEY, TileRect(18, 0, 4, 1)),
-        ),
-        npcs = listOf(
-            WorldNpc("farmer_kc", 28, 27),
-        ),
-    )
+    // R-14 世界收缩（方案 A）：仅保留单一中央小镇 town_hub；旧 5 图世界的外围图
+    // （farm_north / mine_south / campus_east / port_west）已整体移除，不再作主线/支线场景。
+    val all: List<WorldMapDefinition> = listOf(townHub)
 
-    val mineSouth: WorldMapDefinition = WorldMapDefinition(
-        key = "mine_south",
-        width = 30,
-        height = 30,
-        spawnX = 15,
-        spawnY = 28,
-        groundColor = PixelTheme.gray700,
-        pathColor = PixelTheme.gray500,
-        buildings = listOf(
-            TileRect(8, 16, 2, 2),
-            TileRect(20, 16, 2, 2),
-        ),
-        exits = listOf(
-            WorldExit(DEFAULT_WORLD_MAP_KEY, TileRect(13, 29, 4, 1)),
-        ),
-        npcs = listOf(
-            WorldNpc("foreman_bug", 14, 25),
-            WorldNpc("mine_keeper", 15, 20),
-        ),
-    )
-
-    val campusEast: WorldMapDefinition = WorldMapDefinition(
-        key = "campus_east",
-        width = 40,
-        height = 30,
-        spawnX = 2,
-        spawnY = 15,
-        groundColor = PixelTheme.primary50,
-        pathColor = PixelTheme.gray300,
-        buildings = listOf(
-            TileRect(8, 22, 5, 4),
-            TileRect(18, 22, 5, 4),
-            TileRect(28, 22, 5, 4),
-            TileRect(26, 5, 4, 3),
-            TileRect(16, 8, 5, 4),
-        ),
-        exits = listOf(
-            WorldExit(DEFAULT_WORLD_MAP_KEY, TileRect(0, 13, 1, 4)),
-        ),
-        npcs = listOf(
-            WorldNpc("librarian_doc", 10, 21),
-            WorldNpc("coach_q", 20, 21),
-            WorldNpc("sage_review", 30, 21),
-        ),
-    )
-
-    val portWest: WorldMapDefinition = WorldMapDefinition(
-        key = "port_west",
-        width = 35,
-        height = 25,
-        spawnX = 33,
-        spawnY = 13,
-        groundColor = PixelTheme.accentBlue,
-        pathColor = PixelTheme.primary100,
-        buildings = listOf(
-            TileRect(3, 17, 2, 4),
-        ),
-        exits = listOf(
-            WorldExit(DEFAULT_WORLD_MAP_KEY, TileRect(34, 11, 1, 4)),
-        ),
-        npcs = listOf(
-            WorldNpc("class_president", 25, 16),
-            WorldNpc("captain_def", 5, 16),
-        ),
-    )
-
-    val all: List<WorldMapDefinition> = listOf(townHub, farmNorth, mineSouth, campusEast, portWest)
-
+    /** 单图世界下任何 key 都回落到 town_hub（防御性：历史存档可能停在已删除的外围图）。 */
     fun byKey(key: String?): WorldMapDefinition =
         all.firstOrNull { it.key == key } ?: townHub
 }

@@ -2,20 +2,22 @@
 
 ## 当前形态
 
-`pythontopia-api.json` 是 **手写** 的最小 OpenAPI 3.0 静态规格（`version: 0.12.0-demo`），仅覆盖 Android-R12 demo 链路使用的 8 个端点：
+`pythontopia-api.json` 是 **手写** 的最小 OpenAPI 3.0 静态规格（`version: 0.12.0-demo`），覆盖 Android 像素小镇 demo 链路使用的 7 个端点：
 
 - `POST  /api/auth/login`
 - `POST  /api/game/bootstrap`（单次聚合）
 - `GET   /api/world/npcs/{npcKey}/state`
 - `POST  /api/world/npcs/{npcKey}/talk`
 - `GET   /api/world/calendar/today`
-- `GET   /api/world/inventory`
 - `POST  /api/world/sleep`
 - `PATCH /api/world/player`（8 方向玩家上报）
 
+> R-14 世界收缩后**无**背包/货币/商店端点，原虚构的 `GET /api/world/inventory` 与
+> `InventoryItemDto`/`PlayerCurrencyDto` 已从本规格与 `:core:data` 移除（详见 `../docs/04-backend-contract-drift.md`）。
+
 真实后端通过 `springdoc-openapi-starter-webmvc-ui` 在 `GET http://localhost:18080/v3/api-docs`
-暴露 **完整规格**（约 108 个端点）。本仓库这份 demo json 是它的**陈旧子集**，技能树/商店/班级/
-KC 掌握度/复盘/矿洞副本等留待全量替换。
+暴露 **完整规格**（约 108 个端点）。本仓库这份 demo json 是它的**陈旧子集**，技能树/班级/
+KC 掌握度/主线冒险/章末测试/复盘/矿洞副本等留待全量替换。
 
 > ⚠️ **`pythontopia-api.json` 由根级 agent 统一维护为权威规格。** 本模块 / 子代理任务
 > **不要**擅自启动后端，也**不要**覆盖这份已提交的 json——刷新由拥有规格的 agent 负责。

@@ -4,8 +4,7 @@
 
 | 路径 | 用途 | 来源 | License |
 | --- | --- | --- | --- |
-| `town_hub.json` | Tiled JSON 地图（50×40, 16px）。**R-14 起为唯一主线场景** | `frontend/public/assets/maps/town_hub.json`（由 `frontend/scripts/generate-maps.mjs` 程序化生成），与之**字节一致** | 项目源码部分（CC-BY-SA 3.0 包装版本） |
-| `farm_north.json` / `mine_south.json` / `campus_east.json` / `port_west.json` | 旧 5 图世界的外围图。**R-14 收缩后不再作主线场景**，保留仅为兼容/参考，运行时不会被加载 | 同上 | 项目源码部分（CC-BY-SA 3.0 包装版本） |
+| `town_hub.json` | Tiled JSON 地图（50×40, 16px）。**R-14 起为唯一场景** | `frontend/public/assets/maps/town_hub.json`（由 `frontend/scripts/generate-maps.mjs` 程序化生成），与之**字节一致** | 项目源码部分（CC-BY-SA 3.0 包装版本） |
 | `tilemap_packed.png` | 12×11 瓦片图集（132 tiles, 16×16）的参考副本 | Kenney Tiny Town 1.1 (`frontend/public/assets/pixel/tilesets/kenney-tiny-town/Tilemap/tilemap_packed.png`) | CC0 1.0 |
 | `LICENSE-kenney-tiny-town.txt` | Kenney 资产 license 副本 | Kenney.nl | CC0 1.0 |
 
@@ -19,8 +18,8 @@
 （与可见建筑像素级一致），`objects` 对象层在渲染时被安全跳过（NPC 锚点由 `:game/WorldMapData`
 的 `WorldMaps.townHub.npcs` 提供，已对齐 Web 端 `objects` 层）。
 
-- `WorldRenderScreen.show()` 强制载入 `town_hub`；即便历史存档停在外围图，也会回到 hub。
-- `town_hub` 已无边缘出口，外围 4 图正常游玩不可达（其 JSON 仍保留在本目录）。
+- `WorldRenderScreen.show()` 强制载入 `town_hub`；即便历史存档停在已删除的外围图，`WorldMaps.byKey` 也回落到 hub。
+- `town_hub` 无边缘出口（单图世界）；旧 5 图世界的外围图（farm/mine/campus/port）JSON 与 `WorldMaps` 定义已整体移除。
 
 ## 像素素材（真素材已落地）
 
@@ -29,7 +28,7 @@
 
 - 瓦片集：`assets/tilesets/town.png` 与 Kenney Tiny Town `tilemap_packed.png` **像素一致**
   （CC0；`frame = gid - 1`，firstgid=1，12 列 × 11 行 = 132 块，与本目录 JSON 完全对齐）；
-  `assets/tilesets/dungeon.png` 为 Kenney Tiny Dungeon 对应图（仅旧矿洞图使用，R-14 下不可达）。
+  `assets/tilesets/dungeon.png` 为 Kenney Tiny Dungeon 对应图（旧矿洞图素材，单图世界下运行时不再加载）。
 - 角色：`assets/sprites/player.png`（LPC walk9）+ `assets/sprites/npc/*.png`；缺图时回退程序化 4 向小人。
 
 程序化生成属纯算法产物（CC0），不引入任何商业素材。

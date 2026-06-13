@@ -2,19 +2,18 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Pythontopia Backend API (R-12 Android subset)",
-    "description": "手写的最小静态 OpenAPI 3 规格，仅覆盖 Android-R12 demo 所需的端点（auth/login、game/bootstrap、world/npcs/{key}/state|talk、world/calendar/today、world/sleep、world/inventory）。后端 springdoc 完整规格落地后由 build 脚本生成的版本覆盖本文件，详见 android/docs/r12_demo.md。",
+    "description": "手写的最小静态 OpenAPI 3 规格，覆盖 Android 像素小镇 demo 链路端点（auth/login、game/bootstrap、world/npcs/{key}/state|talk、world/calendar/today、world/sleep、world/player）。R-14 世界收缩后无背包/货币/商店端点。后端 springdoc 完整规格见 /v3/api-docs，待全量代码生成覆盖本文件。",
     "version": "0.12.0-demo"
   },
   "servers": [
-    { "url": "http://10.0.2.2:18080", "description": "Android 模拟器访问宿主机后端" },
-    { "url": "https://demo.pythontopia.local", "description": "演示环境" }
+    { "url": "http://47.120.29.62:18080", "description": "公网 ECS 后端（debug 默认）" },
+    { "url": "http://10.0.2.2:18080", "description": "Android 模拟器访问宿主机后端" }
   ],
   "tags": [
     { "name": "auth", "description": "认证" },
     { "name": "game", "description": "全局 bootstrap 聚合" },
     { "name": "world-npc", "description": "NPC 对话状态" },
-    { "name": "world-calendar", "description": "游戏日历" },
-    { "name": "world-inventory", "description": "背包" }
+    { "name": "world-calendar", "description": "游戏日历" }
   ],
   "components": {
     "securitySchemes": {
@@ -152,33 +151,12 @@
           "inGameMinutes": { "type": "integer" }
         }
       },
-      "InventoryItemDto": {
-        "type": "object",
-        "required": ["itemKey", "qty"],
-        "properties": {
-          "itemKey": { "type": "string" },
-          "displayName": { "type": "string", "nullable": true },
-          "qty": { "type": "integer" },
-          "category": { "type": "string", "nullable": true },
-          "rarity": { "type": "string", "nullable": true }
-        }
-      },
-      "PlayerCurrencyDto": {
-        "type": "object",
-        "required": ["coins", "gems"],
-        "properties": {
-          "coins": { "type": "integer", "format": "int64" },
-          "gems": { "type": "integer", "format": "int64" }
-        }
-      },
       "GameBootstrapResponse": {
         "type": "object",
         "required": ["world", "player"],
         "properties": {
           "world": { "$ref": "#/components/schemas/WorldSnapshotDto" },
           "player": { "$ref": "#/components/schemas/PlayerStateDto" },
-          "inventory": { "type": "array", "items": { "$ref": "#/components/schemas/InventoryItemDto" } },
-          "currency": { "$ref": "#/components/schemas/PlayerCurrencyDto" },
           "npcStates": { "type": "array", "items": { "$ref": "#/components/schemas/NpcDialogStateDto" } }
         }
       },
@@ -290,26 +268,6 @@
             "description": "日历响应",
             "content": {
               "application/json": { "schema": { "$ref": "#/components/schemas/CalendarTodayResponse" } }
-            }
-          }
-        }
-      }
-    },
-    "/api/world/inventory": {
-      "get": {
-        "tags": ["world-inventory"],
-        "summary": "读取当前玩家背包条目",
-        "security": [{ "bearerAuth": [] }],
-        "responses": {
-          "200": {
-            "description": "背包条目数组",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": { "$ref": "#/components/schemas/InventoryItemDto" }
-                }
-              }
             }
           }
         }

@@ -117,3 +117,18 @@ public record GameBootstrapResponse(
 4. **Auth 续签策略**：把 refresh 当「12h 内主动续签」；401 一律走重新登录；不要假设有长效 refresh token。
 5. **存档槽位用 0–5**（6 槽）。
 6. 顺带修正 `openapi/README.md` 对不存在文档 `r12_demo.md` 的引用。
+
+## 5. 解决记录（2026-06-13 · Android 重构 M0）
+
+> 本节为后续追加；上文审计原文保持不变以留痕。
+
+| 漂移 | 状态 | 处理 |
+| --- | --- | --- |
+| D-1 虚构 `/api/world/inventory` | ✅ 已解决 | 从 `openapi/pythontopia-api.json` 删除该 path、`world-inventory` tag；删除 `CalendarApi.inventory()` |
+| D-2 虚构 `PlayerCurrencyDto`/`InventoryItemDto` | ✅ 已解决 | 删除两个 DTO 文件与 openapi schema；移除 `HubScreen` 的「背包/金币/宝石」HUD chips |
+| D-3 `GameBootstrapResponse` 字段双向漂移 | ✅ 已解决 | 重写 `GameBootstrapResponseDto`：去 inventory/currency，补 `profile/quests/mastery/path/skills/activeSlot/pendingEvents`（命名以后端为准）；在 `:core:data/dto/learner` 新增 `LearnerProfileDto`(+7 子 DTO)/`QuestDto`(+枚举)/`MasterySnapshotDto`/`LearningPathNodeDto`(+枚举)，`:core:data/dto/world` 新增 `SaveSlotDto`/`WorldEventDto`/`LearnerSkillDto`，并补全 `PlayerStateDto` |
+| D-4 `/api/auth/refresh` 语义误解 | ⏳ 待处理 | 当前客户端无 refresh token，`refresh()` 直接降级为重新登录（与 api-contract 推荐策略一致），故行为可用；正式纠偏（用未过期 access token 续签）随会话层重构处理 |
+| D-5 存档槽位 0–5 | ⏳ 待处理 | Android 尚未实现存档 UI/API；新增的 `SaveSlotDto` 已按 0–5 语义注释，待存档功能落地时接线 |
+
+> 代码生成（OpenAPI Generator）路线：`:core:network` 仍保留可选 `openApiGenerate` 任务（不入常规构建）。
+> 本轮按「外科手术式对齐」手写 DTO 以保持增量可验证；全量 codegen 替换留作后续选项。

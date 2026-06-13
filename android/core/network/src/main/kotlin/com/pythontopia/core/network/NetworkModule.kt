@@ -4,6 +4,8 @@ import android.content.Context
 import com.pythontopia.core.network.api.AuthApi
 import com.pythontopia.core.network.api.BootstrapApi
 import com.pythontopia.core.network.api.CalendarApi
+import com.pythontopia.core.network.api.MainlineApi
+import com.pythontopia.core.network.api.MainlineTestApi
 import com.pythontopia.core.network.api.NpcDialogApi
 import dagger.Module
 import dagger.Provides
@@ -76,4 +78,13 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideCalendarApi(retrofit: Retrofit): CalendarApi = retrofit.create(CalendarApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideMainlineApi(retrofit: Retrofit): MainlineApi = retrofit.create(MainlineApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideMainlineTestApi(retrofit: Retrofit): MainlineTestApi =
+        retrofit.create(MainlineTestApi::class.java)
 }
