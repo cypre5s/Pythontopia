@@ -175,6 +175,7 @@ GitHub Actions `.github/workflows/windows.yml` 在 `windows-latest` 上构建 Co
 ## 设计说明 / 后续项
 
 - **真实数据**：所有数据均来自后端真实接口，无 mock。
+- **安全**：缓存的 JWT 以 Windows DPAPI（CurrentUser 作用域 + 应用熵）加密落盘（`session.json`），离 Windows 时降级明文；媒资 URL 一律相对后端 host 解析，不加载服务端返回的外部 host；API 路径参数（npcKey/skillKey/kcCode 等）均经 `Uri.EscapeDataString`。**待改进**：默认后端为 `http://`（建议上线切 HTTPS，否则 Bearer 经明文传输）；小镇子进程经 `PYT_TOKEN` 环境变量接收令牌（同用户本地 IPC，建议后续改命名管道/一次性句柄）。
 - **小镇嵌入（决策）**：小镇以独立窗口（独立进程）从 `TownPage` 启动，`TownViewModel` 现做单实例生命周期管理（运行中禁用启动按钮、进程退出后自动复位状态）。**真正的窗口内嵌**需把 `Pythontopia.Game` 的 MonoGame 后端从 `DesktopGL`（SDL/OpenGL，自带窗口）切到 `WindowsDX` + `SwapChainPanel`——这会让 Game 变为**仅 Windows 可构建**，破坏当前「Core/Game 跨平台、WSL 互操作可构建」的设计属性，且无法在本机运行期验证；故保留为需在 Windows 上落地与回归验证的显式后续决策，不在本次盲改。
 - **原生外壳**：`MainWindow` 启用 Mica 系统背景（`MicaBackdrop`，Win11 生效、旧系统优雅降级）+ `ExtendsContentIntoTitleBar` 自定义标题栏（品牌徽标），并按导航项设置页头标题、在导航面板展示当前用户。品牌色板与卡片样式集中在 `App.xaml`（`BrandPrimaryBrush` / `BrandHeaderBrush` / `PytCardBorderStyle`）。
 - **HUD 字体**：内置 ASCII 5x7 位图字体，HUD/提示使用对象的 ASCII 标识（如 `npc_mayor_py`、`/profile-room`）；地图里的中文 `label` 不由该字体渲染。

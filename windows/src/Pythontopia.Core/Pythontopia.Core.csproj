@@ -8,10 +8,15 @@
   </PropertyGroup>
 
   <!--
-    No third-party dependencies: System.Text.Json, System.Net.Http and
-    HttpClient ship in the net8.0 BCL. This keeps Core fully buildable from
-    the WSL interop dotnet.exe without any Windows-only workloads.
+    Minimal dependencies: System.Text.Json / System.Net.Http ship in the BCL.
+    System.Security.Cryptography.ProtectedData is added ONLY to encrypt the cached
+    session token at rest via Windows DPAPI (CurrentUser scope). It restores/builds
+    via the WSL interop dotnet.exe; off-Windows it degrades to a plaintext fallback.
   -->
+
+  <ItemGroup>
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+  </ItemGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="Pythontopia.Core.Tests" />

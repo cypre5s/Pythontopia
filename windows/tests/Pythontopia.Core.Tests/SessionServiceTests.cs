@@ -87,6 +87,19 @@ public class SessionServiceTests : IDisposable
         Assert.False(session.PersistsToDisk);
     }
 
+    [Fact]
+    public async Task PersistedSession_DoesNotStoreTokenInPlaintext()
+    {
+        var api = LoginApi("super-secret-jwt-xyz", DateTimeOffset.UtcNow.AddHours(12));
+        var session = new SessionService(api, _sessionFile);
+
+        await session.LoginAsync("bob", "pw");
+
+        // On Windows the file is DPAPI-encrypted, so the raw token must not appear on disk.
+        var raw = await File.ReadAllTextAsync(_sessionFile);
+        Assert.DoesNotContain("super-secret-jwt-xyz", raw);
+    }
+
     public void Dispose()
     {
         if (File.Exists(_sessionFile))

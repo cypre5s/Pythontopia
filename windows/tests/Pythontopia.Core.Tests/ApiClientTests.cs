@@ -761,6 +761,16 @@ public class ApiClientTests
     }
 
     [Fact]
+    public void GetMediaAssetUri_IgnoresForeignHost()
+    {
+        var api = ClientReturning(_ => StubHttpMessageHandler.Json(HttpStatusCode.OK, "{}"), out _);
+
+        Assert.Equal(
+            "http://test.local/api/media/assets/7",
+            api.GetMediaAssetUri("http://evil.example/api/media/assets/7").ToString());
+    }
+
+    [Fact]
     public async Task SubmitAndPoll_PollsUntilTerminalStatus()
     {
         var statuses = new Queue<string>(new[] { "QUEUED", "RUNNING", "PASSED" });

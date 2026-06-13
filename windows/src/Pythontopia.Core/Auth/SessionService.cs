@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Pythontopia.Core.Api;
 using Pythontopia.Core.Dto;
@@ -8,7 +10,8 @@ namespace Pythontopia.Core.Auth;
 /// <summary>
 /// Owns the authenticated session: login/register/logout, the current user and
 /// JWT, and best-effort persistence to <c>%LOCALAPPDATA%/Pythontopia/session.json</c>.
-/// When that path is unavailable the session is kept in memory only.
+/// The cached token is encrypted at rest with Windows DPAPI (CurrentUser scope); when
+/// the path is unavailable the session is kept in memory only.
 /// </summary>
 public sealed class SessionService
 {
@@ -82,7 +85,11 @@ public sealed class SessionService
 
         try
         {
-            var json = File.ReadAllText(_sessionFilePath);
+            var json = Unprotect(File.ReadAllBytes(_sessionFilePath));
+            if (json is null)
+            {
+                return;
+            }
             var loaded = JsonSerializer.Deserialize<PersistedSession>(json, PytJson.Default);
             if (loaded is null || string.IsNullOrEmpty(loaded.Token))
             {
@@ -115,7 +122,8 @@ public sealed class SessionService
             {
                 Directory.CreateDirectory(directory);
             }
-            File.WriteAllText(_sessionFilePath, JsonSerializer.Serialize(_session, PytJson.Default));
+            var json = JsonSerializer.Serialize(_session, PytJson.Default);
+            File.WriteAllBytes(_sessionFilePath, Protect(json));
         }
         catch
         {
@@ -140,6 +148,56 @@ public sealed class SessionService
         catch
         {
             // ignore
+        }
+    }
+
+    // App-specific additional entropy for DPAPI (defense-in-depth; not itself a secret).
+    private static readonly byte[] DpapiEntropy = Encoding.UTF8.GetBytes("Pythontopia.session.v1");
+
+    /// <summary>Encrypts the session JSON with Windows DPAPI (CurrentUser); plaintext fallback off-Windows.</summary>
+    private static byte[] Protect(string json)
+    {
+        var bytes = Encoding.UTF8.GetBytes(json);
+        if (OperatingSystem.IsWindows())
+        {
+            try
+            {
+                return ProtectedData.Protect(bytes, DpapiEntropy, DataProtectionScope.CurrentUser);
+            }
+            catch (CryptographicException)
+            {
+                // best-effort: fall through to plaintext persistence
+            }
+        }
+        return bytes;
+    }
+
+    /// <summary>Reverses <see cref="Protect"/>; tolerates legacy plaintext files for migration.</summary>
+    private static string? Unprotect(byte[] bytes)
+    {
+        if (bytes.Length == 0)
+        {
+            return null;
+        }
+        if (OperatingSystem.IsWindows())
+        {
+            try
+            {
+                return Encoding.UTF8.GetString(
+                    ProtectedData.Unprotect(bytes, DpapiEntropy, DataProtectionScope.CurrentUser));
+            }
+            catch (CryptographicException)
+            {
+                // not DPAPI-protected (legacy plaintext) or a different user; fall back to plaintext
+            }
+        }
+        try
+        {
+            return Encoding.UTF8.GetString(bytes);
+        }
+        catch
+        {
+            return null;
         }
     }
 

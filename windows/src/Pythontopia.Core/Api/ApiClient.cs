@@ -200,8 +200,15 @@ public sealed class ApiClient : IApiClient
     public Task<MediaAssetDto> GenerateImageAsync(string prompt, string? label = null, CancellationToken ct = default) =>
         SendJsonAsync<MediaAssetDto>(HttpMethod.Post, "/api/media/image", new ImageGenerationRequest(prompt, label), ct);
 
-    public Uri GetMediaAssetUri(string relativeUrl) =>
-        new(relativeUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? relativeUrl : _baseUrl + relativeUrl);
+    public Uri GetMediaAssetUri(string relativeUrl)
+    {
+        // Always resolve against the configured backend host; never load a server-supplied
+        // foreign host (defense against a compromised/abused backend returning an external URL).
+        var path = Uri.TryCreate(relativeUrl, UriKind.Absolute, out var absolute)
+            ? absolute.PathAndQuery
+            : (relativeUrl.StartsWith('/') ? relativeUrl : "/" + relativeUrl);
+        return new Uri(_baseUrl + path);
+    }
 
     // ----------------------------------------------------- profile / mastery ----
 
