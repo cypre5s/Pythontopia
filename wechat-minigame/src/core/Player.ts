@@ -20,6 +20,7 @@ export class Player {
   private originY: number;
   private progress = 1;
   private animTimeMs = 0;
+  private readonly fracOut = { fx: 0, fy: 0 };
 
   constructor(tileX: number, tileY: number) {
     this.tileX = tileX;
@@ -76,13 +77,12 @@ export class Player {
     this.animTimeMs += deltaMs;
   }
 
-  /** 当前小数格坐标（用于渲染插值）。 */
+  /** 当前小数格坐标（用于渲染插值）。复用同一对象，免每帧两次调用各分配一次（调用方均即时解构）。 */
   fractionalTile(): { fx: number; fy: number } {
     const eased = easeInOut(this.progress);
-    return {
-      fx: this.originX + (this.tileX - this.originX) * eased,
-      fy: this.originY + (this.tileY - this.originY) * eased,
-    };
+    this.fracOut.fx = this.originX + (this.tileX - this.originX) * eased;
+    this.fracOut.fy = this.originY + (this.tileY - this.originY) * eased;
+    return this.fracOut;
   }
 
   /** 走路上下小幅 bob（像素抖动），站定为 0。 */

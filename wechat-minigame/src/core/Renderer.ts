@@ -74,6 +74,9 @@ export class Renderer {
   // 建筑/地标名牌锚点缓存：仅在地图引用变化时重算，避免每帧扫描 interactables 算 min/max。
   private placeLabelMap: TileMap | null = null;
   private placeLabels: PlaceLabel[] = [];
+  // HUD 状态条文本按对象引用缓存：hudStatus 仅在 bootstrap/mainline 时换新对象，稳态下逐帧复用。
+  private lastStatusRef: HudStatus | null = null;
+  private lastStatusText = '';
 
   resize(viewWidth: number, viewHeight: number): void {
     this.viewWidth = viewWidth;
@@ -353,7 +356,7 @@ export class Renderer {
     ctx.fillStyle = '#ffd166';
     ctx.fillText(title, x + 10, y + h / 2 + 1);
 
-    const statusText = status ? this.statusText(status) : '';
+    const statusText = status ? this.statusTextCached(status) : '';
     if (statusText) {
       ctx.font = '12px sans-serif';
       const w = ctx.measureText(statusText).width + 20;
@@ -362,6 +365,15 @@ export class Renderer {
       ctx.fillStyle = '#e9f0d9';
       ctx.fillText(statusText, x + 10, y2 + h / 2 + 1);
     }
+  }
+
+  private statusTextCached(status: HudStatus): string {
+    if (status === this.lastStatusRef) {
+      return this.lastStatusText;
+    }
+    this.lastStatusText = this.statusText(status);
+    this.lastStatusRef = status;
+    return this.lastStatusText;
   }
 
   private statusText(status: HudStatus): string {
@@ -656,13 +668,21 @@ function weekdayLabel(code: string): string {
   }
 }
 
+const colorCache = new Map<string, string>();
+
 function colorFor(seed: string): string {
+  const cached = colorCache.get(seed);
+  if (cached !== undefined) {
+    return cached;
+  }
   let hash = 0;
   for (let i = 0; i < seed.length; i += 1) {
     hash = (hash * 31 + seed.charCodeAt(i)) | 0;
   }
   const index = Math.abs(hash) % NPC_PALETTE.length;
-  return NPC_PALETTE[index] ?? PLAYER_BODY;
+  const color = NPC_PALETTE[index] ?? PLAYER_BODY;
+  colorCache.set(seed, color);
+  return color;
 }
 
 function roundRect(ctx: Ctx2D, x: number, y: number, w: number, h: number, r: number): void {
