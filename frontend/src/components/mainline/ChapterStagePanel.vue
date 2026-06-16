@@ -172,13 +172,14 @@ function pieces(stage: MainlineStageDto): StagePiece[] {
         type="button"
         class="action action--test"
         data-testid="mainline-open-test"
-        @click="emit('open-test', chapter.chapter)"
+        :disabled="!allStagesComplete"
+        @click="allStagesComplete && emit('open-test', chapter.chapter)"
       >
-        参加大测试
+        {{ allStagesComplete ? '参加大测试' : '完成全部小节后参加大测试' }}
         <span
           v-if="!allStagesComplete"
           class="action__hint"
-        >（完成全部小节解锁 2★+）</span>
+        >（看、学、练全部过线后解锁）</span>
       </button>
 
       <div

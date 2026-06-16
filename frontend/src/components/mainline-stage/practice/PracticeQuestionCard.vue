@@ -27,10 +27,15 @@ const props = defineProps<{
 const emit = defineEmits<{ (e: 'correct', questionId: number): void }>();
 
 const TYPE_LABEL: Record<StagePracticeQuestionDto['type'], string> = {
-  CHOICE: '选择题',
+  CHOICE: '单选题',
   JUDGE: '判断题',
   FILL: '填空题',
 };
+
+/** 选项字母编号（学习通式 A/B/C/D）。 */
+function optionLetter(idx: number): string {
+  return String.fromCharCode(65 + idx);
+}
 
 const blankCount = computed<number>(() =>
   props.question.type === 'FILL' ? Math.max(1, props.question.blankCount) : 0,
@@ -151,25 +156,19 @@ function judgeClass(value: boolean): Record<string, boolean> {
     :class="{ 'pq-card--done': answeredCorrect }"
     :data-testid="`practice-q-${question.id}`"
   >
-    <header class="pq-card__head">
-      <span class="pq-card__no">第 {{ index }} 题</span>
-      <span class="pq-card__kind">{{ TYPE_LABEL[question.type] }}</span>
-      <span
-        v-if="question.kcCode"
-        class="pq-card__kc"
-      >{{ question.kcCode }}</span>
+    <!-- 学习通式题头：「1. (单选题) 题干」 -->
+    <p class="pq-card__stem">
+      <span class="pq-card__no">{{ index }}.</span>
+      <span class="pq-card__kind">({{ TYPE_LABEL[question.type] }})</span>
+      {{ question.stem }}
       <span
         v-if="answeredCorrect"
         class="pq-card__tick"
         aria-hidden="true"
       >✓</span>
-    </header>
-
-    <p class="pq-card__stem">
-      {{ question.stem }}
     </p>
 
-    <!-- CHOICE：单选 -->
+    <!-- CHOICE：单选（A/B/C/D 字母行） -->
     <ul
       v-if="question.type === 'CHOICE'"
       class="pq-opts"
@@ -185,7 +184,7 @@ function judgeClass(value: boolean): Record<string, boolean> {
           :data-testid="`practice-q-${question.id}-opt-${idx}`"
           @click="pickChoice(idx)"
         >
-          <span class="pq-opt__mark">{{ choiceIndex === idx ? '◉' : '○' }}</span>
+          <span class="pq-opt__mark">{{ optionLetter(idx) }}</span>
           <span class="pq-opt__text">{{ opt }}</span>
         </button>
       </li>
@@ -203,7 +202,8 @@ function judgeClass(value: boolean): Record<string, boolean> {
         :data-testid="`practice-q-${question.id}-judge-true`"
         @click="pickJudge(true)"
       >
-        ✓ 正确
+        <span class="pq-opt__mark">A</span>
+        <span class="pq-opt__text">正确 ✓</span>
       </button>
       <button
         type="button"
@@ -212,7 +212,8 @@ function judgeClass(value: boolean): Record<string, boolean> {
         :data-testid="`practice-q-${question.id}-judge-false`"
         @click="pickJudge(false)"
       >
-        ✗ 错误
+        <span class="pq-opt__mark">B</span>
+        <span class="pq-opt__text">错误 ✗</span>
       </button>
     </div>
 
@@ -226,7 +227,7 @@ function judgeClass(value: boolean): Record<string, boolean> {
         :key="i - 1"
         class="pq-fill__field"
       >
-        <span class="pq-fill__label">空 {{ i }}</span>
+        <span class="pq-fill__label">第 {{ i }} 空</span>
         <input
           class="pq-fill__input"
           :value="blanks[i - 1] ?? ''"
@@ -251,7 +252,7 @@ function judgeClass(value: boolean): Record<string, boolean> {
       </button>
     </div>
 
-    <!-- 判分横幅：本端判分结果优先；否则若初始已答对给精简完成态 -->
+    <!-- 判分区：学习通式浅灰答案块（正确答案 / 答案解析） -->
     <div
       v-if="result"
       class="pq-result"
@@ -265,13 +266,13 @@ function judgeClass(value: boolean): Record<string, boolean> {
         v-if="result.correctAnswers.length"
         class="pq-result__answers"
       >
-        参考答案：{{ result.correctAnswers.join(' / ') }}
+        <span class="pq-result__label">正确答案：</span>{{ result.correctAnswers.join(' / ') }}
       </p>
       <p
         v-if="result.explanation"
         class="pq-result__explain"
       >
-        讲解：{{ result.explanation }}
+        <span class="pq-result__label">答案解析：</span>{{ result.explanation }}
       </p>
     </div>
     <div
@@ -287,220 +288,249 @@ function judgeClass(value: boolean): Record<string, boolean> {
 </template>
 
 <style scoped>
+/* 学习通作业式朴素风：白底、细分隔、灰字蓝点缀，不用像素字/重边框/大色块。 */
 .pq-card {
   display: grid;
-  gap: var(--pyt-space-2);
-  padding: var(--pyt-space-3);
-  background: var(--pyt-color-bg-soft);
-  border: 2px solid var(--pyt-color-border);
-  border-radius: var(--pyt-radius-sm);
+  gap: 10px;
+  padding: 16px 18px;
+  background: #fff;
+  border-bottom: 1px solid #ececec;
 }
-.pq-card--done {
-  background: var(--pyt-color-success-bg);
-  border-color: var(--pyt-color-success);
+.pq-card:last-child {
+  border-bottom: 0;
 }
-.pq-card__head {
-  display: flex;
-  align-items: center;
-  gap: var(--pyt-space-2);
-  font-size: var(--pyt-font-size-xs);
-}
-.pq-card__no {
-  font-family: var(--pyt-font-pixel), sans-serif;
-  font-weight: 700;
-  color: var(--pyt-color-text-primary);
-}
-.pq-card__kind {
-  padding: 1px var(--pyt-space-2);
-  background: var(--pyt-color-info-bg);
-  border: 1px solid var(--pyt-color-info);
-  color: var(--pyt-color-info);
-  border-radius: var(--pyt-radius-sm);
-}
-.pq-card__kc {
-  font-family: var(--pyt-font-pixel-mono), monospace;
-  color: var(--pyt-color-text-muted);
-}
-.pq-card__tick {
-  margin-left: auto;
-  color: var(--pyt-color-success);
-  font-weight: 700;
+.pq-card--done .pq-card__stem {
+  color: #555;
 }
 .pq-card__stem {
   margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
   font-family: var(--pyt-font-read), sans-serif;
-  font-size: var(--pyt-font-size-sm);
-  line-height: 1.6;
-  color: var(--pyt-color-text-primary);
+  font-size: 14px;
+  line-height: 1.8;
+  color: #333;
 }
+.pq-card__no {
+  font-weight: 700;
+  margin-right: 2px;
+}
+.pq-card__kind {
+  color: #8a8a8a;
+  font-size: 13px;
+  margin-right: 4px;
+}
+.pq-card__tick {
+  margin-left: 6px;
+  color: #1fa657;
+  font-weight: 700;
+}
+
+/* 选项：纯文字行 + 字母圆圈，悬停浅灰 */
 .pq-opts {
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: 0 0 0 4px;
   display: grid;
-  gap: var(--pyt-space-1);
+  gap: 2px;
 }
-.pq-opt {
+.pq-opt,
+.pq-judge__btn {
   width: 100%;
+  min-height: 0;
   display: flex;
   align-items: flex-start;
-  gap: var(--pyt-space-2);
-  padding: var(--pyt-space-2);
+  gap: 10px;
+  padding: 7px 10px;
   text-align: left;
-  background: var(--pyt-color-bg-elevated);
-  border: 2px solid var(--pyt-color-border);
-  border-radius: var(--pyt-radius-sm);
-  color: var(--pyt-color-text-primary);
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  box-shadow: none;
+  color: #333;
   font-family: var(--pyt-font-read), sans-serif;
-  font-size: var(--pyt-font-size-sm);
+  font-size: 14px;
+  line-height: 1.6;
   cursor: pointer;
-  transition: background var(--pyt-motion-base), border-color var(--pyt-motion-base);
+  transition: background var(--pyt-motion-base);
 }
-.pq-opt:hover:not(:disabled) {
-  background: var(--pyt-color-bg-soft);
+/* 盖掉全局像素 button 的 :active 位移/投影，保持白纸朴素风 */
+.pq-opt:active,
+.pq-judge__btn:active,
+.pq-submit:active {
+  transform: none;
+  box-shadow: none;
 }
-.pq-opt:disabled {
-  cursor: default;
-}
-.pq-opt--picked {
-  border-color: var(--pyt-color-primary);
-  background: var(--pyt-color-bg-soft);
-}
-.pq-opt--correct {
-  border-color: var(--pyt-color-success);
-  background: var(--pyt-color-success-bg);
-}
-.pq-opt--wrong {
-  border-color: var(--pyt-color-danger);
-  background: var(--pyt-color-danger-bg);
-}
-.pq-opt__mark {
-  flex: 0 0 auto;
-  font-family: var(--pyt-font-pixel-mono), monospace;
-  color: var(--pyt-color-primary);
-}
-.pq-opt__text {
-  flex: 1 1 auto;
-}
-.pq-judge {
-  display: flex;
-  gap: var(--pyt-space-2);
-}
-.pq-judge__btn {
-  flex: 1 1 0;
-  padding: var(--pyt-space-2);
-  background: var(--pyt-color-bg-elevated);
-  border: 2px solid var(--pyt-color-border);
-  border-radius: var(--pyt-radius-sm);
-  color: var(--pyt-color-text-primary);
-  font-family: var(--pyt-font-read), sans-serif;
-  font-size: var(--pyt-font-size-sm);
-  cursor: pointer;
-  transition: background var(--pyt-motion-base), border-color var(--pyt-motion-base);
-}
+.pq-opt:hover:not(:disabled),
 .pq-judge__btn:hover:not(:disabled) {
-  background: var(--pyt-color-bg-soft);
+  background: #f5f6f8;
 }
+.pq-opt:disabled,
 .pq-judge__btn:disabled {
   cursor: default;
 }
+.pq-opt__mark {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #c4c8cf;
+  border-radius: 50%;
+  font-size: 12px;
+  color: #666;
+  background: #fff;
+  margin-top: 1px;
+}
+.pq-opt__text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.pq-opt--picked,
 .pq-judge__btn--picked {
-  border-color: var(--pyt-color-primary);
-  background: var(--pyt-color-bg-soft);
+  background: #f0f6ff;
 }
+.pq-opt--picked .pq-opt__mark,
+.pq-judge__btn--picked .pq-opt__mark {
+  background: #3a7bd5;
+  border-color: #3a7bd5;
+  color: #fff;
+}
+.pq-opt--correct,
 .pq-judge__btn--correct {
-  border-color: var(--pyt-color-success);
-  background: var(--pyt-color-success-bg);
+  background: #f2faf4;
 }
+.pq-opt--correct .pq-opt__mark,
+.pq-judge__btn--correct .pq-opt__mark {
+  background: #1fa657;
+  border-color: #1fa657;
+  color: #fff;
+}
+.pq-opt--wrong,
 .pq-judge__btn--wrong {
-  border-color: var(--pyt-color-danger);
-  background: var(--pyt-color-danger-bg);
+  background: #fdf3f2;
 }
+.pq-opt--wrong .pq-opt__mark,
+.pq-judge__btn--wrong .pq-opt__mark {
+  background: #e25c4a;
+  border-color: #e25c4a;
+  color: #fff;
+}
+
+.pq-judge {
+  display: grid;
+  gap: 2px;
+  padding-left: 4px;
+}
+
+/* 填空：浅框输入 */
 .pq-fill {
   display: grid;
-  gap: var(--pyt-space-1);
+  gap: 8px;
+  padding-left: 4px;
 }
 .pq-fill__field {
   display: flex;
   align-items: center;
-  gap: var(--pyt-space-2);
+  gap: 10px;
 }
 .pq-fill__label {
   flex: 0 0 auto;
-  font-size: var(--pyt-font-size-xs);
-  color: var(--pyt-color-text-muted);
+  font-size: 13px;
+  color: #8a8a8a;
 }
 .pq-fill__input {
-  flex: 1 1 auto;
+  flex: 0 1 320px;
   min-width: 0;
-  padding: 2px var(--pyt-space-2);
-  background: var(--pyt-color-bg-elevated);
-  border: 2px solid var(--pyt-color-border);
-  border-radius: var(--pyt-radius-sm);
-  color: var(--pyt-color-text-primary);
+  padding: 5px 10px;
+  background: #fff;
+  border: 1px solid #d4d8df;
+  border-radius: 4px;
+  color: #333;
   font-family: var(--pyt-font-mono), monospace;
-  font-size: var(--pyt-font-size-sm);
+  font-size: 13px;
 }
 .pq-fill__input:focus {
-  border-color: var(--pyt-color-primary);
+  border-color: #3a7bd5;
   outline: none;
 }
 .pq-fill__input:disabled {
-  opacity: 0.8;
+  background: #f7f8fa;
+  color: #888;
 }
+
 .pq-card__foot {
   display: flex;
   justify-content: flex-end;
 }
 .pq-submit {
-  font-family: var(--pyt-font-pixel), monospace;
-  font-size: var(--pyt-font-size-xs);
-  padding: 2px 12px;
-  background: var(--pyt-color-bg-elevated);
-  border: 2px solid var(--pyt-color-border);
-  border-radius: var(--pyt-radius-sm);
-  color: var(--pyt-color-text-primary);
+  font-family: var(--pyt-font-read), sans-serif;
+  font-size: 13px;
+  min-height: 0;
+  padding: 4px 18px;
+  background: #3a7bd5;
+  border: 1px solid #3a7bd5;
+  border-radius: 4px;
+  box-shadow: none;
+  color: #fff;
   cursor: pointer;
-  box-shadow: 0 2px 0 var(--pyt-color-border);
+}
+.pq-submit:hover:not(:disabled) {
+  background: #2f6cc0;
 }
 .pq-submit:disabled {
-  opacity: 0.5;
+  background: #f0f1f3;
+  border-color: #dcdfe5;
+  color: #9aa0a8;
   cursor: not-allowed;
-  box-shadow: none;
 }
-.pq-submit:not(:disabled):active {
-  transform: translateY(2px);
-  box-shadow: none;
-}
+
+/* 判分区：学习通式浅灰答案块 */
 .pq-result {
-  padding: var(--pyt-space-2);
-  border: 2px solid var(--pyt-color-border);
-  border-radius: var(--pyt-radius-sm);
-  font-size: var(--pyt-font-size-xs);
-  background: var(--pyt-color-bg-elevated);
+  padding: 10px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  background: #f7f8fa;
+  border: 1px solid #eef0f3;
+  font-family: var(--pyt-font-read), sans-serif;
+  animation: pq-result-in var(--pyt-motion-slow) ease-out;
 }
-.pq-result--ok {
-  border-color: var(--pyt-color-success);
-  background: var(--pyt-color-success-bg);
+@keyframes pq-result-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
-.pq-result--bad {
-  border-color: var(--pyt-color-danger);
-  background: var(--pyt-color-danger-bg);
+@media (prefers-reduced-motion: reduce) {
+  .pq-result {
+    animation: none;
+  }
+}
+.pq-result--ok .pq-result__verdict {
+  color: #1fa657;
+}
+.pq-result--bad .pq-result__verdict {
+  color: #e25c4a;
 }
 .pq-result__verdict {
   margin: 0;
   font-weight: 700;
-  color: var(--pyt-color-text-primary);
 }
 .pq-result__answers {
-  margin: var(--pyt-space-1) 0 0;
-  color: var(--pyt-color-text-primary);
+  margin: 6px 0 0;
+  color: #333;
 }
 .pq-result__explain {
-  margin: var(--pyt-space-1) 0 0;
-  line-height: 1.6;
-  color: var(--pyt-color-text-hint);
+  margin: 6px 0 0;
+  line-height: 1.7;
+  color: #666;
+}
+.pq-result__label {
+  color: #8a8a8a;
 }
 </style>

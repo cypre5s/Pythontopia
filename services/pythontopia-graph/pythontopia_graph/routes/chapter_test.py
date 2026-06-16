@@ -4,7 +4,7 @@
 errorbook_brief/counts → 输出 §3 题面 JSON + 生成审计 meta。
 
 节点链失败 → 结构化 502（detail 为 ``ChapterTestErrorDetail``），backend 据此落
-chapter_test.status=FAILED 并重试/兜底（golden）。绝不静默降级成纯文本。
+chapter_test.status=FAILED 并重试。绝不静默降级成纯文本或缩减题量。
 """
 
 from __future__ import annotations

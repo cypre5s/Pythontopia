@@ -86,36 +86,31 @@ function onInput(i: number, event: Event): void {
 </template>
 
 <style scoped>
+/* 学习通考试卷面白纸风（与 ChoiceQuestion 同语言）。 */
 .ct-card {
   display: grid;
-  gap: var(--pyt-space-3);
-  padding: var(--pyt-space-4);
-  background: linear-gradient(180deg, var(--pyt-color-bg-elevated) 0%, var(--pyt-color-bg-sunken) 100%);
-  border: 3px solid var(--pyt-color-border-strong);
-  border-radius: var(--pyt-radius-lg);
-  box-shadow: var(--pyt-shadow-card);
+  gap: 10px;
+  padding: 16px 18px;
+  background: #fff;
+  border: 1px solid #e6e8ec;
+  border-radius: 4px;
+  font-family: var(--pyt-font-read), sans-serif;
 }
-.ct-card__head { display: flex; align-items: center; gap: var(--pyt-space-2); font-size: var(--pyt-font-size-sm); }
-.ct-card__no { font-weight: 700; color: var(--pyt-color-text-primary); }
-.ct-card__kind {
-  padding: 2px var(--pyt-space-2);
-  background: var(--pyt-color-warning-bg);
-  border: 1px solid var(--pyt-color-warning);
-  color: var(--pyt-color-warning);
-  border-radius: var(--pyt-radius-sm);
-}
-.ct-card__blanks { color: var(--pyt-color-text-muted); }
-.ct-card__score { margin-left: auto; color: var(--pyt-color-text-muted); }
-/* 填空正文：终端深色例外（代码块）。 */
+.ct-card__head { display: flex; align-items: baseline; gap: 6px; font-size: 13px; }
+.ct-card__no { font-weight: 700; color: #333; font-size: 14px; }
+.ct-card__kind { color: #8a8a8a; }
+.ct-card__blanks { color: #9aa0a8; }
+.ct-card__score { margin-left: auto; color: #9aa0a8; }
+/* 填空正文：浅灰代码块（题干可能含代码，保持等宽可读但不再深底）。 */
 .ct-fill__body {
-  padding: var(--pyt-space-3);
-  background: var(--pyt-color-terminal-bg);
-  color: var(--pyt-color-terminal-text);
-  border: 2px solid var(--pyt-color-border-strong);
-  border-radius: var(--pyt-radius-sm);
+  padding: 10px 12px;
+  background: #f7f8fa;
+  color: #333;
+  border: 1px solid #eef0f3;
+  border-radius: 4px;
   font-family: var(--pyt-font-mono);
-  font-size: var(--pyt-font-size-base);
-  line-height: 2;
+  font-size: 13px;
+  line-height: 2.1;
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -123,28 +118,29 @@ function onInput(i: number, event: Event): void {
 .ct-fill__input {
   display: inline-block;
   min-width: 96px;
-  margin: 0 var(--pyt-space-1);
-  padding: 2px var(--pyt-space-2);
-  background: var(--pyt-color-shadow);
-  border: 2px dashed var(--pyt-color-gold);
-  border-radius: var(--pyt-radius-sm);
-  color: var(--pyt-color-gold-bright);
+  margin: 0 4px;
+  padding: 2px 8px;
+  background: #fff;
+  border: 1px solid #d4d8df;
+  border-bottom: 2px solid #9aa0a8;
+  border-radius: 3px;
+  color: #333;
   font-family: inherit;
-  font-size: var(--pyt-font-size-base);
+  font-size: 13px;
   text-align: center;
 }
-.ct-fill__input:focus { border-color: var(--pyt-color-success); outline: none; }
-.ct-fill__input:disabled { opacity: 0.8; }
+.ct-fill__input:focus { border-color: #3a7bd5; border-bottom-color: #3a7bd5; outline: none; }
+.ct-fill__input:disabled { background: #f0f1f3; color: #888; }
 .ct-review {
-  padding: var(--pyt-space-3);
-  border: 2px solid var(--pyt-color-border);
-  border-radius: var(--pyt-radius-md);
-  font-size: var(--pyt-font-size-sm);
-  background: var(--pyt-color-bg-soft);
+  padding: 10px 12px;
+  border: 1px solid #eef0f3;
+  border-radius: 4px;
+  font-size: 13px;
+  background: #f7f8fa;
 }
-.ct-review--ok { border-color: var(--pyt-color-success); }
-.ct-review--bad { border-color: var(--pyt-color-danger); }
-.ct-review__verdict { margin: 0 0 var(--pyt-space-2); font-weight: 700; color: var(--pyt-color-text-primary); }
-.ct-review__accepted { margin: 0 0 var(--pyt-space-2); color: var(--pyt-color-text-primary); }
-.ct-review__explain { margin: 0; color: var(--pyt-color-text-hint); line-height: 1.6; }
+.ct-review--ok .ct-review__verdict { color: #1fa657; }
+.ct-review--bad .ct-review__verdict { color: #e25c4a; }
+.ct-review__verdict { margin: 0; font-weight: 700; }
+.ct-review__accepted { margin: 6px 0 0; color: #333; }
+.ct-review__explain { margin: 6px 0 0; color: #666; line-height: 1.7; }
 </style>

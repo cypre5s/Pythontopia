@@ -170,6 +170,18 @@ class ErrorbookBrief(BaseModel):
     summary: str = ""
 
 
+class PreferredCodingQuestion(BaseModel):
+    """后端从 packId=43 题库筛出的编程题候选；Graph 优先直接并卷。"""
+
+    source_problem_id: int = Field(ge=1)
+    title: str = Field(min_length=1, max_length=200)
+    statement_markdown: str = Field(min_length=1)
+    samples: list[CodingSample] = Field(min_length=1)
+    hidden_test_cases: list[CodingSample] = Field(min_length=1)
+    reference_solution: str = Field(min_length=1)
+    kc_code: str = Field(min_length=1)
+
+
 class PaperCounts(BaseModel):
     """题量与分值。默认 5×8 + 3×5 + 3×5 + 1×30 = 100（§3）。"""
 
@@ -213,6 +225,10 @@ class ChapterTestGenerateRequest(BaseModel):
     errorbook_brief: ErrorbookBrief = Field(default_factory=ErrorbookBrief)
     counts: PaperCounts = Field(default_factory=PaperCounts)
     focus_hint: str | None = Field(default=None, max_length=512)
+    excluded_questions: list[str] = Field(default_factory=list, max_length=200)
+    preferred_coding_questions: list[PreferredCodingQuestion] = Field(
+        default_factory=list, max_length=40
+    )
 
 
 # --------------------------------------------------------------------------- #

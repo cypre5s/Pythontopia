@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
@@ -15,9 +16,14 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.mainline.domain.ChapterAssessmentKind;
 import com.pythontopia.mainline.domain.ChapterStar;
 import com.pythontopia.mainline.domain.ChapterTestRecord;
 import com.pythontopia.mainline.domain.ChapterTestStatus;
+import com.pythontopia.mainline.domain.MainlineStage;
+import com.pythontopia.mainline.domain.MainlineStageProgress;
+import com.pythontopia.mainline.MainlineStageProgressRepository;
+import com.pythontopia.mainline.MainlineStageRepository;
 import com.pythontopia.mainline.dto.ChapterTestPaperDto;
 import com.pythontopia.mainline.dto.ChapterTestResultDto;
 import com.pythontopia.mainline.dto.ChapterTestSubmitRequest;
@@ -32,9 +38,10 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-/** ChapterTestService：prepare 幂等 / start golden 兜底与再进入 / submit 判分+超时拒收+幂等 / latest。 */
+/** ChapterTestService：小测/大测 prepare / start / submit / latest 编排。 */
 class ChapterTestServiceTest {
 
   private static final long USER = 7L;
@@ -44,15 +51,22 @@ class ChapterTestServiceTest {
   private final ObjectMapper mapper = new ObjectMapper();
   private final ChapterTestRepository repo = mock(ChapterTestRepository.class);
   private final ChapterTestPregenService pregen = mock(ChapterTestPregenService.class);
-  private final GoldenPaperProvider golden = mock(GoldenPaperProvider.class);
   private final ChapterTestJudge judge = mock(ChapterTestJudge.class);
   private final ChapterTestMapper mapperBean = new ChapterTestMapper();
   private final ChapterStarService starService = mock(ChapterStarService.class);
   private final ChapterStarRepository starRepo = mock(ChapterStarRepository.class);
+  private final MainlineStageRepository stageRepo = mock(MainlineStageRepository.class);
+  private final MainlineStageProgressRepository progressRepo =
+      mock(MainlineStageProgressRepository.class);
 
   private final ChapterTestService service =
       new ChapterTestService(
-          repo, pregen, golden, judge, mapperBean, starService, starRepo, mapper);
+          repo, pregen, judge, mapperBean, starService, starRepo, stageRepo, progressRepo, mapper);
+
+  @BeforeEach
+  void setUp() {
+    stubChapterStagesComplete();
+  }
 
   private JsonNode questions() {
     try {
@@ -66,46 +80,113 @@ class ChapterTestServiceTest {
 
   private ChapterTestRecord record(
       ChapterTestStatus status, OffsetDateTime deadline, JsonNode questions, JsonNode detail) {
+    return record(ChapterAssessmentKind.FINAL, status, deadline, questions, detail);
+  }
+
+  private ChapterTestRecord record(
+      ChapterAssessmentKind assessmentKind,
+      ChapterTestStatus status,
+      OffsetDateTime deadline,
+      JsonNode questions,
+      JsonNode detail) {
     return new ChapterTestRecord(
-        TEST_ID, USER, CH, status, 1, questions, null, null, 1800,
+        TEST_ID, USER, CH, assessmentKind, status, 1, questions, null, null, 7200,
         deadline == null ? null : deadline.minusMinutes(30), deadline, null,
         detail == null ? null : detail.path("score").asInt(), detail,
         mapper.createObjectNode().put("paste_blocked", 0).put("blur_events", 0).put("overtime", false),
         OffsetDateTime.now());
   }
 
+  private MainlineStage stage(long id, int index) {
+    return new MainlineStage(
+        id, CH, index, "stage-" + index, List.of("PY43-KC-001"), "kw", List.of(), List.of(), 240, 2, 0);
+  }
+
+  private MainlineStageProgress completedProgress(long stageId) {
+    return new MainlineStageProgress(
+        stageId, USER, stageId, 240, List.of(1L, 2L), List.of(), List.of(), OffsetDateTime.now(),
+        OffsetDateTime.now());
+  }
+
+  private void stubChapterStagesComplete() {
+    when(stageRepo.findByChapter(CH)).thenReturn(List.of(stage(21L, 1), stage(22L, 2)));
+    when(progressRepo.findByUser(USER))
+        .thenReturn(List.of(completedProgress(21L), completedProgress(22L)));
+  }
+
   // --- prepare ---------------------------------------------------------------
 
   @Test
   void prepareIsIdempotentWhenAlreadyReady() {
-    when(repo.findLatest(USER, CH))
+    when(repo.findLatest(USER, CH, ChapterAssessmentKind.FINAL))
         .thenReturn(Optional.of(record(ChapterTestStatus.READY, null, questions(), null)));
 
     TestPrepareResponse resp = service.prepare(USER, CH);
 
     assertThat(resp.status()).isEqualTo("READY");
-    verify(pregen, never()).pregenerate(anyLong(), anyLong(), anyInt());
-    verify(repo, never()).insertPending(anyLong(), anyInt(), anyInt(), anyInt());
+    verify(pregen, never())
+        .pregenerate(anyLong(), anyLong(), anyInt(), any(), anyList());
+    verify(repo, never()).insertPending(anyLong(), anyInt(), any(), anyInt(), anyInt());
   }
 
   @Test
   void prepareTriggersAsyncGenerationWhenNone() {
-    when(repo.findLatest(USER, CH)).thenReturn(Optional.empty());
-    when(repo.nextAttemptNo(USER, CH)).thenReturn(1);
-    when(repo.insertPending(USER, CH, 1, 1800)).thenReturn(TEST_ID);
+    when(repo.findLatest(USER, CH, ChapterAssessmentKind.FINAL)).thenReturn(Optional.empty());
+    when(repo.findLatest(USER, CH, ChapterAssessmentKind.QUIZ)).thenReturn(Optional.empty());
+    when(repo.nextAttemptNo(USER, CH, ChapterAssessmentKind.FINAL)).thenReturn(1);
+    when(repo.insertPending(USER, CH, ChapterAssessmentKind.FINAL, 1, 7200))
+        .thenReturn(TEST_ID);
 
     TestPrepareResponse resp = service.prepare(USER, CH);
 
     assertThat(resp.status()).isEqualTo("GENERATING");
     verify(repo).markStatus(TEST_ID, ChapterTestStatus.GENERATING);
-    verify(pregen).pregenerate(TEST_ID, USER, CH);
+    verify(pregen)
+        .pregenerate(TEST_ID, USER, CH, ChapterAssessmentKind.FINAL, List.of());
+  }
+
+  @Test
+  void prepareQuizUsesThirtyThreeQuestionsAndSixtyMinuteAttempt() {
+    when(repo.findLatest(USER, CH, ChapterAssessmentKind.QUIZ)).thenReturn(Optional.empty());
+    when(repo.nextAttemptNo(USER, CH, ChapterAssessmentKind.QUIZ)).thenReturn(1);
+    when(repo.insertPending(USER, CH, ChapterAssessmentKind.QUIZ, 1, 3600))
+        .thenReturn(TEST_ID);
+
+    TestPrepareResponse resp = service.prepareQuiz(USER, CH);
+
+    assertThat(resp.status()).isEqualTo("GENERATING");
+    verify(pregen)
+        .pregenerate(TEST_ID, USER, CH, ChapterAssessmentKind.QUIZ, List.of());
+  }
+
+  @Test
+  void prepareFinalExcludesQuestionsFromLatestQuiz() {
+    when(repo.findLatest(USER, CH, ChapterAssessmentKind.FINAL)).thenReturn(Optional.empty());
+    when(repo.findLatest(USER, CH, ChapterAssessmentKind.QUIZ))
+        .thenReturn(
+            Optional.of(
+                record(
+                    ChapterAssessmentKind.QUIZ,
+                    ChapterTestStatus.SUBMITTED,
+                    null,
+                    questions(),
+                    null)));
+    when(repo.nextAttemptNo(USER, CH, ChapterAssessmentKind.FINAL)).thenReturn(2);
+    when(repo.insertPending(USER, CH, ChapterAssessmentKind.FINAL, 2, 7200))
+        .thenReturn(TEST_ID);
+
+    service.prepare(USER, CH);
+
+    verify(pregen)
+        .pregenerate(
+            TEST_ID, USER, CH, ChapterAssessmentKind.FINAL, List.of("s"));
   }
 
   // --- start -----------------------------------------------------------------
 
   @Test
   void startReentersExistingInProgressPaperStrippingAnswers() {
-    when(repo.findLatest(USER, CH))
+    when(repo.findLatest(USER, CH, ChapterAssessmentKind.FINAL))
         .thenReturn(
             Optional.of(
                 record(
@@ -120,37 +201,76 @@ class ChapterTestServiceTest {
     assertThat(paper.items().get(0).type()).isEqualTo("CHOICE");
     assertThat(paper.items().get(0).options()).containsExactly("A. x", "B. y");
     // 去答案题面 DTO 结构上不含答案字段（QuestionView 无 answer 成员）。
-    verify(repo, never()).insertPending(anyLong(), anyInt(), anyInt(), anyInt());
+    verify(repo, never()).insertPending(anyLong(), anyInt(), any(), anyInt(), anyInt());
     verify(repo, never()).startExam(anyLong(), any(), any());
   }
 
   @Test
-  void startUsesGoldenFallbackWhenNotReady() {
-    when(repo.findLatest(USER, CH))
+  void startRejectsWhenPaperIsNotReady() {
+    when(repo.findLatest(USER, CH, ChapterAssessmentKind.FINAL))
         .thenReturn(Optional.of(record(ChapterTestStatus.PENDING, null, null, null)));
-    when(repo.nextAttemptNo(USER, CH)).thenReturn(2);
-    when(repo.insertPending(USER, CH, 2, 1800)).thenReturn(200L);
-    when(golden.loadQuestions(CH)).thenReturn(questions());
-    when(golden.meta(CH)).thenReturn(mapper.createObjectNode().put("source", "golden"));
-    ChapterTestRecord ready =
-        new ChapterTestRecord(
-            200L, USER, CH, ChapterTestStatus.READY, 2, questions(), null, null, 1800,
-            null, null, null, null, null, mapper.createObjectNode(), OffsetDateTime.now());
-    ChapterTestRecord inProgress =
-        new ChapterTestRecord(
-            200L, USER, CH, ChapterTestStatus.IN_PROGRESS, 2, questions(), null, null, 1800,
-            OffsetDateTime.now(), OffsetDateTime.now().plusMinutes(30), null, null, null,
-            mapper.createObjectNode(), OffsetDateTime.now());
-    when(repo.findById(200L)).thenReturn(Optional.of(ready), Optional.of(inProgress));
-    when(repo.startExam(eq(200L), any(), any())).thenReturn(true);
 
-    ChapterTestPaperDto paper = service.start(USER, CH);
+    assertThatThrownBy(() -> service.start(USER, CH))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("仍在生成");
 
-    assertThat(paper.testId()).isEqualTo(200L);
+    verify(repo, never()).startExam(anyLong(), any(), any());
+  }
+
+  @Test
+  void startFinalRejectsWhenChapterStagesAreNotCompleted() {
+    when(progressRepo.findByUser(USER)).thenReturn(List.of(completedProgress(21L)));
+    when(repo.findLatest(USER, CH, ChapterAssessmentKind.FINAL))
+        .thenReturn(
+            Optional.of(
+                record(
+                    ChapterTestStatus.READY,
+                    null,
+                    questions(),
+                    null)));
+
+    assertThatThrownBy(() -> service.start(USER, CH))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("先完成本章所有小节");
+
+    verify(repo, never()).startExam(anyLong(), any(), any());
+  }
+
+  @Test
+  void startQuizDoesNotRequireAllChapterStagesCompleted() {
+    when(progressRepo.findByUser(USER)).thenReturn(List.of());
+    when(repo.findLatest(USER, CH, ChapterAssessmentKind.QUIZ))
+        .thenReturn(
+            Optional.of(
+                record(
+                    ChapterAssessmentKind.QUIZ,
+                    ChapterTestStatus.READY,
+                    null,
+                    questions(),
+                    null)));
+    when(repo.startExam(eq(TEST_ID), any(), any())).thenReturn(true);
+    when(repo.findById(TEST_ID))
+        .thenReturn(
+            Optional.of(
+                record(
+                    ChapterAssessmentKind.QUIZ,
+                    ChapterTestStatus.READY,
+                    null,
+                    questions(),
+                    null)))
+        .thenReturn(
+            Optional.of(
+                record(
+                    ChapterAssessmentKind.QUIZ,
+                    ChapterTestStatus.IN_PROGRESS,
+                    OffsetDateTime.now().plusHours(1),
+                    questions(),
+                    null)));
+
+    ChapterTestPaperDto paper = service.startQuiz(USER, CH);
+
     assertThat(paper.status()).isEqualTo("IN_PROGRESS");
-    verify(golden).loadQuestions(CH);
-    verify(repo).markReady(eq(200L), any(), any(), any());
-    verify(repo).startExam(eq(200L), any(), any());
+    verify(repo).startExam(eq(TEST_ID), any(), any());
   }
 
   // --- submit ----------------------------------------------------------------
@@ -259,7 +379,7 @@ class ChapterTestServiceTest {
 
   @Test
   void latestReturnsNullWhenNoTest() {
-    when(repo.findLatest(USER, CH)).thenReturn(Optional.empty());
+    when(repo.findLatest(USER, CH, ChapterAssessmentKind.FINAL)).thenReturn(Optional.empty());
     assertThat(service.latest(USER, CH)).isNull();
   }
 
@@ -269,7 +389,7 @@ class ChapterTestServiceTest {
         mapper.readTree(
             "{\"score\":72,\"maxScore\":100,\"items\":[{\"qid\":\"c1\",\"type\":\"CHOICE\","
                 + "\"correct\":true,\"awardedScore\":8,\"maxScore\":8}]}");
-    when(repo.findLatest(USER, CH))
+    when(repo.findLatest(USER, CH, ChapterAssessmentKind.FINAL))
         .thenReturn(
             Optional.of(record(ChapterTestStatus.SUBMITTED, OffsetDateTime.now(), questions(), detail)));
     lenient().when(starRepo.find(USER, CH))

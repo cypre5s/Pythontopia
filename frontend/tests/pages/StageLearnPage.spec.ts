@@ -11,9 +11,13 @@ vi.mock('@/api/mainline', () => ({
   postExampleDone: vi.fn(),
   answerPracticeQuestion: vi.fn(),
 }));
+vi.mock('@/api/chapterTest', () => ({
+  prepareTest: vi.fn(),
+}));
 
 import StageLearnPage from '@/pages/StageLearnPage.vue';
 import { getStageDetail, postExampleDone } from '@/api/mainline';
+import { prepareTest } from '@/api/chapterTest';
 import type { StageDetailDto, StageProgressDto } from '@/api/mainline';
 import { ApiClientError } from '@/api/http';
 
@@ -73,6 +77,7 @@ function createTestRouter(): Router {
       { path: '/', component: { template: '<div />' } },
       { path: '/mainline/stage/:stageId(\\d+)', name: 'stage-learn', component: { template: '<div />' } },
       { path: '/mainline-map', name: 'mainline-map', component: { template: '<div />' } },
+      { path: '/chapter-quiz/:chapter', name: 'chapter-quiz', component: { template: '<div />' } },
       { path: '/library', name: 'library', component: { template: '<div />' } },
       { path: '/training', name: 'training', component: { template: '<div />' } },
       { path: '/workshop', name: 'workshop', component: { template: '<div />' } },
@@ -102,6 +107,7 @@ describe('StageLearnPage（小节学习页 · 三件套编排）', () => {
     vi.mocked(postExampleDone).mockResolvedValue(
       makeStageProgress({ examplesDone: 1, examplesDoneIds: [201] }),
     );
+    vi.mocked(prepareTest).mockResolvedValue({ status: 'GENERATING' });
   });
 
   afterEach(() => {
@@ -139,6 +145,66 @@ describe('StageLearnPage（小节学习页 · 三件套编排）', () => {
     expect(vi.mocked(postExampleDone)).toHaveBeenCalledWith(7, 201);
     expect(wrapper.find('[data-testid="summary-practice-val"]').text()).toContain('1/1 OJ');
 
+    wrapper.unmount();
+  });
+
+  it('每章最后小节完成视频与 PPT 后开放章节小测', async () => {
+    vi.mocked(getStageDetail).mockResolvedValue(
+      makeStageDetail({
+        chapter: 2,
+        index: 3,
+        videoWatchedSec: 240,
+        pagesReadIds: [101, 102],
+      }),
+    );
+    const { wrapper, router } = await mountAt(7);
+    await wrapper.find('[data-testid="stage-toc-practice"]').trigger('click');
+    const button = wrapper.find('[data-testid="stage-chapter-quiz"]');
+    expect(button.exists()).toBe(true);
+    expect(button.attributes('disabled')).toBeUndefined();
+
+    await button.trigger('click');
+    await flushPromises();
+    expect(router.currentRoute.value.path).toBe('/chapter-quiz/2');
+    wrapper.unmount();
+  });
+
+  it('每章最后小节完成视频与 PPT 后后台预生成章末大测试', async () => {
+    vi.mocked(getStageDetail).mockResolvedValue(
+      makeStageDetail({
+        chapter: 2,
+        index: 3,
+        videoWatchedSec: 240,
+        pagesReadIds: [101, 102],
+      }),
+    );
+
+    const { wrapper } = await mountAt(7);
+    await flushPromises();
+
+    expect(vi.mocked(prepareTest)).toHaveBeenCalledWith(2, 'test');
+    wrapper.unmount();
+  });
+
+  it('最终小节视频与 PPT 未达标时不预生成章末大测试', async () => {
+    vi.mocked(getStageDetail).mockResolvedValue(
+      makeStageDetail({ chapter: 2, index: 3, videoWatchedSec: 239 }),
+    );
+
+    const { wrapper } = await mountAt(7);
+    await flushPromises();
+
+    expect(vi.mocked(prepareTest)).not.toHaveBeenCalledWith(2, 'test');
+    wrapper.unmount();
+  });
+
+  it('章节小测在视频或 PPT 未完成时保持锁定', async () => {
+    vi.mocked(getStageDetail).mockResolvedValue(
+      makeStageDetail({ chapter: 2, index: 3, videoWatchedSec: 239 }),
+    );
+    const { wrapper } = await mountAt(7);
+    await wrapper.find('[data-testid="stage-toc-practice"]').trigger('click');
+    expect(wrapper.find('[data-testid="stage-chapter-quiz"]').attributes('disabled')).toBeDefined();
     wrapper.unmount();
   });
 

@@ -12,6 +12,7 @@ import {
 } from '@/api/chapterTest';
 import type {
   ChapterTestAnswerDto,
+  ChapterAssessmentMode,
   ChapterTestIntegrityDto,
   ChapterTestPaperDto,
   ChapterTestQuestionDto,
@@ -85,7 +86,10 @@ export interface ChapterTestExam {
   markOvertime: () => void;
 }
 
-export function useChapterTestExam(chapter: number): ChapterTestExam {
+export function useChapterTestExam(
+  chapter: number,
+  assessment: ChapterAssessmentMode = 'test',
+): ChapterTestExam {
   const phase = ref<ExamPhase>('idle');
   const paper = ref<ChapterTestPaperDto | null>(null);
   const result = ref<ChapterTestResultDto | null>(null);
@@ -171,7 +175,7 @@ export function useChapterTestExam(chapter: number): ChapterTestExam {
 
   async function loadLatest(): Promise<void> {
     try {
-      latestResult.value = await getLatestTest(chapter);
+      latestResult.value = await getLatestTest(chapter, assessment);
     } catch {
       // 历史成绩拉取失败不阻塞开考流程，静默忽略。
       latestResult.value = null;
@@ -200,7 +204,7 @@ export function useChapterTestExam(chapter: number): ChapterTestExam {
         // 学生已手动开考/离开准备态则停止轮询。
         if (phase.value !== 'preparing') return;
         try {
-          const res = await prepareTest(chapter);
+          const res = await prepareTest(chapter, assessment);
           prepareStatus.value = res.status;
           if (res.status === 'READY') {
             phase.value = 'ready';
@@ -217,7 +221,7 @@ export function useChapterTestExam(chapter: number): ChapterTestExam {
   async function prepare(): Promise<void> {
     phase.value = 'preparing';
     try {
-      const res = await prepareTest(chapter);
+      const res = await prepareTest(chapter, assessment);
       prepareStatus.value = res.status;
       phase.value = res.status === 'READY' ? 'ready' : 'preparing';
       if (phase.value === 'preparing') {
@@ -236,7 +240,7 @@ export function useChapterTestExam(chapter: number): ChapterTestExam {
     stopPreparePoll();
     phase.value = 'starting';
     try {
-      const p = await startTest(chapter);
+      const p = await startTest(chapter, assessment);
       paper.value = p;
       initAnswers(p.items);
       result.value = null;
@@ -261,7 +265,7 @@ export function useChapterTestExam(chapter: number): ChapterTestExam {
       integrity: buildIntegrity(),
     };
     try {
-      result.value = await submitTest(chapter, p.testId, payload);
+      result.value = await submitTest(chapter, p.testId, payload, assessment);
       latestResult.value = result.value;
       phase.value = 'submitted';
     } catch (error) {

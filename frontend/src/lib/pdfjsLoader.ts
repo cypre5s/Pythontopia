@@ -1,4 +1,4 @@
-// pdfjs-dist 4.7 加载适配层。
+// pdfjs-dist 4.x 加载适配层。
 //
 // 业务层不直接 import pdfjs-dist，全部走本文件，方便：
 //   - 在 vitest（jsdom）里 stub worker / 不实际渲染；

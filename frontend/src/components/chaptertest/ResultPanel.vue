@@ -57,35 +57,37 @@ const flagged = computed<boolean>(
 </template>
 
 <style scoped>
+/* 学习通成绩条白纸风：白卡 + 左侧色条标记通过/未通过。 */
 .ct-result {
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: var(--pyt-space-4);
   padding: var(--pyt-space-4);
-  background: linear-gradient(180deg, var(--pyt-color-bg-elevated) 0%, var(--pyt-color-bg-sunken) 100%);
-  border: 3px solid var(--pyt-color-border-strong);
-  border-radius: var(--pyt-radius-lg);
-  box-shadow: var(--pyt-shadow-card);
+  background: #fff;
+  border: 1px solid #e6e8ec;
+  border-left-width: 4px;
+  border-radius: 4px;
+  font-family: var(--pyt-font-read), sans-serif;
 }
-.ct-result--pass { border-color: var(--pyt-color-success); }
-.ct-result--fail { border-color: var(--pyt-color-danger); }
-.ct-result__score { display: flex; align-items: baseline; gap: var(--pyt-space-1); }
-.ct-result__num { font-size: var(--pyt-font-size-2xl); font-weight: 700; color: var(--pyt-color-text-primary); }
-.ct-result__max { font-size: var(--pyt-font-size-base); color: var(--pyt-color-text-muted); }
-.ct-result__meta { display: flex; flex-direction: column; gap: var(--pyt-space-1); }
-.ct-result__verdict { font-size: var(--pyt-font-size-lg); font-weight: 700; }
-.ct-result--pass .ct-result__verdict { color: var(--pyt-color-success); }
-.ct-result--fail .ct-result__verdict { color: var(--pyt-color-danger); }
-.ct-result__stars { font-size: var(--pyt-font-size-lg); color: var(--pyt-color-gold); }
-.ct-result__attempt { font-size: var(--pyt-font-size-xs); color: var(--pyt-color-text-muted); }
+.ct-result--pass { border-left-color: #1fa657; }
+.ct-result--fail { border-left-color: #e25c4a; }
+.ct-result__score { display: flex; align-items: baseline; gap: 4px; }
+.ct-result__num { font-size: 28px; font-weight: 700; color: #333; }
+.ct-result__max { font-size: 14px; color: #9aa0a8; }
+.ct-result__meta { display: flex; flex-direction: column; gap: 2px; }
+.ct-result__verdict { font-size: 15px; font-weight: 700; }
+.ct-result--pass .ct-result__verdict { color: #1fa657; }
+.ct-result--fail .ct-result__verdict { color: #e25c4a; }
+.ct-result__stars { font-size: 15px; color: #f0a93d; }
+.ct-result__attempt { font-size: 12px; color: #9aa0a8; }
 .ct-result__integrity {
   list-style: none;
   margin: 0;
   padding: 0;
-  font-size: var(--pyt-font-size-xs);
-  color: var(--pyt-color-text-muted);
+  font-size: 12px;
+  color: #9aa0a8;
   text-align: right;
 }
-.ct-result__integrity--flagged { color: var(--pyt-color-warning); }
+.ct-result__integrity--flagged { color: #e0922f; }
 </style>

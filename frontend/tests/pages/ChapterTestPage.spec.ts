@@ -51,7 +51,12 @@ function setupRouter(): Router {
       {
         path: '/chapter-test/:chapter',
         component: ChapterTestPage,
-        props: (r) => ({ chapter: Number(r.params.chapter) }),
+        props: (r) => ({ chapter: Number(r.params.chapter), assessment: 'test' }),
+      },
+      {
+        path: '/chapter-quiz/:chapter',
+        component: ChapterTestPage,
+        props: (r) => ({ chapter: Number(r.params.chapter), assessment: 'quiz' }),
       },
       { path: '/mainline-map', component: { template: '<div data-testid="map-stub"/>' } },
       { path: '/workshop', component: { template: '<div data-testid="ws-stub"/>' } },
@@ -128,12 +133,45 @@ async function mountAt(chapter: number) {
   return wrapper;
 }
 
+async function mountQuizAt(chapter: number) {
+  await router.push(`/chapter-quiz/${chapter}`);
+  await router.isReady();
+  const wrapper = mount(ROOT, {
+    global: { plugins: [router], stubs: { AppLayout: APP_LAYOUT_STUB } },
+  });
+  await flushPromises();
+  return wrapper;
+}
+
 describe('ChapterTestPage', () => {
   it('shows the pre-exam gate and triggers prepare + loadLatest', async () => {
     const wrapper = await mountAt(1);
     expect(wrapper.find('[data-testid="ct-gate"]').exists()).toBe(true);
-    expect(apiMocks.prepareTest).toHaveBeenCalledWith(1);
-    expect(apiMocks.getLatestTest).toHaveBeenCalledWith(1);
+    expect(apiMocks.prepareTest).toHaveBeenCalledWith(1, 'test');
+    expect(apiMocks.getLatestTest).toHaveBeenCalledWith(1, 'test');
+  });
+
+  it('shows the 33-question chapter quiz contract and uses quiz APIs', async () => {
+    const wrapper = await mountQuizAt(1);
+    expect(wrapper.find('[data-testid="ct-gate"]').text()).toContain('章节小测');
+    expect(wrapper.find('[data-testid="ct-gate"]').text()).toContain('10 道选择');
+    expect(wrapper.find('[data-testid="ct-gate"]').text()).toContain('10 道填空');
+    expect(wrapper.find('[data-testid="ct-gate"]').text()).toContain('10 道判断');
+    expect(wrapper.find('[data-testid="ct-gate"]').text()).toContain('3 道编程');
+    expect(wrapper.find('[data-testid="ct-gate"]').text()).toContain('60 分钟');
+    expect(apiMocks.prepareTest).toHaveBeenCalledWith(1, 'quiz');
+    expect(apiMocks.getLatestTest).toHaveBeenCalledWith(1, 'quiz');
+  });
+
+  it('shows the 99-question final contract and 120-minute duration', async () => {
+    const wrapper = await mountAt(1);
+    const gate = wrapper.find('[data-testid="ct-gate"]').text();
+    expect(gate).toContain('章末大测试');
+    expect(gate).toContain('30 道选择');
+    expect(gate).toContain('30 道填空');
+    expect(gate).toContain('30 道判断');
+    expect(gate).toContain('9 道编程');
+    expect(gate).toContain('120 分钟');
   });
 
   it('renders an error for an out-of-range chapter', async () => {
@@ -146,7 +184,7 @@ describe('ChapterTestPage', () => {
     const wrapper = await mountAt(1);
     await wrapper.find('[data-testid="ct-start"]').trigger('click');
     await flushPromises();
-    expect(apiMocks.startTest).toHaveBeenCalledWith(1);
+    expect(apiMocks.startTest).toHaveBeenCalledWith(1, 'test');
     expect(wrapper.find('[data-testid="choice-question"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="judge-question"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="fill-question"]').exists()).toBe(true);
@@ -183,10 +221,16 @@ describe('ChapterTestPage', () => {
     await flushPromises();
 
     expect(apiMocks.submitTest).toHaveBeenCalledTimes(1);
-    const call = apiMocks.submitTest.mock.calls[0] as [number, string, ChapterTestSubmitRequest];
+    const call = apiMocks.submitTest.mock.calls[0] as [
+      number,
+      string,
+      ChapterTestSubmitRequest,
+      string,
+    ];
     expect(call[0]).toBe(1);
     expect(call[1]).toBe('t-1');
     const payload = call[2];
+    expect(call[3]).toBe('test');
     expect(payload.integrity).toEqual({ paste_blocked: 2, blur_events: 1, overtime: false });
     const byQid = Object.fromEntries(payload.answers.map((a) => [a.qid, a]));
     expect(byQid.c1).toEqual({ qid: 'c1', type: 'CHOICE', choice: 'B' });
@@ -220,7 +264,12 @@ describe('ChapterTestPage', () => {
     await flushPromises();
 
     expect(apiMocks.submitTest).toHaveBeenCalledTimes(1);
-    const call = apiMocks.submitTest.mock.calls[0] as [number, string, ChapterTestSubmitRequest];
+    const call = apiMocks.submitTest.mock.calls[0] as [
+      number,
+      string,
+      ChapterTestSubmitRequest,
+      string,
+    ];
     expect(call[2].integrity.overtime).toBe(true);
     vi.useRealTimers();
   });

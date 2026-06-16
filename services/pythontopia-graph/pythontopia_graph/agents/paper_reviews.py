@@ -97,26 +97,32 @@ def safety_critic(paper: QuestionPaper) -> SafetyReport:
     """泄答关键词（学生可见题面）、歧视、PII（含解析）、参考解危险代码。"""
     visible_parts: list[str] = []   # 学生可见题面：泄答关键词扫描
     full_parts: list[str] = []      # 可见 + 解析/答案：PII / 歧视扫描
+    pii_parts: list[str] = []       # 不含纯数值测试用例，避免把输入数据误判为手机号/证件号
     code_parts: list[str] = []      # 参考解：危险代码扫描
 
     for item in paper.items:
         if item.type == "CHOICE":
             visible_parts.extend([item.stem, *item.options])
             full_parts.append(item.explain)
+            pii_parts.extend([item.stem, *item.options, item.explain])
         elif item.type == "JUDGE":
             visible_parts.append(item.stem)
             full_parts.append(item.explain)
+            pii_parts.extend([item.stem, item.explain])
         elif item.type == "FILL":
             visible_parts.append(item.stem)
             full_parts.extend([item.explain, *item.answers])
+            pii_parts.extend([item.stem, item.explain, *item.answers])
         elif item.type == "CODING":
             visible_parts.extend([item.title, item.statement_markdown])
+            pii_parts.extend([item.title, item.statement_markdown])
             for sample in item.samples:
                 visible_parts.extend([sample.input, sample.output])
             code_parts.append(item.reference_solution)
 
     visible = "\n".join(p for p in visible_parts if p)
     full = "\n".join(p for p in (visible_parts + full_parts) if p)
+    pii_text = "\n".join(p for p in pii_parts if p)
     code = "\n".join(code_parts).lower()
 
     reasons: list[str] = []
@@ -128,7 +134,7 @@ def safety_critic(paper: QuestionPaper) -> SafetyReport:
         if keyword in full:
             reasons.append(f"DISCRIMINATION:{keyword}")
     for pattern in PII_PATTERNS:
-        if pattern.search(full):
+        if pattern.search(pii_text):
             reasons.append("PII_DETECTED")
             break
     for token in _DANGEROUS_CODE_TOKENS:

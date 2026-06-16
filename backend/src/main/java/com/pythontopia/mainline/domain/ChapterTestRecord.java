@@ -13,6 +13,7 @@ public record ChapterTestRecord(
     long id,
     long userId,
     int chapter,
+    ChapterAssessmentKind assessmentKind,
     ChapterTestStatus status,
     int attemptNo,
     JsonNode questions,

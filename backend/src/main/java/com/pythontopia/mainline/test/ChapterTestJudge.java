@@ -44,7 +44,8 @@ public class ChapterTestJudge {
       total += judgement.awardedScore();
       max += judgement.maxScore();
     }
-    return new JudgeReport(total, max, results);
+    int normalizedScore = max == 0 ? 0 : Math.round((float) total * 100 / max);
+    return new JudgeReport(normalizedScore, 100, results);
   }
 
   private QuestionJudgement judgeOne(QuestionItem item, String submitted) {

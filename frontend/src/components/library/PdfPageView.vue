@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * 原 PDF 页渲染器（pdfjs-dist 4.7）。
+ * 原 PDF 页渲染器（pdfjs-dist 4.x）。
  *
  * 直接 fetch 后端 `/api/course/documents/{docId}/pdf`，按 pageNo 渲染到 canvas。
  *
@@ -27,15 +27,29 @@ interface Props {
   pageNo: number;
   /** 自定义 PDF base 路径（默认 `/api/course/documents`，便于测试注入）。 */
   pdfBase?: string;
+  /**
+   * 适配模式：'width'（默认，按容器宽撑满，高度溢出由父级滚动）；
+   * 'contain'（同时按容器宽高自适应，整页恰好放进容器、不产生滚动——
+   * 主线 PPT 精读单屏布局用）。'contain' 要求父级给本组件确定高度。
+   */
+  fit?: 'width' | 'contain';
 }
 
-const props = withDefaults(defineProps<Props>(), { pdfBase: '/api/course/documents' });
+const props = withDefaults(defineProps<Props>(), {
+  pdfBase: '/api/course/documents',
+  fit: 'width',
+});
 
 const canvasEl = ref<HTMLCanvasElement | null>(null);
 const wrapperEl = ref<HTMLDivElement | null>(null);
 const loading = ref<boolean>(false);
 const error = ref<string | null>(null);
 const totalPages = ref<number | null>(null);
+/**
+ * 是否已成功画过至少一页。翻页加载期间 canvas 保留上一页画面（不再 display:none
+ * 塌缩 → 触发 ResizeObserver → 与新页渲染竞态清空画布），加载提示浮在画布上方。
+ */
+const hasRendered = ref<boolean>(false);
 
 let currentLoaded: LoadedPdfPage | null = null;
 let resizeObserver: ResizeObserver | null = null;
@@ -45,12 +59,26 @@ function buildPdfUrl(docId: number): string {
   return `${props.pdfBase}/${docId}/pdf`;
 }
 
+/** 期望渲染宽度：'width' 撑满容器宽；'contain' 再按容器高反推宽，整页可见。 */
+function computeTargetWidthPx(wrapper: HTMLElement): number {
+  const widthFit = Math.max(240, wrapper.clientWidth);
+  if (props.fit !== 'contain' || !currentLoaded) return widthFit;
+  const base = currentLoaded.page.getViewport({ scale: 1 });
+  const availHeight = wrapper.clientHeight - 8;
+  if (availHeight < 80 || base.height <= 0) return widthFit;
+  const heightFit = Math.floor(availHeight * (base.width / base.height));
+  return Math.max(240, Math.min(widthFit, heightFit));
+}
+
 async function renderNow(): Promise<void> {
   const canvas = canvasEl.value;
   const wrapper = wrapperEl.value;
   if (!canvas || !wrapper) return;
   if (!currentLoaded) return;
-  const targetWidthPx = Math.max(320, wrapper.clientWidth);
+  // 翻页加载中由 loadAndRender 收尾统一渲染；此处跳过，避免 ResizeObserver
+  // 用上一页（可能已 destroy）的 page 与新页渲染竞态、互相 cancel 清空画布。
+  if (loading.value) return;
+  const targetWidthPx = computeTargetWidthPx(wrapper);
   try {
     await renderPdfPageToCanvas({
       page: currentLoaded.page,
@@ -74,7 +102,10 @@ async function loadAndRender(docId: number, pageNo: number): Promise<void> {
     }
     currentLoaded = loaded;
     totalPages.value = loaded.pdf.numPages;
+    // 先解除 loading 再渲染：renderNow 在 loading 期间直接 return（防 resize 竞态）。
+    loading.value = false;
     await renderNow();
+    hasRendered.value = true;
   } catch (err) {
     if (token !== renderToken) return;
     error.value = renderErrToString(err);
@@ -134,18 +165,20 @@ onBeforeUnmount(() => {
     <p
       v-if="loading"
       class="state state--loading"
+      :class="{ 'state--floating': hasRendered }"
     >
       正在加载课件 PDF 第 {{ pageNo }} 页…
     </p>
     <p
-      v-else-if="error"
+      v-if="!loading && error"
       class="state state--error"
       data-testid="library-pdf-error"
     >
       PDF 加载失败：{{ error }}
     </p>
+    <!-- 翻页加载期间保留上一页画面（仅首次加载/出错时隐藏） -->
     <canvas
-      v-show="!loading && !error"
+      v-show="!error && (hasRendered || !loading)"
       ref="canvasEl"
       class="pdf-canvas"
       data-testid="library-pdf-canvas"
@@ -161,6 +194,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .pdf-page-view {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -186,6 +220,21 @@ onBeforeUnmount(() => {
 
 .state--loading {
   color: var(--pyt-color-text-hint);
+}
+
+/* 翻页期间浮在画布上方的小提示条（不参与布局，避免画布尺寸抖动） */
+.state--floating {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1;
+  padding: 2px 10px;
+  font-size: 11px;
+  background: rgba(255, 247, 230, 0.92);
+  border: 1px solid var(--pyt-color-border);
+  border-radius: 999px;
+  white-space: nowrap;
 }
 
 .state--error {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 题库浏览页：按 KC / 难度 / 玩家状态过滤，按章节 / 难度 / 尝试次数排序；
-// 点击行展开题目预览，点击「去做」跳到 /training。
+// 点击题号 / 标题 / 「去做」均直达做题界面 /training（不再行内展开题面预览）。
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import AppLayout from '@/app/AppLayout.vue';
@@ -37,7 +37,6 @@ const filterKcCode = ref<string>('');
 const filterDifficulty = ref<DifficultyFilter>('');
 const filterStatus = ref<StatusFilter>('');
 const sortField = ref<SortField>('chapter');
-const expanded = ref<Set<number>>(new Set());
 
 const loading = ref<boolean>(true);
 
@@ -174,15 +173,6 @@ watch(kcsWithProblems, (kcs) => {
     filterKcCode.value = '';
   }
 });
-
-function toggleExpand(problemId: number): void {
-  if (expanded.value.has(problemId)) {
-    expanded.value.delete(problemId);
-  } else {
-    expanded.value.add(problemId);
-  }
-  expanded.value = new Set(expanded.value);
-}
 
 function goTraining(problemId: number): void {
   void router.push({ path: '/training', query: { problemId: String(problemId) } });
@@ -429,20 +419,20 @@ onMounted(async () => {
         <div
           v-for="p in sorted"
           :key="p.problemId"
-          :class="['problem-row', { expanded: expanded.has(p.problemId) }]"
+          class="problem-row"
           role="row"
         >
           <button
             type="button"
             class="row-toggle"
-            @click="toggleExpand(p.problemId)"
+            @click="goTraining(p.problemId)"
           >
             {{ p.problemId }}
           </button>
           <button
             type="button"
             class="row-title"
-            @click="toggleExpand(p.problemId)"
+            @click="goTraining(p.problemId)"
           >
             {{ p.title }}
           </button>
@@ -468,27 +458,6 @@ onMounted(async () => {
           >
             去做
           </PyButton>
-          <article
-            v-if="expanded.has(p.problemId)"
-            class="row-preview"
-          >
-            <header>
-              <strong>{{ p.title }}</strong>
-              <span class="badge kc">{{ kcNameOf(p.kcCode) }}</span>
-            </header>
-            <pre
-              v-text="
-                p.statementMarkdown.slice(0, 240) +
-                  (p.statementMarkdown.length > 240 ? '…' : '')
-              "
-            />
-            <p
-              v-if="p.commonMistakes.length"
-              class="mistakes"
-            >
-              <strong>常见失误：</strong>{{ p.commonMistakes[0] }}
-            </p>
-          </article>
         </div>
         <p
           v-if="!loading && sorted.length === 0"
@@ -715,25 +684,6 @@ onMounted(async () => {
   border: 2px solid var(--pyt-color-border-strong, var(--pyt-color-text-primary));
   cursor: pointer;
   box-shadow: 2px 2px 0 var(--pyt-color-border-strong, var(--pyt-color-text-primary));
-}
-.row-preview {
-  grid-column: 1 / -1;
-  background: var(--pyt-color-bg-soft, var(--pyt-color-bg-soft));
-  border: 2px solid var(--pyt-color-border, var(--pyt-color-border));
-  margin-top: 6px;
-  padding: 8px 10px;
-}
-.row-preview pre {
-  margin: 6px 0;
-  white-space: pre-wrap;
-  font-family: var(--pyt-font-sans, sans-serif);
-  font-size: 13px;
-  line-height: 1.6;
-}
-.row-preview .mistakes {
-  margin: 0;
-  font-size: 12px;
-  color: var(--pyt-color-warning, var(--pyt-color-warning));
 }
 .empty {
   text-align: center;

@@ -11,27 +11,35 @@
  * 一次性批量上报本章全部 pageIds（`postPagesRead`，后端并集去重幂等），本地置
  * 「已过线 ✓」并向上 emit 进度。过线 = 读满整章（readPageIds ∩ pageIds 数 ≥ requiredPages）。
  */
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import PdfPageView from '@/components/library/PdfPageView.vue';
 import StageContextTutor from './StageContextTutor.vue';
 import { postPagesRead } from '@/api/mainline';
 import { getDocumentPage } from '@/api/courseLibrary';
 import type { StageTaskProgress } from './stageTypes';
 
-const props = defineProps<{
-  stageId: number;
-  chapter: number;
-  /** course_document.id（= 185 + chapter）。 */
-  docId: number;
-  /** 本章文档全部页 id（用于计数与批量打点）。 */
-  pageIds: number[];
-  /** 本章页数（全部看完过线）。 */
-  requiredPages: number;
-  /** 已读页 id。 */
-  readPageIds: number[];
-  /** 本节知识点（传给锚定问答，收敛课件 RAG 检索范围）。 */
-  kcCodes?: string[];
-}>();
+const props = withDefaults(
+  defineProps<{
+    stageId: number;
+    chapter: number;
+    /** course_document.id（= 185 + chapter）。 */
+    docId: number;
+    /** 本章文档全部页 id（用于计数与批量打点）。 */
+    pageIds: number[];
+    /** 本章页数（全部看完过线）。 */
+    requiredPages: number;
+    /** 已读页 id。 */
+    readPageIds: number[];
+    /** 本节知识点（传给锚定问答，收敛课件 RAG 检索范围）。 */
+    kcCodes?: string[];
+    /**
+     * 是否为学习页当前激活的 tab。三件套用 v-show 常驻挂载，
+     * 键盘翻页快捷键只在本组件可见时响应，避免在「看/练」里误翻页。
+     */
+    active?: boolean;
+  }>(),
+  { active: true },
+);
 
 const emit = defineEmits<{ (e: 'progress', p: StageTaskProgress): void }>();
 
@@ -105,6 +113,31 @@ async function markAllRead(): Promise<void> {
   }
 }
 
+// ── 键盘翻页：← / → 上下页，End 末页（仅本 tab 激活、且焦点不在输入框时）──
+function onKeydown(event: KeyboardEvent): void {
+  if (!props.active || totalPages.value === 0) return;
+  const target = event.target as HTMLElement | null;
+  const tag = target?.tagName ?? '';
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return;
+  if (event.key === 'ArrowLeft') {
+    event.preventDefault();
+    goPrev();
+  } else if (event.key === 'ArrowRight') {
+    event.preventDefault();
+    goNext();
+  } else if (event.key === 'End') {
+    event.preventDefault();
+    goLast();
+  }
+}
+
+onMounted(() => {
+  if (typeof window !== 'undefined') window.addEventListener('keydown', onKeydown);
+});
+onBeforeUnmount(() => {
+  if (typeof window !== 'undefined') window.removeEventListener('keydown', onKeydown);
+});
+
 // ── 锚定当前页的「百晓助教」问答（R-15 反馈：升级原关键词检索）──
 // 把当前正在看的这一页 PPT 文本作为 context 喂给 /api/tutor/ask，让助教紧扣这一页作答。
 // contextProvider 是函数：提交问答的「此刻」才懒取当前页文本（翻页后自动变），失败回退空串。
@@ -136,6 +169,7 @@ async function currentPageContext(): Promise<string> {
           aria-hidden="true"
         >📖</span> 学 · 课件精读
       </h3>
+      <span class="stage-courseware__hint">逐页翻阅（支持键盘 ← →），浏览到末页后可标记整章已读</span>
       <span
         v-if="passed"
         class="stage-courseware__passed"
@@ -148,85 +182,88 @@ async function currentPageContext(): Promise<string> {
       >已读 {{ readCount }} / {{ requiredCount }} 页</span>
     </header>
 
-    <template v-if="pageIds.length > 0">
-      <p class="stage-courseware__hint">
-        站内精读本章 PPT 课件（共 {{ totalPages }} 页）。用下方按钮逐页翻阅，
-        浏览到最后一页后即可「标记整章课件已读」过线。
-      </p>
+    <div
+      v-if="pageIds.length > 0"
+      class="stage-courseware__body"
+    >
+      <!-- 左：PDF 单屏自适应 + 紧凑翻页工具条（页面不再上下滚动） -->
+      <div class="stage-courseware__reader">
+        <div
+          class="stage-courseware__viewer"
+          data-testid="stage-courseware-viewer"
+        >
+          <PdfPageView
+            :doc-id="docId"
+            :page-no="currentPage"
+            fit="contain"
+          />
+        </div>
 
-      <!-- 锚定当前页的「百晓助教」问答（升级原关键词检索）：基于这一页 PPT 内容作答 -->
+        <div class="stage-courseware__nav">
+          <button
+            type="button"
+            class="stage-courseware__navbtn"
+            data-testid="stage-courseware-prev"
+            :disabled="currentPage <= 1"
+            @click="goPrev"
+          >
+            ‹ 上一页
+          </button>
+          <span
+            class="stage-courseware__pageno"
+            data-testid="stage-courseware-pageno"
+          >第 {{ currentPage }} / {{ totalPages }} 页</span>
+          <button
+            type="button"
+            class="stage-courseware__navbtn"
+            data-testid="stage-courseware-next"
+            :disabled="currentPage >= totalPages"
+            @click="goNext"
+          >
+            下一页 ›
+          </button>
+          <button
+            type="button"
+            class="stage-courseware__navbtn stage-courseware__navbtn--ghost"
+            data-testid="stage-courseware-last"
+            :disabled="currentPage >= totalPages"
+            @click="goLast"
+          >
+            末页 ⇥
+          </button>
+
+          <span class="stage-courseware__nav-spacer" />
+
+          <span
+            v-if="!passed && !reachedEnd"
+            class="stage-courseware__tip"
+          >翻到最后一页后可标记 ✓</span>
+          <button
+            v-if="!passed"
+            type="button"
+            class="stage-courseware__mark"
+            data-testid="stage-courseware-mark-all"
+            :disabled="!reachedEnd || marking"
+            @click="markAllRead"
+          >
+            {{ marking ? '标记中…' : '✅ 标记整章课件已读' }}
+          </button>
+          <span
+            v-else
+            class="stage-courseware__done"
+            data-testid="stage-courseware-done"
+          >本章课件已读完 ✓</span>
+        </div>
+      </div>
+
+      <!-- 右：锚定当前页的「百晓助教」问答（基于这一页 PPT 内容作答） -->
       <StageContextTutor
+        class="stage-courseware__tutor"
         :kc-codes="ctxKcCodes"
         scope-label="这一页课件"
         :context-provider="currentPageContext"
       />
-
-      <div
-        class="stage-courseware__viewer"
-        data-testid="stage-courseware-viewer"
-      >
-        <PdfPageView
-          :doc-id="docId"
-          :page-no="currentPage"
-        />
-      </div>
-
-      <div class="stage-courseware__nav">
-        <button
-          type="button"
-          class="stage-courseware__navbtn"
-          data-testid="stage-courseware-prev"
-          :disabled="currentPage <= 1"
-          @click="goPrev"
-        >
-          ← 上一页
-        </button>
-        <span
-          class="stage-courseware__pageno"
-          data-testid="stage-courseware-pageno"
-        >第 {{ currentPage }} / {{ totalPages }} 页</span>
-        <button
-          type="button"
-          class="stage-courseware__navbtn"
-          data-testid="stage-courseware-next"
-          :disabled="currentPage >= totalPages"
-          @click="goNext"
-        >
-          下一页 →
-        </button>
-        <button
-          type="button"
-          class="stage-courseware__navbtn stage-courseware__navbtn--ghost"
-          data-testid="stage-courseware-last"
-          :disabled="currentPage >= totalPages"
-          @click="goLast"
-        >
-          末页 ⇥
-        </button>
-      </div>
-
-      <div class="stage-courseware__foot">
-        <button
-          v-if="!passed"
-          type="button"
-          class="stage-courseware__mark"
-          data-testid="stage-courseware-mark-all"
-          :disabled="!reachedEnd || marking"
-          @click="markAllRead"
-        >
-          {{ marking ? '标记中…' : '✅ 标记整章课件已读' }}
-        </button>
-        <span
-          v-else
-          class="stage-courseware__done"
-          data-testid="stage-courseware-done"
-        >本章课件已读完 ✓</span>
-        <span
-          v-if="!passed && !reachedEnd"
-          class="stage-courseware__tip"
-        >翻到最后一页后可标记 ✓</span>
-      </div>
-    </template>
+    </div>
 
     <p
       v-else
@@ -242,11 +279,13 @@ async function currentPageContext(): Promise<string> {
   display: flex;
   flex-direction: column;
   gap: var(--pyt-space-2);
+  height: 100%;
+  min-height: 0;
 }
 .stage-courseware__head {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: var(--pyt-space-2);
 }
 .stage-courseware__title {
@@ -254,11 +293,22 @@ async function currentPageContext(): Promise<string> {
   font-family: var(--pyt-font-pixel), sans-serif;
   font-size: var(--pyt-font-size-lg);
   color: var(--pyt-color-text-primary);
+  white-space: nowrap;
 }
 .stage-courseware__icon {
   color: var(--pyt-color-info);
 }
+.stage-courseware__hint {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--pyt-font-size-xs);
+  color: var(--pyt-color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .stage-courseware__passed {
+  flex: 0 0 auto;
   font-size: var(--pyt-font-size-xs);
   padding: 2px 8px;
   background: var(--pyt-color-success-bg);
@@ -268,57 +318,88 @@ async function currentPageContext(): Promise<string> {
   white-space: nowrap;
 }
 .stage-courseware__count {
+  flex: 0 0 auto;
   font-size: var(--pyt-font-size-xs);
   font-family: var(--pyt-font-pixel-mono), monospace;
   color: var(--pyt-color-text-muted);
+  white-space: nowrap;
 }
-.stage-courseware__hint {
-  margin: 0;
-  font-size: var(--pyt-font-size-xs);
-  line-height: 1.5;
-  color: var(--pyt-color-text-muted);
+
+/* ── 单屏两栏：左 PDF（自适应高度）+ 右锚定问答 ── */
+.stage-courseware__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(240px, 28%, 330px);
+  gap: var(--pyt-space-3);
+  align-items: stretch;
+}
+.stage-courseware__reader {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pyt-space-2);
 }
 .stage-courseware__viewer {
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
+  align-items: center;
   justify-content: center;
-  width: 100%;
-  max-height: 70vh;
-  overflow: auto;
-  padding: var(--pyt-space-2);
+  overflow: hidden;
+  padding: var(--pyt-space-1);
   background: var(--pyt-color-bg-sunken);
   border: 2px solid var(--pyt-color-border-strong);
   border-radius: var(--pyt-radius-sm);
   box-shadow: inset 0 0 0 2px var(--pyt-color-bg-soft);
 }
+.stage-courseware__viewer :deep(.pdf-page-view) {
+  width: 100%;
+  height: 100%;
+  justify-content: center;
+}
+/* 页码已在工具条显示，contain 单屏下隐藏组件内置 meta 行省高度 */
+.stage-courseware__viewer :deep(.state--meta) {
+  display: none;
+}
+
+/* 紧凑单行工具条：小号翻页键 + 页码 + 标记按钮，全部一行收纳 */
 .stage-courseware__nav {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: var(--pyt-space-2);
   flex-wrap: wrap;
 }
 .stage-courseware__navbtn {
-  font-family: var(--pyt-font-pixel), monospace;
+  font-family: var(--pyt-font-read), sans-serif;
   font-size: var(--pyt-font-size-xs);
-  padding: 2px 10px;
+  line-height: 1.4;
+  min-height: 0;
+  padding: 2px 8px;
   background: var(--pyt-color-bg-elevated);
-  border: 2px solid var(--pyt-color-border);
+  border: 1px solid var(--pyt-color-border);
   border-radius: var(--pyt-radius-sm);
+  box-shadow: none;
   color: var(--pyt-color-text-primary);
   cursor: pointer;
-  box-shadow: 0 2px 0 var(--pyt-color-border);
+}
+.stage-courseware__navbtn:active,
+.stage-courseware__mark:active {
+  transform: none;
+  box-shadow: none;
+}
+.stage-courseware__navbtn:hover:not(:disabled) {
+  border-color: var(--pyt-color-gold);
+  background: var(--pyt-color-warning-bg);
 }
 .stage-courseware__navbtn--ghost {
   background: var(--pyt-color-bg-soft);
 }
 .stage-courseware__navbtn:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: not-allowed;
-  box-shadow: none;
-}
-.stage-courseware__navbtn:not(:disabled):active {
-  transform: translateY(2px);
-  box-shadow: none;
 }
 .stage-courseware__pageno {
   font-size: var(--pyt-font-size-xs);
@@ -327,145 +408,40 @@ async function currentPageContext(): Promise<string> {
   min-width: 8ch;
   text-align: center;
 }
-.stage-courseware__foot {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--pyt-space-2);
-  flex-wrap: wrap;
+.stage-courseware__nav-spacer {
+  flex: 1 1 auto;
 }
 .stage-courseware__mark {
-  font-family: var(--pyt-font-pixel), monospace;
-  font-size: var(--pyt-font-size-sm);
-  padding: 4px 16px;
+  font-family: var(--pyt-font-read), sans-serif;
+  font-size: var(--pyt-font-size-xs);
+  min-height: 0;
+  padding: 2px 10px;
   background: var(--pyt-color-success-bg);
-  border: 2px solid var(--pyt-color-success);
+  border: 1px solid var(--pyt-color-success);
   border-radius: var(--pyt-radius-sm);
+  box-shadow: none;
   color: var(--pyt-color-success);
   cursor: pointer;
-  box-shadow: 0 2px 0 var(--pyt-color-border);
 }
 .stage-courseware__mark:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-  box-shadow: none;
   background: var(--pyt-color-bg-elevated);
   border-color: var(--pyt-color-border);
   color: var(--pyt-color-text-muted);
 }
-.stage-courseware__mark:not(:disabled):active {
-  transform: translateY(2px);
-  box-shadow: none;
-}
 .stage-courseware__done {
-  font-size: var(--pyt-font-size-sm);
-  font-family: var(--pyt-font-pixel), monospace;
+  font-size: var(--pyt-font-size-xs);
   color: var(--pyt-color-success);
+  white-space: nowrap;
 }
 .stage-courseware__tip {
   font-size: var(--pyt-font-size-xs);
   color: var(--pyt-color-text-hint);
+  white-space: nowrap;
 }
-
-/* ── 本章课件检索（弱化版工坊）── */
-.stage-courseware__search {
-  display: flex;
-  flex-direction: column;
-  gap: var(--pyt-space-2);
-  padding: var(--pyt-space-2);
-  background: var(--pyt-color-bg-soft);
-  border: 2px dashed var(--pyt-color-border);
-  border-radius: var(--pyt-radius-sm);
-}
-.stage-courseware__search-toggle {
-  align-self: flex-start;
-  font-family: var(--pyt-font-pixel), monospace;
-  font-size: var(--pyt-font-size-xs);
-  padding: 2px 10px;
-  background: var(--pyt-color-bg-elevated);
-  border: 2px solid var(--pyt-color-border);
-  border-radius: var(--pyt-radius-full);
-  color: var(--pyt-color-text-primary);
-  cursor: pointer;
-}
-.stage-courseware__search-toggle:hover {
-  background: var(--pyt-color-warning-bg);
-}
-.stage-courseware__search-form {
-  display: flex;
-  gap: var(--pyt-space-2);
-}
-.stage-courseware__search-input {
-  flex: 1 1 auto;
-  min-width: 0;
-  padding: 4px 8px;
-  font: inherit;
-  background: var(--pyt-color-bg-primary);
-  border: 2px solid var(--pyt-color-border-strong);
-  border-radius: var(--pyt-radius-sm);
-  color: var(--pyt-color-text-primary);
-}
-.stage-courseware__search-submit {
-  flex: 0 0 auto;
-  font-family: var(--pyt-font-pixel), monospace;
-  font-size: var(--pyt-font-size-xs);
-  padding: 4px 12px;
-  background: var(--pyt-color-info-bg);
-  border: 2px solid var(--pyt-color-border-strong);
-  border-radius: var(--pyt-radius-sm);
-  color: var(--pyt-color-text-primary);
-  cursor: pointer;
-}
-.stage-courseware__search-submit:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.stage-courseware__search-hint {
-  margin: 0;
-  font-size: var(--pyt-font-size-xs);
-  color: var(--pyt-color-text-muted);
-}
-.stage-courseware__search-results {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--pyt-space-1);
-  max-height: 30vh;
-  overflow: auto;
-}
-.stage-courseware__search-hit {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  width: 100%;
-  padding: 6px 8px;
-  text-align: left;
-  background: var(--pyt-color-bg-elevated);
-  border: 1px solid var(--pyt-color-border);
-  border-radius: var(--pyt-radius-sm);
-  cursor: pointer;
-  font: inherit;
-}
-.stage-courseware__search-hit:hover {
-  border-color: var(--pyt-color-gold);
-  background: var(--pyt-color-warning-bg);
-}
-.stage-courseware__search-hit-page {
-  font-family: var(--pyt-font-pixel-mono), monospace;
-  font-size: var(--pyt-font-size-xs);
-  color: var(--pyt-color-info);
-}
-.stage-courseware__search-hit-snippet {
-  font-size: var(--pyt-font-size-xs);
-  line-height: 1.45;
-  color: var(--pyt-color-text-primary);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+.stage-courseware__tutor {
+  min-height: 0;
 }
 .stage-courseware__empty {
   margin: 0;
@@ -476,5 +452,21 @@ async function currentPageContext(): Promise<string> {
   background: var(--pyt-color-bg-soft);
   border: 1px dashed var(--pyt-color-border);
   border-radius: var(--pyt-radius-md);
+}
+
+@media (max-width: 900px) {
+  .stage-courseware {
+    height: auto;
+  }
+  .stage-courseware__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .stage-courseware__viewer {
+    flex: 0 0 auto;
+    height: 56vh;
+  }
+  .stage-courseware__tutor {
+    min-height: 220px;
+  }
 }
 </style>

@@ -109,12 +109,10 @@ async function markExampleDone(problemId: number): Promise<void> {
     class="stage-practice"
     data-testid="stage-practice"
   >
+    <!-- 学习通作业式顶栏：标题 + 答题进度 -->
     <header class="stage-practice__head">
       <h3 class="stage-practice__title">
-        <span
-          class="stage-practice__icon"
-          aria-hidden="true"
-        >⌨</span> 练 · 客观题 &amp; 实战
+        练 · 题目练习
       </h3>
       <div class="stage-practice__status">
         <span
@@ -138,7 +136,10 @@ async function markExampleDone(problemId: number): Promise<void> {
     <!-- 客观题区 -->
     <div class="stage-practice__block">
       <h4 class="stage-practice__subtitle">
-        客观题自检（答对 {{ quizRequired }} 道）
+        一、客观题 <span
+          v-if="questions.length > 0"
+          class="stage-practice__subnote"
+        >（共 {{ questions.length }} 题，答对 {{ quizRequired }} 题过线）</span>
       </h4>
       <div
         v-if="questions.length > 0"
@@ -166,7 +167,10 @@ async function markExampleDone(problemId: number): Promise<void> {
     <!-- OJ 区 -->
     <div class="stage-practice__block">
       <h4 class="stage-practice__subtitle">
-        编程实战（去训练场真实判题，完成 {{ ojRequired }} 道）
+        二、编程实战 <span
+          v-if="examples.length > 0"
+          class="stage-practice__subnote"
+        >（去训练场真实判题，完成 {{ ojRequired }} 道）</span>
       </h4>
       <ul
         v-if="examples.length > 0"
@@ -222,10 +226,14 @@ async function markExampleDone(problemId: number): Promise<void> {
 </template>
 
 <style scoped>
+/* 学习通作业式白纸风：白底细线、灰字蓝点缀，整卷一张纸，不用像素字/重边框/大色块。 */
 .stage-practice {
   display: flex;
   flex-direction: column;
-  gap: var(--pyt-space-3);
+  background: #fff;
+  border: 1px solid #e6e8ec;
+  border-radius: 4px;
+  font-family: var(--pyt-font-read), sans-serif;
 }
 .stage-practice__head {
   display: flex;
@@ -233,138 +241,145 @@ async function markExampleDone(problemId: number): Promise<void> {
   justify-content: space-between;
   gap: var(--pyt-space-2);
   flex-wrap: wrap;
+  padding: 14px 18px;
+  border-bottom: 1px solid #ececec;
 }
 .stage-practice__title {
   margin: 0;
-  font-family: var(--pyt-font-pixel), sans-serif;
-  font-size: var(--pyt-font-size-lg);
-  color: var(--pyt-color-text-primary);
-}
-.stage-practice__icon {
-  color: var(--pyt-color-accent);
+  font-size: 16px;
+  font-weight: 700;
+  color: #333;
 }
 .stage-practice__status {
   display: inline-flex;
   align-items: center;
-  gap: var(--pyt-space-2);
+  gap: var(--pyt-space-3);
   flex-wrap: wrap;
 }
 .stage-practice__count {
-  font-size: var(--pyt-font-size-xs);
-  font-family: var(--pyt-font-pixel-mono), monospace;
-  color: var(--pyt-color-text-muted);
+  font-size: 12px;
+  color: #8a8a8a;
 }
 .stage-practice__passed {
-  font-size: var(--pyt-font-size-xs);
-  padding: 2px 8px;
-  background: var(--pyt-color-success-bg);
-  color: var(--pyt-color-success);
-  border: 1px solid var(--pyt-color-border);
-  border-radius: var(--pyt-radius-full);
+  font-size: 12px;
+  padding: 1px 10px;
+  background: #f2faf4;
+  color: #1fa657;
+  border: 1px solid #b9e4c7;
+  border-radius: 999px;
   white-space: nowrap;
 }
 .stage-practice__block {
   display: flex;
   flex-direction: column;
-  gap: var(--pyt-space-2);
 }
 .stage-practice__subtitle {
   margin: 0;
-  font-size: var(--pyt-font-size-sm);
+  padding: 12px 18px 8px;
+  font-size: 14px;
   font-weight: 700;
-  color: var(--pyt-color-text-hint);
+  color: #333;
+  background: #fafbfc;
+  border-bottom: 1px solid #f0f1f3;
+}
+.stage-practice__subnote {
+  font-size: 12px;
+  font-weight: 400;
+  color: #9aa0a8;
 }
 .stage-practice__quiz {
   display: grid;
-  gap: var(--pyt-space-2);
 }
 .stage-practice__list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  gap: var(--pyt-space-1);
 }
 .stage-practice__item {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--pyt-space-2);
-  padding: var(--pyt-space-2);
-  background: var(--pyt-color-bg-soft);
-  border: 2px solid var(--pyt-color-border);
-  border-radius: var(--pyt-radius-sm);
+  padding: 12px 18px;
+  background: #fff;
+  border-bottom: 1px solid #ececec;
+}
+.stage-practice__item:last-child {
+  border-bottom: 0;
 }
 .stage-practice__item--done {
-  background: var(--pyt-color-success-bg);
-  border-color: var(--pyt-color-success);
+  background: #fafdfb;
 }
 .stage-practice__name {
   display: inline-flex;
   align-items: center;
-  gap: var(--pyt-space-2);
+  gap: 10px;
   min-width: 0;
-  font-size: var(--pyt-font-size-sm);
-  color: var(--pyt-color-text-primary);
+  font-size: 14px;
+  color: #333;
 }
 .stage-practice__check {
   flex: 0 0 auto;
-  font-family: var(--pyt-font-pixel-mono), monospace;
-  color: var(--pyt-color-success);
+  color: #1fa657;
 }
 .stage-practice__label {
   min-width: 0;
 }
 .stage-practice__no {
-  font-family: var(--pyt-font-pixel-mono), monospace;
-  color: var(--pyt-color-text-muted);
-  margin-right: var(--pyt-space-1);
+  color: #8a8a8a;
+  margin-right: 6px;
+  font-size: 13px;
 }
 .stage-practice__kc {
-  margin-left: var(--pyt-space-1);
-  font-size: var(--pyt-font-size-xs);
-  font-family: var(--pyt-font-pixel-mono), monospace;
-  color: var(--pyt-color-text-muted);
+  margin-left: 6px;
+  font-size: 12px;
+  color: #9aa0a8;
 }
 .stage-practice__actions {
   display: inline-flex;
   align-items: center;
-  gap: var(--pyt-space-2);
+  gap: var(--pyt-space-3);
   flex: 0 0 auto;
 }
 .stage-practice__open {
-  font-size: var(--pyt-font-size-xs);
+  font-size: 13px;
+  text-decoration: none;
+  color: #3a7bd5;
+}
+.stage-practice__open:hover {
   text-decoration: underline;
-  color: var(--pyt-color-info);
 }
 .stage-practice__mark {
-  font-family: var(--pyt-font-pixel), monospace;
-  font-size: var(--pyt-font-size-xs);
-  padding: 2px 10px;
-  background: var(--pyt-color-bg-elevated);
-  border: 2px solid var(--pyt-color-border);
-  border-radius: var(--pyt-radius-sm);
-  color: var(--pyt-color-text-primary);
+  font-family: var(--pyt-font-read), sans-serif;
+  font-size: 13px;
+  min-height: 0;
+  padding: 3px 12px;
+  background: #fff;
+  border: 1px solid #d4d8df;
+  border-radius: 4px;
+  box-shadow: none;
+  color: #555;
   cursor: pointer;
-  box-shadow: 0 2px 0 var(--pyt-color-border);
+}
+.stage-practice__mark:active {
+  transform: none;
+  box-shadow: none;
+}
+.stage-practice__mark:hover:not(:disabled) {
+  border-color: #3a7bd5;
+  color: #3a7bd5;
 }
 .stage-practice__mark:disabled {
-  opacity: 0.5;
+  background: #f7f8fa;
+  color: #9aa0a8;
   cursor: not-allowed;
-  box-shadow: none;
-}
-.stage-practice__mark:not(:disabled):active {
-  transform: translateY(2px);
-  box-shadow: none;
 }
 .stage-practice__empty {
   margin: 0;
-  padding: var(--pyt-space-3);
+  padding: 18px;
   text-align: center;
-  font-size: var(--pyt-font-size-sm);
-  color: var(--pyt-color-text-hint);
-  background: var(--pyt-color-bg-soft);
-  border: 1px dashed var(--pyt-color-border);
-  border-radius: var(--pyt-radius-md);
+  font-size: 13px;
+  color: #9aa0a8;
 }
 </style>

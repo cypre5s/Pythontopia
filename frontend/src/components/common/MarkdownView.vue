@@ -8,6 +8,22 @@ const props = defineProps<{
   inline?: boolean;
 }>();
 
+const emit = defineEmits<{
+  (e: 'cite-click', payload: { pageId: number; pageNo: number }): void;
+}>();
+
+// 点击正文里的 [页 N] 角标 → 上抛 cite-click（pageId 跳 /library?pageId=）。
+function onRootClick(event: MouseEvent): void {
+  const target = event.target as HTMLElement | null;
+  const cite = target?.closest?.('.pyt-cite[data-page-id]') as HTMLElement | null;
+  if (!cite) return;
+  const pageId = Number(cite.dataset.pageId);
+  const pageNo = Number(cite.dataset.page);
+  if (Number.isFinite(pageId) && pageId > 0) {
+    emit('cite-click', { pageId, pageNo: Number.isFinite(pageNo) ? pageNo : 0 });
+  }
+}
+
 const PURIFY_CONFIG: { ALLOWED_TAGS: string[]; ALLOWED_ATTR: string[] } = {
   ALLOWED_TAGS: [
     'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
@@ -50,11 +66,13 @@ const rendered = computed(() => {
     v-if="!inline"
     class="md-view"
     v-html="rendered"
+    @click="onRootClick"
   />
   <span
     v-else
     class="md-view md-view--inline"
     v-html="rendered"
+    @click="onRootClick"
   />
   <!-- eslint-enable vue/no-v-html -->
 </template>
@@ -155,7 +173,7 @@ const rendered = computed(() => {
   font-size: 0.72em;
   vertical-align: super;
   color: var(--pyt-color-text-hint);
-  cursor: help;
+  cursor: pointer;
   border-bottom: 1px dashed var(--pyt-color-text-hint);
   padding: 0 1px;
 }
@@ -166,7 +184,7 @@ const rendered = computed(() => {
 /* 富浮层卡（CSS-only）：hover 即时显示「第 N 页 · 课件原文」，data-* 经 attr() 取值不被 marked
    解析；跳转仍由底部「课件证据」面板承担。 */
 .md-view :deep(.pyt-cite:hover::after) {
-  content: '📖 第 ' attr(data-page) ' 页　' attr(data-snippet);
+  content: '📖 第 ' attr(data-page) ' 页\3000' attr(data-snippet);
   position: absolute;
   left: 0;
   bottom: 1.7em;

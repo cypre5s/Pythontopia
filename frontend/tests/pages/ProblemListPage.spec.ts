@@ -209,8 +209,9 @@ describe('ProblemListPage', () => {
     expect(payload.query?.problemId).toBe('476');
   });
 
-  it('展开预览展示题面摘要', async () => {
+  it('点击题目标题直达做题界面 /training（不再行内展开预览）', async () => {
     const router = createTestRouter();
+    const pushSpy = vi.spyOn(router, 'push');
     await router.push('/problems');
     await router.isReady();
     const wrapper = mount(ProblemListPage, {
@@ -218,10 +219,16 @@ describe('ProblemListPage', () => {
     });
     await flushPromises();
 
+    pushSpy.mockClear();
     const titleButtons = wrapper.findAll('.row-title');
     await titleButtons[0]!.trigger('click');
-    await flushPromises();
-    expect(wrapper.find('.row-preview').exists()).toBe(true);
-    expect(wrapper.text()).toContain('圆面积计算 题面描述');
+
+    expect(wrapper.find('.row-preview').exists()).toBe(false);
+    const payload = pushSpy.mock.calls[0]?.[0] as {
+      path?: string;
+      query?: Record<string, unknown>;
+    };
+    expect(payload.path).toBe('/training');
+    expect(payload.query?.problemId).toBe('476');
   });
 });

@@ -29,8 +29,9 @@ export function annotateCitations(md: string, citations: EvidenceCitation[]): st
     // data-* 承载富浮层内容（CSS ::after attr() 取值显示，marked 不解析属性值，避免 snippet 被
     // 当 markdown 渲染）；title 作为可访问性 / 移动端 / 无 CSS 的 fallback。
     const snip = escapeAttr(cite.snippet);
+    // data-page-id 承载课件页主键，供 MarkdownView 点击委托 → 跳转 /library?pageId=（可点页码）。
     return (
-      `<sup class="pyt-cite" data-page="${num}" data-snippet="${snip}" title="${snip}">` +
+      `<sup class="pyt-cite" data-page="${num}" data-page-id="${cite.pageId}" data-snippet="${snip}" title="${snip}">` +
       `[页 ${num}${suffix}]</sup>`
     );
   });

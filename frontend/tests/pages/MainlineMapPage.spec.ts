@@ -89,7 +89,10 @@ async function mountPage(): Promise<{ wrapper: VueWrapper; router: Router }> {
   const router = setupRouter();
   await router.push('/mainline-map');
   await router.isReady();
-  const w = mount(MainlineMapPage, { global: { plugins: [router] } });
+  const w = mount(MainlineMapPage, {
+    attachTo: document.body,
+    global: { plugins: [router] },
+  });
   await flushPromises();
   await flushPromises();
   wrapper = w;
@@ -150,6 +153,56 @@ describe('MainlineMapPage', () => {
     await w.get('[data-testid="mainline-enter-stage-31"]').trigger('click');
     await flushPromises();
     expect(router.currentRoute.value.path).toBe('/mainline/stage/31');
+  });
+
+  it('keeps chapter final test locked until all stages are complete', async () => {
+    const { wrapper: w, router } = await mountPage();
+    await w.get('[data-testid="mainline-node-btn-3"]').trigger('click');
+    await flushPromises();
+
+    const button = w.get('[data-testid="mainline-open-test"]');
+    expect(button.attributes('disabled')).toBeDefined();
+    await button.trigger('click');
+    await flushPromises();
+    expect(router.currentRoute.value.path).toBe('/mainline-map');
+  });
+
+  it('routes to chapter final test after all stages are complete', async () => {
+    mocks.getMainlineOverview.mockResolvedValueOnce({
+      totalStars: 0,
+      chapters: [
+        chapter({
+          chapter: 1,
+          title: '计算思维',
+          unlocked: true,
+          stars: 0,
+          stages: [stage({ id: 11, completed: true, videoWatchedSec: 240, pagesRead: 2, examplesDone: 2 })],
+        }),
+      ],
+    });
+    const { wrapper: w, router } = await mountPage();
+
+    const button = w.get('[data-testid="mainline-open-test"]');
+    expect(button.attributes('disabled')).toBeUndefined();
+    await button.trigger('click');
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe('/chapter-test/1');
+  });
+
+  it('keeps drawer pointerup events from reaching the Phaser window listener', async () => {
+    const { wrapper: w } = await mountPage();
+    await w.get('[data-testid="mainline-node-btn-3"]').trigger('click');
+    await flushPromises();
+
+    const phaserPointerUp = vi.fn();
+    window.addEventListener('pointerup', phaserPointerUp);
+    try {
+      await w.get('[data-testid="mainline-enter-stage-31"]').trigger('pointerup');
+      expect(phaserPointerUp).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener('pointerup', phaserPointerUp);
+    }
   });
 
   it('shows an error state with retry when overview load fails', async () => {

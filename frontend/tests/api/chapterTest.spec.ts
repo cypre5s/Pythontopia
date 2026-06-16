@@ -97,6 +97,47 @@ describe('chapterTest api client', () => {
     expect(res.status).toBe('GENERATING');
   });
 
+  it('quiz mode uses /quiz endpoints while final mode keeps /test endpoints', async () => {
+    httpMock.post
+      .mockResolvedValueOnce({ data: { status: 'GENERATING' } })
+      .mockResolvedValueOnce({ data: PAPER_WIRE })
+      .mockResolvedValueOnce({ data: RESULT_WIRE });
+    httpMock.get.mockResolvedValueOnce({ data: null });
+
+    await prepareTest(2, 'quiz');
+    await startTest(2, 'quiz');
+    await submitTest(
+      2,
+      '7',
+      {
+        answers: [],
+        integrity: { paste_blocked: 0, blur_events: 0, overtime: false },
+      },
+      'quiz',
+    );
+    await getLatestTest(2, 'quiz');
+
+    expect(httpMock.post).toHaveBeenNthCalledWith(
+      1,
+      '/api/mainline/chapters/2/quiz/prepare',
+      {},
+    );
+    expect(httpMock.post).toHaveBeenNthCalledWith(
+      2,
+      '/api/mainline/chapters/2/quiz/start',
+      {},
+    );
+    expect(httpMock.post).toHaveBeenNthCalledWith(
+      3,
+      '/api/mainline/chapters/2/quiz/7/submit',
+      {
+        answers: {},
+        integrity: { pasteBlocked: 0, blurEvents: 0, overtime: false },
+      },
+    );
+    expect(httpMock.get).toHaveBeenCalledWith('/api/mainline/chapters/2/quiz/latest');
+  });
+
   it('startTest POSTs .../test/start，把线格式映射成去答案考卷', async () => {
     httpMock.post.mockResolvedValueOnce({ data: PAPER_WIRE });
     const paper = await startTest(3);

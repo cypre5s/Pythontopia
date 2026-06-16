@@ -162,126 +162,125 @@ async function runPreview(): Promise<void> {
 </template>
 
 <style scoped>
+/* 学习通考试卷面白纸风：白卡 + 深色代码区（编程题编辑器/样例/输出保留终端深色）。 */
 .ct-card {
   display: grid;
-  gap: var(--pyt-space-3);
-  padding: var(--pyt-space-4);
-  background: linear-gradient(180deg, var(--pyt-color-bg-elevated) 0%, var(--pyt-color-bg-sunken) 100%);
-  border: 3px solid var(--pyt-color-border-strong);
-  border-radius: var(--pyt-radius-lg);
-  box-shadow: var(--pyt-shadow-card);
+  gap: 10px;
+  padding: 16px 18px;
+  background: #fff;
+  border: 1px solid #e6e8ec;
+  border-radius: 4px;
+  font-family: var(--pyt-font-read), sans-serif;
 }
-.ct-card__head { display: flex; align-items: center; gap: var(--pyt-space-2); font-size: var(--pyt-font-size-sm); }
-.ct-card__no { font-weight: 700; color: var(--pyt-color-text-primary); }
-.ct-card__kind {
-  padding: 2px var(--pyt-space-2);
-  background: var(--pyt-color-success-bg);
-  border: 1px solid var(--pyt-color-success);
-  color: var(--pyt-color-success);
-  border-radius: var(--pyt-radius-sm);
-}
-.ct-card__score { margin-left: auto; color: var(--pyt-color-text-muted); }
-.ct-coding__title { margin: 0; font-size: var(--pyt-font-size-lg); color: var(--pyt-color-text-primary); }
-/* 题面：终端深色例外。 */
+.ct-card__head { display: flex; align-items: baseline; gap: 6px; font-size: 13px; }
+.ct-card__no { font-weight: 700; color: #333; font-size: 14px; }
+.ct-card__kind { color: #8a8a8a; }
+.ct-card__score { margin-left: auto; color: #9aa0a8; }
+.ct-coding__title { margin: 0; font-size: 15px; font-weight: 700; color: #333; }
+/* 题面：白纸普通文字（markdown 源文本，保留 pre-wrap）。 */
 .ct-stem {
   margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
-  padding: var(--pyt-space-3);
-  background: var(--pyt-color-terminal-bg);
-  color: var(--pyt-color-terminal-text);
-  border: 2px solid var(--pyt-color-border-strong);
-  border-radius: var(--pyt-radius-sm);
-  font-family: var(--pyt-font-read);
-  font-size: var(--pyt-font-size-base);
-  line-height: 1.6;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: #333;
+  font-family: var(--pyt-font-read), sans-serif;
+  font-size: 14px;
+  line-height: 1.8;
 }
-.ct-coding__samples { font-size: var(--pyt-font-size-sm); }
-.ct-coding__samples summary { cursor: pointer; color: var(--pyt-color-text-hint); }
-.ct-coding__sample { display: grid; grid-template-columns: 1fr 1fr; gap: var(--pyt-space-2); margin-top: var(--pyt-space-2); }
-.ct-coding__io-label { font-size: var(--pyt-font-size-xs); color: var(--pyt-color-text-muted); }
+.ct-coding__samples { font-size: 13px; }
+.ct-coding__samples summary { cursor: pointer; color: #666; }
+.ct-coding__sample { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.ct-coding__io-label { font-size: 12px; color: #9aa0a8; }
 .ct-coding__io pre {
-  margin: var(--pyt-space-1) 0 0;
-  padding: var(--pyt-space-2);
+  margin: 4px 0 0;
+  padding: 8px;
   background: var(--pyt-color-terminal-bg);
   color: var(--pyt-color-terminal-text);
-  border: 1px solid var(--pyt-color-border-strong);
-  border-radius: var(--pyt-radius-sm);
+  border: 1px solid #d4d8df;
+  border-radius: 4px;
   font-family: var(--pyt-font-mono);
-  font-size: var(--pyt-font-size-sm);
+  font-size: 12px;
   white-space: pre-wrap;
 }
-.ct-coding__editor { display: flex; flex-direction: column; gap: var(--pyt-space-1); }
-.ct-coding__editor-label { font-size: var(--pyt-font-size-sm); color: var(--pyt-color-text-hint); }
-/* 编辑器：终端深色例外。 */
+.ct-coding__editor { display: flex; flex-direction: column; gap: 4px; }
+.ct-coding__editor-label { font-size: 13px; color: #666; }
+/* 编辑器：终端深色（学习通编程题同款白卡深码区）。 */
 .ct-coding__editor textarea {
   font-family: var(--pyt-font-mono);
   font-size: var(--pyt-font-size-base);
   background: var(--pyt-color-terminal-bg);
   color: var(--pyt-color-terminal-text);
-  border: 2px solid var(--pyt-color-border-strong);
-  border-radius: var(--pyt-radius-sm);
-  padding: var(--pyt-space-3);
+  border: 1px solid #d4d8df;
+  border-radius: 4px;
+  padding: 12px;
   resize: vertical;
   min-height: 180px;
 }
-.ct-coding__bar { display: flex; align-items: center; gap: var(--pyt-space-3); flex-wrap: wrap; }
+.ct-coding__bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .ct-coding__btn {
-  font-family: var(--pyt-font-sans);
-  font-size: var(--pyt-font-size-sm);
-  padding: var(--pyt-space-2) var(--pyt-space-4);
-  background: var(--pyt-color-primary);
-  color: var(--pyt-color-text-on-dark);
-  border: 2px solid var(--pyt-color-primary-dark);
-  border-radius: var(--pyt-radius-sm);
+  font-family: var(--pyt-font-read), sans-serif;
+  font-size: 13px;
+  min-height: 0;
+  padding: 4px 16px;
+  background: #3a7bd5;
+  color: #fff;
+  border: 1px solid #3a7bd5;
+  border-radius: 4px;
+  box-shadow: none;
   cursor: pointer;
 }
-.ct-coding__btn:disabled { opacity: 0.6; cursor: not-allowed; }
-.ct-coding__hint { font-size: var(--pyt-font-size-xs); color: var(--pyt-color-text-muted); }
-.ct-coding__preview { display: grid; gap: var(--pyt-space-2); }
+.ct-coding__btn:hover:not(:disabled) { background: #2f6cc0; }
+.ct-coding__btn:active { transform: none; box-shadow: none; }
+.ct-coding__btn:disabled { background: #f0f1f3; border-color: #dcdfe5; color: #9aa0a8; cursor: not-allowed; }
+.ct-coding__hint { font-size: 12px; color: #9aa0a8; }
+.ct-coding__preview { display: grid; gap: 8px; }
 .ct-coding__stdout {
   margin: 0;
-  padding: var(--pyt-space-2);
+  padding: 8px;
   background: var(--pyt-color-terminal-bg);
   color: var(--pyt-color-terminal-stdout);
-  border: 1px solid var(--pyt-color-border-strong);
-  border-radius: var(--pyt-radius-sm);
+  border: 1px solid #d4d8df;
+  border-radius: 4px;
   font-family: var(--pyt-font-mono);
-  font-size: var(--pyt-font-size-sm);
+  font-size: 12px;
   white-space: pre-wrap;
 }
 .ct-coding__stderr {
   margin: 0;
-  padding: var(--pyt-space-2);
+  padding: 8px;
   background: var(--pyt-color-terminal-stderr-bg);
   color: var(--pyt-color-terminal-stderr-text);
-  border: 1px solid var(--pyt-color-danger);
-  border-radius: var(--pyt-radius-sm);
+  border: 1px solid #e25c4a;
+  border-radius: 4px;
   font-family: var(--pyt-font-mono);
-  font-size: var(--pyt-font-size-sm);
+  font-size: 12px;
   white-space: pre-wrap;
 }
 .ct-review {
-  padding: var(--pyt-space-3);
-  border: 2px solid var(--pyt-color-border);
-  border-radius: var(--pyt-radius-md);
-  font-size: var(--pyt-font-size-sm);
-  background: var(--pyt-color-bg-soft);
+  padding: 10px 12px;
+  border: 1px solid #eef0f3;
+  border-radius: 4px;
+  font-size: 13px;
+  background: #f7f8fa;
 }
-.ct-review--ok { border-color: var(--pyt-color-success); }
-.ct-review--bad { border-color: var(--pyt-color-danger); }
-.ct-review__verdict { margin: 0 0 var(--pyt-space-2); font-weight: 700; color: var(--pyt-color-text-primary); }
-.ct-review__explain { margin: 0 0 var(--pyt-space-2); color: var(--pyt-color-text-hint); line-height: 1.6; }
-.ct-coding__ref summary { cursor: pointer; color: var(--pyt-color-text-hint); font-size: var(--pyt-font-size-sm); }
+.ct-review--ok .ct-review__verdict { color: #1fa657; }
+.ct-review--bad .ct-review__verdict { color: #e25c4a; }
+.ct-review__verdict { margin: 0; font-weight: 700; }
+.ct-review__explain { margin: 6px 0 0; color: #666; line-height: 1.7; }
+.ct-coding__ref { margin-top: 6px; }
+.ct-coding__ref summary { cursor: pointer; color: #666; font-size: 13px; }
 .ct-coding__ref pre {
-  margin: var(--pyt-space-2) 0 0;
-  padding: var(--pyt-space-2);
+  margin: 8px 0 0;
+  padding: 8px;
   background: var(--pyt-color-terminal-bg);
   color: var(--pyt-color-terminal-text);
-  border: 1px solid var(--pyt-color-border-strong);
-  border-radius: var(--pyt-radius-sm);
+  border: 1px solid #d4d8df;
+  border-radius: 4px;
   font-family: var(--pyt-font-mono);
-  font-size: var(--pyt-font-size-sm);
+  font-size: 12px;
   white-space: pre-wrap;
 }
 </style>

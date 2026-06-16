@@ -3,6 +3,7 @@ package com.pythontopia.mainline.test;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pythontopia.mainline.domain.ChapterAssessmentKind;
 import com.pythontopia.mainline.domain.ChapterTestRecord;
 import com.pythontopia.mainline.domain.ChapterTestStatus;
 import java.sql.ResultSet;
@@ -18,7 +19,7 @@ import org.springframework.stereotype.Repository;
 public class ChapterTestRepository {
 
   private static final String SELECT_COLUMNS =
-      "id, user_id, chapter, status, attempt_no, questions::text AS questions,"
+      "id, user_id, chapter, assessment_kind, status, attempt_no, questions::text AS questions,"
           + " profile_snapshot::text AS profile_snapshot, generator_meta::text AS generator_meta,"
           + " time_limit_sec, started_at, deadline_at, submitted_at, score, detail::text AS detail,"
           + " integrity::text AS integrity, created_at";
@@ -32,13 +33,25 @@ public class ChapterTestRepository {
   }
 
   public long insertPending(long userId, int chapter, int attemptNo, int timeLimitSec) {
+    return insertPending(
+        userId, chapter, ChapterAssessmentKind.FINAL, attemptNo, timeLimitSec);
+  }
+
+  public long insertPending(
+      long userId,
+      int chapter,
+      ChapterAssessmentKind assessmentKind,
+      int attemptNo,
+      int timeLimitSec) {
     Long id =
         jdbcTemplate.queryForObject(
-            "INSERT INTO chapter_test (user_id, chapter, status, attempt_no, time_limit_sec)"
-                + " VALUES (?, ?, 'PENDING', ?, ?) RETURNING id",
+            "INSERT INTO chapter_test"
+                + " (user_id, chapter, assessment_kind, status, attempt_no, time_limit_sec)"
+                + " VALUES (?, ?, ?, 'PENDING', ?, ?) RETURNING id",
             Long.class,
             userId,
             chapter,
+            assessmentKind.name(),
             attemptNo,
             timeLimitSec);
     if (id == null) {
@@ -67,15 +80,21 @@ public class ChapterTestRepository {
 
   /** 该学生该章最近一条章测（任意状态）。 */
   public Optional<ChapterTestRecord> findLatest(long userId, int chapter) {
+    return findLatest(userId, chapter, ChapterAssessmentKind.FINAL);
+  }
+
+  public Optional<ChapterTestRecord> findLatest(
+      long userId, int chapter, ChapterAssessmentKind assessmentKind) {
     return jdbcTemplate
         .query(
             "SELECT "
                 + SELECT_COLUMNS
-                + " FROM chapter_test WHERE user_id = ? AND chapter = ?"
+                + " FROM chapter_test WHERE user_id = ? AND chapter = ? AND assessment_kind = ?"
                 + " ORDER BY created_at DESC, id DESC LIMIT 1",
             this::map,
             userId,
-            chapter)
+            chapter,
+            assessmentKind.name())
         .stream()
         .findFirst();
   }
@@ -89,7 +108,8 @@ public class ChapterTestRepository {
     jdbcTemplate
         .query(
             "SELECT DISTINCT ON (chapter) chapter, status FROM chapter_test"
-                + " WHERE user_id = ? ORDER BY chapter, created_at DESC, id DESC",
+                + " WHERE user_id = ? AND assessment_kind = 'FINAL'"
+                + " ORDER BY chapter, created_at DESC, id DESC",
             (rs, rowNum) -> java.util.Map.entry(rs.getInt("chapter"), rs.getString("status")),
             userId)
         .forEach(entry -> out.put(entry.getKey(), entry.getValue()));
@@ -101,7 +121,8 @@ public class ChapterTestRepository {
     Integer best =
         jdbcTemplate.queryForObject(
             "SELECT MAX(score) FROM chapter_test"
-                + " WHERE user_id = ? AND chapter = ? AND status = 'SUBMITTED' AND score IS NOT NULL",
+                + " WHERE user_id = ? AND chapter = ? AND assessment_kind = 'FINAL'"
+                + " AND status = 'SUBMITTED' AND score IS NOT NULL",
             Integer.class,
             userId,
             chapter);
@@ -109,12 +130,19 @@ public class ChapterTestRepository {
   }
 
   public int nextAttemptNo(long userId, int chapter) {
+    return nextAttemptNo(userId, chapter, ChapterAssessmentKind.FINAL);
+  }
+
+  public int nextAttemptNo(
+      long userId, int chapter, ChapterAssessmentKind assessmentKind) {
     Integer max =
         jdbcTemplate.queryForObject(
-            "SELECT COALESCE(MAX(attempt_no), 0) FROM chapter_test WHERE user_id = ? AND chapter = ?",
+            "SELECT COALESCE(MAX(attempt_no), 0) FROM chapter_test"
+                + " WHERE user_id = ? AND chapter = ? AND assessment_kind = ?",
             Integer.class,
             userId,
-            chapter);
+            chapter,
+            assessmentKind.name());
     return (max == null ? 0 : max) + 1;
   }
 
@@ -122,7 +150,7 @@ public class ChapterTestRepository {
     jdbcTemplate.update("UPDATE chapter_test SET status = ? WHERE id = ?", status.name(), testId);
   }
 
-  /** graph/golden 题面就绪：写 questions + generator_meta(+profile_snapshot)，状态置 READY。 */
+  /** graph 题面就绪：写 questions + generator_meta(+profile_snapshot)，状态置 READY。 */
   public void markReady(long testId, JsonNode questions, JsonNode generatorMeta, JsonNode profile) {
     jdbcTemplate.update(
         "UPDATE chapter_test SET status = 'READY', questions = ?::jsonb,"
@@ -173,6 +201,7 @@ public class ChapterTestRepository {
         rs.getLong("id"),
         rs.getLong("user_id"),
         rs.getInt("chapter"),
+        ChapterAssessmentKind.valueOf(rs.getString("assessment_kind")),
         ChapterTestStatus.valueOf(rs.getString("status")),
         rs.getInt("attempt_no"),
         readJson(rs.getString("questions")),

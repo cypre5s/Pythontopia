@@ -1,0 +1,1791 @@
+{
+  "_meta": {
+    "purpose": "R-14 主线「练」客观题题库（通识题，非课件原题）",
+    "count": 96,
+    "per_stage": 4,
+    "type_order": [
+      "CHOICE",
+      "CHOICE",
+      "JUDGE",
+      "FILL"
+    ]
+  },
+  "questions": [
+    {
+      "chapter": 1,
+      "stage_index": 1,
+      "ordinal": 1,
+      "stage_title": "计算思维的概念与方法",
+      "kc_code": "PY43-KC-004",
+      "type": "CHOICE",
+      "stem": "计算思维（Computational Thinking）这一概念的经典定义是由哪位学者提出的？",
+      "options": [
+        "周以真（Jeannette M. Wing）",
+        "艾伦·图灵",
+        "冯·诺依曼",
+        "高德纳"
+      ],
+      "answer": [
+        "周以真（Jeannette M. Wing）"
+      ],
+      "blank_count": 0,
+      "explanation": "计算思维的经典定义由周以真教授于 2006 年提出，其本质是抽象与自动化。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 1,
+      "stage_index": 1,
+      "ordinal": 2,
+      "stage_title": "计算思维的概念与方法",
+      "kc_code": "PY43-KC-004",
+      "type": "CHOICE",
+      "stem": "下列对计算思维本质的概括，最准确的是？",
+      "options": [
+        "抽象与自动化",
+        "记忆与背诵",
+        "上网与办公",
+        "复制与粘贴"
+      ],
+      "answer": [
+        "抽象与自动化"
+      ],
+      "blank_count": 0,
+      "explanation": "计算思维的本质可概括为抽象（abstraction）与自动化（automation）。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 1,
+      "stage_index": 1,
+      "ordinal": 3,
+      "stage_title": "计算思维的概念与方法",
+      "kc_code": "PY43-KC-003",
+      "type": "JUDGE",
+      "stem": "计算思维求解问题的一般流程可概括为：发现问题→抽象建模→算法设计→程序实现→结果评价。",
+      "options": [],
+      "answer": [
+        "正确"
+      ],
+      "blank_count": 0,
+      "explanation": "这正是计算思维解决问题的典型操作流程。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 1,
+      "stage_index": 1,
+      "ordinal": 4,
+      "stage_title": "计算思维的概念与方法",
+      "kc_code": "PY43-KC-004",
+      "type": "FILL",
+      "stem": "计算思维的本质可以概括为抽象和______两个关键词。",
+      "options": [],
+      "answer": [
+        "自动化"
+      ],
+      "blank_count": 1,
+      "explanation": "计算思维本质 = 抽象 + 自动化。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 1,
+      "stage_index": 2,
+      "ordinal": 1,
+      "stage_title": "计算与计算科学",
+      "kc_code": "PY43-KC-006",
+      "type": "CHOICE",
+      "stem": "关于“计算”的本质，下列说法最准确的是？",
+      "options": [
+        "计算的本质是基于规则的符号串变换",
+        "计算只能由计算机完成",
+        "计算就是上网查资料",
+        "计算等同于做四则运算"
+      ],
+      "answer": [
+        "计算的本质是基于规则的符号串变换"
+      ],
+      "blank_count": 0,
+      "explanation": "计算的本质是按照确定规则进行的符号串变换或物理状态变换。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 1,
+      "stage_index": 2,
+      "ordinal": 2,
+      "stage_title": "计算与计算科学",
+      "kc_code": "PY43-KC-007",
+      "type": "CHOICE",
+      "stem": "下列哪一项属于计算科学的基本特征？",
+      "options": [
+        "自动化",
+        "随机化",
+        "主观化",
+        "不可重复"
+      ],
+      "answer": [
+        "自动化"
+      ],
+      "blank_count": 0,
+      "explanation": "计算科学的四大特征为：器械化、形式化、自动化、泛在化。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 1,
+      "stage_index": 2,
+      "ordinal": 3,
+      "stage_title": "计算与计算科学",
+      "kc_code": "PY43-KC-007",
+      "type": "JUDGE",
+      "stem": "计算思维、理论思维和实验思维并称为三大科学思维。",
+      "options": [],
+      "answer": [
+        "正确"
+      ],
+      "blank_count": 0,
+      "explanation": "计算思维与理论思维、实验思维并列为三大科学思维。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 1,
+      "stage_index": 2,
+      "ordinal": 4,
+      "stage_title": "计算与计算科学",
+      "kc_code": "PY43-KC-007",
+      "type": "FILL",
+      "stem": "计算科学的四大特征包括器械化、形式化、泛在化和______。",
+      "options": [],
+      "answer": [
+        "自动化"
+      ],
+      "blank_count": 1,
+      "explanation": "四大特征：器械化、形式化、自动化、泛在化。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 1,
+      "stage_index": 3,
+      "ordinal": 1,
+      "stage_title": "计算工具与计算机发展",
+      "kc_code": "PY43-KC-002",
+      "type": "CHOICE",
+      "stem": "下列哪一项被公认为世界上第一台通用电子数字计算机？",
+      "options": [
+        "ENIAC",
+        "算盘",
+        "差分机",
+        "穿孔制表机"
+      ],
+      "answer": [
+        "ENIAC"
+      ],
+      "blank_count": 0,
+      "explanation": "ENIAC（1946 年）是世界上第一台通用电子数字计算机；算盘、差分机等属于更早的机械/手动工具。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 1,
+      "stage_index": 3,
+      "ordinal": 2,
+      "stage_title": "计算工具与计算机发展",
+      "kc_code": "PY43-KC-005",
+      "type": "CHOICE",
+      "stem": "下列哪一项不属于计算机的发展趋势？",
+      "options": [
+        "单机化",
+        "巨型化",
+        "微型化",
+        "网络化"
+      ],
+      "answer": [
+        "单机化"
+      ],
+      "blank_count": 0,
+      "explanation": "计算机发展趋势为巨型化、微型化、网络化、智能化、多媒体化；“单机化”与网络化趋势相反。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 1,
+      "stage_index": 3,
+      "ordinal": 3,
+      "stage_title": "计算工具与计算机发展",
+      "kc_code": "PY43-KC-001",
+      "type": "JUDGE",
+      "stem": "神威·太湖之光是中国自主研制的超级计算机。",
+      "options": [],
+      "answer": [
+        "正确"
+      ],
+      "blank_count": 0,
+      "explanation": "神威·太湖之光是我国研制的超级计算机，体现了中国在计算机领域的成就。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 1,
+      "stage_index": 3,
+      "ordinal": 4,
+      "stage_title": "计算工具与计算机发展",
+      "kc_code": "PY43-KC-002",
+      "type": "FILL",
+      "stem": "中国古代广泛使用、至今仍在沿用的一种手动计算工具是______。",
+      "options": [],
+      "answer": [
+        "算盘"
+      ],
+      "blank_count": 1,
+      "explanation": "算盘是典型的手动式计算工具。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 2,
+      "stage_index": 1,
+      "ordinal": 1,
+      "stage_title": "Python 与程序语言入门",
+      "kc_code": "PY43-KC-009",
+      "type": "CHOICE",
+      "stem": "Python 语言的创始人是？",
+      "options": [
+        "Guido van Rossum",
+        "James Gosling",
+        "Dennis Ritchie",
+        "Bjarne Stroustrup"
+      ],
+      "answer": [
+        "Guido van Rossum"
+      ],
+      "blank_count": 0,
+      "explanation": "Python 由 Guido van Rossum 创造；Gosling/Ritchie/Stroustrup 分别与 Java/C/C++ 相关。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 2,
+      "stage_index": 1,
+      "ordinal": 2,
+      "stage_title": "Python 与程序语言入门",
+      "kc_code": "PY43-KC-015",
+      "type": "CHOICE",
+      "stem": "下列关于程序设计语言的说法，正确的是？",
+      "options": [
+        "Python 是解释型语言",
+        "Python 是编译型语言",
+        "机器语言是高级语言",
+        "汇编语言不需要翻译即可执行"
+      ],
+      "answer": [
+        "Python 是解释型语言"
+      ],
+      "blank_count": 0,
+      "explanation": "Python 程序由解释器逐行解释执行，属于解释型语言。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 2,
+      "stage_index": 1,
+      "ordinal": 3,
+      "stage_title": "Python 与程序语言入门",
+      "kc_code": "PY43-KC-008",
+      "type": "JUDGE",
+      "stem": "在 Python 中可以使用 print() 函数把内容输出到屏幕。",
+      "options": [],
+      "answer": [
+        "正确"
+      ],
+      "blank_count": 0,
+      "explanation": "print() 是 Python 的标准输出内置函数。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 2,
+      "stage_index": 1,
+      "ordinal": 4,
+      "stage_title": "Python 与程序语言入门",
+      "kc_code": "PY43-KC-008",
+      "type": "FILL",
+      "stem": "在 Python 中，用于把信息输出到控制台的内置函数名是______。",
+      "options": [],
+      "answer": [
+        "print"
+      ],
+      "blank_count": 1,
+      "explanation": "print() 用于控制台输出。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 2,
+      "stage_index": 2,
+      "ordinal": 1,
+      "stage_title": "变量、类型与运算",
+      "kc_code": "PY43-KC-011",
+      "type": "CHOICE",
+      "stem": "在 Python 中，表达式 type(3.14) 的结果是？",
+      "options": [
+        "<class 'float'>",
+        "<class 'int'>",
+        "<class 'str'>",
+        "<class 'bool'>"
+      ],
+      "answer": [
+        "<class 'float'>"
+      ],
+      "blank_count": 0,
+      "explanation": "3.14 是带小数点的浮点数，类型为 float。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 2,
+      "stage_index": 2,
+      "ordinal": 2,
+      "stage_title": "变量、类型与运算",
+      "kc_code": "PY43-KC-010",
+      "type": "CHOICE",
+      "stem": "在 Python 中，运算符 // 的作用是？",
+      "options": [
+        "整除（向下取整）",
+        "普通除法",
+        "求幂",
+        "求余数"
+      ],
+      "answer": [
+        "整除（向下取整）"
+      ],
+      "blank_count": 0,
+      "explanation": "// 是整除运算符，结果向下取整；/ 是普通除法，** 求幂，% 求余。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 2,
+      "stage_index": 2,
+      "ordinal": 3,
+      "stage_title": "变量、类型与运算",
+      "kc_code": "PY43-KC-010",
+      "type": "JUDGE",
+      "stem": "在 Python 中，变量名（标识符）可以以数字开头。",
+      "options": [],
+      "answer": [
+        "错误"
+      ],
+      "blank_count": 0,
+      "explanation": "标识符只能以字母或下划线开头，不能以数字开头。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 2,
+      "stage_index": 2,
+      "ordinal": 4,
+      "stage_title": "变量、类型与运算",
+      "kc_code": "PY43-KC-010",
+      "type": "FILL",
+      "stem": "在 Python 中，用于求两个整数相除余数的运算符是______。",
+      "options": [],
+      "answer": [
+        "%"
+      ],
+      "blank_count": 1,
+      "explanation": "% 是取模（求余）运算符。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 2,
+      "stage_index": 3,
+      "ordinal": 1,
+      "stage_title": "输入输出与运行原理",
+      "kc_code": "PY43-KC-013",
+      "type": "CHOICE",
+      "stem": "在 Python 中，input() 函数的返回值类型是？",
+      "options": [
+        "字符串(str)",
+        "整数(int)",
+        "浮点数(float)",
+        "布尔值(bool)"
+      ],
+      "answer": [
+        "字符串(str)"
+      ],
+      "blank_count": 0,
+      "explanation": "input() 始终返回字符串，需要时要再做类型转换。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 2,
+      "stage_index": 3,
+      "ordinal": 2,
+      "stage_title": "输入输出与运行原理",
+      "kc_code": "PY43-KC-013",
+      "type": "CHOICE",
+      "stem": "要把字符串 \"100\" 转换为整数 100，应使用下列哪个表达式？",
+      "options": [
+        "int(\"100\")",
+        "str(100)",
+        "float(\"100\")",
+        "input(\"100\")"
+      ],
+      "answer": [
+        "int(\"100\")"
+      ],
+      "blank_count": 0,
+      "explanation": "int() 将字符串转换为整数；str() 转字符串，float() 转浮点数。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 2,
+      "stage_index": 3,
+      "ordinal": 3,
+      "stage_title": "输入输出与运行原理",
+      "kc_code": "PY43-KC-016",
+      "type": "JUDGE",
+      "stem": "程序的执行过程通常可以概括为：输入数据、处理数据、输出数据三个环节。",
+      "options": [],
+      "answer": [
+        "正确"
+      ],
+      "blank_count": 0,
+      "explanation": "这是程序运行原理的基本概括。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 2,
+      "stage_index": 3,
+      "ordinal": 4,
+      "stage_title": "输入输出与运行原理",
+      "kc_code": "PY43-KC-012",
+      "type": "FILL",
+      "stem": "在 Python 中，从控制台读取用户输入的内置函数名是______。",
+      "options": [],
+      "answer": [
+        "input"
+      ],
+      "blank_count": 1,
+      "explanation": "input() 用于读取控制台输入。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 3,
+      "stage_index": 1,
+      "ordinal": 1,
+      "stage_title": "进制与二进制运算",
+      "kc_code": "PY43-KC-030",
+      "type": "CHOICE",
+      "stem": "十进制数 10 转换为二进制是？",
+      "options": [
+        "1010",
+        "1000",
+        "1100",
+        "1001"
+      ],
+      "answer": [
+        "1010"
+      ],
+      "blank_count": 0,
+      "explanation": "10 = 8 + 2 = 1010(2)。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 3,
+      "stage_index": 1,
+      "ordinal": 2,
+      "stage_title": "进制与二进制运算",
+      "kc_code": "PY43-KC-029",
+      "type": "CHOICE",
+      "stem": "二进制采用的基数（进位基数）是？",
+      "options": [
+        "2",
+        "8",
+        "10",
+        "16"
+      ],
+      "answer": [
+        "2"
+      ],
+      "blank_count": 0,
+      "explanation": "二进制逢二进一，基数为 2。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 3,
+      "stage_index": 1,
+      "ordinal": 3,
+      "stage_title": "进制与二进制运算",
+      "kc_code": "PY43-KC-021",
+      "type": "JUDGE",
+      "stem": "二进制加法运算遵循“逢二进一”的规则。",
+      "options": [],
+      "answer": [
+        "正确"
+      ],
+      "blank_count": 0,
+      "explanation": "二进制加法逢二进一，与十进制逢十进一类比。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 3,
+      "stage_index": 1,
+      "ordinal": 4,
+      "stage_title": "进制与二进制运算",
+      "kc_code": "PY43-KC-030",
+      "type": "FILL",
+      "stem": "二进制数 111 转换为十进制数等于______。",
+      "options": [],
+      "answer": [
+        "7"
+      ],
+      "blank_count": 1,
+      "explanation": "111(2) = 4 + 2 + 1 = 7。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 3,
+      "stage_index": 2,
+      "ordinal": 1,
+      "stage_title": "信息编码",
+      "kc_code": "PY43-KC-020",
+      "type": "CHOICE",
+      "stem": "在 Python 中，表达式 ord('A') 的返回值是？",
+      "options": [
+        "65",
+        "97",
+        "66",
+        "1"
+      ],
+      "answer": [
+        "65"
+      ],
+      "blank_count": 0,
+      "explanation": "大写字母 'A' 的 Unicode/ASCII 码位是 65。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 3,
+      "stage_index": 2,
+      "ordinal": 2,
+      "stage_title": "信息编码",
+      "kc_code": "PY43-KC-020",
+      "type": "CHOICE",
+      "stem": "在 Python 中，要把整数 97 转换为对应的字符，应使用？",
+      "options": [
+        "chr(97)",
+        "ord(97)",
+        "str(97)",
+        "int(97)"
+      ],
+      "answer": [
+        "chr(97)"
+      ],
+      "blank_count": 0,
+      "explanation": "chr() 由码位得到字符（chr(97) 为 'a'）；ord() 与之相反。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 3,
+      "stage_index": 2,
+      "ordinal": 3,
+      "stage_title": "信息编码",
+      "kc_code": "PY43-KC-026",
+      "type": "JUDGE",
+      "stem": "ASCII 编码主要用于表示西文字符（如英文字母、数字和常见符号）。",
+      "options": [],
+      "answer": [
+        "正确"
+      ],
+      "blank_count": 0,
+      "explanation": "ASCII 是最基础的西文字符编码。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 3,
+      "stage_index": 2,
+      "ordinal": 4,
+      "stage_title": "信息编码",
+      "kc_code": "PY43-KC-020",
+      "type": "FILL",
+      "stem": "在 Python 中，返回单个字符 Unicode 码位的内置函数名是______。",
+      "options": [],
+      "answer": [
+        "ord"
+      ],
+      "blank_count": 1,
+      "explanation": "ord() 返回字符的 Unicode 码位。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 3,
+      "stage_index": 3,
+      "ordinal": 1,
+      "stage_title": "数值类型与运算",
+      "kc_code": "PY43-KC-019",
+      "type": "CHOICE",
+      "stem": "在 Python 中，表达式 2 ** 3 的结果是？",
+      "options": [
+        "8",
+        "6",
+        "9",
+        "5"
+      ],
+      "answer": [
+        "8"
+      ],
+      "blank_count": 0,
+      "explanation": "** 是求幂运算符，2 的 3 次方等于 8。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 3,
+      "stage_index": 3,
+      "ordinal": 2,
+      "stage_title": "数值类型与运算",
+      "kc_code": "PY43-KC-025",
+      "type": "CHOICE",
+      "stem": "要提取整数 n 的个位数字，正确的表达式是？",
+      "options": [
+        "n % 10",
+        "n // 10",
+        "n % 100",
+        "n / 10"
+      ],
+      "answer": [
+        "n % 10"
+      ],
+      "blank_count": 0,
+      "explanation": "对 10 取模即得个位数字。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 3,
+      "stage_index": 3,
+      "ordinal": 3,
+      "stage_title": "数值类型与运算",
+      "kc_code": "PY43-KC-028",
+      "type": "JUDGE",
+      "stem": "在 Python 中，可以使用语句 import random 来导入 random 标准库模块。",
+      "options": [],
+      "answer": [
+        "正确"
+      ],
+      "blank_count": 0,
+      "explanation": "import 模块名 是导入模块的常用方式。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 3,
+      "stage_index": 3,
+      "ordinal": 4,
+      "stage_title": "数值类型与运算",
+      "kc_code": "PY43-KC-025",
+      "type": "FILL",
+      "stem": "表达式 1234 // 100 % 10 的计算结果是______。",
+      "options": [],
+      "answer": [
+        "2"
+      ],
+      "blank_count": 1,
+      "explanation": "1234 // 100 = 12，12 % 10 = 2（提取百位数字）。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 3,
+      "stage_index": 4,
+      "ordinal": 1,
+      "stage_title": "字符串处理与格式化",
+      "kc_code": "PY43-KC-024",
+      "type": "CHOICE",
+      "stem": "已知 s = \"Python\"，则 s[0] 的值是？",
+      "options": [
+        "'P'",
+        "'n'",
+        "'y'",
+        "'Python'"
+      ],
+      "answer": [
+        "'P'"
+      ],
+      "blank_count": 0,
+      "explanation": "字符串索引从 0 开始，s[0] 是首字符 'P'。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 3,
+      "stage_index": 4,
+      "ordinal": 2,
+      "stage_title": "字符串处理与格式化",
+      "kc_code": "PY43-KC-024",
+      "type": "CHOICE",
+      "stem": "已知 s = \"Python\"，则切片 s[1:4] 的值是？",
+      "options": [
+        "'yth'",
+        "'Pyt'",
+        "'tho'",
+        "'hon'"
+      ],
+      "answer": [
+        "'yth'"
+      ],
+      "blank_count": 0,
+      "explanation": "切片左闭右开，取下标 1、2、3，即 'yth'。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 3,
+      "stage_index": 4,
+      "ordinal": 3,
+      "stage_title": "字符串处理与格式化",
+      "kc_code": "PY43-KC-022",
+      "type": "JUDGE",
+      "stem": "字符串的 strip() 方法可以去除字符串首尾的空白字符。",
+      "options": [],
+      "answer": [
+        "正确"
+      ],
+      "blank_count": 0,
+      "explanation": "strip() 去除首尾空白（含空格、换行、制表符）。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 3,
+      "stage_index": 4,
+      "ordinal": 4,
+      "stage_title": "字符串处理与格式化",
+      "kc_code": "PY43-KC-022",
+      "type": "FILL",
+      "stem": "可以按指定分隔符把字符串切分成列表的字符串方法名是______。",
+      "options": [],
+      "answer": [
+        "split"
+      ],
+      "blank_count": 1,
+      "explanation": "split() 按分隔符切分字符串为列表。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 4,
+      "stage_index": 1,
+      "ordinal": 1,
+      "stage_title": "顺序与分支结构",
+      "kc_code": "PY43-KC-033",
+      "type": "CHOICE",
+      "stem": "在 Python 中，实现多分支选择通常使用的关键字组合是？",
+      "options": [
+        "if-elif-else",
+        "for-in",
+        "while-break",
+        "try-except"
+      ],
+      "answer": [
+        "if-elif-else"
+      ],
+      "blank_count": 0,
+      "explanation": "if-elif-else 用于多分支条件选择。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 4,
+      "stage_index": 1,
+      "ordinal": 2,
+      "stage_title": "顺序与分支结构",
+      "kc_code": "PY43-KC-035",
+      "type": "CHOICE",
+      "stem": "表达式 (3 > 2) and (1 > 5) 的值是？",
+      "options": [
+        "False",
+        "True",
+        "1",
+        "0"
+      ],
+      "answer": [
+        "False"
+      ],
+      "blank_count": 0,
+      "explanation": "and 要求两侧都为真；1 > 5 为 False，故整体为 False。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 4,
+      "stage_index": 1,
+      "ordinal": 3,
+      "stage_title": "顺序与分支结构",
+      "kc_code": "PY43-KC-038",
+      "type": "JUDGE",
+      "stem": "顺序结构的程序自上而下依次执行每一条语句。",
+      "options": [],
+      "answer": [
+        "正确"
+      ],
+      "blank_count": 0,
+      "explanation": "顺序结构即按书写顺序逐条执行。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 4,
+      "stage_index": 1,
+      "ordinal": 4,
+      "stage_title": "顺序与分支结构",
+      "kc_code": "PY43-KC-033",
+      "type": "FILL",
+      "stem": "在 Python 分支结构中，表示“否则如果”的关键字是______。",
+      "options": [],
+      "answer": [
+        "elif"
+      ],
+      "blank_count": 1,
+      "explanation": "elif 是 else if 的缩写，用于追加分支条件。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 4,
+      "stage_index": 2,
+      "ordinal": 1,
+      "stage_title": "循环结构",
+      "kc_code": "PY43-KC-031",
+      "type": "CHOICE",
+      "stem": "在 Python 中，range(1, 5) 生成的整数序列是？",
+      "options": [
+        "1, 2, 3, 4",
+        "1, 2, 3, 4, 5",
+        "0, 1, 2, 3, 4",
+        "2, 3, 4, 5"
+      ],
+      "answer": [
+        "1, 2, 3, 4"
+      ],
+      "blank_count": 0,
+      "explanation": "range 区间左闭右开，包含 1 不包含 5。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 4,
+      "stage_index": 2,
+      "ordinal": 2,
+      "stage_title": "循环结构",
+      "kc_code": "PY43-KC-037",
+      "type": "CHOICE",
+      "stem": "在循环中，用于立即结束（跳出）整个循环的语句是？",
+      "options": [
+        "break",
+        "continue",
+        "pass",
+        "return"
+      ],
+      "answer": [
+        "break"
+      ],
+      "blank_count": 0,
+      "explanation": "break 跳出整个循环；continue 只结束本次迭代。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 4,
+      "stage_index": 2,
+      "ordinal": 3,
+      "stage_title": "循环结构",
+      "kc_code": "PY43-KC-037",
+      "type": "JUDGE",
+      "stem": "continue 语句的作用是跳过本次循环的剩余语句，直接进入下一次循环。",
+      "options": [],
+      "answer": [
+        "正确"
+      ],
+      "blank_count": 0,
+      "explanation": "continue 结束本次迭代并继续下一次。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 4,
+      "stage_index": 2,
+      "ordinal": 4,
+      "stage_title": "循环结构",
+      "kc_code": "PY43-KC-031",
+      "type": "FILL",
+      "stem": "要重复执行确定次数的遍历循环，常与 range() 配合使用的循环关键字是______。",
+      "options": [],
+      "answer": [
+        "for"
+      ],
+      "blank_count": 1,
+      "explanation": "for 循环常与 range() 配合实现确定次数循环。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 4,
+      "stage_index": 3,
+      "ordinal": 1,
+      "stage_title": "嵌套结构",
+      "kc_code": "PY43-KC-036",
+      "type": "CHOICE",
+      "stem": "执行双重循环：外层 for i in range(3) 内嵌 for j in range(2)，循环体里的 print 语句一共会执行多少次？",
+      "options": [
+        "6 次",
+        "5 次",
+        "3 次",
+        "2 次"
+      ],
+      "answer": [
+        "6 次"
+      ],
+      "blank_count": 0,
+      "explanation": "外层 3 次 × 内层 2 次 = 6 次。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 4,
+      "stage_index": 3,
+      "ordinal": 2,
+      "stage_title": "嵌套结构",
+      "kc_code": "PY43-KC-034",
+      "type": "CHOICE",
+      "stem": "关于分支语句嵌套，下列说法正确的是？",
+      "options": [
+        "一个 if 语句的内部可以再包含 if 语句",
+        "if 语句内部不允许再写 if 语句",
+        "嵌套分支最多只能有两层",
+        "嵌套分支可以不用缩进"
+      ],
+      "answer": [
+        "一个 if 语句的内部可以再包含 if 语句"
+      ],
+      "blank_count": 0,
+      "explanation": "分支可以嵌套，内层语句需要相应缩进。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 4,
+      "stage_index": 3,
+      "ordinal": 3,
+      "stage_title": "嵌套结构",
+      "kc_code": "PY43-KC-036",
+      "type": "JUDGE",
+      "stem": "在循环嵌套中，外层循环每执行一次，内层循环都要完整执行一遍。",
+      "options": [],
+      "answer": [
+        "正确"
+      ],
+      "blank_count": 0,
+      "explanation": "这是循环嵌套的执行规律。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 4,
+      "stage_index": 3,
+      "ordinal": 4,
+      "stage_title": "嵌套结构",
+      "kc_code": "PY43-KC-036",
+      "type": "FILL",
+      "stem": "打印九九乘法表通常需要使用______层循环（请填阿拉伯数字）。",
+      "options": [],
+      "answer": [
+        "2"
+      ],
+      "blank_count": 1,
+      "explanation": "九九乘法表需要双层（2 层）循环：外层控制行，内层控制列。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 5,
+      "stage_index": 1,
+      "ordinal": 1,
+      "stage_title": "序列与列表",
+      "kc_code": "PY43-KC-045",
+      "type": "CHOICE",
+      "stem": "下列属于 Python 可变（mutable）序列类型的是？",
+      "options": [
+        "列表(list)",
+        "字符串(str)",
+        "元组(tuple)",
+        "整数(int)"
+      ],
+      "answer": [
+        "列表(list)"
+      ],
+      "blank_count": 0,
+      "explanation": "列表可变；字符串和元组是不可变序列，整数不是序列。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 5,
+      "stage_index": 1,
+      "ordinal": 2,
+      "stage_title": "序列与列表",
+      "kc_code": "PY43-KC-040",
+      "type": "CHOICE",
+      "stem": "向列表末尾添加一个元素，应使用的方法是？",
+      "options": [
+        "append()",
+        "remove()",
+        "pop()",
+        "sort()"
+      ],
+      "answer": [
+        "append()"
+      ],
+      "blank_count": 0,
+      "explanation": "append() 在列表末尾追加元素；remove/pop 删除元素，sort 排序。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 5,
+      "stage_index": 1,
+      "ordinal": 3,
+      "stage_title": "序列与列表",
+      "kc_code": "PY43-KC-044",
+      "type": "JUDGE",
+      "stem": "在 Python 中，len() 函数可以返回列表中元素的个数。",
+      "options": [],
+      "answer": [
+        "正确"
+      ],
+      "blank_count": 0,
+      "explanation": "len() 返回序列长度（元素个数）。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 5,
+      "stage_index": 1,
+      "ordinal": 4,
+      "stage_title": "序列与列表",
+      "kc_code": "PY43-KC-040",
+      "type": "FILL",
+      "stem": "已知 lst = [1, 2, 3]，执行 lst.append(4) 后，列表 lst 的长度是______。",
+      "options": [],
+      "answer": [
+        "4"
+      ],
+      "blank_count": 1,
+      "explanation": "追加一个元素后元素个数由 3 变为 4。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 5,
+      "stage_index": 2,
+      "ordinal": 1,
+      "stage_title": "字典",
+      "kc_code": "PY43-KC-043",
+      "type": "CHOICE",
+      "stem": "在 Python 中，创建字典使用的定界符是？",
+      "options": [
+        "花括号 {}",
+        "方括号 []",
+        "圆括号 ()",
+        "尖括号 <>"
+      ],
+      "answer": [
+        "花括号 {}"
+      ],
+      "blank_count": 0,
+      "explanation": "字典用花括号 {} 表示，元素为 键:值 对。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 5,
+      "stage_index": 2,
+      "ordinal": 2,
+      "stage_title": "字典",
+      "kc_code": "PY43-KC-042",
+      "type": "CHOICE",
+      "stem": "已知 d = {\"a\": 1, \"b\": 2}，则 d[\"b\"] 的值是？",
+      "options": [
+        "2",
+        "1",
+        "'b'",
+        "报错(KeyError)"
+      ],
+      "answer": [
+        "2"
+      ],
+      "blank_count": 0,
+      "explanation": "通过键 'b' 访问，得到对应的值 2。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 5,
+      "stage_index": 2,
+      "ordinal": 3,
+      "stage_title": "字典",
+      "kc_code": "PY43-KC-043",
+      "type": "JUDGE",
+      "stem": "字典中的键（key）必须唯一，不能重复。",
+      "options": [],
+      "answer": [
+        "正确"
+      ],
+      "blank_count": 0,
+      "explanation": "字典键唯一，重复赋值会覆盖旧值。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 5,
+      "stage_index": 2,
+      "ordinal": 4,
+      "stage_title": "字典",
+      "kc_code": "PY43-KC-042",
+      "type": "FILL",
+      "stem": "判断键 k 是否存在于字典 d 中，可写成表达式 k ______ d。",
+      "options": [],
+      "answer": [
+        "in"
+      ],
+      "blank_count": 1,
+      "explanation": "用成员运算符 in 判断键是否存在于字典中。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 5,
+      "stage_index": 3,
+      "ordinal": 1,
+      "stage_title": "集合",
+      "kc_code": "PY43-KC-047",
+      "type": "CHOICE",
+      "stem": "下列关于 Python 集合(set)特点的描述，正确的是？",
+      "options": [
+        "元素无序且唯一",
+        "元素有序且可重复",
+        "元素有序且唯一",
+        "元素无序且可重复"
+      ],
+      "answer": [
+        "元素无序且唯一"
+      ],
+      "blank_count": 0,
+      "explanation": "集合的两大特性：无序、元素唯一（自动去重）。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 5,
+      "stage_index": 3,
+      "ordinal": 2,
+      "stage_title": "集合",
+      "kc_code": "PY43-KC-047",
+      "type": "CHOICE",
+      "stem": "求集合 a 与 b 的交集，应使用的运算符是？",
+      "options": [
+        "a & b",
+        "a | b",
+        "a - b",
+        "a ^ b"
+      ],
+      "answer": [
+        "a & b"
+      ],
+      "blank_count": 0,
+      "explanation": "& 求交集，| 求并集，- 求差集，^ 求对称差集。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 5,
+      "stage_index": 3,
+      "ordinal": 3,
+      "stage_title": "集合",
+      "kc_code": "PY43-KC-047",
+      "type": "JUDGE",
+      "stem": "把一个含重复元素的列表转换成集合后，重复的元素会被自动去除。",
+      "options": [],
+      "answer": [
+        "正确"
+      ],
+      "blank_count": 0,
+      "explanation": "集合元素唯一，可用于去重。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 5,
+      "stage_index": 3,
+      "ordinal": 4,
+      "stage_title": "集合",
+      "kc_code": "PY43-KC-046",
+      "type": "FILL",
+      "stem": "向集合 s 中添加一个元素 x，使用的方法是 s.______(x)。",
+      "options": [],
+      "answer": [
+        "add"
+      ],
+      "blank_count": 1,
+      "explanation": "add() 向集合添加单个元素。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 6,
+      "stage_index": 1,
+      "ordinal": 1,
+      "stage_title": "文件系统与文件操作",
+      "kc_code": "PY43-KC-048",
+      "type": "CHOICE",
+      "stem": "在 Python 中，打开文件使用的内置函数是？",
+      "options": [
+        "open()",
+        "file()",
+        "read()",
+        "load()"
+      ],
+      "answer": [
+        "open()"
+      ],
+      "blank_count": 0,
+      "explanation": "open() 用于打开文件并返回文件对象。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 6,
+      "stage_index": 1,
+      "ordinal": 2,
+      "stage_title": "文件系统与文件操作",
+      "kc_code": "PY43-KC-048",
+      "type": "CHOICE",
+      "stem": "以“只读”方式打开文本文件时，open() 的模式参数应为？",
+      "options": [
+        "\"r\"",
+        "\"w\"",
+        "\"a\"",
+        "\"x\""
+      ],
+      "answer": [
+        "\"r\""
+      ],
+      "blank_count": 0,
+      "explanation": "\"r\" 只读，\"w\" 覆盖写，\"a\" 追加，\"x\" 排他创建。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 6,
+      "stage_index": 1,
+      "ordinal": 3,
+      "stage_title": "文件系统与文件操作",
+      "kc_code": "PY43-KC-048",
+      "type": "JUDGE",
+      "stem": "文件使用完毕后应当调用 close() 关闭，或使用 with 语句自动关闭。",
+      "options": [],
+      "answer": [
+        "正确"
+      ],
+      "blank_count": 0,
+      "explanation": "及时关闭文件可释放资源；with 语句能自动关闭。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 6,
+      "stage_index": 1,
+      "ordinal": 4,
+      "stage_title": "文件系统与文件操作",
+      "kc_code": "PY43-KC-048",
+      "type": "FILL",
+      "stem": "在 Python 中，打开文件的内置函数名是______。",
+      "options": [],
+      "answer": [
+        "open"
+      ],
+      "blank_count": 1,
+      "explanation": "open() 是打开文件的内置函数。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 6,
+      "stage_index": 2,
+      "ordinal": 1,
+      "stage_title": "文件读写",
+      "kc_code": "PY43-KC-050",
+      "type": "CHOICE",
+      "stem": "以写入模式 \"w\" 打开一个已存在的文件，会发生什么？",
+      "options": [
+        "清空原有内容后再写入",
+        "在文件末尾追加内容",
+        "报错无法打开",
+        "只能读取不能写入"
+      ],
+      "answer": [
+        "清空原有内容后再写入"
+      ],
+      "blank_count": 0,
+      "explanation": "\"w\" 模式会清空原文件内容；若要追加应使用 \"a\"。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 6,
+      "stage_index": 2,
+      "ordinal": 2,
+      "stage_title": "文件读写",
+      "kc_code": "PY43-KC-052",
+      "type": "CHOICE",
+      "stem": "一次性读取文件全部内容并返回为一个字符串，使用的方法是？",
+      "options": [
+        "read()",
+        "write()",
+        "append()",
+        "close()"
+      ],
+      "answer": [
+        "read()"
+      ],
+      "blank_count": 0,
+      "explanation": "read() 读取整个文件内容为字符串。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 6,
+      "stage_index": 2,
+      "ordinal": 3,
+      "stage_title": "文件读写",
+      "kc_code": "PY43-KC-050",
+      "type": "JUDGE",
+      "stem": "以 \"a\" 模式打开文件写入时，新内容会追加到文件末尾，不会清空原内容。",
+      "options": [],
+      "answer": [
+        "正确"
+      ],
+      "blank_count": 0,
+      "explanation": "\"a\" 为追加模式，保留原有内容。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 6,
+      "stage_index": 2,
+      "ordinal": 4,
+      "stage_title": "文件读写",
+      "kc_code": "PY43-KC-050",
+      "type": "FILL",
+      "stem": "以“追加”方式打开文件时，open() 的模式参数是______（单个字母）。",
+      "options": [],
+      "answer": [
+        "a"
+      ],
+      "blank_count": 1,
+      "explanation": "追加模式用 \"a\"。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 6,
+      "stage_index": 3,
+      "ordinal": 1,
+      "stage_title": "文件数据分析",
+      "kc_code": "PY43-KC-053",
+      "type": "CHOICE",
+      "stem": "进行词频统计时，通常使用哪种数据结构作为计数器？",
+      "options": [
+        "字典(dict)",
+        "元组(tuple)",
+        "集合(set)",
+        "字符串(str)"
+      ],
+      "answer": [
+        "字典(dict)"
+      ],
+      "blank_count": 0,
+      "explanation": "字典以“词→次数”键值对计数，最为方便。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 6,
+      "stage_index": 3,
+      "ordinal": 2,
+      "stage_title": "文件数据分析",
+      "kc_code": "PY43-KC-049",
+      "type": "CHOICE",
+      "stem": "对一行 CSV 文本 \"a,b,c\" 按逗号切分成列表，应使用？",
+      "options": [
+        "\"a,b,c\".split(\",\")",
+        "\"a,b,c\".strip(\",\")",
+        "\"a,b,c\".join(\",\")",
+        "\"a,b,c\".find(\",\")"
+      ],
+      "answer": [
+        "\"a,b,c\".split(\",\")"
+      ],
+      "blank_count": 0,
+      "explanation": "split(\",\") 按逗号分割字符串为列表。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 6,
+      "stage_index": 3,
+      "ordinal": 3,
+      "stage_title": "文件数据分析",
+      "kc_code": "PY43-KC-053",
+      "type": "JUDGE",
+      "stem": "字典的 get(key, 0) 方法可以在键不存在时返回默认值 0，常用于计数。",
+      "options": [],
+      "answer": [
+        "正确"
+      ],
+      "blank_count": 0,
+      "explanation": "get(key, 默认值) 避免 KeyError，便于累加计数。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 6,
+      "stage_index": 3,
+      "ordinal": 4,
+      "stage_title": "文件数据分析",
+      "kc_code": "PY43-KC-049",
+      "type": "FILL",
+      "stem": "去除字符串首尾空白字符（含换行符）常用的字符串方法名是______。",
+      "options": [],
+      "answer": [
+        "strip"
+      ],
+      "blank_count": 1,
+      "explanation": "strip() 去除首尾空白，常用于清洗按行读取的数据。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 7,
+      "stage_index": 1,
+      "ordinal": 1,
+      "stage_title": "函数进阶",
+      "kc_code": "PY43-KC-059",
+      "type": "CHOICE",
+      "stem": "在函数定义中，用于接收任意数量“位置参数”的语法是？",
+      "options": [
+        "*args",
+        "**kwargs",
+        "args",
+        "&args"
+      ],
+      "answer": [
+        "*args"
+      ],
+      "blank_count": 0,
+      "explanation": "*args 收集任意数量位置参数为元组；**kwargs 收集关键字参数为字典。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 7,
+      "stage_index": 1,
+      "ordinal": 2,
+      "stage_title": "函数进阶",
+      "kc_code": "PY43-KC-054",
+      "type": "CHOICE",
+      "stem": "关于 lambda 函数，下列说法正确的是？",
+      "options": [
+        "它是一种匿名函数",
+        "它必须有函数名",
+        "它可以包含多条语句",
+        "它不能带任何参数"
+      ],
+      "answer": [
+        "它是一种匿名函数"
+      ],
+      "blank_count": 0,
+      "explanation": "lambda 定义匿名的单表达式函数。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 7,
+      "stage_index": 1,
+      "ordinal": 3,
+      "stage_title": "函数进阶",
+      "kc_code": "PY43-KC-060",
+      "type": "JUDGE",
+      "stem": "在函数内部定义的局部变量，默认情况下在函数外部无法访问。",
+      "options": [],
+      "answer": [
+        "正确"
+      ],
+      "blank_count": 0,
+      "explanation": "局部变量作用域限于函数内部。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 7,
+      "stage_index": 1,
+      "ordinal": 4,
+      "stage_title": "函数进阶",
+      "kc_code": "PY43-KC-059",
+      "type": "FILL",
+      "stem": "在函数定义中，用于接收任意数量关键字参数的语法是______（含两个星号）。",
+      "options": [],
+      "answer": [
+        "**kwargs"
+      ],
+      "blank_count": 1,
+      "explanation": "**kwargs 收集关键字参数为字典。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 7,
+      "stage_index": 2,
+      "ordinal": 1,
+      "stage_title": "递归",
+      "kc_code": "PY43-KC-061",
+      "type": "CHOICE",
+      "stem": "关于递归函数，下列说法正确的是？",
+      "options": [
+        "递归函数必须有基准情形（终止条件）",
+        "递归函数不需要终止条件",
+        "递归函数不能调用自身",
+        "递归一定比循环运行更快"
+      ],
+      "answer": [
+        "递归函数必须有基准情形（终止条件）"
+      ],
+      "blank_count": 0,
+      "explanation": "递归必须有基准情形，否则会无限递归。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 7,
+      "stage_index": 2,
+      "ordinal": 2,
+      "stage_title": "递归",
+      "kc_code": "PY43-KC-061",
+      "type": "CHOICE",
+      "stem": "5 的阶乘 5! 的值是？",
+      "options": [
+        "120",
+        "25",
+        "60",
+        "100"
+      ],
+      "answer": [
+        "120"
+      ],
+      "blank_count": 0,
+      "explanation": "5! = 5×4×3×2×1 = 120。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 7,
+      "stage_index": 2,
+      "ordinal": 3,
+      "stage_title": "递归",
+      "kc_code": "PY43-KC-061",
+      "type": "JUDGE",
+      "stem": "递归函数如果缺少基准情形（终止条件），可能导致无限递归。",
+      "options": [],
+      "answer": [
+        "正确"
+      ],
+      "blank_count": 0,
+      "explanation": "缺少终止条件会无限递归直至栈溢出。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 7,
+      "stage_index": 2,
+      "ordinal": 4,
+      "stage_title": "递归",
+      "kc_code": "PY43-KC-061",
+      "type": "FILL",
+      "stem": "递归的两大要素是递归情形和______情形（即递归终止条件）。",
+      "options": [],
+      "answer": [
+        "基准"
+      ],
+      "blank_count": 1,
+      "explanation": "递归两要素：基准情形（终止）与递归情形（规模缩小）。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 7,
+      "stage_index": 3,
+      "ordinal": 1,
+      "stage_title": "模块与包",
+      "kc_code": "PY43-KC-062",
+      "type": "CHOICE",
+      "stem": "在 Python 中，导入整个 math 模块的语句是？",
+      "options": [
+        "import math",
+        "include math",
+        "using math",
+        "require math"
+      ],
+      "answer": [
+        "import math"
+      ],
+      "blank_count": 0,
+      "explanation": "import 模块名 导入整个模块。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 7,
+      "stage_index": 3,
+      "ordinal": 2,
+      "stage_title": "模块与包",
+      "kc_code": "PY43-KC-062",
+      "type": "CHOICE",
+      "stem": "只从 math 模块中导入 sqrt 函数，正确的语句是？",
+      "options": [
+        "from math import sqrt",
+        "import sqrt from math",
+        "import math.sqrt only",
+        "using math.sqrt"
+      ],
+      "answer": [
+        "from math import sqrt"
+      ],
+      "blank_count": 0,
+      "explanation": "from 模块 import 名称 可只导入指定对象。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 7,
+      "stage_index": 3,
+      "ordinal": 3,
+      "stage_title": "模块与包",
+      "kc_code": "PY43-KC-056",
+      "type": "JUDGE",
+      "stem": "一个包含 __init__.py 文件的目录可以被视为一个 Python 包。",
+      "options": [],
+      "answer": [
+        "正确"
+      ],
+      "blank_count": 0,
+      "explanation": "传统包通过 __init__.py 标识目录为包。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 7,
+      "stage_index": 3,
+      "ordinal": 4,
+      "stage_title": "模块与包",
+      "kc_code": "PY43-KC-062",
+      "type": "FILL",
+      "stem": "在 Python 中，用于导入模块的关键字是______。",
+      "options": [],
+      "answer": [
+        "import"
+      ],
+      "blank_count": 1,
+      "explanation": "import 是导入模块的关键字。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 7,
+      "stage_index": 4,
+      "ordinal": 1,
+      "stage_title": "库与打包",
+      "kc_code": "PY43-KC-057",
+      "type": "CHOICE",
+      "stem": "安装第三方库常用的包管理工具是？",
+      "options": [
+        "pip",
+        "git",
+        "npm",
+        "make"
+      ],
+      "answer": [
+        "pip"
+      ],
+      "blank_count": 0,
+      "explanation": "pip 是 Python 的官方包管理工具。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 7,
+      "stage_index": 4,
+      "ordinal": 2,
+      "stage_title": "库与打包",
+      "kc_code": "PY43-KC-058",
+      "type": "CHOICE",
+      "stem": "当一个 Python 文件作为主程序直接运行时，其变量 __name__ 的值是？",
+      "options": [
+        "\"__main__\"",
+        "文件名",
+        "\"module\"",
+        "None"
+      ],
+      "answer": [
+        "\"__main__\""
+      ],
+      "blank_count": 0,
+      "explanation": "直接运行时 __name__ 为 \"__main__\"，被导入时为模块名。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 7,
+      "stage_index": 4,
+      "ordinal": 3,
+      "stage_title": "库与打包",
+      "kc_code": "PY43-KC-055",
+      "type": "JUDGE",
+      "stem": "pyinstaller 可以把 Python 程序打包成独立的可执行文件（如 .exe）。",
+      "options": [],
+      "answer": [
+        "正确"
+      ],
+      "blank_count": 0,
+      "explanation": "pyinstaller 用于将脚本打包为可执行文件。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 7,
+      "stage_index": 4,
+      "ordinal": 4,
+      "stage_title": "库与打包",
+      "kc_code": "PY43-KC-057",
+      "type": "FILL",
+      "stem": "使用 pip 安装第三方库 requests 的命令是：pip ______ requests。",
+      "options": [],
+      "answer": [
+        "install"
+      ],
+      "blank_count": 1,
+      "explanation": "pip install 库名 用于安装第三方库。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 7,
+      "stage_index": 5,
+      "ordinal": 1,
+      "stage_title": "面向对象",
+      "kc_code": "PY43-KC-064",
+      "type": "CHOICE",
+      "stem": "在 Python 中，定义类使用的关键字是？",
+      "options": [
+        "class",
+        "def",
+        "object",
+        "new"
+      ],
+      "answer": [
+        "class"
+      ],
+      "blank_count": 0,
+      "explanation": "class 用于定义类；def 定义函数。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 7,
+      "stage_index": 5,
+      "ordinal": 2,
+      "stage_title": "面向对象",
+      "kc_code": "PY43-KC-065",
+      "type": "CHOICE",
+      "stem": "面向对象编程的三大特征是？",
+      "options": [
+        "封装、继承、多态",
+        "顺序、分支、循环",
+        "输入、处理、输出",
+        "增、删、改、查"
+      ],
+      "answer": [
+        "封装、继承、多态"
+      ],
+      "blank_count": 0,
+      "explanation": "OOP 三大特征：封装、继承、多态。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 7,
+      "stage_index": 5,
+      "ordinal": 3,
+      "stage_title": "面向对象",
+      "kc_code": "PY43-KC-064",
+      "type": "JUDGE",
+      "stem": "对象是类的实例。",
+      "options": [],
+      "answer": [
+        "正确"
+      ],
+      "blank_count": 0,
+      "explanation": "类是模板，对象是按模板创建的实例。",
+      "source_label": "通识题（非课件原题）"
+    },
+    {
+      "chapter": 7,
+      "stage_index": 5,
+      "ordinal": 4,
+      "stage_title": "面向对象",
+      "kc_code": "PY43-KC-064",
+      "type": "FILL",
+      "stem": "在 Python 类的实例方法中，表示对象自身的第一个参数通常命名为______。",
+      "options": [],
+      "answer": [
+        "self"
+      ],
+      "blank_count": 1,
+      "explanation": "约定俗成用 self 表示实例自身。",
+      "source_label": "通识题（非课件原题）"
+    }
+  ]
+}

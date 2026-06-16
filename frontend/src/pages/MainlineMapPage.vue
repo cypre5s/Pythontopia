@@ -259,6 +259,8 @@ onBeforeUnmount(() => {
           <aside
             v-if="selectedView"
             class="map-drawer"
+            @pointerdown.stop
+            @pointerup.stop
           >
             <button
               type="button"

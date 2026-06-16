@@ -8,6 +8,7 @@ import PdfPageView from '@/components/library/PdfPageView.vue';
 import PyButton from '@/components/ui/PyButton.vue';
 import { useToastStore } from '@stores/toast';
 import {
+  answerCourseware,
   getDocumentPage,
   listAllExamples,
   listAllProblems,
@@ -16,6 +17,7 @@ import {
   listDocumentPages,
   listKcFallbacks,
   searchCourseLibrary,
+  type CoursewareCitation,
 } from '@/api/courseLibrary';
 import { listChapters, listKnowledgeComponents } from '@/api/course';
 import { listChapterVideos, videoStreamUrl, type CourseVideoDto } from '@/api/courseVideo';
@@ -86,7 +88,11 @@ const documentPageList = ref<CoursePageDetail[]>([]);
 const ragQuery = ref<string>('');
 const ragRunning = ref<boolean>(false);
 const ragResults = ref<LibrarySearchHit[]>([]);
-const ragHint = ref<string>('在课件 561 页中关键词检索；登录身份不足时自动降级为本地全文检索。');
+// 课件问答（LLM 作答 + 页码引用）。answer 端点不可用时回退到 ragResults 片段卡。
+const ragAnswer = ref<string>('');
+const ragCitations = ref<CoursewareCitation[]>([]);
+const ragAnswerMode = ref<boolean>(false);
+const ragHint = ref<string>('就课件内容提问，AI 依据命中课件作答并给出可跳转页码。');
 
 const viewMode = ref<PageViewMode>(readPreferredViewMode());
 function setViewMode(mode: PageViewMode): void {
@@ -119,11 +125,17 @@ function selectVideo(id: number): void {
   selectedVideoId.value = id;
 }
 
-function formatDuration(sec: number | null): string {
-  if (!sec || sec <= 0) return '';
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return `${m}:${String(s).padStart(2, '0')}`;
+const currentVideoIndex = computed<number>(() =>
+  chapterVideos.value.findIndex((v) => v.id === selectedVideoId.value),
+);
+
+// 视频视图下「上一个 / 下一个」切片（替代 PDF 翻页语义）；列表已从底部移除。
+function gotoVideo(delta: number): void {
+  const list = chapterVideos.value;
+  if (list.length === 0) return;
+  const base = currentVideoIndex.value < 0 ? 0 : currentVideoIndex.value;
+  const target = list[base + delta];
+  if (target) selectVideo(target.id);
 }
 
 const currentDocument = computed<CourseDocumentSummary | null>(
@@ -184,67 +196,6 @@ const catalogSidebarTitle = computed<string>(() => {
     return `${ch} 章 · ${kc} KC`;
   }
   return '章节目录';
-});
-
-interface BreadcrumbItem {
-  key: string;
-  label: string;
-}
-
-function cleanBreadcrumbLabel(value: string | null | undefined): string | null {
-  if (!value) return null;
-  const cleaned = value
-    .replace(/[\u000b\f\r\n\t]+/g, ' ') // eslint-disable-line no-control-regex -- OCR 页标题里会带垂直制表符分页符。
-    .replace(/\s+/g, ' ')
-    .replace(/\s+([（(])/g, '$1')
-    .replace(/([）)])\s+/g, '$1')
-    .trim();
-  return cleaned ? cleaned : null;
-}
-
-const breadcrumbItems = computed<BreadcrumbItem[]>(() => {
-  const items: BreadcrumbItem[] = [];
-  const chapter = currentChapter.value;
-  const doc = currentDocument.value;
-  const chapterLabel = chapter
-    ? `第 ${chapter.orderIndex} 章 · ${chapterTitleLabel(cleanBreadcrumbLabel(chapter.title) ?? chapter.title)}`
-    : doc
-      ? `第 ${doc.sortOrder} 章 · ${chapterTitleLabel(cleanBreadcrumbLabel(doc.title) ?? doc.title)}`
-      : indexLoading.value
-        ? '章节索引加载中'
-        : null;
-  if (chapterLabel) {
-    items.push({ key: 'chapter', label: chapterLabel });
-  }
-
-  const documentLabel = doc
-    ? cleanBreadcrumbLabel(doc.title) ?? cleanBreadcrumbLabel(doc.filename)
-    : indexLoading.value
-      ? '课件索引加载中'
-      : currentDocId.value > 0
-        ? `课件 ${currentDocId.value}`
-        : null;
-  if (documentLabel) {
-    items.push({ key: 'document', label: documentLabel });
-  }
-
-  const titleLabel = pageDetail.value
-    ? cleanBreadcrumbLabel(pageDetail.value.title)
-    : pageLoading.value
-      ? '页面加载中'
-      : null;
-  if (titleLabel) {
-    items.push({ key: 'page-title', label: titleLabel });
-  }
-
-  const totalPages = doc?.pageCount;
-  items.push({
-    key: 'page-status',
-    label: totalPages && totalPages > 0
-      ? `第 ${currentPage.value} / ${totalPages} 页`
-      : `第 ${currentPage.value} 页`,
-  });
-  return items;
 });
 
 const relatedProblems = computed<CourseProblemSummary[]>(() => {
@@ -417,20 +368,38 @@ async function runRagSearch(): Promise<void> {
   const q = ragQuery.value.trim();
   if (!q) {
     ragResults.value = [];
+    ragAnswer.value = '';
+    ragCitations.value = [];
     return;
   }
   ragRunning.value = true;
   try {
-    const hits = await searchCourseLibrary(q, { topK: 6 });
-    ragResults.value = hits;
-    if (hits.length === 0) {
-      ragHint.value = '没有命中证据片段，请尝试更宽泛的关键词。';
-    } else {
-      ragHint.value = `命中 ${hits.length} 个片段（按相关性排序）。点击片段直达对应页。`;
+    // 首选：LLM 课件作答 + 页码引用（学生可用的新端点）。
+    const result = await answerCourseware(q, { topK: 6 });
+    ragAnswerMode.value = true;
+    ragAnswer.value = result.answerMd;
+    ragCitations.value = result.citations;
+    ragResults.value = [];
+    ragHint.value = result.noEvidence
+      ? '课件中未直接覆盖该问题，换个关键词或在左侧选章节/KC 再试。'
+      : `已据 ${result.citations.length} 处课件作答，点页码可跳转到对应课件页。`;
+  } catch {
+    // 课件作答端点不可用（如服务未起 / 鉴权）→ 回退片段检索（旧行为）。
+    try {
+      const hits = await searchCourseLibrary(q, { topK: 6 });
+      ragAnswerMode.value = false;
+      ragAnswer.value = '';
+      ragCitations.value = [];
+      ragResults.value = hits;
+      ragHint.value =
+        hits.length === 0
+          ? '没有命中证据片段，请尝试更宽泛的关键词。'
+          : `命中 ${hits.length} 个片段（按相关性排序）。点击片段直达对应页。`;
+    } catch (fallbackError) {
+      const message =
+        fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+      ragHint.value = `检索失败：${message}`;
     }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    ragHint.value = `检索失败：${message}`;
   } finally {
     ragRunning.value = false;
   }
@@ -474,6 +443,8 @@ function backToWorld(): void {
 }
 
 function jumpToRagHit(hit: LibrarySearchHit): void {
+  // 跳转一定落到能看见的 PDF 视图（用户偏好可能停在视频视图）。
+  setViewMode('pdf');
   if (hit.documentId && hit.pageNo) {
     currentDocId.value = hit.documentId;
     currentPage.value = hit.pageNo;
@@ -481,6 +452,12 @@ function jumpToRagHit(hit: LibrarySearchHit): void {
   } else if (hit.pageId) {
     void resolvePageById(hit.pageId);
   }
+}
+
+function jumpToCitation(citation: CoursewareCitation): void {
+  if (!citation.pageId) return;
+  setViewMode('pdf');
+  void resolvePageById(citation.pageId);
 }
 
 function openProblem(problemId: number): void {
@@ -544,19 +521,6 @@ watch(chapterNoForVideo, (next) => {
   <AppLayout>
     <section class="library-page">
       <header class="library-header">
-        <nav
-          class="breadcrumb"
-          aria-label="阅读路径"
-        >
-          <span class="brand">Pythontopia 图书馆</span>
-          <template
-            v-for="item in breadcrumbItems"
-            :key="item.key"
-          >
-            <span class="sep">/</span>
-            <span>{{ item.label }}</span>
-          </template>
-        </nav>
         <PyButton
           test-id="library-back"
           variant="secondary"
@@ -649,9 +613,49 @@ watch(chapterNoForVideo, (next) => {
         >
           <header class="page-bar">
             <h2 class="page-title">
-              {{ pageDetail?.title || currentDocument?.title || '加载中…' }}
+              {{ viewMode === 'video'
+                ? (selectedVideo?.title || '课件视频')
+                : (pageDetail?.title || currentDocument?.title || '加载中…') }}
             </h2>
-            <div class="page-controls">
+            <!-- 视频视图：翻页语义改为「上一个/下一个视频」 -->
+            <div
+              v-if="viewMode === 'video'"
+              class="page-controls"
+            >
+              <PyButton
+                class="page-control"
+                test-id="library-prev-video"
+                variant="secondary"
+                size="sm"
+                :disabled="currentVideoIndex <= 0"
+                @click="gotoVideo(-1)"
+              >
+                ◀ 上一个
+              </PyButton>
+              <span
+                class="page-jump page-jump--video"
+                aria-label="当前视频序号"
+              >
+                {{ chapterVideos.length > 0
+                  ? `${Math.max(currentVideoIndex, 0) + 1} / ${chapterVideos.length}`
+                  : '0 / 0' }}
+              </span>
+              <PyButton
+                class="page-control"
+                test-id="library-next-video"
+                variant="secondary"
+                size="sm"
+                :disabled="chapterVideos.length === 0 || currentVideoIndex >= chapterVideos.length - 1"
+                @click="gotoVideo(1)"
+              >
+                下一个 ▶
+              </PyButton>
+            </div>
+            <!-- 原 PDF 视图：按页翻 -->
+            <div
+              v-else
+              class="page-controls"
+            >
               <PyButton
                 class="page-control"
                 test-id="library-prev-page"
@@ -762,28 +766,6 @@ watch(chapterNoForVideo, (next) => {
                     <p>该视频文件整理中（manifest 已登记，尚未下载到服务器）。</p>
                   </div>
                 </div>
-                <ul class="video-list">
-                  <li
-                    v-for="v in chapterVideos"
-                    :key="v.id"
-                  >
-                    <button
-                      type="button"
-                      class="video-item"
-                      :class="{ 'video-item--active': v.id === selectedVideoId }"
-                      @click="selectVideo(v.id)"
-                    >
-                      <span class="video-item__title">{{ v.title }}</span>
-                      <span class="video-item__meta">
-                        <span v-if="formatDuration(v.durationSec)">{{ formatDuration(v.durationSec) }}</span>
-                        <span
-                          v-if="!v.available"
-                          class="video-item__pending"
-                        >未就绪</span>
-                      </span>
-                    </button>
-                  </li>
-                </ul>
               </template>
               <template v-else>
                 <p class="muted video-fallback-note">
@@ -898,7 +880,41 @@ watch(chapterNoForVideo, (next) => {
           <p class="rag-hint">
             {{ ragHint }}
           </p>
+          <!-- LLM 课件作答 + 可跳转页码引用 -->
+          <div
+            v-if="ragAnswerMode && ragAnswer"
+            class="rag-answer"
+            data-testid="library-rag-answer"
+          >
+            <!-- eslint-disable vue/no-v-html — renderPageHtml 内部 DOMPurify 严格白名单清洗，已审阅 -->
+            <div
+              class="rag-answer__md page-prose page-prose--md"
+              v-html="renderPageHtml(ragAnswer)"
+            />
+            <!-- eslint-enable vue/no-v-html -->
+            <ul
+              v-if="ragCitations.length > 0"
+              class="rag-citations"
+            >
+              <li
+                v-for="(c, i) in ragCitations"
+                :key="`${c.pageId}-${i}`"
+              >
+                <button
+                  type="button"
+                  class="rag-cite"
+                  data-testid="library-rag-cite"
+                  @click="jumpToCitation(c)"
+                >
+                  <span class="badge">第 {{ c.pageNo }} 页</span>
+                  <span class="rag-cite__quote">{{ c.quote }}</span>
+                </button>
+              </li>
+            </ul>
+          </div>
+          <!-- 回退：课件作答端点不可用时展示片段卡（旧行为） -->
           <ul
+            v-else
             class="rag-results"
             data-testid="library-rag-results"
           >
@@ -945,27 +961,12 @@ watch(chapterNoForVideo, (next) => {
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
-  padding: 12px 16px;
+  padding: 10px 16px;
   border: 3px solid var(--pyt-color-border-strong, var(--pyt-color-text-primary));
   background: var(--pyt-color-bg-elevated, var(--pyt-color-bg-elevated));
   box-shadow: 4px 4px 0 var(--pyt-color-border-strong, var(--pyt-color-text-primary));
-}
-.breadcrumb {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  font-family: var(--pyt-font-pixel), var(--pyt-font-sans, sans-serif);
-  font-size: 14px;
-  color: var(--pyt-color-text-primary, var(--pyt-color-text-primary));
-}
-.breadcrumb .brand {
-  font-weight: 700;
-}
-.breadcrumb .sep {
-  color: var(--pyt-color-text-muted, var(--pyt-color-text-muted));
 }
 .back-button {
   font-family: var(--pyt-font-pixel), monospace;
@@ -1529,6 +1530,58 @@ watch(chapterNoForVideo, (next) => {
   margin: 0;
   font-size: 12px;
   line-height: 1.45;
+}
+
+/* 视频视图的「第 X / N 个」计数（替代 PDF 的页码输入框） */
+.page-jump--video {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 64px;
+  height: var(--library-page-control-height, 34px);
+  padding: 0 8px;
+}
+
+/* 课件 LLM 作答 + 可跳转页码引用 */
+.rag-answer {
+  display: grid;
+  gap: 8px;
+}
+.rag-answer__md {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--pyt-color-text-primary, var(--pyt-color-text-primary));
+}
+.rag-citations {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.rag-cite {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 6px;
+  text-align: left;
+  background: var(--pyt-color-bg-soft, var(--pyt-color-bg-soft));
+  border: 2px solid var(--pyt-color-border, var(--pyt-color-border));
+  font: inherit;
+  cursor: pointer;
+  min-height: auto;
+}
+.rag-cite:hover {
+  background: var(--pyt-color-warning-bg, var(--pyt-color-warning-bg));
+}
+.rag-cite__quote {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--pyt-color-text-muted, var(--pyt-color-text-muted));
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .muted {
   color: var(--pyt-color-text-muted, var(--pyt-color-text-muted));

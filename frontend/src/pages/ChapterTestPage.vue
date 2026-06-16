@@ -25,13 +25,26 @@ import {
   useChapterTestExam,
   useExamRouteGuard,
 } from '@/components/chaptertest';
-import type { ChapterTestResultItemDto } from '@/api/chapterTest';
+import type {
+  ChapterAssessmentMode,
+  ChapterTestResultItemDto,
+} from '@/api/chapterTest';
 
-const props = defineProps<{ chapter: number }>();
+const props = withDefaults(
+  defineProps<{ chapter: number; assessment?: ChapterAssessmentMode }>(),
+  { assessment: 'test' },
+);
 
 const router = useRouter();
-const exam = useChapterTestExam(props.chapter);
+const exam = useChapterTestExam(props.chapter, props.assessment);
 const exitConfirm = ref<boolean>(false);
+const isQuiz = computed<boolean>(() => props.assessment === 'quiz');
+const assessmentTitle = computed<string>(() => (isQuiz.value ? '章节小测' : '章末大测试'));
+const assessmentRules = computed<string>(() =>
+  isQuiz.value
+    ? '10 道选择、10 道填空、10 道判断、3 道编程，共 33 题，限时 60 分钟。'
+    : '30 道选择、30 道填空、30 道判断、9 道编程，共 99 题，限时 120 分钟。',
+);
 
 const validChapter = computed<boolean>(
   () => Number.isInteger(props.chapter) && props.chapter >= 1 && props.chapter <= 7,
@@ -49,9 +62,9 @@ const prepareHint = computed<string>(() => {
       return '题目已就绪，可以开始。';
     case 'GENERATING':
     case 'PENDING':
-      return '题目正在按你的学情预生成…（开考时若仍未就绪将用兜底题组，全程不调用 AI）';
+      return '题目正在按本章课件和你的学情生成，请稍后再开始。';
     case 'FAILED':
-      return '预生成失败，开考将使用兜底题组。';
+      return '题目生成失败，请重新进入本页准备。';
     default:
       return '本测试限时作答、禁止粘贴、失焦会被记录，请独立完成。';
   }
@@ -176,7 +189,7 @@ onBeforeUnmount(() => {
       >
         <header class="ct-gate__head">
           <h1 class="ct-gate__title">
-            第 {{ chapter }} 章 · 章末大测试
+            第 {{ chapter }} 章 · {{ assessmentTitle }}
           </h1>
           <button
             type="button"
@@ -189,7 +202,8 @@ onBeforeUnmount(() => {
         </header>
 
         <ul class="ct-gate__rules">
-          <li>选择 / 判断 / 填空 / 编程四类题，满分 100，限时作答。</li>
+          <li>{{ assessmentRules }}</li>
+          <li>题目严格覆盖本章内容，编程题优先使用课程题库。</li>
           <li>考试期间禁止前往百晓工坊 / AI 导学 / Bug 矿洞。</li>
           <li>编程题禁止粘贴；切屏失焦会被记录供教师参考。</li>
           <li>到达截止时间将自动交卷。</li>
@@ -226,7 +240,7 @@ onBeforeUnmount(() => {
           :disabled="exam.phase.value === 'starting'"
           @click="onStart"
         >
-          {{ exam.phase.value === 'starting' ? '正在出卷…' : '开始考试' }}
+          {{ exam.phase.value === 'starting' ? '正在出卷…' : isQuiz ? '开始小测' : '开始考试' }}
         </button>
       </div>
 
@@ -235,7 +249,7 @@ onBeforeUnmount(() => {
         <header class="ct-exam-head">
           <div class="ct-exam-head__left">
             <h1 class="ct-exam-head__title">
-              第 {{ chapter }} 章 · 章末大测试
+              第 {{ chapter }} 章 · {{ assessmentTitle }}
             </h1>
             <span
               class="ct-exam-head__progress"
@@ -333,27 +347,27 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+/* 学习通考试页白纸风：浅灰页面底 + 白卡卷面 + 蓝色主按钮（朴素、不花眼）。 */
 .ct-page {
   min-height: 100%;
   padding: var(--pyt-space-5);
   display: flex;
   flex-direction: column;
-  gap: var(--pyt-space-4);
-  background:
-    radial-gradient(ellipse at top, rgba(255, 247, 230, 0.85) 0%, rgba(241, 216, 150, 0.55) 60%, rgba(212, 175, 55, 0.18) 100%);
-  font-family: var(--pyt-font-sans);
-  color: var(--pyt-color-text-primary);
+  gap: var(--pyt-space-3);
+  background: #f4f5f7;
+  font-family: var(--pyt-font-read), sans-serif;
+  color: #333;
 }
 .ct-block {
   padding: var(--pyt-space-5);
-  background: var(--pyt-color-bg-elevated);
-  border: 3px solid var(--pyt-color-border-strong);
-  border-radius: var(--pyt-radius-lg);
+  background: #fff;
+  border: 1px solid #e6e8ec;
+  border-radius: 4px;
   display: grid;
   gap: var(--pyt-space-3);
   justify-items: start;
 }
-.ct-block--error { border-color: var(--pyt-color-danger); }
+.ct-block--error { border-color: #e25c4a; }
 
 .ct-gate {
   max-width: 720px;
@@ -362,25 +376,24 @@ onBeforeUnmount(() => {
   display: grid;
   gap: var(--pyt-space-4);
   padding: var(--pyt-space-6);
-  background: linear-gradient(180deg, var(--pyt-color-bg-elevated) 0%, var(--pyt-color-bg-sunken) 100%);
-  border: 3px solid var(--pyt-color-border-strong);
-  border-radius: var(--pyt-radius-lg);
-  box-shadow: var(--pyt-shadow-card);
+  background: #fff;
+  border: 1px solid #e6e8ec;
+  border-radius: 4px;
 }
 .ct-gate__head { display: flex; align-items: center; justify-content: space-between; gap: var(--pyt-space-3); }
-.ct-gate__title { margin: 0; font-size: var(--pyt-font-size-2xl); color: var(--pyt-color-text-primary); }
+.ct-gate__title { margin: 0; font-size: 20px; font-weight: 700; color: #333; }
 .ct-gate__rules {
   margin: 0;
   padding-left: var(--pyt-space-5);
   display: grid;
   gap: var(--pyt-space-1);
-  color: var(--pyt-color-text-hint);
-  font-size: var(--pyt-font-size-base);
-  line-height: 1.6;
+  color: #666;
+  font-size: 14px;
+  line-height: 1.7;
 }
-.ct-gate__hint { margin: 0; color: var(--pyt-color-text-muted); font-size: var(--pyt-font-size-sm); }
-.ct-gate__latest { margin: 0; color: var(--pyt-color-text-primary); font-weight: 700; }
-.ct-gate__error { margin: 0; color: var(--pyt-color-danger); }
+.ct-gate__hint { margin: 0; color: #9aa0a8; font-size: 13px; }
+.ct-gate__latest { margin: 0; color: #333; font-weight: 700; }
+.ct-gate__error { margin: 0; color: #e25c4a; }
 
 .ct-exam-head {
   display: flex;
@@ -389,50 +402,54 @@ onBeforeUnmount(() => {
   gap: var(--pyt-space-3);
   flex-wrap: wrap;
   padding: var(--pyt-space-3) var(--pyt-space-4);
-  background: linear-gradient(180deg, var(--pyt-color-bg-elevated) 0%, var(--pyt-color-bg-sunken) 100%);
-  border: 3px solid var(--pyt-color-border-strong);
-  border-radius: var(--pyt-radius-lg);
-  box-shadow: var(--pyt-shadow-card);
+  background: #fff;
+  border: 1px solid #e6e8ec;
+  border-radius: 4px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
   position: sticky;
   top: 0;
   z-index: var(--pyt-z-hud);
 }
-.ct-exam-head__left { display: flex; flex-direction: column; gap: var(--pyt-space-1); }
-.ct-exam-head__title { margin: 0; font-size: var(--pyt-font-size-lg); }
-.ct-exam-head__progress { font-size: var(--pyt-font-size-sm); color: var(--pyt-color-text-muted); }
+.ct-exam-head__left { display: flex; flex-direction: column; gap: 2px; }
+.ct-exam-head__title { margin: 0; font-size: 16px; font-weight: 700; color: #333; }
+.ct-exam-head__progress { font-size: 13px; color: #8a8a8a; }
 .ct-exam-head__right { display: flex; align-items: center; gap: var(--pyt-space-2); }
 .ct-exam-error {
   margin: 0;
-  padding: var(--pyt-space-3);
-  background: var(--pyt-color-danger-bg);
-  border: 2px solid var(--pyt-color-danger);
-  border-radius: var(--pyt-radius-md);
-  color: var(--pyt-color-danger);
+  padding: 10px 12px;
+  background: #fdf3f2;
+  border: 1px solid #f3c4bc;
+  border-radius: 4px;
+  color: #e25c4a;
+  font-size: 13px;
 }
-.ct-questions { display: grid; gap: var(--pyt-space-4); }
+.ct-questions { display: grid; gap: var(--pyt-space-3); }
 .ct-exam-foot { display: flex; justify-content: center; padding: var(--pyt-space-4) 0; }
 
 .ct-btn {
-  font-family: var(--pyt-font-sans);
-  font-size: var(--pyt-font-size-sm);
-  padding: var(--pyt-space-2) var(--pyt-space-4);
-  background: var(--pyt-color-bg-elevated);
-  color: var(--pyt-color-text-primary);
-  border: 2px solid var(--pyt-color-border-strong);
-  border-radius: var(--pyt-radius-sm);
+  font-family: var(--pyt-font-read), sans-serif;
+  font-size: 13px;
+  min-height: 0;
+  padding: 5px 16px;
+  background: #fff;
+  color: #555;
+  border: 1px solid #d4d8df;
+  border-radius: 4px;
   cursor: pointer;
-  box-shadow: var(--pyt-shadow-card);
+  box-shadow: none;
 }
-.ct-btn:hover:not(:disabled) { background: var(--pyt-color-bg-soft); }
+.ct-btn:hover:not(:disabled) { border-color: #3a7bd5; color: #3a7bd5; }
+.ct-btn:active { transform: none; box-shadow: none; }
 .ct-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .ct-btn--primary {
-  background: linear-gradient(180deg, var(--pyt-color-gold-bright) 0%, var(--pyt-color-gold) 100%);
-  border-color: var(--pyt-color-primary-dark);
-  color: var(--pyt-color-primary-dark);
+  background: #3a7bd5;
+  border-color: #3a7bd5;
+  color: #fff;
   font-weight: 700;
 }
-.ct-btn--ghost { background: var(--pyt-color-bg-soft); }
-.ct-btn--wide { min-width: 240px; padding: var(--pyt-space-3) var(--pyt-space-6); font-size: var(--pyt-font-size-base); }
+.ct-btn--primary:hover:not(:disabled) { background: #2f6cc0; color: #fff; }
+.ct-btn--ghost { background: transparent; }
+.ct-btn--wide { min-width: 240px; padding: 9px 32px; font-size: 14px; }
 
 @media (max-width: 720px) {
   .ct-exam-head { flex-direction: column; align-items: stretch; }

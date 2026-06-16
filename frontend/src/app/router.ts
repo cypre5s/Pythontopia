@@ -238,11 +238,18 @@ export const router = createRouter({
     },
     // 章末大测试：考试期禁挂随身助教（防 AI 协助），路由守卫另禁跳 AI 页。
     {
+      path: '/chapter-quiz/:chapter(\\d+)',
+      name: 'chapter-quiz',
+      component: () => import('@/pages/ChapterTestPage.vue'),
+      meta: { requiresAuth: true, hideCompanion: true },
+      props: (route) => ({ chapter: Number(route.params.chapter), assessment: 'quiz' }),
+    },
+    {
       path: '/chapter-test/:chapter(\\d+)',
       name: 'chapter-test',
       component: () => import('@/pages/ChapterTestPage.vue'),
       meta: { requiresAuth: true, hideCompanion: true },
-      props: (route) => ({ chapter: Number(route.params.chapter) }),
+      props: (route) => ({ chapter: Number(route.params.chapter), assessment: 'test' }),
     },
     // catch-all 404 兜底，永不白屏。必须放在最后，避免抢占其它路由。
     {

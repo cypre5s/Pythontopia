@@ -204,6 +204,80 @@ export async function searchCourseLibrary(
   return localKeywordSearch(trimmed, topK, options);
 }
 
+export interface CoursewareCitation {
+  pageId: number;
+  pageNo: number;
+  chapterId: number | null;
+  quote: string;
+}
+
+export interface CoursewareAnswer {
+  answerMd: string;
+  citations: CoursewareCitation[];
+  noEvidence: boolean;
+}
+
+/**
+ * 课件问答（LLM 作答 + 可跳转页码引用）。调后端 `POST /api/courseware/answer`（学生可用）。
+ * 端点不可用 / 鉴权失败时由调用方回退到 {@link searchCourseLibrary} 的片段检索。
+ */
+export async function answerCourseware(
+  query: string,
+  options: RagSearchOptions = {},
+): Promise<CoursewareAnswer> {
+  const trimmed = query.trim();
+  if (!trimmed) {
+    return { answerMd: '', citations: [], noEvidence: true };
+  }
+  const topK = Math.max(1, Math.min(options.topK ?? RAG_TOP_K, 12));
+  const response = await http.post<{
+    answerMd?: string;
+    answer_md?: string;
+    citations?: Array<{
+      pageId?: number;
+      page_id?: number;
+      pageNo?: number;
+      page_no?: number;
+      chapterId?: number | null;
+      chapter_id?: number | null;
+      quote?: string;
+    }>;
+    noEvidence?: boolean;
+    no_evidence?: boolean;
+  }>(`/api/courseware/answer`, {
+    query: trimmed,
+    kcCodes: options.kcCodes ?? [],
+    topK,
+  });
+  const data = response.data;
+  return {
+    answerMd: data.answerMd ?? data.answer_md ?? '',
+    citations: (data.citations ?? []).map((c) => ({
+      pageId: c.pageId ?? c.page_id ?? 0,
+      pageNo: c.pageNo ?? c.page_no ?? 0,
+      chapterId: c.chapterId ?? c.chapter_id ?? null,
+      quote: c.quote ?? '',
+    })),
+    noEvidence: Boolean(data.noEvidence ?? data.no_evidence ?? false),
+  };
+}
+
+/**
+ * 查询分词：除按空白切分外，还在 ASCII 与非 ASCII（中文）边界处切开，
+ * 让「input函数」这类中英混写命中课件里的「input()函数」（连写时课件常带括号/空格）。
+ */
+function tokenizeQuery(query: string): string[] {
+  return Array.from(
+    new Set(
+      query
+        .toLowerCase()
+        .split(/\s+/)
+        .flatMap((chunk) => chunk.match(/[0-9a-z_]+|[^ -~\s]+/g) ?? [])
+        .filter(Boolean),
+    ),
+  );
+}
+
 async function localKeywordSearch(
   query: string,
   topK: number,
@@ -211,8 +285,7 @@ async function localKeywordSearch(
 ): Promise<LibrarySearchHit[]> {
   const docs = await listCourseDocuments();
   const docFilter = options.documentId ?? null;
-  const lowerQuery = query.toLowerCase();
-  const terms = Array.from(new Set(lowerQuery.split(/\s+/).filter(Boolean)));
+  const terms = tokenizeQuery(query);
   const hits: LibrarySearchHit[] = [];
 
   for (const doc of docs) {
@@ -253,7 +326,16 @@ function extractSnippet(content: string, query: string): string {
     return '';
   }
   const lower = content.toLowerCase();
-  const idx = lower.indexOf(query.toLowerCase());
+  let idx = lower.indexOf(query.toLowerCase());
+  if (idx === -1) {
+    // 整句没命中时退回首个命中的分词位置（与 localKeywordSearch 的分词一致）。
+    for (const term of tokenizeQuery(query)) {
+      const termIdx = lower.indexOf(term);
+      if (termIdx !== -1 && (idx === -1 || termIdx < idx)) {
+        idx = termIdx;
+      }
+    }
+  }
   if (idx === -1) {
     return content.slice(0, RAG_SNIPPET_LEN);
   }

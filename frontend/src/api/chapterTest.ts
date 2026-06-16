@@ -15,6 +15,7 @@ import { ApiClientError, http } from './http';
 
 /** 章测四种题型（§3 题面 JSON 契约）。 */
 export type ChapterTestQuestionType = 'CHOICE' | 'JUDGE' | 'FILL' | 'CODING';
+export type ChapterAssessmentMode = 'quiz' | 'test';
 
 /** chapter_test.status 状态机（§3 表定义）。 */
 export type ChapterTestStatus =
@@ -357,19 +358,29 @@ export function serializeAnswer(answer: ChapterTestAnswerDto): string {
   }
 }
 
-/** 触发本章章测预生成（§4.1）；返回当前状态机状态。 */
-export async function prepareTest(chapter: number): Promise<ChapterTestPrepareDto> {
+function assessmentPath(mode: ChapterAssessmentMode): string {
+  return mode === 'quiz' ? 'quiz' : 'test';
+}
+
+/** 触发本章测评预生成（§4.1）；返回当前状态机状态。 */
+export async function prepareTest(
+  chapter: number,
+  mode: ChapterAssessmentMode = 'test',
+): Promise<ChapterTestPrepareDto> {
   const response = await http.post<ChapterTestPrepareDto>(
-    `/api/mainline/chapters/${chapter}/test/prepare`,
+    `/api/mainline/chapters/${chapter}/${assessmentPath(mode)}/prepare`,
     {},
   );
   return response.data;
 }
 
 /** 开考：下发去答案考卷 + deadlineAt（§4.2）。 */
-export async function startTest(chapter: number): Promise<ChapterTestPaperDto> {
+export async function startTest(
+  chapter: number,
+  mode: ChapterAssessmentMode = 'test',
+): Promise<ChapterTestPaperDto> {
   const response = await http.post<PaperWire>(
-    `/api/mainline/chapters/${chapter}/test/start`,
+    `/api/mainline/chapters/${chapter}/${assessmentPath(mode)}/start`,
     {},
   );
   return mapPaper(response.data);
@@ -380,13 +391,14 @@ export async function submitTest(
   chapter: number,
   testId: string,
   payload: ChapterTestSubmitRequest,
+  mode: ChapterAssessmentMode = 'test',
 ): Promise<ChapterTestResultDto> {
   const answers: Record<string, string> = {};
   for (const answer of payload.answers) {
     answers[answer.qid] = serializeAnswer(answer);
   }
   const response = await http.post<ResultWire>(
-    `/api/mainline/chapters/${chapter}/test/${testId}/submit`,
+    `/api/mainline/chapters/${chapter}/${assessmentPath(mode)}/${testId}/submit`,
     {
       answers,
       integrity: {
@@ -407,10 +419,11 @@ export async function submitTest(
 /** 拉取本章最近一次已提交结果；尚无记录（404 / 空）→ null。 */
 export async function getLatestTest(
   chapter: number,
+  mode: ChapterAssessmentMode = 'test',
 ): Promise<ChapterTestResultDto | null> {
   try {
     const response = await http.get<ResultWire | null>(
-      `/api/mainline/chapters/${chapter}/test/latest`,
+      `/api/mainline/chapters/${chapter}/${assessmentPath(mode)}/latest`,
     );
     return mapResult(response.data ?? null);
   } catch (error) {

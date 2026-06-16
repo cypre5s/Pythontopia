@@ -97,30 +97,30 @@ onBeforeUnmount(stop);
 </template>
 
 <style scoped>
+/* 学习通考试倒计时白纸风：浅底细线，紧急/截止时浅红。 */
 .ct-countdown {
   display: inline-flex;
   align-items: center;
-  gap: var(--pyt-space-2);
-  padding: var(--pyt-space-2) var(--pyt-space-4);
-  background: var(--pyt-color-bg-elevated);
-  border: 2px solid var(--pyt-color-border-strong);
-  border-radius: var(--pyt-radius-md);
+  gap: 8px;
+  padding: 5px 14px;
+  background: #f7f8fa;
+  border: 1px solid #e6e8ec;
+  border-radius: 4px;
   font-family: var(--pyt-font-mono);
-  color: var(--pyt-color-text-primary);
-  box-shadow: var(--pyt-shadow-card);
+  color: #333;
 }
-.ct-countdown__icon { font-size: var(--pyt-font-size-lg); }
-.ct-countdown__time { font-size: var(--pyt-font-size-xl); font-weight: 700; letter-spacing: 1px; }
-.ct-countdown__hint { font-size: var(--pyt-font-size-xs); color: var(--pyt-color-text-muted); }
+.ct-countdown__icon { font-size: 15px; }
+.ct-countdown__time { font-size: 18px; font-weight: 700; letter-spacing: 1px; }
+.ct-countdown__hint { font-size: 12px; color: #9aa0a8; }
 .ct-countdown--urgent {
-  border-color: var(--pyt-color-danger);
-  color: var(--pyt-color-danger);
-  background: var(--pyt-color-danger-bg);
+  border-color: #f3c4bc;
+  color: #e25c4a;
+  background: #fdf3f2;
 }
-.ct-countdown--urgent .ct-countdown__hint { color: var(--pyt-color-danger); }
+.ct-countdown--urgent .ct-countdown__hint { color: #e25c4a; }
 .ct-countdown--expired {
-  border-color: var(--pyt-color-text-muted);
-  color: var(--pyt-color-text-muted);
-  background: var(--pyt-color-bg-sunken);
+  border-color: #dcdfe5;
+  color: #9aa0a8;
+  background: #f0f1f3;
 }
 </style>

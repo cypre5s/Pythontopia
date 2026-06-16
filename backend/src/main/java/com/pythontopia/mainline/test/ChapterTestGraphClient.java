@@ -5,10 +5,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.pythontopia.common.config.GraphServiceProperties;
+import com.pythontopia.common.web.GraphInternalTokenSupport;
+import com.pythontopia.mainline.test.ChapterProblemBankRepository.PreferredCodingQuestion;
 import java.time.Instant;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -34,7 +37,7 @@ public class ChapterTestGraphClient {
   private final ObjectMapper objectMapper;
 
   public ChapterTestGraphClient(
-      RestTemplate graphRestTemplate,
+      @Qualifier("chapterTestRestTemplate") RestTemplate graphRestTemplate,
       GraphServiceProperties properties,
       ObjectMapper objectMapper) {
     this.restTemplate = graphRestTemplate;
@@ -51,6 +54,7 @@ public class ChapterTestGraphClient {
   public GeneratedPaper generate(GenerateRequest request) {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
+    GraphInternalTokenSupport.apply(headers, properties);
     HttpEntity<GenerateRequest> entity = new HttpEntity<>(request, headers);
     JsonNode body;
     try {
@@ -65,13 +69,20 @@ public class ChapterTestGraphClient {
     } catch (RestClientException ex) {
       throw new ChapterTestGenerationException("chapter-test graph 调用失败: " + ex.getMessage(), ex);
     }
-    if (body == null || !body.has("items") || !body.get("items").isArray()
-        || body.get("items").isEmpty()) {
+    JsonNode questionBody =
+        body != null && body.path("questions").isObject() ? body.path("questions") : body;
+    if (questionBody == null
+        || !questionBody.has("items")
+        || !questionBody.get("items").isArray()
+        || questionBody.get("items").isEmpty()) {
       throw new ChapterTestGenerationException("chapter-test graph 返回无有效 items");
     }
     ObjectNode questions = objectMapper.createObjectNode();
-    questions.set("items", body.get("items"));
-    return new GeneratedPaper(questions, buildMeta(body));
+    questions.set("items", questionBody.get("items"));
+    return new GeneratedPaper(
+        questions,
+        buildMeta(body),
+        body.has("profile_snapshot") ? body.get("profile_snapshot") : null);
   }
 
   /** 把 graph 返回的审计字段（run_id/agent/grounding/safety/meta）规整成 generator_meta（防幻觉审计 §10）。 */
@@ -79,6 +90,10 @@ public class ChapterTestGraphClient {
     ObjectNode meta = objectMapper.createObjectNode();
     meta.put("source", "graph");
     meta.put("generated_at", Instant.now().toString());
+    if (body.has("generator_meta") && body.get("generator_meta").isObject()) {
+      meta.setAll((ObjectNode) body.get("generator_meta"));
+      return meta;
+    }
     copyIfPresent(body, meta, "run_id");
     copyIfPresent(body, meta, "agent");
     copyIfPresent(body, meta, "grounding");
@@ -96,7 +111,13 @@ public class ChapterTestGraphClient {
   }
 
   /** 题面 + 生成审计。 */
-  public record GeneratedPaper(JsonNode questions, JsonNode generatorMeta) {}
+  public record GeneratedPaper(
+      JsonNode questions, JsonNode generatorMeta, JsonNode profileSnapshot) {
+
+    public GeneratedPaper(JsonNode questions, JsonNode generatorMeta) {
+      this(questions, generatorMeta, null);
+    }
+  }
 
   /** 请求体：对齐 graph schema（snake_case，§10 输入）。 */
   public record GenerateRequest(
@@ -105,7 +126,10 @@ public class ChapterTestGraphClient {
       @JsonProperty("kc_codes") List<String> kcCodes,
       @JsonProperty("profile_brief") JsonNode profileBrief,
       @JsonProperty("errorbook_brief") JsonNode errorbookBrief,
-      @JsonProperty("counts") Counts counts) {
+      @JsonProperty("counts") Counts counts,
+      @JsonProperty("excluded_questions") List<String> excludedQuestions,
+      @JsonProperty("preferred_coding_questions")
+          List<PreferredCodingQuestion> preferredCodingQuestions) {
 
     public record Counts(
         @JsonProperty("choice") int choice,
