@@ -240,3 +240,45 @@
    `tutor_workflow_action_event`，只接受 card/action 级 feedback。
 2. 前端再给卡片加“有帮助/没帮助”按钮；反馈失败只 toast 或静默，不阻塞导学。
 3. 暂不做复杂推荐模型更新，只把反馈事件稳定沉淀，供后续 coach state 聚合。
+
+## 第七批执行记录
+
+第七批已完成反馈事件沉淀：
+
+1. Backend
+   - 新增 `TutorWorkflowFeedbackRequest`。
+   - 新增 `POST /api/tutor/workflow/sessions/{sessionKey}/feedback`。
+   - `TutorWorkflowRepository` 支持按 `sessionKey + userId` 查询活跃 session，避免跨用户写反馈。
+   - `TutorWorkflowService.recordFeedback()` 将 `ACTION_CLICKED / CHECKPOINT_COMPLETED /
+     CARD_HELPFUL / CARD_NOT_HELPFUL` 写入 `tutor_workflow_action_event`。
+   - `ACTION_CLICKED` 发布 `LearningEvent.GuideActionClicked`。
+   - `CHECKPOINT_COMPLETED` 发布 `LearningEvent.GuideCheckpointCompleted`。
+   - `MemoryStreamMirror` 将 `guide_action_clicked / guide_checkpoint_completed` 镜像进
+     `learning_event_log`，归属到 `coach_q` 记忆流。
+
+2. Frontend
+   - `tutorWorkflow.ts` 新增 `recordTutorWorkflowFeedback()`，请求设置 `suppressNetworkToast`。
+   - `TutorWorkflowPanel` 点击动作时非阻塞记录 `ACTION_CLICKED`。
+   - 每张导学卡新增“有帮助 / 没帮助”轻反馈按钮，成功后显示“已记录”。
+   - 反馈失败被吞掉，不阻塞 SSE 工作流。
+
+3. 未做范围
+   - 尚未把“后续提交是否 AC”自动归因到上一条导学动作；这一块会牵动 submission 服务与 coach
+     state 聚合，留到后续更小批次。
+
+4. 验证
+   - Backend focused gate：
+     `mvn -s .mvn/settings.build.xml -Dtest=TutorWorkflowServiceTest,CoursePackServiceIntegrationTest test`
+   - 结果：14 tests，0 failures，0 errors；Flyway validated 83 migrations。
+   - Frontend focused gate：`npm run test -- tests/components/training/TutorWorkflowPanel.spec.ts`
+   - 结果：3 tests passed。
+   - Frontend type gate：`npm run typecheck` 通过。
+
+## 第八批建议
+
+下一批实现 Task 10：展示 bounded coach progress，但不展示隐藏推理链。
+
+1. 使用 `useSseStream.events/traces` 中的节点名，投影为人话状态，例如：
+   `coach.decide -> 我在选择最合适的下一步`，`coach.guardrail -> 我在检查提示是否安全`。
+2. 只展示节点级进度和安全状态，不展示 prompt、chain-of-thought、内部打分细节。
+3. 增加 focused component test，覆盖 trace 到人话进度的映射。
