@@ -208,7 +208,7 @@ else
   c_info "启动后端 (mvn spring-boot:run)，日志: $BACKEND_LOG"
   : > "$BACKEND_LOG"
   # JAVA_TOOL_OPTIONS 注入讯飞代理参数（spring-boot:run 派生的 JVM 会继承）；为空则不影响。
-  ( cd "$BACKEND_DIR" && JAVA_TOOL_OPTIONS="$BACKEND_JAVA_PROXY_OPTS" setsid mvn -q -s .mvn/settings.xml spring-boot:run >>"$BACKEND_LOG" 2>&1 ) &
+  ( cd "$BACKEND_DIR" && JAVA_TOOL_OPTIONS="$BACKEND_JAVA_PROXY_OPTS" setsid mvn -q -s .mvn/settings.build.xml spring-boot:run >>"$BACKEND_LOG" 2>&1 ) &
   echo "$!" > "$BACKEND_PID_FILE"
 
   c_info "等待后端健康 (:18080/healthz)…最长 ~3 分钟（首次编译较慢）"
