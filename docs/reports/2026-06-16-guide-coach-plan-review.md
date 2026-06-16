@@ -142,3 +142,39 @@
 1. 先加 Flyway 表和 repository round-trip 测试。
 2. 再让 `TutorWorkflowService` 请求 graph 前带入 persisted `student_state`。
 3. 最后持久化 graph 返回的 `student_state/coach_decision` 和 action event。
+
+## 第四批执行记录
+
+第四批已完成 Java 侧状态持久化：
+
+1. **数据库**
+   - 新增 `V165__tutor_workflow_agent_state.sql`。
+   - 新表：
+     - `tutor_workflow_agent_state`：按 session 持久化 `state_json/latest_decision_json`；
+     - `tutor_workflow_action_event`：记录导学动作事件，按 `(session_id, seq DESC)` 建索引。
+
+2. **Repository**
+   - `findAgentState(sessionId)`。
+   - `upsertAgentState(sessionId, stateJson, decisionJson)`。
+   - `insertActionEvent(sessionId, seq, eventType, actionKey, payloadJson)`。
+
+3. **Service**
+   - `run()` 请求 graph 前放入 `coach_mode=true`。
+   - 若已有 persisted state，则将 `student_state` 注入 graph body。
+   - `persistProjection()` 读取 graph result 中的实际 `event`、`student_state`、`coach_decision`。
+   - 卡片落库事件从请求事件改为 graph 返回的实际事件，适配 `ERROR_FEEDBACK -> EXECUTION_TRACE` 这类 manager 决策。
+   - 每张生成卡记录 `CARD_GENERATED` action event。
+
+4. **验证**
+   - 扩展 `TutorWorkflowServiceTest`，覆盖 state restore、state/decision upsert、action event。
+   - Focused backend gate：
+     `mvn -s .mvn/settings.build.xml -Dtest=TutorWorkflowServiceTest,CoursePackServiceIntegrationTest test`
+   - 结果：12 tests，0 failures，0 errors；Flyway validated 83 migrations。
+
+## 第五批建议
+
+下一批进入前端“主动一句话，等待点击继续”：
+
+1. 新增 `GuideNudgeCard.vue`，只展示短邀请，不自动触发导学。
+2. `TrainingPanel` 在 AC/WA/CE/RE/TLE 后展示 nudge。
+3. 点击继续后再打开/驱动 `TutorWorkflowPanel`，不要在 TrainingPanel 复制 SSE 逻辑。

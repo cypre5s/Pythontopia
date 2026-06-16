@@ -24,6 +24,9 @@
 - **AI 导学助手第三批 guardrail 接入**：新增 `GuideGuardrailCritic`，对骨架泄答、错因卡完整修正代码、
   迁移题参考解/测试点泄露等高置信违规做生成后检查；`TutorWorkflowGraph` 在卡片生成后执行
   `coach.guardrail`，失败时带 reason 重试一次，仍失败则 fail fast。
+- **AI 导学助手第四批 Java 状态持久化**：新增 `tutor_workflow_agent_state` 与
+  `tutor_workflow_action_event`，Java 请求 graph 前恢复 `student_state`，graph result 后持久化
+  `student_state/coach_decision` 并记录生成动作事件；卡片事件使用 graph 返回的实际 `event`。
 - **主线与课件学习增强**：加入章末测试扩展、课件学习链路、公用导学验收 shell、图书馆阅读路径恢复；
   Stage07 工坊验收契约修正为“资源消费后产生 `RESOURCE_READ`”，不再把资源生成视为阅读完成。
 - **学习画像与资源回流**：新增资源消费掌握度 delta 支持，恢复百晓答案轻反馈事件 `answer_feedback`，
@@ -38,6 +41,9 @@
   - AI 导学助手第一批实现后 graph 全量：645 passed，1 warning。
   - AI 导学助手第二批 graph 接入后 graph 全量：647 passed，1 warning。
   - AI 导学助手第三批 guardrail 接入后 graph 全量：652 passed，1 warning。
+  - AI 导学助手第四批 Java 持久化 focused gate：
+    `mvn -s .mvn/settings.build.xml -Dtest=TutorWorkflowServiceTest,CoursePackServiceIntegrationTest test`
+    12 tests，0 failures，0 errors，Flyway 83 migrations validated。
   - `cd backend && mvn -s .mvn/settings.build.xml test`：756 tests，0 failures，0 errors。
   - `cd frontend && npm run typecheck`：通过。
   - `cd frontend && npm run test`：202 files / 1973 tests passed。
