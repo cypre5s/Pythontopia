@@ -230,6 +230,8 @@ export interface WorkflowActionDto {
   key: string;
   label: string;
   event: WorkflowEvent;
+  recommended?: boolean;
+  reason?: string;
 }
 
 /** SSE RUN_FINISHED.result 形状（graph WorkflowRunResult）。 */

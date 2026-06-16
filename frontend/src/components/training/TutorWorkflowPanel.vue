@@ -69,6 +69,9 @@ const sse = useSseStream<WorkflowRunResultDto>('/api/tutor/workflow/runs');
 const running = computed(
   () => sse.status.value === 'streaming' || sse.status.value === 'connecting',
 );
+const recommendedAction = computed<WorkflowActionDto | null>(
+  () => availableActions.value.find((action) => action.recommended) ?? null,
+);
 
 // 起手动作 + 始终可用的 4 个辅助动作（与后端 PHASE_ACTIONS + AUX 对齐；后端最终以 available_actions 为准）。
 const STARTER_ACTIONS: WorkflowActionDto[] = [
@@ -532,14 +535,32 @@ function cardId(entry: CardEntry): string {
       class="tw-actions"
       data-testid="tw-actions"
     >
+      <section
+        v-if="recommendedAction"
+        class="tw-recommend"
+        data-testid="coach-recommended-action"
+      >
+        <span class="tw-recommend__eyebrow">推荐下一步</span>
+        <strong>{{ recommendedAction.label }}</strong>
+        <p v-if="recommendedAction.reason">
+          {{ recommendedAction.reason }}
+        </p>
+      </section>
       <button
         v-for="a in availableActions"
         :key="a.key"
         type="button"
         class="tw-action"
+        :class="{ 'tw-action--recommended': a.recommended }"
         :disabled="running"
         @click="onAction(a)"
       >
+        <span
+          v-if="a.recommended"
+          class="tw-action__tag"
+        >
+          推荐
+        </span>
         {{ a.label }}
       </button>
     </div>
@@ -789,6 +810,29 @@ function cardId(entry: CardEntry): string {
   padding: 8px 12px;
   border-top: 1px dashed rgba(74, 54, 29, 0.3);
 }
+.tw-recommend {
+  flex: 1 1 100%;
+  display: grid;
+  gap: 3px;
+  padding: 8px 10px;
+  border: 1px solid rgba(42, 111, 151, 0.35);
+  border-radius: 8px;
+  background: rgba(230, 242, 251, 0.82);
+}
+.tw-recommend__eyebrow {
+  font-size: 10px;
+  color: #1b4a6b;
+}
+.tw-recommend strong {
+  font-family: var(--pyt-font-read);
+  font-size: 13px;
+}
+.tw-recommend p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--pyt-color-text-muted);
+}
 .tw-action {
   font-family: inherit;
   font-size: 12px;
@@ -799,6 +843,19 @@ function cardId(entry: CardEntry): string {
   border-radius: 4px;
   box-shadow: 2px 2px 0 var(--pyt-color-border-strong, #2a1a05);
   color: var(--pyt-color-text-primary);
+}
+.tw-action--recommended {
+  border-color: var(--pyt-color-info, #2a6f97);
+  background: var(--pyt-color-info-bg, #e6f2fb);
+  color: #1b4a6b;
+}
+.tw-action__tag {
+  display: inline-block;
+  margin-right: 4px;
+  padding: 1px 4px;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--pyt-color-info, #2a6f97);
 }
 .tw-action:disabled {
   opacity: 0.5;
