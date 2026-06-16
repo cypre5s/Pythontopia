@@ -78,6 +78,22 @@ TRACE_CARD = {
     "key_insight": "程序实际输出半径，不是面积。",
 }
 
+LEAKY_ERROR_CARD = {
+    "root_cause": "你没有计算面积。",
+    "what_program_is_doing": "程序直接输出 radius。",
+    "expected_behavior": "题目期望输出圆面积。",
+    "fix_direction": "完整代码：```python\nradius=float(input())\nprint(f'{3.1415*radius*radius:.4f}')\n```",
+    "related_kcs": ["PY43-KC-016"],
+}
+
+SAFE_ERROR_CARD = {
+    "root_cause": "当前代码跳过了面积计算。",
+    "what_program_is_doing": "程序读取 radius 后直接输出原值。",
+    "expected_behavior": "题目期望先计算面积，再按 4 位小数输出。",
+    "fix_direction": "先补上面积变量，再检查格式化输出；不要直接改成一整段答案。",
+    "related_kcs": ["PY43-KC-016"],
+}
+
 
 async def _collect_sse(response) -> list[tuple[str, dict]]:
     raw_parts: list[str] = []
@@ -183,3 +199,40 @@ async def test_stream_result_exposes_coach_decision_and_effective_event() -> Non
     assert result["agentic"] is True
     assert result["coach_decision"]["next_event"] == "EXECUTION_TRACE"
     assert result["student_state"]["next_best_action"] == "EXECUTION_TRACE"
+
+
+@pytest.mark.asyncio
+async def test_guardrail_retries_once_when_card_leaks_complete_code() -> None:
+    events: list[tuple[str, dict]] = []
+
+    async def emit(event: str, data: dict) -> None:
+        events.append((event, data))
+
+    provider = JsonStubProvider([LEAKY_ERROR_CARD, SAFE_ERROR_CARD])
+    graph = TutorWorkflowGraph(provider, StaticEvidenceFetcher([]), emit=emit)
+    state = await graph.run(
+        {
+            "request": WorkflowRunRequest(
+                session_id="wf-guardrail",
+                user_id=1,
+                event="ERROR_FEEDBACK",
+                problem=PROBLEM,
+                diagnosis=DIAGNOSIS,
+                coach_mode=False,
+            ),
+            "current_phase": "CODING",
+            "last_cards": [],
+            "chat_history": [],
+        }
+    )
+
+    assert provider.calls == 2
+    assert state["runtime_state"] == "SUCCEEDED"
+    assert state["card_key"] == "error_diagnosis"
+    assert state["card"]["fix_direction"] == SAFE_ERROR_CARD["fix_direction"]
+    guardrail_events = [
+        payload
+        for event, payload in events
+        if event == "trace" and payload["node"] == "coach.guardrail" and payload["phase"] == "finish"
+    ]
+    assert [item["status"] for item in guardrail_events] == ["retry", "ok"]

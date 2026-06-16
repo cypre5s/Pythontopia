@@ -25,6 +25,7 @@ from typing import Any, TypedDict
 from langgraph.graph import END, START, StateGraph
 
 from pythontopia_graph.agents.guide_coach_agent import CoachContext, GuideCoachAgent
+from pythontopia_graph.agents.guide_guardrail_critic import GuideGuardrailCritic
 from pythontopia_graph.agents.tutor_workflow_cards import (
     CardGenerationError,
     TutorWorkflowCardAgent,
@@ -188,6 +189,14 @@ def _rank_actions(
     return ranked
 
 
+def _append_guardrail_note(profile_brief: str, reasons: list[str]) -> str:
+    note = (
+        "Guardrail feedback: 上一次导学卡被拦截，原因为 "
+        f"{', '.join(reasons)}。请重新生成，保留引导性，不给完整可提交答案。"
+    )
+    return f"{profile_brief}\n{note}".strip()[:1200]
+
+
 # ── LangGraph 状态与图 ──
 
 
@@ -223,6 +232,7 @@ class TutorWorkflowGraph:
     ) -> None:
         self._agent = TutorWorkflowCardAgent(provider)
         self._coach = GuideCoachAgent(provider)
+        self._guardrail = GuideGuardrailCritic()
         self._evidence_fetcher = evidence_fetcher
         self._emit = emit
         self._compiled = self._build()
@@ -355,7 +365,9 @@ class TutorWorkflowGraph:
         node_name = f"card.{card_key}"
         await self._emit_step_start(node_name)
         try:
-            card = await self._dispatch_card(state, request.model_copy(update={"event": event}))
+            effective_request = request.model_copy(update={"event": event})
+            card = await self._dispatch_card(state, effective_request)
+            card = await self._apply_guardrail(state, effective_request, card_key or "", card)
         except CardGenerationError as exc:
             await self._emit_step_finish(node_name, "fail", started, note=str(exc))
             return {
@@ -365,7 +377,7 @@ class TutorWorkflowGraph:
                 "last_error": str(exc),
             }
         await self._emit_step_finish(node_name, "ok", started)
-        return {**state, "card_key": card_key, "card": card}
+        return {**state, "card_key": card_key, "card": card, "runtime_state": "SUCCEEDED"}
 
     async def _dispatch_card(
         self, state: WorkflowGraphState, request: WorkflowRunRequest
@@ -426,6 +438,43 @@ class TutorWorkflowGraph:
                 brief,
             )
         raise CardGenerationError("SYSTEM_ERROR", f"unsupported event: {event}")
+
+    async def _apply_guardrail(
+        self,
+        state: WorkflowGraphState,
+        request: WorkflowRunRequest,
+        card_key: str,
+        card: dict[str, Any],
+    ) -> dict[str, Any]:
+        for attempt in range(2):
+            started = time.monotonic()
+            await self._emit_step_start("coach.guardrail")
+            result = self._guardrail.check(card_key, card)
+            if result.passed:
+                await self._emit_step_finish("coach.guardrail", "ok", started)
+                return card
+            status = "retry" if attempt == 0 else "fail"
+            await self._emit_step_finish(
+                "coach.guardrail",
+                status,
+                started,
+                reasons=result.reasons,
+            )
+            if attempt == 0:
+                request = request.model_copy(
+                    update={
+                        "profile_brief": _append_guardrail_note(
+                            request.profile_brief, result.reasons
+                        )
+                    }
+                )
+                card = await self._dispatch_card(state, request)
+                continue
+            raise CardGenerationError(
+                "GUIDE_GUARDRAIL_FAILED",
+                f"guide card failed guardrail: {', '.join(result.reasons)}",
+            )
+        raise CardGenerationError("GUIDE_GUARDRAIL_FAILED", "guide guardrail exhausted")
 
     async def _node_decide_actions(self, state: WorkflowGraphState) -> WorkflowGraphState:
         phase = state.get("new_phase", "READING")
