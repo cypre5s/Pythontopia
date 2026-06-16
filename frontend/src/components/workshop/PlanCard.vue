@@ -4,7 +4,11 @@
  *
  * 标题「📋 你的学习计划」+ 竖向步骤列表：阶段徽章（watch=看 / learn=学 / practice=练 /
  * assess=测，各自配色；未知 phase 原样显示）+ title + detail 小字 + panel 非空时
- * 「前往 →」按钮 emit open(panel)。步骤间细虚线连接（rail 风格与 MarvisPanel 工位线一致）。
+ * 「前往 →」按钮 emit open(panel) 与 open-step(step)。步骤间细虚线连接（rail 风格与
+ * MarvisPanel 工位线一致）。
+ *
+ * 深链上下文：open 保留 panel 字符串（向后兼容旧接线）；open-step 携带整步
+ * （panel + kc_codes + resource_type），宿主据此把 KC / 资源类型带进目标面板的链接。
  */
 interface PlanStep {
   id: string;
@@ -17,11 +21,18 @@ interface PlanStep {
    * pending / active / done / failed / skipped；缺省按 pending（历史回放/静态卡无此字段）。
    */
   status?: string;
+  /** 该步锚定的知识点（orchestrator plan 现有字段；深链时随链接带给目标面板）。 */
+  kc_codes?: string[];
+  /** phase=learn 时的资源类型（HANDOUT/MINDMAP/...；深链工坊时随链接携带）。 */
+  resource_type?: string | null;
 }
 
 defineProps<{ steps: PlanStep[] }>();
 
-const emit = defineEmits<{ (e: 'open', panel: string): void }>();
+const emit = defineEmits<{
+  (e: 'open', panel: string): void;
+  (e: 'open-step', step: PlanStep): void;
+}>();
 
 interface PhaseMeta {
   label: string;
@@ -56,7 +67,9 @@ function statusIcon(step: PlanStep): string {
 }
 
 function onOpen(step: PlanStep): void {
-  if (step.panel) emit('open', step.panel);
+  if (!step.panel) return;
+  emit('open', step.panel);
+  emit('open-step', step);
 }
 </script>
 

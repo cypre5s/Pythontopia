@@ -1,11 +1,9 @@
 <script setup lang="ts">
 /**
  * 百晓工坊主页：
- *   - 顶部传送栏（返回小镇 / 快速传送 / 图书馆 / 闯关塔）；
- *   - 左「对话流」WorkshopChat（@ 引用 + / 选工具 + 自动判定 → 问答 / 6 类资源；
- *     生成时对话内 ThinkingStream「思考文字」与右栏 MarvisPanel「多智能体工作室」双呈现），
- *     右栏：MarvisPanel（智能体工作室，常驻可视化协同流水线）+ StudioDrawer（书房，可收起，
- *     列表 + 详情；详情由 store 持有的 openResourceId 驱动，不进 URL）。
+ *   - 顶部传送栏（返回小镇 / 快速传送 / 图书馆 / 闯关塔 / 历史 / 书房 / 调用）；
+ *   - 默认仅展示居中的单对话流；
+ *   - 历史、书房、调用过程按需从右侧抽屉打开。
  */
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
@@ -15,28 +13,34 @@ import MarvisPanel from '@/components/workshop/MarvisPanel.vue';
 import StudioDrawer from '@/components/workshop/StudioDrawer.vue';
 import ResourceDetailPanel from '@/components/workshop/ResourceDetailPanel.vue';
 import ChatHistoryRail from '@/components/workshop/ChatHistoryRail.vue';
+import ToolCallTimeline from '@/components/workshop/ToolCallTimeline.vue';
 import type { TutorSessionDto } from '@/api/tutor';
 import { FAST_TRAVEL_ROUTES, type FastTravelRoute } from '@/data/fastTravel';
 import { useLearningStore } from '@stores/learning';
 import { useWorldStore } from '@stores/world';
 import { useToastStore } from '@stores/toast';
 import { useWorkshopUiStore } from '@stores/workshopUi';
+import { useWorkshopActivityStore } from '@stores/workshopActivity';
 import { playUiClick, playChime } from '@/composables/useStardewFx';
 
 const learning = useLearningStore();
 const world = useWorldStore();
 const toast = useToastStore();
 const workshopUi = useWorkshopUiStore();
+const activity = useWorkshopActivityStore();
 const router = useRouter();
 
 // 书房默认收起（窄把手），聊天占满主区；学生需要时点把手展开。
 const drawerOpen = ref(false);
+type WorkshopDrawer = 'history' | 'study' | 'calls' | null;
+const activeDrawer = ref<WorkshopDrawer>(null);
 
 // 左栏「聊天记录」选中某段会话时，把整段会话（多轮问答）回看注入对话流并接着聊
 // （WorkshopChat 暴露 loadConversation）。
 const chatRef = ref<{ loadConversation: (sessions: TutorSessionDto[]) => void } | null>(null);
 function onSelectConversation(sessions: TutorSessionDto[]): void {
   chatRef.value?.loadConversation(sessions);
+  activeDrawer.value = null;
 }
 
 // R-14 域1④：书房当前打开的资源 id 由 store 持有，不再进 URL（避免暴露可枚举 id）。
@@ -48,6 +52,10 @@ const currentMapKey = computed<string | null>(() => world.player?.mapKey ?? null
 function onKeydown(event: KeyboardEvent): void {
   if (event.key === 'Escape' && selectedId.value !== null) {
     onDrawerBack();
+    return;
+  }
+  if (event.key === 'Escape' && activeDrawer.value !== null) {
+    closeDrawer();
   }
 }
 
@@ -68,6 +76,7 @@ onUnmounted(() => {
 });
 
 function onOpenResource(id: number): void {
+  activeDrawer.value = 'study';
   drawerOpen.value = true;
   // R-14 域1④：资源 id 不进 URL，改存 store（避免学生改网址枚举他人资源；后端本就归属校验）。
   workshopUi.openResource(id);
@@ -108,6 +117,31 @@ function openArena(chapter: number): void {
   playUiClick();
   void router.push({ path: `/arena/${chapter}` });
 }
+
+function openDrawer(drawer: Exclude<WorkshopDrawer, null>): void {
+  playUiClick();
+  activeDrawer.value = activeDrawer.value === drawer ? null : drawer;
+  drawerOpen.value = drawer === 'study';
+}
+
+function closeDrawer(): void {
+  activeDrawer.value = null;
+  drawerOpen.value = false;
+}
+
+function onStudyOpenChange(open: boolean): void {
+  drawerOpen.value = open;
+  if (!open && activeDrawer.value === 'study') {
+    activeDrawer.value = null;
+  }
+}
+
+const drawerTitle = computed<string>(() => {
+  if (activeDrawer.value === 'history') return '历史问答';
+  if (activeDrawer.value === 'study') return '我的书房';
+  if (activeDrawer.value === 'calls') return '调用过程';
+  return '';
+});
 </script>
 
 <template>
@@ -131,6 +165,41 @@ function openArena(chapter: number): void {
         </button>
         <span class="travel-divider">/</span>
         <span class="travel-label">百晓工坊</span>
+        <nav
+          class="workshop-drawer-tabs"
+          aria-label="百晓工坊面板"
+        >
+          <button
+            type="button"
+            class="workshop-drawer-tab"
+            :class="{ 'workshop-drawer-tab--active': activeDrawer === 'history' }"
+            data-testid="workshop-open-history"
+            :aria-expanded="activeDrawer === 'history'"
+            @click="openDrawer('history')"
+          >
+            历史
+          </button>
+          <button
+            type="button"
+            class="workshop-drawer-tab"
+            :class="{ 'workshop-drawer-tab--active': activeDrawer === 'study' }"
+            data-testid="workshop-open-study"
+            :aria-expanded="activeDrawer === 'study'"
+            @click="openDrawer('study')"
+          >
+            书房
+          </button>
+          <button
+            type="button"
+            class="workshop-drawer-tab"
+            :class="{ 'workshop-drawer-tab--active': activeDrawer === 'calls' }"
+            data-testid="workshop-open-calls"
+            :aria-expanded="activeDrawer === 'calls'"
+            @click="openDrawer('calls')"
+          >
+            调用
+          </button>
+        </nav>
         <span class="travel-spacer" />
         <ul class="travel-list">
           <li
@@ -178,23 +247,63 @@ function openArena(chapter: number): void {
         class="workshop-body"
         data-testid="workshop-body"
       >
-        <ChatHistoryRail @select="onSelectConversation" />
-        <div class="workshop-chat-pane">
+        <div
+          class="workshop-chat-pane"
+          data-testid="workshop-chat-pane"
+        >
           <WorkshopChat
             ref="chatRef"
             @open-resource="onOpenResource"
           />
         </div>
-        <div class="workshop-rail">
-          <!-- 多智能体工作室：常驻像素协同流水线（答疑/生成两条流都会点亮工位）。 -->
-          <MarvisPanel />
-          <div
-            class="rail-drawer"
-            :class="{ 'rail-drawer--collapsed': !drawerOpen }"
-          >
-            <StudioDrawer v-model:open="drawerOpen" />
+        <aside
+          v-if="activeDrawer !== null"
+          class="workshop-drawer"
+          :data-testid="`workshop-drawer-${activeDrawer}`"
+          role="complementary"
+          :aria-label="drawerTitle"
+        >
+          <header class="workshop-drawer__bar">
+            <span class="workshop-drawer__title">{{ drawerTitle }}</span>
+            <button
+              type="button"
+              class="workshop-drawer__close"
+              data-testid="workshop-drawer-close"
+              @click="closeDrawer"
+            >
+              关闭
+            </button>
+          </header>
+          <div class="workshop-drawer__body">
+            <ChatHistoryRail
+              v-if="activeDrawer === 'history'"
+              embedded-open
+              @select="onSelectConversation"
+            />
+            <StudioDrawer
+              v-else-if="activeDrawer === 'study'"
+              :open="drawerOpen"
+              @update:open="onStudyOpenChange"
+            />
+            <div
+              v-else-if="activeDrawer === 'calls'"
+              class="workshop-call-drawer"
+            >
+              <MarvisPanel />
+              <ToolCallTimeline
+                :traces="activity.traces"
+                :live="activity.status === 'streaming'"
+              />
+              <p
+                v-if="activity.traces.length === 0"
+                class="workshop-call-drawer__empty"
+                data-testid="workshop-call-empty"
+              >
+                暂无调用过程。发起一次提问或生成后，这里会保留详细链路。
+              </p>
+            </div>
           </div>
-        </div>
+        </aside>
       </div>
 
       <!-- 书房资源详情弹窗：列表点击某行（或聊天「在书房查看」）写入 store openResourceId 后弹出，
@@ -277,6 +386,26 @@ function openArena(chapter: number): void {
   font-size: 13px;
   font-weight: 700;
 }
+.workshop-drawer-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.workshop-drawer-tab {
+  font-family: inherit;
+  font-size: 12px;
+  padding: 4px 9px;
+  color: #4f3514;
+  background: transparent;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.workshop-drawer-tab:hover,
+.workshop-drawer-tab--active {
+  background: #fff8df;
+  border-color: rgba(140, 106, 35, 0.55);
+}
 .travel-spacer {
   flex: 1 1 auto;
 }
@@ -329,12 +458,15 @@ function openArena(chapter: number): void {
   flex: 1 1 auto;
   display: flex;
   align-items: stretch;
+  justify-content: center;
   gap: 10px;
   min-height: 0;
   overflow: hidden;
+  position: relative;
 }
 .workshop-chat-pane {
-  flex: 1 1 auto;
+  flex: 0 1 920px;
+  width: min(920px, 100%);
   min-width: 0;
   min-height: 0;
   display: flex;
@@ -345,25 +477,76 @@ function openArena(chapter: number): void {
   box-shadow: inset 0 0 0 2px rgba(255, 247, 230, 0.55);
   overflow: hidden;
 }
-.workshop-rail {
-  flex: 0 0 clamp(240px, 24vw, 300px);
-  /* min-width:0 关键：否则书房展开后里面卡片的 min-content 宽度会把整条 rail 撑宽、
-     反过来挤压聊天主区（flex 项默认 min-width:auto 不肯收缩）。 */
-  min-width: 0;
+.workshop-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  width: min(360px, 92vw);
+  display: flex;
+  flex-direction: column;
   min-height: 0;
+  background: rgba(255, 248, 224, 0.96);
+  border: 3px solid var(--pyt-color-text-primary);
+  border-radius: var(--pyt-radius-lg);
+  box-shadow: -6px 6px 0 rgba(42, 26, 5, 0.22);
+  overflow: hidden;
+  font-family: var(--pyt-font-pixel);
+}
+.workshop-drawer__bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 2px dashed rgba(110, 79, 29, 0.45);
+  background: #fff8df;
+}
+.workshop-drawer__title {
+  font-size: 13px;
+  font-weight: 700;
+}
+.workshop-drawer__close {
+  font: inherit;
+  font-size: 11px;
+  padding: 3px 8px;
+  border: 2px solid var(--pyt-color-text-primary);
+  border-radius: 4px;
+  background: var(--pyt-color-warning-bg);
+  cursor: pointer;
+}
+.workshop-drawer__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 8px;
+  overflow: auto;
+}
+.workshop-drawer__body :deep(.history),
+.workshop-drawer__body :deep(.drawer) {
+  width: 100%;
+  height: 100%;
+}
+.workshop-drawer__body :deep(.history__handle),
+.workshop-drawer__body :deep(.drawer__handle) {
+  display: none;
+}
+.workshop-call-drawer {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-height: 100%;
 }
-/* 书房占满侧栏：展开时占满剩余高度，收起时仅留把手。 */
-.rail-drawer {
-  flex: 1 1 auto;
-  min-height: 0;
+.workshop-call-drawer__empty {
+  margin: 0;
+  padding: 10px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--pyt-color-text-muted);
+  border: 1px dashed rgba(110, 79, 29, 0.45);
+  border-radius: var(--pyt-radius-md);
 }
-.rail-drawer--collapsed {
-  flex: 0 0 auto;
-}
-
 /* ── 书房资源详情弹窗（Teleport 到 body，仍受本组件 scoped 作用域约束） ── */
 .resource-modal-overlay {
   position: fixed;
@@ -428,14 +611,11 @@ function openArena(chapter: number): void {
 
 @media (max-width: 900px) {
   .workshop-body {
-    flex-direction: column;
-    overflow: auto;
+    overflow: hidden;
   }
-  .workshop-rail {
-    flex: 0 0 auto;
-  }
-  .rail-drawer {
-    max-height: 45vh;
+  .workshop-drawer {
+    left: 0;
+    width: auto;
   }
 }
 @media (max-width: 640px) {

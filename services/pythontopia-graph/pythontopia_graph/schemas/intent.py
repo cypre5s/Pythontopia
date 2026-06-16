@@ -38,6 +38,32 @@ IntentKind = Literal[
     "MY_STUDY",
 ]
 
+RouteSource = Literal[
+    "composer_text",
+    "slash_command",
+    "capability_launcher",
+    "contextual_suggestion",
+]
+CapabilityNamespace = Literal["ask", "quiz", "make", "practice", "plan", "find"]
+RouteRiskClass = Literal["read_only", "navigational", "generative"]
+RouteRenderMode = Literal[
+    "answer",
+    "resource",
+    "practice",
+    "plan",
+    "progress",
+    "navigation",
+    "clarification",
+]
+RouteReasonCode = Literal[
+    "explicit_command",
+    "contextual_match",
+    "missing_required_context",
+    "multi_intent",
+    "safety_constrained",
+    "fallback",
+]
+
 
 class CourseKc(BaseModel):
     """课程 KC 目录项（code + 展示名），供意图锚定建议。"""
@@ -80,6 +106,10 @@ class IntentRouteRequest(BaseModel):
     session_corrections: list[SessionCorrection] = Field(default_factory=list, max_length=3)
     # 工具作用域：default = 常规；quiz = 考核模式（动态收缩可选工具集）。
     scope: Literal["default", "quiz"] = "default"
+    # 触发来源：普通输入、slash、能力启动器、上下文建议。用于中等置信度时决定是否先澄清。
+    source: RouteSource = "composer_text"
+    # 能力启动器选中的 6 类分组：只作为候选空间 hint，不等同于强制 primary intent。
+    capability_namespace: CapabilityNamespace | None = None
 
 
 class IntentRouteResponse(BaseModel):
@@ -94,3 +124,11 @@ class IntentRouteResponse(BaseModel):
     # 组合意图：一句话含两个诉求时的次级意图（如「讲讲循环再出两道题」→ ASK + PRACTICE），
     # 第一个动作完成后前端出「接着…」一键 chip；无则 None。
     secondary_intent: IntentKind | None = None
+    # ── 工具治理路由计划字段 ──
+    namespace: CapabilityNamespace
+    candidate_intents: list[IntentKind] = Field(default_factory=list, max_length=5)
+    needs_clarification: bool = False
+    clarification_prompt: str = ""
+    risk_class: RouteRiskClass
+    render_mode: RouteRenderMode
+    reason_code: RouteReasonCode

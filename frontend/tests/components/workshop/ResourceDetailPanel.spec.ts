@@ -65,7 +65,12 @@ function mountPanel(): ReturnType<typeof mount> {
   return mount(ResourceDetailPanel, {
     // resourceId=null：immediate watcher 不触发 openResource（直接用已注入的 current）。
     props: { resourceId: null },
-    global: { stubs: CONTENT_STUBS },
+    global: {
+      stubs: {
+        ...CONTENT_STUBS,
+        RouterLink: { template: '<a><slot /></a>' },
+      },
+    },
   });
 }
 
@@ -73,6 +78,7 @@ describe('ResourceDetailPanel · 决策玻璃盒挂载（P7.1）', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     httpMocks.get.mockReset().mockResolvedValue({ data: [] });
+    httpMocks.post.mockReset().mockResolvedValue({ data: undefined });
   });
 
   afterEach(() => {
@@ -120,5 +126,34 @@ describe('ResourceDetailPanel · 决策玻璃盒挂载（P7.1）', () => {
     const box = wrapper.find('[data-testid="resource-decision-box"]');
     expect(box.text()).toContain('ResourceDesignerAgent');
     expect(box.text()).toContain('生成讲义');
+  });
+
+  it('打开资源详情时记录消费，并展示 micro-check CTA', async () => {
+    httpMocks.get.mockImplementation((url: string) => {
+      if (url === '/api/workshop/resources/7') return Promise.resolve({ data: RESOURCE });
+      return Promise.resolve({ data: [] });
+    });
+    httpMocks.post.mockResolvedValueOnce({
+      data: {
+        resourceId: 7,
+        kcCodes: ['PY43-KC-001'],
+        nextAction: 'micro_check',
+        prompt: '用 1 分钟做个小检查：说出 input 的作用。',
+      },
+    });
+
+    const wrapper = mount(ResourceDetailPanel, {
+      props: { resourceId: 7 },
+      global: {
+        stubs: {
+          ...CONTENT_STUBS,
+          RouterLink: { template: '<a><slot /></a>' },
+        },
+      },
+    });
+    await flushPromises();
+
+    expect(httpMocks.post).toHaveBeenCalledWith('/api/workshop/resources/7/consumptions');
+    expect(wrapper.find('[data-testid="resource-micro-check"]').text()).toContain('说出 input 的作用');
   });
 });

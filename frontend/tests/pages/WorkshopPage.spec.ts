@@ -17,6 +17,7 @@ const apiMocks = vi.hoisted(() => ({
   fetchMastery: vi.fn(),
   getLearnerProfile: vi.fn(),
   getTodayQuests: vi.fn(),
+  listTutorSessions: vi.fn(),
 }));
 
 vi.mock('@/api/course', () => ({
@@ -53,6 +54,14 @@ vi.mock('@/api/learner', () => ({
   sendProfileTurn: vi.fn(),
   finishProfileInterview: vi.fn(),
 }));
+
+vi.mock('@/api/tutor', async () => {
+  const actual = await vi.importActual<typeof import('@/api/tutor')>('@/api/tutor');
+  return {
+    ...actual,
+    listTutorSessions: apiMocks.listTutorSessions,
+  };
+});
 
 vi.mock('@/composables/useStardewFx', () => ({
   playUiClick: vi.fn(),
@@ -113,6 +122,7 @@ describe('WorkshopPage R-13 改造', () => {
     apiMocks.fetchMastery.mockResolvedValue([]);
     apiMocks.getLearnerProfile.mockResolvedValue(null);
     apiMocks.getTodayQuests.mockResolvedValue([]);
+    apiMocks.listTutorSessions.mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -210,5 +220,36 @@ describe('WorkshopPage R-13 改造', () => {
     expect(wrapper.find('[data-testid="workshop-page"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="workshop-travel-bar"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="workshop-body"]').exists()).toBe(true);
+  });
+
+  it('defaults to a centered single chat shell with hidden drawers', async () => {
+    await router.push('/workshop');
+    const wrapper = mountPage();
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="workshop-chat-pane"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="workshop-open-history"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="workshop-open-study"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="workshop-open-calls"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="workshop-drawer-history"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="workshop-drawer-study"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="workshop-drawer-calls"]').exists()).toBe(false);
+  });
+
+  it('opens history, study space and call-process drawers from the top bar', async () => {
+    await router.push('/workshop');
+    const wrapper = mountPage();
+    await flushPromises();
+
+    await wrapper.get('[data-testid="workshop-open-history"]').trigger('click');
+    expect(wrapper.find('[data-testid="workshop-drawer-history"]').exists()).toBe(true);
+
+    await wrapper.get('[data-testid="workshop-open-study"]').trigger('click');
+    expect(wrapper.find('[data-testid="workshop-drawer-study"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="workshop-drawer-history"]').exists()).toBe(false);
+
+    await wrapper.get('[data-testid="workshop-open-calls"]').trigger('click');
+    expect(wrapper.find('[data-testid="workshop-drawer-calls"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="workshop-drawer-study"]').exists()).toBe(false);
   });
 });

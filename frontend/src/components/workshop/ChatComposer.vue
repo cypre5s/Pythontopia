@@ -3,9 +3,10 @@
  * 百晓工坊统一输入框：一个 textarea 同时承载
  *   - `@`  引用 KC / 章节（复用 useCoursewareMention + CoursewareMentionMenu）；
  *   - `/`  选工具（useSlashCommand + SlashCommandMenu），命令以「工具徽标」呈现；
- *   - 提交时 emit { text, manualKcCodes, contextHint, forcedIntent }，由父级
+ *   - `+`  打开 6 个能力组（普通学生不用记内部工具名）；
+ *   - 提交时 emit { text, manualKcCodes, contextHint, forcedIntent, source, capabilityNamespace }，由父级
  *     WorkshopChat 决定：forcedIntent 为空 → 调 /api/intent/route 自动判定；
- *     否则直接用该工具，再分派到导师 / 工坊 SSE 管线。
+ *     `/` 强制具体工具；`+` 仅作为能力组 hint，仍由路由器在组内选工具。
  *
  * 本组件只负责输入与候选交互，不含任何网络/分派逻辑。
  */
@@ -22,6 +23,14 @@ import {
 import { useSlashCommand, type SlashCommand } from '@/composables/useSlashCommand';
 import type { IntentKind } from '@/api/intent';
 import {
+  WORKSHOP_CAPABILITIES,
+  type WorkshopCapability,
+} from '@/components/workshop/capabilities';
+import type {
+  WorkshopCapabilityNamespace,
+  WorkshopToolRouteSource,
+} from '@/components/workshop/toolRouting';
+import {
   ALLOWED_UPLOAD_EXTS,
   extOf,
   uploadFile,
@@ -34,6 +43,9 @@ export interface ComposerSubmitPayload {
   manualKcCodes: string[];
   contextHint: string;
   forcedIntent: IntentKind | null;
+  source?: WorkshopToolRouteSource;
+  /** `+` 能力面板只传分组 hint，不限制学生只能用 primary intent。 */
+  capabilityNamespace?: WorkshopCapabilityNamespace;
   /**
    * 本轮随发的已就绪上传附件（仿 Claude Code 上传，契约 §3.5）。默认空数组，向后兼容。
    * 仅含上传成功（status==='ready'、带后端 upload id）的文件；上传中 / 失败的不进 payload。
@@ -72,6 +84,8 @@ const mentionVisible = mention.menuVisible;
 const slashVisible = slash.menuVisible;
 const selectedRefs = mention.selected;
 const forcedCommand = slash.forcedCommand;
+const capabilityMenuOpen = ref(false);
+const selectedCapability = ref<WorkshopCapability | null>(null);
 
 // ============ 上传附件状态机（仿 Claude Code：📎 / 拖拽 / 粘贴 → 多文件 pill） ============
 // 每个文件一枚 pill：uploading（解析中）→ ready（行/字）/ error（错误 + 重试）。
@@ -166,8 +180,24 @@ function onSelectMention(item: MentionItem): void {
 }
 
 function onSelectSlash(cmd: SlashCommand): void {
+  selectedCapability.value = null;
   slash.selectCommand(cmd);
   focusInput();
+}
+
+function toggleCapabilities(): void {
+  capabilityMenuOpen.value = !capabilityMenuOpen.value;
+}
+
+function selectCapability(capability: WorkshopCapability): void {
+  selectedCapability.value = capability;
+  capabilityMenuOpen.value = false;
+  slash.clearForced();
+  focusInput();
+}
+
+function clearSelectedCapability(): void {
+  selectedCapability.value = null;
 }
 
 // ============ 上传：选择 / 拖拽 / 粘贴 → 状态机 ============
@@ -315,15 +345,26 @@ function submit(): void {
   if (!text || props.disabled || props.busy) return;
   // 还有附件在上传：不发送，避免就绪前的附件被遗漏。
   if (hasUploading.value) return;
+  const capabilityNamespace = selectedCapability.value?.namespace;
+  const forcedIntent = selectedCapability.value ? null : slash.forcedIntent.value;
+  const source: WorkshopToolRouteSource = selectedCapability.value
+    ? 'capability_launcher'
+    : slash.forcedIntent.value
+      ? 'slash_command'
+      : 'composer_text';
   emit('submit', {
     text,
     manualKcCodes: [...mention.selectedKcCodes.value],
     contextHint: mention.contextHint.value,
-    forcedIntent: slash.forcedIntent.value,
+    forcedIntent,
+    source,
+    ...(capabilityNamespace ? { capabilityNamespace } : {}),
     attachments: readyAttachments(),
   });
   mention.reset();
   slash.reset();
+  selectedCapability.value = null;
+  capabilityMenuOpen.value = false;
   attachments.value = [];
   fileHandles.clear();
 }
@@ -362,9 +403,24 @@ defineExpose({ focus: focusInput });
 
     <!-- 已选引用 + 强制工具徽标 -->
     <div
-      v-if="selectedRefs.length > 0 || forcedCommand"
+      v-if="selectedRefs.length > 0 || forcedCommand || selectedCapability"
       class="composer__chips"
     >
+      <button
+        v-if="selectedCapability"
+        type="button"
+        class="tool-pill"
+        :title="`取消「${selectedCapability.label}」，恢复自动判定`"
+        data-testid="composer-capability-pill"
+        @click="clearSelectedCapability"
+      >
+        <span class="tool-pill__icon">+</span>
+        <span class="tool-pill__label">{{ selectedCapability.label }}</span>
+        <span
+          class="tool-pill__x"
+          aria-hidden="true"
+        >×</span>
+      </button>
       <button
         v-if="forcedCommand"
         type="button"
@@ -405,6 +461,36 @@ defineExpose({ focus: focusInput });
     />
 
     <div class="composer__input">
+      <div class="composer__capability-wrap">
+        <button
+          type="button"
+          class="composer__capability-toggle"
+          data-testid="composer-open-capabilities"
+          title="选择能力"
+          :aria-expanded="capabilityMenuOpen"
+          :disabled="isDisabled"
+          @click="toggleCapabilities"
+        >
+          +
+        </button>
+        <div
+          v-if="capabilityMenuOpen"
+          class="composer__capability-menu"
+          data-testid="composer-capability-menu"
+        >
+          <button
+            v-for="capability in WORKSHOP_CAPABILITIES"
+            :key="capability.namespace"
+            type="button"
+            class="composer__capability-card"
+            :data-testid="`composer-capability-${capability.namespace}`"
+            @click="selectCapability(capability)"
+          >
+            <span class="composer__capability-label">{{ capability.label }}</span>
+            <span class="composer__capability-desc">{{ capability.description }}</span>
+          </button>
+        </div>
+      </div>
       <SlashCommandMenu
         :visible="slashVisible"
         :groups="slash.groups.value"
@@ -552,6 +638,79 @@ defineExpose({ focus: focusInput });
   display: flex;
   gap: 8px;
   align-items: flex-end;
+}
+.composer__capability-wrap {
+  position: relative;
+  flex: 0 0 auto;
+}
+.composer__capability-toggle {
+  width: 38px;
+  height: 38px;
+  font-family: inherit;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
+  background: #fff8df;
+  color: #2a1a08;
+  border: 3px solid #8c6a23;
+  border-radius: 6px;
+  box-shadow: 0 3px 0 #8c6a23;
+  cursor: pointer;
+  transition: transform 80ms, box-shadow 80ms;
+}
+.composer__capability-toggle:hover:not(:disabled) {
+  background: #ffe098;
+}
+.composer__capability-toggle:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #8c6a23;
+}
+.composer__capability-toggle:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.composer__capability-menu {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  z-index: 4;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(150px, 1fr));
+  gap: 6px;
+  width: min(420px, 82vw);
+  padding: 8px;
+  background: #fff8df;
+  border: 3px solid #8c6a23;
+  border-radius: 8px;
+  box-shadow: 0 8px 0 rgba(140, 106, 35, 0.18);
+}
+.composer__capability-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-height: 58px;
+  padding: 8px;
+  font-family: inherit;
+  text-align: left;
+  color: #2a1a08;
+  background: #fff3c4;
+  border: 2px solid rgba(140, 106, 35, 0.55);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.composer__capability-card:hover {
+  background: #fde48a;
+  border-color: #8c6a23;
+}
+.composer__capability-label {
+  font-size: 12px;
+  font-weight: 800;
+}
+.composer__capability-desc {
+  font-size: 10px;
+  line-height: 1.45;
+  color: #6b4c17;
 }
 .composer__attach {
   flex: 0 0 auto;

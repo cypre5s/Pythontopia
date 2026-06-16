@@ -6,9 +6,13 @@
  * 点某条把该次问答回看到对话流（由父级注入 WorkshopChat）。懒加载：仅首次展开时拉取；
  * 失败安全降级（不打断工坊主流程），可手动重试 / 刷新。
  */
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { listTutorSessions, type TutorSessionDto } from '@/api/tutor';
 import { playUiClick } from '@/composables/useStardewFx';
+
+const props = withDefaults(defineProps<{ embeddedOpen?: boolean }>(), {
+  embeddedOpen: false,
+});
 
 const emit = defineEmits<{ (e: 'select', sessions: TutorSessionDto[]): void }>();
 
@@ -17,6 +21,7 @@ const loading = ref(false);
 const loaded = ref(false);
 const failed = ref(false);
 const sessions = ref<TutorSessionDto[]>([]);
+const effectiveOpen = computed<boolean>(() => props.embeddedOpen || open.value);
 
 async function load(): Promise<void> {
   loading.value = true;
@@ -87,6 +92,14 @@ function toggle(): void {
   if (open.value && !loaded.value && !loading.value) void load();
 }
 
+watch(
+  () => props.embeddedOpen,
+  (value) => {
+    if (value && !loaded.value && !loading.value) void load();
+  },
+  { immediate: true },
+);
+
 function refresh(): void {
   playUiClick();
   void load();
@@ -122,15 +135,16 @@ function shortTime(iso: string): string {
 <template>
   <aside
     class="history"
-    :class="{ 'history--open': open }"
+    :class="{ 'history--open': effectiveOpen }"
     data-testid="workshop-history-rail"
   >
     <button
+      v-if="!props.embeddedOpen"
       type="button"
       class="history__handle"
       data-testid="workshop-history-handle"
-      :aria-expanded="open"
-      :title="open ? '收起聊天记录' : '展开聊天记录'"
+      :aria-expanded="effectiveOpen"
+      :title="effectiveOpen ? '收起聊天记录' : '展开聊天记录'"
       @click="toggle"
     >
       <span
@@ -141,11 +155,11 @@ function shortTime(iso: string): string {
       <span
         class="history__handle-chev"
         aria-hidden="true"
-      >{{ open ? '‹' : '›' }}</span>
+      >{{ effectiveOpen ? '‹' : '›' }}</span>
     </button>
 
     <div
-      v-if="open"
+      v-if="effectiveOpen"
       class="history__panel"
       data-testid="workshop-history-panel"
     >

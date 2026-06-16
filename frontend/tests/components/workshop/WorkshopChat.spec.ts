@@ -205,13 +205,29 @@ vi.mock('@/components/workshop/PlanCard.vue', async () => {
     default: defineComponent({
       name: 'PlanCard',
       props: ['steps'],
-      emits: ['open'],
+      // 与真 PlanCard 契约一致：open 保留 panel 字符串（向后兼容），
+      // open-step 携带整步上下文（panel + kc_codes + resource_type）供深链。
+      emits: ['open', 'open-step'],
       template:
         '<div data-testid="stub-plan">' +
         '<span data-testid="stub-plan-count">{{ steps.length }}</span>' +
         '<button v-for="s in steps" :key="s.id" :data-testid="\'plan-open-\' + (s.panel || \'none\')" ' +
-        '@click="$emit(\'open\', s.panel || \'\')">{{ s.title }}</button>' +
+        '@click="$emit(\'open\', s.panel || \'\'); $emit(\'open-step\', s)">{{ s.title }}</button>' +
         '</div>',
+    }),
+  };
+});
+
+// 多智能体「工作室」思考链：暴露 label/status/traces 供向导联动断言。
+vi.mock('@/components/workshop/AgentStudioStream.vue', async () => {
+  const { defineComponent } = await import('vue');
+  return {
+    default: defineComponent({
+      name: 'AgentStudioStream',
+      props: ['traces', 'status', 'tokenPreview', 'plan', 'errorMessage', 'label'],
+      template:
+        '<div data-testid="stub-studio" :data-label="label" :data-status="status" ' +
+        ':data-traces="(traces || []).length" />',
     }),
   };
 });
@@ -350,7 +366,6 @@ function mountChat(): VueWrapper {
       stubs: {
         MarkdownView: true,
         BilibiliVideoCards: true,
-        AgentStudioStream: true,
         CoursewareEvidence: true,
         TutorVisualAids: true,
         HandoutView: true,
@@ -368,6 +383,8 @@ interface SubmitExtra {
   manualKcCodes?: string[];
   contextHint?: string;
   forcedIntent?: string | null;
+  source?: string;
+  capabilityNamespace?: string;
 }
 
 async function submit(wrapper: VueWrapper, text: string, extra: SubmitExtra = {}): Promise<void> {
@@ -901,6 +918,21 @@ describe('WorkshopChat 16 工具分发', () => {
     expect(turns.at(-1)?.role).toBe('assistant');
   });
 
+  it('能力启动器提交时把 capabilityNamespace 作为路由 hint 透传', async () => {
+    const wrapper = mountChat();
+    await flushPromises();
+    armRoute({ intent: 'PRACTICE', kcCodes: ['PY43-KC-001'] });
+
+    await submit(wrapper, '循环', {
+      source: 'capability_launcher',
+      capabilityNamespace: 'practice',
+    });
+
+    const req = apiMocks.routeIntent.mock.calls.at(-1)?.[0] as Record<string, unknown>;
+    expect(req.source).toBe('capability_launcher');
+    expect(req.capabilityNamespace).toBe('practice');
+  });
+
   it('forcedIntent（/ 命令）不走路由直接执行', async () => {
     const wrapper = mountChat();
     await flushPromises();
@@ -912,5 +944,276 @@ describe('WorkshopChat 16 工具分发', () => {
     await submit(wrapper, '出题', { forcedIntent: 'PRACTICE', manualKcCodes: ['PY43-KC-001'] });
     expect(apiMocks.routeIntent).not.toHaveBeenCalled();
     expect(sse(WORKSHOP_URL).start).toHaveBeenCalledTimes(1);
+  });
+
+  // ============ 伴学向导（悬浮窗）⇄ 工坊联动 + 计划深链 ============
+
+  it('向导悬浮窗发起的 orchestrator 活动出现在工坊：思考链点亮 + 输入框忙碌', async () => {
+    const wrapper = mountChat();
+    await flushPromises();
+    expect(wrapper.find('[data-testid="stub-studio"]').exists()).toBe(false);
+
+    // 模拟 GuideOverlay：start + 旧签名镜像（不带运行令牌的现网调用）。
+    const activity = useWorkshopActivityStore();
+    activity.start('orchestrator', '协同规划：我想学循环');
+    activity.syncTraces('orchestrator', [{ node: 'understand', status: 'ok', elapsed_ms: 3 }]);
+    await flushPromises();
+
+    const studio = wrapper.find('[data-testid="stub-studio"]');
+    expect(studio.exists()).toBe(true);
+    expect(studio.attributes('data-label')).toBe('协同规划：我想学循环');
+    expect(studio.attributes('data-traces')).toBe('1');
+    // 向导协同期间工坊输入框置忙，避免双口同时开火。
+    expect(wrapper.findComponent({ name: 'ChatComposer' }).props('busy')).toBe(true);
+
+    activity.finish(true);
+    await flushPromises();
+    expect(wrapper.find('[data-testid="stub-studio"]').exists()).toBe(false);
+    expect(wrapper.findComponent({ name: 'ChatComposer' }).props('busy')).toBe(false);
+  });
+
+  it('过期的工坊 PLAN 流不会覆盖向导新发起的活动（运行令牌防串台）', async () => {
+    const wrapper = mountChat();
+    await flushPromises();
+    const orch = sse(ORCH_URL);
+    let release: (() => void) | null = null;
+    orch.start.mockImplementation(() => {
+      orch.status.value = 'streaming';
+      return new Promise<void>((resolve) => {
+        release = resolve;
+      });
+    });
+    armRoute({ intent: 'PLAN' });
+
+    await submit(wrapper, '帮我规划本周怎么学'); // runPlan 开始，流挂起中
+    const activity = useWorkshopActivityStore();
+    expect(activity.status).toBe('streaming');
+    expect(activity.label).toBe('学习规划');
+
+    // 学生切去伴学悬浮窗继续聊：向导接管，开了新一轮活动。
+    activity.start('orchestrator', '协同规划：向导新任务');
+
+    // 工坊那条已过期的流还在吐 traces / plan → 不得覆盖向导新活动。
+    orch.traces.value = [{ node: 'understand', status: 'ok', elapsed_ms: 3 }];
+    orch.plan.value = { type: 'plan', nodes: [] };
+    await flushPromises();
+    expect(activity.traces).toEqual([]);
+    expect(activity.plan).toBeNull();
+
+    // 过期流收尾：也不得把向导新活动标记完结。
+    orch.status.value = 'done';
+    orch.result.value = {
+      reply_md: '迟到的计划',
+      clarifying_question: null,
+      needs_user_input: false,
+      plan: [],
+      dispatch_results: [],
+      profile_updates: [],
+      trace: [],
+      done: true,
+    };
+    release?.();
+    await flushPromises();
+    expect(activity.status).toBe('streaming');
+    expect(activity.label).toBe('协同规划：向导新任务');
+  });
+
+  it('计划步骤「前往」深链工坊：携带 kc 与资源类型上下文', async () => {
+    const wrapper = mountChat();
+    await flushPromises();
+    const orch = sse(ORCH_URL);
+    orch.start.mockImplementation(async () => {
+      orch.status.value = 'done';
+      orch.result.value = {
+        reply_md: '计划如下',
+        clarifying_question: null,
+        needs_user_input: false,
+        plan: [
+          {
+            id: 's1',
+            phase: 'learn',
+            title: '学：生成讲义',
+            detail: '先把概念过一遍',
+            agent: 'ResourceDesignerAgent',
+            kc_codes: ['PY43-KC-007', 'PY43-KC-008'],
+            panel: 'workshop',
+            status: 'pending',
+            resource_type: 'HANDOUT',
+          },
+        ],
+        dispatch_results: [],
+        profile_updates: [],
+        trace: [],
+        done: true,
+      };
+    });
+    armRoute({ intent: 'PLAN' });
+
+    await submit(wrapper, '怎么学函数');
+    await wrapper.find('[data-testid="plan-open-workshop"]').trigger('click');
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe('/workshop');
+    expect(router.currentRoute.value.query.kc).toBe('PY43-KC-007,PY43-KC-008');
+    expect(router.currentRoute.value.query.type).toBe('HANDOUT');
+
+    // 人已在工坊（组件不重挂）：深链上下文就地化作「接着」chip，待点击生成，不自动开火。
+    const chip = wrapper.find('[data-testid="secondary-go"]');
+    expect(chip.exists()).toBe(true);
+    expect(chip.text()).toContain('讲义');
+    expect(sse(WORKSHOP_URL).start).not.toHaveBeenCalled();
+  });
+
+  it('练习 / 图书馆 / 复盘 / 闯关塔的计划链接保留 KC 上下文', async () => {
+    const wrapper = mountChat();
+    await flushPromises();
+    const orch = sse(ORCH_URL);
+    const mkStep = (
+      id: string,
+      panel: string,
+      kc: string,
+    ): Record<string, unknown> => ({
+      id,
+      phase: 'practice',
+      title: `去${panel}`,
+      detail: '',
+      agent: 'PathPlannerAgent',
+      kc_codes: [kc],
+      panel,
+      status: 'pending',
+      resource_type: null,
+    });
+    orch.start.mockImplementation(async () => {
+      orch.status.value = 'done';
+      orch.result.value = {
+        reply_md: '四个去处',
+        clarifying_question: null,
+        needs_user_input: false,
+        plan: [
+          mkStep('s1', 'training', 'PY43-KC-001'),
+          mkStep('s2', 'library', 'PY43-KC-002'),
+          mkStep('s3', 'review', 'PY43-KC-003'),
+          mkStep('s4', 'problems', 'PY43-KC-004'),
+        ],
+        dispatch_results: [],
+        profile_updates: [],
+        trace: [],
+        done: true,
+      };
+    });
+    armRoute({ intent: 'PLAN' });
+    await submit(wrapper, '都有哪些地方能练');
+
+    const cases: Array<[string, string, string]> = [
+      ['training', '/training', 'PY43-KC-001'],
+      ['library', '/library', 'PY43-KC-002'],
+      ['review', '/review-hall', 'PY43-KC-003'],
+      ['problems', '/arena/1', 'PY43-KC-004'],
+    ];
+    for (const [panel, path, kc] of cases) {
+      await wrapper.find(`[data-testid="plan-open-${panel}"]`).trigger('click');
+      await flushPromises();
+      expect(router.currentRoute.value.path, `panel=${panel}`).toBe(path);
+      expect(router.currentRoute.value.query.kc, `panel=${panel}`).toBe(kc);
+      // 非工坊面板不带资源类型参数。
+      expect(router.currentRoute.value.query.type, `panel=${panel}`).toBeUndefined();
+    }
+  });
+
+  it('带上下文深链进工坊：出「接着」chip 不自动开火；返回重进不重复生成向导计划', async () => {
+    // 向导已完成的一轮协同规划（计划归档在共享活动状态里）。
+    const activity = useWorkshopActivityStore();
+    const guideToken = activity.start('orchestrator', '协同规划：学循环');
+    activity.syncPlan('orchestrator', { type: 'plan', nodes: [] }, guideToken);
+    activity.finish(true, guideToken);
+
+    await router.push('/workshop?kc=PY43-KC-001&type=HANDOUT');
+    const wrapper = mountChat();
+    await flushPromises();
+
+    // 不重复生成向导计划：orchestrator 没被调用，向导活动原样保留。
+    expect(sse(ORCH_URL).start).not.toHaveBeenCalled();
+    expect(activity.seq).toBe(guideToken);
+    expect(activity.plan).toEqual({ type: 'plan', nodes: [] });
+    expect(activity.status).toBe('done');
+
+    // 深链上下文化作「接着」chip：不自动开火，点击才按 kc+type 生成。
+    const chip = wrapper.find('[data-testid="secondary-go"]');
+    expect(chip.exists()).toBe(true);
+    expect(chip.text()).toContain('讲义');
+    expect(sse(WORKSHOP_URL).start).not.toHaveBeenCalled();
+    await chip.trigger('click');
+    await flushPromises();
+    expect(sse(WORKSHOP_URL).start).toHaveBeenCalledTimes(1);
+    expect(sse(WORKSHOP_URL).start.mock.calls[0]?.[0]).toMatchObject({
+      kcCodes: ['PY43-KC-001'],
+      type: 'HANDOUT',
+    });
+
+    // 返回小镇再回工坊（卸载 → 重挂）：仍不生成向导计划，共享状态不被动。
+    wrapper.unmount();
+    const wrapper2 = mountChat();
+    await flushPromises();
+    expect(sse(ORCH_URL).start).not.toHaveBeenCalled();
+    expect(sse(WORKSHOP_URL).start).not.toHaveBeenCalled();
+    expect(activity.seq).toBe(guideToken);
+    expect(activity.plan).toEqual({ type: 'plan', nodes: [] });
+    // chip 重新可用但依旧只待点击，不自动生成。
+    expect(wrapper2.find('[data-testid="secondary-go"]').exists()).toBe(true);
+  });
+
+  it('新活动开始后旧会话残留数据被忽略：连续两次 PLAN 不串台', async () => {
+    const wrapper = mountChat();
+    await flushPromises();
+    const orch = sse(ORCH_URL);
+    orch.start.mockImplementation(async () => {
+      orch.traces.value = [{ node: 'understand', status: 'ok', elapsed_ms: 2 }];
+      orch.status.value = 'done';
+      orch.result.value = {
+        reply_md: '第一轮计划',
+        clarifying_question: null,
+        needs_user_input: false,
+        plan: [],
+        dispatch_results: [],
+        profile_updates: [],
+        trace: [],
+        done: true,
+      };
+    });
+    armRoute({ intent: 'PLAN' });
+    await submit(wrapper, '先规划一轮');
+
+    const activity = useWorkshopActivityStore();
+    const firstSeq = activity.seq;
+    expect(activity.status).toBe('done');
+
+    // 第二轮 PLAN 挂起在 streaming：开场即清掉上一轮残留 traces/plan。
+    let release: (() => void) | null = null;
+    orch.start.mockImplementation(() => {
+      orch.status.value = 'streaming';
+      return new Promise<void>((resolve) => {
+        release = resolve;
+      });
+    });
+    await submit(wrapper, '再规划一轮');
+    expect(activity.seq).toBeGreaterThan(firstSeq);
+    expect(activity.status).toBe('streaming');
+    expect(activity.traces).toEqual([]);
+    expect(activity.plan).toBeNull();
+
+    orch.status.value = 'done';
+    orch.result.value = {
+      reply_md: '第二轮计划',
+      clarifying_question: null,
+      needs_user_input: false,
+      plan: [],
+      dispatch_results: [],
+      profile_updates: [],
+      trace: [],
+      done: true,
+    };
+    release?.();
+    await flushPromises();
+    expect(activity.status).toBe('done');
   });
 });

@@ -2,6 +2,7 @@ import { http } from './http';
 import type {
   WorkshopCreateRequest,
   WorkshopCreateResponse,
+  WorkshopConsumptionResponse,
   WorkshopFeedbackRequest,
   WorkshopResourceDto,
   WorkshopResourceListItemDto,
@@ -45,6 +46,15 @@ export async function getWorkshopResource(
 ): Promise<WorkshopResourceDto> {
   const response = await http.get<WorkshopResourceDto>(
     `/api/workshop/resources/${id}`,
+  );
+  return response.data;
+}
+
+export async function consumeWorkshopResource(
+  id: number,
+): Promise<WorkshopConsumptionResponse> {
+  const response = await http.post<WorkshopConsumptionResponse>(
+    `/api/workshop/resources/${id}/consumptions`,
   );
   return response.data;
 }

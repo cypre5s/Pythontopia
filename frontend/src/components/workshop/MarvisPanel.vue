@@ -148,12 +148,28 @@ function stationElapsed(node: string): number {
   return last.elapsed_ms ?? 0;
 }
 
+/** 工位成果概述：本阶段「得到什么」——命中课件段数 / 看图进度 / 产物备注（过滤技术性 token）。 */
+function stationOutcome(node: string): string {
+  const last = lastTraceFor(node);
+  if (!last || last.phase === 'start') return '';
+  const parts: string[] = [];
+  if (typeof last.chunks === 'number' && last.chunks >= 0) parts.push(`命中 ${last.chunks} 段课件`);
+  if (typeof last.index === 'number' && typeof last.total === 'number') {
+    parts.push(`第 ${last.index}/${last.total} 张图`);
+  }
+  if (typeof last.chars === 'number' && last.chars > 0) parts.push(`识别 ${last.chars} 字`);
+  const note = (last.note ?? '').trim();
+  if (note && note !== '[]' && note !== 'kept_original' && note !== 'revised') parts.push(note);
+  return parts.join(' · ');
+}
+
 interface StationVm {
   node: string;
   label: string;
   state: StationState;
   sprite: string;
   elapsedMs: number;
+  outcome: string;
 }
 
 const stations = computed<StationVm[]>(() => {
@@ -165,6 +181,7 @@ const stations = computed<StationVm[]>(() => {
     state: stationState(n.node),
     sprite: KIND_SPRITE[n.kind] ?? 'npc_workshop',
     elapsedMs: stationElapsed(n.node),
+    outcome: stationOutcome(n.node),
   }));
 });
 
@@ -337,6 +354,11 @@ const IDLE_ROSTER: readonly RosterMember[] = [
           <span class="tl__content">
             <span class="tl__label">{{ s.label }}</span>
             <span class="tl__sub">{{ subText(s) }}</span>
+            <span
+              v-if="(s.state === 'done' || s.state === 'retry') && s.outcome"
+              class="tl__outcome"
+              data-testid="station-outcome"
+            >成果：{{ s.outcome }}</span>
           </span>
         </li>
       </ol>
@@ -438,10 +460,16 @@ const IDLE_ROSTER: readonly RosterMember[] = [
   background-position: 0 -68px;
 }
 .marvis__sprite--idle {
-  animation: marvis-idle 2.6s ease-in-out infinite;
+  /* 待命也"动起来"：帧步进的行走循环 + 轻微上下浮，告别「傻站着」。 */
+  animation:
+    marvis-walk-lg 1.1s steps(9) infinite,
+    marvis-idle 2.6s ease-in-out infinite;
 }
 .marvis__sprite--working {
-  animation: marvis-work 0.55s ease-in-out infinite;
+  /* 工作态：更快的行走帧循环 + 跳动，强调「正在干活」。 */
+  animation:
+    marvis-walk-bar 0.6s steps(9) infinite,
+    marvis-work 0.55s ease-in-out infinite;
 }
 
 /* ── 运行态 ── */
@@ -604,7 +632,9 @@ const IDLE_ROSTER: readonly RosterMember[] = [
   image-rendering: pixelated;
 }
 .tl__avatar--working {
-  animation: marvis-work 0.55s ease-in-out infinite;
+  animation:
+    marvis-walk-node 0.6s steps(9) infinite,
+    marvis-work 0.55s ease-in-out infinite;
 }
 .tl__glyph {
   position: absolute;
@@ -671,6 +701,12 @@ const IDLE_ROSTER: readonly RosterMember[] = [
 .tl__row--error .tl__sub {
   color: var(--pyt-color-danger);
 }
+.tl__outcome {
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--pyt-color-success, #4d6e1d);
+  word-break: break-word;
+}
 
 /* ── 空闲：像素小人待命名单 ── */
 .marvis__idle-hint {
@@ -715,6 +751,19 @@ const IDLE_ROSTER: readonly RosterMember[] = [
 @keyframes marvis-work {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-3px) scale(1.05); }
+}
+/* 行走帧循环：沿精灵表横向逐帧切换（9 列），只动 background-position-x 不改朝向行(Y)。 */
+@keyframes marvis-walk-lg {
+  from { background-position-x: 0; }
+  to { background-position-x: -396px; }
+}
+@keyframes marvis-walk-bar {
+  from { background-position-x: 0; }
+  to { background-position-x: -306px; }
+}
+@keyframes marvis-walk-node {
+  from { background-position-x: 0; }
+  to { background-position-x: -252px; }
 }
 @keyframes marvis-pip {
   0%, 100% { opacity: 1; }

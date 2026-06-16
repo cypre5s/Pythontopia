@@ -142,6 +142,13 @@ export interface WorkshopCreateResponse {
   status: 'SUCCESS' | 'PARTIAL' | 'FAILED';
 }
 
+export interface WorkshopConsumptionResponse {
+  resourceId: number;
+  kcCodes: string[];
+  nextAction: 'micro_check';
+  prompt: string;
+}
+
 export interface WorkshopFeedbackRequest {
   status: 'LIKED' | 'DISLIKED' | 'NONE';
   note?: string;

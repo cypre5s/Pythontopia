@@ -30,8 +30,10 @@ const toast = useToastStore();
 const feedbackNote = ref<string>('');
 const submittingFeedback = ref<boolean>(false);
 const showPpt = ref<boolean>(false);
+const consumingResource = ref<boolean>(false);
 
 const resource = computed(() => learning.resources.current);
+const consumption = computed(() => learning.resources.currentConsumption);
 
 watch(
   () => props.resourceId,
@@ -41,6 +43,7 @@ watch(
       try {
         await learning.openResource(id);
         feedbackNote.value = learning.resources.current?.feedbackNote ?? '';
+        void consumeCurrentResource(id);
       } catch (error) {
         const message = error instanceof Error ? error.message : '载入资源失败';
         toast.show(message, 'error');
@@ -49,6 +52,18 @@ watch(
   },
   { immediate: true },
 );
+
+async function consumeCurrentResource(id: number): Promise<void> {
+  consumingResource.value = true;
+  try {
+    await learning.consumeResource(id);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '学习记录同步失败';
+    toast.show(message, 'error');
+  } finally {
+    consumingResource.value = false;
+  }
+}
 
 async function submitFeedback(status: 'LIKED' | 'DISLIKED'): Promise<void> {
   if (!resource.value) return;
@@ -119,6 +134,24 @@ async function submitFeedback(status: 'LIKED' | 'DISLIKED'): Promise<void> {
     >
       {{ resource.summary }}
     </p>
+    <section
+      class="micro-check"
+      data-testid="resource-micro-check"
+    >
+      <div>
+        <h4>读完小检查</h4>
+        <p>
+          {{ consumption?.prompt ?? (consumingResource ? '正在记录你的学习进度…' : '读完后做一道小检查，把资料转成真正会用的能力。') }}
+        </p>
+      </div>
+      <router-link
+        v-if="resource.kcCodes.length > 0"
+        class="micro-check__cta"
+        :to="{ name: 'workshop', query: { type: 'PRACTICE', kc: resource.kcCodes.join(',') } }"
+      >
+        生成迁移练习
+      </router-link>
+    </section>
     <div
       v-if="resource.type === 'HANDOUT'"
       class="handout-section"
@@ -249,6 +282,37 @@ header h2 {
   margin: 0;
   line-height: 1.5;
   color: #2b1c0b;
+}
+.micro-check {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  background: #f4f7dc;
+  border: 2px solid #9cad57;
+  border-radius: var(--pyt-radius-lg);
+}
+.micro-check h4 {
+  margin: 0 0 4px;
+  color: #364310;
+}
+.micro-check p {
+  margin: 0;
+  line-height: 1.5;
+  color: #4f5c20;
+}
+.micro-check__cta {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: #56711f;
+  color: #fffde8;
+  font-weight: 700;
+  text-decoration: none;
+}
+.micro-check__cta:hover {
+  background: #6f8c2b;
 }
 .badges {
   display: flex;

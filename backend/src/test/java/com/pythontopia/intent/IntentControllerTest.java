@@ -30,6 +30,8 @@ class IntentControllerTest {
         null,
         List.of(),
         List.of(),
+        null,
+        null,
         null);
   }
 
@@ -54,7 +56,21 @@ class IntentControllerTest {
     IntentRouteRequest request = sampleRequest();
     CurrentUserPrincipal student = new CurrentUserPrincipal(7L, "stu", Role.STUDENT);
     IntentRouteResponse expected =
-        new IntentRouteResponse("MINDMAP", List.of("PY43-KC-001"), "for 循环", 0.9, "ok", "", null);
+        new IntentRouteResponse(
+            "MINDMAP",
+            List.of("PY43-KC-001"),
+            "for 循环",
+            0.9,
+            "ok",
+            "",
+            null,
+            "make",
+            List.of("MINDMAP", "HANDOUT"),
+            false,
+            "",
+            "generative",
+            "resource",
+            "explicit_command");
     when(service.route(eq(student), eq(request))).thenReturn(expected);
     IntentController controller = new IntentController(service);
 

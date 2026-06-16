@@ -18,6 +18,12 @@ const emit = defineEmits<{
 
 const deckRef = ref<HTMLElement | null>(null);
 let deck: Reveal | null = null;
+let resizeObserver: ResizeObserver | null = null;
+
+// reveal.js 的 TS 类型未暴露 layout()（实例运行时有该方法）；窄类型转换调用，避免 any。
+function relayout(): void {
+  (deck as unknown as { layout?: () => void } | null)?.layout?.();
+}
 
 onMounted(async () => {
   await nextTick();
@@ -36,10 +42,21 @@ onMounted(async () => {
     center: true,
   });
   await deck.initialize();
+  // 弹层/flex 容器在初始化瞬间尺寸可能为 0 → reveal 量错尺寸导致空白或排版错位。
+  // 下一帧容器拿到真实尺寸后再 layout 一次，并用 ResizeObserver 跟随后续尺寸变化（PPT 正确显示）。
+  requestAnimationFrame(() => relayout());
+  if (typeof ResizeObserver === 'function') {
+    resizeObserver = new ResizeObserver(() => relayout());
+    resizeObserver.observe(deckRef.value);
+  }
   deckRef.value.focus();
 });
 
 onBeforeUnmount(() => {
+  if (resizeObserver) {
+    resizeObserver.disconnect();
+    resizeObserver = null;
+  }
   deck?.destroy();
   deck = null;
 });

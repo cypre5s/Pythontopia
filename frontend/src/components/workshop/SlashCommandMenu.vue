@@ -3,7 +3,7 @@
  * `/` 斜杠命令菜单（展示型），与 CoursewareMentionMenu 同款星露谷牛皮纸下拉。
  * 由 useSlashCommand 提供 groups / activeIndex，选中通过 select 事件回传。
  */
-import { computed } from 'vue';
+import { computed, nextTick, watch } from 'vue';
 import type { SlashCommand, SlashCommandGroup } from '@/composables/useSlashCommand';
 
 const props = defineProps<{
@@ -11,6 +11,21 @@ const props = defineProps<{
   groups: SlashCommandGroup[];
   activeIndex: number;
 }>();
+
+// 按"下/上"键移动选中项时，让选中项滚动进可视区。
+const itemEls = new Map<number, HTMLElement>();
+function setItemRef(index: number, el: unknown): void {
+  if (el instanceof HTMLElement) itemEls.set(index, el);
+  else itemEls.delete(index);
+}
+watch(
+  () => props.activeIndex,
+  (idx) => {
+    void nextTick(() => {
+      itemEls.get(idx)?.scrollIntoView({ block: 'nearest' });
+    });
+  },
+);
 
 const emit = defineEmits<{
   (event: 'select', cmd: SlashCommand): void;
@@ -59,6 +74,7 @@ function entriesOf(group: SlashCommandGroup): FlatEntry[] {
       <button
         v-for="entry in entriesOf(group)"
         :key="entry.item.token"
+        :ref="(el) => setItemRef(entry.index, el)"
         type="button"
         class="slash-item"
         :class="{ 'slash-item--active': entry.index === props.activeIndex }"

@@ -29,12 +29,16 @@ const masteryByKc = computed<Map<string, number>>(() => {
   return map;
 });
 
-/** 资源对应 KC 的最低掌握度（0..100）；无快照记 0（生成过但还没练）。 */
+/**
+ * 资源对应 KC 的最低掌握度（0..100）。
+ * 无快照（还没练过该 KC）记 100 —— 刚生成、尚未练习的资源属于「待学习」而非「待复习」，
+ * 不该被复习分桶从主列表里剔除（否则新讲义会「消失」在书房）。
+ */
 function resourceMastery(item: WorkshopResourceListItemDto): number {
   if (item.kcCodes.length === 0) return 100;
   let min = 100;
   for (const code of item.kcCodes) {
-    const score = masteryByKc.value.get(code) ?? 0;
+    const score = masteryByKc.value.get(code) ?? 100;
     if (score < min) min = score;
   }
   return min;
@@ -53,11 +57,11 @@ const reviewItems = computed<ReviewItem[]>(() => {
   for (const item of allItems.value) {
     const mastery = resourceMastery(item);
     if (mastery >= REVIEW_THRESHOLD) continue;
-    // 最弱 KC（用于「再练」直达）。
+    // 最弱 KC（用于「再练」直达）。无快照记 100（与 resourceMastery 一致，未练不算待复习）。
     let weakestKc = item.kcCodes[0] ?? '';
     let weakest = 100;
     for (const code of item.kcCodes) {
-      const score = masteryByKc.value.get(code) ?? 0;
+      const score = masteryByKc.value.get(code) ?? 100;
       if (score < weakest) {
         weakest = score;
         weakestKc = code;

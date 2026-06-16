@@ -42,7 +42,12 @@ export const useWorkshopActivityStore = defineStore('workshopActivity', {
     },
   },
   actions: {
-    start(kind: ActivityKind, label: string): void {
+    /**
+     * 开始一轮新活动并返回「运行令牌」（即新 seq）。
+     * 发起方应持令牌调 syncTraces/syncPlan/finish——新活动开始后，旧令牌的写入一律被忽略，
+     * 保证过期的流不会覆盖新活动、旧会话残留数据不回灌。
+     */
+    start(kind: ActivityKind, label: string): number {
       this.status = 'streaming';
       this.kind = kind;
       this.label = label;
@@ -50,19 +55,31 @@ export const useWorkshopActivityStore = defineStore('workshopActivity', {
       this.traces = [];
       this.startedAt = Date.now();
       this.seq += 1;
+      return this.seq;
     },
-    /** 仅在对应 kind 的流活跃时镜像，避免另一条流的陈旧数据串台。 */
-    syncTraces(kind: ActivityKind, traces: SseTraceEvent[]): void {
-      if (this.status === 'streaming' && this.kind === kind) {
+    /**
+     * 当前是否接受该（kind, token）来源的镜像：
+     * 流活跃 + kind 匹配 + 令牌（若携带）等于当前 seq。
+     * 不带令牌为旧签名兼容路径（GuideOverlay 现网调用），保持原有 kind+streaming 判定。
+     */
+    acceptsRun(kind: ActivityKind, token?: number): boolean {
+      if (this.status !== 'streaming' || this.kind !== kind) return false;
+      return token === undefined || token === this.seq;
+    },
+    /** 仅在对应 kind 的流活跃（且令牌未过期）时镜像，避免另一条/过期流的陈旧数据串台。 */
+    syncTraces(kind: ActivityKind, traces: SseTraceEvent[], token?: number): void {
+      if (this.acceptsRun(kind, token)) {
         this.traces = traces;
       }
     },
-    syncPlan(kind: ActivityKind, plan: SsePlan | null): void {
-      if (this.status === 'streaming' && this.kind === kind) {
+    syncPlan(kind: ActivityKind, plan: SsePlan | null, token?: number): void {
+      if (this.acceptsRun(kind, token)) {
         this.plan = plan;
       }
     },
-    finish(ok: boolean): void {
+    /** 收尾。携带令牌且已被新活动取代时忽略——过期流不得把新活动标记完结。 */
+    finish(ok: boolean, token?: number): void {
+      if (token !== undefined && token !== this.seq) return;
       this.status = ok ? 'done' : 'error';
     },
     idle(): void {

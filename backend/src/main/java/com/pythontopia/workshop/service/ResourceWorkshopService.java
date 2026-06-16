@@ -8,8 +8,8 @@ import com.pythontopia.agent.run.RunStatus;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.coursepack.domain.CourseKc;
 import com.pythontopia.coursepack.repository.CoursePackRepository;
+import com.pythontopia.learner.event.LearningEvent;
 import com.pythontopia.learner.mastery.MasteryEvaluator;
-import com.pythontopia.learner.mastery.MasterySource;
 import com.pythontopia.learner.memory.MemoryRetrievalService;
 import com.pythontopia.learner.memory.dto.MemoryItemDto;
 import com.pythontopia.learner.profile.dto.LearnerProfileDto;
@@ -20,6 +20,7 @@ import com.pythontopia.learner.reflection.LearnerInsightRepository;
 import com.pythontopia.workshop.config.WorkshopProperties;
 import com.pythontopia.workshop.dto.ContentFormat;
 import com.pythontopia.workshop.dto.LearningResourceDto;
+import com.pythontopia.workshop.dto.ResourceConsumptionResponse;
 import com.pythontopia.workshop.dto.ResourceCreateRequest;
 import com.pythontopia.workshop.dto.ResourceCreateResponse;
 import com.pythontopia.workshop.dto.ResourceFeedbackRequest;
@@ -47,6 +48,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -79,6 +81,7 @@ public class ResourceWorkshopService {
   private final MemoryRetrievalService memoryRetrievalService;
   private final MetaReflectionService metaReflectionService;
   private final ResourceFeedbackRepository resourceFeedbackRepository;
+  private final ApplicationEventPublisher eventPublisher;
   private final ObjectMapper objectMapper;
 
   public ResourceWorkshopService(
@@ -94,6 +97,7 @@ public class ResourceWorkshopService {
       MemoryRetrievalService memoryRetrievalService,
       MetaReflectionService metaReflectionService,
       ResourceFeedbackRepository resourceFeedbackRepository,
+      ApplicationEventPublisher eventPublisher,
       ObjectMapper objectMapper) {
     this.properties = properties;
     this.graphClient = graphClient;
@@ -107,6 +111,7 @@ public class ResourceWorkshopService {
     this.memoryRetrievalService = memoryRetrievalService;
     this.metaReflectionService = metaReflectionService;
     this.resourceFeedbackRepository = resourceFeedbackRepository;
+    this.eventPublisher = eventPublisher;
     this.objectMapper = objectMapper;
   }
 
@@ -188,7 +193,6 @@ public class ResourceWorkshopService {
             groundingFlag,
             runId);
 
-    awardMastery(userId, validatedKcCodes, request.type());
     return new ResourceCreateResponse(runId, resourceId, runStatus.name());
   }
 
@@ -291,7 +295,6 @@ public class ResourceWorkshopService {
         groundingFlag,
         runId);
 
-    awardMastery(userId, validatedKcCodes, request.type());
     return new ResourceCreateResponse(runId, resourceId, runStatus.name());
   }
 
@@ -310,6 +313,23 @@ public class ResourceWorkshopService {
             () ->
                 new BusinessException(
                     HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "未找到该学习资源"));
+  }
+
+  @Transactional
+  public ResourceConsumptionResponse consume(Long userId, Long resourceId) {
+    LearningResourceDto resource = findOne(userId, resourceId);
+    List<String> kcCodes = resource.kcCodes() == null ? List.of() : resource.kcCodes();
+    String resourceKind = resource.type() == null ? "UNKNOWN" : resource.type().name();
+    for (String kcCode : kcCodes) {
+      if (kcCode == null || kcCode.isBlank()) {
+        continue;
+      }
+      eventPublisher.publishEvent(
+          new LearningEvent.ResourceConsumed(
+              userId, kcCode, resourceKind, cappedResourceDelta(userId, kcCode)));
+    }
+    return new ResourceConsumptionResponse(
+        resource.id(), kcCodes, "micro_check", microCheckPrompt(resource, kcCodes));
   }
 
   @Transactional
@@ -598,19 +618,28 @@ public class ResourceWorkshopService {
     return ResourceStatusFlag.PASSED;
   }
 
-  private void awardMastery(Long userId, List<String> kcCodes, ResourceType type) {
+  private BigDecimal cappedResourceDelta(Long userId, String kcCode) {
     BigDecimal cap = properties.masteryDailyCapPerKc();
-    OffsetDateTime startOfDay = OffsetDateTime.now(ZoneOffset.UTC).toLocalDate().atStartOfDay().atOffset(ZoneOffset.UTC);
-    for (String code : kcCodes) {
-      BigDecimal already = resourceRepository.sumMasteryRewardsToday(userId, code, startOfDay);
-      BigDecimal remaining = cap.subtract(already);
-      if (remaining.compareTo(BigDecimal.ZERO) <= 0) {
-        continue;
-      }
-      BigDecimal proposed = new BigDecimal("0.05");
-      BigDecimal delta = proposed.min(remaining);
-      masteryEvaluator.applyEvent(userId, code, MasterySource.RESOURCE_READ, delta, "workshop:" + type.name());
+    OffsetDateTime startOfDay =
+        OffsetDateTime.now(ZoneOffset.UTC).toLocalDate().atStartOfDay().atOffset(ZoneOffset.UTC);
+    BigDecimal already = resourceRepository.sumMasteryRewardsToday(userId, kcCode, startOfDay);
+    BigDecimal remaining = cap.subtract(already);
+    if (remaining.compareTo(BigDecimal.ZERO) <= 0) {
+      return BigDecimal.ZERO;
     }
+    BigDecimal proposed = new BigDecimal("0.05");
+    return proposed.min(remaining);
+  }
+
+  private String microCheckPrompt(LearningResourceDto resource, List<String> kcCodes) {
+    String target =
+        kcCodes == null || kcCodes.isEmpty()
+            ? resource.title()
+            : kcCodes.stream().filter(code -> code != null && !code.isBlank()).collect(Collectors.joining("、"));
+    if (target == null || target.isBlank()) {
+      target = "这份资料";
+    }
+    return "用 1 分钟做个小检查：请用自己的话说出 " + target + " 的一个关键点，或继续生成一道迁移练习。";
   }
 
   private String scenarioForType(ResourceType type) {

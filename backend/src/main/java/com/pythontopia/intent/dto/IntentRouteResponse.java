@@ -22,4 +22,11 @@ public record IntentRouteResponse(
     double confidence,
     String reason,
     String target,
-    String secondaryIntent) {}
+    String secondaryIntent,
+    String namespace,
+    List<String> candidateIntents,
+    boolean needsClarification,
+    String clarificationPrompt,
+    String riskClass,
+    String renderMode,
+    String reasonCode) {}

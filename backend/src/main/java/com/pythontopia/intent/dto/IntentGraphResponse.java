@@ -18,4 +18,11 @@ public record IntentGraphResponse(
     double confidence,
     String reason,
     String target,
-    @JsonProperty("secondary_intent") String secondaryIntent) {}
+    @JsonProperty("secondary_intent") String secondaryIntent,
+    String namespace,
+    @JsonProperty("candidate_intents") List<String> candidateIntents,
+    @JsonProperty("needs_clarification") Boolean needsClarification,
+    @JsonProperty("clarification_prompt") String clarificationPrompt,
+    @JsonProperty("risk_class") String riskClass,
+    @JsonProperty("render_mode") String renderMode,
+    @JsonProperty("reason_code") String reasonCode) {}

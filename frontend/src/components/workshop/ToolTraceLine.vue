@@ -13,11 +13,15 @@ interface ToolTrace {
   status: string;
   elapsed_ms: number;
   note?: string | null;
+  // 后端每个工位发 start + finish 两条；下面用于折叠去重 + 中文工位名（永不显英文）。
+  phase?: string | null;
+  agent_label?: string | null;
+  actor_label?: string | null;
 }
 
 const props = defineProps<{ traces: ToolTrace[] }>();
 
-/** node → 中文名（执行蓝本 §6 给定映射；未知 node 原样显示）。 */
+/** node → 中文名兜底（后端已随事件下发 agent_label，优先用它；未知 node 才查此表）。 */
 const NODE_LABELS: Record<string, string> = {
   evidence_fetcher: '证据检索',
   TutorAgent: '导师作答',
@@ -27,11 +31,43 @@ const NODE_LABELS: Record<string, string> = {
   safety_critic: '安全审查',
   code_runner: '沙箱验证',
   debate: '辩论复核',
+  solver: '求解者',
+  critic: '质疑者',
+  referee: '仲裁者',
+  tutor_diagram: '图解生成',
+  tutor_evidence_note: '证据导读',
+  quiz_question: '考官出题',
+  quiz_judge: '考官评卷',
 };
 
-function nodeLabel(node: string): string {
-  return NODE_LABELS[node] ?? node;
+function nodeLabel(t: ToolTrace): string {
+  return t.actor_label || t.agent_label || NODE_LABELS[t.node] || t.node;
 }
+
+/**
+ * 折叠 start/finish：后端对每个工位发一条 start（status=running，耗时 0）+ 一条 finish。
+ * 按 node 合并成一行，用 finish 的状态/耗时/备注回填，避免「引用审查 / 防幻觉 / 安全」各显示两遍。
+ */
+const rows = computed<ToolTrace[]>(() => {
+  const order: string[] = [];
+  const map = new Map<string, ToolTrace>();
+  for (const t of props.traces) {
+    const existing = map.get(t.node);
+    if (!existing) {
+      map.set(t.node, { ...t });
+      order.push(t.node);
+      continue;
+    }
+    if (t.phase === 'finish' || !t.phase || safeElapsed(t.elapsed_ms) > 0) {
+      if (t.status) existing.status = t.status;
+      if (safeElapsed(t.elapsed_ms) > 0) existing.elapsed_ms = t.elapsed_ms;
+      if (t.note != null && t.note !== '') existing.note = t.note;
+    }
+    if (!existing.agent_label && t.agent_label) existing.agent_label = t.agent_label;
+    if (!existing.actor_label && t.actor_label) existing.actor_label = t.actor_label;
+  }
+  return order.map((k) => map.get(k) as ToolTrace);
+});
 
 /** 状态点档位：error/fail 红、retry 黄，其余按 ok 绿。 */
 function dotClass(status: string): string {
@@ -46,7 +82,7 @@ function safeElapsed(ms: number): number {
 }
 
 const totalMs = computed<number>(() =>
-  props.traces.reduce((sum, t) => sum + safeElapsed(t.elapsed_ms), 0),
+  rows.value.reduce((sum, t) => sum + safeElapsed(t.elapsed_ms), 0),
 );
 
 function fmtMs(ms: number): string {
@@ -69,7 +105,7 @@ function badgesOf(note: string | null | undefined): TraceBadge[] {
 
 /** 无治理关键词的 note 以小字原样披露（有徽章时不重复展示原文）。 */
 function plainNote(note: string | null | undefined): string {
-  if (!note) return '';
+  if (!note || note === '[]') return '';
   return badgesOf(note).length > 0 ? '' : note;
 }
 </script>
@@ -85,11 +121,11 @@ function plainNote(note: string | null | undefined): string {
         class="trace__caret"
         aria-hidden="true"
       >▸</span>
-      ⚙ 工具调用 ×{{ traces.length }} · {{ fmtMs(totalMs) }}
+      ⚙ 工具调用 ×{{ rows.length }} · {{ fmtMs(totalMs) }}
     </summary>
     <ul class="trace__rows">
       <li
-        v-for="(t, i) in traces"
+        v-for="(t, i) in rows"
         :key="`${i}-${t.node}`"
         class="trace__row"
         data-testid="tool-trace-row"
@@ -99,7 +135,7 @@ function plainNote(note: string | null | undefined): string {
           :class="dotClass(t.status)"
           aria-hidden="true"
         />
-        <span class="trace__label">{{ nodeLabel(t.node) }}</span>
+        <span class="trace__label">{{ nodeLabel(t) }}</span>
         <span
           v-if="safeElapsed(t.elapsed_ms) > 0"
           class="trace__ms"

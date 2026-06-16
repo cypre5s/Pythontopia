@@ -20,6 +20,7 @@ import com.pythontopia.agent.run.RunStatus;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.coursepack.domain.CourseKc;
 import com.pythontopia.coursepack.repository.CoursePackRepository;
+import com.pythontopia.learner.event.LearningEvent;
 import com.pythontopia.learner.mastery.MasteryEvaluator;
 import com.pythontopia.learner.mastery.MasterySnapshot;
 import com.pythontopia.learner.mastery.MasterySource;
@@ -56,6 +57,7 @@ import java.util.UUID;
 import java.util.function.Function;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -74,6 +76,7 @@ class ResourceWorkshopServiceTest {
   private MemoryRetrievalService memoryRetrievalService;
   private MetaReflectionService metaReflectionService;
   private ResourceFeedbackRepository resourceFeedbackRepository;
+  private ApplicationEventPublisher eventPublisher;
   private ObjectMapper objectMapper;
   private ResourceWorkshopService service;
 
@@ -91,6 +94,7 @@ class ResourceWorkshopServiceTest {
     memoryRetrievalService = Mockito.mock(MemoryRetrievalService.class);
     metaReflectionService = Mockito.mock(MetaReflectionService.class);
     resourceFeedbackRepository = Mockito.mock(ResourceFeedbackRepository.class);
+    eventPublisher = Mockito.mock(ApplicationEventPublisher.class);
     objectMapper = new ObjectMapper();
     service =
         new ResourceWorkshopService(
@@ -106,6 +110,7 @@ class ResourceWorkshopServiceTest {
             memoryRetrievalService,
             metaReflectionService,
             resourceFeedbackRepository,
+            eventPublisher,
             objectMapper);
 
     when(coursePackRepository.findKcs(eq(43L), eq(null)))
@@ -160,7 +165,7 @@ class ResourceWorkshopServiceTest {
   }
 
   @Test
-  void createPersistsResourceAndPublishesEvent() {
+  void createPersistsResourceWithoutMasteryReward() {
     when(graphClient.produce(any())).thenReturn(successResponse());
 
     ResourceCreateResponse response =
@@ -169,8 +174,9 @@ class ResourceWorkshopServiceTest {
     assertThat(response.runId()).isEqualTo(42L);
     assertThat(response.resourceId()).isEqualTo(7L);
     assertThat(response.status()).isEqualTo("SUCCESS");
-    verify(masteryEvaluator, times(1))
+    verify(masteryEvaluator, Mockito.never())
         .applyEvent(eq(1L), eq("PY43-KC-001"), eq(MasterySource.RESOURCE_READ), any(), anyString());
+    verify(eventPublisher, Mockito.never()).publishEvent(any(LearningEvent.ResourceConsumed.class));
   }
 
   @Test
@@ -205,15 +211,35 @@ class ResourceWorkshopServiceTest {
   }
 
   @Test
-  void createCapsMasteryRewardWhenDailyAlreadyMaxed() {
-    when(graphClient.produce(any())).thenReturn(successResponse());
+  void consumePublishesResourceConsumedWithCappedDelta() {
+    when(resourceRepository.findById(1L, 7L)).thenReturn(Optional.of(resource()));
+    when(resourceRepository.sumMasteryRewardsToday(anyLong(), anyString(), any()))
+        .thenReturn(new BigDecimal("0.12"));
+
+    var response = service.consume(1L, 7L);
+
+    assertThat(response.resourceId()).isEqualTo(7L);
+    assertThat(response.kcCodes()).containsExactly("PY43-KC-001");
+    assertThat(response.nextAction()).isEqualTo("micro_check");
+    ArgumentCaptor<LearningEvent.ResourceConsumed> captor =
+        ArgumentCaptor.forClass(LearningEvent.ResourceConsumed.class);
+    verify(eventPublisher).publishEvent(captor.capture());
+    assertThat(captor.getValue().delta()).isEqualByComparingTo("0.03");
+    assertThat(captor.getValue().resourceKind()).isEqualTo("HANDOUT");
+  }
+
+  @Test
+  void consumeStillPublishesEventWithZeroDeltaWhenDailyCapReached() {
+    when(resourceRepository.findById(1L, 7L)).thenReturn(Optional.of(resource()));
     when(resourceRepository.sumMasteryRewardsToday(anyLong(), anyString(), any()))
         .thenReturn(new BigDecimal("0.15"));
 
-    service.create(1L, new ResourceCreateRequest(List.of("PY43-KC-001"), ResourceType.HANDOUT, null));
+    service.consume(1L, 7L);
 
-    verify(masteryEvaluator, Mockito.never())
-        .applyEvent(anyLong(), anyString(), eq(MasterySource.RESOURCE_READ), any(), anyString());
+    ArgumentCaptor<LearningEvent.ResourceConsumed> captor =
+        ArgumentCaptor.forClass(LearningEvent.ResourceConsumed.class);
+    verify(eventPublisher).publishEvent(captor.capture());
+    assertThat(captor.getValue().delta()).isEqualByComparingTo(BigDecimal.ZERO);
   }
 
   @Test
@@ -233,6 +259,7 @@ class ResourceWorkshopServiceTest {
             memoryRetrievalService,
             metaReflectionService,
             resourceFeedbackRepository,
+            eventPublisher,
             objectMapper);
     when(graphClient.produce(any())).thenReturn(successResponse());
     when(resourceRepository.countCreatedAfter(anyLong(), any())).thenReturn(5);
@@ -345,7 +372,7 @@ class ResourceWorkshopServiceTest {
     assertThat(response.status()).isEqualTo("SUCCESS");
     verify(resourceRepository, times(1))
         .insert(anyLong(), anyLong(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
-    verify(masteryEvaluator, times(1))
+    verify(masteryEvaluator, Mockito.never())
         .applyEvent(eq(1L), eq("PY43-KC-001"), eq(MasterySource.RESOURCE_READ), any(), anyString());
   }
 
@@ -458,6 +485,10 @@ class ResourceWorkshopServiceTest {
         ResourceFeedbackStatus.NONE,
         null,
         OffsetDateTime.now());
+  }
+
+  private LearningResourceDto resource() {
+    return feedbackResourceDto();
   }
 
   private ResourceProduceResponseDto successResponse() {

@@ -1,5 +1,10 @@
 import { http } from './http';
 import type { WorkshopResourceType } from './dto/Workshop';
+import type {
+  WorkshopCapabilityNamespace,
+  WorkshopToolRouteSource,
+  WorkshopRenderMode,
+} from '@/components/workshop/toolRouting';
 
 // 百晓工坊「意图路由」前端契约。后端 POST /api/intent/route（Java 代理 → Python IntentRouterAgent），
 // 单次分类（非流式）：把一句话判定成该调用的工具并锚定 KC，前端据此分派到既有导师 / 工坊 SSE 管线。
@@ -62,6 +67,10 @@ export interface IntentRouteRequest {
   sessionCorrections?: IntentCorrectionRef[];
   /** 路由范围：考核模式下收窄为 quiz 工具集（ASK/REVIEW）。 */
   scope?: 'default' | 'quiz';
+  /** 触发来源：普通输入、slash、能力启动器或上下文建议。 */
+  source?: WorkshopToolRouteSource;
+  /** 能力启动器选择的 6 类分组；仅作为路由候选空间 hint，不等同于 forcedIntent。 */
+  capabilityNamespace?: WorkshopCapabilityNamespace;
 }
 
 export interface IntentRouteResponse {
@@ -74,6 +83,19 @@ export interface IntentRouteResponse {
   target: string;
   /** 组合意图的次级动作（如「讲完再出题」），可空。 */
   secondaryIntent: IntentKind | null;
+  namespace: WorkshopCapabilityNamespace;
+  candidateIntents: IntentKind[];
+  needsClarification: boolean;
+  clarificationPrompt: string;
+  riskClass: 'read_only' | 'navigational' | 'generative';
+  renderMode: WorkshopRenderMode;
+  reasonCode:
+    | 'explicit_command'
+    | 'contextual_match'
+    | 'missing_required_context'
+    | 'multi_intent'
+    | 'safety_constrained'
+    | 'fallback';
 }
 
 const RESOURCE_INTENTS: ReadonlySet<IntentKind> = new Set<IntentKind>([

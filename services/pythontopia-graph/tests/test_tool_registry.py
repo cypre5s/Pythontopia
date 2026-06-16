@@ -67,6 +67,16 @@ def test_tool_catalog_payload_fields_complete() -> None:
             "costClass",
             "scopes",
             "version",
+            "namespace",
+            "capabilityLabel",
+            "renderer",
+            "readOnly",
+            "destructive",
+            "openWorld",
+            "idempotent",
+            "visibility",
+            "invocationLabel",
+            "completionLabel",
         }
         assert isinstance(entry["zhLabel"], str) and entry["zhLabel"]
         assert isinstance(entry["desc"], str) and entry["desc"]
@@ -76,6 +86,35 @@ def test_tool_catalog_payload_fields_complete() -> None:
         assert entry["costClass"] in COST_CLASSES
         assert isinstance(entry["scopes"], list) and "default" in entry["scopes"]
         assert isinstance(entry["version"], int) and entry["version"] >= 1
+        assert entry["namespace"] in {"ask", "quiz", "make", "practice", "plan", "find"}
+        assert isinstance(entry["capabilityLabel"], str) and entry["capabilityLabel"]
+        assert entry["visibility"] in {"default_hidden", "default_visible", "debug_only"}
+        assert isinstance(entry["invocationLabel"], str) and entry["invocationLabel"]
+        assert isinstance(entry["completionLabel"], str) and entry["completionLabel"]
+
+
+def test_capability_groups_cover_all_16_tools() -> None:
+    """16 个内部意图必须被稳定映射到 6 个学生可见能力组。"""
+    payload = tool_catalog_payload()
+    by_name = {str(tool["name"]): tool for tool in payload}
+
+    assert set(by_name) == set(ALL_TOOL_NAMES)
+    assert by_name["ASK"]["namespace"] == "ask"
+    assert by_name["EXPLAIN_CODE"]["namespace"] == "ask"
+    assert by_name["FIX_BUG"]["namespace"] == "ask"
+    assert by_name["ASKME"]["namespace"] == "quiz"
+    assert by_name["REVIEW"]["namespace"] == "quiz"
+    assert by_name["HANDOUT"]["namespace"] == "make"
+    assert by_name["MINDMAP"]["namespace"] == "make"
+    assert by_name["READING"]["namespace"] == "make"
+    assert by_name["STORYBOARD"]["namespace"] == "make"
+    assert by_name["PRACTICE"]["namespace"] == "practice"
+    assert by_name["CODE_LAB"]["namespace"] == "practice"
+    assert by_name["PLAN"]["namespace"] == "plan"
+    assert by_name["PROGRESS"]["namespace"] == "plan"
+    assert by_name["MY_STUDY"]["namespace"] == "plan"
+    assert by_name["VIDEO"]["namespace"] == "find"
+    assert by_name["NAVIGATE"]["namespace"] == "find"
 
 
 def test_navigate_targets_constant() -> None:

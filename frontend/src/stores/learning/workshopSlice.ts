@@ -1,5 +1,6 @@
 import { ref } from 'vue';
 import {
+  consumeWorkshopResource,
   createWorkshopResource,
   getWorkshopResource,
   listWorkshopResources,
@@ -8,6 +9,7 @@ import {
 import type {
   WorkshopCreateRequest,
   WorkshopCreateResponse,
+  WorkshopConsumptionResponse,
   WorkshopFeedbackRequest,
   WorkshopResourceDto,
   WorkshopResourceListItemDto,
@@ -24,6 +26,7 @@ export interface WorkshopFilters {
 export interface ResourcesState {
   list: WorkshopResourceListItemDto[];
   current: WorkshopResourceDto | null;
+  currentConsumption: WorkshopConsumptionResponse | null;
   filters: WorkshopFilters;
   phase: WorkshopRunPhase;
   lastError: string | null;
@@ -35,6 +38,7 @@ export function createWorkshopSlice() {
   const resources = ref<ResourcesState>({
     list: [],
     current: null,
+    currentConsumption: null,
     filters: { type: null, kcCode: null },
     phase: 'idle',
     lastError: null,
@@ -49,7 +53,7 @@ export function createWorkshopSlice() {
         type?: WorkshopResourceType;
         kcCode?: string;
         limit: number;
-      } = { limit: 30 };
+      } = { limit: 100 }; // 放宽上限：避免新生成的讲义因超过 30 条而看不到（书房应收齐所有产物）。
       if (filters.type) {
         query.type = filters.type;
       }
@@ -83,10 +87,19 @@ export function createWorkshopSlice() {
     try {
       const detail = await getWorkshopResource(id);
       resources.value.current = detail;
+      resources.value.currentConsumption = null;
       return detail;
     } finally {
       resources.value.loading = false;
     }
+  }
+
+  async function consumeResource(id: number): Promise<WorkshopConsumptionResponse> {
+    const response = await consumeWorkshopResource(id);
+    if (resources.value.current && resources.value.current.id === id) {
+      resources.value.currentConsumption = response;
+    }
+    return response;
   }
 
   async function giveResourceFeedback(id: number, request: WorkshopFeedbackRequest): Promise<void> {
@@ -120,6 +133,7 @@ export function createWorkshopSlice() {
     loadResources,
     createResource,
     openResource,
+    consumeResource,
     giveResourceFeedback,
     setResourceFilter,
     resetResourcePhase,

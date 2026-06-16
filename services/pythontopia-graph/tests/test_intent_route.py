@@ -55,6 +55,12 @@ def test_intent_route_returns_200_and_shape() -> None:
     # R-16 响应契约：target / secondary_intent 始终在线（snake_case）。
     assert data["target"] == ""
     assert data["secondary_intent"] is None
+    assert data["namespace"] == "make"
+    assert data["candidate_intents"] == ["HANDOUT", "MINDMAP", "READING", "STORYBOARD"]
+    assert data["needs_clarification"] is False
+    assert data["risk_class"] == "generative"
+    assert data["render_mode"] == "resource"
+    assert data["reason_code"] in {"explicit_command", "contextual_match", "fallback"}
 
     del app.state.llm_provider
 
@@ -114,6 +120,109 @@ def test_intent_route_navigate_returns_target() -> None:
     data = response.json()
     assert data["intent"] == "NAVIGATE"
     assert data["target"] == "arena"
+    assert data["namespace"] == "find"
+    assert data["render_mode"] == "navigation"
+    assert data["risk_class"] == "navigational"
+
+    del app.state.llm_provider
+
+
+def test_intent_route_returns_structured_route_plan_fields() -> None:
+    app.state.llm_provider = StubProvider(
+        {"intent": "PRACTICE", "kc_codes": ["PY43-KC-012"], "confidence": 0.88}
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/agents/intent/route",
+        json={
+            "message": "出几道循环题",
+            "course_kcs": [{"code": "PY43-KC-012", "name": "循环"}],
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["intent"] == "PRACTICE"
+    assert data["namespace"] == "practice"
+    assert data["candidate_intents"] == ["PRACTICE", "CODE_LAB"]
+    assert data["needs_clarification"] is False
+    assert data["clarification_prompt"] == ""
+    assert data["risk_class"] == "generative"
+    assert data["render_mode"] == "practice"
+    assert data["reason_code"] in {"explicit_command", "contextual_match", "fallback"}
+
+    del app.state.llm_provider
+
+
+def test_capability_launcher_uses_namespace_as_candidate_space_not_primary_intent() -> None:
+    """能力组是候选空间：+生成资料 后仍应按文本选组内具体工具。"""
+    app.state.llm_provider = StubProvider(None)
+    client = TestClient(app)
+
+    response = client.post(
+        "/agents/intent/route",
+        json={
+            "message": "循环思维导图",
+            "course_kcs": [{"code": "PY43-KC-012", "name": "循环"}],
+            "source": "capability_launcher",
+            "capability_namespace": "make",
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["intent"] == "MINDMAP"
+    assert data["namespace"] == "make"
+    assert data["candidate_intents"] == ["HANDOUT", "MINDMAP", "READING", "STORYBOARD"]
+
+    del app.state.llm_provider
+
+
+def test_capability_launcher_defaults_to_namespace_primary_when_text_is_ambiguous() -> None:
+    """能力组可消除歧义：+练一练 后只说主题时，默认组内主工具。"""
+    app.state.llm_provider = StubProvider(None)
+    client = TestClient(app)
+
+    response = client.post(
+        "/agents/intent/route",
+        json={
+            "message": "循环",
+            "course_kcs": [{"code": "PY43-KC-012", "name": "循环"}],
+            "source": "capability_launcher",
+            "capability_namespace": "practice",
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["intent"] == "PRACTICE"
+    assert data["namespace"] == "practice"
+    assert data["candidate_intents"] == ["PRACTICE", "CODE_LAB"]
+    assert data["needs_clarification"] is False
+
+    del app.state.llm_provider
+
+
+def test_intent_route_clarifies_low_confidence_without_tool_call() -> None:
+    app.state.llm_provider = StubProvider(
+        {"intent": "ASK", "confidence": 0.32, "reason": "请求过于模糊"}
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/agents/intent/route",
+        json={"message": "帮我弄一下", "course_kcs": []},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["intent"] == "ASK"
+    assert data["needs_clarification"] is True
+    assert data["render_mode"] == "clarification"
+    assert data["candidate_intents"]
+    assert data["clarification_prompt"]
+    assert data["reason_code"] == "missing_required_context"
 
     del app.state.llm_provider
 

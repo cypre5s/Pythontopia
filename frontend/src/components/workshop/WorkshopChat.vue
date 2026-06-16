@@ -738,7 +738,12 @@ async function onSubmit(payload: ComposerSubmitPayload): Promise<void> {
   if (!payload.forcedIntent) {
     const parsed = parseLeadingSlashCommand(payload.text);
     if (parsed) {
-      payload = { ...payload, forcedIntent: parsed.intent, text: parsed.text };
+      payload = {
+        ...payload,
+        forcedIntent: parsed.intent,
+        source: 'slash_command',
+        text: parsed.text,
+      };
     }
   }
 
@@ -797,7 +802,11 @@ async function onSubmit(payload: ComposerSubmitPayload): Promise<void> {
         manualKcCodes: payload.manualKcCodes,
         courseKcs: courseKcs.value,
         scope: quiz.value ? 'quiz' : 'default',
+        source: payload.source ?? 'composer_text',
       };
+      if (payload.source === 'capability_launcher' && payload.capabilityNamespace) {
+        req.capabilityNamespace = payload.capabilityNamespace;
+      }
       if (recentTurns.length > 0) req.recentTurns = recentTurns;
       if (last) {
         req.lastIntent = last.intent;

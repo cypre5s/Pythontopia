@@ -30,6 +30,7 @@ from pythontopia_graph.tools.registry import (
     ALL_TOOL_NAMES,
     NAVIGATE_TARGETS,
     TOOLS,
+    ToolSpec,
     intent_catalog_lines,
     tools_for_scope,
 )
@@ -143,6 +144,17 @@ _MAX_KC = 3
 _LLM_TIMEOUT_S = 20.0
 _LLM_MAX_RETRIES = 1
 
+# `+` 能力启动器的组内默认工具。注意：这只是文本无组内明确信号时的兜底，
+# 不是前端直接强制 intent；组内具体工具仍由路由器按文本/上下文选择。
+_PRIMARY_INTENT_BY_NAMESPACE: dict[str, str] = {
+    "ask": "ASK",
+    "quiz": "ASKME",
+    "make": "HANDOUT",
+    "practice": "PRACTICE",
+    "plan": "PLAN",
+    "find": "VIDEO",
+}
+
 
 def _strip_json_fence(text: str) -> str:
     """剥离可选的 ```json … ``` 围栏后再 json.loads。"""
@@ -207,9 +219,25 @@ class IntentRouterAgent:
         kc_codes = self._merge_kcs(req, allowed, suggested)
         focus = self._clean_text(data.get("focus_hint")) or req.message.strip()[:120]
 
+        before_capability = intent
+        intent, capability_note = self._clamp_to_capability(intent, req)
+        if capability_note:
+            reason = f"{reason}；{capability_note}" if reason else capability_note
+        if intent != before_capability:
+            target_raw = ""
+            secondary_raw = None
+
         intent, scope_note = self._clamp_to_scope(intent, req.scope)
         if scope_note:
             reason = f"{reason}；{scope_note}" if reason else scope_note
+
+        metadata = self._route_metadata(
+            intent=intent,
+            confidence=confidence,
+            req=req,
+            reason=reason,
+            secondary_intent=self._coerce_secondary(secondary_raw, intent, req.scope),
+        )
 
         return IntentRouteResponse(
             intent=intent,  # type: ignore[arg-type]  # 已校验 ∈ ALL_TOOL_NAMES，pydantic 二次校验
@@ -218,7 +246,14 @@ class IntentRouterAgent:
             confidence=confidence,
             reason=reason,
             target=self._coerce_target(intent, target_raw),
-            secondary_intent=self._coerce_secondary(secondary_raw, intent, req.scope),
+            secondary_intent=metadata["secondary_intent"],
+            namespace=metadata["namespace"],
+            candidate_intents=metadata["candidate_intents"],
+            needs_clarification=metadata["needs_clarification"],
+            clarification_prompt=metadata["clarification_prompt"],
+            risk_class=metadata["risk_class"],
+            render_mode=metadata["render_mode"],
+            reason_code=metadata["reason_code"],
         )
 
     # ── 确定性预判 ──
@@ -261,29 +296,48 @@ class IntentRouterAgent:
         intent = ""
         target = ""
         reason = "关键词兜底判定"
+        confidence = 0.4
+        allowed_by_capability = set(cls._capability_candidate_intents(req))
+
+        def allowed(candidate: str) -> bool:
+            return not allowed_by_capability or candidate in allowed_by_capability
 
         navigate_target = cls._navigate_target(message)
-        if navigate_target:
+        if navigate_target and allowed("NAVIGATE"):
             intent, target = "NAVIGATE", navigate_target
             reason = "关键词兜底判定：带路词+地标"
+            confidence = 0.8
         if not intent:
             for candidate, keywords in _INTENT_KEYWORDS:
+                if not allowed(candidate):
+                    continue
                 if any(kw in message or kw in lowered for kw in keywords):
                     intent = candidate
+                    confidence = 0.78
                     break
-        if not intent and any(signal in message for signal in _REPHRASE_SIGNALS):
+        if not intent and allowed("ASK") and any(signal in message for signal in _REPHRASE_SIGNALS):
             intent = "ASK"
             reason = "指代消解：换个方式再讲，沿用上轮知识点"
+            confidence = 0.78
         if not intent:
             last_intent = req.last_intent.strip().upper()
-            if last_intent in TOOLS and any(s in message for s in _CONTINUE_SIGNALS):
+            if last_intent in TOOLS and allowed(last_intent) and any(s in message for s in _CONTINUE_SIGNALS):
                 intent = last_intent
                 reason = f"指代消解：接续上轮意图 {last_intent}"
-        if not intent and any(signal in message for signal in _FRUSTRATION_SIGNALS):
+                confidence = 0.78
+        if not intent and allowed("REVIEW") and any(signal in message for signal in _FRUSTRATION_SIGNALS):
             intent = "REVIEW"
             reason = "情绪信号：挫败语气且无其它明确诉求，倾斜复盘巩固"
-        if not intent and any(kw in message or kw in lowered for kw in _ASK_KEYWORDS):
+            confidence = 0.78
+        if not intent and allowed("ASK") and any(kw in message or kw in lowered for kw in _ASK_KEYWORDS):
             intent = "ASK"
+            confidence = 0.76
+        if not intent and allowed_by_capability:
+            # 学生点了 `+` 能力组但文本只有主题词（如「循环」）：用组内主工具消歧，
+            # 仍保留 route plan 的 candidate_intents 供前端展示/纠错。
+            intent = cls._primary_intent_for_namespace(req.capability_namespace or "", req.scope)
+            reason = f"能力组 hint：{req.capability_namespace}，文本无组内明确工具，使用组内默认工具"
+            confidence = 0.76
         if not intent:
             # 默认兜底：答疑（R-16 起不再默认生成讲义，生成成本高且更易答非所问）。
             intent = "ASK"
@@ -291,7 +345,7 @@ class IntentRouterAgent:
         return {
             "intent": intent,
             "kc_codes": cls._anaphora_kcs(req),
-            "confidence": 0.4,
+            "confidence": confidence,
             "reason": reason,
             "target": target,
             "secondary_intent": None,
@@ -423,6 +477,17 @@ class IntentRouterAgent:
                     "content": "本会话纠错记忆（强提示，类似表述优先按纠正后的意图）：\n" + corrections,
                 }
             )
+        capability_candidates = self._capability_candidate_intents(req)
+        if capability_candidates:
+            messages.append(
+                {
+                    "role": "system",
+                    "content": "学生通过 + 能力面板选择了能力组 "
+                    f"{req.capability_namespace}。这只是候选空间 hint，不是固定工具；"
+                    "请只在这些组内工具中按学生文本选择最合适的一项："
+                    + "|".join(capability_candidates),
+                }
+            )
         messages.append({"role": "user", "content": req.message})
         return messages
 
@@ -449,6 +514,35 @@ class IntentRouterAgent:
             return intent, ""
         return "ASK", "考核模式下工具收缩，已回退为答疑"
 
+    @classmethod
+    def _clamp_to_capability(
+        cls, intent: str, req: IntentRouteRequest
+    ) -> tuple[str, str]:
+        """能力启动器收缩：最终意图必须落在学生选择的能力组候选中。
+
+        这不是把 `+` 当强制 primary intent；只有当 LLM/兜底跑到组外工具时才收缩回组内默认工具。
+        """
+        candidates = cls._capability_candidate_intents(req)
+        if not candidates or intent in candidates:
+            return intent, ""
+        primary = cls._primary_intent_for_namespace(req.capability_namespace or "", req.scope)
+        return primary, f"能力组 {req.capability_namespace} 已收缩候选工具，回退为 {primary}"
+
+    @classmethod
+    def _capability_candidate_intents(cls, req: IntentRouteRequest) -> list[str]:
+        namespace = (req.capability_namespace or "").strip()
+        if req.source != "capability_launcher" or not namespace:
+            return []
+        return cls._candidate_intents(namespace, req.scope)
+
+    @classmethod
+    def _primary_intent_for_namespace(cls, namespace: str, scope: str) -> str:
+        candidates = cls._candidate_intents(namespace, scope)
+        configured = _PRIMARY_INTENT_BY_NAMESPACE.get(namespace)
+        if configured and configured in candidates:
+            return configured
+        return candidates[0] if candidates else "ASK"
+
     @staticmethod
     def _coerce_target(intent: str, raw: Any) -> str:
         """target 仅 NAVIGATE 保留，且必须 ∈ NAVIGATE_TARGETS，否则清空。"""
@@ -465,6 +559,117 @@ class IntentRouterAgent:
             return None
         scope_names = {spec.name for spec in tools_for_scope(scope)}
         return secondary if secondary in scope_names else None
+
+    # ── route-plan 治理元数据 ──
+
+    def _route_metadata(
+        self,
+        intent: str,
+        confidence: float,
+        req: IntentRouteRequest,
+        reason: str,
+        secondary_intent: str | None,
+    ) -> dict[str, Any]:
+        spec = TOOLS[intent]
+        namespace = spec.namespace
+        candidates = self._candidate_intents(namespace, req.scope)
+        needs_clarification = self._needs_clarification(confidence, req.source)
+        reason_code = self._reason_code(
+            confidence=confidence,
+            source=req.source,
+            reason=reason,
+            secondary_intent=secondary_intent,
+            needs_clarification=needs_clarification,
+            message=req.message,
+        )
+        return {
+            "secondary_intent": secondary_intent,
+            "namespace": namespace,
+            "candidate_intents": candidates,
+            "needs_clarification": needs_clarification,
+            "clarification_prompt": self._clarification_prompt(intent, req)
+            if needs_clarification
+            else "",
+            "risk_class": spec.risk_class,
+            "render_mode": "clarification"
+            if needs_clarification
+            else self._render_mode(intent, spec),
+            "reason_code": reason_code,
+        }
+
+    @staticmethod
+    def _candidate_intents(namespace: str, scope: str) -> list[str]:
+        allowed = {spec.name for spec in tools_for_scope(scope)}
+        if scope == "quiz":
+            allowed.add("ASKME")
+        candidates = [
+            spec.name
+            for spec in TOOLS.values()
+            if spec.namespace == namespace and spec.name in allowed
+        ]
+        return candidates[:5] or ["ASK"]
+
+    @staticmethod
+    def _needs_clarification(confidence: float, source: str) -> bool:
+        if confidence < 0.45:
+            return True
+        return (
+            source == "composer_text"
+            and confidence < 0.75
+            and source not in {"slash_command", "capability_launcher"}
+        )
+
+    @staticmethod
+    def _clarification_prompt(intent: str, req: IntentRouteRequest) -> str:
+        if intent in {"EXPLAIN_CODE", "FIX_BUG"}:
+            return "把代码或报错贴给我，我再继续帮你看。"
+        if intent in RESOURCE_INTENTS:
+            return "你想围绕哪个知识点或主题来生成？"
+        if intent == "NAVIGATE":
+            return "你想去图书馆、闯关塔、错题矿洞，还是回小镇？"
+        return "你想问概念、生成资料、练习，还是查看学习进度？"
+
+    @staticmethod
+    def _route_risk_class(spec: ToolSpec) -> str:
+        return spec.risk_class
+
+    @staticmethod
+    def _render_mode(intent: str, spec: ToolSpec) -> str:
+        if intent in {"ASK", "ASKME", "EXPLAIN_CODE", "FIX_BUG", "REVIEW"}:
+            return "answer"
+        if intent in {"HANDOUT", "MINDMAP", "READING", "STORYBOARD"}:
+            return "resource"
+        if intent in {"PRACTICE", "CODE_LAB"}:
+            return "practice"
+        if intent == "PLAN":
+            return "plan"
+        if intent == "PROGRESS":
+            return "progress"
+        if intent == "NAVIGATE":
+            return "navigation"
+        return "resource" if spec.renderer == "resource" else "answer"
+
+    @staticmethod
+    def _reason_code(
+        confidence: float,
+        source: str,
+        reason: str,
+        secondary_intent: str | None,
+        needs_clarification: bool,
+        message: str,
+    ) -> str:
+        lowered = message.lower()
+        if any(token in lowered for token in ("hidden test", "system prompt", "完整答案", "隐藏测试", "忽略规则")):
+            return "safety_constrained"
+        if needs_clarification or confidence < 0.45:
+            return "missing_required_context"
+        if secondary_intent:
+            return "multi_intent"
+        if source in {"slash_command", "capability_launcher", "contextual_suggestion"}:
+            return "explicit_command"
+        if "兜底" in reason:
+            return "fallback"
+        return "contextual_match"
 
     # ── KC 锚定 ──
 

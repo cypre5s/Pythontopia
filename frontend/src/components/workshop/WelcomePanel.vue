@@ -3,40 +3,30 @@
  * WelcomePanel —— 百晓工坊欢迎屏（对话流为空时的首屏）。
  *
  * 顶部百晓立绘 + 标题「想学什么直接说」+ 副文案；
- * 中部 4 个快捷提问 chips（点击把完整文本 emit 给调用方代发）；
- * 底部「能力一览」折叠：按 SLASH_COMMANDS 的 group 字段聚合渲染 icon+label+hint
- * 小网格——按数组实际内容渲染，WP5 扩充新命令/新分组后本组件无需改动。
+ * 中部 3 个快捷提问 chips（点击把完整文本 emit 给调用方代发）；
+ * 能力入口默认折叠为单个按钮，点击后才展示 6 个学生可见能力组。
  */
-import { computed } from 'vue';
+import { ref } from 'vue';
 import WorkshopAvatar from '@/components/workshop/WorkshopAvatar.vue';
-import {
-  SLASH_COMMANDS,
-  type SlashCommandGroup,
-} from '@/composables/useSlashCommand';
+import { WORKSHOP_CAPABILITIES } from '@/components/workshop/capabilities';
 
 const emit = defineEmits<{ (e: 'quick', text: string): void }>();
 
-/** 快捷提问（完整文本原样上送，含 / 命令前缀）。 */
+/** 快捷提问（完整文本原样上送）。 */
 const QUICK_PROMPTS: readonly string[] = [
-  '什么是列表推导式？',
-  '/考考我 循环',
-  '出几道函数的练习',
-  '我学得怎么样？',
+  '我想学循环，先从哪里开始？',
+  '解释一下这段代码为什么这么写',
+  '出一道函数的小练习',
 ];
 
-// 按 group 聚合且保持命令表中的出现顺序（不依赖 useSlashCommand 内部未导出的分组序）。
-const groups = computed<SlashCommandGroup[]>(() => {
-  const out: SlashCommandGroup[] = [];
-  for (const cmd of SLASH_COMMANDS) {
-    const bucket = out.find((g) => g.group === cmd.group);
-    if (bucket) bucket.items.push(cmd);
-    else out.push({ group: cmd.group, items: [cmd] });
-  }
-  return out;
-});
+const capabilitiesOpen = ref(false);
 
 function onQuick(text: string): void {
   emit('quick', text);
+}
+
+function toggleCapabilities(): void {
+  capabilitiesOpen.value = !capabilitiesOpen.value;
 }
 </script>
 
@@ -64,39 +54,37 @@ function onQuick(text: string): void {
         {{ text }}
       </button>
     </div>
-    <details
+    <button
+      type="button"
+      class="welcome__capability-button"
+      data-testid="welcome-open-capabilities"
+      :aria-expanded="capabilitiesOpen"
+      @click="toggleCapabilities"
+    >
+      {{ capabilitiesOpen ? '收起能力' : '查看百晓能帮我做什么' }}
+    </button>
+    <div
+      v-if="capabilitiesOpen"
       class="welcome__abilities"
       data-testid="welcome-abilities"
     >
-      <summary class="welcome__abilities-summary">
-        能力一览
-      </summary>
-      <div
-        v-for="g in groups"
-        :key="g.group"
-        class="welcome__group"
+      <article
+        v-for="capability in WORKSHOP_CAPABILITIES"
+        :key="capability.namespace"
+        class="welcome__capability-card"
+        data-testid="welcome-capability-card"
       >
-        <p class="welcome__group-name">
-          {{ g.group }}
+        <p class="welcome__capability-label">
+          {{ capability.label }}
         </p>
-        <ul class="welcome__grid">
-          <li
-            v-for="cmd in g.items"
-            :key="cmd.intent"
-            class="welcome__cell"
-          >
-            <span
-              class="welcome__cell-icon"
-              aria-hidden="true"
-            >{{ cmd.icon }}</span>
-            <span class="welcome__cell-body">
-              <span class="welcome__cell-label">{{ cmd.label }}</span>
-              <span class="welcome__cell-hint">{{ cmd.hint }}</span>
-            </span>
-          </li>
-        </ul>
-      </div>
-    </details>
+        <p class="welcome__capability-desc">
+          {{ capability.description }}
+        </p>
+        <p class="welcome__capability-example">
+          例如：{{ capability.examples[0] }}
+        </p>
+      </article>
+    </div>
   </div>
 </template>
 
@@ -153,74 +141,51 @@ function onQuick(text: string): void {
   transform: translate(2px, 2px);
   box-shadow: none;
 }
+.welcome__capability-button {
+  margin-top: 10px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: #4f3514;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid rgba(140, 106, 35, 0.4);
+  cursor: pointer;
+}
+.welcome__capability-button:hover {
+  color: var(--pyt-color-text-primary);
+  border-bottom-color: #8c6a23;
+}
 .welcome__abilities {
   width: 100%;
   margin-top: 10px;
   font-size: 12px;
   text-align: left;
-}
-.welcome__abilities-summary {
-  text-align: center;
-  font-weight: 700;
-  font-size: 12px;
-  color: var(--pyt-color-text-hint);
-  cursor: pointer;
-  list-style: none;
-}
-.welcome__abilities-summary::-webkit-details-marker {
-  display: none;
-}
-.welcome__abilities-summary:hover {
-  color: var(--pyt-color-text-primary);
-}
-.welcome__group {
-  margin-top: 8px;
-}
-.welcome__group-name {
-  margin: 0 0 4px;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--pyt-color-text-muted);
-  letter-spacing: 0.5px;
-}
-.welcome__grid {
-  list-style: none;
-  margin: 0;
-  padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 4px;
-}
-.welcome__cell {
-  display: flex;
-  align-items: flex-start;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 6px;
-  padding: 5px 8px;
+}
+.welcome__capability-card {
+  padding: 8px 10px;
   background: #f5ecd4;
   border: 1px solid rgba(140, 106, 35, 0.45);
   border-radius: var(--pyt-radius-md);
 }
-.welcome__cell-icon {
-  flex: none;
-  width: 14px;
-  text-align: center;
+.welcome__capability-label {
+  margin: 0 0 4px;
+  font-size: 12px;
   font-weight: 700;
   color: #8c6a23;
 }
-.welcome__cell-body {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-}
-.welcome__cell-label {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--pyt-color-text-primary);
-}
-.welcome__cell-hint {
+.welcome__capability-desc,
+.welcome__capability-example {
+  margin: 0;
   font-size: 10px;
   line-height: 1.4;
   color: var(--pyt-color-text-muted);
+}
+.welcome__capability-example {
+  margin-top: 3px;
+  color: #6b4b19;
 }
 </style>

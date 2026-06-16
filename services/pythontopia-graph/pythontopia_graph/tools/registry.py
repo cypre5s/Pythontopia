@@ -26,6 +26,20 @@ ExecMode = Literal["tutor_sse", "workshop_sse", "orchestrator_sse", "frontend"]
 # 防止学生在被考核时跑去生成讲义逃避作答；退出考核由前端模式条控制）。
 Scope = Literal["default", "quiz"]
 
+CapabilityNamespace = Literal["ask", "quiz", "make", "practice", "plan", "find"]
+Renderer = Literal[
+    "text",
+    "resource",
+    "practice",
+    "code_lab",
+    "plan",
+    "progress",
+    "navigation",
+    "video",
+    "study_space",
+]
+Visibility = Literal["default_hidden", "default_visible", "debug_only"]
+
 
 @dataclass(frozen=True)
 class ToolSpec:
@@ -45,6 +59,16 @@ class ToolSpec:
     fallback: str | None
     scopes: tuple[Scope, ...] = ("default",)
     version: int = 1
+    namespace: CapabilityNamespace = "ask"
+    capability_label: str = "问一问"
+    renderer: Renderer = "text"
+    read_only: bool = False
+    destructive: bool = False
+    open_world: bool = False
+    idempotent: bool = True
+    visibility: Visibility = "default_hidden"
+    invocation_label: str = "处理中"
+    completion_label: str = "已完成"
 
 
 def _spec(  # noqa: PLR0913 - 声明式注册表，参数即文档
@@ -59,7 +83,18 @@ def _spec(  # noqa: PLR0913 - 声明式注册表，参数即文档
     max_retries: int = 0,
     fallback: str | None = None,
     scopes: tuple[Scope, ...] = ("default",),
+    namespace: CapabilityNamespace | None = None,
+    capability_label: str | None = None,
+    renderer: Renderer | None = None,
+    read_only: bool | None = None,
+    destructive: bool = False,
+    open_world: bool = False,
+    idempotent: bool | None = None,
+    visibility: Visibility = "default_hidden",
+    invocation_label: str | None = None,
+    completion_label: str | None = None,
 ) -> ToolSpec:
+    resolved_namespace, resolved_label = CAPABILITY_BY_TOOL[name]
     return ToolSpec(
         name=name,
         zh_label=zh_label,
@@ -72,7 +107,53 @@ def _spec(  # noqa: PLR0913 - 声明式注册表，参数即文档
         max_retries=max_retries,
         fallback=fallback,
         scopes=scopes,
+        namespace=namespace or resolved_namespace,
+        capability_label=capability_label or resolved_label,
+        renderer=renderer or RENDERER_BY_TOOL.get(name, "text"),
+        read_only=(exec_mode == "frontend" and risk_class == "read_only")
+        if read_only is None
+        else read_only,
+        destructive=destructive,
+        open_world=open_world,
+        idempotent=(exec_mode != "workshop_sse") if idempotent is None else idempotent,
+        visibility=visibility,
+        invocation_label=invocation_label or f"正在处理：{zh_label}",
+        completion_label=completion_label or f"{zh_label}已完成",
     )
+
+
+CAPABILITY_BY_TOOL: dict[str, tuple[CapabilityNamespace, str]] = {
+    "ASK": ("ask", "问一问"),
+    "EXPLAIN_CODE": ("ask", "问一问"),
+    "FIX_BUG": ("ask", "问一问"),
+    "ASKME": ("quiz", "考考我"),
+    "REVIEW": ("quiz", "考考我"),
+    "HANDOUT": ("make", "生成资料"),
+    "MINDMAP": ("make", "生成资料"),
+    "READING": ("make", "生成资料"),
+    "STORYBOARD": ("make", "生成资料"),
+    "PRACTICE": ("practice", "练一练"),
+    "CODE_LAB": ("practice", "练一练"),
+    "PLAN": ("plan", "规划学习"),
+    "PROGRESS": ("plan", "规划学习"),
+    "MY_STUDY": ("plan", "规划学习"),
+    "VIDEO": ("find", "找内容/带路"),
+    "NAVIGATE": ("find", "找内容/带路"),
+}
+
+RENDERER_BY_TOOL: dict[str, Renderer] = {
+    "VIDEO": "video",
+    "HANDOUT": "resource",
+    "MINDMAP": "resource",
+    "READING": "resource",
+    "STORYBOARD": "resource",
+    "PRACTICE": "practice",
+    "CODE_LAB": "code_lab",
+    "PLAN": "plan",
+    "PROGRESS": "progress",
+    "NAVIGATE": "navigation",
+    "MY_STUDY": "study_space",
+}
 
 
 # ── 16 工具注册表（9 既有 + 7 新增）。顺序即意图路由 prompt 中的呈现顺序。──
@@ -295,6 +376,16 @@ def tool_catalog_payload() -> list[dict[str, object]]:
             "costClass": spec.cost_class,
             "scopes": list(spec.scopes),
             "version": spec.version,
+            "namespace": spec.namespace,
+            "capabilityLabel": spec.capability_label,
+            "renderer": spec.renderer,
+            "readOnly": spec.read_only,
+            "destructive": spec.destructive,
+            "openWorld": spec.open_world,
+            "idempotent": spec.idempotent,
+            "visibility": spec.visibility,
+            "invocationLabel": spec.invocation_label,
+            "completionLabel": spec.completion_label,
         }
         for spec in TOOLS.values()
     ]

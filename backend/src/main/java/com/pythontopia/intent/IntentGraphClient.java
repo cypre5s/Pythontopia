@@ -26,6 +26,42 @@ import org.springframework.web.client.RestTemplate;
 public class IntentGraphClient {
 
   private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
+  private static final Map<String, String> NAMESPACE_BY_INTENT =
+      Map.ofEntries(
+          Map.entry("ASK", "ask"),
+          Map.entry("EXPLAIN_CODE", "ask"),
+          Map.entry("FIX_BUG", "ask"),
+          Map.entry("ASKME", "quiz"),
+          Map.entry("REVIEW", "quiz"),
+          Map.entry("HANDOUT", "make"),
+          Map.entry("MINDMAP", "make"),
+          Map.entry("READING", "make"),
+          Map.entry("STORYBOARD", "make"),
+          Map.entry("PRACTICE", "practice"),
+          Map.entry("CODE_LAB", "practice"),
+          Map.entry("PLAN", "plan"),
+          Map.entry("PROGRESS", "plan"),
+          Map.entry("MY_STUDY", "plan"),
+          Map.entry("VIDEO", "find"),
+          Map.entry("NAVIGATE", "find"));
+  private static final Map<String, String> RISK_CLASS_BY_INTENT =
+      Map.ofEntries(
+          Map.entry("VIDEO", "read_only"),
+          Map.entry("PROGRESS", "read_only"),
+          Map.entry("MY_STUDY", "read_only"),
+          Map.entry("REVIEW", "navigational"),
+          Map.entry("NAVIGATE", "navigational"));
+  private static final Map<String, String> RENDER_MODE_BY_INTENT =
+      Map.ofEntries(
+          Map.entry("HANDOUT", "resource"),
+          Map.entry("MINDMAP", "resource"),
+          Map.entry("READING", "resource"),
+          Map.entry("STORYBOARD", "resource"),
+          Map.entry("PRACTICE", "practice"),
+          Map.entry("CODE_LAB", "practice"),
+          Map.entry("PLAN", "plan"),
+          Map.entry("PROGRESS", "progress"),
+          Map.entry("NAVIGATE", "navigation"));
 
   private final RestTemplate restTemplate;
   private final GraphServiceProperties properties;
@@ -72,6 +108,14 @@ public class IntentGraphClient {
     body.put(
         "scope",
         request.scope() == null || request.scope().isBlank() ? "default" : request.scope());
+    body.put(
+        "source",
+        request.source() == null || request.source().isBlank()
+            ? "composer_text"
+            : request.source());
+    if (request.capabilityNamespace() != null && !request.capabilityNamespace().isBlank()) {
+      body.put("capability_namespace", request.capabilityNamespace());
+    }
     if (profileBrief != null && !profileBrief.isBlank()) {
       // graph 契约 profile_brief max_length=1000：超长截断，避免极端 tag 长度导致 422 断送路由。
       body.put(
@@ -98,18 +142,9 @@ public class IntentGraphClient {
 
     if (graph == null || graph.intent() == null) {
       // graph 异常兜底：回落到答疑，避免前端拿到 null intent。
-      return new IntentRouteResponse(
-          "ASK", List.of(), request.message(), 0.0, "graph 无响应", "", null);
+      return fallbackRouteResponse(request.message());
     }
-    return new IntentRouteResponse(
-        graph.intent(),
-        graph.kcCodes() != null ? graph.kcCodes() : List.of(),
-        graph.focusHint() != null ? graph.focusHint() : "",
-        graph.confidence(),
-        graph.reason() != null ? graph.reason() : "",
-        graph.target() != null ? graph.target() : "",
-        // 无次级意图时 graph 返回 null，保持 null 让前端按「无组合动作」处理。
-        graph.secondaryIntent());
+    return graphRouteResponse(graph);
   }
 
   private void setInternalToken(HttpHeaders headers) {
@@ -173,5 +208,61 @@ public class IntentGraphClient {
       payload.add(entry);
     }
     return payload;
+  }
+
+  private IntentRouteResponse fallbackRouteResponse(String message) {
+    return new IntentRouteResponse(
+        "ASK",
+        List.of(),
+        message,
+        0.0,
+        "graph 无响应",
+        "",
+        null,
+        "ask",
+        List.of("ASK"),
+        false,
+        "",
+        "generative",
+        "answer",
+        "graph_unavailable");
+  }
+
+  private IntentRouteResponse graphRouteResponse(IntentGraphResponse graph) {
+    String intent = graph.intent();
+    return new IntentRouteResponse(
+        intent,
+        graph.kcCodes() != null ? graph.kcCodes() : List.of(),
+        graph.focusHint() != null ? graph.focusHint() : "",
+        graph.confidence(),
+        graph.reason() != null ? graph.reason() : "",
+        graph.target() != null ? graph.target() : "",
+        // 无次级意图时 graph 返回 null，保持 null 让前端按「无组合动作」处理。
+        graph.secondaryIntent(),
+        nonBlank(graph.namespace(), namespaceFor(intent)),
+        graph.candidateIntents() != null && !graph.candidateIntents().isEmpty()
+            ? graph.candidateIntents()
+            : List.of(intent),
+        graph.needsClarification() != null && graph.needsClarification(),
+        graph.clarificationPrompt() != null ? graph.clarificationPrompt() : "",
+        nonBlank(graph.riskClass(), riskClassFor(intent)),
+        nonBlank(graph.renderMode(), renderModeFor(intent)),
+        nonBlank(graph.reasonCode(), "legacy_response"));
+  }
+
+  private String namespaceFor(String intent) {
+    return NAMESPACE_BY_INTENT.getOrDefault(intent, "ask");
+  }
+
+  private String riskClassFor(String intent) {
+    return RISK_CLASS_BY_INTENT.getOrDefault(intent, "generative");
+  }
+
+  private String renderModeFor(String intent) {
+    return RENDER_MODE_BY_INTENT.getOrDefault(intent, "answer");
+  }
+
+  private String nonBlank(String value, String fallback) {
+    return value == null || value.isBlank() ? fallback : value;
   }
 }

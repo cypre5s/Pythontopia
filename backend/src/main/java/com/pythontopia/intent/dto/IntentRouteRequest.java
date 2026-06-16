@@ -16,7 +16,9 @@ import java.util.List;
  * <p>R-16 多轮意图理解新增（契约见百晓深度优化蓝本 §0）：{@code recentTurns}（≤6 轮，时间正序）、
  * {@code lastIntent}/{@code lastKcCodes}（上轮已执行意图与 KC，指代消解锚点）、
  * {@code sessionCorrections}（≤3 条会话内纠错记忆）、{@code scope}（default/quiz，考核模式收缩工具集）。
- * 学生画像摘要 {@code profile_brief} 由后端 IntentService 注入，前端不传。
+ * 学生画像摘要 {@code profile_brief} 由后端 IntentService 注入，前端不传。{@code source} 标记本轮来自
+ * 自由输入、斜杠命令、能力启动器或上下文建议，用于 graph 决定是否需要澄清。{@code capabilityNamespace}
+ * 是能力启动器的 6 类分组 hint，只收缩候选工具空间，不等同于强制 primary intent。
  */
 public record IntentRouteRequest(
     @NotBlank @Size(max = 4000) String message,
@@ -28,7 +30,10 @@ public record IntentRouteRequest(
     @Size(max = 32) String lastIntent,
     @Size(max = 3) List<String> lastKcCodes,
     @Valid @Size(max = 3) List<Correction> sessionCorrections,
-    @Pattern(regexp = "default|quiz") String scope) {
+    @Pattern(regexp = "default|quiz") String scope,
+    @Pattern(regexp = "composer_text|slash_command|capability_launcher|contextual_suggestion")
+        String source,
+    @Pattern(regexp = "ask|quiz|make|practice|plan|find") String capabilityNamespace) {
 
   /** 课程 KC 目录条目：code 用于锚定，name 用于让 LLM 把语句主题映射到正确知识点。 */
   public record CourseKc(@NotBlank @Size(max = 64) String code, @Size(max = 200) String name) {}

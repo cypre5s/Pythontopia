@@ -27,11 +27,36 @@ class IntentServiceTest {
 
   private static IntentRouteRequest request() {
     return new IntentRouteRequest(
-        "讲讲 for 循环", List.of(), List.of(), null, List.of(), null, null, null, null, null);
+        "讲讲 for 循环",
+        List.of(),
+        List.of(),
+        null,
+        List.of(),
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null);
   }
 
   private static final IntentRouteResponse RESPONSE =
-      new IntentRouteResponse("ASK", List.of(), "for 循环", 0.8, "ok", "", null);
+      new IntentRouteResponse(
+          "ASK",
+          List.of(),
+          "for 循环",
+          0.8,
+          "ok",
+          "",
+          null,
+          "ask",
+          List.of("ASK"),
+          false,
+          "",
+          "generative",
+          "answer",
+          "contextual_match");
 
   @Test
   void studentRouteInjectsProfileBrief() {

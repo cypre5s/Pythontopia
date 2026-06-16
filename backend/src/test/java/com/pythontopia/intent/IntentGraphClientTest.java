@@ -19,8 +19,9 @@ import org.springframework.web.client.RestTemplate;
  *
  * <ul>
  *   <li>请求 camelCase → snake_case：recent_turns / last_intent / last_kc_codes /
- *       session_corrections / scope / profile_brief；可选字段为空时不写入 body，scope 缺省 default；
- *   <li>响应 snake_case → camelCase：target / secondary_intent 空安全映射（null→""/null 保持）；
+ *       session_corrections / scope / source / profile_brief；可选字段为空时不写入 body，scope 缺省
+ *       default、source 缺省 composer_text；
+ *   <li>响应 snake_case → camelCase：target / secondary_intent / route plan 空安全映射；
  *   <li>graph 无 intent 时兜底 ASK。
  * </ul>
  */
@@ -44,11 +45,14 @@ class IntentGraphClientTest {
         "PRACTICE",
         List.of("PY43-KC-007"),
         List.of(new IntentRouteRequest.Correction("不是想要这个", "MINDMAP")),
-        "quiz");
+        "quiz",
+        "capability_launcher",
+        "practice");
   }
 
   private static IntentRouteRequest minimalRequest() {
-    return new IntentRouteRequest("怎么去闯关塔", null, null, null, null, null, null, null, null, null);
+    return new IntentRouteRequest(
+        "怎么去闯关塔", null, null, null, null, null, null, null, null, null, null, null);
   }
 
   @Test
@@ -72,6 +76,8 @@ class IntentGraphClientTest {
             MockRestRequestMatchers.jsonPath("$.session_corrections[0].corrected_intent")
                 .value("MINDMAP"))
         .andExpect(MockRestRequestMatchers.jsonPath("$.scope").value("quiz"))
+        .andExpect(MockRestRequestMatchers.jsonPath("$.source").value("capability_launcher"))
+        .andExpect(MockRestRequestMatchers.jsonPath("$.capability_namespace").value("practice"))
         .andExpect(
             MockRestRequestMatchers.jsonPath("$.profile_brief").value("认知风格: visual; 情绪: 需鼓励"))
         .andRespond(
@@ -84,7 +90,14 @@ class IntentGraphClientTest {
                   "confidence": 0.86,
                   "reason": "沿用上轮意图",
                   "target": "",
-                  "secondary_intent": "MINDMAP"
+                  "secondary_intent": "MINDMAP",
+                  "namespace": "practice",
+                  "candidate_intents": ["PRACTICE", "CODE_LAB"],
+                  "needs_clarification": false,
+                  "clarification_prompt": "",
+                  "risk_class": "generative",
+                  "render_mode": "practice",
+                  "reason_code": "capability_continuation"
                 }
                 """,
                 MediaType.APPLICATION_JSON));
@@ -97,6 +110,13 @@ class IntentGraphClientTest {
     assertThat(response.confidence()).isEqualTo(0.86);
     assertThat(response.target()).isEmpty();
     assertThat(response.secondaryIntent()).isEqualTo("MINDMAP");
+    assertThat(response.namespace()).isEqualTo("practice");
+    assertThat(response.candidateIntents()).containsExactly("PRACTICE", "CODE_LAB");
+    assertThat(response.needsClarification()).isFalse();
+    assertThat(response.clarificationPrompt()).isEmpty();
+    assertThat(response.riskClass()).isEqualTo("generative");
+    assertThat(response.renderMode()).isEqualTo("practice");
+    assertThat(response.reasonCode()).isEqualTo("capability_continuation");
     server.verify(Duration.ofSeconds(2));
   }
 
@@ -111,6 +131,7 @@ class IntentGraphClientTest {
         .andExpect(MockRestRequestMatchers.jsonPath("$.session_corrections").doesNotExist())
         .andExpect(MockRestRequestMatchers.jsonPath("$.profile_brief").doesNotExist())
         .andExpect(MockRestRequestMatchers.jsonPath("$.scope").value("default"))
+        .andExpect(MockRestRequestMatchers.jsonPath("$.source").value("composer_text"))
         .andRespond(
             MockRestResponseCreators.withSuccess(
                 """
@@ -155,6 +176,13 @@ class IntentGraphClientTest {
     assertThat(response.reason()).isEmpty();
     assertThat(response.target()).isEmpty();
     assertThat(response.secondaryIntent()).isNull();
+    assertThat(response.namespace()).isEqualTo("ask");
+    assertThat(response.candidateIntents()).containsExactly("ASK");
+    assertThat(response.needsClarification()).isFalse();
+    assertThat(response.clarificationPrompt()).isEmpty();
+    assertThat(response.riskClass()).isEqualTo("generative");
+    assertThat(response.renderMode()).isEqualTo("answer");
+    assertThat(response.reasonCode()).isEqualTo("legacy_response");
     server.verify(Duration.ofSeconds(2));
   }
 
@@ -171,6 +199,12 @@ class IntentGraphClientTest {
     assertThat(response.reason()).isEqualTo("graph 无响应");
     assertThat(response.target()).isEmpty();
     assertThat(response.secondaryIntent()).isNull();
+    assertThat(response.namespace()).isEqualTo("ask");
+    assertThat(response.candidateIntents()).containsExactly("ASK");
+    assertThat(response.needsClarification()).isFalse();
+    assertThat(response.riskClass()).isEqualTo("generative");
+    assertThat(response.renderMode()).isEqualTo("answer");
+    assertThat(response.reasonCode()).isEqualTo("graph_unavailable");
     server.verify(Duration.ofSeconds(2));
   }
 }
