@@ -6,13 +6,18 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import time
 
 import pytest
 
+import pythontopia_graph.tools.harness as harness_mod
 from pythontopia_graph.tools.harness import (
     BudgetGuard,
+    _backoff_delay,
     breaker_for,
     harness_stats,
+    is_permanent_error,
     reset_harness_state,
     run_with_governance,
 )
@@ -268,3 +273,291 @@ async def test_harness_stats_aggregates_calls_and_avg_elapsed() -> None:
     assert entry["calls"] == 2
     assert entry["failures"] == 0
     assert entry["avgElapsedMs"] >= 0
+
+
+# ── A2：token 预算 ──
+
+
+@pytest.mark.asyncio
+async def test_budget_token_exhaustion_marks_budget_skipped() -> None:
+    """累计 token 达到/超过 max_tokens 后，后续 try_acquire 标 budget_skipped、factory 不跑。"""
+    guard = BudgetGuard(max_llm_calls=10, max_tokens=100)
+    calls = {"n": 0}
+
+    async def factory() -> str:
+        calls["n"] += 1
+        return "value"
+
+    first = await run_with_governance("t1", factory, timeout_s=1.0, budget=guard)
+    assert first.ok is True
+    assert calls["n"] == 1
+
+    guard.add_tokens(70, 50)  # 120 ≥ 100 → token 预算耗尽
+    assert guard.used_tokens == 120
+    assert guard.tokens_exhausted() is True
+
+    second = await run_with_governance("t2", factory, timeout_s=1.0, budget=guard)
+    assert second.ok is False
+    assert second.status == "budget_skipped"
+    assert calls["n"] == 1  # factory 未被二次调用
+    assert "t2" in guard.skipped
+
+
+def test_add_tokens_accumulates_and_clamps_negative() -> None:
+    guard = BudgetGuard(max_tokens=1000)
+    guard.add_tokens(10, 20)
+    guard.add_tokens(5)  # output 默认 0
+    guard.add_tokens(-3, -100)  # 负数按 0
+    assert guard.used_tokens == 35
+    assert guard.tokens_exhausted() is False
+
+
+def test_token_budget_disabled_when_max_tokens_none() -> None:
+    guard = BudgetGuard()  # max_tokens 默认 None → 不限
+    guard.add_tokens(10_000, 10_000)
+    assert guard.tokens_exhausted() is False
+    assert guard.try_acquire("anything") is True
+
+
+# ── A2：整轮 wall-clock 截止 ──
+
+
+@pytest.mark.asyncio
+async def test_wall_clock_deadline_exceeded_returns_structured() -> None:
+    """整轮墙钟超 max_wall_s 后，执行前直接 deadline_exceeded 返回，factory 不跑。"""
+    guard = BudgetGuard(max_wall_s=0.01)
+    guard.started_at = time.monotonic() - 1.0  # 模拟整轮已耗时 1s（免真实 sleep）
+    calls = {"n": 0}
+
+    async def factory() -> str:
+        calls["n"] += 1
+        return "value"
+
+    obs = await run_with_governance("late_tool", factory, timeout_s=1.0, budget=guard)
+
+    assert obs.ok is False
+    assert obs.status == "deadline_exceeded"
+    assert obs.attempts == 0
+    assert calls["n"] == 0
+    assert "late_tool" in guard.skipped
+
+
+@pytest.mark.asyncio
+async def test_wall_clock_within_deadline_executes_normally() -> None:
+    guard = BudgetGuard(max_wall_s=100.0)
+
+    async def factory() -> str:
+        return "ok"
+
+    obs = await run_with_governance("in_time", factory, timeout_s=1.0, budget=guard)
+
+    assert obs.ok is True
+    assert obs.status == "ok"
+    assert obs.value == "ok"
+
+
+def test_wall_clock_disabled_when_max_wall_s_none() -> None:
+    guard = BudgetGuard()  # max_wall_s 默认 None → 不限
+    guard.started_at = time.monotonic() - 10_000.0
+    assert guard.deadline_exceeded() is False
+
+
+# ── A5：错误分类（瞬时 vs 永久）──
+
+
+def test_is_permanent_error_classification() -> None:
+    # 通用异常仍按可重试（保留既有重试契约，不可误判为永久）。
+    assert is_permanent_error(ValueError("x")) is False
+    assert is_permanent_error(RuntimeError("x")) is False
+    assert is_permanent_error(KeyError("x")) is False
+    assert is_permanent_error(TimeoutError("x")) is False
+    assert is_permanent_error(asyncio.TimeoutError()) is False
+    assert is_permanent_error(ConnectionError("x")) is False
+
+    # 永久：校验 / 认证 / 授权语义（按类名 / 子串）。
+    class ValidationError(Exception):
+        pass
+
+    class AuthenticationError(Exception):
+        pass
+
+    class PermissionDeniedError(Exception):
+        pass
+
+    assert is_permanent_error(ValidationError("x")) is True
+    assert is_permanent_error(AuthenticationError("x")) is True
+    assert is_permanent_error(PermissionDeniedError("x")) is True
+    assert is_permanent_error(PermissionError("x")) is True
+
+    # HTTP：4xx 永久（408/425/429 除外），5xx 瞬时。
+    def http_error(code: int) -> Exception:
+        class _Resp:
+            status_code = code
+
+        class _HttpError(Exception):
+            response = _Resp()
+
+        return _HttpError(f"http {code}")
+
+    assert is_permanent_error(http_error(400)) is True
+    assert is_permanent_error(http_error(401)) is True
+    assert is_permanent_error(http_error(404)) is True
+    assert is_permanent_error(http_error(408)) is False
+    assert is_permanent_error(http_error(429)) is False
+    assert is_permanent_error(http_error(500)) is False
+    assert is_permanent_error(http_error(503)) is False
+
+
+@pytest.mark.asyncio
+async def test_permanent_error_not_retried_even_with_retry_budget() -> None:
+    """永久错误（ValidationError 语义）即便 max_retries>0 也只跑一次、status=error。"""
+
+    class ValidationError(Exception):
+        pass
+
+    calls = {"n": 0}
+
+    async def factory() -> str:
+        calls["n"] += 1
+        raise ValidationError("schema invalid")
+
+    obs = await run_with_governance(
+        "validate_tool", factory, timeout_s=1.0, max_retries=3
+    )
+
+    assert calls["n"] == 1  # 不重试
+    assert obs.attempts == 1
+    assert obs.ok is False
+    assert obs.status == "error"
+    assert obs.error_class == "ValidationError"
+
+
+@pytest.mark.asyncio
+async def test_permanent_error_skips_retry_but_still_honors_fallback() -> None:
+    """永久错误不重试，但既有降级语义保留：有 fallback 时仍优雅降级；且不污染熔断计数。"""
+
+    class AuthError(Exception):
+        pass
+
+    calls = {"n": 0}
+
+    async def factory() -> str:
+        calls["n"] += 1
+        raise AuthError("401 unauthorized")
+
+    async def fallback() -> str:
+        return "degraded"
+
+    obs = await run_with_governance(
+        "auth_tool",
+        factory,
+        timeout_s=1.0,
+        max_retries=5,
+        fallback=fallback,
+        breaker_key="auth_dep",
+    )
+
+    assert calls["n"] == 1  # 永久错误不重试
+    assert obs.ok is True
+    assert obs.status == "fallback"
+    assert obs.value == "degraded"
+    # 永久错误不计入熔断（非依赖健康信号）。
+    assert breaker_for("auth_dep").snapshot()["consecutiveFailures"] == 0
+
+
+@pytest.mark.asyncio
+async def test_transient_error_still_retries_with_backoff(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """瞬时错误（ConnectionError）维持既有重试：max_retries=2 → factory 跑 3 次。"""
+    monkeypatch.setattr(harness_mod, "_backoff_delay", lambda attempts: 0.0)
+    calls = {"n": 0}
+
+    async def factory() -> str:
+        calls["n"] += 1
+        raise ConnectionError("network down")
+
+    obs = await run_with_governance("net_tool", factory, timeout_s=1.0, max_retries=2)
+
+    assert calls["n"] == 3  # 首跑 + 2 次重试
+    assert obs.attempts == 3
+    assert obs.ok is False
+    assert obs.status == "error"
+    assert obs.error_class == "ConnectionError"
+
+
+def test_backoff_delay_stays_within_cap_and_nonneg() -> None:
+    """全抖动退避：恒落在 [0, cap]，抖动幅度不超过既有上限，且确有随机性。"""
+    for attempt in range(1, 9):
+        for _ in range(64):
+            delay = _backoff_delay(attempt)
+            assert 0.0 <= delay <= 4.0
+    samples = {round(_backoff_delay(3), 6) for _ in range(32)}
+    assert len(samples) > 1
+
+
+# ── §5.6：observability（OTel）防御性接线 ──
+
+
+def test_add_tokens_reports_to_otel(monkeypatch: pytest.MonkeyPatch) -> None:
+    recorded: list[tuple[int, int]] = []
+    monkeypatch.setattr(
+        harness_mod, "_otel_record_token_usage", lambda i, o: recorded.append((i, o))
+    )
+    guard = BudgetGuard()
+    guard.add_tokens(7, 3)
+    assert recorded == [(7, 3)]
+    assert guard.used_tokens == 10
+
+
+def test_add_tokens_swallows_otel_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    def boom(i: int, o: int) -> None:
+        raise RuntimeError("otel down")
+
+    monkeypatch.setattr(harness_mod, "_otel_record_token_usage", boom)
+    guard = BudgetGuard()
+    guard.add_tokens(4, 6)  # 观测上报失败绝不抛
+    assert guard.used_tokens == 10
+
+
+@pytest.mark.asyncio
+async def test_traced_tool_span_wraps_execution(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """span 在 factory 执行前 enter、执行后 exit（execute_tool span 包裹主体）。"""
+    events: list[str] = []
+
+    @contextlib.contextmanager
+    def spy_span(name: str):
+        events.append(f"enter:{name}")
+        try:
+            yield
+        finally:
+            events.append(f"exit:{name}")
+
+    monkeypatch.setattr(harness_mod, "_otel_traced_tool", spy_span)
+
+    async def factory() -> str:
+        events.append("body")
+        return "v"
+
+    obs = await run_with_governance("traced", factory, timeout_s=1.0)
+
+    assert obs.ok is True
+    assert events == ["enter:traced", "body", "exit:traced"]
+
+
+@pytest.mark.asyncio
+async def test_span_degrades_when_traced_tool_misbehaves(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """traced_tool 返回非上下文管理器（签名不符）时，_span 静默降级、主链路照常。"""
+    monkeypatch.setattr(harness_mod, "_otel_traced_tool", lambda name: object())
+
+    async def factory() -> str:
+        return "resilient"
+
+    obs = await run_with_governance("resilient_tool", factory, timeout_s=1.0)
+
+    assert obs.ok is True
+    assert obs.value == "resilient"
