@@ -8,7 +8,7 @@
  * - 基于学生画像作答（后端 learner_block 注入）+ 与百晓工坊联动（一键去工坊生成针对本题资源）；
  * - 防泄答：后端 prompt 硬约束不给可直接提交的完整答案。
  */
-import { computed, nextTick, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import MarkdownView from '@/components/common/MarkdownView.vue';
 import { useSseStream } from '@/composables/useSseStream';
@@ -38,6 +38,7 @@ const props = defineProps<{
   problemId: number;
   kcCodes: string[];
   submissionId?: number | null;
+  initialEventRequest?: { event: WorkflowEvent; nonce: number } | null;
 }>();
 
 const emit = defineEmits<{
@@ -61,6 +62,8 @@ const availableActions = ref<WorkflowActionDto[]>([]);
 const phase = ref<string>('READING');
 const chatInput = ref('');
 const bodyRef = ref<HTMLElement | null>(null);
+const loaded = ref(false);
+const lastInitialNonce = ref(0);
 
 const sse = useSseStream<WorkflowRunResultDto>('/api/tutor/workflow/runs');
 const running = computed(
@@ -103,6 +106,8 @@ async function load(): Promise<void> {
     cards.value = [];
   }
   availableActions.value = withAux(STARTER_ACTIONS);
+  loaded.value = true;
+  void consumeInitialRequest();
   scrollBottom();
 }
 
@@ -140,6 +145,22 @@ async function runEvent(event: WorkflowEvent, eventData?: Record<string, unknown
     toast.show(sse.error.value?.message ?? '导学助手暂时没响应，再试一次', 'error');
   }
 }
+
+async function consumeInitialRequest(): Promise<void> {
+  const request = props.initialEventRequest;
+  if (!loaded.value || !request || request.nonce === lastInitialNonce.value) return;
+  if (running.value) return;
+  lastInitialNonce.value = request.nonce;
+  await runEvent(request.event, eventDataFor(request.event));
+}
+
+watch(
+  () => props.initialEventRequest,
+  () => {
+    void consumeInitialRequest();
+  },
+  { deep: true },
+);
 
 function onAction(action: WorkflowActionDto): void {
   void runEvent(action.event, eventDataFor(action.event));

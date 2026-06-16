@@ -29,12 +29,21 @@ vi.mock('@/api/quests', () => ({
 vi.mock('@/api/classroomQuests', () => ({
   getMyClassroomQuests: vi.fn(),
 }));
+vi.mock('@/api/tutorWorkflow', () => ({
+  getActiveWorkflowSession: vi.fn(async () => ({
+    sessionKey: 'wf-test',
+    problemId: 476,
+    phase: 'READING',
+    seq: 0,
+    cards: [],
+  })),
+}));
 
 import { getPublicProblem } from '@/api/problems';
 import { createSubmission, getSubmission } from '@/api/submissions';
 import { getTodayQuests } from '@/api/quests';
 
-function mountPanel() {
+function mountPanel(options: { stubTutor?: boolean } = {}) {
   const router: Router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -45,6 +54,15 @@ function mountPanel() {
   return mount(TrainingPanel, {
     global: {
       plugins: [createPinia(), router],
+      stubs: options.stubTutor
+        ? {
+            TutorWorkflowPanel: {
+              props: ['problemId', 'kcCodes', 'submissionId', 'initialEventRequest'],
+              template:
+                '<div data-testid="stub-tutor-workflow" :data-initial-event="initialEventRequest?.event || \'\'" />',
+            },
+          }
+        : {},
     },
   });
 }
@@ -147,6 +165,65 @@ describe('TrainingPanel', () => {
     expect(getSubmission).toHaveBeenCalledWith(1);
     expect(wrapper.find('[data-testid="submission-result"]').exists()).toBe(true);
     expect(wrapper.text()).toContain('AC');
+  });
+
+  it('shows a short AC nudge and waits for click before opening tutor workflow', async () => {
+    vi.mocked(createSubmission).mockResolvedValue({
+      id: 21,
+      userId: 7,
+      problemId: 476,
+      questId: null,
+      source: 'TRAINING',
+      language: 'PYTHON_3_11',
+      code: 'print(1)',
+      submittedAt: '2026-05-21T19:00:00Z',
+      status: 'PASSED',
+      runtimeMs: 12,
+      memoryKb: null,
+    });
+    vi.mocked(getSubmission).mockResolvedValue({
+      submission: {
+        id: 21,
+        userId: 7,
+        problemId: 476,
+        questId: null,
+        source: 'TRAINING',
+        language: 'PYTHON_3_11',
+        code: 'print(1)',
+        submittedAt: '2026-05-21T19:00:00Z',
+        status: 'PASSED',
+        runtimeMs: 12,
+        memoryKb: null,
+      },
+      judgeResult: {
+        id: 31,
+        submissionId: 21,
+        verdict: 'AC',
+        passedCases: 3,
+        totalCases: 3,
+        failureReason: null,
+        trace: {},
+        createdAt: '2026-05-21T19:00:00Z',
+      },
+    });
+
+    const wrapper = mountPanel({ stubTutor: true });
+    const learning = useLearningStore();
+    await learning.loadTrainingProblem(476);
+    learning.setTrainingCode('print(1)');
+    await flushPromises();
+
+    await wrapper.find('[data-testid="submit-button"]').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.get('[data-testid="guide-nudge"]').text()).toContain('这题过了');
+    expect(wrapper.find('[data-testid="stub-tutor-workflow"]').exists()).toBe(false);
+
+    await wrapper.get('[data-testid="guide-nudge-ac-review"]').trigger('click');
+    await flushPromises();
+
+    const tutor = wrapper.get('[data-testid="stub-tutor-workflow"]');
+    expect(tutor.attributes('data-initial-event')).toBe('AC_REVIEW');
   });
 
   it('offers bug mine entry after failed official training submission', async () => {

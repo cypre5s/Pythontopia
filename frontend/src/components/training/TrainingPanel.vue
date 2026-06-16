@@ -7,8 +7,10 @@ import { playSfx } from '@/composables/useAudio';
 import { kcDisplayName } from '@/data/kcNames';
 import MarkdownView from '@/components/common/MarkdownView.vue';
 import PyButton from '@/components/ui/PyButton.vue';
+import GuideNudgeCard from '@/components/training/GuideNudgeCard.vue';
 import PythonCodeEditor from '@/components/training/PythonCodeEditor.vue';
 import TutorWorkflowPanel from '@/components/training/TutorWorkflowPanel.vue';
+import type { WorkflowEvent } from '@/api/tutorWorkflow';
 
 const learning = useLearningStore();
 const toast = useToastStore();
@@ -170,6 +172,16 @@ const tutorKcCodes = computed<string[]>(() =>
 const tutorSubmissionId = computed<number | null>(
   () => learning.training.submission?.submission.id ?? null,
 );
+const guideNudgeVerdict = computed<string>(
+  () => learning.training.submission?.judgeResult?.verdict ?? '',
+);
+const tutorInitialRequest = ref<{ event: WorkflowEvent; nonce: number } | null>(null);
+
+function onGuideNudgeContinue(event: WorkflowEvent): void {
+  playSfx('sfx_click');
+  showTutor.value = true;
+  tutorInitialRequest.value = { event, nonce: Date.now() };
+}
 
 /** 导学助手「插入骨架」→ 写入编辑器代码。 */
 function onTutorInsertCode(code: string): void {
@@ -415,6 +427,12 @@ async function copySample(text: string): Promise<void> {
               进入 Bug 矿洞
             </PyButton>
           </section>
+          <GuideNudgeCard
+            v-if="guideNudgeVerdict"
+            :verdict="guideNudgeVerdict"
+            :disabled="learning.training.phase === 'submitting'"
+            @continue="onGuideNudgeContinue"
+          />
         </article>
       </section>
 
@@ -429,6 +447,7 @@ async function copySample(text: string): Promise<void> {
             :problem-id="problem.id"
             :kc-codes="tutorKcCodes"
             :submission-id="tutorSubmissionId"
+            :initial-event-request="tutorInitialRequest"
             @insert-code="onTutorInsertCode"
             @close="toggleTutor"
           />
