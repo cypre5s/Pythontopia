@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.classroom.dashboard.service.ClassroomDashboardService;
+import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.learner.event.LearningEvent;
 import com.pythontopia.learner.memory.MemoryRetrievalService;
 import com.pythontopia.learner.memory.dto.MemoryItemDto;
@@ -14,9 +15,12 @@ import com.pythontopia.tutor.dto.TutorAskRequest;
 import com.pythontopia.tutor.dto.TutorSessionDto;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -41,6 +45,8 @@ public class TutorService {
   private final ApplicationEventPublisher eventPublisher;
   private final ClassroomDashboardService classroomDashboardService;
   private final MemoryRetrievalService memoryRetrievalService;
+  /** 进行中的答疑流（userId:conversationId），防同一会话窗口并发重复提问。 */
+  private final Set<String> inFlightConversations = ConcurrentHashMap.newKeySet();
 
   public TutorService(
       TutorGraphClient graphClient,
@@ -60,6 +66,26 @@ public class TutorService {
   }
 
   public SseEmitter ask(CurrentUserPrincipal user, TutorAskRequest request) {
+    Long userId = user.userId();
+    // 同一会话窗口并发重复提问防护：上一问流式作答未结束时按统一错误约定快速拒绝；
+    // 无 conversationId 的独立单问不互斥。释放由中继 onFinished 回调保证恰好一次。
+    String conversationKey = inFlightKey(userId, request.conversationId());
+    if (conversationKey != null && !inFlightConversations.add(conversationKey)) {
+      throw new BusinessException(
+          HttpStatus.CONFLICT, "SESSION_BUSY", "上一条消息还在处理中，请稍候再试");
+    }
+    Runnable release =
+        conversationKey == null ? () -> {} : () -> inFlightConversations.remove(conversationKey);
+    try {
+      return askInternal(user, request, release);
+    } catch (RuntimeException e) {
+      release.run();
+      throw e;
+    }
+  }
+
+  private SseEmitter askInternal(
+      CurrentUserPrincipal user, TutorAskRequest request, Runnable release) {
     Long userId = user.userId();
     SseEmitter emitter = new SseEmitter(120_000L);
 
@@ -94,9 +120,17 @@ public class TutorService {
           } catch (Exception e) {
             log.warn("Failed to persist tutor session", e);
           }
-        });
+        },
+        release);
 
     return emitter;
+  }
+
+  private static String inFlightKey(Long userId, String conversationId) {
+    if (conversationId == null || conversationId.isBlank()) {
+      return null;
+    }
+    return userId + ":" + conversationId.trim();
   }
 
   /**

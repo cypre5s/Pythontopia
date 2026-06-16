@@ -81,6 +81,7 @@ class TutorMemoryBriefTest {
             any(),
             any(),
             any(),
+            any(),
             any());
     String context = contextCaptor.getValue();
     assertThat(context).contains("近期学情:");

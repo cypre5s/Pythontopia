@@ -46,6 +46,11 @@ function onImgError(pageId: number): void {
 function onOpen(pageId: number): void {
   emit('open-page', pageId);
 }
+
+/** 页码标签：有真实页号显示「第 N 页」，缺省（0，如历史回放只存 pageId）显示「课件页」。 */
+function pageLabel(pageNo: number): string {
+  return pageNo > 0 ? `第 ${pageNo} 页` : '课件页';
+}
 </script>
 
 <template>
@@ -78,22 +83,22 @@ function onOpen(pageId: number): void {
         <button
           type="button"
           class="evidence-image__btn"
-          :title="`查看课件第 ${c.pageNo} 页原文`"
+          :title="`查看${pageLabel(c.pageNo)}原文`"
           @click="onOpen(c.pageId)"
         >
           <img
             v-if="!failedIds.has(c.pageId)"
             class="evidence-image__img"
             :src="imageUrl(c.pageId)"
-            :alt="`课件第 ${c.pageNo} 页`"
+            :alt="pageLabel(c.pageNo)"
             loading="lazy"
             @error="onImgError(c.pageId)"
           >
           <span
             v-else
             class="evidence-image__fallback"
-          >第 {{ c.pageNo }} 页（图暂不可用，点此看原文）</span>
-          <span class="evidence-image__cap">第 {{ c.pageNo }} 页 · 点击看原文</span>
+          >{{ pageLabel(c.pageNo) }}（图暂不可用，点此看原文）</span>
+          <span class="evidence-image__cap">{{ pageLabel(c.pageNo) }} · 点击看原文</span>
         </button>
         <p
           v-if="c.snippet"
@@ -121,10 +126,10 @@ function onOpen(pageId: number): void {
           <button
             type="button"
             class="evidence-item__page"
-            :title="`查看课件第 ${c.pageNo} 页原文`"
+            :title="`查看${pageLabel(c.pageNo)}原文`"
             @click="onOpen(c.pageId)"
           >
-            第 {{ c.pageNo }} 页
+            {{ pageLabel(c.pageNo) }}
           </button>
           <p
             v-if="c.snippet"
@@ -136,14 +141,7 @@ function onOpen(pageId: number): void {
       </ul>
     </details>
   </section>
-
-  <p
-    v-else-if="props.groundingStatus === 'NO_EVIDENCE'"
-    class="evidence-panel evidence-panel--none"
-    data-testid="courseware-evidence-none"
-  >
-    本回答基于通识知识 · 无明确课件引用
-  </p>
+  <!-- 无课件命中时不再渲染「基于通识知识」脚注：诚实标注已由答案开头与接地徽标承担，避免每答必唠。 -->
 </template>
 
 <style scoped>
@@ -154,13 +152,6 @@ function onOpen(pageId: number): void {
   border: 1px dashed var(--pyt-color-text-hint);
   border-radius: var(--pyt-radius-md);
   font-family: inherit;
-}
-.evidence-panel--none {
-  margin: 8px 0 0;
-  font-size: 11px;
-  font-style: italic;
-  color: var(--pyt-color-text-hint);
-  background: #f4e4c1;
 }
 
 .evidence-panel__head {

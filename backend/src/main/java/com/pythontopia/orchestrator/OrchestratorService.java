@@ -1,10 +1,14 @@
 package com.pythontopia.orchestrator;
 
 import com.pythontopia.bugmine.service.BugMineService;
+import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.orchestrator.dto.OrchestratorTurnRequest;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -14,6 +18,10 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
  *
  * <p>每轮对话从 {@link BugMineService} 取「记忆矿脉」当下到期的 KC（{@code decaying_kcs}）一并透传，
  * 让总管把看/学/练/测计划优先锚定到待复习知识点；取数失败不阻断对话，降级为空列表。
+ *
+ * <p>同一 (userId, sessionId) 的上一轮流还在进行时，新 turn 按统一错误约定快速拒绝
+ * （409 {@code SESSION_BUSY}），流终结（含失败 / 断开）由中继回调恰好释放一次；
+ * 空 sessionId 由服务端生成唯一 id，无会话语义，不互斥。
  */
 @Service
 public class OrchestratorService {
@@ -24,6 +32,8 @@ public class OrchestratorService {
 
   private final OrchestratorGraphClient graphClient;
   private final BugMineService bugMineService;
+  /** 进行中的会话流（userId:sessionId），防同一会话并发重复提交。 */
+  private final Set<String> inFlightSessions = ConcurrentHashMap.newKeySet();
 
   public OrchestratorService(OrchestratorGraphClient graphClient, BugMineService bugMineService) {
     this.graphClient = graphClient;
@@ -31,9 +41,28 @@ public class OrchestratorService {
   }
 
   public SseEmitter turn(Long userId, OrchestratorTurnRequest request) {
-    SseEmitter emitter = new SseEmitter(120_000L);
-    graphClient.turnStream(userId, request, decayingKcs(userId), emitter);
-    return emitter;
+    String sessionKey = inFlightKey(userId, request.sessionId());
+    if (sessionKey != null && !inFlightSessions.add(sessionKey)) {
+      throw new BusinessException(
+          HttpStatus.CONFLICT, "SESSION_BUSY", "上一条消息还在处理中，请稍候再试");
+    }
+    Runnable release =
+        sessionKey == null ? () -> {} : () -> inFlightSessions.remove(sessionKey);
+    try {
+      SseEmitter emitter = new SseEmitter(120_000L);
+      graphClient.turnStream(userId, request, decayingKcs(userId), emitter, release);
+      return emitter;
+    } catch (RuntimeException e) {
+      release.run();
+      throw e;
+    }
+  }
+
+  private static String inFlightKey(Long userId, String sessionId) {
+    if (sessionId == null || sessionId.isBlank()) {
+      return null;
+    }
+    return userId + ":" + sessionId.trim();
   }
 
   private List<String> decayingKcs(Long userId) {

@@ -39,7 +39,8 @@ class OrchestratorServiceTest {
     assertThat(emitter).isNotNull();
     @SuppressWarnings("unchecked")
     ArgumentCaptor<List<String>> captor = ArgumentCaptor.forClass(List.class);
-    verify(client).turnStream(eq(7L), eq(request), captor.capture(), any(SseEmitter.class));
+    verify(client)
+        .turnStream(eq(7L), eq(request), captor.capture(), any(SseEmitter.class), any(Runnable.class));
     assertThat(captor.getValue()).containsExactly("PY43-KC-016", "PY43-KC-022");
   }
 
@@ -56,7 +57,8 @@ class OrchestratorServiceTest {
     assertThat(emitter).isNotNull();
     @SuppressWarnings("unchecked")
     ArgumentCaptor<List<String>> captor = ArgumentCaptor.forClass(List.class);
-    verify(client).turnStream(eq(7L), eq(request), captor.capture(), any(SseEmitter.class));
+    verify(client)
+        .turnStream(eq(7L), eq(request), captor.capture(), any(SseEmitter.class), any(Runnable.class));
     assertThat(captor.getValue()).isEmpty();
   }
 }

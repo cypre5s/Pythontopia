@@ -8,7 +8,7 @@ import { kcDisplayName } from '@/data/kcNames';
 import MarkdownView from '@/components/common/MarkdownView.vue';
 import PyButton from '@/components/ui/PyButton.vue';
 import PythonCodeEditor from '@/components/training/PythonCodeEditor.vue';
-import TutorPanel from '@/components/tutor/TutorPanel.vue';
+import TutorWorkflowPanel from '@/components/training/TutorWorkflowPanel.vue';
 
 const learning = useLearningStore();
 const toast = useToastStore();
@@ -157,9 +157,8 @@ async function enterBugMine(): Promise<void> {
   await router.push('/bug-mine');
 }
 
-// 做题页内嵌 AI 导学助手：复用 TutorPanel，把「当前题目 KC + 题面 + 最近判定」
-// 作为上下文传入，并在 context 末尾追加防泄答提醒（与 Python 端 SAFETY_KEYWORDS +
-// 系统提示「不输出完整答案代码」双重护栏，确保做题时只给思路/提示）。
+// 做题页内嵌 AI 导学助手：阶段卡片式工作流（TutorWorkflowPanel），按 problemId 驱动后端
+// 工作流（题目/判定/画像由后端组装，防泄答在后端 prompt 护栏），关键节点带 submission_id 感知环境。
 const showTutor = ref(false);
 function toggleTutor(): void {
   playSfx('sfx_click');
@@ -168,22 +167,24 @@ function toggleTutor(): void {
 const tutorKcCodes = computed<string[]>(() =>
   problem.value?.kcCode ? [problem.value.kcCode] : [],
 );
-const tutorContext = computed<string>(() => {
-  const p = problem.value;
-  if (!p) return '';
-  const stmt = (p.statementMarkdown ?? '').slice(0, 600);
-  const sub = learning.training.submission;
-  const verdict = sub?.judgeResult?.verdict;
-  const reason = sub?.judgeResult?.failureReason;
-  const verdictPart = verdict
-    ? `；学生最近一次提交判定：${verdict}${reason ? `（${reason}）` : ''}`
-    : '';
-  return (
-    `学生正在做练习题《${p.title}》（KC ${p.kcCode}，难度 ${p.difficulty}）。题面：${stmt}` +
-    `${verdictPart}。请只给思路、关键提示或苏格拉底式追问，` +
-    `严禁给出可直接提交的完整答案代码。`
-  );
-});
+const tutorSubmissionId = computed<number | null>(
+  () => learning.training.submission?.submission.id ?? null,
+);
+
+/** 导学助手「插入骨架」→ 写入编辑器代码。 */
+function onTutorInsertCode(code: string): void {
+  learning.setTrainingCode(code);
+}
+
+/** 输入输出样例「一键复制」。 */
+async function copySample(text: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(text ?? '');
+    toast.show('已复制到剪贴板', 'success');
+  } catch {
+    toast.show('复制失败，请手动选择复制', 'error');
+  }
+}
 </script>
 
 <template>
@@ -194,6 +195,7 @@ const tutorContext = computed<string>(() => {
     <section
       v-if="problem"
       class="oj-layout"
+      :class="{ 'oj-layout--tutor': showTutor }"
     >
       <aside
         id="problem-left"
@@ -266,14 +268,30 @@ const tutorContext = computed<string>(() => {
                 @mouseenter="onSampleHover"
               >
                 <div class="sample-item">
-                  <div class="sample-title">
-                    输入 {{ i + 1 }}
+                  <div class="sample-head">
+                    <span class="sample-title">输入 {{ i + 1 }}</span>
+                    <button
+                      type="button"
+                      class="sample-copy"
+                      title="复制输入"
+                      @click="copySample(sample.input)"
+                    >
+                      ⧉ 复制
+                    </button>
                   </div>
                   <pre><code>{{ sample.input || '(空)' }}</code></pre>
                 </div>
                 <div class="sample-item">
-                  <div class="sample-title">
-                    输出 {{ i + 1 }}
+                  <div class="sample-head">
+                    <span class="sample-title">输出 {{ i + 1 }}</span>
+                    <button
+                      type="button"
+                      class="sample-copy"
+                      title="复制输出"
+                      @click="copySample(sample.output)"
+                    >
+                      ⧉ 复制
+                    </button>
                   </div>
                   <pre><code>{{ sample.output || '(空)' }}</code></pre>
                 </div>
@@ -317,7 +335,6 @@ const tutorContext = computed<string>(() => {
           <header class="runtime-card__header">
             <div>
               <h3>调试面板</h3>
-              <span>本机运行不记分，正式提交入库评分</span>
             </div>
             <div class="runtime-actions">
               <PyButton
@@ -400,6 +417,23 @@ const tutorContext = computed<string>(() => {
           </section>
         </article>
       </section>
+
+      <!-- AI 导学助手：阶段卡片式工作流面板（自带标题/关闭/动作链）。 -->
+      <aside
+        v-if="showTutor"
+        class="tutor-drawer"
+        data-testid="training-tutor-body"
+      >
+        <div class="tutor-drawer__body">
+          <TutorWorkflowPanel
+            :problem-id="problem.id"
+            :kc-codes="tutorKcCodes"
+            :submission-id="tutorSubmissionId"
+            @insert-code="onTutorInsertCode"
+            @close="toggleTutor"
+          />
+        </div>
+      </aside>
     </section>
 
     <section
@@ -411,33 +445,6 @@ const tutorContext = computed<string>(() => {
         {{ learning.training.lastError }}
       </p>
     </section>
-
-    <aside
-      v-if="problem && showTutor"
-      class="tutor-drawer"
-      data-testid="training-tutor-body"
-    >
-      <header class="tutor-drawer__header">
-        <div>
-          <h3>AI 导学助手</h3>
-          <span>只给思路和提示</span>
-        </div>
-        <button
-          type="button"
-          class="drawer-close"
-          aria-label="关闭 AI 导学助手"
-          @click="toggleTutor"
-        >
-          ×
-        </button>
-      </header>
-      <div class="tutor-drawer__body">
-        <TutorPanel
-          :kc-codes="tutorKcCodes"
-          :context="tutorContext"
-        />
-      </div>
-    </aside>
   </section>
 </template>
 
@@ -459,6 +466,13 @@ const tutorContext = computed<string>(() => {
   grid-template-columns: minmax(340px, 0.9fr) 12px minmax(520px, 1.1fr);
   gap: 0;
   padding: 18px;
+}
+
+/* 助教展开时追加第四列（侧栏化，不遮挡编辑器/调试面板） */
+.oj-layout--tutor {
+  grid-template-columns:
+    minmax(300px, 0.85fr) 12px minmax(440px, 1.05fr) minmax(280px, 0.55fr);
+  column-gap: 12px;
 }
 
 .problem-pane,
@@ -582,11 +596,32 @@ const tutorContext = computed<string>(() => {
   min-width: 0;
 }
 
-.sample-title {
+.sample-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   margin-bottom: 6px;
+}
+.sample-title {
   font-family: var(--pyt-font-read);
   font-size: 13px;
   font-weight: 700;
+}
+.sample-copy {
+  flex: 0 0 auto;
+  font-family: var(--pyt-font-pixel);
+  font-size: 11px;
+  padding: 2px 8px;
+  cursor: pointer;
+  background: var(--pyt-color-bg-soft);
+  border: 1px solid var(--pyt-color-border);
+  border-radius: 4px;
+  color: var(--pyt-color-text-hint);
+}
+.sample-copy:hover {
+  background: var(--pyt-color-warning-bg);
+  color: var(--pyt-color-text-primary);
 }
 
 .sample-item pre,
@@ -826,19 +861,15 @@ const tutorContext = computed<string>(() => {
 }
 
 .tutor-drawer {
-  position: absolute;
-  top: 18px;
-  right: 18px;
-  bottom: 18px;
-  width: min(440px, calc(100vw - 36px));
+  min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  z-index: 30;
   background: rgba(255, 249, 234, 0.96);
   border: 2px solid var(--pyt-color-border);
   border-radius: 8px;
-  box-shadow: -8px 0 28px rgba(35, 24, 12, 0.24);
+  box-shadow: 0 4px 0 rgba(74, 54, 29, 0.32), 0 10px 28px rgba(60, 41, 18, 0.14);
 }
 
 .drawer-close {
@@ -862,15 +893,21 @@ const tutorContext = computed<string>(() => {
 }
 
 @media (max-width: 1100px) {
-  .oj-layout {
+  .oj-layout,
+  .oj-layout--tutor {
     grid-template-columns: 1fr;
     grid-template-rows: minmax(280px, 0.9fr) minmax(440px, 1.1fr);
+    grid-auto-rows: minmax(320px, auto);
     gap: 14px;
     overflow-y: auto;
   }
 
   .drag-handle {
     display: none;
+  }
+
+  .tutor-drawer {
+    min-height: 360px;
   }
 }
 

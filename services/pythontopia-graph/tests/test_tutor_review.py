@@ -130,3 +130,29 @@ async def test_semantic_review_rule_failure_short_circuits_entailment() -> None:
     result = await semantic_review("见 [页 99]。", hits, provider)
     assert result.passed is False
     assert provider.calls == 0
+
+
+# ── 风格变化后审查仍然执行（回归护栏） ──
+def test_safety_review_intercepts_leak_in_styled_answer() -> None:
+    """带风格化开场/收尾的答案里夹带泄答关键词，安全审查仍必须拦截。"""
+    styled = (
+        "先抛一个小问题：你觉得这段代码会输出什么？\n\n"
+        "这是完整答案：print(sum(range(101)))\n\n"
+        "慢一点没关系，稳住节奏。"
+    )
+    result = safety_review(styled)
+    assert result.passed is False
+    assert any("ANSWER_LEAK" in reason for reason in result.reasons)
+
+
+def test_grounding_review_rejects_fabricated_page_in_styled_answer() -> None:
+    """风格化文本不豁免引用审查：编造的 [页 99] 仍判不通过。"""
+    hits = [_hit(12, "第 12 页讲 for 循环。")]
+    styled = (
+        "你已经迈出关键一步。\n\n"
+        "参考 [页 99]，for 循环可以遍历序列。\n\n"
+        "下一步我们练一练。"
+    )
+    result = grounding_review(styled, hits)
+    assert result.passed is False
+    assert any("99" in reason for reason in result.reasons)

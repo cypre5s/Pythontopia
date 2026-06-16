@@ -1,54 +1,76 @@
 package com.pythontopia.orchestrator;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pythontopia.common.config.GraphHttpClientProperties;
 import com.pythontopia.common.config.GraphServiceProperties;
-import com.pythontopia.common.sse.GraphSseConsumer;
 import com.pythontopia.common.sse.SseRelayExecutor;
 import com.pythontopia.common.web.GraphInternalTokenSupport;
 import com.pythontopia.orchestrator.dto.OrchestratorTurnMessage;
 import com.pythontopia.orchestrator.dto.OrchestratorTurnRequest;
-import java.io.IOException;
+import com.pythontopia.tutor.GraphStreamRelay;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
  * 学习总管 SSE 代理客户端，镜像 {@code TutorGraphClient}：把前端请求转成 Python graph 服务期望的
- * snake_case body，并在后台线程里把上游 SSE 事件（trace / token / result / error）原样转发给浏览器。
- * 不做任何落库——会话记忆全部在 Python 服务侧。
+ * snake_case body，并在后台线程里经 {@link GraphStreamRelay} 把上游 SSE 事件（trace / token /
+ * result / error）原样转发给浏览器；故障语义（快速失败 / 读超时 / 单条终止性 error / 断开清理）
+ * 由中继统一保证。不做任何落库——会话记忆全部在 Python 服务侧。
  */
 @Component
 public class OrchestratorGraphClient {
 
-  private static final Logger log = LoggerFactory.getLogger(OrchestratorGraphClient.class);
+  /** 流式读不活动上限：与 {@code OrchestratorService} 的 SseEmitter 120s 窗口对齐（复用既有流超时约定）。 */
+  static final int STREAM_READ_TIMEOUT_MS = 120_000;
 
   private final GraphServiceProperties properties;
-  private final ObjectMapper objectMapper;
   private final SseRelayExecutor sseRelayExecutor;
+  private final GraphStreamRelay relay;
 
+  /** Spring 注入构造：连接超时复用 graphRestTemplate 的 {@code pythontopia.http.graph} 配置（fail fast）。 */
+  @Autowired
   public OrchestratorGraphClient(
       GraphServiceProperties properties,
+      GraphHttpClientProperties httpProperties,
       ObjectMapper objectMapper,
       SseRelayExecutor sseRelayExecutor) {
+    this(
+        properties,
+        objectMapper,
+        sseRelayExecutor,
+        httpProperties.connectTimeoutMs(),
+        STREAM_READ_TIMEOUT_MS);
+  }
+
+  /** 包内可见：测试用可控超时构造。 */
+  OrchestratorGraphClient(
+      GraphServiceProperties properties,
+      ObjectMapper objectMapper,
+      SseRelayExecutor sseRelayExecutor,
+      int connectTimeoutMs,
+      int readTimeoutMs) {
     this.properties = properties;
-    this.objectMapper = objectMapper;
     this.sseRelayExecutor = sseRelayExecutor;
+    this.relay = new GraphStreamRelay(objectMapper, connectTimeoutMs, readTimeoutMs);
   }
 
   /**
    * 打开到 Python graph 服务的 SSE 连接并把每个事件按名字转发给 {@code emitter}。
    * 仅把非空的可选字段写入 body，避免给下游传一堆 null。
+   *
+   * @param onFinished 流终结（成功 / 失败 / 客户端断开）后恰好执行一次的资源释放回调
    */
   public void turnStream(
       Long userId,
       OrchestratorTurnRequest request,
       List<String> decayingKcs,
-      SseEmitter emitter) {
+      SseEmitter emitter,
+      Runnable onFinished) {
     String url = properties.graphUrl() + "/agents/orchestrator/turn/stream";
 
     String sessionId = request.sessionId();
@@ -85,28 +107,9 @@ public class OrchestratorGraphClient {
       body.put("decaying_kcs", decayingKcs);
     }
 
+    String internalToken = GraphInternalTokenSupport.tokenOrNull(properties);
     sseRelayExecutor.submit(
-        () -> {
-          try {
-            GraphSseConsumer.consume(
-                url,
-                body,
-                objectMapper,
-                GraphInternalTokenSupport.tokenOrNull(properties),
-                (event, data) -> {
-                  try {
-                    emitter.send(SseEmitter.event().name(event).data(data));
-                  } catch (IOException e) {
-                    log.debug(
-                        "Orchestrator SSE emitter write failed, client likely disconnected", e);
-                  }
-                });
-            emitter.complete();
-          } catch (IOException e) {
-            log.error("Orchestrator graph SSE stream failed", e);
-            emitter.completeWithError(e);
-          }
-        });
+        () -> relay.relay(url, () -> body, internalToken, emitter, null, onFinished));
   }
 
   private List<Map<String, Object>> buildHistory(List<OrchestratorTurnMessage> history) {

@@ -1,13 +1,17 @@
 """OrchestratorAgent（学习总管）：多智能体对话入口，不直接生成课件内容。
 
 职责：understand（意图/歧义）、decompose（看→学→练→测计划）、extract_profile（对话即画像）、reply_stream（Markdown 回复）。
-JSON 方法经 content_json→围栏文本回落解析；provider 不可用时确定性结构化兜底，不退化为自由对话。
+JSON 方法经 content_json→围栏文本回落解析；provider 不可用时确定性结构化兜底（fallback_reply），不退化为自由对话。
+回复讲解经有界风格目录（REPLY_STYLE_KEYS）按 session/轮次/画像确定性轮换，
+风格标识符仅存在于 prompt 内部，所有 prompt 与兜底回复都锚定 packId=43《Python语言基础》初学者语境。
 """
 
 from __future__ import annotations
 
 import json
+import logging
 import re
+import zlib
 from collections.abc import AsyncIterator
 from typing import Any, TypedDict
 
@@ -20,6 +24,14 @@ from pythontopia_graph.schemas.orchestrator import (
 )
 
 AGENT_NAME = "OrchestratorAgent"
+
+LOG = logging.getLogger(__name__)
+
+# 课程语境：所有 prompt 与确定性兜底回复都显式锚定唯一课程底座。
+COURSE_PACK_CONTEXT = (
+    "课程固定为《Python语言基础》（packId=43），服务对象是高校 Python 初学者，"
+    "表达保持新手友好，不要假设课程之外的教材。"
+)
 
 # 对最终回复做泄答关键词扫描（与 TutorAgent 同词表）。
 SAFETY_KEYWORDS = ("answer_key", "hidden_test", "完整答案", "直接给我代码")
@@ -58,7 +70,9 @@ _PHASE_AGENT: dict[Phase, str] = {
 }
 _PHASE_PANEL: dict[Phase, str] = {
     "watch": "lecture",
-    "learn": "library",
+    # learn 深链工坊：R-14 教育化映射「学 = 工坊生成并消费学习资源」，讲义/导图等
+    # 资源由百晓工坊的 ResourceDesigner 生成，图书馆只承担课件原文与证据检索。
+    "learn": "workshop",
     "practice": "training",
     "assess": "problems",
 }
@@ -115,6 +129,122 @@ _AMBIGUOUS_MESSAGES = (
     "？",
 )
 
+# 歧义兜底默认澄清问题：恰好一个问号、简洁单问，不连环追问。
+_DEFAULT_CLARIFYING_QUESTION = "你想先从哪个主题入手，比如输入输出、循环还是函数？"
+
+# ── 有界讲解风格目录 ─────────────────────────────────────────────────────
+# 内部模式标识符，仅用于 prompt 指令与兜底模板选择，绝不出现在面向学生的文本里。
+REPLY_STYLE_KEYS: tuple[str, ...] = (
+    "step_by_step",
+    "example_first",
+    "question_first",
+    "analogy_first",
+    "encouraging_recap",
+)
+
+# 风格 → 注入回复 prompt 的中文讲解节奏指令（统一以「本轮讲解节奏」开头便于审计）。
+REPLY_STYLE_DIRECTIVES: dict[str, str] = {
+    "step_by_step": (
+        "本轮讲解节奏：开场用一句话点明本轮要解决什么，主体按第一步、第二步的小步推进，"
+        "结尾用一句话归纳行动要点。"
+    ),
+    "example_first": (
+        "本轮讲解节奏：开场先给一个贴近生活的小例子，主体围绕例子把概念讲透，"
+        "结尾邀请学生动手改一改这个例子。"
+    ),
+    "question_first": (
+        "本轮讲解节奏：开场先抛出一个引发思考的小问题，主体顺着这个问题层层展开，"
+        "结尾以一个轻量追问收束。"
+    ),
+    "analogy_first": (
+        "本轮讲解节奏：开场先用一个直观类比建立画面感，主体把类比映射回 Python 概念，"
+        "结尾点出类比的边界避免误解。"
+    ),
+    "encouraging_recap": (
+        "本轮讲解节奏：开场先真诚肯定学生已有的进步，主体放慢节奏复盘已掌握与待巩固的点，"
+        "结尾给一句鼓励并指出下一小步。"
+    ),
+}
+
+
+def _style_affinity(profile_brief: str | None) -> dict[str, int]:
+    """画像信号 → 各风格亲和度打分（认知风格 / 学习偏好 / 情绪与坚持度）。"""
+    scores = dict.fromkeys(REPLY_STYLE_KEYS, 0)
+    text = (profile_brief or "").lower()
+    if not text:
+        return scores
+    # cognitive_style：视觉型偏类比/例子，逻辑型偏步骤，试错型偏先上手。
+    if "visual" in text or "视觉" in text:
+        scores["analogy_first"] += 2
+        scores["example_first"] += 1
+    if "logical" in text or "逻辑" in text:
+        scores["step_by_step"] += 2
+        scores["question_first"] += 1
+    if "trial" in text or "试错" in text:
+        scores["example_first"] += 2
+        scores["question_first"] += 1
+    # learning_preference：媒介与互动倾向。
+    if any(token in text for token in ("视频", "动画", "导图", "图示")):
+        scores["analogy_first"] += 1
+    if any(token in text for token in ("提问", "互动", "讨论", "苏格拉底")):
+        scores["question_first"] += 2
+    if any(token in text for token in ("实例", "案例", "代码", "实操", "动手")):
+        scores["example_first"] += 1
+    # emotion_persistence：受挫/需鼓励信号权重最高，优先安抚。
+    if any(token in text for token in ("鼓励", "挫", "放弃", "焦虑", "沮丧", "信心")):
+        scores["encouraging_recap"] += 3
+    return scores
+
+
+def style_candidates(profile_brief: str | None) -> list[str]:
+    """按画像亲和度排序的风格候选（取前 3，平分时按目录基础顺序稳定排序）。"""
+    scores = _style_affinity(profile_brief)
+    ordered = sorted(
+        REPLY_STYLE_KEYS, key=lambda key: (-scores[key], REPLY_STYLE_KEYS.index(key))
+    )
+    return ordered[:3]
+
+
+def select_reply_style(
+    session_key: str, turn_no: int, profile_brief: str | None = None
+) -> str:
+    """由 session/轮次/画像确定性选择本轮讲解风格。
+
+    候选集合尊重画像信号；session 哈希决定起点、轮次推进轮转，
+    保证相邻两轮不复用同一风格（候选恒为 3 个互异风格）。
+    """
+    candidates = style_candidates(profile_brief)
+    offset = zlib.crc32((session_key or "").encode("utf-8")) % len(candidates)
+    return candidates[(offset + max(turn_no, 0)) % len(candidates)]
+
+
+# 风格 → 确定性兜底回复的开场白（{goal} 为学生目标摘要）。
+_FALLBACK_OPENINGS: dict[str, str] = {
+    "step_by_step": "好的，我们一步一步来，先把「{goal}」拆成可执行的小步骤。",
+    "example_first": "我们先从一个小例子的角度切入「{goal}」，再回到概念本身。",
+    "question_first": "先抛一个小问题热热身：如果用 Python 实现「{goal}」，你会从哪里下手？",
+    "analogy_first": "可以把「{goal}」想象成搭积木：先有底座，再一层层往上叠。",
+    "encouraging_recap": "你能主动提出「{goal}」这个目标，已经是很好的开始，我们放稳节奏。",
+}
+
+# 风格 → 计划清单前的引导句（讲解结构随风格变化）。
+_FALLBACK_SECTION_LEADS: dict[str, str] = {
+    "step_by_step": "按下面的顺序逐步推进：",
+    "example_first": "围绕例子，对应的学习安排是：",
+    "question_first": "带着这个问题，我们按这样的路线找答案：",
+    "analogy_first": "对应到课程里，积木是这样一层层搭起来的：",
+    "encouraging_recap": "我们把任务拆小，每完成一项都算实打实的进步：",
+}
+
+# 风格 → 收尾句。
+_FALLBACK_CLOSINGS: dict[str, str] = {
+    "step_by_step": "完成第一步后告诉我进展，我们再进入下一步。",
+    "example_first": "动手把例子改一改，遇到卡点随时回来找我。",
+    "question_first": "学完第一步后，回来聊聊你对刚才那个问题的新想法。",
+    "analogy_first": "记住类比只是脚手架，最后落到代码上才算真正搭稳。",
+    "encouraging_recap": "节奏慢一点没关系，稳住每一小步，你可以的。",
+}
+
 
 class Understanding(TypedDict):
     intent: str
@@ -162,10 +292,10 @@ class OrchestratorAgent:
             ambiguous = True
 
         if ambiguous and not clarifying:
-            clarifying = (
-                "你想先从哪个主题入手？比如输入输出、循环还是函数？"
-                "也告诉我你的目标（期末备考 / 做项目 / 纯兴趣）。"
-            )
+            clarifying = _DEFAULT_CLARIFYING_QUESTION
+        if clarifying:
+            # 只问一个简洁的澄清问题：多问压缩到第一问，避免连环追问吓退初学者。
+            clarifying = self._condense_clarifying(clarifying)
 
         return Understanding(
             intent=intent,
@@ -248,17 +378,67 @@ class OrchestratorAgent:
         reasons = [f"SAFETY_KEYWORD:{kw}" for kw in SAFETY_KEYWORDS if kw in reply_md]
         return (not reasons, reasons)
 
+    # ── deterministic fallback reply ──────────────────────────────────────
+    def fallback_reply(
+        self,
+        req: OrchestratorRequest,
+        plan: list[PlanStep],
+        clarifying: str | None = None,
+    ) -> str:
+        """provider 不可用时的确定性教学兜底回复：结构化、自然中文，绝不自由聊天。
+
+        - 歧义轮：只问一个简洁的澄清问题，不甩计划；
+        - 规划轮：按风格目录轮换开场/结构/收尾，正文是真实 plan 的看/学/练/测清单；
+        - 始终锚定 packId=43《Python语言基础》初学者语境，不伪造课件页码。
+        """
+        if clarifying:
+            question = self._condense_clarifying(clarifying)
+            return (
+                "为了按《Python语言基础》（packId=43）给你定制初学者节奏，"
+                f"先确认一下：{question}"
+            )
+        turn_no = len(req.history) // 2
+        style = select_reply_style(req.session_id, turn_no, req.profile_brief)
+        goal_label = " ".join(req.user_message.split())[:40] or "本轮目标"
+        lines = [
+            _FALLBACK_OPENINGS[style].format(goal=goal_label),
+            "",
+            "（智能讲解服务暂时不可用，下面是按《Python语言基础》（packId=43）"
+            "课程结构整理的确定安排，节奏按 Python 初学者设定。）",
+            "",
+            _FALLBACK_SECTION_LEADS[style],
+        ]
+        if plan:
+            lines.append(self._plan_outline(plan))
+        else:
+            lines.append("先从你最近接触的知识点开始，按看、学、练、测四步小步推进。")
+        lines += ["", _FALLBACK_CLOSINGS[style]]
+        return "\n".join(lines)
+
+    @staticmethod
+    def _condense_clarifying(text: str) -> str:
+        """把澄清问题压缩为单问：保留到第一个问号为止，去掉后续追问。"""
+        cleaned = " ".join((text or "").split())
+        positions = [index for index in (cleaned.find("？"), cleaned.find("?")) if index >= 0]
+        if positions:
+            return cleaned[: min(positions) + 1]
+        return cleaned
+
     # ── provider plumbing ─────────────────────────────────────────────────
     async def _chat_json(self, messages: list[dict[str, str]]) -> dict[str, Any]:
         try:
-            response = await self.provider.chat(
-                messages, response_format={"type": "json_object"}, temperature=0.3
-            )
-        except TypeError:
             try:
-                response = await self.provider.chat(messages, temperature=0.3)
+                response = await self.provider.chat(
+                    messages, response_format={"type": "json_object"}, temperature=0.3
+                )
             except TypeError:
-                response = await self.provider.chat(messages)
+                try:
+                    response = await self.provider.chat(messages, temperature=0.3)
+                except TypeError:
+                    response = await self.provider.chat(messages)
+        except Exception as exc:  # noqa: BLE001 - provider 不可用：确定性兜底，不让整轮崩溃
+            LOG.warning("LLM provider 调用失败（%s），转入确定性兜底路径", exc)
+            return {}
         return self._coerce_json(response)
 
     @staticmethod
@@ -286,7 +466,8 @@ class OrchestratorAgent:
                     '"ambiguous":true/false,"clarifying_question":"…或null",'
                     '"goal":"一句话目标","focus":"主题关键词"}。'
                     "negotiate=对已有计划提太难/太简单/换例子/跳过等调整。"
-                    "ambiguous=目标模糊到无法规划。不要编造课程内容。"
+                    "ambiguous=目标模糊到无法规划，此时 clarifying_question 只问一个简洁问题。"
+                    f"不要编造课程内容。{COURSE_PACK_CONTEXT}"
                 ),
             }
         ]
@@ -312,6 +493,7 @@ class OrchestratorAgent:
                     "kc_codes 只能取自允许列表，列表为空则留空数组；"
                     "resource_type 仅 learn 阶段需要，按画像偏好选择；"
                     "watch（看）阶段优先推荐 B站精选讲解视频/微课，帮助学生建立直观印象。"
+                    f"{COURSE_PACK_CONTEXT}"
                 ),
             },
             {"role": "system", "content": f"允许 KC 列表: {allowed}"},
@@ -336,6 +518,7 @@ class OrchestratorAgent:
                     '{"profile_signals":[{"dimension":"…","value":"中文短语",'
                     '"confidence":0~1}]}。'
                     "只抽取消息中可观测的信号，无法抽取就返回空数组，禁止编造。"
+                    f"{COURSE_PACK_CONTEXT}"
                 ),
             }
         ]
@@ -358,6 +541,7 @@ class OrchestratorAgent:
                     "2) 只做规划与引导，绝不给出练习题的完整答案代码；"
                     "3) 这是规划对话，没有课件证据时不要编造页码；"
                     "4) 根据画像调整难度与措辞。"
+                    f"{COURSE_PACK_CONTEXT}"
                 ),
             }
         ]
@@ -369,20 +553,26 @@ class OrchestratorAgent:
                     "role": "system",
                     "content": (
                         "学生目标尚不明确，请用一两句话友好地把下面的澄清问题问出来，"
-                        f"不要罗列计划：{clarifying}"
+                        f"不要罗列计划，也只问这一个问题：{clarifying}"
                     ),
                 }
             )
-        elif plan:
-            messages.append(
-                {
-                    "role": "system",
-                    "content": (
-                        "本轮已为学生规划如下步骤，请用自然语言介绍这个安排并鼓励 ta "
-                        "从第一步开始：\n" + self._plan_outline(plan)
-                    ),
-                }
+        else:
+            # 有界风格轮换：按 session/轮次/画像确定性选风格，相邻轮次开场与收尾不雷同。
+            style = select_reply_style(
+                req.session_id, len(req.history) // 2, req.profile_brief
             )
+            messages.append({"role": "system", "content": REPLY_STYLE_DIRECTIVES[style]})
+            if plan:
+                messages.append(
+                    {
+                        "role": "system",
+                        "content": (
+                            "本轮已为学生规划如下步骤，请用自然语言介绍这个安排并鼓励 ta "
+                            "从第一步开始：\n" + self._plan_outline(plan)
+                        ),
+                    }
+                )
         messages.extend(self._history_messages(req))
         messages.append({"role": "user", "content": req.user_message})
         return messages

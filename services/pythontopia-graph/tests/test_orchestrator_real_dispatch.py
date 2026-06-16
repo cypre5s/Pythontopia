@@ -525,7 +525,11 @@ async def test_practice_focus_hint_carries_learn_artifact(
 
 @pytest.mark.asyncio
 async def test_orchestrator_node_dispatch_catches_per_step_and_emits_error() -> None:
-    """单步 provider 爆炸（经治理转 ok=False）→ SSE error 上报，其余 step 继续。"""
+    """单步 provider 爆炸（经治理转 ok=False）→ SSE step_error 上报（非终止），其余 step 继续。
+
+    单步失败必须用 step_error 而非 error：下游 SSE 中继与前端把 error 视为整轮
+    终止事件，若发 error 会截断后续 STATE_DELTA / result，导致整个学习计划丢失。
+    """
     await reset_session("t-failfast")
 
     # understand + decompose 先用 None（规则兜底），dispatch 阶段第一个 agent 爆炸
@@ -557,9 +561,15 @@ async def test_orchestrator_node_dispatch_catches_per_step_and_emits_error() -> 
 
     await graph.run_streaming(request_of("学 for 循环", "t-failfast"), emit)
 
-    # 应有 error 事件（dispatch 中爆炸的 step 被捕获并转 SSE error）
-    errors = [d for (e, d) in events if e == "error"]
-    assert len(errors) >= 1, f"expected >=1 error events, got {len(errors)}"
+    # 应有 step_error 事件（dispatch 中爆炸的 step 被捕获并转非终止 step_error）
+    errors = [d for (e, d) in events if e == "step_error"]
+    assert len(errors) >= 1, f"expected >=1 step_error events, got {len(errors)}"
+    assert all(d.get("code") == "DISPATCH_FAILED" for d in errors)
+    assert all(d.get("step_id") for d in errors), "step_error 必须携带 step_id"
+
+    # 整轮不得出现终止性 error（否则下游会把流截断、计划丢失）
+    terminal_errors = [d for (e, d) in events if e == "error"]
+    assert terminal_errors == [], f"单步失败不应发终止性 error：{terminal_errors}"
 
     # result 中 dispatch_results 应含 ok=False 的项
     result_events = [d for (e, d) in events if e == "result"]

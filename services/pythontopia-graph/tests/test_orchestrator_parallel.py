@@ -213,7 +213,9 @@ async def test_single_step_failure_keeps_other_steps_alive(
     assert by_agent["ResourceDesignerAgent"]["ok"] is True
     assert by_agent["PracticeAgent"]["ok"] is True
 
-    # 仅执行类失败上报 SSE error；PathPlanner 无画像的诚实 FAILED 不触发 error 事件
-    errors = [d for (e, d) in events if e == "error"]
-    assert len(errors) == 1, f"expected exactly 1 error event, got {errors}"
+    # 仅执行类失败上报非终止 step_error；PathPlanner 无画像的诚实 FAILED 不触发；
+    # 且整轮不得出现终止性 error（否则下游中继会截断流、计划丢失）。
+    errors = [d for (e, d) in events if e == "step_error"]
+    assert len(errors) == 1, f"expected exactly 1 step_error event, got {errors}"
     assert errors[0]["agent"] == "StoryboardAgent"
+    assert [d for (e, d) in events if e == "error"] == []

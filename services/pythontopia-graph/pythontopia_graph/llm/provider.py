@@ -157,24 +157,36 @@ class OpenAiCompatProvider:
         tier = kwargs.pop("model_tier", None)
         return self.fast_model if tier == "fast" else self.model
 
-    async def chat(self, messages: list[dict[str, str]], **kwargs: object) -> LlmResponse:
+    async def chat(
+        self, messages: list[dict[str, str]], *, json_mode: bool = True, **kwargs: object
+    ) -> LlmResponse:
         model = self._resolve_model(kwargs)
+        # 按需结构化输出（json_mode）：仅当 json_mode=True（默认）才强制
+        # response_format=json_object——资源/画像/图解/证据注/辩论等依赖 JSON 的调用沿用默认；
+        # 纯文本答疑（导师作答 / 修订 / 考考我点评）显式传 json_mode=False，避免回答被压成
+        # JSON 串而变短、夹结构噪声。调用方显式传入的 response_format 始终优先（保持既有
+        # *_agent 行为不变）。默认保持 True 是为不波及本次改动范围外、未显式声明 JSON 的调用方
+        # （6 个资源 Agent + profile_graph 等），它们靠该默认拿到结构化输出。
+        body: dict[str, object] = {"model": model, "messages": messages}
+        if json_mode and "response_format" not in kwargs:
+            body["response_format"] = {"type": "json_object"}
+        body.update(kwargs)
         # trust_env=True：有 HTTP(S)_PROXY 则走代理，否则直连；NO_PROXY 保护 localhost/RAG。
-        async with httpx.AsyncClient(timeout=30, trust_env=True) as client:
+        # 读超时 90s：讲义/练习生成属长输出任务，30s 会让 ResourceDesigner 等 agent 高频
+        # 超时（实测 DeepSeek 长文常超 30s）；连接超时仍保持 10s 快速失败。
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(90, connect=10), trust_env=True
+        ) as client:
             response = await client.post(
                 f"{self.base_url.rstrip('/')}/chat/completions",
                 headers={"Authorization": f"Bearer {self.api_key}"},
-                json={
-                    "model": model,
-                    "messages": messages,
-                    "response_format": {"type": "json_object"},
-                    **kwargs,
-                },
+                json=body,
             )
             response.raise_for_status()
         data = response.json()
         content = data["choices"][0]["message"]["content"]
-        # response_format=json_object 时解析 JSON 到 content_json；失败则仅保留 content_text，避免回落离线草稿。
+        # 始终尝试把 content 解析为 JSON 到 content_json（json_mode 调用走这条拿结构化结果）；
+        # 解析失败（含 json_mode=False 的纯文本答疑）则 content_json=None、仅保留 content_text。
         content_json: dict[str, Any] | None = None
         try:
             parsed = _json.loads(content)
@@ -272,7 +284,8 @@ class SparkProvider:
         for forwarded in ("temperature", "top_p", "max_tokens", "response_format"):
             if forwarded in kwargs:
                 payload[forwarded] = kwargs[forwarded]
-        async with httpx.AsyncClient(timeout=30) as client:
+        # 同 OpenAiCompatProvider.chat：长输出任务读超时 90s，连接超时 10s。
+        async with httpx.AsyncClient(timeout=httpx.Timeout(90, connect=10)) as client:
             response = await client.post(
                 f"{self.base_url}/chat/completions",
                 headers={

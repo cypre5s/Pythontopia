@@ -96,7 +96,7 @@ class TutorHistoryBriefTest {
     ArgumentCaptor<String> contextCaptor = ArgumentCaptor.forClass(String.class);
     verify(graphClient)
         .askStream(
-            eq(7L), any(), anyList(), contextCaptor.capture(), any(), any(), any(), any());
+            eq(7L), any(), anyList(), contextCaptor.capture(), any(), any(), any(), any(), any());
     String context = contextCaptor.getValue();
     assertThat(context).contains("对话历史:");
     assertThat(context).contains("什么是变量");

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import time
 from collections.abc import AsyncIterator, Callable
 from typing import Any
@@ -70,6 +71,88 @@ _ASK_PLAN: dict[str, Any] = {
     ],
 }
 
+# 工位中文名（C1）：plan 与每条 STEP_* trace 都带 agent_label，前端优先读它、绝不显英文 node 名。
+# 与 _ASK_PLAN 的 5 个工位 label 保持一致；debate 子节点（solver/critic/referee）以 DebateGraph
+# 事件自带的 agent_label 为准（事件源头），此处登记一份兜底，避免事件偶发缺字段时回落英文。
+_NODE_LABELS: dict[str, str] = {
+    "evidence_fetcher": "证据检索·馆员",
+    "TutorAgent": "导师·作答",
+    "code_runner": "代码运行·沙箱",
+    "grounding_critic": "引用审查·审查官",
+    "hallucination_detector": "防幻觉核查·校对官",
+    "safety_critic": "安全审查·安全员",
+    "TutorAgent.revise": "导师·返工",
+    "tutor_diagram": "图解生成",
+    "tutor_evidence_note": "证据导读",
+    "debate": "辩论复核·三方",
+    "solver": "求解者",
+    "critic": "质疑者",
+    "referee": "仲裁者",
+    "quiz_question": "考官·出题",
+    "quiz_judge": "考官·评卷",
+}
+
+# 考考我（ASKME 多轮填空）开场工位清单（C4）：出题流只有出题官；评卷流含馆员→评卷→引用审查→安全。
+_QUIZ_ASK_PLAN: dict[str, Any] = {
+    "type": "ASKME",
+    "nodes": [
+        {"node": "quiz_question", "agent_label": _NODE_LABELS["quiz_question"], "kind": "quiz"},
+    ],
+}
+
+_QUIZ_JUDGE_PLAN: dict[str, Any] = {
+    "type": "ASKME",
+    "nodes": [
+        {
+            "node": "evidence_fetcher",
+            "agent_label": _NODE_LABELS["evidence_fetcher"],
+            "kind": "evidence",
+        },
+        {"node": "quiz_judge", "agent_label": _NODE_LABELS["quiz_judge"], "kind": "quiz"},
+        {
+            "node": "grounding_critic",
+            "agent_label": _NODE_LABELS["grounding_critic"],
+            "kind": "grounding",
+        },
+        {"node": "safety_critic", "agent_label": _NODE_LABELS["safety_critic"], "kind": "safety"},
+    ],
+}
+
+# 考考我分流标记（C4）：context 含 QUIZ_TURN_<n> → 出题；含 QUIZ_JUDGE → 评卷。
+_QUIZ_ASK_RE = re.compile(r"QUIZ_TURN_(\d+)")
+# 评卷点评里的课件引用标记 [页 X]，用于判断「是否真的引用了 PPT」。
+_CITATION_RE = re.compile(r"\[页\s*(\d+)\]")
+
+
+def _detect_quiz_mode(context: str) -> tuple[str, int] | None:
+    """识别考考我分流（C4）：QUIZ_JUDGE → ("judge", 0)；QUIZ_TURN_<n> → ("ask", n)；都没有 → None。"""
+    if "QUIZ_JUDGE" in (context or ""):
+        return ("judge", 0)
+    match = _QUIZ_ASK_RE.search(context or "")
+    if match:
+        return ("ask", int(match.group(1)))
+    return None
+
+
+def _label_for(node: str) -> str:
+    return _NODE_LABELS.get(node, node)
+
+
+def _note_kwargs(reasons: list[str]) -> dict[str, str]:
+    """审查理由拼成 note；为空则不带 note 字段（避免前端把空列表显示成字面量 "[]"）。"""
+    note = "; ".join(reason for reason in reasons if reason)
+    return {"note": note} if note else {}
+
+
+def _render_quiz_stem(stem: str, blanks: list[dict[str, Any]]) -> str:
+    """把填空题渲染成可读 Markdown：题干 +（可选）逐空提示行。"""
+    lines = [stem]
+    hints = [f"({b['index']}) {b['hint']}" for b in blanks if b.get("hint")]
+    if hints:
+        lines.append("")
+        lines.append("提示：" + "；".join(hints))
+    return "\n".join(lines)
+
 
 def _provider(request: Request) -> LlmProvider:
     provider = getattr(request.app.state, "llm_provider", None)
@@ -98,19 +181,30 @@ def _stream_pieces(text: str, size: int = 24) -> list[str]:
     return [text[i : i + size] for i in range(0, len(text), size)]
 
 
-def _trace_start(node: str) -> str:
+def _trace_start(node: str, *, agent_label: str | None = None) -> str:
     return _format_sse(
         "trace",
-        {"node": node, "phase": "start", "status": "running", "elapsed_ms": 0, "note": None},
+        {
+            "node": node,
+            "phase": "start",
+            "status": "running",
+            "elapsed_ms": 0,
+            "note": None,
+            # C1：每条 STEP_* 都带中文 agent_label（debate 子节点用事件源头自带值，其余查表）。
+            "agent_label": agent_label or _label_for(node),
+        },
     )
 
 
-def _trace_finish(node: str, status: str, elapsed_ms: int, **extra: Any) -> str:
+def _trace_finish(
+    node: str, status: str, elapsed_ms: int, *, agent_label: str | None = None, **extra: Any
+) -> str:
     payload: dict[str, Any] = {
         "node": node,
         "phase": "finish",
         "status": status,
         "elapsed_ms": elapsed_ms,
+        "agent_label": agent_label or _label_for(node),
     }
     payload.update(extra)
     return _format_sse("trace", payload)
@@ -187,6 +281,18 @@ async def tutor_ask_stream(
             # 上下文存在时，把它并入检索 query，让证据更贴合当前视频/PPT/题目。
             query = f"{context}\n{base_question}".strip() if context else base_question
             kc_codes = body.kc_codes or []
+
+            # ── 考考我（ASKME 多轮填空）分流（跨包契约 C4）：context 含 QUIZ_TURN_<n> → 出题；
+            #     含 QUIZ_JUDGE → 评卷（仅 RAG 命中才引用 PPT）。命中即走考核专用流，不跑普通答疑。 ──
+            quiz = _detect_quiz_mode(context)
+            if quiz is not None:
+                async for chunk in _quiz_stages(
+                    quiz, body, base_question, kc_codes, query,
+                    provider, evidence_fetcher, heartbeat,
+                ):
+                    yield chunk
+                return
+
             # 每请求 LLM 子调用预算：修订先用、图解/证据注优先级最低后用（预算不足先被砍）。
             guard = BudgetGuard(max_llm_calls=_MAX_LLM_CALLS)
 
@@ -194,6 +300,8 @@ async def tutor_ask_stream(
             yield _format_sse("plan", _ASK_PLAN)
 
             # ── 馆员：课件 RAG 检索（治理：超时 + 重试 + rag 熔断；失败回空证据 → 通识标注路径） ──
+            # 统一发 start（C2：所有节点 start+finish 对称，便于前端按 node 折叠去重）。
+            yield _trace_start("evidence_fetcher")
             started = time.monotonic()
 
             async def _fetch_evidence() -> EvidenceBundle:
@@ -248,27 +356,34 @@ async def tutor_ask_stream(
             if debate_mode:
                 debate = DebateGraph(provider)
                 debate_result: DebateResult | None = None
-                pending_node: str | None = None
+                pending: dict[str, str] | None = None
                 node_started = time.monotonic()
                 debate_started = time.monotonic()
+                # 复合 debate 工位先发 start，子节点 solver/critic/referee 嵌套其中（start+finish 对称·C2）。
+                yield _trace_start("debate")
                 async for kind, payload in debate.run_events(
                     agent_question, evidence.chunks, body.profile_brief,
                 ):
-                    if kind == "node_start" and isinstance(payload, str):
-                        pending_node = payload
+                    # node_* 载荷为 {node, agent_label}（事件源头自带中文 label·C1）。
+                    if kind == "node_start" and isinstance(payload, dict):
+                        pending = payload
                         node_started = time.monotonic()
-                        yield _trace_start(payload)
-                    elif kind == "node_finish" and isinstance(payload, str):
-                        pending_node = None
+                        yield _trace_start(
+                            payload["node"], agent_label=payload.get("agent_label"),
+                        )
+                    elif kind == "node_finish" and isinstance(payload, dict):
+                        pending = None
                         yield _trace_finish(
-                            payload, "ok", int((time.monotonic() - node_started) * 1000),
+                            payload["node"], "ok",
+                            int((time.monotonic() - node_started) * 1000),
+                            agent_label=payload.get("agent_label"),
                         )
                     elif kind == "result":
                         debate_result = payload if isinstance(payload, DebateResult) else None
                 # 仅当复核产出非空定稿时采用；否则（含异常/空答）回退普通答疑，绝不让难题崩答疑。
                 if debate_result is not None and debate_result.answer.strip():
                     answer = debate_result.answer
-                    # P1.4: 辩论完成后发复合 debate trace（前端可视为"两个 agent 争论"）
+                    # 辩论完成后关闭复合 debate 工位（前端可视为"多个 agent 争论"）。
                     yield _trace_finish(
                         "debate", "ok",
                         int((time.monotonic() - debate_started) * 1000),
@@ -278,8 +393,16 @@ async def tutor_ask_stream(
                         collected.append(piece)
                         yield _format_sse("token", {"delta": piece})
                 else:
-                    if pending_node is not None:
-                        yield _trace_finish(pending_node, "error", 0)
+                    # 子节点 start 未配对 finish 时补 error finish，再关闭复合 debate 工位（保持对称）。
+                    if pending is not None:
+                        yield _trace_finish(
+                            pending["node"], "error", 0,
+                            agent_label=pending.get("agent_label"),
+                        )
+                    yield _trace_finish(
+                        "debate", "error",
+                        int((time.monotonic() - debate_started) * 1000),
+                    )
                     debate_mode = False
 
             if not debate_mode:
@@ -314,7 +437,7 @@ async def tutor_ask_stream(
                 "grounding_critic",
                 "ok" if grounding.passed else "retry",
                 int((time.monotonic() - g_started) * 1000),
-                note=str(grounding.reasons),
+                **_note_kwargs(grounding.reasons),
             )
 
             # ── 校对官：防幻觉（统计型数字是否有据） ──
@@ -325,7 +448,7 @@ async def tutor_ask_stream(
                 "hallucination_detector",
                 "ok" if hallucination.passed else "retry",
                 int((time.monotonic() - h_started) * 1000),
-                note=str(hallucination.reasons),
+                **_note_kwargs(hallucination.reasons),
             )
 
             # ── 安全员：泄答 / 歧视 / PII / 危险代码 ──
@@ -336,7 +459,7 @@ async def tutor_ask_stream(
                 "safety_critic",
                 "ok" if safety.passed else "fail",
                 int((time.monotonic() - s_started) * 1000),
-                note=str(safety.reasons),
+                **_note_kwargs(safety.reasons),
             )
 
             # ── critique→revise 闭环：grounding/hallucination 未过 → 注入审查意见做一轮有界修订 ──
@@ -449,27 +572,42 @@ async def tutor_ask_stream(
             )
             if heartbeat.due():
                 yield _PING
+            # 尾部工位 start（仅对实际会运行的节点发，与 finish 对称·C2）：未触发图解/无证据则不发。
+            tail_started = time.monotonic()
+            if want_diagram:
+                yield _trace_start("tutor_diagram")
+            if evidence.chunks:
+                yield _trace_start("tutor_evidence_note")
             tail_task = asyncio.ensure_future(asyncio.gather(diagram_coro, note_coro))
             async for ping in _pings_while(tail_task, heartbeat):
                 yield ping
             diagram_obs, note_obs = await tail_task
+            tail_elapsed = int((time.monotonic() - tail_started) * 1000)
 
             visual_aids: list[dict[str, Any]] = []
             if isinstance(diagram_obs, ToolObservation):
                 if diagram_obs.status == "budget_skipped":
-                    yield _trace_finish("tutor_diagram", "skipped", 0, note="budget_skipped")
+                    yield _trace_finish(
+                        "tutor_diagram", "skipped", tail_elapsed, note="budget_skipped",
+                    )
                 elif diagram_obs.ok and isinstance(diagram_obs.value, list):
                     visual_aids = [aid.model_dump(mode="json") for aid in diagram_obs.value]
+                    yield _trace_finish("tutor_diagram", "ok", tail_elapsed)
+                else:
+                    yield _trace_finish("tutor_diagram", "retry", tail_elapsed)
 
             # 「课件证据」整组一句话总览说明（结合提问/上下文/画像）；best-effort，失败回空串。
             evidence_note = ""
             if isinstance(note_obs, ToolObservation):
                 if note_obs.status == "budget_skipped":
                     yield _trace_finish(
-                        "tutor_evidence_note", "skipped", 0, note="budget_skipped",
+                        "tutor_evidence_note", "skipped", tail_elapsed, note="budget_skipped",
                     )
                 elif note_obs.ok and isinstance(note_obs.value, str):
                     evidence_note = note_obs.value
+                    yield _trace_finish("tutor_evidence_note", "ok", tail_elapsed)
+                else:
+                    yield _trace_finish("tutor_evidence_note", "retry", tail_elapsed)
 
             yield _format_sse("result", _build_result(
                 answer=answer,
@@ -560,4 +698,245 @@ def _build_result(
             },
             "safety": {"passed": safety.passed, "reasons": list(safety.reasons)},
         },
+    }
+
+
+async def _quiz_stages(
+    quiz: tuple[str, int],
+    body: TutorAskRequest,
+    base_question: str,
+    kc_codes: list[str],
+    query: str,
+    provider: LlmProvider,
+    evidence_fetcher: EvidenceFetcher,
+    heartbeat: _SseHeartbeat,
+) -> AsyncIterator[str]:
+    """考考我（ASKME 多轮填空）专用 SSE 流（跨包契约 C4）。
+
+    出题（QUIZ_TURN_<n>）：出题官产出一道填空题（不引用 PPT、不给证据页）。
+    评卷（QUIZ_JUDGE）：馆员检索 → 评卷官判定 → 引用审查 → 安全审查；仅当课件 RAG 命中、
+    且点评里确有合法 [页 X] 引用时才回带证据卡，否则不提 PPT（防伪造页码红线由引用审查兜底）。
+    plan 与每条 trace 均带中文 agent_label，结构与普通答疑流一致，前端复用同一套时间轴。
+    """
+    phase, round_no = quiz
+    agent = TutorAgent(provider)
+
+    if phase == "ask":
+        yield _format_sse("plan", _QUIZ_ASK_PLAN)
+        yield _trace_start("quiz_question")
+        q_started = time.monotonic()
+        topic = base_question or "、".join(kc_codes) or "Python 基础"
+        ask_task = asyncio.ensure_future(
+            agent.ask_quiz_question(
+                topic=topic, profile_brief=body.profile_brief, round_no=round_no,
+            )
+        )
+        async for ping in _pings_while(ask_task, heartbeat):
+            yield ping
+        try:
+            quiz_q = await ask_task
+        except Exception as exc:  # noqa: BLE001 - 出题失败 fail-fast 报错，不静默降级
+            yield _trace_finish(
+                "quiz_question", "error", int((time.monotonic() - q_started) * 1000),
+            )
+            yield _format_sse("error", {"code": "QUIZ_FAILED", "message": str(exc)})
+            return
+        stem = quiz_q["stem"]
+        blanks = quiz_q["blanks"]
+        answer_md = _render_quiz_stem(stem, blanks)
+        safety = safety_review(answer_md)
+        yield _trace_finish(
+            "quiz_question",
+            "ok" if safety.passed else "fail",
+            int((time.monotonic() - q_started) * 1000),
+            **_note_kwargs(safety.reasons),
+        )
+        for piece in _stream_pieces(answer_md):
+            yield _format_sse("token", {"delta": piece})
+        yield _format_sse("result", _build_quiz_result(
+            answer_md=answer_md,
+            quiz={
+                "phase": "ask",
+                "round": round_no,
+                "stem": stem,
+                "blanks": blanks,
+                "cite_evidence": False,
+            },
+            page_ids=[],
+            evidence=[],
+            grounding_status="NO_EVIDENCE",
+            based_on_general=True,
+            safety=safety,
+            profile_brief=body.profile_brief,
+        ))
+        return
+
+    # ── phase == "judge"：先检索判定 RAG 是否命中（决定能否引用 PPT） ──
+    yield _format_sse("plan", _QUIZ_JUDGE_PLAN)
+    yield _trace_start("evidence_fetcher")
+    started = time.monotonic()
+
+    async def _fetch_evidence() -> EvidenceBundle:
+        return await evidence_fetcher.fetch(kc_codes=kc_codes, query=query, top_k=_TOP_K)
+
+    async def _empty_evidence() -> EvidenceBundle:
+        return EvidenceBundle(chunks=[], no_evidence_found=True)
+
+    fetch_obs = await run_with_governance(
+        "evidence_fetch",
+        _fetch_evidence,
+        timeout_s=_RAG_TIMEOUT_S,
+        max_retries=1,
+        fallback=_empty_evidence,
+        breaker_key="rag",
+    )
+    evidence = (
+        fetch_obs.value
+        if isinstance(fetch_obs.value, EvidenceBundle)
+        else EvidenceBundle(chunks=[], no_evidence_found=True)
+    )
+    fetch_extra: dict[str, Any] = {"chunks": len(evidence.chunks)}
+    if fetch_obs.status != "ok":
+        fetch_extra["note"] = fetch_obs.as_trace_note()
+    yield _trace_finish(
+        "evidence_fetcher",
+        "ok" if fetch_obs.status == "ok" else "retry",
+        int((time.monotonic() - started) * 1000),
+        **fetch_extra,
+    )
+
+    # 上一轮题目（评卷依据）：取最近一条 assistant 历史。
+    prev_question = next(
+        (t.content for t in reversed(body.conversation_history) if t.role == "assistant"),
+        "",
+    )
+    yield _trace_start("quiz_judge")
+    j_started = time.monotonic()
+    judge_task = asyncio.ensure_future(
+        agent.judge_quiz(
+            prev_question=prev_question,
+            student_answer=base_question,
+            profile_brief=body.profile_brief,
+            evidence_chunks=evidence.chunks,
+        )
+    )
+    async for ping in _pings_while(judge_task, heartbeat):
+        yield ping
+    try:
+        judged = await judge_task
+    except Exception as exc:  # noqa: BLE001 - 评卷失败 fail-fast 报错
+        yield _trace_finish(
+            "quiz_judge", "error", int((time.monotonic() - j_started) * 1000),
+        )
+        yield _format_sse("error", {"code": "QUIZ_FAILED", "message": str(exc)})
+        return
+    explanation = judged["explanation_md"]
+    verdict = judged["verdict"]
+    yield _trace_finish(
+        "quiz_judge", "ok", int((time.monotonic() - j_started) * 1000),
+        note=f"verdict={verdict}",
+    )
+
+    # 引用审查：点评里的 [页 X] 必须命中证据页（防伪造页码红线）。
+    yield _trace_start("grounding_critic")
+    g_started = time.monotonic()
+    grounding = grounding_review(explanation, evidence.chunks)
+    yield _trace_finish(
+        "grounding_critic",
+        "ok" if grounding.passed else "retry",
+        int((time.monotonic() - g_started) * 1000),
+        **_note_kwargs(grounding.reasons),
+    )
+    yield _trace_start("safety_critic")
+    s_started = time.monotonic()
+    safety = safety_review(explanation)
+    yield _trace_finish(
+        "safety_critic",
+        "ok" if safety.passed else "fail",
+        int((time.monotonic() - s_started) * 1000),
+        **_note_kwargs(safety.reasons),
+    )
+
+    for piece in _stream_pieces(explanation):
+        yield _format_sse("token", {"delta": piece})
+
+    # 仅 RAG 命中时引用 PPT：有证据→回带证据卡 + 页码；无证据→不提 PPT。
+    cited_pages = {int(m) for m in _CITATION_RE.findall(explanation)}
+    has_valid_citation = bool(
+        evidence.chunks
+        and grounding.passed
+        and cited_pages & {chunk.page_no for chunk in evidence.chunks}
+    )
+    if evidence.chunks:
+        citations = TutorAgent._build_citations(evidence.chunks)
+        evidence_list = [c.model_dump(mode="json") for c in citations]
+        page_ids = [c.page_id for c in citations]
+        grounding_status = "PASSED" if grounding.passed else "FAILED"
+        based_on_general = False
+    else:
+        evidence_list = []
+        page_ids = []
+        grounding_status = "NO_EVIDENCE"
+        based_on_general = True
+
+    yield _format_sse("result", _build_quiz_result(
+        answer_md=explanation,
+        quiz={
+            "phase": "judge",
+            "round": round_no,
+            "verdict": verdict,
+            "cite_evidence": has_valid_citation,
+        },
+        page_ids=page_ids,
+        evidence=evidence_list,
+        grounding_status=grounding_status,
+        based_on_general=based_on_general,
+        safety=safety,
+        profile_brief=body.profile_brief,
+        grounding=grounding,
+    ))
+
+
+def _build_quiz_result(
+    *,
+    answer_md: str,
+    quiz: dict[str, Any],
+    page_ids: list[int],
+    evidence: list[dict[str, Any]],
+    grounding_status: str,
+    based_on_general: bool,
+    safety: Any,
+    profile_brief: str = "",
+    grounding: Any = None,
+) -> dict[str, Any]:
+    """组装考考我结果 payload：复用答疑结果的标准键（含 camelCase）+ 新增 ``quiz`` 结构（C4）。
+
+    ``quiz``：
+      - 出题 → ``{"phase":"ask","round":n,"stem":...,"blanks":[{"index","hint"}],"cite_evidence":false}``
+      - 评卷 → ``{"phase":"judge","round":n,"verdict":"correct|partial|wrong","cite_evidence":bool}``
+    其余键与 :func:`_build_result` 对齐，前端答案气泡/课件证据面板可零改动复用。
+    """
+    grounding_passed = grounding.passed if grounding is not None else True
+    grounding_reasons = list(grounding.reasons) if grounding is not None else []
+    return {
+        "answer_md": answer_md,
+        "evidence_page_ids": page_ids,
+        "evidence": evidence,
+        "grounding_result": {"passed": grounding_passed, "reasons": grounding_reasons},
+        "safety_result": {"passed": safety.passed, "reasons": list(safety.reasons)},
+        "based_on_general_knowledge": based_on_general,
+        "grounding_status": grounding_status,
+        "visual_aids": [],
+        "evidence_note": "",
+        "revised": False,
+        "personalization_note": TutorAgent.personalization_note(profile_brief),
+        "answerMd": answer_md,
+        "evidencePageIds": page_ids,
+        "groundingStatus": grounding_status,
+        "review": {
+            "grounding": {"passed": grounding_passed, "reasons": grounding_reasons},
+            "hallucination": {"passed": True, "reasons": []},
+            "safety": {"passed": safety.passed, "reasons": list(safety.reasons)},
+        },
+        "quiz": quiz,
     }

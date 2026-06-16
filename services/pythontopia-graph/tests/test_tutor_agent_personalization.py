@@ -112,3 +112,15 @@ def test_personalization_note_empty_or_unrecognized_brief() -> None:
     assert TutorAgent.personalization_note("") == ""
     assert TutorAgent.personalization_note(None) == ""
     assert TutorAgent.personalization_note("专业: 文科") == ""
+
+
+def test_style_directive_coexists_with_personalization_directives() -> None:
+    """风格轮换指令与既有个性化指令组并存：各注入一份，互不挤占。"""
+    agent = TutorAgent(provider=None)
+    messages = agent._build_messages("for 循环怎么写", FULL_BRIEF, [], [])
+    system_contents = [m["content"] for m in messages if m["role"] == "system"]
+    style_hits = [c for c in system_contents if c.startswith("本轮讲解节奏")]
+    assert len(style_hits) == 1
+    for directive in TutorAgent._personalization_directives(FULL_BRIEF):
+        assert directive in system_contents
+    assert messages[-1] == {"role": "user", "content": "for 循环怎么写"}

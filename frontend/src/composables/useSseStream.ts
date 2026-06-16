@@ -4,6 +4,8 @@ import { toAguiEvent, type AguiEvent } from './agui';
 
 export interface SseTraceEvent {
   node: string;
+  /** 编排分发步骤 id（orchestrator dispatch 携带）；用于工具调用生命周期按步精确配对。 */
+  step_id?: string;
   status: string;
   elapsed_ms: number;
   /**
@@ -26,6 +28,8 @@ export interface SseTraceEvent {
    */
   role_key?: string;
   actor_label?: string;
+  /** 编排分发步骤的中文工位名（orchestrator dispatch trace 携带，如「讲义写手」）。 */
+  agent_label?: string;
   message?: string;
   percent?: number;
   note?: string;

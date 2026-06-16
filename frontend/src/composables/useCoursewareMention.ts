@@ -63,8 +63,10 @@ const AT_TRIGGER_RE = /(?:^|\s)@([^\s@]*)$/;
 /** 选中时用于把末尾 `@query` 替换为 token 的正则。 */
 const AT_REPLACE_RE = /(^|\s)@([^\s@]*)$/;
 
-const MAX_CHAPTER_ITEMS = 8;
-const MAX_KC_ITEMS = 12;
+// 课程共 7 章 / 65 个 KC：上限放宽到能覆盖全部，靠 query 过滤 + 菜单滚动浏览，
+// 避免「@ 引用」下拉把 KC 列表截断（之前 12 条导致大量 KC 选不到）。
+const MAX_CHAPTER_ITEMS = 20;
+const MAX_KC_ITEMS = 80;
 
 export function useCoursewareMention(allItems: Ref<MentionItem[]>): CoursewareMention {
   const text = ref('');

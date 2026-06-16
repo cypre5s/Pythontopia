@@ -41,8 +41,20 @@ const props = withDefaults(
     videoId?: number;
     /** 看课页视频 RAG：当前播放时刻（秒）。 */
     videoTimeSec?: number;
+    /**
+     * 空态占位文案（按宿主语境覆盖：做题页/看课页措辞不同）。
+     * 不传则按 embedded 与否回退默认文案（看课页语境）。
+     */
+    emptyPlaceholder?: string;
   }>(),
-  { kcCodes: () => [], context: '', embedded: false, videoId: undefined, videoTimeSec: undefined },
+  {
+    kcCodes: () => [],
+    context: '',
+    embedded: false,
+    videoId: undefined,
+    videoTimeSec: undefined,
+    emptyPlaceholder: '',
+  },
 );
 
 const router = useRouter();
@@ -483,7 +495,7 @@ onMounted(async () => {
           v-else-if="tutor.turns.length === 0 && !tutor.currentSession && !isStreaming"
           class="answer-placeholder"
         >
-          {{ embedded ? '边看视频边问：输入 @ 可引用本章知识点' : '有什么 Python 问题？问问 AI 助教' }}
+          {{ emptyPlaceholder || (embedded ? '边看视频边问：输入 @ 可引用本章知识点' : '有什么 Python 问题？问问 AI 助教') }}
         </p>
       </div>
 

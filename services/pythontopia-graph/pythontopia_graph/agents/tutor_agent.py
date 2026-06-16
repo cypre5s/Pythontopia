@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import re
 from collections.abc import AsyncIterator
+from typing import Any
 
+from pythontopia_graph.agents.orchestrator_agent import (
+    REPLY_STYLE_DIRECTIVES,
+    select_reply_style,
+)
 from pythontopia_graph.llm.provider import LlmProvider
 from pythontopia_graph.nodes.code_runner import CodeRunResult, run_python
 from pythontopia_graph.nodes.evidence_fetcher import RagHit
@@ -19,6 +24,11 @@ from pythontopia_graph.schemas.tutor import (
 # 「课件证据」片段展示上限：保证面板里每条片段简短、整齐。
 _SNIPPET_MAX_CHARS = 160
 
+# 答疑作答 / 修订 token 上限：放开篇幅避免回答被截断变短（纯文本，配合 json_mode=False）。
+_ANSWER_MAX_TOKENS = 2048
+# 考考我（出题 / 评卷）token 上限：题目与点评都不长，留足空间即可。
+_QUIZ_MAX_TOKENS = 1024
+
 SYSTEM_PROMPT = (
     "你是 Pythontopia 智能答疑助教。\n"
     "规则：\n"
@@ -30,7 +40,9 @@ SYSTEM_PROMPT = (
     "6. 不输出完整答案代码，只给引导和关键片段。\n"
     "7. 苏格拉底式阶梯提示：引导按「①换述问题，帮学生理清自己究竟在问什么 → "
     "②把问题拆解成可上手的小步骤 → ③点出关键方向」的顺序逐级推进；"
-    "经过这三级引导之后才允许给出关键代码片段，且任何时候都禁止给完整答案。"
+    "经过这三级引导之后才允许给出关键代码片段，且任何时候都禁止给完整答案。\n"
+    "8. 你服务的课程固定为《Python语言基础》（packId=43），面向高校 Python 初学者，"
+    "讲解保持新手友好，不要假设课程之外的教材。"
 )
 
 SAFETY_KEYWORDS = ("answer_key", "hidden_test", "完整答案", "直接给我代码")
@@ -86,9 +98,10 @@ VERIFY_TRIGGERS = ("为什么", "输出不对", "报错", "error", "不对", "wr
 # 抽取问题里第一个围栏代码块的内容（``` 或 ```python）。
 _CODE_FENCE_RE = re.compile(r"```(?:python)?\s*\n?(.*?)```", re.DOTALL)
 
-# 「辩论复核」触发词：在原有「难/需严谨论证/权衡比较」基础上，P1.4 扩展至关键教学决策。
+# 「辩论复核」触发词：收窄回「需严谨论证 / 权衡比较」核心集（R-14 优化）。
+# 原 P1.4「教学决策」扩展（难度/怎么讲/太难/应该先/先学…）会把大量普通问题误判进辩论，
+# 拿到的是更简短的「草答」；移除后这些问题改走更充分的 ask_stream 流式作答。
 DEBATE_TRIGGERS = (
-    # 原有：需严谨论证
     "辩论",
     "复核",
     "严谨",
@@ -102,23 +115,42 @@ DEBATE_TRIGGERS = (
     "一定对吗",
     "真的吗",
     "区别与联系",
-    # P1.4 扩展：关键教学决策
-    "难度",       # 出题难度选择
-    "怎么讲",     # 讲法选择
-    "怎么教",
-    "哪种讲法",
-    "用什么方式教",
-    "跳过",       # 是否跳关
-    "跳关",
-    "先学哪个",   # 学习顺序
-    "学习顺序",
-    "先学什么",
-    "适合什么难度",
-    "太难",
-    "太简单",
-    "应该先",
-    "应该怎么",
 )
+
+# ── 考考我（ASKME 多轮填空）·跨包契约 C4：出题 / 评卷指令与输出结构 ──
+# 出题（QUIZ_TURN_<n>）：产出一道填空题，不引用课件、不给答案。
+QUIZ_ASK_SYSTEM = (
+    "你是 Pythontopia《Python语言基础》考官，面向高校 Python 初学者出口头小测。\n"
+    "请就给定知识点/主题出**恰好一道填空题**：\n"
+    "1. 题干用中文，聚焦该主题的一个核心概念，难度适中（适合初学者）；\n"
+    "2. 设 1~3 个空，并在题干里用 (1)(2)(3) 明确标出每个空的位置；\n"
+    "3. 不要给出答案或解析；\n"
+    "4. 不要引用课件页码（禁止出现 [页 X]），不要提及课件 / PPT / 参考资料；\n"
+    "5. 只输出 JSON 对象，schema："
+    '{"stem": "<含 (1)(2) 空位标记的题干>", '
+    '"blanks": [{"index": <空序号 int>, "hint": "<该空简短提示，可为空字符串>"}]}。'
+)
+
+# 评卷（QUIZ_JUDGE）：判定对错并点评；是否引用 PPT 取决于课件 RAG 是否命中。
+_QUIZ_JUDGE_SYSTEM_BASE = (
+    "你是 Pythontopia《Python语言基础》考官，正在为学生上一轮的填空题评卷。\n"
+    "请依据【上一轮题目】判断【学生作答】是否正确，并简要点评：\n"
+    "1. 用中文、Markdown，先给判定结论，再点出关键处、给出正确要点帮助巩固；\n"
+    "2. 不要泄露题库或给出可直接照抄的完整答案，只针对本题点评；\n"
+)
+QUIZ_JUDGE_SYSTEM_WITH_EVIDENCE = _QUIZ_JUDGE_SYSTEM_BASE + (
+    "3. 下面提供了课件证据，若与本题相关，可用 [页 X] 引用帮助学生巩固；"
+    "页码必须严格来自所给证据，绝不编造；与本题无关则不必引用；\n"
+    "4. 只输出 JSON 对象，schema："
+    '{"verdict": "correct|partial|wrong", "explanation_md": "<点评 Markdown>"}。'
+)
+QUIZ_JUDGE_SYSTEM_NO_EVIDENCE = _QUIZ_JUDGE_SYSTEM_BASE + (
+    "3. 本题没有可用的课件证据：请勿提及课件 / PPT / 页码，仅凭通识知识点评；\n"
+    "4. 只输出 JSON 对象，schema："
+    '{"verdict": "correct|partial|wrong", "explanation_md": "<点评 Markdown>"}。'
+)
+
+_QUIZ_VERDICTS = ("correct", "partial", "wrong")
 
 
 class TutorAgent:
@@ -141,7 +173,11 @@ class TutorAgent:
         messages = self._build_messages(
             question, profile_brief, conversation_history, evidence_chunks,
         )
-        response = await self.provider.chat(messages)
+        # 导师作答是 Markdown 纯文本（修订/编排分发同此路径）：显式 json_mode=False 不强制 JSON，
+        # 并放足 max_tokens，避免回答被压成 JSON 串或截断变短。
+        response = await self.provider.chat(
+            messages, json_mode=False, max_tokens=_ANSWER_MAX_TOKENS,
+        )
         answer = response.content_text or ""
         built = self._build_response(answer, evidence_chunks)
         # allow_diagram=False 供修订等内部调用关闭图解附加（保证恰好一次 LLM 调用）。
@@ -168,8 +204,123 @@ class TutorAgent:
                 messages.append(
                     {"role": "system", "content": self._build_verification_note(result)},
                 )
-        async for token in self.provider.chat_stream(messages):
+        # 流式作答放足 max_tokens，避免长解答被截断变短（chat_stream 本就不强制 JSON）。
+        async for token in self.provider.chat_stream(messages, max_tokens=_ANSWER_MAX_TOKENS):
             yield token
+
+    async def ask_quiz_question(
+        self, *, topic: str, profile_brief: str, round_no: int = 1,
+    ) -> dict[str, Any]:
+        """考考我·出题（QUIZ_TURN_<n>）：就主题产出一道填空题（题干 + 1~3 空），不引用课件、不给答案。
+
+        返回 ``{"stem": str, "blanks": [{"index": int, "hint": str}]}``；
+        LLM 失败 / 产出不合法时回退一道确定式填空题（绝不伪造页码）。
+        """
+        messages: list[dict[str, str]] = [{"role": "system", "content": QUIZ_ASK_SYSTEM}]
+        if profile_brief:
+            messages.append({"role": "system", "content": f"学生画像: {profile_brief}"})
+        messages.append(
+            {
+                "role": "user",
+                "content": f"知识点/主题：{topic or 'Python 基础'}（第 {round_no} 轮）",
+            }
+        )
+        try:
+            response = await self.provider.chat(
+                messages, json_mode=True, max_tokens=_QUIZ_MAX_TOKENS,
+            )
+        except Exception:  # noqa: BLE001 - 出题失败回退确定式，不让考核中断
+            return self._fallback_quiz_question(topic)
+        data = response.content_json if isinstance(response.content_json, dict) else {}
+        stem = str(data.get("stem", "") or "").strip()
+        blanks = self._normalize_blanks(data.get("blanks"))
+        if not stem:
+            return self._fallback_quiz_question(topic)
+        if not blanks:
+            blanks = [{"index": 1, "hint": ""}]
+        return {"stem": stem, "blanks": blanks}
+
+    async def judge_quiz(
+        self,
+        *,
+        prev_question: str,
+        student_answer: str,
+        profile_brief: str,
+        evidence_chunks: list[RagHit],
+    ) -> dict[str, Any]:
+        """考考我·评卷（QUIZ_JUDGE）：判定学生填空对错并点评。
+
+        仅当有课件证据（RAG 命中）时才走「可引用 [页 X]」的提示词；未命中则用「不提 PPT」提示词。
+        返回 ``{"verdict": "correct|partial|wrong", "explanation_md": str}``；
+        LLM 失败时回退中性点评（不伪造页码）。
+        """
+        has_evidence = bool(evidence_chunks)
+        system = (
+            QUIZ_JUDGE_SYSTEM_WITH_EVIDENCE if has_evidence else QUIZ_JUDGE_SYSTEM_NO_EVIDENCE
+        )
+        messages: list[dict[str, str]] = [{"role": "system", "content": system}]
+        if profile_brief:
+            messages.append({"role": "system", "content": f"学生画像: {profile_brief}"})
+        if has_evidence:
+            evidence_text = "\n---\n".join(
+                f"[页 {c.page_no}] (page_id={c.page_id}): {c.text}" for c in evidence_chunks
+            )
+            messages.append({"role": "system", "content": f"课件证据:\n{evidence_text}"})
+        messages.append(
+            {
+                "role": "user",
+                "content": (
+                    f"【上一轮题目】\n{prev_question or '(未提供)'}\n\n"
+                    f"【学生作答】\n{student_answer}"
+                ),
+            }
+        )
+        try:
+            response = await self.provider.chat(
+                messages, json_mode=True, max_tokens=_QUIZ_MAX_TOKENS,
+            )
+        except Exception:  # noqa: BLE001 - 评卷失败回退中性点评，不让考核中断
+            return {
+                "verdict": "partial",
+                "explanation_md": "我没能完整判定这次作答，我们直接进入下一题继续巩固。",
+            }
+        data = response.content_json if isinstance(response.content_json, dict) else {}
+        verdict = str(data.get("verdict", "") or "").strip().lower()
+        if verdict not in _QUIZ_VERDICTS:
+            verdict = "partial"
+        explanation = str(data.get("explanation_md", "") or "").strip()
+        if not explanation:
+            explanation = (response.content_text or "").strip() or "已收到你的作答，我们继续下一题。"
+        return {"verdict": verdict, "explanation_md": explanation}
+
+    @staticmethod
+    def _normalize_blanks(raw: object) -> list[dict[str, Any]]:
+        """把 LLM 返回的 blanks 规整成 ``[{"index": int, "hint": str}]``（最多 3 个空）。"""
+        blanks: list[dict[str, Any]] = []
+        if isinstance(raw, list):
+            for i, item in enumerate(raw[:3], start=1):
+                if not isinstance(item, dict):
+                    continue
+                idx = item.get("index", i)
+                index = int(idx) if isinstance(idx, (int, float)) else i
+                hint = str(item.get("hint", "") or "").strip()
+                blanks.append({"index": index, "hint": hint})
+        return blanks
+
+    @staticmethod
+    def _fallback_quiz_question(topic: str) -> dict[str, Any]:
+        """出题兜底：基于主题的确定式填空题（不伪造页码，仍是一道可作答的小测）。"""
+        clean = (topic or "Python 基础").strip()
+        return {
+            "stem": (
+                f"请填空：在 Python 中，关于「{clean}」，最关键的概念是 (1)____，"
+                f"它常见的一个用途是 (2)____。"
+            ),
+            "blanks": [
+                {"index": 1, "hint": "核心概念"},
+                {"index": 2, "hint": "典型用途"},
+            ],
+        }
 
     @staticmethod
     def should_verify(question: str) -> bool:
@@ -221,6 +372,10 @@ class TutorAgent:
             # 因材施教指令组：按 brief 里实际存在的信号逐条注入 system 消息。
             for directive in self._personalization_directives(profile_brief):
                 messages.append({"role": "system", "content": directive})
+        # 有界讲解风格轮换：按对话轮次/画像确定性选风格，相邻轮次开场与收尾不雷同；
+        # 风格标识符只存在于 prompt 内部，输出仍是自然中文且受防泄答规则约束。
+        style = select_reply_style("tutor", len(conversation_history) // 2, profile_brief)
+        messages.append({"role": "system", "content": REPLY_STYLE_DIRECTIVES[style]})
         if evidence_chunks:
             # KC 图谱感知扩展：来自前置 KC 的证据显式标注，提示导师「学生的困惑
             # 可能源于前置知识没掌握」——引导时可先回填前置概念再讲当前主题。

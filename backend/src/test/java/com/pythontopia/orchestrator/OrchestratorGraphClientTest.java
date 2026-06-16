@@ -74,7 +74,7 @@ class OrchestratorGraphClientTest {
             "偏好示例驱动",
             List.of("PY43-KC-001", "PY43-KC-010"));
 
-    client.turnStream(7L, request, List.of("PY43-KC-016", "PY43-KC-022"), emitter);
+    client.turnStream(7L, request, List.of("PY43-KC-016", "PY43-KC-022"), emitter, () -> {});
 
     String body = capturedBody.get(5, TimeUnit.SECONDS);
     assertThat(capturedPath.get(5, TimeUnit.SECONDS))
@@ -117,7 +117,7 @@ class OrchestratorGraphClientTest {
     OrchestratorTurnRequest request =
         new OrchestratorTurnRequest("hi", "sess-abc", null, null, null, null, null, null);
 
-    client.turnStream(42L, request, List.of(), emitter);
+    client.turnStream(42L, request, List.of(), emitter, () -> {});
 
     String body = capturedBody.get(5, TimeUnit.SECONDS);
     JsonNode json = new ObjectMapper().readTree(body);
@@ -139,7 +139,8 @@ class OrchestratorGraphClientTest {
   private OrchestratorGraphClient newClient(int port) {
     GraphServiceProperties properties =
         new GraphServiceProperties("http://127.0.0.1:" + port, "http://rag.test", "secret");
-    return new OrchestratorGraphClient(properties, new ObjectMapper(), new SseRelayExecutor());
+    return new OrchestratorGraphClient(
+        properties, new ObjectMapper(), new SseRelayExecutor(), 2_000, 10_000);
   }
 
   private int startFakeGraph(

@@ -215,6 +215,10 @@ export function toAguiEvent(eventName: string, raw: string): AguiEvent | null {
     // ── 历史事件名 ──
     case 'plan':
       return { type: 'CUSTOM', name: 'plan', value: data as SsePlan };
+    // 单步派发失败（非终止）：计划中某个 agent 失败，整轮继续、result 仍会到达；
+    // 不映射 RUN_ERROR（那会把整轮置为失败态），步骤失败展示由 STATE_DELTA 承担。
+    case 'step_error':
+      return { type: 'CUSTOM', name: 'step_error', value: data };
     case 'trace': {
       const step = data as SseTraceEvent;
       return step.phase === 'finish'

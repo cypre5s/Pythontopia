@@ -3,7 +3,7 @@
  * 课件 `@` 引用菜单（展示型）。仿 Alethicode AtMentionMenu，像素牛皮纸风格。
  * 由 useCoursewareMention 提供 groups / activeIndex，选中通过 select 事件回传。
  */
-import { computed } from 'vue';
+import { computed, nextTick, watch } from 'vue';
 import type { MentionGroup, MentionItem } from '@/composables/useCoursewareMention';
 
 const props = defineProps<{
@@ -11,6 +11,21 @@ const props = defineProps<{
   groups: MentionGroup[];
   activeIndex: number;
 }>();
+
+// 按"下/上"键移动选中项时，让选中项滚动进可视区（菜单本身可滚，但只改 class 不滚 DOM）。
+const itemEls = new Map<number, HTMLElement>();
+function setItemRef(index: number, el: unknown): void {
+  if (el instanceof HTMLElement) itemEls.set(index, el);
+  else itemEls.delete(index);
+}
+watch(
+  () => props.activeIndex,
+  (idx) => {
+    void nextTick(() => {
+      itemEls.get(idx)?.scrollIntoView({ block: 'nearest' });
+    });
+  },
+);
 
 const emit = defineEmits<{
   (event: 'select', item: MentionItem): void;
@@ -56,6 +71,7 @@ function entriesOf(group: MentionGroup): FlatEntry[] {
       <button
         v-for="entry in entriesOf(group)"
         :key="entry.item.token"
+        :ref="(el) => setItemRef(entry.index, el)"
         type="button"
         class="mention-item"
         :class="{ 'mention-item--active': entry.index === props.activeIndex }"

@@ -19,11 +19,16 @@ from pythontopia_graph.nodes.evidence_fetcher import RagHit
 # critic 无异议时 referee 直接采纳 solver 的默认置信度。
 _ADOPT_CONFIDENCE = 0.85
 
+# 辩论各步 token 上限：solver/referee 是答案产出方，放足篇幅避免「草答」过短；critic 仅挑错从简。
+_DEBATE_MAX_TOKENS = 2048
+_CRITIC_MAX_TOKENS = 800
+
 _SOLVER_SYSTEM = (
-    "你是 Pythontopia 答疑 Solver。针对难题给出一版**草答**："
+    "你是 Pythontopia 答疑 Solver。针对难题给出一版**尽量充分**的解答草稿："
     "用中文、Markdown；有课件证据须用 [页 X] 引用，无证据须标注「基于通识知识」；"
-    "只给引导与关键片段，禁止给出可直接提交的完整答案。"
-    '只输出 JSON 对象，schema: {"draft": "<草答 Markdown>"}。'
+    "请把思路、关键步骤与必要的代码片段讲清楚（可逐步推导、配示例），"
+    "但仍不要给出可直接照抄提交的完整作业答案。"
+    '只输出 JSON 对象，schema: {"draft": "<解答草稿 Markdown>"}。'
 )
 
 _CRITIC_SYSTEM = (
@@ -57,8 +62,21 @@ class DebateResult:
 class DebateGraph:
     """Solver→Critic→Referee 复核子图（异常回退 None）。"""
 
+    # 节点中文工位名（C1·事件源头）：run_events 在 node_start/node_finish 事件里随 node 一并下发，
+    # 路由按它发 STEP_* trace 的 agent_label，前端绝不显英文 node 名。
+    NODE_LABELS: dict[str, str] = {
+        "solver": "求解者",
+        "critic": "质疑者",
+        "referee": "仲裁者",
+    }
+
     def __init__(self, provider: LlmProvider) -> None:
         self.provider = provider
+
+    @classmethod
+    def _node_event(cls, node: str) -> dict[str, str]:
+        """构造带中文 agent_label 的节点事件载荷（事件源头附 label）。"""
+        return {"node": node, "agent_label": cls.NODE_LABELS.get(node, node)}
 
     async def run(
         self,
@@ -78,27 +96,28 @@ class DebateGraph:
         question: str,
         evidence_chunks: list[RagHit],
         profile_brief: str = "",
-    ) -> AsyncIterator[tuple[str, str | DebateResult | None]]:
+    ) -> AsyncIterator[tuple[str, dict[str, str] | DebateResult | None]]:
         """逐节点产出事件，供路由发真实 solver/critic/referee start/finish trace。
 
-        事件序列：(node_start, name) → (node_finish, name) …，末尾 (result, DebateResult|None)。
+        事件序列：(node_start, {node, agent_label}) → (node_finish, {node, agent_label}) …，
+        末尾 (result, DebateResult|None)。node_* 载荷自带中文 agent_label（事件源头·C1）。
         任一步异常 → 末尾产出 (result, None)（此前 start 未 finish 的节点由调用方补 error finish）。
         """
         try:
-            yield ("node_start", "solver")
+            yield ("node_start", self._node_event("solver"))
             solver_text = await self._solver(question, evidence_chunks, profile_brief)
-            yield ("node_finish", "solver")
+            yield ("node_finish", self._node_event("solver"))
 
-            yield ("node_start", "critic")
+            yield ("node_start", self._node_event("critic"))
             has_objection, critique = await self._critic(question, solver_text, evidence_chunks)
-            yield ("node_finish", "critic")
+            yield ("node_finish", self._node_event("critic"))
 
             rounds = [
                 DebateRound("solver", solver_text),
                 DebateRound("critic", critique),
             ]
 
-            yield ("node_start", "referee")
+            yield ("node_start", self._node_event("referee"))
             if has_objection:
                 answer, confidence = await self._referee(
                     question, solver_text, critique, evidence_chunks,
@@ -107,7 +126,7 @@ class DebateGraph:
                 # critic 无异议 → referee 直接采纳 solver，不再消耗一次 LLM 调用。
                 answer, confidence = solver_text, _ADOPT_CONFIDENCE
             rounds.append(DebateRound("referee", answer))
-            yield ("node_finish", "referee")
+            yield ("node_finish", self._node_event("referee"))
 
             yield ("result", DebateResult(answer=answer, rounds=rounds, confidence=confidence))
         except Exception:  # noqa: BLE001 - 子图边界：任一步失败回退普通答疑，绝不让难题崩答疑
@@ -123,7 +142,8 @@ class DebateGraph:
         if evidence_message is not None:
             messages.append(evidence_message)
         messages.append({"role": "user", "content": question})
-        response = await self.provider.chat(messages)
+        # 放足篇幅（max_tokens）避免草稿被截断变短；JSON 结构由默认 json_mode 保证。
+        response = await self.provider.chat(messages, max_tokens=_DEBATE_MAX_TOKENS)
         draft = self._text_field(response.content_json, "draft")
         return draft or (response.content_text or "").strip()
 
@@ -137,7 +157,7 @@ class DebateGraph:
         messages.append(
             {"role": "user", "content": f"问题：{question}\n\nSolver 草答：\n{solver_text}"},
         )
-        response = await self.provider.chat(messages)
+        response = await self.provider.chat(messages, max_tokens=_CRITIC_MAX_TOKENS)
         data = response.content_json or {}
         has_objection = bool(data.get("has_objection", False))
         critique = str(data.get("critique", "") or "").strip()
@@ -162,7 +182,8 @@ class DebateGraph:
                 ),
             },
         )
-        response = await self.provider.chat(messages)
+        # 定稿同样放足篇幅，避免复核后的答案反而比草稿更短。
+        response = await self.provider.chat(messages, max_tokens=_DEBATE_MAX_TOKENS)
         data = response.content_json or {}
         answer = str(data.get("answer", "") or "").strip() or solver_text
         confidence = self._clamp_confidence(data.get("confidence"))

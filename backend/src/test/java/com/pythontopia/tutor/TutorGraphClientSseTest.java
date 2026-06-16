@@ -70,7 +70,8 @@ class TutorGraphClientSseTest {
         null,
         "认知风格: visual",
         emitter,
-        results::add);
+        results::add,
+        () -> {});
 
     awaitEvent(emitter, "event:result");
 
@@ -91,7 +92,7 @@ class TutorGraphClientSseTest {
     XfyunImageUnderstandingService imageUnderstanding = mock(XfyunImageUnderstandingService.class);
     when(imageUnderstanding.isEnabled()).thenReturn(false);
     return new TutorGraphClient(
-        properties, new ObjectMapper(), new SseRelayExecutor(), imageUnderstanding);
+        properties, new ObjectMapper(), new SseRelayExecutor(), imageUnderstanding, 2_000, 10_000);
   }
 
   private int startFakeGraph() throws IOException {
