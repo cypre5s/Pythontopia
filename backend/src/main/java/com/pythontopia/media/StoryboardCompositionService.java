@@ -56,6 +56,34 @@ public class StoryboardCompositionService {
   public record SceneSpec(
       String imagePrompt, String narration, String voice, int durationSeconds, List<String> kcCodes) {}
 
+  /**
+   * 合成进度回调 + 讯飞路数闸门。同步端点（{@code /api/media/storyboard/video}）用 {@link #NOOP}，
+   * 行为与重构前完全一致；异步 job worker 注入实现：{@link #onProgress} 回写 {@code progress_json}
+   * 并向 SSE 订阅者推 trace（{@code roleKey}=illustrator/narrator/editor），
+   * {@code acquire*Slot}/{@code release*Slot} 接到全局 Semaphore 限讯飞并发（acquire 在 TTS/TTI 调用前）。
+   */
+  public interface ProgressSink {
+
+    /** 一个合成阶段开始。 */
+    void onProgress(
+        String phase, int sceneIndex, int sceneTotal, String roleKey, String message, int percent);
+
+    /** 文生图（插画师）调用前获取一路讯飞 TTI 配额；NOOP 不限流。 */
+    default void acquireImageSlot() throws InterruptedException {}
+
+    /** 释放一路讯飞 TTI 配额（务必在 finally 调用）。 */
+    default void releaseImageSlot() {}
+
+    /** 语音合成（配音师）调用前获取一路讯飞 TTS 配额；NOOP 不限流。 */
+    default void acquireTtsSlot() throws InterruptedException {}
+
+    /** 释放一路讯飞 TTS 配额（务必在 finally 调用）。 */
+    default void releaseTtsSlot() {}
+
+    /** 无操作 sink：保持同步端点旧行为（无进度上报、无并发闸门）。 */
+    ProgressSink NOOP = (phase, sceneIndex, sceneTotal, roleKey, message, percent) -> {};
+  }
+
   /** ffmpeg 是否可用（缓存探测结果）。 */
   public boolean isAvailable() {
     Boolean cached = availableCache;
@@ -79,7 +107,16 @@ public class StoryboardCompositionService {
     return ok;
   }
 
+  /** 同步合成（{@code /api/media/storyboard/video}）：无进度上报、无并发闸门，行为与重构前一致。 */
   public MediaAsset compose(Long userId, List<SceneSpec> scenes) {
+    return compose(userId, scenes, ProgressSink.NOOP);
+  }
+
+  /**
+   * 带进度回调 + 讯飞路数闸门的合成（异步 job worker 用）。逐镜：插画师出图（{@code acquireImageSlot}）
+   * → 配音师配音（{@code acquireTtsSlot}）→ 定格片段 → 剪辑师 concat 成片，每阶段经 {@code sink} 上报。
+   */
+  public MediaAsset compose(Long userId, List<SceneSpec> scenes, ProgressSink sink) {
     if (scenes == null || scenes.isEmpty()) {
       throw new BusinessException(HttpStatus.BAD_REQUEST, "STORYBOARD_EMPTY", "分镜为空，无法合成视频");
     }
@@ -93,6 +130,8 @@ public class StoryboardCompositionService {
           "服务端未安装 ffmpeg，已降级为实时剧场播放");
     }
 
+    int total = scenes.size();
+    long units = 2L * total + 1; // 每镜 2 步（图/音）+ 1 步成片，用于进度百分比。
     Path work = null;
     boolean degraded = false;
     List<String> kcAll = new ArrayList<>();
@@ -103,9 +142,16 @@ public class StoryboardCompositionService {
         SceneSpec scene = scenes.get(i);
         kcAll.addAll(scene.kcCodes() == null ? List.of() : scene.kcCodes());
 
-        MediaAsset image =
-            imageService.generate(
-                userId, resolvePrompt(scene), labelOf(scene), scene.kcCodes());
+        sink.onProgress(
+            "illustrate", i, total, "illustrator", "插画师绘制第 " + (i + 1) + " 镜",
+            percentOf(2L * i, units));
+        MediaAsset image;
+        sink.acquireImageSlot();
+        try {
+          image = imageService.generate(userId, resolvePrompt(scene), labelOf(scene), scene.kcCodes());
+        } finally {
+          sink.releaseImageSlot();
+        }
         degraded = degraded || image.degraded();
         Path imagePath =
             storage
@@ -117,13 +163,17 @@ public class StoryboardCompositionService {
                             "IMAGE_MISSING",
                             "分镜插画落盘失败"));
 
-        Path audioPath = synthAudio(userId, scene, work, i);
+        sink.onProgress(
+            "narrate", i, total, "narrator", "配音师朗读第 " + (i + 1) + " 镜",
+            percentOf(2L * i + 1, units));
+        Path audioPath = synthAudio(userId, scene, work, i, sink);
         if (audioPath == null) {
           degraded = true; // 没有真实 TTS 音轨即视为降级（静默片段）。
         }
         clips.add(buildClip(work, i, imagePath, audioPath, scene.durationSeconds()));
       }
 
+      sink.onProgress("edit", total, total, "editor", "剪辑师拼接成片", percentOf(2L * total, units));
       Path finalMp4 = concat(work, clips);
       byte[] bytes = Files.readAllBytes(finalMp4);
       String file = storage.write("mp4", bytes);
@@ -140,6 +190,9 @@ public class StoryboardCompositionService {
     } catch (BusinessException ex) {
       throw ex;
     } catch (Exception ex) {
+      if (ex instanceof InterruptedException) {
+        Thread.currentThread().interrupt();
+      }
       log.error("storyboard composition failed", ex);
       throw new BusinessException(
           HttpStatus.BAD_GATEWAY, "VIDEO_COMPOSE_FAILED", "短视频合成失败：" + ex.getMessage());
@@ -148,11 +201,13 @@ public class StoryboardCompositionService {
     }
   }
 
-  private Path synthAudio(Long userId, SceneSpec scene, Path work, int index) {
+  private Path synthAudio(Long userId, SceneSpec scene, Path work, int index, ProgressSink sink)
+      throws InterruptedException {
     String narration = scene.narration() == null ? "" : scene.narration().trim();
     if (narration.isEmpty()) {
       return null;
     }
+    sink.acquireTtsSlot();
     try {
       byte[] audio =
           ttsService.synthesize(
@@ -164,7 +219,17 @@ public class StoryboardCompositionService {
       // TTS 未配置/失败 → 该片段无音轨，按时长定格（不阻塞合成）。
       log.debug("scene {} tts unavailable, silent clip: {}", index, ex.getMessage());
       return null;
+    } finally {
+      sink.releaseTtsSlot();
     }
+  }
+
+  private static int percentOf(long done, long total) {
+    if (total <= 0) {
+      return 0;
+    }
+    long pct = Math.round(done * 100.0 / total);
+    return (int) Math.max(0, Math.min(100, pct));
   }
 
   private Path buildClip(Path work, int index, Path image, Path audio, int durationSeconds)

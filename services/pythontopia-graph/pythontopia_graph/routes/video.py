@@ -63,12 +63,26 @@ def _configure_bilibili_proxy() -> None:
         or ""
     ).strip()
     if proxy:
+        # 兜底：即便 set_proxy 不可用，也让 bilibili-api 的 httpx(trust_env=True) 经代理出网。
+        os.environ.setdefault("HTTPS_PROXY", proxy)
+        os.environ.setdefault("HTTP_PROXY", proxy)
         try:
             from bilibili_api import request_settings  # noqa: PLC0415
 
             request_settings.set_proxy(proxy)
-        except Exception:  # noqa: BLE001 - 老版本无该 API 时忽略，不阻塞检索
-            pass
+            _LOG.info("bilibili 代理已配置: %s", proxy)
+        except Exception as exc:  # noqa: BLE001 - 老版本无该 API：已回退 HTTPS_PROXY env 兜底
+            _LOG.warning(
+                "bilibili request_settings.set_proxy 不可用(%s)，回退 HTTPS_PROXY env 兜底",
+                type(exc).__name__,
+            )
+    # 放宽请求超时（老版本无此 API 则忽略）：弱网/过代理时默认超时偏短易失败。
+    try:
+        from bilibili_api import request_settings  # noqa: PLC0415
+
+        request_settings.set_timeout(20.0)
+    except Exception:  # noqa: BLE001 - best-effort，失败不影响检索
+        pass
     _proxy_configured = True
 
 # 任意 HTML 标签（覆盖 B站标题里的 <em class="keyword"> / </em> 高亮）。
@@ -152,12 +166,22 @@ async def _bilibili_search_videos(keyword: str, page: int) -> dict[str, Any]:
     from bilibili_api import search  # noqa: PLC0415 - 惰性 import：缺包/无网时不影响应用导入与单测
 
     _configure_bilibili_proxy()
-    result: dict[str, Any] = await search.search_by_type(
-        keyword=keyword,
-        search_type=search.SearchObjectType.VIDEO,
-        page=page,
-    )
-    return result
+    # 瞬时网络/风控抖动重试一次再抛（缺包 ModuleNotFoundError 在 import 处已先于此抛出）。
+    last_exc: Exception | None = None
+    for attempt in range(2):
+        try:
+            result: dict[str, Any] = await search.search_by_type(
+                keyword=keyword,
+                search_type=search.SearchObjectType.VIDEO,
+                page=page,
+            )
+            return result
+        except Exception as exc:  # noqa: BLE001 - 重试一次；仍失败则上抛由路由转 502 结构化错误
+            last_exc = exc
+            if attempt == 0:
+                _LOG.warning("bilibili search 第 %d 次失败，重试: %s", attempt + 1, exc)
+                await asyncio.sleep(0.8)
+    raise last_exc if last_exc is not None else RuntimeError("bilibili search failed")
 
 
 def _clean_title(raw: str) -> str:
