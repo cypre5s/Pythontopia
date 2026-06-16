@@ -282,3 +282,37 @@
    `coach.decide -> 我在选择最合适的下一步`，`coach.guardrail -> 我在检查提示是否安全`。
 2. 只展示节点级进度和安全状态，不展示 prompt、chain-of-thought、内部打分细节。
 3. 增加 focused component test，覆盖 trace 到人话进度的映射。
+
+## 第八批执行记录
+
+第八批已完成 bounded coach progress：
+
+1. Graph trace
+   - `TutorWorkflowGraph` 在 coach 模式下新增 `coach.load_state` 与 `coach.update_state`
+     trace，明确区分“读取学生状态”和“更新导学状态”。
+   - 卡片生成阶段新增 `coach.tool.<tool_name>` trace，例如 `coach.tool.execution_trace`，
+     让 UI 可以展示“manager agent 正在调用哪个教育工具类别”。
+   - 失败时同步结束 tool trace，避免前端留下悬空进度。
+
+2. Frontend projection
+   - `TutorWorkflowPanel` 将 trace node 投影为学生可理解的短句：
+     “正在判断你卡在哪里”“正在选择下一步提示”“正在生成导学卡”“正在检查是否过度提示”等。
+   - UI 只显示步骤级状态：进行中、完成、重新调整、未通过。
+   - 不展示 raw node name、prompt、内部打分或 chain-of-thought。
+
+3. 验证
+   - Graph focused gate：
+     `python3 -m pytest -q tests/test_tutor_workflow_coach_graph.py tests/test_sse_agui.py`
+   - 结果：21 passed。
+   - Frontend focused gate：
+     `npm run test -- tests/components/training/TutorWorkflowPanel.spec.ts`
+   - 结果：4 tests passed。
+   - Frontend type gate：`npm run typecheck` 通过。
+
+## 第九批建议
+
+下一批进入 Task 11 终验，但先复核 acceptance checklist：
+
+1. 已实现项用 focused/full tests 证明，不靠口头判断。
+2. 对“后续提交是否更新 coach state”单独检查代码路径；如果仍只是动作反馈事件，需要补一个小批次。
+3. 最后再跑 graph、backend、frontend 的最终验收组合，并记录未覆盖的真栈浏览器/ECS/多端范围。
