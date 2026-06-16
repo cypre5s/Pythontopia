@@ -1,5 +1,40 @@
 # Changelog
 
+## 2026-06-16 — 百晓工坊单对话治理验收 + AI/安全本地质量门刷新
+
+> 本节汇总 2026-06-14 至 2026-06-16 在 `main` 上的本地提交队列与本轮验收。验收报告见
+> `docs/reports/2026-06-16-local-acceptance.md`；本节不代表公网 ECS 已重新验收。
+
+- **安全围墙与 AI 表面加固**：新增安全 harness 与内部鉴权覆盖，收紧 AI 相关内部接口访问边界；
+  保留公网安全报告中的 TLS、登录限流、Swagger 暴露等线上加固项，避免把本地 harness 通过误写成公网安全闭环。
+- **百晓工坊单对话工具治理**：落地 ChatGPT-like 单对话入口，将 `ASK / EXPLAIN_CODE / FIX_BUG /
+  ASKME / REVIEW / HANDOUT / MINDMAP / READING / STORYBOARD / PRACTICE / CODE_LAB / PLAN /
+  PROGRESS / MY_STUDY / VIDEO / NAVIGATE` 收进能力分组、意图路由、工具 timeline 与透明调用链；
+  能力面板用于发现功能，不限制普通学生能力。
+- **AI 导学助手 agent 化地基**：新增 manager workflow 方向的本地实现基础，为 AC/WA 后的主动一句话邀请、
+  点击继续、教育工具调度和复盘/纠错闭环做准备；后续按
+  `docs/plans/2026-06-16-guide-coach-agent-education-agent-refactor.md` 分批落地。
+- **AI 导学助手第一批 manager agent 实现**：新增 `TutorStudentState`、`GuideCoachDecision`、
+  `GuideCoachAgent` 与 coach golden eval，先在 graph 服务内证明“学生状态 + 判题证据 + 工具白名单”
+  能结构化选择下一步教育动作；批判性 review 记录见
+  `docs/reports/2026-06-16-guide-coach-plan-review.md`。
+- **主线与课件学习增强**：加入章末测试扩展、课件学习链路、公用导学验收 shell、图书馆阅读路径恢复；
+  Stage07 工坊验收契约修正为“资源消费后产生 `RESOURCE_READ`”，不再把资源生成视为阅读完成。
+- **学习画像与资源回流**：新增资源消费掌握度 delta 支持，恢复百晓答案轻反馈事件 `answer_feedback`，
+  为后续画像、推荐和工具选择提供更低摩擦的反馈信号。
+- **多媒体与体验扩展**：加入视频工作室任务与洞察、NPC 个性化寒暄预热、Bug Mine 代码剧场 replay、
+  `town_hub` 路线简化、生产部署加固与项目交接材料刷新。
+- **本轮验收修正**：对齐 graph provider 失败后的 harness keyword fallback 断言；修复/更新 HUD guide 槽位、
+  章测解锁、资源卡打开、ASKME 三轮 ask/judge 上下文、GuideOverlay 工具时间线等前端规格。
+- **本地验证（实跑）**：
+  - `cd services/pythontopia-graph && python3 -m pytest -q`：632 passed，1 warning。
+  - `python3 -m pytest -q security/tests`：36 passed。
+  - AI 导学助手第一批实现后 graph 全量：645 passed，1 warning。
+  - `cd backend && mvn -s .mvn/settings.build.xml test`：756 tests，0 failures，0 errors。
+  - `cd frontend && npm run typecheck`：通过。
+  - `cd frontend && npm run test`：202 files / 1973 tests passed。
+- **未覆盖**：本节未执行 `./dev.sh` 真栈浏览器验收、Android/Windows/微信端回归、ECS 公网验收。
+
 ## 2026-06-13 — Android R-15 主线冒险闭环 + 契约对齐 + 单 town_hub
 
 > 据提交 `64c0d7f5` 记录：本次仅提交 `android/`，将原生客户端对齐当前后端/Web 的
