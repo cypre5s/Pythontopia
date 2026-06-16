@@ -2,6 +2,7 @@ package com.pythontopia.feynman;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.pythontopia.common.config.GraphServiceProperties;
+import com.pythontopia.common.web.GraphInternalTokenSupport;
 import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -31,6 +32,9 @@ public class FeynmanGraphClient {
       String kcCode, List<Misconception> misconceptions, String studentTeaching) {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
+    // 内部调用令牌：与 IntentGraphClient / RagEmbeddingClient 一致复用 ragAdminToken；
+    // 缺省时不写头，配置 PYT_RAG_ADMIN_TOKEN 后避免费曼对话恒 401。
+    GraphInternalTokenSupport.apply(headers, properties);
     List<GraphMisconception> wire =
         (misconceptions == null ? List.<Misconception>of() : misconceptions)
             .stream().map(GraphMisconception::from).toList();

@@ -1,5 +1,6 @@
 package com.pythontopia.common.web;
 
+import com.pythontopia.common.config.ChapterTestHttpClientProperties;
 import com.pythontopia.common.config.GraphHttpClientProperties;
 import java.time.Duration;
 import org.springframework.boot.web.client.RestTemplateBuilder;
@@ -20,6 +21,21 @@ public class RestClientConfig {
     return builder
         .setConnectTimeout(Duration.ofMillis(httpProperties.connectTimeoutMs()))
         .setReadTimeout(Duration.ofMillis(httpProperties.readTimeoutMs()))
+        .build();
+  }
+
+  /**
+   * 章节试卷生成专用客户端。33/99 题需要多轮模型调用，允许更长读取时间，但连接失败仍沿用 Graph
+   * 客户端的快速失败阈值。
+   */
+  @Bean
+  RestTemplate chapterTestRestTemplate(
+      RestTemplateBuilder builder,
+      GraphHttpClientProperties graphHttpProperties,
+      ChapterTestHttpClientProperties chapterTestHttpProperties) {
+    return builder
+        .setConnectTimeout(Duration.ofMillis(graphHttpProperties.connectTimeoutMs()))
+        .setReadTimeout(Duration.ofMillis(chapterTestHttpProperties.readTimeoutMs()))
         .build();
   }
 

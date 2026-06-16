@@ -10,6 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -62,8 +63,8 @@ public class FeynmanSessionService {
   }
 
   @Transactional
-  public TurnResponse teach(long sessionId, String explanation) {
-    SessionData session = loadSession(sessionId);
+  public TurnResponse teach(long userId, long sessionId, String explanation) {
+    SessionData session = loadSession(userId, sessionId);
     List<Misconception> misconceptions = parseMisconceptions(session.tuteeState());
 
     // 学生本回合的教学先落库为 STUDENT 轮，支撑「误解→你的教学→判题→证据」玻璃盒可溯源。
@@ -116,19 +117,25 @@ public class FeynmanSessionService {
     return new TurnResponse(turnId == null ? 0L : turnId, "TUTEE", reply, null);
   }
 
-  SessionData loadSession(long sessionId) {
-    return jdbc.queryForObject(
-        "SELECT id, user_id, kc_code, problem_id, status, tutee_state::text AS state "
-            + "FROM feynman_session WHERE id = ?",
-        (rs, rowNum) ->
-            new SessionData(
-                rs.getLong("id"),
-                rs.getLong("user_id"),
-                rs.getString("kc_code"),
-                rs.getObject("problem_id", Long.class),
-                rs.getString("status"),
-                rs.getString("state")),
-        sessionId);
+  SessionData loadSession(long userId, long sessionId) {
+    try {
+      return jdbc.queryForObject(
+          "SELECT id, user_id, kc_code, problem_id, status, tutee_state::text AS state "
+              + "FROM feynman_session WHERE id = ? AND user_id = ?",
+          (rs, rowNum) ->
+              new SessionData(
+                  rs.getLong("id"),
+                  rs.getLong("user_id"),
+                  rs.getString("kc_code"),
+                  rs.getObject("problem_id", Long.class),
+                  rs.getString("status"),
+                  rs.getString("state")),
+          sessionId,
+          userId);
+    } catch (EmptyResultDataAccessException exception) {
+      throw new BusinessException(
+          HttpStatus.NOT_FOUND, "FEYNMAN_SESSION_NOT_FOUND", "Feynman session not found");
+    }
   }
 
   private FeynmanGraphClient.FeynmanOutput fallbackStep(

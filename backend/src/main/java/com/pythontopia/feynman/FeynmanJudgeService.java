@@ -46,8 +46,8 @@ public class FeynmanJudgeService {
   }
 
   @Transactional
-  public Verdict judge(long sessionId) {
-    FeynmanSessionService.SessionData session = sessionService.loadSession(sessionId);
+  public Verdict judge(long userId, long sessionId) {
+    FeynmanSessionService.SessionData session = sessionService.loadSession(userId, sessionId);
     String code = latestProducedCode(sessionId);
     if (code == null || code.isBlank() || FeynmanAntiCheat.looksLikeAnswerDump(code)) {
       publishFailed(session);

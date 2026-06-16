@@ -20,6 +20,19 @@ services/pythontopia-rag/data/*.parquet
 .env.local
 deploy/.env
 
+# 私钥 / 凭据 / 密钥库（绝不入库；防止 ssh/tls 私钥被 `git add -A` 误提交）
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa
+id_ed25519
+
+# 根目录发布包构建产物（~46MB，可重生，不入库；inbox zip 已在下方单独忽略）
+/pythontopia-web.zip
+
 .DS_Store
 
 # R-100 子代理工作产出
@@ -67,3 +80,6 @@ wechat-minigame/js/
 .claude/
 .playwright-mcp/
 test.md
+
+# 发布包构建产物
+output/

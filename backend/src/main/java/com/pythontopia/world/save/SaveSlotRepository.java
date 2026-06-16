@@ -13,6 +13,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.http.HttpStatus;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
@@ -75,22 +76,31 @@ public class SaveSlotRepository {
    * <p>V114 扩展列（scene_name / unlocked_buildings / accumulated_play_seconds / inventory_items）
    * 此处刻意回退到 DB 默认值；需预置的调用方应在此后调 {@link #updateExtension}。
    */
+  @Transactional
   public SaveSlot createSlot(Long userId, int slotIndex, String displayName) {
     requireValidIndex(slotIndex);
     if (displayName == null || displayName.isBlank()) {
       throw new BusinessException(
           HttpStatus.BAD_REQUEST, "SAVE_SLOT_NAME_REQUIRED", "Save slot displayName is required");
     }
+    lockUserSaveState(userId);
     boolean shouldActivate = findAll(userId).isEmpty();
-    jdbcTemplate.update(
-        """
-        INSERT INTO save_slot (user_id, slot_index, display_name, is_active)
-        VALUES (?, ?, ?, ?)
-        """,
-        userId,
-        slotIndex,
-        displayName,
-        shouldActivate);
+    try {
+      jdbcTemplate.update(
+          """
+          INSERT INTO save_slot (user_id, slot_index, display_name, is_active)
+          VALUES (?, ?, ?, ?)
+          """,
+          userId,
+          slotIndex,
+          displayName,
+          shouldActivate);
+    } catch (DuplicateKeyException exception) {
+      throw new BusinessException(
+          HttpStatus.CONFLICT,
+          "SAVE_SLOT_CONFLICT",
+          "Save slot " + slotIndex + " already exists");
+    }
     return findOne(userId, slotIndex).orElseThrow();
   }
 
@@ -98,6 +108,7 @@ public class SaveSlotRepository {
   @Transactional
   public SaveSlot activateSlot(Long userId, int slotIndex) {
     requireValidIndex(slotIndex);
+    lockUserSaveState(userId);
     if (findOne(userId, slotIndex).isEmpty()) {
       throw new BusinessException(
           HttpStatus.NOT_FOUND, "SAVE_SLOT_NOT_FOUND", "Save slot " + slotIndex + " not found");
@@ -200,6 +211,11 @@ public class SaveSlotRepository {
           "SAVE_SLOT_INDEX_INVALID",
           "slotIndex must be between 0 and " + MAX_SLOT_INDEX);
     }
+  }
+
+  private void lockUserSaveState(Long userId) {
+    // Negative keys keep this lock namespace separate from the submission service's user lock.
+    jdbcTemplate.queryForObject("SELECT pg_advisory_xact_lock(?)", Object.class, -userId);
   }
 
   private SaveSlot map(ResultSet rs, int rowNum) throws SQLException {

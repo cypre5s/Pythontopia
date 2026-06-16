@@ -32,6 +32,39 @@ public class StaticCodeChecker {
   public StaticCodeChecker(
       @Value("${pythontopia.judge.python:python3}") String pythonExecutable) {
     this.pythonExecutable = pythonExecutable;
+    selfCheck();
+  }
+
+  /**
+   * 启动自检：用最小合法代码 {@code pass} 跑一次 AST 白名单。若解释器缺标准库（如 {@code ast}）或无法启动，
+   * 记 {@code log.error} 提示运维（演示阻断级，根因：运行镜像曾装 python3-minimal），
+   * 但<strong>绝不</strong> fail-fast 阻断应用启动。
+   */
+  private void selfCheck() {
+    CheckResult probe;
+    try {
+      probe = runAstWhitelist("pass");
+    } catch (RuntimeException ex) {
+      log.error(
+          "StaticCodeChecker 启动自检异常（已忽略，不阻断启动）：python={} err={}",
+          pythonExecutable,
+          ex.getMessage());
+      return;
+    }
+    if (probe.systemError()) {
+      log.error(
+          "StaticCodeChecker 启动自检失败：python 解释器 '{}' 无法运行 AST 白名单（{}）；"
+              + "运行镜像很可能装了 python3-minimal（缺 ast 等标准库），将导致全部提交被误判。"
+              + "请改装完整 python3。",
+          pythonExecutable,
+          probe.failureReason());
+    } else if (!probe.passed()) {
+      log.warn(
+          "StaticCodeChecker 启动自检：AST 白名单对 `pass` 返回非通过（{}），请核对 ast_whitelist.py。",
+          probe.failureReason());
+    } else {
+      log.info("StaticCodeChecker 启动自检通过：AST 白名单可用（python={}）。", pythonExecutable);
+    }
   }
 
   // ---- Phase 1 正则黑名单（已补 known bypass patterns） ----
@@ -89,22 +122,22 @@ public class StaticCodeChecker {
 
   public CheckResult check(String code) {
     if (code == null) {
-      return new CheckResult(false, "EMPTY_CODE");
+      return rejected("EMPTY_CODE");
     }
     if (code.length() > MAX_CODE_LENGTH) {
-      return new CheckResult(false, "CODE_TOO_LONG");
+      return rejected("CODE_TOO_LONG");
     }
     for (RegexRule rule : RULES) {
       Matcher matcher = rule.pattern().matcher(code);
       if (matcher.find()) {
-        return new CheckResult(false, rule.label() + ":" + matcher.group());
+        return rejected(rule.label() + ":" + matcher.group());
       }
     }
     CheckResult astResult = runAstWhitelist(code);
     if (!astResult.passed()) {
       return astResult;
     }
-    return new CheckResult(true, null);
+    return accepted();
   }
 
   /** Phase 2：AST 白名单（python3 ast_whitelist.py），拦截正则难覆盖的绕过写法。 */
@@ -116,7 +149,7 @@ public class StaticCodeChecker {
           getClass().getClassLoader().getResourceAsStream("judge/ast_whitelist.py")) {
         if (in == null) {
           log.warn("ast_whitelist.py missing from classpath; skipping AST phase");
-          return new CheckResult(true, null);
+          return accepted();
         }
         Files.write(scriptFile, in.readAllBytes());
       }
@@ -130,20 +163,33 @@ public class StaticCodeChecker {
       boolean finished = process.waitFor(AST_CHECK_TIMEOUT_SECONDS, TimeUnit.SECONDS);
       if (!finished) {
         process.destroyForcibly();
-        return new CheckResult(false, "AST_CHECK_TIMEOUT");
+        return rejected("AST_CHECK_TIMEOUT");
       }
       String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8)
           .trim();
       if (process.exitValue() != 0) {
-        return new CheckResult(false, output.isEmpty() ? "AST_REJECTED" : output);
+        // 解释器自身缺模块 / 脚本崩溃（Python traceback）≠ 学生代码违规：归为基础设施错误，
+        // 不把环境问题判成学生的 CE（任务 A 根因：python3-minimal 缺 ast，首行 import ast 即 ModuleNotFoundError）。
+        // 学生违规走 ast_whitelist.py 的干净输出（banned_* / syntax_error），不含 traceback。
+        if (looksLikeInterpreterFailure(output)) {
+          log.warn(
+              "AST whitelist interpreter failure (treated as SYSTEM_ERROR, not student CE): {}",
+              firstLine(output));
+          return infraError("SYSTEM_ERROR:ast_whitelist_interpreter");
+        }
+        return rejected(output.isEmpty() ? "AST_REJECTED" : output);
       }
-      return new CheckResult(true, null);
-    } catch (IOException | InterruptedException exception) {
-      if (exception instanceof InterruptedException) {
-        Thread.currentThread().interrupt();
-      }
-      log.warn("AST whitelist check failed: {}", exception.getMessage());
-      return new CheckResult(false, "AST_CHECK_ERROR");
+      return accepted();
+    } catch (IOException exception) {
+      // 子进程无法启动（fork/exec 失败、解释器缺失）属基础设施错误，而非学生代码问题。
+      log.warn(
+          "AST whitelist could not launch (treated as SYSTEM_ERROR): {}", exception.getMessage());
+      return infraError("SYSTEM_ERROR:ast_whitelist_launch_failed");
+    } catch (InterruptedException exception) {
+      Thread.currentThread().interrupt();
+      log.warn(
+          "AST whitelist interrupted (treated as SYSTEM_ERROR): {}", exception.getMessage());
+      return infraError("SYSTEM_ERROR:ast_whitelist_interrupted");
     } finally {
       if (scriptFile != null) {
         try {
@@ -159,7 +205,52 @@ public class StaticCodeChecker {
     return new RegexRule(Pattern.compile(regex, Pattern.MULTILINE), label);
   }
 
+  /**
+   * 判断 AST 子进程的合并输出是否为「解释器自身故障」而非学生代码违规。学生违规由 ast_whitelist.py
+   * 打印干净标签（如 {@code banned_import:socket}、{@code syntax_error:...}）且不含 Python traceback；
+   * 一旦出现模块缺失 / 导入失败 / traceback，即判定为基础设施错误。
+   */
+  private static boolean looksLikeInterpreterFailure(String output) {
+    if (output == null || output.isBlank()) {
+      return false;
+    }
+    return output.contains("ModuleNotFoundError")
+        || output.contains("No module named")
+        || output.contains("ImportError")
+        || output.contains("Traceback (most recent call last)");
+  }
+
+  private static String firstLine(String output) {
+    if (output == null) {
+      return "";
+    }
+    int idx = output.indexOf('\n');
+    return idx >= 0 ? output.substring(0, idx) : output;
+  }
+
+  private static CheckResult accepted() {
+    return new CheckResult(true, null, false);
+  }
+
+  private static CheckResult rejected(String reason) {
+    return new CheckResult(false, reason, false);
+  }
+
+  /** 基础设施错误（解释器缺模块/无法启动等）：{@code passed=false} 仍 fail-closed 拦截，但带 SYSTEM_ERROR 信号。 */
+  private static CheckResult infraError(String reason) {
+    return new CheckResult(false, reason, true);
+  }
+
   private record RegexRule(Pattern pattern, String label) {}
 
-  public record CheckResult(boolean passed, String failureReason) {}
+  /**
+   * 静态检查结果。
+   *
+   * @param passed 是否通过（true=放行进入沙箱判题）
+   * @param failureReason 失败原因标签（{@code passed=false} 时有意义）
+   * @param systemError 是否为基础设施错误（解释器缺模块/无法启动等）。<strong>跨包契约</strong>：
+   *     调用方（{@code JudgeService}）应在 {@code systemError()} 为 true 时判为 {@code Verdict.SYSTEM_ERROR}
+   *     （配 {@code SubmissionStatus.ERROR}），而非把环境问题当成学生代码的 CE。
+   */
+  public record CheckResult(boolean passed, String failureReason, boolean systemError) {}
 }

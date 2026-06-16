@@ -1,6 +1,7 @@
 package com.pythontopia.submission.judge;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import org.junit.jupiter.api.Test;
 
@@ -12,7 +13,8 @@ import org.junit.jupiter.api.Test;
  */
 class SandboxResourceLimitTest {
 
-  private final SubprocessPythonSandbox sandbox = new SubprocessPythonSandbox("python3");
+  // ulimit 资源限制测试与网络隔离正交，固定 isolation=none 保证不依赖 CI 是否开启 user namespace。
+  private final SubprocessPythonSandbox sandbox = new SubprocessPythonSandbox("python3", "none");
   private static final JudgeTestCase ECHO_HELLO = new JudgeTestCase("", "hello", 3000);
 
   @Test
@@ -65,5 +67,24 @@ class SandboxResourceLimitTest {
     JudgeTestCase tc = new JudgeTestCase("", "", 3000);
     SandboxRunResult result = sandbox.run(code, tc);
     assertThat(result.stdout().length()).isLessThanOrEqualTo(64 * 1024);
+  }
+
+  @Test
+  void networkIsBlockedWhenIsolationAvailable() {
+    SubprocessPythonSandbox isolated = new SubprocessPythonSandbox("python3", "auto");
+    assumeTrue(
+        isolated.isNetworkIsolated(),
+        "unprivileged user namespaces unavailable here; network isolation skipped");
+    // 学生代码尝试出网；隔离生效时新 netns 无网络接口 → OSError，打印 BLOCKED。
+    String code =
+        "import socket\n"
+            + "try:\n"
+            + "  socket.create_connection(('1.1.1.1', 80), 2)\n"
+            + "  print('REACHABLE')\n"
+            + "except OSError:\n"
+            + "  print('BLOCKED')\n";
+    SandboxRunResult result = isolated.run(code, new JudgeTestCase("", "BLOCKED", 3000));
+    assertThat(result.stdout()).contains("BLOCKED");
+    assertThat(result.stdout()).doesNotContain("REACHABLE");
   }
 }

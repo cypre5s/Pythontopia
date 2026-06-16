@@ -19,10 +19,13 @@ import org.springframework.stereotype.Service;
 @Service
 public class AuthService {
 
+  private static final String LOGIN_TIMING_DUMMY_PASSWORD = "pythontopia-login-timing-dummy";
+
   private final UserRepository userRepository;
   private final PasswordEncoder passwordEncoder;
   private final JwtService jwtService;
   private final TeacherInviteProperties teacherInviteProperties;
+  private final String loginTimingDummyHash;
 
   public AuthService(
       UserRepository userRepository,
@@ -33,6 +36,7 @@ public class AuthService {
     this.passwordEncoder = passwordEncoder;
     this.jwtService = jwtService;
     this.teacherInviteProperties = teacherInviteProperties;
+    this.loginTimingDummyHash = passwordEncoder.encode(LOGIN_TIMING_DUMMY_PASSWORD);
   }
 
   public UserDto register(RegisterRequest request) {
@@ -57,11 +61,11 @@ public class AuthService {
   }
 
   public LoginResponse login(LoginRequest request) {
-    UserAccount user =
-        userRepository
-            .findByUsername(request.username())
-            .orElseThrow(
-                () -> new BusinessException(HttpStatus.UNAUTHORIZED, "BAD_CREDENTIALS", "Bad credentials"));
+    UserAccount user = userRepository.findByUsername(request.username()).orElse(null);
+    if (user == null) {
+      passwordEncoder.matches(request.password(), loginTimingDummyHash);
+      throw new BusinessException(HttpStatus.UNAUTHORIZED, "BAD_CREDENTIALS", "Bad credentials");
+    }
     if (!passwordEncoder.matches(request.password(), user.passwordHash())) {
       throw new BusinessException(HttpStatus.UNAUTHORIZED, "BAD_CREDENTIALS", "Bad credentials");
     }

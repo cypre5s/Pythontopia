@@ -38,7 +38,7 @@ class FeynmanJudgeServiceTest {
 
   @Test
   void judgeFailsWhenProducedCodeDoesNotMatchRepresentativeHiddenCase() {
-    when(sessionService.loadSession(10L))
+    when(sessionService.loadSession(7L, 10L))
         .thenReturn(new FeynmanSessionService.SessionData(10L, 7L, "PY43-KC-010", 101L, "TAUGHT", "{}"));
     when(jdbc.query(eq("SELECT taught_fix FROM feynman_turn "
             + "WHERE session_id = ? AND taught_fix IS NOT NULL "
@@ -62,7 +62,7 @@ class FeynmanJudgeServiceTest {
     when(sandbox.run(eq("print(1)"), any(JudgeTestCase.class)))
         .thenReturn(new SandboxRunResult(false, 0, "1\n", "", 8, null));
 
-    Verdict verdict = service.judge(10L);
+    Verdict verdict = service.judge(7L, 10L);
 
     assertThat(verdict.passed()).isFalse();
     assertThat(verdict.message()).contains("隐藏用例");

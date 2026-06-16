@@ -1,14 +1,19 @@
 package com.pythontopia.world.save;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.world.save.dto.SaveSlotDto;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 @Service
 public class SaveSlotService {
+
+  private static final int MAX_SNAPSHOT_CHARS = 262_144;
 
   private final SaveSlotRepository repository;
   private final ObjectMapper objectMapper;
@@ -35,7 +40,8 @@ public class SaveSlotService {
   }
 
   public SaveSlotDto saveSnapshot(Long userId, int slotIndex, String snapshotJson) {
-    return SaveSlotDto.from(repository.updateSnapshot(userId, slotIndex, snapshotJson));
+    return SaveSlotDto.from(
+        repository.updateSnapshot(userId, slotIndex, validateSnapshot(snapshotJson)));
   }
 
   /**
@@ -74,5 +80,31 @@ public class SaveSlotService {
       throw new IllegalStateException(
           "Failed to serialise save_slot.inventory_items payload", exception);
     }
+  }
+
+  private String validateSnapshot(String snapshotJson) {
+    String payload = snapshotJson == null || snapshotJson.isBlank() ? "{}" : snapshotJson;
+    if (payload.length() > MAX_SNAPSHOT_CHARS) {
+      throw new BusinessException(
+          HttpStatus.PAYLOAD_TOO_LARGE,
+          "SAVE_SLOT_SNAPSHOT_TOO_LARGE",
+          "Save slot snapshot is too large");
+    }
+    try {
+      JsonNode snapshot = objectMapper.readTree(payload);
+      if (snapshot == null || !snapshot.isObject()) {
+        throw invalidSnapshot();
+      }
+      return objectMapper.writeValueAsString(snapshot);
+    } catch (JsonProcessingException exception) {
+      throw invalidSnapshot();
+    }
+  }
+
+  private BusinessException invalidSnapshot() {
+    return new BusinessException(
+        HttpStatus.BAD_REQUEST,
+        "SAVE_SLOT_SNAPSHOT_INVALID",
+        "Save slot snapshot must be a valid JSON object");
   }
 }

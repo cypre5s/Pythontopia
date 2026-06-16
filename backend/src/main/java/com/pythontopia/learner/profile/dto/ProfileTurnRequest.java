@@ -1,6 +1,8 @@
 package com.pythontopia.learner.profile.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Size;
 import java.util.List;
 
 /**
@@ -8,7 +10,8 @@ import java.util.List;
  * 避免「单轮无上下文」导致重复提问。
  */
 public record ProfileTurnRequest(
-    @NotBlank String userMessage, List<ProfileMessageDto> history) {
+    @NotBlank @Size(max = 2000) String userMessage,
+    @Valid @Size(max = 20) List<ProfileMessageDto> history) {
 
   public List<ProfileMessageDto> resolvedHistory() {
     return history == null ? List.of() : history;

@@ -10,6 +10,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpMediaTypeNotAcceptableException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -17,9 +18,15 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+  private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
   @ExceptionHandler(MethodArgumentNotValidException.class)
   ResponseEntity<ApiError> handleValidation(
@@ -92,6 +99,17 @@ public class GlobalExceptionHandler {
         request);
   }
 
+  @ExceptionHandler(HttpMediaTypeNotAcceptableException.class)
+  ResponseEntity<ApiError> handleMediaTypeNotAcceptable(
+      HttpMediaTypeNotAcceptableException exception, HttpServletRequest request) {
+    return error(
+        HttpStatus.NOT_ACCEPTABLE,
+        "NOT_ACCEPTABLE",
+        "Requested response media type is not available",
+        List.of(),
+        request);
+  }
+
   @ExceptionHandler(NoHandlerFoundException.class)
   ResponseEntity<ApiError> handleNoHandler(
       NoHandlerFoundException exception, HttpServletRequest request) {
@@ -119,24 +137,31 @@ public class GlobalExceptionHandler {
 
   @ExceptionHandler({
     HttpMessageNotReadableException.class,
-    MissingServletRequestParameterException.class
+    MissingServletRequestParameterException.class,
+    MissingServletRequestPartException.class,
+    MethodArgumentTypeMismatchException.class
   })
   ResponseEntity<ApiError> handleBadRequest(Exception exception, HttpServletRequest request) {
     return error(
         HttpStatus.BAD_REQUEST,
         "BAD_REQUEST",
         "Request payload is malformed",
-        List.of(exception.getMessage() == null ? "" : exception.getMessage()),
+        List.of(),
         request);
   }
 
   @ExceptionHandler(Exception.class)
   ResponseEntity<ApiError> handleException(Exception exception, HttpServletRequest request) {
+    log.error(
+        "Unhandled exception for {} {}",
+        request.getMethod(),
+        request.getRequestURI(),
+        exception);
     return error(
         HttpStatus.INTERNAL_SERVER_ERROR,
         "INTERNAL_ERROR",
         "Unexpected server error",
-        List.of(exception.getClass().getSimpleName()),
+        List.of(),
         request);
   }
 

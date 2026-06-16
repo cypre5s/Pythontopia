@@ -22,6 +22,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @Service
@@ -81,11 +82,20 @@ public class ProfileService {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
     GraphInternalTokenSupport.apply(headers, graphProperties);
-    ProfileTurnResponse response =
-        graphRestTemplate.postForObject(
-            graphProperties.graphUrl() + "/agents/profile/turn",
-            new HttpEntity<>(agentRequest, headers),
-            ProfileTurnResponse.class);
+    ProfileTurnResponse response;
+    try {
+      response =
+          graphRestTemplate.postForObject(
+              graphProperties.graphUrl() + "/agents/profile/turn",
+              new HttpEntity<>(agentRequest, headers),
+              ProfileTurnResponse.class);
+    } catch (RestClientException exception) {
+      log.warn("ProfileAgent request failed: {}", exception.getMessage());
+      throw new BusinessException(
+          HttpStatus.BAD_GATEWAY,
+          "PROFILE_AGENT_UNAVAILABLE",
+          "ProfileAgent is temporarily unavailable");
+    }
     if (response == null) {
       throw new BusinessException(HttpStatus.BAD_GATEWAY, "PROFILE_AGENT_EMPTY_RESPONSE", "ProfileAgent returned empty response");
     }

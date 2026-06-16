@@ -10,8 +10,11 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 class SecurityConfigCorsTest {
 
   @Test
-  void corsShouldAllowDockerDemoEntrypointOrigins() {
-    CorsConfigurationSource source = new SecurityConfig().corsConfigurationSource();
+  void corsShouldAllowConfiguredOrigins() {
+    CorsConfigurationSource source =
+        new SecurityConfig()
+            .corsConfigurationSource(
+                java.util.List.of("http://localhost:8080", "http://127.0.0.1:8080"));
 
     CorsConfiguration config = ((UrlBasedCorsConfigurationSource) source).getCorsConfigurations().get("/**");
 

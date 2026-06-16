@@ -43,13 +43,13 @@ public class FeynmanController {
       @PathVariable long id,
       @Valid @RequestBody TeachRequest request) {
     requireStudent(user);
-    return sessionService.teach(id, request.explanation());
+    return sessionService.teach(user.userId(), id, request.explanation());
   }
 
   @PostMapping("/sessions/{id}/judge")
   public Verdict judge(@CurrentUser CurrentUserPrincipal user, @PathVariable long id) {
     requireStudent(user);
-    return judgeService.judge(id);
+    return judgeService.judge(user.userId(), id);
   }
 
   private void requireStudent(CurrentUserPrincipal user) {
