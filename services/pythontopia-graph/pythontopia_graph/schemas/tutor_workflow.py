@@ -74,6 +74,31 @@ class WorkflowDiagnosisContext(BaseModel):
     consecutive_errors: int = 0
 
 
+class TutorStudentState(BaseModel):
+    """导学助手的持久学生状态快照。
+
+    这是 manager agent 的输入，不直接代替既有阶段状态机；Java 持久化后每次 run 还原给 graph。
+    """
+
+    session_id: str = Field(min_length=1, max_length=80)
+    problem_id: int = Field(ge=1)
+    user_id: int = Field(ge=1)
+    phase: Phase
+    attempt_count: int = Field(default=0, ge=0)
+    latest_verdict: str = ""
+    consecutive_errors: int = Field(default=0, ge=0)
+    hint_level: int = Field(default=0, ge=0, le=3)
+    frustration_level: Literal["low", "moderate", "severe"] = "low"
+    misconception_hypothesis: str = ""
+    last_action: str = ""
+    last_action_effective: bool | None = None
+    last_card_key: str = ""
+    next_best_action: str = ""
+    mastery_snapshot: dict[str, Any] = Field(default_factory=dict)
+    clicked_actions: list[str] = Field(default_factory=list)
+    completed_checkpoints: list[str] = Field(default_factory=list)
+
+
 class WorkflowRunRequest(BaseModel):
     """一次工作流事件 run（同步 SSE 单请求，替代 Alethicode 异步 run + WebSocket）。"""
 
@@ -82,6 +107,10 @@ class WorkflowRunRequest(BaseModel):
     event: WorkflowEvent
     problem: WorkflowProblemContext
     diagnosis: WorkflowDiagnosisContext | None = None
+    # manager-style education agent；默认开启，graph 尚可通过 coach_mode=False 保持旧工作流。
+    coach_mode: bool = True
+    student_state: TutorStudentState | None = None
+    force_event: WorkflowEvent | None = None
     # CHAT 消息 / IDEATING 学生思路等事件数据。
     event_data: dict[str, Any] = Field(default_factory=dict)
     profile_brief: str = Field(default="", max_length=1000)
@@ -93,6 +122,26 @@ class WorkflowAction(BaseModel):
     key: str
     label: str
     event: WorkflowEvent
+    recommended: bool = False
+    reason: str = ""
+
+
+class GuideCoachDecision(BaseModel):
+    """GuideCoachAgent 的结构化决策。
+
+    reason_summary 是可审计摘要，不是隐藏推理链；前端可以展示，但不能当作 chain-of-thought。
+    """
+
+    next_event: WorkflowEvent
+    tool_name: str
+    hint_level: int = Field(default=0, ge=0, le=3)
+    diagnosis_label: str = ""
+    student_state_label: str = ""
+    action_goal: str
+    stop_condition: str
+    allowed_followups: list[WorkflowAction] = Field(default_factory=list)
+    confidence: float = Field(default=0.0, ge=0, le=1)
+    reason_summary: str
 
 
 # ── 卡片模型（字段对齐 Alethicode contracts/tutor_workflow/cards） ──
@@ -358,5 +407,8 @@ class WorkflowRunResult(BaseModel):
     card_key: str | None = None
     card: dict[str, Any] | None = None
     available_actions: list[WorkflowAction] = Field(default_factory=list)
+    coach_decision: GuideCoachDecision | None = None
+    student_state: TutorStudentState | None = None
+    agentic: bool = True
     # 会话内卡片序号（投影排序用；无卡片事件不递增）。
     seq: int = 0
