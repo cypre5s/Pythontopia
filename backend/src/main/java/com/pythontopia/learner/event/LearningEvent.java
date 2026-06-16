@@ -24,7 +24,13 @@ public sealed interface LearningEvent
 
   record ProfileBootstrapped(Long userId, java.util.List<String> unlockedKcs) implements LearningEvent {}
 
-  record ResourceConsumed(Long userId, String kcCode, String resourceKind) implements LearningEvent {}
+  record ResourceConsumed(
+      Long userId, String kcCode, String resourceKind, java.math.BigDecimal delta)
+      implements LearningEvent {
+    public ResourceConsumed(Long userId, String kcCode, String resourceKind) {
+      this(userId, kcCode, resourceKind, null);
+    }
+  }
 
   record PracticeSucceeded(Long userId, String kcCode, Long problemId, String difficulty)
       implements LearningEvent {}

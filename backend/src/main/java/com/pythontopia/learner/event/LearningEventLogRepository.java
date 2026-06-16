@@ -51,6 +51,20 @@ public class LearningEventLogRepository {
   }
 
   /**
+   * 列出 {@code since} 以来产生过学习事件的 distinct 学生 userId（按最近活跃时间降序，至多 {@code limit} 个）。
+   *
+   * <p>供 NPC 寒暄「每日预生成」任务挑选「有记忆的活跃学生」，避免给历史全量学生跑 LLM。
+   */
+  public List<Long> findActiveUserIds(Instant since, int limit) {
+    return jdbc.queryForList(
+        "SELECT user_id FROM learning_event_log WHERE created_at >= ? "
+            + "GROUP BY user_id ORDER BY MAX(created_at) DESC LIMIT ?",
+        Long.class,
+        Timestamp.from(since),
+        limit);
+  }
+
+  /**
    * 取该用户最近 {@code windowSize} 条事件并结构化为 {@link MemoryRow}（含解析后的 payload 与抽取的 KC
    * code），供记忆流检索打分。payload JSON 非法时降级为空节点 + 空 KC，单行失败不影响整体。
    */

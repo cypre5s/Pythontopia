@@ -2,6 +2,7 @@ package com.pythontopia.learner.event;
 
 import com.pythontopia.learner.mastery.MasteryEvaluator;
 import com.pythontopia.learner.mastery.MasterySource;
+import java.math.BigDecimal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
@@ -22,8 +23,11 @@ public class LearningEventListener {
 
   @EventListener
   public void onResourceConsumed(LearningEvent.ResourceConsumed event) {
+    if (event.delta() != null && event.delta().compareTo(BigDecimal.ZERO) <= 0) {
+      return;
+    }
     masteryEvaluator.applyEvent(event.userId(), event.kcCode(),
-        MasterySource.RESOURCE_READ, null, "resource:" + event.resourceKind());
+        MasterySource.RESOURCE_READ, event.delta(), "resource:" + event.resourceKind());
   }
 
   @EventListener
