@@ -263,8 +263,7 @@
    - 反馈失败被吞掉，不阻塞 SSE 工作流。
 
 3. 未做范围
-   - 尚未把“后续提交是否 AC”自动归因到上一条导学动作；这一块会牵动 submission 服务与 coach
-     state 聚合，留到后续更小批次。
+   - 当时尚未把“后续提交是否 AC”自动归因到上一条导学动作；该缺口已在第九批用提交事件监听器补上。
 
 4. 验证
    - Backend focused gate：
@@ -316,3 +315,38 @@
 1. 已实现项用 focused/full tests 证明，不靠口头判断。
 2. 对“后续提交是否更新 coach state”单独检查代码路径；如果仍只是动作反馈事件，需要补一个小批次。
 3. 最后再跑 graph、backend、frontend 的最终验收组合，并记录未覆盖的真栈浏览器/ECS/多端范围。
+
+## 第九批执行记录
+
+第九批补齐“后续提交更新 coach state”：
+
+1. Submission feedback listener
+   - 新增 `TutorWorkflowSubmissionFeedbackListener`，监听
+     `LearningEvent.PracticeSucceeded` 与 `LearningEvent.PracticeFailed`。
+   - 若存在同题 active tutor workflow session，则读取现有 `tutor_workflow_agent_state`，
+     回写 `attempt_count`、`latest_verdict`、`consecutive_errors`、`frustration_level`、
+     `last_action_effective`。
+   - AC 将连续错误清零并标记上一导学动作有效；WA/RE/TLE 等失败会累加连续错误并标记上一动作未见效。
+   - 同步写入 `tutor_workflow_action_event`：`event_type=SUBMISSION_OBSERVED`。
+
+2. 边界
+   - 该监听器不重新调用 graph、不主动生成新卡，避免把“状态回流”变成开放自动循环。
+   - 没有 active session 时直接跳过；状态 JSON 异常时重建最小 state 并 fail-soft 记录日志。
+
+3. 验证
+   - 先写红测：
+     `TutorWorkflowSubmissionFeedbackListenerTest` 初始因缺少监听器编译失败。
+   - 单测转绿：
+     `mvn -s .mvn/settings.build.xml -Dtest=TutorWorkflowSubmissionFeedbackListenerTest test`
+   - 结果：2 tests，0 failures，0 errors。
+   - 后端 focused gate：
+     `mvn -s .mvn/settings.build.xml -Dtest=TutorWorkflowServiceTest,TutorWorkflowSubmissionFeedbackListenerTest,SubmissionServiceTest,CoursePackServiceIntegrationTest test`
+   - 结果：20 tests，0 failures，0 errors；Flyway validated 83 migrations。
+
+## 第十批建议
+
+现在可以进入 Task 11 final verification：
+
+1. 逐条核验 acceptance checklist。
+2. 跑 guide coach 相关 graph/backend/frontend 组合测试。
+3. 再按用户要求执行更大的本地项目验收；若真栈浏览器或 ECS 不跑，需要明确列为未覆盖。

@@ -39,6 +39,10 @@
   `coach.load_state / coach.decide / coach.tool.* / coach.guardrail / coach.update_state` trace；
   前端将这些内部节点投影为“正在判断你卡在哪里 / 正在选择下一步提示 / 正在生成导学卡”等人话进度，
   不暴露 raw reasoning 或 prompt 细节。
+- **AI 导学助手第九批后续提交回流**：新增 `TutorWorkflowSubmissionFeedbackListener`，
+  监听正式练习 AC/WA 等结果，将同题 active 导学会话的 `attempt_count/latest_verdict/consecutive_errors/
+  frustration_level/last_action_effective` 写回 `tutor_workflow_agent_state`，并记录
+  `SUBMISSION_OBSERVED` 事件；不重新调 graph、不自动生成新卡。
 - **主线与课件学习增强**：加入章末测试扩展、课件学习链路、公用导学验收 shell、图书馆阅读路径恢复；
   Stage07 工坊验收契约修正为“资源消费后产生 `RESOURCE_READ`”，不再把资源生成视为阅读完成。
 - **学习画像与资源回流**：新增资源消费掌握度 delta 支持，恢复百晓答案轻反馈事件 `answer_feedback`，
@@ -71,6 +75,10 @@
     `cd services/pythontopia-graph && python3 -m pytest -q tests/test_tutor_workflow_coach_graph.py tests/test_sse_agui.py`
     21 passed；`cd frontend && npm run test -- tests/components/training/TutorWorkflowPanel.spec.ts`
     4 tests passed；`cd frontend && npm run typecheck` 通过。
+  - AI 导学助手第九批后续提交回流 focused gate：
+    `cd backend && mvn -s .mvn/settings.build.xml -Dtest=TutorWorkflowSubmissionFeedbackListenerTest test`
+    2 tests，0 failures，0 errors；`cd backend && mvn -s .mvn/settings.build.xml -Dtest=TutorWorkflowServiceTest,TutorWorkflowSubmissionFeedbackListenerTest,SubmissionServiceTest,CoursePackServiceIntegrationTest test`
+    20 tests，0 failures，0 errors。
   - `cd backend && mvn -s .mvn/settings.build.xml test`：756 tests，0 failures，0 errors。
   - `cd frontend && npm run typecheck`：通过。
   - `cd frontend && npm run test`：202 files / 1973 tests passed。
