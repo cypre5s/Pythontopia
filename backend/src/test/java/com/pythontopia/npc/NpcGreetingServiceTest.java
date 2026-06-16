@@ -107,11 +107,32 @@ class NpcGreetingServiceTest {
         .thenReturn(Optional.of(new NpcDialogResponse("嗨", List.of(9L), true)));
 
     service.greeting(7L, "foreman_bug");
-    advance(Duration.ofMinutes(31)); // 过 TTL
+    advance(NpcGreetingService.CACHE_TTL.plusMinutes(1)); // 过 TTL（当日级）
     NpcGreetingResponse third = service.greeting(7L, "foreman_bug");
 
     assertThat(third.cached()).isFalse();
     verify(graphClient, times(2)).talk(anyString(), anyString(), any(), anyString());
+  }
+
+  @Test
+  void prewarmForcesRecomputeAndCachesForLaterCacheHit() {
+    when(memoryRetrievalService.retrieve(eq(7L), isNull(), anyInt()))
+        .thenReturn(List.of(memory(9L, "练习失败：PY43-KC-016", "PY43-KC-016")));
+    when(personaService.load(anyString())).thenReturn(new NpcPersona("foreman_bug", "工头", "core"));
+    when(passiveProfileService.getDimensions(anyLong())).thenReturn(List.of());
+    when(graphClient.talk(anyString(), anyString(), any(), anyString()))
+        .thenReturn(Optional.of(new NpcDialogResponse("预热寒暄", List.of(9L), true)));
+
+    // 预热（每日预生成）：强制重算并写缓存。
+    NpcGreetingResponse warmed = service.prewarm(7L, "foreman_bug");
+    assertThat(warmed.available()).isTrue();
+    assertThat(warmed.cached()).isFalse();
+
+    // 玩家随后进对话：命中预热缓存，不再调 graph。
+    NpcGreetingResponse hit = service.greeting(7L, "foreman_bug");
+    assertThat(hit.cached()).isTrue();
+    assertThat(hit.greeting()).isEqualTo(warmed.greeting());
+    verify(graphClient, times(1)).talk(anyString(), anyString(), any(), anyString());
   }
 
   @Test

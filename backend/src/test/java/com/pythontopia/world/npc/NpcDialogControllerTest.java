@@ -76,6 +76,14 @@ class NpcDialogControllerTest {
   }
 
   @Test
+  void getStateRejectsOversizedNpcKeyBeforeDatabaseAccess() throws Exception {
+    mockMvc
+        .perform(get("/api/world/npcs/{npcKey}/state", "a".repeat(256)))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("INVALID_NPC_KEY"));
+  }
+
+  @Test
   void talkAppliesEffectsAndReturnsState() throws Exception {
     NpcDialogStateDto dto =
         new NpcDialogStateDto(

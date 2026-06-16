@@ -2,6 +2,7 @@ package com.pythontopia.npc.graph;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.pythontopia.common.config.GraphServiceProperties;
+import com.pythontopia.common.web.GraphInternalTokenSupport;
 import com.pythontopia.learner.memory.dto.MemoryItemDto;
 import com.pythontopia.npc.dto.NpcDialogResponse;
 import java.util.List;
@@ -34,6 +35,9 @@ public class NpcDialogGraphClient {
       String npcKey, String personaCore, List<MemoryItemDto> memories, String message) {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
+    // 内部调用令牌：与 IntentGraphClient / RagEmbeddingClient 一致复用 ragAdminToken；
+    // 缺省（未配 PYT_RAG_ADMIN_TOKEN）时不写头，配置后避免寒暄/对话恒 401。
+    GraphInternalTokenSupport.apply(headers, properties);
     List<RecalledMemoryPayload> projected =
         (memories == null ? List.<MemoryItemDto>of() : memories).stream()
             .map(RecalledMemoryPayload::from)

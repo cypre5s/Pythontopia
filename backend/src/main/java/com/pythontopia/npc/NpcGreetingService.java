@@ -29,8 +29,11 @@ public class NpcGreetingService {
 
   private static final Logger log = LoggerFactory.getLogger(NpcGreetingService.class);
 
-  /** npc×学生 寒暄缓存有效期（R-15 §8：30 分钟内复用上次 greeting）。 */
-  static final Duration CACHE_TTL = Duration.ofMinutes(30);
+  /**
+   * npc×学生 寒暄缓存有效期。R-15 反馈：改为「当日级」（26h，留余量覆盖到次日凌晨预生成刷新），
+   * 配合 {@link NpcGreetingPrewarmJob} 每日预热，玩家白天进对话命中缓存、零等待、一天一更新。
+   */
+  static final Duration CACHE_TTL = Duration.ofHours(26);
 
   /** 注入寒暄上下文的近期记忆要点条数（与答疑 memory_brief 同量级）。 */
   private static final int MEMORY_LIMIT = 5;
@@ -76,14 +79,25 @@ public class NpcGreetingService {
   public NpcGreetingResponse greeting(long userId, String npcKey) {
     String key = cacheKey(userId, npcKey);
     CacheEntry cached = cache.get(key);
-    Instant now = clock.instant();
-    if (cached != null && now.isBefore(cached.expiresAt())) {
+    if (cached != null && clock.instant().isBefore(cached.expiresAt())) {
       return cached.response().asCached();
     }
+    return computeAndCache(userId, npcKey);
+  }
+
+  /**
+   * 强制重算并刷新该生在某 NPC 的寒暄缓存（无视现有缓存），供 {@link NpcGreetingPrewarmJob}
+   * 每日预生成调用：把当天缓存提前写好，玩家进对话直接命中。返回 degraded（下游故障）时不写缓存、可恢复。
+   */
+  public NpcGreetingResponse prewarm(long userId, String npcKey) {
+    return computeAndCache(userId, npcKey);
+  }
+
+  /** 计算寒暄并按「非降级」写入缓存（成功寒暄 + 确定无记忆态才缓存；下游故障不缓存，下次重试）。 */
+  private NpcGreetingResponse computeAndCache(long userId, String npcKey) {
     NpcGreetingResponse fresh = compute(userId, npcKey);
-    // 只缓存「可复用」的结果：成功寒暄 + 确定的无记忆态；下游故障不缓存，下次重试。
     if (!fresh.degraded()) {
-      cache.put(key, new CacheEntry(fresh, now.plus(CACHE_TTL)));
+      cache.put(cacheKey(userId, npcKey), new CacheEntry(fresh, clock.instant().plus(CACHE_TTL)));
     }
     return fresh;
   }
@@ -108,12 +122,20 @@ public class NpcGreetingService {
 
     Optional<NpcDialogResponse> graphReply = graphClient.talk(npcKey, personaCore, memories, prompt);
     if (graphReply.isEmpty()) {
-      // graph NpcDialogAgent 不可用 → 结构化降级（fail-fast，不静默降级成普通寒暄）。
+      // graph NpcDialogAgent 不可达/超时/缺 token → 结构化降级（fail-fast，不静默降级成普通寒暄）。
+      // 具体 RestClientException 由 NpcDialogGraphClient 记录；此处补一条 service 级 reason 便于定位「记忆服务暂不可用」。
+      log.warn(
+          "npc greeting degraded for user={} npc={}: graph NpcDialogAgent unreachable (empty Optional; "
+              + "检查 graph 是否可达/超时，以及是否需配 PYT_RAG_ADMIN_TOKEN)",
+          userId,
+          npcKey);
       return NpcGreetingResponse.serviceUnavailable();
     }
     NpcDialogResponse reply = graphReply.get();
     if (reply.replyMd() == null || reply.replyMd().isBlank()) {
-      // 下游返回空文本：视为不可用，避免展示空寒暄。
+      // 下游可达但返回空文本（LLM 兜底缺失/被裁剪）：视为不可用，避免展示空寒暄。
+      log.warn(
+          "npc greeting degraded for user={} npc={}: graph returned blank reply_md", userId, npcKey);
       return NpcGreetingResponse.serviceUnavailable();
     }
     return NpcGreetingResponse.personalized(reply.replyMd().trim(), reply.grounded(), reply.citedEventIds());

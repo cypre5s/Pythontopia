@@ -90,9 +90,12 @@ class NpcDialogAgent:
         if _has_forbidden_token(reply_md):
             return self._safety_refusal()
         allowed_ids = {memory.event_id for memory in inp.memories}
+        # LLM 偶发把数组写成 null/标量：非 list 一律按空处理，避免 _parse_output 抛错击穿
+        # reply() 的非空兜底（否则会冒泡成 graph 500 → 后端误判「记忆服务暂不可用」）。
+        raw_cited = data.get("cited_event_ids", [])
         cited_event_ids = [
             int(event_id)
-            for event_id in data.get("cited_event_ids", [])
+            for event_id in (raw_cited if isinstance(raw_cited, list) else [])
             if isinstance(event_id, int) and event_id in allowed_ids
         ]
         return NpcDialogOutput(

@@ -313,10 +313,11 @@ async function fetchJson<T>(url: string, timeoutMs = 8000): Promise<T> {
 }
 
 /**
- * 寒暄请求的独立超时（ms）：比全局 axios（10s）更短，让真正的慢链路更快落 fallback，
- * 少让玩家对着「正在回忆…」干等。快档模型（flash）寒暄实测约 3s，8s 对正常调用绰绰有余。
+ * 寒暄请求的独立超时（ms）：后端 graph 读超时为 30s，前端必须给后端足够时间跑完，否则后端还在生成、
+ * 前端先超时就会误显「记忆服务暂不可用」横幅（假阴性 fallback）。快档模型（flash）寒暄实测约 3s，
+ * 正常调用远快于此；15s 仅用于覆盖冷启动 / graph 抖动等慢尾。
  */
-const GREETING_TIMEOUT_MS = 8_000;
+const GREETING_TIMEOUT_MS = 15_000;
 
 /** 寒暄请求最大尝试次数：瞬时快失败重试一次；慢调用（＝超时）不重试，避免叠加等待。 */
 const GREETING_MAX_ATTEMPTS = 2;

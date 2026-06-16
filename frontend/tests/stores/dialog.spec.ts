@@ -647,7 +647,7 @@ describe('dialog store - NPC greeting (R-15 §8)', () => {
 
     expect(httpMocks.get).toHaveBeenCalledWith('/api/npc/foreman_bug/greeting', {
       suppressNetworkToast: true,
-      timeout: 8_000,
+      timeout: 15_000,
     });
     expect(store.greetingStatus).toBe('ready');
     expect(store.greetingText).toContain('for 循环错了 3 次');
@@ -726,7 +726,7 @@ describe('dialog store - NPC greeting (R-15 §8)', () => {
     expect(store.currentNodeId).toBe('greet');
     expect(httpMocks.get).toHaveBeenCalledWith('/api/npc/mayor_py/greeting', {
       suppressNetworkToast: true,
-      timeout: 8_000,
+      timeout: 15_000,
     });
 
     await flush();

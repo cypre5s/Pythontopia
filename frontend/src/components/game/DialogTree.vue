@@ -314,9 +314,13 @@ function onPortraitError(event: Event): void {
   justify-content: center;
   padding: 0 24px 48px 24px;
   z-index: var(--pyt-z-modal, 1000);
+  /* 多弹层重叠时（如暂停菜单上弹出 NPC 对话），全屏遮罩不吞点击：
+     对话框本体仍可交互（下方 .dialog-frame 恢复 auto），遮罩外的下层弹层照常可点。 */
+  pointer-events: none;
 }
 
 .dialog-frame {
+  pointer-events: auto;
   display: flex;
   gap: 16px;
   width: min(820px, 100%);
