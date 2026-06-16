@@ -24,6 +24,7 @@ from typing import Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
+from pythontopia_graph.agents.guide_coach_agent import CoachContext, GuideCoachAgent
 from pythontopia_graph.agents.tutor_workflow_cards import (
     CardGenerationError,
     TutorWorkflowCardAgent,
@@ -32,8 +33,11 @@ from pythontopia_graph.llm.provider import LlmProvider
 from pythontopia_graph.nodes.evidence_fetcher import EvidenceBundle, EvidenceFetcher
 from pythontopia_graph.schemas.tutor_workflow import (
     EVENT_OUTPUT_KEY,
+    GuideCoachDecision,
+    TutorStudentState,
     WorkflowAction,
     WorkflowDiagnosisContext,
+    WorkflowEvent,
     WorkflowProblemContext,
     WorkflowRunRequest,
 )
@@ -144,6 +148,46 @@ def decide_actions(phase: str, *, has_post_ac: bool) -> list[WorkflowAction]:
     return actions
 
 
+def _coach_allowed_events(
+    request: WorkflowRunRequest,
+    *,
+    current_phase: str,
+    new_phase: str,
+    has_post_ac: bool,
+) -> list[WorkflowEvent]:
+    """Coach 决策白名单：请求事件 + 当前/目标阶段动作，诊断类事件需有判题证据。"""
+    candidates: list[str] = [request.event]
+    for phase in (current_phase, new_phase):
+        candidates.extend(action.event for action in decide_actions(phase, has_post_ac=has_post_ac))
+    allowed: list[WorkflowEvent] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        token = str(candidate).upper()
+        if token in seen:
+            continue
+        if token in DIAGNOSIS_EVENTS and request.diagnosis is None:
+            continue
+        seen.add(token)
+        allowed.append(token)  # type: ignore[arg-type]
+    return allowed or [request.event]
+
+
+def _rank_actions(
+    actions: list[WorkflowAction], decision: GuideCoachDecision
+) -> list[WorkflowAction]:
+    """把 coach 推荐动作排到首位；不存在于阶段动作时不强插非法按钮。"""
+    ranked: list[WorkflowAction] = []
+    for action in actions:
+        if action.event == decision.next_event:
+            ranked.append(
+                action.model_copy(update={"recommended": True, "reason": decision.reason_summary})
+            )
+        else:
+            ranked.append(action.model_copy(update={"recommended": False, "reason": ""}))
+    ranked.sort(key=lambda action: 0 if action.recommended else 1)
+    return ranked
+
+
 # ── LangGraph 状态与图 ──
 
 
@@ -158,6 +202,9 @@ class WorkflowGraphState(TypedDict, total=False):
     evidence_chunks: list[Any]
     card_key: str | None
     card: dict[str, Any] | None
+    effective_event: WorkflowEvent
+    coach_decision: GuideCoachDecision
+    student_state: TutorStudentState
     runtime_state: str
     failure_bucket: str | None
     last_error: str | None
@@ -175,6 +222,7 @@ class TutorWorkflowGraph:
         emit: Emit,
     ) -> None:
         self._agent = TutorWorkflowCardAgent(provider)
+        self._coach = GuideCoachAgent(provider)
         self._evidence_fetcher = evidence_fetcher
         self._emit = emit
         self._compiled = self._build()
@@ -211,9 +259,74 @@ class TutorWorkflowGraph:
         await self._emit_step_finish("validate_transition", "ok", started)
         return {**state, "new_phase": new_phase}
 
+    async def _node_coach_decide(self, state: WorkflowGraphState) -> WorkflowGraphState:
+        request = state["request"]
+        if not request.coach_mode:
+            return {**state, "effective_event": request.event}
+        started = time.monotonic()
+        await self._emit_step_start("coach.decide")
+        current_phase = state.get("current_phase", "READING")
+        new_phase = state.get("new_phase", current_phase)
+        student_state = request.student_state or TutorStudentState(
+            session_id=request.session_id,
+            user_id=request.user_id,
+            problem_id=request.problem.problem_id,
+            phase=current_phase,  # type: ignore[arg-type]
+            latest_verdict=request.diagnosis.verdict if request.diagnosis else "",
+            consecutive_errors=request.diagnosis.consecutive_errors if request.diagnosis else 0,
+        )
+        allowed_events = _coach_allowed_events(
+            request,
+            current_phase=current_phase,
+            new_phase=new_phase,
+            has_post_ac=bool(state.get("next_practice_direction")),
+        )
+        if request.force_event and request.force_event in allowed_events:
+            allowed_events = [request.force_event]
+        decision = await self._coach.decide(
+            CoachContext(
+                requested_event=request.force_event or request.event,
+                allowed_events=allowed_events,
+                state=student_state,
+                problem=request.problem,
+                diagnosis=request.diagnosis,
+                profile_brief=request.profile_brief,
+                recent_cards=state.get("last_cards", []),
+            )
+        )
+        updated_state = student_state.model_copy(
+            update={
+                "phase": new_phase,
+                "latest_verdict": request.diagnosis.verdict
+                if request.diagnosis
+                else student_state.latest_verdict,
+                "consecutive_errors": max(
+                    student_state.consecutive_errors,
+                    request.diagnosis.consecutive_errors if request.diagnosis else 0,
+                ),
+                "hint_level": decision.hint_level,
+                "last_action": decision.tool_name,
+                "next_best_action": decision.next_event,
+            }
+        )
+        await self._emit_step_finish(
+            "coach.decide",
+            "ok",
+            started,
+            next_event=decision.next_event,
+            tool_name=decision.tool_name,
+        )
+        return {
+            **state,
+            "effective_event": decision.next_event,
+            "coach_decision": decision,
+            "student_state": updated_state,
+        }
+
     async def _node_fetch_evidence(self, state: WorkflowGraphState) -> WorkflowGraphState:
         request = state["request"]
-        if request.event not in COURSEWARE_EVENTS:
+        event = state.get("effective_event", request.event)
+        if event not in COURSEWARE_EVENTS:
             return {**state, "evidence_chunks": []}
         started = time.monotonic()
         await self._emit_step_start("evidence_fetcher")
@@ -233,7 +346,7 @@ class TutorWorkflowGraph:
 
     async def _node_generate_card(self, state: WorkflowGraphState) -> WorkflowGraphState:
         request = state["request"]
-        event = request.event
+        event = state.get("effective_event", request.event)
         card_key = EVENT_OUTPUT_KEY.get(event)
         if event == "CODING":
             # 纯状态推进：学生宣告进入编码，不产卡（源版 coding 节点同此默认行为）。
@@ -242,7 +355,7 @@ class TutorWorkflowGraph:
         node_name = f"card.{card_key}"
         await self._emit_step_start(node_name)
         try:
-            card = await self._dispatch_card(state, request)
+            card = await self._dispatch_card(state, request.model_copy(update={"event": event}))
         except CardGenerationError as exc:
             await self._emit_step_finish(node_name, "fail", started, note=str(exc))
             return {
@@ -317,13 +430,18 @@ class TutorWorkflowGraph:
     async def _node_decide_actions(self, state: WorkflowGraphState) -> WorkflowGraphState:
         phase = state.get("new_phase", "READING")
         has_post_ac = bool(state.get("next_practice_direction")) or state.get("card_key") == "post_ac"
-        return {**state, "available_actions": decide_actions(phase, has_post_ac=has_post_ac)}
+        actions = decide_actions(phase, has_post_ac=has_post_ac)
+        decision = state.get("coach_decision")
+        if decision is not None:
+            actions = _rank_actions(actions, decision)
+        return {**state, "available_actions": actions}
 
     # ── 图装配 ──
 
     def _build(self) -> Any:
         graph: StateGraph = StateGraph(WorkflowGraphState)
         graph.add_node("validate_transition", self._node_validate_transition)
+        graph.add_node("coach_decide", self._node_coach_decide)
         graph.add_node("fetch_evidence", self._node_fetch_evidence)
         graph.add_node("generate_card", self._node_generate_card)
         graph.add_node("decide_actions", self._node_decide_actions)
@@ -331,9 +449,10 @@ class TutorWorkflowGraph:
         graph.add_edge(START, "validate_transition")
         graph.add_conditional_edges(
             "validate_transition",
-            lambda state: "end" if state.get("runtime_state") == "FAILED" else "fetch_evidence",
-            {"end": END, "fetch_evidence": "fetch_evidence"},
+            lambda state: "end" if state.get("runtime_state") == "FAILED" else "coach_decide",
+            {"end": END, "coach_decide": "coach_decide"},
         )
+        graph.add_edge("coach_decide", "fetch_evidence")
         graph.add_edge("fetch_evidence", "generate_card")
         graph.add_conditional_edges(
             "generate_card",

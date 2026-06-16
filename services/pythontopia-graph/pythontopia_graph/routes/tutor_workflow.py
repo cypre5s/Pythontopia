@@ -175,11 +175,14 @@ async def tutor_workflow_run_stream(
 
             result = WorkflowRunResult(
                 session_id=body.session_id,
-                event=body.event,
+                event=state.get("effective_event", body.event),
                 phase=new_phase,
                 card_key=card_key,
                 card=card,
                 available_actions=state.get("available_actions", []),
+                coach_decision=state.get("coach_decision"),
+                student_state=state.get("student_state"),
+                agentic=body.coach_mode,
                 seq=seq,
             )
             yield sse_agui.translate("result", result.model_dump(mode="json"))
