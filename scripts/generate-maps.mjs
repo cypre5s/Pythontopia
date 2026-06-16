@@ -615,8 +615,8 @@ function generateTownHub() {
   // 竞技场
   const arena = { x: 36, y: 34, w: 4, h: 3, label: '闯关竞技场', route: '/arena/1', name: 'building_arena' };
   paintBuilding(buildings, W, arena.x, arena.y, arena.w, arena.h);
-  // 训练场
-  const training = { x: 8, y: 34, w: 4, h: 3, label: '训练场', route: '/training', name: 'building_training' };
+  // 训练场（点击 → 题库列表 /problems，先选题再去训练场做题界面）
+  const training = { x: 8, y: 34, w: 4, h: 3, label: '训练场', route: '/problems', name: 'building_training' };
   paintBuilding(buildings, W, training.x, training.y, training.w, training.h);
 
   // objects ---------- (no exits, single map)
@@ -638,16 +638,16 @@ function generateTownHub() {
     //   miner（与守矿人 / 矿头 Bug 重复）、farmer + gardener（农场 / 作物系统已删）、
     //   chef + sailor（纯装饰 + 已删的商店 / 商船）。保留的每个 NPC 各担一项学习闭环职责。
     // 站位：贴近对应建筑入口，彼此错开 ≥2 tile，避免重叠。
+    // R-14 核心阵容收敛：只保留 7 个主线 NPC（镇长引导 / 馆长看 / 工坊师傅学 /
+    // 教务 Q 练·测 / 矿头 Bug 调试 / 复盘师复盘 / 班长班级）。移除 professor、student_a、
+    // arena_guard、mine_keeper 的「地图站位」——它们的数据文件保留（professor 头像仍被
+    // 工坊智能体工作室复用），仅不再在小镇里出现，降低首页 NPC 认知负荷。
     makeNpc('npc_mayor_py', 'mayor_py', '镇长 Py', 25, 10, 'npc_mayor'),
     makeNpc('npc_librarian_doc', 'librarian_doc', '馆长 Doc', 11, 12, 'npc_librarian'),
-    makeNpc('npc_professor', 'professor', '教授', 14, 12, 'npc_professor'),
-    makeNpc('npc_coach_q', 'coach_q', '教务 Q', 10, 33, 'npc_coach'),
-    makeNpc('npc_sage_review', 'sage_review', '复盘师 Sage', 37, 12, 'npc_sage'),
-    makeNpc('npc_student_a', 'student_a', '学生 A', 22, 22, 'npc_student'),
     makeNpc('npc_workshop_master', 'workshop_master', '工坊师傅', 42, 28, 'npc_workshop'),
-    makeNpc('npc_arena_guard', 'arena_guard', '竞技场守卫', 37, 37, 'npc_guard'),
-    makeNpc('npc_mine_keeper', 'mine_keeper', '守矿人', 21, 33, 'npc_miner'),
+    makeNpc('npc_coach_q', 'coach_q', '教务 Q', 10, 33, 'npc_coach'),
     makeNpc('npc_foreman_bug', 'foreman_bug', '矿头 Bug', 25, 33, 'npc_guard'),
+    makeNpc('npc_sage_review', 'sage_review', '复盘师 Sage', 37, 12, 'npc_sage'),
     makeNpc('npc_class_president', 'class_president', '班长', 18, 21, 'npc_student'),
     makeSpawn(25, 20),
   ];
@@ -713,7 +713,7 @@ ${rows}
 
 - 出口：无（R-14 单中央 hub，外围图已移除；Bug 矿洞经 building → /bug-mine 路由进入）
 - 学习建筑：图书馆 / 工坊 / 训练场 / 竞技场 / 复盘大厅 / Bug 矿洞入口等
-- 11 主线 NPC 贴近建筑入口排布（见 \`scripts/generate-maps.mjs\` 内 \`makeNpc\` 列表）
+- 7 核心 NPC 贴近建筑入口排布：镇长 Py / 馆长 Doc / 工坊师傅 / 教务 Q / 矿头 Bug / 复盘师 Sage / 班长（见 \`scripts/generate-maps.mjs\` 内 \`makeNpc\` 列表）
 
 ## 文件结构
 

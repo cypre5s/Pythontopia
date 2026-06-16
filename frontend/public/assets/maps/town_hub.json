@@ -10,7 +10,7 @@
   "tileheight": 16,
   "infinite": false,
   "nextlayerid": 5,
-  "nextobjectid": 38,
+  "nextobjectid": 34,
   "properties": [
     {
       "name": "mapKey",
@@ -6240,7 +6240,7 @@
             {
               "name": "route",
               "type": "string",
-              "value": "/training"
+              "value": "/problems"
             },
             {
               "name": "label",
@@ -6886,10 +6886,10 @@
         },
         {
           "id": 28,
-          "name": "npc_professor",
+          "name": "npc_workshop_master",
           "type": "npc",
-          "x": 224,
-          "y": 192,
+          "x": 672,
+          "y": 448,
           "width": 0,
           "height": 0,
           "visible": true,
@@ -6898,17 +6898,17 @@
             {
               "name": "key",
               "type": "string",
-              "value": "professor"
+              "value": "workshop_master"
             },
             {
               "name": "label",
               "type": "string",
-              "value": "教授"
+              "value": "工坊师傅"
             },
             {
               "name": "sprite",
               "type": "string",
-              "value": "npc_professor"
+              "value": "npc_workshop"
             }
           ]
         },
@@ -6942,146 +6942,6 @@
         },
         {
           "id": 30,
-          "name": "npc_sage_review",
-          "type": "npc",
-          "x": 592,
-          "y": 192,
-          "width": 0,
-          "height": 0,
-          "visible": true,
-          "rotation": 0,
-          "properties": [
-            {
-              "name": "key",
-              "type": "string",
-              "value": "sage_review"
-            },
-            {
-              "name": "label",
-              "type": "string",
-              "value": "复盘师 Sage"
-            },
-            {
-              "name": "sprite",
-              "type": "string",
-              "value": "npc_sage"
-            }
-          ]
-        },
-        {
-          "id": 31,
-          "name": "npc_student_a",
-          "type": "npc",
-          "x": 352,
-          "y": 352,
-          "width": 0,
-          "height": 0,
-          "visible": true,
-          "rotation": 0,
-          "properties": [
-            {
-              "name": "key",
-              "type": "string",
-              "value": "student_a"
-            },
-            {
-              "name": "label",
-              "type": "string",
-              "value": "学生 A"
-            },
-            {
-              "name": "sprite",
-              "type": "string",
-              "value": "npc_student"
-            }
-          ]
-        },
-        {
-          "id": 32,
-          "name": "npc_workshop_master",
-          "type": "npc",
-          "x": 672,
-          "y": 448,
-          "width": 0,
-          "height": 0,
-          "visible": true,
-          "rotation": 0,
-          "properties": [
-            {
-              "name": "key",
-              "type": "string",
-              "value": "workshop_master"
-            },
-            {
-              "name": "label",
-              "type": "string",
-              "value": "工坊师傅"
-            },
-            {
-              "name": "sprite",
-              "type": "string",
-              "value": "npc_workshop"
-            }
-          ]
-        },
-        {
-          "id": 33,
-          "name": "npc_arena_guard",
-          "type": "npc",
-          "x": 592,
-          "y": 592,
-          "width": 0,
-          "height": 0,
-          "visible": true,
-          "rotation": 0,
-          "properties": [
-            {
-              "name": "key",
-              "type": "string",
-              "value": "arena_guard"
-            },
-            {
-              "name": "label",
-              "type": "string",
-              "value": "竞技场守卫"
-            },
-            {
-              "name": "sprite",
-              "type": "string",
-              "value": "npc_guard"
-            }
-          ]
-        },
-        {
-          "id": 34,
-          "name": "npc_mine_keeper",
-          "type": "npc",
-          "x": 336,
-          "y": 528,
-          "width": 0,
-          "height": 0,
-          "visible": true,
-          "rotation": 0,
-          "properties": [
-            {
-              "name": "key",
-              "type": "string",
-              "value": "mine_keeper"
-            },
-            {
-              "name": "label",
-              "type": "string",
-              "value": "守矿人"
-            },
-            {
-              "name": "sprite",
-              "type": "string",
-              "value": "npc_miner"
-            }
-          ]
-        },
-        {
-          "id": 35,
           "name": "npc_foreman_bug",
           "type": "npc",
           "x": 400,
@@ -7109,7 +6969,35 @@
           ]
         },
         {
-          "id": 36,
+          "id": 31,
+          "name": "npc_sage_review",
+          "type": "npc",
+          "x": 592,
+          "y": 192,
+          "width": 0,
+          "height": 0,
+          "visible": true,
+          "rotation": 0,
+          "properties": [
+            {
+              "name": "key",
+              "type": "string",
+              "value": "sage_review"
+            },
+            {
+              "name": "label",
+              "type": "string",
+              "value": "复盘师 Sage"
+            },
+            {
+              "name": "sprite",
+              "type": "string",
+              "value": "npc_sage"
+            }
+          ]
+        },
+        {
+          "id": 32,
           "name": "npc_class_president",
           "type": "npc",
           "x": 288,
@@ -7137,7 +7025,7 @@
           ]
         },
         {
-          "id": 37,
+          "id": 33,
           "name": "spawn",
           "type": "spawn",
           "x": 400,

@@ -12,7 +12,7 @@ R-14 方案 A：仅生成 **town_hub**（中央小镇）。外围图与 Bug 矿�
 
 - 出口：无（R-14 单中央 hub，外围图已移除；Bug 矿洞经 building → /bug-mine 路由进入）
 - 学习建筑：图书馆 / 工坊 / 训练场 / 竞技场 / 复盘大厅 / Bug 矿洞入口等
-- 11 主线 NPC 贴近建筑入口排布（见 `scripts/generate-maps.mjs` 内 `makeNpc` 列表）
+- 7 核心 NPC 贴近建筑入口排布：镇长 Py / 馆长 Doc / 工坊师傅 / 教务 Q / 矿头 Bug / 复盘师 Sage / 班长（见 `scripts/generate-maps.mjs` 内 `makeNpc` 列表）
 
 ## 文件结构
 
