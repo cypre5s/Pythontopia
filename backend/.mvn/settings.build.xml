@@ -1,10 +1,13 @@
 <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
+  <!-- 默认直连（ECS/正常网络）。本机受限网络构建时用 Dockerfile 的
+       MAVEN_PROXY_OPTS build-arg 注入 -Dhttps.proxyHost/-Dhttps.proxyPort，
+       不要在这里写死 active=true 的代理（会把 ECS 等直连环境一起拖下水）。 -->
   <proxies>
     <proxy>
       <id>local-clash</id>
-      <active>true</active>
+      <active>false</active>
       <protocol>http</protocol>
       <host>127.0.0.1</host>
       <port>7892</port>
@@ -13,9 +16,9 @@
   </proxies>
   <mirrors>
     <mirror>
-      <id>tencent-maven</id>
+      <id>aliyun-maven</id>
       <mirrorOf>central,*</mirrorOf>
-      <url>https://mirrors.cloud.tencent.com/nexus/repository/maven-public/</url>
+      <url>https://maven.aliyun.com/repository/public</url>
     </mirror>
   </mirrors>
 </settings>

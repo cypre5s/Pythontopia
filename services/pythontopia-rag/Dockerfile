@@ -5,7 +5,9 @@ ARG NO_PROXY
 ENV HTTP_PROXY=${HTTP_PROXY} HTTPS_PROXY=${HTTPS_PROXY} NO_PROXY=${NO_PROXY}
 WORKDIR /app
 
-RUN apt-get update \
+# apt 换阿里源：deb.debian.org 在国内网络拉索引极慢（ECS 直连也一样）。
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources \
+    && apt-get update \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
@@ -15,6 +17,9 @@ RUN pip install --no-cache-dir \
     --index-url https://mirrors.aliyun.com/pypi/simple/ \
     --trusted-host mirrors.aliyun.com \
     .
+
+# 构建代理仅供上面 apt/pip 拉取使用；清空运行时代理，避免部署到 ECS 后外部调用走不存在的代理。
+ENV HTTP_PROXY="" HTTPS_PROXY="" NO_PROXY="" http_proxy="" https_proxy=""
 
 EXPOSE 18092
 HEALTHCHECK --interval=15s --timeout=5s --retries=5 --start-period=15s \

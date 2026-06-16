@@ -1,0 +1,210 @@
+# =============================================================================
+# Pythontopia 生产编排（阿里云 ECS 2C4G · Ubuntu 22.04 · 公网 47.120.29.62）
+# =============================================================================
+# 使用方式（必须固定项目名 -p deploy，以复用现有数据卷 deploy_pytopia_pg）：
+#   cd <release>/deploy
+#   docker compose -p deploy -f docker-compose.production.yml config -q   # 校验
+#   docker compose -p deploy -f docker-compose.production.yml up -d --remove-orphans
+#
+# 与开发编排（docker-compose.yml）的关键差异：
+#   1. 全部使用发布包冻结镜像 pythontopia/{frontend,backend,graph,rag}:release，
+#      无 build 上下文，pull_policy: never（镜像由 install_release.sh docker load 导入）。
+#   2. pythontopia-graph 不再使用 network_mode: host，回归 Compose 默认 bridge 网络；
+#      graph 访问 RAG 改为服务名 http://pythontopia-rag:18092（开发态是 127.0.0.1:18092）。
+#   3. backend 通过服务名访问 graph/rag（PYT_GRAPH_URL / PYT_RAG_URL 显式覆盖，
+#      防止远端 .env 残留的旧 127.0.0.1 地址经 env_file 注入后干扰接线）。
+#   4. 仅 frontend(127.0.0.1:8080) 与 backend(127.0.0.1:18080，主机诊断用) 绑定宿主
+#      回环端口；graph/rag/postgres/redis 一律不暴露宿主端口。对外唯一入口是
+#      主机 Nginx 的 80 端口（见 deploy/nginx/pythontopia.conf）。
+#   5. 秘密一律来自远端已有的 .env（env_file 注入 + Compose 变量插值），发布包内
+#      不携带任何秘密；本文件中 ${VAR:?} 形式的变量缺失时 compose 直接报错。
+#   6. 去掉开发态的源码只读挂载与宿主代理 JAVA_OPTS 默认值（ECS 无本地 7892 代理）。
+#   7. 增加 mem_limit / 日志轮转上限，适配 2C4G 小机型，防止 JVM 按宿主 4G 取
+#      MaxRAMPercentage 以及 json-file 日志撑爆 40G 磁盘。
+#
+# 数据目录约定（由 install_release.sh 创建）：
+#   /opt/pythontopia/shared/data/course-pack-43/   课件 PDF / 视频（只读挂载，主线闯关必需）
+#   /opt/pythontopia/shared/data/generated-media/  多模态生成产物（读写挂载，可重生成）
+# =============================================================================
+
+# 日志轮转：每容器最多 10m x 3 份，防小盘被日志写满。
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 640m
+    environment:
+      POSTGRES_DB: pythontopia
+      POSTGRES_USER: ${PYT_DB_USERNAME:?缺少 PYT_DB_USERNAME，请检查远端 .env}
+      POSTGRES_PASSWORD: ${PYT_DB_PASSWORD:?缺少 PYT_DB_PASSWORD，请检查远端 .env}
+    # 不绑定任何宿主端口；仅供 Compose 网络内的 backend/rag 访问。
+    # 注意：复用已有数据卷时，认证凭据以卷内已初始化的为准，.env 中的
+    # PYT_DB_USERNAME/PYT_DB_PASSWORD 必须与建卷时一致。
+    volumes:
+      - pytopia_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 192m
+    # 不绑定任何宿主端口。
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  backend:
+    image: pythontopia/backend:release
+    pull_policy: never
+    restart: unless-stopped
+    logging: *default-logging
+    # JVM 按容器内存上限取 MaxRAMPercentage=70 ≈ 1.05G 堆。
+    mem_limit: 1536m
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # 秘密（JWT/数据库/讯飞/OpenAI 兼容凭据等）全部由远端 .env 注入。
+    env_file:
+      - .env
+    environment:
+      # ---- 数据库接线（bridge 网络内服务名，覆盖 env_file 可能带入的旧值）----
+      PYT_DB_URL: jdbc:postgresql://postgres:5432/pythontopia
+      # ---- graph / rag 接线：双写两种变量名 ----
+      # PYTHONTOPIA_SERVICES_* 经 Spring relaxed binding 直接命中属性（优先级最高），
+      # PYT_GRAPH_URL / PYT_RAG_URL 同步覆盖 application.yml 占位符，
+      # 确保远端 .env 残留的 host 网络旧地址（如 127.0.0.1:18091）不会生效。
+      PYTHONTOPIA_SERVICES_GRAPHURL: http://pythontopia-graph:18091
+      PYTHONTOPIA_SERVICES_RAGURL: http://pythontopia-rag:18092
+      PYT_GRAPH_URL: http://pythontopia-graph:18091
+      PYT_RAG_URL: http://pythontopia-rag:18092
+      # 生产环境不公开 Swagger/OpenAPI，避免匿名枚举完整接口与 DTO。
+      PYT_EXPOSE_API_DOCS: "false"
+      # ---- 数据目录接线：远端 .env 中的宿主相对路径在容器内无意义，统一覆盖 ----
+      PYT_COURSEPACK_PDF_DIR: /data/course-pack-43/pdfs
+      PYT_COURSEPACK_VIDEO_DIR: /data/course-pack-43/videos
+      PYT_COURSEPACK_VIDEO_MANIFEST: /data/course-pack-43/video_manifest.json
+      PYT_MEDIA_GENERATED_DIR: /data/generated-media
+      # ---- JVM：默认直连（ECS 无本地代理）；如需代理用 PYT_BACKEND_JAVA_OPTS 覆盖 ----
+      JAVA_OPTS: ${PYT_BACKEND_JAVA_OPTS:--XX:MaxRAMPercentage=70 -Dfile.encoding=UTF-8}
+    volumes:
+      # 课件 PDF / 超星视频：只读；目录不存在或为空时相关端点自动降级，不阻塞主链路。
+      - ${PYT_SHARED_DATA_DIR:-/opt/pythontopia/shared/data}/course-pack-43:/data/course-pack-43:ro
+      # 多模态生成产物（文生图/TTS/合成视频）：读写；内容可重生成。
+      - ${PYT_SHARED_DATA_DIR:-/opt/pythontopia/shared/data}/generated-media:/data/generated-media
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # 仅绑定回环：供主机诊断（curl 127.0.0.1:18080/healthz），不对公网暴露。
+    ports:
+      - "127.0.0.1:18080:18080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:18080/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      # 冷启动 = JVM 启动 + Flyway 增量迁移，2C4G 上预留 2 分钟。
+      start_period: 120s
+
+  pythontopia-graph:
+    image: pythontopia/graph:release
+    pull_policy: never
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 640m
+    # 生产关键差异：不再 network_mode: host，加入 Compose bridge 网络，
+    # 仅服务名可达（pythontopia-graph:18091），不监听宿主 0.0.0.0:18091。
+    depends_on:
+      pythontopia-rag:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      # OpenAiCompatProvider 读取无前缀 OPENAI_*/LLM_* 变量，
+      # 这里把 .env 中带 PYT_ 前缀的值映射成 provider 期望的形态（与开发编排一致）。
+      OPENAI_BASE_URL: ${PYT_OPENAI_BASE_URL:-}
+      OPENAI_API_KEY: ${PYT_OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${PYT_OPENAI_MODEL:-}
+      OPENAI_MODEL_FAST: ${PYT_OPENAI_MODEL_FAST:-}
+      LLM_BASE_URL: ${PYT_OPENAI_BASE_URL:-}
+      LLM_API_KEY: ${PYT_OPENAI_API_KEY:-}
+      LLM_MODEL: ${PYT_OPENAI_MODEL:-}
+      LLM_MODEL_FAST: ${PYT_OPENAI_MODEL_FAST:-}
+      # bridge 网络内用服务名访问 RAG（开发 host 网络时是 127.0.0.1:18092）。
+      PYT_RAG_URL: http://pythontopia-rag:18092
+      # 生产默认不走 B 站代理；确有需要时在远端 .env 设 PYT_BILI_PROXY 覆盖。
+      PYT_BILI_PROXY: ${PYT_BILI_PROXY:-}
+      NO_PROXY: localhost,127.0.0.1,pythontopia-rag,postgres,redis,backend
+      no_proxy: localhost,127.0.0.1,pythontopia-rag,postgres,redis,backend
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:18091/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  pythontopia-rag:
+    image: pythontopia/rag:release
+    pull_policy: never
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 640m
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      # 用 .env 凭据拼数据库连接串；密码含 @ : / 等 URL 保留字符时会解析失败，
+      # 见 README「常见故障」。
+      PYT_DB_URL: postgresql://${PYT_DB_USERNAME:?缺少 PYT_DB_USERNAME，请检查远端 .env}:${PYT_DB_PASSWORD:?缺少 PYT_DB_PASSWORD，请检查远端 .env}@postgres:5432/pythontopia
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:18092/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      # lifespan 阶段会加载课件索引，预留 1 分钟。
+      start_period: 60s
+
+  frontend:
+    image: pythontopia/frontend:release
+    pull_policy: never
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 96m
+    # 镜像内 nginx 写死反代 http://backend:18080，必须等 backend 容器就绪，
+    # 否则 nginx 启动时上游域名解析失败直接退出。
+    depends_on:
+      backend:
+        condition: service_healthy
+    # 仅绑定回环 8080，对外由主机 Nginx 的 80 端口统一代理
+    # （旧部署的 0.0.0.0:8080 公网暴露在此消除）。
+    ports:
+      - "127.0.0.1:8080:80"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  # 以 -p deploy 启动时实际卷名为 deploy_pytopia_pg，与现有线上数据卷同名复用；
+  # 卷已存在且属于 deploy 项目时 Compose 直接挂载，不会重建、不会清空。
+  pytopia_pg:
