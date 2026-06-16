@@ -1,5 +1,42 @@
 # Changelog
 
+## 2026-06-13 — Android R-15 主线冒险闭环 + 契约对齐 + 单 town_hub
+
+> 据提交 `64c0d7f5` 记录：本次仅提交 `android/`，将原生客户端对齐当前后端/Web 的
+> R-14 世界收缩与 R-15 后端权威主线；未包含工作区中并行存在的 backend/frontend 改动。
+
+- **后端契约对齐（M0）**：移除客户端虚构的 inventory/currency DTO、OpenAPI 与 HUD 接线，
+  重写 `GameBootstrapResponseDto` 为真实聚合；新增 learner 侧画像、任务、掌握度、学习路径 DTO，
+  以及 world 侧存档、世界事件、技能 DTO。
+- **单中央小镇收敛（M2）**：`:game` 仅保留 `town_hub`，移除外围四图定义与
+  `mine_south.json`，同步地图 README、注释和单测；同时收敛 `ProceduralArt` 的既有
+  Detekt 复杂度问题。
+- **R-15 主线闭环（M3）**：新增 `:core:data/dto/mainline`、`MainlineApi`、
+  `MainlineTestApi` 与 `:feature:mainline`，覆盖冒险地图、看/学/练三件套进度打点、章末测试和
+  错题补星，并接入 App 导航与 ViewModel 单测。
+- **调试环境接线**：该提交将 Android debug `BASE_URL` 与 OpenAPI server 指向
+  `http://47.120.29.62:18080/`，并在 `network_security_config` 中加入对应 cleartext 白名单。
+- 改动面：**52 文件（+1883 / −3164）**，包含新增 `feature:mainline`、契约 DTO/API，删除
+  `mine_south.json` 与 inventory/currency DTO。
+- 验证（提交记录）：`./gradlew :app:assembleDebug test` 全绿；改动模块 `detekt` 通过。
+
+## 2026-06-12 — AG-UI 语义流式协议 + STATE_DELTA 计划进度 + 流式渲染规范（Phase 5「AI 体验层」）
+
+> 据提交 `7e6972c4` 记录：Phase 5「AI 体验层」模块 A（协议正式化）+ 模块 C（流式渲染）落地；模块 B 评估后跳过
+> （避免提前抽象，遵守「简单优先」红线）。本节验证均实跑（见末尾「验证」）。
+
+- **协议层（AG-UI 命名归一）**：前端 `composables/agui.ts` 新增双语兼容层（AG-UI 官方事件名 ↔
+  历史名 plan/trace/token/result/error 归一化），`useSseStream` 暴露类型化 events + 运行态 state；
+  Python `sse_agui.py` 新增 emitter + translate，tutor/streaming 端点**零调用点改动**迁移到 AG-UI
+  命名；Java 中转层原样透传，无需改动。
+- **STATE_DELTA 端到端**：orchestrator dispatch 实时推送真实 plan 步骤进度，前端 plan 卡**流式点亮**
+  步骤；`PlanCard` 新增进度视觉（done/active/failed），并修正 `result.plan` status 多停在 pending 的 bug。
+- **流式渲染规范**：`MarkdownView` 对未闭合 ``` 代码围栏自动补全（防闪烁 / 防吞后文）；答案 `[页 N]`
+  引用渲染为上标角标 + hover 课件原文富浮层卡（无证据不伪造引用，延续防幻觉红线）。
+- **附带修复**：移除 `vite.config` 对已卸载 tailwind 依赖的残留引用（pre-existing 阻塞），typecheck 恢复全绿。
+- 改动面：22 文件（+1136 / −64），覆盖前端协议/渲染层（7 源 + 5 测试）与 graph SSE 层（4 源 + 5 测试）。
+- 验证（实跑）：前端 vitest **1690/1690** + 全库 typecheck ✓；graph pytest **544/544**。
+
 ## 2026-06-11（夜）— KC 图谱感知检索（GraphRAG 思想·零抽取自建版）
 
 > 业界 GraphRAG/LightRAG 最贵的一步是「LLM 从文本抽实体关系」；本项目 65 KC 的前置边

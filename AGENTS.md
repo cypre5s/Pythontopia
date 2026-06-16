@@ -255,6 +255,26 @@ cd /home/cypress/Pythontopia/deploy
 docker compose up -d
 ```
 
+## 阿里云 ECS 连接（2026-06-12 实测）
+
+| 名称 | 公网 IP | 私网 IP | 规格 | 系统 | 密钥 |
+|------|---------|---------|------|------|------|
+| Pythontopia 实例 | `47.120.29.62` | `172.19.246.30` | ecs.e-c1m2.large（2C4G/40G） | Ubuntu 22.04 | `~/.ssh/ecs-pythontopia.pem` |
+
+- 已在 `~/.ssh/config` 配置别名，直接 `ssh ecs-pythontopia`（root 登录）。
+- **密钥易错点**：正确密钥源文件是 Windows 下载目录的 `wsl (1).pem`（指纹 `SHA256:UptKUtQt...`）；`wsl.pem` 是另一把旧钥匙，对这台机器无效，不要混用。
+- **WSL2 TUN 代理绕过（每次 WSL 重启后必做）**：本机 TUN 代理（eth0，网关 `198.18.0.2`）拦截所有 TCP 但不转发 SSH，导致 banner 交换超时；7892 代理也带不动 22 端口。必须为目标 IP 加直连路由：
+
+```bash
+# 2026-06-12 实测出口是 eth2 热点网络；若网络环境变了，先用
+# `ip route show default` 找非 198.18.0.2 的真实默认网关再替换
+sudo ip route add 47.120.29.62/32 via 192.168.43.1 dev eth2
+ip route get 47.120.29.62   # 应显示 via 192.168.43.1，而非 198.18.0.2
+```
+
+- 诊断特征：TUN 劫持时连不存在的 IP:端口 也会"握手成功"，不能用 TCP 连通性判断网络是否真通。
+- Alethicode 老服务器（`ecs-alethicode` / 47.98.184.170）同样受 TUN 影响，需要时同法加路由。
+
 ## 验证与交付
 
 每次修改后按影响范围验证：
