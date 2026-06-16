@@ -18,6 +18,9 @@
   `GuideCoachAgent` 与 coach golden eval，先在 graph 服务内证明“学生状态 + 判题证据 + 工具白名单”
   能结构化选择下一步教育动作；批判性 review 记录见
   `docs/reports/2026-06-16-guide-coach-plan-review.md`。
+- **AI 导学助手第二批 graph 接入**：`TutorWorkflowGraph` 新增 `coach.decide` 节点，支持
+  `effective_event`、coach 推荐动作排序、SSE result 透出 `coach_decision/student_state/agentic`；
+  WA 场景可由请求的 `ERROR_FEEDBACK` 经 manager 选择为更合适的 `EXECUTION_TRACE` 卡片。
 - **主线与课件学习增强**：加入章末测试扩展、课件学习链路、公用导学验收 shell、图书馆阅读路径恢复；
   Stage07 工坊验收契约修正为“资源消费后产生 `RESOURCE_READ`”，不再把资源生成视为阅读完成。
 - **学习画像与资源回流**：新增资源消费掌握度 delta 支持，恢复百晓答案轻反馈事件 `answer_feedback`，
@@ -30,6 +33,7 @@
   - `cd services/pythontopia-graph && python3 -m pytest -q`：632 passed，1 warning。
   - `python3 -m pytest -q security/tests`：36 passed。
   - AI 导学助手第一批实现后 graph 全量：645 passed，1 warning。
+  - AI 导学助手第二批 graph 接入后 graph 全量：647 passed，1 warning。
   - `cd backend && mvn -s .mvn/settings.build.xml test`：756 tests，0 failures，0 errors。
   - `cd frontend && npm run typecheck`：通过。
   - `cd frontend && npm run test`：202 files / 1973 tests passed。

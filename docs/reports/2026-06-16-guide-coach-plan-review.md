@@ -77,3 +77,37 @@
 3. 将 `available_actions` 按 coach 推荐排序，先只做 graph 测试。
 4. 前端 `TutorWorkflowPanel` 只展示推荐动作，不改变 TrainingPanel 触发方式。
 5. 最后再做 Java 持久化和 AC/WA nudge 卡。
+
+## 第二批执行记录
+
+第二批已进入 graph 主流程，但仍未触碰 Java DB 和前端 nudge：
+
+1. **Coach 节点接入**
+   - `TutorWorkflowGraph` 新增 `coach.decide` 节点。
+   - `validate_transition` 仍先校验学生请求事件；coach 只在合法白名单中选择 `effective_event`。
+   - `coach_mode=false` 保留旧路径。
+
+2. **Effective Event**
+   - 卡片生成、课件证据获取和结果事件使用 `effective_event`。
+   - 典型场景：学生点击 WA 继续后，请求事件是 `ERROR_FEEDBACK`，coach 可选择 `EXECUTION_TRACE`，先让学生看见程序实际行为。
+
+3. **推荐动作排序**
+   - `available_actions` 支持 `recommended/reason`。
+   - coach 推荐动作存在于当前阶段动作内时，会排到第一位并带推荐原因。
+
+4. **SSE Result 透出**
+   - `WorkflowRunResult` 透出 `coach_decision`、`student_state`、`agentic`。
+   - route 结果中的 `event` 改为实际生成卡片的事件。
+
+5. **验证**
+   - 新增 `services/pythontopia-graph/tests/test_tutor_workflow_coach_graph.py`。
+   - Focused：`25 passed in 0.37s`。
+   - Graph 全量：`647 passed, 1 warning in 36.39s`。
+
+## 第三批建议
+
+下一批建议继续保持小步：
+
+1. 增加 pedagogical guardrail critic，先覆盖最明确的泄答场景。
+2. 接入 graph 生成卡片后的 guardrail 检查，但只做一次失败报错，不急着引入自动 revise。
+3. 再跑 graph 全量；稳定后再进入 Java 持久化。
