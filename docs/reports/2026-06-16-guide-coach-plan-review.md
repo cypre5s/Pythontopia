@@ -350,3 +350,47 @@
 1. 逐条核验 acceptance checklist。
 2. 跑 guide coach 相关 graph/backend/frontend 组合测试。
 3. 再按用户要求执行更大的本地项目验收；若真栈浏览器或 ECS 不跑，需要明确列为未覆盖。
+
+## 第十批执行记录
+
+第十批已完成最终验收和本地健康检查：
+
+1. Acceptance checklist
+   - AC/WA/CE/RE/TLE 后短 nudge 等待点击：由 `GuideNudgeCard` 和 `TrainingPanel` 规格覆盖。
+   - 点击继续进入 manager 决策：`TutorWorkflowGraph` 的 `coach.decide` 与 `effective_event` 测试覆盖。
+   - 结构化决策与持久化：`TutorWorkflowServiceTest` 覆盖 `student_state/coach_decision` restore 与 upsert。
+   - 推荐动作排序：graph 与 `TutorWorkflowPanel` 测试覆盖 `recommended/reason`。
+   - 后续提交更新 state：`TutorWorkflowSubmissionFeedbackListenerTest` 覆盖 AC 与失败提交回流。
+   - guardrail 与迁移题边界：`GuideGuardrailCritic` 和 coach graph 测试覆盖泄答打回。
+   - AG-UI 进度可见但不泄露推理链：`test_sse_agui.py` 与 `TutorWorkflowPanel.spec.ts` 覆盖自然语言投影。
+
+2. Focused verification
+   - Graph：
+     `python3 -m pytest -q tests/test_tutor_workflow_coach_schema.py tests/test_guide_coach_agent.py tests/test_tutor_workflow_coach_graph.py tests/test_guide_guardrail_critic.py tests/test_guide_coach_golden.py tests/test_sse_agui.py`
+   - 结果：38 passed。
+   - Backend workflow/submission：
+     `mvn -s .mvn/settings.build.xml -Dtest=TutorWorkflowServiceTest,TutorWorkflowSubmissionFeedbackListenerTest,SubmissionServiceTest test`
+   - 结果：17 tests，0 failures，0 errors。
+   - Backend graph client：
+     `mvn -s .mvn/settings.build.xml -Dtest=TutorGraphClientSseTest,TutorGraphClientFailureTest test`
+   - 结果：5 tests，0 failures，0 errors。
+   - Frontend：
+     `npm run test -- tests/components/training/GuideNudgeCard.spec.ts tests/components/training/TutorWorkflowPanel.spec.ts`
+   - 结果：2 files，7 tests passed；`npm run typecheck` 通过。
+
+3. Full local verification
+   - Graph full：652 passed，1 warning。
+   - Backend full：762 tests，0 failures，0 errors。
+   - Frontend full：204 files / 1981 tests passed；typecheck 通过。
+   - 本地真栈：`./dev.sh` 启动后 5173 / 18080 / 18091 / 18092 healthz 均 ok，`/api/course/videos`
+     返回课程视频 JSON，Postgres / Redis / graph / rag 均 healthy。
+
+4. 发现并修复的环境问题
+   - `./dev.sh` 原本使用 `.mvn/settings.xml` 启动后端，该配置只走 Maven Central；当前网络环境下
+     `poi-ooxml` 依赖解析会被 `repo.maven.apache.org` 超时阻断。
+   - 已将启动脚本改为 `.mvn/settings.build.xml`，复用项目已有 Maven 镜像配置。
+
+5. 未覆盖
+   - 未执行浏览器手工 AC/WA 点击流。
+   - 未执行公网 ECS 验收。
+   - 未执行 Android / Windows / 微信端回归。

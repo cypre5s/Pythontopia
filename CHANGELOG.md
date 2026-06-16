@@ -51,8 +51,10 @@
   `town_hub` 路线简化、生产部署加固与项目交接材料刷新。
 - **本轮验收修正**：对齐 graph provider 失败后的 harness keyword fallback 断言；修复/更新 HUD guide 槽位、
   章测解锁、资源卡打开、ASKME 三轮 ask/judge 上下文、GuideOverlay 工具时间线等前端规格。
+- **本地启动修复**：`dev.sh` 后端启动改用 `.mvn/settings.build.xml`，避免 `.mvn/settings.xml`
+  只走 Maven Central 时在当前网络环境下阻断依赖解析；修复后 `./dev.sh` 真栈健康检查通过。
 - **本地验证（实跑）**：
-  - `cd services/pythontopia-graph && python3 -m pytest -q`：632 passed，1 warning。
+  - `cd services/pythontopia-graph && python3 -m pytest -q`：652 passed，1 warning。
   - `python3 -m pytest -q security/tests`：36 passed。
   - AI 导学助手第一批实现后 graph 全量：645 passed，1 warning。
   - AI 导学助手第二批 graph 接入后 graph 全量：647 passed，1 warning。
@@ -79,10 +81,14 @@
     `cd backend && mvn -s .mvn/settings.build.xml -Dtest=TutorWorkflowSubmissionFeedbackListenerTest test`
     2 tests，0 failures，0 errors；`cd backend && mvn -s .mvn/settings.build.xml -Dtest=TutorWorkflowServiceTest,TutorWorkflowSubmissionFeedbackListenerTest,SubmissionServiceTest,CoursePackServiceIntegrationTest test`
     20 tests，0 failures，0 errors。
-  - `cd backend && mvn -s .mvn/settings.build.xml test`：756 tests，0 failures，0 errors。
+  - AI 导学助手最终 focused gate：graph coach 组合 38 passed；backend workflow/submission 组合 17 tests，
+    graph client 组合 5 tests；frontend nudge/panel 组合 2 files / 7 tests passed；`npm run typecheck` 通过。
+  - `cd backend && mvn -s .mvn/settings.build.xml test`：762 tests，0 failures，0 errors。
   - `cd frontend && npm run typecheck`：通过。
-  - `cd frontend && npm run test`：202 files / 1973 tests passed。
-- **未覆盖**：本节未执行 `./dev.sh` 真栈浏览器验收、Android/Windows/微信端回归、ECS 公网验收。
+  - `cd frontend && npm run test`：204 files / 1981 tests passed。
+  - `./dev.sh` 真栈健康：5173 / 18080 / 18091 / 18092 均 `{"status":"ok"}`；
+    `/api/course/videos` 返回课程视频 JSON；Postgres / Redis / graph / rag healthy。
+- **未覆盖**：本节未执行浏览器手工 AC/WA 点击流、Android/Windows/微信端回归、ECS 公网验收。
 
 ## 2026-06-13 — Android R-15 主线冒险闭环 + 契约对齐 + 单 town_hub
 

@@ -1081,7 +1081,8 @@ Expected: pass.
 
 ```bash
 cd backend
-mvn -q -Dtest=TutorWorkflowServiceTest,TutorWorkflowGraphClientTest,SubmissionServiceTest test
+mvn -s .mvn/settings.build.xml -Dtest=TutorWorkflowServiceTest,TutorWorkflowSubmissionFeedbackListenerTest,SubmissionServiceTest test
+mvn -s .mvn/settings.build.xml -Dtest=TutorGraphClientSseTest,TutorGraphClientFailureTest test
 ```
 
 Expected: pass.
@@ -1126,18 +1127,46 @@ git add <only-files-touched-for-this-plan>
 git commit -m "chore(guide): verify coach agent refactor"
 ```
 
+## Final Verification Record
+
+Completed on 2026-06-16.
+
+- Focused graph:
+  `python3 -m pytest -q tests/test_tutor_workflow_coach_schema.py tests/test_guide_coach_agent.py tests/test_tutor_workflow_coach_graph.py tests/test_guide_guardrail_critic.py tests/test_guide_coach_golden.py tests/test_sse_agui.py`
+  -> 38 passed.
+- Focused backend workflow/submission:
+  `mvn -s .mvn/settings.build.xml -Dtest=TutorWorkflowServiceTest,TutorWorkflowSubmissionFeedbackListenerTest,SubmissionServiceTest test`
+  -> 17 tests, 0 failures, 0 errors.
+- Focused backend graph client:
+  `mvn -s .mvn/settings.build.xml -Dtest=TutorGraphClientSseTest,TutorGraphClientFailureTest test`
+  -> 5 tests, 0 failures, 0 errors.
+- Focused frontend:
+  `npm run test -- tests/components/training/GuideNudgeCard.spec.ts tests/components/training/TutorWorkflowPanel.spec.ts`
+  -> 2 files, 7 tests passed; `npm run typecheck` passed.
+- Full graph:
+  `python3 -m pytest -q` -> 652 passed, 1 warning.
+- Full backend:
+  `mvn -s .mvn/settings.build.xml test` -> 762 tests, 0 failures, 0 errors.
+- Full frontend:
+  `npm run test` -> 204 files / 1981 tests passed; `npm run typecheck` passed.
+- Local stack health:
+  `./dev.sh` started the stack; 5173 / 18080 / 18091 / 18092 health checks returned ok;
+  `/api/course/videos` returned course video JSON; Postgres / Redis / graph / rag were healthy.
+
+Manual browser AC/WA click-through, ECS public smoke, and Android / Windows / WeChat regressions were not executed in this verification pass.
+
 ## Acceptance Checklist
 
-- [ ] AC/WA/CE/RE/TLE trigger only a short nudge and wait for click.
-- [ ] Clicking continue invokes `GuideCoachAgent`, not a fixed event-only workflow.
-- [ ] Coach decision is structured and persisted.
-- [ ] `available_actions` are ranked by coach recommendation.
-- [ ] Student state tracks hint level, latest verdict, misconception hypothesis, and last action effectiveness.
-- [ ] Subsequent submissions update coach state.
-- [ ] Guardrails reject complete submit-ready code.
-- [ ] Transfer practice remains non-judge, no reference solution.
-- [ ] AG-UI progress is visible but does not reveal raw reasoning.
-- [ ] Focused graph, backend, and frontend tests pass.
+- [x] AC/WA/CE/RE/TLE trigger only a short nudge and wait for click.
+- [x] Clicking continue invokes `GuideCoachAgent`, not a fixed event-only workflow.
+- [x] Coach decision is structured and persisted.
+- [x] `available_actions` are ranked by coach recommendation.
+- [x] Student state tracks hint level, latest verdict, misconception hypothesis, and last action effectiveness.
+- [x] Subsequent submissions update coach state.
+- [x] Guardrails reject complete submit-ready code.
+- [x] Transfer practice remains non-judge, no reference solution.
+- [x] AG-UI progress is visible but does not reveal raw reasoning.
+- [x] Focused graph, backend, and frontend tests pass.
 
 ## Risks and Mitigations
 
