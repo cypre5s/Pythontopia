@@ -210,3 +210,33 @@
    `available_actions[].recommended/reason`。
 2. 保留所有动作可点，推荐只是排序和提示，不锁死学生路径。
 3. 增加 focused component test，覆盖推荐动作显示和非推荐动作仍可见。
+
+## 第六批执行记录
+
+第六批已完成推荐动作可见化：
+
+1. DTO
+   - `WorkflowActionDto` 新增可选 `recommended` 与 `reason` 字段。
+   - 与 graph 侧 `WorkflowAction` 保持兼容；旧响应不带字段时 UI 不展示推荐块。
+
+2. `TutorWorkflowPanel`
+   - 新增“推荐下一步”提示块，展示推荐动作 label 与简短 reason。
+   - 推荐动作按钮增加轻量标签和高亮。
+   - 其它动作仍正常渲染、可点击，推荐不等于锁定路径。
+
+3. 验证
+   - 先写红测：`TutorWorkflowPanel.spec.ts` 要求推荐动作可见且普通动作仍保留。
+   - Focused frontend gate：
+     `npm run test -- tests/components/training/TutorWorkflowPanel.spec.ts tests/components/training/GuideNudgeCard.spec.ts tests/components/TrainingPanel.spec.ts`
+   - 结果：3 files，11 tests passed。
+   - Frontend type gate：`npm run typecheck` 通过。
+   - Graph focused gate：`python3 -m pytest -q tests/test_tutor_workflow_coach_graph.py`，3 passed。
+
+## 第七批建议
+
+下一批进入反馈回流，但建议继续拆小：
+
+1. 后端先加 `POST /api/tutor/workflow/sessions/{sessionKey}/feedback`，写入
+   `tutor_workflow_action_event`，只接受 card/action 级 feedback。
+2. 前端再给卡片加“有帮助/没帮助”按钮；反馈失败只 toast 或静默，不阻塞导学。
+3. 暂不做复杂推荐模型更新，只把反馈事件稳定沉淀，供后续 coach state 聚合。

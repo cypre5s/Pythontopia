@@ -30,6 +30,8 @@
 - **AI 导学助手第五批前端主动 nudge**：训练场 AC/WA/CE/RE/TLE 后只主动说一句短邀请，
   不自动展开长分析；学生点击继续后再打开 `TutorWorkflowPanel` 并触发 `AC_REVIEW` 或
   `ERROR_FEEDBACK`，SSE 运行逻辑仍集中在导学面板内。
+- **AI 导学助手第六批推荐动作可见化**：`TutorWorkflowPanel` 接收 graph 返回的
+  `available_actions[].recommended/reason`，展示“推荐下一步”和简短理由，同时保留其它动作按钮可点。
 - **主线与课件学习增强**：加入章末测试扩展、课件学习链路、公用导学验收 shell、图书馆阅读路径恢复；
   Stage07 工坊验收契约修正为“资源消费后产生 `RESOURCE_READ`”，不再把资源生成视为阅读完成。
 - **学习画像与资源回流**：新增资源消费掌握度 delta 支持，恢复百晓答案轻反馈事件 `answer_feedback`，
@@ -50,6 +52,10 @@
   - AI 导学助手第五批前端 nudge focused gate：
     `cd frontend && npm run test -- tests/components/training/GuideNudgeCard.spec.ts tests/components/TrainingPanel.spec.ts`
     2 files / 10 tests passed。
+  - AI 导学助手第六批推荐动作 focused gate：
+    `cd frontend && npm run test -- tests/components/training/TutorWorkflowPanel.spec.ts tests/components/training/GuideNudgeCard.spec.ts tests/components/TrainingPanel.spec.ts`
+    3 files / 11 tests passed；`cd services/pythontopia-graph && python3 -m pytest -q tests/test_tutor_workflow_coach_graph.py`
+    3 passed。
   - `cd backend && mvn -s .mvn/settings.build.xml test`：756 tests，0 failures，0 errors。
   - `cd frontend && npm run typecheck`：通过。
   - `cd frontend && npm run test`：202 files / 1973 tests passed。
