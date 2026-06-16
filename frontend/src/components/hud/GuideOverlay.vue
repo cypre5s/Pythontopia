@@ -20,12 +20,15 @@ import { CHAPTERS, formatKcNumber } from '@/data/chapters';
 import { useLearningStore } from '@stores/learning';
 import { useWorkshopActivityStore } from '@stores/workshopActivity';
 import { useSseStream } from '@/composables/useSseStream';
+import { useReducedMotion } from '@/composables/useReducedMotion';
 import { playUiClick, playUiHover } from '@/composables/useStardewFx';
 import MarkdownView from '@/components/common/MarkdownView.vue';
 import { humanizeKcText } from '@/data/kcNames';
 import type {
   OrchestratorPhase,
+  OrchestratorPlanStep,
   OrchestratorResult,
+  OrchestratorTurnMessage,
   OrchestratorTurnRequest,
 } from '@/api/orchestrator';
 import type { LearnerProfileDto } from '@/api/dto/LearnerProfileDto';
@@ -47,6 +50,7 @@ function chapterKcCodes(chapter: number): string[] {
 }
 const activity = useWorkshopActivityStore();
 const router = useRouter();
+const reducedMotion = useReducedMotion();
 
 const sse = useSseStream<OrchestratorResult>('/api/orchestrator/turn/stream');
 
@@ -78,6 +82,13 @@ const PANEL_LABEL: Record<string, string> = {
   review: '去复盘厅',
 };
 
+/** 计划步骤只能跳白名单内部面板：白名单 = PANEL_LABEL 的 key 集（与 panelRoute 同源）。 */
+const PANEL_WHITELIST: ReadonlySet<string> = new Set(Object.keys(PANEL_LABEL));
+
+function isAllowedPanel(panel: string | null): boolean {
+  return panel !== null && PANEL_WHITELIST.has(panel);
+}
+
 function panelRoute(panel: string, chapter: number): string | null {
   switch (panel) {
     case 'lecture':
@@ -93,7 +104,8 @@ function panelRoute(panel: string, chapter: number): string | null {
     case 'problems':
       return '/problems';
     case 'examples':
-      return '/examples';
+      // 方案 C：示例库画廊已隐藏，统一去题库 /problems。
+      return '/problems';
     case 'review':
       return '/review-hall';
     default:
@@ -116,13 +128,22 @@ function buildProfileBrief(profile: LearnerProfileDto | null): string {
   return parts.join('；');
 }
 
+// 建议问题随对话状态变化：澄清追问 → 回答型；有计划 → 推进型；尚未开聊 → 起步型；其余默认。
+const SUGGEST_CLARIFY = ['从当前章开始', '想先打好概念', '想多做题练手', '偏视频/图解'];
+const SUGGEST_STARTER = ['带我开始第 1 章', '帮我规划学习路径', '我想学循环', '出几道题练练'];
+const SUGGEST_AFTER_PLAN = ['继续下一步', '这步太难了', '换个例子', '完成这步后做什么？'];
+const SUGGEST_DEFAULT = ['想看视频讲解', '这步太难了', '换个例子', '下一步做什么？'];
+
 const suggestions = computed<string[]>(() => {
   const last = guide.lastAssistant;
-  if (last?.needsUserInput) {
-    return ['从当前章开始', '想先打好概念', '想多做题练手', '偏视频/图解'];
-  }
-  return ['想看视频讲解', '这步太难了', '换个例子', '下一步做什么？'];
+  if (last?.needsUserInput) return SUGGEST_CLARIFY;
+  if (last?.plan && last.plan.length > 0) return SUGGEST_AFTER_PLAN;
+  if (!guide.messages.some((m) => m.role === 'user')) return SUGGEST_STARTER;
+  return SUGGEST_DEFAULT;
 });
+
+/** 流式状态的无障碍朗读文本（aria-live 区域）。 */
+const liveStatus = computed<string>(() => (guide.isStreaming ? 'AI 助教正在回复，请稍候' : ''));
 
 async function scrollToBottom(): Promise<void> {
   await nextTick();
@@ -169,25 +190,15 @@ function close(): void {
   guide.closePanel();
 }
 
-async function send(raw: string): Promise<void> {
-  const text = raw.trim();
-  if (!text || guide.isStreaming) return;
-  playUiClick();
-
-  const chapter = mainline.firstActionableChapter;
-  const chapterKcs = chapterKcCodes(chapter);
-  // 在 push 用户消息之前取历史（不含本轮）。historyForRequest 是 getter（属性访问）。
-  const history = guide.historyForRequest;
-  guide.pushUserMessage(text);
-  inputText.value = '';
-  await scrollToBottom();
-
-  const aid = guide.beginAssistant();
+/** 执行一轮编排请求（send 与 retry 共用，保证只有这一套聊天管线）。 */
+async function runTurn(text: string, history: OrchestratorTurnMessage[], aid: string): Promise<void> {
   currentAssistantId.value = aid;
 
   // Start orchestrator activity in workshopActivity for ThinkingStream.
   activity.start('orchestrator', `协同规划：${text.slice(0, 24)}`);
 
+  const chapter = mainline.firstActionableChapter;
+  const chapterKcs = chapterKcCodes(chapter);
   const body: OrchestratorTurnRequest = {
     sessionId: guide.sessionId,
     message: text,
@@ -232,11 +243,40 @@ async function send(raw: string): Promise<void> {
   await scrollToBottom();
 }
 
+async function send(raw: string): Promise<void> {
+  const text = raw.trim();
+  if (!text || guide.isStreaming) return;
+  playUiClick();
+
+  // 在 push 用户消息之前取历史（不含本轮）。historyForRequest 是 getter（属性访问）。
+  const history = guide.historyForRequest;
+  guide.pushUserMessage(text);
+  inputText.value = '';
+  await scrollToBottom();
+
+  // 单飞行兜底：store 在 streaming 中拒绝开新占位。
+  const aid = guide.beginAssistant();
+  if (!aid) return;
+  await runTurn(text, history, aid);
+}
+
+/** 重试最近一轮失败：只重发该轮用户输入，不重复历史、不追加新用户气泡。 */
+async function retry(): Promise<void> {
+  const turn = guide.beginRetry();
+  if (!turn) return;
+  playUiClick();
+  await scrollToBottom();
+  await runTurn(turn.text, turn.history, turn.assistantId);
+}
+
 function onSubmit(): void {
   void send(inputText.value);
 }
 function onSuggestion(s: string): void {
   void send(s);
+}
+function onRetry(): void {
+  void retry();
 }
 function onKeydown(e: KeyboardEvent): void {
   if (e.key === 'Enter' && !e.shiftKey) {
@@ -244,21 +284,28 @@ function onKeydown(e: KeyboardEvent): void {
     onSubmit();
   }
 }
-function goToPanel(panel: string | null): void {
-  if (!panel) return;
-  const route = panelRoute(panel, mainline.firstActionableChapter);
+function goToPanel(step: OrchestratorPlanStep): void {
+  if (!step.panel) return;
+  const route = panelRoute(step.panel, mainline.firstActionableChapter);
   if (!route) return;
   playUiClick();
   guide.closePanel();
   hud.closeAll();
-  void router.push(route);
+  // 深链保留 KC 上下文（与工坊 ?kc=&type= 消费契约一致）；目标页未消费时参数无害。
+  const query: Record<string, string> = {};
+  const kc = step.kc_codes?.[0];
+  if (kc) query.kc = kc;
+  if (step.resource_type && (step.panel === 'workshop' || step.panel === 'tutor')) {
+    query.type = step.resource_type;
+  }
+  void router.push(Object.keys(query).length > 0 ? { path: route, query } : route);
 }
 </script>
 
 <template>
   <div
     class="guide-overlay"
-    :class="{ 'guide-overlay--open': visible }"
+    :class="{ 'guide-overlay--open': visible, 'guide-overlay--reduced': reducedMotion }"
     data-testid="guide-overlay"
     @click.self="close"
   >
@@ -266,6 +313,7 @@ function goToPanel(panel: string | null): void {
       class="guide-card"
       role="dialog"
       aria-label="AI 助教"
+      @keydown.escape.stop.prevent="close"
     >
       <header class="guide-head">
         <span class="guide-head__title">✧ AI 助教</span>
@@ -311,6 +359,14 @@ function goToPanel(panel: string | null): void {
               class="guide-typing"
             >AI 助教思考中 ▌</span>
 
+            <p
+              v-if="m.failed"
+              class="guide-failnote"
+              data-testid="guide-fail-note"
+            >
+              ⚠ 本轮回复已中断，可在下方点「重试本轮」
+            </p>
+
             <ol
               v-if="m.plan && m.plan.length"
               class="guide-plan"
@@ -331,13 +387,13 @@ function goToPanel(panel: string | null): void {
                   <small class="guide-plan__detail">{{ humanizeKcText(step.detail) }}</small>
                 </span>
                 <button
-                  v-if="step.panel"
+                  v-if="isAllowedPanel(step.panel)"
                   type="button"
                   class="guide-plan__go"
-                  @click="goToPanel(step.panel)"
+                  @click="goToPanel(step)"
                   @mouseenter="playUiHover"
                 >
-                  {{ PANEL_LABEL[step.panel] ?? '前往' }}
+                  {{ PANEL_LABEL[step.panel ?? ''] ?? '前往' }}
                 </button>
               </li>
             </ol>
@@ -411,10 +467,29 @@ function goToPanel(panel: string | null): void {
         </button>
       </form>
       <p
+        class="guide-live"
+        role="status"
+        aria-live="polite"
+        data-testid="guide-live-status"
+      >
+        {{ liveStatus }}
+      </p>
+      <p
         v-if="guide.lastError"
         class="guide-error"
+        role="alert"
+        data-testid="guide-error"
       >
-        {{ guide.lastError }}
+        <span class="guide-error__text">{{ guide.lastError }}</span>
+        <button
+          v-if="guide.canRetry"
+          type="button"
+          class="guide-error__retry"
+          data-testid="guide-retry"
+          @click="onRetry"
+        >
+          重试本轮
+        </button>
       </p>
     </section>
   </div>
@@ -512,8 +587,13 @@ function goToPanel(panel: string | null): void {
   background: rgba(241, 196, 83, 0.18);
   border-color: var(--pyt-panel-border);
 }
+/* 失败态只标红边框，不整体染红正文：已收到的部分回答保持可读。 */
 .guide-bubble--failed {
   border-color: var(--pyt-danger, #e63946);
+}
+.guide-failnote {
+  margin: 6px 0 0;
+  font-size: 11px;
   color: var(--pyt-danger, #e63946);
 }
 .guide-typing {
@@ -700,8 +780,58 @@ function goToPanel(panel: string | null): void {
 .guide-error {
   margin: 0;
   padding: 0 12px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 11px;
   color: var(--pyt-danger, #e63946);
+}
+.guide-error__text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.guide-error__retry {
+  flex: 0 0 auto;
+  font-family: inherit;
+  font-size: 11px;
+  padding: 2px 8px;
+  background: var(--pyt-btn-bg);
+  color: var(--pyt-text-primary);
+  border: 2px solid var(--pyt-danger, #e63946);
+  border-radius: 2px;
+  cursor: pointer;
+}
+.guide-error__retry:hover {
+  border-color: var(--pyt-text-accent);
+}
+/* 仅供读屏的流式状态区（aria-live），视觉上隐藏不占布局。 */
+.guide-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+/* prefers-reduced-motion：JS 检测（跨组件统一 useReducedMotion）+ 纯 CSS 双保险。 */
+.guide-overlay--reduced,
+.guide-overlay--reduced .guide-card {
+  transition: none;
+}
+.guide-overlay--reduced .guide-trace__dot {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .guide-overlay,
+  .guide-card {
+    transition: none;
+  }
+  .guide-trace__dot {
+    animation: none;
+  }
 }
 @media (max-width: 520px) {
   .guide-overlay {

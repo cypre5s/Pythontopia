@@ -2,7 +2,7 @@
  * 操作指南（/guide）结构化内容源。
  *
  * 指南页完全由本文件驱动渲染：调整章节、文案、截图只改数据，不动组件。
- * 21 张截图 URL 是与截图生成基础设施约定的冻结契约——
+ * 截图 URL 是与截图生成基础设施约定的冻结契约——
  * 开发期文件可能尚未落盘，GuideScreenshot 会优雅降级为文字占位说明。
  */
 
@@ -81,6 +81,35 @@ export interface GuideSectionContent {
   readonly heroShot: GuideScreenshotSpec;
   readonly subsections: readonly GuideSubsection[];
 }
+
+export interface GuideNavGroup {
+  readonly id: string;
+  readonly label: string;
+  readonly description: string;
+  readonly sectionIds: readonly string[];
+}
+
+/** 全站目录只在这里分组，不改变各主题既有 URL 与排序编号。 */
+export const GUIDE_NAV_GROUPS: readonly GuideNavGroup[] = [
+  {
+    id: 'quick-start',
+    label: '快速开始',
+    description: '先会走，再知道下一步去哪',
+    sectionIds: ['town-basics', 'ai-guide', 'mainline'],
+  },
+  {
+    id: 'learning-loop',
+    label: '看学练测',
+    description: '完成一次真实学习闭环',
+    sectionIds: ['library', 'workshop', 'code-theater', 'training', 'bug-mine', 'review-hall'],
+  },
+  {
+    id: 'growth-teaching',
+    label: '成长与教学',
+    description: '查看成长证据并连接班级',
+    sectionIds: ['profile', 'teacher-classroom', 'clients'],
+  },
+];
 
 const SCREENSHOT_BASE = '/guide/screenshots';
 
@@ -238,16 +267,22 @@ export const GUIDE_SECTIONS: readonly GuideSectionContent[] = [
     subsections: [
       {
         id: 'ai-guide-what',
-        title: '它能帮你做什么',
+        title: '什么时候应该找 AI 导学助手',
         blocks: [
+          {
+            kind: 'paragraph',
+            text:
+              'AI 导学助手会综合你的主线进度、个人画像，以及当前视频、课件页、题目与知识点来理解处境。'
+              + '它先判断你卡在「看、学、练、测」哪一步，再给一个现在就能执行的下一步，而不是丢给你一段通用答案。',
+          },
           {
             kind: 'list',
             items: [
-              '推荐下一步：结合主线进度与知识点掌握度，给出具体、可执行的行动建议',
-              '随时答疑：直接问 Python 概念或题目思路，回答尽量贴合你的基础',
-              '解释玩法：不清楚某栋建筑、某个系统怎么用，问它就行',
-              '一键带路：建议通常带可点击入口，点一下就跳到对应页面，不用自己找',
-              '为你定制：它读得到你的画像，同一个问题给不同的人，建议也会不一样',
+              '不知道下一步：结合课程进度与掌握度，说明「去哪里、做什么、为什么现在做」',
+              '概念没听懂：贴着当前材料换一种讲法，并用提问确认你真正卡住的位置',
+              '题目不会做：分阶段给审题、思路、骨架和调试提示，让你保留独立完成代码的过程',
+              '在小镇迷路：解释建筑与系统用途，并给出可点击的页面入口',
+              '需要深入学习：把当前目标交给百晓工坊，继续生成讲义、导图、练习或学习计划',
             ],
           },
           {
@@ -264,6 +299,12 @@ export const GUIDE_SECTIONS: readonly GuideSectionContent[] = [
             caption:
               '每阶段都给「下一步」选项按钮，按你的画像因材施教、只给思路不给完整答案；'
               + '还能随时「画一下 / 拼装挑战 / 知识点复盘」。',
+          },
+          {
+            kind: 'paragraph',
+            text:
+              '完整辅导链是「审题导读 → 思路分析 → 骨架代码 → 错因诊断 → AC 复盘」。'
+              + '你可以逐段推进，也可以在某一步停下来追问；通过后再用迁移练习确认自己不是只记住了这一题。',
           },
         ],
       },
@@ -285,6 +326,15 @@ export const GUIDE_SECTIONS: readonly GuideSectionContent[] = [
             text:
               '在输入框里用中文直接说出你的目标或困惑即可，例如「我现在该学什么」「for 循环没看懂」。'
               + '回答支持随时停止、重试，多轮对话也会被记住。',
+          },
+          {
+            kind: 'list',
+            items: [
+              '问路径：「我刚学完列表，下一步先练什么？」',
+              '问概念：「用一个生活例子解释 for 循环和 while 循环的区别」',
+              '问题目：「先帮我读懂题意，不要直接写答案」',
+              '问调试：「这次 Wrong Answer 更像边界条件还是循环范围问题？」',
+            ],
           },
           {
             kind: 'screenshot',
@@ -311,13 +361,13 @@ export const GUIDE_SECTIONS: readonly GuideSectionContent[] = [
           {
             kind: 'paragraph',
             text:
-              '在主线小节的视频页、课件阅读器和训练场做题页，右侧还内置了「就地助教」：'
-              + '它会紧扣你此刻正在看的这段视频、这一页课件或这道题来回答，问思路、要提示都行。',
+              '在主线小节的视频页、课件阅读器和训练场做题页，右侧还内置了「就地助教」。'
+              + '这时你不必重新描述背景：助教会紧扣当前材料回答，并把课件依据、学习目标与刚才的对话连续起来。',
           },
           {
             kind: 'tip',
             text:
-              '做题与考试场景的助教只给思路与提示、不会直接给出完整答案；'
+              '做题与考试场景的助教只给思路与提示，不会直接给出可复制提交的完整答案；'
               + '章末大测试、Bug 矿洞等需要专注或防作弊的页面会暂时收起助教，这是刻意设计。',
           },
         ],
@@ -332,6 +382,11 @@ export const GUIDE_SECTIONS: readonly GuideSectionContent[] = [
               '一句话：AI 助教是「随身的快速向导」，在任何页面都能呼出，问下一步、问思路、求带路；'
               + '百晓工坊是「专门的 AI 工作室」，适合更深入的答疑，还能为你生成讲义、思维导图、练习等学习资源。'
               + '两者其实是同一位 AI 伙伴——需要深入时，助教也会把你带进工坊。',
+          },
+          {
+            kind: 'tip',
+            text:
+              '判断方法：只想知道「现在怎么办」就先问助教；需要一份可反复使用的学习产物，就让助教把当前知识点和学习目标一起带进百晓工坊。',
           },
         ],
       },
@@ -586,8 +641,14 @@ export const GUIDE_SECTIONS: readonly GuideSectionContent[] = [
     subsections: [
       {
         id: 'workshop-ask',
-        title: '怎么用',
+        title: '带着目标进入工坊',
         blocks: [
+          {
+            kind: 'paragraph',
+            text:
+              '百晓工坊接受三类输入：自然语言、@ 知识点和上传文件。你只要说明想解决的问题，'
+              + '不必先理解背后有哪些智能体或命令；需要精确控制时，再用「/」点名能力。',
+          },
           {
             kind: 'steps',
             items: [
@@ -613,6 +674,12 @@ export const GUIDE_SECTIONS: readonly GuideSectionContent[] = [
             caption: '右侧「多智能体工作室」会实时点亮每个在岗的小人，并在每阶段旁概述「成果」。',
           },
           {
+            kind: 'paragraph',
+            text:
+              '收到请求后，工坊会先理解意图，从 16 项能力中选择合适的处理方式；'
+              + '如果目标太宽，它会先追问范围，如果识别偏了，你可以用纠错标签立刻切换能力。',
+          },
+          {
             kind: 'screenshot',
             shot: {
               src: `${SCREENSHOT_BASE}/live-workshop-answer.png`,
@@ -624,7 +691,7 @@ export const GUIDE_SECTIONS: readonly GuideSectionContent[] = [
       },
       {
         id: 'workshop-abilities',
-        title: '16 项能力，分四组',
+        title: '16 项能力如何匹配你的请求',
         blocks: [
           {
             kind: 'paragraph',
@@ -649,11 +716,13 @@ export const GUIDE_SECTIONS: readonly GuideSectionContent[] = [
       },
       {
         id: 'workshop-interactive',
-        title: '提问之后会发生什么',
+        title: '多智能体怎样完成一次任务',
         blocks: [
           {
             kind: 'paragraph',
-            text: '工坊不是「问一句、答一段」就完了，而是一段可控的对话：',
+            text:
+              '工坊不是「问一句、答一段」就完了。一次完整任务会经过课件证据、内容生成、引用审查、防幻觉与安全审查，'
+              + '再把通过检查的结果流式交给你；右侧工作室负责把这些真实阶段变成看得懂的进度。',
           },
           {
             kind: 'list',
@@ -685,7 +754,7 @@ export const GUIDE_SECTIONS: readonly GuideSectionContent[] = [
       },
       {
         id: 'workshop-resources',
-        title: '它能产出的学习资源',
+        title: '会交付哪些学习产物',
         blocks: [
           {
             kind: 'paragraph',
@@ -704,13 +773,13 @@ export const GUIDE_SECTIONS: readonly GuideSectionContent[] = [
           },
           {
             kind: 'tip',
-            text: '生成的资源都会收进你的「我的书房」，之后用 /找资料 随时翻回来复用。',
+            text: '生成的资源可以保存到「我的书房」继续复用，之后用 /找资料 随时翻回来，不必在历史对话里逐条寻找。',
           },
         ],
       },
       {
         id: 'workshop-upload',
-        title: '上传你的文件，让百晓就着它讲',
+        title: '用自己的文件继续学',
         blocks: [
           {
             kind: 'paragraph',
@@ -742,7 +811,7 @@ export const GUIDE_SECTIONS: readonly GuideSectionContent[] = [
       },
       {
         id: 'workshop-output',
-        title: '看得见依据，不替你作弊',
+        title: '证据、边界与学习安全',
         blocks: [
           {
             kind: 'list',

@@ -13,7 +13,11 @@
 //   6. **不依赖 useAudio**：Tone.js 走自己的 AudioContext，不抢 Phaser BGM 通道，
 //      避免 Howler/Tone/Phaser 三套同时启动导致 iOS 卡死。
 
-import * as Tone from 'tone';
+type ToneModule = typeof import('tone');
+type SynthLike = {
+  triggerAttackRelease: (...args: unknown[]) => unknown;
+  dispose: () => void;
+};
 
 let unlocked = false;
 let muted = false;
@@ -21,12 +25,14 @@ let muted = false;
 // 避免动效偏好为「减少」的玩家被音效骚扰。
 let reducedMotionMode = false;
 
-let stepSynth: Tone.MembraneSynth | null = null;
-let clickSynth: Tone.MetalSynth | null = null;
-let hoverSynth: Tone.Synth | null = null;
-let questSynth: Tone.PolySynth | null = null;
-let dialogSynth: Tone.Synth | null = null;
-let chimeSynth: Tone.PolySynth | null = null;
+let toneModule: ToneModule | null = null;
+let toneLoadPromise: Promise<ToneModule | null> | null = null;
+let stepSynth: SynthLike | null = null;
+let clickSynth: SynthLike | null = null;
+let hoverSynth: SynthLike | null = null;
+let questSynth: SynthLike | null = null;
+let dialogSynth: SynthLike | null = null;
+let chimeSynth: SynthLike | null = null;
 let lastToneStartAt = 0;
 
 const lastFiredAt = new Map<string, number>();
@@ -42,8 +48,25 @@ function shouldFire(key: string, cooldownMs: number): boolean {
   return true;
 }
 
-function nextToneStartTime(): number {
-  const next = Math.max(Tone.now() + 0.005, lastToneStartAt + 0.02);
+async function loadTone(): Promise<ToneModule | null> {
+  if (toneModule) return toneModule;
+  if (!toneLoadPromise) {
+    toneLoadPromise = import('tone')
+      .then((mod) => {
+        toneModule = mod;
+        return mod;
+      })
+      .catch(() => null);
+  }
+  return toneLoadPromise;
+}
+
+function getTone(): ToneModule | null {
+  return toneModule;
+}
+
+function nextToneStartTime(tone: ToneModule): number {
+  const next = Math.max(tone.now() + 0.005, lastToneStartAt + 0.02);
   lastToneStartAt = next;
   return next;
 }
@@ -71,7 +94,9 @@ if (typeof window !== 'undefined') {
 export async function unlockStardewFx(): Promise<void> {
   if (unlocked) return;
   try {
-    await Tone.start();
+    const tone = await loadTone();
+    if (!tone) return;
+    await tone.start();
     unlocked = true;
   } catch {
     // 静默：jsdom 等环境无 AudioContext
@@ -98,15 +123,16 @@ export function isStardewFxMuted(): boolean {
   return muted;
 }
 
-function ensureStepSynth(): Tone.MembraneSynth | null {
-  if (!stepSynth && unlocked) {
+function ensureStepSynth(): SynthLike | null {
+  const tone = getTone();
+  if (!stepSynth && unlocked && tone) {
     try {
-      stepSynth = new Tone.MembraneSynth({
+      stepSynth = new tone.MembraneSynth({
         octaves: 2,
         pitchDecay: 0.04,
         envelope: { attack: 0.001, decay: 0.08, sustain: 0, release: 0.08 },
         volume: -22,
-      }).toDestination();
+      }).toDestination() as SynthLike;
     } catch {
       stepSynth = null;
     }
@@ -114,17 +140,18 @@ function ensureStepSynth(): Tone.MembraneSynth | null {
   return stepSynth;
 }
 
-function ensureClickSynth(): Tone.MetalSynth | null {
-  if (!clickSynth && unlocked) {
+function ensureClickSynth(): SynthLike | null {
+  const tone = getTone();
+  if (!clickSynth && unlocked && tone) {
     try {
-      clickSynth = new Tone.MetalSynth({
+      clickSynth = new tone.MetalSynth({
         envelope: { attack: 0.001, decay: 0.08, release: 0.05 },
         harmonicity: 5.1,
         modulationIndex: 24,
         resonance: 2000,
         octaves: 1.5,
         volume: -20,
-      }).toDestination();
+      }).toDestination() as SynthLike;
     } catch {
       clickSynth = null;
     }
@@ -132,14 +159,15 @@ function ensureClickSynth(): Tone.MetalSynth | null {
   return clickSynth;
 }
 
-function ensureHoverSynth(): Tone.Synth | null {
-  if (!hoverSynth && unlocked) {
+function ensureHoverSynth(): SynthLike | null {
+  const tone = getTone();
+  if (!hoverSynth && unlocked && tone) {
     try {
-      hoverSynth = new Tone.Synth({
+      hoverSynth = new tone.Synth({
         oscillator: { type: 'triangle' },
         envelope: { attack: 0.005, decay: 0.05, sustain: 0, release: 0.05 },
         volume: -28,
-      }).toDestination();
+      }).toDestination() as SynthLike;
     } catch {
       hoverSynth = null;
     }
@@ -147,14 +175,15 @@ function ensureHoverSynth(): Tone.Synth | null {
   return hoverSynth;
 }
 
-function ensureQuestSynth(): Tone.PolySynth | null {
-  if (!questSynth && unlocked) {
+function ensureQuestSynth(): SynthLike | null {
+  const tone = getTone();
+  if (!questSynth && unlocked && tone) {
     try {
-      questSynth = new Tone.PolySynth(Tone.Synth, {
+      questSynth = new tone.PolySynth(tone.Synth, {
         oscillator: { type: 'fmsquare' },
         envelope: { attack: 0.01, decay: 0.2, sustain: 0.2, release: 0.4 },
         volume: -14,
-      }).toDestination();
+      }).toDestination() as SynthLike;
     } catch {
       questSynth = null;
     }
@@ -162,14 +191,15 @@ function ensureQuestSynth(): Tone.PolySynth | null {
   return questSynth;
 }
 
-function ensureDialogSynth(): Tone.Synth | null {
-  if (!dialogSynth && unlocked) {
+function ensureDialogSynth(): SynthLike | null {
+  const tone = getTone();
+  if (!dialogSynth && unlocked && tone) {
     try {
-      dialogSynth = new Tone.Synth({
+      dialogSynth = new tone.Synth({
         oscillator: { type: 'sine' },
         envelope: { attack: 0.01, decay: 0.1, sustain: 0, release: 0.1 },
         volume: -22,
-      }).toDestination();
+      }).toDestination() as SynthLike;
     } catch {
       dialogSynth = null;
     }
@@ -177,14 +207,15 @@ function ensureDialogSynth(): Tone.Synth | null {
   return dialogSynth;
 }
 
-function ensureChimeSynth(): Tone.PolySynth | null {
-  if (!chimeSynth && unlocked) {
+function ensureChimeSynth(): SynthLike | null {
+  const tone = getTone();
+  if (!chimeSynth && unlocked && tone) {
     try {
-      chimeSynth = new Tone.PolySynth(Tone.Synth, {
+      chimeSynth = new tone.PolySynth(tone.Synth, {
         oscillator: { type: 'sine' },
         envelope: { attack: 0.03, decay: 0.5, sustain: 0.3, release: 0.8 },
         volume: -18,
-      }).toDestination();
+      }).toDestination() as SynthLike;
     } catch {
       chimeSynth = null;
     }
@@ -206,9 +237,10 @@ const TERRAIN_NOTES: Record<TerrainKind, string> = {
 export function playStep(terrain: TerrainKind = 'grass'): void {
   if (!shouldFire('step', 60)) return;
   const synth = ensureStepSynth();
-  if (!synth) return;
+  const tone = getTone();
+  if (!synth || !tone) return;
   try {
-    synth.triggerAttackRelease(TERRAIN_NOTES[terrain], '32n', nextToneStartTime());
+    synth.triggerAttackRelease(TERRAIN_NOTES[terrain], '32n', nextToneStartTime(tone));
   } catch {
     // 忽略
   }
@@ -218,9 +250,10 @@ export function playStep(terrain: TerrainKind = 'grass'): void {
 export function playUiClick(): void {
   if (!shouldFire('ui-click', 80)) return;
   const synth = ensureClickSynth();
-  if (!synth) return;
+  const tone = getTone();
+  if (!synth || !tone) return;
   try {
-    synth.triggerAttackRelease('32n', nextToneStartTime(), 0.7);
+    synth.triggerAttackRelease('32n', nextToneStartTime(tone), 0.7);
   } catch {
     // 忽略
   }
@@ -230,9 +263,10 @@ export function playUiClick(): void {
 export function playUiHover(): void {
   if (!shouldFire('ui-hover', 120)) return;
   const synth = ensureHoverSynth();
-  if (!synth) return;
+  const tone = getTone();
+  if (!synth || !tone) return;
   try {
-    synth.triggerAttackRelease('A5', '64n', nextToneStartTime());
+    synth.triggerAttackRelease('A5', '64n', nextToneStartTime(tone));
   } catch {
     // 忽略
   }
@@ -242,9 +276,10 @@ export function playUiHover(): void {
 export function playQuestComplete(): void {
   if (!shouldFire('quest', 400)) return;
   const synth = ensureQuestSynth();
-  if (!synth) return;
+  const tone = getTone();
+  if (!synth || !tone) return;
   try {
-    const now = nextToneStartTime();
+    const now = nextToneStartTime(tone);
     synth.triggerAttackRelease(['C4', 'E4', 'G4'], '8n', now);
     synth.triggerAttackRelease(['F4', 'A4', 'C5'], '8n', now + 0.2);
     synth.triggerAttackRelease(['G4', 'B4', 'D5'], '4n', now + 0.4);
@@ -257,9 +292,10 @@ export function playQuestComplete(): void {
 export function playDialogOpen(): void {
   if (!shouldFire('dialog-open', 150)) return;
   const synth = ensureDialogSynth();
-  if (!synth) return;
+  const tone = getTone();
+  if (!synth || !tone) return;
   try {
-    synth.triggerAttackRelease('A4', '16n', nextToneStartTime());
+    synth.triggerAttackRelease('A4', '16n', nextToneStartTime(tone));
   } catch {
     // 忽略
   }
@@ -268,9 +304,10 @@ export function playDialogOpen(): void {
 export function playDialogClose(): void {
   if (!shouldFire('dialog-close', 150)) return;
   const synth = ensureDialogSynth();
-  if (!synth) return;
+  const tone = getTone();
+  if (!synth || !tone) return;
   try {
-    synth.triggerAttackRelease('E4', '16n', nextToneStartTime());
+    synth.triggerAttackRelease('E4', '16n', nextToneStartTime(tone));
   } catch {
     // 忽略
   }
@@ -280,14 +317,15 @@ export function playDialogClose(): void {
 export function playChime(mood: 'dawn' | 'dusk' | 'season' = 'dawn'): void {
   if (!shouldFire(`chime-${mood}`, 1500)) return;
   const synth = ensureChimeSynth();
-  if (!synth) return;
+  const tone = getTone();
+  if (!synth || !tone) return;
   const notes: Record<string, string[]> = {
     dawn: ['E5', 'G5', 'A5'],
     dusk: ['A4', 'F4', 'D4'],
     season: ['C5', 'E5', 'G5', 'C6'],
   };
   try {
-    const now = nextToneStartTime();
+    const now = nextToneStartTime(tone);
     notes[mood]?.forEach((note, i) => {
       synth.triggerAttackRelease(note, '8n', now + i * 0.15);
     });
@@ -319,6 +357,8 @@ export function disposeStardewFx(): void {
 export function __resetStardewFxForTest(): void {
   muted = false;
   unlocked = false;
+  toneModule = null;
+  toneLoadPromise = null;
   lastToneStartAt = 0;
   lastFiredAt.clear();
   disposeStardewFx();

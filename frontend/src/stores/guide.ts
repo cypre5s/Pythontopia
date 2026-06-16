@@ -38,6 +38,19 @@ export interface GuideMessage {
 
 export type GuideStatus = 'idle' | 'streaming' | 'error';
 
+/** 最近一轮用户输入的标记（重试只重发这一轮，不重复历史）。 */
+export interface GuideLastTurn {
+  userMessageId: string;
+  text: string;
+}
+
+/** beginRetry 返回给调用方的「重发载荷」：新占位 id + 原文 + 截到该轮之前的历史。 */
+export interface GuideRetryTurn {
+  assistantId: string;
+  text: string;
+  history: OrchestratorTurnMessage[];
+}
+
 function genId(): string {
   try {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -72,6 +85,15 @@ export interface GuideStoreState {
   recentFailures: string[];
   /** 是否已展示过欢迎语（避免重复 seed）。 */
   greeted: boolean;
+  /** 最近一轮用户输入；该轮失败时支撑「只重发本轮」的重试。 */
+  lastTurn: GuideLastTurn | null;
+}
+
+/** 过滤出可发给后端的多轮历史（剔除欢迎语与正在流式/失败的占位）。 */
+function toRequestHistory(messages: GuideMessage[]): OrchestratorTurnMessage[] {
+  return messages
+    .filter((m) => !m.streaming && !m.failed && m.id !== 'welcome' && m.content.trim().length > 0)
+    .map((m) => ({ role: m.role, content: m.content }));
 }
 
 const WELCOME: GuideMessage = {
@@ -92,14 +114,15 @@ export const useGuideStore = defineStore('guide', {
     lastError: null,
     recentFailures: [],
     greeted: false,
+    lastTurn: null,
   }),
   getters: {
     isStreaming: (state): boolean => state.status === 'streaming',
+    /** 仅最近一轮失败时可重试（idle/streaming 下重试无意义，且保证单飞行）。 */
+    canRetry: (state): boolean => state.status === 'error' && state.lastTurn !== null,
     /** 转成发给后端的多轮历史（剔除欢迎语与正在流式/失败的占位）。 */
     historyForRequest(): OrchestratorTurnMessage[] {
-      return this.messages
-        .filter((m) => !m.streaming && !m.failed && m.id !== 'welcome' && m.content.trim().length > 0)
-        .map((m) => ({ role: m.role, content: m.content }));
+      return toRequestHistory(this.messages);
     },
     /** 最近一条助手消息（用于渲染计划 / 追问建议）。 */
     lastAssistant(): GuideMessage | null {
@@ -131,9 +154,12 @@ export const useGuideStore = defineStore('guide', {
     pushUserMessage(content: string): string {
       const id = genId();
       this.messages = [...this.messages, { id, role: 'user', content }];
+      this.lastTurn = { userMessageId: id, text: content };
       return id;
     },
-    beginAssistant(): string {
+    /** 开启一轮助手流式占位。同一时刻只允许一个进行中请求：streaming 中拒绝并返回 null。 */
+    beginAssistant(): string | null {
+      if (this.status === 'streaming') return null;
       const id = genId();
       this.messages = [
         ...this.messages,
@@ -142,6 +168,30 @@ export const useGuideStore = defineStore('guide', {
       this.status = 'streaming';
       this.lastError = null;
       return id;
+    },
+    /**
+     * 重试最近一轮失败的请求：只重发该轮用户输入，历史截到该轮之前（避免 message 与
+     * history 重复）。失败占位被替换为新的流式占位，不在线程里堆积。
+     * 仅 canRetry（最近一轮失败）时可用；streaming/idle 下返回 null。
+     */
+    beginRetry(): GuideRetryTurn | null {
+      if (!this.canRetry || this.lastTurn === null) return null;
+      const { userMessageId, text } = this.lastTurn;
+      const turnIndex = this.messages.findIndex((m) => m.id === userMessageId);
+      if (turnIndex < 0) return null;
+      const history = toRequestHistory(this.messages.slice(0, turnIndex));
+      // 移除本轮（含此前各次重试）的失败占位，再挂新的流式占位。
+      this.messages = this.messages.filter(
+        (m, idx) => !(idx > turnIndex && m.role === 'assistant' && m.failed),
+      );
+      const assistantId = genId();
+      this.messages = [
+        ...this.messages,
+        { id: assistantId, role: 'assistant', content: '', streaming: true },
+      ];
+      this.status = 'streaming';
+      this.lastError = null;
+      return { assistantId, text, history };
     },
     updateAssistantStream(id: string, content: string, traces: OrchestratorTraceStep[]): void {
       this.messages = this.messages.map((m) =>
@@ -185,6 +235,7 @@ export const useGuideStore = defineStore('guide', {
       this.status = 'idle';
       this.lastError = null;
       this.greeted = false;
+      this.lastTurn = null;
     },
   },
 });

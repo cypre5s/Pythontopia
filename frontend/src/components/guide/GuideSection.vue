@@ -313,14 +313,29 @@ function pad(value: number): string {
 
 .guide-subsection {
   margin-top: var(--pyt-space-5);
+  padding-top: var(--pyt-space-4);
+  border-top: 1px solid var(--pyt-color-border-soft);
 }
 
 .guide-subsection__title {
+  position: relative;
   margin: 0 0 var(--pyt-space-3);
+  padding-left: 14px;
   font-size: 19px;
   line-height: 1.5;
   color: var(--pyt-color-primary-dark);
   scroll-margin-top: 88px;
+}
+
+.guide-subsection__title::before {
+  content: '';
+  position: absolute;
+  top: 0.45em;
+  left: 0;
+  width: 6px;
+  height: 0.7em;
+  background: var(--pyt-color-gold);
+  box-shadow: 2px 2px 0 var(--pyt-color-border-soft);
 }
 
 .guide-p {

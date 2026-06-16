@@ -143,6 +143,12 @@ function onClickGuide(): void {
   guide.toggle();
 }
 
+/** Dock「指南」：跳转 /guide 图文操作手册。 */
+function onOpenManual(): void {
+  playUiClick();
+  void router.push('/guide');
+}
+
 function openLibrary(): void {
   playUiClick();
   void router.push('/library');
@@ -556,6 +562,23 @@ onUnmounted(() => {
         </span>
         <span class="hud-slot__label">{{ slot.label }}</span>
         <span class="hud-slot__shortcut">{{ slot.shortcut }}</span>
+      </button>
+      <!-- 指南 = 跳转 /guide 图文操作指南页（与「技能」相邻，便于新手发现） -->
+      <button
+        type="button"
+        class="hud-slot"
+        data-testid="hud-slot-manual"
+        aria-label="指南（图文操作手册）"
+        title="指南（图文操作手册）"
+        @click="onOpenManual"
+        @mouseenter="onSlotHover"
+      >
+        <span
+          class="hud-slot__icon"
+          aria-hidden="true"
+        >📖</span>
+        <span class="hud-slot__label">指南</span>
+        <span class="hud-slot__shortcut">?</span>
       </button>
       <span
         class="hud-divider"

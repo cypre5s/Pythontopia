@@ -109,7 +109,7 @@ describe('GuidePage 分页式文档布局', () => {
     expect(fallbackWrapper.find(`#${GUIDE_SECTIONS[0]!.id}`).exists()).toBe(true);
   });
 
-  it('右侧本页大纲只列当前主题的小节，并提供其他主题快捷入口', async () => {
+  it('右侧本页大纲只列当前主题的小节，不重复全站目录', async () => {
     const { wrapper } = await mountGuide('/guide?topic=workshop');
     const outline = wrapper.get('[data-testid="guide-outline"]');
 
@@ -120,9 +120,37 @@ describe('GuidePage 分页式文档布局', () => {
         `大纲缺少当前页小节锚点 ${sub.id}`,
       ).toBe(true);
     }
-    // 其他主题以快捷入口形式存在
-    expect(outline.text()).toContain('其他主题');
-    expect(outline.text()).toContain('训练场');
+    // 全站主题只由左侧目录负责，右栏不重复第二份全站导航。
+    expect(outline.text()).not.toContain('其他主题');
+    expect(outline.text()).not.toContain('训练场');
+  });
+
+  it('左侧目录按快速开始、看学练测、成长与教学分组，并覆盖全部主题', async () => {
+    const { wrapper } = await mountGuide();
+    const sidebar = wrapper.get('[data-testid="guide-sidebar"]');
+
+    const expectedGroups = [
+      ['quick-start', '快速开始'],
+      ['learning-loop', '看学练测'],
+      ['growth-teaching', '成长与教学'],
+    ] as const;
+    for (const [id, label] of expectedGroups) {
+      const group = sidebar.get(`[data-testid="guide-nav-group-${id}"]`);
+      expect(group.text()).toContain(label);
+    }
+
+    expect(sidebar.findAll('[data-testid^="guide-nav-link-"]').length)
+      .toBe(GUIDE_SECTIONS.length);
+  });
+
+  it('左侧目录在当前主题下展开本页小节，移动端只打开一层目录也能定位', async () => {
+    const { wrapper } = await mountGuide('/guide?topic=ai-guide');
+    const section = GUIDE_SECTIONS.find((item) => item.id === 'ai-guide')!;
+
+    for (const subsection of section.subsections) {
+      const link = wrapper.get(`[data-testid="guide-nav-sub-${subsection.id}"]`);
+      expect(link.attributes('href')).toBe(`#${subsection.id}`);
+    }
   });
 });
 
@@ -314,6 +342,26 @@ describe('GuidePage 内容覆盖十大主题', () => {
       expect(allText, `缺少主题关键词：${keyword}`).toContain(keyword);
     }
     expect(allText).toContain('看 → 学 → 练 → 测');
+  });
+
+  it('AI 导学助手讲清上下文、分阶段辅导、边界与工坊联动', async () => {
+    const { wrapper } = await mountGuide('/guide?topic=ai-guide');
+    const text = wrapper.get('[data-testid="guide-content"]').text();
+
+    expect(text).toContain('当前视频、课件页、题目与知识点');
+    expect(text).toContain('审题导读 → 思路分析 → 骨架代码 → 错因诊断 → AC 复盘');
+    expect(text).toContain('不会直接给出可复制提交的完整答案');
+    expect(text).toContain('把当前知识点和学习目标一起带进百晓工坊');
+  });
+
+  it('百晓工坊讲清输入、能力路由、多智能体审查、产物与复用', async () => {
+    const { wrapper } = await mountGuide('/guide?topic=workshop');
+    const text = wrapper.get('[data-testid="guide-content"]').text();
+
+    expect(text).toContain('自然语言、@ 知识点和上传文件');
+    expect(text).toContain('从 16 项能力中选择合适的处理方式');
+    expect(text).toContain('课件证据、内容生成、引用审查、防幻觉与安全审查');
+    expect(text).toContain('保存到「我的书房」继续复用');
   });
 });
 

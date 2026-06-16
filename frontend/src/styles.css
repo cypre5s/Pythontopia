@@ -370,7 +370,11 @@ a {
   }
 
   /* Touch target minimum 44×44 */
-  button, [role="button"], a.btn, .choice-btn, .pixel-btn {
+  button,
+  [role="button"],
+  a.btn,
+  .choice-btn,
+  .pixel-btn {
     min-height: 44px;
     min-width: 44px;
   }

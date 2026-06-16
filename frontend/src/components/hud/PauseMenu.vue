@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** ESC 暂停菜单：4 分组入口（继续 / 学习 / 我 / 系统）+ 快捷键速查 + 退出确认。 */
+/** ESC 暂停菜单：4 分组入口（继续 / 学习 / 我 / 系统）+ 退出确认；操作帮助跳转 /guide 指南页。 */
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useGameSettingsStore } from '@stores/gameSettings';
@@ -15,7 +15,6 @@ const session = useSessionStore();
 const router = useRouter();
 
 const open = computed(() => settings.pauseMenuOpen);
-const showHelp = ref(false);
 const showQuitConfirm = ref(false);
 
 const ICON_BASE = '/assets/pixel/icons/ui';
@@ -34,7 +33,6 @@ interface MenuSection {
 }
 
 function close(): void {
-  showHelp.value = false;
   showQuitConfirm.value = false;
   settings.closePauseMenu();
 }
@@ -58,12 +56,10 @@ const menuSections: MenuSection[] = [
     title: '学习',
     items: [
       { id: 'library', icon: `${ICON_BASE}/book-open.svg`, label: '课程图书馆', action: () => go('/library') },
-      { id: 'training', icon: `${ICON_BASE}/shield.svg`, label: '训练场', action: () => go('/training') },
       { id: 'workshop-nav', icon: `${ICON_BASE}/notebook.svg`, label: '百晓工坊', action: () => go('/workshop') },
       { id: 'review', icon: `${ICON_BASE}/scroll-horizontal.svg`, label: '复盘大厅', action: () => go('/review-hall') },
       { id: 'arena', icon: `${ICON_BASE}/flag.svg`, label: '闯关竞技场', action: () => go('/arena/1') },
       { id: 'problems', icon: `${ICON_BASE}/book-open.svg`, label: '题目列表', action: () => go('/problems') },
-      { id: 'examples', icon: `${ICON_BASE}/notebook.svg`, label: '例题列表', action: () => go('/examples') },
       { id: 'tutor', icon: `${ICON_BASE}/save.svg`, label: 'AI 助教', action: () => go('/tutor') },
     ],
   },
@@ -123,10 +119,8 @@ const menuSections: MenuSection[] = [
         id: 'help',
         icon: `${ICON_BASE}/book-open.svg`,
         label: '操作帮助',
-        action: () => {
-          showHelp.value = !showHelp.value;
-          showQuitConfirm.value = false;
-        },
+        // 旧内联快捷键速查卡已并入 /guide 指南页（小镇操作 → 快捷键速查）。
+        action: () => go('/guide'),
       },
       {
         id: 'quit',
@@ -134,27 +128,10 @@ const menuSections: MenuSection[] = [
         label: '返回主菜单',
         action: () => {
           showQuitConfirm.value = true;
-          showHelp.value = false;
         },
       },
     ],
   },
-];
-
-const HOTKEYS: readonly { key: string; desc: string }[] = [
-  { key: 'WASD / 方向键', desc: '移动' },
-  { key: 'F / Enter', desc: '与NPC交谈' },
-  { key: 'Tab', desc: '快捷轮盘' },
-  { key: 'ESC', desc: '暂停菜单' },
-  { key: 'Q', desc: '任务' },
-  { key: 'J', desc: '对话' },
-  { key: 'M', desc: '地图' },
-  { key: 'K', desc: '技能' },
-  { key: 'L', desc: '课程' },
-  { key: 'Shift+A', desc: '闯关塔（小镇内单按 A 为左移）' },
-  { key: 'T', desc: '传送' },
-  { key: 'C', desc: '休息' },
-  { key: ',', desc: '设置' },
 ];
 
 function onMenuClick(item: MenuItem): void {
@@ -233,27 +210,6 @@ onUnmounted(() => {
             </div>
           </section>
         </div>
-
-        <!-- 快捷键速查卡 -->
-        <transition name="pyt-fade">
-          <div
-            v-if="showHelp"
-            class="pause-help pyt-panel--inset"
-          >
-            <h2 class="pause-help__title">
-              快捷键速查
-            </h2>
-            <div class="pause-help__grid">
-              <template
-                v-for="hk in HOTKEYS"
-                :key="hk.key"
-              >
-                <kbd class="pause-help__key">{{ hk.key }}</kbd>
-                <span class="pause-help__desc">{{ hk.desc }}</span>
-              </template>
-            </div>
-          </div>
-        </transition>
 
         <!-- 退出确认对话框 -->
         <transition name="pyt-fade">
@@ -416,47 +372,6 @@ onUnmounted(() => {
 
 .pause-item__label {
   flex: 1;
-}
-
-/* ── 快捷键速查卡 ─────────────────────────────────────────── */
-.pause-help {
-  width: 280px;
-  margin: 8px auto 0;
-  padding: 14px 16px 12px;
-  border: 2px solid var(--pyt-panel-border-dark);
-  border-radius: 2px;
-  background: rgba(0, 0, 0, 0.35);
-}
-
-.pause-help__title {
-  margin: 0 0 8px;
-  font-size: 14px;
-  color: var(--pyt-text-accent);
-  text-align: center;
-  letter-spacing: 1px;
-}
-
-.pause-help__grid {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 4px 14px;
-  font-size: 12px;
-}
-
-.pause-help__key {
-  color: var(--pyt-text-accent);
-  font-family: var(--pyt-font-pixel);
-  background: rgba(212, 175, 55, 0.1);
-  border: 1px solid var(--pyt-btn-border);
-  border-radius: 2px;
-  padding: 1px 6px;
-  font-size: 11px;
-  white-space: nowrap;
-}
-
-.pause-help__desc {
-  color: var(--pyt-text-secondary);
-  line-height: 1.8;
 }
 
 /* ── 退出确认框 ───────────────────────────────────────────── */

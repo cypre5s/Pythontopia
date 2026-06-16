@@ -10,13 +10,26 @@ import { useRoute, useRouter } from 'vue-router';
 import AppLayout from '@/app/AppLayout.vue';
 import GuideSidebar from '@/components/guide/GuideSidebar.vue';
 import GuideSection from '@/components/guide/GuideSection.vue';
-import { GUIDE_SECTIONS, GUIDE_SCREENSHOT_TOTAL } from '@/content/guideSections';
+import {
+  GUIDE_NAV_GROUPS,
+  GUIDE_SECTIONS,
+  GUIDE_SCREENSHOT_TOTAL,
+} from '@/content/guideSections';
 
 const route = useRoute();
 const router = useRouter();
 
 const sections = GUIDE_SECTIONS;
+const navGroups = GUIDE_NAV_GROUPS;
 const navOpen = ref(false);
+
+const learningPath = [
+  { label: '起步', detail: '会走会找', sectionId: 'town-basics' },
+  { label: '看', detail: '视频与课件', sectionId: 'library' },
+  { label: '学', detail: '百晓加工', sectionId: 'workshop' },
+  { label: '练', detail: '真实判题', sectionId: 'training' },
+  { label: '测', detail: '章节通关', sectionId: 'mainline' },
+] as const;
 
 /** 小节锚点归属的主题 id（点其他主题的小节锚点时先切页再滚动）。 */
 function ownerSectionId(anchorId: string): string {
@@ -168,10 +181,27 @@ watch(
             Pythontopia 新手操作指南
           </h1>
           <p class="guide-hero__lead">
-            Pythontopia 把一门《Python语言基础》课变成一座可以行走的小镇。本指南按「看 → 学 → 练 → 测」
-            学习闭环介绍十大主题：从小镇基础操作开始，到主线任务、AI 助教，再到图书馆、百晓工坊、
-            训练场、Bug 矿洞、复盘大厅、个人画像与教师班级。
+            第一次来，沿「起步 → 看 → 学 → 练 → 测」走一遍；之后遇到具体问题，直接从左侧目录查功能。
+            每篇都先讲什么时候用，再讲操作、能力边界和相关模块。
           </p>
+          <nav
+            class="guide-journey"
+            aria-label="新手学习路径"
+          >
+            <button
+              v-for="(step, index) in learningPath"
+              :key="step.label"
+              type="button"
+              class="guide-journey__step"
+              @click="goToPage(step.sectionId)"
+            >
+              <span class="guide-journey__index pyt-pixel-text">{{ index + 1 }}</span>
+              <span class="guide-journey__body">
+                <strong>{{ step.label }}</strong>
+                <small>{{ step.detail }}</small>
+              </span>
+            </button>
+          </nav>
           <div class="guide-hero__meta">
             <span class="guide-hero__chip pyt-pixel-text">{{ sections.length }} 大主题</span>
             <span class="guide-hero__chip pyt-pixel-text">{{ GUIDE_SCREENSHOT_TOTAL }} 张截图</span>
@@ -204,6 +234,7 @@ watch(
         <GuideSidebar
           class="guide-nav-area"
           :sections="sections"
+          :groups="navGroups"
           :active-id="activeId"
           @select="goTo"
         />
@@ -299,23 +330,6 @@ watch(
               </ol>
             </li>
           </ol>
-          <p class="guide-outline__label guide-outline__label--more pyt-pixel-text">
-            其他主题
-          </p>
-          <ol class="guide-outline__list">
-            <li
-              v-for="section in sections.filter((s) => s.id !== activeSection.id)"
-              :key="section.id"
-            >
-              <a
-                class="guide-outline__sublink"
-                :href="`/guide?topic=${section.id}`"
-                @click.prevent="goToPage(section.id)"
-              >
-                {{ section.navTitle }}
-              </a>
-            </li>
-          </ol>
         </nav>
       </div>
     </div>
@@ -334,8 +348,8 @@ watch(
   grid-template-areas:
     'hero hero hero'
     'nav  main outline';
-  gap: var(--pyt-space-4) var(--pyt-space-6);
-  max-width: 1280px;
+  gap: var(--pyt-space-4) var(--pyt-space-5);
+  max-width: 1320px;
   margin: 0 auto;
   padding: var(--pyt-space-6) var(--pyt-space-6) 96px;
 }
@@ -346,8 +360,8 @@ watch(
   grid-area: hero;
   display: flex;
   flex-direction: column;
-  gap: var(--pyt-space-3);
-  padding: var(--pyt-space-5) var(--pyt-space-5) var(--pyt-space-4);
+  gap: var(--pyt-space-2);
+  padding: var(--pyt-space-4) var(--pyt-space-5);
   border: 2px solid var(--pyt-color-border-strong);
   background: var(--pyt-color-bg-elevated);
   box-shadow: 4px 4px 0 var(--pyt-color-border-soft);
@@ -389,10 +403,78 @@ watch(
 
 .guide-hero__lead {
   margin: 0;
-  max-width: 46em;
-  font-size: 17px;
-  line-height: 1.8;
+  max-width: 62em;
+  font-size: 16px;
+  line-height: 1.65;
   color: var(--pyt-color-text-hint);
+}
+
+.guide-journey {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  margin: var(--pyt-space-2) 0;
+}
+
+.guide-journey__step {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 8px 10px;
+  font-family: var(--pyt-font-read);
+  text-align: left;
+  color: var(--pyt-color-text-primary);
+  background: var(--pyt-color-bg-soft);
+  border: 1px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-sm);
+  box-shadow: none;
+}
+
+.guide-journey__step:not(:last-child)::after {
+  content: '›';
+  position: absolute;
+  z-index: 1;
+  right: -7px;
+  color: var(--pyt-color-warning);
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.guide-journey__step:hover,
+.guide-journey__step:focus-visible {
+  background: rgba(241, 196, 83, 0.2);
+  border-color: var(--pyt-color-gold);
+}
+
+.guide-journey__index {
+  display: grid;
+  place-items: center;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  color: var(--pyt-color-text-on-dark);
+  background: var(--pyt-color-primary-dark);
+  border-radius: 2px;
+  font-size: 11px;
+}
+
+.guide-journey__body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.guide-journey__body strong {
+  color: var(--pyt-color-primary-dark);
+  font-size: 15px;
+}
+
+.guide-journey__body small {
+  color: var(--pyt-color-text-muted);
+  font-size: 11px;
 }
 
 .guide-hero__meta {
@@ -460,9 +542,9 @@ watch(
 .guide-nav-area {
   grid-area: nav;
   position: sticky;
-  top: 80px;
+  top: 20px;
   align-self: start;
-  max-height: calc(100vh - 100px);
+  max-height: calc(100vh - 40px);
   overflow-y: auto;
   padding-right: var(--pyt-space-2);
 }
@@ -530,10 +612,6 @@ watch(
   color: var(--pyt-color-primary-dark);
 }
 
-.guide-outline__label--more {
-  margin-top: var(--pyt-space-4);
-}
-
 .guide-footnote {
   margin-top: var(--pyt-space-6);
   padding: var(--pyt-space-4);
@@ -566,9 +644,9 @@ watch(
 .guide-outline {
   grid-area: outline;
   position: sticky;
-  top: 80px;
+  top: 20px;
   align-self: start;
-  max-height: calc(100vh - 100px);
+  max-height: calc(100vh - 40px);
   overflow-y: auto;
   padding-left: var(--pyt-space-3);
   border-left: 1px solid var(--pyt-color-border-soft);
@@ -637,17 +715,33 @@ watch(
 }
 
 /* ── 响应式 ─────────────────────────────────────────────────── */
-/* 中屏：收起右侧大纲，保留双栏 */
+/* 中屏：左侧目录继续吸顶，本页大纲成为正文上方的紧凑导航。 */
 @media (max-width: 1279px) {
   .guide-layout {
     grid-template-columns: 224px minmax(0, 1fr);
     grid-template-areas:
       'hero hero'
+      'nav  outline'
       'nav  main';
   }
 
   .guide-outline {
-    display: none;
+    position: sticky;
+    top: 12px;
+    z-index: 2;
+    max-height: none;
+    padding: var(--pyt-space-3) var(--pyt-space-4);
+    border: 1px solid var(--pyt-color-border-soft);
+    background: var(--pyt-color-bg-elevated);
+    box-shadow: 0 4px 0 rgba(76, 51, 20, 0.08);
+  }
+
+  .guide-outline__subs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px var(--pyt-space-3);
+    padding-left: 0;
+    border-left: 0;
   }
 }
 
@@ -666,6 +760,14 @@ watch(
     display: inline-flex;
   }
 
+  .guide-journey {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .guide-journey__step:not(:last-child)::after {
+    display: none;
+  }
+
   .guide-nav-area {
     display: none;
     position: static;
@@ -677,6 +779,10 @@ watch(
 
   .guide-layout--nav-open .guide-nav-area {
     display: flex;
+  }
+
+  .guide-outline {
+    display: none;
   }
 
   .guide-hero__title {
