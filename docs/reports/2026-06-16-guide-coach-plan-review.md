@@ -178,3 +178,35 @@
 1. 新增 `GuideNudgeCard.vue`，只展示短邀请，不自动触发导学。
 2. `TrainingPanel` 在 AC/WA/CE/RE/TLE 后展示 nudge。
 3. 点击继续后再打开/驱动 `TutorWorkflowPanel`，不要在 TrainingPanel 复制 SSE 逻辑。
+
+## 第五批执行记录
+
+第五批已完成训练场提交后的短邀请触发：
+
+1. `GuideNudgeCard.vue`
+   - AC 后文案为短复盘邀请，按钮触发 `AC_REVIEW`。
+   - WA/CE/RE/TLE 后文案为错误分析邀请，按钮触发 `ERROR_FEEDBACK`。
+   - 组件只在学生点击后 emit，不自动展开导学。
+
+2. `TrainingPanel`
+   - 正式提交返回判题结果后展示 nudge。
+   - 点击继续后打开 `TutorWorkflowPanel`，并通过 `initialEventRequest` 传入一次性初始事件。
+
+3. `TutorWorkflowPanel`
+   - 复用已有 SSE 工作流执行逻辑消费 `initialEventRequest`。
+   - 避免在训练场组件中复制 `/api/tutor/workflow/runs` 调用。
+
+4. 验证
+   - Focused frontend gate：
+     `npm run test -- tests/components/training/GuideNudgeCard.spec.ts tests/components/TrainingPanel.spec.ts`
+   - 结果：2 files，10 tests passed。
+   - Frontend type gate：`npm run typecheck` 通过。
+
+## 第六批建议
+
+下一批继续补“manager agent 可见但不暴露推理链”的体验层：
+
+1. 在 `TutorWorkflowPanel` 展示推荐下一步动作和简短理由，优先读取 graph 返回的
+   `available_actions[].recommended/reason`。
+2. 保留所有动作可点，推荐只是排序和提示，不锁死学生路径。
+3. 增加 focused component test，覆盖推荐动作显示和非推荐动作仍可见。

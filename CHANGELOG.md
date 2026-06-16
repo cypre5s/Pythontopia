@@ -27,6 +27,9 @@
 - **AI 导学助手第四批 Java 状态持久化**：新增 `tutor_workflow_agent_state` 与
   `tutor_workflow_action_event`，Java 请求 graph 前恢复 `student_state`，graph result 后持久化
   `student_state/coach_decision` 并记录生成动作事件；卡片事件使用 graph 返回的实际 `event`。
+- **AI 导学助手第五批前端主动 nudge**：训练场 AC/WA/CE/RE/TLE 后只主动说一句短邀请，
+  不自动展开长分析；学生点击继续后再打开 `TutorWorkflowPanel` 并触发 `AC_REVIEW` 或
+  `ERROR_FEEDBACK`，SSE 运行逻辑仍集中在导学面板内。
 - **主线与课件学习增强**：加入章末测试扩展、课件学习链路、公用导学验收 shell、图书馆阅读路径恢复；
   Stage07 工坊验收契约修正为“资源消费后产生 `RESOURCE_READ`”，不再把资源生成视为阅读完成。
 - **学习画像与资源回流**：新增资源消费掌握度 delta 支持，恢复百晓答案轻反馈事件 `answer_feedback`，
@@ -44,6 +47,9 @@
   - AI 导学助手第四批 Java 持久化 focused gate：
     `mvn -s .mvn/settings.build.xml -Dtest=TutorWorkflowServiceTest,CoursePackServiceIntegrationTest test`
     12 tests，0 failures，0 errors，Flyway 83 migrations validated。
+  - AI 导学助手第五批前端 nudge focused gate：
+    `cd frontend && npm run test -- tests/components/training/GuideNudgeCard.spec.ts tests/components/TrainingPanel.spec.ts`
+    2 files / 10 tests passed。
   - `cd backend && mvn -s .mvn/settings.build.xml test`：756 tests，0 failures，0 errors。
   - `cd frontend && npm run typecheck`：通过。
   - `cd frontend && npm run test`：202 files / 1973 tests passed。
