@@ -117,6 +117,22 @@ class Stage07WorkshopAcceptanceIntegrationTest {
             "SELECT COUNT(*) FROM kc_mastery_event WHERE user_id = ? AND kc_code = 'PY43-KC-001' AND source = 'RESOURCE_READ'",
             Integer.class,
             userId);
+    assertThat(events).isZero();
+
+    ResponseEntity<Map> consumption =
+        restTemplate.exchange(
+            "/api/workshop/resources/" + resourceId + "/consumptions",
+            HttpMethod.POST,
+            bearer(token, Map.of()),
+            Map.class);
+    assertThat(consumption.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(consumption.getBody().get("nextAction")).isEqualTo("micro_check");
+
+    events =
+        jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM kc_mastery_event WHERE user_id = ? AND kc_code = 'PY43-KC-001' AND source = 'RESOURCE_READ'",
+            Integer.class,
+            userId);
     assertThat(events).isEqualTo(1);
 
     ResponseEntity<List> list =

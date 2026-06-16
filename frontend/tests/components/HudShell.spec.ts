@@ -7,12 +7,13 @@ import QuickslotPanelHost from '@/components/hud/QuickslotPanelHost.vue';
 import { useDialogStore } from '@stores/dialog';
 import { useHudStore, type HudQuickSlot } from '@stores/hud';
 
-// R-15：dock 删「任务」槽（与冒险地图重复）→ 仅剩 dialog/map/skill 三槽。
+// R-15：dock 删「任务」槽（与冒险地图重复）→ 学习 quickslot 仅剩 dialog/map/skill 三槽。
 const SLOT_KEYS: readonly HudQuickSlot[] = [
   'dialog',
   'map',
   'skill',
 ];
+const HUD_SLOT_BUTTONS = SLOT_KEYS.length + 1; // 三个 quickslot + 「指南」工具入口。
 
 const router = createRouter({
   history: createMemoryHistory(),
@@ -33,14 +34,15 @@ describe('HudShell', () => {
     setActivePinia(createPinia());
   });
 
-  it('挂载后渲染 3 个 quickslot 按钮（dialog/map/skill），不再有「任务」槽', () => {
+  it('挂载后渲染 3 个 quickslot + 指南按钮，不再有「任务」槽', () => {
     const wrapper = mountShell();
     for (const key of SLOT_KEYS) {
       const btn = wrapper.find(`[data-testid="hud-slot-${key}"]`);
       expect(btn.exists()).toBe(true);
       expect(btn.element.tagName).toBe('BUTTON');
     }
-    expect(wrapper.findAll('button.hud-slot')).toHaveLength(SLOT_KEYS.length);
+    expect(wrapper.find('[data-testid="hud-slot-manual"]').exists()).toBe(true);
+    expect(wrapper.findAll('button.hud-slot')).toHaveLength(HUD_SLOT_BUTTONS);
     // 「任务」槽已删除。
     expect(wrapper.find('[data-testid="hud-slot-quest"]').exists()).toBe(false);
   });
@@ -129,7 +131,7 @@ describe('HudShell', () => {
     await flushPromises();
     expect(wrapper.find('[data-testid="hud-top"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="hud-bottom"]').exists()).toBe(true);
-    expect(wrapper.findAll('button.hud-slot')).toHaveLength(SLOT_KEYS.length);
+    expect(wrapper.findAll('button.hud-slot')).toHaveLength(HUD_SLOT_BUTTONS);
   });
 
   it('依次点击不同 slot：互斥单选，只有最后一个按钮 active', async () => {

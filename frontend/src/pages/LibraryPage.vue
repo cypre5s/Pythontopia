@@ -57,6 +57,10 @@ function persistViewMode(mode: PageViewMode): void {
   }
 }
 
+function displayTitle(title: string | null | undefined): string {
+  return (title ?? '').replace(/\s+/g, ' ').replace(/\s+([（(])/g, '$1').trim();
+}
+
 interface ChapterGroup {
   chapter: ChapterDto;
   kcs: CourseKcSummary[];
@@ -529,6 +533,18 @@ watch(chapterNoForVideo, (next) => {
         >
           ← 返回小镇
         </PyButton>
+        <nav
+          class="breadcrumb"
+          aria-label="阅读路径"
+        >
+          <span>Pythontopia 图书馆</span>
+          <span v-if="currentChapter">第 {{ currentChapter.orderIndex }} 章</span>
+          <span v-if="currentChapter">{{ chapterTitleLabel(currentChapter.title) }}</span>
+          <span v-if="pageDetail?.title || currentDocument?.title">
+            {{ displayTitle(pageDetail?.title || currentDocument?.title) }}
+          </span>
+          <span v-if="currentDocument">第 {{ currentPage }} / {{ currentDocument.pageCount }} 页</span>
+        </nav>
       </header>
 
       <div

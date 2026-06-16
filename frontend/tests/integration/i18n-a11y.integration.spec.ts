@@ -124,14 +124,17 @@ describe('a11y.integration · HudShell aria + 按钮可达性', () => {
     setActivePinia(createPinia());
   });
 
-  it('HudShell 3 quickslot 都有 aria-label 与 aria-pressed', () => {
-    // R-15 主线巡检：删「任务」槽（与冒险地图重复）→ dock 收敛为 对话/地图/技能 3 槽。
+  it('HudShell 3 quickslot + 指南入口都有 aria-label', () => {
+    // R-15 主线巡检：删「任务」槽（与冒险地图重复）→ 学习 quickslot 收敛为 对话/地图/技能 3 槽，
+    // 另保留一个图文指南入口。
     const wrapper = mount(HudShell, { global: { plugins: [makeRouter()] }, attachTo: document.body });
     const slots = wrapper.findAll('.hud-slot');
-    expect(slots.length).toBe(3);
+    expect(slots.length).toBe(4);
     for (const s of slots) {
       expect(s.attributes('aria-label')).toBeDefined();
-      expect(s.attributes('aria-pressed')).toBeDefined();
+    }
+    for (const id of ['hud-slot-dialog', 'hud-slot-map', 'hud-slot-skill']) {
+      expect(wrapper.get(`[data-testid="${id}"]`).attributes('aria-pressed')).toBeDefined();
     }
     wrapper.unmount();
   });

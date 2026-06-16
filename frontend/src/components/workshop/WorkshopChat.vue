@@ -40,6 +40,7 @@ import ProgressCard from '@/components/workshop/ProgressCard.vue';
 import PlanCard from '@/components/workshop/PlanCard.vue';
 import ToolTraceLine from '@/components/workshop/ToolTraceLine.vue';
 import ToolCallTimeline from '@/components/workshop/ToolCallTimeline.vue';
+import AnswerFeedback from '@/components/workshop/AnswerFeedback.vue';
 import MarkdownView from '@/components/common/MarkdownView.vue';
 import { annotateCitations } from '@/utils/citations';
 import TutorVisualAids, { type TutorVisualAid } from '@/components/tutor/TutorVisualAids.vue';
@@ -1063,6 +1064,20 @@ function onAnswerGenerate(m: ChatMessage, type: WorkshopResourceType): void {
   void runResource(type, m.kcCodes ?? [], m.suggestTopic ?? '');
 }
 
+function onAnswerFeedback(m: ChatMessage, up: boolean): void {
+  void postLearningEvent({
+    eventType: 'answer_feedback',
+    payload: {
+      messageId: m.id,
+      useful: up,
+      intent: m.intent ?? 'ASK',
+      kcCodes: m.kcCodes ?? [],
+    },
+  }).catch(() => {
+    /* 轻反馈失败不打断对话 */
+  });
+}
+
 // ============ tutor_sse：ASK / ASKME / EXPLAIN_CODE / FIX_BUG 共用管线 ============
 async function runAsk(
   question: string,
@@ -1924,6 +1939,12 @@ onMounted(async () => {
                   {{ c.label }}
                 </button>
               </div>
+              <AnswerFeedback
+                v-if="!m.streaming"
+                class="msg__feedback"
+                :message-id="m.id"
+                @feedback="(up) => onAnswerFeedback(m, up)"
+              />
             </div>
 
             <!-- 助手：资源卡（就地内联浏览全文 + 「我的书房」历史库入口） -->

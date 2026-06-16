@@ -57,7 +57,13 @@ describe('ChapterStagePanel', () => {
   });
 
   it('emits enter-stage / open-test / open-endless / claim-errorbook', async () => {
-    const wrapper = mount(ChapterStagePanel, { props: { chapter: chapter() } });
+    const ready = chapter({
+      stages: [
+        stage({ id: 31, index: 1, title: '数字与进制', videoWatchedSec: 240, pagesRead: 2, examplesDone: 2, completed: true }),
+        stage({ id: 32, index: 2, title: '字符与编码', videoWatchedSec: 240, pagesRead: 2, examplesDone: 2, completed: true }),
+      ],
+    });
+    const wrapper = mount(ChapterStagePanel, { props: { chapter: ready } });
     await wrapper.get('[data-testid="mainline-enter-stage-31"]').trigger('click');
     expect(wrapper.emitted('enter-stage')?.[0]).toEqual([31]);
 

@@ -52,7 +52,7 @@ describe('ResourceListPanel', () => {
 
     const wrapper = mount(ResourceListPanel);
 
-    await wrapper.get('.review__btn').trigger('click');
+    await wrapper.get('.card').trigger('click');
 
     expect(workshopUi.openResourceId).toBe(42);
     expect(push).not.toHaveBeenCalledWith({ path: '/workshop', query: { id: '42' } });

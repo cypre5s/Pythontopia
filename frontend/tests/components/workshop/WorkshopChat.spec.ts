@@ -533,10 +533,12 @@ describe('WorkshopChat 16 工具分发', () => {
     });
 
     const contexts = tutor.start.mock.calls.map((c) => (c[0] as AskBody).context);
-    expect(contexts[0]).toContain('【考核模式·第1/3轮】');
+    expect(contexts[0]).toContain('【考核·第1/3轮】');
     expect(contexts[1]).toContain('第1/3轮·评卷');
-    expect(contexts[2]).toContain('第2/3轮·评卷');
-    expect(contexts[3]).toContain('第3/3轮·评卷');
+    expect(contexts[2]).toContain('【考核·第2/3轮】');
+    expect(contexts[3]).toContain('第2/3轮·评卷');
+    expect(contexts[4]).toContain('【考核·第3/3轮】');
+    expect(contexts[5]).toContain('第3/3轮·评卷');
   });
 
   it('QuizModeBar exit 事件：手动退出考核模式', async () => {
@@ -948,7 +950,7 @@ describe('WorkshopChat 16 工具分发', () => {
 
   // ============ 伴学向导（悬浮窗）⇄ 工坊联动 + 计划深链 ============
 
-  it('向导悬浮窗发起的 orchestrator 活动出现在工坊：思考链点亮 + 输入框忙碌', async () => {
+  it('向导悬浮窗发起的 orchestrator 活动出现在工坊：时间轴点亮 + 输入框忙碌', async () => {
     const wrapper = mountChat();
     await flushPromises();
     expect(wrapper.find('[data-testid="stub-studio"]').exists()).toBe(false);
@@ -959,16 +961,16 @@ describe('WorkshopChat 16 工具分发', () => {
     activity.syncTraces('orchestrator', [{ node: 'understand', status: 'ok', elapsed_ms: 3 }]);
     await flushPromises();
 
-    const studio = wrapper.find('[data-testid="stub-studio"]');
-    expect(studio.exists()).toBe(true);
-    expect(studio.attributes('data-label')).toBe('协同规划：我想学循环');
-    expect(studio.attributes('data-traces')).toBe('1');
+    const timeline = wrapper.find('[data-testid="tool-call-timeline"]');
+    expect(timeline.exists()).toBe(true);
+    expect(timeline.findAll('[data-testid="tool-call-step"]')).toHaveLength(1);
+    expect(timeline.text()).toContain('理解意图');
     // 向导协同期间工坊输入框置忙，避免双口同时开火。
     expect(wrapper.findComponent({ name: 'ChatComposer' }).props('busy')).toBe(true);
 
     activity.finish(true);
     await flushPromises();
-    expect(wrapper.find('[data-testid="stub-studio"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="tool-call-timeline"]').exists()).toBe(false);
     expect(wrapper.findComponent({ name: 'ChatComposer' }).props('busy')).toBe(false);
   });
 

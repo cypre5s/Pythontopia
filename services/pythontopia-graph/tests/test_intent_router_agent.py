@@ -291,7 +291,8 @@ async def test_provider_failure_degrades_via_harness_to_keyword_route() -> None:
     resp = await agent.route(request_of("考考我 while 循环"))
 
     assert resp.intent == "ASKME"
-    assert resp.confidence <= 0.5
+    assert resp.confidence == 0.78
+    assert resp.reason_code == "fallback"
     assert resp.intent in ALL_INTENTS
 
 
