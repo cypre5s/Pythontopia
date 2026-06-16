@@ -111,3 +111,34 @@
 1. 增加 pedagogical guardrail critic，先覆盖最明确的泄答场景。
 2. 接入 graph 生成卡片后的 guardrail 检查，但只做一次失败报错，不急着引入自动 revise。
 3. 再跑 graph 全量；稳定后再进入 Java 持久化。
+
+## 第三批执行记录
+
+第三批已完成 pedagogical guardrail 接入，并按原计划支持一次重试：
+
+1. **GuideGuardrailCritic**
+   - 新增 `services/pythontopia-graph/pythontopia_graph/agents/guide_guardrail_critic.py`。
+   - 当前覆盖高置信违规：
+     - `skeleton_code` 无 TODO / 空位，疑似可直接提交；
+     - `error_diagnosis` 输出完整修正代码；
+     - `transfer_problem` 携带 `reference_solution/test_cases/hidden_test_cases/solution/answer`；
+     - `knowledge_review` 的课件引用结构异常。
+
+2. **Graph 接入**
+   - `TutorWorkflowGraph` 在卡片生成后执行 `coach.guardrail`。
+   - 第一次失败时将原因追加到重试上下文，重新生成一次。
+   - 第二次仍失败则返回 `GUIDE_GUARDRAIL_FAILED`，不静默降级为普通聊天。
+
+3. **验证**
+   - 新增 `services/pythontopia-graph/tests/test_guide_guardrail_critic.py`。
+   - 扩展 `services/pythontopia-graph/tests/test_tutor_workflow_coach_graph.py`，覆盖泄答卡被打回后重试成功。
+   - Focused：`30 passed in 0.35s`。
+   - Graph 全量：`652 passed, 1 warning in 35.30s`。
+
+## 第四批建议
+
+下一批进入 Java 持久化，但仍建议小步拆：
+
+1. 先加 Flyway 表和 repository round-trip 测试。
+2. 再让 `TutorWorkflowService` 请求 graph 前带入 persisted `student_state`。
+3. 最后持久化 graph 返回的 `student_state/coach_decision` 和 action event。
