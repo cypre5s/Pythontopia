@@ -261,6 +261,19 @@ export interface WorkflowSessionSnapshotDto {
   cards: WorkflowTimelineCardDto[];
 }
 
+export type WorkflowFeedbackEventType =
+  | 'ACTION_CLICKED'
+  | 'CHECKPOINT_COMPLETED'
+  | 'CARD_HELPFUL'
+  | 'CARD_NOT_HELPFUL';
+
+export interface TutorWorkflowFeedbackRequest {
+  eventType: WorkflowFeedbackEventType;
+  actionKey?: string;
+  cardKey?: string;
+  payload?: Record<string, unknown>;
+}
+
 /** 取（或创建）该题活跃工作流会话快照 + 卡片时间线。 */
 export async function getActiveWorkflowSession(
   problemId: number,
@@ -270,4 +283,14 @@ export async function getActiveWorkflowSession(
     { params: { problemId } },
   );
   return response.data;
+}
+
+/** 记录导学动作/卡片反馈；调用方应视为非阻塞旁路。 */
+export async function recordTutorWorkflowFeedback(
+  sessionKey: string,
+  request: TutorWorkflowFeedbackRequest,
+): Promise<void> {
+  await http.post(`/api/tutor/workflow/sessions/${sessionKey}/feedback`, request, {
+    suppressNetworkToast: true,
+  });
 }

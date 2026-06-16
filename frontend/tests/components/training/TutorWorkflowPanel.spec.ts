@@ -19,6 +19,7 @@ vi.mock('@/api/tutorWorkflow', async (importOriginal) => {
       seq: 0,
       cards: [],
     })),
+    recordTutorWorkflowFeedback: vi.fn(async () => undefined),
   };
 });
 
@@ -37,8 +38,18 @@ vi.mock('@/composables/useSseStream', async () => {
       session_id: 'wf-test',
       event: 'READING',
       phase: 'READING',
-      card_key: null,
-      card: null,
+      card_key: 'problem_guide',
+      card: {
+        card_id: 'card-reading-1',
+        problem_restatement: '题目要求读取半径并输出面积。',
+        input_output_focus: '关注浮点输入输出。',
+        key_observation: '面积公式需要半径平方。',
+        starter_questions: ['半径在哪里读入？'],
+        related_kcs: ['PY43-KC-016'],
+        teaching_goal: '读懂题意。',
+        checkpoint_prompt: '你能说出输入和输出吗？',
+        reflection_prompt: '这题最容易漏哪一步？',
+      },
       seq: 1,
       available_actions: [
         {
@@ -65,6 +76,7 @@ vi.mock('@/composables/useSseStream', async () => {
 });
 
 import { useSseStream } from '@/composables/useSseStream';
+import { recordTutorWorkflowFeedback } from '@/api/tutorWorkflow';
 
 interface MockStream {
   status: { value: 'idle' | 'connecting' | 'streaming' | 'done' | 'error' };
@@ -110,6 +122,7 @@ describe('TutorWorkflowPanel', () => {
     stream.events.value = [];
     stream.state.value = {};
     stream.start.mockClear();
+    vi.mocked(recordTutorWorkflowFeedback).mockClear();
   });
 
   it('highlights the coach recommended next action without hiding other actions', async () => {
@@ -125,5 +138,37 @@ describe('TutorWorkflowPanel', () => {
     expect(recommended.text()).toContain('执行轨迹讲解');
     expect(recommended.text()).toContain('先看变量如何变化');
     expect(wrapper.get('[data-testid="tw-actions"]').text()).toContain('知识点复盘');
+  });
+
+  it('records action click feedback before running the selected tool', async () => {
+    const wrapper = mountPanel();
+    await flushPromises();
+
+    await wrapper.get('[data-testid="tw-actions"] button').trigger('click');
+    await flushPromises();
+
+    expect(recordTutorWorkflowFeedback).toHaveBeenCalledWith('wf-test', {
+      eventType: 'ACTION_CLICKED',
+      actionKey: 'problem_guide',
+      payload: { event: 'READING' },
+    });
+    expect(getStream().start).toHaveBeenCalledTimes(1);
+  });
+
+  it('records helpful card feedback without blocking the workflow UI', async () => {
+    const wrapper = mountPanel();
+    await flushPromises();
+    await wrapper.get('[data-testid="tw-actions"] button').trigger('click');
+    await flushPromises();
+
+    await wrapper.get('[data-testid="card-helpful"]').trigger('click');
+    await flushPromises();
+
+    expect(recordTutorWorkflowFeedback).toHaveBeenCalledWith('wf-test', {
+      eventType: 'CARD_HELPFUL',
+      cardKey: 'problem_guide',
+      payload: { cardId: 'card-reading-1', seq: 1 },
+    });
+    expect(wrapper.get('[data-testid="card-feedback-state"]').text()).toContain('已记录');
   });
 });

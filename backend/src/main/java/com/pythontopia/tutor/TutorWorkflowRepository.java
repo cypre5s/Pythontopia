@@ -41,6 +41,20 @@ public class TutorWorkflowRepository {
     return rows.stream().findFirst();
   }
 
+  public Optional<TutorWorkflowSessionDto> findBySessionKey(Long userId, String sessionKey) {
+    List<TutorWorkflowSessionDto> rows =
+        jdbcTemplate.query(
+            """
+            SELECT id, session_key, problem_id, phase, seq, status
+            FROM tutor_workflow_session
+            WHERE user_id = ? AND session_key = ? AND status = 'ACTIVE'
+            """,
+            this::mapSession,
+            userId,
+            sessionKey);
+    return rows.stream().findFirst();
+  }
+
   public TutorWorkflowSessionDto insertSession(Long userId, Long problemId, String sessionKey) {
     GeneratedKeyHolder keyHolder = new GeneratedKeyHolder();
     jdbcTemplate.update(

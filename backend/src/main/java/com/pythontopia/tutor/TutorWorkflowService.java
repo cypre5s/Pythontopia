@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.learner.event.LearningEvent;
 import com.pythontopia.submission.dto.PublicProblemDto;
 import com.pythontopia.submission.dto.SubmissionDetailDto;
 import com.pythontopia.submission.dto.SubmissionDto;
@@ -13,6 +14,7 @@ import com.pythontopia.submission.repository.PublicProblemRepository;
 import com.pythontopia.submission.service.SubmissionService;
 import com.pythontopia.tutor.dto.TutorWorkflowCardDto;
 import com.pythontopia.tutor.dto.TutorWorkflowAgentStateDto;
+import com.pythontopia.tutor.dto.TutorWorkflowFeedbackRequest;
 import com.pythontopia.tutor.dto.TutorWorkflowRunRequest;
 import com.pythontopia.tutor.dto.TutorWorkflowSessionDto;
 import java.security.SecureRandom;
@@ -22,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -51,6 +54,7 @@ public class TutorWorkflowService {
   private final TutorService tutorService;
   private final PublicProblemRepository problemRepository;
   private final SubmissionService submissionService;
+  private final ApplicationEventPublisher eventPublisher;
   private final ObjectMapper objectMapper;
 
   public TutorWorkflowService(
@@ -59,12 +63,14 @@ public class TutorWorkflowService {
       TutorService tutorService,
       PublicProblemRepository problemRepository,
       SubmissionService submissionService,
+      ApplicationEventPublisher eventPublisher,
       ObjectMapper objectMapper) {
     this.repository = repository;
     this.graphClient = graphClient;
     this.tutorService = tutorService;
     this.problemRepository = problemRepository;
     this.submissionService = submissionService;
+    this.eventPublisher = eventPublisher;
     this.objectMapper = objectMapper;
   }
 
@@ -119,6 +125,50 @@ public class TutorWorkflowService {
     return emitter;
   }
 
+  /** 记录学生对导学动作/卡片的显式反馈；失败不应由前端阻塞导学主链路。 */
+  public void recordFeedback(
+      Long userId, String sessionKey, TutorWorkflowFeedbackRequest request) {
+    TutorWorkflowSessionDto session =
+        repository
+            .findBySessionKey(userId, sessionKey)
+            .orElseThrow(
+                () ->
+                    new BusinessException(
+                        HttpStatus.NOT_FOUND, "WORKFLOW_SESSION_NOT_FOUND", "导学会话不存在"));
+    PublicProblemDto problem = requireProblem(session.problemId());
+    String targetKey = feedbackTargetKey(request);
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("event_type", request.eventType());
+    if (request.actionKey() != null && !request.actionKey().isBlank()) {
+      payload.put("action_key", request.actionKey());
+    }
+    if (request.cardKey() != null && !request.cardKey().isBlank()) {
+      payload.put("card_key", request.cardKey());
+    }
+    payload.put("payload", request.payloadOrEmpty());
+    try {
+      repository.insertActionEvent(
+          session.id(),
+          session.seq(),
+          request.eventType(),
+          targetKey,
+          objectMapper.writeValueAsString(payload));
+    } catch (Exception e) {
+      throw new BusinessException(
+          HttpStatus.BAD_REQUEST, "WORKFLOW_FEEDBACK_INVALID", "导学反馈写入失败");
+    }
+
+    if ("ACTION_CLICKED".equals(request.eventType())) {
+      eventPublisher.publishEvent(
+          new LearningEvent.GuideActionClicked(
+              userId, session.problemId(), problem.kcCode(), targetKey));
+    } else if ("CHECKPOINT_COMPLETED".equals(request.eventType())) {
+      eventPublisher.publishEvent(
+          new LearningEvent.GuideCheckpointCompleted(
+              userId, session.problemId(), problem.kcCode(), targetKey));
+    }
+  }
+
   private TutorWorkflowSessionDto findOrCreate(Long userId, Long problemId) {
     return repository
         .findActive(userId, problemId)
@@ -130,6 +180,30 @@ public class TutorWorkflowService {
 
   private static String sessionKey(Long userId, Long problemId) {
     return "wf-" + userId + "-" + problemId + "-" + Integer.toHexString(RANDOM.nextInt());
+  }
+
+  private String feedbackTargetKey(TutorWorkflowFeedbackRequest request) {
+    return switch (request.eventType()) {
+      case "ACTION_CLICKED" -> requireFeedbackKey(request.actionKey(), "ACTION_KEY_REQUIRED");
+      case "CHECKPOINT_COMPLETED" -> requireFeedbackKey(request.cardKey(), "CARD_KEY_REQUIRED");
+      case "CARD_HELPFUL", "CARD_NOT_HELPFUL" -> {
+        String cardKey = request.cardKey();
+        if (cardKey != null && !cardKey.isBlank()) {
+          yield cardKey;
+        }
+        yield requireFeedbackKey(request.actionKey(), "FEEDBACK_TARGET_REQUIRED");
+      }
+      default ->
+          throw new BusinessException(
+              HttpStatus.BAD_REQUEST, "UNKNOWN_WORKFLOW_FEEDBACK", "未知的导学反馈事件");
+    };
+  }
+
+  private String requireFeedbackKey(String value, String code) {
+    if (value == null || value.isBlank()) {
+      throw new BusinessException(HttpStatus.BAD_REQUEST, code, "导学反馈缺少目标");
+    }
+    return value;
   }
 
   private PublicProblemDto requireProblem(Long problemId) {

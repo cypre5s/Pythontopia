@@ -16,6 +16,7 @@ import { useLearningStore } from '@stores/learning';
 import { useToastStore } from '@stores/toast';
 import {
   getActiveWorkflowSession,
+  recordTutorWorkflowFeedback,
   type AiReplyCardDto,
   type ErrorDiagnosisCardDto,
   type ExecutionTraceCardDto,
@@ -60,10 +61,12 @@ interface CardEntry {
 const cards = ref<CardEntry[]>([]);
 const availableActions = ref<WorkflowActionDto[]>([]);
 const phase = ref<string>('READING');
+const sessionKey = ref('');
 const chatInput = ref('');
 const bodyRef = ref<HTMLElement | null>(null);
 const loaded = ref(false);
 const lastInitialNonce = ref(0);
+const cardFeedback = ref<Record<string, 'helpful' | 'not_helpful'>>({});
 
 const sse = useSseStream<WorkflowRunResultDto>('/api/tutor/workflow/runs');
 const running = computed(
@@ -103,6 +106,7 @@ onMounted(load);
 async function load(): Promise<void> {
   try {
     const snap = await getActiveWorkflowSession(props.problemId);
+    sessionKey.value = snap.sessionKey;
     cards.value = snap.cards.map((c) => ({ key: c.cardKey, payload: c.payload, seq: c.seq }));
     phase.value = snap.phase;
   } catch {
@@ -133,6 +137,7 @@ async function runEvent(event: WorkflowEvent, eventData?: Record<string, unknown
   await sse.start(body);
   if (sse.status.value === 'done' && sse.result.value) {
     const r = sse.result.value;
+    sessionKey.value = r.session_id || sessionKey.value;
     phase.value = r.phase;
     if (r.card && r.card_key) {
       const entry: CardEntry = { key: r.card_key, payload: r.card, seq: r.seq };
@@ -166,7 +171,37 @@ watch(
 );
 
 function onAction(action: WorkflowActionDto): void {
+  void recordFeedback({
+    eventType: 'ACTION_CLICKED',
+    actionKey: action.key,
+    payload: { event: action.event },
+  });
   void runEvent(action.event, eventDataFor(action.event));
+}
+
+async function recordFeedback(request: {
+  eventType: 'ACTION_CLICKED' | 'CHECKPOINT_COMPLETED' | 'CARD_HELPFUL' | 'CARD_NOT_HELPFUL';
+  actionKey?: string;
+  cardKey?: string;
+  payload?: Record<string, unknown>;
+}): Promise<void> {
+  if (!sessionKey.value) return;
+  try {
+    await recordTutorWorkflowFeedback(sessionKey.value, request);
+  } catch {
+    // Feedback is a learning signal side channel; never block the tutor workflow.
+  }
+}
+
+async function markCardFeedback(entry: CardEntry, value: 'helpful' | 'not_helpful'): Promise<void> {
+  const id = cardId(entry);
+  const eventType = value === 'helpful' ? 'CARD_HELPFUL' : 'CARD_NOT_HELPFUL';
+  await recordFeedback({
+    eventType,
+    cardKey: entry.key,
+    payload: { cardId: id, seq: entry.seq },
+  });
+  cardFeedback.value = { ...cardFeedback.value, [id]: value };
 }
 
 function sendChat(): void {
@@ -520,6 +555,33 @@ function cardId(entry: CardEntry): string {
             >✗ 再调整一下</span>
           </div>
         </template>
+        <footer class="tw-card-feedback">
+          <button
+            type="button"
+            class="tw-card-feedback__btn"
+            data-testid="card-helpful"
+            :disabled="cardFeedback[cardId(entry)] === 'helpful'"
+            @click="markCardFeedback(entry, 'helpful')"
+          >
+            有帮助
+          </button>
+          <button
+            type="button"
+            class="tw-card-feedback__btn"
+            data-testid="card-not-helpful"
+            :disabled="cardFeedback[cardId(entry)] === 'not_helpful'"
+            @click="markCardFeedback(entry, 'not_helpful')"
+          >
+            没帮助
+          </button>
+          <span
+            v-if="cardFeedback[cardId(entry)]"
+            class="tw-card-feedback__state"
+            data-testid="card-feedback-state"
+          >
+            已记录
+          </span>
+        </footer>
       </article>
 
       <p
@@ -676,6 +738,32 @@ function cardId(entry: CardEntry): string {
   color: var(--pyt-color-text-primary);
   border-bottom: 1px dashed rgba(74, 54, 29, 0.3);
   padding-bottom: 4px;
+}
+.tw-card-feedback {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px dashed rgba(74, 54, 29, 0.22);
+}
+.tw-card-feedback__btn {
+  font-family: inherit;
+  font-size: 11px;
+  padding: 3px 8px;
+  cursor: pointer;
+  color: var(--pyt-color-text-muted);
+  background: rgba(255, 255, 255, 0.58);
+  border: 1px solid rgba(74, 54, 29, 0.28);
+  border-radius: 999px;
+}
+.tw-card-feedback__btn:disabled {
+  opacity: 0.62;
+  cursor: default;
+}
+.tw-card-feedback__state {
+  font-size: 11px;
+  color: var(--pyt-color-success, #2d6a4f);
 }
 .tw-card__lead {
   margin: 0;

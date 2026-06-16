@@ -18,7 +18,9 @@ public sealed interface LearningEvent
         LearningEvent.PracticeAbandoned,
         LearningEvent.ComebackSolved,
         LearningEvent.TaughtAiSucceeded,
-        LearningEvent.TaughtAiFailed {
+        LearningEvent.TaughtAiFailed,
+        LearningEvent.GuideActionClicked,
+        LearningEvent.GuideCheckpointCompleted {
 
   Long userId();
 
@@ -84,4 +86,10 @@ public sealed interface LearningEvent
   record TaughtAiSucceeded(Long userId, String kcCode, Long sessionId) implements LearningEvent {}
 
   record TaughtAiFailed(Long userId, String kcCode, Long sessionId) implements LearningEvent {}
+
+  record GuideActionClicked(Long userId, Long problemId, String kcCode, String actionKey)
+      implements LearningEvent {}
+
+  record GuideCheckpointCompleted(Long userId, Long problemId, String kcCode, String cardKey)
+      implements LearningEvent {}
 }

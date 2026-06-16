@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.learner.event.LearningEvent;
 import com.pythontopia.submission.dto.JudgeResultDto;
 import com.pythontopia.submission.dto.PublicProblemDto;
 import com.pythontopia.submission.dto.SubmissionDetailDto;
@@ -21,6 +22,7 @@ import com.pythontopia.submission.dto.SubmissionStatus;
 import com.pythontopia.submission.dto.Verdict;
 import com.pythontopia.submission.repository.PublicProblemRepository;
 import com.pythontopia.submission.service.SubmissionService;
+import com.pythontopia.tutor.dto.TutorWorkflowFeedbackRequest;
 import com.pythontopia.tutor.dto.TutorWorkflowRunRequest;
 import com.pythontopia.tutor.dto.TutorWorkflowAgentStateDto;
 import com.pythontopia.tutor.dto.TutorWorkflowSessionDto;
@@ -32,6 +34,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 import org.mockito.ArgumentCaptor;
 
 /**
@@ -51,6 +54,7 @@ class TutorWorkflowServiceTest {
   private final TutorService tutorService = mock(TutorService.class);
   private final PublicProblemRepository problemRepository = mock(PublicProblemRepository.class);
   private final SubmissionService submissionService = mock(SubmissionService.class);
+  private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
 
   private final TutorWorkflowService service =
       new TutorWorkflowService(
@@ -59,6 +63,7 @@ class TutorWorkflowServiceTest {
           tutorService,
           problemRepository,
           submissionService,
+          eventPublisher,
           new ObjectMapper());
 
   private static final long USER = 7L;
@@ -83,6 +88,7 @@ class TutorWorkflowServiceTest {
                     "Low",
                     null)));
     when(repository.findActive(USER, PROBLEM)).thenReturn(Optional.of(session));
+    when(repository.findBySessionKey(USER, session.sessionKey())).thenReturn(Optional.of(session));
     when(repository.findAgentState(session.id())).thenReturn(Optional.empty());
     when(tutorService.resolveProfileBrief(USER, null)).thenReturn("认知风格: visual");
   }
@@ -267,6 +273,41 @@ class TutorWorkflowServiceTest {
     assertThat(decisionJson.getValue()).contains("\"next_event\":\"EXECUTION_TRACE\"");
     verify(repository)
         .insertActionEvent(eq(11L), eq(4), eq("CARD_GENERATED"), eq("execution_trace"), any());
+  }
+
+  @Test
+  void recordFeedbackStoresActionClickAndPublishesLearningEvent() {
+    service.recordFeedback(
+        USER,
+        session.sessionKey(),
+        new TutorWorkflowFeedbackRequest(
+            "ACTION_CLICKED", "execution_trace", null, Map.of("source", "button")));
+
+    ArgumentCaptor<String> payload = ArgumentCaptor.forClass(String.class);
+    verify(repository)
+        .insertActionEvent(
+            eq(11L), eq(0), eq("ACTION_CLICKED"), eq("execution_trace"), payload.capture());
+    assertThat(payload.getValue()).contains("\"source\":\"button\"");
+    verify(eventPublisher)
+        .publishEvent(
+            new LearningEvent.GuideActionClicked(
+                USER, PROBLEM, "PY43-KC-016", "execution_trace"));
+  }
+
+  @Test
+  void recordFeedbackStoresCheckpointCompletedAndPublishesLearningEvent() {
+    service.recordFeedback(
+        USER,
+        session.sessionKey(),
+        new TutorWorkflowFeedbackRequest(
+            "CHECKPOINT_COMPLETED", null, "execution_trace", Map.of("answer", "变量变了")));
+
+    verify(repository)
+        .insertActionEvent(eq(11L), eq(0), eq("CHECKPOINT_COMPLETED"), eq("execution_trace"), any());
+    verify(eventPublisher)
+        .publishEvent(
+            new LearningEvent.GuideCheckpointCompleted(
+                USER, PROBLEM, "PY43-KC-016", "execution_trace"));
   }
 
   @Test

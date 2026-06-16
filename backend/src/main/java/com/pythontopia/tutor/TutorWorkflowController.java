@@ -4,12 +4,14 @@ import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
+import com.pythontopia.tutor.dto.TutorWorkflowFeedbackRequest;
 import com.pythontopia.tutor.dto.TutorWorkflowRunRequest;
 import jakarta.validation.Valid;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -46,6 +48,15 @@ public class TutorWorkflowController {
       @CurrentUser CurrentUserPrincipal user, @RequestParam Long problemId) {
     requireStudent(user);
     return service.activeSession(user.userId(), problemId);
+  }
+
+  @PostMapping("/sessions/{sessionKey}/feedback")
+  public void feedback(
+      @CurrentUser CurrentUserPrincipal user,
+      @PathVariable String sessionKey,
+      @Valid @RequestBody TutorWorkflowFeedbackRequest request) {
+    requireStudent(user);
+    service.recordFeedback(user.userId(), sessionKey, request);
   }
 
   private void requireStudent(CurrentUserPrincipal user) {
