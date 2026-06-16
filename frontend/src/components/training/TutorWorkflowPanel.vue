@@ -11,7 +11,7 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import MarkdownView from '@/components/common/MarkdownView.vue';
-import { useSseStream } from '@/composables/useSseStream';
+import { useSseStream, type SseTraceEvent } from '@/composables/useSseStream';
 import { useLearningStore } from '@stores/learning';
 import { useToastStore } from '@stores/toast';
 import {
@@ -75,6 +75,24 @@ const running = computed(
 const recommendedAction = computed<WorkflowActionDto | null>(
   () => availableActions.value.find((action) => action.recommended) ?? null,
 );
+interface CoachProgressItem {
+  key: string;
+  label: string;
+  statusLabel: string;
+}
+const coachProgressItems = computed<CoachProgressItem[]>(() => {
+  const latestByNode = new Map<string, CoachProgressItem>();
+  for (const trace of sse.traces.value) {
+    const label = coachProgressLabel(trace.node);
+    if (!label) continue;
+    latestByNode.set(trace.node, {
+      key: trace.node,
+      label,
+      statusLabel: coachProgressStatus(trace),
+    });
+  }
+  return [...latestByNode.values()];
+});
 
 // 起手动作 + 始终可用的 4 个辅助动作（与后端 PHASE_ACTIONS + AUX 对齐；后端最终以 available_actions 为准）。
 const STARTER_ACTIONS: WorkflowActionDto[] = [
@@ -92,6 +110,25 @@ const AUX_ACTIONS: WorkflowActionDto[] = [
 function withAux(actions: WorkflowActionDto[]): WorkflowActionDto[] {
   const seen = new Set(actions.map((a) => a.key));
   return [...actions, ...AUX_ACTIONS.filter((a) => !seen.has(a.key))];
+}
+
+function coachProgressLabel(node: string | undefined): string {
+  if (!node) return '';
+  if (node === 'coach.load_state') return '正在判断你卡在哪里';
+  if (node === 'coach.decide') return '正在选择下一步提示';
+  if (node.startsWith('coach.tool.') || node.startsWith('card.')) return '正在生成导学卡';
+  if (node === 'coach.guardrail') return '正在检查是否过度提示';
+  if (node === 'coach.update_state') return '正在更新导学状态';
+  if (node === 'evidence_fetcher') return '正在查找相关知识';
+  return '';
+}
+
+function coachProgressStatus(trace: SseTraceEvent): string {
+  if (trace.phase !== 'finish') return '进行中';
+  if (trace.status === 'ok') return '完成';
+  if (trace.status === 'retry') return '重新调整';
+  if (trace.status === 'fail') return '未通过';
+  return '完成';
 }
 
 function scrollBottom(): void {
@@ -590,6 +627,22 @@ function cardId(entry: CardEntry): string {
       >
         百晓思考中…
       </p>
+      <section
+        v-if="coachProgressItems.length"
+        class="tw-coach-progress"
+        data-testid="coach-progress"
+      >
+        <strong>导学助手进度</strong>
+        <ul>
+          <li
+            v-for="item in coachProgressItems"
+            :key="item.key"
+          >
+            <span>{{ item.label }}</span>
+            <em>{{ item.statusLabel }}</em>
+          </li>
+        </ul>
+      </section>
     </div>
 
     <!-- 下一步动作链（available_actions 驱动 + 4 个辅助动作） -->
@@ -888,6 +941,39 @@ function cardId(entry: CardEntry): string {
 }
 .tw-running {
   font-size: 12px;
+  color: var(--pyt-color-text-muted);
+}
+.tw-coach-progress {
+  border: 1px solid rgba(42, 111, 151, 0.28);
+  border-radius: 8px;
+  background: rgba(230, 242, 251, 0.74);
+  padding: 8px 10px;
+}
+.tw-coach-progress strong {
+  display: block;
+  margin-bottom: 5px;
+  font-family: var(--pyt-font-read);
+  font-size: 13px;
+  color: #1b4a6b;
+}
+.tw-coach-progress ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tw-coach-progress li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.tw-coach-progress em {
+  flex: 0 0 auto;
+  font-style: normal;
   color: var(--pyt-color-text-muted);
 }
 .tw-actions {

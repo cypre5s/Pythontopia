@@ -277,6 +277,8 @@ class TutorWorkflowGraph:
         await self._emit_step_start("coach.decide")
         current_phase = state.get("current_phase", "READING")
         new_phase = state.get("new_phase", current_phase)
+        load_started = time.monotonic()
+        await self._emit_step_start("coach.load_state")
         student_state = request.student_state or TutorStudentState(
             session_id=request.session_id,
             user_id=request.user_id,
@@ -285,6 +287,7 @@ class TutorWorkflowGraph:
             latest_verdict=request.diagnosis.verdict if request.diagnosis else "",
             consecutive_errors=request.diagnosis.consecutive_errors if request.diagnosis else 0,
         )
+        await self._emit_step_finish("coach.load_state", "ok", load_started)
         allowed_events = _coach_allowed_events(
             request,
             current_phase=current_phase,
@@ -304,6 +307,8 @@ class TutorWorkflowGraph:
                 recent_cards=state.get("last_cards", []),
             )
         )
+        update_started = time.monotonic()
+        await self._emit_step_start("coach.update_state")
         updated_state = student_state.model_copy(
             update={
                 "phase": new_phase,
@@ -319,6 +324,7 @@ class TutorWorkflowGraph:
                 "next_best_action": decision.next_event,
             }
         )
+        await self._emit_step_finish("coach.update_state", "ok", update_started)
         await self._emit_step_finish(
             "coach.decide",
             "ok",
@@ -364,11 +370,23 @@ class TutorWorkflowGraph:
         started = time.monotonic()
         node_name = f"card.{card_key}"
         await self._emit_step_start(node_name)
+        tool_node = ""
+        tool_started = 0.0
         try:
             effective_request = request.model_copy(update={"event": event})
+            if request.coach_mode:
+                decision = state.get("coach_decision")
+                tool_name = getattr(decision, "tool_name", "") or str(card_key or event).lower()
+                tool_node = f"coach.tool.{tool_name}"
+                tool_started = time.monotonic()
+                await self._emit_step_start(tool_node)
             card = await self._dispatch_card(state, effective_request)
+            if tool_node:
+                await self._emit_step_finish(tool_node, "ok", tool_started)
             card = await self._apply_guardrail(state, effective_request, card_key or "", card)
         except CardGenerationError as exc:
+            if tool_node:
+                await self._emit_step_finish(tool_node, "fail", tool_started, note=str(exc))
             await self._emit_step_finish(node_name, "fail", started, note=str(exc))
             return {
                 **state,

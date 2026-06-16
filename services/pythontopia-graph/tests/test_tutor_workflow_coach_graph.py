@@ -165,7 +165,11 @@ async def test_coach_decision_controls_generated_card() -> None:
     assert state["available_actions"][0].event == "EXECUTION_TRACE"
     assert state["available_actions"][0].recommended is True
     trace_nodes = [payload["node"] for event, payload in events if event == "trace"]
+    assert "coach.load_state" in trace_nodes
     assert "coach.decide" in trace_nodes
+    assert "coach.tool.execution_trace" in trace_nodes
+    assert "coach.guardrail" in trace_nodes
+    assert "coach.update_state" in trace_nodes
 
 
 @pytest.mark.asyncio

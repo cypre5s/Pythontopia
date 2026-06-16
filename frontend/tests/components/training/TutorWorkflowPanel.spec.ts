@@ -171,4 +171,25 @@ describe('TutorWorkflowPanel', () => {
     });
     expect(wrapper.get('[data-testid="card-feedback-state"]').text()).toContain('已记录');
   });
+
+  it('renders bounded coach progress from trace nodes without exposing raw internals', async () => {
+    const stream = getStream();
+    stream.status.value = 'streaming';
+    stream.traces.value = [
+      { node: 'coach.load_state', phase: 'start', status: 'running', elapsed_ms: 0 },
+      { node: 'coach.decide', phase: 'start', status: 'running', elapsed_ms: 1 },
+      { node: 'coach.tool.execution_trace', phase: 'start', status: 'running', elapsed_ms: 2 },
+      { node: 'coach.guardrail', phase: 'start', status: 'running', elapsed_ms: 3 },
+    ];
+
+    const wrapper = mountPanel();
+    await flushPromises();
+
+    const progress = wrapper.get('[data-testid="coach-progress"]');
+    expect(progress.text()).toContain('正在判断你卡在哪里');
+    expect(progress.text()).toContain('正在选择下一步提示');
+    expect(progress.text()).toContain('正在生成导学卡');
+    expect(progress.text()).toContain('正在检查是否过度提示');
+    expect(progress.text()).not.toContain('coach.decide');
+  });
 });
