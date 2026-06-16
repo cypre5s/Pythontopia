@@ -2,6 +2,7 @@ package com.pythontopia.tutor;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pythontopia.tutor.dto.TutorWorkflowAgentStateDto;
 import com.pythontopia.tutor.dto.TutorWorkflowCardDto;
 import com.pythontopia.tutor.dto.TutorWorkflowSessionDto;
 import java.sql.ResultSet;
@@ -86,6 +87,52 @@ public class TutorWorkflowRepository {
         seq,
         event,
         cardKey,
+        payloadJson);
+  }
+
+  public Optional<TutorWorkflowAgentStateDto> findAgentState(Long sessionId) {
+    List<TutorWorkflowAgentStateDto> rows =
+        jdbcTemplate.query(
+            """
+            SELECT session_id, state_json::text, latest_decision_json::text
+            FROM tutor_workflow_agent_state
+            WHERE session_id = ?
+            """,
+            (rs, rowNum) ->
+                new TutorWorkflowAgentStateDto(
+                    rs.getLong("session_id"),
+                    rs.getString("state_json"),
+                    rs.getString("latest_decision_json")),
+            sessionId);
+    return rows.stream().findFirst();
+  }
+
+  public void upsertAgentState(Long sessionId, String stateJson, String decisionJson) {
+    jdbcTemplate.update(
+        """
+        INSERT INTO tutor_workflow_agent_state (session_id, state_json, latest_decision_json)
+        VALUES (?, ?::jsonb, ?::jsonb)
+        ON CONFLICT (session_id) DO UPDATE
+        SET state_json = EXCLUDED.state_json,
+            latest_decision_json = EXCLUDED.latest_decision_json,
+            updated_at = now()
+        """,
+        sessionId,
+        stateJson,
+        decisionJson);
+  }
+
+  public void insertActionEvent(
+      Long sessionId, int seq, String eventType, String actionKey, String payloadJson) {
+    jdbcTemplate.update(
+        """
+        INSERT INTO tutor_workflow_action_event (session_id, seq, event_type, action_key, payload)
+        VALUES (?, ?, ?, ?, ?::jsonb)
+        """,
+        sessionId,
+        seq,
+        eventType,
+        actionKey,
         payloadJson);
   }
 

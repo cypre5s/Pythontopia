@@ -2,6 +2,7 @@ package com.pythontopia.tutor;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.submission.dto.PublicProblemDto;
 import com.pythontopia.submission.dto.SubmissionDetailDto;
@@ -11,6 +12,7 @@ import com.pythontopia.submission.dto.Verdict;
 import com.pythontopia.submission.repository.PublicProblemRepository;
 import com.pythontopia.submission.service.SubmissionService;
 import com.pythontopia.tutor.dto.TutorWorkflowCardDto;
+import com.pythontopia.tutor.dto.TutorWorkflowAgentStateDto;
 import com.pythontopia.tutor.dto.TutorWorkflowRunRequest;
 import com.pythontopia.tutor.dto.TutorWorkflowSessionDto;
 import java.security.SecureRandom;
@@ -97,6 +99,8 @@ public class TutorWorkflowService {
     }
     body.put("event_data", eventData);
     body.put("profile_brief", tutorService.resolveProfileBrief(userId, null));
+    body.put("coach_mode", true);
+    repository.findAgentState(session.id()).ifPresent(state -> restoreAgentState(body, state));
     // 投影回放：graph 进程内已有会话时忽略；重启后据此恢复阶段（持久化为权威）。
     body.put("restore_phase", session.phase());
     body.put("restore_seq", session.seq());
@@ -231,7 +235,9 @@ public class TutorWorkflowService {
     JsonNode result = root.has("result") && root.path("result").isObject() ? root.path("result") : root;
     String phase = result.path("phase").asText(session.phase());
     int seq = result.path("seq").asInt(session.seq());
+    String event = result.path("event").asText(request.event());
     repository.updateProgress(session.id(), phase, seq);
+    persistAgentProjection(session.id(), seq, event, result);
 
     JsonNode card = result.path("card");
     String cardKey = result.path("card_key").asText(null);
@@ -244,8 +250,48 @@ public class TutorWorkflowService {
         payload = enriched;
       }
       repository.insertCard(
-          session.id(), seq, request.event(), cardKey, objectMapper.writeValueAsString(payload));
+          session.id(), seq, event, cardKey, objectMapper.writeValueAsString(payload));
+      insertActionEvent(session.id(), seq, event, cardKey, result);
     }
+  }
+
+  private void restoreAgentState(
+      Map<String, Object> body, TutorWorkflowAgentStateDto agentState) {
+    try {
+      Map<String, Object> state =
+          objectMapper.readValue(
+              agentState.stateJson(), new TypeReference<Map<String, Object>>() {});
+      if (!state.isEmpty()) {
+        body.put("student_state", state);
+      }
+    } catch (Exception e) {
+      log.warn("Failed to restore tutor workflow agent state", e);
+    }
+  }
+
+  private void persistAgentProjection(Long sessionId, int seq, String event, JsonNode result)
+      throws Exception {
+    JsonNode studentState = result.path("student_state");
+    JsonNode coachDecision = result.path("coach_decision");
+    if (studentState.isObject() || coachDecision.isObject()) {
+      repository.upsertAgentState(
+          sessionId,
+          studentState.isObject() ? objectMapper.writeValueAsString(studentState) : "{}",
+          coachDecision.isObject() ? objectMapper.writeValueAsString(coachDecision) : "{}");
+    }
+  }
+
+  private void insertActionEvent(
+      Long sessionId, int seq, String event, String cardKey, JsonNode result) throws Exception {
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("event", event);
+    payload.put("card_key", cardKey);
+    JsonNode coachDecision = result.path("coach_decision");
+    if (coachDecision.isObject()) {
+      payload.put("coach_decision", coachDecision);
+    }
+    repository.insertActionEvent(
+        sessionId, seq, "CARD_GENERATED", cardKey, objectMapper.writeValueAsString(payload));
   }
 
   private static String nullSafe(String value) {

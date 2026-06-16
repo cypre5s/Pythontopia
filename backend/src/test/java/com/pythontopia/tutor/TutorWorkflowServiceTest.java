@@ -22,6 +22,7 @@ import com.pythontopia.submission.dto.Verdict;
 import com.pythontopia.submission.repository.PublicProblemRepository;
 import com.pythontopia.submission.service.SubmissionService;
 import com.pythontopia.tutor.dto.TutorWorkflowRunRequest;
+import com.pythontopia.tutor.dto.TutorWorkflowAgentStateDto;
 import com.pythontopia.tutor.dto.TutorWorkflowSessionDto;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -82,6 +83,7 @@ class TutorWorkflowServiceTest {
                     "Low",
                     null)));
     when(repository.findActive(USER, PROBLEM)).thenReturn(Optional.of(session));
+    when(repository.findAgentState(session.id())).thenReturn(Optional.empty());
     when(tutorService.resolveProfileBrief(USER, null)).thenReturn("认知风格: visual");
   }
 
@@ -100,12 +102,35 @@ class TutorWorkflowServiceTest {
     assertThat(body.get("session_id")).isEqualTo("wf-7-476-abc");
     assertThat(body.get("event")).isEqualTo("READING");
     assertThat(body.get("restore_phase")).isEqualTo("READING");
+    assertThat(body.get("coach_mode")).isEqualTo(true);
     assertThat(body.get("profile_brief")).isEqualTo("认知风格: visual");
     @SuppressWarnings("unchecked")
     Map<String, Object> problem = (Map<String, Object>) body.get("problem");
     assertThat(problem.get("problem_id")).isEqualTo(PROBLEM);
     assertThat(problem.get("kc_codes")).isEqualTo(List.of("PY43-KC-016"));
     assertThat(body).doesNotContainKey("diagnosis");
+  }
+
+  @Test
+  void runRestoresPersistedAgentStateIntoGraphBody() {
+    when(repository.findAgentState(session.id()))
+        .thenReturn(
+            Optional.of(
+                new TutorWorkflowAgentStateDto(
+                    session.id(),
+                    """
+                    {"session_id":"wf-7-476-abc","user_id":7,"problem_id":476,
+                     "phase":"CODING","hint_level":2,"latest_verdict":"WA"}
+                    """,
+                    """
+                    {"next_event":"EXECUTION_TRACE","reason_summary":"先看轨迹"}
+                    """)));
+
+    service.run(USER, new TutorWorkflowRunRequest(PROBLEM, "READING", Map.of()));
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> state = (Map<String, Object>) capturedBody().get("student_state");
+    assertThat(state).containsEntry("hint_level", 2).containsEntry("latest_verdict", "WA");
   }
 
   @Test
@@ -205,6 +230,43 @@ class TutorWorkflowServiceTest {
     ArgumentCaptor<String> payload = ArgumentCaptor.forClass(String.class);
     verify(repository).insertCard(eq(11L), eq(3), eq("CHAT"), eq("ai_reply"), payload.capture());
     assertThat(payload.getValue()).contains("user_message").contains("怎么保留小数？");
+  }
+
+  @Test
+  void persistProjectionStoresCoachStateDecisionAndActionEvent() throws Exception {
+    AtomicReference<Consumer<String>> onResult = new AtomicReference<>();
+    org.mockito.Mockito.doAnswer(
+            invocation -> {
+              onResult.set(invocation.getArgument(2));
+              return null;
+            })
+        .when(graphClient)
+        .runStream(any(), any(), any());
+
+    service.run(
+        USER, new TutorWorkflowRunRequest(PROBLEM, "CHAT", Map.of("message", "先看哪里？")));
+
+    onResult
+        .get()
+        .accept(
+            """
+            {"result": {"session_id": "wf-7-476-abc", "event": "EXECUTION_TRACE", "phase": "READING",
+             "card_key": "execution_trace", "card": {"card_id": "wf-7-476-abc:x2", "summary": "看变量"},
+             "student_state": {"session_id": "wf-7-476-abc", "user_id": 7, "problem_id": 476,
+               "phase": "READING", "hint_level": 1, "next_best_action": "EXECUTION_TRACE"},
+             "coach_decision": {"next_event": "EXECUTION_TRACE", "tool_name": "execution_trace",
+               "hint_level": 1, "action_goal": "看清实际行为", "stop_condition": "说出偏差",
+               "confidence": 0.82, "reason_summary": "WA 早期先看执行轨迹"},
+             "available_actions": [], "seq": 4}}
+            """);
+
+    ArgumentCaptor<String> stateJson = ArgumentCaptor.forClass(String.class);
+    ArgumentCaptor<String> decisionJson = ArgumentCaptor.forClass(String.class);
+    verify(repository).upsertAgentState(eq(11L), stateJson.capture(), decisionJson.capture());
+    assertThat(stateJson.getValue()).contains("\"hint_level\":1");
+    assertThat(decisionJson.getValue()).contains("\"next_event\":\"EXECUTION_TRACE\"");
+    verify(repository)
+        .insertActionEvent(eq(11L), eq(4), eq("CARD_GENERATED"), eq("execution_trace"), any());
   }
 
   @Test
