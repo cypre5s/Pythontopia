@@ -196,6 +196,22 @@ ask←{ASK,EXPLAIN_CODE,FIX_BUG}；quiz←{ASKME,REVIEW}；make_resource←{HAND
 - **机理**：专用**分类器**（必须输出一个意图）没有 agentic 循环里"要不要调工具"的犹豫/弃权，对未微调模型的工具选择远胜"裸 schema 选择"。这定量证实了混合架构的正确性（+36pp）。
 - 触发澄清 0/14：本组改写虽模糊但路由器有把握；真正低置信时会反问而非误选。
 
+#### 🎯 真实 DeepSeek in-distribution A/B（DEFAULT_TASKS，3 次多数投票）
+2026-06-17 补跑完整 end-to-end A/B，任务集为
+`pythontopia_graph.eval.tool_use_eval.DEFAULT_TASKS`（20 条，覆盖全部 9 个收敛工具），模型固定
+`deepseek-v4-pro`，温度 0。可复现脚本：
+`services/pythontopia-graph/scripts/run_deepseek_tool_use_ab.py`；完整报告见
+`docs/reports/2026-06-17-deepseek-tool-use-ab.md`。
+
+| 选择方式 | 3x majority |
+|---|---:|
+| 纯 LLM 工具循环 | **19/20 = 95%** |
+| **混合端（IntentRouter 选择）** | **20/20 = 100%** |
+
+- round 级别：纯循环 `18/20, 19/20, 19/20`；混合路由器三轮均 `20/20`。
+- 纯循环唯一稳定错例：`review`（"帮我复习一下快忘的旧知识点"）被多数选成 `my_space`，期望为 `quiz`。
+- 结论不变但置信更细：纯循环在 in-distribution 提示上可用性较高；混合路由仍是默认选择器，循环负责路由后多步编排。
+
 ### 接线（A · flag-gated，2026-06-17）
 - `routes/orchestrator.py` 新增 **`POST /agents/orchestrator/tool-loop`**（非流式）与 **`/tool-loop/stream`**（SSE：增量 `loop_step` + 终态 `result`），由 `PYT_TOOL_LOOP` 开关（**默认 off → 404**，在线默认路径零回归）。
 - `tool_loop.py`/`hybrid_loop.py` 加 `on_step` 回调供 SSE 增量推送；`ToolLoopStep` 经 `model_dump` 发出。
