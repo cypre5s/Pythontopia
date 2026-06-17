@@ -57,6 +57,10 @@ public class LearningPathService {
 
   private static final Logger log = LoggerFactory.getLogger(LearningPathService.class);
 
+  /** graph PlannerProfileSnapshot.major 仅接受这四个枚举值；自由文本 major 必须归一，否则 graph 422。 */
+  private static final Set<String> GRAPH_MAJOR_VALUES =
+      Set.of("CS", "NON_CS_STEM", "NON_CS_HUMANITIES", "OTHER");
+
   /** 反思洞察扫描条数，用于提取 error_pattern 高频坑 KC。 */
   static final int INSIGHT_SCAN_LIMIT = 20;
 
@@ -470,9 +474,41 @@ public class LearningPathService {
     if (profile.baseLevel() != null && profile.baseLevel().pythonSelfRatedLevel() != null) {
       pythonLevel = profile.baseLevel().pythonSelfRatedLevel();
     }
-    String major = profile.major() == null ? "OTHER" : profile.major();
     // 末位恒传 7：让 planner 将画像视为已满 7 天，从而触发 PROFILE_UPDATE 节点。
-    return new PathPlannerGraphRequest.ProfileSnapshot(true, major, pythonLevel, 7);
+    return new PathPlannerGraphRequest.ProfileSnapshot(
+        true, graphMajor(profile.major()), pythonLevel, 7);
+  }
+
+  /**
+   * 把任意 major 文本归一到 graph {@code PlannerProfileSnapshot.major} 接受的四枚举值，避免自由文本
+   * （如中文专业名）触发 graph 422 → PATH_PLANNER_GRAPH_UNAVAILABLE。与 {@code ResourceWorkshopService}
+   * 的映射保持一致。
+   */
+  static String graphMajor(String rawMajor) {
+    if (rawMajor == null || rawMajor.isBlank()) {
+      return "OTHER";
+    }
+    String normalized = rawMajor.trim().toUpperCase(Locale.ROOT);
+    if (GRAPH_MAJOR_VALUES.contains(normalized)) {
+      return normalized;
+    }
+    String lower = rawMajor.trim().toLowerCase(Locale.ROOT);
+    if (lower.contains("计算机")
+        || lower.contains("软件")
+        || lower.contains("computer")
+        || lower.contains("cs")) {
+      return "CS";
+    }
+    if (lower.contains("理工")
+        || lower.contains("工科")
+        || lower.contains("stem")
+        || lower.contains("engineering")) {
+      return "NON_CS_STEM";
+    }
+    if (lower.contains("文科") || lower.contains("人文") || lower.contains("humanities")) {
+      return "NON_CS_HUMANITIES";
+    }
+    return "OTHER";
   }
 
   private List<PathPlannerGraphRequest.KcSnapshot> buildKcSnapshots(

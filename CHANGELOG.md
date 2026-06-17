@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-06-17 — 全栈 E2E 实跑验收 + 两处后端修复（启动阻塞 DI / 路径规划 major 健壮性）
+
+> 在「Agentic Loop 六框架融合」工作树（未提交）基础上做全栈冒烟 + 浏览器模拟点击 E2E，验收核心学习闭环并修复两处实测暴露的后端问题。`services/pythontopia-graph` 套件 936 passed / 3 skipped；`./dev.sh` 四服务（前端/后端/graph/rag）健康、Flyway 至 V171。
+
+- **修复 · 后端启动阻塞（DI）**：`MemoryBriefService` 有两个构造器（3 参注入 + 4 参注入 `Clock` 供测试）却无 `@Autowired`，Spring 回退无参构造器失败致整个后端无法启动（`No default constructor found` / `NoSuchMethodException <init>()`）。给 3 参构造器加 `@Autowired` 修复；单测因直调测试构造器未覆盖此 DI 路径，唯有全栈启动可暴露。
+- **修复 · 路径规划 major 健壮性**：`LearningPathService.buildProfileSnapshot` 把 `profile.major()` 原样下传 graph，而 graph `PlannerProfileSnapshot.major` 是枚举 `CS/NON_CS_STEM/NON_CS_HUMANITIES/OTHER`；自由文本 major（如中文专业名）致 graph 返回 422 → `PATH_PLANNER_GRAPH_UNAVAILABLE`。新增 `graphMajor()` 归一映射（与 `ResourceWorkshopService.graphMajor` 一致）并在 `buildProfileSnapshot` 调用；新增单测 `planNormalizesFreeTextMajorToGraphEnum`，`LearningPathServiceTest` 6/6 通过，重启后端后实测自由文本 major → `ACTIVE` 10 节点路径。
+- **E2E 实测（demo-stu-01 · 浏览器模拟点击）**：登录 → 中央小镇 hub（6 NPC）→ 入门画像 → NPC 对话 → AI 助教智能体闭环（有界 4 步 + 工具调用时间线 + SSE，生成 STORYBOARD/HANDOUT/PRACTICE 真产物）；训练场 #493 服务端判题 `WA`（期望 55 实际 45）→ 错题矿洞自动入册 → L1 逐层调试改对重提 `AC` → 会话 `RESOLVED` 出坑、掌握度 `0.25→0.29`（`practice_submission` #11 FAILED→#12 PASSED·BUG_MINE_RETRY、`bug_mine_session` #2、`kc_mastery` 落库核对）；百晓工坊 RAG 答疑 6 智能体接地管线 + 真实课件引用页（p59-62）；工坊「生成讲义」触发防幻觉校对官 `['Ungrounded numbers: 2025']` → 讲义设计师重跑修订 → 终态「引用充分」。
+- **演示数据注入**：为 `demo-stu-01`(user_id 2) 注入 8 维 `learner_profile.dimensions` + 13 条 `kc_mastery`（混合掌握度驱动聚焦选题）。注意契约：`learning_goal`/`cognitive_style` 列实际以 JSON DTO 存储（非纯文本，否则 `Failed to read profile JSON`），`major` 须为上列枚举值。
+- **观察（待跟进 · 本轮未改）**：① 智能体闭环内 path 步骤 `agents/dispatch.py` 硬编码 `has_profile=False`/`user_id=1`（诚实降级 stub，`test_orchestrator_real_dispatch` 已断言），不随 DB 画像转绿，需透传真实画像/`user_id` 才能闭环；② 工坊「生成讲义」当日未写入 `resource_run`/`learning_resource`（0 行），疑为「预览待显式保存（书房→）」，AGENTS.md 要求每次资源生成落审计 run，待确认保存路径是否补写审计；③ graph 实际走真 DeepSeek（非 dryrun），故闭环每步 ~30s。
+
 ## 2026-06-17 — Agentic Loop 六框架融合（带护栏 · 可审计 · 非自由 ReAct）
 
 > 在既有有界编排（`orchestrator_graph`：understand→plan→dispatch→reflect→replan→compose）上**正交侧挂**融合 6 个 AI 框架，把「AI 导学助手 + 百晓工坊 + AI 导师」升级为带护栏、可审计、非自由 ReAct 的自主智能体闭环。计划与执行追踪见 `docs/plans/2026-06-17-agentic-loop-framework-integration.md` 与同名 `-worklog.md`（§9 实测日志）。

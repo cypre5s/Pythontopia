@@ -193,6 +193,44 @@ class LearningPathServiceTest {
     assertThat(captor.getValue().errorPatternKcs()).containsExactly("PY43-KC-002");
   }
 
+  @Test
+  void planNormalizesFreeTextMajorToGraphEnum() {
+    LearnerProfileDto freeTextMajor =
+        new LearnerProfileDto(
+            100L,
+            7L,
+            43L,
+            "计算机科学（大一）",
+            new BaseLevelDto(1, List.of("C"), 3),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            "测试画像");
+    when(profileService.findProfile(7L)).thenReturn(Optional.of(freeTextMajor));
+    when(coursePackRepository.findKcs(eq(43L), eq(null)))
+        .thenReturn(
+            List.of(new CourseKc(1L, 43L, "PY43-KC-001", "变量", 1L, 1, "basic", "summary")));
+    when(masteryEvaluator.snapshots(7L)).thenReturn(List.of());
+    when(classroomQuestRepository.listActiveForStudent(eq(7L), any())).thenReturn(List.of());
+    when(graphClient.plan(any(PathPlannerGraphRequest.class))).thenReturn(graphResponse());
+    when(pathRepository.archiveActivePaths(7L, 43L)).thenReturn(List.of());
+    when(pathRepository.nextVersion(7L, 43L)).thenReturn(1);
+    when(pathRepository.insertPath(eq(7L), eq(43L), eq(1), any(), any(), any())).thenReturn(50L);
+    when(pathRepository.insertNode(eq(50L), any())).thenReturn(500L).thenReturn(501L);
+    when(pathRepository.findById(7L, 50L)).thenReturn(Optional.of(samplePath(50L, 1)));
+
+    service.plan(7L);
+
+    org.mockito.ArgumentCaptor<PathPlannerGraphRequest> captor =
+        org.mockito.ArgumentCaptor.forClass(PathPlannerGraphRequest.class);
+    verify(graphClient).plan(captor.capture());
+    // 自由文本中文专业名归一到 graph 接受的枚举，避免 422 → PATH_PLANNER_GRAPH_UNAVAILABLE。
+    assertThat(captor.getValue().profile().major()).isEqualTo("CS");
+  }
+
   private PathPlannerGraphResponse graphResponse() {
     return new PathPlannerGraphResponse(
         7L,
