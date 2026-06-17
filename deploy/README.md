@@ -78,6 +78,46 @@ curl -s http://127.0.0.1:8080/healthz
 
 `docker compose ps` 应展示 6 个 service 全部 `healthy`。
 
+## 可观测性（可选）：Langfuse 自托管
+
+Langfuse 是**可选** profile，**不影响默认 6 服务起停**。默认 `docker compose up -d` 不含任何
+`langfuse-*` 容器；只有显式启用 `observability` profile 才拉起 Langfuse 全链路 trace + 评测看板。
+全链路 trace 走 **OTLP-native**：graph 微服务把既有 OpenTelemetry span 导出到 Langfuse 的
+`/api/public/otel`（观测层 fail-soft，未配 endpoint 时 graph no-op，主链路零影响）。
+
+```bash
+cd /home/cypress/Pythontopia/deploy
+cp .env.example .env                                  # 已含全部 Langfuse/OTLP 变量样例
+docker compose --profile observability up -d          # 起 langfuse-web/worker + 专用 pg/clickhouse/redis/minio
+curl -fsS http://127.0.0.1:3000/api/public/health     # langfuse-web 健康
+# 浏览器开 http://127.0.0.1:3000 → 注册 → 建项目 → 复制 pk-lf-.../sk-lf-...
+```
+
+拿到 `pk:sk` 后，在 `.env` 配置 graph 的 OTLP 上报并重建 graph：
+
+```bash
+# echo -n "pk-lf-xxxx:sk-lf-xxxx" | base64   # 生成下面的 base64
+# .env 内：
+#   OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:3000/api/public/otel
+#   OTEL_EXPORTER_OTLP_HEADERS=Authorization=Basic <上面的 base64>
+docker compose up -d pythontopia-graph                 # 重建 graph 使 OTLP env 生效
+# 触发一次答疑/工坊后，回 Langfuse UI 的 Tracing 应看到 execute_tool span。
+docker compose --profile observability down            # 停 Langfuse（加 -v 连数据卷一起删）
+```
+
+设计要点：
+
+- 依赖按 Langfuse 官方 v3 compose 精简，全部加 `langfuse-` 前缀（`langfuse-postgres` /
+  `langfuse-clickhouse` / `langfuse-redis` / `langfuse-minio`），与项目业务 `postgres`/`redis`
+  **服务名与数据卷均隔离**，互不影响。
+- 内部依赖不暴露宿主端口，仅 `langfuse-web` 绑回环 `127.0.0.1:3000`（UI + OTLP 接收口）。
+- 开发态 graph 走 `network_mode: host`，故 OTLP endpoint 用 `http://127.0.0.1:3000/...`。
+- `TELEMETRY_ENABLED=false`：关闭 Langfuse 自身匿名用量上报。
+- **生产（2C4G）不内置 Langfuse 重栈**：`docker-compose.production.yml` 只给 graph 加了
+  `OTEL_EXPORTER_OTLP_*` / `LANGFUSE_*` env 接线（留空 no-op），如需观测请把
+  `OTEL_EXPORTER_OTLP_ENDPOINT` 指向**外部** Langfuse（Cloud 或独立机）。可换性见主契约 §8.8。
+- 校验编排（无需真起容器）：`docker compose config >/dev/null && echo COMPOSE_CONFIG_OK`。
+
 ## 课程种子导入
 
 `postgres` 容器通过 `POSTGRES_DB=pythontopia` 创建本地数据库，并挂载 `deploy/initdb/` 作为初始化入口。

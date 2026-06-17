@@ -152,6 +152,22 @@ services:
       PYT_BILI_PROXY: ${PYT_BILI_PROXY:-}
       NO_PROXY: localhost,127.0.0.1,pythontopia-rag,postgres,redis,backend
       no_proxy: localhost,127.0.0.1,pythontopia-rag,postgres,redis,backend
+      # ── 可观测性对账（O3 / 主契约 §3.6 + §8.8）：导出 OTel span 到【外部】Langfuse ──
+      # 2C4G 生产机【不】内置 Langfuse 重栈（clickhouse/minio/2×app 会撑爆内存，
+      # 违背本文件 mem_limit 纪律），故此处只做 env 接线，不加 observability profile。
+      # 如需观测：在远端 .env 把 OTEL_EXPORTER_OTLP_ENDPOINT 指向【外部】Langfuse
+      # （Langfuse Cloud 或独立机自托管）的 /api/public/otel，并配
+      # OTEL_EXPORTER_OTLP_HEADERS（Authorization=Basic <base64(pk:sk)>）。
+      # 全部留空默认 → otel.py 无 endpoint 即 no-op，主链路零影响（fail-soft）。
+      # 可换性（§8.8）：Langfuse ↔ 任意 OTLP backend 仅改 env，不动业务层。
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-pythontopia-graph}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-}
+      OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
+      OTEL_EXPORTER_OTLP_PROTOCOL: ${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}
+      LANGFUSE_HOST: ${LANGFUSE_HOST:-}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:18091/healthz || exit 1"]
       interval: 15s

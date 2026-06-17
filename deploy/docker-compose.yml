@@ -112,6 +112,21 @@ services:
       PYT_BILI_PROXY: ${PYT_BILI_PROXY:-http://127.0.0.1:7892}
       NO_PROXY: localhost,127.0.0.1,pythontopia-rag,postgres,redis
       no_proxy: localhost,127.0.0.1,pythontopia-rag,postgres,redis
+      # ── 可观测性对账（O3 / 主契约 §3.6）：把 observability/otel.py 既有 OTel span
+      # 经 OTLP-native 导出到 Langfuse `/api/public/otel`。graph 走 host 网络，故指向
+      # 宿主回环上的 langfuse-web（compose 映射 127.0.0.1:3000）。
+      # 全部留空默认 → otel.py 检测到无 endpoint 即 no-op，主链路零影响（fail-soft）。
+      # 启用：① `docker compose --profile observability up -d` 起 Langfuse；
+      #       ② 在 .env 填 OTEL_EXPORTER_OTLP_ENDPOINT/HEADERS（见 .env.example 冒烟说明）。
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-pythontopia-graph}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-}
+      OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
+      OTEL_EXPORTER_OTLP_PROTOCOL: ${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}
+      # eval/runner 经 Langfuse REST 推分用（可选；留空=仅本地评测，不推分）。
+      LANGFUSE_HOST: ${LANGFUSE_HOST:-}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
 
   pythontopia-rag:
     image: pythontopia-rag:dev
@@ -144,5 +159,163 @@ services:
     ports:
       - "8080:80"
 
+  # ════════════════════════════════════════════════════════════════════════
+  # 可观测性（可选 profile：observability）· Langfuse 自托管 · OTLP-native
+  # ────────────────────────────────────────────────────────────────────────
+  # 仅 `docker compose --profile observability up -d` 时拉起；缺它上面 6 个核心
+  # 服务照常起停（默认 `docker compose up -d` 不含以下任何 langfuse-* 容器）。
+  # 依赖按 Langfuse 官方 v3 compose 精简，全部加 `langfuse-` 前缀与项目业务服务
+  # 隔离（不抢 postgres/redis 名字与数据卷）；内部依赖不暴露宿主端口，仅
+  # langfuse-web 绑回环 3000 供 UI 与（host 网络的）graph OTLP 上报。
+  # 拿 pk/sk：起 Langfuse 后浏览器开 http://127.0.0.1:3000 注册→建项目→API Keys，
+  # 或在 .env 预置 LANGFUSE_INIT_PROJECT_*（见 .env.example）免手动建项目。
+  # ════════════════════════════════════════════════════════════════════════
+  langfuse-worker:
+    image: langfuse/langfuse-worker:3
+    profiles: ["observability"]
+    restart: unless-stopped
+    depends_on: &langfuse-deps
+      langfuse-postgres:
+        condition: service_healthy
+      langfuse-minio:
+        condition: service_healthy
+      langfuse-redis:
+        condition: service_healthy
+      langfuse-clickhouse:
+        condition: service_healthy
+    environment: &langfuse-common-env
+      DATABASE_URL: postgresql://${LANGFUSE_POSTGRES_USER:-postgres}:${LANGFUSE_POSTGRES_PASSWORD:-langfuse}@langfuse-postgres:5432/${LANGFUSE_POSTGRES_DB:-postgres}
+      SALT: ${SALT:-pyt-langfuse-salt-CHANGEME}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-0000000000000000000000000000000000000000000000000000000000000000}
+      # Langfuse 自身匿名用量上报：默认关闭（O3 任务要求 TELEMETRY_ENABLED=false）。
+      TELEMETRY_ENABLED: ${TELEMETRY_ENABLED:-false}
+      LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: ${LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES:-false}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      CLICKHOUSE_MIGRATION_URL: ${CLICKHOUSE_MIGRATION_URL:-clickhouse://langfuse-clickhouse:9000}
+      CLICKHOUSE_URL: ${CLICKHOUSE_URL:-http://langfuse-clickhouse:8123}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-clickhouse}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse}
+      CLICKHOUSE_CLUSTER_ENABLED: ${CLICKHOUSE_CLUSTER_ENABLED:-false}
+      REDIS_HOST: langfuse-redis
+      REDIS_PORT: "6379"
+      REDIS_AUTH: ${LANGFUSE_REDIS_AUTH:-langfuse-redis}
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: ${LANGFUSE_S3_BUCKET:-langfuse}
+      LANGFUSE_S3_EVENT_UPLOAD_REGION: ${LANGFUSE_S3_REGION:-auto}
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: ${LANGFUSE_MINIO_ROOT_USER:-minio}
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${LANGFUSE_MINIO_ROOT_PASSWORD:-miniosecret}
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://langfuse-minio:9000
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
+      LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: ${LANGFUSE_S3_BUCKET:-langfuse}
+      LANGFUSE_S3_MEDIA_UPLOAD_REGION: ${LANGFUSE_S3_REGION:-auto}
+      LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: ${LANGFUSE_MINIO_ROOT_USER:-minio}
+      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${LANGFUSE_MINIO_ROOT_PASSWORD:-miniosecret}
+      LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://langfuse-minio:9000
+      LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
+
+  langfuse-web:
+    image: langfuse/langfuse:3
+    profiles: ["observability"]
+    restart: unless-stopped
+    depends_on: *langfuse-deps
+    # 仅绑回环：UI（http://127.0.0.1:3000）+ OTLP 接收口 /api/public/otel。
+    # 开发态 host 网络的 graph 经 127.0.0.1:3000 上报，无需公网暴露。
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      <<: *langfuse-common-env
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-pyt-langfuse-nextauth-CHANGEME}
+      # 可选：首启自动建组织/项目/账号并固定 pk/sk（免 UI 手动建项目）。
+      LANGFUSE_INIT_ORG_ID: ${LANGFUSE_INIT_ORG_ID:-}
+      LANGFUSE_INIT_ORG_NAME: ${LANGFUSE_INIT_ORG_NAME:-}
+      LANGFUSE_INIT_PROJECT_ID: ${LANGFUSE_INIT_PROJECT_ID:-}
+      LANGFUSE_INIT_PROJECT_NAME: ${LANGFUSE_INIT_PROJECT_NAME:-}
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_INIT_PROJECT_PUBLIC_KEY:-}
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_INIT_PROJECT_SECRET_KEY:-}
+      LANGFUSE_INIT_USER_EMAIL: ${LANGFUSE_INIT_USER_EMAIL:-}
+      LANGFUSE_INIT_USER_NAME: ${LANGFUSE_INIT_USER_NAME:-}
+      LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD:-}
+
+  langfuse-postgres:
+    image: postgres:17
+    profiles: ["observability"]
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${LANGFUSE_POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${LANGFUSE_POSTGRES_PASSWORD:-langfuse}
+      POSTGRES_DB: ${LANGFUSE_POSTGRES_DB:-postgres}
+      TZ: UTC
+      PGTZ: UTC
+    volumes:
+      - langfuse_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  langfuse-clickhouse:
+    image: clickhouse/clickhouse-server
+    profiles: ["observability"]
+    restart: unless-stopped
+    user: "101:101"
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-clickhouse}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse}
+    volumes:
+      - langfuse_clickhouse_data:/var/lib/clickhouse
+      - langfuse_clickhouse_logs:/var/log/clickhouse-server
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  langfuse-minio:
+    image: cgr.dev/chainguard/minio
+    profiles: ["observability"]
+    restart: unless-stopped
+    entrypoint: sh
+    # 启动前先建 langfuse 桶（事件/媒体对象存储）。
+    command:
+      - -c
+      - 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
+    environment:
+      MINIO_ROOT_USER: ${LANGFUSE_MINIO_ROOT_USER:-minio}
+      MINIO_ROOT_PASSWORD: ${LANGFUSE_MINIO_ROOT_PASSWORD:-miniosecret}
+    volumes:
+      - langfuse_minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  langfuse-redis:
+    image: redis:7
+    profiles: ["observability"]
+    restart: unless-stopped
+    command: >-
+      --requirepass ${LANGFUSE_REDIS_AUTH:-langfuse-redis}
+      --maxmemory-policy noeviction
+    volumes:
+      - langfuse_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
 volumes:
   pytopia_pg:
+  # Langfuse 自托管数据卷（仅 observability profile 使用）。
+  langfuse_pg:
+  langfuse_clickhouse_data:
+  langfuse_clickhouse_logs:
+  langfuse_minio_data:
+  langfuse_redis_data:

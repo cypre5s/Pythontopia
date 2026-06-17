@@ -49,6 +49,37 @@ license 矩阵无关（它们是 JS 代码，受代码层 MIT 控制），但为
 **GSAP 商用注意**：GSAP 3 主分发 license（"GreenSock No-Charge License"）对教育与非营利产品免费，
 本项目作为高校 Python 教学游戏在本分类内。若未来商业化（付费课程 / 闭源 SaaS 等），需购买 GSAP Business 许可证。
 
+## Agentic Loop 六框架融合新增依赖与素材（2026-06-17）
+
+「Agentic Loop 六框架融合」工程（见 `docs/plans/2026-06-17-agentic-loop-framework-integration.md` 与
+配套 worklog）为闭环步骤前端动效引入 Rive / Motion。**Rive 运行时与 Motion 均为代码层 JS 依赖
+（MIT），不属于本文档涵盖的"资产层"**，受代码层 MIT 控制；为完整性记录如下：
+
+| 库 | 版本 | License | 用途 | 层级 |
+| --- | --- | --- | --- | --- |
+| `@rive-app/canvas` | ^2.38.1 | MIT | 吉祥物矢量动画运行时（按 critic 结果反馈表情），隔离在 `frontend/src/game/adapters/anim/riveMascot.ts` | **代码层（非素材）** |
+| `motion` | ^12.40.0 | MIT | 闭环步骤 DOM 过渡动效，隔离在 `frontend/src/game/adapters/anim/domMotion.ts` | **代码层（非素材）** |
+| `gsap` | 3.13 | "GSAP No-Charge" license（教育免费，见上节） | HUD/路由过渡动效，沿用 R-13 既有登记，本期不新增 | **代码层（非素材）** |
+
+> GSAP 本期沿用上节「代码层音视觉库（R-13）」已有登记，不重复列入素材 license。Motion / Rive 运行时同属代码层，
+> 业务层禁止直接 `import gsap/motion/@rive-app`，必须经 `adapters/anim/**` 隔离（§3.7 类型纪律）。
+
+### Rive 吉祥物动画资产（`.riv`）— 占位 / 待补
+
+Rive `.riv` 二进制动画属**素材层**，**只允许 CC0 / CC-BY / CC-BY-SA / OFL**，且须同步登记本文件与
+`frontend/public/assets/pixel/LICENSE.md`。当前**尚无具体 `.riv` 资产**，先登记占位条目供后续替换：
+
+| 运行时路径（计划） | 来源 | License | 用途 | 状态 |
+| --- | --- | --- | --- | --- |
+| `frontend/public/assets/pixel/rive/mascot_loop.riv` | 待定（须为 CC0 / CC-BY / CC-BY-SA / OFL 审计来源；或项目原创 AI 辅助生成 + 人工审核，以 CC-BY-SA 3.0+ 发布） | **待补（占位）** | 闭环吉祥物表情反馈（按 critic 结果 idle / celebrate / fail） | ⬜ 待补 |
+
+**引入时必办**：①确认许可 ∈ {CC0/CC-BY/CC-BY-SA/OFL}；②落盘上述路径；③把本表与
+`frontend/public/assets/pixel/LICENSE.md` 的占位条目改为正式条目（补作者 / 来源链接 / 署名）；
+④若选 CC-BY-SA，包装作品须同以 CC-BY-SA 3.0+ 发布（项目已接受 LPC 传染，见下节，沿用即可）；
+⑤CC-BY / CC-BY-SA / OFL 强制署名须进 `frontend/public/credits/`。
+**缺 `.riv` 时**：`adapters/anim/riveMascot.ts` 须 fail-soft 降级（Motion/Phaser tween 或静态表情），
+不得硬依赖该二进制——故占位缺失为**非阻塞**项，不影响演示链路。
+
 ## 项目级 SA 传染决策
 
 **接受 CC-BY-SA 3.0 传染**：因 LPC 系列素材教育价值高，无 CC0 等价替代物。本项目最终二进制 / 包装作品同时以 **CC-BY-SA 3.0 / 4.0 (or compatible) 公开发布**，与代码层（MIT 推荐）分层授权：
