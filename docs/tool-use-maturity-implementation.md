@@ -226,6 +226,26 @@ ask←{ASK,EXPLAIN_CODE,FIX_BUG}；quiz←{ASKME,REVIEW}；make_resource←{HAND
 - 混合路由仍领先（+2pp），但不再是小样本里的 100%；其主要弱点是保守澄清和 quiz/practice 边界。
 - 下一步提质重点应是**产品语义边界与回归样例**，而不是只堆工具 schema 文案。
 
+#### 🎯 边界优化后 200-case challenge_v2 A/B（第二套非重叠提示集）
+按用户要求先联网复核 tool-use / agent-eval 经验，再补一层 `IntentRouterAgent`
+边界裁决策略（资源产物、即时测问、个人历史/证据、导航动作），并新增第二套
+200 条提示词 `CHALLENGE_TASKS_V2`：不复用 `DEFAULT_TASKS`，也不复用上一轮
+`CHALLENGE_TASKS`。完整报告见
+`docs/reports/2026-06-17-deepseek-tool-use-ab-200-boundary-v2.md`。
+
+| 选择方式 | 200-case challenge_v2 |
+|---|---:|
+| 纯 LLM 工具循环 | **186/200 = 93%** |
+| 混合端（IntentRouter 选择） | **180/200 = 90%** |
+
+- 这是一个负向但有价值的 holdout 结果：本次泛化边界策略没有提升 router，反而落后纯循环 `-3pp`。
+- 主要失败集中在 `navigate`、`quiz`、`my_space`、`make_resource` 的产品语义交界：
+  `打开个人空间/学习路径界面/资源库`、`直接测/即时测验/现场考我`、`我的错题/上次分数`、
+  `不要生成资料，直接解释` 等。
+- 结论调整：不能继续把同一 200 条失败逐条硬编码再重跑，那会把 holdout 变训练集。
+  下一步应先把边界规则抽成更显式的产品 taxonomy，再用新的 `challenge_v3` 或采样 holdout
+  验证泛化。
+
 ### 接线（A · flag-gated，2026-06-17）
 - `routes/orchestrator.py` 新增 **`POST /agents/orchestrator/tool-loop`**（非流式）与 **`/tool-loop/stream`**（SSE：增量 `loop_step` + 终态 `result`），由 `PYT_TOOL_LOOP` 开关（**默认 off → 404**，在线默认路径零回归）。
 - `tool_loop.py`/`hybrid_loop.py` 加 `on_step` 回调供 SSE 增量推送；`ToolLoopStep` 经 `model_dump` 发出。

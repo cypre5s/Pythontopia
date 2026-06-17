@@ -140,6 +140,111 @@ _ASK_KEYWORDS: tuple[str, ...] = (
     "？",
 )
 
+# 工具边界裁决信号：LLM 已返回合法 intent 但落在近义工具边界时，用强产品语义纠偏。
+# 原则来自 200-case challenge 的失败面：产物请求、即时测问、个人历史/证据查询、导航动作。
+_BOUNDARY_RESOURCE_MARKERS: tuple[str, ...] = (
+    "速查卡",
+    "讲义",
+    "笔记",
+    "总结",
+    "清单",
+    "说明稿",
+    "海报",
+    "资料",
+    "材料",
+    "对比表",
+    "图文材料",
+    "预习单",
+    "复习卡片",
+    "板书",
+    "cheatsheet",
+    "概念图",
+    "诊断手册",
+    "讲解页",
+    "便于复制",
+)
+_BOUNDARY_RESOURCE_ACTIONS: tuple[str, ...] = (
+    "整理",
+    "生成",
+    "做",
+    "做个",
+    "做成",
+    "产出",
+    "给我一份",
+    "我需要一份",
+    "请把",
+    "把",
+)
+_BOUNDARY_QUIZ_MARKERS: tuple[str, ...] = (
+    "考我",
+    "自测",
+    "小 quiz",
+    "小测",
+    "直接问我",
+    "问我题",
+    "让我自己回答",
+    "边问边看",
+    "抽查",
+    "追问",
+    "现在就考",
+)
+_BOUNDARY_GENERATE_PRACTICE_MARKERS: tuple[str, ...] = (
+    "生成",
+    "设计",
+    "出一道",
+    "出几道",
+    "给我一组",
+    "安排一个",
+    "代码补全",
+    "动手题",
+    "示例任务",
+)
+_BOUNDARY_MY_SPACE_MARKERS: tuple[str, ...] = (
+    "我之前",
+    "之前生成",
+    "我是不是",
+    "有没有我",
+    "我做过",
+    "最近一次",
+    "最近哪",
+    "历史",
+    "记录",
+    "提交结果",
+    "反复提交失败",
+    "一直卡在",
+    "进度",
+    "掌握度",
+    "生成过",
+)
+_BOUNDARY_NAV_ACTIONS: tuple[str, ...] = (
+    "带我",
+    "带路",
+    "我想去",
+    "去",
+    "打开",
+    "传送",
+    "回到",
+    "导航到",
+    "切到",
+    "跳转",
+    "进入",
+    "到",
+)
+_BOUNDARY_NAV_DESTINATIONS: tuple[str, ...] = (
+    "训练场",
+    "图书馆",
+    "工坊",
+    "小镇",
+    "闯关塔",
+    "复盘大厅",
+    "公告板",
+    "课堂任务",
+    "资源的地方",
+    "个人空间",
+    "提交代码的地方",
+    "学习路径面板",
+)
+
 _MAX_KC = 3
 # LLM 调用治理参数（蓝本 §1：timeout 20s / 重试 1 次 / provider 熔断 / 关键词降级）。
 _LLM_TIMEOUT_S = 20.0
@@ -216,6 +321,15 @@ class IntentRouterAgent:
             secondary_raw = None
             if not suggested:
                 suggested = self._ground(fallback["kc_codes"], allowed)
+
+        boundary_intent, boundary_note = self._boundary_policy_intent(req.message, intent)
+        if boundary_intent != intent:
+            intent = boundary_intent
+            confidence = max(confidence, 0.82)
+            reason = f"{reason}；{boundary_note}" if reason else boundary_note
+            secondary_raw = None
+            if intent != "NAVIGATE":
+                target_raw = ""
 
         kc_codes = self._merge_kcs(req, allowed, suggested)
         focus = self._clean_text(data.get("focus_hint")) or req.message.strip()[:120]
@@ -361,6 +475,36 @@ class IntentRouterAgent:
             if landmark in message:
                 return target
         return ""
+
+    @classmethod
+    def _boundary_policy_intent(cls, message: str, intent: str) -> tuple[str, str]:
+        """强产品语义边界纠偏：只处理 200-case A/B 暴露的高置信近义误选。"""
+        lowered = message.lower()
+
+        def has_any(words: tuple[str, ...]) -> bool:
+            return any(word in message or word in lowered for word in words)
+
+        nav_like = has_any(_BOUNDARY_NAV_ACTIONS) and has_any(_BOUNDARY_NAV_DESTINATIONS)
+        if nav_like and intent != "NAVIGATE":
+            return "NAVIGATE", "边界裁决：动作词+目的地，应导航而非查询内容"
+
+        resource_like = has_any(_BOUNDARY_RESOURCE_ACTIONS) and has_any(
+            _BOUNDARY_RESOURCE_MARKERS
+        )
+        if resource_like and intent not in RESOURCE_INTENTS:
+            return "HANDOUT", "边界裁决：明确要求可保存学习产物，应生成资料"
+
+        quiz_like = has_any(_BOUNDARY_QUIZ_MARKERS) and not has_any(
+            _BOUNDARY_GENERATE_PRACTICE_MARKERS
+        )
+        if quiz_like and intent != "ASKME":
+            return "ASKME", "边界裁决：即时测问/让学生回答，应进入考考我"
+
+        my_space_like = has_any(_BOUNDARY_MY_SPACE_MARKERS)
+        if my_space_like and intent not in {"MY_STUDY", "PROGRESS"}:
+            return "MY_STUDY", "边界裁决：查询个人历史/证据，应进入我的学习空间"
+
+        return intent, ""
 
     @staticmethod
     def _anaphora_kcs(req: IntentRouteRequest) -> list[str]:

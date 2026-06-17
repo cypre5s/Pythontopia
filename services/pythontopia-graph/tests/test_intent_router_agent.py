@@ -7,7 +7,7 @@ quiz scope 收缩、provider 失败经 harness 降级仍结构化返回。
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Generator
 
 import pytest
 
@@ -28,7 +28,7 @@ from pythontopia_graph.tools.registry import ALL_TOOL_NAMES
 
 
 @pytest.fixture(autouse=True)
-def _isolate_harness_state():
+def _isolate_harness_state() -> Generator[None, None, None]:
     """隔离进程级熔断器/统计：避免本文件触发的 provider 熔断污染其它测试。"""
     reset_harness_state()
     yield
@@ -38,25 +38,33 @@ def _isolate_harness_state():
 class StubProvider(LlmProvider):
     """chat() 返回预设 content_json；空则 None。"""
 
-    def __init__(self, payload: dict | None = None) -> None:
+    def __init__(self, payload: dict[str, object] | None = None) -> None:
         self._payload = payload
         self.calls = 0
 
-    async def chat(self, messages, **kwargs):  # type: ignore[override]
+    async def chat(
+        self, messages: list[dict[str, str]], **kwargs: object
+    ) -> LlmResponse:
         self.calls += 1
         return LlmResponse(content_json=self._payload)
 
-    async def chat_stream(self, messages, **kwargs) -> AsyncIterator[str]:  # type: ignore[override]
+    async def chat_stream(
+        self, messages: list[dict[str, str]], **kwargs: object
+    ) -> AsyncIterator[str]:
         yield ""
 
 
 class RaisingProvider(LlmProvider):
     """chat() 永远抛异常：驱动 harness 降级路径。"""
 
-    async def chat(self, messages, **kwargs):  # type: ignore[override]
+    async def chat(
+        self, messages: list[dict[str, str]], **kwargs: object
+    ) -> LlmResponse:
         raise RuntimeError("provider down")
 
-    async def chat_stream(self, messages, **kwargs) -> AsyncIterator[str]:  # type: ignore[override]
+    async def chat_stream(
+        self, messages: list[dict[str, str]], **kwargs: object
+    ) -> AsyncIterator[str]:
         raise RuntimeError("provider down")
         yield ""
 
@@ -68,10 +76,10 @@ CATALOG = [
 ]
 
 
-def request_of(message: str, **overrides) -> IntentRouteRequest:
-    payload: dict = {"message": message, "course_kcs": CATALOG}
+def request_of(message: str, **overrides: object) -> IntentRouteRequest:
+    payload: dict[str, object] = {"message": message, "course_kcs": CATALOG}
     payload.update(overrides)
-    return IntentRouteRequest(**payload)
+    return IntentRouteRequest.model_validate(payload)
 
 
 # LLM 路由
@@ -146,6 +154,35 @@ async def test_confidence_is_clamped_to_unit_interval() -> None:
 
     assert resp.intent == "ASK"
     assert resp.confidence == pytest.approx(1.0)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("message", "llm_intent", "expected"),
+    [
+        ("整理一份 input/print 的常见坑清单", "ASK", "HANDOUT"),
+        ("给列表切片做一个可视化说明稿", "ASK", "HANDOUT"),
+        ("做个海报式总结：Python 数据类型", "ASK", "HANDOUT"),
+        ("我想做一次课前自测", "PRACTICE", "ASKME"),
+        ("做一个不计分的小 quiz", "PRACTICE", "ASKME"),
+        ("让我自己回答几题递归基础", "PRACTICE", "ASKME"),
+        ("有没有我反复提交失败的题", "ASKME", "MY_STUDY"),
+        ("我的最近一次训练场提交结果是什么", "ASK", "MY_STUDY"),
+        ("带我到公告板", "ASK", "NAVIGATE"),
+        ("我想去个人空间", "MY_STUDY", "NAVIGATE"),
+    ],
+)
+async def test_boundary_policy_corrects_common_near_miss_intents(
+    message: str, llm_intent: str, expected: str
+) -> None:
+    agent = IntentRouterAgent(
+        StubProvider({"intent": llm_intent, "confidence": 0.82, "reason": "LLM raw route"})
+    )
+
+    resp = await agent.route(request_of(message))
+
+    assert resp.intent == expected
+    assert "边界裁决" in resp.reason
 
 
 def test_all_intents_aligned_with_registry() -> None:

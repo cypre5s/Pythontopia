@@ -12,6 +12,7 @@ import pytest
 
 from pythontopia_graph.eval.tool_use_eval import (
     CHALLENGE_TASKS,
+    CHALLENGE_TASKS_V2,
     DEFAULT_TASKS,
     ToolUseTask,
     run_tool_use_eval,
@@ -153,9 +154,34 @@ def test_challenge_tasks_cover_all_tools_with_reasonable_balance() -> None:
     assert max(counts.values()) <= 24
 
 
+def test_challenge_v2_tasks_are_large_unique_and_do_not_reuse_prior_prompts() -> None:
+    prior_prompts = {task.prompt for task in DEFAULT_TASKS}
+    prior_prompts.update(task.prompt for task in CHALLENGE_TASKS)
+    challenge_prompts = [task.prompt for task in CHALLENGE_TASKS_V2]
+
+    assert len(CHALLENGE_TASKS_V2) == 200
+    assert len({task.id for task in CHALLENGE_TASKS_V2}) == 200
+    assert len(set(challenge_prompts)) == 200
+    assert not prior_prompts.intersection(challenge_prompts)
+    assert all(task.id.startswith("v2_") for task in CHALLENGE_TASKS_V2)
+
+
+def test_challenge_v2_tasks_cover_all_tools_with_reasonable_balance() -> None:
+    from collections import Counter
+
+    from pythontopia_graph.tools.consolidated import CONSOLIDATED_TOOL_NAMES
+
+    counts = Counter(task.expected_tools[0] for task in CHALLENGE_TASKS_V2)
+
+    assert set(counts) == set(CONSOLIDATED_TOOL_NAMES)
+    assert min(counts.values()) >= 18
+    assert max(counts.values()) <= 24
+
+
 def test_tool_use_tasks_for_set_selects_default_and_challenge_sets() -> None:
     assert tool_use_tasks_for_set("default") == DEFAULT_TASKS
     assert tool_use_tasks_for_set("challenge") == CHALLENGE_TASKS
+    assert tool_use_tasks_for_set("challenge_v2") == CHALLENGE_TASKS_V2
 
     with pytest.raises(ValueError):
         tool_use_tasks_for_set("unknown")

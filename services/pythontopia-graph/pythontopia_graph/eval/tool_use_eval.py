@@ -415,7 +415,293 @@ def _challenge_tasks() -> tuple[ToolUseTask, ...]:
     return tuple(tasks)
 
 
+def _tasks_from_specs(
+    id_root: str, specs: tuple[tuple[str, str, tuple[str, ...]], ...]
+) -> tuple[ToolUseTask, ...]:
+    """Build stable task ids from grouped prompt specs."""
+
+    tasks: list[ToolUseTask] = []
+    for prefix, tool, prompts in specs:
+        tasks.extend(
+            ToolUseTask(
+                id=f"{id_root}_{prefix}_{index:02d}",
+                prompt=prompt,
+                expected_tools=[tool],
+            )
+            for index, prompt in enumerate(prompts, start=1)
+        )
+    return tuple(tasks)
+
+
+def _challenge_v2_tasks() -> tuple[ToolUseTask, ...]:
+    """Second 200-prompt challenge set for boundary-policy reruns.
+
+    This set is intentionally separate from ``CHALLENGE_TASKS`` so real-provider
+    A/B reports can compare old and new prompt distributions without rewriting
+    the prior evidence.
+    """
+
+    specs: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+        (
+            "ask",
+            "ask",
+            (
+                "我只想问概念：浅拷贝和深拷贝差在哪",
+                "帮我看这句为什么会打印 True：```python\nprint(1 == True)\n```",
+                "Python 的缩进为什么会影响程序结构？",
+                "不要生成资料，直接解释一下 lambda 是什么",
+                "这个 NameError 通常说明哪里没写对",
+                "列表 append 和 extend 有什么区别",
+                "为什么 `a = b` 以后改 b 会影响 a",
+                "函数里写 return 后面的语句还会执行吗",
+                "请用一句例子解释关键字参数",
+                "布尔运算 and / or 会不会短路？",
+                "set 的元素为什么必须可哈希",
+                "这个代码为什么只输出最后一个值```python\nfor i in range(3):\n    pass\nprint(i)\n```",
+                "我不懂模块搜索路径，import 到底从哪里找",
+                "try 里出错后 finally 一定会执行吗",
+                "为什么浮点数 0.1 + 0.2 不等于 0.3",
+                "解释一下 `with open(...) as f` 的好处",
+                "类变量和实例变量哪里容易混",
+                "能口头说明一下 generator 和 list 的区别吗",
+                "报错 KeyError 时我应该先检查什么",
+                "为什么函数可以作为参数传给另一个函数",
+                "sorted 和 list.sort 返回值有什么不同",
+                "请解释 `*args` 和 `**kwargs` 的含义",
+                "这不是练习，我只是想知道 pass 有什么用",
+            ),
+        ),
+        (
+            "resource",
+            "make_resource",
+            (
+                "把浅拷贝深拷贝做成一份对照笔记",
+                "请产出一张异常类型速览表",
+                "给 lambda 和普通函数整理成课堂讲义",
+                "帮我做一个文件读写流程卡片",
+                "把函数式编程基础画成思维导图",
+                "整理一个 import 常见问题手册",
+                "把生成器概念写成图文教程",
+                "做一份字符串格式化的速查资料",
+                "把集合和字典的哈希规则做成学习单",
+                "生成一页 return / print 对比讲义",
+                "请把调试 NameError 的步骤整理成清单",
+                "用材料形式讲清楚类和对象",
+                "做一个浮点误差的可视化说明稿",
+                "把 list.sort 与 sorted 做成对比卡",
+                "给函数作用域 LEGB 生成复习资料",
+                "把短路求值整理成板书式提纲",
+                "做一份 with 上下文管理器入门讲义",
+                "将装饰器概念整理成新手可读的笔记",
+                "帮我产出一份推导式分类表",
+                "把常见 KeyError 场景收集成诊断页",
+                "请做一个命令行参数 argparse 入门材料",
+                "将 pip、venv、requirements 的关系画成图",
+                "给 pytest 基础断言整理一份学习资料",
+            ),
+        ),
+        (
+            "practice",
+            "make_practice",
+            (
+                "出两道浅拷贝的观察题",
+                "给我安排一组 lambda 改写练习",
+                "我想练文件逐行读取，出个短任务",
+                "生成几个异常捕获的小题",
+                "来一道 sorted key 的代码补全题",
+                "设计一个 set 去重但保留顺序的练习",
+                "给我练习 `*args` 的小例子",
+                "出题让我判断类变量和实例变量",
+                "来一个 generator 的动手实验",
+                "给我 3 个 import 相关的排错题",
+                "安排一组字符串 format/f-string 训练",
+                "设计一个 with open 的改错题",
+                "来几道浮点数比较的判断题",
+                "我要练字典默认值，请出题",
+                "给装饰器做一个最小可运行练习",
+                "生成一组列表推导式转换题",
+                "用小项目形式练 argparse",
+                "给 pytest 写断言出几道入门题",
+                "来一个 NameError 定位训练",
+                "给我一个递归改循环的练习",
+                "安排 4 个布尔短路求值判断题",
+                "我想练 try/else/finally 的执行顺序",
+            ),
+        ),
+        (
+            "plan",
+            "plan_study",
+            (
+                "下周要考文件和异常，帮我排复习路线",
+                "我想把函数进阶补起来，先学哪些点",
+                "每天半小时，三周学完 Python 基础怎么安排",
+                "给我从数据类型到面向对象的路线图",
+                "我总混淆函数作用域，帮我制定纠错计划",
+                "请安排一套先概念后练习的学习路径",
+                "这周目标是能读懂类，帮我拆任务",
+                "我准备做一个小项目，前置知识怎么补",
+                "把异常、文件、模块排成两天计划",
+                "我想从基础题过渡到综合题，怎么走",
+                "给我一个今晚 2 小时的冲刺安排",
+                "我漏了好几章，请设计补课顺序",
+                "按先易后难规划推导式、生成器、装饰器",
+                "我需要一个适合零基础的月度计划",
+                "把我的学习节奏改成少量高频练习",
+                "如果只剩 5 天，Python 重点怎么复习",
+                "帮我把文件读写和异常处理合成一个训练路径",
+                "我想减少语法错误，后续该怎么练",
+                "请给我三阶段计划：理解、练习、复盘",
+                "我想准备课堂展示，Python 小项目怎么排期",
+                "帮我决定今天先看课件还是先刷题",
+                "给我一条从 if 到函数的最短补弱路径",
+            ),
+        ),
+        (
+            "space",
+            "my_space",
+            (
+                "查一下我在异常处理上的历史表现",
+                "我之前收藏的文件读写资料在哪",
+                "看我的档案，函数题是不是退步了",
+                "最近一次生成器练习结果是什么",
+                "我有哪些资源已经生成但没打开",
+                "帮我找上次的 class 讲义，不要新建",
+                "我的错题里有没有 KeyError 相关的",
+                "回顾一下我过去三次训练场提交",
+                "我现在的学习路径卡在哪个节点",
+                "从个人记录里看，我更常错语法还是逻辑",
+                "我有没有完成上周的复习任务",
+                "把我之前做过的文件题列出来",
+                "看看我的掌握度最低的两个 KC",
+                "我收藏过 pytest 相关资料吗",
+                "帮我定位历史生成的作用域思维导图",
+                "我上次自测分数是多少",
+                "查查我是否已经学过装饰器",
+                "我的训练记录里 sorted 题通过了吗",
+                "找我的学习计划，不要重新规划",
+                "个人空间里有没有浮点数误差笔记",
+                "请查看我的学习画像有什么变化",
+                "我哪些任务已经过期还没完成",
+            ),
+        ),
+        (
+            "quiz",
+            "quiz",
+            (
+                "现在抽问我浅拷贝",
+                "来一轮异常处理口头小测",
+                "用选择题检查我懂不懂 lambda",
+                "别给讲义，直接测文件读写",
+                "问我几个 import 的判断题",
+                "用追问方式复习类和对象",
+                "给我做 6 道 set/dict 自测",
+                "考考我 `*args` 和 `**kwargs`",
+                "我想被测一下函数作用域",
+                "安排一次生成器概念问答",
+                "现在就检查短路求值",
+                "帮我复习快遗忘的 sorted key",
+                "给我一组不计分的 pytest 小测",
+                "拿浮点数误差考我几个问题",
+                "像老师抽查一样问装饰器",
+                "做一次推导式转换的即时测验",
+                "我想自测 NameError 排错",
+                "复盘旧知识，用问答形式就好",
+                "请连续问我三个文件上下文管理问题",
+                "来个小 quiz：类变量还是实例变量",
+                "我准备好了，测我 try/except/finally",
+                "不要看历史，直接现场考我模块基础",
+            ),
+        ),
+        (
+            "video",
+            "video",
+            (
+                "找个讲浅拷贝深拷贝的视频",
+                "我想看 lambda 的中文讲解视频",
+                "搜一下 Python 文件读写入门视频",
+                "有没有异常处理的动画讲解",
+                "帮我找 sorted key 参数的视频",
+                "推荐一个讲 set 和 hash 的课程片段",
+                "找 `*args` `**kwargs` 的短视频",
+                "我想看类和对象的新手视频",
+                "搜生成器 generator 的可视化视频",
+                "找一个 import 机制的教学视频",
+                "有没有 f-string 格式化的讲解视频",
+                "找 with open 上下文管理器视频",
+                "推荐浮点数误差的科普视频",
+                "帮我搜字典默认值相关视频",
+                "找装饰器入门视频，越直观越好",
+                "来个列表推导式视频资源",
+                "找 argparse 命令行参数教程视频",
+                "有没有 pytest 入门视频",
+                "找 NameError 调试过程的视频",
+                "搜递归转循环的讲解视频",
+                "推荐布尔短路求值的视频",
+                "找 try else finally 执行顺序视频",
+            ),
+        ),
+        (
+            "nav",
+            "navigate",
+            (
+                "把页面切到训练场",
+                "我想打开个人空间",
+                "去 AI 工坊生成资源",
+                "带我回中央小镇",
+                "进入图书馆资料区",
+                "跳到闯关塔入口",
+                "帮我导航到复盘大厅",
+                "切换到课堂公告板",
+                "我要去代码提交的地方",
+                "打开学习路径界面",
+                "送我去能看历史资源的位置",
+                "前往 Bug 矿洞",
+                "带我找导学 NPC",
+                "去资源库，不要生成新资料",
+                "导航到自测入口",
+                "切到今天任务面板",
+                "我想进入练习关卡",
+                "回 hub，再决定做什么",
+                "打开班级任务入口",
+                "把我带到可以看视频资源的地方",
+                "去复习区开始回顾",
+                "打开我的资料夹页面",
+            ),
+        ),
+        (
+            "browse",
+            "browse",
+            (
+                "联网查 Python 官方文档里 copy 模块怎么解释 deepcopy",
+                "去官网确认 lambda 表达式语法",
+                "帮我搜索 Python docs 的 file object 说明",
+                "查官方文档异常处理 tutorial",
+                "去 docs.python.org 看 sorted 的 key 参数示例",
+                "联网确认 set 类型要求元素 hashable 的官方说法",
+                "查 Python 官方教程里的 arbitrary argument lists",
+                "去官网找 class objects 教程章节",
+                "搜索官方文档 generator expressions",
+                "联网查 import system 的官方参考",
+                "到 docs.python.org 查 f-string 说明",
+                "帮我查 contextlib 官方文档",
+                "联网确认 decimal 模块适合处理浮点精度吗",
+                "搜索 collections.defaultdict 官方示例",
+                "去 Python 文档看 decorator 相关 glossary",
+                "查官方教程 list comprehensions 新例子",
+                "联网找 argparse 官方 quick start",
+                "查 pytest 官方 getting started",
+                "到 Python docs 搜 NameError 定义",
+                "帮我查 recursion limit 的官方说明",
+                "联网看 operator precedence 官方表",
+                "搜索 Python tutorial errors and exceptions",
+            ),
+        ),
+    )
+    return _tasks_from_specs("v2", specs)
+
+
 CHALLENGE_TASKS: tuple[ToolUseTask, ...] = _challenge_tasks()
+CHALLENGE_TASKS_V2: tuple[ToolUseTask, ...] = _challenge_v2_tasks()
 
 
 def tool_use_tasks_for_set(name: str) -> tuple[ToolUseTask, ...]:
@@ -425,6 +711,8 @@ def tool_use_tasks_for_set(name: str) -> tuple[ToolUseTask, ...]:
         return DEFAULT_TASKS
     if name == "challenge":
         return CHALLENGE_TASKS
+    if name == "challenge_v2":
+        return CHALLENGE_TASKS_V2
     raise ValueError(f"Unknown tool-use task set: {name}")
 
 
