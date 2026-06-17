@@ -1,7 +1,7 @@
 """IntentRouterAgent HTTP 端点（百晓工坊意图路由）。
 
 * ``POST /agents/intent/route`` → 非流式 ``IntentRouteResponse``。
-* ``GET /agents/intent/tools`` → 16 工具注册表目录（前端欢迎屏「能力一览」/测试对账同源）。
+* ``GET /agents/intent/tools`` → 17 工具注册表目录（前端欢迎屏「能力一览」/测试对账同源）。
 * ``GET /agents/harness/stats`` → 工具治理 harness 统计快照（调用/失败/降级/熔断器状态）。
 
 非 SSE：前端在分流到 tutor/workshop SSE 流水线之前做一次性 LLM 分类。

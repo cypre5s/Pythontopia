@@ -18,7 +18,9 @@ from pydantic import BaseModel, Field
 # EXPLAIN_CODE = 讲代码（逐行讲解）；FIX_BUG = 修报错（调试引导 + 沙箱验证）；
 # PLAN = 学习规划（学习总管 orchestrator 管线）；PROGRESS = 学情报告（纯前端学情卡）；
 # NAVIGATE = 带路跳转（纯前端，target 给出地标）；MY_STUDY = 找资料（纯前端书房检索）。
-# 完整治理元数据见 pythontopia_graph.tools.registry（单一事实源）。
+# Agentic Loop 融合新增 1 工具：BROWSE = 联网查证（白名单域内浏览官方文档，外部内容非课件证据，
+# orchestrator_sse 管线，考核 scope 不暴露）。
+# 完整治理元数据见 pythontopia_graph.tools.registry（单一事实源；与 ALL_TOOL_NAMES 全集一致）。
 IntentKind = Literal[
     "ASK",
     "VIDEO",
@@ -36,6 +38,7 @@ IntentKind = Literal[
     "PROGRESS",
     "NAVIGATE",
     "MY_STUDY",
+    "BROWSE",
 ]
 
 RouteSource = Literal[

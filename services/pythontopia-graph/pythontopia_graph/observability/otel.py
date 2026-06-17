@@ -21,6 +21,7 @@ GenAI Semantic Conventions 的 ``execute_tool`` 操作约定：
 
 from __future__ import annotations
 
+import base64
 import contextlib
 import os
 from collections.abc import Iterator
@@ -46,6 +47,13 @@ _OP_EXECUTE_TOOL = "execute_tool"
 
 _TRACER_NAME = "pythontopia_graph.observability"
 _DEFAULT_SERVICE_NAME = "pythontopia-graph"
+
+# OTLP/HTTP traces 信号子路径；base endpoint（OTEL_EXPORTER_OTLP_ENDPOINT 或 Langfuse host）
+# 需要补到此路径才是真正的 traces 投递地址（signal-specific endpoint 则原样使用）。
+_OTLP_TRACES_SIGNAL_PATH = "/v1/traces"
+# Langfuse 的 OTLP 基础路径（自托管/云端一致）：{LANGFUSE_HOST}/api/public/otel。
+# 参考 Langfuse OpenTelemetry 文档：traces 实际投递到 {host}/api/public/otel/v1/traces。
+_LANGFUSE_OTEL_BASE_PATH = "/api/public/otel"
 
 # 幂等位：init_tracing 只真正执行一次。
 _initialized = False
@@ -167,20 +175,117 @@ def _install_sdk_provider_if_absent() -> None:
 
 
 def _maybe_attach_otlp_exporter(provider: Any) -> None:
-    """仅当配置了 OTLP endpoint 且 exporter 包可用时，挂一个 batch OTLP span exporter。
+    """仅当配置了 OTLP traces endpoint 且 exporter 包可用时，挂一个 batch OTLP span exporter。
 
-    OTLP exporter 是独立可选包（不在硬依赖内）；缺包则跳过导出，span 仍在进程内记录。
+    在既有 OTLP 导出基础上扩展（并发构建主契约 §3.6 第 1 条）：
+
+    - endpoint 解析支持 ``OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`` / ``OTEL_EXPORTER_OTLP_ENDPOINT``，
+      并新增由 ``LANGFUSE_HOST`` 推导出指向 Langfuse ``/api/public/otel`` 的 traces 地址；
+    - headers 解析支持 ``OTEL_EXPORTER_OTLP_HEADERS``（``k1=v1,k2=v2``），并支持由
+      ``LANGFUSE_PUBLIC_KEY`` / ``LANGFUSE_SECRET_KEY`` 拼出 ``Authorization: Basic <b64(pk:sk)>``。
+
+    OTLP exporter 是独立可选包（不在硬依赖内）；缺 endpoint / 缺包 / 任何异常都跳过导出且
+    **绝不抛错**——span 仍在进程内记录，主链路零影响（fail-soft 观测）。
     """
-    endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT") or os.getenv(
-        "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"
-    )
-    if not endpoint:
+    try:
+        endpoint = _resolve_otlp_traces_endpoint()
+        if not endpoint:
+            return
+        headers = _resolve_otlp_headers()
+        exporter = _build_otlp_span_exporter(endpoint, headers)
+        if exporter is None:
+            return
+        from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
+        provider.add_span_processor(BatchSpanProcessor(exporter))
+    except Exception:  # noqa: BLE001 - 导出挂载的任何失败都降级 no-op，绝不拖垮主链路
         return
+
+
+def _resolve_otlp_traces_endpoint() -> str | None:
+    """解析 OTLP **traces 信号** 投递地址；都没配则返回 None（→ 不挂导出）。
+
+    优先级（与 OTel 约定一致，外加 Langfuse 便捷推导）：
+
+    1. ``OTEL_EXPORTER_OTLP_TRACES_ENDPOINT``：signal-specific，原样使用（已含 ``/v1/traces``）。
+    2. ``OTEL_EXPORTER_OTLP_ENDPOINT``：base endpoint，补 ``/v1/traces``。
+    3. ``LANGFUSE_HOST``：推导 ``{host}/api/public/otel/v1/traces``。
+    """
+    traces_endpoint = os.getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")
+    if traces_endpoint and traces_endpoint.strip():
+        return traces_endpoint.strip()
+
+    base_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+    if base_endpoint and base_endpoint.strip():
+        return base_endpoint.strip().rstrip("/") + _OTLP_TRACES_SIGNAL_PATH
+
+    langfuse_host = os.getenv("LANGFUSE_HOST")
+    if langfuse_host and langfuse_host.strip():
+        return (
+            langfuse_host.strip().rstrip("/")
+            + _LANGFUSE_OTEL_BASE_PATH
+            + _OTLP_TRACES_SIGNAL_PATH
+        )
+
+    return None
+
+
+def _resolve_otlp_headers() -> dict[str, str] | None:
+    """解析 OTLP exporter 的请求头；都没配则返回 None（exporter 用默认/无鉴权头）。
+
+    优先级：
+
+    1. ``OTEL_EXPORTER_OTLP_HEADERS``（``k1=v1,k2=v2``）；解析到至少一对才采用。
+    2. 否则由 ``LANGFUSE_PUBLIC_KEY`` + ``LANGFUSE_SECRET_KEY`` 拼 HTTP Basic auth
+       （``Authorization: Basic <base64(pk:sk)>``，Langfuse OTLP 鉴权方式）。
+    """
+    raw_headers = os.getenv("OTEL_EXPORTER_OTLP_HEADERS")
+    if raw_headers and raw_headers.strip():
+        parsed = _parse_otlp_headers(raw_headers)
+        if parsed:
+            return parsed
+
+    public_key = os.getenv("LANGFUSE_PUBLIC_KEY")
+    secret_key = os.getenv("LANGFUSE_SECRET_KEY")
+    if public_key and secret_key:
+        token = base64.b64encode(f"{public_key}:{secret_key}".encode()).decode("ascii")
+        return {"Authorization": f"Basic {token}"}
+
+    return None
+
+
+def _parse_otlp_headers(raw: str) -> dict[str, str]:
+    """把 ``k1=v1,k2=v2`` 形式的 header 串解析成 dict。
+
+    仅在**首个** ``=`` 处切分键值，从而保留 base64 值里的 ``=`` padding（如 Basic auth）。
+    空白、缺 ``=`` 或键为空的片段一律跳过。
+    """
+    headers: dict[str, str] = {}
+    for pair in raw.split(","):
+        if "=" not in pair:
+            continue
+        key, _, value = pair.partition("=")
+        key = key.strip()
+        if key:
+            headers[key] = value.strip()
+    return headers
+
+
+def _build_otlp_span_exporter(
+    endpoint: str, headers: dict[str, str] | None
+) -> Any | None:
+    """惰性导入并构造 OTLP/HTTP span exporter；缺包或构造失败一律返回 None（fail-soft）。
+
+    OTLP exporter（``opentelemetry-exporter-otlp-proto-http``）是独立可选包、不在硬依赖内，
+    故惰性导入并吞掉 ImportError；构造异常同样吞掉，绝不拖垮主链路。
+    """
     try:
         from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
             OTLPSpanExporter,
         )
-        from opentelemetry.sdk.trace.export import BatchSpanProcessor
     except Exception:  # noqa: BLE001 - 未装 OTLP exporter 包就跳过导出
-        return
-    provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
+        return None
+    try:
+        return OTLPSpanExporter(endpoint=endpoint, headers=headers)
+    except Exception:  # noqa: BLE001 - exporter 构造失败也降级 no-op
+        return None

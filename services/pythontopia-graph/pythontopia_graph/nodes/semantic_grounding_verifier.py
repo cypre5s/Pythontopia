@@ -3,6 +3,10 @@
 规则驱动（始终可用）：检查 PageRef 页码 + 强断言引用。
 LLM entailment（有 provider 时启用）：用轻量 prompt 判断论述是否被证据支持。
 无 key/DryRun 降级为纯规则，不抛异常。
+
+KC 子图感知（§4 G2 第 3 条）：区分「直接证据页」与「前置页」（``RagHit.via_prerequisite``）。
+PageRef 须命中直接证据页；命中纯前置页 → 标记「前置页冒充直接证据」；entailment 的证据文段
+只取直接证据页（前置链路只解释学习顺序，不支撑答案主张）。旧数据全部计入直接页，行为不变。
 """
 
 from __future__ import annotations
@@ -11,6 +15,10 @@ import re
 from typing import TYPE_CHECKING
 
 from pythontopia_graph.nodes.evidence_fetcher import EvidenceBundle, RagHit
+from pythontopia_graph.nodes.grounding_critic import (
+    direct_evidence_page_ids,
+    prerequisite_page_ids,
+)
 from pythontopia_graph.schemas.resource import ResourceDraft
 
 if TYPE_CHECKING:
@@ -22,17 +30,34 @@ STRONG_ASSERTION_RE = re.compile(
 )
 
 
+def _direct_chunks(chunks: list[RagHit]) -> list[RagHit]:
+    """entailment 证据文段只取直接证据页（``via_prerequisite`` 为假）。
+
+    全为前置页时回退原列表（成本守恒、保证非空）；旧数据全是直接页，行为不变。
+    """
+    direct = [c for c in chunks if not getattr(c, "via_prerequisite", False)]
+    return direct or chunks
+
+
 def verify_semantic_grounding(
     draft: ResourceDraft, evidence: EvidenceBundle
 ) -> tuple[bool, list[str]]:
     reasons: list[str] = []
-    evidence_page_ids = {c.page_id for c in evidence.chunks}
+    direct_ids = direct_evidence_page_ids(evidence)
+    prereq_only_ids = prerequisite_page_ids(evidence) - direct_ids
     handout = getattr(draft, "handout", None)
     sections = handout.sections if handout else []
 
     for section in sections:
         for ref in section.page_refs:
-            if ref.page_id not in evidence_page_ids:
+            if ref.page_id in direct_ids:
+                continue
+            if ref.page_id in prereq_only_ids:
+                reasons.append(
+                    f"PageRef page_id={ref.page_id} 是前置页，非直接证据页"
+                    "（前置链路仅作解释，答案主张须命中直接证据页）"
+                )
+            else:
                 reasons.append(f"PageRef page_id={ref.page_id} 不在证据页中")
 
     text = _extract_text(draft)
@@ -94,7 +119,7 @@ async def verify_entailment(
     if not strong:
         return True, []
 
-    evidence_text = " ".join(c.text for c in evidence.chunks[:3])
+    evidence_text = " ".join(c.text for c in _direct_chunks(evidence.chunks)[:3])
     judgment = await _llm_entailment_judgment(strong, evidence_text, provider)
     if judgment is None:
         return verify_semantic_grounding(draft, evidence)
@@ -115,7 +140,7 @@ async def verify_answer_entailment(
     if not strong:
         return True, []
 
-    evidence_text = " ".join(c.text for c in evidence_chunks[:3])
+    evidence_text = " ".join(c.text for c in _direct_chunks(evidence_chunks)[:3])
     judgment = await _llm_entailment_judgment(strong, evidence_text, provider)
     if judgment is None:
         return verify_answer_grounding(answer_md, evidence_chunks)

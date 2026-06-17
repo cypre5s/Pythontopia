@@ -52,6 +52,23 @@ from langgraph.graph import END, START, StateGraph
 
 from pythontopia_graph.agents.dispatch import AgentDispatcher, DispatchContext
 from pythontopia_graph.agents.orchestrator_agent import OrchestratorAgent
+from pythontopia_graph.graph.agentic_loop import (
+    EXTERNAL_CONTEXT_TAG,
+    AgenticLoopController,
+    AgenticLoopState,
+    BrowseExecutor,
+    CriticVerdict,
+    MemoryBriefProvider,
+    NullMemoryBriefProvider,
+    Scope,
+    count_bounded_recoveries,
+    current_trace_id,
+    fold_memory_brief,
+    loop_plan_event,
+    loop_step_event,
+    phase_for_plan_step,
+    tool_trail_from_results,
+)
 from pythontopia_graph.graph.orchestrator_session import (
     append_turns,
     get_history,
@@ -60,7 +77,9 @@ from pythontopia_graph.graph.orchestrator_session import (
     set_plan,
 )
 from pythontopia_graph.llm.provider import LlmProvider
+from pythontopia_graph.memory.contract import MemoryBrief
 from pythontopia_graph.nodes.evidence_fetcher import EvidenceFetcher, StaticEvidenceFetcher
+from pythontopia_graph.schemas.agentic_loop import AgenticLoopRunRecord, LoopStep
 from pythontopia_graph.schemas.orchestrator import (
     DispatchResult,
     OrchestratorRequest,
@@ -74,6 +93,9 @@ from pythontopia_graph.schemas.resource import (
     GroundingResult,
     SafetyResult,
 )
+
+# 闭环审计记录的接收回调（Phase 2 由 S2-loop-backend 注入 → 落 V171）。
+LoopRecordSink = Callable[[AgenticLoopRunRecord], Awaitable[None]]
 
 Emit = Callable[[str, dict[str, Any]], Awaitable[None]]
 
@@ -111,8 +133,12 @@ async def _noop_emit(_event: str, _data: dict[str, Any]) -> None:
     return None
 
 
-class OrchestratorState(TypedDict, total=False):
-    """LangGraph 共享状态；trace / dispatch_results 经 reducer 累加。"""
+class OrchestratorState(AgenticLoopState, total=False):
+    """LangGraph 共享状态；trace / dispatch_results 经 reducer 累加。
+
+    继承 :class:`AgenticLoopState` 的有界闭环字段（``loop_step`` / ``max_loop_steps`` /
+    ``tool_trail`` / ``memory_brief`` 等），使闭环上下文随 checkpoint 入轮快照可审计。
+    """
 
     # 输入（初始 state 一次性写入）
     req: OrchestratorRequest
@@ -139,6 +165,12 @@ class OrchestratorGraph:
         evidence_fetcher: EvidenceFetcher | None = None,
         valid_kc_codes: set[str] | None = None,
         checkpointer: Any | None = None,
+        memory_brief_provider: MemoryBriefProvider | None = None,
+        browse_executor: BrowseExecutor | None = None,
+        browse_allowed_domains: list[str] | None = None,
+        max_loop_steps: int = 4,
+        loop_scope: Scope = "default",
+        loop_record_sink: LoopRecordSink | None = None,
     ) -> None:
         self._provider = provider
         self._agent = OrchestratorAgent(provider)
@@ -153,10 +185,23 @@ class OrchestratorGraph:
         )
         # 当前 run 的 emit 回调（单 run 存 self，免逐节点传参）
         self._emit_cb: Emit = _noop_emit
+        # ── 有界 Agentic Loop 侧挂依赖（缺省全部 no-op / null，向后兼容；Phase 2 真接线）──
+        self._memory_brief_provider = memory_brief_provider or NullMemoryBriefProvider()
+        self._browse_executor = browse_executor
+        self._browse_allowed_domains = browse_allowed_domains
+        self._loop = AgenticLoopController(max_loop_steps=max_loop_steps, scope=loop_scope)
+        self._loop_record_sink = loop_record_sink
+        # 最近一轮闭环审计记录（结构化产出；落库由 S2 经 sink 负责）。
+        self._last_loop_record: AgenticLoopRunRecord | None = None
         # checkpointer 降级发生在**构造期**（default_checkpointer：postgres 不可用→memory）。
         # 运行时不做"失败重跑降级"——节点有真实 LLM 副作用，重跑会重复调用并重发 SSE trace。
         self._checkpointer = checkpointer if checkpointer is not None else default_checkpointer()
         self._compiled = self._build_compiled(self._checkpointer)
+
+    @property
+    def last_loop_record(self) -> AgenticLoopRunRecord | None:
+        """最近一轮闭环审计记录（镜像 V171；供 S2 落库 / 测试断言）。"""
+        return self._last_loop_record
 
     async def run(self, req: OrchestratorRequest) -> OrchestratorResponse:
         return await self._invoke(req, _noop_emit)
@@ -222,9 +267,14 @@ class OrchestratorGraph:
         server_history = await get_history(req.session_id)
         merged_history = server_history if server_history else list(req.history)
         merged_req = req.model_copy(update={"history": merged_history})
+
+        # understand 前注入记忆 brief（§3.2，缺省空 brief 向后兼容）：折叠进 profile_brief /
+        # decaying_kcs（OrchestratorRequest 无 context 字段、非本域可写），使理解与调度可见时序记忆。
+        brief = await self._fetch_memory_brief(merged_req)
+        merged_req = fold_memory_brief(merged_req, brief)
         allowed_set = set(req.course_kc_index)
 
-        # 每轮重建调度上下文：把本轮请求的真实画像注入 DispatchContext（真画像透传）。
+        # 每轮重建调度上下文：把本轮请求的真实画像（含记忆折叠）注入 DispatchContext。
         self._dispatcher = AgentDispatcher(
             DispatchContext(
                 provider=self._provider,
@@ -239,6 +289,12 @@ class OrchestratorGraph:
             "allowed_set": allowed_set,
             "trace": [],
             "dispatch_results": [],
+            # 有界闭环上下文入轮快照（可审计）。
+            "memory_brief": brief.model_dump(mode="json"),
+            "max_loop_steps": self._loop.max_loop_steps,
+            "loop_step": 0,
+            "replan_count": 0,
+            "tool_trail": [],
         }
         # 轮次 = 服务端已存对话轮数（user+assistant 成对，半开容忍）；thread 按轮独立。
         turn_no = len(server_history) // 2
@@ -246,8 +302,88 @@ class OrchestratorGraph:
         final: dict[str, Any] = await self._compiled.ainvoke(initial, config)
 
         response = self._assemble(allowed_set, final)
+        # 结构化闭环审计（镜像 V171）；落库由 S2-loop-backend 经 sink 负责（fail-soft）。
+        self._last_loop_record = self._build_loop_record(merged_req, final, response, turn_no)
+        await self._emit_loop_record(self._last_loop_record)
         await self._persist(req, response)
         return response
+
+    async def _fetch_memory_brief(self, req: OrchestratorRequest) -> MemoryBrief:
+        """取记忆 brief（M2 brief_client；缺省 Null）。超时/异常 fail-soft 回退空 brief。"""
+        try:
+            return await self._memory_brief_provider.fetch(
+                user_id=req.user_id, query=req.user_message
+            )
+        except Exception as exc:  # noqa: BLE001 - 记忆层失败不拖垮主链路
+            LOG.warning("memory brief 获取失败（fail-soft 空 brief）：%s", exc)
+            return MemoryBrief()
+
+    def _build_loop_record(
+        self,
+        req: OrchestratorRequest,
+        final: dict[str, Any],
+        response: OrchestratorResponse,
+        turn_no: int,
+    ) -> AgenticLoopRunRecord:
+        """从本轮终态组织闭环审计记录（plan/tool_trail/critic/replan/trace_id）。"""
+        dispatch_results = self._collapse_redispatched_results(
+            final.get("dispatch_results", [])
+        )
+        trace = final.get("trace", [])
+        tools_used = tool_trail_from_results(dispatch_results)
+        replan_count = count_bounded_recoveries(trace)
+        steps_used = min(1 + replan_count, self._loop.max_loop_steps)
+        verdict = CriticVerdict(
+            grounding_pass=response.grounding_result.passed,
+            safety_pass=response.safety_result.passed,
+            reasons=list(response.grounding_result.reasons)
+            + list(response.safety_result.reasons),
+        )
+        return self._loop.build_run_record(
+            user_id=req.user_id,
+            session_id=req.session_id,
+            turn=turn_no,
+            verdict=verdict,
+            steps_used=steps_used,
+            replan_count=replan_count,
+            tools_used=tools_used,
+            trace_id=current_trace_id(),
+        )
+
+    async def _emit_loop_record(self, record: AgenticLoopRunRecord) -> None:
+        """把闭环审计记录交给 sink（Phase 2 由 S2 落 V171）；sink 失败 fail-soft。"""
+        if self._loop_record_sink is None:
+            return
+        try:
+            await self._loop_record_sink(record)
+        except Exception as exc:  # noqa: BLE001 - 落库失败不拖垮主链路
+            LOG.warning("loop_record sink 失败（fail-soft）：%s", exc)
+
+    async def _emit_loop_step(
+        self,
+        step: PlanStep,
+        status: str,
+        *,
+        duration_ms: int = 0,
+        reason_summary: str = "",
+        error: str = "",
+    ) -> None:
+        """发 loop_step CUSTOM 事件（§3.8）：PlanStep + 状态 → 闭环可见 LoopStep（camelCase 载荷）。
+
+        与既有 trace/STATE_DELTA 并存、向后兼容；id 与 loop_plan 同源（step.id），
+        前端 loopSlice 按 id 单调推进（pending→active→done/failed）。
+        """
+        loop_step = LoopStep(
+            id=step.id,
+            phase=phase_for_plan_step(step),
+            label=step.title,
+            tool_name=step.resource_type or step.agent,
+            status=status,  # type: ignore[arg-type]  # 调用方仅传 active/done/failed
+            duration_ms=max(0, duration_ms),
+            reason_summary=(reason_summary or "")[:200],
+            error=(error or "")[:200],
+        )
+        await self._emit_cb("CUSTOM", {"name": "loop_step", "value": loop_step_event(loop_step)})
 
     async def _node_understand(self, state: OrchestratorState) -> dict[str, Any]:
         req = state["req"]
@@ -298,6 +434,13 @@ class OrchestratorGraph:
             {"type": "orchestrator", "nodes": plan_nodes},
         )
 
+        # §3.8 闭环可见有界计划（Claude Code 网页版格式）：发 loop_plan CUSTOM 事件供前端
+        # loopSlice 累积，LoopProgress 渲染（与既有 plan/STATE_DELTA 事件并存，向后兼容）。
+        await self._emit_cb(
+            "CUSTOM",
+            {"name": "loop_plan", "value": loop_plan_event(self._loop.build_loop_plan(plan))},
+        )
+
         # AG-UI STATE_DELTA：plan 步骤进度的累积状态映射（step_id → pending/active/done/failed），
         # 随 dispatch 真实推进实时同步前端。区别于离散 trace 日志，这是「当前完整状态」快照，前端
         # useSseStream.state 浅合并即得最新全量、可直接绑定计划卡，无需自行从 trace 流累积。
@@ -325,6 +468,7 @@ class OrchestratorGraph:
             async with semaphore:
                 step_status[step.id] = "active"
                 await _emit_plan_progress()
+                await self._emit_loop_step(step, "active")
                 await self._emit_cb(
                     "trace",
                     {
@@ -389,6 +533,13 @@ class OrchestratorGraph:
                 )
                 step_status[step.id] = "done" if result.ok else "failed"
                 await _emit_plan_progress()
+                await self._emit_loop_step(
+                    step,
+                    "done" if result.ok else "failed",
+                    duration_ms=elapsed_ms,
+                    reason_summary=result.summary,
+                    error="" if result.ok else (result.note or result.summary or ""),
+                )
                 results_by_id[step.id] = result
                 traces_by_id[step.id] = GraphTraceStep(
                     node=f"dispatch.{step.agent}",
@@ -660,12 +811,23 @@ class OrchestratorGraph:
     ) -> OrchestratorResponse:
         reply_md = final.get("reply_md", "")
         trace = final.get("trace", [])
+        goal = final.get("goal") or ""
         safety_passed, safety_reasons = OrchestratorAgent.scan_safety(reply_md)
         safety = SafetyResult(passed=safety_passed, reasons=safety_reasons)
 
         if final.get("needs_user_input"):
+            # 澄清轮：critic 闸门只看 safety（grounding 视作通过）；越权内容→诚实降级。
+            clarify_verdict = CriticVerdict(
+                grounding_pass=True, safety_pass=safety.passed, reasons=list(safety_reasons)
+            )
+            self._loop.record_eval(clarify_verdict)
+            clarify_reply = reply_md
+            if not clarify_verdict.passed:
+                clarify_reply = self._loop.downgrade_reply(
+                    goal=goal, reasons=clarify_verdict.reasons
+                )
             return OrchestratorResponse(
-                reply_md=reply_md,
+                reply_md=clarify_reply,
                 clarifying_question=final.get("clarifying"),
                 needs_user_input=True,
                 plan=[],
@@ -679,8 +841,23 @@ class OrchestratorGraph:
 
         plan = final.get("plan", [])
         done = bool(plan) and all(step.status in ("done", "skipped") for step in plan)
+        grounding = self._grounding(plan, allowed_set)
+
+        # critic 闸门（§3.6 / §4.3）：grounding + safety 双轨裁决 → critic 后调 eval_span。
+        verdict = CriticVerdict(
+            grounding_pass=grounding.passed,
+            safety_pass=safety.passed,
+            reasons=list(grounding.reasons) + list(safety_reasons),
+        )
+        self._loop.record_eval(verdict)
+        final_reply = reply_md
+        if not verdict.passed:
+            # critic 拒绝：既有有界恢复（reflect N=1 + replan）已尽 → 不 surface 越权 /
+            # 未达证据标准内容，给诚实「未达证据标准」降级回复（不编造）。
+            final_reply = self._loop.downgrade_reply(goal=goal, reasons=verdict.reasons)
+
         return OrchestratorResponse(
-            reply_md=reply_md,
+            reply_md=final_reply,
             clarifying_question=None,
             needs_user_input=False,
             plan=plan,
@@ -691,7 +868,7 @@ class OrchestratorGraph:
             trace=trace,
             done=done,
             safety_result=safety,
-            grounding_result=self._grounding(plan, allowed_set),
+            grounding_result=grounding,
         )
 
     async def _persist(
@@ -713,9 +890,90 @@ class OrchestratorGraph:
     async def _dispatch_step(
         self, step: PlanStep, user_id: int = 1, focus_hint_extra: str = ""
     ) -> DispatchResult:
-        """真正 await 子 agent（经 AgentDispatcher），不再只回文本摘要。"""
+        """真正 await 子 agent（经 AgentDispatcher），不再只回文本摘要。
+
+        BROWSE 工具步（``agent == "BrowseAgent"``）走有界闭环的 BROWSE 派发路径
+        （§3.1，受 scope/allowlist 收缩），其余沿用既有 AgentDispatcher。
+        """
+        if step.agent == "BrowseAgent":
+            return await self._dispatch_browse(step, user_id)
         return await self._dispatcher.dispatch(
             step, user_id=user_id, focus_hint_extra=focus_hint_extra
+        )
+
+    def _resolve_browse_allowlist(self) -> list[str]:
+        """解析 BROWSE allowlist：构造注入优先，否则读 ``BROWSE_ALLOWED_DOMAINS``（逗号分隔）。
+
+        空 = 拒绝发起（§3.4）。完整安全墙交集由 B1 ``allowlist.py`` 落地（Phase 2 接线）。
+        """
+        if self._browse_allowed_domains is not None:
+            return list(self._browse_allowed_domains)
+        raw = os.environ.get("BROWSE_ALLOWED_DOMAINS", "")
+        return [domain.strip() for domain in raw.split(",") if domain.strip()]
+
+    async def _dispatch_browse(self, step: PlanStep, user_id: int) -> DispatchResult:
+        """有界 BROWSE 派发：scope/allowlist 闸门 → mock/真 executor；外部引用标注非课件。
+
+        不可派发（考核 scope / 空 allowlist / 未接线 executor）→ ok=True 但携回退 VIDEO 提示，
+        不报错；executor 异常 → ok=False（dispatch_failure）+ 回退；成功 → 外部引用带标签。
+        """
+        started = time.monotonic()
+        dispatch = await self._loop.run_browse(
+            self._browse_executor,
+            goal=(step.detail or step.title),
+            user_id=user_id,
+            allowed_domains=self._resolve_browse_allowlist(),
+            scope=self._loop.scope,
+        )
+        elapsed_ms = int((time.monotonic() - started) * 1000)
+        if not dispatch.dispatched:
+            return DispatchResult(
+                step_id=step.id,
+                agent="BrowseAgent",
+                ok=True,
+                summary=f"联网查证不可派发（{dispatch.reason}），建议回退 {dispatch.fallback}",
+                note=dispatch.reason,
+                elapsed_ms=elapsed_ms,
+                artifact={
+                    "kind": "browse_skipped",
+                    "reason": dispatch.reason,
+                    "fallback": dispatch.fallback,
+                },
+            )
+        if dispatch.error:
+            return DispatchResult(
+                step_id=step.id,
+                agent="BrowseAgent",
+                ok=False,
+                summary=f"联网查证失败（回退 {dispatch.fallback}）：{dispatch.error}",
+                note=dispatch.error,
+                elapsed_ms=elapsed_ms,
+                artifact={
+                    "kind": "dispatch_failure",
+                    "status": "browse_error",
+                    "error_class": "BrowseError",
+                    "fallback": dispatch.fallback,
+                },
+            )
+        citations = [citation.ref for citation in dispatch.citations]
+        final_summary = dispatch.result.final_summary if dispatch.result else ""
+        return DispatchResult(
+            step_id=step.id,
+            agent="BrowseAgent",
+            ok=True,
+            summary=(
+                f"联网查证完成：{final_summary[:120]}"
+                f"（{len(citations)} 条外部引用，{EXTERNAL_CONTEXT_TAG}）"
+            ),
+            note=final_summary[:200] or None,
+            elapsed_ms=elapsed_ms,
+            artifact={
+                "kind": "browse_result",
+                "external": True,
+                "tag": EXTERNAL_CONTEXT_TAG,
+                "citations": citations,
+                "truncated": bool(dispatch.result.truncated) if dispatch.result else False,
+            },
         )
 
     @staticmethod

@@ -1,10 +1,32 @@
 from __future__ import annotations
 
 import os
-from typing import Protocol
+from typing import Literal, Protocol
 
 import httpx
 from pydantic import BaseModel, Field
+
+# GraphRAG 检索路由开关（契约 §3.3）：off=恒向量；auto=自适应（简单走向量、多跳走图）；
+# force=恒走图。运行时按字符串透传给 RAG 服务，非法值业务 fail-fast。
+GraphMode = Literal["off", "auto", "force"]
+_GRAPH_MODES: frozenset[str] = frozenset({"off", "auto", "force"})
+# 前置 KC 扩展跳数上界（契约 §3.3「上界 2」）；客户端侧裁剪与 G1 端裁剪语义一致。
+_MAX_PREREQ_HOPS = 2
+
+
+def _clamp_prereq_hops(prereq_hops: int) -> int:
+    """把前置扩展跳数裁剪进 [0, _MAX_PREREQ_HOPS]，防越界多跳拖垮 2C4G。"""
+
+    return max(0, min(prereq_hops, _MAX_PREREQ_HOPS))
+
+
+def _ensure_graph_mode(graph_mode: str) -> None:
+    """非法 graph_mode 直接 fail-fast（不发起请求），避免静默走错检索路。"""
+
+    if graph_mode not in _GRAPH_MODES:
+        raise ValueError(
+            f"graph_mode must be one of {sorted(_GRAPH_MODES)}, got {graph_mode!r}"
+        )
 
 
 class RagHit(BaseModel):
@@ -19,9 +41,26 @@ class RagHit(BaseModel):
     via_prerequisite: bool = False
 
 
+class KcEdge(BaseModel):
+    """KC 知识图谱有向边（GraphRAG 子图审计单元，契约 §3.3）。
+
+    from_kc/to_kc 为 KC 编码端点（缺一即为畸形边，Pydantic 校验 fail-fast）；
+    relation 缺省取主导关系 ``prerequisite``，避免次级审计字段缺失拖垮主链路解析。
+    """
+
+    from_kc: str
+    to_kc: str
+    relation: str = "prerequisite"
+
+
 class EvidenceBundle(BaseModel):
     chunks: list[RagHit] = Field(default_factory=list)
     no_evidence_found: bool = False
+    # GraphRAG 可审计字段（契约 §3.3）：route=本次检索实际走的路（vector|graph|hybrid）；
+    # subgraph=多跳前置链路边集，供 grounding_critic 做「为什么先学 X」的可审计解释，
+    # 但前置页不得冒充直接证据出处（由 G2b grounding_critic 把关）。
+    route: str = "vector"
+    subgraph: list[KcEdge] = Field(default_factory=list)
 
     @property
     def page_ids(self) -> list[int]:
@@ -41,21 +80,60 @@ class EvidenceBundle(BaseModel):
 
 class EvidenceFetcher(Protocol):
     async def fetch(
-        self, *, kc_codes: list[str], query: str, top_k: int = 6
+        self,
+        *,
+        kc_codes: list[str],
+        query: str,
+        top_k: int = 6,
+        graph_mode: GraphMode = "auto",
+        prereq_hops: int = 1,
     ) -> EvidenceBundle: ...
 
 
 class StaticEvidenceFetcher:
-    """测试用确定性 fetcher，基于内存 RagHit 列表。"""
+    """测试用确定性 fetcher，基于内存 RagHit 列表。
 
-    def __init__(self, hits: list[RagHit]) -> None:
+    同步支持 GraphRAG 新字段（route/subgraph）便于兄弟单元（S1/G2b）注入；
+    并记录每次 fetch 入参（含 graph_mode/prereq_hops）便于断言上游透传。
+    """
+
+    def __init__(
+        self,
+        hits: list[RagHit],
+        *,
+        route: str = "vector",
+        subgraph: list[KcEdge] | None = None,
+    ) -> None:
         self._hits = hits
+        self._route = route
+        self._subgraph = list(subgraph or [])
+        self.calls: list[dict[str, object]] = []
 
     async def fetch(
-        self, *, kc_codes: list[str], query: str, top_k: int = 6
+        self,
+        *,
+        kc_codes: list[str],
+        query: str,
+        top_k: int = 6,
+        graph_mode: GraphMode = "auto",
+        prereq_hops: int = 1,
     ) -> EvidenceBundle:
+        self.calls.append(
+            {
+                "kc_codes": list(kc_codes),
+                "query": query,
+                "top_k": top_k,
+                "graph_mode": graph_mode,
+                "prereq_hops": prereq_hops,
+            }
+        )
         filtered = [hit for hit in self._hits if any(code in hit.kc_codes for code in kc_codes)]
-        return EvidenceBundle(chunks=filtered[:top_k], no_evidence_found=not filtered)
+        return EvidenceBundle(
+            chunks=filtered[:top_k],
+            no_evidence_found=not filtered,
+            route=self._route,
+            subgraph=list(self._subgraph),
+        )
 
 
 class HttpRagEvidenceFetcher:
@@ -66,8 +144,16 @@ class HttpRagEvidenceFetcher:
         self._timeout = timeout
 
     async def fetch(
-        self, *, kc_codes: list[str], query: str, top_k: int = 6
+        self,
+        *,
+        kc_codes: list[str],
+        query: str,
+        top_k: int = 6,
+        graph_mode: GraphMode = "auto",
+        prereq_hops: int = 1,
     ) -> EvidenceBundle:
+        # 非法 graph_mode fail-fast（在发请求前），前置跳数裁剪进上界。
+        _ensure_graph_mode(graph_mode)
         # 有 kc_codes 时 min_score=0（KC 已过滤，hash 向量对会话 query 余弦偏低，高阈值会误成 no_evidence）；无 KC 时用 0.15 抑噪。
         min_score = 0.0 if kc_codes else 0.15
         payload = {
@@ -75,10 +161,21 @@ class HttpRagEvidenceFetcher:
             "top_k": top_k,
             "kc_codes": list(kc_codes),
             "min_score": min_score,
+            "graph_mode": graph_mode,
+            "prereq_hops": _clamp_prereq_hops(prereq_hops),
         }
         async with httpx.AsyncClient(timeout=self._timeout, trust_env=False) as client:
             response = await client.post(f"{self._base_url}/rag/query", json=payload)
         response.raise_for_status()
         body = response.json()
         chunks = [RagHit(**hit) for hit in body.get("hits", [])]
-        return EvidenceBundle(chunks=chunks, no_evidence_found=bool(body.get("no_evidence_found")))
+        # 新字段向后兼容：旧版 RAG 不返回 route/subgraph 时回退 vector / 空子图；
+        # 显式 null 也回退 vector，避免 str(None) 污染审计。
+        route = str(body.get("route") or "vector")
+        subgraph = [KcEdge(**edge) for edge in (body.get("subgraph") or [])]
+        return EvidenceBundle(
+            chunks=chunks,
+            no_evidence_found=bool(body.get("no_evidence_found")),
+            route=route,
+            subgraph=subgraph,
+        )

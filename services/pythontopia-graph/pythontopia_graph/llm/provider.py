@@ -10,12 +10,51 @@ import httpx
 from dotenv import dotenv_values
 from pydantic import BaseModel
 
+from pythontopia_graph.optimize.loader import CompiledPrompt, load_compiled
 from pythontopia_graph.schemas.profile import ProfileDraft
 
 
 class LlmResponse(BaseModel):
     content_json: dict[str, Any] | None = None
     content_text: str | None = None
+    # 原生工具调用（OpenAI 兼容 function calling）：模型请求调用的工具列表，无则 None。
+    # 每项形如 {"id","type":"function","function":{"name","arguments"(JSON 串)}}。
+    tool_calls: list[dict[str, Any]] | None = None
+
+
+def _parse_chat_message(data: dict[str, Any]) -> LlmResponse:
+    """把 OpenAI 兼容 chat.completions 响应解析为 LlmResponse（含原生 tool_calls）。
+
+    工具调用轮 content 可能为 null（仅 tool_calls）；content 为字符串时尽力解析为
+    content_json；响应结构异常一律降级为空 LlmResponse（绝不抛断主链路）。
+    """
+    try:
+        message = data["choices"][0]["message"]
+    except (KeyError, IndexError, TypeError):
+        return LlmResponse()
+    content = message.get("content")
+    raw_tool_calls = message.get("tool_calls")
+    tool_calls = (
+        raw_tool_calls if isinstance(raw_tool_calls, list) and raw_tool_calls else None
+    )
+    content_json: dict[str, Any] | None = None
+    if isinstance(content, str):
+        try:
+            parsed = _json.loads(content)
+        except (ValueError, TypeError):
+            parsed = None
+        if isinstance(parsed, dict):
+            content_json = parsed
+    return LlmResponse(
+        content_json=content_json,
+        content_text=content if isinstance(content, str) else None,
+        tool_calls=tool_calls,
+    )
+
+
+def provider_supports_tool_calling(provider: object) -> bool:
+    """provider 是否支持原生工具调用；无能力位者视为不支持 → 调用方回落意图分类器（零回归）。"""
+    return bool(getattr(provider, "supports_tool_calling", False))
 
 
 class LlmProvider(Protocol):
@@ -111,7 +150,14 @@ def _openai_fast_model() -> str | None:
 
 
 class DryRunProvider:
+    # dry-run 也声明支持工具调用：离线确定性地回一次 tool_call → 收到 tool 结果后作答，
+    # 让「有界工具调用循环」在无网络/无密钥时也可被单测覆盖（确定性、可终止）。
+    supports_tool_calling = True
+
     async def chat(self, messages: list[dict[str, str]], **kwargs: object) -> LlmResponse:
+        tools = kwargs.get("tools")
+        if tools:
+            return self._dryrun_tool_turn(messages, tools)
         text = "\n".join(message["content"] for message in messages)
         if "敏感" in text:
             return LlmResponse(content_json={"safety_failed": True, "reason": "PII_OR_SENSITIVE"})
@@ -138,8 +184,32 @@ class DryRunProvider:
         for i in range(0, len(answer), 12):
             yield answer[i : i + 12]
 
+    @staticmethod
+    def _dryrun_tool_turn(messages: list[dict[str, str]], tools: object) -> LlmResponse:
+        """收到 tool 结果前回一次确定性 tool_call；收到后给最终答复（保证循环可终止）。"""
+        last_role = messages[-1].get("role") if messages else None
+        if last_role == "tool":
+            return LlmResponse(content_text="（dry-run）已根据工具结果作答。")
+        name = "unknown_tool"
+        if isinstance(tools, list) and tools and isinstance(tools[0], dict):
+            fn = tools[0].get("function")
+            if isinstance(fn, dict) and isinstance(fn.get("name"), str):
+                name = fn["name"]
+        return LlmResponse(
+            tool_calls=[
+                {
+                    "id": "drycall_0",
+                    "type": "function",
+                    "function": {"name": name, "arguments": "{}"},
+                }
+            ]
+        )
+
 
 class OpenAiCompatProvider:
+    # DeepSeek 兼容接口原生支持 function calling（已实测 v4-pro / v4-flash 单轮+回喂双轮）。
+    supports_tool_calling = True
+
     def __init__(self) -> None:
         load_pythontopia_env()
         load_alethicode_env()
@@ -168,7 +238,10 @@ class OpenAiCompatProvider:
         # *_agent 行为不变）。默认保持 True 是为不波及本次改动范围外、未显式声明 JSON 的调用方
         # （6 个资源 Agent + profile_graph 等），它们靠该默认拿到结构化输出。
         body: dict[str, object] = {"model": model, "messages": messages}
-        if json_mode and "response_format" not in kwargs:
+        # 原生工具调用与强制 json_object 互斥：传 tools 时绝不再强制 response_format
+        # （上游会冲突/失能），由模型自行决定输出 tool_calls 还是文本。
+        has_tools = bool(kwargs.get("tools"))
+        if json_mode and not has_tools and "response_format" not in kwargs:
             body["response_format"] = {"type": "json_object"}
         body.update(kwargs)
         # trust_env=True：有 HTTP(S)_PROXY 则走代理，否则直连；NO_PROXY 保护 localhost/RAG。
@@ -183,18 +256,8 @@ class OpenAiCompatProvider:
                 json=body,
             )
             response.raise_for_status()
-        data = response.json()
-        content = data["choices"][0]["message"]["content"]
-        # 始终尝试把 content 解析为 JSON 到 content_json（json_mode 调用走这条拿结构化结果）；
-        # 解析失败（含 json_mode=False 的纯文本答疑）则 content_json=None、仅保留 content_text。
-        content_json: dict[str, Any] | None = None
-        try:
-            parsed = _json.loads(content)
-            if isinstance(parsed, dict):
-                content_json = parsed
-        except (ValueError, TypeError):
-            content_json = None
-        return LlmResponse(content_json=content_json, content_text=content)
+        # 解析含原生 tool_calls（function calling）：工具调用轮 content 可能为 null。
+        return _parse_chat_message(response.json())
 
     async def chat_stream(
         self, messages: list[dict[str, str]], **kwargs: object
@@ -244,6 +307,8 @@ class SparkProvider:
     DEFAULT_BASE_URL = "https://spark-api-open.xf-yun.com/v1"
     RATE_LIMIT_STATUSES = {429}
     BILLING_STATUSES = {402, 403}
+    # Spark 工具调用能力未经验证：声明不支持 → 工具调用循环对 Spark 回落意图分类器（安全默认）。
+    supports_tool_calling = False
 
     def __init__(self) -> None:
         self.app_id = os.environ.get("PYT_SPARK_APP_ID")
@@ -401,3 +466,75 @@ def provider_label() -> str:
         suffix = f" (fast={fast})" if fast and fast != model else ""
         return f"openai_compat:{model or 'unknown'}{suffix}"
     return name
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# §3.5 DSPy 冻结产物 loader hook（P2-dspy-loader）
+#
+# 可选、fail-soft：命中离线 GEPA 编译产物时，用冻结 instruction 替换系统提示并注入
+# demos；未命中（缺/损坏产物）时**原样返回**传入 messages，完全不改变现有调用语义。
+# 运行时绝不调用 dspy.compile / GEPA（仅离线 scripts/optimize_*.py 跑）。
+#
+# 接线方式（Phase 2，不在本单元改 agents/*）：调用方在 provider.chat 前包一层——
+#   messages = apply_compiled_prompt(self._messages(...), "guide_coach_decision")
+#   await provider.chat(messages, ...)
+# ─────────────────────────────────────────────────────────────────────────────
+
+_COMPILED_DEMO_ROLES: frozenset[str] = frozenset({"system", "user", "assistant"})
+
+
+def apply_compiled_prompt(
+    messages: list[dict[str, str]],
+    name: str,
+    *,
+    artifacts_dir: Path | None = None,
+) -> list[dict[str, str]]:
+    """命中 DSPy 冻结产物则套用冻结 prompt，否则原样返回（§3.5 provider 侧 hook）。
+
+    Args:
+        messages: 调用方原始消息（手写系统提示 + 真实对话轮次）。
+        name: 产物名（``CompiledPrompt`` 白名单内才会命中）。
+        artifacts_dir: 可选目录覆盖（测试用）；缺省读默认 ``optimize/artifacts/``。
+
+    Returns:
+        命中 → 新 list：``[system=冻结 instruction] + demo 消息 + 原非系统轮次``；
+        未命中 → **传入的同一对象**（保证现有调用零回归）。
+    """
+    compiled = load_compiled(name, artifacts_dir=artifacts_dir)
+    if compiled is None:
+        return messages
+    return _compose_compiled_messages(messages, compiled)
+
+
+def _compose_compiled_messages(
+    messages: list[dict[str, str]], compiled: CompiledPrompt
+) -> list[dict[str, str]]:
+    composed: list[dict[str, str]] = [{"role": "system", "content": compiled.instruction}]
+    for demo in compiled.demos:
+        composed.extend(_demo_to_messages(demo))
+    # 冻结 instruction 取代手写系统提示；保留真实 user/assistant 轮次（动态上下文）。
+    composed.extend(message for message in messages if message.get("role") != "system")
+    return composed
+
+
+def _demo_to_messages(demo: dict[str, Any]) -> list[dict[str, str]]:
+    """把一个 demo 渲染为 few-shot 聊天消息；无法识别的形状静默跳过（fail-soft）。"""
+    role = demo.get("role")
+    content = demo.get("content")
+    if isinstance(role, str) and role in _COMPILED_DEMO_ROLES and isinstance(content, str):
+        return [{"role": role, "content": content}]
+    rendered: list[dict[str, str]] = []
+    if "inputs" in demo or "input" in demo:
+        rendered.append({"role": "user", "content": _stringify_demo(demo.get("inputs", demo.get("input")))})
+    if "outputs" in demo or "output" in demo:
+        rendered.append({"role": "assistant", "content": _stringify_demo(demo.get("outputs", demo.get("output")))})
+    return rendered
+
+
+def _stringify_demo(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    try:
+        return _json.dumps(value, ensure_ascii=False)
+    except (TypeError, ValueError):
+        return str(value)

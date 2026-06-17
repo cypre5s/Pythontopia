@@ -4,7 +4,7 @@ from pythontopia_graph.agents.personalization import (
     agent_strategy_messages,
     personalization_messages,
 )
-from pythontopia_graph.llm.provider import LlmProvider
+from pythontopia_graph.llm.provider import LlmProvider, apply_compiled_prompt
 from pythontopia_graph.nodes.evidence_fetcher import EvidenceBundle
 from pythontopia_graph.schemas.resource import (
     PracticeContent,
@@ -39,7 +39,10 @@ class PracticeAgent:
         evidence: EvidenceBundle,
         revision_notes: list[str] | None = None,
     ) -> ResourceDraft:
-        messages = self._prompt(request, evidence, revision_notes)
+        # P2-dspy-loader（§3.5）：命中离线 GEPA 冻结产物则套用，否则原样返回手写 prompt（零回归）。
+        messages = apply_compiled_prompt(
+            self._prompt(request, evidence, revision_notes), "practice_generate"
+        )
         response = await self.provider.chat(messages)
         return self._build(request, response.content_json)
 

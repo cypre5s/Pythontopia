@@ -1,4 +1,4 @@
-"""百晓工坊工具注册表：16 个工具的单一事实源。
+"""百晓工坊工具注册表：17 个工具的单一事实源。
 
 治理原则（2026 harness 工程共识）：
 - 注册表是治理首要控制点：类型化元数据 + 风险分级 + 版本，而非散落在 prompt 里的手写清单；
@@ -15,8 +15,9 @@ exec_mode 说明（前端按此分发到既有管线，不新建 SSE 通道）�
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Literal
+import json
+from dataclasses import dataclass
+from typing import Any, Literal
 
 RiskClass = Literal["read_only", "generative", "navigational"]
 CostClass = Literal["zero", "low", "medium", "high"]
@@ -37,6 +38,7 @@ Renderer = Literal[
     "navigation",
     "video",
     "study_space",
+    "browse",
 ]
 Visibility = Literal["default_hidden", "default_visible", "debug_only"]
 
@@ -139,6 +141,7 @@ CAPABILITY_BY_TOOL: dict[str, tuple[CapabilityNamespace, str]] = {
     "MY_STUDY": ("plan", "规划学习"),
     "VIDEO": ("find", "找内容/带路"),
     "NAVIGATE": ("find", "找内容/带路"),
+    "BROWSE": ("find", "找内容/带路"),
 }
 
 RENDERER_BY_TOOL: dict[str, Renderer] = {
@@ -153,10 +156,11 @@ RENDERER_BY_TOOL: dict[str, Renderer] = {
     "PROGRESS": "progress",
     "NAVIGATE": "navigation",
     "MY_STUDY": "study_space",
+    "BROWSE": "browse",
 }
 
 
-# ── 16 工具注册表（9 既有 + 7 新增）。顺序即意图路由 prompt 中的呈现顺序。──
+# ── 17 工具注册表（9 既有 + 7 新增 + 1 浏览查证）。顺序即意图路由 prompt 中的呈现顺序。──
 TOOLS: dict[str, ToolSpec] = {
     spec.name: spec
     for spec in (
@@ -340,6 +344,27 @@ TOOLS: dict[str, ToolSpec] = {
             "read_only",
             "zero",
         ),
+        # ── 新增 1（Agentic Loop 融合 · B1）：白名单内联网查证（browser-use 窄工具化）──
+        # 外部内容（非课件证据）；只读导航、有界步数、域 allowlist fail-fast、DOM 去敏。
+        # 复用学习总管 SSE，不新建通道；考核 scope 不暴露（防逃避作答）；失败回退 VIDEO。
+        _spec(
+            "BROWSE",
+            "联网查证",
+            "在白名单域内自主浏览官方文档/判题站并回带可引用摘要（外部内容，非课件证据）",
+            ("去 python 官网查 sorted 的稳定性", "看看这道题在官方文档怎么说"),
+            "orchestrator_sse",  # 复用学习总管流，不新建 SSE 通道
+            "navigational",
+            "high",
+            timeout_s=60.0,
+            max_retries=0,  # 浏览器步骤不重试（副作用 + 慢），失败回退 VIDEO
+            fallback="VIDEO",
+            scopes=("default",),  # 考核 scope 不暴露
+            open_world=True,
+            destructive=False,
+            idempotent=False,
+            renderer="browse",  # F 新增 renderer；前端映射 BrowseTimeline.vue
+            visibility="default_hidden",
+        ),
     )
 }
 
@@ -361,6 +386,111 @@ def intent_catalog_lines(scope: Scope = "default") -> list[str]:
         example = f"（例：{spec.examples[0]}）" if spec.examples else ""
         lines.append(f"{spec.name}={spec.zh_label}：{spec.desc}{example}")
     return lines
+
+
+# ── 原生工具调用 schema（Phase B：function-calling 入参契约 + Tool Use Examples）──────
+# 设计：tools 的入参不再走 IntentRouteResponse 旁路，而是作为 function 的 typed 参数，
+# 让模型在有界循环里直接以结构化 arguments 调用。参数 schema 用集中映射显式声明
+# （沿用 RENDERER_BY_TOOL / CAPABILITY_BY_TOOL 风格，不改 17 个 _spec 调用，纯加法）。
+# OpenAI 兼容（DeepSeek）function schema 无 input_examples 槽位，故把示例折进 description
+# ——即 Anthropic「Tool Use Examples」原则在 OpenAI-compat 上的等价落地。
+
+_PARAM_TOPIC: dict[str, Any] = {
+    "type": "string",
+    "description": "本次聚焦的学习主题/重点（一句话，如「for 循环遍历列表」）",
+}
+_PARAM_KC_CODES: dict[str, Any] = {
+    "type": "array",
+    "items": {"type": "string"},
+    "description": "相关知识点 code（取自课程目录，最多 3 个；不确定就留空数组，禁止编造）",
+}
+_PARAM_CODE: dict[str, Any] = {
+    "type": "string",
+    "description": "学生提供的代码或报错文本（可含 ``` 围栏）",
+}
+_PARAM_TARGET: dict[str, Any] = {
+    "type": "string",
+    "enum": list(NAVIGATE_TARGETS),
+    "description": "跳转目标地标：library/arena/bugmine/world/workshop",
+}
+_PARAM_GOAL: dict[str, Any] = {
+    "type": "string",
+    "description": "联网查证目标（自然语言；仅在白名单官方站只读浏览，回带可引用摘要）",
+}
+
+_COMMON_PARAMS: dict[str, Any] = {"topic": _PARAM_TOPIC, "kc_codes": _PARAM_KC_CODES}
+
+# 每工具入参 properties（缺省 = 通用 topic+kc_codes）。
+PARAMS_BY_TOOL: dict[str, dict[str, Any]] = {
+    "ASK": _COMMON_PARAMS,
+    "ASKME": _COMMON_PARAMS,
+    "REVIEW": {"kc_codes": _PARAM_KC_CODES},
+    "HANDOUT": _COMMON_PARAMS,
+    "MINDMAP": _COMMON_PARAMS,
+    "PRACTICE": _COMMON_PARAMS,
+    "CODE_LAB": _COMMON_PARAMS,
+    "READING": _COMMON_PARAMS,
+    "STORYBOARD": _COMMON_PARAMS,
+    "EXPLAIN_CODE": {"code": _PARAM_CODE, "kc_codes": _PARAM_KC_CODES},
+    "FIX_BUG": {"code": _PARAM_CODE, "kc_codes": _PARAM_KC_CODES},
+    "PLAN": _COMMON_PARAMS,
+    "PROGRESS": {},
+    "MY_STUDY": {"topic": _PARAM_TOPIC},
+    "VIDEO": {"topic": _PARAM_TOPIC},
+    "NAVIGATE": {"target": _PARAM_TARGET},
+    "BROWSE": {"goal": _PARAM_GOAL},
+}
+
+# 必填参数（其余可选——dispatch 端能在缺省下工作）。
+REQUIRED_BY_TOOL: dict[str, tuple[str, ...]] = {
+    "EXPLAIN_CODE": ("code",),
+    "FIX_BUG": ("code",),
+    "NAVIGATE": ("target",),
+    "BROWSE": ("goal",),
+}
+
+# Tool Use Examples：示例调用（argument 对象）；聚焦"易歧义/需约定"的工具，每个 1-2 个。
+INPUT_EXAMPLES_BY_TOOL: dict[str, tuple[dict[str, Any], ...]] = {
+    "ASK": ({"topic": "为什么 list 不能作字典 key", "kc_codes": ["PY43-KC-012"]},),
+    "HANDOUT": ({"topic": "函数定义与参数传递", "kc_codes": ["PY43-KC-020"]},),
+    "PRACTICE": ({"topic": "while 循环边界条件", "kc_codes": ["PY43-KC-015"]},),
+    "EXPLAIN_CODE": ({"code": "x = [i for i in range(3)]", "kc_codes": []},),
+    "FIX_BUG": ({"code": "print(1 + '2')  # TypeError", "kc_codes": []},),
+    "NAVIGATE": ({"target": "library"},),
+    "BROWSE": ({"goal": "去 python 官网查 sorted 的稳定性"},),
+}
+
+
+def tool_parameters(name: str) -> dict[str, Any]:
+    """某工具的 JSON-Schema 入参对象（object + properties + 可选 required）。"""
+    properties = PARAMS_BY_TOOL.get(name, _COMMON_PARAMS)
+    schema: dict[str, Any] = {"type": "object", "properties": properties}
+    required = REQUIRED_BY_TOOL.get(name)
+    if required:
+        schema["required"] = list(required)
+    return schema
+
+
+def to_tool_schema(spec: ToolSpec) -> dict[str, Any]:
+    """单个 ToolSpec → OpenAI 兼容 function-calling schema（示例折进 description）。"""
+    description = spec.desc
+    examples = INPUT_EXAMPLES_BY_TOOL.get(spec.name)
+    if examples:
+        rendered = "；".join(json.dumps(example, ensure_ascii=False) for example in examples)
+        description = f"{description}\n调用示例：{rendered}"
+    return {
+        "type": "function",
+        "function": {
+            "name": spec.name,
+            "description": description,
+            "parameters": tool_parameters(spec.name),
+        },
+    }
+
+
+def tool_schemas_for_scope(scope: Scope = "default") -> list[dict[str, Any]]:
+    """按作用域产出 function-calling schema 列表（考核 scope 自动收缩，与意图路由同源）。"""
+    return [to_tool_schema(spec) for spec in tools_for_scope(scope)]
 
 
 def tool_catalog_payload() -> list[dict[str, object]]:

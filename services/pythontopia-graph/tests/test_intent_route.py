@@ -234,9 +234,9 @@ def test_intent_tools_endpoint_returns_catalog() -> None:
 
     assert response.status_code == 200
     payload = response.json()
-    assert len(payload) == 16
+    assert len(payload) == 17
     names = {entry["name"] for entry in payload}
-    assert {"ASK", "ASKME", "NAVIGATE", "MY_STUDY"} <= names
+    assert {"ASK", "ASKME", "NAVIGATE", "MY_STUDY", "BROWSE"} <= names
     first = payload[0]
     assert {"name", "zhLabel", "desc", "examples", "execMode"} <= set(first.keys())
 

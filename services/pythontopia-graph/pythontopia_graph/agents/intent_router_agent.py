@@ -46,7 +46,7 @@ RESOURCE_INTENTS: tuple[str, ...] = (
     "READING",
     "STORYBOARD",
 )
-# 全部 16 工具意图（意图名即工具名），与 tools.registry / schemas.intent.IntentKind 对齐。
+# 全部 17 工具意图（意图名即工具名），与 tools.registry / schemas.intent.IntentKind 对齐。
 ALL_INTENTS: tuple[str, ...] = ALL_TOOL_NAMES
 
 # ── 确定性预判（调 LLM 之前，零成本零延迟）──

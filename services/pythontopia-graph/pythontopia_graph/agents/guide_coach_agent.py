@@ -13,7 +13,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field, ValidationError
 
-from pythontopia_graph.llm.provider import LlmProvider, LlmResponse
+from pythontopia_graph.llm.provider import LlmProvider, LlmResponse, apply_compiled_prompt
 from pythontopia_graph.schemas.tutor_workflow import (
     GuideCoachDecision,
     TutorStudentState,
@@ -175,8 +175,10 @@ class GuideCoachAgent:
         if not allowed:
             return None
         try:
+            # P2-dspy-loader（§3.5）：命中离线 GEPA 冻结产物则套用冻结 instruction+demos，
+            # 缺/损坏产物时原样返回手写 prompt（零回归）。运行时绝不重编译。
             response = await self._provider.chat(
-                self._messages(ctx, allowed),
+                apply_compiled_prompt(self._messages(ctx, allowed), "guide_coach_decision"),
                 response_format={"type": "json_object"},
                 temperature=0.1,
             )

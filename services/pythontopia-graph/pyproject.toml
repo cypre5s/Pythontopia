@@ -33,6 +33,25 @@ observability = [
   "opentelemetry-api>=1.42,<2",
   "opentelemetry-sdk>=1.42,<2",
 ]
+# 新框架依赖（2026-06-17 pip 实测最新稳定版）。全部 optional + 缺包 lazy-import/no-op 降级
+# （沿用 observability 范式），不入核心 dependencies、不入 dev：单测一律用注入 fake/mock，
+# 缺这些重包仍须跑绿；运行时缺包则该能力 fail-soft 降级，绝不拖垮主链路。
+memory = [
+  "mem0ai>=2,<3",
+  "zep-cloud>=3.23,<4",
+]
+eval = [
+  "ragas>=0.4,<0.5",
+  "deepeval>=4,<5",
+  "langfuse>=4.9,<5",
+]
+optimize = [
+  "dspy>=3.2,<4",
+]
+browse = [
+  "browser-use>=0.13,<0.14",
+  "playwright>=1.60,<2",
+]
 dev = [
   "pytest>=8,<9",
   "pytest-asyncio>=0.25,<0.26",

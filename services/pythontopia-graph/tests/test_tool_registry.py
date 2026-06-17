@@ -23,7 +23,7 @@ def test_registry_matches_intent_kind_literal() -> None:
     """ALL_TOOL_NAMES 与 schemas.intent.IntentKind 的 Literal 全集一致（顺序无关）。"""
     literal_values = set(typing.get_args(intent_schemas.IntentKind))
     assert set(ALL_TOOL_NAMES) == literal_values
-    assert len(ALL_TOOL_NAMES) == 16
+    assert len(ALL_TOOL_NAMES) == 17
     # 注册表 key 与 spec.name 一致，无重复。
     assert len(set(ALL_TOOL_NAMES)) == len(ALL_TOOL_NAMES)
     for name, spec in TOOLS.items():
@@ -34,7 +34,7 @@ def test_quiz_scope_shrinks_to_ask_and_review() -> None:
     """考核模式工具集收缩：只剩 ASK/REVIEW（防止被考时跑去生成讲义逃避作答）。"""
     quiz_names = {spec.name for spec in tools_for_scope("quiz")}
     assert quiz_names == {"ASK", "REVIEW"}
-    # default 作用域必须包含全部 16 工具。
+    # default 作用域必须包含全部 17 工具。
     default_names = {spec.name for spec in tools_for_scope("default")}
     assert default_names == set(ALL_TOOL_NAMES)
 
@@ -42,7 +42,7 @@ def test_quiz_scope_shrinks_to_ask_and_review() -> None:
 def test_intent_catalog_lines_follow_scope() -> None:
     """目录行按 scope 自动收缩，且每行以工具名开头（prompt 可解析）。"""
     default_lines = intent_catalog_lines("default")
-    assert len(default_lines) == 16
+    assert len(default_lines) == 17
     quiz_lines = intent_catalog_lines("quiz")
     assert len(quiz_lines) == 2
     for line in default_lines:
@@ -53,7 +53,7 @@ def test_intent_catalog_lines_follow_scope() -> None:
 def test_tool_catalog_payload_fields_complete() -> None:
     """GET /agents/intent/tools 载荷字段完整且取值合法。"""
     payload = tool_catalog_payload()
-    assert len(payload) == 16
+    assert len(payload) == 17
     names = {entry["name"] for entry in payload}
     assert names == set(ALL_TOOL_NAMES)
     for entry in payload:
@@ -93,8 +93,8 @@ def test_tool_catalog_payload_fields_complete() -> None:
         assert isinstance(entry["completionLabel"], str) and entry["completionLabel"]
 
 
-def test_capability_groups_cover_all_16_tools() -> None:
-    """16 个内部意图必须被稳定映射到 6 个学生可见能力组。"""
+def test_capability_groups_cover_all_17_tools() -> None:
+    """17 个内部意图必须被稳定映射到 6 个学生可见能力组。"""
     payload = tool_catalog_payload()
     by_name = {str(tool["name"]): tool for tool in payload}
 
@@ -115,6 +115,7 @@ def test_capability_groups_cover_all_16_tools() -> None:
     assert by_name["MY_STUDY"]["namespace"] == "plan"
     assert by_name["VIDEO"]["namespace"] == "find"
     assert by_name["NAVIGATE"]["namespace"] == "find"
+    assert by_name["BROWSE"]["namespace"] == "find"
 
 
 def test_navigate_targets_constant() -> None:

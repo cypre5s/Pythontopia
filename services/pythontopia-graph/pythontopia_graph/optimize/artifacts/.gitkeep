@@ -1,0 +1,2 @@
+# DSPy GEPA 冻结产物目录（P1 离线 scripts 导出 → P2 loader 运行时读取）。
+# 产物文件：guide_coach_decision.json / practice_generate.json（离线编译后生成，不纳入版本控制由团队约定）。

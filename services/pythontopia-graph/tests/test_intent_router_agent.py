@@ -149,9 +149,9 @@ async def test_confidence_is_clamped_to_unit_interval() -> None:
 
 
 def test_all_intents_aligned_with_registry() -> None:
-    """agent 常量与注册表/IntentKind 同源：16 工具不漏不多。"""
+    """agent 常量与注册表/IntentKind 同源：17 工具不漏不多。"""
     assert ALL_INTENTS == ALL_TOOL_NAMES
-    assert len(ALL_INTENTS) == 16
+    assert len(ALL_INTENTS) == 17
 
 
 # 确定性预判（LLM 之前，零成本）
@@ -451,7 +451,7 @@ def test_messages_use_registry_catalog_and_inject_context() -> None:
     joined = "\n".join(m["content"] for m in messages)
     system = messages[0]["content"]
 
-    # 工具目录来自注册表：16 工具名与中文名都在 system 提示里。
+    # 工具目录来自注册表：17 工具名与中文名都在 system 提示里。
     for name in ALL_TOOL_NAMES:
         assert name in system
     assert "考考我" in system and "带路" in system
