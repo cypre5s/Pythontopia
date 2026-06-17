@@ -30,6 +30,7 @@ from pythontopia_graph.tools.registry import (
     ALL_TOOL_NAMES,
     NAVIGATE_TARGETS,
     TOOLS,
+    Scope,
     ToolSpec,
     intent_catalog_lines,
     tools_for_scope,
@@ -502,7 +503,7 @@ class IntentRouterAgent:
         return None
 
     @staticmethod
-    def _clamp_to_scope(intent: str, scope: str) -> tuple[str, str]:
+    def _clamp_to_scope(intent: str, scope: Scope) -> tuple[str, str]:
         """考核模式收缩：最终意图必须 ∈ tools_for_scope("quiz") ∪ {ASKME}，越界回退 ASK。
 
         ASKME 例外：考核中说「再考我」仍合法；退出考核由前端模式条控制，graph 不感知。
@@ -536,7 +537,7 @@ class IntentRouterAgent:
         return cls._candidate_intents(namespace, req.scope)
 
     @classmethod
-    def _primary_intent_for_namespace(cls, namespace: str, scope: str) -> str:
+    def _primary_intent_for_namespace(cls, namespace: str, scope: Scope) -> str:
         candidates = cls._candidate_intents(namespace, scope)
         configured = _PRIMARY_INTENT_BY_NAMESPACE.get(namespace)
         if configured and configured in candidates:
@@ -552,7 +553,7 @@ class IntentRouterAgent:
         return target if target in NAVIGATE_TARGETS else ""
 
     @classmethod
-    def _coerce_secondary(cls, raw: Any, primary: str, scope: str) -> str | None:
+    def _coerce_secondary(cls, raw: Any, primary: str, scope: Scope) -> str | None:
         """secondary_intent 必须 ∈ 当前 scope 工具集且 ≠ 主意图，否则置 None。"""
         secondary = cls._coerce_intent(raw)
         if secondary is None or secondary == primary:
@@ -598,7 +599,7 @@ class IntentRouterAgent:
         }
 
     @staticmethod
-    def _candidate_intents(namespace: str, scope: str) -> list[str]:
+    def _candidate_intents(namespace: str, scope: Scope) -> list[str]:
         allowed = {spec.name for spec in tools_for_scope(scope)}
         if scope == "quiz":
             allowed.add("ASKME")
