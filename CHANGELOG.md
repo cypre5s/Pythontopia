@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-06-17 — 百晓工坊 Tool Use 成熟化（混合架构：确定性路由选择 + 有界工具调用循环 · flag-gated 零回归）
+
+> 把百晓工坊 tool use 从「单轮意图分类器 + 静态 SSE 管线」升级为**有界原生工具调用循环 + 工具收敛 + Tool Use Examples + eval 守门**，全程 flag-gated（`PYT_TOOL_LOOP` 默认 off）/ 纯加法，在线默认路径逐字节零回归。完整实施日志（含五阶段、A/B 证据、验证记录）见 `docs/tool-use-maturity-implementation.md`。
+
+- **provider 原生 function-calling（graph）**：`llm/provider.py` 的 `LlmResponse` 增 `tool_calls` + 统一响应解析 + 能力探测 `provider_supports_tool_calling`；OpenAI-compat 传 `tools` 时不再强制 `response_format=json_object`（两者互斥），无能力 provider 回落意图分类器（零回归）。DeepSeek v4-pro/flash 实测原生支持 function calling。
+- **工具 JSON schema + 收敛 17→9（graph）**：`tools/registry.py` 加 `to_tool_schema/tool_parameters/tool_schemas_for_scope`（typed 入参 + Tool Use Examples 折进 description）；`tools/consolidated.py` 把 17 个意图收敛为 9 个高杠杆参数化工具（`ask/quiz/make_resource/make_practice/plan_study/my_space/video/navigate/browse`，loop-only，不动意图路由/前端/Android）。
+- **有界工具调用循环 + 执行器桥接（graph）**：`graph/tool_loop.py`（`max_steps` + `BudgetGuard` 三道预算 + 白名单丢弃臆造工具 + 治理失败 fail-soft 回喂 + 触上界诚实停止）；`graph/tool_executor.py` 把生成类工具经既有 `AgentDispatcher` 真派发并回带 summary，前端/交互/外部类回结构化指令。
+- **混合编排 + 决定性 A/B（graph）**：`graph/hybrid_loop.py` 的 `HybridToolOrchestrator`——选择交既有确定性 `IntentRouterAgent`、循环只做「看结果再决策」的多步编排，provider 无工具能力时优雅降级为「仅路由 + 执行首工具」（`stop_reason=router_only`）。**held-out 改写集（避开关键词、3 次多数投票、真实 DeepSeek）实测：纯 LLM 选工具 64% vs 混合（路由器）选择 14/14=100%（+36pp）**——故定稿「选择=确定性路由器、循环=多步编排」，不让未微调模型裸 schema 选工具。
+- **工具调用 eval（graph）**：`eval/tool_use_eval.py`（`selection_accuracy / clean_termination_rate / avg_rounds`，provider/executor 可注入做零外网 CI），落地 Anthropic「评测驱动工具迭代」原则。
+- **flag-gated 端点 + 前后端接线**：graph `POST /agents/orchestrator/tool-loop[/stream]`（`PYT_TOOL_LOOP` 默认 off → 404，在线默认路径零回归）；前端 `api/toolLoop.ts` + `composables/useToolLoop.ts` + `components/learning/ToolLoopPanel.vue`（后端 `on_step` 发 AG-UI `CUSTOM`/loop_step，复用既有 `loopSlice`/`LoopProgress`）；Java `POST /api/orchestrator/tool-loop/stream` 代理（仅学生、镜像 `turn`，`OrchestratorGraphClient.toolLoopStream` 抽取 `relayStream` 复用，转发 graph 同名端点、固定空 `decaying_kcs`）。
+- **本会话验证（四端零回归）**：graph `./.venv/bin/python -m pytest -q` **993 passed / 1 skipped**；rag **116 passed / 2 skipped**；frontend `vitest` **2067 passed（210 文件）** + `vue-tsc` **0 错** + `eslint` **0 错**；backend `mvn test` **822 passed / 0 fail / 0 error（BUILD SUCCESS）**，含新增 tool-loop 代理单测 3 个（controller 仅学生可用 ×2 + `OrchestratorGraphClient.toolLoopStream` 转 snake_case body 并打到 `/agents/orchestrator/tool-loop/stream`、固定空 `decaying_kcs` ×1）。
+- **红线 / 残留**：严格有界（step/budget 上限 + 停止条件 + 白名单 + 达上界诚实降级），不给 shell、不泄完整答案、grounding/safety critic 照跑，不推翻有界结构化图。held-out 64% 说明工具循环**尚不足以替换**现有经调优的意图路由（后者有关键词兜底 + 低置信澄清），故仅 flag-gated 并存、默认仍走分类器；`llm/provider.py` 等历史 mypy 债务非本特性引入，未顺手改。
+
 ## 2026-06-17 — 全栈 E2E 实跑验收 + 两处后端修复（启动阻塞 DI / 路径规划 major 健壮性）
 
 > 在「Agentic Loop 六框架融合」工作树（未提交）基础上做全栈冒烟 + 浏览器模拟点击 E2E，验收核心学习闭环并修复两处实测暴露的后端问题。`services/pythontopia-graph` 套件 936 passed / 3 skipped；`./dev.sh` 四服务（前端/后端/graph/rag）健康、Flyway 至 V171。
