@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from pythontopia_graph.agents.personalization import (
     agent_strategy_messages,
     personalization_messages,
@@ -61,7 +63,7 @@ class ReadingAgent:
         self,
         request: ResourceProduceRequest,
         evidence: EvidenceBundle,
-        content_json: dict | None,
+        content_json: dict[str, Any] | None,
     ) -> ResourceDraft:
         content = self._build_content(request, evidence, content_json)
         return ResourceDraft(
@@ -75,7 +77,7 @@ class ReadingAgent:
         self,
         request: ResourceProduceRequest,
         evidence: EvidenceBundle,
-        content_json: dict | None,
+        content_json: dict[str, Any] | None,
     ) -> ReadingContent:
         if isinstance(content_json, dict) and "reading" in content_json:
             try:

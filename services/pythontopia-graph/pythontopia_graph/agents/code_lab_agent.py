@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+from typing import Any
 
 from pythontopia_graph.agents.personalization import (
     agent_strategy_messages,
@@ -57,7 +58,7 @@ class CodeLabAgent:
             {"role": "user", "content": ",".join(request.kc_codes)},
         ]
 
-    def _build(self, request: ResourceProduceRequest, content_json: dict | None) -> ResourceDraft:
+    def _build(self, request: ResourceProduceRequest, content_json: dict[str, Any] | None) -> ResourceDraft:
         content = self._build_content(request, content_json)
         return ResourceDraft(
             title=f"代码实验室：{','.join(request.kc_codes[:3])}",
@@ -67,7 +68,7 @@ class CodeLabAgent:
         )
 
     def _build_content(
-        self, request: ResourceProduceRequest, content_json: dict | None
+        self, request: ResourceProduceRequest, content_json: dict[str, Any] | None
     ) -> CodeLabContent:
         if isinstance(content_json, dict) and "code_lab" in content_json:
             try:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pythontopia_graph.schemas.resource import (
+    GraphTraceStep,
     GroundingResult,
     ResourceDraft,
     ResourceProduceResponse,
@@ -16,7 +17,7 @@ def build_response(
     evidence_page_ids: list[int],
     grounding: GroundingResult,
     safety: SafetyResult,
-    graph_trace: list,
+    graph_trace: list[GraphTraceStep],
     status: str,
 ) -> ResourceProduceResponse:
     return ResourceProduceResponse(

@@ -45,7 +45,7 @@ import operator
 import os
 import time
 from collections.abc import Awaitable, Callable
-from typing import Annotated, Any, TypedDict
+from typing import Annotated, Any
 
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
@@ -214,7 +214,7 @@ class OrchestratorGraph:
             await emit("error", {"code": "ORCHESTRATOR_FAILED", "message": str(exc)})
 
     def _build_compiled(self, checkpointer: Any | None) -> Any:
-        graph: StateGraph = StateGraph(OrchestratorState)
+        graph = StateGraph(OrchestratorState)
         graph.add_node("understand", self._node_understand)
         graph.add_node("build_plan", self._node_build_plan)
         graph.add_node("dispatch", self._node_dispatch)

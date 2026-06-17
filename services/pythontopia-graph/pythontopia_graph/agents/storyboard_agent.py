@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from pythontopia_graph.agents.personalization import (
     agent_strategy_messages,
     personalization_messages,
@@ -70,7 +72,7 @@ class StoryboardAgent:
         ]
 
     def _build(
-        self, request: ResourceProduceRequest, content_json: dict | None,
+        self, request: ResourceProduceRequest, content_json: dict[str, Any] | None,
         evidence: EvidenceBundle | None = None,
     ) -> ResourceDraft:
         content = self._build_content(request, content_json)
@@ -95,7 +97,7 @@ class StoryboardAgent:
         return f"像素教学插画，{hint}，暖色调，无真实人物，无文字水印"
 
     def _build_content(
-        self, request: ResourceProduceRequest, content_json: dict | None
+        self, request: ResourceProduceRequest, content_json: dict[str, Any] | None
     ) -> StoryboardContent:
         if isinstance(content_json, dict) and "storyboard" in content_json:
             try:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from typing import Any
 
 from pythontopia_graph.agents.personalization import (
     agent_strategy_messages,
@@ -73,7 +74,7 @@ class MindMapAgent:
             {"role": "user", "content": ",".join(request.kc_codes)},
         ]
 
-    def _build(self, request: ResourceProduceRequest, content_json: dict | None) -> ResourceDraft:
+    def _build(self, request: ResourceProduceRequest, content_json: dict[str, Any] | None) -> ResourceDraft:
         mindmap = self._build_content(request, content_json)
         return ResourceDraft(
             title=f"思维导图：{','.join(request.kc_codes[:3])}",
@@ -83,7 +84,7 @@ class MindMapAgent:
         )
 
     def _build_content(
-        self, request: ResourceProduceRequest, content_json: dict | None
+        self, request: ResourceProduceRequest, content_json: dict[str, Any] | None
     ) -> MindMapContent:
         candidate = None
         if isinstance(content_json, dict) and "mindmap" in content_json:

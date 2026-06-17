@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from pythontopia_graph.agents.personalization import (
     agent_strategy_messages,
     personalization_messages,
@@ -80,7 +82,7 @@ class PracticeAgent:
             },
         ]
 
-    def _build(self, request: ResourceProduceRequest, content_json: dict | None) -> ResourceDraft:
+    def _build(self, request: ResourceProduceRequest, content_json: dict[str, Any] | None) -> ResourceDraft:
         practice = self._build_content(request, content_json)
         return ResourceDraft(
             title=f"练习题：{','.join(request.kc_codes[:3])}",
@@ -90,7 +92,7 @@ class PracticeAgent:
         )
 
     def _build_content(
-        self, request: ResourceProduceRequest, content_json: dict | None
+        self, request: ResourceProduceRequest, content_json: dict[str, Any] | None
     ) -> PracticeContent:
         if isinstance(content_json, dict) and "practice" in content_json:
             try:

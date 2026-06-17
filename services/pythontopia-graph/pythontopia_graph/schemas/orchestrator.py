@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -46,7 +46,7 @@ class DispatchResult(BaseModel):
     summary: str
     note: str | None = None
     elapsed_ms: int = 0
-    artifact: dict | None = None
+    artifact: dict[str, Any] | None = None
 
 
 class ProfileSignal(BaseModel):

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from pythontopia_graph.agents.personalization import (
     agent_strategy_messages,
     personalization_messages,
@@ -86,7 +88,7 @@ class HandoutAgent:
         self,
         request: ResourceProduceRequest,
         evidence: EvidenceBundle,
-        content_json: dict | None,
+        content_json: dict[str, Any] | None,
     ) -> ResourceDraft:
         if content_json is None or "handout" not in content_json:
             return self._fallback_draft(request, evidence)

@@ -58,7 +58,9 @@ def provider_supports_tool_calling(provider: object) -> bool:
 
 
 class LlmProvider(Protocol):
-    async def chat(self, messages: list[dict[str, str]], **kwargs: object) -> LlmResponse:
+    async def chat(
+        self, messages: list[dict[str, str]], *, json_mode: bool = True, **kwargs: object
+    ) -> LlmResponse:
         raise NotImplementedError
 
     async def chat_stream(
@@ -213,11 +215,15 @@ class OpenAiCompatProvider:
     def __init__(self) -> None:
         load_pythontopia_env()
         load_alethicode_env()
-        self.base_url, self.api_key, self.model = _openai_compat_env()
-        if not self.base_url or not self.api_key or not self.model:
+        base_url, api_key, model = _openai_compat_env()
+        if not base_url or not api_key or not model:
             raise RuntimeError("OpenAI-compatible LLM env is missing")
+        # 经上面非空校验后窄化为 str（mypy 不跨实例属性传递 narrowing，故经局部变量回填）。
+        self.base_url: str = base_url
+        self.api_key: str = api_key
+        self.model: str = model
         # 快档模型（NPC 寒暄/对话）未配置时回落默认档，行为零回归。
-        self.fast_model = _openai_fast_model() or self.model
+        self.fast_model: str = _openai_fast_model() or self.model
 
     def _resolve_model(self, kwargs: dict[str, object]) -> str:
         """按调用方声明的 model_tier 选模型：fast→快档（寒暄/对话），其余→默认档（答疑/工坊）。
