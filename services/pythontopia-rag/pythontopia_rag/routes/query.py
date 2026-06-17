@@ -7,8 +7,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 
 from pythontopia_rag.app_state import AppState
 from pythontopia_rag.data.loader import DEFAULT_DB_URL, fetch_pages
+from pythontopia_rag.graph.router import route_and_retrieve
 from pythontopia_rag.index.builder import rebuild_index
-from pythontopia_rag.index.fusion import hybrid_search
 from pythontopia_rag.index.kc_graph import fetch_kc_graph
 from pythontopia_rag.data.page_source import InMemoryPageSource, page_records_to_indexable
 from pythontopia_rag.safety.forbidden import is_forbidden
@@ -35,14 +35,16 @@ async def rag_query(
     body: RagQueryRequest,
     state: AppState = Depends(_state),
 ) -> RagQueryResponse:
-    """课件混合检索（BM25+向量 RRF 融合，BM25 缺失退回纯向量）。
+    """课件检索 + GraphRAG 自适应路由（向后兼容）。
 
-    防幻觉门控在 fusion 层完成：向量候选按 min_score（余弦）过滤、BM25 候选须正分，
-    两路皆空则 no_evidence_found=True。hit.text 始终是课件原文片段（不含上下文前缀）。
+    路由层（`graph/router.py`）：graph_mode 未传=旧版混合检索；off/auto/force 为自适应路由
+    （简单走向量、多跳调 G1a 前置图扩展并标 via_prerequisite，回带可审计 subgraph）。
+    防幻觉门控仍在 fusion 层：min_score 过滤 + BM25 正分，两路皆空则 no_evidence_found=True。
+    hit.text 始终是课件原文片段（不含上下文前缀）；no_evidence 时下游不得伪造页码引用。
     """
     if is_forbidden(body.query):
         return RagQueryResponse(hits=[], no_evidence_found=True)
-    hits, mode = await hybrid_search(
+    result = await route_and_retrieve(
         query=body.query,
         embedder=state.embedder,
         store=state.store,
@@ -51,11 +53,19 @@ async def rag_query(
         min_score=body.min_score,
         kc_codes=body.kc_codes,
         chapter_ids=body.chapter_ids,
-        kc_graph=state.kc_graph,
+        index_kc_graph=state.kc_graph,
+        graph_mode=body.graph_mode,
+        prereq_hops=body.prereq_hops,
         expand_prerequisites=body.expand_prerequisites,
     )
-    if not hits:
-        return RagQueryResponse(hits=[], no_evidence_found=True, retrieval_mode=mode)
+    if not result.hits:
+        return RagQueryResponse(
+            hits=[],
+            no_evidence_found=True,
+            retrieval_mode=result.retrieval_mode,
+            route=result.route,
+            subgraph=result.subgraph,
+        )
     response_hits = [
         RagHit(
             chunk_id=hit.chunk.chunk_id,
@@ -67,9 +77,15 @@ async def rag_query(
             score=round(hit.score, 4),
             via_prerequisite=hit.via_prerequisite,
         )
-        for hit in hits
+        for hit in result.hits
     ]
-    return RagQueryResponse(hits=response_hits, no_evidence_found=False, retrieval_mode=mode)
+    return RagQueryResponse(
+        hits=response_hits,
+        no_evidence_found=False,
+        retrieval_mode=result.retrieval_mode,
+        route=result.route,
+        subgraph=result.subgraph,
+    )
 
 
 def _require_admin_token(x_internal_token: str | None) -> None:

@@ -21,6 +21,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# KC 知识图谱（GraphRAG 多跳 / 前置扩展，2026-06-17 实测最新稳定版）。optional + lazy-import：
+# 缺包时回退既有 expand_prerequisites 字面/向量召回，不影响 /rag/query 主链路。
+graph = [
+  "networkx>=3,<4",
+]
 dev = [
   "pytest>=8,<9",
   "pytest-asyncio>=0.25,<0.26",
