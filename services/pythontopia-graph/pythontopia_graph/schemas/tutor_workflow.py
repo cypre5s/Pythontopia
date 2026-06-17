@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 Phase = Literal[
     "READING",
@@ -99,6 +99,104 @@ class TutorStudentState(BaseModel):
     completed_checkpoints: list[str] = Field(default_factory=list)
 
 
+# ── Episode 规划链（有界自主多步辅导计划；与 GuideCoachDecision 同处一个 schema 文件） ──
+
+TutorEpisodeStepStatus = Literal["PENDING", "ACTIVE", "DONE", "SKIPPED", "REVISED"]
+
+TutorEpisodeExpectedEvidence = Literal[
+    "CARD_VIEWED",
+    "CHECKPOINT_COMPLETED",
+    "ACTION_CLICKED",
+    "SUBMISSION_OBSERVED",
+    "AC_SUBMISSION",
+    "TRANSFER_ATTEMPT",
+]
+
+TutorEpisodeStopPolicy = Literal["WAIT_FOR_CLICK", "WAIT_FOR_SUBMISSION", "DONE"]
+
+# 学生可见文本里禁止出现的原始推理痕迹标记（防把 chain-of-thought / system prompt 泄给前端）。
+_RAW_REASONING_MARKERS: tuple[str, ...] = (
+    "chain-of-thought",
+    "chain of thought",
+    "hidden reasoning",
+    "system prompt",
+    "思维链",
+)
+
+
+def _assert_no_raw_reasoning(*texts: str) -> None:
+    for text in texts:
+        lowered = str(text).lower()
+        for marker in _RAW_REASONING_MARKERS:
+            if marker in lowered:
+                raise ValueError(f"raw reasoning marker not allowed: {marker}")
+
+
+class TutorEpisodeStep(BaseModel):
+    """episode 计划的一步（一张待生成卡 + 推进它所需的证据与停止条件）。"""
+
+    step_id: str = Field(min_length=1, max_length=80)
+    event: WorkflowEvent
+    tool_name: str = ""
+    title: str = Field(min_length=1)
+    goal: str = ""
+    student_visible_reason: str = ""
+    stop_condition: str = ""
+    status: TutorEpisodeStepStatus = "PENDING"
+    depends_on: list[str] = Field(default_factory=list)
+    expected_evidence: TutorEpisodeExpectedEvidence = "CARD_VIEWED"
+
+    @model_validator(mode="after")
+    def _no_raw_reasoning(self) -> TutorEpisodeStep:
+        _assert_no_raw_reasoning(
+            self.title, self.goal, self.student_visible_reason, self.stop_condition
+        )
+        return self
+
+
+class TutorEpisodePlan(BaseModel):
+    """单题/单会话的有界短程辅导计划（2-4 步，至多一步 ACTIVE，每步明确停止条件）。"""
+
+    plan_id: str = Field(min_length=1, max_length=80)
+    session_id: str = Field(min_length=1, max_length=80)
+    problem_id: int = Field(ge=1)
+    user_id: int = Field(ge=1)
+    objective: str = Field(min_length=1)
+    trigger_event: WorkflowEvent
+    trigger_verdict: str = ""
+    revision: int = Field(default=0, ge=0)
+    current_step_id: str = Field(min_length=1)
+    steps: list[TutorEpisodeStep] = Field(min_length=2, max_length=4)
+    stop_policy: TutorEpisodeStopPolicy = "WAIT_FOR_CLICK"
+    revision_reason: str = ""
+    created_by: Literal["coach", "fallback"] = "coach"
+    evidence_summary: str = ""
+
+    @model_validator(mode="after")
+    def _validate_plan(self) -> TutorEpisodePlan:
+        step_ids = [step.step_id for step in self.steps]
+        if len(set(step_ids)) != len(step_ids):
+            raise ValueError("episode step ids must be unique")
+        if self.current_step_id not in step_ids:
+            raise ValueError("current_step_id must reference an existing step")
+        active = [step for step in self.steps if step.status == "ACTIVE"]
+        if len(active) > 1:
+            raise ValueError("at most one episode step may be ACTIVE")
+        _assert_no_raw_reasoning(self.objective, self.revision_reason, self.evidence_summary)
+        return self
+
+
+class TutorEpisodePlanPatch(BaseModel):
+    """episode 修订增量（revise 后回传，便于审计与最小化传输；不携带完整 steps）。"""
+
+    plan_id: str = Field(min_length=1, max_length=80)
+    revision: int = Field(ge=0)
+    current_step_id: str | None = None
+    revised_step_ids: list[str] = Field(default_factory=list)
+    revision_reason: str = ""
+    stop_policy: TutorEpisodeStopPolicy | None = None
+
+
 class WorkflowRunRequest(BaseModel):
     """一次工作流事件 run（同步 SSE 单请求，替代 Alethicode 异步 run + WebSocket）。"""
 
@@ -114,6 +212,9 @@ class WorkflowRunRequest(BaseModel):
     # CHAT 消息 / IDEATING 学生思路等事件数据。
     event_data: dict[str, Any] = Field(default_factory=dict)
     profile_brief: str = Field(default="", max_length=1000)
+    # Java 投影还原的既有 episode 计划（首次触发为 None，由 graph 新建）。
+    episode_plan: TutorEpisodePlan | None = None
+    episode_patch: TutorEpisodePlanPatch | None = None
 
 
 class WorkflowAction(BaseModel):
@@ -410,5 +511,8 @@ class WorkflowRunResult(BaseModel):
     coach_decision: GuideCoachDecision | None = None
     student_state: TutorStudentState | None = None
     agentic: bool = True
+    # 有界自主多步辅导计划（coach_mode 才有；纯状态推进事件可为 None）。
+    episode_plan: TutorEpisodePlan | None = None
+    episode_patch: TutorEpisodePlanPatch | None = None
     # 会话内卡片序号（投影排序用；无卡片事件不递增）。
     seq: int = 0
