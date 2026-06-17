@@ -6,8 +6,9 @@ The comparison is intentionally narrow:
 - pure LLM tool-loop selection from consolidated tool schemas
 - hybrid router selection via IntentRouterAgent, mapped to consolidated tools
 
-It uses ``DEFAULT_TASKS`` from ``pythontopia_graph.eval.tool_use_eval`` so the
-result stays comparable with the offline deterministic eval. Credentials are
+By default it uses ``DEFAULT_TASKS`` from ``pythontopia_graph.eval.tool_use_eval``
+so the result stays comparable with the offline deterministic eval. Pass
+``--task-set challenge`` for the larger anti-overfit prompt set. Credentials are
 loaded by ``OpenAiCompatProvider`` from ``deploy/.env`` or normal OpenAI-compatible
 environment variables. The script never prints secret values.
 """
@@ -30,7 +31,11 @@ import httpx
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from pythontopia_graph.agents.intent_router_agent import IntentRouterAgent
-from pythontopia_graph.eval.tool_use_eval import DEFAULT_SYSTEM_PROMPT, DEFAULT_TASKS
+from pythontopia_graph.eval.tool_use_eval import (
+    DEFAULT_SYSTEM_PROMPT,
+    ToolUseTask,
+    tool_use_tasks_for_set,
+)
 from pythontopia_graph.graph.hybrid_loop import IntentRouterSelector
 from pythontopia_graph.graph.tool_executor import RegistryToolExecutor
 from pythontopia_graph.graph.tool_loop import ToolCallingLoop
@@ -72,6 +77,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="OpenAI-compatible model to pin for the A/B run.",
     )
     parser.add_argument("--votes", type=int, default=3, help="Number of rounds for majority vote.")
+    parser.add_argument(
+        "--task-set",
+        default="default",
+        choices=["default", "challenge"],
+        help="Prompt set to evaluate.",
+    )
     parser.add_argument("--max-steps", type=int, default=4, help="Tool loop step budget.")
     parser.add_argument(
         "--retry-attempts",
@@ -124,10 +135,12 @@ async def router_pick(selector: IntentRouterSelector, prompt: str) -> str:
     return mapped[0] if mapped else "(none)"
 
 
-def majority_accuracy(votes: dict[str, list[str]]) -> tuple[int, list[str]]:
+def majority_accuracy(
+    tasks: tuple[ToolUseTask, ...], votes: dict[str, list[str]]
+) -> tuple[int, list[str]]:
     correct = 0
     failures: list[str] = []
-    for task in DEFAULT_TASKS:
+    for task in tasks:
         winner = Counter(votes[task.id]).most_common(1)[0][0]
         if winner in task.expected_tools:
             correct += 1
@@ -141,17 +154,18 @@ async def run(args: argparse.Namespace) -> None:
         raise ValueError("--votes must be >= 1")
     os.environ["OPENAI_MODEL"] = args.model
 
+    tasks = tool_use_tasks_for_set(args.task_set)
     provider = OpenAiCompatProvider()
     selector = IntentRouterSelector(IntentRouterAgent(provider))
-    task_count = len(DEFAULT_TASKS)
+    task_count = len(tasks)
     print(
         f"PROVIDER {provider_label()} | model={provider.model} "
-        f"| tasks={task_count} votes={args.votes}",
+        f"| task_set={args.task_set} tasks={task_count} votes={args.votes}",
         flush=True,
     )
 
-    loop_votes: dict[str, list[str]] = {task.id: [] for task in DEFAULT_TASKS}
-    router_votes: dict[str, list[str]] = {task.id: [] for task in DEFAULT_TASKS}
+    loop_votes: dict[str, list[str]] = {task.id: [] for task in tasks}
+    router_votes: dict[str, list[str]] = {task.id: [] for task in tasks}
 
     for round_index in range(1, args.votes + 1):
         reset_harness_state()
@@ -161,7 +175,7 @@ async def run(args: argparse.Namespace) -> None:
         started_at = time.time()
         print(f"\n----- ROUND {round_index}/{args.votes} -----", flush=True)
 
-        for task in DEFAULT_TASKS:
+        for task in tasks:
             try:
                 loop_choice = await retry_call(
                     lambda: loop_pick(provider, executor, task.prompt, args.max_steps),
@@ -201,8 +215,8 @@ async def run(args: argparse.Namespace) -> None:
             flush=True,
         )
 
-    loop_majority, loop_failures = majority_accuracy(loop_votes)
-    router_majority, router_failures = majority_accuracy(router_votes)
+    loop_majority, loop_failures = majority_accuracy(tasks, loop_votes)
+    router_majority, router_failures = majority_accuracy(tasks, router_votes)
     print("\n==================== MAJORITY SUMMARY ====================", flush=True)
     print(
         f"PURE-LLM TOOL-LOOP : {loop_majority}/{task_count} = "

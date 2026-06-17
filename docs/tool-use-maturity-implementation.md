@@ -212,6 +212,20 @@ ask←{ASK,EXPLAIN_CODE,FIX_BUG}；quiz←{ASKME,REVIEW}；make_resource←{HAND
 - 纯循环唯一稳定错例：`review`（"帮我复习一下快忘的旧知识点"）被多数选成 `my_space`，期望为 `quiz`。
 - 结论不变但置信更细：纯循环在 in-distribution 提示上可用性较高；混合路由仍是默认选择器，循环负责路由后多步编排。
 
+#### 🎯 真实 DeepSeek 200-case challenge A/B（反过拟合提示集）
+按用户要求追加 200 条不同提示词的 challenge set（不复用 `DEFAULT_TASKS`），模型仍固定
+`deepseek-v4-pro`，温度 0，`--task-set challenge --votes 1`。完整报告见
+`docs/reports/2026-06-17-deepseek-tool-use-ab-200-challenge.md`。
+
+| 选择方式 | 200-case challenge |
+|---|---:|
+| 纯 LLM 工具循环 | **183/200 = 92%** |
+| **混合端（IntentRouter 选择）** | **188/200 = 94%** |
+
+- challenge set 暴露了默认 20 条没有覆盖到的边界：`quiz` vs `make_practice`、`make_resource` vs `quiz/plan_study`、`my_space` vs `ask/quiz`、`navigate` vs `my_space`。
+- 混合路由仍领先（+2pp），但不再是小样本里的 100%；其主要弱点是保守澄清和 quiz/practice 边界。
+- 下一步提质重点应是**产品语义边界与回归样例**，而不是只堆工具 schema 文案。
+
 ### 接线（A · flag-gated，2026-06-17）
 - `routes/orchestrator.py` 新增 **`POST /agents/orchestrator/tool-loop`**（非流式）与 **`/tool-loop/stream`**（SSE：增量 `loop_step` + 终态 `result`），由 `PYT_TOOL_LOOP` 开关（**默认 off → 404**，在线默认路径零回归）。
 - `tool_loop.py`/`hybrid_loop.py` 加 `on_step` 回调供 SSE 增量推送；`ToolLoopStep` 经 `model_dump` 发出。

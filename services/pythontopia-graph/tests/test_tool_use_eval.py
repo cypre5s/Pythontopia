@@ -11,9 +11,11 @@ from collections.abc import AsyncIterator
 import pytest
 
 from pythontopia_graph.eval.tool_use_eval import (
+    CHALLENGE_TASKS,
     DEFAULT_TASKS,
     ToolUseTask,
     run_tool_use_eval,
+    tool_use_tasks_for_set,
 )
 from pythontopia_graph.graph.tool_executor import RegistryToolExecutor
 from pythontopia_graph.llm.provider import LlmResponse
@@ -77,7 +79,7 @@ def _isolate_harness() -> None:
 async def test_perfect_provider_full_pass() -> None:
     executor = RegistryToolExecutor(_FakeDispatcher())
     report = await run_tool_use_eval(
-        _ScriptedToolProvider(_INLINE_PLAN), executor, tasks=_INLINE_TASKS  # type: ignore[arg-type]
+        _ScriptedToolProvider(_INLINE_PLAN), executor, tasks=_INLINE_TASKS
     )
     assert report.total == len(_INLINE_TASKS)
     assert report.pass_rate == 1.0
@@ -91,7 +93,7 @@ async def test_wrong_provider_low_accuracy() -> None:
     # "" 子串恒命中 → 每个任务都选 ask；仅期望 ask 的任务命中。
     executor = RegistryToolExecutor(_FakeDispatcher())
     report = await run_tool_use_eval(
-        _ScriptedToolProvider({"": "ask"}), executor  # type: ignore[arg-type]
+        _ScriptedToolProvider({"": "ask"}), executor
     )
     ask_tasks = sum(1 for task in DEFAULT_TASKS if "ask" in task.expected_tools)
     expected_acc = ask_tasks / len(DEFAULT_TASKS)
@@ -104,7 +106,7 @@ async def test_eval_detects_no_tool_selection() -> None:
     # 空 plan → 从不调工具 → 选择正确率 0，但干净终止（end_turn）。
     executor = RegistryToolExecutor(_FakeDispatcher())
     report = await run_tool_use_eval(
-        _ScriptedToolProvider({}),  # type: ignore[arg-type]
+        _ScriptedToolProvider({}),
         executor,
         tasks=[ToolUseTask(id="t", prompt="给我讲义", expected_tools=["make_resource"])],
     )
@@ -127,3 +129,33 @@ def test_default_tasks_cover_all_consolidated_tools() -> None:
 
     covered = {tool for task in DEFAULT_TASKS for tool in task.expected_tools}
     assert covered == set(CONSOLIDATED_TOOL_NAMES)
+
+
+def test_challenge_tasks_are_large_unique_and_do_not_reuse_default_prompts() -> None:
+    default_prompts = {task.prompt for task in DEFAULT_TASKS}
+    challenge_prompts = [task.prompt for task in CHALLENGE_TASKS]
+
+    assert len(CHALLENGE_TASKS) == 200
+    assert len({task.id for task in CHALLENGE_TASKS}) == 200
+    assert len(set(challenge_prompts)) == 200
+    assert not default_prompts.intersection(challenge_prompts)
+
+
+def test_challenge_tasks_cover_all_tools_with_reasonable_balance() -> None:
+    from collections import Counter
+
+    from pythontopia_graph.tools.consolidated import CONSOLIDATED_TOOL_NAMES
+
+    counts = Counter(task.expected_tools[0] for task in CHALLENGE_TASKS)
+
+    assert set(counts) == set(CONSOLIDATED_TOOL_NAMES)
+    assert min(counts.values()) >= 18
+    assert max(counts.values()) <= 24
+
+
+def test_tool_use_tasks_for_set_selects_default_and_challenge_sets() -> None:
+    assert tool_use_tasks_for_set("default") == DEFAULT_TASKS
+    assert tool_use_tasks_for_set("challenge") == CHALLENGE_TASKS
+
+    with pytest.raises(ValueError):
+        tool_use_tasks_for_set("unknown")
