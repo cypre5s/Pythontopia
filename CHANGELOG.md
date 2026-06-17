@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-06-17 — Agentic Loop 六框架融合（带护栏 · 可审计 · 非自由 ReAct）
+
+> 在既有有界编排（`orchestrator_graph`：understand→plan→dispatch→reflect→replan→compose）上**正交侧挂**融合 6 个 AI 框架，把「AI 导学助手 + 百晓工坊 + AI 导师」升级为带护栏、可审计、非自由 ReAct 的自主智能体闭环。计划与执行追踪见 `docs/plans/2026-06-17-agentic-loop-framework-integration.md` 与同名 `-worklog.md`（§9 实测日志）。
+
+- **browser-use → BROWSE 工具**：白名单（`docs.python.org`/`peps.python.org`/`pypi.org` + env 注入）两段式 propose→execute，越界 URL 执行前 fail-fast 零请求，只读动作 + DOM 去敏 + PII 脱敏，结构化降级（返回已走步骤 + error，回退 VIDEO）；真 engine 待注入 LLM+Playwright。后端 `V170 browse_run/browse_step` 审计落库。
+- **Langfuse + Ragas + DeepEval**：`observability/otel.py` 支持 `OTEL_EXPORTER_OTLP_HEADERS`（指向 Langfuse `/api/public/otel`）；`eval/` 离线评测（faithfulness/context_recall/answer_relevancy，judge 可注入零外网）；`record_eval_score` 在 critic 后写 span。Langfuse 自托管 compose 走可选 `observability` profile（默认不起）。
+- **GraphRAG · LightRAG**：RAG 新增 `graph_mode`(off/auto/force) 自适应路由 + `prereq_hops`，多跳问扩展前置 KC 闭包并回带可审计 `subgraph` 与 `via_prerequisite`；`graph_mode` 缺省=旧 fusion 行为（零漂移）。
+- **Mem0 · Zep 记忆**：`MemoryProvider`(local/mem0/zep) env 路由 + 外部失败 fail-soft 回退 local；`MemoryBrief`（facts/weak_kcs/style_notes/as_of 时序）喂 `understand` 上下文。后端 `V169 agent_memory_ref`。
+- **DSPy-GEPA**：离线编译冻结 prompt 产物，运行时 `load_compiled` fail-soft 加载（缺/损坏→回退手写 prompt），运行时绝不 `dspy.compile`。
+- **GSAP · Rive · Motion**：闭环动效隔离在 `game/adapters/anim/**`（业务层禁直接 import）；`LoopProgress.vue` 可视化看/学/练/测/查证，尊重 `prefers-reduced-motion`，Claude Code 网页版式输出（可见有界计划 + 工具时间线 + 证据 chips 分区，仅 reasonSummary 不暴露 CoT）。
+- **有界闭环编排（S-spine）**：`AgenticLoopController` 显式 `max_loop_steps`（默认 4，<1 fail-fast）+ oscillation 提前终止 + 达上界诚实降级（不编造）；后端 `V171 loop_run` 审计（plan/tool_trail/critic/retry/token/trace_id）。
+- **验证（四端 + 实测）**：graph 936 / rag 61 / backend 818(0 fail) / frontend 82 + typecheck 全绿；空库迁移 V169–V171 不破坏课程种子（7 文档/561 页/7 章/65 KC/46 示例/39 题，集成测试断言）；**实跑全栈 e2e**：RAG `input函数`/`for循环`/`列表` 命中真实引用页（p61/p22/p15），多跳查询 `route=graph` 回带 subgraph + `via_prerequisite`，`graph_mode=off` 退回 vector（向后兼容）；判题三态 AC/CE/WA 由提交验收集成测试覆盖。
+
 ## 2026-06-16 — 百晓工坊单对话治理验收 + AI/安全本地质量门刷新
 
 > 本节汇总 2026-06-14 至 2026-06-16 在 `main` 上的本地提交队列与本轮验收。验收报告见

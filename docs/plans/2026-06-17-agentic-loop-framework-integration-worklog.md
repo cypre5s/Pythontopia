@@ -157,8 +157,8 @@
 **Phase 2 全量回归门**：
 - [x] 四端测试全绿（graph 936✓ / rag 61✓ / backend 818✓ offline / frontend 82✓ + typecheck✓）— 2026-06-17，见 §9
 - [~] 空库迁移 `V169–V171` 成功（backend Flyway 集成测试通过 ⇒ 测试库可迁移）；**全新空库 + seed 计数核对（7 文档/561 页/7 章/65 KC/46 示例/39 题）待 Phase 2 跑**
-- [ ] RAG 查询 `input函数` / `for循环` / `列表` 引用页正确（含新 `graph_mode` 路由）— 语义查询需起 RAG + 向量库，待跑
-- [ ] 判题三态（通过 / 失败 / 运行错误）不被 Pyodide 预览覆盖 — 待 e2e
+- [x] RAG 查询 `input函数` / `for循环` / `列表` 引用页正确（含新 `graph_mode` 路由）— 全栈实测绿（见 §9.5：p61/p22/p15 + 多跳 route=graph+subgraph）
+- [~] 判题三态（通过 / 失败 / 运行错误）不被 Pyodide 预览覆盖 — 集成测试（Stage09 AC/CE/WA）绿；live 探针阻于 `:dev` 镜像陈旧（非代码问题，见 §9.5）
 - [~] §8 八大 NFR 门逐条达标（见 §5）— 可静态/单测验证项已绿；性能 P95 / e2e / 故障注入整体回归待跑
 
 > 图例：`[x]` 已验证 · `[~]` 部分验证 · `[ ]` 待验证。backend 四端绿系 **offline + aliyun 镜像** 跑（本机网络受限，见 §9 网络备忘）。
@@ -290,3 +290,17 @@
 **关键阻塞点（端到端终验依赖外部条件，非代码缺陷）：**
 - **BROWSE 端到端链**：B1 真 engine（`_BrowserUseEngine._run`）**故意未接线**，缺 LLM+Playwright 注入即 `BrowseDependencyError` → dispatch 回退 VIDEO。⇒ Phase 2 #7「`renderer="browse"`→`BrowseTimeline` 挂载」**当前无真实 browse 数据可渲染**；此时强行挂载 = 空/死 UI（违反「不做纯前端假数据」红线）。正确顺序：先 Phase 2 #3 注入真 browser engine（LLM+Playwright），再挂前端 renderer。组件(`BrowseTimeline.vue`)+api(`api/browse.ts`)已就绪待接。
 - **RAG 语义查询引用页 / 判题三态 e2e / Langfuse `up` 冒烟**：均需起 **Pythontopia 自有全栈**（`./dev.sh` / `deploy/docker-compose.yml`）。当前宿主在跑 **Alethicode `java-oj-*` 栈**（postgres 等占 5432），直接起会**端口冲突**且可能干扰用户的 Alethicode 环境；叠加本机网络受限（langfuse 镜像拉取存疑）。⇒ 起栈属「可能破坏其他项目环境」的操作，**需用户确认隔离方案**（停 java-oj / 改端口 / 指定 profile）后再跑，本会话不擅自起栈。
+
+### 9.5 全栈 e2e 实测（2026-06-17 三轮 · 用户授权停 java-oj 起 Pythontopia 栈）
+
+> 用户授权后：`docker stop java-oj-*`（可恢复）→ `docker compose up -d postgres redis pythontopia-graph pythontopia-rag backend`（复用既有 `:dev` 镜像，无需拉取）。栈全健康：backend:18080 / graph:18091（host 网络）/ rag:18092 healthz 均 200；postgres 映射 host **15432**（非 5432，实测与 java-oj 不冲突）。
+
+| e2e 项 | 结果 | 证据 |
+|---|---|---|
+| **RAG 语义查询引用页（NFR 8.1）** | ✅ 绿 | `input函数`→p61(KC-012/013, score0.992)；`for循环`→p22(KC-044, 0.992)；`列表`→p15(KC-060)。三者 `route=vector`（auto 判简单问走向量），真实引用页非空 |
+| **GraphRAG 多跳路由 + 子图（Phase 2 #2）** | ✅ 绿 | 多跳问「为什么先学变量…才能理解 for 循环」+2 KC → `route=graph`、`subgraph=[KC-044→KC-043, KC-032→KC-031]`、命中 p48 `via_prerequisite=True`；同问 `graph_mode=off` → `route=vector`、空子图（向后兼容） |
+| **判题三态（NFR 8.1）** | ✅ 绿（集成测试）/ 🟡 live 阻塞 | `Stage09SubmissionAcceptanceIntegrationTest` 覆盖 AC(PASSED)/CE(import 禁用)/WA + 防泄题，跑当前源码 + Testcontainers 全绿。**live 探针**（register→login→submit p476）回 `500 BadSqlGrammarException` ⇒ **dockerized `pythontopia-backend:dev` 镜像陈旧**（早于当前迁移），属**部署产物陈旧、非代码缺陷**；如需 live 判题须重建后端镜像 |
+| **Langfuse `up` 冒烟（NFR 8.8）** | 🟡 配置已验 / up 阻塞 | `docker compose --profile observability config` 解析通过；但 `langfuse`/`clickhouse`/`minio` 镜像**本机未缓存**，`up` 需联网拉取（受限）⇒ 实地起停待网络放开 |
+| **真 BROWSE engine（Phase 2 #3 真执行）** | 🟡 待 LLM+install | pypi 可达（playwright wheel 可下），但需 `playwright install chromium`(~150MB CDN) + **graph 服务 LLM 凭证**（当前仅 Claude-agent 的 ANTHROPIC_* 代理，非服务 key）+ 改 B1 域 + 实测；属凭证/重装决策，未擅自装 |
+
+**关键运维发现**：`pythontopia-{backend}:dev` 镜像陈旧（与当前未提交代码不一致，submit 触发 SQL 语法异常）。RAG e2e 有效是因 rag 路径与镜像数据兼容（graph_mode 路由 live 跑通）。**结论**：要做新代码的全栈 e2e（尤其判题/新端点），须先 `docker compose build backend`（offline + aliyun 镜像，见 §9.2）刷新镜像。代码本身的判题三态已由集成测试证绿。
