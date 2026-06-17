@@ -202,6 +202,16 @@ ask←{ASK,EXPLAIN_CODE,FIX_BUG}；quiz←{ASKME,REVIEW}；make_resource←{HAND
 - `tests/test_tool_loop_route.py`(3)：flag off→404、flag on→端到端运行（路由器有把握选 HANDOUT→种子 make_resource→循环）、SSE 发 `loop_step`+`result`。
 - 路由验证发现并保留的真实行为：stub LLM 低置信时路由器**触发澄清**（hybrid 短路返回澄清，不硬猜）——证明"歧义就问"链路打通。
 
+### 前端渲染（A · 复用既有 Agentic Loop UI，2026-06-17）
+- 后端 `on_step` 改发 **AG-UI `CUSTOM`/loop_step（`LoopStep` 形状：phase=act、status done/failed、toolName/reasonSummary）**，与既有 `loopSlice` 冻结契约一致 → 直接复用 `LoopProgress.vue`。
+- 前端新增（与 `GuideOverlay` 的 orchestrator 接线同范式）：
+  - `api/toolLoop.ts`：`HybridResult`/`ToolLoopResult` 镜像类型 + `/api/orchestrator/tool-loop/stream`。
+  - `composables/useToolLoop.ts`：`useSseStream` + `createLoopSlice` + `watch(events→syncFromEvents)`，暴露 `plan/status/runError/result/start/stop`。
+  - `components/learning/ToolLoopPanel.vue`：渲染 `LoopProgress` + 最终答复/澄清 + 工具轨迹。
+  - `tests/composables/useToolLoop.spec.ts`(4)：CUSTOM/loop_step 喂入、RUN_FINISHED 完成、RUN_ERROR 失败、start/stop 接线。
+- 验证：`vitest` useToolLoop 4 + loopSlice 13 + LoopProgress 16 = **33 passed**；`vue-tsc` 全项目 **0 错误**。
+- **剩余连接件**：`/api/orchestrator/tool-loop/stream` 的 **Java 代理**（OrchestratorController 增并行转发）——前端/ graph 两端已就绪，差这一跳。
+
 ### 架构决策（记录）
 - **不**用纯 LLM 工具循环替换意图路由器（held-out 64% 不及现有调优路由）。
 - 选择 = 确定性混合路由器（held-out 实测 100%）；编排 = 有界循环；二者经 `HybridToolOrchestrator` 组合，`PYT_TOOL_LOOP` flag-gated，默认不改在线路径。
