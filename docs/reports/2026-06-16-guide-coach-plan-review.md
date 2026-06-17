@@ -380,15 +380,21 @@
 
 3. Full local verification
    - Graph full：652 passed，1 warning。
-   - Backend full：762 tests，0 failures，0 errors。
+   - Backend full：767 tests，0 failures，0 errors。
    - Frontend full：204 files / 1981 tests passed；typecheck 通过。
    - 本地真栈：`./dev.sh` 启动后 5173 / 18080 / 18091 / 18092 healthz 均 ok，`/api/course/videos`
      返回课程视频 JSON，Postgres / Redis / graph / rag 均 healthy。
+   - B站 graph 内部认证 focused gate：
+     `mvn -s .mvn/settings.build.xml -Dtest=BilibiliVideoServiceTest,BilibiliVideoAcceptanceIntegrationTest test`
+     5 tests，0 failures，0 errors；真实 graph 检索返回 B站视频卡片。
 
 4. 发现并修复的环境问题
    - `./dev.sh` 原本使用 `.mvn/settings.xml` 启动后端，该配置只走 Maven Central；当前网络环境下
      `poi-ooxml` 依赖解析会被 `repo.maven.apache.org` 超时阻断。
    - 已将启动脚本改为 `.mvn/settings.build.xml`，复用项目已有 Maven 镜像配置。
+   - B站 live e2e 暴露出 graph 业务端点内部认证不完整：后端 search 代理未发送 `X-Internal-Token`，
+     开发 compose 也未向 graph 注入 `PYT_RAG_ADMIN_TOKEN`。
+   - 已补齐后端代理 header、compose graph token 注入，以及 live e2e 的业务端点就绪检查。
 
 5. 未覆盖
    - 未执行浏览器手工 AC/WA 点击流。

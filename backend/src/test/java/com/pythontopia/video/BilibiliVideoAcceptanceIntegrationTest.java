@@ -44,6 +44,8 @@ class BilibiliVideoAcceptanceIntegrationTest {
 
   private static final String GRAPH_E2E_URL =
       System.getenv().getOrDefault("PYT_GRAPH_E2E_URL", "http://127.0.0.1:18091");
+  private static final String GRAPH_INTERNAL_TOKEN =
+      System.getenv().getOrDefault("PYT_RAG_ADMIN_TOKEN", "pytopia-rag-admin");
 
   @Container
   static final PostgreSQLContainer<?> POSTGRES =
@@ -65,7 +67,7 @@ class BilibiliVideoAcceptanceIntegrationTest {
     registry.add("pythontopia.security.teacherInviteCode", () -> "test-teacher-code");
     registry.add("pythontopia.services.graphUrl", () -> GRAPH_E2E_URL);
     registry.add("pythontopia.services.ragUrl", () -> "http://127.0.0.1:18092");
-    registry.add("pythontopia.services.ragInternalSecret", () -> "e2e-secret");
+    registry.add("pythontopia.services.ragAdminToken", () -> GRAPH_INTERNAL_TOKEN);
   }
 
   @Autowired TestRestTemplate restTemplate;
@@ -93,6 +95,39 @@ class BilibiliVideoAcceptanceIntegrationTest {
     Assumptions.assumeTrue(
         response.statusCode() == 200,
         () -> "graph 未就绪（" + GRAPH_E2E_URL + "），跳过 B站 e2e");
+
+    HttpRequest videoSearchRequest =
+        HttpRequest.newBuilder()
+            .uri(
+                URI.create(
+                    GRAPH_E2E_URL
+                        + "/agents/video/bilibili/search?keyword=for%E5%BE%AA%E7%8E%AF%20Python&limit=1&with_summary=false"))
+            .timeout(Duration.ofSeconds(15))
+            .header("X-Internal-Token", GRAPH_INTERNAL_TOKEN)
+            .GET()
+            .build();
+    HttpResponse<String> videoSearchResponse;
+    try {
+      videoSearchResponse = client.send(videoSearchRequest, HttpResponse.BodyHandlers.ofString());
+    } catch (IOException exception) {
+      Assumptions.assumeTrue(
+          false,
+          () ->
+              "graph B站检索不可用（"
+                  + GRAPH_E2E_URL
+                  + "），跳过 B站 e2e: "
+                  + exception.getMessage());
+      return;
+    }
+    Assumptions.assumeTrue(
+        videoSearchResponse.statusCode() == 200,
+        () ->
+            "graph B站检索不可用（"
+                + GRAPH_E2E_URL
+                + "），跳过 B站 e2e: status="
+                + videoSearchResponse.statusCode()
+                + ", body="
+                + videoSearchResponse.body());
   }
 
   @Test

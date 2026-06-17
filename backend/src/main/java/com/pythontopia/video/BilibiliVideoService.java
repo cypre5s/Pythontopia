@@ -2,10 +2,14 @@ package com.pythontopia.video;
 
 import com.pythontopia.common.config.GraphServiceProperties;
 import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.common.web.GraphInternalTokenSupport;
 import java.net.URI;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientException;
@@ -20,7 +24,7 @@ import org.springframework.web.util.UriComponentsBuilder;
  * + {@link GraphServiceProperties} 用法。graph 返回 {@code {"items":[...]}}，本类解包成
  * {@code List<BilibiliVideoDto>}；空结果原样返回空列表（前端降级占位，不报错），仅在 HTTP/风控
  * 失败时抛 {@link BusinessException}（{@code VIDEO_SEARCH_UNAVAILABLE}），由 {@code GlobalExceptionHandler}
- * 转标准 {@code ApiError}。
+ * 转标准 {@code ApiError}。后端到 graph 的内部调用统一附带 {@code X-Internal-Token}。
  */
 @Service
 public class BilibiliVideoService {
@@ -44,8 +48,13 @@ public class BilibiliVideoService {
             .encode()
             .build()
             .toUri();
+    HttpHeaders headers = new HttpHeaders();
+    GraphInternalTokenSupport.apply(headers, properties);
     try {
-      GraphSearchResponse response = restTemplate.getForObject(uri, GraphSearchResponse.class);
+      GraphSearchResponse response =
+          restTemplate
+              .exchange(uri, HttpMethod.GET, new HttpEntity<>(headers), GraphSearchResponse.class)
+              .getBody();
       if (response == null || response.items() == null) {
         return List.of();
       }

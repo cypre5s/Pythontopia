@@ -1146,7 +1146,10 @@ Completed on 2026-06-16.
 - Full graph:
   `python3 -m pytest -q` -> 652 passed, 1 warning.
 - Full backend:
-  `mvn -s .mvn/settings.build.xml test` -> 762 tests, 0 failures, 0 errors.
+  `mvn -s .mvn/settings.build.xml test` -> 767 tests, 0 failures, 0 errors.
+- Bilibili graph internal-auth focused gate:
+  `mvn -s .mvn/settings.build.xml -Dtest=BilibiliVideoServiceTest,BilibiliVideoAcceptanceIntegrationTest test`
+  -> 5 tests, 0 failures, 0 errors; live graph returned real Bilibili cards.
 - Full frontend:
   `npm run test` -> 204 files / 1981 tests passed; `npm run typecheck` passed.
 - Local stack health:
