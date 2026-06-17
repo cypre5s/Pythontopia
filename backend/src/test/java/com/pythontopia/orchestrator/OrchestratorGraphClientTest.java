@@ -136,6 +136,55 @@ class OrchestratorGraphClientTest {
     awaitEvent(emitter, "event:result");
   }
 
+  @Test
+  void toolLoopForwardsSnakeCaseBodyToToolLoopPathAndRelaysEvents() throws Exception {
+    CompletableFuture<String> capturedBody = new CompletableFuture<>();
+    CompletableFuture<String> capturedPath = new CompletableFuture<>();
+    int port =
+        startFakeGraph("/agents/orchestrator/tool-loop/stream", capturedBody, capturedPath);
+
+    OrchestratorGraphClient client = newClient(port);
+    RecordingSseEmitter emitter = new RecordingSseEmitter();
+
+    OrchestratorTurnRequest request =
+        new OrchestratorTurnRequest(
+            "把这章梳理成一张图",
+            "sess-loop",
+            List.of(new OrchestratorTurnMessage("user", "你好")),
+            2,
+            List.of("PY43-KC-010"),
+            List.of("sub-1"),
+            "偏好图示驱动",
+            List.of("PY43-KC-001", "PY43-KC-010"));
+
+    client.toolLoopStream(7L, request, emitter, () -> {});
+
+    String body = capturedBody.get(5, TimeUnit.SECONDS);
+    assertThat(capturedPath.get(5, TimeUnit.SECONDS))
+        .isEqualTo("/agents/orchestrator/tool-loop/stream");
+
+    JsonNode json = new ObjectMapper().readTree(body);
+    assertThat(json.get("user_id").asLong()).isEqualTo(7L);
+    assertThat(json.get("user_message").asText()).isEqualTo("把这章梳理成一张图");
+    assertThat(json.get("session_id").asText()).isEqualTo("sess-loop");
+    assertThat(json.get("current_chapter").asInt()).isEqualTo(2);
+    assertThat(json.get("profile_brief").asText()).isEqualTo("偏好图示驱动");
+    assertThat(json.get("recent_kc_codes")).hasSize(1);
+    assertThat(json.get("recent_kc_codes").get(0).asText()).isEqualTo("PY43-KC-010");
+    assertThat(json.get("recent_failures").get(0).asText()).isEqualTo("sub-1");
+    assertThat(json.get("course_kc_index")).hasSize(2);
+    assertThat(json.get("history")).hasSize(1);
+    assertThat(json.get("history").get(0).get("role").asText()).isEqualTo("user");
+    // 工具编排不透传记忆矿脉到期 KC（toolLoopStream 固定传空 decaying_kcs）。
+    assertThat(json.has("decaying_kcs")).isFalse();
+
+    awaitEvent(emitter, "event:result");
+    assertThat(emitter.events()).anyMatch(e -> e.contains("event:trace"));
+    assertThat(emitter.events()).anyMatch(e -> e.contains("event:token"));
+    assertThat(emitter.events())
+        .anyMatch(e -> e.contains("event:result") && e.contains("reply_md"));
+  }
+
   private OrchestratorGraphClient newClient(int port) {
     GraphServiceProperties properties =
         new GraphServiceProperties("http://127.0.0.1:" + port, "http://rag.test", "secret");
@@ -146,9 +195,17 @@ class OrchestratorGraphClientTest {
   private int startFakeGraph(
       CompletableFuture<String> capturedBody, CompletableFuture<String> capturedPath)
       throws IOException {
+    return startFakeGraph("/agents/orchestrator/turn/stream", capturedBody, capturedPath);
+  }
+
+  private int startFakeGraph(
+      String path,
+      CompletableFuture<String> capturedBody,
+      CompletableFuture<String> capturedPath)
+      throws IOException {
     server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
     server.createContext(
-        "/agents/orchestrator/turn/stream",
+        path,
         (HttpExchange exchange) -> {
           capturedPath.complete(exchange.getRequestURI().getPath());
           String reqBody =

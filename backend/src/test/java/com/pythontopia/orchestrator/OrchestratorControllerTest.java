@@ -52,4 +52,33 @@ class OrchestratorControllerTest {
 
     assertThat(actual).isSameAs(expected);
   }
+
+  @Test
+  void toolLoopRejectsNonStudentWithForbidden() {
+    OrchestratorService service = mock(OrchestratorService.class);
+    OrchestratorController controller = new OrchestratorController(service);
+    CurrentUserPrincipal teacher = new CurrentUserPrincipal(2L, "teacher", Role.TEACHER);
+
+    assertThatThrownBy(() -> controller.toolLoopStream(teacher, sampleRequest()))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("仅学生可使用学习总管")
+        .extracting(ex -> ((BusinessException) ex).status())
+        .isEqualTo(HttpStatus.FORBIDDEN);
+
+    verifyNoInteractions(service);
+  }
+
+  @Test
+  void toolLoopStudentDelegatesToServiceWithUserId() {
+    OrchestratorService service = mock(OrchestratorService.class);
+    OrchestratorTurnRequest request = sampleRequest();
+    SseEmitter expected = new SseEmitter();
+    when(service.toolLoop(eq(9L), eq(request))).thenReturn(expected);
+    OrchestratorController controller = new OrchestratorController(service);
+    CurrentUserPrincipal student = new CurrentUserPrincipal(9L, "stu", Role.STUDENT);
+
+    SseEmitter actual = controller.toolLoopStream(student, request);
+
+    assertThat(actual).isSameAs(expected);
+  }
 }
