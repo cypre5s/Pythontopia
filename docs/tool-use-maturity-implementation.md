@@ -210,7 +210,8 @@ ask←{ASK,EXPLAIN_CODE,FIX_BUG}；quiz←{ASKME,REVIEW}；make_resource←{HAND
   - `components/learning/ToolLoopPanel.vue`：渲染 `LoopProgress` + 最终答复/澄清 + 工具轨迹。
   - `tests/composables/useToolLoop.spec.ts`(4)：CUSTOM/loop_step 喂入、RUN_FINISHED 完成、RUN_ERROR 失败、start/stop 接线。
 - 验证：`vitest` useToolLoop 4 + loopSlice 13 + LoopProgress 16 = **33 passed**；`vue-tsc` 全项目 **0 错误**。
-- **剩余连接件**：`/api/orchestrator/tool-loop/stream` 的 **Java 代理**（OrchestratorController 增并行转发）——前端/ graph 两端已就绪，差这一跳。
+- **Java 代理（已补，2026-06-17）**：`OrchestratorController` 增 `POST /api/orchestrator/tool-loop/stream`（仅学生，SSE）；`OrchestratorService.toolLoop` 镜像 `turn`；`OrchestratorGraphClient` 抽取 `relayStream` 复用，新增 `toolLoopStream` 转发 graph `/agents/orchestrator/tool-loop/stream`。至此 **前端 → Java → graph** 端到端链路代码齐全。
+  - ⚠️ **本环境未能编译验证**：WSL2 TUN 把 Maven Central 解析到 198.18.0.40 超时，卡在下载预存未缓存依赖 `poi-ooxml`（与本改动无关；见 AGENTS.md 网络备忘）。Java 改动为既有 `turn/turnStream` 模式的 1:1 镜像 + 纯重构（`relayStream` 抽取保留原 body 逐字不变），网络可用时 `mvn test` 复核即可。
 
 ### 架构决策（记录）
 - **不**用纯 LLM 工具循环替换意图路由器（held-out 64% 不及现有调优路由）。

@@ -58,6 +58,28 @@ public class OrchestratorService {
     }
   }
 
+  /**
+   * 混合工具编排（Phase F）SSE：镜像 {@link #turn}，转发到 graph 的 tool-loop 流。
+   * 同一 (userId, sessionId) 与 turn 共享在途互斥（一会话一活动流）。
+   */
+  public SseEmitter toolLoop(Long userId, OrchestratorTurnRequest request) {
+    String sessionKey = inFlightKey(userId, request.sessionId());
+    if (sessionKey != null && !inFlightSessions.add(sessionKey)) {
+      throw new BusinessException(
+          HttpStatus.CONFLICT, "SESSION_BUSY", "上一条消息还在处理中，请稍候再试");
+    }
+    Runnable release =
+        sessionKey == null ? () -> {} : () -> inFlightSessions.remove(sessionKey);
+    try {
+      SseEmitter emitter = new SseEmitter(120_000L);
+      graphClient.toolLoopStream(userId, request, emitter, release);
+      return emitter;
+    } catch (RuntimeException e) {
+      release.run();
+      throw e;
+    }
+  }
+
   private static String inFlightKey(Long userId, String sessionId) {
     if (sessionId == null || sessionId.isBlank()) {
       return null;

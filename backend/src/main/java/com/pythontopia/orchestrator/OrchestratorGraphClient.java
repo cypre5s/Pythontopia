@@ -71,8 +71,38 @@ public class OrchestratorGraphClient {
       List<String> decayingKcs,
       SseEmitter emitter,
       Runnable onFinished) {
-    String url = properties.graphUrl() + "/agents/orchestrator/turn/stream";
+    relayStream(
+        properties.graphUrl() + "/agents/orchestrator/turn/stream",
+        userId,
+        request,
+        decayingKcs,
+        emitter,
+        onFinished);
+  }
 
+  /**
+   * 混合工具编排（Phase F）SSE 代理：转发 graph {@code /agents/orchestrator/tool-loop/stream}
+   * （{@code PYT_TOOL_LOOP} flag-gated；flag off 时 graph 返回 404，由中继按错误处理）。
+   * 工具编排不需要记忆矿脉到期 KC，故 {@code decaying_kcs} 传空。
+   */
+  public void toolLoopStream(
+      Long userId, OrchestratorTurnRequest request, SseEmitter emitter, Runnable onFinished) {
+    relayStream(
+        properties.graphUrl() + "/agents/orchestrator/tool-loop/stream",
+        userId,
+        request,
+        List.of(),
+        emitter,
+        onFinished);
+  }
+
+  private void relayStream(
+      String url,
+      Long userId,
+      OrchestratorTurnRequest request,
+      List<String> decayingKcs,
+      SseEmitter emitter,
+      Runnable onFinished) {
     String sessionId = request.sessionId();
     if (sessionId == null || sessionId.isBlank()) {
       sessionId = "u" + userId + "-" + System.currentTimeMillis();
