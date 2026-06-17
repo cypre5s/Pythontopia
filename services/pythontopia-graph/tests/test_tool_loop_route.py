@@ -88,6 +88,8 @@ def test_tool_loop_stream_emits_events_when_enabled(
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/event-stream")
     text = response.text
-    assert "event: loop_step" in text  # 种子步骤
+    # loop_step 以 AG-UI CUSTOM 事件承载（前端 loopSlice 契约），种子步骤即触发。
+    assert "event: CUSTOM" in text
+    assert '"loop_step"' in text
     assert "event: result" in text
     assert "event: error" not in text

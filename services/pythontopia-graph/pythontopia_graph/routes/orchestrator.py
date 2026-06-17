@@ -283,7 +283,19 @@ async def _tool_loop_stream_generator(
         await queue.put(_format_sse(event, data))
 
     async def on_step(step: ToolLoopStep) -> None:
-        await emit("loop_step", step.model_dump(mode="json"))
+        # 映射为前端 loopSlice 冻结契约（AG-UI CUSTOM/loop_step，LoopStep 形状），
+        # 复用既有 LoopProgress.vue 渲染（phase=act 工具执行；status done/failed）。
+        loop_step: dict[str, Any] = {
+            "id": f"tool-{step.step}",
+            "phase": "act",
+            "label": step.tool_name,
+            "status": "done" if step.ok else "failed",
+            "toolName": step.tool_name,
+            "reasonSummary": step.summary,
+        }
+        if not step.ok:
+            loop_step["error"] = step.summary
+        await emit("CUSTOM", {"name": "loop_step", "value": loop_step})
 
     orchestrator = _build_hybrid(provider, evidence_fetcher, valid_kc_codes, body)
 
