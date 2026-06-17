@@ -101,3 +101,19 @@
 
 > 编辑方式：修改 `scripts/sync-assets.mjs` 的 MANIFEST 数组后重新运行 `node scripts/sync-assets.mjs`。
 <!-- AUTO-GENERATED LICENSE INDEX END -->
+
+## Agentic Loop 闭环动效素材（2026-06-17 · 手工登记，非自动索引）
+
+「Agentic Loop 六框架融合」工程为闭环吉祥物表情反馈引入 Rive 动画。说明：
+- `@rive-app/canvas`、`motion`、`gsap` 均为**代码层 JS 依赖（MIT / GSAP No-Charge）**，**非素材**，
+  不在本目录 license 范围内（详见仓库根 `/LICENSE-ART.md`「Agentic Loop 六框架融合新增依赖与素材」一节）。
+- 仅 Rive `.riv` 二进制动画属**素材层**，只允许 CC0 / CC-BY / CC-BY-SA / OFL。
+
+| 运行时路径（计划） | 来源 | License | 用途 | 状态 |
+| --- | --- | --- | --- | --- |
+| `rive/mascot_loop.riv` | 待定（CC0 / CC-BY / CC-BY-SA / OFL 审计来源，或项目原创以 CC-BY-SA 3.0+ 发布） | **待补（占位）** | 闭环吉祥物表情反馈（idle / celebrate / fail，按 critic 结果） | ⬜ 待补 |
+
+> 当前仓库**尚无** `.riv` 资产，本条为占位。引入真实素材时：确认许可 ∈ {CC0/CC-BY/CC-BY-SA/OFL} → 落盘
+> `frontend/public/assets/pixel/rive/mascot_loop.riv` → 同步把本条与 `/LICENSE-ART.md` 占位改为正式条目
+> （作者 / 来源 / 署名）→ CC-BY/CC-BY-SA/OFL 强制署名进 `frontend/public/credits/`。
+> 缺 `.riv` 时动效 adapter 须 fail-soft 降级（Motion/Phaser tween / 静态表情），不硬依赖，故为非阻塞项。

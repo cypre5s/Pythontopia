@@ -11,7 +11,7 @@
  * 数据源：POST /api/orchestrator/turn/stream（Java 代理 → Python 学习总管），
  * SSE 事件 trace/token/result/error 由 useSseStream 解析。
  */
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, markRaw, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useGuideStore } from '@stores/guide';
 import { useHudStore } from '@stores/hud';
@@ -23,6 +23,10 @@ import { useSseStream } from '@/composables/useSseStream';
 import { useReducedMotion } from '@/composables/useReducedMotion';
 import { playUiClick, playUiHover } from '@/composables/useStardewFx';
 import MarkdownView from '@/components/common/MarkdownView.vue';
+import LoopProgress from '@/components/hud/LoopProgress.vue';
+import { createLoopSlice } from '@/stores/learning/loopSlice';
+import { createAnimAdapter } from '@game/adapters/anim';
+import type { LoopCitation } from '@/stores/learning/loopTypes';
 import { humanizeKcText } from '@/data/kcNames';
 import type {
   OrchestratorPhase,
@@ -54,10 +58,40 @@ const reducedMotion = useReducedMotion();
 
 const sse = useSseStream<OrchestratorResult>('/api/orchestrator/turn/stream');
 
+// 有界 Agentic Loop 可视化（§3.8）：消费 orchestrator SSE 的 loop_plan/loop_step 事件累积闭环步骤，
+// 注入 F1 真实动效适配器（DOM Motion 后端；尊重 prefers-reduced-motion）。markRaw 防 Vue 包裹其 getter/方法。
+const loop = createLoopSlice();
+const anim = markRaw(createAnimAdapter());
+const loopPlan = computed(() => loop.plan.value);
+const loopStatus = computed(() => loop.status.value);
+const loopRunError = computed(() => loop.runError.value);
+const loopInterrupted = computed(() => loop.interrupted.value);
+const showLoop = computed(() => loopPlan.value.steps.length > 0);
+
+// orchestrator SSE 的归一化 AG-UI 事件流增量喂入 loopSlice（loop_plan/loop_step/RUN_FINISHED…）。
+watch(
+  () => sse.events.value,
+  (events) => loop.syncFromEvents(events),
+);
+
 // 进入时拉一次主线总览，保证 firstActionableChapter 反映真实进度（失败由 store 静默兜底）。
 onMounted(() => {
   void mainline.load();
 });
+onUnmounted(() => anim.dispose());
+
+function onLoopStop(): void {
+  sse.abort();
+  loop.stop();
+}
+function onLoopCitation(citation: LoopCitation): void {
+  // 课件引用 → 跳书房带页码；外部引用在 LoopProgress 内为 <a> 直开，不经此回调。
+  if (citation.kind !== 'courseware') return;
+  playUiClick();
+  guide.closePanel();
+  hud.closeAll();
+  void router.push({ path: '/library', query: { page: citation.ref } });
+}
 
 const visible = computed(() => guide.open);
 const inputText = ref('');
@@ -210,6 +244,7 @@ async function runTurn(text: string, history: OrchestratorTurnMessage[], aid: st
     courseKcCodes: learning.kcs.length ? learning.kcs : chapterKcs,
   };
 
+  loop.reset();
   await sse.start(body);
 
   if (sse.result.value) {
@@ -429,6 +464,20 @@ function goToPanel(step: OrchestratorPlanStep): void {
           </div>
         </div>
       </div>
+
+      <!-- 有界 Agentic Loop 实时可视化（§3.8 Claude Code 网页版格式：可见有界计划 + 工具时间线 + 证据 chips + 可中断） -->
+      <LoopProgress
+        v-if="showLoop"
+        class="guide-loop"
+        :plan="loopPlan"
+        :status="loopStatus"
+        :run-error="loopRunError"
+        :interrupted="loopInterrupted"
+        :anim="anim"
+        data-testid="guide-loop-progress"
+        @stop="onLoopStop"
+        @select-citation="onLoopCitation"
+      />
 
       <div class="guide-suggest">
         <button
@@ -719,6 +768,10 @@ function goToPanel(step: OrchestratorPlanStep): void {
   margin: 8px 0 0;
   font-size: 10px;
   color: var(--pyt-info, #6aa1d6);
+}
+.guide-loop {
+  margin: 0 12px;
+  flex: 0 0 auto;
 }
 .guide-suggest {
   display: flex;
