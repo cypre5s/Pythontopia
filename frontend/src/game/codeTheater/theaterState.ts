@@ -25,7 +25,8 @@
  *   dict_set     : { target:string, key:string, value:string, line?:number }
  *   speak        : { text?:string | prompt?:string + value?:string, line?:number }
  *   stumble      : { excType:string, message:string, line?:number }
- *   world_effect : { effect?:string, label?:string, line?:number }
+ *   world_effect : { goal:string, targetNoun:string, target:number(1基),
+ *                    state:'done'|'pending', unit?:string, actionVerb?:string, order?:number }
  * 通用：任何 payload 若含数值 `line`，先据此推进发光行（再被各 action 的专有行覆盖）。
  */
 import type { RenderAction, RenderCommand } from '@/services/codeTheater/types';
@@ -74,6 +75,39 @@ export interface StumbleState {
   line: number;
 }
 
+/** 单个世界目标的可见状态（如第 i 盏路灯）。 */
+export interface WorldTargetCell {
+  /** 目标编号（1 基）。 */
+  target: number;
+  /** 目标人类可读名（如「路灯」），用于拼可见反馈。 */
+  noun: string;
+  /** 是否已被学生代码作用到。 */
+  state: 'done' | 'pending';
+}
+
+/**
+ * 世界目标可见全景（world_effect 累积快照）：替代隐藏断言，把「世界现状」摊开成
+ * 一排可见的目标格，由舞台演成「已点亮 / 仍黑着」。
+ */
+export interface WorldStageState {
+  /** 目标种类（如 'coverage'）。 */
+  goal: string;
+  /** 目标人类可读名（取最近一条指令的 targetNoun）。 */
+  noun: string;
+  /** 可选：反馈/横幅里用的动词（如「点亮」）。 */
+  actionVerb?: string;
+  /** 可选：目标量词（如「盏」）。 */
+  unit?: string;
+  /** 目标格序列，按 target 升序（渲染成稳定的一排灯，不随到达顺序抖动）。 */
+  cells: WorldTargetCell[];
+  /** 已完成（done）的目标数。 */
+  doneCount: number;
+  /** 目标总数。 */
+  totalCount: number;
+  /** 是否全部完成（totalCount>0 且 doneCount===totalCount）→ 舞台演成功横幅。 */
+  allDone: boolean;
+}
+
 /** 机关广场完整快照。 */
 export interface TheaterState {
   /** 傀儡所在的发光行（1 基）；-1 = 尚未开始。 */
@@ -102,7 +136,9 @@ export interface TheaterState {
   stumble: StumbleState | null;
   /** 列表「走到第 i 号箱」的瞬时高亮（每步重置）。 */
   listFocus: { target: string; position: number } | null;
-  /** 最近一次 world_effect 的标签（MVP 留桩，仅记录）。 */
+  /** 世界目标可见全景（null = 尚无 world_effect）。 */
+  world: WorldStageState | null;
+  /** 最近一条 world_effect 的简记标签（兼容旧消费者；真状态见 `world`）。 */
   lastWorldEffect: string | null;
   /** 最近一条已应用指令的 action（驱动渲染层做对应动画）。 */
   lastAction: RenderAction | null;
@@ -128,6 +164,7 @@ export function initialTheaterState(): TheaterState {
     stumbled: false,
     stumble: null,
     listFocus: null,
+    world: null,
     lastWorldEffect: null,
     lastAction: null,
     lastStep: -1,
@@ -155,6 +192,16 @@ function optionalString(payload: Payload, key: string): string | undefined {
 function optionalNumber(payload: Payload, key: string): number | undefined {
   const value = payload[key];
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+/** 累积更新某个世界目标格：同 target 覆盖、否则追加，并按 target 升序返回新数组（纯函数）。 */
+function upsertWorldCell(
+  cells: readonly WorldTargetCell[],
+  cell: WorldTargetCell,
+): WorldTargetCell[] {
+  const idx = cells.findIndex((c) => c.target === cell.target);
+  const merged = idx >= 0 ? cells.map((c, i) => (i === idx ? cell : c)) : [...cells, cell];
+  return merged.sort((a, b) => a.target - b.target);
 }
 
 /**
@@ -302,7 +349,25 @@ export function applyCommand(prev: TheaterState, cmd: RenderCommand): TheaterSta
       break;
     }
     case 'world_effect': {
-      next.lastWorldEffect = optionalString(p, 'effect') ?? readString(p, 'label', 'effect');
+      // 冻结契约（data/codeTheater/quests/worldEffects.ts）：每条指令携带单个目标的
+      // target/state，按 target 累积成一排可见目标格；缺省键兜底、可选键沿用上一帧。
+      const target = readNumber(p, 'target', 0);
+      const stateValue: 'done' | 'pending' = readString(p, 'state') === 'done' ? 'done' : 'pending';
+      const noun = readString(p, 'targetNoun', prev.world?.noun ?? '目标');
+      const cells = upsertWorldCell(prev.world?.cells ?? [], { target, noun, state: stateValue });
+      const doneCount = cells.reduce((n, c) => (c.state === 'done' ? n + 1 : n), 0);
+      const totalCount = cells.length;
+      next.world = {
+        goal: readString(p, 'goal', prev.world?.goal ?? 'coverage'),
+        noun,
+        actionVerb: optionalString(p, 'actionVerb') ?? prev.world?.actionVerb,
+        unit: optionalString(p, 'unit') ?? prev.world?.unit,
+        cells,
+        doneCount,
+        totalCount,
+        allDone: totalCount > 0 && doneCount === totalCount,
+      };
+      next.lastWorldEffect = `${noun}#${target}:${stateValue}`;
       break;
     }
     default: {

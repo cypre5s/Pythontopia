@@ -296,11 +296,11 @@ watch(
 
         <nav
           class="guide-outline"
-          aria-label="本页大纲"
+          aria-label="指南二级目录"
           data-testid="guide-outline"
         >
           <p class="guide-outline__label pyt-pixel-text">
-            本页大纲
+            二级目录
           </p>
           <ol class="guide-outline__list">
             <li class="guide-outline__group">

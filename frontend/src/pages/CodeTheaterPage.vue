@@ -3,27 +3,51 @@
  * 代码剧场页（机关广场入口）——「只有游戏能做」的具身执行可视化 MVP 入口。
  *
  * 学生读 NPC 真实需求 → 写/改真实 Python → 运行：经 codeTheater 管线把执行轨迹整形为
- * 「执行步骤视图」+ 用「世界条件」（每块旱地是否浇到）替代隐藏断言给出可见反馈。
+ * 「执行步骤视图」+ 用「世界条件」（每个目标是否被作用到）替代隐藏断言给出可见反馈。
  * 若当前存在 Phaser 单例（如从 /world 进入），同时驱动 CodeTheaterScene 让傀儡走代码（渐进增强、
  * 守卫式 no-op）。Pyodide 预览仅用于「看执行 / 学习预览」，掌握度仍以服务端判题为准。
  */
 import { computed, ref } from 'vue';
 import PythonCodeEditor from '@/components/training/PythonCodeEditor.vue';
+import TheaterStageCanvas from '@/components/codeTheater/TheaterStageCanvas.vue';
 import { runCodeForQuest, type QuestRunResult } from '@/services/codeTheater/pipeline';
 import { TraceExecutionError } from '@/services/codeTheater/trace';
-import { WATER_DRY_FIELDS_QUEST } from '@/data/codeTheater/quests';
+import { CODE_THEATER_QUESTS, type CodeTheaterQuest } from '@/data/codeTheater/quests';
 import type { TraceEvent } from '@/services/codeTheater/types';
 
-const quest = WATER_DRY_FIELDS_QUEST;
+const quests = CODE_THEATER_QUESTS;
+const activeQuestId = ref<string>(quests[0]?.id ?? '');
+const activeQuest = computed<CodeTheaterQuest>(() => {
+  const found = quests.find((q) => q.id === activeQuestId.value) ?? quests[0];
+  if (!found) throw new Error('代码剧场任务清单为空');
+  return found;
+});
 
-const code = ref<string>(quest.starterCode ?? '');
+const code = ref<string>(activeQuest.value.starterCode ?? '');
 const running = ref(false);
 const errorMsg = ref<string>('');
 const result = ref<QuestRunResult | null>(null);
 
-const worldGoalTargets = computed<readonly number[]>(() =>
-  quest.worldGoal.kind === 'coverage' ? quest.worldGoal.targets : [],
+// coverage 与 sequence 两种世界目标都带 targets/targetNoun/unit/actionVerb，目标清单 UI 通用。
+const targetGoal = computed(() => {
+  const goal = activeQuest.value.worldGoal;
+  return goal.kind === 'coverage' || goal.kind === 'sequence' ? goal : null;
+});
+const worldGoalTargets = computed<readonly number[]>(() => targetGoal.value?.targets ?? []);
+const goalUnit = computed<string>(() => targetGoal.value?.unit ?? '个');
+const goalNoun = computed<string>(() => targetGoal.value?.targetNoun ?? '');
+const goalVerb = computed<string>(
+  () => targetGoal.value?.actionVerb ?? targetGoal.value?.actionName ?? '',
 );
+
+/** 切换任务：重置代码为该任务起手代码、清空上轮结果。 */
+function selectQuest(id: string): void {
+  if (id === activeQuestId.value || running.value) return;
+  activeQuestId.value = id;
+  code.value = activeQuest.value.starterCode ?? '';
+  result.value = null;
+  errorMsg.value = '';
+}
 
 /** 把一条执行事件翻译成一行人话「执行步骤」。 */
 function describeEvent(event: TraceEvent): string {
@@ -63,7 +87,7 @@ async function run(): Promise<void> {
   running.value = true;
   errorMsg.value = '';
   try {
-    const res = await runCodeForQuest(code.value, quest);
+    const res = await runCodeForQuest(code.value, activeQuest.value);
     result.value = res;
     // 渐进增强：存在 Phaser 单例时让傀儡在机关广场走代码；不存在则纯 DOM 视图已足够。
     try {
@@ -92,7 +116,7 @@ async function run(): Promise<void> {
 }
 
 function reset(): void {
-  code.value = quest.starterCode ?? '';
+  code.value = activeQuest.value.starterCode ?? '';
   result.value = null;
   errorMsg.value = '';
 }
@@ -110,18 +134,46 @@ function reset(): void {
       </p>
     </header>
 
+    <nav
+      class="ct-quest-tabs"
+      data-testid="ct-quest-tabs"
+      aria-label="代码剧场任务"
+    >
+      <button
+        v-for="q in quests"
+        :key="q.id"
+        type="button"
+        class="ct-tab"
+        :class="{ 'ct-tab--active': q.id === activeQuestId }"
+        :aria-pressed="q.id === activeQuestId"
+        :data-testid="`ct-tab-${q.id}`"
+        :disabled="running"
+        @click="selectQuest(q.id)"
+      >
+        {{ q.title }}
+      </button>
+    </nav>
+
     <section
       class="ct-quest"
       data-testid="ct-quest"
     >
       <div class="ct-quest__title">
-        <span class="ct-quest__icon">🪣</span>
-        <span>{{ quest.title }}</span>
-        <span class="ct-quest__kc">{{ quest.kcCodes.join(' / ') }}</span>
+        <span class="ct-quest__icon">🎯</span>
+        <span>{{ activeQuest.title }}</span>
+        <span class="ct-quest__kc">{{ activeQuest.kcCodes.join(' / ') }}</span>
       </div>
       <p class="ct-quest__prompt">
-        {{ quest.prompt }}
+        {{ activeQuest.prompt }}
       </p>
+    </section>
+
+    <section
+      class="ct-stage"
+      data-testid="ct-stage"
+      aria-label="代码剧场舞台：傀儡走代码"
+    >
+      <TheaterStageCanvas />
     </section>
 
     <div class="ct-body">
@@ -169,7 +221,7 @@ function reset(): void {
             data-testid="ct-world"
           >
             <div class="ct-world__head">
-              {{ result.world.achieved ? '✅ 世界目标达成' : '🌵 还没全部完成' }}
+              {{ result.world.achieved ? '✅ 世界目标达成' : '🚧 还没全部完成' }}
             </div>
             <p class="ct-world__feedback">
               {{ result.world.feedback }}
@@ -184,19 +236,28 @@ function reset(): void {
                 class="ct-field"
                 :class="
                   result.world.satisfied.includes(target)
-                    ? 'ct-field--watered'
-                    : 'ct-field--dry'
+                    ? 'ct-field--done'
+                    : 'ct-field--pending'
                 "
                 :title="
                   result.world.satisfied.includes(target)
-                    ? `第 ${target} 块：已浇透`
-                    : `第 ${target} 块：还干着`
+                    ? `第 ${target} ${goalUnit}${goalNoun}：已${goalVerb}`
+                    : `第 ${target} ${goalUnit}${goalNoun}：还没${goalVerb}`
                 "
               >
-                {{ result.world.satisfied.includes(target) ? '🌿' : '🟫' }}
-                第{{ target }}块
+                {{ result.world.satisfied.includes(target) ? '🟢' : '⚪' }}
+                第{{ target }}{{ goalUnit }}{{ goalNoun }}
               </span>
             </div>
+            <p
+              v-if="result.world.outOfRange.length"
+              class="ct-world__waste"
+              data-testid="ct-waste"
+            >
+              ⚠ 误触了不该碰的{{ goalNoun }}：{{
+                result.world.outOfRange.map((t) => `第 ${t} ${goalUnit}${goalNoun}`).join('、')
+              }}
+            </p>
           </div>
 
           <div
@@ -226,7 +287,7 @@ function reset(): void {
           v-else-if="!errorMsg"
           class="ct-empty"
         >
-          点「▶ 运行」，让傀儡按你的代码去浇地——看它走对了几块、漏了哪块。
+          点「▶ 运行」，让傀儡按你的代码去完成任务——看它做对了几个、漏了哪个。
         </p>
       </div>
     </div>
@@ -253,6 +314,35 @@ function reset(): void {
   font-size: 13px;
   line-height: 1.6;
   color: var(--pyt-color-text-muted, #6b5836);
+}
+.ct-quest-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.ct-tab {
+  font-family: inherit;
+  font-size: 12px;
+  padding: 5px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 2px solid #c9a86b;
+  background: #fffdf6;
+  color: #6b5836;
+}
+.ct-tab:hover:not(:disabled) {
+  background: #fff3cd;
+}
+.ct-tab:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.ct-tab--active {
+  background: #f7d774;
+  color: #2a1a08;
+  border-color: #8c6a23;
+  font-weight: 700;
 }
 .ct-quest {
   border: 2px solid #c9a86b;
@@ -281,6 +371,19 @@ function reset(): void {
   margin: 8px 0 0;
   font-size: 13px;
   line-height: 1.7;
+}
+.ct-stage {
+  height: 360px;
+  margin-bottom: 14px;
+  border: 2px solid #8c6a23;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #141821;
+}
+@media (max-width: 900px) {
+  .ct-stage {
+    height: 280px;
+  }
 }
 .ct-body {
   display: grid;
@@ -396,15 +499,20 @@ function reset(): void {
   border-radius: 6px;
   border: 1px solid;
 }
-.ct-field--watered {
+.ct-field--done {
   background: #d6ead1;
   border-color: #4d6e1d;
   color: #2d5b1b;
 }
-.ct-field--dry {
+.ct-field--pending {
   background: #efe1c4;
   border-color: #b08a3e;
   color: #6b4e16;
+}
+.ct-world__waste {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: #b3402a;
 }
 .ct-steps {
   border: 1px solid #c9a86b;

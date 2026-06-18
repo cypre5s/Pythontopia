@@ -4,11 +4,13 @@ import {
   computeLadderLayout,
   computeLoopTrackLayout,
   computeNoticeBoardLayout,
+  computeWorldPanelLayout,
   forkBranchPosition,
   ladderLineY,
   loopRunnerPosition,
   puppetPositionForLine,
   variableBoardSlot,
+  worldCellSlot,
 } from '@/game/codeTheater/stageLayout';
 
 const DIM = { width: 960, height: 640 };
@@ -114,5 +116,42 @@ describe('stageLayout · variable boards & notice', () => {
     expect(notice.x + notice.width).toBeLessThanOrEqual(DIM.width);
     expect(notice.x).toBeCloseTo((DIM.width - notice.width) / 2, 0);
     expect(notice.y + notice.height).toBeLessThanOrEqual(DIM.height);
+  });
+});
+
+describe('stageLayout · world panel', () => {
+  it('lays N cells in a centered single row when they fit', () => {
+    const layout = computeWorldPanelLayout(4, DIM, { cell: 30, gap: 10, maxWidth: 300, top: 90 });
+    expect(layout.count).toBe(4);
+    expect(layout.columns).toBe(4);
+    expect(layout.rows).toBe(1);
+    expect(layout.y).toBe(90);
+    expect(layout.x + layout.width / 2).toBeCloseTo(DIM.width / 2, 0); // 居中
+
+    const a = worldCellSlot(layout, 0);
+    const b = worldCellSlot(layout, 1);
+    expect(b.x).toBeGreaterThan(a.x); // 单调向右
+    expect(b.y).toBe(a.y); // 同一行
+  });
+
+  it('wraps to the next row once a row is full', () => {
+    const layout = computeWorldPanelLayout(10, DIM, { cell: 30, gap: 10, maxWidth: 200 });
+    const perRow = Math.floor((200 + 10) / (30 + 10)); // 5
+    expect(layout.columns).toBe(perRow);
+    expect(layout.rows).toBe(Math.ceil(10 / perRow));
+
+    const first = worldCellSlot(layout, 0);
+    const wrapped = worldCellSlot(layout, perRow);
+    expect(wrapped.y).toBeGreaterThan(first.y); // 下移一行
+    expect(wrapped.x).toBe(first.x); // 回到行首
+  });
+
+  it('count 0 yields an empty zero-size panel', () => {
+    const layout = computeWorldPanelLayout(0, DIM);
+    expect(layout.count).toBe(0);
+    expect(layout.columns).toBe(0);
+    expect(layout.rows).toBe(0);
+    expect(layout.width).toBe(0);
+    expect(layout.height).toBe(0);
   });
 });

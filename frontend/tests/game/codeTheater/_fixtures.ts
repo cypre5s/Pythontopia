@@ -48,3 +48,29 @@ export function sumLoopCommands(): RenderCommand[] {
     cmd(8, 'speak', { text: '3', channel: 'output', line: 4 }, 150),
   ];
 }
+
+/**
+ * 一组「点亮路灯」world_effect 指令（对齐冻结契约 data/codeTheater/quests/worldEffects.ts）：
+ * 共 total 盏，前 doneCount 盏 done、其余 pending。供舞台/状态机消费测试。
+ */
+export function lampWorldCommands(total = 4, doneCount = total, startStep = 0): RenderCommand[] {
+  const out: RenderCommand[] = [];
+  for (let i = 0; i < total; i += 1) {
+    out.push(
+      cmd(
+        startStep + i,
+        'world_effect',
+        {
+          goal: 'coverage',
+          targetNoun: '路灯',
+          target: i + 1,
+          state: i < doneCount ? 'done' : 'pending',
+          actionVerb: '点亮',
+          unit: '盏',
+        },
+        120,
+      ),
+    );
+  }
+  return out;
+}

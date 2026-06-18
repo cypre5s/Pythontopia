@@ -24,6 +24,7 @@ import {
   computeLadderLayout,
   computeLoopTrackLayout,
   computeNoticeBoardLayout,
+  computeWorldPanelLayout,
   puppetPositionForLine,
   variableBoardSlot,
   type LadderLayout,
@@ -35,6 +36,7 @@ import {
   createPuppet,
   createScriptLadder,
   createVariableBoards,
+  createWorldPanel,
   formatStumble,
   type BranchForkHandle,
   type LoopTrackHandle,
@@ -45,6 +47,8 @@ import {
   type StageContext,
   type StageTweensLike,
   type VariableBoardsHandle,
+  type WorldPanelHandle,
+  type WorldPanelMeta,
 } from '@game/codeTheater/stagePrimitives';
 
 export const CODE_THEATER_SCENE_KEY = 'CodeTheaterScene';
@@ -75,6 +79,7 @@ interface StageHandles {
   loopTrack: LoopTrackHandle;
   fork: BranchForkHandle;
   notice: NoticeBoardHandle;
+  world: WorldPanelHandle;
 }
 
 // ── 模块级桥（场景实例无法被 Vue 直接持有，沿用 ChapterMapScene 的中转模式） ──
@@ -134,6 +139,47 @@ function inferLineCount(): number {
   return Math.max(1, maxLine);
 }
 
+/** 读取系统「减少动作」偏好；SSR / 无 matchMedia 环境 fail-safe 返回 false。 */
+function prefersReducedMotion(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return false;
+  }
+  try {
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  } catch {
+    return false;
+  }
+}
+
+interface WorldScan {
+  /** 全部世界目标编号（升序、去重）。 */
+  targets: number[];
+  meta: WorldPanelMeta;
+}
+
+/**
+ * 预扫指令里的 world_effect，得到全部目标编号与展示元信息，供舞台开场即把整排灯「全暗」铺好，
+ * 随播放逐一点亮（避免目标逐条出现时反复重排）。与 reducer 一致按 target 升序。
+ */
+function scanWorldTargets(): WorldScan {
+  const set = new Set<number>();
+  let noun = '目标';
+  let actionVerb: string | undefined;
+  let unit: string | undefined;
+  for (const cmd of player.getCommands()) {
+    if (cmd.action !== 'world_effect') continue;
+    const target = cmd.payload['target'];
+    if (typeof target === 'number' && Number.isFinite(target)) set.add(target);
+    const nounValue = cmd.payload['targetNoun'];
+    if (typeof nounValue === 'string' && nounValue) noun = nounValue;
+    const verbValue = cmd.payload['actionVerb'];
+    if (typeof verbValue === 'string' && verbValue) actionVerb = verbValue;
+    const unitValue = cmd.payload['unit'];
+    if (typeof unitValue === 'string' && unitValue) unit = unitValue;
+  }
+  return { targets: [...set].sort((a, b) => a - b), meta: { noun, actionVerb, unit } };
+}
+
 function destroyHandles(): void {
   if (!handles) return;
   handles.ladder.destroy();
@@ -142,6 +188,7 @@ function destroyHandles(): void {
   handles.loopTrack.destroy();
   handles.fork.destroy();
   handles.notice.destroy();
+  handles.world.destroy();
   handles = null;
 }
 
@@ -170,6 +217,8 @@ function rebuildStage(ctx: CodeTheaterSceneContext): void {
   const loopTrack = computeLoopTrackLayout(stageDim);
   const fork = computeForkLayout(stageDim);
   const notice = computeNoticeBoardLayout(stageDim);
+  const worldScan = scanWorldTargets();
+  const worldLayout = computeWorldPanelLayout(worldScan.targets.length, stageDim);
   const start = puppetPositionForLine(ladderLayout, 1);
 
   handles = {
@@ -179,6 +228,7 @@ function rebuildStage(ctx: CodeTheaterSceneContext): void {
     loopTrack: createLoopTrack(ctx, loopTrack),
     fork: createBranchFork(ctx, fork),
     notice: createNoticeBoard(ctx, notice),
+    world: createWorldPanel(ctx, worldLayout, worldScan.targets, worldScan.meta, stageDim),
   };
 
   lastRenderedCount = -1;
@@ -197,6 +247,7 @@ function renderState(state: TheaterState): void {
   handles.puppet.setStumbled(state.stumbled);
   handles.boards.sync(state, (index) => variableBoardSlot(index, stageDim));
   handles.loopTrack.sync(state.loops);
+  handles.world.sync(state.world, { reducedMotion: prefersReducedMotion() });
 
   if (state.lastBranch) {
     handles.fork.choose(state.lastBranch.result, state.lastBranch.cond);

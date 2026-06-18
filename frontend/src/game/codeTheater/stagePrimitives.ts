@@ -13,9 +13,17 @@ import type {
   StumbleState,
   TheaterState,
   VariableCell,
+  WorldStageState,
 } from './theaterState';
-import type { LadderLayout, LoopTrackLayout, ForkLayout, NoticeBoardLayout } from './stageLayout';
-import { forkBranchPosition, ladderLineY, loopRunnerPosition } from './stageLayout';
+import type {
+  LadderLayout,
+  LoopTrackLayout,
+  ForkLayout,
+  NoticeBoardLayout,
+  StageDimensions,
+  WorldPanelLayout,
+} from './stageLayout';
+import { forkBranchPosition, ladderLineY, loopRunnerPosition, worldCellSlot } from './stageLayout';
 
 // ── 最小 Phaser 接口（仅本层绘制所需，链式方法返回自身以匹配 Phaser GameObject） ──
 export interface GraphicsLike {
@@ -81,6 +89,14 @@ const COLOR_FORK_TRUE = 0x4caf50;
 const COLOR_FORK_FALSE = 0xe06c75;
 const COLOR_NOTICE_FILL = 0x14110a;
 const COLOR_NOTICE_EDGE = 0xb9923f;
+const COLOR_WORLD_CARD_FILL = 0x1b2230;
+const COLOR_WORLD_CARD_EDGE = 0x3a4a66;
+const COLOR_LAMP_PENDING_FILL = 0x2a2f3a;
+const COLOR_LAMP_PENDING_EDGE = 0x49566f;
+const COLOR_LAMP_DONE_FILL = 0x47b061;
+const COLOR_LAMP_DONE_EDGE = 0x9ff0a6;
+const COLOR_BANNER_FILL = 0x123a18;
+const COLOR_BANNER_EDGE = 0xffd166;
 
 const DEPTH_LADDER = 2;
 const DEPTH_GLOW = 3;
@@ -90,6 +106,10 @@ const DEPTH_BOARD = 5;
 const DEPTH_TRACK = 4;
 const DEPTH_FORK = 4;
 const DEPTH_NOTICE = 7;
+const DEPTH_WORLD_CARD = 5;
+const DEPTH_WORLD_LAMP = 6;
+const DEPTH_WORLD_TEXT = 7;
+const DEPTH_WORLD_BANNER = 9;
 
 function applyAlpha(g: GraphicsLike, alpha: number): void {
   // 桩对象可能不实现 setAlpha，可选链兜底。
@@ -537,4 +557,247 @@ export function createNoticeBoard(
 export function formatStumble(stumble: StumbleState | null): string {
   if (!stumble) return '';
   return `${stumble.excType}: ${stumble.message} (第 ${stumble.line} 行)`;
+}
+
+// ── 世界目标面板（world_effect：一排灯/格 + 全完成横幅） ──
+/** 世界面板展示元信息（拼标题/成功横幅）。 */
+export interface WorldPanelMeta {
+  /** 目标人类可读名（如「路灯」）。 */
+  noun: string;
+  /** 可选：动作动词（如「点亮」）。 */
+  actionVerb?: string;
+  /** 可选：量词（如「盏」）。 */
+  unit?: string;
+}
+
+export interface WorldPanelHandle {
+  /** 按世界目标快照刷新每盏灯；world=null 时全部维持 pending（暗）。 */
+  sync(world: WorldStageState | null, options?: { reducedMotion?: boolean }): void;
+  destroy(): void;
+}
+
+interface LampObjects {
+  tile: GraphicsLike;
+  glyph: TextLike;
+  num: TextLike;
+  /** 上次渲染状态，用于「新点亮」判定（仅新 done 才脉冲）。 */
+  lastState: 'done' | 'pending' | null;
+}
+
+/**
+ * 世界目标面板：把每个目标画成一格灯——`done` 亮绿打勾、`pending` 灰暗显问号；
+ * 全部 done 时在舞台中央亮成功横幅。失败/未达成 = 对应灯仍黑着，天然把「世界现状」
+ * 摊给学生看（替代隐藏断言）。`targets` 为预扫得到的全部目标（升序），开场即全暗呈现，
+ * 随播放逐一点亮。`reducedMotion` 时跳过脉冲/弹入补间，瞬时切换。
+ */
+export function createWorldPanel(
+  ctx: StageContext,
+  layout: WorldPanelLayout,
+  targets: readonly number[],
+  meta: WorldPanelMeta,
+  dim: StageDimensions,
+): WorldPanelHandle {
+  const add = ctx.add;
+  const created: Array<{ destroy(): void }> = [];
+  const lamps = new Map<number, LampObjects>();
+  const slotOf = new Map<number, number>();
+  const hasTargets = targets.length > 0 && layout.count > 0;
+
+  let titleText: TextLike | null = null;
+  let banner: GraphicsLike | null = null;
+  let bannerText: TextLike | null = null;
+  let bannerShown = false;
+
+  function hideBanner(): void {
+    if (!banner || !bannerText) return;
+    banner.clear();
+    applyAlpha(banner, 0);
+    bannerText.setText('');
+    bannerShown = false;
+  }
+
+  function showBanner(doneCount: number, total: number, reduced: boolean): void {
+    if (!banner || !bannerText) return;
+    const verb = meta.actionVerb ?? '完成';
+    const unit = meta.unit ?? '个';
+    const label = `✓ 全部${verb}！${total} ${unit}${meta.noun}`;
+    const w = Math.max(220, Math.min(dim.width - 40, label.length * 17 + 56));
+    const h = 56;
+    const bx = Math.round(dim.width / 2 - w / 2);
+    const by = Math.round(dim.height / 2 - h / 2);
+    banner
+      .clear()
+      .fillStyle(COLOR_BANNER_EDGE, 1)
+      .fillRoundedRect(bx, by, w, h, 12)
+      .fillStyle(COLOR_BANNER_FILL, 0.96)
+      .fillRoundedRect(bx + 3, by + 3, w - 6, h - 6, 10)
+      .setDepth(DEPTH_WORLD_BANNER);
+    applyAlpha(banner, 1);
+    bannerText.setText(label).setPosition(dim.width / 2, dim.height / 2);
+    // 仅首次出现时弹入，避免每帧重复触发；reduce 时直接呈现。
+    if (!reduced && ctx.tweens && !bannerShown) {
+      ctx.tweens.killTweensOf(bannerText);
+      ctx.tweens.add({
+        targets: bannerText,
+        scaleX: { from: 0.6, to: 1 },
+        scaleY: { from: 0.6, to: 1 },
+        duration: 260,
+        ease: 'Back.easeOut',
+      });
+    }
+    bannerShown = true;
+  }
+
+  if (hasTargets) {
+    const pad = 10;
+    const card = add.graphics();
+    card
+      .fillStyle(COLOR_WORLD_CARD_EDGE, 1)
+      .fillRoundedRect(
+        layout.x - pad,
+        layout.y - pad - 18,
+        layout.width + pad * 2,
+        layout.height + pad * 2 + 18,
+        8,
+      )
+      .fillStyle(COLOR_WORLD_CARD_FILL, 0.96)
+      .fillRoundedRect(
+        layout.x - pad + 2,
+        layout.y - pad - 16,
+        layout.width + pad * 2 - 4,
+        layout.height + pad * 2 + 14,
+        7,
+      )
+      .setDepth(DEPTH_WORLD_CARD);
+    created.push(card);
+
+    titleText = add
+      .text(layout.x - pad + 6, layout.y - pad - 14, worldTitle(meta, 0, targets.length), {
+        fontFamily: PIXEL_FONT,
+        fontSize: '11px',
+        color: '#cdd6e4',
+      })
+      .setOrigin(0, 0)
+      .setDepth(DEPTH_WORLD_TEXT);
+    created.push(titleText);
+
+    targets.forEach((target, index) => {
+      slotOf.set(target, index);
+      const slot = worldCellSlot(layout, index);
+      const tile = add.graphics();
+      const glyph = add
+        .text(slot.x + layout.cell / 2, slot.y + layout.cell / 2 - 3, '?', {
+          fontFamily: PIXEL_FONT,
+          fontSize: '15px',
+          color: '#8794ad',
+        })
+        .setOrigin(0.5, 0.5)
+        .setDepth(DEPTH_WORLD_TEXT);
+      const num = add
+        .text(slot.x + layout.cell / 2, slot.y + layout.cell - 1, `#${target}`, {
+          fontFamily: PIXEL_FONT,
+          fontSize: '9px',
+          color: '#7f8da3',
+        })
+        .setOrigin(0.5, 1)
+        .setDepth(DEPTH_WORLD_TEXT);
+      const obj: LampObjects = { tile, glyph, num, lastState: null };
+      drawLamp(obj, slot, layout.cell, 'pending');
+      obj.lastState = 'pending';
+      lamps.set(target, obj);
+      created.push(tile, glyph, num);
+    });
+
+    banner = add.graphics();
+    bannerText = add
+      .text(dim.width / 2, dim.height / 2, '', {
+        fontFamily: PIXEL_FONT,
+        fontSize: '18px',
+        color: '#eafff0',
+        align: 'center',
+      })
+      .setOrigin(0.5, 0.5)
+      .setDepth(DEPTH_WORLD_BANNER + 1);
+    created.push(banner, bannerText);
+    hideBanner();
+  }
+
+  return {
+    sync(world: WorldStageState | null, options): void {
+      if (!hasTargets) return;
+      const reduced = options?.reducedMotion ?? false;
+      const stateByTarget = new Map<number, 'done' | 'pending'>();
+      let doneCount = 0;
+      if (world) {
+        for (const c of world.cells) {
+          stateByTarget.set(c.target, c.state);
+          if (c.state === 'done') doneCount += 1;
+        }
+      }
+      const total = targets.length;
+      for (const target of targets) {
+        const obj = lamps.get(target);
+        if (!obj) continue;
+        const slot = worldCellSlot(layout, slotOf.get(target) ?? 0);
+        const stateValue = stateByTarget.get(target) ?? 'pending';
+        const was = obj.lastState;
+        drawLamp(obj, slot, layout.cell, stateValue);
+        if (stateValue === 'done' && was !== 'done' && !reduced && ctx.tweens) {
+          ctx.tweens.killTweensOf(obj.glyph);
+          ctx.tweens.add({
+            targets: obj.glyph,
+            scaleX: { from: 0.4, to: 1 },
+            scaleY: { from: 0.4, to: 1 },
+            duration: 220,
+            ease: 'Back.easeOut',
+          });
+        }
+        obj.lastState = stateValue;
+      }
+      titleText?.setText(worldTitle(meta, doneCount, total));
+      if (total > 0 && doneCount === total) {
+        showBanner(doneCount, total, reduced);
+      } else {
+        hideBanner();
+      }
+    },
+    destroy(): void {
+      for (const obj of created) {
+        try {
+          obj.destroy();
+        } catch {
+          // 忽略桩对象差异。
+        }
+      }
+      created.length = 0;
+      lamps.clear();
+      slotOf.clear();
+    },
+  };
+}
+
+function drawLamp(
+  obj: LampObjects,
+  slot: { x: number; y: number },
+  cell: number,
+  state: 'done' | 'pending',
+): void {
+  const fill = state === 'done' ? COLOR_LAMP_DONE_FILL : COLOR_LAMP_PENDING_FILL;
+  const edge = state === 'done' ? COLOR_LAMP_DONE_EDGE : COLOR_LAMP_PENDING_EDGE;
+  obj.tile
+    .clear()
+    .fillStyle(edge, 1)
+    .fillRoundedRect(slot.x, slot.y, cell, cell, 6)
+    .fillStyle(fill, 1)
+    .fillRoundedRect(slot.x + 2, slot.y + 2, cell - 4, cell - 4, 5)
+    .setDepth(DEPTH_WORLD_LAMP);
+  if (state === 'done') {
+    // 灯芯高光，强化「亮起来」的可见变化。
+    obj.tile.fillStyle(0xffffff, 0.4).fillCircle(slot.x + cell / 2, slot.y + cell / 2 - 3, Math.max(3, cell * 0.16));
+  }
+  obj.glyph.setText(state === 'done' ? '✓' : '?').setColor(state === 'done' ? '#08240f' : '#8794ad');
+}
+
+function worldTitle(meta: WorldPanelMeta, doneCount: number, total: number): string {
+  return `世界目标 · ${meta.noun} ${doneCount}/${total}`;
 }

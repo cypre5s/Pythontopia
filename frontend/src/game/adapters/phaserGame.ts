@@ -225,7 +225,7 @@ export function getPerfSnapshot(): PerfSnapshot | null {
   };
 }
 
-function destroyPhaserGame(removeCanvas = true): void {
+export function destroyPhaserGame(removeCanvas = true): void {
   if (gameInstance) {
     gameInstance.destroy(removeCanvas);
     gameInstance = null;

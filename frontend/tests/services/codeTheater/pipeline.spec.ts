@@ -11,7 +11,7 @@ import {
   buildQuestResult,
   traceToRenderCommands,
 } from '@/services/codeTheater/pipeline';
-import { WATER_DRY_FIELDS_QUEST } from '@/data/codeTheater/quests';
+import { LIGHT_STREET_LAMPS_QUEST } from '@/data/codeTheater/quests';
 
 /**
  * 代码剧场端到端集成门（MVP gate）：用真实 C-mappers + C-quest 模块，验证
@@ -35,29 +35,29 @@ function assign(step: number, varName: string, value: string): AssignEvent {
 function loopIter(step: number, iter: number, value: number): LoopIterEvent {
   return {
     step,
-    line: 4,
+    line: 7,
     kind: 'loop_iter',
-    loopId: 'for@4',
+    loopId: 'for@7',
     loopType: 'for',
     iter,
-    varName: 'plot',
+    varName: 'lamp',
     value: String(value),
   };
 }
 function call(step: number, funcName: string, arg: string): CallEvent {
-  return { step, line: 5, kind: 'call', funcName, args: [arg], depth: 1 };
+  return { step, line: 8, kind: 'call', funcName, args: [arg], depth: 1 };
 }
 function output(step: number, text: string): OutputEvent {
-  return { step, line: 6, kind: 'output', text };
+  return { step, line: 9, kind: 'output', text };
 }
 
-/** 模拟 `for plot in range(...)：water(plot)` 真实留下的轨迹（loop_iter 与 call 交替）。 */
-function wateringTrace(plots: readonly number[]): Trace {
+/** 模拟 `for lamp in range(...)：light(lamp)` 真实留下的轨迹（loop_iter 与 call 交替）。 */
+function lightingTrace(lamps: readonly number[]): Trace {
   const events: TraceEvent[] = [];
   let step = 0;
-  plots.forEach((plot, iter) => {
-    events.push(loopIter(step++, iter, plot));
-    events.push(call(step++, 'water', String(plot)));
+  lamps.forEach((lamp, iter) => {
+    events.push(loopIter(step++, iter, lamp));
+    events.push(call(step++, 'light', String(lamp)));
   });
   return traceOf(events);
 }
@@ -97,17 +97,17 @@ describe('traceToRenderCommands · 引擎累积 MapContext + 真实 mapper', () 
   });
 });
 
-describe('buildQuestResult · trace + 浇灌任务 → 世界判定 + world_effect', () => {
-  it('达成：浇遍第 1~4 块 → world.achieved，末尾追加 4 条全 watered 的 world_effect', () => {
-    const trace = wateringTrace([1, 2, 3, 4]);
-    const result = buildQuestResult(trace, WATER_DRY_FIELDS_QUEST);
+describe('buildQuestResult · trace + 点亮任务 → 世界判定 + world_effect', () => {
+  it('达成：点遍第 1~4 盏 → world.achieved，末尾追加 4 条全 done 的 world_effect', () => {
+    const trace = lightingTrace([1, 2, 3, 4]);
+    const result = buildQuestResult(trace, LIGHT_STREET_LAMPS_QUEST);
 
     expect(result.world.achieved).toBe(true);
     expect(result.world.satisfied).toEqual([1, 2, 3, 4]);
 
     const effects = result.commands.filter((c) => c.action === 'world_effect');
     expect(effects).toHaveLength(4);
-    expect(effects.every((c) => c.payload.state === 'watered')).toBe(true);
+    expect(effects.every((c) => c.payload.state === 'done')).toBe(true);
     // world_effect 接在 Trace 末尾（step 从 stepCount 起）。
     expect(effects.map((c) => c.step)).toEqual([
       trace.stepCount,
@@ -117,18 +117,18 @@ describe('buildQuestResult · trace + 浇灌任务 → 世界判定 + world_effe
     ]);
   });
 
-  it('off-by-one：range(1,4) 漏掉第 4 块 → 第 4 块 world_effect 为 dry', () => {
-    const result = buildQuestResult(wateringTrace([1, 2, 3]), WATER_DRY_FIELDS_QUEST);
+  it('off-by-one：range(1,4) 漏掉第 4 盏 → 第 4 盏 world_effect 为 pending', () => {
+    const result = buildQuestResult(lightingTrace([1, 2, 3]), LIGHT_STREET_LAMPS_QUEST);
 
     expect(result.world.achieved).toBe(false);
     expect(result.world.unmet).toEqual([4]);
 
     const effects = result.commands.filter((c) => c.action === 'world_effect');
     expect(effects.map((c) => c.payload.state)).toEqual([
-      'watered',
-      'watered',
-      'watered',
-      'dry',
+      'done',
+      'done',
+      'done',
+      'pending',
     ]);
     expect(effects.map((c) => c.payload.target)).toEqual([1, 2, 3, 4]);
   });

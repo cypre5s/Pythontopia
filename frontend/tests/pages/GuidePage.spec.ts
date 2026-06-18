@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
@@ -14,6 +17,10 @@ import { GUIDE_SECTIONS, GUIDE_SCREENSHOT_TOTAL } from '@/content/guideSections'
 import { useGameSettingsStore } from '@stores/gameSettings';
 
 const APP_LAYOUT_STUB = { template: '<div data-testid="layout-stub"><slot /></div>' };
+const SCREENSHOT_DIR = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../../public/guide/screenshots',
+);
 
 /** 任务要求覆盖的十大主题关键词（逐页核对页面文本）。 */
 const TEN_THEME_KEYWORDS = [
@@ -81,7 +88,7 @@ describe('GuidePage 分页式文档布局', () => {
 
     const outline = wrapper.get('[data-testid="guide-outline"]');
     expect(outline.element.tagName).toBe('NAV');
-    expect(outline.attributes('aria-label')).toBe('本页大纲');
+    expect(outline.attributes('aria-label')).toBe('指南二级目录');
 
     // 左侧导航覆盖全部主题；正文为可读长文（段落数量充足，而非空壳）。
     expect(wrapper.findAll('[data-testid^="guide-nav-link-"]').length).toBe(GUIDE_SECTIONS.length);
@@ -109,20 +116,35 @@ describe('GuidePage 分页式文档布局', () => {
     expect(fallbackWrapper.find(`#${GUIDE_SECTIONS[0]!.id}`).exists()).toBe(true);
   });
 
-  it('右侧本页大纲只列当前主题的小节，不重复全站目录', async () => {
+  it('右侧目录只显示当前主题(一级)及其小节(二级)，不罗列其它主题', async () => {
     const { wrapper } = await mountGuide('/guide?topic=workshop');
     const outline = wrapper.get('[data-testid="guide-outline"]');
 
     const workshop = GUIDE_SECTIONS.find((s) => s.id === 'workshop')!;
+    const training = GUIDE_SECTIONS.find((s) => s.id === 'training')!;
+
+    // 一级：只列当前主题锚点，其它主题不出现。
+    expect(outline.find(`a[href="#${workshop.id}"]`).exists()).toBe(true);
+    expect(outline.find(`a[href="#${training.id}"]`).exists()).toBe(false);
+
+    // 二级：只列当前主题的小节；其它主题的小节都不出现。
     for (const sub of workshop.subsections) {
       expect(
         outline.find(`a[href="#${sub.id}"]`).exists(),
-        `大纲缺少当前页小节锚点 ${sub.id}`,
+        `二级目录缺少当前主题小节锚点 ${sub.id}`,
       ).toBe(true);
     }
-    // 全站主题只由左侧目录负责，右栏不重复第二份全站导航。
-    expect(outline.text()).not.toContain('其他主题');
-    expect(outline.text()).not.toContain('训练场');
+    for (const sub of training.subsections) {
+      expect(
+        outline.find(`a[href="#${sub.id}"]`).exists(),
+        `二级目录不应出现其它主题小节锚点 ${sub.id}`,
+      ).toBe(false);
+    }
+
+    // 当前主题在目录中高亮，且整份目录里 aria-current 全局唯一。
+    const current = outline.findAll('a[aria-current="location"]');
+    expect(current.length).toBe(1);
+    expect(current[0]!.attributes('href')).toBe('#workshop');
   });
 
   it('左侧目录按快速开始、看学练测、成长与教学分组，并覆盖全部主题', async () => {
@@ -151,6 +173,40 @@ describe('GuidePage 分页式文档布局', () => {
       const link = wrapper.get(`[data-testid="guide-nav-sub-${subsection.id}"]`);
       expect(link.attributes('href')).toBe(`#${subsection.id}`);
     }
+  });
+
+  it('左侧分组手风琴：默认只展开当前主题所属分组，点其它分组头单开切换', async () => {
+    // workshop 属于「看学练测 learning-loop」分组。
+    const { wrapper } = await mountGuide('/guide?topic=workshop');
+    const sidebar = wrapper.get('[data-testid="guide-sidebar"]');
+    const toggleOf = (id: string) =>
+      sidebar.get(`[data-testid="guide-nav-group-toggle-${id}"]`);
+
+    // 当前主题所属分组展开，其它分组折叠。
+    expect(toggleOf('learning-loop').attributes('aria-expanded')).toBe('true');
+    expect(toggleOf('quick-start').attributes('aria-expanded')).toBe('false');
+    expect(toggleOf('growth-teaching').attributes('aria-expanded')).toBe('false');
+
+    // 点折叠分组头：展开它并收起原分组（单开手风琴）。
+    await toggleOf('quick-start').trigger('click');
+    expect(toggleOf('quick-start').attributes('aria-expanded')).toBe('true');
+    expect(toggleOf('learning-loop').attributes('aria-expanded')).toBe('false');
+  });
+
+  it('切到其它分组的主题时，左侧自动展开该主题所属分组', async () => {
+    // town-basics 属于「快速开始 quick-start」分组。
+    const { wrapper } = await mountGuide('/guide?topic=town-basics');
+    const sidebar = wrapper.get('[data-testid="guide-sidebar"]');
+    const toggleOf = (id: string) =>
+      sidebar.get(`[data-testid="guide-nav-group-toggle-${id}"]`);
+
+    expect(toggleOf('quick-start').attributes('aria-expanded')).toBe('true');
+    expect(toggleOf('learning-loop').attributes('aria-expanded')).toBe('false');
+
+    // 切到 learning-loop 组的 workshop：该组自动展开、原组收起。
+    await switchTopic(wrapper, 'workshop');
+    expect(toggleOf('learning-loop').attributes('aria-expanded')).toBe('true');
+    expect(toggleOf('quick-start').attributes('aria-expanded')).toBe('false');
   });
 });
 
@@ -242,6 +298,23 @@ describe('GuidePage 截图契约与优雅降级', () => {
     // 全站截图总数与内容数据一致，且无重复 URL
     expect(new Set(seen).size).toBe(seen.length);
     expect(seen.length).toBe(GUIDE_SCREENSHOT_TOTAL);
+  });
+
+  it('内容引用的本地截图文件都已落盘，避免发布后出现占位图', () => {
+    const screenshots = GUIDE_SECTIONS.flatMap((section) => [
+      section.heroShot,
+      ...section.subsections.flatMap((sub) =>
+        sub.blocks.flatMap((block) => (block.kind === 'screenshot' ? [block.shot] : [])),
+      ),
+    ]);
+
+    for (const shot of screenshots) {
+      const filename = path.basename(shot.src);
+      const filePath = path.join(SCREENSHOT_DIR, filename);
+      expect(fs.existsSync(filePath), `缺少指南截图文件：${filename}`).toBe(true);
+      expect(fs.statSync(filePath).size, `指南截图文件异常小：${filename}`)
+        .toBeGreaterThan(4096);
+    }
   });
 
   it('截图加载失败时降级为文字占位说明，图注保留，不出现假截图', async () => {
@@ -350,6 +423,8 @@ describe('GuidePage 内容覆盖十大主题', () => {
 
     expect(text).toContain('当前视频、课件页、题目与知识点');
     expect(text).toContain('审题导读 → 思路分析 → 骨架代码 → 错因诊断 → AC 复盘');
+    expect(text).toContain('目标识别 → 澄清 → 计划 → 执行 → 复盘');
+    expect(text).toContain('失败不会被静默吞掉');
     expect(text).toContain('不会直接给出可复制提交的完整答案');
     expect(text).toContain('把当前知识点和学习目标一起带进百晓工坊');
   });
@@ -361,6 +436,9 @@ describe('GuidePage 内容覆盖十大主题', () => {
     expect(text).toContain('自然语言、@ 知识点和上传文件');
     expect(text).toContain('从 16 项能力中选择合适的处理方式');
     expect(text).toContain('课件证据、内容生成、引用审查、防幻觉与安全审查');
+    expect(text).toContain('右上方点「调用」');
+    expect(text).toContain('工具调用时间线');
+    expect(text).toContain('外部查证');
     expect(text).toContain('保存到「我的书房」继续复用');
   });
 });

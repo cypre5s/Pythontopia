@@ -30,6 +30,10 @@
           "nextNodeId": "history"
         },
         {
+          "label": "代码剧场是什么？",
+          "nextNodeId": "code_theater"
+        },
+        {
           "label": "下次再聊",
           "nextNodeId": null
         }
@@ -53,6 +57,27 @@
       "choices": [
         {
           "label": "有趣！",
+          "nextNodeId": null
+        }
+      ]
+    },
+    "code_theater": {
+      "id": "code_theater",
+      "text": "代码剧场（机关广场）是只有游戏才给得了你的东西：你写下真实的 Python，台上的小傀儡就照着你的代码一步步走、触发各处机关，让你亲眼看见程序在内部究竟是怎么跑的。想上去看看吗？",
+      "conditions": [],
+      "choices": [
+        {
+          "label": "去代码剧场看看",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "route",
+              "route": "/code-theater"
+            }
+          ]
+        },
+        {
+          "label": "下次吧",
           "nextNodeId": null
         }
       ]

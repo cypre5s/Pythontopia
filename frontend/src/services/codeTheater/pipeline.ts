@@ -70,12 +70,14 @@ export interface QuestRunResult {
 /**
  * 纯整形：已有 `Trace` 时复用（便于单测）。
  * Trace + 具身任务 → 完整渲染指令时间轴（含追加在末尾的 world_effect）+ 世界判定结果。
- * 仅 `coverage` 型 worldGoal 追加 world_effect；世界判定仅用于「学习预览」，掌握度仍走服务端判题。
+ * coverage / sequence 型 worldGoal 都追加 world_effect（payload 同构，舞台统一消费）；
+ * 世界判定仅用于「学习预览」，掌握度仍走服务端判题。
  */
 export function buildQuestResult(trace: Trace, quest: CodeTheaterQuest): QuestRunResult {
   const commands = traceToRenderCommands(trace);
   const world = checkQuestWorldGoal(quest, trace);
-  if (quest.worldGoal.kind === 'coverage') {
+  const goalKind = quest.worldGoal.kind;
+  if (goalKind === 'coverage' || goalKind === 'sequence') {
     commands.push(
       ...toWorldEffectCommands(quest.worldGoal, world, { startStep: trace.stepCount }),
     );

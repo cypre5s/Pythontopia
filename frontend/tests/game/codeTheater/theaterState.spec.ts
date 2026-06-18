@@ -4,7 +4,7 @@ import {
   computeStateAt,
   initialTheaterState,
 } from '@/game/codeTheater/theaterState';
-import { cmd, sumLoopCommands } from './_fixtures';
+import { cmd, lampWorldCommands, sumLoopCommands } from './_fixtures';
 
 describe('theaterState · initial', () => {
   it('starts on no line with empty stage', () => {
@@ -16,6 +16,8 @@ describe('theaterState · initial', () => {
     expect(s.callDepth).toBe(0);
     expect(s.noticeLines).toEqual([]);
     expect(s.stumbled).toBe(false);
+    expect(s.world).toBeNull();
+    expect(s.lastWorldEffect).toBeNull();
     expect(s.lastStep).toBe(-1);
   });
 });
@@ -149,16 +151,104 @@ describe('theaterState · per-action', () => {
     expect(s.currentLine).toBe(4);
   });
 
-  it('world_effect (stub) records a label without throwing', () => {
-    const s = applyCommand(initialTheaterState(), cmd(0, 'world_effect', { effect: 'gate_open' }));
-    expect(s.lastWorldEffect).toBe('gate_open');
-  });
-
   it('unknown action is a safe no-op beyond generic line/step', () => {
     const weird = { step: 0, action: 'totally_new_action', payload: { line: 3 }, durationMs: 10 } as never;
     const s = applyCommand(initialTheaterState(), weird);
     expect(s.currentLine).toBe(3);
     expect(s.lastStep).toBe(0);
+  });
+});
+
+describe('theaterState · world_effect (coverage targets)', () => {
+  // 对齐冻结契约：每条指令携带单个目标的 target/state。
+  function worldCmd(
+    step: number,
+    target: number,
+    state: 'done' | 'pending',
+    extra: Record<string, string | number | boolean> = {},
+  ) {
+    return cmd(step, 'world_effect', { goal: 'coverage', targetNoun: '路灯', target, state, ...extra });
+  }
+
+  it('accumulates per-target state and computes done/total/allDone', () => {
+    let s = initialTheaterState();
+    s = applyCommand(s, worldCmd(0, 1, 'done'));
+    s = applyCommand(s, worldCmd(1, 2, 'done'));
+    s = applyCommand(s, worldCmd(2, 3, 'pending'));
+
+    expect(s.world?.cells.map((c) => [c.target, c.state])).toEqual([
+      [1, 'done'],
+      [2, 'done'],
+      [3, 'pending'],
+    ]);
+    expect(s.world?.doneCount).toBe(2);
+    expect(s.world?.totalCount).toBe(3);
+    expect(s.world?.allDone).toBe(false);
+    expect(s.world?.noun).toBe('路灯');
+    // lastWorldEffect 兼容字段记录最近一条真实作用（不再是留桩占位）。
+    expect(s.lastWorldEffect).toBe('路灯#3:pending');
+  });
+
+  it('flips to allDone once every target is done; re-applying a target upserts (no duplicate)', () => {
+    let s = initialTheaterState();
+    s = applyCommand(s, worldCmd(0, 1, 'done'));
+    s = applyCommand(s, worldCmd(1, 2, 'done'));
+    s = applyCommand(s, worldCmd(2, 3, 'pending'));
+    expect(s.world?.allDone).toBe(false);
+
+    s = applyCommand(s, worldCmd(3, 3, 'done')); // 第 3 盏补亮
+    expect(s.world?.allDone).toBe(true);
+    expect(s.world?.doneCount).toBe(3);
+    expect(s.world?.cells).toHaveLength(3); // 覆盖而非追加
+  });
+
+  it('sorts cells by target ascending regardless of arrival order', () => {
+    let s = initialTheaterState();
+    s = applyCommand(s, worldCmd(0, 3, 'pending'));
+    s = applyCommand(s, worldCmd(1, 1, 'done'));
+    s = applyCommand(s, worldCmd(2, 2, 'done'));
+    expect(s.world?.cells.map((c) => c.target)).toEqual([1, 2, 3]);
+  });
+
+  it('captures optional unit/actionVerb and keeps them when later commands omit them', () => {
+    let s = applyCommand(
+      initialTheaterState(),
+      worldCmd(0, 1, 'done', { actionVerb: '点亮', unit: '盏' }),
+    );
+    expect(s.world?.actionVerb).toBe('点亮');
+    expect(s.world?.unit).toBe('盏');
+
+    s = applyCommand(s, worldCmd(1, 2, 'pending')); // 不带 unit/verb
+    expect(s.world?.actionVerb).toBe('点亮');
+    expect(s.world?.unit).toBe('盏');
+  });
+
+  it('is a pure reducer: previous world snapshot is untouched', () => {
+    const prev = applyCommand(initialTheaterState(), worldCmd(0, 1, 'pending'));
+    const snapshot = JSON.parse(JSON.stringify(prev));
+    const next = applyCommand(prev, worldCmd(1, 1, 'done'));
+    expect(prev).toEqual(snapshot);
+    expect(next.world).not.toBe(prev.world);
+    expect(next.world?.cells).not.toBe(prev.world?.cells);
+    expect(prev.world?.cells[0]?.state).toBe('pending'); // 旧帧仍是 pending
+    expect(next.world?.cells[0]?.state).toBe('done');
+  });
+
+  it('world state survives unrelated commands and partial replay (computeStateAt)', () => {
+    const commands = [
+      cmd(0, 'set_var', { varName: 'x', value: '1', line: 1 }),
+      ...lampWorldCommands(3, 3, 1), // 3 盏全 done
+    ];
+    const full = computeStateAt(commands, commands.length);
+    expect(full.world?.totalCount).toBe(3);
+    expect(full.world?.allDone).toBe(true);
+    expect(full.variables.x?.value).toBe('1'); // 世界状态不挤掉别的状态
+
+    // 纯折叠：allDone 只能基于「已知目标」判定（未来目标尚未出现）。
+    const mid = computeStateAt(commands, 2); // set_var + 第 1 盏
+    expect(mid.world?.cells).toHaveLength(1);
+    expect(mid.world?.doneCount).toBe(1);
+    expect(mid.variables.x?.value).toBe('1');
   });
 });
 

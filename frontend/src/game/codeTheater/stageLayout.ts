@@ -209,3 +209,79 @@ export function computeNoticeBoardLayout(
     height,
   };
 }
+
+export interface WorldPanelOptions {
+  /** 第一行格子的 y（面板顶部基准）。 */
+  top?: number;
+  /** 单格边长。 */
+  cell?: number;
+  /** 格间距。 */
+  gap?: number;
+  /** 整排最大宽度（超出自动换行）。 */
+  maxWidth?: number;
+  /** 横向居中基准 x（默认舞台正中）。 */
+  centerX?: number;
+}
+
+export interface WorldPanelLayout {
+  /** 第一格左上角 x。 */
+  x: number;
+  /** 第一行 y。 */
+  y: number;
+  cell: number;
+  gap: number;
+  /** 每行格数。 */
+  columns: number;
+  /** 行数。 */
+  rows: number;
+  /** 整排像素宽。 */
+  width: number;
+  /** 整排像素高。 */
+  height: number;
+  /** 目标总数（count=0 时面板为空，不绘制）。 */
+  count: number;
+}
+
+/**
+ * 世界目标面板：把 `count` 个目标排成居中的一排灯/格，超出 `maxWidth` 自动换行。
+ * 落在舞台上方居中区（脚本梯右、循环跑道左的空带），与既有部件错开。
+ */
+export function computeWorldPanelLayout(
+  count: number,
+  dim: StageDimensions,
+  options: WorldPanelOptions = {},
+): WorldPanelLayout {
+  const cell = options.cell ?? 34;
+  const gap = options.gap ?? 10;
+  const top = options.top ?? 92;
+  const n = Math.max(0, Math.floor(count));
+  const maxWidth = options.maxWidth ?? Math.min(300, Math.max(120, dim.width * 0.34));
+  const perRow = Math.max(1, Math.floor((maxWidth + gap) / (cell + gap)));
+  const columns = n > 0 ? Math.min(perRow, n) : 0;
+  const rows = columns > 0 ? Math.ceil(n / columns) : 0;
+  const width = columns > 0 ? columns * cell + (columns - 1) * gap : 0;
+  const height = rows > 0 ? rows * cell + (rows - 1) * gap : 0;
+  const centerX = options.centerX ?? dim.width / 2;
+  return {
+    x: Math.round(centerX - width / 2),
+    y: top,
+    cell,
+    gap,
+    columns,
+    rows,
+    width,
+    height,
+    count: n,
+  };
+}
+
+/** 第 index 个目标格（0 基）的左上角坐标：先填满一行再换行。 */
+export function worldCellSlot(layout: WorldPanelLayout, index: number): { x: number; y: number } {
+  const i = Math.max(0, Math.floor(index));
+  const col = layout.columns > 0 ? i % layout.columns : 0;
+  const row = layout.columns > 0 ? Math.floor(i / layout.columns) : 0;
+  return {
+    x: layout.x + col * (layout.cell + layout.gap),
+    y: layout.y + row * (layout.cell + layout.gap),
+  };
+}

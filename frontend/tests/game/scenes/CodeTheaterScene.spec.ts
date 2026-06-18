@@ -9,7 +9,12 @@ import {
   stopCodeTheaterScene,
   type CodeTheaterSceneContext,
 } from '@/game/scenes/CodeTheaterScene';
-import { makeTrace, SUM_LOOP_SOURCE, sumLoopCommands } from '../codeTheater/_fixtures';
+import {
+  lampWorldCommands,
+  makeTrace,
+  SUM_LOOP_SOURCE,
+  sumLoopCommands,
+} from '../codeTheater/_fixtures';
 
 type Spy = ReturnType<typeof vi.fn>;
 
@@ -70,6 +75,70 @@ function makeCtx(width = 960, height = 640): FakeCtx {
     _spies: { graphics, text, tweenAdd, removeAll, eventsOn, scaleOn },
   };
   return ctx as unknown as FakeCtx;
+}
+
+interface TextRec {
+  texts: string[];
+}
+
+/** 记录式 ctx：text 记录文本历史，用于断言世界面板（灯/横幅）是否真的画出来了。 */
+function makeRecordingCtx(width = 960, height = 640) {
+  const textList: TextRec[] = [];
+  const tweenAdd = vi.fn();
+
+  function graphics(): Record<string, unknown> {
+    const g: Record<string, unknown> = {};
+    for (const m of GRAPHICS_METHODS) g[m] = vi.fn(() => g);
+    g.destroy = vi.fn();
+    return g;
+  }
+  function text(_x: number, _y: number, str: string): Record<string, unknown> {
+    const rec: TextRec = { texts: [str] };
+    const t: Record<string, unknown> = {
+      setText: vi.fn((s: string) => {
+        rec.texts.push(s);
+        return t;
+      }),
+    };
+    for (const m of TEXT_METHODS) {
+      if (m === 'setText') continue;
+      t[m] = vi.fn(() => t);
+    }
+    t.destroy = vi.fn();
+    textList.push(rec);
+    return t;
+  }
+
+  const ctx = {
+    add: { graphics, text },
+    tweens: { add: tweenAdd, killTweensOf: vi.fn() },
+    scale: { width, height, on: vi.fn() },
+    time: { now: 0 },
+    events: { on: vi.fn() },
+    children: { removeAll: vi.fn() },
+  };
+
+  function findText(pred: (t: string) => boolean): string | undefined {
+    for (const rec of textList) {
+      for (const t of rec.texts) {
+        if (pred(t)) return t;
+      }
+    }
+    return undefined;
+  }
+
+  return { ctx: ctx as unknown as CodeTheaterSceneContext & { time: { now: number } }, findText };
+}
+
+function runToEnd(ctx: { time: { now: number } }): void {
+  const player = getCodeTheaterPlayer();
+  player.play();
+  let now = 0;
+  for (let i = 0; i < 80 && player.getStatus() !== 'ended'; i += 1) {
+    now += 200;
+    ctx.time.now = now;
+    CodeTheaterScene.update.call(ctx);
+  }
 }
 
 afterEach(() => {
@@ -162,5 +231,47 @@ describe('CodeTheaterScene · singleton mounting', () => {
     const stop = vi.fn();
     stopCodeTheaterScene({ scene: { stop } });
     expect(stop).toHaveBeenCalledWith(CODE_THEATER_SCENE_KEY);
+  });
+});
+
+describe('CodeTheaterScene · world_effect rendering', () => {
+  it('plays the visible world change: lights all lamps and shows the success banner', () => {
+    loadCodeTheater(lampWorldCommands(4, 4));
+    const { ctx, findText } = makeRecordingCtx();
+    expect(() => CodeTheaterScene.create.call(ctx)).not.toThrow();
+
+    runToEnd(ctx);
+
+    const player = getCodeTheaterPlayer();
+    expect(player.getStatus()).toBe('ended');
+    expect(player.getState().world?.allDone).toBe(true);
+    expect(player.getState().world?.doneCount).toBe(4);
+    // 世界面板把成功演了出来（横幅 + 标题计数）。
+    expect(findText((t) => t.includes('全部'))).toBeTruthy();
+    expect(findText((t) => t.includes('世界目标') && t.includes('4/4'))).toBeTruthy();
+  });
+
+  it('leaves unmet targets dark with no success banner when partially met', () => {
+    loadCodeTheater(lampWorldCommands(4, 3)); // 3/4 盏
+    const { ctx, findText } = makeRecordingCtx();
+    CodeTheaterScene.create.call(ctx);
+
+    runToEnd(ctx);
+
+    const player = getCodeTheaterPlayer();
+    expect(player.getState().world?.allDone).toBe(false);
+    expect(player.getState().world?.doneCount).toBe(3);
+    expect(findText((t) => t.includes('全部'))).toBeFalsy();
+    expect(findText((t) => t.includes('世界目标') && t.includes('3/4'))).toBeTruthy();
+  });
+
+  it('does not build a world panel when there are no world_effect commands', () => {
+    loadCodeTheater(sumLoopCommands(), { trace: makeTrace(SUM_LOOP_SOURCE) });
+    const { ctx, findText } = makeRecordingCtx();
+    CodeTheaterScene.create.call(ctx);
+    runToEnd(ctx);
+
+    expect(findText((t) => t.includes('世界目标'))).toBeFalsy();
+    expect(getCodeTheaterPlayer().getState().world).toBeNull();
   });
 });

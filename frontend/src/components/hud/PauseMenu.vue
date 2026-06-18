@@ -59,6 +59,7 @@ const menuSections: MenuSection[] = [
       { id: 'workshop-nav', icon: `${ICON_BASE}/notebook.svg`, label: '百晓工坊', action: () => go('/workshop') },
       { id: 'review', icon: `${ICON_BASE}/scroll-horizontal.svg`, label: '复盘大厅', action: () => go('/review-hall') },
       { id: 'arena', icon: `${ICON_BASE}/flag.svg`, label: '闯关竞技场', action: () => go('/arena/1') },
+      { id: 'code-theater', icon: `${ICON_BASE}/music.svg`, label: '代码剧场', action: () => go('/code-theater') },
       { id: 'problems', icon: `${ICON_BASE}/book-open.svg`, label: '题目列表', action: () => go('/problems') },
       { id: 'tutor', icon: `${ICON_BASE}/save.svg`, label: 'AI 助教', action: () => go('/tutor') },
     ],

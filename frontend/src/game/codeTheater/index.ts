@@ -33,6 +33,8 @@ export type {
   BranchRuntimeState,
   ListBox,
   StumbleState,
+  WorldTargetCell,
+  WorldStageState,
 } from './theaterState';
 
 export {
@@ -45,6 +47,8 @@ export {
   forkBranchPosition,
   variableBoardSlot,
   computeNoticeBoardLayout,
+  computeWorldPanelLayout,
+  worldCellSlot,
 } from './stageLayout';
 export type {
   StageDimensions,
@@ -53,6 +57,8 @@ export type {
   LoopTrackLayout,
   ForkLayout,
   NoticeBoardLayout,
+  WorldPanelLayout,
+  WorldPanelOptions,
 } from './stageLayout';
 
 export {
@@ -62,6 +68,7 @@ export {
   createLoopTrack,
   createBranchFork,
   createNoticeBoard,
+  createWorldPanel,
   formatStumble,
 } from './stagePrimitives';
 export type {
@@ -76,4 +83,6 @@ export type {
   LoopTrackHandle,
   BranchForkHandle,
   NoticeBoardHandle,
+  WorldPanelHandle,
+  WorldPanelMeta,
 } from './stagePrimitives';
