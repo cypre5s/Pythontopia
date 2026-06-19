@@ -11,14 +11,11 @@ onMounted(() => {
   playBgm('bgm_quest');
 });
 onMounted(async () => {
+  // 加载更多历史以便按周分组；详情改为点击周报某天后弹窗展示，故不再自动打开第一条。
   await Promise.all([
-    learning.loadEvaluations(4),
+    learning.loadEvaluations(20),
     learning.loadActivePath(),
   ]);
-  const [first] = learning.evaluation.list;
-  if (first) {
-    await learning.openEvaluation(first.id);
-  }
 });
 onUnmounted(() => {
   stopBgm();

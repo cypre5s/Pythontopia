@@ -28,6 +28,7 @@ vi.mock('@/api/quests', () => ({
 
 import {
   listEvaluations,
+  getEvaluation,
   runEvaluation,
   acceptEvaluationPath,
   keepOldEvaluationPath,
@@ -95,6 +96,7 @@ describe('ReviewHallPanel', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     vi.mocked(listEvaluations).mockResolvedValue([SAMPLE]);
+    vi.mocked(getEvaluation).mockResolvedValue(SAMPLE);
     vi.mocked(runEvaluation).mockResolvedValue({ ...SAMPLE, id: 102 });
     vi.mocked(acceptEvaluationPath).mockResolvedValue({ ...SAMPLE, actedStatus: 'ACCEPTED' });
     vi.mocked(keepOldEvaluationPath).mockResolvedValue({ ...SAMPLE, actedStatus: 'KEPT_OLD' });
@@ -109,12 +111,25 @@ describe('ReviewHallPanel', () => {
     return mount(ReviewHallPanel, { global: { plugins: [pinia] } });
   }
 
-  it('renders metrics for the selected evaluation', async () => {
+  // 新 UX：详情改为点击周报某一天的行后弹窗展示，先打开弹窗再断言。
+  async function openDetail(wrapper: ReturnType<typeof mountWithSample>) {
+    await wrapper.find('[data-testid="eval-row"]').trigger('click');
+    await flushPromises();
+    await wrapper.vm.$nextTick();
+  }
+
+  it('shows the weekly report row and opens metrics modal on click', async () => {
     const wrapper = mountWithSample();
     await flushPromises();
     await wrapper.vm.$nextTick();
 
     expect(wrapper.find('[data-testid="review-hall-panel"]').exists()).toBe(true);
+    // 点击前弹窗不展示
+    expect(wrapper.find('[data-testid="evaluation-modal"]').exists()).toBe(false);
+
+    await openDetail(wrapper);
+
+    expect(wrapper.find('[data-testid="evaluation-modal"]').exists()).toBe(true);
     expect(wrapper.text()).toContain('KC 总掌握');
     expect(wrapper.text()).toContain('练习通过率');
   });
@@ -122,7 +137,7 @@ describe('ReviewHallPanel', () => {
   it('accept-new-path triggers acceptEvaluationPath API', async () => {
     const wrapper = mountWithSample();
     await flushPromises();
-    await wrapper.vm.$nextTick();
+    await openDetail(wrapper);
     await wrapper.find('[data-testid="accept-new-path"]').trigger('click');
     expect(acceptEvaluationPath).toHaveBeenCalledWith(101);
   });
@@ -130,7 +145,7 @@ describe('ReviewHallPanel', () => {
   it('keep-old triggers keepOldEvaluationPath API', async () => {
     const wrapper = mountWithSample();
     await flushPromises();
-    await wrapper.vm.$nextTick();
+    await openDetail(wrapper);
     await wrapper.find('[data-testid="keep-old"]').trigger('click');
     expect(keepOldEvaluationPath).toHaveBeenCalledWith(101);
   });
