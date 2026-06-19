@@ -163,10 +163,21 @@ class EvaluationNarrativeAgent:
         )
 
     def _number_aliases(self, value: float) -> list[str]:
-        """返回 f-string 用的 `0.10` 与去尾零的 `0.1` 两种数字字符串形式。"""
+        """同一数值在 narrative 里有多种字符串形态，全部纳入白名单，避免 grounding 把
+        确有出处的合法数字按格式差异误判为「未追踪」而整单 422：
+
+        * metrics 行用 ``{value}`` 直接渲染 → 原始 ``str(value)``（如 ``1.0`` / ``0.0`` /
+          ``5.888`` / ``0.3333``）；
+        * 整数值再补整数形态（``1.0`` → ``1``）；
+        * KC 行用 ``{:.2f}`` 渲染 → 两位小数形态（``0.70`` / ``0.00``）及其去尾零形态。
+        """
+        aliases: set[str] = {str(value)}
         if value == int(value):
-            return [str(int(value))]
-        return [f"{value:.2f}", f"{value:.2f}".rstrip("0").rstrip(".")]
+            aliases.add(str(int(value)))
+        formatted = f"{value:.2f}"
+        aliases.add(formatted)
+        aliases.add(formatted.rstrip("0").rstrip("."))
+        return [alias for alias in aliases if alias]
 
     def _idle_response(self, request: EvaluationNarrativeRequest) -> EvaluationNarrativeResponse:
         narrative = "# 本周复盘\n- 近期无活动\n本周指标全部为 0，建议先完成一次画像访谈或在知识田种 KC。"

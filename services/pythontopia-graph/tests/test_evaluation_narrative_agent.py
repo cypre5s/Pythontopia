@@ -75,6 +75,74 @@ def test_narrative_passes_grounding_with_real_numbers() -> None:
     assert response.deterministic_signature
 
 
+def test_grounding_allows_raw_and_two_decimal_number_forms() -> None:
+    """回归：metrics 行用 ``{value}`` 渲染整数值浮点（1.0/0.0）与高精度浮点（5.888/0.3333），
+    KC 行用 ``{:.2f}`` 渲染零增量（0.00）。这些数字都确有出处，却曾因别名只生成「整数」或
+    「两位小数四舍五入」形态而与 narrative 实际字符串不匹配，被 grounding 误判为「未追踪」整单 422。
+    修复后必须 SUCCESS、grounding 通过、unknown_numbers 为空。"""
+    request = EvaluationNarrativeRequest(
+        user_id=2,
+        pack_id=43,
+        metrics=[
+            EvaluationMetric(
+                metric_key="bug_mine_resolve_rate",
+                value=1.0,
+                numerator=1.0,
+                denominator=1.0,
+                display_unit="ratio",
+            ),
+            EvaluationMetric(
+                metric_key="kc_mastery_total",
+                value=5.888,
+                numerator=5.888,
+                denominator=0.0,
+                display_unit="score",
+            ),
+            EvaluationMetric(
+                metric_key="profile_confidence_delta",
+                value=0.3333,
+                numerator=2.0,
+                denominator=3.0,
+                display_unit="score",
+            ),
+            EvaluationMetric(
+                metric_key="resource_consumption_count",
+                value=0.0,
+                numerator=0.0,
+                denominator=0.0,
+                display_unit="count",
+            ),
+        ],
+        top_kcs=[
+            KcSummary(
+                kc_code="PY43-KC-031",
+                kc_name="for循环与遍历",
+                mastery_score=0.29,
+                delta_score=0.219,
+            ),
+            KcSummary(
+                kc_code="PY43-KC-009",
+                kc_name="Python语言概述",
+                mastery_score=0.7,
+                delta_score=0.0,
+            ),
+        ],
+        recent_events=[
+            EventSummary(event_kind="PRACTICE_AC", occurred_at="2026-06-17", detail="题目 493"),
+        ],
+        profile_brief=ProfileBrief(major="计算机科学（大一）", python_level=2, has_recent_failures=False),
+    )
+
+    response = EvaluationNarrativeAgent().narrate(request)
+
+    assert response.status == "SUCCESS"
+    assert response.grounding_result.passed is True
+    assert response.grounding_result.unknown_numbers == []
+    assert "1.0" in response.narrative_md
+    assert "5.888" in response.narrative_md
+    assert "0.3333" in response.narrative_md
+
+
 def test_narrative_is_deterministic() -> None:
     agent = EvaluationNarrativeAgent()
     first = agent.narrate(_full_request())
