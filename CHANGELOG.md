@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-06-19 — 百晓工坊聊天历史持久化 + 离开-返回保留布局（含两处 bug 修复）
+
+> 把百晓工坊「历史问答」从只读 `tutor_session` 升级为覆盖全部聊天工具结果的持久化，并修两处体验 bug：①一开始回答就在左栏「历史问答」生成记录；②离开工坊（返回小镇 / 去图书馆点页码 / 闯关塔等任意跳转）再回来，对话流与左右面板（历史/书房/调用）布局、书房弹窗都停在离开时那一刻。
+
+- **历史问答持久化（后端）**：新增 `workshop_chat_turn`（迁移 `V172`，不改 `tutor_session`）+ `workshop/history` 模块（Controller/Service/Repository/DTO，仅学生角色），落库覆盖 `answer/resource/plan/video/progress/mystudy/navigate/clarify/...` 全部聊天工具结果；列表查询在应用层 UNION 旧 `tutor_session` 问答记录，向后兼容历史数据。
+- **历史问答持久化（前端）**：新增 `api/workshopHistory.ts`（list/record/remember + 60s 缓存与本地 merge）；`ChatHistoryRail.vue` 按 `conversationId` 把多轮问答归并成「会话」一条、本地标题/问题搜索、懒加载与失败安全降级；`WorkshopChat.vue` 各工具 turn 落库并 `emit('history-saved')` 即时回灌左栏。
+- **tutor 落库修复**：`TutorGraphClient`/`TutorService` 兼容 graph 已迁的 AG-UI `RUN_FINISHED`（形状 `{"result":{...}}`）与历史裸 `result` 两种终态解包——否则 `tutor_session` 永不写入、历史问答恒空；`TutorSessionRepository` 修「最近 N 轮」查询为「先 `ORDER BY created_at DESC LIMIT ?` 子查询再 `ASC`」，多轮路由上下文取最近而非最早 N 条。
+- **Bug① 一开始回答即出历史记录**：`WorkshopChat` 新增 `emitProvisionalAnswerTurn`，答疑流式刚推出气泡那一刻就向左栏发占位记录（`responseText` 暂空、`groundingStatus` 暂 null，id 用 `local-<messageId>`）；流式完成后 `emitSavedAnswerTurn` 以**同一 id** 覆盖更新，左栏据 id 去重 merge——发问即现、答完即更新，不再等整段答案生成完才出现，也不会出现两条。
+- **Bug② 离开-返回保留**：`App.vue` 的 `<KeepAlive>` include 加入 `WorkshopPage`（`:include="['WorldPage','WorkshopPage']"`）；`WorkshopPage` 加 `defineOptions({ name: 'WorkshopPage' })` 命中缓存，并用 `onActivated/onDeactivated` 接管 `keydown` 监听与 `pageActive`（失活时停渲染 Teleport 到 body 的书房弹窗、回来再渲染，避免弹窗遗留到别的页面），保留对话流、面板开合（历史/书房/调用）、滚动位置与会话态；移除原 `onUnmounted` 里离开即 `closeResource` 的清空。
+- **验证（前端为主）**：`vue-tsc` 0 错、`eslint` 0 错；targeted `vitest` **56 passed**（5 文件，含新增「ASK 开始即发占位记录、与最终记录共用同一 id」断言与「`WorkshopPage` 组件名 === KeepAlive include 契约」守卫）；`npm run build` 成功（`WorkshopPage` chunk 正常产出）。
+- **未验证 / 残留**：未跑全栈 live 点击流（「发问→未答完离开→返回」需 backend + graph 起栈与鉴权，前端单栈因 401 自动登出无法抵达 `/workshop`），离开-返回保留与占位记录机制由上述单测 + 构建覆盖；本次提交不含后端 `mvn test` 复跑（后端模块为既有未提交工作、本会话未改动后端编排/资源链路）；同工作树中 `WorkshopGraphClient` 资源落库的 AG-UI 修复与 android/graph/code-theater/图书馆/指南截图等无关 WIP **不在本提交范围**。
+
 ## 2026-06-17 — 百晓工坊 Tool Use 成熟化（混合架构：确定性路由选择 + 有界工具调用循环 · flag-gated 零回归）
 
 > 把百晓工坊 tool use 从「单轮意图分类器 + 静态 SSE 管线」升级为**有界原生工具调用循环 + 工具收敛 + Tool Use Examples + eval 守门**，全程 flag-gated（`PYT_TOOL_LOOP` 默认 off）/ 纯加法，在线默认路径逐字节零回归。完整实施日志（含五阶段、A/B 证据、验证记录）见 `docs/tool-use-maturity-implementation.md`。

@@ -58,9 +58,11 @@ onBeforeUnmount(() => {
   <Suspense>
     <template #default>
       <!-- 路由切换 fade transition；/world 不参与，避免切场景时 Phaser canvas 重建。 -->
-      <!-- WorldPage 用 KeepAlive 缓存：离开 /world 不销毁 Phaser，避免每次返回重跑 BootScene -->
+      <!-- WorldPage 用 KeepAlive 缓存：离开 /world 不销毁 Phaser，避免每次返回重跑 BootScene。 -->
+      <!-- WorkshopPage 同样缓存：离开百晓工坊（返回小镇 / 去图书馆 / 闯关塔等任意跳转）不销毁本页，
+           下次回来对话流、面板布局（历史/书房/调用）与书房弹窗都停在离开时那一刻。 -->
       <RouterView v-slot="{ Component, route }">
-        <KeepAlive include="WorldPage">
+        <KeepAlive :include="['WorldPage', 'WorkshopPage']">
           <Transition
             :name="route.name === 'world' ? 'route-none' : 'route-fade'"
             mode="out-in"

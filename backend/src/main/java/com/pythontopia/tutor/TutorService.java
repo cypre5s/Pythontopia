@@ -371,11 +371,15 @@ public class TutorService {
   private void persistSession(Long userId, String question, String conversationId, String resultJson) {
     try {
       JsonNode root = objectMapper.readTree(resultJson);
-      String answerMd = textField(root, "answer_md");
-      String groundingStatus = textField(root, "grounding_status");
+      // AG-UI RUN_FINISHED 形状是 {"result": {...}}；历史 result 事件是裸结果。两种都接
+      // （与 TutorWorkflowService 同款解包），否则 answer_md 取不到、落库被当空答案丢弃。
+      JsonNode result =
+          root.has("result") && root.path("result").isObject() ? root.path("result") : root;
+      String answerMd = textField(result, "answer_md");
+      String groundingStatus = textField(result, "grounding_status");
 
       List<Integer> evidencePageIds = new ArrayList<>();
-      JsonNode pages = root.path("evidence_page_ids");
+      JsonNode pages = result.path("evidence_page_ids");
       if (pages.isArray()) {
         for (JsonNode node : pages) {
           evidencePageIds.add(node.asInt());

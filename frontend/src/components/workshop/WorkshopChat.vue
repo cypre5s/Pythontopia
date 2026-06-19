@@ -51,8 +51,12 @@ import {
   type CognitiveStyle,
   type EvidenceCitation,
   type TutorAskRequest,
-  type TutorSessionDto,
 } from '@/api/tutor';
+import {
+  recordWorkshopChatHistoryTurn,
+  type WorkshopChatHistoryRecordRequest,
+  type WorkshopChatHistoryTurnDto,
+} from '@/api/workshopHistory';
 import { kcDisplayName } from '@/data/kcNames';
 import { listChapters, listKnowledgeComponents } from '@/api/course';
 import { getWorkshopResource } from '@/api/workshop';
@@ -290,6 +294,7 @@ interface ChatMessage {
 
 const emit = defineEmits<{
   (event: 'open-resource', resourceId: number): void;
+  (event: 'history-saved', turn: WorkshopChatHistoryTurnDto): void;
 }>();
 
 const router = useRouter();
@@ -316,6 +321,8 @@ const liveAskTraces = computed(() => tutorSse.traces.value);
 const streamingAskId = ref<string | null>(null);
 // PLAN 流式：当前正被 STATE_DELTA 实时点亮步骤的 plan 卡 id（dispatch 进度写入它）。
 const streamingPlanId = ref<string | null>(null);
+// 工具结果已展示但历史 POST 还没返回时，也算忙碌：避免「新对话」抢先清掉尚未保存的当前轮。
+const pendingHistorySaves = ref(0);
 // 本组件正在跑的 orchestrator 活动「运行令牌」（activity.start 返回值）。
 // 镜像/收尾都持它写 store：向导（GuideOverlay）接管开新活动后，本组件过期流的数据被 store 忽略。
 const planRunToken = ref<number | null>(null);
@@ -353,6 +360,10 @@ const sessionCorrections = ref<IntentCorrectionRef[]>([]);
 
 /** 开新对话窗口：清空当前对话流并换一个会话 id（此后提问归入新会话）。 */
 function newChat(): void {
+  if (busy.value) {
+    toast.show('当前回复正在生成或保存，稍等一下再开新对话', 'info');
+    return;
+  }
   playSfx('sfx_click');
   messages.value = [];
   streamingAskId.value = null;
@@ -369,23 +380,84 @@ function newChat(): void {
  * 并把当前会话 id 切到这段会话——于是学生可「接着这段对话继续问」。
  * 旧数据（conversationId 为 null）无法续聊，续问会新开一个会话以免污染分组。
  */
-function loadConversation(sessions: TutorSessionDto[]): void {
-  const ordered = [...sessions].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+function payloadObject(turn: WorkshopChatHistoryTurnDto): Record<string, unknown> {
+  return turn.responsePayload && typeof turn.responsePayload === 'object' ? turn.responsePayload : {};
+}
+
+function historyAssistantMessage(turn: WorkshopChatHistoryTurnDto): ChatMessage {
+  const payload = payloadObject(turn);
+  const intent = asIntentKind(turn.intent);
+  const meta = commandOf(intent);
+  const kind = turn.responseKind as ChatMessage['kind'];
+  const msg: ChatMessage = {
+    id: genId(),
+    role: 'assistant',
+    kind,
+    intent,
+    text: turn.responseText ?? '',
+    toolLabel: turn.toolLabel ?? meta.label,
+    toolIcon: meta.icon,
+    streaming: false,
+  };
+
+  if (kind === 'answer') {
+    msg.groundingStatus = turn.groundingStatus ?? 'NO_EVIDENCE';
+    msg.evidencePageIds = turn.evidencePageIds;
+    msg.evidence = pageIdsToCitations(turn.evidencePageIds);
+    return msg;
+  }
+  if (kind === 'plan') {
+    msg.planSteps = Array.isArray(payload.planSteps)
+      ? (payload.planSteps as OrchestratorPlanStep[])
+      : [];
+    return msg;
+  }
+  if (kind === 'resource') {
+    if (typeof payload.resourceId === 'number') msg.resourceId = payload.resourceId;
+    if (typeof payload.resourceType === 'string') {
+      msg.resourceType = payload.resourceType as WorkshopResourceType;
+    }
+    if (typeof payload.resourceTitle === 'string') msg.resourceTitle = payload.resourceTitle;
+    if (typeof payload.resourceGrounding === 'string') msg.resourceGrounding = payload.resourceGrounding;
+    if (typeof payload.resourceSafety === 'string') msg.resourceSafety = payload.resourceSafety;
+    if (typeof payload.resourceSummary === 'string') msg.resourceSummary = payload.resourceSummary;
+    if (Array.isArray(payload.resourceKcCodes)) msg.resourceKcCodes = payload.resourceKcCodes as string[];
+    if (payload.resourceContent && typeof payload.resourceContent === 'object') {
+      msg.resourceContent = payload.resourceContent as WorkshopContent;
+    }
+    msg.resourceExpanded = false;
+    return msg;
+  }
+  if (kind === 'video') {
+    if (typeof payload.videoKeyword === 'string') msg.videoKeyword = payload.videoKeyword;
+    return msg;
+  }
+  if (kind === 'mystudy') {
+    if (Array.isArray(payload.mystudyItems)) {
+      msg.mystudyItems = payload.mystudyItems as WorkshopResourceListItemDto[];
+    }
+    return msg;
+  }
+  if (kind === 'navigate') {
+    if (typeof payload.navRoute === 'string') msg.navRoute = payload.navRoute;
+    if (typeof payload.navLabel === 'string') msg.navLabel = payload.navLabel;
+    return msg;
+  }
+  if (kind === 'clarify') {
+    if (Array.isArray(payload.clarifyOptions)) {
+      msg.clarifyOptions = payload.clarifyOptions as Array<{ intent: string; label: string; icon: string }>;
+    }
+    if (typeof payload.clarifyReason === 'string') msg.clarifyReason = payload.clarifyReason;
+  }
+  return msg;
+}
+
+function loadConversation(turns: WorkshopChatHistoryTurnDto[]): void {
+  const ordered = [...turns].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   const replay: ChatMessage[] = [];
-  for (const s of ordered) {
-    replay.push({ id: genId(), role: 'user', kind: 'text', text: s.question });
-    replay.push({
-      id: genId(),
-      role: 'assistant',
-      kind: s.answerMd ? 'answer' : 'error',
-      intent: 'ASK',
-      text: s.answerMd ?? '（这条历史问答没有保存答案）',
-      groundingStatus: s.groundingStatus,
-      evidencePageIds: s.evidencePageIds,
-      // 历史回放只存了 page_ids：用它兜底合成课件证据，让旧会话也能看到课件页图 + 回链。
-      evidence: pageIdsToCitations(s.evidencePageIds),
-      streaming: false,
-    });
+  for (const turn of ordered) {
+    replay.push({ id: genId(), role: 'user', kind: 'text', text: turn.userText });
+    replay.push(historyAssistantMessage(turn));
   }
   messages.value = replay;
   quiz.value = null;
@@ -418,7 +490,8 @@ const busy = computed(
     orchestratorSse.status.value === 'streaming' ||
     orchestratorSse.status.value === 'connecting' ||
     officeStreamState.value === 'streaming' ||
-    isOrchestratorActive.value,
+    isOrchestratorActive.value ||
+    pendingHistorySaves.value > 0,
 );
 
 const GROUNDING_LABELS: Record<string, { text: string; cls: string }> = {
@@ -469,6 +542,158 @@ function reviewBadges(review: TutorReview): ReviewBadge[] {
 function commandOf(intent: IntentKind): { label: string; icon: string } {
   const cmd = SLASH_COMMANDS.find((c) => c.intent === intent);
   return { label: cmd?.label ?? intent, icon: cmd?.icon ?? '•' };
+}
+
+function asIntentKind(intent: string | null | undefined): IntentKind {
+  const hit = SLASH_COMMANDS.find((c) => c.intent === intent);
+  return (hit?.intent ?? 'ASK') as IntentKind;
+}
+
+function assistantMessageById(id: string | null): ChatMessage | null {
+  if (!id) return null;
+  return messages.value.find((m) => m.id === id && m.role === 'assistant') ?? null;
+}
+
+function historyPayloadFor(m: ChatMessage): Record<string, unknown> {
+  if (m.kind === 'plan') return { planSteps: m.planSteps ?? [] };
+  if (m.kind === 'resource') {
+    return {
+      resourceId: m.resourceId,
+      resourceType: m.resourceType,
+      resourceTitle: m.resourceTitle,
+      resourceGrounding: m.resourceGrounding,
+      resourceSafety: m.resourceSafety,
+      resourceSummary: m.resourceSummary,
+      resourceKcCodes: m.resourceKcCodes ?? [],
+      resourceContent: m.resourceContent ?? null,
+    };
+  }
+  if (m.kind === 'video') return { videoKeyword: m.videoKeyword ?? '' };
+  if (m.kind === 'progress') return { masterySnapshot: learning.field.masterySnapshot };
+  if (m.kind === 'mystudy') return { mystudyItems: m.mystudyItems ?? [] };
+  if (m.kind === 'navigate') return { navRoute: m.navRoute ?? '', navLabel: m.navLabel ?? '' };
+  if (m.kind === 'clarify') {
+    return { clarifyOptions: m.clarifyOptions ?? [], clarifyReason: m.clarifyReason ?? '' };
+  }
+  if (m.kind === 'error') return { retryMode: m.retry?.mode ?? null };
+  if (m.kind === 'secondary') return { secondaryIntent: m.secondaryIntent ?? null };
+  return {};
+}
+
+function responseTextForHistory(m: ChatMessage): string {
+  if (m.text.trim()) return m.text.trim();
+  if (m.kind === 'plan') return '学习规划';
+  if (m.kind === 'resource') return m.resourceTitle ?? m.toolLabel ?? '资源';
+  if (m.kind === 'video') return m.videoKeyword ?? '相关视频';
+  if (m.kind === 'progress') return '学情报告';
+  if (m.kind === 'mystudy') return m.mystudyItems?.length ? '我的书房检索结果' : '';
+  if (m.kind === 'navigate') return m.navLabel ? `带你去${m.navLabel}` : '导航';
+  if (m.kind === 'clarify') return m.clarifyReason ?? '需要澄清意图';
+  if (m.kind === 'secondary') return m.secondaryIntent ? `接着：${commandOf(m.secondaryIntent).label}` : '';
+  return '';
+}
+
+function groundingStatusForHistory(m: ChatMessage): string | null {
+  return m.groundingStatus ?? m.resourceGrounding ?? null;
+}
+
+function emitSavedWorkshopTurn(
+  request: WorkshopChatHistoryRecordRequest,
+  recordId: number,
+  m: ChatMessage,
+): void {
+  emit('history-saved', {
+    id: `workshop-${recordId}`,
+    conversationId: request.conversationId,
+    userText: request.userText,
+    intent: request.intent,
+    responseKind: request.responseKind,
+    toolLabel: request.toolLabel ?? null,
+    responseText: request.responseText ?? null,
+    responsePayload: request.responsePayload ?? {},
+    evidencePageIds: m.evidencePageIds ?? [],
+    groundingStatus: groundingStatusForHistory(m),
+    createdAt: new Date().toISOString(),
+  });
+}
+
+/**
+ * 答疑「开始回答」即向左栏「历史问答」发一条占位记录（responseText 暂空、groundingStatus 暂 null），
+ * 用与最终记录相同的 id（local-<messageId>）。流式完成后 emitSavedAnswerTurn 再用同一 id 覆盖更新，
+ * 左栏据 id 去重 merge——于是学生一发问、记录立刻出现在左侧，而非等整段答案生成完才出现。
+ */
+function emitProvisionalAnswerTurn(
+  messageId: string,
+  question: string,
+  intent: IntentKind,
+  kcCodes: string[],
+): void {
+  const meta = commandOf(intent);
+  emit('history-saved', {
+    id: `local-${messageId}`,
+    conversationId: conversationId.value,
+    userText: question,
+    intent,
+    responseKind: 'answer',
+    toolLabel: intent === 'ASK' ? '问答' : meta.label,
+    responseText: '',
+    responsePayload: { kcCodes },
+    evidencePageIds: [],
+    groundingStatus: null,
+    createdAt: new Date().toISOString(),
+  });
+}
+
+function emitSavedAnswerTurn(
+  messageId: string,
+  question: string,
+  intent: IntentKind,
+  result: TutorStreamResult,
+  text: string,
+  kcCodes: string[],
+): void {
+  const meta = commandOf(intent);
+  emit('history-saved', {
+    id: `local-${messageId}`,
+    conversationId: conversationId.value,
+    userText: question,
+    intent,
+    responseKind: 'answer',
+    toolLabel: intent === 'ASK' ? '问答' : meta.label,
+    responseText: text,
+    responsePayload: {
+      kcCodes,
+      evidenceNote: result.evidence_note ?? '',
+      personalizationNote: result.personalization_note ?? '',
+      visualAids: result.visual_aids ?? [],
+    },
+    evidencePageIds: result.evidence_page_ids ?? [],
+    groundingStatus: deriveGroundingStatus(result),
+    createdAt: new Date().toISOString(),
+  });
+}
+
+async function persistWorkshopHistoryTurn(ctx: DispatchContext, messageId: string | null): Promise<void> {
+  const m = assistantMessageById(messageId);
+  if (!m || m.kind === 'answer' || m.kind === 'text') return;
+  const request: WorkshopChatHistoryRecordRequest = {
+    conversationId: conversationId.value,
+    userText: ctx.text,
+    intent: m.intent ?? 'ASK',
+    responseKind: m.kind,
+    toolLabel: m.toolLabel ?? (m.intent ? commandOf(m.intent).label : null),
+    responseText: responseTextForHistory(m),
+    responsePayload: historyPayloadFor(m),
+  };
+  pendingHistorySaves.value += 1;
+  try {
+    const response = await recordWorkshopChatHistoryTurn(request);
+    emitSavedWorkshopTurn(request, response.id, m);
+  } catch {
+    /* 历史保存失败不打断当前工具结果。 */
+  } finally {
+    pendingHistorySaves.value = Math.max(0, pendingHistorySaves.value - 1);
+  }
 }
 
 /**
@@ -668,9 +893,10 @@ function buildClarifyOptions(
   return picks;
 }
 
-function pushClarify(guess: IntentKind, ctx: DispatchContext, reason: string): void {
+function pushClarify(guess: IntentKind, ctx: DispatchContext, reason: string): string {
+  const id = genId();
   pushMessage({
-    id: genId(),
+    id,
     role: 'assistant',
     kind: 'clarify',
     text: '',
@@ -678,6 +904,7 @@ function pushClarify(guess: IntentKind, ctx: DispatchContext, reason: string): v
     clarifyReason: reason,
     dispatchCtx: ctx,
   });
+  return id;
 }
 
 function onClarifyPick(m: ChatMessage, intentStr: string): void {
@@ -856,11 +1083,13 @@ async function onSubmit(payload: ComposerSubmitPayload): Promise<void> {
 
   // 低置信（<0.45 且非强制）：不直接执行，出澄清气泡让学生自己点工具。
   if (confidence !== null && confidence < 0.45) {
-    pushClarify(intent, ctx, routeReason);
+    const clarifyId = pushClarify(intent, ctx, routeReason);
+    void persistWorkshopHistoryTurn(ctx, clarifyId);
     return;
   }
 
   const msgId = await dispatchIntent(intent, ctx);
+  void persistWorkshopHistoryTurn(ctx, msgId);
 
   // 中置信（0.45~0.7）：已正常执行，答后在该 assistant 消息挂纠错 chips。
   if (msgId && confidence !== null && confidence < 0.7) {
@@ -1104,6 +1333,8 @@ async function runAsk(
   pushMessage(initial);
   streamingAskId.value = id;
   askInterrupted.value = false;
+  // 一开始回答就向左栏「历史问答」发占位记录；完成后用同一 id 覆盖更新（见 emitSavedAnswerTurn）。
+  emitProvisionalAnswerTurn(id, question, intent, kcCodes);
 
   // 工具差异以 context 前缀 directive 注入（蓝本 §0），graph 不需要新端点。
   const mergedContext = opts.directive
@@ -1133,8 +1364,9 @@ async function runAsk(
   if (tutorSse.status.value === 'done' && tutorSse.result.value) {
     playSfx('sfx_success');
     const r = tutorSse.result.value;
+    const answerText = r.answer_md || tutorSse.tokens.value;
     updateMessage(id, {
-      text: r.answer_md || tutorSse.tokens.value,
+      text: answerText,
       groundingStatus: deriveGroundingStatus(r),
       evidencePageIds: r.evidence_page_ids ?? [],
       evidence: toCitations(r),
@@ -1166,6 +1398,7 @@ async function runAsk(
       showVideo: wantsVideo(question),
       videoKeyword: buildVideoKeyword(question, kcCodes),
     });
+    emitSavedAnswerTurn(id, question, intent, r, answerText, kcCodes);
   } else {
     playSfx('sfx_error');
     updateMessage(id, {
@@ -1668,7 +1901,8 @@ onMounted(async () => {
         type="button"
         class="chat__newchat"
         data-testid="workshop-new-chat"
-        title="开一段新对话（之前的会进「聊天记录」）"
+        :disabled="busy"
+        :title="busy ? '当前回复正在生成或保存，稍等一下再开新对话' : '开一段新对话（之前的会进「聊天记录」）'"
         @click="newChat"
       >
         ＋ 新对话
@@ -2320,6 +2554,11 @@ onMounted(async () => {
 }
 .chat__newchat:hover {
   background: #ffe098;
+}
+.chat__newchat:disabled {
+  opacity: 0.55;
+  cursor: wait;
+  transform: none;
 }
 .chat__newchat:active {
   transform: translate(2px, 2px);

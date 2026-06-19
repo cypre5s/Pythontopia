@@ -17,7 +17,8 @@ const apiMocks = vi.hoisted(() => ({
   fetchMastery: vi.fn(),
   getLearnerProfile: vi.fn(),
   getTodayQuests: vi.fn(),
-  listTutorSessions: vi.fn(),
+  listWorkshopChatHistoryTurns: vi.fn(),
+  rememberWorkshopChatHistoryTurn: vi.fn(),
 }));
 
 vi.mock('@/api/course', () => ({
@@ -55,11 +56,11 @@ vi.mock('@/api/learner', () => ({
   finishProfileInterview: vi.fn(),
 }));
 
-vi.mock('@/api/tutor', async () => {
-  const actual = await vi.importActual<typeof import('@/api/tutor')>('@/api/tutor');
+vi.mock('@/api/workshopHistory', () => {
   return {
-    ...actual,
-    listTutorSessions: apiMocks.listTutorSessions,
+    listWorkshopChatHistoryTurns: apiMocks.listWorkshopChatHistoryTurns,
+    rememberWorkshopChatHistoryTurn: apiMocks.rememberWorkshopChatHistoryTurn,
+    recordWorkshopChatHistoryTurn: vi.fn(),
   };
 });
 
@@ -81,6 +82,7 @@ vi.mock('@/composables/useAudio', async () => {
 });
 
 import WorkshopPage from '@/pages/WorkshopPage.vue';
+import WorkshopChat from '@/components/workshop/WorkshopChat.vue';
 import { useWorldStore } from '@stores/world';
 
 const APP_LAYOUT_STUB = { template: '<div data-testid="layout-stub"><slot /></div>' };
@@ -122,7 +124,7 @@ describe('WorkshopPage R-13 改造', () => {
     apiMocks.fetchMastery.mockResolvedValue([]);
     apiMocks.getLearnerProfile.mockResolvedValue(null);
     apiMocks.getTodayQuests.mockResolvedValue([]);
-    apiMocks.listTutorSessions.mockResolvedValue([]);
+    apiMocks.listWorkshopChatHistoryTurns.mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -222,12 +224,24 @@ describe('WorkshopPage R-13 改造', () => {
     expect(wrapper.find('[data-testid="workshop-body"]').exists()).toBe(true);
   });
 
+  // 离开工坊再返回保留布局/对话靠 App.vue 的 <KeepAlive :include="['WorldPage','WorkshopPage']">；
+  // 该机制按组件 name 匹配。此处守住「组件 name === 'WorkshopPage'」契约：一旦被重命名，
+  // KeepAlive 会静默失效（页面被销毁、状态丢失），此断言即报警。
+  it('registers component name WorkshopPage so App KeepAlive include caches it across navigation', async () => {
+    await router.push('/workshop');
+    const wrapper = mountPage();
+    await flushPromises();
+
+    expect(wrapper.vm.$options.name).toBe('WorkshopPage');
+  });
+
   it('defaults to a centered single chat shell with hidden drawers', async () => {
     await router.push('/workshop');
     const wrapper = mountPage();
     await flushPromises();
 
     expect(wrapper.find('[data-testid="workshop-chat-pane"]').exists()).toBe(true);
+    expect(wrapper.get('[data-testid="workshop-body"]').classes()).toContain('workshop-body--solo');
     expect(wrapper.find('[data-testid="workshop-open-history"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="workshop-open-study"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="workshop-open-calls"]').exists()).toBe(true);
@@ -243,13 +257,96 @@ describe('WorkshopPage R-13 改造', () => {
 
     await wrapper.get('[data-testid="workshop-open-history"]').trigger('click');
     expect(wrapper.find('[data-testid="workshop-drawer-history"]').exists()).toBe(true);
+    expect(wrapper.get('[data-testid="workshop-body"]').classes()).toContain(
+      'workshop-body--with-history',
+    );
 
     await wrapper.get('[data-testid="workshop-open-study"]').trigger('click');
     expect(wrapper.find('[data-testid="workshop-drawer-study"]').exists()).toBe(true);
-    expect(wrapper.find('[data-testid="workshop-drawer-history"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="workshop-drawer-history"]').exists()).toBe(true);
 
     await wrapper.get('[data-testid="workshop-open-calls"]').trigger('click');
     expect(wrapper.find('[data-testid="workshop-drawer-calls"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="workshop-drawer-study"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="workshop-drawer-history"]').exists()).toBe(true);
+  });
+
+  it('places history on the leading side and study or calls on the trailing side', async () => {
+    await router.push('/workshop');
+    const wrapper = mountPage();
+    await flushPromises();
+
+    await wrapper.get('[data-testid="workshop-open-history"]').trigger('click');
+    await wrapper.get('[data-testid="workshop-open-study"]').trigger('click');
+
+    const body = wrapper.get('[data-testid="workshop-body"]');
+    const history = wrapper.get('[data-testid="workshop-drawer-history"]');
+    const chat = wrapper.get('[data-testid="workshop-chat-pane"]');
+    const study = wrapper.get('[data-testid="workshop-drawer-study"]');
+    const children = Array.from(body.element.children);
+
+    expect(history.attributes('data-panel-side')).toBe('left');
+    expect(study.attributes('data-panel-side')).toBe('right');
+    expect(children.indexOf(history.element)).toBeLessThan(children.indexOf(chat.element));
+    expect(children.indexOf(study.element)).toBeGreaterThan(children.indexOf(chat.element));
+  });
+
+  it('merges a saved history turn into the open drawer without reloading from the database', async () => {
+    apiMocks.listWorkshopChatHistoryTurns.mockResolvedValueOnce([]);
+    const savedTurn = {
+      id: 'workshop-99',
+      conversationId: 'conv-99',
+      userText: '我想学循环，从哪开始',
+      intent: 'PLAN',
+      responseKind: 'plan',
+      toolLabel: '规划学习',
+      responseText: '计划如下',
+      responsePayload: { planSteps: [{ id: 's1', title: '先看循环概念' }] },
+      evidencePageIds: [],
+      groundingStatus: 'PASSED',
+      createdAt: '2026-06-18T10:00:00Z',
+    };
+
+    await router.push('/workshop');
+    const wrapper = mountPage();
+    await flushPromises();
+
+    await wrapper.get('[data-testid="workshop-open-history"]').trigger('click');
+    await flushPromises();
+    expect(apiMocks.listWorkshopChatHistoryTurns).toHaveBeenCalledTimes(1);
+    expect(wrapper.text()).toContain('还没有问答记录');
+
+    wrapper.findComponent(WorkshopChat).vm.$emit('history-saved', savedTurn);
+    await flushPromises();
+
+    expect(apiMocks.listWorkshopChatHistoryTurns).toHaveBeenCalledTimes(1);
+    expect(wrapper.text()).toContain('我想学循环，从哪开始');
+    expect(wrapper.text()).toContain('引用充分');
+    expect(wrapper.text()).toContain('PLAN');
+  });
+
+  it('remembers saved history turns even when the history drawer is closed', async () => {
+    const savedTurn = {
+      id: 'workshop-100',
+      conversationId: 'conv-100',
+      userText: '我想学循环，从哪开始',
+      intent: 'PLAN',
+      responseKind: 'plan',
+      toolLabel: '规划学习',
+      responseText: '计划如下',
+      responsePayload: { planSteps: [] },
+      evidencePageIds: [],
+      groundingStatus: null,
+      createdAt: '2026-06-18T10:00:00Z',
+    };
+
+    await router.push('/workshop');
+    const wrapper = mountPage();
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="workshop-drawer-history"]').exists()).toBe(false);
+    wrapper.findComponent(WorkshopChat).vm.$emit('history-saved', savedTurn);
+
+    expect(apiMocks.rememberWorkshopChatHistoryTurn).toHaveBeenCalledWith(savedTurn);
   });
 });

@@ -27,6 +27,7 @@ const apiMocks = vi.hoisted(() => ({
   fetchMastery: vi.fn(),
   styleEngaged: vi.fn(),
   postLearningEvent: vi.fn(),
+  recordWorkshopChatHistoryTurn: vi.fn(),
 }));
 
 /** 假 SSE 实例注册表（按 URL），WorkshopChat 的 3 条流都从这里取控制柄。 */
@@ -108,6 +109,11 @@ vi.mock('@/api/workshop', () => ({
   listWorkshopResources: apiMocks.listWorkshopResources,
   getWorkshopResource: apiMocks.getWorkshopResource,
   submitWorkshopFeedback: vi.fn(),
+}));
+
+vi.mock('@/api/workshopHistory', () => ({
+  recordWorkshopChatHistoryTurn: apiMocks.recordWorkshopChatHistoryTurn,
+  listWorkshopChatHistoryTurns: vi.fn(),
 }));
 
 vi.mock('@/api/field', () => ({
@@ -418,6 +424,7 @@ describe('WorkshopChat 16 工具分发', () => {
     apiMocks.fetchMastery.mockResolvedValue([]);
     apiMocks.styleEngaged.mockResolvedValue(undefined);
     apiMocks.postLearningEvent.mockResolvedValue(undefined);
+    apiMocks.recordWorkshopChatHistoryTurn.mockResolvedValue({ id: 1 });
     armRoute();
   });
 
@@ -467,6 +474,27 @@ describe('WorkshopChat 16 工具分发', () => {
     expect(wrapper.find('.msg__pnote').attributes('title')).toBe('按你的视觉偏好定制');
     expect(wrapper.find('[data-testid="style-chips"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="stub-feedback"]').exists()).toBe(true);
+    const historyEvents = wrapper.emitted('history-saved');
+    // 开始回答即发占位记录（responseText 空），完成后用同一 id 覆盖更新成最终答案。
+    expect(historyEvents).toHaveLength(2);
+    expect(historyEvents?.[0]?.[0]).toMatchObject({
+      userText: '什么是循环',
+      intent: 'ASK',
+      responseKind: 'answer',
+      toolLabel: '问答',
+      responseText: '',
+    });
+    expect(historyEvents?.at(-1)?.[0]).toMatchObject({
+      userText: '什么是循环',
+      intent: 'ASK',
+      responseKind: 'answer',
+      toolLabel: '问答',
+      responseText: '这是答案。',
+    });
+    // 占位与最终记录共用同一 id，左栏据 id 去重 merge（不会出现两条）。
+    expect((historyEvents?.[0]?.[0] as { id: string }).id).toBe(
+      (historyEvents?.at(-1)?.[0] as { id: string }).id,
+    );
   });
 
   it('换讲法 chips：点「图解」→ styleEngaged 回流 + 带 style 重问同一问题', async () => {
@@ -648,10 +676,88 @@ describe('WorkshopChat 16 工具分发', () => {
 
     expect(wrapper.find('[data-testid="plan-card-msg"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="stub-plan-count"]').text()).toBe('1');
+    expect(apiMocks.recordWorkshopChatHistoryTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userText: '帮我规划一下这周怎么学',
+        intent: 'PLAN',
+        responseKind: 'plan',
+        toolLabel: '学习规划',
+        responseText: '计划如下',
+        responsePayload: expect.objectContaining({
+          planSteps: expect.any(Array),
+        }),
+      }),
+    );
+    expect(wrapper.emitted('history-saved')?.at(-1)?.[0]).toMatchObject({
+      userText: '帮我规划一下这周怎么学',
+      intent: 'PLAN',
+      responseKind: 'plan',
+      toolLabel: '学习规划',
+      responseText: '计划如下',
+    });
 
     await wrapper.find('[data-testid="plan-open-library"]').trigger('click');
     await flushPromises();
     expect(router.currentRoute.value.path).toBe('/library');
+  });
+
+  it('PLAN 历史保存未完成时禁用新对话，避免当前规划被清空后漏入历史', async () => {
+    const wrapper = mountChat();
+    await flushPromises();
+    const orch = sse(ORCH_URL);
+    orch.start.mockImplementation(async () => {
+      orch.status.value = 'done';
+      orch.result.value = {
+        reply_md: '循环学习计划',
+        clarifying_question: null,
+        needs_user_input: false,
+        plan: [
+          {
+            id: 's1',
+            phase: 'learn',
+            title: '先理解循环',
+            detail: '从重复执行开始',
+            agent: 'PathPlannerAgent',
+            kc_codes: ['PY43-KC-010'],
+            panel: 'library',
+            status: 'pending',
+            resource_type: 'HANDOUT',
+          },
+        ],
+        dispatch_results: [],
+        profile_updates: [],
+        trace: [],
+        done: true,
+      };
+    });
+    let releaseRecord: ((value: { id: number }) => void) | null = null;
+    apiMocks.recordWorkshopChatHistoryTurn.mockReturnValue(
+      new Promise((resolve) => {
+        releaseRecord = resolve;
+      }),
+    );
+    armRoute({ intent: 'PLAN' });
+
+    await submit(wrapper, '我想学循环，从哪里开始');
+
+    const newChat = wrapper.get('[data-testid="workshop-new-chat"]');
+    expect(newChat.attributes('disabled')).toBeDefined();
+
+    await newChat.trigger('click');
+    await flushPromises();
+    expect(wrapper.find('[data-testid="plan-card-msg"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="workshop-welcome"]').exists()).toBe(false);
+
+    releaseRecord?.({ id: 77 });
+    await flushPromises();
+    expect(wrapper.emitted('history-saved')?.at(-1)?.[0]).toMatchObject({
+      id: 'workshop-77',
+      userText: '我想学循环，从哪里开始',
+      intent: 'PLAN',
+      responseKind: 'plan',
+      responseText: '循环学习计划',
+    });
+    expect(wrapper.get('[data-testid="workshop-new-chat"]').attributes('disabled')).toBeUndefined();
   });
 
   it('PROGRESS → 纯前端学情卡：空快照先 loadField；practice 事件跳训练场', async () => {

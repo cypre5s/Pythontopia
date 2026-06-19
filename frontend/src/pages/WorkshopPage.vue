@@ -3,9 +3,9 @@
  * 百晓工坊主页：
  *   - 顶部传送栏（返回小镇 / 快速传送 / 图书馆 / 闯关塔 / 历史 / 书房 / 调用）；
  *   - 默认仅展示居中的单对话流；
- *   - 历史、书房、调用过程按需从右侧抽屉打开。
+ *   - 历史在左侧，书房、调用过程在右侧按需打开。
  */
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, onActivated, onDeactivated, onMounted, onUnmounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import AppLayout from '@/app/AppLayout.vue';
 import WorkshopChat from '@/components/workshop/WorkshopChat.vue';
@@ -14,7 +14,10 @@ import StudioDrawer from '@/components/workshop/StudioDrawer.vue';
 import ResourceDetailPanel from '@/components/workshop/ResourceDetailPanel.vue';
 import ChatHistoryRail from '@/components/workshop/ChatHistoryRail.vue';
 import ToolCallTimeline from '@/components/workshop/ToolCallTimeline.vue';
-import type { TutorSessionDto } from '@/api/tutor';
+import {
+  rememberWorkshopChatHistoryTurn,
+  type WorkshopChatHistoryTurnDto,
+} from '@/api/workshopHistory';
 import { FAST_TRAVEL_ROUTES, type FastTravelRoute } from '@/data/fastTravel';
 import { useLearningStore } from '@stores/learning';
 import { useWorldStore } from '@stores/world';
@@ -23,6 +26,10 @@ import { useWorkshopUiStore } from '@stores/workshopUi';
 import { useWorkshopActivityStore } from '@stores/workshopActivity';
 import { playUiClick, playChime } from '@/composables/useStardewFx';
 
+// 名字供 App.vue 的 <KeepAlive include> 命中：离开工坊（返回小镇 / 去图书馆 / 闯关塔等任意跳转）
+// 不销毁本页，下次回来对话流、面板布局与书房弹窗都停在离开时那一刻。
+defineOptions({ name: 'WorkshopPage' });
+
 const learning = useLearningStore();
 const world = useWorldStore();
 const toast = useToastStore();
@@ -30,17 +37,24 @@ const workshopUi = useWorkshopUiStore();
 const activity = useWorkshopActivityStore();
 const router = useRouter();
 
-// 书房默认收起（窄把手），聊天占满主区；学生需要时点把手展开。
+// 被 KeepAlive 缓存时是否处于「激活」（当前可见）状态。
+// 仅用于守卫 Teleport 到 body 的书房弹窗：失活（切到别的页）时不渲染，回来再渲染，
+// 避免弹窗遗留在其它页面之上。直接挂载（非 KeepAlive，如单测）时恒为 true。
+const pageActive = ref(true);
+
+// 书房默认收起，聊天占满主区；学生需要时点顶部按钮展开。
 const drawerOpen = ref(false);
-type WorkshopDrawer = 'history' | 'study' | 'calls' | null;
+type WorkshopDrawer = 'study' | 'calls' | null;
+const historyOpen = ref(false);
 const activeDrawer = ref<WorkshopDrawer>(null);
+const historyPendingTurn = ref<WorkshopChatHistoryTurnDto | null>(null);
 
 // 左栏「聊天记录」选中某段会话时，把整段会话（多轮问答）回看注入对话流并接着聊
-// （WorkshopChat 暴露 loadConversation）。
-const chatRef = ref<{ loadConversation: (sessions: TutorSessionDto[]) => void } | null>(null);
-function onSelectConversation(sessions: TutorSessionDto[]): void {
-  chatRef.value?.loadConversation(sessions);
-  activeDrawer.value = null;
+// （WorkshopChat 暴露 loadConversation）。选中后**保持历史栏与右侧栏原样**，
+// 方便学生连续翻看多段会话（不自动收起任何面板）。
+const chatRef = ref<{ loadConversation: (turns: WorkshopChatHistoryTurnDto[]) => void } | null>(null);
+function onSelectConversation(turns: WorkshopChatHistoryTurnDto[]): void {
+  chatRef.value?.loadConversation(turns);
 }
 
 // R-14 域1④：书房当前打开的资源 id 由 store 持有，不再进 URL（避免暴露可枚举 id）。
@@ -56,11 +70,18 @@ function onKeydown(event: KeyboardEvent): void {
   }
   if (event.key === 'Escape' && activeDrawer.value !== null) {
     closeDrawer();
+    return;
+  }
+  if (event.key === 'Escape' && historyOpen.value) {
+    closeHistoryDrawer();
   }
 }
 
 onMounted(async () => {
+  // keydown 监听只在本页激活时生效：用同一函数引用重复 add 是幂等的（浏览器去重），
+  // 故 onMounted 与 onActivated 都 add 不会重复绑定；失活/卸载时 remove。
   window.addEventListener('keydown', onKeydown);
+  pageActive.value = true;
   if (learning.field.masterySnapshot.length === 0) {
     await learning.loadField();
   }
@@ -69,10 +90,21 @@ onMounted(async () => {
   }
 });
 
+// KeepAlive 重新激活（再次进入工坊）：恢复键盘监听与弹窗渲染，状态本就保留。
+onActivated(() => {
+  window.addEventListener('keydown', onKeydown);
+  pageActive.value = true;
+});
+
+// KeepAlive 失活（离开工坊但不销毁）：撤掉键盘监听、停渲染 body 上的书房弹窗，
+// 但保留 historyOpen / activeDrawer / openResourceId 等状态，回来时原样恢复。
+onDeactivated(() => {
+  window.removeEventListener('keydown', onKeydown);
+  pageActive.value = false;
+});
+
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeydown);
-  // 离开工坊清空书房选中，避免下次进入残留旧资源弹窗。
-  workshopUi.closeResource();
 });
 
 function onOpenResource(id: number): void {
@@ -118,15 +150,28 @@ function openArena(chapter: number): void {
   void router.push({ path: `/arena/${chapter}` });
 }
 
-function openDrawer(drawer: Exclude<WorkshopDrawer, null>): void {
+function openDrawer(drawer: 'history' | Exclude<WorkshopDrawer, null>): void {
   playUiClick();
+  if (drawer === 'history') {
+    historyOpen.value = !historyOpen.value;
+    return;
+  }
   activeDrawer.value = activeDrawer.value === drawer ? null : drawer;
-  drawerOpen.value = drawer === 'study';
+  drawerOpen.value = activeDrawer.value === 'study';
 }
 
 function closeDrawer(): void {
   activeDrawer.value = null;
   drawerOpen.value = false;
+}
+
+function closeHistoryDrawer(): void {
+  historyOpen.value = false;
+}
+
+function appendHistoryTurn(turn: WorkshopChatHistoryTurnDto): void {
+  rememberWorkshopChatHistoryTurn(turn);
+  historyPendingTurn.value = turn;
 }
 
 function onStudyOpenChange(open: boolean): void {
@@ -137,11 +182,16 @@ function onStudyOpenChange(open: boolean): void {
 }
 
 const drawerTitle = computed<string>(() => {
-  if (activeDrawer.value === 'history') return '历史问答';
   if (activeDrawer.value === 'study') return '我的书房';
   if (activeDrawer.value === 'calls') return '调用过程';
   return '';
 });
+
+const bodyClass = computed<Record<string, boolean>>(() => ({
+  'workshop-body--solo': !historyOpen.value && activeDrawer.value === null,
+  'workshop-body--with-history': historyOpen.value,
+  'workshop-body--with-side': activeDrawer.value !== null,
+}));
 </script>
 
 <template>
@@ -172,9 +222,9 @@ const drawerTitle = computed<string>(() => {
           <button
             type="button"
             class="workshop-drawer-tab"
-            :class="{ 'workshop-drawer-tab--active': activeDrawer === 'history' }"
+            :class="{ 'workshop-drawer-tab--active': historyOpen }"
             data-testid="workshop-open-history"
-            :aria-expanded="activeDrawer === 'history'"
+            :aria-expanded="historyOpen"
             @click="openDrawer('history')"
           >
             历史
@@ -245,8 +295,37 @@ const drawerTitle = computed<string>(() => {
 
       <div
         class="workshop-body"
+        :class="bodyClass"
         data-testid="workshop-body"
       >
+        <aside
+          v-if="historyOpen"
+          class="workshop-drawer workshop-drawer--history"
+          data-testid="workshop-drawer-history"
+          data-panel-side="left"
+          role="complementary"
+          aria-label="历史问答"
+        >
+          <header class="workshop-drawer__bar">
+            <span class="workshop-drawer__title">历史问答</span>
+            <button
+              type="button"
+              class="workshop-drawer__close"
+              data-testid="workshop-history-close"
+              @click="closeHistoryDrawer"
+            >
+              关闭
+            </button>
+          </header>
+          <div class="workshop-drawer__body">
+            <ChatHistoryRail
+              embedded-open
+              :pending-turn="historyPendingTurn"
+              @select="onSelectConversation"
+            />
+          </div>
+        </aside>
+
         <div
           class="workshop-chat-pane"
           data-testid="workshop-chat-pane"
@@ -254,12 +333,14 @@ const drawerTitle = computed<string>(() => {
           <WorkshopChat
             ref="chatRef"
             @open-resource="onOpenResource"
+            @history-saved="appendHistoryTurn"
           />
         </div>
         <aside
           v-if="activeDrawer !== null"
-          class="workshop-drawer"
+          class="workshop-drawer workshop-drawer--side"
           :data-testid="`workshop-drawer-${activeDrawer}`"
+          data-panel-side="right"
           role="complementary"
           :aria-label="drawerTitle"
         >
@@ -275,13 +356,8 @@ const drawerTitle = computed<string>(() => {
             </button>
           </header>
           <div class="workshop-drawer__body">
-            <ChatHistoryRail
-              v-if="activeDrawer === 'history'"
-              embedded-open
-              @select="onSelectConversation"
-            />
             <StudioDrawer
-              v-else-if="activeDrawer === 'study'"
+              v-if="activeDrawer === 'study'"
               :open="drawerOpen"
               @update:open="onStudyOpenChange"
             />
@@ -310,7 +386,7 @@ const drawerTitle = computed<string>(() => {
            展示讲义 / 思维导图 / 练习等内容；点遮罩、点 ✕ 或按 Esc 关闭。 -->
       <Teleport to="body">
         <div
-          v-if="selectedId !== null"
+          v-if="selectedId !== null && pageActive"
           class="resource-modal-overlay"
           data-testid="resource-modal"
           role="dialog"
@@ -456,17 +532,25 @@ const drawerTitle = computed<string>(() => {
 
 .workshop-body {
   flex: 1 1 auto;
-  display: flex;
+  display: grid;
   align-items: stretch;
-  justify-content: center;
   gap: 10px;
   min-height: 0;
   overflow: hidden;
   position: relative;
+  grid-template-columns: minmax(0, 1fr);
+}
+.workshop-body--with-history {
+  grid-template-columns: minmax(240px, 300px) minmax(520px, 1fr);
+}
+.workshop-body--with-side {
+  grid-template-columns: minmax(520px, 1fr) minmax(320px, 380px);
+}
+.workshop-body--with-history.workshop-body--with-side {
+  grid-template-columns: minmax(230px, 280px) minmax(500px, 1fr) minmax(320px, 380px);
 }
 .workshop-chat-pane {
-  flex: 0 1 920px;
-  width: min(920px, 100%);
+  width: 100%;
   min-width: 0;
   min-height: 0;
   display: flex;
@@ -477,13 +561,11 @@ const drawerTitle = computed<string>(() => {
   box-shadow: inset 0 0 0 2px rgba(255, 247, 230, 0.55);
   overflow: hidden;
 }
+.workshop-body--solo .workshop-chat-pane {
+  justify-self: stretch;
+}
 .workshop-drawer {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 20;
-  width: min(360px, 92vw);
+  width: 100%;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -493,6 +575,12 @@ const drawerTitle = computed<string>(() => {
   box-shadow: -6px 6px 0 rgba(42, 26, 5, 0.22);
   overflow: hidden;
   font-family: var(--pyt-font-pixel);
+}
+.workshop-drawer--history {
+  box-shadow: 6px 6px 0 rgba(42, 26, 5, 0.16);
+}
+.workshop-drawer--side {
+  box-shadow: -6px 6px 0 rgba(42, 26, 5, 0.18);
 }
 .workshop-drawer__bar {
   flex: 0 0 auto;
@@ -609,12 +697,20 @@ const drawerTitle = computed<string>(() => {
   padding: 12px;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1120px) {
   .workshop-body {
+    grid-template-columns: minmax(0, 1fr);
     overflow: hidden;
   }
+  .workshop-body--with-history,
+  .workshop-body--with-side,
+  .workshop-body--with-history.workshop-body--with-side {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .workshop-drawer {
-    left: 0;
+    position: absolute;
+    inset: 0;
+    z-index: 20;
     width: auto;
   }
 }

@@ -109,7 +109,9 @@ public class TutorGraphClient {
                 internalToken,
                 emitter,
                 (event, data) -> {
-                  if ("result".equals(event)) {
+                  // graph 已迁 AG-UI：终态走 RUN_FINISHED（形状 {"result":{...}}），历史名 result 是裸结果。
+                  // 两种都触发落库，否则 tutor_session 永远写不进、历史问答恒为空。
+                  if ("result".equals(event) || "RUN_FINISHED".equals(event)) {
                     onResult.accept(data);
                   }
                 },

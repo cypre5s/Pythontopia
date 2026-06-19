@@ -2,32 +2,40 @@
 /**
  * ChatHistoryRail —— 工坊左栏「聊天记录」可伸缩侧栏。
  *
- * 默认收起为一条竖把手；点把手拉出，列出学生的历史问答会话（真实数据 /api/tutor/sessions），
+ * 默认收起为一条竖把手；点把手拉出，列出学生的工坊聊天历史（真实数据 /api/workshop/chat-history/turns），
  * 点某条把该次问答回看到对话流（由父级注入 WorkshopChat）。懒加载：仅首次展开时拉取；
  * 失败安全降级（不打断工坊主流程），可手动重试 / 刷新。
  */
 import { computed, ref, watch } from 'vue';
-import { listTutorSessions, type TutorSessionDto } from '@/api/tutor';
+import {
+  listWorkshopChatHistoryTurns,
+  rememberWorkshopChatHistoryTurn,
+  type WorkshopChatHistoryTurnDto,
+} from '@/api/workshopHistory';
 import { playUiClick } from '@/composables/useStardewFx';
 
-const props = withDefaults(defineProps<{ embeddedOpen?: boolean }>(), {
-  embeddedOpen: false,
-});
+const props = withDefaults(
+  defineProps<{ embeddedOpen?: boolean; pendingTurn?: WorkshopChatHistoryTurnDto | null }>(),
+  {
+    embeddedOpen: false,
+    pendingTurn: null,
+  },
+);
 
-const emit = defineEmits<{ (e: 'select', sessions: TutorSessionDto[]): void }>();
+const emit = defineEmits<{ (e: 'select', turns: WorkshopChatHistoryTurnDto[]): void }>();
 
 const open = ref(false);
 const loading = ref(false);
 const loaded = ref(false);
 const failed = ref(false);
-const sessions = ref<TutorSessionDto[]>([]);
+const turns = ref<WorkshopChatHistoryTurnDto[]>([]);
 const effectiveOpen = computed<boolean>(() => props.embeddedOpen || open.value);
 
-async function load(): Promise<void> {
+async function load(force = false): Promise<void> {
   loading.value = true;
   failed.value = false;
   try {
-    sessions.value = await listTutorSessions();
+    turns.value = await listWorkshopChatHistoryTurns(50, { force });
     loaded.value = true;
   } catch {
     failed.value = true;
@@ -36,21 +44,36 @@ async function load(): Promise<void> {
   }
 }
 
-/** 一段会话（同一 conversationId 的多轮问答）；旧数据无 id 时每条各成一段。 */
+function mergeTurn(turn: WorkshopChatHistoryTurnDto): void {
+  const existingIndex = turns.value.findIndex((item) => item.id === turn.id);
+  if (existingIndex >= 0) {
+    turns.value = turns.value.map((item, index) => (index === existingIndex ? turn : item));
+  } else {
+    turns.value = [turn, ...turns.value];
+  }
+  rememberWorkshopChatHistoryTurn(turn);
+  failed.value = false;
+}
+
+/** 一段会话（同一 conversationId 的多轮工具 turn）；旧数据无 id 时每条各成一段。 */
 interface ConversationGroup {
   key: string;
   title: string;
-  turns: number;
+  turnCount: number;
   latestAt: string;
-  groundingStatus: string;
-  sessions: TutorSessionDto[];
+  evidenceLabel: string;
+  evidenceClass: string;
+  kindLabel: string;
+  kindClass: string;
+  toolLabel: string | null;
+  turns: WorkshopChatHistoryTurnDto[];
 }
 
-// 按 conversationId 把多轮问答归并成「会话」：一个窗口一条，而非每问一条。
+// 按 conversationId 把多轮聊天归并成「会话」：一个窗口一条，而非每问一条。
 const groups = computed<ConversationGroup[]>(() => {
-  const byKey = new Map<string, TutorSessionDto[]>();
-  for (const s of sessions.value) {
-    const key = s.conversationId ?? `s-${s.id}`;
+  const byKey = new Map<string, WorkshopChatHistoryTurnDto[]>();
+  for (const s of turns.value) {
+    const key = s.conversationId || `s-${s.id}`;
     const bucket = byKey.get(key);
     if (bucket) bucket.push(s);
     else byKey.set(key, [s]);
@@ -63,11 +86,15 @@ const groups = computed<ConversationGroup[]>(() => {
     const latest = asc[asc.length - 1] ?? earliest;
     result.push({
       key,
-      title: earliest.question,
-      turns: asc.length,
+      title: earliest.userText,
+      turnCount: asc.length,
       latestAt: latest.createdAt,
-      groundingStatus: latest.groundingStatus,
-      sessions: bucket,
+      evidenceLabel: groundingLabel(latest.groundingStatus),
+      evidenceClass: latest.groundingStatus || 'NONE',
+      kindLabel: historyKindLabel(latest),
+      kindClass: historyKindClass(latest),
+      toolLabel: latest.toolLabel,
+      turns: bucket,
     });
   }
   // 最近活跃的会话排最前。
@@ -81,7 +108,7 @@ const filteredGroups = computed<ConversationGroup[]>(() => {
   if (!q) return groups.value;
   return groups.value.filter((g) => {
     if (g.title.toLowerCase().includes(q)) return true;
-    return g.sessions.some((s) => s.question.toLowerCase().includes(q));
+    return g.turns.some((s) => s.userText.toLowerCase().includes(q));
   });
 });
 
@@ -100,15 +127,22 @@ watch(
   { immediate: true },
 );
 
+watch(
+  () => props.pendingTurn,
+  (turn) => {
+    if (turn) mergeTurn(turn);
+  },
+);
+
 function refresh(): void {
   playUiClick();
-  void load();
+  void load(true);
 }
 
 function pick(group: ConversationGroup): void {
   playUiClick();
-  // 列表项已含 answerMd（后端 findByUser 直接 SELECT），整段会话直接回放，无需再请求详情。
-  emit('select', group.sessions);
+  // 列表项已含回放所需 payload，整段会话直接回放，无需再请求详情。
+  emit('select', group.turns);
 }
 
 const GROUNDING_LABEL: Record<string, string> = {
@@ -116,8 +150,20 @@ const GROUNDING_LABEL: Record<string, string> = {
   NO_EVIDENCE: '通识',
   FAILED: '未过',
 };
-function groundingLabel(status: string): string {
+function groundingLabel(status: string | null): string {
+  if (!status) return '记录';
   return GROUNDING_LABEL[status] ?? status;
+}
+
+function historyKindLabel(turn: WorkshopChatHistoryTurnDto): string {
+  const source = turn.intent || turn.responseKind;
+  const normalized = source.trim().toUpperCase();
+  if (normalized === 'ANSWER') return 'ASK';
+  return normalized || '记录';
+}
+
+function historyKindClass(turn: WorkshopChatHistoryTurnDto): string {
+  return historyKindLabel(turn).replace(/[^A-Z0-9_-]/g, '');
 }
 
 function shortTime(iso: string): string {
@@ -168,6 +214,7 @@ function shortTime(iso: string): string {
         <button
           type="button"
           class="history__refresh"
+          data-testid="workshop-history-refresh"
           title="刷新"
           @click="refresh"
         >
@@ -177,7 +224,7 @@ function shortTime(iso: string): string {
 
       <!-- 本地搜索：会话多了也能按标题 / 问题文本快速筛。 -->
       <input
-        v-if="loaded && !failed && sessions.length > 0"
+        v-if="loaded && !failed && turns.length > 0"
         v-model="query"
         type="search"
         class="history__search"
@@ -205,7 +252,7 @@ function shortTime(iso: string): string {
         </button>
       </p>
       <p
-        v-else-if="sessions.length === 0"
+        v-else-if="turns.length === 0"
         class="history__state"
       >
         还没有问答记录，去对话框问点什么吧。
@@ -227,19 +274,24 @@ function shortTime(iso: string): string {
           <button
             type="button"
             class="history__item"
-            :title="`回看并继续这段会话（${g.turns} 轮）：${g.title}`"
+            :title="`回看并继续这段会话（${g.turnCount} 轮）：${g.title}`"
             @click="pick(g)"
           >
             <span class="history__q">{{ g.title }}</span>
             <span class="history__meta">
               <span
-                v-if="g.turns > 1"
+                v-if="g.turnCount > 1"
                 class="history__turns"
-              >{{ g.turns }} 轮</span>
+              >{{ g.turnCount }} 轮</span>
               <span
                 class="history__g"
-                :class="`history__g--${g.groundingStatus}`"
-              >{{ groundingLabel(g.groundingStatus) }}</span>
+                :class="`history__g--${g.evidenceClass}`"
+              >{{ g.evidenceLabel }}</span>
+              <span
+                class="history__kind"
+                :class="`history__kind--${g.kindClass}`"
+                :title="g.toolLabel || `类型：${g.kindLabel}`"
+              >{{ g.kindLabel }}</span>
               <span class="history__time">{{ shortTime(g.latestAt) }}</span>
             </span>
           </button>
@@ -248,7 +300,7 @@ function shortTime(iso: string): string {
 
       <!-- 续聊提示：点任意会话会回看并把当前窗口切到这段会话，接着问即并入同一条记录。 -->
       <p
-        v-if="loaded && !failed && sessions.length > 0"
+        v-if="loaded && !failed && turns.length > 0"
         class="history__hint"
       >
         💡 点会话可回看并接着聊
@@ -428,16 +480,18 @@ function shortTime(iso: string): string {
 .history__meta {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 6px;
 }
-.history__g {
+.history__g,
+.history__kind {
   font-size: 9px;
   padding: 0 6px;
   border-radius: var(--pyt-radius-full);
   border: 1px solid var(--pyt-color-border);
   background: var(--pyt-color-bg-soft);
   color: var(--pyt-color-text-muted);
+  white-space: nowrap;
 }
 .history__g--PASSED {
   background: #d6ead1;
@@ -454,6 +508,28 @@ function shortTime(iso: string): string {
   border-color: var(--pyt-color-danger);
   color: #b3402a;
 }
+.history__kind {
+  border-color: #8c6a23;
+  background: #fff8df;
+  color: #6e4f1d;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+.history__kind--ASK {
+  background: #e9f3ff;
+  border-color: #3d6f9f;
+  color: #285177;
+}
+.history__kind--PLAN {
+  background: #f1e7ff;
+  border-color: #7a55ad;
+  color: #5b368f;
+}
+.history__kind--RESOURCE {
+  background: #e2f7e8;
+  border-color: #43845a;
+  color: #2f6843;
+}
 .history__turns {
   font-size: 9px;
   padding: 0 6px;
@@ -464,6 +540,7 @@ function shortTime(iso: string): string {
   white-space: nowrap;
 }
 .history__time {
+  margin-left: auto;
   font-size: 10px;
   color: var(--pyt-color-text-muted);
   font-variant-numeric: tabular-nums;

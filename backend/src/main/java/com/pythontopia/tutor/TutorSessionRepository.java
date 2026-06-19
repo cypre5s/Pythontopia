@@ -76,10 +76,14 @@ public class TutorSessionRepository {
     return jdbcTemplate.query(
         """
         SELECT id, question, answer_md, evidence_page_ids, grounding_status, conversation_id, created_at
-        FROM tutor_session
-        WHERE user_id = ? AND conversation_id = ?
+        FROM (
+          SELECT id, question, answer_md, evidence_page_ids, grounding_status, conversation_id, created_at
+          FROM tutor_session
+          WHERE user_id = ? AND conversation_id = ?
+          ORDER BY created_at DESC
+          LIMIT ?
+        ) recent
         ORDER BY created_at ASC
-        LIMIT ?
         """,
         this::mapDto,
         userId, conversationId, safeLimit);
