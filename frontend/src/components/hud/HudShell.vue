@@ -156,7 +156,7 @@ function openLibrary(): void {
 
 function openArena(): void {
   playUiClick();
-  void router.push('/arena/1');
+  void router.push('/expedition');
 }
 
 function onToggleSettings(): void {

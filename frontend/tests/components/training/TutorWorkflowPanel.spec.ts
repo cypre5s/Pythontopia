@@ -125,10 +125,11 @@ describe('TutorWorkflowPanel', () => {
     vi.mocked(recordTutorWorkflowFeedback).mockClear();
   });
 
-  it('highlights the coach recommended next action without hiding other actions', async () => {
+  it('highlights the coach recommended next action and tucks tools into a collapsible drawer', async () => {
     const wrapper = mountPanel();
     await flushPromises();
 
+    // 初始主推荐是「题目导读」；点它触发一次 run，返回 execution_trace(recommended)+knowledge_review。
     await wrapper.get('[data-testid="tw-actions"] button').trigger('click');
     await flushPromises();
     await nextTick();
@@ -137,6 +138,11 @@ describe('TutorWorkflowPanel', () => {
     expect(recommended.text()).toContain('推荐下一步');
     expect(recommended.text()).toContain('执行轨迹讲解');
     expect(recommended.text()).toContain('先看变量如何变化');
+
+    // 辅助工具默认收纳，不直接铺成一排按钮；展开「学习工具」后才出现知识点复盘。
+    expect(wrapper.get('[data-testid="tw-actions"]').text()).not.toContain('知识点复盘');
+    await wrapper.get('.tw-tools__toggle').trigger('click');
+    await nextTick();
     expect(wrapper.get('[data-testid="tw-actions"]').text()).toContain('知识点复盘');
   });
 
@@ -186,6 +192,11 @@ describe('TutorWorkflowPanel', () => {
     await flushPromises();
 
     const progress = wrapper.get('[data-testid="coach-progress"]');
+    // 思考过程默认只露一行「思考中…」，详情收纳；展开后才显示各节点（用户要求缩小收纳）。
+    expect(progress.text()).toContain('百晓思考中');
+    expect(progress.text()).not.toContain('正在判断你卡在哪里');
+    await wrapper.get('.tw-think__toggle').trigger('click');
+    await nextTick();
     expect(progress.text()).toContain('正在判断你卡在哪里');
     expect(progress.text()).toContain('正在选择下一步提示');
     expect(progress.text()).toContain('正在生成导学卡');

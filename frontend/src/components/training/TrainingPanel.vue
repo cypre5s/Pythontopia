@@ -3,9 +3,9 @@ import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useLearningStore } from '@stores/learning';
 import { useToastStore } from '@stores/toast';
-import { useCodeTheaterStore } from '@stores/codeTheater';
 import { playSfx } from '@/composables/useAudio';
-import { kcDisplayName } from '@/data/kcNames';
+import { useCodeEditorTheme } from '@/composables/useCodeEditorTheme';
+import { useResizable } from '@/composables/useResizable';
 import MarkdownView from '@/components/common/MarkdownView.vue';
 import PyButton from '@/components/ui/PyButton.vue';
 import GuideNudgeCard from '@/components/training/GuideNudgeCard.vue';
@@ -15,7 +15,6 @@ import type { WorkflowEvent } from '@/api/tutorWorkflow';
 
 const learning = useLearningStore();
 const toast = useToastStore();
-const codeTheaterStore = useCodeTheaterStore();
 const router = useRouter();
 const route = useRoute();
 
@@ -27,18 +26,25 @@ const isVariantMode = computed<boolean>(() => route.query.variant === '1' && var
 
 const problem = computed(() => learning.training.problem);
 
-// 掌握度透明化：把本题 KC 的隐藏掌握度翻成「当前/100」直观显示。
-// R-15 退役旧 mainQuest 后不再读每 KC 的主线阈值；章末测试才是达标判据（mainline 域）。
-interface KcMasteryHint {
-  current: number;
-}
-const kcMasteryHint = computed<KcMasteryHint | null>(() => {
-  const kc = problem.value?.kcCode;
-  if (!kc) return null;
-  const snap = learning.field.masterySnapshot.find((s) => s.kcCode === kc);
-  const current = Math.round((snap?.masteryScore ?? 0) * 100);
-  return { current };
-});
+// 编辑器「暗色/亮色」开关上提到头部（AI 助教左侧），与编辑器共享同一份响应式状态。
+const { isLight: editorIsLight, toggle: toggleEditorTheme } = useCodeEditorTheme();
+
+// 三栏（题干 | 代码 | AI 助手）左右可拖、（代码 | 调试）上下可拖：尺寸用 px ref 驱动 CSS 变量，
+// 不直接内联 grid-template-columns，确保窄屏 media query 仍能把布局收成单列。
+const problemColPx = ref(420);
+const tutorColPx = ref(320);
+const runtimeRowPx = ref(170);
+const { onPointerDown: onDragProblem } = useResizable(problemColPx, { min: 280, max: 760, axis: 'x' });
+const { onPointerDown: onDragTutor } = useResizable(tutorColPx, { min: 240, max: 600, axis: 'x', invert: true });
+const { onPointerDown: onDragRuntime } = useResizable(runtimeRowPx, { min: 110, max: 460, axis: 'y', invert: true });
+const layoutStyle = computed(() => ({
+  '--left-col': `${problemColPx.value}px`,
+  '--tutor-col': `${tutorColPx.value}px`,
+}));
+const solutionStyle = computed(() => ({
+  '--runtime-row': `${runtimeRowPx.value}px`,
+}));
+
 const sampleStdin = computed(() => {
   const samples = problem.value?.samples ?? [];
   const first = samples[0];
@@ -161,16 +167,6 @@ async function enterBugMine(): Promise<void> {
   await router.push('/bug-mine');
 }
 
-/** WA/RE 后去代码剧场「自由可视化」，把这段提交代码的执行过程演出来（学习预览，不判分）。 */
-async function enterCodeTheater(): Promise<void> {
-  codeTheaterStore.setFreeRun({
-    code: learning.training.code,
-    stdin: debugInput.value,
-    label: problem.value?.title ?? '',
-  });
-  await router.push('/code-theater');
-}
-
 // 做题页内嵌 AI 导学助手：阶段卡片式工作流（TutorWorkflowPanel），按 problemId 驱动后端
 // 工作流（题目/判定/画像由后端组装，防泄答在后端 prompt 护栏），关键节点带 submission_id 感知环境。
 const showTutor = ref(false);
@@ -220,6 +216,7 @@ async function copySample(text: string): Promise<void> {
       v-if="problem"
       class="oj-layout"
       :class="{ 'oj-layout--tutor': showTutor }"
+      :style="layoutStyle"
     >
       <aside
         id="problem-left"
@@ -231,19 +228,6 @@ async function copySample(text: string): Promise<void> {
               <h2>{{ problem.title }}</h2>
               <span class="problem-id">#{{ problem.id }}</span>
             </div>
-            <div class="problem-meta">
-              <span>{{ kcDisplayName(problem.kcCode) }}</span>
-              <span>{{ problem.kcCode }}</span>
-              <span>难度 {{ problem.difficulty }}</span>
-            </div>
-            <p
-              v-if="kcMasteryHint"
-              class="mastery-hint"
-              data-testid="training-mastery-hint"
-              title="掌握进度：做对题目会涨，达到目标就过关"
-            >
-              掌握进度 <strong>{{ kcMasteryHint.current }}/100</strong>
-            </p>
           </header>
 
           <div class="problem-content">
@@ -292,32 +276,34 @@ async function copySample(text: string): Promise<void> {
                 @mouseenter="onSampleHover"
               >
                 <div class="sample-item">
-                  <div class="sample-head">
-                    <span class="sample-title">输入 {{ i + 1 }}</span>
+                  <span class="sample-title">输入 {{ i + 1 }}</span>
+                  <div class="sample-box">
                     <button
                       type="button"
                       class="sample-copy"
                       title="复制输入"
+                      aria-label="复制输入"
                       @click="copySample(sample.input)"
                     >
-                      ⧉ 复制
+                      ⧉
                     </button>
+                    <pre><code>{{ sample.input || '(空)' }}</code></pre>
                   </div>
-                  <pre><code>{{ sample.input || '(空)' }}</code></pre>
                 </div>
                 <div class="sample-item">
-                  <div class="sample-head">
-                    <span class="sample-title">输出 {{ i + 1 }}</span>
+                  <span class="sample-title">输出 {{ i + 1 }}</span>
+                  <div class="sample-box">
                     <button
                       type="button"
                       class="sample-copy"
                       title="复制输出"
+                      aria-label="复制输出"
                       @click="copySample(sample.output)"
                     >
-                      ⧉ 复制
+                      ⧉
                     </button>
+                    <pre><code>{{ sample.output || '(空)' }}</code></pre>
                   </div>
-                  <pre><code>{{ sample.output || '(空)' }}</code></pre>
                 </div>
               </div>
             </section>
@@ -326,13 +312,18 @@ async function copySample(text: string): Promise<void> {
       </aside>
 
       <div
-        class="drag-handle"
-        aria-hidden="true"
+        class="drag-handle drag-handle--col"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="拖动调整题干与代码区宽度"
+        title="拖动调整宽度"
+        @pointerdown="onDragProblem"
       />
 
       <section
         id="problem-right"
         class="solution-pane"
+        :style="solutionStyle"
       >
         <article class="editor-card">
           <header class="editor-card__header">
@@ -340,20 +331,41 @@ async function copySample(text: string): Promise<void> {
               <h3>main.py</h3>
               <span>Python 3.11</span>
             </div>
-            <button
-              type="button"
-              class="ai-toggle"
-              data-testid="training-tutor-toggle"
-              @click="toggleTutor"
-            >
-              {{ showTutor ? '收起助教' : 'AI 助教' }}
-            </button>
+            <div class="editor-card__actions">
+              <button
+                type="button"
+                class="editor-theme-btn"
+                :title="editorIsLight ? '切换到暗色主题' : '切换到亮色主题'"
+                data-testid="training-theme-toggle"
+                @click="toggleEditorTheme"
+              >
+                {{ editorIsLight ? '🌙 暗色' : '☀ 亮色' }}
+              </button>
+              <button
+                type="button"
+                class="ai-toggle"
+                data-testid="training-tutor-toggle"
+                @click="toggleTutor"
+              >
+                {{ showTutor ? '收起助教' : 'AI 助教' }}
+              </button>
+            </div>
           </header>
           <PythonCodeEditor
             :model-value="learning.training.code"
+            :show-theme-toggle="false"
             @update:model-value="learning.setTrainingCode"
           />
         </article>
+
+        <div
+          class="drag-handle drag-handle--row"
+          role="separator"
+          aria-orientation="horizontal"
+          aria-label="拖动调整代码区与调试区高度"
+          title="拖动调整高度"
+          @pointerdown="onDragRuntime"
+        />
 
         <article class="runtime-card">
           <header class="runtime-card__header">
@@ -441,14 +453,6 @@ async function copySample(text: string): Promise<void> {
               >
                 进入 Bug 矿洞
               </PyButton>
-              <PyButton
-                test-id="code-theater-button"
-                variant="secondary"
-                size="sm"
-                @click="enterCodeTheater"
-              >
-                去代码剧场看执行
-              </PyButton>
             </div>
           </section>
           <GuideNudgeCard
@@ -459,6 +463,16 @@ async function copySample(text: string): Promise<void> {
           />
         </article>
       </section>
+
+      <div
+        v-if="showTutor"
+        class="drag-handle drag-handle--col"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="拖动调整 AI 助手宽度"
+        title="拖动调整宽度"
+        @pointerdown="onDragTutor"
+      />
 
       <!-- AI 导学助手：阶段卡片式工作流面板（自带标题/关闭/动作链）。 -->
       <aside
@@ -502,20 +516,21 @@ async function copySample(text: string): Promise<void> {
     var(--pyt-color-bg-primary);
 }
 
+/* 列宽由内联 CSS 变量（--left-col / --tutor-col）驱动拖拽，而非内联 grid-template，
+   这样窄屏 media query 仍能把布局收成单列。中间 8px 列是可拖拽手柄。 */
 .oj-layout {
   height: 100%;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(340px, 0.9fr) 12px minmax(520px, 1.1fr);
+  grid-template-columns: var(--left-col, minmax(340px, 0.9fr)) 8px minmax(0, 1fr);
   gap: 0;
   padding: 18px;
 }
 
-/* 助教展开时追加第四列（侧栏化，不遮挡编辑器/调试面板） */
+/* 助教展开时追加「手柄 + AI 助手」两列（侧栏化，不遮挡编辑器/调试面板） */
 .oj-layout--tutor {
   grid-template-columns:
-    minmax(300px, 0.85fr) 12px minmax(440px, 1.05fr) minmax(280px, 0.55fr);
-  column-gap: 12px;
+    var(--left-col, minmax(300px, 0.85fr)) 8px minmax(0, 1fr) 8px var(--tutor-col, minmax(280px, 0.55fr));
 }
 
 .problem-pane,
@@ -573,31 +588,6 @@ async function copySample(text: string): Promise<void> {
   padding: 4px 7px;
 }
 
-.problem-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 10px;
-}
-
-.problem-meta span,
-.mastery-hint {
-  font-size: 12px;
-  color: var(--pyt-color-text-hint);
-  background: rgba(241, 216, 150, 0.42);
-  border: 1px solid rgba(74, 54, 29, 0.22);
-  border-radius: 4px;
-  padding: 5px 8px;
-}
-
-.mastery-hint {
-  margin: 8px 0 0;
-}
-
-.mastery-hint strong {
-  color: var(--pyt-color-text-primary);
-}
-
 .problem-content {
   flex: 1;
   min-height: 0;
@@ -637,37 +627,47 @@ async function copySample(text: string): Promise<void> {
 
 .sample-item {
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.sample-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 6px;
-}
 .sample-title {
   font-family: var(--pyt-font-read);
   font-size: 13px;
   font-weight: 700;
 }
+
+/* LeetCode 式：复制按钮嵌在数据黑框内部右上角，悬停才显形。 */
+.sample-box {
+  position: relative;
+}
 .sample-copy {
-  flex: 0 0 auto;
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 1;
   font-family: var(--pyt-font-pixel);
-  font-size: 11px;
-  padding: 2px 8px;
+  font-size: 12px;
+  line-height: 1.2;
+  padding: 2px 7px;
   cursor: pointer;
-  background: var(--pyt-color-bg-soft);
-  border: 1px solid var(--pyt-color-border);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 4px;
-  color: var(--pyt-color-text-hint);
+  color: #cfe4f5;
+  opacity: 0;
+  transition: opacity 120ms ease, background 120ms ease;
+}
+.sample-box:hover .sample-copy,
+.sample-copy:focus-visible {
+  opacity: 1;
 }
 .sample-copy:hover {
-  background: var(--pyt-color-warning-bg);
-  color: var(--pyt-color-text-primary);
+  background: rgba(255, 255, 255, 0.2);
 }
 
-.sample-item pre,
+.sample-box pre,
 .stdout,
 .stderr {
   margin: 0;
@@ -680,32 +680,49 @@ async function copySample(text: string): Promise<void> {
   line-height: 1.55;
 }
 
-.sample-item pre {
+.sample-box pre {
   min-height: 54px;
   color: var(--pyt-color-terminal-text);
   background: var(--pyt-color-terminal-bg);
 }
 
+/* 可拖拽手柄（题干|代码、代码|调试、代码|AI 助手）。 */
 .drag-handle {
-  width: 12px;
-  height: calc(100% - 18px);
-  align-self: center;
   position: relative;
+  align-self: stretch;
+  background: transparent;
+  touch-action: none;
 }
-
+.drag-handle--col {
+  width: 8px;
+  cursor: col-resize;
+}
+.drag-handle--row {
+  height: 8px;
+  cursor: row-resize;
+}
 .drag-handle::before {
   content: '';
   position: absolute;
-  inset: 18px 4px;
   border-radius: 999px;
-  background: rgba(74, 54, 29, 0.32);
-  box-shadow: 0 0 0 1px rgba(255, 249, 234, 0.6);
+  background: rgba(74, 54, 29, 0.28);
+  transition: background 120ms ease;
+}
+.drag-handle--col::before {
+  inset: 14px 2px;
+}
+.drag-handle--row::before {
+  inset: 2px 14px;
+}
+.drag-handle:hover::before,
+.drag-handle:active::before {
+  background: var(--pyt-color-warning, #d99f3a);
 }
 
 .solution-pane {
   display: grid;
-  grid-template-rows: minmax(430px, 1fr) minmax(148px, 0.34fr);
-  gap: 12px;
+  grid-template-rows: minmax(0, 1fr) 8px var(--runtime-row, minmax(148px, 0.34fr));
+  gap: 0;
 }
 
 .editor-card,
@@ -753,7 +770,14 @@ async function copySample(text: string): Promise<void> {
   box-shadow: none;
 }
 
+.editor-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .ai-toggle,
+.editor-theme-btn,
 .drawer-close {
   border: 1px solid var(--pyt-color-border);
   border-radius: 6px;
@@ -764,9 +788,18 @@ async function copySample(text: string): Promise<void> {
   font-weight: 700;
 }
 
-.ai-toggle {
+.ai-toggle,
+.editor-theme-btn {
   padding: 7px 10px;
   font-size: 12px;
+}
+.editor-theme-btn {
+  font-weight: 600;
+  color: var(--pyt-color-text-hint);
+}
+.editor-theme-btn:hover {
+  color: var(--pyt-color-text-primary);
+  background: var(--pyt-color-warning-bg);
 }
 
 .runtime-actions {
@@ -951,8 +984,14 @@ async function copySample(text: string): Promise<void> {
     overflow-y: auto;
   }
 
+  /* 窄屏堆叠：隐藏拖拽手柄，调试区回到自适应两行（不再用拖拽 px 行高）。 */
   .drag-handle {
     display: none;
+  }
+
+  .solution-pane {
+    grid-template-rows: minmax(280px, 0.9fr) minmax(200px, 0.5fr);
+    gap: 14px;
   }
 
   .tutor-drawer {

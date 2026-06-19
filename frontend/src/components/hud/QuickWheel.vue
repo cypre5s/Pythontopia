@@ -20,7 +20,7 @@ const world = useWorldStore();
 
 const items: readonly WheelItem[] = [
   { icon: 'L',  label: '课程',  action: () => void router.push('/library') },
-  { icon: 'A',  label: '闯关',  action: () => void router.push('/arena/1') },
+  { icon: 'A',  label: '远征',  action: () => void router.push('/expedition') },
   { icon: 'T',  label: '传送',  action: () => window.dispatchEvent(new CustomEvent('pythontopia:fast-travel-open')) },
   { icon: 'Z',  label: '休息',  action: () => void world.sleep() },
   { icon: 'B',  label: '矿洞',  action: () => void router.push('/bug-mine') },

@@ -148,17 +148,17 @@ describe('HudShell', () => {
     ).toContain('hud-slot--active');
   });
 
-  it('小镇内单按 A 不跳转闯关塔（A 留给左移）', async () => {
+  it('小镇内单按 A 不跳转无尽远征（A 留给左移）', async () => {
     const push = vi.spyOn(router, 'push');
     mountShell('/world');
     window.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'a', bubbles: true, cancelable: true }),
     );
-    expect(push).not.toHaveBeenCalledWith('/arena/1');
+    expect(push).not.toHaveBeenCalledWith('/expedition');
     push.mockRestore();
   });
 
-  it('Shift+A 打开闯关塔第 1 章', async () => {
+  it('Shift+A 打开无尽远征', async () => {
     const push = vi.spyOn(router, 'push');
     mountShell('/workshop');
     window.dispatchEvent(
@@ -169,7 +169,7 @@ describe('HudShell', () => {
         cancelable: true,
       }),
     );
-    expect(push).toHaveBeenCalledWith('/arena/1');
+    expect(push).toHaveBeenCalledWith('/expedition');
     push.mockRestore();
   });
 

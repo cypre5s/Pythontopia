@@ -533,20 +533,6 @@ test.describe('引导手册 23 张截图（输出 frontend/public/guide/screensh
     ]);
   });
 
-  test('22-code-theater 代码剧场机关广场', async ({ page, context, request }, testInfo) => {
-    await prepareStudentContext(context, request);
-    await page.goto('/code-theater', { waitUntil: 'domcontentloaded' });
-    await expect(page.locator('[data-testid="code-theater-page"]')).toBeVisible();
-    await expect(page.locator('[data-testid="ct-quest"]')).toBeVisible();
-    await page.locator('[data-testid="ct-run"]').click();
-    await expect(page.locator('[data-testid="ct-world"]'), '代码剧场世界反馈未出现')
-      .toBeVisible({ timeout: 30_000 });
-    await expect(page.locator('[data-testid="ct-steps"]'), '代码剧场执行轨迹未出现')
-      .toBeVisible({ timeout: 30_000 });
-    await settleFrames(page, 6);
-    await captureShot(page, testInfo, '22-code-theater');
-  });
-
   test('23-clients 多端下载与同步说明', async ({ page, context, request }, testInfo) => {
     await prepareStudentContext(context, request);
     await page.goto('/guide?topic=clients', { waitUntil: 'domcontentloaded' });
@@ -560,43 +546,8 @@ test.describe('引导手册 23 张截图（输出 frontend/public/guide/screensh
     await captureShot(page, testInfo, '23-clients');
   });
 
-  // ── R-16 统一玩法新增：代码舞台 × 无尽闯关闭环（24–29） ─────────────────────────
-  // 24/28 代码舞台为纯前端 Pyodide（不依赖 graph/rag）；25/26/27/29 走后端 golden 兜底出题。
-
-  test('24-code-theater-stage 代码舞台·世界目标达成', async ({ page, context, request }, testInfo) => {
-    await prepareStudentContext(context, request);
-    await page.goto('/code-theater', { waitUntil: 'domcontentloaded' });
-    await expect(page.locator('[data-testid="code-theater-page"]')).toBeVisible();
-    await expect(page.locator('[data-testid="ct-quest"]')).toBeVisible();
-    // 把默认起手的 off-by-one（range(1,4)）改成正确 range(1,5)，跑出「世界目标达成」（绿）。
-    const editor = page.locator('.cm-content').first();
-    await editor.click();
-    await page.keyboard.press('Control+a');
-    await page.keyboard.press('Delete');
-    await page.keyboard.insertText(
-      'def light(lamp):\n    print(f"点亮第 {lamp} 盏路灯")\nfor lamp in range(1, 5):\n    light(lamp)\n',
-    );
-    await page.locator('[data-testid="ct-run"]').click();
-    await expect(page.locator('[data-testid="ct-world"]'), '代码舞台世界反馈未出现')
-      .toBeVisible({ timeout: 30_000 });
-    await expect(page.locator('[data-testid="ct-steps"]')).toBeVisible({ timeout: 30_000 });
-    await settleFrames(page, 12);
-    await captureShot(page, testInfo, '24-code-theater-stage');
-  });
-
-  test('28-code-theater-debug 代码舞台·看清错在哪', async ({ page, context, request }, testInfo) => {
-    await prepareStudentContext(context, request);
-    await page.goto('/code-theater', { waitUntil: 'domcontentloaded' });
-    await expect(page.locator('[data-testid="code-theater-page"]')).toBeVisible();
-    await expect(page.locator('[data-testid="ct-quest"]')).toBeVisible();
-    // 直接跑默认起手代码（range(1,4) 漏了第 4 盏）——世界目标未达成，可见「第 4 盏还黑着」的犯罪现场。
-    await page.locator('[data-testid="ct-run"]').click();
-    await expect(page.locator('[data-testid="ct-world"]'), '代码舞台世界反馈未出现')
-      .toBeVisible({ timeout: 30_000 });
-    await expect(page.locator('[data-testid="ct-steps"]')).toBeVisible({ timeout: 30_000 });
-    await settleFrames(page, 6);
-    await captureShot(page, testInfo, '28-code-theater-debug');
-  });
+  // ── R-16 统一玩法新增：无尽闯关闭环（25–29） ─────────────────────────
+  // 25/26/27/29 走后端 golden 兜底出题。
 
   test('26-arena-tower 闯关塔阶梯', async ({ page, context, request }, testInfo) => {
     await prepareStudentContext(context, request);

@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import {
-  computed,
   onBeforeUnmount,
   onMounted,
   ref,
   watch,
 } from 'vue';
+import { useCodeEditorTheme } from '@/composables/useCodeEditorTheme';
 import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from '@codemirror/autocomplete';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { bracketMatching, defaultHighlightStyle, foldGutter, syntaxHighlighting } from '@codemirror/language';
@@ -23,9 +23,12 @@ const props = withDefaults(
   defineProps<{
     modelValue: string;
     readonly?: boolean;
+    /** 是否显示编辑器内置「暗色/亮色」切换按钮。做题页把按钮上提到头部（AI 助教左侧）后传 false。 */
+    showThemeToggle?: boolean;
   }>(),
   {
     readonly: false,
+    showThemeToggle: true,
   },
 );
 
@@ -81,20 +84,9 @@ const lightTheme = EditorView.theme(
 );
 
 const themeCompartment = new Compartment();
-const theme = ref<'light' | 'dark'>('dark');
-// 用户手动切过主题后，不再跟随站点主题自动变化（尊重显式选择）。
-let userOverrode = false;
-
-function detectSiteTheme(): 'light' | 'dark' {
-  if (typeof document === 'undefined') return 'dark';
-  const attr = document.documentElement.dataset.theme;
-  if (attr === 'light') return 'light';
-  if (attr === 'dark') return 'dark';
-  if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: light)').matches) {
-    return 'light';
-  }
-  return 'dark';
-}
+// 主题状态上提到共享 composable：做题页把「暗色/亮色」按钮放到头部 AI 助教左侧，
+// 与编辑器共享同一份响应式状态；任一处切换，所有代码编辑器跟随（watch theme 重配置）。
+const { theme, isLight, toggle: toggleTheme, followSiteTheme } = useCodeEditorTheme();
 
 function themeExtension(): Extension {
   return theme.value === 'light' ? lightTheme : darkTheme;
@@ -103,14 +95,6 @@ function themeExtension(): Extension {
 function reconfigureTheme(): void {
   view?.dispatch({ effects: themeCompartment.reconfigure(themeExtension()) });
 }
-
-function toggleTheme(): void {
-  userOverrode = true;
-  theme.value = theme.value === 'light' ? 'dark' : 'light';
-  reconfigureTheme();
-}
-
-const isLight = computed(() => theme.value === 'light');
 
 function editorExtensions(): Extension[] {
   return [
@@ -153,20 +137,11 @@ function replaceDocument(nextValue: string): void {
   applyingExternalValue = false;
 }
 
-// 跟随站点主题（用户未手动覆盖时）。
+// 跟随站点主题（composable 内部判断用户是否手动覆盖过）。
 let themeObserver: MutationObserver | null = null;
 let mediaQuery: MediaQueryList | null = null;
-function followSiteTheme(): void {
-  if (userOverrode) return;
-  const next = detectSiteTheme();
-  if (next !== theme.value) {
-    theme.value = next;
-    reconfigureTheme();
-  }
-}
 
 onMounted(() => {
-  theme.value = detectSiteTheme();
   if (!host.value) return;
   view = new EditorView({
     parent: host.value,
@@ -190,6 +165,9 @@ watch(
   (nextValue) => replaceDocument(nextValue),
 );
 
+// 主题来自共享 composable：任意位置（如做题页头部按钮）切换都重配置本编辑器视图。
+watch(theme, () => reconfigureTheme());
+
 onBeforeUnmount(() => {
   themeObserver?.disconnect();
   themeObserver = null;
@@ -207,6 +185,7 @@ onBeforeUnmount(() => {
     data-testid="code-editor-wrap"
   >
     <button
+      v-if="showThemeToggle"
       type="button"
       class="editor-theme-toggle"
       :title="isLight ? '切换到暗色主题' : '切换到亮色主题'"

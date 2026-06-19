@@ -30,11 +30,18 @@ declare global {
 }
 
 const PYODIDE_VERSION = '0.25.0';
-const PYODIDE_INDEX_URL = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`;
+// 第三方 CDN（仅作回退）：浏览器「跟踪保护 / Tracking Prevention」会拦截其 storage 访问，
+// 触发控制台告警甚至加载失败，所以优先走下面的同源自托管路径。
+const CDN_BASE = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`;
+// 同源自托管（scripts/sync-pyodide.mjs 把运行时复制到 public/pyodide/）：避免跨站存储被拦截。
+// 应用部署在站点根（nginx `/`、vite dev `/`），故用绝对同源路径。
+const LOCAL_BASE = '/pyodide/';
 
 export class CdnPyodideRunner implements PyodideRunner {
   private instance: LoadedPyodide | null = null;
   private initPromise: Promise<void> | null = null;
+  // ensureLoader 选定的实际加载基址（同源或 CDN），init 用它作 indexURL 以便找到 asm/stdlib。
+  private resolvedBase = LOCAL_BASE;
 
   async init(): Promise<void> {
     if (this.instance) return;
@@ -44,7 +51,17 @@ export class CdnPyodideRunner implements PyodideRunner {
     }
     this.initPromise = (async () => {
       const loader = await this.ensureLoader();
-      this.instance = await loader({ indexURL: PYODIDE_INDEX_URL });
+      try {
+        this.instance = await loader({ indexURL: this.resolvedBase });
+      } catch (error) {
+        // 自托管资源缺失/损坏（如未跑 sync-pyodide）→ 回退 CDN 再试一次。
+        if (this.resolvedBase !== CDN_BASE) {
+          this.resolvedBase = CDN_BASE;
+          this.instance = await loader({ indexURL: CDN_BASE });
+        } else {
+          throw error;
+        }
+      }
     })();
     try {
       await this.initPromise;
@@ -107,18 +124,30 @@ export class CdnPyodideRunner implements PyodideRunner {
     if (window.loadPyodide) {
       return window.loadPyodide;
     }
-    await new Promise<void>((resolve, reject) => {
-      const script = document.createElement('script');
-      script.src = `${PYODIDE_INDEX_URL}pyodide.js`;
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error('Failed to load Pyodide script'));
-      document.head.appendChild(script);
-    });
+    // 同源优先，失败回退 CDN；记录最终生效的基址供 init 设置 indexURL。
+    try {
+      await loadScript(`${LOCAL_BASE}pyodide.js`);
+      this.resolvedBase = LOCAL_BASE;
+    } catch {
+      await loadScript(`${CDN_BASE}pyodide.js`);
+      this.resolvedBase = CDN_BASE;
+    }
     if (!window.loadPyodide) {
       throw new Error('Pyodide script loaded but loadPyodide is undefined');
     }
     return window.loadPyodide;
   }
+}
+
+/** 注入一个 <script> 并等待加载完成；失败 reject。 */
+function loadScript(src: string): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = src;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
+    document.head.appendChild(script);
+  });
 }
 
 function indent(text: string): string {

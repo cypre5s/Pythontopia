@@ -32,6 +32,8 @@ export function createPhaserGame(rootEl: HTMLElement, scenes: PhaserSceneConfig[
   gameInstance = new Phaser.Game({
     type: Phaser.AUTO,
     parent: rootEl,
+    // 关掉 Phaser 启动横幅（控制台噪音：每次挂载都会打印 "Phaser v3.87 …"）。
+    banner: false,
     width: initWidth,
     height: initHeight,
     backgroundColor: '#1c2b18',

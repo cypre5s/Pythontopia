@@ -147,14 +147,9 @@ export const router = createRouter({
       component: () => import('@/pages/GuidePage.vue'),
       meta: { requiresAuth: true },
     },
-    // 代码剧场（机关广场）：写真实 Python → 看傀儡走执行过程 + 世界条件反馈。
-    // 「只有游戏能做」的具身执行可视化（notional machine 可见化）。
-    {
-      path: '/code-theater',
-      name: 'code-theater',
-      component: () => import('@/pages/CodeTheaterPage.vue'),
-      meta: { requiresAuth: true, hideCompanion: true },
-    },
+    // 代码剧场（机关广场）暂时下线（不上线）：保留实现代码（CodeTheaterPage / 引擎 / 场景），
+    // 仅隐藏入口与路由。直接访问旧链接统一回小镇，避免暴露未上线功能。
+    { path: '/code-theater', redirect: '/world' },
     // 费曼反演（创新点 C）：教会会犯你同款错的 AI 学弟 → 真判题回流。
     // 复盘大厅「测」入口与 NPC 对话可跳转 /feynman?kc=...。
     {
@@ -204,12 +199,19 @@ export const router = createRouter({
       component: () => import('@/pages/GraduationPage.vue'),
       meta: { requiresAuth: true },
     },
-    // 无尽模式 — 连续 AI 出题，自适应难度。
-    // 与闯关模式 /boss/:chapter 互补：闯关推主线，无尽刷分练手。
+    // 无尽模式 — 连续 AI 出题，自适应难度（简洁「随便练练」入口）。
     {
       path: '/endless',
       name: 'endless',
       component: () => import('@/pages/EndlessPage.vue'),
+      meta: { requiresAuth: true },
+    },
+    // 无尽远征（Roguelike）：知识前沿 + 画像生成分支地图，取代「7 章 × 10 关」死网格。
+    // 详见 docs/plans/2026-06-19-endless-roguelike-rebuild.md。
+    {
+      path: '/expedition',
+      name: 'expedition',
+      component: () => import('@/pages/EndlessExpeditionPage.vue'),
       meta: { requiresAuth: true },
     },
     // 章节闯关塔，每章 10 关 = 9 知识/技能小关 + 1 章末 boss。

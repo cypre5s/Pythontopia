@@ -83,3 +83,6 @@ test.md
 
 # 发布包构建产物
 output/
+
+# 自托管 Pyodide 运行时（由 frontend/scripts/sync-pyodide.mjs 从 node_modules 复制，~13MB，可重生，不入库）
+frontend/public/pyodide/

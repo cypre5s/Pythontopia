@@ -72,9 +72,6 @@ const sse = useSseStream<WorkflowRunResultDto>('/api/tutor/workflow/runs');
 const running = computed(
   () => sse.status.value === 'streaming' || sse.status.value === 'connecting',
 );
-const recommendedAction = computed<WorkflowActionDto | null>(
-  () => availableActions.value.find((action) => action.recommended) ?? null,
-);
 interface CoachProgressItem {
   key: string;
   label: string;
@@ -94,9 +91,14 @@ const coachProgressItems = computed<CoachProgressItem[]>(() => {
   return [...latestByNode.values()];
 });
 
-// 起手动作 + 始终可用的 4 个辅助动作（与后端 PHASE_ACTIONS + AUX 对齐；后端最终以 available_actions 为准）。
+// 辅助动作 key（与后端 _AUX_ACTIONS 对齐）：任意阶段可用，但收进「学习工具」抽屉，不挤占主线「下一步」。
+const AUX_KEYS = new Set(['visualize', 'execution_trace', 'knowledge_review', 'parsons']);
+
+// 无会话时的起手动作（READING 阶段）+ 辅助动作；进入会话后一律以后端 available_actions 为准。
+// 后端已按当前 Phase 门控（如「错因诊断/AC 复盘」需 submission 才会出现、TRANSFER 需先有复盘方向），
+// 前端不再无脑补齐所有按钮——这正是「并非所有阶段都能任意调用所有动作」的落地。
 const STARTER_ACTIONS: WorkflowActionDto[] = [
-  { key: 'problem_guide', label: '题目导读', event: 'READING' },
+  { key: 'problem_guide', label: '题目导读', event: 'READING', recommended: true, reason: '先读懂题目，再动手。' },
   { key: 'ideate', label: '思路分析', event: 'IDEATING' },
   { key: 'skeleton', label: '骨架代码', event: 'SKELETON' },
 ];
@@ -106,11 +108,30 @@ const AUX_ACTIONS: WorkflowActionDto[] = [
   { key: 'visualize', label: '画一下', event: 'VISUALIZE' },
   { key: 'parsons', label: '拼装挑战', event: 'PARSONS' },
 ];
+const INITIAL_ACTIONS: WorkflowActionDto[] = [...STARTER_ACTIONS, ...AUX_ACTIONS];
 
-function withAux(actions: WorkflowActionDto[]): WorkflowActionDto[] {
-  const seen = new Set(actions.map((a) => a.key));
-  return [...actions, ...AUX_ACTIONS.filter((a) => !seen.has(a.key))];
-}
+// 主线「下一步」动作（推进阶段）与「学习工具」（辅助、收纳进抽屉）分组。
+const phaseActions = computed<WorkflowActionDto[]>(
+  () => availableActions.value.filter((a) => !AUX_KEYS.has(a.key)),
+);
+// 推荐项可能是阶段动作，也可能是辅助动作（coach 可推荐「画一下/执行轨迹」）：始终把推荐项作为主按钮。
+const primaryAction = computed<WorkflowActionDto | null>(
+  () => availableActions.value.find((a) => a.recommended)
+    ?? phaseActions.value[0]
+    ?? availableActions.value[0]
+    ?? null,
+);
+const secondaryPhaseActions = computed<WorkflowActionDto[]>(
+  () => phaseActions.value.filter((a) => a.key !== primaryAction.value?.key),
+);
+// 学习工具（辅助动作）收纳进抽屉；若推荐项本身就是某个工具，则不在抽屉里重复。
+const toolActions = computed<WorkflowActionDto[]>(
+  () => availableActions.value.filter((a) => AUX_KEYS.has(a.key) && a.key !== primaryAction.value?.key),
+);
+
+// 「学习工具」抽屉与「思考过程」默认收起（用户要求：这些内容平时缩小收纳）。
+const toolsOpen = ref(false);
+const thinkOpen = ref(false);
 
 function coachProgressLabel(node: string | undefined): string {
   if (!node) return '';
@@ -149,7 +170,7 @@ async function load(): Promise<void> {
   } catch {
     cards.value = [];
   }
-  availableActions.value = withAux(STARTER_ACTIONS);
+  availableActions.value = INITIAL_ACTIONS;
   loaded.value = true;
   void consumeInitialRequest();
   scrollBottom();
@@ -182,8 +203,9 @@ async function runEvent(event: WorkflowEvent, eventData?: Record<string, unknown
       if (typeof msg === 'string' && msg) entry.userMessage = msg;
       cards.value = [...cards.value, entry];
     }
+    // 严格以后端 available_actions 为准（已按 Phase 门控 + 推荐排序），不再前端补齐辅助动作。
     if (Array.isArray(r.available_actions) && r.available_actions.length > 0) {
-      availableActions.value = withAux(r.available_actions);
+      availableActions.value = r.available_actions;
     }
     scrollBottom();
   } else {
@@ -621,19 +643,31 @@ function cardId(entry: CardEntry): string {
         </footer>
       </article>
 
-      <p
+      <!-- 思考过程：默认只显示一行「思考中…」，详细节点收纳进可展开列表（用户要求缩小收纳）。 -->
+      <div
         v-if="running"
-        class="tw-running"
-      >
-        百晓思考中…
-      </p>
-      <section
-        v-if="coachProgressItems.length"
-        class="tw-coach-progress"
+        class="tw-think"
         data-testid="coach-progress"
       >
-        <strong>导学助手进度</strong>
-        <ul>
+        <div class="tw-think__status">
+          <span
+            class="tw-think__spinner"
+            aria-hidden="true"
+          />
+          <span class="tw-think__label">百晓思考中…</span>
+          <button
+            v-if="coachProgressItems.length"
+            type="button"
+            class="tw-think__toggle"
+            @click="thinkOpen = !thinkOpen"
+          >
+            {{ thinkOpen ? '收起过程' : '查看过程' }}
+          </button>
+        </div>
+        <ul
+          v-if="thinkOpen && coachProgressItems.length"
+          class="tw-think__steps"
+        >
           <li
             v-for="item in coachProgressItems"
             :key="item.key"
@@ -642,42 +676,73 @@ function cardId(entry: CardEntry): string {
             <em>{{ item.statusLabel }}</em>
           </li>
         </ul>
-      </section>
+      </div>
     </div>
 
-    <!-- 下一步动作链（available_actions 驱动 + 4 个辅助动作） -->
+    <!-- 下一步：一个主推荐 + 折叠的其它阶段动作 + 收纳的「学习工具」（按阶段门控，后端 available_actions 驱动）。 -->
     <div
-      class="tw-actions"
+      class="tw-next"
       data-testid="tw-actions"
     >
-      <section
-        v-if="recommendedAction"
-        class="tw-recommend"
-        data-testid="coach-recommended-action"
-      >
-        <span class="tw-recommend__eyebrow">推荐下一步</span>
-        <strong>{{ recommendedAction.label }}</strong>
-        <p v-if="recommendedAction.reason">
-          {{ recommendedAction.reason }}
-        </p>
-      </section>
       <button
-        v-for="a in availableActions"
-        :key="a.key"
+        v-if="primaryAction"
         type="button"
-        class="tw-action"
-        :class="{ 'tw-action--recommended': a.recommended }"
+        class="tw-next__primary"
+        data-testid="coach-recommended-action"
         :disabled="running"
-        @click="onAction(a)"
+        @click="onAction(primaryAction)"
       >
-        <span
-          v-if="a.recommended"
-          class="tw-action__tag"
-        >
-          推荐
-        </span>
-        {{ a.label }}
+        <span class="tw-next__eyebrow">推荐下一步</span>
+        <strong>{{ primaryAction.label }}</strong>
+        <small v-if="primaryAction.reason">{{ primaryAction.reason }}</small>
       </button>
+
+      <div
+        v-if="secondaryPhaseActions.length"
+        class="tw-next__alts"
+      >
+        <button
+          v-for="a in secondaryPhaseActions"
+          :key="a.key"
+          type="button"
+          class="tw-chip"
+          :disabled="running"
+          @click="onAction(a)"
+        >
+          {{ a.label }}
+        </button>
+      </div>
+
+      <div
+        v-if="toolActions.length"
+        class="tw-tools"
+      >
+        <button
+          type="button"
+          class="tw-tools__toggle"
+          :class="{ 'is-open': toolsOpen }"
+          :aria-expanded="toolsOpen"
+          @click="toolsOpen = !toolsOpen"
+        >
+          🧰 学习工具
+          <span class="tw-tools__chev">{{ toolsOpen ? '▾' : '▸' }}</span>
+        </button>
+        <div
+          v-if="toolsOpen"
+          class="tw-tools__menu"
+        >
+          <button
+            v-for="a in toolActions"
+            :key="a.key"
+            type="button"
+            class="tw-chip tw-chip--tool"
+            :disabled="running"
+            @click="onAction(a)"
+          >
+            {{ a.label }}
+          </button>
+        </div>
+      </div>
     </div>
 
     <!-- 自由提问（CHAT） -->
@@ -939,102 +1004,178 @@ function cardId(entry: CardEntry): string {
   color: #b3261e;
   font-weight: 700;
 }
-.tw-running {
-  font-size: 12px;
-  color: var(--pyt-color-text-muted);
-}
-.tw-coach-progress {
-  border: 1px solid rgba(42, 111, 151, 0.28);
+/* 思考过程：默认极简一行 +「查看过程」收纳详情。 */
+.tw-think {
+  border: 1px solid rgba(42, 111, 151, 0.22);
   border-radius: 8px;
-  background: rgba(230, 242, 251, 0.74);
-  padding: 8px 10px;
+  background: rgba(230, 242, 251, 0.5);
+  padding: 7px 10px;
 }
-.tw-coach-progress strong {
-  display: block;
-  margin-bottom: 5px;
-  font-family: var(--pyt-font-read);
-  font-size: 13px;
+.tw-think__status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.tw-think__spinner {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid rgba(42, 111, 151, 0.3);
+  border-top-color: var(--pyt-color-info, #2a6f97);
+  animation: tw-spin 0.7s linear infinite;
+}
+@keyframes tw-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tw-think__spinner {
+    animation: none;
+  }
+}
+.tw-think__label {
+  font-weight: 600;
   color: #1b4a6b;
 }
-.tw-coach-progress ul {
-  display: grid;
-  gap: 4px;
-  margin: 0;
+.tw-think__toggle {
+  margin-left: auto;
+  font-family: inherit;
+  font-size: 11px;
+  padding: 2px 8px;
+  cursor: pointer;
+  color: #1b4a6b;
+  background: transparent;
+  border: 1px solid rgba(42, 111, 151, 0.35);
+  border-radius: 999px;
+}
+.tw-think__steps {
+  margin: 7px 0 0;
   padding: 0;
   list-style: none;
+  display: grid;
+  gap: 4px;
 }
-.tw-coach-progress li {
+.tw-think__steps li {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
   font-size: 12px;
   line-height: 1.5;
-}
-.tw-coach-progress em {
-  flex: 0 0 auto;
-  font-style: normal;
   color: var(--pyt-color-text-muted);
 }
-.tw-actions {
+.tw-think__steps em {
+  flex: 0 0 auto;
+  font-style: normal;
+}
+
+/* 下一步：一个主推荐大按钮 + 其它阶段动作（chips）+「学习工具」抽屉。 */
+.tw-next {
   flex: 0 0 auto;
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 8px 12px;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
   border-top: 1px dashed rgba(74, 54, 29, 0.3);
 }
-.tw-recommend {
-  flex: 1 1 100%;
+.tw-next__primary {
   display: grid;
-  gap: 3px;
-  padding: 8px 10px;
-  border: 1px solid rgba(42, 111, 151, 0.35);
+  gap: 2px;
+  text-align: left;
+  padding: 9px 12px;
+  cursor: pointer;
+  color: #14405f;
+  background: var(--pyt-color-info-bg, #e6f2fb);
+  border: 2px solid var(--pyt-color-info, #2a6f97);
   border-radius: 8px;
-  background: rgba(230, 242, 251, 0.82);
+  box-shadow: 2px 2px 0 rgba(42, 111, 151, 0.4);
 }
-.tw-recommend__eyebrow {
+.tw-next__primary:hover:not(:disabled) {
+  background: #d8ebf8;
+}
+.tw-next__primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+.tw-next__eyebrow {
   font-size: 10px;
-  color: #1b4a6b;
+  letter-spacing: 0.5px;
+  color: #2a6f97;
 }
-.tw-recommend strong {
+.tw-next__primary strong {
   font-family: var(--pyt-font-read);
-  font-size: 13px;
+  font-size: 14px;
 }
-.tw-recommend p {
-  margin: 0;
-  font-size: 12px;
+.tw-next__primary small {
+  font-size: 11px;
   line-height: 1.5;
   color: var(--pyt-color-text-muted);
 }
-.tw-action {
+.tw-next__alts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tw-chip {
   font-family: inherit;
   font-size: 12px;
-  padding: 5px 12px;
+  padding: 5px 11px;
   cursor: pointer;
-  background: var(--pyt-color-warning-bg, #ffe9b8);
-  border: 2px solid var(--pyt-color-border-strong, #2a1a05);
-  border-radius: 4px;
-  box-shadow: 2px 2px 0 var(--pyt-color-border-strong, #2a1a05);
   color: var(--pyt-color-text-primary);
-}
-.tw-action--recommended {
-  border-color: var(--pyt-color-info, #2a6f97);
-  background: var(--pyt-color-info-bg, #e6f2fb);
-  color: #1b4a6b;
-}
-.tw-action__tag {
-  display: inline-block;
-  margin-right: 4px;
-  padding: 1px 4px;
+  background: var(--pyt-color-bg-soft);
+  border: 1px solid var(--pyt-color-border);
   border-radius: 999px;
-  color: #fff;
-  background: var(--pyt-color-info, #2a6f97);
 }
-.tw-action:disabled {
+.tw-chip:hover:not(:disabled) {
+  background: var(--pyt-color-warning-bg, #ffe9b8);
+}
+.tw-chip:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-  box-shadow: none;
+}
+.tw-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tw-tools__toggle {
+  align-self: flex-start;
+  font-family: inherit;
+  font-size: 12px;
+  padding: 4px 10px;
+  cursor: pointer;
+  color: var(--pyt-color-text-hint);
+  background: transparent;
+  border: 1px dashed var(--pyt-color-border);
+  border-radius: 999px;
+}
+.tw-tools__toggle.is-open {
+  color: var(--pyt-color-text-primary);
+  border-style: solid;
+}
+.tw-tools__chev {
+  font-size: 10px;
+}
+.tw-tools__menu {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid rgba(74, 54, 29, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 252, 242, 0.6);
+}
+.tw-chip--tool {
+  background: rgba(237, 233, 254, 0.6);
+  border-color: rgba(124, 92, 196, 0.4);
+  color: #4b3b86;
+}
+.tw-chip--tool:hover:not(:disabled) {
+  background: rgba(237, 233, 254, 0.95);
 }
 .tw-chat {
   flex: 0 0 auto;

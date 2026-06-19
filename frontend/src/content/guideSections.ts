@@ -101,7 +101,7 @@ export const GUIDE_NAV_GROUPS: readonly GuideNavGroup[] = [
     id: 'learning-loop',
     label: '看学练测',
     description: '完成一次真实学习闭环',
-    sectionIds: ['loop', 'library', 'workshop', 'code-theater', 'training', 'endless', 'bug-mine', 'review-hall'],
+    sectionIds: ['loop', 'library', 'workshop', 'training', 'endless', 'bug-mine', 'review-hall'],
   },
   {
     id: 'growth-teaching',
@@ -130,7 +130,7 @@ const TOWN_HOTKEYS: readonly GuideKeyRow[] = [
   { keys: ',', desc: '设置' },
 ];
 
-export const GUIDE_SECTIONS: readonly GuideSectionContent[] = [
+const ALL_GUIDE_SECTIONS: readonly GuideSectionContent[] = [
   {
     id: 'town-basics',
     title: '小镇操作：在 Pythontopia 里行走与交互',
@@ -613,7 +613,7 @@ export const GUIDE_SECTIONS: readonly GuideSectionContent[] = [
     title: '看学练测闭环：把零散功能拧成一条主线',
     navTitle: '看学练测闭环',
     summary:
-      '小镇里的图书馆、百晓工坊、代码剧场、训练场、无尽闯关不是各玩各的——'
+      '小镇里的图书馆、百晓工坊、训练场、无尽闯关不是各玩各的——'
       + '它们被拧成一条「看 → 学 → 练 → 测」的闭环：看懂、学透、练会、测准，再把结果回流到下一轮。',
     loop:
       '这一篇就是整条闭环的总览：后面每一篇都是其中某一环的放大；'
@@ -636,21 +636,21 @@ export const GUIDE_SECTIONS: readonly GuideSectionContent[] = [
           },
           {
             kind: 'diagram',
-            title: '看学练测 · 统一闭环（含代码剧场与无尽闯关）',
+            title: '看学练测 · 统一闭环（含无尽闯关）',
             flow: 'row',
             nodes: [
-              { icon: '📖', label: '看', desc: '图书馆课件 / 视频，代码剧场看执行' },
+              { icon: '📖', label: '看', desc: '图书馆课件 / 视频' },
               { icon: '🛠️', label: '学', desc: '百晓工坊生成讲义 / 导图 / 练习' },
               { icon: '⌨️', label: '练', desc: '训练场判题 + 无尽闯关连续刷题' },
               { icon: '🎯', label: '测', desc: '掌握度达阈值 / 章末测试 / BOSS' },
             ],
-            caption: '「看」不只是读字：看不懂代码怎么跑，就去代码剧场把执行过程「看」一遍。',
+            caption: '「看」不只是读字：看不懂就回图书馆课件 / 视频，再带着问题去百晓工坊深问。',
           },
           {
             kind: 'paragraph',
             text:
-              '四步里最容易被跳过的是「看执行」。很多人课件读懂了、题却不会做，'
-              + '卡点往往在「不知道代码在机器里到底怎么一行行跑」——这一步交给代码剧场补齐；'
+              '四步里最容易被跳过的是「学」：很多人课件读了就直接去做题，'
+              + '没在百晓工坊把知识点整理成贴合自己的讲义 / 导图，结果练起来频频卡壳；'
               + '而「练」也不止训练场的单题，无尽闯关用 AI 连续出题，把同一类知识点练到稳。',
           },
         ],
@@ -680,7 +680,7 @@ export const GUIDE_SECTIONS: readonly GuideSectionContent[] = [
           {
             kind: 'list',
             items: [
-              '看：图书馆读课件、看视频；看不懂执行就去代码剧场让傀儡逐行走给你看',
+              '看：图书馆读课件、看视频，把当前知识点先弄懂',
               '学：把看过的内容带进百晓工坊，生成贴合画像的讲义、导图与练习',
               '练：训练场提交真题判题，或在无尽闯关里连续刷题、连胜拉高难度',
               '测：掌握度达阈值、通过章末大测试或 BOSS，即点亮进度',
@@ -706,7 +706,7 @@ export const GUIDE_SECTIONS: readonly GuideSectionContent[] = [
           {
             kind: 'list',
             items: [
-              '练 → 看执行：训练场或无尽闯关里一道题想不通，跳进代码剧场把它「走」一遍，看清哪一行出了问题',
+              '练 → 调试：训练场里提交没过，进 Bug 矿洞逐层定位、修复、验证，把错题变成调试副本',
               '练 → 学：连续做错同一类题，回百晓工坊就这个知识点生成讲义与针对性练习',
               '测 → 练：章末测试暴露的弱项 KC，会被推回训练场 / 无尽闯关重点补练',
               '看 → 学 → 练：从图书馆某页课件出发，带着这页证据去工坊深问，再去训练场上手',
@@ -714,7 +714,7 @@ export const GUIDE_SECTIONS: readonly GuideSectionContent[] = [
           },
           {
             kind: 'tip',
-            text: '代码剧场与无尽闯关已经打通：闯关途中可跳进剧场观察执行，剧场里调通后再回闯关继续连胜。',
+            text: '哪一环卡住就近跳到能帮你的那一环，比从头到尾死磕一道题高效得多。',
           },
         ],
       },
@@ -1303,23 +1303,6 @@ export const GUIDE_SECTIONS: readonly GuideSectionContent[] = [
           },
         ],
       },
-      {
-        id: 'endless-theater',
-        title: '和代码剧场联动',
-        blocks: [
-          {
-            kind: 'paragraph',
-            text:
-              '无尽闯关与代码剧场是一对搭档：闯关负责「练」，剧场负责「看执行」。'
-              + '一道题反复做错、又说不清错在哪时，跳进代码剧场把这段代码逐行走一遍，'
-              + '看清傀儡在哪一行走偏，回来再战往往就通了。',
-          },
-          {
-            kind: 'tip',
-            text: '把无尽闯关当「练」、代码剧场当「看执行」、训练场当「正式判题」——三者配合，比单点死磕一道题高效得多。',
-          },
-        ],
-      },
     ],
   },
   {
@@ -1600,6 +1583,14 @@ export const GUIDE_SECTIONS: readonly GuideSectionContent[] = [
     ],
   },
 ];
+
+// 代码剧场暂时下线（不上线）：从对外导出的指南章节里过滤掉，正文 / 左侧导航 / 翻页都不再出现。
+// 章节内容仍保留在 ALL_GUIDE_SECTIONS（与页面、NPC、引擎实现一并保留），重新上线时把 id 从下面这份
+// 过滤名单移除即可恢复。
+const HIDDEN_GUIDE_SECTION_IDS: ReadonlySet<string> = new Set(['code-theater']);
+export const GUIDE_SECTIONS: readonly GuideSectionContent[] = ALL_GUIDE_SECTIONS.filter(
+  (section) => !HIDDEN_GUIDE_SECTION_IDS.has(section.id),
+);
 
 /** 全部截图数（hero + 正文内嵌），供页头徽标等展示用。 */
 export const GUIDE_SCREENSHOT_TOTAL: number = GUIDE_SECTIONS.reduce(

@@ -20,7 +20,6 @@ import { MAIN_QUEST_BOSSES } from '@/data/bossCatalog';
 import { useArenaStore } from '@stores/arena';
 import { useMainlineStore } from '@stores/mainline';
 import { useToastStore } from '@stores/toast';
-import { useCodeTheaterStore } from '@stores/codeTheater';
 import type { ArenaLevelKind } from '@/types/arena';
 import type { ChallengeResult } from '@/api/dto/CodeChallenge';
 
@@ -29,7 +28,6 @@ const route = useRoute();
 const arena = useArenaStore();
 const mainline = useMainlineStore();
 const toast = useToastStore();
-const codeTheater = useCodeTheaterStore();
 
 // 从 query 读 ?chapter & ?arenaLevel：EndlessPage 同时承担「随机刷题」与
 // 「ArenaPage 闯关塔单关入口」两个角色。arenaLevel 形如 "1-3"，通关后回 ArenaPage markCleared。
@@ -199,23 +197,33 @@ const challengeResult = computed<ChallengeResult | null>(() => {
 // 本题加分（展示用）：取最近一条历史记录的得分。
 const lastScore = computed<number>(() => run.history.value[0]?.score ?? 0);
 
-// 闭环联动：做错时一键跳「代码舞台」把这段代码的执行过程演出来，看清错在哪（练 → 看为何错 → 再练）。
-function onSeeInTheater(): void {
-  const p = run.problem.value;
-  codeTheater.setFreeRun({
-    code: run.code.value,
-    stdin: p?.sampleInput ?? '',
-    label: `无尽闯关 · ${kcDisplayName(p?.kcCode)} · 看执行`,
-  });
-  void router.push('/code-theater');
-}
-
 // 提交期出错（判题服务不可用）时，若题目仍在则允许「重试提交」，否则「重新开始」。
 async function onRetry(): Promise<void> {
   if (run.problem.value) {
     await onSubmit();
   } else {
     await onStartRun();
+  }
+}
+
+// 对标做题页（/training?problemId=476）的 OJ 排布：
+// - 通用刷题（无 kind）走「题面 | 作答」两栏；
+// - 关卡题型（pdf_question / fill_blank / debug…）的卡片自带题面+作答，整张铺在作答区（单栏）。
+const isTwoPane = computed<boolean>(() => preferredKindTyped.value === null);
+
+// 「最近题」改为可收缩隐藏的侧栏收纳，默认收起，作答区更宽敞。
+const recentOpen = ref<boolean>(false);
+function toggleRecent(): void {
+  recentOpen.value = !recentOpen.value;
+}
+
+/** 输入输出样例「一键复制」（与做题页一致）。 */
+async function copySample(text: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(text ?? '');
+    toast.show('已复制到剪贴板', 'success');
+  } catch {
+    toast.show('复制失败，请手动选择复制', 'error');
   }
 }
 </script>
@@ -347,127 +355,205 @@ async function onRetry(): Promise<void> {
 
       <div
         v-else
-        class="endless-body"
+        class="endless-stage"
         data-testid="endless-body"
       >
-        <article class="endless-problem">
-          <header class="endless-problem__head">
-            <span class="chapter-pill">{{ currentChapterName }}</span>
-            <span class="kc-pill">{{ kcDisplayName(run.problem.value?.kcCode) }}</span>
-            <span class="diff-pill">难度 {{ run.problem.value?.difficulty }} / 5</span>
-            <span
-              v-if="run.problem.value?.aiGenerated"
-              class="badge badge--ai"
-            >AI · 5 重审查</span>
-            <span
-              v-else
-              class="badge badge--golden"
-            >Golden 兜底</span>
-            <span class="timer">⏱ {{ run.elapsedSec.value }}s</span>
-          </header>
-
-          <KindRouter
-            v-if="preferredKindTyped && run.problem.value"
-            v-model:code="run.code.value"
-            :kind="preferredKindTyped"
-            :problem="run.problem.value"
-            @timeout="onSubmit"
+        <div
+          class="endless-oj"
+          :class="{
+            'endless-oj--two': isTwoPane,
+            'endless-oj--single': !isTwoPane,
+            'endless-oj--recent': recentOpen,
+          }"
+        >
+          <!-- 题面（通用刷题：左列） -->
+          <aside
+            v-if="isTwoPane"
+            class="oj-pane oj-problem"
           >
-            <pre class="endless-problem__statement">{{ run.problem.value?.statement }}</pre>
-          </KindRouter>
-
-          <template v-else>
-            <pre class="endless-problem__statement">{{ run.problem.value?.statement }}</pre>
-            <details
-              v-if="run.problem.value?.sampleInput || run.problem.value?.sampleOutput"
-              class="endless-sample"
-            >
-              <summary>样例输入 / 输出</summary>
-              <div class="endless-sample__pair">
-                <pre>{{ run.problem.value?.sampleInput }}</pre>
-                <pre>{{ run.problem.value?.sampleOutput }}</pre>
-              </div>
-            </details>
-
-            <div class="endless-editor">
-              <span class="endless-editor__label">你的代码（Python 3）</span>
-              <div
-                class="endless-editor__host"
-                data-testid="endless-code"
-              >
-                <PythonCodeEditor v-model="run.code.value" />
+            <div class="oj-card oj-card--problem">
+              <header class="oj-card__head">
+                <div class="oj-title-row">
+                  <h2>{{ currentChapterName }}</h2>
+                  <span class="oj-tag">{{ kindLabel }}</span>
+                </div>
+                <div class="oj-meta">
+                  <span>{{ kcDisplayName(run.problem.value?.kcCode) }}</span>
+                  <span>难度 {{ run.problem.value?.difficulty }} / 5</span>
+                  <span
+                    class="oj-meta__badge"
+                    :class="run.problem.value?.aiGenerated ? 'is-ai' : 'is-golden'"
+                  >{{ run.problem.value?.aiGenerated ? 'AI · 5 重审查' : 'Golden 兜底' }}</span>
+                  <span class="oj-meta__timer">⏱ {{ run.elapsedSec.value }}s</span>
+                </div>
+              </header>
+              <div class="oj-card__body">
+                <pre class="oj-statement">{{ run.problem.value?.statement }}</pre>
+                <section
+                  v-if="run.problem.value?.sampleInput || run.problem.value?.sampleOutput"
+                  class="oj-samples"
+                >
+                  <h3 class="oj-section-title">
+                    输入输出样例
+                  </h3>
+                  <div class="oj-sample-grid">
+                    <div class="oj-sample">
+                      <span class="oj-sample__label">输入</span>
+                      <div class="oj-iobox">
+                        <button
+                          type="button"
+                          class="oj-copy"
+                          title="复制输入"
+                          @click="copySample(run.problem.value?.sampleInput ?? '')"
+                        >
+                          ⧉
+                        </button>
+                        <pre>{{ run.problem.value?.sampleInput || '(空)' }}</pre>
+                      </div>
+                    </div>
+                    <div class="oj-sample">
+                      <span class="oj-sample__label">输出</span>
+                      <div class="oj-iobox">
+                        <button
+                          type="button"
+                          class="oj-copy"
+                          title="复制输出"
+                          @click="copySample(run.problem.value?.sampleOutput ?? '')"
+                        >
+                          ⧉
+                        </button>
+                        <pre>{{ run.problem.value?.sampleOutput || '(空)' }}</pre>
+                      </div>
+                    </div>
+                  </div>
+                </section>
               </div>
             </div>
-          </template>
-          <div class="endless-actions">
-            <PyButton
-              variant="primary"
-              test-id="endless-submit"
-              :disabled="submitDisabled"
-              @click="onSubmit"
-            >
-              {{ run.phase.value === 'evaluating' ? '评测中…' : '提交答案' }}
-            </PyButton>
-            <PyButton
-              v-if="showNextButton"
-              variant="secondary"
-              test-id="endless-next"
-              @click="onNext"
-            >
-              {{ run.phase.value === 'passed' ? '下一题（难度提升）' : '继续挑战（难度下调）' }}
-            </PyButton>
-            <PyButton
-              v-if="run.phase.value === 'failed'"
-              variant="secondary"
-              test-id="endless-see-theater"
-              @click="onSeeInTheater"
-            >
-              去代码舞台看执行
-            </PyButton>
-          </div>
-          <div
-            v-if="challengeResult"
-            class="endless-result"
-            data-testid="endless-result"
-          >
-            <JudgeResultPanel
-              :result="challengeResult"
-              mode="judge"
-            />
-            <p
-              v-if="challengeResult.passed"
-              class="endless-result__score"
-            >
-              本题加分 +{{ lastScore }}
-            </p>
-          </div>
-        </article>
+          </aside>
 
-        <aside class="endless-side">
-          <h3>最近 8 题</h3>
-          <ul
-            class="history-list"
-            data-testid="endless-history"
-          >
-            <li
-              v-for="(h, idx) in run.history.value.slice(0, 8)"
-              :key="`${h.problemId}-${idx}`"
-              :class="{
-                'history-item': true,
-                'history-item--passed': h.passed,
-                'history-item--failed': !h.passed,
-              }"
-            >
-              <header>
-                <strong>第 {{ h.chapter }} 章 · 难 {{ h.difficulty }}</strong>
-                <span class="badge">{{ kcDisplayName(h.kcCode) }}</span>
+          <!-- 作答 -->
+          <section class="oj-pane oj-solution">
+            <article class="oj-card oj-card--work">
+              <header class="oj-card__head oj-card__head--row">
+                <div class="oj-work-title">
+                  <h3>{{ isTwoPane ? '作答' : kindLabel }}</h3>
+                  <span
+                    v-if="!isTwoPane"
+                    class="oj-sub"
+                  >{{ currentChapterName }} · {{ kcDisplayName(run.problem.value?.kcCode) }} · 难度 {{ run.problem.value?.difficulty }} / 5 · ⏱ {{ run.elapsedSec.value }}s</span>
+                </div>
+                <button
+                  type="button"
+                  class="oj-recent-toggle"
+                  data-testid="endless-recent-toggle"
+                  @click="toggleRecent"
+                >
+                  {{ recentOpen ? '收起最近 ›' : `‹ 最近 ${run.history.value.length} 题` }}
+                </button>
               </header>
-              <small>
-                {{ h.passed ? '通过' : '失败' }} · +{{ h.score }} 分 · {{ h.elapsedSec }}s
-              </small>
-            </li>
-          </ul>
-        </aside>
+              <div class="oj-card__body oj-card__body--work">
+                <KindRouter
+                  v-if="preferredKindTyped && run.problem.value"
+                  v-model:code="run.code.value"
+                  :kind="preferredKindTyped"
+                  :problem="run.problem.value"
+                  @timeout="onSubmit"
+                >
+                  <pre class="oj-statement">{{ run.problem.value?.statement }}</pre>
+                </KindRouter>
+                <div
+                  v-else
+                  class="oj-editor-host"
+                  data-testid="endless-code"
+                >
+                  <PythonCodeEditor v-model="run.code.value" />
+                </div>
+              </div>
+              <footer class="oj-card__foot">
+                <div class="oj-actions">
+                  <PyButton
+                    variant="primary"
+                    test-id="endless-submit"
+                    :disabled="submitDisabled"
+                    @click="onSubmit"
+                  >
+                    {{ run.phase.value === 'evaluating' ? '评测中…' : '提交答案' }}
+                  </PyButton>
+                  <PyButton
+                    v-if="showNextButton"
+                    variant="secondary"
+                    test-id="endless-next"
+                    @click="onNext"
+                  >
+                    {{ run.phase.value === 'passed' ? '下一题（难度提升）' : '继续挑战（难度下调）' }}
+                  </PyButton>
+                </div>
+                <div
+                  v-if="challengeResult"
+                  class="oj-result"
+                  data-testid="endless-result"
+                >
+                  <JudgeResultPanel
+                    :result="challengeResult"
+                    mode="judge"
+                  />
+                  <p
+                    v-if="challengeResult.passed"
+                    class="oj-result__score"
+                  >
+                    本题加分 +{{ lastScore }}
+                  </p>
+                </div>
+              </footer>
+            </article>
+          </section>
+
+          <!-- 最近题：可收缩隐藏的侧栏收纳 -->
+          <aside
+            v-if="recentOpen"
+            class="oj-pane oj-recent"
+          >
+            <header class="oj-recent__head">
+              <h3>最近 8 题</h3>
+              <button
+                type="button"
+                class="oj-recent__close"
+                aria-label="收起最近题"
+                @click="toggleRecent"
+              >
+                ×
+              </button>
+            </header>
+            <ul
+              class="oj-history"
+              data-testid="endless-history"
+            >
+              <li
+                v-for="(h, idx) in run.history.value.slice(0, 8)"
+                :key="`${h.problemId}-${idx}`"
+                :class="{
+                  'oj-history__item': true,
+                  'is-passed': h.passed,
+                  'is-failed': !h.passed,
+                }"
+              >
+                <header>
+                  <strong>第 {{ h.chapter }} 章 · 难 {{ h.difficulty }}</strong>
+                  <span class="oj-history__kc">{{ kcDisplayName(h.kcCode) }}</span>
+                </header>
+                <small>
+                  {{ h.passed ? '通过' : '失败' }} · +{{ h.score }} 分 · {{ h.elapsedSec }}s
+                </small>
+              </li>
+              <li
+                v-if="run.history.value.length === 0"
+                class="oj-history__empty"
+              >
+                还没有记录，先答一题吧。
+              </li>
+            </ul>
+          </aside>
+        </div>
       </div>
     </section>
   </AppLayout>
@@ -547,39 +633,6 @@ async function onRetry(): Promise<void> {
   border-radius: var(--pyt-radius-sm);
   padding: 2px 6px;
 }
-.endless-btn {
-  font-family: inherit;
-  cursor: pointer;
-  font-size: 13px;
-  padding: 6px 14px;
-  background: var(--pyt-color-bg-soft);
-  color: var(--pyt-color-text-primary);
-  border: 2px solid var(--pyt-color-text-primary);
-  border-radius: var(--pyt-radius-md);
-  box-shadow: 2px 2px 0 var(--pyt-color-shadow);
-}
-.endless-btn--exit {
-  background: var(--pyt-color-warning-bg);
-}
-.endless-btn--primary {
-  background: var(--pyt-color-gold);
-  color: #2a1a08;
-}
-.endless-btn--next {
-  background: var(--pyt-color-success-bg);
-  color: var(--pyt-color-success);
-  border-color: var(--pyt-color-success);
-  box-shadow: 2px 2px 0 rgba(47, 143, 60, 0.45);
-}
-.endless-btn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-  box-shadow: none;
-}
-.endless-btn:active:not(:disabled) {
-  transform: translate(2px, 2px);
-  box-shadow: none;
-}
 .endless-rate {
   color: var(--pyt-color-warning);
   font-size: 12px;
@@ -604,170 +657,353 @@ async function onRetry(): Promise<void> {
   color: var(--pyt-color-text-muted);
   font-size: 12px;
 }
-.endless-body {
+/* ── OJ 排布（对标 /training?problemId=476）：题面 | 作答 + 可收纳「最近题」侧栏 ── */
+.endless-stage {
   flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
+.endless-oj {
+  flex: 1 1 auto;
+  min-height: 0;
   display: grid;
-  grid-template-columns: 1.4fr 0.6fr;
-  gap: 12px;
+  column-gap: 12px;
+  row-gap: 12px;
+}
+/* 通用刷题：题面 | 作答（与做题页一致的两栏） */
+.endless-oj--two {
+  grid-template-columns: minmax(320px, 0.92fr) minmax(440px, 1.08fr);
+}
+.endless-oj--two.endless-oj--recent {
+  grid-template-columns: minmax(280px, 0.8fr) minmax(380px, 1fr) minmax(240px, 0.5fr);
+}
+/* 关卡题型：卡片自带题面+作答，单栏铺满（+ 可选最近侧栏） */
+.endless-oj--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+.endless-oj--single.endless-oj--recent {
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 0.42fr);
+}
+
+.oj-pane {
+  min-width: 0;
   min-height: 0;
 }
-.endless-problem,
-.endless-side {
-  background: rgba(255, 249, 234, 0.94);
-  border: 2px solid var(--pyt-color-border);
-  border-radius: var(--pyt-radius-md);
-  box-shadow: 3px 3px 0 rgba(74, 54, 29, 0.25);
-  padding: 12px;
+.oj-card {
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  overflow: auto;
+  overflow: hidden;
+  background: rgba(255, 249, 234, 0.94);
+  border: 2px solid var(--pyt-color-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 0 rgba(74, 54, 29, 0.32), 0 10px 28px rgba(60, 41, 18, 0.14);
 }
-.endless-problem__head {
+.oj-card__head {
+  flex: 0 0 auto;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(74, 54, 29, 0.22);
+  background: rgba(255, 252, 242, 0.82);
+}
+.oj-card__head--row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.oj-title-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.oj-title-row h2 {
+  margin: 0;
+  font-family: var(--pyt-font-read);
+  font-size: 19px;
+  line-height: 1.3;
+}
+.oj-tag {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--pyt-color-text-hint);
+  background: var(--pyt-color-bg-soft);
+  border: 1px solid var(--pyt-color-border);
+  border-radius: 4px;
+  padding: 3px 8px;
+}
+.oj-meta {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  align-items: center;
-  font-size: 11px;
+  margin-top: 10px;
 }
-.chapter-pill,
-.kc-pill,
-.diff-pill,
-.badge,
-.timer {
-  display: inline-block;
-  padding: 2px 8px;
-  background: var(--pyt-color-info-bg);
-  border: 1px solid var(--pyt-color-info);
-  border-radius: var(--pyt-radius-sm);
-  font-size: 11px;
-  color: var(--pyt-color-info);
+.oj-meta > span {
+  font-size: 12px;
+  color: var(--pyt-color-text-hint);
+  background: rgba(241, 216, 150, 0.42);
+  border: 1px solid rgba(74, 54, 29, 0.22);
+  border-radius: 4px;
+  padding: 4px 8px;
 }
-.badge--ai {
+.oj-meta__badge.is-ai {
+  color: var(--pyt-color-success);
   background: var(--pyt-color-success-bg);
   border-color: var(--pyt-color-success);
-  color: var(--pyt-color-success);
 }
-.badge--golden {
+.oj-meta__badge.is-golden {
+  color: var(--pyt-color-warning);
   background: var(--pyt-color-warning-bg);
   border-color: var(--pyt-color-warning);
-  color: var(--pyt-color-warning);
 }
-.timer {
+.oj-meta__timer {
   margin-left: auto;
-  background: var(--pyt-color-warning-bg);
-  border-color: var(--pyt-color-warning);
-  color: var(--pyt-color-warning);
 }
-/* 题面/样例/编辑器：保留终端深色例外（与训练场代码输出块一致），其余全亮色。 */
-.endless-problem__statement {
+.oj-work-title h3 {
   margin: 0;
-  padding: 10px;
+  font-family: var(--pyt-font-read);
+  font-size: 16px;
+}
+.oj-sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--pyt-color-text-hint);
+}
+.oj-card__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  scrollbar-width: thin;
+}
+.oj-card__body--work {
+  gap: 12px;
+}
+.oj-section-title {
+  margin: 0 0 8px;
+  font-family: var(--pyt-font-read);
+  font-size: 15px;
+}
+/* 题面/样例：保留终端深色（与做题页 stdout 同语言） */
+.oj-statement {
+  margin: 0;
+  padding: 12px 14px;
   background: var(--pyt-color-terminal-bg);
   border: 1px solid var(--pyt-color-border-strong);
-  border-radius: var(--pyt-radius-sm);
+  border-radius: 6px;
   white-space: pre-wrap;
+  font-family: 'Fira Code', 'JetBrains Mono', 'Source Code Pro', monospace;
   font-size: 13px;
   line-height: 1.7;
   color: var(--pyt-color-terminal-text);
 }
-.endless-sample {
-  background: var(--pyt-color-bg-soft);
-  border: 1px solid var(--pyt-color-border);
-  border-radius: var(--pyt-radius-sm);
-  padding: 6px 10px;
-}
-.endless-sample summary {
-  cursor: pointer;
-  font-size: 12px;
-  color: var(--pyt-color-info);
-}
-.endless-sample__pair {
+.oj-sample-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-top: 6px;
+  gap: 10px;
 }
-.endless-sample__pair pre {
-  margin: 0;
-  padding: 6px;
-  background: var(--pyt-color-terminal-bg);
-  border: 1px solid var(--pyt-color-border-strong);
-  border-radius: var(--pyt-radius-sm);
-  font-size: 12px;
-  color: var(--pyt-color-terminal-text);
-}
-.endless-editor {
+.oj-sample {
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  font-size: 12px;
-  color: var(--pyt-color-text-hint);
+  gap: 6px;
 }
-.endless-editor__label {
-  font-size: 12px;
-  color: var(--pyt-color-text-hint);
+.oj-sample__label {
+  font-family: var(--pyt-font-read);
+  font-size: 13px;
+  font-weight: 700;
 }
-.endless-editor__host {
-  height: 260px;
-  min-height: 220px;
-  border-radius: var(--pyt-radius-sm);
+/* LeetCode 式：复制按钮嵌在数据黑框内部右上角，悬停显形 */
+.oj-iobox {
+  position: relative;
+}
+.oj-iobox pre {
+  margin: 0;
+  padding: 10px 12px;
+  min-height: 46px;
+  overflow: auto;
+  white-space: pre-wrap;
+  border-radius: 6px;
+  font-family: 'Fira Code', 'JetBrains Mono', 'Source Code Pro', monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--pyt-color-terminal-text);
+  background: var(--pyt-color-terminal-bg);
+  border: 1px solid var(--pyt-color-border-strong);
+}
+.oj-copy {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 1;
+  padding: 2px 7px;
+  font-size: 12px;
+  line-height: 1.2;
+  cursor: pointer;
+  color: #cfe4f5;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 120ms ease, background 120ms ease;
+}
+.oj-iobox:hover .oj-copy,
+.oj-copy:focus-visible {
+  opacity: 1;
+}
+.oj-copy:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+.oj-editor-host {
+  flex: 1 1 auto;
+  min-height: 240px;
+  border-radius: 6px;
   overflow: hidden;
 }
-.endless-actions {
+.oj-card__foot {
+  flex: 0 0 auto;
+  display: grid;
+  gap: 10px;
+  padding: 12px 16px;
+  border-top: 1px solid rgba(74, 54, 29, 0.22);
+  background: rgba(255, 252, 242, 0.7);
+}
+.oj-actions {
   display: flex;
   gap: 8px;
 }
-.endless-result {
+.oj-result {
   display: grid;
   gap: 6px;
 }
-.endless-result__score {
+.oj-result__score {
   margin: 0;
   font-size: 12px;
   color: var(--pyt-color-success);
 }
-.endless-side h3 {
-  margin: 0;
+.oj-recent-toggle {
+  flex: 0 0 auto;
+  font-family: var(--pyt-font-pixel);
+  font-size: 11px;
+  padding: 5px 10px;
+  cursor: pointer;
   color: var(--pyt-color-text-primary);
+  background: var(--pyt-color-bg-soft);
+  border: 1px solid var(--pyt-color-border);
+  border-radius: 6px;
+}
+.oj-recent-toggle:hover {
+  background: var(--pyt-color-warning-bg);
+}
+
+/* 「最近题」可收纳侧栏 */
+.oj-recent {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: rgba(255, 249, 234, 0.96);
+  border: 2px solid var(--pyt-color-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 0 rgba(74, 54, 29, 0.32), 0 10px 28px rgba(60, 41, 18, 0.14);
+}
+.oj-recent__head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(74, 54, 29, 0.22);
+  background: rgba(255, 252, 242, 0.82);
+}
+.oj-recent__head h3 {
+  margin: 0;
+  font-family: var(--pyt-font-read);
   font-size: 14px;
 }
-.history-list {
+.oj-recent__close {
+  width: 26px;
+  height: 26px;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  background: var(--pyt-color-bg-soft);
+  border: 1px solid var(--pyt-color-border);
+  border-radius: 4px;
+}
+.oj-history {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
   list-style: none;
-  padding: 0;
+  padding: 10px;
   margin: 0;
   display: grid;
   gap: 6px;
+  align-content: start;
 }
-.history-item {
-  padding: 6px 8px;
+.oj-history__item {
+  padding: 7px 9px;
   background: var(--pyt-color-bg-soft);
   border: 1px solid var(--pyt-color-border);
   border-radius: var(--pyt-radius-sm);
 }
-.history-item--passed {
+.oj-history__item.is-passed {
   border-color: var(--pyt-color-success);
   background: var(--pyt-color-success-bg);
 }
-.history-item--failed {
+.oj-history__item.is-failed {
   border-color: var(--pyt-color-danger);
   background: var(--pyt-color-danger-bg);
 }
-.history-item header {
+.oj-history__item header {
   display: flex;
   align-items: center;
   gap: 6px;
+  font-size: 12px;
 }
-.history-item small {
+.oj-history__kc {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--pyt-color-info);
+  background: var(--pyt-color-info-bg);
+  border: 1px solid var(--pyt-color-info);
+  border-radius: var(--pyt-radius-sm);
+  padding: 1px 6px;
+}
+.oj-history__item small {
   display: block;
-  margin-top: 2px;
+  margin-top: 3px;
+  font-size: 11px;
   color: var(--pyt-color-text-muted);
 }
+.oj-history__empty {
+  font-size: 12px;
+  color: var(--pyt-color-text-muted);
+  text-align: center;
+  padding: 18px 8px;
+}
 
-@media (max-width: 900px) {
-  .endless-body {
+@media (max-width: 1024px) {
+  .endless-oj,
+  .endless-oj--two,
+  .endless-oj--two.endless-oj--recent,
+  .endless-oj--single,
+  .endless-oj--single.endless-oj--recent {
     grid-template-columns: 1fr;
+    grid-auto-rows: minmax(220px, auto);
+    overflow-y: auto;
   }
+  .oj-card {
+    height: auto;
+    min-height: 280px;
+  }
+}
+@media (max-width: 900px) {
   .endless-head {
     grid-template-columns: auto 1fr;
   }
