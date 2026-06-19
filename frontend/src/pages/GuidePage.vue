@@ -22,6 +22,8 @@ const router = useRouter();
 const sections = GUIDE_SECTIONS;
 const navGroups = GUIDE_NAV_GROUPS;
 const navOpen = ref(false);
+// 正文列内部滚动（整页自适应窗口高度）：切主题时滚回该容器顶部，而非滚 window。
+const contentEl = ref<HTMLElement | null>(null);
 
 const learningPath = [
   { label: '起步', detail: '会走会找', sectionId: 'town-basics' },
@@ -125,8 +127,12 @@ function scrollToAnchor(anchorId: string): void {
 }
 
 function scrollToTop(): void {
-  if (typeof window.scrollTo === 'function') {
-    window.scrollTo({ top: 0, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+  const behavior = prefersReducedMotion() ? 'auto' : 'smooth';
+  const el = contentEl.value;
+  if (el && typeof el.scrollTo === 'function') {
+    el.scrollTo({ top: 0, behavior });
+  } else if (typeof window.scrollTo === 'function') {
+    window.scrollTo({ top: 0, behavior });
   }
 }
 
@@ -240,6 +246,7 @@ watch(
         />
 
         <article
+          ref="contentEl"
           class="guide-content"
           data-testid="guide-content"
           aria-label="操作指南正文"
@@ -337,21 +344,25 @@ watch(
 </template>
 
 <style scoped>
+/* 整页自适应窗口高度：页面高度锁到视口（减页头），内部分区各自滚动，不让整页长滚。 */
 .guide-page {
-  min-height: calc(100vh - 64px);
+  height: calc(100dvh - 64px);
+  overflow: hidden;
   background: var(--pyt-color-bg-primary);
 }
 
 .guide-layout {
   display: grid;
-  grid-template-columns: 236px minmax(0, 1fr) 232px;
+  grid-template-columns: 248px minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   grid-template-areas:
-    'hero hero hero'
-    'nav  main outline';
+    'hero hero'
+    'nav  main';
   gap: var(--pyt-space-4) var(--pyt-space-5);
   max-width: 1320px;
+  height: 100%;
   margin: 0 auto;
-  padding: var(--pyt-space-6) var(--pyt-space-6) 96px;
+  padding: var(--pyt-space-5) var(--pyt-space-6) 0;
 }
 
 /* ── 页头 ─────────────────────────────────────────────────── */
@@ -541,19 +552,21 @@ watch(
 /* ── 左侧章节导航 ───────────────────────────────────────────── */
 .guide-nav-area {
   grid-area: nav;
-  position: sticky;
-  top: 20px;
-  align-self: start;
-  max-height: calc(100vh - 40px);
+  align-self: stretch;
+  min-height: 0;
   overflow-y: auto;
   padding-right: var(--pyt-space-2);
+  padding-bottom: var(--pyt-space-6);
 }
 
-/* ── 中间正文列 ─────────────────────────────────────────────── */
+/* ── 中间正文列（内部滚动） ─────────────────────────────────── */
 .guide-content {
   grid-area: main;
   min-width: 0;
-  max-width: 760px;
+  min-height: 0;
+  overflow-y: auto;
+  max-width: 820px;
+  padding-bottom: var(--pyt-space-6);
   font-family: var(--pyt-font-read);
   font-size: 17px;
   line-height: 1.8;
@@ -640,17 +653,10 @@ watch(
   border-radius: var(--pyt-radius-sm);
 }
 
-/* ── 右侧页内大纲 ───────────────────────────────────────────── */
+/* ── 页内二级目录：已并入左侧一级目录（GuideSidebar 常显当前主题子节）。
+   此块仍保留在 DOM 中（直链锚点 / 测试契约），但视觉隐藏，不再单独占列或顶部横排。 ── */
 .guide-outline {
-  grid-area: outline;
-  position: sticky;
-  top: 20px;
-  align-self: start;
-  max-height: calc(100vh - 40px);
-  overflow-y: auto;
-  padding-left: var(--pyt-space-3);
-  border-left: 1px solid var(--pyt-color-border-soft);
-  font-size: 14px;
+  display: none;
 }
 
 .guide-outline__label {
@@ -715,40 +721,25 @@ watch(
 }
 
 /* ── 响应式 ─────────────────────────────────────────────────── */
-/* 中屏：左侧目录继续吸顶，本页大纲成为正文上方的紧凑导航。 */
+/* 中屏：保持两列（左一级+二级目录 / 右正文），仅收窄目录列。 */
 @media (max-width: 1279px) {
   .guide-layout {
-    grid-template-columns: 224px minmax(0, 1fr);
-    grid-template-areas:
-      'hero hero'
-      'nav  outline'
-      'nav  main';
-  }
-
-  .guide-outline {
-    position: sticky;
-    top: 12px;
-    z-index: 2;
-    max-height: none;
-    padding: var(--pyt-space-3) var(--pyt-space-4);
-    border: 1px solid var(--pyt-color-border-soft);
-    background: var(--pyt-color-bg-elevated);
-    box-shadow: 0 4px 0 rgba(76, 51, 20, 0.08);
-  }
-
-  .guide-outline__subs {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 2px var(--pyt-space-3);
-    padding-left: 0;
-    border-left: 0;
+    grid-template-columns: 220px minmax(0, 1fr);
   }
 }
 
-/* 窄屏：单列 + 可折叠导航；导航展开时占文档流，不覆盖正文 */
+/* 窄屏：单列 + 可折叠导航；回归整页自然滚动（移动端不做内部双滚动） */
 @media (max-width: 1023px) {
+  .guide-page {
+    height: auto;
+    min-height: calc(100dvh - 56px);
+    overflow: visible;
+  }
+
   .guide-layout {
+    height: auto;
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
     grid-template-areas:
       'hero'
       'nav'
@@ -770,8 +761,7 @@ watch(
 
   .guide-nav-area {
     display: none;
-    position: static;
-    max-height: none;
+    overflow: visible;
     padding: var(--pyt-space-3);
     border: 2px solid var(--pyt-color-border);
     background: var(--pyt-color-bg-elevated);
@@ -781,16 +771,13 @@ watch(
     display: flex;
   }
 
-  .guide-outline {
-    display: none;
+  .guide-content {
+    overflow: visible;
+    font-size: 16px;
   }
 
   .guide-hero__title {
     font-size: 24px;
-  }
-
-  .guide-content {
-    font-size: 16px;
   }
 }
 

@@ -272,8 +272,9 @@ function sectionNumber(sectionId: string): string {
   flex: 1;
 }
 
+/* 二级目录直接嵌在一级目录（当前主题）下，所有宽度常显——不再依赖独立的右侧/顶部大纲块。 */
 .guide-sidebar__sublist {
-  display: none;
+  display: flex;
   flex-direction: column;
   gap: 1px;
   margin: 2px 0 5px 32px;
@@ -303,9 +304,4 @@ function sectionNumber(sectionId: string): string {
   }
 }
 
-@media (max-width: 1023px) {
-  .guide-sidebar__sublist {
-    display: flex;
-  }
-}
 </style>

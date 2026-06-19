@@ -212,7 +212,8 @@ export const router = createRouter({
       path: '/expedition',
       name: 'expedition',
       component: () => import('@/pages/EndlessExpeditionPage.vue'),
-      meta: { requiresAuth: true },
+      // 无尽远征自带像素塔/列表 + 战斗页交互，右下角再挂「随身助教」浮层会遮挡塔与按钮，故关掉。
+      meta: { requiresAuth: true, hideCompanion: true },
     },
     // 闯关塔（静态 7 章×10 关）已退役，并入「无尽远征」(/expedition)。
     // 旧链接重定向，保留章节作 ?focus 聚焦过滤。
