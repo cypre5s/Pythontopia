@@ -53,6 +53,13 @@ class OrchestratorGraphClientTest {
   }
 
   @Test
+  void streamReadTimeoutCoversBoundedAgenticLoop() {
+    assertThat(OrchestratorGraphClient.STREAM_READ_TIMEOUT_MS)
+        .as("orchestrator 需要容纳有界 agentic loop 的看/学/练/测工具链")
+        .isGreaterThanOrEqualTo(300_000);
+  }
+
+  @Test
   void forwardsSnakeCaseBodyAndRelaysAllEvents() throws Exception {
     CompletableFuture<String> capturedBody = new CompletableFuture<>();
     CompletableFuture<String> capturedPath = new CompletableFuture<>();

@@ -13,7 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
- * 学习总管服务层，镜像 {@code TutorService}：创建带 120s 超时的 {@link SseEmitter}，交给
+ * 学习总管服务层，镜像 {@code TutorService}：创建带长任务超时的 {@link SseEmitter}，交给
  * {@link OrchestratorGraphClient} 流式转发后立即返回。无 Repository——会话记忆在 Python 服务侧。
  *
  * <p>每轮对话从 {@link BugMineService} 取「记忆矿脉」当下到期的 KC（{@code decaying_kcs}）一并透传，
@@ -27,6 +27,8 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 public class OrchestratorService {
 
   private static final Logger log = LoggerFactory.getLogger(OrchestratorService.class);
+  /** 有界 agentic loop 会串行跑看/学/练/测工具链，生产小机型上 120s 偶发不够。 */
+  static final long STREAM_TIMEOUT_MS = 300_000L;
   /** 透传给总管的到期 KC 上限，与百晓工坊遗忘回声候选条数对齐，避免冲淡计划焦点。 */
   private static final int DECAYING_KC_LIMIT = 5;
 
@@ -49,7 +51,7 @@ public class OrchestratorService {
     Runnable release =
         sessionKey == null ? () -> {} : () -> inFlightSessions.remove(sessionKey);
     try {
-      SseEmitter emitter = new SseEmitter(120_000L);
+      SseEmitter emitter = new SseEmitter(STREAM_TIMEOUT_MS);
       graphClient.turnStream(userId, request, decayingKcs(userId), emitter, release);
       return emitter;
     } catch (RuntimeException e) {
@@ -71,7 +73,7 @@ public class OrchestratorService {
     Runnable release =
         sessionKey == null ? () -> {} : () -> inFlightSessions.remove(sessionKey);
     try {
-      SseEmitter emitter = new SseEmitter(120_000L);
+      SseEmitter emitter = new SseEmitter(STREAM_TIMEOUT_MS);
       graphClient.toolLoopStream(userId, request, emitter, release);
       return emitter;
     } catch (RuntimeException e) {

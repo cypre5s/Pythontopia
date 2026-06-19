@@ -25,8 +25,8 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @Component
 public class OrchestratorGraphClient {
 
-  /** 流式读不活动上限：与 {@code OrchestratorService} 的 SseEmitter 120s 窗口对齐（复用既有流超时约定）。 */
-  static final int STREAM_READ_TIMEOUT_MS = 120_000;
+  /** 流式读不活动上限：与 {@code OrchestratorService} 的长任务窗口对齐，覆盖有界 agentic loop。 */
+  static final int STREAM_READ_TIMEOUT_MS = 300_000;
 
   private final GraphServiceProperties properties;
   private final SseRelayExecutor sseRelayExecutor;

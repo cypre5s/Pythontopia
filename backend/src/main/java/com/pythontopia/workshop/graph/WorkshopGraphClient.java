@@ -1,5 +1,6 @@
 package com.pythontopia.workshop.graph;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.common.config.GraphServiceProperties;
 import com.pythontopia.common.sse.GraphSseConsumer;
@@ -76,11 +77,15 @@ public class WorkshopGraphClient {
             GraphInternalTokenSupport.tokenOrNull(properties),
             (event, data) -> {
           try {
-            String outboundData = data;
-            if ("result".equals(event)) {
-              outboundData = onResult.apply(data);
+            if ("result".equals(event) || "RUN_FINISHED".equals(event)) {
+              // graph 已迁 AG-UI：终态走 RUN_FINISHED（形状 {"result":{...}}），历史名 result 是裸结果。
+              // 两种都剥成裸 graph 结果交 onResult 落库（生成 resourceId），并统一以历史 result 事件回传
+              // （前端 toAguiEvent 归一 result/RUN_FINISHED）；否则资源永不入库、书房恒空、详情打不开。
+              String graphResult = "RUN_FINISHED".equals(event) ? unwrapAguiResult(data) : data;
+              emitter.send(SseEmitter.event().name("result").data(onResult.apply(graphResult)));
+            } else {
+              emitter.send(SseEmitter.event().name(event).data(data));
             }
-            emitter.send(SseEmitter.event().name(event).data(outboundData));
           } catch (IOException e) {
             log.debug("SSE emitter write failed, client likely disconnected", e);
           } catch (Exception e) {
@@ -104,6 +109,19 @@ public class WorkshopGraphClient {
         }
       }
     });
+  }
+
+  /** 从 AG-UI RUN_FINISHED 的 {"result":{...}} 形状剥出裸 graph 结果 JSON；非该形状原样返回。 */
+  private String unwrapAguiResult(String data) {
+    try {
+      JsonNode inner = objectMapper.readTree(data).path("result");
+      if (inner.isObject()) {
+        return objectMapper.writeValueAsString(inner);
+      }
+    } catch (IOException e) {
+      log.debug("RUN_FINISHED payload parse failed, using raw data", e);
+    }
+    return data;
   }
 
   private void sendError(SseEmitter emitter, String code, String message) {
