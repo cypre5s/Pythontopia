@@ -6,6 +6,7 @@ import com.pythontopia.world.boss.dto.BossEvaluateResultDto;
 import com.pythontopia.world.boss.dto.BossInternalProblem;
 import com.pythontopia.world.boss.dto.BossProblemRequest.ProfileSignalsPayload;
 import com.pythontopia.world.boss.dto.BossTestCasePayload;
+import com.pythontopia.world.boss.dto.FrontierSelectResultDto;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -104,6 +105,67 @@ public class BossGraphClient {
                     new HttpEntity<>(body, headers),
                     BossInternalProblem.class)
                 .getBody());
+  }
+
+  /**
+   * 调 graph 知识前沿选择器（无尽远征生成地图用）。失败抛 {@link RestClientException}，由调用方决定降级。
+   *
+   * <p>mastery 由后端从权威来源读取后传入；profileSignals / recentKcs / focusChapter / exclude 透传。
+   */
+  public FrontierSelectResultDto selectFrontier(
+      Map<String, Double> mastery,
+      ProfileSignalsPayload profileSignals,
+      List<String> recentKcs,
+      Integer focusChapter,
+      List<String> exclude,
+      int count) {
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.APPLICATION_JSON);
+    setInternalToken(headers);
+    List<Map<String, Object>> masteryList =
+        mastery.entrySet().stream()
+            .<Map<String, Object>>map(
+                e -> Map.of("kcCode", e.getKey(), "masteryScore", e.getValue()))
+            .toList();
+    Map<String, Object> body = new HashMap<>();
+    body.put("mastery", masteryList);
+    body.put("recentKcs", recentKcs == null ? List.of() : recentKcs);
+    body.put("exclude", exclude == null ? List.of() : exclude);
+    body.put("count", count);
+    if (focusChapter != null) {
+      body.put("focusChapter", focusChapter);
+    }
+    Map<String, Object> sig = signalsToMap(profileSignals);
+    if (!sig.isEmpty()) {
+      body.put("profileSignals", sig);
+    }
+    return GraphClientRetryHelper.withRetry(
+        "boss-select-frontier",
+        () ->
+            restTemplate
+                .exchange(
+                    properties.graphUrl() + "/agents/boss/select-frontier",
+                    HttpMethod.POST,
+                    new HttpEntity<>(body, headers),
+                    FrontierSelectResultDto.class)
+                .getBody());
+  }
+
+  private static Map<String, Object> signalsToMap(ProfileSignalsPayload profileSignals) {
+    Map<String, Object> sig = new HashMap<>();
+    if (profileSignals == null) {
+      return sig;
+    }
+    if (profileSignals.weakKcCodes() != null) sig.put("weakKcCodes", profileSignals.weakKcCodes());
+    if (profileSignals.pythonSelfRatedLevel() != null)
+      sig.put("pythonSelfRatedLevel", profileSignals.pythonSelfRatedLevel());
+    if (profileSignals.successRate() != null) sig.put("successRate", profileSignals.successRate());
+    if (profileSignals.mediaPriority() != null)
+      sig.put("mediaPriority", profileSignals.mediaPriority());
+    if (profileSignals.resilience() != null) sig.put("resilience", profileSignals.resilience());
+    if (profileSignals.questPreferredKind() != null)
+      sig.put("questPreferredKind", profileSignals.questPreferredKind());
+    return sig;
   }
 
   /** 调 graph 评测玩家提交的代码。失败抛 {@link RestClientException}。 */

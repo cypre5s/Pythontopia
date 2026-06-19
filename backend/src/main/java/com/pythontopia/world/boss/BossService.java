@@ -13,11 +13,15 @@ import com.pythontopia.world.boss.dto.BossInternalProblem;
 import com.pythontopia.world.boss.dto.BossProblemDto;
 import com.pythontopia.world.boss.dto.BossProblemRequest;
 import com.pythontopia.world.boss.dto.BossTestCasePayload;
+import com.pythontopia.world.boss.dto.FrontierSelectRequest;
+import com.pythontopia.world.boss.dto.FrontierSelectResultDto;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -69,6 +73,36 @@ public class BossService {
     this.coursePackRepository = coursePackRepository;
     this.pregenService = pregenService;
     this.eventPublisher = eventPublisher;
+  }
+
+  /**
+   * 无尽远征知识前沿选择（下沉自前端）：从权威掌握度 + 画像 + 近期 KC，调 graph 选择器返回候选。
+   *
+   * <p>graph 不可达时返回空 picks（前端回退本地 useKcFrontier，绝不阻塞玩家）。
+   */
+  public FrontierSelectResultDto selectFrontier(Long userId, FrontierSelectRequest request) {
+    Map<String, Double> mastery = new HashMap<>();
+    if (userId != null) {
+      for (MasterySnapshot snapshot : masteryRepository.findAll(userId)) {
+        if (snapshot.kcCode() != null && snapshot.masteryScore() != null) {
+          mastery.put(snapshot.kcCode(), snapshot.masteryScore().doubleValue());
+        }
+      }
+    }
+    try {
+      FrontierSelectResultDto result =
+          graphClient.selectFrontier(
+              mastery,
+              request.profileSignals(),
+              request.recentKcs(),
+              request.focusChapter(),
+              request.exclude(),
+              request.count());
+      return result == null ? FrontierSelectResultDto.empty() : result;
+    } catch (RestClientException ex) {
+      LOG.warn("select-frontier graph unavailable, returning empty (frontend falls back): {}", ex.getMessage());
+      return FrontierSelectResultDto.empty();
+    }
   }
 
   public BossProblemDto fetchProblem(int chapter, BossProblemRequest request, Long userId) {

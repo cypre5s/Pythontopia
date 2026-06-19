@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import type { BossProblemDto } from '@/api/dto/Boss';
 
 const judgeMock = vi.hoisted(() => ({ fetchProblem: vi.fn(), judge: vi.fn() }));
+const frontierApiMock = vi.hoisted(() => ({ requestFrontierPicks: vi.fn() }));
 
 vi.mock('@/composables/useChallengeJudge', () => ({
   isJudgeUnavailable: () => false,
@@ -26,6 +27,9 @@ vi.mock('@/composables/useProfileSignals', () => ({
 vi.mock('@stores/mainline', () => ({
   useMainlineStore: () => ({ submitEndlessSummary: vi.fn(async () => false) }),
 }));
+vi.mock('@/api/expedition', () => ({
+  requestFrontierPicks: frontierApiMock.requestFrontierPicks,
+}));
 
 import { useRogueRunStore } from '@/stores/rogueRun';
 
@@ -42,12 +46,14 @@ beforeEach(() => {
   localStorage.clear();
   judgeMock.fetchProblem.mockReset().mockResolvedValue(problem());
   judgeMock.judge.mockReset();
+  // 默认后端前沿选择器返回空 → 回退本地 useKcFrontier。
+  frontierApiMock.requestFrontierPicks.mockReset().mockResolvedValue([]);
 });
 
 describe('rogueRun store', () => {
-  it('startRun builds a map with an available start node', () => {
+  it('startRun builds a map with an available start node', async () => {
     const run = useRogueRunStore();
-    run.startRun(null);
+    await run.startRun(null);
     expect(run.phase).toBe('map');
     expect(run.nodes.length).toBeGreaterThan(0);
     const start = run.nodes.find((n) => n.layer === 0);
@@ -57,7 +63,7 @@ describe('rogueRun store', () => {
 
   it('passing a battle awards score + momentum and clears the node, unlocking next', async () => {
     const run = useRogueRunStore();
-    run.startRun(null);
+    await run.startRun(null);
     const start = run.nodes.find((n) => n.layer === 0);
     expect(start).toBeDefined();
     judgeMock.judge.mockResolvedValue({
@@ -72,7 +78,6 @@ describe('rogueRun store', () => {
     expect(run.nodes.find((n) => n.id === start!.id)?.state).toBe('cleared');
     run.continueAfterChallenge();
     expect(run.phase).toBe('map');
-    // 出边节点应解锁
     const unlocked = (start!.next ?? []).every(
       (id) => run.nodes.find((n) => n.id === id)?.state === 'available',
     );
@@ -81,7 +86,7 @@ describe('rogueRun store', () => {
 
   it('failing a battle costs HP gently (resilience 0.5 → -2) and resets momentum', async () => {
     const run = useRogueRunStore();
-    run.startRun(null);
+    await run.startRun(null);
     const start = run.nodes.find((n) => n.layer === 0);
     const hp0 = run.hp;
     judgeMock.judge.mockResolvedValue({
@@ -96,7 +101,7 @@ describe('rogueRun store', () => {
 
   it('relic 沉静心法(calm_mind) softens damage from -2 to -1', async () => {
     const run = useRogueRunStore();
-    run.startRun(null);
+    await run.startRun(null);
     run.relics.push('calm_mind');
     const start = run.nodes.find((n) => n.layer === 0);
     const hp0 = run.hp;
@@ -112,18 +117,16 @@ describe('rogueRun store', () => {
     judgeMock.judge.mockResolvedValue({
       problemId: 'p1', passed: true, passedTestCases: 1, totalTestCases: 1, score: 80, feedback: 'ok',
     });
-    // 基线（无增益）：battle 难度 2 → base 20, momentum 0 → 20 分。
     const baseRun = useRogueRunStore();
-    baseRun.startRun(null);
+    await baseRun.startRun(null);
     const baseStart = baseRun.nodes.find((n) => n.layer === 0);
     await baseRun.enterNode(baseStart!.id);
     await baseRun.submitChallenge();
     const baseScore = baseRun.score;
 
-    // 全新一局 + 增益：同样首通一关，分数应更高（×1.2）。
     setActivePinia(createPinia());
     const relicRun = useRogueRunStore();
-    relicRun.startRun(null);
+    await relicRun.startRun(null);
     relicRun.relics.push('combo_scholar');
     const relicStart = relicRun.nodes.find((n) => n.layer === 0);
     await relicRun.enterNode(relicStart!.id);
@@ -133,7 +136,7 @@ describe('rogueRun store', () => {
 
   it('event 复盘(review) heals + scores + clears node, returns to map without judging', async () => {
     const run = useRogueRunStore();
-    run.startRun(null);
+    await run.startRun(null);
     const node = run.nodes.find((n) => n.layer === 0);
     node!.kcCode = 'PY43-KC-001';
     run.hp = 3;
@@ -142,15 +145,15 @@ describe('rogueRun store', () => {
     run.phase = 'event';
     await run.chooseEvent('review');
     expect(run.phase).toBe('map');
-    expect(run.hp).toBe(4); // 回 1 血
+    expect(run.hp).toBe(4);
     expect(run.score).toBeGreaterThan(score0);
     expect(run.nodes.find((n) => n.id === node!.id)?.state).toBe('cleared');
-    expect(run.attempts).toBe(0); // 复盘不算判题尝试
+    expect(run.attempts).toBe(0);
   });
 
   it('event 钻研(study) bumps difficulty by 1 and starts a challenge', async () => {
     const run = useRogueRunStore();
-    run.startRun(null);
+    await run.startRun(null);
     const node = run.nodes.find((n) => n.layer === 0);
     node!.kcCode = 'PY43-KC-001';
     const d0 = node!.difficulty;
@@ -164,7 +167,7 @@ describe('rogueRun store', () => {
 
   it('boss requires beating bossPhasesTotal phases before victory', async () => {
     const run = useRogueRunStore();
-    run.startRun(null);
+    await run.startRun(null);
     const node = run.nodes.find((n) => n.layer === 0);
     node!.kind = 'boss';
     node!.kcCode = 'PY43-KC-001';
@@ -188,18 +191,37 @@ describe('rogueRun store', () => {
     expect(run.phase).toBe('cleared');
   });
 
-  it('daily run marks today done after the run ends and blocks a second daily', () => {
+  it('daily run marks today done after the run ends and blocks a second daily', async () => {
     const run = useRogueRunStore();
     expect(run.dailyAvailable).toBe(true);
-    run.startDailyRun();
+    await run.startDailyRun();
     expect(run.isDaily).toBe(true);
     expect(run.phase).toBe('map');
-    // 模拟本局体力耗尽收尾。
     run.hp = 0;
     run.activeNode = run.nodes.find((n) => n.layer === 0) ?? null;
     run.phase = 'challenge';
     run.continueAfterChallenge();
     expect(run.phase).toBe('over');
     expect(run.dailyAvailable).toBe(false);
+  });
+
+  it('uses backend frontier picks for challenge nodes when the selector returns them', async () => {
+    frontierApiMock.requestFrontierPicks.mockResolvedValueOnce([
+      { kcCode: 'PY43-KC-042', chapter: 5, difficulty: 4, reason: '画像弱项' },
+    ]);
+    const run = useRogueRunStore();
+    await run.startRun(null);
+    // 起点 battle 是第一个挑战节点，应消费后端首个 pick。
+    const start = run.nodes.find((n) => n.layer === 0);
+    expect(start?.kcCode).toBe('PY43-KC-042');
+    expect(start?.difficulty).toBe(4);
+  });
+
+  it('falls back to local frontier when the backend selector throws', async () => {
+    frontierApiMock.requestFrontierPicks.mockRejectedValueOnce(new Error('network'));
+    const run = useRogueRunStore();
+    await run.startRun(null);
+    const start = run.nodes.find((n) => n.layer === 0);
+    expect(start?.kcCode).toBe('PY43-KC-001'); // 本地 useKcFrontier mock
   });
 });

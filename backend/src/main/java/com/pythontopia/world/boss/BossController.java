@@ -6,6 +6,8 @@ import com.pythontopia.world.boss.dto.BossAttemptRequest;
 import com.pythontopia.world.boss.dto.BossAttemptResultDto;
 import com.pythontopia.world.boss.dto.BossProblemDto;
 import com.pythontopia.world.boss.dto.BossProblemRequest;
+import com.pythontopia.world.boss.dto.FrontierSelectRequest;
+import com.pythontopia.world.boss.dto.FrontierSelectResultDto;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -60,6 +62,17 @@ public class BossController {
       @CurrentUser CurrentUserPrincipal user) {
     Long userId = user == null ? null : user.userId();
     service.prefetch(chapter, request, userId);
+  }
+
+  /**
+   * 无尽远征「下一题选择器」：后端读权威掌握度 + 画像 → graph 排序候选 KC，前端据此生成分支地图。
+   * graph 不可达时返回空 picks，前端回退本地 useKcFrontier。
+   */
+  @PostMapping("/select-frontier")
+  public FrontierSelectResultDto selectFrontier(
+      @Valid @RequestBody FrontierSelectRequest request, @CurrentUser CurrentUserPrincipal user) {
+    Long userId = user == null ? null : user.userId();
+    return service.selectFrontier(userId, request);
   }
 
   @PostMapping("/{chapter}/attempt")

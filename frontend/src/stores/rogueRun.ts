@@ -19,6 +19,7 @@ import { kcDisplayName } from '@/data/kcNames';
 import { useKcFrontier } from '@/composables/useKcFrontier';
 import { useChallengeJudge, isJudgeUnavailable } from '@/composables/useChallengeJudge';
 import { useProfileSignals } from '@/composables/useProfileSignals';
+import { requestFrontierPicks, type FrontierPick } from '@/api/expedition';
 import { useMainlineStore } from '@stores/mainline';
 import { useToastStore } from '@stores/toast';
 import type { BossAttemptResultDto, BossProblemDto } from '@/api/dto/Boss';
@@ -98,7 +99,7 @@ function loadPersisted(): PersistShape | null {
 export const useRogueRunStore = defineStore('rogueRun', () => {
   const frontier = useKcFrontier();
   const challenge = useChallengeJudge();
-  const { signals } = useProfileSignals();
+  const { signals, hasAnySignal } = useProfileSignals();
   const mainline = useMainlineStore();
   const toast = useToastStore();
 
@@ -211,28 +212,62 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     toast.show(`获得学习增益：${relic.icon} ${relic.name}`, 'success');
   }
 
-  function resolveChallenge(kind: RogueNodeKind, _layer: number, usedKcs: Set<string>) {
+  function resolveChallenge(
+    kind: RogueNodeKind,
+    _layer: number,
+    usedKcs: Set<string>,
+    queue: FrontierPick[],
+  ) {
     if (kind === 'rest' || kind === 'chest') {
       return { kcCode: null, challengeKind: null as ArenaLevelKind | null, difficulty: 0 };
     }
-    const kc = frontier.pickKc(focusChapter.value, usedKcs);
+    // 优先用后端前沿选择器的 pick（权威 + 间隔重复）；用尽则回退本地 useKcFrontier。
+    const pick = queue.shift();
+    let kc: string;
+    let difficulty: number;
+    if (pick) {
+      kc = pick.kcCode;
+      difficulty = pick.difficulty;
+    } else {
+      kc = frontier.pickKc(focusChapter.value, usedKcs);
+      difficulty = frontier.difficultyForKc(kc);
+    }
     usedKcs.add(kc);
     const pool = NODE_KIND_POOLS[kind];
     const challengeKind = (pool.length > 0
       ? pool[Math.floor(Math.random() * pool.length)]
       : 'dual_track') as ArenaLevelKind;
-    let difficulty = frontier.difficultyForKc(kc);
     if (kind === 'elite') difficulty = Math.min(5, difficulty + 1);
     if (kind === 'boss') difficulty = Math.min(5, Math.max(3, difficulty + 1));
     return { kcCode: kc, challengeKind, difficulty };
   }
 
-  function startRun(focus: number | null, opts: { rng?: () => number; daily?: boolean } = {}): void {
+  async function startRun(
+    focus: number | null,
+    opts: { rng?: () => number; daily?: boolean } = {},
+  ): Promise<void> {
     focusChapter.value = focus;
+    // 后端权威「知识前沿选择器」（下沉）：取一批候选；失败/超时回退本地 useKcFrontier，绝不阻塞玩家。
+    const recent = history.value
+      .map((h) => h.kcCode)
+      .filter((k): k is string => !!k)
+      .slice(0, 12);
+    let picks: FrontierPick[] = [];
+    try {
+      picks = await requestFrontierPicks({
+        focusChapter: focus,
+        recentKcs: recent,
+        count: 28,
+        ...(hasAnySignal.value ? { profileSignals: signals.value } : {}),
+      });
+    } catch {
+      picks = [];
+    }
+    const queue = [...picks];
     const usedKcs = new Set<string>();
     const map = generateRogueMap({
       rng: opts.rng,
-      resolveChallenge: (kind, layer) => resolveChallenge(kind, layer, usedKcs),
+      resolveChallenge: (kind, layer) => resolveChallenge(kind, layer, usedKcs, queue),
     });
     nodes.value = map.nodes;
     layers.value = map.layers;
@@ -253,13 +288,13 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
   }
 
   /** 每日挑战：当日一次，弱项 + 日期种子稳定地图。 */
-  function startDailyRun(): void {
+  async function startDailyRun(): Promise<void> {
     if (!dailyAvailable.value) {
       toast.show('今日挑战已完成，明天再来', 'info');
       return;
     }
     const seed = Number(todayStr().replace(/-/g, ''));
-    startRun(null, { rng: makeLcg(seed), daily: true });
+    await startRun(null, { rng: makeLcg(seed), daily: true });
   }
 
   function clearActive(): void {

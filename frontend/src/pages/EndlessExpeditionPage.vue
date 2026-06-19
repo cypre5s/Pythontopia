@@ -53,7 +53,7 @@ onBeforeUnmount(() => {
 });
 
 function onStart(): void {
-  run.startRun(focusChoice.value);
+  void run.startRun(focusChoice.value);
 }
 function onExit(): void {
   run.abort();
