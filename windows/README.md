@@ -18,7 +18,8 @@ windows/
     │   ├── Api/ApiException.cs              # 解析 {code,message,details,traceId,timestamp}
     │   ├── Api/IApiClient.cs / ApiClient.cs # HttpClient；注入 Bearer；SubmitAndPollAsync；AskTutorStreamAsync(SSE)
     │   ├── Api/SseParser.cs                 # 可单测的 SSE 帧解析器（ApiClient 流式委托给它）
-    │   └── Auth/SessionService.cs           # 登录/注册/登出，token 持久化到 %LOCALAPPDATA%/Pythontopia/session.json
+    │   ├── Auth/SessionService.cs           # 登录/注册/登出，token 持久化到 %LOCALAPPDATA%/Pythontopia/session.json
+    │   └── Expedition/*.cs                  # 无尽远征 Roguelike 纯逻辑（模型/配置/KC 名/地图生成/前沿选择/run 引擎，无 I/O，可单测）
     ├── Pythontopia.Game/        # net8.0 MonoGame DesktopGL（跨平台，WSL 互操作可构建）
     │   ├── TownGame.cs                      # 加载 town_hub.json + tilemap_packed.png，渲染地面/建筑/装饰层 + 玩家 + NPC + HUD
     │   ├── Tiled/TiledMap.cs                # Tiled JSON 解析
@@ -30,11 +31,11 @@ windows/
     └── Pythontopia.App/         # net8.0-windows10.0.19041.0 WinUI 3（需 Windows 构建）
         ├── App.xaml(.cs)                    # DI + 品牌主题资源（Brand* 画刷 / PytCardBorderStyle）
         ├── MainWindow.xaml(.cs)             # 原生外壳：Mica 背景 + 自定义标题栏 + NavigationView + 登录门禁
-        ├── Views/*.xaml(.cs)                # Login / Guide / Mainline / Path / Profile / Quests / Course / Examples / Library / Bilibili / Practice / ChapterTest / Feynman / Workshop / Media / BugMine / Boss / Endless / ReviewHall / Insights / Classroom / Calendar / Saves / Skills / Npc / Town
+        ├── Views/*.xaml(.cs)                # Login / Guide / Mainline / Path / Profile / Quests / Course / Examples / Library / Bilibili / Practice / ChapterTest / Feynman / Workshop / Media / BugMine / Boss / Endless / Expedition / ReviewHall / Insights / Classroom / Calendar / Saves / Skills / Npc / Town / Lecture / ProfileRoom / Graduation / Credits
         ├── ViewModels/*.cs                  # MVVM（CommunityToolkit.Mvvm）
         └── Converters/Converters.cs
 └── tests/
-    └── Pythontopia.Core.Tests/  # net8.0 xUnit（29 个单测；跨平台，WSL 互操作可运行）
+    └── Pythontopia.Core.Tests/  # net8.0 xUnit（133 个单测；跨平台，WSL 互操作可运行）
 ```
 
 ## 先决条件
@@ -89,11 +90,15 @@ dotnet run --project src/Pythontopia.Game/Pythontopia.Game.csproj
 # 或先构建后直接运行：src/Pythontopia.Game/bin/Debug/net8.0/Pythontopia.Game.exe
 ```
 
-发布自包含的 App（产出可直接分发的 .exe 目录）：
+发布完全自包含的 App（产出可直接双击运行、无需预装 .NET / Windows App SDK 的 .exe 目录）：
 
 ```powershell
-dotnet publish src/Pythontopia.App/Pythontopia.App.csproj -c Release -p:Platform=x64 -r win-x64
+dotnet publish src/Pythontopia.App/Pythontopia.App.csproj -c Release -p:Platform=x64 -r win-x64 -p:SelfContained=true
 ```
+
+- 产物目录：`src/Pythontopia.App/bin/x64/Release/net8.0-windows10.0.19041.0/win-x64/publish/`，入口 `Pythontopia.App.exe`。
+- 自包含：`coreclr.dll`（.NET 运行时）+ `Microsoft.WinUI.dll` / `Microsoft.WindowsAppRuntime*`（Windows App SDK，`WindowsAppSDKSelfContained=true`）一并打包，约 350 个文件、~162 MB，整目录拷贝到任意 Win10/11 机器即可运行。
+- 本仓库已在 WSL 互操作 dotnet.exe 下验证该 publish 成功产出上述 .exe 目录（不在 Windows 运行期内验证）。
 
 ### 像素小镇操作
 
@@ -111,7 +116,7 @@ dotnet publish src/Pythontopia.App/Pythontopia.App.csproj -c Release -p:Platform
 | Pythontopia.Core | net8.0 | ✅ 构建通过（0 警告 0 错误） |
 | Pythontopia.Game | net8.0 (DesktopGL) | ✅ 构建通过（仅 “No Content References” 提示，见下） |
 | Pythontopia.App | net8.0-windows10.0.19041.0 | ✅ 本次互操作下也构建通过（XAML 已编译）；**正式开发/运行仍建议在 Windows** |
-| Pythontopia.Core.Tests | net8.0 (xUnit) | ✅ `dotnet test` 通过：29 个测试全绿 |
+| Pythontopia.Core.Tests | net8.0 (xUnit) | ✅ `dotnet test` 通过：133 个测试全绿 |
 
 > WinUI 的 XAML 编译依赖 Windows 专用工具链；本机能过是因为调用的是 Windows 侧 `dotnet.exe`。若在纯 Linux .NET 上则无法构建 App。
 
@@ -125,7 +130,7 @@ Game 通过 `Texture2D.FromStream` + 直接读取 JSON 在**运行期**加载 `A
 
 ```powershell
 dotnet test tests/Pythontopia.Core.Tests/Pythontopia.Core.Tests.csproj -c Debug
-# 已通过：失败 0，通过 29，跳过 0
+# 已通过：失败 0，通过 133，跳过 0
 ```
 
 GitHub Actions `.github/workflows/windows.yml` 在 `windows-latest` 上构建 Core / Game / WinUI App（x64）并运行上述测试，仅当 `windows/**` 或该工作流变更时触发。
@@ -148,11 +153,18 @@ GitHub Actions `.github/workflows/windows.yml` 在 `windows-latest` 上构建 Co
 - Boss 副本（新增，对齐 web `BossPage`）：`POST /world/boss/{chapter}/problem`、`.../attempt`（取题 + 服务端判题）
 - 章测作答闭环（新增，对齐 web `ChapterTestPage`）：`POST .../test/prepare|start|{testId}/submit`（出卷 → 答题 → 判分）
 - 无尽模式（新增，对齐 web `EndlessPage`）：复用 `POST /world/boss/{chapter}/problem|attempt` + `POST /mainline/endless/summary`（连续闯关 + 结算补星）
+- 无尽远征 Roguelike（新增，对齐 web `EndlessExpeditionPage`）：`POST /world/boss/select-frontier`（知识前沿候选，失败回退本地选择器）、`GET|PUT|DELETE /world/expedition/run`（run 快照跨会话续局/弃局）；分层 DAG 地图与玩法在 `Pythontopia.Core/Expedition` 纯逻辑里生成与推进，战斗节点复用 boss problem/attempt 真判题、达标复用 endless/summary 补星
 - 技能树（新增，对齐 web 技能）：`GET /world/skills`、`POST /world/skills/{key}/unlock`（节点列表 + 解锁状态 + 解锁）
 - NPC 互动（新增，对齐 web NPC）：`GET /npc/{key}/greeting`、`POST /npc/{key}/dialog`（NPC 名册取自静态 town_hub 目录）
 - 课件库 PDF（新增，对齐 web `LibraryPage`）：`GET /course/documents/{id}/pdf`（携 JWT 取字节 → 临时文件 → WebView2 渲染）
 - 学习路径（新增，对齐 web `PathTreeTab`）：`GET /learner/path/active`、`POST /learner/path/plan`（个性化路径 + 重新规划）
-- AI 配图（新增，对齐 web 媒体）：`POST /media/image`（按 prompt 生成插图，`/media/assets/{id}` 匿名直链显示；无 key 时降级占位）
+- AI 配图 / 故事板短视频（新增，对齐 web 媒体）：`POST /media/image`（按 prompt 生成插图）、`POST /media/storyboard/video`（图序列 + TTS 经 ffmpeg 合成 mp4；无 ffmpeg 后端抛 VIDEO_COMPOSE_UNAVAILABLE，前端提示降级）；`/media/assets/{id}` 匿名直链供 `Image` / `MediaPlayerElement` 显示
+- 视频讲解（新增，对齐 web `LecturePage`）：`GET /course/videos?chapterId=`（章节小节列表）+ `GET /course/videos/{id}`（公开流，`MediaPlayerElement` 播放）；无在线视频时回退 `GET /videos/bilibili?keyword=` B 站精选
+- 毕业典礼（新增，对齐 web `GraduationPage`）：`GET /mainline/overview` + `GET /learner/mastery`（7 章全 ≥1★ 判定毕业，未达成显示剩余条件，只读）
+- 学习档案室（新增，对齐 web `ProfileRoomPage`）：聚合 `GET /learner/profile` + `/profile/dimensions` + `/twin/weekly` + `/memory`（画像叙述 + 8 维 + 周报 + Agent 记忆），并内嵌「画像访谈」
+- 画像访谈（新增，对齐 web `ProfileInterviewPanel`）：`POST /learner/profile/interview`、`.../{id}/turn`、`.../{id}/finish`（ProfileAgent 多轮对话生成 8 维画像，完成后刷新档案）
+- 语音听写 ASR（新增，对齐 web `/media/asr`）：`POST /media/asr`（multipart 上传音频 → 转文字；档案室外置于「AI 配图」页，选音频文件转写）
+- 异步视频合成作业（新增，对齐 web 视频工坊）：`POST /media/storyboard/video/jobs`（入队，命中幂等缓存直给 assetId）、`GET /media/jobs/{id}`（轮询进度）、`GET /media/jobs/{id}/stream`（SSE plan/trace/result/error）
 - 画像/掌握度：`GET /learner/profile`(204=无)、`GET /learner/profile/dimensions`、`PUT /learner/profile/dimensions/{key}`、`GET /learner/mastery`
 - 任务：`GET /quests/today`、`GET /quests?status=&limit=`、`POST /quests/{id}/start|complete|skip`
 - 课程：`GET /course/pack|chapters|kcs?chapterId|pages?kcCode|problems?kcCode|videos?chapterId`、`GET /course/pages/{id}/image`、`GET /course/videos/{id}`
@@ -166,10 +178,10 @@ GitHub Actions `.github/workflows/windows.yml` 在 `windows-latest` 上构建 Co
 
 目标：把 web 端全部学生功能逐步搬到 Windows 端。下表追踪进度（教师端与纯运营页暂不在学生客户端范围内）。
 
-**已对齐**：登录/注册 · 像素小镇(town_hub) · 学习画像(8 维 + 掌握度) · 任务公告板 · 课程(章/KC/课件页+图) · 训练场(服务端判题) · 百晓工坊(意图路由/答疑/资源/学习总管 SSE) · Bug 矿洞 · 班级(加入/班级任务) · **主线地图** · **主线关卡详情** · **主线看学练打点** · **复盘大厅(周报+风险)** · **章节测验(最近成绩)** · **章测作答闭环** · **例题库** · **世界日历** · **学情洞察(洞察+记忆)** · **B站精选视频** · **存档(列表+激活)** · **费曼学弟(teach-back)** · **Boss 副本** · **无尽模式** · **技能树** · **NPC 互动** · **课件库 PDF** · **学习路径** · **新手引导** · **AI 配图**。
+**已对齐**：登录/注册 · 像素小镇(town_hub) · 学习画像(8 维 + 掌握度) · 任务公告板 · 课程(章/KC/课件页+图) · 训练场(服务端判题) · 百晓工坊(意图路由/答疑/资源/学习总管 SSE) · Bug 矿洞 · 班级(加入/班级任务) · **主线地图** · **主线关卡详情** · **主线看学练打点** · **复盘大厅(周报+风险)** · **章节测验(最近成绩)** · **章测作答闭环** · **例题库** · **世界日历** · **学情洞察(洞察+记忆)** · **B站精选视频** · **存档(列表+激活)** · **费曼学弟(teach-back)** · **Boss 副本** · **无尽模式** · **无尽远征(Roguelike：知识前沿分支地图 + 像素远征塔/列表双视图 + 跨会话续局)** · **技能树** · **NPC 互动** · **课件库 PDF** · **学习路径** · **新手引导** · **AI 配图** · **故事板短视频** · **视频讲解** · **毕业典礼** · **学习档案室** · **画像访谈(ProfileAgent)** · **语音听写(ASR)** · **异步视频合成作业** · **致谢**。
 
 **待对齐（后续批次）**：
-- 媒体生成 storyboard 视频 / TTS 语音（`/api/media/storyboard/video`、`/api/media/tts`）— 异步合成 + 媒体渲染，需 Windows 运行期验证（配图 image 已接入）
+- ASR 录音输入：当前以「选择音频文件转写」接入 `POST /media/asr`；浏览器式实时录音（MediaCapture 麦克风采集）待 Windows 运行期补齐（需麦克风权限，无法在 WSL 无头验证）。
 - 仅教师/管理员（学生客户端不适用）：RAG 课件直查 `/api/rag/query`、教师班级看板 `/api/teacher/*`
 
 ## 设计说明 / 后续项
@@ -177,7 +189,9 @@ GitHub Actions `.github/workflows/windows.yml` 在 `windows-latest` 上构建 Co
 - **真实数据**：所有数据均来自后端真实接口，无 mock。
 - **安全**：缓存的 JWT 以 Windows DPAPI（CurrentUser 作用域 + 应用熵）加密落盘（`session.json`），离 Windows 时降级明文；媒资 URL 一律相对后端 host 解析，不加载服务端返回的外部 host；API 路径参数（npcKey/skillKey/kcCode 等）均经 `Uri.EscapeDataString`。**待改进**：默认后端为 `http://`（建议上线切 HTTPS，否则 Bearer 经明文传输）；小镇子进程经 `PYT_TOKEN` 环境变量接收令牌（同用户本地 IPC，建议后续改命名管道/一次性句柄）。
 - **小镇嵌入（决策）**：小镇以独立窗口（独立进程）从 `TownPage` 启动，`TownViewModel` 现做单实例生命周期管理（运行中禁用启动按钮、进程退出后自动复位状态）。**真正的窗口内嵌**需把 `Pythontopia.Game` 的 MonoGame 后端从 `DesktopGL`（SDL/OpenGL，自带窗口）切到 `WindowsDX` + `SwapChainPanel`——这会让 Game 变为**仅 Windows 可构建**，破坏当前「Core/Game 跨平台、WSL 互操作可构建」的设计属性，且无法在本机运行期验证；故保留为需在 Windows 上落地与回归验证的显式后续决策，不在本次盲改。
+- **无尽远征像素塔（决策）**：`/expedition` 的「像素远征塔」用 **WinUI 原生 `Canvas`**（`ExpeditionPage` code-behind 按 run 引擎的节点图实时绘制节点按钮 + 连边，layer 0 在底、BOSS 在顶）实现，与页内 run 状态同进程联动；顶部「🗼 像素塔 / ☰ 列表」双视图（与 web 一致，列表为交互真源）。未采用 MonoGame 内嵌（同「小镇嵌入」理由：WindowsDX + SwapChainPanel 会破坏 Game 跨平台构建且无法本机验证）。
 - **原生外壳**：`MainWindow` 启用 Mica 系统背景（`MicaBackdrop`，Win11 生效、旧系统优雅降级）+ `ExtendsContentIntoTitleBar` 自定义标题栏（品牌徽标），并按导航项设置页头标题、在导航面板展示当前用户。品牌色板与卡片样式集中在 `App.xaml`（`BrandPrimaryBrush` / `BrandHeaderBrush` / `PytCardBorderStyle`）。
+- **Windows 原生适配**：启动时按主显示器工作区居中（`DisplayArea` + `AppWindow.Move`）；`app.manifest` 声明 PerMonitorV2 DPI 感知；`.csproj` 写入产品/版本元数据与 `NeutralLanguage=zh-CN`；未打包自包含发布（`WindowsPackageType=None` + `WindowsAppSDKSelfContained` + `SelfContained`）。**待改进**：`.exe` 自定义图标（当前用系统默认，缺 `.ico` 资产）。
 - **HUD 字体**：内置 ASCII 5x7 位图字体，HUD/提示使用对象的 ASCII 标识（如 `npc_mayor_py`、`/profile-room`）；地图里的中文 `label` 不由该字体渲染。
 - **导师 SSE**：`ApiClient.AskTutorStreamAsync` 已实现，并由 `WorkshopPage` 的 ASK 意图分派消费（逐 `delta` 拼接答案）。
 - **SSE 复用**：`tutor/ask`、`workshop/resources/stream`、`orchestrator/turn/stream` 共用一个 `StreamEventsAsync` 解析器；`AskTutorStreamAsync` 产出 `data` 字符串，资源/总管流产出带事件名的 `SseEvent`。

@@ -15,6 +15,9 @@ public partial class App : Application
     /// <summary>Process-wide service container (simple service-locator for page construction).</summary>
     public static IServiceProvider Services { get; private set; } = default!;
 
+    /// <summary>The root window, used by pages that need an HWND (e.g. file pickers).</summary>
+    public static Window? RootWindow { get; private set; }
+
     public App()
     {
         InitializeComponent();
@@ -26,6 +29,7 @@ public partial class App : Application
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
         _window = new MainWindow();
+        RootWindow = _window;
         _window.Activate();
     }
 
@@ -50,11 +54,15 @@ public partial class App : Application
         services.AddTransient<FeynmanViewModel>();
         services.AddTransient<BossViewModel>();
         services.AddTransient<EndlessViewModel>();
+        services.AddTransient<ExpeditionViewModel>();
         services.AddTransient<SkillsViewModel>();
         services.AddTransient<NpcViewModel>();
         services.AddTransient<LibraryViewModel>();
         services.AddTransient<LearningPathViewModel>();
         services.AddTransient<MediaViewModel>();
+        services.AddTransient<GraduationViewModel>();
+        services.AddTransient<LectureViewModel>();
+        services.AddTransient<ProfileRoomViewModel>();
         services.AddTransient<ProfileViewModel>();
         services.AddTransient<QuestsViewModel>();
         services.AddTransient<CourseViewModel>();

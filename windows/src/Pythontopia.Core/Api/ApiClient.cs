@@ -162,6 +162,44 @@ public sealed class ApiClient : IApiClient
         SendJsonAsync<StarAwardResultDto>(
             HttpMethod.Post, "/api/mainline/endless/summary", new EndlessSummaryRequest(chapter, correct, total, streak), ct);
 
+    // ------------------------------------------------------------- expedition ----
+
+    public async Task<IReadOnlyList<FrontierPick>> SelectFrontierAsync(FrontierSelectRequest request, CancellationToken ct = default)
+    {
+        var result = await SendJsonAsync<FrontierSelectResult>(
+            HttpMethod.Post, "/api/world/boss/select-frontier", request, ct).ConfigureAwait(false);
+        return result.Picks ?? (IReadOnlyList<FrontierPick>)Array.Empty<FrontierPick>();
+    }
+
+    public async Task<ExpeditionRunSnapshot?> GetExpeditionRunAsync(CancellationToken ct = default)
+    {
+        using var response = await SendAsync(HttpMethod.Get, "/api/world/expedition/run", null, ct).ConfigureAwait(false);
+        if (response.StatusCode == HttpStatusCode.NoContent)
+        {
+            return null;
+        }
+        await EnsureSuccessAsync(response, ct).ConfigureAwait(false);
+        // Some backends answer 200 with an empty / null body when there is no active run.
+        var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(body) || body.Trim() is "null")
+        {
+            return null;
+        }
+        return JsonSerializer.Deserialize<ExpeditionRunSnapshot>(body, PytJson.Default);
+    }
+
+    public async Task SaveExpeditionRunAsync(ExpeditionRunSnapshot run, CancellationToken ct = default)
+    {
+        using var response = await SendAsync(HttpMethod.Put, "/api/world/expedition/run", run, ct).ConfigureAwait(false);
+        await EnsureSuccessAsync(response, ct).ConfigureAwait(false);
+    }
+
+    public async Task DeleteExpeditionRunAsync(CancellationToken ct = default)
+    {
+        using var response = await SendAsync(HttpMethod.Delete, "/api/world/expedition/run", null, ct).ConfigureAwait(false);
+        await EnsureSuccessAsync(response, ct).ConfigureAwait(false);
+    }
+
     // ----------------------------------------------------------------- skills ----
 
     public Task<SkillsResponse> GetSkillsAsync(CancellationToken ct = default) =>
@@ -199,6 +237,45 @@ public sealed class ApiClient : IApiClient
 
     public Task<MediaAssetDto> GenerateImageAsync(string prompt, string? label = null, CancellationToken ct = default) =>
         SendJsonAsync<MediaAssetDto>(HttpMethod.Post, "/api/media/image", new ImageGenerationRequest(prompt, label), ct);
+
+    public Task<MediaAssetDto> ComposeStoryboardVideoAsync(IReadOnlyList<StoryboardSceneSpec> scenes, CancellationToken ct = default) =>
+        SendJsonAsync<MediaAssetDto>(HttpMethod.Post, "/api/media/storyboard/video", new StoryboardVideoRequest(scenes), ct);
+
+    public Task<MediaJobCreateResponse> CreateStoryboardVideoJobAsync(IReadOnlyList<StoryboardSceneSpec> scenes, CancellationToken ct = default) =>
+        SendJsonAsync<MediaJobCreateResponse>(HttpMethod.Post, "/api/media/storyboard/video/jobs", new StoryboardVideoRequest(scenes), ct);
+
+    public Task<MediaJobDto> GetMediaJobAsync(long jobId, CancellationToken ct = default) =>
+        SendJsonAsync<MediaJobDto>(HttpMethod.Get, $"/api/media/jobs/{jobId}", null, ct);
+
+    public IAsyncEnumerable<SseEvent> StreamMediaJobAsync(long jobId, CancellationToken ct = default) =>
+        StreamEventsAsync(HttpMethod.Get, $"/api/media/jobs/{jobId}/stream", null, ct);
+
+    public async Task<AsrResponse> TranscribeAudioAsync(
+        byte[] audio, string fileName = "speech.webm", string contentType = "audio/webm", CancellationToken ct = default)
+    {
+        using var form = new MultipartFormDataContent();
+        var file = new ByteArrayContent(audio);
+        file.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+        form.Add(file, "audio", fileName);
+        using var response = await SendContentAsync(HttpMethod.Post, "/api/media/asr", form, ct).ConfigureAwait(false);
+        return await ReadJsonAsync<AsrResponse>(response, ct).ConfigureAwait(false);
+    }
+
+    // ----------------------------------------------------- profile interview ----
+
+    public Task<ProfileInterviewStartResponse> OpenProfileInterviewAsync(CancellationToken ct = default) =>
+        SendJsonAsync<ProfileInterviewStartResponse>(HttpMethod.Post, "/api/learner/profile/interview", null, ct);
+
+    public Task<ProfileTurnResponse> SendProfileTurnAsync(string sessionId, ProfileTurnRequest request, CancellationToken ct = default) =>
+        SendJsonAsync<ProfileTurnResponse>(
+            HttpMethod.Post, $"/api/learner/profile/interview/{Uri.EscapeDataString(sessionId)}/turn", request, ct);
+
+    public async Task FinishProfileInterviewAsync(string sessionId, CancellationToken ct = default)
+    {
+        var path = $"/api/learner/profile/interview/{Uri.EscapeDataString(sessionId)}/finish";
+        using var response = await SendAsync(HttpMethod.Post, path, null, ct).ConfigureAwait(false);
+        await EnsureSuccessAsync(response, ct).ConfigureAwait(false);
+    }
 
     public Uri GetMediaAssetUri(string relativeUrl)
     {
@@ -435,10 +512,13 @@ public sealed class ApiClient : IApiClient
     /// Reads a POST SSE stream, yielding one <see cref="SseEvent"/> per frame in arrival order. An
     /// <c>error</c> frame throws an <see cref="ApiException"/> instead of being yielded.
     /// </summary>
+    private IAsyncEnumerable<SseEvent> StreamEventsAsync(string path, object? body, CancellationToken ct) =>
+        StreamEventsAsync(HttpMethod.Post, path, body, ct);
+
     private async IAsyncEnumerable<SseEvent> StreamEventsAsync(
-        string path, object? body, [EnumeratorCancellation] CancellationToken ct)
+        HttpMethod method, string path, object? body, [EnumeratorCancellation] CancellationToken ct)
     {
-        using var response = await SendAsync(HttpMethod.Post, path, body, ct, acceptSse: true)
+        using var response = await SendAsync(method, path, body, ct, acceptSse: true)
             .ConfigureAwait(false);
         await EnsureSuccessAsync(response, ct).ConfigureAwait(false);
 
@@ -538,6 +618,41 @@ public sealed class ApiClient : IApiClient
         finally
         {
             timeoutCts?.Dispose();
+        }
+    }
+
+    /// <summary>Sends a request with a caller-supplied <see cref="HttpContent"/> (e.g. multipart audio upload).</summary>
+    private async Task<HttpResponseMessage> SendContentAsync(
+        HttpMethod method, string path, HttpContent content, CancellationToken ct)
+    {
+        using var request = new HttpRequestMessage(method, _baseUrl + path) { Content = content };
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        if (!string.IsNullOrEmpty(AuthToken))
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AuthToken);
+        }
+
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeoutCts.CancelAfter(_requestTimeout);
+        try
+        {
+            return await _http.SendAsync(request, HttpCompletionOption.ResponseContentRead, timeoutCts.Token).ConfigureAwait(false);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new ApiException(
+                HttpStatusCode.ServiceUnavailable,
+                $"无法连接后端 {_baseUrl}（{ex.Message}）",
+                code: "NETWORK_ERROR",
+                innerException: ex);
+        }
+        catch (OperationCanceledException ex) when (!ct.IsCancellationRequested)
+        {
+            throw new ApiException(
+                HttpStatusCode.RequestTimeout,
+                $"请求 {path} 超时",
+                code: "TIMEOUT",
+                innerException: ex);
         }
     }
 

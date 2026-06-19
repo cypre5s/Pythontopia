@@ -1,0 +1,341 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="Pythontopia.App.Views.ExpeditionPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Grid Padding="20" RowSpacing="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Header: title + live run stats -->
+        <Grid Grid.Row="0" ColumnSpacing="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                <TextBlock Text="无尽远征 · 知识前沿" FontSize="22" FontWeight="Bold" VerticalAlignment="Center" />
+                <ProgressRing IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}" Width="20" Height="20" VerticalAlignment="Center" />
+            </StackPanel>
+            <StackPanel
+                Grid.Column="1"
+                Orientation="Horizontal"
+                Spacing="16"
+                VerticalAlignment="Center"
+                Visibility="{x:Bind ViewModel.StatsVisible, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                <StackPanel>
+                    <TextBlock Text="体力" FontSize="10" Opacity="0.6" />
+                    <TextBlock Text="{x:Bind ViewModel.HpText, Mode=OneWay}" FontWeight="Bold" Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
+                </StackPanel>
+                <StackPanel>
+                    <TextBlock Text="气势" FontSize="10" Opacity="0.6" />
+                    <TextBlock Text="{x:Bind ViewModel.MomentumText, Mode=OneWay}" FontWeight="Bold" />
+                </StackPanel>
+                <StackPanel>
+                    <TextBlock Text="得分" FontSize="10" Opacity="0.6" />
+                    <TextBlock Text="{x:Bind ViewModel.ScoreText, Mode=OneWay}" FontWeight="Bold" Foreground="{ThemeResource SystemFillColorAttentionBrush}" />
+                </StackPanel>
+                <StackPanel>
+                    <TextBlock Text="深度" FontSize="10" Opacity="0.6" />
+                    <TextBlock Text="{x:Bind ViewModel.DepthText, Mode=OneWay}" FontWeight="Bold" />
+                </StackPanel>
+            </StackPanel>
+        </Grid>
+
+        <!-- Relic bar + error -->
+        <StackPanel Grid.Row="1" Spacing="8">
+            <StackPanel
+                Orientation="Horizontal"
+                Spacing="8"
+                Visibility="{x:Bind ViewModel.RelicsVisible, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                <TextBlock Text="学习增益" FontSize="11" Opacity="0.7" VerticalAlignment="Center" />
+                <TextBlock Text="{x:Bind ViewModel.RelicsText, Mode=OneWay}" FontSize="16" VerticalAlignment="Center" />
+            </StackPanel>
+            <InfoBar
+                IsOpen="{x:Bind ViewModel.HasError, Mode=OneWay}"
+                Severity="Error"
+                IsClosable="False"
+                Message="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}" />
+        </StackPanel>
+
+        <!-- ================= Stage panels ================= -->
+        <Grid Grid.Row="3">
+
+            <!-- Idle / start -->
+            <ScrollViewer Visibility="{x:Bind ViewModel.IsIdle, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                <StackPanel Spacing="14" MaxWidth="640" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock
+                        TextWrapping="Wrap"
+                        TextAlignment="Center"
+                        Opacity="0.8"
+                        Text="按你的掌握度 + 画像生成分支远征：选路闯关、攒气势；答错温和扣体力，掌握度永久保留。" />
+                    <ComboBox
+                        Header="聚焦章节"
+                        HorizontalAlignment="Stretch"
+                        ItemsSource="{x:Bind ViewModel.FocusOptions}"
+                        DisplayMemberPath="Label"
+                        SelectedItem="{x:Bind ViewModel.SelectedFocus, Mode=TwoWay}" />
+                    <StackPanel Orientation="Horizontal" Spacing="12" HorizontalAlignment="Center">
+                        <Button
+                            Content="开始远征"
+                            Style="{ThemeResource AccentButtonStyle}"
+                            Command="{x:Bind ViewModel.StartCommand}"
+                            IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBool}}" />
+                        <Button
+                            Content="{x:Bind ViewModel.DailyButtonText, Mode=OneWay}"
+                            Command="{x:Bind ViewModel.DailyCommand}"
+                            IsEnabled="{x:Bind ViewModel.DailyAvailable, Mode=OneWay}" />
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- Map -->
+            <Grid
+                RowSpacing="10"
+                Visibility="{x:Bind ViewModel.IsMap, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Grid Grid.Row="0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock
+                        Grid.Column="0"
+                        VerticalAlignment="Center"
+                        Opacity="0.7"
+                        FontSize="12"
+                        TextWrapping="Wrap"
+                        Text="点亮的房间可前往，选了同层就不回头——一路打到顶层 BOSS。" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                        <Button Content="🗼 像素塔" Command="{x:Bind ViewModel.ShowPixelMapCommand}" />
+                        <Button Content="☰ 列表" Command="{x:Bind ViewModel.ShowListMapCommand}" />
+                        <Button Content="🏳 弃局" Command="{x:Bind ViewModel.AbandonCommand}" />
+                    </StackPanel>
+                </Grid>
+
+                <Grid Grid.Row="1">
+                    <!-- Pixel expedition tower (native canvas, built in code-behind) -->
+                    <Border
+                        Background="#161126"
+                        CornerRadius="8"
+                        Visibility="{x:Bind ViewModel.MapIsPixel, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Padding="8">
+                            <Canvas
+                                x:Name="TowerCanvas"
+                                Width="{x:Bind ViewModel.TowerWidth, Mode=OneWay}"
+                                Height="{x:Bind ViewModel.TowerHeight, Mode=OneWay}" />
+                        </ScrollViewer>
+                    </Border>
+
+                    <!-- List view (canonical fallback) -->
+                    <ScrollViewer Visibility="{x:Bind ViewModel.MapIsList, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                        <ItemsControl ItemsSource="{x:Bind ViewModel.Layers, Mode=OneWay}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,4" ColumnSpacing="10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="64" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock
+                                            Grid.Column="0"
+                                            Text="{Binding Tag}"
+                                            FontSize="11"
+                                            Opacity="0.6"
+                                            VerticalAlignment="Center" />
+                                        <ItemsControl Grid.Column="1" ItemsSource="{Binding Nodes}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <StackPanel Orientation="Horizontal" />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Button
+                                                        Margin="4"
+                                                        Padding="10,8"
+                                                        MinWidth="148"
+                                                        HorizontalContentAlignment="Left"
+                                                        Opacity="{Binding Opacity}"
+                                                        Command="{Binding EnterCommand}">
+                                                        <StackPanel Spacing="2">
+                                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                                <TextBlock Text="{Binding Icon}" FontSize="15" />
+                                                                <TextBlock Text="{Binding KindLabel}" FontWeight="SemiBold" FontSize="13" />
+                                                                <TextBlock Text="{Binding DoneGlyph}" Foreground="{ThemeResource SystemFillColorSuccessBrush}" FontWeight="Bold" />
+                                                            </StackPanel>
+                                                            <TextBlock Text="{Binding KcName}" FontSize="11" Opacity="0.7" TextWrapping="Wrap" />
+                                                            <TextBlock Text="{Binding DifficultyStars}" FontSize="11" Foreground="{ThemeResource SystemFillColorCautionBrush}" />
+                                                        </StackPanel>
+                                                    </Button>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+            </Grid>
+
+            <!-- Concept event -->
+            <ScrollViewer Visibility="{x:Bind ViewModel.IsEvent, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                <Border Style="{StaticResource PytCardBorderStyle}" Padding="20" MaxWidth="560" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <StackPanel Spacing="12">
+                        <TextBlock Text="{x:Bind ViewModel.EventTitle, Mode=OneWay}" FontSize="17" FontWeight="Bold" TextAlignment="Center" />
+                        <TextBlock Text="{x:Bind ViewModel.EventText, Mode=OneWay}" TextWrapping="Wrap" TextAlignment="Center" Opacity="0.8" />
+                        <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Command="{x:Bind ViewModel.ChooseEventCommand}" CommandParameter="study">
+                            <StackPanel>
+                                <TextBlock Text="🔬 迎难钻研" FontWeight="SemiBold" />
+                                <TextBlock Text="挑战一道更难的题（难度 +1），通关得分 ×1.5。" FontSize="11" Opacity="0.7" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Button>
+                        <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Command="{x:Bind ViewModel.ChooseEventCommand}" CommandParameter="steady">
+                            <StackPanel>
+                                <TextBlock Text="🎯 稳扎稳打" FontWeight="SemiBold" />
+                                <TextBlock Text="按当前难度挑战一题，常规得分。" FontSize="11" Opacity="0.7" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Button>
+                        <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Command="{x:Bind ViewModel.ChooseEventCommand}" CommandParameter="review">
+                            <StackPanel>
+                                <TextBlock Text="📖 就地复盘" FontWeight="SemiBold" />
+                                <TextBlock Text="不开打：回 1 点体力，拿少量分直接通过。" FontSize="11" Opacity="0.7" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </Border>
+            </ScrollViewer>
+
+            <!-- Challenge -->
+            <Grid
+                RowSpacing="10"
+                Visibility="{x:Bind ViewModel.IsChallenge, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8">
+                    <Border Background="{ThemeResource SystemFillColorAttentionBackgroundBrush}" CornerRadius="4" Padding="8,2">
+                        <TextBlock Text="{x:Bind ViewModel.ChallengeKindChip, Mode=OneWay}" FontSize="12" />
+                    </Border>
+                    <Border Background="{ThemeResource SystemFillColorAttentionBackgroundBrush}" CornerRadius="4" Padding="8,2">
+                        <TextBlock Text="{x:Bind ViewModel.KcChip, Mode=OneWay}" FontSize="12" />
+                    </Border>
+                    <Border Background="{ThemeResource SystemFillColorAttentionBackgroundBrush}" CornerRadius="4" Padding="8,2">
+                        <TextBlock Text="{x:Bind ViewModel.DifficultyChip, Mode=OneWay}" FontSize="12" />
+                    </Border>
+                    <Border
+                        Background="{ThemeResource SystemFillColorCriticalBackgroundBrush}"
+                        CornerRadius="4"
+                        Padding="8,2"
+                        Visibility="{x:Bind ViewModel.BossPhaseVisible, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Text="{x:Bind ViewModel.BossPhaseChip, Mode=OneWay}" FontSize="12" />
+                    </Border>
+                    <Border Background="{ThemeResource SystemFillColorCautionBackgroundBrush}" CornerRadius="4" Padding="8,2">
+                        <TextBlock Text="{x:Bind ViewModel.TimerChip, Mode=OneWay}" FontSize="12" />
+                    </Border>
+                </StackPanel>
+
+                <Grid Grid.Row="1" ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <ScrollViewer Grid.Column="0" Visibility="{x:Bind ViewModel.ProblemPanelVisible, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                        <Border Style="{StaticResource PytCardBorderStyle}" Padding="14">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="{x:Bind ViewModel.Statement, Mode=OneWay}" TextWrapping="Wrap" FontFamily="Consolas" />
+                                <TextBlock
+                                    Text="{x:Bind ViewModel.Hints, Mode=OneWay}"
+                                    Opacity="0.75"
+                                    FontSize="12"
+                                    TextWrapping="Wrap"
+                                    Visibility="{x:Bind ViewModel.HintsVisible, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+                            </StackPanel>
+                        </Border>
+                    </ScrollViewer>
+
+                    <Grid Grid.Column="1" RowSpacing="8" Visibility="{x:Bind ViewModel.ProblemPanelVisible, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBox
+                            Grid.Row="0"
+                            Header="解答代码（Python）"
+                            Text="{x:Bind ViewModel.Code, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                            FontFamily="Consolas"
+                            AcceptsReturn="True"
+                            TextWrapping="NoWrap"
+                            ScrollViewer.VerticalScrollBarVisibility="Auto"
+                            ScrollViewer.HorizontalScrollBarVisibility="Auto" />
+                        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="10">
+                            <Button
+                                Content="提交答案"
+                                Style="{ThemeResource AccentButtonStyle}"
+                                Command="{x:Bind ViewModel.SubmitCommand}"
+                                Visibility="{x:Bind ViewModel.ShowSubmit, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+                            <Button
+                                Content="{x:Bind ViewModel.ContinueLabel, Mode=OneWay}"
+                                Style="{ThemeResource AccentButtonStyle}"
+                                Command="{x:Bind ViewModel.ContinueCommand}"
+                                Visibility="{x:Bind ViewModel.ShowContinue, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+                            <Button
+                                Content="再试一次（换一题）"
+                                Command="{x:Bind ViewModel.RetryCommand}"
+                                Visibility="{x:Bind ViewModel.ShowRetry, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+                            <Button
+                                Content="体力耗尽 · 查看结算"
+                                Command="{x:Bind ViewModel.ContinueCommand}"
+                                Visibility="{x:Bind ViewModel.ShowOver, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+                        </StackPanel>
+                        <TextBlock
+                            Grid.Row="2"
+                            Text="{x:Bind ViewModel.ResultText, Mode=OneWay}"
+                            TextWrapping="Wrap"
+                            Visibility="{x:Bind ViewModel.ResultVisible, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+                        <TextBlock
+                            Grid.Row="3"
+                            Text="{x:Bind ViewModel.FailHpText, Mode=OneWay}"
+                            FontSize="12"
+                            Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                            Visibility="{x:Bind ViewModel.FailHpVisible, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+                    </Grid>
+                </Grid>
+            </Grid>
+
+            <!-- End -->
+            <ScrollViewer Visibility="{x:Bind ViewModel.IsEnded, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                <StackPanel Spacing="14" MaxWidth="640" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock Text="{x:Bind ViewModel.EndTitle, Mode=OneWay}" FontSize="20" FontWeight="Bold" TextAlignment="Center" TextWrapping="Wrap" />
+                    <TextBlock Text="{x:Bind ViewModel.EndStatsText, Mode=OneWay}" TextAlignment="Center" Opacity="0.85" TextWrapping="Wrap" />
+                    <TextBlock
+                        Text="{x:Bind ViewModel.StarMessage, Mode=OneWay}"
+                        TextAlignment="Center"
+                        Foreground="{ThemeResource SystemFillColorSuccessBrush}"
+                        FontWeight="SemiBold"
+                        Visibility="{x:Bind ViewModel.StarVisible, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+                    <TextBlock Text="做过的每题都已入库，掌握度永久保留。" TextAlignment="Center" FontSize="12" Opacity="0.6" />
+                    <StackPanel Orientation="Horizontal" Spacing="12" HorizontalAlignment="Center">
+                        <Button Content="再来一局" Style="{ThemeResource AccentButtonStyle}" Command="{x:Bind ViewModel.RestartCommand}" />
+                        <Button Content="返回起点" Command="{x:Bind ViewModel.AbandonCommand}" />
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+
+        </Grid>
+    </Grid>
+</Page>

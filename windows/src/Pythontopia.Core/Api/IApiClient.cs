@@ -91,6 +91,16 @@ public interface IApiClient
     /// <summary>POST /api/mainline/endless/summary — report an endless-run result; returns whether a star was awarded.</summary>
     Task<StarAwardResultDto> SubmitEndlessSummaryAsync(int chapter, int correct, int total, int streak, CancellationToken ct = default);
 
+    // ---- expedition (无尽远征 Roguelike) ----
+    /// <summary>POST /api/world/boss/select-frontier — 知识前沿候选（掌握度 + 画像 + 间隔重复）；失败由调用方回退本地选择器。</summary>
+    Task<IReadOnlyList<FrontierPick>> SelectFrontierAsync(FrontierSelectRequest request, CancellationToken ct = default);
+    /// <summary>GET /api/world/expedition/run — the current user's active run; returns null when there is none (204/empty).</summary>
+    Task<ExpeditionRunSnapshot?> GetExpeditionRunAsync(CancellationToken ct = default);
+    /// <summary>PUT /api/world/expedition/run — upsert the active run snapshot (cross-device / session resume).</summary>
+    Task SaveExpeditionRunAsync(ExpeditionRunSnapshot run, CancellationToken ct = default);
+    /// <summary>DELETE /api/world/expedition/run — end/abandon: clear the active run.</summary>
+    Task DeleteExpeditionRunAsync(CancellationToken ct = default);
+
     // ---- skills (技能树) ----
     /// <summary>GET /api/world/skills — the skill tree plus the learner's unlocked skills.</summary>
     Task<SkillsResponse> GetSkillsAsync(CancellationToken ct = default);
@@ -116,6 +126,24 @@ public interface IApiClient
     // ---- media (AI 配图) ----
     /// <summary>POST /api/media/image — generate an illustration; returns the asset (degrades to a placeholder).</summary>
     Task<MediaAssetDto> GenerateImageAsync(string prompt, string? label = null, CancellationToken ct = default);
+    /// <summary>POST /api/media/storyboard/video — composite an image sequence + TTS into an mp4 (throws VIDEO_COMPOSE_UNAVAILABLE without ffmpeg).</summary>
+    Task<MediaAssetDto> ComposeStoryboardVideoAsync(IReadOnlyList<StoryboardSceneSpec> scenes, CancellationToken ct = default);
+    /// <summary>POST /api/media/storyboard/video/jobs — enqueue an async compose job (202; cached=true returns assetId immediately).</summary>
+    Task<MediaJobCreateResponse> CreateStoryboardVideoJobAsync(IReadOnlyList<StoryboardSceneSpec> scenes, CancellationToken ct = default);
+    /// <summary>GET /api/media/jobs/{id} — poll an async compose job's status / progress.</summary>
+    Task<MediaJobDto> GetMediaJobAsync(long jobId, CancellationToken ct = default);
+    /// <summary>GET /api/media/jobs/{id}/stream — SSE plan/trace/result/error progress for an async compose job.</summary>
+    IAsyncEnumerable<SseEvent> StreamMediaJobAsync(long jobId, CancellationToken ct = default);
+    /// <summary>POST /api/media/asr — multipart upload of recorded/selected audio; returns recognised text (degraded when unavailable).</summary>
+    Task<AsrResponse> TranscribeAudioAsync(byte[] audio, string fileName = "speech.webm", string contentType = "audio/webm", CancellationToken ct = default);
+
+    // ---- profile interview (画像访谈 · ProfileAgent) ----
+    /// <summary>POST /api/learner/profile/interview — open (or resume) the ProfileAgent interview session.</summary>
+    Task<ProfileInterviewStartResponse> OpenProfileInterviewAsync(CancellationToken ct = default);
+    /// <summary>POST /api/learner/profile/interview/{id}/turn — answer the current question; returns the next question + live draft.</summary>
+    Task<ProfileTurnResponse> SendProfileTurnAsync(string sessionId, ProfileTurnRequest request, CancellationToken ct = default);
+    /// <summary>POST /api/learner/profile/interview/{id}/finish — finalise the interview and persist the profile.</summary>
+    Task FinishProfileInterviewAsync(string sessionId, CancellationToken ct = default);
     /// <summary>Absolute URL for a media asset relative path (e.g. <c>/api/media/assets/{id}</c>, anonymous).</summary>
     Uri GetMediaAssetUri(string relativeUrl);
 

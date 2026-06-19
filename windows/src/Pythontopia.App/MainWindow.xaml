@@ -35,10 +35,12 @@
                 <NavigationViewItem Content="主线" Tag="MainlinePage" Icon="Map" />
                 <NavigationViewItem Content="学习路径" Tag="PathPage" Icon="Flag" />
                 <NavigationViewItem Content="画像" Tag="ProfilePage" Icon="Contact" />
+                <NavigationViewItem Content="档案室" Tag="ProfileRoomPage" Icon="Contact2" />
                 <NavigationViewItem Content="任务公告板" Tag="QuestsPage" Icon="List" />
                 <NavigationViewItem Content="课程" Tag="CoursePage" Icon="Library" />
                 <NavigationViewItem Content="例题" Tag="ExamplesPage" Icon="Bookmarks" />
                 <NavigationViewItem Content="课件库" Tag="LibraryPage" Icon="Page2" />
+                <NavigationViewItem Content="视频讲解" Tag="LecturePage" Icon="Video" />
                 <NavigationViewItem Content="B站精选" Tag="BilibiliPage" Icon="Video" />
                 <NavigationViewItem Content="训练场" Tag="PracticePage" Icon="Play" />
                 <NavigationViewItem Content="章节测验" Tag="ChapterTestPage" Icon="Document" />
@@ -48,8 +50,10 @@
                 <NavigationViewItem Content="Bug 矿洞" Tag="BugMinePage" Icon="Repair" />
                 <NavigationViewItem Content="Boss 副本" Tag="BossPage" Icon="Important" />
                 <NavigationViewItem Content="无尽模式" Tag="EndlessPage" Icon="Sync" />
+                <NavigationViewItem Content="无尽远征" Tag="ExpeditionPage" Icon="World" />
                 <NavigationViewItem Content="复盘大厅" Tag="ReviewHallPage" Icon="Refresh" />
                 <NavigationViewItem Content="学情洞察" Tag="InsightsPage" Icon="Comment" />
+                <NavigationViewItem Content="毕业典礼" Tag="GraduationPage" Icon="Important" />
                 <NavigationViewItem Content="班级" Tag="ClassroomPage" Icon="People" />
                 <NavigationViewItem Content="日历" Tag="CalendarPage" Icon="Calendar" />
                 <NavigationViewItem Content="存档" Tag="SavesPage" Icon="Save" />
@@ -73,6 +77,7 @@
             </NavigationView.PaneCustomContent>
 
             <NavigationView.FooterMenuItems>
+                <NavigationViewItem Content="致谢" Tag="CreditsPage" Icon="Help" />
                 <NavigationViewItem Content="退出登录" Tag="Logout" Icon="BlockContact" />
             </NavigationView.FooterMenuItems>
 

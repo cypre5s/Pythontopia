@@ -7,6 +7,13 @@
     <RootNamespace>Pythontopia.App</RootNamespace>
     <AssemblyName>Pythontopia.App</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Native Windows metadata (shown in file properties / task manager) + zh-CN as the neutral culture. -->
+    <Version>1.0.0</Version>
+    <AssemblyTitle>Pythontopia 像素学习小镇</AssemblyTitle>
+    <Product>Pythontopia</Product>
+    <Company>Pythontopia</Company>
+    <Authors>Pythontopia</Authors>
+    <NeutralLanguage>zh-CN</NeutralLanguage>
     <Platforms>x86;x64;ARM64</Platforms>
     <RuntimeIdentifiers>win-x86;win-x64;win-arm64</RuntimeIdentifiers>
     <UseWinUI>true</UseWinUI>
