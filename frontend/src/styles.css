@@ -61,6 +61,19 @@ a {
   outline-offset: 2px;
 }
 
+/* 尊重「减少动态效果」系统偏好（a11y · 前庭功能障碍友好 / NFR）：把 CSS 动画与过渡
+   收敛到近 0、滚动改为瞬时。JS 动画（GSAP/Phaser）另由 useReducedMotion 治理，互不冲突。 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 .app-shell {
   min-height: 100vh;
   min-height: 100dvh;

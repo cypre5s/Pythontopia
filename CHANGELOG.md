@@ -29,6 +29,8 @@
 
 - **#6 全局键盘焦点环（a11y · WCAG 2.4.7 焦点可见）**：`styles.css` 此前所有交互元素（按钮/链接/输入/`[role=button]`）聚焦后无可见指示，键盘 tab 用户无法判断焦点落点。新增全局 `:focus-visible { outline: 3px solid #315c9a; outline-offset: 2px }`——仅键盘导航时显示焦点环，鼠标点击不打扰（`:focus-visible` 不命中鼠标聚焦）。验证：`npm run build` 通过。
 
+- **#7 尊重「减少动态效果」偏好（a11y · 前庭障碍友好 / NFR）**：`styles.css` 新增 `@media (prefers-reduced-motion: reduce)` 全局护栏，把 CSS `animation`/`transition` 收敛到 `0.01ms`、`scroll-behavior: auto`。系统开启「减弱动态效果」的用户不再被位移/淡入等过渡干扰；JS 动画（GSAP/Phaser）另由既有 `useReducedMotion` 治理，二者互补不冲突。验证：`npm run build` 通过。
+
 ## 2026-06-19 — 代码舞台 × 无尽闯关统一玩法 + 看学练测闭环（含 8 大非功能需求 + 实拍指南）
 
 > 把「代码舞台」（`/code-theater`）与「无尽闯关」（`/endless` + `/arena`）两条做题链路在玩法与实现上统一，并补全 练→测 掌握度/画像回流闭环；同步治理 8 大非功能需求（可用性 a11y / 安全防离线刷关 / 可维护性单源去重 / 可信 AI 接地等）。
