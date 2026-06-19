@@ -3,7 +3,12 @@ import { createPinia, setActivePinia } from 'pinia';
 import type { BossProblemDto } from '@/api/dto/Boss';
 
 const judgeMock = vi.hoisted(() => ({ fetchProblem: vi.fn(), judge: vi.fn() }));
-const frontierApiMock = vi.hoisted(() => ({ requestFrontierPicks: vi.fn() }));
+const frontierApiMock = vi.hoisted(() => ({
+  requestFrontierPicks: vi.fn(),
+  fetchExpeditionRun: vi.fn(),
+  saveExpeditionRun: vi.fn(),
+  deleteExpeditionRun: vi.fn(),
+}));
 
 vi.mock('@/composables/useChallengeJudge', () => ({
   isJudgeUnavailable: () => false,
@@ -29,6 +34,9 @@ vi.mock('@stores/mainline', () => ({
 }));
 vi.mock('@/api/expedition', () => ({
   requestFrontierPicks: frontierApiMock.requestFrontierPicks,
+  fetchExpeditionRun: frontierApiMock.fetchExpeditionRun,
+  saveExpeditionRun: frontierApiMock.saveExpeditionRun,
+  deleteExpeditionRun: frontierApiMock.deleteExpeditionRun,
 }));
 
 import { useRogueRunStore } from '@/stores/rogueRun';
@@ -48,6 +56,10 @@ beforeEach(() => {
   judgeMock.judge.mockReset();
   // 默认后端前沿选择器返回空 → 回退本地 useKcFrontier。
   frontierApiMock.requestFrontierPicks.mockReset().mockResolvedValue([]);
+  // 默认没有后端活跃 run；startRun 新开局。
+  frontierApiMock.fetchExpeditionRun.mockReset().mockResolvedValue(null);
+  frontierApiMock.saveExpeditionRun.mockReset().mockResolvedValue(undefined);
+  frontierApiMock.deleteExpeditionRun.mockReset().mockResolvedValue(undefined);
 });
 
 describe('rogueRun store', () => {
@@ -223,5 +235,85 @@ describe('rogueRun store', () => {
     await run.startRun(null);
     const start = run.nodes.find((n) => n.layer === 0);
     expect(start?.kcCode).toBe('PY43-KC-001'); // 本地 useKcFrontier mock
+  });
+
+  it('resumes an active backend run before generating a new map', async () => {
+    frontierApiMock.fetchExpeditionRun.mockResolvedValueOnce({
+      phase: 'map',
+      focusChapter: 3,
+      nodes: [
+        {
+          id: 'L0-0',
+          layer: 0,
+          col: 0,
+          kind: 'battle',
+          kcCode: 'PY43-KC-017',
+          challengeKind: 'dual_track',
+          difficulty: 4,
+          next: [],
+          state: 'available',
+        },
+      ],
+      layers: 1,
+      currentNodeId: 'L0-0',
+      hp: 4,
+      maxHp: 6,
+      momentum: 2,
+      bestMomentum: 3,
+      score: 88,
+      relics: ['calm_mind'],
+      isDaily: false,
+      history: [],
+    });
+
+    const run = useRogueRunStore();
+    await run.startRun(null);
+
+    expect(frontierApiMock.requestFrontierPicks).not.toHaveBeenCalled();
+    expect(run.phase).toBe('map');
+    expect(run.focusChapter).toBe(3);
+    expect(run.nodes[0]?.kcCode).toBe('PY43-KC-017');
+    expect(run.hp).toBe(4);
+    expect(run.maxHp).toBe(6);
+    expect(run.relics).toEqual(['calm_mind']);
+  });
+
+  it('falls back to localStorage when backend run loading is unreachable', async () => {
+    frontierApiMock.fetchExpeditionRun.mockRejectedValueOnce(new Error('offline'));
+    localStorage.setItem('pyt_rogue_run_v1', JSON.stringify({
+      phase: 'map',
+      focusChapter: 4,
+      nodes: [
+        {
+          id: 'L0-0',
+          layer: 0,
+          col: 0,
+          kind: 'battle',
+          kcCode: 'PY43-KC-031',
+          challengeKind: 'dual_track',
+          difficulty: 2,
+          next: [],
+          state: 'available',
+        },
+      ],
+      layers: 1,
+      currentNodeId: null,
+      hp: 3,
+      maxHp: 5,
+      momentum: 1,
+      bestMomentum: 1,
+      score: 42,
+      relics: [],
+      isDaily: false,
+      history: [],
+    }));
+
+    const run = useRogueRunStore();
+    await run.startRun(null);
+
+    expect(frontierApiMock.requestFrontierPicks).not.toHaveBeenCalled();
+    expect(run.focusChapter).toBe(4);
+    expect(run.nodes[0]?.kcCode).toBe('PY43-KC-031');
+    expect(run.score).toBe(42);
   });
 });

@@ -19,7 +19,14 @@ import { kcDisplayName } from '@/data/kcNames';
 import { useKcFrontier } from '@/composables/useKcFrontier';
 import { useChallengeJudge, isJudgeUnavailable } from '@/composables/useChallengeJudge';
 import { useProfileSignals } from '@/composables/useProfileSignals';
-import { requestFrontierPicks, type FrontierPick } from '@/api/expedition';
+import {
+  deleteExpeditionRun,
+  fetchExpeditionRun,
+  requestFrontierPicks,
+  saveExpeditionRun,
+  type ExpeditionRunSnapshot,
+  type FrontierPick,
+} from '@/api/expedition';
 import { useMainlineStore } from '@stores/mainline';
 import { useToastStore } from '@stores/toast';
 import type { BossAttemptResultDto, BossProblemDto } from '@/api/dto/Boss';
@@ -67,20 +74,12 @@ function makeLcg(seed: number): () => number {
   };
 }
 
-interface PersistShape {
-  phase: RogueRunPhase;
-  focusChapter: number | null;
-  nodes: RogueNode[];
-  layers: number;
-  currentNodeId: string | null;
-  hp: number;
-  maxHp: number;
-  momentum: number;
-  bestMomentum: number;
-  score: number;
-  relics: string[];
-  isDaily: boolean;
-  history: RogueHistoryEntry[];
+// run 可持久化快照：与后端 expedition_run 同构（api/expedition.ts 单一事实源）。
+type PersistShape = ExpeditionRunSnapshot;
+
+/** 续局允许的 phase（中途答题/事件刷新统一回退到地图）。 */
+function isResumablePhase(p: RogueRunPhase): boolean {
+  return p === 'map' || p === 'challenge' || p === 'event';
 }
 
 function loadPersisted(): PersistShape | null {
@@ -151,35 +150,48 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
   const depth = computed(() => nodes.value.filter((n) => n.state === 'cleared' && n.challengeKind).length);
   const nodeById = (id: string): RogueNode | undefined => nodes.value.find((n) => n.id === id);
 
+  function snapshot(): PersistShape {
+    return {
+      phase: phase.value,
+      focusChapter: focusChapter.value,
+      nodes: nodes.value,
+      layers: layers.value,
+      currentNodeId: currentNodeId.value,
+      hp: hp.value,
+      maxHp: maxHp.value,
+      momentum: momentum.value,
+      bestMomentum: bestMomentum.value,
+      score: score.value,
+      relics: relics.value,
+      isDaily: isDaily.value,
+      history: history.value,
+    };
+  }
+
+  /**
+   * 持久化 run 进度：后端权威（saveExpeditionRun）+ localStorage 兜底。
+   * 后端失败/不可达只吞掉（best-effort，绝不阻塞玩家）；本地写入隐私模式禁写也忽略。
+   * idle（弃局/未开局）不镜像后端——交由 abort() 显式 DELETE 清活跃 run。
+   */
   function persist(): void {
-    if (typeof window === 'undefined') return;
-    try {
-      const snap: PersistShape = {
-        phase: phase.value,
-        focusChapter: focusChapter.value,
-        nodes: nodes.value,
-        layers: layers.value,
-        currentNodeId: currentNodeId.value,
-        hp: hp.value,
-        maxHp: maxHp.value,
-        momentum: momentum.value,
-        bestMomentum: bestMomentum.value,
-        score: score.value,
-        relics: relics.value,
-        isDaily: isDaily.value,
-        history: history.value,
-      };
-      window.localStorage.setItem(PERSIST_KEY, JSON.stringify(snap));
-    } catch {
-      /* 隐私模式禁写，忽略 */
+    const snap = snapshot();
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(PERSIST_KEY, JSON.stringify(snap));
+      } catch {
+        /* 隐私模式禁写，忽略 */
+      }
+    }
+    if (phase.value !== 'idle') {
+      void saveExpeditionRun(snap).catch(() => {
+        /* 后端不可达：本地已兜底，忽略 */
+      });
     }
   }
 
-  function hydrate(): void {
-    const p = loadPersisted();
-    if (!p) return;
-    // 中途答题 / 事件选择刷新 → 退回地图
-    phase.value = p.phase === 'challenge' || p.phase === 'event' ? 'map' : p.phase;
+  /** 把一份快照灌入 store（中途答题/事件刷新 → 退回地图）；供 hydrate / 续局复用。 */
+  function applySnapshot(p: PersistShape): void {
+    phase.value = isResumablePhase(p.phase) && p.phase !== 'map' ? 'map' : p.phase;
     focusChapter.value = p.focusChapter ?? null;
     nodes.value = p.nodes;
     layers.value = p.layers;
@@ -192,6 +204,45 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     relics.value = Array.isArray(p.relics) ? p.relics : [];
     isDaily.value = p.isDaily ?? false;
     history.value = Array.isArray(p.history) ? p.history : [];
+    clearActive();
+  }
+
+  function hydrate(): void {
+    const p = loadPersisted();
+    if (p) applySnapshot(p);
+  }
+
+  /**
+   * 续局：后端权威优先（fetchExpeditionRun），不可达回退 localStorage。命中可续 run（有节点 +
+   * phase 可续）则灌入 store 返回 true；无则 false（调用方新开局）。绝不阻塞玩家。
+   */
+  async function tryResumeRun(): Promise<boolean> {
+    let snap: ExpeditionRunSnapshot | null = null;
+    try {
+      snap = await fetchExpeditionRun();
+    } catch {
+      snap = loadPersisted();
+    }
+    if (!snap || !Array.isArray(snap.nodes) || snap.nodes.length === 0) return false;
+    if (!isResumablePhase(snap.phase)) return false;
+    applySnapshot(snap); // applySnapshot 已把可续 phase 归一到 'map'
+    persist();
+    return true;
+  }
+
+  /** 跨设备进页：本地无进行中的局时，静默拉取后端活跃 run 续上（供页面 onMounted 调）。 */
+  async function resumeFromBackend(): Promise<boolean> {
+    if (phase.value !== 'idle') return false;
+    try {
+      const snap = await fetchExpeditionRun();
+      if (snap && Array.isArray(snap.nodes) && snap.nodes.length > 0 && isResumablePhase(snap.phase)) {
+        applySnapshot(snap); // applySnapshot 已把可续 phase 归一到 'map'
+        return true;
+      }
+    } catch {
+      /* 后端不可达：保持 idle，玩家可手动开始 */
+    }
+    return false;
   }
 
   /** 获得一件未拥有的学习增益（宝箱 / 精英通关）；集齐则给提示不重复发。 */
@@ -244,8 +295,13 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
 
   async function startRun(
     focus: number | null,
-    opts: { rng?: () => number; daily?: boolean } = {},
+    opts: { rng?: () => number; daily?: boolean; fresh?: boolean } = {},
   ): Promise<void> {
+    // 续局：每日挑战（种子稳定地图）与显式「弃局重开」(fresh) 不续局，其余先尝试续后端/本地活跃 run。
+    if (!opts.daily && !opts.fresh) {
+      const resumed = await tryResumeRun();
+      if (resumed) return;
+    }
     focusChapter.value = focus;
     // 后端权威「知识前沿选择器」（下沉）：取一批候选；失败/超时回退本地 useKcFrontier，绝不阻塞玩家。
     const recent = history.value
@@ -493,10 +549,20 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     await beginChallenge(node);
   }
 
-  function abort(): void {
+  /** 弃局：回到起始页 + 清后端活跃 run 与本地缓存（避免下次 startRun 续到废局）。 */
+  async function abort(): Promise<void> {
     phase.value = 'idle';
     clearActive();
-    persist();
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.removeItem(PERSIST_KEY);
+      } catch {
+        /* 隐私模式禁写，忽略 */
+      }
+    }
+    await deleteExpeditionRun().catch(() => {
+      /* 后端不可达：本地已清，忽略 */
+    });
   }
 
   function tickSecond(): void {
@@ -556,6 +622,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     depth,
     startRun,
     startDailyRun,
+    resumeFromBackend,
     enterNode,
     chooseEvent,
     submitChallenge,
