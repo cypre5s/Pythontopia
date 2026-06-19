@@ -147,7 +147,8 @@ function backToWorld(): void {
 
 function openArena(chapter: number): void {
   playUiClick();
-  void router.push({ path: `/arena/${chapter}` });
+  // 闯关塔已退役并入无尽远征：带章节聚焦进入 /expedition。
+  void router.push({ path: '/expedition', query: { focus: String(chapter) } });
 }
 
 function openDrawer(drawer: 'history' | Exclude<WorkshopDrawer, null>): void {

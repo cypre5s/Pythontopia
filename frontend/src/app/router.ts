@@ -214,14 +214,11 @@ export const router = createRouter({
       component: () => import('@/pages/EndlessExpeditionPage.vue'),
       meta: { requiresAuth: true },
     },
-    // 章节闯关塔，每章 10 关 = 9 知识/技能小关 + 1 章末 boss。
-    // 前 9 关跳 /endless?chapter=&kc=；第 10 关跳 /boss/:chapter。
-    // 关卡进度由 useArenaStore 持久化到 localStorage。
+    // 闯关塔（静态 7 章×10 关）已退役，并入「无尽远征」(/expedition)。
+    // 旧链接重定向，保留章节作 ?focus 聚焦过滤。
     {
       path: '/arena/:chapter(\\d+)',
-      name: 'arena',
-      component: () => import('@/pages/ArenaPage.vue'),
-      meta: { requiresAuth: true },
+      redirect: (to) => ({ path: '/expedition', query: { focus: String(to.params.chapter) } }),
     },
     // R-15 主线：关卡地图（冒险地图）/ 小节三件套学习页 / 章末大测试。
     {

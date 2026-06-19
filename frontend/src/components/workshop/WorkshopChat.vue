@@ -1458,7 +1458,7 @@ function onStyleChip(m: ChatMessage, style: CognitiveStyle): void {
 const PLAN_PANEL_ROUTES: Record<string, string> = {
   library: '/library',
   training: '/training',
-  problems: '/arena/1',
+  problems: '/problems',
   workshop: '/workshop',
   tutor: '/workshop',
   examples: '/examples',
@@ -1600,7 +1600,7 @@ function onPracticeKc(kcCode: string): void {
 // ============ 纯前端：NAVIGATE 带路 ============
 const NAV_TARGETS: Record<string, { route: string; label: string }> = {
   library: { route: '/library', label: '图书馆' },
-  arena: { route: '/arena/1', label: '闯关塔' },
+  arena: { route: '/expedition', label: '无尽远征' },
   bugmine: { route: '/bug-mine', label: '错题矿洞' },
   world: { route: '/world', label: '小镇广场' },
   workshop: { route: '/workshop', label: '百晓工坊' },

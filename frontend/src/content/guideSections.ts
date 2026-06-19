@@ -1179,7 +1179,7 @@ const ALL_GUIDE_SECTIONS: readonly GuideSectionContent[] = [
     summary:
       '无尽闯关是训练场之外的「连续练习」模式：AI 按你的画像不断出题，做对一题接一题。'
       + '它有两种形态——无尽模式（/endless）无限连答、冲连胜与积分；'
-      + '闯关塔（/arena/:章）每章一座塔，10 关 = 9 小关 + 1 章末 BOSS，逐关攀登。',
+      + '无尽远征（/expedition）按你的掌握度 + 画像生成知识前沿分支地图，选路闯关、攒气势、收学习增益。',
     loop:
       '无尽闯关承担「练」并直接接通「测」：每一关的结果都会折算成 KC 掌握度、回流八维画像，'
       + '系统再把你的弱项知识点优先推回来——练得越多，出的题越贴合你。',
@@ -1205,7 +1205,7 @@ const ALL_GUIDE_SECTIONS: readonly GuideSectionContent[] = [
             flow: 'row',
             nodes: [
               { icon: '♾️', label: '无尽模式', desc: '/endless：无限连答，冲连胜与积分' },
-              { icon: '🗼', label: '闯关塔', desc: '/arena/:章：10 关阶梯，逐关攀登' },
+              { icon: '🗼', label: '无尽远征', desc: '/expedition：知识前沿分支地图，自适应闯关' },
               { icon: '👹', label: '章末 BOSS', desc: '第 10 关 4 阶段副本，AI 多重审查出题' },
             ],
             caption: '闯关塔前 9 关复用无尽模式的出题机制（锁定本章 + 知识点），第 10 关跳章末 BOSS 副本。',
@@ -1227,7 +1227,7 @@ const ALL_GUIDE_SECTIONS: readonly GuideSectionContent[] = [
           {
             kind: 'steps',
             items: [
-              '闯关塔：在小镇里按 Shift + A 打开闯关塔，或从冒险地图进入某一章的 /arena/章号',
+              '无尽远征：在小镇里按 Shift + A 打开 /expedition，按掌握度 + 画像自适应闯关（可选聚焦某章）',
               '在塔里点一关看详情，再点「进入」开始作答：前 9 关进入无尽出题机制，第 10 关进入章末 BOSS 副本',
               '无尽模式：也可直接进入 /endless，连续刷题、冲连胜与积分',
             ],

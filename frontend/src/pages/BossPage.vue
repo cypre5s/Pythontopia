@@ -17,14 +17,12 @@ import BossSprite from '@/components/boss/BossSprite.vue';
 import BossMoveEffect from '@/components/boss/BossMoveEffect.vue';
 import { useBossSession } from '@/composables/useBossSession';
 import { findBossByChapter, type MainSubQuestReward } from '@/data/bossCatalog';
-import { useArenaStore } from '@stores/arena';
 
 const props = defineProps<{ chapter: number }>();
 
 const router = useRouter();
 const session = useBossSession({ chapter: props.chapter });
 const boss = findBossByChapter(props.chapter);
-const arena = useArenaStore();
 
 let secondTimer: number | null = null;
 const exitConfirm = ref<boolean>(false);
@@ -96,9 +94,7 @@ watch(
   () => session.phase.value,
   (next) => {
     if (next === 'victory') {
-      // 闯关塔第 10 关 = 本章 BOSS：通关即记 cleared，闭合 7×10 关进度链
-      // （此前只有 1–9 关经 EndlessPage 回写，第 10 关永远缺一块）。
-      arena.markCleared(`${props.chapter}-10`, session.elapsedSec.value);
+      // 闯关塔已退役（并入无尽远征）：章末 BOSS 通关不再回写静态关卡进度，掌握度由判题入库权威驱动。
       if (typeof window !== 'undefined') {
         window.setTimeout(() => {
           // 第 7 章终极 BOSS 通关 → 毕业典礼（主线终局演出）；其余章节回小镇。

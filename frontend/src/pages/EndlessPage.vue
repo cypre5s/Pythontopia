@@ -17,7 +17,6 @@ import PythonCodeEditor from '@/components/training/PythonCodeEditor.vue';
 import JudgeResultPanel from '@/components/challenge/JudgeResultPanel.vue';
 import { useEndlessRun } from '@/composables/useEndlessRun';
 import { MAIN_QUEST_BOSSES } from '@/data/bossCatalog';
-import { useArenaStore } from '@stores/arena';
 import { useMainlineStore } from '@stores/mainline';
 import { useToastStore } from '@stores/toast';
 import type { ArenaLevelKind } from '@/types/arena';
@@ -25,12 +24,11 @@ import type { ChallengeResult } from '@/api/dto/CodeChallenge';
 
 const router = useRouter();
 const route = useRoute();
-const arena = useArenaStore();
 const mainline = useMainlineStore();
 const toast = useToastStore();
 
-// 从 query 读 ?chapter & ?arenaLevel：EndlessPage 同时承担「随机刷题」与
-// 「ArenaPage 闯关塔单关入口」两个角色。arenaLevel 形如 "1-3"，通关后回 ArenaPage markCleared。
+// 从 query 读 ?chapter / ?kc / ?kind：EndlessPage 是「随便练练」快速无尽模式
+// （静态闯关塔已退役并入无尽远征 /expedition）。
 const queryChapter = computed<number | null>(() => {
   const raw = Number(route.query.chapter);
   return Number.isInteger(raw) && raw >= 1 && raw <= 7 ? raw : null;
@@ -41,14 +39,10 @@ const queryKc = computed<string | null>(() =>
 const queryKind = computed<string | null>(() =>
   typeof route.query.kind === 'string' && route.query.kind.length > 0 ? route.query.kind : null,
 );
-const arenaLevelId = computed<string | null>(() =>
-  typeof route.query.arenaLevel === 'string' ? route.query.arenaLevel : null,
-);
 const focusChapter = ref<number | null>(queryChapter.value);
 const focusKc = ref<string | null>(queryKc.value);
 const preferredKind = ref<string | null>(queryKind.value);
-const arenaLevel = ref<string | null>(arenaLevelId.value);
-const run = useEndlessRun({ focusChapter, focusKc, preferredKind, arenaLevel });
+const run = useEndlessRun({ focusChapter, focusKc, preferredKind });
 
 watch(queryChapter, (next) => {
   focusChapter.value = next;
@@ -59,26 +53,6 @@ watch(queryKc, (next) => {
 watch(queryKind, (next) => {
   preferredKind.value = next;
 });
-watch(arenaLevelId, (next) => {
-  arenaLevel.value = next;
-});
-
-// 作为闯关塔单关入口时，通过 1 题即记 markCleared 并自动回 ArenaPage。
-watch(
-  () => run.phase.value,
-  (phase) => {
-    if (phase === 'passed' && arenaLevelId.value) {
-      arena.markCleared(arenaLevelId.value, run.elapsedSec.value);
-      // 留 1.5s 让玩家看到「通过」庆祝再回闯关塔
-      if (typeof window !== 'undefined' && queryChapter.value !== null) {
-        const ch = queryChapter.value;
-        window.setTimeout(() => {
-          void router.push(`/arena/${ch}`);
-        }, 1500);
-      }
-    }
-  },
-);
 
 // 无尽补星小结上报（r15 §7：锁定本章 + 单轮答对 ≥8 且正确率 ≥80%）。
 // 达标即上报一次（每轮至多一次，失败可在下次达标变化时重试）；门槛与
@@ -244,7 +218,7 @@ async function copySample(text: string): Promise<void> {
           ← 返回小镇
         </PyButton>
         <h1 class="endless-title">
-          {{ arenaLevelId ? `闯关塔 ${arenaLevelId} · ${kindLabel}` : '无尽闯关 · 连续出题' }}
+          无尽闯关 · 连续出题
         </h1>
         <div class="endless-stats">
           <span

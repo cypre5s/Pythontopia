@@ -357,6 +357,7 @@ function buildRouter(): Router {
       { path: '/training', component: stub },
       { path: '/workshop', component: stub },
       { path: '/arena/:chapter(\\d+)', component: stub },
+      { path: '/expedition', component: stub },
       { path: '/review-hall', component: stub },
       { path: '/examples', component: stub },
       { path: '/problems', component: stub },
@@ -803,7 +804,7 @@ describe('WorkshopChat 16 工具分发', () => {
     const wrapper = mountChat();
     await flushPromises();
     const cases: Array<[string, string]> = [
-      ['arena', '/arena/1'],
+      ['arena', '/expedition'],
       ['bugmine', '/bug-mine'],
       ['world', '/world'],
       ['workshop', '/workshop'],
@@ -1216,7 +1217,7 @@ describe('WorkshopChat 16 工具分发', () => {
       ['training', '/training', 'PY43-KC-001'],
       ['library', '/library', 'PY43-KC-002'],
       ['review', '/review-hall', 'PY43-KC-003'],
-      ['problems', '/arena/1', 'PY43-KC-004'],
+      ['problems', '/problems', 'PY43-KC-004'],
     ];
     for (const [panel, path, kc] of cases) {
       await wrapper.find(`[data-testid="plan-open-${panel}"]`).trigger('click');
