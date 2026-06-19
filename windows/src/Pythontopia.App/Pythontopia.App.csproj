@@ -27,6 +27,14 @@
     <UseRidGraph>true</UseRidGraph>
   </PropertyGroup>
 
+  <!-- Release hardening: ship no PDBs / debug symbols (removes method/local names; raises the
+       reverse-engineering bar). The client carries no judging/answer logic (all server-side),
+       so binaries expose only API call shapes, not exploitable secrets. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.5.240607001" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.22621.3233" />

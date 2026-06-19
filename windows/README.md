@@ -197,6 +197,13 @@ GitHub Actions `.github/workflows/windows.yml` 在 `windows-latest` 上构建 Co
 - **SSE 复用**：`tutor/ask`、`workshop/resources/stream`、`orchestrator/turn/stream` 共用一个 `StreamEventsAsync` 解析器；`AskTutorStreamAsync` 产出 `data` 字符串，资源/总管流产出带事件名的 `SseEvent`。
 - **资源渲染**：`WorkshopPage` 当前用非流式 `POST /workshop/resources` + `GET /workshop/resources/{id}` 取回并渲染（markdown / mermaid / struct json 文本）；流式 `StreamResourceAsync` 已在客户端暴露备用。
 
+## 安全加固（防反编译/破解）
+
+- **客户端无判题/答案逻辑**：判题、AI 出题、防幻觉审查、隐藏测试全在服务端（后端权威）；反编译 Windows 客户端只暴露 API 调用形状，无可窃取的业务机密、答案或隐藏用例 —— 这是最根本的「破解无收益」设计。
+- **Release 剥离符号**：`.csproj` 在 `Configuration=Release` 下 `DebugType=none` / `DebugSymbols=false`，发布产物不含 `.pdb`，去掉方法/局部名等调试元数据。
+- **JWT 落盘加密**：缓存令牌以 Windows DPAPI（CurrentUser + 应用熵）加密（见 `SessionService`），非明文。
+- **可选更强对抗**（需在 Windows 上回归验证，本机无法验证 GUI/运行期）：对 `Pythontopia.Core.dll` / `Pythontopia.App.dll` 运行 ConfuserEx 或 Obfuscar 做符号混淆 —— 必须排除：所有 `Dto/*`（System.Text.Json 按属性名映射）、`Views/*` 与 `ViewModels/*`（WinUI x:Bind / XAML 类型解析）、DI 按类型解析的类型，否则会破坏 XAML/序列化。.NET IL 本质可反编译，混淆只提高门槛，不等于不可破解。
+
 ## 资源与许可
 
 地图瓦片 `tilemap_packed.png` 来自 Kenney Tiny Town（见 `src/Pythontopia.Game/Assets/tilesets/kenney-tiny-town-License.txt`）。代码层 MIT；像素资产遵循各自 CC0 / CC-BY / CC-BY-SA / OFL 许可，详见仓库根 `LICENSE-ART.md`。
