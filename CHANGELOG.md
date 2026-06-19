@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-06-19 — 费曼小游戏改名「代码找茬」+ 知识点显示中文名
+
+> 「错误猎人」名字太跳、且与错题矿洞的 bug 隐喻撞车；改名为更贴合项目既有语汇的「代码找茬」（graph 文档串本就用「限时找茬」描述该玩法）。同时费曼标题不再暴露 KC 原始编码，统一显示知识点中文名。
+
+- **改名 错误猎人 → 代码找茬（全端用户可见文案）**：前端 `BugHunterGame.vue`（标题 /「开始找茬」/ 空闲提示）、`FeynmanPanel.vue`（讲明白引导 / 舞台注释 / intro 文案）、`FeynmanPage.vue`（引导步骤与文案）、`FeynmanPanel.spec.ts`（用例描述）；graph `feynman_tutee_agent.py` 用户可见兜底提示 + 文档串、`routes/feynman.py` `schemas/feynman.py` 文档串、`tests` 注释；后端 `FeynmanSessionService` 服务不可用错误文案 + 注释、`FeynmanGraphClient` / `FeynmanDtos` 注释。**代码标识保持不变**（组件名 `BugHunterGame`、`data-testid="bug-hunter-*"`、`.bug-hunter` 类、API / 字段），零行为改动。
+- **知识点显示中文名（前端）**：复用既有 `kcDisplayName`（`data/kcNames.ts`，与后端 `course_kc.kc_name` 一致），费曼标题从「教会 AI 学弟 · PY43-KC-031」改为「教会 AI 学弟 · for 循环与遍历」，不再向学生暴露原始 KC 编码。
+- **验证**：`vue-tsc` 0 错；`vitest` BugHunter 2 + FeynmanPanel 4 passed；`eslint` 组件 0 错；graph 改动文件 `py_compile` 通过、无测试断言依赖被改字符串；浏览器实测 /feynman 选 KC → 标题显示中文名「for 循环与遍历」、游戏区显示「代码找茬 / 开始找茬」（截图存证）。
+- **残留**：后端 Java 改了字符串 / 注释但未本地重编译重启（运行实例仍服务旧兜底错误串，仅极少数「服务不可用」时可见，下次重启生效）；graph 兜底提示同理（仅「无 bug 样本」时可见），为不打断在测演示未重启 graph。
+
 ## 2026-06-19 — 无尽远征 Phase 3b 像素远征塔 + Phase 2d run 跨会话持久化 + 间隔重复持久化
 
 > 补完上一批收官时挂起的两件「后续」：Phaser 像素远征塔可视化（Phase 3b）与 run 跨会话 DB 持久化 + 真·间隔重复（Phase 2d）。

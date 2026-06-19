@@ -17,9 +17,9 @@ from pythontopia_graph.schemas.feynman import (
 
 AGENT_NAME = "FeynmanTuteeAgent"
 
-# 错误猎人内置的三类初学者陷阱（与 _mistake_for / _fixed_code_for 的 tag 对齐）。
+# 代码找茬内置的三类初学者陷阱（与 _mistake_for / _fixed_code_for 的 tag 对齐）。
 CANNED_BUG_TAGS = ("off_by_one_range", "input_type_string", "list_alias_mutation")
-# 错误猎人是限时小游戏：未知 tag 走 LLM 生成 bug 代码时给一个紧超时，超时即退化为
+# 代码找茬是限时小游戏：未知 tag 走 LLM 生成 bug 代码时给一个紧超时，超时即退化为
 # 确定性常见陷阱，避免慢 LLM 拖过前端 10s axios 超时让整局卡住。
 _BUG_LLM_TIMEOUT_S = 6.0
 
@@ -63,7 +63,7 @@ class FeynmanTuteeAgent:
         return parsed if parsed is not None else self._rule_step(inp)
 
     async def expose_bug(self, inp: FeynmanBugExposureInput) -> FeynmanBugExposureOutput:
-        """错误猎人：产出一段含 bug 的代码 + 真实 bug 行号，供学生限时找茬。
+        """代码找茬：产出一段含 bug 的代码 + 真实 bug 行号，供学生限时找茬。
 
         优先复现学生真实误解（canned tag → 确定性样本；其它 tag → LLM 生成 buggy+fixed 再 diff），
         无真实误解史时退化为按 KC 确定性选定的常见初学者陷阱（source 诚实标注，不冒充「你的错」）。
@@ -85,7 +85,7 @@ class FeynmanTuteeAgent:
             return generic
         return FeynmanBugExposureOutput(
             source="none",
-            hint_md="暂时没有可玩的 bug 样本，先去做题积累一些错误，再回来玩错误猎人。",
+            hint_md="暂时没有可玩的 bug 样本，先去做题积累一些错误，再回来玩代码找茬。",
         )
 
     def _bug_from_tag(self, tag: str, source: str) -> FeynmanBugExposureOutput | None:

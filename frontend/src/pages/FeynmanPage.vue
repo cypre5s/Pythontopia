@@ -59,12 +59,12 @@ function resetPicker(): void {
             教会一个会犯你同款错的 AI 学弟
           </h1>
           <p class="feynman-page__lead">
-            这位 AI 学弟会犯和你一样的错。挑一个想巩固的知识点：先玩「错误猎人」限时揪出它代码里的 bug，
+            这位 AI 学弟会犯和你一样的错。挑一个想巩固的知识点：先玩「代码找茬」限时揪出它代码里的 bug，
             再用你自己的话把它讲明白——能讲会，你就真的懂了。
           </p>
           <ol class="feynman-page__steps">
             <li><span class="feynman-page__step-no">1</span>选知识点</li>
-            <li><span class="feynman-page__step-no">2</span>错误猎人找 bug</li>
+            <li><span class="feynman-page__step-no">2</span>代码找茬揪 bug</li>
             <li><span class="feynman-page__step-no">3</span>讲明白 → 真判题出师</li>
           </ol>
         </div>
@@ -117,7 +117,7 @@ function resetPicker(): void {
         class="feynman-page__hint"
         data-testid="feynman-page-hint"
       >
-        在上方选一个知识点，就能召唤 AI 学弟、开始错误猎人啦。
+        在上方选一个知识点，就能召唤 AI 学弟、开始代码找茬啦。
       </p>
       </div>
     </section>

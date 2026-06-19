@@ -175,7 +175,7 @@ def test_feynman_route_is_registered() -> None:
     del app.state.llm_provider
 
 
-# ── 错误猎人（bug-exposure） ──────────────────────────────────────────────
+# ── 代码找茬（bug-exposure） ──────────────────────────────────────────────
 
 def test_bug_line_indices_diffs_replaced_line() -> None:
     buggy = "a = [1, 2]\nb = a\nb.append(3)\nprint(a)"

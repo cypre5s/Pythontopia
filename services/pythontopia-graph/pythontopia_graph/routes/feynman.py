@@ -36,5 +36,5 @@ async def feynman_bug_exposure(
     body: FeynmanBugExposureInput,
     provider: LlmProvider = Depends(_provider),
 ) -> FeynmanBugExposureOutput:
-    """错误猎人：学弟写出含 bug 的代码 + 真实 bug 行号，供学生限时找茬。"""
+    """代码找茬：学弟写出含 bug 的代码 + 真实 bug 行号，供学生限时找茬。"""
     return await FeynmanTuteeAgent(provider).expose_bug(body)

@@ -58,7 +58,7 @@ public class FeynmanGraphClient {
   }
 
   /**
-   * 错误猎人：请求学弟写出含 bug 的代码 + 真实 bug 行号（graph /agents/feynman/bug-exposure）。
+   * 代码找茬：请求学弟写出含 bug 的代码 + 真实 bug 行号（graph /agents/feynman/bug-exposure）。
    * 下游不可达返回 empty，由调用方决定降级或报错。
    */
   public Optional<BugExposure> bugExposure(String kcCode, List<Misconception> misconceptions) {
@@ -91,7 +91,7 @@ public class FeynmanGraphClient {
       @JsonProperty("kc_code") String kcCode,
       @JsonProperty("misconceptions") List<GraphMisconception> misconceptions) {}
 
-  /** graph 错误猎人原始响应（snake_case）；fixed_code 是答案，不进领域/前端。 */
+  /** graph 代码找茬原始响应（snake_case）；fixed_code 是答案，不进领域/前端。 */
   record GraphBugExposure(
       @JsonProperty("source") String source,
       @JsonProperty("misconception_tag") String misconceptionTag,

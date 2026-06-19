@@ -89,7 +89,7 @@ describe('FeynmanPanel', () => {
     expect(wrapper.get('[data-testid="feynman-judge"]').text()).toContain('隐藏用例通过');
   });
 
-  it('错误猎人产出的 bug 提示接入「讲明白」引导，串起出师闭环（B）', async () => {
+  it('代码找茬产出的 bug 提示接入「讲明白」引导，串起出师闭环（B）', async () => {
     const wrapper = mount(FeynmanPanel, {
       props: { kcCode: 'PY43-KC-010' },
     });

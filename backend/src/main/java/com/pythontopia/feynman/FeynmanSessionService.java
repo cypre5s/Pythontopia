@@ -100,7 +100,7 @@ public class FeynmanSessionService {
         turnId == null ? 0L : turnId, "TUTEE", output.replyMd(), output.producedCode());
   }
 
-  /** 错误猎人：基于该会话的真实误解，让学弟写出含 bug 的代码 + 真实 bug 行号供学生找茬。 */
+  /** 代码找茬：基于该会话的真实误解，让学弟写出含 bug 的代码 + 真实 bug 行号供学生找茬。 */
   @Transactional(readOnly = true)
   public com.pythontopia.feynman.dto.FeynmanDtos.BugHuntResponse bugHunt(
       long userId, long sessionId) {
@@ -114,7 +114,7 @@ public class FeynmanSessionService {
                     new BusinessException(
                         HttpStatus.BAD_GATEWAY,
                         "FEYNMAN_BUG_EXPOSURE_UNAVAILABLE",
-                        "错误猎人服务暂不可用，稍后再试"));
+                        "代码找茬服务暂不可用，稍后再试"));
     return new com.pythontopia.feynman.dto.FeynmanDtos.BugHuntResponse(
         exposure.source(),
         exposure.misconceptionTag(),

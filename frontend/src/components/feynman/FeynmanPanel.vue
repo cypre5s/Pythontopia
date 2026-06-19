@@ -4,6 +4,7 @@ import { storeToRefs } from 'pinia';
 import { useReducedMotion } from '@/composables/useReducedMotion';
 import { useFeynmanStore } from '@/stores/feynman';
 import BugHunterGame from '@/components/feynman/BugHunterGame.vue';
+import { kcDisplayName } from '@/data/kcNames';
 import type { FeynmanJudgeResultDto } from '@/api/feynman';
 
 const props = defineProps<{
@@ -47,8 +48,10 @@ const judgeText = computed(() => {
 
 const misconceptionSummary = computed(() => misconceptions.value.map((item) => item.tag).join('、'));
 const latestTurn = computed(() => turns.value.at(-1) ?? null);
-// 错误猎人找到的 bug 提示接入讲解（B）：把那处 bug 的提示带进「讲明白」环节，形成闭环。
+// 代码找茬找到的 bug 提示接入讲解（B）：把那处 bug 的提示带进「讲明白」环节，形成闭环。
 const teachHint = computed(() => store.bugHunt?.hintMd ?? '');
+// 面向学生只显示知识点中文名，不暴露 PY43-KC-031 这种原始编码。
+const kcLabel = computed(() => kcDisplayName(props.kcCode));
 
 function judgeClass(result: FeynmanJudgeResultDto | null): string {
   if (!result) {
@@ -100,7 +103,7 @@ async function submitJudge(): Promise<void> {
       <div class="feynman-panel__bar-title">
         <span class="feynman-panel__eyebrow">费曼反演</span>
         <h2 class="feynman-panel__title">
-          教会 AI 学弟 · {{ kcCode }}
+          教会 AI 学弟 · {{ kcLabel }}
         </h2>
       </div>
       <p
@@ -145,7 +148,7 @@ async function submitJudge(): Promise<void> {
       v-if="!currentSession"
       class="feynman-panel__intro-hint"
     >
-      点「开始费曼反演」召唤会犯你同款错的 AI 学弟：先玩错误猎人揪出它代码里的 bug，再用自己的话讲明白、跑真判题出师。
+      点「开始费曼反演」召唤会犯你同款错的 AI 学弟：先玩代码找茬揪出它代码里的 bug，再用自己的话讲明白、跑真判题出师。
     </p>
 
     <div
@@ -195,7 +198,7 @@ async function submitJudge(): Promise<void> {
             class="feynman-panel__teach-hint"
             data-testid="feynman-teach-hint"
           >
-            错误猎人那处 bug：{{ teachHint }} —— 用一句话讲清它为什么错，再让学弟改对跑真判题。
+            代码找茬那处 bug：{{ teachHint }} —— 用一句话讲清它为什么错，再让学弟改对跑真判题。
           </p>
           <textarea
             v-model="teachingText"
@@ -374,7 +377,7 @@ async function submitJudge(): Promise<void> {
   line-height: 1.7;
 }
 
-/* ── 主舞台：左「错误猎人」｜右「讲明白 → 真判题」，各自内部滚动，整页不上下滑 ── */
+/* ── 主舞台：左「代码找茬」｜右「讲明白 → 真判题」，各自内部滚动，整页不上下滑 ── */
 .feynman-panel__stage {
   flex: 1;
   min-height: 0;

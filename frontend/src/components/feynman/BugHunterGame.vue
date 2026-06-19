@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * 错误猎人：学弟写出一段含 bug 的代码，玩家限时点出错误行；命中/误报/漏判即时判分。
+ * 代码找茬：学弟写出一段含 bug 的代码，玩家限时点出错误行；命中/误报/漏判即时判分。
  * bug 行号由后端（buggy/fixed diff）给出，前端只负责交互与计分，不持有"正确答案代码"。
  */
 import { computed, onUnmounted, ref } from 'vue';
@@ -162,7 +162,7 @@ onUnmounted(clearTimer);
     <header class="bug-hunter__head">
       <div>
         <h3 class="bug-hunter__title">
-          错误猎人
+          代码找茬
         </h3>
         <p class="bug-hunter__sub">
           {{ phase === 'idle' ? '限时找出学弟代码里的 bug 行——命中得分、误报扣分。' : sourceLabel }}
@@ -197,7 +197,7 @@ onUnmounted(clearTimer);
           :disabled="store.hunting"
           @click="start"
         >
-          {{ store.hunting ? '生成中…' : phase === 'idle' ? '开始错误猎人' : '换一局' }}
+          {{ store.hunting ? '生成中…' : phase === 'idle' ? '开始找茬' : '换一局' }}
         </button>
       </div>
     </header>
@@ -287,7 +287,7 @@ onUnmounted(clearTimer);
       data-testid="bug-hunter-idle"
     >
       <p>
-        点上方「开始错误猎人」，学弟会写出一段含 bug 的代码；<br>
+        点上方「开始找茬」，学弟会写出一段含 bug 的代码；<br>
         限时揪出错误行——命中得分、误报扣分、漏判提醒。
       </p>
     </div>
