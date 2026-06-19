@@ -27,6 +27,8 @@
 
 - **#5 登录表单校验错误无障碍关联（a11y · 功能交互）**：`LoginForm` 校验失败时仅有 `role="alert"` 文案，未与出错输入框程序化关联。新增 `aria-invalid` + `aria-describedby="login-error"`（错误 `<p>` 补 `id`），屏读器聚焦出错框即播报原因；并为用户名/密码输入补 `name` 增强密码管理器自动填充可靠性。验证：`vue-tsc` 0 错 + 作用域 `vitest` LoginForm **3 passed**（含新增「出错框带 aria-invalid/-describedby」断言）。
 
+- **#6 全局键盘焦点环（a11y · WCAG 2.4.7 焦点可见）**：`styles.css` 此前所有交互元素（按钮/链接/输入/`[role=button]`）聚焦后无可见指示，键盘 tab 用户无法判断焦点落点。新增全局 `:focus-visible { outline: 3px solid #315c9a; outline-offset: 2px }`——仅键盘导航时显示焦点环，鼠标点击不打扰（`:focus-visible` 不命中鼠标聚焦）。验证：`npm run build` 通过。
+
 ## 2026-06-19 — 代码舞台 × 无尽闯关统一玩法 + 看学练测闭环（含 8 大非功能需求 + 实拍指南）
 
 > 把「代码舞台」（`/code-theater`）与「无尽闯关」（`/endless` + `/arena`）两条做题链路在玩法与实现上统一，并补全 练→测 掌握度/画像回流闭环；同步治理 8 大非功能需求（可用性 a11y / 安全防离线刷关 / 可维护性单源去重 / 可信 AI 接地等）。

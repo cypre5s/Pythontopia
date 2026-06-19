@@ -54,6 +54,13 @@ a {
   text-decoration-thickness: 2px;
 }
 
+/* 全局键盘焦点环（a11y · WCAG 2.4.7 焦点可见）：仅 :focus-visible（键盘 tab）显示，
+   鼠标点击不打扰。此前交互元素聚焦后无可见指示，键盘用户无法判断焦点落点而"迷路"。 */
+:focus-visible {
+  outline: 3px solid #315c9a;
+  outline-offset: 2px;
+}
+
 .app-shell {
   min-height: 100vh;
   min-height: 100dvh;
