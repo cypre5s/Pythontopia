@@ -14,6 +14,8 @@ import {
   REST_HEAL,
 } from '@/data/rogueConfig';
 import { ROGUE_RELICS } from '@/data/rogueRelics';
+import { pickEventScenario, type RogueEventChoice } from '@/data/rogueEvents';
+import { kcDisplayName } from '@/data/kcNames';
 import { useKcFrontier } from '@/composables/useKcFrontier';
 import { useChallengeJudge, isJudgeUnavailable } from '@/composables/useChallengeJudge';
 import { useProfileSignals } from '@/composables/useProfileSignals';
@@ -92,6 +94,9 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
   const elapsedSec = ref(0);
   const errorMessage = ref('');
   const summaryReported = ref(false);
+  // 概念事件：进入 event 节点先选应对；study 选项把本题得分 ×eventScoreMult。
+  const activeEventText = ref('');
+  const eventScoreMult = ref(1);
 
   // ── 派生 ──
   const nodesByLayer = computed<RogueNode[][]>(() => {
@@ -132,7 +137,8 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
   function hydrate(): void {
     const p = loadPersisted();
     if (!p) return;
-    phase.value = p.phase === 'challenge' ? 'map' : p.phase; // 中途答题刷新 → 退回地图
+    // 中途答题 / 事件选择刷新 → 退回地图
+    phase.value = p.phase === 'challenge' || p.phase === 'event' ? 'map' : p.phase;
     focusChapter.value = p.focusChapter ?? null;
     nodes.value = p.nodes;
     layers.value = p.layers;
@@ -209,6 +215,8 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     challengeResult.value = null;
     elapsedSec.value = 0;
     errorMessage.value = '';
+    activeEventText.value = '';
+    eventScoreMult.value = 1;
   }
 
   /** 标记节点通关：解锁出边、同层其它可选节点置为绕过（不可回头）。 */
@@ -222,6 +230,28 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     for (const id of node.next) {
       const target = nodeById(id);
       if (target && target.state === 'locked') target.state = 'available';
+    }
+  }
+
+  /** 拉取并进入某节点的判题（战斗/精英/抓bug/boss，以及事件选择后的挑战）。 */
+  async function beginChallenge(node: RogueNode): Promise<void> {
+    activeNode.value = node;
+    activeCode.value = '';
+    challengeResult.value = null;
+    errorMessage.value = '';
+    elapsedSec.value = 0;
+    phase.value = 'challenge';
+    loading.value = true;
+    try {
+      activeProblem.value = await challenge.fetchProblem({
+        kc: node.kcCode ?? '',
+        kind: node.challengeKind,
+        difficulty: node.difficulty,
+      });
+    } catch (error) {
+      errorMessage.value = error instanceof Error ? error.message : '出题失败，请重试';
+    } finally {
+      loading.value = false;
     }
   }
 
@@ -247,25 +277,41 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
       return;
     }
 
-    // 战斗 / 精英 / 概念 / 抓 bug / boss：出题。
-    activeNode.value = node;
-    activeCode.value = '';
-    challengeResult.value = null;
-    errorMessage.value = '';
-    elapsedSec.value = 0;
-    phase.value = 'challenge';
-    loading.value = true;
-    try {
-      activeProblem.value = await challenge.fetchProblem({
-        kc: node.kcCode ?? '',
-        kind: node.challengeKind,
-        difficulty: node.difficulty,
-      });
-    } catch (error) {
-      errorMessage.value = error instanceof Error ? error.message : '出题失败，请重试';
-    } finally {
-      loading.value = false;
+    // 概念事件：先选应对（钻研/稳练/复盘），再决定是否开打。
+    if (node.kind === 'event') {
+      activeNode.value = node;
+      eventScoreMult.value = 1;
+      activeEventText.value = pickEventScenario(kcDisplayName(node.kcCode ?? ''));
+      phase.value = 'event';
+      persist();
+      return;
     }
+
+    // 战斗 / 精英 / 抓 bug / boss：直接出题。
+    await beginChallenge(node);
+  }
+
+  /** 事件节点三选一：钻研(难度+1，得分×1.5) / 稳练(常规) / 复盘(不战，回血+小分直接过)。 */
+  async function chooseEvent(choice: RogueEventChoice): Promise<void> {
+    const node = activeNode.value;
+    if (!node || phase.value !== 'event') return;
+    if (choice === 'review') {
+      const heal = 1 + (hasRelic('focus_lens') ? 1 : 0);
+      hp.value = Math.min(maxHp.value, hp.value + heal);
+      score.value += node.difficulty * 5;
+      markCleared(node);
+      clearActive();
+      phase.value = 'map';
+      persist();
+      return;
+    }
+    if (choice === 'study') {
+      node.difficulty = Math.min(5, node.difficulty + 1);
+      eventScoreMult.value = 1.5;
+    } else {
+      eventScoreMult.value = 1;
+    }
+    await beginChallenge(node);
   }
 
   function scoreFor(node: RogueNode): number {
@@ -273,7 +319,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     const momentumBonus = Math.round(base * momentum.value * 0.1);
     const kindMult = node.kind === 'elite' || node.kind === 'boss' ? 1.5 : 1;
     const relicMult = hasRelic('combo_scholar') ? 1.2 : 1;
-    return Math.round((base + momentumBonus) * kindMult * relicMult);
+    return Math.round((base + momentumBonus) * kindMult * relicMult * eventScoreMult.value);
   }
 
   async function submitChallenge(): Promise<void> {
@@ -335,11 +381,11 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     persist();
   }
 
-  /** 战斗失败后重试同一节点（重新出一道同 KC/题型/难度的题）。 */
+  /** 战斗失败后重试同一节点（重新出一道同 KC/题型/难度的题，事件加成保留）。 */
   async function retryChallenge(): Promise<void> {
     const node = activeNode.value;
     if (!node) return;
-    await enterNode(node.id);
+    await beginChallenge(node);
   }
 
   function abort(): void {
@@ -394,12 +440,14 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     loading,
     elapsedSec,
     errorMessage,
+    activeEventText,
     nodesByLayer,
     passedCount,
     attempts,
     depth,
     startRun,
     enterNode,
+    chooseEvent,
     submitChallenge,
     continueAfterChallenge,
     retryChallenge,

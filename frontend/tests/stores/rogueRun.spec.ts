@@ -130,4 +130,35 @@ describe('rogueRun store', () => {
     await relicRun.submitChallenge();
     expect(relicRun.score).toBeGreaterThan(baseScore);
   });
+
+  it('event 复盘(review) heals + scores + clears node, returns to map without judging', async () => {
+    const run = useRogueRunStore();
+    run.startRun(null);
+    const node = run.nodes.find((n) => n.layer === 0);
+    node!.kcCode = 'PY43-KC-001';
+    run.hp = 3;
+    const score0 = run.score;
+    run.activeNode = node!;
+    run.phase = 'event';
+    await run.chooseEvent('review');
+    expect(run.phase).toBe('map');
+    expect(run.hp).toBe(4); // 回 1 血
+    expect(run.score).toBeGreaterThan(score0);
+    expect(run.nodes.find((n) => n.id === node!.id)?.state).toBe('cleared');
+    expect(run.attempts).toBe(0); // 复盘不算判题尝试
+  });
+
+  it('event 钻研(study) bumps difficulty by 1 and starts a challenge', async () => {
+    const run = useRogueRunStore();
+    run.startRun(null);
+    const node = run.nodes.find((n) => n.layer === 0);
+    node!.kcCode = 'PY43-KC-001';
+    const d0 = node!.difficulty;
+    run.activeNode = node!;
+    run.phase = 'event';
+    judgeMock.fetchProblem.mockResolvedValue(problem());
+    await run.chooseEvent('study');
+    expect(node!.difficulty).toBe(Math.min(5, d0 + 1));
+    expect(run.phase).toBe('challenge');
+  });
 });

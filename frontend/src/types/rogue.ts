@@ -46,6 +46,7 @@ export interface RogueMap {
 export type RogueRunPhase =
   | 'idle'        // 未开始
   | 'map'         // 在地图上选节点
+  | 'event'       // 概念事件节点：选应对（钻研/稳练/复盘）
   | 'challenge'   // 进入某节点答题中
   | 'cleared'     // 打通 boss，本局胜利
   | 'over';       // HP 归零，本局结束

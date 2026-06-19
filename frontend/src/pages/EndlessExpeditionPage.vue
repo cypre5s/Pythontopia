@@ -17,6 +17,7 @@ import { useRogueRunStore } from '@stores/rogueRun';
 import { kcDisplayName } from '@/data/kcNames';
 import { NODE_KIND_ICON, NODE_KIND_LABEL } from '@/data/rogueConfig';
 import { relicById } from '@/data/rogueRelics';
+import { ROGUE_EVENT_CHOICES } from '@/data/rogueEvents';
 import { MAIN_QUEST_BOSSES } from '@/data/bossCatalog';
 import type { ChallengeResult } from '@/api/dto/CodeChallenge';
 import type { RogueNode } from '@/types/rogue';
@@ -326,6 +327,37 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
         </div>
       </div>
 
+      <!-- 概念事件：三选一应对 -->
+      <div
+        v-else-if="run.phase === 'event'"
+        class="exp-event"
+        data-testid="expedition-event"
+      >
+        <div class="exp-event__card">
+          <span class="exp-event__icon">{{ NODE_KIND_ICON.event }}</span>
+          <h2 class="exp-event__title">
+            概念事件 · {{ kcDisplayName(run.activeNode?.kcCode ?? '') }}
+          </h2>
+          <p class="exp-event__text">
+            {{ run.activeEventText }}
+          </p>
+          <div class="exp-event__choices">
+            <button
+              v-for="c in ROGUE_EVENT_CHOICES"
+              :key="c.key"
+              type="button"
+              class="exp-event__choice"
+              :data-testid="`expedition-event-${c.key}`"
+              @click="run.chooseEvent(c.key)"
+            >
+              <span class="exp-event__choice-icon">{{ c.icon }}</span>
+              <strong>{{ c.label }}</strong>
+              <small>{{ c.desc }}</small>
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- 战斗：出题 + 判题 -->
       <div
         v-else-if="run.phase === 'challenge'"
@@ -549,6 +581,74 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
 .exp-relic {
   font-size: 18px;
   cursor: help;
+}
+
+/* 概念事件卡 */
+.exp-event {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.exp-event__card {
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+  padding: 24px;
+  background: rgba(255, 249, 234, 0.94);
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-md);
+  box-shadow: 3px 3px 0 rgba(74, 54, 29, 0.25);
+}
+.exp-event__icon {
+  font-size: 34px;
+}
+.exp-event__title {
+  margin: 0;
+  font-size: 18px;
+}
+.exp-event__text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--pyt-color-text-hint);
+}
+.exp-event__choices {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+.exp-event__choice {
+  display: grid;
+  gap: 2px;
+  text-align: left;
+  padding: 10px 14px;
+  cursor: pointer;
+  background: var(--pyt-color-bg-soft);
+  border: 2px solid var(--pyt-color-border);
+  border-radius: 8px;
+  box-shadow: 2px 2px 0 rgba(74, 54, 29, 0.25);
+  color: var(--pyt-color-text-primary);
+  font-family: inherit;
+}
+.exp-event__choice:hover {
+  border-color: var(--pyt-color-warning);
+  background: var(--pyt-color-warning-bg);
+}
+.exp-event__choice-icon {
+  font-size: 16px;
+}
+.exp-event__choice strong {
+  font-size: 14px;
+}
+.exp-event__choice small {
+  font-size: 11px;
+  color: var(--pyt-color-text-muted);
 }
 
 .exp-start,
