@@ -9,7 +9,8 @@ const toast = useToastStore();
     v-if="toast.visible"
     class="toast"
     :class="toast.kind"
-    role="status"
+    :role="toast.kind === 'error' ? 'alert' : 'status'"
+    :aria-live="toast.kind === 'error' ? 'assertive' : 'polite'"
   >
     {{ toast.message }}
   </div>

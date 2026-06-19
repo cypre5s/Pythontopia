@@ -35,6 +35,8 @@
 
 - **#9 输入占位文字对比度（a11y · 文本对比 WCAG 1.4.3）**：浏览器默认 `::placeholder` 约 54% 灰，在 `#fffef8`/`#fff8e1` 浅色输入框上对比不足、弱视用户难辨。`styles.css` 统一 `::placeholder { color: #5a6560; opacity: 1 }`（足够对比的墨绿灰，opacity 拉满防半透明再变浅）。验证：`npm run build` 通过。
 
+- **#10 错误提示及时播报（a11y · 功能交互）**：`AppToast.vue` 此前恒为 `role="status"`（polite），错误提示常被屏读器延迟或跳过。改为按类型动态：错误用 `role="alert"` + `aria-live="assertive"`（即时打断播报），其余仍 `status`/`polite`（不打扰）。验证：`vue-tsc` 通过。
+
 ## 2026-06-19 — 代码舞台 × 无尽闯关统一玩法 + 看学练测闭环（含 8 大非功能需求 + 实拍指南）
 
 > 把「代码舞台」（`/code-theater`）与「无尽闯关」（`/endless` + `/arena`）两条做题链路在玩法与实现上统一，并补全 练→测 掌握度/画像回流闭环；同步治理 8 大非功能需求（可用性 a11y / 安全防离线刷关 / 可维护性单源去重 / 可信 AI 接地等）。
