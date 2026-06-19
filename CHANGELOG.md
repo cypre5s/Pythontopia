@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-06-19 — 生产部署批次：前端人本打磨 + 工坊 AG-UI 入库修复 + graph 工具调用优化 + nginx 防白屏（ECS 上线 + 浏览器 e2e 验收）
+
+> 把若干条已完成且经验证为正向的改动一次性提交并发布到生产 ECS（`http://47.120.29.62`）。发布包 `pythontopia-web-20260619T084925Z`（676M，sha256 校验一致），生效 release `20260619-165320`，上一版本 `20260618-230311` 保留可回滚。本批 5 个提交：`d20e8528`(前端) / `8873aa28`(deploy/nginx) / `b558953e`(截图) / `5de00ce4`(后端) / `f167163f`(graph)。
+
+- **前端 · 学习链路人本细节**（`d20e8528`）：WorkshopPage/TrainingPanel/GuideOverlay/router 的无障碍(`aria-*`/`role=status`)与运行-提交忙态文案；空闲预取 `app/prefetch.ts`（仅登录态 + 非省流，预热冒险地图/图书馆/工坊/训练场路由分块与课程清单，纯加法失败静默）；`courseLibrary` 会话级页列表缓存；`codeTheater` store；配套 vitest。
+- **后端 · 流式稳健 + 工坊入库**（`5de00ce4`）：Orchestrator `SseEmitter`/读超时 120s→300s（小机型有界 agentic loop 串行看/学/练/测）；`WorkshopGraphClient` 兼容 graph 已迁的 AG-UI `RUN_FINISHED` 终态（剥 `{"result":{...}}`）后落库生成 `resourceId`，修复书房恒空、资源详情打不开。
+- **graph · DeepSeek 工具调用优化**（`f167163f`）：`intent_router_agent` 混合意图路由强化(+484) + 新增 `tool_use_eval` 评测框架(+723) + `path_planner` 微调 + 配套测试(+413)。
+- **deploy/前端壳 · 防白屏**（`8873aa28`）：nginx `/assets` 指纹资源 `immutable` 强缓存 + `index.html` `no-cache` + SPA 回退（避免发版后 `.js` 命中 `index.html` 拿到 `text/html` 触发严格 MIME 校验、动态导入分块失败白屏）；`docker-compose.production` 课件页 PNG 缓存目录落到可写卷，修课件证据图裂图。
+- **指南截图**（`b558953e`）：`guide/screenshots` 01-21 重渲染 + 新增 22-code-theater/23-clients + 刷新 course43 manifest 时间戳。
+- **本地验证**：前端 `vue-tsc` 0 错 + `eslint` 0 错 + `vitest` **2150 passed**；后端 `mvn test`（Aliyun mirror）**831 passed BUILD SUCCESS**；graph `pytest` **1108 passed / 1 skip**。
+- **部署**：`build_release_archive.sh` 构建 4 镜像（走 7892 代理；Maven 因 TUN 劫持 aliyun 直连超时，临时启用 `settings.build.xml` 代理构建后已还原）→ 发布包 sha256 与本地一致 → ECS `install_release.sh` 事务安装（pg_dump 备份 → docker load → 起服务等健康 → 原子切换 `current` → reload nginx）→ 6 服务全 healthy、公网 `/healthz` 200。
+- **浏览器 e2e（公网验收）**：`publicAcceptance.spec.ts` 对 `http://47.120.29.62` **25/27 passed**（覆盖 auth/world/mainline/guide/guide-ai/deeplink/workshop/library/training/复盘画像/深链刷新/错误不泄密）；2 个失败（guide-ai 多轮、training AC）为 2C4G 持续压测下页面加载超时抖动，**低负载单独重试 2/2 通过**，等价全过。`public_acceptance.sh` shell 冒烟 10 通过/0 失败（含 nginx 缓存头与认证 SSE×3）。
+- **未纳入 / 残留**：android 为独立线（发布包按 allowlist 自动排除）；e2e 在公共演示账号 `demo-stu-01` 累积少量提交/资源属预期；内部端口公网封闭性因本机 TUN 测量受限跳过（已从 ECS 内部确认绑 `127.0.0.1`）。
+
 ## 2026-06-19 — 人本细节优化迭代（R-14 · 100 轮 · 不加新功能）
 
 > 以人为本对**现有功能**做细粒度打磨：功能交互、前端引导、性能与各项非功能需求（a11y / 健壮性 / 可维护性 / 移动端）。每轮聚焦一处改动，独立验证、独立提交、独立记录；**不新增任何业务功能**。验证以 `vue-tsc`(typecheck) + 作用域 `vitest` 为主，HTML/构建相关项跑 `npm run build`。
