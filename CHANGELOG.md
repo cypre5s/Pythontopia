@@ -5,6 +5,7 @@
 > 以人为本对**现有功能**做细粒度打磨：功能交互、前端引导、性能与各项非功能需求（a11y / 健壮性 / 可维护性 / 移动端）。每轮聚焦一处改动，独立验证、独立提交、独立记录；**不新增任何业务功能**。验证以 `vue-tsc`(typecheck) + 作用域 `vitest` 为主，HTML/构建相关项跑 `npm run build`。
 
 - **#1 首页 HTML 健壮化（非功能 · SEO / 移动端 / 优雅降级）**：`index.html` 补 `<meta name="description">`（搜索/分享摘要，避免抓取器取到空描述）+ `<meta name="theme-color" #fef7e3>`（移动端浏览器地址栏/任务切换器配色对齐羊皮纸主背景）+ `<noscript>` 文案（JS 被禁用或入口脚本加载失败时不再纯白屏，给出"开启 JavaScript 后刷新"的可操作提示）。验证：`npm run build` 通过。
+- **#2 页面高度移动端安全化（移动端 · 防视口跳动）**：`styles.css` 6 处页面级高度 `100vh` 叠加 `100dvh` 回退（`.app-shell` / `.app-main` / `.auth-page` / `.town-screen` / `.placeholder-page` / `.profile-room-page`）。移动端浏览器地址栏收起/展开时，`100vh` 会把底部内容顶出视口或留白；`100dvh` 跟随动态视口消除此跳动，旧浏览器回退 `100vh`。验证：`npm run build` 通过。
 
 ## 2026-06-19 — 代码舞台 × 无尽闯关统一玩法 + 看学练测闭环（含 8 大非功能需求 + 实拍指南）
 
