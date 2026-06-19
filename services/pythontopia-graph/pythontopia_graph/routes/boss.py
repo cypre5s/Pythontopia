@@ -17,6 +17,7 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
 from pythontopia_graph.agents.boss.evaluator import build_failure_hint, evaluate_boss_attempt
+from pythontopia_graph.agents.boss.expedition_selector import select_frontier
 from pythontopia_graph.agents.boss.golden_problems import get_golden_problem
 from pythontopia_graph.agents.boss.kc_map import chapter_default_kc
 from pythontopia_graph.agents.boss.llm_factory import build_llm_problem_factory
@@ -228,6 +229,62 @@ def evaluate_attempt(body: BossEvaluateRequest) -> BossEvaluateResponse:
         failureFirstHint=build_failure_hint(result),
         runtimeError=result.runtime_error,
         failedIndices=result.failed_indices,
+    )
+
+
+class MasteryEntryPayload(BaseModel):
+    kcCode: str
+    masteryScore: float = Field(ge=0, le=1)
+
+
+class FrontierSelectRequest(BaseModel):
+    """无尽远征「下一题选择器」请求：掌握度 + 画像 + 近期 KC → 前沿候选。"""
+
+    mastery: list[MasteryEntryPayload] = Field(default_factory=list)
+    profileSignals: ProfileSignalsPayload | None = None
+    recentKcs: list[str] = Field(default_factory=list, description="近期练过的 KC（最近在前）")
+    focusChapter: int | None = Field(default=None, ge=1, le=7)
+    exclude: list[str] = Field(default_factory=list)
+    count: int = Field(default=1, ge=1, le=40)
+
+
+class FrontierPickPayload(BaseModel):
+    kcCode: str
+    chapter: int
+    difficulty: int
+    reason: str
+
+
+class FrontierSelectResponse(BaseModel):
+    picks: list[FrontierPickPayload]
+
+
+@router.post("/agents/boss/select-frontier", response_model=FrontierSelectResponse)
+def select_frontier_endpoint(body: FrontierSelectRequest) -> FrontierSelectResponse:
+    """知识前沿选择器（下沉自前端 useKcFrontier）：权威排序 + 间隔重复，供无尽远征生成地图。"""
+
+    mastery = {e.kcCode: e.masteryScore for e in body.mastery}
+    signals = (
+        body.profileSignals.model_dump(exclude_none=True) if body.profileSignals else None
+    )
+    picks = select_frontier(
+        mastery=mastery,
+        profile_signals=signals,
+        recent_kcs=body.recentKcs,
+        focus_chapter=body.focusChapter,
+        exclude=body.exclude,
+        count=body.count,
+    )
+    return FrontierSelectResponse(
+        picks=[
+            FrontierPickPayload(
+                kcCode=p.kc_code,
+                chapter=p.chapter,
+                difficulty=p.difficulty,
+                reason=p.reason,
+            )
+            for p in picks
+        ]
     )
 
 
