@@ -3,6 +3,7 @@ import { computed, ref } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useReducedMotion } from '@/composables/useReducedMotion';
 import { useFeynmanStore } from '@/stores/feynman';
+import BugHunterGame from '@/components/feynman/BugHunterGame.vue';
 import type { FeynmanJudgeResultDto } from '@/api/feynman';
 
 const props = defineProps<{
@@ -129,6 +130,8 @@ async function submitJudge(): Promise<void> {
     >
       {{ error }}
     </p>
+
+    <BugHunterGame v-if="currentSession" />
 
     <div class="feynman-panel__grid">
       <article

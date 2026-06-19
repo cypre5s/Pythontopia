@@ -77,4 +77,40 @@ class FeynmanGraphClientTest {
     assertThat(output).isEmpty();
     server.verify(Duration.ofSeconds(2));
   }
+
+  @Test
+  void bugExposureMapsBugLinesAndKeepsAnswerOffWire() {
+    MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+    server
+        .expect(MockRestRequestMatchers.requestTo("http://graph.test/agents/feynman/bug-exposure"))
+        .andExpect(MockRestRequestMatchers.jsonPath("$.kc_code").value("PY43-KC-004"))
+        .andExpect(
+            MockRestRequestMatchers.jsonPath("$.misconceptions[0].tag").value("input_type_string"))
+        .andRespond(
+            MockRestResponseCreators.withSuccess(
+                """
+                {
+                  "source": "real_misconception",
+                  "misconception_tag": "input_type_string",
+                  "buggy_code": "age = input('age: ')\\nprint(age + 1)",
+                  "fixed_code": "age = int(input('age: '))\\nprint(age + 1)",
+                  "bug_line_indices": [0],
+                  "hint_md": "input() 返回什么类型？"
+                }
+                """,
+                MediaType.APPLICATION_JSON));
+
+    Optional<FeynmanGraphClient.BugExposure> exposure =
+        client.bugExposure(
+            "PY43-KC-004",
+            List.of(new Misconception("input_type_string", List.of(601L), false)));
+
+    assertThat(exposure).isPresent();
+    assertThat(exposure.get().source()).isEqualTo("real_misconception");
+    assertThat(exposure.get().misconceptionTag()).isEqualTo("input_type_string");
+    assertThat(exposure.get().buggyCode()).contains("input('age: ')");
+    assertThat(exposure.get().bugLineIndices()).containsExactly(0);
+    assertThat(exposure.get().hintMd()).isNotBlank();
+    server.verify(Duration.ofSeconds(2));
+  }
 }

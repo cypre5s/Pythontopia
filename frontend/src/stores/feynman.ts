@@ -1,8 +1,10 @@
 import { defineStore } from 'pinia';
 import {
+  huntFeynmanBug,
   judgeFeynmanSession,
   startFeynmanSession,
   teachFeynmanSession,
+  type FeynmanBugHuntDto,
   type FeynmanJudgeResultDto,
   type FeynmanSessionDto,
   type FeynmanTurnDto,
@@ -14,9 +16,11 @@ interface FeynmanState {
   loading: boolean;
   teaching: boolean;
   judging: boolean;
+  hunting: boolean;
   error: string | null;
   latestProducedCode: string;
   latestJudgeResult: FeynmanJudgeResultDto | null;
+  bugHunt: FeynmanBugHuntDto | null;
 }
 
 function errorMessage(error: unknown): string {
@@ -30,9 +34,11 @@ export const useFeynmanStore = defineStore('feynman', {
     loading: false,
     teaching: false,
     judging: false,
+    hunting: false,
     error: null,
     latestProducedCode: '',
     latestJudgeResult: null,
+    bugHunt: null,
   }),
   getters: {
     misconceptions(state) {
@@ -49,6 +55,7 @@ export const useFeynmanStore = defineStore('feynman', {
         this.turns = [];
         this.latestProducedCode = session.tuteeState.producedCode ?? '';
         this.latestJudgeResult = session.tuteeState.judgeResult ?? null;
+        this.bugHunt = null;
         return session;
       } catch (error) {
         this.error = errorMessage(error);
@@ -82,6 +89,25 @@ export const useFeynmanStore = defineStore('feynman', {
         throw error;
       } finally {
         this.teaching = false;
+      }
+    },
+    async startBugHunt(): Promise<FeynmanBugHuntDto | null> {
+      const sessionId = this.currentSession?.id;
+      if (sessionId === undefined) {
+        throw new Error('请先开始费曼反演会话');
+      }
+
+      this.hunting = true;
+      this.error = null;
+      try {
+        const hunt = await huntFeynmanBug(sessionId);
+        this.bugHunt = hunt;
+        return hunt;
+      } catch (error) {
+        this.error = errorMessage(error);
+        return null;
+      } finally {
+        this.hunting = false;
       }
     },
     async judge(): Promise<FeynmanJudgeResultDto> {

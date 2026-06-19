@@ -27,3 +27,27 @@ class FeynmanTuteeOutput(BaseModel):
     reply_md: str
     updated_misconceptions: list[Misconception] = Field(default_factory=list)
     produced_code: str | None = None
+
+
+class FeynmanBugExposureInput(BaseModel):
+    """错误猎人：让学弟写出一段含 bug 的代码供学生限时找茬。"""
+
+    kc_code: str
+    misconceptions: list[Misconception] = Field(default_factory=list)
+
+
+class FeynmanBugExposureOutput(BaseModel):
+    """错误猎人产出：buggy 代码 + 真实 bug 行号（与正确版 diff 得出，零伪造）。
+
+    * ``source=real_misconception``：复现学生真实误解（misconception_tag 带 evidence）。
+    * ``source=generic_beginner_bug``：无真实误解史时退化为常见初学者陷阱（诚实标注，不冒充"你的错"）。
+    * ``source=none``：无可用样本（buggy_code 为 None，前端提示先做题）。
+    """
+
+    source: Literal["real_misconception", "generic_beginner_bug", "none"] = "none"
+    misconception_tag: str | None = None
+    buggy_code: str | None = None
+    fixed_code: str | None = None
+    # buggy_code 中确属 bug 的 0-based 行号（与 fixed_code 逐行 diff 得出）。
+    bug_line_indices: list[int] = Field(default_factory=list)
+    hint_md: str = ""

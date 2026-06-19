@@ -4,10 +4,17 @@ from collections.abc import AsyncIterator
 
 from fastapi.testclient import TestClient
 
-from pythontopia_graph.agents.feynman_tutee_agent import FeynmanTuteeAgent
+from pythontopia_graph.agents.feynman_tutee_agent import (
+    FeynmanTuteeAgent,
+    bug_line_indices,
+)
 from pythontopia_graph.llm.provider import LlmProvider, LlmResponse
 from pythontopia_graph.main import app
-from pythontopia_graph.schemas.feynman import FeynmanTuteeInput, Misconception
+from pythontopia_graph.schemas.feynman import (
+    FeynmanBugExposureInput,
+    FeynmanTuteeInput,
+    Misconception,
+)
 
 
 class JsonProvider(LlmProvider):
@@ -166,3 +173,79 @@ def test_feynman_route_is_registered() -> None:
     assert response.status_code == 200
     assert response.json()["updated_misconceptions"][0]["tag"] == "input_type_string"
     del app.state.llm_provider
+
+
+# ── 错误猎人（bug-exposure） ──────────────────────────────────────────────
+
+def test_bug_line_indices_diffs_replaced_line() -> None:
+    buggy = "a = [1, 2]\nb = a\nb.append(3)\nprint(a)"
+    fixed = "a = [1, 2]\nb = a.copy()\nb.append(3)\nprint(a)"
+    assert bug_line_indices(buggy, fixed) == [1]
+
+
+async def test_expose_bug_canned_tag_marks_real_bug_line() -> None:
+    # canned tag 走确定性样本，不应触达 LLM（用 RaisingProvider 兜底证明）。
+    out = await FeynmanTuteeAgent(RaisingProvider()).expose_bug(
+        FeynmanBugExposureInput(
+            kc_code="PY43-KC-021",
+            misconceptions=[_misconception("off_by_one_range")],
+        )
+    )
+
+    assert out.source == "real_misconception"
+    assert out.misconception_tag == "off_by_one_range"
+    assert "range(1, 5)" in (out.buggy_code or "")
+    assert out.bug_line_indices == [0]
+    assert out.hint_md
+
+
+async def test_expose_bug_unknown_tag_uses_llm_and_diffs() -> None:
+    provider = JsonProvider(
+        {
+            "buggy_code": "x = 1\nprint(x + '1')",
+            "fixed_code": "x = 1\nprint(x + 1)",
+            "hint_md": "类型对不上",
+        }
+    )
+
+    out = await FeynmanTuteeAgent(provider).expose_bug(
+        FeynmanBugExposureInput(
+            kc_code="PY43-KC-099",
+            misconceptions=[_misconception("some_unmapped_tag")],
+        )
+    )
+
+    assert provider.calls == 1
+    assert out.source == "real_misconception"
+    assert out.bug_line_indices == [1]
+    assert "x + '1'" in (out.buggy_code or "")
+
+
+async def test_expose_bug_without_history_falls_back_to_generic() -> None:
+    out = await FeynmanTuteeAgent(RaisingProvider()).expose_bug(
+        FeynmanBugExposureInput(kc_code="PY43-KC-021", misconceptions=[])
+    )
+
+    assert out.source == "generic_beginner_bug"
+    assert out.buggy_code is not None
+    assert out.bug_line_indices  # 至少标出一行 bug
+
+
+def test_bug_exposure_route_returns_bug_lines() -> None:
+    client = TestClient(app)
+
+    response = client.post(
+        "/agents/feynman/bug-exposure",
+        json={
+            "kc_code": "PY43-KC-004",
+            "misconceptions": [
+                {"tag": "input_type_string", "evidence_event_ids": [601], "resolved": False}
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["source"] == "real_misconception"
+    assert payload["misconception_tag"] == "input_type_string"
+    assert payload["bug_line_indices"] == [0]

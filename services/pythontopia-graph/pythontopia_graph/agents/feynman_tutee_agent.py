@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import asyncio
+import difflib
 import json
 import re
 from typing import Any
 
 from pythontopia_graph.llm.provider import LlmProvider, LlmResponse
 from pythontopia_graph.schemas.feynman import (
+    FeynmanBugExposureInput,
+    FeynmanBugExposureOutput,
     FeynmanTuteeInput,
     FeynmanTuteeOutput,
     Misconception,
@@ -13,10 +17,31 @@ from pythontopia_graph.schemas.feynman import (
 
 AGENT_NAME = "FeynmanTuteeAgent"
 
+# 错误猎人内置的三类初学者陷阱（与 _mistake_for / _fixed_code_for 的 tag 对齐）。
+CANNED_BUG_TAGS = ("off_by_one_range", "input_type_string", "list_alias_mutation")
+# 错误猎人是限时小游戏：未知 tag 走 LLM 生成 bug 代码时给一个紧超时，超时即退化为
+# 确定性常见陷阱，避免慢 LLM 拖过前端 10s axios 超时让整局卡住。
+_BUG_LLM_TIMEOUT_S = 6.0
+
 
 def _strip_json_fence(text: str) -> str:
     fence = re.match(r"^\s*```(?:json)?\s*(.+?)\s*```\s*$", text, re.DOTALL)
     return fence.group(1) if fence else text
+
+
+def bug_line_indices(buggy: str, fixed: str) -> list[int]:
+    """buggy 相对 fixed 的「被替换/删除」行号（0-based），即真正的 bug 行。
+
+    用 difflib 行级序列比对，避免简单按位 diff 在行数变化时误标整段。
+    """
+    buggy_lines = buggy.split("\n")
+    fixed_lines = fixed.split("\n")
+    matcher = difflib.SequenceMatcher(a=buggy_lines, b=fixed_lines, autojunk=False)
+    indices: list[int] = []
+    for tag, i1, i2, _j1, _j2 in matcher.get_opcodes():
+        if tag in ("replace", "delete"):
+            indices.extend(range(i1, i2))
+    return indices
 
 
 class FeynmanTuteeAgent:
@@ -36,6 +61,99 @@ class FeynmanTuteeAgent:
             return self._rule_step(inp)
         parsed = self._parse_output(data, inp)
         return parsed if parsed is not None else self._rule_step(inp)
+
+    async def expose_bug(self, inp: FeynmanBugExposureInput) -> FeynmanBugExposureOutput:
+        """错误猎人：产出一段含 bug 的代码 + 真实 bug 行号，供学生限时找茬。
+
+        优先复现学生真实误解（canned tag → 确定性样本；其它 tag → LLM 生成 buggy+fixed 再 diff），
+        无真实误解史时退化为按 KC 确定性选定的常见初学者陷阱（source 诚实标注，不冒充「你的错」）。
+        """
+        target = next(
+            (m for m in inp.misconceptions if not m.resolved),
+            inp.misconceptions[0] if inp.misconceptions else None,
+        )
+        if target is not None:
+            real = self._bug_from_tag(target.tag, "real_misconception")
+            if real is not None:
+                return real
+            llm = await self._bug_from_llm(inp.kc_code, target.tag)
+            if llm is not None:
+                return llm
+        fallback_tag = CANNED_BUG_TAGS[sum(ord(c) for c in inp.kc_code) % len(CANNED_BUG_TAGS)]
+        generic = self._bug_from_tag(fallback_tag, "generic_beginner_bug")
+        if generic is not None:
+            return generic
+        return FeynmanBugExposureOutput(
+            source="none",
+            hint_md="暂时没有可玩的 bug 样本，先去做题积累一些错误，再回来玩错误猎人。",
+        )
+
+    def _bug_from_tag(self, tag: str, source: str) -> FeynmanBugExposureOutput | None:
+        _, buggy = self._mistake_for(tag)
+        fixed = self._fixed_code_for(tag)
+        if not buggy or not fixed:
+            return None
+        return FeynmanBugExposureOutput(
+            source=source,  # type: ignore[arg-type]
+            misconception_tag=tag,
+            buggy_code=buggy,
+            fixed_code=fixed,
+            bug_line_indices=bug_line_indices(buggy, fixed),
+            hint_md=self._bug_hint_for(tag),
+        )
+
+    async def _bug_from_llm(self, kc_code: str, tag: str) -> FeynmanBugExposureOutput | None:
+        try:
+            data = await asyncio.wait_for(
+                self._chat_json(self._bug_messages(kc_code, tag)),
+                timeout=_BUG_LLM_TIMEOUT_S,
+            )
+        except Exception:  # noqa: BLE001 - 超时/无网/无 key 时回退上层确定性兜底
+            return None
+        buggy = data.get("buggy_code")
+        fixed = data.get("fixed_code")
+        if (
+            not isinstance(buggy, str)
+            or not isinstance(fixed, str)
+            or not buggy.strip()
+            or not fixed.strip()
+        ):
+            return None
+        hint = data.get("hint_md")
+        return FeynmanBugExposureOutput(
+            source="real_misconception",
+            misconception_tag=tag,
+            buggy_code=buggy,
+            fixed_code=fixed,
+            bug_line_indices=bug_line_indices(buggy, fixed),
+            hint_md=hint if isinstance(hint, str) else "",
+        )
+
+    @staticmethod
+    def _bug_hint_for(tag: str) -> str:
+        hints = {
+            "off_by_one_range": "想想 range(a, b) 到底取到哪个数？右端点会被包含吗？",
+            "input_type_string": "input() 返回的是什么类型？能直接和数字相加吗？",
+            "list_alias_mutation": "b = a 是复制了新列表，还是给同一个列表起了别名？",
+        }
+        return hints.get(tag, "对照正确写法，找出哪一行把规则用错了。")
+
+    def _bug_messages(self, kc_code: str, tag: str) -> list[dict[str, str]]:
+        schema_hint = (
+            '{"buggy_code":"含 bug 的 Python 代码","fixed_code":"修正后的代码",'
+            '"hint_md":"一句找茬提示"}'
+        )
+        system = (
+            "你是 Pythontopia 费曼反演里的 AI 学弟。请就给定知识点写一段「初学者常见错误」的 "
+            "Python 代码，并给出对应的正确版本。只输出一个 JSON 对象，不要多余文字。"
+            f"严格遵循结构：{schema_hint}。"
+            "buggy_code 与 fixed_code 必须仅在「体现该误解的那一行（或几行）」不同、其余行逐字一致，"
+            "以便据此定位 bug 行；不要编造隐藏测试或题目，也不要在注释里直接写出答案。"
+        )
+        return [
+            {"role": "system", "content": system},
+            {"role": "user", "content": f"kc_code={kc_code}\nmisconception_tag={tag}"},
+        ]
 
     async def _chat_json(self, messages: list[dict[str, str]]) -> dict[str, Any]:
         try:

@@ -4,6 +4,7 @@ import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
+import com.pythontopia.feynman.dto.FeynmanDtos.BugHuntResponse;
 import com.pythontopia.feynman.dto.FeynmanDtos.SessionResponse;
 import com.pythontopia.feynman.dto.FeynmanDtos.StartRequest;
 import com.pythontopia.feynman.dto.FeynmanDtos.TeachRequest;
@@ -50,6 +51,12 @@ public class FeynmanController {
   public Verdict judge(@CurrentUser CurrentUserPrincipal user, @PathVariable long id) {
     requireStudent(user);
     return judgeService.judge(user.userId(), id);
+  }
+
+  @PostMapping("/sessions/{id}/bug-hunt")
+  public BugHuntResponse bugHunt(@CurrentUser CurrentUserPrincipal user, @PathVariable long id) {
+    requireStudent(user);
+    return sessionService.bugHunt(user.userId(), id);
   }
 
   private void requireStudent(CurrentUserPrincipal user) {

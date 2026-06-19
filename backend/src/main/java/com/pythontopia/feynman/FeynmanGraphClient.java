@@ -57,6 +57,66 @@ public class FeynmanGraphClient {
     }
   }
 
+  /**
+   * 错误猎人：请求学弟写出含 bug 的代码 + 真实 bug 行号（graph /agents/feynman/bug-exposure）。
+   * 下游不可达返回 empty，由调用方决定降级或报错。
+   */
+  public Optional<BugExposure> bugExposure(String kcCode, List<Misconception> misconceptions) {
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.APPLICATION_JSON);
+    GraphInternalTokenSupport.apply(headers, properties);
+    List<GraphMisconception> wire =
+        (misconceptions == null ? List.<Misconception>of() : misconceptions)
+            .stream().map(GraphMisconception::from).toList();
+    HttpEntity<BugExposureInput> entity =
+        new HttpEntity<>(new BugExposureInput(kcCode, wire), headers);
+    try {
+      GraphBugExposure body =
+          restTemplate
+              .exchange(
+                  properties.graphUrl() + "/agents/feynman/bug-exposure",
+                  HttpMethod.POST,
+                  entity,
+                  GraphBugExposure.class)
+              .getBody();
+      return Optional.ofNullable(body).map(GraphBugExposure::toDomain);
+    } catch (RestClientException ex) {
+      log.warn("feynman bug-exposure graph unavailable: {}", ex.getMessage());
+      return Optional.empty();
+    }
+  }
+
+  /** 请求体：对齐 graph schemas.feynman.FeynmanBugExposureInput（snake_case）。 */
+  record BugExposureInput(
+      @JsonProperty("kc_code") String kcCode,
+      @JsonProperty("misconceptions") List<GraphMisconception> misconceptions) {}
+
+  /** graph 错误猎人原始响应（snake_case）；fixed_code 是答案，不进领域/前端。 */
+  record GraphBugExposure(
+      @JsonProperty("source") String source,
+      @JsonProperty("misconception_tag") String misconceptionTag,
+      @JsonProperty("buggy_code") String buggyCode,
+      @JsonProperty("fixed_code") String fixedCode,
+      @JsonProperty("bug_line_indices") List<Integer> bugLineIndices,
+      @JsonProperty("hint_md") String hintMd) {
+    BugExposure toDomain() {
+      return new BugExposure(
+          source,
+          misconceptionTag,
+          buggyCode,
+          bugLineIndices == null ? List.of() : bugLineIndices,
+          hintMd);
+    }
+  }
+
+  /** 领域输出：供 FeynmanSessionService 直接消费（不含答案 fixed_code）。 */
+  public record BugExposure(
+      String source,
+      String misconceptionTag,
+      String buggyCode,
+      List<Integer> bugLineIndices,
+      String hintMd) {}
+
   /** 请求体：对齐 graph schemas.feynman.FeynmanTuteeInput（snake_case）。 */
   record FeynmanInput(
       @JsonProperty("kc_code") String kcCode,

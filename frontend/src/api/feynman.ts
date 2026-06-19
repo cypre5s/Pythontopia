@@ -63,6 +63,25 @@ export async function teachFeynmanSession(
   return response.data;
 }
 
+export type FeynmanBugHuntSource = 'real_misconception' | 'generic_beginner_bug' | 'none';
+
+export interface FeynmanBugHuntDto {
+  source: FeynmanBugHuntSource;
+  misconceptionTag: string | null;
+  buggyCode: string | null;
+  /** buggyCode 中确属 bug 的 0-based 行号（后端由 buggy/fixed diff 得出，仅用于判分，不下发答案）。 */
+  bugLineIndices: number[];
+  hintMd: string;
+}
+
+export async function huntFeynmanBug(sessionId: number): Promise<FeynmanBugHuntDto> {
+  const response = await http.post<FeynmanBugHuntDto>(
+    `/api/feynman/sessions/${encodeURIComponent(String(sessionId))}/bug-hunt`,
+    {},
+  );
+  return response.data;
+}
+
 export interface FeynmanVerdictDto {
   sessionId: number;
   passed: boolean;

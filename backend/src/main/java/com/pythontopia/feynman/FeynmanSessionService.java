@@ -100,6 +100,29 @@ public class FeynmanSessionService {
         turnId == null ? 0L : turnId, "TUTEE", output.replyMd(), output.producedCode());
   }
 
+  /** 错误猎人：基于该会话的真实误解，让学弟写出含 bug 的代码 + 真实 bug 行号供学生找茬。 */
+  @Transactional(readOnly = true)
+  public com.pythontopia.feynman.dto.FeynmanDtos.BugHuntResponse bugHunt(
+      long userId, long sessionId) {
+    SessionData session = loadSession(userId, sessionId);
+    List<Misconception> misconceptions = parseMisconceptions(session.tuteeState());
+    FeynmanGraphClient.BugExposure exposure =
+        graphClient
+            .bugExposure(session.kcCode(), misconceptions)
+            .orElseThrow(
+                () ->
+                    new BusinessException(
+                        HttpStatus.BAD_GATEWAY,
+                        "FEYNMAN_BUG_EXPOSURE_UNAVAILABLE",
+                        "错误猎人服务暂不可用，稍后再试"));
+    return new com.pythontopia.feynman.dto.FeynmanDtos.BugHuntResponse(
+        exposure.source(),
+        exposure.misconceptionTag(),
+        exposure.buggyCode(),
+        exposure.bugLineIndices(),
+        exposure.hintMd());
+  }
+
   private TurnResponse refuseAnswerDump(long sessionId, List<Misconception> misconceptions) {
     String reply = "请不要直接把完整代码或答案贴给我——讲讲「为什么」这样改，用反例点出我原来的错误规则。";
     Long turnId =
