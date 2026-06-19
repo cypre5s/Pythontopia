@@ -22,8 +22,12 @@ import com.pythontopia.world.boss.dto.BossEvaluateResultDto;
 import com.pythontopia.world.boss.dto.BossInternalProblem;
 import com.pythontopia.world.boss.dto.BossProblemRequest;
 import com.pythontopia.world.boss.dto.BossTestCasePayload;
+import com.pythontopia.world.boss.dto.FrontierSelectRequest;
+import com.pythontopia.world.boss.dto.FrontierSelectResultDto;
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -58,6 +62,34 @@ class BossServiceTest {
     service =
         new BossService(
             graphClient, masteryRepository, coursePackRepository, pregenService, eventPublisher);
+  }
+
+  @Test
+  @DisplayName("selectFrontier 把 kc_mastery.last_event_at 作为 lastPracticed 传给 graph")
+  void selectFrontierPassesPersistedLastPracticedToGraph() {
+    OffsetDateTime lastPracticed = OffsetDateTime.parse("2026-05-01T08:30:00Z");
+    when(masteryRepository.findAll(7L))
+        .thenReturn(
+            List.of(
+                new MasterySnapshot(
+                    1L,
+                    7L,
+                    "PY43-KC-001",
+                    new BigDecimal("0.82"),
+                    new BigDecimal("0.80"),
+                    lastPracticed,
+                    lastPracticed)));
+    when(graphClient.selectFrontier(any(), any(), any(), any(), any(), anyInt(), any()))
+        .thenReturn(FrontierSelectResultDto.empty());
+
+    service.selectFrontier(
+        7L,
+        new FrontierSelectRequest(null, List.of(), 1, List.of(), 4));
+
+    @SuppressWarnings("unchecked")
+    ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+    verify(graphClient).selectFrontier(any(), any(), any(), any(), any(), anyInt(), captor.capture());
+    assertThat(captor.getValue()).containsEntry("PY43-KC-001", "2026-05-01T08:30:00Z");
   }
 
   @Test

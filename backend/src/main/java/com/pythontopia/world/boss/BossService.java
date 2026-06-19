@@ -17,6 +17,7 @@ import com.pythontopia.world.boss.dto.FrontierSelectRequest;
 import com.pythontopia.world.boss.dto.FrontierSelectResultDto;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -82,10 +83,21 @@ public class BossService {
    */
   public FrontierSelectResultDto selectFrontier(Long userId, FrontierSelectRequest request) {
     Map<String, Double> mastery = new HashMap<>();
+    // 间隔重复持久化：复用 kc_mastery.last_event_at 作为「每 KC 最近练习时间」，传给 graph 做真·间隔
+    // 重复（久未练上浮），而非仅靠前端 recentKcs。ISO_OFFSET_DATE_TIME 保证 "...:00Z" 完整秒位。
+    Map<String, String> lastPracticed = new HashMap<>();
     if (userId != null) {
       for (MasterySnapshot snapshot : masteryRepository.findAll(userId)) {
-        if (snapshot.kcCode() != null && snapshot.masteryScore() != null) {
+        if (snapshot.kcCode() == null) {
+          continue;
+        }
+        if (snapshot.masteryScore() != null) {
           mastery.put(snapshot.kcCode(), snapshot.masteryScore().doubleValue());
+        }
+        if (snapshot.lastEventAt() != null) {
+          lastPracticed.put(
+              snapshot.kcCode(),
+              snapshot.lastEventAt().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME));
         }
       }
     }
@@ -97,7 +109,8 @@ public class BossService {
               request.recentKcs(),
               request.focusChapter(),
               request.exclude(),
-              request.count());
+              request.count(),
+              lastPracticed);
       return result == null ? FrontierSelectResultDto.empty() : result;
     } catch (RestClientException ex) {
       LOG.warn("select-frontier graph unavailable, returning empty (frontend falls back): {}", ex.getMessage());

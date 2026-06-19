@@ -1,0 +1,143 @@
+package com.pythontopia.world.boss;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pythontopia.auth.security.CurrentUserPrincipal;
+import com.pythontopia.auth.security.JwtAuthenticationFilter;
+import com.pythontopia.auth.security.Role;
+import com.pythontopia.common.error.GlobalExceptionHandler;
+import com.pythontopia.common.web.CurrentUserArgumentResolver;
+import com.pythontopia.common.web.WebConfig;
+import com.pythontopia.world.boss.dto.ExpeditionRunDto;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.test.web.servlet.MockMvc;
+
+@WebMvcTest(ExpeditionRunController.class)
+@AutoConfigureMockMvc(addFilters = false)
+@Import({GlobalExceptionHandler.class, WebConfig.class, CurrentUserArgumentResolver.class})
+class ExpeditionRunControllerTest {
+
+  @Autowired MockMvc mockMvc;
+  @Autowired ObjectMapper objectMapper;
+
+  @MockBean ExpeditionRunService service;
+  @MockBean JwtAuthenticationFilter jwtAuthenticationFilter;
+
+  @BeforeEach
+  void authenticateAsStudent() {
+    CurrentUserPrincipal principal = new CurrentUserPrincipal(7L, "stu", Role.STUDENT);
+    SecurityContextHolder.getContext()
+        .setAuthentication(
+            new UsernamePasswordAuthenticationToken(
+                principal, null, List.of(new SimpleGrantedAuthority("ROLE_STUDENT"))));
+  }
+
+  @AfterEach
+  void clearContext() {
+    SecurityContextHolder.clearContext();
+  }
+
+  @Test
+  void getReturns204WhenNoActiveRun() throws Exception {
+    when(service.findActive(7L)).thenReturn(Optional.empty());
+
+    mockMvc.perform(get("/api/world/expedition/run")).andExpect(status().isNoContent());
+  }
+
+  @Test
+  void getReturnsActiveRunForCurrentStudent() throws Exception {
+    when(service.findActive(7L)).thenReturn(Optional.of(runDto()));
+
+    mockMvc
+        .perform(get("/api/world/expedition/run"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.phase").value("map"))
+        .andExpect(jsonPath("$.focusChapter").value(2))
+        .andExpect(jsonPath("$.nodes[0].kcCode").value("PY43-KC-008"));
+  }
+
+  @Test
+  void putUpsertsActiveRunForCurrentStudent() throws Exception {
+    ExpeditionRunDto dto = runDto();
+    when(service.save(eq(7L), any(ExpeditionRunDto.class))).thenReturn(dto);
+
+    mockMvc
+        .perform(
+            put("/api/world/expedition/run")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(dto)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.score").value(32));
+
+    verify(service).save(eq(7L), any(ExpeditionRunDto.class));
+  }
+
+  @Test
+  void deleteAbandonsActiveRunForCurrentStudent() throws Exception {
+    mockMvc.perform(delete("/api/world/expedition/run")).andExpect(status().isNoContent());
+    verify(service).abandon(7L);
+  }
+
+  @Test
+  void teacherCannotAccessStudentRunPersistence() throws Exception {
+    CurrentUserPrincipal teacher = new CurrentUserPrincipal(2L, "teacher", Role.TEACHER);
+    SecurityContextHolder.getContext()
+        .setAuthentication(
+            new UsernamePasswordAuthenticationToken(
+                teacher, null, List.of(new SimpleGrantedAuthority("ROLE_TEACHER"))));
+
+    mockMvc.perform(get("/api/world/expedition/run")).andExpect(status().isForbidden());
+    verifyNoInteractions(service);
+  }
+
+  private static ExpeditionRunDto runDto() {
+    return new ExpeditionRunDto(
+        "map",
+        2,
+        List.of(
+            Map.of(
+                "id", "L0-0",
+                "layer", 0,
+                "col", 0,
+                "kind", "battle",
+                "kcCode", "PY43-KC-008",
+                "challengeKind", "dual_track",
+                "difficulty", 3,
+                "next", List.of(),
+                "state", "available")),
+        1,
+        null,
+        5,
+        5,
+        1,
+        2,
+        32,
+        List.of("calm_mind"),
+        false,
+        List.of());
+  }
+}
