@@ -336,8 +336,9 @@ async function dismissProbes(page: Page): Promise<void> {
 /** 在 /world 打开伴学向导浮层（HUD 按钮优先，键盘 G 兜底）。 */
 async function openGuideOverlay(page: Page): Promise<void> {
   // 先等世界真正可交互（HUD 出现 + 资产加载遮罩移除），探针卡此时才会弹，再做清场。
-  await expect(page.getByTestId('hud-shell'), '主城 HUD 未渲染').toBeVisible({ timeout: 60_000 });
-  await expect(page.locator('.world-load-overlay')).toHaveCount(0, { timeout: 90_000 });
+  await expect(page.getByTestId('hud-shell'), '主城 HUD 未渲染').toBeVisible({ timeout: 90_000 });
+  // 像素小镇首屏需加载 ~29MB 资产；2C4G ECS 持续压测下放宽到 150s（配合 config 的 retries 兜底抖动）。
+  await expect(page.locator('.world-load-overlay')).toHaveCount(0, { timeout: 150_000 });
   await dismissProbes(page);
   const overlay = page.getByTestId('guide-overlay');
   const hudGuide = page.getByTestId('hud-guide');
@@ -1024,12 +1025,12 @@ test.describe('公网验收 · 训练场判题三态 @training', () => {
     test.skip(!ACCOUNT_AVAILABLE, SKIP_REASON_NO_ACCOUNT);
     await preparePage(page, request, testInfo.workerIndex);
     await gotoWithRetry(page, `/training?problemId=${TRAINING_PROBLEM_ID}`, '训练场');
-    await expect(page.getByTestId('training-panel')).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByTestId('training-panel')).toBeVisible({ timeout: 90_000 });
     await expect(page.getByTestId('problem-statement')).toBeVisible({ timeout: 60_000 });
   });
 
   test('正确解法判 AC（通过）', async ({ page }) => {
-    test.setTimeout(180_000);
+    test.setTimeout(240_000);
     const text = await submitTrainingCode(page, CODE_AC);
     expect(text, `判题结果应为 AC，实际：${text}`).toMatch(/\bAC\b/);
     expect(text, `判题状态应为 PASSED，实际：${text}`).toMatch(/PASSED/);
@@ -1037,14 +1038,14 @@ test.describe('公网验收 · 训练场判题三态 @training', () => {
   });
 
   test('错误输出判 WA（答错）', async ({ page }) => {
-    test.setTimeout(180_000);
+    test.setTimeout(240_000);
     const text = await submitTrainingCode(page, CODE_WA);
     expect(text, `判题结果应为 WA/FAILED，实际：${text}`).toMatch(/\bWA\b|FAILED/);
     await evidence(page, 'training-WA答错');
   });
 
   test('抛异常判 RE（运行错误）且错误信息不泄密', async ({ page }) => {
-    test.setTimeout(180_000);
+    test.setTimeout(240_000);
     const text = await submitTrainingCode(page, CODE_RE);
     expect(text, `判题结果应为 RE/ERROR，实际：${text}`).toMatch(/\bRE\b|ERROR/);
     // 判题失败原因可包含学生代码自身的报错（Python Traceback 属教学必需信息），

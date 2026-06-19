@@ -15,7 +15,9 @@ export default defineConfig({
   // 12 张截图共享同一个演示账号会话（worker 内缓存），单 worker 串行保证注册只发生一次、
   // 截图顺序与编号一致，也避免对并行开发中的后端造成压力。
   workers: 1,
-  retries: 0,
+  // 公网验收针对 2C4G ECS：重试 2 次吸收偶发页面加载超时抖动
+  // （world ~29MB 像素资产 / training 面板冷载在持续压测下偶发超时）。
+  retries: 2,
   forbidOnly: !!process.env.CI,
   // 首次进 /world 需要预加载像素素材，留足单测预算；其余页面远快于此。
   timeout: 120_000,
