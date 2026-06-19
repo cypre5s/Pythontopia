@@ -6,6 +6,7 @@ import json
 import re
 from typing import Any
 
+from pythontopia_graph.agents.boss.kc_map import chapter_for_kc
 from pythontopia_graph.llm.provider import LlmProvider, LlmResponse
 from pythontopia_graph.schemas.feynman import (
     FeynmanBugExposureInput,
@@ -22,6 +23,26 @@ CANNED_BUG_TAGS = ("off_by_one_range", "input_type_string", "list_alias_mutation
 # 代码找茬是限时小游戏：未知 tag 走 LLM 生成 bug 代码时给一个紧超时，超时即退化为
 # 确定性常见陷阱，避免慢 LLM 拖过前端 10s axios 超时让整局卡住。
 _BUG_LLM_TIMEOUT_S = 6.0
+
+# 课程包 7 章主题（chapter_order → 中文主题短语），喂给 LLM 让生成的 bug 贴合所选 KC，
+# 不再只给 LLM 一个无语义的 kc_code。来源：data/course-pack-43 分章（见 boss/kc_map）。
+_CHAPTER_TOPIC: dict[int, str] = {
+    1: "计算思维与计算工具",
+    2: "Python 基础：变量、数据类型、控制台输入与类型转换",
+    3: "数值、字符串、编码与进制运算",
+    4: "流程自动化：分支与循环",
+    5: "数据结构：列表、字典、集合、序列",
+    6: "文件操作与数据分析",
+    7: "函数、模块与面向对象",
+}
+# 章节 → 最贴切的 canned bug：3 种 bug 各覆盖「循环边界 / 输入类型 / 列表别名」一类陷阱。
+# 用于无真实样本时的兜底选择——按所选 KC 的章节挑主题相关的 bug，而非过去按 kc_code 哈希乱挑。
+_CHAPTER_BUG_TAG: dict[int, str] = {
+    2: "input_type_string",  # 第二章 变量 / 类型 / 控制台输入
+    3: "input_type_string",  # 第三章 数值 / 字符串 / 进制（类型相关）
+    4: "off_by_one_range",  # 第四章 流程自动化（循环 / 分支）
+    5: "list_alias_mutation",  # 第五章 数据结构（列表 / 字典 / 集合）
+}
 
 
 def _strip_json_fence(text: str) -> str:
@@ -79,7 +100,7 @@ class FeynmanTuteeAgent:
             llm = await self._bug_from_llm(inp.kc_code, target.tag)
             if llm is not None:
                 return llm
-        fallback_tag = CANNED_BUG_TAGS[sum(ord(c) for c in inp.kc_code) % len(CANNED_BUG_TAGS)]
+        fallback_tag = self._canned_tag_for_kc(inp.kc_code)
         generic = self._bug_from_tag(fallback_tag, "generic_beginner_bug")
         if generic is not None:
             return generic
@@ -130,6 +151,12 @@ class FeynmanTuteeAgent:
         )
 
     @staticmethod
+    def _canned_tag_for_kc(kc_code: str) -> str:
+        """按所选 KC 的章节挑主题最贴切的 canned bug；未知章节回退到循环边界这一最通用陷阱。"""
+        chapter = chapter_for_kc(kc_code)
+        return _CHAPTER_BUG_TAG.get(chapter or 0, "off_by_one_range")
+
+    @staticmethod
     def _bug_hint_for(tag: str) -> str:
         hints = {
             "off_by_one_range": "想想 range(a, b) 到底取到哪个数？右端点会被包含吗？",
@@ -150,9 +177,14 @@ class FeynmanTuteeAgent:
             "buggy_code 与 fixed_code 必须仅在「体现该误解的那一行（或几行）」不同、其余行逐字一致，"
             "以便据此定位 bug 行；不要编造隐藏测试或题目，也不要在注释里直接写出答案。"
         )
+        topic = _CHAPTER_TOPIC.get(chapter_for_kc(kc_code) or 0, "")
+        kc_line = f"kc_code={kc_code}" + (f"（知识点主题：{topic}）" if topic else "")
         return [
             {"role": "system", "content": system},
-            {"role": "user", "content": f"kc_code={kc_code}\nmisconception_tag={tag}"},
+            {
+                "role": "user",
+                "content": f"{kc_line}\nmisconception_tag={tag}\n请让 bug 紧扣该知识点主题。",
+            },
         ]
 
     async def _chat_json(self, messages: list[dict[str, str]]) -> dict[str, Any]:

@@ -231,6 +231,27 @@ async def test_expose_bug_without_history_falls_back_to_generic() -> None:
     assert out.bug_line_indices  # 至少标出一行 bug
 
 
+def test_canned_tag_for_kc_maps_chapter_to_relevant_bug() -> None:
+    # 兜底 bug 不再按 kc_code 哈希乱挑，而是按章节主题挑：循环 / 数据结构 / 类型各取对应陷阱。
+    pick = FeynmanTuteeAgent._canned_tag_for_kc
+    assert pick("PY43-KC-031") == "off_by_one_range"  # 第四章 流程自动化（for 循环）
+    assert pick("PY43-KC-040") == "list_alias_mutation"  # 第五章 数据结构（列表）
+    assert pick("PY43-KC-013") == "input_type_string"  # 第二章 控制台输入与类型转换
+    assert pick("PY43-KC-019") == "input_type_string"  # 第三章 数值类型与运算
+    assert pick("PY43-KC-999") == "off_by_one_range"  # 未知 KC 回退最通用陷阱
+
+
+async def test_generic_fallback_is_chapter_relevant() -> None:
+    # 选「for 循环与遍历」(KC-031, 第四章) 无样本时，兜底应给「循环边界」bug 而非随机类型陷阱。
+    out = await FeynmanTuteeAgent(RaisingProvider()).expose_bug(
+        FeynmanBugExposureInput(kc_code="PY43-KC-031", misconceptions=[])
+    )
+
+    assert out.source == "generic_beginner_bug"
+    assert out.misconception_tag == "off_by_one_range"
+    assert "range(1, 5)" in (out.buggy_code or "")
+
+
 def test_bug_exposure_route_returns_bug_lines() -> None:
     client = TestClient(app)
 

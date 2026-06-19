@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { ref } from 'vue';
 import { useRoute } from 'vue-router';
 import AppLayout from '@/app/AppLayout.vue';
 import FeynmanPanel from '@/components/feynman/FeynmanPanel.vue';
+import KcPicker from '@/components/feynman/KcPicker.vue';
 
 const route = useRoute();
 
@@ -14,16 +15,14 @@ function initialKc(): string {
   return typeof raw === 'string' ? raw : '';
 }
 
-const kcInput = ref(initialKc());
 const activeKc = ref(initialKc());
-const trimmedKc = computed(() => kcInput.value.trim());
 
 interface SuggestedKc {
   code: string;
   label: string;
 }
 
-// 学生多半不记得 KC 代码，给几个常见知识点快捷入口（点一下即开课）。
+// 学生多半不记得知识点全名，给几个常见入口（点一下即开课）。
 const suggestedKcs: SuggestedKc[] = [
   { code: 'PY43-KC-031', label: 'for 循环与遍历' },
   { code: 'PY43-KC-019', label: '数值类型与运算' },
@@ -31,19 +30,11 @@ const suggestedKcs: SuggestedKc[] = [
   { code: 'PY43-KC-048', label: '文件操作' },
 ];
 
-function openSession(): void {
-  if (trimmedKc.value.length === 0) {
-    return;
-  }
-  activeKc.value = trimmedKc.value;
-}
-
 function pick(code: string): void {
-  kcInput.value = code;
   activeKc.value = code;
 }
 
-// 面板内「换知识点」：收起会话、回到选择器（保留上次输入，方便微调再开）。
+// 面板内「换知识点」：收起会话、回到选择器。
 function resetPicker(): void {
   activeKc.value = '';
 }
@@ -69,41 +60,21 @@ function resetPicker(): void {
           </ol>
         </div>
 
-        <form
-          class="feynman-page__picker"
-          @submit.prevent="openSession"
-        >
-          <label for="feynman-kc">选择知识点开始</label>
-          <div class="feynman-page__picker-row">
-            <input
-              id="feynman-kc"
-              v-model="kcInput"
-              type="text"
-              placeholder="输入 KC 代码，例如 PY43-KC-031"
-              data-testid="feynman-kc-input"
-            >
-            <button
-              type="submit"
-              data-testid="feynman-kc-open"
-              :disabled="trimmedKc.length === 0"
-            >
-              开始
-            </button>
-          </div>
+        <div class="feynman-page__picker">
+          <KcPicker @select="pick" />
           <div class="feynman-page__chips">
-            <span class="feynman-page__chips-hint">不知道填什么？点一个：</span>
+            <span class="feynman-page__chips-hint">常用知识点：</span>
             <button
               v-for="kc in suggestedKcs"
               :key="kc.code"
               type="button"
               class="feynman-page__chip"
-              :class="{ 'feynman-page__chip--active': activeKc === kc.code }"
               @click="pick(kc.code)"
             >
               {{ kc.label }}
             </button>
           </div>
-        </form>
+        </div>
       </header>
 
       <FeynmanPanel
@@ -233,48 +204,7 @@ function resetPicker(): void {
 
 .feynman-page__picker {
   display: grid;
-  gap: var(--pyt-space-2);
-}
-
-.feynman-page__picker label {
-  font-family: var(--pyt-font-pixel);
-  font-size: var(--pyt-font-size-sm);
-  color: var(--pyt-color-text-primary);
-}
-
-.feynman-page__picker-row {
-  display: flex;
-  gap: var(--pyt-space-2);
-  flex-wrap: wrap;
-}
-
-.feynman-page__picker input {
-  flex: 1 1 240px;
-  border: 2px solid var(--pyt-color-border);
-  border-radius: var(--pyt-radius-sm, 4px);
-  background: var(--pyt-color-bg-primary);
-  color: var(--pyt-color-text-primary);
-  padding: var(--pyt-space-2) var(--pyt-space-3);
-  font: inherit;
-}
-
-.feynman-page__picker input:focus {
-  outline: none;
-  border-color: var(--pyt-color-primary);
-}
-
-.feynman-page__picker button[type='submit'] {
-  border: 2px solid var(--pyt-color-border-strong);
-  background: var(--pyt-color-primary);
-  color: var(--pyt-color-text-on-dark);
-  padding: var(--pyt-space-2) var(--pyt-space-5, 20px);
-  font-family: var(--pyt-font-pixel);
-  cursor: pointer;
-}
-
-.feynman-page__picker button[type='submit']:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
+  gap: var(--pyt-space-3);
 }
 
 .feynman-page__chips {

@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-06-19 — 代码找茬 KC↔bug 对齐 + 知识点下拉模糊搜索选择器
+
+> 修「所选知识点与生成的 bug 代码对不上」（如选「for 循环与遍历」却给 input() 类型 bug）；把知识点选择从「填编码」升级为下拉筛选 + 模糊搜索的中文名 combobox。
+
+- **KC↔bug 主题对齐（graph）**：`feynman_tutee_agent` 过去无真实样本时按 `kc_code` 哈希在 3 个 canned bug 里乱挑，与所选 KC 主题脱节。改为按课程包章节挑主题相关 bug（复用 `boss/kc_map.chapter_for_kc`）：第四章流程自动化 → 循环边界 bug、第五章数据结构 → 列表别名 bug、第二/三章变量与数值 → 输入类型 bug，其余回退最通用的循环边界；并把章节主题短语喂进 LLM bug 生成提示（不再只给无语义的 kc_code），让 LLM 路径也贴合 KC。`pytest` +2 例（章节映射 + 「for 循环」兜底给 range bug）共 **14 passed**。
+- **知识点选择器（前端 · combobox）**：新增 `KcPicker.vue`——对 65 个 KC 中文名做下拉筛选 + 模糊搜索（名字子串/子序列 + 按编码搜），遵循 W3C APG combobox 规范（role=combobox/listbox/option、`aria-activedescendant` 虚拟焦点、↑↓ 导航 / Enter 选中 / Esc 收起、焦点留输入框），只显示中文名不暴露编码；`FeynmanPage` 用它替换原「填 KC 编码」输入框（删旧文本框 + 死 CSS），保留 4 个常用知识点快捷 chip。星露谷风（木纹边框 / 羊皮纸下拉 / 金色高亮）。
+- **验证**：`vue-tsc` 0 错；`vitest` KcPicker **4** + BugHunter 2 + FeynmanPanel 4 passed；`eslint` 0 错（新组件 0 警告）；graph `.venv pytest test_feynman_tutee_agent` **14 passed** + `py_compile`，**已 `docker compose restart pythontopia-graph`（healthy）**；浏览器实测：搜「循环」→ 下拉只剩 4 个循环类 KC → 选「for 循环与遍历」→ 开会话 → 代码找茬现在给 `for i in range(1, 5)` 循环边界 bug（与 KC 对齐，不再是 input 类型 bug），截图存证。
+- **残留**：后端 Java（上批改的兜底错误串）仍未本地重编译重启。
+
 ## 2026-06-19 — 费曼小游戏改名「代码找茬」+ 知识点显示中文名
 
 > 「错误猎人」名字太跳、且与错题矿洞的 bug 隐喻撞车；改名为更贴合项目既有语汇的「代码找茬」（graph 文档串本就用「限时找茬」描述该玩法）。同时费曼标题不再暴露 KC 原始编码，统一显示知识点中文名。
