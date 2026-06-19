@@ -254,13 +254,23 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
             </option>
           </select>
         </label>
-        <PyButton
-          variant="primary"
-          test-id="expedition-begin"
-          @click="onStart"
-        >
-          开始远征
-        </PyButton>
+        <div class="exp-actions">
+          <PyButton
+            variant="primary"
+            test-id="expedition-begin"
+            @click="onStart"
+          >
+            开始远征
+          </PyButton>
+          <PyButton
+            variant="secondary"
+            test-id="expedition-daily"
+            :disabled="!run.dailyAvailable"
+            @click="run.startDailyRun()"
+          >
+            {{ run.dailyAvailable ? '☀ 今日挑战 · 弱项' : '今日挑战已完成' }}
+          </PyButton>
+        </div>
       </div>
 
       <!-- 地图：选节点 -->
@@ -368,6 +378,10 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
           <span class="exp-chip">{{ NODE_KIND_ICON[run.activeNode?.kind ?? 'battle'] }} {{ NODE_KIND_LABEL[run.activeNode?.kind ?? 'battle'] }}</span>
           <span class="exp-chip">{{ kcDisplayName(run.activeNode?.kcCode ?? '') }}</span>
           <span class="exp-chip">难度 {{ run.activeNode?.difficulty }} / 5</span>
+          <span
+            v-if="run.activeNode?.kind === 'boss'"
+            class="exp-chip exp-chip--boss"
+          >阶段 {{ run.bossPhase }} / {{ run.bossPhasesTotal }}</span>
           <span class="exp-chip exp-chip--timer">⏱ {{ run.elapsedSec }}s</span>
         </header>
 
@@ -842,6 +856,11 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
   border: 1px solid var(--pyt-color-info);
   border-radius: var(--pyt-radius-sm);
   color: var(--pyt-color-info);
+}
+.exp-chip--boss {
+  background: var(--pyt-color-danger-bg);
+  border-color: var(--pyt-color-danger);
+  color: var(--pyt-color-danger);
 }
 .exp-chip--timer {
   margin-left: auto;

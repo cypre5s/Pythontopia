@@ -31,9 +31,40 @@ import type {
 } from '@/types/rogue';
 
 const PERSIST_KEY = 'pyt_rogue_run_v1';
+const DAILY_KEY = 'pyt_rogue_daily_v1';
 // 无尽补星门槛（与 EndlessPage / 后端 MainlineRecoveryService 一致）。
 const STAR_MIN_CORRECT = 8;
 const STAR_MIN_ACCURACY = 0.8;
+// BOSS 多阶段：连过 N 道才算击穿知识闸（过关高潮）。
+const BOSS_PHASES = 3;
+
+function todayStr(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+function loadDailyDate(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.localStorage.getItem(DAILY_KEY);
+  } catch {
+    return null;
+  }
+}
+function saveDailyDate(date: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(DAILY_KEY, date);
+  } catch {
+    /* 隐私模式禁写，忽略 */
+  }
+}
+/** 确定性 RNG（LCG）：每日挑战按日期种子生成稳定的当日地图。 */
+function makeLcg(seed: number): () => number {
+  let s = (seed >>> 0) || 1;
+  return () => {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 0xffffffff;
+  };
+}
 
 interface PersistShape {
   phase: RogueRunPhase;
@@ -47,6 +78,7 @@ interface PersistShape {
   bestMomentum: number;
   score: number;
   relics: string[];
+  isDaily: boolean;
   history: RogueHistoryEntry[];
 }
 
@@ -97,6 +129,13 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
   // 概念事件：进入 event 节点先选应对；study 选项把本题得分 ×eventScoreMult。
   const activeEventText = ref('');
   const eventScoreMult = ref(1);
+  // BOSS 多阶段进度（连过 bossPhasesTotal 道才通关）。
+  const bossPhase = ref(1);
+  const bossPhasesTotal = ref(BOSS_PHASES);
+  // 每日挑战：当日弱项 + 日期种子稳定地图；每天一次（记录完成日期）。
+  const isDaily = ref(false);
+  const dailyDoneDate = ref<string | null>(loadDailyDate());
+  const dailyAvailable = computed(() => dailyDoneDate.value !== todayStr());
 
   // ── 派生 ──
   const nodesByLayer = computed<RogueNode[][]>(() => {
@@ -126,6 +165,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
         bestMomentum: bestMomentum.value,
         score: score.value,
         relics: relics.value,
+        isDaily: isDaily.value,
         history: history.value,
       };
       window.localStorage.setItem(PERSIST_KEY, JSON.stringify(snap));
@@ -149,6 +189,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     bestMomentum.value = p.bestMomentum ?? 0;
     score.value = p.score ?? 0;
     relics.value = Array.isArray(p.relics) ? p.relics : [];
+    isDaily.value = p.isDaily ?? false;
     history.value = Array.isArray(p.history) ? p.history : [];
   }
 
@@ -186,10 +227,11 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     return { kcCode: kc, challengeKind, difficulty };
   }
 
-  function startRun(focus: number | null): void {
+  function startRun(focus: number | null, opts: { rng?: () => number; daily?: boolean } = {}): void {
     focusChapter.value = focus;
     const usedKcs = new Set<string>();
     const map = generateRogueMap({
+      rng: opts.rng,
       resolveChallenge: (kind, layer) => resolveChallenge(kind, layer, usedKcs),
     });
     nodes.value = map.nodes;
@@ -202,10 +244,22 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     score.value = 0;
     relics.value = [];
     history.value = [];
+    bossPhase.value = 1;
+    isDaily.value = opts.daily ?? false;
     summaryReported.value = false;
     clearActive();
     phase.value = 'map';
     persist();
+  }
+
+  /** 每日挑战：当日一次，弱项 + 日期种子稳定地图。 */
+  function startDailyRun(): void {
+    if (!dailyAvailable.value) {
+      toast.show('今日挑战已完成，明天再来', 'info');
+      return;
+    }
+    const seed = Number(todayStr().replace(/-/g, ''));
+    startRun(null, { rng: makeLcg(seed), daily: true });
   }
 
   function clearActive(): void {
@@ -287,7 +341,8 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
       return;
     }
 
-    // 战斗 / 精英 / 抓 bug / boss：直接出题。
+    // 战斗 / 精英 / 抓 bug / boss：直接出题（boss 多阶段从第 1 阶段起）。
+    if (node.kind === 'boss') bossPhase.value = 1;
     await beginChallenge(node);
   }
 
@@ -344,6 +399,15 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
         score.value += scoreFor(node);
         momentum.value += 1;
         if (momentum.value > bestMomentum.value) bestMomentum.value = momentum.value;
+        // BOSS 多阶段：未到最后一阶段则进入下一阶段、不结算，连续作战。
+        if (node.kind === 'boss' && bossPhase.value < bossPhasesTotal.value) {
+          bossPhase.value += 1;
+          toast.show(`BOSS 阶段 ${bossPhase.value - 1}/${bossPhasesTotal.value} 通过，继续！`, 'success');
+          void maybeReportStar();
+          persist();
+          await beginChallenge(node);
+          return;
+        }
         markCleared(node);
         // 精英通关给一件学习增益（roguelike 成长）。
         if (node.kind === 'elite') grantRelic();
@@ -377,6 +441,12 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
       phase.value = 'cleared';
     } else {
       phase.value = 'map';
+    }
+    // 每日挑战：本局收尾即算「今日已挑战」（无论胜负，给予参与认定）。
+    if ((phase.value === 'over' || phase.value === 'cleared') && isDaily.value) {
+      const d = todayStr();
+      dailyDoneDate.value = d;
+      saveDailyDate(d);
     }
     persist();
   }
@@ -432,6 +502,10 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     bestMomentum,
     score,
     relics,
+    isDaily,
+    dailyAvailable,
+    bossPhase,
+    bossPhasesTotal,
     history,
     activeNode,
     activeProblem,
@@ -446,6 +520,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     attempts,
     depth,
     startRun,
+    startDailyRun,
     enterNode,
     chooseEvent,
     submitChallenge,

@@ -161,4 +161,45 @@ describe('rogueRun store', () => {
     expect(node!.difficulty).toBe(Math.min(5, d0 + 1));
     expect(run.phase).toBe('challenge');
   });
+
+  it('boss requires beating bossPhasesTotal phases before victory', async () => {
+    const run = useRogueRunStore();
+    run.startRun(null);
+    const node = run.nodes.find((n) => n.layer === 0);
+    node!.kind = 'boss';
+    node!.kcCode = 'PY43-KC-001';
+    node!.challengeKind = 'multi_round';
+    run.activeNode = node!;
+    run.activeProblem = problem();
+    run.phase = 'challenge';
+    run.bossPhase = 1;
+    judgeMock.fetchProblem.mockResolvedValue(problem());
+    judgeMock.judge.mockResolvedValue({
+      problemId: 'p1', passed: true, passedTestCases: 1, totalTestCases: 1, score: 80, feedback: 'ok',
+    });
+    await run.submitChallenge();
+    expect(run.bossPhase).toBe(2);
+    expect(run.nodes.find((n) => n.id === node!.id)?.state).not.toBe('cleared');
+    await run.submitChallenge();
+    expect(run.bossPhase).toBe(3);
+    await run.submitChallenge();
+    expect(run.nodes.find((n) => n.id === node!.id)?.state).toBe('cleared');
+    run.continueAfterChallenge();
+    expect(run.phase).toBe('cleared');
+  });
+
+  it('daily run marks today done after the run ends and blocks a second daily', () => {
+    const run = useRogueRunStore();
+    expect(run.dailyAvailable).toBe(true);
+    run.startDailyRun();
+    expect(run.isDaily).toBe(true);
+    expect(run.phase).toBe('map');
+    // 模拟本局体力耗尽收尾。
+    run.hp = 0;
+    run.activeNode = run.nodes.find((n) => n.layer === 0) ?? null;
+    run.phase = 'challenge';
+    run.continueAfterChallenge();
+    expect(run.phase).toBe('over');
+    expect(run.dailyAvailable).toBe(false);
+  });
 });
