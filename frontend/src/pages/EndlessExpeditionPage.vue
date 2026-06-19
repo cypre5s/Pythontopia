@@ -6,7 +6,7 @@
  * 战斗节点真判题；对得分攒气势、错按韧性温和扣血，HP 归零结束，打通 boss 胜利。
  * 章节为可选「聚焦」过滤器，默认全局自适应。详见 docs/plans/2026-06-19-endless-roguelike-rebuild.md。
  */
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import AppLayout from '@/app/AppLayout.vue';
 import PyButton from '@/components/ui/PyButton.vue';
@@ -85,6 +85,67 @@ function relicTitle(id: string): string {
   const r = relicById(id);
   return r ? `${r.name}：${r.desc}` : id;
 }
+
+// ── 分支连线可视化：测量节点中心，画 SVG 连边（类杀戮尖塔地图） ──
+const mapInner = ref<HTMLElement | null>(null);
+const nodeEls = new Map<string, HTMLElement>();
+function setNodeEl(id: string, el: unknown): void {
+  if (el instanceof HTMLElement) nodeEls.set(id, el);
+  else nodeEls.delete(id);
+}
+interface EdgeSeg {
+  id: string;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  cls: string;
+}
+const edges = ref<EdgeSeg[]>([]);
+function computeEdges(): void {
+  const inner = mapInner.value;
+  if (!inner) {
+    edges.value = [];
+    return;
+  }
+  const ir = inner.getBoundingClientRect();
+  const segs: EdgeSeg[] = [];
+  for (const node of run.nodes) {
+    const fromEl = nodeEls.get(node.id);
+    if (!fromEl) continue;
+    const fr = fromEl.getBoundingClientRect();
+    const x1 = fr.left - ir.left + fr.width / 2;
+    const y1 = fr.top - ir.top + fr.height;
+    for (const nid of node.next) {
+      const toEl = nodeEls.get(nid);
+      if (!toEl) continue;
+      const tr = toEl.getBoundingClientRect();
+      const x2 = tr.left - ir.left + tr.width / 2;
+      const y2 = tr.top - ir.top;
+      const target = run.nodes.find((n) => n.id === nid);
+      const cls = node.state === 'cleared'
+        ? (target && (target.state === 'cleared' || target.state === 'available') ? 'is-open' : 'is-dim')
+        : 'is-dim';
+      segs.push({ id: `${node.id}->${nid}`, x1, y1, x2, y2, cls });
+    }
+  }
+  edges.value = segs;
+}
+function scheduleCompute(): void {
+  void nextTick(() => computeEdges());
+}
+onMounted(() => {
+  scheduleCompute();
+  if (typeof window !== 'undefined') window.addEventListener('resize', computeEdges);
+});
+onBeforeUnmount(() => {
+  if (typeof window !== 'undefined') window.removeEventListener('resize', computeEdges);
+});
+// 进入地图 / 节点状态变化（通关解锁）后重算连线。
+watch(
+  () => [run.phase, run.nodes.map((n) => n.state).join(',')],
+  () => scheduleCompute(),
+);
 function nodeClass(node: RogueNode): Record<string, boolean> {
   return {
     'exp-node': true,
@@ -211,36 +272,56 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
           点亮的节点可前往；选了一个，同层其它岔路就走不回头了。一路打到顶层 BOSS 即通关。
         </p>
         <div
-          v-for="(layer, li) in run.nodesByLayer"
-          :key="li"
-          class="exp-layer"
+          ref="mapInner"
+          class="exp-map__inner"
         >
-          <span class="exp-layer__tag">{{ li === run.layers - 1 ? '顶层' : `第 ${li + 1} 层` }}</span>
-          <div class="exp-layer__nodes">
-            <button
-              v-for="node in layer"
-              :key="node.id"
-              type="button"
-              :class="nodeClass(node)"
-              :disabled="node.state !== 'available'"
-              :data-testid="`expedition-node-${node.id}`"
-              @click="onEnter(node)"
-            >
-              <span class="exp-node__icon">{{ NODE_KIND_ICON[node.kind] }}</span>
-              <span class="exp-node__kind">{{ NODE_KIND_LABEL[node.kind] }}</span>
-              <span
-                v-if="node.kcCode"
-                class="exp-node__kc"
-              >{{ kcDisplayName(node.kcCode) }}</span>
-              <span
-                v-if="node.difficulty > 0"
-                class="exp-node__diff"
-              >{{ star(node.difficulty) }}</span>
-              <span
-                v-if="node.state === 'cleared'"
-                class="exp-node__done"
-              >✓</span>
-            </button>
+          <svg
+            class="exp-edges"
+            aria-hidden="true"
+          >
+            <line
+              v-for="e in edges"
+              :key="e.id"
+              :x1="e.x1"
+              :y1="e.y1"
+              :x2="e.x2"
+              :y2="e.y2"
+              :class="['exp-edge', e.cls]"
+            />
+          </svg>
+          <div
+            v-for="(layer, li) in run.nodesByLayer"
+            :key="li"
+            class="exp-layer"
+          >
+            <span class="exp-layer__tag">{{ li === run.layers - 1 ? '顶层' : `第 ${li + 1} 层` }}</span>
+            <div class="exp-layer__nodes">
+              <button
+                v-for="node in layer"
+                :key="node.id"
+                :ref="(el) => setNodeEl(node.id, el)"
+                type="button"
+                :class="nodeClass(node)"
+                :disabled="node.state !== 'available'"
+                :data-testid="`expedition-node-${node.id}`"
+                @click="onEnter(node)"
+              >
+                <span class="exp-node__icon">{{ NODE_KIND_ICON[node.kind] }}</span>
+                <span class="exp-node__kind">{{ NODE_KIND_LABEL[node.kind] }}</span>
+                <span
+                  v-if="node.kcCode"
+                  class="exp-node__kc"
+                >{{ kcDisplayName(node.kcCode) }}</span>
+                <span
+                  v-if="node.difficulty > 0"
+                  class="exp-node__diff"
+                >{{ star(node.difficulty) }}</span>
+                <span
+                  v-if="node.state === 'cleared'"
+                  class="exp-node__done"
+                >✓</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -521,7 +602,37 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
   color: var(--pyt-color-text-muted);
   text-align: center;
 }
+.exp-map__inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+/* 分支连线层：垫在节点下方，纯展示不挡点击。 */
+.exp-edges {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 0;
+}
+.exp-edge {
+  stroke-width: 2;
+  fill: none;
+}
+.exp-edge.is-open {
+  stroke: var(--pyt-color-warning, #d99f3a);
+  stroke-opacity: 0.85;
+}
+.exp-edge.is-dim {
+  stroke: rgba(74, 54, 29, 0.22);
+  stroke-dasharray: 4 5;
+}
 .exp-layer {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: 12px;
