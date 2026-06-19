@@ -77,6 +77,13 @@ a {
   }
 }
 
+/* 输入占位文字对比度（a11y · 文本对比）：浏览器默认 placeholder 约 54% 灰，在浅色输入框上
+   常不达 WCAG 对比；统一为足够对比的墨绿灰并把 opacity 拉满，避免半透明再叠浅。 */
+::placeholder {
+  color: #5a6560;
+  opacity: 1;
+}
+
 .app-shell {
   min-height: 100vh;
   min-height: 100dvh;
