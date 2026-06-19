@@ -258,6 +258,17 @@ export const router = createRouter({
       component: () => import('@/pages/NotFoundPage.vue'),
     },
   ],
+  // 导航定位（功能交互）：新页面滚动到顶，浏览器前进/后退恢复离开时的滚动位置，
+  // 避免「点进新页却停在上一页的半中间」。锚点跳转（带 hash）交给浏览器原生处理。
+  scrollBehavior(to, _from, savedPosition) {
+    if (savedPosition) {
+      return savedPosition;
+    }
+    if (to.hash) {
+      return { el: to.hash, behavior: 'smooth' };
+    }
+    return { top: 0 };
+  },
 });
 
 router.beforeEach((to: RouteLocationNormalized) => {
