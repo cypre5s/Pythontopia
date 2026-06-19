@@ -107,3 +107,12 @@
 - 地图 DAG 生成与连通性需保证「每条路可达 boss」。
 - HP 温和规则的具体数值需打磨（首版给保守默认，后续按数据调）。
 - 与 `mainline`「测」闸的回流口径需与后端对齐（沿用 `submitEndlessSummary` 门槛）。
+
+## 9. 实施进度（2026-06-19 更新）
+- **阶段 1（前端 Roguelike MVP）✅**：types + 配置 + KC 前沿 + run store + 地图 DOM UI + 节点真判题 + HP/气势/结算 + 章节聚焦 + localStorage + `/arena` 重定向 + 单测。
+- **阶段 2（后端选择器 + 间隔重复）✅**：选择器下沉 graph `agents/boss/expedition_selector` + `POST /agents/boss/select-frontier`；后端 `BossController/BossService/BossGraphClient` 读权威掌握度透传；前端 `api/expedition` + `rogueRun.startRun` 后端优先 + 本地兜底。
+- **阶段 3（像素化）✅**：知识星座 DOM 可视化（`KnowledgeConstellation.vue`）；**Phase 3b** Phaser 像素远征塔 `game/scenes/ExpeditionScene.ts` + `components/expedition/ExpeditionCanvas.vue`（单 Game 单例渐进增强，DOM 地图保留为交互真源/降级；点像素节点 = `run.enterNode`；过 BOSS 庆祝；零第三方素材）。
+- **阶段 4（每日挑战 + 退役静态 Arena）✅**：每日弱项种子 run；删 `arenaLevels.ts`/`ArenaPage`，`/arena` 重定向 `/expedition`。
+- **Phase 2d（run 跨会话 DB 持久化 + 间隔重复持久化）✅**：迁移 `V173__expedition_run.sql`（user 单活跃 run）；`ExpeditionRunController/Service/Dto`（GET/PUT/DELETE，学生限定）；`stores/rogueRun` 后端优先 + localStorage 兜底 + 续局/弃局 + 跨设备 `resumeFromBackend`；间隔重复改用持久化 `kc_mastery.last_event_at`（`BossService` → `BossGraphClient.lastPracticed` → graph `select_frontier(last_practiced=...)`）。
+- **测试**：前端 `npm run test` 2172 passed（含 ExpeditionScene 6 / expedition api 5 / rogueRun 续局+兜底）；后端 `BossServiceTest`+`ExpeditionRunControllerTest` 18 passed；graph `test_expedition_selector` 7 passed。浏览器对 demo-stu-01 完成像素塔可视化验收（render→自适应一屏→点节点进真判题）。
+- **后续**：空库初始化迁移与全链路 E2E 在 ECS 部署专场验；像素塔 avatar 攀爬/通关动画当前为状态重建驱动（已单测），后续可加补间动画打磨。

@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-06-19 — 无尽远征 Phase 3b 像素远征塔 + Phase 2d run 跨会话持久化 + 间隔重复持久化
+
+> 补完上一批收官时挂起的两件「后续」：Phaser 像素远征塔可视化（Phase 3b）与 run 跨会话 DB 持久化 + 真·间隔重复（Phase 2d）。
+
+- **Phase 3b · Phaser 像素远征塔（前端）**：新增 `game/scenes/ExpeditionScene.ts`（模块级 scene + `ensureExpeditionSceneStarted`/`loadExpedition`/`getExpeditionBridge` 桥，仿 `CodeTheaterScene`），把 rogueRun 的分层分支 DAG 渲染成一座可见像素塔——底层在下、顶层 BOSS，房间按 kind 着色/图标、按 state 点亮(已过)/高亮(可选·蓝)/暗(未解锁)/灰(绕过)，出边连线（已通关→金线），avatar 随通关向上攀爬，过 BOSS 触发「通关」庆祝；布局随层数/层宽自适应，整塔一屏可见。新增 `components/expedition/ExpeditionCanvas.vue`（复用单 `Phaser.Game` 单例，仿 `TheaterStageCanvas` 的挂载/销毁 + ResizeObserver）接进 `EndlessExpeditionPage` 的 map 阶段（🗼像素塔 / ☰列表 二选一 + 🏳弃局）；点像素节点 = `run.enterNode`（与 DOM 地图同一动作，移动端/降级用 DOM）。**全程序化绘制（graphics+text），零第三方素材，无 LICENSE-ART 变更**（同 `CodeTheaterScene` 先例）。
+- **Phase 2d · run 跨会话 DB 持久化（后端权威）**：迁移 `V173__expedition_run.sql`（`expedition_run` 按 user 单活跃 run：结构化标量列 + nodes/relics/history JSONB）；`ExpeditionRunController`（GET/PUT/DELETE `/api/world/expedition/run`，学生限定 403）+ `ExpeditionRunService`（JdbcTemplate UPSERT/查询/删除）+ `ExpeditionRunDto`（前后端同构 13 字段）。前端 `api/expedition.ts` 加 run 读写、`stores/rogueRun.ts` 持久化改「后端优先 + localStorage 兜底」，`startRun` 续局（后端有活跃 run 则恢复，不可达回退本地，绝不阻塞），新增 `resumeFromBackend`（跨设备进页静默续局）+ `abort` 弃局 DELETE。
+- **Phase 2d · 间隔重复持久化**：`BossService.selectFrontier` 复用既有 `kc_mastery.last_event_at`（`MasterySnapshot.lastEventAt`，`ISO_OFFSET_DATE_TIME` 格式）作「每 KC 最近练习时间」喂 graph；`BossGraphClient.selectFrontier` 加 `lastPracticed` 透传；graph `agents/boss/expedition_selector` 接 `last_practiced` 做真·间隔重复（≥45 天久未练大幅上浮、≥14 天上浮、≤3 天压制），`routes/boss.py` 加 `lastPracticed` 字段——让间隔重复用持久化的 last_practiced 而非仅前端 recentKcs。
+- **验证**：前端 `vue-tsc` 0 错、`eslint` 0 错、`npm run test` **2172 passed**（新增 ExpeditionScene 6 / expedition api 5 / rogueRun 续局+兜底 2 例）；后端 `mvn -Dtest=BossServiceTest,ExpeditionRunControllerTest` **18 passed**（aliyun 镜像绕 TUN）；graph `pytest test_expedition_selector` **7 passed**（含 last_practiced 久未练上浮用例）。浏览器实测 demo-stu-01 → /expedition → 开始远征：整塔一屏（房间态/连线/HUD/avatar）→ 点像素节点进真判题（3 轮截图迭代到正确）。
+- **提交 / 残留**：仅提交无尽远征 Part B/D 相关文件（frontend scenes/components/pages/api/stores/tests + backend world/boss + V173 + graph boss）+ 本 CHANGELOG + 计划文档；同工作树 android / feynman / styles.css 等其它会话 WIP 不裹挟。空库初始化迁移 + 全链路 E2E 在 ECS 部署专场验收。
+
 ## 2026-06-19 — 费曼界面收敛自适应 + 错误猎人计时重渲染修复 + 出师闭环接入
 
 > 续作费曼反演界面优化：减框、整页不滚自适应视口、更星露谷风；修计时每秒重渲染致点击发涩（A）；把错误猎人找到的 bug 提示接进「讲明白 → 真判题」出师闭环（B）。
