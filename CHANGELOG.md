@@ -1,18 +1,39 @@
 # Changelog
 
-## 2026-06-19 — 生产部署批次：前端人本打磨 + 工坊 AG-UI 入库修复 + graph 工具调用优化 + nginx 防白屏（ECS 上线 + 浏览器 e2e 验收）
+## 2026-06-19 — 复盘周报每周自动生成 + 费曼「错误猎人」游戏化
 
-> 把若干条已完成且经验证为正向的改动一次性提交并发布到生产 ECS（`http://47.120.29.62`）。发布包 `pythontopia-web-20260619T084925Z`（676M，sha256 校验一致），生效 release `20260619-165320`，上一版本 `20260618-230311` 保留可回滚。本批 5 个提交：`d20e8528`(前端) / `8873aa28`(deploy/nginx) / `b558953e`(截图) / `5de00ce4`(后端) / `f167163f`(graph)。
+> 复盘大厅周报支持后端每周自动生成（与手动并存）；费曼反演从"纯对话"升级为「错误猎人」限时找茬小游戏——学弟写出含 bug 的代码，玩家限时点出错误行、即时判分，再接"讲清→真判题出师"。
 
-- **前端 · 学习链路人本细节**（`d20e8528`）：WorkshopPage/TrainingPanel/GuideOverlay/router 的无障碍(`aria-*`/`role=status`)与运行-提交忙态文案；空闲预取 `app/prefetch.ts`（仅登录态 + 非省流，预热冒险地图/图书馆/工坊/训练场路由分块与课程清单，纯加法失败静默）；`courseLibrary` 会话级页列表缓存；`codeTheater` store；配套 vitest。
-- **后端 · 流式稳健 + 工坊入库**（`5de00ce4`）：Orchestrator `SseEmitter`/读超时 120s→300s（小机型有界 agentic loop 串行看/学/练/测）；`WorkshopGraphClient` 兼容 graph 已迁的 AG-UI `RUN_FINISHED` 终态（剥 `{"result":{...}}`）后落库生成 `resourceId`，修复书房恒空、资源详情打不开。
-- **graph · DeepSeek 工具调用优化**（`f167163f`）：`intent_router_agent` 混合意图路由强化(+484) + 新增 `tool_use_eval` 评测框架(+723) + `path_planner` 微调 + 配套测试(+413)。
-- **deploy/前端壳 · 防白屏**（`8873aa28`）：nginx `/assets` 指纹资源 `immutable` 强缓存 + `index.html` `no-cache` + SPA 回退（避免发版后 `.js` 命中 `index.html` 拿到 `text/html` 触发严格 MIME 校验、动态导入分块失败白屏）；`docker-compose.production` 课件页 PNG 缓存目录落到可写卷，修课件证据图裂图。
-- **指南截图**（`b558953e`）：`guide/screenshots` 01-21 重渲染 + 新增 22-code-theater/23-clients + 刷新 course43 manifest 时间戳。
-- **本地验证**：前端 `vue-tsc` 0 错 + `eslint` 0 错 + `vitest` **2150 passed**；后端 `mvn test`（Aliyun mirror）**831 passed BUILD SUCCESS**；graph `pytest` **1108 passed / 1 skip**。
-- **部署**：`build_release_archive.sh` 构建 4 镜像（走 7892 代理；Maven 因 TUN 劫持 aliyun 直连超时，临时启用 `settings.build.xml` 代理构建后已还原）→ 发布包 sha256 与本地一致 → ECS `install_release.sh` 事务安装（pg_dump 备份 → docker load → 起服务等健康 → 原子切换 `current` → reload nginx）→ 6 服务全 healthy、公网 `/healthz` 200。
-- **浏览器 e2e（公网验收）**：`publicAcceptance.spec.ts` 对 `http://47.120.29.62` **25/27 passed**（覆盖 auth/world/mainline/guide/guide-ai/deeplink/workshop/library/training/复盘画像/深链刷新/错误不泄密）；2 个失败（guide-ai 多轮、training AC）为 2C4G 持续压测下页面加载超时抖动，**低负载单独重试 2/2 通过**，等价全过。`public_acceptance.sh` shell 冒烟 10 通过/0 失败（含 nginx 缓存头与认证 SSE×3）。
-- **未纳入 / 残留**：android 为独立线（发布包按 allowlist 自动排除）；e2e 在公共演示账号 `demo-stu-01` 累积少量提交/资源属预期；内部端口公网封闭性因本机 TUN 测量受限跳过（已从 ECS 内部确认绑 `127.0.0.1`）。
+- **复盘周报每周自动生成（后端）**：`WeeklyEvaluationScheduler` 默认每周一 03:00(UTC) 为「近 7 天有真实活动、近 6 天尚无评估」的学生各生成一份周报；幂等可重跑（去重闸门防自动+手动重复）、单点失败仅记日志不阻断他人；`pyt.evaluation.weekly-auto-enabled` / `weekly-cron` 可关停或改时。`EvaluationRepository.findActiveLearnerIdsSince` + `existsEvaluationCreatedAfter`、`LearnerEvaluationService.findLearnersNeedingWeeklyEvaluation`。手动「立即评估」保留不变。
+- **费曼错误猎人（graph）**：新增 `POST /agents/feynman/bug-exposure`——canned 误区→确定性 buggy/fixed 样本；未知真实误解 tag→LLM 生成 buggy+fixed（**6s 紧超时**回退，避免拖过前端 10s）；无样本→按 KC 确定性退化为常见初学者陷阱（`source` 诚实标注，不冒充"你的错"）。bug 行号由 buggy/fixed `difflib` 行级 diff 得出（**零伪造**）。
+- **费曼错误猎人（后端）**：`FeynmanGraphClient.bugExposure` + `FeynmanSessionService.bugHunt` + `POST /api/feynman/sessions/{id}/bug-hunt` + `BugHuntResponse`（**不下发 fixed_code 答案**，只给 bug 行号判分；下游不可达 502）。
+- **费曼错误猎人（前端）**：`BugHunterGame.vue`（可点代码行 + 30s 倒计时 + 命中/误报/漏判即时计分 + 揭晓高亮 + 接"出师"教学提示），接入 `FeynmanPanel`；`api/feynman.ts` + `stores/feynman.ts` 加 bug-hunt 流。
+- **验证**：graph `pytest test_feynman_tutee_agent` **12 passed**（含 diff 行号 / canned / LLM / generic 兜底 / 路由用例）+ 实点端点；backend `mvn -Dtest=Feynman*` **13 passed**（含 bugExposure 映射，不泄答案）；frontend `vitest` BugHunterGame **2** + FeynmanPanel **3 passed**、`vue-tsc`/`eslint` 0 错；周报后端作用域 **9 passed**。浏览器实测 demo-stu-01 → /feynman 开会话 → 错误猎人生成 bug 代码 → 点中真实 bug 行 **完美命中得分 10**（截图存证）。
+- **提交 / 残留**：本机后端已用同一 JWT secret 重启载入新端点（登录态不丢）；调试中修两处：旧后端进程致 404（重启解决）、未知 tag 走慢 LLM 致 10s 超时（graph 加 6s 紧超时秒回）。
+
+## 2026-06-19 — 做题/无尽页对标 476 改版 + AI 导学助手重构 + 无尽远征 Roguelike MVP + 自托管 pyodide + 隐藏代码舞台
+
+> 一次性落地用户提的 5 件事。已提交 `0a1f3462`（33 文件 +2932/-657）。详细方案见 `docs/plans/2026-06-19-endless-roguelike-rebuild.md`。
+
+- **做题页（TrainingPanel）美化**：删 `kc 名 / KC 编码 / 难度 / 掌握进度` 标签行；`暗色/亮色` 按钮上提到 `AI 助教` 左侧（抽 `useCodeEditorTheme` 全站编辑器共享同一主题）；输入输出样例复制按钮改 **LeetCode 式嵌入数据黑框右上角、悬停才显形**；三栏（题干|代码|AI 助手）左右 + 代码|调试上下**真正可拖拽**（新 `useResizable`，CSS 变量驱动、窄屏 media query 仍能收单列）。
+- **AI 导学助手（TutorWorkflowPanel）重构**：从「平铺一排 7+ 按钮 + 大段进度框」改为 **单「推荐下一步」主按钮 + 其余阶段动作 chips +「🧰 学习工具」抽屉（默认收纳）**；「导学助手进度」节点串折叠为一行「百晓思考中…」+「查看过程」；动作严格按后端 `available_actions` **阶段门控**渲染（对齐 Alethicode `transitions.py`：错因诊断/AC 复盘需 `submission_id`、TRANSFER 需先有复盘方向），不再前端无脑补齐全部按钮。
+- **无尽页（EndlessPage）对标 476 OJ 排布**：通用刷题走「题面|作答」两栏（题面 + 样例黑框带 LeetCode 式复制），关卡题型（pdf_question 等）卡片自带题面+作答时单栏铺满；「最近 8 题」改为**默认收起、可展开的侧栏收纳**。
+- **本地修控制台报错**：Pyodide **同源自托管**（`scripts/sync-pyodide.mjs` 从 `node_modules/pyodide` 复制运行时到 `public/pyodide/`，predev/prebuild 钩子自动跑；adapter 同源优先、CDN 兜底）——根治 Edge「跟踪保护」拦 jsdelivr 的 `Tracking Prevention blocked storage` 告警；`banner: false` 关闭 Phaser 启动横幅（消除每次挂载的 `Phaser v3.87` 噪音）。`[boss] backend status=0` 本为后端不可达时的 golden 优雅降级，本地后端在线即不触发。
+- **无尽闯关重构（任务 4）**：详细计划 + **Phase 1** 新增 `/expedition`「无尽远征」——知识前沿（掌握度+画像）`useKcFrontier` 选 KC、`rogueMap` 生成「必可达 boss」的分支 DAG、`rogueRun` 状态机（真判题 / 温和 HP 按抗挫折度扣血 / 气势连击 / 掌握度永久入库 / 达标补星）+ 复用 `KindRouter` 9 题型，取代「7 章×10 关」死网格；章节降级为可选聚焦过滤器；入口（暂停菜单/HUD/QuickWheel）改指 `/expedition`（旧 `/arena` 暂留，Phase 4 退役）。
+- **隐藏代码舞台（任务 5）**：`/code-theater` 路由重定向回小镇；移除暂停菜单 / 做题页 / 无尽页 / 教授 NPC 对话 / 操作指南的全部入口与交叉引用（引擎/页面实现代码保留，改回只需还原路由 + `HIDDEN_GUIDE_SECTION_IDS` 过滤名单）。
+- **无尽远征 · 肉鸽血肉增量**（在 `0a1f3462` 之后陆续提交）：① **学习增益(relics) 系统**（`a29c7b2d`）——🛡厚实笔记/🧘沉静心法/🔥连题学者/💧复盘回气/🔍专注透镜 5 件被动增益，从资源宝箱与精英通关获得，作用于体力上限/答错扣血/通关得分/气势/营地回血，随 run 持久化；② **分支地图连线可视化**（`064eedd7`）——测量节点中心画 SVG 连边（已达=实线高亮、未解锁=虚线淡显），选路真像杀戮尖塔地图。
+- **验证**：`vue-tsc` 0 错、`eslint` 0 错、`vitest` **2161 passed**（新增 rogueMap/rogueConfig/rogueRun + TutorWorkflowPanel/HudShell 更新共 14 例）、`vite build` 通过。
+- **提交 / 残留**：已提交 `0a1f3462`；本 CHANGELOG 条目因同工作树存在另一会话对 `CHANGELOG.md` 的未提交改写（复盘大厅 502 批次 + 删 #6–#13）**暂不单独提交**，避免裹挟无关 WIP；同工作树 android / ReviewHall / styles.css 等无关改动不在本批范围。
+
+## 2026-06-19 — 复盘大厅 502 修复 + 周报列表化 + ESC 菜单错题矿洞入口
+
+> 修复复盘大厅「立即评估」必现的 502（两层根因），把历史评估从小卡片改为**按周收纳的列表 + 点击日期弹窗看摘要**，并给 ESC 暂停菜单补上错题矿洞入口。
+
+- **修复 · 复盘评估 502（两层根因）**：① 运行栈只起了 postgres+redis+backend，漏了 `pythontopia-graph`/`pythontopia-rag`（开发应走 `./dev.sh`、演示走 `start.sh`，二者本就拉起并健康门禁 graph/rag，本次确认脚本无需改）；② 真正的 bug——`EvaluationNarrativeAgent._number_aliases` 只生成「整数 / 两位四舍五入」别名，而 narrative 用 `{value}` 渲染原始浮点（`1.0`/`5.888`/`0.3333`）、用 `{:.2f}` 渲染 KC 行（`0.00`），致这些**确有出处**的数字被 grounding 误判为「未追踪」→ 整单 `422` → 后端 `RestTemplate`/`GraphClientRetryHelper` 包成 `502`。修 `_number_aliases` 覆盖「原始 str / 整数 / 两位小数 / 去尾零」四形态，不改 narrative 文本、不削弱防幻觉。
+- **ESC 暂停菜单 · 错题矿洞入口**：「学习」组新增「错题矿洞 → `/bug-mine`」（此前矿洞仅能从判题失败 / 竞技场卡片 / NPC 进入，无主菜单入口）；顺带提交工作区既存的「移除下线代码剧场入口」+ 删其过时 `PauseMenu.spec.ts`。
+- **复盘大厅界面 · 周报列表化**：历史评估由「小卡片 chip + 行内展开详情」改为**按周分组列表**（`本周`/`上周`/日期区间 + 「N 份」计数），**点击某天以弹窗**展示该次评估摘要（指标卡 / narrative / 关键 KC / 路径对比 / 接受·保留），支持 ESC / 点遮罩 / ✕ 关闭，复用 `pyt-fade`/`pyt-scale` 过渡；历史加载 4→20、不再进页自动弹首条；移除顶部冗长引导文案。
+- **验证**：graph `pytest tests/test_evaluation_narrative_agent.py` **7 passed**（含用真实数值 `1.0/5.888/0.3333/零增量` 锁定 grounding 的回归用例）；前端 `vue-tsc` 0 错、`eslint` 0 错、`ReviewHallPanel.spec.ts` **4 passed**；浏览器实测 demo-stu-01 → `/review-hall`「立即评估」`200` 成功出周报、按周列表 + 点击弹窗均正常（截图存证）。
+- **提交 / 残留**：已提交 `feat(frontend): ESC 菜单错题矿洞入口`、`fix(graph): grounding 兼容数字多形态`；复盘大厅 UI 改动（`ReviewHallPanel`/`ReviewHallPage`/spec + 引导文案移除）**尚未提交**；未跑后端 `mvn test`（本会话未改后端 Java，502 修复在 graph + 运维层）；同工作树 android 等无关 WIP 不在范围。
 
 ## 2026-06-19 — 人本细节优化迭代（R-14 · 100 轮 · 不加新功能）
 
@@ -26,22 +47,6 @@
 - **#4 像素工具提示键盘可达 + z 令牌（a11y · 可维护性）**：`pixel-ui.css` 的 `.pyt-tooltip` 仅 `:hover` 显示，键盘 tab 用户看不到提示；新增 `:focus` / `:focus-within` 同步显示气泡。同时把硬编码 `z-index: 200` 收敛为 `var(--pyt-z-popover)`（对齐全站层级公约）。验证：`npm run build` 通过。
 
 - **#5 登录表单校验错误无障碍关联（a11y · 功能交互）**：`LoginForm` 校验失败时仅有 `role="alert"` 文案，未与出错输入框程序化关联。新增 `aria-invalid` + `aria-describedby="login-error"`（错误 `<p>` 补 `id`），屏读器聚焦出错框即播报原因；并为用户名/密码输入补 `name` 增强密码管理器自动填充可靠性。验证：`vue-tsc` 0 错 + 作用域 `vitest` LoginForm **3 passed**（含新增「出错框带 aria-invalid/-describedby」断言）。
-
-- **#6 全局键盘焦点环（a11y · WCAG 2.4.7 焦点可见）**：`styles.css` 此前所有交互元素（按钮/链接/输入/`[role=button]`）聚焦后无可见指示，键盘 tab 用户无法判断焦点落点。新增全局 `:focus-visible { outline: 3px solid #315c9a; outline-offset: 2px }`——仅键盘导航时显示焦点环，鼠标点击不打扰（`:focus-visible` 不命中鼠标聚焦）。验证：`npm run build` 通过。
-
-- **#7 尊重「减少动态效果」偏好（a11y · 前庭障碍友好 / NFR）**：`styles.css` 新增 `@media (prefers-reduced-motion: reduce)` 全局护栏，把 CSS `animation`/`transition` 收敛到 `0.01ms`、`scroll-behavior: auto`。系统开启「减弱动态效果」的用户不再被位移/淡入等过渡干扰；JS 动画（GSAP/Phaser）另由既有 `useReducedMotion` 治理，二者互补不冲突。验证：`npm run build` 通过。
-
-- **#8 移动端字号自适应锁定（移动端 NFR · 防布局抖动）**：`:root` 补 `-webkit-text-size-adjust: 100%` + `text-size-adjust: 100%`。此前 iOS（及部分安卓）在横竖屏切换/字号缩放时会自动放大正文，撑破像素小镇画布与固定面板布局；锁定为 100% 后由我们自己的响应式断点掌控字号。验证：`npm run build` 通过。
-
-- **#9 输入占位文字对比度（a11y · 文本对比 WCAG 1.4.3）**：浏览器默认 `::placeholder` 约 54% 灰，在 `#fffef8`/`#fff8e1` 浅色输入框上对比不足、弱视用户难辨。`styles.css` 统一 `::placeholder { color: #5a6560; opacity: 1 }`（足够对比的墨绿灰，opacity 拉满防半透明再变浅）。验证：`npm run build` 通过。
-
-- **#10 错误提示及时播报（a11y · 功能交互）**：`AppToast.vue` 此前恒为 `role="status"`（polite），错误提示常被屏读器延迟或跳过。改为按类型动态：错误用 `role="alert"` + `aria-live="assertive"`（即时打断播报），其余仍 `status`/`polite`（不打扰）。验证：`vue-tsc` 通过。
-
-- **#11 跳到主内容链接（a11y · WCAG 2.4.1 绕过重复块）**：`AppLayout.vue` 新增可聚焦 `skip-link`（键盘首个 Tab 即现，跳过头部直达 `#main-content`），`<main>` 补 `id="main-content"` + `tabindex="-1"` 作焦点落点；平时移出视口隐藏，获焦滑入（过渡受 #7 reduced-motion 护栏）。验证：`vue-tsc` + 作用域 `vitest` AppLayout 通过。
-
-- **#12 全屏页移动端高度回退（移动端 NFR）**：`AppLayout.vue` 全屏布局 `.app-main--fullscreen` 的 `min-height: 100vh` 叠加 `100dvh` 回退（与 #2 同源治理），消除移动端地址栏收展时全屏页底部留白/跳动。验证：`vue-tsc` 通过。
-
-- **#13 导航滚动定位（功能交互）**：`router.ts` 此前无 `scrollBehavior`，SPA 切页保留上一页滚动位置（点进新页却停在半中间）。新增：新导航滚到顶部、浏览器前进/后退恢复离开时位置、带 `hash` 的锚点跳转走平滑滚动（受 #7 reduced-motion 偏好约束）。验证：`vue-tsc` + 作用域 `vitest` router 通过。
 
 ## 2026-06-19 — 代码舞台 × 无尽闯关统一玩法 + 看学练测闭环（含 8 大非功能需求 + 实拍指南）
 
