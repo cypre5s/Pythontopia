@@ -77,12 +77,15 @@ def test_plan_returns_seven_day_layout_with_focus_kcs() -> None:
     assert all(count <= 4 for count in grouped.values())
 
 
-def test_plan_without_profile_returns_failed() -> None:
+def test_plan_without_profile_uses_cold_start_defaults() -> None:
     request = _request(profile=PlannerProfileSnapshot(has_profile=False))
     response = PathPlannerAgent().plan(request)
-    assert response.status == "FAILED"
-    assert not response.grounding_result.passed
-    assert response.nodes == []
+    assert response.status == "SUCCESS"
+    assert response.grounding_result.passed
+    assert response.nodes
+    assert any(node.node_type == "READ_RESOURCE" for node in response.nodes)
+    assert any(node.node_type == "SOLVE_PROBLEM" for node in response.nodes)
+    assert "缺少画像" not in response.goal_summary
 
 
 def test_classroom_quest_kcs_are_prioritised_on_day_one() -> None:

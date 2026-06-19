@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from pythontopia_graph.agents.boss.schemas import TestCase
 from pythontopia_graph.llm.provider import LlmResponse
 from pythontopia_graph.main import app
 

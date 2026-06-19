@@ -15,7 +15,6 @@ from pythontopia_graph.schemas.resource import (
     MindMapContent,
     PracticeContent,
     ProblemSpec,
-    ReadingContent,
     ResourceProduceRequest,
     SampleIo,
     StoryboardContent,

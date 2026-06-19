@@ -58,7 +58,6 @@ def test_layer3_does_not_contain_copyable_code() -> None:
 def test_unsafe_layer_is_downgraded() -> None:
     agent = DebugAgent()
     # 构造一个被 agent 误判为可粘贴代码的 hint，验证 downgrade 行为
-    original_build = agent._build_hint_layers
     def replacement(payload):  # type: ignore[no-untyped-def]
         return [
             HintLayer(layer=1, headline="L1", body="思考一下输入输出"),

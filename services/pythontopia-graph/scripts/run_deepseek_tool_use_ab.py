@@ -8,8 +8,9 @@ The comparison is intentionally narrow:
 
 By default it uses ``DEFAULT_TASKS`` from ``pythontopia_graph.eval.tool_use_eval``
 so the result stays comparable with the offline deterministic eval. Pass
-``--task-set challenge`` or ``--task-set challenge_v2`` for larger anti-overfit
-prompt sets. Credentials are loaded by ``OpenAiCompatProvider`` from
+``--task-set challenge``, ``--task-set challenge_v2``, ``--task-set
+challenge_v3``, ``--task-set challenge_v4``, ``--task-set challenge_v5``, or
+``--task-set challenge_v6`` for larger anti-overfit prompt sets. Credentials are loaded by ``OpenAiCompatProvider`` from
 ``deploy/.env`` or normal OpenAI-compatible environment variables. The script
 never prints secret values.
 """
@@ -81,7 +82,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--task-set",
         default="default",
-        choices=["default", "challenge", "challenge_v2"],
+        choices=[
+            "default",
+            "challenge",
+            "challenge_v2",
+            "challenge_v3",
+            "challenge_v4",
+            "challenge_v5",
+            "challenge_v6",
+        ],
         help="Prompt set to evaluate.",
     )
     parser.add_argument("--max-steps", type=int, default=4, help="Tool loop step budget.")

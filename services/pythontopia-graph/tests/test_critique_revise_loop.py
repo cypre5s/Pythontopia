@@ -6,14 +6,12 @@ reasons 为空/通过时不触发额外 LLM 调用。
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
 
 import pytest
 
 from pythontopia_graph.graph.resource_graph import ResourceGraph, ResourceGraphConfig
 from pythontopia_graph.llm.provider import LlmProvider, LlmResponse
 from pythontopia_graph.nodes.evidence_fetcher import (
-    EvidenceBundle,
     RagHit,
     StaticEvidenceFetcher,
 )

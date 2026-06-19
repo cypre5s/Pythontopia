@@ -11,7 +11,6 @@ from pythontopia_graph.graph.resource_graph import (
 from pythontopia_graph.llm.provider import LlmProvider, LlmResponse
 from pythontopia_graph.main import app
 from pythontopia_graph.nodes.evidence_fetcher import (
-    EvidenceBundle,
     RagHit,
     StaticEvidenceFetcher,
 )

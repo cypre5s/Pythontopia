@@ -36,25 +36,11 @@ class _CandidateKc:
 
 
 class PathPlannerAgent:
-    """据画像快照、掌握度与班级任务生成个性化 7 日路径节点；缺画像或未解锁 KC 时 fail fast。"""
+    """据画像快照、掌握度与班级任务生成个性化 7 日路径节点；新学生用默认画像冷启动。"""
 
     AGENT_NAME = AGENT_NAME
 
     def plan(self, request: PathPlannerRequest) -> PathPlannerResponse:
-        if not request.profile.has_profile:
-            return PathPlannerResponse(
-                user_id=request.user_id,
-                pack_id=request.pack_id,
-                goal_summary="缺少画像，无法规划。",
-                nodes=[],
-                safety_result=PathPlannerSafetyResult(passed=True),
-                grounding_result=PathPlannerGroundingResult(
-                    passed=False, reasons=["PROFILE_REQUIRED"]
-                ),
-                deterministic_signature=self._signature(request, []),
-                status="FAILED",
-            )
-
         kc_index = self._build_kc_index(request.kcs)
         unlocked_kcs = [kc for kc in request.kcs if kc.unlocked]
         if not unlocked_kcs:

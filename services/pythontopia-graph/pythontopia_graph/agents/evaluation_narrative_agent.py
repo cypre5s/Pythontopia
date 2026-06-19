@@ -11,11 +11,9 @@ import re
 from dataclasses import dataclass
 
 from pythontopia_graph.schemas.evaluation import (
-    EvaluationMetric,
     EvaluationNarrativeRequest,
     EvaluationNarrativeResponse,
     GroundingResult,
-    KcSummary,
     SafetyResult,
 )
 

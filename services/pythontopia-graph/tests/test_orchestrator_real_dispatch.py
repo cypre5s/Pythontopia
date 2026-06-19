@@ -11,13 +11,10 @@ from pythontopia_graph.graph.orchestrator_graph import OrchestratorGraph
 from pythontopia_graph.graph.orchestrator_session import reset_session
 from pythontopia_graph.llm.provider import LlmProvider, LlmResponse
 from pythontopia_graph.nodes.evidence_fetcher import (
-    EvidenceFetcher,
-    EvidenceBundle,
     RagHit,
     StaticEvidenceFetcher,
 )
 from pythontopia_graph.schemas.orchestrator import (
-    DispatchResult,
     OrchestratorRequest,
     PlanStep,
 )
@@ -276,13 +273,16 @@ async def test_orchestrator_real_dispatch_produces_artifacts() -> None:
     assert response.reply_md == "规划完成。"
     assert len(response.dispatch_results) >= 4
 
-    # dispatch_results 应含真产物（非旧式「已将…分派给…」文本）
-    # PathPlannerAgent 在无完整画像时诚实返回 FAILED（非播报式占位）
+    # dispatch_results 应含真产物（非旧式「已将…分派给…」文本）；
+    # PathPlannerAgent 对无画像新学生用默认画像冷启动，仍应产出真实路径 artifact。
     for dr in response.dispatch_results:
         if dr.agent == "PathPlannerAgent":
-            # 无画像时诚实 FAILED 是预期行为（非旧式播报）
             assert not dr.summary.startswith("已将")
-            assert "缺少画像" in dr.summary or "路径规划FAILED" in dr.summary
+            assert "缺少画像" not in dr.summary
+            assert dr.ok is True
+            assert dr.artifact is not None
+            assert dr.artifact.get("status") in {"SUCCESS", "PARTIAL"}
+            assert dr.artifact.get("node_count", 0) > 0
         else:
             assert dr.ok is True
             # 真产物摘要应不含旧式播报前缀
