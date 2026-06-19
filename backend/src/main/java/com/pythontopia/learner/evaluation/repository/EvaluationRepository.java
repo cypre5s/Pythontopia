@@ -130,6 +130,40 @@ public class EvaluationRepository {
         Math.max(1, Math.min(50, limit)));
   }
 
+  /**
+   * 周报自动生成用：自 {@code since} 起有真实学习活动（提交 / 矿洞 / 资源 / 掌握事件）的学生
+   * user_id（去重、升序）。仅纳入 STUDENT，避免给教师/未活动用户空跑评估。
+   */
+  public List<Long> findActiveLearnerIdsSince(OffsetDateTime since) {
+    return jdbcTemplate.query(
+        """
+        SELECT u.id FROM users u
+        WHERE u.role = 'STUDENT' AND (
+          EXISTS (SELECT 1 FROM practice_submission ps WHERE ps.user_id = u.id AND ps.submitted_at > ?)
+          OR EXISTS (SELECT 1 FROM bug_mine_session bm WHERE bm.user_id = u.id AND bm.opened_at > ?)
+          OR EXISTS (SELECT 1 FROM learning_resource lr WHERE lr.user_id = u.id AND lr.created_at > ?)
+          OR EXISTS (SELECT 1 FROM kc_mastery_event ke WHERE ke.user_id = u.id AND ke.created_at > ?)
+        )
+        ORDER BY u.id
+        """,
+        (rs, rowNum) -> rs.getLong("id"),
+        since,
+        since,
+        since,
+        since);
+  }
+
+  /** 幂等闸门：该用户在 {@code since} 之后是否已有评估（防一周内自动 + 手动重复生成）。 */
+  public boolean existsEvaluationCreatedAfter(Long userId, OffsetDateTime since) {
+    Boolean exists =
+        jdbcTemplate.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM learner_evaluation WHERE user_id = ? AND created_at > ?)",
+            Boolean.class,
+            userId,
+            since);
+    return Boolean.TRUE.equals(exists);
+  }
+
   public List<EvaluationMetricDto> findMetrics(Long evaluationId) {
     return jdbcTemplate.query(
         """

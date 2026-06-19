@@ -190,6 +190,19 @@ class LearnerEvaluationServiceTest {
         .isEqualTo("EVALUATION_ALREADY_ACTED");
   }
 
+  @Test
+  void weeklyEligibilitySkipsLearnersWithRecentReport() {
+    when(repository.findActiveLearnerIdsSince(any())).thenReturn(List.of(1L, 2L, 3L));
+    when(repository.existsEvaluationCreatedAfter(eq(1L), any())).thenReturn(false);
+    when(repository.existsEvaluationCreatedAfter(eq(2L), any())).thenReturn(true);
+    when(repository.existsEvaluationCreatedAfter(eq(3L), any())).thenReturn(false);
+
+    List<Long> needing = service.findLearnersNeedingWeeklyEvaluation();
+
+    // 2 号本周已有评估（自动或手动）→ 跳过，幂等不重复生成。
+    assertThat(needing).containsExactly(1L, 3L);
+  }
+
   private EvaluationDto persisted(
       Long id, Long draftId, Long activeId, EvaluationActedStatus status) {
     return new EvaluationDto(

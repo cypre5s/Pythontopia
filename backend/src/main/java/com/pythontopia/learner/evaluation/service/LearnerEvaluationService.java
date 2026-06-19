@@ -37,6 +37,8 @@ public class LearnerEvaluationService {
 
   static final Long DEFAULT_PACK_ID = 43L;
   static final int DEFAULT_PERIOD_DAYS = 7;
+  // 每周自动生成的去重窗口：近 6 天内已有评估（自动或手动）则本周跳过，保证幂等可重跑。
+  static final int WEEKLY_DEDUPE_DAYS = 6;
   static final int HISTORY_LIMIT_DEFAULT = 8;
   static final int HISTORY_LIMIT_MAX = 30;
   static final int TOP_KC_LIMIT = 5;
@@ -245,6 +247,25 @@ public class LearnerEvaluationService {
   public List<EvaluationDto> listForUser(Long userId, Integer limit) {
     int effective = limit == null ? HISTORY_LIMIT_DEFAULT : Math.min(HISTORY_LIMIT_MAX, Math.max(1, limit));
     return evaluationRepository.listForUser(userId, effective);
+  }
+
+  /**
+   * 每周自动生成用：近 {@value #DEFAULT_PERIOD_DAYS} 天有学习活动、且近
+   * {@value #WEEKLY_DEDUPE_DAYS} 天内尚无评估（自动或手动）的学生 user_id 列表。
+   * 仅做只读筛选，实际生成由调度器逐个调 {@link #compute}（各自独立事务、单点失败隔离）。
+   */
+  @Transactional(readOnly = true)
+  public List<Long> findLearnersNeedingWeeklyEvaluation() {
+    OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+    OffsetDateTime activitySince = now.minusDays(DEFAULT_PERIOD_DAYS);
+    OffsetDateTime dedupeSince = now.minusDays(WEEKLY_DEDUPE_DAYS);
+    List<Long> needing = new ArrayList<>();
+    for (Long userId : evaluationRepository.findActiveLearnerIdsSince(activitySince)) {
+      if (!evaluationRepository.existsEvaluationCreatedAfter(userId, dedupeSince)) {
+        needing.add(userId);
+      }
+    }
+    return needing;
   }
 
   @Transactional
