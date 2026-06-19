@@ -52,5 +52,6 @@ const showCompanion = computed(() => route.meta.hideCompanion !== true);
 
 .app-main--fullscreen {
   min-height: 100vh;
+  min-height: 100dvh;
 }
 </style>

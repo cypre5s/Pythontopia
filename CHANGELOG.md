@@ -39,6 +39,8 @@
 
 - **#11 跳到主内容链接（a11y · WCAG 2.4.1 绕过重复块）**：`AppLayout.vue` 新增可聚焦 `skip-link`（键盘首个 Tab 即现，跳过头部直达 `#main-content`），`<main>` 补 `id="main-content"` + `tabindex="-1"` 作焦点落点；平时移出视口隐藏，获焦滑入（过渡受 #7 reduced-motion 护栏）。验证：`vue-tsc` + 作用域 `vitest` AppLayout 通过。
 
+- **#12 全屏页移动端高度回退（移动端 NFR）**：`AppLayout.vue` 全屏布局 `.app-main--fullscreen` 的 `min-height: 100vh` 叠加 `100dvh` 回退（与 #2 同源治理），消除移动端地址栏收展时全屏页底部留白/跳动。验证：`vue-tsc` 通过。
+
 ## 2026-06-19 — 代码舞台 × 无尽闯关统一玩法 + 看学练测闭环（含 8 大非功能需求 + 实拍指南）
 
 > 把「代码舞台」（`/code-theater`）与「无尽闯关」（`/endless` + `/arena`）两条做题链路在玩法与实现上统一，并补全 练→测 掌握度/画像回流闭环；同步治理 8 大非功能需求（可用性 a11y / 安全防离线刷关 / 可维护性单源去重 / 可信 AI 接地等）。
