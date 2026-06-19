@@ -14,6 +14,7 @@ import BossSprite from '@/components/boss/BossSprite.vue';
 import JudgeResultPanel from '@/components/challenge/JudgeResultPanel.vue';
 import { KindRouter } from '@/components/arena';
 import KnowledgeConstellation from '@/components/expedition/KnowledgeConstellation.vue';
+import ExpeditionCanvas from '@/components/expedition/ExpeditionCanvas.vue';
 import { useRogueRunStore } from '@stores/rogueRun';
 import { useLearningStore } from '@stores/learning';
 import { kcDisplayName } from '@/data/kcNames';
@@ -44,9 +45,18 @@ const focusFromQuery = computed<number | null>(() => {
 });
 const focusChoice = ref<number | null>(run.focusChapter ?? focusFromQuery.value);
 
+// 地图视图：像素远征塔（Phaser 渐进增强）/ 列表（移动端 + 降级真源）。窄屏默认列表。
+const mapView = ref<'pixel' | 'list'>(
+  typeof window !== 'undefined' && window.innerWidth >= 900 ? 'pixel' : 'list',
+);
+
 let timer: number | null = null;
 onMounted(() => {
   if (typeof window !== 'undefined') timer = window.setInterval(() => run.tickSecond(), 1000);
+});
+onMounted(() => {
+  // 跨设备/会话续局：本地无进行中的局时，静默拉取后端活跃 run 续上。
+  if (run.phase === 'idle') void run.resumeFromBackend();
 });
 onBeforeUnmount(() => {
   if (timer !== null) window.clearInterval(timer);
@@ -55,12 +65,23 @@ onBeforeUnmount(() => {
 function onStart(): void {
   void run.startRun(focusChoice.value);
 }
+/** 再来一局 / 弃局重开：显式新开，不续旧局。 */
+function onRestart(): void {
+  void run.startRun(focusChoice.value, { fresh: true });
+}
+/** 弃局：清后端活跃 run + 本地缓存，回到起始页。 */
+function onAbandon(): void {
+  void run.abort();
+}
+/** 返回小镇：保留当前 run（已实时持久化后端），下次回来或换设备可续局。 */
 function onExit(): void {
-  run.abort();
   void router.push('/world');
 }
 function onEnter(node: RogueNode): void {
   void run.enterNode(node.id);
+}
+function onEnterId(id: string): void {
+  void run.enterNode(id);
 }
 function onSubmit(): void {
   void run.submitChallenge();
@@ -302,10 +323,69 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
         class="exp-map"
         data-testid="expedition-map"
       >
-        <p class="exp-map__hint">
-          点亮的节点可前往；选了一个，同层其它岔路就走不回头了。一路打到顶层 BOSS 即通关。
-        </p>
+        <div class="exp-map__bar">
+          <p class="exp-map__hint">
+            点亮的节点可前往；选了一个，同层其它岔路就走不回头了。一路打到顶层 BOSS 即通关。
+          </p>
+          <div class="exp-map__tools">
+            <div
+              class="exp-view-toggle"
+              role="group"
+              aria-label="地图视图切换"
+            >
+              <button
+                type="button"
+                class="exp-view-btn"
+                :class="{ 'is-active': mapView === 'pixel' }"
+                :aria-pressed="mapView === 'pixel'"
+                data-testid="expedition-view-pixel"
+                @click="mapView = 'pixel'"
+              >
+                🗼 像素塔
+              </button>
+              <button
+                type="button"
+                class="exp-view-btn"
+                :class="{ 'is-active': mapView === 'list' }"
+                :aria-pressed="mapView === 'list'"
+                data-testid="expedition-view-list"
+                @click="mapView = 'list'"
+              >
+                ☰ 列表
+              </button>
+            </div>
+            <button
+              type="button"
+              class="exp-abandon"
+              data-testid="expedition-abandon"
+              @click="onAbandon"
+            >
+              🏳 弃局
+            </button>
+          </div>
+        </div>
+
+        <!-- 像素远征塔（Phaser 单例渐进增强）：点像素节点 = 同 DOM 的 run.enterNode -->
         <div
+          v-if="mapView === 'pixel'"
+          class="exp-tower"
+          data-testid="expedition-tower"
+        >
+          <ExpeditionCanvas
+            :nodes="run.nodes"
+            :layers="run.layers"
+            :current-node-id="run.currentNodeId"
+            :phase="run.phase"
+            :hp="run.hp"
+            :max-hp="run.maxHp"
+            :score="run.score"
+            @select="onEnterId"
+          />
+        </div>
+
+        <!-- 列表视图（移动端 / 降级交互真源） -->
+        <div
+          v-else
           ref="mapInner"
           class="exp-map__inner"
         >
@@ -534,7 +614,7 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
           <PyButton
             variant="primary"
             test-id="expedition-again"
-            @click="onStart"
+            @click="onRestart"
           >
             再来一局
           </PyButton>
@@ -748,11 +828,75 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
   gap: 12px;
   padding: 6px 4px 24px;
 }
+.exp-map__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
 .exp-map__hint {
   margin: 0;
   font-size: 12px;
   color: var(--pyt-color-text-muted);
-  text-align: center;
+  text-align: left;
+  flex: 1 1 240px;
+}
+.exp-map__tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.exp-view-toggle {
+  display: inline-flex;
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-md);
+  overflow: hidden;
+}
+.exp-view-btn {
+  font-family: inherit;
+  font-size: 12px;
+  padding: 4px 10px;
+  cursor: pointer;
+  border: none;
+  background: var(--pyt-color-bg-elevated);
+  color: var(--pyt-color-text-hint);
+}
+.exp-view-btn.is-active {
+  background: var(--pyt-color-gold);
+  color: var(--pyt-color-primary-dark);
+  font-weight: 700;
+}
+.exp-abandon {
+  font-family: inherit;
+  font-size: 12px;
+  padding: 4px 10px;
+  cursor: pointer;
+  color: var(--pyt-color-text-hint);
+  background: transparent;
+  border: 1px dashed var(--pyt-color-border);
+  border-radius: var(--pyt-radius-md);
+}
+.exp-abandon:hover {
+  color: var(--pyt-color-danger);
+  border-color: var(--pyt-color-danger);
+  border-style: solid;
+}
+/* 像素远征塔画布容器：深色背景配 Phaser 渲染（同代码剧场舞台的暗色例外）。
+   高度收敛到视口内，让整座塔（起点层→顶层 BOSS）一屏可见，不必滚动页面。 */
+.exp-tower {
+  flex: 1 1 auto;
+  height: clamp(380px, calc(100dvh - 220px), 900px);
+  border: 2px solid var(--pyt-color-border-strong);
+  border-radius: var(--pyt-radius-md);
+  overflow: hidden;
+  background: #161126;
+  box-shadow: 3px 3px 0 rgba(74, 54, 29, 0.25);
+}
+@media (max-width: 900px) {
+  .exp-tower {
+    height: clamp(320px, calc(100dvh - 200px), 720px);
+  }
 }
 .exp-map__inner {
   position: relative;
