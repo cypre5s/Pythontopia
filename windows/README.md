@@ -100,14 +100,25 @@ dotnet publish src/Pythontopia.App/Pythontopia.App.csproj -c Release -p:Platform
 - 自包含：`coreclr.dll`（.NET 运行时）+ `Microsoft.WinUI.dll` / `Microsoft.WindowsAppRuntime*`（Windows App SDK，`WindowsAppSDKSelfContained=true`）一并打包，约 350 个文件、~162 MB，整目录拷贝到任意 Win10/11 机器即可运行。
 - 本仓库已在 WSL 互操作 dotnet.exe 下验证该 publish 成功产出上述 .exe 目录（不在 Windows 运行期内验证）。
 
-### 已部署（在线下载）
+### 单文件 .exe 发布（匹配 guide 直链）
 
-加固后的自包含包（R2R + 剥离 PDB）已打包为 `windows/dist/pythontopia-windows.zip`（本地，未入库）并上传到生产 ECS 的 Nginx 直出目录 `/opt/pythontopia/downloads/`：
+为让 guide 页既有链接 `/downloads/pythontopia-windows.exe` 直接可用，另出**真·单文件自包含 exe**（原生库自解压 + 压缩，运行期解压到临时目录）：
 
-- 下载地址：`http://47.120.29.62/downloads/pythontopia-windows.zip`（HTTP 200，`application/zip`，约 74MB，支持断点续传）
-- 校验：`http://47.120.29.62/downloads/pythontopia-windows.zip.sha256`（SHA-256 `351f91a3…824e2`，上传后本地⟷远端比对一致）
-- 用法：下载 zip → 解压到任意目录 → 运行 `Pythontopia.App.exe`（自包含，无需预装 .NET / Windows App SDK）。
-- **guide 页接线（待前端发版）**：`guideSections.ts` 中 Windows 项 `href` 应为 `/downloads/pythontopia-windows.zip`（产物是自包含目录的 zip，非单 exe）；下载计数复用既有 `POST /api/downloads/{key}/hit` + `GET /api/downloads/{key}`（key 如 `windows_exe`，首次点击 UPSERT 自动建行）。
+```powershell
+dotnet publish src/Pythontopia.App/Pythontopia.App.csproj -c Release -p:Platform=x64 -r win-x64 `
+  -p:SelfContained=true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
+  -p:EnableCompressionInSingleFile=true -p:PublishReadyToRun=false -p:PublishDir=bin/singlefile/
+```
+
+产物仅 1 个文件 `bin/singlefile/Pythontopia.App.exe`（~64MB，无 .pdb）。**注意**：WinUI 3 单文件自解压需在 Windows 上实测启动一次；若个别环境自解压原生 WinUI 失败，回退用下方 .zip 目录包（保证可用）。
+
+### 已部署（在线下载，已验证 HTTP 200 + SHA-256 比对一致）
+
+两份产物均已上传生产 ECS Nginx 直出目录 `/opt/pythontopia/downloads/`（本地产物 `windows/dist/` 与 `windows/bin/singlefile/` 不入库）：
+
+- **单文件 exe（主，匹配 guide 链接）**：`http://47.120.29.62/downloads/pythontopia-windows.exe`（~64MB，下载即运行）+ `.sha256`
+- **目录 zip（备，R2R + 剥离 PDB）**：`http://47.120.29.62/downloads/pythontopia-windows.zip`（~74MB，解压后运行 `Pythontopia.App.exe`）+ `.sha256`
+- guide 页 Windows 按钮（href=`…/pythontopia-windows.exe`）现可直接下载，**无需前端重建**。下载计数后端 `POST /api/downloads/{key}/hit` + `GET /api/downloads/{key}` 已部署（认证态可用）；guide 按钮接计数为前端可选增强。
 
 ### 像素小镇操作
 
