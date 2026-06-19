@@ -93,4 +93,41 @@ describe('rogueRun store', () => {
     expect(run.momentum).toBe(0);
     expect(run.nodes.find((n) => n.id === start!.id)?.state).not.toBe('cleared');
   });
+
+  it('relic 沉静心法(calm_mind) softens damage from -2 to -1', async () => {
+    const run = useRogueRunStore();
+    run.startRun(null);
+    run.relics.push('calm_mind');
+    const start = run.nodes.find((n) => n.layer === 0);
+    const hp0 = run.hp;
+    judgeMock.judge.mockResolvedValue({
+      problemId: 'p1', passed: false, passedTestCases: 0, totalTestCases: 1, score: 0, feedback: 'wa',
+    });
+    await run.enterNode(start!.id);
+    await run.submitChallenge();
+    expect(run.hp).toBe(hp0 - 1);
+  });
+
+  it('relic 连题学者(combo_scholar) boosts first-clear score over the no-relic baseline', async () => {
+    judgeMock.judge.mockResolvedValue({
+      problemId: 'p1', passed: true, passedTestCases: 1, totalTestCases: 1, score: 80, feedback: 'ok',
+    });
+    // 基线（无增益）：battle 难度 2 → base 20, momentum 0 → 20 分。
+    const baseRun = useRogueRunStore();
+    baseRun.startRun(null);
+    const baseStart = baseRun.nodes.find((n) => n.layer === 0);
+    await baseRun.enterNode(baseStart!.id);
+    await baseRun.submitChallenge();
+    const baseScore = baseRun.score;
+
+    // 全新一局 + 增益：同样首通一关，分数应更高（×1.2）。
+    setActivePinia(createPinia());
+    const relicRun = useRogueRunStore();
+    relicRun.startRun(null);
+    relicRun.relics.push('combo_scholar');
+    const relicStart = relicRun.nodes.find((n) => n.layer === 0);
+    await relicRun.enterNode(relicStart!.id);
+    await relicRun.submitChallenge();
+    expect(relicRun.score).toBeGreaterThan(baseScore);
+  });
 });

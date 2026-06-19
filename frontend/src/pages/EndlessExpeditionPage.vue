@@ -16,6 +16,7 @@ import { KindRouter } from '@/components/arena';
 import { useRogueRunStore } from '@stores/rogueRun';
 import { kcDisplayName } from '@/data/kcNames';
 import { NODE_KIND_ICON, NODE_KIND_LABEL } from '@/data/rogueConfig';
+import { relicById } from '@/data/rogueRelics';
 import { MAIN_QUEST_BOSSES } from '@/data/bossCatalog';
 import type { ChallengeResult } from '@/api/dto/CodeChallenge';
 import type { RogueNode } from '@/types/rogue';
@@ -77,6 +78,13 @@ const challengeResult = computed<ChallengeResult | null>(() => {
 function star(n: number): string {
   return '★'.repeat(n) + '☆'.repeat(Math.max(0, 5 - n));
 }
+function relicIcon(id: string): string {
+  return relicById(id)?.icon ?? '◆';
+}
+function relicTitle(id: string): string {
+  const r = relicById(id);
+  return r ? `${r.name}：${r.desc}` : id;
+}
 function nodeClass(node: RogueNode): Record<string, boolean> {
   return {
     'exp-node': true,
@@ -136,6 +144,20 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
           </span>
         </div>
       </header>
+
+      <div
+        v-if="run.phase !== 'idle' && run.relics.length > 0"
+        class="exp-relics"
+        data-testid="expedition-relics"
+      >
+        <span class="exp-relics__label">学习增益</span>
+        <span
+          v-for="id in run.relics"
+          :key="id"
+          class="exp-relic"
+          :title="relicTitle(id)"
+        >{{ relicIcon(id) }}</span>
+      </div>
 
       <!-- 起始：选聚焦章节 + 开始 -->
       <div
@@ -427,6 +449,25 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
 .exp-stat--hp .exp-stat__value {
   color: var(--pyt-color-danger);
   letter-spacing: 1px;
+}
+
+/* 学习增益条 */
+.exp-relics {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: rgba(237, 233, 254, 0.6);
+  border: 1px solid rgba(124, 92, 196, 0.4);
+  border-radius: var(--pyt-radius-md);
+}
+.exp-relics__label {
+  font-size: 11px;
+  color: #4b3b86;
+}
+.exp-relic {
+  font-size: 18px;
+  cursor: help;
 }
 
 .exp-start,

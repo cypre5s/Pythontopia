@@ -13,6 +13,7 @@ import {
   NODE_KIND_POOLS,
   REST_HEAL,
 } from '@/data/rogueConfig';
+import { ROGUE_RELICS } from '@/data/rogueRelics';
 import { useKcFrontier } from '@/composables/useKcFrontier';
 import { useChallengeJudge, isJudgeUnavailable } from '@/composables/useChallengeJudge';
 import { useProfileSignals } from '@/composables/useProfileSignals';
@@ -43,6 +44,7 @@ interface PersistShape {
   momentum: number;
   bestMomentum: number;
   score: number;
+  relics: string[];
   history: RogueHistoryEntry[];
 }
 
@@ -76,7 +78,10 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
   const momentum = ref(0);
   const bestMomentum = ref(0);
   const score = ref(0);
+  const relics = ref<string[]>([]);
   const history = ref<RogueHistoryEntry[]>([]);
+
+  const hasRelic = (id: string): boolean => relics.value.includes(id);
 
   // 当前进入的节点 + 题目（不持久化：刷新中途答题安全退回地图）。
   const activeNode = ref<RogueNode | null>(null);
@@ -115,6 +120,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
         momentum: momentum.value,
         bestMomentum: bestMomentum.value,
         score: score.value,
+        relics: relics.value,
         history: history.value,
       };
       window.localStorage.setItem(PERSIST_KEY, JSON.stringify(snap));
@@ -136,7 +142,26 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     momentum.value = p.momentum ?? 0;
     bestMomentum.value = p.bestMomentum ?? 0;
     score.value = p.score ?? 0;
+    relics.value = Array.isArray(p.relics) ? p.relics : [];
     history.value = Array.isArray(p.history) ? p.history : [];
+  }
+
+  /** 获得一件未拥有的学习增益（宝箱 / 精英通关）；集齐则给提示不重复发。 */
+  function grantRelic(): void {
+    const owned = new Set(relics.value);
+    const candidates = ROGUE_RELICS.filter((r) => !owned.has(r.id));
+    if (candidates.length === 0) {
+      toast.show('已集齐全部学习增益', 'info');
+      return;
+    }
+    const relic = candidates[Math.floor(Math.random() * candidates.length)];
+    if (!relic) return;
+    relics.value = [...relics.value, relic.id];
+    if (relic.id === 'sturdy_notes') {
+      maxHp.value += 1;
+      hp.value += 1;
+    }
+    toast.show(`获得学习增益：${relic.icon} ${relic.name}`, 'success');
   }
 
   function resolveChallenge(kind: RogueNodeKind, _layer: number, usedKcs: Set<string>) {
@@ -169,6 +194,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     momentum.value = 0;
     bestMomentum.value = 0;
     score.value = 0;
+    relics.value = [];
     history.value = [];
     summaryReported.value = false;
     clearActive();
@@ -207,15 +233,16 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
 
     // 非战斗节点（营地 / 宝箱）即时结算，不出题。
     if (node.kind === 'rest') {
-      hp.value = Math.min(maxHp.value, hp.value + REST_HEAL);
+      const heal = REST_HEAL + (hasRelic('focus_lens') ? 1 : 0);
+      hp.value = Math.min(maxHp.value, hp.value + heal);
       markCleared(node);
-      toast.show(`营地休整：恢复 ${REST_HEAL} 点体力`, 'success');
+      toast.show(`营地休整：恢复 ${heal} 点体力`, 'success');
       persist();
       return;
     }
     if (node.kind === 'chest') {
       markCleared(node);
-      toast.show('发现资源宝箱：可去百晓工坊生成本知识点的专属资源', 'success');
+      grantRelic();
       persist();
       return;
     }
@@ -245,7 +272,8 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     const base = node.difficulty * 10;
     const momentumBonus = Math.round(base * momentum.value * 0.1);
     const kindMult = node.kind === 'elite' || node.kind === 'boss' ? 1.5 : 1;
-    return Math.round((base + momentumBonus) * kindMult);
+    const relicMult = hasRelic('combo_scholar') ? 1.2 : 1;
+    return Math.round((base + momentumBonus) * kindMult * relicMult);
   }
 
   async function submitChallenge(): Promise<void> {
@@ -271,11 +299,16 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
         momentum.value += 1;
         if (momentum.value > bestMomentum.value) bestMomentum.value = momentum.value;
         markCleared(node);
+        // 精英通关给一件学习增益（roguelike 成长）。
+        if (node.kind === 'elite') grantRelic();
       } else {
         const resilience = signals.value.resilience ?? 0.5;
-        // 温和：低韧性扣得更少，避免逼脆弱的学生。
-        hp.value = Math.max(0, hp.value - (resilience < 0.4 ? 1 : 2));
-        momentum.value = 0;
+        // 温和：低韧性扣得更少，避免逼脆弱的学生；「沉静心法」再 -1（至少扣 1）。
+        let loss = resilience < 0.4 ? 1 : 2;
+        if (hasRelic('calm_mind')) loss = Math.max(1, loss - 1);
+        hp.value = Math.max(0, hp.value - loss);
+        // 「复盘回气」：气势减半而非清零。
+        momentum.value = hasRelic('second_wind') ? Math.floor(momentum.value / 2) : 0;
       }
       void maybeReportStar();
       persist();
@@ -352,6 +385,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     momentum,
     bestMomentum,
     score,
+    relics,
     history,
     activeNode,
     activeProblem,
