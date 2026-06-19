@@ -191,7 +191,7 @@ GitHub Actions `.github/workflows/windows.yml` 在 `windows-latest` 上构建 Co
 - **小镇嵌入（决策）**：小镇以独立窗口（独立进程）从 `TownPage` 启动，`TownViewModel` 现做单实例生命周期管理（运行中禁用启动按钮、进程退出后自动复位状态）。**真正的窗口内嵌**需把 `Pythontopia.Game` 的 MonoGame 后端从 `DesktopGL`（SDL/OpenGL，自带窗口）切到 `WindowsDX` + `SwapChainPanel`——这会让 Game 变为**仅 Windows 可构建**，破坏当前「Core/Game 跨平台、WSL 互操作可构建」的设计属性，且无法在本机运行期验证；故保留为需在 Windows 上落地与回归验证的显式后续决策，不在本次盲改。
 - **无尽远征像素塔（决策）**：`/expedition` 的「像素远征塔」用 **WinUI 原生 `Canvas`**（`ExpeditionPage` code-behind 按 run 引擎的节点图实时绘制节点按钮 + 连边，layer 0 在底、BOSS 在顶）实现，与页内 run 状态同进程联动；顶部「🗼 像素塔 / ☰ 列表」双视图（与 web 一致，列表为交互真源）。未采用 MonoGame 内嵌（同「小镇嵌入」理由：WindowsDX + SwapChainPanel 会破坏 Game 跨平台构建且无法本机验证）。
 - **原生外壳**：`MainWindow` 启用 Mica 系统背景（`MicaBackdrop`，Win11 生效、旧系统优雅降级）+ `ExtendsContentIntoTitleBar` 自定义标题栏（品牌徽标），并按导航项设置页头标题、在导航面板展示当前用户。品牌色板与卡片样式集中在 `App.xaml`（`BrandPrimaryBrush` / `BrandHeaderBrush` / `PytCardBorderStyle`）。
-- **Windows 原生适配**：启动时按主显示器工作区居中（`DisplayArea` + `AppWindow.Move`）；`app.manifest` 声明 PerMonitorV2 DPI 感知；`.csproj` 写入产品/版本元数据与 `NeutralLanguage=zh-CN`；未打包自包含发布（`WindowsPackageType=None` + `WindowsAppSDKSelfContained` + `SelfContained`）。**待改进**：`.exe` 自定义图标（当前用系统默认，缺 `.ico` 资产）。
+- **Windows 原生适配**：启动时按主显示器工作区居中（`DisplayArea` + `AppWindow.Move`）；`app.manifest` 声明 PerMonitorV2 DPI 感知；`.csproj` 写入产品/版本元数据与 `NeutralLanguage=zh-CN`；`ApplicationIcon=Assets\app.ico`（7 档分辨率 16–256，嵌入 .exe）；未打包自包含发布（`WindowsPackageType=None` + `WindowsAppSDKSelfContained` + `SelfContained`）。
 - **HUD 字体**：内置 ASCII 5x7 位图字体，HUD/提示使用对象的 ASCII 标识（如 `npc_mayor_py`、`/profile-room`）；地图里的中文 `label` 不由该字体渲染。
 - **导师 SSE**：`ApiClient.AskTutorStreamAsync` 已实现，并由 `WorkshopPage` 的 ASK 意图分派消费（逐 `delta` 拼接答案）。
 - **SSE 复用**：`tutor/ask`、`workshop/resources/stream`、`orchestrator/turn/stream` 共用一个 `StreamEventsAsync` 解析器；`AskTutorStreamAsync` 产出 `data` 字符串，资源/总管流产出带事件名的 `SseEvent`。
@@ -200,3 +200,5 @@ GitHub Actions `.github/workflows/windows.yml` 在 `windows-latest` 上构建 Co
 ## 资源与许可
 
 地图瓦片 `tilemap_packed.png` 来自 Kenney Tiny Town（见 `src/Pythontopia.Game/Assets/tilesets/kenney-tiny-town-License.txt`）。代码层 MIT；像素资产遵循各自 CC0 / CC-BY / CC-BY-SA / OFL 许可，详见仓库根 `LICENSE-ART.md`。
+
+应用图标 `src/Pythontopia.App/Assets/app.ico` 为本项目原创品牌图标（AI 生成的像素风 Python 学习小镇徽标，非任何商业像素游戏官方素材），用于 .exe 与窗口图标。
