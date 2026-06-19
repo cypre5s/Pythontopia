@@ -5,20 +5,50 @@
  */
 import { computed, onUnmounted, ref } from 'vue';
 import { useFeynmanStore } from '@/stores/feynman';
+import { useToastStore } from '@stores/toast';
 
 const ROUND_SECONDS = 30;
 const HIT_SCORE = 10;
 const WRONG_PENALTY = 4;
+const COMBO_BONUS = 5;
+const BEST_KEY = 'pyt:bug-hunter-best';
 
 const store = useFeynmanStore();
+const toast = useToastStore();
 
 type Phase = 'idle' | 'playing' | 'done';
 const phase = ref<Phase>('idle');
 const remaining = ref(ROUND_SECONDS);
 const score = ref(0);
+const streak = ref(0);
+const bestScore = ref(readBest());
 const selected = ref<Set<number>>(new Set());
-const result = ref<{ hits: number; wrong: number; missed: number; perfect: boolean } | null>(null);
+const result = ref<{
+  hits: number;
+  wrong: number;
+  missed: number;
+  perfect: boolean;
+  comboBonus: number;
+} | null>(null);
 let timerId: number | undefined;
+
+function readBest(): number {
+  try {
+    const raw = window.localStorage.getItem(BEST_KEY);
+    const value = raw ? Number(raw) : 0;
+    return Number.isFinite(value) ? value : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function persistBest(value: number): void {
+  try {
+    window.localStorage.setItem(BEST_KEY, String(value));
+  } catch {
+    /* 隐私模式禁用 localStorage 时忽略 */
+  }
+}
 
 const hunt = computed(() => store.bugHunt);
 const lines = computed<string[]>(() =>
@@ -92,10 +122,22 @@ function finish(): void {
   }
   const missed = [...bugSet.value].filter((index) => !selected.value.has(index)).length;
   const perfect = hits > 0 && missed === 0 && wrong === 0;
-  // 命中得分、误报扣分；全对则按剩余秒数给时间奖励。
+  // 连胜：连续完美命中累计、给逐级加成；非完美清零。
+  streak.value = perfect ? streak.value + 1 : 0;
+  const comboBonus = perfect ? (streak.value - 1) * COMBO_BONUS : 0;
+  // 命中得分、误报扣分；全对则按剩余秒数给时间奖励 + 连胜加成。
   const timeBonus = perfect ? Math.max(0, remaining.value) : 0;
-  score.value = Math.max(0, hits * HIT_SCORE - wrong * WRONG_PENALTY + timeBonus);
-  result.value = { hits, wrong, missed, perfect };
+  score.value = Math.max(0, hits * HIT_SCORE - wrong * WRONG_PENALTY + timeBonus + comboBonus);
+  result.value = { hits, wrong, missed, perfect, comboBonus };
+  if (score.value > bestScore.value) {
+    bestScore.value = score.value;
+    persistBest(bestScore.value);
+  }
+  if (perfect) {
+    toast.show(`完美命中！${hunt.value?.hintMd ?? ''}`.trim(), 'success');
+  } else {
+    toast.show('看看高亮的正确 bug 行，再讲一遍就真懂了', 'info');
+  }
 }
 
 function lineClass(index: number): string {
@@ -126,6 +168,20 @@ onUnmounted(clearTimer);
         </p>
       </div>
       <div class="bug-hunter__meta">
+        <span
+          v-if="streak > 1"
+          class="bug-hunter__streak"
+          data-testid="bug-hunter-streak"
+        >
+          连胜 ×{{ streak }}
+        </span>
+        <span
+          v-if="bestScore > 0"
+          class="bug-hunter__best"
+          data-testid="bug-hunter-best"
+        >
+          最高 {{ bestScore }}
+        </span>
         <span
           v-if="phase === 'playing'"
           class="bug-hunter__timer"
@@ -205,7 +261,7 @@ onUnmounted(clearTimer);
         >
           <strong>{{ result.perfect ? '完美命中！' : '本局结束' }}</strong>
           命中 {{ result.hits }} · 误报 {{ result.wrong }} · 漏判 {{ result.missed }} ·
-          得分 {{ score }}。
+          得分 {{ score }}<span v-if="result.comboBonus > 0">（含连胜 +{{ result.comboBonus }}）</span>。
           <span class="bug-hunter__teach-tip">
             想真正"出师"？在下方用一句话讲清这行为什么错，再让学弟改对跑真判题。
           </span>
@@ -228,6 +284,7 @@ onUnmounted(clearTimer);
   gap: var(--pyt-space-3);
   padding: var(--pyt-space-4);
   border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-lg, 8px);
   background: var(--pyt-color-bg-elevated);
   box-shadow: var(--pyt-shadow-card);
 }
@@ -274,6 +331,22 @@ onUnmounted(clearTimer);
   color: var(--pyt-color-text-accent, var(--pyt-color-primary));
 }
 
+.bug-hunter__streak {
+  font-family: var(--pyt-font-pixel);
+  font-size: var(--pyt-font-size-sm);
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--pyt-color-warning-bg);
+  color: var(--pyt-color-text-hint);
+  border: 1px solid var(--pyt-color-warning);
+}
+
+.bug-hunter__best {
+  font-family: var(--pyt-font-mono);
+  font-size: var(--pyt-font-size-sm);
+  color: var(--pyt-color-text-muted);
+}
+
 .bug-hunter__action {
   border: 2px solid var(--pyt-color-border-strong);
   background: var(--pyt-color-bg-soft);
@@ -304,8 +377,10 @@ onUnmounted(clearTimer);
   padding: 0;
   list-style: none;
   border: 2px solid var(--pyt-color-text-hint);
+  border-radius: var(--pyt-radius-sm, 4px);
   background: var(--pyt-color-terminal-bg);
   overflow: hidden;
+  font-size: var(--pyt-font-size-sm);
 }
 
 .code-line {

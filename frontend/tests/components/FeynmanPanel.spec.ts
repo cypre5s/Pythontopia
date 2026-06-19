@@ -67,8 +67,8 @@ describe('FeynmanPanel', () => {
     expect(wrapper.get('[data-testid="feynman-code"]').text()).toContain('print(x)');
     expect(wrapper.get('[data-testid="feynman-judge"]').text()).toContain('等待学弟提交可判题代码');
     const evidence = wrapper.get('[data-testid="feynman-evidence-chain"]').text();
-    expect(evidence).toContain('event #101');
-    expect(evidence).toContain('误解');
+    expect(evidence).toContain('学习记录 #101');
+    expect(evidence).toContain('误区');
   });
 
   it('提交教学输入后展示学弟回复、修正点、判题结果与证据回链', async () => {
@@ -87,7 +87,7 @@ describe('FeynmanPanel', () => {
     expect(wrapper.get('[data-testid="feynman-fix"]').text()).toContain('比较和赋值');
     expect(wrapper.get('[data-testid="feynman-code"]').text()).toContain('print(x)');
     expect(wrapper.get('[data-testid="feynman-judge"]').text()).toContain('隐藏用例通过');
-    expect(wrapper.get('[data-testid="feynman-evidence-chain"]').text()).toContain('event #102');
+    expect(wrapper.get('[data-testid="feynman-evidence-chain"]').text()).toContain('学习记录 #102');
   });
 
   it('未开始会话时教学按钮禁用，避免提交无 session 的解释', () => {

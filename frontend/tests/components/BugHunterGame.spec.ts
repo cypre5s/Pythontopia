@@ -25,6 +25,7 @@ function seedSession(): void {
 describe('BugHunterGame', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
+    localStorage.clear();
     mocks.huntFeynmanBug.mockReset();
     mocks.huntFeynmanBug.mockResolvedValue({
       source: 'real_misconception',

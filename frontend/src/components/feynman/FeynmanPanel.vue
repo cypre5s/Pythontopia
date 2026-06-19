@@ -253,29 +253,29 @@ async function submitJudge(): Promise<void> {
       class="feynman-panel__evidence"
       data-testid="feynman-evidence-chain"
     >
-      <h3>玻璃盒证据链</h3>
+      <h3>学习足迹 · 全程可溯源</h3>
       <ol>
         <li>
-          <strong>误解</strong>
+          <strong>误区</strong>
           <span v-if="misconceptions.length > 0">
             {{ misconceptions.map((item) => item.tag).join('、') }}
           </span>
-          <span v-else>暂无真实误解来源</span>
+          <span v-else>暂无真实错误记录</span>
         </li>
         <li>
-          <strong>你的教学</strong>
+          <strong>你的讲解</strong>
           <span>{{ teachingText.trim() || '等待输入' }}</span>
         </li>
         <li>
-          <strong>判题</strong>
+          <strong>真判题</strong>
           <span>{{ judgeText }}</span>
         </li>
         <li>
-          <strong>证据</strong>
+          <strong>来源</strong>
           <span v-if="evidenceEvents.length > 0">
-            {{ evidenceEvents.map((id) => `event #${id}`).join(' · ') }}
+            {{ evidenceEvents.map((id) => `学习记录 #${id}`).join(' · ') }}
           </span>
-          <span v-else>等待真实 event_id 回链</span>
+          <span v-else>等待你的真实学习记录</span>
         </li>
       </ol>
     </aside>
@@ -295,10 +295,19 @@ async function submitJudge(): Promise<void> {
   align-items: center;
   justify-content: space-between;
   gap: var(--pyt-space-4);
-  padding: var(--pyt-space-4);
+  padding: var(--pyt-space-3) var(--pyt-space-4);
   border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-lg, 8px);
   background: var(--pyt-color-bg-elevated);
   box-shadow: var(--pyt-shadow-card);
+}
+
+.feynman-panel h2 {
+  font-size: clamp(15px, 2vw, 18px);
+}
+
+.feynman-panel h3 {
+  font-size: var(--pyt-font-size-md, 14px);
 }
 
 .feynman-panel__eyebrow {
@@ -339,11 +348,13 @@ async function submitJudge(): Promise<void> {
 .feynman-panel__card,
 .feynman-panel__evidence {
   display: grid;
-  gap: var(--pyt-space-3);
-  padding: var(--pyt-space-4);
+  gap: var(--pyt-space-2);
+  padding: var(--pyt-space-3);
   border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-lg, 8px);
   background: rgba(255, 247, 230, 0.88);
   box-shadow: var(--pyt-shadow-card);
+  font-size: var(--pyt-font-size-sm);
 }
 
 .feynman-panel__muted {
