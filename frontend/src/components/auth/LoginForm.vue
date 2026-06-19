@@ -57,9 +57,12 @@ defineExpose({
         ref="usernameInput"
         v-model="form.username"
         :class="{ 'has-error': errorField === 'username' }"
+        name="username"
         autocomplete="username"
         placeholder="请输入用户名，例如 demo"
         :disabled="props.loading"
+        :aria-invalid="errorField === 'username'"
+        :aria-describedby="errorField === 'username' ? 'login-error' : undefined"
       >
     </label>
     <label>
@@ -68,14 +71,18 @@ defineExpose({
         ref="passwordInput"
         v-model="form.password"
         :class="{ 'has-error': errorField === 'password' }"
+        name="password"
         autocomplete="current-password"
         type="password"
         placeholder="密码至少 8 位"
         :disabled="props.loading"
+        :aria-invalid="errorField === 'password'"
+        :aria-describedby="errorField === 'password' ? 'login-error' : undefined"
       >
     </label>
     <p
       v-if="error"
+      id="login-error"
       class="form-error"
       role="alert"
     >

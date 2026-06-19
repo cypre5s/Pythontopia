@@ -25,4 +25,15 @@ describe('LoginForm', () => {
       password: 'P@ssw0rd1',
     });
   });
+
+  it('links the validation error to the offending field for screen readers', async () => {
+    const wrapper = mount(LoginForm);
+
+    await wrapper.find('form').trigger('submit.prevent');
+
+    const username = wrapper.findAll('input')[0];
+    expect(username?.attributes('aria-invalid')).toBe('true');
+    expect(username?.attributes('aria-describedby')).toBe('login-error');
+    expect(wrapper.find('#login-error').exists()).toBe(true);
+  });
 });
