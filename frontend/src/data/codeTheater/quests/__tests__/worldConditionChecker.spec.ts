@@ -372,24 +372,39 @@ describe('toWorldEffectCommands · sequence 与 coverage payload 同构', () => 
     if (first) {
       expect(first.payload.goal).toBe('sequence');
       expect(first.payload.targetNoun).toBe('烽火台');
+      // 核心四键 + 动词/量词（舞台横幅文案用）随 goal 下发；sequence 再带 order。
+      expect(first.payload.actionVerb).toBe('点燃');
+      expect(first.payload.unit).toBe('座');
       expect(Object.keys(first.payload).sort()).toEqual([
+        'actionVerb',
         'goal',
         'order',
         'state',
         'target',
         'targetNoun',
+        'unit',
       ]);
     }
   });
 
-  it('coverage 的 payload 保持原四键（不掺入 order），与 sequence 的前四键同构', () => {
+  it('coverage 的 payload 不掺入 order，与 sequence 去掉 order 后同构（含动词/量词）', () => {
     const result = checkCoverageGoal(lampGoal, [1, 2, 3]);
     const commands = toWorldEffectCommands(lampGoal, result);
     const first = commands[0];
     expect(first).toBeDefined();
     if (first) {
       expect(first.payload.goal).toBe('coverage');
-      expect(Object.keys(first.payload).sort()).toEqual(['goal', 'state', 'target', 'targetNoun']);
+      expect(first.payload).not.toHaveProperty('order');
+      expect(first.payload.actionVerb).toBe('点亮');
+      expect(first.payload.unit).toBe('盏');
+      expect(Object.keys(first.payload).sort()).toEqual([
+        'actionVerb',
+        'goal',
+        'state',
+        'target',
+        'targetNoun',
+        'unit',
+      ]);
     }
   });
 });

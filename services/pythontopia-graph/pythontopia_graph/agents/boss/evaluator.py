@@ -46,6 +46,8 @@ class EvaluationResult:
     runtime_error: str | None = None  # 非用例级失败（禁 import、语法错误等）
 
     failed_indices: list[int] = field(default_factory=list)
+    # 文本题接地评分给出的结构化反馈；代码题保持 None（沿用 first_failure / runtime_error 渲染）。
+    feedback: str | None = None
 
 
 def evaluate_student_code(
@@ -144,8 +146,11 @@ def evaluate_student_code(
 
 
 def build_failure_hint(result: EvaluationResult) -> str | None:
-    """将首条失败或 ``runtime_error`` 渲染为单行提示，供 BossPage 展示。"""
+    """将接地反馈 / 首条失败 / ``runtime_error`` 渲染为单行提示，供 BossPage 展示。"""
 
+    # 文本题接地评分优先用结构化 feedback。
+    if result.feedback:
+        return result.feedback
     if result.runtime_error:
         return result.runtime_error
     f = result.first_failure
@@ -154,3 +159,33 @@ def build_failure_hint(result: EvaluationResult) -> str | None:
     if f.timed_out:
         return f"用例 {f.index + 1} 超时（>5s）"
     return f"用例 {f.index + 1} 期望 {f.expected!r} 实际 {f.actual!r}"
+
+
+def evaluate_boss_attempt(
+    *,
+    kind: str | None,
+    submission: str,
+    test_cases: Sequence[TestCase],
+    timeout_sec: int = DEFAULT_TIMEOUT_SEC,
+    reference_answer: str | None = None,
+    kc_code: str | None = None,
+) -> EvaluationResult:
+    """按 ``kind`` 分派判题：文本题走接地评分，其余走 stdout 沙箱。
+
+    显式分派、永不把自然语言当 Python 跑；未知/缺省 ``kind`` 按代码题处理（向后兼容）。
+    文本评分为确定性接地算法，fail fast、不静默降级为闲聊。
+    """
+
+    # 局部导入规避 text_evaluator → evaluator 的循环依赖。
+    from .kinds import is_text_kind
+
+    if is_text_kind(kind):
+        from .text_evaluator import evaluate_text_answer
+
+        return evaluate_text_answer(
+            submission,
+            test_cases,
+            reference_answer=reference_answer,
+            kc_code=kc_code,
+        )
+    return evaluate_student_code(submission, test_cases, timeout_sec=timeout_sec)

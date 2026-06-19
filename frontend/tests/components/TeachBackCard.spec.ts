@@ -19,11 +19,15 @@ const problem: BossProblemDto = {
 };
 
 describe('TeachBackCard', () => {
-  it('uses black ink for NPC dialog copy', () => {
+  it('NPC 台词走设计令牌而非散落 hex 内联色', () => {
     const wrapper = mount(TeachBackCard, {
       props: { problem, code: '' },
     });
 
-    expect(wrapper.get('.npc-says').attributes('style')).toContain('color: rgb(17, 17, 17)');
+    const says = wrapper.get('.npc-says');
+    // 台词正常渲染（可读性由 .npc-says 的 var(--pyt-color-text-primary) 令牌保证）。
+    expect(says.text()).toContain('解释一下');
+    // 不再用内联 hardcoded 颜色（统一令牌化，NFR-CMP/可维护性）。
+    expect(says.attributes('style')).toBeUndefined();
   });
 });

@@ -47,6 +47,11 @@ export function toWorldEffectCommands(
       target,
       state,
     };
+    // 同时下发动词/量词，舞台横幅才能演成「全部点亮！N 盏路灯」而非泛化的「全部完成！N 个路灯」
+    // （消费端 CodeTheaterScene.scanWorldTargets 读 actionVerb/unit；缺省时回退 actionName/「个」）。
+    const verb = goal.actionVerb ?? goal.actionName;
+    if (verb) payload.actionVerb = verb;
+    if (goal.unit) payload.unit = goal.unit;
     if (goal.kind === 'sequence') {
       payload.order = index + 1;
     }

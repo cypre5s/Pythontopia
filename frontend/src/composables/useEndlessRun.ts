@@ -152,12 +152,10 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
 
   const failureRate = computed<number>(() => {
     if (attempts.value === 0) return 0;
-    const failed = attempts.value - streak.value - bestStreak.value;
-    // 简化：用近 10 题统计
+    // 用近 10 题统计失败率（仅作自适应难度的辅助展示）。
     const recent = history.value.slice(0, 10);
     if (recent.length === 0) return 0;
     const failedCount = recent.filter((h) => !h.passed).length;
-    void failed;
     return failedCount / recent.length;
   });
 
@@ -236,7 +234,7 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
     if (!p) return;
     phase.value = 'evaluating';
     const localEval = await _runPyodide(p, code.value);
-    let backendResult: BossAttemptResultDto | null = null;
+    let backendResult: BossAttemptResultDto;
     try {
       backendResult = await submitBossAttempt({
         problemId: p.problemId,
@@ -248,22 +246,18 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
         ...(profileSignals.hasAnySignal.value ? { profileSignals: profileSignals.signals.value } : {}),
       });
     } catch (error) {
-      backendResult = {
-        problemId: p.problemId,
-        passed: localEval.ok,
-        passedTestCases: localEval.ok ? p.totalTestCases : 0,
-        totalTestCases: p.totalTestCases,
-        score: localEval.ok ? 60 : 0,
-        feedback: `后端联通失败，按本地 Pyodide 判定：${error instanceof Error ? error.message : String(error)}`,
-      };
+      // 判题服务不可用：绝不拿本地公开样例冒充正式判题（否则后端宕机时仅凭可见样例即可「过关」，
+      // 闯关塔还会 markCleared 离线刷关）。本次不计分、不入历史、不动连胜，玩家可重试提交。
+      errorMessage.value =
+        `判题服务暂不可用，本次不计分，请稍后重试。（${error instanceof Error ? error.message : String(error)}）`;
+      lastResult.value = null;
+      phase.value = 'error';
+      return;
     }
     const passed = backendResult.passed;
     const finalResult: BossAttemptResultDto = {
       ...backendResult,
       passed,
-      passedTestCases: passed
-        ? backendResult.passedTestCases
-        : backendResult.passedTestCases,
       feedback: passed
         ? backendResult.feedback || '通过！下一题难度自适应提升。'
         : backendResult.feedback || localEval.stderr || '未通过，难度自适应下调。',
@@ -278,15 +272,13 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
       streak.value += 1;
       passedCount.value += 1;
       if (streak.value > bestStreak.value) bestStreak.value = streak.value;
-      // 连胜自适应：连 1 → +0.5；连 2+ → +1
-      const bump = streak.value >= 2 ? 1 : 0.5;
-      currentDifficulty.value = clampDifficulty(currentDifficulty.value + bump);
       phase.value = 'passed';
     } else {
       streak.value = 0;
-      currentDifficulty.value = clampDifficulty(currentDifficulty.value - 1);
       phase.value = 'failed';
     }
+    // 难度自适应统一由 computeAdaptiveDifficulty 在下一次取题时按更新后的 streak / 近期失败 / successRate
+    // 计算（单一真源，NFR-MNT）；此处不再叠加 "+0.5 / -1"，避免双重难度系统互相打架。
 
     const entry: EndlessHistoryEntry = {
       problemId: p.problemId,

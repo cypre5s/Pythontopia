@@ -16,8 +16,9 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
-from pythontopia_graph.agents.boss.evaluator import build_failure_hint, evaluate_student_code
+from pythontopia_graph.agents.boss.evaluator import build_failure_hint, evaluate_boss_attempt
 from pythontopia_graph.agents.boss.golden_problems import get_golden_problem
+from pythontopia_graph.agents.boss.kc_map import chapter_default_kc
 from pythontopia_graph.agents.boss.llm_factory import build_llm_problem_factory
 from pythontopia_graph.agents.boss.orchestrator import generate_boss_problem
 from pythontopia_graph.agents.boss.schemas import TestCase
@@ -25,6 +26,7 @@ from pythontopia_graph.llm.provider import (
     DryRunProvider,
     LlmProvider,
     LlmProviderError,
+    OpenAiCompatProvider,
     provider_from_env,
 )
 
@@ -70,6 +72,19 @@ class BossEvaluateRequest(BaseModel):
     code: str
     testCases: list[TestCasePayload]
     timeoutSec: int = Field(default=5, ge=1, le=15)
+    kind: str | None = Field(
+        default=None,
+        description=(
+            "题型：文本类（short_answer / teach_back / pdf_question）走接地评分，"
+            "其余（fill_blank / debug / closed_loop / dual_track / bug_mine / multi_round / 缺省）走 stdout 沙箱判题"
+        ),
+    )
+    referenceAnswer: str | None = Field(
+        default=None, description="文本题参考答案/要点（接地评分证据，可空）"
+    )
+    kcCode: str | None = Field(
+        default=None, description="题目 KC 编码（文本题防幻觉校验用，可空）"
+    )
 
 
 class BossEvaluateResponse(BaseModel):
@@ -83,19 +98,20 @@ class BossEvaluateResponse(BaseModel):
 
 
 def _resolve_kc(chapter: int, override: str) -> str:
-    """章号 → 默认 KC（与前端 MAIN_QUEST_BOSSES 对齐）。"""
+    """章号 → 默认 KC。
+
+    覆盖值（``preferredKc`` / ``kcCode``）优先；否则用课程包派生的单一事实源
+    ``kc_map.chapter_default_kc``（见 ``agents/boss/kc_map.py``）取该章首个真实 KC。
+
+    历史上这里硬编码的 ``{2: KC-006, 3: KC-016, 4: KC-026, ...}`` 用了错误的「每章 10
+    个 KC」假设，与课程包真实分章（1-7 / 8-16 / 17-30 / 31-38 / 39-47 / 48-53 / 54-65）不符，
+    解析出的 KC 会落到相邻错误章节。现改为从课程包映射取值，与前端 ``useEndlessRun`` 的
+    ``kcRange`` 一致；章 1 仍解析为 ``PY43-KC-001``，保持向后兼容。
+    """
 
     if override and override.strip():
         return override.strip()
-    return {
-        1: "PY43-KC-001",
-        2: "PY43-KC-006",
-        3: "PY43-KC-016",
-        4: "PY43-KC-026",
-        5: "PY43-KC-036",
-        6: "PY43-KC-046",
-        7: "PY43-KC-056",
-    }.get(chapter, "PY43-KC-001")
+    return chapter_default_kc(chapter)
 
 
 def _safe_provider() -> LlmProvider:
@@ -194,7 +210,16 @@ def evaluate_attempt(body: BossEvaluateRequest) -> BossEvaluateResponse:
         )
         for tc in body.testCases
     ]
-    result = evaluate_student_code(body.code, cases, timeout_sec=body.timeoutSec)
+    # kind 决定判题路径：文本题接地评分 vs 代码题 stdout 沙箱（见 agents/boss/kinds.py）。
+    # 文本题绝不把自然语言当 Python 跑，且 fail fast（确定性评分，不静默降级为闲聊）。
+    result = evaluate_boss_attempt(
+        kind=body.kind,
+        submission=body.code,
+        test_cases=cases,
+        timeout_sec=body.timeoutSec,
+        reference_answer=body.referenceAnswer,
+        kc_code=body.kcCode,
+    )
     return BossEvaluateResponse(
         problemId=body.problemId,
         passed=result.passed,

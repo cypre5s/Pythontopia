@@ -12,6 +12,7 @@
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import AppLayout from '@/app/AppLayout.vue';
+import PyButton from '@/components/ui/PyButton.vue';
 import { useArenaStore } from '@stores/arena';
 import { arenaLevelsByChapter } from '@/data/arenaLevels';
 import { findBossByChapter } from '@/data/bossCatalog';
@@ -139,14 +140,14 @@ function star(level: ArenaLevel): string {
       data-testid="arena-page"
     >
       <header class="arena-head">
-        <button
-          type="button"
-          class="arena-btn arena-btn--exit"
-          data-testid="arena-exit"
+        <PyButton
+          variant="secondary"
+          size="sm"
+          test-id="arena-exit"
           @click="back"
         >
           ← 返回小镇
-        </button>
+        </PyButton>
         <div class="arena-head__center">
           <h1 class="arena-title">
             第 {{ chapter }} 章 · 闯关塔
@@ -262,23 +263,25 @@ function star(level: ArenaLevel): string {
             ✓ 已通关 · 最近用时 {{ arena.getProgress(selectedLevel.id).lastClearedSec ?? '?' }}s
           </div>
 
-          <button
-            type="button"
-            class="arena-btn arena-btn--primary"
-            data-testid="arena-enter"
-            :disabled="!arena.isUnlocked(selectedLevel.id)"
-            @click="enterLevel(selectedLevel)"
-          >
-            <template v-if="!arena.isUnlocked(selectedLevel.id)">
-              [X] 解锁上一关再来
-            </template>
-            <template v-else-if="selectedLevel.kind === 'boss'">
-              ★ 挑战 BOSS（4 阶段）
-            </template>
-            <template v-else>
-              ▶ 进入第 {{ selectedLevel.index }} 关
-            </template>
-          </button>
+          <div class="arena-enter">
+            <PyButton
+              variant="primary"
+              block
+              test-id="arena-enter"
+              :disabled="!arena.isUnlocked(selectedLevel.id)"
+              @click="enterLevel(selectedLevel)"
+            >
+              <template v-if="!arena.isUnlocked(selectedLevel.id)">
+                [X] 解锁上一关再来
+              </template>
+              <template v-else-if="selectedLevel.kind === 'boss'">
+                ★ 挑战 BOSS（4 阶段）
+              </template>
+              <template v-else>
+                ▶ 进入第 {{ selectedLevel.index }} 关
+              </template>
+            </PyButton>
+          </div>
         </article>
       </div>
     </section>
@@ -289,8 +292,10 @@ function star(level: ArenaLevel): string {
 .arena-page {
   min-height: 100%;
   padding: 24px;
+  /* 与无尽闯关（EndlessPage）同一套羊皮纸视觉语言：两页是同一玩法的两种入口，不再金红/羊皮纸割裂。 */
   background:
-    radial-gradient(ellipse at top, rgba(255, 247, 230, 0.85) 0%, rgba(241, 216, 150, 0.55) 60%, rgba(212, 175, 55, 0.18) 100%);
+    linear-gradient(180deg, rgba(243, 220, 157, 0.26), rgba(122, 93, 48, 0.1)),
+    var(--pyt-color-bg-primary);
   font-family: var(--pyt-font-pixel);
   color: var(--pyt-color-text-primary);
 }
@@ -337,37 +342,8 @@ function star(level: ArenaLevel): string {
 }
 .arena-stat--total { background: var(--pyt-color-info-bg); }
 
-.arena-btn {
-  padding: 10px 18px;
-  font-family: inherit;
-  font-size: 13px;
-  letter-spacing: 1px;
-  border: 3px solid var(--pyt-color-text-primary);
-  background: var(--pyt-color-bg-elevated);
-  color: var(--pyt-color-text-primary);
-  cursor: pointer;
-  box-shadow: 3px 3px 0 var(--pyt-color-shadow);
-  transition: transform 0.1s, box-shadow 0.1s;
-}
-.arena-btn:hover:not(:disabled) {
-  transform: translate(1px, 1px);
-  box-shadow: 2px 2px 0 var(--pyt-color-shadow);
-}
-.arena-btn:active:not(:disabled) {
-  transform: translate(3px, 3px);
-  box-shadow: 0 0 0 var(--pyt-color-shadow);
-}
-.arena-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-.arena-btn--exit { background: #e2c391; }
-.arena-btn--primary {
-  background: linear-gradient(180deg, var(--pyt-color-gold-bright) 0%, var(--pyt-color-gold) 100%);
-  width: 100%;
+.arena-enter {
   margin-top: 16px;
-  padding: 14px 20px;
-  font-size: 15px;
 }
 
 .arena-chapter-tabs {
@@ -452,7 +428,7 @@ function star(level: ArenaLevel): string {
 .arena-step--current {
   border-color: var(--pyt-color-danger);
   box-shadow: 2px 2px 0 var(--pyt-color-text-primary);
-  background: #ffe7b3;
+  background: var(--pyt-color-warning-bg);
 }
 .arena-step--boss {
   background: linear-gradient(135deg, var(--pyt-color-bg-elevated) 0%, var(--pyt-color-gold-bright) 50%, var(--pyt-color-gold-bright) 100%);

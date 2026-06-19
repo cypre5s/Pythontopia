@@ -6,9 +6,9 @@
 from __future__ import annotations
 
 import ast
-import re
 from typing import Iterable, Mapping
 
+from .kc_map import is_known_kc
 from .schemas import BossProblem, ReviewIssue, ReviewVerdict
 
 
@@ -99,20 +99,35 @@ def verify_kc_grounding(
     kc_keywords: Mapping[str, Iterable[str]] | None = None,
     min_keyword_hits: int = 1,
 ) -> ReviewVerdict:
-    """校验 KC 关键词接地与章节语法白名单，未命中或超纲则 reject。"""
+    """校验 KC 关键词接地与章节语法白名单，未命中或超纲则 reject。
+
+    关键词来源优先级：
+    1. 外部 ``kc_keywords[kc_code]`` 显式词表；
+    2. 按 ``problem.chapter`` 取本章默认关键词（关卡课程的题面主题词）。
+
+    章节默认关键词按 ``problem.chapter`` 选取（题目自身权威的关卡章节），不再用编号边界
+    反推章节——历史上那段 ``n <= 5 → 1`` 的反推与课程包真实分章不符（见 ``kc_map``）。
+    另外用 ``kc_map.is_known_kc`` 做防幻觉提示：KC 不在课程包内仅 warning，不阻断。
+    """
     issues: list[ReviewIssue] = []
 
-    keywords = list(_resolve_keywords(problem.kc_code, kc_keywords))
-    if not keywords:
-        # 无 KC 关键词列表时仅做超纲检查
-        issues.append(
-            ReviewIssue(
-                review="grounding",
-                severity="warning",
-                code="no_keywords_provided",
-                message=f"kc_code {problem.kc_code} has no keyword list; only checking syntax allowlist",
+    override = bool(kc_keywords and problem.kc_code in kc_keywords)
+    if override:
+        keywords = list(kc_keywords[problem.kc_code])  # type: ignore[index]
+    else:
+        keywords = _default_keywords_for_chapter(problem.chapter)
+        if not is_known_kc(problem.kc_code):
+            issues.append(
+                ReviewIssue(
+                    review="grounding",
+                    severity="warning",
+                    code="no_keywords_provided",
+                    message=(
+                        f"kc_code {problem.kc_code} not in course pack (packId=43); "
+                        f"falling back to chapter {problem.chapter} default keywords"
+                    ),
+                )
             )
-        )
 
     haystack = f"{problem.statement}\n{problem.reference_solution}".lower()
     hits = sum(1 for kw in keywords if kw.lower() in haystack)
@@ -147,16 +162,9 @@ def verify_kc_grounding(
     return ReviewVerdict(review="grounding", passed=not errors, issues=issues)
 
 
-def _resolve_keywords(
-    kc_code: str,
-    kc_keywords: Mapping[str, Iterable[str]] | None,
-) -> list[str]:
-    if kc_keywords and kc_code in kc_keywords:
-        return list(kc_keywords[kc_code])
-    # 无外部词表时按 kc_code 推断章节默认关键词
-    return _default_keywords(kc_code)
-
-
+# 关卡（boss/arena）课程章节的题面主题词，按关卡章节 1..7 索引。
+# 注意：这是「关卡课程」（golden 题库 + LLM 出题 prompt 采用的循序渐进结构）的主题词，
+# 与 ``kc_map`` 的课程包 chapter↔KC 是两条不同的轴；此处按 ``problem.chapter`` 取用。
 _DEFAULT_KEYWORDS_BY_CHAPTER: Mapping[int, list[str]] = {
     1: ["print", "input", "变量", "注释"],
     2: ["list", "dict", "str", "int", "float", "类型", "切片"],
@@ -168,25 +176,9 @@ _DEFAULT_KEYWORDS_BY_CHAPTER: Mapping[int, list[str]] = {
 }
 
 
-def _default_keywords(kc_code: str) -> list[str]:
-    m = re.match(r"^PY43-KC-(\d{3})$", kc_code)
-    if not m:
-        return []
-    n = int(m.group(1))
-    if n <= 5:
-        chapter = 1
-    elif n <= 15:
-        chapter = 2
-    elif n <= 25:
-        chapter = 3
-    elif n <= 35:
-        chapter = 4
-    elif n <= 45:
-        chapter = 5
-    elif n <= 55:
-        chapter = 6
-    else:
-        chapter = 7
+def _default_keywords_for_chapter(chapter: int) -> list[str]:
+    """按关卡章号取本章默认关键词；章号越界返回空列表。"""
+
     return list(_DEFAULT_KEYWORDS_BY_CHAPTER.get(chapter, []))
 
 

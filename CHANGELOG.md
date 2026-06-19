@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-06-19 — 代码舞台 × 无尽闯关统一玩法 + 看学练测闭环（含 8 大非功能需求 + 实拍指南）
+
+> 把「代码舞台」（`/code-theater`）与「无尽闯关」（`/endless` + `/arena`）两条做题链路在玩法与实现上统一，并补全 练→测 掌握度/画像回流闭环；同步治理 8 大非功能需求（可用性 a11y / 安全防离线刷关 / 可维护性单源去重 / 可信 AI 接地等）。
+
+- **共享基座（前端）**：新增 `useCodeChallenge` 组合式 + 归一 `CodeChallenge/ChallengeResult` DTO + `JudgeResultPanel`（`role=status` + `aria-live` 自动播报判定）。无尽/闯关改用 `PythonCodeEditor`(CodeMirror) + `PyButton` + `JudgeResultPanel` + `var(--pyt-*)` 令牌；ArenaPage 背景/按钮与 EndlessPage 收敛为同一套羊皮纸视觉；`KindRouter` prop 强类型为 `ArenaLevelKind`。
+- **闭环（后端）**：`BossService.evaluateAttempt` 判题后发 `LearningEvent.PracticeSucceeded/Failed`（复用 `SubmissionService` 同链路）→ 自动喂 `MasteryEvaluator`（测）+ 8 维被动画像，仅在真实判题后发、幂等不误报；`resolveKc` 改走权威 `ChapterCatalog`（对齐 course-pack-43）。
+- **闭环（互跳）**：无尽/闯关做错 → 一键「去代码舞台看执行」（复用 `useCodeTheaterStore.setFreeRun`）把这段代码执行过程演出来（练→看为何错→再练）；代码舞台 `driveStage` 现把 `Trace` 喂给 Phaser（脚本梯逐行源码 + 死循环「原地踱步」终于生效）；`world_effect` 补 `actionVerb/unit`，舞台横幅文案与任务一致。
+- **Python 图**：章节→KC 单一真源 `kc_map.py`（对齐 course-pack-43，65 KC）；文本题型（short_answer/teach_back/pdf_question）改走确定性 grounded 评分（不再把散文当 Python 跑、无证据不杜撰），代码题型仍走沙箱判题。
+- **非功能需求**：修「后端不可达即按公开样例冒充通过」的离线刷关（NFR-SEC，arena 不再离线通关）；难度自适应收敛为 `computeAdaptiveDifficulty` 单源（NFR-MNT）；DebugCard 可疑行改为键盘可达 `<button>`、TeachBackCard 去内联 hex（NFR-USE/CMP）；删除 9 个 never-mounted 的「调试剧场」死代码文件。
+- **指南实拍**：`guideSections.ts` 扩「代码舞台 / 无尽闯关 / 看学练测闭环」三块 + 6 张新截图（24–29：世界达成绿 / 未达成犯罪现场 / 统一判题面板 / 闯关塔 / 锁章出题），由 `e2e/guideScreenshots.spec.ts` 实拍落盘。
+- **验证**：前端 `vue-tsc` 0 错、`eslint` 0 错、`vitest` **2150 passed**（含 useCodeChallenge 9 + JudgeResultPanel 5 + 无尽离线防刷关 + worldEffect 契约用例 + GuidePage 截图存在性转绿）；后端作用域 `mvn test` `BossServiceTest(12)/BossControllerTest(6)/SubmissionServiceTest(4)` **22 passed BUILD SUCCESS**（经 Aliyun mirror）；graph `pytest` **1106 passed**（boss 套件 182，新增 kc_map/text_evaluator/kind dispatch 27 例）；`./dev.sh` 全栈起栈实拍 24–29 截图 **6/6 通过**。
+- **未验证 / 残留**：后端仅作用域复跑（本机 Maven Central 受 TUN/代理所阻，改用 Aliyun mirror；后端代码自 W1-B 起未变）；graph/rag 微服务镜像未起（无尽走 golden 兜底出题、judge 走后端兜底，截图与本地链路不依赖 graph）；26/27 两张闯关塔截图取同一 `/arena/1` 视图；同工作树中 android / agentic-loop / 工坊聊天等无关 WIP 不在本提交范围。
+
 ## 2026-06-19 — 百晓工坊聊天历史持久化 + 离开-返回保留布局（含两处 bug 修复）
 
 > 把百晓工坊「历史问答」从只读 `tutor_session` 升级为覆盖全部聊天工具结果的持久化，并修两处体验 bug：①一开始回答就在左栏「历史问答」生成记录；②离开工坊（返回小镇 / 去图书馆点页码 / 闯关塔等任意跳转）再回来，对话流与左右面板（历史/书房/调用）布局、书房弹窗都停在离开时那一刻。

@@ -1,6 +1,6 @@
 # 引导手册截图清单（screenshot manifest）
 
-本文档是 `frontend/public/guide/screenshots/` 下 21 张引导截图的唯一权威说明：每张图的页面路径、前置状态、稳定等待条件、遮蔽规则与重拍方法。
+本文档是 `frontend/public/guide/screenshots/` 下 29 张引导截图的唯一权威说明：每张图的页面路径、前置状态、稳定等待条件、遮蔽规则与重拍方法。
 
 - 采集套件：`frontend/e2e/guideScreenshots.spec.ts`（Playwright，chromium 单 worker 串行）
 - 会话辅助：`frontend/e2e/support/demoSession.ts`（真实 API 注册/登录，注入 localStorage，无任何静态伪造）
@@ -18,14 +18,14 @@
 | `PYT_E2E_TEACHER_USERNAME` / `PYT_E2E_TEACHER_PASSWORD` | 第 12、21 张² | 教师演示账号凭证（直接登录） |
 | `PYT_E2E_TEACHER_INVITE_CODE` | 第 12、21 张² | 配合 `PYT_E2E_REGISTER=1` 注册临时教师号，须与后端 `PYT_TEACHER_INVITE_CODE` 一致 |
 
-¹ 学生会话两条路径至少满足一条，否则 1–11 全部失败。
+¹ 学生会话两条路径至少满足一条，否则学生视角截图全部失败。
 ² 教师会话两条路径至少满足一条，否则 `12-teacher-classroom` 与 `21-teacher-board` 失败（不会用学生号凑数）。
 
 凭证只经环境变量传入，绝不写死在源码；登录失败的报错信息不回显用户名/密码。
 
 ## 通用前置状态
 
-所有学生视角截图（01–11、13–20）共用同一套注入逻辑：
+所有学生视角截图（01–11、13–20、22–29）共用同一套注入逻辑：
 
 1. 通过真实 API 拿到 JWT 会话（注册或登录，见上表）；
 2. `context.addInitScript` 在页面脚本执行前写入 `pythontopia.token` / `pythontopia.expiresAt` / `pythontopia.user` 三个 localStorage key（与玩家真实登录后的持久化完全一致，应用启动时还会向 `/api/auth/refresh` 换发校验）；
@@ -33,7 +33,7 @@
 
 全局遮蔽（每张图都生效）：`.header-status__name`（顶栏登录昵称）、`time` 元素（任何真实时间戳）。遮蔽用 Playwright `mask` 实现，盖深色块（`#10131a`），不改动页面 DOM。
 
-## 21 张截图明细
+## 29 张截图明细
 
 | # | 文件名 | 页面路径 | 进入方式与前置状态 | 稳定等待条件 | 额外遮蔽 |
 | --- | --- | --- | --- | --- | --- |
@@ -58,6 +58,16 @@
 | 19 | `19-training-verdict.webp` | `/training?problemId=476` | 提交真实可通过代码 | 判题结果出现 `AC` | 无 |
 | 20 | `20-bugmine-debug.webp` | `/bug-mine` | 同题提交 WA 后从训练场进入 Bug 矿洞 | 错题进入矿洞且逐层调试界面可见 | 无 |
 | 21 | `21-teacher-board.webp` | `/teacher` | **教师会话**；进入真实演示班级看板 | `teacher-detail` 可见 | 加入码、教师昵称 |
+| 22 | `22-code-theater.webp` | `/code-theater` | 学生会话；点击「运行」执行默认机关广场代码 | `code-theater-page` 与 `ct-quest` 可见 → 点击 `ct-run` → `ct-world` 与 `ct-steps` 可见 | 无 |
+| 23 | `23-clients.webp` | `/guide?topic=clients` | 学生会话；滚动到「多端下载」主题的下载卡片区 | `guide-content` 含「多端下载」→ `guide-downloads` 可见并含 Android / Windows 下载卡 | 无 |
+| 24 | `24-code-theater-stage.webp` | `/code-theater` | 学生会话；点「运行」后代码傀儡执行到循环中段（脚本梯发光行、变量牌翻新、循环跑道计数） | `code-theater-page` 与 `ct-quest` 可见 → 点 `ct-run` → `ct-stage` 与 `ct-steps` 可见，傀儡停在 `ct-world` 内某一执行行 | 无 |
+| 25 | `25-endless-result.webp` | `/endless` | 学生会话；点 `endless-start` 连答数题后命中一次判题结算 | `endless-page` → `endless-start` → `endless-body` → 至少一次 `endless-submit` → `endless-result` 可见，且 `endless-streak` / `endless-total-score` 有值 | 无 |
+| 26 | `26-arena-tower.webp` | `/arena/1` | 学生会话；展示第 1 章闯关塔 10 关阶梯（9 小关 + 第 10 关 BOSS），部分已通关点亮 | `arena-page` → `arena-steps` 可见 → 10 个 `arena-step-1-1`…`arena-step-1-10` 渲染（末关为 boss） | 无 |
+| 27 | `27-loop-mastery.webp` | `/arena/1` | 学生会话；点开某一关详情，展示该关 KC、弱项推荐徽标与画像接入提示（练→测→掌握→画像回流的落点） | `arena-page` → 点某个 `arena-step-1-*` → `arena-detail` 可见 → `arena-reco-badge` 与 `arena-profile-hint` 可见 | 无 |
+| 28 | `28-code-theater-debug.webp` | `/code-theater` | 学生会话；模拟「从失败练习跳入」（载入一段未通过代码）运行后，世界目标未全部达成（如第 4 盏灯仍黑） | `code-theater-page` 与 `ct-quest` 可见 → 点 `ct-run` → `ct-world` 显示部分目标未点亮（未达成态） | 无 |
+| 29 | `29-endless-weak-kc.webp` | `/endless` | 学生会话；锁定 `endless-focus-chapter` 后连答，展示按画像弱项出题 + 历史记录 | `endless-page` → 选择 `endless-focus-chapter` → `endless-start` → `endless-history` 可见且含知识点 / 难度记录 | 无 |
+
+> 24–29 为 R-14「代码剧场 × 无尽闯关」统一玩法新增：与 01–23 一致，均走学生会话注入、视口 **1440×900**、`deviceScaleFactor=1`、全局遮蔽规则相同。这 6 张当前未落盘，指南页以「截图准备中」文字占位优雅降级；对应的 Playwright 采集用例待在 `frontend/e2e/guideScreenshots.spec.ts` 中补齐后再实拍（Wave 2）。
 
 等待策略说明：全套不使用长 `sleep`，也不使用 `networkidle`（应用挂有 SSE 长连接，`networkidle` 永远不触发）；统一用「目标元素可见 / 加载态元素从 DOM 消失 / N 帧 `requestAnimationFrame`」组合。
 
@@ -95,7 +105,7 @@ npm run capture:guide
 
 ## 已知风险与注意事项
 
-1. **截图必须随指南内容同步复验**：当前指南引用 21 张 WebP；发布前用内容源提取 URL，并确认每个文件存在、尺寸为 1440×900 且非空。
+1. **截图必须随指南内容同步复验**：当前指南引用 29 张 WebP（01–29）；发布前用内容源提取 URL，并确认每个文件存在、尺寸为 1440×900 且非空。其中 24–29 为本轮新增，尚待采集套件补齐用例后实拍。
 2. **教师邀请码**：后端默认 `PYT_TEACHER_INVITE_CODE` 为空（注册教师会被 403）。注册临时教师号前需先给后端配置该变量，或直接提供已有教师账号凭证。
 3. **Phaser 在无头浏览器下的渲染**：配置里已加 `--enable-unsafe-swiftshader` 放行软件 WebGL；若 WebGL 仍不可用，Phaser 会自动退回 Canvas2D，画面内容一致但渲染保真度略降。
 4. **首次运行较慢**：`/world` 需预加载像素素材（等待上限 90s）；后续用例复用已起的浏览器与会话，整体明显变快。

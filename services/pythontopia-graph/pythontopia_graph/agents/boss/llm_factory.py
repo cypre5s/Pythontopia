@@ -190,6 +190,7 @@ def build_llm_problem_factory(provider: LlmProvider) -> ProblemFactory:
             reference_solution=str(data.get("reference_solution", "")),
             test_cases=test_cases,
             difficulty=difficulty,
+            kind=preferred_kind or "",
             hints=hints,
             metadata=meta,
         )

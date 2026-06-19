@@ -66,4 +66,22 @@ describe('useEndlessRun', () => {
     expect(run.streak.value).toBe(0);
     expect(run.history.value[0]?.passed).toBe(false);
   });
+
+  it('判题服务不可用时不按本地公开样例冒充通过（防离线刷关 / arena 离线通关）', async () => {
+    const run = useEndlessRun();
+    await run.startRun();
+    run.code.value = 'print(5)';
+    // 本地公开样例恰好「通过」，但后端判题服务抛错（不可达）。
+    pyodideMock.run.mockResolvedValueOnce({ stdout: '5\n', stderr: '' });
+    apiMocks.submitBossAttempt.mockRejectedValueOnce(new Error('network down'));
+
+    await run.submit();
+
+    // 绝不冒充通过：phase=error、无结果、连胜不变、历史不写（arena 不会 markCleared）。
+    expect(run.phase.value).toBe('error');
+    expect(run.lastResult.value).toBeNull();
+    expect(run.streak.value).toBe(0);
+    expect(run.history.value.length).toBe(0);
+    expect(run.errorMessage.value).toContain('判题服务暂不可用');
+  });
 });

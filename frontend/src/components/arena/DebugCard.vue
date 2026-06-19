@@ -25,11 +25,14 @@ function selectLine(idx: number): void {
       <span class="badge-bug">找到并修复 Bug</span>
     </header>
     <div class="buggy-code">
-      <div
+      <button
         v-for="(line, idx) in lines"
         :key="idx"
+        type="button"
         class="code-line"
         :class="{ 'code-line--selected': selectedLine === idx }"
+        :aria-pressed="selectedLine === idx"
+        :aria-label="`第 ${idx + 1} 行：标记为可疑`"
         @click="selectLine(idx)"
       >
         <span class="line-num">{{ idx + 1 }}</span>
@@ -38,7 +41,7 @@ function selectLine(idx: number): void {
           v-if="selectedLine === idx"
           class="bug-marker"
         >&lt;- BUG?</span>
-      </div>
+      </button>
     </div>
     <label class="fix-editor">
       <span>修复后的完整代码</span>
@@ -63,9 +66,10 @@ function selectLine(idx: number): void {
 .card-head h3 { margin: 0; font-size: 16px; color: var(--pyt-color-gold-bright); }
 .badge-bug { margin-left: auto; font-size: 11px; color: var(--pyt-color-danger); padding: 2px 8px; background: var(--pyt-color-danger-bg); border: 1px solid var(--pyt-color-danger); border-radius: 3px; }
 .buggy-code { background: var(--pyt-color-terminal-bg); border: 2px solid var(--pyt-color-danger); padding: 8px; font-family: 'JetBrains Mono', monospace; font-size: 13px; }
-.code-line { display: flex; align-items: center; gap: 8px; padding: 2px 4px; cursor: pointer; border-radius: 2px; transition: background 0.15s; }
-.code-line:hover { background: rgba(184,68,45,0.15); }
-.code-line--selected { background: rgba(184,68,45,0.3); border-left: 3px solid var(--pyt-color-terminal-stderr-text); }
+.code-line { display: flex; align-items: center; gap: 8px; width: 100%; padding: 2px 4px; cursor: pointer; border: none; border-left: 3px solid transparent; border-radius: 2px; background: transparent; color: var(--pyt-color-terminal-text); font: inherit; text-align: left; transition: background 0.15s; }
+.code-line:hover { background: var(--pyt-color-danger-bg); }
+.code-line:focus-visible { outline: 2px solid var(--pyt-color-gold); outline-offset: -2px; }
+.code-line--selected { background: var(--pyt-color-danger-bg); border-left-color: var(--pyt-color-terminal-stderr-text); }
 .line-num { color: var(--pyt-color-gold); min-width: 24px; text-align: right; font-size: 11px; user-select: none; }
 .line-text { white-space: pre; color: var(--pyt-color-terminal-text); }
 .bug-marker { color: var(--pyt-color-terminal-stderr-text); font-size: 12px; margin-left: auto; }

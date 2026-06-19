@@ -102,14 +102,31 @@ async function captureShot(
 ): Promise<void> {
   assertAuthedUrl(page);
   const pngPath = testInfo.outputPath(`${name}.png`);
-  await page.screenshot({
+  const screenshotOptions = {
     path: pngPath,
     fullPage: false,
-    animations: 'disabled',
-    caret: 'hide',
+    animations: 'disabled' as const,
+    caret: 'hide' as const,
     mask: [...globalMasks(page), ...extraMasks],
     maskColor: MASK_COLOR,
-  });
+  };
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await page.screenshot(screenshotOptions);
+      break;
+    } catch (error) {
+      if (
+        attempt === 2
+        || !(error instanceof Error)
+        || !/Execution context was destroyed|navigation/i.test(error.message)
+      ) {
+        throw error;
+      }
+      await page.waitForLoadState('domcontentloaded').catch(() => undefined);
+      await settleFrames(page, 4);
+      assertAuthedUrl(page);
+    }
+  }
   await fs.mkdir(SCREENSHOT_DIR, { recursive: true });
   const webpPath = path.join(SCREENSHOT_DIR, `${name}.webp`);
   await sharp(pngPath).webp({ quality: 92, effort: 5 }).toFile(webpPath);
@@ -166,7 +183,7 @@ async function openMainlineChapterOne(page: Page): Promise<void> {
   await expect(page.locator('[data-testid="mainline-stage-panel"]')).toBeVisible();
 }
 
-test.describe('引导手册 21 张截图（输出 frontend/public/guide/screenshots）', () => {
+test.describe('引导手册 23 张截图（输出 frontend/public/guide/screenshots）', () => {
   test('01-town-hub 小镇主城', async ({ page, context, request }, testInfo) => {
     await prepareStudentContext(context, request);
     await openWorld(page);
@@ -394,10 +411,20 @@ test.describe('引导手册 21 张截图（输出 frontend/public/guide/screensh
     const ragInput = page.locator('[data-testid="library-rag-input"]');
     await expect(ragInput).toBeVisible({ timeout: 30_000 });
     await ragInput.fill('input函数');
-    await page.locator('[data-testid="library-rag-submit"]').click();
+    const submit = page.locator('[data-testid="library-rag-submit"]');
+    await submit.click();
+    await expect(submit, '课件检索未完成').toBeEnabled({ timeout: 120_000 });
+    const answer = page.locator('[data-testid="library-rag-answer"]');
     const results = page.locator('[data-testid="library-rag-results"]');
-    await expect(results, '检索结果未渲染').toBeVisible({ timeout: 60_000 });
-    await expect(results, '检索结果缺少页码证据').toContainText(/第\s*\d+\s*页/, {
+    await expect
+      .poll(
+        async () => (await answer.isVisible().catch(() => false))
+          || (await results.isVisible().catch(() => false)),
+        { message: '检索结果未渲染', timeout: 60_000 },
+      )
+      .toBe(true);
+    const evidenceArea = await answer.isVisible().catch(() => false) ? answer : results;
+    await expect(evidenceArea, '检索结果缺少页码证据').toContainText(/第\s*\d+\s*页/, {
       timeout: 60_000,
     });
     await settleFrames(page, 4);
@@ -413,11 +440,15 @@ test.describe('引导手册 21 张截图（输出 frontend/public/guide/screensh
     await expect(composer).toBeVisible({ timeout: 30_000 });
     await composer.fill('帮我规划第 1 章怎么学，安排看视频、读讲义、做练习的完整计划');
     await composer.press('Enter');
+    await page.locator('[data-testid="workshop-open-calls"]').click();
+    await expect(page.locator('[data-testid="workshop-drawer-calls"]')).toBeVisible({
+      timeout: 30_000,
+    });
     // 多智能体工作室（marvis 面板）亮起且出现至少一个智能体工位即可拍（协同进行中最有现场感）。
     const marvis = page.locator('[data-testid="marvis-panel"]');
     await expect(marvis, '多智能体工作室未亮起').toBeVisible({ timeout: 120_000 });
     await expect(
-      marvis.locator('text=/故事板导演|讲义设计师|练习设计师|路径规划师/').first(),
+      marvis.locator('text=/设计师|审查官|规划师|安全员|学习总管/').first(),
       '工作室没有出现智能体工位',
     ).toBeVisible({ timeout: 120_000 });
     // 等几个工位点亮、流式推进一段，画面更有内容。
@@ -500,5 +531,126 @@ test.describe('引导手册 21 张截图（输出 frontend/public/guide/screensh
       page.locator('.code'),
       page.locator('.teacher-detail header p').first(),
     ]);
+  });
+
+  test('22-code-theater 代码剧场机关广场', async ({ page, context, request }, testInfo) => {
+    await prepareStudentContext(context, request);
+    await page.goto('/code-theater', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('[data-testid="code-theater-page"]')).toBeVisible();
+    await expect(page.locator('[data-testid="ct-quest"]')).toBeVisible();
+    await page.locator('[data-testid="ct-run"]').click();
+    await expect(page.locator('[data-testid="ct-world"]'), '代码剧场世界反馈未出现')
+      .toBeVisible({ timeout: 30_000 });
+    await expect(page.locator('[data-testid="ct-steps"]'), '代码剧场执行轨迹未出现')
+      .toBeVisible({ timeout: 30_000 });
+    await settleFrames(page, 6);
+    await captureShot(page, testInfo, '22-code-theater');
+  });
+
+  test('23-clients 多端下载与同步说明', async ({ page, context, request }, testInfo) => {
+    await prepareStudentContext(context, request);
+    await page.goto('/guide?topic=clients', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('[data-testid="guide-content"]')).toContainText('多端下载');
+    const downloads = page.locator('[data-testid="guide-downloads"]');
+    await downloads.scrollIntoViewIfNeeded();
+    await expect(downloads).toBeVisible();
+    await expect(downloads).toContainText('Android');
+    await expect(downloads).toContainText('Windows');
+    await settleFrames(page, 6);
+    await captureShot(page, testInfo, '23-clients');
+  });
+
+  // ── R-16 统一玩法新增：代码舞台 × 无尽闯关闭环（24–29） ─────────────────────────
+  // 24/28 代码舞台为纯前端 Pyodide（不依赖 graph/rag）；25/26/27/29 走后端 golden 兜底出题。
+
+  test('24-code-theater-stage 代码舞台·世界目标达成', async ({ page, context, request }, testInfo) => {
+    await prepareStudentContext(context, request);
+    await page.goto('/code-theater', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('[data-testid="code-theater-page"]')).toBeVisible();
+    await expect(page.locator('[data-testid="ct-quest"]')).toBeVisible();
+    // 把默认起手的 off-by-one（range(1,4)）改成正确 range(1,5)，跑出「世界目标达成」（绿）。
+    const editor = page.locator('.cm-content').first();
+    await editor.click();
+    await page.keyboard.press('Control+a');
+    await page.keyboard.press('Delete');
+    await page.keyboard.insertText(
+      'def light(lamp):\n    print(f"点亮第 {lamp} 盏路灯")\nfor lamp in range(1, 5):\n    light(lamp)\n',
+    );
+    await page.locator('[data-testid="ct-run"]').click();
+    await expect(page.locator('[data-testid="ct-world"]'), '代码舞台世界反馈未出现')
+      .toBeVisible({ timeout: 30_000 });
+    await expect(page.locator('[data-testid="ct-steps"]')).toBeVisible({ timeout: 30_000 });
+    await settleFrames(page, 12);
+    await captureShot(page, testInfo, '24-code-theater-stage');
+  });
+
+  test('28-code-theater-debug 代码舞台·看清错在哪', async ({ page, context, request }, testInfo) => {
+    await prepareStudentContext(context, request);
+    await page.goto('/code-theater', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('[data-testid="code-theater-page"]')).toBeVisible();
+    await expect(page.locator('[data-testid="ct-quest"]')).toBeVisible();
+    // 直接跑默认起手代码（range(1,4) 漏了第 4 盏）——世界目标未达成，可见「第 4 盏还黑着」的犯罪现场。
+    await page.locator('[data-testid="ct-run"]').click();
+    await expect(page.locator('[data-testid="ct-world"]'), '代码舞台世界反馈未出现')
+      .toBeVisible({ timeout: 30_000 });
+    await expect(page.locator('[data-testid="ct-steps"]')).toBeVisible({ timeout: 30_000 });
+    await settleFrames(page, 6);
+    await captureShot(page, testInfo, '28-code-theater-debug');
+  });
+
+  test('26-arena-tower 闯关塔阶梯', async ({ page, context, request }, testInfo) => {
+    await prepareStudentContext(context, request);
+    await page.goto('/arena/1', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('[data-testid="arena-page"]')).toBeVisible();
+    await expect(page.locator('[data-testid="arena-steps"]')).toBeVisible();
+    await expect(page.locator('[data-testid="arena-step-1-1"]')).toBeVisible();
+    await settleFrames(page, 4);
+    await captureShot(page, testInfo, '26-arena-tower');
+  });
+
+  test('27-loop-mastery 闯关塔关卡详情', async ({ page, context, request }, testInfo) => {
+    await prepareStudentContext(context, request);
+    await page.goto('/arena/1', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('[data-testid="arena-page"]')).toBeVisible();
+    await expect(page.locator('[data-testid="arena-detail"]')).toBeVisible();
+    await settleFrames(page, 4);
+    await captureShot(page, testInfo, '27-loop-mastery');
+  });
+
+  test('29-endless-weak-kc 无尽闯关·锁定章节出题', async ({ page, context, request }, testInfo) => {
+    test.setTimeout(120_000);
+    await prepareStudentContext(context, request);
+    await page.goto('/endless?chapter=1', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('[data-testid="endless-page"]')).toBeVisible();
+    await page.locator('[data-testid="endless-start"]').click();
+    // golden 兜底出题即可（不依赖 graph）；题面 + 统一编辑器 + 连胜/难度状态条出现即可拍。
+    await expect(page.locator('[data-testid="endless-body"]')).toBeVisible({ timeout: 60_000 });
+    await expect(page.locator('[data-testid="endless-focus-chapter"]')).toBeVisible();
+    await expect(page.locator('.cm-content').first()).toBeVisible();
+    await settleFrames(page, 4);
+    await captureShot(page, testInfo, '29-endless-weak-kc');
+  });
+
+  test('25-endless-result 无尽闯关·统一判题结果', async ({ page, context, request }, testInfo) => {
+    test.setTimeout(150_000);
+    await prepareStudentContext(context, request);
+    await page.goto('/endless?chapter=1', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('[data-testid="endless-page"]')).toBeVisible();
+    await page.locator('[data-testid="endless-start"]').click();
+    await expect(page.locator('[data-testid="endless-body"]')).toBeVisible({ timeout: 60_000 });
+    const editor = page.locator('.cm-content').first();
+    await expect(editor).toBeVisible();
+    await editor.click();
+    await page.keyboard.press('Control+a');
+    await page.keyboard.press('Delete');
+    await page.keyboard.insertText('print(1)\n');
+    await page.locator('[data-testid="endless-submit"]').click();
+    // 通过/未通过都展示统一 JudgeResultPanel（这正是要展示的统一结果面板）。
+    await expect(
+      page.locator('[data-testid="endless-result"]'),
+      '无尽闯关判题结果面板未出现（后端判题可能不可用）',
+    ).toBeVisible({ timeout: 90_000 });
+    await settleFrames(page, 4);
+    await captureShot(page, testInfo, '25-endless-result');
   });
 });

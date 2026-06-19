@@ -9,8 +9,11 @@ import type {
 } from '@/services/codeTheater/types';
 import {
   buildQuestResult,
+  runFreeVisualization,
   traceToRenderCommands,
 } from '@/services/codeTheater/pipeline';
+import { TRACE_SENTINEL_BEGIN, TRACE_SENTINEL_END } from '@/services/codeTheater/trace';
+import type { PyodideRunResult, PyodideRunner } from '@game/adapters/pyodide';
 import { LIGHT_STREET_LAMPS_QUEST } from '@/data/codeTheater/quests';
 
 /**
@@ -131,5 +134,63 @@ describe('buildQuestResult · trace + 点亮任务 → 世界判定 + world_effe
       'pending',
     ]);
     expect(effects.map((c) => c.payload.target)).toEqual([1, 2, 3, 4]);
+  });
+});
+
+// ── 自由可视化（训练场 WA/RE → 看自己的代码怎么跑），mock Pyodide 适配 ──
+interface FreeFakeRunner extends PyodideRunner {
+  lastStdin: string | undefined;
+}
+function freeFakeRunner(stdout: string): FreeFakeRunner {
+  const runner: FreeFakeRunner = {
+    lastStdin: undefined,
+    init: () => Promise.resolve(),
+    run: (_code: string, stdin = ''): Promise<PyodideRunResult> => {
+      runner.lastStdin = stdin;
+      return Promise.resolve({ stdout, stderr: '', durationMs: 1, isError: false });
+    },
+    dispose: () => {},
+  };
+  return runner;
+}
+function wrapTraceStdout(payload: unknown): string {
+  return `boot\n${TRACE_SENTINEL_BEGIN}\n${JSON.stringify(payload)}\n${TRACE_SENTINEL_END}\n`;
+}
+
+describe('runFreeVisualization · 自由可视化（无世界目标，mock Pyodide）', () => {
+  it('任意代码 → trace + 渲染指令；stdin 透传；不产出 world_effect', async () => {
+    const payload = {
+      records: [
+        { kind: 'line', line: 1 },
+        { kind: 'assign', line: 1, varName: 'n', value: '3', scope: 'global' },
+        { kind: 'output', line: 2, text: '3' },
+      ],
+      stdout: '3\n',
+      truncated: false,
+    };
+    const runner = freeFakeRunner(wrapTraceStdout(payload));
+    const res = await runFreeVisualization('n = int(input())\nprint(n)', '3\n', { runner });
+
+    expect(runner.lastStdin).toBe('3\n');
+    expect(res.trace.events.length).toBeGreaterThanOrEqual(3);
+    expect(res.commands.length).toBeGreaterThan(0);
+    expect(res.commands.some((c) => c.action === 'world_effect')).toBe(false);
+    const actions = new Set(res.commands.map((c) => c.action));
+    expect(actions.has('set_var')).toBe(true);
+    expect(actions.has('speak')).toBe(true);
+  });
+
+  it('运行时异常也能可视化（exception → stumble），不抛错', async () => {
+    const payload = {
+      records: [
+        { kind: 'line', line: 1 },
+        { kind: 'exception', line: 1, excType: 'ZeroDivisionError', message: 'division by zero' },
+      ],
+      stdout: '',
+      truncated: false,
+    };
+    const runner = freeFakeRunner(wrapTraceStdout(payload));
+    const res = await runFreeVisualization('print(1 / 0)', '', { runner });
+    expect(res.commands.some((c) => c.action === 'stumble')).toBe(true);
   });
 });

@@ -12,17 +12,24 @@ import AppLayout from '@/app/AppLayout.vue';
 import { kcDisplayName } from '@/data/kcNames';
 import BossSprite from '@/components/boss/BossSprite.vue';
 import { KindRouter } from '@/components/arena';
+import PyButton from '@/components/ui/PyButton.vue';
+import PythonCodeEditor from '@/components/training/PythonCodeEditor.vue';
+import JudgeResultPanel from '@/components/challenge/JudgeResultPanel.vue';
 import { useEndlessRun } from '@/composables/useEndlessRun';
 import { MAIN_QUEST_BOSSES } from '@/data/bossCatalog';
 import { useArenaStore } from '@stores/arena';
 import { useMainlineStore } from '@stores/mainline';
 import { useToastStore } from '@stores/toast';
+import { useCodeTheaterStore } from '@stores/codeTheater';
+import type { ArenaLevelKind } from '@/types/arena';
+import type { ChallengeResult } from '@/api/dto/CodeChallenge';
 
 const router = useRouter();
 const route = useRoute();
 const arena = useArenaStore();
 const mainline = useMainlineStore();
 const toast = useToastStore();
+const codeTheater = useCodeTheaterStore();
 
 // 从 query 读 ?chapter & ?arenaLevel：EndlessPage 同时承担「随机刷题」与
 // 「ArenaPage 闯关塔单关入口」两个角色。arenaLevel 形如 "1-3"，通关后回 ArenaPage markCleared。
@@ -168,13 +175,49 @@ const kindLabel = computed<string>(() => {
   return KIND_LABELS[kind] ?? kind;
 });
 
-watch(
-  () => focusChapter.value,
-  (next) => {
-    if (run.phase.value === 'idle' || run.phase.value === 'error') return;
-    void next;
-  },
-);
+// 把 query 里的任意 kind 字符串收窄成合法 ArenaLevelKind；非法 / 缺省 → null（回退到通用代码编辑器路径）。
+const ARENA_KINDS = Object.keys(KIND_LABELS) as ArenaLevelKind[];
+const preferredKindTyped = computed<ArenaLevelKind | null>(() => {
+  const k = preferredKind.value;
+  return k && (ARENA_KINDS as string[]).includes(k) ? (k as ArenaLevelKind) : null;
+});
+
+// 后端 BossAttemptResultDto → 共享 ChallengeResult，喂统一的 JudgeResultPanel（带 aria-live 自动播报，NFR-USE）。
+const challengeResult = computed<ChallengeResult | null>(() => {
+  const r = run.lastResult.value;
+  if (!r) return null;
+  return {
+    passed: r.passed,
+    passedCases: r.passedTestCases,
+    totalCases: r.totalTestCases,
+    verdict: r.passed ? 'AC' : 'WA',
+    feedback: r.feedback,
+    ...(r.failureFirstHint ? { firstHint: r.failureFirstHint } : {}),
+  };
+});
+
+// 本题加分（展示用）：取最近一条历史记录的得分。
+const lastScore = computed<number>(() => run.history.value[0]?.score ?? 0);
+
+// 闭环联动：做错时一键跳「代码舞台」把这段代码的执行过程演出来，看清错在哪（练 → 看为何错 → 再练）。
+function onSeeInTheater(): void {
+  const p = run.problem.value;
+  codeTheater.setFreeRun({
+    code: run.code.value,
+    stdin: p?.sampleInput ?? '',
+    label: `无尽闯关 · ${kcDisplayName(p?.kcCode)} · 看执行`,
+  });
+  void router.push('/code-theater');
+}
+
+// 提交期出错（判题服务不可用）时，若题目仍在则允许「重试提交」，否则「重新开始」。
+async function onRetry(): Promise<void> {
+  if (run.problem.value) {
+    await onSubmit();
+  } else {
+    await onStartRun();
+  }
+}
 </script>
 
 <template>
@@ -184,14 +227,14 @@ watch(
       data-testid="endless-page"
     >
       <header class="endless-head">
-        <button
-          type="button"
-          class="endless-btn endless-btn--exit"
-          data-testid="endless-exit"
+        <PyButton
+          variant="secondary"
+          size="sm"
+          test-id="endless-exit"
           @click="onExit"
         >
           ← 返回小镇
-        </button>
+        </PyButton>
         <h1 class="endless-title">
           {{ arenaLevelId ? `闯关塔 ${arenaLevelId} · ${kindLabel}` : '无尽闯关 · 连续出题' }}
         </h1>
@@ -240,15 +283,15 @@ watch(
             </option>
           </select>
         </label>
-        <button
+        <PyButton
           v-if="run.phase.value === 'idle'"
-          type="button"
-          class="endless-btn endless-btn--primary"
-          data-testid="endless-start"
+          variant="primary"
+          size="sm"
+          test-id="endless-start"
           @click="onStartRun"
         >
           开始无尽
-        </button>
+        </PyButton>
         <span
           v-else
           class="endless-rate"
@@ -279,6 +322,8 @@ watch(
       <div
         v-else-if="run.phase.value === 'loading'"
         class="endless-loading"
+        role="status"
+        aria-live="polite"
       >
         正在抽题中…
       </div>
@@ -286,15 +331,18 @@ watch(
       <div
         v-else-if="run.phase.value === 'error'"
         class="endless-error"
+        role="alert"
+        aria-live="assertive"
       >
-        出错：{{ run.errorMessage.value }}
-        <button
-          type="button"
-          class="endless-btn"
-          @click="onStartRun"
+        <p>{{ run.errorMessage.value }}</p>
+        <PyButton
+          variant="primary"
+          size="sm"
+          test-id="endless-retry"
+          @click="onRetry"
         >
-          重新开始
-        </button>
+          {{ run.problem.value ? '重试提交' : '重新开始' }}
+        </PyButton>
       </div>
 
       <div
@@ -319,9 +367,9 @@ watch(
           </header>
 
           <KindRouter
-            v-if="preferredKind && run.problem.value"
+            v-if="preferredKindTyped && run.problem.value"
             v-model:code="run.code.value"
-            :kind="preferredKind"
+            :kind="preferredKindTyped"
             :problem="run.problem.value"
             @timeout="onSubmit"
           >
@@ -341,54 +389,56 @@ watch(
               </div>
             </details>
 
-            <label class="endless-editor">
-              <span>你的代码（Python 3）</span>
-              <textarea
-                v-model="run.code.value"
+            <div class="endless-editor">
+              <span class="endless-editor__label">你的代码（Python 3）</span>
+              <div
+                class="endless-editor__host"
                 data-testid="endless-code"
-                rows="10"
-                placeholder="# 在这里写 Python 代码，stdout 等于样例期望即可"
-              />
-            </label>
+              >
+                <PythonCodeEditor v-model="run.code.value" />
+              </div>
+            </div>
           </template>
           <div class="endless-actions">
-            <button
-              type="button"
-              class="endless-btn endless-btn--primary"
-              data-testid="endless-submit"
+            <PyButton
+              variant="primary"
+              test-id="endless-submit"
               :disabled="submitDisabled"
               @click="onSubmit"
             >
               {{ run.phase.value === 'evaluating' ? '评测中…' : '提交答案' }}
-            </button>
-            <button
+            </PyButton>
+            <PyButton
               v-if="showNextButton"
-              type="button"
-              class="endless-btn endless-btn--next"
-              data-testid="endless-next"
+              variant="secondary"
+              test-id="endless-next"
               @click="onNext"
             >
               {{ run.phase.value === 'passed' ? '下一题（难度提升）' : '继续挑战（难度下调）' }}
-            </button>
+            </PyButton>
+            <PyButton
+              v-if="run.phase.value === 'failed'"
+              variant="secondary"
+              test-id="endless-see-theater"
+              @click="onSeeInTheater"
+            >
+              去代码舞台看执行
+            </PyButton>
           </div>
           <div
-            v-if="run.lastResult.value"
+            v-if="challengeResult"
             class="endless-result"
-            :class="{
-              'endless-result--passed': run.lastResult.value.passed,
-              'endless-result--failed': !run.lastResult.value.passed,
-            }"
             data-testid="endless-result"
           >
-            <strong>{{ run.lastResult.value.passed ? '通过' : '未通过' }}</strong>
-            · 通过用例 {{ run.lastResult.value.passedTestCases }} / {{ run.lastResult.value.totalTestCases }}
-            · 本题加分 {{ run.lastResult.value.passed ? '+' + (run.history.value[0]?.score ?? 0) : '0' }}
-            <p>{{ run.lastResult.value.feedback }}</p>
+            <JudgeResultPanel
+              :result="challengeResult"
+              mode="judge"
+            />
             <p
-              v-if="run.lastResult.value.failureFirstHint"
-              class="hint"
+              v-if="challengeResult.passed"
+              class="endless-result__score"
             >
-              提示：{{ run.lastResult.value.failureFirstHint }}
+              本题加分 +{{ lastScore }}
             </p>
           </div>
         </article>
@@ -654,43 +704,28 @@ watch(
   font-size: 12px;
   color: var(--pyt-color-text-hint);
 }
-.endless-editor textarea {
-  font-family: var(--pyt-font-mono, 'JetBrains Mono', monospace);
-  font-size: 13px;
-  background: var(--pyt-color-terminal-bg);
-  color: var(--pyt-color-terminal-text);
-  border: 2px solid var(--pyt-color-border-strong);
+.endless-editor__label {
+  font-size: 12px;
+  color: var(--pyt-color-text-hint);
+}
+.endless-editor__host {
+  height: 260px;
+  min-height: 220px;
   border-radius: var(--pyt-radius-sm);
-  padding: 8px;
-  resize: vertical;
-  min-height: 160px;
+  overflow: hidden;
 }
 .endless-actions {
   display: flex;
   gap: 8px;
 }
 .endless-result {
-  padding: 8px 12px;
-  border-radius: var(--pyt-radius-sm);
+  display: grid;
+  gap: 6px;
+}
+.endless-result__score {
+  margin: 0;
   font-size: 12px;
-  background: var(--pyt-color-bg-soft);
-  border: 1px solid var(--pyt-color-border);
-  color: var(--pyt-color-text-primary);
-}
-.endless-result--passed {
-  background: var(--pyt-color-success-bg);
-  border-color: var(--pyt-color-success);
-}
-.endless-result--failed {
-  background: var(--pyt-color-danger-bg);
-  border-color: var(--pyt-color-danger);
-}
-.endless-result p {
-  margin: 4px 0 0;
-}
-.hint {
-  font-style: italic;
-  color: var(--pyt-color-warning);
+  color: var(--pyt-color-success);
 }
 .endless-side h3 {
   margin: 0;

@@ -49,6 +49,8 @@ class BossProblem:
     reference_solution: str
     test_cases: list[TestCase]
     difficulty: int
+    # 题型；空串=代码题（stdout 沙箱判题）。文本题（short_answer/teach_back/pdf_question）走接地评分。
+    kind: str = ""
     hints: list[str] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -61,6 +63,8 @@ class BossProblem:
             "stage": self.stage,
             "difficulty": self.difficulty,
             "kcCode": self.kc_code,
+            # 透传题型，便于 backend 落库并在 evaluate 时回传，evaluator 据此选判题路径。
+            "kind": self.kind,
             "statement": self.statement,
             "hints": self.hints,
             "sampleInput": sample.input,

@@ -40,10 +40,7 @@ const showTips = ref(false);
           @error="($event.target as HTMLImageElement).style.display='none'"
         >
         <div class="bubble-text">
-          <p
-            class="npc-says"
-            style="color: #111111;"
-          >
+          <p class="npc-says">
             "同学，我不太理解这个概念，你能用简单的话给我解释一下吗？"
           </p>
           <pre class="concept-prompt">{{ problem.statement }}</pre>
@@ -99,7 +96,7 @@ const showTips = ref(false);
 .npc-bubble { display: flex; gap: 12px; align-items: flex-start; }
 .npc-avatar { width: 48px; height: 48px; image-rendering: pixelated; border: 2px solid var(--pyt-color-gold); border-radius: 4px; flex-shrink: 0; }
 .bubble-text { flex: 1; }
-.npc-says { margin: 0 0 8px; font-style: italic; color: #111111; font-size: 13px; }
+.npc-says { margin: 0 0 8px; font-style: italic; color: var(--pyt-color-text-primary); font-size: 13px; }
 .concept-prompt { margin: 0; padding: 8px; background: var(--pyt-color-terminal-bg); border: 1px solid var(--pyt-color-border-strong); white-space: pre-wrap; font-size: 13px; color: var(--pyt-color-terminal-text); }
 .teach-editor { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
 .teach-editor textarea { font-family: inherit; font-size: 14px; background: var(--pyt-color-terminal-bg); color: var(--pyt-color-terminal-text); border: 2px solid var(--pyt-color-accent); padding: 10px; resize: vertical; min-height: 120px; line-height: 1.6; }

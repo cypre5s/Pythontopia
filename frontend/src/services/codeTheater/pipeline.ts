@@ -11,7 +11,7 @@
  */
 
 import { mapEvent } from '@/services/codeTheater/mappers';
-import { runTrace } from '@/services/codeTheater/trace';
+import { runTrace, type RunTraceOptions } from '@/services/codeTheater/trace';
 import type { MapContext, RenderCommand, Trace } from '@/services/codeTheater/types';
 import {
   checkQuestWorldGoal,
@@ -96,4 +96,24 @@ export async function runCodeForQuest(
 ): Promise<QuestRunResult> {
   const trace = await runTrace(code);
   return buildQuestResult(trace, quest);
+}
+
+/** 自由可视化结果：只有执行轨迹 + 渲染指令，无具身任务/世界目标。 */
+export interface FreeRunResult {
+  readonly trace: Trace;
+  readonly commands: RenderCommand[];
+}
+
+/**
+ * 自由可视化：跑任意一段学生代码（如训练场里 WA/RE 的提交），只把执行过程整形成
+ * 可演出的渲染指令，不绑定任何具身任务/世界目标。`stdin` 透传给 `input()`。
+ * 同样是「学习预览」，掌握度仍以服务端判题为准。
+ */
+export async function runFreeVisualization(
+  code: string,
+  stdin = '',
+  options: Pick<RunTraceOptions, 'runner'> = {},
+): Promise<FreeRunResult> {
+  const trace = await runTrace(code, { stdin, runner: options.runner });
+  return { trace, commands: traceToRenderCommands(trace) };
 }

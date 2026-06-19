@@ -2,8 +2,10 @@ package com.pythontopia.world.boss;
 
 import com.pythontopia.coursepack.domain.CourseKc;
 import com.pythontopia.coursepack.repository.CoursePackRepository;
+import com.pythontopia.learner.event.LearningEvent;
 import com.pythontopia.learner.mastery.MasteryRepository;
 import com.pythontopia.learner.mastery.MasterySnapshot;
+import com.pythontopia.mainline.ChapterCatalog;
 import com.pythontopia.world.boss.dto.BossAttemptRequest;
 import com.pythontopia.world.boss.dto.BossAttemptResultDto;
 import com.pythontopia.world.boss.dto.BossEvaluateResultDto;
@@ -22,6 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientException;
 
@@ -52,17 +55,20 @@ public class BossService {
   private final MasteryRepository masteryRepository;
   private final CoursePackRepository coursePackRepository;
   private final EndlessPregenService pregenService;
+  private final ApplicationEventPublisher eventPublisher;
   private final ConcurrentMap<String, CachedProblem> cache = new ConcurrentHashMap<>();
 
   public BossService(
       BossGraphClient graphClient,
       MasteryRepository masteryRepository,
       CoursePackRepository coursePackRepository,
-      EndlessPregenService pregenService) {
+      EndlessPregenService pregenService,
+      ApplicationEventPublisher eventPublisher) {
     this.graphClient = graphClient;
     this.masteryRepository = masteryRepository;
     this.coursePackRepository = coursePackRepository;
     this.pregenService = pregenService;
+    this.eventPublisher = eventPublisher;
   }
 
   public BossProblemDto fetchProblem(int chapter, BossProblemRequest request, Long userId) {
@@ -199,6 +205,10 @@ public class BossService {
               : graphResult.runtimeError() != null
                   ? "代码运行错误：" + graphResult.runtimeError()
                   : "未通过 ❌ 部分用例失败，请参考下方 hint。";
+      // 闭环关键：服务端沙箱真实判完后（且仅此路径）才发学习事件，与 SubmissionService 同一套事件驱动
+      // KC 掌握度（测）+ 8 维画像被动修订。缓存过期 / 缺 testCases / graph 不可用等「未判定」路径不发，
+      // 避免把非判题结果污染进掌握度。单次 attempt 仅发一次，天然幂等。
+      publishPracticeOutcome(userId, problem, graphResult);
       return new BossAttemptResultDto(
           request.problemId(),
           graphResult.passed(),
@@ -221,6 +231,51 @@ public class BossService {
           0,
           "graph 评测服务不可用，请用前端 Pyodide 校验后再次提交。");
     }
+  }
+
+  /**
+   * 把一次 boss / endless 的服务端判题结果发布为 {@link LearningEvent}：通过 → {@code PracticeSucceeded}，
+   * 未通过 → {@code PracticeFailed}（verdict 取 RE/WA），与 {@code SubmissionService} 同一套事件，
+   * 统一驱动 KC 掌握度与 8 维画像被动修订（修复 /endless、/arena 练习此前不回流学情的断环）。
+   *
+   * <p>boss 题为 AI 现场生成、无 {@code course_problem} 数字主键，故事件 {@code problemId} 传 {@code null}
+   * （各监听器对 null 均安全）；难度按题目 1..5 映射到 mastery 可识别的档位字符串，保留难度加权语义。
+   * userId 为空（匿名/未鉴权）或题目缺 kcCode 时安全跳过，绝不抛错影响判题返回。
+   */
+  private void publishPracticeOutcome(
+      Long userId, BossInternalProblem problem, BossEvaluateResultDto result) {
+    if (userId == null) {
+      return;
+    }
+    String kcCode = problem.kcCode();
+    if (kcCode == null || kcCode.isBlank()) {
+      LOG.warn("boss attempt problemId={} has no kcCode; skip LearningEvent", problem.problemId());
+      return;
+    }
+    String difficulty = difficultyBand(problem.difficulty());
+    if (result.passed()) {
+      eventPublisher.publishEvent(
+          new LearningEvent.PracticeSucceeded(userId, kcCode, null, difficulty));
+    } else {
+      String verdict =
+          result.runtimeError() != null && !result.runtimeError().isBlank() ? "RE" : "WA";
+      eventPublisher.publishEvent(
+          new LearningEvent.PracticeFailed(userId, kcCode, null, verdict, difficulty));
+    }
+  }
+
+  /**
+   * Boss 难度 int(1..5) → mastery 难度系数可识别的档位字符串（驱动难度加权：易题失败重罚、难题通过厚奖，
+   * 见 {@code MasteryProperties.difficultyMultiplier}）。1..2→easy，3→medium，4..5→hard。
+   */
+  static String difficultyBand(int difficulty) {
+    if (difficulty <= 2) {
+      return "easy";
+    }
+    if (difficulty >= 4) {
+      return "hard";
+    }
+    return "medium";
   }
 
   /**
@@ -321,21 +376,20 @@ public class BossService {
     return fraction >= 0.75;
   }
 
-  /** 章号 1..7 → 默认 KC 起始码（与 MainQuest data 表对齐）。 */
+  /**
+   * 章号 1..7 → 默认锚定 KC（该章起始 KC code）。权威映射统一走 {@link ChapterCatalog}
+   * （与 {@code data/course-pack-43/json/course_kc.json} 对齐：ch1=001..007、ch2=008..016、
+   * ch3=017..030、ch4=031..038、ch5=039..047、ch6=048..053、ch7=054..065）。
+   *
+   * <p>修复旧硬编码表 ch2..7 整体「错位一章」的缺陷（如旧值 ch2→KC-006、ch3→KC-016 实际分别属于
+   * 第 1、2 章），该错位会让 boss 出题与学情聚合锚到错误章节的 KC。不再臆造 KC，全部源自课程包。
+   */
   String resolveKc(int chapter, String override) {
     if (override != null && !override.isBlank()) {
       return override;
     }
-    return switch (chapter) {
-      case 1 -> "PY43-KC-001";
-      case 2 -> "PY43-KC-006";
-      case 3 -> "PY43-KC-016";
-      case 4 -> "PY43-KC-026";
-      case 5 -> "PY43-KC-036";
-      case 6 -> "PY43-KC-046";
-      case 7 -> "PY43-KC-056";
-      default -> "PY43-KC-001";
-    };
+    int safeChapter = ChapterCatalog.isValidChapter(chapter) ? chapter : 1;
+    return ChapterCatalog.kcCodes(safeChapter).get(0);
   }
 
   BossProblemDto buildGoldenProblem(int chapter, int stage, String kcCode, int difficulty) {

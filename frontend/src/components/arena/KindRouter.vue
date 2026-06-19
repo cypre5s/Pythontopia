@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { BossProblemDto } from '@/api/dto/Boss';
+import type { ArenaLevelKind } from '@/types/arena';
 import FillBlankCard from './FillBlankCard.vue';
 import DebugCard from './DebugCard.vue';
 import ShortAnswerCard from './ShortAnswerCard.vue';
@@ -11,7 +12,7 @@ import BugMineCard from './BugMineCard.vue';
 import PdfQuestionCard from './PdfQuestionCard.vue';
 
 defineProps<{
-  kind: string | null;
+  kind: ArenaLevelKind | null;
   problem: BossProblemDto;
 }>();
 

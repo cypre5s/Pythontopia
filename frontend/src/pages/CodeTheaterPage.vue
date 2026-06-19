@@ -7,13 +7,18 @@
  * 若当前存在 Phaser 单例（如从 /world 进入），同时驱动 CodeTheaterScene 让傀儡走代码（渐进增强、
  * 守卫式 no-op）。Pyodide 预览仅用于「看执行 / 学习预览」，掌握度仍以服务端判题为准。
  */
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import PythonCodeEditor from '@/components/training/PythonCodeEditor.vue';
 import TheaterStageCanvas from '@/components/codeTheater/TheaterStageCanvas.vue';
-import { runCodeForQuest, type QuestRunResult } from '@/services/codeTheater/pipeline';
+import {
+  runCodeForQuest,
+  runFreeVisualization,
+  type QuestRunResult,
+} from '@/services/codeTheater/pipeline';
 import { TraceExecutionError } from '@/services/codeTheater/trace';
 import { CODE_THEATER_QUESTS, type CodeTheaterQuest } from '@/data/codeTheater/quests';
 import type { TraceEvent } from '@/services/codeTheater/types';
+import { useCodeTheaterStore } from '@stores/codeTheater';
 
 const quests = CODE_THEATER_QUESTS;
 const activeQuestId = ref<string>(quests[0]?.id ?? '');
@@ -27,6 +32,12 @@ const code = ref<string>(activeQuest.value.starterCode ?? '');
 const running = ref(false);
 const errorMsg = ref<string>('');
 const result = ref<QuestRunResult | null>(null);
+
+// 自由可视化模式：从训练场带着「学生这次提交的代码 + 调试输入」进来，只看执行、不绑世界目标。
+const ctStore = useCodeTheaterStore();
+const freeMode = ref(false);
+const freeLabel = ref('');
+const freeStdin = ref('');
 
 // coverage 与 sequence 两种世界目标都带 targets/targetNoun/unit/actionVerb，目标清单 UI 通用。
 const targetGoal = computed(() => {
@@ -82,28 +93,47 @@ function describeEvent(event: TraceEvent): string {
   }
 }
 
+/** 渐进增强：存在 Phaser 单例时让傀儡在机关广场走代码；不存在则纯 DOM 视图已足够。 */
+async function driveStage(
+  commands: QuestRunResult['commands'],
+  trace: QuestRunResult['trace'],
+): Promise<void> {
+  try {
+    const [{ getPhaserGame }, scene] = await Promise.all([
+      import('@game/adapters/phaserGame'),
+      import('@game/scenes/CodeTheaterScene'),
+    ]);
+    const game = getPhaserGame();
+    if (game) {
+      scene.ensureCodeTheaterSceneStarted(
+        game as unknown as Parameters<typeof scene.ensureCodeTheaterSceneStarted>[0],
+      );
+      // 关键：把 Trace 一并喂给舞台——脚本梯才有逐行源码、死循环截断才会触发「傀儡原地踱步」。
+      scene.loadCodeTheater(commands, { trace });
+    }
+  } catch {
+    /* Phaser 不可用：DOM 执行视图已是完整学习反馈，忽略 */
+  }
+}
+
 async function run(): Promise<void> {
   if (running.value) return;
   running.value = true;
   errorMsg.value = '';
   try {
-    const res = await runCodeForQuest(code.value, activeQuest.value);
-    result.value = res;
-    // 渐进增强：存在 Phaser 单例时让傀儡在机关广场走代码；不存在则纯 DOM 视图已足够。
-    try {
-      const [{ getPhaserGame }, scene] = await Promise.all([
-        import('@game/adapters/phaserGame'),
-        import('@game/scenes/CodeTheaterScene'),
-      ]);
-      const game = getPhaserGame();
-      if (game) {
-        scene.ensureCodeTheaterSceneStarted(
-          game as unknown as Parameters<typeof scene.ensureCodeTheaterSceneStarted>[0],
-        );
-        scene.loadCodeTheater(res.commands);
-      }
-    } catch {
-      /* Phaser 不可用：DOM 执行视图已是完整学习反馈，忽略 */
+    if (freeMode.value) {
+      const res = await runFreeVisualization(code.value, freeStdin.value);
+      // 自由模式无世界目标：用中性 world 占位，模板里世界面板对自由模式隐藏。
+      result.value = {
+        trace: res.trace,
+        commands: res.commands,
+        world: { achieved: true, satisfied: [], unmet: [], outOfRange: [], feedback: '' },
+      };
+      await driveStage(res.commands, res.trace);
+    } else {
+      const res = await runCodeForQuest(code.value, activeQuest.value);
+      result.value = res;
+      await driveStage(res.commands, res.trace);
     }
   } catch (err) {
     errorMsg.value =
@@ -116,10 +146,27 @@ async function run(): Promise<void> {
 }
 
 function reset(): void {
+  if (freeMode.value) {
+    // 自由模式保留带进来的代码，只清运行结果，便于改完再跑。
+    result.value = null;
+    errorMsg.value = '';
+    return;
+  }
   code.value = activeQuest.value.starterCode ?? '';
   result.value = null;
   errorMsg.value = '';
 }
+
+onMounted(() => {
+  // 训练场 WA/RE「去代码剧场看执行」交接：有待消费载荷则进自由模式并自动跑一遍。
+  const pending = ctStore.consumeFreeRun();
+  if (!pending) return;
+  freeMode.value = true;
+  freeLabel.value = pending.label;
+  freeStdin.value = pending.stdin;
+  code.value = pending.code;
+  void run();
+});
 </script>
 
 <template>
@@ -134,7 +181,29 @@ function reset(): void {
       </p>
     </header>
 
+    <section
+      v-if="freeMode"
+      class="ct-free"
+      data-testid="ct-free-banner"
+    >
+      <span
+        class="ct-free__icon"
+        aria-hidden="true"
+      >🔍</span>
+      <div class="ct-free__body">
+        <strong>自由可视化 · 看你自己的代码怎么跑</strong>
+        <span>{{ freeLabel ? `来自训练场：${freeLabel}` : '来自训练场的提交' }}——学习预览不判分；可在下方改代码后再「▶ 运行」。</span>
+      </div>
+      <RouterLink
+        class="ct-free__back"
+        to="/training"
+      >
+        ← 返回训练场
+      </RouterLink>
+    </section>
+
     <nav
+      v-if="!freeMode"
       class="ct-quest-tabs"
       data-testid="ct-quest-tabs"
       aria-label="代码剧场任务"
@@ -155,6 +224,7 @@ function reset(): void {
     </nav>
 
     <section
+      v-if="!freeMode"
       class="ct-quest"
       data-testid="ct-quest"
     >
@@ -194,6 +264,7 @@ function reset(): void {
               class="ct-btn ct-btn--primary"
               data-testid="ct-run"
               :disabled="running"
+              :aria-busy="running"
               @click="run"
             >
               {{ running ? '运行中…' : '▶ 运行' }}
@@ -210,15 +281,19 @@ function reset(): void {
           v-if="errorMsg"
           class="ct-error"
           data-testid="ct-error"
+          role="alert"
         >
           {{ errorMsg }}
         </p>
 
         <template v-if="result">
           <div
+            v-if="!freeMode"
             class="ct-world"
             :class="result.world.achieved ? 'ct-world--ok' : 'ct-world--miss'"
             data-testid="ct-world"
+            role="status"
+            aria-live="polite"
           >
             <div class="ct-world__head">
               {{ result.world.achieved ? '✅ 世界目标达成' : '🚧 还没全部完成' }}
@@ -239,13 +314,13 @@ function reset(): void {
                     ? 'ct-field--done'
                     : 'ct-field--pending'
                 "
-                :title="
+                :aria-label="
                   result.world.satisfied.includes(target)
                     ? `第 ${target} ${goalUnit}${goalNoun}：已${goalVerb}`
                     : `第 ${target} ${goalUnit}${goalNoun}：还没${goalVerb}`
                 "
               >
-                {{ result.world.satisfied.includes(target) ? '🟢' : '⚪' }}
+                <span aria-hidden="true">{{ result.world.satisfied.includes(target) ? '🟢' : '⚪' }}</span>
                 第{{ target }}{{ goalUnit }}{{ goalNoun }}
               </span>
             </div>
@@ -301,19 +376,62 @@ function reset(): void {
   overflow-y: auto;
   padding: 18px 22px 32px;
   font-family: var(--pyt-font-pixel), monospace;
-  color: #2f2412;
-  background: var(--pyt-color-bg-primary, #fbf7ec);
+  color: var(--pyt-color-text-primary);
+  background: var(--pyt-color-bg-primary);
 }
 .ct-head__title {
   margin: 0 0 4px;
   font-size: 20px;
-  color: #7a5210;
+  color: var(--pyt-color-primary);
 }
 .ct-head__sub {
   margin: 0 0 14px;
   font-size: 13px;
   line-height: 1.6;
-  color: var(--pyt-color-text-muted, #6b5836);
+  color: var(--pyt-color-text-muted);
+}
+.ct-free {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  border: 2px solid var(--pyt-color-border-strong);
+  border-radius: var(--pyt-radius-lg);
+  background: var(--pyt-color-warning-bg);
+}
+.ct-free__icon {
+  font-size: 22px;
+  line-height: 1;
+}
+.ct-free__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.ct-free__body strong {
+  font-size: 14px;
+  color: var(--pyt-color-primary-dark);
+}
+.ct-free__body span {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--pyt-color-text-hint);
+}
+.ct-free__back {
+  flex-shrink: 0;
+  font-size: 12px;
+  padding: 5px 12px;
+  border-radius: var(--pyt-radius-lg);
+  border: 2px solid var(--pyt-color-border-strong);
+  background: var(--pyt-color-gold);
+  color: var(--pyt-color-primary-dark);
+  text-decoration: none;
+}
+.ct-free__back:hover {
+  background: var(--pyt-color-gold-bright);
 }
 .ct-quest-tabs {
   display: flex;
@@ -325,29 +443,29 @@ function reset(): void {
   font-family: inherit;
   font-size: 12px;
   padding: 5px 12px;
-  border-radius: 6px;
+  border-radius: var(--pyt-radius-lg);
   cursor: pointer;
-  border: 2px solid #c9a86b;
-  background: #fffdf6;
-  color: #6b5836;
+  border: 2px solid var(--pyt-color-border);
+  background: var(--pyt-color-bg-elevated);
+  color: var(--pyt-color-text-hint);
 }
 .ct-tab:hover:not(:disabled) {
-  background: #fff3cd;
+  background: var(--pyt-color-warning-bg);
 }
 .ct-tab:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
 .ct-tab--active {
-  background: #f7d774;
-  color: #2a1a08;
-  border-color: #8c6a23;
+  background: var(--pyt-color-gold);
+  color: var(--pyt-color-primary-dark);
+  border-color: var(--pyt-color-border-strong);
   font-weight: 700;
 }
 .ct-quest {
-  border: 2px solid #c9a86b;
-  border-radius: 8px;
-  background: #fff8df;
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-lg);
+  background: var(--pyt-color-bg-soft);
   padding: 12px 14px;
   margin-bottom: 14px;
 }
@@ -357,26 +475,27 @@ function reset(): void {
   gap: 8px;
   font-size: 15px;
   font-weight: 700;
-  color: #5a3d12;
+  color: var(--pyt-color-primary-dark);
 }
 .ct-quest__kc {
   font-size: 11px;
   padding: 1px 8px;
-  border-radius: 999px;
-  background: #d6ead1;
-  color: #2d5b1b;
-  border: 1px solid #4d6e1d;
+  border-radius: var(--pyt-radius-full);
+  background: var(--pyt-color-success-bg);
+  color: var(--pyt-color-success);
+  border: 1px solid var(--pyt-color-success);
 }
 .ct-quest__prompt {
   margin: 8px 0 0;
   font-size: 13px;
   line-height: 1.7;
 }
+/* 舞台与编辑器外壳保留蓝黑暗色：与内嵌 CodeMirror 暗色编辑器配套（同 EndlessPage 的终端深色例外）。 */
 .ct-stage {
   height: 360px;
   margin-bottom: 14px;
-  border: 2px solid #8c6a23;
-  border-radius: 8px;
+  border: 2px solid var(--pyt-color-border-strong);
+  border-radius: var(--pyt-radius-lg);
   overflow: hidden;
   background: #141821;
 }
@@ -399,8 +518,8 @@ function reset(): void {
   display: flex;
   flex-direction: column;
   min-height: 360px;
-  border: 2px solid #8c6a23;
-  border-radius: 8px;
+  border: 2px solid var(--pyt-color-border-strong);
+  border-radius: var(--pyt-radius-lg);
   overflow: hidden;
   background: #111827;
 }
@@ -414,7 +533,7 @@ function reset(): void {
 }
 .ct-editor__label {
   font-size: 12px;
-  color: #cdd9e8;
+  color: var(--pyt-color-text-on-dark);
 }
 .ct-editor__actions {
   display: flex;
@@ -428,25 +547,25 @@ function reset(): void {
   font-family: inherit;
   font-size: 12px;
   padding: 4px 14px;
-  border-radius: 6px;
+  border-radius: var(--pyt-radius-lg);
   cursor: pointer;
-  border: 2px solid #8c6a23;
+  border: 2px solid var(--pyt-color-border-strong);
 }
 .ct-btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
 .ct-btn--primary {
-  background: #f7d774;
-  color: #2a1a08;
-  box-shadow: 0 2px 0 #8c6a23;
+  background: var(--pyt-color-gold);
+  color: var(--pyt-color-primary-dark);
+  box-shadow: 0 2px 0 var(--pyt-color-border-strong);
 }
 .ct-btn--primary:hover:not(:disabled) {
-  background: #fde48a;
+  background: var(--pyt-color-gold-bright);
 }
 .ct-btn--ghost {
   background: transparent;
-  color: #cdd9e8;
+  color: var(--pyt-color-text-on-dark);
   border-color: rgba(148, 163, 184, 0.5);
 }
 .ct-result {
@@ -459,23 +578,23 @@ function reset(): void {
   margin: 0;
   padding: 10px 12px;
   font-size: 13px;
-  border-radius: 6px;
-  background: #f8d7d0;
-  border: 1px solid var(--pyt-color-danger, #c0392b);
-  color: #b3402a;
+  border-radius: var(--pyt-radius-lg);
+  background: var(--pyt-color-danger-bg);
+  border: 1px solid var(--pyt-color-danger);
+  color: var(--pyt-color-danger);
 }
 .ct-world {
   padding: 12px 14px;
-  border-radius: 8px;
+  border-radius: var(--pyt-radius-lg);
   border: 2px solid;
 }
 .ct-world--ok {
-  background: #e3f3dd;
-  border-color: #4d6e1d;
+  background: var(--pyt-color-success-bg);
+  border-color: var(--pyt-color-success);
 }
 .ct-world--miss {
-  background: #fff3cd;
-  border-color: #d4af37;
+  background: var(--pyt-color-warning-bg);
+  border-color: var(--pyt-color-gold);
 }
 .ct-world__head {
   font-size: 14px;
@@ -496,37 +615,37 @@ function reset(): void {
 .ct-field {
   font-size: 12px;
   padding: 3px 10px;
-  border-radius: 6px;
+  border-radius: var(--pyt-radius-lg);
   border: 1px solid;
 }
 .ct-field--done {
-  background: #d6ead1;
-  border-color: #4d6e1d;
-  color: #2d5b1b;
+  background: var(--pyt-color-success-bg);
+  border-color: var(--pyt-color-success);
+  color: var(--pyt-color-success);
 }
 .ct-field--pending {
-  background: #efe1c4;
-  border-color: #b08a3e;
-  color: #6b4e16;
+  background: var(--pyt-color-warning-bg);
+  border-color: var(--pyt-color-warning);
+  color: var(--pyt-color-text-hint);
 }
 .ct-world__waste {
   margin: 10px 0 0;
   font-size: 12px;
-  color: #b3402a;
+  color: var(--pyt-color-danger);
 }
 .ct-steps {
-  border: 1px solid #c9a86b;
-  border-radius: 8px;
-  background: #fffdf6;
+  border: 1px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-lg);
+  background: var(--pyt-color-bg-elevated);
   overflow: hidden;
 }
 .ct-steps__head {
   padding: 8px 12px;
   font-size: 12px;
   font-weight: 700;
-  color: #5a3d12;
-  background: #f1e8d2;
-  border-bottom: 1px solid #c9a86b;
+  color: var(--pyt-color-primary-dark);
+  background: var(--pyt-color-bg-sunken);
+  border-bottom: 1px solid var(--pyt-color-border);
 }
 .ct-steps__list {
   margin: 0;
@@ -539,21 +658,21 @@ function reset(): void {
   line-height: 1.8;
 }
 .ct-step--exc {
-  color: #b3402a;
+  color: var(--pyt-color-danger);
   font-weight: 700;
 }
 .ct-step__line {
   display: inline-block;
   min-width: 34px;
-  color: #8a7a55;
+  color: var(--pyt-color-text-muted);
 }
 .ct-step__desc {
-  color: #2f2412;
+  color: var(--pyt-color-text-primary);
 }
 .ct-empty {
   margin: 0;
   padding: 18px 12px;
   font-size: 13px;
-  color: var(--pyt-color-text-muted, #6b5836);
+  color: var(--pyt-color-text-muted);
 }
 </style>
