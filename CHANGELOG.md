@@ -31,6 +31,8 @@
 
 - **#7 尊重「减少动态效果」偏好（a11y · 前庭障碍友好 / NFR）**：`styles.css` 新增 `@media (prefers-reduced-motion: reduce)` 全局护栏，把 CSS `animation`/`transition` 收敛到 `0.01ms`、`scroll-behavior: auto`。系统开启「减弱动态效果」的用户不再被位移/淡入等过渡干扰；JS 动画（GSAP/Phaser）另由既有 `useReducedMotion` 治理，二者互补不冲突。验证：`npm run build` 通过。
 
+- **#8 移动端字号自适应锁定（移动端 NFR · 防布局抖动）**：`:root` 补 `-webkit-text-size-adjust: 100%` + `text-size-adjust: 100%`。此前 iOS（及部分安卓）在横竖屏切换/字号缩放时会自动放大正文，撑破像素小镇画布与固定面板布局；锁定为 100% 后由我们自己的响应式断点掌控字号。验证：`npm run build` 通过。
+
 ## 2026-06-19 — 代码舞台 × 无尽闯关统一玩法 + 看学练测闭环（含 8 大非功能需求 + 实拍指南）
 
 > 把「代码舞台」（`/code-theater`）与「无尽闯关」（`/endless` + `/arena`）两条做题链路在玩法与实现上统一，并补全 练→测 掌握度/画像回流闭环；同步治理 8 大非功能需求（可用性 a11y / 安全防离线刷关 / 可维护性单源去重 / 可信 AI 接地等）。

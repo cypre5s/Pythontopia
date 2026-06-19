@@ -5,6 +5,9 @@
     "Trebuchet MS", "Avenir Next", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+  /* 移动端 NFR：禁止 iOS/部分安卓在横竖屏切换时自动放大正文字号（会撑破像素小镇与面板布局）。 */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 * {
