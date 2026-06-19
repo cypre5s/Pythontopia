@@ -99,7 +99,9 @@ async function submitJudge(): Promise<void> {
     <header class="feynman-panel__bar">
       <div class="feynman-panel__bar-title">
         <span class="feynman-panel__eyebrow">费曼反演</span>
-        <h2 class="feynman-panel__title">教会 AI 学弟 · {{ kcCode }}</h2>
+        <h2 class="feynman-panel__title">
+          教会 AI 学弟 · {{ kcCode }}
+        </h2>
       </div>
       <p
         v-if="currentSession"
@@ -389,9 +391,9 @@ async function submitJudge(): Promise<void> {
 
 .feynman-panel__flow {
   display: grid;
-  grid-template-rows: auto auto auto;
+  /* 对话区 1fr 铺满剩余高度（聊天面板式），讲明白 / 真判题按内容自适应贴下方。 */
+  grid-template-rows: minmax(0, 1fr) auto auto;
   gap: var(--pyt-space-3);
-  align-content: start;
   padding-right: 2px;
 }
 
@@ -418,10 +420,11 @@ async function submitJudge(): Promise<void> {
   color: var(--pyt-color-text-muted);
 }
 
-/* 对话可能多轮：卡片内部滚动，避免把右栏撑高破坏视口适配。 */
+/* 对话区铺满右栏剩余高度并内部滚动（聊天面板式），多轮也不撑破视口。 */
 .feynman-panel__dialog {
-  max-height: 38vh;
+  min-height: 120px;
   overflow-y: auto;
+  align-content: start;
 }
 
 .feynman-panel__turn {

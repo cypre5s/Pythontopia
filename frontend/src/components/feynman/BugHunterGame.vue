@@ -280,18 +280,49 @@ onUnmounted(clearTimer);
         提示：{{ hunt.hintMd }}
       </p>
     </template>
+
+    <div
+      v-if="phase === 'idle'"
+      class="bug-hunter__idle"
+      data-testid="bug-hunter-idle"
+    >
+      <p>
+        点上方「开始错误猎人」，学弟会写出一段含 bug 的代码；<br>
+        限时揪出错误行——命中得分、误报扣分、漏判提醒。
+      </p>
+    </div>
   </section>
 </template>
 
 <style scoped>
 .bug-hunter {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: var(--pyt-space-3);
+  height: 100%;
+  min-height: 0;
   padding: var(--pyt-space-4);
   border: 2px solid var(--pyt-color-border);
   border-radius: var(--pyt-radius-lg, 8px);
   background: var(--pyt-color-bg-elevated);
   box-shadow: var(--pyt-shadow-card);
+}
+
+/* 空闲态占位：把「按开始」提示居中铺满整块，避免大片空白。 */
+.bug-hunter__idle {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: var(--pyt-space-4);
+  text-align: center;
+  color: var(--pyt-color-text-muted);
+  line-height: 1.8;
+}
+
+.bug-hunter__idle p {
+  margin: 0;
 }
 
 .bug-hunter__head {
@@ -408,13 +439,15 @@ onUnmounted(clearTimer);
 
 /* ── 代码行（可点找茬） ─────────────────────────────────── */
 .bug-hunter__code {
+  flex: 1;
+  min-height: 96px;
   margin: 0;
   padding: 0;
   list-style: none;
   border: 2px solid var(--pyt-color-text-hint);
   border-radius: var(--pyt-radius-sm, 4px);
   background: var(--pyt-color-terminal-bg);
-  overflow: hidden;
+  overflow-y: auto;
   font-size: var(--pyt-font-size-sm);
 }
 
