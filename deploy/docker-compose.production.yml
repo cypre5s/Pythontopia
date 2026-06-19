@@ -102,6 +102,10 @@ services:
       PYT_COURSEPACK_VIDEO_DIR: /data/course-pack-43/videos
       PYT_COURSEPACK_VIDEO_MANIFEST: /data/course-pack-43/video_manifest.json
       PYT_MEDIA_GENERATED_DIR: /data/generated-media
+      # 课件页 PNG 渲染缓存目录：必须落到可写挂载卷（generated-media，rw），否则容器内非 root
+      # 用户写默认 ./data(=/app/data) 触发 AccessDenied，课件证据图全部裂图。relaxed-binding 覆盖
+      # CoursePageImageController 的 pythontopia.coursepack.pageImageDir。
+      PYTHONTOPIA_COURSEPACK_PAGEIMAGEDIR: /data/generated-media/page-images
       # ---- JVM：默认直连（ECS 无本地代理）；如需代理用 PYT_BACKEND_JAVA_OPTS 覆盖 ----
       JAVA_OPTS: ${PYT_BACKEND_JAVA_OPTS:--XX:MaxRAMPercentage=70 -Dfile.encoding=UTF-8}
     volumes:
