@@ -62,9 +62,9 @@ const playable = computed(() => (hunt.value?.buggyCode?.trim().length ?? 0) > 0)
 const sourceLabel = computed(() => {
   switch (hunt.value?.source) {
     case 'real_misconception':
-      return '学弟复现了你的同款错误，找出它写错的那一行';
+      return '复现了你的同款错误，找出错的那行';
     case 'generic_beginner_bug':
-      return '学弟随手写了个常见初学者陷阱，找出错误行';
+      return '常见初学者陷阱，找出错的那行';
     default:
       return '';
   }
@@ -165,7 +165,7 @@ onUnmounted(clearTimer);
           代码找茬
         </h3>
         <p class="bug-hunter__sub">
-          {{ phase === 'idle' ? '限时找出学弟代码里的 bug 行——命中得分、误报扣分。' : sourceLabel }}
+          {{ phase === 'idle' ? '限时找出 bug 行：命中得分，误报扣分。' : sourceLabel }}
         </p>
       </div>
       <div class="bug-hunter__meta">
@@ -268,7 +268,7 @@ onUnmounted(clearTimer);
           命中 {{ result.hits }} · 误报 {{ result.wrong }} · 漏判 {{ result.missed }} ·
           得分 {{ score }}<span v-if="result.comboBonus > 0">（含连胜 +{{ result.comboBonus }}）</span>。
           <span class="bug-hunter__teach-tip">
-            想真正"出师"？在下方用一句话讲清这行为什么错，再让学弟改对跑真判题。
+            想出师？下方一句话讲清它为什么错。
           </span>
         </p>
       </div>
@@ -286,10 +286,7 @@ onUnmounted(clearTimer);
       class="bug-hunter__idle"
       data-testid="bug-hunter-idle"
     >
-      <p>
-        点上方「开始找茬」，学弟会写出一段含 bug 的代码；<br>
-        限时揪出错误行——命中得分、误报扣分、漏判提醒。
-      </p>
+      <p>点「开始找茬」，限时揪出学弟代码里的 bug 行。</p>
     </div>
   </section>
 </template>

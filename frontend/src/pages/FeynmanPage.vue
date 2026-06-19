@@ -50,8 +50,7 @@ function resetPicker(): void {
             教会一个会犯你同款错的 AI 学弟
           </h1>
           <p class="feynman-page__lead">
-            这位 AI 学弟会犯和你一样的错。挑一个想巩固的知识点：先玩「代码找茬」限时揪出它代码里的 bug，
-            再用你自己的话把它讲明白——能讲会，你就真的懂了。
+            AI 学弟会犯你同款错——选个知识点，把它教会，你就真懂了。
           </p>
           <ol class="feynman-page__steps">
             <li><span class="feynman-page__step-no">1</span>选知识点</li>

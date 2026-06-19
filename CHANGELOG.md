@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-06-19 — 代码找茬：学弟开口说误解 + 前端文案精简
+
+> 生成 bug 的同时让 AI 学弟在对话区用自己口吻说出这处（错误）理解；并把费曼界面文案大幅精简，去掉冗余说明。
+
+- **学弟开口（前端）**：`FeynmanPanel`「学弟对话」顶部新增一条学弟第一人称气泡，按 `bugHunt.misconceptionTag` 给出与所选 bug 对齐的误解自述（循环 bug → 「我以为 range(1, 5) 会取到 5。」/ 输入类型 → 「我以为 input() 拿到的是数字，能直接 +1。」/ 列表别名 → 「我以为 b = a 是复制，改 b 不影响 a。」）；文案与 graph `feynman_tutee_agent._mistake_for` 对齐（前端静态镜像，未知 tag 回退通用句），不需后端改动即生效。
+- **文案精简（前端 · 字数尽可能少）**：收敛费曼各处说明——FeynmanPage 引导语、FeynmanPanel intro / 讲明白引导 / 输入框 placeholder / 学弟代码占位、BugHunterGame 副标题 / 空闲提示 / 出师提示 / 来源标签、KcPicker placeholder，去掉重复解释只留关键信息。
+- **验证**：`vue-tsc` 0 错；`vitest` KcPicker 4 + BugHunter 2 + FeynmanPanel 4 passed（FeynmanPanel 加「学弟开口说误解」断言）；`eslint` 0 错；浏览器实测：选「for 循环与遍历」→ 代码找茬给 range bug，「学弟对话」同时显示「我以为 range(1, 5) 会取到 5。」，各处文案已精简（截图存证）。
+
 ## 2026-06-19 — 代码找茬 KC↔bug 对齐 + 知识点下拉模糊搜索选择器
 
 > 修「所选知识点与生成的 bug 代码对不上」（如选「for 循环与遍历」却给 input() 类型 bug）；把知识点选择从「填编码」升级为下拉筛选 + 模糊搜索的中文名 combobox。

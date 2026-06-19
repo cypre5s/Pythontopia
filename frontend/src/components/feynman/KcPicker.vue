@@ -130,7 +130,7 @@ function onEnter(event: Event): void {
         :aria-expanded="open"
         :aria-activedescendant="activeId"
         autocomplete="off"
-        placeholder="搜索知识点，如「循环」「列表」「文件」"
+        placeholder="搜知识点，如「循环」「列表」"
         data-testid="kc-picker-input"
         @focus="openList"
         @input="onInput"

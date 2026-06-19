@@ -53,6 +53,21 @@ const teachHint = computed(() => store.bugHunt?.hintMd ?? '');
 // 面向学生只显示知识点中文名，不暴露 PY43-KC-031 这种原始编码。
 const kcLabel = computed(() => kcDisplayName(props.kcCode));
 
+// 学弟「以自己口吻」描述这处 bug 的（错误）理解，与 graph feynman_tutee_agent._mistake_for 对齐。
+const TUTEE_VOICE: Record<string, string> = {
+  off_by_one_range: '我以为 range(1, 5) 会取到 5。',
+  input_type_string: '我以为 input() 拿到的是数字，能直接 +1。',
+  list_alias_mutation: '我以为 b = a 是复制，改 b 不影响 a。',
+};
+const tuteeVoice = computed(() => {
+  const hunt = store.bugHunt;
+  if (!hunt?.buggyCode) return '';
+  return (
+    (hunt.misconceptionTag && TUTEE_VOICE[hunt.misconceptionTag]) ||
+    '我照自己的理解写的，但好像哪里想错了。'
+  );
+});
+
 function judgeClass(result: FeynmanJudgeResultDto | null): string {
   if (!result) {
     return 'feynman-panel__judge--pending';
@@ -113,7 +128,7 @@ async function submitJudge(): Promise<void> {
       >
         <span class="feynman-panel__misc-tag">学弟误区</span>
         <span class="feynman-panel__misc-text">{{
-          misconceptionSummary || '此 KC 暂无真实错误史，不编造误解'
+          misconceptionSummary || '暂无真实错误史'
         }}</span>
       </p>
       <div class="feynman-panel__bar-actions">
@@ -148,7 +163,7 @@ async function submitJudge(): Promise<void> {
       v-if="!currentSession"
       class="feynman-panel__intro-hint"
     >
-      点「开始费曼反演」召唤会犯你同款错的 AI 学弟：先玩代码找茬揪出它代码里的 bug，再用自己的话讲明白、跑真判题出师。
+      点「开始费曼反演」，召唤会犯你同款错的 AI 学弟。
     </p>
 
     <div
@@ -166,29 +181,35 @@ async function submitJudge(): Promise<void> {
         >
           <h3>学弟对话</h3>
           <p
-            v-if="turns.length === 0"
+            v-if="!tuteeVoice && turns.length === 0"
             class="feynman-panel__muted"
           >
-            学弟会在你讲解后复述自己的理解。
+            找茬后学弟会在这儿开口。
           </p>
-          <template v-else>
-            <div
-              v-for="turn in turns"
-              :key="turn.id"
-              class="feynman-panel__turn"
-            >
-              <strong>{{ turn.role === 'TUTEE' ? 'AI 学弟' : '我' }}</strong>
-              <p>{{ turn.content }}</p>
-            </div>
-            <p
-              v-if="latestTurn?.taughtFix"
-              class="feynman-panel__fix"
-              data-testid="feynman-fix"
-            >
-              <span class="feynman-panel__fix-label">学弟吸收的修正点</span>
-              {{ latestTurn.taughtFix }}
-            </p>
-          </template>
+          <div
+            v-if="tuteeVoice"
+            class="feynman-panel__turn"
+            data-testid="feynman-tutee-voice"
+          >
+            <strong>AI 学弟</strong>
+            <p>{{ tuteeVoice }}</p>
+          </div>
+          <div
+            v-for="turn in turns"
+            :key="turn.id"
+            class="feynman-panel__turn"
+          >
+            <strong>{{ turn.role === 'TUTEE' ? 'AI 学弟' : '我' }}</strong>
+            <p>{{ turn.content }}</p>
+          </div>
+          <p
+            v-if="latestTurn?.taughtFix"
+            class="feynman-panel__fix"
+            data-testid="feynman-fix"
+          >
+            <span class="feynman-panel__fix-label">学弟吸收的修正点</span>
+            {{ latestTurn.taughtFix }}
+          </p>
         </article>
 
         <article class="feynman-panel__card">
@@ -198,13 +219,13 @@ async function submitJudge(): Promise<void> {
             class="feynman-panel__teach-hint"
             data-testid="feynman-teach-hint"
           >
-            代码找茬那处 bug：{{ teachHint }} —— 用一句话讲清它为什么错，再让学弟改对跑真判题。
+            这处 bug：{{ teachHint }}
           </p>
           <textarea
             v-model="teachingText"
             class="feynman-panel__teach-input"
             data-testid="feynman-teach-input"
-            placeholder="用自己的话解释概念、指出学弟错在哪里，但不要直接贴完整答案。"
+            placeholder="用自己的话讲清错在哪，别贴答案。"
             rows="4"
           />
           <button
@@ -226,7 +247,7 @@ async function submitJudge(): Promise<void> {
           <pre
             class="feynman-panel__code"
             data-testid="feynman-code"
-          ><code>{{ latestProducedCode || '等待学弟写出可判题代码' }}</code></pre>
+          ><code>{{ latestProducedCode || '等学弟写出代码' }}</code></pre>
           <p
             class="feynman-panel__judge-msg"
             data-testid="feynman-judge"
