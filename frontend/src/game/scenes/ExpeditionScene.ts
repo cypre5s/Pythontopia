@@ -249,7 +249,7 @@ function rebuildTower(ctx: ExpeditionSceneContext): void {
 
   // 标题（测试断言含「无尽远征」）。
   ctx.add
-    .text(width / 2, 26, '无尽远征 · 知识前沿塔', {
+    .text(width / 2, 26, '无尽远征塔', {
       fontFamily: PIXEL_FONT,
       fontSize: '18px',
       color: '#ffd166',
@@ -383,18 +383,6 @@ function drawRoom(ctx: ExpeditionSceneContext, pos: NodePos, roomW: number, room
     .setDepth(3)
     .setColor(textAlpha >= 1 ? '#3a2f57' : '#a99fc6')
     .setAlpha(textAlpha);
-
-  // BOSS 顶幅（测试断言含「BOSS」）。
-  if (isBoss) {
-    ctx.add
-      .text(x, top - 11, '★ BOSS 知识闸 ★', {
-        fontFamily: PIXEL_FONT,
-        fontSize: '12px',
-        color: '#ffd54a',
-      })
-      .setOrigin(0.5, 0.5)
-      .setDepth(4);
-  }
 
   // 已通关打勾。
   if (node.state === 'cleared') {

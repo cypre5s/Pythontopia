@@ -265,8 +265,7 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
           :size="150"
         />
         <p class="exp-start__lead">
-          系统按你的<strong>掌握度 + 学生画像</strong>实时编排一条分支远征路线：选路、闯关、攒气势。
-          答错按你的抗挫折度温和扣体力，体力归零本局结束——但<strong>掌握度收益永久保留</strong>。
+          按你的<strong>掌握度 + 画像</strong>生成分支远征：选路闯关、攒气势；答错温和扣体力，<strong>掌握度永久保留</strong>。
         </p>
         <label class="exp-focus">
           <span>聚焦章节</span>
@@ -325,7 +324,7 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
       >
         <div class="exp-map__bar">
           <p class="exp-map__hint">
-            点亮的节点可前往；选了一个，同层其它岔路就走不回头了。一路打到顶层 BOSS 即通关。
+            点亮的房间可前往，选了同层就不回头——一路打到顶层 BOSS。
           </p>
           <div class="exp-map__tools">
             <div
@@ -493,7 +492,7 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
           class="exp-loading"
           role="status"
         >
-          正在出题中…（5 重审查 + golden 兜底）
+          正在出题…
         </div>
 
         <div
@@ -581,7 +580,7 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
               v-if="!run.challengeResult?.passed"
               class="exp-result__hp"
             >
-              答错，体力 −{{ (1) }}~2（按抗挫折度）；当前体力 {{ run.hp }}/{{ run.maxHp }}
+              答错 · 体力 {{ run.hp }}/{{ run.maxHp }}
             </p>
           </div>
         </template>
@@ -607,7 +606,7 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
           <li>答对 {{ run.passedCount }} / {{ run.attempts }}</li>
         </ul>
         <p class="exp-end__note">
-          做过的每一题都已真实入库，掌握度与画像不会回滚。
+          做过的每题都已入库，掌握度永久保留。
         </p>
         <KnowledgeConstellation :mastery="masteryMap" />
         <div class="exp-actions">
