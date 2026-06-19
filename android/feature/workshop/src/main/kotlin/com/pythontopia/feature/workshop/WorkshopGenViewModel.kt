@@ -22,6 +22,9 @@ data class WorkshopGenUiState(
     val traces: List<String> = emptyList(),
     val result: WorkshopGenEvent.Result? = null,
     val error: String? = null,
+    val detailLoading: Boolean = false,
+    val detail: WorkshopResourceDetailDto? = null,
+    val detailContent: WorkshopContentView? = null,
 ) {
     val kcCodes: List<String>
         get() = kcInput.split(',', '，', ' ').map { it.trim() }.filter { it.isNotEmpty() }
@@ -55,7 +58,15 @@ class WorkshopGenViewModel @Inject constructor(
         val current = _state.value
         if (!current.canGenerate) return
         _state.update {
-            it.copy(streaming = true, plan = emptyList(), traces = emptyList(), result = null, error = null)
+            it.copy(
+                streaming = true,
+                plan = emptyList(),
+                traces = emptyList(),
+                result = null,
+                error = null,
+                detail = null,
+                detailContent = null,
+            )
         }
         viewModelScope.launch {
             repository.generateStream(current.type, current.kcCodes, current.focusHint)
@@ -65,6 +76,32 @@ class WorkshopGenViewModel @Inject constructor(
                 .onCompletion { _state.update { it.copy(streaming = false) } }
                 .collect { event -> reduce(event) }
         }
+    }
+
+    /** 打开刚生成的资源详情并按类型解析 content。 */
+    fun openResource() {
+        val id = _state.value.result?.resourceId ?: return
+        if (_state.value.detailLoading) return
+        _state.update { it.copy(detailLoading = true, error = null) }
+        viewModelScope.launch {
+            repository.findResource(id)
+                .onSuccess { d ->
+                    _state.update {
+                        it.copy(
+                            detailLoading = false,
+                            detail = d,
+                            detailContent = repository.parseContent(d.type, d.content),
+                        )
+                    }
+                }
+                .onFailure { e ->
+                    _state.update { it.copy(detailLoading = false, error = "打开生成内容失败：${e.message ?: "网络异常"}") }
+                }
+        }
+    }
+
+    fun closeDetail() {
+        _state.update { it.copy(detail = null, detailContent = null) }
     }
 
     private fun reduce(event: WorkshopGenEvent) {

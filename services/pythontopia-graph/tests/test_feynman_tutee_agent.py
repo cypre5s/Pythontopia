@@ -1,9 +1,19 @@
 from __future__ import annotations
 
+import random
 from collections.abc import AsyncIterator
 
 from fastapi.testclient import TestClient
 
+from pythontopia_graph.agents.feynman import bug_bank as bug_bank_mod
+from pythontopia_graph.agents.feynman.bug_bank import (
+    all_samples,
+    bug_line_indices as bank_bug_line_indices,
+    distinct_tags,
+    samples_for_chapter,
+    samples_for_tag,
+    validate_sample,
+)
 from pythontopia_graph.agents.feynman_tutee_agent import (
     FeynmanTuteeAgent,
     bug_line_indices,
@@ -54,9 +64,10 @@ def _input(
 
 
 async def test_injected_misconception_makes_corresponding_mistake() -> None:
+    # 初始暴露：学弟中性描述代码做了什么（不忏悔），误解隐含在 produced_code 里。
     provider = JsonProvider(
         {
-            "reply_md": "我以为 range(1, 5) 会包含 5，所以循环次数会多一次。",
+            "reply_md": "我写了个循环，用 range(1, 5) 从 1 累加到 5，最后打印总和。",
             "updated_misconceptions": [
                 {"tag": "off_by_one_range", "evidence_event_ids": [501], "resolved": False}
             ],
@@ -66,10 +77,11 @@ async def test_injected_misconception_makes_corresponding_mistake() -> None:
 
     out = await FeynmanTuteeAgent(provider).step(_input())
 
-    assert "包含 5" in out.reply_md
+    # tag 透传、初始未解决、误解体现在代码里；且不得出现忏悔式措辞。
     assert out.updated_misconceptions[0].tag == "off_by_one_range"
     assert out.updated_misconceptions[0].resolved is False
     assert "range" in (out.produced_code or "")
+    assert "我以为" not in out.reply_md
 
 
 async def test_correct_teaching_resolves_matching_misconception() -> None:
@@ -101,7 +113,7 @@ async def test_provider_failure_uses_rule_fallback() -> None:
 
     out = await FeynmanTuteeAgent(provider).step(_input())
 
-    assert "range" in out.reply_md
+    assert "累加" in out.reply_md or "range" in out.reply_md
     assert out.updated_misconceptions[0].tag == "off_by_one_range"
     assert out.updated_misconceptions[0].resolved is False
 
@@ -132,9 +144,10 @@ async def test_teaching_is_evaluated_by_llm_for_arbitrary_tag() -> None:
 
 async def test_initial_step_forces_misconception_unresolved() -> None:
     # 初始暴露阶段（无教学）即使 LLM 误标 resolved=true，也必须被强制改回 false。
+    # reply_md 用中性的代码描述（不忏悔），但 resolved 强制收敛逻辑不变。
     provider = JsonProvider(
         {
-            "reply_md": "我以为 range(1, 5) 会包含 5。",
+            "reply_md": "我写了个循环，用 range(1, 5) 从 1 累加到 5。",
             "updated_misconceptions": [
                 {"tag": "off_by_one_range", "evidence_event_ids": [501], "resolved": True}
             ],
@@ -150,7 +163,7 @@ async def test_initial_step_forces_misconception_unresolved() -> None:
 def test_feynman_route_is_registered() -> None:
     app.state.llm_provider = JsonProvider(
         {
-            "reply_md": "我以为 input() 得到的就是数字，所以直接相加。",
+            "reply_md": "我让用户输入年龄，然后把年龄加一后打印出来。",
             "updated_misconceptions": [
                 {"tag": "input_type_string", "evidence_event_ids": [601], "resolved": False}
             ],
@@ -171,7 +184,9 @@ def test_feynman_route_is_registered() -> None:
     )
 
     assert response.status_code == 200
-    assert response.json()["updated_misconceptions"][0]["tag"] == "input_type_string"
+    body = response.json()
+    assert body["updated_misconceptions"][0]["tag"] == "input_type_string"
+    assert "我以为" not in body["reply_md"]
     del app.state.llm_provider
 
 
@@ -184,8 +199,9 @@ def test_bug_line_indices_diffs_replaced_line() -> None:
 
 
 async def test_expose_bug_canned_tag_marks_real_bug_line() -> None:
-    # canned tag 走确定性样本，不应触达 LLM（用 RaisingProvider 兜底证明）。
-    out = await FeynmanTuteeAgent(RaisingProvider()).expose_bug(
+    # 已知误解 tag 走 bug 库确定性样本（注入固定 seed 确定化变体），不应触达 LLM
+    # （用 RaisingProvider 兜底证明）。bug 行号严格由 buggy/fixed 行级 diff 得出（零伪造）。
+    out = await FeynmanTuteeAgent(RaisingProvider(), rng=random.Random(0)).expose_bug(
         FeynmanBugExposureInput(
             kc_code="PY43-KC-021",
             misconceptions=[_misconception("off_by_one_range")],
@@ -194,8 +210,10 @@ async def test_expose_bug_canned_tag_marks_real_bug_line() -> None:
 
     assert out.source == "real_misconception"
     assert out.misconception_tag == "off_by_one_range"
-    assert "range(1, 5)" in (out.buggy_code or "")
-    assert out.bug_line_indices == [0]
+    assert "range(" in (out.buggy_code or "")
+    # bug_line_indices 必须等于对 buggy/fixed 重新做行级 diff 的结果，且至少标出一行。
+    assert out.bug_line_indices == bug_line_indices(out.buggy_code or "", out.fixed_code or "")
+    assert out.bug_line_indices
     assert out.hint_md
 
 
@@ -242,14 +260,16 @@ def test_canned_tag_for_kc_maps_chapter_to_relevant_bug() -> None:
 
 
 async def test_generic_fallback_is_chapter_relevant() -> None:
-    # 选「for 循环与遍历」(KC-031, 第四章) 无样本时，兜底应给「循环边界」bug 而非随机类型陷阱。
-    out = await FeynmanTuteeAgent(RaisingProvider()).expose_bug(
+    # 选「for 循环与遍历」(KC-031, 第四章) 无真实误解史时，兜底应从该章节 bug 库抽题，
+    # 即返回的 tag 必属于第四章题库（chapter-relevant），而非随机跨章陷阱。
+    out = await FeynmanTuteeAgent(RaisingProvider(), rng=random.Random(1)).expose_bug(
         FeynmanBugExposureInput(kc_code="PY43-KC-031", misconceptions=[])
     )
 
     assert out.source == "generic_beginner_bug"
-    assert out.misconception_tag == "off_by_one_range"
-    assert "range(1, 5)" in (out.buggy_code or "")
+    chapter4_tags = {s.tag for s in samples_for_chapter(4)}
+    assert out.misconception_tag in chapter4_tags
+    assert out.bug_line_indices
 
 
 def test_bug_exposure_route_returns_bug_lines() -> None:
@@ -269,4 +289,141 @@ def test_bug_exposure_route_returns_bug_lines() -> None:
     payload = response.json()
     assert payload["source"] == "real_misconception"
     assert payload["misconception_tag"] == "input_type_string"
-    assert payload["bug_line_indices"] == [0]
+    # 路由层不注入 seed（随机变体），故断言「非空真实 bug 行」而非固定下标。
+    assert payload["bug_line_indices"]
+    assert payload["bug_line_indices"] == bug_line_indices(
+        payload["buggy_code"], payload["fixed_code"]
+    )
+
+
+# ── TASK A：初始暴露中性化（去「我以为」忏悔） ───────────────────────────────
+
+def test_initial_prompt_requires_neutral_voice_and_forbids_confession() -> None:
+    # 白盒：初始暴露（student_teaching=None）的系统提示必须要求中性描述、禁止忏悔/点破 bug。
+    agent = FeynmanTuteeAgent(RaisingProvider())
+    messages = agent._messages(_input())
+    system = "\n".join(m["content"] for m in messages if m["role"] == "system")
+    assert "我以为" in system  # 以“禁止词清单”的形式出现
+    assert "严禁" in system or "不得" in system
+    assert "中性" in system
+    # 末轮 user 指令要求把（带误解的）代码放进 produced_code，但不点破。
+    user = [m for m in messages if m["role"] == "user"][-1]["content"]
+    assert "produced_code" in user
+
+
+def test_teaching_prompt_keeps_evaluation_voice() -> None:
+    # 教学回合（student_teaching 已给）不加初始中性化指令，沿用评估口吻。
+    agent = FeynmanTuteeAgent(RaisingProvider())
+    messages = agent._messages(_input(teaching="range 右端点不包含，要包含 5 应写 range(1, 6)。"))
+    system = "\n".join(m["content"] for m in messages if m["role"] == "system")
+    assert "中性" not in system
+    user = [m for m in messages if m["role"] == "user"][-1]["content"]
+    assert "range(1, 6)" in user  # 教学原文作为 user 轮
+
+
+# ── TASK B：bug 库（bug_bank） ──────────────────────────────────────────────
+
+def test_bank_has_rich_coverage() -> None:
+    samples = all_samples()
+    assert len(samples) >= 24  # 任务要求至少 ~24，实际更多
+    assert len(distinct_tags()) >= 12  # 丰富的错误种类
+    for chapter in range(1, 8):  # 覆盖全部 7 章
+        assert samples_for_chapter(chapter), f"chapter {chapter} 无样本"
+
+
+def test_every_curated_sample_is_valid_and_diffable() -> None:
+    # 每个样本：6-14 行、buggy/fixed 仅 bug 行不同、行级 diff 至少一行、均可 compile()。
+    for sample in all_samples():
+        problems = validate_sample(sample)
+        assert not problems, f"{sample.tag}: {problems}"
+        buggy_lines = sample.buggy_code.split("\n")
+        fixed_lines = sample.fixed_code.split("\n")
+        assert 6 <= len(buggy_lines) <= 14
+        assert len(buggy_lines) == len(fixed_lines)
+        indices = bug_line_indices(sample.buggy_code, sample.fixed_code)
+        assert indices  # 至少一行 bug
+        per_line_diff = {
+            i for i in range(len(buggy_lines)) if buggy_lines[i] != fixed_lines[i]
+        }
+        assert set(indices) == per_line_diff  # 仅在 bug 行不同（其余逐字一致）
+        compile(sample.buggy_code, f"<buggy:{sample.tag}>", "exec")
+        compile(sample.fixed_code, f"<fixed:{sample.tag}>", "exec")
+    # re-export 的 bug_line_indices 与库内实现是同一函数。
+    assert bug_line_indices is bank_bug_line_indices
+
+
+def test_samples_for_tag_and_chapter_filters() -> None:
+    off = samples_for_tag("off_by_one_range")
+    assert off and all(s.tag == "off_by_one_range" for s in off)
+    assert len(off) >= 2  # 同一类型多个变体 → 「换一局」有变化
+    ch5 = samples_for_chapter(5)
+    assert ch5 and all(s.chapter == 5 for s in ch5)
+    assert samples_for_tag("definitely_not_a_real_tag") == []
+
+
+async def test_expose_bug_uses_bank_for_known_tag() -> None:
+    # 真实误解 tag 命中 bug 库 → 直接出库样本（不触达 LLM，RaisingProvider 证明），
+    # seed 注入使变体确定化。
+    out = await FeynmanTuteeAgent(RaisingProvider(), rng=random.Random(7)).expose_bug(
+        FeynmanBugExposureInput(
+            kc_code="PY43-KC-021",
+            misconceptions=[_misconception("mutable_default_arg")],
+        )
+    )
+
+    assert out.source == "real_misconception"
+    assert out.misconception_tag == "mutable_default_arg"
+    assert out.bug_line_indices == bug_line_indices(out.buggy_code or "", out.fixed_code or "")
+    assert out.bug_line_indices
+    # 出库样本同样满足「可 compile + 仅 bug 行不同」不变量。
+    compile(out.buggy_code or "", "<buggy>", "exec")
+    compile(out.fixed_code or "", "<fixed>", "exec")
+
+
+async def test_expose_bug_known_tag_variants_are_seed_dependent() -> None:
+    # 不同 seed 可抽到 off_by_one_range 的不同变体（库里有多个变体时，「换一局」才有变化）。
+    async def pick(seed: int) -> str:
+        out = await FeynmanTuteeAgent(RaisingProvider(), rng=random.Random(seed)).expose_bug(
+            FeynmanBugExposureInput(
+                kc_code="PY43-KC-031",
+                misconceptions=[_misconception("off_by_one_range")],
+            )
+        )
+        return out.buggy_code or ""
+
+    variants = {await pick(seed) for seed in range(12)}
+    assert len(variants) >= 2  # 至少能抽到两个不同变体
+
+
+def test_generated_json_loader_is_failsoft(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    # 缺文件 → []；损坏 JSON → []；不存在的目录 → []，绝不抛。
+    assert bug_bank_mod._load_generated(tmp_path / "nope.json") == []
+    garbage = tmp_path / "garbage.json"
+    garbage.write_text("{not json", encoding="utf-8")
+    assert bug_bank_mod._load_generated(garbage) == []
+
+
+def test_generated_json_loader_validates_and_augments(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    # 合法样本被载入；不合格样本（过短/不 diff）被丢弃——只融合可玩样本。
+    good = {
+        "tag": "off_by_one_range",
+        "chapter": 4,
+        "topic": "range 边界",
+        "difficulty": "easy",
+        "buggy_code": "# sum 1..5\ntotal = 0\nfor i in range(1, 5):\n    total += i\nprint(\"15?\")\nprint(total)",
+        "fixed_code": "# sum 1..5\ntotal = 0\nfor i in range(1, 6):\n    total += i\nprint(\"15?\")\nprint(total)",
+        "hint_md": "range 右端点？",
+    }
+    too_short = {**good, "buggy_code": "a = 1\nb = 2", "fixed_code": "a = 1\nb = 3"}
+    not_diff = {**good, "fixed_code": good["buggy_code"]}  # buggy == fixed
+    path = tmp_path / "feynman_bug_bank.generated.json"
+    import json as _json
+
+    path.write_text(
+        _json.dumps({"samples": [good, too_short, not_diff]}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    loaded = bug_bank_mod._load_generated(path)
+    assert len(loaded) == 1
+    assert loaded[0].tag == "off_by_one_range"
+    assert not validate_sample(loaded[0])

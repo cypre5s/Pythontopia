@@ -796,7 +796,7 @@ onMounted(async () => {
   flex-wrap: wrap;
 }
 .evidence-badge {
-  font-family: monospace, 'PingFang SC', sans-serif;
+  font-family: 'Consolas', monospace, 'PingFang SC', sans-serif;
   font-size: 11px;
   padding: 2px 6px;
   background: var(--pyt-color-info-bg);

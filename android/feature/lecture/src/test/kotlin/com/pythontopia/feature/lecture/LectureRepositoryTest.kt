@@ -1,6 +1,9 @@
 package com.pythontopia.feature.lecture
 
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
+import com.pythontopia.core.network.BaseUrlProvider
+import io.mockk.every
+import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
@@ -31,7 +34,10 @@ class LectureRepositoryTest {
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
             .create(LectureApi::class.java)
-        repository = LectureRepository(api)
+        val baseUrlProvider = mockk<BaseUrlProvider>().apply {
+            every { current() } returns server.url("/").toString()
+        }
+        repository = LectureRepository(api, baseUrlProvider)
     }
 
     @AfterEach

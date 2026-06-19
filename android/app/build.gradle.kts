@@ -18,6 +18,9 @@ android {
         targetSdk = libs.versions.targetSdk.get().toInt()
         versionCode = 1
         versionName = "0.1.0-alpha01"
+        // 本地化：面向中国高校学生，仅打包简体中文资源（缩减 APK，声明主语言）。
+        @Suppress("DEPRECATION")
+        resConfigs("zh")
     }
 
     buildFeatures {
@@ -116,7 +119,13 @@ dependencies {
     implementation(project(":feature:library"))
     implementation(project(":feature:boss"))
     implementation(project(":feature:endless"))
+    implementation(project(":feature:expedition"))
     implementation(project(":feature:lecture"))
+    implementation(project(":feature:feynman"))
+    implementation(project(":feature:problems"))
+    implementation(project(":feature:board"))
+    implementation(project(":feature:teacherreview"))
+    implementation(project(":feature:about"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)

@@ -1,5 +1,6 @@
 package com.pythontopia.feature.lecture
 
+import com.pythontopia.core.network.BaseUrlProvider
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -13,7 +14,7 @@ import retrofit2.http.GET
 import retrofit2.http.Path
 import retrofit2.http.Query
 
-/** `GET /api/workshop/resources` 列表；`GET /api/workshop/resources/{id}` 详情。 */
+/** `GET /api/workshop/resources` 列表/详情；`GET /api/course/videos` 章节视频清单。 */
 interface LectureApi {
 
     @GET("api/workshop/resources")
@@ -24,12 +25,16 @@ interface LectureApi {
 
     @GET("api/workshop/resources/{id}")
     suspend fun findOne(@Path("id") id: Long): LectureResourceDto
+
+    @GET("api/course/videos")
+    suspend fun videos(@Query("chapterId") chapterId: Int): List<CourseVideoDto>
 }
 
 /** HANDOUT 列表失败静默空表；详情失败上抛 [Result]；多态 content 宽松解码为 [HandoutContent]。 */
 @Singleton
 class LectureRepository @Inject constructor(
     private val api: LectureApi,
+    private val baseUrlProvider: BaseUrlProvider,
 ) {
     private val json = Json {
         ignoreUnknownKeys = true
@@ -47,6 +52,14 @@ class LectureRepository @Inject constructor(
         content
             ?.let { runCatching { json.decodeFromJsonElement(HandoutContent.serializer(), it) }.getOrNull() }
             ?.takeIf { it.sections.isNotEmpty() }
+
+    /** 某章视频清单；失败/无视频回退空表（线下课无视频，UI 回退讲义）。 */
+    suspend fun chapterVideos(chapter: Int): List<CourseVideoDto> =
+        runCatching { api.videos(chapter) }.getOrElse { emptyList() }
+
+    /** 视频字节流绝对地址（匿名 + Range，供 [com.pythontopia.core.design.PytVideoPlayer] 直连）。 */
+    fun videoUrl(id: Long): String =
+        baseUrlProvider.current().trimEnd('/') + "/api/course/videos/$id"
 }
 
 @Module

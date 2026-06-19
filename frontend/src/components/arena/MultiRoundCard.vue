@@ -110,5 +110,5 @@ function prevRound(): void {
 .round-nav button { font-family: inherit; font-size: 12px; padding: 4px 10px; background: var(--pyt-color-info-bg); color: var(--pyt-color-info); border: 1px solid var(--pyt-color-info); border-radius: 3px; cursor: pointer; }
 .round-nav button:disabled { opacity: 0.4; cursor: not-allowed; }
 .question { margin: 0; padding: 10px; background: var(--pyt-color-terminal-bg); border: 2px solid var(--pyt-color-border-strong); white-space: pre-wrap; font-size: 13px; line-height: 1.7; color: var(--pyt-color-terminal-text); }
-.round-editor { font-family: 'JetBrains Mono', monospace; font-size: 13px; background: var(--pyt-color-terminal-bg); color: var(--pyt-color-terminal-text); border: 2px solid var(--pyt-color-gold); padding: 8px; resize: vertical; min-height: 120px; }
+.round-editor { font-family: 'Consolas', 'JetBrains Mono', 'Cascadia Code', Menlo, 'Courier New', monospace; font-size: 13px; background: var(--pyt-color-terminal-bg); color: var(--pyt-color-terminal-text); border: 2px solid var(--pyt-color-gold); padding: 8px; resize: vertical; min-height: 120px; }
 </style>

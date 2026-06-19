@@ -41,32 +41,34 @@ const misconceptions = computed(() => currentSession.value?.tuteeState.misconcep
 const judgeText = computed(() => {
   const result = latestJudgeResult.value;
   if (!result) {
-    return '等待学弟提交可判题代码';
+    return '等待代码';
   }
   return result.messageZh;
 });
 
 const misconceptionSummary = computed(() => misconceptions.value.map((item) => item.tag).join('、'));
 const latestTurn = computed(() => turns.value.at(-1) ?? null);
-// 代码找茬找到的 bug 提示接入讲解（B）：把那处 bug 的提示带进「讲明白」环节，形成闭环。
 const teachHint = computed(() => store.bugHunt?.hintMd ?? '');
-// 面向学生只显示知识点中文名，不暴露 PY43-KC-031 这种原始编码。
 const kcLabel = computed(() => kcDisplayName(props.kcCode));
 
-// 学弟「以自己口吻」描述这处 bug 的（错误）理解，与 graph feynman_tutee_agent._mistake_for 对齐。
-const TUTEE_VOICE: Record<string, string> = {
-  off_by_one_range: '我以为 range(1, 5) 会取到 5。',
-  input_type_string: '我以为 input() 拿到的是数字，能直接 +1。',
-  list_alias_mutation: '我以为 b = a 是复制，改 b 不影响 a。',
+/** 学弟中性描述代码在做什么（不暴露「我以为…」式自我纠错）。 */
+const TUTEE_CODE_DESC: Record<string, string> = {
+  off_by_one_range: '我写了个循环，用 range(1, 5) 从 1 累加到 5，最后打印总和。',
+  input_type_string: '让用户输入年龄，然后直接加 1 打印出来。',
+  list_alias_mutation: '先建列表 a，令 b = a，往 b 里 append 一个数，再 print(a) 看结果。',
 };
 const tuteeVoice = computed(() => {
   const hunt = store.bugHunt;
   if (!hunt?.buggyCode) return '';
   return (
-    (hunt.misconceptionTag && TUTEE_VOICE[hunt.misconceptionTag]) ||
-    '我照自己的理解写的，但好像哪里想错了。'
+    (hunt.misconceptionTag && TUTEE_CODE_DESC[hunt.misconceptionTag]) ||
+    '我按自己的理解写了段代码，你来帮我看看。'
   );
 });
+
+const hasChat = computed(
+  () => tuteeVoice.value.length > 0 || turns.value.length > 0 || Boolean(latestTurn.value?.taughtFix),
+);
 
 function judgeClass(result: FeynmanJudgeResultDto | null): string {
   if (!result) {
@@ -90,6 +92,7 @@ async function submitTeaching(): Promise<void> {
   }
   try {
     await store.teach(explanation);
+    teachingText.value = '';
   } catch {
     // 错误已写入 store.error 并在面板内提示，这里吞掉以避免未处理的 promise rejection。
   }
@@ -118,18 +121,16 @@ async function submitJudge(): Promise<void> {
       <div class="feynman-panel__bar-title">
         <span class="feynman-panel__eyebrow">费曼反演</span>
         <h2 class="feynman-panel__title">
-          教会 AI 学弟 · {{ kcLabel }}
+          {{ kcLabel }}
         </h2>
       </div>
       <p
-        v-if="currentSession"
+        v-if="currentSession && misconceptionSummary"
         class="feynman-panel__misc"
         data-testid="feynman-tutee-state"
       >
-        <span class="feynman-panel__misc-tag">学弟误区</span>
-        <span class="feynman-panel__misc-text">{{
-          misconceptionSummary || '暂无真实错误史'
-        }}</span>
+        <span class="feynman-panel__misc-tag">误区</span>
+        <span class="feynman-panel__misc-text">{{ misconceptionSummary }}</span>
       </p>
       <div class="feynman-panel__bar-actions">
         <button
@@ -146,7 +147,7 @@ async function submitJudge(): Promise<void> {
           :disabled="loading"
           @click="start"
         >
-          {{ currentSession ? '重新开始' : '开始费曼反演' }}
+          {{ currentSession ? '重来' : '开始' }}
         </button>
       </div>
     </header>
@@ -163,7 +164,7 @@ async function submitJudge(): Promise<void> {
       v-if="!currentSession"
       class="feynman-panel__intro-hint"
     >
-      点「开始费曼反演」，召唤会犯你同款错的 AI 学弟。
+      点「开始」，召唤会犯同款错的 AI 学弟。
     </p>
 
     <div
@@ -176,93 +177,130 @@ async function submitJudge(): Promise<void> {
 
       <div class="feynman-panel__flow">
         <article
-          class="feynman-panel__card feynman-panel__dialog"
+          class="feynman-panel__card feynman-panel__chat"
           data-testid="feynman-dialog"
         >
-          <h3>学弟对话</h3>
-          <p
-            v-if="!tuteeVoice && turns.length === 0"
-            class="feynman-panel__muted"
-          >
-            找茬后学弟会在这儿开口。
-          </p>
-          <div
-            v-if="tuteeVoice"
-            class="feynman-panel__turn"
-            data-testid="feynman-tutee-voice"
-          >
-            <strong>AI 学弟</strong>
-            <p>{{ tuteeVoice }}</p>
-          </div>
-          <div
-            v-for="turn in turns"
-            :key="turn.id"
-            class="feynman-panel__turn"
-          >
-            <strong>{{ turn.role === 'TUTEE' ? 'AI 学弟' : '我' }}</strong>
-            <p>{{ turn.content }}</p>
-          </div>
-          <p
-            v-if="latestTurn?.taughtFix"
-            class="feynman-panel__fix"
-            data-testid="feynman-fix"
-          >
-            <span class="feynman-panel__fix-label">学弟吸收的修正点</span>
-            {{ latestTurn.taughtFix }}
-          </p>
-        </article>
+          <header class="feynman-panel__chat-header">
+            <span class="feynman-panel__chat-avatar">弟</span>
+            <div class="feynman-panel__chat-meta">
+              <span class="feynman-panel__chat-name">学弟</span>
+              <span class="feynman-panel__chat-status">
+                <span
+                  class="feynman-panel__chat-dot"
+                  aria-hidden="true"
+                />
+                费曼反演
+              </span>
+            </div>
+          </header>
 
-        <article class="feynman-panel__card">
-          <h3>讲明白</h3>
-          <p
-            v-if="teachHint"
-            class="feynman-panel__teach-hint"
-            data-testid="feynman-teach-hint"
-          >
-            这处 bug：{{ teachHint }}
-          </p>
-          <textarea
-            v-model="teachingText"
-            class="feynman-panel__teach-input"
-            data-testid="feynman-teach-input"
-            placeholder="用自己的话讲清错在哪，别贴答案。"
-            rows="4"
-          />
-          <button
-            type="button"
-            class="feynman-panel__teach-submit"
-            data-testid="feynman-teach-submit"
-            :disabled="!canTeach"
-            @click="submitTeaching"
-          >
-            {{ teaching ? '学弟思考中...' : '讲给学弟听' }}
-          </button>
+          <div class="feynman-panel__chat-body">
+            <p
+              v-if="!hasChat"
+              class="feynman-panel__muted"
+            >
+              找茬后学弟会开口。
+            </p>
+
+            <div
+              v-if="tuteeVoice"
+              class="chat-msg chat-msg--tutee"
+              data-testid="feynman-tutee-voice"
+            >
+              <span class="chat-msg__avatar">弟</span>
+              <div class="chat-msg__bubble">
+                <p>{{ tuteeVoice }}</p>
+              </div>
+            </div>
+
+            <template
+              v-for="turn in turns"
+              :key="turn.id"
+            >
+              <div
+                v-if="turn.role === 'TUTEE'"
+                class="chat-msg chat-msg--tutee"
+              >
+                <span class="chat-msg__avatar">弟</span>
+                <div class="chat-msg__bubble">
+                  <p>{{ turn.content }}</p>
+                  <p
+                    v-if="turn.taughtFix"
+                    class="chat-msg__fix"
+                    data-testid="feynman-fix"
+                  >
+                    {{ turn.taughtFix }}
+                  </p>
+                </div>
+              </div>
+              <div
+                v-else
+                class="chat-msg chat-msg--me"
+              >
+                <div class="chat-msg__bubble">
+                  <p>{{ turn.content }}</p>
+                </div>
+                <span class="chat-msg__avatar">我</span>
+              </div>
+            </template>
+
+            <p
+              v-if="teachHint"
+              class="feynman-panel__teach-hint"
+              data-testid="feynman-teach-hint"
+            >
+              {{ teachHint }}
+            </p>
+          </div>
+
+          <div class="feynman-panel__chat-input">
+            <textarea
+              v-model="teachingText"
+              class="feynman-panel__teach-input"
+              data-testid="feynman-teach-input"
+              placeholder="讲清错在哪…"
+              rows="2"
+            />
+            <div class="feynman-panel__chat-send-row">
+              <button
+                type="button"
+                class="feynman-panel__teach-submit feynman-panel__send"
+                data-testid="feynman-teach-submit"
+                :disabled="!canTeach"
+                @click="submitTeaching"
+              >
+                {{ teaching ? '思考中…' : '讲给学弟听' }}
+              </button>
+            </div>
+          </div>
         </article>
 
         <article
           class="feynman-panel__card feynman-panel__verdict"
           :class="judgeClass(latestJudgeResult)"
         >
-          <h3>学弟代码 · 真判题</h3>
+          <h3>真判题</h3>
           <pre
             class="feynman-panel__code"
             data-testid="feynman-code"
-          ><code>{{ latestProducedCode || '等学弟写出代码' }}</code></pre>
+          ><code>{{ latestProducedCode || '等学弟写代码' }}</code></pre>
           <p
             class="feynman-panel__judge-msg"
             data-testid="feynman-judge"
           >
             {{ judgeText }}
           </p>
-          <button
-            type="button"
-            class="feynman-panel__teach-submit"
-            data-testid="feynman-judge-submit"
-            :disabled="!canJudge"
-            @click="submitJudge"
-          >
-            {{ judging ? '判题中...' : '真判题裁定' }}
-          </button>
+          <div class="feynman-panel__verdict-foot">
+            <button
+              type="button"
+              class="feynman-panel__teach-submit"
+              data-testid="feynman-judge-submit"
+              :disabled="!canJudge"
+              @click="submitJudge"
+            >
+              {{ judging ? '判题中…' : '真判题裁定' }}
+            </button>
+          </div>
         </article>
       </div>
     </div>
@@ -280,7 +318,6 @@ async function submitJudge(): Promise<void> {
   font-family: var(--pyt-font-read);
 }
 
-/* ── 顶部紧凑信息条：标题 / 学弟误区 / 操作（替代原大 header + 学弟状态卡）── */
 .feynman-panel__bar {
   display: flex;
   align-items: center;
@@ -363,6 +400,25 @@ async function submitJudge(): Promise<void> {
   color: var(--pyt-color-text-on-dark);
 }
 
+.feynman-panel__chat-send-row,
+.feynman-panel__verdict-foot {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.feynman-panel__verdict-foot {
+  margin-top: auto;
+}
+
+.feynman-panel__send {
+  background: #07c160;
+  border-color: #06a14a;
+}
+
+.feynman-panel__send:hover:not(:disabled) {
+  background: #06ad56;
+}
+
 .feynman-panel__ghost:hover:not(:disabled),
 .feynman-panel__start:hover:not(:disabled),
 .feynman-panel__teach-submit:hover:not(:disabled) {
@@ -390,15 +446,13 @@ async function submitJudge(): Promise<void> {
 .feynman-panel__intro-hint {
   flex-shrink: 0;
   margin: 0;
-  padding: var(--pyt-space-4);
+  padding: var(--pyt-space-3);
   border: 2px dashed var(--pyt-color-border);
   border-radius: var(--pyt-radius-md);
   background: var(--pyt-color-bg-soft);
   color: var(--pyt-color-text-hint);
-  line-height: 1.7;
 }
 
-/* ── 主舞台：左「代码找茬」｜右「讲明白 → 真判题」，各自内部滚动，整页不上下滑 ── */
 .feynman-panel__stage {
   flex: 1;
   min-height: 0;
@@ -415,8 +469,7 @@ async function submitJudge(): Promise<void> {
 
 .feynman-panel__flow {
   display: grid;
-  /* 对话区 1fr 铺满剩余高度（聊天面板式），讲明白 / 真判题按内容自适应贴下方。 */
-  grid-template-rows: minmax(0, 1fr) auto auto;
+  grid-template-rows: minmax(0, 1fr) auto;
   gap: var(--pyt-space-3);
   padding-right: 2px;
 }
@@ -442,76 +495,176 @@ async function submitJudge(): Promise<void> {
 .feynman-panel__muted {
   margin: 0;
   color: var(--pyt-color-text-muted);
+  text-align: center;
 }
 
-/* 对话区铺满右栏剩余高度并内部滚动（聊天面板式），多轮也不撑破视口。 */
-.feynman-panel__dialog {
+/* ── 微信式聊天气泡 ── */
+.feynman-panel__chat {
   min-height: 120px;
-  overflow-y: auto;
-  align-content: start;
+  grid-template-rows: auto 1fr auto;
+  overflow: hidden;
+  background: #ececec;
+  border-color: #d8d8d8;
 }
 
-.feynman-panel__turn {
-  display: grid;
-  gap: var(--pyt-space-1);
-  padding: var(--pyt-space-2);
-  background: var(--pyt-color-bg-primary);
-  border-left: 4px solid var(--pyt-color-info);
-  border-radius: var(--pyt-radius-sm);
+.feynman-panel__chat-header {
+  display: flex;
+  align-items: center;
+  gap: var(--pyt-space-2);
+  margin: calc(-1 * var(--pyt-space-3)) calc(-1 * var(--pyt-space-3)) 0;
+  padding: var(--pyt-space-2) var(--pyt-space-3);
+  background: #f7f7f7;
+  border-bottom: 1px solid #d8d8d8;
 }
 
-.feynman-panel__turn p {
-  margin: 0;
-  line-height: 1.6;
-}
-
-.feynman-panel__turn strong {
+.feynman-panel__chat-avatar {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  background: #576b95;
+  color: #fff;
   font-family: var(--pyt-font-pixel);
+  font-size: 11px;
+}
+
+.feynman-panel__chat-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.2;
+}
+
+.feynman-panel__chat-name {
+  font-family: var(--pyt-font-pixel);
+  font-size: var(--pyt-font-size-sm);
+  color: var(--pyt-color-text-primary);
+}
+
+.feynman-panel__chat-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: var(--pyt-font-size-xs);
-  color: var(--pyt-color-text-hint);
+  color: var(--pyt-color-text-muted);
 }
 
-.feynman-panel__fix {
-  margin: 0;
-  padding: var(--pyt-space-2);
-  border: 1px solid var(--pyt-color-success);
-  border-radius: var(--pyt-radius-sm);
-  background: var(--pyt-color-success-bg);
-  line-height: 1.6;
+.feynman-panel__chat-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #07c160;
 }
 
-.feynman-panel__fix-label {
-  display: block;
+.feynman-panel__chat-body {
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pyt-space-3);
+  padding: var(--pyt-space-2) var(--pyt-space-1);
+}
+
+.chat-msg {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--pyt-space-2);
+  max-width: 88%;
+}
+
+.chat-msg--tutee {
+  align-self: flex-start;
+}
+
+.chat-msg--me {
+  align-self: flex-end;
+  flex-direction: row;
+}
+
+.chat-msg__avatar {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  background: #576b95;
+  color: #fff;
   font-family: var(--pyt-font-pixel);
+  font-size: 11px;
+}
+
+.chat-msg--me .chat-msg__avatar {
+  background: #07c160;
+}
+
+.chat-msg__bubble {
+  padding: 8px 12px;
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  line-height: 1.55;
+}
+
+.chat-msg--me .chat-msg__bubble {
+  background: #95ec69;
+}
+
+.chat-msg__bubble p {
+  margin: 0;
+  word-break: break-word;
+}
+
+.chat-msg__fix {
+  margin: 6px 0 0 !important;
+  padding-top: 6px;
+  border-top: 1px dashed rgba(0, 0, 0, 0.12);
   font-size: var(--pyt-font-size-xs);
   color: var(--pyt-color-success);
+}
+
+.feynman-panel__chat-input {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pyt-space-2);
+  padding-top: var(--pyt-space-2);
+  border-top: 1px solid #d8d8d8;
+  background: #f7f7f7;
+  margin: 0 calc(-1 * var(--pyt-space-3)) calc(-1 * var(--pyt-space-3));
+  padding: var(--pyt-space-2) var(--pyt-space-3);
 }
 
 .feynman-panel__teach-hint {
   margin: 0;
   padding: var(--pyt-space-2);
-  border: 1px solid var(--pyt-color-warning);
   border-radius: var(--pyt-radius-sm);
-  background: var(--pyt-color-warning-bg);
+  background: rgba(255, 209, 102, 0.35);
   color: var(--pyt-color-text-hint);
-  line-height: 1.6;
+  font-size: var(--pyt-font-size-xs);
+  text-align: center;
 }
 
 .feynman-panel__teach-input {
   width: 100%;
-  resize: vertical;
-  min-height: 64px;
-  border: 2px solid var(--pyt-color-border);
+  resize: none;
+  min-height: 48px;
+  border: 1px solid #d8d8d8;
   border-radius: var(--pyt-radius-sm);
-  background: var(--pyt-color-bg-primary);
+  background: #fff;
   color: var(--pyt-color-text-primary);
   padding: var(--pyt-space-2);
   font: inherit;
-  line-height: 1.6;
+  line-height: 1.5;
 }
 
-.feynman-panel__teach-submit {
-  justify-self: start;
+.feynman-panel__verdict {
+  display: flex;
+  flex-direction: column;
+  border-color: var(--pyt-color-info);
 }
 
 .feynman-panel__code {
@@ -532,10 +685,6 @@ async function submitJudge(): Promise<void> {
   line-height: 1.6;
 }
 
-.feynman-panel__verdict {
-  border-color: var(--pyt-color-info);
-}
-
 .feynman-panel__judge--passed {
   border-color: var(--pyt-color-success);
   background: var(--pyt-color-success-bg);
@@ -552,7 +701,6 @@ async function submitJudge(): Promise<void> {
   background: var(--pyt-color-warning-bg);
 }
 
-/* 窄屏：单列堆叠 + 允许整页自然滚动（不强行锁视口高度）。 */
 @media (max-width: 900px) {
   .feynman-panel {
     height: auto;
@@ -568,7 +716,6 @@ async function submitJudge(): Promise<void> {
     overflow-y: visible;
   }
 
-  .feynman-panel__dialog,
   .feynman-panel__code {
     max-height: none;
   }

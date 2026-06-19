@@ -33,15 +33,18 @@ import com.pythontopia.core.data.dto.mainline.ChapterTestQuestionViewDto
 import com.pythontopia.core.data.dto.mainline.ChapterTestResultDto
 import com.pythontopia.core.design.PytErrorRetry
 
-/** 章末大测试：开考题面作答 + 交卷结果（含解析）。 */
+/** 章末测评：开考题面作答 + 交卷结果（含解析）。[assessment] 区分大测试 / 快测。 */
 @Composable
 fun ChapterTestScreen(
     chapter: Int,
     onBack: () -> Unit = {},
+    assessment: ChapterAssessment = ChapterAssessment.TEST,
     viewModel: ChapterTestViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    LaunchedEffect(chapter) { viewModel.load(chapter) }
+    LaunchedEffect(chapter, assessment) { viewModel.load(chapter, assessment) }
+
+    val title = if (assessment == ChapterAssessment.QUIZ) "章末快测" else "章末测试"
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         val result = state.result
@@ -52,6 +55,7 @@ fun ChapterTestScreen(
             result != null -> ResultView(result = result, onBack = onBack)
             state.paper != null -> PaperView(
                 paper = state.paper!!,
+                title = title,
                 answers = state.answers,
                 submitting = state.submitting,
                 onAnswer = viewModel::setAnswer,
@@ -61,7 +65,7 @@ fun ChapterTestScreen(
             else -> Box(Modifier.fillMaxSize().padding(16.dp), Alignment.Center) {
                 PytErrorRetry(
                     message = state.error ?: "无法开考",
-                    onRetry = { viewModel.load(chapter) },
+                    onRetry = { viewModel.load(chapter, assessment) },
                 )
             }
         }
@@ -71,6 +75,7 @@ fun ChapterTestScreen(
 @Composable
 private fun PaperView(
     paper: ChapterTestPaperDto,
+    title: String,
     answers: Map<String, String>,
     submitting: Boolean,
     onAnswer: (String, String) -> Unit,
@@ -85,7 +90,7 @@ private fun PaperView(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = onBack) { Text("‹ 返回") }
                 Text(
-                    text = "第 ${paper.chapter} 章 · 章末测试（第 ${paper.attemptNo} 次）",
+                    text = "第 ${paper.chapter} 章 · $title（第 ${paper.attemptNo} 次）",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )

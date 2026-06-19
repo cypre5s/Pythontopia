@@ -296,7 +296,7 @@ function exportMarpMd(): void {
 }
 
 .ppt-reveal .slides .slide-code code {
-  font-family: 'Fira Code', 'Source Code Pro', monospace;
+  font-family: 'Consolas', 'JetBrains Mono', 'Cascadia Code', Menlo, 'Courier New', monospace;
   white-space: pre;
 }
 

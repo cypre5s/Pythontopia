@@ -1056,7 +1056,7 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
   border: 1px solid var(--pyt-color-border-strong);
   border-radius: 6px;
   white-space: pre-wrap;
-  font-family: 'Fira Code', 'JetBrains Mono', monospace;
+  font-family: 'Consolas', 'JetBrains Mono', 'Cascadia Code', Menlo, 'Courier New', monospace;
   font-size: 13px;
   line-height: 1.7;
   color: var(--pyt-color-terminal-text);

@@ -18,6 +18,17 @@ data class LectureListItemDto(
     val createdAt: String? = null,
 )
 
+/** 章节视频讲解条目（`GET /api/course/videos?chapterId=`）；字节流 `/api/course/videos/{id}` 放行匿名 + Range。 */
+@Serializable
+data class CourseVideoDto(
+    val id: Long,
+    val chapter: Int = 0,
+    val title: String = "",
+    val durationSec: Int? = null,
+    val kcCodes: List<String> = emptyList(),
+    val available: Boolean = false,
+)
+
 @Serializable
 data class LectureResourceDto(
     val id: Long,

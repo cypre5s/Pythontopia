@@ -5,9 +5,6 @@
     "Trebuchet MS", "Avenir Next", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  /* 移动端 NFR：禁止 iOS/部分安卓在横竖屏切换时自动放大正文字号（会撑破像素小镇与面板布局）。 */
-  -webkit-text-size-adjust: 100%;
-  text-size-adjust: 100%;
 }
 
 * {
@@ -55,33 +52,6 @@ button[disabled]:active {
 a {
   color: #315c9a;
   text-decoration-thickness: 2px;
-}
-
-/* 全局键盘焦点环（a11y · WCAG 2.4.7 焦点可见）：仅 :focus-visible（键盘 tab）显示，
-   鼠标点击不打扰。此前交互元素聚焦后无可见指示，键盘用户无法判断焦点落点而"迷路"。 */
-:focus-visible {
-  outline: 3px solid #315c9a;
-  outline-offset: 2px;
-}
-
-/* 尊重「减少动态效果」系统偏好（a11y · 前庭功能障碍友好 / NFR）：把 CSS 动画与过渡
-   收敛到近 0、滚动改为瞬时。JS 动画（GSAP/Phaser）另由 useReducedMotion 治理，互不冲突。 */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
-}
-
-/* 输入占位文字对比度（a11y · 文本对比）：浏览器默认 placeholder 约 54% 灰，在浅色输入框上
-   常不达 WCAG 对比；统一为足够对比的墨绿灰并把 opacity 拉满，避免半透明再叠浅。 */
-::placeholder {
-  color: #5a6560;
-  opacity: 1;
 }
 
 .app-shell {

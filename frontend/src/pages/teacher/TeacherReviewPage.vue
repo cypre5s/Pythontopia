@@ -630,7 +630,7 @@ const currentEntry = computed<ReviewEntry | null>(() => {
   padding: 10px;
   background: var(--pyt-color-bg-soft);
   border: 2px solid var(--pyt-color-border);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'Consolas', 'JetBrains Mono', 'Cascadia Code', Menlo, 'Courier New', monospace;
   font-size: 13px;
   line-height: 1.7;
   white-space: pre-wrap;
@@ -645,7 +645,7 @@ const currentEntry = computed<ReviewEntry | null>(() => {
   padding: 8px;
   background: #1a0e04;
   color: #f6f1e6;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'Consolas', 'JetBrains Mono', 'Cascadia Code', Menlo, 'Courier New', monospace;
   font-size: 12px;
   border: 2px solid var(--pyt-color-text-primary);
 }

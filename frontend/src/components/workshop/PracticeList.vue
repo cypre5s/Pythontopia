@@ -275,7 +275,7 @@ function enterBugMine(): void {
   border-radius: 6px;
   background: var(--pyt-color-terminal-bg);
   color: var(--pyt-color-terminal-text);
-  font-family: 'Fira Code', 'JetBrains Mono', 'Source Code Pro', monospace;
+  font-family: 'Consolas', 'JetBrains Mono', 'Cascadia Code', Menlo, 'Courier New', monospace;
   font-size: 13px;
   line-height: 1.55;
   resize: vertical;

@@ -212,7 +212,7 @@ const dimensionCards = computed(() => {
             <h1 class="profile-name">
               {{ session.displayName }}
             </h1>
-            <span class="profile-subtitle">Pythontopia 学习者画像</span>
+            <span class="profile-subtitle">学习者画像</span>
           </div>
         </div>
         <span class="nav-breadcrumb">我的画像</span>
@@ -233,7 +233,7 @@ const dimensionCards = computed(() => {
               class="self-rate"
             >
               <h3 class="self-rate__title">
-                自评（仅主观维度，随时调整）
+                自评（仅主观维度）
               </h3>
               <div
                 v-for="dim in selfEditable"
@@ -318,7 +318,7 @@ const dimensionCards = computed(() => {
           v-if="!p"
           class="profile-empty"
           title="画像尚未生成"
-          description="先完成入学访谈，或在小镇开始学习，系统会据此生成你的画像。"
+          description="完成入学访谈或开始学习后自动生成。"
           icon="🧭"
         >
           <PyButton

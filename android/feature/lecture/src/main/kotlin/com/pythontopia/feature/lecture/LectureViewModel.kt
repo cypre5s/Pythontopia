@@ -23,6 +23,32 @@ class LectureViewModel @Inject constructor(
 
     init {
         loadList()
+        selectChapter(1)
+    }
+
+    fun setMode(mode: LectureMode) {
+        _state.update { it.copy(mode = mode) }
+    }
+
+    /** 选章并拉视频清单；自动选中首个可播放视频。 */
+    fun selectChapter(chapter: Int) {
+        _state.update { it.copy(chapter = chapter, videosLoading = true) }
+        viewModelScope.launch {
+            val videos = repository.chapterVideos(chapter)
+            val first = videos.firstOrNull { it.available } ?: videos.firstOrNull()
+            _state.update {
+                it.copy(
+                    videos = videos,
+                    videosLoading = false,
+                    selectedVideoId = first?.id,
+                    videoUrl = first?.id?.let { id -> repository.videoUrl(id) },
+                )
+            }
+        }
+    }
+
+    fun selectVideo(id: Long) {
+        _state.update { it.copy(selectedVideoId = id, videoUrl = repository.videoUrl(id)) }
     }
 
     fun loadList() {

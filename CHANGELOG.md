@@ -1,5 +1,34 @@
 # Changelog
 
+## 2026-06-19 — Android 原生端对齐 Web 全功能 + 超强加固 + ECS 发版（APK/EXE 下载 + 下载计数）
+
+> 把 Android 端逐功能补齐到与 Web 对齐：新增无尽远征模块、主线三件套做成真交互、工坊生成物查看器、费曼代码找茬、课件 RAG 问答 + PDF 页图、讲义视频、像素小镇 HUD/小地图/日夜/天气/瞬移；中文本地化；release 包 R8 超强加固；并在 ECS 上线 APK/EXE 下载入口 + 后端下载次数统计。
+
+- **新增 `:feature:expedition` 无尽远征（Roguelike，移植 Web `stores/rogueRun` 等）**：完整状态机（idle→map→event→challenge→cleared/over）、分层 DAG 地图生成（可注入 RNG，含单测）、relic 增益、概念事件、BOSS 多阶段、每日挑战（日期种子确定性地图）、知识星座、后端 run 跨会话存档（`/api/world/expedition/run`）+ 本地兜底、复用 boss 真判题；接入导航 dock。
+- **主线「看/学/练」三件套真交互（`:feature:mainline`）**：练-客观题改为站内选/判/填 + 服务端判分（`/practice/{id}/answer`，不泄题，回正确答案+解析）；学-课件逐页阅读 + 逐页 read 打点（`/page-read`，新增 `CoursePageApi`）；看-内嵌视频播放（`PytVideoPlayer`）。
+- **工坊生成物查看器（`:feature:workshop`）**：`GET /api/workshop/resources/{id}` 拉详情，按类型渲染 讲义/思维导图/练习/代码实验/拓展阅读/故事分镜。
+- **费曼「代码找茬」限时小游戏（`:feature:feynman`）**：`/bug-hunt` 拉含 bug 代码，30s 点 bug 行 + 命中/误报/漏判判分 + 连胜/最高分（客户端计分）。
+- **课件 RAG + PDF（`:feature:library`）**：`POST /api/courseware/answer` 课件问答（答案 + 页码引用，选中 KC 收敛范围）；阅读器加载 `GET /api/course/pages/{id}/image`（后端 PDFBox 渲染 PNG，`BitmapFactory` 解码，零新依赖），失败降级 markdown。
+- **讲义视频页（`:feature:lecture`）**：重构为「视频讲解 / 生成讲义」双模式，章节选择 + 视频列表 + WebView 播放器（`/api/course/videos` 匿名 Range 流，对齐 Web `<video>`）。
+- **像素小镇 HUD + 引擎增强（`:feature:hub` + `:game`）**：Compose 叠加层加 小地图（Canvas，点选瞬移）、随身助教、快速旅行、暂停菜单；LibGDX 加 日夜光照着色、雨/雪天气粒子、小地图点选瞬移（`HubGameBridge.setEnvironment/requestTeleport`、`WorldRenderScreen`）。
+- **共享 `core:design/PytVideoPlayer`**：依赖无关 WebView 视频播放器（避免引入 Media3），lecture 与 mainline 看 共用。
+- **本地化适配**：`resConfigs("zh")` 仅打包简体中文资源；`Application` + `MainActivity.attachBaseContext` 强制 `Locale.SIMPLIFIED_CHINESE`，系统级文案/日期不随设备语言漂移。
+- **release 超强加固（防反编译）**：R8 full mode + `-repackageclasses ''` + `-allowaccessmodification` + 去 `android.util.Log`；release APK 18.8MB(debug) → **5.6MB**，类/方法/包名全混淆（`mapping.txt` 留存反混淆）；APK 启动图标改用 Windows EXE 同款像素品牌徽标（`app.ico` → 全密度 mipmap PNG）。
+- **下载次数统计（后端 `com.pythontopia.download` + 前端 guide）**：迁移 `V174__app_download_stat.sql` + `DownloadStatService`(JdbcTemplate 原子自增) + `DownloadStatController`（`GET /api/downloads/{key}`、`POST …/hit`，key 限 `[a-z0-9_]`）+ SecurityConfig 放行 `/api/downloads/**`；guide 页「下载客户端」卡列 APK/Windows EXE/Windows ZIP 三个下载按钮 + 各自累计次数（`api/downloads.ts`，octet-stream 直链下载）。
+- **ECS 发版（公网 47.120.29.62）**：APK 上传 `/opt/pythontopia/downloads/pythontopia.apk`（+ sha256），Windows EXE/ZIP 同目录；在 ECS 上从源码重建 backend（V174 已迁移、计数端点 200）与 frontend（干净镜像 216MB，按钮从源码烘入）镜像并 `docker compose ... --force-recreate` 重部；保留 `*-backup` 镜像标签可回滚。
+- **验证**：各 Android 改动模块 `:feature:*:testDebugUnitTest` 全绿、`:app:assembleDebug`/`assembleRelease` 全绿；前端 `vue-tsc` 0 错 + `GuidePage.spec` 22 passed；ECS 端到端复验：index/healthz/guide 分块/APK/EXE/计数端点（GET/POST）均 200，backend/frontend 容器 healthy，计数已置 0。**未验证**：APK 真机安装/图标/加固运行（无设备）。
+
+## 2026-06-19 — 费曼反演：学弟中性描述 + 微信式聊天对话框 + 代码找茬题库扩充
+
+> 把上一批「学弟开口说『我以为』」反过来：学弟只中性描述代码在做什么、不剧透 bug；「讲明白」搬进微信式聊天对话框、操作按钮右对齐；代码找茬 bug 库结合真实错题用 LLM 大规模生成更长、更多类型的题；并继续精简费曼与指南文案。
+
+- **学弟中性化 · 去「我以为」（前端 · graph）**：费曼「与学弟对话」里学弟不再第一人称自述「我以为 range(1, 5) 会取到 5」等误解，改为只中性描述这段代码在做什么、不剧透 bug，把「错在哪」的思考完整留给学生（graph `feynman_tutee_agent._mistake_for` / `_CODE_DESCRIPTION`、前端 `FeynmanPanel.TUTEE_CODE_DESC` 同步）。**反演上一批「学弟开口说误解」**。
+- **微信式聊天对话框 + 按钮右对齐（前端）**：`FeynmanPanel`「与学弟对话」重做成微信式聊天气泡——学弟（弟）靠左、我靠右、微信绿气泡 + 头像；「讲给学弟听」「真判题裁定」两个操作按钮统一右对齐（`feynman-panel__teach-submit--right`）。
+- **代码找茬 bug 库大规模扩充（graph）**：`feynman_tutee_agent` 的 canned 样本从单行 demo 升为多行教学片段；新增 `_bug_from_llm_generic`，无真实错误史时也按 KC 章节主题用 LLM 生成 6–14 行长代码陷阱（`_BUG_MIN_LINES`/`_BUG_MAX_LINES`，超时 6s→8s）；LLM 提示要求错误类型多样（边界 / 类型 / 别名 / 缩进 / 逻辑运算符 / 字典键…）且紧扣 KC，bug 行仍由 buggy/fixed `difflib` diff 自动标出（零伪造）——结合真实错题 + LLM 大规模生成，支撑每日教学常练常新。
+- **文案精简（前端）**：`BugHunterGame`（副标题「30 秒 · 点 bug 行」、结算与空闲提示收敛）、`FeynmanPage`（标题改「费曼反演」、引导收为「找茬 → 讲明白 → 真判题出师」、删多余步骤列表）去掉冗余说明。
+- **指南同步（前端 · 本会话所属）**：`guideSections.ts` 复盘大厅「费曼反演」小节重写为「代码找茬(30s 点 bug 行) → 微信式对话框讲明白(学弟中性描述、不剧透 bug) → 真判题出师」，注明 bug 库结合真实错题 + LLM 大规模生成（更长、更多错误类型）；并把「学生 A」cast 与复盘大厅 summary 里「会犯你同款错误的 AI 学弟」收敛为中性表述，顺手精简该处文案。
+- **验证（本会话 guide 部分）**：`eslint src/content/guideSections.ts src/pages/GuidePage.vue` 0 错；`vitest run tests/pages/GuidePage.spec.ts` 全绿（`GUIDE_SCREENSHOT_TOTAL` 截图计数不变）。费曼组件 / graph 改动由同批其它会话各自 `vitest` / `pytest` 验证。
+
 ## 2026-06-19 — 代码找茬：学弟开口说误解 + 前端文案精简
 
 > 生成 bug 的同时让 AI 学弟在对话区用自己口吻说出这处（错误）理解；并把费曼界面文案大幅精简，去掉冗余说明。

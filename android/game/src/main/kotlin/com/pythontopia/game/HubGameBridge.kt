@@ -23,6 +23,13 @@ class HubGameBridge {
     private val playerTile: AtomicReference<TileCoord> =
         AtomicReference(TileCoord(SPAWN_TILE_X, SPAWN_TILE_Y, DEFAULT_WORLD_MAP_KEY))
 
+    /** Compose 线程写、渲染线程读：日夜/天气环境（驱动光照着色与天气粒子）。 */
+    @Volatile
+    private var environment: EnvState = EnvState()
+
+    /** Compose 线程置请求、渲染线程消费：小地图点选瞬移到目标 tile。 */
+    private val teleportRequest: AtomicReference<TileCoord?> = AtomicReference(null)
+
     fun emit(event: HubEvent) {
         eventChannel.trySend(event)
     }
@@ -56,6 +63,20 @@ class HubGameBridge {
 
     fun latestPlayerTile(): TileCoord = playerTile.get()
 
+    /** 设置日夜/天气（来自后端日历）；渲染线程下一帧应用光照与粒子。 */
+    fun setEnvironment(timeOfDay: String?, weather: String?) {
+        environment = EnvState(timeOfDay, weather)
+    }
+
+    fun environment(): EnvState = environment
+
+    /** 请求瞬移到 [x],[y]（小地图点选）；渲染线程下一帧消费并落到最近可走格。 */
+    fun requestTeleport(x: Int, y: Int) {
+        teleportRequest.set(TileCoord(x, y))
+    }
+
+    fun consumeTeleportRequest(): TileCoord? = teleportRequest.getAndSet(null)
+
     companion object {
         const val SPAWN_TILE_X = 25
         const val SPAWN_TILE_Y = 20
@@ -67,6 +88,12 @@ data class TileCoord(
     val x: Int,
     val y: Int,
     val mapKey: String = DEFAULT_WORLD_MAP_KEY,
+)
+
+/** 日夜/天气环境快照（驱动 LibGDX 光照着色与天气粒子）。 */
+data class EnvState(
+    val timeOfDay: String? = null,
+    val weather: String? = null,
 )
 
 sealed interface HubEvent {

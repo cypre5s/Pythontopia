@@ -163,7 +163,7 @@ watch(() => props.content.mermaid, async () => {
   border: 2px solid var(--pyt-color-border);
   border-radius: 6px;
   padding: 10px;
-  font-family: 'Fira Code', monospace;
+  font-family: 'Consolas', 'JetBrains Mono', 'Cascadia Code', Menlo, 'Courier New', monospace;
   font-size: 13px;
   white-space: pre-wrap;
 }

@@ -28,6 +28,9 @@ data class HubUiState(
     val dialogOpenedFor: String? = null,
     val statusMessage: String? = null,
     val errorMessage: String? = null,
+    /** 玩家当前 tile（小地图用；y-up，与 LibGDX 一致）。 */
+    val playerTileX: Int = 25,
+    val playerTileY: Int = 20,
 )
 
 /** 中央小镇 ViewModel；聚合 GameBootstrap、日历与 LibGDX 桥事件。 */
@@ -81,12 +84,15 @@ class HubViewModel @Inject constructor(
                     val mapKey = bootstrap.player.mapKey ?: DEFAULT_WORLD_MAP_KEY
                     bridge.updatePlayerTile(bootstrap.player.tileX, bootstrap.player.tileY, mapKey)
                     val calendar = repository.today()
+                    bridge.setEnvironment(calendar?.timeOfDay, calendar?.weather)
                     _state.update {
                         it.copy(
                             isBootstrapping = false,
                             world = bootstrap,
                             calendar = calendar,
                             mapKey = mapKey,
+                            playerTileX = bootstrap.player.tileX,
+                            playerTileY = bootstrap.player.tileY,
                             statusMessage = null,
                             errorMessage = null,
                         )
@@ -127,7 +133,7 @@ class HubViewModel @Inject constructor(
                 }
             }
             is com.pythontopia.game.HubEvent.PlayerMoved -> {
-                _state.update { it.copy(mapKey = event.mapKey) }
+                _state.update { it.copy(mapKey = event.mapKey, playerTileX = event.tileX, playerTileY = event.tileY) }
                 reportPlayerMove(event.tileX, event.tileY, event.direction)
             }
         }
@@ -141,6 +147,11 @@ class HubViewModel @Inject constructor(
 
     fun dialogDismissed() {
         _state.update { it.copy(dialogOpenedFor = null) }
+    }
+
+    /** 小地图点选瞬移：转发到渲染线程（落到最近可走格）。 */
+    fun teleportTo(tileX: Int, tileY: Int) {
+        bridge.requestTeleport(tileX, tileY)
     }
 
     fun reportPlayerMove(tileX: Int, tileY: Int, direction: String) {

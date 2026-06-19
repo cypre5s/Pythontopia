@@ -42,53 +42,54 @@ function resetPicker(): void {
 
 <template>
   <AppLayout>
-    <section class="feynman-page" :class="{ 'feynman-page--active': activeKc.length > 0 }">
+    <section
+      class="feynman-page"
+      :class="{ 'feynman-page--active': activeKc.length > 0 }"
+    >
       <div class="feynman-page__content">
-      <header v-if="activeKc.length === 0" class="feynman-page__intro">
-        <div class="feynman-page__hero">
-          <h1 class="feynman-page__title">
-            教会一个会犯你同款错的 AI 学弟
-          </h1>
-          <p class="feynman-page__lead">
-            AI 学弟会犯你同款错——选个知识点，把它教会，你就真懂了。
-          </p>
-          <ol class="feynman-page__steps">
-            <li><span class="feynman-page__step-no">1</span>选知识点</li>
-            <li><span class="feynman-page__step-no">2</span>代码找茬揪 bug</li>
-            <li><span class="feynman-page__step-no">3</span>讲明白 → 真判题出师</li>
-          </ol>
-        </div>
-
-        <div class="feynman-page__picker">
-          <KcPicker @select="pick" />
-          <div class="feynman-page__chips">
-            <span class="feynman-page__chips-hint">常用知识点：</span>
-            <button
-              v-for="kc in suggestedKcs"
-              :key="kc.code"
-              type="button"
-              class="feynman-page__chip"
-              @click="pick(kc.code)"
-            >
-              {{ kc.label }}
-            </button>
+        <header
+          v-if="activeKc.length === 0"
+          class="feynman-page__intro"
+        >
+          <div class="feynman-page__hero">
+            <h1 class="feynman-page__title">
+              费曼反演
+            </h1>
+            <p class="feynman-page__lead">
+              找茬 → 讲明白 → 真判题出师。
+            </p>
           </div>
-        </div>
-      </header>
 
-      <FeynmanPanel
-        v-if="activeKc.length > 0"
-        :key="activeKc"
-        :kc-code="activeKc"
-        @change-kc="resetPicker"
-      />
-      <p
-        v-else
-        class="feynman-page__hint"
-        data-testid="feynman-page-hint"
-      >
-        在上方选一个知识点，就能召唤 AI 学弟、开始代码找茬啦。
-      </p>
+          <div class="feynman-page__picker">
+            <KcPicker @select="pick" />
+            <div class="feynman-page__chips">
+              <span class="feynman-page__chips-hint">常用：</span>
+              <button
+                v-for="kc in suggestedKcs"
+                :key="kc.code"
+                type="button"
+                class="feynman-page__chip"
+                @click="pick(kc.code)"
+              >
+                {{ kc.label }}
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <FeynmanPanel
+          v-if="activeKc.length > 0"
+          :key="activeKc"
+          :kc-code="activeKc"
+          @change-kc="resetPicker"
+        />
+        <p
+          v-else
+          class="feynman-page__hint"
+          data-testid="feynman-page-hint"
+        >
+          选个知识点开始。
+        </p>
       </div>
     </section>
   </AppLayout>

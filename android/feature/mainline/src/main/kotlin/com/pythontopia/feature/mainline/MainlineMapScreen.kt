@@ -31,11 +31,21 @@ import com.pythontopia.core.design.PytErrorRetry
 
 private const val MAX_CHAPTER_STARS = 3
 
+/** 章节卡回调集合（避免 Composable 参数列表过长）。 */
+private data class MainlineMapActions(
+    val onOpenStage: (Long) -> Unit,
+    val onOpenTest: (Int) -> Unit,
+    val onOpenQuiz: (Int) -> Unit,
+    val onClaimRecovery: (Int) -> Unit,
+    val onOpenEndless: (Int) -> Unit,
+)
+
 /** R-15 主线冒险地图：章节 → 小节（看/学/练进度），点小节进入学习页。 */
 @Composable
 fun MainlineMapScreen(
     onOpenStage: (Long) -> Unit = {},
     onOpenTest: (Int) -> Unit = {},
+    onOpenQuiz: (Int) -> Unit = {},
     onOpenEndless: (Int) -> Unit = {},
     viewModel: MainlineMapViewModel = hiltViewModel(),
 ) {
@@ -51,10 +61,13 @@ fun MainlineMapScreen(
                 totalStars = state.totalStars,
                 chapters = state.chapters,
                 message = state.message,
-                onOpenStage = onOpenStage,
-                onOpenTest = onOpenTest,
-                onClaimRecovery = viewModel::claimErrorbookRecovery,
-                onOpenEndless = onOpenEndless,
+                actions = MainlineMapActions(
+                    onOpenStage = onOpenStage,
+                    onOpenTest = onOpenTest,
+                    onOpenQuiz = onOpenQuiz,
+                    onClaimRecovery = viewModel::claimErrorbookRecovery,
+                    onOpenEndless = onOpenEndless,
+                ),
             )
         }
     }
@@ -72,10 +85,7 @@ private fun MapContent(
     totalStars: Int,
     chapters: List<ChapterOverviewDto>,
     message: String?,
-    onOpenStage: (Long) -> Unit,
-    onOpenTest: (Int) -> Unit,
-    onClaimRecovery: (Int) -> Unit,
-    onOpenEndless: (Int) -> Unit,
+    actions: MainlineMapActions,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 12.dp),
@@ -115,13 +125,7 @@ private fun MapContent(
             }
         }
         items(chapters, key = { it.chapter }) { chapter ->
-            ChapterCard(
-                chapter = chapter,
-                onOpenStage = onOpenStage,
-                onOpenTest = onOpenTest,
-                onClaimRecovery = onClaimRecovery,
-                onOpenEndless = onOpenEndless,
-            )
+            ChapterCard(chapter = chapter, actions = actions)
         }
     }
 }
@@ -130,10 +134,7 @@ private fun MapContent(
 @Composable
 private fun ChapterCard(
     chapter: ChapterOverviewDto,
-    onOpenStage: (Long) -> Unit,
-    onOpenTest: (Int) -> Unit,
-    onClaimRecovery: (Int) -> Unit,
-    onOpenEndless: (Int) -> Unit,
+    actions: MainlineMapActions,
 ) {
     Surface(
         color = MaterialTheme.colorScheme.surface,
@@ -158,15 +159,16 @@ private fun ChapterCard(
             )
             if (chapter.unlocked) {
                 chapter.stages.forEach { stage ->
-                    StageRow(stage = stage, onClick = { onOpenStage(stage.id) })
+                    StageRow(stage = stage, onClick = { actions.onOpenStage(stage.id) })
                 }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    TextButton(onClick = { onOpenTest(chapter.chapter) }) { Text("章末测试 ›") }
+                    TextButton(onClick = { actions.onOpenQuiz(chapter.chapter) }) { Text("章末快测 ›") }
+                    TextButton(onClick = { actions.onOpenTest(chapter.chapter) }) { Text("章末测试 ›") }
                     if (chapter.recovery?.errorbookDone != true) {
-                        TextButton(onClick = { onClaimRecovery(chapter.chapter) }) { Text("错题补星") }
+                        TextButton(onClick = { actions.onClaimRecovery(chapter.chapter) }) { Text("错题补星") }
                     }
                     if (chapter.recovery?.endlessDone != true) {
-                        TextButton(onClick = { onOpenEndless(chapter.chapter) }) { Text("无尽挑战") }
+                        TextButton(onClick = { actions.onOpenEndless(chapter.chapter) }) { Text("无尽挑战") }
                     }
                 }
             } else {

@@ -5,7 +5,7 @@
  *   - 默认仅展示居中的单对话流；
  *   - 历史在左侧，书房、调用过程在右侧按需打开。
  */
-import { computed, onActivated, onDeactivated, onMounted, onUnmounted, ref } from 'vue';
+import { computed, onActivated, onDeactivated, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import AppLayout from '@/app/AppLayout.vue';
 import WorkshopChat from '@/components/workshop/WorkshopChat.vue';
@@ -43,11 +43,46 @@ const router = useRouter();
 const pageActive = ref(true);
 
 // 书房默认收起，聊天占满主区；学生需要时点顶部按钮展开。
-const drawerOpen = ref(false);
+// 「100% 保留布局」：面板布局（历史/书房/调用）除 KeepAlive 会话内保留外，再持久化到 localStorage——
+// 即便整页刷新/重开，回到工坊也恢复上次的面板布局；对话流本身由 KeepAlive 会话内保留，
+// 刷新后可从左栏「历史」一键回看上次那段会话。
 type WorkshopDrawer = 'study' | 'calls' | null;
-const historyOpen = ref(false);
-const activeDrawer = ref<WorkshopDrawer>(null);
+const WORKSHOP_LAYOUT_KEY = 'pyt:workshop-layout';
+
+function loadWorkshopLayout(): { historyOpen: boolean; activeDrawer: WorkshopDrawer } {
+  try {
+    const raw = window.localStorage.getItem(WORKSHOP_LAYOUT_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as { historyOpen?: unknown; activeDrawer?: unknown };
+      const drawer = parsed.activeDrawer;
+      return {
+        historyOpen: parsed.historyOpen === true,
+        activeDrawer: drawer === 'study' || drawer === 'calls' ? drawer : null,
+      };
+    }
+  } catch {
+    /* localStorage 不可用（隐私模式）时回退默认布局 */
+  }
+  return { historyOpen: false, activeDrawer: null };
+}
+
+const restoredLayout = loadWorkshopLayout();
+const drawerOpen = ref(restoredLayout.activeDrawer === 'study');
+const historyOpen = ref(restoredLayout.historyOpen);
+const activeDrawer = ref<WorkshopDrawer>(restoredLayout.activeDrawer);
 const historyPendingTurn = ref<WorkshopChatHistoryTurnDto | null>(null);
+
+// 面板布局变化即持久化，供刷新/重开后恢复（会话内保留仍由 KeepAlive 负责）。
+watch([historyOpen, activeDrawer], ([open, drawer]) => {
+  try {
+    window.localStorage.setItem(
+      WORKSHOP_LAYOUT_KEY,
+      JSON.stringify({ historyOpen: open, activeDrawer: drawer }),
+    );
+  } catch {
+    /* 隐私模式禁用 localStorage 时忽略 */
+  }
+});
 
 // 左栏「聊天记录」选中某段会话时，把整段会话（多轮问答）回看注入对话流并接着聊
 // （WorkshopChat 暴露 loadConversation）。选中后**保持历史栏与右侧栏原样**，
@@ -274,7 +309,7 @@ const bodyClass = computed<Record<string, boolean>>(() => ({
               type="button"
               class="travel-chip travel-chip--library"
               data-testid="workshop-open-library"
-              title="打开课程图书馆（PDF / 65 KC）"
+              title="课程图书馆"
               @click="openLibrary"
             >
               <span class="travel-chip__label">图书馆 L</span>
@@ -285,7 +320,7 @@ const bodyClass = computed<Record<string, boolean>>(() => ({
               type="button"
               class="travel-chip travel-chip--arena"
               data-testid="workshop-open-arena"
-              title="章节闯关塔（7 章 × 10 关 = 70 关）"
+              title="章节闯关塔"
               @click="openArena(1)"
             >
               <span class="travel-chip__label">闯关塔 A</span>
@@ -376,7 +411,7 @@ const bodyClass = computed<Record<string, boolean>>(() => ({
                 class="workshop-call-drawer__empty"
                 data-testid="workshop-call-empty"
               >
-                暂无调用过程。发起一次提问或生成后，这里会保留详细链路。
+                暂无调用过程，提问或生成后会显示链路。
               </p>
             </div>
           </div>
@@ -397,7 +432,7 @@ const bodyClass = computed<Record<string, boolean>>(() => ({
         >
           <div class="resource-modal">
             <header class="resource-modal__bar">
-              <span class="resource-modal__title">📄 讲义 / 资源详情</span>
+              <span class="resource-modal__title">📄 资源详情</span>
               <button
                 type="button"
                 class="resource-modal__close"

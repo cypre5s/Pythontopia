@@ -30,7 +30,10 @@ describe('BugHunterGame', () => {
     mocks.huntFeynmanBug.mockResolvedValue({
       source: 'real_misconception',
       misconceptionTag: 'off_by_one_range',
-      buggyCode: 'for i in range(1, 5):\n    print(i)',
+      buggyCode: `total = 0
+for i in range(1, 5):
+    total += i
+print("1到5的和是", total)`,
       bugLineIndices: [0],
       hintMd: 'range 右端不包含',
     });
@@ -51,8 +54,8 @@ describe('BugHunterGame', () => {
 
     const result = wrapper.get('[data-testid="bug-hunter-result"]');
     expect(result.text()).toContain('命中 1');
-    expect(result.text()).toContain('误报 0');
-    expect(result.text()).toContain('漏判 0');
+    expect(result.text()).toContain('误 0');
+    expect(result.text()).toContain('漏 0');
   });
 
   it('点错非 bug 行记为误报，并漏判真实 bug 行', async () => {
@@ -67,7 +70,7 @@ describe('BugHunterGame', () => {
 
     const result = wrapper.get('[data-testid="bug-hunter-result"]');
     expect(result.text()).toContain('命中 0');
-    expect(result.text()).toContain('误报 1');
-    expect(result.text()).toContain('漏判 1');
+    expect(result.text()).toContain('误 1');
+    expect(result.text()).toContain('漏 1');
   });
 });

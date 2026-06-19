@@ -102,6 +102,9 @@ function setupRouter(): Router {
 
 describe('WorkshopPage R-13 改造', () => {
   beforeEach(() => {
+    // 工坊布局现持久化到 localStorage（刷新/重开后恢复面板布局）；测试间须清空以隔离，
+    // 否则前一用例开过的抽屉会被后一用例的全新挂载 hydrate，污染默认布局断言。
+    localStorage.clear();
     setActivePinia(createPinia());
     router = setupRouter();
     Object.values(apiMocks).forEach((fn) => fn.mockReset?.());

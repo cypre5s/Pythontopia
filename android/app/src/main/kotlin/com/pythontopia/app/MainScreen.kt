@@ -42,14 +42,21 @@ import androidx.navigation.navArgument
 import com.pythontopia.core.design.PytColors
 import com.pythontopia.feature.auth.AuthDestination
 import com.pythontopia.feature.auth.authGraph
+import com.pythontopia.feature.about.CreditsScreen
+import com.pythontopia.feature.about.GraduationScreen
+import com.pythontopia.feature.about.GuideScreen
 import com.pythontopia.feature.arena.ArenaScreen
 import com.pythontopia.feature.arena.ChapterTowerScreen
 import com.pythontopia.feature.classroom.ClassroomScreen
 import com.pythontopia.feature.fields.FieldsScreen
+import com.pythontopia.feature.board.BoardScreen
 import com.pythontopia.feature.boss.BossScreen
 import com.pythontopia.feature.endless.EndlessScreen
+import com.pythontopia.feature.expedition.ExpeditionScreen
+import com.pythontopia.feature.feynman.FeynmanScreen
 import com.pythontopia.feature.hub.HubScreen
 import com.pythontopia.feature.lecture.LectureScreen
+import com.pythontopia.feature.mainline.ChapterAssessment
 import com.pythontopia.feature.mainline.ChapterTestScreen
 import com.pythontopia.feature.mainline.MainlineMapScreen
 import com.pythontopia.feature.mainline.MainlineStageScreen
@@ -57,8 +64,10 @@ import com.pythontopia.feature.library.LibraryScreen
 import com.pythontopia.feature.mine.MineEchoesScreen
 import com.pythontopia.feature.mine.MineSessionScreen
 import com.pythontopia.feature.path.PathScreen
+import com.pythontopia.feature.problems.ProblemsScreen
 import com.pythontopia.feature.profile.ProfileScreen
 import com.pythontopia.feature.retro.RetroScreen
+import com.pythontopia.feature.teacherreview.TeacherReviewScreen
 import com.pythontopia.feature.tutor.TutorScreen
 import com.pythontopia.feature.workshop.IntentRouterScreen
 import com.pythontopia.feature.workshop.WorkshopGenScreen
@@ -132,19 +141,28 @@ private val APP_DESTINATIONS = listOf(
     // 看 · 课件与讲义
     AppDestination("library", "图书馆", PytColors.info),
     AppDestination("lecture", "讲义", PytColors.success),
+    AppDestination("problems", "题库", PytColors.info),
     // 练 / 测
     AppDestination("arena", "训练场", PytColors.danger),
     AppDestination("tower", "闯关塔", PytColors.warning),
     AppDestination("endless", "无尽练习", PytColors.warning),
+    AppDestination("expedition", "无尽远征", PytColors.tertiary),
     AppDestination("boss", "BOSS战", PytColors.danger),
     // 支线 · 复盘
     AppDestination("mine", "矿洞", PytColors.textMuted),
     AppDestination("retro", "复盘", PytColors.info),
+    AppDestination("feynman", "费曼", PytColors.tertiary),
     // 画像 / 路径 / 知识田 / 班级
     AppDestination("profile", "画像", PytColors.info),
+    AppDestination("board", "任务板", PytColors.warning),
     AppDestination("path", "路径", PytColors.success),
     AppDestination("fields", "知识田", PytColors.success),
     AppDestination("classroom", "班级", PytColors.danger),
+    AppDestination("teacher-review", "审题", PytColors.danger),
+    // 关于 · 指南 / 致谢 / 毕业
+    AppDestination("guide", "指南", PytColors.textMuted),
+    AppDestination("credits", "致谢", PytColors.textMuted),
+    AppDestination("graduation", "毕业", PytColors.tertiary),
 )
 
 @Composable
@@ -163,11 +181,17 @@ private fun AppShell(onLogout: () -> Unit) {
             startDestination = "hub",
             modifier = Modifier.padding(padding),
         ) {
-            composable("hub") { HubScreen(onLogout = onLogout) }
+            composable("hub") {
+                HubScreen(
+                    onLogout = onLogout,
+                    onNavigate = { route -> featureNav.navigate(route) { launchSingleTop = true } },
+                )
+            }
             composable("mainline") {
                 MainlineMapScreen(
                     onOpenStage = { stageId -> featureNav.navigate("mainline/stage/$stageId") },
                     onOpenTest = { chapter -> featureNav.navigate("mainline/chapter-test/$chapter") },
+                    onOpenQuiz = { chapter -> featureNav.navigate("mainline/chapter-quiz/$chapter") },
                     onOpenEndless = { chapter -> featureNav.navigate("endless?chapter=$chapter") },
                 )
             }
@@ -187,6 +211,16 @@ private fun AppShell(onLogout: () -> Unit) {
                 ChapterTestScreen(
                     chapter = backStackEntry.arguments?.getInt("chapter") ?: 1,
                     onBack = { featureNav.popBackStack() },
+                )
+            }
+            composable(
+                route = "mainline/chapter-quiz/{chapter}",
+                arguments = listOf(navArgument("chapter") { type = NavType.IntType }),
+            ) { backStackEntry ->
+                ChapterTestScreen(
+                    chapter = backStackEntry.arguments?.getInt("chapter") ?: 1,
+                    onBack = { featureNav.popBackStack() },
+                    assessment = ChapterAssessment.QUIZ,
                 )
             }
             composable("tutor") { TutorScreen() }
@@ -223,6 +257,7 @@ private fun AppShell(onLogout: () -> Unit) {
                 )
             }
             composable("library") { LibraryScreen() }
+            composable("problems") { ProblemsScreen() }
             composable("arena") { ArenaScreen() }
             composable("boss") { BossScreen() }
             composable(
@@ -233,6 +268,9 @@ private fun AppShell(onLogout: () -> Unit) {
                 EndlessScreen(chapter = ch)
             }
             composable("lecture") { LectureScreen() }
+            composable("expedition") {
+                ExpeditionScreen(onExit = { featureNav.navigate("hub") { launchSingleTop = true } })
+            }
             composable("tower") { ChapterTowerScreen() }
             composable("mine") {
                 MineEchoesScreen(
@@ -249,8 +287,21 @@ private fun AppShell(onLogout: () -> Unit) {
                 )
             }
             composable("retro") { RetroScreen() }
+            composable(
+                route = "feynman?kc={kc}",
+                arguments = listOf(
+                    navArgument("kc") { type = NavType.StringType; nullable = true; defaultValue = null },
+                ),
+            ) { backStackEntry ->
+                FeynmanScreen(prefillKc = backStackEntry.arguments?.getString("kc"))
+            }
+            composable("board") { BoardScreen() }
             composable("path") { PathScreen() }
             composable("classroom") { ClassroomScreen() }
+            composable("teacher-review") { TeacherReviewScreen() }
+            composable("guide") { GuideScreen() }
+            composable("credits") { CreditsScreen() }
+            composable("graduation") { GraduationScreen() }
         }
     }
 }

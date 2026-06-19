@@ -779,7 +779,7 @@ function rewardLabel(r: MainSubQuestReward): string {
   color: var(--pyt-color-gold);
 }
 .boss-editor__label textarea {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'Consolas', 'JetBrains Mono', 'Cascadia Code', Menlo, 'Courier New', monospace;
   font-size: 13px;
   background: #110a04;
   color: #f6f1e6;

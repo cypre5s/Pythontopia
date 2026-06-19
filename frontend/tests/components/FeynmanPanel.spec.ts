@@ -101,15 +101,19 @@ describe('FeynmanPanel', () => {
     store.bugHunt = {
       source: 'real_misconception',
       misconceptionTag: 'off_by_one_range',
-      buggyCode: 'for i in range(1, 5):\n    print(i)',
-      bugLineIndices: [0],
+      buggyCode: `total = 0
+for i in range(1, 5):
+    total += i
+print("1到5的和是", total)`,
+      bugLineIndices: [1],
       hintMd: 'range 右端不包含',
     };
     await flushPromises();
 
     expect(wrapper.get('[data-testid="feynman-teach-hint"]').text()).toContain('range 右端不包含');
-    // 生成 bug 的同时，学弟以自己口吻在对话区说出这处误解。
-    expect(wrapper.get('[data-testid="feynman-tutee-voice"]').text()).toContain('range(1, 5)');
+    // 学弟以中性口吻描述代码在做什么，不暴露「我以为…」式自我纠错。
+    expect(wrapper.get('[data-testid="feynman-tutee-voice"]').text()).toContain('累加');
+    expect(wrapper.get('[data-testid="feynman-tutee-voice"]').text()).not.toContain('我以为');
   });
 
   it('未开始会话时不渲染教学输入，从结构上杜绝无 session 提交', () => {

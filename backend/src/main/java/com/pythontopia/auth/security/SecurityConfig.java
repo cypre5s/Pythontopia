@@ -47,6 +47,7 @@ public class SecurityConfig {
                       "/api/course/**",
                       "/api/media/assets/**",
                       "/api/internal/**",
+                      "/api/downloads/**",
                       "/healthz")
                   .permitAll();
               // OpenAPI/Swagger 默认开放（dev 联调方便）；生产设 PYT_EXPOSE_API_DOCS=false 后

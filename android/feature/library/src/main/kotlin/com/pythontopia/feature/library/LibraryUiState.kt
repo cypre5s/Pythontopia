@@ -13,6 +13,16 @@ data class LibraryUiState(
     val selectedPage: LibraryPageDto? = null,
     val loading: Boolean = false,
     val error: String? = null,
+    /** 当前页的 PDF 渲染图（后端 PNG）；null 时阅读器降级到 markdown 文本。 */
+    val pageImage: androidx.compose.ui.graphics.ImageBitmap? = null,
+    val pageImageLoading: Boolean = false,
+    // ── 课件问答（RAG Q&A） ──
+    val askQuery: String = "",
+    val asking: Boolean = false,
+    val answerMd: String = "",
+    val citations: List<CoursewareCitationDto> = emptyList(),
+    val noEvidence: Boolean = false,
+    val askError: String? = null,
 ) {
     val crumb: String
         get() = when (level) {

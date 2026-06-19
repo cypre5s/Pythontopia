@@ -62,9 +62,9 @@ const playable = computed(() => (hunt.value?.buggyCode?.trim().length ?? 0) > 0)
 const sourceLabel = computed(() => {
   switch (hunt.value?.source) {
     case 'real_misconception':
-      return '复现了你的同款错误，找出错的那行';
+      return '你的同款错';
     case 'generic_beginner_bug':
-      return '常见初学者陷阱，找出错的那行';
+      return '常见陷阱';
     default:
       return '';
   }
@@ -137,7 +137,7 @@ function finish(): void {
   if (perfect) {
     toast.show(`完美命中！${hunt.value?.hintMd ?? ''}`.trim(), 'success');
   } else {
-    toast.show('看看高亮的正确 bug 行，再讲一遍就真懂了', 'info');
+    toast.show('对照高亮 bug 行，再讲一遍就懂', 'info');
   }
 }
 
@@ -165,7 +165,7 @@ onUnmounted(clearTimer);
           代码找茬
         </h3>
         <p class="bug-hunter__sub">
-          {{ phase === 'idle' ? '限时找出 bug 行：命中得分，误报扣分。' : sourceLabel }}
+          {{ phase === 'idle' ? '30 秒 · 点 bug 行' : sourceLabel }}
         </p>
       </div>
       <div class="bug-hunter__meta">
@@ -219,7 +219,7 @@ onUnmounted(clearTimer);
       class="bug-hunter__empty"
       data-testid="bug-hunter-empty"
     >
-      {{ hunt?.hintMd || '暂时没有可玩的 bug 样本，先去做几道题积累错误再来。' }}
+      {{ hunt?.hintMd || '还没有可玩样本，先做几道题再来。' }}
     </p>
 
     <template v-else-if="phase !== 'idle'">
@@ -264,12 +264,8 @@ onUnmounted(clearTimer);
           :class="{ 'bug-hunter__result--perfect': result.perfect }"
           data-testid="bug-hunter-result"
         >
-          <strong>{{ result.perfect ? '完美命中！' : '本局结束' }}</strong>
-          命中 {{ result.hits }} · 误报 {{ result.wrong }} · 漏判 {{ result.missed }} ·
-          得分 {{ score }}<span v-if="result.comboBonus > 0">（含连胜 +{{ result.comboBonus }}）</span>。
-          <span class="bug-hunter__teach-tip">
-            想出师？下方一句话讲清它为什么错。
-          </span>
+          <strong>{{ result.perfect ? '完美！' : '结束' }}</strong>
+          命中 {{ result.hits }} · 误 {{ result.wrong }} · 漏 {{ result.missed }} · {{ score }} 分<span v-if="result.comboBonus > 0">（+{{ result.comboBonus }}）</span>
         </p>
       </div>
 
@@ -277,7 +273,7 @@ onUnmounted(clearTimer);
         v-if="hunt?.hintMd && phase === 'playing'"
         class="bug-hunter__hint"
       >
-        提示：{{ hunt.hintMd }}
+        {{ hunt.hintMd }}
       </p>
     </template>
 
@@ -286,7 +282,7 @@ onUnmounted(clearTimer);
       class="bug-hunter__idle"
       data-testid="bug-hunter-idle"
     >
-      <p>点「开始找茬」，限时揪出学弟代码里的 bug 行。</p>
+      <p>点「开始找茬」</p>
     </div>
   </section>
 </template>

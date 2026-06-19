@@ -16,6 +16,7 @@ import kotlinx.coroutines.launch
 data class ChapterTestUiState(
     val isLoading: Boolean = true,
     val chapter: Int = 0,
+    val assessment: ChapterAssessment = ChapterAssessment.TEST,
     val paper: ChapterTestPaperDto? = null,
     val answers: Map<String, String> = emptyMap(),
     val submitting: Boolean = false,
@@ -35,14 +36,22 @@ class ChapterTestViewModel @Inject constructor(
     private val _state = MutableStateFlow(ChapterTestUiState())
     val state: StateFlow<ChapterTestUiState> = _state.asStateFlow()
 
-    fun load(chapter: Int) {
+    fun load(chapter: Int, assessment: ChapterAssessment = ChapterAssessment.TEST) {
         _state.update {
-            it.copy(isLoading = true, chapter = chapter, paper = null, result = null, answers = emptyMap(), error = null)
+            it.copy(
+                isLoading = true,
+                chapter = chapter,
+                assessment = assessment,
+                paper = null,
+                result = null,
+                answers = emptyMap(),
+                error = null,
+            )
         }
         viewModelScope.launch {
             runCatching {
-                runCatching { repository.prepareTest(chapter) } // 触发异步预生成，忽略其返回/失败
-                repository.startTest(chapter)
+                runCatching { repository.prepareTest(chapter, assessment) } // 触发异步预生成，忽略其返回/失败
+                repository.startTest(chapter, assessment)
             }.onSuccess { paper ->
                 _state.update { it.copy(isLoading = false, paper = paper, error = null) }
             }.onFailure { throwable ->
@@ -62,7 +71,14 @@ class ChapterTestViewModel @Inject constructor(
         if (_state.value.submitting) return
         _state.update { it.copy(submitting = true, error = null) }
         viewModelScope.launch {
-            runCatching { repository.submitTest(_state.value.chapter, paper.testId, _state.value.answers) }
+            runCatching {
+                repository.submitTest(
+                    _state.value.chapter,
+                    paper.testId,
+                    _state.value.answers,
+                    _state.value.assessment,
+                )
+            }
                 .onSuccess { result -> _state.update { it.copy(submitting = false, result = result) } }
                 .onFailure { throwable ->
                     _state.update { it.copy(submitting = false, error = throwable.message ?: "交卷失败") }

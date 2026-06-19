@@ -33,6 +33,11 @@ class WorldRenderScreen(
     private val visibleChars = ArrayList<WorldCharacter>()
     private var lastEmittedNpcKey: String? = null
 
+    // 天气粒子：以视口比例 (0..1) 存储，规避镜头移动/尺寸变化导致的越界。
+    private val weatherRng = java.util.Random()
+    private var weatherX: FloatArray? = null
+    private var weatherY: FloatArray? = null
+
     override fun show() {
         batch = SpriteBatch()
         shape = ShapeRenderer()
@@ -82,6 +87,8 @@ class WorldRenderScreen(
         batch.begin()
         drawWorld(batch, assets)
         drawCharacters(batch, assets)
+        drawEnvironmentTint(batch, assets)
+        drawWeather(batch, assets, safeDelta)
         batch.end()
 
         drawHud()
@@ -176,6 +183,20 @@ class WorldRenderScreen(
             if (edge == InputController.EdgeEvent.INTERACT) checkProximity(force = true)
         }
         if (bridge.consumeInteractRequest()) checkProximity(force = true)
+        consumeTeleport()
+    }
+
+    /** 小地图点选瞬移：落到最近可走格，立即更新镜头与 NPC 邻近态。 */
+    private fun consumeTeleport() {
+        val req = bridge.consumeTeleportRequest() ?: return
+        val player = player ?: return
+        if (player.moving) return
+        val dest = nudgeToWalkable(req.x, req.y)
+        if (isSolid(dest.first, dest.second)) return
+        player.snapTo(dest.first, dest.second)
+        followCamera()
+        publishPlayerPosition()
+        checkProximity(force = true)
     }
 
     private fun tryStartStep(dx: Int, dy: Int) {
@@ -285,6 +306,64 @@ class WorldRenderScreen(
         batch.setColor(1f, 1f, 1f, 1f)
     }
 
+    /** 日夜光照：按 timeOfDay 在世界上叠一层视口大小的半透明色块（NOON/未知无叠加）。 */
+    private fun drawEnvironmentTint(batch: SpriteBatch, assets: GameAssets) {
+        val tint = envTint(bridge.environment().timeOfDay) ?: return
+        val halfW = camera.viewportWidth / 2f
+        val halfH = camera.viewportHeight / 2f
+        batch.setColor(tint[0], tint[1], tint[2], tint[3])
+        batch.draw(
+            assets.white,
+            camera.position.x - halfW,
+            camera.position.y - halfH,
+            camera.viewportWidth,
+            camera.viewportHeight,
+        )
+        batch.setColor(1f, 1f, 1f, 1f)
+    }
+
+    /** 天气粒子：雨（细长蓝线，快落）/ 雪（白点，慢落）；晴/阴无粒子。 */
+    private fun drawWeather(batch: SpriteBatch, assets: GameAssets, delta: Float) {
+        val w = bridge.environment().weather?.uppercase()
+        val isRain = w == "RAIN" || w == "RAINY" || w == "STORM"
+        val isSnow = w == "SNOW" || w == "SNOWY"
+        if (!isRain && !isSnow) return
+        val vw = camera.viewportWidth
+        val vh = camera.viewportHeight
+        val left = camera.position.x - vw / 2f
+        val bottom = camera.position.y - vh / 2f
+        val n = WEATHER_PARTICLES
+        var ax = weatherX
+        var ay = weatherY
+        if (ax == null || ay == null || ax.size != n) {
+            ax = FloatArray(n) { weatherRng.nextFloat() }
+            ay = FloatArray(n) { weatherRng.nextFloat() }
+            weatherX = ax
+            weatherY = ay
+        }
+        val speedFrac = (if (isRain) 1.4f else 0.35f) * delta
+        if (isRain) batch.setColor(0.6f, 0.72f, 1f, 0.5f) else batch.setColor(1f, 1f, 1f, 0.85f)
+        for (i in 0 until n) {
+            ay[i] -= speedFrac
+            if (ay[i] < 0f) {
+                ay[i] += 1f
+                ax[i] = weatherRng.nextFloat()
+            }
+            val px = left + ax[i] * vw
+            val py = bottom + ay[i] * vh
+            if (isRain) batch.draw(assets.white, px, py, 1.5f, 10f) else batch.draw(assets.white, px, py, 3.5f, 3.5f)
+        }
+        batch.setColor(1f, 1f, 1f, 1f)
+    }
+
+    private fun envTint(timeOfDay: String?): FloatArray? = when (timeOfDay?.uppercase()) {
+        "MORNING" -> floatArrayOf(1f, 0.85f, 0.6f, 0.10f)
+        "AFTERNOON" -> floatArrayOf(1f, 0.9f, 0.7f, 0.08f)
+        "EVENING" -> floatArrayOf(1f, 0.55f, 0.3f, 0.28f)
+        "NIGHT" -> floatArrayOf(0.15f, 0.2f, 0.45f, 0.5f)
+        else -> null
+    }
+
     private fun drawCharacters(batch: SpriteBatch, assets: GameAssets) {
         // 屏外 NPC 剔除；玩家恒绘制。
         visibleChars.clear()
@@ -325,6 +404,7 @@ class WorldRenderScreen(
         const val MAX_DELTA = 0.05f
         const val TILES_ACROSS = 13f
         const val MAX_NUDGE_RADIUS = 6
+        const val WEATHER_PARTICLES = 70
 
         fun isAdjacent(a: WorldCharacter, b: WorldCharacter): Boolean =
             kotlin.math.abs(a.tileX - b.tileX) <= 1 && kotlin.math.abs(a.tileY - b.tileY) <= 1

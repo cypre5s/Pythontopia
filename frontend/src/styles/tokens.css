@@ -96,7 +96,7 @@
   /* 字体 */
   --pyt-font-sans: 'LXGW WenKai', '霞鹜文楷', 'PingFang SC', 'Microsoft YaHei', system-ui, -apple-system,
     'Segoe UI', sans-serif;
-  --pyt-font-mono: 'JetBrains Mono', 'Cascadia Code', Menlo, Consolas, 'Courier New', monospace;
+  --pyt-font-mono: 'Consolas', 'JetBrains Mono', 'Cascadia Code', Menlo, 'Courier New', monospace;
   /* R-100 新增：像素字体（游戏画布 / 像素徽章 / Phaser BitmapText 用） */
   --pyt-font-pixel: 'Zpix', 'Ark Pixel 12', var(--pyt-font-sans);
   --pyt-font-pixel-mono: 'Zpix', 'Ark Pixel 12 Mono', var(--pyt-font-mono);

@@ -18,17 +18,22 @@ import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.ResponseBody
 import retrofit2.Retrofit
 import retrofit2.http.Body
+import retrofit2.http.GET
 import retrofit2.http.Headers
 import retrofit2.http.POST
+import retrofit2.http.Path
 import retrofit2.http.Streaming
 
-/** `POST /api/workshop/resources/stream` 返回 text/event-stream（plan→trace*→result→error）。 */
+/** `POST /api/workshop/resources/stream` 返回 text/event-stream（plan→trace*→result→error）；`GET .../{id}` 取生成物详情。 */
 interface WorkshopGenApi {
 
     @Streaming
     @Headers("Accept: text/event-stream")
     @POST("api/workshop/resources/stream")
     suspend fun generateStream(@Body body: ResourceCreateRequestBody): ResponseBody
+
+    @GET("api/workshop/resources/{id}")
+    suspend fun resource(@Path("id") id: Long): WorkshopResourceDetailDto
 }
 
 /**
@@ -135,6 +140,32 @@ class WorkshopGenRepository @Inject constructor(
     /** 拆出 AG-UI 包装事件的内层对象（如 RUN_FINISHED 的 data.result）；缺失则回退原文。 */
     private fun unwrap(data: String, key: String): String =
         json.parseToJsonElement(data).jsonObject[key]?.toString() ?: data
+
+    /** 取生成物详情；失败上抛 [Result]。 */
+    suspend fun findResource(id: Long): Result<WorkshopResourceDetailDto> =
+        runCatching { api.resource(id) }
+
+    /** 按 type 宽松解码多态 content；结构不符/缺失回退 [WorkshopContentView.Unsupported]。 */
+    fun parseContent(type: WorkshopResourceType, content: kotlinx.serialization.json.JsonElement?): WorkshopContentView {
+        if (content == null) return WorkshopContentView.Unsupported
+        return runCatching {
+            when (type) {
+                WorkshopResourceType.HANDOUT ->
+                    WorkshopContentView.Handout(json.decodeFromJsonElement(WsHandoutContent.serializer(), content).sections)
+                WorkshopResourceType.MINDMAP ->
+                    json.decodeFromJsonElement(WsMindMapContent.serializer(), content)
+                        .let { WorkshopContentView.MindMap(it.mermaid, it.kcMap) }
+                WorkshopResourceType.PRACTICE ->
+                    WorkshopContentView.Practice(json.decodeFromJsonElement(WsPracticeContent.serializer(), content).problems)
+                WorkshopResourceType.CODE_LAB ->
+                    WorkshopContentView.CodeLab(json.decodeFromJsonElement(WsCodeLabContent.serializer(), content).walkthroughs)
+                WorkshopResourceType.READING ->
+                    WorkshopContentView.Reading(json.decodeFromJsonElement(WsReadingContent.serializer(), content).items)
+                WorkshopResourceType.STORYBOARD ->
+                    WorkshopContentView.Storyboard(json.decodeFromJsonElement(WsStoryboardContent.serializer(), content).scenes)
+            }
+        }.getOrElse { WorkshopContentView.Unsupported }
+    }
 
     private companion object {
         val STATE_DELTA_LABEL_KEYS = listOf("note", "message", "phase", "stage", "status")

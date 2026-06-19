@@ -86,3 +86,6 @@ output/
 
 # 自托管 Pyodide 运行时（由 frontend/scripts/sync-pyodide.mjs 从 node_modules 复制，~13MB，可重生，不入库）
 frontend/public/pyodide/
+
+# Playwright e2e 运行产物（截图/trace），不入库
+frontend/e2e/.artifacts/

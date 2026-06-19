@@ -149,7 +149,7 @@ onMounted(async () => {
               班级：{{ classroom.name }}
             </p>
             <p class="welcome-hint">
-              今天也来 Pythontopia 种知识吧
+              开始今天的学习吧
             </p>
           </div>
           <div class="mastery-ring-wrap">
@@ -211,7 +211,7 @@ onMounted(async () => {
             v-else-if="recommendations.length === 0"
             class="empty-hint"
           >
-            暂无推荐资源，去工坊生成属于你的学习资料吧
+            暂无推荐资源，去工坊生成学习资料
           </p>
           <ul
             v-else

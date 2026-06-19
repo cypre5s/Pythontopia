@@ -771,7 +771,7 @@ async function copySample(text: string): Promise<void> {
   border: 1px solid var(--pyt-color-border-strong);
   border-radius: 6px;
   white-space: pre-wrap;
-  font-family: 'Fira Code', 'JetBrains Mono', 'Source Code Pro', monospace;
+  font-family: 'Consolas', 'JetBrains Mono', 'Cascadia Code', Menlo, 'Courier New', monospace;
   font-size: 13px;
   line-height: 1.7;
   color: var(--pyt-color-terminal-text);
@@ -803,7 +803,7 @@ async function copySample(text: string): Promise<void> {
   overflow: auto;
   white-space: pre-wrap;
   border-radius: 6px;
-  font-family: 'Fira Code', 'JetBrains Mono', 'Source Code Pro', monospace;
+  font-family: 'Consolas', 'JetBrains Mono', 'Cascadia Code', Menlo, 'Courier New', monospace;
   font-size: 13px;
   line-height: 1.55;
   color: var(--pyt-color-terminal-text);

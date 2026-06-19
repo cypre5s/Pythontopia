@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -19,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -73,7 +75,139 @@ fun WorkshopGenScreen(
             state.error?.let { ErrorText(it) }
             StreamView(state = state)
             state.result?.let { ResultCard(it) }
+            if (state.result?.resourceId != null && state.detail == null) {
+                Button(
+                    onClick = viewModel::openResource,
+                    enabled = !state.detailLoading,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(if (state.detailLoading) "打开中…" else "查看生成内容")
+                }
+            }
+            state.detail?.let { d -> ResourceDetailView(d, state.detailContent, onClose = viewModel::closeDetail) }
         }
+    }
+}
+
+@Composable
+private fun ResourceDetailView(
+    detail: WorkshopResourceDetailDto,
+    content: WorkshopContentView?,
+    onClose: () -> Unit,
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        shape = MaterialTheme.shapes.medium,
+        tonalElevation = 2.dp,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Text(
+                    detail.title.ifBlank { detail.type.label },
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f),
+                )
+                Text("收起", color = MaterialTheme.colorScheme.primary, modifier = Modifier.clickable(onClick = onClose).padding(4.dp))
+            }
+            if (!detail.summary.isNullOrBlank()) {
+                Text(detail.summary, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            when (content) {
+                is WorkshopContentView.Handout -> content.sections.forEachIndexed { i, s -> HandoutSectionView(i + 1, s) }
+                is WorkshopContentView.MindMap -> MindMapView(content)
+                is WorkshopContentView.Practice -> content.problems.forEachIndexed { i, p -> ProblemView(i + 1, p) }
+                is WorkshopContentView.CodeLab -> content.walkthroughs.forEachIndexed { i, w -> WalkthroughView(i + 1, w) }
+                is WorkshopContentView.Reading -> content.items.forEachIndexed { i, r -> ReadingItemView(i + 1, r) }
+                is WorkshopContentView.Storyboard -> content.scenes.forEachIndexed { i, s -> SceneView(i + 1, s) }
+                else -> Text("该类型暂不支持结构化预览。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SubCard(content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+        shape = MaterialTheme.shapes.small,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp), content = content)
+    }
+}
+
+@Composable
+private fun CodeBlock(code: String) {
+    if (code.isBlank()) return
+    Surface(color = MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth()) {
+        Text(code, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(8.dp))
+    }
+}
+
+@Composable
+private fun HandoutSectionView(order: Int, s: WsHandoutSection) {
+    SubCard {
+        Text("$order. ${s.heading}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+        s.paragraphs.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
+        s.codeSnippets.forEach { CodeBlock(it) }
+    }
+}
+
+@Composable
+private fun MindMapView(m: WorkshopContentView.MindMap) {
+    SubCard {
+        if (m.mermaid.isNotBlank()) {
+            Text("结构（Mermaid）", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+            CodeBlock(m.mermaid)
+        }
+        m.kcMap.forEach { (kc, children) ->
+            Text("• $kc", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+            children.forEach { Text("    └ $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
+    }
+}
+
+@Composable
+private fun ProblemView(order: Int, p: WsProblemSpec) {
+    SubCard {
+        Text("$order. ${p.title}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+        if (p.difficulty.isNotBlank()) Text("难度：${p.difficulty}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (p.statementMd.isNotBlank()) Text(p.statementMd, style = MaterialTheme.typography.bodyMedium)
+        p.hints.forEach { Text("提示：$it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+    }
+}
+
+@Composable
+private fun WalkthroughView(order: Int, w: WsWalkthrough) {
+    SubCard {
+        Text("$order. ${w.title}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+        if (w.narrative.isNotBlank()) Text(w.narrative, style = MaterialTheme.typography.bodyMedium)
+        CodeBlock(w.code)
+        if (w.expectedOutput.isNotBlank()) {
+            Text("预期输出", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            CodeBlock(w.expectedOutput)
+        }
+        w.commonMistakes.forEach { Text("⚠ $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
+    }
+}
+
+@Composable
+private fun ReadingItemView(order: Int, r: WsReadingItem) {
+    SubCard {
+        Text("$order. ${r.summaryMd}", style = MaterialTheme.typography.bodyMedium)
+        if (r.kcCodes.isNotEmpty()) Text(r.kcCodes.joinToString(" · "), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun SceneView(order: Int, s: WsScene) {
+    SubCard {
+        Text("$order. ${s.title}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+        if (s.narration.isNotBlank()) Text(s.narration, style = MaterialTheme.typography.bodyMedium)
+        if (s.visualHint.isNotBlank()) Text("画面：${s.visualHint}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (s.durationSeconds > 0) Text("时长 ${s.durationSeconds}s", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

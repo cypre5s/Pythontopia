@@ -13,9 +13,13 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -24,16 +28,20 @@ import com.pythontopia.core.design.PytErrorRetry
 import com.pythontopia.feature.dialog.DemoDialogTree
 import com.pythontopia.feature.dialog.DialogViewModel
 import com.pythontopia.feature.dialog.NpcDialogPanel
+import com.pythontopia.game.minimapData
 
 /** 中央小镇主屏；LibGDX 铺满视口，Compose 负责 HUD 与底部面板，事件经 [HubViewModel.bridge] 上报。 */
 @Composable
 fun HubScreen(
     onLogout: () -> Unit = {},
+    onNavigate: (String) -> Unit = {},
     hubViewModel: HubViewModel = hiltViewModel(),
     dialogViewModel: DialogViewModel = hiltViewModel(),
 ) {
     val state by hubViewModel.state.collectAsStateWithLifecycle()
     val dialogState by dialogViewModel.state.collectAsStateWithLifecycle()
+    var travelOpen by remember { mutableStateOf(false) }
+    var menuOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(hubViewModel.bridge) {
         hubViewModel.bridge.events().collect { event ->
@@ -58,6 +66,28 @@ fun HubScreen(
                 calendar = state.calendar,
                 nearbyNpcKey = state.nearbyNpcKey,
                 modifier = Modifier.fillMaxSize(),
+            )
+            // 小地图（左上，避让顶部日历条）
+            val miniData = remember(state.mapKey) { minimapData(state.mapKey) }
+            Minimap(
+                data = miniData,
+                playerX = state.playerTileX,
+                playerY = state.playerTileY,
+                nearbyNpc = state.nearbyNpcKey,
+                onTeleport = { x, y -> hubViewModel.teleportTo(x, y) },
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(start = 12.dp, top = 64.dp)
+                    .size(width = 120.dp, height = 96.dp),
+            )
+            // 动作按钮（右上）：随身助教 / 快速旅行 / 暂停菜单
+            HudActionColumn(
+                onCompanion = { onNavigate("tutor") },
+                onFastTravel = { travelOpen = true },
+                onMenu = { menuOpen = true },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(end = 12.dp, top = 64.dp),
             )
             Surface(
                 modifier = Modifier
@@ -99,6 +129,12 @@ fun HubScreen(
                         modifier = Modifier.padding(4.dp),
                     )
                 }
+            }
+            if (travelOpen) {
+                FastTravelSheet(onNavigate = onNavigate, onClose = { travelOpen = false })
+            }
+            if (menuOpen) {
+                PauseMenuSheet(onNavigate = onNavigate, onLogout = onLogout, onClose = { menuOpen = false })
             }
         }
     }

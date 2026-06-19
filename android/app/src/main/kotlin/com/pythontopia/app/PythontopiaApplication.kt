@@ -3,12 +3,15 @@ package com.pythontopia.app
 import android.app.Application
 import android.os.StrictMode
 import dagger.hilt.android.HiltAndroidApp
+import java.util.Locale
 
 @HiltAndroidApp
 class PythontopiaApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // 本地化：强制简体中文，确保日期/数字格式与系统级文案不随设备语言漂移。
+        Locale.setDefault(Locale.SIMPLIFIED_CHINESE)
         if (BuildConfig.DEBUG) {
             enableStrictMode()
         }

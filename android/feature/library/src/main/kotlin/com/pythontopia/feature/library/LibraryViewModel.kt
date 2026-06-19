@@ -1,5 +1,6 @@
 package com.pythontopia.feature.library
 
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -64,7 +65,13 @@ class LibraryViewModel @Inject constructor(
     }
 
     fun openPage(page: LibraryPageDto) {
-        _state.update { it.copy(level = LibraryLevel.READER, selectedPage = page) }
+        _state.update {
+            it.copy(level = LibraryLevel.READER, selectedPage = page, pageImage = null, pageImageLoading = true)
+        }
+        viewModelScope.launch {
+            val bitmap = repository.pageImage(page.id)
+            _state.update { it.copy(pageImage = bitmap?.asImageBitmap(), pageImageLoading = false) }
+        }
     }
 
     fun back() {
@@ -75,6 +82,33 @@ class LibraryViewModel @Inject constructor(
                 LibraryLevel.KCS -> it.copy(level = LibraryLevel.CHAPTERS, selectedChapter = null, error = null)
                 LibraryLevel.CHAPTERS -> it
             }
+        }
+    }
+
+    // ── 课件问答（RAG Q&A） ──
+
+    fun onAskChange(value: String) {
+        _state.update { it.copy(askQuery = value) }
+    }
+
+    /** 就课件提问：当前选中 KC 时把答案范围收敛到该 KC，否则全课程检索。 */
+    fun ask() {
+        val q = _state.value.askQuery.trim()
+        if (q.isEmpty() || _state.value.asking) return
+        val kcScope = _state.value.selectedKc?.kcCode?.let { listOf(it) }
+        _state.update {
+            it.copy(asking = true, askError = null, answerMd = "", citations = emptyList(), noEvidence = false)
+        }
+        viewModelScope.launch {
+            repository.answerCourseware(q, kcScope)
+                .onSuccess { r ->
+                    _state.update {
+                        it.copy(asking = false, answerMd = r.answerMd, citations = r.citations, noEvidence = r.noEvidence)
+                    }
+                }
+                .onFailure { e ->
+                    _state.update { it.copy(asking = false, askError = "课件问答失败：${e.message ?: "服务不可用"}") }
+                }
         }
     }
 }

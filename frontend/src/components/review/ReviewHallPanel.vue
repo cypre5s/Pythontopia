@@ -400,7 +400,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 .week__range {
   font-size: 11px;
   color: var(--pyt-color-text-muted);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'Consolas', 'JetBrains Mono', 'Cascadia Code', Menlo, 'Courier New', monospace;
 }
 .week__count {
   margin-left: auto;

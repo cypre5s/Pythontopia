@@ -15,6 +15,7 @@ import {
   GUIDE_SECTIONS,
   GUIDE_SCREENSHOT_TOTAL,
 } from '@/content/guideSections';
+import { getDownloadStat, hitDownload } from '@/api/downloads';
 
 const route = useRoute();
 const router = useRouter();
@@ -32,6 +33,46 @@ const learningPath = [
   { label: '练', detail: '真实判题', sectionId: 'training' },
   { label: '测', detail: '章节通关', sectionId: 'mainline' },
 ] as const;
+
+// 「下载客户端」：guide 页提供各端安装包下载入口 + 累计下载次数（后端匿名计数，首次点击自动建行）。
+// 安装包由主机 Nginx /downloads/ 直出（/opt/pythontopia/downloads/*）。
+interface DownloadItem {
+  key: string;
+  url: string;
+  label: string;
+  hint: string;
+}
+const DOWNLOADS: readonly DownloadItem[] = [
+  { key: 'android_apk', url: '/downloads/pythontopia.apk', label: '📱 Android App（APK）', hint: '像素小镇 + 完整学习闭环' },
+  { key: 'windows_exe', url: '/downloads/pythontopia-windows.exe', label: '🪟 Windows 安装版（EXE）', hint: '桌面原生客户端' },
+  { key: 'windows_zip', url: '/downloads/pythontopia-windows.zip', label: '🪟 Windows 免装版（ZIP）', hint: '解压即用，免安装' },
+];
+const downloadCounts = ref<Record<string, number | null>>({});
+
+onMounted(async () => {
+  await Promise.all(
+    DOWNLOADS.map(async (d) => {
+      try {
+        downloadCounts.value = { ...downloadCounts.value, [d.key]: (await getDownloadStat(d.key)).count };
+      } catch {
+        downloadCounts.value = { ...downloadCounts.value, [d.key]: null };
+      }
+    }),
+  );
+});
+
+/** 点击下载：乐观 +1 即时反馈，后端点击计数 best-effort，绝不阻断真实下载跳转。 */
+function onDownloadClick(key: string): void {
+  const current = downloadCounts.value[key] ?? 0;
+  downloadCounts.value = { ...downloadCounts.value, [key]: current + 1 };
+  void hitDownload(key)
+    .then((stat) => {
+      downloadCounts.value = { ...downloadCounts.value, [key]: stat.count };
+    })
+    .catch(() => {
+      /* 计数失败忽略 */
+    });
+}
 
 /** 小节锚点归属的主题 id（点其他主题的小节锚点时先切页再滚动）。 */
 function ownerSectionId(anchorId: string): string {
@@ -251,6 +292,30 @@ watch(
           data-testid="guide-content"
           aria-label="操作指南正文"
         >
+          <section
+            data-testid="guide-apk-download"
+            style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;padding:12px 16px;border:2px solid var(--pyt-color-border-strong);border-radius:8px;background:var(--pyt-color-warning-bg);"
+          >
+            <strong style="font-size:15px;color:var(--pyt-color-text-primary);">⬇ 下载客户端</strong>
+            <div
+              v-for="d in DOWNLOADS"
+              :key="d.key"
+              style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;"
+            >
+              <div style="display:flex;flex-direction:column;gap:2px;min-width:0;">
+                <span style="font-size:14px;color:var(--pyt-color-text-primary);">{{ d.label }}</span>
+                <span style="font-size:12px;color:var(--pyt-color-text-muted);">{{ d.hint }}<template v-if="downloadCounts[d.key] != null"> · 已下载 {{ downloadCounts[d.key] }} 次</template></span>
+              </div>
+              <a
+                :href="d.url"
+                download
+                :data-testid="`guide-dl-${d.key}`"
+                style="flex:0 0 auto;padding:8px 18px;border:2px solid var(--pyt-color-border-strong);border-radius:6px;background:var(--pyt-color-gold);color:var(--pyt-color-text-primary);font-weight:700;text-decoration:none;cursor:pointer;"
+                @click="onDownloadClick(d.key)"
+              >下载 ↓</a>
+            </div>
+          </section>
+
           <GuideSection
             :key="activeSection.id"
             :section="activeSection"

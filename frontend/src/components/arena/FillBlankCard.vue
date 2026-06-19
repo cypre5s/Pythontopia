@@ -78,7 +78,7 @@ watch(
 .card-icon { font-size: 20px; }
 .card-head h3 { margin: 0; font-size: 16px; color: var(--pyt-color-gold-bright); }
 .blank-count { margin-left: auto; font-size: 11px; color: var(--pyt-color-info); padding: 2px 8px; background: var(--pyt-color-info-bg); border: 1px solid var(--pyt-color-info); border-radius: 3px; }
-.code-body { background: var(--pyt-color-terminal-bg); border: 2px solid var(--pyt-color-border-strong); padding: 12px; font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 2; white-space: pre-wrap; color: var(--pyt-color-terminal-text); }
+.code-body { background: var(--pyt-color-terminal-bg); border: 2px solid var(--pyt-color-border-strong); padding: 12px; font-family: 'Consolas', 'JetBrains Mono', 'Cascadia Code', Menlo, 'Courier New', monospace; font-size: 13px; line-height: 2; white-space: pre-wrap; color: var(--pyt-color-terminal-text); }
 .code-seg { white-space: pre-wrap; }
 .blank-input { display: inline-block; width: 120px; margin: 0 4px; padding: 2px 6px; background: var(--pyt-color-shadow); border: 2px dashed var(--pyt-color-gold); border-radius: 3px; color: var(--pyt-color-gold-bright); font-family: inherit; font-size: 13px; text-align: center; }
 .blank-input:focus { border-color: var(--pyt-color-success); background: var(--pyt-color-terminal-bg); outline: none; }

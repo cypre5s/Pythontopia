@@ -106,7 +106,7 @@ const rendered = computed(() => {
 }
 .md-view :deep(a:hover) { color: #3a2a14; }
 .md-view :deep(code) {
-  font-family: 'Fira Code', 'JetBrains Mono', monospace;
+  font-family: 'Consolas', 'JetBrains Mono', 'Cascadia Code', Menlo, 'Courier New', monospace;
   background: rgba(110, 79, 29, 0.1);
   padding: 1px 5px;
   border-radius: 3px;
