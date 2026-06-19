@@ -14,6 +14,7 @@ KC↔章节用单一事实源 ``kc_map``，绝不臆造课程包外的 KC。
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 from pythontopia_graph.agents.boss.kc_map import (
     all_kc_codes,
@@ -49,6 +50,8 @@ def _priority(
     mastery: dict[str, float],
     weak: set[str],
     recent_rank: int | None,
+    last_practiced: dict[str, str],
+    now: datetime,
 ) -> tuple[float, str]:
     m = mastery.get(kc, 0.0)
     score = 0.0
@@ -64,12 +67,45 @@ def _priority(
         reasons.append("尚未掌握")
     score += (1 - m) * 10
     if recent_rank is None:
-        score += 15  # 久未练 → 适合间隔复习
-        reasons.append("间隔复习")
+        spacing_score, spacing_reason = _spacing_priority(kc, last_practiced, now)
+        score += spacing_score
+        if spacing_reason:
+            reasons.append(spacing_reason)
     else:
         # 越近越压制（rank 0 最近 → -25，rank≥5 → -5），避免立刻重复同一 KC。
         score -= 25 - min(recent_rank, 5) * 4
     return score, "、".join(reasons) or "巩固"
+
+
+def _parse_practiced_at(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    normalized = value[:-1] + "+00:00" if value.endswith("Z") else value
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _spacing_priority(
+    kc: str,
+    last_practiced: dict[str, str],
+    now: datetime,
+) -> tuple[float, str]:
+    practiced_at = _parse_practiced_at(last_practiced.get(kc))
+    if practiced_at is None:
+        return 12, "间隔复习"
+    days = max(0, (now.astimezone(timezone.utc) - practiced_at).days)
+    if days >= 45:
+        return 35, "久未练"
+    if days >= 14:
+        return 22, "间隔复习"
+    if days <= 3:
+        return -16, ""
+    return 6, "巩固"
 
 
 def select_frontier(
@@ -77,6 +113,8 @@ def select_frontier(
     mastery: dict[str, float] | None = None,
     profile_signals: dict | None = None,
     recent_kcs: list[str] | None = None,
+    last_practiced: dict[str, str] | None = None,
+    now: datetime | None = None,
     focus_chapter: int | None = None,
     exclude: list[str] | None = None,
     count: int = 1,
@@ -89,6 +127,8 @@ def select_frontier(
     success_rate = signals.get("successRate", signals.get("success_rate"))
     recent = list(recent_kcs or [])
     recent_rank = {kc: i for i, kc in enumerate(recent)}
+    practiced = dict(last_practiced or {})
+    clock = now or datetime.now(timezone.utc)
     exclude_set = set(exclude or [])
 
     base_pool = (
@@ -98,7 +138,7 @@ def select_frontier(
 
     scored = sorted(
         (
-            (*_priority(kc, mastery, weak, recent_rank.get(kc)), kc)
+            (*_priority(kc, mastery, weak, recent_rank.get(kc), practiced, clock), kc)
             for kc in pool
         ),
         key=lambda t: t[0],

@@ -243,6 +243,10 @@ class FrontierSelectRequest(BaseModel):
     mastery: list[MasteryEntryPayload] = Field(default_factory=list)
     profileSignals: ProfileSignalsPayload | None = None
     recentKcs: list[str] = Field(default_factory=list, description="近期练过的 KC（最近在前）")
+    lastPracticed: dict[str, str] = Field(
+        default_factory=dict,
+        description="每个 KC 的后端权威最近练习时间（ISO-8601），用于间隔重复",
+    )
     focusChapter: int | None = Field(default=None, ge=1, le=7)
     exclude: list[str] = Field(default_factory=list)
     count: int = Field(default=1, ge=1, le=40)
@@ -271,6 +275,7 @@ def select_frontier_endpoint(body: FrontierSelectRequest) -> FrontierSelectRespo
         mastery=mastery,
         profile_signals=signals,
         recent_kcs=body.recentKcs,
+        last_practiced=body.lastPracticed,
         focus_chapter=body.focusChapter,
         exclude=body.exclude,
         count=body.count,

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from fastapi.testclient import TestClient
 
 from pythontopia_graph.agents.boss.expedition_selector import select_frontier
@@ -30,6 +32,26 @@ def test_recent_kc_pushed_down() -> None:
     assert order[-1] == "PY43-KC-001"  # 刚练过 → 强力压制到末位
 
 
+def test_persisted_last_practiced_prioritizes_stale_mastered_kc() -> None:
+    others = [
+        c for c in kc_codes_for_chapter(1)
+        if c not in {"PY43-KC-001", "PY43-KC-002"}
+    ]
+    picks = select_frontier(
+        mastery={"PY43-KC-001": 0.9, "PY43-KC-002": 0.9},
+        last_practiced={
+            "PY43-KC-001": "2026-06-18T00:00:00Z",
+            "PY43-KC-002": "2026-04-01T00:00:00Z",
+        },
+        now=datetime(2026, 6, 19, tzinfo=timezone.utc),
+        focus_chapter=1,
+        exclude=others,
+        count=2,
+    )
+    assert [p.kc_code for p in picks][:2] == ["PY43-KC-002", "PY43-KC-001"]
+    assert "久未练" in picks[0].reason
+
+
 def test_difficulty_scales_with_mastery() -> None:
     others = [c for c in kc_codes_for_chapter(1) if c != "PY43-KC-001"]
     low = select_frontier(mastery={"PY43-KC-001": 0.0}, focus_chapter=1, exclude=others, count=1)
@@ -52,6 +74,7 @@ def test_select_frontier_route_smoke() -> None:
             "mastery": [{"kcCode": "PY43-KC-001", "masteryScore": 0.5}],
             "profileSignals": {"weakKcCodes": ["PY43-KC-005"]},
             "recentKcs": ["PY43-KC-001"],
+            "lastPracticed": {"PY43-KC-002": "2026-04-01T00:00:00Z"},
             "focusChapter": 1,
             "count": 3,
         },
