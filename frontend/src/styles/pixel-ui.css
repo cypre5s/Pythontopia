@@ -486,11 +486,14 @@
   pointer-events: none;
   opacity: 0;
   transition: opacity 120ms;
-  z-index: 200;
+  z-index: var(--pyt-z-popover);
   box-shadow: 2px 2px 0 var(--pyt-panel-border-dark);
 }
 
-.pyt-tooltip:hover::after {
+/* 键盘可达：tab 聚焦到带提示的控件时也显示气泡，不再只响应鼠标悬停 */
+.pyt-tooltip:hover::after,
+.pyt-tooltip:focus::after,
+.pyt-tooltip:focus-within::after {
   opacity: 1;
 }
 

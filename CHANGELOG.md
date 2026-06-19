@@ -9,6 +9,8 @@
 
 - **#3 全局按钮禁用态可感知（功能交互 · a11y）**：`styles.css` 此前无全局 `button:disabled` 样式，禁用按钮仍是手型光标、满不透明度且保留按下位移，玩家易误以为点击生效。新增 `button:disabled/[disabled]`：`cursor: not-allowed` + `opacity: 0.55` + 取消 `:active` 位移，清晰传达"不可点"。验证：`npm run build` 通过。
 
+- **#4 像素工具提示键盘可达 + z 令牌（a11y · 可维护性）**：`pixel-ui.css` 的 `.pyt-tooltip` 仅 `:hover` 显示，键盘 tab 用户看不到提示；新增 `:focus` / `:focus-within` 同步显示气泡。同时把硬编码 `z-index: 200` 收敛为 `var(--pyt-z-popover)`（对齐全站层级公约）。验证：`npm run build` 通过。
+
 ## 2026-06-19 — 代码舞台 × 无尽闯关统一玩法 + 看学练测闭环（含 8 大非功能需求 + 实拍指南）
 
 > 把「代码舞台」（`/code-theater`）与「无尽闯关」（`/endless` + `/arena`）两条做题链路在玩法与实现上统一，并补全 练→测 掌握度/画像回流闭环；同步治理 8 大非功能需求（可用性 a11y / 安全防离线刷关 / 可维护性单源去重 / 可信 AI 接地等）。
