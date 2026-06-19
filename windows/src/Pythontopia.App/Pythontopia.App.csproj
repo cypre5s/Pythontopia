@@ -33,6 +33,8 @@
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
     <DebugType>none</DebugType>
     <DebugSymbols>false</DebugSymbols>
+    <!-- Precompile IL to native (ReadyToRun): faster cold start + raises the reverse-engineering bar. -->
+    <PublishReadyToRun>true</PublishReadyToRun>
   </PropertyGroup>
 
   <ItemGroup>

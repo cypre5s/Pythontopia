@@ -100,6 +100,15 @@ dotnet publish src/Pythontopia.App/Pythontopia.App.csproj -c Release -p:Platform
 - 自包含：`coreclr.dll`（.NET 运行时）+ `Microsoft.WinUI.dll` / `Microsoft.WindowsAppRuntime*`（Windows App SDK，`WindowsAppSDKSelfContained=true`）一并打包，约 350 个文件、~162 MB，整目录拷贝到任意 Win10/11 机器即可运行。
 - 本仓库已在 WSL 互操作 dotnet.exe 下验证该 publish 成功产出上述 .exe 目录（不在 Windows 运行期内验证）。
 
+### 已部署（在线下载）
+
+加固后的自包含包（R2R + 剥离 PDB）已打包为 `windows/dist/pythontopia-windows.zip`（本地，未入库）并上传到生产 ECS 的 Nginx 直出目录 `/opt/pythontopia/downloads/`：
+
+- 下载地址：`http://47.120.29.62/downloads/pythontopia-windows.zip`（HTTP 200，`application/zip`，约 74MB，支持断点续传）
+- 校验：`http://47.120.29.62/downloads/pythontopia-windows.zip.sha256`（SHA-256 `351f91a3…824e2`，上传后本地⟷远端比对一致）
+- 用法：下载 zip → 解压到任意目录 → 运行 `Pythontopia.App.exe`（自包含，无需预装 .NET / Windows App SDK）。
+- **guide 页接线（待前端发版）**：`guideSections.ts` 中 Windows 项 `href` 应为 `/downloads/pythontopia-windows.zip`（产物是自包含目录的 zip，非单 exe）；下载计数复用既有 `POST /api/downloads/{key}/hit` + `GET /api/downloads/{key}`（key 如 `windows_exe`，首次点击 UPSERT 自动建行）。
+
 ### 像素小镇操作
 
 - `WASD` / 方向键：按瓦片网格移动（带补间动画）。
@@ -200,7 +209,9 @@ GitHub Actions `.github/workflows/windows.yml` 在 `windows-latest` 上构建 Co
 ## 安全加固（防反编译/破解）
 
 - **客户端无判题/答案逻辑**：判题、AI 出题、防幻觉审查、隐藏测试全在服务端（后端权威）；反编译 Windows 客户端只暴露 API 调用形状，无可窃取的业务机密、答案或隐藏用例 —— 这是最根本的「破解无收益」设计。
-- **Release 剥离符号**：`.csproj` 在 `Configuration=Release` 下 `DebugType=none` / `DebugSymbols=false`，发布产物不含 `.pdb`，去掉方法/局部名等调试元数据。
+- **Release 剥离符号**：`.csproj`（App 与 Core）在 `Configuration=Release` 下 `DebugType=none` / `DebugSymbols=false`，发布产物不含 `.pdb`，去掉方法/局部名等调试元数据。
+- **ReadyToRun 原生预编译**：Release 发布 `PublishReadyToRun=true`，IL 预编译为 win-x64 原生映像（`Pythontopia.App.dll` ~1.9MB / `Core.dll` ~0.9MB 含原生码），冷启动更快、IL 不再以「干净托管形态」直接示人，提高反编译门槛。
+- **代码签名（建议）**：分发前用企业证书做 Authenticode 签名（`signtool`），可防篡改并减少 SmartScreen 拦截（需自备证书）。
 - **JWT 落盘加密**：缓存令牌以 Windows DPAPI（CurrentUser + 应用熵）加密（见 `SessionService`），非明文。
 - **可选更强对抗**（需在 Windows 上回归验证，本机无法验证 GUI/运行期）：对 `Pythontopia.Core.dll` / `Pythontopia.App.dll` 运行 ConfuserEx 或 Obfuscar 做符号混淆 —— 必须排除：所有 `Dto/*`（System.Text.Json 按属性名映射）、`Views/*` 与 `ViewModels/*`（WinUI x:Bind / XAML 类型解析）、DI 按类型解析的类型，否则会破坏 XAML/序列化。.NET IL 本质可反编译，混淆只提高门槛，不等于不可破解。
 
