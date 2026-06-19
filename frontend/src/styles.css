@@ -36,6 +36,19 @@ button:active {
   box-shadow: 1px 1px 0 #263426;
 }
 
+/* 全局禁用态：清晰传达"不可点"，并取消按下位移，避免误以为生效 */
+button:disabled,
+button[disabled] {
+  cursor: not-allowed;
+  opacity: 0.55;
+  box-shadow: 1px 1px 0 #263426;
+}
+
+button:disabled:active,
+button[disabled]:active {
+  transform: none;
+}
+
 a {
   color: #315c9a;
   text-decoration-thickness: 2px;

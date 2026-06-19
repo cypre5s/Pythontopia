@@ -7,6 +7,8 @@
 - **#1 首页 HTML 健壮化（非功能 · SEO / 移动端 / 优雅降级）**：`index.html` 补 `<meta name="description">`（搜索/分享摘要，避免抓取器取到空描述）+ `<meta name="theme-color" #fef7e3>`（移动端浏览器地址栏/任务切换器配色对齐羊皮纸主背景）+ `<noscript>` 文案（JS 被禁用或入口脚本加载失败时不再纯白屏，给出"开启 JavaScript 后刷新"的可操作提示）。验证：`npm run build` 通过。
 - **#2 页面高度移动端安全化（移动端 · 防视口跳动）**：`styles.css` 6 处页面级高度 `100vh` 叠加 `100dvh` 回退（`.app-shell` / `.app-main` / `.auth-page` / `.town-screen` / `.placeholder-page` / `.profile-room-page`）。移动端浏览器地址栏收起/展开时，`100vh` 会把底部内容顶出视口或留白；`100dvh` 跟随动态视口消除此跳动，旧浏览器回退 `100vh`。验证：`npm run build` 通过。
 
+- **#3 全局按钮禁用态可感知（功能交互 · a11y）**：`styles.css` 此前无全局 `button:disabled` 样式，禁用按钮仍是手型光标、满不透明度且保留按下位移，玩家易误以为点击生效。新增 `button:disabled/[disabled]`：`cursor: not-allowed` + `opacity: 0.55` + 取消 `:active` 位移，清晰传达"不可点"。验证：`npm run build` 通过。
+
 ## 2026-06-19 — 代码舞台 × 无尽闯关统一玩法 + 看学练测闭环（含 8 大非功能需求 + 实拍指南）
 
 > 把「代码舞台」（`/code-theater`）与「无尽闯关」（`/endless` + `/arena`）两条做题链路在玩法与实现上统一，并补全 练→测 掌握度/画像回流闭环；同步治理 8 大非功能需求（可用性 a11y / 安全防离线刷关 / 可维护性单源去重 / 可信 AI 接地等）。
