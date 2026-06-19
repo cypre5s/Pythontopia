@@ -13,7 +13,9 @@ import PyButton from '@/components/ui/PyButton.vue';
 import BossSprite from '@/components/boss/BossSprite.vue';
 import JudgeResultPanel from '@/components/challenge/JudgeResultPanel.vue';
 import { KindRouter } from '@/components/arena';
+import KnowledgeConstellation from '@/components/expedition/KnowledgeConstellation.vue';
 import { useRogueRunStore } from '@stores/rogueRun';
+import { useLearningStore } from '@stores/learning';
 import { kcDisplayName } from '@/data/kcNames';
 import { NODE_KIND_ICON, NODE_KIND_LABEL } from '@/data/rogueConfig';
 import { relicById } from '@/data/rogueRelics';
@@ -25,6 +27,15 @@ import type { RogueNode } from '@/types/rogue';
 const route = useRoute();
 const router = useRouter();
 const run = useRogueRunStore();
+const learning = useLearningStore();
+
+// 知识星座掌握度映射（跨局 meta 进度）。
+const masteryMap = computed<Record<string, number>>(() => {
+  const m: Record<string, number> = {};
+  for (const s of learning.field.masterySnapshot) m[s.kcCode] = s.masteryScore;
+  return m;
+});
+const showConstellation = ref(false);
 
 // ?focus=章 来自旧 /arena 重定向或聚焦练习。
 const focusFromQuery = computed<number | null>(() => {
@@ -271,6 +282,18 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
             {{ run.dailyAvailable ? '☀ 今日挑战 · 弱项' : '今日挑战已完成' }}
           </PyButton>
         </div>
+        <button
+          type="button"
+          class="exp-constellation-toggle"
+          data-testid="expedition-constellation-toggle"
+          @click="showConstellation = !showConstellation"
+        >
+          {{ showConstellation ? '收起知识星座 ▴' : '✦ 查看知识星座（跨局进度）' }}
+        </button>
+        <KnowledgeConstellation
+          v-if="showConstellation"
+          :mastery="masteryMap"
+        />
       </div>
 
       <!-- 地图：选节点 -->
@@ -506,6 +529,7 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
         <p class="exp-end__note">
           做过的每一题都已真实入库，掌握度与画像不会回滚。
         </p>
+        <KnowledgeConstellation :mastery="masteryMap" />
         <div class="exp-actions">
           <PyButton
             variant="primary"
@@ -595,6 +619,20 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
 .exp-relic {
   font-size: 18px;
   cursor: help;
+}
+.exp-constellation-toggle {
+  font-family: var(--pyt-font-pixel);
+  font-size: 12px;
+  padding: 6px 12px;
+  cursor: pointer;
+  color: var(--pyt-color-text-hint);
+  background: transparent;
+  border: 1px dashed var(--pyt-color-border);
+  border-radius: 999px;
+}
+.exp-constellation-toggle:hover {
+  color: var(--pyt-color-text-primary);
+  border-style: solid;
 }
 
 /* 概念事件卡 */
