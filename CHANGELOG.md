@@ -7,6 +7,7 @@
 - **Phase 3 · 知识星座可视化**（`c1912a57`）：65 个 KC 程序化排成 7 章节星团（团内成环），按掌握度点亮（≥0.6 绿 / ≥0.2 金 / 未触及暗），作跨局 meta 成长地图（起始页可展开、结算页常显）；纯函数布局 + 纯展示组件 + 5 例单测。（Phase 3 的「Phaser 像素远征塔」画布因单 Game 实例约束 + 需浏览器可视化验收，留待可视化 QA 专场。）
 - **Phase 2 · 选择器下沉后端 + 间隔重复**（graph `03278d8d`、前端+Java `79173103`）：graph 新增 `agents/boss/expedition_selector` + `POST /agents/boss/select-frontier`（ZPD/弱项/未掌握排序 + 间隔重复：久未练上浮、刚练过强压制；难度按掌握度推断；KC↔章节用单一事实源 kc_map）；后端 `BossController/BossService/BossGraphClient` 从 `MasteryRepository` 读**权威掌握度**透传 graph；前端 `api/expedition` + `rogueRun.startRun` 改异步，优先用后端 picks 生成地图，失败/超时回退本地 `useKcFrontier`（3s 快失败，绝不阻塞）。graph `pytest` 6 例；前端 store 11 例（含「用后端 picks / 失败回退」）。
 - **Phase 4 · 退役静态闯关塔**（`a827f641`）：删 `ArenaPage` / `arenaLevels`(70关) / `useArenaStore` + 测试；`/arena/:章` 重定向 `/expedition?focus=章`；BossPage 解耦 arena 进度回写（章末 BOSS 折入远征，掌握度由判题入库权威驱动，`/boss` 仍可直达）；EndlessPage 回归纯「随便练练」；WorkshopChat/WorkshopPage/指南导航改指 `/expedition`。
+- **AI 导师 / 随身助教术语同步**：graph `intent_router_agent` 的 NAVIGATE 地标 + 边界目的地 + 澄清话术、`tools/consolidated`+`registry` 的 navigate 工具描述，统一改为「无尽远征」（保留「闯关塔/竞技场」为旧称兼容别名，老说法仍能路由到 `/expedition`）；随身助教画像提示文案同步。graph 意图相关 150 例通过。
 - **验证**：相关文件 `vue-tsc` 类型干净、`eslint` 0 错；graph `pytest` 6 passed；前端 rogueRun 11 + 知识星座 5 + 选择器纯函数等通过，全量 `vitest` 2155 passed。
 - **残留**：后端 Java 因本机 Maven 镜像不可达（AGENTS.md TUN 已知问题）未本地编译，代码严格沿用既有 boss 代理模式，待 CI/联网编译；run 跨会话 DB 持久化（当前 localStorage 工作）与 Phaser 像素塔为后续；同工作树另一会话的 `FeynmanPanel.vue` 未提交 WIP 致其 3 例 + 该文件 typecheck 报错，与本批无关。
 

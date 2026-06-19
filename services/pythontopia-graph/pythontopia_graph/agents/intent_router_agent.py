@@ -69,7 +69,9 @@ _PREROUTE_CONFIDENCE = 0.95
 _NAVIGATE_GO_WORDS: tuple[str, ...] = ("带我去", "我想去", "带路")
 _NAVIGATE_LANDMARKS: tuple[tuple[str, str], ...] = (
     ("图书馆", "library"),
-    ("闯关塔", "arena"),
+    ("无尽远征", "arena"),
+    ("远征", "arena"),
+    ("闯关塔", "arena"),  # 旧称兼容（已退役并入无尽远征）
     ("竞技场", "arena"),
     ("矿洞", "bugmine"),
     ("小镇", "world"),
@@ -370,6 +372,7 @@ _BOUNDARY_NAV_DESTINATIONS: tuple[str, ...] = (
     "图书馆",
     "工坊",
     "小镇",
+    "无尽远征",
     "闯关塔",
     "复盘大厅",
     "公告板",
@@ -1209,7 +1212,7 @@ class IntentRouterAgent:
         if intent in RESOURCE_INTENTS:
             return "你想围绕哪个知识点或主题来生成？"
         if intent == "NAVIGATE":
-            return "你想去图书馆、闯关塔、错题矿洞，还是回小镇？"
+            return "你想去图书馆、无尽远征、错题矿洞，还是回小镇？"
         return "你想问概念、生成资料、练习，还是查看学习进度？"
 
     @staticmethod

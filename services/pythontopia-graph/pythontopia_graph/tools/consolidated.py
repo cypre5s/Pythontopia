@@ -226,7 +226,7 @@ CONSOLIDATED_TOOLS: tuple[ConsolidatedTool, ...] = (
     ),
     ConsolidatedTool(
         name="navigate",
-        description="带学生跳转到目标场所：图书馆/闯关塔/错题矿洞/小镇/工坊",
+        description="带学生跳转到目标场所：图书馆/无尽远征/错题矿洞/小镇/工坊",
         parameters={"type": "object", "properties": {"target": _P_TARGET}, "required": ["target"]},
         examples=({"target": "library"},),
         legacy_intent="NAVIGATE",

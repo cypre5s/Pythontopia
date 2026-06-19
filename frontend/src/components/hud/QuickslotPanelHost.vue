@@ -216,7 +216,7 @@ const profileDimensions = computed(() => {
           <li><b>最近情绪</b><span>{{ profileDimensions.mood }}</span></li>
         </ul>
         <p class="qslot-hint">
-          这些维度会驱动闯关塔 / 无尽塔 / boss 副本的出题偏好（弱项 KC 优先 + 难度自适应）。
+          这些维度会驱动无尽远征 / boss 副本的出题偏好（弱项 KC 优先 + 难度自适应）。
         </p>
       </section>
     </div>
