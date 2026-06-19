@@ -37,6 +37,8 @@
 
 - **#10 错误提示及时播报（a11y · 功能交互）**：`AppToast.vue` 此前恒为 `role="status"`（polite），错误提示常被屏读器延迟或跳过。改为按类型动态：错误用 `role="alert"` + `aria-live="assertive"`（即时打断播报），其余仍 `status`/`polite`（不打扰）。验证：`vue-tsc` 通过。
 
+- **#11 跳到主内容链接（a11y · WCAG 2.4.1 绕过重复块）**：`AppLayout.vue` 新增可聚焦 `skip-link`（键盘首个 Tab 即现，跳过头部直达 `#main-content`），`<main>` 补 `id="main-content"` + `tabindex="-1"` 作焦点落点；平时移出视口隐藏，获焦滑入（过渡受 #7 reduced-motion 护栏）。验证：`vue-tsc` + 作用域 `vitest` AppLayout 通过。
+
 ## 2026-06-19 — 代码舞台 × 无尽闯关统一玩法 + 看学练测闭环（含 8 大非功能需求 + 实拍指南）
 
 > 把「代码舞台」（`/code-theater`）与「无尽闯关」（`/endless` + `/arena`）两条做题链路在玩法与实现上统一，并补全 练→测 掌握度/画像回流闭环；同步治理 8 大非功能需求（可用性 a11y / 安全防离线刷关 / 可维护性单源去重 / 可信 AI 接地等）。
