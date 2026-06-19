@@ -178,6 +178,11 @@ const suggestions = computed<string[]>(() => {
 
 /** 流式状态的无障碍朗读文本（aria-live 区域）。 */
 const liveStatus = computed<string>(() => (guide.isStreaming ? 'AI 助教正在回复，请稍候' : ''));
+const streamingPlaceholder = computed<string>(() =>
+  showLoop.value
+    ? '正在执行学习闭环：我会把目标拆成看、学、练、测，并逐步查证证据；完成后给你下一步行动。'
+    : 'AI 助教思考中 ▌',
+);
 
 async function scrollToBottom(): Promise<void> {
   await nextTick();
@@ -392,7 +397,7 @@ function goToPanel(step: OrchestratorPlanStep): void {
             <span
               v-else-if="m.streaming"
               class="guide-typing"
-            >AI 助教思考中 ▌</span>
+            >{{ streamingPlaceholder }}</span>
 
             <p
               v-if="m.failed"

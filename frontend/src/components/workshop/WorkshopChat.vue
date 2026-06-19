@@ -2531,6 +2531,10 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  /* 与抽屉表头 .workshop-drawer__bar 统一为同一固定高度（box-sizing 含内边距与下边框），
+     使各面板顶部的虚线分隔线落在同一水平线上对齐（WorkshopPage 同步）。 */
+  min-height: 44px;
+  box-sizing: border-box;
   padding: 6px 12px;
   border-bottom: 2px dashed rgba(110, 79, 29, 0.4);
   background: rgba(255, 247, 230, 0.55);

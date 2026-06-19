@@ -355,6 +355,9 @@ function onKcSelect(group: ChapterGroup, event: Event): void {
 }
 
 async function resolvePageById(pageId: number): Promise<void> {
+  // 按 page_id 跳转（导师课件证据回链 / KC 直达）一律落到能看见的「原 PDF」视图：
+  // 否则用户上次停在「课件视频」时，点证据图会停在视频面板上看不到被引用的那页，像「跳转错误」。
+  setViewMode('pdf');
   for (const doc of documents.value) {
     const pages = await listDocumentPages(doc.documentId);
     const match = pages.find((p) => p.pageId === pageId);

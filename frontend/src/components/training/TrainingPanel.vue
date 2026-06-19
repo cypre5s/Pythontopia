@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useLearningStore } from '@stores/learning';
 import { useToastStore } from '@stores/toast';
+import { useCodeTheaterStore } from '@stores/codeTheater';
 import { playSfx } from '@/composables/useAudio';
 import { kcDisplayName } from '@/data/kcNames';
 import MarkdownView from '@/components/common/MarkdownView.vue';
@@ -14,6 +15,7 @@ import type { WorkflowEvent } from '@/api/tutorWorkflow';
 
 const learning = useLearningStore();
 const toast = useToastStore();
+const codeTheaterStore = useCodeTheaterStore();
 const router = useRouter();
 const route = useRoute();
 
@@ -157,6 +159,16 @@ async function enterBugMine(): Promise<void> {
   // S1：私有 submissionId 不写进 URL，改走 store 入口（BugMinePage consume 后开矿洞会话）。
   learning.setPendingBugMineEntry({ submissionId: submission.submission.id });
   await router.push('/bug-mine');
+}
+
+/** WA/RE 后去代码剧场「自由可视化」，把这段提交代码的执行过程演出来（学习预览，不判分）。 */
+async function enterCodeTheater(): Promise<void> {
+  codeTheaterStore.setFreeRun({
+    code: learning.training.code,
+    stdin: debugInput.value,
+    label: problem.value?.title ?? '',
+  });
+  await router.push('/code-theater');
 }
 
 // 做题页内嵌 AI 导学助手：阶段卡片式工作流（TutorWorkflowPanel），按 problemId 驱动后端
@@ -417,15 +429,27 @@ async function copySample(text: string): Promise<void> {
             >
               {{ learning.training.submission.judgeResult.failureReason }}
             </p>
-            <PyButton
+            <div
               v-if="showBugMineButton"
-              test-id="bug-mine-button"
-              variant="secondary"
-              size="sm"
-              @click="enterBugMine"
+              class="submission__actions"
             >
-              进入 Bug 矿洞
-            </PyButton>
+              <PyButton
+                test-id="bug-mine-button"
+                variant="secondary"
+                size="sm"
+                @click="enterBugMine"
+              >
+                进入 Bug 矿洞
+              </PyButton>
+              <PyButton
+                test-id="code-theater-button"
+                variant="secondary"
+                size="sm"
+                @click="enterCodeTheater"
+              >
+                去代码剧场看执行
+              </PyButton>
+            </div>
           </section>
           <GuideNudgeCard
             v-if="guideNudgeVerdict"
@@ -840,6 +864,12 @@ async function copySample(text: string): Promise<void> {
 .submission--warning {
   border-color: rgba(194, 133, 34, 0.52);
   background: rgba(255, 241, 210, 0.92);
+}
+
+.submission__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .submission__summary {

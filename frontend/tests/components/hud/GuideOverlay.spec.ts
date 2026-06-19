@@ -492,6 +492,51 @@ describe('GuideOverlay（AI 助教悬浮窗）', () => {
   });
 
   describe('9. 流式 Markdown / trace 展示与共享活动状态（回归）', () => {
+    it('闭环计划已开始但最终文本未到达时，气泡展示可读的进行中说明', async () => {
+      const wrapper = await mountOverlay();
+      const orch = sse();
+      let release: (() => void) | null = null;
+      orch.start.mockImplementation(() => {
+        resetStreamRefs(orch);
+        orch.status.value = 'streaming';
+        orch.events.value = [
+          {
+            type: 'CUSTOM',
+            name: 'loop_plan',
+            value: {
+              maxSteps: 4,
+              steps: [
+                {
+                  id: 's1',
+                  phase: 'plan',
+                  label: '拆解学习目标',
+                  status: 'active',
+                  reasonSummary: '先把看、学、练、测拆成可执行动作',
+                },
+              ],
+            },
+          },
+        ];
+        return new Promise<void>((resolve) => {
+          release = resolve;
+        });
+      });
+
+      await sendMessage(wrapper, '帮我从第 1 章开始安排');
+
+      await nextTick();
+      const assistantBubbles = wrapper.findAll('.guide-msg--assistant .guide-bubble');
+      const assistant = assistantBubbles[assistantBubbles.length - 1];
+      expect(assistant).toBeTruthy();
+      expect(assistant.text()).toContain('学习闭环');
+      expect(assistant.text()).toContain('看、学、练、测');
+
+      orch.result.value = okResult({ reply_md: '计划已经准备好' });
+      orch.status.value = 'done';
+      release?.();
+      await flushPromises();
+    });
+
     it('流式中渲染部分 Markdown 与「智能体协同中」trace，并镜像进 workshopActivity', async () => {
       const wrapper = await mountOverlay();
       const orch = sse();

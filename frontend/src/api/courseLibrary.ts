@@ -45,6 +45,9 @@ let exampleSummariesCache: CourseExampleSummary[] | null = null;
 let chaptersSummariesCache: CourseChapterSummary[] | null = null;
 let kcSummariesCache: CourseKcSummary[] | null = null;
 let manifestCache: CourseLibraryManifest | null = null;
+// RAG 检索结果缓存：同一查询（含 topK/kcCodes/documentId）在本次会话内命中即返回，
+// 避免重复网络往返与本地全文重算（课件为静态内容，会话内结果稳定）。返回副本防止调用方改写污染缓存。
+const ragSearchCache = new Map<string, LibrarySearchHit[]>();
 
 interface FetchLike {
   (input: string, init?: RequestInit): Promise<Response>;
@@ -155,6 +158,11 @@ export interface RagSearchOptions {
   documentId?: number;
 }
 
+function ragCacheKey(query: string, topK: number, options: RagSearchOptions): string {
+  const kc = options.kcCodes ? [...options.kcCodes].sort() : null;
+  return JSON.stringify({ q: query, k: topK, kc, doc: options.documentId ?? null });
+}
+
 export async function searchCourseLibrary(
   query: string,
   options: RagSearchOptions = {},
@@ -164,6 +172,12 @@ export async function searchCourseLibrary(
     return [];
   }
   const topK = Math.max(1, Math.min(options.topK ?? RAG_TOP_K, 20));
+
+  const cacheKey = ragCacheKey(trimmed, topK, options);
+  const cached = ragSearchCache.get(cacheKey);
+  if (cached) {
+    return cached.slice();
+  }
 
   // 学生角色无法直接调 /api/rag/query（限教师/管理员），先尝试后端，403/失败时回退本地关键字检索。
   try {
@@ -185,7 +199,7 @@ export async function searchCourseLibrary(
     });
     const hits = response.data.hits ?? [];
     if (hits.length > 0) {
-      return hits.map((hit) => ({
+      const mapped: LibrarySearchHit[] = hits.map((hit) => ({
         pageId: hit.pageId ?? hit.page_id ?? 0,
         documentId: 0,
         pageNo: hit.pageNo ?? hit.page_no ?? 0,
@@ -193,6 +207,8 @@ export async function searchCourseLibrary(
         snippet: hit.text,
         score: hit.score,
       }));
+      ragSearchCache.set(cacheKey, mapped);
+      return mapped.slice();
     }
   } catch (error) {
     if (!(error instanceof ApiClientError) || (error.status !== 403 && error.status !== 401)) {
@@ -201,7 +217,9 @@ export async function searchCourseLibrary(
     }
   }
 
-  return localKeywordSearch(trimmed, topK, options);
+  const local = await localKeywordSearch(trimmed, topK, options);
+  ragSearchCache.set(cacheKey, local);
+  return local.slice();
 }
 
 export interface CoursewareCitation {
@@ -402,4 +420,5 @@ export function resetCourseLibraryCacheForTest(): void {
   kcSummariesCache = null;
   manifestCache = null;
   documentsCache.clear();
+  ragSearchCache.clear();
 }

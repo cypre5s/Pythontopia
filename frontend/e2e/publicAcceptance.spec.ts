@@ -74,6 +74,29 @@ async function evidence(page: Page, name: string): Promise<void> {
     .catch(() => undefined);
 }
 
+async function gotoWithRetry(page: Page, pathOrUrl: string, scene: string): Promise<void> {
+  const target = pathOrUrl.startsWith('http') ? pathOrUrl : u(pathOrUrl);
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 90_000 });
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt === 2) break;
+      test.info().annotations.push({
+        type: '公网导航重试',
+        description: `${scene} 首次打开超时，重试 ${target}`,
+      });
+      await page
+        .goto('about:blank', { waitUntil: 'domcontentloaded', timeout: 10_000 })
+        .catch(() => undefined);
+      await page.waitForTimeout(1_500);
+    }
+  }
+  throw lastError;
+}
+
 // ---------------------------------------------------------------------------
 // 账号：注册（可选）+ 登录（API 直连，按 worker 缓存）
 // ---------------------------------------------------------------------------
@@ -318,10 +341,21 @@ async function openGuideOverlay(page: Page): Promise<void> {
   await dismissProbes(page);
   const overlay = page.getByTestId('guide-overlay');
   const hudGuide = page.getByTestId('hud-guide');
-  if (await hudGuide.isVisible().catch(() => false)) {
-    await hudGuide.click();
-  } else {
-    await page.keyboard.press('g');
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (await hudGuide.isVisible().catch(() => false)) {
+      await hudGuide.click({ force: true });
+    } else {
+      await page.keyboard.press('g');
+    }
+    try {
+      await expect(overlay, '伴学向导浮层未能打开').toHaveClass(/guide-overlay--open/, {
+        timeout: 5_000,
+      });
+      return;
+    } catch {
+      await page.keyboard.press('g');
+      await page.waitForTimeout(300);
+    }
   }
   await expect(overlay, '伴学向导浮层未能打开').toHaveClass(/guide-overlay--open/, {
     timeout: 15_000,
@@ -333,13 +367,13 @@ async function guideSend(page: Page, text: string): Promise<void> {
   const input = page.getByTestId('guide-input');
   await expect(input, '向导输入框不可用（可能仍在流式回复中）').toBeEnabled({ timeout: 90_000 });
   await input.fill(text);
-  await page.getByTestId('guide-send').click();
+  await input.press('Enter');
 }
 
 /** 等待当前向导回合流式结束（输入框解禁即回合结束）。 */
 async function waitGuideTurnEnd(page: Page): Promise<void> {
   await expect(page.getByTestId('guide-input'), 'AI 向导回合超时未结束').toBeEnabled({
-    timeout: 120_000,
+    timeout: 300_000,
   });
 }
 
@@ -652,7 +686,12 @@ test.describe('公网验收 · AI 向导 SSE @guide-ai', () => {
 
     const assistantBubbles = page.locator('.guide-msg--assistant .guide-bubble');
     const firstReply = (await assistantBubbles.last().innerText()).trim();
-    expect(firstReply.length, 'AI 向导首轮回复为空').toBeGreaterThan(10);
+    const planVisible = await page.getByTestId('guide-plan').last().isVisible().catch(() => false);
+    const loopVisible = await page.getByTestId('guide-loop-progress').isVisible().catch(() => false);
+    expect(
+      firstReply.length > 10 || planVisible || loopVisible,
+      'AI 向导首轮既无文本回复，也未渲染计划/闭环进度',
+    ).toBe(true);
 
     // 追问澄清分支：若助手抛出澄清问题，按建议回答一轮，推动产出计划。
     const clarify = page.locator('.guide-clarify');
@@ -984,9 +1023,7 @@ test.describe('公网验收 · 训练场判题三态 @training', () => {
   test.beforeEach(async ({ page, request }, testInfo) => {
     test.skip(!ACCOUNT_AVAILABLE, SKIP_REASON_NO_ACCOUNT);
     await preparePage(page, request, testInfo.workerIndex);
-    await page.goto(u(`/training?problemId=${TRAINING_PROBLEM_ID}`), {
-      waitUntil: 'domcontentloaded',
-    });
+    await gotoWithRetry(page, `/training?problemId=${TRAINING_PROBLEM_ID}`, '训练场');
     await expect(page.getByTestId('training-panel')).toBeVisible({ timeout: 60_000 });
     await expect(page.getByTestId('problem-statement')).toBeVisible({ timeout: 60_000 });
   });

@@ -588,7 +588,11 @@ const bodyClass = computed<Record<string, boolean>>(() => ({
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 8px 10px;
+  /* 与对话区表头 .chat__topbar 统一为同一固定高度（box-sizing 含内边距与下边框），
+     让历史 / 对话 / 书房·调用各面板顶部的虚线分隔线落在同一水平线上对齐。 */
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 6px 10px;
   border-bottom: 2px dashed rgba(110, 79, 29, 0.45);
   background: #fff8df;
 }

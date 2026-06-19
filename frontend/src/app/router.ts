@@ -280,6 +280,53 @@ router.beforeEach((to: RouteLocationNormalized) => {
   return true;
 });
 
+// ── 发布滚动更新自愈：旧标签页引用了已被新构建替换掉的分块 ──────────────────────
+// 部署新版本后，index.html 引用的 *.js 分块文件名（内容指纹 hash）会变化。仍开着旧页面的
+// 用户点进懒加载路由（如 /arena 的 ArenaPage 分块）时，旧 hash 文件已不存在：
+//   · 服务端命中 SPA 回退把 index.html(text/html) 当作 .js 返回 → 严格 MIME 校验报错；
+//   · 或直接 404 → 动态 import() reject。
+// 两种都会让导航中断、页面卡住。这里统一拦截，做「一次性整页跳转到目标地址」自愈：
+// 整页加载会拉到最新 index.html 与正确的分块清单，路由随即正常解析。
+const CHUNK_RELOAD_KEY = 'pyt:chunk-reload-at';
+
+/** 是否为动态 import 分块加载失败（含跨浏览器措辞与 MIME 误判）。 */
+function isDynamicImportError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  return /Failed to fetch dynamically imported module|error loading dynamically imported module|Importing a module script failed|expected a javascript.*module|dynamically imported module/i.test(
+    message,
+  );
+}
+
+/**
+ * 命中分块失效时整页跳到目标地址自愈。用 sessionStorage 做一次性闸门：
+ * 10 秒内只自愈一次，避免目标分块在新构建里也真的取不到时陷入无限重载。
+ */
+function recoverFromStaleChunk(targetPath: string): void {
+  try {
+    const last = Number(sessionStorage.getItem(CHUNK_RELOAD_KEY) ?? '0');
+    if (Number.isFinite(last) && Date.now() - last < 10_000) {
+      return;
+    }
+    sessionStorage.setItem(CHUNK_RELOAD_KEY, String(Date.now()));
+  } catch {
+    /* sessionStorage 不可用：放弃闸门但仍尝试一次跳转（极少触发，可接受） */
+  }
+  window.location.assign(targetPath);
+}
+
+router.onError((error, to) => {
+  if (isDynamicImportError(error)) {
+    recoverFromStaleChunk(to?.fullPath ?? window.location.pathname);
+  }
+});
+
+// Vite 的 modulepreload 预载失败会先抛 `vite:preloadError`（早于 import() reject）。
+// preventDefault 后由我们统一走整页自愈，避免 Vite 默认直接抛错。
+window.addEventListener('vite:preloadError', (event) => {
+  event.preventDefault();
+  recoverFromStaleChunk(window.location.pathname);
+});
+
 // 切换路由时关闭可能残留的 NPC 对话浮层：DialogTree 全局挂在 App.vue（不随路由卸载），
 // 若用 HUD 等方式离开当前页而对话仍 visible，浮层会残留到下一页。close() 幂等，
 // 由对话选项触发导航时已 close 过，这里再调一次也无副作用。
@@ -288,5 +335,11 @@ router.afterEach(() => {
     useDialogStore().close();
   } catch {
     /* pinia 未就绪（极端时序）忽略 */
+  }
+  // 导航成功即清除「分块加载失败」一次性闸门：下一次真正的分块失效能立刻自愈刷新。
+  try {
+    sessionStorage.removeItem(CHUNK_RELOAD_KEY);
+  } catch {
+    /* 隐私模式等禁用 sessionStorage 时忽略 */
   }
 });
