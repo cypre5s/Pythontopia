@@ -18,7 +18,6 @@ const toast = useToastStore();
 
 type Phase = 'idle' | 'playing' | 'done';
 const phase = ref<Phase>('idle');
-const remaining = ref(ROUND_SECONDS);
 const score = ref(0);
 const streak = ref(0);
 const bestScore = ref(readBest());
@@ -30,7 +29,10 @@ const result = ref<{
   perfect: boolean;
   comboBonus: number;
 } | null>(null);
+// 计时用「开始时间戳 + 单次 setTimeout」而非按秒 setInterval：避免每秒 reactive 重渲染
+// 把可点代码行的 DOM 抖掉（点击发涩）；倒计时改 CSS 进度条动画呈现，剩余秒数在结算时回算。
 let timerId: number | undefined;
+let roundStartedAt = 0;
 
 function readBest(): number {
   try {
@@ -70,7 +72,7 @@ const sourceLabel = computed(() => {
 
 function clearTimer(): void {
   if (timerId !== undefined) {
-    window.clearInterval(timerId);
+    window.clearTimeout(timerId);
     timerId = undefined;
   }
 }
@@ -84,15 +86,10 @@ async function start(): Promise<void> {
   selected.value = new Set();
   result.value = null;
   score.value = 0;
-  remaining.value = ROUND_SECONDS;
   phase.value = 'playing';
   clearTimer();
-  timerId = window.setInterval(() => {
-    remaining.value -= 1;
-    if (remaining.value <= 0) {
-      finish();
-    }
-  }, 1000);
+  roundStartedAt = Date.now();
+  timerId = window.setTimeout(finish, ROUND_SECONDS * 1000);
 }
 
 function toggleLine(index: number): void {
@@ -125,8 +122,12 @@ function finish(): void {
   // 连胜：连续完美命中累计、给逐级加成；非完美清零。
   streak.value = perfect ? streak.value + 1 : 0;
   const comboBonus = perfect ? (streak.value - 1) * COMBO_BONUS : 0;
-  // 命中得分、误报扣分；全对则按剩余秒数给时间奖励 + 连胜加成。
-  const timeBonus = perfect ? Math.max(0, remaining.value) : 0;
+  // 命中得分、误报扣分；全对则按剩余秒数给时间奖励 + 连胜加成（剩余秒数由开始时间戳回算）。
+  const remainingSeconds = Math.max(
+    0,
+    Math.round(ROUND_SECONDS - (Date.now() - roundStartedAt) / 1000),
+  );
+  const timeBonus = perfect ? remainingSeconds : 0;
   score.value = Math.max(0, hits * HIT_SCORE - wrong * WRONG_PENALTY + timeBonus + comboBonus);
   result.value = { hits, wrong, missed, perfect, comboBonus };
   if (score.value > bestScore.value) {
@@ -183,14 +184,6 @@ onUnmounted(clearTimer);
           最高 {{ bestScore }}
         </span>
         <span
-          v-if="phase === 'playing'"
-          class="bug-hunter__timer"
-          :class="{ 'bug-hunter__timer--urgent': remaining <= 5 }"
-          data-testid="bug-hunter-timer"
-        >
-          ⏱ {{ remaining }}s
-        </span>
-        <span
           v-if="phase !== 'idle'"
           class="bug-hunter__score"
           data-testid="bug-hunter-score"
@@ -208,6 +201,18 @@ onUnmounted(clearTimer);
         </button>
       </div>
     </header>
+
+    <div
+      v-if="phase === 'playing'"
+      class="bug-hunter__timebar"
+      data-testid="bug-hunter-timer"
+      aria-hidden="true"
+    >
+      <span
+        class="bug-hunter__timebar-fill"
+        :style="{ animationDuration: `${ROUND_SECONDS}s` }"
+      />
+    </div>
 
     <p
       v-if="phase !== 'idle' && !playable"
@@ -304,8 +309,9 @@ onUnmounted(clearTimer);
 }
 
 .bug-hunter__sub {
-  margin: var(--pyt-space-1) 0 0;
-  font-size: var(--pyt-font-size-sm);
+  margin: 2px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
   color: var(--pyt-color-text-muted);
 }
 
@@ -315,14 +321,43 @@ onUnmounted(clearTimer);
   gap: var(--pyt-space-2);
 }
 
-.bug-hunter__timer {
-  font-family: var(--pyt-font-mono);
-  font-weight: 700;
-  color: var(--pyt-color-text-hint);
+/* 倒计时进度条：纯 CSS 动画，不触发每秒 reactive 重渲染。 */
+.bug-hunter__timebar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--pyt-color-bg-sunken);
+  overflow: hidden;
 }
 
-.bug-hunter__timer--urgent {
-  color: var(--pyt-color-danger);
+.bug-hunter__timebar-fill {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: var(--pyt-color-primary);
+  animation-name: bug-hunter-countdown;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+@keyframes bug-hunter-countdown {
+  0% {
+    width: 100%;
+    background: var(--pyt-color-primary);
+  }
+  80% {
+    background: var(--pyt-color-primary);
+  }
+  100% {
+    width: 0%;
+    background: var(--pyt-color-danger);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bug-hunter__timebar-fill {
+    animation: none;
+    width: 100%;
+  }
 }
 
 .bug-hunter__score {

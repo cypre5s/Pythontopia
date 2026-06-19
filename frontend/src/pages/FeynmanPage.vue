@@ -42,13 +42,18 @@ function pick(code: string): void {
   kcInput.value = code;
   activeKc.value = code;
 }
+
+// 面板内「换知识点」：收起会话、回到选择器（保留上次输入，方便微调再开）。
+function resetPicker(): void {
+  activeKc.value = '';
+}
 </script>
 
 <template>
   <AppLayout>
-    <section class="feynman-page">
+    <section class="feynman-page" :class="{ 'feynman-page--active': activeKc.length > 0 }">
       <div class="feynman-page__content">
-      <header class="feynman-page__intro">
+      <header v-if="activeKc.length === 0" class="feynman-page__intro">
         <div class="feynman-page__hero">
           <h1 class="feynman-page__title">
             教会一个会犯你同款错的 AI 学弟
@@ -105,6 +110,7 @@ function pick(code: string): void {
         v-if="activeKc.length > 0"
         :key="activeKc"
         :kc-code="activeKc"
+        @change-kc="resetPicker"
       />
       <p
         v-else
@@ -122,6 +128,7 @@ function pick(code: string): void {
 .feynman-page {
   padding: var(--pyt-space-4);
   min-height: calc(100vh - 64px);
+  min-height: calc(100dvh - 64px);
   background: linear-gradient(
     180deg,
     var(--pyt-color-bg-primary) 0%,
@@ -136,6 +143,29 @@ function pick(code: string): void {
   width: 100%;
   max-width: 1080px;
   margin: 0 auto;
+}
+
+/* 进入会话后整页不上下滚动：锁定视口高度，让面板内部各区自行滚动腾出视口。 */
+.feynman-page--active {
+  height: calc(100vh - 52px);
+  height: calc(100dvh - 52px);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.feynman-page--active .feynman-page__content {
+  height: 100%;
+  min-height: 0;
+  max-width: none;
+}
+
+@media (max-width: 900px) {
+  /* 窄屏回归自然流：单列堆叠时允许整页滚动，避免内容被压扁。 */
+  .feynman-page--active {
+    height: auto;
+    min-height: calc(100dvh - 52px);
+    overflow: visible;
+  }
 }
 
 .feynman-page__intro {

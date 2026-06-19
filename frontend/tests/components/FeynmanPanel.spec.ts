@@ -2,6 +2,7 @@ import { mount, flushPromises } from '@vue/test-utils';
 import { setActivePinia, createPinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import FeynmanPanel from '@/components/feynman/FeynmanPanel.vue';
+import { useFeynmanStore } from '@/stores/feynman';
 
 const mocks = vi.hoisted(() => ({
   startFeynmanSession: vi.fn(),
@@ -52,7 +53,7 @@ describe('FeynmanPanel', () => {
     });
   });
 
-  it('开始会话后展示学弟状态、代码草稿与真实证据链', async () => {
+  it('开始会话后在信息条展示学弟误区，并给出代码草稿与判题占位', async () => {
     const wrapper = mount(FeynmanPanel, {
       props: { kcCode: 'PY43-KC-010' },
     });
@@ -66,12 +67,11 @@ describe('FeynmanPanel', () => {
     );
     expect(wrapper.get('[data-testid="feynman-code"]').text()).toContain('print(x)');
     expect(wrapper.get('[data-testid="feynman-judge"]').text()).toContain('等待学弟提交可判题代码');
-    const evidence = wrapper.get('[data-testid="feynman-evidence-chain"]').text();
-    expect(evidence).toContain('学习记录 #101');
-    expect(evidence).toContain('误区');
+    // 「学习足迹·全程可溯源」整块已删除，不再渲染独立证据链。
+    expect(wrapper.find('[data-testid="feynman-evidence-chain"]').exists()).toBe(false);
   });
 
-  it('提交教学输入后展示学弟回复、修正点、判题结果与证据回链', async () => {
+  it('提交教学输入后展示学弟回复、修正点与真判题结果', async () => {
     const wrapper = mount(FeynmanPanel, {
       props: { kcCode: 'PY43-KC-010' },
     });
@@ -87,14 +87,35 @@ describe('FeynmanPanel', () => {
     expect(wrapper.get('[data-testid="feynman-fix"]').text()).toContain('比较和赋值');
     expect(wrapper.get('[data-testid="feynman-code"]').text()).toContain('print(x)');
     expect(wrapper.get('[data-testid="feynman-judge"]').text()).toContain('隐藏用例通过');
-    expect(wrapper.get('[data-testid="feynman-evidence-chain"]').text()).toContain('学习记录 #102');
   });
 
-  it('未开始会话时教学按钮禁用，避免提交无 session 的解释', () => {
+  it('错误猎人产出的 bug 提示接入「讲明白」引导，串起出师闭环（B）', async () => {
     const wrapper = mount(FeynmanPanel, {
       props: { kcCode: 'PY43-KC-010' },
     });
 
-    expect(wrapper.get('[data-testid="feynman-teach-submit"]').attributes('disabled')).toBeDefined();
+    await wrapper.get('[data-testid="feynman-start"]').trigger('click');
+    await flushPromises();
+
+    const store = useFeynmanStore();
+    store.bugHunt = {
+      source: 'real_misconception',
+      misconceptionTag: 'off_by_one_range',
+      buggyCode: 'for i in range(1, 5):\n    print(i)',
+      bugLineIndices: [0],
+      hintMd: 'range 右端不包含',
+    };
+    await flushPromises();
+
+    expect(wrapper.get('[data-testid="feynman-teach-hint"]').text()).toContain('range 右端不包含');
+  });
+
+  it('未开始会话时不渲染教学输入，从结构上杜绝无 session 提交', () => {
+    const wrapper = mount(FeynmanPanel, {
+      props: { kcCode: 'PY43-KC-010' },
+    });
+
+    expect(wrapper.find('[data-testid="feynman-teach-input"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="feynman-teach-submit"]').exists()).toBe(false);
   });
 });

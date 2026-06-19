@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-06-19 — 费曼界面收敛自适应 + 错误猎人计时重渲染修复 + 出师闭环接入
+
+> 续作费曼反演界面优化：减框、整页不滚自适应视口、更星露谷风；修计时每秒重渲染致点击发涩（A）；把错误猎人找到的 bug 提示接进「讲明白 → 真判题」出师闭环（B）。
+
+- **费曼面板收敛（前端）**：`FeynmanPanel.vue` 从「大 header + 6 卡网格 + 学习足迹证据链 aside」收敛为「紧凑信息条 + 左错误猎人 ｜ 右（对话 / 讲明白 / 学弟代码·真判题）三卡」——学弟误区折入信息条、修正点并入对话卡、学弟代码与真判题合卡；**删除「学习足迹·全程可溯源」整块**（误区 / 讲解 / 真判题 / 来源），KC 标题用 `·` 不用 `/`。`flex` 列布局 + `height:100%` + 各区内部滚动，配合页面视口锁定实现整页不上下滑；像素边框 / 木纹羊皮纸底 / 金色描边强化星露谷风。
+- **进会话收起大 intro（前端）**：`FeynmanPage.vue` 选定 KC 后隐藏 hero / 选择器大引导、面板全幅铺满；`.feynman-page--active` 锁 `calc(100dvh - 52px)` + 内部滚动；面板「换知识点」`@change-kc` 回到选择器（窄屏 ≤900px 回归单列自然滚动）。
+- **A · 错误猎人计时重渲染修复（前端）**：`BugHunterGame.vue` 计时从按秒 `setInterval` reactive 重渲改为单次 `setTimeout` + 纯 CSS 进度条（剩余秒数由 `roundStartedAt` 回算），消除每秒把可点代码行抖掉导致的点击发涩；副标题字号缩到 11px；`prefers-reduced-motion` 关动画。
+- **B · 出师闭环接入（前端）**：错误猎人产出的 bug 提示 `bugHunt.hintMd` 经 `teachHint` 接入「讲明白」引导条，串起「找 bug → 讲清它为什么错 → 真判题裁定」闭环（`submitTeaching` → `submitJudge`）。
+- **验证**：`vue-tsc --noEmit` 0 错；`vitest` BugHunterGame **2** + FeynmanPanel **4 passed**（删证据链断言、新增「未开会话不渲染教学输入」与「bug 提示接入讲明白(B)」用例）；`eslint` 0 错（FeynmanPage 残留既有 `vue/html-indent` 警告，按外科手术式修改不顺手重排整棵模板）；浏览器实测 demo-stu-01 → /feynman 选 KC → 开会话（intro 收起、整页不滚）→ 开错误猎人（CSS 计时条 + 生成 `input()` 类型陷阱 bug 代码）→ 讲明白卡显示 bug 提示接入（截图存证）。
+- **提交 / 残留**：仅提交 feynman 相关文件（`FeynmanPanel.vue` / `BugHunterGame.vue` / `FeynmanPage.vue` / `FeynmanPanel.spec.ts`）+ 本 CHANGELOG；同工作树 android / styles.css / 无尽远征等其它会话 WIP 不裹挟。
+
 ## 2026-06-19 — 无尽远征 Roguelike 全 Phase 收官（后端选择器 / 知识星座 / 退役静态闯关塔）
 
 > 在「无尽远征 Phase 1 + 肉鸽血肉」基础上，按计划做完 Phase 2/3/4，把「7 章×10 关」死网格彻底替换为画像驱动的 roguelike 远征。
