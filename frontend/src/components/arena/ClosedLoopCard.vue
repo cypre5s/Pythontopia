@@ -6,6 +6,8 @@ defineProps<{ problem: BossProblemDto }>();
 const code = defineModel<string>('code', { required: true });
 
 const step = ref<'read' | 'locate' | 'fix'>('read');
+// 定位笔记单独存放，绝不写进提交的 code（否则「出错原因」散文会被当代码判 → 必败）。
+const locateNote = ref('');
 
 function advanceStep(): void {
   if (step.value === 'read') step.value = 'locate';
@@ -52,7 +54,7 @@ function advanceStep(): void {
       <h4>阶段 2：定位错误根源</h4>
       <pre class="trace trace--dim">{{ problem.statement }}</pre>
       <textarea
-        v-model="code"
+        v-model="locateNote"
         class="locate-input"
         rows="3"
         placeholder="写出你认为出错的行号和原因，例如：第 5 行 IndexError，因为列表只有 3 个元素…"

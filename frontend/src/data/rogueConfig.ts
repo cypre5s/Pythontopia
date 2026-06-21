@@ -40,16 +40,27 @@ export function chapterKcs(chapter: number): string[] {
 
 /**
  * 节点类型 → 题型候选池（加权随机取一个）。chest/rest 无题型。
- * battle 偏代码判题，event 偏概念，bug 偏改错，elite 偏综合，boss 偏组合大题。
+ *
+ * 健壮性约束（2026-06-21）：后端 boss 判题只做**代码沙箱判题**（把提交内容当 Python 跑测试用例），
+ * 且 graph 出题流水线只产出「写程序」类代码题。因此题型池只收录**学生最终提交可运行 Python 代码、
+ * 能被真判通过**的题型：
+ *   - dual_track：写完整程序（最贴合现场出的代码题）；
+ *   - closed_loop：读→定位→修复，最终在「修复」步写出完整代码；
+ *   - debug / bug_mine：在含 bug 的初始代码上改出正确解（bug 节点的「抓 bug」主题）。
+ * 已移除会导致**必败/卡死**的题型（与真判题不兼容）：
+ *   - short_answer / pdf_question：提交散文 → 当代码跑 → SyntaxError；
+ *   - fill_blank：现场代码题题面无 `___` 占位 → 实际提交的是题面散文；
+ *   - multi_round：多段散文+代码拼接 → 非法 Python。
+ * 这样保证「每个节点都能真判通过、boss 必可通关」。概念/叙事性仍由 event 的情景文案 + 三选一承载。
  */
 export const NODE_KIND_POOLS: Record<RogueNodeKind, ArenaLevelKind[]> = {
-  battle: ['dual_track', 'fill_blank', 'closed_loop'],
-  elite: ['dual_track', 'multi_round'],
-  event: ['short_answer', 'pdf_question'],
+  battle: ['dual_track', 'closed_loop'],
+  elite: ['dual_track', 'closed_loop'],
+  event: ['dual_track'],
   bug: ['debug', 'bug_mine'],
   chest: [],
   rest: [],
-  boss: ['multi_round', 'dual_track'],
+  boss: ['dual_track'],
 };
 
 /** 节点类型中文名（地图节点标签 / 结算用）。 */

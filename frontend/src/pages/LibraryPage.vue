@@ -750,6 +750,7 @@ watch(chapterNoForVideo, (next) => {
               <PdfPageView
                 :doc-id="currentDocId"
                 :page-no="currentPage"
+                fit="contain"
               />
             </div>
             <!-- 课件视频视图：整章无视频时回退到文字摘录。 -->
@@ -1353,6 +1354,9 @@ watch(chapterNoForVideo, (next) => {
   line-height: 1.65;
   min-height: 0;
   flex: 1;
+  /* 让原 PDF 视图按可用高度自适应：tab 行(auto) + PDF 区(1fr) 纵向铺满，整页不再上下滚 */
+  display: flex;
+  flex-direction: column;
 }
 
 /* 课件视图切换 tab */
@@ -1385,7 +1389,25 @@ watch(chapterNoForVideo, (next) => {
 }
 .pdf-stage {
   position: relative;
+  flex: 1 1 auto;
   min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+/* contain 模式：整页 PDF 恰好放进可用高度，不撑高、不滚动 */
+.pdf-stage :deep(.pdf-page-view) {
+  width: 100%;
+  height: 100%;
+  justify-content: center;
+}
+.pdf-stage :deep(.pdf-canvas) {
+  max-height: 100%;
+}
+/* 页码已在顶部页栏显示，contain 单屏下隐藏组件内置 meta 行省高度 */
+.pdf-stage :deep(.state--meta) {
+  display: none;
 }
 .page-loading-overlay {
   position: sticky;

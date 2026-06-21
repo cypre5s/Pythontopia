@@ -4,31 +4,23 @@ import { useRoute } from 'vue-router';
 import AppLayout from '@/app/AppLayout.vue';
 import FeynmanPanel from '@/components/feynman/FeynmanPanel.vue';
 import KcPicker from '@/components/feynman/KcPicker.vue';
+import { FEYNMAN_SELF_TEST_KCS, FEYNMAN_SUGGESTED_KCS, isFeynmanSelfTestKc } from '@/data/feynmanKcs';
 
 const route = useRoute();
 
 function initialKc(): string {
   const raw = route.query.kc;
-  if (Array.isArray(raw)) {
-    return raw[0] ?? '';
-  }
-  return typeof raw === 'string' ? raw : '';
+  const code = Array.isArray(raw) ? raw[0] ?? '' : typeof raw === 'string' ? raw : '';
+  // 深链带入的 KC 也须是「可用」自测知识点，否则回到选择器让学生自选。
+  return code && isFeynmanSelfTestKc(code) ? code : '';
 }
 
 const activeKc = ref(initialKc());
 
-interface SuggestedKc {
-  code: string;
-  label: string;
-}
-
-// 学生多半不记得知识点全名，给几个常见入口（点一下即开课）。
-const suggestedKcs: SuggestedKc[] = [
-  { code: 'PY43-KC-031', label: 'for 循环与遍历' },
-  { code: 'PY43-KC-019', label: '数值类型与运算' },
-  { code: 'PY43-KC-009', label: 'Python 语言概述' },
-  { code: 'PY43-KC-048', label: '文件操作' },
-];
+// 自测仅开放「可编程、可找茬」的知识点（隐藏纯史实/概念 KC）。
+const availableKcs = FEYNMAN_SELF_TEST_KCS;
+// 学生多半不记得知识点全名，给几个常见入口（点一下即开课），均取自可用集合。
+const suggestedKcs = FEYNMAN_SUGGESTED_KCS;
 
 function pick(code: string): void {
   activeKc.value = code;
@@ -61,7 +53,10 @@ function resetPicker(): void {
           </div>
 
           <div class="feynman-page__picker">
-            <KcPicker @select="pick" />
+            <KcPicker
+              :codes="availableKcs"
+              @select="pick"
+            />
             <div class="feynman-page__chips">
               <span class="feynman-page__chips-hint">常用：</span>
               <button

@@ -93,6 +93,25 @@ function isResumablePhase(p: RogueRunPhase): boolean {
   return p === 'map' || p === 'challenge' || p === 'event';
 }
 
+/**
+ * 可被真判通过的题型（后端只做代码沙箱判题）。续局时把历史存档里**不可代码真判**的旧题型
+ * （short_answer / pdf_question / fill_blank / multi_round / teach_back）就地迁移为 dual_track，
+ * 避免老存档恢复后撞上「写散文 / 多段拼接 → 当代码跑 → 必败卡死」的节点（与新局 NODE_KIND_POOLS 对齐）。
+ */
+const SAFE_CHALLENGE_KINDS: ReadonlySet<ArenaLevelKind> = new Set<ArenaLevelKind>([
+  'dual_track',
+  'closed_loop',
+  'debug',
+  'bug_mine',
+]);
+function sanitizeRunNodes(nodes: RogueNode[]): RogueNode[] {
+  return nodes.map((n) =>
+    n.challengeKind && !SAFE_CHALLENGE_KINDS.has(n.challengeKind)
+      ? { ...n, challengeKind: 'dual_track' as ArenaLevelKind }
+      : n,
+  );
+}
+
 function loadPersisted(): PersistShape | null {
   if (typeof window === 'undefined') return null;
   try {
@@ -236,7 +255,8 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
   function applySnapshot(p: PersistShape): void {
     phase.value = isResumablePhase(p.phase) && p.phase !== 'map' ? 'map' : p.phase;
     focusChapter.value = p.focusChapter ?? null;
-    nodes.value = p.nodes;
+    // 老存档可能含已弃用的不可判题型，续局前就地迁移到可真判题型，避免恢复即卡死。
+    nodes.value = sanitizeRunNodes(p.nodes);
     layers.value = p.layers;
     currentNodeId.value = p.currentNodeId;
     hp.value = p.hp;

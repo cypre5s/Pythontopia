@@ -8,6 +8,11 @@
 import { computed, nextTick, ref } from 'vue';
 import { KC_NAMES } from '@/data/kcNames';
 
+const props = defineProps<{
+  /** 限定可选 KC 编码（默认全部 65）；费曼自测传入「可用知识点」白名单。 */
+  codes?: readonly string[];
+}>();
+
 const emit = defineEmits<{ (e: 'select', code: string): void }>();
 
 interface KcEntry {
@@ -15,9 +20,13 @@ interface KcEntry {
   name: string;
 }
 
-const ALL: readonly KcEntry[] = Object.entries(KC_NAMES)
-  .map(([code, name]) => ({ code, name }))
-  .sort((a, b) => a.code.localeCompare(b.code));
+const ALL = computed<readonly KcEntry[]>(() => {
+  const codes = props.codes ?? Object.keys(KC_NAMES);
+  return codes
+    .filter((code) => Object.prototype.hasOwnProperty.call(KC_NAMES, code))
+    .map((code) => ({ code, name: KC_NAMES[code] as string }))
+    .sort((a, b) => a.code.localeCompare(b.code));
+});
 
 const LIST_ID = 'kc-picker-listbox';
 const query = ref('');
@@ -52,8 +61,9 @@ function score(entry: KcEntry, q: string): number {
 
 const filtered = computed<KcEntry[]>(() => {
   const q = query.value.trim().toLowerCase();
-  if (!q) return [...ALL];
-  return ALL.map((entry) => ({ entry, s: score(entry, q) }))
+  if (!q) return [...ALL.value];
+  return ALL.value
+    .map((entry) => ({ entry, s: score(entry, q) }))
     .filter((x) => x.s > 0)
     .sort((a, b) => b.s - a.s || a.entry.code.localeCompare(b.entry.code))
     .map((x) => x.entry);

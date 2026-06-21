@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import AppLayout from '@/app/AppLayout.vue';
 import MarkdownView from '@/components/common/MarkdownView.vue';
@@ -53,6 +53,27 @@ const selfEditable = computed(() =>
   dimensions.value.filter((d) => d.selfEditable && d.key !== COGNITIVE_STYLE_KEY),
 );
 
+// 自评滑块的「本地草稿值」(0..100)：拖动即时跟手、提交后保留学生选定位置，
+// 不被后端 effective(decay) 分数拉回——否则松手就回弹，像「拉不动」。
+const draftScores = ref<Record<string, number>>({});
+watch(
+  selfEditable,
+  (dims) => {
+    for (const d of dims) {
+      if (draftScores.value[d.key] === undefined) {
+        draftScores.value[d.key] = Math.round(d.score * 100);
+      }
+    }
+  },
+  { immediate: true },
+);
+function draftValue(dim: ProfileDimensionDto): number {
+  return draftScores.value[dim.key] ?? Math.round(dim.score * 100);
+}
+function onDraftInput(dim: ProfileDimensionDto, event: Event): void {
+  draftScores.value[dim.key] = Number((event.target as HTMLInputElement).value);
+}
+
 // 当前主导认知风格 = cognitive_style 维度末尾 tag（与后端消费口径一致），用于高亮已选项。
 const currentCognitiveStyle = computed<string | null>(() => {
   const dim = dimensions.value.find((d) => d.key === COGNITIVE_STYLE_KEY);
@@ -61,15 +82,18 @@ const currentCognitiveStyle = computed<string | null>(() => {
   return last ?? null;
 });
 
-/** 学生自评：滑块给出目标分（0..100），换算成相对当前分的增量提交。 */
-async function onSelfRate(dim: ProfileDimensionDto, event: Event): Promise<void> {
-  const target = Number((event.target as HTMLInputElement).value) / 100;
+/** 学生自评：松手时把草稿目标分（0..100）换算成相对当前分的增量提交，并保留所选位置。 */
+async function onSelfRate(dim: ProfileDimensionDto): Promise<void> {
+  const targetPct = draftValue(dim);
+  const target = targetPct / 100;
   const delta = Math.round((target - dim.score) * 100) / 100;
   if (delta === 0) return;
   savingKey.value = dim.key;
   try {
     await selfUpdateDimension(dim.key, delta);
     await loadDimensions();
+    // 乐观保留学生选定位置（自评代表「我的主观目标」），不让 effective decay 把滑块拉回。
+    draftScores.value[dim.key] = targetPct;
     toast.show(`已更新「${dim.label}」自评`, 'success');
   } catch (error) {
     const message = error instanceof Error ? error.message : '自评提交失败';
@@ -247,12 +271,13 @@ const dimensionCards = computed(() => {
                   min="0"
                   max="100"
                   step="5"
-                  :value="Math.round(dim.score * 100)"
+                  :value="draftValue(dim)"
                   :disabled="savingKey === dim.key"
                   class="self-rate__slider"
-                  @change="onSelfRate(dim, $event)"
+                  @input="onDraftInput(dim, $event)"
+                  @change="onSelfRate(dim)"
                 >
-                <span class="self-rate__value">{{ Math.round(dim.score * 100) }}%</span>
+                <span class="self-rate__value">{{ draftValue(dim) }}%</span>
               </div>
             </div>
           </PyPanel>
