@@ -116,3 +116,13 @@
 - **Phase 2d（run 跨会话 DB 持久化 + 间隔重复持久化）✅**：迁移 `V173__expedition_run.sql`（user 单活跃 run）；`ExpeditionRunController/Service/Dto`（GET/PUT/DELETE，学生限定）；`stores/rogueRun` 后端优先 + localStorage 兜底 + 续局/弃局 + 跨设备 `resumeFromBackend`；间隔重复改用持久化 `kc_mastery.last_event_at`（`BossService` → `BossGraphClient.lastPracticed` → graph `select_frontier(last_practiced=...)`）。
 - **测试**：前端 `npm run test` 2172 passed（含 ExpeditionScene 6 / expedition api 5 / rogueRun 续局+兜底）；后端 `BossServiceTest`+`ExpeditionRunControllerTest` 18 passed；graph `test_expedition_selector` 7 passed。浏览器对 demo-stu-01 完成像素塔可视化验收（render→自适应一屏→点节点进真判题）。
 - **后续**：空库初始化迁移与全链路 E2E 在 ECS 部署专场验；像素塔 avatar 攀爬/通关动画当前为状态重建驱动（已单测），后续可加补间动画打磨。
+
+## 10. 玩法 + 健壮性补强（2026-06-21）
+
+在四阶段已交付基础上做的外科手术式增强（不动「真判题/掌握度后端权威」红线，纯前端层）：
+
+- **G1 健壮性**：`stores/rogueRun` 新增 `isValidRogueNode/isValidSnapshot` 逐节点结构校验，`loadPersisted`/`isUsableSavedRun` 走深校验——损坏/半截存档（缺 `next`、`state` 非法等）直接丢弃回退新局，避免恢复即崩；`applySnapshot` 显式归零 `bossPhase`；清理死参 `startRun(opts.fresh)` 与死码 `resumeFromBackend`。
+- **G2 局内自适应**：新增纯函数 `data/rogueConfig.computeRunDifficulty(base, momentum, recentFailures)`（气势 ≥3 +1、≥6 +2；最近两题皆错 -1；clamp 1..5），`beginChallenge` 据此出题、`scoreFor` 以实际难度计分，对齐计划 §4「连胜抬难度+得分系数」；页面 header 展示实际难度 + 「↑气势/↓回稳」标签。
+- **G3 策略深度**：宝箱/精英通关改为 `reward` 阶段「三选一」学习增益（`openReward/chooseReward` + `sampleN`）；新增 2 个正向 relic `quick_thinker`（30s 内通关 +50% 分）、`first_aid`（本局首次答错不扣血，从持久化 history 派生→续局不重复触发）；`markCleared` 半程层首次到达小回 1 血。
+- **G4 UX**：地图图例条、列表节点 `title` tooltip、结算页「本局练习小结」（按 KC 聚合 history 对错，弱项高亮）。
+- **验证**：`npm run typecheck` / `eslint` 干净；`npm run test` **223 文件 2201 通过**（新增 computeRunDifficulty 4 + rogueRun 三选一/急救包/急智/半程回血/坏档拒绝/连胜抬难度 6 用例，并更新宝箱用例为三选一流）。

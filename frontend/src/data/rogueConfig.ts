@@ -92,3 +92,25 @@ export const LAYER_MAX_WIDTH = 4;
 /** HP / 计分。 */
 export const EXPEDITION_MAX_HP = 5;
 export const REST_HEAL = 1;
+
+/**
+ * 局内自适应难度（「手感层」，不改地图生成时定下的基准难度真源 node.difficulty）。
+ *
+ * - 连胜攒气势 → 抬难度：气势 ≥3 → +1，≥6 → +2（让连胜玩家「越打越上头」，对齐重构计划 §4
+ *   「连胜拉高下一题难度与得分系数」）；
+ * - 近期连败 → 温和下调：最近两题皆错 → -1（脆弱学生临时降压，符合「温和 HP」哲学）；
+ * - 结果 clamp 到 1..5。
+ *
+ * 纯函数（无副作用），便于单测；得分侧的气势加成仍由 store.scoreFor 的 momentumBonus 负责。
+ */
+export function computeRunDifficulty(
+  base: number,
+  momentum: number,
+  recentFailures: number,
+): number {
+  let d = base;
+  if (momentum >= 6) d += 2;
+  else if (momentum >= 3) d += 1;
+  if (recentFailures >= 2) d -= 1;
+  return Math.max(1, Math.min(5, Math.round(d)));
+}

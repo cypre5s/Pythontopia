@@ -33,6 +33,9 @@ class FeynmanBugExposureInput(BaseModel):
     """代码找茬：让学弟写出一段含 bug 的代码供学生限时找茬。"""
 
     kc_code: str
+    # 人类可读的知识点/概念主题（课程 KC 传中文名；课件外概念直接传概念词）。
+    # 用于让 LLM 生成「贴该 KC / 该概念」的 bug，而非只按章节泛化；缺省回退到章节主题/kc_code。
+    topic: str | None = None
     misconceptions: list[Misconception] = Field(default_factory=list)
 
 

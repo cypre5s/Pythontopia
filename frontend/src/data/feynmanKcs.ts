@@ -1,27 +1,19 @@
 // 费曼反演「代码找茬」自测可用知识点集合。
 //
-// 自测玩法是「学弟写一段含 bug 的代码 → 你限时找出 bug 行」，因此只对**能写出可调试代码**的
-// 知识点开放。课程包 ch1 里有若干纯计算机发展史 / 抽象概念 KC（没有可找茬的代码），从自测
-// 选择器里隐藏，避免「在『中国计算机发展成就』上做代码找茬」这种文不对题的体验。
+// 玩法：学弟写一段含 bug 的代码 → 你限时找出 bug 行 / 讲清错因。
 //
-// 其余编程相关 KC 均可玩：后端 bug 库（services/pythontopia-graph/.../feynman/bug_bank.py）
-// 对课程包 1-7 章逐章都有 curated 样本，按所选 KC 的章节抽题，故「可用」≈「可写代码的 KC」。
+// 覆盖范围（2026-06：放开「所有 KC + 课件外概念」）：
+// - 全部 65 个课程 KC 均可选（不再隐藏史实/概念 KC）。后端按 KC 中文名作 topic 让 LLM 生成贴该
+//   KC 的 bug；偏史实/概念的 KC 走「概念模式」（无代表题，仅找茬+对话，不计掌握度，标「通识」）。
+// - 课件外概念（如装饰器/正则/生成器）由 FeynmanPage 的自由输入直接开局（概念模式）。
+// 后端 bug 库（services/pythontopia-graph/.../feynman/bug_bank.py）对 1-7 章有 curated 样本，
+// 无样本时按 KC 主题 LLM 现生，bug 行一律 buggy/fixed diff 得出（零伪造）。
 
 import { KC_NAMES } from './kcNames';
 
-/** 纯史实 / 抽象概念、无代码可找茬的 KC：从费曼自测选择器隐藏。 */
-const NON_CODING_KCS: ReadonlySet<string> = new Set([
-  'PY43-KC-001', // 中国计算机发展成就（史实）
-  'PY43-KC-002', // 计算工具的演变（史实）
-  'PY43-KC-005', // 计算机发展历程与趋势（史实）
-  'PY43-KC-007', // 计算科学与计算机科学（概念辨析）
-  'PY43-KC-015', // 程序设计语言发展历史（史实）
-  'PY43-KC-027', // 汉字编码体系（概念）
-]);
-
-/** 该 KC 是否可用于费曼「代码找茬」自测（真实课程 KC 且非纯概念史实）。 */
+/** 该 code 是否为真实课程 KC（用于区分「课程 KC」与「课件外自由概念」）。 */
 export function isFeynmanSelfTestKc(code: string): boolean {
-  return Object.prototype.hasOwnProperty.call(KC_NAMES, code) && !NON_CODING_KCS.has(code);
+  return Object.prototype.hasOwnProperty.call(KC_NAMES, code);
 }
 
 /** 费曼自测可选的全部 KC 编码（按编号升序），供选择器只展示「可用知识点」。 */

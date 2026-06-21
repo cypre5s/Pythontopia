@@ -38,18 +38,19 @@ public class FeynmanSessionService {
   }
 
   @Transactional
-  public SessionResponse start(long userId, String kcCode) {
+  public SessionResponse start(long userId, String rawKcCode) {
+    // kc_code 列为 VARCHAR(40)：课件外自由概念可能超长，截断到 40 防写库失败（不影响生成主题，
+    // 主题另由 kcTopic 取人类可读串）。
+    String kcCode = rawKcCode != null && rawKcCode.length() > 40 ? rawKcCode.substring(0, 40) : rawKcCode;
     List<Misconception> misconceptions = extractor.extract(userId, kcCode);
     String state = toState(misconceptions);
-    PublicProblemRepository.RepresentativeProblem representative =
+    // 课程模式：该 KC 在 pack43 有代表题 → 绑定代表题，支持「教学→产代码→真判题→掌握度回流」。
+    // 概念模式：课件外概念 / 无代表题的 KC → problem_id 留空，仅走「代码找茬 + 学弟对话」（通识，不计掌握度）。
+    Long problemId =
         problemRepository
             .findRepresentativeProblem(43L, kcCode)
-            .orElseThrow(
-                () ->
-                    new BusinessException(
-                        HttpStatus.NOT_FOUND,
-                        "FEYNMAN_PROBLEM_NOT_FOUND",
-                        "该知识点暂无可用于费曼判题的代表题"));
+            .map(PublicProblemRepository.RepresentativeProblem::id)
+            .orElse(null);
     Long id =
         jdbc.queryForObject(
             "INSERT INTO feynman_session (user_id, kc_code, problem_id, tutee_state, status) "
@@ -57,7 +58,7 @@ public class FeynmanSessionService {
             Long.class,
             userId,
             kcCode,
-            representative.id(),
+            problemId,
             state);
     return new SessionResponse(id == null ? 0L : id, userId, kcCode, "OPEN", readJson(state));
   }
@@ -106,9 +107,11 @@ public class FeynmanSessionService {
       long userId, long sessionId) {
     SessionData session = loadSession(userId, sessionId);
     List<Misconception> misconceptions = parseMisconceptions(session.tuteeState());
+    // 主题：课程 KC 取中文名让 LLM 生成贴该 KC 的 bug；课件外概念 kcCode 本身即概念词。
+    String topic = kcTopic(session.kcCode());
     FeynmanGraphClient.BugExposure exposure =
         graphClient
-            .bugExposure(session.kcCode(), misconceptions)
+            .bugExposure(session.kcCode(), topic, misconceptions)
             .orElseThrow(
                 () ->
                     new BusinessException(
@@ -215,6 +218,30 @@ public class FeynmanSessionService {
           arr, objectMapper.getTypeFactory().constructCollectionType(List.class, Misconception.class));
     } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
       return List.of();
+    }
+  }
+
+  /**
+   * 该 KC 的人类可读主题：课程 KC 取 {@code course_kc.kc_name}（让 LLM 生成贴该 KC 的 bug）；
+   * 课件外概念在 kc_code 列本就是概念词，直接用作主题。查不到一律回退 kcCode，绝不阻塞。
+   */
+  private String kcTopic(String kcCode) {
+    if (kcCode == null || kcCode.isBlank()) {
+      return kcCode;
+    }
+    try {
+      String name =
+          jdbc
+              .query(
+                  "SELECT kc_name FROM course_kc WHERE pack_id = 43 AND kc_code = ? LIMIT 1",
+                  (rs, rowNum) -> rs.getString("kc_name"),
+                  kcCode)
+              .stream()
+              .findFirst()
+              .orElse(null);
+      return name == null || name.isBlank() ? kcCode : name;
+    } catch (RuntimeException ex) {
+      return kcCode;
     }
   }
 

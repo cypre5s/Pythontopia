@@ -260,14 +260,35 @@ describe('BugMinePanel', () => {
     expect(wrapper.text()).toContain('久未复习');
   });
 
-  it('locks L4 cards when depth is below requirement', async () => {
+  it('omits locked layers from the diagnostic dropdown (depth gating)', async () => {
     const wrapper = mountPanel();
     const learning = useLearningStore();
     learning.bugMine.session = buildSession({ depthLayer: 2 });
     await flushPromises();
 
-    expect(wrapper.find('[data-testid="card-assumption"]').text()).toContain('需先下探到 L4');
-    expect(wrapper.find('[data-testid="card-hint-1"]').text()).toContain('需先下探到 L4');
+    // depthLayer=2 → 诊断层下拉只列已解锁的 L1/L2，锁定的 L4 不可选、内容也不渲染。
+    const options = wrapper.find('[data-testid="layer-select"]').findAll('option');
+    expect(options).toHaveLength(2);
+    expect(options.map((o) => o.text()).join(' ')).not.toContain('L4');
+    expect(wrapper.find('[data-testid="card-assumption"]').exists()).toBe(false);
+    // 默认停在系统判定的当前层（L2），展示反例卡。
+    expect(wrapper.find('[data-testid="card-counter-example"]').exists()).toBe(true);
+  });
+
+  it('switches the visible diagnostic layer via the dropdown (unlocked only)', async () => {
+    const wrapper = mountPanel();
+    const learning = useLearningStore();
+    learning.bugMine.session = buildSession({ depthLayer: 4 });
+    await flushPromises();
+
+    // 默认停在当前系统判定层 L4（分层提示）。
+    expect(wrapper.find('[data-testid="card-assumption"]').exists()).toBe(true);
+    // 下拉切回已解锁的 L2 → 显示反例卡、隐藏 L4 内容。
+    await wrapper.find('[data-testid="layer-select"]').setValue('2');
+    expect(wrapper.find('[data-testid="card-counter-example"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="card-assumption"]').exists()).toBe(false);
+    // 作答框（原题重试）始终常驻。
+    expect(wrapper.find('[data-testid="retry-area"]').exists()).toBe(true);
   });
 
   it('reveals hint layer 2 when depth allows and button clicked', async () => {

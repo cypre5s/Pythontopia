@@ -5,15 +5,16 @@
 // 掌握度 / 达标后端权威（submitBossAttempt 入库）；本 store 只持久化 run 进度（localStorage）。
 // 详见 docs/plans/2026-06-19-endless-roguelike-rebuild.md。
 
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { defineStore } from 'pinia';
 import { generateRogueMap } from '@/data/rogueMap';
 import {
   EXPEDITION_MAX_HP,
   NODE_KIND_POOLS,
   REST_HEAL,
+  computeRunDifficulty,
 } from '@/data/rogueConfig';
-import { ROGUE_RELICS } from '@/data/rogueRelics';
+import { ROGUE_RELICS, relicById } from '@/data/rogueRelics';
 import { pickEventScenario, type RogueEventChoice } from '@/data/rogueEvents';
 import { kcDisplayName } from '@/data/kcNames';
 import { useKcFrontier } from '@/composables/useKcFrontier';
@@ -21,9 +22,12 @@ import { useChallengeJudge, isJudgeUnavailable } from '@/composables/useChalleng
 import { useProfileSignals } from '@/composables/useProfileSignals';
 import {
   deleteExpeditionRun,
+  fetchExpeditionLeaderboard,
   fetchExpeditionRun,
   requestFrontierPicks,
   saveExpeditionRun,
+  submitExpeditionScore,
+  type ExpeditionLeaderboard,
   type ExpeditionRunSnapshot,
   type FrontierPick,
 } from '@/api/expedition';
@@ -35,6 +39,7 @@ import type {
   RogueHistoryEntry,
   RogueNode,
   RogueNodeKind,
+  RogueNodeState,
   RogueRunPhase,
 } from '@/types/rogue';
 
@@ -88,9 +93,19 @@ export interface RogueRunSaveSummary {
   lastPlayedAt: string | null;
 }
 
-/** 续局允许的 phase（中途答题/事件刷新统一回退到地图）。 */
+/** 续局允许的 phase（中途答题/事件/领增益统一回退到地图，避免存档因瞬时态被判废）。 */
 function isResumablePhase(p: RogueRunPhase): boolean {
-  return p === 'map' || p === 'challenge' || p === 'event';
+  return p === 'map' || p === 'challenge' || p === 'event' || p === 'reward';
+}
+
+/** 从数组里无放回随机取最多 n 个（Fisher–Yates 部分洗牌）。 */
+function sampleN<T>(arr: readonly T[], n: number): T[] {
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j] as T, copy[i] as T];
+  }
+  return copy.slice(0, Math.max(0, n));
 }
 
 /**
@@ -112,14 +127,48 @@ function sanitizeRunNodes(nodes: RogueNode[]): RogueNode[] {
   );
 }
 
+const VALID_NODE_KINDS: ReadonlySet<RogueNodeKind> = new Set<RogueNodeKind>([
+  'battle', 'elite', 'event', 'bug', 'chest', 'rest', 'boss',
+]);
+const VALID_NODE_STATES: ReadonlySet<RogueNodeState> = new Set<RogueNodeState>([
+  'locked', 'available', 'current', 'cleared', 'bypassed',
+]);
+
+/** 逐节点结构校验：损坏 / 半截存档（缺 next、state 非法等）不可信，丢弃回退新局。 */
+function isValidRogueNode(value: unknown): value is RogueNode {
+  if (!value || typeof value !== 'object') return false;
+  const n = value as Record<string, unknown>;
+  return (
+    typeof n.id === 'string'
+    && typeof n.layer === 'number' && Number.isFinite(n.layer)
+    && typeof n.col === 'number' && Number.isFinite(n.col)
+    && typeof n.difficulty === 'number' && Number.isFinite(n.difficulty)
+    && VALID_NODE_KINDS.has(n.kind as RogueNodeKind)
+    && VALID_NODE_STATES.has(n.state as RogueNodeState)
+    && Array.isArray(n.next) && n.next.every((x) => typeof x === 'string')
+    && (n.kcCode === null || typeof n.kcCode === 'string')
+    && (n.challengeKind === null || typeof n.challengeKind === 'string')
+  );
+}
+
+/** 整份快照结构校验（顶层标量 + 每个节点）：任一不合法即视为不可用存档。 */
+function isValidSnapshot(value: unknown): value is PersistShape {
+  if (!value || typeof value !== 'object') return false;
+  const s = value as Record<string, unknown>;
+  if (typeof s.phase !== 'string') return false;
+  if (typeof s.hp !== 'number' || !Number.isFinite(s.hp)) return false;
+  if (typeof s.layers !== 'number' || !Number.isFinite(s.layers)) return false;
+  if (!Array.isArray(s.nodes) || s.nodes.length === 0) return false;
+  return s.nodes.every(isValidRogueNode);
+}
+
 function loadPersisted(): PersistShape | null {
   if (typeof window === 'undefined') return null;
   try {
     const raw = window.localStorage.getItem(PERSIST_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as PersistShape;
-    if (!parsed || !Array.isArray(parsed.nodes)) return null;
-    return parsed;
+    const parsed = JSON.parse(raw) as unknown;
+    return isValidSnapshot(parsed) ? parsed : null;
   } catch {
     return null;
   }
@@ -151,6 +200,8 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
   // 当前进入的节点 + 题目（不持久化：刷新中途答题安全退回地图）。
   const activeNode = ref<RogueNode | null>(null);
   const activeProblem = ref<BossProblemDto | null>(null);
+  // 本次挑战实际难度（= 基准 node.difficulty 经局内气势/连败自适应后的值；驱动出题与计分）。
+  const activeDifficulty = ref(0);
   const activeCode = ref('');
   const challengeResult = ref<BossAttemptResultDto | null>(null);
   const loading = ref(false);
@@ -160,6 +211,8 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
   // 概念事件：进入 event 节点先选应对；study 选项把本题得分 ×eventScoreMult。
   const activeEventText = ref('');
   const eventScoreMult = ref(1);
+  // 宝箱 / 精英通关的「三选一」学习增益候选（reward 阶段，瞬时态不入快照）。
+  const rewardChoices = ref<string[]>([]);
   // BOSS 多阶段进度（连过 bossPhasesTotal 道才通关）。
   const bossPhase = ref(1);
   const bossPhasesTotal = ref(BOSS_PHASES);
@@ -167,6 +220,9 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
   const isDaily = ref(false);
   const dailyDoneDate = ref<string | null>(loadDailyDate());
   const dailyAvailable = computed(() => dailyDoneDate.value !== todayStr());
+  // 班级排行榜（最高单局得分）：结算上报 + 起始页拉取；本局成绩只上报一次。
+  const leaderboard = ref<ExpeditionLeaderboard | null>(null);
+  const scoreReported = ref(false);
 
   // ── 派生 ──
   const nodesByLayer = computed<RogueNode[][]>(() => {
@@ -197,7 +253,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
   });
 
   function isUsableSavedRun(snap: PersistShape | null): snap is PersistShape {
-    return !!snap && Array.isArray(snap.nodes) && snap.nodes.length > 0 && isResumablePhase(snap.phase);
+    return isValidSnapshot(snap) && isResumablePhase(snap.phase);
   }
 
   function initialCodeFor(problem: BossProblemDto): string {
@@ -267,6 +323,9 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     relics.value = Array.isArray(p.relics) ? p.relics : [];
     isDaily.value = p.isDaily ?? false;
     history.value = Array.isArray(p.history) ? p.history : [];
+    // 续局统一回退到地图：BOSS 多阶段不跨会话恢复（重进 BOSS 由 enterNode 重置为第 1 阶段），
+    // 这里显式归零避免上一局的 bossPhase 残留被渲染。
+    bossPhase.value = 1;
     clearActive();
   }
 
@@ -299,37 +358,45 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     return true;
   }
 
-  /** 跨设备进页：本地无进行中的局时，静默拉取后端活跃 run 续上（供页面 onMounted 调）。 */
-  async function resumeFromBackend(): Promise<boolean> {
-    if (phase.value !== 'idle') return false;
-    try {
-      const snap = await fetchExpeditionRun();
-      if (snap && Array.isArray(snap.nodes) && snap.nodes.length > 0 && isResumablePhase(snap.phase)) {
-        applySnapshot(snap); // applySnapshot 已把可续 phase 归一到 'map'
-        return true;
-      }
-    } catch {
-      /* 后端不可达：保持 idle，玩家可手动开始 */
-    }
-    return false;
-  }
-
-  /** 获得一件未拥有的学习增益（宝箱 / 精英通关）；集齐则给提示不重复发。 */
-  function grantRelic(): void {
-    const owned = new Set(relics.value);
-    const candidates = ROGUE_RELICS.filter((r) => !owned.has(r.id));
-    if (candidates.length === 0) {
-      toast.show('已集齐全部学习增益', 'info');
-      return;
-    }
-    const relic = candidates[Math.floor(Math.random() * candidates.length)];
-    if (!relic) return;
-    relics.value = [...relics.value, relic.id];
-    if (relic.id === 'sturdy_notes') {
+  /** 把一件学习增益落到 run 上（仅厚实笔记有即时数值效果，其余在计分/扣血/回血时按需读取）。 */
+  function applyRelic(id: string): void {
+    if (relics.value.includes(id)) return;
+    relics.value = [...relics.value, id];
+    if (id === 'sturdy_notes') {
       maxHp.value += 1;
       hp.value += 1;
     }
-    toast.show(`获得学习增益：${relic.icon} ${relic.name}`, 'success');
+    const relic = relicById(id);
+    if (relic) toast.show(`获得学习增益：${relic.icon} ${relic.name}`, 'success');
+  }
+
+  /**
+   * 开启「三选一」学习增益（宝箱 / 精英通关触发）：从未拥有的增益里抽最多 3 个候选交玩家抉择，
+   * 把「领奖」从随机发放升级为 roguelike 式取舍。已集齐则折算少量得分、直接回地图。
+   */
+  function openReward(): void {
+    const owned = new Set(relics.value);
+    const pool = ROGUE_RELICS.filter((r) => !owned.has(r.id)).map((r) => r.id);
+    if (pool.length === 0) {
+      score.value += 30;
+      toast.show('已集齐全部学习增益 · 折算 +30 分', 'info');
+      rewardChoices.value = [];
+      phase.value = 'map';
+      persist();
+      return;
+    }
+    rewardChoices.value = sampleN(pool, 3);
+    phase.value = 'reward';
+    persist();
+  }
+
+  /** 三选一领取：选中的增益生效并回到地图（未选中的弃掉）。 */
+  function chooseReward(id: string): void {
+    if (phase.value !== 'reward') return;
+    if (rewardChoices.value.includes(id)) applyRelic(id);
+    rewardChoices.value = [];
+    phase.value = 'map';
+    persist();
   }
 
   function resolveChallenge(
@@ -364,7 +431,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
 
   async function startRun(
     focus: number | null,
-    opts: { rng?: () => number; daily?: boolean; fresh?: boolean } = {},
+    opts: { rng?: () => number; daily?: boolean } = {},
   ): Promise<void> {
     focusChapter.value = focus;
     // 后端权威「知识前沿选择器」（下沉）：取一批候选；失败/超时回退本地 useKcFrontier，绝不阻塞玩家。
@@ -402,6 +469,8 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     bossPhase.value = 1;
     isDaily.value = opts.daily ?? false;
     summaryReported.value = false;
+    scoreReported.value = false;
+    challenge.clearPrefetch();
     clearActive();
     phase.value = 'map';
     persist();
@@ -420,15 +489,17 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
   function clearActive(): void {
     activeNode.value = null;
     activeProblem.value = null;
+    activeDifficulty.value = 0;
     activeCode.value = '';
     challengeResult.value = null;
     elapsedSec.value = 0;
     errorMessage.value = '';
     activeEventText.value = '';
     eventScoreMult.value = 1;
+    rewardChoices.value = [];
   }
 
-  /** 标记节点通关：解锁出边、同层其它可选节点置为绕过（不可回头）。 */
+  /** 标记节点通关：解锁出边、同层其它可选节点置为绕过（不可回头）、过半程小回血。 */
   function markCleared(node: RogueNode): void {
     node.state = 'cleared';
     for (const sib of nodes.value) {
@@ -439,6 +510,21 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     for (const id of node.next) {
       const target = nodeById(id);
       if (target && target.state === 'locked') target.state = 'available';
+    }
+    maybeMilestone(node);
+  }
+
+  /** 首次到达「半程层」时小回 1 点体力（每层至多通关 1 个节点 → 天然只触发一次；续局不重复）。 */
+  function maybeMilestone(node: RogueNode): void {
+    const halfway = Math.floor((layers.value - 1) / 2);
+    if (halfway <= 0 || node.layer !== halfway) return;
+    const otherCleared = nodes.value.some(
+      (n) => n.layer === halfway && n.id !== node.id && n.state === 'cleared',
+    );
+    if (otherCleared) return;
+    if (hp.value < maxHp.value) {
+      hp.value = Math.min(maxHp.value, hp.value + 1);
+      toast.show('已过半程 · 恢复 1 点体力', 'success');
     }
   }
 
@@ -451,12 +537,15 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     elapsedSec.value = 0;
     phase.value = 'challenge';
     loading.value = true;
+    // 局内自适应：连胜抬难度、近期连败温和降（不改地图基准 node.difficulty，只影响本次出题/计分）。
+    const recentFailures = history.value.slice(0, 2).filter((h) => !h.passed).length;
+    activeDifficulty.value = computeRunDifficulty(node.difficulty, momentum.value, recentFailures);
     persist();
     try {
       activeProblem.value = await challenge.fetchProblem({
         kc: node.kcCode ?? '',
         kind: node.challengeKind,
-        difficulty: node.difficulty,
+        difficulty: activeDifficulty.value,
       });
       activeCode.value = initialCodeFor(activeProblem.value);
     } catch (error) {
@@ -465,6 +554,27 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
       loading.value = false;
     }
   }
+
+  /**
+   * 预取所有「可前往的战斗类节点」的题目：落到地图时调用，玩家点哪个都秒开。
+   * 难度按当前气势/连败算，与 beginChallenge 同口径 → 进入时命中缓存。
+   * 跳过事件节点（「钻研」会临时 +1 难度，预取的难度会对不上）与营地/宝箱（本就不出题）。
+   */
+  function prefetchAvailable(): void {
+    if (phase.value !== 'map') return;
+    const recentFailures = history.value.slice(0, 2).filter((h) => !h.passed).length;
+    for (const node of nodes.value) {
+      if (node.state !== 'available') continue;
+      if (!node.kcCode || !node.challengeKind || node.kind === 'event') continue;
+      const difficulty = computeRunDifficulty(node.difficulty, momentum.value, recentFailures);
+      challenge.prefetchProblem({ kc: node.kcCode, kind: node.challengeKind, difficulty });
+    }
+  }
+
+  // 落到地图（开局 / 通关返回 / 营地 / 宝箱 / 事件复盘后）→ 预取可达节点题目，减少「正在出题…」等待。
+  watch(phase, (p) => {
+    if (p === 'map') prefetchAvailable();
+  });
 
   async function enterNode(id: string): Promise<void> {
     if (phase.value !== 'map') return;
@@ -483,8 +593,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     }
     if (node.kind === 'chest') {
       markCleared(node);
-      grantRelic();
-      persist();
+      openReward();
       return;
     }
 
@@ -527,11 +636,15 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
   }
 
   function scoreFor(node: RogueNode): number {
-    const base = node.difficulty * 10;
+    // 计分以「本次实际难度」为底（连胜抬难度后通关给更高回报）；未进战斗时回退基准难度。
+    const effective = activeDifficulty.value > 0 ? activeDifficulty.value : node.difficulty;
+    const base = effective * 10;
     const momentumBonus = Math.round(base * momentum.value * 0.1);
     const kindMult = node.kind === 'elite' || node.kind === 'boss' ? 1.5 : 1;
     const relicMult = hasRelic('combo_scholar') ? 1.2 : 1;
-    return Math.round((base + momentumBonus) * kindMult * relicMult * eventScoreMult.value);
+    // 「急智」：30 秒内通关额外 +50% 得分（奖励快速作答，不影响判题真源）。
+    const speedMult = hasRelic('quick_thinker') && elapsedSec.value <= 30 ? 1.5 : 1;
+    return Math.round((base + momentumBonus) * kindMult * relicMult * speedMult * eventScoreMult.value);
   }
 
   async function submitChallenge(): Promise<void> {
@@ -566,13 +679,19 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
           return;
         }
         markCleared(node);
-        // 精英通关给一件学习增益（roguelike 成长）。
-        if (node.kind === 'elite') grantRelic();
+        // 精英通关的学习增益走「三选一」（continueAfterChallenge 里玩家看完判题结果再选）。
       } else {
         const resilience = signals.value.resilience ?? 0.5;
         // 温和：低韧性扣得更少，避免逼脆弱的学生；「沉静心法」再 -1（至少扣 1）。
         let loss = resilience < 0.4 ? 1 : 2;
         if (hasRelic('calm_mind')) loss = Math.max(1, loss - 1);
+        // 「急救包」：本局首次答错不扣血。用 history 里此前的失败数判定（已含本次失败条目 → 排除自身），
+        // 从持久化历史派生 → 续局也不会被重置而重复触发。
+        const priorMistakes = history.value.slice(1).filter((h) => !h.passed).length;
+        if (hasRelic('first_aid') && priorMistakes === 0) {
+          loss = 0;
+          toast.show('急救包：本局首次失误免于扣体力', 'info');
+        }
         hp.value = Math.max(0, hp.value - loss);
         // 「复盘回气」：气势减半而非清零。
         momentum.value = hasRelic('second_wind') ? Math.floor(momentum.value / 2) : 0;
@@ -590,21 +709,46 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
   function continueAfterChallenge(): void {
     const node = activeNode.value;
     const wasBoss = node?.kind === 'boss';
+    const wasElite = node?.kind === 'elite';
     const passed = challengeResult.value?.passed ?? false;
     clearActive();
     if (hp.value <= 0) {
       phase.value = 'over';
     } else if (wasBoss && passed) {
       phase.value = 'cleared';
+    } else if (wasElite && passed) {
+      // 精英通关 → 三选一领增益（openReward 内部置 phase='reward' 并 persist；集齐则回地图）。
+      openReward();
     } else {
       phase.value = 'map';
     }
-    // 每日挑战：本局收尾即算「今日已挑战」（无论胜负，给予参与认定）。
-    if ((phase.value === 'over' || phase.value === 'cleared') && isDaily.value) {
+    // 本局收尾：上报班级排行榜成绩（每局一次）；每日挑战记「今日已挑战」（无论胜负）。
+    if (phase.value === 'over' || phase.value === 'cleared') {
+      if (isDaily.value) {
+        const d = todayStr();
+        dailyDoneDate.value = d;
+        saveDailyDate(d);
+      }
+      void reportScore();
+    }
+    persist();
+  }
+
+  /**
+   * 主动结束本局：直接进结算页（掌握度/判题结果已实时入库，永不回滚）。
+   * 区别于 abort（弃局清后端活跃 run + 本地缓存、回到起始页）。每日挑战照常算「今日已挑战」。
+   */
+  function finishRun(): void {
+    if (phase.value === 'idle' || phase.value === 'over' || phase.value === 'cleared') return;
+    clearActive();
+    phase.value = 'over';
+    if (isDaily.value) {
       const d = todayStr();
       dailyDoneDate.value = d;
       saveDailyDate(d);
     }
+    // 主动结束也算一局有效成绩：上报班级排行榜（reportScore 内部 scoreReported 防重复）。
+    void reportScore();
     persist();
   }
 
@@ -634,6 +778,26 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
 
   function tickSecond(): void {
     if (phase.value === 'challenge' && !loading.value) elapsedSec.value += 1;
+  }
+
+  /** 起始/结算页拉取班级排行榜（best-effort，不阻塞）。 */
+  async function loadLeaderboard(): Promise<void> {
+    const board = await fetchExpeditionLeaderboard();
+    if (board) leaderboard.value = board;
+  }
+
+  /** 本局结束上报成绩（每局至多一次）；返回的最新榜直接刷新本地缓存。best-effort。 */
+  async function reportScore(): Promise<void> {
+    if (scoreReported.value) return;
+    scoreReported.value = true;
+    const board = await submitExpeditionScore({
+      score: score.value,
+      depth: depth.value,
+      bestMomentum: bestMomentum.value,
+      cleared: phase.value === 'cleared',
+      daily: isDaily.value,
+    });
+    if (board) leaderboard.value = board;
   }
 
   async function maybeReportStar(): Promise<void> {
@@ -675,12 +839,14 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     history,
     activeNode,
     activeProblem,
+    activeDifficulty,
     activeCode,
     challengeResult,
     loading,
     elapsedSec,
     errorMessage,
     activeEventText,
+    rewardChoices,
     hasSavedRun,
     savedRunSummary,
     nodesByLayer,
@@ -692,13 +858,16 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     refreshSavedRun,
     resumeSavedRun,
     saveCheckpoint,
-    resumeFromBackend,
     enterNode,
     chooseEvent,
     submitChallenge,
     continueAfterChallenge,
+    chooseReward,
+    finishRun,
     retryChallenge,
     abort,
     tickSecond,
+    leaderboard,
+    loadLeaderboard,
   };
 });

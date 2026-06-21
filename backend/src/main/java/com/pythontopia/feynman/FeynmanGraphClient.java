@@ -61,7 +61,8 @@ public class FeynmanGraphClient {
    * 代码找茬：请求学弟写出含 bug 的代码 + 真实 bug 行号（graph /agents/feynman/bug-exposure）。
    * 下游不可达返回 empty，由调用方决定降级或报错。
    */
-  public Optional<BugExposure> bugExposure(String kcCode, List<Misconception> misconceptions) {
+  public Optional<BugExposure> bugExposure(
+      String kcCode, String topic, List<Misconception> misconceptions) {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
     GraphInternalTokenSupport.apply(headers, properties);
@@ -69,7 +70,7 @@ public class FeynmanGraphClient {
         (misconceptions == null ? List.<Misconception>of() : misconceptions)
             .stream().map(GraphMisconception::from).toList();
     HttpEntity<BugExposureInput> entity =
-        new HttpEntity<>(new BugExposureInput(kcCode, wire), headers);
+        new HttpEntity<>(new BugExposureInput(kcCode, topic, wire), headers);
     try {
       GraphBugExposure body =
           restTemplate
@@ -89,6 +90,7 @@ public class FeynmanGraphClient {
   /** 请求体：对齐 graph schemas.feynman.FeynmanBugExposureInput（snake_case）。 */
   record BugExposureInput(
       @JsonProperty("kc_code") String kcCode,
+      @JsonProperty("topic") String topic,
       @JsonProperty("misconceptions") List<GraphMisconception> misconceptions) {}
 
   /** graph 代码找茬原始响应（snake_case）；fixed_code 是答案，不进领域/前端。 */

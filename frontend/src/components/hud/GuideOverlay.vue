@@ -613,6 +613,9 @@ function goToPanel(step: OrchestratorPlanStep): void {
 }
 .guide-thread {
   flex: 1 1 auto;
+  /* flex 列子项默认 min-height:auto 不会收缩到内容以下，导致内容超高时整条撑开而非滚动；
+     置 0 才能让 overflow-y 生效（对齐 CompanionDock 的 .companion__messages）。 */
+  min-height: 0;
   overflow-y: auto;
   padding: 12px;
   display: flex;

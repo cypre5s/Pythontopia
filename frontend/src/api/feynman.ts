@@ -52,6 +52,10 @@ export async function startFeynmanSession(kcCode: string): Promise<FeynmanSessio
   return response.data;
 }
 
+// 费曼「教学/出题」要等 graph LLM（学弟评估 / 现生 bug），放宽到 25s，
+// 覆盖全局默认 10s（< 后端 graphRestTemplate 30s、≥ graph LLM 18s，三层对齐）。
+const FEYNMAN_LLM_TIMEOUT_MS = 25_000;
+
 export async function teachFeynmanSession(
   sessionId: number,
   explanation: string,
@@ -59,6 +63,7 @@ export async function teachFeynmanSession(
   const response = await http.post<FeynmanTurnDto>(
     `/api/feynman/sessions/${encodeURIComponent(String(sessionId))}/teach`,
     { explanation },
+    { timeout: FEYNMAN_LLM_TIMEOUT_MS },
   );
   return response.data;
 }
@@ -78,6 +83,7 @@ export async function huntFeynmanBug(sessionId: number): Promise<FeynmanBugHuntD
   const response = await http.post<FeynmanBugHuntDto>(
     `/api/feynman/sessions/${encodeURIComponent(String(sessionId))}/bug-hunt`,
     {},
+    { timeout: FEYNMAN_LLM_TIMEOUT_MS },
   );
   return response.data;
 }

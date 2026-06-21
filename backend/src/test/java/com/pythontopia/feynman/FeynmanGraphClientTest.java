@@ -84,6 +84,7 @@ class FeynmanGraphClientTest {
     server
         .expect(MockRestRequestMatchers.requestTo("http://graph.test/agents/feynman/bug-exposure"))
         .andExpect(MockRestRequestMatchers.jsonPath("$.kc_code").value("PY43-KC-004"))
+        .andExpect(MockRestRequestMatchers.jsonPath("$.topic").value("控制台输入与数据类型转换"))
         .andExpect(
             MockRestRequestMatchers.jsonPath("$.misconceptions[0].tag").value("input_type_string"))
         .andRespond(
@@ -103,6 +104,7 @@ class FeynmanGraphClientTest {
     Optional<FeynmanGraphClient.BugExposure> exposure =
         client.bugExposure(
             "PY43-KC-004",
+            "控制台输入与数据类型转换",
             List.of(new Misconception("input_type_string", List.of(601L), false)));
 
     assertThat(exposure).isPresent();

@@ -249,6 +249,41 @@ async def test_expose_bug_without_history_falls_back_to_generic() -> None:
     assert out.bug_line_indices  # 至少标出一行 bug
 
 
+async def test_expose_bug_non_courseware_concept_uses_topic_in_prompt() -> None:
+    """课件外概念（非 pack KC）+ topic：LLM 生成贴该概念的 bug，且把该主题带进 prompt。"""
+
+    class CapturingProvider(LlmProvider):
+        def __init__(self, payload: dict) -> None:
+            self.payload = payload
+            self.last_messages: list[dict[str, str]] | None = None
+
+        async def chat(self, messages, **kwargs):  # type: ignore[override]
+            self.last_messages = messages
+            return LlmResponse(content_json=self.payload)
+
+        async def chat_stream(self, messages, **kwargs) -> AsyncIterator[str]:  # type: ignore[override]
+            yield ""
+
+    provider = CapturingProvider(
+        {
+            "buggy_code": "import re\nm = re.match('a', 'ba')\nprint(m.group())",
+            "fixed_code": "import re\nm = re.search('a', 'ba')\nprint(m.group())",
+            "hint_md": "match 从头匹配还是任意位置？",
+        }
+    )
+
+    out = await FeynmanTuteeAgent(provider).expose_bug(
+        FeynmanBugExposureInput(kc_code="正则表达式", topic="正则表达式", misconceptions=[])
+    )
+
+    # 课件外概念（chapter 未知）走不到 bank，但带 topic 仍能由 LLM 现生贴该概念的 bug。
+    assert out.source == "generic_beginner_bug"
+    assert out.buggy_code is not None
+    assert out.bug_line_indices
+    blob = " ".join(m.get("content", "") for m in (provider.last_messages or []))
+    assert "正则表达式" in blob
+
+
 def test_canned_tag_for_kc_maps_chapter_to_relevant_bug() -> None:
     # 兜底 bug 不再按 kc_code 哈希乱挑，而是按章节主题挑：循环 / 数据结构 / 类型各取对应陷阱。
     pick = FeynmanTuteeAgent._canned_tag_for_kc

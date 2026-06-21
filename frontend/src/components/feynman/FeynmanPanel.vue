@@ -5,6 +5,7 @@ import { useReducedMotion } from '@/composables/useReducedMotion';
 import { useFeynmanStore } from '@/stores/feynman';
 import BugHunterGame from '@/components/feynman/BugHunterGame.vue';
 import { kcDisplayName } from '@/data/kcNames';
+import { isFeynmanSelfTestKc } from '@/data/feynmanKcs';
 import type { FeynmanJudgeResultDto } from '@/api/feynman';
 
 const props = defineProps<{
@@ -50,6 +51,8 @@ const misconceptionSummary = computed(() => misconceptions.value.map((item) => i
 const latestTurn = computed(() => turns.value.at(-1) ?? null);
 const teachHint = computed(() => store.bugHunt?.hintMd ?? '');
 const kcLabel = computed(() => kcDisplayName(props.kcCode));
+// 概念模式：非课程 KC（课件外自由概念）→ 通识知识，以代码找茬为准、不计入掌握度。
+const isConcept = computed(() => !isFeynmanSelfTestKc(props.kcCode));
 
 /** 学弟中性描述代码在做什么（不暴露「我以为…」式自我纠错）。 */
 const TUTEE_CODE_DESC: Record<string, string> = {
@@ -57,13 +60,21 @@ const TUTEE_CODE_DESC: Record<string, string> = {
   input_type_string: '让用户输入年龄，然后直接加 1 打印出来。',
   list_alias_mutation: '先建列表 a，令 b = a，往 b 里 append 一个数，再 print(a) 看结果。',
 };
+// 仅当 bug 代码确实匹配该题型签名时才套固定文案：LLM 现生的 bug（贴任意 KC/课件外概念）会复用
+// 兜底 tag，若无脑套文案会出现「正则的题配『我写了个循环』开场白」的错位，此时回退中性开场白。
+const TUTEE_DESC_SIGNATURE: Record<string, RegExp> = {
+  off_by_one_range: /range\s*\(/,
+  input_type_string: /input\s*\(/,
+  list_alias_mutation: /\.append\s*\(/,
+};
 const tuteeVoice = computed(() => {
   const hunt = store.bugHunt;
   if (!hunt?.buggyCode) return '';
-  return (
-    (hunt.misconceptionTag && TUTEE_CODE_DESC[hunt.misconceptionTag]) ||
-    '我按自己的理解写了段代码，你来帮我看看。'
-  );
+  const tag = hunt.misconceptionTag ?? '';
+  const desc = TUTEE_CODE_DESC[tag];
+  const signature = TUTEE_DESC_SIGNATURE[tag];
+  if (desc && signature && signature.test(hunt.buggyCode)) return desc;
+  return '我按自己的理解写了段代码，你来帮我看看哪里不对。';
 });
 
 const hasChat = computed(
@@ -124,6 +135,12 @@ async function submitJudge(): Promise<void> {
           {{ kcLabel }}
         </h2>
       </div>
+      <span
+        v-if="isConcept"
+        class="feynman-panel__concept-badge"
+        data-testid="feynman-concept-badge"
+        title="课件外概念 · 通识知识：以代码找茬为准，不计入掌握度"
+      >通识 · 非课件</span>
       <p
         v-if="currentSession && misconceptionSummary"
         class="feynman-panel__misc"
@@ -369,6 +386,18 @@ async function submitJudge(): Promise<void> {
   background: var(--pyt-color-warning-bg);
   font-family: var(--pyt-font-pixel);
   font-size: var(--pyt-font-size-xs);
+}
+
+.feynman-panel__concept-badge {
+  flex-shrink: 0;
+  padding: 2px 10px;
+  border: 1px solid var(--pyt-color-info);
+  border-radius: var(--pyt-radius-full);
+  background: var(--pyt-color-info-bg);
+  color: var(--pyt-color-info);
+  font-family: var(--pyt-font-pixel);
+  font-size: var(--pyt-font-size-xs);
+  white-space: nowrap;
 }
 
 .feynman-panel__bar-actions {

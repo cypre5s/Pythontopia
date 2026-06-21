@@ -61,6 +61,7 @@ const menuSections: MenuSection[] = [
       { id: 'arena', icon: `${ICON_BASE}/flag.svg`, label: '无尽远征', action: () => go('/expedition') },
       { id: 'problems', icon: `${ICON_BASE}/book-open.svg`, label: '题目列表', action: () => go('/problems') },
       { id: 'bug-mine', icon: `${ICON_BASE}/sword.svg`, label: '错题矿洞', action: () => go('/bug-mine') },
+      { id: 'feynman', icon: `${ICON_BASE}/book-open.svg`, label: '费曼反演', action: () => go('/feynman') },
       { id: 'tutor', icon: `${ICON_BASE}/save.svg`, label: 'AI 助教', action: () => go('/tutor') },
     ],
   },

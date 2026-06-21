@@ -30,9 +30,11 @@ AGENT_NAME = "FeynmanTuteeAgent"
 
 # 代码找茬内置的三类初学者陷阱（与 _mistake_for / _fixed_code_for 的 tag 对齐）。
 CANNED_BUG_TAGS = ("off_by_one_range", "input_type_string", "list_alias_mutation")
-# 代码找茬是限时小游戏：未知 tag 走 LLM 生成 bug 代码时给一个紧超时，超时即退化为
-# 确定性常见陷阱，避免慢 LLM 拖过前端 10s axios 超时让整局卡住。
-_BUG_LLM_TIMEOUT_S = 8.0
+# LLM 生成 bug 代码的超时：放宽到 18s，让「贴该 KC / 课件外概念」的现生例子真能产出
+# （旧 8s 在 ECS 上常超时→退化通用罐头，导致选「正则表达式」却出循环题）。
+# 仍小于后端 graphRestTemplate read=30s 与前端费曼出题 25s（见 api/feynman.ts），三层对齐；
+# 真超时才退化确定性常见陷阱，绝不卡死整局。
+_BUG_LLM_TIMEOUT_S = 18.0
 # LLM 生成代码目标行数区间（教学向：比单行 demo 更接近真实练习片段）。
 _BUG_MIN_LINES = 6
 _BUG_MAX_LINES = 14
@@ -137,17 +139,18 @@ class FeynmanTuteeAgent:
             bank = self._bug_from_bank_tag(target.tag, "real_misconception")
             if bank is not None:
                 return bank
-            llm = await self._bug_from_llm(inp.kc_code, target.tag)
+            llm = await self._bug_from_llm(inp.kc_code, target.tag, inp.topic)
             if llm is not None:
                 return llm
             legacy = self._bug_from_tag(target.tag, "real_misconception")
             if legacy is not None:
                 return legacy
         # 无真实误解史（或真实 tag 无任何样本）：按 KC 章节从 bug 库抽 → generic LLM → canned。
+        # 课件外概念（chapter 未知）走不到 bank，但带 topic 仍能由 LLM 现生贴该概念的 bug。
         bank_generic = self._bug_from_bank_chapter(inp.kc_code, "generic_beginner_bug")
         if bank_generic is not None:
             return bank_generic
-        llm_generic = await self._bug_from_llm_generic(inp.kc_code)
+        llm_generic = await self._bug_from_llm_generic(inp.kc_code, inp.topic)
         if llm_generic is not None:
             return llm_generic
         fallback_tag = self._canned_tag_for_kc(inp.kc_code)
@@ -200,22 +203,26 @@ class FeynmanTuteeAgent:
             hint_md=self._bug_hint_for(tag),
         )
 
-    async def _bug_from_llm_generic(self, kc_code: str) -> FeynmanBugExposureOutput | None:
-        """无真实误解史时，按 KC 章节主题 LLM 生成长代码初学者陷阱。"""
+    async def _bug_from_llm_generic(
+        self, kc_code: str, topic: str | None = None
+    ) -> FeynmanBugExposureOutput | None:
+        """无真实误解史时，按 KC 主题（优先显式 topic，回退章节主题）LLM 生成长代码初学者陷阱。"""
         tag = self._canned_tag_for_kc(kc_code)
         try:
             data = await asyncio.wait_for(
-                self._chat_json(self._bug_messages(kc_code, tag, generic=True)),
+                self._chat_json(self._bug_messages(kc_code, tag, generic=True, topic=topic)),
                 timeout=_BUG_LLM_TIMEOUT_S,
             )
         except Exception:  # noqa: BLE001
             return None
         return self._parse_bug_llm(data, tag, "generic_beginner_bug")
 
-    async def _bug_from_llm(self, kc_code: str, tag: str) -> FeynmanBugExposureOutput | None:
+    async def _bug_from_llm(
+        self, kc_code: str, tag: str, topic: str | None = None
+    ) -> FeynmanBugExposureOutput | None:
         try:
             data = await asyncio.wait_for(
-                self._chat_json(self._bug_messages(kc_code, tag)),
+                self._chat_json(self._bug_messages(kc_code, tag, topic=topic)),
                 timeout=_BUG_LLM_TIMEOUT_S,
             )
         except Exception:  # noqa: BLE001 - 超时/无网/无 key 时回退上层确定性兜底
@@ -262,7 +269,9 @@ class FeynmanTuteeAgent:
         }
         return hints.get(tag, "对照正确写法，找出哪一行把规则用错了。")
 
-    def _bug_messages(self, kc_code: str, tag: str, *, generic: bool = False) -> list[dict[str, str]]:
+    def _bug_messages(
+        self, kc_code: str, tag: str, *, generic: bool = False, topic: str | None = None
+    ) -> list[dict[str, str]]:
         schema_hint = (
             '{"buggy_code":"含 bug 的 Python 代码","fixed_code":"修正后的代码",'
             '"hint_md":"一句找茬提示（不直接给答案）"}'
@@ -277,8 +286,11 @@ class FeynmanTuteeAgent:
             "错误类型应多样：边界、类型、别名/可变默认、缩进、逻辑运算符、字典键等，"
             "但 bug 必须紧扣 misconception_tag 与 KC 主题。"
         )
-        topic = _CHAPTER_TOPIC.get(chapter_for_kc(kc_code) or 0, "")
-        kc_line = f"kc_code={kc_code}" + (f"（知识点主题：{topic}）" if topic else "")
+        # 显式 topic（课程 KC 中文名 / 课件外概念词）优先；缺省回退章节主题。
+        resolved_topic = (topic or "").strip() or _CHAPTER_TOPIC.get(chapter_for_kc(kc_code) or 0, "")
+        kc_line = f"kc_code={kc_code}" + (
+            f"（知识点主题：{resolved_topic}）" if resolved_topic else ""
+        )
         mode = "常见初学者陷阱（无该生真实错误史）" if generic else f"复现 misconception_tag={tag}"
         return [
             {"role": "system", "content": system},

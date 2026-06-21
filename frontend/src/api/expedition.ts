@@ -98,3 +98,61 @@ export async function deleteExpeditionRun(): Promise<void> {
     timeout: 3000,
   });
 }
+
+// ── 班级排行榜（最高单局得分；后端真实数据，未入班为空榜） ──
+
+export interface ExpeditionLeaderboardEntry {
+  rank: number;
+  userId: number;
+  displayName: string;
+  bestScore: number;
+  bestDepth: number;
+  self: boolean;
+}
+
+export interface ExpeditionLeaderboard {
+  entries: ExpeditionLeaderboardEntry[];
+  /** 自身全班名次（1 起；未上榜 / 未玩过为 null）。 */
+  selfRank: number | null;
+  selfBest: number;
+  inClass: boolean;
+}
+
+export interface ExpeditionScorePayload {
+  score: number;
+  depth: number;
+  bestMomentum: number;
+  cleared: boolean;
+  daily: boolean;
+}
+
+const SCORE_PATH = '/api/world/expedition/score';
+const LEADERBOARD_PATH = '/api/world/expedition/leaderboard';
+
+/** 上报一局成绩，返回最新班级榜；失败返回 null（best-effort，不阻塞结算）。 */
+export async function submitExpeditionScore(
+  payload: ExpeditionScorePayload,
+): Promise<ExpeditionLeaderboard | null> {
+  try {
+    const res = await http.post<ExpeditionLeaderboard>(SCORE_PATH, payload, {
+      suppressNetworkToast: true,
+      timeout: 3000,
+    });
+    return res.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** 取当前学生班级排行榜；失败返回 null（best-effort）。 */
+export async function fetchExpeditionLeaderboard(): Promise<ExpeditionLeaderboard | null> {
+  try {
+    const res = await http.get<ExpeditionLeaderboard>(LEADERBOARD_PATH, {
+      suppressNetworkToast: true,
+      timeout: 3000,
+    });
+    return res.data ?? null;
+  } catch {
+    return null;
+  }
+}

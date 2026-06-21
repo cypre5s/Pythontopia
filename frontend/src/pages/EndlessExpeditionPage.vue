@@ -11,10 +11,10 @@ import { useRoute, useRouter } from 'vue-router';
 import AppLayout from '@/app/AppLayout.vue';
 import PyButton from '@/components/ui/PyButton.vue';
 import BossSprite from '@/components/boss/BossSprite.vue';
-import JudgeResultPanel from '@/components/challenge/JudgeResultPanel.vue';
-import { KindRouter } from '@/components/arena';
+import ChallengeWorkspace from '@/components/challenge/ChallengeWorkspace.vue';
 import KnowledgeConstellation from '@/components/expedition/KnowledgeConstellation.vue';
 import ExpeditionCanvas from '@/components/expedition/ExpeditionCanvas.vue';
+import ExpeditionLeaderboard from '@/components/expedition/ExpeditionLeaderboard.vue';
 import { useRogueRunStore } from '@stores/rogueRun';
 import { useLearningStore } from '@stores/learning';
 import { kcDisplayName } from '@/data/kcNames';
@@ -23,7 +23,12 @@ import { relicById } from '@/data/rogueRelics';
 import { ROGUE_EVENT_CHOICES } from '@/data/rogueEvents';
 import { MAIN_QUEST_BOSSES } from '@/data/bossCatalog';
 import type { ChallengeResult } from '@/api/dto/CodeChallenge';
-import type { RogueNode } from '@/types/rogue';
+import type { RogueNode, RogueNodeKind } from '@/types/rogue';
+
+// 地图图例固定顺序（与节点类型一一对应，供玩家快速看懂各房间含义）。
+const LEGEND_KINDS: readonly RogueNodeKind[] = [
+  'battle', 'elite', 'event', 'bug', 'chest', 'rest', 'boss',
+];
 
 const route = useRoute();
 const router = useRouter();
@@ -37,6 +42,7 @@ const masteryMap = computed<Record<string, number>>(() => {
   return m;
 });
 const showConstellation = ref(false);
+const showLeaderboard = ref(false);
 
 // ?focus=章 来自旧 /arena 重定向或聚焦练习。
 const focusFromQuery = computed<number | null>(() => {
@@ -57,6 +63,8 @@ onMounted(() => {
 onMounted(() => {
   // 跨设备/会话存档：只刷新可继续入口，不静默进入，让玩家自己选择继续或新开。
   if (run.phase === 'idle') void run.refreshSavedRun();
+  // 班级排行榜：进入即拉一次（best-effort，失败静默降级）。
+  void run.loadLeaderboard();
 });
 onBeforeUnmount(() => {
   if (timer !== null) window.clearInterval(timer);
@@ -65,9 +73,9 @@ onBeforeUnmount(() => {
 function onStart(): void {
   void run.startRun(focusChoice.value);
 }
-/** 再来一局 / 弃局重开：显式新开，不续旧局。 */
+/** 再来一局 / 弃局重开：显式新开，不续旧局（startRun 总是全量重建地图）。 */
 function onRestart(): void {
-  void run.startRun(focusChoice.value, { fresh: true });
+  void run.startRun(focusChoice.value);
 }
 function onResume(): void {
   void run.resumeSavedRun();
@@ -92,6 +100,12 @@ function onEnterId(id: string): void {
 function onSubmit(): void {
   void run.submitChallenge();
 }
+// 答题中「主动结束本局」→ 进结算（掌握度已入库不回滚）；「查看地图」只读弹窗。
+const showMapModal = ref(false);
+function onFinishRun(): void {
+  showMapModal.value = false;
+  run.finishRun();
+}
 
 const bossChapter = computed<number>(() => {
   // 聚焦章 → 该章 boss 立绘；否则按当前题目章节，兜底第 1 章。
@@ -100,6 +114,18 @@ const bossChapter = computed<number>(() => {
 const bossName = computed<string>(
   () => MAIN_QUEST_BOSSES.find((b) => b.chapter === bossChapter.value)?.name ?? '知识守关者',
 );
+
+// 局内自适应难度展示：实际出题难度 + 相对基准的「↑气势 / ↓回稳」标签。
+const shownDifficulty = computed<number>(() =>
+  run.activeDifficulty > 0 ? run.activeDifficulty : run.activeNode?.difficulty ?? 0,
+);
+const difficultyTag = computed<string>(() => {
+  const node = run.activeNode;
+  if (!node || run.activeDifficulty <= 0) return '';
+  if (run.activeDifficulty > node.difficulty) return '↑气势';
+  if (run.activeDifficulty < node.difficulty) return '↓回稳';
+  return '';
+});
 
 const challengeResult = computed<ChallengeResult | null>(() => {
   const r = run.challengeResult;
@@ -119,6 +145,12 @@ function star(n: number): string {
 }
 function relicIcon(id: string): string {
   return relicById(id)?.icon ?? '◆';
+}
+function relicName(id: string): string {
+  return relicById(id)?.name ?? id;
+}
+function relicDesc(id: string): string {
+  return relicById(id)?.desc ?? '';
 }
 function relicTitle(id: string): string {
   const r = relicById(id);
@@ -185,6 +217,34 @@ watch(
   () => [run.phase, run.nodes.map((n) => n.state).join(',')],
   () => scheduleCompute(),
 );
+function nodeTooltip(node: RogueNode): string {
+  const parts: string[] = [NODE_KIND_LABEL[node.kind]];
+  if (node.kcCode) parts.push(kcDisplayName(node.kcCode));
+  if (node.difficulty > 0) parts.push(`难度 ${node.difficulty}/5`);
+  if (node.kind === 'rest') parts.push('恢复体力');
+  if (node.kind === 'chest') parts.push('三选一学习增益');
+  if (node.state === 'cleared') parts.push('已通关');
+  else if (node.state === 'available') parts.push('可前往');
+  else if (node.state === 'bypassed') parts.push('已绕过');
+  else if (node.state === 'locked') parts.push('未解锁');
+  return parts.join(' · ');
+}
+
+// 结算「本局练习小结」：按 KC 聚合 history 的对错（自包含、与判题真源一致，不依赖异步掌握度刷新）。
+const kcSummary = computed<{ kcCode: string; passed: number; total: number }[]>(() => {
+  const agg = new Map<string, { passed: number; total: number }>();
+  for (const h of run.history) {
+    if (!h.kcCode) continue;
+    const cur = agg.get(h.kcCode) ?? { passed: 0, total: 0 };
+    cur.total += 1;
+    if (h.passed) cur.passed += 1;
+    agg.set(h.kcCode, cur);
+  }
+  return [...agg.entries()]
+    .map(([kcCode, v]) => ({ kcCode, passed: v.passed, total: v.total }))
+    .sort((a, b) => b.total - a.total);
+});
+
 function nodeClass(node: RogueNode): Record<string, boolean> {
   return {
     'exp-node': true,
@@ -338,6 +398,18 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
           v-if="showConstellation"
           :mastery="masteryMap"
         />
+        <button
+          type="button"
+          class="exp-constellation-toggle"
+          data-testid="expedition-leaderboard-toggle"
+          @click="showLeaderboard = !showLeaderboard"
+        >
+          {{ showLeaderboard ? '收起班级排行榜 ▴' : '🏆 查看班级排行榜' }}
+        </button>
+        <ExpeditionLeaderboard
+          v-if="showLeaderboard"
+          :board="run.leaderboard"
+        />
       </div>
 
       <!-- 地图：选节点 -->
@@ -387,6 +459,14 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
             </button>
             <button
               type="button"
+              class="exp-abandon exp-abandon--finish"
+              data-testid="expedition-finish-map"
+              @click="onFinishRun"
+            >
+              🏁 结束本局
+            </button>
+            <button
+              type="button"
               class="exp-abandon"
               data-testid="expedition-abandon"
               @click="onAbandon"
@@ -394,6 +474,20 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
               🏳 弃局
             </button>
           </div>
+        </div>
+
+        <!-- 图例：让玩家快速看懂各房间含义 -->
+        <div
+          class="exp-legend"
+          data-testid="expedition-legend"
+        >
+          <span
+            v-for="k in LEGEND_KINDS"
+            :key="k"
+            class="exp-legend__item"
+          >
+            <span class="exp-legend__icon">{{ NODE_KIND_ICON[k] }}</span>{{ NODE_KIND_LABEL[k] }}
+          </span>
         </div>
 
         <!-- 像素远征塔（Phaser 单例渐进增强）：点像素节点 = 同 DOM 的 run.enterNode -->
@@ -448,6 +542,7 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
                 type="button"
                 :class="nodeClass(node)"
                 :disabled="node.state !== 'available'"
+                :title="nodeTooltip(node)"
                 :data-testid="`expedition-node-${node.id}`"
                 @click="onEnter(node)"
               >
@@ -502,6 +597,37 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
         </div>
       </div>
 
+      <!-- 领取学习增益：三选一 -->
+      <div
+        v-else-if="run.phase === 'reward'"
+        class="exp-reward"
+        data-testid="expedition-reward"
+      >
+        <div class="exp-reward__card">
+          <span class="exp-reward__icon">{{ NODE_KIND_ICON.chest }}</span>
+          <h2 class="exp-reward__title">
+            选择一件学习增益
+          </h2>
+          <p class="exp-reward__hint">
+            每件都正向且与学习相关，挑最契合你打法的一件，未选中的本次放弃。
+          </p>
+          <div class="exp-reward__choices">
+            <button
+              v-for="id in run.rewardChoices"
+              :key="id"
+              type="button"
+              class="exp-reward__choice"
+              :data-testid="`expedition-reward-${id}`"
+              @click="run.chooseReward(id)"
+            >
+              <span class="exp-reward__choice-icon">{{ relicIcon(id) }}</span>
+              <strong>{{ relicName(id) }}</strong>
+              <small>{{ relicDesc(id) }}</small>
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- 战斗：出题 + 判题 -->
       <div
         v-else-if="run.phase === 'challenge'"
@@ -510,13 +636,25 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
       >
         <header class="exp-challenge__head">
           <span class="exp-chip">{{ NODE_KIND_ICON[run.activeNode?.kind ?? 'battle'] }} {{ NODE_KIND_LABEL[run.activeNode?.kind ?? 'battle'] }}</span>
-          <span class="exp-chip">{{ kcDisplayName(run.activeNode?.kcCode ?? '') }}</span>
-          <span class="exp-chip">难度 {{ run.activeNode?.difficulty }} / 5</span>
-          <span
-            v-if="run.activeNode?.kind === 'boss'"
-            class="exp-chip exp-chip--boss"
-          >阶段 {{ run.bossPhase }} / {{ run.bossPhasesTotal }}</span>
           <span class="exp-chip exp-chip--timer">⏱ {{ run.elapsedSec }}s</span>
+          <div class="exp-challenge__tools">
+            <button
+              type="button"
+              class="exp-mini-btn"
+              data-testid="expedition-view-map"
+              @click="showMapModal = true"
+            >
+              🗺 查看地图
+            </button>
+            <button
+              type="button"
+              class="exp-mini-btn exp-mini-btn--danger"
+              data-testid="expedition-finish"
+              @click="onFinishRun"
+            >
+              🏁 结束本局
+            </button>
+          </div>
         </header>
 
         <div
@@ -542,24 +680,36 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
           </PyButton>
         </div>
 
-        <template v-else-if="run.activeProblem">
-          <KindRouter
-            v-model:code="run.activeCode"
-            :kind="run.activeNode?.challengeKind ?? null"
-            :problem="run.activeProblem"
-            @timeout="onSubmit"
-          >
-            <pre class="exp-statement">{{ run.activeProblem.statement }}</pre>
-          </KindRouter>
-
-          <p
-            v-if="run.errorMessage"
-            class="exp-inline-error"
-          >
-            {{ run.errorMessage }}
-          </p>
-
-          <div class="exp-actions">
+        <ChallengeWorkspace
+          v-else-if="run.activeProblem"
+          v-model:code="run.activeCode"
+          :kind="run.activeNode?.challengeKind ?? null"
+          :problem="run.activeProblem"
+          :title="NODE_KIND_LABEL[run.activeNode?.kind ?? 'battle']"
+          :kc-code="run.activeNode?.kcCode ?? null"
+          :difficulty="shownDifficulty"
+          :elapsed-sec="run.elapsedSec"
+          :ai-generated="run.activeProblem.aiGenerated"
+          :result="challengeResult"
+          @timeout="onSubmit"
+        >
+          <template #chips>
+            <span
+              v-if="difficultyTag"
+              class="exp-chip"
+            >{{ difficultyTag }}</span>
+            <span
+              v-if="run.activeNode?.kind === 'boss'"
+              class="exp-chip exp-chip--boss"
+            >阶段 {{ run.bossPhase }} / {{ run.bossPhasesTotal }}</span>
+          </template>
+          <template #actions>
+            <p
+              v-if="run.errorMessage"
+              class="exp-inline-error"
+            >
+              {{ run.errorMessage }}
+            </p>
             <PyButton
               v-if="!run.challengeResult"
               variant="primary"
@@ -597,25 +747,80 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
                 </PyButton>
               </template>
             </template>
-          </div>
-
-          <div
-            v-if="challengeResult"
-            class="exp-result"
-            data-testid="expedition-result"
-          >
-            <JudgeResultPanel
-              :result="challengeResult"
-              mode="judge"
-            />
+          </template>
+          <template #result-extra>
             <p
               v-if="!run.challengeResult?.passed"
               class="exp-result__hp"
             >
               答错 · 体力 {{ run.hp }}/{{ run.maxHp }}
             </p>
+          </template>
+        </ChallengeWorkspace>
+
+        <!-- 只读地图弹窗：答题中查看进度，不可换节点 -->
+        <div
+          v-if="showMapModal"
+          class="exp-modal"
+          data-testid="expedition-map-modal"
+          @click.self="showMapModal = false"
+        >
+          <div
+            class="exp-modal__panel"
+            role="dialog"
+            aria-label="远征地图"
+          >
+            <header class="exp-modal__head">
+              <h3>远征地图 · 只读</h3>
+              <button
+                type="button"
+                class="exp-modal__close"
+                aria-label="关闭地图"
+                data-testid="expedition-map-modal-close"
+                @click="showMapModal = false"
+              >
+                ×
+              </button>
+            </header>
+            <p class="exp-modal__legend">
+              <span
+                v-for="k in LEGEND_KINDS"
+                :key="k"
+                class="exp-legend__item"
+              ><span class="exp-legend__icon">{{ NODE_KIND_ICON[k] }}</span>{{ NODE_KIND_LABEL[k] }}</span>
+            </p>
+            <div class="exp-modal__body">
+              <div
+                v-for="(layer, li) in run.nodesByLayer"
+                :key="li"
+                class="exp-mini-layer"
+              >
+                <span class="exp-mini-layer__tag">{{ li === run.layers - 1 ? '顶层' : `第 ${li + 1} 层` }}</span>
+                <div class="exp-mini-layer__nodes">
+                  <span
+                    v-for="node in layer"
+                    :key="node.id"
+                    class="exp-mini-node"
+                    :class="{
+                      'is-cleared': node.state === 'cleared',
+                      'is-available': node.state === 'available',
+                      'is-locked': node.state === 'locked',
+                      'is-bypassed': node.state === 'bypassed',
+                      'is-current': node.id === run.currentNodeId,
+                    }"
+                    :title="nodeTooltip(node)"
+                  >
+                    {{ NODE_KIND_ICON[node.kind] }}
+                    <span
+                      v-if="node.id === run.currentNodeId"
+                      class="exp-mini-node__here"
+                    >●</span>
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
-        </template>
+        </div>
       </div>
 
       <!-- 结算：胜利 / 失败 -->
@@ -640,7 +845,31 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
         <p class="exp-end__note">
           做过的每题都已入库，掌握度永久保留。
         </p>
+        <div
+          v-if="kcSummary.length > 0"
+          class="exp-end__kc"
+          data-testid="expedition-kc-summary"
+        >
+          <h3 class="exp-end__kc-title">
+            本局练习小结
+          </h3>
+          <ul class="exp-end__kc-list">
+            <li
+              v-for="row in kcSummary"
+              :key="row.kcCode"
+              class="exp-end__kc-row"
+              :class="{ 'is-weak': row.passed < row.total }"
+            >
+              <span class="exp-end__kc-name">{{ kcDisplayName(row.kcCode) }}</span>
+              <span class="exp-end__kc-score">答对 {{ row.passed }}/{{ row.total }}</span>
+            </li>
+          </ul>
+        </div>
         <KnowledgeConstellation :mastery="masteryMap" />
+        <ExpeditionLeaderboard
+          :board="run.leaderboard"
+          data-testid="expedition-end-leaderboard"
+        />
         <div class="exp-actions">
           <PyButton
             variant="primary"
@@ -814,6 +1043,79 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
   color: var(--pyt-color-text-muted);
 }
 
+/* 领取学习增益（三选一） */
+.exp-reward {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.exp-reward__card {
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+  padding: 24px;
+  background: rgba(237, 233, 254, 0.6);
+  border: 2px solid rgba(124, 92, 196, 0.5);
+  border-radius: var(--pyt-radius-md);
+  box-shadow: 3px 3px 0 rgba(74, 54, 29, 0.2);
+}
+.exp-reward__icon {
+  font-size: 34px;
+}
+.exp-reward__title {
+  margin: 0;
+  font-size: 18px;
+}
+.exp-reward__hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--pyt-color-text-hint);
+}
+.exp-reward__choices {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+}
+.exp-reward__choice {
+  flex: 1 1 170px;
+  max-width: 200px;
+  display: grid;
+  gap: 4px;
+  text-align: center;
+  padding: 14px 12px;
+  cursor: pointer;
+  background: var(--pyt-color-bg-soft);
+  border: 2px solid var(--pyt-color-border);
+  border-radius: 8px;
+  box-shadow: 2px 2px 0 rgba(74, 54, 29, 0.25);
+  color: var(--pyt-color-text-primary);
+  font-family: inherit;
+  transition: transform 0.1s, border-color 0.1s;
+}
+.exp-reward__choice:hover {
+  transform: translateY(-2px);
+  border-color: #7c5cc4;
+  background: rgba(237, 233, 254, 0.9);
+}
+.exp-reward__choice-icon {
+  font-size: 24px;
+}
+.exp-reward__choice strong {
+  font-size: 13px;
+}
+.exp-reward__choice small {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--pyt-color-text-muted);
+}
+
 .exp-start,
 .exp-end,
 .exp-loading,
@@ -939,6 +1241,12 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
   border-color: var(--pyt-color-danger);
   border-style: solid;
 }
+/* 「结束本局」走结算（正向收束），与「弃局」的危险红区分开。 */
+.exp-abandon--finish:hover {
+  color: var(--pyt-color-warning);
+  border-color: var(--pyt-color-warning);
+  border-style: solid;
+}
 /* 像素远征塔画布容器：深色背景配 Phaser 渲染（同代码剧场舞台的暗色例外）。
    高度收敛到视口内，让整座塔（起点层→顶层 BOSS）一屏可见，不必滚动页面。 */
 .exp-tower {
@@ -954,6 +1262,26 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
   .exp-tower {
     height: clamp(320px, calc(100dvh - 200px), 720px);
   }
+}
+/* 图例条 */
+.exp-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  padding: 6px 10px;
+  background: rgba(255, 249, 234, 0.7);
+  border: 1px dashed var(--pyt-color-border);
+  border-radius: var(--pyt-radius-md);
+  font-size: 11px;
+  color: var(--pyt-color-text-hint);
+}
+.exp-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.exp-legend__icon {
+  font-size: 13px;
 }
 .exp-map__inner {
   position: relative;
@@ -1085,7 +1413,144 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
 .exp-challenge__head {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
+}
+.exp-challenge__tools {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+.exp-mini-btn {
+  font-family: inherit;
+  font-size: 12px;
+  padding: 4px 10px;
+  cursor: pointer;
+  color: var(--pyt-color-text-hint);
+  background: var(--pyt-color-bg-elevated);
+  border: 1px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-md);
+}
+.exp-mini-btn:hover {
+  background: var(--pyt-color-warning-bg);
+  color: var(--pyt-color-text-primary);
+}
+.exp-mini-btn--danger:hover {
+  color: var(--pyt-color-danger);
+  border-color: var(--pyt-color-danger);
+}
+
+/* 只读地图弹窗 */
+.exp-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(20, 13, 34, 0.6);
+}
+.exp-modal__panel {
+  width: min(680px, 100%);
+  max-height: 86dvh;
+  display: flex;
+  flex-direction: column;
+  background: rgba(255, 249, 234, 0.98);
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-md);
+  box-shadow: 4px 4px 0 rgba(74, 54, 29, 0.4);
+  overflow: hidden;
+}
+.exp-modal__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--pyt-color-border);
+}
+.exp-modal__head h3 {
+  margin: 0;
+  font-size: 15px;
+}
+.exp-modal__close {
+  width: 28px;
+  height: 28px;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  background: var(--pyt-color-bg-soft);
+  border: 1px solid var(--pyt-color-border);
+  border-radius: 4px;
+}
+.exp-modal__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 0;
+  padding: 8px 14px;
+  font-size: 11px;
+  color: var(--pyt-color-text-hint);
+  border-bottom: 1px dashed var(--pyt-color-border);
+}
+.exp-modal__body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 8px;
+}
+.exp-mini-layer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.exp-mini-layer__tag {
+  flex: 0 0 56px;
+  font-size: 11px;
+  color: var(--pyt-color-text-muted);
+  text-align: right;
+}
+.exp-mini-layer__nodes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.exp-mini-node {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  font-size: 16px;
+  border: 2px solid var(--pyt-color-border);
+  border-radius: 6px;
+  background: rgba(255, 252, 242, 0.9);
+}
+.exp-mini-node.is-cleared {
+  border-color: var(--pyt-color-success);
+  background: var(--pyt-color-success-bg);
+}
+.exp-mini-node.is-available {
+  border-color: var(--pyt-color-warning);
+}
+.exp-mini-node.is-locked {
+  opacity: 0.45;
+}
+.exp-mini-node.is-bypassed {
+  opacity: 0.3;
+}
+.exp-mini-node.is-current {
+  box-shadow: 0 0 0 2px var(--pyt-color-warning);
+}
+.exp-mini-node__here {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  font-size: 9px;
+  color: var(--pyt-color-warning);
 }
 .exp-chip {
   display: inline-block;
@@ -1095,6 +1560,11 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
   border: 1px solid var(--pyt-color-info);
   border-radius: var(--pyt-radius-sm);
   color: var(--pyt-color-info);
+}
+.exp-chip__tag {
+  margin-left: 4px;
+  font-size: 10px;
+  color: var(--pyt-color-warning);
 }
 .exp-chip--boss {
   background: var(--pyt-color-danger-bg);
@@ -1148,6 +1618,43 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
 }
 .exp-end--win h2 {
   color: var(--pyt-color-success);
+}
+.exp-end__kc {
+  width: min(520px, 100%);
+  text-align: left;
+}
+.exp-end__kc-title {
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: var(--pyt-color-text-hint);
+}
+.exp-end__kc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.exp-end__kc-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 10px;
+  font-size: 12px;
+  background: var(--pyt-color-success-bg);
+  border: 1px solid var(--pyt-color-success);
+  border-radius: var(--pyt-radius-sm);
+}
+.exp-end__kc-row.is-weak {
+  background: var(--pyt-color-warning-bg);
+  border-color: var(--pyt-color-warning);
+}
+.exp-end__kc-name {
+  color: var(--pyt-color-text-primary);
+}
+.exp-end__kc-score {
+  color: var(--pyt-color-text-hint);
+  white-space: nowrap;
 }
 
 @media (max-width: 720px) {

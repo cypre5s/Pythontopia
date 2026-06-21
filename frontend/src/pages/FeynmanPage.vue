@@ -26,6 +26,15 @@ function pick(code: string): void {
   activeKc.value = code;
 }
 
+// 课件外自由概念：直接用概念词开局（概念模式——后端无代表题，仅找茬+对话、不计掌握度、标「通识」）。
+const conceptDraft = ref('');
+function startConcept(): void {
+  const concept = conceptDraft.value.trim();
+  if (concept.length === 0) return;
+  activeKc.value = concept;
+  conceptDraft.value = '';
+}
+
 // 面板内「换知识点」：收起会话、回到选择器。
 function resetPicker(): void {
   activeKc.value = '';
@@ -69,6 +78,27 @@ function resetPicker(): void {
                 {{ kc.label }}
               </button>
             </div>
+            <form
+              class="feynman-page__concept"
+              @submit.prevent="startConcept"
+            >
+              <input
+                v-model="conceptDraft"
+                type="text"
+                class="feynman-page__concept-input"
+                maxlength="30"
+                placeholder="课件里没有？直接输入概念，如「装饰器」「正则表达式」"
+                data-testid="feynman-concept-input"
+              >
+              <button
+                type="submit"
+                class="feynman-page__concept-go"
+                :disabled="conceptDraft.trim().length === 0"
+                data-testid="feynman-concept-go"
+              >
+                用这个概念开始
+              </button>
+            </form>
           </div>
         </header>
 
@@ -241,5 +271,44 @@ function resetPicker(): void {
   margin: 0;
   padding: var(--pyt-space-4);
   color: var(--pyt-color-text-muted);
+}
+
+/* 课件外自由概念入口 */
+.feynman-page__concept {
+  display: flex;
+  gap: var(--pyt-space-2);
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: var(--pyt-space-1);
+}
+.feynman-page__concept-input {
+  flex: 1 1 240px;
+  min-width: 0;
+  padding: var(--pyt-space-2) var(--pyt-space-3);
+  border: 2px dashed var(--pyt-color-border);
+  border-radius: var(--pyt-radius-sm);
+  background: var(--pyt-color-bg-primary);
+  color: var(--pyt-color-text-primary);
+  font: inherit;
+}
+.feynman-page__concept-input:focus {
+  outline: none;
+  border-style: solid;
+  border-color: var(--pyt-color-primary);
+}
+.feynman-page__concept-go {
+  flex: 0 0 auto;
+  padding: var(--pyt-space-2) var(--pyt-space-3);
+  border: 2px solid var(--pyt-color-border-strong);
+  border-radius: var(--pyt-radius-sm);
+  background: var(--pyt-color-bg-soft);
+  color: var(--pyt-color-text-primary);
+  font-family: var(--pyt-font-pixel);
+  font-size: var(--pyt-font-size-sm);
+  cursor: pointer;
+}
+.feynman-page__concept-go:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 </style>

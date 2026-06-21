@@ -13,19 +13,32 @@ export function isJudgeUnavailable(result: BossAttemptResultDto): boolean {
   return !result.passed && result.score === 0 && result.feedback.includes(UNAVAILABLE_HINT);
 }
 
+export interface ChallengeProblemArgs {
+  kc: string;
+  kind: string | null;
+  difficulty: number;
+}
+
 export interface UseChallengeJudgeReturn {
-  fetchProblem: (args: { kc: string; kind: string | null; difficulty: number }) => Promise<BossProblemDto>;
+  fetchProblem: (args: ChallengeProblemArgs) => Promise<BossProblemDto>;
+  /** 后台预取一道题并缓存（按 kc|kind|difficulty）；fetchProblem 命中即秒开。fire-and-forget。 */
+  prefetchProblem: (args: ChallengeProblemArgs) => void;
+  /** 清空预取缓存（新开一局时调用，避免跨局残留）。 */
+  clearPrefetch: () => void;
   judge: (problem: BossProblemDto, code: string, elapsedSec: number) => Promise<BossAttemptResultDto>;
 }
 
 export function useChallengeJudge(): UseChallengeJudgeReturn {
   const { signals, hasAnySignal } = useProfileSignals();
 
-  async function fetchProblem(args: {
-    kc: string;
-    kind: string | null;
-    difficulty: number;
-  }): Promise<BossProblemDto> {
+  // 一次性预取缓存：key = kc|kind|difficulty → 进行中/已完成的出题 Promise。
+  // fetchProblem 命中即消费（删除）→ 同一道不会被重复用（重试自然现取换新题）。
+  const cache = new Map<string, Promise<BossProblemDto>>();
+  function keyOf(args: ChallengeProblemArgs): string {
+    return `${args.kc}|${args.kind ?? ''}|${args.difficulty}`;
+  }
+
+  function request(args: ChallengeProblemArgs): Promise<BossProblemDto> {
     const chapter = kcChapter(args.kc);
     const stage = Math.max(1, Math.min(4, Math.round(args.difficulty)));
     return requestBossProblem(chapter, {
@@ -35,6 +48,35 @@ export function useChallengeJudge(): UseChallengeJudgeReturn {
       difficulty: args.difficulty,
       ...(hasAnySignal.value ? { profileSignals: signals.value } : {}),
     });
+  }
+
+  async function fetchProblem(args: ChallengeProblemArgs): Promise<BossProblemDto> {
+    const key = keyOf(args);
+    const cached = cache.get(key);
+    if (cached) {
+      cache.delete(key);
+      try {
+        return await cached;
+      } catch {
+        // 预取失败：落回现取，绝不把预取错误抛给调用方。
+      }
+    }
+    return request(args);
+  }
+
+  function prefetchProblem(args: ChallengeProblemArgs): void {
+    const key = keyOf(args);
+    if (cache.has(key)) return;
+    const p = request(args);
+    cache.set(key, p);
+    // 防未处理 rejection；预取失败即移除，留待 fetchProblem 现取。
+    void p.catch(() => {
+      cache.delete(key);
+    });
+  }
+
+  function clearPrefetch(): void {
+    cache.clear();
   }
 
   async function judge(
@@ -52,5 +94,5 @@ export function useChallengeJudge(): UseChallengeJudgeReturn {
     });
   }
 
-  return { fetchProblem, judge };
+  return { fetchProblem, prefetchProblem, clearPrefetch, judge };
 }

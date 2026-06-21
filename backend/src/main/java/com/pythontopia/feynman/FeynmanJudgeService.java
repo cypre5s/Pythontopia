@@ -48,6 +48,14 @@ public class FeynmanJudgeService {
   @Transactional
   public Verdict judge(long userId, long sessionId) {
     FeynmanSessionService.SessionData session = sessionService.loadSession(userId, sessionId);
+    // 概念模式（通识知识 / 课件外概念，无代表题）：以「代码找茬」为评估，不做代表题真判题，
+    // 不计掌握度、不记失败事件——直接返回说明，避免误判为"失败"。
+    if (session.problemId() == null) {
+      return new Verdict(
+          sessionId,
+          false,
+          "概念模式（通识知识）以代码找茬为准，本模式不做代表题真判题，也不计入掌握度。");
+    }
     String code = latestProducedCode(sessionId);
     if (code == null || code.isBlank() || FeynmanAntiCheat.looksLikeAnswerDump(code)) {
       publishFailed(session);

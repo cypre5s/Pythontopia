@@ -29,6 +29,9 @@ const errorBook = computed(() => learning.bugMine.errorBook);
 const echoes = computed(() => learning.bugMine.echoes);
 const cards = computed<BugMineCardDto[]>(() => session.value?.cards ?? []);
 
+// 错题本 + 遗忘回声左侧栏：可一键收起，给「题面 | 作答」工作区让出全宽。
+const sidebarOpen = ref(true);
+
 const defaultDepthSteps: BugMineDepthStepDto[] = [
   { layer: 1, key: 'bare_retry', title: 'L1 裸重试', description: '先独立重试一次。', unlocked: true },
   { layer: 2, key: 'counter_example', title: 'L2 反例', description: '用反例定位偏差。', unlocked: false },
@@ -56,6 +59,33 @@ const hintCards = computed(() =>
 const retryCode = ref<string>('');
 const depthLayer = computed(() => session.value?.depthLayer ?? 1);
 
+// 诊断层下拉：仅在「已解锁」层（L1..当前系统判定深度）间切换查看，不能跳到锁定层——
+// 仍保留「系统决定能下探多深」的教育原则，下拉只是已解锁层的导航。
+const LAYER_NAMES: Record<number, string> = {
+  1: '原题重试',
+  2: '反例',
+  3: '变量轨迹',
+  4: '分层提示',
+  5: '掌握确认',
+};
+const selectedLayer = ref(1);
+const unlockedLayers = computed<{ layer: number; name: string }[]>(() => {
+  const max = Math.min(5, Math.max(1, depthLayer.value));
+  const out: { layer: number; name: string }[] = [];
+  for (let l = 1; l <= max; l += 1) {
+    out.push({ layer: l, name: LAYER_NAMES[l] ?? `L${l}` });
+  }
+  return out;
+});
+// 切换会话 / 系统下探（depthLayer 变化）→ 自动跳到当前系统判定层，让玩家看到最新解锁的诊断。
+watch(
+  () => [session.value?.id, session.value?.depthLayer] as const,
+  ([, layer]) => {
+    if (typeof layer === 'number') selectedLayer.value = layer;
+  },
+  { immediate: true },
+);
+
 const sessionDepthSteps = computed<BugMineDepthStepDto[]>(() => {
   if (session.value?.depthSteps?.length) {
     return session.value.depthSteps;
@@ -63,8 +93,7 @@ const sessionDepthSteps = computed<BugMineDepthStepDto[]>(() => {
   return defaultDepthSteps;
 });
 
-// 题干面板：默认展开，内部分「题面 / 样例 / 知识点与错因」三页（题干是右侧工作区的上下文中心）。
-const problemOpen = ref(true);
+// 左侧题面分页：题面 / 样例 / 知识点与错因。
 type ProblemTab = 'statement' | 'samples' | 'kc';
 const problemTab = ref<ProblemTab>('statement');
 
@@ -175,13 +204,6 @@ function shortLayerName(layer: number): string {
   return SHORT_LAYER_NAMES[layer] ?? `L${layer}`;
 }
 
-function layerUnlocked(layer: number): boolean {
-  return depthLayer.value >= layer;
-}
-function layerIsCurrent(layer: number): boolean {
-  return depthLayer.value === layer;
-}
-
 function cardAccessible(card?: BugMineCardDto): boolean {
   if (!card || !session.value) return false;
   return canAccessCard(session.value.depthLayer, card);
@@ -268,6 +290,15 @@ async function retry(): Promise<void> {
     data-testid="bug-mine-panel"
   >
     <header class="bug-mine__header">
+      <button
+        type="button"
+        class="bug-mine__rail-toggle"
+        :aria-pressed="sidebarOpen"
+        data-testid="error-book-toggle"
+        @click="sidebarOpen = !sidebarOpen"
+      >
+        {{ sidebarOpen ? '« 收起错题本' : '» 错题本' }}
+      </button>
       <div class="bug-mine__heading">
         <h2>错题矿洞</h2>
         <span class="bug-mine__subtitle">
@@ -276,9 +307,15 @@ async function retry(): Promise<void> {
       </div>
     </header>
 
-    <div class="bug-mine__body">
-      <!-- 左栏：错题选择区（遗忘回声 + 错题本 + 筛选） -->
-      <aside class="rail">
+    <div
+      class="bug-mine__body"
+      :class="{ 'bug-mine__body--no-rail': !sidebarOpen }"
+    >
+      <!-- 左栏：错题选择区（遗忘回声 + 错题本 + 筛选），可一键收起 -->
+      <aside
+        v-show="sidebarOpen"
+        class="rail"
+      >
         <section
           v-if="echoes.length > 0 || learning.bugMine.echoesLoading || learning.bugMine.echoesError"
           class="board"
@@ -489,15 +526,14 @@ async function retry(): Promise<void> {
         </section>
       </aside>
 
-      <!-- 右栏：题干面板 + 系统分配下探工作区 -->
-      <section
+      <!-- 主区：题面（左）| 作答 · 逐层诊断（右），仿做题界面左右分栏 -->
+      <main
         v-if="session"
-        class="workspace"
+        class="bm-main"
       >
-        <!-- 题干面板：右侧工作区的上下文中心，默认展开、可折叠 -->
+        <!-- 左：题面（题面 / 样例 / 知识点与错因） -->
         <section
-          class="problem"
-          :class="{ 'problem--collapsed': !problemOpen }"
+          class="bm-problem"
           data-testid="problem-panel"
         >
           <header class="problem__head">
@@ -514,628 +550,553 @@ async function retry(): Promise<void> {
                 >难度 {{ difficultyLabel(problem.difficulty) }}</span>
               </div>
             </div>
-            <button
-              type="button"
-              class="problem__toggle"
-              :aria-expanded="problemOpen"
-              data-testid="problem-toggle"
-              @click="problemOpen = !problemOpen"
-            >
-              {{ problemOpen ? '收起题干' : '展开题干' }}
-            </button>
           </header>
 
-          <template v-if="problemOpen">
-            <nav class="tabs">
-              <button
-                type="button"
-                class="tabs__btn"
-                :class="{ 'tabs__btn--on': problemTab === 'statement' }"
-                @click="problemTab = 'statement'"
-              >
-                题面
-              </button>
-              <button
-                type="button"
-                class="tabs__btn"
-                :class="{ 'tabs__btn--on': problemTab === 'samples' }"
-                @click="problemTab = 'samples'"
-              >
-                样例
-                <span
-                  v-if="problem?.samples?.length"
-                  class="tabs__count"
-                >{{ problem.samples.length }}</span>
-              </button>
-              <button
-                type="button"
-                class="tabs__btn"
-                :class="{ 'tabs__btn--on': problemTab === 'kc' }"
-                @click="problemTab = 'kc'"
-              >
-                知识点与错因
-              </button>
-            </nav>
+          <nav class="tabs">
+            <button
+              type="button"
+              class="tabs__btn"
+              :class="{ 'tabs__btn--on': problemTab === 'statement' }"
+              @click="problemTab = 'statement'"
+            >
+              题面
+            </button>
+            <button
+              type="button"
+              class="tabs__btn"
+              :class="{ 'tabs__btn--on': problemTab === 'samples' }"
+              @click="problemTab = 'samples'"
+            >
+              样例
+              <span
+                v-if="problem?.samples?.length"
+                class="tabs__count"
+              >{{ problem.samples.length }}</span>
+            </button>
+            <button
+              type="button"
+              class="tabs__btn"
+              :class="{ 'tabs__btn--on': problemTab === 'kc' }"
+              @click="problemTab = 'kc'"
+            >
+              知识点与错因
+            </button>
+          </nav>
 
-            <div class="problem__body">
+          <div class="problem__body bm-problem__body">
+            <p
+              v-if="learning.bugMine.problemLoading && !problem"
+              class="notice"
+            >
+              读取题干...
+            </p>
+            <p
+              v-else-if="learning.bugMine.problemError"
+              class="notice notice--error"
+            >
+              题干加载失败：{{ learning.bugMine.problemError }}
+            </p>
+
+            <template v-else-if="problemTab === 'statement'">
+              <MarkdownView
+                v-if="problem?.statementMarkdown"
+                :source="problem.statementMarkdown"
+              />
               <p
-                v-if="learning.bugMine.problemLoading && !problem"
+                v-else
                 class="notice"
               >
-                读取题干...
+                暂无题面内容。
               </p>
-              <p
-                v-else-if="learning.bugMine.problemError"
-                class="notice notice--error"
+              <div
+                v-if="problem?.inputDescription"
+                class="problem__io"
               >
-                题干加载失败：{{ learning.bugMine.problemError }}
-              </p>
+                <h4 class="problem__io-title">
+                  输入
+                </h4>
+                <MarkdownView :source="problem.inputDescription" />
+              </div>
+              <div
+                v-if="problem?.outputDescription"
+                class="problem__io"
+              >
+                <h4 class="problem__io-title">
+                  输出
+                </h4>
+                <MarkdownView :source="problem.outputDescription" />
+              </div>
+            </template>
 
-              <template v-else-if="problemTab === 'statement'">
-                <MarkdownView
-                  v-if="problem?.statementMarkdown"
-                  :source="problem.statementMarkdown"
-                />
-                <p
-                  v-else
-                  class="notice"
-                >
-                  暂无题面内容。
-                </p>
+            <template v-else-if="problemTab === 'samples'">
+              <div
+                v-if="problem?.samples?.length"
+                class="samples"
+              >
                 <div
-                  v-if="problem?.inputDescription"
-                  class="problem__io"
+                  v-for="(sample, index) in problem.samples"
+                  :key="index"
+                  class="sample"
                 >
-                  <h4 class="problem__io-title">
-                    输入
-                  </h4>
-                  <MarkdownView :source="problem.inputDescription" />
-                </div>
-                <div
-                  v-if="problem?.outputDescription"
-                  class="problem__io"
-                >
-                  <h4 class="problem__io-title">
-                    输出
-                  </h4>
-                  <MarkdownView :source="problem.outputDescription" />
-                </div>
-              </template>
-
-              <template v-else-if="problemTab === 'samples'">
-                <div
-                  v-if="problem?.samples?.length"
-                  class="samples"
-                >
-                  <div
-                    v-for="(sample, index) in problem.samples"
-                    :key="index"
-                    class="sample"
-                  >
-                    <div class="sample__col">
-                      <span class="sample__label">输入 {{ index + 1 }}</span>
-                      <pre class="sample__pre">{{ sample.input || '(空)' }}</pre>
-                    </div>
-                    <div class="sample__col">
-                      <span class="sample__label">期望输出 {{ index + 1 }}</span>
-                      <pre class="sample__pre">{{ sample.output || '(空)' }}</pre>
-                    </div>
+                  <div class="sample__col">
+                    <span class="sample__label">输入 {{ index + 1 }}</span>
+                    <pre class="sample__pre">{{ sample.input || '(空)' }}</pre>
+                  </div>
+                  <div class="sample__col">
+                    <span class="sample__label">期望输出 {{ index + 1 }}</span>
+                    <pre class="sample__pre">{{ sample.output || '(空)' }}</pre>
                   </div>
                 </div>
-                <p
-                  v-else
-                  class="notice"
-                >
-                  该题暂无公开样例。
-                </p>
-              </template>
+              </div>
+              <p
+                v-else
+                class="notice"
+              >
+                该题暂无公开样例。
+              </p>
+            </template>
 
-              <template v-else>
-                <div class="kc-meta">
-                  <p class="kv">
-                    <span class="kv__key">知识点</span>
-                    <span class="kc-code">{{ problem?.kcCode ?? activeErrorItem?.kcCode ?? '—' }}</span>
-                  </p>
-                  <p
-                    v-if="activeErrorItem"
-                    class="kv"
-                  >
-                    <span class="kv__key">掌握度</span>
-                    <span>{{ formatMasteryScore(activeErrorItem.masteryScore) }}</span>
-                  </p>
-                  <p
-                    v-if="activeErrorItem"
-                    class="kv"
-                  >
-                    <span class="kv__key">遗忘风险</span>
-                    <span>{{ formatMasteryScore(activeErrorItem.decayRisk) }}</span>
-                  </p>
-                </div>
-                <div
-                  v-if="mistakePatterns.length"
-                  class="kc-patterns"
-                >
-                  <span class="kc-patterns__label">历史错因</span>
-                  <span
-                    v-for="pattern in mistakePatterns"
-                    :key="pattern"
-                    class="chip chip--warn"
-                  >{{ pattern }}</span>
-                </div>
-                <p
-                  v-if="activeErrorItem?.recommendationReason"
-                  class="kc-reason"
-                >
-                  {{ activeErrorItem.recommendationReason }}
+            <template v-else>
+              <div class="kc-meta">
+                <p class="kv">
+                  <span class="kv__key">知识点</span>
+                  <span class="kc-code">{{ problem?.kcCode ?? activeErrorItem?.kcCode ?? '—' }}</span>
                 </p>
-              </template>
-            </div>
-          </template>
+                <p
+                  v-if="activeErrorItem"
+                  class="kv"
+                >
+                  <span class="kv__key">掌握度</span>
+                  <span>{{ formatMasteryScore(activeErrorItem.masteryScore) }}</span>
+                </p>
+                <p
+                  v-if="activeErrorItem"
+                  class="kv"
+                >
+                  <span class="kv__key">遗忘风险</span>
+                  <span>{{ formatMasteryScore(activeErrorItem.decayRisk) }}</span>
+                </p>
+              </div>
+              <div
+                v-if="mistakePatterns.length"
+                class="kc-patterns"
+              >
+                <span class="kc-patterns__label">历史错因</span>
+                <span
+                  v-for="pattern in mistakePatterns"
+                  :key="pattern"
+                  class="chip chip--warn"
+                >{{ pattern }}</span>
+              </div>
+              <p
+                v-if="activeErrorItem?.recommendationReason"
+                class="kc-reason"
+              >
+                {{ activeErrorItem.recommendationReason }}
+              </p>
+            </template>
+          </div>
         </section>
 
-        <!-- 下探工作区 -->
-        <section class="dig">
-          <div class="dig__top">
-            <!-- 会话状态栏 -->
+        <!-- 右：作答 · 逐层诊断（诊断层下拉 + 选中层内容 + 常驻作答框） -->
+        <section class="bm-work">
+          <header class="bm-work__head">
+            <div class="bm-work__row">
+              <h3 class="bm-work__title">
+                逐层诊断
+              </h3>
+              <label class="bm-layer-pick">
+                <span class="bm-layer-pick__label">诊断层</span>
+                <select
+                  v-model.number="selectedLayer"
+                  class="bm-layer-pick__select"
+                  data-testid="layer-select"
+                >
+                  <option
+                    v-for="opt in unlockedLayers"
+                    :key="opt.layer"
+                    :value="opt.layer"
+                  >
+                    L{{ opt.layer }} · {{ opt.name }}
+                  </option>
+                </select>
+              </label>
+            </div>
             <div
               class="statusbar"
               data-testid="session-statusbar"
             >
               <span class="statusbar__id">会话 #{{ session.id }}</span>
-              <div class="stat">
-                <span class="stat__key">状态</span>
-                <span
-                  class="stat__val stat__val--status"
-                  :class="{
-                    'is-resolved': session.status === 'RESOLVED',
-                    'is-abandoned': session.status === 'ABANDONED',
-                  }"
-                  :title="session.status"
-                >{{ sessionStatusLabel(session.status) }}</span>
-              </div>
-              <div class="stat stat--accent">
-                <span class="stat__key">当前层级<em>系统判定</em></span>
-                <span class="stat__val">L{{ session.depthLayer }}</span>
-              </div>
-              <div class="stat stat--target">
-                <span class="stat__key">目标层级<em>画像建议</em></span>
-                <span class="stat__val">L{{ session.profileDepthTarget }}</span>
-              </div>
-              <div class="stat">
-                <span class="stat__key">重试</span>
-                <span class="stat__val">已 {{ session.retryCount }} 次</span>
-              </div>
+              <span
+                class="bm-chip"
+                :class="{
+                  'is-resolved': session.status === 'RESOLVED',
+                  'is-abandoned': session.status === 'ABANDONED',
+                }"
+                :title="session.status"
+              >{{ sessionStatusLabel(session.status) }}</span>
+              <span
+                class="bm-chip bm-chip--accent"
+                title="系统判定"
+              >当前 L{{ session.depthLayer }}</span>
+              <span
+                class="bm-chip bm-chip--target"
+                title="画像建议"
+              >目标 L{{ session.profileDepthTarget }}</span>
+              <span class="bm-chip">重试 {{ session.retryCount }} 次</span>
             </div>
+          </header>
 
-            <!-- 系统分配深度轨道（状态展示，非可点切换） -->
-            <section
-              class="assign"
-              data-testid="depth-assignment"
+          <!-- 系统分配深度（细条，只读）：强调深度由系统判定，下拉只在已解锁层间查看 -->
+          <section
+            class="assign assign--slim"
+            data-testid="depth-assignment"
+          >
+            <ol
+              class="stepper stepper--track"
+              data-testid="session-depth-steps"
             >
-              <div class="assign__head">
-                <span class="assign__label">系统分配深度</span>
-                <span class="assign__hint">
-                  由掌握度 · 遗忘风险 · 历史错因 · 个人画像自动判定，非手动选层
-                </span>
-              </div>
-              <ol
-                class="stepper stepper--track"
-                data-testid="session-depth-steps"
+              <li
+                v-for="step in sessionDepthSteps"
+                :key="step.layer"
+                class="stepper__node stepper__node--track"
+                :class="{
+                  'stepper__node--unlocked': step.layer < session.depthLayer,
+                  'stepper__node--current': session.depthLayer === step.layer,
+                  'stepper__node--target': session.profileDepthTarget === step.layer,
+                  'stepper__node--locked': step.layer > session.depthLayer,
+                }"
               >
-                <li
-                  v-for="step in sessionDepthSteps"
-                  :key="step.layer"
-                  class="stepper__node stepper__node--track"
-                  :class="{
-                    'stepper__node--unlocked': step.layer < session.depthLayer,
-                    'stepper__node--current': session.depthLayer === step.layer,
-                    'stepper__node--target': session.profileDepthTarget === step.layer,
-                    'stepper__node--locked': step.layer > session.depthLayer,
-                  }"
-                >
-                  <span class="stepper__num">{{ step.layer }}</span>
-                  <span class="stepper__name">{{ shortLayerName(step.layer) }}</span>
-                </li>
-              </ol>
-              <ul class="legend">
-                <li><span class="legend__dot legend__dot--done" />已下探</li>
-                <li><span class="legend__dot legend__dot--current" />当前层（系统判定）</li>
-                <li><span class="legend__dot legend__dot--target" />建议目标（画像建议）</li>
-                <li><span class="legend__dot legend__dot--locked" />未解锁</li>
-              </ul>
-            </section>
+                <span class="stepper__num">{{ step.layer }}</span>
+                <span class="stepper__name">{{ shortLayerName(step.layer) }}</span>
+              </li>
+            </ol>
+            <span class="assign__hint">
+              深度由系统按掌握度 · 遗忘风险 · 画像自动判定；下拉仅在已解锁层间查看
+            </span>
+          </section>
 
-            <!-- 系统引导说明 -->
-            <div
-              class="guidance"
-              data-testid="profile-guidance"
-            >
-              <span class="guidance__badge">系统引导</span>
-              <div class="guidance__text">
-                <p
-                  v-if="session.profileGuidance"
-                  class="guidance__line"
-                >
-                  {{ session.profileGuidance }}
-                </p>
-                <p
-                  v-if="mistakePatterns.length"
-                  class="guidance__line guidance__line--sub"
-                >
-                  你在相似题上多次出现：{{ mistakePatterns.join(' / ') }}，系统已据此设定目标层级
-                  L{{ session.profileDepthTarget }}。
-                </p>
-              </div>
+          <!-- 系统引导 -->
+          <div
+            v-if="session.profileGuidance || mistakePatterns.length"
+            class="guidance"
+            data-testid="profile-guidance"
+          >
+            <span class="guidance__badge">系统引导</span>
+            <div class="guidance__text">
+              <p
+                v-if="session.profileGuidance"
+                class="guidance__line"
+              >
+                {{ session.profileGuidance }}
+              </p>
+              <p
+                v-if="mistakePatterns.length"
+                class="guidance__line guidance__line--sub"
+              >
+                你在相似题上多次出现：{{ mistakePatterns.join(' / ') }}，系统已据此设定目标层级
+                L{{ session.profileDepthTarget }}。
+              </p>
             </div>
           </div>
 
-          <!-- L1-L5 纵向诊断流 -->
-          <div class="dig__scroll">
-            <ol class="layers">
-              <!-- L1 原题重试：当前主操作 -->
-              <li
-                class="layer layer--primary"
-                :class="{ 'layer--current': layerIsCurrent(1) }"
-                data-testid="retry-area"
-              >
-                <div class="layer__rail">
-                  <span class="layer__badge">L1</span>
-                </div>
-                <div class="layer__panel">
-                  <div class="layer__head">
-                    <h4 class="layer__title">
-                      原题重试
-                    </h4>
-                    <span class="tag tag--primary">主操作 · 先独立改一版</span>
-                  </div>
-                  <p class="layer__desc">
-                    不看更深提示，先按题意重写并提交；通过即出坑，未通过系统才继续下探。
-                  </p>
-                  <textarea
-                    v-model="retryCode"
-                    class="retry__code"
-                    rows="6"
-                    spellcheck="false"
-                    placeholder="粘贴修正后的代码…"
-                  />
-                  <div class="layer__actions">
-                    <PyButton
-                      variant="primary"
-                      :disabled="learning.bugMine.loading"
-                      test-id="retry-button"
-                      @click="retry"
-                    >
-                      重新提交（服务端判题）
-                    </PyButton>
-                    <span
-                      v-if="learning.bugMine.lastRetry"
-                      class="status"
-                    >
-                      {{ learning.bugMine.lastRetry.status }} · {{ learning.bugMine.lastRetry.source }}
-                    </span>
-                  </div>
-                </div>
-              </li>
+          <!-- 选中诊断层内容（一次一层；锁定层不在下拉里，无法选中） -->
+          <div
+            class="bm-diag"
+            data-testid="layer-content"
+          >
+            <!-- L1 原题重试：说明在此，作答框常驻于下方 -->
+            <p
+              v-if="selectedLayer === 1"
+              class="bm-diag__note"
+            >
+              先不看更深提示，按题意在下方独立改一版并提交；通过即出坑，未通过系统才继续下探。
+            </p>
 
-              <!-- L2 反例 -->
-              <li
-                v-if="cardVisible(counterExample)"
-                class="layer"
-                :class="{
-                  'layer--current': layerIsCurrent(2),
-                  'layer--locked': !layerUnlocked(2),
-                  'layer--done': layerUnlocked(2) && !layerIsCurrent(2),
-                }"
-                data-testid="card-counter-example"
+            <!-- L2 反例 -->
+            <article
+              v-else-if="selectedLayer === 2 && cardVisible(counterExample)"
+              class="bm-card"
+              data-testid="card-counter-example"
+            >
+              <h4 class="layer__title">
+                反例
+              </h4>
+              <p
+                v-if="!cardAccessible(counterExample)"
+                class="lock"
               >
-                <div class="layer__rail">
-                  <span class="layer__badge">L2</span>
-                </div>
-                <div class="layer__panel">
-                  <div class="layer__head">
-                    <h4 class="layer__title">
-                      反例
-                    </h4>
-                    <span
-                      v-if="layerIsCurrent(2)"
-                      class="tag tag--current"
-                    >当前层</span>
-                    <span
-                      v-else-if="!layerUnlocked(2)"
-                      class="tag tag--locked"
-                    >未解锁</span>
-                  </div>
-                  <p
-                    v-if="!cardAccessible(counterExample)"
-                    class="lock"
-                  >
-                    {{ depthLockMessage(depthLayer, 'COUNTER_EXAMPLE') }}
-                  </p>
-                  <template v-else-if="counterExample?.revealed">
-                    <p class="kv">
-                      <span class="kv__key">输入</span><code>{{ counterExample.payload.stdin }}</code>
-                    </p>
-                    <p class="kv">
-                      <span class="kv__key">期望</span><code>{{ counterExample.payload.expectedStdout ?? counterExample.payload.expected_stdout }}</code>
-                    </p>
-                    <p class="kv">
-                      <span class="kv__key">实际</span><code>{{ counterExample.payload.yourStdout ?? counterExample.payload.your_stdout }}</code>
-                    </p>
-                    <p class="kv kv--diff">
-                      <span class="kv__key">差异</span>{{ counterExample.payload.diffSummary ?? counterExample.payload.diff_summary }}
-                    </p>
-                  </template>
-                  <PyButton
-                    v-else
-                    variant="secondary"
-                    size="sm"
-                    @click="reveal(counterExample)"
-                  >
-                    解锁反例卡
-                  </PyButton>
-                </div>
-              </li>
+                {{ depthLockMessage(depthLayer, 'COUNTER_EXAMPLE') }}
+              </p>
+              <template v-else-if="counterExample?.revealed">
+                <p class="kv">
+                  <span class="kv__key">输入</span><code>{{ counterExample.payload.stdin }}</code>
+                </p>
+                <p class="kv">
+                  <span class="kv__key">期望</span><code>{{ counterExample.payload.expectedStdout ?? counterExample.payload.expected_stdout }}</code>
+                </p>
+                <p class="kv">
+                  <span class="kv__key">实际</span><code>{{ counterExample.payload.yourStdout ?? counterExample.payload.your_stdout }}</code>
+                </p>
+                <p class="kv kv--diff">
+                  <span class="kv__key">差异</span>{{ counterExample.payload.diffSummary ?? counterExample.payload.diff_summary }}
+                </p>
+              </template>
+              <PyButton
+                v-else
+                variant="secondary"
+                size="sm"
+                @click="reveal(counterExample)"
+              >
+                解锁反例卡
+              </PyButton>
+            </article>
 
-              <!-- L3 变量轨迹 -->
-              <li
-                v-if="cardVisible(variableTrace)"
-                class="layer"
-                :class="{
-                  'layer--current': layerIsCurrent(3),
-                  'layer--locked': !layerUnlocked(3),
-                  'layer--done': layerUnlocked(3) && !layerIsCurrent(3),
-                }"
-                data-testid="card-trace"
+            <!-- L3 变量轨迹 -->
+            <article
+              v-else-if="selectedLayer === 3 && cardVisible(variableTrace)"
+              class="bm-card"
+              data-testid="card-trace"
+            >
+              <h4 class="layer__title">
+                变量轨迹
+              </h4>
+              <p
+                v-if="!cardAccessible(variableTrace)"
+                class="lock"
               >
-                <div class="layer__rail">
-                  <span class="layer__badge">L3</span>
-                </div>
-                <div class="layer__panel">
-                  <div class="layer__head">
-                    <h4 class="layer__title">
-                      变量轨迹
-                    </h4>
-                    <span
-                      v-if="layerIsCurrent(3)"
-                      class="tag tag--current"
-                    >当前层</span>
-                    <span
-                      v-else-if="!layerUnlocked(3)"
-                      class="tag tag--locked"
-                    >未解锁</span>
-                  </div>
-                  <p
-                    v-if="!cardAccessible(variableTrace)"
-                    class="lock"
-                  >
-                    {{ depthLockMessage(depthLayer, 'VARIABLE_TRACE') }}
-                  </p>
-                  <pre
-                    v-else-if="variableTrace?.revealed"
-                    class="trace"
-                  >{{ JSON.stringify(variableTrace.payload, null, 2).slice(0, 1600) }}</pre>
-                  <PyButton
-                    v-else
-                    variant="secondary"
-                    size="sm"
-                    @click="reveal(variableTrace)"
-                  >
-                    解锁变量轨迹
-                  </PyButton>
-                </div>
-              </li>
+                {{ depthLockMessage(depthLayer, 'VARIABLE_TRACE') }}
+              </p>
+              <pre
+                v-else-if="variableTrace?.revealed"
+                class="trace"
+              >{{ JSON.stringify(variableTrace.payload, null, 2).slice(0, 1600) }}</pre>
+              <PyButton
+                v-else
+                variant="secondary"
+                size="sm"
+                @click="reveal(variableTrace)"
+              >
+                解锁变量轨迹
+              </PyButton>
+            </article>
 
-              <!-- L4 分层诊断：错误假设 + 提示 1/2/3 -->
-              <li
-                v-if="cardVisible(wrongAssumption) || hintCards.length > 0"
-                class="layer"
-                :class="{
-                  'layer--current': layerIsCurrent(4),
-                  'layer--locked': !layerUnlocked(4),
-                  'layer--done': layerUnlocked(4) && !layerIsCurrent(4),
-                }"
-              >
-                <div class="layer__rail">
-                  <span class="layer__badge">L4</span>
-                </div>
-                <div class="layer__panel">
-                  <div class="layer__head">
-                    <h4 class="layer__title">
-                      分层提示
-                    </h4>
-                    <span
-                      v-if="layerIsCurrent(4)"
-                      class="tag tag--current"
-                    >当前层</span>
-                    <span
-                      v-else-if="!layerUnlocked(4)"
-                      class="tag tag--locked"
-                    >未解锁</span>
-                  </div>
+            <!-- L4 分层提示：错误假设 + 提示 1/2/3 -->
+            <div
+              v-else-if="selectedLayer === 4 && (cardVisible(wrongAssumption) || hintCards.length > 0)"
+              class="bm-card"
+            >
+              <h4 class="layer__title">
+                分层提示
+              </h4>
+              <div class="subcards">
+                <article
+                  v-if="cardVisible(wrongAssumption)"
+                  class="subcard"
+                  :class="{ 'subcard--locked': !cardAccessible(wrongAssumption) }"
+                  data-testid="card-assumption"
+                >
+                  <h5 class="subcard__title">
+                    错误假设
+                  </h5>
                   <p
-                    v-if="!layerUnlocked(4)"
+                    v-if="!cardAccessible(wrongAssumption)"
                     class="lock"
                   >
                     {{ depthLockMessage(depthLayer, 'WRONG_ASSUMPTION') }}
                   </p>
-                  <div class="subcards">
-                    <article
-                      v-if="cardVisible(wrongAssumption)"
-                      class="subcard"
-                      :class="{ 'subcard--locked': !cardAccessible(wrongAssumption) }"
-                      data-testid="card-assumption"
-                    >
-                      <h5 class="subcard__title">
-                        错误假设
-                      </h5>
-                      <p
-                        v-if="!cardAccessible(wrongAssumption)"
-                        class="lock"
-                      >
-                        {{ depthLockMessage(depthLayer, 'WRONG_ASSUMPTION') }}
-                      </p>
-                      <template v-else-if="wrongAssumption?.revealed">
-                        <p class="kv">
-                          <span class="kv__key">误区</span>{{ wrongAssumption.payload.youThought ?? wrongAssumption.payload.you_thought }}
-                        </p>
-                        <p class="kv kv--diff">
-                          <span class="kv__key">正解</span>{{ wrongAssumption.payload.actually }}
-                        </p>
-                      </template>
-                      <PyButton
-                        v-else
-                        variant="secondary"
-                        size="sm"
-                        @click="reveal(wrongAssumption)"
-                      >
-                        解锁错误假设
-                      </PyButton>
-                    </article>
-
-                    <article
-                      v-if="cardVisible(hintLayer1)"
-                      class="subcard"
-                      data-testid="card-hint-1"
-                      :class="{ 'subcard--locked': !cardAccessible(hintLayer1) }"
-                    >
-                      <h5 class="subcard__title">
-                        提示 1
-                      </h5>
-                      <p
-                        v-if="!cardAccessible(hintLayer1)"
-                        class="lock"
-                      >
-                        {{ depthLockMessage(depthLayer, 'HINT_LAYER_1') }}
-                      </p>
-                      <template v-else-if="hintLayer1?.revealed">
-                        <p class="headline">
-                          {{ hintLayer1.payload.headline }}
-                        </p>
-                        <p>{{ hintLayer1.payload.body }}</p>
-                      </template>
-                      <PyButton
-                        v-else
-                        variant="secondary"
-                        size="sm"
-                        @click="reveal(hintLayer1)"
-                      >
-                        解锁 Layer 1 提示
-                      </PyButton>
-                    </article>
-
-                    <article
-                      v-if="cardVisible(hintLayer2)"
-                      class="subcard"
-                      data-testid="card-hint-2"
-                      :class="{ 'subcard--locked': !cardAccessible(hintLayer2) }"
-                    >
-                      <h5 class="subcard__title">
-                        提示 2
-                      </h5>
-                      <p
-                        v-if="!cardAccessible(hintLayer2)"
-                        class="lock"
-                      >
-                        {{ depthLockMessage(depthLayer, 'HINT_LAYER_2') }}
-                      </p>
-                      <template v-else-if="hintLayer2?.revealed">
-                        <p class="headline">
-                          {{ hintLayer2.payload.headline }}
-                        </p>
-                        <p>{{ hintLayer2.payload.body }}</p>
-                      </template>
-                      <PyButton
-                        v-else
-                        variant="secondary"
-                        size="sm"
-                        @click="reveal(hintLayer2)"
-                      >
-                        解锁 Layer 2 提示
-                      </PyButton>
-                    </article>
-
-                    <article
-                      v-if="cardVisible(hintLayer3)"
-                      class="subcard"
-                      data-testid="card-hint-3"
-                      :class="{ 'subcard--locked': !cardAccessible(hintLayer3) }"
-                    >
-                      <h5 class="subcard__title">
-                        提示 3
-                      </h5>
-                      <p
-                        v-if="!cardAccessible(hintLayer3)"
-                        class="lock"
-                      >
-                        {{ depthLockMessage(depthLayer, 'HINT_LAYER_3') }}
-                      </p>
-                      <template v-else-if="hintLayer3?.revealed">
-                        <p class="headline">
-                          {{ hintLayer3.payload.headline }}
-                        </p>
-                        <p>{{ hintLayer3.payload.body }}</p>
-                      </template>
-                      <PyButton
-                        v-else
-                        variant="secondary"
-                        size="sm"
-                        @click="reveal(hintLayer3)"
-                      >
-                        解锁 Layer 3 提示
-                      </PyButton>
-                    </article>
-                  </div>
-                </div>
-              </li>
-
-              <!-- L5 掌握确认（同 KC 变式） -->
-              <li
-                class="layer layer--variant"
-                :class="{
-                  'layer--current': layerIsCurrent(5),
-                  'layer--locked': !showVariantStep,
-                }"
-                data-testid="card-kc-variant"
-              >
-                <div class="layer__rail">
-                  <span class="layer__badge">L5</span>
-                </div>
-                <div class="layer__panel">
-                  <div class="layer__head">
-                    <h4 class="layer__title">
-                      掌握确认
-                    </h4>
-                    <span class="tag tag--target">迁移验证 · 非普通提示</span>
-                  </div>
-                  <template v-if="showVariantStep">
-                    <p>换一道同知识点题验证迁移：{{ session.variantProblem?.title }}</p>
-                    <p
-                      v-if="session.masteryConfirmed"
-                      class="status"
-                    >
-                      变式掌握已确认。
+                  <template v-else-if="wrongAssumption?.revealed">
+                    <p class="kv">
+                      <span class="kv__key">误区</span>{{ wrongAssumption.payload.youThought ?? wrongAssumption.payload.you_thought }}
                     </p>
-                    <PyButton
-                      v-else
-                      variant="primary"
-                      test-id="variant-problem-button"
-                      @click="openVariantProblem"
-                    >
-                      去做变式题
-                    </PyButton>
+                    <p class="kv kv--diff">
+                      <span class="kv__key">正解</span>{{ wrongAssumption.payload.actually }}
+                    </p>
                   </template>
-                  <p
+                  <PyButton
                     v-else
+                    variant="secondary"
+                    size="sm"
+                    @click="reveal(wrongAssumption)"
+                  >
+                    解锁错误假设
+                  </PyButton>
+                </article>
+
+                <article
+                  v-if="cardVisible(hintLayer1)"
+                  class="subcard"
+                  data-testid="card-hint-1"
+                  :class="{ 'subcard--locked': !cardAccessible(hintLayer1) }"
+                >
+                  <h5 class="subcard__title">
+                    提示 1
+                  </h5>
+                  <p
+                    v-if="!cardAccessible(hintLayer1)"
                     class="lock"
                   >
-                    需系统将深度下探到 L5 并匹配到同 KC 变式题后开放。
+                    {{ depthLockMessage(depthLayer, 'HINT_LAYER_1') }}
                   </p>
-                </div>
-              </li>
-            </ol>
+                  <template v-else-if="hintLayer1?.revealed">
+                    <p class="headline">
+                      {{ hintLayer1.payload.headline }}
+                    </p>
+                    <p>{{ hintLayer1.payload.body }}</p>
+                  </template>
+                  <PyButton
+                    v-else
+                    variant="secondary"
+                    size="sm"
+                    @click="reveal(hintLayer1)"
+                  >
+                    解锁 Layer 1 提示
+                  </PyButton>
+                </article>
+
+                <article
+                  v-if="cardVisible(hintLayer2)"
+                  class="subcard"
+                  data-testid="card-hint-2"
+                  :class="{ 'subcard--locked': !cardAccessible(hintLayer2) }"
+                >
+                  <h5 class="subcard__title">
+                    提示 2
+                  </h5>
+                  <p
+                    v-if="!cardAccessible(hintLayer2)"
+                    class="lock"
+                  >
+                    {{ depthLockMessage(depthLayer, 'HINT_LAYER_2') }}
+                  </p>
+                  <template v-else-if="hintLayer2?.revealed">
+                    <p class="headline">
+                      {{ hintLayer2.payload.headline }}
+                    </p>
+                    <p>{{ hintLayer2.payload.body }}</p>
+                  </template>
+                  <PyButton
+                    v-else
+                    variant="secondary"
+                    size="sm"
+                    @click="reveal(hintLayer2)"
+                  >
+                    解锁 Layer 2 提示
+                  </PyButton>
+                </article>
+
+                <article
+                  v-if="cardVisible(hintLayer3)"
+                  class="subcard"
+                  data-testid="card-hint-3"
+                  :class="{ 'subcard--locked': !cardAccessible(hintLayer3) }"
+                >
+                  <h5 class="subcard__title">
+                    提示 3
+                  </h5>
+                  <p
+                    v-if="!cardAccessible(hintLayer3)"
+                    class="lock"
+                  >
+                    {{ depthLockMessage(depthLayer, 'HINT_LAYER_3') }}
+                  </p>
+                  <template v-else-if="hintLayer3?.revealed">
+                    <p class="headline">
+                      {{ hintLayer3.payload.headline }}
+                    </p>
+                    <p>{{ hintLayer3.payload.body }}</p>
+                  </template>
+                  <PyButton
+                    v-else
+                    variant="secondary"
+                    size="sm"
+                    @click="reveal(hintLayer3)"
+                  >
+                    解锁 Layer 3 提示
+                  </PyButton>
+                </article>
+              </div>
+            </div>
+
+            <!-- L5 掌握确认（同 KC 变式） -->
+            <article
+              v-else-if="selectedLayer === 5"
+              class="bm-card bm-card--variant"
+              data-testid="card-kc-variant"
+            >
+              <h4 class="layer__title">
+                掌握确认
+              </h4>
+              <template v-if="showVariantStep">
+                <p>换一道同知识点题验证迁移：{{ session.variantProblem?.title }}</p>
+                <p
+                  v-if="session.masteryConfirmed"
+                  class="status"
+                >
+                  变式掌握已确认。
+                </p>
+                <PyButton
+                  v-else
+                  variant="primary"
+                  test-id="variant-problem-button"
+                  @click="openVariantProblem"
+                >
+                  去做变式题
+                </PyButton>
+              </template>
+              <p
+                v-else
+                class="lock"
+              >
+                需系统将深度下探到 L5 并匹配到同 KC 变式题后开放。
+              </p>
+            </article>
+
+            <p
+              v-else
+              class="notice"
+            >
+              本层暂无可展示的诊断内容。
+            </p>
+          </div>
+
+          <!-- 作答核心：原题重试编辑器（始终可见，仿做题界面右侧作答区） -->
+          <div
+            class="bm-answer"
+            data-testid="retry-area"
+          >
+            <div class="bm-answer__head">
+              <h4 class="layer__title">
+                作答 · 原题重试
+              </h4>
+              <span class="tag tag--primary">通过即出坑</span>
+            </div>
+            <textarea
+              v-model="retryCode"
+              class="retry__code"
+              rows="8"
+              spellcheck="false"
+              placeholder="粘贴修正后的代码…"
+            />
+            <div class="layer__actions">
+              <PyButton
+                variant="primary"
+                :disabled="learning.bugMine.loading"
+                test-id="retry-button"
+                @click="retry"
+              >
+                重新提交（服务端判题）
+              </PyButton>
+              <span
+                v-if="learning.bugMine.lastRetry"
+                class="status"
+              >
+                {{ learning.bugMine.lastRetry.status }} · {{ learning.bugMine.lastRetry.source }}
+              </span>
+            </div>
           </div>
         </section>
-      </section>
+      </main>
       <PyEmptyState
         v-else
         class="detail-empty"
@@ -1163,10 +1124,24 @@ async function retry(): Promise<void> {
 /* Header */
 .bug-mine__header {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
+  align-items: center;
   gap: var(--pyt-space-3);
   flex-wrap: wrap;
+}
+.bug-mine__rail-toggle {
+  flex: 0 0 auto;
+  border: 1px solid var(--pyt-color-border);
+  background: var(--pyt-color-bg-soft);
+  color: var(--pyt-color-text-hint);
+  border-radius: var(--pyt-radius-md);
+  padding: 6px 12px;
+  font-size: var(--pyt-font-size-xs);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.bug-mine__rail-toggle:hover {
+  background: var(--pyt-color-warning-bg);
+  color: var(--pyt-color-text-primary);
 }
 .bug-mine__heading {
   display: flex;
@@ -1187,8 +1162,12 @@ async function retry(): Promise<void> {
 .bug-mine__body {
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(300px, 360px) 1fr;
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
   gap: var(--pyt-space-3);
+}
+/* 收起错题本 → 工作区独占全宽 */
+.bug-mine__body--no-rail {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 /* ---------- Left rail ---------- */
@@ -1434,20 +1413,20 @@ async function retry(): Promise<void> {
   color: var(--pyt-color-text-hint);
 }
 
-/* ---------- Right workspace ---------- */
-.workspace {
+/* ---------- Right workspace: 题面 | 作答 两栏 ---------- */
+.bm-main {
   min-height: 0;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: minmax(280px, 0.85fr) minmax(320px, 1.15fr);
   gap: var(--pyt-space-3);
 }
 .detail-empty {
   align-self: stretch;
 }
 
-/* Problem panel */
-.problem {
-  flex: 0 0 auto;
+/* 左：题面 */
+.bm-problem {
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: var(--pyt-space-2);
@@ -1455,17 +1434,14 @@ async function retry(): Promise<void> {
   border: 1px solid var(--pyt-color-border);
   border-radius: var(--pyt-radius-lg);
   padding: var(--pyt-space-3);
-  max-height: 42vh;
   overflow: hidden;
-}
-.problem--collapsed {
-  max-height: none;
 }
 .problem__head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--pyt-space-2);
+  flex: 0 0 auto;
 }
 .problem__title-wrap {
   min-width: 0;
@@ -1487,19 +1463,6 @@ async function retry(): Promise<void> {
   display: flex;
   gap: var(--pyt-space-1);
   flex-wrap: wrap;
-}
-.problem__toggle {
-  flex: 0 0 auto;
-  border: 1px solid var(--pyt-color-border);
-  background: var(--pyt-color-bg-soft);
-  color: var(--pyt-color-text-hint);
-  border-radius: var(--pyt-radius-md);
-  padding: 4px 10px;
-  font-size: var(--pyt-font-size-xs);
-  cursor: pointer;
-}
-.problem__toggle:hover {
-  background: var(--pyt-color-warning-bg);
 }
 
 /* Tabs */
@@ -1538,6 +1501,9 @@ async function retry(): Promise<void> {
   min-height: 0;
   overflow-y: auto;
   padding-right: var(--pyt-space-1);
+}
+.bm-problem__body {
+  flex: 1 1 auto;
 }
 .problem__io {
   margin-top: var(--pyt-space-2);
@@ -1605,9 +1571,8 @@ async function retry(): Promise<void> {
   color: var(--pyt-color-text-hint);
 }
 
-/* Dig workspace */
-.dig {
-  flex: 1 1 auto;
+/* 右：作答 · 逐层诊断 */
+.bm-work {
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -1617,11 +1582,42 @@ async function retry(): Promise<void> {
   border-radius: var(--pyt-radius-lg);
   padding: var(--pyt-space-3);
 }
-.dig__top {
+.bm-work__head {
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   gap: var(--pyt-space-2);
+}
+.bm-work__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pyt-space-2);
+  flex-wrap: wrap;
+}
+.bm-work__title {
+  margin: 0;
+  font-size: var(--pyt-font-size-base);
+  color: var(--pyt-color-text-primary);
+}
+.bm-layer-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pyt-space-1);
+}
+.bm-layer-pick__label {
+  font-size: var(--pyt-font-size-xs);
+  color: var(--pyt-color-text-muted);
+}
+.bm-layer-pick__select {
+  padding: 5px 10px;
+  border: 1px solid var(--pyt-color-gold);
+  border-radius: var(--pyt-radius-md);
+  background: var(--pyt-color-bg-soft);
+  color: var(--pyt-color-text-primary);
+  font-size: var(--pyt-font-size-sm);
+  font-weight: 700;
+  cursor: pointer;
 }
 
 /* Status bar */
@@ -1629,7 +1625,7 @@ async function retry(): Promise<void> {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: var(--pyt-space-3);
+  gap: var(--pyt-space-2);
   background: var(--pyt-color-bg-soft);
   border: 1px solid var(--pyt-color-border-soft);
   border-radius: var(--pyt-radius-md);
@@ -1637,7 +1633,7 @@ async function retry(): Promise<void> {
 }
 .statusbar__id {
   font-weight: 700;
-  font-size: var(--pyt-font-size-base);
+  font-size: var(--pyt-font-size-sm);
   color: var(--pyt-color-text-on-dark, #fff);
   background: var(--pyt-color-primary);
   border: 1px solid var(--pyt-color-primary-dark);
@@ -1645,43 +1641,37 @@ async function retry(): Promise<void> {
   padding: 2px 12px;
   white-space: nowrap;
 }
-.stat {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 64px;
-}
-.stat__key {
+.bm-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
   font-size: var(--pyt-font-size-xs);
-  color: var(--pyt-color-text-muted);
-  display: flex;
-  flex-direction: column;
+  font-weight: 600;
+  border: 1px solid var(--pyt-color-border-soft);
+  border-radius: var(--pyt-radius-full);
+  background: var(--pyt-color-bg-elevated);
+  color: var(--pyt-color-text-hint);
+  white-space: nowrap;
 }
-.stat__key em {
-  font-style: normal;
-  font-size: 9px;
-  color: var(--pyt-color-text-muted);
-  opacity: 0.85;
-}
-.stat__val {
-  font-size: var(--pyt-font-size-base);
-  font-weight: 700;
-  color: var(--pyt-color-text-primary);
-}
-.stat__val--status.is-resolved {
+.bm-chip.is-resolved {
   color: var(--pyt-color-success);
+  border-color: var(--pyt-color-success);
 }
-.stat__val--status.is-abandoned {
+.bm-chip.is-abandoned {
   color: var(--pyt-color-text-muted);
 }
-.stat--accent .stat__val {
+.bm-chip--accent {
   color: var(--pyt-color-primary-dark);
+  border-color: var(--pyt-color-primary);
+  background: var(--pyt-color-warning-bg);
 }
-.stat--target .stat__val {
+.bm-chip--target {
   color: var(--pyt-color-accent);
+  border-color: var(--pyt-color-accent);
+  background: var(--pyt-color-accent-bg);
 }
 
-/* Assignment (depth track) */
+/* Assignment (depth track) - slim, read-only */
 .assign {
   background: var(--pyt-color-bg-soft);
   border: 1px solid var(--pyt-color-border-soft);
@@ -1691,16 +1681,12 @@ async function retry(): Promise<void> {
   flex-direction: column;
   gap: var(--pyt-space-2);
 }
-.assign__head {
-  display: flex;
-  align-items: baseline;
-  gap: var(--pyt-space-2);
+.assign--slim {
+  flex: 0 0 auto;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--pyt-space-3);
   flex-wrap: wrap;
-}
-.assign__label {
-  font-size: var(--pyt-font-size-sm);
-  font-weight: 700;
-  color: var(--pyt-color-text-primary);
 }
 .assign__hint {
   font-size: var(--pyt-font-size-xs);
@@ -1793,47 +1779,9 @@ async function retry(): Promise<void> {
   font-weight: 600;
 }
 
-/* Legend */
-.legend {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--pyt-space-3);
-}
-.legend li {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: var(--pyt-font-size-xs);
-  color: var(--pyt-color-text-muted);
-}
-.legend__dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 3px;
-  border: 1px solid var(--pyt-color-border);
-  display: inline-block;
-}
-.legend__dot--done {
-  background: var(--pyt-color-bg-elevated);
-}
-.legend__dot--current {
-  background: var(--pyt-color-gold);
-  border-color: var(--pyt-color-primary);
-}
-.legend__dot--target {
-  background: transparent;
-  border: 2px dashed var(--pyt-color-accent);
-}
-.legend__dot--locked {
-  background: var(--pyt-color-bg-sunken);
-  opacity: 0.6;
-}
-
 /* Guidance */
 .guidance {
+  flex: 0 0 auto;
   display: flex;
   gap: var(--pyt-space-2);
   padding: var(--pyt-space-2) var(--pyt-space-3);
@@ -1867,58 +1815,24 @@ async function retry(): Promise<void> {
   color: var(--pyt-color-text-muted);
 }
 
-/* Layers timeline */
-.dig__scroll {
+/* 选中诊断层内容 */
+.bm-diag {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   padding-right: var(--pyt-space-1);
 }
-.layers {
-  list-style: none;
+.bm-diag__note {
   margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--pyt-space-3);
-}
-.layer {
-  display: grid;
-  grid-template-columns: 40px 1fr;
-  gap: var(--pyt-space-2);
-}
-.layer__rail {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  position: relative;
-}
-.layer__rail::before {
-  content: '';
-  position: absolute;
-  top: 36px;
-  bottom: -22px;
-  width: 2px;
-  background: var(--pyt-color-border-soft);
-}
-.layer:last-child .layer__rail::before {
-  display: none;
-}
-.layer__badge {
-  width: 34px;
-  height: 34px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--pyt-radius-md);
-  border: 2px solid var(--pyt-color-border);
-  background: var(--pyt-color-bg-sunken);
-  color: var(--pyt-color-text-muted);
-  font-weight: 700;
+  padding: var(--pyt-space-3);
   font-size: var(--pyt-font-size-sm);
-  z-index: 1;
+  line-height: 1.6;
+  color: var(--pyt-color-text-muted);
+  background: var(--pyt-color-bg-soft);
+  border: 1px dashed var(--pyt-color-border);
+  border-radius: var(--pyt-radius-md);
 }
-.layer__panel {
+.bm-card {
   background: var(--pyt-color-bg-soft);
   border: 1px solid var(--pyt-color-border);
   border-radius: var(--pyt-radius-md);
@@ -1927,92 +1841,14 @@ async function retry(): Promise<void> {
   flex-direction: column;
   gap: var(--pyt-space-2);
 }
-.layer__head {
-  display: flex;
-  align-items: center;
-  gap: var(--pyt-space-2);
-  flex-wrap: wrap;
+.bm-card--variant {
+  border-color: var(--pyt-color-accent);
+  background: var(--pyt-color-accent-bg);
 }
 .layer__title {
   margin: 0;
   font-size: var(--pyt-font-size-base);
   color: var(--pyt-color-text-primary);
-}
-.layer__desc {
-  margin: 0;
-  font-size: var(--pyt-font-size-sm);
-  color: var(--pyt-color-text-muted);
-  line-height: 1.5;
-}
-.layer__actions {
-  display: flex;
-  align-items: center;
-  gap: var(--pyt-space-3);
-  flex-wrap: wrap;
-}
-
-/* Layer states */
-.layer--primary .layer__badge {
-  background: var(--pyt-color-gold);
-  border-color: var(--pyt-color-primary);
-  color: var(--pyt-color-primary-dark);
-}
-.layer--primary .layer__panel {
-  background: var(--pyt-color-bg-elevated);
-  border-color: var(--pyt-color-primary);
-  box-shadow: 0 2px 0 var(--pyt-color-border);
-}
-.layer--current .layer__badge {
-  background: var(--pyt-color-gold);
-  border-color: var(--pyt-color-primary);
-  color: var(--pyt-color-primary-dark);
-}
-.layer--current .layer__panel {
-  border-color: var(--pyt-color-gold);
-  box-shadow: 0 0 0 1px var(--pyt-color-gold) inset;
-}
-.layer--done .layer__panel {
-  opacity: 0.96;
-}
-.layer--locked .layer__panel {
-  opacity: 0.7;
-  border-style: dashed;
-  background: var(--pyt-color-bg-sunken);
-}
-.layer--variant .layer__panel {
-  border-color: var(--pyt-color-accent);
-  background: var(--pyt-color-accent-bg);
-}
-
-/* Tags */
-.tag {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.3px;
-  padding: 2px 8px;
-  border-radius: var(--pyt-radius-full);
-  border: 1px solid var(--pyt-color-border);
-  background: var(--pyt-color-bg-sunken);
-  color: var(--pyt-color-text-hint);
-}
-.tag--primary {
-  background: var(--pyt-color-gold);
-  border-color: var(--pyt-color-primary);
-  color: var(--pyt-color-primary-dark);
-}
-.tag--current {
-  background: var(--pyt-color-warning-bg);
-  border-color: var(--pyt-color-gold);
-  color: var(--pyt-color-primary-dark);
-}
-.tag--target {
-  background: var(--pyt-color-accent-bg);
-  border-color: var(--pyt-color-accent);
-  color: var(--pyt-color-accent);
-}
-.tag--locked {
-  background: var(--pyt-color-bg-sunken);
-  color: var(--pyt-color-text-muted);
 }
 
 /* Sub cards (L4) */
@@ -2040,8 +1876,51 @@ async function retry(): Promise<void> {
   color: var(--pyt-color-text-primary);
 }
 
+/* 作答核心：原题重试 */
+.bm-answer {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pyt-space-2);
+  background: var(--pyt-color-bg-elevated);
+  border: 1px solid var(--pyt-color-primary);
+  border-radius: var(--pyt-radius-md);
+  padding: var(--pyt-space-3);
+  box-shadow: 0 2px 0 var(--pyt-color-border);
+}
+.bm-answer__head {
+  display: flex;
+  align-items: center;
+  gap: var(--pyt-space-2);
+  flex-wrap: wrap;
+}
+.layer__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--pyt-space-3);
+  flex-wrap: wrap;
+}
+
+/* Tags */
+.tag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  padding: 2px 8px;
+  border-radius: var(--pyt-radius-full);
+  border: 1px solid var(--pyt-color-border);
+  background: var(--pyt-color-bg-sunken);
+  color: var(--pyt-color-text-hint);
+}
+.tag--primary {
+  background: var(--pyt-color-gold);
+  border-color: var(--pyt-color-primary);
+  color: var(--pyt-color-primary-dark);
+}
+
 /* shared content */
-.layer__panel p {
+.bm-card p,
+.subcard p {
   margin: 0;
   line-height: 1.5;
   font-size: var(--pyt-font-size-sm);
@@ -2057,7 +1936,7 @@ async function retry(): Promise<void> {
   color: var(--pyt-color-text-muted);
   font-weight: 600;
 }
-.layer__panel code,
+.bm-card code,
 .subcard code {
   background: var(--pyt-color-bg-elevated);
   border: 1px solid var(--pyt-color-border-soft);
@@ -2078,7 +1957,7 @@ async function retry(): Promise<void> {
   color: var(--pyt-color-terminal-text);
   border-radius: var(--pyt-radius-md);
   padding: var(--pyt-space-2);
-  max-height: 160px;
+  max-height: 220px;
   overflow: auto;
   font-size: var(--pyt-font-size-xs);
 }
@@ -2095,6 +1974,7 @@ async function retry(): Promise<void> {
   background: var(--pyt-color-bg-primary);
   color: var(--pyt-color-text-primary);
   resize: vertical;
+  min-height: 120px;
 }
 .status {
   font-size: var(--pyt-font-size-sm);
@@ -2114,16 +1994,20 @@ async function retry(): Promise<void> {
     height: auto;
     min-height: 100%;
   }
-  .bug-mine__body {
+  .bug-mine__body,
+  .bug-mine__body--no-rail {
+    grid-template-columns: 1fr;
+  }
+  .bm-main {
     grid-template-columns: 1fr;
   }
   .rail,
   .problem__body,
-  .dig__scroll {
+  .bm-diag {
     overflow: visible;
   }
-  .problem {
-    max-height: none;
+  .bm-problem {
+    overflow: visible;
   }
   .sample {
     grid-template-columns: 1fr;

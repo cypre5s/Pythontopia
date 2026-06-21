@@ -1,9 +1,35 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import type { BossProblemDto } from '@/api/dto/Boss';
 
-defineProps<{ problem: BossProblemDto }>();
+const props = defineProps<{ problem: BossProblemDto }>();
 const code = defineModel<string>('code', { required: true });
+
+// 题面常把「描述 + ```代码``` + 报错 + 样例」混在一段里。按 ``` 代码围栏切成
+// 文字段 / 代码段，分别用题面样式 / 代码框渲染，避免代码与题干糊成一坨报错文本。
+interface StatementSegment {
+  type: 'text' | 'code';
+  content: string;
+}
+const segments = computed<StatementSegment[]>(() => {
+  const src = props.problem.statement ?? '';
+  // 正则在函数内新建，避免共享 /g 正则的 lastIndex 副作用（computed 须纯）。
+  const fence = /```[a-zA-Z0-9_-]*\r?\n?([\s\S]*?)```/g;
+  const out: StatementSegment[] = [];
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = fence.exec(src)) !== null) {
+    const before = src.slice(last, m.index).trim();
+    if (before) out.push({ type: 'text', content: before });
+    const codeBody = (m[1] ?? '').replace(/\s+$/, '');
+    if (codeBody) out.push({ type: 'code', content: codeBody });
+    last = fence.lastIndex;
+  }
+  const tail = src.slice(last).trim();
+  if (tail) out.push({ type: 'text', content: tail });
+  // 无围栏（纯文本题面）时回退为单个文字段，保证始终有内容渲染。
+  return out.length > 0 ? out : [{ type: 'text', content: src.trim() }];
+});
 
 const step = ref<'read' | 'locate' | 'fix'>('read');
 // 定位笔记单独存放，绝不写进提交的 code（否则「出错原因」散文会被当代码判 → 必败）。
@@ -37,7 +63,22 @@ function advanceStep(): void {
       class="phase-panel"
     >
       <h4>阶段 1：阅读报错信息</h4>
-      <pre class="trace">{{ problem.statement }}</pre>
+      <div class="cl-statement">
+        <template
+          v-for="(seg, i) in segments"
+          :key="i"
+        >
+          <pre
+            v-if="seg.type === 'code'"
+            class="cl-code"
+          ><code>{{ seg.content }}</code></pre>
+          <p
+            v-else
+            class="cl-prose"
+            v-text="seg.content"
+          />
+        </template>
+      </div>
       <button
         type="button"
         class="advance-btn"
@@ -52,7 +93,22 @@ function advanceStep(): void {
       class="phase-panel"
     >
       <h4>阶段 2：定位错误根源</h4>
-      <pre class="trace trace--dim">{{ problem.statement }}</pre>
+      <div class="cl-statement cl-statement--dim">
+        <template
+          v-for="(seg, i) in segments"
+          :key="i"
+        >
+          <pre
+            v-if="seg.type === 'code'"
+            class="cl-code"
+          ><code>{{ seg.content }}</code></pre>
+          <p
+            v-else
+            class="cl-prose"
+            v-text="seg.content"
+          />
+        </template>
+      </div>
       <textarea
         v-model="locateNote"
         class="locate-input"
@@ -96,8 +152,12 @@ function advanceStep(): void {
 .step-arrow { color: var(--pyt-color-text-muted); }
 .phase-panel { display: grid; gap: 10px; }
 .phase-panel h4 { margin: 0; color: var(--pyt-color-text-hint); font-size: 14px; }
-.trace { margin: 0; padding: 10px; background: var(--pyt-color-terminal-stderr-bg); border: 2px solid var(--pyt-color-danger); border-radius: var(--pyt-radius-sm); white-space: pre-wrap; font-size: 12px; line-height: 1.6; color: var(--pyt-color-terminal-stderr-text); font-family: var(--pyt-font-mono, monospace); }
-.trace--dim { opacity: 0.6; border-color: var(--pyt-color-border); }
+/* 题面分段：文字段（描述/报错/输入输出/样例）与代码段分开渲染，不再糊成一坨报错文本。 */
+.cl-statement { display: grid; gap: 8px; }
+.cl-statement--dim { opacity: 0.62; }
+.cl-prose { margin: 0; padding: 8px 10px; white-space: pre-wrap; word-break: break-word; font-size: 13px; line-height: 1.7; color: var(--pyt-color-text-primary); background: var(--pyt-color-bg-soft); border: 1px solid var(--pyt-color-border); border-radius: var(--pyt-radius-sm); }
+.cl-code { margin: 0; padding: 10px 12px; overflow-x: auto; white-space: pre; font-family: var(--pyt-font-mono, monospace); font-size: 13px; line-height: 1.6; color: var(--pyt-color-terminal-text); background: var(--pyt-color-terminal-bg); border: 2px solid var(--pyt-color-border-strong); border-radius: var(--pyt-radius-sm); }
+.cl-code code { font-family: inherit; background: none; padding: 0; }
 .locate-input { font-family: inherit; font-size: 13px; background: var(--pyt-color-terminal-bg); color: var(--pyt-color-terminal-text); border: 2px solid var(--pyt-color-gold); border-radius: var(--pyt-radius-sm); padding: 8px; resize: vertical; }
 .advance-btn { align-self: flex-start; font-family: inherit; font-size: 12px; padding: 6px 14px; background: var(--pyt-color-info-bg); color: var(--pyt-color-info); border: 2px solid var(--pyt-color-info); border-radius: 4px; cursor: pointer; box-shadow: 2px 2px 0 rgba(42, 111, 151, 0.35); }
 .advance-btn:hover { background: #c2dcee; }

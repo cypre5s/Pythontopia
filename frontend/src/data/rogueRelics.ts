@@ -16,6 +16,8 @@ export const ROGUE_RELICS: readonly RogueRelic[] = [
   { id: 'combo_scholar', name: '连题学者', icon: '🔥', desc: '通关得分 +20%。' },
   { id: 'second_wind', name: '复盘回气', icon: '💧', desc: '答错时气势减半，而非清零。' },
   { id: 'focus_lens', name: '专注透镜', icon: '🔍', desc: '营地复盘额外回 1 点体力。' },
+  { id: 'quick_thinker', name: '急智', icon: '⚡', desc: '30 秒内通关，额外 +50% 得分。' },
+  { id: 'first_aid', name: '急救包', icon: '🩹', desc: '本局首次答错不扣体力。' },
 ];
 
 export function relicById(id: string): RogueRelic | undefined {

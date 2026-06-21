@@ -2,17 +2,29 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import type { BossProblemDto } from '@/api/dto/Boss';
 
-const judgeMock = vi.hoisted(() => ({ fetchProblem: vi.fn(), judge: vi.fn() }));
+const judgeMock = vi.hoisted(() => ({
+  fetchProblem: vi.fn(),
+  judge: vi.fn(),
+  prefetchProblem: vi.fn(),
+  clearPrefetch: vi.fn(),
+}));
 const frontierApiMock = vi.hoisted(() => ({
   requestFrontierPicks: vi.fn(),
   fetchExpeditionRun: vi.fn(),
   saveExpeditionRun: vi.fn(),
   deleteExpeditionRun: vi.fn(),
+  submitExpeditionScore: vi.fn(),
+  fetchExpeditionLeaderboard: vi.fn(),
 }));
 
 vi.mock('@/composables/useChallengeJudge', () => ({
   isJudgeUnavailable: () => false,
-  useChallengeJudge: () => ({ fetchProblem: judgeMock.fetchProblem, judge: judgeMock.judge }),
+  useChallengeJudge: () => ({
+    fetchProblem: judgeMock.fetchProblem,
+    judge: judgeMock.judge,
+    prefetchProblem: judgeMock.prefetchProblem,
+    clearPrefetch: judgeMock.clearPrefetch,
+  }),
 }));
 vi.mock('@/composables/useKcFrontier', () => ({
   useKcFrontier: () => ({
@@ -37,6 +49,8 @@ vi.mock('@/api/expedition', () => ({
   fetchExpeditionRun: frontierApiMock.fetchExpeditionRun,
   saveExpeditionRun: frontierApiMock.saveExpeditionRun,
   deleteExpeditionRun: frontierApiMock.deleteExpeditionRun,
+  submitExpeditionScore: frontierApiMock.submitExpeditionScore,
+  fetchExpeditionLeaderboard: frontierApiMock.fetchExpeditionLeaderboard,
 }));
 
 import { useRogueRunStore } from '@/stores/rogueRun';
@@ -54,12 +68,17 @@ beforeEach(() => {
   localStorage.clear();
   judgeMock.fetchProblem.mockReset().mockResolvedValue(problem());
   judgeMock.judge.mockReset();
+  judgeMock.prefetchProblem.mockReset();
+  judgeMock.clearPrefetch.mockReset();
   // 默认后端前沿选择器返回空 → 回退本地 useKcFrontier。
   frontierApiMock.requestFrontierPicks.mockReset().mockResolvedValue([]);
   // 默认没有后端活跃 run；startRun 新开局。
   frontierApiMock.fetchExpeditionRun.mockReset().mockResolvedValue(null);
   frontierApiMock.saveExpeditionRun.mockReset().mockResolvedValue(undefined);
   frontierApiMock.deleteExpeditionRun.mockReset().mockResolvedValue(undefined);
+  // 排行榜：默认不上报/拉到空（best-effort）。具体用例自行覆盖返回值。
+  frontierApiMock.submitExpeditionScore.mockReset().mockResolvedValue(null);
+  frontierApiMock.fetchExpeditionLeaderboard.mockReset().mockResolvedValue(null);
 });
 
 describe('rogueRun store', () => {
@@ -71,6 +90,17 @@ describe('rogueRun store', () => {
     const start = run.nodes.find((n) => n.layer === 0);
     expect(start?.kind).toBe('battle');
     expect(start?.state).toBe('available');
+  });
+
+  it('prefetches the available start battle node after landing on the map', async () => {
+    const run = useRogueRunStore();
+    await run.startRun(null);
+    await new Promise((resolve) => setTimeout(resolve, 0)); // flush phase watcher（落地图触发预取）
+    expect(judgeMock.clearPrefetch).toHaveBeenCalled();
+    const start = run.nodes.find((n) => n.layer === 0);
+    expect(judgeMock.prefetchProblem).toHaveBeenCalledWith(
+      expect.objectContaining({ kc: start?.kcCode, kind: start?.challengeKind }),
+    );
   });
 
   it('passing a battle awards score + momentum and clears the node, unlocking next', async () => {
@@ -254,7 +284,7 @@ describe('rogueRun store', () => {
     expect(run.nodes.find((n) => n.id === node!.id)?.state).toBe('cleared');
   });
 
-  it('chest node grants a relic and clears in-place without fetching a problem', async () => {
+  it('chest node opens a three-choice reward; claiming returns to map with the relic', async () => {
     const run = useRogueRunStore();
     await run.startRun(null);
     const node = run.nodes.find((n) => n.layer === 0);
@@ -263,9 +293,117 @@ describe('rogueRun store', () => {
     await run.enterNode(node!.id);
 
     expect(judgeMock.fetchProblem).not.toHaveBeenCalled();
-    expect(run.phase).toBe('map');
-    expect(run.relics).toHaveLength(1);
+    expect(run.phase).toBe('reward');
+    expect(run.rewardChoices.length).toBeGreaterThan(0);
+    expect(run.rewardChoices.length).toBeLessThanOrEqual(3);
+    expect(run.relics).toHaveLength(0); // not granted until chosen
     expect(run.nodes.find((n) => n.id === node!.id)?.state).toBe('cleared');
+
+    const picked = run.rewardChoices[0]!;
+    run.chooseReward(picked);
+    expect(run.phase).toBe('map');
+    expect(run.relics).toEqual([picked]);
+  });
+
+  it('relic 急救包(first_aid) shields the first mistake, then later mistakes cost HP', async () => {
+    const run = useRogueRunStore();
+    await run.startRun(null);
+    run.relics.push('first_aid');
+    const start = run.nodes.find((n) => n.layer === 0);
+    const hp0 = run.hp;
+    judgeMock.judge.mockResolvedValue({
+      problemId: 'p1', passed: false, passedTestCases: 0, totalTestCases: 1, score: 0, feedback: 'wa',
+    });
+    await run.enterNode(start!.id);
+    await run.submitChallenge();
+    expect(run.hp).toBe(hp0); // first failure shielded
+
+    await run.retryChallenge();
+    await run.submitChallenge();
+    expect(run.hp).toBe(hp0 - 2); // second failure costs HP normally
+  });
+
+  it('relic 急智(quick_thinker) boosts score when solved quickly', async () => {
+    judgeMock.judge.mockResolvedValue({
+      problemId: 'p1', passed: true, passedTestCases: 1, totalTestCases: 1, score: 80, feedback: 'ok',
+    });
+    const baseRun = useRogueRunStore();
+    await baseRun.startRun(null);
+    const baseStart = baseRun.nodes.find((n) => n.layer === 0);
+    await baseRun.enterNode(baseStart!.id);
+    await baseRun.submitChallenge();
+    const baseScore = baseRun.score;
+
+    setActivePinia(createPinia());
+    const fastRun = useRogueRunStore();
+    await fastRun.startRun(null);
+    fastRun.relics.push('quick_thinker');
+    const fastStart = fastRun.nodes.find((n) => n.layer === 0);
+    await fastRun.enterNode(fastStart!.id);
+    await fastRun.submitChallenge();
+    expect(fastRun.score).toBeGreaterThan(baseScore);
+  });
+
+  it('clearing a node at the half-way layer heals 1 HP (milestone)', async () => {
+    const run = useRogueRunStore();
+    await run.startRun(null);
+    const halfway = Math.floor((run.layers - 1) / 2);
+    const node = run.nodes.find((n) => n.layer === halfway);
+    expect(node).toBeDefined();
+    node!.kind = 'chest';
+    node!.state = 'available';
+    run.hp = run.maxHp - 2;
+
+    await run.enterNode(node!.id);
+
+    // chest 不直接回血，唯一来源是半程里程碑 +1。
+    expect(run.hp).toBe(run.maxHp - 1);
+  });
+
+  it('rejects a structurally corrupt saved run instead of resuming into a crash', async () => {
+    frontierApiMock.fetchExpeditionRun.mockResolvedValueOnce(null);
+    localStorage.setItem('pyt_rogue_run_v1', JSON.stringify({
+      phase: 'map',
+      focusChapter: 1,
+      nodes: [{ id: 'L0-0', layer: 0 }], // missing col/kind/state/next → invalid
+      layers: 1,
+      hp: 3,
+      maxHp: 5,
+      momentum: 0,
+      bestMomentum: 0,
+      score: 0,
+      relics: [],
+      isDaily: false,
+      history: [],
+    }));
+
+    const run = useRogueRunStore();
+    const ok = await run.refreshSavedRun();
+
+    expect(ok).toBe(false);
+    expect(run.hasSavedRun).toBe(false);
+  });
+
+  it('raises in-run difficulty on a winning streak (momentum feeds back into the next fight)', async () => {
+    frontierApiMock.requestFrontierPicks.mockResolvedValue(
+      Array.from({ length: 28 }, () => ({
+        kcCode: 'PY43-KC-001', chapter: 1, difficulty: 2, reason: 'test',
+      })),
+    );
+    judgeMock.judge.mockResolvedValue({
+      problemId: 'p1', passed: true, passedTestCases: 1, totalTestCases: 1, score: 80, feedback: 'ok',
+    });
+    const run = useRogueRunStore();
+    await run.startRun(null);
+    // 直接把气势拉到 3，进入任一可战节点应出更高难度题。
+    run.momentum = 3;
+    const start = run.nodes.find((n) => n.layer === 0);
+    await run.enterNode(start!.id);
+    // base 2 + 气势(>=3) +1 = 3。
+    expect(run.activeDifficulty).toBe(3);
+    expect(judgeMock.fetchProblem).toHaveBeenLastCalledWith(
+      expect.objectContaining({ difficulty: 3 }),
+    );
   });
 
   it('boss requires beating bossPhasesTotal phases before victory', async () => {
@@ -457,5 +595,62 @@ describe('rogueRun store', () => {
     expect(run.focusChapter).toBe(1);
     expect(run.nodes[0]?.kcCode).not.toBe('PY43-KC-039');
     expect(frontierApiMock.requestFrontierPicks).toHaveBeenCalled();
+  });
+
+  it('finishRun settles the run and reports the score to the class leaderboard once', async () => {
+    const board = {
+      entries: [{ rank: 1, userId: 7, displayName: '我', bestScore: 120, bestDepth: 0, self: true }],
+      selfRank: 1,
+      selfBest: 120,
+      inClass: true,
+    };
+    frontierApiMock.submitExpeditionScore.mockResolvedValue(board);
+    const run = useRogueRunStore();
+    await run.startRun(null);
+    run.score = 120;
+    run.bestMomentum = 2;
+
+    run.finishRun();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(run.phase).toBe('over');
+    expect(frontierApiMock.submitExpeditionScore).toHaveBeenCalledTimes(1);
+    expect(frontierApiMock.submitExpeditionScore).toHaveBeenCalledWith(
+      expect.objectContaining({ score: 120, bestMomentum: 2, cleared: false }),
+    );
+    expect(run.leaderboard).toEqual(board);
+
+    // 已结算后再点「结束本局」不重复上报。
+    run.finishRun();
+    expect(frontierApiMock.submitExpeditionScore).toHaveBeenCalledTimes(1);
+  });
+
+  it('loadLeaderboard populates the class leaderboard state (best-effort)', async () => {
+    const board = {
+      entries: [
+        { rank: 1, userId: 1, displayName: '甲', bestScore: 300, bestDepth: 6, self: false },
+        { rank: 2, userId: 7, displayName: '我', bestScore: 150, bestDepth: 3, self: true },
+      ],
+      selfRank: 2,
+      selfBest: 150,
+      inClass: true,
+    };
+    frontierApiMock.fetchExpeditionLeaderboard.mockResolvedValueOnce(board);
+    const run = useRogueRunStore();
+    await run.loadLeaderboard();
+    expect(run.leaderboard).toEqual(board);
+  });
+
+  it('does not double-report when a run settles via HP loss then finishRun', async () => {
+    const run = useRogueRunStore();
+    await run.startRun(null);
+    run.hp = 0;
+    run.activeNode = run.nodes.find((n) => n.layer === 0) ?? null;
+    run.phase = 'challenge';
+    run.continueAfterChallenge(); // hp 0 → 结算并上报一次
+    expect(run.phase).toBe('over');
+    expect(frontierApiMock.submitExpeditionScore).toHaveBeenCalledTimes(1);
+    run.finishRun(); // 已 over，提前返回，不重复上报
+    expect(frontierApiMock.submitExpeditionScore).toHaveBeenCalledTimes(1);
   });
 });
