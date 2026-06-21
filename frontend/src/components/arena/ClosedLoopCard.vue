@@ -11,23 +11,54 @@ interface StatementSegment {
   type: 'text' | 'code';
   content: string;
 }
+// 按行解析，双识别代码块：① ``` 围栏；② 中文「【错误代码】/【代码】…」标签后到下一个
+// 【…】标签前的行。两种格式的代码都抽成独立代码框，与题干/样例分开（线上 boss 题多用标签式）。
+const FENCE_RE = /^\s*```/;
+const CODE_LABEL_RE = /^\s*【\s*(?:错误代码|出错代码|错误的代码|错误程序|有误代码|代码|参考代码|示例代码|程序代码|原代码|原始代码)\s*】\s*$/;
+const SECTION_LABEL_RE = /^\s*【[^】]+】/;
 const segments = computed<StatementSegment[]>(() => {
   const src = props.problem.statement ?? '';
-  // 正则在函数内新建，避免共享 /g 正则的 lastIndex 副作用（computed 须纯）。
-  const fence = /```[a-zA-Z0-9_-]*\r?\n?([\s\S]*?)```/g;
   const out: StatementSegment[] = [];
-  let last = 0;
-  let m: RegExpExecArray | null;
-  while ((m = fence.exec(src)) !== null) {
-    const before = src.slice(last, m.index).trim();
-    if (before) out.push({ type: 'text', content: before });
-    const codeBody = (m[1] ?? '').replace(/\s+$/, '');
-    if (codeBody) out.push({ type: 'code', content: codeBody });
-    last = fence.lastIndex;
+  let buf: string[] = [];
+  let mode: StatementSegment['type'] = 'text';
+  let inFence = false;
+  let inCodeSection = false;
+  const flush = (): void => {
+    const content = buf.join('\n').replace(/^\n+/, '').replace(/\s+$/, '');
+    if (content.trim().length > 0) out.push({ type: mode, content });
+    buf = [];
+  };
+  for (const line of src.split('\n')) {
+    if (FENCE_RE.test(line)) {
+      flush();
+      inFence = !inFence;
+      inCodeSection = false;
+      mode = inFence ? 'code' : 'text';
+      continue; // 围栏行本身是分隔符，不渲染
+    }
+    if (inFence) {
+      buf.push(line);
+      continue;
+    }
+    if (CODE_LABEL_RE.test(line)) {
+      // 代码标签作为题面小标题留在 prose；其后到下一个【…】标签前的行作为代码段。
+      buf.push(line);
+      flush();
+      mode = 'code';
+      inCodeSection = true;
+      continue;
+    }
+    if (inCodeSection && SECTION_LABEL_RE.test(line)) {
+      flush();
+      mode = 'text';
+      inCodeSection = false;
+      buf.push(line);
+      continue;
+    }
+    buf.push(line);
   }
-  const tail = src.slice(last).trim();
-  if (tail) out.push({ type: 'text', content: tail });
-  // 无围栏（纯文本题面）时回退为单个文字段，保证始终有内容渲染。
+  flush();
+  // 无任何可分段内容时回退为单个文字段，保证始终有内容渲染。
   return out.length > 0 ? out : [{ type: 'text', content: src.trim() }];
 });
 
