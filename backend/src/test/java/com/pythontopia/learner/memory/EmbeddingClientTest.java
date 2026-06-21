@@ -44,9 +44,9 @@ class EmbeddingClientTest {
 
   @Test
   void embedSingleReturnsVectorWithExpectedDimension() {
-    // 512 维（对齐 BgeSmallEmbedder）：客户端原样解析维度，不截断。
+    // 2048 维（对齐智谱 embedding-3）：客户端原样解析维度，不截断。
     StringBuilder vector = new StringBuilder("0.0");
-    for (int i = 1; i < 512; i++) {
+    for (int i = 1; i < 2048; i++) {
       vector.append(",0.0");
     }
     MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
@@ -54,13 +54,13 @@ class EmbeddingClientTest {
         .expect(MockRestRequestMatchers.requestTo("http://rag.test/embed"))
         .andRespond(
             MockRestResponseCreators.withSuccess(
-                "{\"model\":\"bge-small-zh-v1.5\",\"dim\":512,\"vectors\":[[" + vector + "]]}",
+                "{\"model\":\"zhipu-embedding-3\",\"dim\":2048,\"vectors\":[[" + vector + "]]}",
                 MediaType.APPLICATION_JSON));
 
     Optional<float[]> result = client.embed("列表是可变对象");
 
     assertThat(result).isPresent();
-    assertThat(result.orElseThrow()).hasSize(512);
+    assertThat(result.orElseThrow()).hasSize(2048);
   }
 
   @Test

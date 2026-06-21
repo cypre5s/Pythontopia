@@ -106,6 +106,25 @@ def test_parse_chat_message_plain_text_back_compatible() -> None:
     assert resp.tool_calls is None
 
 
+def test_parse_chat_message_joins_array_content_parts() -> None:
+    resp = _parse_chat_message(
+        {
+            "choices": [
+                {
+                    "message": {
+                        "content": [
+                            {"type": "text", "text": '{"ok": '},
+                            {"type": "text", "text": "true}"},
+                        ]
+                    }
+                }
+            ]
+        }
+    )
+    assert resp.content_json == {"ok": True}
+    assert resp.content_text == '{"ok": true}'
+
+
 def test_parse_chat_message_malformed_failsoft() -> None:
     assert _parse_chat_message({}).tool_calls is None
     assert _parse_chat_message({"choices": []}).content_text is None

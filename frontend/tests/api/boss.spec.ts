@@ -45,9 +45,103 @@ describe('requestBossProblem', () => {
     });
 
     const problem = await requestBossProblem(1, 1);
-    expect(httpMock.post).toHaveBeenCalledWith('/api/world/boss/1/problem', { stage: 1 });
+    expect(httpMock.post).toHaveBeenCalledWith(
+      '/api/world/boss/1/problem',
+      { stage: 1 },
+      expect.objectContaining({ timeout: 180_000 }),
+    );
     expect(problem.problemId).toBe('ai-1');
     expect(problem.aiGenerated).toBe(true);
+  });
+
+  it('normalizes backend bug payloads that only include a prompt into editable code', async () => {
+    httpMock.post.mockResolvedValueOnce({
+      data: {
+        problemId: 'ai-bug-1',
+        chapter: 1,
+        stage: 2,
+        difficulty: 2,
+        kcCode: 'PY43-KC-001',
+        statement: '修复求和程序：读入两个数，输出和。',
+        hints: [],
+        sampleInput: '2 3',
+        sampleOutput: '5',
+        totalTestCases: 3,
+        reviewed: true,
+        aiGenerated: true,
+      },
+    });
+
+    const problem = await requestBossProblem(1, {
+      stage: 2,
+      preferredKind: 'bug_mine',
+      preferredKc: 'PY43-KC-001',
+    });
+
+    expect(problem.problemId).toBe('ai-bug-1');
+    expect(problem.buggyCode).toContain('input');
+    expect(problem.starterCode).toBe(problem.buggyCode);
+    expect(problem.statement).toContain('修复求和程序');
+    expect(problem.statement).not.toBe(problem.buggyCode);
+  });
+
+  it('uses backend buggy code when starter code is present but empty', async () => {
+    httpMock.post.mockResolvedValueOnce({
+      data: {
+        problemId: 'ai-bug-2',
+        chapter: 2,
+        stage: 3,
+        difficulty: 3,
+        kcCode: 'PY43-KC-008',
+        statement: '修复循环累计程序。',
+        starterCode: '',
+        buggyCode: 'total = 0\nfor n in nums:\n    total = n\nprint(total)\n',
+        hints: [],
+        sampleInput: '1 2 3',
+        sampleOutput: '6',
+        totalTestCases: 3,
+        reviewed: true,
+        aiGenerated: true,
+      },
+    });
+
+    const problem = await requestBossProblem(2, {
+      stage: 3,
+      preferredKind: 'debug',
+      preferredKc: 'PY43-KC-008',
+    });
+
+    expect(problem.buggyCode).toContain('total = n');
+    expect(problem.starterCode).toBe(problem.buggyCode);
+  });
+
+  it('leaves dual-track backend starter code empty when no starter is expected', async () => {
+    httpMock.post.mockResolvedValueOnce({
+      data: {
+        problemId: 'ai-code-1',
+        chapter: 1,
+        stage: 1,
+        difficulty: 1,
+        kcCode: 'PY43-KC-001',
+        statement: '读入两个整数并输出和。',
+        starterCode: '',
+        hints: [],
+        sampleInput: '1 2',
+        sampleOutput: '3',
+        totalTestCases: 3,
+        reviewed: true,
+        aiGenerated: true,
+      },
+    });
+
+    const problem = await requestBossProblem(1, {
+      stage: 1,
+      preferredKind: 'dual_track',
+      preferredKc: 'PY43-KC-001',
+    });
+
+    expect(problem.starterCode).toBe('');
+    expect(problem.buggyCode).toBeUndefined();
   });
 
   it('falls back to local golden problem on 4xx error', async () => {
@@ -71,6 +165,35 @@ describe('requestBossProblem', () => {
     expect(problem.chapter).toBe(7);
     expect(problem.stage).toBe(2);
     expect(problem.kcCode).toMatch(/^PY43-KC-\d{3}$/);
+  });
+
+  it('debug golden fallback includes buggy starter code separate from the prompt', async () => {
+    httpMock.post.mockRejectedValueOnce(new Error('network'));
+
+    const problem = await requestBossProblem(1, {
+      stage: 2,
+      preferredKind: 'debug',
+      preferredKc: 'PY43-KC-002',
+    });
+
+    expect(problem.statement).toContain('修复');
+    expect(problem.buggyCode).toContain('print');
+    expect(problem.starterCode).toBe(problem.buggyCode);
+    expect(problem.statement).not.toBe(problem.buggyCode);
+  });
+
+  it('bug mine golden fallback includes code that can be edited in-place', async () => {
+    httpMock.post.mockRejectedValueOnce(new Error('network'));
+
+    const problem = await requestBossProblem(1, {
+      stage: 2,
+      preferredKind: 'bug_mine',
+      preferredKc: 'PY43-KC-001',
+    });
+
+    expect(problem.statement).toContain('30 秒');
+    expect(problem.buggyCode).toContain('input');
+    expect(problem.starterCode).toBe(problem.buggyCode);
   });
 });
 

@@ -1,9 +1,11 @@
 <script setup lang="ts">
 /** 指南单个主题：标题锚点 + 概述 + 主截图 + 闭环说明 + 小节正文，由结构化数据驱动。 */
+import { computed } from 'vue';
 import GuideScreenshot from './GuideScreenshot.vue';
 import type { GuideSectionContent } from '@/content/guideSections';
+import { useDownloadStats } from '@/composables/useDownloadStats';
 
-defineProps<{
+const props = defineProps<{
   section: GuideSectionContent;
   index: number;
 }>();
@@ -11,6 +13,31 @@ defineProps<{
 const emit = defineEmits<{
   (e: 'navigate', anchorId: string): void;
 }>();
+
+const downloadStatKeys = computed(() => {
+  const keys: string[] = [];
+  for (const sub of props.section.subsections) {
+    for (const block of sub.blocks) {
+      if (block.kind === 'download') {
+        for (const item of block.items) {
+          if (item.statKey) keys.push(item.statKey);
+        }
+      }
+    }
+  }
+  return keys;
+});
+
+const { downloadCounts } = useDownloadStats(downloadStatKeys.value);
+
+function downloadNote(dl: { note?: string; statKey?: string }): string {
+  const parts: string[] = [];
+  if (dl.note) parts.push(dl.note);
+  if (dl.statKey && downloadCounts.value[dl.statKey] != null) {
+    parts.push(`已下载 ${downloadCounts.value[dl.statKey]} 次`);
+  }
+  return parts.join(' · ');
+}
 
 function pad(value: number): string {
   return String(value).padStart(2, '0');
@@ -193,8 +220,9 @@ function pad(value: number): string {
             :key="dl.href"
             class="guide-download"
             :href="dl.href"
-            download
-            :data-testid="`guide-download-${dl.platform}`"
+            target="_blank"
+            rel="noopener noreferrer"
+            :data-testid="dl.statKey ? `guide-dl-${dl.statKey}` : `guide-download-${dl.platform}`"
           >
             <span
               v-if="dl.icon"
@@ -204,9 +232,9 @@ function pad(value: number): string {
             <span class="guide-download__body">
               <span class="guide-download__label">{{ dl.label }}</span>
               <span
-                v-if="dl.note"
+                v-if="downloadNote(dl)"
                 class="guide-download__note"
-              >{{ dl.note }}</span>
+              >{{ downloadNote(dl) }}</span>
             </span>
             <span
               class="guide-download__arrow"

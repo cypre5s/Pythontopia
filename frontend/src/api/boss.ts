@@ -16,6 +16,8 @@ import type {
 } from './dto/Boss';
 import { findBossByChapter } from '@/data/bossCatalog';
 
+const BOSS_PROBLEM_TIMEOUT_MS = 180_000;
+
 const GOLDEN_TEMPLATES: Record<number, GoldenTemplate[]> = {
   1: [
     {
@@ -70,6 +72,7 @@ function buildGoldenProblem(
   chapter: number,
   stage: number,
   preferredKc?: string,
+  preferredKind?: string,
 ): BossProblemDto {
   const templates = GOLDEN_TEMPLATES[chapter];
   const fallback: GoldenTemplate = {
@@ -89,20 +92,124 @@ function buildGoldenProblem(
     const idx = Math.max(0, Math.min(stage - 1, (templates?.length ?? 1) - 1));
     template = templates?.[idx] ?? fallback;
   }
+  const kindPatch = buildKindPatch(template, preferredKind);
   return {
     problemId: `golden-c${chapter}-s${stage}${preferredKc ? `-${preferredKc}` : ''}`,
     chapter,
     stage,
     difficulty: Math.min(5, stage),
     kcCode: template.kcCode,
-    statement: `${template.title}\n\n${template.statement}`,
+    statement: kindPatch.statement,
     hints: [],
     sampleInput: template.sampleInput,
     sampleOutput: template.sampleOutput,
     totalTestCases: 3,
     reviewed: false,
     aiGenerated: false,
+    ...kindPatch.extra,
   };
+}
+
+function buildKindPatch(
+  template: GoldenTemplate,
+  preferredKind?: string,
+): { statement: string; extra: Partial<BossProblemDto> } {
+  const baseStatement = `${template.title}\n\n${template.statement}`;
+  const buggyCode = buildBuggyCode(template);
+  switch (preferredKind) {
+    case 'debug':
+      return {
+        statement: [
+          `${template.title} · 改错`,
+          '',
+          '下面的程序与题目要求不一致。请先定位可疑行，再提交修复后的完整代码。',
+          '',
+          `题目要求：${template.statement}`,
+        ].join('\n'),
+        extra: { buggyCode, starterCode: buggyCode },
+      };
+    case 'bug_mine':
+      return {
+        statement: [
+          `${template.title} · Bug 矿洞`,
+          '',
+          '30 秒内修复下面程序的关键 Bug。提交修复后的完整代码，样例必须通过。',
+          '',
+          `题目要求：${template.statement}`,
+        ].join('\n'),
+        extra: { buggyCode, starterCode: buggyCode },
+      };
+    case 'fill_blank':
+      return {
+        statement: `${template.title} · 代码填空\n\n${buildFillBlankCode(template)}`,
+        extra: {},
+      };
+    case 'closed_loop':
+      return {
+        statement: [
+          `${template.title} · 调试闭环`,
+          '',
+          '阶段 1 阅读：程序运行结果与样例不一致。',
+          '',
+          buggyCode,
+          '',
+          `样例输入：${template.sampleInput}`,
+          `期望输出：${template.sampleOutput}`,
+          '请完成定位并提交修复后的完整代码。',
+        ].join('\n'),
+        extra: { buggyCode, starterCode: buggyCode },
+      };
+    case 'short_answer':
+      return {
+        statement: `${template.title} · 概念简答\n\n请用自己的话说明这道题涉及的 Python 知识点，并解释为什么样例输出是 ${template.sampleOutput}。`,
+        extra: {},
+      };
+    case 'pdf_question':
+      return {
+        statement: `${template.title} · 课件问答\n\n结合课程包 43 的相关知识，说明这道题应如何处理输入、转换和输出格式。\n\n题目背景：${template.statement}`,
+        extra: {},
+      };
+    case 'multi_round':
+      return {
+        statement: [
+          `${template.title} · 组合挑战`,
+          '',
+          `第 1 题：解释输入样例 ${JSON.stringify(template.sampleInput)} 中每个值的含义。`,
+          '---',
+          `第 2 题：写出能得到样例输出 ${JSON.stringify(template.sampleOutput)} 的完整 Python 程序。`,
+          '---',
+          '第 3 题：说明你的程序如何处理边界情况。',
+        ].join('\n'),
+        extra: { starterCode: template.solution },
+      };
+    case 'dual_track':
+    default:
+      return { statement: baseStatement, extra: { starterCode: '' } };
+  }
+}
+
+function buildFillBlankCode(template: GoldenTemplate): string {
+  const lines = template.solution.split('\n');
+  if (lines.length === 0) return template.statement;
+  const target = lines.find((line) => line.includes('print')) ?? lines[lines.length - 1] ?? '';
+  return lines.map((line) => (line === target ? line.replace(/[A-Za-z_][A-Za-z0-9_]*(?=\()/, '___') : line)).join('\n');
+}
+
+function buildBuggyCode(template: GoldenTemplate): string {
+  if (template.kcCode === 'PY43-KC-001') {
+    return 'a, b = input().split()\nprint(a + b)\n';
+  }
+  if (template.kcCode === 'PY43-KC-002') {
+    return 'name = input\nprint("Hello, name!")\n';
+  }
+  if (template.solution.includes('count += 1')) {
+    return template.solution.replace('count += 1', 'count = 1');
+  }
+  if (template.solution.includes(':.1f')) {
+    return template.solution.replace(':.1f', '');
+  }
+  const lines = template.solution.split('\n');
+  return lines.length > 1 ? lines.slice(0, -1).join('\n') : template.solution;
 }
 
 /**
@@ -126,9 +233,12 @@ export async function requestBossProblem(
     const response = await http.post<BossProblemDto>(
       `/api/world/boss/${chapter}/problem`,
       req,
+      {
+        timeout: BOSS_PROBLEM_TIMEOUT_MS,
+      },
     );
     if (response.data && typeof response.data.problemId === 'string') {
-      return response.data;
+      return normalizeProblemForKind(response.data, req.preferredKind);
     }
   } catch (error) {
     if (typeof console !== 'undefined') {
@@ -137,7 +247,40 @@ export async function requestBossProblem(
       console.warn(`[boss] backend status=${status} ${msg} — falling back to golden`);
     }
   }
-  return buildGoldenProblem(chapter, req.stage, req.preferredKc);
+  return buildGoldenProblem(chapter, req.stage, req.preferredKc, req.preferredKind);
+}
+
+function normalizeProblemForKind(problem: BossProblemDto, preferredKind?: string): BossProblemDto {
+  if (preferredKind !== 'debug' && preferredKind !== 'bug_mine' && preferredKind !== 'closed_loop') {
+    return problem;
+  }
+  if ((problem.buggyCode?.trim() || problem.starterCode?.trim())) {
+    const code = problem.buggyCode?.trim() ? problem.buggyCode : problem.starterCode;
+    return { ...problem, buggyCode: code, starterCode: problem.starterCode?.trim() ? problem.starterCode : code };
+  }
+  const synthesized = extractCodeBlock(problem.statement) ?? synthesizeBuggyCode(problem);
+  return {
+    ...problem,
+    buggyCode: synthesized,
+    starterCode: synthesized,
+  };
+}
+
+function extractCodeBlock(markdown: string): string | null {
+  const fenced = /```(?:python|py)?\s*\n([\s\S]*?)```/i.exec(markdown);
+  if (fenced?.[1]?.trim()) return `${fenced[1].trimEnd()}\n`;
+  return null;
+}
+
+function synthesizeBuggyCode(problem: BossProblemDto): string {
+  const sampleParts = problem.sampleInput.trim().split(/\s+/).filter(Boolean);
+  if (sampleParts.length >= 2 && sampleParts.slice(0, 2).every((p) => /^-?\d+(\.\d+)?$/.test(p))) {
+    return 'a, b = input().split()\nprint(a + b)\n';
+  }
+  if (problem.sampleInput.trim()) {
+    return 'value = input\nprint(value)\n';
+  }
+  return 'print(result)\n';
 }
 
 /**

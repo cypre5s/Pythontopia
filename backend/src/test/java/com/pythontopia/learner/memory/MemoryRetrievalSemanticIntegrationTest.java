@@ -21,13 +21,13 @@ import org.testcontainers.utility.DockerImageName;
 /**
  * 记忆向量语义检索集成测试（计划中的 {@code MemoryRetrievalSemanticIT}；按本仓 surefire 约定改名 *
  * IntegrationTest 以确保被 mvn test 执行）。在真 pgvector 库上跑 V140 迁移，验证 upsert/find 往返、余弦
- * topK 顺序、(user) 隔离。维度 512 对齐 BgeSmallEmbedder。
+ * topK 顺序、(user) 隔离。维度 2048 对齐智谱 embedding-3。
  */
 @Testcontainers
 @SpringBootTest(classes = PythontopiaApplication.class)
 class MemoryRetrievalSemanticIntegrationTest {
 
-  private static final int DIM = 512;
+  private static final int DIM = 2048;
 
   @Container
   static final PostgreSQLContainer<?> POSTGRES =
@@ -65,7 +65,7 @@ class MemoryRetrievalSemanticIntegrationTest {
 
     assertThat(hits).extracting(ScoredEvent::eventId).containsExactly(e1, e3, e2);
     assertThat(hits.get(0).similarity()).isCloseTo(1.0, Offset.offset(1e-4));
-    assertThat(hits.get(1).similarity()).isCloseTo(0.8, Offset.offset(1e-4));
+    assertThat(hits.get(1).similarity()).isCloseTo(0.8, Offset.offset(5e-4));
     assertThat(hits.get(2).similarity()).isCloseTo(0.0, Offset.offset(1e-4));
   }
 
@@ -94,7 +94,7 @@ class MemoryRetrievalSemanticIntegrationTest {
     assertThat(found).isPresent();
     assertThat(found.orElseThrow()).hasSize(DIM);
     assertThat(found.orElseThrow()[0]).isCloseTo(0.6f, Offset.offset(1e-4f));
-    assertThat(found.orElseThrow()[1]).isCloseTo(0.8f, Offset.offset(1e-4f));
+    assertThat(found.orElseThrow()[1]).isCloseTo(0.8f, Offset.offset(5e-4f));
   }
 
   @Test

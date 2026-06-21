@@ -55,8 +55,8 @@ onMounted(() => {
   if (typeof window !== 'undefined') timer = window.setInterval(() => run.tickSecond(), 1000);
 });
 onMounted(() => {
-  // 跨设备/会话续局：本地无进行中的局时，静默拉取后端活跃 run 续上。
-  if (run.phase === 'idle') void run.resumeFromBackend();
+  // 跨设备/会话存档：只刷新可继续入口，不静默进入，让玩家自己选择继续或新开。
+  if (run.phase === 'idle') void run.refreshSavedRun();
 });
 onBeforeUnmount(() => {
   if (timer !== null) window.clearInterval(timer);
@@ -69,12 +69,18 @@ function onStart(): void {
 function onRestart(): void {
   void run.startRun(focusChoice.value, { fresh: true });
 }
+function onResume(): void {
+  void run.resumeSavedRun();
+}
 /** 弃局：清后端活跃 run + 本地缓存，回到起始页。 */
 function onAbandon(): void {
   void run.abort();
 }
-/** 返回小镇：保留当前 run（已实时持久化后端），下次回来或换设备可续局。 */
+/** 保存并返回小镇：保留当前 run，下次回来可从存档继续。 */
 function onExit(): void {
+  if (run.phase !== 'idle' && run.phase !== 'cleared' && run.phase !== 'over') {
+    run.saveCheckpoint();
+  }
   void router.push('/world');
 }
 function onEnter(node: RogueNode): void {
@@ -204,7 +210,7 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
           test-id="expedition-exit"
           @click="onExit"
         >
-          ← 返回小镇
+          {{ run.phase === 'idle' || run.phase === 'cleared' || run.phase === 'over' ? '← 返回小镇' : '保存并返回小镇' }}
         </PyButton>
         <h1 class="exp-title">
           无尽远征 · 知识前沿
@@ -267,6 +273,24 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
         <p class="exp-start__lead">
           按你的<strong>掌握度 + 画像</strong>生成分支远征：选路闯关、攒气势；答错温和扣体力，<strong>掌握度永久保留</strong>。
         </p>
+        <div
+          v-if="run.hasSavedRun && run.savedRunSummary"
+          class="exp-save-card"
+          data-testid="expedition-save-card"
+        >
+          <span class="exp-save-card__eyebrow">已有远征存档</span>
+          <strong>{{ run.savedRunSummary.focusChapter ? `第 ${run.savedRunSummary.focusChapter} 章聚焦` : '全局自适应远征' }}</strong>
+          <span>体力 {{ run.savedRunSummary.hp }}/{{ run.savedRunSummary.maxHp }} · 深度 {{ run.savedRunSummary.depth }} · 得分 {{ run.savedRunSummary.score }}</span>
+          <span v-if="run.savedRunSummary.relicCount > 0">学习增益 {{ run.savedRunSummary.relicCount }} 件</span>
+          <PyButton
+            variant="primary"
+            size="sm"
+            test-id="expedition-resume"
+            @click="onResume"
+          >
+            继续上次远征
+          </PyButton>
+        </div>
         <label class="exp-focus">
           <span>聚焦章节</span>
           <select
@@ -353,6 +377,14 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
                 ☰ 列表
               </button>
             </div>
+            <button
+              type="button"
+              class="exp-abandon"
+              data-testid="expedition-save-exit"
+              @click="onExit"
+            >
+              保存退出
+            </button>
             <button
               type="button"
               class="exp-abandon"
@@ -801,6 +833,32 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
   font-size: 13px;
   line-height: 1.8;
   color: var(--pyt-color-text-hint);
+}
+.exp-save-card {
+  display: grid;
+  gap: 6px;
+  min-width: min(520px, 100%);
+  padding: 12px 14px;
+  text-align: left;
+  background: rgba(255, 249, 234, 0.96);
+  border: 2px solid var(--pyt-color-warning);
+  border-radius: var(--pyt-radius-md);
+  box-shadow: 3px 3px 0 rgba(217, 159, 58, 0.28);
+  color: var(--pyt-color-text-primary);
+}
+.exp-save-card__eyebrow {
+  font-size: 11px;
+  color: var(--pyt-color-warning);
+}
+.exp-save-card strong {
+  font-size: 15px;
+}
+.exp-save-card span {
+  font-size: 12px;
+  color: var(--pyt-color-text-hint);
+}
+.exp-save-card :deep(.py-button) {
+  justify-self: start;
 }
 .exp-focus {
   display: flex;

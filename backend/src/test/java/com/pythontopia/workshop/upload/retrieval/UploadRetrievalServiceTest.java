@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test;
  */
 class UploadRetrievalServiceTest {
 
-  private static final int DIM = 512;
+  private static final int DIM = 2048;
 
   private final EmbeddingClient embeddingClient = mock(EmbeddingClient.class);
   private final UploadChunkRepository repository = mock(UploadChunkRepository.class);
@@ -33,7 +33,7 @@ class UploadRetrievalServiceTest {
     return new RetrievalHit(1L, "a.py", 0, "for 循环", score);
   }
 
-  private static float[] vec512() {
+  private static float[] vec2048() {
     float[] v = new float[DIM];
     v[0] = 1f;
     return v;
@@ -48,7 +48,7 @@ class UploadRetrievalServiceTest {
 
   @Test
   void usesCosineWhenQueryVectorAvailable() {
-    when(embeddingClient.embed("for循环")).thenReturn(Optional.of(vec512()));
+    when(embeddingClient.embed("for循环")).thenReturn(Optional.of(vec2048()));
     when(repository.searchByCosine(eq(9L), any(float[].class), eq(List.of()), eq(5)))
         .thenReturn(List.of(hit(0.92)));
 
@@ -74,7 +74,7 @@ class UploadRetrievalServiceTest {
 
   @Test
   void fallsBackToLiteralWhenCosineHasNoHits() {
-    when(embeddingClient.embed("字典")).thenReturn(Optional.of(vec512()));
+    when(embeddingClient.embed("字典")).thenReturn(Optional.of(vec2048()));
     when(repository.searchByCosine(eq(9L), any(float[].class), eq(List.of()), eq(5)))
         .thenReturn(List.of());
     when(repository.searchByLiteral(eq(9L), eq("字典"), eq(List.of()), eq(5)))
@@ -102,7 +102,7 @@ class UploadRetrievalServiceTest {
 
   @Test
   void clampsTopKAndForwardsUploadIdsScope() {
-    when(embeddingClient.embed("切片")).thenReturn(Optional.of(vec512()));
+    when(embeddingClient.embed("切片")).thenReturn(Optional.of(vec2048()));
     when(repository.searchByCosine(eq(9L), any(float[].class), eq(List.of(3L, 4L)), eq(20)))
         .thenReturn(List.of(hit(0.5)));
 

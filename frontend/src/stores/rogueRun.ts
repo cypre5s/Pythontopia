@@ -77,6 +77,17 @@ function makeLcg(seed: number): () => number {
 // run 可持久化快照：与后端 expedition_run 同构（api/expedition.ts 单一事实源）。
 type PersistShape = ExpeditionRunSnapshot;
 
+export interface RogueRunSaveSummary {
+  focusChapter: number | null;
+  hp: number;
+  maxHp: number;
+  score: number;
+  depth: number;
+  relicCount: number;
+  isDaily: boolean;
+  lastPlayedAt: string | null;
+}
+
 /** 续局允许的 phase（中途答题/事件刷新统一回退到地图）。 */
 function isResumablePhase(p: RogueRunPhase): boolean {
   return p === 'map' || p === 'challenge' || p === 'event';
@@ -114,6 +125,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
   const score = ref(0);
   const relics = ref<string[]>([]);
   const history = ref<RogueHistoryEntry[]>([]);
+  const savedRun = ref<PersistShape | null>(loadPersisted());
 
   const hasRelic = (id: string): boolean => relics.value.includes(id);
 
@@ -149,6 +161,29 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
   const attempts = computed(() => history.value.length);
   const depth = computed(() => nodes.value.filter((n) => n.state === 'cleared' && n.challengeKind).length);
   const nodeById = (id: string): RogueNode | undefined => nodes.value.find((n) => n.id === id);
+  const hasSavedRun = computed(() => isUsableSavedRun(savedRun.value));
+  const savedRunSummary = computed<RogueRunSaveSummary | null>(() => {
+    const snap = savedRun.value;
+    if (!isUsableSavedRun(snap)) return null;
+    return {
+      focusChapter: snap.focusChapter ?? null,
+      hp: snap.hp,
+      maxHp: snap.maxHp ?? EXPEDITION_MAX_HP,
+      score: snap.score ?? 0,
+      depth: snap.nodes.filter((n) => n.state === 'cleared' && n.challengeKind).length,
+      relicCount: Array.isArray(snap.relics) ? snap.relics.length : 0,
+      isDaily: snap.isDaily ?? false,
+      lastPlayedAt: snap.history[0]?.at ?? null,
+    };
+  });
+
+  function isUsableSavedRun(snap: PersistShape | null): snap is PersistShape {
+    return !!snap && Array.isArray(snap.nodes) && snap.nodes.length > 0 && isResumablePhase(snap.phase);
+  }
+
+  function initialCodeFor(problem: BossProblemDto): string {
+    return problem.starterCode?.trim() ? problem.starterCode : problem.buggyCode ?? '';
+  }
 
   function snapshot(): PersistShape {
     return {
@@ -183,10 +218,18 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
       }
     }
     if (phase.value !== 'idle') {
+      savedRun.value = snap;
       void saveExpeditionRun(snap).catch(() => {
         /* 后端不可达：本地已兜底，忽略 */
       });
     }
+  }
+
+  /** 用户显式保存当前进度：用于“保存并返回小镇”。 */
+  function saveCheckpoint(): void {
+    if (phase.value === 'idle') return;
+    persist();
+    toast.show('远征已存档，下次可从存档继续', 'success');
   }
 
   /** 把一份快照灌入 store（中途答题/事件刷新 → 退回地图）；供 hydrate / 续局复用。 */
@@ -207,24 +250,30 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     clearActive();
   }
 
-  function hydrate(): void {
-    const p = loadPersisted();
-    if (p) applySnapshot(p);
+  async function loadSavedSnapshot(): Promise<PersistShape | null> {
+    try {
+      const snap = await fetchExpeditionRun();
+      return snap ?? loadPersisted();
+    } catch {
+      return loadPersisted();
+    }
   }
 
-  /**
-   * 续局：后端权威优先（fetchExpeditionRun），不可达回退 localStorage。命中可续 run（有节点 +
-   * phase 可续）则灌入 store 返回 true；无则 false（调用方新开局）。绝不阻塞玩家。
-   */
-  async function tryResumeRun(): Promise<boolean> {
-    let snap: ExpeditionRunSnapshot | null = null;
-    try {
-      snap = await fetchExpeditionRun();
-    } catch {
-      snap = loadPersisted();
+  /** 只刷新“可继续的存档预览”，不直接灌入 run，让玩家自己选择是否继续。 */
+  async function refreshSavedRun(): Promise<boolean> {
+    const snap = await loadSavedSnapshot();
+    savedRun.value = isUsableSavedRun(snap) ? snap : null;
+    return hasSavedRun.value;
+  }
+
+  /** 玩家点“继续上次远征”后才恢复存档。 */
+  async function resumeSavedRun(): Promise<boolean> {
+    const snap = isUsableSavedRun(savedRun.value) ? savedRun.value : await loadSavedSnapshot();
+    if (!isUsableSavedRun(snap)) {
+      savedRun.value = null;
+      return false;
     }
-    if (!snap || !Array.isArray(snap.nodes) || snap.nodes.length === 0) return false;
-    if (!isResumablePhase(snap.phase)) return false;
+    savedRun.value = snap;
     applySnapshot(snap); // applySnapshot 已把可续 phase 归一到 'map'
     persist();
     return true;
@@ -297,11 +346,6 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     focus: number | null,
     opts: { rng?: () => number; daily?: boolean; fresh?: boolean } = {},
   ): Promise<void> {
-    // 续局：每日挑战（种子稳定地图）与显式「弃局重开」(fresh) 不续局，其余先尝试续后端/本地活跃 run。
-    if (!opts.daily && !opts.fresh) {
-      const resumed = await tryResumeRun();
-      if (resumed) return;
-    }
     focusChapter.value = focus;
     // 后端权威「知识前沿选择器」（下沉）：取一批候选；失败/超时回退本地 useKcFrontier，绝不阻塞玩家。
     const recent = history.value
@@ -387,12 +431,14 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     elapsedSec.value = 0;
     phase.value = 'challenge';
     loading.value = true;
+    persist();
     try {
       activeProblem.value = await challenge.fetchProblem({
         kc: node.kcCode ?? '',
         kind: node.challengeKind,
         difficulty: node.difficulty,
       });
+      activeCode.value = initialCodeFor(activeProblem.value);
     } catch (error) {
       errorMessage.value = error instanceof Error ? error.message : '出题失败，请重试';
     } finally {
@@ -560,6 +606,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
         /* 隐私模式禁写，忽略 */
       }
     }
+    savedRun.value = null;
     await deleteExpeditionRun().catch(() => {
       /* 后端不可达：本地已清，忽略 */
     });
@@ -589,8 +636,6 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     }
   }
 
-  hydrate();
-
   return {
     phase,
     focusChapter,
@@ -616,12 +661,17 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     elapsedSec,
     errorMessage,
     activeEventText,
+    hasSavedRun,
+    savedRunSummary,
     nodesByLayer,
     passedCount,
     attempts,
     depth,
     startRun,
     startDailyRun,
+    refreshSavedRun,
+    resumeSavedRun,
+    saveCheckpoint,
     resumeFromBackend,
     enterNode,
     chooseEvent,

@@ -10,6 +10,7 @@ import OperationHints from '@/components/world/OperationHints.vue';
 import DialogModal from '@/components/game/DialogModal.vue';
 import WorldCanvas from '@/components/game/WorldCanvas.vue';
 import SceneTransition from '@/components/game/SceneTransition.vue';
+import VirtualJoystick from '@/components/hud/VirtualJoystick.vue';
 import {
   HudShell,
   SettingsModal,
@@ -129,6 +130,7 @@ onBeforeUnmount(() => {
     <MoodOverlay />
     <!-- HUD 套件 -->
     <HudShell />
+    <VirtualJoystick />
     <LearningObjectivePanel />
     <SettingsModal />
     <FestivalRibbon />

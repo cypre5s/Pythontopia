@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, computed } from 'vue';
+import { onBeforeUnmount, onMounted, ref, computed, watch } from 'vue';
 import type { BossProblemDto } from '@/api/dto/Boss';
 
-defineProps<{ problem: BossProblemDto }>();
+const props = defineProps<{ problem: BossProblemDto }>();
 const code = defineModel<string>('code', { required: true });
 const emit = defineEmits<{ (e: 'timeout'): void }>();
 
@@ -13,12 +13,21 @@ const expired = ref(false);
 let timer: ReturnType<typeof setInterval> | null = null;
 
 const progress = computed(() => remaining.value / TOTAL_SECONDS);
+const initialBuggyCode = computed(() => props.problem.buggyCode ?? props.problem.starterCode ?? '');
 
 const urgency = computed<'safe' | 'warn' | 'danger'>(() => {
   if (remaining.value > 15) return 'safe';
   if (remaining.value > 5) return 'warn';
   return 'danger';
 });
+
+watch(
+  initialBuggyCode,
+  (next) => {
+    if (!code.value.trim() && next.trim()) code.value = next;
+  },
+  { immediate: true },
+);
 
 function startTimer(): void {
   if (started.value) return;
@@ -87,7 +96,7 @@ onBeforeUnmount(() => {
       data-testid="bug-mine-code"
       rows="8"
       :disabled="expired"
-      placeholder="# 快速修复 Bug！30 秒倒计时已开始…"
+      :placeholder="initialBuggyCode.trim() ? '# 快速修复 Bug！30 秒倒计时已开始…' : '# 当前题目缺少可修复代码，请重试出题'"
       spellcheck="false"
       class="mine-editor"
     />

@@ -13,7 +13,7 @@ import org.springframework.stereotype.Service;
 
 /**
  * 「上传就绪 → 分块 + 向量化 + 入库」服务：读 {@code workshop_upload.extracted_text}（按列名经 JdbcTemplate
- * 读，不依赖 parse 通路的实体类），切块，经 {@link EmbeddingClient} 批量取 512 维向量后整体替换该上传的分块。
+ * 读，不依赖 parse 通路的实体类），切块，经 {@link EmbeddingClient} 批量取 2048 维向量后整体替换该上传的分块。
  *
  * <p>全程 fail-soft：向量化不可用时 chunk 仍入库、embedding 留空（检索回退字面匹配）；任何异常只记 warn、不抛，
  * 确保<strong>分块旁路失败不影响上传主链路</strong>。Phase 2 由 B-backend-parse 在上传 READY 处调用
@@ -22,8 +22,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class UploadCorpusIndexingService {
 
-  /** 向量维度，对齐 BgeSmallEmbedder / pythontopia-rag /embed。 */
-  static final int EMBEDDING_DIM = 512;
+  /** 向量维度，对齐智谱 embedding-3 / pythontopia-rag /embed。 */
+  static final int EMBEDDING_DIM = 2048;
 
   static final String EMBEDDING_MODEL = "pythontopia-rag/embed";
 

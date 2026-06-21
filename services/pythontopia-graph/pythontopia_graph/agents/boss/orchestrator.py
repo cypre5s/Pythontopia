@@ -82,11 +82,11 @@ async def generate_boss_problem(
         profile_signals: 学生画像信号，透传给 factory 以个性化出题。
     """
 
-    temperature_base = 0.4
+    temperature_base = 0.2
     last_review: BossProblemReview | None = None
 
     for attempt in range(1, max_retries + 1):
-        temperature = temperature_base + 0.1 * (attempt - 1)
+        temperature = temperature_base + 0.05 * (attempt - 1)
         try:
             # 兼容仅接受基础 kwargs 的旧 factory 签名
             try:

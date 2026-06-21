@@ -14,6 +14,7 @@ import type { KeyboardKeyLike, SceneLike } from './sceneTypes';
 import { createKeyboardAdapter } from './keyboardAdapter';
 import { createTouchAdapter } from './touchAdapter';
 import { createGamepadAdapter } from './gamepadAdapter';
+import { getTouchControlState } from './touchControls';
 
 export type ExtendedDirection =
   | 'UP'
@@ -77,43 +78,39 @@ export function createDirectionController(scene: SceneLike): DirectionController
       const left = isPressed(aKey) || isPressed(cursors?.left ?? null);
       const right = isPressed(dKey) || isPressed(cursors?.right ?? null);
 
+      let dir: ExtendedDirection | null = null;
       if (up && right) {
-        return 'UP_RIGHT';
+        dir = 'UP_RIGHT';
+      } else if (up && left) {
+        dir = 'UP_LEFT';
+      } else if (down && right) {
+        dir = 'DOWN_RIGHT';
+      } else if (down && left) {
+        dir = 'DOWN_LEFT';
+      } else if (up) {
+        dir = 'UP';
+      } else if (down) {
+        dir = 'DOWN';
+      } else if (left) {
+        dir = 'LEFT';
+      } else if (right) {
+        dir = 'RIGHT';
       }
-      if (up && left) {
-        return 'UP_LEFT';
-      }
-      if (down && right) {
-        return 'DOWN_RIGHT';
-      }
-      if (down && left) {
-        return 'DOWN_LEFT';
-      }
-      if (up) {
-        return 'UP';
-      }
-      if (down) {
-        return 'DOWN';
-      }
-      if (left) {
-        return 'LEFT';
-      }
-      if (right) {
-        return 'RIGHT';
-      }
-      return null;
+
+      // 键盘无方向时回退到移动端虚拟摇杆。
+      return dir ?? getTouchControlState().direction;
     },
     isActionPressed() {
-      return isPressed(fKey) || isPressed(eKey);
+      return isPressed(fKey) || isPressed(eKey) || getTouchControlState().action;
     },
     isJumpPressed() {
-      return isPressed(spaceKey);
+      return isPressed(spaceKey) || getTouchControlState().jump;
     },
     isRunPressed() {
-      return isPressed(shiftKey);
+      return isPressed(shiftKey) || getTouchControlState().run;
     },
     isToolPressed() {
-      return isPressed(cKey);
+      return isPressed(cKey) || getTouchControlState().tool;
     },
   };
 }

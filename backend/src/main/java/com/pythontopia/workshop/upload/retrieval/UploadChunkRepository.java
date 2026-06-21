@@ -4,7 +4,7 @@ import com.pythontopia.workshop.upload.retrieval.dto.RetrievalHit;
 import java.util.List;
 
 /**
- * 个人语料分块的持久化与检索（pgvector 支撑，维度 512 对齐 BgeSmallEmbedder）。
+ * 个人语料分块的持久化与检索（pgvector 支撑，维度 2048 对齐智谱 embedding-3）。
  *
  * <p>所有检索方法都<strong>强制按 {@code userId} scoped</strong>（只命中本人上传），可选再按 {@code uploadIds}
  * 过滤。向量缺失时由 {@link #searchByLiteral} 字面回退（见 {@link UploadRetrievalService}）。
@@ -42,7 +42,7 @@ public interface UploadChunkRepository {
   /**
    * 待写入的分块行。
    *
-   * @param embedding 512 维向量；{@code null} 表示向量化失败（chunk 仍入库、检索回退字面匹配）。
+   * @param embedding 2048 维向量；{@code null} 表示向量化失败（chunk 仍入库、检索回退字面匹配）。
    * @param model 向量模型标识；{@code embedding} 为空时应为 {@code null}。
    */
   record ChunkRow(

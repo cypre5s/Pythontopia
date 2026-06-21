@@ -141,7 +141,12 @@ services:
     environment:
       PYT_DB_URL: postgresql://${PYT_DB_USERNAME:-pytopia}:${PYT_DB_PASSWORD:-pytopia_dev_password}@postgres:5432/pythontopia
       PYT_RAG_ADMIN_TOKEN: ${PYT_RAG_ADMIN_TOKEN:-pytopia-rag-admin}
-      PYT_RAG_EMBEDDER: ${PYT_RAG_EMBEDDER:-hash}
+      PYT_RAG_EMBEDDER: ${PYT_RAG_EMBEDDER:-zhipu}
+      PYT_RAG_EMBEDDING_FALLBACK: ${PYT_RAG_EMBEDDING_FALLBACK:-hash}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+      EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-https://open.bigmodel.cn/api/paas/v4}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-embedding-3}
+      EMBEDDING_DIM: ${EMBEDDING_DIM:-2048}
     depends_on:
       postgres:
         condition: service_healthy

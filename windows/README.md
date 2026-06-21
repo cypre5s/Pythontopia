@@ -12,7 +12,7 @@ windows/
 ├── README.md
 ├── src/
     ├── Pythontopia.Core/        # net8.0 类库（跨平台，WSL 互操作可构建）
-    │   ├── Config/AppConfig.cs              # BackendBaseUrl，默认公网 ECS http://47.120.29.62:18080，可用 PYT_BACKEND_URL 覆盖
+    │   ├── Config/AppConfig.cs              # BackendBaseUrl，默认公网 ECS http://47.120.29.62（Nginx /api），可用 PYT_BACKEND_URL 覆盖
     │   ├── Json/PytJson.cs                  # System.Text.Json，camelCase
     │   ├── Dto/*.cs                         # 与后端 record 1:1 的 C# record
     │   ├── Api/ApiException.cs              # 解析 {code,message,details,traceId,timestamp}
@@ -48,7 +48,7 @@ windows/
 
 ## 后端地址配置
 
-- 默认指向**公网** Pythontopia 后端（阿里云 ECS）：`http://47.120.29.62:18080`，开箱即用。
+- 默认指向**公网** Pythontopia 后端（阿里云 ECS）：`http://47.120.29.62`（80 端口，经 Nginx 反代 `/api/`），开箱即用。
 - 本地联调可用 `PYT_BACKEND_URL` 覆盖为 `http://localhost:18080`（对 App 与 Game 进程同时生效）：
 
 ```powershell

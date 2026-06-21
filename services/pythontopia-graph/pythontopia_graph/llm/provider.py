@@ -22,6 +22,28 @@ class LlmResponse(BaseModel):
     tool_calls: list[dict[str, Any]] | None = None
 
 
+def _message_content_to_text(content: object) -> str | None:
+    if isinstance(content, str):
+        return content
+    if not isinstance(content, list):
+        return None
+    parts: list[str] = []
+    for item in content:
+        if isinstance(item, str):
+            parts.append(item)
+            continue
+        if not isinstance(item, dict):
+            continue
+        text = item.get("text")
+        if isinstance(text, str):
+            parts.append(text)
+            continue
+        nested = item.get("content")
+        if isinstance(nested, str):
+            parts.append(nested)
+    return "".join(parts) if parts else None
+
+
 def _parse_chat_message(data: dict[str, Any]) -> LlmResponse:
     """把 OpenAI 兼容 chat.completions 响应解析为 LlmResponse（含原生 tool_calls）。
 
@@ -32,7 +54,7 @@ def _parse_chat_message(data: dict[str, Any]) -> LlmResponse:
         message = data["choices"][0]["message"]
     except (KeyError, IndexError, TypeError):
         return LlmResponse()
-    content = message.get("content")
+    content = _message_content_to_text(message.get("content"))
     raw_tool_calls = message.get("tool_calls")
     tool_calls = (
         raw_tool_calls if isinstance(raw_tool_calls, list) and raw_tool_calls else None

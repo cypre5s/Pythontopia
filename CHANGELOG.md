@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-06-19 — guide 下载计数并发竞态修复（UI e2e 发现）+ ECS 重部复验
+
+> 对 ECS 公网做登录→guide 多端下载的真实浏览器 UI e2e，发现「初次加载只有一端显示下载次数」的竞态 bug 并修复、重部上线、复验。
+
+- **下载计数并发竞态（前端 `GuidePage.vue`）**：`onMounted` 里三端计数用 `downloadCounts.value = { ...downloadCounts.value, [key]: await ... }`，对象展开 `...downloadCounts.value` 在 `await` **之前**求值，三个并发回调各持初始空快照互相覆盖，最终只剩最后 resolve 的那个 key（线上恒为 `windows_exe`）有计数；APK/ZIP 初次加载不显示「已下载 N 次」。改为先 `Promise.all` 收齐 `[key,count]` 再「一次性」合并赋值，根除覆盖。
+- **回归测试（`tests/pages/GuidePage.spec.ts`）**：新增 2 例——三端 mock 不同计数断言 APK/EXE/ZIP 均渲染（旧实现只剩一端会挂）；点击下载乐观 +1 且不清空其它端已有计数。
+- **ECS 重部（公网 47.120.29.62）**：本地 `npm run build` 产物上传 ECS，`docker cp` 入 `deploy-frontend-1` 即时生效 + nginx reload；并叠加 `FROM pythontopia/frontend:release` 重建同名 release 镜像（容器重建后仍带修复，代价是体积 216MB→325MB，新 assets 层覆盖旧层）；源码修复同步至 ECS `/opt/pythontopia` 检出。
+- **UI e2e 复验**：自建学生测试号登录 → guide「多端下载」；修复前截图证实仅 EXE 显示「已下载 0 次」、点 APK 下载触发 `/downloads/pythontopia.apk` 且后端计数 0→1（API 确认）；重部后干净加载三端均显示「已下载 N 次」（加载的是新 `GuidePage-CNAPZNfh.js` 块，CDP 确认）；计数复位 0 后三端均显「已下载 0 次」。后端 `GET /api/downloads/{android_apk,windows_exe,windows_zip}` 全 200。
+
 ## 2026-06-19 — Android 原生端对齐 Web 全功能 + 超强加固 + ECS 发版（APK/EXE 下载 + 下载计数）
 
 > 把 Android 端逐功能补齐到与 Web 对齐：新增无尽远征模块、主线三件套做成真交互、工坊生成物查看器、费曼代码找茬、课件 RAG 问答 + PDF 页图、讲义视频、像素小镇 HUD/小地图/日夜/天气/瞬移；中文本地化；release 包 R8 超强加固；并在 ECS 上线 APK/EXE 下载入口 + 后端下载次数统计。

@@ -23,6 +23,34 @@ interface LoadedPyodide {
 
 type LoadPyodideFn = (options?: { indexURL?: string }) => Promise<LoadedPyodide>;
 
+// ── Pyodide 加载状态（供 UI 在首次加载 ~10MB / 十几秒时展示进度/骨架） ──
+export type PyodideStatus = 'idle' | 'loading' | 'ready' | 'error';
+let pyodideStatus: PyodideStatus = 'idle';
+const statusListeners = new Set<(status: PyodideStatus) => void>();
+
+function setPyodideStatus(next: PyodideStatus): void {
+  pyodideStatus = next;
+  for (const listener of [...statusListeners]) {
+    try {
+      listener(next);
+    } catch {
+      // 单个监听器异常不应影响加载流程。
+    }
+  }
+}
+
+export function getPyodideStatus(): PyodideStatus {
+  return pyodideStatus;
+}
+
+/** 订阅 Pyodide 加载状态变化，返回取消订阅函数。 */
+export function onPyodideStatus(listener: (status: PyodideStatus) => void): () => void {
+  statusListeners.add(listener);
+  return () => {
+    statusListeners.delete(listener);
+  };
+}
+
 declare global {
   interface Window {
     loadPyodide?: LoadPyodideFn;
@@ -50,6 +78,7 @@ export class CdnPyodideRunner implements PyodideRunner {
       return;
     }
     this.initPromise = (async () => {
+      setPyodideStatus('loading');
       const loader = await this.ensureLoader();
       try {
         this.instance = await loader({ indexURL: this.resolvedBase });
@@ -65,6 +94,10 @@ export class CdnPyodideRunner implements PyodideRunner {
     })();
     try {
       await this.initPromise;
+      setPyodideStatus('ready');
+    } catch (error) {
+      setPyodideStatus('error');
+      throw error;
     } finally {
       this.initPromise = null;
     }
@@ -168,4 +201,36 @@ export function getPyodideRunner(): PyodideRunner {
 
 export function setPyodideRunner(runner: PyodideRunner | null): void {
   runnerSingleton = runner;
+}
+
+/**
+ * 后台空闲预热 Pyodide：在「运行代码」界面挂载时调用，让用户读题/写码的同时静默加载
+ * 运行时（~10MB / 十几秒），等真正点「运行」时多半已就绪 → 首次运行接近秒开。
+ *
+ * - 用 requestIdleCallback 错开首屏渲染，无则降级 setTimeout；
+ * - 幂等：已 loading/ready 直接跳过；
+ * - 预热失败静默吞掉，真正运行时再走正常错误路径，不打扰用户。
+ */
+export function warmPyodide(): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  if (pyodideStatus === 'loading' || pyodideStatus === 'ready') {
+    return;
+  }
+  const start = (): void => {
+    void getPyodideRunner()
+      .init()
+      .catch(() => {
+        /* 预热失败忽略 */
+      });
+  };
+  const ric = (window as Window & {
+    requestIdleCallback?: (cb: () => void, opts?: { timeout?: number }) => number;
+  }).requestIdleCallback;
+  if (typeof ric === 'function') {
+    ric(start, { timeout: 2500 });
+  } else {
+    window.setTimeout(start, 400);
+  }
 }

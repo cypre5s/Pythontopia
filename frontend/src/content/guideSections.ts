@@ -42,6 +42,8 @@ export interface GuideDownload {
   readonly note?: string;
   /** 可选图标 emoji。 */
   readonly icon?: string;
+  /** 后端下载计数 key（如 android_apk）；有值时在按钮旁展示累计次数。 */
+  readonly statKey?: string;
 }
 
 export type GuideBlock =
@@ -1583,32 +1585,35 @@ const ALL_GUIDE_SECTIONS: readonly GuideSectionContent[] = [
         blocks: [
           {
             kind: 'paragraph',
-            text: '选择你的设备下载安装包，登录已有账号即可同步学习进度。',
+            text: '点击下方按钮会在新标签页打开验证页，点选正确答案后即可开始下载；登录已有账号即可同步学习进度。',
           },
           {
             kind: 'download',
             items: [
               {
-                platform: 'Android',
-                icon: '🤖',
-                label: '下载 Android APK',
-                href: '/downloads/pythontopia-android.apk',
-                note: 'Android 8.0+（minSdk 26）· 直接安装 APK',
+                platform: 'Windows-ZIP',
+                icon: '🪟',
+                label: 'Windows 客户端（ZIP）',
+                href: '/download-gate/?file=pythontopia-windows.zip',
+                note: '解压后运行 Pythontopia.exe',
+                statKey: 'windows_zip',
               },
               {
-                platform: 'Windows',
-                icon: '🪟',
-                label: '下载 Windows 客户端',
-                href: '/downloads/pythontopia-windows.exe',
-                note: 'Windows 10/11 64 位 · 运行安装包即可',
+                platform: 'Android',
+                icon: '📱',
+                label: 'Android App（APK）',
+                href: '/download-gate/?file=pythontopia.apk',
+                note: 'Android 8.0+（minSdk 26）· 像素小镇 + 完整学习闭环',
+                statKey: 'android_apk',
               },
             ],
           },
           {
             kind: 'tip',
             text:
-              '首次安装 Android APK 时系统可能提示「未知来源」，按提示允许即可；'
-              + 'Windows 端若被 SmartScreen 拦截，选「仍要运行」。',
+              'Windows：解压 ZIP 后双击 Pythontopia.exe。'
+              + '首次安装 Android APK 时系统可能提示「未知来源」，按提示允许即可；'
+              + 'Windows 若被 SmartScreen 拦截，选「仍要运行」。',
           },
         ],
       },

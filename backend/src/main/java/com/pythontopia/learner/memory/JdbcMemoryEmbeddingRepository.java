@@ -7,7 +7,7 @@ import org.springframework.stereotype.Repository;
 
 /**
  * {@link MemoryEmbeddingRepository} 的 JDBC 实现。pgvector 的 {@code vector} 类型无 JDBC 原生绑定，
- * 故以文本字面量 {@code [v1,v2,...]} 经 {@code ?::vector} 写入、{@code embedding::text} 读出后解析；
+ * 故以文本字面量 {@code [v1,v2,...]} 经 {@code ?::halfvec} 写入、{@code embedding::text} 读出后解析；
  * 余弦距离用 pgvector 的 {@code <=>}，相似度 = {@code 1 - 距离}。
  */
 @Repository
@@ -22,7 +22,7 @@ public class JdbcMemoryEmbeddingRepository implements MemoryEmbeddingRepository 
   @Override
   public void upsert(long eventId, float[] embedding, String model) {
     jdbc.update(
-        "INSERT INTO memory_embedding (event_id, embedding, model) VALUES (?, ?::vector, ?) "
+        "INSERT INTO memory_embedding (event_id, embedding, model) VALUES (?, ?::halfvec, ?) "
             + "ON CONFLICT (event_id) DO UPDATE SET embedding = EXCLUDED.embedding, "
             + "model = EXCLUDED.model, created_at = now()",
         eventId,
@@ -50,11 +50,11 @@ public class JdbcMemoryEmbeddingRepository implements MemoryEmbeddingRepository 
     }
     String literal = toVectorLiteral(query);
     return jdbc.query(
-        "SELECT me.event_id, 1 - (me.embedding <=> ?::vector) AS similarity "
+        "SELECT me.event_id, 1 - (me.embedding <=> ?::halfvec) AS similarity "
             + "FROM memory_embedding me "
             + "JOIN learning_event_log le ON le.id = me.event_id "
             + "WHERE le.user_id = ? "
-            + "ORDER BY me.embedding <=> ?::vector "
+            + "ORDER BY me.embedding <=> ?::halfvec "
             + "LIMIT ?",
         (rs, rowNum) -> new ScoredEvent(rs.getLong("event_id"), rs.getDouble("similarity")),
         literal,

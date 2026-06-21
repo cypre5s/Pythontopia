@@ -12,7 +12,7 @@ import org.springframework.stereotype.Repository;
 
 /**
  * {@link UploadChunkRepository} 的 JDBC 实现。pgvector 的 {@code vector} 类型无 JDBC 原生绑定，故以文本字面量
- * {@code [v1,v2,...]} 经 {@code ?::vector} 写入；余弦距离用 {@code <=>}，相似度 = {@code 1 - 距离}
+ * {@code [v1,v2,...]} 经 {@code ?::halfvec} 写入；余弦距离用 {@code <=>}，相似度 = {@code 1 - 距离}
  * （与 {@code JdbcMemoryEmbeddingRepository} 同范式）。
  *
  * <p>检索 SQL 一律 {@code JOIN workshop_upload} 取 {@code filename}（chunk 表按契约不冗余文件名），并以
@@ -45,7 +45,7 @@ public class JdbcUploadChunkRepository implements UploadChunkRepository {
     jdbc.batchUpdate(
         "INSERT INTO workshop_upload_chunk "
             + "(upload_id, user_id, chunk_index, text, embedding, model) "
-            + "VALUES (?, ?, ?, ?, ?::vector, ?)",
+            + "VALUES (?, ?, ?, ?, ?::halfvec, ?)",
         new BatchPreparedStatementSetter() {
           @Override
           public void setValues(PreparedStatement ps, int i) throws SQLException {
@@ -54,7 +54,7 @@ public class JdbcUploadChunkRepository implements UploadChunkRepository {
             ps.setLong(2, row.userId());
             ps.setInt(3, row.chunkIndex());
             ps.setString(4, row.text());
-            // null embedding → SQL NULL，?::vector 作用于 NULL 仍是 NULL（向量缺失，检索走字面回退）。
+            // null embedding → SQL NULL，?::halfvec 作用于 NULL 仍是 NULL（向量缺失，检索走字面回退）。
             ps.setString(5, row.embedding() == null ? null : toVectorLiteral(row.embedding()));
             ps.setString(6, row.model());
           }
@@ -91,7 +91,7 @@ public class JdbcUploadChunkRepository implements UploadChunkRepository {
     StringBuilder sql =
         new StringBuilder(
             "SELECT c.upload_id, u.filename, c.chunk_index, c.text, "
-                + "1 - (c.embedding <=> ?::vector) AS score "
+                + "1 - (c.embedding <=> ?::halfvec) AS score "
                 + "FROM workshop_upload_chunk c "
                 + "JOIN workshop_upload u ON u.id = c.upload_id "
                 + "WHERE c.user_id = ? AND c.embedding IS NOT NULL");
@@ -99,7 +99,7 @@ public class JdbcUploadChunkRepository implements UploadChunkRepository {
     args.add(literal);
     args.add(userId);
     appendUploadFilter(sql, args, uploadIds);
-    sql.append(" ORDER BY c.embedding <=> ?::vector LIMIT ?");
+    sql.append(" ORDER BY c.embedding <=> ?::halfvec LIMIT ?");
     args.add(literal);
     args.add(limit);
     return jdbc.query(sql.toString(), HIT_MAPPER, args.toArray());

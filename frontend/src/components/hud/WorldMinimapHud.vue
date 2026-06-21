@@ -100,10 +100,16 @@ onUnmounted(() => {
         :player-x="playerX"
         :player-y="playerY"
         :npcs="data?.npcs ?? []"
+        :buildings="data?.buildings ?? []"
         :map-name="''"
         :exits="data?.exits ?? []"
         :player-facing="playerFacing"
       />
+      <p class="world-minimap-hud__legend">
+        <span class="world-minimap-hud__dot world-minimap-hud__dot--me" />你
+        <span class="world-minimap-hud__dot world-minimap-hud__dot--bld" />学习点
+        <span class="world-minimap-hud__dot world-minimap-hud__dot--npc" />NPC
+      </p>
       <p class="world-minimap-hud__hint">
         当前位置 · 按 M 查看大地图
       </p>
@@ -187,11 +193,44 @@ onUnmounted(() => {
   max-height: 300px;
 }
 
+.world-minimap-hud__legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  font-size: 10px;
+  color: var(--pyt-text-secondary);
+  letter-spacing: 0.2px;
+}
+.world-minimap-hud__dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 1px;
+  margin-left: 4px;
+}
+.world-minimap-hud__dot--me {
+  background: #e63946;
+  margin-left: 0;
+}
+.world-minimap-hud__dot--bld {
+  background: #62b6e0;
+}
+.world-minimap-hud__dot--npc {
+  background: #ffd166;
+}
+
 .world-minimap-hud__hint {
   margin: 0;
   font-size: 11px;
   color: var(--pyt-text-secondary);
   letter-spacing: 0.3px;
+}
+
+@media (max-width: 640px) {
+  .world-minimap-hud__legend {
+    display: none;
+  }
 }
 
 @media (max-width: 1280px) {

@@ -1,5 +1,6 @@
 package com.pythontopia.common.web;
 
+import com.pythontopia.common.config.BossProblemHttpClientProperties;
 import com.pythontopia.common.config.ChapterTestHttpClientProperties;
 import com.pythontopia.common.config.GraphHttpClientProperties;
 import java.time.Duration;
@@ -36,6 +37,21 @@ public class RestClientConfig {
     return builder
         .setConnectTimeout(Duration.ofMillis(graphHttpProperties.connectTimeoutMs()))
         .setReadTimeout(Duration.ofMillis(chapterTestHttpProperties.readTimeoutMs()))
+        .build();
+  }
+
+  /**
+   * Boss / endless 现场出题专用客户端。LLM 出题 + 审查偶发超过普通 graph 读超时，单独放宽读窗口；
+   * 连接失败仍沿用 graph 客户端的快速失败阈值。
+   */
+  @Bean
+  RestTemplate bossProblemRestTemplate(
+      RestTemplateBuilder builder,
+      GraphHttpClientProperties graphHttpProperties,
+      BossProblemHttpClientProperties bossProblemHttpProperties) {
+    return builder
+        .setConnectTimeout(Duration.ofMillis(graphHttpProperties.connectTimeoutMs()))
+        .setReadTimeout(Duration.ofMillis(bossProblemHttpProperties.readTimeoutMs()))
         .build();
   }
 

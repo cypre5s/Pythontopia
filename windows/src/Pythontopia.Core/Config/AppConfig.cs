@@ -7,8 +7,8 @@ namespace Pythontopia.Core.Config;
 /// </summary>
 public sealed class AppConfig
 {
-    /// <summary>Public Pythontopia backend (阿里云 ECS, see AGENTS.md). Override locally via env var.</summary>
-    public const string DefaultBackendBaseUrl = "http://47.120.29.62:18080";
+    /// <summary>Public Pythontopia backend via ECS Nginx (port 80, /api prefix). Override locally via env var.</summary>
+    public const string DefaultBackendBaseUrl = "http://47.120.29.62";
     public const string BackendUrlEnvironmentVariable = "PYT_BACKEND_URL";
 
     /// <summary>Base URL without a trailing slash, e.g. <c>http://localhost:18080</c>.</summary>

@@ -40,6 +40,10 @@ export interface BossProblemDto {
   kcCode: string;
   /** 题面 Markdown。 */
   statement: string;
+  /** 可编辑初始代码（代码题 / 改错题 / Bug 矿洞用）。 */
+  starterCode?: string;
+  /** 含 bug 的原始代码（改错题 / Bug 矿洞用；不能把题干当代码）。 */
+  buggyCode?: string;
   /** 不超过 3 条提示，按 layer 索引由前端按需展开。 */
   hints: string[];
   /** 输入样例（公开）。 */

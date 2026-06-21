@@ -13,9 +13,7 @@ import GuideSection from '@/components/guide/GuideSection.vue';
 import {
   GUIDE_NAV_GROUPS,
   GUIDE_SECTIONS,
-  GUIDE_SCREENSHOT_TOTAL,
 } from '@/content/guideSections';
-import { getDownloadStat, hitDownload } from '@/api/downloads';
 
 const route = useRoute();
 const router = useRouter();
@@ -25,54 +23,6 @@ const navGroups = GUIDE_NAV_GROUPS;
 const navOpen = ref(false);
 // 正文列内部滚动（整页自适应窗口高度）：切主题时滚回该容器顶部，而非滚 window。
 const contentEl = ref<HTMLElement | null>(null);
-
-const learningPath = [
-  { label: '起步', detail: '会走会找', sectionId: 'town-basics' },
-  { label: '看', detail: '视频与课件', sectionId: 'library' },
-  { label: '学', detail: '百晓加工', sectionId: 'workshop' },
-  { label: '练', detail: '真实判题', sectionId: 'training' },
-  { label: '测', detail: '章节通关', sectionId: 'mainline' },
-] as const;
-
-// 「下载客户端」：guide 页提供各端安装包下载入口 + 累计下载次数（后端匿名计数，首次点击自动建行）。
-// 安装包由主机 Nginx /downloads/ 直出（/opt/pythontopia/downloads/*）。
-interface DownloadItem {
-  key: string;
-  url: string;
-  label: string;
-  hint: string;
-}
-const DOWNLOADS: readonly DownloadItem[] = [
-  { key: 'android_apk', url: '/downloads/pythontopia.apk', label: '📱 Android App（APK）', hint: '像素小镇 + 完整学习闭环' },
-  { key: 'windows_exe', url: '/downloads/pythontopia-windows.exe', label: '🪟 Windows 安装版（EXE）', hint: '桌面原生客户端' },
-  { key: 'windows_zip', url: '/downloads/pythontopia-windows.zip', label: '🪟 Windows 免装版（ZIP）', hint: '解压即用，免安装' },
-];
-const downloadCounts = ref<Record<string, number | null>>({});
-
-onMounted(async () => {
-  await Promise.all(
-    DOWNLOADS.map(async (d) => {
-      try {
-        downloadCounts.value = { ...downloadCounts.value, [d.key]: (await getDownloadStat(d.key)).count };
-      } catch {
-        downloadCounts.value = { ...downloadCounts.value, [d.key]: null };
-      }
-    }),
-  );
-});
-
-/** 点击下载：乐观 +1 即时反馈，后端点击计数 best-effort，绝不阻断真实下载跳转。 */
-function onDownloadClick(key: string): void {
-  const current = downloadCounts.value[key] ?? 0;
-  downloadCounts.value = { ...downloadCounts.value, [key]: current + 1 };
-  void hitDownload(key)
-    .then((stat) => {
-      downloadCounts.value = { ...downloadCounts.value, [key]: stat.count };
-    })
-    .catch(() => {
-      /* 计数失败忽略 */
-    });
-}
 
 /** 小节锚点归属的主题 id（点其他主题的小节锚点时先切页再滚动）。 */
 function ownerSectionId(anchorId: string): string {
@@ -217,51 +167,7 @@ watch(
         class="guide-layout"
         :class="{ 'guide-layout--nav-open': navOpen }"
       >
-        <header class="guide-hero">
-          <p
-            class="guide-hero__kicker pyt-pixel-text"
-            aria-hidden="true"
-          >
-            PYTHONTOPIA · 操作指南
-          </p>
-          <h1 class="guide-hero__title">
-            Pythontopia 新手操作指南
-          </h1>
-          <p class="guide-hero__lead">
-            第一次来，沿「起步 → 看 → 学 → 练 → 测」走一遍；之后遇到具体问题，直接从左侧目录查功能。
-            每篇都先讲什么时候用，再讲操作、能力边界和相关模块。
-          </p>
-          <nav
-            class="guide-journey"
-            aria-label="新手学习路径"
-          >
-            <button
-              v-for="(step, index) in learningPath"
-              :key="step.label"
-              type="button"
-              class="guide-journey__step"
-              @click="goToPage(step.sectionId)"
-            >
-              <span class="guide-journey__index pyt-pixel-text">{{ index + 1 }}</span>
-              <span class="guide-journey__body">
-                <strong>{{ step.label }}</strong>
-                <small>{{ step.detail }}</small>
-              </span>
-            </button>
-          </nav>
-          <div class="guide-hero__meta">
-            <span class="guide-hero__chip pyt-pixel-text">{{ sections.length }} 大主题</span>
-            <span class="guide-hero__chip pyt-pixel-text">{{ GUIDE_SCREENSHOT_TOTAL }} 张截图</span>
-            <span class="guide-hero__chip pyt-pixel-text">
-              第 {{ activeIndex + 1 }} / {{ sections.length }} 篇
-            </span>
-            <RouterLink
-              class="guide-hero__back"
-              to="/world"
-            >
-              ← 返回小镇
-            </RouterLink>
-          </div>
+        <div class="guide-mobile-bar">
           <button
             type="button"
             class="guide-nav-toggle"
@@ -276,7 +182,7 @@ watch(
             />
             章节导航
           </button>
-        </header>
+        </div>
 
         <GuideSidebar
           class="guide-nav-area"
@@ -292,30 +198,6 @@ watch(
           data-testid="guide-content"
           aria-label="操作指南正文"
         >
-          <section
-            data-testid="guide-apk-download"
-            style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;padding:12px 16px;border:2px solid var(--pyt-color-border-strong);border-radius:8px;background:var(--pyt-color-warning-bg);"
-          >
-            <strong style="font-size:15px;color:var(--pyt-color-text-primary);">⬇ 下载客户端</strong>
-            <div
-              v-for="d in DOWNLOADS"
-              :key="d.key"
-              style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;"
-            >
-              <div style="display:flex;flex-direction:column;gap:2px;min-width:0;">
-                <span style="font-size:14px;color:var(--pyt-color-text-primary);">{{ d.label }}</span>
-                <span style="font-size:12px;color:var(--pyt-color-text-muted);">{{ d.hint }}<template v-if="downloadCounts[d.key] != null"> · 已下载 {{ downloadCounts[d.key] }} 次</template></span>
-              </div>
-              <a
-                :href="d.url"
-                download
-                :data-testid="`guide-dl-${d.key}`"
-                style="flex:0 0 auto;padding:8px 18px;border:2px solid var(--pyt-color-border-strong);border-radius:6px;background:var(--pyt-color-gold);color:var(--pyt-color-text-primary);font-weight:700;text-decoration:none;cursor:pointer;"
-                @click="onDownloadClick(d.key)"
-              >下载 ↓</a>
-            </div>
-          </section>
-
           <GuideSection
             :key="activeSection.id"
             :section="activeSection"
@@ -419,10 +301,8 @@ watch(
 .guide-layout {
   display: grid;
   grid-template-columns: 248px minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr);
-  grid-template-areas:
-    'hero hero'
-    'nav  main';
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: 'nav main';
   gap: var(--pyt-space-4) var(--pyt-space-5);
   max-width: 1320px;
   height: 100%;
@@ -430,162 +310,11 @@ watch(
   padding: var(--pyt-space-5) var(--pyt-space-6) 0;
 }
 
-/* ── 页头 ─────────────────────────────────────────────────── */
-.guide-hero {
-  position: relative;
-  grid-area: hero;
-  display: flex;
-  flex-direction: column;
-  gap: var(--pyt-space-2);
-  padding: var(--pyt-space-4) var(--pyt-space-5);
-  border: 2px solid var(--pyt-color-border-strong);
-  background: var(--pyt-color-bg-elevated);
-  box-shadow: 4px 4px 0 var(--pyt-color-border-soft);
-}
-
-/* 像素装饰角 */
-.guide-hero::before,
-.guide-hero::after {
-  content: '';
-  position: absolute;
-  width: 10px;
-  height: 10px;
-  background: var(--pyt-color-gold);
-}
-
-.guide-hero::before {
-  top: -2px;
-  left: -2px;
-}
-
-.guide-hero::after {
-  right: -2px;
-  bottom: -2px;
-}
-
-.guide-hero__kicker {
-  margin: 0;
-  font-size: 12px;
-  letter-spacing: 3px;
-  color: var(--pyt-color-warning);
-}
-
-.guide-hero__title {
-  margin: 0;
-  font-size: 30px;
-  line-height: 1.3;
-  color: var(--pyt-color-primary-dark);
-}
-
-.guide-hero__lead {
-  margin: 0;
-  max-width: 62em;
-  font-size: 16px;
-  line-height: 1.65;
-  color: var(--pyt-color-text-hint);
-}
-
-.guide-journey {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 6px;
-  margin: var(--pyt-space-2) 0;
-}
-
-.guide-journey__step {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 52px;
-  padding: 8px 10px;
-  font-family: var(--pyt-font-read);
-  text-align: left;
-  color: var(--pyt-color-text-primary);
-  background: var(--pyt-color-bg-soft);
-  border: 1px solid var(--pyt-color-border);
-  border-radius: var(--pyt-radius-sm);
-  box-shadow: none;
-}
-
-.guide-journey__step:not(:last-child)::after {
-  content: '›';
-  position: absolute;
-  z-index: 1;
-  right: -7px;
-  color: var(--pyt-color-warning);
-  font-size: 20px;
-  font-weight: 700;
-}
-
-.guide-journey__step:hover,
-.guide-journey__step:focus-visible {
-  background: rgba(241, 196, 83, 0.2);
-  border-color: var(--pyt-color-gold);
-}
-
-.guide-journey__index {
-  display: grid;
-  place-items: center;
-  flex: 0 0 24px;
-  width: 24px;
-  height: 24px;
-  color: var(--pyt-color-text-on-dark);
-  background: var(--pyt-color-primary-dark);
-  border-radius: 2px;
-  font-size: 11px;
-}
-
-.guide-journey__body {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  line-height: 1.25;
-}
-
-.guide-journey__body strong {
-  color: var(--pyt-color-primary-dark);
-  font-size: 15px;
-}
-
-.guide-journey__body small {
-  color: var(--pyt-color-text-muted);
-  font-size: 11px;
-}
-
-.guide-hero__meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--pyt-space-3);
-}
-
-.guide-hero__chip {
-  font-size: 12px;
-  padding: 3px 10px;
-  color: var(--pyt-color-primary-dark);
-  background: var(--pyt-color-bg-soft);
-  border: 1px solid var(--pyt-color-border);
-}
-
-.guide-hero__back {
-  margin-left: auto;
-  font-size: 14px;
-  padding: 5px 14px;
-  color: var(--pyt-color-text-on-dark);
-  background: var(--pyt-color-primary);
-  border: 2px solid var(--pyt-color-border-strong);
-  border-radius: var(--pyt-radius-sm);
-  text-decoration: none;
-  box-shadow: 2px 2px 0 var(--pyt-color-border-soft);
-  transition: background var(--pyt-motion-base) ease;
-}
-
-.guide-hero__back:hover {
-  background: var(--pyt-color-primary-dark);
-}
-
 /* ── 移动端导航开关（桌面隐藏） ─────────────────────────────── */
+.guide-mobile-bar {
+  display: none;
+}
+
 .guide-nav-toggle {
   display: none;
   align-items: center;
@@ -806,22 +535,19 @@ watch(
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto auto auto;
     grid-template-areas:
-      'hero'
+      'toolbar'
       'nav'
       'main';
     padding: var(--pyt-space-4) var(--pyt-space-4) 72px;
   }
 
+  .guide-mobile-bar {
+    display: block;
+    grid-area: toolbar;
+  }
+
   .guide-nav-toggle {
     display: inline-flex;
-  }
-
-  .guide-journey {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .guide-journey__step:not(:last-child)::after {
-    display: none;
   }
 
   .guide-nav-area {
@@ -840,14 +566,9 @@ watch(
     overflow: visible;
     font-size: 16px;
   }
-
-  .guide-hero__title {
-    font-size: 24px;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .guide-hero__back,
   .guide-outline__link,
   .guide-outline__sublink {
     transition: none;

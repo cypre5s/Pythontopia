@@ -15,6 +15,7 @@ import Phaser from 'phaser';
 import { router } from '@/app/router';
 import { perfMonitor } from '@/services/perfMonitor';
 import { playBgm, playSfx, type BgmKey } from '@/composables/useAudio';
+import { Haptics } from '@game/adapters/haptics';
 import type { Direction } from '@api/dto/Direction';
 import { createDirectionController, type DirectionController } from '@game/adapters/input';
 import { openNpcDialog } from '@game/adapters/dialog';
@@ -72,6 +73,28 @@ function toolActionForMap(mapKey: string): CharacterAction {
 const TURN_DELAY_MS = 70;
 const RAIN_SLOWDOWN = 1.25;
 const FADE_DURATION_MS = 280;
+
+// ── 人物↔NPC AABB 碰撞 + 顿帧(hit-stop) ──
+// 玩家与 NPC 各视作以贴图中心为原点的正方形包围盒；候选目标格中心与各 NPC 像素中心
+// 做轴对齐包围盒(AABB)重叠判定，重叠即视为不可进入（NPC 阻挡）。0.8 tile 的盒边长保证
+// 相邻格可贴边站立、同格/半格内相撞。
+const PLAYER_COLLIDE_BOX = RENDER_TILE_SIZE * 0.8;
+const NPC_COLLIDE_BOX = RENDER_TILE_SIZE * 0.8;
+// 撞到 NPC 时的顿帧(hit-stop)：仅做「短暂冻结 + 极轻撞击音」，不做镜头抖动。
+// （Phaser camera.shake 的 intensity 会乘以整个视口尺寸再乘相机缩放，日常走位撞 NPC 时
+//  极易整屏大幅震动且不适，故移除。）freeze 取 light 档 ≈3 帧(50ms：业界 20–50ms / 1–3 帧，
+//  远低于 300ms 发涩上限)；REFRACTORY 不应期避免持续顶着 NPC 反复触发。
+const HITSTOP_MS = 50;
+const HITSTOP_REFRACTORY_MS = 320;
+
+// ── 脚步反馈 ── 每走一格落一团淡出尘土（减弱动效时跳过），隔步播一声极轻脚步音并随机化
+// 音高（避免机械重复，game feel 经验）。dust 深度落在玩家贴图(≈14)之下，贴地不挡身体。
+const FOOTSTEP_VOLUME = 0.06;
+const FOOTSTEP_DETUNE_RANGE = 600;
+const DUST_DEPTH = 13.5;
+
+// ── 活的小镇 ── NPC 在玩家此半径内会转头看玩家（巡逻/游走/待机呼吸已由 NpcFramework + 贴图实现）。
+const LOOK_AT_RANGE_PX = RENDER_TILE_SIZE * 1.8;
 
 // R-14 方案A：仅中央小镇 town_hub 为实景地图（mine_south 风景图已删，Bug 矿洞改 /bug-mine 页面）。
 const SUPPORTED_MAP_KEYS: ReadonlySet<string> = new Set([
@@ -170,6 +193,10 @@ interface WorldSceneState {
   actionWasDown: boolean;
   jumpWasDown: boolean;
   toolWasDown: boolean;
+  // 顿帧(hit-stop)：this.time.now < hitStopUntil 期间冻结 update 推进；
+  // lastHitStopAt 用于不应期节流，避免持续顶着 NPC 连续触发。
+  hitStopUntil: number;
+  lastHitStopAt: number;
   exits: ExitTile[];
   npcs: NpcSpawn[];
   width: number;
@@ -213,6 +240,8 @@ const state: WorldSceneState = {
   actionWasDown: false,
   jumpWasDown: false,
   toolWasDown: false,
+  hitStopUntil: 0,
+  lastHitStopAt: 0,
   exits: [],
   npcs: [],
   width: 0,
@@ -242,6 +271,8 @@ export const WorldScene = {
     state.switching = false;
     state.lastMoveAt = 0;
     state.actionWasDown = false;
+    state.hitStopUntil = 0;
+    state.lastHitStopAt = 0;
     // 上一次 restart 残留的 weather 句柄要在 init 阶段一次性销毁，避免重复 setTint
     // 在 jsdom 单测下出现 cameras.main null 报错。
     if (state.weather) {
@@ -359,9 +390,16 @@ export const WorldScene = {
     // trigger（distance + hint）；两者从相同的 npcs 列表派生，drawNpcSprite 维持视觉层。
     state.npcFramework = new NpcFramework(phaserScene);
     // wander 避障：把 tile 级碰撞判定（含越界）暴露给 NpcFramework（世界像素坐标 → tile）。
-    state.npcFramework.setCollisionChecker((px, py) =>
-      isBlocked(Math.floor(px / RENDER_TILE_SIZE), Math.floor(py / RENDER_TILE_SIZE)),
-    );
+    state.npcFramework.setCollisionChecker((px, py) => {
+      const tx = Math.floor(px / RENDER_TILE_SIZE);
+      const ty = Math.floor(py / RENDER_TILE_SIZE);
+      if (isBlocked(tx, ty)) {
+        return true;
+      }
+      // 游走避让玩家：玩家所在格视为占用，NPC 不会走到玩家身上（与人物↔NPC AABB 碰撞互补）。
+      const p = state.player;
+      return p !== null && p.tileX === tx && p.tileY === ty;
+    });
     state.npcTriggers.clear();
     state.hintRendererHandle = createPhaserHintRenderer(phaserScene);
     state.interactable = new InteractableSystem(phaserScene, {
@@ -372,6 +410,7 @@ export const WorldScene = {
       const trigger = buildNpcTrigger(npc, RENDER_TILE_SIZE, () => {
         // dialog store openWithTree 自动 fetch /data/npcs/{key}/{meta,dialog}.json，
         // 失败时 store 内部填 loadError。
+        Haptics.tap();
         openNpcDialog(npc.npcKey);
         state.npcFramework?.startDialog(npc.npcKey);
         state.npcFramework?.faceTowards(
@@ -563,6 +602,13 @@ export const WorldScene = {
       return;
     }
 
+    // 顿帧(hit-stop)：撞到 NPC 后短暂冻结整帧推进（玩家移动 + NPC 巡逻/贴图同步），
+    // 强化「撞上去」的打击反馈。冻结期保持 prevUpdateTimeMs 跟随，解冻后 NPC dt 不跳变。
+    if (this.time.now < state.hitStopUntil) {
+      state.prevUpdateTimeMs = this.time.now;
+      return;
+    }
+
     const rawDirection = controller.getDirection();
     const jumpIsDown = controller.isJumpPressed();
     const jumpPressedEdge = jumpIsDown && !state.jumpWasDown;
@@ -644,8 +690,12 @@ export const WorldScene = {
       }
       const nextX = clamp(player.tileX + delta.dx, 0, state.width - 1);
       const nextY = clamp(player.tileY + delta.dy, 0, state.height - 1);
-      if (!isBlocked(nextX, nextY)) {
+      const blockedByTile = isBlocked(nextX, nextY);
+      // 人物↔NPC AABB 碰撞：地形可走但目标格被 NPC 包围盒占据时同样不可进入。
+      const blockedByNpc = !blockedByTile && npcOverlapsTile(nextX, nextY);
+      if (!blockedByTile && !blockedByNpc) {
         player.moveToTile(nextX, nextY, cardinal, { running });
+        spawnFootstepFx(this, player);
         void useWorldStore().updatePlayerTile({
           tileX: nextX,
           tileY: nextY,
@@ -656,7 +706,11 @@ export const WorldScene = {
           triggerSceneTransition(this as unknown as Phaser.Scene, exit);
         }
       } else {
+        // 撞墙/撞 NPC 都只原地转向不前进；撞到 NPC 追加顿帧反馈。
         player.moveToTile(player.tileX, player.tileY, cardinal);
+        if (blockedByNpc) {
+          triggerHitStop(this);
+        }
       }
     }
 
@@ -676,7 +730,16 @@ export const WorldScene = {
       state.npcFramework?.update(safeDelta);
       // 用逻辑层实例位置驱动 NPC 贴图（巡逻走动 / 站桩待机 / 工作手势）。
       if (state.npcFramework) {
-        for (const instance of state.npcFramework.getAll()) {
+        const framework = state.npcFramework;
+        for (const instance of framework.getAll()) {
+          // 活的小镇：玩家走近时 NPC 转头看玩家（未在对话中才生效，避免与对话朝向打架）。
+          if (!instance.inDialog) {
+            const lookDx = player.x - instance.x;
+            const lookDy = player.y - instance.y;
+            if (lookDx * lookDx + lookDy * lookDy <= LOOK_AT_RANGE_PX * LOOK_AT_RANGE_PX) {
+              framework.faceTowards(instance.id, player.x, player.y);
+            }
+          }
           state.npcSprites.get(instance.id)?.sync(instance, safeDelta);
           // wander 时把「按 E」trigger 圆心同步到 NPC 当前位置，交互区随之移动。
           const trig = state.npcTriggers.get(instance.id);
@@ -1034,6 +1097,93 @@ function isBlocked(tileX: number, tileY: number): boolean {
   }
   const row = state.collisions[tileY];
   return Boolean(row?.[tileX]);
+}
+
+/**
+ * 人物↔NPC 的 AABB 碰撞：候选目标格中心与各 NPC 实时像素中心做轴对齐包围盒重叠判定。
+ *
+ * 两个包围盒（玩家 / NPC，均以中心为原点的正方形）在 x、y 轴投影都重叠才算碰撞：
+ * 即 |dx| < (boxP+boxN)/2 且 |dy| < (boxP+boxN)/2。相邻格中心相距一个 tile
+ * (16) 大于阈值(12.8)，故玩家可贴边站立；同格或半格内的 NPC（含游走中的 NPC）则阻挡。
+ */
+function npcOverlapsTile(tileX: number, tileY: number): boolean {
+  const framework = state.npcFramework;
+  if (!framework) {
+    return false;
+  }
+  const centerX = tileX * RENDER_TILE_SIZE + RENDER_TILE_SIZE / 2;
+  const centerY = tileY * RENDER_TILE_SIZE + RENDER_TILE_SIZE / 2;
+  const overlapHalf = (PLAYER_COLLIDE_BOX + NPC_COLLIDE_BOX) / 2;
+  for (const npc of framework.getAll()) {
+    if (Math.abs(centerX - npc.x) < overlapHalf && Math.abs(centerY - npc.y) < overlapHalf) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * 触发顿帧(hit-stop)：设置短暂冻结窗口 + 极轻撞击音，强化「撞上 NPC」的反馈，不做镜头抖动。
+ * 以不应期(REFRACTORY)节流：玩家持续顶着 NPC 时只偶发再触发，不会连续顿帧。
+ */
+function triggerHitStop(scene: SceneLike): void {
+  const now = scene.time.now;
+  if (now - state.lastHitStopAt < HITSTOP_REFRACTORY_MS) {
+    return;
+  }
+  state.lastHitStopAt = now;
+  state.hitStopUntil = now + HITSTOP_MS;
+  Haptics.bump();
+  playSfx('sfx_land', { volume: 0.2 });
+}
+
+/** 是否启用减弱动效（无障碍）：true 时跳过尘土等纯装饰动效。 */
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== 'undefined'
+    && typeof window.matchMedia === 'function'
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+}
+
+let footstepParity = 0;
+
+/**
+ * 玩家走一格的脚步反馈：每步落一团快速淡出的尘土（减弱动效时跳过），隔步播一声极轻脚步音
+ * 并随机化音高（避免机械重复）。尘土深度落在玩家贴图之下，贴地不挡身体。
+ */
+function spawnFootstepFx(scene: SceneLike, player: PlayerSpriteHandle): void {
+  footstepParity = (footstepParity + 1) % 2;
+  if (footstepParity === 0) {
+    const detune = Math.round((Math.random() * 2 - 1) * FOOTSTEP_DETUNE_RANGE);
+    playSfx('sfx_land', { volume: FOOTSTEP_VOLUME, detune });
+  }
+  if (prefersReducedMotion()) {
+    return;
+  }
+  try {
+    const phaserScene = scene as unknown as Phaser.Scene;
+    const dust = phaserScene.add.ellipse(
+      player.x,
+      player.y + RENDER_TILE_SIZE * 0.42,
+      RENDER_TILE_SIZE * 0.5,
+      RENDER_TILE_SIZE * 0.26,
+      0xcdbb94,
+      0.5,
+    );
+    dust.setDepth(DUST_DEPTH);
+    phaserScene.tweens.add({
+      targets: dust,
+      alpha: 0,
+      scaleX: 1.9,
+      scaleY: 1.9,
+      duration: 280,
+      ease: 'Quad.easeOut',
+      onComplete: () => dust.destroy(),
+    });
+  } catch {
+    // 测试 / 无渲染环境（jsdom）忽略。
+  }
 }
 
 export function directionDelta(dir: string): { dx: number; dy: number } {

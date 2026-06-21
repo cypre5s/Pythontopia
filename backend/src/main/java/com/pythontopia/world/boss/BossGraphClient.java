@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -39,10 +40,15 @@ public class BossGraphClient {
   private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
 
   private final RestTemplate restTemplate;
+  private final RestTemplate bossProblemRestTemplate;
   private final GraphServiceProperties properties;
 
-  public BossGraphClient(RestTemplate graphRestTemplate, GraphServiceProperties properties) {
+  public BossGraphClient(
+      @Qualifier("graphRestTemplate") RestTemplate graphRestTemplate,
+      @Qualifier("bossProblemRestTemplate") RestTemplate bossProblemRestTemplate,
+      GraphServiceProperties properties) {
     this.restTemplate = graphRestTemplate;
+    this.bossProblemRestTemplate = bossProblemRestTemplate;
     this.properties = properties;
   }
 
@@ -98,7 +104,7 @@ public class BossGraphClient {
     return GraphClientRetryHelper.withRetry(
         "boss-problem",
         () ->
-            restTemplate
+            bossProblemRestTemplate
                 .exchange(
                     properties.graphUrl() + "/agents/boss/problem",
                     HttpMethod.POST,

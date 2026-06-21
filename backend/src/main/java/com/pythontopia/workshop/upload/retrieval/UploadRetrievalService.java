@@ -21,7 +21,7 @@ public class UploadRetrievalService {
   private static final int MAX_TOP_K = 20;
 
   /** 查询向量期望维度；不符则跳过余弦、走字面回退（fail-soft，避免 pgvector 维度不匹配报错）。 */
-  private static final int EMBEDDING_DIM = 512;
+  private static final int EMBEDDING_DIM = 2048;
 
   private final EmbeddingClient embeddingClient;
   private final UploadChunkRepository repository;

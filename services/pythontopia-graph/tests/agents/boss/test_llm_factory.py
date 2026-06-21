@@ -80,6 +80,55 @@ async def test_factory_strips_code_fence() -> None:
 
 
 @pytest.mark.asyncio
+async def test_factory_repairs_json_object_with_wrapping_text_and_raw_newlines() -> None:
+    """OpenAI-compatible models sometimes return JSON-ish text despite json_object mode."""
+
+    text = """下面是题目 JSON：
+{
+  "title": "换行题",
+  "statement": "读入一个数 n，
+输出 n。",
+  "reference_solution": "n = int(input())
+print(n)",
+  "test_cases": [
+    {"input": "1", "expected_output": "1", "is_sample": true},
+    {"input": "2", "expected_output": "2"},
+    {"input": "3", "expected_output": "3"}
+  ],
+  "hints": ["int 转换"]
+}
+请直接使用。"""
+    provider = _StubProvider(LlmResponse(content_text=text))
+    factory = build_llm_problem_factory(provider)
+    problem = await factory(chapter=1, stage=1, kc_code="PY43-KC-001", difficulty=1)
+    assert problem.title == "换行题"
+    assert problem.statement == "读入一个数 n，\n输出 n。"
+    assert "print(n)" in problem.reference_solution
+    assert len(problem.test_cases) == 3
+
+
+@pytest.mark.asyncio
+async def test_factory_repairs_common_llm_jsonish_quotes_and_trailing_commas() -> None:
+    text = """{
+  "title": "点亮灯牌",
+  "statement": "输出字符串："灯亮了"",
+  "reference_solution": "print("灯亮了")",
+  "test_cases": [
+    {"input": "", "expected_output": "灯亮了", "is_sample": true},
+    {"input": "", "expected_output": "灯亮了"},
+    {"input": "", "expected_output": "灯亮了"},
+  ],
+  "hints": ["使用 print"],
+}"""
+    provider = _StubProvider(LlmResponse(content_text=text))
+    factory = build_llm_problem_factory(provider)
+    problem = await factory(chapter=1, stage=1, kc_code="PY43-KC-001", difficulty=1)
+    assert problem.title == "点亮灯牌"
+    assert problem.reference_solution == 'print("灯亮了")'
+    assert len(problem.test_cases) == 3
+
+
+@pytest.mark.asyncio
 async def test_factory_handles_nested_problem_field() -> None:
     payload = {"problem": _good_payload()}
     provider = _StubProvider(LlmResponse(content_json=payload))
@@ -127,3 +176,65 @@ async def test_factory_retries_without_response_format_kwarg() -> None:
     assert problem.title == "测试题"
     # 回落重试后不再传入 response_format
     assert "response_format" not in provider.last_kwargs
+
+
+@pytest.mark.asyncio
+async def test_bug_mine_prompt_preserves_stdout_judge_contract() -> None:
+    provider = _StubProvider(LlmResponse(content_json=_good_payload()))
+    factory = build_llm_problem_factory(provider)
+
+    await factory(
+        chapter=1,
+        stage=1,
+        kc_code="PY43-KC-001",
+        difficulty=1,
+        preferred_kind="bug_mine",
+    )
+
+    user_prompt = provider.last_messages[-1]["content"]
+    assert "Bug 矿洞仍然是可执行 Python 判题题" in user_prompt
+    assert "stdin 输入" in user_prompt
+    assert "stdout 输出" in user_prompt
+    assert "至少 3 条 test_cases" in user_prompt
+
+
+@pytest.mark.asyncio
+async def test_debug_prompt_preserves_stdout_judge_contract() -> None:
+    provider = _StubProvider(LlmResponse(content_json=_good_payload()))
+    factory = build_llm_problem_factory(provider)
+
+    await factory(
+        chapter=1,
+        stage=1,
+        kc_code="PY43-KC-001",
+        difficulty=1,
+        preferred_kind="debug",
+    )
+
+    user_prompt = provider.last_messages[-1]["content"]
+    assert "改错题仍然是可执行 Python 判题题" in user_prompt
+    assert "stdin 输入" in user_prompt
+    assert "stdout 输出" in user_prompt
+    assert "至少 3 条 test_cases" in user_prompt
+
+
+@pytest.mark.asyncio
+async def test_chapter_1_prompt_repeats_json_and_syntax_contract() -> None:
+    provider = _StubProvider(LlmResponse(content_json=_good_payload()))
+    factory = build_llm_problem_factory(provider)
+
+    await factory(
+        chapter=1,
+        stage=2,
+        kc_code="PY43-KC-004",
+        difficulty=4,
+        preferred_kind="dual_track",
+    )
+
+    user_prompt = provider.last_messages[-1]["content"]
+    assert "只输出合法 JSON 对象" in user_prompt
+    assert "至少 3 条 test_cases" in user_prompt
+    assert "stdin 输入" in user_prompt
+    assert "stdout 输出" in user_prompt
+    assert "第 1 章只能使用 print / input / 变量赋值 / int / float / str / 简单四则运算" in user_prompt
+    assert "禁止 if、for、while、list、dict、def、class、import" in user_prompt

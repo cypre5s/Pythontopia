@@ -38,6 +38,8 @@ pythontopia:
       read-timeout-ms: ${PYT_GRAPH_READ_TIMEOUT_MS:30000}
     chapter-test:
       read-timeout-ms: ${PYT_CHAPTER_TEST_READ_TIMEOUT_MS:600000}
+    boss-problem:
+      read-timeout-ms: ${PYT_BOSS_PROBLEM_READ_TIMEOUT_MS:180000}
   sse:
     relay:
       # SSE 中继线程池：有界 + CallerRunsPolicy，突发流量回压而非打满线程/OOM。

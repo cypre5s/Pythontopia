@@ -21,6 +21,13 @@ interface NpcMarker {
   y: number;
 }
 
+interface BuildingMarker {
+  id: string;
+  x: number;
+  y: number;
+  label?: string;
+}
+
 export type MinimapExitSide = 'north' | 'south' | 'east' | 'west';
 
 export interface MinimapExitMarker {
@@ -38,6 +45,8 @@ interface Props {
   playerX: number;
   playerY: number;
   npcs?: NpcMarker[];
+  /** 建筑（学习入口）标记，帮助「去哪学」导航。 */
+  buildings?: BuildingMarker[];
   /** 当前地图中文显示名，例如「Pythontopia 小镇」 */
   mapName?: string;
   /** 边缘出口方向列表，渲染为 4 边箭头 */
@@ -51,6 +60,7 @@ const props = withDefaults(defineProps<Props>(), {
   height: 200,
   tilemap: null,
   npcs: () => [],
+  buildings: () => [],
   mapName: '',
   exits: () => [],
   playerFacing: '',
@@ -64,6 +74,8 @@ const COLLISION_COLOR = '#3a352a';
 const BG_COLOR = '#2a2118';
 const PLAYER_COLOR = '#e63946';
 const NPC_COLOR = '#ffd166';
+const BUILDING_COLOR = '#62b6e0';
+const BUILDING_BORDER_COLOR = '#173947';
 const POINT_SIZE = 3;
 // 玩家点脉动半径（最大半径，用 sin(time) 调制）
 const PLAYER_PULSE_MAX_RADIUS = 6;
@@ -126,6 +138,16 @@ function redraw(): void {
         }
       }
     }
+  }
+
+  // 建筑标记（学习入口）：带深色描边的方块，画在 NPC/玩家之下。
+  for (const building of props.buildings) {
+    const bx = Math.floor(building.x * scaleX);
+    const by = Math.floor(building.y * scaleY);
+    ctx.fillStyle = BUILDING_BORDER_COLOR;
+    ctx.fillRect(bx - 1, by - 1, POINT_SIZE + 2, POINT_SIZE + 2);
+    ctx.fillStyle = BUILDING_COLOR;
+    ctx.fillRect(bx, by, POINT_SIZE, POINT_SIZE);
   }
 
   ctx.fillStyle = NPC_COLOR;
@@ -199,6 +221,7 @@ watch(
     props.height,
     props.tilemap,
     props.npcs,
+    props.buildings,
   ],
   () => {
     redraw();

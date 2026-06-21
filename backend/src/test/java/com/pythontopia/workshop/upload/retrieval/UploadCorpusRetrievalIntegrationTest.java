@@ -35,7 +35,7 @@ import org.testcontainers.utility.DockerImageName;
 @Testcontainers
 class UploadCorpusRetrievalIntegrationTest {
 
-  private static final int DIM = 512;
+  private static final int DIM = 2048;
   private static final String MODEL = "pythontopia-rag/embed";
 
   @Container
@@ -67,8 +67,11 @@ class UploadCorpusRetrievalIntegrationTest {
             + "id BIGSERIAL PRIMARY KEY, user_id BIGINT, filename TEXT, ext TEXT, "
             + "byte_size BIGINT, extracted_text TEXT, char_count INT, line_count INT, "
             + "status TEXT, error TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT now())");
-    // 应用真实 V163 迁移 SQL（顺带验证迁移 DDL 正确）。
+    jdbc.execute("CREATE TABLE IF NOT EXISTS learning_event_log (id BIGSERIAL PRIMARY KEY)");
+    // 应用真实向量相关迁移 SQL（顺带验证迁移 DDL 正确）。
+    jdbc.execute(readMigration("db/migration/V141__memory_embedding.sql"));
     jdbc.execute(readMigration("db/migration/V163__workshop_upload_chunk.sql"));
+    jdbc.execute(readMigration("db/migration/V175__embedding_halfvec_2048.sql"));
 
     repository = new JdbcUploadChunkRepository(jdbc);
   }
@@ -98,7 +101,7 @@ class UploadCorpusRetrievalIntegrationTest {
     assertThat(hits).extracting(RetrievalHit::uploadId).containsOnly(uploadA); // userB 被隔离
     assertThat(hits.get(0).filename()).isEqualTo("a.py"); // JOIN workshop_upload 取文件名
     assertThat(hits.get(0).score()).isCloseTo(1.0, Offset.offset(1e-4));
-    assertThat(hits.get(1).score()).isCloseTo(0.8, Offset.offset(1e-4));
+    assertThat(hits.get(1).score()).isCloseTo(0.8, Offset.offset(5e-4));
   }
 
   @Test
@@ -240,7 +243,7 @@ class UploadCorpusRetrievalIntegrationTest {
     }
   }
 
-  /** 确定性 512 维单位向量：同文本 → 同向量（余弦 1），用于验证端到端向量往返。 */
+  /** 确定性 2048 维单位向量：同文本 → 同向量（余弦 1），用于验证端到端向量往返。 */
   private static final class DeterministicEmbeddingClient implements EmbeddingClient {
     @Override
     public Optional<float[]> embed(String text) {

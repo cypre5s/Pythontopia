@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 仅放行云端 ECS 主机的明文(HTTP)流量；其余域默认仍强制 HTTPS。 -->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">47.120.29.62</domain>
+    </domain-config>
+</network-security-config>

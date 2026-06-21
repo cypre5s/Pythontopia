@@ -111,6 +111,68 @@ describe('rogueRun store', () => {
     expect(run.nodes.find((n) => n.id === start!.id)?.state).not.toBe('cleared');
   });
 
+  it('initialises challenge editor from the fetched starter code', async () => {
+    judgeMock.fetchProblem.mockResolvedValueOnce({
+      ...problem(),
+      starterCode: 'total = 0\nfor item in items:\n    total += item\nprint(total)\n',
+      buggyCode: 'total = 0\nfor item in items:\n    total = item\nprint(total)\n',
+    });
+    const run = useRogueRunStore();
+    await run.startRun(null);
+    const start = run.nodes.find((n) => n.layer === 0);
+
+    await run.enterNode(start!.id);
+
+    expect(run.phase).toBe('challenge');
+    expect(run.activeCode).toContain('total = 0');
+    expect(run.activeCode).toContain('total += item');
+  });
+
+  it('initialises challenge editor from buggy code when starter code is empty', async () => {
+    judgeMock.fetchProblem.mockResolvedValueOnce({
+      ...problem(),
+      starterCode: '',
+      buggyCode: 'total = 0\nfor item in items:\n    total = item\nprint(total)\n',
+    });
+    const run = useRogueRunStore();
+    await run.startRun(null);
+    const start = run.nodes.find((n) => n.layer === 0);
+
+    await run.enterNode(start!.id);
+
+    expect(run.phase).toBe('challenge');
+    expect(run.activeCode).toContain('total = item');
+  });
+
+  it('persists challenge entry before waiting for a generated problem', async () => {
+    let resolveProblem: ((value: BossProblemDto) => void) | undefined;
+    judgeMock.fetchProblem.mockReturnValueOnce(new Promise((resolve) => {
+      resolveProblem = resolve;
+    }));
+
+    const run = useRogueRunStore();
+    await run.startRun(null);
+    frontierApiMock.saveExpeditionRun.mockClear();
+    const start = run.nodes.find((n) => n.layer === 0);
+
+    const entering = run.enterNode(start!.id);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const persisted = JSON.parse(localStorage.getItem('pyt_rogue_run_v1') ?? '{}');
+    expect(persisted.phase).toBe('challenge');
+    expect(persisted.currentNodeId).toBe(start!.id);
+    expect(frontierApiMock.saveExpeditionRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        phase: 'challenge',
+        currentNodeId: start!.id,
+      }),
+    );
+
+    resolveProblem?.(problem());
+    await entering;
+  });
+
   it('relic 沉静心法(calm_mind) softens damage from -2 to -1', async () => {
     const run = useRogueRunStore();
     await run.startRun(null);
@@ -177,6 +239,35 @@ describe('rogueRun store', () => {
     expect(run.phase).toBe('challenge');
   });
 
+  it('rest node heals and clears in-place without fetching a problem', async () => {
+    const run = useRogueRunStore();
+    await run.startRun(null);
+    const node = run.nodes.find((n) => n.layer === 0);
+    node!.kind = 'rest';
+    run.hp = 2;
+
+    await run.enterNode(node!.id);
+
+    expect(judgeMock.fetchProblem).not.toHaveBeenCalled();
+    expect(run.phase).toBe('map');
+    expect(run.hp).toBeGreaterThan(2);
+    expect(run.nodes.find((n) => n.id === node!.id)?.state).toBe('cleared');
+  });
+
+  it('chest node grants a relic and clears in-place without fetching a problem', async () => {
+    const run = useRogueRunStore();
+    await run.startRun(null);
+    const node = run.nodes.find((n) => n.layer === 0);
+    node!.kind = 'chest';
+
+    await run.enterNode(node!.id);
+
+    expect(judgeMock.fetchProblem).not.toHaveBeenCalled();
+    expect(run.phase).toBe('map');
+    expect(run.relics).toHaveLength(1);
+    expect(run.nodes.find((n) => n.id === node!.id)?.state).toBe('cleared');
+  });
+
   it('boss requires beating bossPhasesTotal phases before victory', async () => {
     const run = useRogueRunStore();
     await run.startRun(null);
@@ -237,7 +328,7 @@ describe('rogueRun store', () => {
     expect(start?.kcCode).toBe('PY43-KC-001'); // 本地 useKcFrontier mock
   });
 
-  it('resumes an active backend run before generating a new map', async () => {
+  it('shows an active backend run as a selectable save before continuing', async () => {
     frontierApiMock.fetchExpeditionRun.mockResolvedValueOnce({
       phase: 'map',
       focusChapter: 3,
@@ -267,9 +358,15 @@ describe('rogueRun store', () => {
     });
 
     const run = useRogueRunStore();
-    await run.startRun(null);
+    await run.refreshSavedRun();
 
     expect(frontierApiMock.requestFrontierPicks).not.toHaveBeenCalled();
+    expect(run.phase).toBe('idle');
+    expect(run.hasSavedRun).toBe(true);
+    expect(run.savedRunSummary?.focusChapter).toBe(3);
+
+    await run.resumeSavedRun();
+
     expect(run.phase).toBe('map');
     expect(run.focusChapter).toBe(3);
     expect(run.nodes[0]?.kcCode).toBe('PY43-KC-017');
@@ -278,7 +375,7 @@ describe('rogueRun store', () => {
     expect(run.relics).toEqual(['calm_mind']);
   });
 
-  it('falls back to localStorage when backend run loading is unreachable', async () => {
+  it('falls back to localStorage when loading a selectable save and backend is unreachable', async () => {
     frontierApiMock.fetchExpeditionRun.mockRejectedValueOnce(new Error('offline'));
     localStorage.setItem('pyt_rogue_run_v1', JSON.stringify({
       phase: 'map',
@@ -309,11 +406,56 @@ describe('rogueRun store', () => {
     }));
 
     const run = useRogueRunStore();
-    await run.startRun(null);
+    await run.refreshSavedRun();
 
     expect(frontierApiMock.requestFrontierPicks).not.toHaveBeenCalled();
+    expect(run.phase).toBe('idle');
+    expect(run.hasSavedRun).toBe(true);
+    expect(run.savedRunSummary?.focusChapter).toBe(4);
+
+    await run.resumeSavedRun();
+
     expect(run.focusChapter).toBe(4);
     expect(run.nodes[0]?.kcCode).toBe('PY43-KC-031');
     expect(run.score).toBe(42);
+  });
+
+  it('starts a fresh run instead of silently auto-resuming a saved run', async () => {
+    frontierApiMock.fetchExpeditionRun.mockResolvedValueOnce({
+      phase: 'map',
+      focusChapter: 5,
+      nodes: [
+        {
+          id: 'L0-0',
+          layer: 0,
+          col: 0,
+          kind: 'battle',
+          kcCode: 'PY43-KC-039',
+          challengeKind: 'dual_track',
+          difficulty: 4,
+          next: [],
+          state: 'available',
+        },
+      ],
+      layers: 1,
+      currentNodeId: 'L0-0',
+      hp: 4,
+      maxHp: 5,
+      momentum: 1,
+      bestMomentum: 1,
+      score: 99,
+      relics: [],
+      isDaily: false,
+      history: [],
+    });
+    const run = useRogueRunStore();
+    await run.refreshSavedRun();
+
+    await run.startRun(1);
+
+    expect(run.phase).toBe('map');
+    expect(run.focusChapter).toBe(1);
+    expect(run.nodes[0]?.kcCode).not.toBe('PY43-KC-039');
+    expect(frontierApiMock.requestFrontierPicks).toHaveBeenCalled();
   });
 });

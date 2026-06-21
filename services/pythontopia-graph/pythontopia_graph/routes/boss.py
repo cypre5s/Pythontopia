@@ -34,6 +34,7 @@ from pythontopia_graph.llm.provider import (
 LOG = logging.getLogger(__name__)
 
 router = APIRouter()
+BOSS_PROBLEM_MAX_RETRIES = 6
 
 
 class ProfileSignalsPayload(BaseModel):
@@ -171,7 +172,7 @@ async def request_boss_problem(body: BossProblemRequest) -> dict[str, Any]:
             difficulty=difficulty,
             problem_factory=factory,
             golden_fallback=golden,
-            max_retries=2,
+            max_retries=BOSS_PROBLEM_MAX_RETRIES,
             preferred_kind=body.preferredKind,
             profile_signals=profile_signals_dict,
         )

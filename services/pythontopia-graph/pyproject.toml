@@ -16,6 +16,7 @@ dependencies = [
   # https://docs.langchain.com/oss/python/migrate/langgraph-v1
   "langgraph>=1,<2",
   "httpx>=0.28,<0.29",
+  "json-repair>=0.59,<0.60",
   "structlog>=24.4,<25",
   "tenacity>=9,<10",
   "python-dotenv>=1,<2",

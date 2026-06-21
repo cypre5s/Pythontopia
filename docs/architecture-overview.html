@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>Pythontopia 系统架构总览</title>
+<style>
+  :root {
+    --red: #c00000;
+    --red-soft: #f4cccc;
+    --gray-label: #ededed;
+    --gray-border: #b7b7b7;
+    --yellow: #f3e2a9;
+    --tan: #fdf3d6;
+    --ink: #333;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
+    color: var(--ink);
+    background: #fff;
+  }
+  .slide {
+    width: 1280px;
+    height: 720px;
+    display: flex;
+    gap: 22px;
+    padding: 26px;
+    align-items: stretch;
+  }
+
+  /* ---------- 左：分层架构 ---------- */
+  .left {
+    flex: 0 0 60%;
+    border: 2px dashed var(--red);
+    border-radius: 4px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .layer {
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .layer > .label {
+    flex: 0 0 70px;
+    background: var(--gray-label);
+    border: 1px solid var(--gray-border);
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-weight: 700;
+    font-size: 14px;
+    line-height: 1.3;
+    padding: 4px;
+  }
+  .layer.core > .label { background: var(--yellow); }
+  .layer.data > .label { background: var(--red-soft); }
+
+  .content {
+    flex: 1;
+    display: flex;
+    gap: 8px;
+  }
+  .cell {
+    flex: 1;
+    background: #fff;
+    border: 1px solid var(--gray-border);
+    border-radius: 3px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 6px;
+    line-height: 1.3;
+  }
+  .cell .sub { color: #777; font-size: 11px; display: block; margin-top: 2px; }
+
+  /* 应用服务层：领域卡片 */
+  .app-wrap {
+    flex: 1;
+    border: 1px solid var(--gray-border);
+    border-radius: 3px;
+    padding: 8px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  .domain {
+    border: 1px solid #cfcfcf;
+    border-radius: 3px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .domain h4 {
+    background: var(--gray-label);
+    font-size: 12.5px;
+    text-align: center;
+    padding: 4px 2px;
+    border-bottom: 1px solid #cfcfcf;
+  }
+  .domain ul { list-style: none; padding: 5px 6px; }
+  .domain li {
+    font-size: 11.5px;
+    line-height: 1.5;
+    color: #444;
+    white-space: nowrap;
+  }
+  .domain li::before { content: "· "; color: #999; }
+
+  /* 核心能力层卡片 */
+  .core .content { flex-wrap: wrap; }
+  .core .cap {
+    flex: 1 1 46%;
+    background: var(--tan);
+    border: 1px solid #e3c987;
+    border-radius: 3px;
+    padding: 6px 9px;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+  .core .cap b { color: #8a6d00; }
+
+  /* ---------- 右：四个架构要点 ---------- */
+  .right {
+    flex: 1;
+    border: 2px dashed var(--red);
+    border-radius: 4px;
+    padding: 22px 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+  }
+  .point { display: flex; gap: 12px; }
+  .point .box {
+    flex: 0 0 26px;
+    width: 26px; height: 26px;
+    border: 3px solid var(--red);
+    border-radius: 3px;
+    margin-top: 3px;
+  }
+  .point .txt h3 {
+    color: var(--red);
+    font-size: 21px;
+    font-weight: 800;
+    letter-spacing: .5px;
+  }
+  .point .txt p {
+    font-size: 13px;
+    font-weight: 700;
+    color: #222;
+    margin-top: 5px;
+    line-height: 1.45;
+  }
+</style>
+</head>
+<body>
+  <div class="slide">
+    <!-- 左：分层架构 -->
+    <div class="left">
+      <!-- 接入层 -->
+      <div class="layer" style="flex:0 0 56px;">
+        <div class="label">接入层</div>
+        <div class="content">
+          <div class="cell">学生端<span class="sub">Web · Android · Windows · 微信</span></div>
+          <div class="cell">教师端<span class="sub">班级 / 看板</span></div>
+        </div>
+      </div>
+
+      <!-- 网关层 -->
+      <div class="layer" style="flex:0 0 52px;">
+        <div class="label">网关层</div>
+        <div class="content">
+          <div class="cell">Nginx<span class="sub">反向代理 · 静态托管</span></div>
+          <div class="cell">Spring Security 6</div>
+          <div class="cell">JWT 鉴权过滤器<span class="sub">STATELESS 无状态</span></div>
+        </div>
+      </div>
+
+      <!-- 应用服务层 -->
+      <div class="layer" style="flex:1 1 auto;">
+        <div class="label">应用<br/>服务层</div>
+        <div class="app-wrap">
+          <div class="domain">
+            <h4>账号与班级域</h4>
+            <ul><li>账号认证</li><li>学生 8 维画像</li><li>班级看板 / 任务</li></ul>
+          </div>
+          <div class="domain">
+            <h4>教学域</h4>
+            <ul><li>AI 辅学答疑</li><li>课件问答</li><li>课程 / 课件浏览</li></ul>
+          </div>
+          <div class="domain">
+            <h4>练习测评域</h4>
+            <ul><li>训练场判题</li><li>Bug 矿洞调试</li><li>复盘 / 费曼评估</li></ul>
+          </div>
+          <div class="domain">
+            <h4>资源工坊域</h4>
+            <ul><li>资源工坊生成</li><li>多模态(图/TTS/脚本)</li><li>主线任务路径</li></ul>
+          </div>
+          <div class="domain">
+            <h4>游戏世界域</h4>
+            <ul><li>世界存档 / 天气</li><li>NPC 对话</li><li>意图编排</li></ul>
+          </div>
+          <div class="domain">
+            <h4>课程内容底座</h4>
+            <ul><li>packId=43 课程包</li><li>561 页 / 65 KC</li><li>内容审查 / 防幻觉</li></ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- 核心能力层 -->
+      <div class="layer core" style="flex:0 0 118px;">
+        <div class="label">核心<br/>能力层</div>
+        <div class="content">
+          <div class="cap"><b>Agent 编排</b><br/>pythontopia-graph（FastAPI + LangGraph · 11 Agent，不启用 ReAct）</div>
+          <div class="cap"><b>代码执行</b><br/>服务端判题（子进程沙箱）· Pyodide 前端即时预览</div>
+          <div class="cap"><b>知识库检索</b><br/>pythontopia-rag（FastAPI）· Embedding（智谱 / hash 兜底）</div>
+          <div class="cap"><b>模型接入</b><br/>LLM 网关（讯飞 Spark / OpenAI 兼容）· 多模态（文生图 / TTS / 看图）</div>
+        </div>
+      </div>
+
+      <!-- 数据层 -->
+      <div class="layer data" style="flex:0 0 50px;">
+        <div class="label">数据层</div>
+        <div class="content">
+          <div class="cell">PostgreSQL 16</div>
+          <div class="cell">pgvector<span class="sub">课件向量检索</span></div>
+          <div class="cell">Redis 7</div>
+          <div class="cell">Langfuse 可观测<span class="sub">可选 profile</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 右：四个架构要点 -->
+    <div class="right">
+      <div class="point">
+        <div class="box"></div>
+        <div class="txt">
+          <h3>AI Agent 编排架构</h3>
+          <p>基于 LangGraph 的 11 智能体协作工作流，结构化输出 + 证据审查，不启用 ReAct</p>
+        </div>
+      </div>
+      <div class="point">
+        <div class="box"></div>
+        <div class="txt">
+          <h3>RAG 知识增强架构</h3>
+          <p>以《Python 语言基础》课件为唯一底座，检索增强生成并强制标注引用页</p>
+        </div>
+      </div>
+      <div class="point">
+        <div class="box"></div>
+        <div class="txt">
+          <h3>智能教学能力层</h3>
+          <p>统一承载多智能体、RAG、服务端判题与 LLM / 多模态模型调用</p>
+        </div>
+      </div>
+      <div class="point">
+        <div class="box"></div>
+        <div class="txt">
+          <h3>游戏化学习支撑架构</h3>
+          <p>把编程学习从「做题式训练」扩展为「看→学→练→测」任务驱动的沉浸式像素小镇</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

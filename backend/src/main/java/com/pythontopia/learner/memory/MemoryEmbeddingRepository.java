@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * 记忆向量持久化与余弦检索（pgvector 支撑，维度 512 对齐 BgeSmallEmbedder）。
+ * 记忆向量持久化与余弦检索（pgvector 支撑，维度 2048 对齐智谱 embedding-3）。
  *
  * <p>无向量 / 离线场景下记忆检索回退至 KC 字面匹配（见 {@link MemoryScorer}），故本仓储仅在 embedding
  * 可用时被写入与检索。

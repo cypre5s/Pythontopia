@@ -22,6 +22,8 @@ export interface PlayBgmOptions {
 
 export interface PlaySfxOptions {
   volume?: number;
+  /** 音高微调（音分 cents）：脚步/撞击等重复音随机化，避免机械重复（game feel 经验）。 */
+  detune?: number;
 }
 
 const DEFAULT_BGM_VOLUME = 0.32;
@@ -174,7 +176,11 @@ export function playSfx(key: SfxKey, options: PlaySfxOptions = {}): void {
     return;
   }
   const base = options.volume ?? DEFAULT_SFX_VOLUME;
-  game.sound.play(key, { volume: base * sfxVolumeMul });
+  const config: { volume: number; detune?: number } = { volume: base * sfxVolumeMul };
+  if (typeof options.detune === 'number') {
+    config.detune = options.detune;
+  }
+  game.sound.play(key, config);
 }
 
 export function unlockAudio(): void {

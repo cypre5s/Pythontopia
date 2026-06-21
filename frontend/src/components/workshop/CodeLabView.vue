@@ -1,12 +1,28 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { onMounted, ref } from 'vue';
 import { useLearningStore } from '@stores/learning';
+import { usePyodideStatus } from '@/composables/usePyodideStatus';
+import PixelSkeleton from '@/components/common/PixelSkeleton.vue';
+import EmptyState from '@/components/common/EmptyState.vue';
+import { warmPyodide } from '@/game/adapters/pyodide';
+import { translatePyError, type PyErrorHint } from '@/utils/pyErrorHints';
 import type { CodeLabContent } from '@/api/dto/Workshop';
 import type { PyodideRunResult } from '@/game/adapters/pyodide';
 
 const props = defineProps<{
   content: CodeLabContent;
 }>();
+
+// Pyodide 首次加载（~10MB / 十几秒）时给出明确进度提示，避免「运行中…」久等无反馈。
+const pyStatus = usePyodideStatus();
+
+// 进入代码讲解即后台预热运行时，争取用户点「运行」时已就绪。
+onMounted(() => warmPyodide());
+
+// 把运行报错翻译成初学者友好提示（模板内按 index 取用）。
+function pyHint(index: number): PyErrorHint | null {
+  return translatePyError(outputs.value[index]?.stderr ?? runError.value[index] ?? null);
+}
 
 // 每个讲解独立保存运行态/输出，避免一个 walkthrough 的结果污染其它行。
 const running = ref<Record<number, boolean>>({});
@@ -38,6 +54,12 @@ async function runWalkthrough(index: number): Promise<void> {
 
 <template>
   <div class="code-lab">
+    <EmptyState
+      v-if="!props.content.walkthroughs.length"
+      icon="🧪"
+      title="暂无代码讲解"
+      description="这个工坊还没有可运行的代码讲解，去其它环节继续学习吧。"
+    />
     <section
       v-for="(walkthrough, index) in props.content.walkthroughs"
       :key="index"
@@ -76,8 +98,16 @@ async function runWalkthrough(index: number): Promise<void> {
           :disabled="running[index] === true"
           @click="runWalkthrough(index)"
         >
-          {{ running[index] ? '运行中…' : '运行' }}
+          {{ running[index] ? (pyStatus === 'loading' ? '加载运行时…' : '运行中…') : '运行' }}
         </button>
+        <div
+          v-if="running[index] && pyStatus === 'loading'"
+          class="py-loading"
+          data-testid="pyodide-loading"
+        >
+          <span>正在加载 Python 运行时（首次约十几秒）…</span>
+          <PixelSkeleton height="8px" />
+        </div>
         <details
           v-if="outputs[index] || runError[index]"
           :data-testid="`codelab-output-${index}`"
@@ -94,6 +124,14 @@ async function runWalkthrough(index: number): Promise<void> {
             v-if="runError[index]"
             class="stderr"
           >{{ runError[index] }}</pre>
+          <div
+            v-if="pyHint(index)"
+            class="error-hint"
+            data-testid="codelab-error-hint"
+          >
+            <strong>💡 {{ pyHint(index)?.title }}</strong>
+            <span>{{ pyHint(index)?.hint }}</span>
+          </div>
           <small
             v-if="outputs[index]"
             class="duration"
@@ -164,6 +202,26 @@ async function runWalkthrough(index: number): Promise<void> {
 .primary:disabled {
   cursor: not-allowed;
   opacity: 0.6;
+}
+.py-loading {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--pyt-color-text-hint);
+}
+.error-hint {
+  display: grid;
+  gap: 3px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(180, 35, 24, 0.3);
+  background: rgba(241, 196, 83, 0.14);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+.error-hint strong {
+  color: var(--pyt-color-danger, #b42318);
 }
 .run-output {
   background: var(--pyt-color-bg-soft);

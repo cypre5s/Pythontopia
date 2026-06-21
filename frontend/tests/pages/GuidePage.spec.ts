@@ -11,6 +11,17 @@ vi.mock('@/composables/useStardewFx', () => ({
   playUiClick: vi.fn(),
 }));
 
+// 下载计数 API：按 key 返回不同计数，用于校验并发拉取后三端计数不互相覆盖。
+const DOWNLOAD_COUNTS: Record<string, number> = {
+  android_apk: 11,
+  windows_exe: 22,
+  windows_zip: 33,
+};
+vi.mock('@/api/downloads', () => ({
+  getDownloadStat: vi.fn(async (key: string) => ({ key, count: DOWNLOAD_COUNTS[key] ?? 0 })),
+  hitDownload: vi.fn(async (key: string) => ({ key, count: (DOWNLOAD_COUNTS[key] ?? 0) + 1 })),
+}));
+
 import GuidePage from '@/pages/GuidePage.vue';
 import PauseMenu from '@/components/hud/PauseMenu.vue';
 import { GUIDE_SECTIONS, GUIDE_SCREENSHOT_TOTAL } from '@/content/guideSections';
@@ -92,7 +103,7 @@ describe('GuidePage 分页式文档布局', () => {
 
     // 左侧导航覆盖全部主题；正文为可读长文（段落数量充足，而非空壳）。
     expect(wrapper.findAll('[data-testid^="guide-nav-link-"]').length).toBe(GUIDE_SECTIONS.length);
-    expect(wrapper.get('h1').text()).toContain('操作指南');
+    expect(wrapper.find('.guide-hero').exists()).toBe(false);
     expect(content.findAll('p').length).toBeGreaterThan(3);
   });
 
@@ -103,8 +114,6 @@ describe('GuidePage 分页式文档布局', () => {
 
     expect(wrapper.find(`#${first.id}`).exists()).toBe(true);
     expect(wrapper.find(`#${second.id}`).exists()).toBe(false);
-    // 页码徽标显示当前页位置
-    expect(wrapper.text()).toContain(`第 1 / ${GUIDE_SECTIONS.length} 篇`);
   });
 
   it('?topic= 驱动当前页；无效 topic 回退第一个主题', async () => {
@@ -440,6 +449,44 @@ describe('GuidePage 内容覆盖十大主题', () => {
     expect(text).toContain('工具调用时间线');
     expect(text).toContain('外部查证');
     expect(text).toContain('保存到「我的书房」继续复用');
+  });
+});
+
+describe('GuidePage 下载客户端计数', () => {
+  it('非「多端下载」章节不显示下载区', async () => {
+    const { wrapper } = await mountGuide();
+    expect(wrapper.find('[data-testid="guide-downloads"]').exists()).toBe(false);
+  });
+
+  it('「多端下载」章节三端计数都渲染，不被并发回调互相覆盖', async () => {
+    const { wrapper } = await mountGuide('/guide?topic=clients');
+    const card = wrapper.get('[data-testid="guide-downloads"]');
+
+    expect(card.find('[data-testid="guide-dl-android_apk"]').exists()).toBe(true);
+    expect(card.find('[data-testid="guide-dl-windows_zip"]').exists()).toBe(true);
+    expect(card.find('[data-testid="guide-dl-windows_exe"]').exists()).toBe(false);
+
+    const text = card.text();
+    expect(text, 'APK 计数缺失（并发覆盖回归）').toContain('已下载 11 次');
+    expect(text, 'ZIP 计数缺失（并发覆盖回归）').toContain('已下载 33 次');
+    expect(text).not.toContain('已下载 22 次');
+  });
+
+  it('点击下载跳转门控页，不在点击时乐观计数（由验证码门控页验证通过后计数）', async () => {
+    const { wrapper } = await mountGuide('/guide?topic=clients');
+    const card = wrapper.get('[data-testid="guide-downloads"]');
+    const link = card.get('[data-testid="guide-dl-android_apk"]');
+
+    expect(link.attributes('href')).toBe('/download-gate/?file=pythontopia.apk');
+    expect(link.attributes('target')).toBe('_blank');
+    expect(link.attributes('rel')).toBe('noopener noreferrer');
+    expect(link.attributes('download')).toBeUndefined();
+    await link.trigger('click');
+    await flushPromises();
+
+    const text = card.text();
+    expect(text).toContain('已下载 11 次');
+    expect(text).not.toContain('已下载 12 次');
   });
 });
 

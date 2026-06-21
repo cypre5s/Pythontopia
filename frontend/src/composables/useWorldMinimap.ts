@@ -68,11 +68,19 @@ export interface MinimapNpcMarker {
   y: number;
 }
 
+export interface MinimapBuildingMarker {
+  id: string;
+  x: number;
+  y: number;
+  label: string;
+}
+
 export interface MinimapMapData {
   mapKey: MapKey;
   mapName: string;
   tilemap: MinimapTilemapShape;
   npcs: MinimapNpcMarker[];
+  buildings: MinimapBuildingMarker[];
   exits: MinimapExitMarker[];
 }
 
@@ -221,6 +229,7 @@ function parseTiledMap(json: TiledMapJson, mapKey: MapKey, index: TiledMapIndex)
   }
 
   const npcs: MinimapNpcMarker[] = [];
+  const buildings: MinimapBuildingMarker[] = [];
   const exits: MinimapExitMarker[] = [];
   const seenExits = new Set<string>();
   for (const layer of layers) {
@@ -235,6 +244,12 @@ function parseTiledMap(json: TiledMapJson, mapKey: MapKey, index: TiledMapIndex)
       if (type === 'npc') {
         const key = String(props['key'] ?? props['npcKey'] ?? obj.name ?? `npc-${tileX}-${tileY}`);
         npcs.push({ id: key, x: tileX, y: tileY });
+      } else if (type === 'building') {
+        // 建筑（学习入口）：用矩形中心作为小地图标记点，便于「去哪学」导航。
+        const cx = Math.floor(((obj.x ?? 0) + (obj.width ?? 0) / 2) / TILE_SIZE);
+        const cy = Math.floor(((obj.y ?? 0) + (obj.height ?? 0) / 2) / TILE_SIZE);
+        const label = String(props['label'] ?? obj.name ?? props['route'] ?? '建筑');
+        buildings.push({ id: obj.name ?? `building-${cx}-${cy}`, x: cx, y: cy, label });
       } else if (type === 'exit') {
         const target = String(props['target'] ?? props['toMap'] ?? '');
         if (!target) continue;
@@ -259,6 +274,7 @@ function parseTiledMap(json: TiledMapJson, mapKey: MapKey, index: TiledMapIndex)
     mapName: rawLabel,
     tilemap: { width, height, ground, collision },
     npcs,
+    buildings,
     exits,
   };
 }

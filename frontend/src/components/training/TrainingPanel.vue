@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useLearningStore } from '@stores/learning';
 import { useToastStore } from '@stores/toast';
 import { playSfx } from '@/composables/useAudio';
+import { warmPyodide } from '@/game/adapters/pyodide';
+import { translatePyError } from '@/utils/pyErrorHints';
+import { loadCodeDraft, saveCodeDraft } from '@/composables/useCodeDraft';
 import { useCodeEditorTheme } from '@/composables/useCodeEditorTheme';
 import { useResizable } from '@/composables/useResizable';
 import MarkdownView from '@/components/common/MarkdownView.vue';
@@ -18,6 +21,9 @@ const toast = useToastStore();
 const router = useRouter();
 const route = useRoute();
 
+// 进入训练场即后台预热 Pyodide，争取用户点「运行/调试」时已就绪（首次秒开）。
+onMounted(() => warmPyodide());
+
 // S1：变式会话 id 改读 store（pendingVariantSessionId），不再从 URL 取私有 id。
 // variant（URL 模式标志，非私有 id）仍作变式模式「门闸」：刷新丢 store 即安全降级为普通做题，
 // 残留 store 在普通做题导航（无 variant 标志）下也不会误触发变式提交。
@@ -25,6 +31,11 @@ const variantBugMineSessionId = computed<number | null>(() => learning.bugMine.p
 const isVariantMode = computed<boolean>(() => route.query.variant === '1' && variantBugMineSessionId.value != null);
 
 const problem = computed(() => learning.training.problem);
+
+// 运行报错「翻译」为初学者友好提示（匹配不到则不显示，仍保留原始 stderr）。
+const previewErrorHint = computed(() =>
+  translatePyError(learning.training.preview?.stderr ?? learning.training.lastError),
+);
 
 // 编辑器「暗色/亮色」开关上提到头部（AI 助教左侧），与编辑器共享同一份响应式状态。
 const { isLight: editorIsLight, toggle: toggleEditorTheme } = useCodeEditorTheme();
@@ -59,6 +70,29 @@ watch(
     debugInput.value = nextInput;
   },
   { immediate: true },
+);
+
+// 代码草稿自动保存：切到某题时恢复该题草稿；编辑时去抖写入 localStorage（刷新/断网/切页不丢）。
+watch(
+  () => problem.value?.id ?? null,
+  (id) => {
+    if (id == null) return;
+    const draft = loadCodeDraft(id);
+    if (draft != null && draft !== learning.training.code) {
+      learning.setTrainingCode(draft);
+    }
+  },
+  { immediate: true },
+);
+let draftSaveTimer: number | null = null;
+watch(
+  () => learning.training.code,
+  (code) => {
+    const id = problem.value?.id;
+    if (id == null) return;
+    if (draftSaveTimer !== null) window.clearTimeout(draftSaveTimer);
+    draftSaveTimer = window.setTimeout(() => saveCodeDraft(id, code), 500);
+  },
 );
 
 async function preview(): Promise<void> {
@@ -355,6 +389,7 @@ async function copySample(text: string): Promise<void> {
             :model-value="learning.training.code"
             :show-theme-toggle="false"
             @update:model-value="learning.setTrainingCode"
+            @run="preview"
           />
         </article>
 
@@ -417,6 +452,14 @@ async function copySample(text: string): Promise<void> {
               <small v-if="learning.training.preview">
                 耗时 {{ learning.training.preview.durationMs }}ms
               </small>
+              <div
+                v-if="previewErrorHint"
+                class="error-hint"
+                data-testid="py-error-hint"
+              >
+                <strong>💡 {{ previewErrorHint.title }}</strong>
+                <span>{{ previewErrorHint.hint }}</span>
+              </div>
             </section>
           </div>
 
@@ -872,6 +915,23 @@ async function copySample(text: string): Promise<void> {
 
 .debug-cell small {
   color: var(--pyt-color-text-hint);
+}
+
+.error-hint {
+  flex: 0 0 auto;
+  display: grid;
+  gap: 3px;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(180, 35, 24, 0.3);
+  background: rgba(241, 196, 83, 0.14);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--pyt-color-text-primary);
+}
+.error-hint strong {
+  color: var(--pyt-color-danger, #b42318);
 }
 
 .submission {

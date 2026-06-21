@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>下载验证 · Pythontopia</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f1e3;
+      --card: #fffdf8;
+      --border: #5c4a32;
+      --text: #2f2418;
+      --muted: #6b5a45;
+      --gold: #f1c453;
+      --danger: #b42318;
+      --ok: #1f7a45;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      font-family: "Segoe UI", "PingFang SC", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .card {
+      width: min(440px, 100%);
+      padding: 24px;
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      background: var(--card);
+      box-shadow: 4px 4px 0 rgba(92, 74, 50, 0.18);
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 22px;
+    }
+    p {
+      margin: 0 0 16px;
+      line-height: 1.6;
+      color: var(--muted);
+    }
+    .file {
+      margin-bottom: 16px;
+      padding: 10px 12px;
+      border: 1px dashed var(--border);
+      border-radius: 8px;
+      background: rgba(241, 196, 83, 0.12);
+      font-weight: 600;
+    }
+    .question {
+      margin: 0 0 14px;
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-align: center;
+    }
+    .choices {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .choice {
+      padding: 14px 10px;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      background: #fff;
+      font-size: 20px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s ease, transform 0.15s ease;
+    }
+    .choice:hover {
+      background: rgba(241, 196, 83, 0.25);
+    }
+    .choice:active {
+      transform: translate(1px, 1px);
+    }
+    .choice:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+    .toolbar {
+      display: flex;
+      justify-content: center;
+      margin-top: 8px;
+    }
+    button.link {
+      border: none;
+      background: none;
+      color: var(--muted);
+      text-decoration: underline;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .error {
+      margin-top: 12px;
+      color: var(--danger);
+      min-height: 1.2em;
+      text-align: center;
+    }
+    .success {
+      margin-top: 12px;
+      color: var(--ok);
+      text-align: center;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>下载验证</h1>
+    <p>请点选正确答案，验证通过后将自动开始下载。验证完成后可关闭此标签页。</p>
+    <div class="file" id="file-label">正在加载…</div>
+    <div class="question" id="question">加载中…</div>
+    <div class="choices" id="choices"></div>
+    <div class="toolbar">
+      <button type="button" class="link" id="refresh">换一题</button>
+    </div>
+    <div class="error" id="error" aria-live="polite"></div>
+    <div class="success" id="success" aria-live="polite"></div>
+  </main>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const file = params.get('file') || '';
+    const fileLabel = document.getElementById('file-label');
+    const questionEl = document.getElementById('question');
+    const choicesEl = document.getElementById('choices');
+    const errorEl = document.getElementById('error');
+    const successEl = document.getElementById('success');
+    const refreshBtn = document.getElementById('refresh');
+    let captchaId = '';
+    let verifying = false;
+
+    function setChoicesDisabled(disabled) {
+      choicesEl.querySelectorAll('.choice').forEach((btn) => {
+        btn.disabled = disabled;
+      });
+    }
+
+    async function loadCaptcha() {
+      errorEl.textContent = '';
+      successEl.textContent = '';
+      verifying = false;
+      choicesEl.innerHTML = '';
+      const res = await fetch(`/download-gate/api/captcha?file=${encodeURIComponent(file)}`);
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || '无法加载验证码');
+      }
+      captchaId = data.id;
+      fileLabel.textContent = data.label || file;
+      questionEl.textContent = data.question;
+      for (const choice of data.choices || []) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'choice';
+        btn.textContent = choice;
+        btn.addEventListener('click', () => {
+          void submitAnswer(choice);
+        });
+        choicesEl.appendChild(btn);
+      }
+    }
+
+    async function hitDownload(statKey) {
+      try {
+        await fetch(`/api/downloads/${encodeURIComponent(statKey)}/hit`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{}',
+        });
+      } catch (_) {
+        /* 计数失败不阻断下载 */
+      }
+    }
+
+    async function submitAnswer(answer) {
+      if (verifying) return;
+      verifying = true;
+      setChoicesDisabled(true);
+      errorEl.textContent = '';
+      successEl.textContent = '';
+      try {
+        const res = await fetch('/download-gate/api/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: captchaId,
+            answer: String(answer),
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || '验证失败');
+        }
+        successEl.textContent = '验证成功，正在开始下载…';
+        await hitDownload(data.stat_key);
+        window.location.href = data.url;
+      } catch (err) {
+        errorEl.textContent = err.message || '验证失败';
+        verifying = false;
+        setChoicesDisabled(false);
+      }
+    }
+
+    refreshBtn.addEventListener('click', () => {
+      loadCaptcha().catch((err) => {
+        errorEl.textContent = err.message || '加载失败';
+      });
+    });
+
+    loadCaptcha().catch((err) => {
+      errorEl.textContent = err.message || '加载失败';
+      fileLabel.textContent = '无效的下载文件';
+    });
+  </script>
+</body>
+</html>

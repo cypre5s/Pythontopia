@@ -34,9 +34,12 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   (event: 'update:modelValue', value: string): void;
+  /** Ctrl/Cmd+Enter 运行：由父级（做题页）绑定到「运行」。 */
+  (event: 'run'): void;
 }>();
 
 const host = ref<HTMLDivElement | null>(null);
+const copied = ref(false);
 let view: EditorView | null = null;
 let applyingExternalValue = false;
 
@@ -98,6 +101,17 @@ function reconfigureTheme(): void {
 
 function editorExtensions(): Extension[] {
   return [
+    // Ctrl/Cmd+Enter 运行：放在最前以取得最高优先级，preventDefault 阻止换行。
+    keymap.of([
+      {
+        key: 'Mod-Enter',
+        preventDefault: true,
+        run: () => {
+          emit('run');
+          return true;
+        },
+      },
+    ]),
     lineNumbers(),
     foldGutter(),
     history(),
@@ -124,6 +138,40 @@ function editorExtensions(): Extension[] {
       emit('update:modelValue', update.state.doc.toString());
     }),
   ];
+}
+
+async function copyCode(): Promise<void> {
+  const text = view?.state.doc.toString() ?? props.modelValue;
+  let ok = false;
+  // 安全上下文(HTTPS/localhost)走 Clipboard API；HTTP 下回退 execCommand，保证可用。
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      ok = true;
+    }
+  } catch {
+    ok = false;
+  }
+  if (!ok) {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+    } catch {
+      ok = false;
+    }
+  }
+  copied.value = ok;
+  if (ok) {
+    window.setTimeout(() => {
+      copied.value = false;
+    }, 1200);
+  }
 }
 
 function replaceDocument(nextValue: string): void {
@@ -194,6 +242,16 @@ onBeforeUnmount(() => {
     >
       {{ isLight ? '🌙 暗色' : '☀ 亮色' }}
     </button>
+    <button
+      type="button"
+      class="editor-copy"
+      :style="{ right: showThemeToggle ? '92px' : '10px' }"
+      :title="copied ? '已复制' : '复制全部代码'"
+      data-testid="editor-copy"
+      @click="copyCode"
+    >
+      {{ copied ? '✓ 已复制' : '⧉ 复制' }}
+    </button>
     <div
       ref="host"
       class="python-code-editor__host"
@@ -240,6 +298,25 @@ onBeforeUnmount(() => {
   transition: opacity 120ms ease;
 }
 .editor-theme-toggle:hover {
+  opacity: 1;
+}
+
+.editor-copy {
+  position: absolute;
+  top: 6px;
+  z-index: 3;
+  padding: 2px 8px;
+  font-family: var(--pyt-font-pixel), monospace;
+  font-size: 11px;
+  cursor: pointer;
+  border-radius: 4px;
+  border: 1px solid rgba(140, 106, 35, 0.6);
+  background: rgba(255, 247, 230, 0.9);
+  color: #3a2a14;
+  opacity: 0.55;
+  transition: opacity 120ms ease;
+}
+.editor-copy:hover {
   opacity: 1;
 }
 
