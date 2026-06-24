@@ -1,75 +1,132 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
+import PythonCodeEditor from '@/components/training/PythonCodeEditor.vue';
 import type { BossProblemDto } from '@/api/dto/Boss';
 
 const props = defineProps<{ problem: BossProblemDto }>();
 const code = defineModel<string>('code', { required: true });
 
-// 题面常把「描述 + ```代码``` + 报错 + 样例」混在一段里。按 ``` 代码围栏切成
-// 文字段 / 代码段，分别用题面样式 / 代码框渲染，避免代码与题干糊成一坨报错文本。
-interface StatementSegment {
+type StepKey = 'read' | 'locate' | 'fix';
+
+interface StatementBlock {
   type: 'text' | 'code';
+  title: string;
   content: string;
 }
-// 按行解析，双识别代码块：① ``` 围栏；② 中文「【错误代码】/【代码】…」标签后到下一个
-// 【…】标签前的行。两种格式的代码都抽成独立代码框，与题干/样例分开（线上 boss 题多用标签式）。
+
 const FENCE_RE = /^\s*```/;
 const CODE_LABEL_RE = /^\s*【\s*(?:错误代码|出错代码|错误的代码|错误程序|有误代码|代码|参考代码|示例代码|程序代码|原代码|原始代码)\s*】\s*$/;
-const SECTION_LABEL_RE = /^\s*【[^】]+】/;
-const segments = computed<StatementSegment[]>(() => {
+const SECTION_LABEL_RE = /^\s*【\s*([^】]+)\s*】\s*$/;
+
+function stripSectionLabel(line: string, fallback: string): string {
+  return SECTION_LABEL_RE.exec(line)?.[1]?.trim() || fallback;
+}
+
+const statementBlocks = computed<StatementBlock[]>(() => {
   const src = props.problem.statement ?? '';
-  const out: StatementSegment[] = [];
+  const out: StatementBlock[] = [];
   let buf: string[] = [];
-  let mode: StatementSegment['type'] = 'text';
+  let type: StatementBlock['type'] = 'text';
+  let title = '题目说明';
   let inFence = false;
   let inCodeSection = false;
+
   const flush = (): void => {
     const content = buf.join('\n').replace(/^\n+/, '').replace(/\s+$/, '');
-    if (content.trim().length > 0) out.push({ type: mode, content });
+    if (content.trim()) out.push({ type, title, content });
     buf = [];
   };
+
   for (const line of src.split('\n')) {
     if (FENCE_RE.test(line)) {
       flush();
       inFence = !inFence;
       inCodeSection = false;
-      mode = inFence ? 'code' : 'text';
-      continue; // 围栏行本身是分隔符，不渲染
+      type = inFence ? 'code' : 'text';
+      title = inFence ? '代码片段' : '题目说明';
+      continue;
     }
     if (inFence) {
       buf.push(line);
       continue;
     }
     if (CODE_LABEL_RE.test(line)) {
-      // 代码标签作为题面小标题留在 prose；其后到下一个【…】标签前的行作为代码段。
-      buf.push(line);
       flush();
-      mode = 'code';
+      type = 'code';
+      title = stripSectionLabel(line, '错误代码');
       inCodeSection = true;
+      continue;
+    }
+    const section = SECTION_LABEL_RE.exec(line);
+    if (section) {
+      flush();
+      type = 'text';
+      title = section[1]?.trim() || '题目说明';
+      inCodeSection = false;
       continue;
     }
     if (inCodeSection && SECTION_LABEL_RE.test(line)) {
       flush();
-      mode = 'text';
+      type = 'text';
+      title = stripSectionLabel(line, '题目说明');
       inCodeSection = false;
-      buf.push(line);
       continue;
     }
     buf.push(line);
   }
   flush();
-  // 无任何可分段内容时回退为单个文字段，保证始终有内容渲染。
-  return out.length > 0 ? out : [{ type: 'text', content: src.trim() }];
+  return out.length > 0 ? out : [{ type: 'text', title: '题目说明', content: src.trim() }];
 });
 
-const step = ref<'read' | 'locate' | 'fix'>('read');
-// 定位笔记单独存放，绝不写进提交的 code（否则「出错原因」散文会被当代码判 → 必败）。
+const activeStep = ref<StepKey>('read');
 const locateNote = ref('');
+const locatePassed = ref(false);
+const causeFeedback = ref('');
 
-function advanceStep(): void {
-  if (step.value === 'read') step.value = 'locate';
-  else if (step.value === 'locate') step.value = 'fix';
+const steps: Array<{ key: StepKey; label: string; hint: string }> = [
+  { key: 'read', label: '1.阅读', hint: '读题面与错误代码' },
+  { key: 'locate', label: '2.定位', hint: '写出错因并判断' },
+  { key: 'fix', label: '3.修复', hint: '编辑完整代码' },
+];
+
+function isStepUnlocked(step: StepKey): boolean {
+  if (step === 'read' || step === 'locate') return true;
+  return locatePassed.value;
 }
+
+function goStep(step: StepKey): void {
+  if (!isStepUnlocked(step)) return;
+  activeStep.value = step;
+}
+
+function causeLooksValid(text: string): boolean {
+  const normalized = text.trim();
+  if (normalized.length < 12) return false;
+  const mentionsLine = /(?:第\s*)?\d+\s*行|line\s*\d+/i.test(normalized);
+  const mentionsReason = /(因为|原因|错|错误|bug|不一致|类型|字符串|数字|转换|输入|输出|range|下标|索引|边界)/i.test(normalized);
+  return mentionsLine && mentionsReason;
+}
+
+function checkCause(): void {
+  if (!causeLooksValid(locateNote.value)) {
+    locatePassed.value = false;
+    causeFeedback.value = '还差一步：请写清楚可疑行号和为什么错，例如“第 1 行因为 input 得到字符串”。';
+    return;
+  }
+  locatePassed.value = true;
+  causeFeedback.value = '定位通过：现在进入修复阶段，错因笔记会保留在右侧供你回看。';
+  activeStep.value = 'fix';
+}
+
+watch(
+  () => props.problem.problemId,
+  () => {
+    activeStep.value = 'read';
+    locateNote.value = '';
+    locatePassed.value = false;
+    causeFeedback.value = '';
+  },
+);
 </script>
 
 <template>
@@ -77,120 +134,425 @@ function advanceStep(): void {
     class="closed-loop-card"
     data-testid="closed-loop-card"
   >
-    <header class="card-head">
-      <span class="card-icon">⟲</span>
-      <h3>调试闭环</h3>
-      <div class="steps">
-        <span :class="['step-dot', { active: step === 'read' }]">1.阅读</span>
-        <span class="step-arrow">→</span>
-        <span :class="['step-dot', { active: step === 'locate' }]">2.定位</span>
-        <span class="step-arrow">→</span>
-        <span :class="['step-dot', { active: step === 'fix' }]">3.修复</span>
-      </div>
-    </header>
-
-    <div
-      v-if="step === 'read'"
-      class="phase-panel"
+    <aside
+      class="cl-problem"
+      data-testid="closed-loop-problem"
     >
-      <h4>阶段 1：阅读报错信息</h4>
-      <div class="cl-statement">
-        <template
-          v-for="(seg, i) in segments"
-          :key="i"
-        >
-          <pre
-            v-if="seg.type === 'code'"
-            class="cl-code"
-          ><code>{{ seg.content }}</code></pre>
-          <p
-            v-else
-            class="cl-prose"
-            v-text="seg.content"
-          />
-        </template>
-      </div>
-      <button
-        type="button"
-        class="advance-btn"
-        @click="advanceStep"
+      <header class="cl-problem__head">
+        <span class="cl-kicker">题干</span>
+        <h3>调试闭环</h3>
+      </header>
+
+      <section
+        v-for="(block, index) in statementBlocks"
+        :key="`${block.type}-${index}`"
+        class="cl-block"
+        :class="`cl-block--${block.type}`"
+        :data-testid="block.type === 'code' ? 'closed-loop-block-code' : 'closed-loop-block-text'"
       >
-        我看懂了，进入定位 →
-      </button>
-    </div>
+        <span class="cl-block__label">{{ block.title }}</span>
+        <pre
+          v-if="block.type === 'code'"
+          class="cl-code"
+        ><code>{{ block.content }}</code></pre>
+        <p
+          v-else
+          class="cl-prose"
+          v-text="block.content"
+        />
+      </section>
 
-    <div
-      v-else-if="step === 'locate'"
-      class="phase-panel"
-    >
-      <h4>阶段 2：定位错误根源</h4>
-      <div class="cl-statement cl-statement--dim">
-        <template
-          v-for="(seg, i) in segments"
-          :key="i"
+      <section class="cl-samples">
+        <div
+          class="cl-sample"
+          data-testid="closed-loop-sample-input"
         >
-          <pre
-            v-if="seg.type === 'code'"
-            class="cl-code"
-          ><code>{{ seg.content }}</code></pre>
-          <p
-            v-else
-            class="cl-prose"
-            v-text="seg.content"
-          />
-        </template>
-      </div>
-      <textarea
-        v-model="locateNote"
-        class="locate-input"
-        rows="3"
-        placeholder="写出你认为出错的行号和原因，例如：第 5 行 IndexError，因为列表只有 3 个元素…"
-      />
-      <button
-        type="button"
-        class="advance-btn"
-        @click="advanceStep"
-      >
-        已定位，开始修复 →
-      </button>
-    </div>
+          <span class="cl-block__label">样例输入</span>
+          <pre>{{ problem.sampleInput || '(空)' }}</pre>
+        </div>
+        <div
+          class="cl-sample"
+          data-testid="closed-loop-sample-output"
+        >
+          <span class="cl-block__label">期望输出</span>
+          <pre>{{ problem.sampleOutput || '(空)' }}</pre>
+        </div>
+      </section>
+    </aside>
 
-    <div
-      v-else
-      class="phase-panel"
-    >
-      <h4>阶段 3：编写修复代码</h4>
-      <textarea
-        v-model="code"
-        data-testid="closed-loop-fix"
-        rows="10"
-        placeholder="# 写修复后的完整代码"
-        spellcheck="false"
-        class="fix-textarea"
-      />
-    </div>
+    <section class="cl-work">
+      <nav
+        class="cl-progress"
+        aria-label="调试闭环阶段"
+      >
+        <button
+          v-for="item in steps"
+          :key="item.key"
+          type="button"
+          class="cl-progress__step"
+          :class="{ 'is-active': activeStep === item.key, 'is-locked': !isStepUnlocked(item.key) }"
+          :disabled="!isStepUnlocked(item.key)"
+          :aria-current="activeStep === item.key ? 'step' : undefined"
+          :data-testid="`closed-loop-step-${item.key}`"
+          @click="goStep(item.key)"
+        >
+          <strong>{{ item.label }}</strong>
+          <span>{{ item.hint }}</span>
+        </button>
+      </nav>
+
+      <div
+        v-if="activeStep === 'read'"
+        class="cl-stage"
+        data-testid="closed-loop-stage-read"
+      >
+        <h4>先把失败现场看清楚</h4>
+        <p>左侧题干已经把说明、错误代码和样例分块。先确认程序现在在做什么，再进入错因定位。</p>
+        <button
+          type="button"
+          class="cl-action"
+          @click="goStep('locate')"
+        >
+          我看懂了，进入定位
+        </button>
+      </div>
+
+      <div
+        v-else-if="activeStep === 'locate'"
+        class="cl-stage"
+        data-testid="closed-loop-stage-locate"
+      >
+        <h4>写出错因并判断</h4>
+        <label class="cl-cause">
+          <span>错因判断</span>
+          <textarea
+            v-model="locateNote"
+            data-testid="closed-loop-cause"
+            rows="6"
+            placeholder="例如：第 1 行错误，因为 input().split() 得到的是字符串，直接相加会拼接成 23。"
+          />
+        </label>
+        <p
+          v-if="causeFeedback"
+          class="cl-feedback"
+          :class="{ 'is-pass': locatePassed }"
+          data-testid="closed-loop-cause-feedback"
+        >
+          {{ causeFeedback }}
+        </p>
+        <button
+          type="button"
+          class="cl-action"
+          data-testid="closed-loop-check-cause"
+          @click="checkCause"
+        >
+          判断定位
+        </button>
+      </div>
+
+      <div
+        v-else
+        class="cl-stage cl-stage--fix"
+        data-testid="closed-loop-stage-fix"
+      >
+        <header class="cl-fix-head">
+          <div>
+            <h4>编写修复代码</h4>
+            <p>这里只提交 Python 代码。错因笔记不会混进判题内容。</p>
+          </div>
+          <button
+            type="button"
+            class="cl-link"
+            @click="goStep('locate')"
+          >
+            回看二阶段
+          </button>
+        </header>
+        <div
+          v-if="locateNote"
+          class="cl-note"
+        >
+          <strong>错因笔记</strong>
+          <span>{{ locateNote }}</span>
+        </div>
+        <div class="cl-editor-shell">
+          <PythonCodeEditor
+            v-model="code"
+            :show-theme-toggle="false"
+          />
+        </div>
+      </div>
+    </section>
   </div>
 </template>
 
 <style scoped>
-.closed-loop-card { display: grid; gap: 12px; }
-.card-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.card-icon { font-size: 20px; }
-.card-head h3 { margin: 0; font-size: 16px; color: var(--pyt-color-text-primary); }
-.steps { display: flex; align-items: center; gap: 4px; margin-left: auto; font-size: 11px; }
-.step-dot { padding: 2px 8px; border-radius: 3px; background: var(--pyt-color-info-bg); color: var(--pyt-color-info); border: 1px solid transparent; }
-.step-dot.active { background: var(--pyt-color-warning-bg); color: var(--pyt-color-warning); border-color: var(--pyt-color-gold); }
-.step-arrow { color: var(--pyt-color-text-muted); }
-.phase-panel { display: grid; gap: 10px; }
-.phase-panel h4 { margin: 0; color: var(--pyt-color-text-hint); font-size: 14px; }
-/* 题面分段：文字段（描述/报错/输入输出/样例）与代码段分开渲染，不再糊成一坨报错文本。 */
-.cl-statement { display: grid; gap: 8px; }
-.cl-statement--dim { opacity: 0.62; }
-.cl-prose { margin: 0; padding: 8px 10px; white-space: pre-wrap; word-break: break-word; font-size: 13px; line-height: 1.7; color: var(--pyt-color-text-primary); background: var(--pyt-color-bg-soft); border: 1px solid var(--pyt-color-border); border-radius: var(--pyt-radius-sm); }
-.cl-code { margin: 0; padding: 10px 12px; overflow-x: auto; white-space: pre; font-family: var(--pyt-font-mono, monospace); font-size: 13px; line-height: 1.6; color: var(--pyt-color-terminal-text); background: var(--pyt-color-terminal-bg); border: 2px solid var(--pyt-color-border-strong); border-radius: var(--pyt-radius-sm); }
-.cl-code code { font-family: inherit; background: none; padding: 0; }
-.locate-input { font-family: inherit; font-size: 13px; background: var(--pyt-color-terminal-bg); color: var(--pyt-color-terminal-text); border: 2px solid var(--pyt-color-gold); border-radius: var(--pyt-radius-sm); padding: 8px; resize: vertical; }
-.advance-btn { align-self: flex-start; font-family: inherit; font-size: 12px; padding: 6px 14px; background: var(--pyt-color-info-bg); color: var(--pyt-color-info); border: 2px solid var(--pyt-color-info); border-radius: 4px; cursor: pointer; box-shadow: 2px 2px 0 rgba(42, 111, 151, 0.35); }
-.advance-btn:hover { background: #c2dcee; }
-.fix-textarea { font-family: var(--pyt-font-mono, monospace); font-size: 13px; background: var(--pyt-color-terminal-bg); color: var(--pyt-color-terminal-text); border: 2px solid var(--pyt-color-success); border-radius: var(--pyt-radius-sm); padding: 8px; resize: vertical; min-height: 160px; }
+.closed-loop-card {
+  min-height: min(620px, calc(100dvh - 270px));
+  display: grid;
+  grid-template-columns: minmax(300px, 0.92fr) minmax(420px, 1.08fr);
+  gap: 14px;
+}
+
+.cl-problem,
+.cl-work {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: rgba(255, 249, 234, 0.96);
+  border: 2px solid var(--pyt-color-border);
+  border-radius: 8px;
+  box-shadow: 3px 3px 0 rgba(74, 54, 29, 0.24);
+}
+
+.cl-problem {
+  gap: 10px;
+  padding: 14px;
+  overflow-y: auto;
+}
+
+.cl-problem__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.cl-problem__head h3,
+.cl-stage h4 {
+  margin: 0;
+  font-family: var(--pyt-font-read);
+  color: var(--pyt-color-text-primary);
+}
+
+.cl-kicker,
+.cl-block__label {
+  width: fit-content;
+  font-size: 11px;
+  color: var(--pyt-color-text-hint);
+  background: rgba(241, 216, 150, 0.42);
+  border: 1px solid rgba(74, 54, 29, 0.22);
+  border-radius: 4px;
+  padding: 3px 7px;
+}
+
+.cl-block,
+.cl-sample {
+  display: grid;
+  gap: 6px;
+}
+
+.cl-prose,
+.cl-sample pre {
+  margin: 0;
+  padding: 10px 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 13px;
+  line-height: 1.72;
+  color: var(--pyt-color-text-primary);
+  background: var(--pyt-color-bg-soft);
+  border: 1px solid var(--pyt-color-border);
+  border-radius: 6px;
+}
+
+.cl-code,
+.cl-sample pre {
+  font-family: var(--pyt-font-mono, 'Consolas', monospace);
+}
+
+.cl-code {
+  margin: 0;
+  padding: 12px 14px;
+  overflow-x: auto;
+  white-space: pre;
+  font-size: 13px;
+  line-height: 1.62;
+  color: var(--pyt-color-terminal-text);
+  background: var(--pyt-color-terminal-bg);
+  border: 2px solid var(--pyt-color-border-strong);
+  border-radius: 6px;
+}
+
+.cl-code code {
+  font-family: inherit;
+}
+
+.cl-samples {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.cl-work {
+  background: rgba(255, 252, 242, 0.96);
+}
+
+.cl-progress {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px;
+  border-bottom: 1px solid rgba(74, 54, 29, 0.22);
+  background: rgba(255, 249, 234, 0.82);
+}
+
+.cl-progress__step {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  text-align: left;
+  cursor: pointer;
+  color: var(--pyt-color-text-primary);
+  background: var(--pyt-color-bg-soft);
+  border: 2px solid rgba(74, 54, 29, 0.24);
+  border-radius: 6px;
+  font-family: inherit;
+}
+
+.cl-progress__step strong {
+  font-size: 13px;
+}
+
+.cl-progress__step span {
+  font-size: 10px;
+  color: var(--pyt-color-text-hint);
+}
+
+.cl-progress__step.is-active {
+  border-color: var(--pyt-color-warning);
+  background: var(--pyt-color-warning-bg);
+}
+
+.cl-progress__step.is-locked {
+  opacity: 0.46;
+  cursor: not-allowed;
+}
+
+.cl-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.cl-stage p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--pyt-color-text-hint);
+}
+
+.cl-action,
+.cl-link {
+  width: fit-content;
+  font-family: inherit;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.cl-action {
+  padding: 8px 14px;
+  color: var(--pyt-color-info);
+  background: var(--pyt-color-info-bg);
+  border: 2px solid var(--pyt-color-info);
+  box-shadow: 2px 2px 0 rgba(42, 111, 151, 0.28);
+}
+
+.cl-link {
+  padding: 6px 10px;
+  color: var(--pyt-color-text-hint);
+  background: transparent;
+  border: 1px dashed var(--pyt-color-border);
+}
+
+.cl-cause {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--pyt-color-text-primary);
+}
+
+.cl-cause textarea {
+  min-height: 128px;
+  resize: vertical;
+  padding: 10px 12px;
+  font-family: var(--pyt-font-read);
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--pyt-color-terminal-text);
+  background: var(--pyt-color-terminal-bg);
+  border: 2px solid var(--pyt-color-gold);
+  border-radius: 6px;
+}
+
+.cl-feedback {
+  padding: 9px 11px;
+  color: var(--pyt-color-danger);
+  background: var(--pyt-color-danger-bg);
+  border: 1px solid var(--pyt-color-danger);
+  border-radius: 6px;
+}
+
+.cl-feedback.is-pass {
+  color: var(--pyt-color-success);
+  background: var(--pyt-color-success-bg);
+  border-color: var(--pyt-color-success);
+}
+
+.cl-stage--fix {
+  overflow: hidden;
+}
+
+.cl-fix-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cl-note {
+  flex: 0 0 auto;
+  display: grid;
+  gap: 4px;
+  padding: 9px 11px;
+  font-size: 12px;
+  color: var(--pyt-color-text-hint);
+  background: rgba(241, 216, 150, 0.28);
+  border: 1px solid rgba(74, 54, 29, 0.18);
+  border-radius: 6px;
+}
+
+.cl-note strong {
+  color: var(--pyt-color-text-primary);
+}
+
+.cl-editor-shell {
+  flex: 1 1 auto;
+  min-height: 260px;
+  overflow: hidden;
+  border-radius: 6px;
+}
+
+.cl-editor-shell :deep(.python-code-editor) {
+  height: 100%;
+}
+
+@media (max-width: 1024px) {
+  .closed-loop-card {
+    min-height: 0;
+    grid-template-columns: 1fr;
+  }
+
+  .cl-progress {
+    grid-template-columns: 1fr;
+  }
+}
 </style>

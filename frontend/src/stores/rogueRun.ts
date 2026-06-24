@@ -473,6 +473,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     challenge.clearPrefetch();
     clearActive();
     phase.value = 'map';
+    prefetchAvailable();
     persist();
   }
 

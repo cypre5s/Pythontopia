@@ -103,6 +103,21 @@ describe('rogueRun store', () => {
     );
   });
 
+  it('starts warming the first battle before persisting a new map', async () => {
+    const run = useRogueRunStore();
+    frontierApiMock.saveExpeditionRun.mockImplementationOnce(async () => {
+      const start = run.nodes.find((n) => n.layer === 0);
+      expect(judgeMock.prefetchProblem).toHaveBeenCalledWith(
+        expect.objectContaining({ kc: start?.kcCode, kind: start?.challengeKind }),
+      );
+      return undefined;
+    });
+
+    await run.startRun(null);
+
+    expect(run.phase).toBe('map');
+  });
+
   it('passing a battle awards score + momentum and clears the node, unlocking next', async () => {
     const run = useRogueRunStore();
     await run.startRun(null);

@@ -16,7 +16,7 @@ import type {
 } from './dto/Boss';
 import { findBossByChapter } from '@/data/bossCatalog';
 
-const BOSS_PROBLEM_TIMEOUT_MS = 180_000;
+const BOSS_PROBLEM_TIMEOUT_MS = 15_000;
 
 const GOLDEN_TEMPLATES: Record<number, GoldenTemplate[]> = {
   1: [

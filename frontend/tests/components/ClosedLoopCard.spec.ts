@@ -37,11 +37,12 @@ describe('ClosedLoopCard 题面分段渲染', () => {
     expect(codeBlocks).toHaveLength(1);
     expect(codeBlocks[0]!.text()).toContain('print(a + b)');
 
-    // 代码不再混进题面文字段；题干与「输入格式」仍在文字段。
+    // 代码不再混进题面文字段；「输入格式」作为分块标题保留。
     const proseText = wrapper.findAll('.cl-prose').map((p) => p.text()).join(' ');
     expect(proseText).toContain('给花园浇水');
-    expect(proseText).toContain('输入格式');
     expect(proseText).not.toContain('print(a + b)');
+    const labels = wrapper.findAll('.cl-block__label').map((label) => label.text());
+    expect(labels).toContain('输入格式');
   });
 
   it('同样支持 ``` 围栏代码块，且不渲染围栏符号', () => {
