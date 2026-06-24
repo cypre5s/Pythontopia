@@ -229,10 +229,37 @@ export interface CoursewareCitation {
   quote: string;
 }
 
+export interface CoursewareKcEdge {
+  fromKc: string;
+  toKc: string;
+  relation: string;
+}
+
+export interface CoursewareGraphTrace {
+  route: string;
+  retrievalMode: string | null;
+  topK: number;
+  hitCount: number;
+  directHitCount: number;
+  supplementalHitCount: number;
+  prerequisiteHitCount: number;
+  coOccurHitCount: number;
+  supplementalHitLimit: number;
+  supplementalHitRatio: number;
+  subgraphEdgeCount: number;
+  expandedKcCount: number;
+  relationCounts: Record<string, number>;
+  noiseGuard: string;
+}
+
 export interface CoursewareAnswer {
   answerMd: string;
   citations: CoursewareCitation[];
   noEvidence: boolean;
+  route: string | null;
+  retrievalMode: string | null;
+  subgraph: CoursewareKcEdge[];
+  graphTrace: CoursewareGraphTrace | null;
 }
 
 /**
@@ -245,7 +272,15 @@ export async function answerCourseware(
 ): Promise<CoursewareAnswer> {
   const trimmed = query.trim();
   if (!trimmed) {
-    return { answerMd: '', citations: [], noEvidence: true };
+    return {
+      answerMd: '',
+      citations: [],
+      noEvidence: true,
+      route: null,
+      retrievalMode: null,
+      subgraph: [],
+      graphTrace: null,
+    };
   }
   const topK = Math.max(1, Math.min(options.topK ?? RAG_TOP_K, 12));
   const response = await http.post<{
@@ -262,6 +297,18 @@ export async function answerCourseware(
     }>;
     noEvidence?: boolean;
     no_evidence?: boolean;
+    route?: string | null;
+    retrievalMode?: string | null;
+    retrieval_mode?: string | null;
+    subgraph?: Array<{
+      fromKc?: string;
+      from_kc?: string;
+      toKc?: string;
+      to_kc?: string;
+      relation?: string;
+    }>;
+    graphTrace?: RawCoursewareGraphTrace | null;
+    graph_trace?: RawCoursewareGraphTrace | null;
   }>(`/api/courseware/answer`, {
     query: trimmed,
     kcCodes: options.kcCodes ?? [],
@@ -277,6 +324,68 @@ export async function answerCourseware(
       quote: c.quote ?? '',
     })),
     noEvidence: Boolean(data.noEvidence ?? data.no_evidence ?? false),
+    route: data.route ?? null,
+    retrievalMode: data.retrievalMode ?? data.retrieval_mode ?? null,
+    subgraph: (data.subgraph ?? []).map((edge) => ({
+      fromKc: edge.fromKc ?? edge.from_kc ?? '',
+      toKc: edge.toKc ?? edge.to_kc ?? '',
+      relation: edge.relation ?? 'prerequisite',
+    })),
+    graphTrace: normalizeCoursewareGraphTrace(data.graphTrace ?? data.graph_trace ?? null),
+  };
+}
+
+interface RawCoursewareGraphTrace {
+  route?: string;
+  retrievalMode?: string | null;
+  retrieval_mode?: string | null;
+  topK?: number;
+  top_k?: number;
+  hitCount?: number;
+  hit_count?: number;
+  directHitCount?: number;
+  direct_hit_count?: number;
+  supplementalHitCount?: number;
+  supplemental_hit_count?: number;
+  prerequisiteHitCount?: number;
+  prerequisite_hit_count?: number;
+  coOccurHitCount?: number;
+  co_occur_hit_count?: number;
+  supplementalHitLimit?: number;
+  supplemental_hit_limit?: number;
+  supplementalHitRatio?: number;
+  supplemental_hit_ratio?: number;
+  subgraphEdgeCount?: number;
+  subgraph_edge_count?: number;
+  expandedKcCount?: number;
+  expanded_kc_count?: number;
+  relationCounts?: Record<string, number>;
+  relation_counts?: Record<string, number>;
+  noiseGuard?: string;
+  noise_guard?: string;
+}
+
+function normalizeCoursewareGraphTrace(
+  raw: RawCoursewareGraphTrace | null,
+): CoursewareGraphTrace | null {
+  if (!raw) {
+    return null;
+  }
+  return {
+    route: raw.route ?? 'vector',
+    retrievalMode: raw.retrievalMode ?? raw.retrieval_mode ?? null,
+    topK: raw.topK ?? raw.top_k ?? 0,
+    hitCount: raw.hitCount ?? raw.hit_count ?? 0,
+    directHitCount: raw.directHitCount ?? raw.direct_hit_count ?? 0,
+    supplementalHitCount: raw.supplementalHitCount ?? raw.supplemental_hit_count ?? 0,
+    prerequisiteHitCount: raw.prerequisiteHitCount ?? raw.prerequisite_hit_count ?? 0,
+    coOccurHitCount: raw.coOccurHitCount ?? raw.co_occur_hit_count ?? 0,
+    supplementalHitLimit: raw.supplementalHitLimit ?? raw.supplemental_hit_limit ?? 0,
+    supplementalHitRatio: raw.supplementalHitRatio ?? raw.supplemental_hit_ratio ?? 0,
+    subgraphEdgeCount: raw.subgraphEdgeCount ?? raw.subgraph_edge_count ?? 0,
+    expandedKcCount: raw.expandedKcCount ?? raw.expanded_kc_count ?? 0,
+    relationCounts: raw.relationCounts ?? raw.relation_counts ?? {},
+    noiseGuard: raw.noiseGuard ?? raw.noise_guard ?? '',
   };
 }
 

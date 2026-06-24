@@ -13,6 +13,8 @@ class Hit:
     score: float
     # KC 图谱感知扩展：命中来自「前置 KC 召回路」而非主题 KC（融合层判定并标注）。
     via_prerequisite: bool = False
+    # 命中来自图扩展时记录主导关系；None 表示主题 KC 直接命中或非图扩展。
+    via_relation: str | None = None
 
 
 @dataclass

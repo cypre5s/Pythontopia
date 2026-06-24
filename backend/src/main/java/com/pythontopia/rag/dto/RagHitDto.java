@@ -14,4 +14,18 @@ public record RagHitDto(
     @JsonProperty("chapter_id") Long chapterId,
     @JsonProperty("kc_codes") List<String> kcCodes,
     String text,
-    double score) {}
+    double score,
+    @JsonProperty("via_prerequisite") boolean viaPrerequisite,
+    @JsonProperty("via_relation") String viaRelation) {
+
+  public RagHitDto(
+      String chunkId,
+      long pageId,
+      int pageNo,
+      Long chapterId,
+      List<String> kcCodes,
+      String text,
+      double score) {
+    this(chunkId, pageId, pageNo, chapterId, kcCodes, text, score, false, null);
+  }
+}

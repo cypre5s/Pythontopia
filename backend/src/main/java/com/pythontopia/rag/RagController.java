@@ -34,6 +34,6 @@ public class RagController {
       throw new BusinessException(
           HttpStatus.FORBIDDEN, "FORBIDDEN", "仅教师/管理员可直接查询课件证据。");
     }
-    return facade.searchByKcCodes(request.query(), request.kcCodes(), request.topK());
+    return facade.search(request);
   }
 }

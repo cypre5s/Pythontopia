@@ -22,6 +22,7 @@ fail-soft：``neighbors`` 抛错 / 无前置数据 / 引擎回退 vector_only �
 from __future__ import annotations
 
 import logging
+from collections import Counter
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Callable, Literal, Sequence
@@ -31,7 +32,7 @@ from pythontopia_rag.index.embedder import Embedder
 from pythontopia_rag.index.fusion import RetrievalMode, hybrid_search
 from pythontopia_rag.index.kc_graph import KcGraph as IndexKcGraph
 from pythontopia_rag.index.store import Hit, VectorStore
-from pythontopia_rag.schemas.query import GraphMode, KcEdge
+from pythontopia_rag.schemas.query import GraphMode, KcEdge, RagGraphTrace
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +102,7 @@ class RouteResult:
     route: RouteName
     retrieval_mode: RetrievalModeName
     subgraph: list[KcEdge] = field(default_factory=list)
+    graph_trace: RagGraphTrace | None = None
 
 
 def classify_query(query: str, kc_codes: Sequence[str] | None) -> Literal["vector", "graph"]:
@@ -293,7 +295,20 @@ async def route_and_retrieve(
             expand_prerequisites=expand_prerequisites,
         )
         legacy_route: RouteName = "vector" if mode == "vector_only" else "hybrid"
-        return RouteResult(hits=hits, route=legacy_route, retrieval_mode=mode, subgraph=[])
+        return RouteResult(
+            hits=hits,
+            route=legacy_route,
+            retrieval_mode=mode,
+            subgraph=[],
+            graph_trace=_build_graph_trace(
+                hits=hits,
+                route=legacy_route,
+                retrieval_mode=mode,
+                top_k=top_k,
+                subgraph=[],
+                anchor_set=set(anchors),
+            ),
+        )
 
     # ── 新自适应路由：决定走向量还是图 ──
     if graph_mode == "force":
@@ -314,7 +329,20 @@ async def route_and_retrieve(
             kc_codes=kc_codes,
             chapter_ids=chapter_ids,
         )
-        return RouteResult(hits=hits, route="vector", retrieval_mode=mode, subgraph=[])
+        return RouteResult(
+            hits=hits,
+            route="vector",
+            retrieval_mode=mode,
+            subgraph=[],
+            graph_trace=_build_graph_trace(
+                hits=hits,
+                route="vector",
+                retrieval_mode=mode,
+                top_k=top_k,
+                subgraph=[],
+                anchor_set=set(anchors),
+            ),
+        )
 
     # ── 图路由：调 G1a neighbors 扩展前置 KC 闭包 ──
     hops = max(1, min(prereq_hops, MAX_PREREQ_HOPS))
@@ -322,9 +350,8 @@ async def route_and_retrieve(
     edges = _collect_subgraph(anchors, hops, neighbors)
 
     anchor_set = set(anchors)
-    prereq_codes = list(
-        dict.fromkeys(edge.to_kc for edge in edges if edge.to_kc and edge.to_kc not in anchor_set)
-    )
+    expansion_relations = _expansion_relations(edges, anchor_set)
+    prereq_codes = list(expansion_relations)
 
     if not prereq_codes:
         # 无前置数据（或 neighbors 全失败）→ 优雅退化向量，不挂空子图、不伪造。
@@ -338,10 +365,21 @@ async def route_and_retrieve(
             kc_codes=kc_codes,
             chapter_ids=chapter_ids,
         )
-        return RouteResult(hits=hits, route="vector", retrieval_mode=mode, subgraph=[])
+        return RouteResult(
+            hits=hits,
+            route="vector",
+            retrieval_mode=mode,
+            subgraph=[],
+            graph_trace=_build_graph_trace(
+                hits=hits,
+                route="vector",
+                retrieval_mode=mode,
+                top_k=top_k,
+                subgraph=[],
+                anchor_set=anchor_set,
+            ),
+        )
 
-    # 把多跳前置闭包压平成「1 跳邻接表」喂给 fusion：复用既有扩展 + 配额 + 降权逻辑（不改 fusion）。
-    flattened = IndexKcGraph(prerequisites={anchor: list(prereq_codes) for anchor in anchors})
     hits, mode = await hybrid_search(
         query=query,
         embedder=embedder,
@@ -351,17 +389,139 @@ async def route_and_retrieve(
         min_score=min_score,
         kc_codes=kc_codes,
         chapter_ids=chapter_ids,
-        kc_graph=flattened,
+        kc_graph=None,
         expand_prerequisites=True,
+        expansion_relations=expansion_relations,
     )
 
     if mode == "vector_only":
         # BM25 缺失 → fusion 走 vector_only 退化路径不扩展；诚实标记 vector，不挂空子图。
-        return RouteResult(hits=hits, route="vector", retrieval_mode="vector_only", subgraph=[])
+        return RouteResult(
+            hits=hits,
+            route="vector",
+            retrieval_mode="vector_only",
+            subgraph=[],
+            graph_trace=_build_graph_trace(
+                hits=hits,
+                route="vector",
+                retrieval_mode="vector_only",
+                top_k=top_k,
+                subgraph=[],
+                anchor_set=anchor_set,
+            ),
+        )
 
     if not hits:
         # 无证据页 → 不回带前置子图（无可审计的证据支撑），与 no_evidence 语义一致。
-        return RouteResult(hits=hits, route="graph", retrieval_mode="graph", subgraph=[])
+        return RouteResult(
+            hits=hits,
+            route="graph",
+            retrieval_mode="graph",
+            subgraph=[],
+            graph_trace=_build_graph_trace(
+                hits=hits,
+                route="graph",
+                retrieval_mode="graph",
+                top_k=top_k,
+                subgraph=[],
+                anchor_set=anchor_set,
+                expansion_enabled=True,
+            ),
+        )
 
-    subgraph = [edge for edge in edges if edge.to_kc not in anchor_set]
-    return RouteResult(hits=hits, route="graph", retrieval_mode="graph", subgraph=subgraph)
+    subgraph = [
+        edge
+        for edge in edges
+        if _edge_expansion_target(edge, anchor_set) in expansion_relations
+    ]
+    return RouteResult(
+        hits=hits,
+        route="graph",
+        retrieval_mode="graph",
+        subgraph=subgraph,
+        graph_trace=_build_graph_trace(
+            hits=hits,
+            route="graph",
+            retrieval_mode="graph",
+            top_k=top_k,
+            subgraph=subgraph,
+            anchor_set=anchor_set,
+            expansion_enabled=True,
+        ),
+    )
+
+
+def _expansion_relations(edges: list[KcEdge], anchor_set: set[str]) -> dict[str, str]:
+    relations: dict[str, str] = {}
+    for edge in edges:
+        target = _edge_expansion_target(edge, anchor_set)
+        if target is None:
+            continue
+        # prerequisite wins over weaker relation if multiple edges reach the same KC.
+        if relations.get(target) == "prerequisite":
+            continue
+        relations[target] = edge.relation
+    return relations
+
+
+def _edge_expansion_target(edge: KcEdge, anchor_set: set[str]) -> str | None:
+    if edge.to_kc and edge.to_kc not in anchor_set:
+        return edge.to_kc
+    if edge.relation != "prerequisite" and edge.from_kc and edge.from_kc not in anchor_set:
+        return edge.from_kc
+    return None
+
+
+def _build_graph_trace(
+    *,
+    hits: list[Hit],
+    route: RouteName,
+    retrieval_mode: RetrievalModeName,
+    top_k: int,
+    subgraph: list[KcEdge],
+    anchor_set: set[str],
+    expansion_enabled: bool = False,
+) -> RagGraphTrace:
+    """把召回结果压成可量化审计指标，避免图扩展变成不可解释的“黑盒加料”。"""
+
+    relation_counts = Counter(edge.relation for edge in subgraph)
+    expanded_targets = {
+        target
+        for edge in subgraph
+        if (target := _edge_expansion_target(edge, anchor_set)) is not None
+    }
+    prerequisite_hit_count = sum(
+        1
+        for hit in hits
+        if hit.via_relation == "prerequisite" or hit.via_prerequisite
+    )
+    co_occur_hit_count = sum(1 for hit in hits if hit.via_relation == "co_occur")
+    supplemental_hit_count = sum(
+        1 for hit in hits if hit.via_relation is not None or hit.via_prerequisite
+    )
+    hit_count = len(hits)
+    expansion_was_used = expansion_enabled or bool(subgraph) or supplemental_hit_count > 0
+    supplemental_hit_limit = max(1, top_k // 3) if expansion_was_used else 0
+    supplemental_hit_ratio = (
+        round(supplemental_hit_count / max(top_k, 1), 4) if top_k > 0 else 0.0
+    )
+    return RagGraphTrace(
+        route=route,
+        retrieval_mode=retrieval_mode,
+        top_k=top_k,
+        hit_count=hit_count,
+        direct_hit_count=max(0, hit_count - supplemental_hit_count),
+        supplemental_hit_count=supplemental_hit_count,
+        prerequisite_hit_count=prerequisite_hit_count,
+        co_occur_hit_count=co_occur_hit_count,
+        supplemental_hit_limit=supplemental_hit_limit,
+        supplemental_hit_ratio=supplemental_hit_ratio,
+        subgraph_edge_count=len(subgraph),
+        expanded_kc_count=len(expanded_targets),
+        relation_counts=dict(relation_counts),
+        noise_guard=(
+            "supplemental_hits_capped_at_top_k_div_3"
+            if expansion_was_used
+            else "graph_expansion_disabled"
+        ),
+    )

@@ -9,11 +9,30 @@ GraphMode = Literal["off", "auto", "force"]
 
 
 class KcEdge(BaseModel):
-    """KC 关系子图的一条可审计边（前置链路）。"""
+    """KC 关系子图的一条可审计边（前置 / 共现链路）。"""
 
     from_kc: str
     to_kc: str
     relation: str = "prerequisite"
+
+
+class RagGraphTrace(BaseModel):
+    """GraphRAG 召回审计指标：证明图扩展补了多少证据，以及噪声配额是否生效。"""
+
+    route: Literal["vector", "graph", "hybrid"]
+    retrieval_mode: Literal["hybrid", "vector_only", "graph"] | None = None
+    top_k: int
+    hit_count: int = 0
+    direct_hit_count: int = 0
+    supplemental_hit_count: int = 0
+    prerequisite_hit_count: int = 0
+    co_occur_hit_count: int = 0
+    supplemental_hit_limit: int = 0
+    supplemental_hit_ratio: float = 0.0
+    subgraph_edge_count: int = 0
+    expanded_kc_count: int = 0
+    relation_counts: dict[str, int] = Field(default_factory=dict)
+    noise_guard: str = "graph_expansion_disabled"
 
 
 class RagHit(BaseModel):
@@ -27,6 +46,8 @@ class RagHit(BaseModel):
     # KC 图谱感知扩展（R-16）：True = 命中来自前置 KC 召回路（「困惑根源在前置知识」），
     # 下游可据此把该页标注为「前置知识」。向后兼容追加，默认 False。
     via_prerequisite: bool = False
+    # 图谱扩展命中的主导关系；None 表示直接命中。co_occur 等关系不应被误当成前置页。
+    via_relation: str | None = None
 
 
 class RagQueryRequest(BaseModel):
@@ -57,8 +78,10 @@ class RagQueryResponse(BaseModel):
     retrieval_mode: Literal["hybrid", "vector_only", "graph"] | None = None
     # 自适应路由决策（可审计，向后兼容追加）：vector / graph / hybrid（旧 hybrid 管线）。
     route: Literal["vector", "graph", "hybrid"] | None = None
-    # KC 关系子图（前置链路），仅图路由非空；供下游做「为什么先学 X」的可审计引用。
+    # KC 关系子图（前置 / 共现链路），仅图路由非空；供下游做可审计引用。
     subgraph: list[KcEdge] = Field(default_factory=list)
+    # GraphRAG 量化 trace：直接/补充命中、关系计数、补充配额等，用于证明丰富度未越过噪声线。
+    graph_trace: RagGraphTrace | None = None
 
 
 class RagIndexStatus(BaseModel):

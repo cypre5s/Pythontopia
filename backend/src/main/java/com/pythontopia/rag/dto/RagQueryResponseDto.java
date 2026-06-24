@@ -2,6 +2,7 @@ package com.pythontopia.rag.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 课件 RAG 检索响应：{@code hits} 为证据命中列表（{@link #hits()} 对 null 兜底空列表）；
@@ -11,9 +12,26 @@ import java.util.List;
 public record RagQueryResponseDto(
     List<RagHitDto> hits,
     @JsonProperty("no_evidence_found") boolean noEvidenceFound,
-    @JsonProperty("rewritten_query") String rewrittenQuery) {
+    @JsonProperty("rewritten_query") String rewrittenQuery,
+    @JsonProperty("retrieval_mode") String retrievalMode,
+    String route,
+    List<KcEdgeDto> subgraph,
+    @JsonProperty("graph_trace") Map<String, Object> graphTrace) {
 
-  public List<RagHitDto> hits() {
-    return hits == null ? List.of() : hits;
+  public RagQueryResponseDto {
+    if (hits == null) {
+      hits = List.of();
+    }
+    if (subgraph == null) {
+      subgraph = List.of();
+    }
+    if (graphTrace == null) {
+      graphTrace = Map.of();
+    }
+  }
+
+  public RagQueryResponseDto(
+      List<RagHitDto> hits, boolean noEvidenceFound, String rewrittenQuery) {
+    this(hits, noEvidenceFound, rewrittenQuery, null, null, List.of(), Map.of());
   }
 }

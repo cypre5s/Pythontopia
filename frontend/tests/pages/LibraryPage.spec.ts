@@ -10,6 +10,7 @@ vi.mock('@/api/courseLibrary', () => ({
   listDocumentPages: vi.fn(),
   getDocumentPage: vi.fn(),
   searchCourseLibrary: vi.fn(),
+  answerCourseware: vi.fn(),
   loadPlayerProblemProgress: vi.fn(),
   listChapterFallbacks: vi.fn(),
   listKcFallbacks: vi.fn(),
@@ -33,6 +34,7 @@ import {
   listDocumentPages,
   listKcFallbacks,
   searchCourseLibrary,
+  answerCourseware,
 } from '@/api/courseLibrary';
 import { listChapters, listKnowledgeComponents } from '@/api/course';
 import type {
@@ -217,6 +219,7 @@ describe('LibraryPage', () => {
         score: 5,
       },
     ]);
+    vi.mocked(answerCourseware).mockRejectedValue(new Error('courseware answer unavailable'));
   });
 
   afterEach(() => {
@@ -285,6 +288,65 @@ describe('LibraryPage', () => {
     expect(vi.mocked(searchCourseLibrary)).toHaveBeenCalledWith('input 函数', { topK: 6 });
     const results = wrapper.find('[data-testid="library-rag-results"]');
     expect(results.text()).toContain('计算思维...片段');
+  });
+
+  it('课件问答渲染 GraphRAG trace，展示共现补证据和噪声配额', async () => {
+    const coursewareTraceAnswer = {
+      answerMd: '字典词频统计需要先掌握 get/items/keys/values。[页 62]',
+      citations: [
+        {
+          pageId: 4201,
+          pageNo: 62,
+          chapterId: 5,
+          quote: '字典 get、items、keys、values 是完成词频统计前需要掌握的基本操作。',
+        },
+      ],
+      noEvidence: false,
+      route: 'graph',
+      retrievalMode: 'graph',
+      subgraph: [
+        {
+          fromKc: 'PY43-KC-041',
+          toKc: 'PY43-KC-042',
+          relation: 'co_occur',
+        },
+      ],
+      graphTrace: {
+        route: 'graph',
+        retrievalMode: 'graph',
+        topK: 6,
+        hitCount: 3,
+        directHitCount: 2,
+        supplementalHitCount: 1,
+        coOccurHitCount: 1,
+        supplementalHitLimit: 2,
+        supplementalHitRatio: 0.3333,
+        relationCounts: { co_occur: 1 },
+        noiseGuard: 'supplemental_hits_capped_at_top_k_div_3',
+      },
+    };
+    vi.mocked(answerCourseware).mockResolvedValueOnce(coursewareTraceAnswer);
+    const router = createTestRouter();
+    await router.push('/library');
+    await router.isReady();
+    const wrapper = mount(LibraryPage, {
+      global: { plugins: [router], stubs: { AppLayout: APP_LAYOUT_STUB } },
+    });
+    await flushPromises();
+
+    await wrapper
+      .find('[data-testid="library-rag-input"]')
+      .setValue('为什么字典词频统计要先理解 get items keys values');
+    await wrapper.find('.rag-form').trigger('submit.prevent');
+    await flushPromises();
+
+    expect(vi.mocked(searchCourseLibrary)).not.toHaveBeenCalled();
+    expect(wrapper.find('[data-testid="library-rag-answer"]').text()).toContain('get/items/keys/values');
+    const trace = wrapper.get('[data-testid="library-rag-trace"]');
+    expect(trace.text()).toContain('route: graph');
+    expect(trace.text()).toContain('co_occur');
+    expect(trace.text()).toContain('补充证据 1 / 2');
+    expect(trace.text()).toContain('共现补证据 1');
   });
 
   it('"返回小镇" 按钮 router.push 到 /world', async () => {

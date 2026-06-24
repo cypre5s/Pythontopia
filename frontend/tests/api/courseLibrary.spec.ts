@@ -8,7 +8,11 @@ vi.mock('@/api/http', () => ({
 }));
 
 import { http } from '@/api/http';
-import { resetCourseLibraryCacheForTest, searchCourseLibrary } from '@/api/courseLibrary';
+import {
+  answerCourseware,
+  resetCourseLibraryCacheForTest,
+  searchCourseLibrary,
+} from '@/api/courseLibrary';
 
 const ragResponse = {
   data: {
@@ -61,5 +65,65 @@ describe('searchCourseLibrary · RAG 结果会话内缓存', () => {
     const b = await searchCourseLibrary('字典', {});
 
     expect(b).toHaveLength(1);
+  });
+});
+
+describe('answerCourseware · GraphRAG trace 归一化', () => {
+  it('把后端 snake_case graph_trace 转成前端 camelCase DTO', async () => {
+    vi.mocked(http.post).mockResolvedValue({
+      data: {
+        answer_md: '字典词频统计需要先掌握 get/items/keys/values。[页 62]',
+        citations: [
+          {
+            page_id: 4201,
+            page_no: 62,
+            chapter_id: 5,
+            quote: '字典 get、items、keys、values 是完成词频统计前需要掌握的基本操作。',
+          },
+        ],
+        no_evidence: false,
+        route: 'graph',
+        retrieval_mode: 'graph',
+        subgraph: [
+          {
+            from_kc: 'PY43-KC-041',
+            to_kc: 'PY43-KC-042',
+            relation: 'co_occur',
+          },
+        ],
+        graph_trace: {
+          route: 'graph',
+          retrieval_mode: 'graph',
+          top_k: 6,
+          hit_count: 3,
+          direct_hit_count: 2,
+          supplemental_hit_count: 1,
+          prerequisite_hit_count: 0,
+          co_occur_hit_count: 1,
+          supplemental_hit_limit: 2,
+          supplemental_hit_ratio: 0.3333,
+          subgraph_edge_count: 1,
+          expanded_kc_count: 1,
+          relation_counts: { co_occur: 1 },
+          noise_guard: 'supplemental_hits_capped_at_top_k_div_3',
+        },
+      },
+    } as never);
+
+    const answer = await answerCourseware('为什么字典词频统计要先理解 get items keys values', {
+      topK: 6,
+      kcCodes: ['PY43-KC-041'],
+    });
+
+    expect(answer.route).toBe('graph');
+    expect(answer.retrievalMode).toBe('graph');
+    expect(answer.subgraph[0]).toEqual({
+      fromKc: 'PY43-KC-041',
+      toKc: 'PY43-KC-042',
+      relation: 'co_occur',
+    });
+    expect(answer.graphTrace?.coOccurHitCount).toBe(1);
+    expect(answer.graphTrace?.supplementalHitLimit).toBe(2);
+    expect(answer.graphTrace?.relationCounts.co_occur).toBe(1);
   });
 });

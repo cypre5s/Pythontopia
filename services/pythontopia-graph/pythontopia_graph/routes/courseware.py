@@ -25,6 +25,7 @@ from pythontopia_graph.nodes.evidence_fetcher import (
     EvidenceBundle,
     EvidenceFetcher,
     HttpRagEvidenceFetcher,
+    KcEdge,
 )
 
 router = APIRouter()
@@ -48,6 +49,10 @@ class CoursewareAnswerOutput(BaseModel):
     answer_md: str
     citations: list[CoursewareCitation] = Field(default_factory=list)
     no_evidence: bool = False
+    route: str = "vector"
+    retrieval_mode: str = "vector_only"
+    subgraph: list[KcEdge] = Field(default_factory=list)
+    graph_trace: dict[str, object] = Field(default_factory=dict)
 
 
 _SYSTEM_PROMPT = (
@@ -105,6 +110,10 @@ async def courseware_answer(
             answer_md="课件中未直接覆盖该问题，换个关键词或 @ 指定章节/知识点再试试。",
             citations=[],
             no_evidence=True,
+            route=bundle.route,
+            retrieval_mode=bundle.retrieval_mode,
+            subgraph=list(bundle.subgraph),
+            graph_trace=dict(bundle.graph_trace),
         )
 
     # page_no → 命中片段（用于把 LLM 给的引用页码映射回 page_id，并做防幻觉过滤）。
@@ -184,4 +193,12 @@ async def courseware_answer(
                 )
             )
 
-    return CoursewareAnswerOutput(answer_md=answer_md, citations=citations, no_evidence=False)
+    return CoursewareAnswerOutput(
+        answer_md=answer_md,
+        citations=citations,
+        no_evidence=False,
+        route=bundle.route,
+        retrieval_mode=bundle.retrieval_mode,
+        subgraph=list(bundle.subgraph),
+        graph_trace=dict(bundle.graph_trace),
+    )

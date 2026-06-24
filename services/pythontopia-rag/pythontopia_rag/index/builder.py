@@ -22,6 +22,7 @@ class RebuildResult:
     embed_model: str
     store: str
     rebuilt_at: str
+    chunks: list[Chunk]
 
 
 def build_context_prefix(page: IndexablePage) -> str:
@@ -84,6 +85,7 @@ async def rebuild_index(
         embed_model=embedder.name,
         store=store.name,
         rebuilt_at=rebuilt_at,
+        chunks=all_chunks,
     )
 
 

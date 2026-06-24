@@ -7,7 +7,9 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 
 from pythontopia_rag.app_state import AppState
 from pythontopia_rag.data.loader import DEFAULT_DB_URL, fetch_pages
+from pythontopia_rag.graph.kc_graph import build_kc_graph_from_chunks
 from pythontopia_rag.graph.router import route_and_retrieve
+from pythontopia_rag.graph.traverse import traverse_subgraph
 from pythontopia_rag.index.builder import rebuild_index
 from pythontopia_rag.index.kc_graph import fetch_kc_graph
 from pythontopia_rag.data.page_source import InMemoryPageSource, page_records_to_indexable
@@ -28,6 +30,25 @@ router = APIRouter()
 def _state(request: Request) -> AppState:
     state: AppState = request.app.state.rag
     return state
+
+
+def _runtime_neighbors_fn(state: AppState):
+    """Return a relation-aware neighbors function when the runtime KC graph is available."""
+    graph = state.knowledge_graph
+    if graph.is_empty:
+        rows = getattr(state.store, "rows", None)
+        if rows:
+            chunks = [row.chunk for row in rows]
+            graph = build_kc_graph_from_chunks(chunks, prerequisites=state.kc_graph.prerequisites)
+            state.knowledge_graph = graph
+    if graph.is_empty:
+        return None
+
+    def _neighbors(kc: str, hops: int):
+        _nodes, edges = traverse_subgraph(graph, [kc], hops)
+        return edges
+
+    return _neighbors
 
 
 @router.post("/rag/query", response_model=RagQueryResponse)
@@ -57,6 +78,7 @@ async def rag_query(
         graph_mode=body.graph_mode,
         prereq_hops=body.prereq_hops,
         expand_prerequisites=body.expand_prerequisites,
+        neighbors_fn=_runtime_neighbors_fn(state),
     )
     if not result.hits:
         return RagQueryResponse(
@@ -65,6 +87,7 @@ async def rag_query(
             retrieval_mode=result.retrieval_mode,
             route=result.route,
             subgraph=result.subgraph,
+            graph_trace=result.graph_trace,
         )
     response_hits = [
         RagHit(
@@ -76,6 +99,7 @@ async def rag_query(
             text=hit.chunk.text,
             score=round(hit.score, 4),
             via_prerequisite=hit.via_prerequisite,
+            via_relation=hit.via_relation,
         )
         for hit in result.hits
     ]
@@ -85,6 +109,7 @@ async def rag_query(
         retrieval_mode=result.retrieval_mode,
         route=result.route,
         subgraph=result.subgraph,
+        graph_trace=result.graph_trace,
     )
 
 
@@ -130,6 +155,9 @@ async def rag_rebuild(
     refreshed = fetch_kc_graph(os.environ.get("PYT_DB_URL", DEFAULT_DB_URL))
     if refreshed.size > 0:
         state.kc_graph = refreshed
+    state.knowledge_graph = build_kc_graph_from_chunks(
+        result.chunks, prerequisites=state.kc_graph.prerequisites
+    )
     return RagRebuildResponse(
         built_chunks=result.built_chunks,
         elapsed_ms=result.elapsed_ms,

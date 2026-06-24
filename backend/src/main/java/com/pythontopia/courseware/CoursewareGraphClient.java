@@ -6,8 +6,10 @@ import com.pythontopia.common.web.GraphInternalTokenSupport;
 import com.pythontopia.courseware.dto.CoursewareAnswerRequestDto;
 import com.pythontopia.courseware.dto.CoursewareAnswerResponseDto;
 import com.pythontopia.courseware.dto.CoursewareCitationDto;
+import com.pythontopia.rag.dto.KcEdgeDto;
 import com.pythontopia.rag.RagUnavailableException;
 import java.util.List;
+import java.util.Map;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -71,12 +73,23 @@ public class CoursewareGraphClient {
   record GraphResponse(
       @JsonProperty("answer_md") String answerMd,
       @JsonProperty("citations") List<GraphCitation> citations,
-      @JsonProperty("no_evidence") boolean noEvidence) {
+      @JsonProperty("no_evidence") boolean noEvidence,
+      @JsonProperty("route") String route,
+      @JsonProperty("retrieval_mode") String retrievalMode,
+      @JsonProperty("subgraph") List<KcEdgeDto> subgraph,
+      @JsonProperty("graph_trace") Map<String, Object> graphTrace) {
     CoursewareAnswerResponseDto toDto() {
       List<CoursewareCitationDto> mapped =
           (citations == null ? List.<GraphCitation>of() : citations)
               .stream().map(GraphCitation::toDto).toList();
-      return new CoursewareAnswerResponseDto(answerMd == null ? "" : answerMd, mapped, noEvidence);
+      return new CoursewareAnswerResponseDto(
+          answerMd == null ? "" : answerMd,
+          mapped,
+          noEvidence,
+          route,
+          retrievalMode,
+          subgraph == null ? List.of() : subgraph,
+          graphTrace == null ? Map.of() : graphTrace);
     }
   }
 

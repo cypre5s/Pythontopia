@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.util.List;
 
@@ -17,7 +18,10 @@ public record RagQueryRequestDto(
     @Min(1) @Max(20) @JsonProperty("top_k") int topK,
     @JsonProperty("kc_codes") List<String> kcCodes,
     @JsonProperty("chapter_ids") List<Long> chapterIds,
-    @JsonProperty("min_score") Double minScore) {
+    @JsonProperty("min_score") Double minScore,
+    @Pattern(regexp = "off|auto|force") @JsonProperty("graph_mode") String graphMode,
+    @Min(1) @Max(2) @JsonProperty("prereq_hops") int prereqHops,
+    @JsonProperty("expand_prerequisites") Boolean expandPrerequisites) {
 
   public RagQueryRequestDto {
     if (topK <= 0) {
@@ -26,5 +30,16 @@ public record RagQueryRequestDto(
     if (minScore == null) {
       minScore = 0.3d;
     }
+    if (prereqHops <= 0) {
+      prereqHops = 1;
+    }
+    if (expandPrerequisites == null) {
+      expandPrerequisites = true;
+    }
+  }
+
+  public RagQueryRequestDto(
+      String query, int topK, List<String> kcCodes, List<Long> chapterIds, Double minScore) {
+    this(query, topK, kcCodes, chapterIds, minScore, null, 1, true);
   }
 }

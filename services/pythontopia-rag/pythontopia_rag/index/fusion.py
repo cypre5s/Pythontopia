@@ -60,6 +60,7 @@ async def hybrid_search(
     chapter_ids: list[int] | None = None,
     kc_graph: KcGraph | None = None,
     expand_prerequisites: bool = True,
+    expansion_relations: dict[str, str] | None = None,
 ) -> tuple[list[Hit], RetrievalMode]:
     """两路（+可选前置两路）召回 + 加权 RRF 融合；返回 (hits, retrieval_mode)。
 
@@ -92,10 +93,17 @@ async def hybrid_search(
 
     # ── KC 前置扩展路（仅 hybrid；查询未锚定 KC / 图为空时自然跳过）──
     prereq_codes: list[str] = []
+    relation_by_kc: dict[str, str] = {}
     prereq_vector_hits: list[Hit] = []
     prereq_bm25_pairs: list[tuple[str, float]] = []
-    if expand_prerequisites and kc_codes and kc_graph is not None:
+    if expansion_relations:
+        relation_by_kc = {
+            code: relation for code, relation in expansion_relations.items() if code
+        }
+        prereq_codes = list(relation_by_kc)
+    elif expand_prerequisites and kc_codes and kc_graph is not None:
         prereq_codes = kc_graph.prerequisites_of(kc_codes)
+        relation_by_kc = {code: "prerequisite" for code in prereq_codes}
     if prereq_codes:
         if query_vector is not None:
             prereq_candidates = await store.search(
@@ -125,11 +133,15 @@ async def hybrid_search(
             if chunk is not None:
                 chunk_by_id[chunk_id] = chunk
     prereq_only_ids: set[str] = set()
+    relation_by_chunk_id: dict[str, str] = {}
     for hit in prereq_vector_hits:
         if hit.chunk.chunk_id not in chunk_by_id:
             chunk_by_id[hit.chunk.chunk_id] = hit.chunk
         if hit.chunk.chunk_id not in main_ids:
             prereq_only_ids.add(hit.chunk.chunk_id)
+            relation_by_chunk_id[hit.chunk.chunk_id] = _relation_for_chunk(
+                hit.chunk.kc_codes, relation_by_kc
+            )
     for chunk_id, _ in prereq_bm25_pairs:
         if chunk_id not in chunk_by_id:
             chunk = bm25.chunk(chunk_id)
@@ -137,6 +149,11 @@ async def hybrid_search(
                 chunk_by_id[chunk_id] = chunk
         if chunk_id not in main_ids:
             prereq_only_ids.add(chunk_id)
+            chunk = chunk_by_id.get(chunk_id)
+            if chunk is not None:
+                relation_by_chunk_id[chunk_id] = _relation_for_chunk(
+                    chunk.kc_codes, relation_by_kc
+                )
 
     rankings: list[tuple[Sequence[str], float]] = [
         ([hit.chunk.chunk_id for hit in vector_hits], 1.0),
@@ -169,11 +186,21 @@ async def hybrid_search(
         chunk = chunk_by_id.get(chunk_id)
         if chunk is None:
             continue
+        via_relation = relation_by_chunk_id.get(chunk_id)
         hits.append(
             Hit(
                 chunk=chunk,
                 score=min(1.0, raw / max_possible),
-                via_prerequisite=chunk_id in prereq_only_ids,
+                via_prerequisite=via_relation == "prerequisite",
+                via_relation=via_relation,
             )
         )
     return hits, "hybrid"
+
+
+def _relation_for_chunk(kc_codes: list[str], relation_by_kc: dict[str, str]) -> str | None:
+    for code in kc_codes:
+        relation = relation_by_kc.get(code)
+        if relation:
+            return relation
+    return None

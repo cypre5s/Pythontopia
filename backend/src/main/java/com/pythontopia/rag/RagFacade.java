@@ -19,6 +19,10 @@ public class RagFacade {
     this.client = client;
   }
 
+  public RagQueryResponseDto search(RagQueryRequestDto request) {
+    return client.query(request);
+  }
+
   public RagQueryResponseDto searchByKcCodes(String query, List<String> kcCodes, int topK) {
     return client.query(new RagQueryRequestDto(query, topK, kcCodes, null, 0.3));
   }

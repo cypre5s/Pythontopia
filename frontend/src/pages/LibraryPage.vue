@@ -18,6 +18,8 @@ import {
   listKcFallbacks,
   searchCourseLibrary,
   type CoursewareCitation,
+  type CoursewareGraphTrace,
+  type CoursewareKcEdge,
 } from '@/api/courseLibrary';
 import { listChapters, listKnowledgeComponents } from '@/api/course';
 import { listChapterVideos, videoStreamUrl, type CourseVideoDto } from '@/api/courseVideo';
@@ -97,6 +99,24 @@ const ragAnswer = ref<string>('');
 const ragCitations = ref<CoursewareCitation[]>([]);
 const ragAnswerMode = ref<boolean>(false);
 const ragHint = ref<string>('就课件内容提问，AI 依据命中课件作答并给出可跳转页码。');
+const ragRoute = ref<string | null>(null);
+const ragRetrievalMode = ref<string | null>(null);
+const ragSubgraph = ref<CoursewareKcEdge[]>([]);
+const ragGraphTrace = ref<CoursewareGraphTrace | null>(null);
+
+const ragTraceVisible = computed<boolean>(() =>
+  Boolean(ragAnswerMode.value && (ragGraphTrace.value || ragRoute.value || ragSubgraph.value.length > 0)),
+);
+const ragTraceRelationEntries = computed<[string, number][]>(() =>
+  Object.entries(ragGraphTrace.value?.relationCounts ?? {}),
+);
+
+function resetRagGraphAudit(): void {
+  ragRoute.value = null;
+  ragRetrievalMode.value = null;
+  ragSubgraph.value = [];
+  ragGraphTrace.value = null;
+}
 
 const viewMode = ref<PageViewMode>(readPreferredViewMode());
 function setViewMode(mode: PageViewMode): void {
@@ -377,6 +397,7 @@ async function runRagSearch(): Promise<void> {
     ragResults.value = [];
     ragAnswer.value = '';
     ragCitations.value = [];
+    resetRagGraphAudit();
     return;
   }
   ragRunning.value = true;
@@ -386,6 +407,10 @@ async function runRagSearch(): Promise<void> {
     ragAnswerMode.value = true;
     ragAnswer.value = result.answerMd;
     ragCitations.value = result.citations;
+    ragRoute.value = result.route;
+    ragRetrievalMode.value = result.retrievalMode;
+    ragSubgraph.value = result.subgraph;
+    ragGraphTrace.value = result.graphTrace;
     ragResults.value = [];
     ragHint.value = result.noEvidence
       ? '课件中未直接覆盖该问题，换个关键词或在左侧选章节/KC 再试。'
@@ -397,6 +422,7 @@ async function runRagSearch(): Promise<void> {
       ragAnswerMode.value = false;
       ragAnswer.value = '';
       ragCitations.value = [];
+      resetRagGraphAudit();
       ragResults.value = hits;
       ragHint.value =
         hits.length === 0
@@ -406,6 +432,7 @@ async function runRagSearch(): Promise<void> {
       const message =
         fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
       ragHint.value = `检索失败：${message}`;
+      resetRagGraphAudit();
     }
   } finally {
     ragRunning.value = false;
@@ -900,6 +927,59 @@ watch(chapterNoForVideo, (next) => {
           <p class="rag-hint">
             {{ ragHint }}
           </p>
+          <div
+            v-if="ragTraceVisible"
+            class="rag-trace"
+            data-testid="library-rag-trace"
+            aria-label="图检索审计 trace"
+          >
+            <div class="rag-trace__metrics">
+              <span data-testid="library-rag-trace-route">
+                route: {{ ragRoute || ragGraphTrace?.route || 'unknown' }}
+              </span>
+              <span>
+                retrieval: {{ ragRetrievalMode || ragGraphTrace?.retrievalMode || 'unknown' }}
+              </span>
+              <span>
+                补充证据 {{ ragGraphTrace?.supplementalHitCount ?? 0 }} /
+                {{ ragGraphTrace?.supplementalHitLimit ?? 0 }}
+              </span>
+              <span>
+                共现补证据 {{ ragGraphTrace?.coOccurHitCount ?? 0 }}
+              </span>
+              <span v-if="(ragGraphTrace?.prerequisiteHitCount ?? 0) > 0">
+                前置补证据 {{ ragGraphTrace?.prerequisiteHitCount ?? 0 }}
+              </span>
+              <span v-if="ragGraphTrace">
+                直接命中 {{ ragGraphTrace.directHitCount }} · topK {{ ragGraphTrace.topK }}
+              </span>
+            </div>
+            <div
+              v-if="ragTraceRelationEntries.length > 0"
+              class="rag-trace__relations"
+            >
+              <span
+                v-for="[relation, count] in ragTraceRelationEntries"
+                :key="relation"
+                class="rag-trace__relation"
+              >
+                {{ relation }} × {{ count }}
+              </span>
+            </div>
+            <ul
+              v-if="ragSubgraph.length > 0"
+              class="rag-trace__edges"
+            >
+              <li
+                v-for="edge in ragSubgraph"
+                :key="`${edge.fromKc}-${edge.toKc}-${edge.relation}`"
+                data-testid="library-rag-subgraph-edge"
+              >
+                {{ edge.fromKc }} → {{ edge.toKc }}
+                <span>{{ edge.relation }}</span>
+              </li>
+            </ul>
+          </div>
           <!-- LLM 课件作答 + 可跳转页码引用 -->
           <div
             v-if="ragAnswerMode && ragAnswer"
@@ -1549,6 +1629,45 @@ watch(chapterNoForVideo, (next) => {
   margin: 0;
   font-size: 11px;
   color: var(--pyt-color-text-muted, var(--pyt-color-text-muted));
+}
+.rag-trace {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border: 2px dashed var(--pyt-color-border, var(--pyt-color-border));
+  background: rgba(255, 249, 234, 0.78);
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--pyt-color-text-muted, var(--pyt-color-text-muted));
+}
+.rag-trace__metrics,
+.rag-trace__relations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+}
+.rag-trace__metrics span,
+.rag-trace__relation {
+  padding: 1px 5px;
+  border: 1px solid var(--pyt-color-border, var(--pyt-color-border));
+  background: var(--pyt-color-bg-soft, var(--pyt-color-bg-soft));
+}
+.rag-trace__edges {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 3px;
+  font-family: var(--pyt-font-mono, monospace);
+}
+.rag-trace__edges li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  word-break: break-all;
+}
+.rag-trace__edges span {
+  color: var(--pyt-color-info, var(--pyt-color-info));
 }
 .rag-hit {
   display: grid;
