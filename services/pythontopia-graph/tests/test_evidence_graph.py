@@ -82,6 +82,7 @@ def _graph_response() -> dict[str, Any]:
                 "text": "变量与赋值是循环计数的前置。",
                 "score": 0.62,
                 "via_prerequisite": True,
+                "via_relation": "prerequisite",
             },
         ],
         "no_evidence_found": False,
@@ -196,6 +197,7 @@ async def test_fetch_parses_route_and_subgraph(
     assert [c.page_id for c in bundle.chunks] == [101, 90]
     # 前置 KC 召回路标记被保留（可审计）。
     assert bundle.chunks[1].via_prerequisite is True
+    assert bundle.chunks[1].via_relation == "prerequisite"
     assert bundle.no_evidence_found is False
 
 

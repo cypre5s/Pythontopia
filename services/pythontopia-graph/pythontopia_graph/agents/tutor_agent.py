@@ -443,6 +443,7 @@ class TutorAgent:
                     snippet=snippet,
                     score=round(float(chunk.score), 3),
                     via_prerequisite=chunk.via_prerequisite,
+                    via_relation=chunk.via_relation,
                 )
             )
         return citations

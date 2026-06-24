@@ -52,6 +52,8 @@ class EvidenceCitation(BaseModel):
     score: float = 0.0
     # KC 图谱感知扩展（R-16）：该证据页来自前置 KC（前端可标「前置知识」）。
     via_prerequisite: bool = False
+    # 图谱命中的关系名；None 表示主题 KC 直接命中，非 None 可供前端显示「相关知识」等标签。
+    via_relation: str | None = None
 
 
 class GroundingResult(BaseModel):

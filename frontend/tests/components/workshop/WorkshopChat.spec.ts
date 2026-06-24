@@ -498,6 +498,76 @@ describe('WorkshopChat 16 工具分发', () => {
     );
   });
 
+  it('ASK 命中课件证据时优先按引用充分落状态，即使后端残留通识标记', async () => {
+    const wrapper = mountChat();
+    await flushPromises();
+    const tutor = sse(TUTOR_URL);
+    tutor.start.mockImplementation(async () => {
+      tutor.status.value = 'done';
+      tutor.result.value = {
+        answer_md: '基于通识知识：列表是可按顺序存放多个值的容器。',
+        based_on_general_knowledge: true,
+        evidence_page_ids: [22],
+        evidence: [{ page_id: 22, page_no: 22, snippet: '列表中添加元素' }],
+        grounding_result: { passed: true, reasons: [] },
+      };
+    });
+    armRoute({ intent: 'ASK', kcCodes: ['PY43-KC-010'] });
+
+    await submit(wrapper, '列表是什么');
+
+    const historyEvents = wrapper.emitted('history-saved');
+    expect(historyEvents?.at(-1)?.[0]).toMatchObject({
+      userText: '列表是什么',
+      responseKind: 'answer',
+      groundingStatus: 'PASSED',
+      evidencePageIds: [22],
+    });
+    expect(historyEvents?.at(-1)?.[0]).toMatchObject({
+      responseText: '列表是可按顺序存放多个值的容器。',
+    });
+  });
+
+  it('ASK 流式过程会镜像到右侧工作室 activity，驱动调用过程动画', async () => {
+    const wrapper = mountChat();
+    await flushPromises();
+    const tutor = sse(TUTOR_URL);
+    tutor.start.mockImplementation(async () => {
+      tutor.plan.value = {
+        type: 'plan',
+        nodes: [{ node: 'evidence_fetcher', agent_label: '馆员', kind: 'evidence' }],
+      };
+      tutor.traces.value = [
+        { node: 'evidence_fetcher', phase: 'start', status: 'running', elapsed_ms: 0 },
+      ];
+      await flushPromises();
+      tutor.traces.value = [
+        { node: 'evidence_fetcher', phase: 'start', status: 'running', elapsed_ms: 0 },
+        { node: 'evidence_fetcher', phase: 'finish', status: 'ok', elapsed_ms: 30, chunks: 5 },
+      ];
+      tutor.status.value = 'done';
+      tutor.result.value = {
+        answer_md: '这是答案。',
+        evidence_page_ids: [22],
+        grounding_result: { passed: true, reasons: [] },
+      };
+    });
+    armRoute({ intent: 'ASK', kcCodes: ['PY43-KC-010'] });
+
+    await submit(wrapper, '列表是什么');
+    await flushPromises();
+
+    const activity = useWorkshopActivityStore();
+    expect(activity.kind).toBe('ask');
+    expect(activity.status).toBe('done');
+    expect(activity.label).toBe('答疑：列表是什么');
+    expect(activity.plan).toEqual({
+      type: 'plan',
+      nodes: [{ node: 'evidence_fetcher', agent_label: '馆员', kind: 'evidence' }],
+    });
+    expect(activity.traces).toHaveLength(2);
+  });
+
   it('换讲法 chips：点「图解」→ styleEngaged 回流 + 带 style 重问同一问题', async () => {
     const wrapper = mountChat();
     await flushPromises();

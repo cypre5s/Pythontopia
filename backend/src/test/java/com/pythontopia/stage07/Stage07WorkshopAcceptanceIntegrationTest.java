@@ -133,7 +133,106 @@ class Stage07WorkshopAcceptanceIntegrationTest {
             "SELECT COUNT(*) FROM kc_mastery_event WHERE user_id = ? AND kc_code = 'PY43-KC-001' AND source = 'RESOURCE_READ'",
             Integer.class,
             userId);
-    assertThat(events).isEqualTo(1);
+    assertThat(events).isZero();
+
+    ResponseEntity<Map> passedCheck =
+        restTemplate.exchange(
+            "/api/workshop/resources/" + resourceId + "/checks",
+            HttpMethod.POST,
+            bearer(
+                token,
+                Map.of(
+                    "kcCode",
+                    "PY43-KC-001",
+                    "evidenceType",
+                    "MICRO_QUIZ",
+                    "answerText",
+                    "input 函数用于读取用户在终端输入的内容")),
+            Map.class);
+    assertThat(passedCheck.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(passedCheck.getBody().get("status")).isEqualTo("PASSED");
+    assertThat(passedCheck.getBody().get("nextAction")).isEqualTo("continue");
+
+    Integer passedEvents =
+        jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM kc_mastery_event WHERE user_id = ? AND kc_code = 'PY43-KC-001' AND source = 'MICRO_CHECK_PASS'",
+            Integer.class,
+            userId);
+    assertThat(passedEvents).isEqualTo(1);
+
+    Integer passedChecks =
+        jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM resource_learning_check WHERE user_id = ? AND resource_id = ? AND status = 'PASSED'",
+            Integer.class,
+            userId,
+            resourceId);
+    assertThat(passedChecks).isEqualTo(1);
+
+    ResponseEntity<Map> failedCheck =
+        restTemplate.exchange(
+            "/api/workshop/resources/" + resourceId + "/checks",
+            HttpMethod.POST,
+            bearer(
+                token,
+                Map.of(
+                    "kcCode",
+                    "PY43-KC-001",
+                    "evidenceType",
+                    "MICRO_QUIZ",
+                    "answerText",
+                    "我看完了，还行")),
+            Map.class);
+    assertThat(failedCheck.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(failedCheck.getBody().get("status")).isEqualTo("FAILED");
+    assertThat(failedCheck.getBody().get("nextAction")).isEqualTo("remediation");
+    assertThat(failedCheck.getBody().get("remediationType")).isEqualTo("PRACTICE");
+
+    Integer failedEvents =
+        jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM kc_mastery_event WHERE user_id = ? AND kc_code = 'PY43-KC-001' AND source = 'MICRO_CHECK_FAIL'",
+            Integer.class,
+            userId);
+    assertThat(failedEvents).isEqualTo(1);
+
+    ResponseEntity<Map> effectSummary =
+        restTemplate.exchange(
+            "/api/learner/effect/summary",
+            HttpMethod.GET,
+            bearer(token, null),
+            Map.class);
+    assertThat(effectSummary.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(effectSummary.getBody().get("resourceCount")).isEqualTo(1);
+    assertThat(effectSummary.getBody().get("consumedResourceCount")).isEqualTo(1);
+    assertThat(effectSummary.getBody().get("checkCount")).isEqualTo(2);
+    assertThat(effectSummary.getBody().get("passedCheckCount")).isEqualTo(1);
+    assertThat(effectSummary.getBody().get("failedCheckCount")).isEqualTo(1);
+    assertThat(((Number) effectSummary.getBody().get("checkPassRate")).doubleValue())
+        .isEqualTo(0.5);
+    assertThat(((Number) effectSummary.getBody().get("totalMasteryDelta")).doubleValue())
+        .isEqualTo(0.03);
+    assertThat(effectSummary.getBody().get("positiveResourceReadEvents")).isEqualTo(0);
+
+    ResponseEntity<Map> tutorBench =
+        restTemplate.exchange(
+            "/api/tutorbench/runs",
+            HttpMethod.POST,
+            bearer(token, Map.of()),
+            Map.class);
+    assertThat(tutorBench.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(tutorBench.getBody().get("totalCases")).isEqualTo(6);
+    assertThat(tutorBench.getBody().get("passedCases")).isEqualTo(6);
+    assertThat(((Number) tutorBench.getBody().get("passRate")).doubleValue()).isEqualTo(1.0);
+
+    ResponseEntity<Map> protocol =
+        restTemplate.exchange(
+            "/api/protocol/descriptor",
+            HttpMethod.GET,
+            bearer(token, null),
+            Map.class);
+    assertThat(protocol.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(protocol.getBody().toString()).contains("workshop.resource.check.submit");
+    assertThat(protocol.getBody().toString()).contains("LearningEffectAgent");
+    assertThat(protocol.getBody().toString()).contains("RUN_FINISHED");
 
     ResponseEntity<List> list =
         restTemplate.exchange(
@@ -293,7 +392,7 @@ class Stage07WorkshopAcceptanceIntegrationTest {
             "artifact",
                 Map.of(
                     "title", "Handout",
-                    "summary", "summary",
+                    "summary", "input 函数用于读取用户输入",
                     "content_format", "MARKDOWN",
                     "handout",
                         Map.of(
@@ -301,7 +400,7 @@ class Stage07WorkshopAcceptanceIntegrationTest {
                             List.of(
                                 Map.of(
                                     "heading", "测试讲义",
-                                    "paragraphs", List.of("段落一"),
+                                    "paragraphs", List.of("input 函数用于读取用户输入"),
                                     "code_snippets", List.of(),
                                     "page_refs",
                                     List.of(

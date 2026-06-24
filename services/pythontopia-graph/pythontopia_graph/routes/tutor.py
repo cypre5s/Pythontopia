@@ -527,7 +527,7 @@ async def tutor_ask_stream(
             # 命中证据按 page_id 去重投影成可展示引用卡（页码 + 原文片段），page_ids 同源同序，
             # 供前端「课件证据」面板（CoursewareEvidence）渲染——复用 TutorAgent 同一套截断逻辑。
             citations = TutorAgent._build_citations(evidence.chunks)
-            evidence_list = [c.model_dump(mode="json") for c in citations]
+            evidence_list = [c.model_dump(mode="json", exclude_none=True) for c in citations]
             page_ids = [c.page_id for c in citations]
             combined_passed = grounding.passed and hallucination.passed
             if based_on_general:

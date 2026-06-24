@@ -39,6 +39,8 @@ class RagHit(BaseModel):
     score: float
     # KC 图谱感知扩展（R-16）：该证据来自前置 KC 召回路（学生困惑可能源于前置知识）。
     via_prerequisite: bool = False
+    # 图扩展命中的主导关系；None 表示直接命中。用于 UI/审计说明，不改变 grounding 边界。
+    via_relation: str | None = None
 
 
 class KcEdge(BaseModel):
@@ -60,7 +62,9 @@ class EvidenceBundle(BaseModel):
     # subgraph=多跳前置链路边集，供 grounding_critic 做「为什么先学 X」的可审计解释，
     # 但前置页不得冒充直接证据出处（由 G2b grounding_critic 把关）。
     route: str = "vector"
+    retrieval_mode: str = "vector_only"
     subgraph: list[KcEdge] = Field(default_factory=list)
+    graph_trace: dict[str, object] = Field(default_factory=dict)
 
     @property
     def page_ids(self) -> list[int]:
@@ -102,11 +106,15 @@ class StaticEvidenceFetcher:
         hits: list[RagHit],
         *,
         route: str = "vector",
+        retrieval_mode: str = "vector_only",
         subgraph: list[KcEdge] | None = None,
+        graph_trace: dict[str, object] | None = None,
     ) -> None:
         self._hits = hits
         self._route = route
+        self._retrieval_mode = retrieval_mode
         self._subgraph = list(subgraph or [])
+        self._graph_trace = dict(graph_trace or {})
         self.calls: list[dict[str, object]] = []
 
     async def fetch(
@@ -127,12 +135,23 @@ class StaticEvidenceFetcher:
                 "prereq_hops": prereq_hops,
             }
         )
-        filtered = [hit for hit in self._hits if any(code in hit.kc_codes for code in kc_codes)]
+        if kc_codes:
+            filtered = [
+                hit
+                for hit in self._hits
+                if any(code in hit.kc_codes for code in kc_codes)
+                or hit.via_relation is not None
+                or hit.via_prerequisite
+            ]
+        else:
+            filtered = list(self._hits)
         return EvidenceBundle(
             chunks=filtered[:top_k],
             no_evidence_found=not filtered,
             route=self._route,
+            retrieval_mode=self._retrieval_mode,
             subgraph=list(self._subgraph),
+            graph_trace=dict(self._graph_trace),
         )
 
 
@@ -172,10 +191,15 @@ class HttpRagEvidenceFetcher:
         # 新字段向后兼容：旧版 RAG 不返回 route/subgraph 时回退 vector / 空子图；
         # 显式 null 也回退 vector，避免 str(None) 污染审计。
         route = str(body.get("route") or "vector")
+        retrieval_mode = str(body.get("retrieval_mode") or "vector_only")
         subgraph = [KcEdge(**edge) for edge in (body.get("subgraph") or [])]
+        graph_trace_raw = body.get("graph_trace")
+        graph_trace = graph_trace_raw if isinstance(graph_trace_raw, dict) else {}
         return EvidenceBundle(
             chunks=chunks,
             no_evidence_found=bool(body.get("no_evidence_found")),
             route=route,
+            retrieval_mode=retrieval_mode,
             subgraph=subgraph,
+            graph_trace=graph_trace,
         )

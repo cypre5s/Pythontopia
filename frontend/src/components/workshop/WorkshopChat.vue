@@ -147,8 +147,23 @@ interface TutorStreamResult {
   };
 }
 
-/** 由 graph 的 grounding_result / based_on_general_knowledge 归一成前端 g-chip 用的状态串。 */
+function hasCoursewareEvidence(r: TutorStreamResult): boolean {
+  return (r.evidence?.length ?? 0) > 0 || (r.evidence_page_ids?.length ?? 0) > 0;
+}
+
+const GENERAL_KNOWLEDGE_PREFIX_RE = /^\s*基于通识知识\s*[：:]\s*/;
+
+/** 有课件证据时，清掉模型或旧后端残留的「基于通识知识」前缀，避免正文与证据面板自相矛盾。 */
+function normalizeAnswerText(r: TutorStreamResult, fallback: string): string {
+  const text = r.answer_md || fallback;
+  return hasCoursewareEvidence(r) ? text.replace(GENERAL_KNOWLEDGE_PREFIX_RE, '') : text;
+}
+
+/** 由 graph 的 grounding_result / based_on_general_knowledge / 实际证据归一成前端 g-chip 用的状态串。 */
 function deriveGroundingStatus(r: TutorStreamResult): string {
+  if (hasCoursewareEvidence(r)) {
+    return r.grounding_result && r.grounding_result.passed === false ? 'FAILED' : 'PASSED';
+  }
   if (r.based_on_general_knowledge) return 'NO_EVIDENCE';
   if (r.grounding_result && r.grounding_result.passed === false) return 'FAILED';
   return 'PASSED';
@@ -326,6 +341,7 @@ const pendingHistorySaves = ref(0);
 // 本组件正在跑的 orchestrator 活动「运行令牌」（activity.start 返回值）。
 // 镜像/收尾都持它写 store：向导（GuideOverlay）接管开新活动后，本组件过期流的数据被 store 忽略。
 const planRunToken = ref<number | null>(null);
+const askRunToken = ref<number | null>(null);
 // 学生点了「⏹ 停止」：runAsk 收尾时据此跳过错误兜底（气泡已标「（已中断）」）。
 const askInterrupted = ref(false);
 
@@ -804,6 +820,16 @@ onUnmounted(() => {
 
 watch(workshopSse.tokens, (t) => {
   officeTokenPreview.value = t.slice(0, 200);
+});
+
+// ASK：答疑流的 traces/plan 也镜像进右侧 workshopActivity，驱动「调用过程」工作室动画。
+watch(tutorSse.traces, (tr) => {
+  if (askRunToken.value === null) return;
+  activity.syncTraces('ask', tr, askRunToken.value);
+});
+watch(tutorSse.plan, (p) => {
+  if (askRunToken.value === null) return;
+  activity.syncPlan('ask', p, askRunToken.value);
 });
 
 // PLAN：orchestrator 流的 traces/plan 镜像进 workshopActivity（MarvisPanel / 思考链自动点亮）。
@@ -1350,7 +1376,12 @@ async function runAsk(
   };
   if (opts.style) body.style = opts.style;
 
+  const askLabel = question.trim() ? `答疑：${question.trim().slice(0, 30)}` : '答疑';
+  const runToken = activity.start('ask', askLabel);
+  askRunToken.value = runToken;
   await tutorSse.start(body);
+  activity.finish(tutorSse.status.value === 'done', runToken);
+  if (askRunToken.value === runToken) askRunToken.value = null;
   // 收尾：把 rAF 攒着的最后一段 token 落进消息（中断/出错时也能看到已生成部分）。
   flushPendingTokens();
   streamingAskId.value = null;
@@ -1364,7 +1395,7 @@ async function runAsk(
   if (tutorSse.status.value === 'done' && tutorSse.result.value) {
     playSfx('sfx_success');
     const r = tutorSse.result.value;
-    const answerText = r.answer_md || tutorSse.tokens.value;
+    const answerText = normalizeAnswerText(r, tutorSse.tokens.value);
     updateMessage(id, {
       text: answerText,
       groundingStatus: deriveGroundingStatus(r),

@@ -76,12 +76,17 @@ async def _collect_sse(response) -> list[tuple[str, dict]]:
     return events
 
 
-async def _run(question: str, kc_codes: list[str], answer: str) -> list[tuple[str, dict]]:
+async def _run(
+    question: str,
+    kc_codes: list[str],
+    answer: str,
+    hits: list[RagHit] | None = None,
+) -> list[tuple[str, dict]]:
     body = TutorAskRequest(user_id=1, question=question, kc_codes=kc_codes)
     response = await tutor_ask_stream(
         body,
         provider=StreamStubProvider(answer),
-        evidence_fetcher=StaticEvidenceFetcher([HIT]),
+        evidence_fetcher=StaticEvidenceFetcher([HIT] if hits is None else hits),
     )
     return await _collect_sse(response)
 
@@ -151,7 +156,7 @@ async def test_ask_stream_tokens_and_result_payload() -> None:
 @pytest.mark.asyncio
 async def test_ask_stream_general_knowledge_when_no_evidence() -> None:
     # 无 KC → StaticEvidenceFetcher 命中为空 → 通识知识。
-    events = await _run("天气怎么样", [], "基于通识知识，这与 Python 无关。")
+    events = await _run("天气怎么样", [], "基于通识知识，这与 Python 无关。", hits=[])
     result = events[-1][1]
     assert result["groundingStatus"] == "NO_EVIDENCE"
     assert result["based_on_general_knowledge"] is True
