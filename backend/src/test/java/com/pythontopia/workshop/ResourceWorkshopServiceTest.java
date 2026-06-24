@@ -36,6 +36,10 @@ import com.pythontopia.learner.reflection.LearnerInsightRepository;
 import com.pythontopia.workshop.config.WorkshopProperties;
 import com.pythontopia.workshop.dto.ContentFormat;
 import com.pythontopia.workshop.dto.LearningResourceDto;
+import com.pythontopia.workshop.dto.ResourceCheckEvidenceType;
+import com.pythontopia.workshop.dto.ResourceCheckResponse;
+import com.pythontopia.workshop.dto.ResourceCheckStatus;
+import com.pythontopia.workshop.dto.ResourceCheckSubmitRequest;
 import com.pythontopia.workshop.dto.ResourceCreateRequest;
 import com.pythontopia.workshop.dto.ResourceCreateResponse;
 import com.pythontopia.workshop.dto.ResourceFeedbackRequest;
@@ -46,6 +50,7 @@ import com.pythontopia.workshop.graph.ResourceProduceRequestDto;
 import com.pythontopia.workshop.graph.ResourceProduceResponseDto;
 import com.pythontopia.workshop.graph.WorkshopGraphClient;
 import com.pythontopia.workshop.repository.LearningResourceRepository;
+import com.pythontopia.workshop.repository.ResourceLearningCheckRepository;
 import com.pythontopia.workshop.repository.ResourceFeedbackRepository;
 import com.pythontopia.workshop.service.ResourceWorkshopService;
 import com.pythontopia.workshop.service.WorkshopRunRecorder;
@@ -67,6 +72,7 @@ class ResourceWorkshopServiceTest {
   private WorkshopProperties properties;
   private WorkshopGraphClient graphClient;
   private LearningResourceRepository resourceRepository;
+  private ResourceLearningCheckRepository checkRepository;
   private CoursePackRepository coursePackRepository;
   private WorkshopRunRecorder runRecorder;
   private MasteryEvaluator masteryEvaluator;
@@ -85,6 +91,7 @@ class ResourceWorkshopServiceTest {
     properties = new WorkshopProperties(3, new BigDecimal("0.15"), List.of());
     graphClient = Mockito.mock(WorkshopGraphClient.class);
     resourceRepository = Mockito.mock(LearningResourceRepository.class);
+    checkRepository = Mockito.mock(ResourceLearningCheckRepository.class);
     coursePackRepository = Mockito.mock(CoursePackRepository.class);
     runRecorder = Mockito.mock(WorkshopRunRecorder.class);
     masteryEvaluator = Mockito.mock(MasteryEvaluator.class);
@@ -101,6 +108,7 @@ class ResourceWorkshopServiceTest {
             properties,
             graphClient,
             resourceRepository,
+            checkRepository,
             coursePackRepository,
             runRecorder,
             masteryEvaluator,
@@ -213,8 +221,6 @@ class ResourceWorkshopServiceTest {
   @Test
   void consumePublishesResourceConsumedWithCappedDelta() {
     when(resourceRepository.findById(1L, 7L)).thenReturn(Optional.of(resource()));
-    when(resourceRepository.sumMasteryRewardsToday(anyLong(), anyString(), any()))
-        .thenReturn(new BigDecimal("0.12"));
 
     var response = service.consume(1L, 7L);
 
@@ -224,22 +230,142 @@ class ResourceWorkshopServiceTest {
     ArgumentCaptor<LearningEvent.ResourceConsumed> captor =
         ArgumentCaptor.forClass(LearningEvent.ResourceConsumed.class);
     verify(eventPublisher).publishEvent(captor.capture());
-    assertThat(captor.getValue().delta()).isEqualByComparingTo("0.03");
+    assertThat(captor.getValue().resourceId()).isEqualTo(7L);
+    assertThat(captor.getValue().delta()).isEqualByComparingTo(BigDecimal.ZERO);
     assertThat(captor.getValue().resourceKind()).isEqualTo("HANDOUT");
   }
 
   @Test
-  void consumeStillPublishesEventWithZeroDeltaWhenDailyCapReached() {
+  void submitCheckPassedRecordsEvidenceAndPublishesMasteryEvent() {
     when(resourceRepository.findById(1L, 7L)).thenReturn(Optional.of(resource()));
     when(resourceRepository.sumMasteryRewardsToday(anyLong(), anyString(), any()))
-        .thenReturn(new BigDecimal("0.15"));
+        .thenReturn(new BigDecimal("0.02"));
+    when(checkRepository.insert(any())).thenReturn(31L);
 
-    service.consume(1L, 7L);
+    ResourceCheckResponse response =
+        service.submitCheck(
+            1L,
+            7L,
+            new ResourceCheckSubmitRequest(
+                "PY43-KC-001",
+                ResourceCheckEvidenceType.MICRO_QUIZ,
+                "input 函数用于读取用户在终端输入的内容",
+                null));
 
-    ArgumentCaptor<LearningEvent.ResourceConsumed> captor =
-        ArgumentCaptor.forClass(LearningEvent.ResourceConsumed.class);
-    verify(eventPublisher).publishEvent(captor.capture());
-    assertThat(captor.getValue().delta()).isEqualByComparingTo(BigDecimal.ZERO);
+    assertThat(response.status()).isEqualTo(ResourceCheckStatus.PASSED);
+    assertThat(response.masteryDelta()).isEqualByComparingTo("0.05");
+    assertThat(response.nextAction()).isEqualTo("continue");
+    ArgumentCaptor<ResourceLearningCheckRepository.CheckInsert> insertCaptor =
+        ArgumentCaptor.forClass(ResourceLearningCheckRepository.CheckInsert.class);
+    verify(checkRepository).insert(insertCaptor.capture());
+    assertThat(insertCaptor.getValue().status()).isEqualTo(ResourceCheckStatus.PASSED);
+    assertThat(insertCaptor.getValue().masteryDelta()).isEqualByComparingTo("0.05");
+    ArgumentCaptor<LearningEvent.ResourceCheckCompleted> eventCaptor =
+        ArgumentCaptor.forClass(LearningEvent.ResourceCheckCompleted.class);
+    verify(eventPublisher).publishEvent(eventCaptor.capture());
+    assertThat(eventCaptor.getValue().passed()).isTrue();
+    assertThat(eventCaptor.getValue().resourceId()).isEqualTo(7L);
+    assertThat(eventCaptor.getValue().delta()).isEqualByComparingTo("0.05");
+  }
+
+  @Test
+  void submitCheckFailedRecordsEvidenceAndTriggersRemediationWithoutPositiveReward() {
+    when(resourceRepository.findById(1L, 7L)).thenReturn(Optional.of(resource()));
+    when(checkRepository.insert(any())).thenReturn(32L);
+
+    ResourceCheckResponse response =
+        service.submitCheck(
+            1L,
+            7L,
+            new ResourceCheckSubmitRequest(
+                "PY43-KC-001",
+                ResourceCheckEvidenceType.MICRO_QUIZ,
+                "我看完了，还行",
+                null));
+
+    assertThat(response.status()).isEqualTo(ResourceCheckStatus.FAILED);
+    assertThat(response.masteryDelta()).isLessThan(BigDecimal.ZERO);
+    assertThat(response.nextAction()).isEqualTo("remediation");
+    assertThat(response.remediationType()).isEqualTo(ResourceType.PRACTICE);
+    ArgumentCaptor<ResourceLearningCheckRepository.CheckInsert> insertCaptor =
+        ArgumentCaptor.forClass(ResourceLearningCheckRepository.CheckInsert.class);
+    verify(checkRepository).insert(insertCaptor.capture());
+    assertThat(insertCaptor.getValue().status()).isEqualTo(ResourceCheckStatus.FAILED);
+    assertThat(insertCaptor.getValue().remediationType()).isEqualTo(ResourceType.PRACTICE);
+    ArgumentCaptor<LearningEvent.ResourceCheckCompleted> eventCaptor =
+        ArgumentCaptor.forClass(LearningEvent.ResourceCheckCompleted.class);
+    verify(eventPublisher).publishEvent(eventCaptor.capture());
+    assertThat(eventCaptor.getValue().passed()).isFalse();
+    assertThat(eventCaptor.getValue().delta()).isLessThan(BigDecimal.ZERO);
+  }
+
+  @Test
+  void submitCheckRejectsKcOutsideResource() {
+    when(resourceRepository.findById(1L, 7L)).thenReturn(Optional.of(resource()));
+
+    assertThatThrownBy(
+            () ->
+                service.submitCheck(
+                    1L,
+                    7L,
+                    new ResourceCheckSubmitRequest(
+                        "PY43-KC-999",
+                        ResourceCheckEvidenceType.MICRO_QUIZ,
+                        "input 用于读取输入",
+                        null)))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("不属于该资源");
+
+    verifyNoInteractions(checkRepository);
+  }
+
+  @Test
+  void submitOperationEvidencePassesWhenCodeSnippetIsProvided() {
+    when(resourceRepository.findById(1L, 7L)).thenReturn(Optional.of(resource()));
+    when(resourceRepository.sumMasteryRewardsToday(anyLong(), anyString(), any()))
+        .thenReturn(BigDecimal.ZERO);
+    when(checkRepository.insert(any())).thenReturn(33L);
+
+    var evidence = objectMapper.createObjectNode();
+    evidence.put("code", "name = input('name: ')\nprint(name)");
+
+    ResourceCheckResponse response =
+        service.submitCheck(
+            1L,
+            7L,
+            new ResourceCheckSubmitRequest(
+                "PY43-KC-001",
+                ResourceCheckEvidenceType.OPERATION,
+                "我运行了 input 并打印结果",
+                evidence));
+
+    assertThat(response.status()).isEqualTo(ResourceCheckStatus.PASSED);
+    assertThat(response.masteryDelta()).isPositive();
+  }
+
+  @Test
+  void checkRewardIsCappedByDailyPositiveLimit() {
+    when(resourceRepository.findById(1L, 7L)).thenReturn(Optional.of(resource()));
+    when(resourceRepository.sumMasteryRewardsToday(anyLong(), anyString(), any()))
+        .thenReturn(new BigDecimal("0.14"));
+    when(checkRepository.insert(any())).thenReturn(34L);
+
+    ResourceCheckResponse response =
+        service.submitCheck(
+            1L,
+            7L,
+            new ResourceCheckSubmitRequest(
+                "PY43-KC-001",
+                ResourceCheckEvidenceType.MICRO_QUIZ,
+                "input 函数用于读取用户输入",
+                null));
+
+    assertThat(response.status()).isEqualTo(ResourceCheckStatus.PASSED);
+    assertThat(response.masteryDelta()).isEqualByComparingTo("0.01");
+    ArgumentCaptor<LearningEvent.ResourceCheckCompleted> eventCaptor =
+        ArgumentCaptor.forClass(LearningEvent.ResourceCheckCompleted.class);
+    verify(eventPublisher).publishEvent(eventCaptor.capture());
+    assertThat(eventCaptor.getValue().delta()).isEqualByComparingTo("0.01");
   }
 
   @Test
@@ -250,6 +376,7 @@ class ResourceWorkshopServiceTest {
             properties,
             graphClient,
             resourceRepository,
+            checkRepository,
             coursePackRepository,
             runRecorder,
             masteryEvaluator,
@@ -479,7 +606,7 @@ class ResourceWorkshopServiceTest {
         ContentFormat.MARKDOWN,
         objectMapper.createObjectNode(),
         List.of(101L),
-        "summary",
+        "input 函数用于读取用户输入",
         ResourceStatusFlag.PASSED,
         ResourceStatusFlag.PASSED,
         ResourceFeedbackStatus.NONE,

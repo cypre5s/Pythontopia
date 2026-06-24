@@ -129,12 +129,31 @@ class Stage08PathBoardAcceptanceIntegrationTest {
     assertThat(completed.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(completed.getBody().get("status")).isEqualTo("COMPLETED");
 
-    Integer events =
+    Integer consumedFacts =
         jdbcTemplate.queryForObject(
-            "SELECT COUNT(*) FROM kc_mastery_event WHERE user_id = ? AND kc_code = 'PY43-KC-001'",
+            """
+            SELECT COUNT(*)
+            FROM learning_event_log
+            WHERE user_id = ?
+              AND event_type = 'resource_consumed'
+              AND payload ->> 'kcCode' = 'PY43-KC-001'
+            """,
             Integer.class,
             userId);
-    assertThat(events).isGreaterThanOrEqualTo(1);
+    assertThat(consumedFacts).isGreaterThanOrEqualTo(1);
+
+    Integer directReadRewards =
+        jdbcTemplate.queryForObject(
+            """
+            SELECT COUNT(*)
+            FROM kc_mastery_event
+            WHERE user_id = ?
+              AND kc_code = 'PY43-KC-001'
+              AND source = 'RESOURCE_READ'
+            """,
+            Integer.class,
+            userId);
+    assertThat(directReadRewards).isZero();
 
     graphServer.verify(Duration.ofSeconds(2));
   }

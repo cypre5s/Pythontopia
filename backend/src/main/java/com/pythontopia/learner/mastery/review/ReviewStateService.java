@@ -29,8 +29,8 @@ public class ReviewStateService {
   /** 掌握度事件 → 复习结果；DECAY/BOOTSTRAP/MANUAL_OVERRIDE 不算一次复习。 */
   static ReviewOutcome outcomeFor(MasterySource source) {
     return switch (source) {
-      case PRACTICE_PASS, DEBUG_FIX -> ReviewOutcome.SUCCESS;
-      case PRACTICE_FAIL -> ReviewOutcome.LAPSE;
+      case PRACTICE_PASS, DEBUG_FIX, MICRO_CHECK_PASS -> ReviewOutcome.SUCCESS;
+      case PRACTICE_FAIL, MICRO_CHECK_FAIL -> ReviewOutcome.LAPSE;
       case RESOURCE_READ -> ReviewOutcome.RESTUDY;
       case DECAY, BOOTSTRAP, MANUAL_OVERRIDE -> null;
     };

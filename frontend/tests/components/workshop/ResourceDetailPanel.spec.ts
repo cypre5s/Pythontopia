@@ -156,4 +156,56 @@ describe('ResourceDetailPanel · 决策玻璃盒挂载（P7.1）', () => {
     expect(httpMocks.post).toHaveBeenCalledWith('/api/workshop/resources/7/consumptions');
     expect(wrapper.find('[data-testid="resource-micro-check"]').text()).toContain('说出 input 的作用');
   });
+
+  it('提交资源微测答案，并展示掌握度证据结果', async () => {
+    httpMocks.get.mockImplementation((url: string) => {
+      if (url === '/api/workshop/resources/7') return Promise.resolve({ data: RESOURCE });
+      return Promise.resolve({ data: [] });
+    });
+    httpMocks.post
+      .mockResolvedValueOnce({
+        data: {
+          resourceId: 7,
+          kcCodes: ['PY43-KC-001'],
+          nextAction: 'micro_check',
+          prompt: '用 1 分钟做个小检查：说出 input 的作用。',
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          checkId: 31,
+          resourceId: 7,
+          kcCode: 'PY43-KC-001',
+          status: 'PASSED',
+          masteryDelta: 0.05,
+          nextAction: 'continue',
+          remediationType: null,
+          feedback: '已命中资源关键点：input',
+        },
+      });
+
+    const wrapper = mount(ResourceDetailPanel, {
+      props: { resourceId: 7 },
+      global: {
+        stubs: {
+          ...CONTENT_STUBS,
+          RouterLink: { template: '<a><slot /></a>' },
+        },
+      },
+    });
+    await flushPromises();
+
+    await wrapper.get('[data-testid="resource-check-answer"]').setValue('input 函数用于读取用户输入');
+    await wrapper.get('[data-testid="resource-check-submit"]').trigger('click');
+    await flushPromises();
+
+    expect(httpMocks.post).toHaveBeenLastCalledWith('/api/workshop/resources/7/checks', {
+      kcCode: 'PY43-KC-001',
+      evidenceType: 'MICRO_QUIZ',
+      answerText: 'input 函数用于读取用户输入',
+    });
+    const result = wrapper.find('[data-testid="resource-check-result"]');
+    expect(result.text()).toContain('PASSED');
+    expect(result.text()).toContain('+0.05');
+  });
 });

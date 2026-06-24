@@ -18,6 +18,7 @@ import type {
   PracticeContent,
   ReadingContent,
   StoryboardContent,
+  WorkshopCheckResponse,
   WorkshopFeedbackRequest,
 } from '@/api/dto/Workshop';
 
@@ -31,6 +32,9 @@ const feedbackNote = ref<string>('');
 const submittingFeedback = ref<boolean>(false);
 const showPpt = ref<boolean>(false);
 const consumingResource = ref<boolean>(false);
+const checkAnswer = ref<string>('');
+const submittingCheck = ref<boolean>(false);
+const checkResult = ref<WorkshopCheckResponse | null>(null);
 
 const resource = computed(() => learning.resources.current);
 const consumption = computed(() => learning.resources.currentConsumption);
@@ -39,6 +43,8 @@ watch(
   () => props.resourceId,
   async (id) => {
     showPpt.value = false;
+    checkAnswer.value = '';
+    checkResult.value = null;
     if (id) {
       try {
         await learning.openResource(id);
@@ -79,6 +85,30 @@ async function submitFeedback(status: 'LIKED' | 'DISLIKED'): Promise<void> {
     toast.show(message, 'error');
   } finally {
     submittingFeedback.value = false;
+  }
+}
+
+async function submitMicroCheck(): Promise<void> {
+  if (!resource.value || resource.value.kcCodes.length === 0) return;
+  const primaryKcCode = resource.value.kcCodes[0];
+  if (!primaryKcCode) return;
+  const answerText = checkAnswer.value.trim();
+  if (answerText.length === 0) {
+    toast.show('先写一句你的理解，再提交小检查。', 'info');
+    return;
+  }
+  submittingCheck.value = true;
+  try {
+    checkResult.value = await learning.submitResourceCheck(resource.value.id, {
+      kcCode: primaryKcCode,
+      evidenceType: 'MICRO_QUIZ',
+      answerText,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '小检查提交失败';
+    toast.show(message, 'error');
+  } finally {
+    submittingCheck.value = false;
   }
 }
 </script>
@@ -151,6 +181,34 @@ async function submitFeedback(status: 'LIKED' | 'DISLIKED'): Promise<void> {
       >
         生成迁移练习
       </router-link>
+      <div class="micro-check__form">
+        <textarea
+          v-model="checkAnswer"
+          data-testid="resource-check-answer"
+          maxlength="2000"
+          rows="2"
+          placeholder="用自己的话写一个关键点，例如 input 读取用户输入"
+        />
+        <button
+          type="button"
+          data-testid="resource-check-submit"
+          :disabled="submittingCheck || checkAnswer.trim().length === 0"
+          @click="submitMicroCheck"
+        >
+          {{ submittingCheck ? '提交中…' : '提交小检查' }}
+        </button>
+      </div>
+      <p
+        v-if="checkResult"
+        class="micro-check__result"
+        data-testid="resource-check-result"
+      >
+        {{ checkResult.status }} · 掌握度 {{ checkResult.masteryDelta >= 0 ? '+' : '' }}{{ checkResult.masteryDelta.toFixed(2) }}
+        <span v-if="checkResult.nextAction === 'remediation' && checkResult.remediationType">
+          · 建议补救：{{ checkResult.remediationType }}
+        </span>
+        <span v-if="checkResult.feedback"> · {{ checkResult.feedback }}</span>
+      </p>
     </section>
     <div
       v-if="resource.type === 'HANDOUT'"
@@ -287,6 +345,7 @@ header h2 {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
   padding: 12px;
   background: #f4f7dc;
@@ -313,6 +372,38 @@ header h2 {
 }
 .micro-check__cta:hover {
   background: #6f8c2b;
+}
+.micro-check__form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  width: 100%;
+}
+.micro-check__form textarea {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid #9cad57;
+  border-radius: 6px;
+  padding: 8px;
+  font: inherit;
+  color: #2b1c0b;
+  background: #fffef2;
+}
+.micro-check__form button {
+  border: 0;
+  border-radius: 6px;
+  padding: 0 12px;
+  background: #3f6421;
+  color: #fffde8;
+  font-weight: 700;
+}
+.micro-check__form button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.micro-check__result {
+  width: 100%;
+  font-weight: 700;
 }
 .badges {
   display: flex;

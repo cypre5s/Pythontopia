@@ -20,6 +20,10 @@ import com.pythontopia.learner.reflection.LearnerInsightRepository;
 import com.pythontopia.workshop.config.WorkshopProperties;
 import com.pythontopia.workshop.dto.ContentFormat;
 import com.pythontopia.workshop.dto.LearningResourceDto;
+import com.pythontopia.workshop.dto.ResourceCheckEvidenceType;
+import com.pythontopia.workshop.dto.ResourceCheckResponse;
+import com.pythontopia.workshop.dto.ResourceCheckStatus;
+import com.pythontopia.workshop.dto.ResourceCheckSubmitRequest;
 import com.pythontopia.workshop.dto.ResourceConsumptionResponse;
 import com.pythontopia.workshop.dto.ResourceCreateRequest;
 import com.pythontopia.workshop.dto.ResourceCreateResponse;
@@ -32,6 +36,7 @@ import com.pythontopia.workshop.graph.ResourceProduceRequestDto;
 import com.pythontopia.workshop.graph.ResourceProduceResponseDto;
 import com.pythontopia.workshop.graph.WorkshopGraphClient;
 import com.pythontopia.workshop.repository.LearningResourceRepository;
+import com.pythontopia.workshop.repository.ResourceLearningCheckRepository;
 import com.pythontopia.workshop.repository.ResourceFeedbackRepository;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -72,6 +77,7 @@ public class ResourceWorkshopService {
   private final WorkshopProperties properties;
   private final WorkshopGraphClient graphClient;
   private final LearningResourceRepository resourceRepository;
+  private final ResourceLearningCheckRepository checkRepository;
   private final CoursePackRepository coursePackRepository;
   private final WorkshopRunRecorder runRecorder;
   private final MasteryEvaluator masteryEvaluator;
@@ -88,6 +94,7 @@ public class ResourceWorkshopService {
       WorkshopProperties properties,
       WorkshopGraphClient graphClient,
       LearningResourceRepository resourceRepository,
+      ResourceLearningCheckRepository checkRepository,
       CoursePackRepository coursePackRepository,
       WorkshopRunRecorder runRecorder,
       MasteryEvaluator masteryEvaluator,
@@ -102,6 +109,7 @@ public class ResourceWorkshopService {
     this.properties = properties;
     this.graphClient = graphClient;
     this.resourceRepository = resourceRepository;
+    this.checkRepository = checkRepository;
     this.coursePackRepository = coursePackRepository;
     this.runRecorder = runRecorder;
     this.masteryEvaluator = masteryEvaluator;
@@ -326,10 +334,61 @@ public class ResourceWorkshopService {
       }
       eventPublisher.publishEvent(
           new LearningEvent.ResourceConsumed(
-              userId, kcCode, resourceKind, cappedResourceDelta(userId, kcCode)));
+              userId, resource.id(), kcCode, resourceKind, BigDecimal.ZERO));
     }
     return new ResourceConsumptionResponse(
         resource.id(), kcCodes, "micro_check", microCheckPrompt(resource, kcCodes));
+  }
+
+  @Transactional
+  public ResourceCheckResponse submitCheck(
+      Long userId, Long resourceId, ResourceCheckSubmitRequest request) {
+    LearningResourceDto resource = findOne(userId, resourceId);
+    String kcCode = request.kcCode() == null ? "" : request.kcCode().trim();
+    if (resource.kcCodes() == null || !resource.kcCodes().contains(kcCode)) {
+      throw new BusinessException(
+          HttpStatus.BAD_REQUEST, "RESOURCE_CHECK_KC_MISMATCH", "该 KC 不属于该资源");
+    }
+
+    CheckEvaluation evaluation = evaluateCheck(resource, request);
+    BigDecimal delta =
+        evaluation.passed()
+            ? cappedResourceDelta(userId, kcCode)
+            : new BigDecimal("-0.02");
+    ResourceType remediationType = evaluation.passed() ? null : ResourceType.PRACTICE;
+    ResourceCheckStatus status =
+        evaluation.passed() ? ResourceCheckStatus.PASSED : ResourceCheckStatus.FAILED;
+    Long checkId =
+        checkRepository.insert(
+            new ResourceLearningCheckRepository.CheckInsert(
+                userId,
+                resource.id(),
+                kcCode,
+                request.evidenceType(),
+                request.answerText(),
+                request.operationEvidence(),
+                status,
+                delta,
+                remediationType,
+                evaluation.reason()));
+    eventPublisher.publishEvent(
+        new LearningEvent.ResourceCheckCompleted(
+            userId,
+            resource.id(),
+            kcCode,
+            request.evidenceType().name(),
+            evaluation.passed(),
+            delta,
+            remediationType == null ? null : remediationType.name()));
+    return new ResourceCheckResponse(
+        checkId,
+        resource.id(),
+        kcCode,
+        status,
+        delta,
+        evaluation.passed() ? "continue" : "remediation",
+        remediationType,
+        evaluation.feedback());
   }
 
   @Transactional
@@ -566,6 +625,105 @@ public class ResourceWorkshopService {
       }
     }
     return List.of();
+  }
+
+  private CheckEvaluation evaluateCheck(
+      LearningResourceDto resource, ResourceCheckSubmitRequest request) {
+    String answer = Optional.ofNullable(request.answerText()).orElse("").trim();
+    if (request.evidenceType() == ResourceCheckEvidenceType.OPERATION) {
+      return evaluateOperationCheck(answer, request.operationEvidence());
+    }
+    return evaluateMicroQuiz(resource, answer);
+  }
+
+  private CheckEvaluation evaluateMicroQuiz(LearningResourceDto resource, String answer) {
+    if (answer.length() < 4) {
+      return CheckEvaluation.failed("回答太短，无法证明已经理解。", "answer too short");
+    }
+    String lowerAnswer = answer.toLowerCase(Locale.ROOT);
+    for (String keyword : resourceKeywords(resource)) {
+      String normalized = keyword.toLowerCase(Locale.ROOT).trim();
+      if (normalized.length() >= 2 && lowerAnswer.contains(normalized)) {
+        return CheckEvaluation.passed("已命中资源关键点：" + keyword, "hit keyword:" + keyword);
+      }
+    }
+    return CheckEvaluation.failed(
+        "这次回答还没有抓住资源里的关键点，建议先做一道迁移练习巩固。",
+        "missing resource keyword");
+  }
+
+  private CheckEvaluation evaluateOperationCheck(String answer, JsonNode operationEvidence) {
+    String evidenceText = jsonText(operationEvidence).toLowerCase(Locale.ROOT);
+    String answerText = Optional.ofNullable(answer).orElse("").toLowerCase(Locale.ROOT);
+    String combined = answerText + "\n" + evidenceText;
+    boolean hasStructuredEvidence =
+        operationEvidence != null
+            && (operationEvidence.hasNonNull("code")
+                || operationEvidence.hasNonNull("submissionId")
+                || operationEvidence.hasNonNull("result")
+                || operationEvidence.hasNonNull("output"));
+    boolean looksLikeCode =
+        combined.contains("input(")
+            || combined.contains("print(")
+            || combined.contains("```")
+            || combined.contains("=")
+            || answer.contains("\n")
+            || evidenceText.contains("\n");
+    if (hasStructuredEvidence && looksLikeCode) {
+      return CheckEvaluation.passed("已收到可复查的操作证据。", "operation evidence accepted");
+    }
+    return CheckEvaluation.failed(
+        "需要提交可复查的操作证据，例如代码片段、运行输出或提交编号。",
+        "operation evidence missing");
+  }
+
+  private List<String> resourceKeywords(LearningResourceDto resource) {
+    List<String> values = new ArrayList<>();
+    addKeywords(values, resource.title());
+    addKeywords(values, resource.summary());
+    if (resource.kcCodes() != null) {
+      resource.kcCodes().forEach(code -> addKeywords(values, code));
+    }
+    addKeywords(values, jsonText(resource.content()));
+    return values.stream().distinct().limit(80).toList();
+  }
+
+  private void addKeywords(List<String> values, String raw) {
+    if (raw == null || raw.isBlank()) {
+      return;
+    }
+    String cleaned = raw.trim();
+    values.add(cleaned);
+    for (String token : cleaned.split("[^\\p{IsHan}\\p{Alnum}_]+")) {
+      if (token != null && token.trim().length() >= 2) {
+        values.add(token.trim());
+      }
+    }
+  }
+
+  private String jsonText(JsonNode node) {
+    if (node == null || node.isNull()) {
+      return "";
+    }
+    if (node.isValueNode()) {
+      return node.asText("");
+    }
+    StringBuilder builder = new StringBuilder();
+    node.elements().forEachRemaining(child -> builder.append(' ').append(jsonText(child)));
+    node.fields()
+        .forEachRemaining(
+            entry -> builder.append(' ').append(entry.getKey()).append(' ').append(jsonText(entry.getValue())));
+    return builder.toString();
+  }
+
+  private record CheckEvaluation(boolean passed, String feedback, String reason) {
+    static CheckEvaluation passed(String feedback, String reason) {
+      return new CheckEvaluation(true, feedback, reason);
+    }
+
+    static CheckEvaluation failed(String feedback, String reason) {
+      return new CheckEvaluation(false, feedback, reason);
+    }
   }
 
   private String graphMajor(String rawMajor) {

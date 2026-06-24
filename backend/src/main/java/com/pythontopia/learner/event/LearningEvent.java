@@ -8,6 +8,7 @@ package com.pythontopia.learner.event;
 public sealed interface LearningEvent
     permits LearningEvent.ProfileBootstrapped,
         LearningEvent.ResourceConsumed,
+        LearningEvent.ResourceCheckCompleted,
         LearningEvent.PracticeSucceeded,
         LearningEvent.PracticeFailed,
         LearningEvent.DebugResolved,
@@ -27,12 +28,27 @@ public sealed interface LearningEvent
   record ProfileBootstrapped(Long userId, java.util.List<String> unlockedKcs) implements LearningEvent {}
 
   record ResourceConsumed(
-      Long userId, String kcCode, String resourceKind, java.math.BigDecimal delta)
+      Long userId, Long resourceId, String kcCode, String resourceKind, java.math.BigDecimal delta)
       implements LearningEvent {
     public ResourceConsumed(Long userId, String kcCode, String resourceKind) {
-      this(userId, kcCode, resourceKind, null);
+      this(userId, null, kcCode, resourceKind, null);
+    }
+
+    public ResourceConsumed(
+        Long userId, String kcCode, String resourceKind, java.math.BigDecimal delta) {
+      this(userId, null, kcCode, resourceKind, delta);
     }
   }
+
+  record ResourceCheckCompleted(
+      Long userId,
+      Long resourceId,
+      String kcCode,
+      String evidenceType,
+      boolean passed,
+      java.math.BigDecimal delta,
+      String remediationType)
+      implements LearningEvent {}
 
   record PracticeSucceeded(Long userId, String kcCode, Long problemId, String difficulty)
       implements LearningEvent {}

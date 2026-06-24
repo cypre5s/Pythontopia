@@ -149,6 +149,28 @@ export interface WorkshopConsumptionResponse {
   prompt: string;
 }
 
+export type WorkshopCheckEvidenceType = 'MICRO_QUIZ' | 'OPERATION';
+
+export type WorkshopCheckStatus = 'PASSED' | 'FAILED';
+
+export interface WorkshopCheckSubmitRequest {
+  kcCode: string;
+  evidenceType: WorkshopCheckEvidenceType;
+  answerText?: string;
+  operationEvidence?: Record<string, unknown>;
+}
+
+export interface WorkshopCheckResponse {
+  checkId: number;
+  resourceId: number;
+  kcCode: string;
+  status: WorkshopCheckStatus;
+  masteryDelta: number;
+  nextAction: 'continue' | 'remediation';
+  remediationType: WorkshopResourceType | null;
+  feedback: string;
+}
+
 export interface WorkshopFeedbackRequest {
   status: 'LIKED' | 'DISLIKED' | 'NONE';
   note?: string;

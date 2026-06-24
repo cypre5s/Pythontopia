@@ -5,6 +5,8 @@ import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
 import com.pythontopia.workshop.dto.LearningResourceDto;
+import com.pythontopia.workshop.dto.ResourceCheckResponse;
+import com.pythontopia.workshop.dto.ResourceCheckSubmitRequest;
 import com.pythontopia.workshop.dto.ResourceConsumptionResponse;
 import com.pythontopia.workshop.dto.ResourceCreateRequest;
 import com.pythontopia.workshop.dto.ResourceCreateResponse;
@@ -74,6 +76,15 @@ public class ResourceWorkshopController {
       @CurrentUser CurrentUserPrincipal user, @PathVariable Long id) {
     requireStudent(user);
     return service.consume(user.userId(), id);
+  }
+
+  @PostMapping("/{id}/checks")
+  public ResourceCheckResponse submitCheck(
+      @CurrentUser CurrentUserPrincipal user,
+      @PathVariable Long id,
+      @Valid @RequestBody ResourceCheckSubmitRequest request) {
+    requireStudent(user);
+    return service.submitCheck(user.userId(), id, request);
   }
 
   @PostMapping("/{id}/feedback")

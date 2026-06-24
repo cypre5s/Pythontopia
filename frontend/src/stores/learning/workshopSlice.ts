@@ -4,11 +4,14 @@ import {
   createWorkshopResource,
   getWorkshopResource,
   listWorkshopResources,
+  submitWorkshopResourceCheck,
   submitWorkshopFeedback,
 } from '@/api/workshop';
 import type {
   WorkshopCreateRequest,
   WorkshopCreateResponse,
+  WorkshopCheckResponse,
+  WorkshopCheckSubmitRequest,
   WorkshopConsumptionResponse,
   WorkshopFeedbackRequest,
   WorkshopResourceDto,
@@ -102,6 +105,13 @@ export function createWorkshopSlice() {
     return response;
   }
 
+  async function submitResourceCheck(
+    id: number,
+    request: WorkshopCheckSubmitRequest,
+  ): Promise<WorkshopCheckResponse> {
+    return submitWorkshopResourceCheck(id, request);
+  }
+
   async function giveResourceFeedback(id: number, request: WorkshopFeedbackRequest): Promise<void> {
     await submitWorkshopFeedback(id, request);
     if (resources.value.current && resources.value.current.id === id) {
@@ -134,6 +144,7 @@ export function createWorkshopSlice() {
     createResource,
     openResource,
     consumeResource,
+    submitResourceCheck,
     giveResourceFeedback,
     setResourceFilter,
     resetResourcePhase,

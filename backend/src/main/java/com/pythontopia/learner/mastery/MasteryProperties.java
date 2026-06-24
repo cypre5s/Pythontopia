@@ -23,6 +23,8 @@ public record MasteryProperties(
     if (deltas == null || deltas.isEmpty()) {
       deltas = Map.of(
           "RESOURCE_READ", new BigDecimal("0.10"),
+          "MICRO_CHECK_PASS", new BigDecimal("0.08"),
+          "MICRO_CHECK_FAIL", new BigDecimal("-0.02"),
           "PRACTICE_PASS", new BigDecimal("0.20"),
           "PRACTICE_FAIL", new BigDecimal("-0.05"),
           "DEBUG_FIX", new BigDecimal("0.15"),

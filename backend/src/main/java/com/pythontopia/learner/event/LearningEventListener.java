@@ -23,11 +23,21 @@ public class LearningEventListener {
 
   @EventListener
   public void onResourceConsumed(LearningEvent.ResourceConsumed event) {
-    if (event.delta() != null && event.delta().compareTo(BigDecimal.ZERO) <= 0) {
+    // 读过资源只是消费事实，不再直接增加掌握度；掌握度必须来自后续微测/操作证据。
+  }
+
+  @EventListener
+  public void onResourceCheckCompleted(LearningEvent.ResourceCheckCompleted event) {
+    BigDecimal delta = event.delta();
+    if (delta == null || delta.compareTo(BigDecimal.ZERO) == 0) {
       return;
     }
-    masteryEvaluator.applyEvent(event.userId(), event.kcCode(),
-        MasterySource.RESOURCE_READ, event.delta(), "resource:" + event.resourceKind());
+    masteryEvaluator.applyEvent(
+        event.userId(),
+        event.kcCode(),
+        event.passed() ? MasterySource.MICRO_CHECK_PASS : MasterySource.MICRO_CHECK_FAIL,
+        delta,
+        "resource_check:" + event.resourceId());
   }
 
   @EventListener

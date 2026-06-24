@@ -159,7 +159,7 @@ public class LearningResourceRepository {
             SELECT COALESCE(SUM(delta), 0)
             FROM kc_mastery_event
             WHERE user_id = ? AND kc_code = ? AND created_at > ?
-              AND source = 'RESOURCE_READ' AND delta > 0
+              AND source = 'MICRO_CHECK_PASS' AND delta > 0
             """,
             BigDecimal.class,
             userId,

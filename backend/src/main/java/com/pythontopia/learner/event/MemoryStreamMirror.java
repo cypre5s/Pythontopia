@@ -54,9 +54,24 @@ public class MemoryStreamMirror {
   @EventListener
   public void onResourceConsumed(LearningEvent.ResourceConsumed event) {
     Map<String, Object> payload = new LinkedHashMap<>();
+    put(payload, "resourceId", event.resourceId());
     put(payload, "kcCode", event.kcCode());
     put(payload, "resourceKind", event.resourceKind());
     mirror(event.userId(), "resource_consumed", payload);
+  }
+
+  @EventListener
+  public void onResourceCheckCompleted(LearningEvent.ResourceCheckCompleted event) {
+    Map<String, Object> payload = new LinkedHashMap<>();
+    put(payload, "resourceId", event.resourceId());
+    put(payload, "kcCode", event.kcCode());
+    put(payload, "evidenceType", event.evidenceType());
+    put(payload, "delta", event.delta());
+    put(payload, "remediationType", event.remediationType());
+    mirror(
+        event.userId(),
+        event.passed() ? "resource_check_passed" : "resource_check_failed",
+        payload);
   }
 
   @EventListener
@@ -201,7 +216,8 @@ public class MemoryStreamMirror {
       return Optional.of("student_a");
     }
     return switch (eventType) {
-      case "resource_consumed", "media_consumed" -> Optional.of("librarian_doc");
+      case "resource_consumed", "media_consumed", "resource_check_passed", "resource_check_failed" ->
+          Optional.of("librarian_doc");
       case "debug_resolved" -> Optional.of("foreman_bug");
       case "profile_bootstrapped" -> Optional.of("mayor_py");
       default -> Optional.empty();
