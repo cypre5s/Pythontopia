@@ -64,7 +64,6 @@ The student submits code. The UI gives the same short nudge. After clicking cont
 1. 先看变量怎么跑偏
 2. 再补一下 range 边界
 3. 最后让你自己改一次并重新提交
-```
 Only the first step card is generated immediately. The student controls every continuation. Later submissions update the episode. If the student ACs, the guide can create a validated transfer practice. If repeated evidence shows this KC keeps blocking progress, the guide proposes a learning path draft and asks the student whether to accept it.
 
 ## Target Architecture

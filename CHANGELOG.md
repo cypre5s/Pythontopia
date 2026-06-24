@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-06-24 — Learning Evidence Graph 深化：SAG/GraphRAG 思路落到学习闭环评测
+
+> 在上一轮 KC 图谱补证据基础上，按 Route A/B/C 深化：不把 SAG 作为黑盒替换 RAG，而是把 SQL-native evidence graph、轨迹级评测、记忆感知个性化信号落到真实学习闭环，形成可审计、可量化、可继续演进的高级 AI 底座。
+
+- **正式设计与实施计划**：新增 `docs/plans/2026-06-24-learning-evidence-graph-design.md` 与 `docs/plans/2026-06-24-learning-evidence-graph-implementation.md`，把 SAG dynamic hyperedge、GraphRAG/DRIFT 局部子图、agentic RAG trajectory eval、MemGraphRAG/HippoRAG 记忆增强映射到 Pythontopia 的课程页码、KC、资源、微测、掌握度事件和学习事件。
+- **Route A · SQL-native Learning Evidence Graph**：新增后端 `learner/evidence` 服务与 `/api/learner/evidence-graph`，从 `learning_resource`、`resource_learning_check`、`kc_mastery_event`、`learning_event_log`、`resource_run`、`course_kc_edge` 动态投影 USER/RESOURCE/CHECK/KC/PAGE/MASTERY_EVENT/EVENT/AGENT_RUN 子图；输出 node/edge、coverage、grounding、connectivity、completeness、isolated evidence 等指标。
+- **Route B · TutorBench-lite 轨迹级评测**：`LearningEffectTraceService` 聚合 evidence graph metrics，`TutorBenchEvaluator` 新增 `evidence_graph_connectivity`、`grounded_personalization`、`trajectory_traceability` 用例，让评测从“是否有资源/事件”升级为“是否形成可解释学习闭环”。
+- **Route C · 记忆感知个性化信号**：新增 `EvidencePersonalizationSignalDto`，按 KC 聚合失败微测、练习失败、课件页 grounding、证据事件与检查证据，生成带优先级和证据 id 的个性化诊断输入，可供后续导学、工坊资源生成、教师热力图复用。
+- **量化对比测试**：新增 graph-backed vs naive resource-only 对比，要求 evidence graph completeness 至少高 0.4、connectivity 与 grounded pages 更高；TutorBench graph-backed summary pass rate 要显著高于 naive summary（至少 +0.5），避免只做概念包装。
+- **验证**：后端 `mvn -s ~/.m2/settings.xml -q test` 全量通过（Surefire 172 份报告、862 tests、0 failures/errors，空库 Testcontainers/Flyway 迁移到 v179）；前端 `npm run typecheck` 与 `npm run test -- --run` 全量通过（2218 tests）；`pythontopia-graph` 全量 `python3 -m pytest -q` 通过（1138 passed, 3 skipped）；`pythontopia-rag` 全量 `python3 -m pytest -q` 通过（128 passed）。未跑真实浏览器全栈点击 e2e，剩余风险是长期 A/B 学习效果仍需真实学生日志。
+
+## 2026-06-23 — SAG 启发的 KC 图谱补证据 + 学习效果闭环可量化
+
+> 调研 SAG/GraphRAG/LightRAG/HippoRAG2/KAG/Mem0/Ragas 后，选择先把「动态图谱补证据、可解释 trace、资源消费后校验、效果评估」落到现有 Pythontopia 链路；SAG 不整体替换 RAG，但其 event/entity/co-occurrence 思路进入 KC 图谱与后续三元组重构路线。
+
+- **技术取舍**：SAG 论文与仓库强调 SQL-RAG、query-time dynamic hyperedges、event/entity 双索引与 chunk-event-entity 图谱，对多跳召回有优势；Pythontopia 课程域目前数据规模小、强页码引用约束更高，所以不直接替换现有 RAG，而是把可控的 `prerequisite/co_occur` KC 边作为低风险增量。
+- **KC 三元组重构底座**：新增 `course_kc_edge` 迁移与 `data/course-pack-43/json/course_kc_edge.json` 种子，边关系从单一前置扩展到 `prerequisite` 与 `co_occur`，支持后续继续补 `example_of/common_error/assessment_of/analogy_to` 等教育关系。
+- **RAG 侧图谱补证据**：`pythontopia-rag` 的 query response 增加 `graph_trace`，记录 route、retrieval_mode、topK、直接命中、补充命中、前置补证据、共现补证据、relation_counts、expanded_kc_count 与 `supplemental_hit_limit` 噪声配额，避免图扩展把结果冲歪。
+- **Graph/后端/前端 trace 打通**：课件问答从 rag -> graph -> backend -> `LibraryPage` 全链路透传 route/retrieval/subgraph/graph_trace；图书馆页面展示「共现补证据」「前置补证据」「补充证据 x/y」「关系边」等可审计信息，便于演示和后续调参。
+- **不止 RAG 的增强**：资源学习不再等同于掌握度奖励，新增资源学习检查与效果 trace；TutorBench-lite/学习效果服务/协议网关定向测试覆盖「生成资源 -> 学生作答/检查 -> 事件入库 -> 效果评估」的闭环，避免只优化检索分数。
+- **验证**：`services/pythontopia-rag` 定向 pytest 12 passed；`services/pythontopia-graph` 定向 pytest 16 passed；backend 定向 Maven 测试通过并空库迁移到 v179；frontend `LibraryPage` 7 passed、`courseLibrary` 5 passed、`ResourceDetailPanel` 4 passed、`vue-tsc --noEmit` 0 错。
+- **未验证/风险**：当前没有启动完整 Vite + backend + graph + rag 栈，因此 `frontend/e2e/publicAcceptance.spec.ts` 的真实浏览器全栈点击未跑；长期 A/B 学习效果也需要真实学生日志。`co_occur` 权重、展示阈值和 SAG 式 event/entity 细粒度抽取仍需用后续 QA 日志校准。
+
 ## 2026-06-19 — guide 下载计数并发竞态修复（UI e2e 发现）+ ECS 重部复验
 
 > 对 ECS 公网做登录→guide 多端下载的真实浏览器 UI e2e，发现「初次加载只有一端显示下载次数」的竞态 bug 并修复、重部上线、复验。
