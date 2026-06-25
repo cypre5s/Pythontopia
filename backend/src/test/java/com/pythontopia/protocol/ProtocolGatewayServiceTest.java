@@ -17,8 +17,22 @@ class ProtocolGatewayServiceTest {
         .contains(
             "workshop.resource.consume",
             "workshop.resource.check.submit",
+            "learner.recommendations.read",
             "learner.effect.trace.summary",
             "tutorbench.run");
+    ProtocolToolDto checkSubmit =
+        descriptor.mcpTools().stream()
+            .filter(tool -> "workshop.resource.check.submit".equals(tool.name()))
+            .findFirst()
+            .orElseThrow();
+    assertThat(checkSubmit.evidenceFields()).contains("checkId", "resourceId", "masteryDelta");
+    ProtocolToolDto recommendations =
+        descriptor.mcpTools().stream()
+            .filter(tool -> "learner.recommendations.read".equals(tool.name()))
+            .findFirst()
+            .orElseThrow();
+    assertThat(recommendations.evidenceFields())
+        .contains("evidenceEventIds", "checkIds", "pageIds");
     assertThat(descriptor.a2aAgents()).extracting(ProtocolAgentCardDto::name)
         .contains("LearningEffectAgent", "TutorBenchAgent");
     assertThat(descriptor.aguiEvents())

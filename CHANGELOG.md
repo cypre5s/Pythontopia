@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-06-25 — 9 项 AI 深度融合 Batch 3：可追溯推荐 + MCP 证据字段声明
+
+> 继续把 Evidence Memory 2.0 从“后端内部排序信号”推进到可被前端、Eval 和外部 Apps/MCP 读取的证据合同：推荐理由不只说“为什么”，还返回支撑它的 event/check/page ids。
+
+- **推荐 DTO 证据扩展**：`RecommendationDto` 新增 `checkIds` 与 `pageIds`，并保留旧构造器兼容；洞察驱动推荐继续返回 `evidenceEventIds`，Evidence Memory 驱动推荐额外透传微测/操作检查 id 与课件页 id。
+- **推荐排序可审计**：`LearnerRecommendationService` 在 `evidenceMemoryGrounded` 分支把 `EvidenceMemorySignalDto.checkIds/pageIds` 写入推荐输出，前端和教师侧可从推荐卡片追到具体失败微测和 grounding 页码。
+- **协议网关证据字段声明**：`ProtocolToolDto` 新增 `evidenceFields`；`workshop.resource.check.submit` 声明 `checkId/resourceId/kcCode/status/masteryDelta`，新增 `learner.recommendations.read` MCP 工具声明并标出 `evidenceEventIds/checkIds/pageIds`。
+- **验证**：后端定向 `mvn --settings .mvn/settings.build.xml -q -Dtest=RecommendationServiceTest,ProtocolGatewayServiceTest test` 通过。
+
 ## 2026-06-25 — 9 项 AI 深度融合 Batch 1/2：证据因果脊柱 + GraphRAG 引用合同
 
 > 面向“9 个点全部深度实现”的第一批可提交改造：先把所有后续 Agent Runtime、Learner Twin、Eval、Realtime、MCP/Apps 和前端 ChatGPT/Claude 工作台都依赖的证据底座做实，避免资源生成、推荐和展示只靠软信号。

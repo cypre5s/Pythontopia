@@ -89,6 +89,8 @@ class RecommendationServiceTest {
     assertThat(baseline.get(0).kcCode()).isEqualTo(weakest);
     assertThat(baseline.get(0).reason()).doesNotContain("反复出错");
     assertThat(baseline.get(0).evidenceEventIds()).isEmpty();
+    assertThat(baseline.get(0).checkIds()).isEmpty();
+    assertThat(baseline.get(0).pageIds()).isEmpty();
 
     // 插入指向掌握度第三的 KC 的真实失败事件 + error_pattern 洞察（evidence 锚定该 event id）。
     Long eventId =
@@ -115,6 +117,8 @@ class RecommendationServiceTest {
     assertThat(top.kcCode()).isNotEqualTo(weakest); // 排序确实因洞察改变
     assertThat(top.reason()).contains("反复出错");
     assertThat(top.evidenceEventIds()).contains(eventId);
+    assertThat(top.checkIds()).isEmpty();
+    assertThat(top.pageIds()).isEmpty();
   }
 
   @Test
@@ -169,14 +173,16 @@ class RecommendationServiceTest {
             Long.class,
             userId,
             "{\"kcCode\":\"" + evidenceWeak + "\",\"problemId\":476}");
-    jdbcTemplate.update(
+    Long checkId =
+        jdbcTemplate.queryForObject(
         """
         INSERT INTO resource_learning_check (
           user_id, resource_id, kc_code, evidence_type, answer_text, operation_evidence,
           status, mastery_delta, remediation_type, reason
         ) VALUES (?, ?, ?, 'MICRO_QUIZ', '没答到关键点', '{}'::jsonb,
-          'FAILED', -0.040, 'PRACTICE', 'recommendation-evidence-memory')
+          'FAILED', -0.040, 'PRACTICE', 'recommendation-evidence-memory') RETURNING id
         """,
+            Long.class,
         userId,
         resourceId,
         evidenceWeak);
@@ -189,6 +195,8 @@ class RecommendationServiceTest {
     assertThat(top.kcCode()).isNotEqualTo(masteryWeakest);
     assertThat(top.reason()).contains("学习证据图", "微测失败");
     assertThat(top.evidenceEventIds()).contains(eventId);
+    assertThat(top.checkIds()).contains(checkId);
+    assertThat(top.pageIds()).contains(10707L);
     assertThat(baselineRank - rankOf(recommendations, evidenceWeak)).isGreaterThanOrEqualTo(2);
   }
 

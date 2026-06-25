@@ -21,7 +21,15 @@ public class ProtocolGatewayService {
                 "MCP",
                 "POST",
                 "/api/workshop/resources/{id}/checks",
-                "Submit micro-quiz or operation evidence before mastery can change."),
+                "Submit micro-quiz or operation evidence before mastery can change.",
+                List.of("checkId", "resourceId", "kcCode", "status", "masteryDelta")),
+            new ProtocolToolDto(
+                "learner.recommendations.read",
+                "MCP",
+                "GET",
+                "/api/learner/recommendations",
+                "Read traceable daily recommendations grounded in Learner Twin and evidence memory.",
+                List.of("evidenceEventIds", "checkIds", "pageIds")),
             new ProtocolToolDto(
                 "learner.effect.trace.summary",
                 "MCP",

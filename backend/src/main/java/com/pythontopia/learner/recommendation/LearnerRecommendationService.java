@@ -109,12 +109,16 @@ public class LearnerRecommendationService {
 
       String reason;
       List<Long> evidence;
+      List<Long> checkIds = List.of();
+      List<Long> pageIds = List.of();
       if (insightGrounded) {
         reason = "因近期在「" + kcName + "」反复出错" + insightSuffix(insight);
         evidence = insight.evidenceEventIds();
       } else if (evidenceMemoryGrounded) {
         reason = "学习证据图显示「" + kcName + "」仍需巩固：" + evidenceSignal.reason();
         evidence = evidenceSignal.evidenceEventIds();
+        checkIds = evidenceSignal.checkIds();
+        pageIds = evidenceSignal.pageIds();
       } else if (memoryGrounded) {
         reason = "近期在「" + kcName + "」的练习记忆中多次受挫，建议优先巩固";
         evidence = List.of();
@@ -126,7 +130,9 @@ public class LearnerRecommendationService {
         evidence = List.of();
       }
 
-      results.add(new RecommendationDto(resourceId, title, type, wk.kcCode(), kcName, reason, evidence));
+      results.add(
+          new RecommendationDto(
+              resourceId, title, type, wk.kcCode(), kcName, reason, evidence, checkIds, pageIds));
       if (results.size() >= MAX_RECOMMENDATIONS) {
         break;
       }
