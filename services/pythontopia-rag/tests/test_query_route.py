@@ -85,6 +85,11 @@ async def test_query_returns_input_evidence() -> None:
     top = body["hits"][0]
     assert top["page_id"] == 11
     assert top["kc_codes"] == ["PY43-KC-012"]
+    assert body["route_reason"]
+    assert body["citations"]
+    assert body["citations"][0]["page_id"] == 11
+    assert body["citations"][0]["source"] == "courseware"
+    assert body["citations"][0]["snippet"]
 
 
 @pytest.mark.asyncio
@@ -155,6 +160,8 @@ async def test_query_no_evidence_when_nothing_matches() -> None:
     body = response.json()
     assert body["no_evidence_found"] is True
     assert body["hits"] == []
+    assert body["citations"] == []
+    assert body["route_reason"]
 
 
 @pytest.mark.asyncio
@@ -164,6 +171,7 @@ async def test_query_no_evidence_when_forbidden_keyword() -> None:
     body = response.json()
     assert body["no_evidence_found"] is True
     assert body["hits"] == []
+    assert body["citations"] == []
 
 
 def test_status_returns_default_when_empty() -> None:
@@ -189,6 +197,7 @@ async def test_query_uses_hybrid_mode_when_bm25_built() -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["retrieval_mode"] == "hybrid"
+    assert "hybrid" in body["route_reason"]
     assert body["no_evidence_found"] is False
     assert body["hits"][0]["page_id"] == 11
     for hit in body["hits"]:
@@ -208,6 +217,7 @@ async def test_query_falls_back_to_vector_only_without_bm25_index() -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["retrieval_mode"] == "vector_only"
+    assert "vector_only" in body["route_reason"]
     assert body["no_evidence_found"] is False
     assert body["hits"][0]["page_id"] == 11
 

@@ -446,6 +446,12 @@ async def test_endpoint_multi_hop_graph_via_index_fallback(_client_with_graph: T
     ]
     by_page = {hit["page_id"]: hit for hit in body["hits"]}
     assert by_page[2]["via_prerequisite"] is True
+    assert "graph" in body["route_reason"]
+    citation_by_page = {citation["page_id"]: citation for citation in body["citations"]}
+    assert citation_by_page[1]["source"] == "courseware"
+    assert citation_by_page[2]["via_prerequisite"] is True
+    assert citation_by_page[2]["via_relation"] == "prerequisite"
+    assert citation_by_page[2]["snippet"]
 
 
 async def test_endpoint_simple_query_routes_vector(_client_with_graph: TestClient) -> None:
@@ -466,6 +472,8 @@ async def test_endpoint_simple_query_routes_vector(_client_with_graph: TestClien
     body = response.json()
     assert body["route"] == "vector"
     assert body["subgraph"] == []
+    assert "vector" in body["route_reason"]
+    assert body["citations"]
     assert all(not hit["via_prerequisite"] for hit in body["hits"])
 
 
@@ -505,6 +513,8 @@ async def test_endpoint_backward_compatible_without_new_fields(
     assert body["route"] != "graph"  # 旧调用不自动升级到图路由
     # 新字段作为可选追加存在（默认值）
     assert body["subgraph"] == []
+    assert body["citations"]
+    assert body["route_reason"]
 
 
 async def test_endpoint_off_mode_disables_expansion(_client_with_graph: TestClient) -> None:
@@ -523,6 +533,7 @@ async def test_endpoint_off_mode_disables_expansion(_client_with_graph: TestClie
 
     body = response.json()
     assert body["route"] == "vector"
+    assert "vector" in body["route_reason"]
     assert {hit["page_id"] for hit in body["hits"]} == {1}
 
 
@@ -546,6 +557,7 @@ async def test_endpoint_prereq_hops_above_bound_is_accepted_and_clamped(
     assert response.status_code == 200
     body = response.json()
     assert body["route"] == "graph"  # 裁剪后仍正常扩展
+    assert "graph" in body["route_reason"]
 
 
 async def test_endpoint_no_evidence_with_graph_mode(_client_with_graph: TestClient) -> None:
@@ -566,3 +578,5 @@ async def test_endpoint_no_evidence_with_graph_mode(_client_with_graph: TestClie
     assert body["no_evidence_found"] is True
     assert body["hits"] == []
     assert body["subgraph"] == []
+    assert body["citations"] == []
+    assert body["route_reason"]

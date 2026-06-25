@@ -264,6 +264,7 @@ class ResourceWorkshopServiceTest {
         ArgumentCaptor.forClass(LearningEvent.ResourceCheckCompleted.class);
     verify(eventPublisher).publishEvent(eventCaptor.capture());
     assertThat(eventCaptor.getValue().passed()).isTrue();
+    assertThat(eventCaptor.getValue().checkId()).isEqualTo(31L);
     assertThat(eventCaptor.getValue().resourceId()).isEqualTo(7L);
     assertThat(eventCaptor.getValue().delta()).isEqualByComparingTo("0.05");
   }
@@ -296,6 +297,8 @@ class ResourceWorkshopServiceTest {
         ArgumentCaptor.forClass(LearningEvent.ResourceCheckCompleted.class);
     verify(eventPublisher).publishEvent(eventCaptor.capture());
     assertThat(eventCaptor.getValue().passed()).isFalse();
+    assertThat(eventCaptor.getValue().checkId()).isEqualTo(32L);
+    assertThat(eventCaptor.getValue().resourceId()).isEqualTo(7L);
     assertThat(eventCaptor.getValue().delta()).isLessThan(BigDecimal.ZERO);
   }
 
@@ -365,6 +368,7 @@ class ResourceWorkshopServiceTest {
     ArgumentCaptor<LearningEvent.ResourceCheckCompleted> eventCaptor =
         ArgumentCaptor.forClass(LearningEvent.ResourceCheckCompleted.class);
     verify(eventPublisher).publishEvent(eventCaptor.capture());
+    assertThat(eventCaptor.getValue().checkId()).isEqualTo(34L);
     assertThat(eventCaptor.getValue().delta()).isEqualByComparingTo("0.01");
   }
 

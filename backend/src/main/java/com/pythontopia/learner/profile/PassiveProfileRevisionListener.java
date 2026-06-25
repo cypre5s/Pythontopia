@@ -6,6 +6,7 @@ import com.pythontopia.learner.profile.dto.DimensionDelta;
 import com.pythontopia.learner.profile.service.PassiveProfileService;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -81,12 +82,40 @@ public class PassiveProfileRevisionListener {
 
   @EventListener
   public void onResourceConsumed(LearningEvent.ResourceConsumed event) {
+    // 资源消费只说明学生看过材料；画像与掌握度必须等微测/操作/提交等可验证证据再变化。
+  }
+
+  @EventListener
+  public void onResourceCheckCompleted(LearningEvent.ResourceCheckCompleted event) {
     Map<String, Object> meta = new LinkedHashMap<>();
     meta.put("kcCode", event.kcCode());
-    meta.put("resourceKind", event.resourceKind());
-    DimensionDelta delta =
-        new DimensionDelta(0.005, 1, null, meta, "RESOURCE_FEEDBACK");
-    safeApply(event.userId(), "knowledge_base", delta);
+    meta.put("checkId", event.checkId());
+    meta.put("resourceId", event.resourceId());
+    meta.put("evidenceType", event.evidenceType());
+    meta.put("passed", event.passed());
+    if (event.delta() != null) {
+      meta.put("masteryDelta", event.delta());
+    }
+    if (event.remediationType() != null && !event.remediationType().isBlank()) {
+      meta.put("remediationType", event.remediationType());
+    }
+    if (event.passed()) {
+      String dimension =
+          "OPERATION".equalsIgnoreCase(event.evidenceType())
+              ? "practical_ability"
+              : "knowledge_base";
+      DimensionDelta delta = new DimensionDelta(0.015, 1, null, meta, "RESOURCE_FEEDBACK");
+      safeApply(event.userId(), dimension, delta);
+      return;
+    }
+    List<String> tags =
+        event.remediationType() == null || event.remediationType().isBlank()
+            ? List.of("resource_check_failed")
+            : List.of(
+                "resource_check_failed",
+                "remediation_" + event.remediationType().toLowerCase(Locale.ROOT));
+    DimensionDelta delta = new DimensionDelta(0.015, 1, tags, meta, "PRACTICE_FAIL");
+    safeApply(event.userId(), "error_pattern", delta);
   }
 
   /**

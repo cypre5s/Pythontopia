@@ -62,6 +62,7 @@ class MemoryStreamMirrorTest {
     mirror.onResourceCheckCompleted(
         new LearningEvent.ResourceCheckCompleted(
             7L,
+            13L,
             99L,
             "PY43-KC-001",
             "MICRO_QUIZ",
@@ -72,6 +73,7 @@ class MemoryStreamMirrorTest {
     ArgumentCaptor<Map<String, Object>> passPayload = ArgumentCaptor.forClass(Map.class);
     verify(repository)
         .insert(eq(7L), eq("resource_check_passed"), passPayload.capture(), eq("backend"), eq(3));
+    assertThat(passPayload.getValue()).containsEntry("checkId", 13L);
     assertThat(passPayload.getValue()).containsEntry("resourceId", 99L);
     assertThat(passPayload.getValue()).containsEntry("kcCode", "PY43-KC-001");
     assertThat(passPayload.getValue()).containsEntry("evidenceType", "MICRO_QUIZ");
@@ -79,6 +81,7 @@ class MemoryStreamMirrorTest {
     mirror.onResourceCheckCompleted(
         new LearningEvent.ResourceCheckCompleted(
             7L,
+            14L,
             99L,
             "PY43-KC-001",
             "MICRO_QUIZ",
@@ -89,6 +92,7 @@ class MemoryStreamMirrorTest {
     ArgumentCaptor<Map<String, Object>> failPayload = ArgumentCaptor.forClass(Map.class);
     verify(repository)
         .insert(eq(7L), eq("resource_check_failed"), failPayload.capture(), eq("backend"), eq(4));
+    assertThat(failPayload.getValue()).containsEntry("checkId", 14L);
     assertThat(failPayload.getValue()).containsEntry("remediationType", "PRACTICE");
   }
 

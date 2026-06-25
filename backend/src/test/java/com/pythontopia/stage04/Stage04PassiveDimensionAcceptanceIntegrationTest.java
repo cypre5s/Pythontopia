@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.PythontopiaApplication;
 import com.pythontopia.learner.event.LearningEvent;
+import java.math.BigDecimal;
 import org.assertj.core.data.Offset;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,7 +31,7 @@ import org.testcontainers.utility.DockerImageName;
  *       并写入 {@code profile_revision} 审计；
  *   <li>{@link LearningEvent.PracticeFailed} 事件最终落到 {@code error_pattern}，{@code tags} 数组追加 failureKind；
  *   <li>{@link LearningEvent.DebugResolved} 事件以负 delta 降低 {@code error_pattern.score}；
- *   <li>{@link LearningEvent.ResourceConsumed} 事件提升 {@code knowledge_base.score} 并记录 metadata。
+ *   <li>{@link LearningEvent.ResourceCheckCompleted} 事件提升 {@code knowledge_base.score} 并记录 metadata。
  * </ul>
  *
  * <p>注：测试绕过 INTERVIEW 流程，直接 INSERT 一行 {@code learner_profile}（pack_id=43，dimensions 取默认
@@ -183,19 +184,30 @@ class Stage04PassiveDimensionAcceptanceIntegrationTest {
   }
 
   @Test
-  void resourceConsumedIncreasesKnowledgeBaseAndCarriesMetadata() throws Exception {
+  void resourceCheckPassedIncreasesKnowledgeBaseAndCarriesMetadata() throws Exception {
     Long userId = insertUserWithProfile("dim-stu-04");
 
-    publisher.publishEvent(new LearningEvent.ResourceConsumed(userId, "PY43-KC-004", "VIDEO"));
+    publisher.publishEvent(
+        new LearningEvent.ResourceCheckCompleted(
+            userId,
+            401L,
+            801L,
+            "PY43-KC-004",
+            "MICRO_QUIZ",
+            true,
+            new BigDecimal("0.05"),
+            null));
 
     JsonNode dimensions = readDimensions(userId);
     JsonNode kb = dimensions.path("knowledge_base");
     assertThat(kb.path("score").asDouble())
-        .as("knowledge_base.score after +0.005")
-        .isEqualTo(0.505, Offset.offset(1e-9));
+        .as("knowledge_base.score after resource check evidence")
+        .isEqualTo(0.515, Offset.offset(1e-9));
     assertThat(kb.path("evidence_count").asInt()).isEqualTo(1);
     assertThat(kb.path("kcCode").asText()).isEqualTo("PY43-KC-004");
-    assertThat(kb.path("resourceKind").asText()).isEqualTo("VIDEO");
+    assertThat(kb.path("checkId").asLong()).isEqualTo(401L);
+    assertThat(kb.path("resourceId").asLong()).isEqualTo(801L);
+    assertThat(kb.path("evidenceType").asText()).isEqualTo("MICRO_QUIZ");
 
     Integer revCount =
         jdbc.queryForObject(

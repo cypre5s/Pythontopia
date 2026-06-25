@@ -37,6 +37,7 @@ class LearningEvidenceGraphServiceTest {
   private Long userId;
   private Long resourceRunId;
   private Long resourceId;
+  private Long checkId;
 
   @BeforeAll
   static void migrateAndWire() {
@@ -58,7 +59,8 @@ class LearningEvidenceGraphServiceTest {
   void seedClosedLearningLoop() {
     jdbc.update("DELETE FROM resource_learning_check");
     jdbc.update("DELETE FROM learning_event_log WHERE source = 'evidence-test'");
-    jdbc.update("DELETE FROM kc_mastery_event WHERE reason LIKE 'evidence-test:%'");
+    jdbc.update(
+        "DELETE FROM kc_mastery_event WHERE reason LIKE 'evidence-test:%' OR reason LIKE 'resource_check:%'");
     jdbc.update("DELETE FROM learning_resource WHERE title LIKE 'evidence-%'");
     jdbc.update("DELETE FROM resource_run WHERE scenario LIKE 'EVIDENCE_%'");
     jdbc.update("DELETE FROM users WHERE username LIKE 'evidence-user-%'");
@@ -105,23 +107,26 @@ class LearningEvidenceGraphServiceTest {
         "{\"resourceId\":" + resourceId + ",\"kcCode\":\"PY43-KC-001\"}",
         userId,
         "{\"problemId\":476,\"kcCode\":\"PY43-KC-001\",\"failureKind\":\"WA\"}");
-    jdbc.update(
+    checkId =
+        jdbc.queryForObject(
         """
         INSERT INTO resource_learning_check (
           user_id, resource_id, kc_code, evidence_type, answer_text, operation_evidence,
           status, mastery_delta, remediation_type, reason
         ) VALUES (?, ?, 'PY43-KC-001', 'MICRO_QUIZ', 'input print',
           '{"submissionId":476,"result":"checked"}'::jsonb, 'PASSED', 0.050, NULL,
-          'evidence-test:hit keyword')
+          'evidence-test:hit keyword') RETURNING id
         """,
+            Long.class,
         userId,
         resourceId);
     jdbc.update(
         """
         INSERT INTO kc_mastery_event (user_id, kc_code, source, delta, reason)
-        VALUES (?, 'PY43-KC-001', 'MICRO_CHECK_PASS', 0.050, 'evidence-test:resource-check')
+        VALUES (?, 'PY43-KC-001', 'MICRO_CHECK_PASS', 0.050, ?)
         """,
-        userId);
+        userId,
+        "resource_check:" + checkId);
   }
 
   @Test
@@ -136,11 +141,19 @@ class LearningEvidenceGraphServiceTest {
             "COVERS_KC",
             "CHECKS_RESOURCE",
             "CHECKS_KC",
+            "CAUSED_MASTERY_EVENT",
             "UPDATES_MASTERY",
             "GROUNDED_BY_PAGE",
             "GENERATED",
             "HAS_ERROR_KIND",
             "KC_RELATION");
+    assertThat(graph.edges())
+        .anySatisfy(
+            edge -> {
+              assertThat(edge.fromId()).isEqualTo("check:" + checkId);
+              assertThat(edge.relation()).isEqualTo("CAUSED_MASTERY_EVENT");
+              assertThat(edge.toId()).startsWith("mastery:");
+            });
 
     assertThat(graph.metrics().nodeCount()).isEqualTo(graph.nodes().size());
     assertThat(graph.metrics().edgeCount()).isEqualTo(graph.edges().size());

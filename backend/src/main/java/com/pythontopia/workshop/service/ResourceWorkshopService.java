@@ -374,6 +374,7 @@ public class ResourceWorkshopService {
     eventPublisher.publishEvent(
         new LearningEvent.ResourceCheckCompleted(
             userId,
+            checkId,
             resource.id(),
             kcCode,
             request.evidenceType().name(),

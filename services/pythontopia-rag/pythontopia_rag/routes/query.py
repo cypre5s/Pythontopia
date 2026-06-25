@@ -15,6 +15,7 @@ from pythontopia_rag.index.kc_graph import fetch_kc_graph
 from pythontopia_rag.data.page_source import InMemoryPageSource, page_records_to_indexable
 from pythontopia_rag.safety.forbidden import is_forbidden
 from pythontopia_rag.schemas.query import (
+    RagCitation,
     RagHit,
     RagIndexStatus,
     RagQueryRequest,
@@ -25,6 +26,8 @@ from pythontopia_rag.schemas.query import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+MAX_CITATION_SNIPPET_CHARS = 180
 
 
 def _state(request: Request) -> AppState:
@@ -51,6 +54,55 @@ def _runtime_neighbors_fn(state: AppState):
     return _neighbors
 
 
+def _citation_from_hit(hit: RagHit) -> RagCitation:
+    return RagCitation(
+        page_id=hit.page_id,
+        page_no=hit.page_no,
+        chunk_id=hit.chunk_id,
+        chapter_id=hit.chapter_id,
+        kc_codes=hit.kc_codes,
+        snippet=_snippet(hit.text),
+        score=hit.score,
+        via_prerequisite=hit.via_prerequisite,
+        via_relation=hit.via_relation,
+    )
+
+
+def _snippet(text: str) -> str:
+    normalized = " ".join((text or "").split())
+    if len(normalized) <= MAX_CITATION_SNIPPET_CHARS:
+        return normalized
+    return normalized[: MAX_CITATION_SNIPPET_CHARS - 3].rstrip() + "..."
+
+
+def _route_reason(
+    *,
+    route: str | None,
+    retrieval_mode: str | None,
+    hit_count: int,
+    subgraph_count: int,
+    no_evidence: bool,
+) -> str:
+    safe_route = route or "hybrid"
+    safe_mode = retrieval_mode or "unknown"
+    if no_evidence:
+        return (
+            f"no_evidence: route={safe_route}; retrieval_mode={safe_mode}; "
+            "all candidate chunks were filtered or missing"
+        )
+    if safe_route == "graph":
+        return (
+            f"graph: multi-hop KC route used; retrieval_mode={safe_mode}; "
+            f"hits={hit_count}; subgraph_edges={subgraph_count}"
+        )
+    if safe_route == "vector":
+        return (
+            f"vector: direct evidence route used; retrieval_mode={safe_mode}; "
+            f"hits={hit_count}"
+        )
+    return f"hybrid: legacy hybrid retrieval used; retrieval_mode={safe_mode}; hits={hit_count}"
+
+
 @router.post("/rag/query", response_model=RagQueryResponse)
 async def rag_query(
     body: RagQueryRequest,
@@ -64,7 +116,12 @@ async def rag_query(
     hit.text 始终是课件原文片段（不含上下文前缀）；no_evidence 时下游不得伪造页码引用。
     """
     if is_forbidden(body.query):
-        return RagQueryResponse(hits=[], no_evidence_found=True)
+        return RagQueryResponse(
+            hits=[],
+            citations=[],
+            no_evidence_found=True,
+            route_reason="no_evidence: forbidden query blocked by safety filter",
+        )
     result = await route_and_retrieve(
         query=body.query,
         embedder=state.embedder,
@@ -83,11 +140,19 @@ async def rag_query(
     if not result.hits:
         return RagQueryResponse(
             hits=[],
+            citations=[],
             no_evidence_found=True,
             retrieval_mode=result.retrieval_mode,
             route=result.route,
             subgraph=result.subgraph,
             graph_trace=result.graph_trace,
+            route_reason=_route_reason(
+                route=result.route,
+                retrieval_mode=result.retrieval_mode,
+                hit_count=0,
+                subgraph_count=len(result.subgraph),
+                no_evidence=True,
+            ),
         )
     response_hits = [
         RagHit(
@@ -105,11 +170,19 @@ async def rag_query(
     ]
     return RagQueryResponse(
         hits=response_hits,
+        citations=[_citation_from_hit(hit) for hit in response_hits],
         no_evidence_found=False,
         retrieval_mode=result.retrieval_mode,
         route=result.route,
         subgraph=result.subgraph,
         graph_trace=result.graph_trace,
+        route_reason=_route_reason(
+            route=result.route,
+            retrieval_mode=result.retrieval_mode,
+            hit_count=len(response_hits),
+            subgraph_count=len(result.subgraph),
+            no_evidence=False,
+        ),
     )
 
 

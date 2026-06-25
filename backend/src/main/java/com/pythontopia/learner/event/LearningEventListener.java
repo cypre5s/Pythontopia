@@ -37,7 +37,7 @@ public class LearningEventListener {
         event.kcCode(),
         event.passed() ? MasterySource.MICRO_CHECK_PASS : MasterySource.MICRO_CHECK_FAIL,
         delta,
-        "resource_check:" + event.resourceId());
+        resourceCheckReason(event));
   }
 
   @EventListener
@@ -78,5 +78,11 @@ public class LearningEventListener {
       log.debug("difficulty lookup failed for problem {}: {}", problemId, e.getMessage());
       return null;
     }
+  }
+
+  private static String resourceCheckReason(LearningEvent.ResourceCheckCompleted event) {
+    String primary =
+        event.checkId() == null ? "resource:" + event.resourceId() : "resource_check:" + event.checkId();
+    return event.resourceId() == null ? primary : primary + ";resource:" + event.resourceId();
   }
 }

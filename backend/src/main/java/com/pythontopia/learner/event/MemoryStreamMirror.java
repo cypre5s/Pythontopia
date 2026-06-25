@@ -63,6 +63,7 @@ public class MemoryStreamMirror {
   @EventListener
   public void onResourceCheckCompleted(LearningEvent.ResourceCheckCompleted event) {
     Map<String, Object> payload = new LinkedHashMap<>();
+    put(payload, "checkId", event.checkId());
     put(payload, "resourceId", event.resourceId());
     put(payload, "kcCode", event.kcCode());
     put(payload, "evidenceType", event.evidenceType());

@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-06-25 — 9 项 AI 深度融合 Batch 1/2：证据因果脊柱 + GraphRAG 引用合同
+
+> 面向“9 个点全部深度实现”的第一批可提交改造：先把所有后续 Agent Runtime、Learner Twin、Eval、Realtime、MCP/Apps 和前端 ChatGPT/Claude 工作台都依赖的证据底座做实，避免资源生成、推荐和展示只靠软信号。
+
+- **实施计划落盘**：新增 `docs/plans/2026-06-25-nine-ai-deep-implementation.md`，把 9 项 AI 升级拆成 Evidence Spine、GraphRAG Citation、Runtime/Skills/Tools、Eval/Observability、Learner Twin、Realtime、Web Research、Frontend Workbench、Changelog/Commits 9 个批次。
+- **资源检测因果追踪**：`LearningEvent.ResourceCheckCompleted` 新增 `checkId`，`ResourceWorkshopService` 发布事件时使用 `resource_learning_check.id`，`LearningEventListener` 将 mastery reason 写成 `resource_check:{checkId};resource:{resourceId}`，让 mastery event 可回连到具体检查证据。
+- **画像更新语义收紧**：`ResourceConsumed` 只记录“看过资源”，不再增加 `knowledge_base`；资源微测通过更新 `knowledge_base`，操作证据通过更新 `practical_ability`，检测失败写入 `error_pattern` 和 remediation tag。
+- **Learning Evidence Graph 补因果边**：后端证据图解析 `kc_mastery_event.reason` 中的 `resource_check:{id}`，新增 `CHECK -> MASTERY_EVENT` 的 `CAUSED_MASTERY_EVENT` 边，形成 `resource -> check -> mastery -> KC` 的可审计闭环。
+- **记忆流镜像增强**：`MemoryStreamMirror` 将 `checkId` 写入 `resource_check_passed/failed` payload，供 Learner Twin、NPC memory、前端 trace 与后续 eval 复用。
+- **GraphRAG 引用合同**：`/rag/query` response 新增 `citations` 与 `route_reason`；命中时 citation 含 `page_id/page_no/chunk_id/kc_codes/snippet/score/source/via_prerequisite/via_relation`，无证据与安全拦截时强制 `citations=[]`，下游不得伪造页码。
+- **验证**：后端定向 `mvn --settings .mvn/settings.build.xml -q -Dtest=ResourceWorkshopServiceTest,PassiveProfileRevisionListenerTest,MemoryStreamMirrorTest,LearningEvidenceGraphServiceTest test` 通过；Stage04 画像端到端 `mvn --settings .mvn/settings.build.xml -q -Dtest=Stage04PassiveDimensionAcceptanceIntegrationTest test` 通过；后端 `test-compile` 通过；RAG `python3 -m pytest -q tests/test_query_route.py tests/test_query_graph_mode.py` 34 passed；RAG 全量 `python3 -m pytest -q` 129 passed。
+- **未完成/下一批**：尚未改前端 ChatGPT/Claude 类工作台，也尚未把协议网关/推荐 DTO、Eval cockpit、Learner Twin、Realtime、Web Research 和 MCP/Apps 外部入口全部串完；这些进入后续 batch commit。
+
 ## 2026-06-25 — AI 技术有机重构收口：AG-UI/MCP Runtime + Evidence Memory + Eval 闸门全链路验收
 
 > 基于 OpenAI Agents/Apps SDK、Claude Code、AG-UI、DSPy 等近期 agent/runtime/eval 思路做取舍后，选择不引入游离 demo，而是把能力收进 Pythontopia 已有导学、工坊、RAG、画像、推荐、班级 evidence 链路：前端可观测流式事件、后端可持久学习记忆、graph/rag 可量化优化闸门形成闭环。

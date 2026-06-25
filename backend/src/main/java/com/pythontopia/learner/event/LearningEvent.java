@@ -42,13 +42,25 @@ public sealed interface LearningEvent
 
   record ResourceCheckCompleted(
       Long userId,
+      Long checkId,
       Long resourceId,
       String kcCode,
       String evidenceType,
       boolean passed,
       java.math.BigDecimal delta,
       String remediationType)
-      implements LearningEvent {}
+      implements LearningEvent {
+    public ResourceCheckCompleted(
+        Long userId,
+        Long resourceId,
+        String kcCode,
+        String evidenceType,
+        boolean passed,
+        java.math.BigDecimal delta,
+        String remediationType) {
+      this(userId, null, resourceId, kcCode, evidenceType, passed, delta, remediationType);
+    }
+  }
 
   record PracticeSucceeded(Long userId, String kcCode, Long problemId, String difficulty)
       implements LearningEvent {}

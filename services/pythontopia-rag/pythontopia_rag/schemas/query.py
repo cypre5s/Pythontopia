@@ -50,6 +50,21 @@ class RagHit(BaseModel):
     via_relation: str | None = None
 
 
+class RagCitation(BaseModel):
+    """可直接展示给前端/评测的课件引用，和 hits 解耦以避免下游拼装伪页码。"""
+
+    page_id: int
+    page_no: int
+    chunk_id: str
+    chapter_id: int | None = None
+    kc_codes: list[str] = Field(default_factory=list)
+    snippet: str
+    score: float
+    source: Literal["courseware"] = "courseware"
+    via_prerequisite: bool = False
+    via_relation: str | None = None
+
+
 class RagQueryRequest(BaseModel):
     query: str = Field(min_length=1, max_length=512)
     top_k: int = Field(default=8, ge=1, le=20)
@@ -71,9 +86,11 @@ class RagQueryRequest(BaseModel):
 
 class RagQueryResponse(BaseModel):
     hits: list[RagHit] = Field(default_factory=list)
+    citations: list[RagCitation] = Field(default_factory=list)
     # 无有效证据时为 True，下游不得伪造 page_id/页码引用
     no_evidence_found: bool = False
     rewritten_query: str | None = None
+    route_reason: str | None = None
     # 检索引擎模式：hybrid（BM25+向量 RRF 融合）/ vector_only（BM25 缺失回退）/ graph（图扩展路）。
     retrieval_mode: Literal["hybrid", "vector_only", "graph"] | None = None
     # 自适应路由决策（可审计，向后兼容追加）：vector / graph / hybrid（旧 hybrid 管线）。

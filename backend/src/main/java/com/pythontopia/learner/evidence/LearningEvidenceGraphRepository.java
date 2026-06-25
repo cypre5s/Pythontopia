@@ -130,15 +130,32 @@ public class LearningEvidenceGraphRepository {
         rs -> {
           long id = rs.getLong("id");
           String kcCode = rs.getString("kc_code");
+          String reason = rs.getString("reason");
           Map<String, Object> attrs = new LinkedHashMap<>();
           attrs.put("source", rs.getString("source"));
           attrs.put("delta", rs.getBigDecimal("delta"));
-          attrs.put("reason", rs.getString("reason"));
+          attrs.put("reason", reason);
           attrs.put("createdAt", ts(rs.getTimestamp("created_at")));
           builder.node(masteryId(id), "MASTERY_EVENT", rs.getString("source") + " " + kcCode, "kc_mastery_event", String.valueOf(id), attrs);
           builder.edge(userId(builder.userId()), masteryId(id), "ACTED", 0.7, Map.of("source", "kc_mastery_event"));
           builder.kc(kcCode);
           builder.edge(masteryId(id), kcId(kcCode), "UPDATES_MASTERY", 1.0, attrs);
+          Long checkRef = extractResourceCheckId(reason);
+          if (checkRef != null) {
+            builder.node(
+                checkId(checkRef),
+                "CHECK",
+                "check " + checkRef,
+                "resource_learning_check",
+                String.valueOf(checkRef),
+                Map.of());
+            builder.edge(
+                checkId(checkRef),
+                masteryId(id),
+                "CAUSED_MASTERY_EVENT",
+                1.0,
+                Map.of("source", "kc_mastery_event", "reason", reason));
+          }
         },
         userId,
         blankToNull(focusKc),
@@ -316,6 +333,30 @@ public class LearningEvidenceGraphRepository {
       return number.longValue();
     }
     return null;
+  }
+
+  private static Long extractResourceCheckId(String reason) {
+    if (reason == null || reason.isBlank()) {
+      return null;
+    }
+    String marker = "resource_check:";
+    int markerStart = reason.indexOf(marker);
+    if (markerStart < 0) {
+      return null;
+    }
+    int start = markerStart + marker.length();
+    int end = start;
+    while (end < reason.length() && Character.isDigit(reason.charAt(end))) {
+      end++;
+    }
+    if (end == start) {
+      return null;
+    }
+    try {
+      return Long.parseLong(reason.substring(start, end));
+    } catch (NumberFormatException ignored) {
+      return null;
+    }
   }
 
   private static String blankToNull(String value) {
