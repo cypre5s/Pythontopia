@@ -2553,8 +2553,15 @@ onMounted(async () => {
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  font-family: var(--pyt-font-pixel);
-  color: #3a2a14;
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'PingFang SC',
+    'Microsoft YaHei',
+    sans-serif;
+  color: #252a2e;
 }
 .chat__topbar {
   flex: 0 0 auto;
@@ -2566,38 +2573,34 @@ onMounted(async () => {
      使各面板顶部的虚线分隔线落在同一水平线上对齐（WorkshopPage 同步）。 */
   min-height: 44px;
   box-sizing: border-box;
-  padding: 6px 12px;
-  border-bottom: 2px dashed rgba(110, 79, 29, 0.4);
-  background: rgba(255, 247, 230, 0.55);
+  padding: 8px 14px;
+  border-bottom: 1px solid #dfe4dd;
+  background: #fbfbf8;
 }
 .chat__topbar-title {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--pyt-color-text-hint);
-  letter-spacing: 0.5px;
+  font-size: 13px;
+  font-weight: 650;
+  color: #2f3732;
+  letter-spacing: 0;
 }
 .chat__newchat {
-  font-family: inherit;
+  font: inherit;
   font-size: 12px;
-  padding: 3px 12px;
-  background: #fff8df;
-  border: 2px solid #8c6a23;
-  border-radius: 999px;
-  color: #2a1a08;
+  padding: 5px 10px;
+  background: #ffffff;
+  border: 1px solid #cbd3ca;
+  border-radius: 8px;
+  color: #46514c;
   cursor: pointer;
-  box-shadow: 2px 2px 0 rgba(140, 106, 35, 0.5);
 }
 .chat__newchat:hover {
-  background: #ffe098;
+  background: #eef5ef;
+  border-color: #9db4a2;
 }
 .chat__newchat:disabled {
   opacity: 0.55;
   cursor: wait;
   transform: none;
-}
-.chat__newchat:active {
-  transform: translate(2px, 2px);
-  box-shadow: none;
 }
 .chat__quizbar {
   flex: 0 0 auto;
@@ -2608,15 +2611,16 @@ onMounted(async () => {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px 16px;
+  gap: 12px;
+  padding: 18px 22px;
+  background: #ffffff;
   scrollbar-width: thin;
 }
 .chat__composer {
   flex: 0 0 auto;
-  padding: 10px 14px 12px;
-  border-top: 2px dashed rgba(110, 79, 29, 0.4);
-  background: rgba(255, 247, 230, 0.55);
+  padding: 12px 18px 14px;
+  border-top: 1px solid #dfe4dd;
+  background: #fbfbf8;
 }
 
 /* 续聊提示条 */
@@ -2626,12 +2630,12 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 10px;
-  font-size: 11px;
-  color: #1b4a6b;
-  background: var(--pyt-color-info-bg);
-  border: 1px dashed var(--pyt-color-info);
-  border-radius: var(--pyt-radius-md);
+  padding: 8px 10px;
+  font-size: 12px;
+  color: #24485e;
+  background: #eef4fb;
+  border: 1px solid #c9d9e6;
+  border-radius: 8px;
 }
 .chat__continue-icon {
   font-weight: 700;
@@ -2642,13 +2646,13 @@ onMounted(async () => {
 }
 .chat__continue-new {
   flex: 0 0 auto;
-  font-family: inherit;
-  font-size: 11px;
-  padding: 2px 8px;
-  background: var(--pyt-color-bg-elevated);
-  border: 1px solid var(--pyt-color-info);
-  border-radius: 999px;
-  color: #1b4a6b;
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 8px;
+  background: #ffffff;
+  border: 1px solid #9cb9d2;
+  border-radius: 8px;
+  color: #24485e;
   cursor: pointer;
 }
 .chat__continue-new:hover {
@@ -2681,20 +2685,23 @@ onMounted(async () => {
 
 /* 消息气泡 */
 .msg {
-  padding: 8px 12px;
-  border-radius: var(--pyt-radius-lg);
-  border: 2px solid var(--pyt-color-border);
+  padding: 10px 13px;
+  border-radius: 8px;
+  border: 1px solid #e0e5df;
   max-width: 90%;
+  box-shadow: none;
 }
 .msg--user {
-  background: var(--pyt-color-bg-elevated);
+  background: #e8f3e8;
+  border-color: #c1d8c2;
+  color: #21352a;
   align-self: flex-end;
-  max-width: 80%;
+  max-width: 76%;
 }
 /* 用户气泡上方的附件 pill 行（右对齐贴合气泡）。 */
 .user-attachments {
   align-self: flex-end;
-  max-width: 80%;
+  max-width: 76%;
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
@@ -2705,12 +2712,12 @@ onMounted(async () => {
   align-items: center;
   gap: 4px;
   max-width: 100%;
-  padding: 2px 8px;
-  font-size: 10px;
-  border-radius: 999px;
-  background: #fff8df;
-  border: 1px solid #8c6a23;
-  color: #2a1a08;
+  padding: 3px 8px;
+  font-size: 11px;
+  border-radius: 8px;
+  background: #f7faf7;
+  border: 1px solid #cbd8ca;
+  color: #33423a;
 }
 .user-attach__name {
   max-width: 140px;
@@ -2720,43 +2727,44 @@ onMounted(async () => {
   font-weight: 700;
 }
 .user-attach__meta {
-  color: var(--pyt-color-text-muted);
+  color: #6c7771;
 }
 .msg--assistant {
-  background: #f5ecd4;
+  background: #ffffff;
+  color: #252a2e;
   align-self: flex-start;
 }
 .msg--error {
-  background: #f8d7d0;
-  border-color: var(--pyt-color-danger);
-  color: #b3402a;
+  background: #fff1ef;
+  border-color: #e2ada5;
+  color: #9e3528;
 }
 /* 视频卡片气泡与答疑气泡同宽（同为撑满行 + 左对齐），避免比上方回答更宽显得突兀。 */
 .msg--video {
   align-self: flex-start;
   width: 100%;
-  background: #f5ecd4;
+  background: #ffffff;
 }
 /* 计划 / 学情 / 书房检索卡：撑满行，像素卡片底色。 */
 .msg--plan,
 .msg--progress,
 .msg--mystudy {
   width: 100%;
-  background: #fff8df;
+  background: #fbfbf8;
 }
 .msg--navigate {
-  background: #f5ecd4;
+  background: #ffffff;
 }
 .msg--clarify {
-  background: #fff8df;
-  border-style: dashed;
+  background: #fbfbf8;
+  border-style: solid;
 }
 /* 「接着：xx →」chip：无气泡边框，仅一枚胶囊按钮。 */
 .msg--secondary {
   align-self: flex-start;
 }
 .msg__text--dim {
-  color: var(--pyt-color-text-muted);
+  color: #6a736e;
   font-size: 12px;
 }
 /* 答案内嵌的工具入口 + 相关 B站讲解。 */
@@ -2765,7 +2773,7 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  border-top: 1px dashed rgba(110, 79, 29, 0.35);
+  border-top: 1px solid #e1e6df;
   padding-top: 8px;
 }
 .msg__tool-actions {
@@ -2777,7 +2785,7 @@ onMounted(async () => {
 .msg__tool-hint {
   font-size: 11px;
   font-weight: 700;
-  color: var(--pyt-color-text-muted);
+  color: #68736e;
   margin-right: 2px;
 }
 .msg__tool-videos {
@@ -2790,7 +2798,7 @@ onMounted(async () => {
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  border-top: 1px dashed rgba(110, 79, 29, 0.35);
+  border-top: 1px solid #e1e6df;
   padding-top: 8px;
 }
 /* 纠错 chips：贴在气泡正下方的无框小行。 */
@@ -2802,17 +2810,18 @@ onMounted(async () => {
   padding-left: 4px;
 }
 .tool-chip {
-  font-family: inherit;
-  font-size: 11px;
-  padding: 3px 10px;
-  background: #fff8df;
-  border: 1px solid #8c6a23;
-  border-radius: 999px;
-  color: #2a1a08;
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 10px;
+  background: #ffffff;
+  border: 1px solid #cbd3ca;
+  border-radius: 8px;
+  color: #33423a;
   cursor: pointer;
 }
 .tool-chip:hover {
-  background: #ffe098;
+  background: #f2f6f3;
+  border-color: #a7b9aa;
 }
 .tool-chip:disabled {
   opacity: 0.5;
@@ -2820,14 +2829,9 @@ onMounted(async () => {
 }
 .tool-chip--secondary {
   font-size: 12px;
-  padding: 5px 14px;
-  background: #fff3c4;
-  border: 2px solid #8c6a23;
-  box-shadow: 2px 2px 0 rgba(140, 106, 35, 0.45);
-}
-.tool-chip--secondary:active {
-  transform: translate(2px, 2px);
-  box-shadow: none;
+  padding: 6px 12px;
+  background: #eef5ef;
+  border-color: #a7b9aa;
 }
 .tool-chip--go {
   margin-top: 6px;
@@ -2835,26 +2839,26 @@ onMounted(async () => {
 }
 .tool-chip--retry {
   margin-top: 6px;
-  border-color: var(--pyt-color-danger);
-  color: #b3402a;
-  background: #fff;
+  border-color: #e2ada5;
+  color: #9e3528;
+  background: #fff7f6;
 }
 /* 「⏹ 停止」：流式中可中断。 */
 .msg__stoprow {
   margin-top: 6px;
 }
 .stop-chip {
-  font-family: inherit;
-  font-size: 11px;
-  padding: 3px 10px;
-  background: #fff;
-  border: 1px solid var(--pyt-color-danger);
-  border-radius: 999px;
-  color: #b3402a;
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 10px;
+  background: #ffffff;
+  border: 1px solid #e2ada5;
+  border-radius: 8px;
+  color: #9e3528;
   cursor: pointer;
 }
 .stop-chip:hover {
-  background: #f8d7d0;
+  background: #fff1ef;
 }
 /* 「✨ 为你定制」画像个性化小标签。 */
 .msg__pnote {
@@ -2863,10 +2867,10 @@ onMounted(async () => {
   padding: 1px 8px;
   font-size: 10px;
   font-weight: 700;
-  color: #7a5b12;
-  background: #fff3c4;
-  border: 1px solid #d4af37;
-  border-radius: 999px;
+  color: #36513f;
+  background: #edf5ef;
+  border: 1px solid #b7c9bb;
+  border-radius: 8px;
   cursor: help;
 }
 .msg__tags {
@@ -2877,19 +2881,19 @@ onMounted(async () => {
 .msg__tool {
   font-size: 10px;
   font-weight: 700;
-  color: #2a1a08;
-  background: #f7d774;
-  border: 1px solid #8c6a23;
-  border-radius: 999px;
+  color: #24485e;
+  background: #eef4fb;
+  border: 1px solid #bfd3e3;
+  border-radius: 8px;
   padding: 1px 8px;
 }
 .msg__kc {
   font-size: 10px;
   font-weight: 700;
-  color: #2d5b1b;
-  background: #d6ead1;
-  border: 1px solid #4d6e1d;
-  border-radius: 999px;
+  color: #36513f;
+  background: #edf5ef;
+  border: 1px solid #b7c9bb;
+  border-radius: 8px;
   padding: 1px 8px;
 }
 .msg__text {
@@ -2914,58 +2918,58 @@ onMounted(async () => {
 }
 .g-chip {
   display: inline-block;
-  padding: 2px 8px;
-  border-radius: 4px;
+  padding: 3px 8px;
+  border-radius: 8px;
   font-size: 11px;
   font-weight: 700;
 }
 .g--passed {
-  background: #d6ead1;
-  color: #2d5b1b;
-  border: 1px solid #4d6e1d;
+  background: #edf5ef;
+  color: #36513f;
+  border: 1px solid #b7c9bb;
 }
 .g--general {
-  background: #fff3cd;
-  color: var(--pyt-color-text-muted);
-  border: 1px solid #d4af37;
+  background: #fff7ea;
+  color: #6a4b22;
+  border: 1px solid #e0c48f;
 }
 .g--failed {
-  background: #f8d7d0;
-  color: #b3402a;
-  border: 1px solid var(--pyt-color-danger);
+  background: #fff1ef;
+  color: #9e3528;
+  border: 1px solid #e2ada5;
 }
 /* 三审徽章：审查官 / 校对官 / 安全员，hover(title) 看具体理由。 */
 .r-badge {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  padding: 2px 7px;
-  border-radius: 999px;
+  padding: 3px 7px;
+  border-radius: 8px;
   font-size: 10px;
   font-weight: 700;
-  border: 1px solid var(--pyt-color-border);
+  border: 1px solid #d0d8cf;
   white-space: nowrap;
   cursor: help;
 }
 .r-badge--ok {
-  background: #d6ead1;
-  color: #2d5b1b;
-  border-color: #4d6e1d;
+  background: #edf5ef;
+  color: #36513f;
+  border-color: #b7c9bb;
 }
 .r-badge--no {
-  background: #f8d7d0;
-  color: #b3402a;
-  border-color: var(--pyt-color-danger);
+  background: #fff1ef;
+  color: #9e3528;
+  border-color: #e2ada5;
 }
 /* 考考我·填空作答 */
 .quiz-fill {
   display: grid;
   gap: 6px;
   margin-top: 8px;
-  padding: 8px 10px;
-  background: rgba(255, 247, 230, 0.7);
-  border: 1px dashed var(--pyt-color-info, #2a6f97);
-  border-radius: var(--pyt-radius-md, 6px);
+  padding: 10px;
+  background: #f7fafc;
+  border: 1px solid #c9d9e6;
+  border-radius: 8px;
 }
 .quiz-fill__row {
   display: flex;
@@ -2975,7 +2979,7 @@ onMounted(async () => {
 .quiz-fill__label {
   flex: 0 0 auto;
   font-weight: 700;
-  color: var(--pyt-color-info, #1b4a6b);
+  color: #24485e;
   font-size: 13px;
 }
 .quiz-fill__input {
@@ -2984,27 +2988,27 @@ onMounted(async () => {
   padding: 5px 8px;
   font: inherit;
   font-size: 13px;
-  border: 2px solid var(--pyt-color-border, #c9a86b);
-  border-radius: 4px;
-  background: var(--pyt-color-bg-primary, #fffdf6);
-  color: var(--pyt-color-text-primary, #3a2a14);
+  border: 1px solid #c9d4ce;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #252a2e;
 }
 .quiz-fill__input:focus {
   outline: none;
-  border-color: var(--pyt-color-info, #2a6f97);
+  border-color: #789d84;
+  box-shadow: 0 0 0 2px rgba(120, 157, 132, 0.16);
 }
 .quiz-fill__submit {
   justify-self: start;
   margin-top: 2px;
-  padding: 5px 14px;
-  font-family: var(--pyt-font-pixel);
+  padding: 6px 12px;
+  font: inherit;
   font-size: 13px;
   cursor: pointer;
-  background: var(--pyt-color-info, #2a6f97);
+  background: #2f6f4f;
   color: #fff;
-  border: 2px solid var(--pyt-color-border-strong, #2a1a05);
-  border-radius: 4px;
-  box-shadow: 2px 2px 0 var(--pyt-color-border-strong, #2a1a05);
+  border: 1px solid #285d43;
+  border-radius: 8px;
 }
 .quiz-fill__submit:disabled {
   opacity: 0.5;
@@ -3012,7 +3016,7 @@ onMounted(async () => {
 }
 .cursor {
   animation: blink 0.8s steps(2) infinite;
-  color: #d4af37;
+  color: #2f6f4f;
   font-weight: 700;
 }
 @keyframes blink {
@@ -3024,7 +3028,7 @@ onMounted(async () => {
 .msg--resource {
   align-self: flex-start;
   width: 100%;
-  background: #fff8df;
+  background: #fbfbf8;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -3038,7 +3042,7 @@ onMounted(async () => {
 .resource-head__icon {
   font-size: 20px;
   text-align: center;
-  color: #8c6a23;
+  color: #2f6f4f;
 }
 .resource-head__body {
   display: flex;
@@ -3062,7 +3066,7 @@ onMounted(async () => {
 }
 .resource-head__meta {
   font-size: 11px;
-  color: var(--pyt-color-text-muted);
+  color: #6a736e;
 }
 .resource-head__actions {
   display: flex;
@@ -3072,48 +3076,48 @@ onMounted(async () => {
 }
 .resource-head__toggle,
 .resource-head__open {
-  font-family: inherit;
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 999px;
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 8px;
+  border-radius: 8px;
   cursor: pointer;
 }
 .resource-head__toggle {
-  background: #fff8df;
-  border: 1px solid #8c6a23;
-  color: #2a1a08;
+  background: #ffffff;
+  border: 1px solid #cbd3ca;
+  color: #33423a;
 }
 .resource-head__toggle:hover {
-  background: #ffe098;
+  background: #f2f6f3;
 }
 .resource-head__open {
-  background: var(--pyt-color-info-bg);
-  border: 1px solid var(--pyt-color-info);
-  color: #1b4a6b;
+  background: #eef4fb;
+  border: 1px solid #9cb9d2;
+  color: #24485e;
   font-weight: 700;
 }
 .resource-head__open:hover {
   background: #fff;
 }
 .resource-body {
-  border-top: 1px dashed rgba(110, 79, 29, 0.35);
+  border-top: 1px solid #e1e6df;
   padding-top: 8px;
 }
 .resource-body__summary {
   margin: 0 0 8px;
   font-size: 13px;
   line-height: 1.55;
-  color: #2b1c0b;
+  color: #33423a;
 }
 .resource-body__loading,
 .resource-body__empty {
   margin: 0;
   font-size: 12px;
-  color: var(--pyt-color-text-muted);
+  color: #6a736e;
 }
 /* MY_STUDY 命中资源行（复用资源卡头样式）。 */
 .mystudy-item {
-  border-top: 1px dashed rgba(110, 79, 29, 0.25);
+  border-top: 1px solid #e1e6df;
   padding-top: 6px;
   margin-top: 6px;
 }
@@ -3122,10 +3126,10 @@ onMounted(async () => {
 .routing {
   align-self: flex-start;
   font-size: 12px;
-  color: var(--pyt-color-text-muted);
+  color: #6a736e;
   padding: 6px 12px;
-  background: rgba(255, 247, 230, 0.7);
-  border: 2px dashed rgba(110, 79, 29, 0.35);
-  border-radius: var(--pyt-radius-lg);
+  background: #fbfbf8;
+  border: 1px solid #dfe4dd;
+  border-radius: 8px;
 }
 </style>

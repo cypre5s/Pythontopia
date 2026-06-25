@@ -63,7 +63,15 @@ function loadWorkshopLayout(): { historyOpen: boolean; activeDrawer: WorkshopDra
   } catch {
     /* localStorage 不可用（隐私模式）时回退默认布局 */
   }
-  return { historyOpen: false, activeDrawer: null };
+  return { historyOpen: defaultHistoryOpen(), activeDrawer: null };
+}
+
+function defaultHistoryOpen(): boolean {
+  const isCompact =
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(max-width: 1120px)').matches;
+  return !isCompact;
 }
 
 const restoredLayout = loadWorkshopLayout();
@@ -333,6 +341,7 @@ const bodyClass = computed<Record<string, boolean>>(() => ({
         class="workshop-body"
         :class="bodyClass"
         data-testid="workshop-body"
+        data-layout="assistant-workbench"
       >
         <aside
           v-if="historyOpen"
@@ -457,46 +466,52 @@ const bodyClass = computed<Record<string, boolean>>(() => ({
 .workshop-page {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 10px 14px;
+  gap: 0;
+  padding: 0;
   height: calc(100dvh - 56px);
-  background:
-    linear-gradient(180deg, rgba(255, 247, 230, 0.5), rgba(243, 228, 190, 0.7)),
-    repeating-linear-gradient(135deg, rgba(110, 79, 29, 0.05) 0 6px, transparent 6px 14px),
-    #fef6dd;
+  background: #f6f7f4;
+  color: #22262a;
   overflow: hidden;
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'PingFang SC',
+    'Microsoft YaHei',
+    sans-serif;
 }
 .travel-bar {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 12px;
-  border: 3px solid var(--pyt-color-text-primary);
-  background: var(--pyt-color-bg-elevated);
-  box-shadow: 4px 4px 0 var(--pyt-color-text-primary);
-  font-family: var(--pyt-font-pixel), 'PingFang SC', monospace;
-  color: var(--pyt-color-text-primary);
+  gap: 8px;
+  min-height: 52px;
+  padding: 8px 14px;
+  border-bottom: 1px solid #d9ddd6;
+  background: rgba(251, 251, 248, 0.96);
+  color: #252a2e;
   flex: 0 0 auto;
 }
 .travel-back {
-  font-family: inherit;
+  font: inherit;
   font-size: 12px;
-  padding: 4px 10px;
-  background: var(--pyt-color-warning-bg);
-  border: 2px solid var(--pyt-color-text-primary);
+  padding: 6px 10px;
+  background: #ffffff;
+  border: 1px solid #ccd3cb;
+  border-radius: 8px;
   cursor: pointer;
-  box-shadow: 2px 2px 0 var(--pyt-color-text-primary);
+  color: #2f4237;
 }
-.travel-back:active {
-  transform: translate(2px, 2px);
-  box-shadow: 0 0 0 var(--pyt-color-text-primary);
+.travel-back:hover {
+  background: #eef5ef;
+  border-color: #9db4a2;
 }
 .travel-divider {
-  color: var(--pyt-color-text-muted);
+  color: #a2aaa2;
 }
 .travel-label {
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 650;
 }
 .workshop-drawer-tabs {
   display: flex;
@@ -504,19 +519,20 @@ const bodyClass = computed<Record<string, boolean>>(() => ({
   gap: 4px;
 }
 .workshop-drawer-tab {
-  font-family: inherit;
+  font: inherit;
   font-size: 12px;
-  padding: 4px 9px;
-  color: #4f3514;
+  padding: 6px 10px;
+  color: #46514c;
   background: transparent;
-  border: 2px solid transparent;
-  border-radius: 999px;
+  border: 1px solid transparent;
+  border-radius: 8px;
   cursor: pointer;
 }
 .workshop-drawer-tab:hover,
 .workshop-drawer-tab--active {
-  background: #fff8df;
-  border-color: rgba(140, 106, 35, 0.55);
+  background: #edf5ef;
+  border-color: #b7c9bb;
+  color: #20362a;
 }
 .travel-spacer {
   flex: 1 1 auto;
@@ -530,60 +546,61 @@ const bodyClass = computed<Record<string, boolean>>(() => ({
   flex-wrap: wrap;
 }
 .travel-chip {
-  font-family: inherit;
+  font: inherit;
   font-size: 12px;
-  padding: 4px 10px;
-  background: var(--pyt-color-bg-soft);
-  border: 2px solid var(--pyt-color-border);
-  color: var(--pyt-color-text-primary);
+  padding: 6px 10px;
+  background: #ffffff;
+  border: 1px solid #d2d8d1;
+  color: #38433f;
   cursor: pointer;
-  border-radius: 4px;
-  min-height: 28px;
+  border-radius: 8px;
+  min-height: 32px;
 }
 .travel-chip:hover:not([disabled]) {
-  background: var(--pyt-color-warning-bg);
-  border-color: var(--pyt-color-text-primary);
+  background: #f4f7fb;
+  border-color: #9db1cf;
 }
 .travel-chip[disabled] {
   opacity: 0.5;
   cursor: not-allowed;
 }
 .travel-chip--current {
-  background: #d6ead1;
-  border-color: #4d6e1d;
+  background: #e7f4e7;
+  border-color: #92b98f;
 }
 .travel-chip--library {
-  background: var(--pyt-color-info-bg);
-  border-color: var(--pyt-color-info);
-  color: #1b4a6b;
+  background: #eef4fb;
+  border-color: #9cb9d2;
+  color: #234961;
 }
 .travel-chip--arena {
-  background: var(--pyt-color-gold-bright);
-  border-color: var(--pyt-color-danger);
-  color: #4d1b14;
+  background: #fff4e5;
+  border-color: #d7aa72;
+  color: #684019;
 }
 .travel-chip__label {
-  letter-spacing: 0.5px;
+  letter-spacing: 0;
 }
 
 .workshop-body {
   flex: 1 1 auto;
   display: grid;
   align-items: stretch;
-  gap: 10px;
+  gap: 0;
   min-height: 0;
   overflow: hidden;
   position: relative;
   grid-template-columns: minmax(0, 1fr);
+  background: #ffffff;
 }
 .workshop-body--with-history {
-  grid-template-columns: minmax(240px, 300px) minmax(520px, 1fr);
+  grid-template-columns: minmax(240px, 292px) minmax(520px, 1fr);
 }
 .workshop-body--with-side {
-  grid-template-columns: minmax(520px, 1fr) minmax(320px, 380px);
+  grid-template-columns: minmax(520px, 1fr) minmax(320px, 376px);
 }
 .workshop-body--with-history.workshop-body--with-side {
-  grid-template-columns: minmax(230px, 280px) minmax(500px, 1fr) minmax(320px, 380px);
+  grid-template-columns: minmax(228px, 276px) minmax(500px, 1fr) minmax(320px, 376px);
 }
 .workshop-chat-pane {
   width: 100%;
@@ -591,10 +608,11 @@ const bodyClass = computed<Record<string, boolean>>(() => ({
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(180deg, #f9e7bc 0%, #f1d896 100%);
-  border: 3px solid var(--pyt-color-text-hint);
-  border-radius: var(--pyt-radius-lg);
-  box-shadow: inset 0 0 0 2px rgba(255, 247, 230, 0.55);
+  background: #ffffff;
+  border-right: 1px solid #e1e5df;
+  border-left: 1px solid #e1e5df;
+  border-radius: 0;
+  box-shadow: none;
   overflow: hidden;
 }
 .workshop-body--solo .workshop-chat-pane {
@@ -605,18 +623,17 @@ const bodyClass = computed<Record<string, boolean>>(() => ({
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: rgba(255, 248, 224, 0.96);
-  border: 3px solid var(--pyt-color-text-primary);
-  border-radius: var(--pyt-radius-lg);
-  box-shadow: -6px 6px 0 rgba(42, 26, 5, 0.22);
+  background: #fafaf7;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
   overflow: hidden;
-  font-family: var(--pyt-font-pixel);
 }
 .workshop-drawer--history {
-  box-shadow: 6px 6px 0 rgba(42, 26, 5, 0.16);
+  border-right: 1px solid #dfe4dd;
 }
 .workshop-drawer--side {
-  box-shadow: -6px 6px 0 rgba(42, 26, 5, 0.18);
+  border-left: 1px solid #dfe4dd;
 }
 .workshop-drawer__bar {
   flex: 0 0 auto;
@@ -628,21 +645,23 @@ const bodyClass = computed<Record<string, boolean>>(() => ({
      让历史 / 对话 / 书房·调用各面板顶部的虚线分隔线落在同一水平线上对齐。 */
   min-height: 44px;
   box-sizing: border-box;
-  padding: 6px 10px;
-  border-bottom: 2px dashed rgba(110, 79, 29, 0.45);
-  background: #fff8df;
+  padding: 8px 12px;
+  border-bottom: 1px solid #dfe4dd;
+  background: #fbfbf8;
 }
 .workshop-drawer__title {
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 650;
+  color: #2f3732;
 }
 .workshop-drawer__close {
   font: inherit;
   font-size: 11px;
-  padding: 3px 8px;
-  border: 2px solid var(--pyt-color-text-primary);
-  border-radius: 4px;
-  background: var(--pyt-color-warning-bg);
+  padding: 5px 8px;
+  border: 1px solid #cbd3ca;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #48534e;
   cursor: pointer;
 }
 .workshop-drawer__body {
@@ -671,9 +690,9 @@ const bodyClass = computed<Record<string, boolean>>(() => ({
   padding: 10px;
   font-size: 11px;
   line-height: 1.6;
-  color: var(--pyt-color-text-muted);
-  border: 1px dashed rgba(110, 79, 29, 0.45);
-  border-radius: var(--pyt-radius-md);
+  color: #6a736e;
+  border: 1px dashed #cfd7ce;
+  border-radius: 8px;
 }
 /* ── 书房资源详情弹窗（Teleport 到 body，仍受本组件 scoped 作用域约束） ── */
 .resource-modal-overlay {
@@ -691,12 +710,11 @@ const bodyClass = computed<Record<string, boolean>>(() => ({
   max-height: 88vh;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(180deg, #f9e7bc 0%, #f1d896 100%);
-  border: 3px solid var(--pyt-color-text-primary);
-  border-radius: var(--pyt-radius-lg);
-  box-shadow: 6px 6px 0 var(--pyt-color-text-primary);
+  background: #ffffff;
+  border: 1px solid #d7ddd5;
+  border-radius: 8px;
+  box-shadow: 0 24px 70px rgba(24, 32, 28, 0.24);
   overflow: hidden;
-  font-family: var(--pyt-font-pixel);
 }
 .resource-modal__bar {
   flex: 0 0 auto;
@@ -705,12 +723,12 @@ const bodyClass = computed<Record<string, boolean>>(() => ({
   justify-content: space-between;
   gap: 8px;
   padding: 8px 12px;
-  border-bottom: 2px dashed rgba(110, 79, 29, 0.4);
+  border-bottom: 1px solid #e1e6df;
 }
 .resource-modal__title {
   font-size: 13px;
   font-weight: 700;
-  color: var(--pyt-color-text-primary);
+  color: #252a2e;
 }
 .resource-modal__close {
   flex: 0 0 auto;
@@ -719,16 +737,11 @@ const bodyClass = computed<Record<string, boolean>>(() => ({
   line-height: 1;
   width: 28px;
   height: 28px;
-  background: var(--pyt-color-warning-bg);
-  border: 2px solid var(--pyt-color-text-primary);
-  border-radius: 4px;
+  background: #ffffff;
+  border: 1px solid #cbd3ca;
+  border-radius: 8px;
   cursor: pointer;
-  box-shadow: 2px 2px 0 var(--pyt-color-text-primary);
-  color: var(--pyt-color-text-primary);
-}
-.resource-modal__close:active {
-  transform: translate(2px, 2px);
-  box-shadow: none;
+  color: #252a2e;
 }
 .resource-modal__body {
   flex: 1 1 auto;

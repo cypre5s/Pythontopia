@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-06-25 — 9 项 AI 深度融合 Batch 4：百晓工坊 AI 工作台前端适配
+
+> 把百晓工坊从像素木牌式聊天页收敛为更接近 ChatGPT / Claude Web 的学习工作台：历史、对话、书房/调用过程成为稳定三栏壳，保留 Pythontopia 的证据、工具分发和学习闭环，不改成纯聊天 demo。
+
+- **工作台默认布局**：`/workshop` 桌面端默认展开历史栏，移动/窄屏仍默认收起；`workshop-body` 标记 `data-layout="assistant-workbench"`，便于后续浏览器验收与视觉回归定位。
+- **页面外壳现代化**：顶部导航、历史栏、书房/调用抽屉和资源弹窗从厚像素边框、木牌阴影与米色底，改为浅色 1px 分隔线、系统字体、8px 控件圆角和密集可扫的 AI 工作台布局。
+- **对话主体统一风格**：`WorkshopChat` 的顶部栏、composer、用户/助手气泡、工具 chips、接地/三审徽章、填空小测和资源卡统一到同一套浅色工作台视觉，同时保留 16 工具分发、SSE trace、课件证据与历史续聊行为。
+- **验证**：前端定向 `npm run test -- --run tests/pages/WorkshopPage.spec.ts tests/components/workshop/WorkshopChat.spec.ts tests/components/workshop/ChatHistoryRail.spec.ts tests/components/workshop/WorkshopChatUploads.spec.ts` 通过（50 tests）；`npm run typecheck` 通过。Vitest 仍打印既有 `public/pyodide/pyodide.js.map` 缺失提示，但命令退出码为 0。
+
 ## 2026-06-25 — 9 项 AI 深度融合 Batch 3：可追溯推荐 + MCP 证据字段声明
 
 > 继续把 Evidence Memory 2.0 从“后端内部排序信号”推进到可被前端、Eval 和外部 Apps/MCP 读取的证据合同：推荐理由不只说“为什么”，还返回支撑它的 event/check/page ids。

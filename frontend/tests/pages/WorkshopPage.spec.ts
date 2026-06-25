@@ -238,17 +238,22 @@ describe('WorkshopPage R-13 改造', () => {
     expect(wrapper.vm.$options.name).toBe('WorkshopPage');
   });
 
-  it('defaults to a centered single chat shell with hidden drawers', async () => {
+  it('defaults to a ChatGPT-like workbench with the history rail visible', async () => {
     await router.push('/workshop');
     const wrapper = mountPage();
     await flushPromises();
 
     expect(wrapper.find('[data-testid="workshop-chat-pane"]').exists()).toBe(true);
-    expect(wrapper.get('[data-testid="workshop-body"]').classes()).toContain('workshop-body--solo');
+    expect(wrapper.get('[data-testid="workshop-body"]').attributes('data-layout')).toBe(
+      'assistant-workbench',
+    );
+    expect(wrapper.get('[data-testid="workshop-body"]').classes()).toContain(
+      'workshop-body--with-history',
+    );
+    expect(wrapper.find('[data-testid="workshop-drawer-history"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="workshop-open-history"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="workshop-open-study"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="workshop-open-calls"]').exists()).toBe(true);
-    expect(wrapper.find('[data-testid="workshop-drawer-history"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="workshop-drawer-study"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="workshop-drawer-calls"]').exists()).toBe(false);
   });
@@ -258,6 +263,9 @@ describe('WorkshopPage R-13 改造', () => {
     const wrapper = mountPage();
     await flushPromises();
 
+    expect(wrapper.find('[data-testid="workshop-drawer-history"]').exists()).toBe(true);
+    await wrapper.get('[data-testid="workshop-open-history"]').trigger('click');
+    expect(wrapper.find('[data-testid="workshop-drawer-history"]').exists()).toBe(false);
     await wrapper.get('[data-testid="workshop-open-history"]').trigger('click');
     expect(wrapper.find('[data-testid="workshop-drawer-history"]').exists()).toBe(true);
     expect(wrapper.get('[data-testid="workshop-body"]').classes()).toContain(
@@ -279,7 +287,6 @@ describe('WorkshopPage R-13 改造', () => {
     const wrapper = mountPage();
     await flushPromises();
 
-    await wrapper.get('[data-testid="workshop-open-history"]').trigger('click');
     await wrapper.get('[data-testid="workshop-open-study"]').trigger('click');
 
     const body = wrapper.get('[data-testid="workshop-body"]');
@@ -314,7 +321,7 @@ describe('WorkshopPage R-13 改造', () => {
     const wrapper = mountPage();
     await flushPromises();
 
-    await wrapper.get('[data-testid="workshop-open-history"]').trigger('click');
+    expect(wrapper.find('[data-testid="workshop-drawer-history"]').exists()).toBe(true);
     await flushPromises();
     expect(apiMocks.listWorkshopChatHistoryTurns).toHaveBeenCalledTimes(1);
     expect(wrapper.text()).toContain('还没有问答记录');
@@ -347,6 +354,8 @@ describe('WorkshopPage R-13 改造', () => {
     const wrapper = mountPage();
     await flushPromises();
 
+    await wrapper.get('[data-testid="workshop-open-history"]').trigger('click');
+    await flushPromises();
     expect(wrapper.find('[data-testid="workshop-drawer-history"]').exists()).toBe(false);
     wrapper.findComponent(WorkshopChat).vm.$emit('history-saved', savedTurn);
 
