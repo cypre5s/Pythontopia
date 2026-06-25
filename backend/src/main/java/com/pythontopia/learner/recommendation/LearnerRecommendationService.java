@@ -2,6 +2,8 @@ package com.pythontopia.learner.recommendation;
 
 import com.pythontopia.coursepack.domain.CourseKc;
 import com.pythontopia.coursepack.repository.CoursePackRepository;
+import com.pythontopia.learner.evidence.EvidenceMemoryService;
+import com.pythontopia.learner.evidence.EvidenceMemorySignalDto;
 import com.pythontopia.learner.memory.MemoryRetrievalService;
 import com.pythontopia.learner.memory.dto.MemoryItemDto;
 import com.pythontopia.learner.profile.dto.LearnerProfileDto;
@@ -13,6 +15,7 @@ import com.pythontopia.learner.reflection.dto.LearnerInsightDto;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -23,7 +26,7 @@ import org.springframework.stereotype.Service;
 
 /**
  * 「今日推送」推荐：以数字孪生为驱动——薄弱 KC（掌握度）× 最新 error_pattern 洞察 × 近期失败记忆 topK，
- * 共同决定推什么、排序与「为什么推」（绑定洞察 evidence event id，满足可溯源红线，P3.3）。
+ * Evidence Memory 2.0 证据图信号，共同决定推什么、排序与「为什么推」（绑定 evidence event id，满足可溯源红线，P3.3）。
  */
 @Service
 public class LearnerRecommendationService {
@@ -41,6 +44,7 @@ public class LearnerRecommendationService {
   private final ProfileService profileService;
   private final PassiveProfileService passiveProfileService;
   private final LearnerInsightRepository insightRepository;
+  private final EvidenceMemoryService evidenceMemoryService;
   private final MemoryRetrievalService memoryRetrievalService;
 
   public LearnerRecommendationService(
@@ -49,12 +53,14 @@ public class LearnerRecommendationService {
       ProfileService profileService,
       PassiveProfileService passiveProfileService,
       LearnerInsightRepository insightRepository,
+      EvidenceMemoryService evidenceMemoryService,
       MemoryRetrievalService memoryRetrievalService) {
     this.jdbcTemplate = jdbcTemplate;
     this.coursePackRepository = coursePackRepository;
     this.profileService = profileService;
     this.passiveProfileService = passiveProfileService;
     this.insightRepository = insightRepository;
+    this.evidenceMemoryService = evidenceMemoryService;
     this.memoryRetrievalService = memoryRetrievalService;
   }
 
@@ -70,17 +76,20 @@ public class LearnerRecommendationService {
         coursePackRepository.findKcs(DEFAULT_PACK_ID, null).stream()
             .collect(Collectors.toMap(CourseKc::kcCode, kc -> kc, (a, b) -> a));
 
-    // 孪生信号：最新 error_pattern 洞察（可溯源 event id）+ 近期失败记忆里反复出现的 KC。
+    // 孪生信号：最新 error_pattern 洞察（可溯源 event id）+ Evidence Memory 2.0 + 近期失败记忆。
     ErrorInsight insight = latestErrorPatternInsight(userId);
+    Map<String, EvidenceMemorySignalDto> evidenceMemorySignals = evidenceMemorySignals(userId);
     Set<String> memoryWeakKcs = memoryWeakKcCodes(userId);
 
-    List<WeakKc> ranked = rerankByTwinSignals(weakKcs, insight, memoryWeakKcs);
+    List<WeakKc> ranked = rerankByTwinSignals(weakKcs, insight, evidenceMemorySignals, memoryWeakKcs);
 
     List<RecommendationDto> results = new ArrayList<>();
     for (WeakKc wk : ranked) {
       CourseKc kc = kcIndex.get(wk.kcCode());
       String kcName = kc != null ? kc.kcName() : wk.kcCode();
       boolean insightGrounded = insight != null && insight.kcTags().contains(wk.kcCode());
+      EvidenceMemorySignalDto evidenceSignal = evidenceMemorySignals.get(wk.kcCode());
+      boolean evidenceMemoryGrounded = evidenceSignal != null;
       boolean memoryGrounded = memoryWeakKcs.contains(wk.kcCode());
 
       List<ResourceCandidate> candidates = findResourcesForKc(userId, wk.kcCode(), mediaPriority);
@@ -103,6 +112,9 @@ public class LearnerRecommendationService {
       if (insightGrounded) {
         reason = "因近期在「" + kcName + "」反复出错" + insightSuffix(insight);
         evidence = insight.evidenceEventIds();
+      } else if (evidenceMemoryGrounded) {
+        reason = "学习证据图显示「" + kcName + "」仍需巩固：" + evidenceSignal.reason();
+        evidence = evidenceSignal.evidenceEventIds();
       } else if (memoryGrounded) {
         reason = "近期在「" + kcName + "」的练习记忆中多次受挫，建议优先巩固";
         evidence = List.of();
@@ -127,20 +139,32 @@ public class LearnerRecommendationService {
    * 同优先级内保持原「掌握度升序」。{@code stream().sorted} 是稳定排序，故原顺序得以保留。
    */
   private List<WeakKc> rerankByTwinSignals(
-      List<WeakKc> weakKcs, ErrorInsight insight, Set<String> memoryWeakKcs) {
+      List<WeakKc> weakKcs,
+      ErrorInsight insight,
+      Map<String, EvidenceMemorySignalDto> evidenceMemorySignals,
+      Set<String> memoryWeakKcs) {
     return weakKcs.stream()
-        .sorted(Comparator.comparingInt(wk -> twinPriority(wk.kcCode(), insight, memoryWeakKcs)))
+        .sorted(
+            Comparator.comparingInt(
+                wk -> twinPriority(wk.kcCode(), insight, evidenceMemorySignals, memoryWeakKcs)))
         .toList();
   }
 
-  private int twinPriority(String kcCode, ErrorInsight insight, Set<String> memoryWeakKcs) {
+  private int twinPriority(
+      String kcCode,
+      ErrorInsight insight,
+      Map<String, EvidenceMemorySignalDto> evidenceMemorySignals,
+      Set<String> memoryWeakKcs) {
     if (insight != null && insight.kcTags().contains(kcCode)) {
       return 0;
     }
-    if (memoryWeakKcs.contains(kcCode)) {
+    if (evidenceMemorySignals.containsKey(kcCode)) {
       return 1;
     }
-    return 2;
+    if (memoryWeakKcs.contains(kcCode)) {
+      return 2;
+    }
+    return 3;
   }
 
   /** 取最新一条 error_pattern 洞察（含 tags 与 evidence event id），无则 null；读失败降级 null。 */
@@ -174,6 +198,25 @@ public class LearnerRecommendationService {
       return codes;
     } catch (RuntimeException ex) {
       return Set.of();
+    }
+  }
+
+  /** Evidence Memory 2.0 只把直接证据图信号用于抢占排序；关系扩散信号留给解释与后续路径规划。 */
+  private Map<String, EvidenceMemorySignalDto> evidenceMemorySignals(Long userId) {
+    try {
+      Map<String, EvidenceMemorySignalDto> signals = new LinkedHashMap<>();
+      for (EvidenceMemorySignalDto signal : evidenceMemoryService.signalsForUser(userId)) {
+        if (!"DIRECT".equals(signal.signalKind())) {
+          continue;
+        }
+        EvidenceMemorySignalDto existing = signals.get(signal.kcCode());
+        if (existing == null || signal.priorityScore() > existing.priorityScore()) {
+          signals.put(signal.kcCode(), signal);
+        }
+      }
+      return signals;
+    } catch (RuntimeException ex) {
+      return Map.of();
     }
   }
 

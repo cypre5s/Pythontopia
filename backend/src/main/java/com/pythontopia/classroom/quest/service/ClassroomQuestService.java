@@ -126,6 +126,10 @@ public class ClassroomQuestService {
     ObjectNode deepLinkParams =
         deepLinkParamsFor(
             nodeType, kcCode, request.targetProblemId(), request.targetResourceType());
+    String requiredEvidenceType =
+        nodeType == QuestNodeType.SOLVE_PROBLEM ? "submission" : null;
+    List<Long> targetProblemIds =
+        request.targetProblemId() == null ? List.of() : List.of(request.targetProblemId());
     for (ClassroomMemberDto member : members) {
       try {
         questRepository.insert(
@@ -140,9 +144,9 @@ public class ClassroomQuestService {
                 payload,
                 request.dueDate(),
                 9,
+                requiredEvidenceType,
                 null,
-                null,
-                List.of(),
+                targetProblemIds,
                 null,
                 deepLinkRoute,
                 deepLinkParams));

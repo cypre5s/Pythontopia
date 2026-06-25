@@ -34,6 +34,7 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DuplicateKeyException;
+import org.mockito.ArgumentCaptor;
 
 class ClassroomQuestServiceTest {
 
@@ -86,7 +87,16 @@ class ClassroomQuestServiceTest {
     assertThat(response.totalStudents()).isEqualTo(3);
     assertThat(response.createdQuests()).isEqualTo(3);
     assertThat(response.skippedDuplicates()).isEqualTo(0);
-    verify(questRepository, times(3)).insert(any(QuestInsert.class));
+    ArgumentCaptor<QuestInsert> questInsertCaptor = ArgumentCaptor.forClass(QuestInsert.class);
+    verify(questRepository, times(3)).insert(questInsertCaptor.capture());
+    assertThat(questInsertCaptor.getAllValues())
+        .allSatisfy(
+            insert -> {
+              assertThat(insert.requiredEvidenceType()).isEqualTo("submission");
+              assertThat(insert.targetProblemIds()).containsExactly(12L);
+              assertThat(insert.deepLinkRoute()).isEqualTo("/training");
+              assertThat(insert.deepLinkParams().toString()).contains("\"problemId\":12");
+            });
     verify(repository).insert(any(ClassroomQuestInsert.class));
   }
 

@@ -117,8 +117,92 @@ class RecommendationServiceTest {
     assertThat(top.evidenceEventIds()).contains(eventId);
   }
 
+  @Test
+  void evidenceMemorySignalChangesRankingBeforeRawMemoryFallback() {
+    Long userId =
+        jdbcTemplate.queryForObject(
+            "INSERT INTO users (username, display_name, password_hash, role)"
+                + " VALUES ('rec-evidence-stu', 'rec evidence', 'x', 'STUDENT') RETURNING id",
+            Long.class);
+
+    List<String> kcCodes =
+        jdbcTemplate.queryForList(
+            "SELECT kc_code FROM course_kc WHERE pack_id = 43 ORDER BY kc_code LIMIT 3",
+            String.class);
+    String masteryWeakest = kcCodes.get(0);
+    String evidenceWeak = kcCodes.get(2);
+
+    jdbcTemplate.update(seedMasterySql(), userId, masteryWeakest);
+    jdbcTemplate.update(
+        "INSERT INTO kc_mastery (user_id, kc_code, mastery_score, confidence, last_event_at)"
+            + " VALUES (?, ?, 0.200, 0.500, now())",
+        userId,
+        kcCodes.get(1));
+    jdbcTemplate.update(
+        "INSERT INTO kc_mastery (user_id, kc_code, mastery_score, confidence, last_event_at)"
+            + " VALUES (?, ?, 0.300, 0.500, now())",
+        userId,
+        evidenceWeak);
+
+    List<RecommendationDto> baseline = service.recommend(userId);
+    assertThat(baseline).isNotEmpty();
+    assertThat(baseline.get(0).kcCode()).isEqualTo(masteryWeakest);
+    int baselineRank = rankOf(baseline, evidenceWeak);
+    assertThat(baselineRank).isEqualTo(2);
+
+    Long resourceId =
+        jdbcTemplate.queryForObject(
+            """
+            INSERT INTO learning_resource (
+              user_id, pack_id, kc_codes, type, title, content_format, content, evidence_page_ids,
+              safety_status, grounding_status
+            ) VALUES (?, 43, ARRAY[?]::text[], 'HANDOUT', '证据记忆讲义',
+              'STRUCT_JSON', '{}'::jsonb, ARRAY[10707]::bigint[], 'PASSED', 'PASSED') RETURNING id
+            """,
+            Long.class,
+            userId,
+            evidenceWeak);
+    Long eventId =
+        jdbcTemplate.queryForObject(
+            "INSERT INTO learning_event_log (user_id, event_type, payload, source, importance)"
+                + " VALUES (?, 'practice_failed', ?::jsonb, 'backend', 5) RETURNING id",
+            Long.class,
+            userId,
+            "{\"kcCode\":\"" + evidenceWeak + "\",\"problemId\":476}");
+    jdbcTemplate.update(
+        """
+        INSERT INTO resource_learning_check (
+          user_id, resource_id, kc_code, evidence_type, answer_text, operation_evidence,
+          status, mastery_delta, remediation_type, reason
+        ) VALUES (?, ?, ?, 'MICRO_QUIZ', '没答到关键点', '{}'::jsonb,
+          'FAILED', -0.040, 'PRACTICE', 'recommendation-evidence-memory')
+        """,
+        userId,
+        resourceId,
+        evidenceWeak);
+
+    List<RecommendationDto> recommendations = service.recommend(userId);
+
+    assertThat(recommendations).isNotEmpty();
+    RecommendationDto top = recommendations.get(0);
+    assertThat(top.kcCode()).isEqualTo(evidenceWeak);
+    assertThat(top.kcCode()).isNotEqualTo(masteryWeakest);
+    assertThat(top.reason()).contains("学习证据图", "微测失败");
+    assertThat(top.evidenceEventIds()).contains(eventId);
+    assertThat(baselineRank - rankOf(recommendations, evidenceWeak)).isGreaterThanOrEqualTo(2);
+  }
+
   private static String seedMasterySql() {
     return "INSERT INTO kc_mastery (user_id, kc_code, mastery_score, confidence, last_event_at)"
         + " VALUES (?, ?, 0.100, 0.500, now())";
+  }
+
+  private static int rankOf(List<RecommendationDto> recommendations, String kcCode) {
+    for (int index = 0; index < recommendations.size(); index++) {
+      if (recommendations.get(index).kcCode().equals(kcCode)) {
+        return index;
+      }
+    }
+    return Integer.MAX_VALUE;
   }
 }

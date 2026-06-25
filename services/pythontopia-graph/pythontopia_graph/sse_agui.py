@@ -19,7 +19,110 @@ Java 中转层（``GraphSseConsumer`` + 各 ``*GraphClient``）按事件名原�
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from typing import Any
+
+
+_AGUI_EVENTS = frozenset(
+    {
+        "RUN_STARTED",
+        "RUN_FINISHED",
+        "RUN_ERROR",
+        "STEP_STARTED",
+        "STEP_FINISHED",
+        "TEXT_MESSAGE_START",
+        "TEXT_MESSAGE_CONTENT",
+        "TEXT_MESSAGE_END",
+        "TOOL_CALL_START",
+        "TOOL_CALL_ARGS",
+        "TOOL_CALL_END",
+        "TOOL_CALL_RESULT",
+        "STATE_SNAPSHOT",
+        "STATE_DELTA",
+        "CUSTOM",
+    }
+)
+_LEGACY_EVENTS = frozenset({"plan", "trace", "token", "result", "error", "step_error"})
+
+
+@dataclass(frozen=True)
+class StreamQuality:
+    """A deterministic quality summary for one agent runtime stream.
+
+    The score is intentionally simple: it rewards canonical AG-UI lifecycle,
+    text, step, state, and terminal events, while applying a penalty for legacy
+    event names. It is used as a regression gate, not as user-facing telemetry.
+    """
+
+    total_events: int
+    agui_event_rate: float
+    lifecycle_coverage: float
+    step_coverage: float
+    text_coverage: float
+    tool_event_coverage: float
+    state_sync_coverage: float
+    terminal_coverage: float
+    legacy_event_count: int
+    score: float
+
+
+def _round(value: float) -> float:
+    return round(value, 3)
+
+
+def stream_quality(events: list[tuple[str, dict[str, Any]]]) -> StreamQuality:
+    """Score how close a stream is to the canonical AG-UI runtime contract.
+
+    Legacy names are still compatible with the frontend, but canonical names
+    are easier to interoperate with AG-UI clients and downstream observability.
+    """
+
+    if not events:
+        return StreamQuality(0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0, 0.0)
+    names = [name for name, _ in events]
+    agui_count = sum(1 for name in names if name in _AGUI_EVENTS)
+    legacy_count = sum(1 for name in names if name in _LEGACY_EVENTS)
+    has_run_started = "RUN_STARTED" in names
+    has_terminal = any(name in {"RUN_FINISHED", "RUN_ERROR"} for name in names)
+    has_legacy_terminal = any(name in {"result", "error"} for name in names)
+    has_step_start = "STEP_STARTED" in names
+    has_step_finish = "STEP_FINISHED" in names
+    has_legacy_trace = "trace" in names
+    has_text = "TEXT_MESSAGE_CONTENT" in names
+    has_legacy_token = "token" in names
+    has_tool = any(name.startswith("TOOL_CALL_") for name in names)
+    has_state = any(name in {"STATE_SNAPSHOT", "STATE_DELTA"} for name in names)
+
+    lifecycle = 1.0 if has_run_started and has_terminal else (0.5 if has_legacy_terminal else 0.0)
+    step = 1.0 if has_step_start and has_step_finish else (0.5 if has_legacy_trace else 0.0)
+    text = 1.0 if has_text else (0.5 if has_legacy_token else 0.0)
+    terminal = 1.0 if has_terminal else (0.5 if has_legacy_terminal else 0.0)
+    tool = 1.0 if has_tool else 0.0
+    state = 1.0 if has_state else 0.0
+    agui_rate = agui_count / len(events)
+    legacy_penalty = min(0.25, legacy_count * 0.04)
+    score = (
+        lifecycle * 0.20
+        + step * 0.18
+        + text * 0.15
+        + terminal * 0.15
+        + state * 0.12
+        + tool * 0.05
+        + agui_rate * 0.15
+        - legacy_penalty
+    )
+    return StreamQuality(
+        total_events=len(events),
+        agui_event_rate=_round(agui_rate),
+        lifecycle_coverage=_round(lifecycle),
+        step_coverage=_round(step),
+        text_coverage=_round(text),
+        tool_event_coverage=_round(tool),
+        state_sync_coverage=_round(state),
+        terminal_coverage=_round(terminal),
+        legacy_event_count=legacy_count,
+        score=_round(max(0.0, min(1.0, score))),
+    )
 
 
 def format_sse(event: str, data: dict[str, Any]) -> str:
@@ -144,6 +247,10 @@ def translate(event: str, data: dict[str, Any]) -> str:
     if name == "plan":
         return custom("plan", data)
     if name == "trace":
-        agui_name = "STEP_FINISHED" if data.get("phase") == "finish" else "STEP_STARTED"
+        agui_name = (
+            "STEP_FINISHED"
+            if data.get("phase") == "finish" or str(data.get("status", "")).lower() != "running"
+            else "STEP_STARTED"
+        )
         return format_sse(agui_name, data)
     return format_sse(name, data)

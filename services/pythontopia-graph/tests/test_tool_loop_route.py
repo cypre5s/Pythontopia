@@ -91,5 +91,5 @@ def test_tool_loop_stream_emits_events_when_enabled(
     # loop_step 以 AG-UI CUSTOM 事件承载（前端 loopSlice 契约），种子步骤即触发。
     assert "event: CUSTOM" in text
     assert '"loop_step"' in text
-    assert "event: result" in text
-    assert "event: error" not in text
+    assert "event: RUN_FINISHED" in text
+    assert "event: RUN_ERROR" not in text

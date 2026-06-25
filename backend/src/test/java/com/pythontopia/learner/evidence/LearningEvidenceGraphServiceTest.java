@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.flywaydb.core.Flyway;
@@ -179,6 +180,57 @@ class LearningEvidenceGraphServiceTest {
   }
 
   @Test
+  void graphBackedLearningLoopWinsEveryAbMetricAgainstResourceOnlyBaseline() {
+    LearningEvidenceGraphDto graphBacked = service.buildForUser(userId, "PY43-KC-001", 80);
+
+    Long naiveUserId =
+        jdbc.queryForObject(
+            "INSERT INTO users (username, display_name, password_hash, role)"
+                + " VALUES (?, 'Naive Matrix User', 'x', 'STUDENT') RETURNING id",
+            Long.class,
+            "evidence-user-naive-matrix-" + System.nanoTime());
+    jdbc.update(
+        """
+        INSERT INTO learning_resource (
+          user_id, pack_id, kc_codes, type, title, content_format, content, evidence_page_ids
+        ) VALUES (?, 43, ARRAY['PY43-KC-001']::text[], 'HANDOUT', 'evidence-naive-matrix',
+          'STRUCT_JSON', '{}'::jsonb, ARRAY[]::bigint[])
+        """,
+        naiveUserId);
+    LearningEvidenceGraphDto baseline = service.buildForUser(naiveUserId, "PY43-KC-001", 80);
+
+    List<AbMetric> rows =
+        List.of(
+            new AbMetric(
+                "graph_completeness",
+                baseline.metrics().graphCompletenessScore(),
+                graphBacked.metrics().graphCompletenessScore(),
+                0.40),
+            new AbMetric(
+                "connected_evidence_rate",
+                baseline.metrics().connectedEvidenceRate(),
+                graphBacked.metrics().connectedEvidenceRate(),
+                0.30),
+            new AbMetric(
+                "grounded_page_count",
+                baseline.metrics().groundedPageCount(),
+                graphBacked.metrics().groundedPageCount(),
+                2.00),
+            new AbMetric(
+                "check_coverage_rate",
+                baseline.metrics().checkCoverageRate(),
+                graphBacked.metrics().checkCoverageRate(),
+                0.80),
+            new AbMetric(
+                "mastery_evidence_rate",
+                baseline.metrics().masteryEvidenceRate(),
+                graphBacked.metrics().masteryEvidenceRate(),
+                0.80));
+
+    assertThat(rows).allSatisfy(row -> assertThat(row.uplift()).isGreaterThanOrEqualTo(row.minUplift()));
+  }
+
+  @Test
   void emitsTraceablePersonalizationSignalFromChecksEventsAndGroundedPages() {
     jdbc.update(
         """
@@ -214,5 +266,11 @@ class LearningEvidenceGraphServiceTest {
 
   private static Set<String> edgeRelations(LearningEvidenceGraphDto graph) {
     return graph.edges().stream().map(EvidenceEdgeDto::relation).collect(Collectors.toSet());
+  }
+
+  private record AbMetric(String name, double baseline, double treatment, double minUplift) {
+    double uplift() {
+      return treatment - baseline;
+    }
   }
 }

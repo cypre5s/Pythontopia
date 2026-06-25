@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import type { ClassroomMemberDto } from '@/api/dto/ClassroomMemberDto';
 import PyButton from '@/components/ui/PyButton.vue';
 import PyTable from '@/components/ui/PyTable.vue';
@@ -14,8 +15,10 @@ const columns = [
   { key: 'action', label: '操作', align: 'right' as const },
 ];
 
-// PyTable rows 接受 Record<string, unknown>[]，ClassroomMemberDto 结构兼容；显式标注便于读。
-const rows = props.members as unknown as Record<string, unknown>[];
+// PyTable rows 接受 Record<string, unknown>[]；props 异步刷新后需要保持响应式。
+const rows = computed<Record<string, unknown>[]>(
+  () => props.members as unknown as Record<string, unknown>[],
+);
 
 function handleRemove(studentId: number) {
   if (typeof window !== 'undefined') {

@@ -59,7 +59,7 @@ def test_orchestrator_turn_returns_200_and_response_shape() -> None:
     del app.state.llm_provider
 
 
-def test_orchestrator_stream_emits_trace_token_and_result_events() -> None:
+def test_orchestrator_stream_emits_canonical_agui_events() -> None:
     app.state.llm_provider = StubProvider([], reply="本轮安排已就绪。")
     client = TestClient(app)
     body = {
@@ -74,10 +74,15 @@ def test_orchestrator_stream_emits_trace_token_and_result_events() -> None:
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/event-stream")
     text = response.text
-    assert "event: trace" in text
-    assert "event: token" in text
-    assert "event: result" in text
-    assert "event: error" not in text
+    assert "event: RUN_STARTED" in text
+    assert "event: STEP_STARTED" in text
+    assert "event: STEP_FINISHED" in text
+    assert "event: TEXT_MESSAGE_CONTENT" in text
+    assert "event: RUN_FINISHED" in text
+    assert "event: RUN_ERROR" not in text
+    assert "event: trace" not in text
+    assert "event: token" not in text
+    assert "event: result" not in text
 
     del app.state.llm_provider
 

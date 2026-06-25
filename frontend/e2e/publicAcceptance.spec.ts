@@ -558,8 +558,10 @@ test.describe('公网验收 · /guide 使用指南 @guide', () => {
         timeout: 30_000,
       });
 
-      // 锚点导航：页面应提供站内目录（href 以 # 或 /guide# 开头）。
-      const anchors = page.locator('a[href^="#"], a[href*="/guide#"]');
+      // 锚点导航：限定到指南自己的章节导航，避开 AppLayout 的无障碍 skip-link。
+      const anchors = page
+        .getByRole('navigation', { name: '章节导航' })
+        .locator('a[href^="#"], a[href*="/guide#"]');
       const anchorCount = await anchors.count();
       expect(anchorCount, '/guide 应提供目录/锚点导航链接').toBeGreaterThan(0);
 
@@ -647,7 +649,9 @@ test.describe('公网验收 · /guide 使用指南 @guide', () => {
       await expect(heading, '移动端首屏未见标题内容').toBeVisible({ timeout: 10_000 });
 
       // 移动端导航可用：目录锚点直接可见，或存在可点开的菜单/目录按钮。
-      const anchors = page.locator('a[href^="#"], a[href*="/guide#"]');
+      const anchors = page.locator(
+        '[data-testid="guide-content"] a[href^="#"], [data-testid="guide-content"] a[href*="/guide#"], [data-testid="guide-outline"] a[href^="#"], [data-testid="guide-outline"] a[href*="/guide#"]',
+      );
       const menuToggle = page.locator(
         'button[aria-label*="目录"], button[aria-label*="菜单"], [class*="menu"], [class*="toc"]',
       );
@@ -954,12 +958,36 @@ test.describe('公网验收 · 图书馆 RAG @library', () => {
       const input = page.getByTestId('library-rag-input');
       await expect(input).toBeVisible({ timeout: 30_000 });
       await input.fill(query);
+      await expect(input).toHaveValue(query);
       const submit = page.getByTestId('library-rag-submit');
       await submit.click();
       await expect(submit, `查询「${query}」在时限内未完成`).toBeEnabled({ timeout: 120_000 });
 
       const answer = page.getByTestId('library-rag-answer');
       const results = page.getByTestId('library-rag-results');
+      await expect
+        .poll(
+          async () => {
+            const answerVisible = await answer.isVisible().catch(() => false);
+            const answerText = answerVisible ? await answer.innerText().catch(() => '') : '';
+            const citeCount = answerVisible
+              ? await answer.getByTestId('library-rag-cite').count().catch(() => 0)
+              : 0;
+            const resultsVisible = await results.isVisible().catch(() => false);
+            const resultCount = await results.locator('li').count().catch(() => 0);
+            const resultsText =
+              resultsVisible || resultCount > 0 ? await results.innerText().catch(() => '') : '';
+            return (
+              (answerVisible && citeCount > 0 && /第\s*\d+\s*页/.test(answerText))
+              || (resultCount > 0 && /第\s*\d+\s*页/.test(resultsText))
+            );
+          },
+          {
+            timeout: 120_000,
+            message: `查询「${query}」未出现带页码的证据引用或片段结果`,
+          },
+        )
+        .toBe(true);
       const answerMode = await answer.isVisible().catch(() => false);
       const evidenceArea = answerMode ? answer : results;
       await expect(evidenceArea, `查询「${query}」未渲染证据区`).toBeVisible();

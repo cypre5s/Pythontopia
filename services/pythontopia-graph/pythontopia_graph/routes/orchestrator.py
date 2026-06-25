@@ -11,7 +11,6 @@ SSE 生成器沿用 ``routes/streaming.py`` 模式：``asyncio.Queue`` + ``emit`
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 from collections.abc import AsyncIterator
 from typing import Any, cast
@@ -20,6 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from pythontopia_graph.agents.dispatch import AgentDispatcher, DispatchContext
+from pythontopia_graph import sse_agui
 from pythontopia_graph.agents.intent_router_agent import IntentRouterAgent
 from pythontopia_graph.graph.agentic_loop import BrowseExecutor, MemoryBriefProvider
 from pythontopia_graph.graph.hybrid_loop import (
@@ -124,7 +124,7 @@ def _browse_allowed_domains() -> list[str] | None:
 
 
 def _format_sse(event: str, data: dict[str, Any]) -> str:
-    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+    return sse_agui.translate(event, data)
 
 
 @router.post("/agents/orchestrator/turn", response_model=OrchestratorResponse)
@@ -176,6 +176,24 @@ async def _orchestrator_stream_generator(
             await queue.put(None)
 
     task = asyncio.create_task(run_graph())
+    await queue.put(
+        _format_sse(
+            "RUN_STARTED",
+            {"runId": f"orchestrator:{body.session_id}", "threadId": body.session_id},
+        )
+    )
+    await queue.put(
+        _format_sse(
+            "STEP_STARTED",
+            {
+                "node": "orchestrator",
+                "phase": "start",
+                "status": "running",
+                "elapsed_ms": 0,
+                "agent_label": "学习总管",
+            },
+        )
+    )
     try:
         while True:
             item = await queue.get()

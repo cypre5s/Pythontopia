@@ -1,5 +1,56 @@
 # Changelog
 
+## 2026-06-25 — AI 技术有机重构收口：AG-UI/MCP Runtime + Evidence Memory + Eval 闸门全链路验收
+
+> 基于 OpenAI Agents/Apps SDK、Claude Code、AG-UI、DSPy 等近期 agent/runtime/eval 思路做取舍后，选择不引入游离 demo，而是把能力收进 Pythontopia 已有导学、工坊、RAG、画像、推荐、班级 evidence 链路：前端可观测流式事件、后端可持久学习记忆、graph/rag 可量化优化闸门形成闭环。
+
+- **Agent Runtime 标准化**：graph orchestrator/tool-loop SSE 输出 AG-UI 风格 `RUN_STARTED` / `STEP_STARTED` / `TEXT_MESSAGE_CONTENT` / `RUN_FINISHED` 等事件；后端协议网关补齐 MCP resource/prompt、`learner.evidence.graph.read` 工具声明和 OTel GenAI 属性，服务于现有导学/工坊流式 UI，而不是另起一套 agent。
+- **Evidence Memory 2.0**：新增 `learner_evidence_memory_snapshot` 迁移和 `EvidenceMemoryService/Repository/Controller`，从练习失败、资源检查、grounded page、mastery event 中抽信号，并沿 `course_kc_edge` 衰减传播；推荐服务用该记忆重排弱项 KC，把 evidence id 带回推荐理由。
+- **Eval-gated 优化**：新增 graph 侧 prompt variant 优化器和 RAG 图谱检索 A/B 门禁，要求样本胜率、mean uplift、回归率、严重回归数同时达标，防止“看起来更聪明”的 prompt 漂移破坏课件接地。
+- **班级闭环补强**：题目型班级任务 fan-out 写入 `submission` evidence 要求；Stage12 与 Playwright 教师/学生全流程都改为用真实 `practice_submission` 证据完成任务，符合“任务完成必须有 evidence”的项目约束。
+- **最终验证**：frontend `npm run typecheck` 通过；`npm run lint` 0 errors / 43 warnings；`npm run test -- --run` 225 files / 2218 tests passed；`npm run build` 通过；完整本地栈 health `5173/18080/18091/18092` 均 `ok`，`/api/course/videos` 返回 34 条；Playwright `publicAcceptance + teacherStudentFullFlow` 28 passed / 8.1m；graph 全量 1146 passed, 3 skipped；rag 全量 129 passed；backend 定向新链路与 Stage12 通过，后端全量 Maven 三轮均为业务断言 0 failures，但 6 个 Testcontainers 类在同一全量 JVM 中受 Docker 随机 host port 冲突报 `ContainerLaunch`，该 6 类窄集合重跑通过。
+
+## 2026-06-24 — 浏览器全流程点击验收：学生主链路 + 教师班级 evidence 闭环
+
+> 在本地完整栈上补跑真实浏览器全流程验收，修掉验收中暴露的指南锚点、RAG 等待、教师成员表响应式和班级任务 evidence fan-out 问题，并新增教师/学生班级闭环 Playwright 用例。
+
+- **验收报告**：新增 `docs/reports/2026-06-24-browser-full-flow-acceptance.md`，记录修前失败、根因、修复点、命令和截图证据路径。
+- **学生端 publicAcceptance 修稳**：`/guide` 桌面锚点限定到指南章节导航，避开 AppLayout skip-link；图书馆 RAG 三问改为等待“AI 引用或片段列表出现第 N 页证据”，不再被首帧空容器误伤。
+- **教师/学生班级闭环 E2E**：新增 `frontend/e2e/teacherStudentFullFlow.spec.ts`，覆盖教师创建班级、学生加入、教师发布绑定题目的任务、学生训练场 AC、公告板提交 submission 证据、教师看板完成率同步 1/1。
+- **真实业务修复**：`ClassroomMembersTab` 的成员表行数据改为 `computed`，修复学生已加入但教师 tab 仍显示空表；`ClassroomQuestService` 对题目型班级任务 fan-out 写入 `requiredEvidenceType=submission` 与 `targetProblemIds`，恢复任务完成 evidence 强校验。
+- **验证**：`ClassroomQuestServiceTest` 通过；教师/学生全流程 Playwright `1 passed / 10.4s`（`--retries=0`）；`publicAcceptance` 全套 `27 passed / 8.3m`（`--retries=0`）；`npm run typecheck` 通过；本地 `5173/18080/18091/18092` 健康端点均 `ok`。
+
+## 2026-06-24 — 长期班级学习效果仿真：KC 掌握 / 复习完成 / 资源使用三指标验证
+
+> 针对“真实长期学习效果仍需班级日志观察”的剩余风险，新增一个 6 周离线班级仿真：同一班级内 baseline/treatment 各 12 人，写入真实 `classrooms`、`classroom_members`、`kc_mastery`、`kc_mastery_event`、`kc_review_state`、`learning_resource`、`learning_event_log`，再用 SQL 聚合长期效果。
+
+- **仿真报告**：新增 `docs/reports/2026-06-24-long-term-classroom-effect-simulation.md`，记录班级规模、周期、表级日志、三项指标和验证命令。
+- **测试实现**：新增 `LongTermClassroomEffectSimulationTest` 与 test-only `ClassroomLearningEffectSimulator`，不加线上接口、不把假数据暴露为生产功能；仿真数据统一标记 `source='long-term-sim'` / `reason='long-term-sim:<runId>:<cohort>'`。
+- **量化结果**：平均 KC 掌握度 baseline **0.280** → treatment **0.482**（+0.202）；复习完成率 **0.333** → **0.800**（+0.467）；资源使用率 **0.625** → **1.000**（+0.375）。原始日志量：`kc_mastery_event` **720**、review logs **1128**、`resource_consumed` **234**。
+- **验证**：`cd backend && mvn -s ~/.m2/settings.xml -q -Dtest=LongTermClassroomEffectSimulationTest test` 通过。边界：这是确定性离线仿真，不等同真实学生在线 A/B 或浏览器全流程验收；后续真实班级日志仍应持续按同三项指标追踪。
+
+## 2026-06-24 — 两日优化详尽 A/B 门禁：稳定胜出才晋级
+
+> 对 2026-06-23/24 的 RAG 图谱补证据、Learning Evidence Graph、TutorBench-lite、Evidence Memory 2.0、推荐重排、AG-UI runtime、eval-gated 自动优化和协议网关做系统 A/B 门禁；补上“稳定样本胜率”约束，避免均值漂亮但不稳定的优化被晋级。
+
+- **A/B 报告**：新增 `docs/reports/2026-06-24-two-day-ab-evaluation.md`，逐项列出 baseline、treatment、量化门槛、当前结果和覆盖测试文件。
+- **Eval 自动优化继续改进**：`OptimizationPolicy` 新增 `min_sample_win_rate`，`CandidateOptimizationSummary` 新增 `sample_win_rate`；一个候选即便 mean uplift 为 **+0.166**、regression rate 为 **0.0**，只要 sample win rate **0.40 < 0.80** 就会被拒绝，防止少数样本大幅提升掩盖整体不稳定。
+- **RAG 图谱检索 A/B**：新增三场景矩阵（前置 / 共现 / 共同错误），strict baseline recall **0.5**，graph treatment recall **1.0**，win rate **1.0**，mean uplift **+0.50**，同时断言无关页不进入结果、补充证据不超过 `top_k // 3`。
+- **后端 Evidence A/B 矩阵**：Learning Evidence Graph 对 resource-only baseline 强制 completeness **+0.40**、connected rate **+0.30**、grounded pages **+2**、check/mastery coverage **+0.80**；Evidence Memory 对 recent-event baseline 强制 graph memory **+0.35**、retained evidence **+2**、direct/propagated signal **+1**；推荐重排要求目标 KC 从第 3 位升到第 1 位（rank uplift **>= 2**）。
+- **AG-UI Runtime A/B**：资源生成 / 工具调用 / 错误终止三类流式场景都要显著优于 legacy 事件名，当前 score uplift 分别为 **+0.77 / +0.585 / +0.495**。
+- **验证**：graph 定向 `python3 -m pytest -q tests/test_sse_agui.py tests/test_eval_optimization.py tests/test_orchestrator_route.py tests/test_tool_loop_route.py` 通过（32 passed）；rag 定向 `python3 -m pytest -q tests/test_recent_optimization_ab.py tests/test_fusion_kc_graph.py tests/test_query_graph_mode.py tests/test_runtime_knowledge_graph.py tests/test_retrieval_golden.py` 通过（38 passed）；backend 定向 Maven 通过，Surefire XML 复核 13 tests / 0 failures / 0 errors。未跑真实浏览器全栈点击 e2e，也未做真实学生在线 A/B。
+
+## 2026-06-24 — 三路线深化：Agent Runtime 标准化 + Evidence Memory 2.0 + Eval 自动优化
+
+> 按「路线 1 → 路线 2 → 路线 3」顺序深度落地：先把 agent runtime/协议层从私有 SSE 事件升级到 AG-UI/MCP/OTel 可描述能力，再把学习证据图推进成可持久化的 Evidence Memory 2.0，最后接入 eval-gated prompt 自动优化，形成“生成前有协议、推荐时有记忆、优化时有量化闸门”的闭环。
+
+- **设计文档与实施记录**：新增 `docs/plans/2026-06-24-agent-runtime-evidence-memory-eval-design.md` 与 `docs/plans/2026-06-24-agent-runtime-evidence-memory-eval-implementation.md`，把 SAG/GraphRAG 之外的 AG-UI、MCP resource/prompt、OpenTelemetry GenAI semantic conventions、MemGraphRAG/HippoRAG 记忆信号、Ragas/trajectory eval 自动优化映射到 Pythontopia 真实模块。
+- **路线 1 · Agent Runtime / AG-UI / 协议网关**：`pythontopia-graph` 的 orchestrator/tool-loop SSE 统一输出 `RUN_STARTED`、`STEP_STARTED`、`TEXT_MESSAGE_CONTENT`、`STEP_FINISHED`、`RUN_FINISHED/RUN_ERROR` 等 AG-UI 风格事件；新增 stream quality 量化函数，能检测 legacy `trace/token/result` 退化；后端 `ProtocolGatewayService` 扩展 MCP resource、MCP prompt、`learner.evidence.graph.read` 工具与 OTel GenAI 属性清单。
+- **路线 2 · Evidence Memory 2.0**：新增 `learner_evidence_memory_snapshot` 迁移、`EvidenceMemoryService/Repository/Controller` 与信号 DTO；从失败微测、练习失败、通过检查、grounded page、evidence id 聚合 KC 记忆信号，并沿 `course_kc_edge` 按 `requires/co_occurs_with/has_common_mistake/same_chapter` 衰减传播；推荐服务优先使用 evidence memory 信号重排资源，并把证据事件 id 透传进推荐结果。
+- **路线 3 · Eval-gated 自动优化**：新增 `pythontopia_graph.eval.optimization`，用 faithfulness / answer relevancy / context recall 加权 composite 对 baseline 与候选 prompt 做样本级对比；只有平均 uplift、回归率、严重回归数、最低均分都过闸门才接受候选，并把选中的 prompt variant 写成现有 `optimize` artifact，避免“自动优化”变成无约束 prompt 漂移。
+- **量化对比测试**：AG-UI 标准流质量分 **0.95**，legacy 事件流 **0.22**；Evidence Memory graph-backed 分数要求比 naive recent-event memory 至少高 **+0.35**；自动优化测试覆盖候选平均 uplift 达 **+0.18** 可接受、但回归率 **0.25 > 0.20** 时必须拒绝；协议、推荐、artifact 导出均有定向断言。
+- **验证**：本条初次落地时完成 graph/rag/backend/frontend 定向验证；最终收口见 2026-06-25 条目。当前复验结果为 `pythontopia-graph` 全量 1146 passed, 3 skipped；`pythontopia-rag` 全量 129 passed；前端 typecheck/lint/test/build 与真实浏览器 E2E 通过；后端新链路、Stage12 与 6 个 Testcontainers 相关类窄集合通过。后端全量 Maven 在同一 JVM 中反复启动随机端口 Spring/Testcontainers 时仍受 Docker host port 冲突影响（业务断言 0 failures，6 个 `ContainerLaunch` errors），需后续把 Testcontainers 复用/端口分配治理成独立工程项。
+
 ## 2026-06-24 — Learning Evidence Graph 深化：SAG/GraphRAG 思路落到学习闭环评测
 
 > 在上一轮 KC 图谱补证据基础上，按 Route A/B/C 深化：不把 SAG 作为黑盒替换 RAG，而是把 SQL-native evidence graph、轨迹级评测、记忆感知个性化信号落到真实学习闭环，形成可审计、可量化、可继续演进的高级 AI 底座。

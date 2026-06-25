@@ -6,4 +6,7 @@ public record ProtocolGatewayDescriptorDto(
     String version,
     List<ProtocolToolDto> mcpTools,
     List<ProtocolAgentCardDto> a2aAgents,
-    List<String> aguiEvents) {}
+    List<String> aguiEvents,
+    List<ProtocolResourceDto> mcpResources,
+    List<ProtocolPromptDto> mcpPrompts,
+    List<String> otelGenAiAttributes) {}

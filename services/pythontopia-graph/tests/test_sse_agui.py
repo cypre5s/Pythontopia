@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from pythontopia_graph import sse_agui
 
 
@@ -132,9 +134,9 @@ def test_translate_trace_start_and_finish_preserve_data() -> None:
     assert '"note": "done"' in finish
 
 
-def test_translate_trace_without_phase_defaults_started() -> None:
+def test_translate_trace_without_phase_infers_finished_from_status() -> None:
     out = sse_agui.translate("trace", {"node": "understand", "status": "ok", "elapsed_ms": 3})
-    assert out.startswith("event: STEP_STARTED\n")
+    assert out.startswith("event: STEP_FINISHED\n")
     assert '"node": "understand"' in out
 
 
@@ -148,3 +150,102 @@ def test_translate_passthrough_agui_and_unknown_names() -> None:
         sse_agui.translate("custom_thing", {"x": 1})
         == 'event: custom_thing\ndata: {"x": 1}\n\n'
     )
+
+
+def test_stream_quality_scores_canonical_agui_higher_than_legacy_names() -> None:
+    canonical = sse_agui.stream_quality(
+        [
+            ("RUN_STARTED", {"runId": "r1"}),
+            ("STEP_STARTED", {"node": "evidence_fetcher"}),
+            ("STATE_DELTA", {"delta": {"plan_steps": [{"id": "learn", "status": "active"}]}}),
+            ("TEXT_MESSAGE_CONTENT", {"delta": "你好"}),
+            ("STEP_FINISHED", {"node": "evidence_fetcher", "status": "ok"}),
+            ("RUN_FINISHED", {"result": {"ok": True}}),
+        ]
+    )
+    legacy = sse_agui.stream_quality(
+        [
+            ("trace", {"node": "evidence_fetcher", "phase": "start"}),
+            ("token", {"delta": "你好"}),
+            ("trace", {"node": "evidence_fetcher", "phase": "finish", "status": "ok"}),
+            ("result", {"ok": True}),
+        ]
+    )
+
+    assert canonical.agui_event_rate == 1.0
+    assert canonical.lifecycle_coverage == 1.0
+    assert canonical.step_coverage == 1.0
+    assert canonical.text_coverage == 1.0
+    assert canonical.state_sync_coverage == 1.0
+    assert canonical.legacy_event_count == 0
+    assert canonical.score >= 0.85
+    assert canonical.score >= legacy.score + 0.25
+
+
+@pytest.mark.parametrize(
+    ("name", "canonical_events", "legacy_events", "min_uplift"),
+    [
+        (
+            "resource_generation_with_state",
+            [
+                ("RUN_STARTED", {"runId": "r1"}),
+                ("STEP_STARTED", {"node": "resource_designer"}),
+                ("STATE_DELTA", {"delta": {"stage": "drafting"}}),
+                ("TEXT_MESSAGE_CONTENT", {"delta": "生成讲义"}),
+                ("STEP_FINISHED", {"node": "resource_designer", "status": "ok"}),
+                ("RUN_FINISHED", {"result": {"resourceId": 1}}),
+            ],
+            [
+                ("trace", {"node": "resource_designer", "phase": "start"}),
+                ("token", {"delta": "生成讲义"}),
+                ("trace", {"node": "resource_designer", "phase": "finish"}),
+                ("result", {"resourceId": 1}),
+            ],
+            0.45,
+        ),
+        (
+            "tool_loop_with_tool_lifecycle",
+            [
+                ("RUN_STARTED", {"runId": "r2"}),
+                ("STEP_STARTED", {"node": "tool_loop"}),
+                ("TOOL_CALL_START", {"toolCallId": "c1", "toolName": "rag.search"}),
+                ("TOOL_CALL_ARGS", {"toolCallId": "c1", "delta": "{}"}),
+                ("TOOL_CALL_RESULT", {"toolCallId": "c1", "content": {"hits": 2}}),
+                ("STEP_FINISHED", {"node": "tool_loop", "status": "ok"}),
+                ("RUN_FINISHED", {"result": {"ok": True}}),
+            ],
+            [
+                ("trace", {"node": "tool_loop", "phase": "start"}),
+                ("trace", {"node": "tool_loop", "phase": "finish"}),
+                ("result", {"ok": True}),
+            ],
+            0.30,
+        ),
+        (
+            "error_terminal_contract",
+            [
+                ("RUN_STARTED", {"runId": "r3"}),
+                ("STEP_STARTED", {"node": "grounding_critic"}),
+                ("STEP_FINISHED", {"node": "grounding_critic", "status": "failed"}),
+                ("RUN_ERROR", {"code": "GROUNDING_FAILED", "message": "no citation"}),
+            ],
+            [
+                ("trace", {"node": "grounding_critic", "phase": "start"}),
+                ("error", {"code": "GROUNDING_FAILED", "message": "no citation"}),
+            ],
+            0.30,
+        ),
+    ],
+)
+def test_stream_quality_stably_beats_legacy_across_runtime_scenarios(
+    name: str,
+    canonical_events: list[tuple[str, dict]],
+    legacy_events: list[tuple[str, dict]],
+    min_uplift: float,
+) -> None:
+    canonical = sse_agui.stream_quality(canonical_events)
+    legacy = sse_agui.stream_quality(legacy_events)
+
+    assert canonical.legacy_event_count == 0, name
+    assert canonical.agui_event_rate == 1.0, name
+    assert canonical.score >= legacy.score + min_uplift, name

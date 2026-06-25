@@ -23,5 +23,18 @@ class ProtocolGatewayServiceTest {
         .contains("LearningEffectAgent", "TutorBenchAgent");
     assertThat(descriptor.aguiEvents())
         .contains("RUN_STARTED", "STEP_STARTED", "TEXT_MESSAGE_CONTENT", "RUN_FINISHED");
+    assertThat(descriptor.mcpResources())
+        .extracting(ProtocolResourceDto::name)
+        .contains("course.pack.43", "learner.evidence.graph", "learner.evidence.memory");
+    assertThat(descriptor.mcpPrompts())
+        .extracting(ProtocolPromptDto::name)
+        .contains("grounded_tutor_answer", "resource_micro_check", "evidence_memory_recommendation");
+    assertThat(descriptor.otelGenAiAttributes())
+        .contains(
+            "gen_ai.operation.name",
+            "gen_ai.request.model",
+            "gen_ai.response.model",
+            "gen_ai.tool.name",
+            "gen_ai.retrieval.query.text");
   }
 }

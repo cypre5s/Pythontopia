@@ -198,13 +198,39 @@ class Stage12TeacherDashboardAcceptanceIntegrationTest {
             "SELECT id FROM quest WHERE user_id = ? AND source = 'CLASSROOM' ORDER BY id LIMIT 1",
             Long.class,
             userId);
-    restTemplate.exchange(
+    ResponseEntity<Map> started =
+        restTemplate.exchange(
         "/api/quests/" + questId + "/start", HttpMethod.POST, bearer(studentToken, null), Map.class);
-    restTemplate.exchange(
+    assertThat(started.getStatusCode()).isEqualTo(HttpStatus.OK);
+
+    Long problemId =
+        jdbcTemplate.queryForObject(
+            "SELECT (target_problem_ids[1]) FROM quest WHERE id = ?",
+            Long.class,
+            questId);
+    Long submissionId = createPassedSubmission(userId, problemId, questId);
+    ResponseEntity<Map> completed =
+        restTemplate.exchange(
         "/api/quests/" + questId + "/complete",
         HttpMethod.POST,
-        bearer(studentToken, Map.of("note", "done")),
+        bearer(studentToken, Map.of("note", "done", "submissionId", submissionId)),
         Map.class);
+    assertThat(completed.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(completed.getBody().get("status")).isEqualTo("COMPLETED");
+  }
+
+  private Long createPassedSubmission(Long userId, Long problemId, Long questId) {
+    return jdbcTemplate.queryForObject(
+        """
+        INSERT INTO practice_submission (
+          user_id, problem_id, quest_id, source, language, code, status, runtime_ms, memory_kb
+        ) VALUES (?, ?, ?, 'CLASSROOM', 'PYTHON_3_11', 'print("ok")', 'PASSED', 12, 1024)
+        RETURNING id
+        """,
+        Long.class,
+        userId,
+        problemId,
+        questId);
   }
 
   @SuppressWarnings("unchecked")
