@@ -8,14 +8,15 @@ import type {
 
 // 百晓工坊「意图路由」前端契约。后端 POST /api/intent/route（Java 代理 → Python IntentRouterAgent），
 // 单次分类（非流式）：把一句话判定成该调用的工具并锚定 KC，前端据此分派到既有导师 / 工坊 SSE 管线。
-// 2026-06 深度优化：扩为 16 工具分发表 + 多轮上下文路由（recentTurns / lastIntent / sessionCorrections / scope）。
+// 2026-06 深度优化：扩为 17 工具分发表 + 多轮上下文路由（recentTurns / lastIntent / sessionCorrections / scope）。
 
 /**
- * 16 工具分发表（与 graph `schemas/intent.py` 的 IntentKind 全集一一对应）：
+ * 17 工具分发表（与 graph `schemas/intent.py` 的 IntentKind 全集一一对应）：
  *   - tutor_sse：ASK 答疑 / ASKME 考考我 / EXPLAIN_CODE 讲代码 / FIX_BUG 修报错
  *     （共用 /api/tutor/ask，差异在 context 前缀 directive）；
  *   - workshop_sse：6 个资源类型（与 WorkshopResourceType 一一对应，工坊生成管线）；
  *   - orchestrator_sse：PLAN 学习规划（/api/orchestrator/turn/stream）；
+ *   - backend tool：BROWSE 联网查证（外部内容，非课件）；
  *   - frontend（零 LLM）：VIDEO B站精选讲解 / REVIEW 记忆矿脉回声复习 /
  *     PROGRESS 学情报告 / NAVIGATE 带路 / MY_STUDY 找我的资料。
  */
@@ -26,6 +27,7 @@ export type IntentKind =
   | 'FIX_BUG'
   | 'VIDEO'
   | 'REVIEW'
+  | 'BROWSE'
   | 'PLAN'
   | 'PROGRESS'
   | 'NAVIGATE'

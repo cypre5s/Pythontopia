@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-06-26 — 9 项 AI 深度融合 Batch 6：联网查证工具进入百晓工坊
+
+> 把已有 BROWSE / browser-use 安全墙从“后端和 graph 里有能力”推进到学生真实可用的工坊工具：显式“联网查证 / 官方文档 / 最新资料”诉求可直接进入白名单、有界、只读的外部查证链路，并在 ChatGPT / Claude 风格工作台中以时间线展示，始终标注“外部内容，非课件”。
+
+- **17 工具分发表对齐**：前端 `IntentKind`、斜杠命令、能力分组、route render mode 全部纳入 `BROWSE`；新增 `/联网查证`，别名覆盖 `browse/search/web/联网/查证/官方文档/最新`，能力启动器“找内容/带路”包含视频、查证和导航。
+- **工坊对话真实接线**：`WorkshopChat` 新增 `browse` 消息类型，`BROWSE` 意图调用 `POST /api/browse/runs` + `GET /api/browse/runs/{id}`，把步骤、来源、截断/错误态用 `BrowseTimeline` 内联渲染；失败时保留错误气泡并支持按原上下文重试。
+- **历史与路由闭环**：前端历史 DTO 和后端 `WorkshopChatHistoryRecordRequest` 允许 `responseKind=browse`，browse 结果进入左侧历史和后续 recentTurns；Java `IntentGraphClient` 的 fallback 元数据补齐 `find/read_only/browse`。
+- **Graph 路由治理修正**：`IntentRouterAgent` 对“联网查证 / 官方文档 / 最新”等显式诉求走确定性预判，不依赖 LLM；工具注册表把 `BROWSE` 风险级别修正为 `read_only` 并显式 `read_only=true`，quiz scope 仍不暴露。
+- **前端视觉适配**：`BrowseTimeline` 从像素卡片调整为当前 AI 工作台的白底细边、系统字体、紧凑来源 chips，同时保留安全链接过滤、错误告警、外部内容 banner 和来源分区。
+- **验证**：前端定向 `npm run test -- --run tests/components/workshop/WorkshopChat.spec.ts tests/composables/useSlashCommand.spec.ts tests/components/workshop/BrowseTimeline.spec.ts src/api/__tests__/browse.spec.ts` 通过（69 tests）；`npm run typecheck` 通过；graph 定向 `python3 -m pytest -q tests/test_intent_router_agent.py tests/test_tool_registry.py tests/test_tool_schema.py` 通过（144 passed）；后端定向 `env MAVEN_OPTS=-Djdk.attach.allowAttachSelf=true mvn -s .mvn/settings.build.xml -q -Dtest=IntentGraphClientTest,WorkshopChatHistoryServiceTest test` 通过；后端 `mvn --settings .mvn/settings.build.xml -q test-compile` 通过；`git diff --check` 通过。Vitest 仍打印既有 `public/pyodide/pyodide.js.map` 缺失提示，退出码为 0。
+
 ## 2026-06-26 — 9 项 AI 深度融合 Batch 5：AI Runtime / Eval 证据驾驶舱
 
 > 把已有 AG-UI/MCP 协议、Learning Evidence Graph、Evidence Memory、Learner Twin 与联网查证安全墙聚合成一个学生可见的 Runtime/Eval 摘要；工坊右侧“调用”面板不只显示过程流，也能看到本次 AI 系统是否有证据、是否有评测闸门、外部来源是否与课件证据隔离。

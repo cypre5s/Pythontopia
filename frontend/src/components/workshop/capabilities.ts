@@ -56,9 +56,9 @@ export const WORKSHOP_CAPABILITIES: WorkshopCapability[] = [
     namespace: 'find',
     label: '找内容/带路',
     primaryIntent: 'VIDEO',
-    intents: ['VIDEO', 'NAVIGATE'],
-    description: '找视频或跳转到学习场所。',
-    examples: ['带我去图书馆'],
+    intents: ['VIDEO', 'BROWSE', 'NAVIGATE'],
+    description: '找视频、联网查证或跳转到学习场所。',
+    examples: ['查一下 Python 官方文档', '带我去图书馆'],
   },
 ];
 

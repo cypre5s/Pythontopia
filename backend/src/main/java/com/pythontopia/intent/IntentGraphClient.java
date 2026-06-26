@@ -43,10 +43,12 @@ public class IntentGraphClient {
           Map.entry("PROGRESS", "plan"),
           Map.entry("MY_STUDY", "plan"),
           Map.entry("VIDEO", "find"),
+          Map.entry("BROWSE", "find"),
           Map.entry("NAVIGATE", "find"));
   private static final Map<String, String> RISK_CLASS_BY_INTENT =
       Map.ofEntries(
           Map.entry("VIDEO", "read_only"),
+          Map.entry("BROWSE", "read_only"),
           Map.entry("PROGRESS", "read_only"),
           Map.entry("MY_STUDY", "read_only"),
           Map.entry("REVIEW", "navigational"),
@@ -61,6 +63,7 @@ public class IntentGraphClient {
           Map.entry("CODE_LAB", "practice"),
           Map.entry("PLAN", "plan"),
           Map.entry("PROGRESS", "progress"),
+          Map.entry("BROWSE", "browse"),
           Map.entry("NAVIGATE", "navigation"));
 
   private final RestTemplate restTemplate;

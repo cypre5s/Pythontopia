@@ -84,6 +84,7 @@ _NAVIGATE_LANDMARKS: tuple[tuple[str, str], ...] = (
 # - ASKME 在 PROGRESS 之前：「检验一下我学得怎么样」是求考核而非看学情卡；
 # - PLAN 在 REVIEW 之前：「怎么安排复习进度」是要规划而非进矿洞复盘；
 # - VIDEO 在 STORYBOARD 之后：「视频脚本/动画分镜」仍判 STORYBOARD，「看视频/B站」才判 VIDEO；
+# - BROWSE 在 VIDEO 之后：官方文档/最新资料诉求走联网查证，普通视频诉求不被抢走；
 # - REVIEW 在 HANDOUT 之前：明确资源词先命中各自意图，纯复习诉求才回错题矿洞。
 _INTENT_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("MY_STUDY", ("之前生成", "之前那份", "我生成过", "生成过的", "找找我", "我的讲义", "书房")),
@@ -93,11 +94,25 @@ _INTENT_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("MINDMAP", ("思维导图", "导图", "脑图", "知识图谱", "mindmap", "mind map")),
     ("STORYBOARD", ("动画", "分镜", "故事板", "动画脚本", "视频脚本", "storyboard")),
     ("VIDEO", ("看视频", "视频讲解", "讲解视频", "b站", "bilibili", "哔哩", "影片", "找视频", "看个视频")),
+    ("BROWSE", ("联网查证", "联网搜索", "查官方", "官方文档", "最新", "最新资料", "查一下官网", "python 官网", "web search", "browse")),
     ("CODE_LAB", ("代码", "示例代码", "敲代码", "实操", "动手", "跑一下", "运行", "code", "demo")),
     ("PRACTICE", ("练习", "练一练", "做题", "习题", "题目", "出题", "练题", "道题", "practice", "quiz")),
     ("READING", ("拓展", "延伸", "扩展阅读", "延伸阅读", "课外", "拓展阅读", "reading")),
     ("REVIEW", ("复习", "复盘", "温习", "回顾", "查漏", "补漏", "遗忘", "快忘", "忘光", "review")),
     ("HANDOUT", ("讲义", "笔记", "总结", "梳理", "讲解", "概念", "整理", "handout")),
+)
+
+_BROWSE_SIGNALS: tuple[str, ...] = (
+    "联网查证",
+    "联网搜索",
+    "查官方",
+    "官方文档",
+    "最新",
+    "最新资料",
+    "查一下官网",
+    "python 官网",
+    "web search",
+    "browse",
 )
 
 # 指代延续兜底：换述类 → ASK（换个方式再讲）；接续类 → 沿用上轮意图（需 last_intent 合法）。
@@ -660,10 +675,24 @@ class IntentRouterAgent:
 
     @classmethod
     def _deterministic_preroute(cls, req: IntentRouteRequest) -> dict[str, Any] | None:
-        """贴代码场景确定性预判（不调 LLM）：围栏+报错 → FIX_BUG；围栏+解释诉求 → EXPLAIN_CODE。"""
-        if _CODE_FENCE not in req.message:
-            return None
+        """显式工具场景确定性预判（不调 LLM）：代码围栏 / 联网查证等低歧义动作。"""
         lowered = req.message.lower()
+        if _CODE_FENCE not in req.message:
+            allowed_by_capability = set(cls._capability_candidate_intents(req))
+            allowed_tools = {spec.name for spec in tools_for_scope(req.scope)}
+            can_browse = "BROWSE" in allowed_tools and (
+                not allowed_by_capability or "BROWSE" in allowed_by_capability
+            )
+            if can_browse and any(signal in req.message or signal in lowered for signal in _BROWSE_SIGNALS):
+                return {
+                    "intent": "BROWSE",
+                    "kc_codes": [],
+                    "confidence": _PREROUTE_CONFIDENCE,
+                    "reason": "确定性预判：显式联网查证/官方资料诉求",
+                    "target": "",
+                    "secondary_intent": None,
+                }
+            return None
         if any(signal in lowered for signal in _BUG_SIGNALS):
             intent, reason = "FIX_BUG", "确定性预判：代码围栏+报错特征"
         elif any(signal in lowered for signal in _EXPLAIN_SIGNALS):
@@ -1231,6 +1260,8 @@ class IntentRouterAgent:
             return "plan"
         if intent == "PROGRESS":
             return "progress"
+        if intent == "BROWSE":
+            return "browse"
         if intent == "NAVIGATE":
             return "navigation"
         return "resource" if spec.renderer == "resource" else "answer"

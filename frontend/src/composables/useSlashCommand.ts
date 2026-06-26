@@ -4,9 +4,9 @@
  * 设计要点：
  *   - 斜杠命令是「模式」不是「内联引用」：选中后不往文本里插 token，而是抹掉末尾
  *     `/query`、把 forcedIntent 设为对应工具，由调用方渲染成一枚可移除的「工具」徽标。
- *   - 16 个命令对齐 api/intent.ts 的 IntentKind 全集（16 工具分发表）：
+ *   - 17 个命令对齐 api/intent.ts 的 IntentKind 全集（17 工具分发表）：
  *     AI 助教（ASK/ASKME/EXPLAIN_CODE/FIX_BUG，导师管线）+ 6 类资源（工坊生成管线）+
- *     看讲解（VIDEO，外部检索非生成）+ 学习管家（PLAN/PROGRESS/NAVIGATE/MY_STUDY/REVIEW）。
+ *     看讲解（VIDEO/BROWSE，外部检索非生成）+ 学习管家（PLAN/PROGRESS/NAVIGATE/MY_STUDY/REVIEW）。
  *   - 触发/替换正则与文本所有权解耦：text 由 useCoursewareMention 持有，本组合式只读它做
  *     检测、并在选中时写回（剥离 /query），便于和 `@` 共用同一个 textarea。
  *
@@ -139,6 +139,15 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
     group: GROUP_WATCH,
     icon: '▶',
     aliases: ['video', 'shipin', 'b站', 'bilibili', '视频', '讲解视频', '哔哩'],
+  },
+  {
+    intent: 'BROWSE',
+    token: '/联网查证',
+    label: '联网查证',
+    hint: '白名单内查官方资料，标注外部内容',
+    group: GROUP_WATCH,
+    icon: '⌁',
+    aliases: ['browse', 'search', 'web', 'wangluo', '联网', '查证', '搜索', '官方文档', '最新'],
   },
   {
     intent: 'PLAN',

@@ -12,7 +12,7 @@ public record WorkshopChatHistoryRecordRequest(
     @NotBlank
         @Pattern(
             regexp =
-                "answer|resource|video|error|clarify|plan|progress|mystudy|navigate|secondary")
+                "answer|resource|video|browse|error|clarify|plan|progress|mystudy|navigate|secondary")
         String responseKind,
     @Size(max = 64) String toolLabel,
     @Size(max = 20000) String responseText,

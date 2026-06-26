@@ -55,6 +55,7 @@ RouteRenderMode = Literal[
     "practice",
     "plan",
     "progress",
+    "browse",
     "navigation",
     "clarification",
 ]

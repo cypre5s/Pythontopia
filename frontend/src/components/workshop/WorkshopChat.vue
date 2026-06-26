@@ -1,12 +1,12 @@
 <script setup lang="ts">
 /**
- * 百晓工坊对话流（合并 导师问答 + 资源生成 + 学习管家），16 工具分发中枢。
+ * 百晓工坊对话流（合并 导师问答 + 资源生成 + 学习管家），17 工具分发中枢。
  *
  * 一条消息进来：
  *   1. ChatComposer 给出 { text, manualKcCodes, contextHint, forcedIntent }；
  *   2. forcedIntent 为空 → 调 /api/intent/route（带最近 6 轮摘要 / 上轮意图 / 本会话纠错 / scope）
  *      自动判定工具 + 锚定 KC；否则直接用；
- *   3. 按 16 工具分发表执行（蓝本 §0）：
+ *   3. 按 17 工具分发表执行（蓝本 §0）：
  *      - tutor_sse：ASK / ASKME / EXPLAIN_CODE / FIX_BUG（共用 /api/tutor/ask，差异在 context 前缀 directive）；
  *      - workshop_sse：6 类资源 → /api/workshop/resources/stream + AgentStudioStream 思考链；
  *      - orchestrator_sse：PLAN → /api/orchestrator/turn/stream（点亮 MarvisPanel）；
@@ -46,6 +46,7 @@ import { annotateCitations } from '@/utils/citations';
 import TutorVisualAids, { type TutorVisualAid } from '@/components/tutor/TutorVisualAids.vue';
 import CoursewareEvidence from '@/components/tutor/CoursewareEvidence.vue';
 import BilibiliVideoCards from '@/components/video/BilibiliVideoCards.vue';
+import BrowseTimeline from '@/components/workshop/BrowseTimeline.vue';
 import {
   styleEngaged,
   type CognitiveStyle,
@@ -71,6 +72,11 @@ import {
   buildMentionItems,
   type MentionItem,
 } from '@/composables/useCoursewareMention';
+import {
+  createBrowseRun,
+  getBrowseRun,
+  type BrowseRunDetailDto,
+} from '@/api/browse';
 import { SLASH_COMMANDS } from '@/composables/useSlashCommand';
 import {
   isResourceIntent,
@@ -214,7 +220,8 @@ interface AskOptions {
 /** 错误气泡「重试」chip 的参数缓存（重放上次 runAsk / runResource）。 */
 type RetryInfo =
   | { mode: 'ask'; question: string; kcCodes: string[]; context: string; opts: AskOptions }
-  | { mode: 'resource'; type: WorkshopResourceType; kcCodes: string[]; focusHint: string };
+  | { mode: 'resource'; type: WorkshopResourceType; kcCodes: string[]; focusHint: string }
+  | { mode: 'browse'; ctx: DispatchContext };
 
 interface ChatMessage {
   id: string;
@@ -224,6 +231,7 @@ interface ChatMessage {
     | 'answer'
     | 'resource'
     | 'video'
+    | 'browse'
     | 'error'
     | 'clarify'
     | 'plan'
@@ -241,6 +249,8 @@ interface ChatMessage {
   attachments?: UploadAttachmentRef[];
   /** kind==='video' / kind==='answer'：B站卡片检索关键词（Python 优先、清洗后）。 */
   videoKeyword?: string;
+  /** kind==='browse'：联网查证会话详情（外部内容，非课件）。 */
+  browseRun?: BrowseRunDetailDto | null;
   /** kind==='answer'：是否自动内嵌「相关 B站讲解」（按学生语句的视频意图判断）。 */
   showVideo?: boolean;
   groundingStatus?: string;
@@ -448,6 +458,12 @@ function historyAssistantMessage(turn: WorkshopChatHistoryTurnDto): ChatMessage 
     if (typeof payload.videoKeyword === 'string') msg.videoKeyword = payload.videoKeyword;
     return msg;
   }
+  if (kind === 'browse') {
+    if (payload.browseRun && typeof payload.browseRun === 'object') {
+      msg.browseRun = payload.browseRun as BrowseRunDetailDto;
+    }
+    return msg;
+  }
   if (kind === 'mystudy') {
     if (Array.isArray(payload.mystudyItems)) {
       msg.mystudyItems = payload.mystudyItems as WorkshopResourceListItemDto[];
@@ -491,6 +507,7 @@ defineExpose({ loadConversation, newChat });
 const officeStreamState = ref<'idle' | 'streaming' | 'done' | 'error'>('idle');
 const officeTokenPreview = ref('');
 const officeStreamLabel = ref('');
+const browseBusy = ref(false);
 
 // orchestrator 协同活动：GuideOverlay 或本组件 PLAN 写入 workshopActivity 时，
 // AgentStudioStream 渲染思考链（MarvisPanel 同步点亮）。
@@ -505,6 +522,7 @@ const busy = computed(
     tutorSse.status.value === 'connecting' ||
     orchestratorSse.status.value === 'streaming' ||
     orchestratorSse.status.value === 'connecting' ||
+    browseBusy.value ||
     officeStreamState.value === 'streaming' ||
     isOrchestratorActive.value ||
     pendingHistorySaves.value > 0,
@@ -585,6 +603,7 @@ function historyPayloadFor(m: ChatMessage): Record<string, unknown> {
     };
   }
   if (m.kind === 'video') return { videoKeyword: m.videoKeyword ?? '' };
+  if (m.kind === 'browse') return { browseRun: m.browseRun ?? null };
   if (m.kind === 'progress') return { masterySnapshot: learning.field.masterySnapshot };
   if (m.kind === 'mystudy') return { mystudyItems: m.mystudyItems ?? [] };
   if (m.kind === 'navigate') return { navRoute: m.navRoute ?? '', navLabel: m.navLabel ?? '' };
@@ -601,6 +620,7 @@ function responseTextForHistory(m: ChatMessage): string {
   if (m.kind === 'plan') return '学习规划';
   if (m.kind === 'resource') return m.resourceTitle ?? m.toolLabel ?? '资源';
   if (m.kind === 'video') return m.videoKeyword ?? '相关视频';
+  if (m.kind === 'browse') return m.browseRun?.finalSummary || m.text || '联网查证';
   if (m.kind === 'progress') return '学情报告';
   if (m.kind === 'mystudy') return m.mystudyItems?.length ? '我的书房检索结果' : '';
   if (m.kind === 'navigate') return m.navLabel ? `带你去${m.navLabel}` : '导航';
@@ -859,6 +879,7 @@ const ROUTE_TURN_KINDS = new Set<ChatMessage['kind']>([
   'answer',
   'resource',
   'video',
+  'browse',
   'plan',
   'progress',
   'mystudy',
@@ -1128,7 +1149,7 @@ async function onSubmit(payload: ComposerSubmitPayload): Promise<void> {
   }
 }
 
-/** 16 工具分发表（蓝本 §0）：按 execMode 分派到 tutor / workshop / orchestrator / 纯前端。 */
+/** 17 工具分发表（蓝本 §0）：按 execMode 分派到 tutor / workshop / orchestrator / browse / 纯前端。 */
 async function dispatchIntent(intent: IntentKind, ctx: DispatchContext): Promise<string | null> {
   if (intent === 'ASK') {
     return runAsk(ctx.text, ctx.kcCodes, ctx.contextHint);
@@ -1150,6 +1171,9 @@ async function dispatchIntent(intent: IntentKind, ctx: DispatchContext): Promise
   }
   if (intent === 'VIDEO') {
     return runVideo(ctx.kcCodes, ctx.focusHint || ctx.text);
+  }
+  if (intent === 'BROWSE') {
+    return runBrowse(ctx);
   }
   if (intent === 'REVIEW') {
     runReview(ctx.kcCodes);
@@ -1292,6 +1316,50 @@ function runVideo(kcCodes: string[], focus: string): string {
     toolIcon: meta.icon,
     toolLabel: meta.label,
   });
+  return id;
+}
+
+async function runBrowse(ctx: DispatchContext): Promise<string> {
+  const meta = commandOf('BROWSE');
+  const id = genId();
+  const goal = (ctx.focusHint || ctx.text).trim();
+  pushMessage({
+    id,
+    role: 'assistant',
+    kind: 'browse',
+    intent: 'BROWSE',
+    text: '正在联网查证…',
+    streaming: true,
+    browseRun: null,
+    toolIcon: meta.icon,
+    toolLabel: meta.label,
+  });
+  browseBusy.value = true;
+  try {
+    const created = await createBrowseRun({ goal });
+    const detail = await getBrowseRun(created.id);
+    const text =
+      detail.finalSummary ||
+      (detail.error ? `联网查证失败：${detail.error}` : '联网查证已完成，见下方步骤与来源。');
+    updateMessage(id, {
+      text,
+      browseRun: detail,
+      streaming: false,
+    });
+    playSfx(detail.status === 'FAILED' ? 'sfx_error' : 'sfx_success');
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '联网查证暂时不可用，请稍后重试';
+    playSfx('sfx_error');
+    updateMessage(id, {
+      kind: 'error',
+      text: message,
+      streaming: false,
+      retry: { mode: 'browse', ctx },
+    });
+  } finally {
+    browseBusy.value = false;
+  }
+  scrollToBottom();
   return id;
 }
 
@@ -1464,8 +1532,10 @@ function onRetry(m: ChatMessage): void {
   playSfx('sfx_click');
   if (r.mode === 'ask') {
     void runAsk(r.question, r.kcCodes, r.context, r.opts);
-  } else {
+  } else if (r.mode === 'resource') {
     void runResource(r.type, r.kcCodes, r.focusHint);
+  } else {
+    void runBrowse(r.ctx);
   }
 }
 
@@ -2323,6 +2393,31 @@ onMounted(async () => {
               />
             </div>
 
+            <!-- 助手：联网查证（BROWSE，外部内容，非课件） -->
+            <div
+              v-else-if="m.kind === 'browse'"
+              class="msg msg--assistant msg--browse"
+              data-testid="browse-msg"
+            >
+              <div
+                v-if="m.toolLabel"
+                class="msg__tags"
+              >
+                <span class="msg__tool">{{ m.toolIcon }} {{ m.toolLabel }}</span>
+              </div>
+              <p
+                v-if="m.text && (m.streaming || !m.browseRun)"
+                class="msg__text"
+              >
+                {{ m.text }}
+                <span
+                  v-if="m.streaming"
+                  class="cursor"
+                >▌</span>
+              </p>
+              <BrowseTimeline :run="m.browseRun ?? null" />
+            </div>
+
             <!-- 助手：学习计划卡（PLAN，orchestrator 产出 看/学/练/测 步骤） -->
             <div
               v-else-if="m.kind === 'plan'"
@@ -2741,6 +2836,11 @@ onMounted(async () => {
 }
 /* 视频卡片气泡与答疑气泡同宽（同为撑满行 + 左对齐），避免比上方回答更宽显得突兀。 */
 .msg--video {
+  align-self: flex-start;
+  width: 100%;
+  background: #ffffff;
+}
+.msg--browse {
   align-self: flex-start;
   width: 100%;
   background: #ffffff;

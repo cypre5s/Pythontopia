@@ -5,7 +5,7 @@ import java.util.List;
 /**
  * 百晓工坊「意图路由」响应（对前端 camelCase）。
  *
- * <p>{@code intent} 取值即 graph 的 IntentKind 16 值：ASK / VIDEO / REVIEW / HANDOUT / MINDMAP /
+ * <p>{@code intent} 取值即 graph 的 IntentKind 17 值：ASK / VIDEO / REVIEW / BROWSE / HANDOUT / MINDMAP /
  * PRACTICE / CODE_LAB / READING / STORYBOARD / ASKME / EXPLAIN_CODE / FIX_BUG / PLAN / PROGRESS /
  * NAVIGATE / MY_STUDY。前端据此分派到导师 / 工坊 / 总管 SSE 或纯前端动作。{@code kcCodes} 为建议
  * 知识点（手动 @ 优先），{@code focusHint} 为一句话学习重点。Java 仅透传，{@code intent} 是

@@ -7,6 +7,8 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -16,6 +18,7 @@ class WorkshopChatHistoryServiceTest {
   private final WorkshopChatHistoryRepository repository = mock(WorkshopChatHistoryRepository.class);
   private final WorkshopChatHistoryService service = new WorkshopChatHistoryService(repository);
   private final ObjectMapper objectMapper = new ObjectMapper();
+  private final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
 
   @Test
   void recordTurnStoresPlanHistoryForCurrentUser() throws Exception {
@@ -35,6 +38,32 @@ class WorkshopChatHistoryServiceTest {
 
     verify(repository).insert(7L, request);
     assertThat(response.id()).isEqualTo(42L);
+  }
+
+  @Test
+  void recordRequestAllowsBrowseHistoryKindButRejectsUnknownKind() throws Exception {
+    JsonNode payload = objectMapper.readTree("{\"browseRun\":{\"id\":88}}");
+    WorkshopChatHistoryRecordRequest browse =
+        new WorkshopChatHistoryRecordRequest(
+            "conv-browse",
+            "查 Python 官网 sorted 稳定性",
+            "BROWSE",
+            "browse",
+            "联网查证",
+            "Python sorted 是稳定排序。",
+            payload);
+    WorkshopChatHistoryRecordRequest invalid =
+        new WorkshopChatHistoryRecordRequest(
+            "conv-browse",
+            "查 Python 官网 sorted 稳定性",
+            "BROWSE",
+            "browser",
+            "联网查证",
+            "Python sorted 是稳定排序。",
+            payload);
+
+    assertThat(validator.validate(browse)).isEmpty();
+    assertThat(validator.validate(invalid)).isNotEmpty();
   }
 
   @Test

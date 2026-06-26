@@ -187,6 +187,29 @@ class IntentGraphClientTest {
   }
 
   @Test
+  void browseIntentFallbackMetadataUsesFindReadOnlyBrowseRenderer() {
+    MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+    server
+        .expect(MockRestRequestMatchers.requestTo("http://graph.test/agents/intent/route"))
+        .andRespond(
+            MockRestResponseCreators.withSuccess(
+                """
+                {"intent": "BROWSE", "focus_hint": "Python sorted stability"}
+                """,
+                MediaType.APPLICATION_JSON));
+
+    IntentRouteResponse response = client.route(minimalRequest(), null);
+
+    assertThat(response.intent()).isEqualTo("BROWSE");
+    assertThat(response.focusHint()).isEqualTo("Python sorted stability");
+    assertThat(response.namespace()).isEqualTo("find");
+    assertThat(response.riskClass()).isEqualTo("read_only");
+    assertThat(response.renderMode()).isEqualTo("browse");
+    assertThat(response.candidateIntents()).containsExactly("BROWSE");
+    server.verify(Duration.ofSeconds(2));
+  }
+
+  @Test
   void fallsBackToAskWhenGraphOmitsIntent() {
     MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
     server

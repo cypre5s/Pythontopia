@@ -16,6 +16,7 @@ export type WorkshopRenderMode =
   | 'practice'
   | 'plan'
   | 'progress'
+  | 'browse'
   | 'navigation'
   | 'clarification';
 

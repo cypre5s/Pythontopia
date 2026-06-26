@@ -1,5 +1,5 @@
 /**
- * WorkshopChat 16 工具分发中枢测试（WP5）。
+ * WorkshopChat 17 工具分发中枢测试（WP5）。
  *
  * 覆盖：
  *   1. 意图分发表：mock routeIntent 各 intent → 走对管线（tutor / workshop / orchestrator / 纯前端）
@@ -24,6 +24,8 @@ const apiMocks = vi.hoisted(() => ({
   listKnowledgeComponents: vi.fn(),
   listWorkshopResources: vi.fn(),
   getWorkshopResource: vi.fn(),
+  createBrowseRun: vi.fn(),
+  getBrowseRun: vi.fn(),
   fetchMastery: vi.fn(),
   styleEngaged: vi.fn(),
   postLearningEvent: vi.fn(),
@@ -115,6 +117,15 @@ vi.mock('@/api/workshopHistory', () => ({
   recordWorkshopChatHistoryTurn: apiMocks.recordWorkshopChatHistoryTurn,
   listWorkshopChatHistoryTurns: vi.fn(),
 }));
+
+vi.mock('@/api/browse', async () => {
+  const actual = await vi.importActual<typeof import('@/api/browse')>('@/api/browse');
+  return {
+    ...actual,
+    createBrowseRun: apiMocks.createBrowseRun,
+    getBrowseRun: apiMocks.getBrowseRun,
+  };
+});
 
 vi.mock('@/api/field', () => ({
   bootstrapCurriculum: vi.fn(),
@@ -407,7 +418,7 @@ async function submit(wrapper: VueWrapper, text: string, extra: SubmitExtra = {}
 
 enableAutoUnmount(afterEach);
 
-describe('WorkshopChat 16 工具分发', () => {
+describe('WorkshopChat 17 工具分发', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     router = buildRouter();
@@ -422,6 +433,33 @@ describe('WorkshopChat 16 工具分发', () => {
     apiMocks.listKnowledgeComponents.mockResolvedValue([]);
     apiMocks.listWorkshopResources.mockResolvedValue([]);
     apiMocks.getWorkshopResource.mockResolvedValue(RESOURCE_DETAIL);
+    apiMocks.createBrowseRun.mockResolvedValue({
+      id: 88,
+      goal: 'Python sorted 稳定性',
+      status: 'SUCCESS',
+      finalSummary: 'Python sorted 是稳定排序。',
+      truncated: false,
+      error: '',
+      createdAt: '2026-06-26T00:00:00Z',
+    });
+    apiMocks.getBrowseRun.mockResolvedValue({
+      id: 88,
+      goal: 'Python sorted 稳定性',
+      status: 'SUCCESS',
+      finalSummary: 'Python sorted 是稳定排序。',
+      truncated: false,
+      error: '',
+      createdAt: '2026-06-26T00:00:00Z',
+      steps: [
+        {
+          index: 1,
+          action: 'read',
+          url: 'https://docs.python.org/3/howto/sorting.html',
+          summary: '官方排序 HOWTO 说明排序稳定性。',
+        },
+      ],
+      citations: ['https://docs.python.org/3/howto/sorting.html'],
+    });
     apiMocks.fetchMastery.mockResolvedValue([]);
     apiMocks.styleEngaged.mockResolvedValue(undefined);
     apiMocks.postLearningEvent.mockResolvedValue(undefined);
@@ -691,6 +729,38 @@ describe('WorkshopChat 16 工具分发', () => {
 
     expect(sse(TUTOR_URL).start).not.toHaveBeenCalled();
     expect(wrapper.find('[data-kind="video"]').exists()).toBe(true);
+  });
+
+  it('BROWSE → 后端联网查证管线 + 外部内容时间线 + 历史保存', async () => {
+    const wrapper = mountChat();
+    await flushPromises();
+    armRoute({ intent: 'BROWSE', kcCodes: [], focusHint: 'Python sorted 稳定性' });
+
+    await submit(wrapper, '查一下 Python sorted 稳定性');
+
+    expect(apiMocks.createBrowseRun).toHaveBeenCalledWith({ goal: 'Python sorted 稳定性' });
+    expect(apiMocks.getBrowseRun).toHaveBeenCalledWith(88);
+    expect(sse(TUTOR_URL).start).not.toHaveBeenCalled();
+    expect(sse(WORKSHOP_URL).start).not.toHaveBeenCalled();
+    expect(wrapper.find('[data-kind="browse"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="browse-timeline"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="browse-external-notice"]').text()).toContain('外部内容，非课件');
+    expect(wrapper.find('[data-testid="browse-final-summary"]').text()).toContain('Python sorted 是稳定排序');
+    expect(apiMocks.recordWorkshopChatHistoryTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userText: '查一下 Python sorted 稳定性',
+        intent: 'BROWSE',
+        responseKind: 'browse',
+        toolLabel: '联网查证',
+        responseText: 'Python sorted 是稳定排序。',
+        responsePayload: expect.objectContaining({
+          browseRun: expect.objectContaining({
+            id: 88,
+            citations: ['https://docs.python.org/3/howto/sorting.html'],
+          }),
+        }),
+      }),
+    );
   });
 
   it('REVIEW → 引导跳转错题矿洞 /bug-mine', async () => {

@@ -51,7 +51,7 @@ function externalAria(url: string): string {
     aria-label="联网查证时间线"
   >
     <header class="browse__head">
-      <span class="browse__title">🌐 联网查证</span>
+      <span class="browse__title">联网查证</span>
       <span
         class="browse__status"
         :class="`browse__status--${statusTone}`"
@@ -64,7 +64,6 @@ function externalAria(url: string): string {
       class="browse__notice"
       data-testid="browse-external-notice"
     >
-      <span aria-hidden="true">⚠️</span>
       {{ BROWSE_EXTERNAL_NOTICE }} · 仅供参考，请以课件为准
     </p>
 
@@ -188,13 +187,13 @@ function externalAria(url: string): string {
   width: 100%;
   align-self: flex-start;
   margin-top: 8px;
-  padding: 10px 12px;
-  border: 1px solid var(--pyt-color-border);
+  padding: 12px;
+  border: 1px solid #dde5de;
   border-radius: 8px;
-  background: var(--pyt-color-bg-soft);
-  font-family: var(--pyt-font-pixel);
-  font-size: 12px;
-  color: var(--pyt-color-text-primary);
+  background: #ffffff;
+  font-family: Inter, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  font-size: 13px;
+  color: #252a2e;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -206,48 +205,49 @@ function externalAria(url: string): string {
   gap: 8px;
 }
 .browse__title {
+  letter-spacing: 0;
   font-weight: 700;
-  color: var(--pyt-color-text-hint);
+  color: #25332b;
 }
 .browse__status {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
-  padding: 1px 8px;
-  border-radius: var(--pyt-radius-full);
-  border: 1px solid var(--pyt-color-border);
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid #d7dfd8;
 }
 .browse__status--pending {
-  background: #eee;
-  color: #555;
+  background: #f4f6f5;
+  color: #5b655f;
 }
 .browse__status--active {
-  background: #f5e2c1;
-  border-color: #c2871f;
-  color: #7a5210;
+  background: #fff7df;
+  border-color: #ead38d;
+  color: #725414;
 }
 .browse__status--done {
-  background: #d6ead1;
-  border-color: #4d6e1d;
-  color: #2d5b1b;
+  background: #ebf6ec;
+  border-color: #bcd9bf;
+  color: #276037;
 }
 .browse__status--warn {
-  background: #f7ecd0;
-  border-color: #b8860b;
-  color: #7a5210;
+  background: #fff7df;
+  border-color: #ead38d;
+  color: #725414;
 }
 .browse__status--failed {
-  background: #f7d9d6;
-  border-color: #b3261e;
-  color: #b3261e;
+  background: #fff1ef;
+  border-color: #e2ada5;
+  color: #9e3528;
 }
 .browse__notice {
   margin: 0;
-  padding: 4px 8px;
-  font-size: 11px;
-  background: #fff2c9;
-  border: 1px dashed #b8860b;
+  padding: 6px 8px;
+  font-size: 12px;
+  background: #fff9e8;
+  border: 1px solid #ead38d;
   border-radius: 6px;
-  color: #7a5210;
+  color: #725414;
 }
 .browse__goal {
   margin: 0;
@@ -256,7 +256,7 @@ function externalAria(url: string): string {
 }
 .browse__goal-key {
   font-weight: 700;
-  color: var(--pyt-color-text-hint);
+  color: #63706a;
   margin-right: 6px;
 }
 .browse__steps {
@@ -286,13 +286,13 @@ function externalAria(url: string): string {
 }
 .browse__action {
   flex: none;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
-  padding: 1px 7px;
-  border-radius: var(--pyt-radius-full);
-  background: #e7eef7;
-  border: 1px solid #6a86b0;
-  color: #2f4a72;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #eef5ef;
+  border: 1px solid #c6d5c8;
+  color: #365241;
   white-space: nowrap;
 }
 .browse__step-body {
@@ -302,38 +302,38 @@ function externalAria(url: string): string {
   gap: 2px;
 }
 .browse__link {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
-  color: #2f4a72;
+  color: #245f80;
   text-decoration: underline;
   word-break: break-all;
 }
 .browse__summary {
   margin: 0;
   line-height: 1.45;
-  color: var(--pyt-color-text-primary);
+  color: #33423a;
   word-break: break-word;
 }
 .browse__empty {
   margin: 0;
   font-style: italic;
-  color: var(--pyt-color-text-muted);
+  color: #6c7771;
 }
 .browse__truncated {
   margin: 0;
-  padding: 4px 8px;
-  font-size: 11px;
-  background: #f7ecd0;
-  border: 1px solid #b8860b;
+  padding: 6px 8px;
+  font-size: 12px;
+  background: #fff9e8;
+  border: 1px solid #ead38d;
   border-radius: 6px;
-  color: #7a5210;
+  color: #725414;
 }
 .browse__final {
   margin: 0;
-  padding: 6px 8px;
+  padding: 8px 10px;
   line-height: 1.5;
-  background: var(--pyt-color-bg);
-  border: 1px solid var(--pyt-color-border);
+  background: #f8faf8;
+  border: 1px solid #dde5de;
   border-radius: 6px;
   word-break: break-word;
 }
@@ -344,9 +344,9 @@ function externalAria(url: string): string {
 }
 .browse__cites-notice {
   margin: 0;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
-  color: var(--pyt-color-text-hint);
+  color: #63706a;
 }
 .browse__cite-list {
   list-style: none;
@@ -358,33 +358,33 @@ function externalAria(url: string): string {
 }
 .browse__chip {
   display: inline-block;
-  font-size: 10px;
-  padding: 2px 8px;
-  border-radius: var(--pyt-radius-full);
-  background: #e7eef7;
-  border: 1px solid #6a86b0;
-  color: #2f4a72;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #eef5ef;
+  border: 1px solid #c6d5c8;
+  color: #245f80;
   text-decoration: none;
   word-break: break-all;
 }
 .browse__chip--plain {
-  background: #efeae0;
-  border-color: var(--pyt-color-border);
-  color: var(--pyt-color-text-muted);
+  background: #f4f6f5;
+  border-color: #dde5de;
+  color: #6c7771;
 }
 .browse__error {
   display: flex;
   gap: 8px;
   align-items: flex-start;
-  padding: 6px 8px;
-  background: #f7d9d6;
-  border: 1px solid #b3261e;
+  padding: 8px;
+  background: #fff1ef;
+  border: 1px solid #e2ada5;
   border-radius: 6px;
 }
 .browse__error-icon {
   flex: none;
   font-weight: 700;
-  color: #b3261e;
+  color: #9e3528;
 }
 .browse__error-body {
   min-width: 0;
@@ -392,7 +392,7 @@ function externalAria(url: string): string {
 .browse__error-msg {
   margin: 0;
   font-weight: 700;
-  color: #b3261e;
+  color: #9e3528;
   word-break: break-word;
 }
 .browse__fallback {

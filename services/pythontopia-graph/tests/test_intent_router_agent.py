@@ -577,6 +577,21 @@ async def test_keyword_fallback_when_provider_empty(message: str, expected: str)
 
 
 @pytest.mark.asyncio
+async def test_browse_preroute_uses_find_metadata_and_browse_renderer() -> None:
+    provider = StubProvider(None)
+    agent = IntentRouterAgent(provider)
+
+    resp = await agent.route(request_of("查一下 Python 官方文档 sorted 稳定性"))
+
+    assert resp.intent == "BROWSE"
+    assert resp.namespace == "find"
+    assert resp.risk_class == "read_only"
+    assert resp.render_mode == "browse"
+    assert "BROWSE" in resp.candidate_intents
+    assert provider.calls == 0
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("message", "target"),
     [

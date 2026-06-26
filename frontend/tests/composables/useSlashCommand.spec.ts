@@ -4,7 +4,7 @@
  * 覆盖：
  *   1. `/` 触发检测：文本末尾 /query 弹菜单并解析 query；非触发态关闭。
  *   2. 分组与过滤：AI 助教 / 生成资源 / 看讲解 / 学习管家分组；query 子串（含别名）过滤。
- *   3. 16 工具分发表完整性：IntentKind 全集（16 值）每个都有且只有一条命令。
+ *   3. 17 工具分发表完整性：IntentKind 全集（17 值）每个都有且只有一条命令。
  *   4. 选中即模式：抹掉末尾 /query、设 forcedIntent（不往文本插 token）。
  *   5. 键盘导航：moveActive 环形；commitActive 选中当前项。
  *   6. forcedIntent：setForced / clearForced / forcedCommand 派生。
@@ -32,19 +32,19 @@ describe('SLASH_TRIGGER_RE', () => {
   });
 });
 
-/** 16 工具分发表全集（与 api/intent.ts 的 IntentKind 一一对应；类型标注保证漏值即编译报错）。 */
+/** 17 工具分发表全集（与 api/intent.ts 的 IntentKind 一一对应；类型标注保证漏值即编译报错）。 */
 const ALL_INTENTS: IntentKind[] = [
   'ASK', 'ASKME', 'EXPLAIN_CODE', 'FIX_BUG',
   'HANDOUT', 'MINDMAP', 'PRACTICE', 'CODE_LAB', 'READING', 'STORYBOARD',
-  'VIDEO',
+  'VIDEO', 'BROWSE',
   'PLAN', 'PROGRESS', 'NAVIGATE', 'MY_STUDY', 'REVIEW',
 ];
 
-describe('SLASH_COMMANDS 16 工具分发表完整性', () => {
-  it('16 个 intent 全有命令，且一一对应不重复（REVIEW 新增 /复习 不豁免）', () => {
-    expect(SLASH_COMMANDS).toHaveLength(16);
+describe('SLASH_COMMANDS 17 工具分发表完整性', () => {
+  it('17 个 intent 全有命令，且一一对应不重复（REVIEW/BROWSE 均不豁免）', () => {
+    expect(SLASH_COMMANDS).toHaveLength(17);
     const intents = SLASH_COMMANDS.map((c) => c.intent);
-    expect(new Set(intents).size).toBe(16);
+    expect(new Set(intents).size).toBe(17);
     for (const intent of ALL_INTENTS) {
       expect(intents, `intent ${intent} 缺少斜杠命令`).toContain(intent);
     }
@@ -61,22 +61,23 @@ describe('SLASH_COMMANDS 16 工具分发表完整性', () => {
     expect(byIntent.get('MY_STUDY')).toMatchObject({ token: '/找资料', icon: '⌕', group: '学习管家' });
     // REVIEW 原本无命令 → 新增 /复习 并入学习管家。
     expect(byIntent.get('REVIEW')).toMatchObject({ token: '/复习', group: '学习管家' });
+    expect(byIntent.get('BROWSE')).toMatchObject({ token: '/联网查证', icon: '⌁', group: '看讲解' });
   });
 
-  it('分组成员对齐蓝本：AI 助教 4 / 生成资源 6 / 看讲解 1 / 学习管家 5', () => {
+  it('分组成员对齐蓝本：AI 助教 4 / 生成资源 6 / 看讲解 2 / 学习管家 5', () => {
     const ofGroup = (g: string): string[] =>
       SLASH_COMMANDS.filter((c) => c.group === g).map((c) => c.intent);
     expect(ofGroup('AI 助教')).toEqual(['ASK', 'ASKME', 'EXPLAIN_CODE', 'FIX_BUG']);
     expect(ofGroup('生成资源')).toEqual([
       'HANDOUT', 'MINDMAP', 'PRACTICE', 'CODE_LAB', 'READING', 'STORYBOARD',
     ]);
-    expect(ofGroup('看讲解')).toEqual(['VIDEO']);
+    expect(ofGroup('看讲解')).toEqual(['VIDEO', 'BROWSE']);
     expect(ofGroup('学习管家')).toEqual(['PLAN', 'PROGRESS', 'NAVIGATE', 'MY_STUDY', 'REVIEW']);
   });
 });
 
 describe('useSlashCommand', () => {
-  it('输入 / 弹出菜单，分组为 AI 助教 + 生成资源 + 看讲解 + 学习管家，共 16 个命令', () => {
+  it('输入 / 弹出菜单，分组为 AI 助教 + 生成资源 + 看讲解 + 学习管家，共 17 个命令', () => {
     const s = useSlashCommand(ref('/'));
     s.updateFromText('/');
     expect(s.menuVisible.value).toBe(true);
@@ -84,7 +85,7 @@ describe('useSlashCommand', () => {
       'AI 助教', '生成资源', '看讲解', '学习管家',
     ]);
     expect(s.flatItems.value).toHaveLength(SLASH_COMMANDS.length);
-    expect(s.flatItems.value).toHaveLength(16);
+    expect(s.flatItems.value).toHaveLength(17);
   });
 
   it('query 子串过滤（命中 label/别名）', () => {
@@ -104,6 +105,16 @@ describe('useSlashCommand', () => {
     const s = useSlashCommand(ref('/b站'));
     s.updateFromText('/b站');
     expect(s.flatItems.value[0]?.intent).toBe('VIDEO');
+  });
+
+  it('别名过滤：最新/官方文档 命中联网查证（BROWSE）', () => {
+    const latest = useSlashCommand(ref('/最新'));
+    latest.updateFromText('/最新');
+    expect(latest.flatItems.value[0]?.intent).toBe('BROWSE');
+
+    const docs = useSlashCommand(ref('/官方文档'));
+    docs.updateFromText('/官方文档');
+    expect(docs.flatItems.value[0]?.intent).toBe('BROWSE');
   });
 
   it('非触发态关闭菜单', () => {
@@ -143,7 +154,7 @@ describe('useSlashCommand', () => {
     s.updateFromText('/');
     expect(s.activeIndex.value).toBe(0);
     s.moveActive(-1);
-    expect(s.activeIndex.value).toBe(15);
+    expect(s.activeIndex.value).toBe(16);
     s.moveActive(1);
     expect(s.activeIndex.value).toBe(0);
     const committed = s.commitActive();

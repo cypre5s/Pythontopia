@@ -4,6 +4,7 @@ export type WorkshopHistoryResponseKind =
   | 'answer'
   | 'resource'
   | 'video'
+  | 'browse'
   | 'error'
   | 'clarify'
   | 'plan'

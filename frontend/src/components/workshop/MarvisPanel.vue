@@ -240,7 +240,7 @@ interface RosterMember {
   role: string;
   sprite: string;
 }
-// R-16 阵容 6→12：跟上 16 工具 + 协作管线（考官/调试员/辩论官/总管/规划师/分诊）。
+// R-16 阵容 6→12：跟上 17 工具 + 协作管线（考官/调试员/辩论官/总管/规划师/分诊）。
 const IDLE_ROSTER: readonly RosterMember[] = [
   { name: '百晓', role: '意图分诊', sprite: 'npc_tutor_ai' },
   { name: '馆员', role: '证据检索', sprite: 'npc_librarian' },
