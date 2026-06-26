@@ -10,7 +10,7 @@
 - **Runtime gate 加严**：`GET /api/ai/runtime/summary` 新增能力包数量、证据能力包列表和 `protocol.skill_packages` 闸门，少于 3 个证据合同能力包时给出 `WARN`，防止协议层只有品牌词没有可验收字段。
 - **前端驾驶舱展示**：`AiRuntimeSummaryPanel` 增加“能力包 / 绑定证据合同”指标，并展示 `AI 能力包声明证据合同` gate，让工坊右侧面板能看见 Apps/MCP/skill 化后的真实覆盖面。
 - **全量前端回归契约修正**：`capabilities.spec.ts` 从 16 工具更新为 17 工具，并明确 `BROWSE` 归属“找内容/带路”能力组，守住联网查证已进入工坊能力启动器的事实。
-- **验证**：后端定向 `env MAVEN_OPTS="-Djdk.attach.allowAttachSelf=true -XX:+EnableDynamicAgentLoading" mvn --settings .mvn/settings.build.xml -q -Dtest=ProtocolGatewayServiceTest,AiRuntimeSummaryServiceTest,AiRuntimeSummaryControllerTest test` 通过；前端定向 `npm run test -- --run tests/components/workshop/AiRuntimeSummaryPanel.spec.ts tests/pages/WorkshopPage.spec.ts` 通过（16 tests）；修正能力契约后前端全量 `npm run test -- --run` 通过（226 files / 2228 tests）；`npm run typecheck` 通过。Vitest 仍打印既有 `public/pyodide/pyodide.js.map` 缺失提示，退出码为 0。
+- **验证**：后端定向 `env MAVEN_OPTS="-Djdk.attach.allowAttachSelf=true -XX:+EnableDynamicAgentLoading" mvn --settings .mvn/settings.build.xml -q -Dtest=ProtocolGatewayServiceTest,AiRuntimeSummaryServiceTest,AiRuntimeSummaryControllerTest test` 通过；前端定向 `npm run test -- --run tests/components/workshop/AiRuntimeSummaryPanel.spec.ts tests/pages/WorkshopPage.spec.ts` 通过（16 tests）；修正能力契约后前端全量 `npm run test -- --run` 通过（226 files / 2228 tests）；`npm run typecheck` 通过；真实 `./dev.sh` 栈健康端点 `5173/18080/18091/18092` 均 `ok`，`/api/course/videos` 返回 34 条；Playwright `publicAcceptance + teacherStudentFullFlow` 通过（28 passed / 11.9m）。Vitest 仍打印既有 `public/pyodide/pyodide.js.map` 缺失提示，退出码为 0。
 
 ## 2026-06-26 — 9 项 AI 深度融合 Batch 8：Learner Twin 进入工坊闭环
 
