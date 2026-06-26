@@ -144,7 +144,10 @@ describe('WorkshopPage R-13 改造', () => {
         toolsWithEvidenceFieldCount: 2,
         mcpResourceCount: 3,
         aguiEventCount: 14,
+        skillPackageCount: 4,
+        evidenceSkillPackageCount: 4,
         toolsWithEvidenceFields: ['workshop.resource.check.submit'],
+        evidenceSkillPackages: ['evidence_grounded_workshop', 'learner_twin_memory'],
       },
       evidence: {
         nodeCount: 18,

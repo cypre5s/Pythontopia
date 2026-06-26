@@ -18,11 +18,16 @@ public record AiRuntimeSummaryDto(
       int toolsWithEvidenceFieldCount,
       int mcpResourceCount,
       int aguiEventCount,
-      List<String> toolsWithEvidenceFields) {
+      int skillPackageCount,
+      int evidenceSkillPackageCount,
+      List<String> toolsWithEvidenceFields,
+      List<String> evidenceSkillPackages) {
 
     public ProtocolSummary {
       toolsWithEvidenceFields =
           toolsWithEvidenceFields == null ? List.of() : List.copyOf(toolsWithEvidenceFields);
+      evidenceSkillPackages =
+          evidenceSkillPackages == null ? List.of() : List.copyOf(evidenceSkillPackages);
     }
   }
 

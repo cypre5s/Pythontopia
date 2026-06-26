@@ -18,8 +18,10 @@ class ProtocolGatewayServiceTest {
             "workshop.resource.consume",
             "workshop.resource.check.submit",
             "learner.recommendations.read",
+            "learner.twin.weekly.read",
             "learner.effect.trace.summary",
-            "tutorbench.run");
+            "tutorbench.run",
+            "browse.run");
     ProtocolToolDto checkSubmit =
         descriptor.mcpTools().stream()
             .filter(tool -> "workshop.resource.check.submit".equals(tool.name()))
@@ -33,6 +35,20 @@ class ProtocolGatewayServiceTest {
             .orElseThrow();
     assertThat(recommendations.evidenceFields())
         .contains("evidenceEventIds", "checkIds", "pageIds");
+    assertThat(descriptor.skillPackages()).extracting(ProtocolSkillPackageDto::key)
+        .contains(
+            "evidence_grounded_workshop",
+            "learner_twin_memory",
+            "eval_observability",
+            "external_research_safety");
+    ProtocolSkillPackageDto twinPackage =
+        descriptor.skillPackages().stream()
+            .filter(pkg -> "learner_twin_memory".equals(pkg.key()))
+            .findFirst()
+            .orElseThrow();
+    assertThat(twinPackage.toolNames())
+        .contains("learner.twin.weekly.read", "learner.evidence.graph.read");
+    assertThat(twinPackage.evidenceFields()).contains("memoryBrief", "masteryDeltas", "pageIds");
     assertThat(descriptor.a2aAgents()).extracting(ProtocolAgentCardDto::name)
         .contains("LearningEffectAgent", "TutorBenchAgent");
     assertThat(descriptor.aguiEvents())

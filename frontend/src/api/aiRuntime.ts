@@ -5,7 +5,10 @@ export interface AiRuntimeProtocolSummary {
   toolsWithEvidenceFieldCount: number;
   mcpResourceCount: number;
   aguiEventCount: number;
+  skillPackageCount: number;
+  evidenceSkillPackageCount: number;
   toolsWithEvidenceFields: string[];
+  evidenceSkillPackages: string[];
 }
 
 export interface AiRuntimeEvidenceSummary {

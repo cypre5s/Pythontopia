@@ -18,7 +18,10 @@ function sampleSummary() {
       toolsWithEvidenceFieldCount: 2,
       mcpResourceCount: 3,
       aguiEventCount: 14,
+      skillPackageCount: 4,
+      evidenceSkillPackageCount: 4,
       toolsWithEvidenceFields: ['workshop.resource.check.submit', 'learner.recommendations.read'],
+      evidenceSkillPackages: ['evidence_grounded_workshop', 'learner_twin_memory'],
     },
     evidence: {
       nodeCount: 18,
@@ -55,6 +58,14 @@ function sampleSummary() {
         evidenceRefs: ['workshop.resource.check.submit'],
       },
       {
+        key: 'protocol.skill_packages',
+        label: 'AI 能力包声明证据合同',
+        status: 'PASS',
+        value: 4,
+        threshold: 3,
+        evidenceRefs: ['evidence_grounded_workshop', 'learner_twin_memory'],
+      },
+      {
         key: 'evidence.graph_completeness',
         label: '学习证据图完整度',
         status: 'PASS',
@@ -79,10 +90,12 @@ describe('AiRuntimeSummaryPanel', () => {
 
     expect(wrapper.find('[data-testid="runtime-summary"]').exists()).toBe(true);
     expect(wrapper.text()).toContain('MCP 工具 6');
+    expect(wrapper.text()).toContain('能力包 4');
     expect(wrapper.text()).toContain('证据图 0.66');
     expect(wrapper.text()).toContain('记忆事件 9');
     expect(wrapper.text()).toContain('外部内容，非课件');
     expect(wrapper.text()).toContain('MCP 工具声明证据字段');
+    expect(wrapper.text()).toContain('AI 能力包声明证据合同');
     expect(wrapper.text()).toContain('learner.evidence.graph');
   });
 

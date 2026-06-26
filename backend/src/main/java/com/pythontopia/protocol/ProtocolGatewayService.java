@@ -31,6 +31,13 @@ public class ProtocolGatewayService {
                 "Read traceable daily recommendations grounded in Learner Twin and evidence memory.",
                 List.of("evidenceEventIds", "checkIds", "pageIds")),
             new ProtocolToolDto(
+                "learner.twin.weekly.read",
+                "MCP",
+                "GET",
+                "/api/learner/twin/weekly",
+                "Read the Learner Twin weekly evidence brief, insights, mastery deltas, and resource runs.",
+                List.of("memoryBrief", "insights", "masteryDeltas", "resourceRuns")),
+            new ProtocolToolDto(
                 "learner.effect.trace.summary",
                 "MCP",
                 "GET",
@@ -47,7 +54,14 @@ public class ProtocolGatewayService {
                 "MCP",
                 "GET",
                 "/api/learner/evidence-graph",
-                "Read the SQL-native learning evidence graph for one learner and optional focus KC.")),
+                "Read the SQL-native learning evidence graph for one learner and optional focus KC."),
+            new ProtocolToolDto(
+                "browse.run",
+                "MCP",
+                "POST",
+                "/api/browse/runs",
+                "Run a bounded allowlisted external research task with separated non-courseware citations.",
+                List.of("runId", "allowedDomains", "citations", "externalLabel"))),
         List.of(
             new ProtocolAgentCardDto(
                 "LearningEffectAgent",
@@ -111,6 +125,7 @@ public class ProtocolGatewayService {
                 "MCP",
                 "Recommendation reasons must include traceable event/check/page evidence when available.",
                 "kc_code + reason + evidence_event_ids + page_ids")),
+        skillPackages(),
         List.of(
             "gen_ai.operation.name",
             "gen_ai.request.model",
@@ -125,5 +140,51 @@ public class ProtocolGatewayService {
             "gen_ai.tool.call.result",
             "gen_ai.retrieval.query.text",
             "gen_ai.retrieval.documents"));
+  }
+
+  private static List<ProtocolSkillPackageDto> skillPackages() {
+    return List.of(
+        new ProtocolSkillPackageDto(
+            "evidence_grounded_workshop",
+            "证据接地工坊",
+            "把资源消费、微测证据、推荐证据和课程页引用打包成完整看学练测闭环。",
+            List.of(
+                "workshop.resource.consume",
+                "workshop.resource.check.submit",
+                "learner.recommendations.read"),
+            List.of("course.pack.43", "learner.evidence.graph", "learner.evidence.memory"),
+            List.of("resource_micro_check", "evidence_memory_recommendation"),
+            List.of("checkId", "resourceId", "kcCode", "masteryDelta", "evidenceEventIds", "pageIds"),
+            "workshop"),
+        new ProtocolSkillPackageDto(
+            "learner_twin_memory",
+            "Learner Twin 记忆包",
+            "把周报、画像洞察、掌握变化和 Evidence Memory 作为下一轮学习请求的可追踪上下文。",
+            List.of(
+                "learner.twin.weekly.read",
+                "learner.recommendations.read",
+                "learner.evidence.graph.read"),
+            List.of("learner.evidence.graph", "learner.evidence.memory"),
+            List.of("evidence_memory_recommendation"),
+            List.of("memoryBrief", "insights", "masteryDeltas", "checkIds", "pageIds"),
+            "workshop.right_panel"),
+        new ProtocolSkillPackageDto(
+            "eval_observability",
+            "Eval / Observability 包",
+            "把 TutorBench、学习效果摘要、AG-UI 事件和 OTel GenAI 字段组合成可验收运行面板。",
+            List.of("tutorbench.run", "learner.effect.trace.summary"),
+            List.of("learner.evidence.graph"),
+            List.of("grounded_tutor_answer"),
+            List.of("trace_summary", "mastery_delta_audit", "remediation_rate"),
+            "runtime.drawer"),
+        new ProtocolSkillPackageDto(
+            "external_research_safety",
+            "外部查证安全包",
+            "把联网查证限制在 allowlist、只读步骤和外部引用标签内，不混入课件页码。",
+            List.of("browse.run"),
+            List.of("course.pack.43"),
+            List.of("grounded_tutor_answer"),
+            List.of("runId", "allowedDomains", "citations", "externalLabel"),
+            "workshop.browse"));
   }
 }

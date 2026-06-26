@@ -11,6 +11,7 @@ import com.pythontopia.learner.twin.WeeklyReportService;
 import com.pythontopia.learner.twin.dto.WeeklyReportDto;
 import com.pythontopia.protocol.ProtocolGatewayDescriptorDto;
 import com.pythontopia.protocol.ProtocolGatewayService;
+import com.pythontopia.protocol.ProtocolSkillPackageDto;
 import com.pythontopia.protocol.ProtocolToolDto;
 import java.util.ArrayList;
 import java.util.List;
@@ -74,12 +75,20 @@ public class AiRuntimeSummaryService {
             .filter(tool -> !tool.evidenceFields().isEmpty())
             .map(ProtocolToolDto::name)
             .toList();
+    List<String> evidencePackages =
+        descriptor.skillPackages().stream()
+            .filter(pkg -> !pkg.evidenceFields().isEmpty())
+            .map(ProtocolSkillPackageDto::key)
+            .toList();
     return new AiRuntimeSummaryDto.ProtocolSummary(
         descriptor.mcpTools().size(),
         evidenceTools.size(),
         descriptor.mcpResources().size(),
         descriptor.aguiEvents().size(),
-        evidenceTools);
+        descriptor.skillPackages().size(),
+        evidencePackages.size(),
+        evidenceTools,
+        evidencePackages);
   }
 
   private static AiRuntimeSummaryDto.EvidenceSummary evidenceSummary(
@@ -122,6 +131,14 @@ public class AiRuntimeSummaryService {
             protocol.toolsWithEvidenceFieldCount(),
             2.0,
             protocol.toolsWithEvidenceFields()));
+    gates.add(
+        new AiRuntimeSummaryDto.RuntimeGate(
+            "protocol.skill_packages",
+            "AI 能力包声明证据合同",
+            protocol.evidenceSkillPackageCount() >= 3 ? "PASS" : "WARN",
+            protocol.evidenceSkillPackageCount(),
+            3.0,
+            protocol.evidenceSkillPackages()));
     gates.add(
         new AiRuntimeSummaryDto.RuntimeGate(
             "evidence.graph_completeness",

@@ -61,6 +61,10 @@ function formatScore(value: number): string {
           <small>{{ summary.protocol.toolsWithEvidenceFieldCount }} 个声明证据字段</small>
         </span>
         <span class="metric">
+          <b>能力包 {{ summary.protocol.skillPackageCount }}</b>
+          <small>{{ summary.protocol.evidenceSkillPackageCount }} 个绑定证据合同</small>
+        </span>
+        <span class="metric">
           <b>证据图 {{ formatScore(summary.evidence.graphCompletenessScore) }}</b>
           <small>{{ summary.evidence.nodeCount }} 节点 / {{ summary.evidence.groundedPageCount }} 页</small>
         </span>

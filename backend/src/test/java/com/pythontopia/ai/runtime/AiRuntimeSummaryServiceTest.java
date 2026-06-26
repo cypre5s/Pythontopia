@@ -91,6 +91,9 @@ class AiRuntimeSummaryServiceTest {
     AiRuntimeSummaryDto summary = service.summaryForUser(userId);
 
     assertThat(summary.protocol().mcpToolCount()).isGreaterThanOrEqualTo(6);
+    assertThat(summary.protocol().skillPackageCount()).isGreaterThanOrEqualTo(4);
+    assertThat(summary.protocol().evidenceSkillPackages())
+        .contains("evidence_grounded_workshop", "learner_twin_memory");
     assertThat(summary.protocol().toolsWithEvidenceFields())
         .contains("workshop.resource.check.submit", "learner.recommendations.read");
     assertThat(summary.evidence().nodeCount()).isEqualTo(18);
@@ -104,6 +107,7 @@ class AiRuntimeSummaryServiceTest {
     assertThat(summary.gates()).extracting(AiRuntimeSummaryDto.RuntimeGate::key)
         .contains(
             "protocol.evidence_fields",
+            "protocol.skill_packages",
             "evidence.graph_completeness",
             "memory.graph_over_naive",
             "browse.external_citation_policy");

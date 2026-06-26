@@ -9,4 +9,5 @@ public record ProtocolGatewayDescriptorDto(
     List<String> aguiEvents,
     List<ProtocolResourceDto> mcpResources,
     List<ProtocolPromptDto> mcpPrompts,
+    List<ProtocolSkillPackageDto> skillPackages,
     List<String> otelGenAiAttributes) {}

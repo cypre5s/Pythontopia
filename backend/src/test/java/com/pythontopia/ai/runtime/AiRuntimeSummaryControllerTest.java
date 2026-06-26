@@ -37,7 +37,15 @@ class AiRuntimeSummaryControllerTest {
     CurrentUserPrincipal student = new CurrentUserPrincipal(7L, "stu", Role.STUDENT);
     AiRuntimeSummaryDto expected =
         new AiRuntimeSummaryDto(
-            new AiRuntimeSummaryDto.ProtocolSummary(6, 2, 2, 14, List.of("learner.recommendations.read")),
+            new AiRuntimeSummaryDto.ProtocolSummary(
+                6,
+                2,
+                2,
+                14,
+                4,
+                4,
+                List.of("learner.recommendations.read"),
+                List.of("learner_twin_memory")),
             new AiRuntimeSummaryDto.EvidenceSummary(4, 5, 1, 2, 0.7, 0.8, 0.3, 1, 0, 1),
             new AiRuntimeSummaryDto.LearnerTwinSummary(9, 3, 4, 1, 1, 1),
             new AiRuntimeSummaryDto.ExternalResearchSummary(

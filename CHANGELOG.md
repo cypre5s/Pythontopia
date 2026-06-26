@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-06-26 — 9 项 AI 深度融合 Batch 9：AI 能力包 / Protocol Skill Packages
+
+> 把前面落地的证据工坊、Learner Twin、Eval/Observability、联网查证安全墙进一步包装成可声明、可审计、可被 ChatGPT Apps / Claude Code skill / MCP 类协议面理解的能力包；不是新增一套游离工具，而是把已有学习闭环暴露成“工具 + 资源 + prompt + evidence fields”的合同。
+
+- **协议能力包模型**：新增 `ProtocolSkillPackageDto`，每个能力包显式声明 key、展示名、描述、工具名、资源名、prompt 名、证据字段和运行界面，避免只给外部协议一个散装工具清单。
+- **四个真实学习包**：`ProtocolGatewayService` 导出 `evidence_grounded_workshop`、`learner_twin_memory`、`eval_observability`、`external_research_safety`，分别覆盖看学练测闭环、周报/画像记忆、TutorBench/Runtime gate、白名单外部查证。
+- **MCP 工具补齐**：协议网关新增 `learner.twin.weekly.read` 与 `browse.run`，把 Learner Twin 周报和有界联网查证纳入同一工具表，并声明 `memoryBrief/masteryDeltas/citations/externalLabel` 等证据字段。
+- **Runtime gate 加严**：`GET /api/ai/runtime/summary` 新增能力包数量、证据能力包列表和 `protocol.skill_packages` 闸门，少于 3 个证据合同能力包时给出 `WARN`，防止协议层只有品牌词没有可验收字段。
+- **前端驾驶舱展示**：`AiRuntimeSummaryPanel` 增加“能力包 / 绑定证据合同”指标，并展示 `AI 能力包声明证据合同` gate，让工坊右侧面板能看见 Apps/MCP/skill 化后的真实覆盖面。
+- **验证**：后端定向 `env MAVEN_OPTS="-Djdk.attach.allowAttachSelf=true -XX:+EnableDynamicAgentLoading" mvn --settings .mvn/settings.build.xml -q -Dtest=ProtocolGatewayServiceTest,AiRuntimeSummaryServiceTest,AiRuntimeSummaryControllerTest test` 通过；前端定向 `npm run test -- --run tests/components/workshop/AiRuntimeSummaryPanel.spec.ts tests/pages/WorkshopPage.spec.ts` 通过（16 tests）；`npm run typecheck` 通过。Vitest 仍打印既有 `public/pyodide/pyodide.js.map` 缺失提示，退出码为 0。
+
 ## 2026-06-26 — 9 项 AI 深度融合 Batch 8：Learner Twin 进入工坊闭环
 
 > 把 Learner Twin 从画像屋里的周报展示推进到百晓工坊右侧工作台：学生不仅能看到本周证据摘要、画像洞察和 KC 掌握变化，还能一键把这些证据转成下一轮工坊提问，让画像真正参与“看、学、练、测”学习闭环。
