@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-06-26 — 9 项 AI 深度融合 Batch 7：工坊实时语音输入接入
+
+> 把已有 Web Speech 与 `/api/media/asr` 语音听写能力从随身助教扩展到百晓工坊输入框：学生可以像 ChatGPT / Claude Web 一样在同一 composer 里直接说出问题，浏览器支持时本地听写，不支持时录音上传后端 ASR；降级时不伪造文本，明确要求键盘输入。
+
+- **同一输入框多模态化**：`ChatComposer` 新增语音按钮，优先使用浏览器 `SpeechRecognition`；识别出的 transcript 会写回现有 textarea，并继续复用 `@` 课件引用、`/` 工具命令和 `+` 能力分组状态机。
+- **后端 ASR 回退链路**：Web Speech 不可用时用 `useAudioRecorder` 采集短录音，调用既有 `transcribeAudio()` / `POST /api/media/asr`；`degraded=true` 或空文本只显示错误，不把失败录音包装成真实学习提问。
+- **发送闸门**：附件上传中、语音采集中、录音中或转写中均禁止发送，避免半截语音上下文进入意图路由和资源生成链路。
+- **前端体验适配**：composer 增加紧凑语音状态行和 active 图标态，保留当前工坊 AI 工作台的浅色输入区，不引入单独语音面板或悬浮录音 demo。
+- **验证**：前端定向 `npm run test -- --run src/components/workshop/__tests__/ChatComposer.spec.ts tests/api/media.spec.ts` 通过（18 tests）；`npm run typecheck` 通过；后端定向 `mvn --settings .mvn/settings.build.xml -q -Dtest=XfyunIatServiceTest test` 通过。Vitest 仍打印既有 `public/pyodide/pyodide.js.map` 缺失提示，退出码为 0。
+
 ## 2026-06-26 — 9 项 AI 深度融合 Batch 6：联网查证工具进入百晓工坊
 
 > 把已有 BROWSE / browser-use 安全墙从“后端和 graph 里有能力”推进到学生真实可用的工坊工具：显式“联网查证 / 官方文档 / 最新资料”诉求可直接进入白名单、有界、只读的外部查证链路，并在 ChatGPT / Claude 风格工作台中以时间线展示，始终标注“外部内容，非课件”。

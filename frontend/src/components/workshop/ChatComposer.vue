@@ -10,7 +10,7 @@
  *
  * 本组件只负责输入与候选交互，不含任何网络/分派逻辑。
  */
-import { computed, nextTick, ref, toRef } from 'vue';
+import { computed, nextTick, ref, toRef, watch } from 'vue';
 import CoursewareMentionMenu from '@/components/tutor/CoursewareMentionMenu.vue';
 import SlashCommandMenu from '@/components/workshop/SlashCommandMenu.vue';
 import AttachmentPills, {
@@ -37,6 +37,9 @@ import {
   uploadRejectionReason,
   type UploadAttachmentRef,
 } from '@/api/upload';
+import { transcribeAudio } from '@/api/media';
+import { useAudioRecorder } from '@/composables/useAudioRecorder';
+import { useVoiceInput } from '@/composables/useVoiceInput';
 
 export interface ComposerSubmitPayload {
   text: string;
@@ -106,12 +109,44 @@ const hasUploading = computed<boolean>(() =>
 const isDisabled = computed<boolean>(() => props.disabled === true);
 const isBusy = computed<boolean>(() => props.busy === true);
 const placeholderText = computed<string>(() => props.placeholder ?? DEFAULT_PLACEHOLDER);
+
+// ============ 语音输入：优先 Web Speech，缺失时回退到后端 ASR ============
+const voice = useVoiceInput();
+const recorder = useAudioRecorder();
+const transcribing = ref(false);
+const voiceError = ref('');
+const voiceBusy = computed<boolean>(
+  () => voice.listening.value || recorder.recording.value || transcribing.value,
+);
+const voiceButtonDisabled = computed<boolean>(
+  () => isDisabled.value || isBusy.value || hasUploading.value || transcribing.value,
+);
+const voiceButtonIcon = computed<string>(() => {
+  if (transcribing.value) return '...';
+  if (voice.listening.value || recorder.recording.value) return '■';
+  return '◉';
+});
+const voiceButtonTitle = computed<string>(() => {
+  if (transcribing.value) return '正在转写语音';
+  if (voice.listening.value) return '停止语音输入';
+  if (recorder.recording.value) return '停止录音并转写';
+  if (voice.supported.value) return '语音输入';
+  if (recorder.supported.value) return '录音转写';
+  return '当前浏览器不支持语音输入';
+});
+const voiceStatus = computed<string>(() => {
+  if (transcribing.value) return '正在转写语音';
+  if (voice.listening.value) return '正在听你说';
+  if (recorder.recording.value) return '再次点击停止录音并转写';
+  return '';
+});
 // 仍有附件在上传时禁止发送，避免就绪前的附件被遗漏（与 Claude Code 一致）。
 const canSubmit = computed<boolean>(
   () =>
     !isDisabled.value &&
     !isBusy.value &&
     !hasUploading.value &&
+    !voiceBusy.value &&
     inputText.value.trim().length > 0,
 );
 
@@ -130,6 +165,81 @@ function onInput(event: Event): void {
   const value = (event.target as HTMLTextAreaElement).value;
   mention.updateFromText(value);
   slash.updateFromText(value);
+}
+
+function syncInputText(next: string): void {
+  mention.updateFromText(next);
+  slash.updateFromText(next);
+}
+
+function appendVoiceText(text: string): void {
+  const clean = text.trim();
+  if (!clean) return;
+  const current = inputText.value.trimEnd();
+  syncInputText(current ? `${current} ${clean}` : clean);
+  voiceError.value = '';
+  focusInput();
+}
+
+watch(
+  () => voice.transcript.value,
+  (value) => {
+    const clean = value.trim();
+    if (!clean) return;
+    appendVoiceText(clean);
+    voice.transcript.value = '';
+  },
+  { flush: 'sync' },
+);
+
+async function stopRecordingAndTranscribe(): Promise<void> {
+  transcribing.value = true;
+  voiceError.value = '';
+  try {
+    const audio = await recorder.stop();
+    if (!audio) {
+      voiceError.value = '没有录到声音，请再试一次';
+      return;
+    }
+    const res = await transcribeAudio(audio);
+    const text = res.text.trim();
+    if (res.degraded || !text) {
+      voiceError.value = '语音转写暂不可用，请用键盘输入';
+      return;
+    }
+    appendVoiceText(text);
+  } catch (err) {
+    voiceError.value = err instanceof Error ? err.message : '语音转写失败，请用键盘输入';
+  } finally {
+    transcribing.value = false;
+  }
+}
+
+async function toggleVoiceInput(): Promise<void> {
+  if (voiceButtonDisabled.value) return;
+  voiceError.value = '';
+  if (voice.listening.value) {
+    voice.stop();
+    return;
+  }
+  if (recorder.recording.value) {
+    await stopRecordingAndTranscribe();
+    return;
+  }
+  if (voice.supported.value) {
+    try {
+      voice.start();
+    } catch {
+      voiceError.value = '无法启动语音输入，请用键盘输入';
+    }
+    return;
+  }
+  if (recorder.supported.value) {
+    const started = await recorder.start();
+    if (!started) voiceError.value = '无法访问麦克风，请检查浏览器权限';
+    return;
+  }
+  voiceError.value = '当前浏览器不支持语音输入';
 }
 
 function handleMenuKey(event: KeyboardEvent, ctrl: MenuController): boolean {
@@ -342,9 +452,9 @@ function readyAttachments(): UploadAttachmentRef[] {
 
 function submit(): void {
   const text = inputText.value.trim();
-  if (!text || props.disabled || props.busy) return;
-  // 还有附件在上传：不发送，避免就绪前的附件被遗漏。
-  if (hasUploading.value) return;
+  if (!text || isDisabled.value || isBusy.value) return;
+  // 还有附件在上传或语音仍在采集中：不发送，避免上下文被截断。
+  if (hasUploading.value || voiceBusy.value) return;
   const capabilityNamespace = selectedCapability.value?.namespace;
   const forcedIntent = selectedCapability.value ? null : slash.forcedIntent.value;
   const source: WorkshopToolRouteSource = selectedCapability.value
@@ -365,6 +475,7 @@ function submit(): void {
   slash.reset();
   selectedCapability.value = null;
   capabilityMenuOpen.value = false;
+  voiceError.value = '';
   attachments.value = [];
   fileHandles.clear();
 }
@@ -513,6 +624,18 @@ defineExpose({ focus: focusInput });
       >
         📎
       </button>
+      <button
+        type="button"
+        class="composer__voice"
+        :class="{ 'composer__voice--active': voiceBusy }"
+        data-testid="composer-voice"
+        :title="voiceButtonTitle"
+        :aria-pressed="voiceBusy"
+        :disabled="voiceButtonDisabled"
+        @click="toggleVoiceInput"
+      >
+        <span class="composer__voice-icon">{{ voiceButtonIcon }}</span>
+      </button>
       <textarea
         ref="inputRef"
         :value="inputText"
@@ -534,6 +657,21 @@ defineExpose({ focus: focusInput });
       >
         {{ isBusy ? '处理中…' : '发送' }}
       </button>
+    </div>
+    <div
+      v-if="voiceStatus || voiceError"
+      class="composer__voice-line"
+    >
+      <span
+        v-if="voiceStatus"
+        class="composer__voice-status"
+        data-testid="composer-voice-status"
+      >{{ voiceStatus }}</span>
+      <span
+        v-if="voiceError"
+        class="composer__voice-error"
+        data-testid="composer-voice-error"
+      >{{ voiceError }}</span>
     </div>
   </div>
 </template>
@@ -712,7 +850,8 @@ defineExpose({ focus: focusInput });
   line-height: 1.45;
   color: #6b4c17;
 }
-.composer__attach {
+.composer__attach,
+.composer__voice {
   flex: 0 0 auto;
   font-family: inherit;
   font-size: 16px;
@@ -726,14 +865,36 @@ defineExpose({ focus: focusInput });
   cursor: pointer;
   transition: transform 80ms, box-shadow 80ms;
 }
-.composer__attach:hover:not(:disabled) {
+.composer__voice {
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.composer__voice--active {
+  background: #2a1a08;
+  color: #fff8df;
+}
+.composer__voice-icon {
+  font-size: 13px;
+  line-height: 1;
+}
+.composer__attach:hover:not(:disabled),
+.composer__voice:hover:not(:disabled) {
   background: #ffe098;
 }
-.composer__attach:active:not(:disabled) {
+.composer__voice--active:hover:not(:disabled) {
+  background: #3a2a14;
+}
+.composer__attach:active:not(:disabled),
+.composer__voice:active:not(:disabled) {
   transform: translateY(2px);
   box-shadow: 0 1px 0 #8c6a23;
 }
-.composer__attach:disabled {
+.composer__attach:disabled,
+.composer__voice:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
@@ -779,5 +940,20 @@ defineExpose({ focus: focusInput });
 .composer__submit:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+.composer__voice-line {
+  min-height: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 96px;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.composer__voice-status {
+  color: #4d6e1d;
+}
+.composer__voice-error {
+  color: #9b2d20;
 }
 </style>

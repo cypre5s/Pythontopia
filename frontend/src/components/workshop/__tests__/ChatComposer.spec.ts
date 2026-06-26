@@ -1,12 +1,94 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils';
-import { nextTick } from 'vue';
+import { nextTick, ref } from 'vue';
 
 // 只替换 uploadFile（网络），保留真实纯函数（extOf / 校验 / 标签）。
 vi.mock('@/api/upload', async () => {
   const actual = await vi.importActual<typeof import('@/api/upload')>('@/api/upload');
   return { ...actual, uploadFile: vi.fn() };
 });
+
+const voiceStartSpy = vi.fn();
+const voiceStopSpy = vi.fn();
+
+interface SpeechRecognitionResultLike {
+  transcript: string;
+}
+
+interface SpeechRecognitionEventLike {
+  results: ArrayLike<ArrayLike<SpeechRecognitionResultLike>>;
+}
+
+class MockSpeechRecognition {
+  lang = '';
+  continuous = false;
+  interimResults = false;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null = null;
+  onend: (() => void) | null = null;
+
+  constructor() {
+    speechInstances.push(this);
+  }
+
+  start(): void {
+    voiceStartSpy();
+  }
+
+  stop(): void {
+    voiceStopSpy();
+    this.onend?.();
+  }
+}
+
+const speechInstances: MockSpeechRecognition[] = [];
+
+function installSpeechRecognition(): void {
+  speechInstances.length = 0;
+  Object.defineProperty(window, 'SpeechRecognition', {
+    configurable: true,
+    writable: true,
+    value: MockSpeechRecognition,
+  });
+  Object.defineProperty(window, 'webkitSpeechRecognition', {
+    configurable: true,
+    writable: true,
+    value: undefined,
+  });
+}
+
+function uninstallSpeechRecognition(): void {
+  speechInstances.length = 0;
+  Object.defineProperty(window, 'SpeechRecognition', {
+    configurable: true,
+    writable: true,
+    value: undefined,
+  });
+  Object.defineProperty(window, 'webkitSpeechRecognition', {
+    configurable: true,
+    writable: true,
+    value: undefined,
+  });
+}
+
+const recorderSupported = ref(true);
+const recorderRecording = ref(false);
+const recorderStartSpy = vi.fn();
+const recorderStopSpy = vi.fn();
+
+vi.mock('@/composables/useAudioRecorder', () => ({
+  useAudioRecorder: () => ({
+    supported: recorderSupported,
+    recording: recorderRecording,
+    start: recorderStartSpy,
+    stop: recorderStopSpy,
+  }),
+}));
+
+const transcribeAudioSpy = vi.fn();
+
+vi.mock('@/api/media', () => ({
+  transcribeAudio: (...args: unknown[]) => transcribeAudioSpy(...args),
+}));
 
 import ChatComposer, { type ComposerSubmitPayload } from '../ChatComposer.vue';
 import { uploadFile, type UploadDto } from '@/api/upload';
@@ -47,6 +129,21 @@ function lastSubmit(w: VueWrapper): ComposerSubmitPayload {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  installSpeechRecognition();
+  recorderSupported.value = true;
+  recorderRecording.value = false;
+  recorderStartSpy.mockImplementation(async () => {
+    recorderRecording.value = true;
+    return true;
+  });
+  recorderStopSpy.mockImplementation(async () => {
+    recorderRecording.value = false;
+    return new Blob(['a'], { type: 'audio/webm' });
+  });
+  transcribeAudioSpy.mockImplementation(async () => ({
+    text: '录音转写的问题',
+    degraded: false,
+  }));
 });
 
 describe('ChatComposer · 上传状态机（uploading→ready→error→retry）', () => {
@@ -202,6 +299,65 @@ describe('ChatComposer · 能力启动器', () => {
     expect(payload.source).toBe('capability_launcher');
     expect(payload.capabilityNamespace).toBe('practice');
     expect(payload.text).toBe('循环');
+  });
+});
+
+describe('ChatComposer · 语音 / ASR 输入', () => {
+  it('Web Speech 结果回填输入框，并在听写结束后进入 payload', async () => {
+    const w = mountComposer();
+
+    await w.find('[data-testid="composer-voice"]').trigger('click');
+    expect(voiceStartSpy).toHaveBeenCalledTimes(1);
+    expect(w.find('[data-testid="composer-voice-status"]').text()).toContain('正在听');
+    await w.find('[data-testid="composer-input"]').setValue('先解释');
+    expect(w.find('[data-testid="composer-submit"]').attributes('disabled')).toBeDefined();
+
+    expect(speechInstances.length).toBe(1);
+    speechInstances[0]!.onresult?.({ results: [[{ transcript: '列表推导式' }]] });
+    await nextTick();
+    expect((w.find('[data-testid="composer-input"]').element as HTMLTextAreaElement).value).toBe(
+      '先解释 列表推导式',
+    );
+
+    speechInstances[0]!.onend?.();
+    await nextTick();
+    await w.find('[data-testid="composer-submit"]').trigger('click');
+
+    const payload = lastSubmit(w);
+    expect(payload.text).toBe('先解释 列表推导式');
+  });
+
+  it('Web Speech 不可用时录音转写，并回填同一个输入框', async () => {
+    uninstallSpeechRecognition();
+    const w = mountComposer();
+
+    await w.find('[data-testid="composer-voice"]').trigger('click');
+    expect(recorderStartSpy).toHaveBeenCalledTimes(1);
+    expect(w.find('[data-testid="composer-voice-status"]').text()).toContain('停止录音');
+
+    await w.find('[data-testid="composer-voice"]').trigger('click');
+    await flushPromises();
+
+    expect(recorderStopSpy).toHaveBeenCalledTimes(1);
+    expect(transcribeAudioSpy).toHaveBeenCalledTimes(1);
+    expect((w.find('[data-testid="composer-input"]').element as HTMLTextAreaElement).value).toBe(
+      '录音转写的问题',
+    );
+  });
+
+  it('ASR 降级时保留错误提示，不伪造文本', async () => {
+    uninstallSpeechRecognition();
+    transcribeAudioSpy.mockResolvedValueOnce({ text: '', degraded: true });
+    const w = mountComposer();
+
+    await w.find('[data-testid="composer-voice"]').trigger('click');
+    await w.find('[data-testid="composer-voice"]').trigger('click');
+    await flushPromises();
+
+    expect(w.find('[data-testid="composer-voice-error"]').text()).toContain('语音转写暂不可用');
+    expect((w.find('[data-testid="composer-input"]').element as HTMLTextAreaElement).value).toBe(
+      '',
+    );
   });
 });
 
