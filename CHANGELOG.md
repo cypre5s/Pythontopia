@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-06-26 — 9 项 AI 深度融合 Batch 5：AI Runtime / Eval 证据驾驶舱
+
+> 把已有 AG-UI/MCP 协议、Learning Evidence Graph、Evidence Memory、Learner Twin 与联网查证安全墙聚合成一个学生可见的 Runtime/Eval 摘要；工坊右侧“调用”面板不只显示过程流，也能看到本次 AI 系统是否有证据、是否有评测闸门、外部来源是否与课件证据隔离。
+
+- **后端 Runtime Summary API**：新增 `GET /api/ai/runtime/summary`（学生只读本人），聚合 `ProtocolGatewayService`、`LearningEvidenceGraphService`、`EvidenceMemoryService`、`WeeklyReportService` 与 `BrowseProperties`，返回协议工具数、证据字段工具、证据图指标、graph memory 分数、Twin 周报摘要、外部查证白名单与引用策略。
+- **Eval Gates 明确化**：summary 新增 `runtime.gates[]`，覆盖 `protocol.evidence_fields`、`evidence.graph_completeness`、`memory.graph_over_naive`、`browse.external_citation_policy`；空学习轨迹返回 `INSUFFICIENT_EVIDENCE`，不伪装成通过。
+- **前端工作台接入**：新增 `AiRuntimeSummaryPanel.vue` 和 `api/aiRuntime.ts`，挂入百晓工坊右侧“调用过程”抽屉，显示 MCP 工具、证据图完整度、Learner Twin 记忆事件、外部查证隔离标签和 gate 状态。
+- **验证**：后端定向 `env MAVEN_OPTS=-Djdk.attach.allowAttachSelf=true mvn -s .mvn/settings.build.xml -q -Dtest=AiRuntimeSummaryServiceTest,AiRuntimeSummaryControllerTest,ProtocolGatewayServiceTest test` 通过；后端 `mvn --settings .mvn/settings.build.xml -q test-compile` 通过；前端定向 `npm run test -- --run tests/components/workshop/AiRuntimeSummaryPanel.spec.ts tests/pages/WorkshopPage.spec.ts` 通过（15 tests）；`npm run typecheck` 通过。Vitest 仍有既有 `public/pyodide/pyodide.js.map` 缺失提示，退出码为 0。
+
 ## 2026-06-25 — 9 项 AI 深度融合 Batch 4：百晓工坊 AI 工作台前端适配
 
 > 把百晓工坊从像素木牌式聊天页收敛为更接近 ChatGPT / Claude Web 的学习工作台：历史、对话、书房/调用过程成为稳定三栏壳，保留 Pythontopia 的证据、工具分发和学习闭环，不改成纯聊天 demo。

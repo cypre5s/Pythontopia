@@ -19,6 +19,7 @@ const apiMocks = vi.hoisted(() => ({
   getTodayQuests: vi.fn(),
   listWorkshopChatHistoryTurns: vi.fn(),
   rememberWorkshopChatHistoryTurn: vi.fn(),
+  fetchAiRuntimeSummary: vi.fn(),
 }));
 
 vi.mock('@/api/course', () => ({
@@ -63,6 +64,10 @@ vi.mock('@/api/workshopHistory', () => {
     recordWorkshopChatHistoryTurn: vi.fn(),
   };
 });
+
+vi.mock('@/api/aiRuntime', () => ({
+  fetchAiRuntimeSummary: apiMocks.fetchAiRuntimeSummary,
+}));
 
 vi.mock('@/composables/useStardewFx', () => ({
   playUiClick: vi.fn(),
@@ -128,6 +133,50 @@ describe('WorkshopPage R-13 改造', () => {
     apiMocks.getLearnerProfile.mockResolvedValue(null);
     apiMocks.getTodayQuests.mockResolvedValue([]);
     apiMocks.listWorkshopChatHistoryTurns.mockResolvedValue([]);
+    apiMocks.fetchAiRuntimeSummary.mockResolvedValue({
+      protocol: {
+        mcpToolCount: 6,
+        toolsWithEvidenceFieldCount: 2,
+        mcpResourceCount: 3,
+        aguiEventCount: 14,
+        toolsWithEvidenceFields: ['workshop.resource.check.submit'],
+      },
+      evidence: {
+        nodeCount: 18,
+        edgeCount: 24,
+        touchedKcCount: 4,
+        groundedPageCount: 5,
+        checkCoverageRate: 0.75,
+        graphCompletenessScore: 0.66,
+        graphMemoryScore: 0.82,
+        directSignalCount: 2,
+        propagatedSignalCount: 3,
+        retainedEvidenceCount: 6,
+      },
+      learnerTwin: {
+        memoryEventCount: 9,
+        failedPracticeCount: 3,
+        succeededPracticeCount: 4,
+        insightCount: 1,
+        masteryKcCount: 1,
+        resourceRunCount: 1,
+      },
+      externalResearch: {
+        allowedDomains: ['docs.python.org', 'peps.python.org', 'pypi.org'],
+        defaultMaxSteps: 6,
+        citationPolicy: '外部内容，非课件',
+      },
+      gates: [
+        {
+          key: 'evidence.graph_completeness',
+          label: '学习证据图完整度',
+          status: 'PASS',
+          value: 0.66,
+          threshold: 0.45,
+          evidenceRefs: ['learner.evidence.graph'],
+        },
+      ],
+    });
   });
 
   afterEach(() => {
@@ -280,6 +329,20 @@ describe('WorkshopPage R-13 改造', () => {
     expect(wrapper.find('[data-testid="workshop-drawer-calls"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="workshop-drawer-study"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="workshop-drawer-history"]').exists()).toBe(true);
+  });
+
+  it('shows AI runtime gates inside the call-process drawer', async () => {
+    await router.push('/workshop');
+    const wrapper = mountPage();
+    await flushPromises();
+
+    await wrapper.get('[data-testid="workshop-open-calls"]').trigger('click');
+    await flushPromises();
+
+    expect(apiMocks.fetchAiRuntimeSummary).toHaveBeenCalledTimes(1);
+    expect(wrapper.find('[data-testid="runtime-summary"]').exists()).toBe(true);
+    expect(wrapper.text()).toContain('学习证据图完整度');
+    expect(wrapper.text()).toContain('外部内容，非课件');
   });
 
   it('places history on the leading side and study or calls on the trailing side', async () => {

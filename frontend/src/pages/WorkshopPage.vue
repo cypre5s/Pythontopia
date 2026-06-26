@@ -14,6 +14,7 @@ import StudioDrawer from '@/components/workshop/StudioDrawer.vue';
 import ResourceDetailPanel from '@/components/workshop/ResourceDetailPanel.vue';
 import ChatHistoryRail from '@/components/workshop/ChatHistoryRail.vue';
 import ToolCallTimeline from '@/components/workshop/ToolCallTimeline.vue';
+import AiRuntimeSummaryPanel from '@/components/workshop/AiRuntimeSummaryPanel.vue';
 import {
   rememberWorkshopChatHistoryTurn,
   type WorkshopChatHistoryTurnDto,
@@ -410,6 +411,7 @@ const bodyClass = computed<Record<string, boolean>>(() => ({
               v-else-if="activeDrawer === 'calls'"
               class="workshop-call-drawer"
             >
+              <AiRuntimeSummaryPanel />
               <MarvisPanel />
               <ToolCallTimeline
                 :traces="activity.traces"
