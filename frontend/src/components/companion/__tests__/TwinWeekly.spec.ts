@@ -32,13 +32,28 @@ describe('TwinWeekly', () => {
     vi.mocked(twinApi.fetchWeeklyReport).mockResolvedValue(mockReport);
     const w = mount(TwinWeekly); await nextTick(); await nextTick(); await nextTick();
     const t = w.text();
-    expect(t).toContain('本周回顾');
+    expect(t).toContain('Learner Twin');
     expect(t).toContain('12'); expect(t).toContain('5'); expect(t).toContain('3');
     expect(t).toContain('易错'); expect(t).toContain('加强错误处理');
     // 掌握度变化必须渲染（修复前 masteryDeltas 在 UI 缺席）。
     expect(t).toContain('KC01'); expect(t).toContain('掌握'); expect(t).toContain('置信');
     // SUCCESS 的 run 必须显示 ✓（修复前判 'OK' 恒不命中，真实数据显字面 SUCCESS）。
     expect(t).toContain('✓');
+  });
+
+  it('emits actionable prompts from weekly plan, insight and mastery rows', async () => {
+    vi.mocked(twinApi.fetchWeeklyReport).mockResolvedValue(mockReport);
+    const w = mount(TwinWeekly); await nextTick(); await nextTick(); await nextTick();
+
+    await w.get('[data-testid="twin-weekly-plan"]').trigger('click');
+    await w.get('[data-testid="twin-insight-prompt-1"]').trigger('click');
+    await w.get('[data-testid="twin-mastery-prompt-KC01"]').trigger('click');
+
+    const prompts = w.emitted('prompt')?.map((event) => event[0] as string) ?? [];
+    expect(prompts).toHaveLength(3);
+    expect(prompts[0]).toContain('看、学、练、测');
+    expect(prompts[1]).toContain('加强错误处理');
+    expect(prompts[2]).toContain('KC01');
   });
 
   it('shows error state on API failure', async () => {

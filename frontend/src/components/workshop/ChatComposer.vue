@@ -181,6 +181,14 @@ function appendVoiceText(text: string): void {
   focusInput();
 }
 
+function prefill(text: string): void {
+  const clean = text.trim();
+  if (!clean) return;
+  syncInputText(clean);
+  voiceError.value = '';
+  focusInput();
+}
+
 watch(
   () => voice.transcript.value,
   (value) => {
@@ -480,7 +488,7 @@ function submit(): void {
   fileHandles.clear();
 }
 
-defineExpose({ focus: focusInput });
+defineExpose({ focus: focusInput, prefill });
 </script>
 
 <template>

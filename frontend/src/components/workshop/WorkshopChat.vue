@@ -334,6 +334,7 @@ const mentionItems = ref<MentionItem[]>([]);
 const courseKcs = ref<CourseKcRef[]>([]);
 const routing = ref(false);
 const scrollRef = ref<HTMLElement | null>(null);
+const composerRef = ref<{ focus: () => void; prefill: (text: string) => void } | null>(null);
 
 const tutorSse = useSseStream<TutorStreamResult>('/api/tutor/ask');
 const workshopSse = useSseStream<WorkshopCreateResponse>('/api/workshop/resources/stream');
@@ -399,6 +400,11 @@ function newChat(): void {
   conversationId.value = genId();
   continuing.value = false;
   scrollToBottom(true);
+}
+
+function prefillDraft(text: string): void {
+  composerRef.value?.prefill(text);
+  scrollToBottom(false);
 }
 
 /**
@@ -500,7 +506,7 @@ function loadConversation(turns: WorkshopChatHistoryTurnDto[]): void {
   continuing.value = Boolean(existing);
   scrollToBottom(true);
 }
-defineExpose({ loadConversation, newChat });
+defineExpose({ loadConversation, newChat, prefillDraft });
 
 // 资源生成「实时思考」状态：驱动 AgentStudioStream（替代旧的像素事务所动画 + 证据卡覆盖层）。
 // 仅 'streaming' 时显示思考链；完成即就地内联展示资源，出错即出错误气泡，随后归 'idle'。
@@ -801,7 +807,13 @@ function onScroll(): void {
 function scrollToBottom(force = false): void {
   if (!force && !atBottom.value) return;
   void nextTick(() => {
-    scrollRef.value?.scrollTo({ top: scrollRef.value.scrollHeight, behavior: 'smooth' });
+    const el = scrollRef.value;
+    if (!el) return;
+    if (typeof el.scrollTo === 'function') {
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    } else {
+      el.scrollTop = el.scrollHeight;
+    }
   });
 }
 
@@ -2634,6 +2646,7 @@ onMounted(async () => {
 
     <div class="chat__composer">
       <ChatComposer
+        ref="composerRef"
         :mention-items="mentionItems"
         :busy="busy"
         @submit="onSubmit"

@@ -20,6 +20,7 @@ const apiMocks = vi.hoisted(() => ({
   listWorkshopChatHistoryTurns: vi.fn(),
   rememberWorkshopChatHistoryTurn: vi.fn(),
   fetchAiRuntimeSummary: vi.fn(),
+  fetchWeeklyReport: vi.fn(),
 }));
 
 vi.mock('@/api/course', () => ({
@@ -67,6 +68,10 @@ vi.mock('@/api/workshopHistory', () => {
 
 vi.mock('@/api/aiRuntime', () => ({
   fetchAiRuntimeSummary: apiMocks.fetchAiRuntimeSummary,
+}));
+
+vi.mock('@/api/twin', () => ({
+  fetchWeeklyReport: apiMocks.fetchWeeklyReport,
 }));
 
 vi.mock('@/composables/useStardewFx', () => ({
@@ -176,6 +181,35 @@ describe('WorkshopPage R-13 改造', () => {
           evidenceRefs: ['learner.evidence.graph'],
         },
       ],
+    });
+    apiMocks.fetchWeeklyReport.mockResolvedValue({
+      periodStart: '2026-06-19',
+      periodEnd: '2026-06-26',
+      memoryBrief: {
+        totalEvents: 12,
+        failedPractices: 3,
+        succeededPractices: 5,
+        topKcCodes: ['PY43-KC-001'],
+        highlights: ['列表别名易错'],
+      },
+      insights: [
+        {
+          id: 1,
+          text: '加强错误处理',
+          dimensionKey: 'error_pattern',
+          tags: ['PY43-KC-001'],
+          createdAt: '2026-06-25T10:00:00Z',
+        },
+      ],
+      masteryDeltas: [
+        {
+          kcCode: 'PY43-KC-001',
+          currentScore: 0.64,
+          confidence: 0.76,
+          recentEventReasons: [],
+        },
+      ],
+      resourceRuns: [],
     });
   });
 
@@ -343,6 +377,23 @@ describe('WorkshopPage R-13 改造', () => {
     expect(wrapper.find('[data-testid="runtime-summary"]').exists()).toBe(true);
     expect(wrapper.text()).toContain('学习证据图完整度');
     expect(wrapper.text()).toContain('外部内容，非课件');
+    expect(apiMocks.fetchWeeklyReport).toHaveBeenCalledTimes(1);
+    expect(wrapper.text()).toContain('Learner Twin');
+  });
+
+  it('prefills the workshop composer from a Learner Twin insight', async () => {
+    await router.push('/workshop');
+    const wrapper = mountPage();
+    await flushPromises();
+
+    await wrapper.get('[data-testid="workshop-open-calls"]').trigger('click');
+    await flushPromises();
+    await wrapper.get('[data-testid="twin-insight-prompt-1"]').trigger('click');
+    await flushPromises();
+
+    const input = wrapper.get('[data-testid="composer-input"]').element as HTMLTextAreaElement;
+    expect(input.value).toContain('加强错误处理');
+    expect(input.value).toContain('Learner Twin');
   });
 
   it('places history on the leading side and study or calls on the trailing side', async () => {

@@ -2,6 +2,10 @@
 import { onMounted, ref } from 'vue';
 import { fetchWeeklyReport, type WeeklyReport } from '@/api/twin';
 
+const emit = defineEmits<{
+  (event: 'prompt', text: string): void;
+}>();
+
 const report = ref<WeeklyReport | null>(null);
 const busy = ref(true);
 const error = ref('');
@@ -30,6 +34,37 @@ function agentIcon(n: string): string {
   for (const [k, v] of Object.entries(agentIcons)) { if (lo.includes(k)) return v; }
   return '\u{1F916}';
 }
+
+function percent(value: number): string {
+  return `${(value * 100).toFixed(0)}%`;
+}
+
+function promptWeeklyPlan(): void {
+  const r = report.value;
+  if (!r) return;
+  const focus = r.memoryBrief.topKcCodes.length
+    ? r.memoryBrief.topKcCodes.slice(0, 3).join('、')
+    : '本周薄弱知识点';
+  emit(
+    'prompt',
+    `基于我的 Learner Twin 本周证据，围绕 ${focus} 按“看、学、练、测”安排下一步。先说明依据，再给 3 个可执行任务。`,
+  );
+}
+
+function promptInsight(insight: { text: string; dimensionKey: string }): void {
+  const label = dimLabel[insight.dimensionKey] ?? insight.dimensionKey;
+  emit(
+    'prompt',
+    `结合我的 Learner Twin 画像洞察「${insight.text}」（${label}），请在课件证据范围内设计一个针对性学习任务，并说明如何验证效果。`,
+  );
+}
+
+function promptMastery(delta: { kcCode: string; currentScore: number; confidence: number }): void {
+  emit(
+    'prompt',
+    `针对 ${delta.kcCode}，我当前掌握约 ${percent(delta.currentScore)}、置信 ${percent(delta.confidence)}。请给我一组由浅入深的练习和课件复习建议。`,
+  );
+}
 </script>
 
 <template>
@@ -57,11 +92,21 @@ function agentIcon(n: string): string {
     </div>
     <template v-else>
       <div class="tw__hd">
-        <span class="tw__ttl">本周回顾</span>
-        <span class="tw__rng">{{ report.periodStart }} → {{ report.periodEnd }}</span>
+        <div>
+          <span class="tw__ttl">Learner Twin</span>
+          <span class="tw__rng">{{ report.periodStart }} → {{ report.periodEnd }}</span>
+        </div>
+        <button
+          type="button"
+          class="tw__action"
+          data-testid="twin-weekly-plan"
+          @click="promptWeeklyPlan"
+        >
+          生成下一步
+        </button>
       </div>
       <div class="tw__card">
-        <span class="tw__ic">🧠</span>
+        <span class="tw__ic">◇</span>
         <span class="tw__tx">
           {{ report.memoryBrief.totalEvents }} 事件 ·
           <span class="ok">{{ report.memoryBrief.succeededPractices }}</span> 通过 ·
@@ -73,22 +118,38 @@ function agentIcon(n: string): string {
         :key="i.id"
         class="tw__card"
       >
-        <span class="tw__ic">💡</span>
+        <span class="tw__ic">!</span>
         <span class="tw__tx">
           <span class="tw__badge">{{ dimLabel[i.dimensionKey] ?? i.dimensionKey }}</span>
           {{ i.text }}
         </span>
+        <button
+          type="button"
+          class="tw__mini"
+          :data-testid="`twin-insight-prompt-${i.id}`"
+          @click="promptInsight(i)"
+        >
+          带入
+        </button>
       </div>
       <div
         v-for="d in report.masteryDeltas"
         :key="'m-' + d.kcCode"
         class="tw__card"
       >
-        <span class="tw__ic">📈</span>
+        <span class="tw__ic">↑</span>
         <span class="tw__tx">
           <span class="tw__badge">{{ d.kcCode }}</span>
-          掌握 {{ (d.currentScore * 100).toFixed(0) }}% · 置信 {{ (d.confidence * 100).toFixed(0) }}%
+          掌握 {{ percent(d.currentScore) }} · 置信 {{ percent(d.confidence) }}
         </span>
+        <button
+          type="button"
+          class="tw__mini"
+          :data-testid="`twin-mastery-prompt-${d.kcCode}`"
+          @click="promptMastery(d)"
+        >
+          补强
+        </button>
       </div>
       <div
         v-for="r in report.resourceRuns"
@@ -110,7 +171,7 @@ function agentIcon(n: string): string {
         v-if="report.resourceRuns.length === 0"
         class="tw__card"
       >
-        <span class="tw__ic">🤖</span>
+        <span class="tw__ic">□</span>
         <span class="tw__tx">本周 AI 团队待命中</span>
       </div>
     </template>
@@ -119,31 +180,97 @@ function agentIcon(n: string): string {
 
 <style scoped>
 .tw {
-  font-family: 'Zpix', monospace; font-size: 12px;
-  color: var(--pyt-color-text-primary); background: var(--pyt-color-bg-primary);
-  border: 2px solid var(--pyt-color-border); border-radius: 4px;
-  padding: 12px; max-width: 360px; image-rendering: pixelated;
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'PingFang SC',
+    'Microsoft YaHei',
+    sans-serif;
+  font-size: 12px;
+  color: #252a2e;
+  background: #ffffff;
+  border: 1px solid #dde3dc;
+  border-radius: 8px;
+  padding: 12px;
+  max-width: 420px;
 }
 .tw__hd {
-  display: flex; justify-content: space-between; align-items: baseline;
-  margin-bottom: 10px; padding-bottom: 6px;
-  border-bottom: 2px solid var(--pyt-color-border-soft);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e4e9e3;
 }
-.tw__ttl { font-weight: 700; }
-.tw__rng { font-size: 10px; color: var(--pyt-color-text-muted); }
+.tw__ttl {
+  display: block;
+  font-weight: 700;
+  color: #1f2d25;
+}
+.tw__rng {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  color: #77827b;
+}
 .tw__card {
-  display: flex; align-items: flex-start; gap: 8px; padding: 6px 0;
-  border-bottom: 1px solid var(--pyt-color-border-soft);
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid #edf0ec;
 }
 .tw__card:last-child { border-bottom: none; }
-.tw__ic { flex-shrink: 0; font-size: 16px; line-height: 1; }
-.tw__tx { flex: 1; line-height: 1.6; }
-.tw__badge {
-  display: inline-block; padding: 0 4px; font-size: 10px;
-  background: var(--pyt-color-info-bg); color: var(--pyt-color-info); margin-right: 4px;
+.tw__ic {
+  flex: 0 0 18px;
+  display: inline-flex;
+  justify-content: center;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #496758;
 }
-.tw__badge.ok { background: var(--pyt-color-success-bg); color: var(--pyt-color-success); }
-.ok { color: var(--pyt-color-success); } .ng { color: var(--pyt-color-danger); }
-.tw__load,.tw__err,.tw__nil { text-align: center; padding: 16px; color: var(--pyt-color-text-muted); }
-.tw__err { color: var(--pyt-color-danger); }
+.tw__tx {
+  flex: 1 1 auto;
+  min-width: 0;
+  line-height: 1.6;
+}
+.tw__badge {
+  display: inline-block;
+  padding: 0 5px;
+  font-size: 10px;
+  border-radius: 999px;
+  background: #eef4fb;
+  color: #31536b;
+  margin-right: 4px;
+}
+.tw__badge.ok { background: #e8f4e8; color: #2d6a42; }
+.tw__action,
+.tw__mini {
+  flex: 0 0 auto;
+  font: inherit;
+  border: 1px solid #cdd8d0;
+  background: #f7faf7;
+  color: #2c4737;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.tw__action {
+  padding: 6px 9px;
+  font-weight: 650;
+}
+.tw__mini {
+  padding: 4px 7px;
+  font-size: 11px;
+}
+.tw__action:hover,
+.tw__mini:hover {
+  background: #edf5ef;
+  border-color: #9fbaa6;
+}
+.ok { color: #2d6a42; } .ng { color: #9b2d20; }
+.tw__load,.tw__err,.tw__nil { text-align: center; padding: 16px; color: #77827b; }
+.tw__err { color: #9b2d20; }
 </style>

@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-06-26 — 9 项 AI 深度融合 Batch 8：Learner Twin 进入工坊闭环
+
+> 把 Learner Twin 从画像屋里的周报展示推进到百晓工坊右侧工作台：学生不仅能看到本周证据摘要、画像洞察和 KC 掌握变化，还能一键把这些证据转成下一轮工坊提问，让画像真正参与“看、学、练、测”学习闭环。
+
+- **Twin 周报可行动化**：`TwinWeekly` 新增 `prompt` 事件，支持“生成下一步”、洞察“带入”、KC “补强”三类动作，prompt 明确要求基于 Learner Twin 证据、课件范围和可验证学习效果。
+- **工坊右侧接入**：`WorkshopPage` 在“调用”抽屉内嵌 Learner Twin 周报，与 Runtime/Eval、Marvis、工具调用时间线同列展示；点击 Twin 动作会把结构化 prompt 预填到主聊天 composer。
+- **输入框外部预填合同**：`ChatComposer` 暴露 `prefill()`，`WorkshopChat` 暴露 `prefillDraft()`，只写入草稿，不绕过现有 submit、意图路由、证据记录和历史落库。
+- **前端视觉统一**：`TwinWeekly` 从像素小卡改为浅色 1px 分隔、8px 圆角、系统字体的工作台面板，适配 ChatGPT / Claude 风格右侧上下文栏。
+- **健壮性修复**：`WorkshopChat.scrollToBottom()` 在不支持 `element.scrollTo()` 的环境回退到 `scrollTop`，避免测试和老浏览器环境出现异步滚动错误。
+- **验证**：前端定向 `npm run test -- --run src/components/companion/__tests__/TwinWeekly.spec.ts tests/pages/WorkshopPage.spec.ts src/components/workshop/__tests__/ChatComposer.spec.ts` 通过（35 tests）；`npm run typecheck` 通过；后端定向 `env MAVEN_OPTS="-Djdk.attach.allowAttachSelf=true -XX:+EnableDynamicAgentLoading" mvn --settings .mvn/settings.build.xml -q -Dtest=WeeklyReportServiceTest,TwinWeeklyControllerTest test` 在非沙箱权限下通过。Vitest 仍打印既有 `public/pyodide/pyodide.js.map` 缺失提示，退出码为 0。
+
 ## 2026-06-26 — 9 项 AI 深度融合 Batch 7：工坊实时语音输入接入
 
 > 把已有 Web Speech 与 `/api/media/asr` 语音听写能力从随身助教扩展到百晓工坊输入框：学生可以像 ChatGPT / Claude Web 一样在同一 composer 里直接说出问题，浏览器支持时本地听写，不支持时录音上传后端 ASR；降级时不伪造文本，明确要求键盘输入。

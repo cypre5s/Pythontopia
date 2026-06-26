@@ -15,6 +15,7 @@ import ResourceDetailPanel from '@/components/workshop/ResourceDetailPanel.vue';
 import ChatHistoryRail from '@/components/workshop/ChatHistoryRail.vue';
 import ToolCallTimeline from '@/components/workshop/ToolCallTimeline.vue';
 import AiRuntimeSummaryPanel from '@/components/workshop/AiRuntimeSummaryPanel.vue';
+import TwinWeekly from '@/components/companion/TwinWeekly.vue';
 import {
   rememberWorkshopChatHistoryTurn,
   type WorkshopChatHistoryTurnDto,
@@ -96,9 +97,17 @@ watch([historyOpen, activeDrawer], ([open, drawer]) => {
 // 左栏「聊天记录」选中某段会话时，把整段会话（多轮问答）回看注入对话流并接着聊
 // （WorkshopChat 暴露 loadConversation）。选中后**保持历史栏与右侧栏原样**，
 // 方便学生连续翻看多段会话（不自动收起任何面板）。
-const chatRef = ref<{ loadConversation: (turns: WorkshopChatHistoryTurnDto[]) => void } | null>(null);
+const chatRef = ref<{
+  loadConversation: (turns: WorkshopChatHistoryTurnDto[]) => void;
+  prefillDraft: (text: string) => void;
+} | null>(null);
 function onSelectConversation(turns: WorkshopChatHistoryTurnDto[]): void {
   chatRef.value?.loadConversation(turns);
+}
+
+function onTwinPrompt(text: string): void {
+  chatRef.value?.prefillDraft(text);
+  toast.show('已带入工坊输入框', 'success');
 }
 
 // R-14 域1④：书房当前打开的资源 id 由 store 持有，不再进 URL（避免暴露可枚举 id）。
@@ -412,6 +421,10 @@ const bodyClass = computed<Record<string, boolean>>(() => ({
               class="workshop-call-drawer"
             >
               <AiRuntimeSummaryPanel />
+              <TwinWeekly
+                class="workshop-twin-weekly"
+                @prompt="onTwinPrompt"
+              />
               <MarvisPanel />
               <ToolCallTimeline
                 :traces="activity.traces"
@@ -686,6 +699,10 @@ const bodyClass = computed<Record<string, boolean>>(() => ({
   flex-direction: column;
   gap: 10px;
   min-height: 100%;
+}
+.workshop-twin-weekly {
+  width: 100%;
+  max-width: none;
 }
 .workshop-call-drawer__empty {
   margin: 0;
