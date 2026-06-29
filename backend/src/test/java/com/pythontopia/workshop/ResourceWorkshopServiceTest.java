@@ -25,6 +25,8 @@ import com.pythontopia.learner.mastery.MasteryEvaluator;
 import com.pythontopia.learner.mastery.MasterySnapshot;
 import com.pythontopia.learner.mastery.MasterySource;
 import com.pythontopia.learner.memory.MemoryRetrievalService;
+import com.pythontopia.learner.memory.MemoryBriefService;
+import com.pythontopia.learner.memory.dto.MemoryBriefDto;
 import com.pythontopia.learner.memory.dto.MemoryItemDto;
 import com.pythontopia.learner.profile.dto.BaseLevelDto;
 import com.pythontopia.learner.profile.dto.LearnerProfileDto;
@@ -33,6 +35,10 @@ import com.pythontopia.learner.profile.dto.ProfileDimensionDto;
 import com.pythontopia.learner.profile.service.PassiveProfileService;
 import com.pythontopia.learner.profile.service.ProfileService;
 import com.pythontopia.learner.reflection.LearnerInsightRepository;
+import com.pythontopia.submission.dto.SubmissionDto;
+import com.pythontopia.submission.dto.SubmissionSource;
+import com.pythontopia.submission.dto.SubmissionStatus;
+import com.pythontopia.submission.repository.PracticeSubmissionRepository;
 import com.pythontopia.workshop.config.WorkshopProperties;
 import com.pythontopia.workshop.dto.ContentFormat;
 import com.pythontopia.workshop.dto.LearningResourceDto;
@@ -80,8 +86,10 @@ class ResourceWorkshopServiceTest {
   private PassiveProfileService passiveProfileService;
   private LearnerInsightRepository insightRepository;
   private MemoryRetrievalService memoryRetrievalService;
+  private MemoryBriefService memoryBriefService;
   private MetaReflectionService metaReflectionService;
   private ResourceFeedbackRepository resourceFeedbackRepository;
+  private PracticeSubmissionRepository submissionRepository;
   private ApplicationEventPublisher eventPublisher;
   private ObjectMapper objectMapper;
   private ResourceWorkshopService service;
@@ -99,8 +107,10 @@ class ResourceWorkshopServiceTest {
     passiveProfileService = Mockito.mock(PassiveProfileService.class);
     insightRepository = Mockito.mock(LearnerInsightRepository.class);
     memoryRetrievalService = Mockito.mock(MemoryRetrievalService.class);
+    memoryBriefService = Mockito.mock(MemoryBriefService.class);
     metaReflectionService = Mockito.mock(MetaReflectionService.class);
     resourceFeedbackRepository = Mockito.mock(ResourceFeedbackRepository.class);
+    submissionRepository = Mockito.mock(PracticeSubmissionRepository.class);
     eventPublisher = Mockito.mock(ApplicationEventPublisher.class);
     objectMapper = new ObjectMapper();
     service =
@@ -116,8 +126,10 @@ class ResourceWorkshopServiceTest {
             passiveProfileService,
             insightRepository,
             memoryRetrievalService,
+            memoryBriefService,
             metaReflectionService,
             resourceFeedbackRepository,
+            submissionRepository,
             eventPublisher,
             objectMapper);
 
@@ -129,6 +141,8 @@ class ResourceWorkshopServiceTest {
     when(passiveProfileService.getDimensions(anyLong())).thenReturn(List.of());
     when(insightRepository.findLatestText(anyLong())).thenReturn(Optional.empty());
     when(memoryRetrievalService.retrieve(anyLong(), any(), anyInt())).thenReturn(List.of());
+    when(memoryBriefService.buildBrief(anyLong(), any()))
+        .thenReturn(new MemoryBriefDto(List.of(), List.of(), List.of(), "2026-06-27T00:00:00Z"));
     when(resourceRepository.countCreatedAfter(anyLong(), any())).thenReturn(0);
     when(resourceRepository.sumMasteryRewardsToday(anyLong(), anyString(), any()))
         .thenReturn(BigDecimal.ZERO);
@@ -227,6 +241,9 @@ class ResourceWorkshopServiceTest {
     assertThat(response.resourceId()).isEqualTo(7L);
     assertThat(response.kcCodes()).containsExactly("PY43-KC-001");
     assertThat(response.nextAction()).isEqualTo("micro_check");
+    assertThat(response.readRecorded()).isTrue();
+    assertThat(response.loopState()).isEqualTo("MICRO_CHECK_REQUIRED");
+    assertThat(response.evidenceRequired()).isEqualTo("micro_check_or_operation");
     ArgumentCaptor<LearningEvent.ResourceConsumed> captor =
         ArgumentCaptor.forClass(LearningEvent.ResourceConsumed.class);
     verify(eventPublisher).publishEvent(captor.capture());
@@ -254,7 +271,10 @@ class ResourceWorkshopServiceTest {
 
     assertThat(response.status()).isEqualTo(ResourceCheckStatus.PASSED);
     assertThat(response.masteryDelta()).isEqualByComparingTo("0.05");
-    assertThat(response.nextAction()).isEqualTo("continue");
+    assertThat(response.nextAction()).isEqualTo("pass");
+    assertThat(response.loopState()).isEqualTo("PASSED");
+    assertThat(response.practiceSubmissionId()).isNull();
+    assertThat(response.decisionReason()).contains("微测通过");
     ArgumentCaptor<ResourceLearningCheckRepository.CheckInsert> insertCaptor =
         ArgumentCaptor.forClass(ResourceLearningCheckRepository.CheckInsert.class);
     verify(checkRepository).insert(insertCaptor.capture());
@@ -286,8 +306,10 @@ class ResourceWorkshopServiceTest {
 
     assertThat(response.status()).isEqualTo(ResourceCheckStatus.FAILED);
     assertThat(response.masteryDelta()).isLessThan(BigDecimal.ZERO);
-    assertThat(response.nextAction()).isEqualTo("remediation");
+    assertThat(response.nextAction()).isEqualTo("remediate");
+    assertThat(response.loopState()).isEqualTo("NEED_REMEDIATION");
     assertThat(response.remediationType()).isEqualTo(ResourceType.PRACTICE);
+    assertThat(response.decisionReason()).contains("先补一轮练习");
     ArgumentCaptor<ResourceLearningCheckRepository.CheckInsert> insertCaptor =
         ArgumentCaptor.forClass(ResourceLearningCheckRepository.CheckInsert.class);
     verify(checkRepository).insert(insertCaptor.capture());
@@ -344,6 +366,111 @@ class ResourceWorkshopServiceTest {
 
     assertThat(response.status()).isEqualTo(ResourceCheckStatus.PASSED);
     assertThat(response.masteryDelta()).isPositive();
+    assertThat(response.nextAction()).isEqualTo("pass");
+  }
+
+  @Test
+  void repeatedFailedCheckSwapsResourceInsteadOfRepeatingSameRemediation() {
+    when(resourceRepository.findById(1L, 7L)).thenReturn(Optional.of(resource()));
+    when(checkRepository.countFailedChecks(1L, 7L, "PY43-KC-001")).thenReturn(1);
+    when(checkRepository.insert(any())).thenReturn(35L);
+
+    ResourceCheckResponse response =
+        service.submitCheck(
+            1L,
+            7L,
+            new ResourceCheckSubmitRequest(
+                "PY43-KC-001",
+                ResourceCheckEvidenceType.MICRO_QUIZ,
+                "我还是没太看懂",
+                null));
+
+    assertThat(response.status()).isEqualTo(ResourceCheckStatus.FAILED);
+    assertThat(response.nextAction()).isEqualTo("swap_resource");
+    assertThat(response.loopState()).isEqualTo("NEED_RESOURCE_SWAP");
+    assertThat(response.remediationType()).isEqualTo(ResourceType.CODE_LAB);
+    assertThat(response.decisionReason()).contains("换一种资源");
+  }
+
+  @Test
+  void passedSubmissionEvidenceClosesLoopAsPracticeSubmitted() {
+    when(resourceRepository.findById(1L, 7L)).thenReturn(Optional.of(resource()));
+    when(resourceRepository.sumMasteryRewardsToday(anyLong(), anyString(), any()))
+        .thenReturn(BigDecimal.ZERO);
+    when(checkRepository.insert(any())).thenReturn(36L);
+    when(submissionRepository.findSubmission(1L, 88L)).thenReturn(Optional.of(submission(88L, SubmissionStatus.PASSED)));
+    when(submissionRepository.findSubmissionKcCode(1L, 88L)).thenReturn(Optional.of("PY43-KC-001"));
+
+    var evidence = objectMapper.createObjectNode();
+    evidence.put("submissionId", 88L);
+
+    ResourceCheckResponse response =
+        service.submitCheck(
+            1L,
+            7L,
+            new ResourceCheckSubmitRequest(
+                "PY43-KC-001",
+                ResourceCheckEvidenceType.OPERATION,
+                "我完成了训练场提交",
+                evidence));
+
+    assertThat(response.status()).isEqualTo(ResourceCheckStatus.PASSED);
+    assertThat(response.nextAction()).isEqualTo("pass");
+    assertThat(response.practiceSubmissionId()).isEqualTo(88L);
+    assertThat(response.decisionReason()).contains("提交已通过");
+  }
+
+  @Test
+  void submissionEvidenceMustMatchResourceKc() {
+    when(resourceRepository.findById(1L, 7L)).thenReturn(Optional.of(resource()));
+    when(submissionRepository.findSubmission(1L, 90L))
+        .thenReturn(Optional.of(submission(90L, SubmissionStatus.PASSED)));
+    when(submissionRepository.findSubmissionKcCode(1L, 90L)).thenReturn(Optional.of("PY43-KC-999"));
+
+    var evidence = objectMapper.createObjectNode();
+    evidence.put("submissionId", 90L);
+
+    assertThatThrownBy(
+            () ->
+                service.submitCheck(
+                    1L,
+                    7L,
+                    new ResourceCheckSubmitRequest(
+                        "PY43-KC-001",
+                        ResourceCheckEvidenceType.OPERATION,
+                        "我完成了训练场提交",
+                        evidence)))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("KC");
+    verifyNoInteractions(checkRepository);
+  }
+
+  @Test
+  void failedSubmissionEvidenceTriggersReplan() {
+    when(resourceRepository.findById(1L, 7L)).thenReturn(Optional.of(resource()));
+    when(checkRepository.insert(any())).thenReturn(37L);
+    when(submissionRepository.findSubmission(1L, 89L)).thenReturn(Optional.of(submission(89L, SubmissionStatus.FAILED)));
+    when(submissionRepository.findSubmissionKcCode(1L, 89L)).thenReturn(Optional.of("PY43-KC-001"));
+
+    var evidence = objectMapper.createObjectNode();
+    evidence.put("submissionId", 89L);
+
+    ResourceCheckResponse response =
+        service.submitCheck(
+            1L,
+            7L,
+            new ResourceCheckSubmitRequest(
+                "PY43-KC-001",
+                ResourceCheckEvidenceType.OPERATION,
+                "提交还是失败",
+                evidence));
+
+    assertThat(response.status()).isEqualTo(ResourceCheckStatus.FAILED);
+    assertThat(response.nextAction()).isEqualTo("replan");
+    assertThat(response.loopState()).isEqualTo("NEED_REPLAN");
+    assertThat(response.remediationType()).isNull();
+    assertThat(response.practiceSubmissionId()).isEqualTo(89L);
+    assertThat(response.decisionReason()).contains("真实提交未通过");
   }
 
   @Test
@@ -388,8 +515,10 @@ class ResourceWorkshopServiceTest {
             passiveProfileService,
             insightRepository,
             memoryRetrievalService,
+            memoryBriefService,
             metaReflectionService,
             resourceFeedbackRepository,
+            submissionRepository,
             eventPublisher,
             objectMapper);
     when(graphClient.produce(any())).thenReturn(successResponse());
@@ -482,6 +611,34 @@ class ResourceWorkshopServiceTest {
         .containsExactly("练习失败：PY43-KC-001（WA）");
     // 记忆检索须以首个 KC 作为聚焦点。
     verify(memoryRetrievalService).retrieve(eq(1L), eq("PY43-KC-001"), anyInt());
+  }
+
+  @Test
+  void createFoldsDeepMemoryDirectivesIntoSnapshot() {
+    when(graphClient.produce(any())).thenReturn(successResponse());
+    when(memoryBriefService.buildBrief(eq(1L), eq("PY43-KC-001")))
+        .thenReturn(
+            new MemoryBriefDto(
+                List.of("事实：最近读过 input"),
+                List.of("PY43-KC-001"),
+                List.of("认知风格: visual"),
+                "2026-06-27T00:00:00Z",
+                List.of("偏好图解"),
+                List.of("微测未过：PY43-KC-001"),
+                List.of("练习通过：PY43-KC-002"),
+                List.of("优先图解/结构化示例。")));
+
+    service.create(1L, new ResourceCreateRequest(List.of("PY43-KC-001"), ResourceType.HANDOUT, null));
+
+    ArgumentCaptor<ResourceProduceRequestDto> captor =
+        ArgumentCaptor.forClass(ResourceProduceRequestDto.class);
+    verify(graphClient).produce(captor.capture());
+    assertThat(captor.getValue().profileSnapshot().memoryDirectives())
+        .containsExactly(
+            "偏好图解",
+            "微测未过：PY43-KC-001",
+            "练习通过：PY43-KC-002",
+            "优先图解/结构化示例。");
   }
 
   @Test
@@ -620,6 +777,21 @@ class ResourceWorkshopServiceTest {
 
   private LearningResourceDto resource() {
     return feedbackResourceDto();
+  }
+
+  private SubmissionDto submission(long id, SubmissionStatus status) {
+    return new SubmissionDto(
+        id,
+        1L,
+        100L,
+        null,
+        SubmissionSource.TRAINING,
+        "PYTHON_3_11",
+        "print('ok')",
+        OffsetDateTime.now(),
+        status,
+        1,
+        1024);
   }
 
   private ResourceProduceResponseDto successResponse() {

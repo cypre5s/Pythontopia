@@ -10,7 +10,10 @@ import ReadingList from './ReadingList.vue';
 import StoryboardView from './StoryboardView.vue';
 import PptView from './PptView.vue';
 import GlassBox from '@/components/companion/GlassBox.vue';
+import { listSubmissions } from '@/api/submissions';
 import { kcDisplayName } from '@/data/kcNames';
+import type { SubmissionDto } from '@/api/dto/Submission';
+import type { SubmissionStatus } from '@/api/dto/Submission';
 import type {
   CodeLabContent,
   HandoutContent,
@@ -20,6 +23,7 @@ import type {
   StoryboardContent,
   WorkshopCheckResponse,
   WorkshopFeedbackRequest,
+  WorkshopResourceType,
 } from '@/api/dto/Workshop';
 
 const props = defineProps<{
@@ -34,10 +38,58 @@ const showPpt = ref<boolean>(false);
 const consumingResource = ref<boolean>(false);
 const checkAnswer = ref<string>('');
 const submittingCheck = ref<boolean>(false);
+const verifyingSubmission = ref<boolean>(false);
 const checkResult = ref<WorkshopCheckResponse | null>(null);
+
+type LoopTone = 'idle' | 'active' | 'done' | 'warn';
+
+interface LoopStepView {
+  label: string;
+  tone: LoopTone;
+}
 
 const resource = computed(() => learning.resources.current);
 const consumption = computed(() => learning.resources.currentConsumption);
+const loopCtaResourceType = computed<WorkshopResourceType>(() => checkResult.value?.remediationType ?? 'PRACTICE');
+const loopStateLabel = computed(() => {
+  const result = checkResult.value;
+  if (!result) {
+    if (consumingResource.value) return '同步';
+    return consumption.value?.readRecorded ? '待测' : '待读';
+  }
+  if (result.nextAction === 'pass') return '通过';
+  if (result.nextAction === 'remediate') return '补救';
+  if (result.nextAction === 'swap_resource') return '换资源';
+  return '重规划';
+});
+const loopActionLabel = computed(() => {
+  const result = checkResult.value;
+  if (!result) return '练习';
+  if (result.nextAction === 'pass') return '继续';
+  if (result.nextAction === 'replan') return '重规划';
+  const suffix = result.remediationType ? ` ${result.remediationType}` : '';
+  return `${result.nextAction === 'swap_resource' ? '换资源' : '补救'}${suffix}`;
+});
+const loopMessage = computed(() => {
+  const result = checkResult.value;
+  if (result) return result.decisionReason || result.feedback;
+  return consumption.value?.prompt ?? (consumingResource.value ? '正在同步学习进度。' : '读完后做小检查。');
+});
+const loopSteps = computed<LoopStepView[]>(() => {
+  const readDone = Boolean(consumption.value?.readRecorded || consumption.value);
+  const result = checkResult.value;
+  const failed = result?.status === 'FAILED';
+  return [
+    { label: '读', tone: readDone ? 'done' : consumingResource.value ? 'active' : 'idle' },
+    { label: '测', tone: result ? (failed ? 'warn' : 'done') : readDone ? 'active' : 'idle' },
+    { label: '判', tone: result ? (failed ? 'warn' : 'done') : 'idle' },
+  ];
+});
+const masteryDeltaText = computed(() => {
+  if (!checkResult.value) return '';
+  const delta = checkResult.value.masteryDelta;
+  return `${delta >= 0 ? '+' : ''}${delta.toFixed(2)}`;
+});
 
 watch(
   () => props.resourceId,
@@ -111,6 +163,44 @@ async function submitMicroCheck(): Promise<void> {
     submittingCheck.value = false;
   }
 }
+
+async function loadLatestSubmission(): Promise<SubmissionDto | null> {
+  const statuses: SubmissionStatus[] = ['PASSED', 'FAILED', 'ERROR'];
+  const results = await Promise.all(statuses.map((status) => listSubmissions({ status, limit: 1 })));
+  const candidates = results.flat();
+  candidates.sort((a, b) => Date.parse(b.submittedAt) - Date.parse(a.submittedAt));
+  return candidates[0] ?? null;
+}
+
+async function submitLatestSubmissionCheck(): Promise<void> {
+  if (!resource.value || resource.value.kcCodes.length === 0) return;
+  const primaryKcCode = resource.value.kcCodes[0];
+  if (!primaryKcCode) return;
+  verifyingSubmission.value = true;
+  try {
+    const submission = await loadLatestSubmission();
+    if (!submission) {
+      toast.show('先完成一次训练场提交。', 'info');
+      return;
+    }
+    checkResult.value = await learning.submitResourceCheck(resource.value.id, {
+      kcCode: primaryKcCode,
+      evidenceType: 'OPERATION',
+      answerText: `训练场提交 #${submission.id}`,
+      operationEvidence: {
+        submissionId: submission.id,
+        submission_id: submission.id,
+        source: 'recent_submission',
+        status: submission.status,
+      },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '提交验证失败';
+    toast.show(message, 'error');
+  } finally {
+    verifyingSubmission.value = false;
+  }
+}
 </script>
 
 <template>
@@ -168,18 +258,34 @@ async function submitMicroCheck(): Promise<void> {
       class="micro-check"
       data-testid="resource-micro-check"
     >
-      <div>
-        <h4>读完小检查</h4>
-        <p>
-          {{ consumption?.prompt ?? (consumingResource ? '正在记录你的学习进度…' : '读完后做一道小检查，把资料转成真正会用的能力。') }}
-        </p>
+      <div
+        class="loop-rail"
+        data-testid="resource-loop-rail"
+      >
+        <span
+          v-for="step in loopSteps"
+          :key="step.label"
+          :class="['loop-step', step.tone]"
+        >
+          {{ step.label }}
+        </span>
+        <strong
+          class="loop-state"
+          data-testid="resource-loop-state"
+        >
+          {{ loopStateLabel }}
+        </strong>
+        <span class="loop-action">{{ loopActionLabel }}</span>
+      </div>
+      <div class="micro-check__prompt">
+        {{ loopMessage }}
       </div>
       <router-link
         v-if="resource.kcCodes.length > 0"
         class="micro-check__cta"
-        :to="{ name: 'workshop', query: { type: 'PRACTICE', kc: resource.kcCodes.join(',') } }"
+        :to="{ name: 'workshop', query: { type: loopCtaResourceType, kc: resource.kcCodes.join(',') } }"
       >
-        生成迁移练习
+        去生成
       </router-link>
       <div class="micro-check__form">
         <textarea
@@ -189,24 +295,32 @@ async function submitMicroCheck(): Promise<void> {
           rows="2"
           placeholder="用自己的话写一个关键点，例如 input 读取用户输入"
         />
-        <button
-          type="button"
-          data-testid="resource-check-submit"
-          :disabled="submittingCheck || checkAnswer.trim().length === 0"
-          @click="submitMicroCheck"
-        >
-          {{ submittingCheck ? '提交中…' : '提交小检查' }}
-        </button>
+        <div class="micro-check__buttons">
+          <button
+            type="button"
+            data-testid="resource-check-submit"
+            :disabled="submittingCheck || checkAnswer.trim().length === 0"
+            @click="submitMicroCheck"
+          >
+            {{ submittingCheck ? '提交中…' : '提交' }}
+          </button>
+          <button
+            type="button"
+            class="micro-check__submission"
+            data-testid="resource-submission-check"
+            :disabled="verifyingSubmission || submittingCheck"
+            @click="submitLatestSubmissionCheck"
+          >
+            {{ verifyingSubmission ? '同步中…' : '最近提交' }}
+          </button>
+        </div>
       </div>
       <p
         v-if="checkResult"
         class="micro-check__result"
         data-testid="resource-check-result"
       >
-        {{ checkResult.status }} · 掌握度 {{ checkResult.masteryDelta >= 0 ? '+' : '' }}{{ checkResult.masteryDelta.toFixed(2) }}
-        <span v-if="checkResult.nextAction === 'remediation' && checkResult.remediationType">
-          · 建议补救：{{ checkResult.remediationType }}
-        </span>
+        {{ checkResult.status }} · {{ masteryDeltaText }}
         <span v-if="checkResult.feedback"> · {{ checkResult.feedback }}</span>
       </p>
     </section>
@@ -342,32 +456,80 @@ header h2 {
   color: #2b1c0b;
 }
 .micro-check {
+  display: grid;
+  grid-template-columns: minmax(210px, 1fr) minmax(160px, 1.4fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid rgba(79, 138, 62, 0.32);
+  border-bottom: 1px solid rgba(79, 138, 62, 0.32);
+}
+.loop-rail {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px;
-  padding: 12px;
+  gap: 6px;
+  min-width: 0;
+}
+.loop-step,
+.loop-state,
+.loop-action {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+}
+.loop-step {
+  width: 28px;
+  border: 1px solid #9cad57;
+  border-radius: 999px;
+  color: #536414;
+  font-size: 12px;
+  background: #fffef2;
+}
+.loop-step.done {
+  border-color: #4f8a3e;
+  background: #4f8a3e;
+  color: #fffde8;
+}
+.loop-step.active {
+  border-color: #b39554;
+  background: #fff2c9;
+  color: #6f4f12;
+}
+.loop-step.warn {
+  border-color: #c14a2f;
+  background: #c14a2f;
+  color: #fffde8;
+}
+.loop-state {
+  padding: 0 9px;
+  border-left: 1px solid rgba(79, 138, 62, 0.32);
+  color: #2b1c0b;
+  font-size: 13px;
+}
+.loop-action {
+  padding: 0 8px;
+  border-radius: 6px;
   background: #f4f7dc;
-  border: 2px solid #9cad57;
-  border-radius: var(--pyt-radius-lg);
+  color: #3f6421;
+  font-size: 12px;
+  font-weight: 700;
 }
-.micro-check h4 {
-  margin: 0 0 4px;
-  color: #364310;
-}
-.micro-check p {
-  margin: 0;
-  line-height: 1.5;
+.micro-check__prompt {
+  min-width: 0;
+  line-height: 1.4;
   color: #4f5c20;
+  font-size: 13px;
 }
 .micro-check__cta {
   flex: 0 0 auto;
-  padding: 8px 12px;
-  border-radius: 999px;
+  padding: 7px 10px;
+  border-radius: 6px;
   background: #56711f;
   color: #fffde8;
   font-weight: 700;
+  font-size: 12px;
   text-decoration: none;
 }
 .micro-check__cta:hover {
@@ -377,7 +539,7 @@ header h2 {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
-  width: 100%;
+  grid-column: 1 / -1;
 }
 .micro-check__form textarea {
   width: 100%;
@@ -397,13 +559,25 @@ header h2 {
   color: #fffde8;
   font-weight: 700;
 }
+.micro-check__buttons {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+}
+.micro-check__submission {
+  background: #fff2c9 !important;
+  color: #4f5c20 !important;
+  border: 1px solid #9cad57 !important;
+}
 .micro-check__form button:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
 .micro-check__result {
-  width: 100%;
+  grid-column: 1 / -1;
+  margin: 0;
   font-weight: 700;
+  color: #4f5c20;
 }
 .badges {
   display: flex;
@@ -549,5 +723,25 @@ header h2 {
   background: rgba(0, 0, 0, 0.85);
   display: flex;
   flex-direction: column;
+}
+@media (max-width: 720px) {
+  .micro-check {
+    grid-template-columns: 1fr;
+  }
+  .loop-rail {
+    flex-wrap: wrap;
+  }
+  .micro-check__cta {
+    justify-self: start;
+  }
+  .micro-check__form {
+    grid-template-columns: 1fr;
+  }
+  .micro-check__buttons {
+    flex-wrap: wrap;
+  }
+  .micro-check__form button {
+    min-height: 36px;
+  }
 }
 </style>

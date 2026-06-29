@@ -15,3 +15,7 @@ class MemoryBrief(BaseModel):
     weak_kcs: list[str] = Field(default_factory=list)  # 近期反复受阻 KC
     style_notes: list[str] = Field(default_factory=list)  # 认知风格 / 偏好（来自 8 维画像）
     as_of: str = ""  # ISO 时间戳；体现时序，缺省空串
+    stable_preferences: list[str] = Field(default_factory=list)
+    struggle_patterns: list[str] = Field(default_factory=list)
+    recent_wins: list[str] = Field(default_factory=list)
+    intervention_hints: list[str] = Field(default_factory=list)

@@ -6,4 +6,7 @@ public record ResourceConsumptionResponse(
     Long resourceId,
     List<String> kcCodes,
     String nextAction,
-    String prompt) {}
+    String prompt,
+    boolean readRecorded,
+    String loopState,
+    String evidenceRequired) {}

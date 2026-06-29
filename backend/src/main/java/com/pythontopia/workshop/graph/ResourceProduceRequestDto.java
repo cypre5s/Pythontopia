@@ -21,5 +21,6 @@ public record ResourceProduceRequestDto(
       @JsonProperty("cognitive_style") String cognitiveStyle,
       @JsonProperty("error_patterns") List<String> errorPatterns,
       @JsonProperty("recent_insight") String recentInsight,
-      @JsonProperty("memory_highlights") List<String> memoryHighlights) {}
+      @JsonProperty("memory_highlights") List<String> memoryHighlights,
+      @JsonProperty("memory_directives") List<String> memoryDirectives) {}
 }

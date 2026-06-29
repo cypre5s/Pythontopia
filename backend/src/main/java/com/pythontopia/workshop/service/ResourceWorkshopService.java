@@ -11,12 +11,17 @@ import com.pythontopia.coursepack.repository.CoursePackRepository;
 import com.pythontopia.learner.event.LearningEvent;
 import com.pythontopia.learner.mastery.MasteryEvaluator;
 import com.pythontopia.learner.memory.MemoryRetrievalService;
+import com.pythontopia.learner.memory.MemoryBriefService;
+import com.pythontopia.learner.memory.dto.MemoryBriefDto;
 import com.pythontopia.learner.memory.dto.MemoryItemDto;
 import com.pythontopia.learner.profile.dto.LearnerProfileDto;
 import com.pythontopia.learner.profile.dto.ProfileDimensionDto;
 import com.pythontopia.learner.profile.service.PassiveProfileService;
 import com.pythontopia.learner.profile.service.ProfileService;
 import com.pythontopia.learner.reflection.LearnerInsightRepository;
+import com.pythontopia.submission.dto.SubmissionDto;
+import com.pythontopia.submission.dto.SubmissionStatus;
+import com.pythontopia.submission.repository.PracticeSubmissionRepository;
 import com.pythontopia.workshop.config.WorkshopProperties;
 import com.pythontopia.workshop.dto.ContentFormat;
 import com.pythontopia.workshop.dto.LearningResourceDto;
@@ -85,8 +90,10 @@ public class ResourceWorkshopService {
   private final PassiveProfileService passiveProfileService;
   private final LearnerInsightRepository insightRepository;
   private final MemoryRetrievalService memoryRetrievalService;
+  private final MemoryBriefService memoryBriefService;
   private final MetaReflectionService metaReflectionService;
   private final ResourceFeedbackRepository resourceFeedbackRepository;
+  private final PracticeSubmissionRepository submissionRepository;
   private final ApplicationEventPublisher eventPublisher;
   private final ObjectMapper objectMapper;
 
@@ -102,8 +109,10 @@ public class ResourceWorkshopService {
       PassiveProfileService passiveProfileService,
       LearnerInsightRepository insightRepository,
       MemoryRetrievalService memoryRetrievalService,
+      MemoryBriefService memoryBriefService,
       MetaReflectionService metaReflectionService,
       ResourceFeedbackRepository resourceFeedbackRepository,
+      PracticeSubmissionRepository submissionRepository,
       ApplicationEventPublisher eventPublisher,
       ObjectMapper objectMapper) {
     this.properties = properties;
@@ -117,8 +126,10 @@ public class ResourceWorkshopService {
     this.passiveProfileService = passiveProfileService;
     this.insightRepository = insightRepository;
     this.memoryRetrievalService = memoryRetrievalService;
+    this.memoryBriefService = memoryBriefService;
     this.metaReflectionService = metaReflectionService;
     this.resourceFeedbackRepository = resourceFeedbackRepository;
+    this.submissionRepository = submissionRepository;
     this.eventPublisher = eventPublisher;
     this.objectMapper = objectMapper;
   }
@@ -337,7 +348,13 @@ public class ResourceWorkshopService {
               userId, resource.id(), kcCode, resourceKind, BigDecimal.ZERO));
     }
     return new ResourceConsumptionResponse(
-        resource.id(), kcCodes, "micro_check", microCheckPrompt(resource, kcCodes));
+        resource.id(),
+        kcCodes,
+        "micro_check",
+        microCheckPrompt(resource, kcCodes),
+        true,
+        "MICRO_CHECK_REQUIRED",
+        "micro_check_or_operation");
   }
 
   @Transactional
@@ -350,12 +367,16 @@ public class ResourceWorkshopService {
           HttpStatus.BAD_REQUEST, "RESOURCE_CHECK_KC_MISMATCH", "该 KC 不属于该资源");
     }
 
-    CheckEvaluation evaluation = evaluateCheck(resource, request);
+    SubmissionDto submission = resolveSubmissionEvidence(userId, kcCode, request);
+    CheckEvaluation evaluation = evaluateCheck(resource, request, submission);
     BigDecimal delta =
         evaluation.passed()
             ? cappedResourceDelta(userId, kcCode)
             : new BigDecimal("-0.02");
-    ResourceType remediationType = evaluation.passed() ? null : ResourceType.PRACTICE;
+    int priorFailedChecks =
+        evaluation.passed() ? 0 : checkRepository.countFailedChecks(userId, resource.id(), kcCode);
+    LoopDecision decision = decideNext(resource, evaluation, priorFailedChecks, submission);
+    ResourceType remediationType = decision.remediationType();
     ResourceCheckStatus status =
         evaluation.passed() ? ResourceCheckStatus.PASSED : ResourceCheckStatus.FAILED;
     Long checkId =
@@ -387,9 +408,12 @@ public class ResourceWorkshopService {
         kcCode,
         status,
         delta,
-        evaluation.passed() ? "continue" : "remediation",
+        decision.nextAction(),
         remediationType,
-        evaluation.feedback());
+        evaluation.feedback(),
+        decision.loopState(),
+        submission == null ? null : submission.id(),
+        decision.reason());
   }
 
   @Transactional
@@ -472,9 +496,11 @@ public class ResourceWorkshopService {
     List<String> errorTags = errorTags(dims);
     String recentInsight = safeRecentInsight(userId);
     List<String> memoryHighlights = safeMemoryHighlights(userId, focusKc);
+    List<String> memoryDirectives = safeMemoryDirectives(userId, focusKc);
     if (profile == null) {
       return new ResourceProduceRequestDto.ProfileSnapshotDto(
-          "OTHER", 2, List.of(), cognitiveStyle, errorTags, recentInsight, memoryHighlights);
+          "OTHER", 2, List.of(), cognitiveStyle, errorTags, recentInsight, memoryHighlights,
+          memoryDirectives);
     }
     String major = graphMajor(profile.major());
     int level =
@@ -486,7 +512,8 @@ public class ResourceWorkshopService {
             ? List.of()
             : List.copyOf(profile.learningPreference().mediaPriority());
     return new ResourceProduceRequestDto.ProfileSnapshotDto(
-        major, level, media, cognitiveStyle, errorTags, recentInsight, memoryHighlights);
+        major, level, media, cognitiveStyle, errorTags, recentInsight, memoryHighlights,
+        memoryDirectives);
   }
 
   /** 取最新一条学情洞察文本注入资源生成（Task 1.3）；任何失败降级为空（不阻断生成）。 */
@@ -509,6 +536,34 @@ public class ResourceWorkshopService {
     } catch (RuntimeException ex) {
       log.warn("workshop memory highlights degraded for user {}: {}", userId, ex.getMessage());
       return List.of();
+    }
+  }
+
+  private List<String> safeMemoryDirectives(Long userId, String focusKc) {
+    try {
+      MemoryBriefDto brief = memoryBriefService.buildBrief(userId, focusKc);
+      LinkedHashSet<String> directives = new LinkedHashSet<>();
+      if (brief != null) {
+        addAllClean(directives, brief.stablePreferences());
+        addAllClean(directives, brief.strugglePatterns());
+        addAllClean(directives, brief.recentWins());
+        addAllClean(directives, brief.interventionHints());
+      }
+      return directives.stream().limit(8).toList();
+    } catch (RuntimeException ex) {
+      log.warn("workshop deep memory directives degraded for user {}: {}", userId, ex.getMessage());
+      return List.of();
+    }
+  }
+
+  private static void addAllClean(LinkedHashSet<String> target, List<String> values) {
+    if (values == null) {
+      return;
+    }
+    for (String value : values) {
+      if (value != null && !value.isBlank()) {
+        target.add(value.trim());
+      }
     }
   }
 
@@ -629,12 +684,71 @@ public class ResourceWorkshopService {
   }
 
   private CheckEvaluation evaluateCheck(
-      LearningResourceDto resource, ResourceCheckSubmitRequest request) {
+      LearningResourceDto resource, ResourceCheckSubmitRequest request, SubmissionDto submission) {
     String answer = Optional.ofNullable(request.answerText()).orElse("").trim();
     if (request.evidenceType() == ResourceCheckEvidenceType.OPERATION) {
-      return evaluateOperationCheck(answer, request.operationEvidence());
+      return evaluateOperationCheck(answer, request.operationEvidence(), submission);
     }
     return evaluateMicroQuiz(resource, answer);
+  }
+
+  private SubmissionDto resolveSubmissionEvidence(
+      Long userId, String kcCode, ResourceCheckSubmitRequest request) {
+    Long submissionId = submissionId(request.operationEvidence());
+    if (submissionId == null) {
+      return null;
+    }
+    SubmissionDto submission =
+        submissionRepository
+            .findSubmission(userId, submissionId)
+            .orElseThrow(
+                () ->
+                    new BusinessException(
+                        HttpStatus.BAD_REQUEST,
+                        "RESOURCE_CHECK_SUBMISSION_INVALID",
+                        "提交不存在或不属于本人"));
+    String submissionKc =
+        submissionRepository
+            .findSubmissionKcCode(userId, submissionId)
+            .orElseThrow(
+                () ->
+                    new BusinessException(
+                        HttpStatus.BAD_REQUEST,
+                        "RESOURCE_CHECK_SUBMISSION_INVALID",
+                        "提交题目不存在或不属于当前课程"));
+    if (!kcCode.equals(submissionKc)) {
+      throw new BusinessException(
+          HttpStatus.BAD_REQUEST,
+          "RESOURCE_CHECK_SUBMISSION_KC_MISMATCH",
+          "提交题目 KC 与资源 KC 不一致");
+    }
+    return submission;
+  }
+
+  private Long submissionId(JsonNode operationEvidence) {
+    if (operationEvidence == null || operationEvidence.isNull()) {
+      return null;
+    }
+    JsonNode value = operationEvidence.get("submissionId");
+    if (value == null || value.isNull()) {
+      value = operationEvidence.get("submission_id");
+    }
+    if (value == null || value.isNull()) {
+      return null;
+    }
+    if (value.canConvertToLong()) {
+      return value.asLong();
+    }
+    String text = value.asText("");
+    if (text.isBlank()) {
+      return null;
+    }
+    try {
+      return Long.parseLong(text.trim());
+    } catch (NumberFormatException ex) {
+      throw new BusinessException(
+          HttpStatus.BAD_REQUEST, "RESOURCE_CHECK_SUBMISSION_INVALID", "提交编号格式不正确");
+    }
   }
 
   private CheckEvaluation evaluateMicroQuiz(LearningResourceDto resource, String answer) {
@@ -653,7 +767,14 @@ public class ResourceWorkshopService {
         "missing resource keyword");
   }
 
-  private CheckEvaluation evaluateOperationCheck(String answer, JsonNode operationEvidence) {
+  private CheckEvaluation evaluateOperationCheck(
+      String answer, JsonNode operationEvidence, SubmissionDto submission) {
+    if (submission != null) {
+      if (submission.status() == SubmissionStatus.PASSED) {
+        return CheckEvaluation.passed("已收到通过判题的训练场提交。", "submission passed");
+      }
+      return CheckEvaluation.failed("这次训练场提交还没有通过，需要重新规划补救。", "submission not passed");
+    }
     String evidenceText = jsonText(operationEvidence).toLowerCase(Locale.ROOT);
     String answerText = Optional.ofNullable(answer).orElse("").toLowerCase(Locale.ROOT);
     String combined = answerText + "\n" + evidenceText;
@@ -676,6 +797,35 @@ public class ResourceWorkshopService {
     return CheckEvaluation.failed(
         "需要提交可复查的操作证据，例如代码片段、运行输出或提交编号。",
         "operation evidence missing");
+  }
+
+  private LoopDecision decideNext(
+      LearningResourceDto resource,
+      CheckEvaluation evaluation,
+      int priorFailedChecks,
+      SubmissionDto submission) {
+    if (evaluation.passed()) {
+      String reason = submission == null ? "微测通过，掌握度已写入。" : "训练场提交已通过，闭环完成。";
+      return new LoopDecision("pass", "PASSED", null, reason);
+    }
+    if (submission != null && submission.status() != SubmissionStatus.PASSED) {
+      return new LoopDecision("replan", "NEED_REPLAN", null, "真实提交未通过，需要重规划学习路径。");
+    }
+    if (priorFailedChecks + 1 >= 2) {
+      return new LoopDecision(
+          "swap_resource",
+          "NEED_RESOURCE_SWAP",
+          alternateResourceType(resource.type()),
+          "同一资源连续未过，换一种资源再学。");
+    }
+    return new LoopDecision("remediate", "NEED_REMEDIATION", ResourceType.PRACTICE, "先补一轮练习。");
+  }
+
+  private ResourceType alternateResourceType(ResourceType current) {
+    if (current == ResourceType.CODE_LAB) {
+      return ResourceType.HANDOUT;
+    }
+    return ResourceType.CODE_LAB;
   }
 
   private List<String> resourceKeywords(LearningResourceDto resource) {
@@ -726,6 +876,9 @@ public class ResourceWorkshopService {
       return new CheckEvaluation(false, feedback, reason);
     }
   }
+
+  private record LoopDecision(
+      String nextAction, String loopState, ResourceType remediationType, String reason) {}
 
   private String graphMajor(String rawMajor) {
     if (rawMajor == null || rawMajor.isBlank()) {

@@ -86,9 +86,21 @@ public class MemoryBriefService {
     List<String> facts = toFacts(recalled);
     List<String> weakKcs = toWeakKcs(userId, recalled, now);
     List<String> styleNotes = toStyleNotes(userId);
+    List<String> stablePreferences = toStablePreferences(recalled, styleNotes);
+    List<String> strugglePatterns = toStrugglePatterns(recalled);
+    List<String> recentWins = toRecentWins(recalled);
+    List<String> interventionHints =
+        toInterventionHints(weakKcs, styleNotes, stablePreferences, strugglePatterns);
 
     return new MemoryBriefDto(
-        facts, weakKcs, styleNotes, DateTimeFormatter.ISO_INSTANT.format(now));
+        facts,
+        weakKcs,
+        styleNotes,
+        DateTimeFormatter.ISO_INSTANT.format(now),
+        stablePreferences,
+        strugglePatterns,
+        recentWins,
+        interventionHints);
   }
 
   private List<RecalledMemory> safeRecall(long userId, String query) {
@@ -119,6 +131,91 @@ public class MemoryBriefService {
             RecalledMemory::occurredAt,
             Comparator.nullsLast(Comparator.reverseOrder()));
     return byRecency.thenComparing(Comparator.comparingDouble(RecalledMemory::score).reversed());
+  }
+
+  private static List<String> toStablePreferences(
+      List<RecalledMemory> recalled, List<String> styleNotes) {
+    LinkedHashSet<String> preferences = new LinkedHashSet<>();
+    for (RecalledMemory memory : recalled) {
+      String kind = safeLower(memory.kind());
+      String text = safeTrim(memory.text());
+      if (text.isBlank()) {
+        continue;
+      }
+      if (kind.contains("preference") || text.contains("偏好") || text.contains("喜欢")) {
+        preferences.add(text);
+      }
+    }
+    for (String note : styleNotes) {
+      String clean = safeTrim(note);
+      if (clean.startsWith("认知风格:") || clean.startsWith("偏好:")) {
+        preferences.add(clean);
+      }
+    }
+    return preferences.stream().limit(5).toList();
+  }
+
+  private static List<String> toStrugglePatterns(List<RecalledMemory> recalled) {
+    LinkedHashSet<String> struggles = new LinkedHashSet<>();
+    for (RecalledMemory memory : recalled) {
+      String kind = safeLower(memory.kind());
+      String text = safeTrim(memory.text());
+      if (text.isBlank()) {
+        continue;
+      }
+      if (memory.isStruggle()
+          || kind.contains("failed")
+          || kind.contains("abandoned")
+          || text.contains("未过")
+          || text.contains("失败")
+          || text.contains("卡")) {
+        struggles.add(text);
+      }
+    }
+    return struggles.stream().limit(6).toList();
+  }
+
+  private static List<String> toRecentWins(List<RecalledMemory> recalled) {
+    LinkedHashSet<String> wins = new LinkedHashSet<>();
+    for (RecalledMemory memory : recalled) {
+      String kind = safeLower(memory.kind());
+      String text = safeTrim(memory.text());
+      if (text.isBlank()) {
+        continue;
+      }
+      if (kind.contains("succeeded")
+          || kind.contains("passed")
+          || kind.contains("comeback")
+          || kind.contains("resolved")
+          || text.contains("通过")
+          || text.contains("修复")) {
+        wins.add(text);
+      }
+    }
+    return wins.stream().limit(5).toList();
+  }
+
+  private static List<String> toInterventionHints(
+      List<String> weakKcs,
+      List<String> styleNotes,
+      List<String> stablePreferences,
+      List<String> strugglePatterns) {
+    LinkedHashSet<String> hints = new LinkedHashSet<>();
+    String preferenceText = String.join(" ", stablePreferences).toLowerCase();
+    String styleText = String.join(" ", styleNotes).toLowerCase();
+    if (preferenceText.contains("图") || styleText.contains("visual")) {
+      hints.add("优先图解/结构化示例。");
+    }
+    if (!weakKcs.isEmpty()) {
+      hints.add("围绕 " + weakKcs.get(0) + " 做一次短补救，再换题验证。");
+    }
+    if (styleNotes.stream().anyMatch(note -> note.contains("需鼓励")) || !strugglePatterns.isEmpty()) {
+      hints.add("短步骤+鼓励反馈：先给一个小目标，再用微练习确认。");
+    }
+    if (!strugglePatterns.isEmpty()) {
+      hints.add("不要只重讲概念，必须接一个可判定的小证据。");
+    }
+    return hints.stream().limit(5).toList();
   }
 
   /**
@@ -243,5 +340,13 @@ public class MemoryBriefService {
 
   private static boolean isPresent(String value) {
     return value != null && !value.isBlank();
+  }
+
+  private static String safeLower(String value) {
+    return value == null ? "" : value.trim().toLowerCase();
+  }
+
+  private static String safeTrim(String value) {
+    return value == null ? "" : value.trim();
   }
 }

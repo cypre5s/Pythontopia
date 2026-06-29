@@ -191,6 +191,22 @@ def test_memory_highlights_empty_not_included() -> None:
     )
 
 
+def test_deep_memory_directives_included() -> None:
+    snap = ProfileSnapshot(
+        memory_directives=[
+            "偏好图解",
+            "微测未过：PY43-KC-001",
+            "优先图解/结构化示例。",
+        ]
+    )
+    directive = resource_personalization_directive(snap)
+    assert directive is not None
+    assert "个人记忆策略" in directive
+    assert "偏好图解" in directive
+    assert "微测未过：PY43-KC-001" in directive
+    assert "优先图解/结构化示例。" in directive
+
+
 def test_personalization_messages_passes_memory_highlights() -> None:
     msgs = personalization_messages(ProfileSnapshot(), memory_highlights=["练习失败：PY43-KC-016"])
     assert len(msgs) == 1

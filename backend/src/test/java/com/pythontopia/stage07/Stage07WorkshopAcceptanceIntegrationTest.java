@@ -151,7 +151,8 @@ class Stage07WorkshopAcceptanceIntegrationTest {
             Map.class);
     assertThat(passedCheck.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(passedCheck.getBody().get("status")).isEqualTo("PASSED");
-    assertThat(passedCheck.getBody().get("nextAction")).isEqualTo("continue");
+    assertThat(passedCheck.getBody().get("nextAction")).isEqualTo("pass");
+    assertThat(passedCheck.getBody().get("loopState")).isEqualTo("PASSED");
 
     Integer passedEvents =
         jdbcTemplate.queryForObject(
@@ -184,7 +185,8 @@ class Stage07WorkshopAcceptanceIntegrationTest {
             Map.class);
     assertThat(failedCheck.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(failedCheck.getBody().get("status")).isEqualTo("FAILED");
-    assertThat(failedCheck.getBody().get("nextAction")).isEqualTo("remediation");
+    assertThat(failedCheck.getBody().get("nextAction")).isEqualTo("remediate");
+    assertThat(failedCheck.getBody().get("loopState")).isEqualTo("NEED_REMEDIATION");
     assertThat(failedCheck.getBody().get("remediationType")).isEqualTo("PRACTICE");
 
     Integer failedEvents =

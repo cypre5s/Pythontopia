@@ -22,6 +22,8 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
+from pythontopia_graph.schemas.loop_contract import LoopResult, validate_loop_result_payload
+
 
 _AGUI_EVENTS = frozenset(
     {
@@ -138,6 +140,12 @@ def run_started(**extra: Any) -> str:
 def run_finished(result: Any) -> str:
     """运行成功结束，携带最终结构化结果（前端投影到 ``useSseStream.result``）。"""
     return format_sse("RUN_FINISHED", {"result": result})
+
+
+def run_finished_loop_result(result: LoopResult | dict[str, Any]) -> str:
+    """运行成功结束，并要求终态满足冻结 loop runtime contract。"""
+    payload = validate_loop_result_payload(result).model_dump(mode="json")
+    return run_finished(payload)
 
 
 def run_error(code: str, message: str) -> str:

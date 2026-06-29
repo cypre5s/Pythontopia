@@ -65,7 +65,7 @@ class WorkshopGraphClientTest {
                 "HANDOUT",
                 null,
                 new ResourceProduceRequestDto.ProfileSnapshotDto(
-                    "OTHER", 2, List.of(), "", List.of(), "", List.of()), null, null));
+                    "OTHER", 2, List.of(), "", List.of(), "", List.of(), List.of()), null, null));
 
     assertThat(response.status()).isEqualTo("SUCCESS");
     assertThat(response.evidencePageIds()).containsExactly(101L);
@@ -91,7 +91,7 @@ class WorkshopGraphClientTest {
                 new ResourceProduceRequestDto(
                     1L, List.of("PY43-KC-001"), "HANDOUT", null,
                     new ResourceProduceRequestDto.ProfileSnapshotDto(
-                        "OTHER", 2, List.of(), "", List.of(), "", List.of()),
+                        "OTHER", 2, List.of(), "", List.of(), "", List.of(), List.of()),
                     null, null)))
         .isInstanceOf(BusinessException.class)
         .hasMessageContaining("workshop 服务暂不可用");

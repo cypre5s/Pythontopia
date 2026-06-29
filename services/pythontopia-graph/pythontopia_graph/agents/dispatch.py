@@ -18,10 +18,21 @@ from pythontopia_graph.agents.path_planner_agent import PathPlannerAgent
 from pythontopia_graph.agents.practice_agent import PracticeAgent
 from pythontopia_graph.agents.reading_agent import ReadingAgent
 from pythontopia_graph.agents.storyboard_agent import StoryboardAgent
+from pythontopia_graph.graph.resource_graph import (
+    ResourceGraph,
+    ResourceGraphConfig,
+    ResourceGraphError,
+)
 from pythontopia_graph.llm.provider import LlmProvider
 from pythontopia_graph.nodes.evidence_fetcher import EvidenceFetcher
 from pythontopia_graph.schemas.orchestrator import DispatchResult, PlanStep
-from pythontopia_graph.schemas.resource import ResourceDraft, ResourceProduceRequest, ResourceType
+from pythontopia_graph.schemas.resource import (
+    GraphTraceStep,
+    ResourceDraft,
+    ResourceProduceRequest,
+    ResourceProduceResponse,
+    ResourceType,
+)
 from pythontopia_graph.tools.harness import ToolObservation, run_with_governance
 
 # 编排内 LLM 子调用的治理参数：单步上限 120s、不重试（失败转 ok=False 由总管聚合）。
@@ -98,36 +109,39 @@ class AgentDispatcher:
                 elapsed_ms=elapsed_ms,
             )
 
-        agent = self._select_resource_agent(resource_type)
-        evidence = await self._ctx.evidence_fetcher.fetch(
-            kc_codes=step.kc_codes,
-            query=step.title,
-        )
         request = ResourceProduceRequest(
             user_id=user_id,
             kc_codes=step.kc_codes if step.kc_codes else ["PY43-KC-001"],
             type=resource_type,
             focus_hint=f"{step.title}{focus_hint_extra}"[:512],
         )
-        observation = await run_with_governance(
-            tool=f"orchestrator.{step.agent}",
-            factory=lambda: agent.design(request, evidence),
-            breaker_key="provider",
-            timeout_s=_GOVERNANCE_TIMEOUT_S,
-            max_retries=0,
+        graph = ResourceGraph(
+            provider=self._ctx.provider,
+            evidence_fetcher=self._ctx.evidence_fetcher,
+            config=ResourceGraphConfig(valid_kc_codes=self._ctx.valid_kc_codes),
         )
-        if not observation.ok:
-            return self._governed_failure(step, observation, started)
-        draft: ResourceDraft = observation.value
+        try:
+            response = await graph.run(request)
+        except ResourceGraphError as exc:
+            return self._resource_graph_failure(step, exc.response, started, str(exc))
+        except Exception as exc:  # noqa: BLE001 - dispatcher must return structured failure
+            elapsed_ms = int((time.monotonic() - started) * 1000)
+            return DispatchResult(
+                step_id=step.id,
+                agent=step.agent,
+                ok=False,
+                summary=f"{step.title} 执行失败（error）",
+                note=exc.__class__.__name__,
+                elapsed_ms=elapsed_ms,
+                artifact={
+                    "kind": "dispatch_failure",
+                    "status": "error",
+                    "error_class": exc.__class__.__name__,
+                },
+            )
+
+        draft = response.artifact
         elapsed_ms = int((time.monotonic() - started) * 1000)
-        section_count = (
-            len(draft.handout.sections) if draft.handout
-            else len(draft.practice.problems) if draft.practice
-            else len(draft.storyboard.scenes) if draft.storyboard
-            else len(draft.reading.items) if draft.reading
-            else len(draft.code_lab.walkthroughs) if draft.code_lab
-            else (1 if draft.mindmap else 0)
-        )
         return DispatchResult(
             step_id=step.id,
             agent=step.agent,
@@ -135,13 +149,7 @@ class AgentDispatcher:
             summary=f"已生成「{draft.title}」({resource_type})",
             note=draft.title,
             elapsed_ms=elapsed_ms,
-            artifact={
-                "title": draft.title,
-                "summary": draft.summary,
-                "type": str(resource_type),
-                "content_format": str(draft.content_format),
-                "section_count": section_count,
-            },
+            artifact=self._resource_graph_artifact(response),
         )
 
     async def _dispatch_debug(
@@ -314,6 +322,59 @@ class AgentDispatcher:
         if step.phase == "practice":
             return "PRACTICE"
         return "HANDOUT"  # learn 默认讲义
+
+    def _resource_graph_failure(
+        self, step: PlanStep, response: ResourceProduceResponse, started: float, message: str
+    ) -> DispatchResult:
+        elapsed_ms = int((time.monotonic() - started) * 1000)
+        artifact = self._resource_graph_artifact(response)
+        artifact["kind"] = "resource_graph_failure"
+        return DispatchResult(
+            step_id=step.id,
+            agent=step.agent,
+            ok=False,
+            summary=f"ResourceGraph 审查未通过：{message}",
+            note=message,
+            elapsed_ms=elapsed_ms,
+            artifact=artifact,
+        )
+
+    @staticmethod
+    def _resource_graph_artifact(response: ResourceProduceResponse) -> dict[str, object]:
+        draft = response.artifact
+        return {
+            "kind": "resource_graph_result",
+            "title": draft.title,
+            "summary": draft.summary,
+            "type": str(response.type),
+            "content_format": str(draft.content_format),
+            "section_count": AgentDispatcher._resource_section_count(draft),
+            "graph_status": response.status,
+            "evidence_page_ids": list(response.evidence_page_ids),
+            "grounding_passed": response.grounding_result.passed,
+            "grounding_reasons": list(response.grounding_result.reasons),
+            "safety_passed": response.safety_result.passed,
+            "safety_reasons": list(response.safety_result.reasons),
+            "graph_trace": AgentDispatcher._trace_payload(response.graph_trace),
+        }
+
+    @staticmethod
+    def _trace_payload(trace: list[GraphTraceStep]) -> list[dict[str, object]]:
+        return [step.model_dump(mode="json") for step in trace]
+
+    @staticmethod
+    def _resource_section_count(draft: ResourceDraft) -> int:
+        if draft.handout:
+            return len(draft.handout.sections)
+        if draft.practice:
+            return len(draft.practice.problems)
+        if draft.storyboard:
+            return len(draft.storyboard.scenes)
+        if draft.reading:
+            return len(draft.reading.items)
+        if draft.code_lab:
+            return len(draft.code_lab.walkthroughs)
+        return 1 if draft.mindmap else 0
 
     def downgraded_learn_step(self, step: PlanStep) -> PlanStep | None:
         """把一个 learn 资源步沿 CODE_LAB→HANDOUT→READING 降一档后返回副本。

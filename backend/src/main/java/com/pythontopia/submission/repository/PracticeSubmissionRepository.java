@@ -128,6 +128,22 @@ public class PracticeSubmissionRepository {
         .findFirst();
   }
 
+  public Optional<String> findSubmissionKcCode(Long userId, Long submissionId) {
+    return jdbcTemplate
+        .query(
+            """
+            SELECT p.kc_code
+            FROM practice_submission s
+            JOIN course_problem p ON p.id = s.problem_id
+            WHERE s.id = ? AND s.user_id = ?
+            """,
+            (rs, rowNum) -> rs.getString("kc_code"),
+            submissionId,
+            userId)
+        .stream()
+        .findFirst();
+  }
+
   public Optional<SubmissionDto> findById(Long submissionId) {
     return jdbcTemplate
         .query(

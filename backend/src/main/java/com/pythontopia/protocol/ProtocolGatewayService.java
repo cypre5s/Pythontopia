@@ -22,7 +22,16 @@ public class ProtocolGatewayService {
                 "POST",
                 "/api/workshop/resources/{id}/checks",
                 "Submit micro-quiz or operation evidence before mastery can change.",
-                List.of("checkId", "resourceId", "kcCode", "status", "masteryDelta")),
+                List.of(
+                    "checkId",
+                    "resourceId",
+                    "kcCode",
+                    "status",
+                    "masteryDelta",
+                    "nextAction",
+                    "loopState",
+                    "practiceSubmissionId",
+                    "decisionReason")),
             new ProtocolToolDto(
                 "learner.recommendations.read",
                 "MCP",

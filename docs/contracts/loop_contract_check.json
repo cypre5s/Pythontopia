@@ -1,0 +1,72 @@
+{
+  "schema_version": "loop-contract.v1",
+  "purpose": "Shared minimum contract for Pythontopia agentic loop runtime results, checkpoints, tool calls, evals, and AG-UI terminal payloads.",
+  "loop_types": ["LEARNER", "DEBUG", "RESOURCE", "WORLD", "IMPROVE"],
+  "loop_result_required_fields": [
+    "run_id",
+    "loop_type",
+    "status",
+    "result",
+    "scores",
+    "artifacts",
+    "next_actions",
+    "policy_version",
+    "trace_id",
+    "evidence_refs",
+    "schema_version"
+  ],
+  "checkpoint_required_fields": [
+    "loop_id",
+    "loop_type",
+    "thread_id",
+    "policy_version",
+    "step_index",
+    "state",
+    "pending_human_input",
+    "resume_token",
+    "expires_at",
+    "schema_version"
+  ],
+  "event_envelope_required_fields": [
+    "event_id",
+    "event_type",
+    "user_id",
+    "session_id",
+    "trace_id",
+    "timestamp",
+    "context",
+    "payload",
+    "evidence_refs",
+    "schema_version"
+  ],
+  "agent_tool_call_required_fields": [
+    "run_id",
+    "tool_name",
+    "args_hash",
+    "result_ref",
+    "timeout_ms",
+    "status",
+    "latency_ms",
+    "schema_version"
+  ],
+  "eval_record_required_fields": [
+    "dataset_id",
+    "item_id",
+    "loop_type",
+    "policy_version",
+    "trace_id",
+    "metrics",
+    "passed",
+    "schema_version"
+  ],
+  "agui_terminal_mapping": {
+    "RUN_FINISHED.result": "LoopResult",
+    "RUN_ERROR": "structured runtime failure"
+  },
+  "gates": {
+    "schema_validity": 1.0,
+    "trace_id_required": true,
+    "policy_version_required": true,
+    "evidence_refs_required": true
+  }
+}

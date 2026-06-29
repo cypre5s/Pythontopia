@@ -188,6 +188,98 @@ async def test_dispatcher_resource_designer_without_type_falls_back() -> None:
     assert "for 循环讲义" in result.summary
 
 
+@pytest.mark.asyncio
+async def test_dispatcher_resource_result_includes_resource_graph_review_trace() -> None:
+    """资源类 dispatcher 必须复用 ResourceGraph 审查链，而不是直调单个设计师。"""
+    handout_payload = {
+        "title": "for 循环讲义",
+        "summary": "用课件证据解释 for 循环。",
+        "handout": {
+            "sections": [
+                {
+                    "heading": "for 循环",
+                    "paragraphs": ["for 循环遍历可迭代对象。"],
+                    "page_refs": [{"page_id": 101, "page_no": 12, "chapter_id": 3}],
+                }
+            ]
+        },
+    }
+    provider = StubProvider([handout_payload])
+    ctx = DispatchContext(
+        provider=provider,
+        evidence_fetcher=StaticEvidenceFetcher([HIT]),
+        valid_kc_codes={"PY43-KC-001"},
+    )
+    dispatcher = AgentDispatcher(ctx)
+    step = PlanStep(
+        id="s-reviewed",
+        phase="learn",
+        title="for 循环讲义",
+        detail="学习 for 循环基础",
+        agent="ResourceDesignerAgent",
+        kc_codes=["PY43-KC-001"],
+        panel="workshop",
+        resource_type="HANDOUT",
+    )
+
+    result = await dispatcher.dispatch(step, user_id=1)
+
+    assert result.ok is True
+    assert result.artifact is not None
+    assert result.artifact["kind"] == "resource_graph_result"
+    assert result.artifact["graph_status"] in {"SUCCESS", "PARTIAL"}
+    assert result.artifact["grounding_passed"] is True
+    assert result.artifact["safety_passed"] is True
+    trace_nodes = {step["node"] for step in result.artifact["graph_trace"]}
+    assert {"evidence_fetcher", "grounding_critic", "semantic_grounding", "safety_critic"} <= trace_nodes
+
+
+@pytest.mark.asyncio
+async def test_dispatcher_resource_graph_failure_is_structured_failure() -> None:
+    """编排内坏资源草稿必须被 ResourceGraph 拦住并作为结构化失败返回。"""
+    bad_payload = {
+        "title": "for 循环讲义",
+        "summary": "包含未经证据支持的页码。",
+        "handout": {
+            "sections": [
+                {
+                    "heading": "for 循环",
+                    "paragraphs": ["根据第 999 页可知 for 循环总是运行 3 秒。"],
+                    "page_refs": [{"page_id": 999, "page_no": 999, "chapter_id": 3}],
+                }
+            ]
+        },
+    }
+    provider = StubProvider([bad_payload, bad_payload, bad_payload])
+    ctx = DispatchContext(
+        provider=provider,
+        evidence_fetcher=StaticEvidenceFetcher([HIT]),
+        valid_kc_codes={"PY43-KC-001"},
+    )
+    dispatcher = AgentDispatcher(ctx)
+    step = PlanStep(
+        id="s-bad-reviewed",
+        phase="learn",
+        title="for 循环讲义",
+        detail="学习 for 循环基础",
+        agent="ResourceDesignerAgent",
+        kc_codes=["PY43-KC-001"],
+        panel="workshop",
+        resource_type="HANDOUT",
+    )
+
+    result = await dispatcher.dispatch(step, user_id=1)
+
+    assert result.ok is False
+    assert result.artifact is not None
+    assert result.artifact["kind"] == "resource_graph_failure"
+    assert result.artifact["graph_status"] == "FAILED"
+    assert result.artifact["grounding_passed"] is False
+    assert "ResourceGraph" in result.summary
+    trace_nodes = [step["node"] for step in result.artifact["graph_trace"]]
+    assert "semantic_grounding" in trace_nodes
+
+
 # ── OrchestratorGraph 集成测试 ──
 
 

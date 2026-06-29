@@ -123,8 +123,42 @@ class MemoryBriefServiceTest {
     // style_notes 来自 8 维画像。
     assertThat(brief.styleNotes())
         .containsExactly("认知风格: visual", "偏好: video,example", "情绪: 需鼓励");
+    assertThat(brief.stablePreferences()).contains("偏好: video,example");
+    assertThat(brief.strugglePatterns()).contains("练习失败：PY43-KC-07");
+    assertThat(brief.recentWins()).contains("练习通过：PY43-KC-03");
+    assertThat(brief.interventionHints())
+        .contains("短步骤+鼓励反馈：先给一个小目标，再用微练习确认。");
     // as_of 体现时序（生成时刻 ISO）。
     assertThat(brief.asOf()).isEqualTo("2026-06-17T05:52:00Z");
+  }
+
+  @Test
+  void deepMemoryBriefSeparatesPreferencesStrugglesWinsAndInterventions() {
+    when(retrieval.retrieve(eq(USER), isNull(), any(), anyInt()))
+        .thenReturn(
+            List.of(
+                item(1L, "preference", "偏好图解讲解", null, "2026-06-13T00:00:00Z"),
+                item(2L, "resource_check_failed", "微测未过：PY43-KC-016", "PY43-KC-016", "2026-06-12T00:00:00Z"),
+                item(3L, "comeback_solved", "逆袭通过：PY43-KC-016", "PY43-KC-016", "2026-06-11T00:00:00Z"),
+                item(4L, "practice_succeeded", "练习通过：PY43-KC-001", "PY43-KC-001", "2026-06-10T00:00:00Z")));
+    when(reviewStateRepository.findAll(USER)).thenReturn(List.of(review("PY43-KC-016", 2, OffsetDateTime.ofInstant(FIXED.minus(Duration.ofDays(1)), ZoneOffset.UTC))));
+    when(profileService.getDimensions(USER))
+        .thenReturn(
+            List.of(
+                dim("cognitive_style", 0.6, 0.6, List.of("visual")),
+                dim("learning_preference", 0.7, 0.7, List.of("diagram")),
+                dim("emotion_persistence", 0.35, 0.4, List.of())));
+
+    MemoryBriefDto brief = service(localProps(), new RestTemplate()).buildBrief(USER, "列表 append");
+
+    assertThat(brief.stablePreferences()).contains("偏好图解讲解", "认知风格: visual", "偏好: diagram");
+    assertThat(brief.strugglePatterns()).contains("微测未过：PY43-KC-016");
+    assertThat(brief.recentWins()).contains("逆袭通过：PY43-KC-016", "练习通过：PY43-KC-001");
+    assertThat(brief.interventionHints())
+        .contains(
+            "优先图解/结构化示例。",
+            "围绕 PY43-KC-016 做一次短补救，再换题验证。",
+            "短步骤+鼓励反馈：先给一个小目标，再用微练习确认。");
   }
 
   // ── ③ 外部 provider 500 → router fail-soft 回退 local，facts 仍出 ──

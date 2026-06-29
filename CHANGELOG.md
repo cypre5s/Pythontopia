@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-06-29 — 下一代 Agentic 学习闭环：Loop Contract + ResourceGraph 审稿链 + 真实 evidence rail
+
+> 按“下一代 Agentic 系统推进报告”落地第一批非 MVP 能力：先冻结跨团队 loop runtime 合同，再把资源生成接入真实审稿闭环，最后让学生在工坊资源详情里用一条紧凑行动轨完成“读→测→判→补救/换资源/重规划/通过”。不新增游离 demo，不堆解释卡片。
+
+- **Loop runtime 合同冻结**：新增 `loop_contract.py` 与 `docs/contracts/loop_contract_check.json`，覆盖 `EventEnvelope / LoopCheckpoint / AgentToolCall / LoopResult / EvalRecord`，强制 loop 终态带 `policy_version / loop_type / trace_id / evidence_refs / schema_version`；AG-UI 新增 `run_finished_loop_result()`，`RUN_FINISHED.result` 可直接承载已校验的 `LoopResult`。
+- **资源生成审稿链接入编排**：`AgentDispatcher` 的资源类步骤改走 `ResourceGraph.run()`，保留 retries、grounding critic、hallucination detector、semantic grounding、safety critic 与 oscillation 熔断；坏资源草稿返回 `resource_graph_failure`，不会再绕过审查以成功 artifact 进入学习总管。
+- **深层记忆合同对齐**：后端 `MemoryBriefDto` 扩展稳定偏好、卡点模式、近期成功、干预建议；graph `MemoryBrief` 同步这些字段，工坊资源生成把 `memory_directives` 注入个性化提示，避免后端记忆增强在 graph 侧被静默丢弃。
+- **学生学习闭环证据化**：资源消费响应带 `readRecorded / loopState / evidenceRequired`；资源检查支持微测或训练场 `submissionId`，通过提交关闭闭环，失败提交进入重规划，同一资源连续失败升级换资源，所有决策返回 `loopState / decisionReason / practiceSubmissionId`。
+- **前端紧凑行动轨**：`ResourceDetailPanel` 用单条 `读 / 测 / 判` rail 展示状态与下一步，不新增说明卡片；“最近提交”会查询 `PASSED / FAILED / ERROR` 三类正式提交，用运行错误提交也能触发重规划，避免浏览器 E2E 受判题错误类型影响。
+- **最终验证**：graph 全量 `python3 -m pytest -q` 通过（1155 passed / 3 skipped）；RAG 全量 `python3 -m pytest -q` 通过（129 passed）；前端 `npm run typecheck` 通过，`npm run lint` 0 error / 43 warnings，Vitest 全量 `npm run test -- --run` 通过（226 files / 2232 tests，仍有既有 Pyodide sourcemap warning）；后端定向新链路与 6 个 Testcontainers 端口冲突类单独重跑通过，排除该 6 类后的 `mvn --settings .mvn/settings.build.xml -q test` 返回 0，单次后端全量 `mvn test` 仍受 Docker 随机 host port 冲突影响报 `ContainerLaunch`，业务断言 0 failures；真实 `./dev.sh` 栈 `5173/18080/18091/18092` 均 `ok`，`/api/course/videos` 返回 34 条；Playwright `studentLearningLoop` 3 passed，`teacherStudentFullFlow` 1 passed。
+
 ## 2026-06-26 — 9 项 AI 深度融合 Batch 9：AI 能力包 / Protocol Skill Packages
 
 > 把前面落地的证据工坊、Learner Twin、Eval/Observability、联网查证安全墙进一步包装成可声明、可审计、可被 ChatGPT Apps / Claude Code skill / MCP 类协议面理解的能力包；不是新增一套游离工具，而是把已有学习闭环暴露成“工具 + 资源 + prompt + evidence fields”的合同。

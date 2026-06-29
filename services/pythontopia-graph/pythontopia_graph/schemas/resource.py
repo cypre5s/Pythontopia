@@ -128,6 +128,8 @@ class ProfileSnapshot(BaseModel):
     recent_insight: str = ""
     # 近期记忆要点（recency×importance×relevance topK 的中文摘要）；非空时折进 directive（Task 2.1）。
     memory_highlights: list[str] = Field(default_factory=list)
+    # 类 ChatGPT memory 的深层个人记忆策略：稳定偏好、卡点模式、近期成功、干预建议。
+    memory_directives: list[str] = Field(default_factory=list)
 
 
 class ResourceProduceRequest(BaseModel):

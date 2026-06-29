@@ -49,6 +49,13 @@ def resource_personalization_directive(
         joined = "；".join(highlights)
         clauses.append(f"该生近期学情：{joined} → 生成时贴合其真实学习轨迹。")
 
+    directives = [
+        item.strip() for item in (snapshot.memory_directives or []) if item and item.strip()
+    ]
+    if directives:
+        joined = "；".join(directives)
+        clauses.append(f"个人记忆策略：{joined} → 下一份资源必须体现这些偏好、卡点和补救方式。")
+
     if not clauses:
         return None
     return "".join(clauses)

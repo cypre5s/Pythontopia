@@ -34,6 +34,10 @@ _FULL_BRIEF_BODY: dict[str, Any] = {
     "weak_kcs": ["PY43-KC-030", "PY43-KC-031"],
     "style_notes": ["视觉型学习者", "需要循序渐进"],
     "as_of": "2026-06-17T05:00:00Z",
+    "stable_preferences": ["偏好图解"],
+    "struggle_patterns": ["微测未过：PY43-KC-030"],
+    "recent_wins": ["练习通过：PY43-KC-001"],
+    "intervention_hints": ["优先图解/结构化示例。"],
 }
 
 
@@ -98,6 +102,10 @@ async def test_fetch_returns_parsed_brief(monkeypatch: pytest.MonkeyPatch) -> No
     assert brief.weak_kcs == _FULL_BRIEF_BODY["weak_kcs"]
     assert brief.style_notes == _FULL_BRIEF_BODY["style_notes"]
     assert brief.as_of == "2026-06-17T05:00:00Z"
+    assert brief.stable_preferences == _FULL_BRIEF_BODY["stable_preferences"]
+    assert brief.struggle_patterns == _FULL_BRIEF_BODY["struggle_patterns"]
+    assert brief.recent_wins == _FULL_BRIEF_BODY["recent_wins"]
+    assert brief.intervention_hints == _FULL_BRIEF_BODY["intervention_hints"]
 
 
 # ── ② 请求形状 ──

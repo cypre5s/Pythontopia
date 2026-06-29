@@ -353,7 +353,7 @@ TOOLS: dict[str, ToolSpec] = {
             "在白名单域内自主浏览官方文档/判题站并回带可引用摘要（外部内容，非课件证据）",
             ("去 python 官网查 sorted 的稳定性", "看看这道题在官方文档怎么说"),
             "orchestrator_sse",  # 复用学习总管流，不新建 SSE 通道
-            "read_only",
+            "navigational",
             "high",
             timeout_s=60.0,
             max_retries=0,  # 浏览器步骤不重试（副作用 + 慢），失败回退 VIDEO

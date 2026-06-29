@@ -134,13 +134,16 @@ describe('ResourceDetailPanel · 决策玻璃盒挂载（P7.1）', () => {
       return Promise.resolve({ data: [] });
     });
     httpMocks.post.mockResolvedValueOnce({
-      data: {
-        resourceId: 7,
-        kcCodes: ['PY43-KC-001'],
-        nextAction: 'micro_check',
-        prompt: '用 1 分钟做个小检查：说出 input 的作用。',
-      },
-    });
+          data: {
+            resourceId: 7,
+            kcCodes: ['PY43-KC-001'],
+            nextAction: 'micro_check',
+            prompt: '用 1 分钟做个小检查：说出 input 的作用。',
+            readRecorded: true,
+            loopState: 'MICRO_CHECK_REQUIRED',
+            evidenceRequired: 'micro_check_or_operation',
+          },
+        });
 
     const wrapper = mount(ResourceDetailPanel, {
       props: { resourceId: 7 },
@@ -155,6 +158,10 @@ describe('ResourceDetailPanel · 决策玻璃盒挂载（P7.1）', () => {
 
     expect(httpMocks.post).toHaveBeenCalledWith('/api/workshop/resources/7/consumptions');
     expect(wrapper.find('[data-testid="resource-micro-check"]').text()).toContain('说出 input 的作用');
+    const rail = wrapper.find('[data-testid="resource-loop-rail"]');
+    expect(rail.exists()).toBe(true);
+    expect(rail.text()).toContain('读');
+    expect(rail.text()).toContain('测');
   });
 
   it('提交资源微测答案，并展示掌握度证据结果', async () => {
@@ -164,13 +171,16 @@ describe('ResourceDetailPanel · 决策玻璃盒挂载（P7.1）', () => {
     });
     httpMocks.post
       .mockResolvedValueOnce({
-        data: {
-          resourceId: 7,
-          kcCodes: ['PY43-KC-001'],
-          nextAction: 'micro_check',
-          prompt: '用 1 分钟做个小检查：说出 input 的作用。',
-        },
-      })
+          data: {
+            resourceId: 7,
+            kcCodes: ['PY43-KC-001'],
+            nextAction: 'micro_check',
+            prompt: '用 1 分钟做个小检查：说出 input 的作用。',
+            readRecorded: true,
+            loopState: 'MICRO_CHECK_REQUIRED',
+            evidenceRequired: 'micro_check_or_operation',
+          },
+        })
       .mockResolvedValueOnce({
         data: {
           checkId: 31,
@@ -178,9 +188,12 @@ describe('ResourceDetailPanel · 决策玻璃盒挂载（P7.1）', () => {
           kcCode: 'PY43-KC-001',
           status: 'PASSED',
           masteryDelta: 0.05,
-          nextAction: 'continue',
+          nextAction: 'pass',
           remediationType: null,
           feedback: '已命中资源关键点：input',
+          loopState: 'PASSED',
+          practiceSubmissionId: null,
+          decisionReason: '微测通过，掌握度已写入。',
         },
       });
 
@@ -207,5 +220,236 @@ describe('ResourceDetailPanel · 决策玻璃盒挂载（P7.1）', () => {
     const result = wrapper.find('[data-testid="resource-check-result"]');
     expect(result.text()).toContain('PASSED');
     expect(result.text()).toContain('+0.05');
+    expect(wrapper.find('[data-testid="resource-loop-state"]').text()).toContain('通过');
+  });
+
+  it('微测连续失败时用同一条行动轨显示换资源，不增加说明卡片', async () => {
+    httpMocks.get.mockImplementation((url: string) => {
+      if (url === '/api/workshop/resources/7') return Promise.resolve({ data: RESOURCE });
+      return Promise.resolve({ data: [] });
+    });
+    httpMocks.post
+      .mockResolvedValueOnce({
+        data: {
+          resourceId: 7,
+          kcCodes: ['PY43-KC-001'],
+          nextAction: 'micro_check',
+          prompt: '说出 input 的作用。',
+          readRecorded: true,
+          loopState: 'MICRO_CHECK_REQUIRED',
+          evidenceRequired: 'micro_check_or_operation',
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          checkId: 32,
+          resourceId: 7,
+          kcCode: 'PY43-KC-001',
+          status: 'FAILED',
+          masteryDelta: -0.02,
+          nextAction: 'swap_resource',
+          remediationType: 'CODE_LAB',
+          feedback: '还没抓住关键点。',
+          loopState: 'NEED_RESOURCE_SWAP',
+          practiceSubmissionId: null,
+          decisionReason: '同一资源连续未过，换一种资源再学。',
+        },
+      });
+
+    const wrapper = mount(ResourceDetailPanel, {
+      props: { resourceId: 7 },
+      global: {
+        stubs: {
+          ...CONTENT_STUBS,
+          RouterLink: { template: '<a><slot /></a>' },
+        },
+      },
+    });
+    await flushPromises();
+
+    await wrapper.get('[data-testid="resource-check-answer"]').setValue('我还是没看懂');
+    await wrapper.get('[data-testid="resource-check-submit"]').trigger('click');
+    await flushPromises();
+
+    const rail = wrapper.find('[data-testid="resource-loop-rail"]');
+    expect(rail.text()).toContain('换资源');
+    expect(rail.text()).toContain('CODE_LAB');
+    expect(wrapper.findAll('[data-testid="resource-loop-rail"]')).toHaveLength(1);
+  });
+
+  it('用最近训练提交作为 operation evidence 完成闭环', async () => {
+    httpMocks.get.mockImplementation((url: string, config?: { params?: Record<string, unknown> }) => {
+      if (url === '/api/workshop/resources/7') return Promise.resolve({ data: RESOURCE });
+      if (url === '/api/submissions' && config?.params?.status === 'PASSED') {
+        return Promise.resolve({
+          data: [
+            {
+              id: 501,
+              userId: 1,
+              problemId: 1001,
+              questId: null,
+              source: 'TRAINING',
+              language: 'PYTHON_3_11',
+              code: 'print(input())',
+              submittedAt: '2026-06-27T06:00:00Z',
+              status: 'PASSED',
+              runtimeMs: 10,
+              memoryKb: 1024,
+            },
+          ],
+        });
+      }
+      if (url === '/api/submissions' && config?.params?.status === 'FAILED') {
+        return Promise.resolve({ data: [] });
+      }
+      return Promise.resolve({ data: [] });
+    });
+    httpMocks.post
+      .mockResolvedValueOnce({
+        data: {
+          resourceId: 7,
+          kcCodes: ['PY43-KC-001'],
+          nextAction: 'micro_check',
+          prompt: '说出 input 的作用。',
+          readRecorded: true,
+          loopState: 'MICRO_CHECK_REQUIRED',
+          evidenceRequired: 'micro_check_or_operation',
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          checkId: 33,
+          resourceId: 7,
+          kcCode: 'PY43-KC-001',
+          status: 'PASSED',
+          masteryDelta: 0.05,
+          nextAction: 'pass',
+          remediationType: null,
+          feedback: '已收到通过判题的训练场提交。',
+          loopState: 'PASSED',
+          practiceSubmissionId: 501,
+          decisionReason: '训练场提交已通过，闭环完成。',
+        },
+      });
+
+    const wrapper = mount(ResourceDetailPanel, {
+      props: { resourceId: 7 },
+      global: {
+        stubs: {
+          ...CONTENT_STUBS,
+          RouterLink: { template: '<a><slot /></a>' },
+        },
+      },
+    });
+    await flushPromises();
+
+    await wrapper.get('[data-testid="resource-submission-check"]').trigger('click');
+    await flushPromises();
+
+    expect(httpMocks.get).toHaveBeenCalledWith('/api/submissions', {
+      params: { status: 'PASSED', limit: 1 },
+    });
+    expect(httpMocks.post).toHaveBeenLastCalledWith('/api/workshop/resources/7/checks', {
+      kcCode: 'PY43-KC-001',
+      evidenceType: 'OPERATION',
+      answerText: '训练场提交 #501',
+      operationEvidence: {
+        submissionId: 501,
+        submission_id: 501,
+        source: 'recent_submission',
+        status: 'PASSED',
+      },
+    });
+    expect(wrapper.find('[data-testid="resource-loop-state"]').text()).toContain('通过');
+    expect(wrapper.find('[data-testid="resource-check-result"]').text()).toContain('+0.05');
+  });
+
+  it('最近运行错误提交也作为失败 evidence 推进到重规划', async () => {
+    httpMocks.get.mockImplementation((url: string, config?: { params?: Record<string, unknown> }) => {
+      if (url === '/api/workshop/resources/7') return Promise.resolve({ data: RESOURCE });
+      if (url === '/api/submissions' && config?.params?.status === 'PASSED') {
+        return Promise.resolve({ data: [] });
+      }
+      if (url === '/api/submissions' && config?.params?.status === 'FAILED') {
+        return Promise.resolve({ data: [] });
+      }
+      if (url === '/api/submissions' && config?.params?.status === 'ERROR') {
+        return Promise.resolve({
+          data: [
+            {
+              id: 502,
+              userId: 1,
+              problemId: 1001,
+              questId: null,
+              source: 'TRAINING',
+              language: 'PYTHON_3_11',
+              code: 'raise RuntimeError()',
+              submittedAt: '2026-06-27T06:01:00Z',
+              status: 'ERROR',
+              runtimeMs: 10,
+              memoryKb: 1024,
+            },
+          ],
+        });
+      }
+      return Promise.resolve({ data: [] });
+    });
+    httpMocks.post
+      .mockResolvedValueOnce({
+        data: {
+          resourceId: 7,
+          kcCodes: ['PY43-KC-001'],
+          nextAction: 'micro_check',
+          prompt: '说出 input 的作用。',
+          readRecorded: true,
+          loopState: 'MICRO_CHECK_REQUIRED',
+          evidenceRequired: 'micro_check_or_operation',
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          checkId: 34,
+          resourceId: 7,
+          kcCode: 'PY43-KC-001',
+          status: 'FAILED',
+          masteryDelta: -0.02,
+          nextAction: 'replan',
+          remediationType: null,
+          feedback: '这次训练场提交还没有通过，需要重新规划补救。',
+          loopState: 'NEED_REPLAN',
+          practiceSubmissionId: 502,
+          decisionReason: '真实提交未通过，需要重规划学习路径。',
+        },
+      });
+
+    const wrapper = mount(ResourceDetailPanel, {
+      props: { resourceId: 7 },
+      global: {
+        stubs: {
+          ...CONTENT_STUBS,
+          RouterLink: { template: '<a><slot /></a>' },
+        },
+      },
+    });
+    await flushPromises();
+
+    await wrapper.get('[data-testid="resource-submission-check"]').trigger('click');
+    await flushPromises();
+
+    expect(httpMocks.get).toHaveBeenCalledWith('/api/submissions', {
+      params: { status: 'ERROR', limit: 1 },
+    });
+    expect(httpMocks.post).toHaveBeenLastCalledWith('/api/workshop/resources/7/checks', {
+      kcCode: 'PY43-KC-001',
+      evidenceType: 'OPERATION',
+      answerText: '训练场提交 #502',
+      operationEvidence: {
+        submissionId: 502,
+        submission_id: 502,
+        source: 'recent_submission',
+        status: 'ERROR',
+      },
+    });
+    expect(wrapper.find('[data-testid="resource-loop-state"]').text()).toContain('重规划');
   });
 });

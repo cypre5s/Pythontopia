@@ -10,4 +10,7 @@ public record ResourceCheckResponse(
     BigDecimal masteryDelta,
     String nextAction,
     ResourceType remediationType,
-    String feedback) {}
+    String feedback,
+    String loopState,
+    Long practiceSubmissionId,
+    String decisionReason) {}

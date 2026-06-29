@@ -585,7 +585,7 @@ async def test_browse_preroute_uses_find_metadata_and_browse_renderer() -> None:
 
     assert resp.intent == "BROWSE"
     assert resp.namespace == "find"
-    assert resp.risk_class == "read_only"
+    assert resp.risk_class == "navigational"
     assert resp.render_mode == "browse"
     assert "BROWSE" in resp.candidate_intents
     assert provider.calls == 0

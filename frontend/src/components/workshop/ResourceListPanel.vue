@@ -129,6 +129,7 @@ function practiceKc(kcCode: string): void {
             <button
               type="button"
               class="review__btn"
+              :data-testid="`resource-list-item-${r.resource.id}`"
               @click="openDetail(r.resource.id)"
             >
               重温
@@ -174,6 +175,7 @@ function practiceKc(kcCode: string): void {
           <button
             type="button"
             class="card"
+            :data-testid="`resource-list-item-${item.id}`"
             @click="openDetail(item.id)"
           >
             <span class="title">{{ item.title }}</span>

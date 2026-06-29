@@ -56,6 +56,21 @@ public class ResourceLearningCheckRepository {
     return id == null ? 0L : id;
   }
 
+  public int countFailedChecks(Long userId, Long resourceId, String kcCode) {
+    Integer count =
+        jdbcTemplate.queryForObject(
+            """
+            SELECT COUNT(*)
+            FROM resource_learning_check
+            WHERE user_id = ? AND resource_id = ? AND kc_code = ? AND status = 'FAILED'
+            """,
+            Integer.class,
+            userId,
+            resourceId,
+            kcCode);
+    return count == null ? 0 : count;
+  }
+
   private String writeJson(JsonNode node) {
     try {
       return objectMapper.writeValueAsString(node == null ? objectMapper.createObjectNode() : node);

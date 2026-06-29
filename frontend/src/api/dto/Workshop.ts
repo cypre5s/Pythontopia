@@ -147,6 +147,9 @@ export interface WorkshopConsumptionResponse {
   kcCodes: string[];
   nextAction: 'micro_check';
   prompt: string;
+  readRecorded: boolean;
+  loopState: 'MICRO_CHECK_REQUIRED' | string;
+  evidenceRequired: 'micro_check_or_operation' | string;
 }
 
 export type WorkshopCheckEvidenceType = 'MICRO_QUIZ' | 'OPERATION';
@@ -166,9 +169,12 @@ export interface WorkshopCheckResponse {
   kcCode: string;
   status: WorkshopCheckStatus;
   masteryDelta: number;
-  nextAction: 'continue' | 'remediation';
+  nextAction: 'pass' | 'remediate' | 'swap_resource' | 'replan';
   remediationType: WorkshopResourceType | null;
   feedback: string;
+  loopState: 'PASSED' | 'NEED_REMEDIATION' | 'NEED_RESOURCE_SWAP' | 'NEED_REPLAN' | string;
+  practiceSubmissionId: number | null;
+  decisionReason: string;
 }
 
 export interface WorkshopFeedbackRequest {
