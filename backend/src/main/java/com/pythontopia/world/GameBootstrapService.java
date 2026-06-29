@@ -89,7 +89,7 @@ public class GameBootstrapService {
     WorldSnapshotDto world = row.world();
     PlayerStateDto player = row.player();
 
-    LearnerProfileDto profile = profileRepository.findProfile(userId).orElse(null);
+    LearnerProfileDto profile = profileRepository.ensureDefaultProfile(userId);
     List<QuestDto> quests = questService.today(userId);
     var mastery = masteryService.listSnapshots(userId);
     List<com.pythontopia.learner.path.dto.LearningPathNodeDto> pathNodes =
@@ -100,7 +100,9 @@ public class GameBootstrapService {
     List<LearnerSkillDto> skills =
         skillRepository.findUnlocked(userId).stream().map(LearnerSkillDto::from).toList();
     List<NpcDialogStateDto> npcStates =
-        npcDialogStateRepository.findAll(userId).stream().map(NpcDialogStateDto::from).toList();
+        npcDialogStateRepository.findAllOrInitTownHub(userId).stream()
+            .map(NpcDialogStateDto::from)
+            .toList();
     SaveSlotDto activeSlot =
         saveSlotRepository.findActive(userId).map(SaveSlotDto::from).orElse(null);
     var pendingEvents = calendarService.pendingEvents(userId);

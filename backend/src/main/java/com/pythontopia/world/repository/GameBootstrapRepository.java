@@ -17,6 +17,8 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class GameBootstrapRepository {
 
+  static final String DEFAULT_MAP_KEY = "town_hub";
+
   private final JdbcTemplate jdbcTemplate;
 
   public GameBootstrapRepository(JdbcTemplate jdbcTemplate) {
@@ -64,11 +66,23 @@ public class GameBootstrapRepository {
             : new PlayerStateDto(
                 playerId,
                 rs.getString("player_avatar_key"),
-                rs.getString("player_map_key"),
+                normalizeMapKey(rs.getString("player_map_key")),
                 (Integer) rs.getObject("player_tile_x"),
                 (Integer) rs.getObject("player_tile_y"),
                 rs.getString("player_direction"));
     return new BootstrapRow(world, player);
+  }
+
+  static String normalizeMapKey(String value) {
+    if (value == null || value.isBlank()) {
+      return DEFAULT_MAP_KEY;
+    }
+    String normalized = value.trim().replace('-', '_');
+    return switch (normalized) {
+      case "town_beta", "town", "town_main", "farm", "farm_north", "mine", "mine_south",
+          "campus", "campus_east", "port", "port_west" -> DEFAULT_MAP_KEY;
+      default -> normalized;
+    };
   }
 
   private static String nonNull(String value, String fallback) {

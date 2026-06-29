@@ -23,6 +23,20 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class NpcDialogStateRepository {
 
+  private static final List<String> TOWN_HUB_NPC_KEYS =
+      List.of(
+          "mayor_py",
+          "foreman_bug",
+          "librarian_doc",
+          "coach_q",
+          "sage_review",
+          "professor",
+          "mine_keeper",
+          "student_a",
+          "class_president",
+          "workshop_master",
+          "arena_guard");
+
   private final JdbcTemplate jdbcTemplate;
   private final ObjectMapper objectMapper;
 
@@ -58,6 +72,20 @@ public class NpcDialogStateRepository {
         """,
         this::map,
         userId);
+  }
+
+  public List<NpcDialogState> findAllOrInitTownHub(Long userId) {
+    for (String npcKey : TOWN_HUB_NPC_KEYS) {
+      jdbcTemplate.update(
+          """
+          INSERT INTO npc_dialog_state (user_id, npc_key)
+          VALUES (?, ?)
+          ON CONFLICT (user_id, npc_key) DO NOTHING
+          """,
+          userId,
+          npcKey);
+    }
+    return findAll(userId);
   }
 
   /** 惰性初始化对话状态行，使调用方无需处理记录缺失；已存在则直接返回现有行。 */

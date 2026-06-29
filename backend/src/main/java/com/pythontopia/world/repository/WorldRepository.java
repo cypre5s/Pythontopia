@@ -98,7 +98,9 @@ public class WorldRepository {
   }
 
   public PlayerState createPlayer(Long userId) {
-    jdbcTemplate.update("INSERT INTO player_state (user_id) VALUES (?)", userId);
+    jdbcTemplate.update(
+        "INSERT INTO player_state (user_id, map_key) VALUES (?, 'town_hub')",
+        userId);
     return findPlayer(userId).orElseThrow();
   }
 

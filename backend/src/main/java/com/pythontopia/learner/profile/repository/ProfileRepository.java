@@ -14,6 +14,20 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class ProfileRepository {
 
+  private static final String DEFAULT_DIMENSIONS_JSON =
+      """
+      {
+        "professional_background": {"score": 0.5, "evidence_count": 0, "tags": [], "source": "bootstrap_default"},
+        "knowledge_base": {"score": 0.5, "evidence_count": 0, "tags": [], "source": "bootstrap_default"},
+        "learning_goal": {"score": 0.5, "evidence_count": 0, "tags": [], "source": "bootstrap_default"},
+        "cognitive_style": {"score": 0.5, "evidence_count": 0, "tags": [], "source": "bootstrap_default"},
+        "learning_preference": {"score": 0.5, "evidence_count": 0, "tags": [], "source": "bootstrap_default"},
+        "error_pattern": {"score": 0.5, "evidence_count": 0, "tags": [], "source": "bootstrap_default"},
+        "practical_ability": {"score": 0.5, "evidence_count": 0, "tags": [], "source": "bootstrap_default"},
+        "emotion_persistence": {"score": 0.5, "evidence_count": 0, "tags": [], "source": "bootstrap_default"}
+      }
+      """;
+
   private final JdbcTemplate jdbcTemplate;
   private final ObjectMapper objectMapper;
 
@@ -76,6 +90,30 @@ public class ProfileRepository {
             userId)
         .stream()
         .findFirst();
+  }
+
+  public LearnerProfileDto ensureDefaultProfile(Long userId) {
+    return findProfile(userId)
+        .orElseGet(
+            () -> {
+              insertDefaultProfile(userId);
+              return findProfile(userId)
+                  .orElseThrow(
+                      () ->
+                          new IllegalStateException(
+                              "Failed to create default learner_profile for user " + userId));
+            });
+  }
+
+  private void insertDefaultProfile(Long userId) {
+    jdbcTemplate.update(
+        """
+        INSERT INTO learner_profile (user_id, pack_id, dimensions, updated_at)
+        VALUES (?, 43, ?::jsonb, now())
+        ON CONFLICT (user_id) DO NOTHING
+        """,
+        userId,
+        DEFAULT_DIMENSIONS_JSON);
   }
 
   public void upsertProfile(Long userId, LearnerProfileDto draft) {

@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-06-29 — 下一代 Agentic 深化验收：90 轮 A/B + 28 条 E2E + R-14 bootstrap 收口
+
+> 对“下一代 Agentic 系统推进报告”逐项复查后继续补深：把 A/B 评估从单次样例升级为 25 案例 × 90 轮稳定性门禁，把浏览器 E2E 扩到 28 条真实闭环，并修掉验收暴露的 R-14 启动源不一致、默认画像缺失、hub NPC 状态缺失问题。
+
+- **要求审查落盘**：新增 `docs/plans/2026-06-29-next-gen-agentic-ab-e2e-deepening.md`，把报告中的统一 Loop Runtime、冻结 schema、五类学习循环、AG-UI 语义事件、A/B/Eval/Canary 和 R-14 `town_hub` 启动源逐项标成已完成 / 本轮补强 / 后续上线项。
+- **A/B 评估门禁加厚**：新增 `pythontopia_graph.eval.agentic_ab` 与 `tests/test_agentic_ab.py`，固定 baseline=`legacy_single_shot`、treatment=`agentic_loop_v1`，覆盖 learner/debug/resource/world/improve 五类循环；用户要求“轮数翻 10 倍”后，报告改为 90 轮重复回放。
+- **A/B 结果可审计**：生成 `docs/reports/2026-06-29-agentic-ab-evaluation.md`，25 个案例 × 90 轮全部通过 gate：mean uplift `0.2791`，stability rate `1.0000`，regression rate `0.0000`，schema validity `1.0000`；每个 loop type 单独列 uplift 和稳定性，避免只报总体均值。
+- **28 条真实 E2E**：新增 `frontend/e2e/agenticDeepLoop.spec.ts`，覆盖 bootstrap、legacy session 兼容、loop run 审计、越权拒绝、runtime summary、memory brief、evidence graph、资源生成/消费/微测、连续失败补救、正式提交证据、Bug Mine 分层锁、推荐和 workshop 紧凑点击流。
+- **R-14 启动源修复**：`player_state.map_key` 默认值与历史外围图统一归一为 `town_hub`，新增 `V181__r14_player_map_key_town_hub.sql`；`POST /api/game/bootstrap` 惰性创建默认画像和 11 个 hub NPC 状态，避免新用户第一帧缺 profile / NPC 状态。
+- **验证**：frontend `npm run typecheck` 通过；graph 定向 `python3 -m pytest -q tests/test_agentic_ab.py` 通过（5 tests）；后端定向 `GameBootstrapServiceTest,GameBootstrapRepositoryTest,GameBootstrapControllerTest` 通过；真实 `./dev.sh` 栈健康端点 `5173/18080/18091/18092` 均 `ok`，Flyway `181` 成功；Playwright 新增全链路 `agenticDeepLoop.spec.ts` 28 passed / 2.8m（`--retries=0`）；`git diff --check` 通过。
+
 ## 2026-06-29 — 下一代 Agentic 学习闭环：Loop Contract + ResourceGraph 审稿链 + 真实 evidence rail
 
 > 按“下一代 Agentic 系统推进报告”落地第一批非 MVP 能力：先冻结跨团队 loop runtime 合同，再把资源生成接入真实审稿闭环，最后让学生在工坊资源详情里用一条紧凑行动轨完成“读→测→判→补救/换资源/重规划/通过”。不新增游离 demo，不堆解释卡片。

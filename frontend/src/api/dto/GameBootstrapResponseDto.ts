@@ -15,7 +15,7 @@ import type { WorldSessionDto } from './WorldSessionDto';
 /**
  * 一次性返回首次进入世界场景所需的全量状态，对齐后端 POST /api/game/bootstrap。
  * 命名无法表达的字段语义：
- *   - npcStates：仅含已交互过的 NPC，未交互过的不出现；
+ *   - npcStates：R-14 hub 的 NPC 基础状态；已交互 NPC 会带 currentNodeId / completedNodeIds；
  *   - activeSlot / saveSlots：当前存档槽 + 全部存档；
  *   - curriculum：可选，仅首次播种课程时返回。
  */
