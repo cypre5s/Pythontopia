@@ -326,4 +326,5 @@ Phase 6 intended files:
 | Phase 4 docs | `cd40df60` | Recorded Phase 4 commit hash |
 | Phase 5 | `f930554c` | Resource lifecycle loop implementation and tests |
 | Phase 5 docs | `c8ece464` | Recorded Phase 5 commit hash |
-| Phase 6 | pending | Game world loop implementation and tests |
+| Phase 6 | `89795575` | Game world loop implementation and tests |
+| Phase 6 docs | pending | Recorded Phase 6 commit hash |
