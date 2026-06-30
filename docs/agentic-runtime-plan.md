@@ -151,6 +151,35 @@ This means the new Phase 0-9 plan should not duplicate those pieces blindly. Ins
   - three or more failures stay remedial rather than escalating difficulty.
 - The phase returns a frozen-contract `LoopResult` with `loop_type=LEARNER`, `trace_id`, `policy_version`, evidence refs, scores, and next actions. Later backend orchestration may persist the update plan through Phase 1 control-plane resources.
 
+## Phase 4 Implementation Notes
+
+- Existing backend persistence already covers the Debug Session requirement:
+  - `practice_submission` and `judge_result` hold formal judge evidence,
+  - `debug_case` stores submission-level debug artifacts,
+  - `bug_mine_session` and `bug_mine_card` store Bug Mine sessions, hint cards, retry counts, depth, and variant mastery.
+- `pythontopia_graph.runtime.code_debug_loop` adds the missing graph-side Debug Runtime contract around those foundations. It does not replace Bug Mine or `DebugAgent`; it turns their inputs and outputs into a recoverable loop result.
+- The loop consumes:
+  - `DebugSubmissionSnapshot`,
+  - optional `ResubmissionSnapshot`,
+  - prior failure count,
+  - course-bound `DebugCourseEvidence`,
+  - `policy_version`,
+  - `trace_id`.
+- It emits the six structured stages required by the pasted plan:
+  - `FailureObservation`,
+  - ranked `DebugHypothesis` entries from runtime behavior, code structure, and KC-prerequisite angles,
+  - `HintPlan`,
+  - `ResubmissionComparison`,
+  - `TransferTask`,
+  - `DebugMemoryWriteback`.
+- `POST /runtime/code-debug-runs` exposes the structured debug loop state through the graph service for API-backed UI/status panels.
+- Safety and fallback behavior is intentionally strict:
+  - missing debug evidence returns `REJECTED` with `request:debug-evidence`,
+  - missing formal resubmission returns `PARTIAL` with `resubmit:formal-judge`,
+  - three failed attempts return `fallback:prerequisite-remediation`,
+  - successful resubmission returns a transfer task rather than ending at "fixed".
+- The phase returns a frozen-contract `LoopResult` with `loop_type=DEBUG`, `trace_id`, `policy_version`, evidence refs, scores, and next actions. Later backend orchestration may persist the memory writeback through existing learner/profile and Bug Mine event listeners.
+
 ## Stage Rules
 
 Each phase follows this order:

@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-06-30 — Agentic Runtime Phase 4：代码调试闭环 Fail → Transfer
+
+> 补齐新 Phase 4 的 graph 侧代码调试闭环：失败提交现在能形成结构化失败观察、三路假设、最小提示、正式重交比较、迁移任务和错因记忆写回计划，并通过 API 暴露当前 debug loop 状态。
+
+- **复用后端 Debug Session 基线**：确认现有 `practice_submission`、`judge_result`、`debug_case`、`bug_mine_session`、`bug_mine_card` 已覆盖正式提交、判题结果、调试卡片、重试次数、深度和变式掌握，不重复造表分裂数据源。
+- **代码调试 Runtime 模块**：新增 `pythontopia_graph.runtime.code_debug_loop`，实现 `FailureObservation`、`DebugHypothesis`、`HintPlan`、`ResubmissionComparison`、`TransferTask`、`DebugMemoryWriteback` 和 `CodeDebugLoopResult`。
+- **六步闭环语义**：`Fail -> Hypothesize -> Hint -> Resubmit -> Compare -> Transfer` 全部产出结构化对象；假设固定从 runtime behavior、code structure、KC prerequisite 三个角度生成并按置信度排序。
+- **安全提示与回退**：缺少调试证据返回 `REJECTED + request:debug-evidence`；未重交返回 `PARTIAL + resubmit:formal-judge`；三次失败返回 `fallback:prerequisite-remediation`；提示只给最小方向，不泄露完整修复代码。
+- **迁移与记忆**：正式重交通后仍生成 transfer practice，避免只做表层修补；`DebugMemoryWriteback` 输出 error pattern、置信度和 evidence submission ids，供后续画像/错因记忆持久化。
+- **API 可见状态**：新增 graph 路由 `POST /runtime/code-debug-runs`，返回当前 debug loop 完整状态和冻结 `LoopResult`，供后续前端/教师运维界面真实接入。
+- **测试**：新增 `test_code_debug_loop.py` 7 条，覆盖 WA 完整闭环、等待正式重交、RE、TLE、缺证据、三次失败回退和 API 可见状态；联跑 DebugAgent、runtime、contract、Phase 3 与 M1-M3 gates 共 89 tests 通过。
+
 ## 2026-06-30 — Agentic Runtime Phase 3：学生学习闭环 Observe → Update
 
 > 补齐新 Phase 3 的 graph 侧学生学习闭环：真实学习事件现在能形成结构化观察、诊断、教学干预、练习安排、复盘提示和画像/KC 更新计划，并通过 API 暴露当前 loop 状态。

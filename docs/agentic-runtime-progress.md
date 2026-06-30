@@ -8,9 +8,9 @@
 | Field | Value |
 |---|---|
 | Phase | Phase 4 - Code debug loop |
-| Status | In progress - audit |
+| Status | Complete pending local commit |
 | Goal | Implement Fail -> Hypothesize -> Hint -> Resubmit -> Compare -> Transfer as a structured debug loop |
-| Scope | Existing debug agent, submission evidence, Bug Mine/replay baseline, graph runtime debug loop, API/state exposure, focused tests |
+| Scope | Existing debug agent, submission evidence, Bug Mine/replay baseline, graph runtime debug loop, API-visible state, focused tests |
 
 ## Completed
 
@@ -118,14 +118,42 @@ These are retained as the current implementation baseline. They do not by themse
   - no complete-answer text is produced.
 - Returned a frozen-contract `LoopResult` with `LEARNER`, `policy_version`, `trace_id`, evidence refs, scores, steps, and next actions.
 
+### Phase 4 Code Debug Loop Work
+
+- Audited existing debug/session foundations:
+  - graph `DebugAgent` and `/agents/debug/analyze`,
+  - backend `practice_submission`, `judge_result`, and `debug_case`,
+  - backend `bug_mine_session` and `bug_mine_card`,
+  - Bug Mine retry and variant-submit flows,
+  - M1 replay coverage for failed submission -> Bug Mine -> retry/recovery.
+- Reused existing backend debug-session persistence instead of adding duplicate submission/session tables:
+  - `V060__practice_submission.sql` already persists formal submissions, judge results, and debug cases,
+  - `V070__bug_mine.sql` already persists Bug Mine sessions and structured debug cards,
+  - later Bug Mine migrations already cover depth, retry, and variant mastery.
+- Added `pythontopia_graph.runtime.code_debug_loop` with a deterministic, evidence-bound six-stage debug loop:
+  - `Fail`: captures failed formal submission, verdict, KC, evidence refs, and attempt count,
+  - `Hypothesize`: produces three ranked hypotheses from runtime behavior, code structure, and KC-prerequisite angles,
+  - `Hint`: emits a minimal/evidence-only hint without complete-answer leakage,
+  - `Resubmit`: waits for or consumes a formal resubmission snapshot,
+  - `Compare`: compares verdict, code-change summary, and judge behavior,
+  - `Transfer`: emits either transfer practice or prerequisite remediation.
+- Added `DebugMemoryWriteback` output to recommend grounded error-pattern writeback with evidence submission ids.
+- Added `POST /runtime/code-debug-runs` in the graph service so API consumers can display the current debug loop state without frontend fake data.
+- Added fail-safe behavior:
+  - missing evidence returns `REJECTED`,
+  - missing resubmission returns `PARTIAL` and asks for formal judge resubmission,
+  - three failed attempts return prerequisite remediation fallback,
+  - resolved resubmission emits a transfer task.
+- Returned a frozen-contract `LoopResult` with `DEBUG`, `policy_version`, `trace_id`, evidence refs, scores, steps, and next actions.
+
 ## In Progress
 
-- Phase 4 audit of existing debug loop code, submission evidence, Bug Mine flows, and prior M1 replay coverage.
+- Preparing narrow staging for Phase 4 files only.
 
 ## Next
 
-1. Write Phase 4 RED tests for failed submissions, hypotheses, hints, resubmit comparison, transfer tasks, low confidence, and three-failure fallback.
-2. Implement the structured graph-side debug loop and any API-visible status route needed for Phase 4.
+1. Commit Phase 4.
+2. Start Phase 5 by auditing existing resource generation, publish flow, artifact schema, revision/effectiveness paths, and M2 resource gate against Goal -> Generate -> Critique -> Revise -> Publish -> Evaluate.
 
 ## Decisions
 
@@ -143,12 +171,21 @@ These are retained as the current implementation baseline. They do not by themse
 | Implement Phase 3 in graph runtime first and expose an internal route | The pasted Phase 3 requires structured learner-loop state plus an API-visible status; this avoids fake frontend data while leaving Phase 8 to build full UI |
 | Treat Pyodide preview as non-mastery evidence | Project rules require formal service-side submissions for official practice evidence and mastery updates |
 | Keep Phase 3 deterministic | This phase proves state, evidence, and update semantics locally without relying on online model/provider availability |
+| Reuse Bug Mine as the backend debug session store for Phase 4 | Existing migrations and services already persist failed submissions, debug cards, retry counts, depth, and variant mastery; duplicating them would split the debug source of truth |
+| Implement Phase 4 graph runtime as a status/contract layer around existing DebugAgent/Bug Mine | Phase 4 needs recoverable state and transfer/memory outputs beyond the single-call DebugAgent response |
+| Keep debug hints minimal | The project forbids direct complete-answer leakage, so Phase 4 stores hints and transfer prompts rather than runnable fixes |
 
 ## Changed Files
 
 Phase 4 intended files:
 
-- TBD after audit; likely graph runtime/debug route/tests plus docs/changelog.
+- `services/pythontopia-graph/pythontopia_graph/runtime/code_debug_loop.py`
+- `services/pythontopia-graph/pythontopia_graph/routes/code_debug_runtime.py`
+- `services/pythontopia-graph/pythontopia_graph/main.py`
+- `services/pythontopia-graph/tests/test_code_debug_loop.py`
+- `docs/agentic-runtime-progress.md`
+- `docs/agentic-runtime-plan.md`
+- `CHANGELOG.md`
 
 ## Tests
 
@@ -169,6 +206,9 @@ Phase 4 intended files:
 | 2026-06-30 | `python3 -m pytest -q tests/test_student_learning_loop.py` | RED: failed at collection because `pythontopia_graph.runtime.student_learning_loop` did not exist |
 | 2026-06-30 | `python3 -m pytest -q tests/test_student_learning_loop.py` | passed: 6 tests covering full loop, missing evidence, three failures remediation, Pyodide preview gate, formal pass update, and API-visible route |
 | 2026-06-30 | `python3 -m pytest -q tests/test_student_learning_loop.py tests/test_loop_runtime.py tests/test_agentic_loop.py tests/test_loop_contract.py tests/test_path_planner_agent.py tests/test_reflection_agent.py tests/test_m1_golden_gate.py tests/test_m2_resource_world_gate.py tests/test_m3_system_evolution_gate.py` | passed: 97 tests |
+| 2026-06-30 | `python3 -m pytest -q tests/test_code_debug_loop.py` | RED: failed at collection because `pythontopia_graph.runtime.code_debug_loop` did not exist |
+| 2026-06-30 | `python3 -m pytest -q tests/test_code_debug_loop.py` | passed: 7 tests covering resolved WA full loop, awaiting resubmission, RE, TLE, missing evidence, three-attempt fallback, and API-visible route |
+| 2026-06-30 | `python3 -m pytest -q tests/test_code_debug_loop.py tests/test_debug_agent.py tests/test_student_learning_loop.py tests/test_loop_runtime.py tests/test_agentic_loop.py tests/test_loop_contract.py tests/test_m1_golden_gate.py tests/test_m2_resource_world_gate.py tests/test_m3_system_evolution_gate.py` | passed: 89 tests |
 
 ## Risks
 
@@ -181,10 +221,12 @@ Phase 4 intended files:
 - Phase 3 is graph-side runtime and API-visible status only; full student/teacher frontend panels remain Phase 8.
 - Phase 3 update output is a structured writeback plan, not direct backend mutation. Backend persistence orchestration remains a later integration concern unless Phase 4-9 wires it sooner.
 - Phase 3 uses deterministic rules and provided course evidence; online model-backed personalization remains outside this local verification.
+- Phase 4 graph runtime emits a debug memory writeback plan; backend persistence already exists for Bug Mine cards, but automatic profile/error-memory application remains a later orchestration concern.
+- Phase 4 does not run a real judge; it consumes formal judge snapshots from existing submission/Bug Mine infrastructure and tests the loop contract around those snapshots.
 
 ## Changelog Links
 
-- Phase 3 changelog entry in `CHANGELOG.md`.
+- Phase 4 changelog entry in `CHANGELOG.md`.
 
 ## Commits
 
@@ -197,3 +239,5 @@ Phase 4 intended files:
 | Phase 2 | `e1f5f3a0` | Loop Runtime skeleton and bounded state machines |
 | Phase 2 docs | `cb021486` | Recorded Phase 2 commit hash |
 | Phase 3 | `168edefa` | Student learning loop implementation and tests |
+| Phase 3 docs | `3d6c11ea` | Recorded Phase 3 commit hash |
+| Phase 4 | pending | Code debug loop implementation and tests |
