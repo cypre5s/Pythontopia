@@ -143,4 +143,4 @@ Phase 1 intended files:
 | Phase | Commit | Notes |
 |---|---|---|
 | Phase 0 | `e0cdbebc` | Baseline audit docs and execution tracking |
-| Phase 1 | Pending | Unified event model and Agent Run control plane |
+| Phase 1 | `9221e7eb` | Unified event model and Agent Run control plane |
