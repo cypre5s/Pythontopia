@@ -7,10 +7,10 @@
 
 | Field | Value |
 |---|---|
-| Phase | Phase 7 - System evolution loop |
+| Phase | Phase 8 - Frontend and teacher operations |
 | Status | Not started - next audit |
-| Goal | Deepen Trace -> Eval -> Cluster -> Improve -> Deploy -> Monitor beyond the existing M3 gate |
-| Scope | Existing M3 eval/canary/rollback baseline, regression/adversarial/long-running/audit datasets, policy version governance |
+| Goal | Expose real runtime state to students and teachers without fake frontend data |
+| Scope | API-backed loop panels, trace/review views, rollback/feature flag status, teacher governance |
 
 ## Completed
 
@@ -212,14 +212,42 @@ These are retained as the current implementation baseline. They do not by themse
   - page-read actions create formal-submission follow-up quests without mastery reward.
 - Returned a frozen-contract `LoopResult` with `WORLD`, `policy_version`, `trace_id`, evidence refs, proposal artifact, scores, rollback patch, and next actions.
 
+### Phase 7 System Evolution Loop Work
+
+- Audited existing M3 system-evolution foundations:
+  - `agentic_m3_system_evolution.jsonl`,
+  - `m3_system_evolution_gate.py`,
+  - failure clustering,
+  - one-variable policy candidate generation,
+  - offline replay gate,
+  - canary dry-run plan,
+  - rollback status,
+  - local scripts for offline eval, nightly improve loop, and canary dry-run,
+  - backend policy registry status transitions.
+- Reused the existing M3 eval/canary/rollback functions instead of duplicating the scoring and policy-candidate logic.
+- Added `pythontopia_graph.runtime.system_evolution_loop` with a deterministic, governance-bound six-stage system loop:
+  - `Trace`: summarizes eval traces, stable ids, loop types, policy versions, and trace ids,
+  - `Eval`: combines offline replay gate with required regression/adversarial/long-running/audit suite results,
+  - `Cluster`: reuses M3 failure clustering across failed traces,
+  - `Improve`: reuses one-variable `PolicyCandidate`,
+  - `Deploy`: builds blocked/canary dry-run/rollback-required deployment state,
+  - `Monitor`: maps schema validity, regression rate, cost ratio, live error rate, and sample size into continue/block/rollback decisions.
+- Added `POST /runtime/system-evolution-runs` in the graph service so API consumers can display policy-evolution state without frontend fake data.
+- Added stricter Phase 7 gates beyond M3:
+  - required suite categories are `regression`, `adversarial`, `long_running`, and `audit`,
+  - failing or missing suite categories block deploy,
+  - offline replay regression blocks deploy,
+  - monitor regressions return rollback next actions.
+- Returned a frozen-contract `LoopResult` with `IMPROVE`, `policy_version`, `trace_id`, eval trace evidence refs, candidate/deployment artifacts, scores, monitor decision, and next actions.
+
 ## In Progress
 
-- Phase 7 audit of existing M3 system-evolution baseline and stricter Phase 7 gaps.
+- Phase 8 audit of existing student/teacher runtime surfaces and API-backed visibility gaps.
 
 ## Next
 
-1. Audit existing M3 system-evolution gate, policy registry status transitions, canary dry-run scripts, rollback status, and reports.
-2. Write Phase 7 RED tests for regression/adversarial/long-running/audit datasets, policy promotion safety, canary monitor, and rollback paths.
+1. Audit existing frontend loop panels, teacher operations, route/API clients, and runtime summary surfaces.
+2. Write Phase 8 RED tests for real API-backed student loop visibility, teacher review/rollback state, and no fake runtime data.
 
 ## Decisions
 
@@ -245,15 +273,18 @@ These are retained as the current implementation baseline. They do not by themse
 | Reuse `WorldLoopProposal` for Phase 6 | M2 already froze evidence-bound world proposal semantics; Phase 6 adds runtime production around that contract |
 | Keep Phase 6 rewards non-economic | R-14/R-15 removed inventory, currency, and shop systems from the learning mainline |
 | Emit rollback patches with previous values | World updates need review/rollback visibility before Phase 8 exposes teacher operations |
+| Reuse M3 evolution functions for Phase 7 | M3 already owns clustering, candidate generation, offline replay, canary dry-run, and rollback metadata |
+| Require four eval suite categories before deploy | Phase 7 raises the gate from one M3 dataset to regression/adversarial/long-running/audit coverage |
+| Treat monitor violations as rollback actions | A canary candidate must not proceed when schema validity, regression rate, cost ratio, or live error rate crosses rules |
 
 ## Changed Files
 
-Phase 6 intended files:
+Phase 7 intended files:
 
-- `services/pythontopia-graph/pythontopia_graph/runtime/world_state_loop.py`
-- `services/pythontopia-graph/pythontopia_graph/routes/world_state_runtime.py`
+- `services/pythontopia-graph/pythontopia_graph/runtime/system_evolution_loop.py`
+- `services/pythontopia-graph/pythontopia_graph/routes/system_evolution_runtime.py`
 - `services/pythontopia-graph/pythontopia_graph/main.py`
-- `services/pythontopia-graph/tests/test_world_state_loop.py`
+- `services/pythontopia-graph/tests/test_system_evolution_loop.py`
 - `docs/agentic-runtime-progress.md`
 - `docs/agentic-runtime-plan.md`
 - `CHANGELOG.md`
@@ -287,6 +318,10 @@ Phase 6 intended files:
 | 2026-06-30 | `python3 -m pytest -q tests/test_world_state_loop.py` | passed: 6 tests covering full world loop, missing evidence, forbidden economy reward, rollback patch, page-read follow-up, and API-visible route |
 | 2026-06-30 | `python3 -m pytest -q tests/test_world_state_loop.py tests/test_m2_resource_world_gate.py tests/test_loop_runtime.py tests/test_loop_contract.py tests/test_resource_lifecycle_loop.py tests/test_code_debug_loop.py tests/test_student_learning_loop.py tests/test_m1_golden_gate.py tests/test_m3_system_evolution_gate.py` | passed: 55 tests |
 | 2026-06-30 | `git diff --check` | passed |
+| 2026-06-30 | `python3 -m pytest -q tests/test_system_evolution_loop.py` | RED: failed at collection because `pythontopia_graph.runtime.system_evolution_loop` did not exist |
+| 2026-06-30 | `python3 -m pytest -q tests/test_system_evolution_loop.py` | passed: 5 tests covering dry-run success, monitor rollback, adversarial suite block, offline regression block, and API-visible route |
+| 2026-06-30 | `python3 -m pytest -q tests/test_system_evolution_loop.py tests/test_m3_system_evolution_gate.py tests/test_loop_runtime.py tests/test_loop_contract.py tests/test_world_state_loop.py tests/test_resource_lifecycle_loop.py tests/test_code_debug_loop.py tests/test_student_learning_loop.py tests/test_m1_golden_gate.py tests/test_m2_resource_world_gate.py` | passed: 60 tests |
+| 2026-06-30 | `git diff --check` | passed |
 
 ## Risks
 
@@ -305,10 +340,12 @@ Phase 6 intended files:
 - Phase 5 evaluation is snapshot-driven and deterministic; scheduled 24h/7d evaluation jobs remain a later orchestration/deployment concern.
 - Phase 6 emits graph-side proposal and rollback state; backend persistence/application of world patches remains a later integration concern unless Phase 8/9 wires it earlier.
 - Phase 6 normalizes world state to `town_hub`; any legacy peripheral-map client state should be treated as input drift and not revived as a mainline scene.
+- Phase 7 is graph-side runtime and API-visible status; actual production traffic routing remains dry-run/human-approved per existing canary policy.
+- Phase 7 monitor decisions consume snapshots rather than reading live telemetry directly; wiring scheduled telemetry ingestion remains later deployment/ops work.
 
 ## Changelog Links
 
-- Phase 6 changelog entry in `CHANGELOG.md`.
+- Phase 7 changelog entry in `CHANGELOG.md`.
 
 ## Commits
 
@@ -328,3 +365,4 @@ Phase 6 intended files:
 | Phase 5 docs | `c8ece464` | Recorded Phase 5 commit hash |
 | Phase 6 | `89795575` | Game world loop implementation and tests |
 | Phase 6 docs | pending | Recorded Phase 6 commit hash |
+| Phase 7 | pending | System evolution loop implementation and tests |

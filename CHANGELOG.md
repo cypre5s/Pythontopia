@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-06-30 — Agentic Runtime Phase 7：系统演化闭环 Trace → Monitor
+
+> 补齐新 Phase 7 的 graph 侧系统演化闭环：已有 M3 gate 继续负责离线聚类、单变量策略候选、回放门禁、canary dry-run 和 rollback 元数据，新 runtime 把这些治理状态整理成可 API 展示、可阻断、可回滚的 `IMPROVE` loop。
+
+- **复用 M3 基线**：确认现有 `m3_system_evolution_gate.py` 已覆盖 stable eval dataset、failure clustering、one-variable `PolicyCandidate`、offline replay gate、5% canary dry-run plan 和 rollback status；Phase 7 在其上补 runtime 状态合同。
+- **系统演化 Runtime 模块**：新增 `pythontopia_graph.runtime.system_evolution_loop`，实现 `TraceSummary`、`EvaluationGate`、`DeploymentPlan`、`MonitorDecision` 和 `SystemEvolutionLoopResult`。
+- **六步闭环语义**：`Trace -> Eval -> Cluster -> Improve -> Deploy -> Monitor` 全部产出结构化对象；失败聚类、策略候选、canary plan 和 rollback status 直接复用 M3 实现。
+- **更严格发布门禁**：除 offline replay 外，发布前必须具备 `regression / adversarial / long_running / audit` 四类 suite；失败或缺失 suite 直接 `REJECTED + hold:release-candidate`。
+- **监控与回滚**：`MonitorSnapshot` 检查 schema validity、regression rate、cost ratio、live error rate 和样本数；超过规则返回 `PARTIAL + rollback:<base-policy>`，不会继续 canary。
+- **API 可见状态**：新增 graph 路由 `POST /runtime/system-evolution-runs`，返回当前系统演化闭环完整状态和冻结 `LoopResult`，供后续前端/教师运维界面真实接入。
+- **测试**：新增 `test_system_evolution_loop.py` 5 条，覆盖 dry-run 成功、monitor 回滚、adversarial suite 阻断、offline regression 阻断和 API 可见状态；联跑 M3 gate、runtime/contract、Phase 3/4/5/6 与 M1/M2 gates 共 60 tests 通过。
+
 ## 2026-06-30 — Agentic Runtime Phase 6：世界状态闭环 State → New Quest
 
 > 补齐新 Phase 6 的 graph 侧小镇世界闭环：真实学习动作现在能生成 evidence-bound 的 `town_hub` 状态补丁、任务推进、非经济奖励、NPC 提示、下一任务和回滚补丁，并通过 API 暴露当前 world loop 状态。

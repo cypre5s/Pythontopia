@@ -29,6 +29,7 @@ from pythontopia_graph.routes.resource import router as resource_router
 from pythontopia_graph.routes.resource_lifecycle_runtime import router as resource_lifecycle_runtime_router
 from pythontopia_graph.routes.streaming import router as streaming_router
 from pythontopia_graph.routes.student_learning_runtime import router as student_learning_runtime_router
+from pythontopia_graph.routes.system_evolution_runtime import router as system_evolution_runtime_router
 from pythontopia_graph.routes.tutor import router as tutor_router
 from pythontopia_graph.routes.tutor_workflow import router as tutor_workflow_router
 from pythontopia_graph.routes.video import router as video_router
@@ -91,6 +92,7 @@ app.include_router(npc_dialog_router)
 app.include_router(feynman_router)
 app.include_router(resource_lifecycle_runtime_router)
 app.include_router(world_state_runtime_router)
+app.include_router(system_evolution_runtime_router)
 
 
 @app.get("/healthz", response_model=HealthResponse)

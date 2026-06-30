@@ -244,6 +244,39 @@ This means the new Phase 0-9 plan should not duplicate those pieces blindly. Ins
 - Page-read actions create a formal-submission follow-up quest but do not grant positive mastery delta. Formal judge passes can grant small evidence-bound mastery progress plus non-economic narrative rewards.
 - The phase returns a frozen-contract `LoopResult` with `loop_type=WORLD`, `trace_id`, `policy_version`, evidence refs, proposal artifact, rollback patches, scores, and next actions. Later backend/world orchestration can persist or apply the proposal after review.
 
+## Phase 7 Implementation Notes
+
+- Existing M3 work already owns the offline system-evolution mechanics:
+  - stable eval dataset loading,
+  - failure clustering,
+  - one-variable `PolicyCandidate`,
+  - offline replay gate,
+  - 5% canary dry-run plan,
+  - rollback status,
+  - local scripts for offline eval, nightly improve, and canary dry-run.
+- `pythontopia_graph.runtime.system_evolution_loop` adds the missing runtime/status contract around that M3 baseline. It does not enable real traffic automatically.
+- The loop consumes:
+  - `EvalDatasetItem` records,
+  - required eval-suite results,
+  - `MonitorSnapshot`,
+  - `policy_version`,
+  - `trace_id`,
+  - `dry_run`.
+- It emits the six structured stages required by the pasted plan:
+  - `TraceSummary`,
+  - `EvaluationGate`,
+  - M3 `FailureCluster` list,
+  - M3 `PolicyCandidate`,
+  - `DeploymentPlan`,
+  - `MonitorDecision`.
+- `POST /runtime/system-evolution-runs` exposes structured policy-evolution state through the graph service for API-backed operations panels.
+- Phase 7 adds stricter deploy gates beyond the M3 dataset:
+  - required suite categories are `regression`, `adversarial`, `long_running`, and `audit`,
+  - failing or missing suites block deploy,
+  - offline replay regression blocks deploy,
+  - monitor violations for schema validity, regression rate, cost ratio, or live error rate produce rollback next actions.
+- The phase returns a frozen-contract `LoopResult` with `loop_type=IMPROVE`, `trace_id`, `policy_version`, eval trace evidence refs, candidate/deployment artifacts, scores, monitor status, and next actions.
+
 ## Stage Rules
 
 Each phase follows this order:
