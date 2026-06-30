@@ -26,6 +26,7 @@ from pythontopia_graph.routes.reflection import router as reflection_router
 from pythontopia_graph.routes.evaluation import router as evaluation_router
 from pythontopia_graph.routes.resource import router as resource_router
 from pythontopia_graph.routes.streaming import router as streaming_router
+from pythontopia_graph.routes.student_learning_runtime import router as student_learning_runtime_router
 from pythontopia_graph.routes.tutor import router as tutor_router
 from pythontopia_graph.routes.tutor_workflow import router as tutor_workflow_router
 from pythontopia_graph.routes.video import router as video_router
@@ -73,6 +74,7 @@ app.include_router(evaluation_router)
 app.include_router(boss_router)
 app.include_router(chapter_test_router)
 app.include_router(streaming_router)
+app.include_router(student_learning_runtime_router)
 app.include_router(tutor_router)
 app.include_router(tutor_workflow_router)
 app.include_router(courseware_router)

@@ -125,6 +125,32 @@ This means the new Phase 0-9 plan should not duplicate those pieces blindly. Ins
 - `LoopRuntime.execute()` consumes an `EventEnvelope`, `policy_version`, and `max_steps`, then returns `LoopExecutionResult` with a validated `LoopResult`.
 - This is the common state-machine layer for Phase 3-7. Domain-specific agents should deepen template behavior without changing the frozen `LoopResult` output contract.
 
+## Phase 3 Implementation Notes
+
+- `pythontopia_graph.runtime.student_learning_loop` implements the student learner loop as a deterministic graph-side runtime module, not a replacement for Tutor, PathPlanner, ReflectionAgent, or backend learner services.
+- The loop consumes:
+  - one triggering `EventEnvelope`,
+  - recent `EventEnvelope` records,
+  - `LearnerProfileState`,
+  - `LearnerKcState`,
+  - course-bound `CourseEvidence`,
+  - `policy_version`.
+- It emits the six structured stages required by the pasted plan:
+  - `ObservationSnapshot`,
+  - `Diagnosis`,
+  - `TeachingPlan`,
+  - `PracticeAssignment`,
+  - `ReflectionPrompt`,
+  - `LearnerUpdatePlan`.
+- `POST /runtime/student-learning-runs` exposes the structured loop state through the graph service for API-backed UI/status panels. Phase 8 can build the student/teacher display on top of this route instead of introducing fake frontend state.
+- Evidence behavior is intentionally strict:
+  - missing evidence returns `REJECTED` with `request:learner-evidence`,
+  - Pyodide preview pass returns `PARTIAL` with `submit:formal-judge`,
+  - formal judge pass returns a positive KC mastery delta,
+  - repeated formal failures produce remediation and an error-pattern profile patch,
+  - three or more failures stay remedial rather than escalating difficulty.
+- The phase returns a frozen-contract `LoopResult` with `loop_type=LEARNER`, `trace_id`, `policy_version`, evidence refs, scores, and next actions. Later backend orchestration may persist the update plan through Phase 1 control-plane resources.
+
 ## Stage Rules
 
 Each phase follows this order:

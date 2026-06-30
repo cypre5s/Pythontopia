@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-06-30 — Agentic Runtime Phase 3：学生学习闭环 Observe → Update
+
+> 补齐新 Phase 3 的 graph 侧学生学习闭环：真实学习事件现在能形成结构化观察、诊断、教学干预、练习安排、复盘提示和画像/KC 更新计划，并通过 API 暴露当前 loop 状态。
+
+- **学生学习 Runtime 模块**：新增 `pythontopia_graph.runtime.student_learning_loop`，实现 `ObservationSnapshot`、`Diagnosis`、`TeachingPlan`、`PracticeAssignment`、`ReflectionPrompt`、`LearnerUpdatePlan` 和 `StudentLearningLoopResult`。
+- **六步闭环语义**：`Observe -> Diagnose -> Teach -> Practice -> Reflect -> Update` 全部产出结构化对象；连续失败识别 `repeated_failure`，低掌握度识别 `low_mastery`，正式通过识别 `practice_success`。
+- **证据与正式判题边界**：缺少课程/学习证据时返回 `REJECTED + request:learner-evidence`；Pyodide preview 通过只返回 `PARTIAL + submit:formal-judge`，不会写正向掌握度；只有正式 `submission.passed` 才生成正向 KC mastery delta。
+- **补救策略**：两次失败进入补救练习，三次及以上保持 `remedial` 难度，不升级到更难练习；输出 prompt 不泄露完整答案。
+- **API 可见状态**：新增 graph 路由 `POST /runtime/student-learning-runs`，返回当前学习闭环完整状态和冻结 `LoopResult`，供后续前端/教师运维界面真实接入。
+- **测试**：新增 `test_student_learning_loop.py` 6 条，覆盖正常全链路、无证据低置信降级、连续三次失败补救、Pyodide preview 门槛、正式通过正向更新和 API 可见状态；联跑 runtime/contract/path/reflection 与 M1-M3 gates 共 97 tests 通过。
+
 ## 2026-06-30 — Agentic Runtime Phase 2：Loop Runtime 骨架与五类有界状态机
 
 > 补齐新 Phase 2 的 graph 侧运行时骨架：五大闭环不再只是 eval/golden 集合里的 loop type，而是有统一模板、状态顺序、边界、fallback、trace/policy 透传和冻结 `LoopResult` 输出的可执行状态机。

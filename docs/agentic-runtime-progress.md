@@ -7,10 +7,10 @@
 
 | Field | Value |
 |---|---|
-| Phase | Phase 2 - Loop Runtime skeleton and bounded state machines |
+| Phase | Phase 3 - Student learning loop |
 | Status | Complete pending local commit |
-| Goal | Provide a shared graph-side runtime skeleton for five bounded loop families with structured LoopResult output |
-| Scope | Graph runtime module, five loop templates, deterministic execution/fallback, focused pytest coverage, docs/changelog |
+| Goal | Implement Observe -> Diagnose -> Teach -> Practice -> Reflect -> Update as a structured graph-side learner loop |
+| Scope | Graph runtime module, API-visible loop state route, evidence-bound diagnosis, formal-judge gating, focused pytest coverage, docs/changelog |
 
 ## Completed
 
@@ -91,14 +91,41 @@ These are retained as the current implementation baseline. They do not by themse
   - max-step truncation returns `PARTIAL` with a resume action,
   - invalid max-step config fails fast.
 
+### Phase 3 Student Learning Loop Work
+
+- Audited existing learner-adjacent graph code:
+  - `PathPlannerAgent`,
+  - `ReflectionAgent`,
+  - `PracticeAgent`,
+  - `LoopRuntime`,
+  - loop contract schemas,
+  - FastAPI route registration.
+- Added `pythontopia_graph.runtime.student_learning_loop` with a deterministic, evidence-bound six-stage learner loop:
+  - `Observe`: aggregates triggering and recent events into `ObservationSnapshot`,
+  - `Diagnose`: identifies KC gaps, repeated failures, low mastery, missing evidence, Pyodide-only preview, or formal-pass success,
+  - `Teach`: emits a structured minimal intervention, remediation, evidence-review, or consolidation plan,
+  - `Practice`: emits targeted, remediation, transfer, evidence micro-check, or formal-submission assignments,
+  - `Reflect`: emits an evidence-event-bound reflection prompt,
+  - `Update`: emits profile dimension patches, KC mastery deltas, and review schedule items.
+- Added `POST /runtime/student-learning-runs` in the graph service so API consumers can display the current learner loop state without frontend fake data.
+- Preserved the formal judge boundary:
+  - Pyodide preview pass returns `PARTIAL` and asks for formal judge submission,
+  - only `submission.passed` can produce a positive mastery delta.
+- Added fail-safe behavior:
+  - missing evidence returns `REJECTED`,
+  - low-confidence diagnosis uses `insufficient_evidence`,
+  - continuous failures route to remediation rather than harder practice,
+  - no complete-answer text is produced.
+- Returned a frozen-contract `LoopResult` with `LEARNER`, `policy_version`, `trace_id`, evidence refs, scores, steps, and next actions.
+
 ## In Progress
 
-- Preparing narrow staging for Phase 2 files only.
+- Preparing narrow staging for Phase 3 files only.
 
 ## Next
 
-1. Commit Phase 2.
-2. Start Phase 3 by auditing existing learner-loop code against Observe → Diagnose → Teach → Practice → Reflect → Update.
+1. Commit Phase 3.
+2. Start Phase 4 by auditing existing debug agent, submission, Bug Mine, and replay code against Fail -> Hypothesize -> Hint -> Resubmit -> Compare -> Transfer.
 
 ## Decisions
 
@@ -113,14 +140,18 @@ These are retained as the current implementation baseline. They do not by themse
 | Expose `/api/agent-runs` as a compatibility control-plane alias over `LoopRunService` | Existing `loop_run` already carries user/session/trace/policy-relevant run audit fields and is used by `/api/loop/runs` |
 | Add graph-side `LoopRuntime` as a small deterministic skeleton, not a replacement for orchestrator agents | Phase 2 asks for common state-machine semantics; Phase 3-7 will deepen each loop without breaking existing orchestrator behavior |
 | Use frozen `LoopResult` contract as the runtime output | Keeps Phase 2 output consumable by AG-UI, eval gates, and backend control plane |
+| Implement Phase 3 in graph runtime first and expose an internal route | The pasted Phase 3 requires structured learner-loop state plus an API-visible status; this avoids fake frontend data while leaving Phase 8 to build full UI |
+| Treat Pyodide preview as non-mastery evidence | Project rules require formal service-side submissions for official practice evidence and mastery updates |
+| Keep Phase 3 deterministic | This phase proves state, evidence, and update semantics locally without relying on online model/provider availability |
 
 ## Changed Files
 
-Phase 2 intended files:
+Phase 3 intended files:
 
-- `services/pythontopia-graph/pythontopia_graph/runtime/__init__.py`
-- `services/pythontopia-graph/pythontopia_graph/runtime/loop_runtime.py`
-- `services/pythontopia-graph/tests/test_loop_runtime.py`
+- `services/pythontopia-graph/pythontopia_graph/runtime/student_learning_loop.py`
+- `services/pythontopia-graph/pythontopia_graph/routes/student_learning_runtime.py`
+- `services/pythontopia-graph/pythontopia_graph/main.py`
+- `services/pythontopia-graph/tests/test_student_learning_loop.py`
 - `docs/agentic-runtime-progress.md`
 - `docs/agentic-runtime-plan.md`
 - `CHANGELOG.md`
@@ -141,6 +172,9 @@ Phase 2 intended files:
 | 2026-06-30 | `python3 -m pytest -q tests/test_loop_runtime.py` | passed: 13 tests |
 | 2026-06-30 | `python3 -m pytest -q tests/test_loop_runtime.py tests/test_agentic_loop.py tests/test_loop_contract.py` | passed: 61 tests |
 | 2026-06-30 | `python3 -m pytest -q tests/test_loop_runtime.py tests/test_agentic_loop.py tests/test_loop_contract.py tests/test_agentic_ab.py tests/test_m1_golden_gate.py tests/test_m2_resource_world_gate.py tests/test_m3_system_evolution_gate.py` | passed: 78 tests |
+| 2026-06-30 | `python3 -m pytest -q tests/test_student_learning_loop.py` | RED: failed at collection because `pythontopia_graph.runtime.student_learning_loop` did not exist |
+| 2026-06-30 | `python3 -m pytest -q tests/test_student_learning_loop.py` | passed: 6 tests covering full loop, missing evidence, three failures remediation, Pyodide preview gate, formal pass update, and API-visible route |
+| 2026-06-30 | `python3 -m pytest -q tests/test_student_learning_loop.py tests/test_loop_runtime.py tests/test_agentic_loop.py tests/test_loop_contract.py tests/test_path_planner_agent.py tests/test_reflection_agent.py tests/test_m1_golden_gate.py tests/test_m2_resource_world_gate.py tests/test_m3_system_evolution_gate.py` | passed: 97 tests |
 
 ## Risks
 
@@ -150,16 +184,22 @@ Phase 2 intended files:
 - Phase 1 is backend control plane only; frontend runtime visibility and teacher operations remain Phase 8 scope.
 - `GET /api/agent-runs/{id}/stream` currently emits deterministic lifecycle replay events from persisted run metadata; richer live streaming remains a later runtime orchestration concern.
 - Phase 2 runtime is a shared skeleton. It proves five loop families have bounded state flow and structured output, but the full learner/debug/resource/world/evolution domain logic remains Phase 3-7 scope.
+- Phase 3 is graph-side runtime and API-visible status only; full student/teacher frontend panels remain Phase 8.
+- Phase 3 update output is a structured writeback plan, not direct backend mutation. Backend persistence orchestration remains a later integration concern unless Phase 4-9 wires it sooner.
+- Phase 3 uses deterministic rules and provided course evidence; online model-backed personalization remains outside this local verification.
 
 ## Changelog Links
 
-- Phase 2 changelog entry in `CHANGELOG.md`.
+- Phase 3 changelog entry in `CHANGELOG.md`.
 
 ## Commits
 
 | Phase | Commit | Notes |
 |---|---|---|
 | Phase 0 | `e0cdbebc` | Baseline audit docs and execution tracking |
+| Phase 0 docs | `f6a4d88a` | Recorded Phase 0 commit hash |
 | Phase 1 | `9221e7eb` | Unified event model and Agent Run control plane |
 | Phase 1 docs | `d403d3ea` | Recorded Phase 1 commit hash |
 | Phase 2 | `e1f5f3a0` | Loop Runtime skeleton and bounded state machines |
+| Phase 2 docs | `cb021486` | Recorded Phase 2 commit hash |
+| Phase 3 | pending | Student learning loop implementation and tests |
