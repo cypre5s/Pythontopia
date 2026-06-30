@@ -364,5 +364,6 @@ Phase 7 intended files:
 | Phase 5 | `f930554c` | Resource lifecycle loop implementation and tests |
 | Phase 5 docs | `c8ece464` | Recorded Phase 5 commit hash |
 | Phase 6 | `89795575` | Game world loop implementation and tests |
-| Phase 6 docs | pending | Recorded Phase 6 commit hash |
-| Phase 7 | pending | System evolution loop implementation and tests |
+| Phase 6 docs | `e6cac5c9` | Recorded Phase 6 commit hash |
+| Phase 7 | `396fe6cb` | System evolution loop implementation and tests |
+| Phase 7 docs | pending | Recorded Phase 7 commit hash |
