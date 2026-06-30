@@ -7,10 +7,10 @@
 
 | Field | Value |
 |---|---|
-| Phase | Phase 4 - Code debug loop |
-| Status | Complete pending local commit |
-| Goal | Implement Fail -> Hypothesize -> Hint -> Resubmit -> Compare -> Transfer as a structured debug loop |
-| Scope | Existing debug agent, submission evidence, Bug Mine/replay baseline, graph runtime debug loop, API-visible state, focused tests |
+| Phase | Phase 5 - Resource generation loop |
+| Status | In progress - audit |
+| Goal | Implement Goal -> Generate -> Critique -> Revise -> Publish -> Evaluate as a structured artifact lifecycle |
+| Scope | Existing resource graph, publish flow, artifact/effectiveness baseline, graph runtime resource loop, API/state exposure, focused tests |
 
 ## Completed
 
@@ -148,12 +148,12 @@ These are retained as the current implementation baseline. They do not by themse
 
 ## In Progress
 
-- Preparing narrow staging for Phase 4 files only.
+- Phase 5 audit of existing resource generation agents, ResourceGraph, M2 publish/effectiveness work, artifact schemas, and workshop APIs.
 
 ## Next
 
-1. Commit Phase 4.
-2. Start Phase 5 by auditing existing resource generation, publish flow, artifact schema, revision/effectiveness paths, and M2 resource gate against Goal -> Generate -> Critique -> Revise -> Publish -> Evaluate.
+1. Write Phase 5 RED tests for goal normalization, forced grounding, generation, critic fail, revision, publish, and effectiveness evaluation writeback.
+2. Implement the structured graph-side resource lifecycle loop and any API-visible status route needed for Phase 5.
 
 ## Decisions
 
@@ -240,4 +240,4 @@ Phase 4 intended files:
 | Phase 2 docs | `cb021486` | Recorded Phase 2 commit hash |
 | Phase 3 | `168edefa` | Student learning loop implementation and tests |
 | Phase 3 docs | `3d6c11ea` | Recorded Phase 3 commit hash |
-| Phase 4 | pending | Code debug loop implementation and tests |
+| Phase 4 | `f14175da` | Code debug loop implementation and tests |
