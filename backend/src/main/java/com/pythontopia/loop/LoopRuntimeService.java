@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.loop.dto.LoopRunDto;
 import java.time.OffsetDateTime;
+import java.util.LinkedHashSet;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -80,6 +81,23 @@ public class LoopRuntimeService {
       List<ToolCallRecord> toolCalls,
       List<AgentRunRecord> agentRuns,
       List<EvalResultRecord> evalResults) {}
+
+  public record ReplayStep(
+      int stepIndex,
+      String status,
+      String resumeCursor,
+      List<String> evidenceRefs,
+      String nextAction) {}
+
+  public record ReplayPlan(
+      Long loopRunId,
+      String loopType,
+      String resumeCursor,
+      String nextAction,
+      List<String> evidenceRefs,
+      List<ReplayStep> steps,
+      boolean replayable,
+      String reason) {}
 
   public PolicyRecord registerPolicy(
       String namespace, String policyKey, String policyVersion, String status, JsonNode config) {
@@ -184,6 +202,52 @@ public class LoopRuntimeService {
         runtimeRepository.evalResults(loopRunId).stream().map(this::evalResult).toList());
   }
 
+  public ReplayPlan restoreReplayPlan(Long authUserId, Long loopRunId) {
+    RuntimeSnapshot snapshot = restoreSnapshot(authUserId, loopRunId);
+    List<ReplayStep> steps =
+        snapshot.checkpoints().stream()
+            .map(
+                checkpoint ->
+                    new ReplayStep(
+                        checkpoint.stepIndex(),
+                        checkpoint.status(),
+                        checkpoint.resumeCursor(),
+                        evidenceRefs(checkpoint.state()),
+                        firstText(checkpoint.state(), "nextAction", "next_action")))
+            .toList();
+    CheckpointRecord latest =
+        snapshot.checkpoints().isEmpty()
+            ? null
+            : snapshot.checkpoints().get(snapshot.checkpoints().size() - 1);
+    String loopType = detectLoopType(snapshot, latest);
+    String resumeCursor = latest == null ? "" : latest.resumeCursor();
+    String nextAction = latest == null ? "" : firstText(latest.state(), "nextAction", "next_action");
+    List<String> evidenceRefs =
+        latest == null ? flattenEvidenceRefs(steps) : evidenceRefs(latest.state());
+    if (evidenceRefs.isEmpty()) {
+      evidenceRefs = flattenEvidenceRefs(steps);
+    }
+    String reason = latest == null ? "" : firstText(latest.state(), "replayReason", "replay_reason");
+    if (reason.isBlank()) {
+      reason = replayFallbackReason(loopType, snapshot);
+    }
+    boolean replayable =
+        !loopType.isBlank()
+            && !resumeCursor.isBlank()
+            && !nextAction.isBlank()
+            && !evidenceRefs.isEmpty()
+            && steps.stream().allMatch(step -> !step.status().isBlank());
+    return new ReplayPlan(
+        snapshot.loopRun().id(),
+        loopType,
+        resumeCursor,
+        nextAction,
+        List.copyOf(evidenceRefs),
+        steps,
+        replayable,
+        reason);
+  }
+
   private LoopRunDto requireOwnedRun(Long authUserId, Long loopRunId) {
     if (authUserId == null || loopRunId == null) {
       throw badRequest("LOOP_RUNTIME_REQUIRED", "user_id 与 loop_run_id 不能为空");
@@ -223,6 +287,94 @@ public class LoopRuntimeService {
 
   private BusinessException badRequest(String code, String message) {
     return new BusinessException(HttpStatus.BAD_REQUEST, code, message);
+  }
+
+  private String detectLoopType(RuntimeSnapshot snapshot, CheckpointRecord latest) {
+    if (!snapshot.evalResults().isEmpty()) {
+      return snapshot.evalResults().get(snapshot.evalResults().size() - 1).loopType();
+    }
+    if (latest != null) {
+      String fromState = firstText(latest.state(), "loopType", "loop_type");
+      if (!fromState.isBlank()) {
+        return fromState;
+      }
+    }
+    for (int i = snapshot.agentRuns().size() - 1; i >= 0; i--) {
+      String agent = snapshot.agentRuns().get(i).agentName();
+      if (agent.contains("Debug")) {
+        return "DEBUG";
+      }
+      if (agent.contains("Resource")) {
+        return "RESOURCE";
+      }
+      if (agent.contains("World") || agent.contains("Quest")) {
+        return "WORLD";
+      }
+      if (agent.contains("Improve") || agent.contains("Policy")) {
+        return "IMPROVE";
+      }
+      if (agent.contains("Learner") || agent.contains("Tutor") || agent.contains("Path")) {
+        return "LEARNER";
+      }
+    }
+    return "";
+  }
+
+  private List<String> evidenceRefs(JsonNode state) {
+    return stringsFromArray(state, "evidenceRefs", "evidence_refs");
+  }
+
+  private List<String> flattenEvidenceRefs(List<ReplayStep> steps) {
+    LinkedHashSet<String> values = new LinkedHashSet<>();
+    for (ReplayStep step : steps) {
+      values.addAll(step.evidenceRefs());
+    }
+    return List.copyOf(values);
+  }
+
+  private List<String> stringsFromArray(JsonNode node, String... fieldNames) {
+    if (node == null || node.isNull()) {
+      return List.of();
+    }
+    LinkedHashSet<String> values = new LinkedHashSet<>();
+    for (String fieldName : fieldNames) {
+      JsonNode array = node.get(fieldName);
+      if (array == null || !array.isArray()) {
+        continue;
+      }
+      array.forEach(item -> {
+        if (item.isTextual() && !item.asText().isBlank()) {
+          values.add(item.asText().strip());
+        }
+      });
+    }
+    return List.copyOf(values);
+  }
+
+  private String firstText(JsonNode node, String... fieldNames) {
+    if (node == null || node.isNull()) {
+      return "";
+    }
+    for (String fieldName : fieldNames) {
+      JsonNode value = node.get(fieldName);
+      if (value != null && value.isTextual() && !value.asText().isBlank()) {
+        return value.asText().strip();
+      }
+    }
+    return "";
+  }
+
+  private String replayFallbackReason(String loopType, RuntimeSnapshot snapshot) {
+    if ("DEBUG".equals(loopType)) {
+      return "debug checkpoint restored from loop runtime artifacts";
+    }
+    if ("LEARNER".equals(loopType)) {
+      return "learner checkpoint restored from loop runtime artifacts";
+    }
+    if (!snapshot.checkpoints().isEmpty()) {
+      return "checkpoint restored from loop runtime artifacts";
+    }
+    return "no checkpoint available for replay";
   }
 
   private PolicyRecord policy(LoopRuntimeRepository.PolicyRow row) {

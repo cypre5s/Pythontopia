@@ -92,6 +92,15 @@ interface RuntimeSnapshotBody {
   evalResults: Array<{ id: number; datasetId: string; loopType: string; passed: boolean }>;
 }
 
+interface ReplayPlanBody {
+  loopRunId: number;
+  loopType: string;
+  resumeCursor: string;
+  nextAction: string;
+  evidenceRefs: string[];
+  replayable: boolean;
+}
+
 interface BugMineSessionBody {
   id: number;
   submissionId: number;
@@ -341,7 +350,12 @@ test.describe('下一代 Agentic 深度闭环 E2E @agentic-deep', () => {
     const checkpoint = await postJson<{ id: number }>(api, session, `/api/loop/runs/${loopRun.id}/checkpoints`, {
       stepIndex: 2,
       status: 'READY',
-      state: { node: 'dispatch' },
+      state: {
+        node: 'dispatch',
+        nextAction: 'resume micro-check after resource reading',
+        evidenceRefs: [`resource:${mainResourceId}`, 'micro-check:pending'],
+        replayReason: 'resource consumed -> micro-check pending',
+      },
       resumeCursor: 'agentic-e2e-cursor',
     });
     await postJson(api, session, `/api/loop/runs/${loopRun.id}/tool-calls`, {
@@ -374,6 +388,15 @@ test.describe('下一代 Agentic 深度闭环 E2E @agentic-deep', () => {
     expect(snapshot.toolCalls[0].toolName).toBe('resource.generate');
     expect(snapshot.agentRuns[0].agentName).toBe('ResourceDesignerAgent');
     expect(snapshot.evalResults[0].loopType).toBe('LEARNER');
+
+    const replay = await getJson<ReplayPlanBody>(api, session, `/api/loop/runs/${loopRun.id}/replay`);
+
+    expect(replay.loopRunId).toBe(loopRun.id);
+    expect(replay.loopType).toBe('LEARNER');
+    expect(replay.resumeCursor).toBe('agentic-e2e-cursor');
+    expect(replay.nextAction).toContain('micro-check');
+    expect(replay.evidenceRefs).toContain(`resource:${mainResourceId}`);
+    expect(replay.replayable).toBe(true);
   });
 
   test('05 loop run 拒绝超过上限的自由循环', async () => {

@@ -1,6 +1,6 @@
 # Agentic 14-Week Completion Worklog
 
-> Updated: 2026-06-30 16:07
+> Updated: 2026-06-30 16:20
 > Source spec: pasted "Pythontopia 下一代 Agentic 系统可执行推进报告"
 > Rule for this worklog: every phase must record scope, tests, changelog entry, and local commit before it is treated as complete.
 
@@ -21,7 +21,7 @@
 | Phase | Plan Window | Completion Bar | Current Status |
 |---|---:|---|---|
 | M0 Baseline Freeze | 2 weeks | startup/API/AG-UI/schema/run trace are consistent and covered by contract tests and golden browser paths | Complete |
-| M1 Learner + Debug Loops | 4 weeks | learner/debug loops can restore, replay, use golden sets, and pass offline regression gates | Not complete |
+| M1 Learner + Debug Loops | 4 weeks | learner/debug loops can restore, replay, use golden sets, and pass offline regression gates | Verified; commit pending |
 | M2 Resource + World Loops | 4 weeks | resource review chain and quest/world updates are evidence-bound and feedback-aware | Not complete |
 | M3 System Evolution Loop | 4 weeks | trace to eval to failure cluster to policy candidate to canary to rollback is automated | Not complete |
 
@@ -80,22 +80,57 @@
 
 ## M1 Learner + Debug Loops
 
-### Remaining Requirements
+### Done In Current Working Tree
 
-- Make learner loop restoration/replay explicit through runtime checkpoint snapshots, not only resource-check state.
-- Make debug loop restoration/replay explicit for failed submission -> Bug Mine -> retry/recovery.
-- Build golden set v1 large enough to be useful for regression:
-  - learner cases,
-  - debug cases,
-  - route/safety/leakage cases.
-- Add offline regression command and report.
-- Add canary-5 policy metadata skeleton without sending real traffic.
+- `LoopRuntimeService.restoreReplayPlan()` turns checkpoint/eval/agent artifacts into an explicit replay plan:
+  - `loopType`
+  - `resumeCursor`
+  - `nextAction`
+  - `evidenceRefs`
+  - ordered replay steps
+  - `replayable`
+- `GET /api/loop/runs/{id}/replay` exposes the replay plan with the same student owner boundary as runtime snapshots.
+- Learner replay is covered from resource-read checkpoint -> pending micro-check.
+- Debug replay is covered from failed formal submission -> Bug Mine -> retry/recovery.
+- `pythontopia_graph.eval.m1_golden_gate` adds an offline regression command with 12 golden cases:
+  - 3 learner
+  - 3 debug
+  - 2 route
+  - 2 safety
+  - 2 leakage
+- Canary-5 metadata skeleton is included in the M1 gate report with `real_traffic_enabled=false`.
+- Report added at `docs/reports/2026-06-30-agentic-m1-golden-gate.md`.
 
-### Planned Tests
+### Still Needed Before M1 Complete
 
-- Backend service tests for replay/restore ownership and invalid-state rejection.
-- Graph tests for golden set evaluation and leakage rejection.
-- Playwright path for failed formal submission -> debug loop -> checkpoint snapshot -> recovery evidence.
+- Stage only M1-owned files.
+- Commit M1 learner/debug replay and golden gate.
+
+### Verification Log
+
+| Time | Command | Result |
+|---|---|---|
+| 2026-06-30 16:08 | `python3 -m pytest -q tests/test_m1_golden_gate.py` | RED: missing `pythontopia_graph.eval.m1_golden_gate` |
+| 2026-06-30 16:09 | `python3 -m pytest -q tests/test_m1_golden_gate.py` | passed: 3 tests after golden gate implementation |
+| 2026-06-30 16:09 | `mvn --settings .mvn/settings.build.xml -q -Dtest=LoopRunServiceTest#replayPlansRestoreLearnerAndDebugLoopsFromCheckpoints test` | RED: missing `restoreReplayPlan` |
+| 2026-06-30 16:10 | same focused Maven service test | passed after replay plan implementation |
+| 2026-06-30 16:10 | `mvn --settings .mvn/settings.build.xml -q -Dtest=LoopControllerTest#replayEndpointReturnsExplicitResumePlan test` | RED: `/api/loop/runs/{id}/replay` returned 404 |
+| 2026-06-30 16:11 | same focused Maven controller test | passed after replay endpoint implementation |
+| 2026-06-30 16:12 | `python3 -m pytest -q tests/test_m1_golden_gate.py tests/test_eval_runner.py tests/test_agentic_ab.py tests/test_loop_contract.py` | initially failed: generic eval runner scanned M1-specific dataset |
+| 2026-06-30 16:13 | same graph test set after moving M1 data to `eval/golden/` | passed: 43 tests |
+| 2026-06-30 16:13 | `python3 -m pythontopia_graph.eval.m1_golden_gate` | passed: 12/12 cases, canary metadata-only |
+| 2026-06-30 16:13 | `mvn --settings .mvn/settings.build.xml -q -Dtest=LoopControllerTest,LoopRunServiceTest test` | passed: exit 0, Testcontainers/Flyway v183 covered |
+| 2026-06-30 16:14 | `npm run typecheck` | passed: `vue-tsc --noEmit` exit 0 |
+| 2026-06-30 16:16 | `PYT_E2E_REGISTER=1 npx playwright test e2e/agenticDeepLoop.spec.ts --retries=0` | passed: 29 tests / 1.4m, includes `/replay` assertion |
+| 2026-06-30 16:19 | `python3 -m pytest -q tests/test_m1_golden_gate.py` | passed: 3 tests after formatting cleanup |
+| 2026-06-30 16:19 | `mvn --settings .mvn/settings.build.xml -q -Dtest=LoopRunServiceTest#replayPlansRestoreLearnerAndDebugLoopsFromCheckpoints,LoopControllerTest#replayEndpointReturnsExplicitResumePlan test` | passed: focused replay retest after cleanup |
+| 2026-06-30 16:19 | `git diff --check` | passed |
+
+### Commit Log
+
+| Phase | Commit | Notes |
+|---|---|---|
+| M1 learner/debug replay + golden gate | pending commit | ReplayPlan API, 12-case M1 golden gate, canary metadata-only, browser replay assertion |
 
 ## M2 Resource + World Loops
 

@@ -133,6 +133,37 @@ class LoopControllerTest {
   }
 
   @Test
+  void replayEndpointReturnsExplicitResumePlan() throws Exception {
+    when(runtimeService.restoreReplayPlan(7L, 99L))
+        .thenReturn(
+            new LoopRuntimeService.ReplayPlan(
+                99L,
+                "DEBUG",
+                "debug-cursor-2",
+                "replay failed submission in Bug Mine, then request retry",
+                List.of("submission:2003", "bug-mine:44", "retry:pending"),
+                List.of(
+                    new LoopRuntimeService.ReplayStep(
+                        2,
+                        "READY_TO_RETRY",
+                        "debug-cursor-2",
+                        List.of("submission:2003", "bug-mine:44", "retry:pending"),
+                        "replay failed submission in Bug Mine, then request retry")),
+                true,
+                "failed submission -> Bug Mine -> retry/recovery"));
+
+    mockMvc
+        .perform(get("/api/loop/runs/99/replay"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.loopRunId").value(99))
+        .andExpect(jsonPath("$.loopType").value("DEBUG"))
+        .andExpect(jsonPath("$.resumeCursor").value("debug-cursor-2"))
+        .andExpect(jsonPath("$.replayable").value(true))
+        .andExpect(jsonPath("$.evidenceRefs[0]").value("submission:2003"))
+        .andExpect(jsonPath("$.steps[0].status").value("READY_TO_RETRY"));
+  }
+
+  @Test
   void runtimeEndpointsRejectNonStudent() throws Exception {
     authenticate(new CurrentUserPrincipal(2L, "teacher", Role.TEACHER), "ROLE_TEACHER");
 

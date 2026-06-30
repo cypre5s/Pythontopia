@@ -121,6 +121,13 @@ public class LoopController {
     return runtimeService.restoreSnapshot(user.userId(), id);
   }
 
+  @GetMapping("/runs/{id}/replay")
+  public LoopRuntimeService.ReplayPlan replayPlan(
+      @CurrentUser CurrentUserPrincipal user, @PathVariable Long id) {
+    requireStudent(user);
+    return runtimeService.restoreReplayPlan(user.userId(), id);
+  }
+
   private void requireStudent(CurrentUserPrincipal user) {
     if (user == null || user.role() != Role.STUDENT) {
       throw new BusinessException(

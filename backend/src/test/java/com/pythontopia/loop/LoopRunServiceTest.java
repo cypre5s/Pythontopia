@@ -428,6 +428,86 @@ class LoopRunServiceTest {
   }
 
   @Test
+  void replayPlansRestoreLearnerAndDebugLoopsFromCheckpoints() {
+    LoopRunDto learnerRun = service.record(userId, fullRequest());
+    ObjectNode learnerState = objectMapper.createObjectNode();
+    learnerState.put("nextAction", "resume micro-check after resource reading");
+    learnerState.putArray("evidenceRefs").add("resource:7").add("micro-check:pending");
+    learnerState.put("replayReason", "resource consumed -> micro-check pending");
+    runtimeService.saveCheckpoint(
+        userId, learnerRun.id(), 1, "READY_TO_RESUME", learnerState, "learner-cursor-1");
+    runtimeService.recordEvalResult(
+        userId,
+        learnerRun.id(),
+        "m1-learner-golden",
+        "learner-repeat-failure",
+        "LEARNER",
+        "agentic_loop_v1",
+        json("passRate", 1.0),
+        true);
+
+    var learnerReplay = runtimeService.restoreReplayPlan(userId, learnerRun.id());
+
+    assertThat(learnerReplay.loopType()).isEqualTo("LEARNER");
+    assertThat(learnerReplay.resumeCursor()).isEqualTo("learner-cursor-1");
+    assertThat(learnerReplay.nextAction()).isEqualTo("resume micro-check after resource reading");
+    assertThat(learnerReplay.evidenceRefs()).containsExactly("resource:7", "micro-check:pending");
+    assertThat(learnerReplay.replayable()).isTrue();
+    assertThat(learnerReplay.reason()).isEqualTo("resource consumed -> micro-check pending");
+
+    LoopRunDto debugRun =
+        service.record(
+            userId,
+            new LoopRunRecordRequest(
+                userId,
+                "debug-session-001",
+                0,
+                4,
+                3,
+                1,
+                List.of("JUDGE", "DEBUG_AGENT"),
+                true,
+                true,
+                100,
+                60,
+                "trace-debug-replay"));
+    ObjectNode debugState = objectMapper.createObjectNode();
+    debugState.put("nextAction", "replay failed submission in Bug Mine, then request retry");
+    debugState.putArray("evidenceRefs").add("submission:2003").add("bug-mine:44").add("retry:pending");
+    debugState.put("replayReason", "failed submission -> Bug Mine -> retry/recovery");
+    runtimeService.saveCheckpoint(
+        userId, debugRun.id(), 2, "READY_TO_RETRY", debugState, "debug-cursor-2");
+    runtimeService.recordAgentRun(
+        userId,
+        debugRun.id(),
+        "DebugAgent",
+        "WAITING_FOR_RETRY",
+        "NameError debug loop",
+        json("bugMineSessionId", 44));
+    runtimeService.recordEvalResult(
+        userId,
+        debugRun.id(),
+        "m1-debug-golden",
+        "debug-runtime-error-replay",
+        "DEBUG",
+        "agentic_loop_v1",
+        json("passRate", 1.0),
+        true);
+
+    var debugReplay = runtimeService.restoreReplayPlan(userId, debugRun.id());
+
+    assertThat(debugReplay.loopType()).isEqualTo("DEBUG");
+    assertThat(debugReplay.resumeCursor()).isEqualTo("debug-cursor-2");
+    assertThat(debugReplay.nextAction()).contains("Bug Mine");
+    assertThat(debugReplay.evidenceRefs())
+        .containsExactly("submission:2003", "bug-mine:44", "retry:pending");
+    assertThat(debugReplay.replayable()).isTrue();
+    assertThat(debugReplay.reason()).isEqualTo("failed submission -> Bug Mine -> retry/recovery");
+    assertThat(debugReplay.steps()).extracting(LoopRuntimeService.ReplayStep::stepIndex)
+        .containsExactly(2);
+  }
+
+  @Test
   void databaseRejectsNewLoopRunWithoutTraceId() {
     assertThatThrownBy(
             () ->
