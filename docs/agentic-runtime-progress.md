@@ -8,7 +8,7 @@
 | Field | Value |
 |---|---|
 | Phase | Phase 0 - Baseline audit and execution docs |
-| Status | Ready for local commit |
+| Status | Complete |
 | Goal | Confirm repository reality, preserve compatibility constraints, initialize long-running execution docs, changelog rules, verification rules, and commit rules |
 | Scope | Documentation and audit only; no runtime code changes in Phase 0 |
 
@@ -115,4 +115,4 @@ Phase 0 intended files:
 
 | Phase | Commit | Notes |
 |---|---|---|
-| Phase 0 | pending local commit | Baseline audit docs and execution tracking |
+| Phase 0 | `e0cdbebc` | Baseline audit docs and execution tracking |
