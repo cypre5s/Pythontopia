@@ -162,4 +162,4 @@ Phase 2 intended files:
 | Phase 0 | `e0cdbebc` | Baseline audit docs and execution tracking |
 | Phase 1 | `9221e7eb` | Unified event model and Agent Run control plane |
 | Phase 1 docs | `d403d3ea` | Recorded Phase 1 commit hash |
-| Phase 2 | Pending | Loop Runtime skeleton and bounded state machines |
+| Phase 2 | `e1f5f3a0` | Loop Runtime skeleton and bounded state machines |
