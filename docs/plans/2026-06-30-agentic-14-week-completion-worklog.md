@@ -1,6 +1,6 @@
 # Agentic 14-Week Completion Worklog
 
-> Updated: 2026-06-30 16:05
+> Updated: 2026-06-30 16:07
 > Source spec: pasted "Pythontopia 下一代 Agentic 系统可执行推进报告"
 > Rule for this worklog: every phase must record scope, tests, changelog entry, and local commit before it is treated as complete.
 
@@ -20,7 +20,7 @@
 
 | Phase | Plan Window | Completion Bar | Current Status |
 |---|---:|---|---|
-| M0 Baseline Freeze | 2 weeks | startup/API/AG-UI/schema/run trace are consistent and covered by contract tests and golden browser paths | Contract/trace gate verified; commit pending |
+| M0 Baseline Freeze | 2 weeks | startup/API/AG-UI/schema/run trace are consistent and covered by contract tests and golden browser paths | Complete |
 | M1 Learner + Debug Loops | 4 weeks | learner/debug loops can restore, replay, use golden sets, and pass offline regression gates | Not complete |
 | M2 Resource + World Loops | 4 weeks | resource review chain and quest/world updates are evidence-bound and feedback-aware | Not complete |
 | M3 System Evolution Loop | 4 weeks | trace to eval to failure cluster to policy candidate to canary to rollback is automated | Not complete |
@@ -46,8 +46,7 @@
 
 ### Still Needed Before M0 Complete
 
-- Stage only M0-owned files.
-- Commit M0 contract/trace gate.
+- None.
 
 ### Verification Log
 
@@ -77,7 +76,7 @@
 | Phase | Commit | Notes |
 |---|---|---|
 | M0 foundation | `a7216f3f` | Runtime persistence, scorer A/B, stronger evidence gate, browser restore test |
-| M0 contract/trace gate | pending commit | Executable contract checker and mandatory trace_id for new loop runs |
+| M0 contract/trace gate | `a3b9ab2e` | Executable contract checker and mandatory trace_id for new loop runs |
 
 ## M1 Learner + Debug Loops
 
