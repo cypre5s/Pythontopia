@@ -7,10 +7,10 @@
 
 | Field | Value |
 |---|---|
-| Phase | Phase 6 - Game world loop |
-| Status | In progress - audit |
-| Goal | Implement State -> Quest -> Action -> Reward -> World Update -> New Quest as a learning-bound world loop |
-| Scope | Existing world proposal schema, quests/mainline/town hub state, non-economic reward constraints, graph runtime world loop, API/state exposure, focused tests |
+| Phase | Phase 7 - System evolution loop |
+| Status | Not started - next audit |
+| Goal | Deepen Trace -> Eval -> Cluster -> Improve -> Deploy -> Monitor beyond the existing M3 gate |
+| Scope | Existing M3 eval/canary/rollback baseline, regression/adversarial/long-running/audit datasets, policy version governance |
 
 ## Completed
 
@@ -180,14 +180,46 @@ These are retained as the current implementation baseline. They do not by themse
   - revision parents are preserved in `ArtifactManifest.revision_of`.
 - Returned a frozen-contract `LoopResult` with `RESOURCE`, `policy_version`, `trace_id`, evidence refs, artifact manifest, scores, and next actions.
 
+### Phase 6 Game World Loop Work
+
+- Audited existing world foundations:
+  - `WorldLoopProposal`,
+  - `WorldStatePatch`,
+  - `WorldQuestProposal`,
+  - `NpcDialoguePatch`,
+  - `RewardPlan`,
+  - M2 resource/world evidence gate,
+  - R-14/R-15 `town_hub` and no-economy constraints.
+- Reused the existing `WorldLoopProposal` evidence contract instead of creating a competing world-update schema.
+- Added `pythontopia_graph.runtime.world_state_loop` with a deterministic, evidence-bound six-stage world loop:
+  - `State`: normalizes the learner snapshot into single-hub `town_hub` state,
+  - `Quest`: updates active/completed quest graph from the learning action,
+  - `Action`: classifies formal submission, page read, resource consumption, debug recovery, or profile action,
+  - `Reward`: emits only learning-safe rewards such as badge, mentor trust, mastery delta, title, or quest branch unlock,
+  - `World Update`: emits evidence-bound `town_hub` state patches,
+  - `New Quest`: emits the next evidence-required quest.
+- Added `POST /runtime/world-state-runs` in the graph service so API consumers can display the current world loop state without frontend fake data.
+- Enforced R-14 world constraints:
+  - output state is normalized to `town_hub`,
+  - all state patches use `town_hub.*` keys,
+  - inventory/currency/shop/coin/gold style reward requests are rejected,
+  - no farm/crop/economy path is reintroduced.
+- Added rollback visibility through `RollbackPatch`, preserving previous world-state values for each proposal patch.
+- Added fail-safe behavior:
+  - missing evidence returns `REJECTED`,
+  - forbidden economy rewards return `REJECTED`,
+  - rejected runs emit no `WorldLoopProposal`,
+  - page-read actions create formal-submission follow-up quests without mastery reward.
+- Returned a frozen-contract `LoopResult` with `WORLD`, `policy_version`, `trace_id`, evidence refs, proposal artifact, scores, rollback patch, and next actions.
+
 ## In Progress
 
-- Phase 6 audit of existing world loop proposal schema, quest/mainline state, town_hub constraints, and non-economic reward rules.
+- Phase 7 audit of existing M3 system-evolution baseline and stricter Phase 7 gaps.
 
 ## Next
 
-1. Write Phase 6 RED tests for world state reduction, quest graph generation, non-economic rewards, evidence-bound patches, rollback, and no inventory/currency/shop leakage.
-2. Implement the structured graph-side world state loop and any API-visible status route needed for Phase 6.
+1. Audit existing M3 system-evolution gate, policy registry status transitions, canary dry-run scripts, rollback status, and reports.
+2. Write Phase 7 RED tests for regression/adversarial/long-running/audit datasets, policy promotion safety, canary monitor, and rollback paths.
 
 ## Decisions
 
@@ -210,15 +242,18 @@ These are retained as the current implementation baseline. They do not by themse
 | Keep debug hints minimal | The project forbids direct complete-answer leakage, so Phase 4 stores hints and transfer prompts rather than runnable fixes |
 | Reuse ResourceGraph as the Phase 5 generation engine | It already performs evidence fetch, generation, critique, revision retry, publish decision, and evaluation-hook binding; Phase 5 adds lifecycle state instead of re-running the same graph |
 | Keep artifact lifecycle separate from backend persistence | The runtime emits manifest/revision/evaluation state for API visibility; workshop persistence and effectiveness APIs remain the authoritative backend integration points |
+| Reuse `WorldLoopProposal` for Phase 6 | M2 already froze evidence-bound world proposal semantics; Phase 6 adds runtime production around that contract |
+| Keep Phase 6 rewards non-economic | R-14/R-15 removed inventory, currency, and shop systems from the learning mainline |
+| Emit rollback patches with previous values | World updates need review/rollback visibility before Phase 8 exposes teacher operations |
 
 ## Changed Files
 
-Phase 5 intended files:
+Phase 6 intended files:
 
-- `services/pythontopia-graph/pythontopia_graph/runtime/resource_lifecycle_loop.py`
-- `services/pythontopia-graph/pythontopia_graph/routes/resource_lifecycle_runtime.py`
+- `services/pythontopia-graph/pythontopia_graph/runtime/world_state_loop.py`
+- `services/pythontopia-graph/pythontopia_graph/routes/world_state_runtime.py`
 - `services/pythontopia-graph/pythontopia_graph/main.py`
-- `services/pythontopia-graph/tests/test_resource_lifecycle_loop.py`
+- `services/pythontopia-graph/tests/test_world_state_loop.py`
 - `docs/agentic-runtime-progress.md`
 - `docs/agentic-runtime-plan.md`
 - `CHANGELOG.md`
@@ -248,6 +283,10 @@ Phase 5 intended files:
 | 2026-06-30 | `python3 -m pytest -q tests/test_resource_lifecycle_loop.py` | RED: failed at collection because `pythontopia_graph.runtime.resource_lifecycle_loop` did not exist |
 | 2026-06-30 | `python3 -m pytest -q tests/test_resource_lifecycle_loop.py` | passed: 6 tests covering publish/evaluate lifecycle, no-evidence hold, critic rejection, revision parent, negative effectiveness revision, and API-visible route |
 | 2026-06-30 | `python3 -m pytest -q tests/test_resource_lifecycle_loop.py tests/test_resource_graph.py tests/test_m2_resource_world_gate.py tests/test_resource_agents.py tests/test_resource_schemas.py tests/test_loop_runtime.py tests/test_loop_contract.py tests/test_code_debug_loop.py tests/test_student_learning_loop.py tests/test_m1_golden_gate.py tests/test_m3_system_evolution_gate.py` | passed: 70 tests |
+| 2026-06-30 | `python3 -m pytest -q tests/test_world_state_loop.py` | RED: failed at collection because `pythontopia_graph.runtime.world_state_loop` did not exist |
+| 2026-06-30 | `python3 -m pytest -q tests/test_world_state_loop.py` | passed: 6 tests covering full world loop, missing evidence, forbidden economy reward, rollback patch, page-read follow-up, and API-visible route |
+| 2026-06-30 | `python3 -m pytest -q tests/test_world_state_loop.py tests/test_m2_resource_world_gate.py tests/test_loop_runtime.py tests/test_loop_contract.py tests/test_resource_lifecycle_loop.py tests/test_code_debug_loop.py tests/test_student_learning_loop.py tests/test_m1_golden_gate.py tests/test_m3_system_evolution_gate.py` | passed: 55 tests |
+| 2026-06-30 | `git diff --check` | passed |
 
 ## Risks
 
@@ -264,10 +303,12 @@ Phase 5 intended files:
 - Phase 4 does not run a real judge; it consumes formal judge snapshots from existing submission/Bug Mine infrastructure and tests the loop contract around those snapshots.
 - Phase 5 consumes `ResourceProduceResponse` rather than invoking live LLM/provider calls; existing `ResourceGraph` tests continue to verify generation and publish-flow behavior.
 - Phase 5 evaluation is snapshot-driven and deterministic; scheduled 24h/7d evaluation jobs remain a later orchestration/deployment concern.
+- Phase 6 emits graph-side proposal and rollback state; backend persistence/application of world patches remains a later integration concern unless Phase 8/9 wires it earlier.
+- Phase 6 normalizes world state to `town_hub`; any legacy peripheral-map client state should be treated as input drift and not revived as a mainline scene.
 
 ## Changelog Links
 
-- Phase 5 changelog entry in `CHANGELOG.md`.
+- Phase 6 changelog entry in `CHANGELOG.md`.
 
 ## Commits
 
@@ -284,3 +325,5 @@ Phase 5 intended files:
 | Phase 4 | `f14175da` | Code debug loop implementation and tests |
 | Phase 4 docs | `cd40df60` | Recorded Phase 4 commit hash |
 | Phase 5 | `f930554c` | Resource lifecycle loop implementation and tests |
+| Phase 5 docs | `c8ece464` | Recorded Phase 5 commit hash |
+| Phase 6 | pending | Game world loop implementation and tests |

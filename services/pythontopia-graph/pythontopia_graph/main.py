@@ -33,6 +33,7 @@ from pythontopia_graph.routes.tutor import router as tutor_router
 from pythontopia_graph.routes.tutor_workflow import router as tutor_workflow_router
 from pythontopia_graph.routes.video import router as video_router
 from pythontopia_graph.routes.video_insight import router as video_insight_router
+from pythontopia_graph.routes.world_state_runtime import router as world_state_runtime_router
 from pythontopia_graph.schemas.curriculum import MapperInput, MapperOutput
 from pythontopia_graph.internal_auth import InternalTokenMiddleware
 from pythontopia_graph.observability import init_tracing
@@ -89,6 +90,7 @@ app.include_router(video_insight_router)
 app.include_router(npc_dialog_router)
 app.include_router(feynman_router)
 app.include_router(resource_lifecycle_runtime_router)
+app.include_router(world_state_runtime_router)
 
 
 @app.get("/healthz", response_model=HealthResponse)

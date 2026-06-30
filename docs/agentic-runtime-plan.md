@@ -216,6 +216,34 @@ This means the new Phase 0-9 plan should not duplicate those pieces blindly. Ins
   - request revision when effectiveness snapshots show low adoption, low micro-check pass rate, or negative mastery delta.
 - The phase returns a frozen-contract `LoopResult` with `loop_type=RESOURCE`, `trace_id`, `policy_version`, evidence refs, artifact manifest, scores, and next actions. Scheduled 24h/7d evaluation jobs can later feed `ArtifactEffectivenessSnapshot` through existing workshop effectiveness APIs.
 
+## Phase 6 Implementation Notes
+
+- Existing M2 work already defines the world update contract through `WorldLoopProposal`, including evidence-bound state patches, quest proposals, NPC dialogue, and reward plan. Phase 6 reuses that contract rather than adding a parallel world schema.
+- `pythontopia_graph.runtime.world_state_loop` implements the game world loop as a deterministic graph-side runtime module, not a Phaser renderer or backend persistence replacement.
+- The loop consumes:
+  - `LearnerWorldSnapshot`,
+  - `WorldQuestHistory`,
+  - `LearningActionEvidence`,
+  - optional previous world-state values,
+  - reward preferences,
+  - `policy_version`,
+  - `trace_id`.
+- It emits the six structured stages required by the pasted plan:
+  - `WorldStateSnapshot`,
+  - `QuestGraphUpdate`,
+  - `WorldActionResult`,
+  - `NarrativeReward`,
+  - `WorldLoopProposal`,
+  - `RollbackPatch`.
+- `POST /runtime/world-state-runs` exposes structured world-loop state through the graph service for API-backed UI/status panels.
+- R-14/R-15 constraints are hard-coded into the runtime contract:
+  - output world state is normalized to `town_hub`,
+  - all generated patch keys use `town_hub.*`,
+  - inventory/currency/shop/coin/gold reward requests are rejected,
+  - no farm/crop/economy route is used for mainline learning.
+- Page-read actions create a formal-submission follow-up quest but do not grant positive mastery delta. Formal judge passes can grant small evidence-bound mastery progress plus non-economic narrative rewards.
+- The phase returns a frozen-contract `LoopResult` with `loop_type=WORLD`, `trace_id`, `policy_version`, evidence refs, proposal artifact, rollback patches, scores, and next actions. Later backend/world orchestration can persist or apply the proposal after review.
+
 ## Stage Rules
 
 Each phase follows this order:

@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-06-30 — Agentic Runtime Phase 6：世界状态闭环 State → New Quest
+
+> 补齐新 Phase 6 的 graph 侧小镇世界闭环：真实学习动作现在能生成 evidence-bound 的 `town_hub` 状态补丁、任务推进、非经济奖励、NPC 提示、下一任务和回滚补丁，并通过 API 暴露当前 world loop 状态。
+
+- **复用世界提案合同**：确认现有 `WorldLoopProposal` 已强制 `state_patch / new_quests / npc_dialogue / reward_plan` 全部绑定 evidence，Phase 6 在其上补 runtime 生产链，不另起一套 world schema。
+- **世界状态 Runtime 模块**：新增 `pythontopia_graph.runtime.world_state_loop`，实现 `LearnerWorldSnapshot`、`QuestGraphUpdate`、`WorldActionResult`、`NarrativeReward`、`RollbackPatch` 和 `WorldStateLoopResult`。
+- **六步闭环语义**：`State -> Quest -> Action -> Reward -> WorldUpdate -> NewQuest` 全部产出结构化对象；学习动作可来自正式提交、页面阅读、资源消费、调试恢复和画像事件。
+- **R-14 约束落地**：输出 world state 统一归一到 `town_hub`；生成 patch 只写 `town_hub.*`；拒绝 inventory/currency/shop/coin/gold 类经济奖励请求，不把已删除的货币/商店系统带回主线。
+- **学习型奖励与任务**：正式提交通过可给小额 mastery delta、badge、mentor trust 等非经济奖励；页面阅读只生成训练场正式提交 follow-up，不产生正向掌握度。
+- **回滚可见性**：新增 `RollbackPatch`，每个世界状态补丁都保留 previous value 和 evidence refs，方便后续教师运维/审查界面做拒绝或回滚。
+- **API 可见状态**：新增 graph 路由 `POST /runtime/world-state-runs`，返回当前世界闭环完整状态和冻结 `LoopResult`，供后续前端/教师运维界面真实接入。
+- **测试**：新增 `test_world_state_loop.py` 6 条，覆盖完整 world loop、缺 evidence 拒绝、经济奖励拒绝、回滚补丁、页面阅读后续任务和 API 可见状态；联跑 M2 world gate、runtime/contract、Phase 3/4/5 与 M1/M3 gates 共 55 tests 通过。
+
 ## 2026-06-30 — Agentic Runtime Phase 5：资源生成闭环 Goal → Evaluate
 
 > 补齐新 Phase 5 的 graph 侧资源生命周期闭环：已有 ResourceGraph 继续负责真实检索、生成、审查和发布决策，新 runtime 把结果整理成可恢复的 artifact manifest、revision、publish state 和 evaluation writeback 状态。
