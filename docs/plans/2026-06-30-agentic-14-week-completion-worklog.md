@@ -1,6 +1,6 @@
 # Agentic 14-Week Completion Worklog
 
-> Updated: 2026-06-30 15:46
+> Updated: 2026-06-30 16:05
 > Source spec: pasted "Pythontopia 下一代 Agentic 系统可执行推进报告"
 > Rule for this worklog: every phase must record scope, tests, changelog entry, and local commit before it is treated as complete.
 
@@ -20,7 +20,7 @@
 
 | Phase | Plan Window | Completion Bar | Current Status |
 |---|---:|---|---|
-| M0 Baseline Freeze | 2 weeks | startup/API/AG-UI/schema/run trace are consistent and covered by contract tests and golden browser paths | Foundation verified; contract gate still remains |
+| M0 Baseline Freeze | 2 weeks | startup/API/AG-UI/schema/run trace are consistent and covered by contract tests and golden browser paths | Contract/trace gate verified; commit pending |
 | M1 Learner + Debug Loops | 4 weeks | learner/debug loops can restore, replay, use golden sets, and pass offline regression gates | Not complete |
 | M2 Resource + World Loops | 4 weeks | resource review chain and quest/world updates are evidence-bound and feedback-aware | Not complete |
 | M3 System Evolution Loop | 4 weeks | trace to eval to failure cluster to policy candidate to canary to rollback is automated | Not complete |
@@ -41,15 +41,13 @@
   - micro quiz must match real resource content rather than KC-code-only text,
   - operation evidence needs a formal passed training submission.
 - Browser E2E includes runtime artifact restore plus learning/debug/resource/world/improve loop coverage.
+- Executable loop contract checker validates the JSON checklist against the five Pydantic models and AG-UI terminal mapping.
+- New loop runs now require nonblank `trace_id` at both `LoopRunService` and database constraint level.
 
 ### Still Needed Before M0 Complete
 
-- Fresh phase verification after this worklog is created.
 - Stage only M0-owned files.
-- Commit M0 foundation.
-- Then add remaining M0 contract gate:
-  - executable loop contract check in CI/test form,
-  - stronger trace/run coverage assertion for new/legacy paths.
+- Commit M0 contract/trace gate.
 
 ### Verification Log
 
@@ -60,12 +58,26 @@
 | 2026-06-30 15:41 | `npm run typecheck` | passed: `vue-tsc --noEmit` exit 0 |
 | 2026-06-30 15:46 | `PYT_E2E_REGISTER=1 npx playwright test e2e/agenticDeepLoop.spec.ts --retries=0` | passed: 29 tests / 1.4m |
 | 2026-06-30 15:41 | `git diff --check` | passed |
+| 2026-06-30 15:48 | `python3 -m pytest -q tests/test_loop_contract.py::test_loop_contract_checker_returns_actionable_summary` | RED: failed with missing `pythontopia_graph.eval.loop_contract_check` |
+| 2026-06-30 15:48 | `python3 -m pytest -q tests/test_loop_contract.py` | passed: 7 tests after checker implementation |
+| 2026-06-30 15:48 | `python3 -m pythontopia_graph.eval.loop_contract_check ../../docs/contracts/loop_contract_check.json` | passed: `OK loop-contract.v1` |
+| 2026-06-30 15:48 | `mvn --settings .mvn/settings.build.xml -q -Dtest=LoopRunServiceTest#criticVerdictsTokensAndTraceArePersistedExactly test` | RED: empty trace accepted before service gate |
+| 2026-06-30 15:49 | `mvn --settings .mvn/settings.build.xml -q -Dtest=LoopRunServiceTest#databaseRejectsNewLoopRunWithoutTraceId test` | RED: DB accepted empty trace before V183 |
+| 2026-06-30 15:50 | same two focused Maven tests | passed after service gate + V183 |
+| 2026-06-30 15:53 | `mvn --settings .mvn/settings.build.xml -q -Dtest=LoopRunServiceTest test` | passed: 9 tests, Flyway v183 |
+| 2026-06-30 15:56 | `python3 -m pytest -q tests/test_loop_contract.py tests/test_agentic_ab.py tests/test_orchestrator_real_dispatch.py` | passed: 27 tests |
+| 2026-06-30 15:56 | `python3 -m pythontopia_graph.eval.loop_contract_check ../../docs/contracts/loop_contract_check.json` | passed: `OK loop-contract.v1` |
+| 2026-06-30 15:56 | `mvn --settings .mvn/settings.build.xml -q -Dtest=LoopControllerTest,ResourceWorkshopServiceTest,LoopRunServiceTest test` | passed: exit 0, Testcontainers/Flyway v183 covered |
+| 2026-06-30 15:56 | `npm run typecheck` | passed: `vue-tsc --noEmit` exit 0 |
+| 2026-06-30 16:00 | `PYT_E2E_REGISTER=1 npx playwright test e2e/agenticDeepLoop.spec.ts --retries=0` | passed: 29 tests / 2.0m, after fresh dev restart and v183 migration |
+| 2026-06-30 16:03 | `git diff --check` | passed |
 
 ### Commit Log
 
 | Phase | Commit | Notes |
 |---|---|---|
-| M0 foundation | pending commit | Runtime persistence, scorer A/B, stronger evidence gate, browser restore test |
+| M0 foundation | `a7216f3f` | Runtime persistence, scorer A/B, stronger evidence gate, browser restore test |
+| M0 contract/trace gate | pending commit | Executable contract checker and mandatory trace_id for new loop runs |
 
 ## M1 Learner + Debug Loops
 

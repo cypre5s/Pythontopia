@@ -168,3 +168,44 @@ def test_repo_loop_contract_check_requires_audit_fields() -> None:
         "schema_version",
     } <= required
     assert "RUN_FINISHED.result" in contract["agui_terminal_mapping"]
+
+
+def test_repo_loop_contract_check_matches_pydantic_models() -> None:
+    """The JSON checklist must stay in lockstep with executable models."""
+
+    contract_path = Path(__file__).resolve().parents[3] / "docs/contracts/loop_contract_check.json"
+    contract = json.loads(contract_path.read_text(encoding="utf-8"))
+
+    model_pairs = {
+        "event_envelope_required_fields": EventEnvelope,
+        "checkpoint_required_fields": LoopCheckpoint,
+        "agent_tool_call_required_fields": AgentToolCall,
+        "loop_result_required_fields": LoopResult,
+        "eval_record_required_fields": EvalRecord,
+    }
+
+    for contract_key, model in model_pairs.items():
+        documented = set(contract[contract_key])
+        actual = set(model.model_fields)
+        assert documented == actual, contract_key
+
+    assert set(contract["loop_types"]) == {"LEARNER", "DEBUG", "RESOURCE", "WORLD", "IMPROVE"}
+
+
+def test_loop_contract_checker_returns_actionable_summary() -> None:
+    from pythontopia_graph.eval.loop_contract_check import check_loop_contract
+
+    contract_path = Path(__file__).resolve().parents[3] / "docs/contracts/loop_contract_check.json"
+
+    summary = check_loop_contract(contract_path)
+
+    assert summary.ok is True
+    assert summary.schema_version == "loop-contract.v1"
+    assert summary.checked_models == [
+        "EventEnvelope",
+        "LoopCheckpoint",
+        "AgentToolCall",
+        "LoopResult",
+        "EvalRecord",
+    ]
+    assert summary.errors == []

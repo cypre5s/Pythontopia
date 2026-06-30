@@ -181,9 +181,12 @@ public class LoopRunService {
 
   private String normalizeTraceId(String traceId) {
     if (traceId == null) {
-      return "";
+      throw badRequest("LOOP_RUN_TRACE_REQUIRED", "trace_id 不能为空");
     }
     String trimmed = traceId.strip();
+    if (trimmed.isEmpty()) {
+      throw badRequest("LOOP_RUN_TRACE_REQUIRED", "trace_id 不能为空");
+    }
     if (trimmed.length() > MAX_TRACE_ID_LEN) {
       throw badRequest("LOOP_RUN_TRACE_TOO_LONG", "trace_id 超过 " + MAX_TRACE_ID_LEN + " 字符");
     }

@@ -7,6 +7,7 @@
 - **A/B 评估改为 scorer-backed**：`pythontopia_graph.eval.agentic_ab` 的 25 个五类 loop 案例现在保存 baseline/treatment candidate output，由统一 scorer 从 `evidence_page_ids`、`next_action`、安全/schema 字段和工具/Token 预算计算指标；新增测试覆盖 schema invalid、candidate output 变化会改变分数，避免预置 treatment 分数冒充评估。
 - **工坊证据门禁收紧**：微测不再把 KC 编号、标题泛词当作理解证据；`OPERATION` 只有绑定本人且 KC 匹配的正式训练场 PASSED submission 才能产生正向掌握度，单独代码片段会进入补救而不是 pass。
 - **Runtime/Policy/Checkpoint/Eval 持久化骨架**：新增 Flyway `V182__loop_runtime_artifacts.sql`，落地 `policy_registry`、`loop_checkpoint`、`agent_run`、`agent_tool_call`、`loop_eval_result`；新增 `LoopRuntimeService/Repository`，支持按 owner 保存 checkpoint/tool call/agent run/eval result 并恢复快照，真库测试覆盖五类 loop eval result。
+- **M0 契约门禁补齐**：新增可执行 `pythontopia_graph.eval.loop_contract_check`，将 `docs/contracts/loop_contract_check.json` 与五个 Pydantic contract model 对齐校验；新增 Flyway `V183__loop_run_trace_required.sql`，后端服务与数据库双层拒绝新建空 `trace_id` 的 loop run。
 - **个性化路径串线修复**：`AgentDispatcher` 的 `PathPlannerAgent` 不再硬编码 `user_id=1`，新增测试确保当前请求用户透传到 `PathPlannerRequest`。
 - **E2E 口径同步**：`agenticDeepLoop.spec.ts` 改为用资源真实摘要通过微测，并断言无正式提交的 operation evidence 不写入掌握度。
 

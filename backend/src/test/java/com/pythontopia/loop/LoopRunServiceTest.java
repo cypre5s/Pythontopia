@@ -14,6 +14,7 @@ import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
@@ -193,7 +194,7 @@ class LoopRunServiceTest {
                 true,
                 0,
                 0,
-                ""));
+                "trace-tools"));
     assertThat(multi.toolsUsed()).containsExactly("RECALL", "RETRIEVE", "HANDOUT", "BROWSE");
     assertThat(readToolsFromDb(multi.id()))
         .containsExactly("RECALL", "RETRIEVE", "HANDOUT", "BROWSE");
@@ -203,7 +204,7 @@ class LoopRunServiceTest {
         service.record(
             userId,
             new LoopRunRecordRequest(
-                userId, "sess-empty", 0, 4, 0, 0, List.of(), true, true, 0, 0, ""));
+                userId, "sess-empty", 0, 4, 0, 0, List.of(), true, true, 0, 0, "trace-empty"));
     assertThat(empty.toolsUsed()).isEmpty();
     assertThat(readToolsFromDb(empty.id())).isEmpty();
 
@@ -212,7 +213,7 @@ class LoopRunServiceTest {
         service.record(
             userId,
             new LoopRunRecordRequest(
-                userId, "sess-null", 0, 4, 0, 0, null, true, true, 0, 0, ""));
+                userId, "sess-null", 0, 4, 0, 0, null, true, true, 0, 0, "trace-null"));
     assertThat(nullTools.toolsUsed()).isEmpty();
     assertThat(readToolsFromDb(nullTools.id())).isEmpty();
   }
@@ -239,13 +240,21 @@ class LoopRunServiceTest {
     assertThat(fetched.outputTokens()).isEqualTo(2048);
     assertThat(fetched.traceId()).isEqualTo("trace-critic-1");
 
-    // 观测 fail-soft：未采集到 trace 时空串落库，不应报错。
-    LoopRunDto noTrace =
-        service.record(
-            userId,
-            new LoopRunRecordRequest(
-                userId, "sess-no-trace", 0, 4, 0, 0, List.of(), true, true, 0, 0, null));
-    assertThat(noTrace.traceId()).isEmpty();
+    // M0 trace completeness gate：闭环 run 必须可追踪，缺 trace 不能进入审计表。
+    assertCode(
+        () ->
+            service.record(
+                userId,
+                new LoopRunRecordRequest(
+                    userId, "sess-no-trace", 0, 4, 0, 0, List.of(), true, true, 0, 0, null)),
+        HttpStatus.BAD_REQUEST);
+    assertCode(
+        () ->
+            service.record(
+                userId,
+                new LoopRunRecordRequest(
+                    userId, "sess-blank-trace", 0, 4, 0, 0, List.of(), true, true, 0, 0, " ")),
+        HttpStatus.BAD_REQUEST);
   }
 
   // ⑤ 非法输入校验（字段越界 + 越权）。
@@ -257,7 +266,7 @@ class LoopRunServiceTest {
             service.record(
                 userId,
                 new LoopRunRecordRequest(
-                    userId, "   ", 0, 4, 0, 0, List.of(), true, true, 0, 0, "")),
+                    userId, "   ", 0, 4, 0, 0, List.of(), true, true, 0, 0, "trace-invalid")),
         HttpStatus.BAD_REQUEST);
 
     // max_steps 越界（> 8，破坏「有界非自由 ReAct」红线）。
@@ -265,7 +274,7 @@ class LoopRunServiceTest {
         () ->
             service.record(
                 userId,
-                new LoopRunRecordRequest(userId, "s", 0, 9, 0, 0, List.of(), true, true, 0, 0, "")),
+                new LoopRunRecordRequest(userId, "s", 0, 9, 0, 0, List.of(), true, true, 0, 0, "trace-invalid")),
         HttpStatus.BAD_REQUEST);
 
     // max_steps < 1。
@@ -273,7 +282,7 @@ class LoopRunServiceTest {
         () ->
             service.record(
                 userId,
-                new LoopRunRecordRequest(userId, "s", 0, 0, 0, 0, List.of(), true, true, 0, 0, "")),
+                new LoopRunRecordRequest(userId, "s", 0, 0, 0, 0, List.of(), true, true, 0, 0, "trace-invalid")),
         HttpStatus.BAD_REQUEST);
 
     // turn 为负。
@@ -281,7 +290,7 @@ class LoopRunServiceTest {
         () ->
             service.record(
                 userId,
-                new LoopRunRecordRequest(userId, "s", -1, 4, 0, 0, List.of(), true, true, 0, 0, "")),
+                new LoopRunRecordRequest(userId, "s", -1, 4, 0, 0, List.of(), true, true, 0, 0, "trace-invalid")),
         HttpStatus.BAD_REQUEST);
 
     // steps_used 超过 max_steps（违反有界语义）。
@@ -289,7 +298,7 @@ class LoopRunServiceTest {
         () ->
             service.record(
                 userId,
-                new LoopRunRecordRequest(userId, "s", 0, 4, 5, 0, List.of(), true, true, 0, 0, "")),
+                new LoopRunRecordRequest(userId, "s", 0, 4, 5, 0, List.of(), true, true, 0, 0, "trace-invalid")),
         HttpStatus.BAD_REQUEST);
 
     // token 为负。
@@ -306,7 +315,7 @@ class LoopRunServiceTest {
             service.record(
                 userId,
                 new LoopRunRecordRequest(
-                    userId, "s", 0, 4, 0, 0, List.of("X".repeat(65)), true, true, 0, 0, "")),
+                    userId, "s", 0, 4, 0, 0, List.of("X".repeat(65)), true, true, 0, 0, "trace-invalid")),
         HttpStatus.BAD_REQUEST);
 
     // trace_id 过长。
@@ -324,7 +333,7 @@ class LoopRunServiceTest {
             service.record(
                 userId,
                 new LoopRunRecordRequest(
-                    otherUserId, "s", 0, 4, 0, 0, List.of(), true, true, 0, 0, "")),
+                    otherUserId, "s", 0, 4, 0, 0, List.of(), true, true, 0, 0, "trace-invalid")),
         HttpStatus.FORBIDDEN);
   }
 
@@ -416,6 +425,17 @@ class LoopRunServiceTest {
                 otherUserId, run.id(), 1, "READY", json("node", "dispatch"), "cursor"),
         HttpStatus.NOT_FOUND);
     assertCode(() -> runtimeService.restoreSnapshot(otherUserId, run.id()), HttpStatus.NOT_FOUND);
+  }
+
+  @Test
+  void databaseRejectsNewLoopRunWithoutTraceId() {
+    assertThatThrownBy(
+            () ->
+                jdbcTemplate.update(
+                    "INSERT INTO loop_run (user_id, session_id, turn, max_steps, steps_used,"
+                        + " replan_count, trace_id) VALUES (?, 'direct-empty-trace', 0, 4, 0, 0, '')",
+                    userId))
+        .isInstanceOf(DataIntegrityViolationException.class);
   }
 
   private List<String> readToolsFromDb(Long id) {
