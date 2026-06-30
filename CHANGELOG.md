@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-06-30 — Agentic Runtime Phase 5：资源生成闭环 Goal → Evaluate
+
+> 补齐新 Phase 5 的 graph 侧资源生命周期闭环：已有 ResourceGraph 继续负责真实检索、生成、审查和发布决策，新 runtime 把结果整理成可恢复的 artifact manifest、revision、publish state 和 evaluation writeback 状态。
+
+- **复用 ResourceGraph 基线**：确认现有 `ResourceGraph` 已覆盖 evidence fetch、资源 agent 设计、grounding critic、防幻觉、semantic grounding、safety critic、修订重试/震荡熔断、publish decision 和 evaluation hook，不重复造一套生成链。
+- **资源生命周期 Runtime 模块**：新增 `pythontopia_graph.runtime.resource_lifecycle_loop`，实现 `ResourceGoal`、`ArtifactManifest`、`CritiqueReport`、`RevisionPlan`、`PublishState`、`EvaluationResult` 和 `ResourceLifecycleLoopResult`。
+- **六步闭环语义**：`Goal -> Generate -> Critique -> Revise -> Publish -> Evaluate` 全部产出结构化对象；artifact manifest 记录 resource type、title、revision parent、grounding refs、publish state 和 evaluation hook。
+- **发布与修订决策**：有证据且安全接地的资源发布；无证据资源进入 `HOLD_FOR_REVIEW`；critic 失败阻止发布；已发布资源如果后续效果差则返回 `revise:effectiveness`。
+- **效果写回**：新增 `ArtifactEffectivenessSnapshot`，把 adoption rate、micro-check pass rate 和 mastery delta 映射成 `PENDING / INSUFFICIENT_EVIDENCE / EFFECTIVE / NEEDS_REVISION` lifecycle signal。
+- **API 可见状态**：新增 graph 路由 `POST /runtime/resource-lifecycle-runs`，返回当前资源生命周期完整状态和冻结 `LoopResult`，供后续前端/教师运维界面真实接入。
+- **测试**：新增 `test_resource_lifecycle_loop.py` 6 条，覆盖发布/评估、无证据 hold、critic 拒绝、revision parent、负效果修订和 API 可见状态；联跑 ResourceGraph、M2 gate、resource agents/schemas、runtime/contract、Phase 3/4 与 M1/M3 gates 共 70 tests 通过。
+
 ## 2026-06-30 — Agentic Runtime Phase 4：代码调试闭环 Fail → Transfer
 
 > 补齐新 Phase 4 的 graph 侧代码调试闭环：失败提交现在能形成结构化失败观察、三路假设、最小提示、正式重交比较、迁移任务和错因记忆写回计划，并通过 API 暴露当前 debug loop 状态。

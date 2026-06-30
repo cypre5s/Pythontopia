@@ -8,7 +8,7 @@
 | Field | Value |
 |---|---|
 | Phase | Phase 5 - Resource generation loop |
-| Status | In progress - audit |
+| Status | Complete pending local commit |
 | Goal | Implement Goal -> Generate -> Critique -> Revise -> Publish -> Evaluate as a structured artifact lifecycle |
 | Scope | Existing resource graph, publish flow, artifact/effectiveness baseline, graph runtime resource loop, API/state exposure, focused tests |
 
@@ -146,14 +146,48 @@ These are retained as the current implementation baseline. They do not by themse
   - resolved resubmission emits a transfer task.
 - Returned a frozen-contract `LoopResult` with `DEBUG`, `policy_version`, `trace_id`, evidence refs, scores, steps, and next actions.
 
+### Phase 5 Resource Generation Loop Work
+
+- Audited existing resource foundations:
+  - `ResourceGraph`,
+  - resource agents and `ResourceProduceResponse`,
+  - `ResourcePublishFlow` and `build_publish_flow`,
+  - M2 resource/world gate,
+  - backend workshop publish/effectiveness APIs.
+- Reused existing ResourceGraph as the generation/critique engine instead of duplicating the LLM generation path:
+  - evidence fetch,
+  - resource agent design,
+  - grounding critic,
+  - hallucination detector,
+  - semantic grounding,
+  - safety critic,
+  - revision retries/oscillation,
+  - publish decision,
+  - evaluation hook.
+- Added `pythontopia_graph.runtime.resource_lifecycle_loop` with a deterministic, artifact-lifecycle runtime:
+  - `Goal`: normalizes user/KC/resource goal,
+  - `Generate`: consumes the real `ResourceProduceResponse` artifact,
+  - `Critique`: summarizes pedagogy, grounding, safety, and game-fit gates,
+  - `Revise`: emits revision requirements and parent artifact linkage,
+  - `Publish`: emits manifest and publish state,
+  - `Evaluate`: maps effectiveness snapshots to lifecycle signals.
+- Added `POST /runtime/resource-lifecycle-runs` in the graph service so API consumers can display artifact lifecycle state without frontend fake data.
+- Added lifecycle decisions:
+  - grounded safe resources publish,
+  - no-evidence resources hold for review,
+  - critic failures reject publishing,
+  - negative effectiveness requests revision after publish,
+  - revision parents are preserved in `ArtifactManifest.revision_of`.
+- Returned a frozen-contract `LoopResult` with `RESOURCE`, `policy_version`, `trace_id`, evidence refs, artifact manifest, scores, and next actions.
+
 ## In Progress
 
-- Phase 5 audit of existing resource generation agents, ResourceGraph, M2 publish/effectiveness work, artifact schemas, and workshop APIs.
+- Preparing narrow staging for Phase 5 files only.
 
 ## Next
 
-1. Write Phase 5 RED tests for goal normalization, forced grounding, generation, critic fail, revision, publish, and effectiveness evaluation writeback.
-2. Implement the structured graph-side resource lifecycle loop and any API-visible status route needed for Phase 5.
+1. Commit Phase 5.
+2. Start Phase 6 by auditing existing world loop proposal, quests, mainline/town hub state, reward constraints, and M2 world evidence gate against State -> Quest -> Action -> Reward -> World Update -> New Quest.
 
 ## Decisions
 
@@ -174,15 +208,17 @@ These are retained as the current implementation baseline. They do not by themse
 | Reuse Bug Mine as the backend debug session store for Phase 4 | Existing migrations and services already persist failed submissions, debug cards, retry counts, depth, and variant mastery; duplicating them would split the debug source of truth |
 | Implement Phase 4 graph runtime as a status/contract layer around existing DebugAgent/Bug Mine | Phase 4 needs recoverable state and transfer/memory outputs beyond the single-call DebugAgent response |
 | Keep debug hints minimal | The project forbids direct complete-answer leakage, so Phase 4 stores hints and transfer prompts rather than runnable fixes |
+| Reuse ResourceGraph as the Phase 5 generation engine | It already performs evidence fetch, generation, critique, revision retry, publish decision, and evaluation-hook binding; Phase 5 adds lifecycle state instead of re-running the same graph |
+| Keep artifact lifecycle separate from backend persistence | The runtime emits manifest/revision/evaluation state for API visibility; workshop persistence and effectiveness APIs remain the authoritative backend integration points |
 
 ## Changed Files
 
-Phase 4 intended files:
+Phase 5 intended files:
 
-- `services/pythontopia-graph/pythontopia_graph/runtime/code_debug_loop.py`
-- `services/pythontopia-graph/pythontopia_graph/routes/code_debug_runtime.py`
+- `services/pythontopia-graph/pythontopia_graph/runtime/resource_lifecycle_loop.py`
+- `services/pythontopia-graph/pythontopia_graph/routes/resource_lifecycle_runtime.py`
 - `services/pythontopia-graph/pythontopia_graph/main.py`
-- `services/pythontopia-graph/tests/test_code_debug_loop.py`
+- `services/pythontopia-graph/tests/test_resource_lifecycle_loop.py`
 - `docs/agentic-runtime-progress.md`
 - `docs/agentic-runtime-plan.md`
 - `CHANGELOG.md`
@@ -209,6 +245,9 @@ Phase 4 intended files:
 | 2026-06-30 | `python3 -m pytest -q tests/test_code_debug_loop.py` | RED: failed at collection because `pythontopia_graph.runtime.code_debug_loop` did not exist |
 | 2026-06-30 | `python3 -m pytest -q tests/test_code_debug_loop.py` | passed: 7 tests covering resolved WA full loop, awaiting resubmission, RE, TLE, missing evidence, three-attempt fallback, and API-visible route |
 | 2026-06-30 | `python3 -m pytest -q tests/test_code_debug_loop.py tests/test_debug_agent.py tests/test_student_learning_loop.py tests/test_loop_runtime.py tests/test_agentic_loop.py tests/test_loop_contract.py tests/test_m1_golden_gate.py tests/test_m2_resource_world_gate.py tests/test_m3_system_evolution_gate.py` | passed: 89 tests |
+| 2026-06-30 | `python3 -m pytest -q tests/test_resource_lifecycle_loop.py` | RED: failed at collection because `pythontopia_graph.runtime.resource_lifecycle_loop` did not exist |
+| 2026-06-30 | `python3 -m pytest -q tests/test_resource_lifecycle_loop.py` | passed: 6 tests covering publish/evaluate lifecycle, no-evidence hold, critic rejection, revision parent, negative effectiveness revision, and API-visible route |
+| 2026-06-30 | `python3 -m pytest -q tests/test_resource_lifecycle_loop.py tests/test_resource_graph.py tests/test_m2_resource_world_gate.py tests/test_resource_agents.py tests/test_resource_schemas.py tests/test_loop_runtime.py tests/test_loop_contract.py tests/test_code_debug_loop.py tests/test_student_learning_loop.py tests/test_m1_golden_gate.py tests/test_m3_system_evolution_gate.py` | passed: 70 tests |
 
 ## Risks
 
@@ -223,10 +262,12 @@ Phase 4 intended files:
 - Phase 3 uses deterministic rules and provided course evidence; online model-backed personalization remains outside this local verification.
 - Phase 4 graph runtime emits a debug memory writeback plan; backend persistence already exists for Bug Mine cards, but automatic profile/error-memory application remains a later orchestration concern.
 - Phase 4 does not run a real judge; it consumes formal judge snapshots from existing submission/Bug Mine infrastructure and tests the loop contract around those snapshots.
+- Phase 5 consumes `ResourceProduceResponse` rather than invoking live LLM/provider calls; existing `ResourceGraph` tests continue to verify generation and publish-flow behavior.
+- Phase 5 evaluation is snapshot-driven and deterministic; scheduled 24h/7d evaluation jobs remain a later orchestration/deployment concern.
 
 ## Changelog Links
 
-- Phase 4 changelog entry in `CHANGELOG.md`.
+- Phase 5 changelog entry in `CHANGELOG.md`.
 
 ## Commits
 
@@ -241,3 +282,5 @@ Phase 4 intended files:
 | Phase 3 | `168edefa` | Student learning loop implementation and tests |
 | Phase 3 docs | `3d6c11ea` | Recorded Phase 3 commit hash |
 | Phase 4 | `f14175da` | Code debug loop implementation and tests |
+| Phase 4 docs | `cd40df60` | Recorded Phase 4 commit hash |
+| Phase 5 | pending | Resource lifecycle loop implementation and tests |

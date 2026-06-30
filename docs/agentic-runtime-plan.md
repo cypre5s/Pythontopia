@@ -180,6 +180,42 @@ This means the new Phase 0-9 plan should not duplicate those pieces blindly. Ins
   - successful resubmission returns a transfer task rather than ending at "fixed".
 - The phase returns a frozen-contract `LoopResult` with `loop_type=DEBUG`, `trace_id`, `policy_version`, evidence refs, scores, and next actions. Later backend orchestration may persist the memory writeback through existing learner/profile and Bug Mine event listeners.
 
+## Phase 5 Implementation Notes
+
+- Existing `ResourceGraph` already covers the generation/critique mechanics required by Phase 5:
+  - evidence retrieval,
+  - resource-agent design,
+  - grounding critic,
+  - hallucination detector,
+  - semantic grounding,
+  - safety critic,
+  - bounded revision retries and oscillation detection,
+  - publish decision,
+  - evaluation hook.
+- `pythontopia_graph.runtime.resource_lifecycle_loop` adds the missing artifact lifecycle contract around that graph response. It consumes `ResourceProduceResponse` rather than duplicating the LLM-generation path.
+- The loop consumes:
+  - `ResourceGoal`,
+  - `ResourceProduceResponse`,
+  - optional `revision_of`,
+  - optional `ArtifactEffectivenessSnapshot`,
+  - `policy_version`,
+  - `trace_id`.
+- It emits the six structured stages required by the pasted plan:
+  - `NormalizedResourceGoal`,
+  - `ArtifactManifest`,
+  - `CritiqueReport`,
+  - `RevisionPlan`,
+  - `PublishState`,
+  - `EvaluationResult`.
+- `POST /runtime/resource-lifecycle-runs` exposes the structured artifact lifecycle through the graph service for API-backed UI/status panels.
+- Lifecycle decisions are evidence-bound:
+  - publish only when graph publish decision is `PUBLISH`,
+  - hold for review when evidence is missing or unbound,
+  - reject when grounding/safety critic fails,
+  - retain `revision_of` for revised artifacts,
+  - request revision when effectiveness snapshots show low adoption, low micro-check pass rate, or negative mastery delta.
+- The phase returns a frozen-contract `LoopResult` with `loop_type=RESOURCE`, `trace_id`, `policy_version`, evidence refs, artifact manifest, scores, and next actions. Scheduled 24h/7d evaluation jobs can later feed `ArtifactEffectivenessSnapshot` through existing workshop effectiveness APIs.
+
 ## Stage Rules
 
 Each phase follows this order:

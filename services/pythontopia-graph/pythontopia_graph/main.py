@@ -26,6 +26,7 @@ from pythontopia_graph.routes.path import router as path_router
 from pythontopia_graph.routes.reflection import router as reflection_router
 from pythontopia_graph.routes.evaluation import router as evaluation_router
 from pythontopia_graph.routes.resource import router as resource_router
+from pythontopia_graph.routes.resource_lifecycle_runtime import router as resource_lifecycle_runtime_router
 from pythontopia_graph.routes.streaming import router as streaming_router
 from pythontopia_graph.routes.student_learning_runtime import router as student_learning_runtime_router
 from pythontopia_graph.routes.tutor import router as tutor_router
@@ -87,6 +88,7 @@ app.include_router(video_router)
 app.include_router(video_insight_router)
 app.include_router(npc_dialog_router)
 app.include_router(feynman_router)
+app.include_router(resource_lifecycle_runtime_router)
 
 
 @app.get("/healthz", response_model=HealthResponse)
