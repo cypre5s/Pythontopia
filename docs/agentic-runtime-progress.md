@@ -7,10 +7,10 @@
 
 | Field | Value |
 |---|---|
-| Phase | Phase 3 - Student learning loop |
-| Status | Complete pending local commit |
-| Goal | Implement Observe -> Diagnose -> Teach -> Practice -> Reflect -> Update as a structured graph-side learner loop |
-| Scope | Graph runtime module, API-visible loop state route, evidence-bound diagnosis, formal-judge gating, focused pytest coverage, docs/changelog |
+| Phase | Phase 4 - Code debug loop |
+| Status | In progress - audit |
+| Goal | Implement Fail -> Hypothesize -> Hint -> Resubmit -> Compare -> Transfer as a structured debug loop |
+| Scope | Existing debug agent, submission evidence, Bug Mine/replay baseline, graph runtime debug loop, API/state exposure, focused tests |
 
 ## Completed
 
@@ -120,12 +120,12 @@ These are retained as the current implementation baseline. They do not by themse
 
 ## In Progress
 
-- Preparing narrow staging for Phase 3 files only.
+- Phase 4 audit of existing debug loop code, submission evidence, Bug Mine flows, and prior M1 replay coverage.
 
 ## Next
 
-1. Commit Phase 3.
-2. Start Phase 4 by auditing existing debug agent, submission, Bug Mine, and replay code against Fail -> Hypothesize -> Hint -> Resubmit -> Compare -> Transfer.
+1. Write Phase 4 RED tests for failed submissions, hypotheses, hints, resubmit comparison, transfer tasks, low confidence, and three-failure fallback.
+2. Implement the structured graph-side debug loop and any API-visible status route needed for Phase 4.
 
 ## Decisions
 
@@ -146,15 +146,9 @@ These are retained as the current implementation baseline. They do not by themse
 
 ## Changed Files
 
-Phase 3 intended files:
+Phase 4 intended files:
 
-- `services/pythontopia-graph/pythontopia_graph/runtime/student_learning_loop.py`
-- `services/pythontopia-graph/pythontopia_graph/routes/student_learning_runtime.py`
-- `services/pythontopia-graph/pythontopia_graph/main.py`
-- `services/pythontopia-graph/tests/test_student_learning_loop.py`
-- `docs/agentic-runtime-progress.md`
-- `docs/agentic-runtime-plan.md`
-- `CHANGELOG.md`
+- TBD after audit; likely graph runtime/debug route/tests plus docs/changelog.
 
 ## Tests
 
@@ -202,4 +196,4 @@ Phase 3 intended files:
 | Phase 1 docs | `d403d3ea` | Recorded Phase 1 commit hash |
 | Phase 2 | `e1f5f3a0` | Loop Runtime skeleton and bounded state machines |
 | Phase 2 docs | `cb021486` | Recorded Phase 2 commit hash |
-| Phase 3 | pending | Student learning loop implementation and tests |
+| Phase 3 | `168edefa` | Student learning loop implementation and tests |
