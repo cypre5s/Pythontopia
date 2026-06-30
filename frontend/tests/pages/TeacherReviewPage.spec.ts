@@ -14,6 +14,10 @@ import { useSessionStore } from '@stores/session';
 import TeacherReviewPage from '@/pages/teacher/TeacherReviewPage.vue';
 import type { BossProblemDto } from '@/api/dto/Boss';
 
+const runtimeMocks = vi.hoisted(() => ({
+  fetchAiRuntimeOperations: vi.fn(),
+}));
+
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
@@ -27,6 +31,10 @@ vi.mock('@/app/AppLayout.vue', () => ({
 
 vi.mock('@/api/boss', () => ({
   requestBossProblem: vi.fn(),
+}));
+
+vi.mock('@/api/aiRuntime', () => ({
+  fetchAiRuntimeOperations: runtimeMocks.fetchAiRuntimeOperations,
 }));
 
 vi.mock('@stores/toast', () => ({
@@ -61,6 +69,29 @@ describe('TeacherReviewPage', () => {
       window.localStorage.clear();
     }
     vi.mocked(requestBossProblem).mockReset();
+    runtimeMocks.fetchAiRuntimeOperations.mockReset();
+    runtimeMocks.fetchAiRuntimeOperations.mockResolvedValue({
+      loops: [
+        {
+          loopType: 'IMPROVE',
+          label: '系统演化闭环',
+          status: 'PASS',
+          latestTraceId: 'trace-improve',
+          nextAction: 'complete:system_evolution_loop',
+          evidenceRefs: ['agentic-m3-system-evolution-v1'],
+        },
+      ],
+      governance: [
+        {
+          key: 'policy_canary_review',
+          label: '策略灰度审核',
+          status: 'PASS',
+          action: '查看 canary dry-run 与 rollback 状态',
+          reviewRoute: '/teacher/review',
+          evidenceRefs: ['agentic-m3-system-evolution-v1'],
+        },
+      ],
+    });
   });
 
   afterEach(() => {
@@ -74,6 +105,18 @@ describe('TeacherReviewPage', () => {
     expect(wrapper.find('[data-testid="teacher-review-page"]').exists()).toBe(true);
     expect(wrapper.text()).toContain('教师审核');
     expect(wrapper.text()).toContain('队列为空');
+  });
+
+  it('renders API-backed runtime operations for teacher governance', async () => {
+    const session = useSessionStore();
+    session.user = { id: 2, username: 'teach', displayName: '老师', role: 'TEACHER' };
+    const wrapper = mount(TeacherReviewPage);
+    await flushPromises();
+
+    expect(runtimeMocks.fetchAiRuntimeOperations).toHaveBeenCalledTimes(1);
+    expect(wrapper.find('[data-testid="runtime-operations"]').exists()).toBe(true);
+    expect(wrapper.text()).toContain('系统演化闭环');
+    expect(wrapper.text()).toContain('策略灰度审核');
   });
 
   it('shows role warning when current user is STUDENT', async () => {

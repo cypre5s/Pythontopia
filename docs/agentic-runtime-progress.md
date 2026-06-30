@@ -7,10 +7,10 @@
 
 | Field | Value |
 |---|---|
-| Phase | Phase 8 - Frontend and teacher operations |
+| Phase | Phase 9 - Full-chain testing and Beta handoff |
 | Status | Not started - next audit |
-| Goal | Expose real runtime state to students and teachers without fake frontend data |
-| Scope | API-backed loop panels, trace/review views, rollback/feature flag status, teacher governance |
+| Goal | Prove local full-chain Agentic Learning Loop and prepare Beta handoff docs |
+| Scope | Backend/graph/rag/frontend/db/API/E2E verification, startup health, docs, changelog, final commit |
 
 ## Completed
 
@@ -240,14 +240,38 @@ These are retained as the current implementation baseline. They do not by themse
   - monitor regressions return rollback next actions.
 - Returned a frozen-contract `LoopResult` with `IMPROVE`, `policy_version`, `trace_id`, eval trace evidence refs, candidate/deployment artifacts, scores, monitor decision, and next actions.
 
+### Phase 8 Frontend And Teacher Operations Work
+
+- Audited existing runtime/operations surfaces:
+  - frontend Vite proxy only exposes `/api` through Spring Boot,
+  - `AiRuntimeSummaryPanel` already consumes `/api/ai/runtime/summary`,
+  - `WorkshopPage` already has a compact "调用过程" drawer,
+  - `TeacherReviewPage` already provides a teacher review surface,
+  - backend `AiRuntimeSummaryService` already combines protocol, evidence graph, memory, Twin, and browse safety gates.
+- Added backend `AiRuntimeOperationsDto` and `GET /api/ai/runtime/operations`:
+  - student/teacher/admin readable,
+  - derives loop operation state from real protocol/evidence/Twin summary,
+  - exposes five loop families: `LEARNER`, `DEBUG`, `RESOURCE`, `WORLD`, `IMPROVE`,
+  - exposes governance items for resource review, world patch review, and policy canary review.
+- Kept `/api/ai/runtime/summary` student-only; teacher operations use the new operations endpoint instead of weakening the original summary permission.
+- Added frontend `fetchAiRuntimeOperations()` with explicit DTO types.
+- Added `RuntimeOperationsPanel.vue`, a compact API-backed operations panel that renders loop state and governance items without fake PASS status.
+- Wired `RuntimeOperationsPanel` into:
+  - `WorkshopPage` call-process drawer for student-facing loop visibility,
+  - `TeacherReviewPage` for teacher governance visibility beside the existing AI problem review queue.
+- Added fail-safe display behavior:
+  - insufficient evidence remains `证据不足`,
+  - warn states remain `需关注`,
+  - the panel surfaces next actions and evidence refs instead of explanatory filler.
+
 ## In Progress
 
-- Phase 8 audit of existing student/teacher runtime surfaces and API-backed visibility gaps.
+- Phase 9 audit and full-chain verification preparation.
 
 ## Next
 
-1. Audit existing frontend loop panels, teacher operations, route/API clients, and runtime summary surfaces.
-2. Write Phase 8 RED tests for real API-backed student loop visibility, teacher review/rollback state, and no fake runtime data.
+1. Run full local verification stack for backend, graph, rag, frontend, and browser E2E.
+2. Update Beta handoff docs and final progress/changelog records.
 
 ## Decisions
 
@@ -276,15 +300,27 @@ These are retained as the current implementation baseline. They do not by themse
 | Reuse M3 evolution functions for Phase 7 | M3 already owns clustering, candidate generation, offline replay, canary dry-run, and rollback metadata |
 | Require four eval suite categories before deploy | Phase 7 raises the gate from one M3 dataset to regression/adversarial/long-running/audit coverage |
 | Treat monitor violations as rollback actions | A canary candidate must not proceed when schema validity, regression rate, cost ratio, or live error rate crosses rules |
+| Put Phase 8 frontend access behind Spring `/api` | Vite only proxies `/api`; direct graph `/runtime` calls would bypass backend auth and client contracts |
+| Add operations endpoint instead of loosening student summary | Teachers need governance visibility, but the existing summary endpoint was intentionally student scoped |
+| Reuse one operations panel across student and teacher surfaces | Keeps UI/API semantics consistent and avoids a second fake teacher-only runtime model |
 
 ## Changed Files
 
-Phase 7 intended files:
+Phase 8 intended files:
 
-- `services/pythontopia-graph/pythontopia_graph/runtime/system_evolution_loop.py`
-- `services/pythontopia-graph/pythontopia_graph/routes/system_evolution_runtime.py`
-- `services/pythontopia-graph/pythontopia_graph/main.py`
-- `services/pythontopia-graph/tests/test_system_evolution_loop.py`
+- `backend/src/main/java/com/pythontopia/ai/runtime/AiRuntimeOperationsDto.java`
+- `backend/src/main/java/com/pythontopia/ai/runtime/AiRuntimeSummaryController.java`
+- `backend/src/main/java/com/pythontopia/ai/runtime/AiRuntimeSummaryService.java`
+- `backend/src/test/java/com/pythontopia/ai/runtime/AiRuntimeSummaryControllerTest.java`
+- `backend/src/test/java/com/pythontopia/ai/runtime/AiRuntimeSummaryServiceTest.java`
+- `frontend/src/api/aiRuntime.ts`
+- `frontend/src/components/workshop/RuntimeOperationsPanel.vue`
+- `frontend/src/pages/WorkshopPage.vue`
+- `frontend/src/pages/teacher/TeacherReviewPage.vue`
+- `frontend/tests/api/aiRuntime.spec.ts`
+- `frontend/tests/components/workshop/RuntimeOperationsPanel.spec.ts`
+- `frontend/tests/pages/WorkshopPage.spec.ts`
+- `frontend/tests/pages/TeacherReviewPage.spec.ts`
 - `docs/agentic-runtime-progress.md`
 - `docs/agentic-runtime-plan.md`
 - `CHANGELOG.md`
@@ -322,6 +358,13 @@ Phase 7 intended files:
 | 2026-06-30 | `python3 -m pytest -q tests/test_system_evolution_loop.py` | passed: 5 tests covering dry-run success, monitor rollback, adversarial suite block, offline regression block, and API-visible route |
 | 2026-06-30 | `python3 -m pytest -q tests/test_system_evolution_loop.py tests/test_m3_system_evolution_gate.py tests/test_loop_runtime.py tests/test_loop_contract.py tests/test_world_state_loop.py tests/test_resource_lifecycle_loop.py tests/test_code_debug_loop.py tests/test_student_learning_loop.py tests/test_m1_golden_gate.py tests/test_m2_resource_world_gate.py` | passed: 60 tests |
 | 2026-06-30 | `git diff --check` | passed |
+| 2026-06-30 | `mvn --settings .mvn/settings.build.xml -q -Dtest=AiRuntimeSummaryServiceTest,AiRuntimeSummaryControllerTest test` | RED: failed because `AiRuntimeOperationsDto`, `operationsForUser`, and controller `operations` did not exist |
+| 2026-06-30 | `npm run test -- --run tests/api/aiRuntime.spec.ts tests/components/workshop/RuntimeOperationsPanel.spec.ts tests/pages/WorkshopPage.spec.ts tests/pages/TeacherReviewPage.spec.ts` | RED: failed because `fetchAiRuntimeOperations`, `RuntimeOperationsPanel.vue`, and page wiring did not exist |
+| 2026-06-30 | `mvn --settings .mvn/settings.build.xml -q -Dtest=AiRuntimeSummaryServiceTest,AiRuntimeSummaryControllerTest test` | passed |
+| 2026-06-30 | `npm run test -- --run tests/api/aiRuntime.spec.ts tests/components/workshop/RuntimeOperationsPanel.spec.ts tests/pages/WorkshopPage.spec.ts tests/pages/TeacherReviewPage.spec.ts` | passed: 28 tests; existing Pyodide sourcemap warning remains; jsdom printed a non-failing ECONNREFUSED log from existing async learning-event noise |
+| 2026-06-30 | `npm run typecheck` | passed |
+| 2026-06-30 | `mvn --settings .mvn/settings.build.xml -q -Dtest=AiRuntimeSummaryServiceTest,AiRuntimeSummaryControllerTest,AgentRuntimeControllerTest,LoopControllerTest test` | passed |
+| 2026-06-30 | `git diff --check` | passed |
 
 ## Risks
 
@@ -342,10 +385,12 @@ Phase 7 intended files:
 - Phase 6 normalizes world state to `town_hub`; any legacy peripheral-map client state should be treated as input drift and not revived as a mainline scene.
 - Phase 7 is graph-side runtime and API-visible status; actual production traffic routing remains dry-run/human-approved per existing canary policy.
 - Phase 7 monitor decisions consume snapshots rather than reading live telemetry directly; wiring scheduled telemetry ingestion remains later deployment/ops work.
+- Phase 8 operations status is derived from current runtime/evidence summaries; it is a visibility/governance surface, not an automatic promotion or rollback executor.
+- Phase 8 frontend verification is component/page/unit focused; full browser click-through and local stack health are Phase 9 deliverables.
 
 ## Changelog Links
 
-- Phase 7 changelog entry in `CHANGELOG.md`.
+- Phase 8 changelog entry in `CHANGELOG.md`.
 
 ## Commits
 
@@ -367,3 +412,4 @@ Phase 7 intended files:
 | Phase 6 docs | `e6cac5c9` | Recorded Phase 6 commit hash |
 | Phase 7 | `396fe6cb` | System evolution loop implementation and tests |
 | Phase 7 docs | pending | Recorded Phase 7 commit hash |
+| Phase 8 | pending | Frontend and teacher operations |

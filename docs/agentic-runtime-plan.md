@@ -277,6 +277,24 @@ This means the new Phase 0-9 plan should not duplicate those pieces blindly. Ins
   - monitor violations for schema validity, regression rate, cost ratio, or live error rate produce rollback next actions.
 - The phase returns a frozen-contract `LoopResult` with `loop_type=IMPROVE`, `trace_id`, `policy_version`, eval trace evidence refs, candidate/deployment artifacts, scores, monitor status, and next actions.
 
+## Phase 8 Implementation Notes
+
+- The frontend should not call graph `/runtime/**` directly. Vite proxies only `/api`, and Spring Boot remains the auth/client contract boundary.
+- Existing student runtime visibility already starts with `AiRuntimeSummaryPanel` and `/api/ai/runtime/summary`. Phase 8 adds operations/governance state without weakening that student-only endpoint.
+- `GET /api/ai/runtime/operations` is the shared operations endpoint for student/teacher/admin readers. It derives:
+  - five loop operation states: `LEARNER`, `DEBUG`, `RESOURCE`, `WORLD`, `IMPROVE`,
+  - governance items: resource review, world patch review, policy canary review.
+- Operations status is derived from existing protocol, evidence graph, Evidence Memory, Learner Twin, and browse-safety summaries. Missing evidence remains `INSUFFICIENT_EVIDENCE`; frontend must not turn it into PASS.
+- `RuntimeOperationsPanel.vue` is the shared UI surface for:
+  - the student workshop call-process drawer,
+  - teacher review/governance page.
+- The panel is intentionally compact and action-oriented:
+  - status chip,
+  - loop/governance label,
+  - next action,
+  - evidence refs.
+- Phase 8 does not execute policy promotion, rollback, or world patch application. It exposes API-backed review state so Phase 9/browser acceptance and later operations can verify governance without fake frontend data.
+
 ## Stage Rules
 
 Each phase follows this order:

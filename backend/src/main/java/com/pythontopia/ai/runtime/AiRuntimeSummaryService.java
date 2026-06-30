@@ -68,6 +68,12 @@ public class AiRuntimeSummaryService {
         gates(protocol, evidence, memory, externalResearch));
   }
 
+  @Transactional(readOnly = true)
+  public AiRuntimeOperationsDto operationsForUser(long userId) {
+    AiRuntimeSummaryDto summary = summaryForUser(userId);
+    return new AiRuntimeOperationsDto(loopOperations(summary), governanceItems(summary));
+  }
+
   private static AiRuntimeSummaryDto.ProtocolSummary protocolSummary(
       ProtocolGatewayDescriptorDto descriptor) {
     List<String> evidenceTools =
@@ -171,5 +177,91 @@ public class AiRuntimeSummaryService {
             1.0,
             externalResearch.allowedDomains()));
     return gates;
+  }
+
+  private static List<AiRuntimeOperationsDto.LoopOperation> loopOperations(
+      AiRuntimeSummaryDto summary) {
+    AiRuntimeSummaryDto.EvidenceSummary evidence = summary.evidence();
+    AiRuntimeSummaryDto.LearnerTwinSummary twin = summary.learnerTwin();
+    return List.of(
+        new AiRuntimeOperationsDto.LoopOperation(
+            "LEARNER",
+            "学生学习闭环",
+            evidence.nodeCount() > 0 ? "PASS" : "INSUFFICIENT_EVIDENCE",
+            evidence.nodeCount() > 0 ? "learner-evidence-graph" : "",
+            "open:student-learning-loop",
+            List.of("learner.evidence.graph")),
+        new AiRuntimeOperationsDto.LoopOperation(
+            "DEBUG",
+            "代码调试闭环",
+            debugStatus(evidence, twin),
+            twin.failedPracticeCount() > 0 ? "bug-mine-errors" : "",
+            "open:bug-mine-or-transfer",
+            twin.failedPracticeCount() > 0 ? List.of("bugmine.errorbook") : List.of()),
+        new AiRuntimeOperationsDto.LoopOperation(
+            "RESOURCE",
+            "资源生成闭环",
+            twin.resourceRunCount() > 0 ? "PASS" : "INSUFFICIENT_EVIDENCE",
+            twin.resourceRunCount() > 0 ? "workshop-resource-runs" : "",
+            "evaluate:resource_feedback_or_check",
+            twin.resourceRunCount() > 0 ? List.of("resource_feedback_or_check") : List.of()),
+        new AiRuntimeOperationsDto.LoopOperation(
+            "WORLD",
+            "小镇世界闭环",
+            evidence.touchedKcCount() > 0 ? "PASS" : "INSUFFICIENT_EVIDENCE",
+            evidence.touchedKcCount() > 0 ? "town_hub-world-proposal" : "",
+            "review:town_hub-world-patch",
+            evidence.touchedKcCount() > 0 ? List.of("world-loop-proposal") : List.of()),
+        new AiRuntimeOperationsDto.LoopOperation(
+            "IMPROVE",
+            "系统演化闭环",
+            gateStatus(summary, "protocol.skill_packages"),
+            "agentic-m3-system-evolution-v1",
+            "review:policy-canary-dry-run",
+            List.of("agentic-m3-system-evolution-v1")));
+  }
+
+  private static List<AiRuntimeOperationsDto.GovernanceItem> governanceItems(
+      AiRuntimeSummaryDto summary) {
+    AiRuntimeSummaryDto.EvidenceSummary evidence = summary.evidence();
+    AiRuntimeSummaryDto.LearnerTwinSummary twin = summary.learnerTwin();
+    return List.of(
+        new AiRuntimeOperationsDto.GovernanceItem(
+            "resource_review",
+            "资源发布审查",
+            twin.resourceRunCount() > 0 ? "PASS" : "INSUFFICIENT_EVIDENCE",
+            "查看资源发布、反馈和微测效果",
+            "/workshop",
+            twin.resourceRunCount() > 0 ? List.of("resource_feedback_or_check") : List.of()),
+        new AiRuntimeOperationsDto.GovernanceItem(
+            "world_patch_review",
+            "世界补丁审查",
+            evidence.touchedKcCount() > 0 ? "PASS" : "INSUFFICIENT_EVIDENCE",
+            "检查 town_hub patch 与 rollback",
+            "/teacher/review",
+            evidence.touchedKcCount() > 0 ? List.of("world-loop-proposal") : List.of()),
+        new AiRuntimeOperationsDto.GovernanceItem(
+            "policy_canary_review",
+            "策略灰度审核",
+            gateStatus(summary, "protocol.skill_packages"),
+            "查看 canary dry-run 与 rollback 状态",
+            "/teacher/review",
+            List.of("agentic-m3-system-evolution-v1")));
+  }
+
+  private static String debugStatus(
+      AiRuntimeSummaryDto.EvidenceSummary evidence, AiRuntimeSummaryDto.LearnerTwinSummary twin) {
+    if (twin.failedPracticeCount() > 0) {
+      return "WARN";
+    }
+    return evidence.nodeCount() > 0 ? "PASS" : "INSUFFICIENT_EVIDENCE";
+  }
+
+  private static String gateStatus(AiRuntimeSummaryDto summary, String key) {
+    return summary.gates().stream()
+        .filter(gate -> key.equals(gate.key()))
+        .map(AiRuntimeSummaryDto.RuntimeGate::status)
+        .findFirst()
+        .orElse("INSUFFICIENT_EVIDENCE");
   }
 }

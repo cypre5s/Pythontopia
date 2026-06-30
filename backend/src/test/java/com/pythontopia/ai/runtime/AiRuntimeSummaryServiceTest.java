@@ -115,6 +115,24 @@ class AiRuntimeSummaryServiceTest {
         .first()
         .extracting(AiRuntimeSummaryDto.RuntimeGate::status)
         .isEqualTo("PASS");
+
+    AiRuntimeOperationsDto operations = service.operationsForUser(userId);
+
+    assertThat(operations.loops()).extracting(AiRuntimeOperationsDto.LoopOperation::loopType)
+        .containsExactly("LEARNER", "DEBUG", "RESOURCE", "WORLD", "IMPROVE");
+    assertThat(operations.loops())
+        .filteredOn(operation -> "RESOURCE".equals(operation.loopType()))
+        .first()
+        .extracting(AiRuntimeOperationsDto.LoopOperation::status)
+        .isEqualTo("PASS");
+    assertThat(operations.governance())
+        .extracting(AiRuntimeOperationsDto.GovernanceItem::key)
+        .contains("resource_review", "world_patch_review", "policy_canary_review");
+    assertThat(operations.governance())
+        .filteredOn(item -> "policy_canary_review".equals(item.key()))
+        .first()
+        .extracting(AiRuntimeOperationsDto.GovernanceItem::reviewRoute)
+        .isEqualTo("/teacher/review");
   }
 
   @Test
@@ -152,6 +170,24 @@ class AiRuntimeSummaryServiceTest {
         .filteredOn(gate -> "memory.graph_over_naive".equals(gate.key()))
         .first()
         .extracting(AiRuntimeSummaryDto.RuntimeGate::status)
+        .isEqualTo("INSUFFICIENT_EVIDENCE");
+
+    AiRuntimeOperationsDto operations = service.operationsForUser(userId);
+
+    assertThat(operations.loops())
+        .filteredOn(operation -> "LEARNER".equals(operation.loopType()))
+        .first()
+        .extracting(AiRuntimeOperationsDto.LoopOperation::status)
+        .isEqualTo("INSUFFICIENT_EVIDENCE");
+    assertThat(operations.loops())
+        .filteredOn(operation -> "RESOURCE".equals(operation.loopType()))
+        .first()
+        .extracting(AiRuntimeOperationsDto.LoopOperation::status)
+        .isEqualTo("INSUFFICIENT_EVIDENCE");
+    assertThat(operations.governance())
+        .filteredOn(item -> "resource_review".equals(item.key()))
+        .first()
+        .extracting(AiRuntimeOperationsDto.GovernanceItem::status)
         .isEqualTo("INSUFFICIENT_EVIDENCE");
   }
 }

@@ -25,9 +25,21 @@ public class AiRuntimeSummaryController {
     return service.summaryForUser(user.userId());
   }
 
+  @GetMapping("/operations")
+  public AiRuntimeOperationsDto operations(@CurrentUser CurrentUserPrincipal user) {
+    requireRuntimeViewer(user);
+    return service.operationsForUser(user.userId());
+  }
+
   private void requireStudent(CurrentUserPrincipal user) {
     if (user.role() != Role.STUDENT) {
       throw new BusinessException(HttpStatus.FORBIDDEN, "FORBIDDEN", "仅学生可查看 AI Runtime 摘要");
+    }
+  }
+
+  private void requireRuntimeViewer(CurrentUserPrincipal user) {
+    if (user.role() != Role.STUDENT && user.role() != Role.TEACHER && user.role() != Role.ADMIN) {
+      throw new BusinessException(HttpStatus.FORBIDDEN, "FORBIDDEN", "无权查看 AI Runtime 运维状态");
     }
   }
 }

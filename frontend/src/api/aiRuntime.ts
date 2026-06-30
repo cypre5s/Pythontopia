@@ -58,8 +58,39 @@ export interface AiRuntimeSummary {
   gates: AiRuntimeGate[];
 }
 
+export type RuntimeOperationStatus = AiRuntimeGateStatus;
+
+export interface RuntimeLoopOperation {
+  loopType: 'LEARNER' | 'DEBUG' | 'RESOURCE' | 'WORLD' | 'IMPROVE' | string;
+  label: string;
+  status: RuntimeOperationStatus;
+  latestTraceId: string;
+  nextAction: string;
+  evidenceRefs: string[];
+}
+
+export interface RuntimeGovernanceItem {
+  key: string;
+  label: string;
+  status: RuntimeOperationStatus;
+  action: string;
+  reviewRoute: string;
+  evidenceRefs: string[];
+}
+
+export interface AiRuntimeOperations {
+  loops: RuntimeLoopOperation[];
+  governance: RuntimeGovernanceItem[];
+}
+
 /** GET /api/ai/runtime/summary */
 export async function fetchAiRuntimeSummary(): Promise<AiRuntimeSummary> {
   const response = await http.get<AiRuntimeSummary>('/api/ai/runtime/summary');
+  return response.data;
+}
+
+/** GET /api/ai/runtime/operations */
+export async function fetchAiRuntimeOperations(): Promise<AiRuntimeOperations> {
+  const response = await http.get<AiRuntimeOperations>('/api/ai/runtime/operations');
   return response.data;
 }

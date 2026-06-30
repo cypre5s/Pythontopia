@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-06-30 — Agentic Runtime Phase 8：前端与教师运维可视化
+
+> 补齐新 Phase 8 的学生/教师可见运维面：Runtime 状态不再只停留在 graph 路由和后端控制面，工坊“调用过程”和教师审核页现在都能通过真实 `/api` 读取五类 loop 与治理项状态。
+
+- **后端 Operations API**：新增 `AiRuntimeOperationsDto` 与 `GET /api/ai/runtime/operations`；学生、教师、管理员可读，继续保留 `/api/ai/runtime/summary` 学生专用权限边界。
+- **真实状态派生**：operations 从现有 Protocol Gateway、学习证据图、Evidence Memory、Learner Twin 和 browse safety summary 派生，不在前端伪造通过；缺少证据时保持 `INSUFFICIENT_EVIDENCE`。
+- **五类闭环可视化**：API 暴露 `LEARNER / DEBUG / RESOURCE / WORLD / IMPROVE` loop operation，携带 label、status、latestTraceId、nextAction 和 evidence refs。
+- **教师治理项**：API 暴露 resource review、world patch review、policy canary review 三类 governance item，指向资源效果、`town_hub` patch/rollback 和策略灰度审核。
+- **前端 API client**：`aiRuntime.ts` 新增 `fetchAiRuntimeOperations()` 与明确 DTO 类型，所有 UI 继续走 `/api`，不直连 graph `/runtime`。
+- **共享运维面板**：新增 `RuntimeOperationsPanel.vue`，用紧凑状态行展示 loop/gov 状态、下一步和证据；接入百晓工坊“调用过程”抽屉与教师审核页。
+- **测试**：后端 `AiRuntimeSummaryServiceTest/AiRuntimeSummaryControllerTest` 通过；前端 API、组件、工坊页、教师审核页 28 tests 通过；`npm run typecheck` 通过；后端控制面回归 `AgentRuntimeControllerTest/LoopControllerTest` 同跑通过。
+
 ## 2026-06-30 — Agentic Runtime Phase 7：系统演化闭环 Trace → Monitor
 
 > 补齐新 Phase 7 的 graph 侧系统演化闭环：已有 M3 gate 继续负责离线聚类、单变量策略候选、回放门禁、canary dry-run 和 rollback 元数据，新 runtime 把这些治理状态整理成可 API 展示、可阻断、可回滚的 `IMPROVE` loop。

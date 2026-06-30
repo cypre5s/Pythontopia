@@ -15,6 +15,7 @@ import ResourceDetailPanel from '@/components/workshop/ResourceDetailPanel.vue';
 import ChatHistoryRail from '@/components/workshop/ChatHistoryRail.vue';
 import ToolCallTimeline from '@/components/workshop/ToolCallTimeline.vue';
 import AiRuntimeSummaryPanel from '@/components/workshop/AiRuntimeSummaryPanel.vue';
+import RuntimeOperationsPanel from '@/components/workshop/RuntimeOperationsPanel.vue';
 import TwinWeekly from '@/components/companion/TwinWeekly.vue';
 import {
   rememberWorkshopChatHistoryTurn,
@@ -421,6 +422,7 @@ const bodyClass = computed<Record<string, boolean>>(() => ({
               class="workshop-call-drawer"
             >
               <AiRuntimeSummaryPanel />
+              <RuntimeOperationsPanel />
               <TwinWeekly
                 class="workshop-twin-weekly"
                 @prompt="onTwinPrompt"

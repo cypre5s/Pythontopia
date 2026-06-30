@@ -20,6 +20,7 @@ const apiMocks = vi.hoisted(() => ({
   listWorkshopChatHistoryTurns: vi.fn(),
   rememberWorkshopChatHistoryTurn: vi.fn(),
   fetchAiRuntimeSummary: vi.fn(),
+  fetchAiRuntimeOperations: vi.fn(),
   fetchWeeklyReport: vi.fn(),
 }));
 
@@ -68,6 +69,7 @@ vi.mock('@/api/workshopHistory', () => {
 
 vi.mock('@/api/aiRuntime', () => ({
   fetchAiRuntimeSummary: apiMocks.fetchAiRuntimeSummary,
+  fetchAiRuntimeOperations: apiMocks.fetchAiRuntimeOperations,
 }));
 
 vi.mock('@/api/twin', () => ({
@@ -182,6 +184,36 @@ describe('WorkshopPage R-13 改造', () => {
           value: 0.66,
           threshold: 0.45,
           evidenceRefs: ['learner.evidence.graph'],
+        },
+      ],
+    });
+    apiMocks.fetchAiRuntimeOperations.mockResolvedValue({
+      loops: [
+        {
+          loopType: 'LEARNER',
+          label: '学生学习闭环',
+          status: 'PASS',
+          latestTraceId: 'trace-learner',
+          nextAction: 'complete:student_learning_loop',
+          evidenceRefs: ['learner.evidence.graph'],
+        },
+        {
+          loopType: 'RESOURCE',
+          label: '资源生成闭环',
+          status: 'INSUFFICIENT_EVIDENCE',
+          latestTraceId: '',
+          nextAction: 'evaluate:resource_feedback_or_check',
+          evidenceRefs: [],
+        },
+      ],
+      governance: [
+        {
+          key: 'policy_canary_review',
+          label: '策略灰度审核',
+          status: 'PASS',
+          action: '查看 canary dry-run 与 rollback 状态',
+          reviewRoute: '/teacher/review',
+          evidenceRefs: ['agentic-m3-system-evolution-v1'],
         },
       ],
     });
@@ -377,8 +409,12 @@ describe('WorkshopPage R-13 改造', () => {
     await flushPromises();
 
     expect(apiMocks.fetchAiRuntimeSummary).toHaveBeenCalledTimes(1);
+    expect(apiMocks.fetchAiRuntimeOperations).toHaveBeenCalledTimes(1);
     expect(wrapper.find('[data-testid="runtime-summary"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="runtime-operations"]').exists()).toBe(true);
     expect(wrapper.text()).toContain('学习证据图完整度');
+    expect(wrapper.text()).toContain('学生学习闭环');
+    expect(wrapper.text()).toContain('策略灰度审核');
     expect(wrapper.text()).toContain('外部内容，非课件');
     expect(apiMocks.fetchWeeklyReport).toHaveBeenCalledTimes(1);
     expect(wrapper.text()).toContain('Learner Twin');

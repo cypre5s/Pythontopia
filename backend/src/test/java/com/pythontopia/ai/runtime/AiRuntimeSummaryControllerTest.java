@@ -58,4 +58,33 @@ class AiRuntimeSummaryControllerTest {
     assertThat(result).isSameAs(expected);
     verify(service).summaryForUser(eq(7L));
   }
+
+  @Test
+  void teacherGetsRuntimeOperationsForGovernance() {
+    CurrentUserPrincipal teacher = new CurrentUserPrincipal(2L, "teacher", Role.TEACHER);
+    AiRuntimeOperationsDto expected =
+        new AiRuntimeOperationsDto(
+            List.of(
+                new AiRuntimeOperationsDto.LoopOperation(
+                    "RESOURCE",
+                    "资源生成闭环",
+                    "PASS",
+                    "trace-resource",
+                    "evaluate:resource_feedback_or_check",
+                    List.of("resource_feedback_or_check"))),
+            List.of(
+                new AiRuntimeOperationsDto.GovernanceItem(
+                    "policy_canary_review",
+                    "策略灰度审核",
+                    "PASS",
+                    "查看 canary dry-run 与 rollback 状态",
+                    "/teacher/review",
+                    List.of("agentic-m3-system-evolution-v1"))));
+    when(service.operationsForUser(eq(2L))).thenReturn(expected);
+
+    AiRuntimeOperationsDto result = controller.operations(teacher);
+
+    assertThat(result).isSameAs(expected);
+    verify(service).operationsForUser(eq(2L));
+  }
 }

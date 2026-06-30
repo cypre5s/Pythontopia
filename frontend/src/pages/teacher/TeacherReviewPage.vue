@@ -8,6 +8,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import AppLayout from '@/app/AppLayout.vue';
+import RuntimeOperationsPanel from '@/components/workshop/RuntimeOperationsPanel.vue';
 import { useSessionStore } from '@stores/session';
 import { useToastStore } from '@stores/toast';
 import { requestBossProblem } from '@/api/boss';
@@ -193,6 +194,8 @@ const currentEntry = computed<ReviewEntry | null>(() => {
         当前账号角色 <strong>{{ session.role ?? '未登录' }}</strong> 没有审核权限；
         请用 TEACHER 或 ADMIN 账号登录后访问。R-14 后端将硬鉴权该路由。
       </div>
+
+      <RuntimeOperationsPanel class="review-runtime" />
 
       <div class="review-toolbar">
         <label class="toolbar-field">
@@ -487,6 +490,9 @@ const currentEntry = computed<ReviewEntry | null>(() => {
   border: 2px solid #c95e3a;
   color: #5a1a08;
   font-size: 13px;
+}
+.review-runtime {
+  box-shadow: 2px 2px 0 var(--pyt-color-text-primary);
 }
 .review-toolbar {
   display: flex;
