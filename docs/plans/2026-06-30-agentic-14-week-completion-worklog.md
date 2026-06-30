@@ -198,7 +198,7 @@
 
 | Phase | Commit | Notes |
 |---|---|---|
-| M2 resource/world gate | pending | PublishFlow, WorldLoopProposal, resource effectiveness API, local ingestion boundary, browser effectiveness assertion |
+| M2 resource/world gate | `b4d20016` | PublishFlow, WorldLoopProposal, resource effectiveness API, local ingestion boundary, browser effectiveness assertion |
 
 ## M3 System Evolution Loop
 
