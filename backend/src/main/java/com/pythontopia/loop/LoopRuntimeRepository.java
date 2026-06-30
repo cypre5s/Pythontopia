@@ -73,6 +73,29 @@ public class LoopRuntimeRepository {
       boolean passed,
       OffsetDateTime createdAt) {}
 
+  public record LoopStateRow(
+      Long id,
+      Long loopRunId,
+      String loopType,
+      String stateKey,
+      String status,
+      JsonNode state,
+      String policyVersion,
+      String traceId,
+      OffsetDateTime updatedAt) {}
+
+  public record PolicyDecisionRow(
+      Long id,
+      Long loopRunId,
+      String decisionKey,
+      String policyVersion,
+      String riskLevel,
+      boolean approvalRequired,
+      JsonNode decision,
+      String reason,
+      String traceId,
+      OffsetDateTime createdAt) {}
+
   public PolicyRow upsertPolicy(
       String namespace, String policyKey, String policyVersion, String status, JsonNode config) {
     return jdbcTemplate.queryForObject(
@@ -205,6 +228,68 @@ public class LoopRuntimeRepository {
         passed);
   }
 
+  public LoopStateRow upsertLoopState(
+      Long loopRunId,
+      String loopType,
+      String stateKey,
+      String status,
+      JsonNode state,
+      String policyVersion,
+      String traceId) {
+    return jdbcTemplate.queryForObject(
+        """
+        INSERT INTO loop_state
+            (loop_run_id, loop_type, state_key, status, state, policy_version, trace_id)
+        VALUES (?, ?, ?, ?, ?::jsonb, ?, ?)
+        ON CONFLICT (loop_run_id, state_key)
+        DO UPDATE SET loop_type = EXCLUDED.loop_type,
+                      status = EXCLUDED.status,
+                      state = EXCLUDED.state,
+                      policy_version = EXCLUDED.policy_version,
+                      trace_id = EXCLUDED.trace_id,
+                      updated_at = now()
+        RETURNING id, loop_run_id, loop_type, state_key, status, state::text AS state_text,
+                  policy_version, trace_id, updated_at
+        """,
+        (rs, rowNum) -> mapLoopState(rs),
+        loopRunId,
+        loopType,
+        stateKey,
+        status,
+        writeJson(state),
+        policyVersion,
+        traceId);
+  }
+
+  public PolicyDecisionRow insertPolicyDecision(
+      Long loopRunId,
+      String decisionKey,
+      String policyVersion,
+      String riskLevel,
+      boolean approvalRequired,
+      JsonNode decision,
+      String reason,
+      String traceId) {
+    return jdbcTemplate.queryForObject(
+        """
+        INSERT INTO policy_decision
+            (loop_run_id, decision_key, policy_version, risk_level, approval_required,
+             decision, reason, trace_id)
+        VALUES (?, ?, ?, ?, ?, ?::jsonb, ?, ?)
+        RETURNING id, loop_run_id, decision_key, policy_version, risk_level, approval_required,
+                  decision::text AS decision_text, reason, trace_id, created_at
+        """,
+        (rs, rowNum) -> mapPolicyDecision(rs),
+        loopRunId,
+        decisionKey,
+        policyVersion,
+        riskLevel,
+        approvalRequired,
+        writeJson(decision),
+        reason,
+        traceId);
+  }
+
   public List<CheckpointRow> checkpoints(Long loopRunId) {
     return jdbcTemplate.query(
         """
@@ -256,6 +341,32 @@ public class LoopRuntimeRepository {
         ORDER BY id ASC
         """,
         (rs, rowNum) -> mapEvalResult(rs),
+        loopRunId);
+  }
+
+  public List<LoopStateRow> loopStates(Long loopRunId) {
+    return jdbcTemplate.query(
+        """
+        SELECT id, loop_run_id, loop_type, state_key, status, state::text AS state_text,
+               policy_version, trace_id, updated_at
+        FROM loop_state
+        WHERE loop_run_id = ?
+        ORDER BY updated_at ASC, id ASC
+        """,
+        (rs, rowNum) -> mapLoopState(rs),
+        loopRunId);
+  }
+
+  public List<PolicyDecisionRow> policyDecisions(Long loopRunId) {
+    return jdbcTemplate.query(
+        """
+        SELECT id, loop_run_id, decision_key, policy_version, risk_level, approval_required,
+               decision::text AS decision_text, reason, trace_id, created_at
+        FROM policy_decision
+        WHERE loop_run_id = ?
+        ORDER BY id ASC
+        """,
+        (rs, rowNum) -> mapPolicyDecision(rs),
         loopRunId);
   }
 
@@ -317,6 +428,33 @@ public class LoopRuntimeRepository {
         rs.getString("policy_version"),
         readJson(rs.getString("metrics_text")),
         rs.getBoolean("passed"),
+        offset(rs, "created_at"));
+  }
+
+  private LoopStateRow mapLoopState(ResultSet rs) throws SQLException {
+    return new LoopStateRow(
+        rs.getLong("id"),
+        rs.getLong("loop_run_id"),
+        rs.getString("loop_type"),
+        rs.getString("state_key"),
+        rs.getString("status"),
+        readJson(rs.getString("state_text")),
+        rs.getString("policy_version"),
+        rs.getString("trace_id"),
+        offset(rs, "updated_at"));
+  }
+
+  private PolicyDecisionRow mapPolicyDecision(ResultSet rs) throws SQLException {
+    return new PolicyDecisionRow(
+        rs.getLong("id"),
+        rs.getLong("loop_run_id"),
+        rs.getString("decision_key"),
+        rs.getString("policy_version"),
+        rs.getString("risk_level"),
+        rs.getBoolean("approval_required"),
+        readJson(rs.getString("decision_text")),
+        rs.getString("reason"),
+        rs.getString("trace_id"),
         offset(rs, "created_at"));
   }
 

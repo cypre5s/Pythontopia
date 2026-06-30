@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-06-30 — Agentic Runtime Phase 1：统一事件模型与 Agent Run 控制平面
+
+> 补齐新 Phase 1 数据底座：在不破坏既有 `/api/loop/**`、Tutor、Workshop、Orchestrator 等公开接口的前提下，新增资源型 Agent Runtime 控制面，并把事件、run、loop state、policy decision 串到真实数据库和测试里。
+
+- **统一事件入口**：新增 `POST /api/events`，复用已有 `learning_event_log` 作为权威事件表，保留 `event_type / payload / source / importance / created_at` 审计信息；新增 `AgentRuntimeEventRepository/Service`，事件重要度缺省时复用既有 `EventImportance` 规则。
+- **Agent Run 控制面**：新增 `POST /api/agent-runs`、`GET /api/agent-runs/{id}` 和 `GET /api/agent-runs/{id}/stream`，通过现有 `LoopRunService` 读写 `loop_run`，保持旧 `/api/loop/runs` 兼容；stream 先输出 AG-UI 语义 `RUN_STARTED / RUN_FINISHED` 生命周期事件并携带 `traceId`。
+- **Loop State / Policy Decision 持久化**：新增 Flyway `V184__agent_runtime_control_plane.sql`，创建 `loop_state` 与 `policy_decision`，约束 loop type、risk level、policy version 和非空 trace；`LoopRuntimeService/Repository` 增加 owner-scoped 写入与查询。
+- **权限与校验**：所有新控制面接口限定学生主体；service 层校验 event、loop type、risk level、trace id、importance，并沿用跨用户隐藏存在性的 404 规则。
+- **测试**：新增 `AgentRuntimeControllerTest` 覆盖 `/api/events`、`/api/agent-runs`、stream、loop state、policy decision 和教师拒绝；扩展 `LoopRunServiceTest` 用真 Postgres + Flyway 验证 V184 迁移、事件落库、loop state、policy decision、非法输入与跨用户拒绝。
+
 ## 2026-06-30 — Agentic Runtime Phase 0：仓库审计、执行计划与进度文档初始化
 
 > 按新粘贴的 Phase 0-9 执行要求重新启动下一代 Agentic Runtime 推进：先做仓库现实审计和长期执行文档，不直接跳入运行时代码。

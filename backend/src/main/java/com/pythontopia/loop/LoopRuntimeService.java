@@ -20,6 +20,9 @@ public class LoopRuntimeService {
   private static final int MAX_SUMMARY_LEN = 512;
   private static final Set<String> POLICY_STATUSES =
       Set.of("DRAFT", "ACTIVE", "CANARY", "RETIRED", "REJECTED");
+  private static final Set<String> LOOP_TYPES =
+      Set.of("LEARNER", "DEBUG", "RESOURCE", "WORLD", "IMPROVE");
+  private static final Set<String> RISK_LEVELS = Set.of("LOW", "MEDIUM", "HIGH");
   private static final Map<String, Set<String>> POLICY_TRANSITIONS =
       Map.of(
           "DRAFT", Set.of("DRAFT", "ACTIVE", "CANARY", "RETIRED", "REJECTED"),
@@ -85,6 +88,29 @@ public class LoopRuntimeService {
       String policyVersion,
       JsonNode metrics,
       boolean passed,
+      OffsetDateTime createdAt) {}
+
+  public record LoopStateRecord(
+      Long id,
+      Long loopRunId,
+      String loopType,
+      String stateKey,
+      String status,
+      JsonNode state,
+      String policyVersion,
+      String traceId,
+      OffsetDateTime updatedAt) {}
+
+  public record PolicyDecisionRecord(
+      Long id,
+      Long loopRunId,
+      String decisionKey,
+      String policyVersion,
+      String riskLevel,
+      boolean approvalRequired,
+      JsonNode decision,
+      String reason,
+      String traceId,
       OffsetDateTime createdAt) {}
 
   public record RuntimeSnapshot(
@@ -231,6 +257,50 @@ public class LoopRuntimeService {
             passed));
   }
 
+  public LoopStateRecord saveLoopState(
+      Long authUserId,
+      Long loopRunId,
+      String loopType,
+      String stateKey,
+      String status,
+      JsonNode state,
+      String policyVersion,
+      String traceId) {
+    requireOwnedRun(authUserId, loopRunId);
+    return loopState(
+        runtimeRepository.upsertLoopState(
+            loopRunId,
+            normalizeLoopType(loopType),
+            requireText(stateKey, "stateKey"),
+            requireText(status, "status"),
+            state,
+            requireText(policyVersion, "policyVersion"),
+            requireTraceId(traceId)));
+  }
+
+  public PolicyDecisionRecord recordPolicyDecision(
+      Long authUserId,
+      Long loopRunId,
+      String decisionKey,
+      String policyVersion,
+      String riskLevel,
+      Boolean approvalRequired,
+      JsonNode decision,
+      String reason,
+      String traceId) {
+    requireOwnedRun(authUserId, loopRunId);
+    return policyDecision(
+        runtimeRepository.insertPolicyDecision(
+            loopRunId,
+            requireText(decisionKey, "decisionKey"),
+            requireText(policyVersion, "policyVersion"),
+            normalizeRiskLevel(riskLevel),
+            approvalRequired != null && approvalRequired,
+            decision,
+            normalizeSummary(reason),
+            requireTraceId(traceId)));
+  }
+
   public RuntimeSnapshot restoreSnapshot(Long authUserId, Long loopRunId) {
     LoopRunDto run = requireOwnedRun(authUserId, loopRunId);
     return new RuntimeSnapshot(
@@ -239,6 +309,16 @@ public class LoopRuntimeService {
         runtimeRepository.toolCalls(loopRunId).stream().map(this::toolCall).toList(),
         runtimeRepository.agentRuns(loopRunId).stream().map(this::agentRun).toList(),
         runtimeRepository.evalResults(loopRunId).stream().map(this::evalResult).toList());
+  }
+
+  public List<LoopStateRecord> loopStates(Long authUserId, Long loopRunId) {
+    requireOwnedRun(authUserId, loopRunId);
+    return runtimeRepository.loopStates(loopRunId).stream().map(this::loopState).toList();
+  }
+
+  public List<PolicyDecisionRecord> policyDecisions(Long authUserId, Long loopRunId) {
+    requireOwnedRun(authUserId, loopRunId);
+    return runtimeRepository.policyDecisions(loopRunId).stream().map(this::policyDecision).toList();
   }
 
   public ReplayPlan restoreReplayPlan(Long authUserId, Long loopRunId) {
@@ -334,6 +414,29 @@ public class LoopRuntimeService {
       throw badRequest("POLICY_STATUS_INVALID", "未知策略状态: " + normalized);
     }
     return normalized;
+  }
+
+  private String normalizeLoopType(String loopType) {
+    String normalized = requireText(loopType, "loopType").toUpperCase(Locale.ROOT);
+    if (!LOOP_TYPES.contains(normalized)) {
+      throw badRequest("LOOP_TYPE_INVALID", "未知闭环类型: " + normalized);
+    }
+    return normalized;
+  }
+
+  private String normalizeRiskLevel(String riskLevel) {
+    String normalized = requireText(riskLevel, "riskLevel").toUpperCase(Locale.ROOT);
+    if (!RISK_LEVELS.contains(normalized)) {
+      throw badRequest("POLICY_RISK_LEVEL_INVALID", "未知风险等级: " + normalized);
+    }
+    return normalized;
+  }
+
+  private String requireTraceId(String traceId) {
+    if (traceId == null || traceId.isBlank()) {
+      throw badRequest("LOOP_RUNTIME_TRACE_REQUIRED", "trace_id 不能为空");
+    }
+    return requireText(traceId, "traceId");
   }
 
   private void assertPolicyTransitionAllowed(String currentStatus, String targetStatus) {
@@ -491,6 +594,33 @@ public class LoopRuntimeService {
         row.policyVersion(),
         row.metrics(),
         row.passed(),
+        row.createdAt());
+  }
+
+  private LoopStateRecord loopState(LoopRuntimeRepository.LoopStateRow row) {
+    return new LoopStateRecord(
+        row.id(),
+        row.loopRunId(),
+        row.loopType(),
+        row.stateKey(),
+        row.status(),
+        row.state(),
+        row.policyVersion(),
+        row.traceId(),
+        row.updatedAt());
+  }
+
+  private PolicyDecisionRecord policyDecision(LoopRuntimeRepository.PolicyDecisionRow row) {
+    return new PolicyDecisionRecord(
+        row.id(),
+        row.loopRunId(),
+        row.decisionKey(),
+        row.policyVersion(),
+        row.riskLevel(),
+        row.approvalRequired(),
+        row.decision(),
+        row.reason(),
+        row.traceId(),
         row.createdAt());
   }
 }

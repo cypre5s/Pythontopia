@@ -98,6 +98,16 @@ This means the new Phase 0-9 plan should not duplicate those pieces blindly. Ins
 | 8 | Frontend and teacher operations | Students/teachers can see and govern runtime state | Real API-backed loop panels, trace views, review/rollback/feature flag status |
 | 9 | Full-chain testing and Beta handoff | Prove local startup and at least one complete end-to-end Agentic Learning Loop | Backend/graph/rag/frontend/db/API/E2E verification, docs, changelog, final commit |
 
+## Phase 1 Implementation Notes
+
+- `/api/events` is backed by the existing `learning_event_log` table, including its `importance` column and memory-stream usage. This avoids splitting the learning-event source of truth.
+- `/api/agent-runs` reuses the existing `loop_run` service and table. The older `/api/loop/runs` endpoint remains compatible.
+- `V184__agent_runtime_control_plane.sql` adds only the missing Phase 1 control-plane tables:
+  - `loop_state`,
+  - `policy_decision`.
+- `loop_state` and `policy_decision` are owner-scoped through `LoopRuntimeService`, so cross-user reads/writes fail through the same hidden-existence rule used by `loop_run`.
+- The initial `/api/agent-runs/{id}/stream` endpoint emits AG-UI-compatible lifecycle events from stored run metadata. Later phases may replace this deterministic replay body with live runtime streaming, but the resource path and event names should stay stable.
+
 ## Stage Rules
 
 Each phase follows this order:

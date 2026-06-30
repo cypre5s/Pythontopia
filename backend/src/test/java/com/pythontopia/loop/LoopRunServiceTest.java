@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.pythontopia.agent.runtime.AgentRuntimeEventRepository;
+import com.pythontopia.agent.runtime.AgentRuntimeEventService;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.loop.dto.LoopRunDto;
 import com.pythontopia.loop.dto.LoopRunRecordRequest;
@@ -48,6 +50,7 @@ class LoopRunServiceTest {
   private static JdbcTemplate jdbcTemplate;
   private static LoopRunService service;
   private static LoopRuntimeService runtimeService;
+  private static AgentRuntimeEventService eventService;
   private static ObjectMapper objectMapper;
 
   private Long userId;
@@ -74,6 +77,9 @@ class LoopRunServiceTest {
         new LoopRuntimeService(
             new LoopRunRepository(jdbcTemplate),
             new LoopRuntimeRepository(jdbcTemplate, objectMapper));
+    eventService =
+        new AgentRuntimeEventService(
+            new AgentRuntimeEventRepository(jdbcTemplate, objectMapper));
   }
 
   @BeforeEach
@@ -87,7 +93,13 @@ class LoopRunServiceTest {
     jdbcTemplate.update(
         "DELETE FROM loop_checkpoint WHERE loop_run_id IN (SELECT id FROM loop_run WHERE user_id IN (SELECT id FROM users WHERE username LIKE 'loop-svc-%'))");
     jdbcTemplate.update(
+        "DELETE FROM policy_decision WHERE loop_run_id IN (SELECT id FROM loop_run WHERE user_id IN (SELECT id FROM users WHERE username LIKE 'loop-svc-%'))");
+    jdbcTemplate.update(
+        "DELETE FROM loop_state WHERE loop_run_id IN (SELECT id FROM loop_run WHERE user_id IN (SELECT id FROM users WHERE username LIKE 'loop-svc-%'))");
+    jdbcTemplate.update(
         "DELETE FROM loop_run WHERE user_id IN (SELECT id FROM users WHERE username LIKE 'loop-svc-%')");
+    jdbcTemplate.update(
+        "DELETE FROM learning_event_log WHERE user_id IN (SELECT id FROM users WHERE username LIKE 'loop-svc-%')");
     jdbcTemplate.update("DELETE FROM policy_registry WHERE namespace LIKE 'loop-svc-%'");
     jdbcTemplate.update("DELETE FROM users WHERE username LIKE 'loop-svc-%'");
     userId = insertStudent("loop-svc-a-" + System.nanoTime());
@@ -463,6 +475,146 @@ class LoopRunServiceTest {
                 otherUserId, run.id(), 1, "READY", json("node", "dispatch"), "cursor"),
         HttpStatus.NOT_FOUND);
     assertCode(() -> runtimeService.restoreSnapshot(otherUserId, run.id()), HttpStatus.NOT_FOUND);
+  }
+
+  @Test
+  void phase1ControlPlanePersistsEventLoopStateAndPolicyDecision() {
+    var event =
+        eventService.recordEvent(
+            userId,
+            new AgentRuntimeEventService.EventRequest(
+                "submission.failed",
+                json("submissionId", 88),
+                "graph",
+                5));
+    LoopRunDto run = service.record(userId, fullRequest());
+
+    var state =
+        runtimeService.saveLoopState(
+            userId,
+            run.id(),
+            "LEARNER",
+            "observe",
+            "READY",
+            json("node", "observe"),
+            "agentic_loop_v1",
+            "trace-phase1-state");
+    var decision =
+        runtimeService.recordPolicyDecision(
+            userId,
+            run.id(),
+            "student-loop-start",
+            "agentic_loop_v1",
+            "MEDIUM",
+            false,
+            json("maxSteps", 4),
+            "bounded loop within student policy",
+            "trace-phase1-policy");
+
+    assertThat(event.id()).isPositive();
+    assertThat(event.userId()).isEqualTo(userId);
+    assertThat(event.eventType()).isEqualTo("submission.failed");
+    assertThat(event.payload().get("submissionId").asDouble()).isEqualTo(88.0);
+    assertThat(event.source()).isEqualTo("graph");
+    assertThat(event.importance()).isEqualTo(5);
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM learning_event_log WHERE id = ? AND user_id = ? AND source = 'graph'",
+                Integer.class,
+                event.id(),
+                userId))
+        .isEqualTo(1);
+
+    assertThat(state.id()).isPositive();
+    assertThat(state.loopRunId()).isEqualTo(run.id());
+    assertThat(state.loopType()).isEqualTo("LEARNER");
+    assertThat(state.stateKey()).isEqualTo("observe");
+    assertThat(state.policyVersion()).isEqualTo("agentic_loop_v1");
+    assertThat(state.traceId()).isEqualTo("trace-phase1-state");
+
+    assertThat(decision.id()).isPositive();
+    assertThat(decision.loopRunId()).isEqualTo(run.id());
+    assertThat(decision.decisionKey()).isEqualTo("student-loop-start");
+    assertThat(decision.riskLevel()).isEqualTo("MEDIUM");
+    assertThat(decision.approvalRequired()).isFalse();
+    assertThat(decision.traceId()).isEqualTo("trace-phase1-policy");
+
+    assertThat(runtimeService.loopStates(userId, run.id()))
+        .extracting(LoopRuntimeService.LoopStateRecord::stateKey)
+        .containsExactly("observe");
+    assertThat(runtimeService.policyDecisions(userId, run.id()))
+        .extracting(LoopRuntimeService.PolicyDecisionRecord::decisionKey)
+        .containsExactly("student-loop-start");
+  }
+
+  @Test
+  void phase1ControlPlaneRejectsInvalidEventsStatesAndDecisions() {
+    LoopRunDto run = service.record(userId, fullRequest());
+
+    assertCode(
+        () ->
+            eventService.recordEvent(
+                userId,
+                new AgentRuntimeEventService.EventRequest(
+                    "  ", objectMapper.createObjectNode(), "graph", 3)),
+        HttpStatus.BAD_REQUEST);
+    assertCode(
+        () ->
+            eventService.recordEvent(
+                userId,
+                new AgentRuntimeEventService.EventRequest(
+                    "resource.generated", objectMapper.createObjectNode(), "graph", 6)),
+        HttpStatus.BAD_REQUEST);
+    assertCode(
+        () ->
+            runtimeService.saveLoopState(
+                userId,
+                run.id(),
+                "OPEN_REACT",
+                "observe",
+                "READY",
+                objectMapper.createObjectNode(),
+                "agentic_loop_v1",
+                "trace-invalid-state"),
+        HttpStatus.BAD_REQUEST);
+    assertCode(
+        () ->
+            runtimeService.saveLoopState(
+                userId,
+                run.id(),
+                "LEARNER",
+                "observe",
+                "READY",
+                objectMapper.createObjectNode(),
+                "agentic_loop_v1",
+                " "),
+        HttpStatus.BAD_REQUEST);
+    assertCode(
+        () ->
+            runtimeService.recordPolicyDecision(
+                userId,
+                run.id(),
+                "unsafe-tool",
+                "agentic_loop_v1",
+                "CRITICAL",
+                true,
+                objectMapper.createObjectNode(),
+                "invalid risk",
+                "trace-invalid-policy"),
+        HttpStatus.BAD_REQUEST);
+    assertCode(
+        () ->
+            runtimeService.recordPolicyDecision(
+                otherUserId,
+                run.id(),
+                "student-loop-start",
+                "agentic_loop_v1",
+                "LOW",
+                false,
+                objectMapper.createObjectNode(),
+                "cross-owner",
+                "trace-cross-owner"),
+        HttpStatus.NOT_FOUND);
   }
 
   @Test
