@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-06-30 — Agentic M3：系统进化闭环、离线回放、灰度 dry-run 与回滚状态
+
+> 补齐 14 周计划 M3 System Evolution Loop：把 trace/eval 数据集、失败聚类、单变量策略候选、offline replay gate、5% canary dry-run 和 rollback rules 串成可执行本地 workflow，完成从“评测报告”到“可灰度可回滚策略链”的最后一段。
+
+- **M3 eval 数据集与稳定 ID**：新增 `agentic_m3_system_evolution.jsonl`，覆盖 RESOURCE/LEARNER/DEBUG/WORLD/IMPROVE 8 个 trace case；loader 先校验空/重复 stable id，再做 Pydantic schema 校验，避免坏数据悄悄进入系统进化 gate。
+- **失败聚类与单变量候选**：新增 `pythontopia_graph.eval.m3_system_evolution_gate`，按 `failure_signature` 聚类，优先识别 `evidence_missing` 失败簇，并只生成 `retrieval_top_k` 一个变量的 `agentic_loop_v2` candidate patch。
+- **Offline replay / canary / rollback 链**：M3 gate 计算 baseline/candidate mean、uplift、regression rate，只有 offline gate 通过才生成 5% canary dry-run plan；rollback rules 固定覆盖 replay gate、schema validity、regression rate、cost ratio。
+- **Policy Registry 状态机**：`LoopRuntimeService` 新增 `transitionPolicyStatus()`，`policy_registry` 支持 `DRAFT → CANARY → RETIRED` 并拒绝 `RETIRED/REJECTED` 终态重新激活，保留 canary traffic 与 rollback metadata。
+- **本地 workflow 脚本**：新增 `scripts/agentic-offline-eval.sh`、`scripts/agentic-nightly-improve-loop.sh`、`scripts/agentic-canary-rollout-dryrun.sh` 和统一入口 `agentic-m3-system-evolution-gate.sh`，三条 workflow 都会刷新 `docs/reports/2026-06-30-agentic-m3-system-evolution-gate.md`。
+- **完整验证**：graph 相关 28 tests 通过；后端 M0-M3 相关 Testcontainers/MockMvc 组合测试通过；前端 `typecheck` 与 workshop API 单测通过；四个本地健康端点均 `ok`；Playwright `agenticDeepLoop.spec.ts` 30 passed / 1.9m；`git diff --check` 通过。
+
 ## 2026-06-30 — Agentic M2：资源发布流、世界提案契约、效果信号与 ingestion 边界
 
 > 补齐 14 周计划 M2 Resource + World Loops：资源不再只返回生成结果，而是带显式发布决策；世界/任务更新必须 evidence-bound；工坊可读取资源发布后的效果信号；上传解析边界明确为本地文本/PDF/DOCX adapter。

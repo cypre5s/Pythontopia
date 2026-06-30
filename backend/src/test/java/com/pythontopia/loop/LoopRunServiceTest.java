@@ -416,6 +416,44 @@ class LoopRunServiceTest {
   }
 
   @Test
+  void policyStatusTransitionsPreserveRollbackMetadataAndRejectTerminalReactivation() {
+    String namespace = "loop-svc-m3";
+    String policyKey = "guide-loop";
+    String version = "agentic_loop_v2";
+    runtimeService.registerPolicy(
+        namespace, policyKey, version, "DRAFT", json("changedVariable", "retrieval_top_k"));
+
+    ObjectNode canaryConfig = objectMapper.createObjectNode();
+    canaryConfig.put("changedVariable", "retrieval_top_k");
+    canaryConfig.put("trafficFraction", 0.05);
+    canaryConfig.put("rollbackRule", "rollback if offline replay gate fails");
+    var canary =
+        runtimeService.transitionPolicyStatus(
+            namespace, policyKey, version, "CANARY", canaryConfig);
+
+    assertThat(canary.status()).isEqualTo("CANARY");
+    assertThat(canary.config().get("changedVariable").asText()).isEqualTo("retrieval_top_k");
+    assertThat(canary.config().get("rollbackRule").asText()).contains("offline replay");
+
+    ObjectNode rollbackConfig = objectMapper.createObjectNode();
+    rollbackConfig.put("changedVariable", "retrieval_top_k");
+    rollbackConfig.put("rollbackReason", "canary regression_rate exceeded threshold");
+    rollbackConfig.put("previousStatus", "CANARY");
+    var retired =
+        runtimeService.transitionPolicyStatus(
+            namespace, policyKey, version, "RETIRED", rollbackConfig);
+
+    assertThat(retired.status()).isEqualTo("RETIRED");
+    assertThat(retired.config().get("rollbackReason").asText()).contains("regression_rate");
+
+    assertCode(
+        () ->
+            runtimeService.transitionPolicyStatus(
+                namespace, policyKey, version, "ACTIVE", json("attempt", "reactivate")),
+        HttpStatus.BAD_REQUEST);
+  }
+
+  @Test
   void runtimeArtifactsAreOwnerScoped() {
     LoopRunDto run = service.record(userId, fullRequest());
 

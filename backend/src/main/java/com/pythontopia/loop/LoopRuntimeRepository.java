@@ -8,6 +8,7 @@ import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -89,6 +90,24 @@ public class LoopRuntimeRepository {
         policyVersion,
         status,
         writeJson(config));
+  }
+
+  public Optional<PolicyRow> findPolicy(
+      String namespace, String policyKey, String policyVersion) {
+    return jdbcTemplate
+        .query(
+            """
+            SELECT id, namespace, policy_key, policy_version, status, config::text AS config_text,
+                   created_at, updated_at
+            FROM policy_registry
+            WHERE namespace = ? AND policy_key = ? AND policy_version = ?
+            """,
+            (rs, rowNum) -> mapPolicy(rs),
+            namespace,
+            policyKey,
+            policyVersion)
+        .stream()
+        .findFirst();
   }
 
   public CheckpointRow upsertCheckpoint(

@@ -6,6 +6,9 @@ import com.pythontopia.loop.dto.LoopRunDto;
 import java.time.OffsetDateTime;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
@@ -15,6 +18,15 @@ public class LoopRuntimeService {
   private static final int MAX_KEY_LEN = 128;
   private static final int MAX_STATUS_LEN = 64;
   private static final int MAX_SUMMARY_LEN = 512;
+  private static final Set<String> POLICY_STATUSES =
+      Set.of("DRAFT", "ACTIVE", "CANARY", "RETIRED", "REJECTED");
+  private static final Map<String, Set<String>> POLICY_TRANSITIONS =
+      Map.of(
+          "DRAFT", Set.of("DRAFT", "ACTIVE", "CANARY", "RETIRED", "REJECTED"),
+          "CANARY", Set.of("CANARY", "ACTIVE", "RETIRED", "REJECTED"),
+          "ACTIVE", Set.of("ACTIVE", "RETIRED"),
+          "RETIRED", Set.of("RETIRED"),
+          "REJECTED", Set.of("REJECTED"));
 
   private final LoopRunRepository runRepository;
   private final LoopRuntimeRepository runtimeRepository;
@@ -106,7 +118,34 @@ public class LoopRuntimeService {
             requireText(namespace, "namespace"),
             requireText(policyKey, "policyKey"),
             requireText(policyVersion, "policyVersion"),
-            requireText(status, "status"),
+            normalizePolicyStatus(status),
+            config));
+  }
+
+  public PolicyRecord transitionPolicyStatus(
+      String namespace,
+      String policyKey,
+      String policyVersion,
+      String targetStatus,
+      JsonNode config) {
+    String normalizedNamespace = requireText(namespace, "namespace");
+    String normalizedPolicyKey = requireText(policyKey, "policyKey");
+    String normalizedPolicyVersion = requireText(policyVersion, "policyVersion");
+    String normalizedTarget = normalizePolicyStatus(targetStatus);
+    LoopRuntimeRepository.PolicyRow current =
+        runtimeRepository
+            .findPolicy(normalizedNamespace, normalizedPolicyKey, normalizedPolicyVersion)
+            .orElseThrow(
+                () ->
+                    new BusinessException(
+                        HttpStatus.NOT_FOUND, "POLICY_NOT_FOUND", "策略版本不存在"));
+    assertPolicyTransitionAllowed(current.status(), normalizedTarget);
+    return policy(
+        runtimeRepository.upsertPolicy(
+            normalizedNamespace,
+            normalizedPolicyKey,
+            normalizedPolicyVersion,
+            normalizedTarget,
             config));
   }
 
@@ -287,6 +326,24 @@ public class LoopRuntimeService {
 
   private BusinessException badRequest(String code, String message) {
     return new BusinessException(HttpStatus.BAD_REQUEST, code, message);
+  }
+
+  private String normalizePolicyStatus(String status) {
+    String normalized = requireText(status, "status").toUpperCase(Locale.ROOT);
+    if (!POLICY_STATUSES.contains(normalized)) {
+      throw badRequest("POLICY_STATUS_INVALID", "未知策略状态: " + normalized);
+    }
+    return normalized;
+  }
+
+  private void assertPolicyTransitionAllowed(String currentStatus, String targetStatus) {
+    String current = normalizePolicyStatus(currentStatus);
+    if (POLICY_TRANSITIONS.getOrDefault(current, Set.of()).contains(targetStatus)) {
+      return;
+    }
+    throw badRequest(
+        "POLICY_STATUS_TRANSITION_INVALID",
+        "策略状态不能从 " + current + " 切换到 " + targetStatus);
   }
 
   private String detectLoopType(RuntimeSnapshot snapshot, CheckpointRecord latest) {

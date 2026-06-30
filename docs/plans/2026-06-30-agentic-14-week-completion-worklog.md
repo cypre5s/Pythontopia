@@ -1,6 +1,6 @@
 # Agentic 14-Week Completion Worklog
 
-> Updated: 2026-06-30 16:35
+> Updated: 2026-06-30 20:46
 > Source spec: pasted "Pythontopia 下一代 Agentic 系统可执行推进报告"
 > Rule for this worklog: every phase must record scope, tests, changelog entry, and local commit before it is treated as complete.
 
@@ -23,7 +23,7 @@
 | M0 Baseline Freeze | 2 weeks | startup/API/AG-UI/schema/run trace are consistent and covered by contract tests and golden browser paths | Complete |
 | M1 Learner + Debug Loops | 4 weeks | learner/debug loops can restore, replay, use golden sets, and pass offline regression gates | Complete |
 | M2 Resource + World Loops | 4 weeks | resource review chain and quest/world updates are evidence-bound and feedback-aware | Complete |
-| M3 System Evolution Loop | 4 weeks | trace to eval to failure cluster to policy candidate to canary to rollback is automated | Not complete |
+| M3 System Evolution Loop | 4 weeks | trace to eval to failure cluster to policy candidate to canary to rollback is automated | Complete |
 
 ## M0 Baseline Freeze
 
@@ -202,28 +202,65 @@
 
 ## M3 System Evolution Loop
 
-### Remaining Requirements
+### Done In Current Working Tree
 
-- Add eval dataset item persistence or file-backed dataset loader with stable IDs.
-- Add failure cluster generation.
-- Add policy candidate proposal constrained to one variable.
-- Add offline replay gate.
-- Add canary rollout plan/executor skeleton.
-- Add rollback rules and status.
-- Add CI workflow or local workflow scripts:
-  - offline agent eval,
-  - nightly improve loop,
-  - canary rollout.
-- Add experiment/monitoring view or report.
+- File-backed M3 eval dataset with stable IDs:
+  - `agentic-m3-system-evolution-v1`,
+  - 8 trace cases across RESOURCE/LEARNER/DEBUG/WORLD/IMPROVE,
+  - duplicate/blank stable IDs rejected before schema validation.
+- `pythontopia_graph.eval.m3_system_evolution_gate` now runs the full system evolution chain:
+  - trace/eval dataset load,
+  - failure clustering by `failure_signature`,
+  - one-variable policy candidate proposal,
+  - offline replay gate,
+  - 5% canary dry-run plan/execution,
+  - rollback rules/status.
+- Policy candidate is constrained to a single changed variable:
+  - selected cluster: `evidence_missing`,
+  - changed variable: `retrieval_top_k`,
+  - target policy version: `agentic_loop_v2`.
+- Backend policy registry now has explicit status transitions:
+  - `DRAFT -> CANARY -> RETIRED`,
+  - terminal `RETIRED/REJECTED` policies reject reactivation,
+  - canary and rollback metadata are preserved in policy config.
+- Local workflow scripts added:
+  - `scripts/agentic-offline-eval.sh`,
+  - `scripts/agentic-nightly-improve-loop.sh`,
+  - `scripts/agentic-canary-rollout-dryrun.sh`,
+  - shared runner `scripts/agentic-m3-system-evolution-gate.sh`.
+- Experiment/monitoring report generated:
+  - `docs/reports/2026-06-30-agentic-m3-system-evolution-gate.md`.
 
-### Planned Tests
+### Still Needed Before M3 Complete
 
-- Graph tests for trace export, score join, failure clustering, candidate proposal, replay gate.
-- Backend tests for policy status transitions and rollback metadata.
-- Script tests or dry-run workflow tests for eval/improve/canary commands.
+- None.
+
+### Verification Log
+
+| Time | Command | Result |
+|---|---|---|
+| 2026-06-30 20:36 | `python3 -m pytest -q tests/test_m3_system_evolution_gate.py` | RED: `config_patch` shape invalid, duplicate ID check blocked by schema validation, CLI JSON missing `one_variable_only` |
+| 2026-06-30 20:37 | same graph M3 test | passed: 3 tests after loader, config patch, computed field fixes |
+| 2026-06-30 20:39 | `mvn --settings .mvn/settings.build.xml -q -DskipTests test-compile` | passed: backend compiles after policy transition implementation |
+| 2026-06-30 20:39 | `python3 -m pythontopia_graph.eval.m3_system_evolution_gate` | passed: 8 cases, mean uplift `0.16`, regression rate `0.0`, canary `DRY_RUN_READY` |
+| 2026-06-30 20:41 | `mvn --settings .mvn/settings.build.xml -q -Dtest=LoopRunServiceTest test` | passed: policy transitions and rollback metadata covered with real Flyway/Testcontainers |
+| 2026-06-30 20:42 | `bash -n scripts/agentic-m3-system-evolution-gate.sh scripts/agentic-offline-eval.sh scripts/agentic-nightly-improve-loop.sh scripts/agentic-canary-rollout-dryrun.sh` | passed |
+| 2026-06-30 20:43 | `python3 -m pytest -q tests/test_m3_system_evolution_gate.py tests/test_eval_optimization.py tests/test_agentic_ab.py tests/test_loop_contract.py tests/test_m1_golden_gate.py tests/test_m2_resource_world_gate.py` | passed: 28 tests |
+| 2026-06-30 20:43 | `scripts/agentic-offline-eval.sh && scripts/agentic-nightly-improve-loop.sh && scripts/agentic-canary-rollout-dryrun.sh` | passed: all three workflow dry-runs returned M3 report with `passed=true` |
+| 2026-06-30 20:43 | `mvn --settings .mvn/settings.build.xml -q -Dtest=LoopControllerTest,LoopRunServiceTest,ResourceWorkshopServiceTest,ResourceWorkshopControllerTest,UploadTextExtractorTest,QuestCompleteWithEvidenceTest test` | passed: exit 0, Flyway v183 and M0-M3 backend paths covered |
+| 2026-06-30 20:43 | `npm run typecheck` | passed: `vue-tsc --noEmit` exit 0 |
+| 2026-06-30 20:43 | `npm run test -- --run src/api/__tests__/workshop.spec.ts` | passed: 1 test; existing Pyodide sourcemap warning only |
+| 2026-06-30 20:44 | `curl` health checks for `5173/18080/18091/18092` | passed: all `{"status":"ok"}` after `./dev.sh` startup |
+| 2026-06-30 20:46 | `PYT_E2E_REGISTER=1 npx playwright test e2e/agenticDeepLoop.spec.ts --retries=0` | passed: 30 tests / 1.9m |
+
+### Commit Log
+
+| Phase | Commit | Notes |
+|---|---|---|
+| M3 system evolution loop | `pending local commit` | Stable eval dataset, failure clustering, one-variable policy candidate, offline replay gate, canary dry-run scripts, rollback status and policy lifecycle |
 
 ## Open Risks
 
 - Existing worktree contains unrelated modified files, including licenses, screenshots, arena/boss files, and presentation artifacts. These must remain unstaged unless the user explicitly asks.
 - Full backend `mvn test` has historical Testcontainers port-conflict flakiness; each phase must still run targeted Testcontainers tests plus broader checks when feasible.
-- Real online LLM/provider evaluation is not yet part of the current local verification contract.
+- Real online LLM/provider evaluation is not part of the current local verification contract; M3 is offline + dry-run canary only, with `real_traffic_enabled=false`.
