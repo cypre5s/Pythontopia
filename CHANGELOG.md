@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-06-30 — Agentic Runtime Phase 0：仓库审计、执行计划与进度文档初始化
+
+> 按新粘贴的 Phase 0-9 执行要求重新启动下一代 Agentic Runtime 推进：先做仓库现实审计和长期执行文档，不直接跳入运行时代码。
+
+- **仓库现状确认**：审计 `README.md`、`AGENTS.md`、四端 API 契约、backend/frontend/graph/rag 结构、Flyway 迁移、测试目录、CI 与构建配置，确认当前技术栈、已有 Agent/RAG/Tutor/Workshop/Judge/Town Hub 能力和不可破坏的公开接口。
+- **执行计划落盘**：新增 `docs/agentic-runtime-plan.md`，把新 Phase 0-9 计划与现有 M0-M3 Agentic 基线对齐，明确兼容接口、扩展目录、禁止重引入 inventory/currency/shop、阶段验收和测试矩阵。
+- **进度文档初始化**：新增 `docs/agentic-runtime-progress.md`，记录当前 Phase、已完成基线、正在进行项、下一步、关键决策、改动文件、测试、风险、changelog 链接和 commit 位置，便于后续 AI/开发者接手。
+- **脏树边界**：记录当前工作树存在 unrelated license、截图、arena/boss 和展示文件改动；Phase 0 只允许 stage 本阶段 docs/changelog 文件。
+
 ## 2026-06-30 — Agentic M3：系统进化闭环、离线回放、灰度 dry-run 与回滚状态
 
 > 补齐 14 周计划 M3 System Evolution Loop：把 trace/eval 数据集、失败聚类、单变量策略候选、offline replay gate、5% canary dry-run 和 rollback rules 串成可执行本地 workflow，完成从“评测报告”到“可灰度可回滚策略链”的最后一段。
