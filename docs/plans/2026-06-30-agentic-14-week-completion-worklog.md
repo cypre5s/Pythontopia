@@ -257,7 +257,7 @@
 
 | Phase | Commit | Notes |
 |---|---|---|
-| M3 system evolution loop | `pending local commit` | Stable eval dataset, failure clustering, one-variable policy candidate, offline replay gate, canary dry-run scripts, rollback status and policy lifecycle |
+| M3 system evolution loop | `460ea4d7` | Stable eval dataset, failure clustering, one-variable policy candidate, offline replay gate, canary dry-run scripts, rollback status and policy lifecycle |
 
 ## Open Risks
 
