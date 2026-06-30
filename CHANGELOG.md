@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-06-30 — Agentic Runtime Phase 2：Loop Runtime 骨架与五类有界状态机
+
+> 补齐新 Phase 2 的 graph 侧运行时骨架：五大闭环不再只是 eval/golden 集合里的 loop type，而是有统一模板、状态顺序、边界、fallback、trace/policy 透传和冻结 `LoopResult` 输出的可执行状态机。
+
+- **统一 Runtime 模块**：新增 `pythontopia_graph.runtime.loop_runtime`，提供 `LoopRuntime`、`LoopRuntimeConfig`、`LoopExecutionRequest`、`LoopExecutionResult`、`LoopTemplate` 和 `RuntimeStep`。
+- **五类 loop 模板**：新增 `student_learning_loop / code_debug_loop / resource_generation_loop / game_world_loop / system_evolution_loop`，分别映射 `LEARNER / DEBUG / RESOURCE / WORLD / IMPROVE`，每类都有显式 states、max attempts 和 fallback action。
+- **有界执行语义**：Runtime 对缺证据事件返回 `REJECTED + fallback`，对 `max_steps` 截断返回 `PARTIAL + resume`，非法 step 上限 fail fast，避免退化成无界 ReAct。
+- **结构化输出**：每次执行返回冻结合同里的 `LoopResult`，携带 `policy_version`、`trace_id`、evidence refs、scores、next actions，可被后续 AG-UI、后端控制面和 eval gate 消费。
+- **测试**：新增 `test_loop_runtime.py` 13 条，覆盖五类 loop、happy path、missing evidence fail path、max-step partial checkpoint 和 invalid bounds；联跑 `test_agentic_loop.py`、`test_loop_contract.py`、A/B 与 M1-M3 gates 共 78 tests 通过。
+
 ## 2026-06-30 — Agentic Runtime Phase 1：统一事件模型与 Agent Run 控制平面
 
 > 补齐新 Phase 1 数据底座：在不破坏既有 `/api/loop/**`、Tutor、Workshop、Orchestrator 等公开接口的前提下，新增资源型 Agent Runtime 控制面，并把事件、run、loop state、policy decision 串到真实数据库和测试里。

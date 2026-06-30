@@ -7,10 +7,10 @@
 
 | Field | Value |
 |---|---|
-| Phase | Phase 1 - Unified event model and Agent Run control plane |
+| Phase | Phase 2 - Loop Runtime skeleton and bounded state machines |
 | Status | Complete pending local commit |
-| Goal | Expose unified event and agent-run control-plane APIs, persist loop state and policy decisions, keep existing public APIs compatible |
-| Scope | Backend API, Flyway migration, runtime repository/service extensions, focused tests, docs/changelog |
+| Goal | Provide a shared graph-side runtime skeleton for five bounded loop families with structured LoopResult output |
+| Scope | Graph runtime module, five loop templates, deterministic execution/fallback, focused pytest coverage, docs/changelog |
 
 ## Completed
 
@@ -75,15 +75,30 @@ These are retained as the current implementation baseline. They do not by themse
   - MockMvc API coverage in `AgentRuntimeControllerTest`,
   - Testcontainers/Flyway persistence and validation coverage in `LoopRunServiceTest`.
 
+### Phase 2 Loop Runtime Skeleton Work
+
+- Added `pythontopia_graph.runtime.loop_runtime` as a shared deterministic graph-side runtime layer.
+- Added five bounded loop templates:
+  - `student_learning_loop` → `LEARNER`,
+  - `code_debug_loop` → `DEBUG`,
+  - `resource_generation_loop` → `RESOURCE`,
+  - `game_world_loop` → `WORLD`,
+  - `system_evolution_loop` → `IMPROVE`.
+- Each template now has explicit states, max attempts, fallback action, trace propagation, and policy-version propagation.
+- Runtime execution now returns a structured `LoopExecutionResult` containing a validated `LoopResult` from the frozen loop contract.
+- Fail paths are bounded:
+  - missing evidence returns `REJECTED` with a fallback action,
+  - max-step truncation returns `PARTIAL` with a resume action,
+  - invalid max-step config fails fast.
+
 ## In Progress
 
-- Preparing narrow staging for Phase 1 files only.
+- Preparing narrow staging for Phase 2 files only.
 
 ## Next
 
-1. Finish Phase 1 verification.
-2. Commit Phase 1.
-3. Start Phase 2 by auditing existing graph loop skeletons against the new Phase 2 acceptance requirements.
+1. Commit Phase 2.
+2. Start Phase 3 by auditing existing learner-loop code against Observe → Diagnose → Teach → Practice → Reflect → Update.
 
 ## Decisions
 
@@ -96,19 +111,16 @@ These are retained as the current implementation baseline. They do not by themse
 | Stage narrowly | Current worktree contains unrelated user/generated changes |
 | Reuse `learning_event_log` for `/api/events` instead of adding a duplicate table | The repository already has a tested append-only learning-event memory stream with importance scoring |
 | Expose `/api/agent-runs` as a compatibility control-plane alias over `LoopRunService` | Existing `loop_run` already carries user/session/trace/policy-relevant run audit fields and is used by `/api/loop/runs` |
+| Add graph-side `LoopRuntime` as a small deterministic skeleton, not a replacement for orchestrator agents | Phase 2 asks for common state-machine semantics; Phase 3-7 will deepen each loop without breaking existing orchestrator behavior |
+| Use frozen `LoopResult` contract as the runtime output | Keeps Phase 2 output consumable by AG-UI, eval gates, and backend control plane |
 
 ## Changed Files
 
-Phase 1 intended files:
+Phase 2 intended files:
 
-- `backend/src/main/resources/db/migration/V184__agent_runtime_control_plane.sql`
-- `backend/src/main/java/com/pythontopia/agent/runtime/AgentRuntimeController.java`
-- `backend/src/main/java/com/pythontopia/agent/runtime/AgentRuntimeEventRepository.java`
-- `backend/src/main/java/com/pythontopia/agent/runtime/AgentRuntimeEventService.java`
-- `backend/src/main/java/com/pythontopia/loop/LoopRuntimeRepository.java`
-- `backend/src/main/java/com/pythontopia/loop/LoopRuntimeService.java`
-- `backend/src/test/java/com/pythontopia/agent/runtime/AgentRuntimeControllerTest.java`
-- `backend/src/test/java/com/pythontopia/loop/LoopRunServiceTest.java`
+- `services/pythontopia-graph/pythontopia_graph/runtime/__init__.py`
+- `services/pythontopia-graph/pythontopia_graph/runtime/loop_runtime.py`
+- `services/pythontopia-graph/tests/test_loop_runtime.py`
 - `docs/agentic-runtime-progress.md`
 - `docs/agentic-runtime-plan.md`
 - `CHANGELOG.md`
@@ -125,6 +137,10 @@ Phase 1 intended files:
 | 2026-06-30 | `mvn --settings .mvn/settings.build.xml -q -Dtest=AgentRuntimeControllerTest,LoopControllerTest,LoopRunServiceTest test` | passed: new control plane, legacy `/api/loop/**` controller, and full loop runtime true-db suite |
 | 2026-06-30 | `mvn --settings .mvn/settings.build.xml -q -DskipTests test-compile` | passed |
 | 2026-06-30 | `git diff --check` | passed |
+| 2026-06-30 | `python3 -m pytest -q tests/test_loop_runtime.py` | RED: failed at collection because `pythontopia_graph.runtime` did not exist |
+| 2026-06-30 | `python3 -m pytest -q tests/test_loop_runtime.py` | passed: 13 tests |
+| 2026-06-30 | `python3 -m pytest -q tests/test_loop_runtime.py tests/test_agentic_loop.py tests/test_loop_contract.py` | passed: 61 tests |
+| 2026-06-30 | `python3 -m pytest -q tests/test_loop_runtime.py tests/test_agentic_loop.py tests/test_loop_contract.py tests/test_agentic_ab.py tests/test_m1_golden_gate.py tests/test_m2_resource_world_gate.py tests/test_m3_system_evolution_gate.py` | passed: 78 tests |
 
 ## Risks
 
@@ -133,10 +149,11 @@ Phase 1 intended files:
 - Full online model/provider eval remains outside local verification unless a later phase explicitly wires provider-backed gates.
 - Phase 1 is backend control plane only; frontend runtime visibility and teacher operations remain Phase 8 scope.
 - `GET /api/agent-runs/{id}/stream` currently emits deterministic lifecycle replay events from persisted run metadata; richer live streaming remains a later runtime orchestration concern.
+- Phase 2 runtime is a shared skeleton. It proves five loop families have bounded state flow and structured output, but the full learner/debug/resource/world/evolution domain logic remains Phase 3-7 scope.
 
 ## Changelog Links
 
-- Phase 1 changelog entry in `CHANGELOG.md`.
+- Phase 2 changelog entry in `CHANGELOG.md`.
 
 ## Commits
 
@@ -144,3 +161,5 @@ Phase 1 intended files:
 |---|---|---|
 | Phase 0 | `e0cdbebc` | Baseline audit docs and execution tracking |
 | Phase 1 | `9221e7eb` | Unified event model and Agent Run control plane |
+| Phase 1 docs | `d403d3ea` | Recorded Phase 1 commit hash |
+| Phase 2 | Pending | Loop Runtime skeleton and bounded state machines |

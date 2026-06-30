@@ -108,6 +108,23 @@ This means the new Phase 0-9 plan should not duplicate those pieces blindly. Ins
 - `loop_state` and `policy_decision` are owner-scoped through `LoopRuntimeService`, so cross-user reads/writes fail through the same hidden-existence rule used by `loop_run`.
 - The initial `/api/agent-runs/{id}/stream` endpoint emits AG-UI-compatible lifecycle events from stored run metadata. Later phases may replace this deterministic replay body with live runtime streaming, but the resource path and event names should stay stable.
 
+## Phase 2 Implementation Notes
+
+- `pythontopia_graph.runtime.loop_runtime` is the shared graph-side skeleton for the five loop families. It is intentionally deterministic and contract-first.
+- Supported template names are:
+  - `student_learning_loop`,
+  - `code_debug_loop`,
+  - `resource_generation_loop`,
+  - `game_world_loop`,
+  - `system_evolution_loop`.
+- Each template defines:
+  - `loop_type`,
+  - ordered states,
+  - max attempts,
+  - fallback action.
+- `LoopRuntime.execute()` consumes an `EventEnvelope`, `policy_version`, and `max_steps`, then returns `LoopExecutionResult` with a validated `LoopResult`.
+- This is the common state-machine layer for Phase 3-7. Domain-specific agents should deepen template behavior without changing the frozen `LoopResult` output contract.
+
 ## Stage Rules
 
 Each phase follows this order:
