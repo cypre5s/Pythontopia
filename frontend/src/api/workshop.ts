@@ -6,10 +6,13 @@ import type {
   WorkshopCheckSubmitRequest,
   WorkshopConsumptionResponse,
   WorkshopFeedbackRequest,
+  WorkshopResourceEffectivenessDto,
   WorkshopResourceDto,
   WorkshopResourceListItemDto,
   WorkshopResourceType,
 } from './dto/Workshop';
+
+export type { WorkshopResourceEffectivenessDto } from './dto/Workshop';
 
 export async function createWorkshopResource(
   request: WorkshopCreateRequest,
@@ -48,6 +51,15 @@ export async function getWorkshopResource(
 ): Promise<WorkshopResourceDto> {
   const response = await http.get<WorkshopResourceDto>(
     `/api/workshop/resources/${id}`,
+  );
+  return response.data;
+}
+
+export async function getWorkshopResourceEffectiveness(
+  id: number,
+): Promise<WorkshopResourceEffectivenessDto> {
+  const response = await http.get<WorkshopResourceEffectivenessDto>(
+    `/api/workshop/resources/${id}/effectiveness`,
   );
   return response.data;
 }

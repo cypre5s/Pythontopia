@@ -80,6 +80,20 @@ class UploadTextExtractorTest {
         .hasMessageContaining("DOCX 解析失败");
   }
 
+  @Test
+  void boundaryDeclaresLocalTextPdfDocxAdapterWithoutExternalOcrOrMarker() {
+    var boundary = extractor.boundary();
+
+    assertThat(boundary.adapterName()).isEqualTo("local_text_pdf_docx");
+    assertThat(boundary.supportedExtensions()).contains(".py", ".txt", ".md", ".csv", ".pdf", ".docx");
+    assertThat(boundary.externalOcrEnabled()).isFalse();
+    assertThat(boundary.markerEnabled()).isFalse();
+    assertThat(boundary.extractionModes())
+        .containsEntry(".pdf", "pdfbox_text")
+        .containsEntry(".docx", "poi_xwpf_text")
+        .containsEntry(".py", "utf8_text");
+  }
+
   private static byte[] samplePdf(String text) throws IOException {
     try (PDDocument document = new PDDocument()) {
       PDPage page = new PDPage();

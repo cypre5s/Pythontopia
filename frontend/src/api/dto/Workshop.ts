@@ -181,3 +181,24 @@ export interface WorkshopFeedbackRequest {
   status: 'LIKED' | 'DISLIKED' | 'NONE';
   note?: string;
 }
+
+export type WorkshopEffectivenessSignal =
+  | 'INSUFFICIENT_EVIDENCE'
+  | 'WATCH'
+  | 'EFFECTIVE'
+  | 'NEEDS_REVISION';
+
+export interface WorkshopResourceEffectivenessDto {
+  resourceId: number;
+  feedbackStatus: WorkshopFeedbackStatus;
+  adoptedCount: number;
+  rejectedCount: number;
+  checkCount: number;
+  passedCheckCount: number;
+  failedCheckCount: number;
+  passRate: number;
+  masteryDeltaSum: number;
+  evidencePageIds: number[];
+  signal: WorkshopEffectivenessSignal;
+  evaluationHook: 'resource_feedback_or_check';
+}

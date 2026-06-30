@@ -48,6 +48,7 @@ import com.pythontopia.workshop.dto.ResourceCheckStatus;
 import com.pythontopia.workshop.dto.ResourceCheckSubmitRequest;
 import com.pythontopia.workshop.dto.ResourceCreateRequest;
 import com.pythontopia.workshop.dto.ResourceCreateResponse;
+import com.pythontopia.workshop.dto.ResourceEffectivenessDto;
 import com.pythontopia.workshop.dto.ResourceFeedbackRequest;
 import com.pythontopia.workshop.dto.ResourceFeedbackStatus;
 import com.pythontopia.workshop.dto.ResourceStatusFlag;
@@ -778,6 +779,29 @@ class ResourceWorkshopServiceTest {
 
     verify(resourceFeedbackRepository, Mockito.never())
         .insert(anyLong(), anyLong(), anyString(), any(), anyBoolean());
+  }
+
+  @Test
+  void effectivenessExposesFeedbackChecksMasteryAndEvaluationHook() {
+    when(resourceRepository.findById(eq(1L), eq(7L))).thenReturn(Optional.of(feedbackResourceDto()));
+    when(resourceFeedbackRepository.effectivenessForResource(1L, 7L))
+        .thenReturn(
+            new ResourceFeedbackRepository.ResourceEffectivenessStats(
+                1, 0, 3, 2, 1, new BigDecimal("0.08")));
+
+    ResourceEffectivenessDto dto = service.effectiveness(1L, 7L);
+
+    assertThat(dto.resourceId()).isEqualTo(7L);
+    assertThat(dto.feedbackStatus()).isEqualTo(ResourceFeedbackStatus.NONE);
+    assertThat(dto.adoptedCount()).isEqualTo(1);
+    assertThat(dto.checkCount()).isEqualTo(3);
+    assertThat(dto.passedCheckCount()).isEqualTo(2);
+    assertThat(dto.failedCheckCount()).isEqualTo(1);
+    assertThat(dto.passRate()).isEqualByComparingTo("0.667");
+    assertThat(dto.masteryDeltaSum()).isEqualByComparingTo("0.08");
+    assertThat(dto.evidencePageIds()).containsExactly(101L);
+    assertThat(dto.signal()).isEqualTo("EFFECTIVE");
+    assertThat(dto.evaluationHook()).isEqualTo("resource_feedback_or_check");
   }
 
   private LearningResourceDto feedbackResourceDto() {

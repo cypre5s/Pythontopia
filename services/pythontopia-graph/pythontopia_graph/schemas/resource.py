@@ -166,6 +166,64 @@ class GraphTraceStep(BaseModel):
     note: str | None = None
 
 
+PublishStageName = Literal[
+    "design",
+    "evidence_assembly",
+    "pedagogy_critique",
+    "grounding_safety",
+    "publish_decision",
+    "evaluation_hook",
+]
+
+
+class ResourcePublishStage(BaseModel):
+    name: PublishStageName
+    status: Literal["PASSED", "NEEDS_REVIEW", "FAILED"]
+    trace_nodes: list[str] = Field(default_factory=list)
+    summary: str = Field(min_length=1, max_length=512)
+    evidence_page_ids: list[int] = Field(default_factory=list)
+
+
+class ResourcePublishDecision(BaseModel):
+    status: Literal["PUBLISH", "HOLD_FOR_REVIEW", "REJECT"]
+    reasons: list[str] = Field(default_factory=list)
+    evidence_page_ids: list[int] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _published_resources_need_evidence(self) -> "ResourcePublishDecision":
+        if self.status == "PUBLISH" and not self.evidence_page_ids:
+            raise ValueError("PUBLISH decision requires bound evidence_page_ids")
+        return self
+
+
+class ResourceEvaluationHook(BaseModel):
+    trigger: Literal["resource_feedback_or_check"] = "resource_feedback_or_check"
+    metric_names: list[str] = Field(min_length=1)
+    artifact_ref_fields: list[str] = Field(default_factory=list)
+
+
+class ResourcePublishFlow(BaseModel):
+    schema_version: str = Field(default="resource-publish-flow.v1")
+    stages: list[ResourcePublishStage] = Field(min_length=6, max_length=6)
+    publish_decision: ResourcePublishDecision
+    evaluation_hook: ResourceEvaluationHook
+
+    @model_validator(mode="after")
+    def _stage_order_is_explicit(self) -> "ResourcePublishFlow":
+        expected = [
+            "design",
+            "evidence_assembly",
+            "pedagogy_critique",
+            "grounding_safety",
+            "publish_decision",
+            "evaluation_hook",
+        ]
+        actual = [stage.name for stage in self.stages]
+        if actual != expected:
+            raise ValueError(f"ResourcePublishFlow stages must be ordered as {expected}")
+        return self
+
+
 class ResourceDraft(BaseModel):
     title: str = Field(min_length=1, max_length=256)
     summary: str | None = Field(default=None, max_length=512)
@@ -204,3 +262,4 @@ class ResourceProduceResponse(BaseModel):
     safety_result: SafetyResult
     graph_trace: list[GraphTraceStep] = Field(default_factory=list)
     status: Literal["SUCCESS", "PARTIAL", "FAILED"] = "SUCCESS"
+    publish_flow: ResourcePublishFlow | None = None

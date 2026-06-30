@@ -10,6 +10,7 @@ import com.pythontopia.workshop.dto.ResourceCheckSubmitRequest;
 import com.pythontopia.workshop.dto.ResourceConsumptionResponse;
 import com.pythontopia.workshop.dto.ResourceCreateRequest;
 import com.pythontopia.workshop.dto.ResourceCreateResponse;
+import com.pythontopia.workshop.dto.ResourceEffectivenessDto;
 import com.pythontopia.workshop.dto.ResourceFeedbackRequest;
 import com.pythontopia.workshop.dto.ResourceListItemDto;
 import com.pythontopia.workshop.dto.ResourceType;
@@ -69,6 +70,13 @@ public class ResourceWorkshopController {
       @CurrentUser CurrentUserPrincipal user, @PathVariable Long id) {
     requireStudent(user);
     return service.findOne(user.userId(), id);
+  }
+
+  @GetMapping("/{id}/effectiveness")
+  public ResourceEffectivenessDto effectiveness(
+      @CurrentUser CurrentUserPrincipal user, @PathVariable Long id) {
+    requireStudent(user);
+    return service.effectiveness(user.userId(), id);
   }
 
   @PostMapping("/{id}/consumptions")

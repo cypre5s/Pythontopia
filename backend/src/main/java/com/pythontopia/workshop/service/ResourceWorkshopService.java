@@ -32,6 +32,7 @@ import com.pythontopia.workshop.dto.ResourceCheckSubmitRequest;
 import com.pythontopia.workshop.dto.ResourceConsumptionResponse;
 import com.pythontopia.workshop.dto.ResourceCreateRequest;
 import com.pythontopia.workshop.dto.ResourceCreateResponse;
+import com.pythontopia.workshop.dto.ResourceEffectivenessDto;
 import com.pythontopia.workshop.dto.ResourceFeedbackRequest;
 import com.pythontopia.workshop.dto.ResourceFeedbackStatus;
 import com.pythontopia.workshop.dto.ResourceListItemDto;
@@ -44,6 +45,7 @@ import com.pythontopia.workshop.repository.LearningResourceRepository;
 import com.pythontopia.workshop.repository.ResourceLearningCheckRepository;
 import com.pythontopia.workshop.repository.ResourceFeedbackRepository;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -437,6 +439,31 @@ public class ResourceWorkshopService {
     diff.put("kcCodes", resource.kcCodes() == null ? List.of() : resource.kcCodes());
     diff.put("resourceType", resource.type() == null ? null : resource.type().name());
     profileService.applyPassiveRevision(userId, "RESOURCE_FEEDBACK", diff);
+  }
+
+  @Transactional(readOnly = true)
+  public ResourceEffectivenessDto effectiveness(Long userId, Long resourceId) {
+    LearningResourceDto resource = findOne(userId, resourceId);
+    ResourceFeedbackRepository.ResourceEffectivenessStats stats =
+        resourceFeedbackRepository.effectivenessForResource(userId, resource.id());
+    BigDecimal passRate =
+        stats.checkCount() == 0
+            ? BigDecimal.ZERO.setScale(3, RoundingMode.HALF_UP)
+            : BigDecimal.valueOf(stats.passedCheckCount())
+                .divide(BigDecimal.valueOf(stats.checkCount()), 3, RoundingMode.HALF_UP);
+    return new ResourceEffectivenessDto(
+        resource.id(),
+        resource.feedbackStatus(),
+        stats.adoptedCount(),
+        stats.rejectedCount(),
+        stats.checkCount(),
+        stats.passedCheckCount(),
+        stats.failedCheckCount(),
+        passRate,
+        stats.masteryDeltaSum(),
+        resource.evidencePageIds() == null ? List.of() : resource.evidencePageIds(),
+        effectivenessSignal(resource.feedbackStatus(), stats),
+        "resource_feedback_or_check");
   }
 
   private void enforceThrottle(Long userId) {
@@ -978,6 +1005,28 @@ public class ResourceWorkshopService {
     boolean adopted = status == ResourceFeedbackStatus.LIKED;
     int rating = adopted ? 5 : 2;
     resourceFeedbackRepository.insert(userId, resource.id(), agent, rating, adopted);
+  }
+
+  private String effectivenessSignal(
+      ResourceFeedbackStatus feedbackStatus,
+      ResourceFeedbackRepository.ResourceEffectivenessStats stats) {
+    if (feedbackStatus == ResourceFeedbackStatus.DISLIKED
+        || (stats.failedCheckCount() > stats.passedCheckCount()
+            && stats.rejectedCount() >= stats.adoptedCount()
+            && stats.checkCount() > 0)) {
+      return "NEEDS_REVISION";
+    }
+    if (feedbackStatus == ResourceFeedbackStatus.LIKED
+        || stats.adoptedCount() > 0
+        || (stats.checkCount() > 0
+            && stats.passedCheckCount() >= stats.failedCheckCount()
+            && stats.masteryDeltaSum().compareTo(BigDecimal.ZERO) > 0)) {
+      return "EFFECTIVE";
+    }
+    if (stats.checkCount() == 0 && stats.adoptedCount() == 0 && stats.rejectedCount() == 0) {
+      return "INSUFFICIENT_EVIDENCE";
+    }
+    return "WATCH";
   }
 
   private String agentName(ResourceType type) {

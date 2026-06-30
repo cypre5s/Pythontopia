@@ -3,6 +3,7 @@ package com.pythontopia.workshop.upload.parser;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import java.util.Set;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -24,6 +25,21 @@ public class UploadTextExtractor {
       Set.of(".py", ".txt", ".md", ".csv", ".pdf", ".docx");
 
   private static final Set<String> TEXT_EXTENSIONS = Set.of(".py", ".txt", ".md", ".csv");
+
+  public UploadIngestionBoundary boundary() {
+    return new UploadIngestionBoundary(
+        "local_text_pdf_docx",
+        Set.copyOf(ALLOWED_EXTENSIONS),
+        false,
+        false,
+        Map.of(
+            ".py", "utf8_text",
+            ".txt", "utf8_text",
+            ".md", "utf8_text",
+            ".csv", "utf8_text",
+            ".pdf", "pdfbox_text",
+            ".docx", "poi_xwpf_text"));
+  }
 
   public ExtractedContent extract(String ext, byte[] bytes) {
     if (bytes == null) {

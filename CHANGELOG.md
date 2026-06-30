@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-06-30 — Agentic M2：资源发布流、世界提案契约、效果信号与 ingestion 边界
+
+> 补齐 14 周计划 M2 Resource + World Loops：资源不再只返回生成结果，而是带显式发布决策；世界/任务更新必须 evidence-bound；工坊可读取资源发布后的效果信号；上传解析边界明确为本地文本/PDF/DOCX adapter。
+
+- **资源发布流显式化**：`ResourceProduceResponse` 新增 `publish_flow`，固定 `design → evidence_assembly → pedagogy_critique → grounding_safety → publish_decision → evaluation_hook` 六阶段；只有有证据页且 grounding/safety 通过才 `PUBLISH`，无证据进入 `HOLD_FOR_REVIEW`，失败进入 `REJECT`。
+- **M2 离线 gate**：新增 `pythontopia_graph.eval.m2_resource_world_gate`，覆盖资源发布/无证据 hold/空证据拒绝、世界提案证据绑定/未绑定拒绝、本地 ingestion 边界 6 个 case；报告输出到 `docs/reports/2026-06-30-agentic-m2-resource-world-gate.md`。
+- **世界/任务提案契约**：新增 `WorldLoopProposal`，要求 `state_patch`、`new_quests`、`npc_dialogue`、`reward_plan` 以及顶层 proposal 都带 `evidence_refs`，避免小镇状态、任务和 NPC 台词脱离学习证据。
+- **资源效果信号 API**：新增 `GET /api/workshop/resources/{id}/effectiveness`，汇总 `resource_feedback`、`resource_learning_check`、掌握度增量和证据页，返回 `INSUFFICIENT_EVIDENCE / WATCH / EFFECTIVE / NEEDS_REVISION` 与 `resource_feedback_or_check` evaluation hook。
+- **OCR/Marker ingestion 边界**：`UploadTextExtractor.boundary()` 声明当前只使用 `local_text_pdf_docx`（UTF-8 文本、PDFBox、POI XWPF），明确 `externalOcrEnabled=false`、`markerEnabled=false`，避免把未接入的外部 OCR/Marker 当作已实现能力。
+- **前端与 E2E 合同**：前端 API client 新增 `getWorkshopResourceEffectiveness()`；`agenticDeepLoop.spec.ts` 新增发布后 effectiveness 断言，完整浏览器链路 30 条通过。
+
 ## 2026-06-30 — Agentic 缺口补齐：真实 scorer A/B、强证据工坊检查、Runtime 持久化骨架
 
 > 基于 code review 结论继续补齐“全面 Agentic 系统”缺口：把 A/B 从内嵌分数改为候选输出评分，收紧资源学习闭环证据门槛，并新增可恢复 runtime artifact 持久化。

@@ -1,5 +1,6 @@
 package com.pythontopia.workshop.repository;
 
+import java.math.BigDecimal;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -43,4 +44,49 @@ public class ResourceFeedbackRepository {
         rating,
         adopted);
   }
+
+  public ResourceEffectivenessStats effectivenessForResource(Long userId, Long resourceId) {
+    return jdbcTemplate.queryForObject(
+        """
+        WITH feedback AS (
+          SELECT
+            COUNT(*) FILTER (WHERE adopted = TRUE) AS adopted_count,
+            COUNT(*) FILTER (WHERE adopted = FALSE) AS rejected_count
+          FROM resource_feedback
+          WHERE user_id = ? AND resource_id = ?
+        ),
+        checks AS (
+          SELECT
+            COUNT(*) AS check_count,
+            COUNT(*) FILTER (WHERE status = 'PASSED') AS passed_check_count,
+            COUNT(*) FILTER (WHERE status = 'FAILED') AS failed_check_count,
+            COALESCE(SUM(mastery_delta), 0) AS mastery_delta_sum
+          FROM resource_learning_check
+          WHERE user_id = ? AND resource_id = ?
+        )
+        SELECT adopted_count, rejected_count, check_count, passed_check_count,
+               failed_check_count, mastery_delta_sum
+        FROM feedback, checks
+        """,
+        (rs, rowNum) ->
+            new ResourceEffectivenessStats(
+                rs.getInt("adopted_count"),
+                rs.getInt("rejected_count"),
+                rs.getInt("check_count"),
+                rs.getInt("passed_check_count"),
+                rs.getInt("failed_check_count"),
+                rs.getBigDecimal("mastery_delta_sum")),
+        userId,
+        resourceId,
+        userId,
+        resourceId);
+  }
+
+  public record ResourceEffectivenessStats(
+      int adoptedCount,
+      int rejectedCount,
+      int checkCount,
+      int passedCheckCount,
+      int failedCheckCount,
+      BigDecimal masteryDeltaSum) {}
 }

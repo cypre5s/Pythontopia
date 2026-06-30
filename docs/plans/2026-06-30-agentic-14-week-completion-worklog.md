@@ -1,6 +1,6 @@
 # Agentic 14-Week Completion Worklog
 
-> Updated: 2026-06-30 16:22
+> Updated: 2026-06-30 16:35
 > Source spec: pasted "Pythontopia 下一代 Agentic 系统可执行推进报告"
 > Rule for this worklog: every phase must record scope, tests, changelog entry, and local commit before it is treated as complete.
 
@@ -22,7 +22,7 @@
 |---|---:|---|---|
 | M0 Baseline Freeze | 2 weeks | startup/API/AG-UI/schema/run trace are consistent and covered by contract tests and golden browser paths | Complete |
 | M1 Learner + Debug Loops | 4 weeks | learner/debug loops can restore, replay, use golden sets, and pass offline regression gates | Complete |
-| M2 Resource + World Loops | 4 weeks | resource review chain and quest/world updates are evidence-bound and feedback-aware | Not complete |
+| M2 Resource + World Loops | 4 weeks | resource review chain and quest/world updates are evidence-bound and feedback-aware | Complete |
 | M3 System Evolution Loop | 4 weeks | trace to eval to failure cluster to policy candidate to canary to rollback is automated | Not complete |
 
 ## M0 Baseline Freeze
@@ -133,29 +133,72 @@
 
 ## M2 Resource + World Loops
 
-### Remaining Requirements
+### Done In Current Working Tree
 
-- Make resource loop publish flow explicit:
+- Resource loop publish flow is explicit in graph responses:
   - design,
   - evidence assembly,
   - pedagogy critique,
   - grounding/safety,
   - publish decision,
   - evaluation hook.
-- Persist or expose publish feedback and effectiveness signal.
-- Add quest/world loop proposal contract:
+- `pythontopia_graph.eval.m2_resource_world_gate` adds a 6-case offline gate for:
+  - publish with bound evidence,
+  - hold partial/no-evidence resources,
+  - reject publish decisions without evidence,
+  - accept evidence-bound world proposals,
+  - reject unbound world proposals,
+  - declare local ingestion boundary.
+- Resource publish feedback/effectiveness is exposed at `GET /api/workshop/resources/{id}/effectiveness`:
+  - feedback adoption/rejection counts,
+  - resource check counts,
+  - pass rate,
+  - mastery delta sum,
+  - evidence page ids,
+  - `resource_feedback_or_check` evaluation hook.
+- Quest/world loop proposal contract added:
   - `state_patch`,
   - `new_quests`,
   - `npc_dialogue`,
   - `reward_plan`,
   - evidence binding.
-- Add OCR/Marker ingestion boundary or a clear local adapter with tests.
+- Upload ingestion boundary declares current adapter as `local_text_pdf_docx`:
+  - `.py/.txt/.md/.csv` via UTF-8 text,
+  - `.pdf` via PDFBox text extraction,
+  - `.docx` via POI XWPF text extraction,
+  - external OCR and Marker disabled.
+- Frontend API client exposes `getWorkshopResourceEffectiveness()`.
+- Browser E2E now checks resource effectiveness after a passing micro-check.
 
-### Planned Tests
+### Still Needed Before M2 Complete
 
-- Graph tests for resource publish/reject decisions.
-- Backend tests for quest/world evidence requirements.
-- Browser E2E for evidence-bound quest/world update after learning event.
+- None.
+
+### Verification Log
+
+| Time | Command | Result |
+|---|---|---|
+| 2026-06-30 16:28 | `python3 -m pytest -q tests/test_m2_resource_world_gate.py` | RED: missing `pythontopia_graph.schemas.world_loop` |
+| 2026-06-30 16:28 | `mvn --settings .mvn/settings.build.xml -q -Dtest=ResourceWorkshopServiceTest#effectivenessExposesFeedbackChecksMasteryAndEvaluationHook,ResourceWorkshopControllerTest,UploadTextExtractorTest#boundaryDeclaresLocalTextPdfDocxAdapterWithoutExternalOcrOrMarker test` | RED: missing `ResourceEffectivenessDto` |
+| 2026-06-30 16:30 | same graph M2 test | passed: 3 tests after publish flow + world proposal schema |
+| 2026-06-30 16:30 | same Maven focus set | passed after effectiveness API + ingestion boundary |
+| 2026-06-30 16:32 | `npm run test -- --run src/api/__tests__/workshop.spec.ts` | RED: missing `getWorkshopResourceEffectiveness` |
+| 2026-06-30 16:33 | same frontend API test | passed: 1 test after API client implementation |
+| 2026-06-30 16:34 | `python3 -m pytest -q tests/test_m2_resource_world_gate.py` | RED: missing `pythontopia_graph.eval.m2_resource_world_gate` |
+| 2026-06-30 16:35 | `python3 -m pytest -q tests/test_m2_resource_world_gate.py` | passed: 4 tests after M2 gate implementation |
+| 2026-06-30 16:35 | `python3 -m pythontopia_graph.eval.m2_resource_world_gate` | passed: 6/6 M2 gate cases |
+| 2026-06-30 16:35 | `python3 -m pytest -q tests/test_m2_resource_world_gate.py tests/test_resource_graph.py tests/test_resource_schemas.py tests/test_loop_contract.py` | passed: 20 tests |
+| 2026-06-30 16:35 | `mvn --settings .mvn/settings.build.xml -q -Dtest=ResourceWorkshopServiceTest,ResourceWorkshopControllerTest,UploadTextExtractorTest,QuestCompleteWithEvidenceTest test` | passed: exit 0 |
+| 2026-06-30 16:35 | `npm run test -- --run src/api/__tests__/workshop.spec.ts` | passed: 1 test; existing Pyodide sourcemap warning only |
+| 2026-06-30 16:35 | `npm run typecheck` | passed: `vue-tsc --noEmit` exit 0 |
+| 2026-06-30 16:38 | `curl` health checks for `5173/18080/18091/18092` | passed: all `{"status":"ok"}` |
+| 2026-06-30 16:40 | `PYT_E2E_REGISTER=1 npx playwright test e2e/agenticDeepLoop.spec.ts --retries=0` | passed: 30 tests / 2.4m, includes effectiveness assertion |
+
+### Commit Log
+
+| Phase | Commit | Notes |
+|---|---|---|
+| M2 resource/world gate | pending | PublishFlow, WorldLoopProposal, resource effectiveness API, local ingestion boundary, browser effectiveness assertion |
 
 ## M3 System Evolution Loop
 

@@ -66,6 +66,21 @@ interface CheckBody {
   decisionReason: string;
 }
 
+interface ResourceEffectivenessBody {
+  resourceId: number;
+  feedbackStatus: 'NONE' | 'LIKED' | 'DISLIKED';
+  adoptedCount: number;
+  rejectedCount: number;
+  checkCount: number;
+  passedCheckCount: number;
+  failedCheckCount: number;
+  passRate: number;
+  masteryDeltaSum: number;
+  evidencePageIds: number[];
+  signal: 'INSUFFICIENT_EVIDENCE' | 'WATCH' | 'EFFECTIVE' | 'NEEDS_REVISION';
+  evaluationHook: 'resource_feedback_or_check';
+}
+
 interface SubmissionBody {
   id: number;
   status: 'PASSED' | 'FAILED' | 'ERROR' | 'PENDING' | 'RUNNING';
@@ -515,6 +530,23 @@ test.describe('下一代 Agentic 深度闭环 E2E @agentic-deep', () => {
     expect(result.nextAction).toBe('pass');
     expect(result.loopState).toBe('PASSED');
     expect(result.masteryDelta).toBeGreaterThan(0);
+  });
+
+  test('13b resource effectiveness 暴露发布后反馈与效果信号', async () => {
+    const effectiveness = await getJson<ResourceEffectivenessBody>(
+      api,
+      session,
+      `/api/workshop/resources/${mainResourceId}/effectiveness`,
+    );
+
+    expect(effectiveness.resourceId).toBe(mainResourceId);
+    expect(effectiveness.evaluationHook).toBe('resource_feedback_or_check');
+    expect(effectiveness.checkCount).toBeGreaterThanOrEqual(1);
+    expect(effectiveness.passedCheckCount).toBeGreaterThanOrEqual(1);
+    expect(effectiveness.passRate).toBeGreaterThan(0);
+    expect(effectiveness.masteryDeltaSum).toBeGreaterThan(0);
+    expect(Array.isArray(effectiveness.evidencePageIds)).toBe(true);
+    expect(effectiveness.signal).toBe('EFFECTIVE');
   });
 
   test('14 micro quiz 首次失败进入补救而不是假装通过', async () => {
