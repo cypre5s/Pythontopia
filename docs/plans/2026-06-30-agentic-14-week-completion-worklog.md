@@ -1,6 +1,6 @@
 # Agentic 14-Week Completion Worklog
 
-> Updated: 2026-06-30 16:20
+> Updated: 2026-06-30 16:22
 > Source spec: pasted "Pythontopia 下一代 Agentic 系统可执行推进报告"
 > Rule for this worklog: every phase must record scope, tests, changelog entry, and local commit before it is treated as complete.
 
@@ -21,7 +21,7 @@
 | Phase | Plan Window | Completion Bar | Current Status |
 |---|---:|---|---|
 | M0 Baseline Freeze | 2 weeks | startup/API/AG-UI/schema/run trace are consistent and covered by contract tests and golden browser paths | Complete |
-| M1 Learner + Debug Loops | 4 weeks | learner/debug loops can restore, replay, use golden sets, and pass offline regression gates | Verified; commit pending |
+| M1 Learner + Debug Loops | 4 weeks | learner/debug loops can restore, replay, use golden sets, and pass offline regression gates | Complete |
 | M2 Resource + World Loops | 4 weeks | resource review chain and quest/world updates are evidence-bound and feedback-aware | Not complete |
 | M3 System Evolution Loop | 4 weeks | trace to eval to failure cluster to policy candidate to canary to rollback is automated | Not complete |
 
@@ -103,8 +103,7 @@
 
 ### Still Needed Before M1 Complete
 
-- Stage only M1-owned files.
-- Commit M1 learner/debug replay and golden gate.
+- None.
 
 ### Verification Log
 
@@ -130,7 +129,7 @@
 
 | Phase | Commit | Notes |
 |---|---|---|
-| M1 learner/debug replay + golden gate | pending commit | ReplayPlan API, 12-case M1 golden gate, canary metadata-only, browser replay assertion |
+| M1 learner/debug replay + golden gate | `c8d85544` | ReplayPlan API, 12-case M1 golden gate, canary metadata-only, browser replay assertion |
 
 ## M2 Resource + World Loops
 
