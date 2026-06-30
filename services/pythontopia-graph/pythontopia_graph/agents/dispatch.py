@@ -88,7 +88,7 @@ class AgentDispatcher:
         if agent_name == "DebugAgent":
             return await self._dispatch_debug(step, started)
         if agent_name == "PathPlannerAgent":
-            return await self._dispatch_path_planner(step, started)
+            return await self._dispatch_path_planner(step, user_id, started)
         if agent_name == "TutorAgent":
             return await self._dispatch_tutor(step, started)
         # 资源类 agent：StoryboardAgent / ResourceDesignerAgent / PracticeAgent
@@ -182,7 +182,7 @@ class AgentDispatcher:
         )
 
     async def _dispatch_path_planner(
-        self, step: PlanStep, started: float
+        self, step: PlanStep, user_id: int, started: float
     ) -> DispatchResult:
         """PathPlannerAgent：确定性路径规划，用可用上下文构建最小请求并真调 agent。"""
         from pythontopia_graph.schemas.path import (
@@ -201,7 +201,7 @@ class AgentDispatcher:
         ]
         try:
             request = PathPlannerRequest(
-                user_id=1,
+                user_id=user_id,
                 pack_id=43,
                 profile=PlannerProfileSnapshot(has_profile=False),
                 kcs=kc_snapshots,

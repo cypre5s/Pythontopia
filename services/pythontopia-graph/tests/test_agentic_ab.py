@@ -53,6 +53,10 @@ def test_repeated_agentic_ab_report_proves_treatment_stably_beats_baseline() -> 
         "regression_rate",
         "schema_validity",
     }
+    assert all(
+        case.baseline_output is not None and case.treatment_output is not None
+        for case in report.source_cases
+    )
 
 
 def test_agentic_ab_gates_reject_unstable_or_regressing_candidate() -> None:
@@ -61,19 +65,23 @@ def test_agentic_ab_gates_reject_unstable_or_regressing_candidate() -> None:
             case_id="unstable-1",
             loop_type="LEARNER",
             scenario="treatment regresses one learning case",
-            baseline_scores={
-                "evidence_binding": 0.80,
-                "learning_action_quality": 0.80,
-                "safety": 0.90,
-                "schema_validity": 1.00,
-                "cost_control": 0.80,
+            required_evidence_ids=[101],
+            expected_action_keywords=["补救", "微测"],
+            baseline_output={
+                "evidence_page_ids": [101],
+                "next_action": "基于第 101 页安排补救微测",
+                "safety_violations": [],
+                "schema_valid": True,
+                "tool_call_count": 2,
+                "token_count": 900,
             },
-            treatment_scores={
-                "evidence_binding": 0.70,
-                "learning_action_quality": 0.70,
-                "safety": 0.90,
-                "schema_validity": 1.00,
-                "cost_control": 0.80,
+            treatment_output={
+                "evidence_page_ids": [],
+                "next_action": "继续阅读即可",
+                "safety_violations": [],
+                "schema_valid": True,
+                "tool_call_count": 2,
+                "token_count": 900,
             },
         )
     ]
@@ -93,6 +101,75 @@ def test_agentic_ab_gates_reject_unstable_or_regressing_candidate() -> None:
     assert report.mean_uplift < 0
     assert report.regression_rate == 1.0
     assert any("regression_rate" in reason for reason in report.gate_reasons)
+
+
+def test_agentic_ab_scores_actual_candidate_outputs_not_embedded_scores() -> None:
+    cases = [
+        AgenticAbCase(
+            case_id="candidate-output-scoring",
+            loop_type="RESOURCE",
+            scenario="Scorer should inspect evidence, action, safety, schema, and cost.",
+            required_evidence_ids=[101, 102],
+            expected_action_keywords=["引用", "修订"],
+            baseline_output={
+                "evidence_page_ids": [101],
+                "next_action": "生成讲义",
+                "safety_violations": [],
+                "schema_valid": True,
+                "tool_call_count": 1,
+                "token_count": 600,
+            },
+            treatment_output={
+                "evidence_page_ids": [101, 102],
+                "next_action": "引用课件后修订讲义",
+                "safety_violations": [],
+                "schema_valid": True,
+                "tool_call_count": 3,
+                "token_count": 1300,
+            },
+        )
+    ]
+
+    report = run_agentic_ab(cases=cases, repeats=1, seed=1)
+
+    run = report.cases[0]
+    assert run.treatment_score > run.baseline_score
+    assert run.treatment_metrics["evidence_binding"] == 1.0
+    assert run.baseline_metrics["evidence_binding"] < 1.0
+
+
+def test_agentic_ab_schema_validity_is_computed_from_outputs() -> None:
+    cases = [
+        AgenticAbCase(
+            case_id="bad-schema",
+            loop_type="IMPROVE",
+            scenario="Schema-invalid candidate must fail the schema gate.",
+            required_evidence_ids=[],
+            expected_action_keywords=["回滚"],
+            baseline_output={
+                "evidence_page_ids": [],
+                "next_action": "回滚策略",
+                "safety_violations": [],
+                "schema_valid": True,
+                "tool_call_count": 1,
+                "token_count": 500,
+            },
+            treatment_output={
+                "evidence_page_ids": [],
+                "next_action": "回滚策略",
+                "safety_violations": [],
+                "schema_valid": False,
+                "tool_call_count": 1,
+                "token_count": 500,
+            },
+        )
+    ]
+
+    report = run_agentic_ab(cases=cases, repeats=1, seed=1)
+
+    assert report.schema_validity == 0.0
+    assert report.passed is False
+    assert any("schema_validity" in reason for reason in report.gate_reasons)
 
 
 def test_agentic_ab_exports_loop_contract_eval_records() -> None:

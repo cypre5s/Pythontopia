@@ -235,6 +235,57 @@ async def test_dispatcher_resource_result_includes_resource_graph_review_trace()
 
 
 @pytest.mark.asyncio
+async def test_dispatcher_path_planner_uses_request_user_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """PathPlannerAgent must receive the caller user_id, not the historical user_id=1 fallback."""
+    from pythontopia_graph.agents.path_planner_agent import PathPlannerAgent
+    from pythontopia_graph.schemas.path import (
+        PathPlannerGroundingResult,
+        PathPlannerResponse,
+        PathPlannerSafetyResult,
+    )
+
+    captured: dict[str, int] = {}
+
+    def fake_plan(self, request):  # type: ignore[no-untyped-def]
+        captured["user_id"] = request.user_id
+        return PathPlannerResponse(
+            user_id=request.user_id,
+            pack_id=request.pack_id,
+            status="SUCCESS",
+            goal_summary="personalized path",
+            nodes=[],
+            safety_result=PathPlannerSafetyResult(passed=True),
+            grounding_result=PathPlannerGroundingResult(passed=True),
+            deterministic_signature="test-signature",
+        )
+
+    monkeypatch.setattr(PathPlannerAgent, "plan", fake_plan)
+
+    ctx = DispatchContext(
+        provider=StubProvider([]),
+        evidence_fetcher=StaticEvidenceFetcher([HIT]),
+        valid_kc_codes={"PY43-KC-001"},
+    )
+    dispatcher = AgentDispatcher(ctx)
+    step = PlanStep(
+        id="s-path",
+        phase="learn",
+        title="规划下一步",
+        detail="根据当前学生画像规划",
+        agent="PathPlannerAgent",
+        kc_codes=["PY43-KC-001"],
+        panel="workshop",
+    )
+
+    result = await dispatcher.dispatch(step, user_id=4242)
+
+    assert result.ok is True
+    assert captured["user_id"] == 4242
+
+
+@pytest.mark.asyncio
 async def test_dispatcher_resource_graph_failure_is_structured_failure() -> None:
     """编排内坏资源草稿必须被 ResourceGraph 拦住并作为结构化失败返回。"""
     bad_payload = {

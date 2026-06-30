@@ -3,6 +3,8 @@ package com.pythontopia.loop;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.loop.dto.LoopRunDto;
 import com.pythontopia.loop.dto.LoopRunRecordRequest;
@@ -44,6 +46,8 @@ class LoopRunServiceTest {
 
   private static JdbcTemplate jdbcTemplate;
   private static LoopRunService service;
+  private static LoopRuntimeService runtimeService;
+  private static ObjectMapper objectMapper;
 
   private Long userId;
   private Long otherUserId;
@@ -64,12 +68,26 @@ class LoopRunServiceTest {
 
     jdbcTemplate = new JdbcTemplate(dataSource);
     service = new LoopRunService(new LoopRunRepository(jdbcTemplate));
+    objectMapper = new ObjectMapper();
+    runtimeService =
+        new LoopRuntimeService(
+            new LoopRunRepository(jdbcTemplate),
+            new LoopRuntimeRepository(jdbcTemplate, objectMapper));
   }
 
   @BeforeEach
   void seedUsers() {
     jdbcTemplate.update(
+        "DELETE FROM loop_eval_result WHERE loop_run_id IN (SELECT id FROM loop_run WHERE user_id IN (SELECT id FROM users WHERE username LIKE 'loop-svc-%'))");
+    jdbcTemplate.update(
+        "DELETE FROM agent_tool_call WHERE loop_run_id IN (SELECT id FROM loop_run WHERE user_id IN (SELECT id FROM users WHERE username LIKE 'loop-svc-%'))");
+    jdbcTemplate.update(
+        "DELETE FROM agent_run WHERE loop_run_id IN (SELECT id FROM loop_run WHERE user_id IN (SELECT id FROM users WHERE username LIKE 'loop-svc-%'))");
+    jdbcTemplate.update(
+        "DELETE FROM loop_checkpoint WHERE loop_run_id IN (SELECT id FROM loop_run WHERE user_id IN (SELECT id FROM users WHERE username LIKE 'loop-svc-%'))");
+    jdbcTemplate.update(
         "DELETE FROM loop_run WHERE user_id IN (SELECT id FROM users WHERE username LIKE 'loop-svc-%')");
+    jdbcTemplate.update("DELETE FROM policy_registry WHERE namespace LIKE 'loop-svc-%'");
     jdbcTemplate.update("DELETE FROM users WHERE username LIKE 'loop-svc-%'");
     userId = insertStudent("loop-svc-a-" + System.nanoTime());
     otherUserId = insertStudent("loop-svc-b-" + System.nanoTime());
@@ -319,6 +337,87 @@ class LoopRunServiceTest {
     assertCode(() -> service.getForOwner(userId, 999_999_999L), HttpStatus.NOT_FOUND);
   }
 
+  @Test
+  void runtimeArtifactsRoundTripAndRestoreByOwner() {
+    LoopRunDto run = service.record(userId, fullRequest());
+
+    var policy =
+        runtimeService.registerPolicy(
+            "loop-svc-runtime",
+            "learner-loop",
+            "v1",
+            "ACTIVE",
+            json("max_steps", 4));
+    var checkpoint =
+        runtimeService.saveCheckpoint(
+            userId, run.id(), 2, "READY_TO_RESUME", json("lastNode", "dispatch"), "cursor-2");
+    var toolCall =
+        runtimeService.recordToolCall(
+            userId,
+            run.id(),
+            checkpoint.id(),
+            "resource.generate",
+            json("kc", "PY43-KC-001"),
+            json("status", "SUCCESS"),
+            "SUCCESS",
+            321);
+    var agentRun =
+        runtimeService.recordAgentRun(
+            userId,
+            run.id(),
+            "ResourceDesignerAgent",
+            "SUCCESS",
+            "生成 input 讲义",
+            json("resourceId", 7));
+    List<String> loopTypes = List.of("LEARNER", "DEBUG", "RESOURCE", "WORLD", "IMPROVE");
+    var evalResults =
+        loopTypes.stream()
+            .map(
+                loopType ->
+                    runtimeService.recordEvalResult(
+                        userId,
+                        run.id(),
+                        "agentic-ab-runtime",
+                        loopType.toLowerCase() + "-case",
+                        loopType,
+                        policy.policyVersion(),
+                        json("mean_uplift", 0.23),
+                        true))
+            .toList();
+
+    var snapshot = runtimeService.restoreSnapshot(userId, run.id());
+
+    assertThat(policy.id()).isPositive();
+    assertThat(checkpoint.id()).isPositive();
+    assertThat(toolCall.id()).isPositive();
+    assertThat(agentRun.id()).isPositive();
+    assertThat(evalResults).extracting(LoopRuntimeService.EvalResultRecord::id)
+        .allSatisfy(id -> assertThat(id).isPositive());
+    assertThat(snapshot.loopRun().id()).isEqualTo(run.id());
+    assertThat(snapshot.checkpoints()).extracting(LoopRuntimeService.CheckpointRecord::resumeCursor)
+        .containsExactly("cursor-2");
+    assertThat(snapshot.toolCalls()).extracting(LoopRuntimeService.ToolCallRecord::toolName)
+        .containsExactly("resource.generate");
+    assertThat(snapshot.agentRuns()).extracting(LoopRuntimeService.AgentRunRecord::agentName)
+        .containsExactly("ResourceDesignerAgent");
+    assertThat(snapshot.evalResults()).extracting(LoopRuntimeService.EvalResultRecord::loopType)
+        .containsExactlyElementsOf(loopTypes);
+    assertThat(snapshot.evalResults()).extracting(LoopRuntimeService.EvalResultRecord::datasetId)
+        .containsOnly("agentic-ab-runtime");
+  }
+
+  @Test
+  void runtimeArtifactsAreOwnerScoped() {
+    LoopRunDto run = service.record(userId, fullRequest());
+
+    assertCode(
+        () ->
+            runtimeService.saveCheckpoint(
+                otherUserId, run.id(), 1, "READY", json("node", "dispatch"), "cursor"),
+        HttpStatus.NOT_FOUND);
+    assertCode(() -> runtimeService.restoreSnapshot(otherUserId, run.id()), HttpStatus.NOT_FOUND);
+  }
+
   private List<String> readToolsFromDb(Long id) {
     return jdbcTemplate.query(
         "SELECT tools_used FROM loop_run WHERE id = ?",
@@ -340,5 +439,17 @@ class LoopRunServiceTest {
         .isInstanceOf(BusinessException.class)
         .extracting(e -> ((BusinessException) e).status())
         .isEqualTo(expected);
+  }
+
+  private ObjectNode json(String key, Object value) {
+    ObjectNode node = objectMapper.createObjectNode();
+    if (value instanceof Number number) {
+      node.put(key, number.doubleValue());
+    } else if (value instanceof Boolean bool) {
+      node.put(key, bool);
+    } else {
+      node.put(key, String.valueOf(value));
+    }
+    return node;
   }
 }

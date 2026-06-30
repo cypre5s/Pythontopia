@@ -1,12 +1,22 @@
 # Changelog
 
+## 2026-06-30 — Agentic 缺口补齐：真实 scorer A/B、强证据工坊检查、Runtime 持久化骨架
+
+> 基于 code review 结论继续补齐“全面 Agentic 系统”缺口：把 A/B 从内嵌分数改为候选输出评分，收紧资源学习闭环证据门槛，并新增可恢复 runtime artifact 持久化。
+
+- **A/B 评估改为 scorer-backed**：`pythontopia_graph.eval.agentic_ab` 的 25 个五类 loop 案例现在保存 baseline/treatment candidate output，由统一 scorer 从 `evidence_page_ids`、`next_action`、安全/schema 字段和工具/Token 预算计算指标；新增测试覆盖 schema invalid、candidate output 变化会改变分数，避免预置 treatment 分数冒充评估。
+- **工坊证据门禁收紧**：微测不再把 KC 编号、标题泛词当作理解证据；`OPERATION` 只有绑定本人且 KC 匹配的正式训练场 PASSED submission 才能产生正向掌握度，单独代码片段会进入补救而不是 pass。
+- **Runtime/Policy/Checkpoint/Eval 持久化骨架**：新增 Flyway `V182__loop_runtime_artifacts.sql`，落地 `policy_registry`、`loop_checkpoint`、`agent_run`、`agent_tool_call`、`loop_eval_result`；新增 `LoopRuntimeService/Repository`，支持按 owner 保存 checkpoint/tool call/agent run/eval result 并恢复快照，真库测试覆盖五类 loop eval result。
+- **个性化路径串线修复**：`AgentDispatcher` 的 `PathPlannerAgent` 不再硬编码 `user_id=1`，新增测试确保当前请求用户透传到 `PathPlannerRequest`。
+- **E2E 口径同步**：`agenticDeepLoop.spec.ts` 改为用资源真实摘要通过微测，并断言无正式提交的 operation evidence 不写入掌握度。
+
 ## 2026-06-29 — 下一代 Agentic 深化验收：90 轮 A/B + 28 条 E2E + R-14 bootstrap 收口
 
 > 对“下一代 Agentic 系统推进报告”逐项复查后继续补深：把 A/B 评估从单次样例升级为 25 案例 × 90 轮稳定性门禁，把浏览器 E2E 扩到 28 条真实闭环，并修掉验收暴露的 R-14 启动源不一致、默认画像缺失、hub NPC 状态缺失问题。
 
 - **要求审查落盘**：新增 `docs/plans/2026-06-29-next-gen-agentic-ab-e2e-deepening.md`，把报告中的统一 Loop Runtime、冻结 schema、五类学习循环、AG-UI 语义事件、A/B/Eval/Canary 和 R-14 `town_hub` 启动源逐项标成已完成 / 本轮补强 / 后续上线项。
 - **A/B 评估门禁加厚**：新增 `pythontopia_graph.eval.agentic_ab` 与 `tests/test_agentic_ab.py`，固定 baseline=`legacy_single_shot`、treatment=`agentic_loop_v1`，覆盖 learner/debug/resource/world/improve 五类循环；用户要求“轮数翻 10 倍”后，报告改为 90 轮重复回放。
-- **A/B 结果可审计**：生成 `docs/reports/2026-06-29-agentic-ab-evaluation.md`，25 个案例 × 90 轮全部通过 gate：mean uplift `0.2791`，stability rate `1.0000`，regression rate `0.0000`，schema validity `1.0000`；每个 loop type 单独列 uplift 和稳定性，避免只报总体均值。
+- **A/B 结果可审计**：生成 `docs/reports/2026-06-29-agentic-ab-evaluation.md`，25 个案例 × 90 轮全部通过 gate；2026-06-30 起该报告由 candidate-output scorer 重生成，当前 mean uplift `0.3915`，stability rate `1.0000`，regression rate `0.0000`，schema validity `1.0000`；每个 loop type 单独列 uplift 和稳定性，避免只报总体均值。
 - **28 条真实 E2E**：新增 `frontend/e2e/agenticDeepLoop.spec.ts`，覆盖 bootstrap、legacy session 兼容、loop run 审计、越权拒绝、runtime summary、memory brief、evidence graph、资源生成/消费/微测、连续失败补救、正式提交证据、Bug Mine 分层锁、推荐和 workshop 紧凑点击流。
 - **R-14 启动源修复**：`player_state.map_key` 默认值与历史外围图统一归一为 `town_hub`，新增 `V181__r14_player_map_key_town_hub.sql`；`POST /api/game/bootstrap` 惰性创建默认画像和 11 个 hub NPC 状态，避免新用户第一帧缺 profile / NPC 状态。
 - **验证**：frontend `npm run typecheck` 通过；graph 定向 `python3 -m pytest -q tests/test_agentic_ab.py` 通过（5 tests）；后端定向 `GameBootstrapServiceTest,GameBootstrapRepositoryTest,GameBootstrapControllerTest` 通过；真实 `./dev.sh` 栈健康端点 `5173/18080/18091/18092` 均 `ok`，Flyway `181` 成功；Playwright 新增全链路 `agenticDeepLoop.spec.ts` 28 passed / 2.8m（`--retries=0`）；`git diff --check` 通过。

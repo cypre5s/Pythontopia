@@ -325,6 +325,31 @@ class ResourceWorkshopServiceTest {
   }
 
   @Test
+  void microQuizRejectsKcCodeOnlyAnswer() {
+    when(resourceRepository.findById(1L, 7L)).thenReturn(Optional.of(resource()));
+    when(checkRepository.insert(any())).thenReturn(39L);
+
+    ResourceCheckResponse response =
+        service.submitCheck(
+            1L,
+            7L,
+            new ResourceCheckSubmitRequest(
+                "PY43-KC-001",
+                ResourceCheckEvidenceType.MICRO_QUIZ,
+                "PY43-KC-001",
+                null));
+
+    assertThat(response.status()).isEqualTo(ResourceCheckStatus.FAILED);
+    assertThat(response.masteryDelta()).isLessThan(BigDecimal.ZERO);
+    assertThat(response.nextAction()).isEqualTo("remediate");
+    ArgumentCaptor<LearningEvent.ResourceCheckCompleted> eventCaptor =
+        ArgumentCaptor.forClass(LearningEvent.ResourceCheckCompleted.class);
+    verify(eventPublisher).publishEvent(eventCaptor.capture());
+    assertThat(eventCaptor.getValue().passed()).isFalse();
+    assertThat(eventCaptor.getValue().delta()).isLessThan(BigDecimal.ZERO);
+  }
+
+  @Test
   void submitCheckRejectsKcOutsideResource() {
     when(resourceRepository.findById(1L, 7L)).thenReturn(Optional.of(resource()));
 
@@ -345,10 +370,8 @@ class ResourceWorkshopServiceTest {
   }
 
   @Test
-  void submitOperationEvidencePassesWhenCodeSnippetIsProvided() {
+  void submitOperationEvidenceWithoutFormalSubmissionDoesNotGrantMastery() {
     when(resourceRepository.findById(1L, 7L)).thenReturn(Optional.of(resource()));
-    when(resourceRepository.sumMasteryRewardsToday(anyLong(), anyString(), any()))
-        .thenReturn(BigDecimal.ZERO);
     when(checkRepository.insert(any())).thenReturn(33L);
 
     var evidence = objectMapper.createObjectNode();
@@ -364,9 +387,11 @@ class ResourceWorkshopServiceTest {
                 "我运行了 input 并打印结果",
                 evidence));
 
-    assertThat(response.status()).isEqualTo(ResourceCheckStatus.PASSED);
-    assertThat(response.masteryDelta()).isPositive();
-    assertThat(response.nextAction()).isEqualTo("pass");
+    assertThat(response.status()).isEqualTo(ResourceCheckStatus.FAILED);
+    assertThat(response.masteryDelta()).isLessThan(BigDecimal.ZERO);
+    assertThat(response.nextAction()).isEqualTo("remediate");
+    assertThat(response.decisionReason()).contains("先补一轮练习");
+    verify(resourceRepository, Mockito.never()).sumMasteryRewardsToday(anyLong(), anyString(), any());
   }
 
   @Test

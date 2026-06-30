@@ -55,6 +55,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -78,6 +79,11 @@ public class ResourceWorkshopService {
 
   /** 注入资源 prompt 的近期记忆要点条数（Task 2.1）。 */
   private static final int MEMORY_HIGHLIGHT_LIMIT = 5;
+
+  private static final Pattern KC_CODE_PATTERN =
+      Pattern.compile("(?i)^(PY43-)?KC-?\\d+$");
+  private static final Set<String> MICRO_QUIZ_STOPWORDS =
+      Set.of("讲义", "资源", "学习", "课程", "知识点", "python", "函数", "用于");
 
   private final WorkshopProperties properties;
   private final WorkshopGraphClient graphClient;
@@ -775,28 +781,9 @@ public class ResourceWorkshopService {
       }
       return CheckEvaluation.failed("这次训练场提交还没有通过，需要重新规划补救。", "submission not passed");
     }
-    String evidenceText = jsonText(operationEvidence).toLowerCase(Locale.ROOT);
-    String answerText = Optional.ofNullable(answer).orElse("").toLowerCase(Locale.ROOT);
-    String combined = answerText + "\n" + evidenceText;
-    boolean hasStructuredEvidence =
-        operationEvidence != null
-            && (operationEvidence.hasNonNull("code")
-                || operationEvidence.hasNonNull("submissionId")
-                || operationEvidence.hasNonNull("result")
-                || operationEvidence.hasNonNull("output"));
-    boolean looksLikeCode =
-        combined.contains("input(")
-            || combined.contains("print(")
-            || combined.contains("```")
-            || combined.contains("=")
-            || answer.contains("\n")
-            || evidenceText.contains("\n");
-    if (hasStructuredEvidence && looksLikeCode) {
-      return CheckEvaluation.passed("已收到可复查的操作证据。", "operation evidence accepted");
-    }
     return CheckEvaluation.failed(
-        "需要提交可复查的操作证据，例如代码片段、运行输出或提交编号。",
-        "operation evidence missing");
+        "操作证据需要绑定一次通过判题的训练场提交，单独代码片段暂不写入掌握度。",
+        "operation evidence requires passed submission");
   }
 
   private LoopDecision decideNext(
@@ -830,13 +817,14 @@ public class ResourceWorkshopService {
 
   private List<String> resourceKeywords(LearningResourceDto resource) {
     List<String> values = new ArrayList<>();
-    addKeywords(values, resource.title());
     addKeywords(values, resource.summary());
-    if (resource.kcCodes() != null) {
-      resource.kcCodes().forEach(code -> addKeywords(values, code));
-    }
     addKeywords(values, jsonText(resource.content()));
-    return values.stream().distinct().limit(80).toList();
+    return values.stream()
+        .map(String::trim)
+        .filter(this::isMicroQuizKeyword)
+        .distinct()
+        .limit(80)
+        .toList();
   }
 
   private void addKeywords(List<String> values, String raw) {
@@ -850,6 +838,17 @@ public class ResourceWorkshopService {
         values.add(token.trim());
       }
     }
+  }
+
+  private boolean isMicroQuizKeyword(String keyword) {
+    if (keyword == null || keyword.length() < 2) {
+      return false;
+    }
+    String normalized = keyword.toLowerCase(Locale.ROOT).trim();
+    if (KC_CODE_PATTERN.matcher(normalized).matches()) {
+      return false;
+    }
+    return !MICRO_QUIZ_STOPWORDS.contains(normalized);
   }
 
   private String jsonText(JsonNode node) {

@@ -40,6 +40,7 @@ interface ResourceBody {
   kcCodes: string[];
   type: string;
   title: string;
+  summary: string;
   evidencePageIds: number[];
   groundingStatus: string;
   safetyStatus: string;
@@ -81,6 +82,14 @@ interface LoopRunBody {
   groundingPass: boolean;
   safetyPass: boolean;
   traceId: string;
+}
+
+interface RuntimeSnapshotBody {
+  loopRun: LoopRunBody;
+  checkpoints: Array<{ id: number; resumeCursor: string; stepIndex: number }>;
+  toolCalls: Array<{ id: number; toolName: string; status: string }>;
+  agentRuns: Array<{ id: number; agentName: string; status: string }>;
+  evalResults: Array<{ id: number; datasetId: string; loopType: string; passed: boolean }>;
 }
 
 interface BugMineSessionBody {
@@ -328,6 +337,45 @@ test.describe('下一代 Agentic 深度闭环 E2E @agentic-deep', () => {
     expect(found.safetyPass).toBe(true);
   });
 
+  test('05b loop runtime artifacts 可写入并恢复快照', async () => {
+    const checkpoint = await postJson<{ id: number }>(api, session, `/api/loop/runs/${loopRun.id}/checkpoints`, {
+      stepIndex: 2,
+      status: 'READY',
+      state: { node: 'dispatch' },
+      resumeCursor: 'agentic-e2e-cursor',
+    });
+    await postJson(api, session, `/api/loop/runs/${loopRun.id}/tool-calls`, {
+      checkpointId: checkpoint.id,
+      toolName: 'resource.generate',
+      requestPayload: { kcCode: KC_CODE },
+      responsePayload: { status: 'SUCCESS' },
+      status: 'SUCCESS',
+      latencyMs: 120,
+    });
+    await postJson(api, session, `/api/loop/runs/${loopRun.id}/agent-runs`, {
+      agentName: 'ResourceDesignerAgent',
+      status: 'SUCCESS',
+      inputSummary: '生成资源',
+      outputArtifact: { resourceId: mainResourceId },
+    });
+    await postJson(api, session, `/api/loop/runs/${loopRun.id}/eval-results`, {
+      datasetId: 'agentic-e2e-runtime',
+      itemId: 'learner-case',
+      loopType: 'LEARNER',
+      policyVersion: 'agentic_loop_v1',
+      metrics: { mean_uplift: 0.2 },
+      passed: true,
+    });
+
+    const snapshot = await getJson<RuntimeSnapshotBody>(api, session, `/api/loop/runs/${loopRun.id}/runtime`);
+
+    expect(snapshot.loopRun.id).toBe(loopRun.id);
+    expect(snapshot.checkpoints[0].resumeCursor).toBe('agentic-e2e-cursor');
+    expect(snapshot.toolCalls[0].toolName).toBe('resource.generate');
+    expect(snapshot.agentRuns[0].agentName).toBe('ResourceDesignerAgent');
+    expect(snapshot.evalResults[0].loopType).toBe('LEARNER');
+  });
+
   test('05 loop run 拒绝超过上限的自由循环', async () => {
     const response = await api.post(u('/api/loop/runs'), {
       headers: authHeaders(session),
@@ -431,11 +479,13 @@ test.describe('下一代 Agentic 深度闭环 E2E @agentic-deep', () => {
     expect(consumption.evidenceRequired).toContain('micro_check');
   });
 
-  test('13 micro quiz 命中资源 KC 后通过闭环', async () => {
+  test('13 micro quiz 命中资源内容后通过闭环', async () => {
+    const resource = await getJson<ResourceBody>(api, session, `/api/workshop/resources/${mainResourceId}`);
+    const summary = resource.summary || 'input 函数用于读取用户输入';
     const result = await submitCheck(api, session, mainResourceId, {
       kcCode: KC_CODE,
       evidenceType: 'MICRO_QUIZ',
-      answerText: `${KC_CODE} 的核心是用正式练习证据证明我读懂了资源。`,
+      answerText: `我读懂的要点是：${summary}。我会再用正式练习证据证明。`,
     });
 
     expect(result.status).toBe('PASSED');
@@ -470,7 +520,7 @@ test.describe('下一代 Agentic 深度闭环 E2E @agentic-deep', () => {
     expect(result.remediationType).toBe('CODE_LAB');
   });
 
-  test('16 operation evidence 有代码证据时可通过', async () => {
+  test('16 operation evidence 无正式提交时不写入掌握度', async () => {
     const result = await submitCheck(api, session, mainResourceId, {
       kcCode: KC_CODE,
       evidenceType: 'OPERATION',
@@ -481,9 +531,10 @@ test.describe('下一代 Agentic 深度闭环 E2E @agentic-deep', () => {
       },
     });
 
-    expect(result.status).toBe('PASSED');
-    expect(result.nextAction).toBe('pass');
-    expect(result.decisionReason).toMatch(/微测通过|闭环完成/);
+    expect(result.status).toBe('FAILED');
+    expect(result.nextAction).toBe('remediate');
+    expect(result.masteryDelta).toBeLessThan(0);
+    expect(result.decisionReason).toContain('先补一轮练习');
   });
 
   test('17 failed formal submission drives replan', async () => {
