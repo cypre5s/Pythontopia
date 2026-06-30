@@ -7,10 +7,10 @@
 
 | Field | Value |
 |---|---|
-| Phase | Phase 5 - Resource generation loop |
-| Status | Complete pending local commit |
-| Goal | Implement Goal -> Generate -> Critique -> Revise -> Publish -> Evaluate as a structured artifact lifecycle |
-| Scope | Existing resource graph, publish flow, artifact/effectiveness baseline, graph runtime resource loop, API/state exposure, focused tests |
+| Phase | Phase 6 - Game world loop |
+| Status | In progress - audit |
+| Goal | Implement State -> Quest -> Action -> Reward -> World Update -> New Quest as a learning-bound world loop |
+| Scope | Existing world proposal schema, quests/mainline/town hub state, non-economic reward constraints, graph runtime world loop, API/state exposure, focused tests |
 
 ## Completed
 
@@ -182,12 +182,12 @@ These are retained as the current implementation baseline. They do not by themse
 
 ## In Progress
 
-- Preparing narrow staging for Phase 5 files only.
+- Phase 6 audit of existing world loop proposal schema, quest/mainline state, town_hub constraints, and non-economic reward rules.
 
 ## Next
 
-1. Commit Phase 5.
-2. Start Phase 6 by auditing existing world loop proposal, quests, mainline/town hub state, reward constraints, and M2 world evidence gate against State -> Quest -> Action -> Reward -> World Update -> New Quest.
+1. Write Phase 6 RED tests for world state reduction, quest graph generation, non-economic rewards, evidence-bound patches, rollback, and no inventory/currency/shop leakage.
+2. Implement the structured graph-side world state loop and any API-visible status route needed for Phase 6.
 
 ## Decisions
 
@@ -283,4 +283,4 @@ Phase 5 intended files:
 | Phase 3 docs | `3d6c11ea` | Recorded Phase 3 commit hash |
 | Phase 4 | `f14175da` | Code debug loop implementation and tests |
 | Phase 4 docs | `cd40df60` | Recorded Phase 4 commit hash |
-| Phase 5 | pending | Resource lifecycle loop implementation and tests |
+| Phase 5 | `f930554c` | Resource lifecycle loop implementation and tests |
