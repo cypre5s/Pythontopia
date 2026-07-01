@@ -291,8 +291,7 @@ These are retained as the current implementation baseline. They do not by themse
 
 ## Next
 
-1. Record the Phase 9 commit hash after the local commit lands.
-2. Keep future production work scoped to external-provider eval, real canary traffic, or scheduled telemetry ingestion; those are outside this local Phase 9 handoff.
+1. Keep future production work scoped to external-provider eval, real canary traffic, or scheduled telemetry ingestion; those are outside this local Phase 9 handoff.
 
 ## Decisions
 
@@ -457,4 +456,4 @@ Phase 9 intended files:
 | Phase 7 docs | `03d65f69` | Recorded Phase 7 commit hash |
 | Phase 8 | `1fe47064` | Frontend and teacher operations |
 | Phase 8 docs | `8500421a` | Recorded Phase 8 commit hash |
-| Phase 9 | pending | Full-chain testing and Beta handoff |
+| Phase 9 | `c590bf40` | Full-chain testing and Beta handoff |
