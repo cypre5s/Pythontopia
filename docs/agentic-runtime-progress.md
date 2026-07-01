@@ -1,6 +1,6 @@
 # Pythontopia Agentic Runtime Progress
 
-> Updated: 2026-06-30
+> Updated: 2026-07-01
 > Current objective: execute the pasted Agentic Runtime Phase 0-9 plan from the current `Pythontopia` checkout, with real implementation, tests, changelog updates, progress docs, and local commits per phase.
 
 ## Current Phase
@@ -8,7 +8,7 @@
 | Field | Value |
 |---|---|
 | Phase | Phase 9 - Full-chain testing and Beta handoff |
-| Status | Not started - next audit |
+| Status | Complete - local full-chain verification passed |
 | Goal | Prove local full-chain Agentic Learning Loop and prepare Beta handoff docs |
 | Scope | Backend/graph/rag/frontend/db/API/E2E verification, startup health, docs, changelog, final commit |
 
@@ -264,14 +264,35 @@ These are retained as the current implementation baseline. They do not by themse
   - warn states remain `需关注`,
   - the panel surfaces next actions and evidence refs instead of explanatory filler.
 
+### Phase 9 Full-Chain Testing And Beta Handoff Work
+
+- Extended `frontend/e2e/agenticDeepLoop.spec.ts` with final runtime operations acceptance:
+  - `GET /api/ai/runtime/operations` must expose `LEARNER / DEBUG / RESOURCE / WORLD / IMPROVE`,
+  - governance must expose `resource_review / world_patch_review / policy_canary_review`,
+  - loop and governance rows must carry real labels, next actions, review routes, and evidence refs.
+- Added browser-level coverage that opens the workshop "调用过程" drawer and verifies the real `RuntimeOperationsPanel` renders "闭环运维状态" and governance content.
+- Started the local stack through root `./dev.sh` and confirmed:
+  - backend `:18080` healthy,
+  - graph `:18091` healthy,
+  - rag `:18092` healthy,
+  - Vite frontend `:5173` healthy.
+- Ran the full local verification matrix for the Agentic Runtime slice:
+  - graph runtime/gates,
+  - RAG service tests,
+  - backend runtime/summary/control-plane tests,
+  - frontend typecheck,
+  - Phase 8 API/component/page tests,
+  - Playwright browser deep loop.
+- Added `docs/reports/2026-07-01-agentic-runtime-phase9-handoff.md` with verification matrix, browser coverage, boundaries, and demo notes.
+
 ## In Progress
 
-- Phase 9 audit and full-chain verification preparation.
+- None.
 
 ## Next
 
-1. Run full local verification stack for backend, graph, rag, frontend, and browser E2E.
-2. Update Beta handoff docs and final progress/changelog records.
+1. Record the Phase 9 commit hash after the local commit lands.
+2. Keep future production work scoped to external-provider eval, real canary traffic, or scheduled telemetry ingestion; those are outside this local Phase 9 handoff.
 
 ## Decisions
 
@@ -303,6 +324,8 @@ These are retained as the current implementation baseline. They do not by themse
 | Put Phase 8 frontend access behind Spring `/api` | Vite only proxies `/api`; direct graph `/runtime` calls would bypass backend auth and client contracts |
 | Add operations endpoint instead of loosening student summary | Teachers need governance visibility, but the existing summary endpoint was intentionally student scoped |
 | Reuse one operations panel across student and teacher surfaces | Keeps UI/API semantics consistent and avoids a second fake teacher-only runtime model |
+| Make Phase 9 browser acceptance assert runtime operations UI directly | Phase 8 must be proven in the same full-chain flow, not only in component tests |
+| Treat local provider-free verification as the Beta handoff boundary | Online LLM/provider quality eval and production canary traffic need separate credentials, traffic policy, and operations windows |
 
 ## Changed Files
 
@@ -323,6 +346,13 @@ Phase 8 intended files:
 - `frontend/tests/pages/TeacherReviewPage.spec.ts`
 - `docs/agentic-runtime-progress.md`
 - `docs/agentic-runtime-plan.md`
+- `CHANGELOG.md`
+
+Phase 9 intended files:
+
+- `frontend/e2e/agenticDeepLoop.spec.ts`
+- `docs/reports/2026-07-01-agentic-runtime-phase9-handoff.md`
+- `docs/agentic-runtime-progress.md`
 - `CHANGELOG.md`
 
 ## Tests
@@ -365,6 +395,18 @@ Phase 8 intended files:
 | 2026-06-30 | `npm run typecheck` | passed |
 | 2026-06-30 | `mvn --settings .mvn/settings.build.xml -q -Dtest=AiRuntimeSummaryServiceTest,AiRuntimeSummaryControllerTest,AgentRuntimeControllerTest,LoopControllerTest test` | passed |
 | 2026-06-30 | `git diff --check` | passed |
+| 2026-07-01 | `python3 -m pytest -q tests/test_system_evolution_loop.py tests/test_m3_system_evolution_gate.py tests/test_loop_runtime.py tests/test_loop_contract.py tests/test_world_state_loop.py tests/test_resource_lifecycle_loop.py tests/test_code_debug_loop.py tests/test_student_learning_loop.py tests/test_m1_golden_gate.py tests/test_m2_resource_world_gate.py` | passed: 60 tests |
+| 2026-07-01 | `python3 -m pytest -q` in `services/pythontopia-rag` | passed: 129 tests |
+| 2026-07-01 | `mvn --settings .mvn/settings.build.xml -q -Dtest=AiRuntimeSummaryServiceTest,AiRuntimeSummaryControllerTest,AgentRuntimeControllerTest,LoopControllerTest test` | passed: exit 0 |
+| 2026-07-01 | `npm run typecheck` | passed: exit 0 |
+| 2026-07-01 | `npm run test -- --run tests/api/aiRuntime.spec.ts tests/components/workshop/RuntimeOperationsPanel.spec.ts tests/pages/WorkshopPage.spec.ts tests/pages/TeacherReviewPage.spec.ts` | passed: 28 tests; existing Pyodide sourcemap warning and non-failing jsdom ECONNREFUSED log remain |
+| 2026-07-01 | `./dev.sh` | passed: Postgres, backend, graph, rag, and Vite reached ready state |
+| 2026-07-01 | `curl --noproxy '*' -fsS http://127.0.0.1:18080/healthz` | passed: `{"status":"ok"}` |
+| 2026-07-01 | `curl --noproxy '*' -fsS http://127.0.0.1:18091/healthz` | passed: `{"status":"ok"}` |
+| 2026-07-01 | `curl --noproxy '*' -fsS http://127.0.0.1:18092/healthz` | passed: `{"status":"ok"}` |
+| 2026-07-01 | `curl --noproxy '*' -fsS http://127.0.0.1:5173/healthz` | passed: `{"status":"ok"}` |
+| 2026-07-01 | `PYT_E2E_REGISTER=1 npx playwright test e2e/agenticDeepLoop.spec.ts --project=chromium --workers=1` | passed: 32 tests / 1.5m after runtime operations API and call-drawer UI assertions |
+| 2026-07-01 | `git diff --check` | passed |
 
 ## Risks
 
@@ -386,11 +428,12 @@ Phase 8 intended files:
 - Phase 7 is graph-side runtime and API-visible status; actual production traffic routing remains dry-run/human-approved per existing canary policy.
 - Phase 7 monitor decisions consume snapshots rather than reading live telemetry directly; wiring scheduled telemetry ingestion remains later deployment/ops work.
 - Phase 8 operations status is derived from current runtime/evidence summaries; it is a visibility/governance surface, not an automatic promotion or rollback executor.
-- Phase 8 frontend verification is component/page/unit focused; full browser click-through and local stack health are Phase 9 deliverables.
+- Phase 9 local verification does not claim external LLM/provider-backed quality evaluation, production canary traffic, or scheduled telemetry ingestion.
 
 ## Changelog Links
 
 - Phase 8 changelog entry in `CHANGELOG.md`.
+- Phase 9 changelog entry in `CHANGELOG.md`.
 
 ## Commits
 
@@ -413,4 +456,5 @@ Phase 8 intended files:
 | Phase 7 | `396fe6cb` | System evolution loop implementation and tests |
 | Phase 7 docs | `03d65f69` | Recorded Phase 7 commit hash |
 | Phase 8 | `1fe47064` | Frontend and teacher operations |
-| Phase 8 docs | pending | Recorded Phase 8 commit hash |
+| Phase 8 docs | `8500421a` | Recorded Phase 8 commit hash |
+| Phase 9 | pending | Full-chain testing and Beta handoff |

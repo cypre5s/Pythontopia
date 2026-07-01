@@ -130,6 +130,25 @@ interface RuntimeSummaryBody {
   gates: Array<{ key: string; status: string; value: number }>;
 }
 
+interface RuntimeOperationsBody {
+  loops: Array<{
+    loopType: string;
+    label: string;
+    status: 'PASS' | 'WARN' | 'INSUFFICIENT_EVIDENCE';
+    latestTraceId: string;
+    nextAction: string;
+    evidenceRefs: string[];
+  }>;
+  governance: Array<{
+    key: string;
+    label: string;
+    status: 'PASS' | 'WARN' | 'INSUFFICIENT_EVIDENCE';
+    action: string;
+    reviewRoute: string;
+    evidenceRefs: string[];
+  }>;
+}
+
 interface MemoryBriefBody {
   facts: unknown[];
   weak_kcs: unknown[];
@@ -452,6 +471,25 @@ test.describe('下一代 Agentic 深度闭环 E2E @agentic-deep', () => {
     expect(summary.gates.map((gate) => gate.key)).toContain('protocol.evidence_fields');
   });
 
+  test('07b runtime operations 暴露五类 loop 与治理项', async () => {
+    const operations = await getJson<RuntimeOperationsBody>(api, session, '/api/ai/runtime/operations');
+
+    expect(operations.loops.map((loop) => loop.loopType)).toEqual([
+      'LEARNER',
+      'DEBUG',
+      'RESOURCE',
+      'WORLD',
+      'IMPROVE',
+    ]);
+    expect(operations.loops.every((loop) => loop.label && loop.nextAction)).toBe(true);
+    expect(operations.governance.map((item) => item.key)).toEqual([
+      'resource_review',
+      'world_patch_review',
+      'policy_canary_review',
+    ]);
+    expect(operations.governance.every((item) => item.action && item.reviewRoute)).toBe(true);
+  });
+
   test('08 memory brief 返回深层个性化字段', async () => {
     const brief = await getJson<MemoryBriefBody>(
       api,
@@ -737,7 +775,24 @@ test.describe('下一代 Agentic 深度闭环 E2E @agentic-deep', () => {
     }
   });
 
-  test('28 workshop browser can submit micro-check from compact rail', async ({ browser }) => {
+  test('28 workshop browser shows runtime operations in call drawer', async ({ browser }) => {
+    const context = await browser.newContext();
+    await injectSession(context, session);
+    await suppressFirstVisitOverlays(context);
+    const page = await context.newPage();
+    try {
+      await page.goto('/workshop', { waitUntil: 'domcontentloaded' });
+      await expect(page.getByTestId('workshop-page')).toBeVisible({ timeout: 60_000 });
+      await page.getByTestId('workshop-open-calls').click();
+      await expect(page.getByTestId('workshop-drawer-calls')).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByTestId('runtime-operations')).toContainText('闭环运维状态', { timeout: 30_000 });
+      await expect(page.getByTestId('runtime-operations')).toContainText(/资源审核|策略灰度/);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test('29 workshop browser can submit micro-check from compact rail', async ({ browser }) => {
     const context = await browser.newContext();
     await injectSession(context, session);
     await suppressFirstVisitOverlays(context);
