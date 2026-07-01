@@ -411,5 +411,6 @@ Phase 8 intended files:
 | Phase 6 | `89795575` | Game world loop implementation and tests |
 | Phase 6 docs | `e6cac5c9` | Recorded Phase 6 commit hash |
 | Phase 7 | `396fe6cb` | System evolution loop implementation and tests |
-| Phase 7 docs | pending | Recorded Phase 7 commit hash |
-| Phase 8 | pending | Frontend and teacher operations |
+| Phase 7 docs | `03d65f69` | Recorded Phase 7 commit hash |
+| Phase 8 | `1fe47064` | Frontend and teacher operations |
+| Phase 8 docs | pending | Recorded Phase 8 commit hash |
