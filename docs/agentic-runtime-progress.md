@@ -284,6 +284,9 @@ These are retained as the current implementation baseline. They do not by themse
   - Phase 8 API/component/page tests,
   - Playwright browser deep loop.
 - Added `docs/reports/2026-07-01-agentic-runtime-phase9-handoff.md` with verification matrix, browser coverage, boundaries, and demo notes.
+- Added `frontend/e2e/agenticDeepMatrix.spec.ts` with 153 additional deep-chain checks.
+- Ran the requested 100+ E2E acceptance: original 32-test deep loop plus 153-test matrix, total 185 passed.
+- Added `docs/reports/2026-07-01-agentic-runtime-100-e2e-results.md` with a tabular result summary.
 
 ## In Progress
 
@@ -350,7 +353,9 @@ Phase 8 intended files:
 Phase 9 intended files:
 
 - `frontend/e2e/agenticDeepLoop.spec.ts`
+- `frontend/e2e/agenticDeepMatrix.spec.ts`
 - `docs/reports/2026-07-01-agentic-runtime-phase9-handoff.md`
+- `docs/reports/2026-07-01-agentic-runtime-100-e2e-results.md`
 - `docs/agentic-runtime-progress.md`
 - `CHANGELOG.md`
 
@@ -405,6 +410,8 @@ Phase 9 intended files:
 | 2026-07-01 | `curl --noproxy '*' -fsS http://127.0.0.1:18092/healthz` | passed: `{"status":"ok"}` |
 | 2026-07-01 | `curl --noproxy '*' -fsS http://127.0.0.1:5173/healthz` | passed: `{"status":"ok"}` |
 | 2026-07-01 | `PYT_E2E_REGISTER=1 npx playwright test e2e/agenticDeepLoop.spec.ts --project=chromium --workers=1` | passed: 32 tests / 1.5m after runtime operations API and call-drawer UI assertions |
+| 2026-07-01 | `npx playwright test e2e/agenticDeepMatrix.spec.ts --project=chromium --list` | passed: listed 153 tests |
+| 2026-07-01 | `PYT_E2E_REGISTER=1 npx playwright test e2e/agenticDeepLoop.spec.ts e2e/agenticDeepMatrix.spec.ts --project=chromium --workers=1` | passed: 185 tests / 3.4m |
 | 2026-07-01 | `git diff --check` | passed |
 
 ## Risks
@@ -457,3 +464,4 @@ Phase 9 intended files:
 | Phase 8 | `1fe47064` | Frontend and teacher operations |
 | Phase 8 docs | `8500421a` | Recorded Phase 8 commit hash |
 | Phase 9 | `c590bf40` | Full-chain testing and Beta handoff |
+| Phase 9 100+ E2E | pending | 153-test deep matrix plus 185-test combined browser run |

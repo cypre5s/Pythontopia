@@ -22,6 +22,7 @@ Phase 0-9 is locally complete for the current checkout. The final verification c
 | Frontend typecheck | `npm run typecheck` | passed: exit 0 |
 | Frontend Phase 8 tests | `npm run test -- --run tests/api/aiRuntime.spec.ts tests/components/workshop/RuntimeOperationsPanel.spec.ts tests/pages/WorkshopPage.spec.ts tests/pages/TeacherReviewPage.spec.ts` | passed: 28 tests |
 | Browser deep loop | `PYT_E2E_REGISTER=1 npx playwright test e2e/agenticDeepLoop.spec.ts --project=chromium --workers=1` | passed: 32 tests / 1.5m |
+| 100+ deep-chain matrix | `PYT_E2E_REGISTER=1 npx playwright test e2e/agenticDeepLoop.spec.ts e2e/agenticDeepMatrix.spec.ts --project=chromium --workers=1` | passed: 185 tests / 3.4m |
 | Whitespace | `git diff --check` | passed |
 
 ## Browser Coverage
@@ -44,7 +45,9 @@ The final Playwright flow registers a real temporary student, then exercises:
 
 - Extended `frontend/e2e/agenticDeepLoop.spec.ts` with runtime operations DTO assertions.
 - Added browser assertion that the workshop call drawer renders `RuntimeOperationsPanel` from the real `/api` endpoint.
+- Added `frontend/e2e/agenticDeepMatrix.spec.ts` with 153 fine-grained deep-chain checks across session, bootstrap, runtime, replay, summary, operations, memory, evidence, resources, formal judge, Bug Mine, quests, recommendations, and browser UI.
 - Added this handoff report and updated progress/changelog records.
+- Added `docs/reports/2026-07-01-agentic-runtime-100-e2e-results.md` with the requested tabular 100+ E2E result summary.
 
 ## Boundaries
 

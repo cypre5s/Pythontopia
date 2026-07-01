@@ -6,9 +6,10 @@
 
 - **全栈启动验收**：通过根目录 `./dev.sh` 拉起 Docker 依赖、Spring Boot 后端和 Vite 前端；`/healthz` 在 `:18080`、`:18091`、`:18092`、`:5173` 均返回 `{"status":"ok"}`。
 - **浏览器深度闭环**：扩展 `frontend/e2e/agenticDeepLoop.spec.ts`，新增 runtime operations API 断言和工坊“调用过程”抽屉 UI 断言；最终 Playwright 32 tests 通过，覆盖 bootstrap、loop run/replay、runtime summary/operations、记忆、证据图、资源生成/阅读/微测、正式判题、Bug Mine 和工坊点击流。
+- **100+ E2E 深链矩阵**：新增 `frontend/e2e/agenticDeepMatrix.spec.ts`，把同一条真实 Agentic 学习链拆成 153 个验收点；与原深链一起运行共 185 tests，全部通过。
 - **运行态可见性验收**：E2E 现在验证 `/api/ai/runtime/operations` 返回 `LEARNER / DEBUG / RESOURCE / WORLD / IMPROVE` 五类 loop 与 resource/world/policy 三类治理项；浏览器端确认 `RuntimeOperationsPanel` 在真实页面渲染“闭环运维状态”。
 - **后端/graph/rag/frontend 回归**：graph Phase 3-7 runtime 与 M1-M3 gates 60 tests 通过；RAG 129 tests 通过；后端 runtime 控制面与 summary/operations 相关测试通过；前端 typecheck 通过；Phase 8 API/组件/页面 Vitest 28 tests 通过。
-- **Beta handoff**：新增 `docs/reports/2026-07-01-agentic-runtime-phase9-handoff.md`，汇总验收矩阵、运行 URL、提交边界、未覆盖项和演示风险。
+- **Beta handoff**：新增 `docs/reports/2026-07-01-agentic-runtime-phase9-handoff.md` 与 `docs/reports/2026-07-01-agentic-runtime-100-e2e-results.md`，汇总验收矩阵、运行 URL、提交边界、未覆盖项和演示风险。
 
 ## 2026-06-30 — Agentic Runtime Phase 8：前端与教师运维可视化
 
