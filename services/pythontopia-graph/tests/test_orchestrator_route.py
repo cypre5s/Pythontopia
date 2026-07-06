@@ -110,3 +110,43 @@ def test_orchestrator_stream_emits_state_delta_plan_progress() -> None:
     assert '"active"' in text
 
     del app.state.llm_provider
+
+
+def test_orchestrator_followup_reuses_stored_plan_without_dispatch() -> None:
+    """已有计划后的“第一步/下一步”追问应快速复用 plan，不再重跑子 agent。"""
+    session_id = "route-followup-fast"
+    app.state.llm_provider = StubProvider([], reply="先完成第一步的视频预习。")
+    client = TestClient(app)
+    first = {
+        "user_id": 1,
+        "session_id": session_id,
+        "user_message": "我想学 for 循环",
+        "course_kc_index": ["PY43-KC-001", "PY43-KC-003"],
+    }
+
+    first_response = client.post("/agents/orchestrator/turn", json=first)
+    assert first_response.status_code == 200
+    first_body = first_response.json()
+    assert len(first_body["plan"]) >= 4
+
+    followup = {
+        "user_id": 1,
+        "session_id": session_id,
+        "user_message": "那我现在第一步具体做什么？",
+        "history": [
+            {"role": "user", "content": first["user_message"]},
+            {"role": "assistant", "content": first_body["reply_md"]},
+        ],
+        "course_kc_index": ["PY43-KC-001", "PY43-KC-003"],
+    }
+
+    response = client.post("/agents/orchestrator/turn/stream", json=followup)
+
+    assert response.status_code == 200
+    text = response.text
+    assert "event: RUN_FINISHED" in text
+    assert "continue:stored_plan" in text
+    assert "event: STATE_DELTA" not in text
+    assert "dispatch." not in text
+
+    del app.state.llm_provider

@@ -53,7 +53,7 @@
 
 ### 5.1 画像维度规范
 
-- T04-01 在 `/home/cypress/Pythontopia/docs/profile_schema.md` 描述 8 维及子字段。示例：
+- T04-01 在 `/home/cypress/Pythontopia/docs/product/profile_schema.md` 描述 8 维及子字段。示例：
   - `major`：枚举 `CS`/`非CS-理工`/`非CS-人文`/`其他`。
   - `base_level`：`{ programming_years: int, languages_known: string[], python_self_rated_level: 1-5 }`。
   - `learning_goal`：`{ kind: 'EXAM'|'PROJECT'|'INTEREST'|'JOB', deadline_iso: string|null, target_kc_codes: string[] }`。

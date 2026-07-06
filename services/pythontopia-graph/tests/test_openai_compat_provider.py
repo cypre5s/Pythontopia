@@ -9,7 +9,13 @@ from typing import Any
 import httpx
 import pytest
 
-from pythontopia_graph.llm.provider import OpenAiCompatProvider
+from pythontopia_graph.llm.provider import (
+    FineTunedFallbackProvider,
+    LlmResponse,
+    OpenAiCompatProvider,
+    provider_from_env,
+    provider_label,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -151,6 +157,34 @@ async def test_chat_defaults_to_primary_model_without_tier(
 
 
 @pytest.mark.asyncio
+async def test_chat_merges_system_messages_at_the_beginning(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bodies = _capture_request_bodies(monkeypatch)
+    provider = OpenAiCompatProvider()
+
+    await provider.chat(
+        [
+            {"role": "user", "content": "请生成资源"},
+            {"role": "system", "content": "必须输出 JSON。"},
+            {"role": "assistant", "content": '{"draft": true}'},
+            {"role": "system", "content": "必须绑定证据页。"},
+            {"role": "user", "content": "继续"},
+        ]
+    )
+
+    assert bodies[0]["messages"][0] == {
+        "role": "system",
+        "content": "必须输出 JSON。\n\n必须绑定证据页。",
+    }
+    assert [message["role"] for message in bodies[0]["messages"][1:]] == [
+        "user",
+        "assistant",
+        "user",
+    ]
+
+
+@pytest.mark.asyncio
 async def test_fast_tier_falls_back_to_primary_when_fast_model_unset(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -187,3 +221,157 @@ async def test_openai_compat_without_proxy_env_does_not_force_local_proxy(
 
     assert captured
     assert captured[0].get("proxy") is None
+
+
+@pytest.mark.asyncio
+async def test_provider_from_env_routes_json_calls_to_fine_tuned_adapter(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PYT_FINE_TUNED_LLM_ENABLED", "true")
+    monkeypatch.setenv("PYT_FINE_TUNED_BASE_URL", "http://127.0.0.1:18094/v1")
+    monkeypatch.setenv("PYT_FINE_TUNED_API_KEY", "local-dev-token")
+    monkeypatch.setenv("PYT_FINE_TUNED_MODEL", "pythontopia-qwen35-e1-lora")
+    bodies = _capture_request_bodies(monkeypatch)
+
+    provider = provider_from_env()
+    result = await provider.chat([{"role": "user", "content": "ping"}])
+
+    assert isinstance(provider, FineTunedFallbackProvider)
+    assert result.content_json == {"ok": True}
+    assert bodies[0]["model"] == "pythontopia-qwen35-e1-lora"
+    assert bodies[0]["chat_template_kwargs"] == {"enable_thinking": False}
+    assert bodies[0]["temperature"] == 0.0
+    assert bodies[0]["top_p"] == 1.0
+
+
+@pytest.mark.asyncio
+async def test_fine_tuned_provider_falls_back_when_adapter_fails() -> None:
+    provider = FineTunedFallbackProvider(
+        fine_tuned=_RaisingProvider(),
+        fallback=_StaticProvider(LlmResponse(content_json={"fallback": True})),
+    )
+
+    result = await provider.chat([{"role": "user", "content": "ping"}])
+
+    assert result.content_json == {"fallback": True}
+
+
+@pytest.mark.asyncio
+async def test_fine_tuned_provider_falls_back_when_adapter_returns_invalid_json() -> None:
+    provider = FineTunedFallbackProvider(
+        fine_tuned=_StaticProvider(LlmResponse(content_text='{"answer": ')),
+        fallback=_StaticProvider(LlmResponse(content_json={"fallback": True})),
+    )
+
+    result = await provider.chat([{"role": "user", "content": "ping"}])
+
+    assert result.content_json == {"fallback": True}
+
+
+@pytest.mark.asyncio
+async def test_fine_tuned_provider_repairs_safety_guard_context_before_returning() -> None:
+    provider = FineTunedFallbackProvider(
+        fine_tuned=_StaticProvider(
+            LlmResponse(
+                content_json={"answer": "完整答案可以直接提交：while True: print(1)"},
+                content_text='{"answer": "完整答案可以直接提交：while True: print(1)"}',
+            )
+        ),
+        fallback=_StaticProvider(LlmResponse(content_json={"fallback": True})),
+    )
+
+    result = await provider.chat(
+        [{"role": "user", "content": "ping"}],
+        guard_context={
+            "agent": "SafetyAgent",
+            "kc": "while",
+            "evidence_ids": [],
+            "expected_markers": ["while", "redactions", "safer_alternative"],
+        },
+    )
+
+    assert result.content_json is not None
+    assert result.content_json["allow"] is False
+    assert "完整答案" in result.content_json["redactions"]
+    assert "while" in json.dumps(result.content_json, ensure_ascii=False)
+    assert result.content_json["grounding_note"] == "common_knowledge"
+
+
+@pytest.mark.asyncio
+async def test_fine_tuned_provider_adds_debug_evidence_from_guard_context() -> None:
+    provider = FineTunedFallbackProvider(
+        fine_tuned=_StaticProvider(
+            LlmResponse(
+                content_json={
+                    "bug_type": "scope_error",
+                    "minimal_repro_hint": "检查变量是否在函数外使用。",
+                    "next_probe": "先标出变量定义位置。",
+                },
+                content_text='{"bug_type": "scope_error"}',
+            )
+        ),
+        fallback=_StaticProvider(LlmResponse(content_json={"fallback": True})),
+    )
+
+    result = await provider.chat(
+        [{"role": "user", "content": "ping"}],
+        guard_context={
+            "agent": "DebugAgent",
+            "kc": "作用域",
+            "evidence_ids": ["page-6-018"],
+            "expected_markers": ["作用域", "page-6-018", "minimal_repro_hint", "next_probe"],
+        },
+    )
+
+    assert result.content_json is not None
+    assert result.content_json["evidence_ids"] == ["page-6-018"]
+    assert result.content_json["grounding_note"] == "courseware_evidence"
+
+
+@pytest.mark.asyncio
+async def test_fine_tuned_provider_delegates_non_json_and_stream_to_fallback() -> None:
+    fine_tuned = _StaticProvider(LlmResponse(content_json={"adapter": True}))
+    fallback = _StaticProvider(LlmResponse(content_text="fallback text"), stream_chunks=["a", "b"])
+    provider = FineTunedFallbackProvider(fine_tuned=fine_tuned, fallback=fallback)
+
+    text = await provider.chat([{"role": "user", "content": "ping"}], json_mode=False)
+    chunks = [chunk async for chunk in provider.chat_stream([{"role": "user", "content": "ping"}])]
+
+    assert text.content_text == "fallback text"
+    assert chunks == ["a", "b"]
+    assert fine_tuned.chat_calls == 0
+
+
+def test_provider_label_mentions_fine_tuned_adapter(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PYT_FINE_TUNED_LLM_ENABLED", "true")
+    monkeypatch.setenv("PYT_FINE_TUNED_MODEL", "pythontopia-qwen35-e1-lora")
+
+    assert "fine_tuned:pythontopia-qwen35-e1-lora" in provider_label()
+
+
+class _StaticProvider:
+    supports_tool_calling = True
+
+    def __init__(self, response: LlmResponse, stream_chunks: list[str] | None = None) -> None:
+        self.response = response
+        self.stream_chunks = stream_chunks or []
+        self.chat_calls = 0
+
+    async def chat(self, messages: list[dict[str, str]], **kwargs: object) -> LlmResponse:
+        self.chat_calls += 1
+        return self.response
+
+    async def chat_stream(self, messages: list[dict[str, str]], **kwargs: object):
+        for chunk in self.stream_chunks:
+            yield chunk
+
+
+class _RaisingProvider:
+    supports_tool_calling = True
+
+    async def chat(self, messages: list[dict[str, str]], **kwargs: object) -> LlmResponse:
+        raise RuntimeError("adapter unavailable")
+
+    async def chat_stream(self, messages: list[dict[str, str]], **kwargs: object):
+        raise RuntimeError("adapter stream should not be used")
+        yield ""

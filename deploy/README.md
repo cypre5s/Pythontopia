@@ -29,7 +29,7 @@ cd /home/cypress/Pythontopia
 ./dev.sh --down     # 停止依赖与本机后端
 ```
 
-故障排查（**Postgres 密码与 `.env` 不一致**等）：见 [`docs/dev-startup.md`](../docs/dev-startup.md)。
+故障排查（**Postgres 密码与 `.env` 不一致**等）：见 [`docs/operations/dev-startup.md`](../docs/operations/dev-startup.md)。
 
 ## 一键启动（全 Docker 演示）
 
@@ -310,7 +310,7 @@ docker compose -p deploy -f docker-compose.production.yml up -d
 | --- | --- |
 | 预检输出 `SECURITY_GROUP_PORT_80_BLOCKED` | 本机 80 通、公网 80 不通：阿里云控制台 → 安全组 → 入方向放行 TCP 80（0.0.0.0/0）。ECS 上有 aliyun CLI 凭证，预检会尽力打印安全组规则佐证 |
 | compose 渲染报「缺少 PYT_DB_USERNAME/...」 | `/opt/pythontopia/shared/.env` 缺必需变量名；先跑预检第 5 节核对（只比对变量名，不读值） |
-| backend 一直不健康，日志见数据库认证失败 | 复用 `deploy_pytopia_pg` 卷时凭据以**建卷时**为准，`.env` 中 `PYT_DB_USERNAME/PYT_DB_PASSWORD` 必须与卷内一致（同开发踩坑 `docs/dev-startup.md`） |
+| backend 一直不健康，日志见数据库认证失败 | 复用 `deploy_pytopia_pg` 卷时凭据以**建卷时**为准，`.env` 中 `PYT_DB_USERNAME/PYT_DB_PASSWORD` 必须与卷内一致（同开发踩坑 `docs/operations/dev-startup.md`） |
 | rag 启动报数据库连接串解析错误 | `PYT_DB_PASSWORD` 含 `@ : /` 等 URL 保留字符时拼接 `postgresql://` 会解析失败；更换无保留字符的密码，或自行 URL 转义 |
 | backend 健康但等待超时（2C4G 冷启动慢） | 安装脚本预算 8 分钟；确认 `docker logs deploy-backend-1` 中 Flyway 正常推进即可重跑安装 |
 | frontend 容器反复重启 | 镜像内 nginx 上游写死 `backend:18080`，backend 容器不存在时 DNS 解析失败即退出；先看 backend 健康状态 |

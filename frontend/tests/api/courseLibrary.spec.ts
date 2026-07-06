@@ -23,6 +23,8 @@ const ragResponse = {
 afterEach(() => {
   resetCourseLibraryCacheForTest();
   vi.clearAllMocks();
+  localStorage.clear();
+  vi.unstubAllGlobals();
 });
 
 describe('searchCourseLibrary · RAG 结果会话内缓存', () => {
@@ -65,6 +67,56 @@ describe('searchCourseLibrary · RAG 结果会话内缓存', () => {
     const b = await searchCourseLibrary('字典', {});
 
     expect(b).toHaveLength(1);
+  });
+
+  it('学生身份直接使用本地课件检索，不请求教师专用 RAG 端点', async () => {
+    localStorage.setItem('pythontopia.user', JSON.stringify({ role: 'STUDENT' }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith('/documents.json')) {
+          return new Response(
+            JSON.stringify([
+              {
+                documentId: 1,
+                packId: 43,
+                sortOrder: 1,
+                filename: 'chapter-1.pdf',
+                title: '第1章 Python概述',
+                pageCount: 1,
+              },
+            ]),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
+        if (url.endsWith('/pages-1.json')) {
+          return new Response(
+            JSON.stringify([
+              {
+                pageId: 101,
+                documentId: 1,
+                chapterId: 1,
+                pageNo: 12,
+                chunkIndex: 0,
+                title: 'input函数',
+                contentMarkdown: 'input函数用于读取一行输入。',
+                excerpt: 'input函数用于读取一行输入。',
+              },
+            ]),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
+        return new Response('{}', { status: 404 });
+      }),
+    );
+
+    const hits = await searchCourseLibrary('input函数', { topK: 6 });
+
+    expect(vi.mocked(http.post)).not.toHaveBeenCalled();
+    expect(hits).toHaveLength(1);
+    expect(hits[0]!.pageNo).toBe(12);
+    expect(hits[0]!.snippet).toContain('input函数');
   });
 });
 

@@ -20,6 +20,7 @@ import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -148,6 +149,17 @@ public class GlobalExceptionHandler {
         "Request payload is malformed",
         List.of(),
         request);
+  }
+
+  @ExceptionHandler(AsyncRequestNotUsableException.class)
+  ResponseEntity<Void> handleClientAbort(
+      AsyncRequestNotUsableException exception, HttpServletRequest request) {
+    log.debug(
+        "Client aborted response stream for {} {}: {}",
+        request.getMethod(),
+        request.getRequestURI(),
+        exception.getMessage());
+    return ResponseEntity.status(499).build();
   }
 
   @ExceptionHandler(Exception.class)

@@ -11,10 +11,13 @@ import TeachBackCard from './TeachBackCard.vue';
 import BugMineCard from './BugMineCard.vue';
 import PdfQuestionCard from './PdfQuestionCard.vue';
 
-defineProps<{
+withDefaults(defineProps<{
   kind: ArenaLevelKind | null;
   problem: BossProblemDto;
-}>();
+  bugMineTimeLimitSeconds?: number;
+}>(), {
+  bugMineTimeLimitSeconds: 30,
+});
 
 const code = defineModel<string>('code', { required: true });
 const emit = defineEmits<{ (e: 'timeout'): void }>();
@@ -60,6 +63,7 @@ const emit = defineEmits<{ (e: 'timeout'): void }>();
     v-else-if="kind === 'bug_mine'"
     v-model:code="code"
     :problem="problem"
+    :time-limit-seconds="bugMineTimeLimitSeconds"
     @timeout="emit('timeout')"
   />
   <PdfQuestionCard

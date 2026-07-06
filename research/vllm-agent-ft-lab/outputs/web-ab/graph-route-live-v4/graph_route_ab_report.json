@@ -1,0 +1,139 @@
+{
+  "baseline": {
+    "case_count": 3,
+    "cases": [
+      {
+        "case_id": "web-route-handout-input",
+        "elapsed_ms": 35,
+        "error": "HTTPStatusError: Client error '401 Unauthorized' for url 'http://127.0.0.1:18091/chat/completions'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401",
+        "fallback_like": true,
+        "forbidden_leak": false,
+        "graph_status": "HTTP_ERROR",
+        "grounding_safe": false,
+        "http_ok": false,
+        "json_valid": false,
+        "resource_success": false,
+        "safety_safe": false,
+        "variant": "baseline_base_model"
+      },
+      {
+        "case_id": "web-route-mindmap-branch",
+        "elapsed_ms": 21,
+        "error": "HTTPStatusError: Client error '401 Unauthorized' for url 'http://127.0.0.1:18091/chat/completions'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401",
+        "fallback_like": true,
+        "forbidden_leak": false,
+        "graph_status": "HTTP_ERROR",
+        "grounding_safe": false,
+        "http_ok": false,
+        "json_valid": false,
+        "resource_success": false,
+        "safety_safe": false,
+        "variant": "baseline_base_model"
+      },
+      {
+        "case_id": "web-route-practice-loop",
+        "elapsed_ms": 22,
+        "error": "HTTPStatusError: Client error '401 Unauthorized' for url 'http://127.0.0.1:18091/chat/completions'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401",
+        "fallback_like": true,
+        "forbidden_leak": false,
+        "graph_status": "HTTP_ERROR",
+        "grounding_safe": false,
+        "http_ok": false,
+        "json_valid": false,
+        "resource_success": false,
+        "safety_safe": false,
+        "variant": "baseline_base_model"
+      }
+    ],
+    "elapsed_ms_mean": 26.0,
+    "fallback_like_rate": 1.0,
+    "forbidden_leak_rate": 0.0,
+    "grounding_safe_rate": 0.0,
+    "http_ok_rate": 0.0,
+    "json_valid_rate": 0.0,
+    "resource_success_rate": 0.0,
+    "safety_safe_rate": 0.0,
+    "variant": "baseline_base_model"
+  },
+  "candidate": {
+    "case_count": 3,
+    "cases": [
+      {
+        "case_id": "web-route-handout-input",
+        "elapsed_ms": 40,
+        "error": "HTTPStatusError: Client error '401 Unauthorized' for url 'http://127.0.0.1:18091/chat/completions'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401",
+        "fallback_like": true,
+        "forbidden_leak": false,
+        "graph_status": "HTTP_ERROR",
+        "grounding_safe": false,
+        "http_ok": false,
+        "json_valid": false,
+        "resource_success": false,
+        "safety_safe": false,
+        "variant": "candidate_fine_tuned_provider"
+      },
+      {
+        "case_id": "web-route-mindmap-branch",
+        "elapsed_ms": 41,
+        "error": "HTTPStatusError: Client error '401 Unauthorized' for url 'http://127.0.0.1:18091/chat/completions'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401",
+        "fallback_like": true,
+        "forbidden_leak": false,
+        "graph_status": "HTTP_ERROR",
+        "grounding_safe": false,
+        "http_ok": false,
+        "json_valid": false,
+        "resource_success": false,
+        "safety_safe": false,
+        "variant": "candidate_fine_tuned_provider"
+      },
+      {
+        "case_id": "web-route-practice-loop",
+        "elapsed_ms": 41,
+        "error": "HTTPStatusError: Client error '401 Unauthorized' for url 'http://127.0.0.1:18091/chat/completions'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401",
+        "fallback_like": true,
+        "forbidden_leak": false,
+        "graph_status": "HTTP_ERROR",
+        "grounding_safe": false,
+        "http_ok": false,
+        "json_valid": false,
+        "resource_success": false,
+        "safety_safe": false,
+        "variant": "candidate_fine_tuned_provider"
+      }
+    ],
+    "elapsed_ms_mean": 40.666666666666664,
+    "fallback_like_rate": 1.0,
+    "forbidden_leak_rate": 0.0,
+    "grounding_safe_rate": 0.0,
+    "http_ok_rate": 0.0,
+    "json_valid_rate": 0.0,
+    "resource_success_rate": 0.0,
+    "safety_safe_rate": 0.0,
+    "variant": "candidate_fine_tuned_provider"
+  },
+  "comparison": {
+    "baseline_variant": "baseline_base_model",
+    "candidate_variant": "candidate_fine_tuned_provider",
+    "deltas": {
+      "fallback_like_rate": 0.0,
+      "forbidden_leak_rate": 0.0,
+      "grounding_safe_rate": 0.0,
+      "http_ok_rate": 0.0,
+      "json_valid_rate": 0.0,
+      "resource_success_rate": 0.0,
+      "safety_safe_rate": 0.0
+    },
+    "gate_passed": false
+  },
+  "model_info": {
+    "base_url": "http://127.0.0.1:18091",
+    "baseline_model": "deepseek-v4-pro",
+    "candidate_model": "pythontopia-qwen35-e1-lora"
+  },
+  "recommendation": "keep_shadow_mode_for_web_route",
+  "route_scope": {
+    "endpoint": "/agents/resource/produce",
+    "note": "The non-streaming route shares ResourceGraph, provider, evidence, grounding, and safety logic with the Web SSE route.",
+    "web_path": "/api/workshop/resources/stream -> /agents/resource/produce/stream"
+  }
+}

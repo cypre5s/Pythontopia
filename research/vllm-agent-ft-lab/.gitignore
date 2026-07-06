@@ -1,0 +1,10 @@
+.venv/
+models/
+runs/
+outputs/adapters/
+outputs/datasets/raw/
+outputs/datasets/normalized/
+*.log
+__pycache__/
+.pytest_cache/
+*.pyc

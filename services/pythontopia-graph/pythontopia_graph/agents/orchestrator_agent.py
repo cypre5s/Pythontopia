@@ -118,6 +118,20 @@ _NEGOTIATE_KEYWORDS = (
     "下一个",
     "skip",
 )
+_CONTINUE_KEYWORDS = (
+    "第一步",
+    "下一步",
+    "下一个",
+    "继续",
+    "现在做什么",
+    "具体做什么",
+    "从哪开始",
+    "从哪里开始",
+    "先做什么",
+    "接下来",
+    "next step",
+    "continue",
+)
 _AMBIGUOUS_MESSAGES = (
     "不知道",
     "随便",
@@ -286,6 +300,10 @@ class OrchestratorAgent:
         # 关键词协商检测优先于可能过时/离线的 provider 判定。
         if self._looks_like_negotiation(req.user_message):
             intent = "negotiate"
+            ambiguous = False
+            clarifying = None
+        elif req.history and self._looks_like_continue(req.user_message):
+            intent = "continue"
             ambiguous = False
             clarifying = None
         elif not data and self._looks_ambiguous(req.user_message):
@@ -594,6 +612,11 @@ class OrchestratorAgent:
     def _looks_like_negotiation(message: str) -> bool:
         lowered = message.lower()
         return any(keyword in lowered for keyword in _NEGOTIATE_KEYWORDS)
+
+    @staticmethod
+    def _looks_like_continue(message: str) -> bool:
+        lowered = message.lower()
+        return any(keyword in lowered for keyword in _CONTINUE_KEYWORDS)
 
     @staticmethod
     def _looks_ambiguous(message: str) -> bool:

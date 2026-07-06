@@ -29,6 +29,7 @@ import type { RogueNode, RogueNodeKind } from '@/types/rogue';
 const LEGEND_KINDS: readonly RogueNodeKind[] = [
   'battle', 'elite', 'event', 'bug', 'chest', 'rest', 'boss',
 ];
+const EXPEDITION_BUG_MINE_SECONDS = 75;
 
 const route = useRoute();
 const router = useRouter();
@@ -690,6 +691,7 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
           :difficulty="shownDifficulty"
           :elapsed-sec="run.elapsedSec"
           :ai-generated="run.activeProblem.aiGenerated"
+          :bug-mine-time-limit-seconds="EXPEDITION_BUG_MINE_SECONDS"
           :result="challengeResult"
           @timeout="onSubmit"
         >
@@ -1247,16 +1249,17 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
   border-color: var(--pyt-color-warning);
   border-style: solid;
 }
-/* 像素远征塔画布容器：深色背景配 Phaser 渲染（同代码剧场舞台的暗色例外）。
+/* 像素远征塔画布容器：浅色地图底，和中央小镇/学习面板的纸面风格保持一致。
    高度收敛到视口内，让整座塔（起点层→顶层 BOSS）一屏可见，不必滚动页面。 */
 .exp-tower {
   flex: 1 1 auto;
   height: clamp(380px, calc(100dvh - 220px), 900px);
-  border: 2px solid var(--pyt-color-border-strong);
+  border: 2px solid rgba(129, 112, 75, 0.38);
   border-radius: var(--pyt-radius-md);
   overflow: hidden;
-  background: #161126;
-  box-shadow: 3px 3px 0 rgba(74, 54, 29, 0.25);
+  background:
+    linear-gradient(180deg, rgba(232, 247, 255, 0.96), rgba(248, 244, 225, 0.98));
+  box-shadow: 3px 3px 0 rgba(129, 112, 75, 0.18), 0 10px 30px rgba(70, 92, 72, 0.12);
 }
 @media (max-width: 900px) {
   .exp-tower {

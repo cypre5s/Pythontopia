@@ -11,7 +11,7 @@
 #      （冻结契约：backend/ deploy/ frontend/ README.md，恰好四项）；
 #   3. 违禁内容：包内任何位置不得命中 allowlist [deny] 模式
 #      （.env、密钥、node_modules、target、dist、coverage、.git、PDF、视频、
-#       生成媒体、android/、windows/、wechat-*/、参考文档 等）；
+#       生成媒体、clients/、docs/references/ 等）；
 #   4. 镜像产物：deploy/runtime/images/ 下四个镜像 tar 齐全、非空，
 #      且为 docker save 导出形态（含 manifest.json 或 OCI index.json）；
 #   5. 校验和：deploy/runtime/sha256sums.txt 存在，逐文件核对一致，

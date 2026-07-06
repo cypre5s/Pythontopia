@@ -27,12 +27,16 @@ public record ResourceProduceResponseDto(
       JsonNode storyboard) {
 
     public JsonNode contentPayload() {
-      if (handout != null) return handout;
-      if (mindmap != null) return mindmap;
-      if (practice != null) return practice;
-      if (codeLab != null) return codeLab;
-      if (reading != null) return reading;
-      return storyboard;
+      if (hasPayload(handout)) return handout;
+      if (hasPayload(mindmap)) return mindmap;
+      if (hasPayload(practice)) return practice;
+      if (hasPayload(codeLab)) return codeLab;
+      if (hasPayload(reading)) return reading;
+      return hasPayload(storyboard) ? storyboard : null;
+    }
+
+    private static boolean hasPayload(JsonNode node) {
+      return node != null && !node.isNull();
     }
   }
 

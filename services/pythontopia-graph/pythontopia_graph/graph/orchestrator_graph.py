@@ -151,6 +151,7 @@ class OrchestratorState(AgenticLoopState, total=False):
     needs_user_input: bool
     # 下游产出
     plan: list[PlanStep]
+    reused_plan: bool
     dispatch_results: Annotated[list[DispatchResult], operator.add]
     signals: list[ProfileSignal]
     reply_md: str
@@ -230,7 +231,11 @@ class OrchestratorGraph:
             self._route_after_understand,
             {"clarify": "clarify", "build_plan": "build_plan"},
         )
-        graph.add_edge("build_plan", "dispatch")
+        graph.add_conditional_edges(
+            "build_plan",
+            self._route_after_build_plan,
+            {"dispatch": "dispatch", "compose": "compose"},
+        )
         # dispatch 后无条件进入有界反思（A3 · N=1）；reflect 无可恢复项时为 no-op。
         graph.add_edge("dispatch", "reflect")
         # 既有 replan/negotiate 路由原样接在 reflect 之后（reflect 不改 plan/intent/
@@ -401,20 +406,25 @@ class OrchestratorGraph:
 
     async def _node_build_plan(self, state: OrchestratorState) -> dict[str, Any]:
         req = state["req"]
-        # negotiate 意图就地改 stored plan，不重建
-        if state["intent"] == "negotiate":
+        # continue/negotiate 意图复用 stored plan：这类轮次是在已有学习计划上追问或调整，
+        # 不应重新 dispatch 四个子 agent，否则一个“下一步做什么”会再次生成全套资源。
+        if state["intent"] in {"continue", "negotiate"}:
             stored_plan = await get_plan(req.session_id)
             if stored_plan:
-                plan = self._negotiate(req.user_message, stored_plan)
-                note = f"negotiate:{self._negotiation_kind(req.user_message)}"
+                if state["intent"] == "negotiate":
+                    plan = self._negotiate(req.user_message, stored_plan)
+                    note = f"negotiate:{self._negotiation_kind(req.user_message)}"
+                else:
+                    plan = stored_plan
+                    note = "continue:stored_plan"
                 step = self._sync_step("replan", note=note)
                 await self._emit_cb("trace", step.model_dump(mode="json"))
-                return {"plan": plan, "trace": [step]}
+                return {"plan": plan, "reused_plan": True, "trace": [step]}
         started = time.monotonic()
         plan = await self._agent.decompose(req, state["goal"])
         step = self._ok_step("decompose", started)
         await self._emit_cb("trace", step.model_dump(mode="json"))
-        return {"plan": plan, "trace": [step]}
+        return {"plan": plan, "reused_plan": False, "trace": [step]}
 
     async def _node_dispatch(self, state: OrchestratorState) -> dict[str, Any]:
         req = state["req"]
@@ -766,6 +776,10 @@ class OrchestratorGraph:
     @staticmethod
     def _route_after_understand(state: OrchestratorState) -> str:
         return "clarify" if state.get("ambiguous") else "build_plan"
+
+    @staticmethod
+    def _route_after_build_plan(state: OrchestratorState) -> str:
+        return "compose" if state.get("reused_plan") else "dispatch"
 
     def _route_after_dispatch(self, state: OrchestratorState) -> str:
         if state["intent"] == "negotiate":

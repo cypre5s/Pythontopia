@@ -48,7 +48,7 @@ describe('requestBossProblem', () => {
     expect(httpMock.post).toHaveBeenCalledWith(
       '/api/world/boss/1/problem',
       { stage: 1 },
-      expect.objectContaining({ timeout: 15_000 }),
+      expect.objectContaining({ suppressNetworkToast: true, timeout: 15_000 }),
     );
     expect(problem.problemId).toBe('ai-1');
     expect(problem.aiGenerated).toBe(true);

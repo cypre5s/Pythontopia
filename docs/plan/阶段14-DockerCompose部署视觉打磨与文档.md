@@ -78,26 +78,26 @@
 
 ### 5.3 文档
 
-- T14-20 `/home/cypress/Pythontopia/docs/system_design.md`：
+- T14-20 `/home/cypress/Pythontopia/docs/architecture/system_design.md`：
   - 总体架构图（Mermaid）：浏览器 → Nginx/Frontend → Backend → (Graph, RAG, Postgres, Redis)。
   - 模块说明：每个目录的职责、对应阶段编号。
   - 关键时序图：登录、画像访谈、资源生成、判题、Bug 矿洞、评估、教师任务发布。
-- T14-21 `/home/cypress/Pythontopia/docs/test_report.md`：
+- T14-21 `/home/cypress/Pythontopia/docs/testing/test_report.md`：
   - 测试范围（单元、集成、端到端）。
   - 覆盖率快照。
   - 已知缺陷与遗留风险。
-- T14-22 `/home/cypress/Pythontopia/docs/ai_coding_disclosure.md`：
+- T14-22 `/home/cypress/Pythontopia/docs/project/ai_coding_disclosure.md`：
   - 哪些模块由 AI 协助生成（包括 ProfileAgent、ResourceDesignerAgent 等 prompt 模板）。
   - 哪些代码由人工编写。
   - 列出使用的 AI Coding 工具与开发场景。
-- T14-23 `/home/cypress/Pythontopia/docs/open_source.md`：
+- T14-23 `/home/cypress/Pythontopia/docs/legal/open_source.md`：
   - 第三方依赖清单（前端、后端、Python）。
   - 各依赖 license。
   - 项目自身 License 选择（默认 MIT 或 Apache 2.0，由用户最终确认）。
-- T14-24 `/home/cypress/Pythontopia/docs/demo_script.md`：
+- T14-24 `/home/cypress/Pythontopia/docs/presentations/demo_script.md`：
   - 演示流程（7 分钟）：登录 → 进入小镇 → 画像 → 知识田 → 资源生成 → 训练场 → Bug 矿洞 → 复盘大厅 → 教师视角。
   - 每步预期截图与时间分配。
-- T14-25 `/home/cypress/Pythontopia/docs/ppt_outline.md`：项目背景、技术架构、核心功能、教育闭环、技术亮点、未来工作。
+- T14-25 `/home/cypress/Pythontopia/docs/presentations/ppt_outline.md`：项目背景、技术架构、核心功能、教育闭环、技术亮点、未来工作。
 
 ### 5.4 演示数据
 

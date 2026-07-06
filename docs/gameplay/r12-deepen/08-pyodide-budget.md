@@ -2,7 +2,7 @@
 
 > 版本：v1.0 · 起草日期：2026-05-24 · 适用版本：R-12 起 · 状态：Draft（待 W4 自动化验收转 Active）
 > 目标读者：玩法工程师、前端 Pyodide owner、后端判题 owner、班级教师视角策划、画像分析师
-> 上游约束：AGENTS.md「Python 练习与判题」「双轨执行」「不允许把 Pyodide 预览结果当作正式判题结果」；`docs/system_design.md` §7「Pyodide 预览只是开发体验」
+> 上游约束：AGENTS.md「Python 练习与判题」「双轨执行」「不允许把 Pyodide 预览结果当作正式判题结果」；`docs/architecture/system_design.md` §7「Pyodide 预览只是开发体验」
 > 平级文档：`docs/gameplay/economy-system.md` §8「Pyodide 预览不结算」、`docs/gameplay/r12-deepen/03-energy-fatigue-curve.md`（能量低时 Pyodide 性能 ×1.3 减速）
 
 ---

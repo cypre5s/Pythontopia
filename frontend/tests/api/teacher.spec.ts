@@ -16,10 +16,12 @@ import {
   fetchEndlessActivity,
   fetchMainlineProgress,
   fetchMainlineStars,
+  triggerRemediation,
 } from '@/api/teacher';
 
 beforeEach(() => {
   httpMock.get.mockReset();
+  httpMock.post.mockReset();
 });
 
 afterEach(() => {
@@ -86,5 +88,20 @@ describe('fetchMainlineProgress', () => {
       '/api/teacher/classrooms/9/dashboard/mainline-progress',
     );
     expect(dto.totalStages).toBe(7);
+  });
+});
+
+describe('triggerRemediation', () => {
+  it('POST /remediation uses an extended timeout because it generates AI resources', async () => {
+    httpMock.post.mockResolvedValueOnce({
+      data: { classroomId: 9, weakKcCount: 1, packs: [] },
+    });
+    const dto = await triggerRemediation(9);
+    expect(httpMock.post).toHaveBeenCalledWith(
+      '/api/teacher/classrooms/9/remediation',
+      undefined,
+      { timeout: 180_000 },
+    );
+    expect(dto.weakKcCount).toBe(1);
   });
 });

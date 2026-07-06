@@ -85,7 +85,7 @@ Pythontopia 是基于 Alethicode 技术资产抽取重构的独立新项目：�
 - 不复用 Web 端 Phaser 代码 / `tilemap.ts` / `frontend/src/api/*.ts`。
 - Android 端不运行 Python（Beta 首发仅服务端判题）。
 - 不上架 Google Play 直到 Beta+1（演示阶段直接发 debug APK）。
-- 完整决策见 `android/docs/ADR-001-tech-selection.md`。
+- 完整决策见 `clients/native/android/docs/ADR-001-tech-selection.md`。
 
 ## 目录约定
 
@@ -93,29 +93,45 @@ Pythontopia 是基于 Alethicode 技术资产抽取重构的独立新项目：�
 /home/cypress/Pythontopia/
 ├── backend/                    # Spring Boot 后端（Web + Android 双端共用）
 ├── frontend/                   # Vue 3 + Phaser 3 网页端（R-12 解冻；R-14 收缩为单中央小镇 hub）
-├── android/                    # Kotlin + Compose + LibGDX 原生 Android 客户端（2026-05-22 新增）
+├── clients/                    # 非 Web 客户端集合：原生端、轻壳端、微信端
+│   ├── native/
+│   │   ├── android/            # Kotlin + Compose + LibGDX 原生 Android 客户端
+│   │   └── windows/            # .NET 8 + WinUI 3 + MonoGame 原生桌面端
+│   ├── wrappers/
+│   │   ├── android-webview/    # Android WebView 轻壳
+│   │   └── windows-electron/   # Electron 轻壳
+│   └── wechat/
+│       ├── miniprogram/        # 原生微信小程序（学习陪伴）
+│       └── minigame/           # 原生微信小游戏（像素小镇）
 ├── services/
 │   ├── pythontopia-graph/       # 多智能体资源生成与路径规划
 │   └── pythontopia-rag/         # 课件 RAG 服务
 ├── data/course-pack-43/         # Python语言基础完整课程种子数据
 ├── assets/                      # 像素素材与 license（双端共用）
-├── docs/                        # 系统设计、测试说明、比赛文档（双端共用）
+├── docs/                        # 文档总目录：架构、测试、报告、演示、合规、参考资料
 ├── deploy/                      # Docker Compose 与启动脚本
 └── AGENTS.md
 ```
 
 ### 目录约定（多端，R-14 追加）
 
-自 R-14 起 Pythontopia 面向 4 类客户端（Web / Android / Windows / 微信）共用同一套后端，除上文已列的 `frontend/`、`android/` 外，新增以下客户端目录（**仅追加约定，不改动上文既有政策**）：
+自 R-14 起 Pythontopia 面向 4 类客户端（Web / Android / Windows / 微信）共用同一套后端。Web 全栈主链路保留在根部 `frontend/`、`backend/`、`services/`、`deploy/`；非 Web 客户端统一收纳到 `clients/`：
 
 ```text
 /home/cypress/Pythontopia/
-├── windows/                    # .NET 8 + WinUI 3 + MonoGame 原生桌面端（像素小镇）
-├── wechat-miniprogram/         # 原生微信小程序（TypeScript），学习陪伴（无像素小镇）
-└── wechat-minigame/            # 原生微信小游戏（TypeScript + canvas2d），像素小镇
+└── clients/
+    ├── native/
+    │   ├── android/            # Kotlin + Compose + LibGDX 原生 Android 客户端
+    │   └── windows/            # .NET 8 + WinUI 3 + MonoGame 原生桌面端（像素小镇）
+    ├── wrappers/
+    │   ├── android-webview/    # Android WebView 轻壳
+    │   └── windows-electron/   # Electron 轻壳
+    └── wechat/
+        ├── miniprogram/        # 原生微信小程序（TypeScript），学习陪伴（无像素小镇）
+        └── minigame/           # 原生微信小游戏（TypeScript + canvas2d），像素小镇
 ```
 
-- 这三个目录由各自端的负责人/Agent 维护，构建与实现细节以各端 README 为准。
+- 这些目录由各自端的负责人/Agent 维护，构建与实现细节以各端 README 为准。
 - 4 端共用 `backend/`（`:18080`，前缀 `/api`，JWT Bearer）。客户端接入契约以 `docs/clients/api-contract.md` 为唯一权威，跨端总览见 `docs/clients/README.md`。
 - 各原生/微信端**不复用** Web 端 Phaser 代码 / `tilemap.ts` / `frontend/src/api/*.ts`（沿用既有 Android 端约定）。
 - 收敛后无背包 / 货币 / 商店端点，客户端不要为其建 UI。
@@ -214,7 +230,7 @@ Pythontopia 保留轻量班级能力：
 
 ## 开发命令
 
-**本地全栈开发（含 graph/rag 微服务）优先用根目录 `./dev.sh`**，不要只起 backend 而漏 Docker 依赖。踩坑备忘见 `docs/dev-startup.md`（Postgres 数据卷密码与 `deploy/.env` 不一致会导致 Flyway 失败）。
+**本地全栈开发（含 graph/rag 微服务）优先用根目录 `./dev.sh`**，不要只起 backend 而漏 Docker 依赖。踩坑备忘见 `docs/operations/dev-startup.md`（Postgres 数据卷密码与 `deploy/.env` 不一致会导致 Flyway 失败）。
 
 后端：
 

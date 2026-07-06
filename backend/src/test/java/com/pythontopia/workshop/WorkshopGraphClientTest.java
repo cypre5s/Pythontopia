@@ -74,6 +74,38 @@ class WorkshopGraphClientTest {
   }
 
   @Test
+  void contentPayloadSkipsExplicitNullBodyFields() throws Exception {
+    ResourceProduceResponseDto response =
+        objectMapper.readValue(
+            """
+            {
+              "artifact": {
+                "title": "练习题",
+                "summary": "ok",
+                "content_format": "STRUCT_JSON",
+                "handout": null,
+                "mindmap": null,
+                "practice": {"problems": [{"title": "边界条件"}]},
+                "code_lab": null,
+                "reading": null,
+                "storyboard": null
+              },
+              "type": "PRACTICE",
+              "evidence_page_ids": [10705],
+              "grounding_result": {"passed": true, "reasons": [], "no_evidence_found": false},
+              "safety_result": {"passed": true, "reasons": []},
+              "graph_trace": [],
+              "status": "SUCCESS"
+            }
+            """,
+            ResourceProduceResponseDto.class);
+
+    assertThat(response.artifact().contentPayload()).isEqualTo(response.artifact().practice());
+    assertThat(response.artifact().contentPayload().isNull()).isFalse();
+    assertThat(response.artifact().contentPayload().path("problems")).hasSize(1);
+  }
+
+  @Test
   void produceWrapsUpstreamFailure() {
     MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
     // 重试一次 + 熔断前初始调用 = 最多 2 次请求

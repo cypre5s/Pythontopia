@@ -1,0 +1,11 @@
+{
+  "content_json": {
+    "evidence_ids": [],
+    "grounding_note": "common_knowledge",
+    "next_action": "Explain the logic of Python if statements and provide a simple code example."
+  },
+  "content_text": "{\n  \"evidence_ids\": [],\n  \"grounding_note\": \"common_knowledge\",\n  \"next_action\": \"Explain the logic of Python if statements and provide a simple code example.\"\n}",
+  "created_at": "2026-07-02T18:18:10.028598+00:00",
+  "provider_label": "dryrun + fine_tuned:pythontopia-qwen35-e1-lora",
+  "provider_type": "FineTunedFallbackProvider"
+}

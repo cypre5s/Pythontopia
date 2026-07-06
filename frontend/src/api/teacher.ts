@@ -141,6 +141,8 @@ export async function triggerRemediation(
 ): Promise<RemediationResultDto> {
   const response = await http.post<RemediationResultDto>(
     `/api/teacher/classrooms/${classroomId}/remediation`,
+    undefined,
+    { timeout: 180_000 },
   );
   return response.data;
 }

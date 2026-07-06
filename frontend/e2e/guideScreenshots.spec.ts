@@ -549,21 +549,29 @@ test.describe('引导手册 23 张截图（输出 frontend/public/guide/screensh
   // ── R-16 统一玩法新增：无尽闯关闭环（25–29） ─────────────────────────
   // 25/26/27/29 走后端 golden 兜底出题。
 
-  test('26-arena-tower 闯关塔阶梯', async ({ page, context, request }, testInfo) => {
+  test('26-expedition-tower 无尽远征浅色分支地图', async ({ page, context, request }, testInfo) => {
     await prepareStudentContext(context, request);
     await page.goto('/arena/1', { waitUntil: 'domcontentloaded' });
-    await expect(page.locator('[data-testid="arena-page"]')).toBeVisible();
-    await expect(page.locator('[data-testid="arena-steps"]')).toBeVisible();
-    await expect(page.locator('[data-testid="arena-step-1-1"]')).toBeVisible();
+    await expect(page).toHaveURL(/\/expedition\?focus=1/);
+    await expect(page.locator('[data-testid="expedition-page"]')).toBeVisible();
+    await page.locator('[data-testid="expedition-begin"]').click();
+    await expect(page.locator('[data-testid="expedition-map"]')).toBeVisible({ timeout: 60_000 });
+    await expect(page.locator('[data-testid="expedition-tower"]')).toBeVisible();
+    await expect(page.locator('[data-testid="expedition-canvas"] canvas')).toBeVisible({ timeout: 30_000 });
     await settleFrames(page, 4);
     await captureShot(page, testInfo, '26-arena-tower');
   });
 
-  test('27-loop-mastery 闯关塔关卡详情', async ({ page, context, request }, testInfo) => {
+  test('27-expedition-node 无尽远征节点挑战详情', async ({ page, context, request }, testInfo) => {
     await prepareStudentContext(context, request);
     await page.goto('/arena/1', { waitUntil: 'domcontentloaded' });
-    await expect(page.locator('[data-testid="arena-page"]')).toBeVisible();
-    await expect(page.locator('[data-testid="arena-detail"]')).toBeVisible();
+    await expect(page.locator('[data-testid="expedition-page"]')).toBeVisible();
+    await page.locator('[data-testid="expedition-begin"]').click();
+    await expect(page.locator('[data-testid="expedition-map"]')).toBeVisible({ timeout: 60_000 });
+    await page.locator('[data-testid="expedition-view-list"]').click();
+    await page.locator('button[data-testid^="expedition-node-"]:not([disabled])').first().click();
+    await expect(page.locator('[data-testid="expedition-challenge"]')).toBeVisible({ timeout: 90_000 });
+    await expect(page.locator('[data-testid="challenge-workspace"]')).toBeVisible({ timeout: 90_000 });
     await settleFrames(page, 4);
     await captureShot(page, testInfo, '27-loop-mastery');
   });

@@ -1,0 +1,19 @@
+{
+  "agents": {
+    "DebugAgent": 14,
+    "GroundingCriticAgent": 14,
+    "GuideCoachAgent": 14,
+    "IntentRouterAgent": 14,
+    "MindMapAgent": 14,
+    "PathPlannerAgent": 14,
+    "PracticeAgent": 14,
+    "ResourceDesignerAgent": 14,
+    "SafetyAgent": 14,
+    "TutorAgent": 14
+  },
+  "format": "chat_messages_jsonl",
+  "heldout_count": 28,
+  "input_policy": "original_case_system_user_without_protocol_patch",
+  "total_count": 140,
+  "train_count": 112
+}

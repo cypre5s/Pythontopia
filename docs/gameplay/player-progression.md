@@ -2,7 +2,7 @@
 
 > 版本：v1.0 · 起草日期：2026-05-24 · 适用版本：R-12 起 · 状态：Draft（待 W2 验收转 Active）
 > 目标读者：玩法工程师、关卡设计师、课程设计师、班主任视角运营、画像分析师
-> 平级文档：`docs/gameplay/education-loop.md`（教育闭环约束）、`docs/gameplay/movement-and-feel.md`（手感）、`docs/mastery_formula.md`（掌握度公式权威源）、`docs/profile_schema.md`（8 维画像 schema）
+> 平级文档：`docs/gameplay/education-loop.md`（教育闭环约束）、`docs/gameplay/movement-and-feel.md`（手感）、`docs/mastery_formula.md`（掌握度公式权威源）、`docs/product/profile_schema.md`（8 维画像 schema）
 
 ## 0. 文档定位
 

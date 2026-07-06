@@ -78,12 +78,10 @@ __pycache__
 *.mkv
 *.flv
 generated-media
-参考文档
+docs/references
 
 # —— 非 Web 端客户端目录（Web 发布包不携带多端代码）——
-android
-windows
-wechat-*
+clients
 
 # —— 测试报告与截图归档 ——
 qa-screens

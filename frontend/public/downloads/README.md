@@ -7,9 +7,9 @@
 
 | 文件名 | 平台 | 产物来源 |
 |---|---|---|
-| `pythontopia.apk` | Android（minSdk 26 / Android 8.0+） | `android/` Gradle 构建的 release/debug APK |
-| `pythontopia-windows.exe` | Windows 10/11 64 位 | `windows/` .NET 8 + WinUI 3 打包安装器 |
-| `pythontopia-windows.zip` | Windows 10/11 64 位 | `windows/` 免安装压缩包 |
+| `pythontopia.apk` | Android（minSdk 26 / Android 8.0+） | `clients/native/android/` Gradle 构建的 release/debug APK |
+| `pythontopia-windows.exe` | Windows 10/11 64 位 | `clients/native/windows/` .NET 8 + WinUI 3 打包安装器 |
+| `pythontopia-windows.zip` | Windows 10/11 64 位 | `clients/native/windows/` 免安装压缩包 |
 
 说明：
 - 二进制产物**不入 git 仓库**（体积大、与代码分层授权）；本目录只保留本说明文件占位。

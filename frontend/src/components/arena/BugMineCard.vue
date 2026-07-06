@@ -2,22 +2,29 @@
 import { onBeforeUnmount, onMounted, ref, computed, watch } from 'vue';
 import type { BossProblemDto } from '@/api/dto/Boss';
 
-const props = defineProps<{ problem: BossProblemDto }>();
+const props = withDefaults(defineProps<{
+  problem: BossProblemDto;
+  timeLimitSeconds?: number;
+}>(), {
+  timeLimitSeconds: 30,
+});
 const code = defineModel<string>('code', { required: true });
 const emit = defineEmits<{ (e: 'timeout'): void }>();
 
-const TOTAL_SECONDS = 30;
-const remaining = ref(TOTAL_SECONDS);
+const totalSeconds = computed<number>(() =>
+  Math.max(15, Math.min(300, Math.round(props.timeLimitSeconds))),
+);
+const remaining = ref(totalSeconds.value);
 const started = ref(false);
 const expired = ref(false);
 let timer: ReturnType<typeof setInterval> | null = null;
 
-const progress = computed(() => remaining.value / TOTAL_SECONDS);
+const progress = computed(() => remaining.value / totalSeconds.value);
 const initialBuggyCode = computed(() => props.problem.buggyCode ?? props.problem.starterCode ?? '');
 
 const urgency = computed<'safe' | 'warn' | 'danger'>(() => {
-  if (remaining.value > 15) return 'safe';
-  if (remaining.value > 5) return 'warn';
+  if (remaining.value > totalSeconds.value * 0.5) return 'safe';
+  if (remaining.value > totalSeconds.value * 0.18) return 'warn';
   return 'danger';
 });
 
@@ -29,10 +36,14 @@ watch(
   { immediate: true },
 );
 
+watch(totalSeconds, (next) => {
+  if (!started.value && !expired.value) remaining.value = next;
+});
+
 function startTimer(): void {
   if (started.value) return;
   started.value = true;
-  remaining.value = TOTAL_SECONDS;
+  remaining.value = totalSeconds.value;
   timer = setInterval(() => {
     remaining.value -= 1;
     if (remaining.value <= 0) {
@@ -96,13 +107,13 @@ onBeforeUnmount(() => {
       data-testid="bug-mine-code"
       rows="8"
       :disabled="expired"
-      :placeholder="initialBuggyCode.trim() ? '# 快速修复 Bug！30 秒倒计时已开始…' : '# 当前题目缺少可修复代码，请重试出题'"
+      :placeholder="initialBuggyCode.trim() ? `# 快速修复 Bug！${totalSeconds} 秒倒计时已开始…` : '# 当前题目缺少可修复代码，请重试出题'"
       spellcheck="false"
       class="mine-editor"
     />
 
     <p class="hint">
-      限时 30 秒！找到 Bug 并修复代码。时间到自动提交。
+      限时 {{ totalSeconds }} 秒！找到 Bug 并修复代码。时间到自动提交。
     </p>
   </div>
 </template>

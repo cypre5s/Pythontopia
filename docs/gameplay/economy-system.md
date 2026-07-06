@@ -2,7 +2,7 @@
 
 > 道具 / 技能树 / 经济三位一体，服务"学 Python = 经营小镇"的教育隐喻。
 > 课程底座：Alethicode `packId=43`《Python语言基础》7 章 / 65 KC / 46 示例 / 39 题。
-> 与 `docs/gameplay/education-loop.md`、`docs/gameplay/movement-and-feel.md`、`docs/mastery_formula.md`、`docs/profile_schema.md` 同构，是 R-12 解冻后玩法层经济维度的合规约束。
+> 与 `docs/gameplay/education-loop.md`、`docs/gameplay/movement-and-feel.md`、`docs/mastery_formula.md`、`docs/product/profile_schema.md` 同构，是 R-12 解冻后玩法层经济维度的合规约束。
 > DTO 对齐：`frontend/src/api/dto/InventoryItemDto.ts`（6 类道具）、`frontend/src/api/dto/SkillNodeDto.ts`（tier + kcCodes）。
 
 ---
@@ -304,7 +304,7 @@ flowchart TB
 
 - **拍卖行价格监控**：与基础价偏差 > 50% 预警，> 200% 自动下架并通知教师；同一买卖双方在 24h 内三次互卖判定为洗 Pythoco，账号冻结结算。
 - **矿洞 Boss 不掉金币**：所有 Pythoco 必须通过教学事件（提交 / 阅读 / 复盘 / 班级任务）入账；矿洞 Boss 只掉 `gift_bug_specimen` 和 KC 修复种子，金币必须靠通关后写 `quest_evidence` 才结算。
-- **Pyodide 预览不结算**：前端 Pyodide 仅供调试，所有 Pythoco 仅在服务端判题 ACCEPTED 后入账，与 `docs/system_design.md` 双轨执行约束一致。
+- **Pyodide 预览不结算**：前端 Pyodide 仅供调试，所有 Pythoco 仅在服务端判题 ACCEPTED 后入账，与 `docs/architecture/system_design.md` 双轨执行约束一致。
 - **班级任务奖励上限**：教师可在 0-200 Pythoco 间微调单次奖励，但单班单周总额不得超过 5000 Pythoco，由后端 `ClassroomQuestService` 强校验。
 - **道具教学注解**：每件道具 `description` 必须包含教育用途字段，由 ResourceDesignerAgent 生成时强制注入，缺失则审查不通过。
 

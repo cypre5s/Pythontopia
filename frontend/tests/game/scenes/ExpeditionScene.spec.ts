@@ -139,6 +139,7 @@ describe('ExpeditionScene · build', () => {
 
     expect(ctx._spies.removeAll).toHaveBeenCalledWith(true);
     expect(ctx._spies.graphics).toHaveBeenCalled();
+    expect(ctx._spies.graphics.mock.results[0]?.value.fillStyle).toHaveBeenCalledWith(0xf7f1dc, 1);
     expect(ctx._spies.text).toHaveBeenCalledWith(
       expect.any(Number),
       expect.any(Number),

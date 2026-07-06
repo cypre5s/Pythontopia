@@ -1,7 +1,13 @@
 # Pythontopia 美术资产 License 总声明
 
 > 本文件覆盖 `assets/inbox/` 与最终集成到 `frontend/public/assets/` 的全部美术、音效、字体资源。
-> 代码层 license 见仓库根 `LICENSE` 文件。
+> Pythontopia 原创代码、文档、产品设计、品牌、原创美术、生成媒体、课程集成与演示材料见仓库根 `LICENSE` 文件；当前阶段不开放外部复用。
+
+## 当前授权边界（2026-06-29 更新）
+
+本仓库目前是 **Source-Available Preview**，仅供评审、演示、课程验收与团队协作查看，不是开源素材包或可复用项目模板。除非项目维护者另行书面授权，外部不得复制、复用、再发布、商用、部署或二次创作 Pythontopia 的原创美术、截图、生成媒体、角色设计、世界观、品牌识别、课程集成与产品编排。
+
+下文列出的第三方素材、字体、音效与 JS 库仍由其各自上游 license 管理；本声明不会收回上游作者已经授予的 CC0 / CC-BY / CC-BY-SA / OFL / MIT 等权利，也不会把这些上游权利扩展为对 Pythontopia 原创内容或项目整体的授权。
 
 ## License 分布矩阵（2026-05-22 更新）
 
@@ -23,7 +29,7 @@ R-12 原生安卓化把 `:game`（LibGDX）从「色块占位」升级为真实�
 | --- | --- | --- |
 | `tilesets/town.png` | Kenney Tiny Town `tilemap_packed.png` | CC0 1.0 |
 | `tilesets/dungeon.png` | Kenney Tiny Dungeon `tilemap_packed.png` | CC0 1.0 |
-| `maps/{town_hub,farm_north,mine_south,campus_east,port_west}.json` | 项目程序化生成（`frontend/scripts/generate-maps.mjs`） | 项目源码（CC-BY-SA 3.0+ 包装版本） |
+| `maps/{town_hub,farm_north,mine_south,campus_east,port_west}.json` | 项目程序化生成（`frontend/scripts/generate-maps.mjs`） | Pythontopia 原创集成内容，见根 `LICENSE`（当前不开放复用） |
 | `sprites/player.png` | LPC walk9 主角行走表（9×4，64px），由 Universal-LPC-Spritesheet-Character-Generator 图层合成（body+pants+longsleeve+cowlick） | CC-BY-SA 3.0+ / GPL 3.0+（传染） |
 | `sprites/player_sara2.png` | ULPC「Expanded」主角整表（13×42，合成自 Universal-LPC 库） | CC-BY-SA 3.0+ / GPL 3.0+（传染） |
 | `sprites/npc/npc_*.png`（16 个） | LPC walk9 NPC 合成图（9×4，64px，按角色配色合成自 Universal-LPC 库） | CC-BY-SA 3.0+ / GPL 3.0+（传染） |
@@ -32,13 +38,13 @@ R-12 原生安卓化把 `:game`（LibGDX）从「色块占位」升级为真实�
 > （Stephen Challener "Redshrike"、Johannes Sjölund "wulax"、bluecarrot16、JaidynReiman、ElizaWy 等），
 > 源 https://github.com/LiberatedPixelCup/Universal-LPC-Spritesheet-Character-Generator ，CC-BY-SA 3.0+。
 > 兜底安全网：缺上述任一二进制图集时，`:game/ProceduralArt` + `GameAssets` 在运行时**程序化生成**
-> 等价配色瓦片与简易像素角色（纯算法产物，CC0），保证 5 张地图永不因缺图崩溃，真素材在场时自动优先。
-> 程序化软阴影 / 1×1 纯白像素（`GameAssets` 内 `Pixmap` 运行时生成）同属 CC0，不计外部素材。
+> 等价配色瓦片与简易像素角色由项目运行时程序化生成，作为 Pythontopia 原创集成内容，见根 `LICENSE`。
+> 程序化软阴影 / 1×1 纯白像素（`GameAssets` 内 `Pixmap` 运行时生成）不引入外部素材，仍随项目当前授权边界管理。
 
 ## 代码层音视觉库（2026-05-24 R-13 新增，不属于资产层）
 
 R-13 Phase 3 引入 3 个前端音视觉 JavaScript 库，与本文档涵盖的"资产层"
-license 矩阵无关（它们是 JS 代码，受代码层 MIT 控制），但为完整性记录：
+license 矩阵无关（它们是第三方 JS 代码，按各自上游 license 使用），但为完整性记录：
 
 | 库 | 版本 | License | 用途 |
 | --- | --- | --- | --- |
@@ -52,8 +58,8 @@ license 矩阵无关（它们是 JS 代码，受代码层 MIT 控制），但为
 ## Agentic Loop 六框架融合新增依赖与素材（2026-06-17）
 
 「Agentic Loop 六框架融合」工程（见 `docs/plans/2026-06-17-agentic-loop-framework-integration.md` 与
-配套 worklog）为闭环步骤前端动效引入 Rive / Motion。**Rive 运行时与 Motion 均为代码层 JS 依赖
-（MIT），不属于本文档涵盖的"资产层"**，受代码层 MIT 控制；为完整性记录如下：
+配套 worklog）为闭环步骤前端动效引入 Rive / Motion。**Rive 运行时与 Motion 均为第三方 JS 依赖
+（MIT），不属于本文档涵盖的"资产层"**；项目自身代码授权仍以根 `LICENSE` 为准。为完整性记录如下：
 
 | 库 | 版本 | License | 用途 | 层级 |
 | --- | --- | --- | --- | --- |
@@ -66,25 +72,27 @@ license 矩阵无关（它们是 JS 代码，受代码层 MIT 控制），但为
 
 ### Rive 吉祥物动画资产（`.riv`）— 占位 / 待补
 
-Rive `.riv` 二进制动画属**素材层**，**只允许 CC0 / CC-BY / CC-BY-SA / OFL**，且须同步登记本文件与
+Rive `.riv` 二进制动画属**素材层**，必须同步登记本文件与
 `frontend/public/assets/pixel/LICENSE.md`。当前**尚无具体 `.riv` 资产**，先登记占位条目供后续替换：
 
 | 运行时路径（计划） | 来源 | License | 用途 | 状态 |
 | --- | --- | --- | --- | --- |
-| `frontend/public/assets/pixel/rive/mascot_loop.riv` | 待定（须为 CC0 / CC-BY / CC-BY-SA / OFL 审计来源；或项目原创 AI 辅助生成 + 人工审核，以 CC-BY-SA 3.0+ 发布） | **待补（占位）** | 闭环吉祥物表情反馈（按 critic 结果 idle / celebrate / fail） | ⬜ 待补 |
+| `frontend/public/assets/pixel/rive/mascot_loop.riv` | 待定：优先使用可审计第三方素材，或由 Pythontopia 原创并按根 `LICENSE` 保留所有权利 | **待补（占位）** | 闭环吉祥物表情反馈（按 critic 结果 idle / celebrate / fail） | 待补 |
 
-**引入时必办**：①确认许可 ∈ {CC0/CC-BY/CC-BY-SA/OFL}；②落盘上述路径；③把本表与
+**引入时必办**：①确认许可、作者与来源；②落盘上述路径；③把本表与
 `frontend/public/assets/pixel/LICENSE.md` 的占位条目改为正式条目（补作者 / 来源链接 / 署名）；
-④若选 CC-BY-SA，包装作品须同以 CC-BY-SA 3.0+ 发布（项目已接受 LPC 传染，见下节，沿用即可）；
-⑤CC-BY / CC-BY-SA / OFL 强制署名须进 `frontend/public/credits/`。
+④若选 CC-BY / CC-BY-SA / OFL，强制署名须进 `frontend/public/credits/`；
+⑤若为项目原创，默认按根 `LICENSE` 保留所有权利，除非另行发布专门授权。
 **缺 `.riv` 时**：`adapters/anim/riveMascot.ts` 须 fail-soft 降级（Motion/Phaser tween 或静态表情），
 不得硬依赖该二进制——故占位缺失为**非阻塞**项，不影响演示链路。
 
-## 项目级 SA 传染决策
+## CC-BY-SA 素材处理原则
 
-**接受 CC-BY-SA 3.0 传染**：因 LPC 系列素材教育价值高，无 CC0 等价替代物。本项目最终二进制 / 包装作品同时以 **CC-BY-SA 3.0 / 4.0 (or compatible) 公开发布**，与代码层（MIT 推荐）分层授权：
-- 代码层：MIT
-- 资产层：CC-BY-SA 3.0+ / OFL-1.1 / CC-BY 4.0 / CC-BY 3.0 / CC0（分文件标识）
+项目中存在 LPC 等 CC-BY-SA 3.0+ 第三方素材及衍生文件。对这些具体素材文件，项目继续遵守上游署名与 share-alike 要求；必要的署名、来源与 CREDITS 文件必须随分发保留。
+
+这不等于把 Pythontopia 原创代码、品牌、课程集成、产品设计、世界观、AI 工作流、原创美术或项目整体开放授权。当前阶段：
+- Pythontopia 原创层：All rights reserved / Source-Available Preview（见根 `LICENSE`）
+- 第三方素材层：按分文件标识的 CC-BY-SA 3.0+ / OFL-1.1 / CC-BY 4.0 / CC-BY 3.0 / CC0 执行
 
 ## 强制署名清单（CC-BY / CC-BY-SA 必读）
 
@@ -148,14 +156,14 @@ Rive `.riv` 二进制动画属**素材层**，**只允许 CC0 / CC-BY / CC-BY-SA
 
 | 运行时路径 | 来源 | License | 用途 |
 | --- | --- | --- | --- |
-| `frontend/public/assets/pixel/ui/login-hero-stardew.png` | Pythontopia 原创（AI 辅助生成 + 人工审核） | CC-BY-SA 3.0+ | LoginPage 星露谷风暖色像素小镇 hero；NPC 与建筑均为原创，不复制任何商业像素游戏 |
-| `frontend/public/assets/pixel/bosses/boss-{1..7}-*.png` (7 张) | Pythontopia 原创（AI 辅助生成 + 人工审核 + 原创主题设计） | CC-BY-SA 3.0+ | BossPage / Endless / Arena 第 10 关 Boss 立绘；7 章主题：算盘灵 / 解释器学徒 / 二进制独眼 / 流程钟楼 / 集合棱镜 / 文档守护神 / 归纳之镜；风格统一星露谷暖色像素，与 hero 同调 |
+| `frontend/public/assets/pixel/ui/login-hero-stardew.png` | Pythontopia 原创（AI 辅助生成 + 人工审核） | Pythontopia-Proprietary / All rights reserved | LoginPage 暖色像素小镇 hero；NPC 与建筑均为原创，不复制任何商业像素游戏 |
+| `frontend/public/assets/pixel/bosses/boss-{1..7}-*.png` (7 张) | Pythontopia 原创（AI 辅助生成 + 人工审核 + 原创主题设计） | Pythontopia-Proprietary / All rights reserved | BossPage / Endless / Arena 第 10 关 Boss 立绘；7 章主题：算盘灵 / 解释器学徒 / 二进制独眼 / 流程钟楼 / 集合棱镜 / 文档守护神 / 归纳之镜；风格统一暖色像素，与 hero 同调 |
 | `frontend/public/assets/pixel/vendor/ansimuz-mountain-dusk/{5×PNG,LICENSE-CC0.txt}` | ansimuz "Mountain at Dusk Background" (https://opengameart.org/content/mountain-at-dusk-background) | **CC0-1.0** | 备用：4 层 parallax 远山日落剪影，预留 boss 终局 / 章末过场使用 |
 | `frontend/public/assets/pixel/portraits/heads/portrait_*_head.png` (29 张) | `frontend/public/assets/pixel/portraits/portrait_*.png` 子裁切；9 个 R-14 demo NPC 从 `sprites/npc-composites/npc_*.png` 的 down idle 正面帧裁切，由 `scripts/crop_portrait_heads.py` 输出 | 继承原 portrait / composite（CC0 / CC-BY 4.0 / OGA-BY 3.0 分文件） | DialogModal / DialogTree 单帧头像，每张 32×48 |
 | `assets/inbox/r13-overworld/pastoral-tileset-db32.png` | Ragnar Random Hat (https://opengameart.org/content/pastoral-overworld) | **CC0-1.0** | 备用：DawnBringer db32 32×32 乡村瓦片，未集成到运行时 |
 | `assets/inbox/r13-lpc-lamp/lpc_lamp_posts_rework-1.0.zip` | Curt, Sharm, William.Thompsonj, mold (LPC) | CC-BY 3.0 / OGA-BY 3.0 / GPL 3.0 | 备用：32×32 路灯柱多色，未集成到运行时；引入时需署名 4 位作者 |
 
-**AI 原创素材声明**：`login-hero-stardew.png` 由项目以 GenerateImage 工具生成，prompt 与生成结果由维护者人工审核确认不包含任何受版权保护角色 / 建筑布局，作为本项目自有资产以 CC-BY-SA 3.0+ 公开发布。
+**AI 原创素材声明**：`login-hero-stardew.png` 与 `boss-{1..7}-*.png` 由项目以 GenerateImage 等工具辅助生成，prompt 与生成结果由维护者人工审核确认不包含任何受版权保护角色 / 建筑布局。它们作为 Pythontopia 原创项目资产，当前阶段不开放外部复用；如后续决定开放，将另行发布明确授权文件。
 
 ## R-12 Web 运行时补充索引（2026-05-24）
 
@@ -163,13 +171,13 @@ Rive `.riv` 二进制动画属**素材层**，**只允许 CC0 / CC-BY / CC-BY-SA
 
 | 运行时路径 | 来源 | License | 备注 |
 | --- | --- | --- | --- |
-| `tilesets/town_tiles.svg`, `buildings/town_buildings.svg`, `characters/student_default.svg` | Pythontopia 自绘占位（见 `assets/pixel/LICENSE.md`） | CC0-1.0 | 早期占位与 fallback，不含商业像素游戏素材 |
+| `tilesets/town_tiles.svg`, `buildings/town_buildings.svg`, `characters/student_default.svg` | Pythontopia 自绘占位（见 `assets/pixel/LICENSE.md`） | Pythontopia-Proprietary / All rights reserved | 早期占位与 fallback，不含商业像素游戏素材 |
 | `fonts/ark-pixel-12px-{mono,prop}-*.woff2`, `fonts/OFL.txt` | TakWolf Ark Pixel Font (`assets/inbox/github_extra/ark_pixel_font/`) | OFL-1.1 | 运行时短文件名，与 OFL 原文一并分发 |
 | `sfx/success.ogg`, `sfx/error.ogg` | Kenney Digital Audio (`assets/inbox/sfx_extra/digital-audio/`) | CC0-1.0 | 正误反馈提示音 |
 | `sfx/jump/kenney_jump_soft_000.ogg`, `sfx/jump/kenney_land_wood_000.ogg` | Kenney "Impact Sounds" (https://kenney.nl/assets/impact-sounds)，通过本机代理 7892 下载；源文件与协议保留在 `assets/inbox/sfx_jump/kenney_impact-sounds/` | CC0-1.0 | 低障碍跳跃起跳/落地反馈音效 |
 | `props/fantastic-fence/fence_00.png` | InThePixel "fantastic fence 16x16" (https://opengameart.org/content/fantastic-fence-16x16)，通过本机代理 7892 下载；源文件保留在 `assets/inbox/fantastic-fence-16x16/` | CC0-1.0 | 低障碍小路矮栅栏 / 木桩 spritesheet（16×16，含单木桩、横栏、竖栏） |
 | `props/fantastic-fence/stump_agnaldo.png` | Agnaldo "Tree(Arvore) & stump" (https://opengameart.org/content/treearvore-stump)，通过本机代理 7892 下载；源文件保留在 `assets/inbox/tree-stump/` | CC0-1.0 | 备用树桩 sprite，当前未接入 BootScene |
-| `effects/weather/` | Weather FX 审计池 (`assets/inbox/weather_fx/LICENSE.md`) + Pythontopia 粒子占位 | CC0-1.0 | 云、雨滴、雪花来自已审计 CC0；confetti 为运行时占位 |
+| `effects/weather/` | Weather FX 审计池 (`assets/inbox/weather_fx/LICENSE.md`) + Pythontopia 粒子占位 | CC0-1.0 / Pythontopia-Proprietary | 云、雨滴、雪花来自已审计 CC0；项目运行时占位部分见根 `LICENSE` |
 | `portraits/` | isaiah658 Pixel Pack #1 + Pepper&Carrot 24x32 + LPC Medieval Fantasy npc-composites | CC0-1.0 / CC-BY-4.0 / OGA-BY-3.0 | 29 NPC 对话立绘；Pepper&Carrot 必须署名 Cabbit 与 David Revoy，LPC composite 必须署名 Johannes Sjolund ("wulax") 与 base contributors |
 | `vendor/opengameart/crates_and_sacks.png` | ScratchIO "Crates And Sacks" on OpenGameArt | CC0-1.0 | 港口/农场货箱与麻袋装饰 |
 
@@ -234,15 +242,15 @@ Rive `.riv` 二进制动画属**素材层**，**只允许 CC0 / CC-BY / CC-BY-SA
 | 讯飞 Spark TTS API | v2 WebSocket | [讯飞服务条款](https://www.xfyun.cn/doc/tts/online_tts/API.html) | 语音合成（后端中继，失败降级 speechSynthesis） |
 | [bilibili-api-python](https://pypi.org/project/bilibili-api-python/) | >=17.4,<18 | **GPL-3.0-or-later** | 「B站精选讲解」方案 A：在 `services/pythontopia-graph` 微服务内检索 B 站视频（取数），后端 Spring 仅 HTTP 代理 |
 
-> reveal.js MIT License 不影响项目 CC-BY-SA 3.0 分层授权。
+> reveal.js MIT License 仅说明该第三方库的上游授权，不改变 Pythontopia 当前未开放复用的项目授权边界。
 > 讯飞 TTS 为商用 API 调用，不包含可再分发代码，仅需遵守讯飞服务条款。
 
 ### 方案 A · B站精选讲解（2026-06-04 R-14 新增）
 
 - **GPL 隔离**：`bilibili-api-python`（GPL-3.0-or-later）**仅**作为 Python 微服务
   `services/pythontopia-graph` 的依赖（`routes/video.py` 内**惰性 import**），不进入 Spring 后端
-  与 Vue 前端代码层；后端 `com.pythontopia.video.*` 只通过 HTTP 代理调用该微服务。代码层分层授权
-  （后端/前端 MIT，资产层 CC-BY-SA 3.0+）不受影响。
+  与 Vue 前端代码层；后端 `com.pythontopia.video.*` 只通过 HTTP 代理调用该微服务。第三方 GPL 依赖不改变
+  Pythontopia 项目自身当前 Source-Available / All rights reserved 的授权边界。
 - **B 站缩略图 / 外链为外部资源，不随仓库分发**：前端「B站精选讲解」卡片仅展示 B 站返回的封面
   缩略图（`<img referrerpolicy="no-referrer">` 实时加载，规避防盗链）并跳转
   `https://www.bilibili.com/video/{bvid}` 官方页面——**不下载、不转存、不打包**任何 B 站视频或图片，
@@ -258,7 +266,7 @@ P3-a2「智能体事务所」执行动画复用既有 NPC 行走帧（无新增�
 | --- | --- | --- | --- |
 | `frontend/public/assets/pixel/sprites/npc-composites/npc_*.png`（16 张） | 由 LPC walkcycle 图层合成（Johannes Sjölund "wulax" + bluecarrot16 + LPC base contributors），源 [LPC Medieval Fantasy Character Sprites](https://opengameart.org/content/lpc-medieval-fantasy-character-sprites) | **CC-BY-SA-3.0** | 智能体事务所 Agent / 主管 NPC 行走帧（9×4 walkcycle，64×64）；事务所动画 + 世界 NPC 复用 |
 
-> LPC CC-BY-SA 3.0 传染已接受：包装作品同时以 CC-BY-SA 3.0+ 发布，代码层保持 MIT。
+> LPC CC-BY-SA 3.0 相关素材与衍生文件继续遵守上游署名与 share-alike 要求；项目原创代码、品牌与集成编排仍见根 `LICENSE`。
 > 已同步登记到 `scripts/sync-assets.mjs` MANIFEST（noSync）与 `frontend/public/assets/pixel/LICENSE.md` 自动索引。
 
 ## R-12 ULPC 全动作角色（动作模组方案A，2026-05-29 修订）
@@ -274,7 +282,7 @@ P3-a2「智能体事务所」执行动画复用既有 NPC 行走帧（无新增�
 | `frontend/public/assets/pixel/sprites/ulpc/{player_sara2,ulpc_villager_f,ulpc_villager_m,ulpc_scholar,ulpc_worker,ulpc_lady,ulpc_youth,ulpc_elder,ulpc_guard}.png`（9 张） | [Universal-LPC-Spritesheet-Character-Generator](https://github.com/LiberatedPixelCup/Universal-LPC-Spritesheet-Character-Generator)，部件作者见 `CREDITS-ulpc-used.txt`（bluecarrot16 / ElizaWy / JaidynReiman / wulax / Redshrike 等） | **CC-BY-SA-3.0 / OGA-BY-3.0 / CC-BY-3.0+ / CC0 / GPL（分文件混合）** | 主角 + 8 个变体 NPC 全动作精灵表（64×64，含 run/jump/idle/sit）；16 个城镇 NPC 按角色映射复用 |
 
 > 合成产物为构建产物（build artifact）：源 = 官方 ULPC 素材库 + 合成脚本；二者均已审计。
-> 接受 CC-BY-SA 3.0 传染：以 CC-BY-SA 3.0+ 发布。
+> CC-BY-SA 3.0 相关素材与衍生文件继续遵守上游署名与 share-alike 要求；项目原创代码、品牌与集成编排仍见根 `LICENSE`。
 
 ## R-12 手持工具叠加层（动作模组 C 阶段，联网爬取，2026-05-29）
 

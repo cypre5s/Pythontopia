@@ -27,6 +27,8 @@ const props = defineProps<{
   difficulty?: number;
   elapsedSec?: number;
   aiGenerated?: boolean;
+  /** Bug 矿洞题型的倒计时；远征页可放宽，普通刷题保持默认。 */
+  bugMineTimeLimitSeconds?: number;
   /** 统一判题结果（驱动 JudgeResultPanel，带 aria-live 播报）。 */
   result?: ChallengeResult | null;
 }>();
@@ -156,6 +158,7 @@ async function copySample(text: string): Promise<void> {
           v-model:code="codeProxy"
           :kind="kind"
           :problem="problem"
+          :bug-mine-time-limit-seconds="props.bugMineTimeLimitSeconds ?? 30"
           @timeout="emit('timeout')"
         >
           <pre class="cw-statement">{{ problem.statement }}</pre>

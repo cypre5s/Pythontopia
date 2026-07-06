@@ -47,7 +47,13 @@ class MindMapAgent:
         body_lines = [line for line in mermaid_text.strip().splitlines()[1:] if line.strip()]
         if not body_lines:
             return False
-        return all("-->" in line or line.strip().endswith("]") or line.strip().endswith(")") for line in body_lines)
+        return all(
+            "-->" in line
+            or line.strip().endswith("]")
+            or line.strip().endswith(")")
+            or line.strip().startswith("style ")
+            for line in body_lines
+        )
 
     def _prompt(
         self,
@@ -92,8 +98,21 @@ class MindMapAgent:
                 candidate = MindMapContent.model_validate(content_json["mindmap"])
             except Exception:  # noqa: BLE001
                 candidate = None
+        elif isinstance(content_json, dict) and "mermaid" in content_json:
+            try:
+                candidate = MindMapContent.model_validate(
+                    {
+                        "mermaid": content_json.get("mermaid"),
+                        "kc_map": content_json.get("kc_map") or {},
+                    }
+                )
+            except Exception:  # noqa: BLE001
+                candidate = None
         if candidate and self.syntax_valid(candidate.mermaid):
-            return candidate
+            return MindMapContent(
+                mermaid=candidate.mermaid,
+                kc_map=self._filter_kc_map(candidate.kc_map, request.kc_codes),
+            )
         return self._fallback(request)
 
     def _fallback(self, request: ResourceProduceRequest) -> MindMapContent:
@@ -117,3 +136,13 @@ class MindMapAgent:
     @staticmethod
     def _node_id(code: str) -> str:
         return re.sub(r"[^A-Za-z0-9]", "_", code) or "node"
+
+    @staticmethod
+    def _filter_kc_map(kc_map: dict[str, list[str]], allowed_codes: list[str]) -> dict[str, list[str]]:
+        allowed = set(allowed_codes)
+        filtered: dict[str, list[str]] = {}
+        for key, values in kc_map.items():
+            if key not in allowed:
+                continue
+            filtered[key] = [value for value in values if value in allowed and value != key]
+        return filtered or {allowed_codes[0]: []}

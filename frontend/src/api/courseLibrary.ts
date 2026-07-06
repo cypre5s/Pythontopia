@@ -49,6 +49,27 @@ let manifestCache: CourseLibraryManifest | null = null;
 // 避免重复网络往返与本地全文重算（课件为静态内容，会话内结果稳定）。返回副本防止调用方改写污染缓存。
 const ragSearchCache = new Map<string, LibrarySearchHit[]>();
 
+function currentRoleSnapshot(): string | null {
+  if (typeof localStorage === 'undefined') {
+    return null;
+  }
+  const raw = localStorage.getItem('pythontopia.user');
+  if (!raw) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(raw) as { role?: unknown };
+    return typeof parsed.role === 'string' ? parsed.role : null;
+  } catch {
+    return null;
+  }
+}
+
+function canUseDirectRagQuery(): boolean {
+  const role = currentRoleSnapshot();
+  return role === null || role === 'TEACHER' || role === 'ADMIN';
+}
+
 interface FetchLike {
   (input: string, init?: RequestInit): Promise<Response>;
 }
@@ -179,41 +200,44 @@ export async function searchCourseLibrary(
     return cached.slice();
   }
 
-  // 学生角色无法直接调 /api/rag/query（限教师/管理员），先尝试后端，403/失败时回退本地关键字检索。
-  try {
-    const response = await http.post<{
-      hits: Array<{
-        page_id?: number;
-        pageId?: number;
-        page_no?: number;
-        pageNo?: number;
-        chapter_id?: number | null;
-        kc_codes?: string[];
-        text: string;
-        score: number;
-      }>;
-    }>(`/api/rag/query`, {
-      query: trimmed,
-      top_k: topK,
-      kc_codes: options.kcCodes ?? null,
-    });
-    const hits = response.data.hits ?? [];
-    if (hits.length > 0) {
-      const mapped: LibrarySearchHit[] = hits.map((hit) => ({
-        pageId: hit.pageId ?? hit.page_id ?? 0,
-        documentId: 0,
-        pageNo: hit.pageNo ?? hit.page_no ?? 0,
-        title: '',
-        snippet: hit.text,
-        score: hit.score,
-      }));
-      ragSearchCache.set(cacheKey, mapped);
-      return mapped.slice();
-    }
-  } catch (error) {
-    if (!(error instanceof ApiClientError) || (error.status !== 403 && error.status !== 401)) {
-      // 真实异常（非鉴权问题）继续抛出，让上层 toast 提示；学生鉴权失败则静默降级。
-      throw error;
+  // 学生角色无法直接调 /api/rag/query（限教师/管理员）。能从本地会话识别为学生时，
+  // 直接走本地关键字检索，避免浏览器产生可见的 403 console noise。
+  if (canUseDirectRagQuery()) {
+    try {
+      const response = await http.post<{
+        hits: Array<{
+          page_id?: number;
+          pageId?: number;
+          page_no?: number;
+          pageNo?: number;
+          chapter_id?: number | null;
+          kc_codes?: string[];
+          text: string;
+          score: number;
+        }>;
+      }>(`/api/rag/query`, {
+        query: trimmed,
+        top_k: topK,
+        kc_codes: options.kcCodes ?? null,
+      });
+      const hits = response.data.hits ?? [];
+      if (hits.length > 0) {
+        const mapped: LibrarySearchHit[] = hits.map((hit) => ({
+          pageId: hit.pageId ?? hit.page_id ?? 0,
+          documentId: 0,
+          pageNo: hit.pageNo ?? hit.page_no ?? 0,
+          title: '',
+          snippet: hit.text,
+          score: hit.score,
+        }));
+        ragSearchCache.set(cacheKey, mapped);
+        return mapped.slice();
+      }
+    } catch (error) {
+      if (!(error instanceof ApiClientError) || (error.status !== 403 && error.status !== 401)) {
+        // 真实异常（非鉴权问题）继续抛出，让上层 toast 提示；学生鉴权失败则静默降级。
+        throw error;
+      }
     }
   }
 

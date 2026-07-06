@@ -59,4 +59,30 @@ describe('arena bug-oriented cards', () => {
     wrapper.unmount();
     vi.useRealTimers();
   });
+
+  it('BugMineCard accepts a relaxed timer for roguelike contexts', async () => {
+    vi.useFakeTimers();
+    const onTimeout = vi.fn();
+    const wrapper = mount(BugMineCard, {
+      props: {
+        problem: problem({
+          statement: '限时内修复总和程序。',
+          buggyCode: 'nums = input().split()\nprint(nums[0] + nums[1])\n',
+          starterCode: 'nums = input().split()\nprint(nums[0] + nums[1])\n',
+        }),
+        code: '',
+        timeLimitSeconds: 75,
+        onTimeout,
+      },
+    });
+
+    expect(wrapper.find('[role="timer"]').text()).toContain('75s');
+    expect(wrapper.find('.hint').text()).toContain('限时 75 秒');
+    await vi.advanceTimersByTimeAsync(74_000);
+    expect(onTimeout).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(onTimeout).toHaveBeenCalledTimes(1);
+    wrapper.unmount();
+    vi.useRealTimers();
+  });
 });

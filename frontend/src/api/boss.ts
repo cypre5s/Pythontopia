@@ -234,6 +234,7 @@ export async function requestBossProblem(
       `/api/world/boss/${chapter}/problem`,
       req,
       {
+        suppressNetworkToast: true,
         timeout: BOSS_PROBLEM_TIMEOUT_MS,
       },
     );

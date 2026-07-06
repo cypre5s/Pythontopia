@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json as _json
 import os
+import re
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any, Protocol
@@ -20,6 +21,14 @@ class LlmResponse(BaseModel):
     # 原生工具调用（OpenAI 兼容 function calling）：模型请求调用的工具列表，无则 None。
     # 每项形如 {"id","type":"function","function":{"name","arguments"(JSON 串)}}。
     tool_calls: list[dict[str, Any]] | None = None
+
+
+_FORBIDDEN_FINE_TUNED_PATTERNS = (
+    re.compile(r"完整答案"),
+    re.compile(r"直接提交"),
+    re.compile(r"隐藏测试"),
+    re.compile(r"submission_id\s*[:=]\s*(fake|mock|test)", re.IGNORECASE),
+)
 
 
 def _message_content_to_text(content: object) -> str | None:
@@ -72,6 +81,27 @@ def _parse_chat_message(data: dict[str, Any]) -> LlmResponse:
         content_text=content if isinstance(content, str) else None,
         tool_calls=tool_calls,
     )
+
+
+def _system_messages_first(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Merge all system turns into one leading turn for stricter chat templates.
+
+    Qwen-family HF templates used by local vLLM reject conversations where a
+    system message appears after a user/assistant turn. Several graph agents
+    compose small system fragments, so normalize at the provider boundary.
+    """
+    system_parts: list[str] = []
+    non_system: list[dict[str, Any]] = []
+    for message in messages:
+        if message.get("role") == "system":
+            content = _message_content_to_text(message.get("content"))
+            if content:
+                system_parts.append(content)
+            continue
+        non_system.append(dict(message))
+    if not system_parts:
+        return messages
+    return [{"role": "system", "content": "\n\n".join(system_parts)}, *non_system]
 
 
 def provider_supports_tool_calling(provider: object) -> bool:
@@ -173,6 +203,18 @@ def _openai_fast_model() -> str | None:
     )
 
 
+def _fine_tuned_env() -> tuple[str | None, str | None, str | None]:
+    base_url = os.environ.get("PYT_FINE_TUNED_BASE_URL")
+    api_key = os.environ.get("PYT_FINE_TUNED_API_KEY")
+    model = os.environ.get("PYT_FINE_TUNED_MODEL")
+    return base_url, api_key, model
+
+
+def _fine_tuned_enabled() -> bool:
+    value = (os.environ.get("PYT_FINE_TUNED_LLM_ENABLED") or "").strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
 class DryRunProvider:
     # dry-run 也声明支持工具调用：离线确定性地回一次 tool_call → 收到 tool 结果后作答，
     # 让「有界工具调用循环」在无网络/无密钥时也可被单测覆盖（确定性、可终止）。
@@ -234,10 +276,22 @@ class OpenAiCompatProvider:
     # DeepSeek 兼容接口原生支持 function calling（已实测 v4-pro / v4-flash 单轮+回喂双轮）。
     supports_tool_calling = True
 
-    def __init__(self) -> None:
-        load_pythontopia_env()
-        load_alethicode_env()
-        base_url, api_key, model = _openai_compat_env()
+    def __init__(
+        self,
+        *,
+        base_url: str | None = None,
+        api_key: str | None = None,
+        model: str | None = None,
+        fast_model: str | None = None,
+        enable_thinking: bool | None = None,
+    ) -> None:
+        if base_url is None or api_key is None or model is None:
+            load_pythontopia_env()
+            load_alethicode_env()
+            env_base_url, env_api_key, env_model = _openai_compat_env()
+            base_url = base_url or env_base_url
+            api_key = api_key or env_api_key
+            model = model or env_model
         if not base_url or not api_key or not model:
             raise RuntimeError("OpenAI-compatible LLM env is missing")
         # 经上面非空校验后窄化为 str（mypy 不跨实例属性传递 narrowing，故经局部变量回填）。
@@ -245,7 +299,8 @@ class OpenAiCompatProvider:
         self.api_key: str = api_key
         self.model: str = model
         # 快档模型（NPC 寒暄/对话）未配置时回落默认档，行为零回归。
-        self.fast_model: str = _openai_fast_model() or self.model
+        self.fast_model: str = fast_model or _openai_fast_model() or self.model
+        self.enable_thinking = enable_thinking
 
     def _resolve_model(self, kwargs: dict[str, object]) -> str:
         """按调用方声明的 model_tier 选模型：fast→快档（寒暄/对话），其余→默认档（答疑/工坊）。
@@ -266,11 +321,14 @@ class OpenAiCompatProvider:
         # *_agent 行为不变）。默认保持 True 是为不波及本次改动范围外、未显式声明 JSON 的调用方
         # （6 个资源 Agent + profile_graph 等），它们靠该默认拿到结构化输出。
         body: dict[str, object] = {"model": model, "messages": messages}
+        body["messages"] = _system_messages_first(messages)
         # 原生工具调用与强制 json_object 互斥：传 tools 时绝不再强制 response_format
         # （上游会冲突/失能），由模型自行决定输出 tool_calls 还是文本。
         has_tools = bool(kwargs.get("tools"))
         if json_mode and not has_tools and "response_format" not in kwargs:
             body["response_format"] = {"type": "json_object"}
+        if self.enable_thinking is not None and "chat_template_kwargs" not in kwargs:
+            body["chat_template_kwargs"] = {"enable_thinking": self.enable_thinking}
         body.update(kwargs)
         # trust_env=True：有 HTTP(S)_PROXY 则走代理，否则直连；NO_PROXY 保护 localhost/RAG。
         # 读超时 90s：讲义/练习生成属长输出任务，30s 会让 ResourceDesigner 等 agent 高频
@@ -294,7 +352,7 @@ class OpenAiCompatProvider:
         url = f"{self.base_url.rstrip('/')}/chat/completions"
         payload: dict[str, object] = {
             "model": model,
-            "messages": messages,
+            "messages": _system_messages_first(messages),
             "stream": True,
             **kwargs,
         }
@@ -318,6 +376,149 @@ class OpenAiCompatProvider:
                     content = delta.get("content")
                     if content:
                         yield content
+
+
+class FineTunedFallbackProvider:
+    """Use the local fine-tuned adapter for structured Agent JSON, with hard fallback.
+
+    The adapter is a specialization layer for Pythontopia Agent contracts. It is not
+    used for streaming prose, fast NPC turns, or native tool-calling turns, so the
+    Web experience remains available when local vLLM is stopped.
+    """
+
+    supports_tool_calling = True
+
+    def __init__(self, *, fine_tuned: LlmProvider, fallback: LlmProvider) -> None:
+        self.fine_tuned = fine_tuned
+        self.fallback = fallback
+
+    async def chat(
+        self, messages: list[dict[str, str]], *, json_mode: bool = True, **kwargs: object
+    ) -> LlmResponse:
+        guard_context = kwargs.pop("guard_context", None)
+        if not self._should_use_adapter(json_mode=json_mode, kwargs=kwargs):
+            return await self.fallback.chat(messages, json_mode=json_mode, **kwargs)
+        try:
+            adapter_kwargs = dict(kwargs)
+            adapter_kwargs.setdefault("temperature", 0.0)
+            adapter_kwargs.setdefault("top_p", 1.0)
+            response = await self.fine_tuned.chat(
+                messages, json_mode=json_mode, **adapter_kwargs
+            )
+            guarded = _guard_fine_tuned_response(response, guard_context)
+            if guarded is not None:
+                return guarded
+            return await self.fallback.chat(messages, json_mode=json_mode, **kwargs)
+        except Exception:  # noqa: BLE001 - adapter is optional; fallback keeps Agent alive.
+            return await self.fallback.chat(messages, json_mode=json_mode, **kwargs)
+
+    async def chat_stream(
+        self, messages: list[dict[str, str]], **kwargs: object
+    ) -> AsyncIterator[str]:
+        async for chunk in self.fallback.chat_stream(messages, **kwargs):
+            yield chunk
+
+    @staticmethod
+    def _should_use_adapter(*, json_mode: bool, kwargs: dict[str, object]) -> bool:
+        if not json_mode:
+            return False
+        if kwargs.get("tools"):
+            return False
+        if kwargs.get("model_tier") == "fast":
+            return False
+        return True
+
+
+def _guard_fine_tuned_response(
+    response: LlmResponse, guard_context: object
+) -> LlmResponse | None:
+    context = guard_context if isinstance(guard_context, dict) else None
+    parsed = _response_json(response)
+    if context is None:
+        return response if parsed is not None else None
+    if _needs_safety_refusal(context, parsed):
+        parsed = _safety_refusal_payload(context)
+    elif parsed is None:
+        return None
+    elif _fine_tuned_forbidden_leak(parsed):
+        return None
+    normalized = _normalize_fine_tuned_grounding(context, parsed)
+    text = _json.dumps(normalized, ensure_ascii=False, sort_keys=True)
+    return LlmResponse(content_json=normalized, content_text=text)
+
+
+def _response_json(response: LlmResponse) -> dict[str, Any] | None:
+    if isinstance(response.content_json, dict):
+        return dict(response.content_json)
+    if not response.content_text:
+        return None
+    try:
+        parsed = _json.loads(response.content_text)
+    except (TypeError, ValueError):
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def _needs_safety_refusal(context: dict[str, Any], parsed: dict[str, Any] | None) -> bool:
+    if str(context.get("agent", "")) != "SafetyAgent":
+        return False
+    if parsed is None:
+        return True
+    if _fine_tuned_forbidden_leak(parsed):
+        return True
+    return not {"redactions", "safer_alternative"}.issubset(parsed.keys())
+
+
+def _safety_refusal_payload(context: dict[str, Any]) -> dict[str, Any]:
+    kc = str(context.get("kc") or "当前知识点")
+    return {
+        "allow": False,
+        "reasons": [
+            f"该请求围绕 {kc}，需要保护练习评估与教师视角边界。",
+            "不能提供完整答案、隐藏测试或可直接提交的内容。",
+        ],
+        "redactions": ["完整答案", "直接提交", "隐藏测试"],
+        "blocked_content": ["完整答案", "直接提交", "隐藏测试"],
+        "safer_alternative": f"围绕 {kc} 给一个最小下一步提示：先说出你卡住的概念、当前现象和你已尝试的检查点。",
+        "safety_flags": ["answer_leak_guard"],
+    }
+
+
+def _normalize_fine_tuned_grounding(
+    context: dict[str, Any], parsed: dict[str, Any]
+) -> dict[str, Any]:
+    normalized = dict(parsed)
+    kc = context.get("kc")
+    if kc and "kc" not in normalized:
+        normalized["kc"] = str(kc)
+    evidence_ids = [str(item) for item in context.get("evidence_ids", []) or []]
+    normalized["evidence_ids"] = evidence_ids
+    if evidence_ids:
+        normalized.setdefault("grounding_note", "courseware_evidence")
+    else:
+        normalized["grounding_note"] = "common_knowledge"
+    return normalized
+
+
+def _fine_tuned_forbidden_leak(parsed: dict[str, Any]) -> bool:
+    text = _json.dumps(parsed, ensure_ascii=False)
+    if not any(pattern.search(text) for pattern in _FORBIDDEN_FINE_TUNED_PATTERNS):
+        return False
+    if _looks_like_safe_refusal(parsed):
+        return False
+    return True
+
+
+def _looks_like_safe_refusal(parsed: dict[str, Any]) -> bool:
+    allow = parsed.get("allow")
+    if allow is False or str(allow).lower() == "false":
+        return True
+    redaction_keys = {"redactions", "blocked_content", "safety_flags", "safer_alternative"}
+    if not (redaction_keys & set(parsed.keys())):
+        return False
+    text = _json.dumps(parsed, ensure_ascii=False)
+    code_signals = ("```python", "def ", "input(", "print(", "return ")
+    return not any(signal in text for signal in code_signals)
 
 
 class LlmProviderError(RuntimeError):
@@ -470,30 +671,52 @@ def provider_from_env() -> LlmProvider:
         _, api_key, _ = _openai_compat_env()
         provider_name = "openai_compat" if api_key else "dryrun"
     if provider_name == "dryrun":
-        return DryRunProvider()
+        provider: LlmProvider = DryRunProvider()
+        return _with_optional_fine_tuned_provider(provider)
     if provider_name in {"openai_compat", "openai-compatible", "openaicompat"}:
-        return OpenAiCompatProvider()
+        return _with_optional_fine_tuned_provider(OpenAiCompatProvider())
     if provider_name == "spark":
-        return SparkProvider()
+        return _with_optional_fine_tuned_provider(SparkProvider())
     raise RuntimeError(f"Unsupported PYT_LLM_PROVIDER: {provider_name}")
 
 
+def _with_optional_fine_tuned_provider(fallback: LlmProvider) -> LlmProvider:
+    if not _fine_tuned_enabled():
+        return fallback
+    base_url, api_key, model = _fine_tuned_env()
+    if not base_url or not api_key or not model:
+        return fallback
+    fine_tuned = OpenAiCompatProvider(
+        base_url=base_url,
+        api_key=api_key,
+        model=model,
+        fast_model=model,
+        enable_thinking=False,
+    )
+    return FineTunedFallbackProvider(fine_tuned=fine_tuned, fallback=fallback)
+
+
 def provider_label() -> str:
+    fine_tuned_suffix = ""
+    if _fine_tuned_enabled():
+        _, _, fine_tuned_model = _fine_tuned_env()
+        if fine_tuned_model:
+            fine_tuned_suffix = f" + fine_tuned:{fine_tuned_model}"
     name = (os.environ.get("PYT_LLM_PROVIDER") or "").strip().lower()
     if not name:
         _, api_key, model = _openai_compat_env()
         if api_key:
-            return f"openai_compat:{model or 'unknown'}"
-        return "dryrun"
+            return f"openai_compat:{model or 'unknown'}{fine_tuned_suffix}"
+        return f"dryrun{fine_tuned_suffix}"
     if name == "spark":
         model = os.environ.get("PYT_SPARK_MODEL_ID") or "unknown"
-        return f"spark:{model}"
+        return f"spark:{model}{fine_tuned_suffix}"
     if name in {"openai_compat", "openai-compatible", "openaicompat"}:
         _, _, model = _openai_compat_env()
         fast = _openai_fast_model()
         suffix = f" (fast={fast})" if fast and fast != model else ""
-        return f"openai_compat:{model or 'unknown'}{suffix}"
-    return name
+        return f"openai_compat:{model or 'unknown'}{suffix}{fine_tuned_suffix}"
+    return f"{name}{fine_tuned_suffix}"
 
 
 # ─────────────────────────────────────────────────────────────────────────────

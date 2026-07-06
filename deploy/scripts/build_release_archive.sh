@@ -119,7 +119,7 @@ PROXY="${PYT_BUILD_PROXY:-http://127.0.0.1:7892}"
 BUILD_ARGS=()
 if [[ "$PROXY" != "none" ]]; then
   if ! curl -sf --connect-timeout 3 -x "$PROXY" https://registry.npmmirror.com/ -o /dev/null; then
-    die "构建代理 $PROXY 不可用。请先启动本机代理（默认 7892），或设 PYT_BUILD_PROXY=<代理地址>；容器内可直连外网时可设 PYT_BUILD_PROXY=none（注意 backend 的 Maven 步骤仍硬编码 127.0.0.1:7892）。"
+    die "构建代理 $PROXY 不可用。请先启动本机代理（默认 7892），或设 PYT_BUILD_PROXY=<代理地址>；容器内可直连外网时可设 PYT_BUILD_PROXY=none。"
   fi
   BUILD_ARGS=(
     --build-arg "HTTP_PROXY=$PROXY"
@@ -130,6 +130,8 @@ if [[ "$PROXY" != "none" ]]; then
   PROXY_HOST="${PROXY_ENDPOINT%%:*}"
   PROXY_PORT="${PROXY_ENDPOINT##*:}"
   BUILD_ARGS+=(
+    --build-arg "MAVEN_PROXY_HOST=${PROXY_HOST}"
+    --build-arg "MAVEN_PROXY_PORT=${PROXY_PORT}"
     --build-arg "MAVEN_PROXY_OPTS=-Dhttp.proxyHost=${PROXY_HOST} -Dhttp.proxyPort=${PROXY_PORT} -Dhttps.proxyHost=${PROXY_HOST} -Dhttps.proxyPort=${PROXY_PORT}"
   )
   echo "==> 构建代理：$PROXY（build-arg 注入，host 网络）"

@@ -1,1 +1,50 @@
-License selection is pending. Do not redistribute third-party assets until stage 14 confirms the final project license and asset licenses.
+Pythontopia Source-Available Notice
+
+Copyright (c) 2026 Pythontopia project contributors.
+All rights reserved.
+
+中文摘要：当前仓库仅供评审、演示、课程验收与团队协作查看，不是开源项目。
+除非项目维护者另行书面授权，不得复制、复用、再发布、商用、部署、二次创作
+或把本项目代码、文档、品牌、原创美术、生成媒体、课程集成与演示材料用于其他项目。
+
+This repository is published for review, demonstration, course assessment, and
+team collaboration only. It is not open source at the current stage.
+
+Unless a separate written agreement from the project maintainers says otherwise,
+you may not:
+
+- copy, reuse, redistribute, sublicense, sell, or deploy Pythontopia source code;
+- create derivative works based on Pythontopia code, documentation, product
+  design, branding, narrative, original art, screenshots, generated media, or
+  course-specific integration;
+- use the Pythontopia name, logo, visual identity, game world design, AI-agent
+  workflow design, or contest/demo materials in another project;
+- train, fine-tune, benchmark, or package another product from this repository's
+  original project assets without permission.
+
+Public visibility on GitHub does not grant an open-source license. GitHub's
+platform terms may allow repository viewing and forking through GitHub features,
+but that does not grant permission to use, modify, distribute, or publish this
+project outside those platform functions.
+
+Third-party exceptions:
+
+This repository may include third-party dependencies, fonts, sounds, pixel art,
+or other assets that are identified in LICENSE-ART.md,
+frontend/public/assets/pixel/LICENSE.md, assets/pixel/LICENSE.md, or
+docs/legal/open_source.md. Those third-party materials remain governed by their own
+upstream licenses. This notice does not remove any rights granted directly by
+the upstream licensors, and it does not grant rights to Pythontopia-specific
+selection, arrangement, integration, branding, original assets, or project code.
+
+Course data and demo materials:
+
+The bundled course structure, examples, demo accounts, screenshots, reports,
+slides, and competition materials are provided only for this project's internal
+teaching/demo context unless a separate file explicitly states otherwise.
+
+No warranty:
+
+The repository is provided "as is" for the limited purposes above, without any
+warranty or guarantee of correctness, availability, fitness for a particular
+purpose, or non-infringement.

@@ -701,7 +701,7 @@ stateDiagram-v2
 ## 12. 防作弊
 
 - **修复方案不在前端暴露**：每张卡的"最小修复"只存在后端 `BugMineCardCatalogService`，前端通过 `revealHintTier(1..3)` 按 Layer 1/2/3 解锁（对齐 `BugMinePanel.spec.ts`）；Layer 3 仍不展示完整答案，只展示"思路 + 关键 API"。
-- **Pyodide 仅作运行环境**：所有通过判定必须经过服务端判题（`practice_submission.status = ACCEPTED`），与 `docs/system_design.md` 双轨执行约束一致；Pyodide PASS 但服务端 FAIL 时以服务端为准。
+- **Pyodide 仅作运行环境**：所有通过判定必须经过服务端判题（`practice_submission.status = ACCEPTED`），与 `docs/architecture/system_design.md` 双轨执行约束一致；Pyodide PASS 但服务端 FAIL 时以服务端为准。
 - **执行时长校验**：每卡 `runtime_limit_ms` 默认 1500，B5 boss 1000；超时即判失败，专防裸递归 / 死循环"假通过"。
 - **教师 dashboard 可见**：班主任在 `port_west` `class_president` 看板里查看本班每张卡的"平均尝试次数 / 平均通关时长 / 跳过率"，便于教学介入。
 - **奖励上链**：通关后端先写 `quest_evidence(kind=BUG_MINE_PASS, deck_card_id, submission_id, kc_mastery_delta)`，再写 `pythoco_ledger(source=BUG_MINE)`；ledger 无 evidence 即清零。

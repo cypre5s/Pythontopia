@@ -101,7 +101,7 @@
 | `04-00-需求总览与数据需求.md` | C04 | 4.1 数据需求 + 4.2 功能总览框架 + 4.3 性能 + 4.4 界面 + 4.5 接口 + 4.6 其他 | 6000 | 全 controller 列表、`data/course-pack-43/`、本总纲 §4/§5 |
 | `05-概要设计.md` | C05 | 5 概要设计（处理流程/总体结构/功能/数据流转/UI/数据结构/接口/异常/配置/部署/跨端架构/其他） | 8000 | `deploy/docker-compose.yml`、后端包结构、`services/*/`、本总纲 §1 |
 | `06-00-数据库设计-规范与总览.md` | C06 | 6.1–6.4 命名规范 + 概念 ER 总览 + 表索引 + 已弃用表附录 | 4500 | `backend/src/main/resources/db/migration/`（全量浏览）、本总纲 §6 |
-| `07-多端部署设计.md` | C07 | 7 手机端/多端侧部署设计 | 4000 | `android/docs/ADR-001-tech-selection.md`、`docs/clients/`、`windows/` `wechat-*/` README |
+| `07-多端部署设计.md` | C07 | 7 手机端/多端侧部署设计 | 4000 | `clients/native/android/docs/ADR-001-tech-selection.md`、`docs/clients/`、`clients/native/windows/`、`clients/wechat/*` README |
 | `09-00-测试计划与结果分析.md` | T00 | 9.1 目标范围 / 9.2 环境工具 / 9.3 策略 / 9.5 结果分析 / 9.6 缺陷统计（聚焦功能测试） | 3500 | 本总纲 §8、`frontend` 测试脚本、`backend` 测试目录 |
 | `10-审查与测试问题清单.md` | C10 | 10 审查/测试问题清单（每阶段≥10） | 3500 | 本总纲 §8、各阶段文档结构 |
 | `11-项目总结.md` | C11 | 11 项目总结（经验成果/反思，按成员） | 4000 | 本总纲 §1.1 |

@@ -189,7 +189,7 @@ flowchart TB
 
 ## Task 0.4 文档与死代码对齐 R-14
 **步骤**：
-1. 更新 `docs/execution_status.md`（去掉“Web 冻结在 R-11”）、`docs/sv-progress.md` 烟雾断言（`maps`/`npcs` 数）、`docs/release/known_issues.md`。
+1. 更新 `docs/operations/execution_status.md`（去掉“Web 冻结在 R-11”）、`docs/sv-progress.md` 烟雾断言（`maps`/`npcs` 数）、`docs/release/known_issues.md`。
 2. 删除死代码：`pages/TownPage.vue`、`pages/FieldPage.vue`（及 `FieldPage.spec.ts`）、`game/adapters/tilemap.ts` 的农场期 `loadTownMap()`/`DEFAULT_*`（确认无引用后删）。
 3. 修 `town_hub` 契约：移除/激活 6 个占位 building；补 `exit` 对象或更正 `index.json` 的 `exits`。
 **验收标准**：

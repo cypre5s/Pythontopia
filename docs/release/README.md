@@ -53,7 +53,7 @@ cd ../images_tar && sha256sum *.tar > checksum.txt
 | 视频 | `docs/release/demo_v1.mp4` | < 200MB |
 | PPT | `docs/release/Pythontopia_v1.pptx` / `.pdf` | < 25MB |
 | 镜像（可选） | `docs/release/images_tar/*.tar` + `checksum.txt` | ~1.2GB |
-| 文档 | `docs/system_design.md`、`docs/test_report.md`、`docs/ai_coding_disclosure.md`、`docs/open_source.md`、`docs/demo_script.md`、`docs/ppt_outline.md`、`docs/release/*.md` | <1MB |
+| 文档 | `docs/architecture/system_design.md`、`docs/testing/test_report.md`、`docs/project/ai_coding_disclosure.md`、`docs/legal/open_source.md`、`docs/presentations/demo_script.md`、`docs/presentations/ppt_outline.md`、`docs/release/*.md` | <1MB |
 
 ## 4. 评审机器复现
 
@@ -84,6 +84,6 @@ docker compose -f deploy/docker-compose.yml down -v
 
 - 是否包含真实学生 PII？必须为 `demo-` 前缀虚构身份。
 - 是否包含真实 LLM 密钥？`.env` 不入提交包；只保留 `.env.example`。
-- 是否所有依赖 License 都在 `docs/open_source.md` 中列出？
-- 是否所有 AI 协作模块在 `docs/ai_coding_disclosure.md` 中说明？
+- 是否所有依赖 License 都在 `docs/legal/open_source.md` 中列出？
+- 是否所有 AI 协作模块在 `docs/project/ai_coding_disclosure.md` 中说明？
 - `docs/release/regression_report.md` 是否反映本次发布的最新结果？

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from pythontopia_graph.agents.personalization import (
@@ -101,6 +102,9 @@ class PracticeAgent:
                     return practice
             except Exception:  # noqa: BLE001
                 pass
+        legacy = self._legacy_practice_content(request, content_json)
+        if legacy is not None and self._safe(legacy):
+            return legacy
         return self._fallback(request)
 
     def _safe(self, practice: PracticeContent) -> bool:
@@ -110,17 +114,119 @@ class PracticeAgent:
                 return False
         return True
 
+    def _legacy_practice_content(
+        self,
+        request: ResourceProduceRequest,
+        content_json: dict[str, Any] | None,
+    ) -> PracticeContent | None:
+        if not isinstance(content_json, dict):
+            return None
+        raw_problems = content_json.get("practice_problems")
+        if not isinstance(raw_problems, list):
+            raw_problems = content_json.get("questions")
+        if not isinstance(raw_problems, list) or not raw_problems:
+            return None
+        diagnostic_hints = [
+            str(hint)
+            for hint in content_json.get("diagnostic_hints", [])
+            if isinstance(hint, str) and hint.strip()
+        ][:2]
+        problems: list[ProblemSpec] = []
+        for index, raw in enumerate(raw_problems[:3], start=1):
+            if not isinstance(raw, dict):
+                continue
+            sample_io = self._legacy_sample_io(raw.get("sample_io"))
+            if not sample_io:
+                continue
+            problem_type = str(raw.get("type") or "practice").replace("_", " ")
+            title = str(raw.get("title") or raw.get("id") or f"练习 {index}")[:200]
+            hint = str(raw.get("hint") or "").strip()
+            raw_hints = raw.get("hints")
+            list_hints = [
+                str(item).strip()
+                for item in raw_hints
+                if isinstance(item, str) and item.strip()
+            ] if isinstance(raw_hints, list) else []
+            hints = [item for item in [hint, *list_hints, *diagnostic_hints] if item]
+            description = str(raw.get("description") or "").strip()
+            statement_parts = [
+                description
+                or f"围绕知识点 {request.kc_codes[0]} 完成一道 {problem_type} 小练习。",
+                "请根据样例输入输出关系写出你的思路或代码。",
+            ]
+            expected = raw.get("expected_output_pattern")
+            if isinstance(expected, str) and expected.strip():
+                statement_parts.append(f"输出应符合样例呈现的模式：{expected.strip()[:120]}。")
+            try:
+                problems.append(
+                    ProblemSpec(
+                        title=title,
+                        statement_md="\n".join(statement_parts),
+                        hints=hints[:4],
+                        sample_io=sample_io,
+                        kc_codes=list(request.kc_codes),
+                        difficulty=self._difficulty_for(request),  # type: ignore[arg-type]
+                    )
+                )
+            except Exception:  # noqa: BLE001
+                continue
+        if not problems:
+            return None
+        try:
+            return PracticeContent(problems=problems)
+        except Exception:  # noqa: BLE001
+            return None
+
+    @staticmethod
+    def _legacy_sample_io(raw: object) -> list[SampleIo]:
+        if isinstance(raw, dict):
+            input_value = raw.get("input")
+            output_value = raw.get("output")
+            if input_value is not None and output_value is not None:
+                return [
+                    SampleIo(
+                        input=PracticeAgent._sample_value_to_text(input_value),
+                        output=PracticeAgent._sample_value_to_text(output_value),
+                    )
+                ]
+        if isinstance(raw, list):
+            sample: list[SampleIo] = []
+            for item in raw[:3]:
+                if not isinstance(item, dict):
+                    continue
+                input_value = item.get("input")
+                output_value = item.get("output")
+                if input_value is not None and output_value is not None:
+                    sample.append(
+                        SampleIo(
+                            input=PracticeAgent._sample_value_to_text(input_value),
+                            output=PracticeAgent._sample_value_to_text(output_value),
+                        )
+                    )
+            return sample
+        return []
+
+    @staticmethod
+    def _sample_value_to_text(value: object) -> str:
+        if isinstance(value, str):
+            return value
+        if isinstance(value, int | float | bool | list | dict) or value is None:
+            return json.dumps(value, ensure_ascii=False)
+        return str(value)
+
+    @staticmethod
+    def _difficulty_for(request: ResourceProduceRequest) -> str:
+        if request.target_difficulty in {"basic", "medium", "hard"}:
+            return str(request.target_difficulty)
+        if request.profile_snapshot.python_self_rated_level <= 2:
+            return "basic"
+        if request.profile_snapshot.python_self_rated_level == 3:
+            return "medium"
+        return "hard"
+
     def _fallback(self, request: ResourceProduceRequest) -> PracticeContent:
         kc = request.kc_codes[0]
-        difficulty: str
-        if request.target_difficulty:
-            difficulty = request.target_difficulty
-        elif request.profile_snapshot.python_self_rated_level <= 2:
-            difficulty = "basic"
-        elif request.profile_snapshot.python_self_rated_level == 3:
-            difficulty = "medium"
-        else:
-            difficulty = "hard"
+        difficulty = self._difficulty_for(request)
         return PracticeContent(
             problems=[
                 ProblemSpec(

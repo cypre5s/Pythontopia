@@ -40,6 +40,6 @@
 
 ## 5. 复盘备注
 
-- 演示主链路依赖讯飞 Spark；如演示日 API 不可用，按 `docs/demo_script.md` 备用计划切换 `openai_compat`。
+- 演示主链路依赖讯飞 Spark；如演示日 API 不可用，按 `docs/presentations/demo_script.md` 备用计划切换 `openai_compat`。
 - Pyodide 首加载约 6~8s，建议演示前在演示机预跑一次 `/training` 热身。
 - 后端单 worker 启动；若评审机器 CPU < 4 核，建议提前 5 分钟把 backend / graph / rag 预热。

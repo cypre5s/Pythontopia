@@ -66,6 +66,7 @@ vi.mock('@/api/insight', () => ({ getInsights: vi.fn() }));
 
 import CompanionDock from '@/components/companion/CompanionDock.vue';
 import { useCompanionStore } from '@/stores/companion';
+import { useSessionStore } from '@/stores/session';
 import { getBugMineEchoes } from '@/api/bugMine';
 import { getInsights } from '@/api/insight';
 import type { BugMineEchoCandidateDto } from '@/api/dto/BugMine';
@@ -313,5 +314,23 @@ describe('CompanionDock', () => {
     const wrapper = mountDock();
     await flushPromises();
     expect(wrapper.find('[data-testid="companion-insight"]').exists()).toBe(false);
+  });
+
+  it('does not request student-only signals for teacher sessions', async () => {
+    const session = useSessionStore();
+    session.user = {
+      id: 77,
+      username: 'teacher77',
+      displayName: '教师 77',
+      role: 'TEACHER',
+    };
+    vi.mocked(getBugMineEchoes).mockClear();
+    vi.mocked(getInsights).mockClear();
+
+    mountDock();
+    await flushPromises();
+
+    expect(getBugMineEchoes).not.toHaveBeenCalled();
+    expect(getInsights).not.toHaveBeenCalled();
   });
 });

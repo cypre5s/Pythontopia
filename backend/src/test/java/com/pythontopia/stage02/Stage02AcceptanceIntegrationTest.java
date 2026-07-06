@@ -10,6 +10,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -75,6 +77,42 @@ class Stage02AcceptanceIntegrationTest {
 
     assertThat(session.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(session.getBody()).containsEntry("dayIndex", 1).containsEntry("weather", "SUNNY");
+  }
+
+  @Test
+  void worldSessionBootstrapIsIdempotentUnderConcurrentRequests() {
+    registerStudent("stu02-race");
+    String token = login("stu02-race", "P@ssw0rd1");
+    Long userId =
+        jdbcTemplate.queryForObject(
+            "SELECT id FROM users WHERE username = 'stu02-race'", Long.class);
+
+    var requests =
+        IntStream.range(0, 4)
+            .mapToObj(
+                ignored ->
+                    CompletableFuture.supplyAsync(
+                        () ->
+                            restTemplate.exchange(
+                                "/api/world/session",
+                                HttpMethod.GET,
+                                bearer(token, null),
+                                Map.class)))
+            .toList();
+
+    for (var request : requests) {
+      ResponseEntity<Map> session = request.join();
+      assertThat(session.getStatusCode()).isEqualTo(HttpStatus.OK);
+      assertThat(session.getBody()).containsEntry("dayIndex", 1).containsEntry("weather", "SUNNY");
+    }
+    Integer sessionRows =
+        jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM world_session WHERE user_id = ?", Integer.class, userId);
+    Integer playerRows =
+        jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM player_state WHERE user_id = ?", Integer.class, userId);
+    assertThat(sessionRows).isEqualTo(1);
+    assertThat(playerRows).isEqualTo(1);
   }
 
   @Test

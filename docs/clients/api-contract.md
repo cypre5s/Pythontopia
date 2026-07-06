@@ -6,9 +6,9 @@
 适用客户端：
 
 - `frontend/`（Vue 3 + Phaser 3 Web）
-- `android/`（Kotlin + Compose + LibGDX）
-- `windows/`（.NET 8 WinUI 3 + MonoGame）
-- `wechat-miniprogram/` + `wechat-minigame/`（原生微信小程序 / 小游戏 TS）
+- `clients/native/android/`（Kotlin + Compose + LibGDX）
+- `clients/native/windows/`（.NET 8 WinUI 3 + MonoGame）
+- `clients/wechat/miniprogram/` + `clients/wechat/minigame/`（原生微信小程序 / 小游戏 TS）
 
 ---
 
@@ -272,7 +272,7 @@ Bug 矿洞是错题复习支线：已有失败提交可进入矿洞；遗忘回�
 > （历史名仅作兼容，后端可能不再发送）。客户端须做「双语归一」：`TEXT_MESSAGE_CONTENT.delta` 拼答案、
 > `STEP_*` 当思考链、`RUN_FINISHED.result`（常再包一层 `{ "result": { ... } }`）为终态、`RUN_ERROR` 为错误、
 > `CUSTOM{name:"plan"}` 为工位清单。参考实现：`frontend/src/composables/agui.ts`、
-> `wechat-miniprogram/miniprogram/utils/agui.ts`。
+> `clients/wechat/miniprogram/miniprogram/utils/agui.ts`。
 > 另：资源工坊流 `/api/workshop/resources/stream` 的 `RUN_FINISHED.result` 只含 graph 内联
 > `artifact`（**无 `resourceId`**，`status` 可能为 `PARTIAL`）；要拿可渲染的**持久化**资源，请用非流式
 > `POST /api/workshop/resources`（返回 `resourceId`）→ `GET /api/workshop/resources/{id}`（返回 `LearningResource`）。

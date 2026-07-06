@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.core.MethodParameter;
 import org.springframework.http.MediaType;
 import org.springframework.web.HttpMediaTypeNotAcceptableException;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
@@ -54,6 +55,18 @@ class GlobalExceptionHandlerSecurityTest {
 
     assertThat(response.getStatusCode().value()).isEqualTo(406);
     assertThat(response.getBody().code()).isEqualTo("NOT_ACCEPTABLE");
+  }
+
+  @Test
+  void clientAbortReturnsEmptyNonErrorBody() {
+    when(request.getMethod()).thenReturn("GET");
+    when(request.getRequestURI()).thenReturn("/api/course/videos/1");
+
+    var response =
+        handler.handleClientAbort(new AsyncRequestNotUsableException("Connection reset by peer"), request);
+
+    assertThat(response.getStatusCode().value()).isEqualTo(499);
+    assertThat(response.getBody()).isNull();
   }
 
   @Test

@@ -17,7 +17,7 @@
 - 基线 commit：`59761c5` (R-0)，冻结 R-10 完成态（234 / 234 测试通过）。
 - 每轮独立 commit，commit message 以 `chore(rNN): ...` 起头，便于回滚定位。
 - 不修改 `git config`、不 push 远端、不 force push。
-- 每轮结束后追加本文件 + 同步 `docs/execution_status.md` + `CHANGELOG.md`。
+- 每轮结束后追加本文件 + 同步 `docs/operations/execution_status.md` + `docs/project/CHANGELOG.md`。
 
 ## R-11 — 根 README 重写为成熟教学游戏作品门面（已完成）
 
@@ -38,19 +38,19 @@ R-10 收尾后根 `README.md` 仅 30 行，仅含目录树 + 开发命令骨架�
 - 11 节结构：项目定位 → 游戏 ↔ 教学映射 → 技术栈 → 项目结构 → 快速开始 →
   测试基线 → 关键文档 → 防幻觉与合规底线 → 迭代历史（含 R-11 ~ R-100 位置）→
   许可 → 团队。
-- 所有外链均指向仓库内真实文件，无虚构引用：`AGENTS.md` / `docs/system_design.md`
-  / `docs/demo_script.md` / `docs/test_report.md` / `docs/beta_acceptance_checklist.md`
-  / `docs/ai_coding_disclosure.md` / `docs/open_source.md` / `docs/release/README.md`
-  / `plan/阶段总览.md` / `CHANGELOG.md` / `LICENSE`。
+- 所有外链均指向仓库内真实文件，无虚构引用：`AGENTS.md` / `docs/architecture/system_design.md`
+  / `docs/presentations/demo_script.md` / `docs/testing/test_report.md` / `docs/beta_acceptance_checklist.md`
+  / `docs/project/ai_coding_disclosure.md` / `docs/legal/open_source.md` / `docs/release/README.md`
+  / `plan/阶段总览.md` / `docs/project/CHANGELOG.md` / `LICENSE`。
 - 引用 234 / 234 测试基线、`packId=43` 课程定量数字、6 服务 Docker Compose、
-  11 个 Agent 列表，全部与 `docs/release/r10_summary.md` 与 `CHANGELOG.md` 对齐。
+  11 个 Agent 列表，全部与 `docs/release/r10_summary.md` 与 `docs/project/CHANGELOG.md` 对齐。
 
 ### 不做（边界）
 
 - 不改任何代码、不改测试、不改 Vue / Java / Python 业务逻辑。
 - 不新增功能模块，不引入新依赖。
 - 不动既有文档内容，仅在 R-11 内**新增** `docs/release/r100_iterations.md`
-  并**追加**修改 `execution_status.md` / `CHANGELOG.md`。
+  并**追加**修改 `execution_status.md` / `docs/project/CHANGELOG.md`。
 
 ### 验证
 
@@ -69,8 +69,8 @@ R-10 收尾后根 `README.md` 仅 30 行，仅含目录树 + 开发命令骨架�
 | R-16 | 所有 Pinia store action 的 loading / error 子状态命名与文案一致性 | 多文件 | 低 |
 | R-17 | 关键面板 empty state 引导文案补强（与 R-3 的 hint 文案分层呼应） | 多文件 | 低 |
 | R-18 | backend `ApiError` 错误码文档化（生成 `docs/error_codes.md`） | 单文件 | 极低 |
-| R-19 | `docs/system_design.md` 时序图重审与口径统一 | 单文件 | 低 |
-| R-20 | `docs/demo_script.md` 7 分钟演示节奏微调 + 视频字幕清单交叉对齐 | 单文件 | 低 |
+| R-19 | `docs/architecture/system_design.md` 时序图重审与口径统一 | 单文件 | 低 |
+| R-20 | `docs/presentations/demo_script.md` 7 分钟演示节奏微调 + 视频字幕清单交叉对齐 | 单文件 | 低 |
 | R-21 ~ R-100 | 视情况排期：测试覆盖补强 / 文案润色 / 文档导航 / 部署文档 / 演示数据完善等 | - | - |
 
 > 每轮真正开始前先确认「是否仍符合外科手术式修改 + 不扩功能」原则，

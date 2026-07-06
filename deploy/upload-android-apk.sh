@@ -17,10 +17,11 @@
 set -euo pipefail
 
 ECS_IP="47.120.29.62"
-APK_SRC="${1:-android/app/build/outputs/apk/release/app-release.apk}"
+ANDROID_DIR="clients/native/android"
+APK_SRC="${1:-${ANDROID_DIR}/app/build/outputs/apk/release/app-release.apk}"
 REMOTE_PATH="/opt/pythontopia/downloads/pythontopia.apk"
 
-[[ -f "$APK_SRC" ]] || { echo "APK 不存在：$APK_SRC（先在 android/ 跑 ./gradlew :app:assembleRelease）"; exit 1; }
+[[ -f "$APK_SRC" ]] || { echo "APK 不存在：$APK_SRC（先在 ${ANDROID_DIR}/ 跑 ./gradlew :app:assembleRelease）"; exit 1; }
 
 # 1) 绕过 TUN：为 ECS 单 IP 加直连路由（自动选非 198.18.0.2 的真实默认网关）。
 GW="$(ip route show default | awk '$3 != "198.18.0.2" {print $3; exit}')"

@@ -12,8 +12,10 @@ import { useCompanionContext } from '@/composables/useCompanionContext';
 import { useVoiceInput } from '@/composables/useVoiceInput';
 import { useAudioRecorder } from '@/composables/useAudioRecorder';
 import { transcribeAudio } from '@/api/media';
+import { useSessionStore } from '@/stores/session';
 
 const store = useCompanionStore();
+const session = useSessionStore();
 const router = useRouter();
 const route = useRoute();
 const ctx = useCompanionContext(() => ({ path: route.path, query: route.query }));
@@ -29,6 +31,7 @@ const asrHint = ref<string>('');
 const showRecordFallback = computed<boolean>(
   () => !voice.supported.value && recorder.supported.value,
 );
+const canLoadStudentSignals = computed<boolean>(() => session.role !== 'TEACHER');
 
 const lastEvidencePageId = computed<number | null>(() => {
   for (let i = store.messages.length - 1; i >= 0; i -= 1) {
@@ -167,10 +170,19 @@ watch(
   },
 );
 
-onMounted(() => {
+function refreshStudentSignals(): void {
+  if (!canLoadStudentSignals.value) {
+    store.nudge = null;
+    store.latestInsight = null;
+    return;
+  }
   void store.loadNudge();
   void store.loadInsight();
-});
+}
+
+watch(() => session.role, refreshStudentSignals);
+
+onMounted(refreshStudentSignals);
 </script>
 
 <template>

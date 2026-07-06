@@ -6,8 +6,6 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Optional;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.support.GeneratedKeyHolder;
-import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -34,21 +32,16 @@ public class WorldRepository {
   }
 
   public WorldSession createSession(Long userId) {
-    KeyHolder keyHolder = new GeneratedKeyHolder();
-    jdbcTemplate.update(
-        connection -> {
-          var statement =
-              connection.prepareStatement(
-                  """
-                  INSERT INTO world_session (user_id, day_index, weather, in_game_minutes)
-                  VALUES (?, 1, 'SUNNY', 480)
-                  """,
-                  new String[] {"id"});
-          statement.setLong(1, userId);
-          return statement;
-        },
-        keyHolder);
-    return findSession(userId).orElseThrow();
+    return jdbcTemplate.queryForObject(
+        """
+        INSERT INTO world_session (user_id, day_index, weather, in_game_minutes)
+        VALUES (?, 1, 'SUNNY', 480)
+        ON CONFLICT (user_id) DO UPDATE
+        SET last_active_at = now()
+        RETURNING id, user_id, day_index, weather, in_game_minutes
+        """,
+        this::mapSession,
+        userId);
   }
 
   /**
@@ -98,10 +91,16 @@ public class WorldRepository {
   }
 
   public PlayerState createPlayer(Long userId) {
-    jdbcTemplate.update(
-        "INSERT INTO player_state (user_id, map_key) VALUES (?, 'town_hub')",
+    return jdbcTemplate.queryForObject(
+        """
+        INSERT INTO player_state (user_id, map_key)
+        VALUES (?, 'town_hub')
+        ON CONFLICT (user_id) DO UPDATE
+        SET updated_at = now()
+        RETURNING id, user_id, avatar_key, map_key, tile_x, tile_y, direction
+        """,
+        this::mapPlayer,
         userId);
-    return findPlayer(userId).orElseThrow();
   }
 
   public PlayerState updatePlayer(Long userId, Integer tileX, Integer tileY, String direction) {

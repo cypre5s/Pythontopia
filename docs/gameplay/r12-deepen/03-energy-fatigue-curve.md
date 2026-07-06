@@ -2,7 +2,7 @@
 
 > 版本：v1.0 · 起草日期：2026-05-24 · 适用版本：R-12 起 · 状态：Draft（待 W5 验收转 Active）
 > 目标读者：玩法工程师、教学策划、画像分析师、后端节奏 owner、班级教师
-> 平级文档：`docs/gameplay/economy-system.md` §7（balance 总表，Energy/day 一行）、`docs/gameplay/world-clock-calendar.md` §2/§9（时段与晚睡警告）、`docs/gameplay/player-progression.md` §7（流失风险）、`docs/mastery_formula.md`（mastery 权威源）、`docs/profile_schema.md` §8（8 维画像）
+> 平级文档：`docs/gameplay/economy-system.md` §7（balance 总表，Energy/day 一行）、`docs/gameplay/world-clock-calendar.md` §2/§9（时段与晚睡警告）、`docs/gameplay/player-progression.md` §7（流失风险）、`docs/mastery_formula.md`（mastery 权威源）、`docs/product/profile_schema.md` §8（8 维画像）
 
 ## 0. 文档定位
 
@@ -327,7 +327,7 @@ ALTER TABLE world_session
 | `emotion_persistence.recent_mood` 心情 | 当日 `FATIGUE_CAP` / `FATIGUE_MODAL` 出现 → `negative` 候选 | 单日 | 配合 `learning_preference.disable_night_warning` 决定是否触发心情提示 |
 | `practice_capability.endurance` 续航（新增） | energy < 50 时正确率 vs ≥ 50 时正确率的差值 | 滚动 14 天 | 差值 < 10% → endurance ↑；> 30% → endurance ↓，PathPlannerAgent 推荐拆任务 |
 
-> `rest_seeking` 与 `endurance` 是本系统在 `learning_preference` / `practice_capability` 下新增的子字段，需要在 R-12 W5 与 `docs/profile_schema.md` 同步扩展（不在本文修改）。
+> `rest_seeking` 与 `endurance` 是本系统在 `learning_preference` / `practice_capability` 下新增的子字段，需要在 R-12 W5 与 `docs/product/profile_schema.md` 同步扩展（不在本文修改）。
 
 ---
 
@@ -390,7 +390,7 @@ ALTER TABLE world_session
 | 多端登录的能量同步漂移 | 设备 A 打满能量，设备 B 旧 cache 看到 50 | 60 秒心跳同步（`world-clock-calendar.md` §8.3）扩展拉取 energy；切换设备时 BootScene 强拉一次 |
 | 能量上限锁住后玩家被劝退 | 240 分钟降到 80，新玩家不理解 | HUD bar 上方"过劳"徽章悬停 tooltip 解释「这是教育版伦理设定」；首次触发额外弹 1 次提示模态 |
 | 防刷条款误伤刻苦学习者 | 学生确实想精读同一 KC 5 遍 | 第 3 次 -15 后停止叠加，第 4-N 次回 -3；同时 `RESOURCE_READ` mastery 收益本身有 30 秒 / 页冷却，刷不出 mastery |
-| `endurance` / `rest_seeking` 字段未在 profile_schema.md 中存在 | 直接落库会破坏画像 schema 校验 | R-12 W5 先在 `docs/profile_schema.md` 扩展，再由 `learner_profile` JSONB 落库；不阻塞本文设计 |
+| `endurance` / `rest_seeking` 字段未在 profile_schema.md 中存在 | 直接落库会破坏画像 schema 校验 | R-12 W5 先在 `docs/product/profile_schema.md` 扩展，再由 `learner_profile` JSONB 落库；不阻塞本文设计 |
 | 节日 +10 上限可能让玩家"过度肝"开学集会 | 110 能量配合马拉松翻倍提交可能日肝 6 小时 | 节日 effect 与 §6 过劳保护**并存**：能量 110 但 360 分钟仍强制存档退出 |
 
 ---

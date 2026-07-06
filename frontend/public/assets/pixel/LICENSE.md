@@ -4,13 +4,13 @@
 > 源仓库 `assets/inbox/` 是已审计的离线镜像，由 `scripts/sync-assets.mjs` 增量复制到此处；
 > 少量自绘占位与手工挑选运行时素材以 manifest-only 方式登记。
 > 全仓库资产 license 总声明见 `/LICENSE-ART.md`。
-> 代码层 license 见仓库根 `LICENSE` 文件（MIT）。
+> Pythontopia 原创代码、文档、品牌、原创美术与集成编排见仓库根 `LICENSE` 文件；当前阶段不开放复用。
 
 ## 项目级 License 分层
 
-- **代码层**：MIT
-- **资产层**：CC-BY-SA 3.0+ / OFL-1.1 / CC-BY 4.0 / CC-BY 3.0 / CC0 1.0（分文件标识）
-- **SA 传染**：LPC 系列素材以 CC-BY-SA 3.0+ 传染至本项目"包装作品"层；衍生发布须同样以 SA 兼容协议公开
+- **Pythontopia 原创层**：All rights reserved / Source-Available Preview（未经书面许可不得复用）
+- **第三方资产层**：CC-BY-SA 3.0+ / OFL-1.1 / CC-BY 4.0 / CC-BY 3.0 / CC0 1.0（分文件标识）
+- **SA 注意**：LPC 等 CC-BY-SA 素材及其衍生文件仍按上游 share-alike 条款执行；这不等于授权 Pythontopia 代码、品牌、原创美术、课程集成或产品编排
 
 ## 必读署名清单（CC-BY / CC-BY-SA / OFL 强制）
 
@@ -44,9 +44,9 @@
 | `tilesets/kenney-tiny-dungeon` | CC0-1.0 | Kenney Vleugels | [link](https://kenney.nl/assets/tiny-dungeon) | Bug 矿洞地牢 16x16 像素 tileset |
 | `tilesets/kenney-roguelike-modern-city` | CC0-1.0 | Kenney Vleugels | [link](https://kenney.nl/assets/roguelike-modern-city) | 现代城市 tileset（可选场景） |
 | `tilesets/kenney-roguelike-caves` | CC0-1.0 | Kenney Vleugels | [link](https://kenney.nl/assets/roguelike-caves-dungeons) | 洞穴/地牢 tileset |
-| `tilesets/town_tiles.svg` | CC0-1.0 | Pythontopia project | [link](assets/pixel/LICENSE.md) | 🛈 manifest-only（已手工挑选，脚本不同步）；自绘小镇 tileset 占位 SVG；源文件为项目早期占位清单 |
-| `buildings/town_buildings.svg` | CC0-1.0 | Pythontopia project | [link](assets/pixel/LICENSE.md) | 🛈 manifest-only（已手工挑选，脚本不同步）；自绘建筑占位 SVG；源文件为项目早期占位清单 |
-| `characters/student_default.svg` | CC0-1.0 | Pythontopia project | [link](assets/pixel/LICENSE.md) | 🛈 manifest-only（已手工挑选，脚本不同步）；自绘默认学生占位 SVG；LPC Sara 不可用时的 fallback |
+| `tilesets/town_tiles.svg` | Pythontopia-Proprietary | Pythontopia project | [link](assets/pixel/LICENSE.md) | 🛈 manifest-only（已手工挑选，脚本不同步）；自绘小镇 tileset 占位 SVG；源文件为项目早期占位清单 |
+| `buildings/town_buildings.svg` | Pythontopia-Proprietary | Pythontopia project | [link](assets/pixel/LICENSE.md) | 🛈 manifest-only（已手工挑选，脚本不同步）；自绘建筑占位 SVG；源文件为项目早期占位清单 |
+| `characters/student_default.svg` | Pythontopia-Proprietary | Pythontopia project | [link](assets/pixel/LICENSE.md) | 🛈 manifest-only（已手工挑选，脚本不同步）；自绘默认学生占位 SVG；LPC Sara 不可用时的 fallback |
 | `sprites/lpc-sara` | CC-BY-SA-3.0 | Sharm / LPC Project | [link](https://opengameart.org/content/lpc-sara) | LPC Sara 全身像，BootScene player_sara 帧 64x64 |
 | `sprites/lpc-medieval-fantasy` | CC-BY-SA-3.0 | bluecarrot16 / TheraHedwig / Reemax / Ivan Voirol 等 | [link](https://opengameart.org/content/lpc-medieval-fantasy-character-sprites) | LPC 中世纪风 NPC，校园老师/同学候选 |
 | `sprites/peppercarrot-24x32` | CC-BY-4.0 | Svetlana Kushnariova ("Cabbit") / David Revoy | [link](https://www.peppercarrot.com) | 24x32 矮人角色，可作"小作物"NPC 候选 |
@@ -96,24 +96,22 @@
 | `effects/jellyfizh-confetti` | CC0-1.0 | Jellyfizh | [link](https://opengameart.org/content/confetti) | 完成奖励彩纸 |
 | `effects/jellyfizh-poof` | CC0-1.0 | Jellyfizh | [link](https://opengameart.org/content/poof) | 消失/淡出动画 |
 | `effects/john2k-heal` | CC-BY-4.0 | john2k | [link](https://opengameart.org/content/heal-effect) | 治疗/复习成功特效 |
-| `effects/weather` | CC0-1.0 | Yevhen Babiichuk (DustDFG) / donte / alxl / Pythontopia project | [link](assets/inbox/weather_fx/LICENSE.md) | 🛈 manifest-only（已手工挑选，脚本不同步）；天气粒子运行时精选：云、雨滴、雪花来自已审计 CC0；confetti 为项目运行时粒子占位 |
+| `effects/weather` | CC0-1.0 / Pythontopia-Proprietary | Yevhen Babiichuk (DustDFG) / donte / alxl / Pythontopia project | [link](assets/inbox/weather_fx/LICENSE.md) | 🛈 manifest-only（已手工挑选，脚本不同步）；天气粒子运行时精选：云、雨滴、雪花来自已审计 CC0；confetti 为项目运行时粒子占位 |
 | `ui/kenney-adventure` | CC0-1.0 | Kenney Vleugels | [link](https://kenney.nl/assets/ui-pack-adventure) | 🛈 manifest-only（已手工挑选，脚本不同步）；冒险风 UI 9-slice 元素，public 已挑选 Default/Double 子集，本脚本不再同步全量 |
 
 > 编辑方式：修改 `scripts/sync-assets.mjs` 的 MANIFEST 数组后重新运行 `node scripts/sync-assets.mjs`。
 <!-- AUTO-GENERATED LICENSE INDEX END -->
 
-## Agentic Loop 闭环动效素材（2026-06-17 · 手工登记，非自动索引）
+## Agentic Loop 闭环动效素材（2026-06-17 · 手工登记）
 
-「Agentic Loop 六框架融合」工程为闭环吉祥物表情反馈引入 Rive 动画。说明：
-- `@rive-app/canvas`、`motion`、`gsap` 均为**代码层 JS 依赖（MIT / GSAP No-Charge）**，**非素材**，
-  不在本目录 license 范围内（详见仓库根 `/LICENSE-ART.md`「Agentic Loop 六框架融合新增依赖与素材」一节）。
-- 仅 Rive `.riv` 二进制动画属**素材层**，只允许 CC0 / CC-BY / CC-BY-SA / OFL。
+「Agentic Loop 六框架融合」工程为闭环吉祥物表情反馈预留 Rive 动画。说明：
+- `@rive-app/canvas`、`motion`、`gsap` 均为代码层 JS 依赖（MIT / GSAP No-Charge），非素材；项目代码授权仍以仓库根 `LICENSE` 为准。
+- 仅 Rive `.riv` 二进制动画属素材层。当前仓库尚无 `.riv` 资产，下表为占位登记。
 
 | 运行时路径（计划） | 来源 | License | 用途 | 状态 |
 | --- | --- | --- | --- | --- |
-| `rive/mascot_loop.riv` | 待定（CC0 / CC-BY / CC-BY-SA / OFL 审计来源，或项目原创以 CC-BY-SA 3.0+ 发布） | **待补（占位）** | 闭环吉祥物表情反馈（idle / celebrate / fail，按 critic 结果） | ⬜ 待补 |
+| `rive/mascot_loop.riv` | 待定：优先使用可审计第三方素材，或由 Pythontopia 原创并按根 `LICENSE` 保留所有权利 | **待补（占位）** | 闭环吉祥物表情反馈（idle / celebrate / fail，按 critic 结果） | 待补 |
 
-> 当前仓库**尚无** `.riv` 资产，本条为占位。引入真实素材时：确认许可 ∈ {CC0/CC-BY/CC-BY-SA/OFL} → 落盘
-> `frontend/public/assets/pixel/rive/mascot_loop.riv` → 同步把本条与 `/LICENSE-ART.md` 占位改为正式条目
-> （作者 / 来源 / 署名）→ CC-BY/CC-BY-SA/OFL 强制署名进 `frontend/public/credits/`。
-> 缺 `.riv` 时动效 adapter 须 fail-soft 降级（Motion/Phaser tween / 静态表情），不硬依赖，故为非阻塞项。
+> 引入真实素材时：确认许可与作者来源 → 落盘 `frontend/public/assets/pixel/rive/mascot_loop.riv` →
+> 同步更新本文件与 `/LICENSE-ART.md` → CC-BY / CC-BY-SA / OFL 等强制署名进 `frontend/public/credits/`。
+> 缺 `.riv` 时动效 adapter 须 fail-soft 降级（Motion/Phaser tween / 静态表情），不硬依赖。

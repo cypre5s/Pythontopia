@@ -13,7 +13,7 @@
 ### Task 1: Establish audit baseline
 
 **Files:**
-- Read: `docs/dev-startup.md`
+- Read: `docs/operations/dev-startup.md`
 - Read: `deploy/docker-compose.yml`
 - Read: `backend/src/main/java/com/pythontopia/auth/security/SecurityConfig.java`
 

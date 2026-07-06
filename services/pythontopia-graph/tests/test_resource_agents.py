@@ -99,6 +99,24 @@ async def test_mind_map_agent_rejects_invalid_mermaid_from_llm() -> None:
 
 
 @pytest.mark.asyncio
+async def test_mind_map_agent_accepts_bare_adapter_payload_and_filters_kcs() -> None:
+    payload = {
+        "mermaid": (
+            "graph TD\n"
+            "  A[Python 基础] --> B[条件表达式]\n"
+            "  style A fill:#ff9,stroke:#333,stroke-width:2px"
+        ),
+        "kc_map": {"PY43-KC-001": ["PY43-KC-002", "PY43-KC-001"]},
+    }
+    agent = MindMapAgent(StubProvider(payload))
+    draft = await agent.design(request_of("MINDMAP"), EVIDENCE)
+
+    assert draft.mindmap is not None
+    assert draft.mindmap.mermaid.startswith("graph TD")
+    assert draft.mindmap.kc_map == {"PY43-KC-001": []}
+
+
+@pytest.mark.asyncio
 async def test_practice_agent_never_emits_hidden_tests() -> None:
     agent = PracticeAgent(StubProvider(payload=None))
     draft = await agent.design(request_of("PRACTICE"), EVIDENCE)
@@ -128,6 +146,78 @@ async def test_practice_agent_filters_unsafe_llm_payload() -> None:
     draft = await agent.design(request_of("PRACTICE"), EVIDENCE)
     assert draft.practice is not None
     assert "answer key" not in (draft.practice.problems[0].hints[0] if draft.practice.problems[0].hints else "").lower()
+
+
+@pytest.mark.asyncio
+async def test_practice_agent_accepts_legacy_adapter_payload() -> None:
+    payload = {
+        "diagnostic_hints": ["注意 range 右端不包含。"],
+        "practice_problems": [
+            {
+                "id": "loop-1",
+                "type": "fill_in_blank",
+                "hint": "先手算前三项。",
+                "sample_io": {"input": "0 5", "output": "0 1 2 3 4"},
+                "expected_output_pattern": "0 1 2 3 4",
+            }
+        ],
+    }
+    agent = PracticeAgent(StubProvider(payload))
+    draft = await agent.design(request_of("PRACTICE"), EVIDENCE)
+
+    assert draft.practice is not None
+    problem = draft.practice.problems[0]
+    assert problem.title == "loop-1"
+    assert problem.sample_io[0].output == "0 1 2 3 4"
+    assert problem.kc_codes == ["PY43-KC-001"]
+    assert "range" in " ".join(problem.hints)
+    assert problem.statement_md != "围绕知识点 PY43-KC-001，编写一段程序读入数据并输出处理结果。请勿粘贴外部答案，独立完成。"
+
+
+@pytest.mark.asyncio
+async def test_practice_agent_rejects_unsafe_legacy_adapter_payload() -> None:
+    payload = {
+        "practice_problems": [
+            {
+                "id": "unsafe",
+                "type": "fill_in_blank",
+                "hint": "answer_key: print(42)",
+                "sample_io": {"input": "1", "output": "1"},
+            }
+        ],
+    }
+    agent = PracticeAgent(StubProvider(payload))
+    draft = await agent.design(request_of("PRACTICE"), EVIDENCE)
+
+    assert draft.practice is not None
+    assert draft.practice.problems[0].title == "练习：PY43-KC-001 基础题"
+
+
+@pytest.mark.asyncio
+async def test_practice_agent_accepts_questions_adapter_payload() -> None:
+    payload = {
+        "questions": [
+            {
+                "title": "Range Boundary Check",
+                "description": "Write a function that counts numbers below a threshold.",
+                "hints": ["Remember that range excludes the right endpoint."],
+                "sample_io": {
+                    "input": {"numbers": [1, 2, 3], "threshold": 3},
+                    "output": 2,
+                },
+            }
+        ]
+    }
+    agent = PracticeAgent(StubProvider(payload))
+    draft = await agent.design(request_of("PRACTICE"), EVIDENCE)
+
+    assert draft.practice is not None
+    problem = draft.practice.problems[0]
+    assert problem.title == "Range Boundary Check"
+    assert problem.statement_md.startswith("Write a function")
+    assert problem.sample_io[0].input == '{"numbers": [1, 2, 3], "threshold": 3}'
+    assert problem.sample_io[0].output == "2"
+    assert problem.difficulty == "basic"
 
 
 @pytest.mark.asyncio

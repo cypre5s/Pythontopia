@@ -3,12 +3,12 @@ name: windows
 on:
   pull_request:
     paths:
-      - 'windows/**'
+      - 'clients/native/windows/**'
       - '.github/workflows/windows.yml'
   push:
     branches: [main]
     paths:
-      - 'windows/**'
+      - 'clients/native/windows/**'
       - '.github/workflows/windows.yml'
 
 concurrency:
@@ -21,7 +21,7 @@ jobs:
     timeout-minutes: 30
     defaults:
       run:
-        working-directory: windows
+        working-directory: clients/native/windows
     steps:
       - uses: actions/checkout@v4
 
@@ -52,5 +52,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: windows-core-tests-${{ github.sha }}
-          path: windows/TestResults/*.trx
+          path: clients/native/windows/TestResults/*.trx
           retention-days: 7

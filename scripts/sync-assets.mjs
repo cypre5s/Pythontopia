@@ -6,7 +6,8 @@
  * @summary
  *   - 输入源（src）：`assets/inbox/`（已审计的离线镜像，约 13000+ 文件）
  *   - 输出目标（dest）：`frontend/public/assets/pixel/`（Vite 静态服务目录）
- *   - 资产分层授权：CC0 / CC-BY 3.0 / CC-BY 4.0 / CC-BY-SA 3.0+ / OFL-1.1
+ *   - 第三方资产分层授权：CC0 / CC-BY 3.0 / CC-BY 4.0 / CC-BY-SA 3.0+ / OFL-1.1
+ *   - Pythontopia 原创占位、原创美术与集成编排授权见仓库根 LICENSE，当前阶段不开放复用
  *   - 同步完成后会在 dest 根目录生成/更新 `LICENSE.md` 的"按目录索引"段落。
  *
  * @example
@@ -16,7 +17,7 @@
  *   node scripts/sync-assets.mjs --force      # 覆盖已存在的目标文件
  *
  * @author Pythontopia 子代理 M1-A
- * @license MIT
+ * @license Pythontopia source-available notice; see LICENSE
  * @runtime Node 20+, 仅依赖 node:fs / node:path / node:url（无 npm 依赖）
  */
 
@@ -49,7 +50,7 @@ const DEFAULT_EXTENSIONS = new Set([
  * @property {string} src           inbox 相对路径
  * @property {string} dest          public/assets/pixel 相对路径
  * @property {'dir'|'file'} [kind]  显式声明类型，缺省时自动判断
- * @property {string} license       SPDX 标识 (CC0-1.0 / CC-BY-3.0 / CC-BY-4.0 / CC-BY-SA-3.0 / OFL-1.1 ...)
+ * @property {string} license       协议标识 (CC0-1.0 / CC-BY-3.0 / CC-BY-4.0 / CC-BY-SA-3.0 / OFL-1.1 / Pythontopia-Proprietary ...)
  * @property {string} [author]      作者署名
  * @property {string} [source]      原始来源 URL
  * @property {string} [notes]       备注
@@ -111,7 +112,7 @@ const MANIFEST = [
     src: 'assets/pixel/LICENSE.md',
     dest: 'tilesets/town_tiles.svg',
     kind: 'file',
-    license: 'CC0-1.0',
+    license: 'Pythontopia-Proprietary',
     author: 'Pythontopia project',
     source: 'assets/pixel/LICENSE.md',
     notes: '自绘小镇 tileset 占位 SVG；源文件为项目早期占位清单',
@@ -121,7 +122,7 @@ const MANIFEST = [
     src: 'assets/pixel/LICENSE.md',
     dest: 'buildings/town_buildings.svg',
     kind: 'file',
-    license: 'CC0-1.0',
+    license: 'Pythontopia-Proprietary',
     author: 'Pythontopia project',
     source: 'assets/pixel/LICENSE.md',
     notes: '自绘建筑占位 SVG；源文件为项目早期占位清单',
@@ -131,7 +132,7 @@ const MANIFEST = [
     src: 'assets/pixel/LICENSE.md',
     dest: 'characters/student_default.svg',
     kind: 'file',
-    license: 'CC0-1.0',
+    license: 'Pythontopia-Proprietary',
     author: 'Pythontopia project',
     source: 'assets/pixel/LICENSE.md',
     notes: '自绘默认学生占位 SVG；LPC Sara 不可用时的 fallback',
@@ -629,7 +630,7 @@ const MANIFEST = [
     src: 'weather_fx/LICENSE.md',
     dest: 'effects/weather',
     kind: 'dir',
-    license: 'CC0-1.0',
+    license: 'CC0-1.0 / Pythontopia-Proprietary',
     author: 'Yevhen Babiichuk (DustDFG) / donte / alxl / Pythontopia project',
     source: 'assets/inbox/weather_fx/LICENSE.md',
     notes: '天气粒子运行时精选：云、雨滴、雪花来自已审计 CC0；confetti 为项目运行时粒子占位',
@@ -837,13 +838,13 @@ const LICENSE_HEADER = `# Pythontopia Web 端集成像素资产 License
 > 源仓库 \`assets/inbox/\` 是已审计的离线镜像，由 \`scripts/sync-assets.mjs\` 增量复制到此处；
 > 少量自绘占位与手工挑选运行时素材以 manifest-only 方式登记。
 > 全仓库资产 license 总声明见 \`/LICENSE-ART.md\`。
-> 代码层 license 见仓库根 \`LICENSE\` 文件（MIT）。
+> Pythontopia 原创代码、文档、品牌、原创美术与集成编排见仓库根 \`LICENSE\` 文件；当前阶段不开放复用。
 
 ## 项目级 License 分层
 
-- **代码层**：MIT
-- **资产层**：CC-BY-SA 3.0+ / OFL-1.1 / CC-BY 4.0 / CC-BY 3.0 / CC0 1.0（分文件标识）
-- **SA 传染**：LPC 系列素材以 CC-BY-SA 3.0+ 传染至本项目"包装作品"层；衍生发布须同样以 SA 兼容协议公开
+- **Pythontopia 原创层**：All rights reserved / Source-Available Preview（未经书面许可不得复用）
+- **第三方资产层**：CC-BY-SA 3.0+ / OFL-1.1 / CC-BY 4.0 / CC-BY 3.0 / CC0 1.0（分文件标识）
+- **SA 注意**：LPC 等 CC-BY-SA 素材及其衍生文件仍按上游 share-alike 条款执行；这不等于授权 Pythontopia 代码、品牌、原创美术、课程集成或产品编排
 
 ## 必读署名清单（CC-BY / CC-BY-SA / OFL 强制）
 
@@ -873,6 +874,22 @@ const LICENSE_HEADER = `# Pythontopia Web 端集成像素资产 License
 const INDEX_BEGIN = '<!-- AUTO-GENERATED LICENSE INDEX BEGIN -->';
 /** 索引段落结束标记 */
 const INDEX_END = '<!-- AUTO-GENERATED LICENSE INDEX END -->';
+
+const LICENSE_FOOTER = `
+## Agentic Loop 闭环动效素材（2026-06-17 · 手工登记）
+
+「Agentic Loop 六框架融合」工程为闭环吉祥物表情反馈预留 Rive 动画。说明：
+- \`@rive-app/canvas\`、\`motion\`、\`gsap\` 均为代码层 JS 依赖（MIT / GSAP No-Charge），非素材；项目代码授权仍以仓库根 \`LICENSE\` 为准。
+- 仅 Rive \`.riv\` 二进制动画属素材层。当前仓库尚无 \`.riv\` 资产，下表为占位登记。
+
+| 运行时路径（计划） | 来源 | License | 用途 | 状态 |
+| --- | --- | --- | --- | --- |
+| \`rive/mascot_loop.riv\` | 待定：优先使用可审计第三方素材，或由 Pythontopia 原创并按根 \`LICENSE\` 保留所有权利 | **待补（占位）** | 闭环吉祥物表情反馈（idle / celebrate / fail，按 critic 结果） | 待补 |
+
+> 引入真实素材时：确认许可与作者来源 → 落盘 \`frontend/public/assets/pixel/rive/mascot_loop.riv\` →
+> 同步更新本文件与 \`/LICENSE-ART.md\` → CC-BY / CC-BY-SA / OFL 等强制署名进 \`frontend/public/credits/\`。
+> 缺 \`.riv\` 时动效 adapter 须 fail-soft 降级（Motion/Phaser tween / 静态表情），不硬依赖。
+`;
 
 /**
  * 根据 MANIFEST 生成按目录的 license 索引 Markdown 表格。
@@ -905,7 +922,7 @@ function renderLicenseIndex() {
  * @returns {string}
  */
 function renderFullLicenseMarkdown() {
-  return `${LICENSE_HEADER}\n${INDEX_BEGIN}\n${renderLicenseIndex()}\n${INDEX_END}\n`;
+  return `${LICENSE_HEADER}\n${INDEX_BEGIN}\n${renderLicenseIndex()}\n${INDEX_END}\n${LICENSE_FOOTER}`;
 }
 
 /**

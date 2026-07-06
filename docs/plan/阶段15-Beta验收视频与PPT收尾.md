@@ -10,7 +10,7 @@
 
 - 完成 Beta 验收 checklist（覆盖 `plan.md` 第 9 节 + `AGENTS.md` 全部硬要求）。
 - 录制并交付 7 分钟演示视频（含教师视角与学生视角双线展示）。
-- 完成 PPT 终稿（与 `docs/ppt_outline.md` 一致，扩展为可交付文件）。
+- 完成 PPT 终稿（与 `docs/presentations/ppt_outline.md` 一致，扩展为可交付文件）。
 - 准备提交包：源码、文档、镜像 tar、演示视频、PPT、运行说明、AI 披露、License。
 - 跑全量回归（`mvn test`、`npm run test`、`pytest -q`、`demo_smoke.sh`）。
 - 修复演示链路上的阻断性问题（非阻断问题列入"已知缺陷"清单）。
@@ -56,7 +56,7 @@
 
 ### 5.2 录制 7 分钟演示视频
 
-- T15-10 视频脚本（基于 `docs/demo_script.md` 精修）：
+- T15-10 视频脚本（基于 `docs/presentations/demo_script.md` 精修）：
   - 00:00 ~ 00:30：项目介绍与教育目标。
   - 00:30 ~ 01:30：小镇登场，玩家进入小镇，介绍场景。
   - 01:30 ~ 03:00：画像访谈 → KC 知识田 → 资源工坊（讲义 + 思维导图 + 练习题）。
@@ -71,7 +71,7 @@
 
 ### 5.3 PPT 终稿
 
-- T15-20 基于 `docs/ppt_outline.md` 制作 PPT，结构：
+- T15-20 基于 `docs/presentations/ppt_outline.md` 制作 PPT，结构：
   1. 项目背景与目标（高校 Python 初学者痛点）。
   2. 教育闭环：画像 → 路径 → 资源 → 练习 → 评估 → 复盘。
   3. 技术架构与多智能体协作。

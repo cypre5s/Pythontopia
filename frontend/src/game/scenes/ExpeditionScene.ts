@@ -22,23 +22,23 @@ export const EXPEDITION_SCENE_KEY = 'ExpeditionScene';
 const DEFAULT_WIDTH = 960;
 const DEFAULT_HEIGHT = 640;
 
-const COLOR_BACKDROP = 0x161126;
-const COLOR_BACKDROP_TOP = 0x241a3d;
-const COLOR_COLUMN = 0x2a2142;
-const COLOR_FLOOR = 0x3a2f57;
-const COLOR_EDGE_OPEN = 0xffc857;
-const COLOR_EDGE_DIM = 0x4a4066;
-const COLOR_AVATAR = 0xffe9a6;
+const COLOR_BACKDROP = 0xf7f1dc;
+const COLOR_BACKDROP_TOP = 0xe4f3ff;
+const COLOR_COLUMN = 0xe8edd9;
+const COLOR_FLOOR = 0xc8d7b8;
+const COLOR_EDGE_OPEN = 0xd99f3a;
+const COLOR_EDGE_DIM = 0xb7c3ac;
+const COLOR_AVATAR = 0x2f8f6f;
 
-/** 每种节点房间的主色（像素地牢调色板）。 */
+/** 每种节点房间的主色（浅色小镇调色板）。 */
 const KIND_COLOR: Record<RogueNodeKind, number> = {
-  battle: 0x5b8cff,
-  elite: 0xb784ff,
-  event: 0xffcf5c,
-  bug: 0xff7a7a,
-  chest: 0xffa64d,
-  rest: 0x6bd49b,
-  boss: 0xffd54a,
+  battle: 0x73a7e8,
+  elite: 0x9b8bd9,
+  event: 0xf2c85a,
+  bug: 0xe9786b,
+  chest: 0xe6a15b,
+  rest: 0x7acb8a,
+  boss: 0xe0b847,
 };
 
 const PIXEL_FONT = '"Zpix", "Ark Pixel 12", monospace';
@@ -227,10 +227,10 @@ function roomColors(node: RogueNode): { fill: number; fillAlpha: number; border:
     case 'current':
       return { fill: base, fillAlpha: 0.85, border: 0xffe08a, textAlpha: 1 };
     case 'bypassed':
-      return { fill: 0x3a3550, fillAlpha: 0.5, border: 0x4a4066, textAlpha: 0.4 };
+      return { fill: 0xd4cec0, fillAlpha: 0.58, border: 0xb6ad98, textAlpha: 0.42 };
     case 'locked':
     default:
-      return { fill: 0x2c2742, fillAlpha: 0.8, border: 0x46406a, textAlpha: 0.55 };
+      return { fill: 0xe3dfd2, fillAlpha: 0.86, border: 0xb6ad98, textAlpha: 0.55 };
   }
 }
 
@@ -241,10 +241,10 @@ function rebuildTower(ctx: ExpeditionSceneContext): void {
 
   const { width, height } = readDimensions(ctx);
 
-  // 背景：上紫下深，模拟塔内幽光。
+  // 背景：浅天空 + 纸面底色，和 town_hub 的温暖学习面板统一。
   const bg = ctx.add.graphics();
   bg.fillStyle(COLOR_BACKDROP, 1).fillRect(0, 0, width, height);
-  bg.fillStyle(COLOR_BACKDROP_TOP, 0.55).fillRect(0, 0, width, height * 0.45);
+  bg.fillStyle(COLOR_BACKDROP_TOP, 0.72).fillRect(0, 0, width, height * 0.42);
   bg.setDepth(0);
 
   // 标题（测试断言含「无尽远征」）。
@@ -252,7 +252,7 @@ function rebuildTower(ctx: ExpeditionSceneContext): void {
     .text(width / 2, 26, '无尽远征塔', {
       fontFamily: PIXEL_FONT,
       fontSize: '18px',
-      color: '#ffd166',
+      color: '#5d4724',
     })
     .setOrigin(0.5, 0.5)
     .setDepth(6);
@@ -263,7 +263,7 @@ function rebuildTower(ctx: ExpeditionSceneContext): void {
       .text(width / 2, height / 2, '点「开始远征」生成你的专属知识塔', {
         fontFamily: PIXEL_FONT,
         fontSize: '14px',
-        color: '#b6add0',
+        color: '#6d6a5c',
       })
       .setOrigin(0.5, 0.5)
       .setDepth(6);
@@ -275,7 +275,7 @@ function rebuildTower(ctx: ExpeditionSceneContext): void {
 
   // 中央塔身柱（垫底装饰）。
   const column = ctx.add.graphics();
-  column.fillStyle(COLOR_COLUMN, 0.45).fillRoundedRect(72, 52, width - 112, height - 104, 18);
+  column.fillStyle(COLOR_COLUMN, 0.72).fillRoundedRect(72, 52, width - 112, height - 104, 18);
   column.setDepth(0);
 
   // 楼层地板线 + 层标签（顶层标 BOSS）。
@@ -288,13 +288,13 @@ function rebuildTower(ctx: ExpeditionSceneContext): void {
     if (!sample) continue;
     const pos = positions.get(sample.id);
     if (!pos) continue;
-    floors.fillStyle(COLOR_FLOOR, 0.4).fillRect(80, pos.y + room.h / 2 + 7, width - 128, 2);
+    floors.fillStyle(COLOR_FLOOR, 0.58).fillRect(80, pos.y + room.h / 2 + 7, width - 128, 2);
     const isTop = layer === map.layers - 1;
     ctx.add
       .text(20, pos.y, isTop ? '顶层' : `${layer + 1}F`, {
         fontFamily: PIXEL_FONT,
         fontSize: '11px',
-        color: isTop ? '#ffd54a' : '#7d7399',
+        color: isTop ? '#7b5d1e' : '#7c6b4e',
       })
       .setOrigin(0, 0.5)
       .setDepth(2);
@@ -381,7 +381,7 @@ function drawRoom(ctx: ExpeditionSceneContext, pos: NodePos, roomW: number, room
     })
     .setOrigin(0.5, 0.5)
     .setDepth(3)
-    .setColor(textAlpha >= 1 ? '#3a2f57' : '#a99fc6')
+    .setColor(textAlpha >= 1 ? '#4f583d' : '#8b8676')
     .setAlpha(textAlpha);
 
   // 已通关打勾。
@@ -417,13 +417,13 @@ function drawAvatar(
   const ay = pos.y;
   const marker = ctx.add.graphics();
   marker.fillStyle(COLOR_AVATAR, 1).fillRoundedRect(ax - 9, ay - 9, 18, 18, 6);
-  marker.lineStyle(2, 0x6b4f12, 1).strokeRoundedRect(ax - 9, ay - 9, 18, 18, 6);
+  marker.lineStyle(2, 0x1f5d49, 1).strokeRoundedRect(ax - 9, ay - 9, 18, 18, 6);
   marker.setDepth(5);
   ctx.add
     .text(ax, ay - 22, '你', {
       fontFamily: PIXEL_FONT,
       fontSize: '11px',
-      color: '#ffe9a6',
+      color: '#2a4d3a',
     })
     .setOrigin(0.5, 0.5)
     .setDepth(5);
@@ -443,7 +443,7 @@ function drawHud(ctx: ExpeditionSceneContext, width: number): void {
     .text(width - 16, 20, `体力 ${hearts}`, {
       fontFamily: PIXEL_FONT,
       fontSize: '13px',
-      color: '#ff8a8a',
+      color: '#b53b42',
     })
     .setOrigin(1, 0.5)
     .setDepth(6);
@@ -451,7 +451,7 @@ function drawHud(ctx: ExpeditionSceneContext, width: number): void {
     .text(width - 16, 40, `得分 ${runView.score}`, {
       fontFamily: PIXEL_FONT,
       fontSize: '12px',
-      color: '#ffd166',
+      color: '#7b5d1e',
     })
     .setOrigin(1, 0.5)
     .setDepth(6);
@@ -459,13 +459,13 @@ function drawHud(ctx: ExpeditionSceneContext, width: number): void {
 
 function drawVictory(ctx: ExpeditionSceneContext, width: number, height: number): void {
   const veil = ctx.add.graphics();
-  veil.fillStyle(0x140d22, 0.72).fillRect(0, 0, width, height);
+  veil.fillStyle(0xfaf3dd, 0.86).fillRect(0, 0, width, height);
   veil.setDepth(9);
   ctx.add
     .text(width / 2, height / 2, '🎉 通关！知识闸已击穿', {
       fontFamily: PIXEL_FONT,
       fontSize: '22px',
-      color: '#8df0b0',
+      color: '#2f8f6f',
     })
     .setOrigin(0.5, 0.5)
     .setDepth(10);
@@ -473,13 +473,13 @@ function drawVictory(ctx: ExpeditionSceneContext, width: number, height: number)
 
 function drawGameOver(ctx: ExpeditionSceneContext, width: number, height: number): void {
   const veil = ctx.add.graphics();
-  veil.fillStyle(0x140d22, 0.72).fillRect(0, 0, width, height);
+  veil.fillStyle(0xfaf3dd, 0.86).fillRect(0, 0, width, height);
   veil.setDepth(9);
   ctx.add
     .text(width / 2, height / 2, '本局远征结束 · 掌握度已入库', {
       fontFamily: PIXEL_FONT,
       fontSize: '18px',
-      color: '#ffb4a8',
+      color: '#b05348',
     })
     .setOrigin(0.5, 0.5)
     .setDepth(10);

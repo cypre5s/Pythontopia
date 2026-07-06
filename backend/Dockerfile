@@ -7,10 +7,20 @@ WORKDIR /workspace
 COPY pom.xml ./pom.xml
 COPY .mvn ./.mvn
 COPY src ./src
-# Maven 代理按需注入：本机受限网络传 MAVEN_PROXY_OPTS（如 -Dhttps.proxyHost=127.0.0.1
-# -Dhttps.proxyPort=7892 ...）；ECS/直连网络留空走镜像源直连。
+# Maven 代理按需注入：本机受限网络需要激活 settings 里的 proxy；ECS/直连网络留空。
 ARG MAVEN_PROXY_OPTS=""
-RUN --mount=type=cache,target=/root/.m2 mvn -B -s .mvn/settings.build.xml \
+ARG MAVEN_PROXY_HOST="127.0.0.1"
+ARG MAVEN_PROXY_PORT="7892"
+RUN --mount=type=cache,target=/root/.m2 \
+    cp .mvn/settings.build.xml /tmp/settings.build.xml \
+    && if [ -n "$MAVEN_PROXY_OPTS" ]; then \
+        sed -i \
+          -e "s|<active>false</active>|<active>true</active>|" \
+          -e "s|<host>127.0.0.1</host>|<host>${MAVEN_PROXY_HOST}</host>|" \
+          -e "s|<port>7892</port>|<port>${MAVEN_PROXY_PORT}</port>|" \
+          /tmp/settings.build.xml; \
+      fi \
+    && mvn -B -s /tmp/settings.build.xml \
     ${MAVEN_PROXY_OPTS} \
     -DskipTests package
 
