@@ -1,0 +1,52 @@
+{
+  "folds": {
+    "0": {
+      "case_count": 46,
+      "forbidden_leak_rate": 0.021739,
+      "grounding_safe_rate": 0.804348,
+      "json_valid_rate": 0.673913,
+      "score_mean": 0.961232,
+      "score_std": 0.089997
+    },
+    "1": {
+      "case_count": 37,
+      "forbidden_leak_rate": 0.0,
+      "grounding_safe_rate": 0.675676,
+      "json_valid_rate": 0.783784,
+      "score_mean": 0.946847,
+      "score_std": 0.100833
+    },
+    "2": {
+      "case_count": 34,
+      "forbidden_leak_rate": 0.0,
+      "grounding_safe_rate": 0.882353,
+      "json_valid_rate": 0.705882,
+      "score_mean": 0.988235,
+      "score_std": 0.052309
+    },
+    "3": {
+      "case_count": 48,
+      "forbidden_leak_rate": 0.0,
+      "grounding_safe_rate": 0.875,
+      "json_valid_rate": 0.729167,
+      "score_mean": 0.985764,
+      "score_std": 0.042664
+    },
+    "4": {
+      "case_count": 30,
+      "forbidden_leak_rate": 0.066667,
+      "grounding_safe_rate": 0.733333,
+      "json_valid_rate": 0.9,
+      "score_mean": 0.953889,
+      "score_std": 0.093739
+    }
+  },
+  "overall": {
+    "case_count": 195,
+    "forbidden_leak_rate": 0.015385,
+    "grounding_safe_rate": 0.8,
+    "json_valid_rate": 0.748718,
+    "score_mean": 0.96812,
+    "score_std": 0.079134
+  }
+}

@@ -1,0 +1,426 @@
+package com.pythontopia.app
+
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavGraphBuilder
+import androidx.navigation.NavHostController
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import com.pythontopia.core.design.PytColors
+import com.pythontopia.feature.auth.AuthDestination
+import com.pythontopia.feature.auth.authGraph
+import com.pythontopia.feature.about.CreditsScreen
+import com.pythontopia.feature.about.GraduationScreen
+import com.pythontopia.feature.about.GuideScreen
+import com.pythontopia.feature.arena.ArenaScreen
+import com.pythontopia.feature.arena.ChapterTowerScreen
+import com.pythontopia.feature.classroom.ClassroomScreen
+import com.pythontopia.feature.fields.FieldsScreen
+import com.pythontopia.feature.board.BoardScreen
+import com.pythontopia.feature.boss.BossScreen
+import com.pythontopia.feature.endless.EndlessScreen
+import com.pythontopia.feature.expedition.ExpeditionScreen
+import com.pythontopia.feature.feynman.FeynmanScreen
+import com.pythontopia.feature.hub.HubScreen
+import com.pythontopia.feature.lecture.LectureScreen
+import com.pythontopia.feature.mainline.ChapterAssessment
+import com.pythontopia.feature.mainline.ChapterTestScreen
+import com.pythontopia.feature.mainline.MainlineMapScreen
+import com.pythontopia.feature.mainline.MainlineStageScreen
+import com.pythontopia.feature.library.LibraryScreen
+import com.pythontopia.feature.mine.MineEchoesScreen
+import com.pythontopia.feature.mine.MineSessionScreen
+import com.pythontopia.feature.path.PathScreen
+import com.pythontopia.feature.problems.ProblemsScreen
+import com.pythontopia.feature.profile.ProfileScreen
+import com.pythontopia.feature.retro.RetroScreen
+import com.pythontopia.feature.teacherreview.TeacherReviewScreen
+import com.pythontopia.feature.tutor.TutorScreen
+import com.pythontopia.feature.workshop.IntentRouterScreen
+import com.pythontopia.feature.workshop.WorkshopGenScreen
+import com.pythontopia.feature.workshop.WorkshopResourceType
+import com.pythontopia.feature.workshop.WorkshopScreen
+import com.pythontopia.feature.workshop.toResourceType
+
+/**
+ * 顶层导航：Login → [AppShell] 功能工作台；
+ * [AuthDestination.HOME] 内 NavHost 懒加载各 feature，减轻冷启动压力。
+ */
+@Composable
+fun MainScreen(entryViewModel: AppEntryViewModel = hiltViewModel()) {
+    val start by entryViewModel.startDestination.collectAsState()
+    val resolved = start
+    if (resolved == null) {
+        SplashLoading()
+        return
+    }
+    val navController = rememberNavController()
+    val onLogout: () -> Unit = {
+        entryViewModel.logout()
+        navController.navigate(AuthDestination.LOGIN) {
+            popUpTo(0) { inclusive = true }
+        }
+    }
+    NavHost(navController = navController, startDestination = resolved) {
+        authGraph(navController)
+        homeRedirect(onLogout)
+    }
+}
+
+@Composable
+private fun SplashLoading() {
+    Box(modifier = Modifier.fillMaxSize().background(PytColors.bgPrimary), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = "PYTHONTOPIA",
+                color = PytColors.primary,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 3.sp,
+            )
+            Spacer(Modifier.height(16.dp))
+            CircularProgressIndicator(color = PytColors.primary)
+        }
+    }
+}
+
+private fun NavGraphBuilder.homeRedirect(onLogout: () -> Unit) {
+    composable(AuthDestination.HOME) {
+        AppShell(onLogout = onLogout)
+    }
+}
+
+private data class AppDestination(
+    val route: String,
+    val label: String,
+    val accent: androidx.compose.ui.graphics.Color,
+)
+
+// dock 顺序对齐 Web 学习流（小镇 → 主线冒险 → 看/学 → 练/测 → 支线复盘 → 画像/路径/班级），
+// 把 R-15 主线「冒险」摆在最显眼位置。各 feature 仍全部可达（M1 收敛保持功能不缩水）。
+private val APP_DESTINATIONS = listOf(
+    AppDestination("hub", "小镇", PytColors.success),
+    AppDestination("mainline", "冒险", PytColors.primary),
+    // 学 / AI 工坊
+    AppDestination("workshop", "工坊", PytColors.warning),
+    AppDestination("intent", "百晓", PytColors.warning),
+    AppDestination("workshop/generate", "生成", PytColors.warning),
+    AppDestination("tutor", "答疑", PytColors.info),
+    // 看 · 课件与讲义
+    AppDestination("library", "图书馆", PytColors.info),
+    AppDestination("lecture", "讲义", PytColors.success),
+    AppDestination("problems", "题库", PytColors.info),
+    // 练 / 测
+    AppDestination("arena", "训练场", PytColors.danger),
+    AppDestination("tower", "闯关塔", PytColors.warning),
+    AppDestination("endless", "无尽练习", PytColors.warning),
+    AppDestination("expedition", "无尽远征", PytColors.tertiary),
+    AppDestination("boss", "BOSS战", PytColors.danger),
+    // 支线 · 复盘
+    AppDestination("mine", "矿洞", PytColors.textMuted),
+    AppDestination("retro", "复盘", PytColors.info),
+    AppDestination("feynman", "费曼", PytColors.tertiary),
+    // 画像 / 路径 / 知识田 / 班级
+    AppDestination("profile", "画像", PytColors.info),
+    AppDestination("board", "任务板", PytColors.warning),
+    AppDestination("path", "路径", PytColors.success),
+    AppDestination("fields", "知识田", PytColors.success),
+    AppDestination("classroom", "班级", PytColors.danger),
+    AppDestination("teacher-review", "审题", PytColors.danger),
+    // 关于 · 指南 / 致谢 / 毕业
+    AppDestination("guide", "指南", PytColors.textMuted),
+    AppDestination("credits", "致谢", PytColors.textMuted),
+    AppDestination("graduation", "毕业", PytColors.tertiary),
+)
+
+@Composable
+private fun AppShell(onLogout: () -> Unit) {
+    val featureNav = rememberNavController()
+    Scaffold(
+        topBar = {
+            FeatureDock(
+                navController = featureNav,
+                onLogout = onLogout,
+            )
+        },
+    ) { padding ->
+        NavHost(
+            navController = featureNav,
+            startDestination = "hub",
+            modifier = Modifier.padding(padding),
+        ) {
+            composable("hub") {
+                HubScreen(
+                    onLogout = onLogout,
+                    onNavigate = { route -> featureNav.navigate(route) { launchSingleTop = true } },
+                )
+            }
+            composable("mainline") {
+                MainlineMapScreen(
+                    onOpenStage = { stageId -> featureNav.navigate("mainline/stage/$stageId") },
+                    onOpenTest = { chapter -> featureNav.navigate("mainline/chapter-test/$chapter") },
+                    onOpenQuiz = { chapter -> featureNav.navigate("mainline/chapter-quiz/$chapter") },
+                    onOpenEndless = { chapter -> featureNav.navigate("endless?chapter=$chapter") },
+                )
+            }
+            composable(
+                route = "mainline/stage/{stageId}",
+                arguments = listOf(navArgument("stageId") { type = NavType.LongType }),
+            ) { backStackEntry ->
+                MainlineStageScreen(
+                    stageId = backStackEntry.arguments?.getLong("stageId") ?: 0L,
+                    onBack = { featureNav.popBackStack() },
+                )
+            }
+            composable(
+                route = "mainline/chapter-test/{chapter}",
+                arguments = listOf(navArgument("chapter") { type = NavType.IntType }),
+            ) { backStackEntry ->
+                ChapterTestScreen(
+                    chapter = backStackEntry.arguments?.getInt("chapter") ?: 1,
+                    onBack = { featureNav.popBackStack() },
+                )
+            }
+            composable(
+                route = "mainline/chapter-quiz/{chapter}",
+                arguments = listOf(navArgument("chapter") { type = NavType.IntType }),
+            ) { backStackEntry ->
+                ChapterTestScreen(
+                    chapter = backStackEntry.arguments?.getInt("chapter") ?: 1,
+                    onBack = { featureNav.popBackStack() },
+                    assessment = ChapterAssessment.QUIZ,
+                )
+            }
+            composable("tutor") { TutorScreen() }
+            composable("profile") { ProfileScreen() }
+            composable("fields") { FieldsScreen() }
+            composable("workshop") { WorkshopScreen() }
+            composable("intent") {
+                IntentRouterScreen(
+                    onOpenReview = { featureNav.navigate("mine") },
+                    onOpenTutor = { featureNav.navigate("tutor") },
+                    onOpenGenerate = { kind, kcCodes ->
+                        val typeArg = kind.toResourceType()?.name.orEmpty()
+                        val kcArg = kcCodes.joinToString(",")
+                        featureNav.navigate("workshop/generate?type=$typeArg&kc=$kcArg")
+                    },
+                )
+            }
+            composable(
+                route = "workshop/generate?type={type}&kc={kc}",
+                arguments = listOf(
+                    navArgument("type") { type = NavType.StringType; nullable = true; defaultValue = null },
+                    navArgument("kc") { type = NavType.StringType; nullable = true; defaultValue = null },
+                ),
+            ) { backStackEntry ->
+                val typeArg = backStackEntry.arguments?.getString("type")
+                val kcArg = backStackEntry.arguments?.getString("kc")
+                WorkshopGenScreen(
+                    prefillType = WorkshopResourceType.fromOrNull(typeArg),
+                    prefillKcCodes = kcArg
+                        ?.split(",")
+                        ?.map { it.trim() }
+                        ?.filter { it.isNotEmpty() }
+                        .orEmpty(),
+                )
+            }
+            composable("library") { LibraryScreen() }
+            composable("problems") { ProblemsScreen() }
+            composable("arena") { ArenaScreen() }
+            composable("boss") { BossScreen() }
+            composable(
+                route = "endless?chapter={chapter}",
+                arguments = listOf(navArgument("chapter") { type = NavType.IntType; defaultValue = -1 }),
+            ) { backStackEntry ->
+                val ch = backStackEntry.arguments?.getInt("chapter")?.takeIf { it > 0 }
+                EndlessScreen(chapter = ch)
+            }
+            composable("lecture") { LectureScreen() }
+            composable("expedition") {
+                ExpeditionScreen(onExit = { featureNav.navigate("hub") { launchSingleTop = true } })
+            }
+            composable("tower") { ChapterTowerScreen() }
+            composable("mine") {
+                MineEchoesScreen(
+                    onOpenSession = { sessionId -> featureNav.navigate("mine/session/$sessionId") },
+                )
+            }
+            composable(
+                route = "mine/session/{sessionId}",
+                arguments = listOf(navArgument("sessionId") { type = NavType.LongType }),
+            ) { backStackEntry ->
+                MineSessionScreen(
+                    sessionId = backStackEntry.arguments?.getLong("sessionId") ?: 0L,
+                    onExit = { featureNav.popBackStack() },
+                )
+            }
+            composable("retro") { RetroScreen() }
+            composable(
+                route = "feynman?kc={kc}",
+                arguments = listOf(
+                    navArgument("kc") { type = NavType.StringType; nullable = true; defaultValue = null },
+                ),
+            ) { backStackEntry ->
+                FeynmanScreen(prefillKc = backStackEntry.arguments?.getString("kc"))
+            }
+            composable("board") { BoardScreen() }
+            composable("path") { PathScreen() }
+            composable("classroom") { ClassroomScreen() }
+            composable("teacher-review") { TeacherReviewScreen() }
+            composable("guide") { GuideScreen() }
+            composable("credits") { CreditsScreen() }
+            composable("graduation") { GraduationScreen() }
+        }
+    }
+}
+
+@Composable
+private fun FeatureDock(
+    navController: NavHostController,
+    onLogout: () -> Unit,
+) {
+    val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route ?: "hub"
+    Surface(color = PytColors.bgElevated) {
+        Column {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 12.dp, top = 10.dp, bottom = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(PytColors.primary),
+                )
+                Text(
+                    text = "  PYTHONTOPIA",
+                    color = PytColors.textPrimary,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                    letterSpacing = 2.sp,
+                    modifier = Modifier.weight(1f),
+                )
+                LogoutPill(onLogout)
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                APP_DESTINATIONS.forEach { destination ->
+                    PixelTab(
+                        label = destination.label,
+                        accent = destination.accent,
+                        selected = destination.route == currentRoute,
+                        onClick = {
+                            if (destination.route != currentRoute) {
+                                navController.navigate(destination.route) {
+                                    launchSingleTop = true
+                                    restoreState = true
+                                    popUpTo("hub") { saveState = true }
+                                }
+                            }
+                        },
+                    )
+                }
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(2.dp)
+                    .background(PytColors.borderStrong),
+            )
+        }
+    }
+}
+
+@Composable
+private fun PixelTab(
+    label: String,
+    accent: androidx.compose.ui.graphics.Color,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val bg = if (selected) PytColors.primary else PytColors.bgSoft
+    val border = if (selected) PytColors.borderStrong else PytColors.borderSoft
+    val textColor = if (selected) PytColors.onPrimary else PytColors.textMuted
+    Surface(
+        color = bg,
+        shape = RoundedCornerShape(7.dp),
+        border = BorderStroke(2.dp, border),
+        modifier = Modifier.clip(RoundedCornerShape(7.dp)).clickable(onClick = onClick),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(7.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(if (selected) PytColors.onPrimary.copy(alpha = 0.7f) else accent),
+            )
+            Text(
+                text = label,
+                color = textColor,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                fontSize = 14.sp,
+            )
+        }
+    }
+}
+
+@Composable
+private fun LogoutPill(onLogout: () -> Unit) {
+    Surface(
+        color = PytColors.bgSunken,
+        shape = RoundedCornerShape(7.dp),
+        border = BorderStroke(2.dp, PytColors.danger.copy(alpha = 0.6f)),
+        modifier = Modifier.clip(RoundedCornerShape(7.dp)).clickable(onClick = onLogout),
+    ) {
+        Text(
+            text = "退出",
+            color = PytColors.danger,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+        )
+    }
+}

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="360" viewBox="0 0 720 360">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="52" y="30" font-family="Arial" font-size="20" fill="#111827">Score by fold</text>
+<line x1="52" y1="308" x2="668" y2="308" stroke="#6b7280"/>
+<line x1="52" y1="52" x2="52" y2="308" stroke="#6b7280"/>
+<text x="113.6" y="340" text-anchor="middle" font-family="Arial" font-size="12" fill="#374151">0</text>
+<rect x="82.80" y="61.92" width="48.05" height="246.08" fill="#2563eb"><title>score: 0.961</title></rect>
+<text x="106.82" y="55.92" text-anchor="middle" font-family="Arial" font-size="11" fill="#111827">0.96</text>
+<text x="236.79999999999998" y="340" text-anchor="middle" font-family="Arial" font-size="12" fill="#374151">1</text>
+<rect x="206.00" y="65.61" width="48.05" height="242.39" fill="#2563eb"><title>score: 0.947</title></rect>
+<text x="230.02" y="59.61" text-anchor="middle" font-family="Arial" font-size="11" fill="#111827">0.95</text>
+<text x="360.0" y="340" text-anchor="middle" font-family="Arial" font-size="12" fill="#374151">2</text>
+<rect x="329.20" y="55.01" width="48.05" height="252.99" fill="#2563eb"><title>score: 0.988</title></rect>
+<text x="353.22" y="49.01" text-anchor="middle" font-family="Arial" font-size="11" fill="#111827">0.99</text>
+<text x="483.20000000000005" y="340" text-anchor="middle" font-family="Arial" font-size="12" fill="#374151">3</text>
+<rect x="452.40" y="55.64" width="48.05" height="252.36" fill="#2563eb"><title>score: 0.986</title></rect>
+<text x="476.42" y="49.64" text-anchor="middle" font-family="Arial" font-size="11" fill="#111827">0.99</text>
+<text x="606.4" y="340" text-anchor="middle" font-family="Arial" font-size="12" fill="#374151">4</text>
+<rect x="575.60" y="63.80" width="48.05" height="244.20" fill="#2563eb"><title>score: 0.954</title></rect>
+<text x="599.62" y="57.80" text-anchor="middle" font-family="Arial" font-size="11" fill="#111827">0.95</text>
+<rect x="538" y="40" width="12" height="12" fill="#2563eb"/>
+<text x="556" y="50" font-family="Arial" font-size="12" fill="#374151">score</text>
+</svg>

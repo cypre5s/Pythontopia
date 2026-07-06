@@ -1,0 +1,137 @@
+spring:
+  profiles:
+    active: local
+  datasource:
+    url: ${PYT_DB_URL}
+    username: ${PYT_DB_USERNAME}
+    password: ${PYT_DB_PASSWORD}
+  flyway:
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+  jpa:
+    open-in-view: false
+  servlet:
+    multipart:
+      # 随身助教语音输入回退（/api/media/asr）上传短录音；放宽到 8MB 容纳 ~60s 录音，余量足够。
+      max-file-size: 8MB
+      max-request-size: 12MB
+
+server:
+  port: 18080
+
+pythontopia:
+  judge:
+    # 判题用的 Python 解释器。
+    python: ${PYT_JUDGE_PYTHON:python3}
+    # 判题沙箱网络隔离：auto=宿主支持非特权 user namespace 时用 `unshare -r -n` 切断网络（推荐，
+    # 阻断 SSRF 内网 / 窃取云元数据 / 数据外传）；none=关闭。容器内被默认 seccomp 拦截 unshare 时
+    # 自动回退为无隔离子进程并记 WARN（见 SubprocessPythonSandbox）。
+    isolation: ${PYT_JUDGE_ISOLATION:auto}
+  services:
+    graphUrl: ${PYT_GRAPH_URL:http://localhost:18091}
+    ragUrl: ${PYT_RAG_URL:http://localhost:18092}
+    ragAdminToken: ${PYT_RAG_ADMIN_TOKEN:}
+  http:
+    graph:
+      # graphRestTemplate 超时（毫秒）：下游不可达时在阈值内 fail-fast，避免占满 Tomcat 线程。
+      connect-timeout-ms: ${PYT_GRAPH_CONNECT_TIMEOUT_MS:3000}
+      read-timeout-ms: ${PYT_GRAPH_READ_TIMEOUT_MS:30000}
+    chapter-test:
+      read-timeout-ms: ${PYT_CHAPTER_TEST_READ_TIMEOUT_MS:600000}
+    boss-problem:
+      read-timeout-ms: ${PYT_BOSS_PROBLEM_READ_TIMEOUT_MS:180000}
+  sse:
+    relay:
+      # SSE 中继线程池：有界 + CallerRunsPolicy，突发流量回压而非打满线程/OOM。
+      core-pool-size: ${PYT_SSE_RELAY_CORE:4}
+      max-pool-size: ${PYT_SSE_RELAY_MAX:16}
+      queue-capacity: ${PYT_SSE_RELAY_QUEUE:200}
+  security:
+    teacherInviteCode: ${PYT_TEACHER_INVITE_CODE:}
+    # 允许的前端来源（CORS allowedOriginPatterns）。逗号分隔；生产用 PYT_CORS_ALLOWED_ORIGINS
+    # 覆盖为真实域名（如 https://pythontopia.example.com），无需改代码。
+    cors:
+      allowed-origin-patterns: ${PYT_CORS_ALLOWED_ORIGINS:http://localhost:8080,http://127.0.0.1:8080,http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173,http://127.0.0.1:5174}
+    # 是否公开 OpenAPI/Swagger UI。dev=true 便于联调；生产设 PYT_EXPOSE_API_DOCS=false 后
+    # 这些端点改为需鉴权访问，避免对公网泄露完整 API 面。
+    expose-api-docs: ${PYT_EXPOSE_API_DOCS:true}
+    jwt:
+      secret: ${PYT_JWT_SECRET:}
+      ttlMinutes: 720
+  mastery:
+    halfLifeDays: 14
+    confidenceGainPerEvent: 0.05
+    confidenceLossPerDecay: 0.02
+    deltas:
+      RESOURCE_READ: 0.10
+      PRACTICE_PASS: 0.20
+      PRACTICE_FAIL: -0.05
+      DEBUG_FIX: 0.15
+      MANUAL_OVERRIDE: 0.00
+      DECAY: 0.00
+      BOOTSTRAP: 0.00
+  workshop:
+    maxResourcesPerHour: 10
+    masteryDailyCapPerKc: 0.15
+    allowlist: []
+  tts:
+    appId: ${PYT_SPARK_APP_ID:}
+    apiKey: ${PYT_SPARK_API_KEY:}
+    apiSecret: ${PYT_SPARK_API_SECRET:}
+    dailyLimitPerUser: 100
+  image:
+    # 讯飞星火文生图：复用与 TTS / Spark LLM 相同的讯飞控制台应用凭据。
+    # 任一缺失则降级为本地占位图（degraded=true），保证无 apikey 时多模态验收链路不被阻塞。
+    appId: ${PYT_SPARK_APP_ID:}
+    apiKey: ${PYT_SPARK_API_KEY:}
+    apiSecret: ${PYT_SPARK_API_SECRET:}
+    baseUrl: ${PYT_SPARK_IMAGE_URL:https://spark-api.cn-huabei-1.xf-yun.com/v2.1/tti}
+    dailyLimitPerUser: 50
+  image-understanding:
+    # 讯飞星火「图片理解」(看图答疑)：复用同一套讯飞凭据；缺失则导师答疑回退纯文本，不阻塞链路。
+    appId: ${PYT_SPARK_APP_ID:}
+    apiKey: ${PYT_SPARK_API_KEY:}
+    apiSecret: ${PYT_SPARK_API_SECRET:}
+    baseUrl: ${PYT_SPARK_IMAGE_UNDERSTANDING_URL:wss://spark-api.cn-huabei-1.xf-yun.com/v2.1/image}
+    domain: ${PYT_SPARK_IMAGE_UNDERSTANDING_DOMAIN:imagev3}
+    maxTokens: 1024
+    dailyLimitPerUser: 50
+  asr:
+    # 讯飞「语音听写」(IAT)：随身助教语音输入在浏览器 Web Speech 不可用时的服务端回退；复用同一套讯飞凭据。
+    # 任一缺失则返回 degraded（前端提示改用键盘），不阻塞答疑。需服务端 ffmpeg 把上传音频转 16k 单声道 PCM。
+    appId: ${PYT_SPARK_APP_ID:}
+    apiKey: ${PYT_SPARK_API_KEY:}
+    apiSecret: ${PYT_SPARK_API_SECRET:}
+    baseUrl: ${PYT_SPARK_IAT_URL:wss://iat-api.xfyun.cn/v2/iat}
+    dailyLimitPerUser: 100
+  media:
+    # 多模态生成产物（文生图/合成短视频）本地落盘目录，不入 git（见 .gitignore），可重生。
+    generatedDir: ${PYT_MEDIA_GENERATED_DIR:./data/course-pack-43/generated-media}
+    compose:
+      # 媒体异步合成作业（Track B）并发护栏：合成 worker 线程池 + 讯飞「文生图/语音合成」全局路数信号量。
+      # 突发提交时在阈值内排队/限流，避免击穿讯飞配额；缺 ffmpeg 时作业置 FAILED(VIDEO_COMPOSE_UNAVAILABLE)。
+      poolSize: ${PYT_MEDIA_COMPOSE_POOL:3}
+      ttiConcurrency: ${PYT_MEDIA_COMPOSE_TTI_CONCURRENCY:2}
+      ttsConcurrency: ${PYT_MEDIA_COMPOSE_TTS_CONCURRENCY:2}
+      queueCapacity: ${PYT_MEDIA_COMPOSE_QUEUE:64}
+      streamTimeoutMs: ${PYT_MEDIA_COMPOSE_STREAM_TIMEOUT_MS:300000}
+  npc:
+    greeting:
+      prewarm:
+        # NPC 寒暄「每日预生成」：每天定时为活跃学生×核心 NPC 预热寒暄缓存，玩家进对话零等待、一天一更新。
+        # enabled=false 关闭（回退实时生成）；cron 默认凌晨 3:30；只覆盖最近 active-days 天活跃、至多 max-users 个学生。
+        enabled: ${PYT_NPC_GREETING_PREWARM_ENABLED:true}
+        cron: ${PYT_NPC_GREETING_PREWARM_CRON:0 30 3 * * *}
+        active-days: ${PYT_NPC_GREETING_PREWARM_ACTIVE_DAYS:7}
+        max-users: ${PYT_NPC_GREETING_PREWARM_MAX_USERS:200}
+  coursepack:
+    # R-13 D1/D2：原 PDF 本地路径（不进 git）。文件命名 {documentId}.pdf（186~192）。
+    # 来源：Alethicode/deploy/data/language_pack/tasks/31/originals 的 7 章 PDF
+    # （第一~第七章），首次部署需 cp 进来，路径与 Pythontopia/data/course-pack-43/pdfs/ 对应。
+    # 后端通过 /api/course/documents/{docId}/pdf 流式分发给 pdfjs-dist 渲染。
+    pdfDir: ${PYT_COURSEPACK_PDF_DIR:./data/course-pack-43/pdfs}
+    # R-12 Phase 2：超星任务点视频本地缓存目录（不进 git，见 .gitignore；由
+    # crawl_chaoxing_videos.py 下载到此）。后端通过 /api/course/videos/{id} 支持 Range 流式分发。
+    videoDir: ${PYT_COURSEPACK_VIDEO_DIR:./data/course-pack-43/videos}
+    # 视频清单（入库；空数组表示当前课程无任务点视频）。由 crawl_chaoxing_videos.py 生成/维护。
+    videoManifest: ${PYT_COURSEPACK_VIDEO_MANIFEST:./data/course-pack-43/video_manifest.json}

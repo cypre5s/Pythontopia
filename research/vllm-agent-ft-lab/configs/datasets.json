@@ -1,0 +1,76 @@
+{
+  "version": "2026-07-02",
+  "normalization_target": {
+    "fields": [
+      "id",
+      "source_dataset",
+      "split",
+      "dialogue_context",
+      "student_state",
+      "tutor_action",
+      "target_json",
+      "license_or_terms_note"
+    ]
+  },
+  "datasets": [
+    {
+      "id": "google-education-dialogue-dataset",
+      "name": "Google Education Dialogue Dataset",
+      "source": "https://github.com/google-research-datasets/Education-Dialogue-Dataset",
+      "raw_files": [
+        "https://raw.githubusercontent.com/google-research-datasets/Education-Dialogue-Dataset/main/conversations_eval.json",
+        "https://raw.githubusercontent.com/google-research-datasets/Education-Dialogue-Dataset/main/conversations_train1.json",
+        "https://raw.githubusercontent.com/google-research-datasets/Education-Dialogue-Dataset/main/conversations_train2.json",
+        "https://raw.githubusercontent.com/google-research-datasets/Education-Dialogue-Dataset/main/conversations_train3.json",
+        "https://raw.githubusercontent.com/google-research-datasets/Education-Dialogue-Dataset/main/conversations_train4.json",
+        "https://raw.githubusercontent.com/google-research-datasets/Education-Dialogue-Dataset/main/conversations_train5.json"
+      ],
+      "size_signal": "40000 train conversations + 7234 test conversations",
+      "use": "large-scale tutoring dialogue training and robustness",
+      "priority": 1
+    },
+    {
+      "id": "studychat",
+      "name": "StudyChat",
+      "source": "https://arxiv.org/html/2503.07928v4",
+      "size_signal": "real student interactions with an LLM-powered tutor in a university AI course",
+      "use": "real LLM-student behavior and programming-assignment style analysis",
+      "priority": 2
+    },
+    {
+      "id": "whj-programming-tutoring",
+      "name": "WHJ Programming Tutoring Corpus",
+      "source": "https://www.research-collection.ethz.ch/bitstreams/e53a7998-775f-4f1e-a181-3f510b771fac/download",
+      "size_signal": "6000 conversations and 18500 utterances",
+      "use": "programming tutoring dialogue style",
+      "priority": 2
+    },
+    {
+      "id": "mathdial",
+      "name": "MathDial",
+      "source": "https://github.com/eth-nlped/mathdial",
+      "size_signal": "about 3000 one-to-one tutoring dialogues",
+      "use": "pedagogical hinting and avoid-solution patterns",
+      "priority": 3
+    },
+    {
+      "id": "eedi-question-anchored-tutoring-2k",
+      "name": "Eedi Question-Anchored Tutoring Dialogues 2k",
+      "source": "https://huggingface.co/datasets/Eedi/Question-Anchored-Tutoring-Dialogues-2k",
+      "size_signal": "2000 real student-tutor dialogues",
+      "use": "real tutoring language and privacy-risk review examples",
+      "priority": 3
+    }
+  ],
+  "folds": {
+    "minimum": 5,
+    "preferred_repeats": 3,
+    "stratification_keys": [
+      "agent",
+      "chapter_or_kc",
+      "task_type",
+      "requires_evidence",
+      "forbidden_answer_risk"
+    ]
+  }
+}

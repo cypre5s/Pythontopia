@@ -1,0 +1,20 @@
+[
+  {
+    "id": 43,
+    "slug": "1defa338-bf8a-425e-806a-17435ebc407a",
+    "version": 1,
+    "name": "Python语言基础",
+    "primary_language": "Python3",
+    "description": "",
+    "status": "published",
+    "document_count": 7,
+    "page_count": 561,
+    "chapter_count": 7,
+    "kc_count": 65,
+    "example_count": 46,
+    "problem_count": 39,
+    "course_objective": null,
+    "target_audience": "非计算机专业编程初学者",
+    "total_hours": null
+  }
+]

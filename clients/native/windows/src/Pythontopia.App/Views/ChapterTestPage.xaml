@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="Pythontopia.App.Views.ChapterTestPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Grid Padding="24" RowSpacing="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Spacing="6">
+            <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                <TextBlock Text="章节测验" FontSize="24" FontWeight="Bold" VerticalAlignment="Center" />
+                <ComboBox
+                    MinWidth="120"
+                    Header="章节"
+                    ItemsSource="{x:Bind ViewModel.ChapterOptions}"
+                    SelectedItem="{x:Bind ViewModel.SelectedChapter, Mode=TwoWay}" />
+                <Button
+                    Content="加载最近成绩"
+                    VerticalAlignment="Bottom"
+                    Command="{x:Bind ViewModel.LoadCommand}"
+                    IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBool}}" />
+                <Button
+                    Content="开始本章测验"
+                    VerticalAlignment="Bottom"
+                    Style="{ThemeResource AccentButtonStyle}"
+                    Command="{x:Bind ViewModel.StartExamCommand}"
+                    IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBool}}" />
+                <ProgressRing IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}" Width="22" Height="22" VerticalAlignment="Bottom" />
+            </StackPanel>
+            <TextBlock Text="只读展示某章最近一次大测试的判分（来自 /api/mainline/chapters/{chapter}/test/latest）。" Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="1" Spacing="8">
+            <Border Style="{StaticResource PytCardBorderStyle}" Padding="14">
+                <TextBlock Text="{x:Bind ViewModel.Summary, Mode=OneWay}" TextWrapping="Wrap" />
+            </Border>
+            <InfoBar
+                IsOpen="{x:Bind ViewModel.HasError, Mode=OneWay}"
+                Severity="Error"
+                IsClosable="False"
+                Message="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}" />
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="2">
+            <StackPanel Spacing="12">
+                <StackPanel
+                    Spacing="8"
+                    Visibility="{x:Bind ViewModel.HasExam, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Text="{x:Bind ViewModel.ExamStatus, Mode=OneWay}" Opacity="0.8" FontSize="12" TextWrapping="Wrap" />
+                    <ItemsControl ItemsSource="{x:Bind ViewModel.ExamItems, Mode=OneWay}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource PytCardBorderStyle}" Padding="12" Margin="0,0,0,8">
+                                    <StackPanel Spacing="6">
+                                        <TextBlock Text="{Binding Header}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                        <TextBlock Text="{Binding Body}" TextWrapping="Wrap" />
+                                        <TextBlock
+                                            Text="{Binding OptionsText}"
+                                            FontSize="12"
+                                            Opacity="0.75"
+                                            TextWrapping="Wrap"
+                                            Visibility="{Binding OptionsText, Converter={StaticResource StringToVisibility}}" />
+                                        <TextBox PlaceholderText="你的答案" Text="{Binding Answer, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Button Content="提交测验" Style="{ThemeResource AccentButtonStyle}" HorizontalAlignment="Left" Command="{x:Bind ViewModel.SubmitExamCommand}" />
+                </StackPanel>
+
+                <ItemsControl
+                    ItemsSource="{x:Bind ViewModel.Items, Mode=OneWay}"
+                    Visibility="{x:Bind ViewModel.HasResult, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Style="{StaticResource PytCardBorderStyle}" Padding="12" Margin="0,0,0,8">
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" Spacing="2">
+                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                        <TextBlock Text="{Binding Detail}" Opacity="0.75" FontSize="12" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="1" Text="{Binding Verdict}" VerticalAlignment="Center" FontWeight="SemiBold" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Page>

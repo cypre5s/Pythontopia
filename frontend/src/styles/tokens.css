@@ -1,0 +1,439 @@
+/* Pythontopia 像素小镇视觉 token（阶段 14 + R-100 字体集成）：教育优先，整体星露谷式像素混合色。 */
+
+/* Zpix 最像素 (SolidZORO, 教育免费) — 中英日像素字体，12px 基准 */
+@font-face {
+  font-family: 'Zpix';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/zpix.ttf') format('truetype');
+}
+
+/* Ark Pixel Font (TakWolf, OFL-1.1) — 中文像素字体，用于游戏画布与像素 UI */
+@font-face {
+  font-family: 'Ark Pixel 12';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/assets/pixel/fonts/ark-pixel-12px-prop-zh_cn.woff2') format('woff2'),
+    url('/assets/pixel/fonts/ark-pixel-12px-prop-latin.woff2') format('woff2');
+  unicode-range: U+0000-007F, U+4E00-9FFF, U+3000-303F, U+FF00-FFEF;
+}
+
+@font-face {
+  font-family: 'Ark Pixel 12 Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/assets/pixel/fonts/ark-pixel-12px-mono-zh_cn.woff2') format('woff2'),
+    url('/assets/pixel/fonts/ark-pixel-12px-mono-latin.woff2') format('woff2');
+  unicode-range: U+0000-007F, U+4E00-9FFF, U+3000-303F, U+FF00-FFEF;
+}
+
+:root {
+  /* Wood / Parchment 基色 */
+  --pyt-color-bg-primary: #fef7e3;
+  --pyt-color-bg-elevated: #fff7e6;
+  --pyt-color-bg-soft: #fdf3d0;
+  --pyt-color-bg-sunken: #f3e4be;
+
+  /* 边框/分隔 */
+  --pyt-color-border-strong: #4d3613;
+  --pyt-color-border: #c9a86b;
+  --pyt-color-border-soft: rgba(201, 168, 107, 0.45);
+
+  /* 文本 */
+  --pyt-color-text-primary: #4d3613;
+  --pyt-color-text-muted: #8a6c2c;
+  --pyt-color-text-hint: #6e4f1d;
+  --pyt-color-text-on-dark: #fff7e6;
+
+  /* 状态色 */
+  --pyt-color-success: #2f8f3c;
+  --pyt-color-success-bg: #d1eccf;
+  --pyt-color-warning: #c2871f;
+  --pyt-color-warning-bg: #f5e2c1;
+  --pyt-color-danger: #b8442d;
+  --pyt-color-danger-bg: #fde2dc;
+  --pyt-color-info: #2a6f97;
+  --pyt-color-info-bg: #d0e3f1;
+
+  /* 按钮主色 */
+  --pyt-color-primary: #6e4f1d;
+  --pyt-color-primary-dark: #4d3613;
+
+  /* R-13 强调色 + 像素位移投影色（星露谷统一；杂色一律收敛到这里） */
+  --pyt-color-gold: #f1c453;
+  --pyt-color-gold-bright: #ffd166;
+  --pyt-color-accent: #7b2cbf;
+  --pyt-color-accent-bg: #ede9fe;
+  --pyt-color-shadow: #2a1a05;
+
+  /* 终端/控制台块（亮字深底）：做题样例 / Pyodide stdout / stderr 等代码输出区专用。
+     收敛此前散落在 TrainingPanel / PptView / CodeLabView / PracticeList / BugMinePanel
+     等组件的「深底亮字」硬编码 hex，统一为可复用令牌。 */
+  --pyt-color-terminal-bg: #2e2417;
+  --pyt-color-terminal-text: #f1e5c8;
+  --pyt-color-terminal-stdout: #b1e8a1;
+  --pyt-color-terminal-stderr-bg: #381b18;
+  --pyt-color-terminal-stderr-text: #ff9d8a;
+
+  /* 间距 */
+  --pyt-space-1: 4px;
+  --pyt-space-2: 8px;
+  --pyt-space-3: 12px;
+  --pyt-space-4: 16px;
+  --pyt-space-5: 24px;
+  --pyt-space-6: 32px;
+
+  /* 圆角（R-13 统一：全站像素紧致星露谷风，弃用 8px+ 软圆角） */
+  --pyt-radius-none: 0;
+  --pyt-radius-sm: 2px;
+  --pyt-radius-md: 4px;
+  --pyt-radius-lg: 6px;
+  --pyt-radius-full: 999px;
+
+  /* 字体 */
+  --pyt-font-sans: 'LXGW WenKai', '霞鹜文楷', 'PingFang SC', 'Microsoft YaHei', system-ui, -apple-system,
+    'Segoe UI', sans-serif;
+  --pyt-font-mono: 'Consolas', 'JetBrains Mono', 'Cascadia Code', Menlo, 'Courier New', monospace;
+  /* R-100 新增：像素字体（游戏画布 / 像素徽章 / Phaser BitmapText 用） */
+  --pyt-font-pixel: 'Zpix', 'Ark Pixel 12', var(--pyt-font-sans);
+  --pyt-font-pixel-mono: 'Zpix', 'Ark Pixel 12 Mono', var(--pyt-font-mono);
+  /* 统一标准：学习正文（讲义/答疑/大段中文）易读体——干净无衬线优先，避免像素字撑长文本。
+     字体分层规则：游戏 UI/徽章/按钮用 --pyt-font-pixel；学习内容用 --pyt-font-read。 */
+  --pyt-font-read: 'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans GB', system-ui, -apple-system,
+    'Segoe UI', 'LXGW WenKai', sans-serif;
+
+  /* 字号 */
+  --pyt-font-size-xs: 11px;
+  --pyt-font-size-sm: 12px;
+  --pyt-font-size-base: 14px;
+  --pyt-font-size-lg: 16px;
+  --pyt-font-size-xl: 20px;
+  --pyt-font-size-2xl: 24px;
+
+  /* 阴影（像素风克制使用，仅在浮层） */
+  --pyt-shadow-card: 0 2px 0 rgba(77, 54, 19, 0.12);
+  --pyt-shadow-modal: 0 6px 0 rgba(77, 54, 19, 0.16), 0 12px 24px rgba(77, 54, 19, 0.18);
+
+  /* z-index（R-13 统一层级公约；禁止 9000/9999 魔法数字，弹层一律走这些档） */
+  --pyt-z-base: 1;
+  --pyt-z-hud: 100;
+  --pyt-z-popover: 200;
+  --pyt-z-overlay: 300;
+  --pyt-z-modal: 1000;
+  --pyt-z-toast: 1100;
+  --pyt-z-debug: 1200;
+
+  /* 过渡时长（R-13 统一） */
+  --pyt-motion-fast: 80ms;
+  --pyt-motion-base: 120ms;
+  --pyt-motion-slow: 200ms;
+  --pyt-motion-slowest: 400ms;
+
+  /* 焦点环（键盘可达性，与全局 :focus-visible 对齐） */
+  --pyt-focus-ring: 2px solid #f1c453;
+
+  /* R-13 响应式断点 token（仅作记录用，@media 不能直接 var()） */
+  --pyt-bp-sm: 640px;
+  --pyt-bp-md: 1024px;
+  --pyt-bp-lg: 1280px;
+  /* R-13 画布尺寸：min 给极窄屏 fallback；max 不超过 1100px 避免远景拉伸 */
+  --pyt-canvas-min-w: 320px;
+  --pyt-canvas-max-w: 1100px;
+  --pyt-canvas-aspect: 1.5;
+  /* 3 : 2，960×640 同比 */
+}
+
+/* R-13：全局 box-sizing 与水平滚动防护，避免响应式断点临界时窄屏被横向溢出。 */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  overflow-x: clip;
+  min-height: 100dvh;
+}
+
+/* R-13 a11y：全局 :focus-visible 高亮，键盘导航时玩家能清楚看到焦点；
+   :focus（非键盘）不触发，避免鼠标点击后留下大方框。 */
+:focus-visible {
+  outline: 2px solid #f1c453;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* 浏览器拖动选择文本时不要被像素背景吞掉（黄底深字像素风可读） */
+::selection {
+  background: #ffd166;
+  color: #2a1a05;
+}
+
+html,
+body,
+#app {
+  font-family: var(--pyt-font-sans);
+  color: var(--pyt-color-text-primary);
+  background: var(--pyt-color-bg-primary);
+}
+
+button {
+  font-family: var(--pyt-font-sans);
+}
+
+code,
+pre {
+  font-family: var(--pyt-font-mono);
+}
+
+/* R-100 像素工具类：用于游戏画面外的徽章、积分、KC 标签等小尺寸像素文字 */
+.pyt-pixel-text {
+  font-family: var(--pyt-font-pixel);
+  letter-spacing: 0.5px;
+  image-rendering: pixelated;
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.pyt-pixel-code {
+  font-family: var(--pyt-font-pixel-mono);
+  letter-spacing: 0;
+  image-rendering: pixelated;
+  -webkit-font-smoothing: none;
+}
+
+/* R-100 P1-B：KC 收获庆祝特效全屏覆盖层（CSS-only，DOM 由 utils/celebrate.ts 注入） */
+.pyt-celebrate {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: var(--pyt-z-toast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  animation: pyt-celebrate-overlay 1200ms ease-out forwards;
+}
+
+.pyt-celebrate__burst {
+  width: min(80vmin, 480px);
+  height: min(80vmin, 480px);
+  background-image: url('/assets/pixel/effects/jellyfizh-confetti/Confetti.png');
+  background-repeat: no-repeat;
+  background-size: contain;
+  background-position: center;
+  image-rendering: pixelated;
+  animation: pyt-celebrate-burst 1200ms cubic-bezier(0.25, 1.4, 0.5, 1) forwards;
+  will-change: transform, opacity;
+}
+
+.pyt-celebrate__piece {
+  position: absolute;
+  top: -120px;
+  width: 72px;
+  height: 72px;
+  background-image: url('/assets/pixel/effects/jellyfizh-confetti/Confetti.png');
+  background-repeat: no-repeat;
+  background-size: 220% 220%;
+  background-position: center;
+  image-rendering: pixelated;
+  opacity: 0;
+  animation: pyt-celebrate-fall 1200ms ease-in forwards;
+  will-change: transform, opacity;
+}
+
+@keyframes pyt-celebrate-overlay {
+  0% {
+    opacity: 0;
+  }
+
+  8% {
+    opacity: 1;
+  }
+
+  82% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes pyt-celebrate-burst {
+  0% {
+    transform: scale(0.35);
+    opacity: 0;
+  }
+
+  25% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+
+  60% {
+    transform: scale(0.98);
+    opacity: 1;
+  }
+
+  100% {
+    transform: scale(1.18);
+    opacity: 0;
+  }
+}
+
+@keyframes pyt-celebrate-fall {
+  0% {
+    transform: translate(-50%, 0) rotate(0deg);
+    opacity: 0;
+  }
+
+  15% {
+    opacity: 1;
+  }
+
+  100% {
+    transform: translate(-50%, 105vh) rotate(540deg);
+    opacity: 0.2;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .pyt-celebrate__burst,
+  .pyt-celebrate__piece,
+  .pyt-celebrate {
+    animation-duration: 600ms;
+  }
+}
+
+/* ============================================================================
+ * R-13 令牌收敛：原 tokens-r12.css 合并至此（已弃用独立文件，单一来源）。
+ * 仍有 ui/ 组件（PyEmptyState / PyToast / PySkeleton）消费 --pyt-r12-* 变量；
+ * 在迁移到上方规范 --pyt-* 令牌前，这里作为兼容层确保其被正确加载。
+ * 圆角/z/motion 与上方规范档对齐（像素紧致 0/2/4/6/999）。
+ * ==========================================================================*/
+:root {
+  /* 调色板：主色 / 辅色 / 语义 / 灰阶 / 覆盖层 */
+  --pyt-r12-color-primary-50: #fef7e3;
+  --pyt-r12-color-primary-100: #fdf3d0;
+  --pyt-r12-color-primary-500: #c9a86b;
+  --pyt-r12-color-primary-900: #4d3613;
+  --pyt-r12-color-accent-gold: #d4af37;
+  --pyt-r12-color-accent-purple: #9b59b6;
+  --pyt-r12-color-accent-blue: #5bc0de;
+  --pyt-r12-color-accent-pink: #ffb7c5;
+  --pyt-r12-color-success: #6bbf59;
+  --pyt-r12-color-warning: #c2871f;
+  --pyt-r12-color-danger: #d9534f;
+  --pyt-r12-color-info: #2a6f97;
+  --pyt-r12-color-neutral: #8b6b47;
+  --pyt-r12-color-gray-50: #fff7e6;
+  --pyt-r12-color-gray-100: #f3e4be;
+  --pyt-r12-color-gray-300: #d8c293;
+  --pyt-r12-color-gray-500: #a08653;
+  --pyt-r12-color-gray-700: #6e4f1d;
+  --pyt-r12-color-gray-900: #2b1d0a;
+  --pyt-r12-overlay-soft: rgba(77, 54, 19, 0.12);
+  --pyt-r12-overlay-medium: rgba(77, 54, 19, 0.24);
+  --pyt-r12-overlay-strong: rgba(0, 0, 0, 0.55);
+  --pyt-r12-overlay-warm: rgba(212, 175, 55, 0.18);
+  --pyt-r12-overlay-night: rgba(26, 43, 92, 0.4);
+  --pyt-r12-overlay-rain: rgba(91, 192, 222, 0.08);
+
+  /* 字体 */
+  --pyt-r12-font-pixel-cn: 'Ark Pixel 12', 'LXGW WenKai', '霞鹜文楷', 'PingFang SC', system-ui, sans-serif;
+  --pyt-r12-font-pixel-en: 'Press Start 2P', 'Ark Pixel 12', 'JetBrains Mono', monospace;
+  --pyt-r12-font-mono-fallback: 'JetBrains Mono', 'Cascadia Code', 'Ark Pixel 12 Mono', Menlo, Consolas, monospace;
+  --pyt-r12-font-weight-regular: 400;
+  --pyt-r12-font-weight-bold: 700;
+
+  /* 字号 */
+  --pyt-r12-font-size-xs: 11px;
+  --pyt-r12-font-size-sm: 12px;
+  --pyt-r12-font-size-md: 14px;
+  --pyt-r12-font-size-lg: 18px;
+  --pyt-r12-font-size-xl: 24px;
+
+  /* 间距 */
+  --pyt-r12-space-0: 0;
+  --pyt-r12-space-1: 4px;
+  --pyt-r12-space-2: 8px;
+  --pyt-r12-space-3: 12px;
+  --pyt-r12-space-4: 16px;
+  --pyt-r12-space-5: 24px;
+
+  /* 圆角（与规范档对齐，像素紧致） */
+  --pyt-r12-radius-none: 0;
+  --pyt-r12-radius-sm: 2px;
+  --pyt-r12-radius-md: 4px;
+  --pyt-r12-radius-lg: 6px;
+  --pyt-r12-radius-full: 999px;
+
+  /* 阴影 */
+  --pyt-r12-shadow-card: 0 2px 0 var(--pyt-r12-overlay-soft);
+  --pyt-r12-shadow-popover: 0 4px 8px var(--pyt-r12-overlay-medium);
+  --pyt-r12-shadow-modal: 0 6px 0 var(--pyt-r12-overlay-medium), 0 12px 24px var(--pyt-r12-overlay-medium);
+  --pyt-r12-shadow-inset: inset 0 1px 0 var(--pyt-r12-overlay-soft);
+
+  /* z-index（与规范公约对齐） */
+  --pyt-r12-z-hud: 100;
+  --pyt-r12-z-popover: 200;
+  --pyt-r12-z-modal: 1000;
+  --pyt-r12-z-toast: 1100;
+  --pyt-r12-z-debug: 1200;
+
+  /* 过渡 */
+  --pyt-r12-motion-fast: 80ms;
+  --pyt-r12-motion-base: 120ms;
+  --pyt-r12-motion-slow: 200ms;
+  --pyt-r12-motion-slowest: 400ms;
+
+  /* 焦点环 */
+  --pyt-r12-focus-ring: 2px solid #f1c453;
+  --pyt-r12-focus-ring-strong: 3px solid #d4af37;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --pyt-r12-color-primary-50: #1f1810;
+    --pyt-r12-color-primary-100: #2b2114;
+    --pyt-r12-color-primary-500: #8a6c2c;
+    --pyt-r12-color-primary-900: #f3e4be;
+    --pyt-r12-color-neutral: #c4a76d;
+    --pyt-r12-color-gray-50: #2b2114;
+    --pyt-r12-color-gray-100: #3a2c1a;
+    --pyt-r12-color-gray-700: #d8c293;
+    --pyt-r12-color-gray-900: #fff7e6;
+    --pyt-r12-overlay-strong: rgba(0, 0, 0, 0.75);
+    --pyt-r12-focus-ring: 2px solid #ffd866;
+  }
+}
+
+:root[data-theme='dark'] {
+  --pyt-r12-color-primary-50: #1f1810;
+  --pyt-r12-color-primary-100: #2b2114;
+  --pyt-r12-color-primary-500: #8a6c2c;
+  --pyt-r12-color-primary-900: #f3e4be;
+  --pyt-r12-color-neutral: #c4a76d;
+  --pyt-r12-color-gray-50: #2b2114;
+  --pyt-r12-color-gray-100: #3a2c1a;
+  --pyt-r12-color-gray-700: #d8c293;
+  --pyt-r12-color-gray-900: #fff7e6;
+  --pyt-r12-overlay-strong: rgba(0, 0, 0, 0.75);
+  --pyt-r12-focus-ring: 2px solid #ffd866;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --pyt-r12-motion-fast: 40ms;
+    --pyt-r12-motion-base: 60ms;
+    --pyt-r12-motion-slow: 100ms;
+    --pyt-r12-motion-slowest: 200ms;
+  }
+}

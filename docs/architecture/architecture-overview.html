@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pythontopia Interactive Architecture</title>
+<style>
+  :root {
+    --paper: #f7f8f3;
+    --surface: #ffffff;
+    --ink: #18251f;
+    --muted: #66736d;
+    --line: #cfd9d3;
+    --green: #1f7a58;
+    --green-soft: #e1f3ea;
+    --blue: #2f6fbd;
+    --blue-soft: #e4efff;
+    --coral: #d45146;
+    --coral-soft: #ffe8e3;
+    --gold: #b98512;
+    --gold-soft: #fff2ca;
+    --violet: #7357bd;
+    --violet-soft: #eee8ff;
+    --shadow: 0 18px 50px rgba(24, 37, 31, .12);
+  }
+
+  * { box-sizing: border-box; }
+
+  html {
+    min-height: 100%;
+    background:
+      linear-gradient(rgba(31, 122, 88, .07) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(47, 111, 189, .06) 1px, transparent 1px),
+      var(--paper);
+    background-size: 28px 28px;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    color: var(--ink);
+    font-family: "Aptos", "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .page {
+    width: min(1180px, calc(100vw - 32px));
+    margin: 0 auto;
+    padding: 34px 0 44px;
+  }
+
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(320px, .65fr);
+    gap: 22px;
+    align-items: stretch;
+    margin-bottom: 20px;
+  }
+
+  .hero-main,
+  .hero-side,
+  .panel {
+    background: rgba(255, 255, 255, .88);
+    border: 1px solid rgba(24, 37, 31, .14);
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(10px);
+  }
+
+  .hero-main {
+    min-height: 238px;
+    padding: clamp(24px, 4vw, 42px);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .hero-main::after {
+    content: "";
+    position: absolute;
+    inset: auto 32px 24px auto;
+    width: min(340px, 40%);
+    height: 10px;
+    background: repeating-linear-gradient(90deg, var(--green) 0 18px, var(--gold) 18px 28px, var(--coral) 28px 36px, transparent 36px 48px);
+    opacity: .8;
+  }
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--green);
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0;
+    text-transform: uppercase;
+  }
+
+  .eyebrow::before {
+    content: "";
+    width: 36px;
+    height: 2px;
+    background: var(--green);
+  }
+
+  h1 {
+    max-width: 760px;
+    margin: 18px 0 14px;
+    font-family: "Palatino Linotype", "Noto Serif SC", "Source Han Serif SC", serif;
+    font-size: 64px;
+    line-height: .95;
+    letter-spacing: 0;
+  }
+
+  .hero-copy {
+    max-width: 760px;
+    color: #2f4039;
+    font-size: 18px;
+    line-height: 1.75;
+  }
+
+  .hero-side {
+    padding: 22px;
+    display: grid;
+    gap: 12px;
+  }
+
+  .metric {
+    border-left: 6px solid var(--green);
+    padding: 12px 14px;
+    background: var(--green-soft);
+  }
+
+  .metric:nth-child(2) {
+    border-color: var(--blue);
+    background: var(--blue-soft);
+  }
+
+  .metric:nth-child(3) {
+    border-color: var(--coral);
+    background: var(--coral-soft);
+  }
+
+  .metric strong {
+    display: block;
+    font-size: 32px;
+    line-height: 1;
+  }
+
+  .metric span {
+    display: block;
+    margin-top: 6px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  .workspace {
+    display: grid;
+    grid-template-columns: 210px minmax(0, 1fr) 320px;
+    gap: 16px;
+    align-items: start;
+  }
+
+  .panel {
+    padding: 16px;
+  }
+
+  .panel-title {
+    margin: 0 0 12px;
+    font-size: 13px;
+    color: var(--muted);
+    letter-spacing: 0;
+    text-transform: uppercase;
+  }
+
+  .segmented {
+    display: grid;
+    gap: 8px;
+  }
+
+  .segmented button,
+  .arch-node,
+  .link-button {
+    appearance: none;
+    border: 1px solid rgba(24, 37, 31, .16);
+    background: var(--surface);
+    color: var(--ink);
+    cursor: pointer;
+    font: inherit;
+    transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease, background .18s ease;
+  }
+
+  .segmented button {
+    min-height: 48px;
+    padding: 10px 12px;
+    text-align: left;
+    font-weight: 800;
+  }
+
+  .segmented button span {
+    display: block;
+    margin-top: 3px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .segmented button:hover,
+  .arch-node:hover,
+  .link-button:hover {
+    transform: translateY(-1px);
+    border-color: var(--green);
+    box-shadow: 0 10px 24px rgba(31, 122, 88, .14);
+  }
+
+  .segmented button.active {
+    border-color: var(--green);
+    background: var(--green-soft);
+  }
+
+  .map-panel {
+    min-height: 650px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .map-panel::before {
+    content: "";
+    position: absolute;
+    inset: 16px;
+    border: 1px dashed rgba(24, 37, 31, .16);
+    pointer-events: none;
+  }
+
+  .map-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: start;
+    margin-bottom: 14px;
+  }
+
+  .map-title {
+    margin: 0;
+    font-family: "Palatino Linotype", "Noto Serif SC", serif;
+    font-size: 34px;
+  }
+
+  .map-subtitle {
+    margin: 6px 0 0;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  .map-canvas {
+    position: relative;
+    min-height: 530px;
+    border: 1px solid rgba(24, 37, 31, .12);
+    background:
+      linear-gradient(135deg, rgba(31, 122, 88, .08), transparent 32%),
+      linear-gradient(315deg, rgba(212, 81, 70, .08), transparent 38%),
+      rgba(255, 255, 255, .75);
+  }
+
+  .connector-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  .connector {
+    stroke: rgba(24, 37, 31, .22);
+    stroke-width: 2;
+    stroke-dasharray: 8 8;
+  }
+
+  .connector.hot {
+    stroke: var(--green);
+    stroke-width: 3;
+    stroke-dasharray: none;
+  }
+
+  .arch-node {
+    position: absolute;
+    width: clamp(138px, 18vw, 188px);
+    min-height: 78px;
+    padding: 12px;
+    text-align: left;
+    box-shadow: 0 12px 28px rgba(24, 37, 31, .12);
+  }
+
+  .arch-node strong {
+    display: block;
+    font-size: 15px;
+  }
+
+  .arch-node span {
+    display: block;
+    margin-top: 6px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .arch-node.active {
+    outline: 3px solid rgba(31, 122, 88, .25);
+    border-color: var(--green);
+    background: var(--green-soft);
+  }
+
+  .arch-node.dimmed {
+    opacity: .5;
+  }
+
+  .node-web { left: 6%; top: 9%; border-top: 6px solid var(--green); }
+  .node-api { left: 38%; top: 10%; border-top: 6px solid var(--gold); }
+  .node-judge { left: 70%; top: 11%; border-top: 6px solid var(--coral); }
+  .node-graph { left: 21%; top: 41%; border-top: 6px solid var(--violet); }
+  .node-rag { left: 53%; top: 42%; border-top: 6px solid var(--blue); }
+  .node-data { left: 38%; top: 74%; border-top: 6px solid var(--green); }
+
+  .detail {
+    min-height: 650px;
+    display: grid;
+    gap: 14px;
+  }
+
+  .detail-card {
+    border: 1px solid rgba(24, 37, 31, .12);
+    background: rgba(255, 255, 255, .72);
+    padding: 14px;
+  }
+
+  .detail-card h3 {
+    margin: 0;
+    font-size: 22px;
+  }
+
+  .detail-card p {
+    margin: 10px 0 0;
+    color: #33433d;
+    line-height: 1.65;
+  }
+
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .chip {
+    border: 1px solid rgba(24, 37, 31, .12);
+    background: var(--surface);
+    padding: 6px 9px;
+    color: #364840;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  .timeline {
+    display: grid;
+    gap: 10px;
+  }
+
+  .step {
+    display: grid;
+    grid-template-columns: 34px 1fr;
+    gap: 10px;
+    align-items: start;
+  }
+
+  .step b {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    background: var(--ink);
+    color: white;
+    font-size: 13px;
+  }
+
+  .step strong {
+    display: block;
+    font-size: 14px;
+  }
+
+  .step span {
+    display: block;
+    margin-top: 3px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .link-row {
+    display: grid;
+    gap: 8px;
+  }
+
+  .link-button {
+    display: block;
+    padding: 11px 12px;
+    font-weight: 800;
+    background: var(--gold-soft);
+  }
+
+  .footer-note {
+    margin-top: 18px;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.7;
+  }
+
+  @media (max-width: 1020px) {
+    .hero,
+    .workspace {
+      grid-template-columns: 1fr;
+    }
+
+    .hero-side,
+    .segmented {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .map-panel,
+    .detail {
+      min-height: auto;
+    }
+  }
+
+  @media (max-width: 680px) {
+    .page {
+      width: min(100% - 20px, 1180px);
+      padding-top: 16px;
+    }
+
+    .hero-main,
+    .hero-side,
+    .panel {
+      padding: 14px;
+    }
+
+    .hero-side,
+    .segmented {
+      grid-template-columns: 1fr;
+    }
+
+    .map-canvas {
+      min-height: 780px;
+    }
+
+    h1 {
+      font-size: 44px;
+    }
+
+    .hero-copy {
+      font-size: 16px;
+    }
+
+    .metric strong {
+      font-size: 26px;
+    }
+
+    .map-title {
+      font-size: 26px;
+    }
+
+    .connector-svg {
+      display: none;
+    }
+
+    .arch-node {
+      position: static;
+      width: 100%;
+      margin-bottom: 10px;
+    }
+  }
+</style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero" aria-labelledby="page-title">
+      <div class="hero-main">
+        <div class="eyebrow">Interactive Architecture</div>
+        <h1 id="page-title">Pythontopia 架构巡航台</h1>
+        <p class="hero-copy">
+          这是一张面向展示与技术评审的交互式系统地图：从学生小镇入口，到 Spring Boot 业务中枢，再到 Graph/RAG 智能层和课程证据底座，所有路径都围绕「真实学习证据」流动。
+        </p>
+      </div>
+      <aside class="hero-side" aria-label="项目指标">
+        <div class="metric"><strong>65 KC</strong><span>packId=43 Python 课程知识点</span></div>
+        <div class="metric"><strong>11 Agents</strong><span>资源生成、路径规划、防幻觉与安全审查</span></div>
+        <div class="metric"><strong>1 Hub</strong><span>R-14 单一中央 town_hub 学习体验</span></div>
+      </aside>
+    </section>
+
+    <section class="workspace">
+      <aside class="panel" aria-label="角色视角">
+        <p class="panel-title">View Mode</p>
+        <div class="segmented" role="tablist" aria-label="架构视角">
+          <button class="active" data-role="student" type="button" role="tab" aria-selected="true">
+            学生视角
+            <span>小镇探索、学习资源、练习提交</span>
+          </button>
+          <button data-role="teacher" type="button" role="tab" aria-selected="false">
+            教师视角
+            <span>班级任务、KC 热力图、误区诊断</span>
+          </button>
+          <button data-role="agent" type="button" role="tab" aria-selected="false">
+            Agent 视角
+            <span>编排、证据、安全、结构化产物</span>
+          </button>
+          <button data-role="ops" type="button" role="tab" aria-selected="false">
+            部署视角
+            <span>Docker、PostgreSQL、Redis、健康检查</span>
+          </button>
+        </div>
+      </aside>
+
+      <section class="panel map-panel" aria-label="系统架构地图">
+        <div class="map-header">
+          <div>
+            <h2 class="map-title" id="role-title">学生视角：学习行为进入证据闭环</h2>
+            <p class="map-subtitle" id="role-copy">学生从 Web 小镇进入课程、工坊和训练场；后端把阅读、生成、提交与复盘转成可追踪学习事件。</p>
+          </div>
+        </div>
+
+        <div class="map-canvas" id="map-canvas">
+          <svg class="connector-svg" viewBox="0 0 1000 620" preserveAspectRatio="none" aria-hidden="true">
+            <line class="connector path-web-api" x1="190" y1="115" x2="445" y2="116"></line>
+            <line class="connector path-api-judge" x1="555" y1="116" x2="770" y2="118"></line>
+            <line class="connector path-api-graph" x1="480" y1="170" x2="310" y2="300"></line>
+            <line class="connector path-api-rag" x1="535" y1="170" x2="615" y2="300"></line>
+            <line class="connector path-graph-data" x1="330" y1="370" x2="485" y2="505"></line>
+            <line class="connector path-rag-data" x1="640" y1="370" x2="540" y2="505"></line>
+          </svg>
+
+          <button class="arch-node node-web active" data-node="web" type="button">
+            <strong>Web 小镇</strong>
+            <span>Vue 3 + Phaser 3，承载 town_hub 与学习面板</span>
+          </button>
+          <button class="arch-node node-api" data-node="api" type="button">
+            <strong>Spring Boot API</strong>
+            <span>账号、画像、任务、课程、工坊、判题、班级</span>
+          </button>
+          <button class="arch-node node-judge" data-node="judge" type="button">
+            <strong>判题与沙箱</strong>
+            <span>正式提交入库，Pyodide 只做即时预览</span>
+          </button>
+          <button class="arch-node node-graph" data-node="graph" type="button">
+            <strong>Graph Agent</strong>
+            <span>多智能体资源生成、路径规划、调试引导</span>
+          </button>
+          <button class="arch-node node-rag" data-node="rag" type="button">
+            <strong>RAG 证据检索</strong>
+            <span>课件页、KC、示例与题目均可追溯</span>
+          </button>
+          <button class="arch-node node-data" data-node="data" type="button">
+            <strong>数据底座</strong>
+            <span>PostgreSQL、Redis、课程包 43、学习事件</span>
+          </button>
+        </div>
+      </section>
+
+      <aside class="panel detail" aria-label="模块详情">
+        <div class="detail-card">
+          <p class="panel-title">Focus Module</p>
+          <h3 id="node-title">Web 小镇</h3>
+          <p id="node-desc">学生在单一中央 town_hub 内完成导学、阅读、工坊、训练、Bug 矿洞和复盘，不在多图之间奔波。</p>
+          <div class="chips" id="node-chips"></div>
+        </div>
+
+        <div class="detail-card">
+          <p class="panel-title">Evidence Loop</p>
+          <div class="timeline" id="timeline"></div>
+        </div>
+
+        <div class="detail-card">
+          <p class="panel-title">Direct Links</p>
+          <div class="link-row">
+            <a class="link-button" href="../README.md">README 总览</a>
+            <a class="link-button" href="system_design.md">系统设计文档</a>
+            <a class="link-button" href="clients/api-contract.md">多端 API 契约</a>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <p class="footer-note">
+      GitHub README 不允许自定义 JavaScript，所以首页使用 Mermaid 与折叠面板；本页面用于 GitHub Pages 或本地浏览器，展示更接近真实前端产品的交互体验。
+    </p>
+  </main>
+
+<script>
+  const roles = {
+    student: {
+      title: "学生视角：学习行为进入证据闭环",
+      copy: "学生从 Web 小镇进入课程、工坊和训练场；后端把阅读、生成、提交与复盘转成可追踪学习事件。",
+      nodes: ["web", "api", "judge", "rag", "data"],
+      paths: ["path-web-api", "path-api-judge", "path-api-rag", "path-rag-data"]
+    },
+    teacher: {
+      title: "教师视角：班级任务聚合成教学诊断",
+      copy: "教师发布任务后，系统聚合 KC 掌握、完成率、高频误区与资源使用情况，形成轻量班级看板。",
+      nodes: ["web", "api", "data"],
+      paths: ["path-web-api"]
+    },
+    agent: {
+      title: "Agent 视角：生成必须经过证据与安全门",
+      copy: "Graph 服务调度多智能体产出资源，RAG 提供课件证据，GroundingCritic 与 SafetyAgent 把幻觉和泄答风险挡在入口。",
+      nodes: ["api", "graph", "rag", "data"],
+      paths: ["path-api-graph", "path-api-rag", "path-graph-data", "path-rag-data"]
+    },
+    ops: {
+      title: "部署视角：主链路可由 Docker Compose 一次拉起",
+      copy: "Backend、Graph、RAG、PostgreSQL、Redis 与 Frontend 分层运行，健康检查围绕 /healthz 与 /api/health 收束。",
+      nodes: ["web", "api", "graph", "rag", "data"],
+      paths: ["path-web-api", "path-api-graph", "path-api-rag"]
+    }
+  };
+
+  const nodes = {
+    web: {
+      title: "Web 小镇",
+      desc: "Vue 3 与 Phaser 3 共同呈现 town_hub。游戏画布负责空间感，学习内容保持可读、可复制、可引用。",
+      chips: ["Vue 3", "Phaser 3", "Pinia", "TypeScript strict"]
+    },
+    api: {
+      title: "Spring Boot API",
+      desc: "后端统一承接账号、画像、课程、任务、工坊、判题、班级与证据校验，向多端提供唯一业务真相。",
+      chips: ["Java 21", "Spring Boot", "Flyway", "DTO"]
+    },
+    judge: {
+      title: "判题与沙箱",
+      desc: "Pyodide 只做浏览器即时预览；正式提交必须进入服务端判题、入库，并驱动画像、任务和班级分析。",
+      chips: ["Server judge", "Static check", "Submission evidence"]
+    },
+    graph: {
+      title: "Graph Agent",
+      desc: "多智能体工作流生成学习资源、调试提示和路径建议，并记录 run id、agent name、证据页与安全结果。",
+      chips: ["FastAPI", "LangGraph", "11 Agents", "Structured output"]
+    },
+    rag: {
+      title: "RAG 证据检索",
+      desc: "围绕 packId=43 的课程页、KC、示例和题目检索证据；证据不足时拒绝伪造课件引用。",
+      chips: ["Course pages", "KC graph", "pgvector", "Grounding"]
+    },
+    data: {
+      title: "数据底座",
+      desc: "PostgreSQL 保存业务事实与学习事件，Redis 承载缓存，课程包 43 提供可审计的教学内容来源。",
+      chips: ["PostgreSQL", "Redis", "Course Pack 43", "Learning events"]
+    }
+  };
+
+  const timelineItems = [
+    ["01", "看", "课程页阅读或 RAG 问答产生 page_read_id 与 evidence page ids"],
+    ["02", "学", "工坊资源写入 run id、artifact、agent 与 grounding result"],
+    ["03", "练", "训练场正式提交生成 submission_id 与 verdict"],
+    ["04", "测", "KC mastery delta 驱动任务完成与路径重排"],
+    ["05", "复盘", "错因、画像与坚持度进入下一轮学习计划"]
+  ];
+
+  const roleButtons = [...document.querySelectorAll("[data-role]")];
+  const nodeButtons = [...document.querySelectorAll("[data-node]")];
+  const connectorLines = [...document.querySelectorAll(".connector")];
+  const roleTitle = document.getElementById("role-title");
+  const roleCopy = document.getElementById("role-copy");
+  const nodeTitle = document.getElementById("node-title");
+  const nodeDesc = document.getElementById("node-desc");
+  const nodeChips = document.getElementById("node-chips");
+  const timeline = document.getElementById("timeline");
+
+  function setRole(roleKey) {
+    const role = roles[roleKey];
+    roleButtons.forEach((button) => {
+      const selected = button.dataset.role === roleKey;
+      button.classList.toggle("active", selected);
+      button.setAttribute("aria-selected", selected ? "true" : "false");
+    });
+    roleTitle.textContent = role.title;
+    roleCopy.textContent = role.copy;
+    nodeButtons.forEach((button) => {
+      const included = role.nodes.includes(button.dataset.node);
+      button.classList.toggle("dimmed", !included);
+    });
+    connectorLines.forEach((line) => {
+      line.classList.toggle("hot", role.paths.some((path) => line.classList.contains(path)));
+    });
+  }
+
+  function setNode(nodeKey) {
+    const node = nodes[nodeKey];
+    nodeButtons.forEach((button) => button.classList.toggle("active", button.dataset.node === nodeKey));
+    nodeTitle.textContent = node.title;
+    nodeDesc.textContent = node.desc;
+    nodeChips.replaceChildren(...node.chips.map((chip) => {
+      const span = document.createElement("span");
+      span.className = "chip";
+      span.textContent = chip;
+      return span;
+    }));
+  }
+
+  function renderTimeline() {
+    timeline.replaceChildren(...timelineItems.map(([index, title, copy]) => {
+      const item = document.createElement("div");
+      item.className = "step";
+      item.innerHTML = `<b>${index}</b><div><strong>${title}</strong><span>${copy}</span></div>`;
+      return item;
+    }));
+  }
+
+  roleButtons.forEach((button) => button.addEventListener("click", () => setRole(button.dataset.role)));
+  nodeButtons.forEach((button) => button.addEventListener("click", () => setNode(button.dataset.node)));
+
+  renderTimeline();
+  setRole("student");
+  setNode("web");
+</script>
+</body>
+</html>

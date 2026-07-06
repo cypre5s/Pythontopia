@@ -1,0 +1,147 @@
+<view class="page">
+  <view wx:if="{{errorMsg}}" class="login__error">{{errorMsg}}</view>
+
+  <!-- 介绍 / 历史成绩 / 开考 -->
+  <block wx:if="{{phase === 'intro'}}">
+    <view class="card test__hero">
+      <view class="section-title">第 {{chapter}} 章 · 章末大测试</view>
+      <view class="muted">画像驱动预生成 · 选/判/填 + 编程题 · 限时闭卷</view>
+    </view>
+
+    <view class="card" wx:if="{{hasLatest}}">
+      <view class="section-title">历史最好成绩</view>
+      <view class="test__score-row">
+        <text class="test__score">{{latestScore}}</text>
+        <text class="muted"> / {{latestMax}}</text>
+        <text class="badge {{latestPassed ? 'badge--done' : 'badge--fail'}}">{{latestPassed ? '已通过' : '未通过'}}</text>
+      </view>
+      <view class="test__stars">本章星级：<text class="test__stars-val">{{latestStars}} ★</text></view>
+    </view>
+
+    <view class="card">
+      <view class="muted test__rules">
+        · 开考后开始倒计时，到点自动交卷。
+        · 提交前不显示答案/解析；交卷后才给每题解析。
+        · 切到后台/离开页面会被记为失焦（教师端可见）。
+      </view>
+      <button class="btn btn--block btn--primary" bindtap="onStart">开始测试</button>
+    </view>
+  </block>
+
+  <!-- 准备 / 判分 中 -->
+  <view wx:if="{{phase === 'preparing' || phase === 'submitting'}}" class="card">
+    <view class="loading">{{statusHint || '处理中…'}}</view>
+  </view>
+
+  <!-- 考试中倒计时条 -->
+  <view wx:if="{{phase === 'exam'}}" class="test__bar">
+    <text class="test__bar-title">答题中 · 第 {{attemptNo}} 次</text>
+    <text class="test__bar-time {{overtime ? 'test__bar-time--over' : ''}}">⏱ {{countdown}}</text>
+  </view>
+
+  <!-- 结果总览 -->
+  <view wx:if="{{phase === 'result'}}" class="card test__result-hero">
+    <view class="test__score-row">
+      <text class="test__score">{{resultScore}}</text>
+      <text class="muted"> / {{resultMax}}</text>
+      <text class="badge {{resultPassed ? 'badge--done' : 'badge--fail'}}">{{resultPassed ? '通过' : '未通过'}}</text>
+    </view>
+    <view class="test__stars">本章星级：<text class="test__stars-val">{{resultStars}} ★</text></view>
+  </view>
+
+  <!-- 题目（考试 / 结果共用） -->
+  <block wx:if="{{phase === 'exam' || phase === 'result'}}">
+    <view
+      wx:for="{{items}}"
+      wx:key="qid"
+      wx:for-item="q"
+      wx:for-index="qi"
+      class="card test-q {{q.graded ? (q.correct ? 'test-q--ok' : 'test-q--bad') : ''}}"
+    >
+      <view class="test-q__head">
+        <text class="test-q__no">{{q.no}}.</text>
+        <text class="test-q__kind">({{q.typeLabel}} · {{q.score}}分)</text>
+        <text wx:if="{{q.graded}}" class="badge {{q.correct ? 'badge--done' : 'badge--fail'}}">{{q.awarded}}分</text>
+      </view>
+
+      <!-- 题干 / 编程题面 -->
+      <view wx:if="{{q.type === 'CODING'}}" class="test-q__stem">
+        <view class="test-q__title">{{q.title}}</view>
+        <view class="test-q__statement">{{q.statement}}</view>
+        <view wx:for="{{q.samples}}" wx:key="no" wx:for-item="s" class="test-sample">
+          <view class="muted">样例 {{s.no}}</view>
+          <view class="code">输入：{{s.input}}</view>
+          <view class="code">输出：{{s.output}}</view>
+        </view>
+      </view>
+      <view wx:else class="test-q__stem">{{q.stem}}</view>
+
+      <!-- CHOICE -->
+      <view wx:if="{{q.type === 'CHOICE'}}" class="stage-opts">
+        <view
+          wx:for="{{q.options}}"
+          wx:key="letter"
+          wx:for-item="opt"
+          wx:for-index="oi"
+          class="stage-opt {{opt.cls}}"
+          data-q="{{qi}}"
+          data-opt="{{oi}}"
+          bindtap="onPickChoice"
+        >
+          <text class="stage-opt__mark">{{opt.letter}}</text>
+          <text class="stage-opt__text">{{opt.text}}</text>
+        </view>
+      </view>
+
+      <!-- JUDGE -->
+      <view wx:elif="{{q.type === 'JUDGE'}}" class="stage-opts">
+        <view class="stage-opt {{q.judgeTrueCls}}" data-q="{{qi}}" data-val="T" bindtap="onPickJudge">
+          <text class="stage-opt__mark">A</text><text class="stage-opt__text">正确 ✓</text>
+        </view>
+        <view class="stage-opt {{q.judgeFalseCls}}" data-q="{{qi}}" data-val="F" bindtap="onPickJudge">
+          <text class="stage-opt__mark">B</text><text class="stage-opt__text">错误 ✗</text>
+        </view>
+      </view>
+
+      <!-- FILL -->
+      <view wx:elif="{{q.type === 'FILL'}}" class="stage-fills">
+        <view wx:for="{{q.blanks}}" wx:key="i" wx:for-item="bk" class="stage-fill">
+          <text class="stage-fill__label">第 {{bk.i + 1}} 空</text>
+          <input
+            class="input stage-fill__input"
+            value="{{bk.value}}"
+            data-q="{{qi}}"
+            data-blank="{{bk.i}}"
+            bindinput="onBlankInput"
+            disabled="{{q.graded}}"
+          />
+        </view>
+      </view>
+
+      <!-- CODING -->
+      <view wx:elif="{{q.type === 'CODING'}}">
+        <textarea
+          class="textarea"
+          value="{{q.code}}"
+          data-q="{{qi}}"
+          bindinput="onCodeInput"
+          disabled="{{q.graded}}"
+          maxlength="-1"
+          auto-height
+        ></textarea>
+      </view>
+
+      <!-- 解析（仅结果态） -->
+      <view wx:if="{{q.graded}}" class="test-q__explain">
+        <view wx:if="{{q.passedCases}}" class="test-q__line">{{q.passedCases}}</view>
+        <view wx:if="{{q.correctText}}" class="test-q__line">{{q.correctText}}</view>
+        <view wx:if="{{q.explain}}" class="test-q__line muted">解析：{{q.explain}}</view>
+      </view>
+    </view>
+
+    <view class="card card--flat">
+      <button wx:if="{{phase === 'exam'}}" class="btn btn--block btn--primary" bindtap="onSubmitTap">交卷</button>
+      <button wx:else class="btn btn--block" bindtap="onBackMap">返回冒险地图</button>
+    </view>
+  </block>
+</view>

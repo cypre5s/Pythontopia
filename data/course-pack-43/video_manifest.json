@@ -1,0 +1,308 @@
+[
+  {
+    "id": 1,
+    "chapter": 1,
+    "title": "中国计算机发展史",
+    "objectid": "9f41e1603235aefd50163a1458c302d9",
+    "file": "9f41e1603235aefd50163a1458c302d9.mp4",
+    "durationSec": 460,
+    "kcCodes": []
+  },
+  {
+    "id": 2,
+    "chapter": 1,
+    "title": "中国超算",
+    "objectid": "8153085aaff3116b9d3a889cf1ba1321",
+    "file": "8153085aaff3116b9d3a889cf1ba1321.mp4",
+    "durationSec": 919,
+    "kcCodes": []
+  },
+  {
+    "id": 3,
+    "chapter": 1,
+    "title": "计算思维小游戏",
+    "objectid": "f6ef9dfbb8a7e214231fb67323d29a68",
+    "file": "f6ef9dfbb8a7e214231fb67323d29a68.mp4",
+    "durationSec": 274,
+    "kcCodes": []
+  },
+  {
+    "id": 4,
+    "chapter": 2,
+    "title": "Python语言概述",
+    "objectid": "4c5996cc515f62551f6c30fd6a2d655f",
+    "file": "4c5996cc515f62551f6c30fd6a2d655f.mp4",
+    "durationSec": 1054,
+    "kcCodes": []
+  },
+  {
+    "id": 5,
+    "chapter": 2,
+    "title": "程序编写与运行",
+    "objectid": "cf1a3270f0b39415ae18f27f1384f3c9",
+    "file": "cf1a3270f0b39415ae18f27f1384f3c9.mp4",
+    "durationSec": 982,
+    "kcCodes": []
+  },
+  {
+    "id": 6,
+    "chapter": 3,
+    "title": "二进制的小故事",
+    "objectid": "767a0ae33d6e93278453c42a1c6700ce",
+    "file": "767a0ae33d6e93278453c42a1c6700ce.mp4",
+    "durationSec": 218,
+    "kcCodes": []
+  },
+  {
+    "id": 7,
+    "chapter": 3,
+    "title": "计算机中的二进制",
+    "objectid": "836ee98ad3e4f218ff4b53112d58ed29",
+    "file": "836ee98ad3e4f218ff4b53112d58ed29.mp4",
+    "durationSec": 354,
+    "kcCodes": []
+  },
+  {
+    "id": 8,
+    "chapter": 3,
+    "title": "进制转换",
+    "objectid": "62119cbeb034f91ad266c6df3628bc61",
+    "file": "62119cbeb034f91ad266c6df3628bc61.mp4",
+    "durationSec": 142,
+    "kcCodes": []
+  },
+  {
+    "id": 9,
+    "chapter": 3,
+    "title": "数值类型",
+    "objectid": "eba17a303cd08522a0b6c7b43aff95a1",
+    "file": "eba17a303cd08522a0b6c7b43aff95a1.mp4",
+    "durationSec": 1287,
+    "kcCodes": []
+  },
+  {
+    "id": 10,
+    "chapter": 3,
+    "title": "变量的操作",
+    "objectid": "0efb5ced627f507fd4f20aeed5252613",
+    "file": "0efb5ced627f507fd4f20aeed5252613.mp4",
+    "durationSec": 947,
+    "kcCodes": []
+  },
+  {
+    "id": 11,
+    "chapter": 3,
+    "title": "运算符和表达式",
+    "objectid": "2e4fc5f29ead3bd52b9f02eab7c705d6",
+    "file": "2e4fc5f29ead3bd52b9f02eab7c705d6.mp4",
+    "durationSec": 1201,
+    "kcCodes": []
+  },
+  {
+    "id": 12,
+    "chapter": 3,
+    "title": "个十百千案例",
+    "objectid": "37a5770f56c1cdd308170fababf30032",
+    "file": "37a5770f56c1cdd308170fababf30032.mp4",
+    "durationSec": 547,
+    "kcCodes": []
+  },
+  {
+    "id": 13,
+    "chapter": 3,
+    "title": "字符串类型",
+    "objectid": "3a8e2848338e4d3033e5fa8101366e1f",
+    "file": "3a8e2848338e4d3033e5fa8101366e1f.mp4",
+    "durationSec": 1177,
+    "kcCodes": []
+  },
+  {
+    "id": 14,
+    "chapter": 3,
+    "title": "字符串格式化",
+    "objectid": "79eee4a5e9e16385c699e254608f72b3",
+    "file": "79eee4a5e9e16385c699e254608f72b3.mp4",
+    "durationSec": 1046,
+    "kcCodes": []
+  },
+  {
+    "id": 15,
+    "chapter": 3,
+    "title": "字符串格式化讲解",
+    "objectid": "8b36de3720c48ebb6262cf958b66d40b",
+    "file": "8b36de3720c48ebb6262cf958b66d40b.mp4",
+    "durationSec": 653,
+    "kcCodes": []
+  },
+  {
+    "id": 16,
+    "chapter": 4,
+    "title": "顺序结构",
+    "objectid": "8c4366013bfa6bc60a723c868ad9eee7",
+    "file": "8c4366013bfa6bc60a723c868ad9eee7.mp4",
+    "durationSec": 990,
+    "kcCodes": []
+  },
+  {
+    "id": 17,
+    "chapter": 4,
+    "title": "分支结构",
+    "objectid": "5c01b75896fadf7ed396416668238db1",
+    "file": "5c01b75896fadf7ed396416668238db1.mp4",
+    "durationSec": 1214,
+    "kcCodes": []
+  },
+  {
+    "id": 18,
+    "chapter": 4,
+    "title": "while循环",
+    "objectid": "bbceda17aecf3782eac53b3eea3725e9",
+    "file": "bbceda17aecf3782eac53b3eea3725e9.mp4",
+    "durationSec": 900,
+    "kcCodes": []
+  },
+  {
+    "id": 19,
+    "chapter": 4,
+    "title": "for循环",
+    "objectid": "9865b8aaa4572b99d6a99c983ebf9f24",
+    "file": "9865b8aaa4572b99d6a99c983ebf9f24.mp4",
+    "durationSec": 1068,
+    "kcCodes": []
+  },
+  {
+    "id": 20,
+    "chapter": 5,
+    "title": "组合数据",
+    "objectid": "a9ad30faae22015f76c36c4955ac6035",
+    "file": "a9ad30faae22015f76c36c4955ac6035.mp4",
+    "durationSec": 1231,
+    "kcCodes": []
+  },
+  {
+    "id": 21,
+    "chapter": 5,
+    "title": "列表和元组",
+    "objectid": "bb080b6bcc5440914a9d84d993e567c2",
+    "file": "bb080b6bcc5440914a9d84d993e567c2.mp4",
+    "durationSec": 1031,
+    "kcCodes": []
+  },
+  {
+    "id": 22,
+    "chapter": 5,
+    "title": "集合",
+    "objectid": "7a9a4071463756ea36d9b43178e51849",
+    "file": "7a9a4071463756ea36d9b43178e51849.mp4",
+    "durationSec": 676,
+    "kcCodes": []
+  },
+  {
+    "id": 23,
+    "chapter": 5,
+    "title": "字典",
+    "objectid": "7f7cc962003af54a5b00a53a2c562231",
+    "file": "7f7cc962003af54a5b00a53a2c562231.mp4",
+    "durationSec": 1308,
+    "kcCodes": []
+  },
+  {
+    "id": 24,
+    "chapter": 6,
+    "title": "文件的基本概念",
+    "objectid": "3f7f18648c14763f0b9e9512d48e7bc3",
+    "file": "3f7f18648c14763f0b9e9512d48e7bc3.mp4",
+    "durationSec": 1124,
+    "kcCodes": []
+  },
+  {
+    "id": 25,
+    "chapter": 6,
+    "title": "文件读写",
+    "objectid": "e1f100a43a94124364b005d0a28dfab4",
+    "file": "e1f100a43a94124364b005d0a28dfab4.mp4",
+    "durationSec": 963,
+    "kcCodes": []
+  },
+  {
+    "id": 26,
+    "chapter": 6,
+    "title": "数据文件分析",
+    "objectid": "e115840b3e1b0633965ed77cc7f1e8bc",
+    "file": "e115840b3e1b0633965ed77cc7f1e8bc.mp4",
+    "durationSec": 1345,
+    "kcCodes": []
+  },
+  {
+    "id": 27,
+    "chapter": 6,
+    "title": "词频分析",
+    "objectid": "f0b9ca5d292d366d9576c6bf67bf2c9b",
+    "file": "f0b9ca5d292d366d9576c6bf67bf2c9b.mp4",
+    "durationSec": 1280,
+    "kcCodes": []
+  },
+  {
+    "id": 28,
+    "chapter": 7,
+    "title": "函数定义与调用",
+    "objectid": "f52bf6f3d2d32841fbc88ca2e4c2a387",
+    "file": "f52bf6f3d2d32841fbc88ca2e4c2a387.mp4",
+    "durationSec": 1096,
+    "kcCodes": []
+  },
+  {
+    "id": 29,
+    "chapter": 7,
+    "title": "参数的传递",
+    "objectid": "e37f2f1c0c5de18173fb391eede09c68",
+    "file": "e37f2f1c0c5de18173fb391eede09c68.mp4",
+    "durationSec": 1160,
+    "kcCodes": []
+  },
+  {
+    "id": 30,
+    "chapter": 7,
+    "title": "变量的作用域",
+    "objectid": "6f8364380ec5dd7266d3a6c21527fa0b",
+    "file": "6f8364380ec5dd7266d3a6c21527fa0b.mp4",
+    "durationSec": 1045,
+    "kcCodes": []
+  },
+  {
+    "id": 31,
+    "chapter": 7,
+    "title": "函数的递归",
+    "objectid": "b56aecec083da0662a8b8c50881947c3",
+    "file": "b56aecec083da0662a8b8c50881947c3.mp4",
+    "durationSec": 1142,
+    "kcCodes": []
+  },
+  {
+    "id": 32,
+    "chapter": 7,
+    "title": "面向对象的概念",
+    "objectid": "5ba444448f5ae26b8daedc2819889424",
+    "file": "5ba444448f5ae26b8daedc2819889424.mp4",
+    "durationSec": 972,
+    "kcCodes": []
+  },
+  {
+    "id": 33,
+    "chapter": 7,
+    "title": "类和实例",
+    "objectid": "de617a2c6384e1d5ddc74ce37bbe58cc",
+    "file": "de617a2c6384e1d5ddc74ce37bbe58cc.mp4",
+    "durationSec": 1325,
+    "kcCodes": []
+  },
+  {
+    "id": 34,
+    "chapter": 7,
+    "title": "程序的组织和管理",
+    "objectid": "99b0a9a476d63d73ef873454909e5916",
+    "file": "99b0a9a476d63d73ef873454909e5916.mp4",
+    "durationSec": 1253,
+    "kcCodes": []
+  }
+]

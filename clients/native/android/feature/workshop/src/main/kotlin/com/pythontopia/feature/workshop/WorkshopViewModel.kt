@@ -1,0 +1,171 @@
+package com.pythontopia.feature.workshop
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.onCompletion
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+
+/**
+ * 代码工坊 ViewModel：选题 → 编辑 → POST 提交 → 轮询终态 → 刷新历史。
+ * 重复提交会先取消进行中的轮询 Job；同题重选保留用户代码。
+ * 历史列表走 `/api/submissions` CurrentUser 鉴权，客户端不传 userId。
+ */
+@HiltViewModel
+class WorkshopViewModel @Inject constructor(
+    private val repository: WorkshopRepository,
+) : ViewModel() {
+
+    private val _state = MutableStateFlow(WorkshopUiState())
+    val state: StateFlow<WorkshopUiState> = _state.asStateFlow()
+
+    private var pollingJob: Job? = null
+
+    fun openPicker() {
+        _state.update { it.copy(isPickerOpen = true, errorMessage = null) }
+        loadProblems()
+    }
+
+    fun dismissPicker() {
+        _state.update { it.copy(isPickerOpen = false) }
+    }
+
+    fun changeKcFilter(kcCode: String) {
+        if (kcCode == _state.value.kcCodeFilter) return
+        _state.update { it.copy(kcCodeFilter = kcCode, problems = emptyList()) }
+        if (_state.value.isPickerOpen) {
+            loadProblems()
+        }
+    }
+
+    fun loadProblems() {
+        viewModelScope.launch {
+            val kcCode = _state.value.kcCodeFilter
+            _state.update { it.copy(isLoadingProblems = true, errorMessage = null) }
+            val problems = repository.problems(kcCode)
+            _state.update { current ->
+                current.copy(
+                    isLoadingProblems = false,
+                    problems = problems,
+                    errorMessage = if (problems.isEmpty()) {
+                        "未拉到 $kcCode 的题目，请确认后端 /api/course/problems 已上线"
+                    } else {
+                        null
+                    },
+                )
+            }
+        }
+    }
+
+    fun selectProblem(problem: ProblemDto) {
+        _state.update { current ->
+            val keepCode = current.currentProblem?.id == problem.id && current.userCode.isNotBlank()
+            current.copy(
+                currentProblem = problem,
+                userCode = if (keepCode) current.userCode else WorkshopUiState.DEFAULT_STARTER_CODE,
+                isPickerOpen = false,
+                latestStatus = null,
+                currentSubmissionId = null,
+                errorMessage = null,
+            )
+        }
+    }
+
+    fun updateCode(text: String) {
+        _state.update { it.copy(userCode = text) }
+    }
+
+    fun submit() {
+        val snapshot = _state.value
+        val problem = snapshot.currentProblem ?: return
+        if (!snapshot.canSubmit) return
+
+        pollingJob?.cancel()
+        _state.update {
+            it.copy(
+                isSubmitting = true,
+                latestStatus = null,
+                currentSubmissionId = null,
+                errorMessage = null,
+            )
+        }
+
+        viewModelScope.launch {
+            val initial = runCatching { repository.submit(problem.id, snapshot.userCode) }
+            initial.onFailure { error ->
+                _state.update {
+                    it.copy(
+                        isSubmitting = false,
+                        errorMessage = "提交失败：${error.message ?: "网络异常"}",
+                    )
+                }
+                return@launch
+            }
+            val firstStatus = initial.getOrThrow()
+            _state.update {
+                it.copy(
+                    isSubmitting = false,
+                    currentSubmissionId = firstStatus.id,
+                    latestStatus = firstStatus,
+                    isPolling = !firstStatus.isTerminal,
+                )
+            }
+            if (!firstStatus.isTerminal) {
+                startPolling(firstStatus.id)
+            } else {
+                loadHistory()
+            }
+        }
+    }
+
+    private fun startPolling(submissionId: Long) {
+        pollingJob = viewModelScope.launch {
+            repository.pollStatus(submissionId)
+                .onEach { dto ->
+                    _state.update { it.copy(latestStatus = dto, isPolling = !dto.isTerminal) }
+                }
+                .catch { error ->
+                    _state.update {
+                        it.copy(
+                            isPolling = false,
+                            errorMessage = "轮询失败：${error.message ?: "网络异常"}",
+                        )
+                    }
+                }
+                .onCompletion { cause ->
+                    _state.update { it.copy(isPolling = false) }
+                    val terminal = _state.value.latestStatus
+                    if (cause == null && terminal != null && terminal.isTerminal) {
+                        loadHistory()
+                    }
+                }
+                .collect()
+        }
+    }
+
+    fun loadHistory() {
+        viewModelScope.launch {
+            val items = repository.history()
+            _state.update { it.copy(history = items) }
+        }
+    }
+
+    fun dismissError() {
+        _state.update { it.copy(errorMessage = null) }
+    }
+
+    override fun onCleared() {
+        pollingJob?.cancel()
+        super.onCleared()
+    }
+
+}

@@ -1,0 +1,53 @@
+{
+  "npcKey": "arena_guard",
+  "rootNodeId": "greet",
+  "nodes": {
+    "greet": {
+      "id": "greet",
+      "text": "{{playerName}}！竞技场大门已开。准备好迎接挑战了吗？",
+      "conditions": [],
+      "choices": [
+        {
+          "label": "进入竞技场",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "route",
+              "route": "/arena/1"
+            }
+          ]
+        },
+        {
+          "label": "规则是什么？",
+          "nextNodeId": "rules"
+        },
+        {
+          "label": "还没准备好",
+          "nextNodeId": null
+        }
+      ]
+    },
+    "enter": {
+      "id": "enter",
+      "text": "进入竞技场后，你要面对每章的综合挑战。完成所有子任务后可以挑战章末 Boss！",
+      "conditions": [],
+      "choices": [
+        {
+          "label": "出发！",
+          "nextNodeId": null
+        }
+      ]
+    },
+    "rules": {
+      "id": "rules",
+      "text": "每章有 5 个子任务。全部完成后解锁 Boss 战（4 阶段）。Boss 出的题越来越难，但击败后奖励丰厚！",
+      "conditions": [],
+      "choices": [
+        {
+          "label": "明白了",
+          "nextNodeId": null
+        }
+      ]
+    }
+  }
+}

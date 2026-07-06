@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "generatedAt": "2026-06-13T08:44:05.087Z",
+  "maps": [
+    {
+      "key": "town_hub",
+      "file": "town_hub.json",
+      "label": "Pythontopia 小镇",
+      "width": 50,
+      "height": 40,
+      "bgm": "bgm_town_day",
+      "tileset": "kenney_tiny_town",
+      "exits": [],
+      "spawn": {
+        "tileX": 25,
+        "tileY": 20
+      }
+    }
+  ]
+}

@@ -1,0 +1,145 @@
+<script setup lang="ts">
+import { onBeforeUnmount, onMounted, ref, computed, watch } from 'vue';
+import type { BossProblemDto } from '@/api/dto/Boss';
+
+const props = withDefaults(defineProps<{
+  problem: BossProblemDto;
+  timeLimitSeconds?: number;
+}>(), {
+  timeLimitSeconds: 30,
+});
+const code = defineModel<string>('code', { required: true });
+const emit = defineEmits<{ (e: 'timeout'): void }>();
+
+const totalSeconds = computed<number>(() =>
+  Math.max(15, Math.min(300, Math.round(props.timeLimitSeconds))),
+);
+const remaining = ref(totalSeconds.value);
+const started = ref(false);
+const expired = ref(false);
+let timer: ReturnType<typeof setInterval> | null = null;
+
+const progress = computed(() => remaining.value / totalSeconds.value);
+const initialBuggyCode = computed(() => props.problem.buggyCode ?? props.problem.starterCode ?? '');
+
+const urgency = computed<'safe' | 'warn' | 'danger'>(() => {
+  if (remaining.value > totalSeconds.value * 0.5) return 'safe';
+  if (remaining.value > totalSeconds.value * 0.18) return 'warn';
+  return 'danger';
+});
+
+watch(
+  initialBuggyCode,
+  (next) => {
+    if (!code.value.trim() && next.trim()) code.value = next;
+  },
+  { immediate: true },
+);
+
+watch(totalSeconds, (next) => {
+  if (!started.value && !expired.value) remaining.value = next;
+});
+
+function startTimer(): void {
+  if (started.value) return;
+  started.value = true;
+  remaining.value = totalSeconds.value;
+  timer = setInterval(() => {
+    remaining.value -= 1;
+    if (remaining.value <= 0) {
+      remaining.value = 0;
+      expired.value = true;
+      if (timer) clearInterval(timer);
+      timer = null;
+      emit('timeout');
+    }
+  }, 1000);
+}
+
+onMounted(() => {
+  startTimer();
+});
+
+onBeforeUnmount(() => {
+  if (timer) {
+    clearInterval(timer);
+    timer = null;
+  }
+});
+</script>
+
+<template>
+  <div
+    class="bug-mine-card"
+    :class="{ expired }"
+    data-testid="bug-mine-card"
+  >
+    <header class="card-head">
+      <span class="card-icon">[B]</span>
+      <h3>Bug 矿洞</h3>
+      <div
+        :class="['timer', `timer--${urgency}`]"
+        role="timer"
+        :aria-label="`剩余 ${remaining} 秒`"
+      >
+        <div
+          class="timer-bar"
+          :style="{ width: `${progress * 100}%` }"
+        />
+        <span class="timer-text">{{ remaining }}s</span>
+      </div>
+    </header>
+
+    <div
+      v-if="expired"
+      class="expired-overlay"
+    >
+      <p>时间到！</p>
+      <p class="expired-hint">
+        已自动提交你的当前代码。
+      </p>
+    </div>
+
+    <pre class="question">{{ problem.statement }}</pre>
+
+    <textarea
+      v-model="code"
+      data-testid="bug-mine-code"
+      rows="8"
+      :disabled="expired"
+      :placeholder="initialBuggyCode.trim() ? `# 快速修复 Bug！${totalSeconds} 秒倒计时已开始…` : '# 当前题目缺少可修复代码，请重试出题'"
+      spellcheck="false"
+      class="mine-editor"
+    />
+
+    <p class="hint">
+      限时 {{ totalSeconds }} 秒！找到 Bug 并修复代码。时间到自动提交。
+    </p>
+  </div>
+</template>
+
+<style scoped>
+/* 白色/羊皮纸亮色主题（与练习场同语言）；题面/编辑器保留终端深色例外。 */
+.bug-mine-card { display: grid; gap: 12px; position: relative; }
+.bug-mine-card.expired { opacity: 0.7; }
+.card-head { display: flex; align-items: center; gap: 8px; }
+.card-icon { font-size: 20px; }
+.card-head h3 { margin: 0; font-size: 16px; color: var(--pyt-color-text-primary); }
+.timer { position: relative; margin-left: auto; width: 120px; height: 24px; background: var(--pyt-color-bg-sunken); border: 2px solid var(--pyt-color-border); border-radius: 3px; overflow: hidden; }
+.timer-bar { position: absolute; inset: 0; background: var(--pyt-color-success); transition: width 1s linear; }
+.timer--warn .timer-bar { background: var(--pyt-color-gold); }
+.timer--danger .timer-bar { background: var(--pyt-color-danger); animation: pulse 0.5s infinite alternate; }
+.timer-text { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; height: 100%; font-size: 13px; color: #fff; font-weight: bold; text-shadow: 0 1px 1px rgba(42, 26, 5, 0.6); }
+.expired-overlay { position: absolute; inset: 0; background: rgba(77, 54, 19, 0.72); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 2; border-radius: 6px; }
+.expired-overlay p { margin: 0; font-size: 20px; color: var(--pyt-color-gold-bright); }
+.expired-hint { font-size: 13px !important; color: var(--pyt-color-bg-elevated) !important; margin-top: 8px !important; }
+.question { margin: 0; padding: 10px; background: var(--pyt-color-terminal-bg); border: 2px solid var(--pyt-color-danger); border-radius: var(--pyt-radius-sm); white-space: pre-wrap; font-size: 13px; line-height: 1.7; color: var(--pyt-color-terminal-text); }
+.mine-editor { font-family: var(--pyt-font-mono, monospace); font-size: 13px; background: var(--pyt-color-terminal-bg); color: var(--pyt-color-terminal-text); border: 2px solid var(--pyt-color-gold); border-radius: var(--pyt-radius-sm); padding: 8px; resize: vertical; min-height: 120px; }
+.mine-editor:disabled { opacity: 0.5; }
+.hint { font-size: 12px; color: var(--pyt-color-text-muted); margin: 0; }
+@keyframes pulse { from { opacity: 0.7; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .timer-bar { transition: none; }
+  .timer--danger .timer-bar { animation: none; }
+}
+</style>

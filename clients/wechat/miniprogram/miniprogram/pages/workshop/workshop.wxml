@@ -1,0 +1,89 @@
+<view class="page">
+  <view class="card card--flat">
+    <view class="section-title">百晓工坊</view>
+    <view class="muted">说一句话，自动判断「答疑 / 看视频 / 复盘 / 生成资源」，再分派到对应管线。</view>
+  </view>
+
+  <!-- 输入 -->
+  <view class="card">
+    <textarea
+      class="textarea ws-input"
+      value="{{input}}"
+      bindinput="onInput"
+      placeholder="例如：帮我做一份 for 循环讲义 / 我想复习列表 / 为什么会报 IndexError？"
+      maxlength="2000"
+      auto-height
+      disabled="{{routing}}"
+    />
+    <button
+      class="btn btn--primary btn--block"
+      loading="{{routing}}"
+      disabled="{{routing}}"
+      bindtap="onSend"
+    >{{routing ? '分析意图中…' : '发送'}}</button>
+  </view>
+
+  <view class="login__error" wx:if="{{errorMsg}}">{{errorMsg}}</view>
+
+  <!-- 意图分类结果 -->
+  <view class="card" wx:if="{{route}}">
+    <view class="row row--between">
+      <view class="section-title">意图 · {{route.intentLabel}}</view>
+      <text class="badge badge--open">置信度 {{route.confidencePct}}</text>
+    </view>
+    <view class="md-p" wx:if="{{route.focusHint}}">重点：{{route.focusHint}}</view>
+    <view class="muted" wx:if="{{route.kcText}}">知识点：{{route.kcText}}</view>
+    <view class="muted" wx:if="{{route.reason}}">理由：{{route.reason}}</view>
+  </view>
+
+  <!-- 答疑（SSE 流式） -->
+  <view class="card" wx:if="{{dispatchKind === 'ask'}}">
+    <view class="section-title">导师答疑</view>
+    <view class="muted" wx:if="{{askStreaming && askStatus}}">{{askStatus}}</view>
+    <view class="ws-answer" wx:if="{{askText}}">{{askText}}</view>
+    <view class="muted" wx:elif="{{askStreaming}}">正在生成回答…</view>
+    <view class="login__error" wx:if="{{askError}}">{{askError}}</view>
+  </view>
+
+  <!-- 资源生成 -->
+  <view class="card" wx:if="{{dispatchKind === 'resource'}}">
+    <view class="section-title">工坊资源</view>
+    <view wx:if="{{resourceLoading}}" class="loading">{{resourceStatus || '生成中（服务端多智能体 + 证据审查）…'}}</view>
+    <view class="login__error" wx:if="{{resourceError}}">{{resourceError}}</view>
+    <block wx:if="{{resource}}">
+      <view class="ws-res-title">{{resource.title}}</view>
+      <view class="ws-tags">
+        <text class="tag">{{resource.typeLabel}}</text>
+        <text class="tag">{{resource.formatLabel}}</text>
+        <text class="tag" wx:if="{{resource.kcText}}">{{resource.kcText}}</text>
+        <text class="badge {{resource.groundingClass}}">证据 {{resource.groundingLabel}}</text>
+        <text class="badge {{resource.safetyClass}}">安全 {{resource.safetyLabel}}</text>
+      </view>
+      <view class="muted" wx:if="{{resource.summary}}">{{resource.summary}}</view>
+      <block wx:if="{{resource.isMarkdown}}">
+        <block wx:for="{{resource.blocks}}" wx:key="id">
+          <view wx:if="{{item.type === 'heading'}}" class="md-heading">{{item.text}}</view>
+          <view wx:elif="{{item.type === 'code'}}" class="code">{{item.text}}</view>
+          <view wx:elif="{{item.type === 'list'}}" class="md-list">· {{item.text}}</view>
+          <view wx:else class="md-p">{{item.text}}</view>
+        </block>
+      </block>
+      <view wx:else class="code">{{resource.code}}</view>
+    </block>
+  </view>
+
+  <!-- 复盘 → 矿洞 -->
+  <view class="card" wx:if="{{dispatchKind === 'review'}}">
+    <view class="section-title">记忆矿脉复盘</view>
+    <view class="md-p">检测到复习诉求，去 Bug 矿洞按 FSRS 到期知识点做遗忘回声复盘。</view>
+    <view class="muted" wx:if="{{reviewKcText}}">建议知识点：{{reviewKcText}}</view>
+    <button class="btn btn--primary btn--block" bindtap="goMine">前往 Bug 矿洞</button>
+  </view>
+
+  <!-- 视频（外部检索，非生成） -->
+  <view class="card" wx:if="{{dispatchKind === 'video'}}">
+    <view class="section-title">B站讲解视频</view>
+    <view class="md-p">你想看视频讲解{{videoFocus ? '：' + videoFocus : ''}}。B站精选为外部检索，建议在课程页或浏览器按主题查找。</view>
+    <view class="muted" wx:if="{{videoKcText}}">建议知识点：{{videoKcText}}</view>
+  </view>
+</view>

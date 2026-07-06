@@ -1,0 +1,38 @@
+package com.pythontopia.media;
+
+import com.pythontopia.auth.security.CurrentUserPrincipal;
+import com.pythontopia.common.web.CurrentUser;
+import com.pythontopia.media.dto.AsrResponse;
+import java.io.IOException;
+import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+
+/**
+ * 语音听写端点：{@code POST /api/media/asr}（需登录，multipart 上传字段 {@code audio}）。随身助教在浏览器
+ * Web Speech API 不可用时回退到此——把录音转写为文本回填 ask 栏。任何不可用情形返回
+ * {@link AsrResponse#degraded()}（前端提示改用键盘），绝不阻塞答疑。
+ */
+@RestController
+@RequestMapping("/api/media")
+public class MediaAsrController {
+
+  private final XfyunIatService iatService;
+
+  public MediaAsrController(XfyunIatService iatService) {
+    this.iatService = iatService;
+  }
+
+  @PostMapping(value = "/asr", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  public AsrResponse transcribe(
+      @CurrentUser CurrentUserPrincipal user, @RequestParam("audio") MultipartFile audio)
+      throws IOException {
+    if (audio == null || audio.isEmpty()) {
+      return AsrResponse.unavailable();
+    }
+    return iatService.transcribe(user.userId(), audio.getBytes(), audio.getContentType());
+  }
+}

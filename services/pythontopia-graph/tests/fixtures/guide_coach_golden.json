@@ -1,0 +1,36 @@
+[
+  {
+    "name": "wa_partial_pass_prefers_trace",
+    "verdict": "WA",
+    "passed_cases": 2,
+    "total_cases": 5,
+    "consecutive_errors": 1,
+    "allowed_events": ["ERROR_FEEDBACK", "EXECUTION_TRACE", "KNOWLEDGE_REVIEW"],
+    "expected_events": ["EXECUTION_TRACE", "ERROR_FEEDBACK"],
+    "forbidden_events": ["SKELETON"]
+  },
+  {
+    "name": "ce_prefers_error_diagnosis",
+    "verdict": "CE",
+    "consecutive_errors": 1,
+    "allowed_events": ["ERROR_FEEDBACK", "KNOWLEDGE_REVIEW"],
+    "expected_events": ["ERROR_FEEDBACK"],
+    "forbidden_events": ["SKELETON", "TRANSFER"]
+  },
+  {
+    "name": "repeated_wa_lowers_load",
+    "verdict": "WA",
+    "consecutive_errors": 3,
+    "allowed_events": ["ERROR_FEEDBACK", "VISUALIZE", "PARSONS", "KNOWLEDGE_REVIEW"],
+    "expected_events": ["VISUALIZE", "PARSONS", "KNOWLEDGE_REVIEW"],
+    "forbidden_events": ["SKELETON"]
+  },
+  {
+    "name": "ac_after_retries_prefers_review",
+    "verdict": "AC",
+    "consecutive_errors": 2,
+    "allowed_events": ["AC_REVIEW", "TRANSFER"],
+    "expected_events": ["AC_REVIEW"],
+    "forbidden_events": ["ERROR_FEEDBACK", "SKELETON"]
+  }
+]

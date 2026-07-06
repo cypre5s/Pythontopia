@@ -1,0 +1,24 @@
+{
+  "teacher": {
+    "username": "demo-teacher-01",
+    "displayName": "演示教师",
+    "role": "TEACHER"
+  },
+  "students": [
+    {
+      "username": "demo-stu-01",
+      "displayName": "演示学生 Alice",
+      "role": "STUDENT"
+    },
+    {
+      "username": "demo-stu-02",
+      "displayName": "演示学生 Bob",
+      "role": "STUDENT"
+    },
+    {
+      "username": "demo-stu-03",
+      "displayName": "演示学生 Carol",
+      "role": "STUDENT"
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+.mine__metrics {
+  margin: 10rpx 0 4rpx;
+}
+
+.mine__reason {
+  font-size: 24rpx;
+  color: var(--ink-soft);
+  margin: 6rpx 0 12rpx;
+}

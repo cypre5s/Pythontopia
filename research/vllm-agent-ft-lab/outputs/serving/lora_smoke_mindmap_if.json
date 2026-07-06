@@ -1,0 +1,47 @@
+{
+  "case": {
+    "agent": "MindMapAgent",
+    "evidence_ids": [
+      "page-3-021"
+    ],
+    "expected_markers": [
+      "if",
+      "page-3-021",
+      "nodes",
+      "edges"
+    ],
+    "id": "serving-smoke-mindmap-if",
+    "kc": "if",
+    "learning_signal": "连续两次只修改输出格式，没有定位条件判断原因",
+    "max_tokens": 512,
+    "misconception_signal": "把 = 当作相等比较",
+    "system": "你是 Pythontopia 知识地图 Agent。输出 JSON：nodes,edges,prerequisites,evidence_ids。必须引用 page-3-021。不要输出 Markdown。",
+    "task_focus": "建立先修边",
+    "user": "学生把 if 条件里的 = 当作 ==，请生成一个紧凑知识图谱，帮助下一步导学。"
+  },
+  "created_at": "2026-07-02T16:18:15.189662+00:00",
+  "endpoint": "http://127.0.0.1:18094/v1",
+  "model": "pythontopia-qwen35-e1-lora",
+  "raw_response": "{\n  \"nodes\": [\n    {\n      \"id\": \"node_if_syntax\",\n      \"label\": \"Python if 语句语法\"\n    },\n    {\n      \"id\": \"node_equality_op\",\n      \"label\": \"等号运算符 (=)\"\n    },\n    {\n      \"id\": \"node_identity_op\",\n      \"label\": \"双等号运算符 (==)\"\n    }\n  ],\n  \"edges\": [\n    {\n      \"source\": \"node_if_syntax\",\n      \"target\": \"node_equality_op\",\n      \"label\": \"误用\"\n    },\n    {\n      \"source\": \"node_if_syntax\",\n      \"target\": \"node_identity_op\",\n      \"label\": \"正确用法\"\n    }\n  ],\n  \"prerequisites\": [\n    \"page-3-021\"\n  ],\n  \"evidence_ids\": [\n    \"page-3-021\"\n  ]\n}",
+  "raw_score": {
+    "agent": "MindMapAgent",
+    "case_id": "serving-smoke-mindmap-if",
+    "expectation_count": 4,
+    "forbidden_leak": false,
+    "grounding_safe": true,
+    "json_valid": true,
+    "matched_expectations": 4,
+    "score": 1.0
+  },
+  "repaired_response": "{\"edges\": [{\"label\": \"误用\", \"source\": \"node_if_syntax\", \"target\": \"node_equality_op\"}, {\"label\": \"正确用法\", \"source\": \"node_if_syntax\", \"target\": \"node_identity_op\"}], \"evidence_ids\": [\"page-3-021\"], \"grounding_note\": \"courseware_evidence\", \"nodes\": [{\"id\": \"node_if_syntax\", \"label\": \"Python if 语句语法\"}, {\"id\": \"node_equality_op\", \"label\": \"等号运算符 (=)\"}, {\"id\": \"node_identity_op\", \"label\": \"双等号运算符 (==)\"}], \"prerequisites\": [\"page-3-021\"]}",
+  "repaired_score": {
+    "agent": "MindMapAgent",
+    "case_id": "serving-smoke-mindmap-if",
+    "expectation_count": 4,
+    "forbidden_leak": false,
+    "grounding_safe": true,
+    "json_valid": true,
+    "matched_expectations": 4,
+    "score": 1.0
+  }
+}

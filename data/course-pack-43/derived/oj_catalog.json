@@ -1,0 +1,400 @@
+{
+  "_meta": {
+    "purpose": "R-14 主线 OJ 覆盖层（safe 模式，不改 course_problem.id）",
+    "source": "data/course-pack-43/json/course_problem.json",
+    "count": 39,
+    "note": "display_no 按 (chapter, stage_index, problem_id) 稳定排序生成 OJ-01..OJ-39"
+  },
+  "catalog": [
+    {
+      "problem_id": 476,
+      "display_no": "OJ-01",
+      "display_name": "圆面积计算",
+      "kc_code": "PY43-KC-016",
+      "kc_name": "程序运行原理",
+      "chapter": 2,
+      "stage_index": 3,
+      "used_fallback": false
+    },
+    {
+      "problem_id": 477,
+      "display_no": "OJ-02",
+      "display_name": "个十百千获取",
+      "kc_code": "PY43-KC-025",
+      "kc_name": "整数位数提取",
+      "chapter": 3,
+      "stage_index": 3,
+      "used_fallback": false
+    },
+    {
+      "problem_id": 478,
+      "display_no": "OJ-03",
+      "display_name": "将单个大写字母加密",
+      "kc_code": "PY43-KC-022",
+      "kc_name": "字符串处理方法",
+      "chapter": 3,
+      "stage_index": 4,
+      "used_fallback": false
+    },
+    {
+      "problem_id": 479,
+      "display_no": "OJ-04",
+      "display_name": "获取星期字符串",
+      "kc_code": "PY43-KC-024",
+      "kc_name": "字符串索引与切片",
+      "chapter": 3,
+      "stage_index": 4,
+      "used_fallback": false
+    },
+    {
+      "problem_id": 487,
+      "display_no": "OJ-05",
+      "display_name": "三角形判断",
+      "kc_code": "PY43-KC-035",
+      "kc_name": "多条件判断与逻辑运算",
+      "chapter": 4,
+      "stage_index": 1,
+      "used_fallback": false
+    },
+    {
+      "problem_id": 488,
+      "display_no": "OJ-06",
+      "display_name": "圆周长和面积计算",
+      "kc_code": "PY43-KC-038",
+      "kc_name": "顺序结构",
+      "chapter": 4,
+      "stage_index": 1,
+      "used_fallback": false
+    },
+    {
+      "problem_id": 489,
+      "display_no": "OJ-07",
+      "display_name": "平均成绩计算",
+      "kc_code": "PY43-KC-038",
+      "kc_name": "顺序结构",
+      "chapter": 4,
+      "stage_index": 1,
+      "used_fallback": false
+    },
+    {
+      "problem_id": 490,
+      "display_no": "OJ-08",
+      "display_name": "年历输出",
+      "kc_code": "PY43-KC-038",
+      "kc_name": "顺序结构",
+      "chapter": 4,
+      "stage_index": 1,
+      "used_fallback": false
+    },
+    {
+      "problem_id": 492,
+      "display_no": "OJ-09",
+      "display_name": "考试成绩判断",
+      "kc_code": "PY43-KC-033",
+      "kc_name": "分支结构",
+      "chapter": 4,
+      "stage_index": 1,
+      "used_fallback": false
+    },
+    {
+      "problem_id": 480,
+      "display_no": "OJ-10",
+      "display_name": "计算π的近似值",
+      "kc_code": "PY43-KC-032",
+      "kc_name": "while循环与循环分支结合",
+      "chapter": 4,
+      "stage_index": 2,
+      "used_fallback": false
+    },
+    {
+      "problem_id": 481,
+      "display_no": "OJ-11",
+      "display_name": "自然数偶数之和",
+      "kc_code": "PY43-KC-031",
+      "kc_name": "for循环与遍历",
+      "chapter": 4,
+      "stage_index": 2,
+      "used_fallback": false
+    },
+    {
+      "problem_id": 483,
+      "display_no": "OJ-12",
+      "display_name": "编写程序，从键盘输入密码",
+      "kc_code": "PY43-KC-037",
+      "kc_name": "循环控制语句",
+      "chapter": 4,
+      "stage_index": 2,
+      "used_fallback": false
+    },
+    {
+      "problem_id": 484,
+      "display_no": "OJ-13",
+      "display_name": "编写程序，随机产生色子的一面（数字1～6），给用户三次猜测机会",
+      "kc_code": "PY43-KC-037",
+      "kc_name": "循环控制语句",
+      "chapter": 4,
+      "stage_index": 2,
+      "used_fallback": false
+    },
+    {
+      "problem_id": 493,
+      "display_no": "OJ-14",
+      "display_name": "使用for语句计算自然数之和",
+      "kc_code": "PY43-KC-031",
+      "kc_name": "for循环与遍历",
+      "chapter": 4,
+      "stage_index": 2,
+      "used_fallback": false
+    },
+    {
+      "problem_id": 482,
+      "display_no": "OJ-15",
+      "display_name": "九九乘法表",
+      "kc_code": "PY43-KC-036",
+      "kc_name": "循环嵌套",
+      "chapter": 4,
+      "stage_index": 3,
+      "used_fallback": false
+    },
+    {
+      "problem_id": 485,
+      "display_no": "OJ-16",
+      "display_name": "三角形图案",
+      "kc_code": "PY43-KC-036",
+      "kc_name": "循环嵌套",
+      "chapter": 4,
+      "stage_index": 3,
+      "used_fallback": false
+    },
+    {
+      "problem_id": 486,
+      "display_no": "OJ-17",
+      "display_name": "BMI 指标计算",
+      "kc_code": "PY43-KC-034",
+      "kc_name": "分支语句嵌套",
+      "chapter": 4,
+      "stage_index": 3,
+      "used_fallback": false
+    },
+    {
+      "problem_id": 491,
+      "display_no": "OJ-18",
+      "display_name": "用户登录",
+      "kc_code": "PY43-KC-034",
+      "kc_name": "分支语句嵌套",
+      "chapter": 4,
+      "stage_index": 3,
+      "used_fallback": false
+    },
+    {
+      "problem_id": 494,
+      "display_no": "OJ-19",
+      "display_name": "开发一个小型计算器",
+      "kc_code": "PY43-KC-034",
+      "kc_name": "分支语句嵌套",
+      "chapter": 4,
+      "stage_index": 3,
+      "used_fallback": false
+    },
+    {
+      "problem_id": 495,
+      "display_no": "OJ-20",
+      "display_name": "小型计算器",
+      "kc_code": "PY43-KC-034",
+      "kc_name": "分支语句嵌套",
+      "chapter": 4,
+      "stage_index": 3,
+      "used_fallback": false
+    },
+    {
+      "problem_id": 496,
+      "display_no": "OJ-21",
+      "display_name": "猜数字游戏",
+      "kc_code": "PY43-KC-034",
+      "kc_name": "分支语句嵌套",
+      "chapter": 4,
+      "stage_index": 3,
+      "used_fallback": false
+    },
+    {
+      "problem_id": 497,
+      "display_no": "OJ-22",
+      "display_name": "成绩统计 V1（A B F 字典统计）",
+      "kc_code": "PY43-KC-041",
+      "kc_name": "字典在实际问题中的应用",
+      "chapter": 5,
+      "stage_index": 2,
+      "used_fallback": false
+    },
+    {
+      "problem_id": 498,
+      "display_no": "OJ-23",
+      "display_name": "成绩统计 V2（带格式化输出）",
+      "kc_code": "PY43-KC-041",
+      "kc_name": "字典在实际问题中的应用",
+      "chapter": 5,
+      "stage_index": 2,
+      "used_fallback": false
+    },
+    {
+      "problem_id": 499,
+      "display_no": "OJ-24",
+      "display_name": "手机通讯录管理",
+      "kc_code": "PY43-KC-041",
+      "kc_name": "字典在实际问题中的应用",
+      "chapter": 5,
+      "stage_index": 2,
+      "used_fallback": false
+    },
+    {
+      "problem_id": 500,
+      "display_no": "OJ-25",
+      "display_name": "统计需要取快递人员的名单",
+      "kc_code": "PY43-KC-047",
+      "kc_name": "集合类型",
+      "chapter": 5,
+      "stage_index": 3,
+      "used_fallback": false
+    },
+    {
+      "problem_id": 501,
+      "display_no": "OJ-26",
+      "display_name": "交集",
+      "kc_code": "PY43-KC-047",
+      "kc_name": "集合类型",
+      "chapter": 5,
+      "stage_index": 3,
+      "used_fallback": false
+    },
+    {
+      "problem_id": 502,
+      "display_no": "OJ-27",
+      "display_name": "差集",
+      "kc_code": "PY43-KC-047",
+      "kc_name": "集合类型",
+      "chapter": 5,
+      "stage_index": 3,
+      "used_fallback": false
+    },
+    {
+      "problem_id": 503,
+      "display_no": "OJ-28",
+      "display_name": "补集",
+      "kc_code": "PY43-KC-047",
+      "kc_name": "集合类型",
+      "chapter": 5,
+      "stage_index": 3,
+      "used_fallback": false
+    },
+    {
+      "problem_id": 504,
+      "display_no": "OJ-29",
+      "display_name": "集合类型的复合赋值操作符",
+      "kc_code": "PY43-KC-047",
+      "kc_name": "集合类型",
+      "chapter": 5,
+      "stage_index": 3,
+      "used_fallback": false
+    },
+    {
+      "problem_id": 505,
+      "display_no": "OJ-30",
+      "display_name": "词频统计问题",
+      "kc_code": "PY43-KC-053",
+      "kc_name": "词频统计",
+      "chapter": 6,
+      "stage_index": 3,
+      "used_fallback": false
+    },
+    {
+      "problem_id": 506,
+      "display_no": "OJ-31",
+      "display_name": "关键步骤3：对单词的统计值从高到低排序",
+      "kc_code": "PY43-KC-053",
+      "kc_name": "词频统计",
+      "chapter": 6,
+      "stage_index": 3,
+      "used_fallback": false
+    },
+    {
+      "problem_id": 507,
+      "display_no": "OJ-32",
+      "display_name": "筛选出租车位置数据",
+      "kc_code": "PY43-KC-049",
+      "kc_name": "基于文件的数据分析",
+      "chapter": 6,
+      "stage_index": 3,
+      "used_fallback": false
+    },
+    {
+      "problem_id": 508,
+      "display_no": "OJ-33",
+      "display_name": "统计学科等级水平",
+      "kc_code": "PY43-KC-049",
+      "kc_name": "基于文件的数据分析",
+      "chapter": 6,
+      "stage_index": 3,
+      "used_fallback": false
+    },
+    {
+      "problem_id": 509,
+      "display_no": "OJ-34",
+      "display_name": "词频统计代码实现",
+      "kc_code": "PY43-KC-053",
+      "kc_name": "词频统计",
+      "chapter": 6,
+      "stage_index": 3,
+      "used_fallback": false
+    },
+    {
+      "problem_id": 512,
+      "display_no": "OJ-35",
+      "display_name": "定义一个接收任意数量关键字参数并打印的函数",
+      "kc_code": "PY43-KC-059",
+      "kc_name": "函数参数高级用法",
+      "chapter": 7,
+      "stage_index": 1,
+      "used_fallback": false
+    },
+    {
+      "problem_id": 513,
+      "display_no": "OJ-36",
+      "display_name": "定义一个接收任意数量数字并求和的函数",
+      "kc_code": "PY43-KC-059",
+      "kc_name": "函数参数高级用法",
+      "chapter": 7,
+      "stage_index": 1,
+      "used_fallback": false
+    },
+    {
+      "problem_id": 511,
+      "display_no": "OJ-37",
+      "display_name": "计算阶乘",
+      "kc_code": "PY43-KC-061",
+      "kc_name": "函数递归",
+      "chapter": 7,
+      "stage_index": 2,
+      "used_fallback": false
+    },
+    {
+      "problem_id": 510,
+      "display_no": "OJ-38",
+      "display_name": "类和对象的创建",
+      "kc_code": "PY43-KC-064",
+      "kc_name": "类和对象基础",
+      "chapter": 7,
+      "stage_index": 5,
+      "used_fallback": false
+    },
+    {
+      "problem_id": 514,
+      "display_no": "OJ-39",
+      "display_name": "面向过程的编程",
+      "kc_code": "PY43-KC-064",
+      "kc_name": "类和对象基础",
+      "chapter": 7,
+      "stage_index": 5,
+      "used_fallback": false
+    }
+  ]
+}

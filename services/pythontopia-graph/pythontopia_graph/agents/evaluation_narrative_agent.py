@@ -1,0 +1,203 @@
+"""复盘大厅确定性叙事生成器。
+
+叙事引用的数值须来自 metrics，KC code 须来自 top_kcs；grounding 校验不通过则 status=FAILED。
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import re
+from dataclasses import dataclass
+
+from pythontopia_graph.schemas.evaluation import (
+    EvaluationNarrativeRequest,
+    EvaluationNarrativeResponse,
+    GroundingResult,
+    SafetyResult,
+)
+
+AGENT_NAME = "EvaluationNarrativeAgent"
+NUMBER_PATTERN = re.compile(r"-?\d+(?:\.\d+)?")
+KC_PATTERN = re.compile(r"PY43-KC-\d{3}")
+FORBIDDEN_WORDS = ["杀", "自残", "歧视"]
+
+
+@dataclass(frozen=True)
+class _AllowedSet:
+    numbers: frozenset[str]
+    kc_codes: frozenset[str]
+
+
+class EvaluationNarrativeAgent:
+    """将 metrics/top_kcs 编排为复盘叙事；grounding 与 safety 不通过时 status=FAILED。"""
+
+    AGENT_NAME = AGENT_NAME
+
+    def narrate(self, request: EvaluationNarrativeRequest) -> EvaluationNarrativeResponse:
+        if all(metric.value == 0 for metric in request.metrics) and not request.top_kcs:
+            return self._idle_response(request)
+
+        narrative = self._compose_narrative(request)
+        recommendations = self._compose_recommendations(request)
+        diff_explainer = self._compose_diff_explainer(request)
+
+        allowed = self._build_allowed(request)
+        narrative, recommendations, diff_explainer, grounding = self._enforce_grounding(
+            narrative, recommendations, diff_explainer, allowed
+        )
+
+        safety = self._safety_check(narrative + " " + diff_explainer)
+        signature = self._signature(request)
+        status = "SUCCESS"
+        if not safety.passed or not grounding.passed:
+            status = "FAILED"
+        return EvaluationNarrativeResponse(
+            narrative_md=narrative,
+            key_recommendations=recommendations[:5],
+            path_diff_explainer=diff_explainer,
+            safety_result=safety,
+            grounding_result=grounding,
+            deterministic_signature=signature,
+            status=status,
+        )
+
+    def _compose_narrative(self, request: EvaluationNarrativeRequest) -> str:
+        lines: list[str] = []
+        lines.append("# 本周复盘")
+        for metric in request.metrics:
+            label = self._label(metric.metric_key)
+            unit = metric.display_unit
+            lines.append(f"- {label}：{metric.value}{unit}")
+        if request.top_kcs:
+            lines.append("\n## 关键 KC")
+            for kc in request.top_kcs[:5]:
+                arrow = "↑" if kc.delta_score >= 0 else "↓"
+                lines.append(
+                    f"- {kc.kc_code} {kc.kc_name}：掌握 {kc.mastery_score:.2f} ({arrow}{abs(kc.delta_score):.2f})"
+                )
+        if request.recent_events:
+            lines.append("\n## 近期亮点")
+            for event in request.recent_events[:3]:
+                lines.append(f"- {event.event_kind}：{event.detail}")
+        return "\n".join(lines)
+
+    def _compose_recommendations(self, request: EvaluationNarrativeRequest) -> list[str]:
+        recs: list[str] = []
+        if request.profile_brief.has_recent_failures:
+            recs.append("建议优先到 Bug 矿洞修复最近失败提交，巩固薄弱点。")
+        weak = [kc for kc in request.top_kcs if kc.mastery_score < 0.5]
+        if weak:
+            kc = weak[0]
+            recs.append(f"近期重点回顾 {kc.kc_code} {kc.kc_name}，平均掌握仅 {kc.mastery_score:.2f}。")
+        improvements = [kc for kc in request.top_kcs if kc.delta_score > 0.05]
+        if improvements:
+            kc = improvements[0]
+            recs.append(f"{kc.kc_code} 进步明显（+{kc.delta_score:.2f}），保持节奏。")
+        if not recs:
+            recs.append("本周表现稳定，可尝试新的拓展阅读资源。")
+        return recs
+
+    def _compose_diff_explainer(self, request: EvaluationNarrativeRequest) -> str:
+        if not request.top_kcs:
+            return "新路径相比当前路径变化不大，建议保留原路径。"
+        weak = [kc for kc in request.top_kcs if kc.mastery_score < 0.5]
+        focus = ", ".join(kc.kc_code for kc in weak[:3]) or "近期高进步 KC"
+        return f"新路径会把节奏调整到 {focus}，删去已掌握 KC 的重复练习。"
+
+    def _enforce_grounding(
+        self,
+        narrative: str,
+        recommendations: list[str],
+        diff: str,
+        allowed: _AllowedSet,
+    ) -> tuple[str, list[str], str, GroundingResult]:
+        text = "\n".join([narrative, diff, *recommendations])
+        # 先校验 KC 白名单，再抹除 KC 文本，避免嵌入数字（如 PY43-KC-001 中的 43）被重复计为叙事数字。
+        unknown_kc: list[str] = []
+        for kc in KC_PATTERN.findall(text):
+            if kc not in allowed.kc_codes:
+                unknown_kc.append(kc)
+        scrubbed_text = KC_PATTERN.sub(" ", text)
+        unknown_numbers: list[str] = []
+        for number in NUMBER_PATTERN.findall(scrubbed_text):
+            if number not in allowed.numbers:
+                unknown_numbers.append(number)
+        passed = not unknown_numbers and not unknown_kc
+        result = GroundingResult(
+            passed=passed,
+            reasons=[] if passed else ["narrative references untracked numbers or KCs"],
+            unknown_numbers=sorted(set(unknown_numbers)),
+            unknown_kc=sorted(set(unknown_kc)),
+        )
+        return narrative, recommendations, diff, result
+
+    def _safety_check(self, text: str) -> SafetyResult:
+        for word in FORBIDDEN_WORDS:
+            if word in text:
+                return SafetyResult(passed=False, reasons=[f"forbidden word: {word}"])
+        return SafetyResult(passed=True)
+
+    def _signature(self, request: EvaluationNarrativeRequest) -> str:
+        payload = request.model_dump(mode="json")
+        encoded = json.dumps(payload, sort_keys=True).encode("utf-8")
+        return hashlib.sha256(encoded).hexdigest()
+
+    def _build_allowed(self, request: EvaluationNarrativeRequest) -> _AllowedSet:
+        numbers: set[str] = set()
+        for metric in request.metrics:
+            for value in (metric.value, metric.numerator, metric.denominator):
+                numbers.update(self._number_aliases(value))
+            numbers.update(self._number_aliases(round(metric.value, 2)))
+        for kc in request.top_kcs:
+            for value in (kc.mastery_score, kc.delta_score, abs(kc.delta_score)):
+                numbers.update(self._number_aliases(value))
+                numbers.update(self._number_aliases(round(value, 2)))
+        # 输入事件 detail 内出现的数字属于"真实事件锚点"，narrative 可以原样引用。
+        for event in request.recent_events:
+            for token in NUMBER_PATTERN.findall(KC_PATTERN.sub(" ", event.detail or "")):
+                numbers.add(token)
+        return _AllowedSet(
+            numbers=frozenset(numbers),
+            kc_codes=frozenset(kc.kc_code for kc in request.top_kcs),
+        )
+
+    def _number_aliases(self, value: float) -> list[str]:
+        """同一数值在 narrative 里有多种字符串形态，全部纳入白名单，避免 grounding 把
+        确有出处的合法数字按格式差异误判为「未追踪」而整单 422：
+
+        * metrics 行用 ``{value}`` 直接渲染 → 原始 ``str(value)``（如 ``1.0`` / ``0.0`` /
+          ``5.888`` / ``0.3333``）；
+        * 整数值再补整数形态（``1.0`` → ``1``）；
+        * KC 行用 ``{:.2f}`` 渲染 → 两位小数形态（``0.70`` / ``0.00``）及其去尾零形态。
+        """
+        aliases: set[str] = {str(value)}
+        if value == int(value):
+            aliases.add(str(int(value)))
+        formatted = f"{value:.2f}"
+        aliases.add(formatted)
+        aliases.add(formatted.rstrip("0").rstrip("."))
+        return [alias for alias in aliases if alias]
+
+    def _idle_response(self, request: EvaluationNarrativeRequest) -> EvaluationNarrativeResponse:
+        narrative = "# 本周复盘\n- 近期无活动\n本周指标全部为 0，建议先完成一次画像访谈或在知识田种 KC。"
+        return EvaluationNarrativeResponse(
+            narrative_md=narrative,
+            key_recommendations=["先进入画像屋完成访谈。", "在知识田种植第一个 KC。"],
+            path_diff_explainer="近期无数据，新路径保持系统默认。",
+            safety_result=SafetyResult(passed=True),
+            grounding_result=GroundingResult(passed=True),
+            deterministic_signature=self._signature(request),
+            status="PARTIAL",
+        )
+
+    def _label(self, metric_key: str) -> str:
+        labels = {
+            "kc_mastery_total": "KC 总掌握度",
+            "kc_mastery_delta_total": "KC 掌握增量",
+            "practice_pass_rate": "练习通过率",
+            "bug_mine_resolve_rate": "Bug 矿洞修复率",
+            "profile_confidence_delta": "画像置信度提升",
+            "resource_consumption_count": "资源消化数",
+        }
+        return labels.get(metric_key, metric_key)

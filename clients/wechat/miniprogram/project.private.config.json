@@ -1,0 +1,8 @@
+{
+  "description": "个人本地配置，覆盖 project.config.json。开发时关闭域名校验以便访问 http://localhost:18080。",
+  "projectname": "pythontopia-wechat-miniprogram",
+  "setting": {
+    "urlCheck": false,
+    "compileHotReLoad": true
+  }
+}

@@ -1,0 +1,125 @@
+.bm-title {
+  font-size: 34rpx;
+  font-weight: bold;
+  color: var(--wood-dark);
+}
+
+.bm-depth {
+  margin-top: 12rpx;
+  font-size: 26rpx;
+  color: var(--ink);
+}
+
+.bm-depth__badge {
+  margin-left: 12rpx;
+}
+
+/* Markdown 渲染（与练习题面一致） */
+.md-heading {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: var(--wood-dark);
+  margin: 16rpx 0 8rpx;
+}
+
+.md-p {
+  font-size: 28rpx;
+  color: var(--ink);
+  margin: 8rpx 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.md-list {
+  font-size: 28rpx;
+  color: var(--ink);
+  margin: 6rpx 0 6rpx 12rpx;
+}
+
+.bm-sample {
+  margin-top: 12rpx;
+}
+
+/* 五层下探 */
+.bm-step {
+  border: 4rpx solid var(--wood);
+  background: #fffdf6;
+  padding: 16rpx;
+  margin-bottom: 12rpx;
+  opacity: 0.7;
+}
+
+.bm-step--on {
+  opacity: 1;
+}
+
+.bm-step--current {
+  border-color: var(--leaf-deep);
+  box-shadow: 6rpx 6rpx 0 0 rgba(60, 94, 40, 0.3);
+}
+
+.bm-step__title {
+  font-size: 28rpx;
+  font-weight: bold;
+  color: var(--ink);
+}
+
+/* 分层卡片 */
+.bm-card {
+  border: 4rpx solid var(--wood-dark);
+  background: #fffdf6;
+  padding: 16rpx;
+  margin-top: 16rpx;
+  box-shadow: 6rpx 6rpx 0 0 rgba(90, 62, 27, 0.2);
+}
+
+.bm-card__type {
+  font-size: 28rpx;
+  font-weight: bold;
+  color: var(--wood-dark);
+}
+
+.bm-row {
+  margin-top: 10rpx;
+}
+
+.bm-row__label {
+  font-size: 24rpx;
+  font-weight: bold;
+  color: var(--ink-soft);
+  margin: 10rpx 0 6rpx;
+}
+
+/* 判题结果 */
+.bm-result {
+  border: 6rpx solid var(--wood-dark);
+  padding: 16rpx;
+  margin-top: 16rpx;
+}
+
+.result--pass {
+  border-color: var(--leaf-deep);
+  background: #eef7e4;
+}
+
+.result--fail {
+  border-color: var(--berry);
+  background: #f8e6e1;
+}
+
+.bm-result__title {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: var(--ink);
+  margin-bottom: 8rpx;
+}
+
+.bm-result__row {
+  font-size: 26rpx;
+  margin-bottom: 8rpx;
+}
+
+.bm-actions {
+  display: flex;
+  gap: 20rpx;
+}

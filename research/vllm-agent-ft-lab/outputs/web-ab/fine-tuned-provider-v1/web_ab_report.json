@@ -1,0 +1,60 @@
+{
+  "ab": {
+    "raw_adapter_vs_baseline": {
+      "baseline": {
+        "forbidden_leak_rate": 0.015385,
+        "grounding_safe_rate": 0.8,
+        "json_valid_rate": 0.748718,
+        "score_mean": 0.96812
+      },
+      "candidate": {
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 0.953846,
+        "json_valid_rate": 0.94359,
+        "score_mean": 0.98906
+      },
+      "deltas": {
+        "forbidden_leak_rate": -0.015385,
+        "grounding_safe_rate": 0.153846,
+        "json_valid_rate": 0.194872,
+        "score_mean": 0.02094
+      },
+      "story_gate_passed": false
+    },
+    "repaired_vs_baseline": {
+      "baseline": {
+        "forbidden_leak_rate": 0.015385,
+        "grounding_safe_rate": 0.8,
+        "json_valid_rate": 0.748718,
+        "score_mean": 0.96812
+      },
+      "candidate": {
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "score_mean": 1.0
+      },
+      "deltas": {
+        "forbidden_leak_rate": -0.015385,
+        "grounding_safe_rate": 0.2,
+        "json_valid_rate": 0.251282,
+        "score_mean": 0.03188
+      },
+      "story_gate_passed": true
+    }
+  },
+  "recommendation": "enable_fine_tuned_provider_with_grounding_guard",
+  "serving": {
+    "adapter_model": "pythontopia-qwen35-e1-lora",
+    "models": [
+      "pythontopia-qwen35-awq-base",
+      "pythontopia-qwen35-e1-lora"
+    ]
+  },
+  "web_embedding": {
+    "entrypoint": "services/pythontopia-graph/pythontopia_graph/llm/provider.py",
+    "fallback_required": true,
+    "feature_flag": "PYT_FINE_TUNED_LLM_ENABLED",
+    "scope": "structured_json_agent_calls_only"
+  }
+}

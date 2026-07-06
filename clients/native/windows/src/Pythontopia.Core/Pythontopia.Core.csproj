@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Pythontopia.Core</RootNamespace>
+    <AssemblyName>Pythontopia.Core</AssemblyName>
+    <IsTrimmable>false</IsTrimmable>
+  </PropertyGroup>
+
+  <!-- Release hardening: ship no PDB / debug symbols (matches Pythontopia.App). -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+  </PropertyGroup>
+
+  <!--
+    Minimal dependencies: System.Text.Json / System.Net.Http ship in the BCL.
+    System.Security.Cryptography.ProtectedData is added ONLY to encrypt the cached
+    session token at rest via Windows DPAPI (CurrentUser scope). It restores/builds
+    via the WSL interop dotnet.exe; off-Windows it degrades to a plaintext fallback.
+  -->
+
+  <ItemGroup>
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Pythontopia.Core.Tests" />
+  </ItemGroup>
+
+</Project>

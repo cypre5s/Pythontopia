@@ -1,0 +1,7 @@
+body.split-dragging {
+  cursor: col-resize;
+  user-select: none;
+}
+body.split-dragging * {
+  cursor: col-resize !important;
+}

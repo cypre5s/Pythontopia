@@ -1,0 +1,21 @@
+{
+  "key": "mayor_py",
+  "name": "镇长 Py",
+  "category": "educator_core",
+  "sprite": "lpc_npc_mayor",
+  "portrait": "portrait_mayor_py.png",
+  "spawnMap": "town_hub",
+  "spawn": { "tileX": 25, "tileY": 10 },
+  "birthday": { "month": 4, "day": 1 },
+  "schedule": {
+    "monday":    [{ "from": "08:00", "map": "town_hub",    "tileX": 25, "tileY": 10 }, { "from": "14:00", "map": "town_hub",    "tileX": 16, "tileY": 12 }],
+    "tuesday":   [{ "from": "08:00", "map": "town_hub",    "tileX": 25, "tileY": 10 }, { "from": "16:00", "map": "town_hub",    "tileX": 16, "tileY": 12 }],
+    "wednesday": [{ "from": "10:00", "map": "town_hub",    "tileX": 16, "tileY": 12 }],
+    "thursday":  [{ "from": "08:00", "map": "town_hub",    "tileX": 25, "tileY": 10 }, { "from": "14:00", "map": "town_hub",    "tileX": 16, "tileY": 12 }],
+    "friday":    [{ "from": "08:00", "map": "town_hub",    "tileX": 25, "tileY": 10 }],
+    "saturday":  [{ "from": "10:00", "map": "town_hub",    "tileX": 25, "tileY": 10 }],
+    "sunday":    [{ "from": "10:00", "map": "town_hub",    "tileX": 25, "tileY": 10 }]
+  },
+  "tags": ["greeter", "path_advisor", "weekly_recap"],
+  "description": "Pythontopia 的镇长，Python 之父 Guido 的镇上化身，负责开场欢迎、整体路径建议与每周复盘提醒。"
+}

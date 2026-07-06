@@ -1,0 +1,108 @@
+.course__pack-name {
+  font-size: 34rpx;
+  font-weight: bold;
+  color: var(--wood-dark);
+}
+
+.course__stats {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: 16rpx;
+}
+
+.course__stat {
+  width: 33.33%;
+  text-align: center;
+  padding: 12rpx 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.course__stat-num {
+  font-size: 40rpx;
+  font-weight: bold;
+  color: var(--leaf-deep);
+}
+
+.course__chapter {
+  padding: 0;
+  overflow: hidden;
+}
+
+.course__chapter-head {
+  padding: 24rpx;
+  background: #efdcb8;
+}
+
+.course__chapter-title {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: var(--ink);
+}
+
+.course__caret {
+  color: var(--wood);
+  font-size: 30rpx;
+}
+
+.course__kcs {
+  padding: 20rpx 24rpx;
+}
+
+.course__chapter-summary {
+  margin-bottom: 16rpx;
+}
+
+.course__kc {
+  border: 3rpx solid var(--wood);
+  margin-bottom: 16rpx;
+  background: #fffdf6;
+}
+
+.course__kc-head {
+  padding: 18rpx;
+}
+
+.course__kc-name {
+  font-size: 26rpx;
+  color: var(--ink);
+}
+
+.course__kc-body {
+  padding: 0 18rpx 18rpx;
+}
+
+.course__kc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14rpx;
+  margin: 14rpx 0;
+}
+
+.course__page {
+  border-top: 3rpx dashed var(--wood);
+  padding-top: 14rpx;
+}
+
+.course__page-title {
+  font-weight: bold;
+  margin-bottom: 10rpx;
+  color: var(--wood-dark);
+}
+
+.course__page-img {
+  width: 100%;
+  border: 4rpx solid var(--wood-dark);
+  background: #fff;
+}
+
+.course__page-excerpt {
+  margin-top: 10rpx;
+}
+
+.course__page-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 14rpx;
+}

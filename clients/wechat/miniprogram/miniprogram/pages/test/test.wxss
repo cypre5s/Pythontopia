@@ -1,0 +1,126 @@
+.test__hero {
+  background: linear-gradient(180deg, #efdcb8 0%, #fff8ea 100%);
+}
+
+.test__rules {
+  line-height: 1.9;
+  margin-bottom: 18rpx;
+}
+
+.test__score-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12rpx;
+  margin: 8rpx 0;
+}
+
+.test__score {
+  font-size: 64rpx;
+  font-weight: bold;
+  color: var(--leaf-deep);
+}
+
+.test__stars {
+  margin-top: 8rpx;
+  color: var(--ink-soft);
+}
+
+.test__stars-val {
+  color: var(--gold);
+  font-weight: bold;
+}
+
+/* 倒计时条（粘顶） */
+.test__bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16rpx 20rpx;
+  margin-bottom: 20rpx;
+  background: var(--wood-dark);
+  color: #fff8ea;
+  border: 4rpx solid var(--ink);
+}
+
+.test__bar-title {
+  font-size: 26rpx;
+}
+
+.test__bar-time {
+  font-size: 34rpx;
+  font-weight: bold;
+  letter-spacing: 2rpx;
+}
+
+.test__bar-time--over {
+  color: #ffb3a3;
+}
+
+.test__result-hero {
+  background: linear-gradient(180deg, #eef6e8 0%, #fff8ea 100%);
+}
+
+/* 题卡 */
+.test-q__head {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  margin-bottom: 10rpx;
+}
+
+.test-q__no {
+  font-weight: bold;
+}
+
+.test-q__kind {
+  color: var(--ink-soft);
+  font-size: 24rpx;
+}
+
+.test-q__stem {
+  font-size: 28rpx;
+  line-height: 1.7;
+  color: var(--ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.test-q__title {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: var(--wood-dark);
+  margin-bottom: 6rpx;
+}
+
+.test-q__statement {
+  margin-bottom: 10rpx;
+}
+
+.test-sample {
+  margin: 10rpx 0;
+}
+
+.test-q--ok {
+  border-color: var(--leaf);
+}
+
+.test-q--bad {
+  border-color: var(--berry);
+}
+
+.test-q__explain {
+  margin-top: 14rpx;
+  padding-top: 12rpx;
+  border-top: 3rpx dashed var(--wood);
+}
+
+.test-q__line {
+  font-size: 26rpx;
+  line-height: 1.6;
+  margin-top: 6rpx;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

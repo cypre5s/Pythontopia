@@ -1,0 +1,331 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: pythontopia
+      POSTGRES_USER: ${PYT_DB_USERNAME:-pytopia}
+      POSTGRES_PASSWORD: ${PYT_DB_PASSWORD:-pytopia_dev_password}
+    ports:
+      - "15432:5432"
+    volumes:
+      - pytopia_pg:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "16379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    image: pythontopia-backend:dev
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      PYT_DB_URL: jdbc:postgresql://postgres:5432/pythontopia
+      PYT_DB_USERNAME: ${PYT_DB_USERNAME:-pytopia}
+      PYT_DB_PASSWORD: ${PYT_DB_PASSWORD:-pytopia_dev_password}
+      PYT_JWT_SECRET: ${PYT_JWT_SECRET:-replace-with-32-char-secret-please}
+      PYT_TEACHER_INVITE_CODE: ${PYT_TEACHER_INVITE_CODE:-pytopia-teacher}
+      PYTHONTOPIA_SERVICES_GRAPHURL: http://pythontopia-graph:18091
+      PYTHONTOPIA_SERVICES_RAGURL: http://pythontopia-rag:18092
+      PYTHONTOPIA_SERVICES_RAGADMINTOKEN: ${PYT_RAG_ADMIN_TOKEN:-pytopia-rag-admin}
+      # 多模态：文生图/TTS/看图答疑全部复用同一套讯飞 PYT_SPARK_* 凭据。此前后端容器未注入
+      # 这些变量，导致 ImageProperties/TtsProperties.isEnabled()=false 而恒走本地占位降级；
+      # 在此补齐后配置真实密钥即可切换为讯飞真实生成（缺失仍自动降级，不阻塞链路）。
+      PYT_SPARK_APP_ID: ${PYT_SPARK_APP_ID:-}
+      PYT_SPARK_API_KEY: ${PYT_SPARK_API_KEY:-}
+      PYT_SPARK_API_SECRET: ${PYT_SPARK_API_SECRET:-}
+      PYT_SPARK_IMAGE_URL: ${PYT_SPARK_IMAGE_URL:-https://spark-api.cn-huabei-1.xf-yun.com/v2.1/tti}
+      PYT_SPARK_IMAGE_UNDERSTANDING_URL: ${PYT_SPARK_IMAGE_UNDERSTANDING_URL:-wss://spark-api.cn-huabei-1.xf-yun.com/v2.1/image}
+      PYT_SPARK_IMAGE_UNDERSTANDING_DOMAIN: ${PYT_SPARK_IMAGE_UNDERSTANDING_DOMAIN:-imagev3}
+      PYT_MEDIA_GENERATED_DIR: ${PYT_MEDIA_GENERATED_DIR:-./data/course-pack-43/generated-media}
+      # 讯飞代理（关键踩坑）：部分宿主网络用 fake-ip DNS（如 198.18.x.x），Java HttpClient 默认
+      # 不读 HTTPS_PROXY，会致文生图(TTI)/语音合成(TTS) connect timeout 而恒降级。bridge 网络下
+      # 容器经 host.docker.internal 访问宿主代理（PYT_XFYUN_PROXY_PORT，默认 7892），nonProxyHosts
+      # 排除容器内服务名直连。代理端口留空（设 PYT_XFYUN_PROXY_PORT=""）则退化为 -Dfile.encoding 直连。
+      JAVA_OPTS: >-
+        -XX:MaxRAMPercentage=70 -Dfile.encoding=UTF-8
+        -Dhttps.proxyHost=${PYT_XFYUN_PROXY_HOST:-host.docker.internal}
+        -Dhttps.proxyPort=${PYT_XFYUN_PROXY_PORT:-7892}
+        -Dhttp.proxyHost=${PYT_XFYUN_PROXY_HOST:-host.docker.internal}
+        -Dhttp.proxyPort=${PYT_XFYUN_PROXY_PORT:-7892}
+        -Dhttp.nonProxyHosts=localhost|127.0.0.1|postgres|redis|pythontopia-graph|pythontopia-rag
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:18080:18080"
+
+  pythontopia-graph:
+    image: pythontopia-graph:dev
+    build:
+      context: ../services/pythontopia-graph
+      dockerfile: Dockerfile
+    # graph 需要访问宿主机本地代理 7892（B站/外网检索）；很多代理只监听
+    # 127.0.0.1，bridge 网络下容器无法连到。开发态让 graph 使用 host 网络，
+    # 保持 http://127.0.0.1:18091 对外入口不变。
+    network_mode: host
+    # R-13 §5 Phase 6 续：开发态把 host 源码 mount 进 /app，
+    # 容器内 sys.path 优先 /app/pythontopia_graph，因此 hot reload 走这里；
+    # site-packages 也保留原 wheel（pyproject 依赖照常工作）。
+    volumes:
+      - ../services/pythontopia-graph/pythontopia_graph:/app/pythontopia_graph:ro
+    environment:
+      PYT_LLM_PROVIDER: ${PYT_LLM_PROVIDER:-dryrun}
+      PYT_OPENAI_BASE_URL: ${PYT_OPENAI_BASE_URL:-}
+      PYT_OPENAI_API_KEY: ${PYT_OPENAI_API_KEY:-}
+      PYT_OPENAI_MODEL: ${PYT_OPENAI_MODEL:-}
+      # 快档模型（仅 NPC 寒暄/对话 NpcDialogAgent 用 model_tier=fast 选用）；留空回落默认档。
+      PYT_OPENAI_MODEL_FAST: ${PYT_OPENAI_MODEL_FAST:-}
+      # 本地微调 vLLM adapter：仅用于结构化 JSON Agent 调用；不可用时 graph 自动回退原 provider。
+      PYT_FINE_TUNED_LLM_ENABLED: ${PYT_FINE_TUNED_LLM_ENABLED:-false}
+      PYT_FINE_TUNED_BASE_URL: ${PYT_FINE_TUNED_BASE_URL:-http://127.0.0.1:18094/v1}
+      PYT_FINE_TUNED_API_KEY: ${PYT_FINE_TUNED_API_KEY:-local-dev-token}
+      PYT_FINE_TUNED_MODEL: ${PYT_FINE_TUNED_MODEL:-pythontopia-qwen35-e1-lora}
+      # R-13：OpenAiCompatProvider 读取无前缀的 OPENAI_*/LLM_* env，
+      # 这里把带 PYT_ 前缀的容器入口映射成 provider 期望的形态，
+      # 同时保留 Alethicode .env 加载兜底（见 provider.load_alethicode_env）。
+      OPENAI_BASE_URL: ${PYT_OPENAI_BASE_URL:-}
+      OPENAI_API_KEY: ${PYT_OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${PYT_OPENAI_MODEL:-}
+      OPENAI_MODEL_FAST: ${PYT_OPENAI_MODEL_FAST:-}
+      LLM_BASE_URL: ${PYT_OPENAI_BASE_URL:-}
+      LLM_API_KEY: ${PYT_OPENAI_API_KEY:-}
+      LLM_MODEL: ${PYT_OPENAI_MODEL:-}
+      LLM_MODEL_FAST: ${PYT_OPENAI_MODEL_FAST:-}
+      PYT_SPARK_APP_ID: ${PYT_SPARK_APP_ID:-}
+      PYT_SPARK_API_KEY: ${PYT_SPARK_API_KEY:-}
+      PYT_SPARK_API_SECRET: ${PYT_SPARK_API_SECRET:-}
+      PYT_SPARK_MODEL_ID: ${PYT_SPARK_MODEL_ID:-}
+      PYT_RAG_URL: http://127.0.0.1:18092
+      PYT_RAG_ADMIN_TOKEN: ${PYT_RAG_ADMIN_TOKEN:-pytopia-rag-admin}
+      PYT_BILI_PROXY: ${PYT_BILI_PROXY:-http://127.0.0.1:7892}
+      NO_PROXY: localhost,127.0.0.1,pythontopia-rag,postgres,redis
+      no_proxy: localhost,127.0.0.1,pythontopia-rag,postgres,redis
+      # ── 可观测性对账（O3 / 主契约 §3.6）：把 observability/otel.py 既有 OTel span
+      # 经 OTLP-native 导出到 Langfuse `/api/public/otel`。graph 走 host 网络，故指向
+      # 宿主回环上的 langfuse-web（compose 映射 127.0.0.1:3000）。
+      # 全部留空默认 → otel.py 检测到无 endpoint 即 no-op，主链路零影响（fail-soft）。
+      # 启用：① `docker compose --profile observability up -d` 起 Langfuse；
+      #       ② 在 .env 填 OTEL_EXPORTER_OTLP_ENDPOINT/HEADERS（见 .env.example 冒烟说明）。
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-pythontopia-graph}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-}
+      OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
+      OTEL_EXPORTER_OTLP_PROTOCOL: ${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}
+      # eval/runner 经 Langfuse REST 推分用（可选；留空=仅本地评测，不推分）。
+      LANGFUSE_HOST: ${LANGFUSE_HOST:-}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+
+  pythontopia-rag:
+    image: pythontopia-rag:dev
+    build:
+      context: ../services/pythontopia-rag
+      dockerfile: Dockerfile
+    # 开发态把 host 源码 mount 进 /app，与 pythontopia-graph 一致：
+    # 容器内 /app/pythontopia_rag 直接用 host 当前代码，避免镜像滞后于源码
+    # （如 lifespan 课件加载等改动需重启容器生效）。
+    volumes:
+      - ../services/pythontopia-rag/pythontopia_rag:/app/pythontopia_rag:ro
+    environment:
+      PYT_DB_URL: postgresql://${PYT_DB_USERNAME:-pytopia}:${PYT_DB_PASSWORD:-pytopia_dev_password}@postgres:5432/pythontopia
+      PYT_RAG_ADMIN_TOKEN: ${PYT_RAG_ADMIN_TOKEN:-pytopia-rag-admin}
+      PYT_RAG_EMBEDDER: ${PYT_RAG_EMBEDDER:-zhipu}
+      PYT_RAG_EMBEDDING_FALLBACK: ${PYT_RAG_EMBEDDING_FALLBACK:-hash}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+      EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-https://open.bigmodel.cn/api/paas/v4}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-embedding-3}
+      EMBEDDING_DIM: ${EMBEDDING_DIM:-2048}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:18092:18092"
+
+  frontend:
+    image: pythontopia-frontend:dev
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    depends_on:
+      backend:
+        condition: service_started
+    ports:
+      - "8080:80"
+
+  # ════════════════════════════════════════════════════════════════════════
+  # 可观测性（可选 profile：observability）· Langfuse 自托管 · OTLP-native
+  # ────────────────────────────────────────────────────────────────────────
+  # 仅 `docker compose --profile observability up -d` 时拉起；缺它上面 6 个核心
+  # 服务照常起停（默认 `docker compose up -d` 不含以下任何 langfuse-* 容器）。
+  # 依赖按 Langfuse 官方 v3 compose 精简，全部加 `langfuse-` 前缀与项目业务服务
+  # 隔离（不抢 postgres/redis 名字与数据卷）；内部依赖不暴露宿主端口，仅
+  # langfuse-web 绑回环 3000 供 UI 与（host 网络的）graph OTLP 上报。
+  # 拿 pk/sk：起 Langfuse 后浏览器开 http://127.0.0.1:3000 注册→建项目→API Keys，
+  # 或在 .env 预置 LANGFUSE_INIT_PROJECT_*（见 .env.example）免手动建项目。
+  # ════════════════════════════════════════════════════════════════════════
+  langfuse-worker:
+    image: langfuse/langfuse-worker:3
+    profiles: ["observability"]
+    restart: unless-stopped
+    depends_on: &langfuse-deps
+      langfuse-postgres:
+        condition: service_healthy
+      langfuse-minio:
+        condition: service_healthy
+      langfuse-redis:
+        condition: service_healthy
+      langfuse-clickhouse:
+        condition: service_healthy
+    environment: &langfuse-common-env
+      DATABASE_URL: postgresql://${LANGFUSE_POSTGRES_USER:-postgres}:${LANGFUSE_POSTGRES_PASSWORD:-langfuse}@langfuse-postgres:5432/${LANGFUSE_POSTGRES_DB:-postgres}
+      SALT: ${SALT:-pyt-langfuse-salt-CHANGEME}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-0000000000000000000000000000000000000000000000000000000000000000}
+      # Langfuse 自身匿名用量上报：默认关闭（O3 任务要求 TELEMETRY_ENABLED=false）。
+      TELEMETRY_ENABLED: ${TELEMETRY_ENABLED:-false}
+      LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: ${LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES:-false}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      CLICKHOUSE_MIGRATION_URL: ${CLICKHOUSE_MIGRATION_URL:-clickhouse://langfuse-clickhouse:9000}
+      CLICKHOUSE_URL: ${CLICKHOUSE_URL:-http://langfuse-clickhouse:8123}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-clickhouse}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse}
+      CLICKHOUSE_CLUSTER_ENABLED: ${CLICKHOUSE_CLUSTER_ENABLED:-false}
+      REDIS_HOST: langfuse-redis
+      REDIS_PORT: "6379"
+      REDIS_AUTH: ${LANGFUSE_REDIS_AUTH:-langfuse-redis}
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: ${LANGFUSE_S3_BUCKET:-langfuse}
+      LANGFUSE_S3_EVENT_UPLOAD_REGION: ${LANGFUSE_S3_REGION:-auto}
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: ${LANGFUSE_MINIO_ROOT_USER:-minio}
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${LANGFUSE_MINIO_ROOT_PASSWORD:-miniosecret}
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://langfuse-minio:9000
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
+      LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: ${LANGFUSE_S3_BUCKET:-langfuse}
+      LANGFUSE_S3_MEDIA_UPLOAD_REGION: ${LANGFUSE_S3_REGION:-auto}
+      LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: ${LANGFUSE_MINIO_ROOT_USER:-minio}
+      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${LANGFUSE_MINIO_ROOT_PASSWORD:-miniosecret}
+      LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://langfuse-minio:9000
+      LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
+
+  langfuse-web:
+    image: langfuse/langfuse:3
+    profiles: ["observability"]
+    restart: unless-stopped
+    depends_on: *langfuse-deps
+    # 仅绑回环：UI（http://127.0.0.1:3000）+ OTLP 接收口 /api/public/otel。
+    # 开发态 host 网络的 graph 经 127.0.0.1:3000 上报，无需公网暴露。
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      <<: *langfuse-common-env
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-pyt-langfuse-nextauth-CHANGEME}
+      # 可选：首启自动建组织/项目/账号并固定 pk/sk（免 UI 手动建项目）。
+      LANGFUSE_INIT_ORG_ID: ${LANGFUSE_INIT_ORG_ID:-}
+      LANGFUSE_INIT_ORG_NAME: ${LANGFUSE_INIT_ORG_NAME:-}
+      LANGFUSE_INIT_PROJECT_ID: ${LANGFUSE_INIT_PROJECT_ID:-}
+      LANGFUSE_INIT_PROJECT_NAME: ${LANGFUSE_INIT_PROJECT_NAME:-}
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_INIT_PROJECT_PUBLIC_KEY:-}
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_INIT_PROJECT_SECRET_KEY:-}
+      LANGFUSE_INIT_USER_EMAIL: ${LANGFUSE_INIT_USER_EMAIL:-}
+      LANGFUSE_INIT_USER_NAME: ${LANGFUSE_INIT_USER_NAME:-}
+      LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD:-}
+
+  langfuse-postgres:
+    image: postgres:17
+    profiles: ["observability"]
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${LANGFUSE_POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${LANGFUSE_POSTGRES_PASSWORD:-langfuse}
+      POSTGRES_DB: ${LANGFUSE_POSTGRES_DB:-postgres}
+      TZ: UTC
+      PGTZ: UTC
+    volumes:
+      - langfuse_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  langfuse-clickhouse:
+    image: clickhouse/clickhouse-server
+    profiles: ["observability"]
+    restart: unless-stopped
+    user: "101:101"
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-clickhouse}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse}
+    volumes:
+      - langfuse_clickhouse_data:/var/lib/clickhouse
+      - langfuse_clickhouse_logs:/var/log/clickhouse-server
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  langfuse-minio:
+    image: cgr.dev/chainguard/minio
+    profiles: ["observability"]
+    restart: unless-stopped
+    entrypoint: sh
+    # 启动前先建 langfuse 桶（事件/媒体对象存储）。
+    command:
+      - -c
+      - 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
+    environment:
+      MINIO_ROOT_USER: ${LANGFUSE_MINIO_ROOT_USER:-minio}
+      MINIO_ROOT_PASSWORD: ${LANGFUSE_MINIO_ROOT_PASSWORD:-miniosecret}
+    volumes:
+      - langfuse_minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  langfuse-redis:
+    image: redis:7
+    profiles: ["observability"]
+    restart: unless-stopped
+    command: >-
+      --requirepass ${LANGFUSE_REDIS_AUTH:-langfuse-redis}
+      --maxmemory-policy noeviction
+    volumes:
+      - langfuse_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pytopia_pg:
+  # Langfuse 自托管数据卷（仅 observability profile 使用）。
+  langfuse_pg:
+  langfuse_clickhouse_data:
+  langfuse_clickhouse_logs:
+  langfuse_minio_data:
+  langfuse_redis_data:

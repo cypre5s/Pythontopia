@@ -1,0 +1,1825 @@
+<script setup lang="ts">
+// Pythontopia 课件阅读器（packId=43）：三栏可拖拽分栏（左导航 | 中阅读 | 右检索），宽度记忆于 localStorage。
+// URL query 同步：?docId=&page=&kcCode=
+import { computed, onMounted, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import AppLayout from '@/app/AppLayout.vue';
+import PdfPageView from '@/components/library/PdfPageView.vue';
+import PyButton from '@/components/ui/PyButton.vue';
+import { useToastStore } from '@stores/toast';
+import {
+  answerCourseware,
+  getDocumentPage,
+  listAllExamples,
+  listAllProblems,
+  listChapterFallbacks,
+  listCourseDocuments,
+  listDocumentPages,
+  listKcFallbacks,
+  searchCourseLibrary,
+  type CoursewareCitation,
+  type CoursewareGraphTrace,
+  type CoursewareKcEdge,
+} from '@/api/courseLibrary';
+import { listChapters, listKnowledgeComponents } from '@/api/course';
+import { listChapterVideos, videoStreamUrl, type CourseVideoDto } from '@/api/courseVideo';
+import type {
+  CourseDocumentSummary,
+  CourseExampleSummary,
+  CourseKcSummary,
+  CoursePageDetail,
+  CourseProblemSummary,
+  LibrarySearchHit,
+} from '@/api/dto/Library';
+import type { ChapterDto } from '@/api/dto/ChapterDto';
+import type { KcDto } from '@/api/dto/KcDto';
+import { useLibrarySplitLayout } from '@/composables/useLibrarySplitLayout';
+import { chapterTitleLabel } from '@/utils/chapterTitleLabel';
+
+const { bodyRef, onSplitterPointerDown, paneStyle } = useLibrarySplitLayout();
+
+// 默认显示原 PDF，第二视图为课件视频；localStorage 记忆用户偏好，避免每次切回 PDF。
+type PageViewMode = 'pdf' | 'video';
+const VIEW_MODE_STORAGE_KEY = 'pyt_library_view_mode';
+function readPreferredViewMode(): PageViewMode {
+  if (typeof window === 'undefined') return 'pdf';
+  try {
+    const raw = window.localStorage.getItem(VIEW_MODE_STORAGE_KEY);
+    return raw === 'video' ? 'video' : 'pdf';
+  } catch {
+    return 'pdf';
+  }
+}
+function persistViewMode(mode: PageViewMode): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(VIEW_MODE_STORAGE_KEY, mode);
+  } catch {
+    /* 隐私模式 localStorage 不可用 */
+  }
+}
+
+function displayTitle(title: string | null | undefined): string {
+  return (title ?? '').replace(/\s+/g, ' ').replace(/\s+([（(])/g, '$1').trim();
+}
+
+interface ChapterGroup {
+  chapter: ChapterDto;
+  kcs: CourseKcSummary[];
+  documentId: number | null;
+  pageCount: number | null;
+}
+
+const route = useRoute();
+const router = useRouter();
+const toast = useToastStore();
+
+const documents = ref<CourseDocumentSummary[]>([]);
+const chapters = ref<ChapterDto[]>([]);
+const kcs = ref<CourseKcSummary[]>([]);
+const problemsList = ref<CourseProblemSummary[]>([]);
+const examplesList = ref<CourseExampleSummary[]>([]);
+
+const currentDocId = ref<number>(parseQueryNumber(route.query.docId, 186));
+const currentPage = ref<number>(parseQueryNumber(route.query.page, 1));
+const currentKcCode = ref<string | null>(
+  typeof route.query.kcCode === 'string' && route.query.kcCode ? route.query.kcCode : null,
+);
+
+const pageDetail = ref<CoursePageDetail | null>(null);
+const pageLoading = ref<boolean>(false);
+const indexLoading = ref<boolean>(true);
+const documentPageList = ref<CoursePageDetail[]>([]);
+
+const ragQuery = ref<string>('');
+const ragRunning = ref<boolean>(false);
+const ragResults = ref<LibrarySearchHit[]>([]);
+// 课件问答（LLM 作答 + 页码引用）。answer 端点不可用时回退到 ragResults 片段卡。
+const ragAnswer = ref<string>('');
+const ragCitations = ref<CoursewareCitation[]>([]);
+const ragAnswerMode = ref<boolean>(false);
+const ragHint = ref<string>('就课件内容提问，AI 依据命中课件作答并给出可跳转页码。');
+const ragRoute = ref<string | null>(null);
+const ragRetrievalMode = ref<string | null>(null);
+const ragSubgraph = ref<CoursewareKcEdge[]>([]);
+const ragGraphTrace = ref<CoursewareGraphTrace | null>(null);
+
+const ragTraceVisible = computed<boolean>(() =>
+  Boolean(ragAnswerMode.value && (ragGraphTrace.value || ragRoute.value || ragSubgraph.value.length > 0)),
+);
+const ragTraceRelationEntries = computed<[string, number][]>(() =>
+  Object.entries(ragGraphTrace.value?.relationCounts ?? {}),
+);
+
+function resetRagGraphAudit(): void {
+  ragRoute.value = null;
+  ragRetrievalMode.value = null;
+  ragSubgraph.value = [];
+  ragGraphTrace.value = null;
+}
+
+const viewMode = ref<PageViewMode>(readPreferredViewMode());
+function setViewMode(mode: PageViewMode): void {
+  if (viewMode.value === mode) return;
+  viewMode.value = mode;
+  persistViewMode(mode);
+}
+
+// 课件视频：按当前章号拉 video_manifest，优先选第一个已就绪(available)的视频；整章无视频时回退文字摘录。
+const chapterVideos = ref<CourseVideoDto[]>([]);
+const videosLoading = ref<boolean>(false);
+const selectedVideoId = ref<number | null>(null);
+const videoChapterLoaded = ref<number | null>(null);
+
+async function loadChapterVideos(chapterNo: number): Promise<void> {
+  if (videoChapterLoaded.value === chapterNo) return;
+  videosLoading.value = true;
+  try {
+    const list = await listChapterVideos(chapterNo);
+    chapterVideos.value = list;
+    videoChapterLoaded.value = chapterNo;
+    const firstReady = list.find((v) => v.available) ?? list[0] ?? null;
+    selectedVideoId.value = firstReady?.id ?? null;
+  } finally {
+    videosLoading.value = false;
+  }
+}
+
+function selectVideo(id: number): void {
+  selectedVideoId.value = id;
+}
+
+const currentVideoIndex = computed<number>(() =>
+  chapterVideos.value.findIndex((v) => v.id === selectedVideoId.value),
+);
+
+// 视频视图下「上一个 / 下一个」切片（替代 PDF 翻页语义）；列表已从底部移除。
+function gotoVideo(delta: number): void {
+  const list = chapterVideos.value;
+  if (list.length === 0) return;
+  const base = currentVideoIndex.value < 0 ? 0 : currentVideoIndex.value;
+  const target = list[base + delta];
+  if (target) selectVideo(target.id);
+}
+
+const currentDocument = computed<CourseDocumentSummary | null>(
+  () => documents.value.find((doc) => doc.documentId === currentDocId.value) ?? null,
+);
+const currentChapter = computed<ChapterDto | null>(() => {
+  if (pageDetail.value?.chapterId != null) {
+    return chapters.value.find((ch) => ch.chapterId === pageDetail.value?.chapterId) ?? null;
+  }
+  const docSortOrder = currentDocument.value?.sortOrder;
+  return docSortOrder == null
+    ? null
+    : chapters.value.find((ch) => ch.orderIndex === docSortOrder) ?? null;
+});
+const chapterNoForVideo = computed<number>(
+  () => currentChapter.value?.orderIndex ?? currentDocument.value?.sortOrder ?? 1,
+);
+const selectedVideo = computed<CourseVideoDto | null>(
+  () => chapterVideos.value.find((v) => v.id === selectedVideoId.value) ?? null,
+);
+const currentKc = computed<CourseKcSummary | null>(() => {
+  if (!currentKcCode.value) {
+    return autoActiveKc.value;
+  }
+  return kcs.value.find((kc) => kc.kcCode === currentKcCode.value) ?? null;
+});
+const autoActiveKc = computed<CourseKcSummary | null>(() => {
+  if (!pageDetail.value) {
+    return null;
+  }
+  const pageId = pageDetail.value.pageId;
+  return kcs.value.find((kc) => kc.pageRefs.includes(pageId)) ?? null;
+});
+const chapterGroups = computed<ChapterGroup[]>(() => {
+  return chapters.value
+    .slice()
+    .sort((a, b) => a.orderIndex - b.orderIndex)
+    .map((chapter) => ({
+      chapter,
+      kcs: kcs.value
+        .filter((kc) => kc.chapterId === chapter.chapterId)
+        .sort((a, b) => a.kcCode.localeCompare(b.kcCode)),
+      documentId:
+        documents.value.find((doc) => doc.sortOrder === chapter.orderIndex)?.documentId ?? null,
+      pageCount:
+        documents.value.find((doc) => doc.sortOrder === chapter.orderIndex)?.pageCount ?? null,
+    }));
+});
+
+const catalogSidebarTitle = computed<string>(() => {
+  const ch = chapters.value.length;
+  const pages = documents.value.reduce((sum, doc) => sum + doc.pageCount, 0);
+  const kc = kcs.value.length;
+  if (ch > 0 && pages > 0 && kc > 0) {
+    return `${ch} 章 · ${pages} 页 · ${kc} KC`;
+  }
+  if (ch > 0 && kc > 0) {
+    return `${ch} 章 · ${kc} KC`;
+  }
+  return '章节目录';
+});
+
+const relatedProblems = computed<CourseProblemSummary[]>(() => {
+  const code = currentKc.value?.kcCode;
+  if (!code) {
+    return [];
+  }
+  return problemsList.value.filter((p) => p.kcCode === code).slice(0, 4);
+});
+const relatedExamples = computed<CourseExampleSummary[]>(() => {
+  const code = currentKc.value?.kcCode;
+  if (!code) {
+    return [];
+  }
+  return examplesList.value.filter((ex) => ex.kcCode === code).slice(0, 4);
+});
+
+function parseQueryNumber(value: unknown, fallback: number): number {
+  if (typeof value === 'string' && /^\d+$/.test(value)) {
+    return Number(value);
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  return fallback;
+}
+
+async function loadIndex(): Promise<void> {
+  indexLoading.value = true;
+  try {
+    const [docs, chs, kcDtos, problems, examples, kcFallback] = await Promise.all([
+      listCourseDocuments(),
+      listChapters().catch((error: unknown) => {
+        toast.push({ kind: 'error', text: '章节索引接口失败，已切到 fixture 兜底。' });
+        void error;
+        return [] as ChapterDto[];
+      }),
+      listKnowledgeComponents().catch((error: unknown) => {
+        void error;
+        return [] as KcDto[];
+      }),
+      listAllProblems(),
+      listAllExamples(),
+      listKcFallbacks(),
+    ]);
+    documents.value = docs;
+    if (chs.length > 0) {
+      chapters.value = chs;
+    } else {
+      chapters.value = await listChapterFallbacks();
+    }
+    kcs.value = mergeKcFromBackend(kcDtos, kcFallback);
+    problemsList.value = problems;
+    examplesList.value = examples;
+  } finally {
+    indexLoading.value = false;
+  }
+}
+
+function mergeKcFromBackend(backend: KcDto[], fallback: CourseKcSummary[]): CourseKcSummary[] {
+  if (backend.length === 0) {
+    return fallback;
+  }
+  const fallbackByCode = new Map(fallback.map((kc) => [kc.kcCode, kc]));
+  return backend.map((kc) => {
+    const fb = fallbackByCode.get(kc.kcCode);
+    return {
+      kcId: kc.kcId,
+      packId: 43,
+      kcCode: kc.kcCode,
+      kcName: kc.kcName,
+      chapterId: kc.chapterId,
+      chapterOrder: kc.chapterOrder,
+      difficulty: kc.difficulty ?? null,
+      summary: kc.summaryMarkdown ?? fb?.summary ?? '',
+      pageRefs: fb?.pageRefs ?? [],
+    };
+  });
+}
+
+async function loadPage(docId: number, pageNo: number): Promise<void> {
+  pageLoading.value = true;
+  try {
+    const [detail, pages] = await Promise.all([
+      getDocumentPage(docId, pageNo),
+      listDocumentPages(docId),
+    ]);
+    documentPageList.value = pages;
+    pageDetail.value = detail;
+    if (!detail) {
+      toast.push({ kind: 'info', text: `课件 ${docId} 第 ${pageNo} 页暂无内容` });
+    }
+    syncQuery();
+  } catch (error) {
+    pageDetail.value = null;
+    const message = error instanceof Error ? error.message : String(error);
+    toast.push({ kind: 'error', text: `课件加载失败：${message}` });
+  } finally {
+    pageLoading.value = false;
+  }
+}
+
+function syncQuery(): void {
+  if (typeof window === 'undefined') return;
+  const next = new URLSearchParams();
+  next.set('docId', String(currentDocId.value));
+  next.set('page', String(currentPage.value));
+  const code = currentKcCode.value ?? autoActiveKc.value?.kcCode ?? null;
+  if (code) {
+    next.set('kcCode', code);
+  }
+  const query = next.toString();
+  const url = query ? `${route.path}?${query}` : route.path;
+  window.history.replaceState(window.history.state, '', url);
+}
+
+function gotoPage(pageNo: number): void {
+  if (!currentDocument.value) {
+    return;
+  }
+  const total = currentDocument.value.pageCount;
+  if (total <= 0) return;
+  const target = Math.max(1, Math.min(pageNo, total));
+  currentPage.value = target;
+  void loadPage(currentDocId.value, target);
+}
+
+function selectDocument(docId: number): void {
+  currentDocId.value = docId;
+  currentPage.value = 1;
+  void loadPage(docId, 1);
+}
+
+function jumpToKc(kc: CourseKcSummary): void {
+  currentKcCode.value = kc.kcCode;
+  if (kc.pageRefs.length === 0) {
+    toast.push({ kind: 'info', text: `KC ${kc.kcCode} 暂未关联课件页` });
+    return;
+  }
+  // 找首个属于章节对应文档的页面
+  const targetPageId = kc.pageRefs[0];
+  if (targetPageId === undefined) {
+    return;
+  }
+  void resolvePageById(targetPageId);
+}
+
+function onKcSelect(group: ChapterGroup, event: Event): void {
+  const code = (event.target as HTMLSelectElement).value;
+  if (!code) return;
+  const kc = group.kcs.find((k) => k.kcCode === code);
+  if (kc) jumpToKc(kc);
+}
+
+async function resolvePageById(pageId: number): Promise<void> {
+  // 按 page_id 跳转（导师课件证据回链 / KC 直达）一律落到能看见的「原 PDF」视图：
+  // 否则用户上次停在「课件视频」时，点证据图会停在视频面板上看不到被引用的那页，像「跳转错误」。
+  setViewMode('pdf');
+  for (const doc of documents.value) {
+    const pages = await listDocumentPages(doc.documentId);
+    const match = pages.find((p) => p.pageId === pageId);
+    if (match) {
+      currentDocId.value = doc.documentId;
+      currentPage.value = match.pageNo;
+      void loadPage(doc.documentId, match.pageNo);
+      return;
+    }
+  }
+  toast.push({ kind: 'error', text: `未找到 pageId=${pageId} 对应的课件页` });
+}
+
+async function runRagSearch(): Promise<void> {
+  const q = ragQuery.value.trim();
+  if (!q) {
+    ragResults.value = [];
+    ragAnswer.value = '';
+    ragCitations.value = [];
+    resetRagGraphAudit();
+    return;
+  }
+  ragRunning.value = true;
+  try {
+    // 首选：LLM 课件作答 + 页码引用（学生可用的新端点）。
+    const result = await answerCourseware(q, { topK: 6 });
+    ragAnswerMode.value = true;
+    ragAnswer.value = result.answerMd;
+    ragCitations.value = result.citations;
+    ragRoute.value = result.route;
+    ragRetrievalMode.value = result.retrievalMode;
+    ragSubgraph.value = result.subgraph;
+    ragGraphTrace.value = result.graphTrace;
+    ragResults.value = [];
+    ragHint.value = result.noEvidence
+      ? '课件中未直接覆盖该问题，换个关键词或在左侧选章节/KC 再试。'
+      : `已据 ${result.citations.length} 处课件作答，点页码可跳转到对应课件页。`;
+  } catch {
+    // 课件作答端点不可用（如服务未起 / 鉴权）→ 回退片段检索（旧行为）。
+    try {
+      const hits = await searchCourseLibrary(q, { topK: 6 });
+      ragAnswerMode.value = false;
+      ragAnswer.value = '';
+      ragCitations.value = [];
+      resetRagGraphAudit();
+      ragResults.value = hits;
+      ragHint.value =
+        hits.length === 0
+          ? '没有命中证据片段，请尝试更宽泛的关键词。'
+          : `命中 ${hits.length} 个片段（按相关性排序）。点击片段直达对应页。`;
+    } catch (fallbackError) {
+      const message =
+        fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+      ragHint.value = `检索失败：${message}`;
+      resetRagGraphAudit();
+    }
+  } finally {
+    ragRunning.value = false;
+  }
+}
+
+/**
+ * 把课件 contentMarkdown 用 marked + DOMPurify 渲染成富文本 HTML。
+ * 用 DOMPurify 严格清洗，禁用 <script>/<iframe>/onclick 等危险标签。
+ */
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
+
+// 不用 `DOMPurify.Config` 命名空间（dompurify@3.4 起改成普通 module export
+// 不再暴露 namespace；用 sanitize 第二参形态推导出 Config 类型，避免版本耦合）。
+type PurifyConfig = NonNullable<Parameters<typeof DOMPurify.sanitize>[1]>;
+
+const PAGE_PURIFY_CONFIG: PurifyConfig = {
+  ALLOWED_TAGS: [
+    'p', 'br', 'strong', 'em', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'ul', 'ol', 'li', 'blockquote', 'pre', 'code',
+    'table', 'thead', 'tbody', 'tr', 'th', 'td',
+    'hr', 'span', 'div',
+  ],
+  ALLOWED_ATTR: ['class'],
+};
+
+function renderPageHtml(raw: string): string {
+  if (!raw) return '';
+  // OCR 文本里 \x0b 是 page break，先转换 + 重复段去掉
+  // eslint-disable-next-line no-control-regex -- 故意匹配垂直制表符(\x0b)作为 OCR 分页符
+  const cleaned = raw.replace(/\x0b/g, '\n\n').replace(/(\n\n)+/g, '\n\n').trim();
+  const html = marked.parse(cleaned, { async: false }) as string;
+  // dompurify@3.4 在 trusted-types 浏览器返回 TrustedHTML，这里强转 string
+  // （Vue 的 v-html 接受字符串；TrustedHTML 在普通浏览器里实际就是 string，
+  // 但 sanitize 默认 RETURN_TRUSTED_TYPE=false，应当返回 string。）
+  return DOMPurify.sanitize(html, PAGE_PURIFY_CONFIG) as unknown as string;
+}
+
+function backToWorld(): void {
+  void router.push({ path: '/world' });
+}
+
+function jumpToRagHit(hit: LibrarySearchHit): void {
+  // 跳转一定落到能看见的 PDF 视图（用户偏好可能停在视频视图）。
+  setViewMode('pdf');
+  if (hit.documentId && hit.pageNo) {
+    currentDocId.value = hit.documentId;
+    currentPage.value = hit.pageNo;
+    void loadPage(hit.documentId, hit.pageNo);
+  } else if (hit.pageId) {
+    void resolvePageById(hit.pageId);
+  }
+}
+
+function jumpToCitation(citation: CoursewareCitation): void {
+  if (!citation.pageId) return;
+  setViewMode('pdf');
+  void resolvePageById(citation.pageId);
+}
+
+function openProblem(problemId: number): void {
+  void router.push({ path: '/training', query: { problemId: String(problemId) } });
+}
+
+onMounted(async () => {
+  await loadIndex();
+  if (!currentDocId.value && documents.value.length > 0) {
+    const first = documents.value[0];
+    if (first) {
+      currentDocId.value = first.documentId;
+    }
+  }
+  // 证据回链（来自导师 evidence_page_ids / RAG 命中）：?pageId 解析 page_id → docId+pageNo。
+  const pageId = parseQueryNumber(route.query.pageId, 0);
+  if (pageId > 0) {
+    await resolvePageById(pageId);
+    return;
+  }
+  await loadPage(currentDocId.value, currentPage.value);
+});
+
+watch(
+  () => route.query,
+  async (next, prev) => {
+    // 证据回链优先：pageId 变化时解析 page_id → docId+pageNo（再由 loadPage 归一化 URL）。
+    const nextPageId = parseQueryNumber(next.pageId, 0);
+    const prevPageId = prev ? parseQueryNumber(prev.pageId, 0) : 0;
+    if (nextPageId > 0 && nextPageId !== prevPageId) {
+      await resolvePageById(nextPageId);
+      return;
+    }
+    if (prev && next.docId === prev.docId && next.page === prev.page) {
+      return;
+    }
+    const docId = parseQueryNumber(next.docId, currentDocId.value);
+    const pageNo = parseQueryNumber(next.page, currentPage.value);
+    if (docId !== currentDocId.value || pageNo !== currentPage.value) {
+      currentDocId.value = docId;
+      currentPage.value = pageNo;
+      await loadPage(docId, pageNo);
+    }
+  },
+);
+
+// 切到「课件视频」视图时按需拉取本章视频清单；切章时自动换片。
+watch(
+  viewMode,
+  (mode) => {
+    if (mode === 'video') void loadChapterVideos(chapterNoForVideo.value);
+  },
+  { immediate: true },
+);
+watch(chapterNoForVideo, (next) => {
+  if (viewMode.value === 'video') void loadChapterVideos(next);
+});
+</script>
+
+<template>
+  <AppLayout>
+    <section class="library-page">
+      <header class="library-header">
+        <PyButton
+          test-id="library-back"
+          variant="secondary"
+          size="sm"
+          @click="backToWorld"
+        >
+          ← 返回小镇
+        </PyButton>
+        <nav
+          class="breadcrumb"
+          aria-label="阅读路径"
+        >
+          <span>Pythontopia 图书馆</span>
+          <span v-if="currentChapter">第 {{ currentChapter.orderIndex }} 章</span>
+          <span v-if="currentChapter">{{ chapterTitleLabel(currentChapter.title) }}</span>
+          <span v-if="pageDetail?.title || currentDocument?.title">
+            {{ displayTitle(pageDetail?.title || currentDocument?.title) }}
+          </span>
+          <span v-if="currentDocument">第 {{ currentPage }} / {{ currentDocument.pageCount }} 页</span>
+        </nav>
+      </header>
+
+      <div
+        ref="bodyRef"
+        class="library-body"
+        data-testid="library-split-body"
+      >
+        <aside
+          class="library-pane library-pane--left"
+          :style="paneStyle.left()"
+          aria-label="章节与 KC 导航"
+        >
+          <section class="side-block">
+            <h3 class="side-title">
+              {{ catalogSidebarTitle }}
+            </h3>
+            <ul class="chapter-list">
+              <li
+                v-for="group in chapterGroups"
+                :key="group.chapter.chapterId"
+                :class="['chapter-item', { active: group.documentId === currentDocId }]"
+              >
+                <div class="chapter-row">
+                  <button
+                    type="button"
+                    class="chapter-head"
+                    :data-testid="`chapter-doc-${group.chapter.orderIndex}`"
+                    :title="
+                      group.documentId
+                        ? documents.find((d) => d.documentId === group.documentId)?.filename ?? ''
+                        : ''
+                    "
+                    :disabled="!group.documentId"
+                    @click="group.documentId && selectDocument(group.documentId)"
+                  >
+                    <span class="chapter-no">第 {{ group.chapter.orderIndex }} 章</span>
+                    <span class="chapter-title">{{ chapterTitleLabel(group.chapter.title) }}</span>
+                    <span
+                      v-if="group.pageCount != null"
+                      class="chapter-pages"
+                    >{{ group.pageCount }} 页</span>
+                  </button>
+                  <select
+                    v-if="group.kcs.length > 0"
+                    class="kc-select"
+                    :data-testid="`kc-select-${group.chapter.orderIndex}`"
+                    :value="group.kcs.some((k) => k.kcCode === currentKc?.kcCode) ? currentKc?.kcCode : ''"
+                    :title="`${group.kcs.length} 个知识点`"
+                    @click.stop
+                    @change="onKcSelect(group, $event)"
+                  >
+                    <option value="">
+                      KC
+                    </option>
+                    <option
+                      v-for="kc in group.kcs"
+                      :key="kc.kcCode"
+                      :value="kc.kcCode"
+                    >
+                      {{ kc.kcName }}{{ kc.pageRefs.length === 0 ? '（无页）' : '' }}
+                    </option>
+                  </select>
+                </div>
+              </li>
+            </ul>
+          </section>
+        </aside>
+
+        <div
+          class="library-splitter"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="调整左侧栏宽度"
+          title="拖动调整左栏宽度"
+          data-testid="library-splitter-left"
+          @pointerdown="onSplitterPointerDown('left', $event)"
+        />
+
+        <main
+          class="library-pane library-pane--main"
+          aria-label="课件正文"
+        >
+          <header class="page-bar">
+            <h2 class="page-title">
+              {{ viewMode === 'video'
+                ? (selectedVideo?.title || '课件视频')
+                : (pageDetail?.title || currentDocument?.title || '加载中…') }}
+            </h2>
+            <!-- 视频视图：翻页语义改为「上一个/下一个视频」 -->
+            <div
+              v-if="viewMode === 'video'"
+              class="page-controls"
+            >
+              <PyButton
+                class="page-control"
+                test-id="library-prev-video"
+                variant="secondary"
+                size="sm"
+                :disabled="currentVideoIndex <= 0"
+                @click="gotoVideo(-1)"
+              >
+                ◀ 上一个
+              </PyButton>
+              <span
+                class="page-jump page-jump--video"
+                aria-label="当前视频序号"
+              >
+                {{ chapterVideos.length > 0
+                  ? `${Math.max(currentVideoIndex, 0) + 1} / ${chapterVideos.length}`
+                  : '0 / 0' }}
+              </span>
+              <PyButton
+                class="page-control"
+                test-id="library-next-video"
+                variant="secondary"
+                size="sm"
+                :disabled="chapterVideos.length === 0 || currentVideoIndex >= chapterVideos.length - 1"
+                @click="gotoVideo(1)"
+              >
+                下一个 ▶
+              </PyButton>
+            </div>
+            <!-- 原 PDF 视图：按页翻 -->
+            <div
+              v-else
+              class="page-controls"
+            >
+              <PyButton
+                class="page-control"
+                test-id="library-prev-page"
+                variant="secondary"
+                size="sm"
+                :disabled="currentPage <= 1"
+                @click="gotoPage(currentPage - 1)"
+              >
+                ◀ 上一页
+              </PyButton>
+              <input
+                class="page-control page-jump"
+                type="number"
+                min="1"
+                :max="currentDocument?.pageCount ?? 1"
+                :value="currentPage"
+                aria-label="跳转页码"
+                data-testid="library-page-jump"
+                @change="(e) => gotoPage(Number((e.target as HTMLInputElement).value))"
+              >
+              <PyButton
+                class="page-control"
+                test-id="library-next-page"
+                variant="secondary"
+                size="sm"
+                :disabled="!!currentDocument && currentPage >= currentDocument.pageCount"
+                @click="gotoPage(currentPage + 1)"
+              >
+                下一页 ▶
+              </PyButton>
+            </div>
+          </header>
+
+          <article
+            class="page-content"
+            data-testid="library-page-content"
+          >
+            <!-- 课件视图切换：原 PDF（pdfjs-dist，保留图 / 排版）与课件视频。 -->
+            <nav
+              class="view-mode-tabs"
+              data-testid="library-view-mode-tabs"
+              aria-label="课件视图切换"
+            >
+              <button
+                type="button"
+                class="view-mode-tab"
+                :class="{ 'view-mode-tab--active': viewMode === 'pdf' }"
+                data-testid="library-view-mode-pdf"
+                @click="setViewMode('pdf')"
+              >
+                原 PDF
+              </button>
+              <button
+                type="button"
+                class="view-mode-tab"
+                :class="{ 'view-mode-tab--active': viewMode === 'video' }"
+                data-testid="library-view-mode-video"
+                @click="setViewMode('video')"
+              >
+                课件视频
+              </button>
+            </nav>
+            <div
+              v-if="viewMode === 'pdf' && currentDocId"
+              class="pdf-stage"
+            >
+              <p
+                v-if="pageLoading"
+                class="muted page-loading-overlay"
+              >
+                翻页中…
+              </p>
+              <PdfPageView
+                :doc-id="currentDocId"
+                :page-no="currentPage"
+                fit="contain"
+              />
+            </div>
+            <!-- 课件视频视图：整章无视频时回退到文字摘录。 -->
+            <div
+              v-else-if="viewMode === 'video'"
+              class="video-pane"
+              data-testid="library-video-pane"
+            >
+              <p
+                v-if="videosLoading"
+                class="muted"
+              >
+                加载课件视频清单…
+              </p>
+              <template v-else-if="chapterVideos.length > 0">
+                <div class="video-stage">
+                  <video
+                    v-if="selectedVideo && selectedVideo.available"
+                    :key="selectedVideo.id"
+                    class="video-player"
+                    controls
+                    preload="metadata"
+                    :src="videoStreamUrl(selectedVideo.id)"
+                  />
+                  <div
+                    v-else
+                    class="video-unavailable"
+                  >
+                    <span
+                      class="video-unavailable__icon"
+                      aria-hidden="true"
+                    >▶</span>
+                    <p>该视频文件整理中（manifest 已登记，尚未下载到服务器）。</p>
+                  </div>
+                </div>
+              </template>
+              <template v-else>
+                <p class="muted video-fallback-note">
+                  本章暂无课件视频，以下为文字摘录：
+                </p>
+                <!-- eslint-disable vue/no-v-html — renderPageHtml 内部 DOMPurify.sanitize 严格白名单清洗，已审阅 -->
+                <div
+                  v-if="pageDetail && (pageDetail.contentMarkdown || pageDetail.excerpt)"
+                  class="page-prose page-prose--md"
+                  v-html="renderPageHtml(pageDetail.contentMarkdown || pageDetail.excerpt || '')"
+                />
+                <p
+                  v-else
+                  class="muted"
+                >
+                  （本页暂无可读文本）
+                </p>
+                <!-- eslint-enable vue/no-v-html -->
+              </template>
+            </div>
+            <p
+              v-else-if="!indexLoading"
+              class="muted"
+            >
+              本页未生成正文。试试切换章节或翻到下一页。
+            </p>
+          </article>
+
+          <section
+            v-if="currentKc"
+            class="kc-anchor"
+            aria-label="当前 KC 资源"
+          >
+            <h3>{{ currentKc.kcName }}</h3>
+            <p class="muted">
+              {{ currentKc.summary }}
+            </p>
+            <div class="kc-resource-grid">
+              <div>
+                <h4>关联示例（{{ relatedExamples.length }}）</h4>
+                <ul>
+                  <li
+                    v-for="ex in relatedExamples"
+                    :key="ex.exampleId"
+                  >
+                    <RouterLink :to="`/examples?kcCode=${ex.kcCode}`">
+                      {{ ex.title }}
+                    </RouterLink>
+                  </li>
+                </ul>
+              </div>
+              <div>
+                <h4>关联题目（{{ relatedProblems.length }}）</h4>
+                <ul>
+                  <li
+                    v-for="p in relatedProblems"
+                    :key="p.problemId"
+                  >
+                    <button
+                      type="button"
+                      class="link-button"
+                      @click="openProblem(p.problemId)"
+                    >
+                      {{ p.title }}
+                      <span class="badge difficulty">{{ p.difficulty }}</span>
+                    </button>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </section>
+        </main>
+
+        <div
+          class="library-splitter"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="调整右侧栏宽度"
+          title="拖动调整右栏宽度"
+          data-testid="library-splitter-right"
+          @pointerdown="onSplitterPointerDown('right', $event)"
+        />
+
+        <aside
+          class="library-pane library-pane--right"
+          :style="paneStyle.right()"
+          aria-label="RAG 检索"
+        >
+          <h3 class="side-title">
+            课件检索
+          </h3>
+          <form
+            class="rag-form"
+            @submit.prevent="runRagSearch"
+          >
+            <textarea
+              v-model="ragQuery"
+              class="rag-input"
+              rows="3"
+              placeholder="例：input 函数怎么用？for 循环和 while 的区别？"
+              data-testid="library-rag-input"
+            />
+            <button
+              type="submit"
+              class="rag-submit"
+              :disabled="ragRunning"
+              data-testid="library-rag-submit"
+            >
+              {{ ragRunning ? '检索中…' : '检索证据' }}
+            </button>
+          </form>
+          <p class="rag-hint">
+            {{ ragHint }}
+          </p>
+          <div
+            v-if="ragTraceVisible"
+            class="rag-trace"
+            data-testid="library-rag-trace"
+            aria-label="图检索审计 trace"
+          >
+            <div class="rag-trace__metrics">
+              <span data-testid="library-rag-trace-route">
+                route: {{ ragRoute || ragGraphTrace?.route || 'unknown' }}
+              </span>
+              <span>
+                retrieval: {{ ragRetrievalMode || ragGraphTrace?.retrievalMode || 'unknown' }}
+              </span>
+              <span>
+                补充证据 {{ ragGraphTrace?.supplementalHitCount ?? 0 }} /
+                {{ ragGraphTrace?.supplementalHitLimit ?? 0 }}
+              </span>
+              <span>
+                共现补证据 {{ ragGraphTrace?.coOccurHitCount ?? 0 }}
+              </span>
+              <span v-if="(ragGraphTrace?.prerequisiteHitCount ?? 0) > 0">
+                前置补证据 {{ ragGraphTrace?.prerequisiteHitCount ?? 0 }}
+              </span>
+              <span v-if="ragGraphTrace">
+                直接命中 {{ ragGraphTrace.directHitCount }} · topK {{ ragGraphTrace.topK }}
+              </span>
+            </div>
+            <div
+              v-if="ragTraceRelationEntries.length > 0"
+              class="rag-trace__relations"
+            >
+              <span
+                v-for="[relation, count] in ragTraceRelationEntries"
+                :key="relation"
+                class="rag-trace__relation"
+              >
+                {{ relation }} × {{ count }}
+              </span>
+            </div>
+            <ul
+              v-if="ragSubgraph.length > 0"
+              class="rag-trace__edges"
+            >
+              <li
+                v-for="edge in ragSubgraph"
+                :key="`${edge.fromKc}-${edge.toKc}-${edge.relation}`"
+                data-testid="library-rag-subgraph-edge"
+              >
+                {{ edge.fromKc }} → {{ edge.toKc }}
+                <span>{{ edge.relation }}</span>
+              </li>
+            </ul>
+          </div>
+          <!-- LLM 课件作答 + 可跳转页码引用 -->
+          <div
+            v-if="ragAnswerMode && ragAnswer"
+            class="rag-answer"
+            data-testid="library-rag-answer"
+          >
+            <!-- eslint-disable vue/no-v-html — renderPageHtml 内部 DOMPurify 严格白名单清洗，已审阅 -->
+            <div
+              class="rag-answer__md page-prose page-prose--md"
+              v-html="renderPageHtml(ragAnswer)"
+            />
+            <!-- eslint-enable vue/no-v-html -->
+            <ul
+              v-if="ragCitations.length > 0"
+              class="rag-citations"
+            >
+              <li
+                v-for="(c, i) in ragCitations"
+                :key="`${c.pageId}-${i}`"
+              >
+                <button
+                  type="button"
+                  class="rag-cite"
+                  data-testid="library-rag-cite"
+                  @click="jumpToCitation(c)"
+                >
+                  <span class="badge">第 {{ c.pageNo }} 页</span>
+                  <span class="rag-cite__quote">{{ c.quote }}</span>
+                </button>
+              </li>
+            </ul>
+          </div>
+          <!-- 回退：课件作答端点不可用时展示片段卡（旧行为） -->
+          <ul
+            v-else
+            class="rag-results"
+            data-testid="library-rag-results"
+          >
+            <li
+              v-for="hit in ragResults"
+              :key="`${hit.documentId}-${hit.pageNo}-${hit.pageId}`"
+            >
+              <button
+                type="button"
+                class="rag-hit"
+                @click="jumpToRagHit(hit)"
+              >
+                <header>
+                  <strong>{{ hit.title || `第 ${hit.pageNo} 页` }}</strong>
+                  <span class="badge">第 {{ hit.pageNo }} 页</span>
+                </header>
+                <p>{{ hit.snippet }}</p>
+              </button>
+            </li>
+          </ul>
+        </aside>
+      </div>
+    </section>
+  </AppLayout>
+</template>
+
+<style scoped>
+.library-page {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(8px, 1.2vw, 14px);
+  padding: clamp(8px, 1.5vw, 16px);
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+  background:
+    linear-gradient(180deg, rgba(255, 247, 230, 0.7), rgba(243, 228, 190, 0.85)),
+    repeating-linear-gradient(135deg, rgba(110, 79, 29, 0.05) 0 6px, transparent 6px 14px),
+    #fef6dd;
+}
+
+.library-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 10px 16px;
+  border: 3px solid var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+  background: var(--pyt-color-bg-elevated, var(--pyt-color-bg-elevated));
+  box-shadow: 4px 4px 0 var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+}
+.back-button {
+  font-family: var(--pyt-font-pixel), monospace;
+  min-height: 36px;
+  padding: 0 16px;
+  background: var(--pyt-color-warning-bg, var(--pyt-color-warning-bg));
+  border: 2px solid var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+  color: var(--pyt-color-text-primary, var(--pyt-color-text-primary));
+  cursor: pointer;
+  box-shadow: 3px 3px 0 var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+}
+.back-button:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+}
+
+.library-body {
+  flex: 1 1 0;
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.library-pane--left,
+.library-pane--right {
+  flex-shrink: 0;
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  padding: 12px;
+  background: var(--pyt-color-bg-elevated, var(--pyt-color-bg-elevated));
+  border: 3px solid var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+  box-shadow: 4px 4px 0 var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+  overflow: auto;
+  min-height: 0;
+}
+
+.library-splitter {
+  flex: 0 0 10px;
+  margin: 0 2px;
+  align-self: stretch;
+  cursor: col-resize;
+  touch-action: none;
+  border-radius: 4px;
+  background: repeating-linear-gradient(
+    180deg,
+    var(--pyt-color-border, var(--pyt-color-border)) 0 4px,
+    transparent 4px 8px
+  );
+  opacity: 0.55;
+  transition: opacity 120ms ease, background-color 120ms ease;
+}
+.library-splitter:hover,
+.library-splitter:focus-visible {
+  opacity: 1;
+  background-color: var(--pyt-color-warning-bg, var(--pyt-color-warning-bg));
+  outline: none;
+}
+
+.side-block {
+  display: grid;
+  gap: 6px;
+}
+.side-title {
+  margin: 0 0 4px;
+  font-family: var(--pyt-font-pixel), sans-serif;
+  font-size: 14px;
+  letter-spacing: 1px;
+  border-bottom: 2px dashed var(--pyt-color-border, var(--pyt-color-border));
+  padding-bottom: 4px;
+}
+.chapter-list,
+.kc-list,
+.rag-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.chapter-item {
+  border: 2px solid var(--pyt-color-border, var(--pyt-color-border));
+  background: var(--pyt-color-bg-soft, var(--pyt-color-bg-soft));
+  padding: 4px 6px;
+}
+.chapter-item.active {
+  background: var(--pyt-color-warning-bg, var(--pyt-color-warning-bg));
+  border-color: var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+}
+.chapter-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.chapter-head {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  flex: 1 1 auto;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  font-family: var(--pyt-font-pixel), sans-serif;
+  font-size: 12px;
+  color: var(--pyt-color-text-primary, var(--pyt-color-text-primary));
+  text-align: left;
+  padding: 4px 2px;
+  cursor: pointer;
+}
+.chapter-head:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+.chapter-pages {
+  flex-shrink: 0;
+  color: var(--pyt-color-text-muted, var(--pyt-color-text-muted));
+  font-family: var(--pyt-font-sans, sans-serif);
+  font-size: 11px;
+}
+.chapter-no {
+  flex-shrink: 0;
+  font-weight: 700;
+}
+.chapter-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--pyt-font-sans, sans-serif);
+  font-size: 12px;
+}
+.kc-list {
+  margin-top: 4px;
+  padding-left: 8px;
+  border-left: 2px dotted var(--pyt-color-border, var(--pyt-color-border));
+}
+.kc-item {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px;
+  text-align: left;
+  background: transparent;
+  border: none;
+  padding: 3px 4px;
+  font-size: 12px;
+  color: var(--pyt-color-text-hint, var(--pyt-color-text-hint));
+  cursor: pointer;
+  opacity: 0.7;
+}
+.kc-item.has-refs {
+  opacity: 1;
+}
+.kc-item.active {
+  background: var(--pyt-color-warning-bg, var(--pyt-color-warning-bg));
+  border: 2px solid var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+  color: var(--pyt-color-text-primary, var(--pyt-color-text-primary));
+  font-weight: 700;
+}
+.kc-code {
+  font-family: var(--pyt-font-pixel), monospace;
+  font-size: 11px;
+}
+
+.kc-select {
+  flex: 0 0 72px;
+  max-width: 88px;
+  font-family: var(--pyt-font-sans, sans-serif);
+  font-size: 11px;
+  padding: 4px 4px;
+  background: var(--pyt-color-bg-primary, var(--pyt-color-bg-primary));
+  border: 2px solid var(--pyt-color-border, var(--pyt-color-border));
+  color: var(--pyt-color-text-primary, var(--pyt-color-text-primary));
+  cursor: pointer;
+}
+.kc-select:focus {
+  outline: none;
+  border-color: var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+}
+
+/* 课件视频视图 */
+.video-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.video-stage {
+  width: 100%;
+  background: #160f04;
+  border: 2px solid var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+  box-shadow: 3px 3px 0 var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+  overflow: hidden;
+}
+.video-player {
+  display: block;
+  width: 100%;
+  max-height: 52vh;
+  background: #000;
+}
+.video-unavailable {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 36px 16px;
+  color: var(--pyt-color-warning-bg);
+  text-align: center;
+  font-size: 13px;
+}
+.video-unavailable__icon {
+  width: 46px;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--pyt-color-warning-bg);
+  border-radius: 50%;
+  font-size: 18px;
+}
+.video-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.video-item {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  text-align: left;
+  cursor: pointer;
+  background: var(--pyt-color-bg-soft, var(--pyt-color-bg-soft));
+  border: 2px solid var(--pyt-color-border, var(--pyt-color-border));
+  font-family: var(--pyt-font-sans, sans-serif);
+  font-size: 13px;
+  color: var(--pyt-color-text-primary, var(--pyt-color-text-primary));
+}
+.video-item:hover {
+  background: var(--pyt-color-warning-bg, var(--pyt-color-warning-bg));
+}
+.video-item--active {
+  background: var(--pyt-color-warning-bg, var(--pyt-color-warning-bg));
+  border-color: var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+  font-weight: 700;
+}
+.video-item__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.video-item__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  font-family: var(--pyt-font-pixel), monospace;
+  font-size: 11px;
+  color: var(--pyt-color-text-muted, var(--pyt-color-text-muted));
+}
+.video-item__pending {
+  padding: 0 6px;
+  border: 1px solid var(--pyt-color-border, var(--pyt-color-border));
+  background: var(--pyt-color-info-bg, var(--pyt-color-info-bg));
+  color: #1b4a6b;
+  font-size: 10px;
+}
+.video-fallback-note {
+  margin: 0 0 4px;
+}
+
+.library-pane--main {
+  flex: 1 1 0;
+  min-width: 0;
+  width: 0;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 12px;
+  padding: 16px;
+  background: var(--pyt-color-bg-elevated, var(--pyt-color-bg-elevated));
+  border: 3px solid var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+  box-shadow: 4px 4px 0 var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+  overflow: hidden;
+  min-height: 0;
+}
+.page-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px 12px;
+  border-bottom: 2px dashed var(--pyt-color-border, var(--pyt-color-border));
+  padding-bottom: 6px;
+}
+.page-title {
+  margin: 0;
+  font-family: var(--pyt-font-pixel), sans-serif;
+  font-size: clamp(14px, 2vw, 18px);
+  min-width: 0;
+  flex: 1 1 12rem;
+}
+.page-controls {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  --library-page-control-width: 98px;
+  --library-page-control-height: 34px;
+}
+.page-controls .page-control {
+  flex: 0 0 var(--library-page-control-width);
+  width: var(--library-page-control-width);
+  min-width: var(--library-page-control-width);
+  height: var(--library-page-control-height);
+  min-height: var(--library-page-control-height);
+  box-sizing: border-box;
+  padding: 0 10px;
+  border-radius: var(--pyt-radius-md, 6px);
+}
+.page-nav {
+  min-height: 32px;
+  padding: 0 10px;
+  background: var(--pyt-color-bg-soft, var(--pyt-color-bg-soft));
+  border: 2px solid var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+  font-family: var(--pyt-font-pixel), monospace;
+  font-size: 12px;
+  cursor: pointer;
+}
+.page-nav:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.page-jump {
+  text-align: center;
+  border: 2px solid var(--pyt-color-border, var(--pyt-color-border));
+  background: var(--pyt-color-bg-soft, var(--pyt-color-bg-soft));
+  color: var(--pyt-color-text-primary, var(--pyt-color-text-primary));
+  box-shadow: 0 2px 0 var(--pyt-color-border, var(--pyt-color-border));
+  font-family: var(--pyt-font-pixel), monospace;
+  font-weight: 700;
+  font-size: var(--pyt-font-size-sm, 12px);
+  line-height: 1;
+  appearance: textfield;
+}
+.page-jump::-webkit-outer-spin-button,
+.page-jump::-webkit-inner-spin-button {
+  margin: 0;
+  appearance: none;
+}
+.page-content {
+  overflow: auto;
+  padding: 12px;
+  background: var(--pyt-color-bg-primary, var(--pyt-color-bg-primary));
+  border: 2px solid var(--pyt-color-border, var(--pyt-color-border));
+  font-family: var(--pyt-font-sans, sans-serif);
+  font-size: 15px;
+  line-height: 1.65;
+  min-height: 0;
+  flex: 1;
+  /* 让原 PDF 视图按可用高度自适应：tab 行(auto) + PDF 区(1fr) 纵向铺满，整页不再上下滚 */
+  display: flex;
+  flex-direction: column;
+}
+
+/* 课件视图切换 tab */
+.view-mode-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+  border-bottom: 2px solid var(--pyt-color-border, var(--pyt-color-border));
+  padding-bottom: 4px;
+}
+.view-mode-tab {
+  font-family: var(--pyt-font-pixel), monospace;
+  font-size: 12px;
+  padding: 4px 12px;
+  background: var(--pyt-color-bg-soft, var(--pyt-color-bg-soft));
+  border: 2px solid var(--pyt-color-border, var(--pyt-color-border));
+  border-bottom-color: transparent;
+  cursor: pointer;
+  color: var(--pyt-color-text-primary, var(--pyt-color-text-primary));
+  min-height: 28px;
+}
+.view-mode-tab--active {
+  background: var(--pyt-color-bg-elevated, var(--pyt-color-bg-elevated));
+  border-color: var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+  border-bottom-color: var(--pyt-color-bg-elevated, var(--pyt-color-bg-elevated));
+  font-weight: 700;
+}
+.view-mode-tab:hover:not(.view-mode-tab--active) {
+  background: var(--pyt-color-warning-bg, var(--pyt-color-warning-bg));
+}
+.pdf-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+/* contain 模式：整页 PDF 恰好放进可用高度，不撑高、不滚动 */
+.pdf-stage :deep(.pdf-page-view) {
+  width: 100%;
+  height: 100%;
+  justify-content: center;
+}
+.pdf-stage :deep(.pdf-canvas) {
+  max-height: 100%;
+}
+/* 页码已在顶部页栏显示，contain 单屏下隐藏组件内置 meta 行省高度 */
+.pdf-stage :deep(.state--meta) {
+  display: none;
+}
+.page-loading-overlay {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  width: max-content;
+  margin: 0 0 -34px auto;
+  padding: 4px 10px;
+  border: 1px solid var(--pyt-color-border, var(--pyt-color-border));
+  background: rgba(255, 249, 234, 0.94);
+  box-shadow: 2px 2px 0 var(--pyt-color-border, var(--pyt-color-border));
+}
+.page-content pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
+}
+
+/* page-prose 分段渲染：让 OCR 文本不再是 plaintext 一整块 */
+.page-prose {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.page-prose__seg {
+  margin: 0;
+  word-break: break-word;
+}
+
+.page-prose__para {
+  font-size: 15px;
+  line-height: 1.8;
+  color: var(--pyt-color-text-primary, var(--pyt-color-text-primary));
+  white-space: pre-wrap;
+}
+
+.page-prose__code {
+  font-family: var(--pyt-font-mono, monospace);
+  background: rgba(77, 54, 19, 0.08);
+  border-left: 3px solid var(--pyt-color-border, var(--pyt-color-border));
+  padding: 8px 12px;
+  white-space: pre;
+  overflow-x: auto;
+  font-size: 13px;
+}
+
+.page-prose__hint {
+  margin: 12px 0 0;
+  padding: 8px 10px;
+  font-size: 11px;
+  color: var(--pyt-color-text-muted, var(--pyt-color-text-muted));
+  background: rgba(201, 168, 107, 0.18);
+  border: 1px dashed var(--pyt-color-border-soft, rgba(201, 168, 107, 0.45));
+  border-radius: 4px;
+}
+.kc-anchor {
+  background: var(--pyt-color-bg-soft, var(--pyt-color-bg-soft));
+  padding: 10px 12px;
+  border: 2px solid var(--pyt-color-border, var(--pyt-color-border));
+}
+.kc-anchor h3 {
+  margin: 0 0 6px;
+  font-family: var(--pyt-font-pixel), sans-serif;
+  font-size: 14px;
+}
+.kc-anchor p {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+.kc-resource-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.kc-resource-grid h4 {
+  margin: 0 0 4px;
+  font-family: var(--pyt-font-pixel), sans-serif;
+  font-size: 12px;
+  color: var(--pyt-color-text-muted, var(--pyt-color-text-muted));
+}
+.kc-resource-grid ul {
+  list-style: square;
+  padding-left: 18px;
+  margin: 0;
+  font-size: 13px;
+}
+.link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--pyt-color-info, var(--pyt-color-info));
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  min-height: auto;
+  text-decoration: underline;
+}
+.badge {
+  display: inline-block;
+  background: var(--pyt-color-warning-bg, var(--pyt-color-warning-bg));
+  border: 1px solid var(--pyt-color-border, var(--pyt-color-border));
+  padding: 0 6px;
+  font-size: 10px;
+  font-family: var(--pyt-font-pixel), monospace;
+  margin-left: 4px;
+}
+.badge.difficulty {
+  background: var(--pyt-color-info-bg, var(--pyt-color-info-bg));
+}
+
+.rag-form {
+  display: grid;
+  gap: 6px;
+}
+.rag-input {
+  border: 2px solid var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+  background: var(--pyt-color-bg-primary, var(--pyt-color-bg-primary));
+  padding: 6px;
+  font: inherit;
+  resize: vertical;
+}
+.rag-submit {
+  min-height: 32px;
+  padding: 0 8px;
+  font-family: var(--pyt-font-pixel), monospace;
+  background: var(--pyt-color-primary, var(--pyt-color-text-hint));
+  color: var(--pyt-color-text-on-dark, var(--pyt-color-bg-elevated));
+  border: 2px solid var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+  cursor: pointer;
+  box-shadow: 2px 2px 0 var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+}
+.rag-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.rag-hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--pyt-color-text-muted, var(--pyt-color-text-muted));
+}
+.rag-trace {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border: 2px dashed var(--pyt-color-border, var(--pyt-color-border));
+  background: rgba(255, 249, 234, 0.78);
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--pyt-color-text-muted, var(--pyt-color-text-muted));
+}
+.rag-trace__metrics,
+.rag-trace__relations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+}
+.rag-trace__metrics span,
+.rag-trace__relation {
+  padding: 1px 5px;
+  border: 1px solid var(--pyt-color-border, var(--pyt-color-border));
+  background: var(--pyt-color-bg-soft, var(--pyt-color-bg-soft));
+}
+.rag-trace__edges {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 3px;
+  font-family: var(--pyt-font-mono, monospace);
+}
+.rag-trace__edges li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  word-break: break-all;
+}
+.rag-trace__edges span {
+  color: var(--pyt-color-info, var(--pyt-color-info));
+}
+.rag-hit {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 6px;
+  text-align: left;
+  background: var(--pyt-color-bg-soft, var(--pyt-color-bg-soft));
+  border: 2px solid var(--pyt-color-border, var(--pyt-color-border));
+  font: inherit;
+  cursor: pointer;
+  min-height: auto;
+}
+.rag-hit header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.rag-hit p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+/* 视频视图的「第 X / N 个」计数（替代 PDF 的页码输入框） */
+.page-jump--video {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 64px;
+  height: var(--library-page-control-height, 34px);
+  padding: 0 8px;
+}
+
+/* 课件 LLM 作答 + 可跳转页码引用 */
+.rag-answer {
+  display: grid;
+  gap: 8px;
+}
+.rag-answer__md {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--pyt-color-text-primary, var(--pyt-color-text-primary));
+}
+.rag-citations {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.rag-cite {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 6px;
+  text-align: left;
+  background: var(--pyt-color-bg-soft, var(--pyt-color-bg-soft));
+  border: 2px solid var(--pyt-color-border, var(--pyt-color-border));
+  font: inherit;
+  cursor: pointer;
+  min-height: auto;
+}
+.rag-cite:hover {
+  background: var(--pyt-color-warning-bg, var(--pyt-color-warning-bg));
+}
+.rag-cite__quote {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--pyt-color-text-muted, var(--pyt-color-text-muted));
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.muted {
+  color: var(--pyt-color-text-muted, var(--pyt-color-text-muted));
+  font-size: 13px;
+  margin: 0;
+}
+
+@media (max-width: 1100px) {
+  .library-body {
+    flex-direction: column;
+    overflow: auto;
+  }
+  .library-splitter {
+    display: none;
+  }
+  .library-pane--left,
+  .library-pane--right {
+    width: auto !important;
+    flex-shrink: 0;
+  }
+  .library-pane--left {
+    max-height: min(38dvh, 340px);
+  }
+  .library-pane--right {
+    max-height: min(32dvh, 300px);
+  }
+  .library-pane--main {
+    flex: 1 1 auto;
+    width: auto;
+    min-height: min(42dvh, 480px);
+  }
+}
+
+@media (max-width: 720px) {
+  .library-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .back-button {
+    width: 100%;
+  }
+  .breadcrumb {
+    font-size: 12px;
+  }
+  .kc-resource-grid {
+    grid-template-columns: 1fr;
+  }
+  .page-controls {
+    flex-wrap: wrap;
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 480px) {
+  .chapter-row {
+    flex-wrap: wrap;
+  }
+  .kc-select {
+    width: 100%;
+    max-width: none;
+  }
+}
+</style>
+
+<!-- 图书馆页占满 app-main 剩余视口，三栏高度随窗口伸缩 -->
+<style>
+.app-main:has(.library-page) {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100dvh - 56px);
+  max-height: calc(100dvh - 56px);
+  overflow: hidden;
+}
+@supports not (height: 100dvh) {
+  .app-main:has(.library-page) {
+    min-height: calc(100vh - 56px);
+    max-height: calc(100vh - 56px);
+  }
+}
+</style>

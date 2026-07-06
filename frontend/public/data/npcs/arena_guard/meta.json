@@ -1,0 +1,79 @@
+{
+  "key": "arena_guard",
+  "name": "竞技场守卫",
+  "category": "life",
+  "sprite": "npc_guard",
+  "portrait": "portrait_arena_guard.png",
+  "spawnMap": "town_hub",
+  "spawn": {
+    "tileX": 37,
+    "tileY": 37
+  },
+  "birthday": {
+    "month": 10,
+    "day": 10
+  },
+  "schedule": {
+    "monday": [
+      {
+        "from": "06:00",
+        "map": "town_hub",
+        "tileX": 37,
+        "tileY": 37
+      }
+    ],
+    "tuesday": [
+      {
+        "from": "06:00",
+        "map": "town_hub",
+        "tileX": 37,
+        "tileY": 37
+      }
+    ],
+    "wednesday": [
+      {
+        "from": "06:00",
+        "map": "town_hub",
+        "tileX": 37,
+        "tileY": 37
+      }
+    ],
+    "thursday": [
+      {
+        "from": "06:00",
+        "map": "town_hub",
+        "tileX": 37,
+        "tileY": 37
+      }
+    ],
+    "friday": [
+      {
+        "from": "06:00",
+        "map": "town_hub",
+        "tileX": 37,
+        "tileY": 37
+      }
+    ],
+    "saturday": [
+      {
+        "from": "06:00",
+        "map": "town_hub",
+        "tileX": 37,
+        "tileY": 37
+      }
+    ],
+    "sunday": [
+      {
+        "from": "06:00",
+        "map": "town_hub",
+        "tileX": 37,
+        "tileY": 37
+      }
+    ]
+  },
+  "tags": [
+    "arena",
+    "challenge"
+  ],
+  "description": "竞技场的守卫，管理闯关挑战和 Boss 战。"
+}

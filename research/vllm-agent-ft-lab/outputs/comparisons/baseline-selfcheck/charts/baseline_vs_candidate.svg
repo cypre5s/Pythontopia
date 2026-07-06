@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="380" viewBox="0 0 760 380">
+<rect width="100%" height="100%" fill="#fff"/>
+<text x="64" y="32" font-family="Arial" font-size="20" fill="#111827">Baseline vs Candidate</text>
+<line x1="64" y1="316" x2="696" y2="316" stroke="#6b7280"/>
+<line x1="64" y1="64" x2="64" y2="316" stroke="#6b7280"/>
+<rect x="92.44" y="65.26" width="43.48" height="250.74" fill="#64748b"><title>baseline score_mean: 0.995</title></rect>
+<text x="114.18" y="59.26" text-anchor="middle" font-family="Arial" font-size="11" fill="#111827">0.99</text>
+<rect x="143.00" y="65.26" width="43.48" height="250.74" fill="#16a34a"><title>candidate score_mean: 0.995</title></rect>
+<text x="164.74" y="59.26" text-anchor="middle" font-family="Arial" font-size="11" fill="#111827">0.99</text>
+<text x="143.00" y="356" text-anchor="middle" font-family="Arial" font-size="11" fill="#374151">score_mean</text>
+<rect x="250.44" y="164.80" width="43.48" height="151.20" fill="#64748b"><title>baseline json_valid_rate: 0.600</title></rect>
+<text x="272.18" y="158.80" text-anchor="middle" font-family="Arial" font-size="11" fill="#111827">0.60</text>
+<rect x="301.00" y="164.80" width="43.48" height="151.20" fill="#16a34a"><title>candidate json_valid_rate: 0.600</title></rect>
+<text x="322.74" y="158.80" text-anchor="middle" font-family="Arial" font-size="11" fill="#111827">0.60</text>
+<text x="301.00" y="356" text-anchor="middle" font-family="Arial" font-size="11" fill="#374151">json_valid_rate</text>
+<rect x="408.44" y="139.60" width="43.48" height="176.40" fill="#64748b"><title>baseline grounding_safe_rate: 0.700</title></rect>
+<text x="430.18" y="133.60" text-anchor="middle" font-family="Arial" font-size="11" fill="#111827">0.70</text>
+<rect x="459.00" y="139.60" width="43.48" height="176.40" fill="#16a34a"><title>candidate grounding_safe_rate: 0.700</title></rect>
+<text x="480.74" y="133.60" text-anchor="middle" font-family="Arial" font-size="11" fill="#111827">0.70</text>
+<text x="459.00" y="356" text-anchor="middle" font-family="Arial" font-size="11" fill="#374151">grounding_safe_rate</text>
+<rect x="566.44" y="316.00" width="43.48" height="0.00" fill="#64748b"><title>baseline forbidden_leak_rate: 0.000</title></rect>
+<text x="588.18" y="310.00" text-anchor="middle" font-family="Arial" font-size="11" fill="#111827">0.00</text>
+<rect x="617.00" y="316.00" width="43.48" height="0.00" fill="#16a34a"><title>candidate forbidden_leak_rate: 0.000</title></rect>
+<text x="638.74" y="310.00" text-anchor="middle" font-family="Arial" font-size="11" fill="#111827">0.00</text>
+<text x="617.00" y="356" text-anchor="middle" font-family="Arial" font-size="11" fill="#374151">forbidden_leak_rate</text>
+<rect x="590" y="54" width="12" height="12" fill="#64748b"/>
+<text x="608" y="65" font-family="Arial" font-size="12" fill="#374151">baseline</text>
+<rect x="590" y="76" width="12" height="12" fill="#16a34a"/>
+<text x="608" y="87" font-family="Arial" font-size="12" fill="#374151">candidate</text>
+</svg>

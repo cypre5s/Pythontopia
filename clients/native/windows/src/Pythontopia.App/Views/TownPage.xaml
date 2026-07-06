@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="Pythontopia.App.Views.TownPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Grid Padding="24">
+        <Border
+            Style="{StaticResource PytCardBorderStyle}"
+            MaxWidth="560"
+            Padding="28"
+            VerticalAlignment="Center"
+            HorizontalAlignment="Center">
+            <StackPanel Spacing="14">
+                <TextBlock Text="像素小镇 · Town Hub" FontSize="24" FontWeight="Bold" />
+                <TextBlock
+                    Text="进入单一中央小镇：用 WASD / 方向键移动，靠近 NPC 或建筑时按 E 交互。地图与瓦片来自前端的 town_hub.json + Kenney Tiny Town 资源，由原生 MonoGame (DesktopGL) 渲染。"
+                    TextWrapping="Wrap"
+                    Opacity="0.85" />
+                <TextBlock
+                    Text="登录后启动会把 JWT 传给小镇进程，叠加真实世界快照（天数 / 天气 / 任务数 / 存档位置）。"
+                    TextWrapping="Wrap"
+                    Opacity="0.7" />
+                <Button
+                    Content="启动像素小镇"
+                    Style="{ThemeResource AccentButtonStyle}"
+                    HorizontalAlignment="Left"
+                    Command="{x:Bind ViewModel.LaunchTownCommand}"
+                    IsEnabled="{x:Bind ViewModel.IsTownRunning, Mode=OneWay, Converter={StaticResource InverseBool}}" />
+                <TextBlock Text="{x:Bind ViewModel.Status, Mode=OneWay}" TextWrapping="Wrap" Opacity="0.85" />
+                <StackPanel Orientation="Horizontal" Spacing="6" Opacity="0.6">
+                    <TextBlock Text="后端：" FontSize="12" />
+                    <TextBlock Text="{x:Bind ViewModel.BackendUrl}" FontSize="12" />
+                </StackPanel>
+                <TextBlock
+                    Text="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}"
+                    Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                    TextWrapping="Wrap"
+                    Visibility="{x:Bind ViewModel.HasError, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</Page>

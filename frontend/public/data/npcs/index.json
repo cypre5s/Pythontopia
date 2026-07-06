@@ -1,0 +1,102 @@
+{
+  "version": 1,
+  "totalNpcs": 11,
+  "categories": {
+    "educator_core": [
+      "mayor_py",
+      "foreman_bug",
+      "librarian_doc",
+      "coach_q",
+      "sage_review",
+      "professor",
+      "mine_keeper"
+    ],
+    "student": [
+      "student_a"
+    ],
+    "life": [
+      "class_president",
+      "workshop_master",
+      "arena_guard"
+    ]
+  },
+  "npcs": [
+    {
+      "key": "mayor_py",
+      "name": "镇长 Py",
+      "category": "educator_core",
+      "spawnMap": "town_hub",
+      "portrait": "portrait_mayor_py.png"
+    },
+    {
+      "key": "foreman_bug",
+      "name": "矿头 Bug",
+      "category": "educator_core",
+      "spawnMap": "town_hub",
+      "portrait": "portrait_foreman_bug.png"
+    },
+    {
+      "key": "librarian_doc",
+      "name": "馆长 Doc",
+      "category": "educator_core",
+      "spawnMap": "town_hub",
+      "portrait": "portrait_librarian_doc.png"
+    },
+    {
+      "key": "coach_q",
+      "name": "教务 Q",
+      "category": "educator_core",
+      "spawnMap": "town_hub",
+      "portrait": "portrait_coach_q.png"
+    },
+    {
+      "key": "sage_review",
+      "name": "复盘师 Sage",
+      "category": "educator_core",
+      "spawnMap": "town_hub",
+      "portrait": "portrait_sage_review.png"
+    },
+    {
+      "key": "professor",
+      "name": "教授",
+      "category": "educator_core",
+      "spawnMap": "town_hub",
+      "portrait": "portrait_professor.png"
+    },
+    {
+      "key": "mine_keeper",
+      "name": "矿洞守矿人",
+      "category": "educator_core",
+      "spawnMap": "town_hub",
+      "portrait": "portrait_mine_keeper.png"
+    },
+    {
+      "key": "student_a",
+      "name": "学生 A",
+      "category": "student",
+      "spawnMap": "town_hub",
+      "portrait": "portrait_student_a.png"
+    },
+    {
+      "key": "class_president",
+      "name": "班长",
+      "category": "life",
+      "spawnMap": "town_hub",
+      "portrait": "portrait_class_president.png"
+    },
+    {
+      "key": "workshop_master",
+      "name": "工坊师傅",
+      "category": "life",
+      "spawnMap": "town_hub",
+      "portrait": "portrait_workshop_master.png"
+    },
+    {
+      "key": "arena_guard",
+      "name": "竞技场守卫",
+      "category": "life",
+      "spawnMap": "town_hub",
+      "portrait": "portrait_arena_guard.png"
+    }
+  ]
+}

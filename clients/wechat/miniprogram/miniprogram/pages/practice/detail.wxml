@@ -1,0 +1,83 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="loading">加载题目…</view>
+  <view class="login__error" wx:if="{{errorMsg}}">{{errorMsg}}</view>
+
+  <block wx:if="{{problem}}">
+    <view class="card">
+      <view class="detail__title">{{problem.title}}</view>
+      <view class="muted">{{problem.kcCode}}<text wx:if="{{problem.difficulty}}"> · 难度 {{problem.difficulty}}</text></view>
+    </view>
+
+    <!-- 题面 -->
+    <view class="card">
+      <view class="section-title">题目描述</view>
+      <block wx:for="{{statementBlocks}}" wx:key="id">
+        <view wx:if="{{item.type === 'heading'}}" class="detail__md-heading">{{item.text}}</view>
+        <view wx:elif="{{item.type === 'code'}}" class="code">{{item.text}}</view>
+        <view wx:elif="{{item.type === 'list'}}" class="detail__md-list">· {{item.text}}</view>
+        <view wx:else class="detail__md-p">{{item.text}}</view>
+      </block>
+
+      <view wx:if="{{problem.inputDescription}}" class="detail__io">
+        <view class="detail__io-label">输入</view>
+        <view class="detail__md-p">{{problem.inputDescription}}</view>
+      </view>
+      <view wx:if="{{problem.outputDescription}}" class="detail__io">
+        <view class="detail__io-label">输出</view>
+        <view class="detail__md-p">{{problem.outputDescription}}</view>
+      </view>
+    </view>
+
+    <!-- 样例 -->
+    <view class="card" wx:if="{{samples.length > 0}}">
+      <view class="section-title">样例</view>
+      <view class="detail__sample" wx:for="{{samples}}" wx:key="index">
+        <view class="detail__sample-label">样例 {{item.index}} · 输入</view>
+        <view class="code">{{item.input}}</view>
+        <view class="detail__sample-label">输出</view>
+        <view class="code">{{item.output}}</view>
+      </view>
+    </view>
+
+    <!-- 代码编辑 + 提交 -->
+    <view class="card">
+      <view class="section-title">你的代码（Python）</view>
+      <textarea
+        class="textarea"
+        value="{{code}}"
+        bindinput="onCodeInput"
+        placeholder="# 在这里编写 Python 代码"
+        maxlength="8192"
+        auto-height
+        disabled="{{submitting}}"
+      />
+      <button
+        class="btn btn--primary btn--block"
+        loading="{{submitting}}"
+        disabled="{{submitting}}"
+        bindtap="onSubmit"
+      >{{polling ? '判题中…' : '提交代码'}}</button>
+      <view class="muted detail__hint">提交后由服务端判题（非 Pyodide 预览），稍候片刻。</view>
+    </view>
+
+    <!-- 判题结果 -->
+    <view class="card detail__result {{resultClass}}" wx:if="{{resultStatus}}">
+      <view class="detail__result-title">
+        {{resultStatus === 'PASSED' ? '通过' : (resultStatus === 'FAILED' ? '未通过' : '运行错误')}}
+      </view>
+      <view class="detail__result-row">
+        <text>判定：{{verdict}}</text>
+        <text>用例：{{passedCases}} / {{totalCases}}</text>
+      </view>
+      <view wx:if="{{failureReason}}" class="detail__fail">
+        <view class="detail__io-label">失败原因</view>
+        <view class="code">{{failureReason}}</view>
+      </view>
+      <button
+        wx:if="{{questId && resultStatus === 'PASSED'}}"
+        class="btn btn--primary btn--block"
+        bindtap="onCompleteQuest"
+      >标记任务完成</button>
+    </view>
+  </block>
+</view>

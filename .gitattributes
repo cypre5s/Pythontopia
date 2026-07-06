@@ -1,0 +1,41 @@
+# Pythontopia Git 属性配置
+#
+# 像素资产体积控制：
+#   当前 frontend/public/assets/pixel 与 data/npcs 等资产合计约 10MB，
+#   直接进 git history 可接受。
+#   达到 100MB 量级或开启 itch.io / Steam 发行时，需要启用 Git LFS：
+#     1) 在 CI / dev 机器安装 git-lfs（apt install git-lfs）
+#     2) git lfs install --local
+#     3) 取消下方注释，让 *.png / *.ogg / *.woff2 等走 LFS filter
+#     4) git lfs migrate import --include="*.png,*.ogg,*.woff2,..."
+#
+# 文本属性（line-ending 规范）
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# 显式标记二进制类型，避免 git diff 把它们当文本输出
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.webp   binary
+*.gif    binary
+*.mp3    binary
+*.ogg    binary
+*.wav    binary
+*.woff2  binary
+*.ttf    binary
+*.otf    binary
+*.apk    binary
+
+# === 未来启用 LFS 时取消注释 ===
+# *.png    filter=lfs diff=lfs merge=lfs -text
+# *.jpg    filter=lfs diff=lfs merge=lfs -text
+# *.jpeg   filter=lfs diff=lfs merge=lfs -text
+# *.webp   filter=lfs diff=lfs merge=lfs -text
+# *.mp3    filter=lfs diff=lfs merge=lfs -text
+# *.ogg    filter=lfs diff=lfs merge=lfs -text
+# *.wav    filter=lfs diff=lfs merge=lfs -text
+# *.woff2  filter=lfs diff=lfs merge=lfs -text
+# *.ttf    filter=lfs diff=lfs merge=lfs -text
+# *.otf    filter=lfs diff=lfs merge=lfs -text

@@ -1,0 +1,92 @@
+{
+  "npcKey": "mine_keeper",
+  "rootNodeId": "greet",
+  "nodes": {
+    "greet": {
+      "id": "greet",
+      "text": "矿灯往这边照——是你呀，{{playerName}}。别看我只守着镇角这座小小的矿洞工棚，我挖的不是煤，是这世界最底下的两块石头：亮的记 1，暗的记 0。在机器眼里，万物都得先化成这一串明暗。",
+      "conditions": [],
+      "choices": [
+        {
+          "label": "0 和 1 也能表示万物？",
+          "nextNodeId": "about_binary"
+        },
+        {
+          "label": "进制转换又是怎么回事？",
+          "nextNodeId": "about_base"
+        },
+        {
+          "label": "我想领第 3 章的第一个任务",
+          "nextNodeId": "about_quest"
+        },
+        {
+          "label": "先逛逛，回头再来",
+          "nextNodeId": null
+        }
+      ]
+    },
+    "about_binary": {
+      "id": "about_binary",
+      "text": "你数到十要十根指头，机器却只有两根：通电是 1，断电是 0。一排灯忽明忽暗，就能写下数字、文字，甚至一整幅画——{{styleAdaptive:你不妨把它想成点阵纸上的黑白格子|说穿了就是「逢二进一」的一套计数规矩|不如等会儿自己敲一串 0 和 1 试试}}。这正是第 3 章「计算机信息表示及计算」的根。",
+      "conditions": [],
+      "choices": [
+        {
+          "label": "那进制之间怎么换？",
+          "nextNodeId": "about_base"
+        },
+        {
+          "label": "懂了，去领任务",
+          "nextNodeId": "about_quest"
+        },
+        {
+          "label": "我再想想",
+          "nextNodeId": null
+        }
+      ]
+    },
+    "about_base": {
+      "id": "about_base",
+      "text": "十进制逢十进一，二进制逢二进一，十六进制便逢十六进一——同一个数，不过换身衣裳。就说 13：二进制写作 1101，十六进制写作 D，分量半点不差。第 3 章会教你让数值和字符串在这几种进制间自在翻译。",
+      "conditions": [],
+      "choices": [
+        {
+          "label": "再说说 0 和 1 怎么表示万物",
+          "nextNodeId": "about_binary"
+        },
+        {
+          "label": "明白了，去领任务",
+          "nextNodeId": "about_quest"
+        },
+        {
+          "label": "先记下了",
+          "nextNodeId": null
+        }
+      ]
+    },
+    "about_quest": {
+      "id": "about_quest",
+      "text": "头一桩活儿叫「0 和 1 的计算思维」。你已点亮了 {{stats.kcUnlocked}} 个知识点，这一关{{profileAdaptive:不急，咱们先把直觉打牢|对你不算难，正好趁势冲一冲}}。先去听一课，回头到训练场把进制玩熟，这一章就算开了头。",
+      "conditions": [],
+      "choices": [
+        {
+          "label": "好，开始第 3 章·这就去上课",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "quest_recommend",
+              "questKey": "3-1"
+            },
+            {
+              "type": "open_panel",
+              "route": "/lecture/3"
+            }
+          ]
+        },
+        {
+          "label": "我再准备准备",
+          "nextNodeId": null
+        }
+      ]
+    }
+  }
+}

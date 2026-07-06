@@ -1,0 +1,2094 @@
+                                                                                                                                                                                                                                         {
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Pythontopia Client-Facing API",
+    "version": "0.1.0",
+    "description": "Curated, hand-authored OpenAPI 3.0.3 description of the **client-facing** REST surface of the Pythontopia backend (Spring Boot, Java 21).\n\nThis spec is intended for native clients (Windows .NET, Android, WeChat mini-program) to use for code generation and reference. It is a *subset* of the full backend surface (teacher dashboards, RAG/media generation, intent/bug-mine internals are intentionally omitted). For the exhaustive, always-up-to-date spec, regenerate from the live springdoc endpoint (`GET /v3/api-docs`) as documented in `openapi/README.md`.\n\n## Conventions\n- **Base URL / prefix**: REST endpoints live under `/api` (e.g. `/api/auth/login`); there is no servlet context path. `/healthz` sits at the root.\n- **Auth**: Bearer JWT (HS256), 12h TTL. Send `Authorization: Bearer <token>`. `POST /api/auth/refresh` re-issues a token from a still-valid token (it does not consume a separate refresh token). On `401`, re-login via `POST /api/auth/login`.\n- **Public endpoints** (no JWT required): everything under `/api/auth/**` and `/api/course/**`, plus `GET /api/media/assets/{id}` and `GET /healthz`. All other operations require `bearerAuth`.\n- **Error envelope**: every non-2xx JSON response uses the shape `{ code, message, details[], traceId, timestamp }` (see `ApiError`).\n- **Numbers**: `integer/int64` = Java Long, `integer/int32` = int/Integer, `number` (no format) = BigDecimal, `number/double` = Double.\n- **Arbitrary JSON**: fields typed as `JsonNode` are server-side Jackson nodes and may be any JSON value (object, array, or scalar).\n- **SSE**: streaming endpoints respond with `text/event-stream`; named events are `plan`, `trace`, `token`, `result`, and `error`."
+  },
+  "servers": [
+    { "url": "http://localhost:18080", "description": "Local backend (desktop / WeChat devtools via host loopback)" },
+    { "url": "http://10.0.2.2:18080", "description": "Android emulator -> host machine loopback" }
+  ],
+  "tags": [
+    { "name": "auth", "description": "Registration, login, and token refresh (public)" },
+    { "name": "game", "description": "Aggregated game bootstrap payload" },
+    { "name": "world", "description": "Pixel-town world state: session, player, calendar, saves, skills, NPCs" },
+    { "name": "boss", "description": "Chapter boss (arena) problems and attempts" },
+    { "name": "learner", "description": "Learner profile, mastery, recommendations, path, evaluations" },
+    { "name": "quests", "description": "Student quest board" },
+    { "name": "course", "description": "Python course pack content (public)" },
+    { "name": "practice", "description": "Public problem view and code submissions / judging" },
+    { "name": "classroom", "description": "Lightweight class management and classroom quests" },
+    { "name": "agents", "description": "Streaming multi-agent endpoints (SSE)" },
+    { "name": "media", "description": "Generated media asset delivery (public stream)" },
+    { "name": "system", "description": "Health and diagnostics (public)" }
+  ],
+  "security": [
+    { "bearerAuth": [] }
+  ],
+  "paths": {
+    "/api/auth/register": {
+      "post": {
+        "tags": ["auth"],
+        "summary": "Register a new account",
+        "operationId": "register",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RegisterRequest" } } }
+        },
+        "responses": {
+          "201": {
+            "description": "Account created",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserDto" } } }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "tags": ["auth"],
+        "summary": "Authenticate and obtain a JWT",
+        "operationId": "login",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoginRequest" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Authenticated",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoginResponse" } } }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/auth/refresh": {
+      "post": {
+        "tags": ["auth"],
+        "summary": "Re-issue a JWT from a still-valid token",
+        "description": "Accepts a currently valid (non-expired) JWT and returns a fresh token with a new 12h expiry. This is not a separate opaque refresh token; once a token has expired, the client must log in again.",
+        "operationId": "refreshToken",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RefreshRequest" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "New token issued",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoginResponse" } } }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/game/bootstrap": {
+      "post": {
+        "tags": ["game"],
+        "summary": "Aggregated bootstrap payload for entering the town",
+        "description": "Returns world, player, profile, quests, mastery, learning path, skills, NPC states, the active save slot, and pending calendar events in one call. Invoked on login and after each chapter reset.",
+        "operationId": "gameBootstrap",
+        "responses": {
+          "200": {
+            "description": "Bootstrap payload",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/GameBootstrapResponse" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/world/session": {
+      "get": {
+        "tags": ["world"],
+        "summary": "Get or create the current world session",
+        "operationId": "getWorldSession",
+        "responses": {
+          "200": {
+            "description": "World session",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/WorldSessionDto" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/world/player": {
+      "patch": {
+        "tags": ["world"],
+        "summary": "Update player tile position and facing direction",
+        "operationId": "patchPlayer",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PlayerStatePatch" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated player state",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PlayerStateDto" } } }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/world/sleep": {
+      "post": {
+        "tags": ["world"],
+        "summary": "Advance the in-game world by one day",
+        "description": "Increments dayIndex, rotates weekday/season/weather, decays mastery, nudges emotion-persistence, and schedules calendar events for the new day.",
+        "operationId": "worldSleep",
+        "responses": {
+          "200": {
+            "description": "New world snapshot plus any newly scheduled events",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/WorldAdvanceResponse" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/world/saves": {
+      "get": {
+        "tags": ["world"],
+        "summary": "List the caller's save slots",
+        "operationId": "listSaveSlots",
+        "responses": {
+          "200": {
+            "description": "Save slots",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/SaveSlotDto" } } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/world/saves/{slotIndex}": {
+      "parameters": [
+        { "name": "slotIndex", "in": "path", "required": true, "description": "Save slot index, 0-5.", "schema": { "type": "integer", "format": "int32", "minimum": 0, "maximum": 5 } }
+      ],
+      "post": {
+        "tags": ["world"],
+        "summary": "Create a save slot",
+        "operationId": "createSaveSlot",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SaveSlotCreateRequest" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Created save slot",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SaveSlotDto" } } }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/world/saves/{slotIndex}/activate": {
+      "parameters": [
+        { "name": "slotIndex", "in": "path", "required": true, "schema": { "type": "integer", "format": "int32", "minimum": 0, "maximum": 5 } }
+      ],
+      "post": {
+        "tags": ["world"],
+        "summary": "Mark a save slot active",
+        "operationId": "activateSaveSlot",
+        "responses": {
+          "200": {
+            "description": "Activated save slot",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SaveSlotDto" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/world/saves/{slotIndex}/snapshot": {
+      "parameters": [
+        { "name": "slotIndex", "in": "path", "required": true, "schema": { "type": "integer", "format": "int32", "minimum": 0, "maximum": 5 } }
+      ],
+      "post": {
+        "tags": ["world"],
+        "summary": "Persist a JSON snapshot into a save slot",
+        "description": "The request body is a raw JSON string (the serialized client snapshot). It is stored verbatim against the slot.",
+        "operationId": "saveSlotSnapshot",
+        "requestBody": {
+          "required": false,
+          "content": { "application/json": { "schema": { "type": "string", "description": "Serialized snapshot payload." } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated save slot",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SaveSlotDto" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/world/skills": {
+      "get": {
+        "tags": ["world"],
+        "summary": "List skill-tree nodes and the caller's unlocked skills",
+        "operationId": "listSkills",
+        "responses": {
+          "200": {
+            "description": "Skill catalog plus unlocked skills",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SkillsResponse" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/world/skills/{skillKey}/unlock": {
+      "parameters": [
+        { "name": "skillKey", "in": "path", "required": true, "schema": { "type": "string" } }
+      ],
+      "post": {
+        "tags": ["world"],
+        "summary": "Unlock a skill node",
+        "operationId": "unlockSkill",
+        "responses": {
+          "200": {
+            "description": "Unlocked skill",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LearnerSkillDto" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/world/npcs": {
+      "get": {
+        "tags": ["world"],
+        "summary": "List all NPC dialog states for the caller",
+        "operationId": "listNpcStates",
+        "responses": {
+          "200": {
+            "description": "NPC dialog states",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/NpcDialogStateDto" } } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/world/npcs/{npcKey}/state": {
+      "parameters": [
+        { "name": "npcKey", "in": "path", "required": true, "schema": { "type": "string" } }
+      ],
+      "get": {
+        "tags": ["world"],
+        "summary": "Get (or initialize) one NPC's dialog state",
+        "operationId": "getNpcState",
+        "responses": {
+          "200": {
+            "description": "NPC dialog state",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/NpcDialogStateDto" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/world/npcs/{npcKey}/talk": {
+      "parameters": [
+        { "name": "npcKey", "in": "path", "required": true, "schema": { "type": "string" } }
+      ],
+      "post": {
+        "tags": ["world"],
+        "summary": "Advance an NPC dialog state machine",
+        "operationId": "talkToNpc",
+        "requestBody": {
+          "required": false,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/NpcTalkRequest" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated NPC dialog state",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/NpcDialogStateDto" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/world/calendar/today": {
+      "get": {
+        "tags": ["world"],
+        "summary": "Get the current in-game calendar state",
+        "operationId": "calendarToday",
+        "responses": {
+          "200": {
+            "description": "Calendar snapshot",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CalendarTodayResponse" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/world/calendar/events": {
+      "get": {
+        "tags": ["world"],
+        "summary": "List pending (unprocessed) calendar events",
+        "operationId": "listCalendarEvents",
+        "responses": {
+          "200": {
+            "description": "Pending events",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/WorldEventDto" } } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/world/calendar/events/{eventId}/process": {
+      "parameters": [
+        { "name": "eventId", "in": "path", "required": true, "schema": { "type": "integer", "format": "int64" } }
+      ],
+      "post": {
+        "tags": ["world"],
+        "summary": "Mark a calendar event processed",
+        "operationId": "processCalendarEvent",
+        "responses": {
+          "200": {
+            "description": "Updated event",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/WorldEventDto" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/world/boss/{chapter}/problem": {
+      "parameters": [
+        { "name": "chapter", "in": "path", "required": true, "description": "Chapter number, 1-7.", "schema": { "type": "integer", "format": "int32", "minimum": 1, "maximum": 7 } }
+      ],
+      "post": {
+        "tags": ["boss"],
+        "summary": "Request a boss (arena) problem for a chapter/stage",
+        "operationId": "requestBossProblem",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/BossProblemRequest" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Boss problem",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/BossProblemDto" } } }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/world/boss/{chapter}/attempt": {
+      "parameters": [
+        { "name": "chapter", "in": "path", "required": true, "schema": { "type": "integer", "format": "int32", "minimum": 1, "maximum": 7 } }
+      ],
+      "post": {
+        "tags": ["boss"],
+        "summary": "Submit a boss attempt for server-side evaluation",
+        "description": "The body's `chapter` must match the path `chapter`. On graph-evaluation failure the client may fall back to local Pyodide.",
+        "operationId": "submitBossAttempt",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/BossAttemptRequest" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Attempt result",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/BossAttemptResultDto" } } }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/learner/profile": {
+      "get": {
+        "tags": ["learner"],
+        "summary": "Get the caller's learner profile",
+        "operationId": "getLearnerProfile",
+        "responses": {
+          "200": {
+            "description": "Learner profile",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LearnerProfileDto" } } }
+          },
+          "204": { "description": "No profile has been created yet" },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/learner/profile/dimensions": {
+      "get": {
+        "tags": ["learner"],
+        "summary": "Get the 8-dimension profile score snapshot",
+        "operationId": "getProfileDimensions",
+        "responses": {
+          "200": {
+            "description": "Dimension snapshots (radar + self-assessment UI)",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/ProfileDimensionDto" } } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/learner/profile/dimensions/{dimensionKey}": {
+      "parameters": [
+        { "name": "dimensionKey", "in": "path", "required": true, "description": "snake_case dimension key, e.g. learning_goal.", "schema": { "type": "string" } }
+      ],
+      "put": {
+        "tags": ["learner"],
+        "summary": "Self-assess (direct-write) one profile dimension",
+        "description": "Students may only write the subjective self-editable dimensions; teachers/admins may write any of their own 8 dimensions. The request must contain at least one of scoreDelta / evidenceIncrement / tagsAdd / metadata.",
+        "operationId": "selfUpdateDimension",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SelfDimensionRequest" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated dimension snapshot",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DimensionUpdateResult" } } }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api/learner/mastery": {
+      "get": {
+        "tags": ["learner"],
+        "summary": "List KC mastery snapshots for the caller",
+        "operationId": "getMastery",
+        "responses": {
+          "200": {
+            "description": "Mastery snapshots",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/MasterySnapshotDto" } } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/learner/recommendations": {
+      "get": {
+        "tags": ["learner"],
+        "summary": "Get personalized resource recommendations",
+        "operationId": "getRecommendations",
+        "responses": {
+          "200": {
+            "description": "Recommendations",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/RecommendationDto" } } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/learner/path/plan": {
+      "post": {
+        "tags": ["learner"],
+        "summary": "Generate (re-plan) the active learning path",
+        "operationId": "planLearningPath",
+        "responses": {
+          "200": {
+            "description": "Plan result",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PlanPathResponse" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api/learner/path/active": {
+      "get": {
+        "tags": ["learner"],
+        "summary": "Get the active learning path",
+        "operationId": "getActivePath",
+        "responses": {
+          "200": {
+            "description": "Active learning path",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LearningPathDto" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/learner/path/archived": {
+      "get": {
+        "tags": ["learner"],
+        "summary": "List archived learning paths",
+        "operationId": "listArchivedPaths",
+        "responses": {
+          "200": {
+            "description": "Archived paths",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/LearningPathDto" } } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api/learner/path/{id}": {
+      "parameters": [
+        { "name": "id", "in": "path", "required": true, "schema": { "type": "integer", "format": "int64" } }
+      ],
+      "get": {
+        "tags": ["learner"],
+        "summary": "Get a learning path by id",
+        "operationId": "getPathById",
+        "responses": {
+          "200": {
+            "description": "Learning path",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LearningPathDto" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/learner/evaluations": {
+      "post": {
+        "tags": ["learner"],
+        "summary": "Compute a retrospective evaluation",
+        "operationId": "computeEvaluation",
+        "requestBody": {
+          "required": false,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EvaluationRequest" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Evaluation result",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EvaluationDto" } } }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      },
+      "get": {
+        "tags": ["learner"],
+        "summary": "List evaluations for the caller",
+        "operationId": "listEvaluations",
+        "parameters": [
+          { "name": "limit", "in": "query", "required": false, "schema": { "type": "integer", "format": "int32" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Evaluations",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/EvaluationDto" } } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api/learner/evaluations/{evaluationId}": {
+      "parameters": [
+        { "name": "evaluationId", "in": "path", "required": true, "schema": { "type": "integer", "format": "int64" } }
+      ],
+      "get": {
+        "tags": ["learner"],
+        "summary": "Get an evaluation by id",
+        "operationId": "getEvaluation",
+        "responses": {
+          "200": {
+            "description": "Evaluation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EvaluationDto" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/quests/today": {
+      "get": {
+        "tags": ["quests"],
+        "summary": "List today's quests",
+        "operationId": "questsToday",
+        "responses": {
+          "200": {
+            "description": "Today's quests",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/QuestDto" } } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api/quests": {
+      "get": {
+        "tags": ["quests"],
+        "summary": "List quests with optional filters",
+        "operationId": "listQuests",
+        "parameters": [
+          { "name": "status", "in": "query", "required": false, "schema": { "$ref": "#/components/schemas/QuestStatus" } },
+          { "name": "source", "in": "query", "required": false, "schema": { "$ref": "#/components/schemas/QuestSource" } },
+          { "name": "limit", "in": "query", "required": false, "schema": { "type": "integer", "format": "int32", "default": 30 } },
+          { "name": "offset", "in": "query", "required": false, "schema": { "type": "integer", "format": "int32", "default": 0 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Quests",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/QuestDto" } } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api/quests/{id}/start": {
+      "parameters": [
+        { "name": "id", "in": "path", "required": true, "schema": { "type": "integer", "format": "int64" } }
+      ],
+      "post": {
+        "tags": ["quests"],
+        "summary": "Start a quest",
+        "operationId": "startQuest",
+        "responses": {
+          "200": {
+            "description": "Updated quest",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/QuestDto" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api/quests/{id}/complete": {
+      "parameters": [
+        { "name": "id", "in": "path", "required": true, "schema": { "type": "integer", "format": "int64" } }
+      ],
+      "post": {
+        "tags": ["quests"],
+        "summary": "Complete a quest with optional evidence",
+        "operationId": "completeQuest",
+        "requestBody": {
+          "required": false,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/QuestCompleteRequest" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated quest",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/QuestDto" } } }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api/quests/{id}/skip": {
+      "parameters": [
+        { "name": "id", "in": "path", "required": true, "schema": { "type": "integer", "format": "int64" } }
+      ],
+      "post": {
+        "tags": ["quests"],
+        "summary": "Skip a quest",
+        "operationId": "skipQuest",
+        "requestBody": {
+          "required": false,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/QuestSkipRequest" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated quest",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/QuestDto" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api/course/pack": {
+      "get": {
+        "tags": ["course"],
+        "summary": "Get the active course pack summary",
+        "operationId": "getCoursePack",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Course pack",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CoursePackDto" } } }
+          }
+        }
+      }
+    },
+    "/api/course/chapters": {
+      "get": {
+        "tags": ["course"],
+        "summary": "List chapters",
+        "operationId": "listChapters",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Chapters",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/ChapterDto" } } } }
+          }
+        }
+      }
+    },
+    "/api/course/kcs": {
+      "get": {
+        "tags": ["course"],
+        "summary": "List knowledge components, optionally by chapter",
+        "operationId": "listKcs",
+        "security": [],
+        "parameters": [
+          { "name": "chapterId", "in": "query", "required": false, "schema": { "type": "integer", "format": "int64" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Knowledge components",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/KcDto" } } } }
+          }
+        }
+      }
+    },
+    "/api/course/pages": {
+      "get": {
+        "tags": ["course"],
+        "summary": "List course pages for a KC",
+        "operationId": "listPages",
+        "security": [],
+        "parameters": [
+          { "name": "kcCode", "in": "query", "required": true, "description": "KC code, pattern PY43-KC-NNN.", "schema": { "type": "string", "pattern": "^PY43-KC-[0-9]{3}$" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Course pages",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/PageDto" } } } }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" }
+        }
+      }
+    },
+    "/api/course/problems": {
+      "get": {
+        "tags": ["course"],
+        "summary": "List course problems, optionally by KC",
+        "operationId": "listCourseProblems",
+        "security": [],
+        "parameters": [
+          { "name": "kcCode", "in": "query", "required": false, "schema": { "type": "string", "pattern": "^PY43-KC-[0-9]{3}$" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Course problems",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/ProblemDto" } } } }
+          }
+        }
+      }
+    },
+    "/api/course/problems/{id}": {
+      "parameters": [
+        { "name": "id", "in": "path", "required": true, "schema": { "type": "integer", "format": "int64" } }
+      ],
+      "get": {
+        "tags": ["course"],
+        "summary": "Get a course problem (full statement)",
+        "operationId": "getCourseProblem",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Course problem",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProblemDto" } } }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/course/examples": {
+      "get": {
+        "tags": ["course"],
+        "summary": "List worked code examples",
+        "operationId": "listExamples",
+        "security": [],
+        "parameters": [
+          { "name": "packId", "in": "query", "required": false, "schema": { "type": "integer", "format": "int64" } },
+          { "name": "kcCode", "in": "query", "required": false, "schema": { "type": "string", "pattern": "^PY43-KC-[0-9]{3}$" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Examples",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/CourseExampleDto" } } } }
+          }
+        }
+      }
+    },
+    "/api/course/examples/{exampleId}": {
+      "parameters": [
+        { "name": "exampleId", "in": "path", "required": true, "schema": { "type": "integer", "format": "int64" } }
+      ],
+      "get": {
+        "tags": ["course"],
+        "summary": "Get a worked code example",
+        "operationId": "getExample",
+        "security": [],
+        "parameters": [
+          { "name": "packId", "in": "query", "required": false, "schema": { "type": "integer", "format": "int64" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Example",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CourseExampleDto" } } }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/course/videos": {
+      "get": {
+        "tags": ["course"],
+        "summary": "List course videos, optionally by chapter",
+        "operationId": "listVideos",
+        "security": [],
+        "parameters": [
+          { "name": "chapterId", "in": "query", "required": false, "schema": { "type": "integer", "format": "int32" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Video manifest entries (may be empty when no task-point videos exist)",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/CourseVideoDto" } } } }
+          }
+        }
+      }
+    },
+    "/api/course/videos/{id}": {
+      "parameters": [
+        { "name": "id", "in": "path", "required": true, "schema": { "type": "integer", "format": "int64" } },
+        { "name": "Range", "in": "header", "required": false, "description": "Optional byte range, e.g. `bytes=0-`. Triggers a 206 partial response.", "schema": { "type": "string" } }
+      ],
+      "get": {
+        "tags": ["course"],
+        "summary": "Stream a course video (supports HTTP Range)",
+        "description": "Returns `video/mp4`. With a `Range` header the response is `206 Partial Content` with `Content-Range`; without it, `200 OK` with the full body. `Accept-Ranges: bytes` is always advertised.",
+        "operationId": "streamVideo",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Full video",
+            "headers": {
+              "Accept-Ranges": { "schema": { "type": "string" }, "description": "bytes" }
+            },
+            "content": { "video/mp4": { "schema": { "type": "string", "format": "binary" } } }
+          },
+          "206": {
+            "description": "Partial video content",
+            "headers": {
+              "Content-Range": { "schema": { "type": "string" } },
+              "Accept-Ranges": { "schema": { "type": "string" } }
+            },
+            "content": { "video/mp4": { "schema": { "type": "string", "format": "binary" } } }
+          },
+          "404": { "description": "Video not found or file missing" },
+          "416": { "description": "Requested range not satisfiable" }
+        }
+      }
+    },
+    "/api/course/pages/{pageId}/image": {
+      "parameters": [
+        { "name": "pageId", "in": "path", "required": true, "schema": { "type": "integer", "format": "int64" } }
+      ],
+      "get": {
+        "tags": ["course"],
+        "summary": "Render a course page as a PNG image",
+        "description": "Renders the corresponding source PDF page to PNG (cached server-side) for inline evidence display.",
+        "operationId": "getPageImage",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Rendered page image",
+            "content": { "image/png": { "schema": { "type": "string", "format": "binary" } } }
+          },
+          "404": { "description": "Page not found or out of range" }
+        }
+      }
+    },
+    "/api/course/documents/{docId}/pdf": {
+      "parameters": [
+        { "name": "docId", "in": "path", "required": true, "description": "Document id, 186-192 (pack 43).", "schema": { "type": "integer", "format": "int64" } }
+      ],
+      "get": {
+        "tags": ["course"],
+        "summary": "Stream the original chapter PDF",
+        "operationId": "streamDocumentPdf",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "PDF document",
+            "content": { "application/pdf": { "schema": { "type": "string", "format": "binary" } } }
+          },
+          "404": { "description": "Document not found / out of range / missing on disk" }
+        }
+      }
+    },
+    "/api/problems/{id}/public": {
+      "parameters": [
+        { "name": "id", "in": "path", "required": true, "schema": { "type": "integer", "format": "int64" } }
+      ],
+      "get": {
+        "tags": ["practice"],
+        "summary": "Get the public (student-safe) view of a problem",
+        "operationId": "getPublicProblem",
+        "responses": {
+          "200": {
+            "description": "Public problem view",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PublicProblemDto" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/submissions": {
+      "post": {
+        "tags": ["practice"],
+        "summary": "Submit code for judging",
+        "operationId": "createSubmission",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SubmissionCreateRequest" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Created submission (judging may still be in progress)",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SubmissionDto" } } }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      },
+      "get": {
+        "tags": ["practice"],
+        "summary": "List the caller's submissions",
+        "operationId": "listSubmissions",
+        "parameters": [
+          { "name": "problemId", "in": "query", "required": false, "schema": { "type": "integer", "format": "int64" } },
+          { "name": "status", "in": "query", "required": false, "schema": { "$ref": "#/components/schemas/SubmissionStatus" } },
+          { "name": "limit", "in": "query", "required": false, "schema": { "type": "integer", "format": "int32", "default": 30 } },
+          { "name": "offset", "in": "query", "required": false, "schema": { "type": "integer", "format": "int32", "default": 0 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Submissions",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/SubmissionDto" } } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api/submissions/{id}": {
+      "parameters": [
+        { "name": "id", "in": "path", "required": true, "schema": { "type": "integer", "format": "int64" } }
+      ],
+      "get": {
+        "tags": ["practice"],
+        "summary": "Get a submission with its judge result",
+        "operationId": "getSubmission",
+        "responses": {
+          "200": {
+            "description": "Submission detail",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SubmissionDetailDto" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/classrooms": {
+      "post": {
+        "tags": ["classroom"],
+        "summary": "Create a classroom (teacher)",
+        "operationId": "createClassroom",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateClassroomRequest" } } }
+        },
+        "responses": {
+          "201": {
+            "description": "Created classroom",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ClassroomDto" } } }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api/classrooms/mine": {
+      "get": {
+        "tags": ["classroom"],
+        "summary": "List classrooms the caller belongs to",
+        "operationId": "listMyClassrooms",
+        "responses": {
+          "200": {
+            "description": "Classrooms",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/ClassroomDto" } } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/classrooms/join": {
+      "post": {
+        "tags": ["classroom"],
+        "summary": "Join a classroom by join code (student)",
+        "operationId": "joinClassroom",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/JoinClassroomRequest" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Joined classroom",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ClassroomDto" } } }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/classrooms/{id}/members": {
+      "parameters": [
+        { "name": "id", "in": "path", "required": true, "schema": { "type": "integer", "format": "int64" } }
+      ],
+      "get": {
+        "tags": ["classroom"],
+        "summary": "List classroom members",
+        "operationId": "listClassroomMembers",
+        "responses": {
+          "200": {
+            "description": "Members",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/ClassroomMemberDto" } } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api/classroom/quests/mine": {
+      "get": {
+        "tags": ["classroom"],
+        "summary": "List the caller's classroom quests (student)",
+        "operationId": "listMyClassroomQuests",
+        "responses": {
+          "200": {
+            "description": "Classroom quests",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/ClassroomQuestDto" } } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api/tutor/ask": {
+      "post": {
+        "tags": ["agents"],
+        "summary": "Ask the tutor (SSE stream)",
+        "description": "Streams the tutor's answer as Server-Sent Events. Response content type is `text/event-stream`. Named events: `plan`, `trace`, `token`, `result`, `error`. Each event's `data:` line carries a JSON payload.",
+        "operationId": "tutorAsk",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TutorAskRequest" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "SSE stream",
+            "content": { "text/event-stream": { "schema": { "$ref": "#/components/schemas/SseEvent" } } }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api/orchestrator/turn/stream": {
+      "post": {
+        "tags": ["agents"],
+        "summary": "Orchestrator single turn (SSE stream)",
+        "description": "Proxies one orchestrator turn to the Python graph service and streams results as SSE (`text/event-stream`). Named events: `plan`, `trace`, `token`, `result`, `error`.",
+        "operationId": "orchestratorTurnStream",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OrchestratorTurnRequest" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "SSE stream",
+            "content": { "text/event-stream": { "schema": { "$ref": "#/components/schemas/SseEvent" } } }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api/workshop/resources/stream": {
+      "post": {
+        "tags": ["agents"],
+        "summary": "Generate a learning resource (SSE stream)",
+        "description": "Streams resource generation progress as SSE (`text/event-stream`). Named events: `plan`, `trace`, `token`, `result`, `error`.",
+        "operationId": "createResourceStream",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ResourceCreateRequest" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "SSE stream",
+            "content": { "text/event-stream": { "schema": { "$ref": "#/components/schemas/SseEvent" } } }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api/learner/profile/interview/{sessionId}/turn/stream": {
+      "parameters": [
+        { "name": "sessionId", "in": "path", "required": true, "schema": { "type": "string" } }
+      ],
+      "post": {
+        "tags": ["agents"],
+        "summary": "Profile interview turn (SSE stream)",
+        "description": "Streams a profile-interview turn as SSE (`text/event-stream`). Named events: `plan`, `trace`, `token`, `result`, `error`.",
+        "operationId": "profileInterviewTurnStream",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProfileTurnRequest" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "SSE stream",
+            "content": { "text/event-stream": { "schema": { "$ref": "#/components/schemas/SseEvent" } } }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api/media/assets/{id}": {
+      "parameters": [
+        { "name": "id", "in": "path", "required": true, "schema": { "type": "integer", "format": "int64" } },
+        { "name": "Range", "in": "header", "required": false, "description": "Optional byte range; triggers a 206 partial response.", "schema": { "type": "string" } }
+      ],
+      "get": {
+        "tags": ["media"],
+        "summary": "Stream a generated media asset (public)",
+        "description": "Serves generated media bytes by id (for use as `<img>` / `<video>` src). Content type matches the asset's stored MIME type. Supports HTTP Range.",
+        "operationId": "serveMediaAsset",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Asset bytes",
+            "content": { "application/octet-stream": { "schema": { "type": "string", "format": "binary" } } }
+          },
+          "206": { "description": "Partial asset content" },
+          "404": { "description": "Asset not found or file missing" }
+        }
+      }
+    },
+    "/healthz": {
+      "get": {
+        "tags": ["system"],
+        "summary": "Liveness probe",
+        "operationId": "healthz",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Service is up",
+            "content": { "application/json": { "schema": { "type": "object", "additionalProperties": { "type": "string" }, "example": { "status": "ok" } } } }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "HS256 JWT, 12h TTL. Obtain via /api/auth/login; renew (while still valid) via /api/auth/refresh."
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Validation or malformed request (codes: VALIDATION_ERROR, BAD_REQUEST).",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } } }
+      },
+      "Unauthorized": {
+        "description": "Missing or invalid JWT (code: UNAUTHORIZED). Re-login required.",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } } }
+      },
+      "Forbidden": {
+        "description": "Authenticated but not permitted (code: FORBIDDEN).",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } } }
+      },
+      "NotFound": {
+        "description": "Resource not found (codes: NOT_FOUND and resource-specific *_NOT_FOUND).",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } } }
+      }
+    },
+    "schemas": {
+      "JsonNode": {
+        "description": "Arbitrary JSON value (object, array, or scalar). Backed by a Jackson JsonNode on the server.",
+        "nullable": true
+      },
+      "ApiError": {
+        "type": "object",
+        "description": "Standard error envelope returned for all non-2xx JSON responses.",
+        "required": ["code", "message", "details", "timestamp"],
+        "properties": {
+          "code": { "type": "string", "description": "Stable machine-readable error code, e.g. VALIDATION_ERROR, UNAUTHORIZED, FORBIDDEN, NOT_FOUND, INTERNAL_ERROR." },
+          "message": { "type": "string", "description": "Human-readable message." },
+          "details": { "type": "array", "items": { "type": "string" }, "description": "Optional field-level or contextual detail lines." },
+          "traceId": { "type": "string", "nullable": true, "description": "Correlation id for server logs." },
+          "timestamp": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Role": {
+        "type": "string",
+        "enum": ["STUDENT", "TEACHER", "ADMIN"]
+      },
+      "RegisterRequest": {
+        "type": "object",
+        "required": ["username", "password", "displayName", "role"],
+        "properties": {
+          "username": { "type": "string", "minLength": 3, "maxLength": 64, "pattern": "^[A-Za-z0-9_.-]+$" },
+          "password": { "type": "string", "format": "password", "minLength": 8, "maxLength": 72 },
+          "displayName": { "type": "string", "maxLength": 128, "pattern": "^[^<>&\"'`]+$" },
+          "role": { "$ref": "#/components/schemas/Role" },
+          "email": { "type": "string", "format": "email", "maxLength": 128, "nullable": true },
+          "teacherInviteCode": { "type": "string", "nullable": true, "description": "Required to register as TEACHER (validated server-side)." }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": ["username", "password"],
+        "properties": {
+          "username": { "type": "string" },
+          "password": { "type": "string", "format": "password" }
+        }
+      },
+      "RefreshRequest": {
+        "type": "object",
+        "required": ["token"],
+        "properties": {
+          "token": { "type": "string", "description": "A currently valid (non-expired) JWT." }
+        }
+      },
+      "UserDto": {
+        "type": "object",
+        "required": ["id", "username", "displayName", "role"],
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "username": { "type": "string" },
+          "displayName": { "type": "string" },
+          "role": { "$ref": "#/components/schemas/Role" }
+        }
+      },
+      "LoginResponse": {
+        "type": "object",
+        "required": ["token", "expiresAt", "user"],
+        "properties": {
+          "token": { "type": "string", "description": "JWT bearer token." },
+          "expiresAt": { "type": "string", "format": "date-time" },
+          "user": { "$ref": "#/components/schemas/UserDto" }
+        }
+      },
+      "GameBootstrapResponse": {
+        "type": "object",
+        "description": "Aggregated payload for POST /api/game/bootstrap.",
+        "properties": {
+          "world": { "$ref": "#/components/schemas/WorldSnapshotDto" },
+          "player": { "$ref": "#/components/schemas/PlayerStateDto" },
+          "profile": { "$ref": "#/components/schemas/LearnerProfileDto" },
+          "quests": { "type": "array", "items": { "$ref": "#/components/schemas/QuestDto" } },
+          "mastery": { "type": "array", "items": { "$ref": "#/components/schemas/MasterySnapshotDto" } },
+          "path": { "type": "array", "items": { "$ref": "#/components/schemas/LearningPathNodeDto" } },
+          "skills": { "type": "array", "items": { "$ref": "#/components/schemas/LearnerSkillDto" } },
+          "npcStates": { "type": "array", "items": { "$ref": "#/components/schemas/NpcDialogStateDto" } },
+          "activeSlot": { "allOf": [{ "$ref": "#/components/schemas/SaveSlotDto" }], "nullable": true },
+          "pendingEvents": { "type": "array", "items": { "$ref": "#/components/schemas/WorldEventDto" } }
+        }
+      },
+      "WorldSnapshotDto": {
+        "type": "object",
+        "properties": {
+          "worldSessionId": { "type": "integer", "format": "int64" },
+          "dayIndex": { "type": "integer", "format": "int32" },
+          "monthIndex": { "type": "integer", "format": "int32" },
+          "weekday": { "type": "string" },
+          "season": { "type": "string" },
+          "timeOfDay": { "type": "string" },
+          "weather": { "type": "string" },
+          "inGameMinutes": { "type": "integer", "format": "int32" },
+          "startedAt": { "type": "string", "format": "date-time", "nullable": true },
+          "lastActiveAt": { "type": "string", "format": "date-time", "nullable": true }
+        }
+      },
+      "WorldSessionDto": {
+        "type": "object",
+        "description": "Lighter session payload for GET /api/world/session.",
+        "properties": {
+          "worldSessionId": { "type": "integer", "format": "int64", "nullable": true },
+          "dayIndex": { "type": "integer", "format": "int32", "nullable": true },
+          "weather": { "type": "string", "nullable": true },
+          "inGameMinutes": { "type": "integer", "format": "int32", "nullable": true },
+          "player": { "$ref": "#/components/schemas/PlayerStateDto" },
+          "npcs": { "type": "array", "items": { "$ref": "#/components/schemas/NpcStateDto" } }
+        }
+      },
+      "WorldAdvanceResponse": {
+        "type": "object",
+        "properties": {
+          "world": { "$ref": "#/components/schemas/WorldSnapshotDto" },
+          "newEvents": { "type": "array", "items": { "$ref": "#/components/schemas/WorldEventDto" } }
+        }
+      },
+      "PlayerStateDto": {
+        "type": "object",
+        "properties": {
+          "playerStateId": { "type": "integer", "format": "int64", "nullable": true },
+          "avatarKey": { "type": "string", "nullable": true },
+          "mapKey": { "type": "string", "nullable": true },
+          "tileX": { "type": "integer", "format": "int32", "nullable": true },
+          "tileY": { "type": "integer", "format": "int32", "nullable": true },
+          "direction": { "type": "string", "nullable": true }
+        }
+      },
+      "PlayerStatePatch": {
+        "type": "object",
+        "required": ["tileX", "tileY", "direction"],
+        "properties": {
+          "tileX": { "type": "integer", "format": "int32" },
+          "tileY": { "type": "integer", "format": "int32" },
+          "direction": {
+            "type": "string",
+            "enum": ["UP", "DOWN", "LEFT", "RIGHT", "UP_LEFT", "UP_RIGHT", "DOWN_LEFT", "DOWN_RIGHT"]
+          }
+        }
+      },
+      "NpcStateDto": {
+        "type": "object",
+        "properties": {
+          "npcKey": { "type": "string" },
+          "mood": { "type": "string", "nullable": true }
+        }
+      },
+      "NpcDialogStateDto": {
+        "type": "object",
+        "properties": {
+          "npcKey": { "type": "string" },
+          "currentNodeId": { "type": "string", "nullable": true },
+          "completedNodeIds": { "type": "array", "items": { "type": "string" }, "nullable": true },
+          "lastTalkedAt": { "type": "string", "format": "date-time", "nullable": true },
+          "flags": { "$ref": "#/components/schemas/JsonNode" }
+        }
+      },
+      "NpcTalkRequest": {
+        "type": "object",
+        "description": "Describes one dialog state-machine transition.",
+        "properties": {
+          "nodeId": { "type": "string", "nullable": true, "description": "Node completed/triggered this turn." },
+          "nextNodeId": { "type": "string", "nullable": true, "description": "Node to advance to (null to stay)." },
+          "effects": { "type": "array", "nullable": true, "items": { "$ref": "#/components/schemas/JsonNode" }, "description": "Side effects produced by this dialog turn." }
+        }
+      },
+      "CalendarTodayResponse": {
+        "type": "object",
+        "properties": {
+          "dayIndex": { "type": "integer", "format": "int32" },
+          "monthIndex": { "type": "integer", "format": "int32" },
+          "weekday": { "type": "string" },
+          "season": { "type": "string" },
+          "timeOfDay": { "type": "string" },
+          "weather": { "type": "string" },
+          "inGameMinutes": { "type": "integer", "format": "int32" }
+        }
+      },
+      "WorldEventDto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "dateIso": { "type": "string", "format": "date", "nullable": true },
+          "eventType": { "type": "string" },
+          "payload": { "$ref": "#/components/schemas/JsonNode" },
+          "isProcessed": { "type": "boolean" },
+          "createdAt": { "type": "string", "format": "date-time", "nullable": true }
+        }
+      },
+      "SaveSlotDto": {
+        "type": "object",
+        "properties": {
+          "slotIndex": { "type": "integer", "format": "int32" },
+          "displayName": { "type": "string", "nullable": true },
+          "isActive": { "type": "boolean" },
+          "createdAt": { "type": "string", "format": "date-time", "nullable": true },
+          "lastPlayedAt": { "type": "string", "format": "date-time", "nullable": true },
+          "snapshot": { "$ref": "#/components/schemas/JsonNode" },
+          "sceneName": { "type": "string", "nullable": true },
+          "unlockedBuildings": { "type": "array", "items": { "type": "string" } },
+          "accumulatedPlaySeconds": { "type": "integer", "format": "int64" },
+          "inventoryItems": { "$ref": "#/components/schemas/JsonNode" }
+        }
+      },
+      "SaveSlotCreateRequest": {
+        "type": "object",
+        "required": ["displayName"],
+        "description": "Only displayName is currently consumed server-side; the other fields are accepted to align with the client save payload shape.",
+        "properties": {
+          "displayName": { "type": "string", "maxLength": 64 },
+          "sceneName": { "type": "string", "maxLength": 64, "nullable": true },
+          "unlockedBuildings": { "type": "array", "nullable": true, "items": { "type": "string", "maxLength": 64 } },
+          "accumulatedPlaySeconds": { "type": "integer", "format": "int64", "minimum": 0, "nullable": true },
+          "inventoryItems": { "$ref": "#/components/schemas/JsonNode" }
+        }
+      },
+      "LearnerSkillDto": {
+        "type": "object",
+        "properties": {
+          "skillKey": { "type": "string" },
+          "unlockedAt": { "type": "string", "format": "date-time", "nullable": true },
+          "proficiency": { "type": "integer", "format": "int32" }
+        }
+      },
+      "SkillNodeDto": {
+        "type": "object",
+        "properties": {
+          "skillKey": { "type": "string" },
+          "displayName": { "type": "string", "nullable": true },
+          "description": { "type": "string", "nullable": true },
+          "kcCodes": { "type": "array", "items": { "type": "string" }, "nullable": true },
+          "unlockCondition": { "$ref": "#/components/schemas/JsonNode" },
+          "iconUrl": { "type": "string", "nullable": true },
+          "tier": { "type": "integer", "format": "int32" }
+        }
+      },
+      "SkillsResponse": {
+        "type": "object",
+        "properties": {
+          "nodes": { "type": "array", "items": { "$ref": "#/components/schemas/SkillNodeDto" } },
+          "unlocked": { "type": "array", "items": { "$ref": "#/components/schemas/LearnerSkillDto" } }
+        }
+      },
+      "BossProblemRequest": {
+        "type": "object",
+        "required": ["stage"],
+        "properties": {
+          "stage": { "type": "integer", "format": "int32", "minimum": 1, "maximum": 4 },
+          "kcCode": { "type": "string", "nullable": true },
+          "difficulty": { "type": "integer", "format": "int32", "nullable": true, "description": "Desired difficulty 1-5; null lets the server infer from stage." },
+          "preferredKc": { "type": "string", "nullable": true },
+          "preferredKind": { "type": "string", "nullable": true, "description": "e.g. fill_blank / debug / multi_round." },
+          "profileSignals": { "allOf": [{ "$ref": "#/components/schemas/ProfileSignalsPayload" }], "nullable": true }
+        }
+      },
+      "ProfileSignalsPayload": {
+        "type": "object",
+        "description": "Learner profile signals used to tailor boss problems.",
+        "properties": {
+          "weakKcCodes": { "type": "array", "items": { "type": "string" }, "nullable": true },
+          "pythonSelfRatedLevel": { "type": "integer", "format": "int32", "nullable": true },
+          "successRate": { "type": "number", "format": "double", "nullable": true },
+          "mediaPriority": { "type": "array", "items": { "type": "string" }, "nullable": true },
+          "resilience": { "type": "number", "format": "double", "nullable": true },
+          "questPreferredKind": { "type": "string", "nullable": true }
+        }
+      },
+      "BossProblemDto": {
+        "type": "object",
+        "properties": {
+          "problemId": { "type": "string" },
+          "chapter": { "type": "integer", "format": "int32" },
+          "stage": { "type": "integer", "format": "int32" },
+          "difficulty": { "type": "integer", "format": "int32" },
+          "kcCode": { "type": "string", "nullable": true },
+          "statement": { "type": "string" },
+          "hints": { "type": "array", "items": { "type": "string" } },
+          "sampleInput": { "type": "string", "nullable": true },
+          "sampleOutput": { "type": "string", "nullable": true },
+          "totalTestCases": { "type": "integer", "format": "int32" },
+          "reviewed": { "type": "boolean" },
+          "aiGenerated": { "type": "boolean" }
+        }
+      },
+      "BossAttemptRequest": {
+        "type": "object",
+        "required": ["problemId", "chapter", "stage", "code", "elapsedSec"],
+        "properties": {
+          "problemId": { "type": "string", "maxLength": 256 },
+          "chapter": { "type": "integer", "format": "int32", "minimum": 1, "maximum": 7 },
+          "stage": { "type": "integer", "format": "int32", "minimum": 1, "maximum": 4 },
+          "code": { "type": "string", "maxLength": 10000 },
+          "elapsedSec": { "type": "integer", "format": "int32", "minimum": 0 }
+        }
+      },
+      "BossAttemptResultDto": {
+        "type": "object",
+        "properties": {
+          "problemId": { "type": "string" },
+          "passed": { "type": "boolean" },
+          "passedTestCases": { "type": "integer", "format": "int32" },
+          "totalTestCases": { "type": "integer", "format": "int32" },
+          "failureFirstHint": { "type": "string", "nullable": true },
+          "score": { "type": "integer", "format": "int32" },
+          "feedback": { "type": "string", "nullable": true }
+        }
+      },
+      "LearnerProfileDto": {
+        "type": "object",
+        "description": "8-dimension learner profile. Nested dimension objects mirror the JSONB sub-documents.",
+        "properties": {
+          "profileId": { "type": "integer", "format": "int64", "nullable": true },
+          "userId": { "type": "integer", "format": "int64", "nullable": true },
+          "packId": { "type": "integer", "format": "int64", "nullable": true },
+          "major": { "type": "string", "nullable": true },
+          "baseLevel": { "allOf": [{ "$ref": "#/components/schemas/BaseLevelDto" }], "nullable": true },
+          "learningGoal": { "allOf": [{ "$ref": "#/components/schemas/LearningGoalDto" }], "nullable": true },
+          "cognitiveStyle": { "allOf": [{ "$ref": "#/components/schemas/CognitiveStyleDto" }], "nullable": true },
+          "learningPreference": { "allOf": [{ "$ref": "#/components/schemas/LearningPreferenceDto" }], "nullable": true },
+          "errorPatterns": { "allOf": [{ "$ref": "#/components/schemas/ErrorPatternsDto" }], "nullable": true },
+          "practiceCapability": { "allOf": [{ "$ref": "#/components/schemas/PracticeCapabilityDto" }], "nullable": true },
+          "emotionPersistence": { "allOf": [{ "$ref": "#/components/schemas/EmotionPersistenceDto" }], "nullable": true },
+          "narrativeSummary": { "type": "string", "nullable": true }
+        }
+      },
+      "BaseLevelDto": {
+        "type": "object",
+        "properties": {
+          "programmingYears": { "type": "integer", "format": "int32", "nullable": true },
+          "languagesKnown": { "type": "array", "items": { "type": "string" }, "nullable": true },
+          "pythonSelfRatedLevel": { "type": "integer", "format": "int32", "nullable": true }
+        }
+      },
+      "LearningGoalDto": {
+        "type": "object",
+        "properties": {
+          "kind": { "type": "string", "nullable": true },
+          "deadlineIso": { "type": "string", "nullable": true },
+          "targetKcCodes": { "type": "array", "items": { "type": "string" }, "nullable": true }
+        }
+      },
+      "CognitiveStyleDto": {
+        "type": "object",
+        "properties": {
+          "fieldDependent": { "type": "number", "format": "double", "nullable": true },
+          "sequentialVsHolistic": { "type": "number", "format": "double", "nullable": true }
+        }
+      },
+      "LearningPreferenceDto": {
+        "type": "object",
+        "properties": {
+          "mediaPriority": { "type": "array", "items": { "type": "string" }, "nullable": true },
+          "sessionMinutesPerDay": { "type": "integer", "format": "int32", "nullable": true }
+        }
+      },
+      "ErrorPatternsDto": {
+        "type": "object",
+        "properties": {
+          "frequentKcCodes": { "type": "array", "items": { "type": "string" }, "nullable": true },
+          "commonCategories": { "type": "array", "items": { "type": "string" }, "nullable": true }
+        }
+      },
+      "PracticeCapabilityDto": {
+        "type": "object",
+        "properties": {
+          "avgAttemptsPerProblem": { "type": "number", "format": "double", "nullable": true },
+          "successRate": { "type": "number", "format": "double", "nullable": true }
+        }
+      },
+      "EmotionPersistenceDto": {
+        "type": "object",
+        "properties": {
+          "resilience": { "type": "number", "format": "double", "nullable": true },
+          "recentMood": { "type": "string", "nullable": true }
+        }
+      },
+      "ProfileDimensionDto": {
+        "type": "object",
+        "description": "One profile dimension snapshot (radar + self-assessment).",
+        "properties": {
+          "key": { "type": "string", "description": "English snake_case dimension key." },
+          "label": { "type": "string", "description": "Localized dimension label." },
+          "score": { "type": "number", "format": "double", "description": "0..1 normalized (decayed) score; default 0.5." },
+          "confidence": { "type": "number", "format": "double", "description": "0..1 = min(1, evidenceCount/8)." },
+          "evidenceCount": { "type": "integer", "format": "int32" },
+          "selfEditable": { "type": "boolean" },
+          "tags": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "SelfDimensionRequest": {
+        "type": "object",
+        "description": "Self-assessment / direct-write for one dimension. Provide at least one of scoreDelta / evidenceIncrement / tagsAdd / metadata.",
+        "properties": {
+          "scoreDelta": { "type": "number", "format": "double", "minimum": -1.0, "maximum": 1.0, "nullable": true },
+          "evidenceIncrement": { "type": "integer", "format": "int32", "nullable": true },
+          "tagsAdd": { "type": "array", "nullable": true, "maxItems": 16, "items": { "type": "string", "maxLength": 64 } },
+          "metadata": { "type": "object", "additionalProperties": true, "nullable": true }
+        }
+      },
+      "DimensionUpdateResult": {
+        "type": "object",
+        "properties": {
+          "userId": { "type": "integer", "format": "int64" },
+          "dimensionKey": { "type": "string" },
+          "finalDimension": { "$ref": "#/components/schemas/JsonNode" }
+        }
+      },
+      "MasterySnapshotDto": {
+        "type": "object",
+        "properties": {
+          "kcCode": { "type": "string" },
+          "masteryScore": { "type": "number", "description": "BigDecimal 0..1." },
+          "confidence": { "type": "number", "description": "BigDecimal 0..1." },
+          "lastEventAt": { "type": "string", "nullable": true },
+          "latestSource": { "type": "string", "nullable": true }
+        }
+      },
+      "RecommendationDto": {
+        "type": "object",
+        "properties": {
+          "resourceId": { "type": "integer", "format": "int64", "nullable": true },
+          "title": { "type": "string", "nullable": true },
+          "type": { "type": "string", "nullable": true },
+          "kcCode": { "type": "string", "nullable": true },
+          "kcName": { "type": "string", "nullable": true },
+          "reason": { "type": "string", "nullable": true }
+        }
+      },
+      "LearningPathDto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "userId": { "type": "integer", "format": "int64" },
+          "packId": { "type": "integer", "format": "int64" },
+          "version": { "type": "integer", "format": "int32" },
+          "status": { "$ref": "#/components/schemas/LearningPathStatus" },
+          "goalSummary": { "type": "string", "nullable": true },
+          "generatedAt": { "type": "string", "format": "date-time", "nullable": true },
+          "nextReviewAt": { "type": "string", "format": "date-time", "nullable": true },
+          "sourceRunId": { "type": "integer", "format": "int64", "nullable": true },
+          "nodes": { "type": "array", "items": { "$ref": "#/components/schemas/LearningPathNodeDto" } }
+        }
+      },
+      "LearningPathStatus": {
+        "type": "string",
+        "enum": ["ACTIVE", "ARCHIVED", "DRAFT"]
+      },
+      "LearningPathNodeDto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "pathId": { "type": "integer", "format": "int64" },
+          "dayIndex": { "type": "integer", "format": "int32" },
+          "orderInDay": { "type": "integer", "format": "int32" },
+          "kcCode": { "type": "string", "nullable": true },
+          "nodeType": { "$ref": "#/components/schemas/PathNodeType" },
+          "reasonSummary": { "type": "string", "nullable": true },
+          "evidenceSummary": { "type": "string", "nullable": true },
+          "suggestedResourceType": { "allOf": [{ "$ref": "#/components/schemas/SuggestedResourceType" }], "nullable": true },
+          "suggestedProblemId": { "type": "integer", "format": "int64", "nullable": true },
+          "sourceClassroomQuestId": { "type": "integer", "format": "int64", "nullable": true }
+        }
+      },
+      "PathNodeType": {
+        "type": "string",
+        "enum": ["READ_RESOURCE", "SOLVE_PROBLEM", "FIX_BUG", "PLANT_KC", "PROFILE_UPDATE"]
+      },
+      "SuggestedResourceType": {
+        "type": "string",
+        "enum": ["HANDOUT", "MINDMAP", "PRACTICE", "CODE_LAB", "READING", "STORYBOARD"]
+      },
+      "PlanPathResponse": {
+        "type": "object",
+        "properties": {
+          "path": { "$ref": "#/components/schemas/LearningPathDto" },
+          "archivedPathIds": { "type": "array", "items": { "type": "integer", "format": "int64" } },
+          "generatedQuestCount": { "type": "integer", "format": "int32" },
+          "runStatus": { "type": "string", "nullable": true },
+          "groundingMessage": { "type": "string", "nullable": true }
+        }
+      },
+      "EvaluationRequest": {
+        "type": "object",
+        "properties": {
+          "periodDays": { "type": "integer", "format": "int32", "minimum": 1, "maximum": 30, "nullable": true }
+        }
+      },
+      "EvaluationDto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "userId": { "type": "integer", "format": "int64" },
+          "packId": { "type": "integer", "format": "int64" },
+          "periodStart": { "type": "string", "format": "date-time", "nullable": true },
+          "periodEnd": { "type": "string", "format": "date-time", "nullable": true },
+          "narrativeSummary": { "type": "string", "nullable": true },
+          "pathDiffSummary": { "type": "string", "nullable": true },
+          "draftPathId": { "type": "integer", "format": "int64", "nullable": true },
+          "activePathId": { "type": "integer", "format": "int64", "nullable": true },
+          "createdAt": { "type": "string", "format": "date-time", "nullable": true },
+          "actedStatus": { "$ref": "#/components/schemas/EvaluationActedStatus" },
+          "metrics": { "type": "array", "items": { "$ref": "#/components/schemas/EvaluationMetricDto" } },
+          "draftPath": { "allOf": [{ "$ref": "#/components/schemas/LearningPathDto" }], "nullable": true }
+        }
+      },
+      "EvaluationActedStatus": {
+        "type": "string",
+        "enum": ["PENDING", "ACCEPTED", "KEPT_OLD", "PARTIAL"]
+      },
+      "EvaluationMetricDto": {
+        "type": "object",
+        "properties": {
+          "metricKey": { "type": "string" },
+          "numerator": { "type": "number", "nullable": true },
+          "denominator": { "type": "number", "nullable": true },
+          "value": { "type": "number", "nullable": true },
+          "displayUnit": { "type": "string", "nullable": true },
+          "notes": { "type": "string", "nullable": true }
+        }
+      },
+      "QuestStatus": {
+        "type": "string",
+        "enum": ["OPEN", "IN_PROGRESS", "COMPLETED", "SKIPPED", "EXPIRED"]
+      },
+      "QuestSource": {
+        "type": "string",
+        "enum": ["PATH_PLANNER", "CLASSROOM", "SYSTEM_DEFAULT"]
+      },
+      "QuestNodeType": {
+        "type": "string",
+        "enum": ["READ_RESOURCE", "SOLVE_PROBLEM", "FIX_BUG", "PLANT_KC", "PROFILE_UPDATE"]
+      },
+      "QuestDto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "userId": { "type": "integer", "format": "int64" },
+          "source": { "$ref": "#/components/schemas/QuestSource" },
+          "sourceRefId": { "type": "integer", "format": "int64", "nullable": true },
+          "title": { "type": "string" },
+          "description": { "type": "string", "nullable": true },
+          "kcCode": { "type": "string", "nullable": true },
+          "nodeType": { "allOf": [{ "$ref": "#/components/schemas/QuestNodeType" }], "nullable": true },
+          "payload": { "$ref": "#/components/schemas/JsonNode" },
+          "dueDate": { "type": "string", "format": "date", "nullable": true },
+          "priority": { "type": "integer", "format": "int32" },
+          "status": { "$ref": "#/components/schemas/QuestStatus" },
+          "requiredEvidenceType": { "type": "string", "nullable": true },
+          "requiredMasteryDelta": { "type": "number", "nullable": true },
+          "targetProblemIds": { "type": "array", "items": { "type": "integer", "format": "int64" }, "nullable": true },
+          "targetResourceId": { "type": "integer", "format": "int64", "nullable": true },
+          "deepLinkRoute": { "type": "string", "nullable": true },
+          "deepLinkParams": { "$ref": "#/components/schemas/JsonNode" },
+          "createdAt": { "type": "string", "format": "date-time", "nullable": true },
+          "updatedAt": { "type": "string", "format": "date-time", "nullable": true }
+        }
+      },
+      "QuestCompleteRequest": {
+        "type": "object",
+        "description": "Evidence payload when completing a quest. Required fields depend on the quest's requiredEvidenceType.",
+        "properties": {
+          "note": { "type": "string", "maxLength": 256, "nullable": true },
+          "submissionId": { "type": "integer", "format": "int64", "nullable": true },
+          "resourceId": { "type": "integer", "format": "int64", "nullable": true },
+          "pageReadId": { "type": "integer", "format": "int64", "nullable": true },
+          "kcMasteryDelta": { "type": "number", "format": "double", "minimum": 0.0, "maximum": 1.0, "nullable": true }
+        }
+      },
+      "QuestSkipRequest": {
+        "type": "object",
+        "properties": {
+          "reason": { "type": "string", "maxLength": 256, "nullable": true }
+        }
+      },
+      "CoursePackDto": {
+        "type": "object",
+        "properties": {
+          "packId": { "type": "integer", "format": "int64" },
+          "name": { "type": "string" },
+          "primaryLanguage": { "type": "string", "nullable": true },
+          "documentCount": { "type": "integer", "format": "int32", "nullable": true },
+          "pageCount": { "type": "integer", "format": "int32", "nullable": true },
+          "chapterCount": { "type": "integer", "format": "int32", "nullable": true },
+          "kcCount": { "type": "integer", "format": "int32", "nullable": true },
+          "exampleCount": { "type": "integer", "format": "int32", "nullable": true },
+          "problemCount": { "type": "integer", "format": "int32", "nullable": true }
+        }
+      },
+      "ChapterDto": {
+        "type": "object",
+        "properties": {
+          "chapterId": { "type": "integer", "format": "int64" },
+          "orderIndex": { "type": "integer", "format": "int32", "nullable": true },
+          "title": { "type": "string" },
+          "summaryMarkdown": { "type": "string", "nullable": true }
+        }
+      },
+      "KcDto": {
+        "type": "object",
+        "properties": {
+          "kcId": { "type": "integer", "format": "int64" },
+          "kcCode": { "type": "string" },
+          "kcName": { "type": "string" },
+          "chapterId": { "type": "integer", "format": "int64", "nullable": true },
+          "chapterOrder": { "type": "integer", "format": "int32", "nullable": true },
+          "difficulty": { "type": "string", "nullable": true },
+          "summaryMarkdown": { "type": "string", "nullable": true }
+        }
+      },
+      "PageDto": {
+        "type": "object",
+        "properties": {
+          "pageId": { "type": "integer", "format": "int64" },
+          "documentId": { "type": "integer", "format": "int64", "nullable": true },
+          "chapterId": { "type": "integer", "format": "int64", "nullable": true },
+          "pageNo": { "type": "integer", "format": "int32", "nullable": true },
+          "title": { "type": "string", "nullable": true },
+          "contentMarkdown": { "type": "string", "nullable": true },
+          "excerpt": { "type": "string", "nullable": true }
+        }
+      },
+      "ProblemDto": {
+        "type": "object",
+        "properties": {
+          "problemId": { "type": "integer", "format": "int64" },
+          "kcCode": { "type": "string", "nullable": true },
+          "title": { "type": "string" },
+          "statementMarkdown": { "type": "string", "nullable": true },
+          "inputDescription": { "type": "string", "nullable": true },
+          "outputDescription": { "type": "string", "nullable": true },
+          "difficulty": { "type": "string", "nullable": true },
+          "sourceLabel": { "type": "string", "nullable": true }
+        }
+      },
+      "CourseExampleDto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "packId": { "type": "integer", "format": "int64", "nullable": true },
+          "kcCode": { "type": "string", "nullable": true },
+          "title": { "type": "string" },
+          "code": { "type": "string" },
+          "explanationMarkdown": { "type": "string", "nullable": true },
+          "pageRefs": { "type": "array", "items": { "type": "integer", "format": "int64" } }
+        }
+      },
+      "CourseVideoDto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "chapter": { "type": "integer", "format": "int32" },
+          "title": { "type": "string", "nullable": true },
+          "durationSec": { "type": "integer", "format": "int32", "nullable": true },
+          "kcCodes": { "type": "array", "items": { "type": "string" } },
+          "available": { "type": "boolean", "description": "Whether the mp4 file is present and playable." }
+        }
+      },
+      "PublicProblemDto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "packId": { "type": "integer", "format": "int64", "nullable": true },
+          "kcCode": { "type": "string", "nullable": true },
+          "title": { "type": "string" },
+          "statementMarkdown": { "type": "string", "nullable": true },
+          "inputDescription": { "type": "string", "nullable": true },
+          "outputDescription": { "type": "string", "nullable": true },
+          "difficulty": { "type": "string", "nullable": true },
+          "samples": { "$ref": "#/components/schemas/JsonNode" }
+        }
+      },
+      "SubmissionSource": {
+        "type": "string",
+        "enum": ["TRAINING", "PATH_QUEST", "BUG_MINE_RETRY", "CLASSROOM"]
+      },
+      "SubmissionStatus": {
+        "type": "string",
+        "enum": ["PENDING", "RUNNING", "PASSED", "FAILED", "ERROR"]
+      },
+      "SubmissionCreateRequest": {
+        "type": "object",
+        "required": ["problemId", "code"],
+        "properties": {
+          "problemId": { "type": "integer", "format": "int64" },
+          "code": { "type": "string", "maxLength": 8192 },
+          "questId": { "type": "integer", "format": "int64", "nullable": true },
+          "source": { "allOf": [{ "$ref": "#/components/schemas/SubmissionSource" }], "nullable": true }
+        }
+      },
+      "SubmissionDto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "userId": { "type": "integer", "format": "int64" },
+          "problemId": { "type": "integer", "format": "int64" },
+          "questId": { "type": "integer", "format": "int64", "nullable": true },
+          "source": { "allOf": [{ "$ref": "#/components/schemas/SubmissionSource" }], "nullable": true },
+          "language": { "type": "string", "nullable": true },
+          "code": { "type": "string", "nullable": true },
+          "submittedAt": { "type": "string", "format": "date-time", "nullable": true },
+          "status": { "$ref": "#/components/schemas/SubmissionStatus" },
+          "runtimeMs": { "type": "integer", "format": "int32", "nullable": true },
+          "memoryKb": { "type": "integer", "format": "int32", "nullable": true }
+        }
+      },
+      "Verdict": {
+        "type": "string",
+        "description": "AC=accepted, WA=wrong answer, RE=runtime error, TLE=time limit, CE=static-check fail, MLE=memory limit, SYSTEM_ERROR=judge error.",
+        "enum": ["AC", "WA", "RE", "TLE", "CE", "MLE", "SYSTEM_ERROR"]
+      },
+      "JudgeResultDto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "submissionId": { "type": "integer", "format": "int64" },
+          "verdict": { "$ref": "#/components/schemas/Verdict" },
+          "passedCases": { "type": "integer", "format": "int32" },
+          "totalCases": { "type": "integer", "format": "int32" },
+          "failureReason": { "type": "string", "nullable": true },
+          "trace": { "$ref": "#/components/schemas/JsonNode" },
+          "createdAt": { "type": "string", "format": "date-time", "nullable": true }
+        }
+      },
+      "SubmissionDetailDto": {
+        "type": "object",
+        "properties": {
+          "submission": { "$ref": "#/components/schemas/SubmissionDto" },
+          "judgeResult": { "allOf": [{ "$ref": "#/components/schemas/JudgeResultDto" }], "nullable": true }
+        }
+      },
+      "ClassroomDto": {
+        "type": "object",
+        "properties": {
+          "classroomId": { "type": "integer", "format": "int64" },
+          "name": { "type": "string" },
+          "description": { "type": "string", "nullable": true },
+          "teacherId": { "type": "integer", "format": "int64" },
+          "packId": { "type": "integer", "format": "int64", "nullable": true },
+          "status": { "type": "string", "nullable": true },
+          "joinCode": { "type": "string", "nullable": true }
+        }
+      },
+      "CreateClassroomRequest": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "maxLength": 128 },
+          "description": { "type": "string", "maxLength": 1000, "nullable": true }
+        }
+      },
+      "JoinClassroomRequest": {
+        "type": "object",
+        "required": ["joinCode"],
+        "properties": {
+          "joinCode": { "type": "string", "pattern": "^[A-Z0-9]{6}$" }
+        }
+      },
+      "ClassroomMemberDto": {
+        "type": "object",
+        "properties": {
+          "studentId": { "type": "integer", "format": "int64" },
+          "username": { "type": "string" },
+          "displayName": { "type": "string", "nullable": true },
+          "status": { "type": "string", "nullable": true }
+        }
+      },
+      "ClassroomQuestDto": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "classroomId": { "type": "integer", "format": "int64" },
+          "title": { "type": "string" },
+          "description": { "type": "string", "nullable": true },
+          "kcCodes": { "type": "array", "items": { "type": "string" }, "nullable": true },
+          "nodeType": { "allOf": [{ "$ref": "#/components/schemas/QuestNodeType" }], "nullable": true },
+          "payload": { "$ref": "#/components/schemas/JsonNode" },
+          "dueDate": { "type": "string", "format": "date", "nullable": true },
+          "createdBy": { "type": "integer", "format": "int64", "nullable": true },
+          "createdAt": { "type": "string", "format": "date-time", "nullable": true },
+          "status": { "type": "string", "nullable": true },
+          "targetProblemId": { "type": "integer", "format": "int64", "nullable": true },
+          "targetResourceType": { "type": "string", "nullable": true },
+          "studentQuestId": { "type": "integer", "format": "int64", "nullable": true },
+          "studentQuestStatus": { "type": "string", "nullable": true },
+          "requiredEvidenceType": { "type": "string", "nullable": true },
+          "targetProblemIds": { "type": "array", "items": { "type": "integer", "format": "int64" }, "nullable": true },
+          "deepLinkRoute": { "type": "string", "nullable": true },
+          "deepLinkParams": { "$ref": "#/components/schemas/JsonNode" }
+        }
+      },
+      "ResourceType": {
+        "type": "string",
+        "enum": ["HANDOUT", "MINDMAP", "PRACTICE", "CODE_LAB", "READING", "STORYBOARD"]
+      },
+      "ResourceCreateRequest": {
+        "type": "object",
+        "required": ["kcCodes", "type"],
+        "properties": {
+          "kcCodes": { "type": "array", "minItems": 1, "maxItems": 10, "items": { "type": "string" } },
+          "type": { "$ref": "#/components/schemas/ResourceType" },
+          "focusHint": { "type": "string", "maxLength": 512, "nullable": true }
+        }
+      },
+      "TutorAskRequest": {
+        "type": "object",
+        "required": ["question"],
+        "properties": {
+          "question": { "type": "string", "maxLength": 2000 },
+          "kcCodes": { "type": "array", "items": { "type": "string" }, "nullable": true },
+          "context": { "type": "string", "maxLength": 2000, "nullable": true },
+          "images": { "type": "array", "maxItems": 3, "items": { "type": "string" }, "nullable": true, "description": "Optional base64 screenshots; max 3, each <= ~8MB string." },
+          "style": { "type": "string", "enum": ["visual", "logical", "trial"], "nullable": true },
+          "conversationId": { "type": "string", "maxLength": 64, "nullable": true }
+        }
+      },
+      "OrchestratorTurnMessage": {
+        "type": "object",
+        "properties": {
+          "role": { "type": "string", "maxLength": 32, "description": "Typically user / assistant / system." },
+          "content": { "type": "string", "maxLength": 8000 }
+        }
+      },
+      "OrchestratorTurnRequest": {
+        "type": "object",
+        "required": ["message"],
+        "properties": {
+          "message": { "type": "string", "maxLength": 4000 },
+          "sessionId": { "type": "string", "maxLength": 64, "nullable": true },
+          "history": { "type": "array", "items": { "$ref": "#/components/schemas/OrchestratorTurnMessage" }, "nullable": true },
+          "currentChapter": { "type": "integer", "format": "int32", "nullable": true },
+          "recentKcCodes": { "type": "array", "items": { "type": "string" }, "nullable": true },
+          "recentFailures": { "type": "array", "items": { "type": "string" }, "nullable": true },
+          "profileBrief": { "type": "string", "maxLength": 2000, "nullable": true },
+          "courseKcCodes": { "type": "array", "items": { "type": "string" }, "nullable": true }
+        }
+      },
+      "ProfileMessageDto": {
+        "type": "object",
+        "properties": {
+          "role": { "type": "string", "nullable": true },
+          "content": { "type": "string", "nullable": true }
+        }
+      },
+      "ProfileTurnRequest": {
+        "type": "object",
+        "required": ["userMessage"],
+        "properties": {
+          "userMessage": { "type": "string" },
+          "history": { "type": "array", "items": { "$ref": "#/components/schemas/ProfileMessageDto" }, "nullable": true }
+        }
+      },
+      "SseEvent": {
+        "type": "string",
+        "description": "Raw Server-Sent Events stream. Each message has an `event:` name (one of plan, trace, token, result, error) and a `data:` line carrying a JSON payload. Codegen for this endpoint should treat the body as a raw stream rather than a typed object."
+      }
+    }
+  }
+}

@@ -1,0 +1,26 @@
+# Build output
+bin/
+obj/
+[Bb]in/
+[Oo]bj/
+
+# Visual Studio / Rider
+.vs/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Publish
+publish/
+*.Appx
+*.msix
+
+# Local distributable artifacts (zipped self-contained bundle; too large for git)
+dist/
+*.zip
+
+# MonoGame content build intermediate
+**/Content/bin/
+**/Content/obj/

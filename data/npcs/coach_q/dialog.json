@@ -1,0 +1,67 @@
+{
+  "npcKey": "coach_q",
+  "rootNodeId": "greet",
+  "nodes": {
+    "greet": {
+      "id": "greet",
+      "text": "{{playerName}}，这里是训练场。真题由我来判，掌握度靠你多刷题往上顶。今天想怎么练？",
+      "conditions": [],
+      "choices": [
+        {
+          "label": "开始练习",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "route",
+              "route": "/problems"
+            }
+          ]
+        },
+        {
+          "label": "去训练场提交真题",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "route",
+              "route": "/training"
+            }
+          ]
+        },
+        {
+          "label": "判题是怎么算的？",
+          "nextNodeId": "judge_info"
+        },
+        {
+          "label": "看看我的练习进度",
+          "nextNodeId": "training_stats"
+        },
+        {
+          "label": "再见",
+          "nextNodeId": null
+        }
+      ]
+    },
+    "judge_info": {
+      "id": "judge_info",
+      "text": "正式提交不走 Pyodide 预览，走服务端判题——预览跑通不等于通过。多刷真题，把掌握度顶到阈值，这一关才算稳。",
+      "conditions": [],
+      "choices": [
+        {
+          "label": "记住了",
+          "nextNodeId": null
+        }
+      ]
+    },
+    "training_stats": {
+      "id": "training_stats",
+      "text": "你已解锁 {{stats.kcUnlocked}} 个 KC，平均掌握度 {{stats.masteryAvg}}。{{styleAdaptive:看图找规律 | 顺着逻辑往下推 | 直接上手试}}，挑顺手的方式接着练。",
+      "conditions": [],
+      "choices": [
+        {
+          "label": "知道了",
+          "nextNodeId": null
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "key": "foreman_bug",
+  "name": "矿头 Bug",
+  "category": "educator_core",
+  "sprite": "lpc_npc_miner",
+  "portrait": "portrait_foreman_bug.png",
+  "spawnMap": "town_hub",
+  "spawn": { "tileX": 25, "tileY": 33 },
+  "birthday": { "month": 8, "day": 10 },
+  "schedule": {
+    "monday":    [{ "from": "07:00", "map": "town_hub", "tileX": 25, "tileY": 33 }],
+    "tuesday":   [{ "from": "07:00", "map": "town_hub", "tileX": 25, "tileY": 33 }],
+    "wednesday": [{ "from": "07:00", "map": "town_hub", "tileX": 25, "tileY": 33 }, { "from": "14:00", "map": "town_hub", "tileX": 8, "tileY": 18 }],
+    "thursday":  [{ "from": "07:00", "map": "town_hub", "tileX": 25, "tileY": 33 }],
+    "friday":    [{ "from": "07:00", "map": "town_hub", "tileX": 25, "tileY": 33 }],
+    "saturday":  [{ "from": "09:00", "map": "town_hub",  "tileX": 18, "tileY": 11 }],
+    "sunday":    [{ "from": "09:00", "map": "town_hub", "tileX": 25, "tileY": 33 }]
+  },
+  "tags": ["debug_mentor", "failed_submission", "mine_quest"],
+  "description": "守在小镇 Bug 矿洞入口的工头，沉默寡言但眼睛毒辣。每次你提交失败，他都会从矿洞里翻出对应的 Bug 等你来打。"
+}

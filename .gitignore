@@ -1,0 +1,103 @@
+target/
+*.class
+
+node_modules/
+dist/
+coverage/
+
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+*.egg-info/
+services/pythontopia-rag/data/*.parquet
+
+.idea/
+.vscode/
+
+.env
+.env.local
+deploy/.env
+
+# 私钥 / 凭据 / 密钥库（绝不入库；防止 ssh/tls 私钥被 `git add -A` 误提交）
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa
+id_ed25519
+
+# 根目录发布包构建产物（~46MB，可重生，不入库；inbox zip 已在下方单独忽略）
+/pythontopia-web.zip
+
+.DS_Store
+
+# R-100 子代理工作产出
+.work/
+
+assets/inbox/sprout_lands/
+assets/inbox/**/*.zip
+
+# R-13 课程包原 PDF（来自 Alethicode language_pack tasks/31，本地缓存供后端 PDF 端点流式分发，
+# 单文件最大 ~80MB，git 仓库不存。后端启动时通过 pythontopia.coursepack.pdfDir 指向本地路径）
+data/course-pack-43/pdfs/
+
+# 浏览器实测截图归档
+qa-screens/
+
+# 超星登录 cookie（本地敏感凭据，绝不入库）
+secrets/
+# 超星爬取的任务点视频（仅本地缓存供演示，manifest 入库、视频不入库）
+data/course-pack-43/videos/
+# 多模态生成产物（文生图/合成短视频，含占位降级产物，本地落盘可重生，不入库）
+data/course-pack-43/generated-media/
+
+# 后端本地开发软链（指向仓库根 data/，仅本地 mvn spring-boot:run 用，不入库）
+backend/data/
+
+# 素材预览临时目录（本地 scratch，不入库）
+.tmp-preview/
+
+# R-14 多端客户端构建产物（clients/ 下各端目录由对应 agent 维护）
+# Windows .NET 8 / MonoGame 编译输出
+clients/native/windows/bin/
+clients/native/windows/obj/
+clients/native/windows/**/bin/
+clients/native/windows/**/obj/
+# 微信小程序：npm 依赖与构建后的 miniprogram_npm
+clients/wechat/miniprogram/node_modules/
+clients/wechat/miniprogram/miniprogram_npm/
+# 微信小游戏：npm 依赖与 TS 编译输出目录
+clients/wechat/minigame/node_modules/
+clients/wechat/minigame/js/
+# Visual Studio 每用户工程配置
+*.user
+
+# 本地 agent / 工具产物与 scratch（不入库；无前导斜杠 → 匹配任意层级的同名目录）
+.claude/
+.playwright-mcp/
+docs/testing/test.md
+
+# 发布包构建产物
+output/
+
+# 自托管 Pyodide 运行时（由 frontend/scripts/sync-pyodide.mjs 从 node_modules 复制，~13MB，可重生，不入库）
+frontend/public/pyodide/
+
+# Playwright e2e 运行产物（截图/trace），不入库
+frontend/e2e/.artifacts/
+
+# 答辩/演示二进制大文件：GitHub 源码快照保留 Markdown 讲稿与说明，PPT/PDF 另走发布包或网盘
+docs/presentations/*.pptx
+docs/presentations/*.pdf
+
+# 本地 Qwen/vLLM 微调实验的大体积或可重生产物
+research/**/.venv/
+research/**/models/
+research/**/outputs/adapters/
+research/**/runs/
+research/**/__pycache__/
+research/**/*.pyc

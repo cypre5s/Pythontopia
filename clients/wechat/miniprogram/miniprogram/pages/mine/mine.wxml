@@ -1,0 +1,58 @@
+<view class="page">
+  <view class="card card--flat">
+    <view class="section-title">Bug 矿洞 · 错题复盘</view>
+    <view class="muted">按 FSRS 到期与画像优先级，回到最该巩固的知识点。提交仍由服务端判题。</view>
+  </view>
+
+  <view class="login__error" wx:if="{{errorMsg}}">{{errorMsg}}</view>
+  <view wx:if="{{loading && errorBook.length === 0 && echoes.length === 0}}" class="loading">加载矿洞…</view>
+
+  <!-- 错题矿洞 -->
+  <view class="card">
+    <view class="section-title">错题矿洞</view>
+    <view wx:if="{{errorBook.length === 0}}" class="empty">暂无未关闭的矿洞，去训练场把错题挖进来吧。</view>
+    <view
+      wx:for="{{errorBook}}"
+      wx:key="sessionId"
+      class="list-item"
+      data-id="{{item.sessionId}}"
+      bindtap="goSession"
+    >
+      <view class="row row--between">
+        <text class="list-item__title">{{item.title}}</text>
+        <text class="badge badge--progress">{{item.statusLabel}}</text>
+      </view>
+      <view class="muted">{{item.kcCode}} · 深度 {{item.depthText}}</view>
+      <view class="mine__metrics">
+        <text class="tag">遗忘风险 {{item.decayText}}</text>
+        <text class="tag">入矿优先 {{item.priorityText}}</text>
+      </view>
+      <view class="mine__reason">{{item.reason}}</view>
+      <view class="muted" wx:if="{{item.guidance}}">{{item.guidance}}</view>
+    </view>
+  </view>
+
+  <!-- 遗忘回声 -->
+  <view class="card">
+    <view class="section-title">遗忘回声</view>
+    <view class="muted">FSRS 复习引擎召回的当下到期知识点，入矿后做同 KC 练习重新确认掌握。</view>
+    <view wx:if="{{echoes.length === 0}}" class="empty">暂无到期的遗忘回声，保持得不错！</view>
+    <view class="list-item" wx:for="{{echoes}}" wx:key="kcCode">
+      <view class="row row--between">
+        <text class="list-item__title">{{item.kcCode}}</text>
+        <text class="badge badge--open">推荐 {{item.recommendText}}</text>
+      </view>
+      <view class="muted">{{item.title}}</view>
+      <view class="mine__metrics">
+        <text class="tag">遗忘风险 {{item.decayText}}</text>
+        <text class="tag">掌握度 {{item.masteryText}}</text>
+      </view>
+      <view class="mine__reason">{{item.reason}}</view>
+      <button
+        class="btn btn--sm btn--primary"
+        data-kc="{{item.kcCode}}"
+        bindtap="onOpenEcho"
+      >入矿复盘</button>
+    </view>
+  </view>
+</view>

@@ -1,0 +1,127 @@
+import { mount, flushPromises } from '@vue/test-utils';
+import { setActivePinia, createPinia } from 'pinia';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import FeynmanPanel from '@/components/feynman/FeynmanPanel.vue';
+import { useFeynmanStore } from '@/stores/feynman';
+
+const mocks = vi.hoisted(() => ({
+  startFeynmanSession: vi.fn(),
+  teachFeynmanSession: vi.fn(),
+}));
+
+vi.mock('@/api/feynman', () => mocks);
+
+const session = {
+  id: 11,
+  userId: 3,
+  kcCode: 'PY43-KC-010',
+  status: 'OPEN',
+  tuteeState: {
+    misconceptions: [
+      {
+        tag: 'confuses_assignment_and_comparison',
+        evidenceEventIds: [101, 102],
+        resolved: false,
+      },
+    ],
+    producedCode: 'x = 1\nprint(x)',
+    judgeResult: {
+      status: 'PENDING',
+      messageZh: '等待学弟提交可判题代码',
+      evidenceEventIds: [101],
+    },
+  },
+};
+
+describe('FeynmanPanel', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    mocks.startFeynmanSession.mockReset();
+    mocks.teachFeynmanSession.mockReset();
+    mocks.startFeynmanSession.mockResolvedValue(session);
+    mocks.teachFeynmanSession.mockResolvedValue({
+      id: 21,
+      role: 'TUTEE',
+      content: '我明白了，赋值用 =，比较才用 ==。',
+      taughtFix: '把比较和赋值的用途分开讲清楚了',
+      producedCode: 'x = 1\nprint(x)',
+      judgeResult: {
+        status: 'PASSED',
+        messageZh: '隐藏用例通过',
+        evidenceEventIds: [101, 102],
+      },
+    });
+  });
+
+  it('开始会话后在信息条展示学弟误区，并给出代码草稿与判题占位', async () => {
+    const wrapper = mount(FeynmanPanel, {
+      props: { kcCode: 'PY43-KC-010' },
+    });
+
+    await wrapper.get('[data-testid="feynman-start"]').trigger('click');
+    await flushPromises();
+
+    expect(mocks.startFeynmanSession).toHaveBeenCalledWith('PY43-KC-010');
+    expect(wrapper.get('[data-testid="feynman-tutee-state"]').text()).toContain(
+      'confuses_assignment_and_comparison',
+    );
+    expect(wrapper.get('[data-testid="feynman-code"]').text()).toContain('print(x)');
+    expect(wrapper.get('[data-testid="feynman-judge"]').text()).toContain('等待学弟提交可判题代码');
+    // 「学习足迹·全程可溯源」整块已删除，不再渲染独立证据链。
+    expect(wrapper.find('[data-testid="feynman-evidence-chain"]').exists()).toBe(false);
+  });
+
+  it('提交教学输入后展示学弟回复、修正点与真判题结果', async () => {
+    const wrapper = mount(FeynmanPanel, {
+      props: { kcCode: 'PY43-KC-010' },
+    });
+
+    await wrapper.get('[data-testid="feynman-start"]').trigger('click');
+    await flushPromises();
+    await wrapper.get('[data-testid="feynman-teach-input"]').setValue('先读变量名，再看 = 右边的值。');
+    await wrapper.get('[data-testid="feynman-teach-submit"]').trigger('click');
+    await flushPromises();
+
+    expect(mocks.teachFeynmanSession).toHaveBeenCalledWith(11, '先读变量名，再看 = 右边的值。');
+    expect(wrapper.get('[data-testid="feynman-dialog"]').text()).toContain('赋值用 =');
+    expect(wrapper.get('[data-testid="feynman-fix"]').text()).toContain('比较和赋值');
+    expect(wrapper.get('[data-testid="feynman-code"]').text()).toContain('print(x)');
+    expect(wrapper.get('[data-testid="feynman-judge"]').text()).toContain('隐藏用例通过');
+  });
+
+  it('代码找茬产出的 bug 提示接入「讲明白」引导，串起出师闭环（B）', async () => {
+    const wrapper = mount(FeynmanPanel, {
+      props: { kcCode: 'PY43-KC-010' },
+    });
+
+    await wrapper.get('[data-testid="feynman-start"]').trigger('click');
+    await flushPromises();
+
+    const store = useFeynmanStore();
+    store.bugHunt = {
+      source: 'real_misconception',
+      misconceptionTag: 'off_by_one_range',
+      buggyCode: `total = 0
+for i in range(1, 5):
+    total += i
+print("1到5的和是", total)`,
+      bugLineIndices: [1],
+      hintMd: 'range 右端不包含',
+    };
+    await flushPromises();
+
+    expect(wrapper.get('[data-testid="feynman-teach-hint"]').text()).toContain('range 右端不包含');
+    // 学弟以中性口吻描述代码在做什么，不暴露「我以为…」式自我纠错。
+    expect(wrapper.get('[data-testid="feynman-tutee-voice"]').text()).toContain('累加');
+    expect(wrapper.get('[data-testid="feynman-tutee-voice"]').text()).not.toContain('我以为');
+  });
+
+  it('未开始会话时不渲染教学输入，从结构上杜绝无 session 提交', () => {
+    const wrapper = mount(FeynmanPanel, {
+      props: { kcCode: 'PY43-KC-010' },
+    });
+
+    expect(wrapper.find('[data-testid="feynman-teach-input"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="feynman-teach-submit"]').exists()).toBe(false);
+  });
+});

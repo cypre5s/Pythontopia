@@ -1,0 +1,147 @@
+{
+  "hud": {
+    "label": {
+      "weather": "Weather",
+      "day": "Day",
+      "timeOfDay": "Time",
+      "season": "Season",
+      "energy": "Energy",
+      "coin": "Coins"
+    },
+    "btn": {
+      "confirm": "Confirm",
+      "cancel": "Cancel",
+      "close": "Close",
+      "save": "Save",
+      "delete": "Delete",
+      "reset": "Reset",
+      "submit": "Submit",
+      "next": "Next",
+      "prev": "Previous",
+      "view": "View",
+      "select": "Select",
+      "done": "Done",
+      "skip": "Skip",
+      "retry": "Try again",
+      "back": "Back",
+      "exit": "Exit",
+      "help": "Help",
+      "settings": "Settings",
+      "start": "Start",
+      "pause": "Pause",
+      "resume": "Resume",
+      "startGame": "New game",
+      "loadGame": "Load save",
+      "newSlot": "New save",
+      "copy": "Copy",
+      "paste": "Paste",
+      "edit": "Edit",
+      "favorite": "Favorite",
+      "share": "Share",
+      "feedback": "Send feedback"
+    }
+  },
+  "toast": {
+    "questDone": "Quest done. Find the NPC to collect.",
+    "itemGet": "Got {item}. Check your bag.",
+    "energyLow": "Energy is low. Rest at the clinic.",
+    "offline": "You're offline. Progress is cached.",
+    "saveOk": "Saved.",
+    "kcUp": "KC \"{kcName}\" mastery is up.",
+    "unlockArea": "{areaName} is open. Take a look.",
+    "pyodideTimeout": "Local preview ran long. Paused.",
+    "judging": "Grading on the server, please wait.",
+    "levelUp": "Level up. A new skill is ready.",
+    "giftAccepted": "{npc} took the gift, smiling.",
+    "giftRejected": "{npc} waved it off. Try later.",
+    "classroomJoined": "Joined {className}.",
+    "classroomLeft": "Left {className}.",
+    "festivalStart": "{festivalName} has begun. Visit the square.",
+    "festivalEnd": "{festivalName} is over. See you next time.",
+    "bgmStart": "Music on.",
+    "bgmMute": "Music muted.",
+    "achievementGet": "Achievement unlocked: {name}.",
+    "reminder": "Time for a break. Have some water."
+  },
+  "empty": {
+    "inventory": "Bag is empty. Try gathering in the wild.",
+    "classQuests": "No class quests yet. Ask your teacher.",
+    "friends": "No classmates yet. Post a card on the board.",
+    "errorLog": "Notebook is empty. Practice to fill it.",
+    "skills": "No skills yet. Finish a chapter to unlock.",
+    "reviews": "No retros yet. Drop by on Friday.",
+    "attempts": "No submissions yet. Try one problem first.",
+    "messages": "No notifications. It's quiet here.",
+    "achievements": "No achievements yet. They come with time.",
+    "saves": "No saves yet. Create one to begin."
+  },
+  "error": {
+    "network": {
+      "offline": "Looks offline. Try refreshing.",
+      "timeout": "Network took too long. Try again."
+    },
+    "pyodide": {
+      "timeout": "Local preview timed out. Paused.",
+      "blocked": "Local preview blocked. Use server submit."
+    },
+    "backend": {
+      "500": "The server sneezed. Try refreshing."
+    },
+    "auth": {
+      "expired": "Session is stale. Please sign in again.",
+      "forbidden": "Permission needed to enter here."
+    },
+    "validation": {
+      "required": "{field} is required.",
+      "format": "{field} format is off."
+    },
+    "classroom": {
+      "notJoined": "Not in a class yet. Ask your teacher for a code.",
+      "full": "This class is full. Let your teacher know."
+    },
+    "save": {
+      "notFound": "Save not found. It may have moved.",
+      "corrupt": "Save can't be read. Pick another."
+    },
+    "inventory": {
+      "full": "Bag is full. Tidy it up first."
+    },
+    "quest": {
+      "notFound": "Quest not found. Back to the main line."
+    }
+  },
+  "npc": {
+    "mayor_py": {
+      "greeting": "Let's look at the path."
+    },
+    "librarian_doc": {
+      "greeting": "Flip here. It's clear."
+    },
+    "coach_q": {
+      "greeting": "Next one. Find your rhythm."
+    },
+    "foreman_bug": {
+      "greeting": "Grab a lamp. Let's dig."
+    },
+    "sage_review": {
+      "greeting": "Sit a moment. Share a thought."
+    },
+    "class_president": {
+      "greeting": "From the teacher, for you."
+    }
+  },
+  "tpl": {
+    "classroom": {
+      "welcome": "Welcome to {className}. Let's learn Python this term.",
+      "weekly": "This week: {focusKc}. Suggested pace {pacePerDay}/day.",
+      "review": "Midterm soon. Revisit your notebook and redo 3.",
+      "encourage": "Activity is up this week. Keep the rhythm.",
+      "deadline": "{title} closes tonight at 22:00. Don't miss it.",
+      "read": "Read {chapter} (p{pageStart}-p{pageEnd}), due {due}.",
+      "practice": "Practice {count} problems on {kcList}, due {due}.",
+      "bugmine": "Bug mine: clear {kcName} failures, submit by {due}.",
+      "retro": "Friday retro: one line takeaway, closes {due} 22:00.",
+      "peer": "Pair write {kcName} with a classmate, submit by {due}."
+    }
+  }
+}

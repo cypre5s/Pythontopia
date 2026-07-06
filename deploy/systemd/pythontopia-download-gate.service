@@ -1,0 +1,16 @@
+[Unit]
+Description=Pythontopia client download captcha gate
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/pythontopia/download-gate
+Environment=PYT_DOWNLOAD_SIGN_SECRET_FILE=/opt/pythontopia/shared/download-sign.secret
+Environment=PYT_DOWNLOAD_GATE_HOST=127.0.0.1
+Environment=PYT_DOWNLOAD_GATE_PORT=9191
+ExecStart=/usr/bin/python3 /opt/pythontopia/download-gate/server.py
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

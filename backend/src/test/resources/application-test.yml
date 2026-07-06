@@ -1,0 +1,17 @@
+spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
+      - org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration
+
+pythontopia:
+  security:
+    teacherInviteCode: test-teacher-code
+    jwt:
+      secret: test-secret-must-be-long-enough-for-hs256
+      ttlMinutes: 720
+  workshop:
+    maxResourcesPerHour: 3
+    masteryDailyCapPerKc: 0.10
+    allowlist: []

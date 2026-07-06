@@ -1,0 +1,93 @@
+[
+  {
+    "id": 186,
+    "pack_id": 43,
+    "original_filename": "第一章：计算工具与计算思维.pptx",
+    "original_path": "/home/cypress/Alethicode/deploy/data/language_pack/tasks/42/originals/第一章：计算工具与计算思维.pptx",
+    "canonical_path": "/home/cypress/Alethicode/deploy/data/language_pack/tasks/42/canonical/第一章：计算工具与计算思维.pptx",
+    "preview_pdf_path": "/home/cypress/Alethicode/deploy/data/language_pack/preview/tasks/42/第一章：计算工具与计算思维.pdf",
+    "file_hash": "110ca86b4c3e9878271b5be8d3baa91b79623094278cffb7fd635faabd56c517",
+    "file_size_bytes": 84832830,
+    "page_count": 45,
+    "status": "normalized",
+    "sort_order": 1
+  },
+  {
+    "id": 187,
+    "pack_id": 43,
+    "original_filename": "第二章：Python 语言基础(2).pptx",
+    "original_path": "/home/cypress/Alethicode/deploy/data/language_pack/tasks/42/originals/第二章：Python 语言基础(2).pptx",
+    "canonical_path": "/home/cypress/Alethicode/deploy/data/language_pack/tasks/42/canonical/第二章：Python 语言基础(2).pptx",
+    "preview_pdf_path": "/home/cypress/Alethicode/deploy/data/language_pack/preview/tasks/42/第二章：Python 语言基础(2).pdf",
+    "file_hash": "7e67d307ad915a13af427a1173865db302bd1782559365e3a17ed0a69e9ca5fb",
+    "file_size_bytes": 9451270,
+    "page_count": 73,
+    "status": "normalized",
+    "sort_order": 2
+  },
+  {
+    "id": 188,
+    "pack_id": 43,
+    "original_filename": "第三章：计算机信息表示及计算.pptx",
+    "original_path": "/home/cypress/Alethicode/deploy/data/language_pack/tasks/42/originals/第三章：计算机信息表示及计算.pptx",
+    "canonical_path": "/home/cypress/Alethicode/deploy/data/language_pack/tasks/42/canonical/第三章：计算机信息表示及计算.pptx",
+    "preview_pdf_path": "/home/cypress/Alethicode/deploy/data/language_pack/preview/tasks/42/第三章：计算机信息表示及计算.pdf",
+    "file_hash": "e467b4693d0165fc4d75966f81ff393e5dbc2d219ae0215f294199c1f55d0f05",
+    "file_size_bytes": 4329959,
+    "page_count": 98,
+    "status": "normalized",
+    "sort_order": 3
+  },
+  {
+    "id": 189,
+    "pack_id": 43,
+    "original_filename": "第四章：流程自动化.pptx",
+    "original_path": "/home/cypress/Alethicode/deploy/data/language_pack/tasks/42/originals/第四章：流程自动化.pptx",
+    "canonical_path": "/home/cypress/Alethicode/deploy/data/language_pack/tasks/42/canonical/第四章：流程自动化.pptx",
+    "preview_pdf_path": "/home/cypress/Alethicode/deploy/data/language_pack/preview/tasks/42/第四章：流程自动化.pdf",
+    "file_hash": "c9825447a14e818e462ecab48db1107c964ce93fe6292d182ede44264eb91367",
+    "file_size_bytes": 4653950,
+    "page_count": 74,
+    "status": "normalized",
+    "sort_order": 4
+  },
+  {
+    "id": 190,
+    "pack_id": 43,
+    "original_filename": "第五章：数据结构.pptx",
+    "original_path": "/home/cypress/Alethicode/deploy/data/language_pack/tasks/42/originals/第五章：数据结构.pptx",
+    "canonical_path": "/home/cypress/Alethicode/deploy/data/language_pack/tasks/42/canonical/第五章：数据结构.pptx",
+    "preview_pdf_path": "/home/cypress/Alethicode/deploy/data/language_pack/preview/tasks/42/第五章：数据结构.pdf",
+    "file_hash": "2334e16a3f9cf646dd388e3b3bca322e8566a50da34a261889db007e4e75884c",
+    "file_size_bytes": 7554913,
+    "page_count": 105,
+    "status": "normalized",
+    "sort_order": 5
+  },
+  {
+    "id": 191,
+    "pack_id": 43,
+    "original_filename": "第六章：数据存取与分析.pptx",
+    "original_path": "/home/cypress/Alethicode/deploy/data/language_pack/tasks/42/originals/第六章：数据存取与分析.pptx",
+    "canonical_path": "/home/cypress/Alethicode/deploy/data/language_pack/tasks/42/canonical/第六章：数据存取与分析.pptx",
+    "preview_pdf_path": "/home/cypress/Alethicode/deploy/data/language_pack/preview/tasks/42/第六章：数据存取与分析.pdf",
+    "file_hash": "719aca59df5504581bfd403cd2f424fae51ab538b58f1254f2fa91782f279b79",
+    "file_size_bytes": 3121820,
+    "page_count": 50,
+    "status": "normalized",
+    "sort_order": 6
+  },
+  {
+    "id": 192,
+    "pack_id": 43,
+    "original_filename": "第七章：归纳与抽象.pptx",
+    "original_path": "/home/cypress/Alethicode/deploy/data/language_pack/tasks/42/originals/第七章：归纳与抽象.pptx",
+    "canonical_path": "/home/cypress/Alethicode/deploy/data/language_pack/tasks/42/canonical/第七章：归纳与抽象.pptx",
+    "preview_pdf_path": "/home/cypress/Alethicode/deploy/data/language_pack/preview/tasks/42/第七章：归纳与抽象.pdf",
+    "file_hash": "e79254e4d4b1ff038af31207b651e0cd4b7e26523b6089efeeab51b0cad3e639",
+    "file_size_bytes": 6075603,
+    "page_count": 116,
+    "status": "normalized",
+    "sort_order": 7
+  }
+]

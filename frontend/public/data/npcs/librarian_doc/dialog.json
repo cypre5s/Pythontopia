@@ -1,0 +1,128 @@
+{
+  "npcKey": "librarian_doc",
+  "rootNodeId": "greet",
+  "nodes": {
+    "greet": {
+      "id": "greet",
+      "text": "图书馆里 561 页课件随你翻，{{playerName}}。带证据页码出门，不要带通识幻觉。",
+      "conditions": [],
+      "choices": [
+        {
+          "label": "进入图书馆",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "route",
+              "route": "/library"
+            }
+          ]
+        },
+        {
+          "label": "推荐我今天看哪章",
+          "nextNodeId": "chapter_recommend"
+        },
+        {
+          "label": "我想找某个 KC 的证据",
+          "nextNodeId": "find_evidence"
+        },
+        {
+          "label": "课程结构是什么？",
+          "nextNodeId": "course_overview"
+        },
+        {
+          "label": "领取本章任务·去上课",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "quest_recommend",
+              "questKey": "4-1"
+            },
+            {
+              "type": "open_panel",
+              "route": "/lecture/4"
+            }
+          ]
+        },
+        {
+          "label": "暂时不读了",
+          "nextNodeId": null
+        }
+      ]
+    },
+    "chapter_recommend": {
+      "id": "chapter_recommend",
+      "text": "{{profileAdaptive:按你的画像，推荐第 {{stats.recommendChapterOrder}} 章 \"{{stats.recommendChapterTitle}}\"，对应页码 p{{stats.recommendPageStart}}–p{{stats.recommendPageEnd}}。 | 你刚起步，建议先翻第一章 p10–p32，再来找我。}}",
+      "conditions": [],
+      "choices": [
+        {
+          "label": "去读",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "quest_recommend",
+              "questKey": "read_chapter_today"
+            }
+          ]
+        },
+        {
+          "label": "换一个",
+          "nextNodeId": "course_overview"
+        }
+      ]
+    },
+    "find_evidence": {
+      "id": "find_evidence",
+      "text": "你想查的那个 KC \"{{stats.focusKcName}}\" 在 p{{stats.focusKcPageStart}}–p{{stats.focusKcPageEnd}}，例题在 p{{stats.focusKcExamplePage}}。要打印小纸条带走吗？",
+      "conditions": [],
+      "choices": [
+        {
+          "label": "要",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "give_item",
+              "itemKey": "evidence_slip"
+            }
+          ]
+        },
+        {
+          "label": "不必",
+          "nextNodeId": null
+        }
+      ]
+    },
+    "course_overview": {
+      "id": "course_overview",
+      "text": "《Python 语言基础》共 7 章 65 个 KC，46 例 39 题。从计算工具讲到数据结构，再到归纳与抽象。一章一章来，别跳。",
+      "conditions": [],
+      "choices": [
+        {
+          "label": "了解了",
+          "nextNodeId": null
+        }
+      ]
+    },
+    "hallucination_warn": {
+      "id": "hallucination_warn",
+      "text": "记住，AI 工坊给你的所有资源都必须带 page_refs。看到没有页码的句子 — 别信，回来找我。",
+      "conditions": [
+        {
+          "type": "first_time_this_week",
+          "key": "hallucination_warn"
+        }
+      ],
+      "choices": [
+        {
+          "label": "懂",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "set_flag",
+              "flagKey": "evidence_aware"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

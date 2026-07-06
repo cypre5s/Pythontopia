@@ -1,0 +1,21 @@
+{
+  "key": "librarian_doc",
+  "name": "馆长 Doc",
+  "category": "educator_core",
+  "sprite": "lpc_npc_librarian",
+  "portrait": "portrait_librarian_doc.png",
+  "spawnMap": "town_hub",
+  "spawn": { "tileX": 11, "tileY": 12 },
+  "birthday": { "month": 10, "day": 11 },
+  "schedule": {
+    "monday":    [{ "from": "08:00", "map": "town_hub", "tileX": 11, "tileY": 12 }],
+    "tuesday":   [{ "from": "08:00", "map": "town_hub", "tileX": 11, "tileY": 12 }],
+    "wednesday": [{ "from": "08:00", "map": "town_hub", "tileX": 11, "tileY": 12 }, { "from": "15:00", "map": "town_hub", "tileX": 8, "tileY": 8 }],
+    "thursday":  [{ "from": "08:00", "map": "town_hub", "tileX": 11, "tileY": 12 }],
+    "friday":    [{ "from": "08:00", "map": "town_hub", "tileX": 11, "tileY": 12 }],
+    "saturday":  [{ "from": "10:00", "map": "town_hub", "tileX": 11, "tileY": 12 }],
+    "sunday":    [{ "from": "12:00", "map": "town_hub",    "tileX": 17, "tileY": 9 }]
+  },
+  "tags": ["doc_recommend", "evidence_finder", "chapter_guide"],
+  "description": "小镇图书馆馆长，掌管 7 份课件 561 页索引。能根据你的 KC 进度精确翻到对应章节页码，让你带着证据页码出门。"
+}

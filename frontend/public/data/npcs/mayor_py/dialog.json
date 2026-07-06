@@ -1,0 +1,108 @@
+{
+  "npcKey": "mayor_py",
+  "rootNodeId": "greet",
+  "nodes": {
+    "greet": {
+      "id": "greet",
+      "text": "欢迎来到 Pythontopia，{{playerName}}！我是镇长 Py，python 之父的化身。",
+      "conditions": [],
+      "choices": [
+        {
+          "label": "请告诉我这里有什么？",
+          "nextNodeId": "introduce_town"
+        },
+        {
+          "label": "我应该从哪里开始？",
+          "nextNodeId": "where_to_start"
+        },
+        {
+          "label": "聊聊我的进度",
+          "nextNodeId": "chat_progress"
+        },
+        {
+          "label": "领取本章任务·去上课",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "quest_recommend",
+              "questKey": "1-1"
+            },
+            {
+              "type": "open_panel",
+              "route": "/lecture/1"
+            }
+          ]
+        },
+        {
+          "label": "再见",
+          "nextNodeId": null
+        }
+      ]
+    },
+    "introduce_town": {
+      "id": "introduce_town",
+      "text": "整座小镇就是你的学习营地，抬脚就能到各处：百晓工坊能为你生成专属学习资源、还能随时问 AI；训练场让你做题、当场判题；图书馆收着 561 页课件原文随你翻阅；复盘大厅帮你回顾巩固；每章末尾还有一场 BOSS 等你挑战。不用东奔西跑，全在这一座镇里。",
+      "conditions": [],
+      "choices": [
+        {
+          "label": "好的，我去逛逛",
+          "nextNodeId": null
+        }
+      ]
+    },
+    "where_to_start": {
+      "id": "where_to_start",
+      "text": "{{profileAdaptive:你的画像显示偏好实践，那就直接在镇上开主线第一章，边做边学最适合你。 | 你刚来不久，建议先去图书馆把课程脉络翻清楚，再跟着主线第一章一步步走。}}{{styleAdaptive:看课件时可以先看图解和流程图，从整体结构入手。|看课件时可以顺着代码一行行读，先理清每步的逻辑。|看课件时可以边看边去训练场跑一个最小例子，动手验证。}}",
+      "conditions": [],
+      "choices": [
+        {
+          "label": "我懂了",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "quest_recommend",
+              "questKey": "1-1"
+            }
+          ]
+        }
+      ]
+    },
+    "chat_progress": {
+      "id": "chat_progress",
+      "text": "你已经解锁 {{stats.kcUnlocked}} 个知识点，掌握度均值 {{stats.masteryAvg}}。继续保持节奏，python 之路无非两步：写下去、再写下去。",
+      "conditions": [],
+      "choices": [
+        {
+          "label": "谢谢镇长",
+          "nextNodeId": null
+        }
+      ]
+    },
+    "weekly_recap": {
+      "id": "weekly_recap",
+      "text": "上周你解锁了 {{stats.kcUnlockedLastWeek}} 个知识点，做了 {{stats.exercisesLastWeek}} 道练习。复盘师 Sage 在小镇的复盘大厅等你做本周复盘，去吗？",
+      "conditions": [
+        {
+          "type": "first_time_this_week",
+          "key": "weekly_recap"
+        }
+      ],
+      "choices": [
+        {
+          "label": "现在就去复盘大厅",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "open_panel",
+              "route": "/review-hall"
+            }
+          ]
+        },
+        {
+          "label": "晚点再去",
+          "nextNodeId": null
+        }
+      ]
+    }
+  }
+}

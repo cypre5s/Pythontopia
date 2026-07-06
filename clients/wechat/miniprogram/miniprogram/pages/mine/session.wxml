@@ -1,0 +1,161 @@
+<view class="page">
+  <view wx:if="{{loading && !problemTitle}}" class="loading">加载会话…</view>
+  <view class="login__error" wx:if="{{errorMsg}}">{{errorMsg}}</view>
+
+  <!-- 会话概览 -->
+  <view class="card" wx:if="{{statusLabel}}">
+    <view class="row row--between">
+      <text class="bm-title">{{problemTitle || 'Bug 矿洞会话'}}</text>
+      <text class="badge {{isOpen ? 'badge--progress' : 'badge--done'}}">{{statusLabel}}</text>
+    </view>
+    <view class="muted" wx:if="{{kcCode}}">{{kcCode}}</view>
+    <view class="bm-depth">
+      当前深度 L{{depthLayer}} · 目标 L{{depthTarget}}
+      <text wx:if="{{masteryConfirmed}}" class="badge badge--done bm-depth__badge">已确认掌握</text>
+    </view>
+    <view class="muted" wx:if="{{guidance}}">{{guidance}}</view>
+  </view>
+
+  <!-- 五层下探 -->
+  <view class="card" wx:if="{{depthSteps.length > 0}}">
+    <view class="section-title">五层下探</view>
+    <view
+      class="bm-step {{item.current ? 'bm-step--current' : ''}} {{item.unlocked ? 'bm-step--on' : ''}}"
+      wx:for="{{depthSteps}}"
+      wx:key="layer"
+    >
+      <view class="row row--between">
+        <text class="bm-step__title">{{item.title}}</text>
+        <text class="tag">{{item.unlocked ? '已解锁' : '未解锁'}}</text>
+      </view>
+      <view class="muted">{{item.description}}</view>
+    </view>
+  </view>
+
+  <!-- 题目描述 -->
+  <view class="card" wx:if="{{statementBlocks.length > 0}}">
+    <view class="section-title">题目描述</view>
+    <block wx:for="{{statementBlocks}}" wx:key="id">
+      <view wx:if="{{item.type === 'heading'}}" class="md-heading">{{item.text}}</view>
+      <view wx:elif="{{item.type === 'code'}}" class="code">{{item.text}}</view>
+      <view wx:elif="{{item.type === 'list'}}" class="md-list">· {{item.text}}</view>
+      <view wx:else class="md-p">{{item.text}}</view>
+    </block>
+    <block wx:if="{{samples.length > 0}}">
+      <view class="bm-sample" wx:for="{{samples}}" wx:key="index">
+        <view class="bm-row__label">样例 {{item.index}} · 输入</view>
+        <view class="code">{{item.input}}</view>
+        <view class="bm-row__label">输出</view>
+        <view class="code">{{item.output}}</view>
+      </view>
+    </block>
+  </view>
+
+  <!-- 原题重试 -->
+  <view class="card" wx:if="{{isOpen}}">
+    <view class="section-title">原题重试</view>
+    <view class="muted">L1 裸重试：不看提示，按题意重写。每次失败会自动下探一层。</view>
+    <textarea
+      class="textarea"
+      value="{{retryCode}}"
+      bindinput="onRetryInput"
+      maxlength="8192"
+      auto-height
+      disabled="{{retrySubmitting}}"
+    />
+    <button
+      class="btn btn--primary btn--block"
+      loading="{{retrySubmitting}}"
+      disabled="{{retrySubmitting}}"
+      bindtap="onRetrySubmit"
+    >{{retrySubmitting ? '判题中…' : '提交重试'}}</button>
+
+    <view class="bm-result {{resultClass}}" wx:if="{{resultKind === 'retry' && resultStatus}}">
+      <view class="bm-result__title">
+        {{resultStatus === 'PASSED' ? '通过' : (resultStatus === 'FAILED' ? '未通过' : '运行错误')}}
+      </view>
+      <view class="row row--between bm-result__row">
+        <text>判定：{{verdict}}</text>
+        <text>用例：{{passedCases}} / {{totalCases}}</text>
+      </view>
+      <view wx:if="{{failureReason}}">
+        <view class="bm-row__label">失败原因</view>
+        <view class="code">{{failureReason}}</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 分层调试卡片 -->
+  <view class="card">
+    <view class="section-title">分层调试卡片</view>
+    <view class="muted">逐层下探：裸重试失败后解锁反例 / 变量轨迹 / 提示，只拿思路不拿完整答案。</view>
+    <view wx:if="{{cards.length === 0}}" class="empty">暂无卡片。</view>
+    <view class="bm-card" wx:for="{{cards}}" wx:key="id">
+      <view class="row row--between">
+        <text class="bm-card__type">{{item.typeLabel}}</text>
+        <text class="tag">需 L{{item.requiredDepth}}</text>
+      </view>
+      <block wx:if="{{item.revealed}}">
+        <view class="bm-row" wx:for="{{item.rows}}" wx:for-item="row" wx:key="label">
+          <view class="bm-row__label">{{row.label}}</view>
+          <view wx:if="{{row.code}}" class="code">{{row.value}}</view>
+          <view wx:else class="md-p">{{row.value}}</view>
+        </view>
+      </block>
+      <block wx:else>
+        <button
+          wx:if="{{!item.locked}}"
+          class="btn btn--sm"
+          data-id="{{item.id}}"
+          bindtap="onReveal"
+          loading="{{revealingId === item.id}}"
+          disabled="{{revealingId !== 0}}"
+        >解锁卡片</button>
+        <view wx:else class="muted">深度不足（需 L{{item.requiredDepth}}），先完成裸重试 / 上一层。</view>
+      </block>
+    </view>
+  </view>
+
+  <!-- L5 同 KC 变式 -->
+  <view class="card" wx:if="{{isOpen && variantUnlocked}}">
+    <view class="section-title">L5 同 KC 变式</view>
+    <view class="muted">换一道同知识点题确认迁移能力：{{variantTitle}}</view>
+    <textarea
+      class="textarea"
+      value="{{variantCode}}"
+      bindinput="onVariantInput"
+      maxlength="8192"
+      auto-height
+      disabled="{{variantSubmitting}}"
+    />
+    <button
+      class="btn btn--primary btn--block"
+      loading="{{variantSubmitting}}"
+      disabled="{{variantSubmitting}}"
+      bindtap="onVariantSubmit"
+    >{{variantSubmitting ? '判题中…' : '提交变式'}}</button>
+
+    <view class="bm-result {{resultClass}}" wx:if="{{resultKind === 'variant' && resultStatus}}">
+      <view class="bm-result__title">
+        {{resultStatus === 'PASSED' ? '通过' : (resultStatus === 'FAILED' ? '未通过' : '运行错误')}}
+      </view>
+      <view class="row row--between bm-result__row">
+        <text>判定：{{verdict}}</text>
+        <text>用例：{{passedCases}} / {{totalCases}}</text>
+      </view>
+      <view wx:if="{{failureReason}}">
+        <view class="bm-row__label">失败原因</view>
+        <view class="code">{{failureReason}}</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 关闭会话 -->
+  <view class="card" wx:if="{{isOpen}}">
+    <view class="section-title">关闭会话</view>
+    <view class="bm-actions">
+      <button class="btn btn--primary" bindtap="onResolve" disabled="{{closing}}">标记已解决</button>
+      <button class="btn btn--ghost" bindtap="onAbandon" disabled="{{closing}}">放弃</button>
+    </view>
+  </view>
+</view>

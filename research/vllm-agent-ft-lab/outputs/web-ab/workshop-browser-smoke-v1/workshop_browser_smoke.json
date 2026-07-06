@@ -1,0 +1,15 @@
+{
+  "base_url": "http://127.0.0.1:5173",
+  "user_id": 236,
+  "checks": {
+    "workshop_page_visible": true,
+    "chat_pane_visible": true,
+    "study_drawer_visible": true,
+    "calls_drawer_visible": true,
+    "no_page_errors": true
+  },
+  "console_error_count": 0,
+  "page_errors": [],
+  "title_text_sample": "← 返回小镇\n/\n百晓工坊\n历史\n书房\n调用\n小镇中心\n图书馆 L\n闯关塔 A\n历史问答\n关闭\n📜 历史问答\n↻\n\n还没有问答记录，去对话框问点什么吧。\n\n✦ AI 答疑\n＋ 新对话\n百晓\n\n想学什么直接说\n\n比如「循环怎么用」，也可以让百晓出题、规划学习、找资料\n\n我想学循环，先从哪里开始？\n解释一下这段代码为什么这么写\n出一道函数的小练习\n查看百晓能帮我做什么\n+\n📎\n◉\n发送\n调用过程\n关闭\nRUNTIME / EVAL\nAI 证据驾驶舱\n\n正在读取协议、证据与记忆状态",
+  "screenshot": "research/vllm-agent-ft-lab/outputs/web-ab/workshop-browser-smoke-v1/workshop_page.png"
+}

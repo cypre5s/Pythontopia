@@ -1,0 +1,94 @@
+# ============================================================
+# Pythontopia Web 发布包内容契约（allowlist + 违禁模式）
+# ------------------------------------------------------------
+# 本文件是 build_release_archive.sh（打包清理）与
+# verify_release_archive.sh（包校验）共用的唯一内容契约。
+# 改这里 = 同时改变打包排除规则与校验拒绝规则。
+#
+# 格式说明：
+#   - 以 # 开头的整行是注释；空行忽略（不支持行内注释）。
+#   - [toplevel] 段：发布包顶层必须“恰好”是这些条目，多一项
+#     或少一项都判失败。目录以 / 结尾，文件不带 / 。
+#   - [deny] 段：发布包内任何位置都不允许出现的模式。
+#       * 不含斜杠的条目：按路径中任意一段（文件名或目录名）
+#         做 shell glob 匹配，如 node_modules、*.pem、wechat-*。
+#       * 含斜杠的条目：按发布包内相对路径做整段前缀匹配，
+#         如 backend/data 匹配 backend/data 及其下所有内容。
+# ============================================================
+
+[toplevel]
+backend/
+deploy/
+frontend/
+README.md
+
+[deny]
+# —— 秘密与凭据（.env.example 模板是合法的，不在此列）——
+.env
+.env.local
+.env.dev*
+.env.prod*
+.env.staging*
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.ppk
+id_rsa*
+id_ed25519*
+id_ecdsa*
+*.token
+token.txt
+credentials.json
+service-account*.json
+*.cookie
+secrets
+
+# —— 依赖缓存与构建产物（前端构建产物在镜像里，不随源码树发布）——
+node_modules
+miniprogram_npm
+target
+dist
+coverage
+__pycache__
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.venv
+*.egg-info
+
+# —— 版本库与本地工作区残留 ——
+.git
+.work
+.idea
+.vscode
+.playwright-mcp
+.tmp-preview
+.DS_Store
+
+# —— 大体积媒体与参考资料（课件 PDF / 视频 / 多模态生成产物不入包）——
+*.pdf
+*.mp4
+*.m4v
+*.webm
+*.mov
+*.avi
+*.mkv
+*.flv
+generated-media
+docs/references
+
+# —— 非 Web 端客户端目录（Web 发布包不携带多端代码）——
+clients
+
+# —— 测试报告与截图归档 ——
+qa-screens
+playwright-report
+test-results
+
+# —— 本地专用路径（按相对路径整段匹配）——
+# backend/data 是本地开发软链目录（指向仓库根 data/ 的 PDF、视频缓存），
+# 镜像内不依赖它，发布包一律剔除。
+backend/data

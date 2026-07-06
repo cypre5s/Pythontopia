@@ -1,0 +1,21 @@
+{
+  "key": "coach_q",
+  "name": "教务 Q",
+  "category": "educator_core",
+  "sprite": "lpc_npc_coach",
+  "portrait": "portrait_coach_q.png",
+  "spawnMap": "town_hub",
+  "spawn": { "tileX": 10, "tileY": 33 },
+  "birthday": { "month": 9, "day": 1 },
+  "schedule": {
+    "monday":    [{ "from": "08:00", "map": "town_hub", "tileX": 10, "tileY": 33 }, { "from": "14:00", "map": "town_hub",   "tileX": 14, "tileY": 14 }],
+    "tuesday":   [{ "from": "08:00", "map": "town_hub", "tileX": 10, "tileY": 33 }],
+    "wednesday": [{ "from": "08:00", "map": "town_hub", "tileX": 10, "tileY": 33 }],
+    "thursday":  [{ "from": "08:00", "map": "town_hub", "tileX": 10, "tileY": 33 }, { "from": "15:00", "map": "town_hub",   "tileX": 14, "tileY": 14 }],
+    "friday":    [{ "from": "08:00", "map": "town_hub", "tileX": 10, "tileY": 33 }],
+    "saturday":  [{ "from": "09:00", "map": "town_hub", "tileX": 10, "tileY": 33 }],
+    "sunday":    [{ "from": "09:00", "map": "town_hub", "tileX": 10, "tileY": 33 }]
+  },
+  "tags": ["problem_recommend", "training_dispatcher", "39_problems"],
+  "description": "训练场教务，负责真题判题与掌握度提升，站在小镇。"
+}

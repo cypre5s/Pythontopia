@@ -1,0 +1,147 @@
+{
+  "hud": {
+    "label": {
+      "weather": "天气",
+      "day": "Day",
+      "timeOfDay": "时段",
+      "season": "季节",
+      "energy": "能量",
+      "coin": "金币"
+    },
+    "btn": {
+      "confirm": "确认",
+      "cancel": "取消",
+      "close": "关闭",
+      "save": "保存",
+      "delete": "删除",
+      "reset": "重置",
+      "submit": "提交",
+      "next": "下一步",
+      "prev": "上一步",
+      "view": "查看",
+      "select": "选择",
+      "done": "完成",
+      "skip": "跳过",
+      "retry": "再试一次",
+      "back": "返回",
+      "exit": "退出",
+      "help": "帮助",
+      "settings": "设置",
+      "start": "开始",
+      "pause": "暂停",
+      "resume": "继续",
+      "startGame": "开始游戏",
+      "loadGame": "加载存档",
+      "newSlot": "新建存档",
+      "copy": "复制",
+      "paste": "粘贴",
+      "edit": "编辑",
+      "favorite": "收藏",
+      "share": "分享",
+      "feedback": "反馈"
+    }
+  },
+  "toast": {
+    "questDone": "任务完成，去 NPC 处领奖",
+    "itemGet": "收到 {item}，已放进背包",
+    "energyLow": "能量低了，去医务歇一会",
+    "offline": "网络断了，进度已暂存",
+    "saveOk": "已保存",
+    "kcUp": "KC「{kcName}」掌握度提升",
+    "unlockArea": "{areaName} 已开放，去看看",
+    "pyodideTimeout": "本机预览久了，先停一下",
+    "judging": "服务端判题中，稍等",
+    "levelUp": "升级了，新技能可点亮",
+    "giftAccepted": "{npc} 收下了礼物，眯眼笑",
+    "giftRejected": "{npc} 摆了摆手，下次再选",
+    "classroomJoined": "已加入 {className}",
+    "classroomLeft": "已离开 {className}",
+    "festivalStart": "{festivalName} 开场，去街上看看",
+    "festivalEnd": "{festivalName} 散场，明年再见",
+    "bgmStart": "背景音乐已开",
+    "bgmMute": "背景音乐静音",
+    "achievementGet": "解锁成就：{name}",
+    "reminder": "该歇会儿了，喝口水"
+  },
+  "empty": {
+    "inventory": "背包是空的，去野外采集试试",
+    "classQuests": "还没有班级任务，等老师发布",
+    "friends": "还没有同学加你，去公告板留名",
+    "errorLog": "错题本是空的，多做题就会积累",
+    "skills": "还没解锁技能，完成章节即可点亮",
+    "reviews": "还没有复盘，周五去复盘殿坐坐",
+    "attempts": "还没提交过，先做一道题练手",
+    "messages": "暂时没有通知，这里挺安静",
+    "achievements": "还没有成就，慢慢解锁就好",
+    "saves": "还没有存档，新建一个开始旅程"
+  },
+  "error": {
+    "network": {
+      "offline": "网络好像断了，刷新看看",
+      "timeout": "网络等久了，再试一次"
+    },
+    "pyodide": {
+      "timeout": "本机预览超时，先停一下",
+      "blocked": "本机预览没起来，可走服务端"
+    },
+    "backend": {
+      "500": "服务器打了个喷嚏，刷新试试"
+    },
+    "auth": {
+      "expired": "登录有点久了，重新进一下",
+      "forbidden": "这里需要先解锁权限"
+    },
+    "validation": {
+      "required": "{field} 还没填",
+      "format": "{field} 格式不太对"
+    },
+    "classroom": {
+      "notJoined": "还没加入班级，去找老师要码",
+      "full": "这班人多了，先告诉老师"
+    },
+    "save": {
+      "notFound": "找不到这个存档，可能搬家了",
+      "corrupt": "存档读不出来，换一个再试"
+    },
+    "inventory": {
+      "full": "背包满了，先去整理一下"
+    },
+    "quest": {
+      "notFound": "找不到这个任务，回主线看看"
+    }
+  },
+  "npc": {
+    "mayor_py": {
+      "greeting": "来，路径我陪你看"
+    },
+    "librarian_doc": {
+      "greeting": "翻到这页就明白"
+    },
+    "coach_q": {
+      "greeting": "下一题，看准节奏"
+    },
+    "foreman_bug": {
+      "greeting": "带上头灯，下去看看"
+    },
+    "sage_review": {
+      "greeting": "坐一坐，说一句心得"
+    },
+    "class_president": {
+      "greeting": "老师让我转给你"
+    }
+  },
+  "tpl": {
+    "classroom": {
+      "welcome": "欢迎来到 {className}，本学期一起学完 Python",
+      "weekly": "本周重点：{focusKc}，建议节奏 {pacePerDay} 题/天",
+      "review": "期中前一周，把错题本翻翻，挑 3 题再做",
+      "encourage": "看到大家最近活跃度上来了，继续保持节奏",
+      "deadline": "{title} 今晚 22:00 截止，没交的同学留意",
+      "read": "本周阅读：{chapter}（p{pageStart}–p{pageEnd}），{due} 截止",
+      "practice": "推荐练习：{count} 道题，覆盖 {kcList}，{due} 截止",
+      "bugmine": "Bug 副本：把 {kcName} 的失败样例做完一轮，{due} 前交",
+      "retro": "周五复盘：写一句本周收获，{due} 22:00 关",
+      "peer": "组队共写：与同学共写 {kcName}，{due} 前交合并版"
+    }
+  }
+}

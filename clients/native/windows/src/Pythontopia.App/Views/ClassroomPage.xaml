@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="Pythontopia.App.Views.ClassroomPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Grid x:Name="PageRoot" Padding="24" RowSpacing="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Spacing="8">
+            <TextBlock Text="班级" FontSize="24" FontWeight="Bold" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBox
+                    Width="220"
+                    PlaceholderText="班级邀请码"
+                    Text="{x:Bind ViewModel.JoinCode, Mode=TwoWay}" />
+                <Button
+                    Content="加入班级"
+                    Command="{x:Bind ViewModel.JoinCommand}"
+                    IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBool}}" />
+                <ProgressRing IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}" Width="22" Height="22" />
+            </StackPanel>
+            <TextBlock
+                Text="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}"
+                Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                TextWrapping="Wrap"
+                Visibility="{x:Bind ViewModel.HasError, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="1">
+            <StackPanel Spacing="20">
+                <TextBlock Text="我的班级" FontSize="18" FontWeight="SemiBold" />
+                <ItemsControl ItemsSource="{x:Bind ViewModel.MyClassrooms, Mode=OneWay}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border
+                                Style="{StaticResource PytCardBorderStyle}"
+                                Margin="0,0,0,8"
+                                Padding="14">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding Description}" Opacity="0.8" TextWrapping="Wrap" />
+                                    <StackPanel Orientation="Horizontal" Spacing="10" Opacity="0.6">
+                                        <TextBlock Text="{Binding Status}" FontSize="12" />
+                                        <TextBlock Text="{Binding JoinCode}" FontSize="12" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <TextBlock Text="班级任务" FontSize="18" FontWeight="SemiBold" />
+                <ItemsControl ItemsSource="{x:Bind ViewModel.ClassQuests, Mode=OneWay}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border
+                                Style="{StaticResource PytCardBorderStyle}"
+                                Margin="0,0,0,8"
+                                Padding="14">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding Description}" Opacity="0.8" TextWrapping="Wrap" />
+                                    <StackPanel Orientation="Horizontal" Spacing="10" Opacity="0.6">
+                                        <TextBlock Text="{Binding Status}" FontSize="12" />
+                                        <TextBlock Text="{Binding StudentQuestStatus}" FontSize="12" />
+                                        <TextBlock Text="{Binding DueDate}" FontSize="12" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Page>

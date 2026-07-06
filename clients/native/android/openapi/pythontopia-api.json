@@ -1,0 +1,313 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Pythontopia Backend API (R-12 Android subset)",
+    "description": "手写的最小静态 OpenAPI 3 规格，覆盖 Android 像素小镇 demo 链路端点（auth/login、game/bootstrap、world/npcs/{key}/state|talk、world/calendar/today、world/sleep、world/player）。R-14 世界收缩后无背包/货币/商店端点。后端 springdoc 完整规格见 /v3/api-docs，待全量代码生成覆盖本文件。",
+    "version": "0.12.0-demo"
+  },
+  "servers": [
+    { "url": "http://47.120.29.62:18080", "description": "公网 ECS 后端（debug 默认）" },
+    { "url": "http://10.0.2.2:18080", "description": "Android 模拟器访问宿主机后端" }
+  ],
+  "tags": [
+    { "name": "auth", "description": "认证" },
+    { "name": "game", "description": "全局 bootstrap 聚合" },
+    { "name": "world-npc", "description": "NPC 对话状态" },
+    { "name": "world-calendar", "description": "游戏日历" }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "ApiErrorDto": {
+        "type": "object",
+        "required": ["code", "message"],
+        "properties": {
+          "code": { "type": "string" },
+          "message": { "type": "string" },
+          "timestamp": { "type": "string", "format": "date-time", "nullable": true },
+          "path": { "type": "string", "nullable": true }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": ["username", "password"],
+        "properties": {
+          "username": { "type": "string" },
+          "password": { "type": "string", "format": "password" }
+        }
+      },
+      "UserDto": {
+        "type": "object",
+        "required": ["id", "username", "role"],
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "username": { "type": "string" },
+          "role": { "type": "string" },
+          "displayName": { "type": "string", "nullable": true }
+        }
+      },
+      "LoginResponse": {
+        "type": "object",
+        "required": ["token", "expiresAt", "user"],
+        "properties": {
+          "token": { "type": "string" },
+          "expiresAt": { "type": "string", "format": "date-time" },
+          "user": { "$ref": "#/components/schemas/UserDto" }
+        }
+      },
+      "WorldSnapshotDto": {
+        "type": "object",
+        "required": [
+          "worldSessionId",
+          "dayIndex",
+          "monthIndex",
+          "weekday",
+          "season",
+          "timeOfDay",
+          "weather",
+          "inGameMinutes"
+        ],
+        "properties": {
+          "worldSessionId": { "type": "integer", "format": "int64" },
+          "dayIndex": { "type": "integer" },
+          "monthIndex": { "type": "integer" },
+          "weekday": { "type": "string" },
+          "season": { "type": "string" },
+          "timeOfDay": { "type": "string", "enum": ["DAWN", "MORNING", "NOON", "AFTERNOON", "DUSK", "NIGHT"] },
+          "weather": { "type": "string", "enum": ["CLEAR", "CLOUDY", "RAIN", "STORM", "SNOW"] },
+          "inGameMinutes": { "type": "integer" },
+          "startedAt": { "type": "string", "format": "date-time", "nullable": true },
+          "lastActiveAt": { "type": "string", "format": "date-time", "nullable": true }
+        }
+      },
+      "PlayerStateDto": {
+        "type": "object",
+        "required": ["tileX", "tileY", "direction"],
+        "properties": {
+          "tileX": { "type": "integer" },
+          "tileY": { "type": "integer" },
+          "direction": {
+            "type": "string",
+            "enum": ["UP", "DOWN", "LEFT", "RIGHT", "UP_LEFT", "UP_RIGHT", "DOWN_LEFT", "DOWN_RIGHT"]
+          },
+          "mapKey": { "type": "string", "nullable": true }
+        }
+      },
+      "NpcDialogStateDto": {
+        "type": "object",
+        "required": ["npcKey", "completedNodeIds"],
+        "properties": {
+          "npcKey": { "type": "string" },
+          "currentNodeId": { "type": "string", "nullable": true },
+          "completedNodeIds": { "type": "array", "items": { "type": "string" } },
+          "lastTalkedAt": { "type": "string", "format": "date-time", "nullable": true },
+          "flags": {
+            "type": "object",
+            "additionalProperties": { "type": "string" },
+            "nullable": true
+          }
+        }
+      },
+      "NpcDialogEffectDto": {
+        "type": "object",
+        "required": ["type"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["COMPLETE_NODE", "SET_FLAG"]
+          },
+          "key": { "type": "string", "nullable": true },
+          "value": { "type": "string", "nullable": true }
+        }
+      },
+      "NpcTalkRequest": {
+        "type": "object",
+        "properties": {
+          "nodeId": { "type": "string", "nullable": true },
+          "nextNodeId": { "type": "string", "nullable": true },
+          "effects": {
+            "type": "array",
+            "nullable": true,
+            "items": { "$ref": "#/components/schemas/NpcDialogEffectDto" }
+          }
+        }
+      },
+      "CalendarTodayResponse": {
+        "type": "object",
+        "required": ["dayIndex", "monthIndex", "weekday", "season", "timeOfDay", "weather", "inGameMinutes"],
+        "properties": {
+          "dayIndex": { "type": "integer" },
+          "monthIndex": { "type": "integer" },
+          "weekday": { "type": "string" },
+          "season": { "type": "string" },
+          "timeOfDay": { "type": "string" },
+          "weather": { "type": "string" },
+          "inGameMinutes": { "type": "integer" }
+        }
+      },
+      "GameBootstrapResponse": {
+        "type": "object",
+        "required": ["world", "player"],
+        "properties": {
+          "world": { "$ref": "#/components/schemas/WorldSnapshotDto" },
+          "player": { "$ref": "#/components/schemas/PlayerStateDto" },
+          "npcStates": { "type": "array", "items": { "$ref": "#/components/schemas/NpcDialogStateDto" } }
+        }
+      },
+      "PlayerStatePatch": {
+        "type": "object",
+        "required": ["tileX", "tileY", "direction"],
+        "properties": {
+          "tileX": { "type": "integer" },
+          "tileY": { "type": "integer" },
+          "direction": {
+            "type": "string",
+            "enum": ["UP", "DOWN", "LEFT", "RIGHT", "UP_LEFT", "UP_RIGHT", "DOWN_LEFT", "DOWN_RIGHT"]
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/api/auth/login": {
+      "post": {
+        "tags": ["auth"],
+        "summary": "登录并获取 JWT",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/LoginRequest" } }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "登录成功",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/LoginResponse" } }
+            }
+          },
+          "401": {
+            "description": "凭证错误",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiErrorDto" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/game/bootstrap": {
+      "post": {
+        "tags": ["game"],
+        "summary": "登录后单次拉齐全局世界/玩家/NPC 状态",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "聚合响应",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/GameBootstrapResponse" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/world/npcs/{npcKey}/state": {
+      "get": {
+        "tags": ["world-npc"],
+        "summary": "读取（必要时初始化）单个 NPC 对话状态",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "npcKey", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "NPC 对话状态",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/NpcDialogStateDto" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/world/npcs/{npcKey}/talk": {
+      "post": {
+        "tags": ["world-npc"],
+        "summary": "推进 NPC 对话节点，可携带 effects",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "npcKey", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/NpcTalkRequest" } }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "推进后的 NPC 对话状态",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/NpcDialogStateDto" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/world/calendar/today": {
+      "get": {
+        "tags": ["world-calendar"],
+        "summary": "读取当前游戏日期/季节/时段/天气",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "日历响应",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/CalendarTodayResponse" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/world/sleep": {
+      "post": {
+        "tags": ["game"],
+        "summary": "结束今日推进到明早，返回新的 WorldSnapshot",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "新世界快照",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/WorldSnapshotDto" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/world/player": {
+      "patch": {
+        "tags": ["game"],
+        "summary": "上报玩家移动到的 tile 坐标 + 朝向（8 向）",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/PlayerStatePatch" } }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的玩家状态",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/PlayerStateDto" } }
+            }
+          }
+        }
+      }
+    }
+  }
+}

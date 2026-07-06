@@ -1,0 +1,47 @@
+{
+  "npcKey": "student_a",
+  "rootNodeId": "greet",
+  "nodes": {
+    "greet": {
+      "id": "greet",
+      "text": "嗨 {{playerName}}！你学到哪了？我刚搞懂 for 循环，感觉打开了新世界！",
+      "conditions": [],
+      "choices": [
+        {
+          "label": "一起讨论循环吧",
+          "nextNodeId": "discuss_loop"
+        },
+        {
+          "label": "你有什么学习技巧？",
+          "nextNodeId": "tips"
+        },
+        {
+          "label": "加油！",
+          "nextNodeId": null
+        }
+      ]
+    },
+    "discuss_loop": {
+      "id": "discuss_loop",
+      "text": "for 循环就像一行一行读代码、一个一个过——遍历列表里的每一个元素。while 循环则是一直干到条件不满足为止！",
+      "conditions": [],
+      "choices": [
+        {
+          "label": "形象！",
+          "nextNodeId": null
+        }
+      ]
+    },
+    "tips": {
+      "id": "tips",
+      "text": "我的技巧：每天至少做一道练习题，哪怕是最简单的。坚持比速度重要！",
+      "conditions": [],
+      "choices": [
+        {
+          "label": "记住了！",
+          "nextNodeId": null
+        }
+      ]
+    }
+  }
+}

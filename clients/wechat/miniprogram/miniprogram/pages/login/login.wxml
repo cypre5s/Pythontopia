@@ -1,0 +1,64 @@
+<view class="page login">
+  <view class="login__hero card">
+    <view class="login__title">PYTHONTOPIA</view>
+    <view class="login__subtitle">像素小镇 · Python 学习伙伴</view>
+    <view class="login__hint muted">看 → 学 → 练 → 测，陪你打通每个知识点</view>
+  </view>
+
+  <view class="card">
+    <view class="login__tabs">
+      <view
+        class="login__tab {{mode === 'login' ? 'login__tab--active' : ''}}"
+        data-mode="login"
+        bindtap="setMode"
+      >登录</view>
+      <view
+        class="login__tab {{mode === 'register' ? 'login__tab--active' : ''}}"
+        data-mode="register"
+        bindtap="setMode"
+      >注册</view>
+    </view>
+
+    <view class="field">
+      <text class="field__label">用户名</text>
+      <input
+        class="input"
+        value="{{username}}"
+        placeholder="字母/数字/_ . - ，至少 3 位"
+        bindinput="onUsername"
+      />
+    </view>
+
+    <view class="field" wx:if="{{mode === 'register'}}">
+      <text class="field__label">昵称</text>
+      <input
+        class="input"
+        value="{{displayName}}"
+        placeholder="显示名称"
+        bindinput="onDisplayName"
+      />
+    </view>
+
+    <view class="field">
+      <text class="field__label">密码</text>
+      <input
+        class="input"
+        value="{{password}}"
+        password
+        placeholder="至少 8 位"
+        bindinput="onPassword"
+      />
+    </view>
+
+    <view class="login__error" wx:if="{{errorMsg}}">{{errorMsg}}</view>
+
+    <button
+      class="btn btn--primary btn--block"
+      loading="{{submitting}}"
+      disabled="{{submitting}}"
+      bindtap="onSubmit"
+    >{{mode === 'login' ? '进入小镇' : '注册并进入'}}</button>
+
+    <view class="login__role muted">注册账号默认角色：学生（STUDENT）</view>
+  </view>
+</view>

@@ -1,0 +1,162 @@
+{
+  "base_url": "http://127.0.0.1:5173",
+  "checks": {
+    "content_non_empty": true,
+    "evidence_bound": true,
+    "not_fallback_practice": true,
+    "resource_id_present": true,
+    "status_grounded": true,
+    "status_safe": true
+  },
+  "detail": {
+    "chapterId": 179,
+    "content": {
+      "problems": [
+        {
+          "difficulty": "basic",
+          "hints": [
+            "考虑使用集合的内置方法。",
+            "尝试使用 'in' 运算符。"
+          ],
+          "kc_codes": [
+            "PY43-KC-005"
+          ],
+          "sample_io": [
+            {
+              "input": "x = 5, target_set = {1, 2, 5, 10}",
+              "output": "True"
+            }
+          ],
+          "statement_md": "围绕知识点 PY43-KC-005 完成一道 practice 小练习。\n请根据样例输入输出关系写出你的思路或代码。",
+          "title": "py43-kc-005-1"
+        },
+        {
+          "difficulty": "basic",
+          "hints": [
+            "可以使用集合（set）来自动去重。",
+            "尝试将列表转换为集合后再转回列表。"
+          ],
+          "kc_codes": [
+            "PY43-KC-005"
+          ],
+          "sample_io": [
+            {
+              "input": "lst = [1, 2, 2, 3, 4, 4]",
+              "output": "[1, 2, 3, 4]"
+            }
+          ],
+          "statement_md": "围绕知识点 PY43-KC-005 完成一道 practice 小练习。\n请根据样例输入输出关系写出你的思路或代码。",
+          "title": "py43-kc-005-2"
+        },
+        {
+          "difficulty": "basic",
+          "hints": [
+            "使用字符串的 'in' 运算符。",
+            "注意区分子串和子序列的概念。"
+          ],
+          "kc_codes": [
+            "PY43-KC-005"
+          ],
+          "sample_io": [
+            {
+              "input": "text = 'Hello World', substring = 'World'",
+              "output": "True"
+            }
+          ],
+          "statement_md": "围绕知识点 PY43-KC-005 完成一道 practice 小练习。\n请根据样例输入输出关系写出你的思路或代码。",
+          "title": "py43-kc-005-3"
+        }
+      ]
+    },
+    "contentFormat": "STRUCT_JSON",
+    "createdAt": "2026-07-03T02:49:48.331595Z",
+    "evidencePageIds": [
+      10706,
+      10704
+    ],
+    "feedbackNote": null,
+    "feedbackStatus": "NONE",
+    "groundingStatus": "PASSED",
+    "id": 107,
+    "kcCodes": [
+      "PY43-KC-005"
+    ],
+    "packId": 43,
+    "safetyStatus": "PASSED",
+    "summary": "针对自评等级 2 的练习",
+    "title": "练习题：PY43-KC-005",
+    "type": "PRACTICE",
+    "userId": 235
+  },
+  "event_count": 14,
+  "events": [
+    {
+      "data": "{\"name\": \"plan\", \"value\": {\"type\": \"PRACTICE\", \"nodes\": [{\"node\": \"evidence_fetcher\", \"agent_label\": \"证据检索·馆员\", \"kind\": \"evidence\"}, {\"node\": \"PracticeAgent.attempt0\", \"agent_label\": \"出题官\", \"kind\": \"designer\"}, {\"node\": \"grounding_critic\", \"agent_label\": \"引用审查·审查官\", \"kind\": \"grounding\"}, {\"node\": \"hallucination_detector\", \"agent_label\": \"防幻觉核查·校对官\", \"kind\": \"hallucination\"}, {\"node\": \"semantic_grounding\", \"agent_label\": \"语义接地·核验官\", \"kind\": \"grounding\"}, {\"node\": \"safety_critic\", \"agent_label\": \"安全审查·安全员\", \"kind\": \"safety\"}]}}",
+      "event": "CUSTOM"
+    },
+    {
+      "data": "{\"node\": \"evidence_fetcher\", \"phase\": \"start\", \"status\": \"running\", \"elapsed_ms\": 0, \"note\": null, \"agent_label\": \"证据检索·馆员\"}",
+      "event": "STEP_STARTED"
+    },
+    {
+      "data": "{\"node\": \"evidence_fetcher\", \"elapsed_ms\": 12, \"status\": \"ok\", \"note\": null, \"phase\": \"finish\", \"agent_label\": \"证据检索·馆员\"}",
+      "event": "STEP_FINISHED"
+    },
+    {
+      "data": "{\"node\": \"PracticeAgent.attempt0\", \"phase\": \"start\", \"status\": \"running\", \"elapsed_ms\": 0, \"note\": null, \"agent_label\": \"出题官\"}",
+      "event": "STEP_STARTED"
+    },
+    {
+      "data": "{\"node\": \"PracticeAgent.attempt0\", \"elapsed_ms\": 19290, \"status\": \"ok\", \"note\": null, \"phase\": \"finish\", \"agent_label\": \"出题官\"}",
+      "event": "STEP_FINISHED"
+    },
+    {
+      "data": "{\"node\": \"grounding_critic\", \"phase\": \"start\", \"status\": \"running\", \"elapsed_ms\": 0, \"note\": null, \"agent_label\": \"引用审查·审查官\"}",
+      "event": "STEP_STARTED"
+    },
+    {
+      "data": "{\"node\": \"grounding_critic\", \"elapsed_ms\": 0, \"status\": \"ok\", \"note\": null, \"phase\": \"finish\", \"agent_label\": \"引用审查·审查官\"}",
+      "event": "STEP_FINISHED"
+    },
+    {
+      "data": "{\"node\": \"hallucination_detector\", \"phase\": \"start\", \"status\": \"running\", \"elapsed_ms\": 0, \"note\": null, \"agent_label\": \"防幻觉核查·校对官\"}",
+      "event": "STEP_STARTED"
+    },
+    {
+      "data": "{\"node\": \"hallucination_detector\", \"elapsed_ms\": 0, \"status\": \"ok\", \"note\": \"[]\", \"phase\": \"finish\", \"agent_label\": \"防幻觉核查·校对官\"}",
+      "event": "STEP_FINISHED"
+    },
+    {
+      "data": "{\"node\": \"semantic_grounding\", \"phase\": \"start\", \"status\": \"running\", \"elapsed_ms\": 0, \"note\": null, \"agent_label\": \"语义接地·核验官\"}",
+      "event": "STEP_STARTED"
+    },
+    {
+      "data": "{\"node\": \"semantic_grounding\", \"elapsed_ms\": 0, \"status\": \"ok\", \"note\": \"[]\", \"phase\": \"finish\", \"agent_label\": \"语义接地·核验官\"}",
+      "event": "STEP_FINISHED"
+    },
+    {
+      "data": "{\"node\": \"safety_critic\", \"phase\": \"start\", \"status\": \"running\", \"elapsed_ms\": 0, \"note\": null, \"agent_label\": \"安全审查·安全员\"}",
+      "event": "STEP_STARTED"
+    },
+    {
+      "data": "{\"node\": \"safety_critic\", \"elapsed_ms\": 0, \"status\": \"ok\", \"note\": \"[]\", \"phase\": \"finish\", \"agent_label\": \"安全审查·安全员\"}",
+      "event": "STEP_FINISHED"
+    },
+    {
+      "data": "{\"runId\":107,\"resourceId\":107,\"status\":\"SUCCESS\"}",
+      "event": "result"
+    }
+  ],
+  "request": {
+    "focusHint": "验证微调 LoRA 在 Web 工坊链路中生成非兜底资源，保留样例但不要泄露隐藏答案。",
+    "kcCodes": [
+      "PY43-KC-005"
+    ],
+    "type": "PRACTICE"
+  },
+  "result": {
+    "resourceId": 107,
+    "runId": 107,
+    "status": "SUCCESS"
+  }
+}

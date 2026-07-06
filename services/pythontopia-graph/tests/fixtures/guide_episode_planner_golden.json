@@ -1,0 +1,66 @@
+[
+  {
+    "name": "WA_first_attempt",
+    "decision_event": "EXECUTION_TRACE",
+    "verdict": "WA",
+    "consecutive_errors": 1,
+    "allowed_events": [
+      "ERROR_FEEDBACK", "EXECUTION_TRACE", "KNOWLEDGE_REVIEW",
+      "VISUALIZE", "PARSONS", "CODING", "READING", "IDEATING", "SKELETON"
+    ],
+    "expected_first": "EXECUTION_TRACE",
+    "expected_contains": ["KNOWLEDGE_REVIEW"],
+    "expected_tail_in": ["SKELETON", "CODING"],
+    "forbidden_events": ["TRANSFER", "AC_REVIEW"]
+  },
+  {
+    "name": "CE",
+    "decision_event": "ERROR_FEEDBACK",
+    "verdict": "CE",
+    "consecutive_errors": 0,
+    "allowed_events": [
+      "ERROR_FEEDBACK", "SKELETON", "CODING", "READING", "IDEATING",
+      "KNOWLEDGE_REVIEW", "EXECUTION_TRACE", "VISUALIZE", "PARSONS"
+    ],
+    "expected_first": "ERROR_FEEDBACK",
+    "expected_second_in": ["SKELETON", "CODING"],
+    "forbidden_events": ["TRANSFER", "AC_REVIEW"]
+  },
+  {
+    "name": "WA_repeated_3",
+    "decision_event": "VISUALIZE",
+    "verdict": "WA",
+    "consecutive_errors": 3,
+    "allowed_events": [
+      "VISUALIZE", "PARSONS", "KNOWLEDGE_REVIEW", "ERROR_FEEDBACK",
+      "EXECUTION_TRACE", "CODING", "SKELETON"
+    ],
+    "expected_first_in": ["VISUALIZE", "PARSONS", "KNOWLEDGE_REVIEW"],
+    "forbidden_events": ["TRANSFER", "AC_REVIEW"]
+  },
+  {
+    "name": "AC_after_retries",
+    "decision_event": "AC_REVIEW",
+    "verdict": "AC",
+    "consecutive_errors": 0,
+    "allowed_events": [
+      "AC_REVIEW", "TRANSFER", "CODING", "VISUALIZE",
+      "KNOWLEDGE_REVIEW", "EXECUTION_TRACE", "PARSONS"
+    ],
+    "expected_first": "AC_REVIEW",
+    "expected_contains": ["TRANSFER"],
+    "forbidden_events": []
+  },
+  {
+    "name": "student_clicked_knowledge_review",
+    "decision_event": "KNOWLEDGE_REVIEW",
+    "verdict": "",
+    "consecutive_errors": 0,
+    "allowed_events": [
+      "KNOWLEDGE_REVIEW", "EXECUTION_TRACE", "CODING", "READING",
+      "IDEATING", "SKELETON", "VISUALIZE", "PARSONS"
+    ],
+    "expected_first": "KNOWLEDGE_REVIEW",
+    "forbidden_events": ["TRANSFER", "AC_REVIEW"]
+  }
+]

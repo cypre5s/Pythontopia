@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="Pythontopia.App.Views.MediaPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Grid Padding="24" RowSpacing="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="多模态媒体" FontSize="24" FontWeight="Bold" />
+
+        <InfoBar
+            Grid.Row="1"
+            IsOpen="{x:Bind ViewModel.HasError, Mode=OneWay}"
+            Severity="Error"
+            IsClosable="False"
+            Message="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}" />
+
+        <Grid Grid.Row="2" ColumnSpacing="16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- AI 配图 -->
+            <Grid Grid.Column="0" RowSpacing="10">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <StackPanel Grid.Row="0" Spacing="8">
+                    <TextBlock Text="AI 配图" FontSize="16" FontWeight="SemiBold" />
+                    <TextBox PlaceholderText="图片描述（prompt）" Text="{x:Bind ViewModel.Prompt, Mode=TwoWay}" />
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <Button
+                            Content="生成配图"
+                            Style="{ThemeResource AccentButtonStyle}"
+                            Command="{x:Bind ViewModel.GenerateCommand}"
+                            IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InverseBool}}" />
+                        <ProgressRing IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}" Width="22" Height="22" />
+                    </StackPanel>
+                    <TextBlock Text="{x:Bind ViewModel.Status, Mode=OneWay}" Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
+                </StackPanel>
+                <Border Grid.Row="1" Style="{StaticResource PytCardBorderStyle}" Padding="8">
+                    <Image Source="{x:Bind ViewModel.Image, Mode=OneWay}" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+            </Grid>
+
+            <!-- 故事板短视频 -->
+            <Grid Grid.Column="1" RowSpacing="10">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <StackPanel Grid.Row="0" Spacing="8">
+                    <TextBlock Text="故事板短视频" FontSize="16" FontWeight="SemiBold" />
+                    <TextBox PlaceholderText="画面风格（image style）" Header="风格" Text="{x:Bind ViewModel.StoryboardStyle, Mode=TwoWay}" />
+                    <TextBox
+                        Header="镜头脚本（每行一镜旁白）"
+                        Text="{x:Bind ViewModel.StoryboardScript, Mode=TwoWay}"
+                        AcceptsReturn="True"
+                        TextWrapping="Wrap"
+                        MinHeight="84"
+                        ScrollViewer.VerticalScrollBarVisibility="Auto" />
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <Button
+                            Content="合成短视频"
+                            Style="{ThemeResource AccentButtonStyle}"
+                            Command="{x:Bind ViewModel.ComposeStoryboardCommand}"
+                            IsEnabled="{x:Bind ViewModel.StoryboardBusy, Mode=OneWay, Converter={StaticResource InverseBool}}" />
+                        <ProgressRing IsActive="{x:Bind ViewModel.StoryboardBusy, Mode=OneWay}" Width="22" Height="22" />
+                    </StackPanel>
+                    <TextBlock Text="{x:Bind ViewModel.StoryboardStatus, Mode=OneWay}" Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
+                    <TextBlock
+                        Text="{x:Bind ViewModel.StoryboardProgress, Mode=OneWay}"
+                        Opacity="0.6"
+                        FontSize="11"
+                        TextWrapping="Wrap"
+                        Visibility="{x:Bind ViewModel.StoryboardProgress, Mode=OneWay, Converter={StaticResource StringToVisibility}}" />
+
+                    <!-- 语音听写 (ASR) -->
+                    <TextBlock Text="语音听写 (ASR)" FontSize="16" FontWeight="SemiBold" Margin="0,8,0,0" />
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <Button Content="选择音频转文字" Click="OnPickAudio" IsEnabled="{x:Bind ViewModel.AsrBusy, Mode=OneWay, Converter={StaticResource InverseBool}}" />
+                        <ProgressRing IsActive="{x:Bind ViewModel.AsrBusy, Mode=OneWay}" Width="20" Height="20" />
+                    </StackPanel>
+                    <TextBlock Text="{x:Bind ViewModel.AsrStatus, Mode=OneWay}" Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
+                    <TextBox
+                        Header="识别结果"
+                        Text="{x:Bind ViewModel.AsrText, Mode=OneWay}"
+                        IsReadOnly="True"
+                        AcceptsReturn="True"
+                        TextWrapping="Wrap"
+                        MinHeight="48"
+                        Visibility="{x:Bind ViewModel.AsrText, Mode=OneWay, Converter={StaticResource StringToVisibility}}" />
+                </StackPanel>
+                <Border Grid.Row="1" Style="{StaticResource PytCardBorderStyle}" Padding="8">
+                    <MediaPlayerElement
+                        Source="{x:Bind ViewModel.StoryboardVideo, Mode=OneWay}"
+                        AreTransportControlsEnabled="True"
+                        Stretch="Uniform" />
+                </Border>
+            </Grid>
+        </Grid>
+    </Grid>
+</Page>

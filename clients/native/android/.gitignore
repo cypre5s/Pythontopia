@@ -1,0 +1,47 @@
+# gradlew + gradle/wrapper/gradle-wrapper.jar 应入 git；首次见 WRAPPER_SETUP.md 生成
+# （本文件不忽略它们，仅在此处提示）
+
+# Gradle
+.gradle/
+build/
+out/
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+*.iws
+*.ipr
+local.properties
+captures/
+.cxx/
+
+# Kotlin
+.kotlin/
+kotlin-js-store/
+
+# NDK
+obj/
+
+# Lint baselines (re-generate on demand)
+lint-baseline.xml
+
+# Keystore (never commit signing keys)
+*.jks
+*.keystore
+keystore.properties
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Profiling
+*.hprof
+
+# Coverage
+coverage/
+
+# Generated docs (Dokka, etc.)
+docs/build/

@@ -1,0 +1,518 @@
+/*
+ * Pythontopia 像素风统一 UI 系统
+ *
+ * 9-slice 边框 + 游戏面板 + 微动画 + 日夜配色变量。
+ * 所有 HUD 组件 @import 或在 main.css 全局引入。
+ */
+
+/* ── 日夜 / 季节 CSS 变量 ──────────────────────────────────── */
+:root {
+  /* 默认日间主题 */
+  --pyt-panel-bg: rgba(28, 24, 16, 0.94);
+  --pyt-panel-border: #d4af37;
+  --pyt-panel-border-dark: #6e4f1d;
+  --pyt-panel-shadow: rgba(0, 0, 0, 0.45);
+  --pyt-panel-header-bg: linear-gradient(180deg, #4d3613 0%, #2a1a05 100%);
+  --pyt-text-primary: #fff7e6;
+  --pyt-text-secondary: #c9d9b8;
+  --pyt-text-accent: #ffd166;
+  --pyt-text-gold: #d4af37;
+  --pyt-hud-bg: rgba(25, 28, 18, 0.82);
+  --pyt-hud-border: rgba(218, 176, 76, 0.65);
+  --pyt-btn-bg: rgba(212, 175, 55, 0.10);
+  --pyt-btn-border: rgba(212, 175, 55, 0.42);
+  --pyt-btn-hover-bg: rgba(241, 196, 83, 0.25);
+  --pyt-btn-active-bg: rgba(241, 196, 83, 0.35);
+  --pyt-bar-energy: #6bbf59;
+  --pyt-bar-mastery: #f1c453;
+  --pyt-danger: #e63946;
+  --pyt-info: #6aa1d6;
+}
+
+/* 日夜变体 —— 由 HudShell 根据 timeOfDay 切换 class */
+.pyt-time--dawn {
+  --pyt-hud-bg: rgba(60, 45, 30, 0.82);
+  --pyt-panel-bg: rgba(50, 38, 24, 0.94);
+  --pyt-text-secondary: #e0c8a0;
+}
+
+.pyt-time--morning {
+  --pyt-hud-bg: rgba(30, 42, 24, 0.78);
+  --pyt-text-secondary: #d0e0b8;
+}
+
+.pyt-time--noon {
+  --pyt-hud-bg: rgba(25, 28, 18, 0.72);
+}
+
+.pyt-time--afternoon {
+  --pyt-hud-bg: rgba(35, 32, 20, 0.76);
+  --pyt-text-accent: #ffe080;
+}
+
+.pyt-time--evening {
+  --pyt-hud-bg: rgba(30, 22, 18, 0.85);
+  --pyt-panel-border: #b8862d;
+  --pyt-text-accent: #ffbf44;
+  --pyt-text-secondary: #b0a090;
+}
+
+.pyt-time--night {
+  --pyt-hud-bg: rgba(12, 14, 22, 0.90);
+  --pyt-panel-bg: rgba(16, 18, 28, 0.95);
+  --pyt-panel-border: #5a6a8a;
+  --pyt-text-primary: #d0d8e8;
+  --pyt-text-accent: #8ab4d8;
+  --pyt-text-secondary: #7888a0;
+  --pyt-hud-border: rgba(100, 130, 180, 0.55);
+  --pyt-btn-border: rgba(100, 130, 180, 0.40);
+  --pyt-btn-hover-bg: rgba(100, 150, 210, 0.20);
+}
+
+/* 季节变体 */
+.pyt-season--spring {
+  --pyt-bar-energy: #6bbf59;
+}
+
+.pyt-season--summer {
+  --pyt-bar-energy: #4caf50;
+  --pyt-text-accent: #ffe066;
+}
+
+.pyt-season--autumn {
+  --pyt-bar-energy: #c2871f;
+  --pyt-panel-border: #c2871f;
+  --pyt-text-accent: #f0b040;
+}
+
+.pyt-season--winter {
+  --pyt-bar-energy: #78b4d0;
+  --pyt-panel-border: #7090a8;
+  --pyt-text-accent: #a8d0e8;
+  --pyt-hud-bg: rgba(20, 28, 38, 0.85);
+}
+
+/* ── 像素风 9-slice 面板 ───────────────────────────────────── */
+.pyt-panel {
+  background: var(--pyt-panel-bg);
+  border: 3px solid var(--pyt-panel-border);
+  border-radius: 2px;
+  box-shadow:
+    4px 4px 0 var(--pyt-panel-border-dark),
+    0 8px 24px var(--pyt-panel-shadow);
+  color: var(--pyt-text-primary);
+  font-family: var(--pyt-font-pixel, 'Zpix', 'Ark Pixel 12', monospace);
+  image-rendering: pixelated;
+}
+
+.pyt-panel--inset {
+  box-shadow:
+    inset 2px 2px 0 rgba(0, 0, 0, 0.3),
+    inset -1px -1px 0 rgba(255, 247, 230, 0.08);
+  border-color: var(--pyt-panel-border-dark);
+}
+
+.pyt-panel-header {
+  background: var(--pyt-panel-header-bg);
+  border-bottom: 2px solid var(--pyt-panel-border);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pyt-panel-header__title {
+  margin: 0;
+  font-size: 16px;
+  color: var(--pyt-text-accent);
+  text-shadow: 1px 1px 0 #2a1a05;
+  letter-spacing: 1px;
+}
+
+.pyt-panel-body {
+  padding: 16px;
+  overflow-y: auto;
+}
+
+/* ── 像素按钮 ──────────────────────────────────────────────── */
+.pyt-btn {
+  font-family: var(--pyt-font-pixel, 'Zpix', 'Ark Pixel 12', monospace);
+  background: var(--pyt-btn-bg);
+  border: 2px solid var(--pyt-btn-border);
+  color: var(--pyt-text-primary);
+  padding: 8px 16px;
+  cursor: pointer;
+  image-rendering: pixelated;
+  box-shadow: 2px 2px 0 var(--pyt-panel-border-dark);
+  transition: transform 80ms ease, box-shadow 80ms ease, background 120ms ease;
+}
+
+.pyt-btn:hover {
+  background: var(--pyt-btn-hover-bg);
+  transform: translateY(-1px);
+  box-shadow: 2px 3px 0 var(--pyt-panel-border-dark);
+}
+
+.pyt-btn:active {
+  transform: translateY(2px);
+  box-shadow: 0 0 0 var(--pyt-panel-border-dark);
+}
+
+.pyt-btn--primary {
+  background: var(--pyt-text-gold);
+  border-color: var(--pyt-text-accent);
+  color: #2a1a05;
+  font-weight: 700;
+}
+
+.pyt-btn--primary:hover {
+  background: var(--pyt-text-accent);
+}
+
+.pyt-btn--danger {
+  background: rgba(230, 57, 70, 0.22);
+  border-color: var(--pyt-danger);
+}
+
+.pyt-btn--danger:hover {
+  background: rgba(230, 57, 70, 0.42);
+}
+
+.pyt-btn--ghost {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.pyt-btn--ghost:hover {
+  background: rgba(255, 247, 230, 0.08);
+}
+
+/* ── 像素分隔线 ────────────────────────────────────────────── */
+.pyt-divider {
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg,
+      transparent 0%,
+      var(--pyt-panel-border) 20%,
+      var(--pyt-panel-border) 80%,
+      transparent 100%);
+  border: none;
+  margin: 8px 0;
+}
+
+.pyt-divider--vertical {
+  width: 2px;
+  height: 100%;
+  background: linear-gradient(180deg,
+      transparent 0%,
+      var(--pyt-panel-border) 20%,
+      var(--pyt-panel-border) 80%,
+      transparent 100%);
+  margin: 0 8px;
+}
+
+/* ── 微动画 ────────────────────────────────────────────────── */
+@keyframes pyt-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pyt-slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pyt-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes pyt-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes pyt-bounce {
+  0% {
+    transform: scale(1);
+  }
+
+  30% {
+    transform: scale(1.12);
+  }
+
+  50% {
+    transform: scale(0.95);
+  }
+
+  70% {
+    transform: scale(1.04);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes pyt-glow-pulse {
+
+  0%,
+  100% {
+    box-shadow: 0 0 4px rgba(241, 196, 83, 0.3);
+  }
+
+  50% {
+    box-shadow: 0 0 12px rgba(241, 196, 83, 0.6);
+  }
+}
+
+@keyframes pyt-pixel-dissolve {
+  0% {
+    clip-path: inset(0 0 0 0);
+    opacity: 1;
+  }
+
+  100% {
+    clip-path: inset(50% 50% 50% 50%);
+    opacity: 0;
+  }
+}
+
+.pyt-anim-slide-up {
+  animation: pyt-slide-up 220ms ease-out;
+}
+
+.pyt-anim-slide-down {
+  animation: pyt-slide-down 220ms ease-out;
+}
+
+.pyt-anim-scale-in {
+  animation: pyt-scale-in 200ms ease-out;
+}
+
+.pyt-anim-fade-in {
+  animation: pyt-fade-in 180ms ease;
+}
+
+.pyt-anim-bounce {
+  animation: pyt-bounce 400ms ease;
+}
+
+.pyt-anim-glow {
+  animation: pyt-glow-pulse 2s ease-in-out infinite;
+}
+
+/* Vue transition helpers */
+.pyt-fade-enter-active,
+.pyt-fade-leave-active {
+  transition: opacity 180ms ease;
+}
+
+.pyt-fade-enter-from,
+.pyt-fade-leave-to {
+  opacity: 0;
+}
+
+.pyt-slide-enter-active {
+  animation: pyt-slide-up 220ms ease-out;
+}
+
+.pyt-slide-leave-active {
+  animation: pyt-slide-up 180ms ease-in reverse;
+}
+
+.pyt-scale-enter-active {
+  animation: pyt-scale-in 200ms ease-out;
+}
+
+.pyt-scale-leave-active {
+  animation: pyt-scale-in 160ms ease-in reverse;
+}
+
+/* ── 滚动条美化 ────────────────────────────────────────────── */
+.pyt-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.pyt-scroll::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.pyt-scroll::-webkit-scrollbar-thumb {
+  background: var(--pyt-panel-border);
+  border-radius: 3px;
+}
+
+/* ── 像素徽章 / 标签 ─────────────────────────────────────── */
+.pyt-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  font-family: var(--pyt-font-pixel, monospace);
+  font-size: 10px;
+  border: 1px solid var(--pyt-panel-border);
+  border-radius: 1px;
+  color: var(--pyt-text-primary);
+  background: rgba(212, 175, 55, 0.14);
+  image-rendering: pixelated;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+.pyt-badge--success {
+  border-color: var(--pyt-bar-energy);
+  background: rgba(107, 191, 89, 0.18);
+}
+
+.pyt-badge--danger {
+  border-color: var(--pyt-danger);
+  background: rgba(230, 57, 70, 0.14);
+}
+
+.pyt-badge--info {
+  border-color: var(--pyt-info);
+  background: rgba(106, 161, 214, 0.14);
+}
+
+/* ── 像素进度条 ──────────────────────────────────────────── */
+.pyt-progress {
+  position: relative;
+  height: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--pyt-panel-border-dark);
+  border-radius: 1px;
+  overflow: hidden;
+  image-rendering: pixelated;
+}
+
+.pyt-progress__bar {
+  height: 100%;
+  background: var(--pyt-bar-energy);
+  transition: width 300ms ease-out;
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.2);
+}
+
+.pyt-progress__bar--gold {
+  background: var(--pyt-bar-mastery);
+}
+
+/* ── 像素卡片 ────────────────────────────────────────────── */
+.pyt-card {
+  background: var(--pyt-panel-bg);
+  border: 2px solid var(--pyt-panel-border);
+  border-radius: 2px;
+  box-shadow: 2px 2px 0 var(--pyt-panel-border-dark);
+  padding: 12px;
+  color: var(--pyt-text-primary);
+  font-family: var(--pyt-font-pixel, monospace);
+  image-rendering: pixelated;
+}
+
+.pyt-card:hover {
+  border-color: var(--pyt-text-accent);
+  box-shadow: 2px 3px 0 var(--pyt-panel-border-dark), 0 0 8px rgba(241, 196, 83, 0.2);
+}
+
+/* ── 像素输入框 ──────────────────────────────────────────── */
+.pyt-input {
+  font-family: var(--pyt-font-pixel, monospace);
+  font-size: 13px;
+  padding: 6px 10px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 2px solid var(--pyt-panel-border-dark);
+  border-radius: 1px;
+  color: var(--pyt-text-primary);
+  outline: none;
+  transition: border-color 120ms;
+  image-rendering: pixelated;
+}
+
+.pyt-input:focus {
+  border-color: var(--pyt-text-accent);
+  box-shadow: 0 0 0 1px var(--pyt-text-accent);
+}
+
+.pyt-input::placeholder {
+  color: rgba(255, 247, 230, 0.35);
+}
+
+/* ── 像素工具提示 ────────────────────────────────────────── */
+.pyt-tooltip {
+  position: relative;
+}
+
+.pyt-tooltip::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 10px;
+  background: var(--pyt-panel-bg);
+  border: 1px solid var(--pyt-panel-border);
+  border-radius: 1px;
+  color: var(--pyt-text-primary);
+  font-family: var(--pyt-font-pixel, monospace);
+  font-size: 11px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 120ms;
+  z-index: var(--pyt-z-popover);
+  box-shadow: 2px 2px 0 var(--pyt-panel-border-dark);
+}
+
+/* 键盘可达：tab 聚焦到带提示的控件时也显示气泡，不再只响应鼠标悬停 */
+.pyt-tooltip:hover::after,
+.pyt-tooltip:focus::after,
+.pyt-tooltip:focus-within::after {
+  opacity: 1;
+}
+
+/* ── 减弱动效偏好 ──────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+
+  .pyt-anim-slide-up,
+  .pyt-anim-slide-down,
+  .pyt-anim-scale-in,
+  .pyt-anim-fade-in,
+  .pyt-anim-bounce,
+  .pyt-anim-glow {
+    animation: none;
+  }
+
+  .pyt-slide-enter-active,
+  .pyt-slide-leave-active,
+  .pyt-scale-enter-active,
+  .pyt-scale-leave-active {
+    animation: none;
+  }
+}

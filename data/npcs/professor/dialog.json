@@ -1,0 +1,61 @@
+{
+  "npcKey": "professor",
+  "rootNodeId": "greet",
+  "nodes": {
+    "greet": {
+      "id": "greet",
+      "text": "{{playerName}}，有什么 Python 问题想讨论吗？",
+      "conditions": [],
+      "choices": [
+        {
+          "label": "听课 · 从算盘到 ENIAC（计算工具史）",
+          "nextNodeId": null,
+          "effects": [
+            {
+              "type": "quest_recommend",
+              "questKey": "1-2"
+            },
+            {
+              "type": "open_panel",
+              "route": "/lecture/1"
+            }
+          ]
+        },
+        {
+          "label": "推荐我学什么",
+          "nextNodeId": "recommend"
+        },
+        {
+          "label": "讲讲 Python 历史",
+          "nextNodeId": "history"
+        },
+        {
+          "label": "下次再聊",
+          "nextNodeId": null
+        }
+      ]
+    },
+    "recommend": {
+      "id": "recommend",
+      "text": "按节奏来就好：先在图书馆看课件、听课把当前章节弄懂（看），再去百晓工坊生成专属学习资源（学），然后到训练场提交判题（练），掌握度达标就算过关（测）。每一章都是下一章的基础！{{styleAdaptive:第一课的内容，你可以先看动画和图示建立直观印象。|第一课的内容，你可以先顺着讲解的推理链一步步理解。|第一课的内容，你可以先动手跑一个最小例子再回看讲解。}}",
+      "conditions": [],
+      "choices": [
+        {
+          "label": "收到！",
+          "nextNodeId": null
+        }
+      ]
+    },
+    "history": {
+      "id": "history",
+      "text": "Python 由 Guido van Rossum 于 1991 年发布。它的设计哲学强调代码可读性，用缩进来定义代码块。Python 这个名字来自 Monty Python 喜剧团！",
+      "conditions": [],
+      "choices": [
+        {
+          "label": "有趣！",
+          "nextNodeId": null
+        }
+      ]
+    }
+  }
+}

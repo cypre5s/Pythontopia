@@ -1,0 +1,131 @@
+.index__hero {
+  background: linear-gradient(180deg, #efdcb8 0%, #fff8ea 100%);
+}
+
+.index__greeting {
+  font-size: 36rpx;
+  font-weight: bold;
+  color: var(--wood-dark);
+}
+
+.index__stars {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: var(--gold);
+}
+
+.index__avg {
+  margin: 12rpx 0 20rpx;
+}
+
+.index__avg-num {
+  font-size: 48rpx;
+  font-weight: bold;
+  color: var(--leaf-deep);
+}
+
+.index__kc {
+  margin-bottom: 14rpx;
+}
+
+.index__kc-code {
+  font-size: 24rpx;
+  color: var(--ink);
+}
+
+.index__entry-text {
+  flex: 1;
+  padding-right: 16rpx;
+}
+
+.quest__desc {
+  margin: 10rpx 0;
+  font-size: 26rpx;
+  color: var(--ink-soft);
+}
+
+.quest__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14rpx;
+  margin-top: 14rpx;
+}
+
+/* 主线冒险地图 */
+.chapter {
+  border: 4rpx solid var(--wood-dark);
+  background: #fffdf6;
+  margin-bottom: 16rpx;
+  box-shadow: 6rpx 6rpx 0 0 rgba(90, 62, 27, 0.22);
+}
+
+.chapter--locked {
+  opacity: 0.75;
+}
+
+.chapter__head {
+  padding: 18rpx 20rpx;
+}
+
+.chapter__title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12rpx;
+}
+
+.chapter__no {
+  font-size: 24rpx;
+  color: #fff8ea;
+  background: var(--wood);
+  border: 3rpx solid var(--wood-dark);
+  padding: 2rpx 10rpx;
+}
+
+.chapter__title {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: var(--ink);
+}
+
+.chapter__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10rpx;
+}
+
+.chapter__stars {
+  font-size: 30rpx;
+  color: var(--gold);
+  letter-spacing: 4rpx;
+}
+
+.chapter__body {
+  padding: 0 20rpx 18rpx;
+  border-top: 3rpx dashed var(--wood);
+}
+
+.chapter__best {
+  margin: 12rpx 0;
+}
+
+.stage-row {
+  padding: 14rpx 16rpx;
+  margin-bottom: 12rpx;
+  background: var(--parchment);
+  border: 3rpx solid var(--wood);
+}
+
+.stage-row__title {
+  font-size: 28rpx;
+  color: var(--ink);
+}
+
+.stage-row__progress {
+  display: block;
+  margin-top: 6rpx;
+}
+
+.chapter__test {
+  margin-top: 6rpx;
+}

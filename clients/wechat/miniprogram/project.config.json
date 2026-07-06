@@ -1,0 +1,28 @@
+{
+  "description": "Pythontopia 学习伙伴 · 原生微信小程序项目配置（非 uni-app / 非 Taro）",
+  "appid": "touristappid",
+  "appidComment": "上线前请替换为你在微信公众平台申请的真实小程序 AppID；touristappid 仅供本机 DevTools 预览（无云能力 / 无真机）",
+  "projectname": "pythontopia-wechat-miniprogram",
+  "miniprogramRoot": "miniprogram/",
+  "compileType": "miniprogram",
+  "libVersion": "3.5.5",
+  "setting": {
+    "urlCheck": false,
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "minified": true,
+    "useCompilerPlugins": [
+      "typescript"
+    ],
+    "packNpmManually": false,
+    "packNpmRelationList": [],
+    "ignoreDevUnusedFiles": false,
+    "babelSetting": {
+      "ignore": [],
+      "disablePlugins": [],
+      "outputPath": ""
+    }
+  },
+  "condition": {}
+}

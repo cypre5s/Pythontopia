@@ -1,0 +1,722 @@
+using System.Net;
+using System.Net.Http.Headers;
+using System.Runtime.CompilerServices;
+using System.Text;
+using System.Text.Json;
+using Pythontopia.Core.Config;
+using Pythontopia.Core.Dto;
+using Pythontopia.Core.Json;
+
+namespace Pythontopia.Core.Api;
+
+/// <summary>HttpClient-backed <see cref="IApiClient"/>. Safe to register as a singleton.</summary>
+public sealed class ApiClient : IApiClient
+{
+    private readonly HttpClient _http;
+    private readonly string _baseUrl;
+    private readonly TimeSpan _requestTimeout;
+
+    public string? AuthToken { get; set; }
+
+    public ApiClient(HttpClient http, AppConfig config)
+    {
+        _http = http ?? throw new ArgumentNullException(nameof(http));
+        ArgumentNullException.ThrowIfNull(config);
+        _baseUrl = config.BackendBaseUrl.TrimEnd('/');
+        _requestTimeout = config.RequestTimeout;
+        // Per-request timeouts are managed with a linked CancelAfter token so that
+        // long-lived SSE streams are never aborted by HttpClient.Timeout.
+        _http.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
+    }
+
+    /// <summary>Convenience factory that owns its own <see cref="HttpClient"/>.</summary>
+    public static ApiClient Create(AppConfig config) => new(new HttpClient(), config);
+
+    // ---------------------------------------------------------------- auth ----
+
+    public Task<LoginResponse> LoginAsync(LoginRequest request, CancellationToken ct = default) =>
+        SendJsonAsync<LoginResponse>(HttpMethod.Post, "/api/auth/login", request, ct);
+
+    public Task<UserDto> RegisterAsync(RegisterRequest request, CancellationToken ct = default) =>
+        SendJsonAsync<UserDto>(HttpMethod.Post, "/api/auth/register", request, ct);
+
+    // ---------------------------------------------------------------- game ----
+
+    public Task<GameBootstrapResponse> BootstrapGameAsync(CancellationToken ct = default) =>
+        SendJsonAsync<GameBootstrapResponse>(HttpMethod.Post, "/api/game/bootstrap", null, ct);
+
+    // ------------------------------------------------------------- mainline ----
+
+    public Task<MainlineOverviewDto> GetMainlineOverviewAsync(CancellationToken ct = default) =>
+        SendJsonAsync<MainlineOverviewDto>(HttpMethod.Get, "/api/mainline/overview", null, ct);
+
+    public Task<StageDetailDto> GetStageDetailAsync(long stageId, CancellationToken ct = default) =>
+        SendJsonAsync<StageDetailDto>(HttpMethod.Get, $"/api/mainline/stages/{stageId}", null, ct);
+
+    public Task<StageProgressDto> ReportVideoProgressAsync(long stageId, int deltaSec, CancellationToken ct = default) =>
+        SendJsonAsync<StageProgressDto>(HttpMethod.Post, $"/api/mainline/stages/{stageId}/video-progress", new VideoProgressRequest(deltaSec), ct);
+
+    public Task<StageProgressDto> ReportPagesReadAsync(long stageId, IReadOnlyList<long> pageIds, CancellationToken ct = default) =>
+        SendJsonAsync<StageProgressDto>(HttpMethod.Post, $"/api/mainline/stages/{stageId}/pages-read", new PagesReadRequest(pageIds), ct);
+
+    // ----------------------------------------------------------- review hall ----
+
+    public Task<WeeklyReportDto> GetWeeklyReportAsync(CancellationToken ct = default) =>
+        SendJsonAsync<WeeklyReportDto>(HttpMethod.Get, "/api/learner/twin/weekly", null, ct);
+
+    public async Task<IReadOnlyList<RiskPredictionDto>> GetRiskPredictionsAsync(CancellationToken ct = default) =>
+        await SendJsonAsync<List<RiskPredictionDto>>(HttpMethod.Get, "/api/learner/oracle/risk", null, ct).ConfigureAwait(false);
+
+    // ---------------------------------------------------------- chapter test ----
+
+    public Task<ChapterTestResultDto> GetLatestChapterTestAsync(int chapter, CancellationToken ct = default) =>
+        SendJsonAsync<ChapterTestResultDto>(HttpMethod.Get, $"/api/mainline/chapters/{chapter}/test/latest", null, ct);
+
+    public Task<TestPrepareResponse> PrepareChapterTestAsync(int chapter, CancellationToken ct = default) =>
+        SendJsonAsync<TestPrepareResponse>(HttpMethod.Post, $"/api/mainline/chapters/{chapter}/test/prepare", null, ct);
+
+    public Task<ChapterTestPaperDto> StartChapterTestAsync(int chapter, CancellationToken ct = default) =>
+        SendJsonAsync<ChapterTestPaperDto>(HttpMethod.Post, $"/api/mainline/chapters/{chapter}/test/start", null, ct);
+
+    public Task<ChapterTestResultDto> SubmitChapterTestAsync(
+        int chapter, long testId, IReadOnlyDictionary<string, string> answers, CancellationToken ct = default) =>
+        SendJsonAsync<ChapterTestResultDto>(
+            HttpMethod.Post, $"/api/mainline/chapters/{chapter}/test/{testId}/submit", new ChapterTestSubmitRequest(answers), ct);
+
+    // ------------------------------------------------------- course examples ----
+
+    public async Task<IReadOnlyList<CourseExampleDto>> GetExamplesAsync(string? kcCode = null, CancellationToken ct = default)
+    {
+        var query = new QueryBuilder().Add("kcCode", kcCode).Build();
+        return await SendJsonAsync<List<CourseExampleDto>>(HttpMethod.Get, "/api/course/examples" + query, null, ct).ConfigureAwait(false);
+    }
+
+    public Task<CourseExampleDto> GetExampleAsync(long exampleId, CancellationToken ct = default) =>
+        SendJsonAsync<CourseExampleDto>(HttpMethod.Get, $"/api/course/examples/{exampleId}", null, ct);
+
+    // -------------------------------------------------------- world calendar ----
+
+    public Task<CalendarTodayDto> GetCalendarTodayAsync(CancellationToken ct = default) =>
+        SendJsonAsync<CalendarTodayDto>(HttpMethod.Get, "/api/world/calendar/today", null, ct);
+
+    public async Task<IReadOnlyList<WorldEventDto>> GetWorldEventsAsync(CancellationToken ct = default) =>
+        await SendJsonAsync<List<WorldEventDto>>(HttpMethod.Get, "/api/world/calendar/events", null, ct).ConfigureAwait(false);
+
+    // ------------------------------------------------------ learner reflection ----
+
+    public async Task<IReadOnlyList<LearnerInsightDto>> GetInsightsAsync(int limit = 10, CancellationToken ct = default)
+    {
+        var query = new QueryBuilder().Add("limit", limit).Build();
+        return await SendJsonAsync<List<LearnerInsightDto>>(HttpMethod.Get, "/api/learner/insights" + query, null, ct).ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<MemoryItemDto>> GetMemoryAsync(string? focusKc = null, int limit = 8, CancellationToken ct = default)
+    {
+        var query = new QueryBuilder().Add("focusKc", focusKc).Add("limit", limit).Build();
+        return await SendJsonAsync<List<MemoryItemDto>>(HttpMethod.Get, "/api/learner/memory" + query, null, ct).ConfigureAwait(false);
+    }
+
+    // -------------------------------------------------------------- bilibili ----
+
+    public async Task<IReadOnlyList<BilibiliVideoDto>> SearchBilibiliVideosAsync(string keyword, int limit = 8, CancellationToken ct = default)
+    {
+        var query = new QueryBuilder().Add("keyword", keyword).Add("limit", limit).Build();
+        return await SendJsonAsync<List<BilibiliVideoDto>>(HttpMethod.Get, "/api/videos/bilibili" + query, null, ct).ConfigureAwait(false);
+    }
+
+    // ------------------------------------------------------------ save slots ----
+
+    public async Task<IReadOnlyList<SaveSlotDto>> GetSaveSlotsAsync(CancellationToken ct = default) =>
+        await SendJsonAsync<List<SaveSlotDto>>(HttpMethod.Get, "/api/world/saves", null, ct).ConfigureAwait(false);
+
+    public Task<SaveSlotDto> ActivateSaveSlotAsync(int slotIndex, CancellationToken ct = default) =>
+        SendJsonAsync<SaveSlotDto>(HttpMethod.Post, $"/api/world/saves/{slotIndex}/activate", null, ct);
+
+    // -------------------------------------------------------------- feynman ----
+
+    public Task<FeynmanSessionDto> StartFeynmanAsync(string kcCode, CancellationToken ct = default) =>
+        SendJsonAsync<FeynmanSessionDto>(HttpMethod.Post, "/api/feynman/sessions", new FeynmanStartRequest(kcCode), ct);
+
+    public Task<FeynmanTurnDto> FeynmanTeachAsync(long sessionId, string explanation, CancellationToken ct = default) =>
+        SendJsonAsync<FeynmanTurnDto>(HttpMethod.Post, $"/api/feynman/sessions/{sessionId}/teach", new FeynmanTeachRequest(explanation), ct);
+
+    public Task<FeynmanVerdictDto> FeynmanJudgeAsync(long sessionId, CancellationToken ct = default) =>
+        SendJsonAsync<FeynmanVerdictDto>(HttpMethod.Post, $"/api/feynman/sessions/{sessionId}/judge", null, ct);
+
+    // ------------------------------------------------------------ boss battle ----
+
+    public Task<BossProblemDto> RequestBossProblemAsync(
+        int chapter, int stage, string? kcCode = null, int? difficulty = null, CancellationToken ct = default) =>
+        SendJsonAsync<BossProblemDto>(
+            HttpMethod.Post, $"/api/world/boss/{chapter}/problem", new BossProblemRequest(stage, kcCode, difficulty), ct);
+
+    public Task<BossAttemptResultDto> SubmitBossAttemptAsync(
+        int chapter, int stage, string problemId, string code, int elapsedSec, CancellationToken ct = default) =>
+        SendJsonAsync<BossAttemptResultDto>(
+            HttpMethod.Post, $"/api/world/boss/{chapter}/attempt", new BossAttemptRequest(problemId, chapter, stage, code, elapsedSec), ct);
+
+    // ---------------------------------------------------------------- endless ----
+
+    public Task<StarAwardResultDto> SubmitEndlessSummaryAsync(
+        int chapter, int correct, int total, int streak, CancellationToken ct = default) =>
+        SendJsonAsync<StarAwardResultDto>(
+            HttpMethod.Post, "/api/mainline/endless/summary", new EndlessSummaryRequest(chapter, correct, total, streak), ct);
+
+    // ------------------------------------------------------------- expedition ----
+
+    public async Task<IReadOnlyList<FrontierPick>> SelectFrontierAsync(FrontierSelectRequest request, CancellationToken ct = default)
+    {
+        var result = await SendJsonAsync<FrontierSelectResult>(
+            HttpMethod.Post, "/api/world/boss/select-frontier", request, ct).ConfigureAwait(false);
+        return result.Picks ?? (IReadOnlyList<FrontierPick>)Array.Empty<FrontierPick>();
+    }
+
+    public async Task<ExpeditionRunSnapshot?> GetExpeditionRunAsync(CancellationToken ct = default)
+    {
+        using var response = await SendAsync(HttpMethod.Get, "/api/world/expedition/run", null, ct).ConfigureAwait(false);
+        if (response.StatusCode == HttpStatusCode.NoContent)
+        {
+            return null;
+        }
+        await EnsureSuccessAsync(response, ct).ConfigureAwait(false);
+        // Some backends answer 200 with an empty / null body when there is no active run.
+        var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(body) || body.Trim() is "null")
+        {
+            return null;
+        }
+        return JsonSerializer.Deserialize<ExpeditionRunSnapshot>(body, PytJson.Default);
+    }
+
+    public async Task SaveExpeditionRunAsync(ExpeditionRunSnapshot run, CancellationToken ct = default)
+    {
+        using var response = await SendAsync(HttpMethod.Put, "/api/world/expedition/run", run, ct).ConfigureAwait(false);
+        await EnsureSuccessAsync(response, ct).ConfigureAwait(false);
+    }
+
+    public async Task DeleteExpeditionRunAsync(CancellationToken ct = default)
+    {
+        using var response = await SendAsync(HttpMethod.Delete, "/api/world/expedition/run", null, ct).ConfigureAwait(false);
+        await EnsureSuccessAsync(response, ct).ConfigureAwait(false);
+    }
+
+    // ----------------------------------------------------------------- skills ----
+
+    public Task<SkillsResponse> GetSkillsAsync(CancellationToken ct = default) =>
+        SendJsonAsync<SkillsResponse>(HttpMethod.Get, "/api/world/skills", null, ct);
+
+    public Task<LearnerSkillDto> UnlockSkillAsync(string skillKey, CancellationToken ct = default) =>
+        SendJsonAsync<LearnerSkillDto>(HttpMethod.Post, $"/api/world/skills/{Uri.EscapeDataString(skillKey)}/unlock", null, ct);
+
+    // -------------------------------------------------------------------- npc ----
+
+    public Task<NpcGreetingDto> GetNpcGreetingAsync(string npcKey, CancellationToken ct = default) =>
+        SendJsonAsync<NpcGreetingDto>(HttpMethod.Get, $"/api/npc/{Uri.EscapeDataString(npcKey)}/greeting", null, ct);
+
+    public Task<NpcDialogResponseDto> TalkToNpcAsync(string npcKey, string message, CancellationToken ct = default) =>
+        SendJsonAsync<NpcDialogResponseDto>(HttpMethod.Post, $"/api/npc/{Uri.EscapeDataString(npcKey)}/dialog", new NpcDialogRequest(message), ct);
+
+    // ----------------------------------------------------- course documents ----
+
+    public async Task<byte[]> GetCourseDocumentPdfAsync(long docId, CancellationToken ct = default)
+    {
+        using var response = await SendAsync(HttpMethod.Get, $"/api/course/documents/{docId}/pdf", null, ct).ConfigureAwait(false);
+        await EnsureSuccessAsync(response, ct).ConfigureAwait(false);
+        return await response.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
+    }
+
+    // ----------------------------------------------------------- learning path ----
+
+    public Task<LearningPathDto> GetActiveLearningPathAsync(CancellationToken ct = default) =>
+        SendJsonAsync<LearningPathDto>(HttpMethod.Get, "/api/learner/path/active", null, ct);
+
+    public Task<PlanPathResponse> PlanLearningPathAsync(CancellationToken ct = default) =>
+        SendJsonAsync<PlanPathResponse>(HttpMethod.Post, "/api/learner/path/plan", null, ct);
+
+    // ------------------------------------------------------------------ media ----
+
+    public Task<MediaAssetDto> GenerateImageAsync(string prompt, string? label = null, CancellationToken ct = default) =>
+        SendJsonAsync<MediaAssetDto>(HttpMethod.Post, "/api/media/image", new ImageGenerationRequest(prompt, label), ct);
+
+    public Task<MediaAssetDto> ComposeStoryboardVideoAsync(IReadOnlyList<StoryboardSceneSpec> scenes, CancellationToken ct = default) =>
+        SendJsonAsync<MediaAssetDto>(HttpMethod.Post, "/api/media/storyboard/video", new StoryboardVideoRequest(scenes), ct);
+
+    public Task<MediaJobCreateResponse> CreateStoryboardVideoJobAsync(IReadOnlyList<StoryboardSceneSpec> scenes, CancellationToken ct = default) =>
+        SendJsonAsync<MediaJobCreateResponse>(HttpMethod.Post, "/api/media/storyboard/video/jobs", new StoryboardVideoRequest(scenes), ct);
+
+    public Task<MediaJobDto> GetMediaJobAsync(long jobId, CancellationToken ct = default) =>
+        SendJsonAsync<MediaJobDto>(HttpMethod.Get, $"/api/media/jobs/{jobId}", null, ct);
+
+    public IAsyncEnumerable<SseEvent> StreamMediaJobAsync(long jobId, CancellationToken ct = default) =>
+        StreamEventsAsync(HttpMethod.Get, $"/api/media/jobs/{jobId}/stream", null, ct);
+
+    public async Task<AsrResponse> TranscribeAudioAsync(
+        byte[] audio, string fileName = "speech.webm", string contentType = "audio/webm", CancellationToken ct = default)
+    {
+        using var form = new MultipartFormDataContent();
+        var file = new ByteArrayContent(audio);
+        file.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+        form.Add(file, "audio", fileName);
+        using var response = await SendContentAsync(HttpMethod.Post, "/api/media/asr", form, ct).ConfigureAwait(false);
+        return await ReadJsonAsync<AsrResponse>(response, ct).ConfigureAwait(false);
+    }
+
+    // ----------------------------------------------------- profile interview ----
+
+    public Task<ProfileInterviewStartResponse> OpenProfileInterviewAsync(CancellationToken ct = default) =>
+        SendJsonAsync<ProfileInterviewStartResponse>(HttpMethod.Post, "/api/learner/profile/interview", null, ct);
+
+    public Task<ProfileTurnResponse> SendProfileTurnAsync(string sessionId, ProfileTurnRequest request, CancellationToken ct = default) =>
+        SendJsonAsync<ProfileTurnResponse>(
+            HttpMethod.Post, $"/api/learner/profile/interview/{Uri.EscapeDataString(sessionId)}/turn", request, ct);
+
+    public async Task FinishProfileInterviewAsync(string sessionId, CancellationToken ct = default)
+    {
+        var path = $"/api/learner/profile/interview/{Uri.EscapeDataString(sessionId)}/finish";
+        using var response = await SendAsync(HttpMethod.Post, path, null, ct).ConfigureAwait(false);
+        await EnsureSuccessAsync(response, ct).ConfigureAwait(false);
+    }
+
+    public Uri GetMediaAssetUri(string relativeUrl)
+    {
+        // Always resolve against the configured backend host; never load a server-supplied
+        // foreign host (defense against a compromised/abused backend returning an external URL).
+        var path = Uri.TryCreate(relativeUrl, UriKind.Absolute, out var absolute)
+            ? absolute.PathAndQuery
+            : (relativeUrl.StartsWith('/') ? relativeUrl : "/" + relativeUrl);
+        return new Uri(_baseUrl + path);
+    }
+
+    // ----------------------------------------------------- profile / mastery ----
+
+    public async Task<LearnerProfileDto?> GetProfileAsync(CancellationToken ct = default)
+    {
+        using var response = await SendAsync(HttpMethod.Get, "/api/learner/profile", null, ct).ConfigureAwait(false);
+        if (response.StatusCode == HttpStatusCode.NoContent)
+        {
+            return null;
+        }
+        return await ReadJsonAsync<LearnerProfileDto>(response, ct).ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<ProfileDimensionDto>> GetProfileDimensionsAsync(CancellationToken ct = default) =>
+        await SendJsonAsync<List<ProfileDimensionDto>>(HttpMethod.Get, "/api/learner/profile/dimensions", null, ct).ConfigureAwait(false);
+
+    public async Task UpdateProfileDimensionAsync(string key, DimensionSelfUpdateRequest request, CancellationToken ct = default)
+    {
+        var path = $"/api/learner/profile/dimensions/{Uri.EscapeDataString(key)}";
+        using var response = await SendAsync(HttpMethod.Put, path, request, ct).ConfigureAwait(false);
+        await EnsureSuccessAsync(response, ct).ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<MasterySnapshotDto>> GetMasteryAsync(CancellationToken ct = default) =>
+        await SendJsonAsync<List<MasterySnapshotDto>>(HttpMethod.Get, "/api/learner/mastery", null, ct).ConfigureAwait(false);
+
+    // -------------------------------------------------------------- quests ----
+
+    public async Task<IReadOnlyList<QuestDto>> GetTodayQuestsAsync(CancellationToken ct = default) =>
+        await SendJsonAsync<List<QuestDto>>(HttpMethod.Get, "/api/quests/today", null, ct).ConfigureAwait(false);
+
+    public async Task<IReadOnlyList<QuestDto>> GetQuestsAsync(string? status = null, int limit = 30, CancellationToken ct = default)
+    {
+        var query = new QueryBuilder()
+            .Add("status", status)
+            .Add("limit", limit)
+            .Build();
+        return await SendJsonAsync<List<QuestDto>>(HttpMethod.Get, "/api/quests" + query, null, ct).ConfigureAwait(false);
+    }
+
+    public Task<QuestDto> StartQuestAsync(long questId, CancellationToken ct = default) =>
+        SendJsonAsync<QuestDto>(HttpMethod.Post, $"/api/quests/{questId}/start", null, ct);
+
+    public Task<QuestDto> CompleteQuestAsync(long questId, CancellationToken ct = default) =>
+        SendJsonAsync<QuestDto>(HttpMethod.Post, $"/api/quests/{questId}/complete", null, ct);
+
+    public Task<QuestDto> SkipQuestAsync(long questId, CancellationToken ct = default) =>
+        SendJsonAsync<QuestDto>(HttpMethod.Post, $"/api/quests/{questId}/skip", null, ct);
+
+    // --------------------------------------------------------------- course ----
+
+    public Task<CoursePackDto> GetCoursePackAsync(CancellationToken ct = default) =>
+        SendJsonAsync<CoursePackDto>(HttpMethod.Get, "/api/course/pack", null, ct);
+
+    public async Task<IReadOnlyList<ChapterDto>> GetChaptersAsync(CancellationToken ct = default) =>
+        await SendJsonAsync<List<ChapterDto>>(HttpMethod.Get, "/api/course/chapters", null, ct).ConfigureAwait(false);
+
+    public async Task<IReadOnlyList<KcDto>> GetKcsAsync(long? chapterId = null, CancellationToken ct = default)
+    {
+        var query = new QueryBuilder().Add("chapterId", chapterId).Build();
+        return await SendJsonAsync<List<KcDto>>(HttpMethod.Get, "/api/course/kcs" + query, null, ct).ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<PageDto>> GetPagesAsync(string kcCode, CancellationToken ct = default)
+    {
+        var query = new QueryBuilder().Add("kcCode", kcCode).Build();
+        return await SendJsonAsync<List<PageDto>>(HttpMethod.Get, "/api/course/pages" + query, null, ct).ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<ProblemDto>> GetProblemsAsync(string? kcCode = null, CancellationToken ct = default)
+    {
+        var query = new QueryBuilder().Add("kcCode", kcCode).Build();
+        return await SendJsonAsync<List<ProblemDto>>(HttpMethod.Get, "/api/course/problems" + query, null, ct).ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<CourseVideoDto>> GetVideosAsync(int? chapterId = null, CancellationToken ct = default)
+    {
+        var query = new QueryBuilder().Add("chapterId", chapterId).Build();
+        return await SendJsonAsync<List<CourseVideoDto>>(HttpMethod.Get, "/api/course/videos" + query, null, ct).ConfigureAwait(false);
+    }
+
+    public async Task<byte[]> GetPageImageAsync(long pageId, CancellationToken ct = default)
+    {
+        using var response = await SendAsync(HttpMethod.Get, $"/api/course/pages/{pageId}/image", null, ct).ConfigureAwait(false);
+        await EnsureSuccessAsync(response, ct).ConfigureAwait(false);
+        return await response.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
+    }
+
+    public Uri GetPageImageUri(long pageId) => new($"{_baseUrl}/api/course/pages/{pageId}/image");
+
+    public Uri GetVideoUri(long videoId) => new($"{_baseUrl}/api/course/videos/{videoId}");
+
+    // ------------------------------------------------------------- problems ----
+
+    public Task<PublicProblemDto> GetPublicProblemAsync(long problemId, CancellationToken ct = default) =>
+        SendJsonAsync<PublicProblemDto>(HttpMethod.Get, $"/api/problems/{problemId}/public", null, ct);
+
+    // ---------------------------------------------------------- submissions ----
+
+    public Task<SubmissionDto> CreateSubmissionAsync(SubmissionCreateRequest request, CancellationToken ct = default) =>
+        SendJsonAsync<SubmissionDto>(HttpMethod.Post, "/api/submissions", request, ct);
+
+    public Task<SubmissionDetailDto> GetSubmissionAsync(long submissionId, CancellationToken ct = default) =>
+        SendJsonAsync<SubmissionDetailDto>(HttpMethod.Get, $"/api/submissions/{submissionId}", null, ct);
+
+    public async Task<SubmissionDetailDto> SubmitAndPollAsync(
+        long problemId, string code, IProgress<string>? progress = null, CancellationToken ct = default)
+    {
+        progress?.Report("提交中…");
+        var created = await CreateSubmissionAsync(new SubmissionCreateRequest(problemId, code), ct).ConfigureAwait(false);
+        return await PollSubmissionAsync(created.Id, progress, ct).ConfigureAwait(false);
+    }
+
+    public async Task<SubmissionDetailDto> PollSubmissionAsync(
+        long submissionId, IProgress<string>? progress = null, CancellationToken ct = default)
+    {
+        var terminal = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "PASSED", "FAILED", "ERROR" };
+        const int maxAttempts = 60;
+        var delay = TimeSpan.FromMilliseconds(800);
+
+        for (var attempt = 0; attempt < maxAttempts; attempt++)
+        {
+            ct.ThrowIfCancellationRequested();
+            var detail = await GetSubmissionAsync(submissionId, ct).ConfigureAwait(false);
+            var status = detail.Submission.Status;
+            progress?.Report($"判题状态：{status ?? "?"}");
+            if (status is not null && terminal.Contains(status))
+            {
+                return detail;
+            }
+            await Task.Delay(delay, ct).ConfigureAwait(false);
+        }
+
+        throw new ApiException(
+            HttpStatusCode.RequestTimeout,
+            $"提交 {submissionId} 在 {maxAttempts} 次轮询后仍未判完",
+            code: "SUBMISSION_POLL_TIMEOUT");
+    }
+
+    // ---------------------------------------------------------------- bug mine ----
+
+    public async Task<IReadOnlyList<BugMineErrorBookItemDto>> GetBugMineErrorBookAsync(CancellationToken ct = default) =>
+        await SendJsonAsync<List<BugMineErrorBookItemDto>>(HttpMethod.Get, "/api/bug-mine/errorbook", null, ct).ConfigureAwait(false);
+
+    public async Task<IReadOnlyList<BugMineEchoCandidateDto>> GetBugMineEchoesAsync(CancellationToken ct = default) =>
+        await SendJsonAsync<List<BugMineEchoCandidateDto>>(HttpMethod.Get, "/api/bug-mine/echoes", null, ct).ConfigureAwait(false);
+
+    public Task<BugMineSessionDto> OpenBugMineEchoAsync(string kcCode, CancellationToken ct = default) =>
+        SendJsonAsync<BugMineSessionDto>(HttpMethod.Post, "/api/bug-mine/echoes", new BugMineEchoOpenRequest(kcCode), ct);
+
+    public Task<BugMineSessionDto> OpenBugMineSessionAsync(long submissionId, CancellationToken ct = default) =>
+        SendJsonAsync<BugMineSessionDto>(HttpMethod.Post, "/api/bug-mine/sessions", new BugMineOpenRequest(submissionId), ct);
+
+    public Task<BugMineSessionDto> GetBugMineSessionAsync(long sessionId, CancellationToken ct = default) =>
+        SendJsonAsync<BugMineSessionDto>(HttpMethod.Get, $"/api/bug-mine/sessions/{sessionId}", null, ct);
+
+    public Task<BugMineCardDto> RevealBugMineCardAsync(long sessionId, long cardId, CancellationToken ct = default) =>
+        SendJsonAsync<BugMineCardDto>(HttpMethod.Post, $"/api/bug-mine/sessions/{sessionId}/cards/{cardId}/reveal", null, ct);
+
+    public Task<SubmissionDto> BugMineRetrySubmitAsync(long sessionId, string code, CancellationToken ct = default) =>
+        SendJsonAsync<SubmissionDto>(HttpMethod.Post, $"/api/bug-mine/sessions/{sessionId}/retry-submit", new BugMineRetryRequest(code), ct);
+
+    public Task<SubmissionDto> BugMineVariantSubmitAsync(long sessionId, string code, CancellationToken ct = default) =>
+        SendJsonAsync<SubmissionDto>(HttpMethod.Post, $"/api/bug-mine/sessions/{sessionId}/variant-submit", new BugMineRetryRequest(code), ct);
+
+    public Task<BugMineSessionDto> CloseBugMineSessionAsync(long sessionId, string status, CancellationToken ct = default)
+    {
+        var path = $"/api/bug-mine/sessions/{sessionId}/close?status={Uri.EscapeDataString(status)}";
+        return SendJsonAsync<BugMineSessionDto>(HttpMethod.Post, path, null, ct);
+    }
+
+    // ----------------------------------------------- intent router / workshop ----
+
+    public Task<IntentRouteResponse> RouteIntentAsync(IntentRouteRequest request, CancellationToken ct = default) =>
+        SendJsonAsync<IntentRouteResponse>(HttpMethod.Post, "/api/intent/route", request, ct);
+
+    public Task<ResourceCreateResponse> CreateResourceAsync(ResourceCreateRequest request, CancellationToken ct = default) =>
+        SendJsonAsync<ResourceCreateResponse>(HttpMethod.Post, "/api/workshop/resources", request, ct);
+
+    public async Task<IReadOnlyList<ResourceListItemDto>> GetResourcesAsync(
+        string? type = null, string? kcCode = null, int limit = 20, int offset = 0, CancellationToken ct = default)
+    {
+        var query = new QueryBuilder()
+            .Add("type", type)
+            .Add("kcCode", kcCode)
+            .Add("limit", limit)
+            .Add("offset", offset)
+            .Build();
+        return await SendJsonAsync<List<ResourceListItemDto>>(HttpMethod.Get, "/api/workshop/resources" + query, null, ct).ConfigureAwait(false);
+    }
+
+    public Task<LearningResourceDto> GetResourceAsync(long resourceId, CancellationToken ct = default) =>
+        SendJsonAsync<LearningResourceDto>(HttpMethod.Get, $"/api/workshop/resources/{resourceId}", null, ct);
+
+    public IAsyncEnumerable<SseEvent> StreamResourceAsync(ResourceCreateRequest request, CancellationToken ct = default) =>
+        StreamEventsAsync("/api/workshop/resources/stream", request, ct);
+
+    public IAsyncEnumerable<SseEvent> StreamOrchestratorTurnAsync(OrchestratorTurnRequest request, CancellationToken ct = default) =>
+        StreamEventsAsync("/api/orchestrator/turn/stream", request, ct);
+
+    // ----------------------------------------------------------- classrooms ----
+
+    public async Task<IReadOnlyList<ClassroomDto>> GetMyClassroomsAsync(CancellationToken ct = default) =>
+        await SendJsonAsync<List<ClassroomDto>>(HttpMethod.Get, "/api/classrooms/mine", null, ct).ConfigureAwait(false);
+
+    public Task<ClassroomDto> JoinClassroomAsync(string joinCode, CancellationToken ct = default) =>
+        SendJsonAsync<ClassroomDto>(HttpMethod.Post, "/api/classrooms/join", new JoinClassroomRequest(joinCode), ct);
+
+    public async Task<IReadOnlyList<ClassroomQuestDto>> GetMyClassroomQuestsAsync(CancellationToken ct = default) =>
+        await SendJsonAsync<List<ClassroomQuestDto>>(HttpMethod.Get, "/api/classroom/quests/mine", null, ct).ConfigureAwait(false);
+
+    // ---------------------------------------------------------- tutor (SSE) ----
+
+    public async IAsyncEnumerable<string> AskTutorStreamAsync(
+        TutorAskRequest request, [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        await foreach (var evt in StreamEventsAsync("/api/tutor/ask", request, ct).ConfigureAwait(false))
+        {
+            yield return evt.Data;
+        }
+    }
+
+    /// <summary>
+    /// Reads a POST SSE stream, yielding one <see cref="SseEvent"/> per frame in arrival order. An
+    /// <c>error</c> frame throws an <see cref="ApiException"/> instead of being yielded.
+    /// </summary>
+    private IAsyncEnumerable<SseEvent> StreamEventsAsync(string path, object? body, CancellationToken ct) =>
+        StreamEventsAsync(HttpMethod.Post, path, body, ct);
+
+    private async IAsyncEnumerable<SseEvent> StreamEventsAsync(
+        HttpMethod method, string path, object? body, [EnumeratorCancellation] CancellationToken ct)
+    {
+        using var response = await SendAsync(method, path, body, ct, acceptSse: true)
+            .ConfigureAwait(false);
+        await EnsureSuccessAsync(response, ct).ConfigureAwait(false);
+
+        await using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+        using var reader = new StreamReader(stream, Encoding.UTF8);
+
+        var parser = new SseParser();
+        while (!reader.EndOfStream)
+        {
+            ct.ThrowIfCancellationRequested();
+            var line = await reader.ReadLineAsync(ct).ConfigureAwait(false);
+            if (line is null)
+            {
+                break;
+            }
+
+            if (parser.Push(line) is not { } frame)
+            {
+                continue;
+            }
+
+            // An `error` frame aborts the stream instead of being surfaced to the caller.
+            if (string.Equals(frame.Event, "error", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new ApiException(
+                    HttpStatusCode.BadGateway,
+                    string.IsNullOrWhiteSpace(frame.Data) ? "流式服务返回错误" : frame.Data,
+                    code: "SSE_STREAM_ERROR");
+            }
+
+            yield return frame;
+        }
+    }
+
+    // -------------------------------------------------------------- plumbing ----
+
+    private async Task<T> SendJsonAsync<T>(HttpMethod method, string path, object? body, CancellationToken ct)
+    {
+        using var response = await SendAsync(method, path, body, ct).ConfigureAwait(false);
+        return await ReadJsonAsync<T>(response, ct).ConfigureAwait(false);
+    }
+
+    private async Task<HttpResponseMessage> SendAsync(
+        HttpMethod method, string path, object? body, CancellationToken ct, bool acceptSse = false)
+    {
+        using var request = new HttpRequestMessage(method, _baseUrl + path);
+
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(
+            acceptSse ? "text/event-stream" : "application/json"));
+
+        if (!string.IsNullOrEmpty(AuthToken))
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AuthToken);
+        }
+
+        if (body is not null)
+        {
+            var json = JsonSerializer.Serialize(body, body.GetType(), PytJson.Default);
+            request.Content = new StringContent(json, Encoding.UTF8, "application/json");
+        }
+
+        var completion = acceptSse
+            ? HttpCompletionOption.ResponseHeadersRead
+            : HttpCompletionOption.ResponseContentRead;
+
+        // SSE streams run until the server or the caller's token ends; every other
+        // call layers a bounded timeout on top of the caller's cancellation token.
+        CancellationTokenSource? timeoutCts = null;
+        var effectiveToken = ct;
+        if (!acceptSse)
+        {
+            timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeoutCts.CancelAfter(_requestTimeout);
+            effectiveToken = timeoutCts.Token;
+        }
+
+        try
+        {
+            return await _http.SendAsync(request, completion, effectiveToken).ConfigureAwait(false);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new ApiException(
+                HttpStatusCode.ServiceUnavailable,
+                $"无法连接后端 {_baseUrl}（{ex.Message}）",
+                code: "NETWORK_ERROR",
+                innerException: ex);
+        }
+        catch (OperationCanceledException ex) when (!ct.IsCancellationRequested)
+        {
+            throw new ApiException(
+                HttpStatusCode.RequestTimeout,
+                $"请求 {path} 超时",
+                code: "TIMEOUT",
+                innerException: ex);
+        }
+        finally
+        {
+            timeoutCts?.Dispose();
+        }
+    }
+
+    /// <summary>Sends a request with a caller-supplied <see cref="HttpContent"/> (e.g. multipart audio upload).</summary>
+    private async Task<HttpResponseMessage> SendContentAsync(
+        HttpMethod method, string path, HttpContent content, CancellationToken ct)
+    {
+        using var request = new HttpRequestMessage(method, _baseUrl + path) { Content = content };
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        if (!string.IsNullOrEmpty(AuthToken))
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AuthToken);
+        }
+
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeoutCts.CancelAfter(_requestTimeout);
+        try
+        {
+            return await _http.SendAsync(request, HttpCompletionOption.ResponseContentRead, timeoutCts.Token).ConfigureAwait(false);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new ApiException(
+                HttpStatusCode.ServiceUnavailable,
+                $"无法连接后端 {_baseUrl}（{ex.Message}）",
+                code: "NETWORK_ERROR",
+                innerException: ex);
+        }
+        catch (OperationCanceledException ex) when (!ct.IsCancellationRequested)
+        {
+            throw new ApiException(
+                HttpStatusCode.RequestTimeout,
+                $"请求 {path} 超时",
+                code: "TIMEOUT",
+                innerException: ex);
+        }
+    }
+
+    private static async Task<T> ReadJsonAsync<T>(HttpResponseMessage response, CancellationToken ct)
+    {
+        await EnsureSuccessAsync(response, ct).ConfigureAwait(false);
+        await using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+        var value = await JsonSerializer.DeserializeAsync<T>(stream, PytJson.Default, ct).ConfigureAwait(false);
+        if (value is null)
+        {
+            throw new ApiException(response.StatusCode, "服务端返回空响应体", code: "EMPTY_BODY");
+        }
+        return value;
+    }
+
+    private static async Task EnsureSuccessAsync(HttpResponseMessage response, CancellationToken ct)
+    {
+        if (response.IsSuccessStatusCode)
+        {
+            return;
+        }
+
+        string? body = null;
+        try
+        {
+            body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            // ignore body read failures; status code still drives the exception
+        }
+
+        throw ApiException.FromResponse(response.StatusCode, body);
+    }
+
+    /// <summary>Minimal helper to build query strings, skipping null/empty values.</summary>
+    private sealed class QueryBuilder
+    {
+        private readonly List<string> _parts = new();
+
+        public QueryBuilder Add(string key, string? value)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                _parts.Add($"{Uri.EscapeDataString(key)}={Uri.EscapeDataString(value)}");
+            }
+            return this;
+        }
+
+        public QueryBuilder Add(string key, long? value)
+        {
+            if (value.HasValue)
+            {
+                _parts.Add($"{Uri.EscapeDataString(key)}={value.Value}");
+            }
+            return this;
+        }
+
+        public QueryBuilder Add(string key, int value)
+        {
+            _parts.Add($"{Uri.EscapeDataString(key)}={value}");
+            return this;
+        }
+
+        public string Build() => _parts.Count == 0 ? string.Empty : "?" + string.Join("&", _parts);
+    }
+}

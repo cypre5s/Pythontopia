@@ -1,0 +1,79 @@
+{
+  "key": "professor",
+  "name": "教授",
+  "category": "educator_core",
+  "sprite": "npc_professor",
+  "portrait": "portrait_professor.png",
+  "spawnMap": "town_hub",
+  "spawn": {
+    "tileX": 14,
+    "tileY": 12
+  },
+  "birthday": {
+    "month": 9,
+    "day": 1
+  },
+  "schedule": {
+    "monday": [
+      {
+        "from": "08:00",
+        "map": "town_hub",
+        "tileX": 14,
+        "tileY": 12
+      }
+    ],
+    "tuesday": [
+      {
+        "from": "08:00",
+        "map": "town_hub",
+        "tileX": 14,
+        "tileY": 12
+      }
+    ],
+    "wednesday": [
+      {
+        "from": "08:00",
+        "map": "town_hub",
+        "tileX": 14,
+        "tileY": 12
+      }
+    ],
+    "thursday": [
+      {
+        "from": "08:00",
+        "map": "town_hub",
+        "tileX": 14,
+        "tileY": 12
+      }
+    ],
+    "friday": [
+      {
+        "from": "08:00",
+        "map": "town_hub",
+        "tileX": 14,
+        "tileY": 12
+      }
+    ],
+    "saturday": [
+      {
+        "from": "08:00",
+        "map": "town_hub",
+        "tileX": 14,
+        "tileY": 12
+      }
+    ],
+    "sunday": [
+      {
+        "from": "08:00",
+        "map": "town_hub",
+        "tileX": 14,
+        "tileY": 12
+      }
+    ]
+  },
+  "tags": [
+    "teaching",
+    "course_guide"
+  ],
+  "description": "图书馆旁的教授，精通 Python 课程体系，能为你讲解每章的核心知识点。"
+}
