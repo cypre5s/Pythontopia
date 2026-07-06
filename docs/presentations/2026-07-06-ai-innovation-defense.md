@@ -4,6 +4,8 @@
 
 这份文档面向保研面试、课程答辩和老师追问。讲法要克制：只讲已经在仓库中能找到代码、数据、测试或报告证据的部分；不要把规划中的能力说成已经完全上线。
 
+如果老师想看“从零开始怎么做、借鉴了哪些论文、数值提升如何计算”，优先给他看总说明：`docs/reports/2026-07-06-ai-system-and-qwen-finetuning-full-explanation.md`。
+
 ## 0. 一句话总述
 
 Pythontopia 的 AI 创新不是“给网页套一个聊天框”，而是把课程证据、学生画像、资源生成、练习判题、错因调试和学习路径重规划做成一个可追踪的闭环。模型微调、多智能体、多模态资源都服务同一个目标：让 Python 初学者下一步知道该看什么、练什么、为什么错、什么时候通过。
@@ -47,6 +49,14 @@ Pythontopia 的 AI 创新不是“给网页套一个聊天框”，而是把课�
 6. 用 heldout、1000 条新手表达噪声、Graph route A/B 和 Web smoke 验证。
 7. 对 SafetyAgent 和 DebugAgent 保留 deterministic guard/fallback，不让模型裸奔上线。
 
+论文和方法来源可以这样解释：
+
+- RAG 论文给了“生成必须接外部知识和来源”的思路，所以课程回答绑定 `packId=43` evidence page ids。
+- LoRA/QLoRA 论文给了“冻结基座，只训练轻量 adapter”的路线，所以 8 GB 显存也能做项目特化微调。
+- AWQ 与 vLLM/PagedAttention 给了本地低显存推理和服务化路线，所以 Qwen3.5-4B 能通过 OpenAI-compatible API 接入 Graph。
+- ReAct/Toolformer 启发了“模型要连接外部工具和行动”，但项目不启用自由 ReAct 循环，而是采用有界 Graph Agent、白名单路由和 fallback。
+- Self-Refine/Constitutional AI 启发了“生成后要有反馈和原则约束”，对应 GroundingCriticAgent、SafetyAgent、repair 和确定性拒答模板。
+
 ### 最关键结果
 
 | 阶段 | JSON valid | Grounding safe | Forbidden leak |
@@ -65,6 +75,14 @@ Pythontopia 的 AI 创新不是“给网页套一个聊天框”，而是把课�
 | Raw adapter vs heldout baseline score delta | +0.020940 |
 | Raw adapter JSON delta | +0.194872 |
 | Raw adapter grounding delta | +0.153846 |
+
+把 1000 case 结果换成计数讲，更容易让老师听懂：
+
+| 问题 | Raw AWQ baseline | E1 protocol patch | Guarded v1 |
+| --- | ---: | ---: | ---: |
+| JSON invalid | 314 / 1000 | 20 / 1000 | 0 / 1000 |
+| grounding false | 178 / 1000 | 37 / 1000 | 0 / 1000 |
+| forbidden leak | 14 / 1000 | 7 / 1000 | 0 / 1000 |
 
 ### 老师可能追问
 

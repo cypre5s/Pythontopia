@@ -17,7 +17,7 @@
 
 **当前仓库不是开源授权版本**：仅供评审、演示、课程验收与团队协作查看；未经项目维护者书面许可，不得复用、再发布、商用、部署或二次创作。第三方依赖与素材仍按各自上游 license 执行。
 
-[快速体验](#快速体验) · [项目亮点](#项目亮点) · [三大 AI 创新点](#三大-ai-创新点) · [系统架构](#系统架构) · [Qwen 微调](#qwen-微调) · [最小版说明](#最小版说明) · [验证命令](#验证命令)
+[快速体验](#快速体验) · [项目亮点](#项目亮点) · [三大 AI 创新点](#三大-ai-创新点) · [AI 总说明](#ai-总说明) · [系统架构](#系统架构) · [Qwen 微调](#qwen-微调) · [最小版说明](#最小版说明) · [验证命令](#验证命令)
 
 </div>
 
@@ -42,13 +42,26 @@ Pythontopia 是一个以《Python 语言基础》为唯一课程底座的网页�
 
 ## 三大 AI 创新点
 
-这三点是保研面试、课程答辩和 GitHub 评审时最值得先讲的部分。完整抗问材料见 [`docs/presentations/2026-07-06-ai-innovation-defense.md`](./docs/presentations/2026-07-06-ai-innovation-defense.md)。
+这三点是保研面试、课程答辩和 GitHub 评审时最值得先讲的部分。完整总说明见 [`docs/reports/2026-07-06-ai-system-and-qwen-finetuning-full-explanation.md`](./docs/reports/2026-07-06-ai-system-and-qwen-finetuning-full-explanation.md)，面试抗问材料见 [`docs/presentations/2026-07-06-ai-innovation-defense.md`](./docs/presentations/2026-07-06-ai-innovation-defense.md)。
 
 | 创新点 | 解决的问题 | 可被追问时的证据 |
 | --- | --- | --- |
 | 证据闭环型多智能体导学 | 不让 AI 停留在聊天层，而是把画像、课程证据、资源生成、判题、错因和路径重规划串成“看-学-练-测-复盘”闭环。 | `services/pythontopia-graph/` 的 Agent runtime、`backend/` 的学习事件与任务 evidence、课程包 `packId=43`。 |
 | 本地 Qwen3.5/vLLM/QLoRA 结构化 Agent 微调 | 解决本地模型在教学 Agent JSON、证据页、拒答边界上的不稳定，使其更适合 Pythontopia 的资源工坊和导学调用。 | 1000 case baseline JSON `0.686` -> E1 `0.980`；QLoRA + 新手噪声 JSON `0.990`；guard 后 JSON/grounding/leak 达到 `1.000/1.000/0.000`。 |
 | 多模态学习资源编排 | 面向不同学生偏好，不只给文字答案，而是组织代码练习、Mermaid/思维导图、真实视频速览、图像提示词和引导截图等学习媒介。 | `schemas/resource.py`、`schemas/tutor.py`、B 站视频速览路由、`frontend/public/guide/screenshots/`、`data/course-pack-43/generated-media/` 的本地生成策略。 |
+
+## AI 总说明
+
+如果只想判断“项目里的大模型到底做了什么、怎么优化、有没有数值提升”，先读这一份：
+
+[`docs/reports/2026-07-06-ai-system-and-qwen-finetuning-full-explanation.md`](./docs/reports/2026-07-06-ai-system-and-qwen-finetuning-full-explanation.md)
+
+它按零上下文读者设计，说明：
+
+- 大模型在 Pythontopia 中负责 RAG 问答、资源生成、练习提示、Debug、路径规划、Safety/Grounding 审查，但不替代后端判题、课程证据库和学习事件系统。
+- Qwen3.5/vLLM/QLoRA 微调的完整路线：raw baseline -> E1 protocol patch -> clean teacher data -> SFT -> QLoRA adapter -> vLLM LoRA serving -> 1000 条新手表达增强评测 -> deterministic guard/fallback。
+- 借鉴的论文与工程落点：RAG、LoRA、QLoRA、AWQ、vLLM/PagedAttention、ReAct、Toolformer、Self-Refine、Constitutional AI。
+- 关键量化提升：JSON `0.686 -> 0.980 -> 0.990 -> 1.000`，grounding `0.822 -> 0.963 -> 0.961 -> 1.000`，forbidden leak `0.014 -> 0.007 -> 0.005 -> 0.000`。
 
 <details open>
 <summary><strong>30 秒导览</strong></summary>
@@ -226,6 +239,7 @@ python -m pytest -q
 | 入口 | 内容 |
 | --- | --- |
 | [`research/README.md`](./research/README.md) | 研究目录总入口与 artifact policy。 |
+| [`docs/reports/2026-07-06-ai-system-and-qwen-finetuning-full-explanation.md`](./docs/reports/2026-07-06-ai-system-and-qwen-finetuning-full-explanation.md) | 面向零上下文读者的 AI 系统与 Qwen 微调总说明：LLM 作用、论文借鉴、优化路线、量化提升和边界。 |
 | [`research/vllm-agent-ft-lab/README.md`](./research/vllm-agent-ft-lab/README.md) | 从环境、vLLM 服务、case 生成、SFT、QLoRA、LoRA serving 到 Web A/B 的完整命令。 |
 | [`research/vllm-agent-ft-lab/MODEL_ARTIFACTS.md`](./research/vllm-agent-ft-lab/MODEL_ARTIFACTS.md) | GitHub 包含/排除哪些微调产物，以及如何重建 adapter。 |
 | [`docs/reports/2026-07-03-qwen-vllm-finetuning-method-report.md`](./docs/reports/2026-07-03-qwen-vllm-finetuning-method-report.md) | 微调方法、数据来源、训练参数和 heldout 效果。 |
@@ -317,6 +331,7 @@ python -m pytest -q
 | [`docs/clients/api-contract.md`](./docs/clients/api-contract.md) | 多端开发 | Web / Android / Windows / 微信共用 API 契约 |
 | [`docs/legal/open_source.md`](./docs/legal/open_source.md) | 合规审查 | 第三方依赖、素材、字体 license |
 | [`docs/project/ai_coding_disclosure.md`](./docs/project/ai_coding_disclosure.md) | 比赛/课程评审 | AI 协作披露与人工责任边界 |
+| [`docs/reports/2026-07-06-ai-system-and-qwen-finetuning-full-explanation.md`](./docs/reports/2026-07-06-ai-system-and-qwen-finetuning-full-explanation.md) | AI 评审 / 面试老师 | LLM 作用、论文借鉴、Qwen 微调路线、指标提升、诚实边界 |
 | [`research/vllm-agent-ft-lab/MODEL_ARTIFACTS.md`](./research/vllm-agent-ft-lab/MODEL_ARTIFACTS.md) | AI 研究复现 | Qwen3.5 微调代码、数据、权重和排除策略 |
 
 ## 合规底线

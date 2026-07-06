@@ -14,6 +14,8 @@ The fine-tuning work is documented as a reproducible research lab, not as a mode
 
 The headline result is: raw AWQ baseline JSON validity was `0.686` on 1000 Agent cases; E1 protocol prompt reached `0.980`; QLoRA adapter under beginner-noise evaluation reached `0.990`; guarded v1 reached JSON `1.000`, grounding `1.000`, and forbidden leak `0.000` on 1000 cases. See the reports linked below for the full tables and caveats.
 
+For the most reader-friendly end-to-end explanation, start with [`../../docs/reports/2026-07-06-ai-system-and-qwen-finetuning-full-explanation.md`](../../docs/reports/2026-07-06-ai-system-and-qwen-finetuning-full-explanation.md). It explains the LLM's project role, the paper inspirations, the data/QLoRA route, the numerical gains, and the limits that should not be overclaimed.
+
 ## Included In Git
 
 | Path | Content |
@@ -71,6 +73,7 @@ python3 -m pytest research/vllm-agent-ft-lab/tests -q
 ## Result Reports
 
 - Main method report: [`../../docs/reports/2026-07-03-qwen-vllm-finetuning-method-report.md`](../../docs/reports/2026-07-03-qwen-vllm-finetuning-method-report.md)
+- Full zero-context explanation: [`../../docs/reports/2026-07-06-ai-system-and-qwen-finetuning-full-explanation.md`](../../docs/reports/2026-07-06-ai-system-and-qwen-finetuning-full-explanation.md)
 - Large-sample vLLM LoRA report: [`../../docs/reports/2026-07-03-vllm-1000-beginner-noise-multifold-eval.md`](../../docs/reports/2026-07-03-vllm-1000-beginner-noise-multifold-eval.md)
 - Web/Graph A/B report: [`../../docs/reports/2026-07-02-fine-tuned-llm-web-ab.md`](../../docs/reports/2026-07-02-fine-tuned-llm-web-ab.md)
 - Guard/fallback report: [`../../docs/reports/2026-07-03-vllm-safety-debug-guard-fix.md`](../../docs/reports/2026-07-03-vllm-safety-debug-guard-fix.md)
