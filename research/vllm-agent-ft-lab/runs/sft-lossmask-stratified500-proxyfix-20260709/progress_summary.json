@@ -1,0 +1,16 @@
+{
+  "completed_cases": 500,
+  "completion_rate": 1.0,
+  "elapsed_seconds": 2849.71,
+  "eta_seconds": 0.0,
+  "forbidden_leak_rate": 0.008,
+  "grounding_safe_rate": 0.86,
+  "json_valid_rate": 0.958,
+  "latency_ms_mean": 24699.82,
+  "latency_ms_p95": 54089.15,
+  "score_mean": 0.9831,
+  "snapshot_count": 20,
+  "throughput_cases_per_second": 0.175456,
+  "total_cases": 500,
+  "ts": "2026-07-09T16:32:58+00:00"
+}

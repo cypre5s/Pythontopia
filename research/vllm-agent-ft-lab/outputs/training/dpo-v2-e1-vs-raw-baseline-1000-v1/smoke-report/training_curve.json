@@ -1,0 +1,10 @@
+{
+  "eval_loss": [],
+  "train_loss": [
+    {
+      "loss": 0.6931473016738892,
+      "mean_token_accuracy": 0.8939740546047688,
+      "step": 1
+    }
+  ]
+}

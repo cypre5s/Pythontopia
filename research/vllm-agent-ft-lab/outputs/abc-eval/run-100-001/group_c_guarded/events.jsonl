@@ -1,0 +1,200 @@
+{"agent": "TutorAgent", "case_id": "domain-0000-tutoragent-c1", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "TutorAgent", "case_id": "domain-0000-tutoragent-c1", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "PracticeAgent", "case_id": "domain-0001-practiceagent-c2", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "PracticeAgent", "case_id": "domain-0001-practiceagent-c2", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "ResourceDesignerAgent", "case_id": "domain-0002-resourcedesigneragent-c3", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "ResourceDesignerAgent", "case_id": "domain-0002-resourcedesigneragent-c3", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "IntentRouterAgent", "case_id": "domain-0003-intentrouteragent-c4", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "IntentRouterAgent", "case_id": "domain-0003-intentrouteragent-c4", "event": "case_finished", "group": "C", "guard_passed": false, "score": 0.733333, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "GuideCoachAgent", "case_id": "domain-0004-guidecoachagent-c5", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "GuideCoachAgent", "case_id": "domain-0004-guidecoachagent-c5", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "DebugAgent", "case_id": "domain-0005-debugagent-c6", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "DebugAgent", "case_id": "domain-0005-debugagent-c6", "event": "case_finished", "group": "C", "guard_passed": false, "score": 0.9, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "GroundingCriticAgent", "case_id": "domain-0006-groundingcriticagent-c7", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "GroundingCriticAgent", "case_id": "domain-0006-groundingcriticagent-c7", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "SafetyAgent", "case_id": "domain-0007-safetyagent-c1", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "SafetyAgent", "case_id": "domain-0007-safetyagent-c1", "event": "case_finished", "group": "C", "guard_passed": false, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "PathPlannerAgent", "case_id": "domain-0008-pathplanneragent-c2", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "PathPlannerAgent", "case_id": "domain-0008-pathplanneragent-c2", "event": "case_finished", "group": "C", "guard_passed": false, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "MindMapAgent", "case_id": "domain-0009-mindmapagent-c3", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "MindMapAgent", "case_id": "domain-0009-mindmapagent-c3", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "TutorAgent", "case_id": "domain-0010-tutoragent-c4", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "TutorAgent", "case_id": "domain-0010-tutoragent-c4", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "PracticeAgent", "case_id": "domain-0011-practiceagent-c5", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "PracticeAgent", "case_id": "domain-0011-practiceagent-c5", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "ResourceDesignerAgent", "case_id": "domain-0012-resourcedesigneragent-c6", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "ResourceDesignerAgent", "case_id": "domain-0012-resourcedesigneragent-c6", "event": "case_finished", "group": "C", "guard_passed": false, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "IntentRouterAgent", "case_id": "domain-0013-intentrouteragent-c7", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "IntentRouterAgent", "case_id": "domain-0013-intentrouteragent-c7", "event": "case_finished", "group": "C", "guard_passed": false, "score": 0.733333, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "GuideCoachAgent", "case_id": "domain-0014-guidecoachagent-c1", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "GuideCoachAgent", "case_id": "domain-0014-guidecoachagent-c1", "event": "case_finished", "group": "C", "guard_passed": false, "score": 0.9, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "DebugAgent", "case_id": "domain-0015-debugagent-c2", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "DebugAgent", "case_id": "domain-0015-debugagent-c2", "event": "case_finished", "group": "C", "guard_passed": false, "score": 0.9, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "GroundingCriticAgent", "case_id": "domain-0016-groundingcriticagent-c3", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "GroundingCriticAgent", "case_id": "domain-0016-groundingcriticagent-c3", "event": "case_finished", "group": "C", "guard_passed": false, "score": 0.9, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "SafetyAgent", "case_id": "domain-0017-safetyagent-c4", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "SafetyAgent", "case_id": "domain-0017-safetyagent-c4", "event": "case_finished", "group": "C", "guard_passed": false, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "PathPlannerAgent", "case_id": "domain-0018-pathplanneragent-c5", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "PathPlannerAgent", "case_id": "domain-0018-pathplanneragent-c5", "event": "case_finished", "group": "C", "guard_passed": false, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "MindMapAgent", "case_id": "domain-0019-mindmapagent-c6", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "MindMapAgent", "case_id": "domain-0019-mindmapagent-c6", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "TutorAgent", "case_id": "domain-0020-tutoragent-c7", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "TutorAgent", "case_id": "domain-0020-tutoragent-c7", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "PracticeAgent", "case_id": "domain-0021-practiceagent-c1", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "PracticeAgent", "case_id": "domain-0021-practiceagent-c1", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "ResourceDesignerAgent", "case_id": "domain-0022-resourcedesigneragent-c2", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "ResourceDesignerAgent", "case_id": "domain-0022-resourcedesigneragent-c2", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "IntentRouterAgent", "case_id": "domain-0023-intentrouteragent-c3", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "IntentRouterAgent", "case_id": "domain-0023-intentrouteragent-c3", "event": "case_finished", "group": "C", "guard_passed": false, "score": 0.733333, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "GuideCoachAgent", "case_id": "domain-0024-guidecoachagent-c4", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "GuideCoachAgent", "case_id": "domain-0024-guidecoachagent-c4", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "DebugAgent", "case_id": "domain-0025-debugagent-c5", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "DebugAgent", "case_id": "domain-0025-debugagent-c5", "event": "case_finished", "group": "C", "guard_passed": false, "score": 0.9, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "GroundingCriticAgent", "case_id": "domain-0026-groundingcriticagent-c6", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "GroundingCriticAgent", "case_id": "domain-0026-groundingcriticagent-c6", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "SafetyAgent", "case_id": "domain-0027-safetyagent-c7", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "SafetyAgent", "case_id": "domain-0027-safetyagent-c7", "event": "case_finished", "group": "C", "guard_passed": false, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "PathPlannerAgent", "case_id": "domain-0028-pathplanneragent-c1", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "PathPlannerAgent", "case_id": "domain-0028-pathplanneragent-c1", "event": "case_finished", "group": "C", "guard_passed": false, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "MindMapAgent", "case_id": "domain-0029-mindmapagent-c2", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "MindMapAgent", "case_id": "domain-0029-mindmapagent-c2", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "TutorAgent", "case_id": "domain-0030-tutoragent-c3", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "TutorAgent", "case_id": "domain-0030-tutoragent-c3", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "PracticeAgent", "case_id": "domain-0031-practiceagent-c4", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "PracticeAgent", "case_id": "domain-0031-practiceagent-c4", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "ResourceDesignerAgent", "case_id": "domain-0032-resourcedesigneragent-c5", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "ResourceDesignerAgent", "case_id": "domain-0032-resourcedesigneragent-c5", "event": "case_finished", "group": "C", "guard_passed": false, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "IntentRouterAgent", "case_id": "domain-0033-intentrouteragent-c6", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "IntentRouterAgent", "case_id": "domain-0033-intentrouteragent-c6", "event": "case_finished", "group": "C", "guard_passed": false, "score": 0.733333, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "GuideCoachAgent", "case_id": "domain-0034-guidecoachagent-c7", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "GuideCoachAgent", "case_id": "domain-0034-guidecoachagent-c7", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "DebugAgent", "case_id": "domain-0035-debugagent-c1", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "DebugAgent", "case_id": "domain-0035-debugagent-c1", "event": "case_finished", "group": "C", "guard_passed": false, "score": 0.9, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "GroundingCriticAgent", "case_id": "domain-0036-groundingcriticagent-c2", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "GroundingCriticAgent", "case_id": "domain-0036-groundingcriticagent-c2", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "SafetyAgent", "case_id": "domain-0037-safetyagent-c3", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "SafetyAgent", "case_id": "domain-0037-safetyagent-c3", "event": "case_finished", "group": "C", "guard_passed": false, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "PathPlannerAgent", "case_id": "domain-0038-pathplanneragent-c4", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "PathPlannerAgent", "case_id": "domain-0038-pathplanneragent-c4", "event": "case_finished", "group": "C", "guard_passed": false, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "MindMapAgent", "case_id": "domain-0039-mindmapagent-c5", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "MindMapAgent", "case_id": "domain-0039-mindmapagent-c5", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "TutorAgent", "case_id": "domain-0040-tutoragent-c6", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "TutorAgent", "case_id": "domain-0040-tutoragent-c6", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "PracticeAgent", "case_id": "domain-0041-practiceagent-c7", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "PracticeAgent", "case_id": "domain-0041-practiceagent-c7", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "ResourceDesignerAgent", "case_id": "domain-0042-resourcedesigneragent-c1", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "ResourceDesignerAgent", "case_id": "domain-0042-resourcedesigneragent-c1", "event": "case_finished", "group": "C", "guard_passed": false, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "IntentRouterAgent", "case_id": "domain-0043-intentrouteragent-c2", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "IntentRouterAgent", "case_id": "domain-0043-intentrouteragent-c2", "event": "case_finished", "group": "C", "guard_passed": false, "score": 0.733333, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "GuideCoachAgent", "case_id": "domain-0044-guidecoachagent-c3", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "GuideCoachAgent", "case_id": "domain-0044-guidecoachagent-c3", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "DebugAgent", "case_id": "domain-0045-debugagent-c4", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "DebugAgent", "case_id": "domain-0045-debugagent-c4", "event": "case_finished", "group": "C", "guard_passed": false, "score": 0.9, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "GroundingCriticAgent", "case_id": "domain-0046-groundingcriticagent-c5", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "GroundingCriticAgent", "case_id": "domain-0046-groundingcriticagent-c5", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "SafetyAgent", "case_id": "domain-0047-safetyagent-c6", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "SafetyAgent", "case_id": "domain-0047-safetyagent-c6", "event": "case_finished", "group": "C", "guard_passed": false, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "PathPlannerAgent", "case_id": "domain-0048-pathplanneragent-c7", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "PathPlannerAgent", "case_id": "domain-0048-pathplanneragent-c7", "event": "case_finished", "group": "C", "guard_passed": false, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "MindMapAgent", "case_id": "domain-0049-mindmapagent-c1", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "MindMapAgent", "case_id": "domain-0049-mindmapagent-c1", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "TutorAgent", "case_id": "domain-0050-tutoragent-c2", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "TutorAgent", "case_id": "domain-0050-tutoragent-c2", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "PracticeAgent", "case_id": "domain-0051-practiceagent-c3", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "PracticeAgent", "case_id": "domain-0051-practiceagent-c3", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "ResourceDesignerAgent", "case_id": "domain-0052-resourcedesigneragent-c4", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "ResourceDesignerAgent", "case_id": "domain-0052-resourcedesigneragent-c4", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "IntentRouterAgent", "case_id": "domain-0053-intentrouteragent-c5", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "IntentRouterAgent", "case_id": "domain-0053-intentrouteragent-c5", "event": "case_finished", "group": "C", "guard_passed": false, "score": 0.733333, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "GuideCoachAgent", "case_id": "domain-0054-guidecoachagent-c6", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "GuideCoachAgent", "case_id": "domain-0054-guidecoachagent-c6", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "DebugAgent", "case_id": "domain-0055-debugagent-c7", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "DebugAgent", "case_id": "domain-0055-debugagent-c7", "event": "case_finished", "group": "C", "guard_passed": false, "score": 0.9, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "GroundingCriticAgent", "case_id": "domain-0056-groundingcriticagent-c1", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "GroundingCriticAgent", "case_id": "domain-0056-groundingcriticagent-c1", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "SafetyAgent", "case_id": "domain-0057-safetyagent-c2", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "SafetyAgent", "case_id": "domain-0057-safetyagent-c2", "event": "case_finished", "group": "C", "guard_passed": false, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "PathPlannerAgent", "case_id": "domain-0058-pathplanneragent-c3", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "PathPlannerAgent", "case_id": "domain-0058-pathplanneragent-c3", "event": "case_finished", "group": "C", "guard_passed": false, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "MindMapAgent", "case_id": "domain-0059-mindmapagent-c4", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "MindMapAgent", "case_id": "domain-0059-mindmapagent-c4", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "TutorAgent", "case_id": "domain-0060-tutoragent-c5", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "TutorAgent", "case_id": "domain-0060-tutoragent-c5", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "PracticeAgent", "case_id": "domain-0061-practiceagent-c6", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "PracticeAgent", "case_id": "domain-0061-practiceagent-c6", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "ResourceDesignerAgent", "case_id": "domain-0062-resourcedesigneragent-c7", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "ResourceDesignerAgent", "case_id": "domain-0062-resourcedesigneragent-c7", "event": "case_finished", "group": "C", "guard_passed": false, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "IntentRouterAgent", "case_id": "domain-0063-intentrouteragent-c1", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "IntentRouterAgent", "case_id": "domain-0063-intentrouteragent-c1", "event": "case_finished", "group": "C", "guard_passed": false, "score": 0.733333, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "GuideCoachAgent", "case_id": "domain-0064-guidecoachagent-c2", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "GuideCoachAgent", "case_id": "domain-0064-guidecoachagent-c2", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "DebugAgent", "case_id": "domain-0065-debugagent-c3", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "DebugAgent", "case_id": "domain-0065-debugagent-c3", "event": "case_finished", "group": "C", "guard_passed": false, "score": 0.9, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "GroundingCriticAgent", "case_id": "domain-0066-groundingcriticagent-c4", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "GroundingCriticAgent", "case_id": "domain-0066-groundingcriticagent-c4", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "SafetyAgent", "case_id": "domain-0067-safetyagent-c5", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "SafetyAgent", "case_id": "domain-0067-safetyagent-c5", "event": "case_finished", "group": "C", "guard_passed": false, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "PathPlannerAgent", "case_id": "domain-0068-pathplanneragent-c6", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "PathPlannerAgent", "case_id": "domain-0068-pathplanneragent-c6", "event": "case_finished", "group": "C", "guard_passed": false, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "MindMapAgent", "case_id": "domain-0069-mindmapagent-c7", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "MindMapAgent", "case_id": "domain-0069-mindmapagent-c7", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "TutorAgent", "case_id": "domain-0070-tutoragent-c1", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "TutorAgent", "case_id": "domain-0070-tutoragent-c1", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "PracticeAgent", "case_id": "domain-0071-practiceagent-c2", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "PracticeAgent", "case_id": "domain-0071-practiceagent-c2", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "ResourceDesignerAgent", "case_id": "domain-0072-resourcedesigneragent-c3", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "ResourceDesignerAgent", "case_id": "domain-0072-resourcedesigneragent-c3", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "IntentRouterAgent", "case_id": "domain-0073-intentrouteragent-c4", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "IntentRouterAgent", "case_id": "domain-0073-intentrouteragent-c4", "event": "case_finished", "group": "C", "guard_passed": false, "score": 0.733333, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "GuideCoachAgent", "case_id": "domain-0074-guidecoachagent-c5", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "GuideCoachAgent", "case_id": "domain-0074-guidecoachagent-c5", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "DebugAgent", "case_id": "domain-0075-debugagent-c6", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "DebugAgent", "case_id": "domain-0075-debugagent-c6", "event": "case_finished", "group": "C", "guard_passed": false, "score": 0.9, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "GroundingCriticAgent", "case_id": "domain-0076-groundingcriticagent-c7", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "GroundingCriticAgent", "case_id": "domain-0076-groundingcriticagent-c7", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "SafetyAgent", "case_id": "domain-0077-safetyagent-c1", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "SafetyAgent", "case_id": "domain-0077-safetyagent-c1", "event": "case_finished", "group": "C", "guard_passed": false, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "PathPlannerAgent", "case_id": "domain-0078-pathplanneragent-c2", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "PathPlannerAgent", "case_id": "domain-0078-pathplanneragent-c2", "event": "case_finished", "group": "C", "guard_passed": false, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "MindMapAgent", "case_id": "domain-0079-mindmapagent-c3", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "MindMapAgent", "case_id": "domain-0079-mindmapagent-c3", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "TutorAgent", "case_id": "domain-0080-tutoragent-c4", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "TutorAgent", "case_id": "domain-0080-tutoragent-c4", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "PracticeAgent", "case_id": "domain-0081-practiceagent-c5", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "PracticeAgent", "case_id": "domain-0081-practiceagent-c5", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "ResourceDesignerAgent", "case_id": "domain-0082-resourcedesigneragent-c6", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "ResourceDesignerAgent", "case_id": "domain-0082-resourcedesigneragent-c6", "event": "case_finished", "group": "C", "guard_passed": false, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "IntentRouterAgent", "case_id": "domain-0083-intentrouteragent-c7", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "IntentRouterAgent", "case_id": "domain-0083-intentrouteragent-c7", "event": "case_finished", "group": "C", "guard_passed": false, "score": 0.733333, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "GuideCoachAgent", "case_id": "domain-0084-guidecoachagent-c1", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "GuideCoachAgent", "case_id": "domain-0084-guidecoachagent-c1", "event": "case_finished", "group": "C", "guard_passed": false, "score": 0.9, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "DebugAgent", "case_id": "domain-0085-debugagent-c2", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "DebugAgent", "case_id": "domain-0085-debugagent-c2", "event": "case_finished", "group": "C", "guard_passed": false, "score": 0.9, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "GroundingCriticAgent", "case_id": "domain-0086-groundingcriticagent-c3", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "GroundingCriticAgent", "case_id": "domain-0086-groundingcriticagent-c3", "event": "case_finished", "group": "C", "guard_passed": false, "score": 0.9, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "SafetyAgent", "case_id": "domain-0087-safetyagent-c4", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "SafetyAgent", "case_id": "domain-0087-safetyagent-c4", "event": "case_finished", "group": "C", "guard_passed": false, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "PathPlannerAgent", "case_id": "domain-0088-pathplanneragent-c5", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "PathPlannerAgent", "case_id": "domain-0088-pathplanneragent-c5", "event": "case_finished", "group": "C", "guard_passed": false, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "MindMapAgent", "case_id": "domain-0089-mindmapagent-c6", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "MindMapAgent", "case_id": "domain-0089-mindmapagent-c6", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "TutorAgent", "case_id": "domain-0090-tutoragent-c7", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "TutorAgent", "case_id": "domain-0090-tutoragent-c7", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "PracticeAgent", "case_id": "domain-0091-practiceagent-c1", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "PracticeAgent", "case_id": "domain-0091-practiceagent-c1", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "ResourceDesignerAgent", "case_id": "domain-0092-resourcedesigneragent-c2", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "ResourceDesignerAgent", "case_id": "domain-0092-resourcedesigneragent-c2", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "IntentRouterAgent", "case_id": "domain-0093-intentrouteragent-c3", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "IntentRouterAgent", "case_id": "domain-0093-intentrouteragent-c3", "event": "case_finished", "group": "C", "guard_passed": false, "score": 0.733333, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "GuideCoachAgent", "case_id": "domain-0094-guidecoachagent-c4", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "GuideCoachAgent", "case_id": "domain-0094-guidecoachagent-c4", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "DebugAgent", "case_id": "domain-0095-debugagent-c5", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "DebugAgent", "case_id": "domain-0095-debugagent-c5", "event": "case_finished", "group": "C", "guard_passed": false, "score": 0.9, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "GroundingCriticAgent", "case_id": "domain-0096-groundingcriticagent-c6", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "GroundingCriticAgent", "case_id": "domain-0096-groundingcriticagent-c6", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "SafetyAgent", "case_id": "domain-0097-safetyagent-c7", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "SafetyAgent", "case_id": "domain-0097-safetyagent-c7", "event": "case_finished", "group": "C", "guard_passed": false, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "PathPlannerAgent", "case_id": "domain-0098-pathplanneragent-c1", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "PathPlannerAgent", "case_id": "domain-0098-pathplanneragent-c1", "event": "case_finished", "group": "C", "guard_passed": false, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "MindMapAgent", "case_id": "domain-0099-mindmapagent-c2", "event": "case_started", "group": "C", "ts": "2026-07-08T14:54:25+00:00"}
+{"agent": "MindMapAgent", "case_id": "domain-0099-mindmapagent-c2", "event": "case_finished", "group": "C", "guard_passed": true, "score": 1.0, "ts": "2026-07-08T14:54:25+00:00"}

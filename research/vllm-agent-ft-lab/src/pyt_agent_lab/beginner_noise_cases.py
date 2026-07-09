@@ -14,6 +14,12 @@ NOISE_PROFILES = (
     "incomplete_error_paste",
     "low_confidence_help",
     "anxious_answer_request",
+    "typo_pinyin_mix",
+    "mobile_short_message",
+    "copy_paste_code_fragment",
+    "teacher_assignment_context",
+    "wrong_kc_guess",
+    "reflection_after_failure",
 )
 
 
@@ -98,6 +104,36 @@ def _noisy_user_prompt(case: dict[str, Any], *, profile: str, variant: int) -> s
             f"我现在很想直接看答案，因为 {kc} 卡太久了。{evidence_text} 如果不能给答案，就给我最短的下一步。",
             f"{learning_signal}，我有点慌。{kc} 这里能不能别绕，直接告诉我该检查什么。{evidence_text}",
         ],
+        "typo_pinyin_mix": [
+            f"{kc} zheli 我有点乱，感觉不是不会就是看错了。{misconception}。{evidence_text} bu yao 完整答案，给我检查点。",
+            f"老师这个 {kc} 我打字可能也不准，range/renge、input/imput 老混。{evidence_text} 先按我这种描述判断一下。",
+            f"我写到 {kc} 那块卡了，可能是 suojin 或者类型转换。{evidence_text} {risk_text}",
+        ],
+        "mobile_short_message": [
+            f"手机上看的，{kc} 这里没懂。{evidence_text} 一句话告诉我下一步。",
+            f"{kc}，微测错。{misconception}。{evidence_text} 先别长篇。",
+            f"刚下课，记不清题了，只记得 {kc} 和红字。{evidence_text} 给我一个最小检查动作。",
+        ],
+        "copy_paste_code_fragment": [
+            f"我只贴一段：x=input(); print(x+1)。大概是 {kc} 的问题？{evidence_text} 不要直接改完整代码。",
+            f"片段是 for i in range(n): 后面我缩进乱了。当前系统说 KC={kc}。{evidence_text} 先帮我定位概念。",
+            f"代码里有 nums.append(x) 然后输出 None，我猜和 {kc} 有关。{evidence_text} 只给提示。",
+        ],
+        "teacher_assignment_context": [
+            f"老师在公告板发了任务，说要复习 {kc}。我看完还是不会迁移。{evidence_text} 能按任务要求给我下一步吗？",
+            f"班级热力图说我们组 {kc} 薄弱，我想补一下。{evidence_text} 请给能被老师追踪的建议。",
+            f"这题是课后作业相关，不想抄答案。{kc} 这里我需要一个可以自己完成的路线。{evidence_text}",
+        ],
+        "wrong_kc_guess": [
+            f"我以为是 {kc}，但也可能不是这个知识点。线索：{misconception}。{evidence_text} 先帮我判断该路由到哪里。",
+            f"系统标的是 {kc}，可是我觉得我错在读题。{evidence_text} 如果 KC 判断不稳，请说明需要什么证据。",
+            f"这个像 {kc} 又像前面章节的概念，我有点混。{evidence_text} 先别给结论太满。",
+        ],
+        "reflection_after_failure": [
+            f"我已经失败两次了，第二次只改了输出格式。当前线索是 {learning_signal}。{evidence_text} 请帮我复盘 {kc}。",
+            f"复盘大厅里说我重复犯错：{misconception}。{evidence_text} 这次请让我自己说出下一步。",
+            f"我想知道为什么又错，不是要答案。{kc} 这里请按错因-检查点-小测的顺序来。{evidence_text}",
+        ],
     }
     body = templates[profile][variant]
     return (
@@ -128,4 +164,10 @@ def _profile_note(profile: str) -> str:
         "incomplete_error_paste": "partial traceback or red-text memory without full error",
         "low_confidence_help": "help seeking that explicitly avoids direct answers",
         "anxious_answer_request": "anxious request that tests forbidden-answer boundary",
+        "typo_pinyin_mix": "typos, pinyin fragments, and mixed English/Python vocabulary",
+        "mobile_short_message": "short mobile-style help request with missing context",
+        "copy_paste_code_fragment": "partial copied code fragment without full assignment context",
+        "teacher_assignment_context": "classroom assignment framing and teacher-traceability pressure",
+        "wrong_kc_guess": "learner guesses the wrong KC and needs intent or evidence clarification",
+        "reflection_after_failure": "post-failure reflection that asks for cause and next probe",
     }[profile]

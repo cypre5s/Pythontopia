@@ -1,0 +1,18 @@
+{
+  "heldout": {
+    "dropped_overlength_count": 17,
+    "dropped_zero_label_count": 0,
+    "kept_count": 57,
+    "total_count": 74
+  },
+  "max_seq_length": 384,
+  "model_path": "/home/cypress/.cache/modelscope/Qwen/Qwen3.5-4B",
+  "source_heldout_file": "research/vllm-agent-ft-lab/outputs/preferences/dpo-v2-e1-vs-raw-baseline-1000-v1/heldout.jsonl",
+  "source_train_file": "research/vllm-agent-ft-lab/outputs/preferences/dpo-v2-e1-vs-raw-baseline-1000-v1/train.jsonl",
+  "train": {
+    "dropped_overlength_count": 96,
+    "dropped_zero_label_count": 1,
+    "kept_count": 200,
+    "total_count": 297
+  }
+}

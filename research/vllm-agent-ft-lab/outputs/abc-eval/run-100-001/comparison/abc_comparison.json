@@ -1,0 +1,58 @@
+{
+  "ab_test": {
+    "baseline_label": "External LLM",
+    "candidate_label": "Qwen LoRA + Guard + Fallback",
+    "deltas": {
+      "forbidden_leak_rate": -0.07,
+      "grounding_safe_rate": 0.48,
+      "json_valid_rate": 0.58,
+      "score_mean": 0.103333
+    },
+    "verdict": "candidate_wins"
+  },
+  "deltas_b_vs_a": {
+    "forbidden_leak_rate": -0.07,
+    "grounding_safe_rate": 0.1,
+    "json_valid_rate": 0.58,
+    "score_mean": 0.120833
+  },
+  "deltas_c_vs_a": {
+    "forbidden_leak_rate": -0.07,
+    "grounding_safe_rate": 0.48,
+    "json_valid_rate": 0.58,
+    "score_mean": 0.103333
+  },
+  "group_a": {
+    "label": "External LLM",
+    "metrics": {
+      "forbidden_leak_rate": 0.07,
+      "grounding_safe_rate": 0.52,
+      "json_valid_rate": 0.42,
+      "score_mean": 0.856
+    }
+  },
+  "group_b": {
+    "label": "Qwen LoRA",
+    "metrics": {
+      "forbidden_leak_rate": 0.0,
+      "grounding_safe_rate": 0.62,
+      "json_valid_rate": 1.0,
+      "score_mean": 0.976833
+    }
+  },
+  "group_c": {
+    "label": "Qwen LoRA + Guard",
+    "metrics": {
+      "forbidden_leak_rate": 0.0,
+      "grounding_safe_rate": 1.0,
+      "json_valid_rate": 1.0,
+      "score_mean": 0.959333
+    }
+  },
+  "guard_effect": {
+    "forbidden_leak_rate": 0.0,
+    "grounding_safe_rate": 0.38,
+    "json_valid_rate": 0.0,
+    "score_mean": -0.0175
+  }
+}

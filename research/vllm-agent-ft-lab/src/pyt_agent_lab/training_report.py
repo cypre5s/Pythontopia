@@ -40,6 +40,43 @@ def write_training_curve_report(state_path: str | Path, output_dir: str | Path) 
     return curve
 
 
+def extract_training_curve_from_jsonl_rows(
+    rows: list[dict[str, Any]]
+) -> dict[str, list[dict[str, float]]]:
+    train_loss: list[dict[str, float]] = []
+    for item in rows:
+        if "loss" not in item:
+            continue
+        train_loss.append(
+            {
+                "step": int(item.get("step", 0)),
+                "loss": float(item["loss"]),
+                "mean_token_accuracy": float(item.get("mean_token_accuracy", 0.0)),
+            }
+        )
+    return {"train_loss": train_loss, "eval_loss": []}
+
+
+def write_training_jsonl_curve_report(
+    log_path: str | Path, output_dir: str | Path
+) -> dict[str, list[dict[str, float]]]:
+    rows = [
+        json.loads(line)
+        for line in Path(log_path).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    curve = extract_training_curve_from_jsonl_rows(rows)
+    target = Path(output_dir)
+    charts_dir = target / "charts"
+    charts_dir.mkdir(parents=True, exist_ok=True)
+    (target / "training_curve.json").write_text(
+        json.dumps(curve, ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    _write_loss_svg(charts_dir / "training_loss.svg", curve)
+    return curve
+
+
 def _write_loss_svg(path: Path, curve: dict[str, list[dict[str, float]]]) -> None:
     width = 820
     height = 420

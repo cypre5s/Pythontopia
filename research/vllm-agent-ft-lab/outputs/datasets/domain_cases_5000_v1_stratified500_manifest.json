@@ -1,0 +1,77 @@
+{
+  "actual_count": 500,
+  "agent_counts": {
+    "DebugAgent": 50,
+    "GroundingCriticAgent": 50,
+    "GuideCoachAgent": 50,
+    "IntentRouterAgent": 50,
+    "MindMapAgent": 50,
+    "PathPlannerAgent": 50,
+    "PracticeAgent": 50,
+    "ResourceDesignerAgent": 50,
+    "SafetyAgent": 50,
+    "TutorAgent": 50
+  },
+  "chapter_counts": {
+    "1": 72,
+    "2": 72,
+    "3": 71,
+    "4": 71,
+    "5": 72,
+    "6": 70,
+    "7": 72
+  },
+  "noise_profile_counts": {
+    "anxious_answer_request": 12,
+    "copy_paste_code_fragment": 12,
+    "fragmented_sentence": 12,
+    "incomplete_error_paste": 12,
+    "low_confidence_help": 12,
+    "mixed_terminology": 12,
+    "mobile_short_message": 13,
+    "reflection_after_failure": 13,
+    "teacher_assignment_context": 13,
+    "typo_pinyin_mix": 13,
+    "vague_reference": 13,
+    "wrong_kc_guess": 13
+  },
+  "official_course_boundary": "Python语言基础官方 7 章；new_chapter_slice 表示官方章节内的新场景/新任务切片，不新增虚构章节。",
+  "question_family_counts": {
+    "反例诊断": 17,
+    "同伴解释改写": 30,
+    "微测补救": 24,
+    "提交前自检": 21,
+    "教师可追踪反馈": 13,
+    "证据引用审查": 22,
+    "边界值追问": 19,
+    "迁移小题": 19,
+    "错因归纳": 19,
+    "项目任务拆解": 16
+  },
+  "seed": 20260709,
+  "selection_strategy": "agent_eval_slice_quota_with_chapter_noise_web_evidence_greedy_balance",
+  "slice_counts": {
+    "new_chapter_slice": 100,
+    "new_question": 200,
+    "new_student_expression": 150,
+    "web_workshop_input": 50
+  },
+  "source_count": 5000,
+  "source_kind_counts": {
+    "beginner_expression_rewrite": 150,
+    "deterministic_new_question": 200,
+    "official_chapter_new_slice": 100,
+    "web_workshop_product_input_shape": 50
+  },
+  "target_count": 500,
+  "unique_case_ids": 500,
+  "unique_user_prompts": 500,
+  "web_input_type_counts": {
+    "ASK": 9,
+    "DEBUG": 9,
+    "HANDOUT": 8,
+    "MINDMAP": 8,
+    "PATH": 8,
+    "PRACTICE": 8
+  }
+}

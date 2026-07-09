@@ -1,0 +1,13 @@
+{
+  "case_id": "structured-smoke-tutor-001",
+  "agent": "TutorAgent",
+  "score": 1.0,
+  "json_valid": true,
+  "grounding_safe": true,
+  "forbidden_leak": false,
+  "matched_expectations": 1,
+  "expectation_count": 1,
+  "schema_valid": true,
+  "missing_schema_keys": [],
+  "schema_type_errors": []
+}

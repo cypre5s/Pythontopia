@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="420" viewBox="0 0 760 420">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="72" y="34" font-family="Arial" font-size="20" fill="#111827">Reliability rates by source kind</text>
+<line x1="72" y1="322" x2="608" y2="322" stroke="#6b7280"/>
+<line x1="72" y1="58" x2="72" y2="322" stroke="#6b7280"/>
+<text x="139.00" y="358" text-anchor="end" transform="rotate(-32 139.00 358)" font-family="Arial" font-size="11" fill="#374151">beginner_expression_rewrite</text>
+<rect x="85.40" y="64.99" width="21.98" height="257.01" fill="#2563eb"><title>json: 0.97</title></rect>
+<text x="96.39" y="59.99" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">0.97</text>
+<rect x="112.20" y="117.44" width="21.98" height="204.56" fill="#16a34a"><title>schema: 0.77</title></rect>
+<text x="123.19" y="112.44" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">0.77</text>
+<rect x="139.00" y="85.97" width="21.98" height="236.03" fill="#dc2626"><title>grounding: 0.89</title></rect>
+<text x="149.99" y="80.97" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">0.89</text>
+<rect x="165.80" y="58.00" width="21.98" height="264.00" fill="#9333ea"><title>no leak: 1.00</title></rect>
+<text x="176.79" y="53.00" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">1.00</text>
+<text x="273.00" y="358" text-anchor="end" transform="rotate(-32 273.00 358)" font-family="Arial" font-size="11" fill="#374151">deterministic_new_question</text>
+<rect x="219.40" y="72.52" width="21.98" height="249.48" fill="#2563eb"><title>json: 0.94</title></rect>
+<text x="230.39" y="67.52" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">0.94</text>
+<rect x="246.20" y="127.96" width="21.98" height="194.04" fill="#16a34a"><title>schema: 0.73</title></rect>
+<text x="257.19" y="122.96" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">0.73</text>
+<rect x="273.00" y="106.84" width="21.98" height="215.16" fill="#dc2626"><title>grounding: 0.81</title></rect>
+<text x="283.99" y="101.84" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">0.81</text>
+<rect x="299.80" y="60.64" width="21.98" height="261.36" fill="#9333ea"><title>no leak: 0.99</title></rect>
+<text x="310.79" y="55.64" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">0.99</text>
+<text x="407.00" y="358" text-anchor="end" transform="rotate(-32 407.00 358)" font-family="Arial" font-size="11" fill="#374151">official_chapter_new_slice</text>
+<rect x="353.40" y="65.92" width="21.98" height="256.08" fill="#2563eb"><title>json: 0.97</title></rect>
+<text x="364.39" y="60.92" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">0.97</text>
+<rect x="380.20" y="118.72" width="21.98" height="203.28" fill="#16a34a"><title>schema: 0.77</title></rect>
+<text x="391.19" y="113.72" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">0.77</text>
+<rect x="407.00" y="102.88" width="21.98" height="219.12" fill="#dc2626"><title>grounding: 0.83</title></rect>
+<text x="417.99" y="97.88" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">0.83</text>
+<rect x="433.80" y="58.00" width="21.98" height="264.00" fill="#9333ea"><title>no leak: 1.00</title></rect>
+<text x="444.79" y="53.00" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">1.00</text>
+<text x="541.00" y="358" text-anchor="end" transform="rotate(-32 541.00 358)" font-family="Arial" font-size="11" fill="#374151">web_workshop_product_input_shape</text>
+<rect x="487.40" y="73.53" width="21.98" height="248.47" fill="#2563eb"><title>json: 0.94</title></rect>
+<text x="498.39" y="68.53" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">0.94</text>
+<rect x="514.20" y="125.29" width="21.98" height="196.71" fill="#16a34a"><title>schema: 0.75</title></rect>
+<text x="525.19" y="120.29" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">0.75</text>
+<rect x="541.00" y="63.18" width="21.98" height="258.82" fill="#dc2626"><title>grounding: 0.98</title></rect>
+<text x="551.99" y="58.18" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">0.98</text>
+<rect x="567.80" y="68.35" width="21.98" height="253.65" fill="#9333ea"><title>no leak: 0.96</title></rect>
+<text x="578.79" y="63.35" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">0.96</text>
+<rect x="628" y="46" width="12" height="12" fill="#2563eb"/>
+<text x="646" y="56" font-family="Arial" font-size="12" fill="#374151">json</text>
+<rect x="628" y="70" width="12" height="12" fill="#16a34a"/>
+<text x="646" y="80" font-family="Arial" font-size="12" fill="#374151">schema</text>
+<rect x="628" y="94" width="12" height="12" fill="#dc2626"/>
+<text x="646" y="104" font-family="Arial" font-size="12" fill="#374151">grounding</text>
+<rect x="628" y="118" width="12" height="12" fill="#9333ea"/>
+<text x="646" y="128" font-family="Arial" font-size="12" fill="#374151">no leak</text>
+</svg>

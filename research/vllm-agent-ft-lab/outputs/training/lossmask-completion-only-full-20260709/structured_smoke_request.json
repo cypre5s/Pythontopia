@@ -1,0 +1,46 @@
+{
+  "model": "pythontopia-qwen35-e1-lossmask-full",
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are TutorAgent. Return only a JSON object that follows the requested schema. Cite evidence_ids exactly when using course evidence."
+    },
+    {
+      "role": "user",
+      "content": "学生说 input() 总是返回数字，所以可以直接和 10 比较。请诊断误区，给下一步提示，只引用 evidence id page_43_001。"
+    }
+  ],
+  "temperature": 0,
+  "max_tokens": 180,
+  "response_format": {
+    "type": "json_schema",
+    "json_schema": {
+      "name": "TutorAgentResponse",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "diagnosis": {
+            "type": "string"
+          },
+          "next_hint": {
+            "type": "string"
+          },
+          "evidence_ids": {
+            "type": "array"
+          },
+          "safety_flags": {
+            "type": "array"
+          }
+        },
+        "required": [
+          "diagnosis",
+          "next_hint",
+          "evidence_ids",
+          "safety_flags"
+        ],
+        "additionalProperties": true
+      },
+      "strict": true
+    }
+  }
+}

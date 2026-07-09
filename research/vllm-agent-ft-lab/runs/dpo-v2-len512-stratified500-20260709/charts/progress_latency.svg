@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="380" viewBox="0 0 760 380">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="70" y="32" font-family="Arial" font-size="20" fill="#111827">Mean latency over time</text>
+<line x1="70" y1="322" x2="726" y2="322" stroke="#6b7280"/>
+<line x1="70" y1="54" x2="70" y2="322" stroke="#6b7280"/>
+<text x="18" y="72" font-family="Arial" font-size="12" fill="#374151">ms</text>
+<polyline fill="none" stroke="#2563eb" stroke-width="2.5" points="70.00,54.00 104.53,63.34 139.05,54.17 173.58,60.17 208.11,61.77 242.63,62.68 277.16,67.41 311.68,70.50 346.21,71.34 380.74,72.11 415.26,72.44 449.79,73.42 484.32,73.12 518.84,69.80 553.37,70.88 587.89,69.88 622.42,69.38 656.95,68.46 691.47,67.99 726.00,69.22"/>
+<rect x="70" y="350" width="12" height="12" fill="#2563eb"/>
+<text x="88" y="360" font-family="Arial" font-size="12" fill="#374151">latency_ms_mean</text>
+</svg>

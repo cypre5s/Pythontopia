@@ -1,0 +1,23 @@
+{
+  "agents": {
+    "DebugAgent": 31,
+    "MindMapAgent": 2,
+    "SafetyAgent": 8
+  },
+  "chosen_policy": "clean_e1_or_guarded_response",
+  "chosen_responses": "research/vllm-agent-ft-lab/runs/vllm-lora-domain-1000-beginner-noise-5fold-conc2-guarded-v1-20260703/responses.jsonl",
+  "flag_counts": {
+    "forbidden_leak": 5,
+    "invalid_json": 10,
+    "missing_required_evidence_id": 31
+  },
+  "format": "chat_preference_jsonl",
+  "heldout_count": 8,
+  "heldout_ratio": 0.2,
+  "input_policy": "original_case_system_user",
+  "rejected_policy": "audited_raw_baseline_or_raw_adapter_failure",
+  "rejected_responses": "research/vllm-agent-ft-lab/runs/vllm-lora-domain-1000-beginner-noise-5fold-conc2-20260703T1559CST/responses.jsonl",
+  "seed": 20260707,
+  "total_count": 41,
+  "train_count": 33
+}

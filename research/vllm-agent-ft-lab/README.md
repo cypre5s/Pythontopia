@@ -217,6 +217,43 @@ python3 research/vllm-agent-ft-lab/scripts/run_workshop_browser_smoke.py \
   --base-url http://127.0.0.1:5173 \
   --api-base-url http://127.0.0.1:18080 \
   --output-dir research/vllm-agent-ft-lab/outputs/web-ab/workshop-browser-smoke-v2
+
+# 19. Build the 5000-case anti-overfit evaluation pack.
+PYTHONPATH=research/vllm-agent-ft-lab/src \
+python3 research/vllm-agent-ft-lab/scripts/build_5000_eval_pack.py \
+  --count 5000 \
+  --seed 20260706 \
+  --output research/vllm-agent-ft-lab/cases/domain_cases_5000_v1.jsonl \
+  --manifest research/vllm-agent-ft-lab/outputs/datasets/domain_cases_5000_v1_manifest.json
+
+# 20. Run the conservative full 5000-case LoRA evaluation.
+NO_PROXY='*' no_proxy='*' PYTHONPATH=research/vllm-agent-ft-lab/src \
+python3 research/vllm-agent-ft-lab/scripts/run_baseline.py \
+  --base-url http://127.0.0.1:18094/v1 \
+  --api-key local-dev-token \
+  --model pythontopia-qwen35-e1-lora \
+  --cases research/vllm-agent-ft-lab/cases/domain_cases_5000_v1.jsonl \
+  --folds 5 \
+  --seed 20260706 \
+  --concurrency 1 \
+  --progress-every 25 \
+  --run-dir research/vllm-agent-ft-lab/runs/vllm-lora-domain-5000-v1-full-20260706
+
+# 21. Generate 5000-run charts, progress tables, and blind-review sheets.
+PYTHONPATH=research/vllm-agent-ft-lab/src \
+python3 research/vllm-agent-ft-lab/scripts/analyze_run.py \
+  --run-dir research/vllm-agent-ft-lab/runs/vllm-lora-domain-5000-v1-full-20260706
+
+PYTHONPATH=research/vllm-agent-ft-lab/src \
+python3 research/vllm-agent-ft-lab/scripts/report_run_progress.py \
+  --run-dir research/vllm-agent-ft-lab/runs/vllm-lora-domain-5000-v1-full-20260706
+
+PYTHONPATH=research/vllm-agent-ft-lab/src \
+python3 research/vllm-agent-ft-lab/scripts/export_blind_review_pack.py \
+  --responses research/vllm-agent-ft-lab/runs/vllm-lora-domain-5000-v1-full-20260706/responses.jsonl \
+  --output-dir research/vllm-agent-ft-lab/runs/vllm-lora-domain-5000-v1-full-20260706/blind-review \
+  --sample-size 120 \
+  --seed 20260706
 ```
 
 ## Output Contract

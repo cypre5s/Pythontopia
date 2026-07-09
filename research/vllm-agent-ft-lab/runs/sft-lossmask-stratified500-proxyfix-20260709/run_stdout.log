@@ -1,0 +1,2 @@
+research/vllm-agent-ft-lab/runs/sft-lossmask-stratified500-proxyfix-20260709
+{'overall': {'case_count': 500, 'score_mean': 0.9832, 'score_std': 0.069046, 'json_valid_rate': 0.958, 'schema_valid_rate': 0.754, 'grounding_safe_rate': 0.86, 'forbidden_leak_rate': 0.008}, 'folds': {'0': {'case_count': 500, 'score_mean': 0.9832, 'score_std': 0.069046, 'json_valid_rate': 0.958, 'schema_valid_rate': 0.754, 'grounding_safe_rate': 0.86, 'forbidden_leak_rate': 0.008}}}
