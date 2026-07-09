@@ -1,5 +1,124 @@
 # Process Log
 
+## 2026-07-09
+
+### Stratified 500 Evaluation Snapshot
+
+Goal:
+
+- Stop optimizing only against small or saturated heldout slices.
+- Build a deterministic 500-case stratified subset from the 5000-case eval pack.
+- Run GPU-backed adapter evaluation with reproducible local artifacts and progress logs.
+
+Implementation and evidence:
+
+- Added deterministic `select_stratified_eval_subset` sampling over agent and eval-slice quotas, with soft balancing for chapter, beginner-noise profile, web input type, and evidence coverage.
+- Wrote `cases/domain_cases_5000_v1_stratified500.jsonl` and `outputs/datasets/domain_cases_5000_v1_stratified500_manifest.json`.
+- The subset has 500 cases: 10 agents x 50; eval slices `new_question=200`, `new_chapter_slice=100`, `new_student_expression=150`, `web_workshop_input=50`; all 7 chapters, 12 beginner-noise profiles, 6 web input types, and both evidence/no-evidence cases are present.
+- Fixed local OpenAI-compatible eval calls to use a proxy-free urllib opener, because the WSL proxy environment could route local vLLM traffic through `127.0.0.1:7892`.
+- Added resume/progress support for `run_baseline.py`, streaming responses to `responses.jsonl` as cases complete and writing periodic progress snapshots.
+
+Adapter results on the 500-case stratified subset:
+
+| Adapter | Cases | Score | JSON | Schema | Grounding | Forbidden leak |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| SFT lossmask completion full | 500 | 0.983200 | 0.958 | 0.754 | 0.860 | 0.008 |
+| DPO v2 len512 | 500 | 0.998000 | 0.994 | 0.732 | 0.988 | 0.002 |
+
+Interpretation:
+
+- DPO improves overall score, JSON validity, grounding safety, and forbidden-answer leakage versus the SFT lossmask adapter on this harder 500-case slice.
+- DPO does not improve schema validity; schema failures remain the next useful preference-data target.
+- ORPO has not yet been evaluated on this stratified 500 slice in this snapshot, so the current comparison is SFT vs DPO only.
+
+Artifacts:
+
+- SFT run: `runs/sft-lossmask-stratified500-proxyfix-20260709/`.
+- DPO run: `runs/dpo-v2-len512-stratified500-20260709/`.
+- Serve logs: `outputs/abc-eval/sft-lossmask-stratified500-serve_maxseq4_stdout.log`, `outputs/abc-eval/dpo-v2-stratified500-serve_stdout.log`.
+
+Verification:
+
+- `cd research/vllm-agent-ft-lab && python3 -m pytest -q` -> 132 passed.
+
+## 2026-07-07
+
+### DPO v2 Preference Data Preparation
+
+Goal:
+
+- Start the next post-training phase after SFT + QLoRA.
+- Build DPO/ORPO-ready preference data without manual relabeling.
+- Preserve professional experiment logging, with raw and guarded artifacts kept separate.
+
+Implementation:
+
+- Added `preference_dataset.py` to pair clean chosen responses with audited rejected responses by case id.
+- Added `scripts/build_preference_dataset.py`.
+- Added `tests/test_preference_dataset.py`.
+- Extended `response_audit.py` so `forbidden_leak` is a first-class audit flag, not only a scoring metric.
+- Extended `tests/test_response_audit.py` with a SafetyAgent leak regression.
+
+TDD evidence:
+
+- `test_preference_dataset.py` first failed because `pyt_agent_lab.preference_dataset` did not exist.
+- `test_audit_flags_forbidden_answer_leak` first failed because audit did not flag forbidden leaks.
+- Green checks:
+  - `PYTHONPATH=research/vllm-agent-ft-lab/src python3 -m pytest research/vllm-agent-ft-lab/tests/test_response_audit.py -q` -> 4 passed.
+  - `PYTHONPATH=research/vllm-agent-ft-lab/src python3 -m pytest research/vllm-agent-ft-lab/tests/test_preference_dataset.py -q` -> 3 passed.
+
+DPO v2 data artifacts:
+
+- `outputs/preferences/dpo-v2-e1-vs-raw-baseline-1000-v1/`
+  - 371 preference pairs.
+  - 297 train / 74 heldout.
+  - Rejected flags: invalid JSON 296, markdown fence 296, missing evidence 100, forbidden leak 12.
+- `outputs/preferences/dpo-v2-guarded-vs-raw-lora-beginner-noise-1000/`
+  - 41 preference pairs.
+  - 33 train / 8 heldout.
+  - Rejected flags: missing evidence 31, invalid JSON 10, forbidden leak 5.
+
+Dependency check:
+
+- Global Python has no `trl`.
+- `research/vllm-agent-ft-lab/.venv` has `trl==0.29.1`.
+- In the venv, `DPOTrainer` and `GRPOTrainer` are available; `ORPOTrainer` is not exposed.
+
+DPO v2 smoke:
+
+- Added `preference_training_plan.py`, `scripts/build_dpo_training_plan.py`, `scripts/train_dpo.py`, and `tests/test_preference_training_plan.py`.
+- Training plan: `outputs/training/dpo-v2-e1-vs-raw-baseline-1000-v1/training_plan.json`.
+- Command: `PYTHONPATH=research/vllm-agent-ft-lab/src CUDA_VISIBLE_DEVICES=0 research/vllm-agent-ft-lab/.venv/bin/python research/vllm-agent-ft-lab/scripts/train_dpo.py --plan research/vllm-agent-ft-lab/outputs/training/dpo-v2-e1-vs-raw-baseline-1000-v1/training_plan.json --max-steps 1`.
+- Result: 1 DPO optimization step completed.
+- Runtime: 135.47 seconds.
+- Peak observed GPU: about 7782 / 8151 MiB, 100% utilization.
+- Logged metrics: loss 0.693147, mean token accuracy 0.893974, chosen logps -84.8364, rejected logps -150.5967.
+- Smoke output: `outputs/adapters/e1-protocol-patch-v1-1000-v1-dpo-v2-smoke1/`.
+- Trainer log: `outputs/adapters/e1-protocol-patch-v1-1000-v1-dpo-v2-smoke1/trainer_log.jsonl`.
+- Smoke chart/report: `outputs/training/dpo-v2-e1-vs-raw-baseline-1000-v1/smoke1-report/`.
+- Interpretation: TRL DPO works with the current Qwen + SFT adapter + preference data path, but full DPO will be slow on the 8GB laptop GPU unless max length/runtime is tuned or a faster open-source stack is used.
+
+DPO len768 full-run failure and len512 recovery:
+
+- Full len768 run failed after 14 / 19 optimization steps with CUDA OOM during DPO reference forward.
+- Partial failure log preserved at `outputs/adapters/e1-protocol-patch-v1-1000-v1-dpo-v2-len768-failed-partial/trainer_log.jsonl`.
+- Partial failure chart: `outputs/training/dpo-v2-e1-vs-raw-baseline-1000-v1/len768-failed-report/`.
+- Added `max_seq_length` support to `build_dpo_training_plan`.
+- Generated len512 plan: `outputs/training/dpo-v2-e1-vs-raw-baseline-1000-v1-len512/training_plan.json`.
+- Full len512 run completed 19 / 19 steps and heldout eval.
+- Output adapter: `outputs/adapters/e1-protocol-patch-v1-1000-v1-dpo-v2-len512/`.
+- Train runtime 2441 seconds, train loss 0.092069, eval loss 0.001634, eval reward accuracy 1.0.
+- Final chart/report: `outputs/training/dpo-v2-e1-vs-raw-baseline-1000-v1-len512/final-report/`.
+- Same 74-case heldout generation comparison:
+  - SFT QLoRA: score 0.999324, JSON 0.986486, grounding 1.0, leak 0.0.
+  - SFT + DPO len512: score 0.998649, JSON 0.986486, grounding 1.0, leak 0.0.
+- Comparison: `outputs/comparisons/dpo-v2-len512-vs-sft-heldout-74/`.
+- Interpretation: DPO pipeline is technically complete, but this first DPO adapter does not beat SFT on the saturated 74-case heldout slice.
+
+Detailed log:
+
+- `docs/preference-optimization-log-2026-07-07.md`.
+
 ## 2026-07-02
 
 ### Scope

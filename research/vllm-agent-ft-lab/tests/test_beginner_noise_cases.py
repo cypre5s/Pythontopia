@@ -46,9 +46,13 @@ def test_beginner_noise_covers_multiple_novice_expression_patterns() -> None:
         "mixed_terminology",
         "incomplete_error_paste",
         "low_confidence_help",
+        "typo_pinyin_mix",
+        "mobile_short_message",
+        "wrong_kc_guess",
     }
     assert "这个" in joined_users
     assert "红字" in joined_users or "Traceback" in joined_users
+    assert "zheli" in joined_users or "手机上看的" in joined_users
     assert "别直接给答案" in joined_users
 
 

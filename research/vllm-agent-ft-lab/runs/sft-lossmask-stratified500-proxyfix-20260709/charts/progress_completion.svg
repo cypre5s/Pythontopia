@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="380" viewBox="0 0 760 380">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="70" y="32" font-family="Arial" font-size="20" fill="#111827">Completed cases over time</text>
+<line x1="70" y1="322" x2="726" y2="322" stroke="#6b7280"/>
+<line x1="70" y1="54" x2="70" y2="322" stroke="#6b7280"/>
+<text x="18" y="72" font-family="Arial" font-size="12" fill="#374151">cases</text>
+<polyline fill="none" stroke="#2563eb" stroke-width="2.5" points="70.00,308.60 104.53,295.20 139.05,281.80 173.58,268.40 208.11,255.00 242.63,241.60 277.16,228.20 311.68,214.80 346.21,201.40 380.74,188.00 415.26,174.60 449.79,161.20 484.32,147.80 518.84,134.40 553.37,121.00 587.89,107.60 622.42,94.20 656.95,80.80 691.47,67.40 726.00,54.00"/>
+<rect x="70" y="350" width="12" height="12" fill="#2563eb"/>
+<text x="88" y="360" font-family="Arial" font-size="12" fill="#374151">completed_cases</text>
+</svg>

@@ -1,0 +1,75 @@
+{
+  "actual_count": 5000,
+  "agent_counts": {
+    "DebugAgent": 500,
+    "GroundingCriticAgent": 500,
+    "GuideCoachAgent": 500,
+    "IntentRouterAgent": 500,
+    "MindMapAgent": 500,
+    "PathPlannerAgent": 500,
+    "PracticeAgent": 500,
+    "ResourceDesignerAgent": 500,
+    "SafetyAgent": 500,
+    "TutorAgent": 500
+  },
+  "chapter_counts": {
+    "1": 715,
+    "2": 715,
+    "3": 714,
+    "4": 714,
+    "5": 714,
+    "6": 714,
+    "7": 714
+  },
+  "noise_profile_counts": {
+    "anxious_answer_request": 125,
+    "copy_paste_code_fragment": 125,
+    "fragmented_sentence": 125,
+    "incomplete_error_paste": 125,
+    "low_confidence_help": 125,
+    "mixed_terminology": 125,
+    "mobile_short_message": 125,
+    "reflection_after_failure": 125,
+    "teacher_assignment_context": 125,
+    "typo_pinyin_mix": 125,
+    "vague_reference": 125,
+    "wrong_kc_guess": 125
+  },
+  "official_course_boundary": "Python语言基础官方 7 章；new_chapter_slice 表示官方章节内的新场景/新任务切片，不新增虚构章节。",
+  "question_family_counts": {
+    "反例诊断": 210,
+    "同伴解释改写": 207,
+    "微测补救": 218,
+    "提交前自检": 203,
+    "教师可追踪反馈": 185,
+    "证据引用审查": 202,
+    "边界值追问": 197,
+    "迁移小题": 173,
+    "错因归纳": 211,
+    "项目任务拆解": 194
+  },
+  "seed": 20260706,
+  "slice_counts": {
+    "new_chapter_slice": 1000,
+    "new_question": 2000,
+    "new_student_expression": 1500,
+    "web_workshop_input": 500
+  },
+  "source_kind_counts": {
+    "beginner_expression_rewrite": 1500,
+    "deterministic_new_question": 2000,
+    "official_chapter_new_slice": 1000,
+    "web_workshop_product_input_shape": 500
+  },
+  "target_count": 5000,
+  "unique_case_ids": 5000,
+  "unique_user_prompts": 5000,
+  "web_input_type_counts": {
+    "ASK": 85,
+    "DEBUG": 91,
+    "HANDOUT": 76,
+    "MINDMAP": 84,
+    "PATH": 84,
+    "PRACTICE": 80
+  }
+}

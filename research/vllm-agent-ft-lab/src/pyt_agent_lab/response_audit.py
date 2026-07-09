@@ -6,6 +6,8 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+from .scoring import score_case_response
+
 
 PAGE_ID_RE = re.compile(r"page-\d+-\d+")
 
@@ -55,6 +57,8 @@ def _audit_record(record: dict[str, Any]) -> dict[str, Any]:
 
     if parsed is None:
         flags.append("invalid_json")
+    if score_case_response(case, response).forbidden_leak:
+        flags.append("forbidden_leak")
     if evidence_ids and not all(evidence_id in response for evidence_id in evidence_ids):
         flags.append("missing_required_evidence_id")
     if not evidence_ids and PAGE_ID_RE.search(response):

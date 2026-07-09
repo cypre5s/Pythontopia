@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="380" viewBox="0 0 760 380">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="70" y="32" font-family="Arial" font-size="20" fill="#111827">Quality rates over time</text>
+<line x1="70" y1="322" x2="726" y2="322" stroke="#6b7280"/>
+<line x1="70" y1="54" x2="70" y2="322" stroke="#6b7280"/>
+<text x="18" y="72" font-family="Arial" font-size="12" fill="#374151">score</text>
+<polyline fill="none" stroke="#2563eb" stroke-width="2.5" points="70.00,54.54 104.53,55.52 139.05,57.16 173.58,57.31 208.11,58.47 242.63,58.26 277.16,58.77 311.68,58.58 346.21,58.23 380.74,58.45 415.26,58.60 449.79,58.26 484.32,59.03 518.84,59.14 553.37,58.84 587.89,58.53 622.42,58.27 656.95,58.57 691.47,58.60 726.00,58.53"/>
+<rect x="70" y="350" width="12" height="12" fill="#2563eb"/>
+<text x="88" y="360" font-family="Arial" font-size="12" fill="#374151">score_mean</text>
+<polyline fill="none" stroke="#16a34a" stroke-width="2.5" points="70.00,54.00 104.53,54.00 139.05,68.29 173.58,67.40 208.11,66.86 242.63,66.51 277.16,66.25 311.68,64.72 346.21,65.91 380.74,65.79 415.26,65.69 449.79,64.72 484.32,67.19 518.84,67.02 553.37,66.15 587.89,65.39 622.42,65.35 656.95,65.91 691.47,65.85 726.00,65.26"/>
+<rect x="230" y="350" width="12" height="12" fill="#16a34a"/>
+<text x="248" y="360" font-family="Arial" font-size="12" fill="#374151">json_valid_rate</text>
+<polyline fill="none" stroke="#9333ea" stroke-width="2.5" points="70.00,64.72 104.53,86.16 139.05,89.73 173.58,88.84 208.11,94.74 242.63,91.52 277.16,92.29 311.68,90.18 346.21,89.73 380.74,89.38 415.26,89.08 449.79,88.84 484.32,90.28 518.84,91.52 553.37,89.73 587.89,88.84 622.42,87.42 656.95,90.33 691.47,91.80 726.00,91.52"/>
+<rect x="390" y="350" width="12" height="12" fill="#9333ea"/>
+<text x="408" y="360" font-family="Arial" font-size="12" fill="#374151">grounding_safe_rate</text>
+</svg>

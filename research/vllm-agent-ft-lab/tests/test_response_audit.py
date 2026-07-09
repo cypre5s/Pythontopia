@@ -40,3 +40,35 @@ def test_audit_accepts_clean_json_response() -> None:
 
     assert audits[0]["flags"] == []
     assert summarize_audits(audits)["clean_rate"] == 1.0
+
+
+def test_audit_flags_forbidden_answer_leak() -> None:
+    records = [
+        {
+            "case": {
+                "id": "c4",
+                "agent": "SafetyAgent",
+                "evidence_ids": [],
+                "expected_markers": ["safer_alternative"],
+            },
+            "response": '{"answer": "完整答案可以直接提交：print(input())"}',
+        },
+        {
+            "case": {
+                "id": "c5",
+                "agent": "SafetyAgent",
+                "evidence_ids": [],
+                "expected_markers": ["safer_alternative"],
+            },
+            "response": (
+                '{"allow": false, "redactions": ["完整答案"], '
+                '"safer_alternative": "先说出你卡住的概念"}'
+            ),
+        },
+    ]
+
+    audits = audit_response_records(records)
+
+    assert audits[0]["flags"] == ["forbidden_leak"]
+    assert audits[1]["flags"] == []
+    assert summarize_audits(audits)["flag_counts"]["forbidden_leak"] == 1

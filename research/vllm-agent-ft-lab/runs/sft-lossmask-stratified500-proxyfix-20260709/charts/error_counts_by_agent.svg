@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="420" viewBox="0 0 1100 420">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="72" y="34" font-family="Arial" font-size="20" fill="#111827">Error counts by agent</text>
+<line x1="72" y1="322" x2="948" y2="322" stroke="#6b7280"/>
+<line x1="72" y1="58" x2="72" y2="322" stroke="#6b7280"/>
+<text x="115.80" y="358" text-anchor="end" transform="rotate(-32 115.80 358)" font-family="Arial" font-size="11" fill="#374151">DebugAgent</text>
+<rect x="80.76" y="322.00" width="14.37" height="0.00" fill="#2563eb"><title>json invalid: 0</title></rect>
+<rect x="98.28" y="322.00" width="14.37" height="0.00" fill="#16a34a"><title>schema invalid: 0</title></rect>
+<rect x="115.80" y="216.40" width="14.37" height="105.60" fill="#dc2626"><title>grounding false: 20</title></rect>
+<text x="122.98" y="211.40" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">20</text>
+<rect x="133.32" y="322.00" width="14.37" height="0.00" fill="#9333ea"><title>forbidden leak: 0</title></rect>
+<text x="203.40" y="358" text-anchor="end" transform="rotate(-32 203.40 358)" font-family="Arial" font-size="11" fill="#374151">GroundingCriticAgent</text>
+<rect x="168.36" y="322.00" width="14.37" height="0.00" fill="#2563eb"><title>json invalid: 0</title></rect>
+<rect x="185.88" y="316.72" width="14.37" height="5.28" fill="#16a34a"><title>schema invalid: 1</title></rect>
+<rect x="203.40" y="322.00" width="14.37" height="0.00" fill="#dc2626"><title>grounding false: 0</title></rect>
+<rect x="220.92" y="322.00" width="14.37" height="0.00" fill="#9333ea"><title>forbidden leak: 0</title></rect>
+<text x="291.00" y="358" text-anchor="end" transform="rotate(-32 291.00 358)" font-family="Arial" font-size="11" fill="#374151">GuideCoachAgent</text>
+<rect x="255.96" y="322.00" width="14.37" height="0.00" fill="#2563eb"><title>json invalid: 0</title></rect>
+<rect x="273.48" y="58.00" width="14.37" height="264.00" fill="#16a34a"><title>schema invalid: 50</title></rect>
+<text x="280.66" y="53.00" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">50</text>
+<rect x="291.00" y="311.44" width="14.37" height="10.56" fill="#dc2626"><title>grounding false: 2</title></rect>
+<rect x="308.52" y="322.00" width="14.37" height="0.00" fill="#9333ea"><title>forbidden leak: 0</title></rect>
+<text x="378.60" y="358" text-anchor="end" transform="rotate(-32 378.60 358)" font-family="Arial" font-size="11" fill="#374151">IntentRouterAgent</text>
+<rect x="343.56" y="322.00" width="14.37" height="0.00" fill="#2563eb"><title>json invalid: 0</title></rect>
+<rect x="361.08" y="322.00" width="14.37" height="0.00" fill="#16a34a"><title>schema invalid: 0</title></rect>
+<rect x="378.60" y="311.44" width="14.37" height="10.56" fill="#dc2626"><title>grounding false: 2</title></rect>
+<rect x="396.12" y="322.00" width="14.37" height="0.00" fill="#9333ea"><title>forbidden leak: 0</title></rect>
+<text x="466.20" y="358" text-anchor="end" transform="rotate(-32 466.20 358)" font-family="Arial" font-size="11" fill="#374151">MindMapAgent</text>
+<rect x="431.16" y="216.40" width="14.37" height="105.60" fill="#2563eb"><title>json invalid: 20</title></rect>
+<text x="438.34" y="211.40" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">20</text>
+<rect x="448.68" y="216.40" width="14.37" height="105.60" fill="#16a34a"><title>schema invalid: 20</title></rect>
+<text x="455.86" y="211.40" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">20</text>
+<rect x="466.20" y="290.32" width="14.37" height="31.68" fill="#dc2626"><title>grounding false: 6</title></rect>
+<text x="473.38" y="285.32" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">6</text>
+<rect x="483.72" y="316.72" width="14.37" height="5.28" fill="#9333ea"><title>forbidden leak: 1</title></rect>
+<text x="553.80" y="358" text-anchor="end" transform="rotate(-32 553.80 358)" font-family="Arial" font-size="11" fill="#374151">PathPlannerAgent</text>
+<rect x="518.76" y="316.72" width="14.37" height="5.28" fill="#2563eb"><title>json invalid: 1</title></rect>
+<rect x="536.28" y="316.72" width="14.37" height="5.28" fill="#16a34a"><title>schema invalid: 1</title></rect>
+<rect x="553.80" y="184.72" width="14.37" height="137.28" fill="#dc2626"><title>grounding false: 26</title></rect>
+<text x="560.98" y="179.72" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">26</text>
+<rect x="571.32" y="311.44" width="14.37" height="10.56" fill="#9333ea"><title>forbidden leak: 2</title></rect>
+<text x="641.40" y="358" text-anchor="end" transform="rotate(-32 641.40 358)" font-family="Arial" font-size="11" fill="#374151">PracticeAgent</text>
+<rect x="606.36" y="322.00" width="14.37" height="0.00" fill="#2563eb"><title>json invalid: 0</title></rect>
+<rect x="623.88" y="58.00" width="14.37" height="264.00" fill="#16a34a"><title>schema invalid: 50</title></rect>
+<text x="631.06" y="53.00" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">50</text>
+<rect x="641.40" y="322.00" width="14.37" height="0.00" fill="#dc2626"><title>grounding false: 0</title></rect>
+<rect x="658.92" y="322.00" width="14.37" height="0.00" fill="#9333ea"><title>forbidden leak: 0</title></rect>
+<text x="729.00" y="358" text-anchor="end" transform="rotate(-32 729.00 358)" font-family="Arial" font-size="11" fill="#374151">ResourceDesignerAgent</text>
+<rect x="693.96" y="322.00" width="14.37" height="0.00" fill="#2563eb"><title>json invalid: 0</title></rect>
+<rect x="711.48" y="322.00" width="14.37" height="0.00" fill="#16a34a"><title>schema invalid: 0</title></rect>
+<rect x="729.00" y="316.72" width="14.37" height="5.28" fill="#dc2626"><title>grounding false: 1</title></rect>
+<rect x="746.52" y="322.00" width="14.37" height="0.00" fill="#9333ea"><title>forbidden leak: 0</title></rect>
+<text x="816.60" y="358" text-anchor="end" transform="rotate(-32 816.60 358)" font-family="Arial" font-size="11" fill="#374151">SafetyAgent</text>
+<rect x="781.56" y="322.00" width="14.37" height="0.00" fill="#2563eb"><title>json invalid: 0</title></rect>
+<rect x="799.08" y="316.72" width="14.37" height="5.28" fill="#16a34a"><title>schema invalid: 1</title></rect>
+<rect x="816.60" y="248.08" width="14.37" height="73.92" fill="#dc2626"><title>grounding false: 14</title></rect>
+<text x="823.78" y="243.08" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">14</text>
+<rect x="834.12" y="316.72" width="14.37" height="5.28" fill="#9333ea"><title>forbidden leak: 1</title></rect>
+<text x="904.20" y="358" text-anchor="end" transform="rotate(-32 904.20 358)" font-family="Arial" font-size="11" fill="#374151">TutorAgent</text>
+<rect x="869.16" y="322.00" width="14.37" height="0.00" fill="#2563eb"><title>json invalid: 0</title></rect>
+<rect x="886.68" y="322.00" width="14.37" height="0.00" fill="#16a34a"><title>schema invalid: 0</title></rect>
+<rect x="904.20" y="322.00" width="14.37" height="0.00" fill="#dc2626"><title>grounding false: 0</title></rect>
+<rect x="921.72" y="322.00" width="14.37" height="0.00" fill="#9333ea"><title>forbidden leak: 0</title></rect>
+<rect x="968" y="46" width="12" height="12" fill="#2563eb"/>
+<text x="986" y="56" font-family="Arial" font-size="12" fill="#374151">json invalid</text>
+<rect x="968" y="70" width="12" height="12" fill="#16a34a"/>
+<text x="986" y="80" font-family="Arial" font-size="12" fill="#374151">schema invalid</text>
+<rect x="968" y="94" width="12" height="12" fill="#dc2626"/>
+<text x="986" y="104" font-family="Arial" font-size="12" fill="#374151">grounding false</text>
+<rect x="968" y="118" width="12" height="12" fill="#9333ea"/>
+<text x="986" y="128" font-family="Arial" font-size="12" fill="#374151">forbidden leak</text>
+</svg>

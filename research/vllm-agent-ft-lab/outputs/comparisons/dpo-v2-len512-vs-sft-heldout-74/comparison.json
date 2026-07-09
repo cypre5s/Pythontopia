@@ -1,0 +1,21 @@
+{
+  "baseline": {
+    "forbidden_leak_rate": 0.0,
+    "grounding_safe_rate": 1.0,
+    "json_valid_rate": 0.986486,
+    "score_mean": 0.999324
+  },
+  "candidate": {
+    "forbidden_leak_rate": 0.0,
+    "grounding_safe_rate": 1.0,
+    "json_valid_rate": 0.986486,
+    "score_mean": 0.998649
+  },
+  "deltas": {
+    "forbidden_leak_rate": 0.0,
+    "grounding_safe_rate": 0.0,
+    "json_valid_rate": 0.0,
+    "score_mean": -0.000675
+  },
+  "story_gate_passed": false
+}

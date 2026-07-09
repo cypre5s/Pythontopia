@@ -1,0 +1,70 @@
+{
+  "eval_loss": [],
+  "train_loss": [
+    {
+      "loss": 0.39021554589271545,
+      "mean_token_accuracy": 0.0,
+      "step": 1
+    },
+    {
+      "loss": 0.3778272271156311,
+      "mean_token_accuracy": 0.0,
+      "step": 2
+    },
+    {
+      "loss": 0.39560621976852417,
+      "mean_token_accuracy": 0.0,
+      "step": 3
+    },
+    {
+      "loss": 0.36682888865470886,
+      "mean_token_accuracy": 0.0,
+      "step": 4
+    },
+    {
+      "loss": 0.3720531761646271,
+      "mean_token_accuracy": 0.0,
+      "step": 5
+    },
+    {
+      "loss": 0.38021644949913025,
+      "mean_token_accuracy": 0.0,
+      "step": 6
+    },
+    {
+      "loss": 0.3762376308441162,
+      "mean_token_accuracy": 0.0,
+      "step": 7
+    },
+    {
+      "loss": 0.3837343752384186,
+      "mean_token_accuracy": 0.0,
+      "step": 8
+    },
+    {
+      "loss": 0.3711102604866028,
+      "mean_token_accuracy": 0.0,
+      "step": 9
+    },
+    {
+      "loss": 0.3731543719768524,
+      "mean_token_accuracy": 0.0,
+      "step": 10
+    },
+    {
+      "loss": 0.36713072657585144,
+      "mean_token_accuracy": 0.0,
+      "step": 11
+    },
+    {
+      "loss": 0.3739962577819824,
+      "mean_token_accuracy": 0.0,
+      "step": 12
+    },
+    {
+      "loss": 0.3867628872394562,
+      "mean_token_accuracy": 0.0,
+      "step": 13
+    }
+  ]
+}

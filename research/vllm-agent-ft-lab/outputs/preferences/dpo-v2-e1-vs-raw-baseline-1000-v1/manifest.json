@@ -1,0 +1,30 @@
+{
+  "agents": {
+    "DebugAgent": 54,
+    "GroundingCriticAgent": 11,
+    "GuideCoachAgent": 100,
+    "IntentRouterAgent": 7,
+    "MindMapAgent": 82,
+    "PathPlannerAgent": 6,
+    "PracticeAgent": 9,
+    "ResourceDesignerAgent": 100,
+    "SafetyAgent": 2
+  },
+  "chosen_policy": "clean_e1_or_guarded_response",
+  "chosen_responses": "research/vllm-agent-ft-lab/runs/e1-protocol-patch-v1-1000-v1-conc4-20260702T103600Z/responses.jsonl",
+  "flag_counts": {
+    "forbidden_leak": 12,
+    "invalid_json": 296,
+    "markdown_fence": 296,
+    "missing_required_evidence_id": 100
+  },
+  "format": "chat_preference_jsonl",
+  "heldout_count": 74,
+  "heldout_ratio": 0.2,
+  "input_policy": "original_case_system_user",
+  "rejected_policy": "audited_raw_baseline_or_raw_adapter_failure",
+  "rejected_responses": "research/vllm-agent-ft-lab/runs/baseline-1000-v1-conc4-20260702T100600Z/responses.jsonl",
+  "seed": 20260707,
+  "total_count": 371,
+  "train_count": 297
+}

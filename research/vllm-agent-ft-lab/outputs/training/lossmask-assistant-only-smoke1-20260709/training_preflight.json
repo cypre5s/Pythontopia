@@ -1,0 +1,103 @@
+{
+  "dependencies": [
+    {
+      "available": true,
+      "name": "torch",
+      "required": true,
+      "version": "2.10.0+cu128"
+    },
+    {
+      "available": true,
+      "name": "transformers",
+      "required": true,
+      "version": "5.13.0.dev0"
+    },
+    {
+      "available": true,
+      "name": "peft",
+      "required": true,
+      "version": "0.19.1"
+    },
+    {
+      "available": true,
+      "name": "trl",
+      "required": true,
+      "version": "0.29.1"
+    },
+    {
+      "available": true,
+      "name": "datasets",
+      "required": true,
+      "version": "4.8.5"
+    },
+    {
+      "available": true,
+      "name": "accelerate",
+      "required": true,
+      "version": "1.14.0"
+    },
+    {
+      "available": true,
+      "name": "bitsandbytes",
+      "required": true,
+      "version": "0.49.2"
+    }
+  ],
+  "dependency_status": {
+    "available": {
+      "accelerate": "1.14.0",
+      "bitsandbytes": "0.49.2",
+      "datasets": "4.8.5",
+      "peft": "0.19.1",
+      "torch": "2.10.0+cu128",
+      "transformers": "5.13.0.dev0",
+      "trl": "0.29.1"
+    },
+    "missing_required": [],
+    "ready": true
+  },
+  "plan": {
+    "heldout_file": "research/vllm-agent-ft-lab/outputs/sft/e1-protocol-patch-v1-1000-v1/heldout.jsonl",
+    "lora": {
+      "alpha": 16,
+      "dropout": 0.05,
+      "r": 8,
+      "target_modules": [
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj",
+        "gate_proj",
+        "up_proj",
+        "down_proj"
+      ]
+    },
+    "loss_masking": {
+      "mode": "assistant_only"
+    },
+    "max_seq_length": 768,
+    "method": "qlora_4bit",
+    "model_path": "/home/cypress/.cache/modelscope/Qwen/Qwen3.5-4B",
+    "notes": [
+      "Designed for an 8GB laptop GPU; use 4-bit QLoRA rather than full fine-tuning.",
+      "Training inputs use original case prompts; E1 protocol text is not included in the user/system prompt.",
+      "Loss masking defaults to assistant_only so gradients focus on the final structured JSON response.",
+      "Held-out evaluation must run through the same scoring/audit pipeline before story claims."
+    ],
+    "output_dir": "research/vllm-agent-ft-lab/outputs/adapters/e1-protocol-patch-v1-1000-v1-qlora-lossmask-smoke1-20260709",
+    "train_file": "research/vllm-agent-ft-lab/outputs/sft/e1-protocol-patch-v1-1000-v1/train.jsonl",
+    "training": {
+      "bf16": true,
+      "eval_strategy": "epoch",
+      "gradient_accumulation_steps": 16,
+      "gradient_checkpointing": true,
+      "learning_rate": 0.0002,
+      "logging_steps": 1,
+      "num_train_epochs": 2,
+      "per_device_eval_batch_size": 1,
+      "per_device_train_batch_size": 1,
+      "save_strategy": "epoch",
+      "warmup_ratio": 0.03
+    }
+  }
+}
