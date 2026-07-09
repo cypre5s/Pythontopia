@@ -2,7 +2,7 @@ from pathlib import Path
 
 from pyt_agent_lab.serving import (
     VllmLoraServeConfig,
-    build_agent_guided_json_extra_body,
+    build_agent_structured_json_extra_body,
     build_vllm_lora_serve_command,
 )
 
@@ -48,25 +48,27 @@ def test_build_vllm_lora_serve_command_keeps_adapter_and_base_names_distinct() -
     assert "adapter-model" not in command[command.index("--served-model-name") + 1]
 
 
-def test_build_vllm_lora_serve_command_can_enable_llguidance() -> None:
+def test_build_vllm_lora_serve_command_does_not_emit_removed_guided_decoding_flag() -> None:
     config = VllmLoraServeConfig(
         vllm_bin=Path("vllm"),
         model_dir=Path("base"),
         adapter_name="adapter-model",
         adapter_dir=Path("adapter"),
         served_model_name="base-model",
-        guided_decoding_backend="llguidance",
     )
 
     command = build_vllm_lora_serve_command(config)
 
-    assert command[command.index("--guided-decoding-backend") + 1] == "llguidance"
+    assert "--guided-decoding-backend" not in command
 
 
-def test_build_agent_guided_json_extra_body_uses_required_schema_fields() -> None:
-    extra_body = build_agent_guided_json_extra_body("TutorAgent")
+def test_build_agent_structured_json_extra_body_uses_openai_json_schema_format() -> None:
+    extra_body = build_agent_structured_json_extra_body("TutorAgent")
 
-    schema = extra_body["guided_json"]
+    response_format = extra_body["response_format"]
+    assert response_format["type"] == "json_schema"
+    assert response_format["json_schema"]["name"] == "TutorAgentResponse"
+    schema = response_format["json_schema"]["schema"]
     assert schema["type"] == "object"
     assert schema["required"] == ["diagnosis", "next_hint", "evidence_ids", "safety_flags"]
     assert schema["properties"]["diagnosis"]["type"] == "string"

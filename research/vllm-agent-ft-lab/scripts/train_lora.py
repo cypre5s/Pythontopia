@@ -11,11 +11,12 @@ from transformers import AutoModelForMultimodalLM, AutoTokenizer, BitsAndBytesCo
 from trl import SFTConfig, SFTTrainer
 
 from pyt_agent_lab.lora_training import (
+    example_to_prompt_completion,
     example_to_training_text,
     load_training_plan,
     require_dependency,
     sft_loss_masking_config_kwargs,
-    should_use_conversational_sft_dataset,
+    should_use_prompt_completion_sft_dataset,
 )
 
 
@@ -55,8 +56,11 @@ def main() -> None:
 
     raw = load_dataset("json", data_files={"train": plan["train_file"], "eval": plan["heldout_file"]})
 
-    if should_use_conversational_sft_dataset(plan):
-        dataset = raw
+    if should_use_prompt_completion_sft_dataset(plan):
+        def format_prompt_completion(example):
+            return example_to_prompt_completion(example, tokenizer)
+
+        dataset = raw.map(format_prompt_completion, remove_columns=raw["train"].column_names)
         dataset_text_field = None
     else:
         def format_batch(example):

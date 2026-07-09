@@ -13,19 +13,32 @@ def example_to_training_text(example: dict[str, Any], tokenizer: Any) -> str:
     return str(tokenizer.apply_chat_template(example["messages"], tokenize=False, add_generation_prompt=False))
 
 
+def example_to_prompt_completion(example: dict[str, Any], tokenizer: Any) -> dict[str, str]:
+    messages = list(example["messages"])
+    if not messages or messages[-1].get("role") != "assistant":
+        raise ValueError("SFT example must end with an assistant message")
+    prompt_messages = messages[:-1]
+    completion = str(messages[-1]["content"])
+    prompt = str(tokenizer.apply_chat_template(prompt_messages, tokenize=False, add_generation_prompt=True))
+    return {
+        "prompt": prompt,
+        "completion": completion,
+    }
+
+
 def sft_loss_masking_config_kwargs(plan: dict[str, Any]) -> dict[str, bool]:
     mode = _loss_masking_mode(plan)
     if mode in {"", "full_text"}:
         return {}
     if mode == "assistant_only":
         return {
-            "assistant_only_loss": True,
-            "completion_only_loss": False,
+            "completion_only_loss": True,
+            "assistant_only_loss": False,
         }
     raise ValueError(f"unsupported SFT loss masking mode: {mode}")
 
 
-def should_use_conversational_sft_dataset(plan: dict[str, Any]) -> bool:
+def should_use_prompt_completion_sft_dataset(plan: dict[str, Any]) -> bool:
     return _loss_masking_mode(plan) == "assistant_only"
 
 

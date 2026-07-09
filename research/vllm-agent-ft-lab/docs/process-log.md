@@ -677,41 +677,62 @@ Current-state checks:
 
 - Local TRL check: `research/vllm-agent-ft-lab/.venv/bin/python` reported `trl 0.29.1`.
 - `trl.DataCollatorForCompletionOnlyLM` is not available in this local TRL, but `SFTConfig` exposes `assistant_only_loss` and `completion_only_loss`.
-- Local vLLM help search found `StructuredOutputsConfig`, but no clear `--guided-decoding-backend` help text in this installed command output. The code now exposes the flag, but live llguidance smoke remains a separate runtime validation.
+- Local vLLM check reported `vllm 0.17.1` and `llguidance 1.3.0`.
+- Local vLLM help search found `StructuredOutputsConfig`, but no `--guided-decoding-backend` CLI flag. Current request API accepts `response_format={"type": "json_schema", ...}` and converts it into `SamplingParams.structured_outputs`.
 - Existing dirty worktree note: `process-log.md` already contained an uncommitted 2026-07-07 DPO section before this P0 continuation.
 
 TDD red checks:
 
 - `tests/test_lora_training.py` first failed because `should_use_conversational_sft_dataset` and `sft_loss_masking_config_kwargs` did not exist.
-- `tests/test_serving.py` first failed because `build_agent_guided_json_extra_body` and the llguidance config field did not exist.
+- `tests/test_serving.py` first failed because structured JSON response-format helper support did not exist.
 - `tests/test_training_plan.py` first failed because `build_training_plan()` did not emit `loss_masking`.
 
 Implementation:
 
 - `lora_training.py`
   - Added `sft_loss_masking_config_kwargs(plan)`.
-  - Added `should_use_conversational_sft_dataset(plan)`.
-  - `loss_masking.mode=assistant_only` maps to `assistant_only_loss=True` and `completion_only_loss=False`.
+  - Added `example_to_prompt_completion(example, tokenizer)`.
+  - Added `should_use_prompt_completion_sft_dataset(plan)`.
+  - `loss_masking.mode=assistant_only` maps to prompt/completion rows with `completion_only_loss=True`, so loss is applied only to the final assistant JSON response without requiring Qwen's chat template to expose assistant token masks.
 - `train_lora.py`
   - Reads the plan loss masking mode.
-  - Uses conversational `messages` records for assistant-only SFT so TRL can apply assistant loss masking.
+  - Uses prompt/completion records for assistant-only loss masking.
   - Keeps the previous full-text `text` mapping for `full_text` / unset mode.
 - `training_plan.py` and `preflight_training.py`
   - Training plans now default to `loss_masking: {mode: assistant_only}`.
   - Preflight CLI accepts `--loss-masking-mode assistant_only|full_text`.
 - `serving.py`
-  - `VllmLoraServeConfig` now accepts `guided_decoding_backend`.
-  - `build_vllm_lora_serve_command()` emits `--guided-decoding-backend llguidance` when configured.
-  - Added `build_agent_guided_json_extra_body(agent)` to convert the local `AGENT_SCHEMA` into an OpenAI-compatible `extra_body={"guided_json": ...}` payload.
+  - Kept the vLLM serve command free of the removed `--guided-decoding-backend` flag.
+  - Added `build_agent_structured_json_extra_body(agent)` to convert the local `AGENT_SCHEMA` into an OpenAI-compatible `response_format={"type": "json_schema", ...}` payload.
+
+Failure evidence and recovery:
+
+- First GPU smoke attempted conversational `assistant_only_loss=True`.
+- Failure path: `outputs/training/lossmask-assistant-only-smoke1-20260709/train_smoke_stdout.log`.
+- Root cause: Qwen chat template did not contain `{% generation %}`, so TRL could not generate assistant masks and raised `RuntimeError: You're using assistant_only_loss=True, but at least one example has no assistant tokens`.
+- Fix: switch the SFT dataset to prompt/completion rows and use TRL `completion_only_loss=True`.
+- Recovery smoke path: `outputs/training/lossmask-completion-only-smoke1-20260709/train_smoke_stdout.log`.
+- Recovery adapter path: `outputs/adapters/e1-protocol-patch-v1-1000-v1-qlora-lossmask-completion-smoke1-20260709/`.
+- Recovery result: 1 training step completed, `training_complete.txt=ok`.
+- Logged metrics: `loss=0.8998`, `grad_norm=1.062`, `mean_token_accuracy=0.7833`, `train_runtime=51.93`, `epoch=0.02051`.
+- GPU post-check: `nvidia-smi` showed 0 MiB used and no running GPU processes after the smoke.
+
+vLLM structured output probe:
+
+- `SamplingParams` no longer exposes direct `guided_json` / `guided_decoding` parameters in this local vLLM.
+- `StructuredOutputsParams(json=...)` is available.
+- `ChatCompletionRequest` accepts `response_format.type=json_schema` and maps it into `SamplingParams.structured_outputs.json`.
+- The local auto backend can fall back to `guidance` when schema support requires it, but a live serving smoke is still required before claiming runtime llguidance enforcement.
 
 Verification so far:
 
-- Target tests: `cd research/vllm-agent-ft-lab && python3 -m pytest tests/test_training_plan.py tests/test_lora_training.py tests/test_serving.py -q` passed with 11 tests.
-- Script compile check: `python3 -m py_compile research/vllm-agent-ft-lab/scripts/train_lora.py research/vllm-agent-ft-lab/scripts/preflight_training.py` passed.
-- Full lab logic check: `cd research/vllm-agent-ft-lab && python3 -m pytest -q` passed with 127 tests.
+- Target tests after the completion-only recovery: `cd research/vllm-agent-ft-lab && python3 -m pytest tests/test_training_plan.py tests/test_lora_training.py tests/test_serving.py -q` passed with 12 tests.
+- Script compile check: `python3 -m py_compile research/vllm-agent-ft-lab/scripts/train_lora.py research/vllm-agent-ft-lab/scripts/preflight_training.py research/vllm-agent-ft-lab/scripts/serve_qwen35_lora.py` passed.
+- Full lab logic check: `cd research/vllm-agent-ft-lab && python3 -m pytest -q` passed with 128 tests.
 - Whitespace check: `git diff --check` passed.
+- Current request-shape validation: local vLLM `ChatCompletionRequest.model_validate()` accepted the TutorAgent `response_format` body and produced `structured_outputs.json` with the expected required fields.
 
 Not run in this step:
 
-- No GPU SFT retraining yet.
-- No live vLLM llguidance serving smoke yet, because the local vLLM help output did not clearly expose the guided-decoding flag and this step is a pure logic/CI gate.
+- No full loss-masked SFT retraining yet; only a 1-step GPU smoke was run.
+- No live vLLM serving smoke yet; the current verified boundary is request-shape compatibility plus local package capability, not end-to-end token-level enforcement.
