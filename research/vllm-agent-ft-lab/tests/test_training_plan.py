@@ -19,6 +19,7 @@ def test_build_training_plan_defaults_to_qlora_for_local_qwen35() -> None:
     assert plan["lora"]["r"] == 8
     assert plan["training"]["per_device_train_batch_size"] == 1
     assert plan["training"]["gradient_accumulation_steps"] >= 8
+    assert plan["loss_masking"] == {"mode": "assistant_only"}
 
 
 def test_dependency_status_marks_required_missing_dependencies() -> None:

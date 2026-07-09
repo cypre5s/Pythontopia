@@ -10,7 +10,13 @@ from peft import LoraConfig
 from transformers import AutoModelForMultimodalLM, AutoTokenizer, BitsAndBytesConfig
 from trl import SFTConfig, SFTTrainer
 
-from pyt_agent_lab.lora_training import example_to_training_text, load_training_plan, require_dependency
+from pyt_agent_lab.lora_training import (
+    example_to_training_text,
+    load_training_plan,
+    require_dependency,
+    sft_loss_masking_config_kwargs,
+    should_use_conversational_sft_dataset,
+)
 
 
 def main() -> None:
@@ -49,10 +55,15 @@ def main() -> None:
 
     raw = load_dataset("json", data_files={"train": plan["train_file"], "eval": plan["heldout_file"]})
 
-    def format_batch(example):
-        return {"text": example_to_training_text(example, tokenizer)}
+    if should_use_conversational_sft_dataset(plan):
+        dataset = raw
+        dataset_text_field = None
+    else:
+        def format_batch(example):
+            return {"text": example_to_training_text(example, tokenizer)}
 
-    dataset = raw.map(format_batch, remove_columns=raw["train"].column_names)
+        dataset = raw.map(format_batch, remove_columns=raw["train"].column_names)
+        dataset_text_field = "text"
 
     training = dict(plan["training"])
     if args.max_steps is not None:
@@ -61,14 +72,17 @@ def main() -> None:
         training["save_strategy"] = "no"
         training["eval_strategy"] = "no"
 
-    sft_config = SFTConfig(
-        output_dir=plan["output_dir"],
-        dataset_text_field="text",
-        max_length=plan["max_seq_length"],
-        packing=False,
-        report_to=[],
+    sft_config_kwargs = {
+        "output_dir": plan["output_dir"],
+        "max_length": plan["max_seq_length"],
+        "packing": False,
+        "report_to": [],
+        **sft_loss_masking_config_kwargs(plan),
         **training,
-    )
+    }
+    if dataset_text_field is not None:
+        sft_config_kwargs["dataset_text_field"] = dataset_text_field
+    sft_config = SFTConfig(**sft_config_kwargs)
     lora = plan["lora"]
     peft_config = LoraConfig(
         r=int(lora["r"]),

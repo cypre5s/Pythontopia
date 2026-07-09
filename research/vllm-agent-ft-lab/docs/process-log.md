@@ -663,3 +663,55 @@ Verification:
 - CI install equivalent: `cd research/vllm-agent-ft-lab && python3 -m pip install -e ".[dev]"` succeeded.
 - Lab CI equivalent: `cd research/vllm-agent-ft-lab && python3 -m pytest -q` passed with 123 tests.
 - Whitespace verification: `git diff --check` passed.
+
+### 2026-07-09 Continuation: P0 Loss Masking and llguidance Engineering Gate
+
+User/reference update:
+
+- The pasted research note recommends two P0 moves before more DPO/ORPO/GRPO work:
+  - SFT loss masking so training loss focuses on the final assistant JSON response.
+  - vLLM llguidance / guided JSON so inference can enforce schema-level JSON structure.
+- The note frames this as moving an already-strong setup toward 100% format reliability rather than fixing a broken baseline.
+
+Current-state checks:
+
+- Local TRL check: `research/vllm-agent-ft-lab/.venv/bin/python` reported `trl 0.29.1`.
+- `trl.DataCollatorForCompletionOnlyLM` is not available in this local TRL, but `SFTConfig` exposes `assistant_only_loss` and `completion_only_loss`.
+- Local vLLM help search found `StructuredOutputsConfig`, but no clear `--guided-decoding-backend` help text in this installed command output. The code now exposes the flag, but live llguidance smoke remains a separate runtime validation.
+- Existing dirty worktree note: `process-log.md` already contained an uncommitted 2026-07-07 DPO section before this P0 continuation.
+
+TDD red checks:
+
+- `tests/test_lora_training.py` first failed because `should_use_conversational_sft_dataset` and `sft_loss_masking_config_kwargs` did not exist.
+- `tests/test_serving.py` first failed because `build_agent_guided_json_extra_body` and the llguidance config field did not exist.
+- `tests/test_training_plan.py` first failed because `build_training_plan()` did not emit `loss_masking`.
+
+Implementation:
+
+- `lora_training.py`
+  - Added `sft_loss_masking_config_kwargs(plan)`.
+  - Added `should_use_conversational_sft_dataset(plan)`.
+  - `loss_masking.mode=assistant_only` maps to `assistant_only_loss=True` and `completion_only_loss=False`.
+- `train_lora.py`
+  - Reads the plan loss masking mode.
+  - Uses conversational `messages` records for assistant-only SFT so TRL can apply assistant loss masking.
+  - Keeps the previous full-text `text` mapping for `full_text` / unset mode.
+- `training_plan.py` and `preflight_training.py`
+  - Training plans now default to `loss_masking: {mode: assistant_only}`.
+  - Preflight CLI accepts `--loss-masking-mode assistant_only|full_text`.
+- `serving.py`
+  - `VllmLoraServeConfig` now accepts `guided_decoding_backend`.
+  - `build_vllm_lora_serve_command()` emits `--guided-decoding-backend llguidance` when configured.
+  - Added `build_agent_guided_json_extra_body(agent)` to convert the local `AGENT_SCHEMA` into an OpenAI-compatible `extra_body={"guided_json": ...}` payload.
+
+Verification so far:
+
+- Target tests: `cd research/vllm-agent-ft-lab && python3 -m pytest tests/test_training_plan.py tests/test_lora_training.py tests/test_serving.py -q` passed with 11 tests.
+- Script compile check: `python3 -m py_compile research/vllm-agent-ft-lab/scripts/train_lora.py research/vllm-agent-ft-lab/scripts/preflight_training.py` passed.
+- Full lab logic check: `cd research/vllm-agent-ft-lab && python3 -m pytest -q` passed with 127 tests.
+- Whitespace check: `git diff --check` passed.
+
+Not run in this step:
+
+- No GPU SFT retraining yet.
+- No live vLLM llguidance serving smoke yet, because the local vLLM help output did not clearly expose the guided-decoding flag and this step is a pure logic/CI gate.

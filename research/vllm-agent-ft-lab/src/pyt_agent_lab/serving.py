@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
+
+from .scoring import AGENT_SCHEMA
 
 
 @dataclass(frozen=True)
@@ -20,10 +23,11 @@ class VllmLoraServeConfig:
     max_lora_rank: int = 8
     api_key: str = "local-dev-token"
     reasoning_parser: str = "qwen3"
+    guided_decoding_backend: str | None = None
 
 
 def build_vllm_lora_serve_command(config: VllmLoraServeConfig) -> list[str]:
-    return [
+    command = [
         str(config.vllm_bin),
         "serve",
         str(config.model_dir),
@@ -59,3 +63,38 @@ def build_vllm_lora_serve_command(config: VllmLoraServeConfig) -> list[str]:
         "--api-key",
         config.api_key,
     ]
+    if config.guided_decoding_backend:
+        command.extend(["--guided-decoding-backend", config.guided_decoding_backend])
+    return command
+
+
+def build_agent_guided_json_extra_body(agent: str) -> dict[str, Any]:
+    schema = AGENT_SCHEMA.get(agent)
+    if schema is None:
+        raise ValueError(f"unknown agent schema: {agent}")
+    required = schema["required"]
+    return {
+        "guided_json": {
+            "type": "object",
+            "properties": {
+                key: {"type": _json_schema_type(expected_type)}
+                for key, expected_type in required.items()
+            },
+            "required": list(required),
+            "additionalProperties": True,
+        }
+    }
+
+
+def _json_schema_type(expected_type: Any) -> str:
+    if expected_type is str:
+        return "string"
+    if expected_type is bool:
+        return "boolean"
+    if expected_type is list:
+        return "array"
+    if expected_type is dict:
+        return "object"
+    if expected_type in {int, float} or expected_type == (int, float):
+        return "number"
+    return "string"

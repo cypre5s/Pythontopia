@@ -14,6 +14,7 @@ def main() -> None:
     parser.add_argument("--adapter-output", required=True)
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--method", default="qlora_4bit")
+    parser.add_argument("--loss-masking-mode", default="assistant_only", choices=["assistant_only", "full_text"])
     args = parser.parse_args()
 
     plan = build_training_plan(
@@ -22,6 +23,7 @@ def main() -> None:
         heldout_file=args.heldout_file,
         output_dir=args.adapter_output,
         method=args.method,
+        loss_masking_mode=args.loss_masking_mode,
     )
     write_training_plan(plan, f"{args.output_dir}/training_plan.json")
     report = write_preflight_report(plan, detect_training_dependencies(args.method), args.output_dir)

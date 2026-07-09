@@ -22,6 +22,7 @@ def build_training_plan(
     heldout_file: str,
     output_dir: str,
     method: str = "qlora_4bit",
+    loss_masking_mode: str = "assistant_only",
 ) -> dict[str, Any]:
     return {
         "method": method,
@@ -49,9 +50,13 @@ def build_training_plan(
             "gradient_checkpointing": True,
             "bf16": True,
         },
+        "loss_masking": {
+            "mode": loss_masking_mode,
+        },
         "notes": [
             "Designed for an 8GB laptop GPU; use 4-bit QLoRA rather than full fine-tuning.",
             "Training inputs use original case prompts; E1 protocol text is not included in the user/system prompt.",
+            "Loss masking defaults to assistant_only so gradients focus on the final structured JSON response.",
             "Held-out evaluation must run through the same scoring/audit pipeline before story claims.",
         ],
     }

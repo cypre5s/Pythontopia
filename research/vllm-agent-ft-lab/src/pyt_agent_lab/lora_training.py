@@ -13,8 +13,31 @@ def example_to_training_text(example: dict[str, Any], tokenizer: Any) -> str:
     return str(tokenizer.apply_chat_template(example["messages"], tokenize=False, add_generation_prompt=False))
 
 
+def sft_loss_masking_config_kwargs(plan: dict[str, Any]) -> dict[str, bool]:
+    mode = _loss_masking_mode(plan)
+    if mode in {"", "full_text"}:
+        return {}
+    if mode == "assistant_only":
+        return {
+            "assistant_only_loss": True,
+            "completion_only_loss": False,
+        }
+    raise ValueError(f"unsupported SFT loss masking mode: {mode}")
+
+
+def should_use_conversational_sft_dataset(plan: dict[str, Any]) -> bool:
+    return _loss_masking_mode(plan) == "assistant_only"
+
+
 def require_dependency(name: str) -> None:
     try:
         __import__(name)
     except ModuleNotFoundError as exc:
         raise RuntimeError(f"missing required training dependency: {name}") from exc
+
+
+def _loss_masking_mode(plan: dict[str, Any]) -> str:
+    config = plan.get("loss_masking") or plan.get("training", {}).get("loss_masking") or {}
+    if isinstance(config, str):
+        return config
+    return str(config.get("mode", "") or "")
