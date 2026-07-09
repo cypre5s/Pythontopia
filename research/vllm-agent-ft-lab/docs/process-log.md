@@ -613,3 +613,53 @@ Artifacts:
 - Raw-vs-guarded chart: `outputs/comparisons/raw-vs-guarded-safety-debug-v1/charts/baseline_vs_candidate.svg`.
 - Repo report: `docs/reports/2026-07-03-vllm-safety-debug-guard-fix.md`.
 - Changelog updated: `docs/project/CHANGELOG.md`.
+
+### 2026-07-09 Continuation: Adapter Golden Set, Schema Scoring, CI Gate
+
+User update:
+
+- 固化已有手动实验数据：从 5000 条 eval pack 抽 50 条 golden set，10 个 Agent 各 5 条。
+- 将 adapter 输出存成 expected baseline，并写 `test_adapter_golden.py`，用 mock/fixture 重放 guard + scoring。
+- 将 `score_case_response()` 从只看 `json.loads` 扩展为 Agent schema 校验。
+- 将 `research/vllm-agent-ft-lab` 加入 GitHub Actions `python-services` matrix，并保持 `pytest -q` 纯逻辑通过。
+
+TDD red checks:
+
+- `test_scoring_schema.py` 初始失败于 `ImportError: cannot import name 'AGENT_SCHEMA'`。
+- `test_adapter_golden.py` 初始失败于缺少 `cases/golden_adapter_50_v1.jsonl`。
+- summary 层新增 schema 断言后，`test_folds_reporting.py` 和 `test_run_analysis.py` 分别失败于缺少 `schema_valid_rate` 与 `schema_invalid_count`。
+
+Implementation:
+
+- `scoring.py`
+  - 增加 `AGENT_SCHEMA`，覆盖 Tutor / Practice / ResourceDesigner / IntentRouter / GuideCoach / Debug / GroundingCritic / Safety / PathPlanner / MindMap 共 10 个 Agent。
+  - `CaseScore` 增加 `schema_valid`、`missing_schema_keys`、`schema_type_errors`。
+  - `score_case_response()` 保留 `json_valid` 作为 JSON object 解析结果，并单独计算 schema 有效性。
+- `guard.py`
+  - `apply_guard()` 在 JSON 有效但 schema 无效时追加 `schema_invalid`。
+- `golden_adapter.py` + `scripts/build_adapter_golden.py`
+  - 固定从 `cases/domain_cases_5000_v1.jsonl` 生成 50 条 golden case。
+  - 通过 deterministic guarded adapter baseline 生成 `outputs/golden/adapter_baseline_50_v1.jsonl`。
+- `fallback.py`
+  - 统一 deterministic fallback 输出到新的 Agent schema，避免 Practice / Guide / Debug 等旧模板绕过 schema。
+- Reporting:
+  - `reporting.py` 与 `run_analysis.py` 增加 schema rate / invalid count，并将 schema 加入可靠性图表序列。
+- CI:
+  - `.github/workflows/ci.yml` 的 `python-services` matrix 改为 `{ path, name }`，新增 `research/vllm-agent-ft-lab`。
+  - 新增 `research/vllm-agent-ft-lab/pyproject.toml`，支持 `pip install -e ".[dev]"`。
+
+Golden fixture data:
+
+- Golden cases: 50 total.
+- Agent coverage: 10 agents x 5 cases.
+- Scenario coverage: `with_evidence=30`, `without_evidence=10`, `safety_sensitive=10`.
+- Expected baseline: 50 records.
+- Baseline score checks: `schema_valid=50/50`, `grounding_safe=50/50`, `forbidden_leak=0/50`.
+
+Verification:
+
+- Target RED/GREEN check: `PYTHONPATH=research/vllm-agent-ft-lab/src python3 -m pytest research/vllm-agent-ft-lab/tests/test_scoring_schema.py research/vllm-agent-ft-lab/tests/test_adapter_golden.py -q` passed with 4 tests.
+- Summary schema check: `PYTHONPATH=research/vllm-agent-ft-lab/src python3 -m pytest research/vllm-agent-ft-lab/tests/test_folds_reporting.py research/vllm-agent-ft-lab/tests/test_run_analysis.py -q` passed with 4 tests.
+- CI install equivalent: `cd research/vllm-agent-ft-lab && python3 -m pip install -e ".[dev]"` succeeded.
+- Lab CI equivalent: `cd research/vllm-agent-ft-lab && python3 -m pytest -q` passed with 123 tests.
+- Whitespace verification: `git diff --check` passed.

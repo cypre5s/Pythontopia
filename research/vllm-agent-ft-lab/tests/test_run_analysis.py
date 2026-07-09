@@ -13,6 +13,7 @@ def test_build_extended_summary_groups_reliability_by_noise_profile_and_agent() 
             "agent": "TutorAgent",
             "score": "1.0",
             "json_valid": "True",
+            "schema_valid": "True",
             "grounding_safe": "False",
             "forbidden_leak": "False",
             "latency_ms": "1000",
@@ -23,6 +24,7 @@ def test_build_extended_summary_groups_reliability_by_noise_profile_and_agent() 
             "agent": "TutorAgent",
             "score": "0.6",
             "json_valid": "False",
+            "schema_valid": "False",
             "grounding_safe": "True",
             "forbidden_leak": "True",
             "latency_ms": "2000",
@@ -33,6 +35,7 @@ def test_build_extended_summary_groups_reliability_by_noise_profile_and_agent() 
             "agent": "SafetyAgent",
             "score": "0.8",
             "json_valid": "True",
+            "schema_valid": "False",
             "grounding_safe": "True",
             "forbidden_leak": "False",
             "latency_ms": "3000",
@@ -43,6 +46,8 @@ def test_build_extended_summary_groups_reliability_by_noise_profile_and_agent() 
 
     assert summary["overall"]["case_count"] == 3
     assert summary["overall"]["json_invalid_count"] == 1
+    assert summary["overall"]["schema_invalid_count"] == 2
+    assert summary["overall"]["schema_valid_rate"] == 0.333333
     assert summary["overall"]["grounding_false_count"] == 1
     assert summary["overall"]["forbidden_leak_count"] == 1
     assert summary["by_noise_profile"]["vague_reference"]["case_count"] == 2
@@ -60,6 +65,7 @@ def test_write_additional_charts_creates_svg_files(tmp_path: Path) -> None:
                 "agent": "TutorAgent",
                 "score": "1.0",
                 "json_valid": "True",
+                "schema_valid": "True",
                 "grounding_safe": "True",
                 "forbidden_leak": "False",
                 "latency_ms": "1000",
@@ -70,6 +76,7 @@ def test_write_additional_charts_creates_svg_files(tmp_path: Path) -> None:
                 "agent": "SafetyAgent",
                 "score": "0.7",
                 "json_valid": "False",
+                "schema_valid": "False",
                 "grounding_safe": "False",
                 "forbidden_leak": "True",
                 "latency_ms": "2500",

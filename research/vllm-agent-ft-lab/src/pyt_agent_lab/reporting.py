@@ -28,13 +28,14 @@ def build_report(summary: dict[str, Any], out_dir: str | Path) -> None:
     labels = list(folds.keys())
     score_values = [folds[label]["score_mean"] for label in labels]
     json_rates = [folds[label].get("json_valid_rate", 0.0) for label in labels]
+    schema_rates = [folds[label].get("schema_valid_rate", 0.0) for label in labels]
     grounding_rates = [folds[label].get("grounding_safe_rate", 0.0) for label in labels]
     _write_bar_svg(charts_dir / "score_by_fold.svg", "Score by fold", labels, [("score", score_values)])
     _write_bar_svg(
         charts_dir / "rates_by_fold.svg",
         "Validation rates by fold",
         labels,
-        [("json", json_rates), ("grounding", grounding_rates)],
+        [("json", json_rates), ("schema", schema_rates), ("grounding", grounding_rates)],
     )
 
 
@@ -45,6 +46,7 @@ def _summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "score_mean": _mean(scores),
         "score_std": _std(scores),
         "json_valid_rate": _rate(rows, "json_valid"),
+        "schema_valid_rate": _rate(rows, "schema_valid"),
         "grounding_safe_rate": _rate(rows, "grounding_safe"),
         "forbidden_leak_rate": _rate(rows, "forbidden_leak"),
     }

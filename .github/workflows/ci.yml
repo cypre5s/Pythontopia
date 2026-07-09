@@ -39,13 +39,18 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        service: [pythontopia-graph, pythontopia-rag]
+        service:
+          - { path: services/pythontopia-graph, name: pythontopia-graph }
+          - { path: services/pythontopia-rag, name: pythontopia-rag }
+          - { path: research/vllm-agent-ft-lab, name: vllm-agent-ft-lab }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install -e ".[dev]"
-        working-directory: services/${{ matrix.service }}
-      - run: pytest -q
-        working-directory: services/${{ matrix.service }}
+      - name: Install ${{ matrix.service.name }}
+        run: pip install -e ".[dev]"
+        working-directory: ${{ matrix.service.path }}
+      - name: Test ${{ matrix.service.name }}
+        run: pytest -q
+        working-directory: ${{ matrix.service.path }}

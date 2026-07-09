@@ -19,16 +19,17 @@ def test_kfold_is_deterministic_and_covers_each_case_once() -> None:
 
 def test_build_report_writes_summary_and_svg_charts(tmp_path: Path) -> None:
     rows = [
-        {"fold": 0, "score": 0.2, "json_valid": False, "grounding_safe": True},
-        {"fold": 0, "score": 0.4, "json_valid": True, "grounding_safe": True},
-        {"fold": 1, "score": 0.8, "json_valid": True, "grounding_safe": False},
-        {"fold": 1, "score": 1.0, "json_valid": True, "grounding_safe": True},
+        {"fold": 0, "score": 0.2, "json_valid": False, "schema_valid": False, "grounding_safe": True},
+        {"fold": 0, "score": 0.4, "json_valid": True, "schema_valid": False, "grounding_safe": True},
+        {"fold": 1, "score": 0.8, "json_valid": True, "schema_valid": True, "grounding_safe": False},
+        {"fold": 1, "score": 1.0, "json_valid": True, "schema_valid": True, "grounding_safe": True},
     ]
 
     summary = aggregate_fold_metrics(rows)
     build_report(summary, tmp_path)
 
     assert summary["overall"]["score_mean"] == 0.6
+    assert summary["overall"]["schema_valid_rate"] == 0.5
     assert summary["folds"]["0"]["score_mean"] == 0.3
     assert (tmp_path / "summary.json").exists()
     assert json.loads((tmp_path / "summary.json").read_text(encoding="utf-8"))["overall"]["case_count"] == 4

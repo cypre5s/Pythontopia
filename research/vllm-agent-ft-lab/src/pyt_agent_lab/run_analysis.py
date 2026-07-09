@@ -19,6 +19,10 @@ def build_extended_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "by_fold": _group_and_summarize(rows, "fold", numeric_keys=True),
         "by_agent": _group_and_summarize(rows, "agent"),
         "by_noise_profile": _group_and_summarize(rows, "_noise_profile"),
+        "by_eval_slice": _group_and_summarize(rows, "eval_slice"),
+        "by_source_kind": _group_and_summarize(rows, "source_kind"),
+        "by_chapter": _group_and_summarize(rows, "chapter", numeric_keys=True),
+        "by_web_input_type": _group_and_summarize(rows, "web_input_type"),
     }
 
 
@@ -35,6 +39,7 @@ def write_additional_charts(summary: dict[str, Any], charts_dir: str | Path) -> 
         labels=list(summary["by_noise_profile"].keys()),
         series=[
             ("json", [item["json_valid_rate"] for item in summary["by_noise_profile"].values()]),
+            ("schema", [item["schema_valid_rate"] for item in summary["by_noise_profile"].values()]),
             ("grounding", [item["grounding_safe_rate"] for item in summary["by_noise_profile"].values()]),
             ("no leak", [1.0 - item["forbidden_leak_rate"] for item in summary["by_noise_profile"].values()]),
         ],
@@ -46,6 +51,7 @@ def write_additional_charts(summary: dict[str, Any], charts_dir: str | Path) -> 
         labels=list(summary["by_agent"].keys()),
         series=[
             ("json invalid", [item["json_invalid_count"] for item in summary["by_agent"].values()]),
+            ("schema invalid", [item["schema_invalid_count"] for item in summary["by_agent"].values()]),
             ("grounding false", [item["grounding_false_count"] for item in summary["by_agent"].values()]),
             ("forbidden leak", [item["forbidden_leak_count"] for item in summary["by_agent"].values()]),
         ],
@@ -61,21 +67,69 @@ def write_additional_charts(summary: dict[str, Any], charts_dir: str | Path) -> 
         ],
         value_format="{:.0f}",
     )
+    _write_optional_rates_chart(
+        target / "rates_by_eval_slice.svg",
+        "Reliability rates by eval slice",
+        summary.get("by_eval_slice", {}),
+    )
+    _write_optional_rates_chart(
+        target / "rates_by_source_kind.svg",
+        "Reliability rates by source kind",
+        summary.get("by_source_kind", {}),
+    )
+    _write_optional_rates_chart(
+        target / "rates_by_chapter.svg",
+        "Reliability rates by chapter",
+        summary.get("by_chapter", {}),
+    )
+    _write_optional_rates_chart(
+        target / "rates_by_web_input_type.svg",
+        "Reliability rates by Web input type",
+        summary.get("by_web_input_type", {}),
+    )
 
 
 def _group_and_summarize(rows: list[dict[str, Any]], key: str, numeric_keys: bool = False) -> dict[str, Any]:
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
         group_key = _noise_profile(row.get("case_id", "")) if key == "_noise_profile" else str(row.get(key, "unknown"))
+        if group_key in {"", "None"}:
+            group_key = "unknown"
         grouped[group_key].append(row)
-    sort_key = (lambda item: int(item[0])) if numeric_keys else (lambda item: item[0])
+    sort_key = (lambda item: _numeric_group_key(item[0])) if numeric_keys else (lambda item: item[0])
     return {group: _summarize(items) for group, items in sorted(grouped.items(), key=sort_key)}
+
+
+def _numeric_group_key(value: str) -> tuple[int, str]:
+    try:
+        return (0, f"{int(value):06d}")
+    except ValueError:
+        return (1, value)
+
+
+def _write_optional_rates_chart(path: Path, title: str, grouped: dict[str, Any]) -> None:
+    filtered = {key: value for key, value in grouped.items() if key != "unknown"}
+    if not filtered:
+        return
+    _write_grouped_bar_svg(
+        path,
+        title=title,
+        labels=list(filtered.keys()),
+        series=[
+            ("json", [item["json_valid_rate"] for item in filtered.values()]),
+            ("schema", [item["schema_valid_rate"] for item in filtered.values()]),
+            ("grounding", [item["grounding_safe_rate"] for item in filtered.values()]),
+            ("no leak", [1.0 - item["forbidden_leak_rate"] for item in filtered.values()]),
+        ],
+        value_format="{:.2f}",
+    )
 
 
 def _summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
     scores = [_float(row.get("score")) for row in rows]
     latency = [_float(row.get("latency_ms")) for row in rows if row.get("latency_ms") not in {None, ""}]
     json_invalid_count = sum(not _truthy(row.get("json_valid")) for row in rows)
+    schema_invalid_count = sum(not _truthy(row.get("schema_valid")) for row in rows)
     grounding_false_count = sum(not _truthy(row.get("grounding_safe")) for row in rows)
     forbidden_leak_count = sum(_truthy(row.get("forbidden_leak")) for row in rows)
     count = len(rows)
@@ -85,6 +139,8 @@ def _summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "score_std": _round(_std(scores)),
         "json_valid_rate": _round((count - json_invalid_count) / count) if count else 0.0,
         "json_invalid_count": json_invalid_count,
+        "schema_valid_rate": _round((count - schema_invalid_count) / count) if count else 0.0,
+        "schema_invalid_count": schema_invalid_count,
         "grounding_safe_rate": _round((count - grounding_false_count) / count) if count else 0.0,
         "grounding_false_count": grounding_false_count,
         "forbidden_leak_rate": _round(forbidden_leak_count / count) if count else 0.0,
