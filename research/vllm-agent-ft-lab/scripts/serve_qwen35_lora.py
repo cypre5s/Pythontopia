@@ -33,6 +33,7 @@ def main() -> None:
         max_num_seqs=int(os.environ.get("MAX_NUM_SEQS", "1")),
         cpu_offload_gb=int(os.environ.get("CPU_OFFLOAD_GB", "0")),
         api_key=os.environ.get("VLLM_API_KEY", "local-dev-token"),
+        reasoning_parser=os.environ.get("REASONING_PARSER") or None,
     )
     command = build_vllm_lora_serve_command(config)
     if args.dry_run_json:

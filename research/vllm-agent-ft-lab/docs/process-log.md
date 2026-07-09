@@ -704,6 +704,7 @@ Implementation:
 - `serving.py`
   - Kept the vLLM serve command free of the removed `--guided-decoding-backend` flag.
   - Added `build_agent_structured_json_extra_body(agent)` to convert the local `AGENT_SCHEMA` into an OpenAI-compatible `response_format={"type": "json_schema", ...}` payload.
+  - Made `--reasoning-parser` opt-in through `REASONING_PARSER`; default serving no longer enables Qwen reasoning parsing because it can move JSON text into `message.reasoning` and leave `message.content=null`.
 
 Failure evidence and recovery:
 
@@ -722,17 +723,42 @@ vLLM structured output probe:
 - `SamplingParams` no longer exposes direct `guided_json` / `guided_decoding` parameters in this local vLLM.
 - `StructuredOutputsParams(json=...)` is available.
 - `ChatCompletionRequest` accepts `response_format.type=json_schema` and maps it into `SamplingParams.structured_outputs.json`.
-- The local auto backend can fall back to `guidance` when schema support requires it, but a live serving smoke is still required before claiming runtime llguidance enforcement.
+- The local auto backend can fall back to `guidance` when schema support requires it. The live smoke below verifies runtime structured-output enforcement through vLLM's current OpenAI `response_format=json_schema` path, but does not prove the selected backend was specifically llguidance.
+
+Full loss-masked SFT retrain:
+
+- Full run path: `outputs/training/lossmask-completion-only-full-20260709/`.
+- Adapter path: `outputs/adapters/e1-protocol-patch-v1-1000-v1-qlora-lossmask-completion-full-20260709/`.
+- Command: `CUDA_VISIBLE_DEVICES=0 PYTHONPATH=research/vllm-agent-ft-lab/src research/vllm-agent-ft-lab/.venv/bin/python research/vllm-agent-ft-lab/scripts/train_lora.py --plan research/vllm-agent-ft-lab/outputs/training/lossmask-completion-only-full-20260709/training_plan.json`.
+- Dataset: 780 train rows, 195 heldout rows.
+- Plan: `loss_masking.mode=assistant_only`, implemented as prompt/completion rows with `completion_only_loss=True`.
+- Result: 98 / 98 training steps completed, `training_complete.txt=ok`.
+- Runtime: `train_runtime=5256s`, `train_loss=0.2952`, `epoch=2`.
+- Final train step: `loss=0.1953`, `mean_token_accuracy=0.9357`.
+- Epoch 1 heldout eval: `eval_loss=0.2808`, `eval_mean_token_accuracy=0.9053`.
+- Epoch 2 heldout eval: `eval_loss=0.2619`, `eval_mean_token_accuracy=0.9103`.
+- Report artifacts: `outputs/training/lossmask-completion-only-full-20260709/final-report/training_curve.json` and `outputs/training/lossmask-completion-only-full-20260709/final-report/charts/training_loss.svg`.
+- Post-run GPU check: `nvidia-smi` showed no running GPU processes after training.
+
+Live vLLM structured-output smoke:
+
+- First serve attempt bound to `127.0.0.1:18094`; vLLM logged `Application startup complete`, but local clients could not connect because WSL routed `127.0.0.1` through `loopback0` via table 127. Evidence: `ip route get 127.0.0.1` returned `127.0.0.1 via 169.254.73.152 dev loopback0 table 127`.
+- Recovery serve bound to `0.0.0.0:18096`; `/v1/models` succeeded through `10.255.255.254:18096` and listed both `pythontopia-qwen35-awq-base` and `pythontopia-qwen35-e1-lossmask-full`.
+- With `--reasoning-parser qwen3`, a minimal LoRA chat request returned JSON fragments in `message.reasoning` with `message.content=null`. This is incompatible with adapter scoring and structured JSON consumers.
+- After disabling reasoning parser by default, the live TutorAgent structured request succeeded:
+  - Request: `outputs/training/lossmask-completion-only-full-20260709/structured_smoke_request.json`.
+  - Response: `outputs/training/lossmask-completion-only-full-20260709/structured_smoke_response.json`.
+  - Score: `outputs/training/lossmask-completion-only-full-20260709/structured_smoke_score.json`.
+  - Result: `json_valid=true`, `schema_valid=true`, `grounding_safe=true`, `forbidden_leak=false`, `score=1.0`.
+  - Finish reason: `stop`; `message.content` was non-null JSON containing `diagnosis`, `next_hint`, `evidence_ids`, and `safety_flags`.
+- vLLM log confirmed `structured_outputs_config=StructuredOutputsConfig(backend='auto', ..., reasoning_parser='', ...)` and a successful `POST /v1/chat/completions HTTP/1.1 200 OK`.
+- Post-smoke GPU check: vLLM was stopped and `nvidia-smi` showed no running GPU processes.
 
 Verification so far:
 
 - Target tests after the completion-only recovery: `cd research/vllm-agent-ft-lab && python3 -m pytest tests/test_training_plan.py tests/test_lora_training.py tests/test_serving.py -q` passed with 12 tests.
 - Script compile check: `python3 -m py_compile research/vllm-agent-ft-lab/scripts/train_lora.py research/vllm-agent-ft-lab/scripts/preflight_training.py research/vllm-agent-ft-lab/scripts/serve_qwen35_lora.py` passed.
-- Full lab logic check: `cd research/vllm-agent-ft-lab && python3 -m pytest -q` passed with 128 tests.
+- Target tests after the reasoning-parser serving fix: `cd research/vllm-agent-ft-lab && python3 -m pytest tests/test_training_plan.py tests/test_lora_training.py tests/test_serving.py -q` passed with 14 tests.
+- Full lab logic check after the serving fix: `cd research/vllm-agent-ft-lab && python3 -m pytest -q` passed with 130 tests.
 - Whitespace check: `git diff --check` passed.
 - Current request-shape validation: local vLLM `ChatCompletionRequest.model_validate()` accepted the TutorAgent `response_format` body and produced `structured_outputs.json` with the expected required fields.
-
-Not run in this step:
-
-- No full loss-masked SFT retraining yet; only a 1-step GPU smoke was run.
-- No live vLLM serving smoke yet; the current verified boundary is request-shape compatibility plus local package capability, not end-to-end token-level enforcement.

@@ -62,6 +62,35 @@ def test_build_vllm_lora_serve_command_does_not_emit_removed_guided_decoding_fla
     assert "--guided-decoding-backend" not in command
 
 
+def test_build_vllm_lora_serve_command_does_not_emit_reasoning_parser_by_default() -> None:
+    config = VllmLoraServeConfig(
+        vllm_bin=Path("vllm"),
+        model_dir=Path("base"),
+        adapter_name="adapter-model",
+        adapter_dir=Path("adapter"),
+        served_model_name="base-model",
+    )
+
+    command = build_vllm_lora_serve_command(config)
+
+    assert "--reasoning-parser" not in command
+
+
+def test_build_vllm_lora_serve_command_can_emit_reasoning_parser_explicitly() -> None:
+    config = VllmLoraServeConfig(
+        vllm_bin=Path("vllm"),
+        model_dir=Path("base"),
+        adapter_name="adapter-model",
+        adapter_dir=Path("adapter"),
+        served_model_name="base-model",
+        reasoning_parser="qwen3",
+    )
+
+    command = build_vllm_lora_serve_command(config)
+
+    assert command[command.index("--reasoning-parser") + 1] == "qwen3"
+
+
 def test_build_agent_structured_json_extra_body_uses_openai_json_schema_format() -> None:
     extra_body = build_agent_structured_json_extra_body("TutorAgent")
 

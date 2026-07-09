@@ -22,7 +22,7 @@ class VllmLoraServeConfig:
     cpu_offload_gb: int = 0
     max_lora_rank: int = 8
     api_key: str = "local-dev-token"
-    reasoning_parser: str = "qwen3"
+    reasoning_parser: str | None = None
 
 
 def build_vllm_lora_serve_command(config: VllmLoraServeConfig) -> list[str]:
@@ -48,8 +48,6 @@ def build_vllm_lora_serve_command(config: VllmLoraServeConfig) -> list[str]:
         "--max-num-seqs",
         str(config.max_num_seqs),
         "--enforce-eager",
-        "--reasoning-parser",
-        config.reasoning_parser,
         "--enable-lora",
         "--lora-modules",
         f"{config.adapter_name}={config.adapter_dir}",
@@ -62,6 +60,8 @@ def build_vllm_lora_serve_command(config: VllmLoraServeConfig) -> list[str]:
         "--api-key",
         config.api_key,
     ]
+    if config.reasoning_parser:
+        command.extend(["--reasoning-parser", config.reasoning_parser])
     return command
 
 
