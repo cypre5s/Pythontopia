@@ -400,7 +400,7 @@ describe('WorkshopPage R-13 改造', () => {
     expect(wrapper.find('[data-testid="workshop-drawer-history"]').exists()).toBe(true);
   });
 
-  it('shows AI runtime gates inside the call-process drawer', async () => {
+  it('shows only student-facing progress and does not fetch internal runtime diagnostics', async () => {
     await router.push('/workshop');
     const wrapper = mountPage();
     await flushPromises();
@@ -408,31 +408,14 @@ describe('WorkshopPage R-13 改造', () => {
     await wrapper.get('[data-testid="workshop-open-calls"]').trigger('click');
     await flushPromises();
 
-    expect(apiMocks.fetchAiRuntimeSummary).toHaveBeenCalledTimes(1);
-    expect(apiMocks.fetchAiRuntimeOperations).toHaveBeenCalledTimes(1);
-    expect(wrapper.find('[data-testid="runtime-summary"]').exists()).toBe(true);
-    expect(wrapper.find('[data-testid="runtime-operations"]').exists()).toBe(true);
-    expect(wrapper.text()).toContain('学习证据图完整度');
-    expect(wrapper.text()).toContain('学生学习闭环');
-    expect(wrapper.text()).toContain('策略灰度审核');
-    expect(wrapper.text()).toContain('外部内容，非课件');
-    expect(apiMocks.fetchWeeklyReport).toHaveBeenCalledTimes(1);
-    expect(wrapper.text()).toContain('Learner Twin');
-  });
-
-  it('prefills the workshop composer from a Learner Twin insight', async () => {
-    await router.push('/workshop');
-    const wrapper = mountPage();
-    await flushPromises();
-
-    await wrapper.get('[data-testid="workshop-open-calls"]').trigger('click');
-    await flushPromises();
-    await wrapper.get('[data-testid="twin-insight-prompt-1"]').trigger('click');
-    await flushPromises();
-
-    const input = wrapper.get('[data-testid="composer-input"]').element as HTMLTextAreaElement;
-    expect(input.value).toContain('加强错误处理');
-    expect(input.value).toContain('Learner Twin');
+    expect(wrapper.find('[data-testid="workshop-process"]').exists()).toBe(true);
+    expect(wrapper.text()).toContain('还没有处理记录');
+    expect(wrapper.text()).toContain('课件命中情况');
+    expect(apiMocks.fetchAiRuntimeSummary).not.toHaveBeenCalled();
+    expect(apiMocks.fetchAiRuntimeOperations).not.toHaveBeenCalled();
+    expect(apiMocks.fetchWeeklyReport).not.toHaveBeenCalled();
+    expect(wrapper.text()).not.toContain('MCP 工具');
+    expect(wrapper.text()).not.toContain('策略灰度审核');
   });
 
   it('places history on the leading side and study or calls on the trailing side', async () => {
@@ -484,8 +467,8 @@ describe('WorkshopPage R-13 改造', () => {
 
     expect(apiMocks.listWorkshopChatHistoryTurns).toHaveBeenCalledTimes(1);
     expect(wrapper.text()).toContain('我想学循环，从哪开始');
-    expect(wrapper.text()).toContain('引用充分');
-    expect(wrapper.text()).toContain('PLAN');
+    expect(wrapper.text()).not.toContain('引用充分');
+    expect(wrapper.text()).not.toContain('PLAN');
   });
 
   it('remembers saved history turns even when the history drawer is closed', async () => {

@@ -77,6 +77,18 @@ export interface BossProblemRequest {
   profileSignals?: ProfileSignalsDto;
 }
 
+export type BossPrefetchStatus = 'IDLE' | 'PENDING' | 'READY' | 'FAILED';
+
+/** Server-persisted preload state. READY is emitted only after a reviewed problem is stored. */
+export interface BossPrefetchStatusDto {
+  jobId: number | null;
+  status: BossPrefetchStatus;
+  attempts: number;
+  errorMessage: string | null;
+  retryable: boolean;
+  updatedAt: string | null;
+}
+
 export interface BossAttemptRequest {
   problemId: string;
   chapter: number;

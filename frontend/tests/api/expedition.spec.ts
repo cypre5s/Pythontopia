@@ -47,7 +47,13 @@ beforeEach(() => {
 
 describe('expedition.ts · frontier selector', () => {
   it('requests graph-backed frontier picks through the boss proxy', async () => {
-    vi.mocked(http.post).mockResolvedValueOnce({ data: { picks: [] } });
+    vi.mocked(http.post).mockResolvedValueOnce({
+      data: {
+        picks: [
+          { kcCode: 'PY43-KC-001', chapter: 1, difficulty: 2, reason: '最近发展区' },
+        ],
+      },
+    });
 
     await requestFrontierPicks({ focusChapter: 1, recentKcs: ['PY43-KC-001'], count: 4 });
 
@@ -56,6 +62,11 @@ describe('expedition.ts · frontier selector', () => {
       { recentKcs: ['PY43-KC-001'], exclude: [], count: 4, focusChapter: 1 },
       { suppressNetworkToast: true, timeout: 3000 },
     );
+  });
+
+  it('rejects an empty result instead of fabricating a local frontier', async () => {
+    vi.mocked(http.post).mockResolvedValueOnce({ data: { picks: [] } });
+    await expect(requestFrontierPicks({ count: 4 })).rejects.toThrow('未返回画像学习前沿');
   });
 });
 

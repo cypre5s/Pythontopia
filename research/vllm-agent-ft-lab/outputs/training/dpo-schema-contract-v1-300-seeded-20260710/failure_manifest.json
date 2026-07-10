@@ -1,0 +1,11 @@
+{
+  "status": "failed_not_candidate",
+  "stage": "configuration_audit_before_step_1",
+  "stopped_after_step": 0,
+  "reason": "explicit seed 20260710 would change both the preference dataset and trainer randomness relative to the champion, violating the one-variable rule",
+  "champion_actual_trainer_seed": 42,
+  "attempted_trainer_seed": 20260710,
+  "failure_artifact": "outputs/adapters/dpo-schema-contract-v1-300-seeded-20260710/failed_runs/20260710T085634Z/failure.json",
+  "replacement_plan": "outputs/training/dpo-schema-contract-v1-300-seed42-20260710/training_plan.json",
+  "promotion_eligible": false
+}

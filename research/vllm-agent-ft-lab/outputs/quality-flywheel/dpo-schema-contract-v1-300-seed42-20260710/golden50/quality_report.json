@@ -1,0 +1,605 @@
+{
+  "auxiliary_metric": "score_mean",
+  "claims_policy": "Smoke, small heldout, and guard/fallback-repaired results are not evidence that a model reached 100%.",
+  "failure_matrices": {
+    "candidate": {
+      "agent": {
+        "DebugAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "GroundingCriticAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "GuideCoachAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "schema_invalid": 5,
+            "schema_type_error:evidence_needed": 5,
+            "schema_type_error:learner_state_update": 5
+          },
+          "failure_count": 5
+        },
+        "IntentRouterAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "MindMapAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "PathPlannerAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "PracticeAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "schema_invalid": 5,
+            "schema_type_error:blocked_content": 5
+          },
+          "failure_count": 5
+        },
+        "ResourceDesignerAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "SafetyAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "TutorAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        }
+      },
+      "beginner_noise": {
+        "clean": {
+          "case_count": 50,
+          "contract_pass_rate": 0.8,
+          "failure_categories": {
+            "schema_invalid": 10,
+            "schema_type_error:blocked_content": 5,
+            "schema_type_error:evidence_needed": 5,
+            "schema_type_error:learner_state_update": 5
+          },
+          "failure_count": 10
+        }
+      },
+      "chapter": {
+        "1": {
+          "case_count": 8,
+          "contract_pass_rate": 0.75,
+          "failure_categories": {
+            "schema_invalid": 2,
+            "schema_type_error:blocked_content": 1,
+            "schema_type_error:evidence_needed": 1,
+            "schema_type_error:learner_state_update": 1
+          },
+          "failure_count": 2
+        },
+        "2": {
+          "case_count": 6,
+          "contract_pass_rate": 0.666667,
+          "failure_categories": {
+            "schema_invalid": 2,
+            "schema_type_error:blocked_content": 1,
+            "schema_type_error:evidence_needed": 1,
+            "schema_type_error:learner_state_update": 1
+          },
+          "failure_count": 2
+        },
+        "3": {
+          "case_count": 7,
+          "contract_pass_rate": 0.857143,
+          "failure_categories": {
+            "schema_invalid": 1,
+            "schema_type_error:evidence_needed": 1,
+            "schema_type_error:learner_state_update": 1
+          },
+          "failure_count": 1
+        },
+        "4": {
+          "case_count": 7,
+          "contract_pass_rate": 0.857143,
+          "failure_categories": {
+            "schema_invalid": 1,
+            "schema_type_error:blocked_content": 1
+          },
+          "failure_count": 1
+        },
+        "5": {
+          "case_count": 6,
+          "contract_pass_rate": 0.833333,
+          "failure_categories": {
+            "schema_invalid": 1,
+            "schema_type_error:evidence_needed": 1,
+            "schema_type_error:learner_state_update": 1
+          },
+          "failure_count": 1
+        },
+        "6": {
+          "case_count": 8,
+          "contract_pass_rate": 0.75,
+          "failure_categories": {
+            "schema_invalid": 2,
+            "schema_type_error:blocked_content": 1,
+            "schema_type_error:evidence_needed": 1,
+            "schema_type_error:learner_state_update": 1
+          },
+          "failure_count": 2
+        },
+        "7": {
+          "case_count": 8,
+          "contract_pass_rate": 0.875,
+          "failure_categories": {
+            "schema_invalid": 1,
+            "schema_type_error:blocked_content": 1
+          },
+          "failure_count": 1
+        }
+      },
+      "evidence": {
+        "none": {
+          "case_count": 15,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "required": {
+          "case_count": 35,
+          "contract_pass_rate": 0.714286,
+          "failure_categories": {
+            "schema_invalid": 10,
+            "schema_type_error:blocked_content": 5,
+            "schema_type_error:evidence_needed": 5,
+            "schema_type_error:learner_state_update": 5
+          },
+          "failure_count": 10
+        }
+      },
+      "failure_category": {
+        "schema_invalid": 10,
+        "schema_type_error:blocked_content": 5,
+        "schema_type_error:evidence_needed": 5,
+        "schema_type_error:learner_state_update": 5
+      },
+      "missing_schema_field": {},
+      "safety": {
+        "sensitive": {
+          "case_count": 10,
+          "contract_pass_rate": 0.5,
+          "failure_categories": {
+            "schema_invalid": 5,
+            "schema_type_error:blocked_content": 5
+          },
+          "failure_count": 5
+        },
+        "standard": {
+          "case_count": 40,
+          "contract_pass_rate": 0.875,
+          "failure_categories": {
+            "schema_invalid": 5,
+            "schema_type_error:evidence_needed": 5,
+            "schema_type_error:learner_state_update": 5
+          },
+          "failure_count": 5
+        }
+      },
+      "schema_type_error": {
+        "blocked_content": 5,
+        "evidence_needed": 5,
+        "learner_state_update": 5
+      },
+      "web_input": {
+        "non_web": {
+          "case_count": 50,
+          "contract_pass_rate": 0.8,
+          "failure_categories": {
+            "schema_invalid": 10,
+            "schema_type_error:blocked_content": 5,
+            "schema_type_error:evidence_needed": 5,
+            "schema_type_error:learner_state_update": 5
+          },
+          "failure_count": 10
+        }
+      }
+    },
+    "champion": {
+      "agent": {
+        "DebugAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "schema_invalid": 5,
+            "schema_type_error:safety_flags": 5
+          },
+          "failure_count": 5
+        },
+        "GroundingCriticAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "GuideCoachAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "schema_invalid": 5,
+            "schema_type_error:evidence_needed": 5,
+            "schema_type_error:learner_state_update": 5
+          },
+          "failure_count": 5
+        },
+        "IntentRouterAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "MindMapAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "PathPlannerAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "PracticeAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "schema_invalid": 5,
+            "schema_type_error:blocked_content": 5
+          },
+          "failure_count": 5
+        },
+        "ResourceDesignerAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "SafetyAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 0.8,
+          "failure_categories": {
+            "grounding_unsafe": 1
+          },
+          "failure_count": 1
+        },
+        "TutorAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        }
+      },
+      "beginner_noise": {
+        "clean": {
+          "case_count": 50,
+          "contract_pass_rate": 0.68,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "schema_invalid": 15,
+            "schema_type_error:blocked_content": 5,
+            "schema_type_error:evidence_needed": 5,
+            "schema_type_error:learner_state_update": 5,
+            "schema_type_error:safety_flags": 5
+          },
+          "failure_count": 16
+        }
+      },
+      "chapter": {
+        "1": {
+          "case_count": 8,
+          "contract_pass_rate": 0.75,
+          "failure_categories": {
+            "schema_invalid": 2,
+            "schema_type_error:blocked_content": 1,
+            "schema_type_error:evidence_needed": 1,
+            "schema_type_error:learner_state_update": 1
+          },
+          "failure_count": 2
+        },
+        "2": {
+          "case_count": 6,
+          "contract_pass_rate": 0.5,
+          "failure_categories": {
+            "schema_invalid": 3,
+            "schema_type_error:blocked_content": 1,
+            "schema_type_error:evidence_needed": 1,
+            "schema_type_error:learner_state_update": 1,
+            "schema_type_error:safety_flags": 1
+          },
+          "failure_count": 3
+        },
+        "3": {
+          "case_count": 7,
+          "contract_pass_rate": 0.571429,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "schema_invalid": 2,
+            "schema_type_error:evidence_needed": 1,
+            "schema_type_error:learner_state_update": 1,
+            "schema_type_error:safety_flags": 1
+          },
+          "failure_count": 3
+        },
+        "4": {
+          "case_count": 7,
+          "contract_pass_rate": 0.714286,
+          "failure_categories": {
+            "schema_invalid": 2,
+            "schema_type_error:blocked_content": 1,
+            "schema_type_error:safety_flags": 1
+          },
+          "failure_count": 2
+        },
+        "5": {
+          "case_count": 6,
+          "contract_pass_rate": 0.833333,
+          "failure_categories": {
+            "schema_invalid": 1,
+            "schema_type_error:evidence_needed": 1,
+            "schema_type_error:learner_state_update": 1
+          },
+          "failure_count": 1
+        },
+        "6": {
+          "case_count": 8,
+          "contract_pass_rate": 0.625,
+          "failure_categories": {
+            "schema_invalid": 3,
+            "schema_type_error:blocked_content": 1,
+            "schema_type_error:evidence_needed": 1,
+            "schema_type_error:learner_state_update": 1,
+            "schema_type_error:safety_flags": 1
+          },
+          "failure_count": 3
+        },
+        "7": {
+          "case_count": 8,
+          "contract_pass_rate": 0.75,
+          "failure_categories": {
+            "schema_invalid": 2,
+            "schema_type_error:blocked_content": 1,
+            "schema_type_error:safety_flags": 1
+          },
+          "failure_count": 2
+        }
+      },
+      "evidence": {
+        "none": {
+          "case_count": 15,
+          "contract_pass_rate": 0.933333,
+          "failure_categories": {
+            "grounding_unsafe": 1
+          },
+          "failure_count": 1
+        },
+        "required": {
+          "case_count": 35,
+          "contract_pass_rate": 0.571429,
+          "failure_categories": {
+            "schema_invalid": 15,
+            "schema_type_error:blocked_content": 5,
+            "schema_type_error:evidence_needed": 5,
+            "schema_type_error:learner_state_update": 5,
+            "schema_type_error:safety_flags": 5
+          },
+          "failure_count": 15
+        }
+      },
+      "failure_category": {
+        "grounding_unsafe": 1,
+        "schema_invalid": 15,
+        "schema_type_error:blocked_content": 5,
+        "schema_type_error:evidence_needed": 5,
+        "schema_type_error:learner_state_update": 5,
+        "schema_type_error:safety_flags": 5
+      },
+      "missing_schema_field": {},
+      "safety": {
+        "sensitive": {
+          "case_count": 10,
+          "contract_pass_rate": 0.4,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "schema_invalid": 5,
+            "schema_type_error:blocked_content": 5
+          },
+          "failure_count": 6
+        },
+        "standard": {
+          "case_count": 40,
+          "contract_pass_rate": 0.75,
+          "failure_categories": {
+            "schema_invalid": 10,
+            "schema_type_error:evidence_needed": 5,
+            "schema_type_error:learner_state_update": 5,
+            "schema_type_error:safety_flags": 5
+          },
+          "failure_count": 10
+        }
+      },
+      "schema_type_error": {
+        "blocked_content": 5,
+        "evidence_needed": 5,
+        "learner_state_update": 5,
+        "safety_flags": 5
+      },
+      "web_input": {
+        "non_web": {
+          "case_count": 50,
+          "contract_pass_rate": 0.68,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "schema_invalid": 15,
+            "schema_type_error:blocked_content": 5,
+            "schema_type_error:evidence_needed": 5,
+            "schema_type_error:learner_state_update": 5,
+            "schema_type_error:safety_flags": 5
+          },
+          "failure_count": 16
+        }
+      }
+    }
+  },
+  "models": {
+    "candidate": {
+      "case_count": 50,
+      "critical_slices": {
+        "agent:GuideCoachAgent": 0.0,
+        "agent:PracticeAgent": 0.0,
+        "agent:SafetyAgent": 1.0,
+        "evidence_required": 0.714286,
+        "safety_sensitive": 0.5
+      },
+      "fallback_count": 0,
+      "fallback_rate": 0.0,
+      "final": {
+        "case_count": 50,
+        "contract_pass_rate": 1.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "schema_valid_rate": 1.0,
+        "score_mean": 1.0
+      },
+      "guard": {
+        "case_count": 50,
+        "contract_pass_rate": 1.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "schema_valid_rate": 1.0,
+        "score_mean": 1.0
+      },
+      "guard_repair_count": 10,
+      "guard_repair_rate": 0.2,
+      "guard_repair_rate_among_raw_failures": 1.0,
+      "layer_semantics": {
+        "final": "guard result or deterministic fallback replay; final 100% must not be attributed to the raw model",
+        "guard": "offline deterministic contract-repair replay; not a claim about historical production guard execution",
+        "raw": "observed model response"
+      },
+      "primary_metric": "contract_pass_rate",
+      "raw": {
+        "case_count": 50,
+        "contract_pass_rate": 0.8,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "schema_valid_rate": 0.8,
+        "score_mean": 1.0
+      },
+      "safety_sensitive_forbidden_leak_rate": 0.0
+    },
+    "champion": {
+      "case_count": 50,
+      "critical_slices": {
+        "agent:GuideCoachAgent": 0.0,
+        "agent:PracticeAgent": 0.0,
+        "agent:SafetyAgent": 0.8,
+        "evidence_required": 0.571429,
+        "safety_sensitive": 0.4
+      },
+      "fallback_count": 0,
+      "fallback_rate": 0.0,
+      "final": {
+        "case_count": 50,
+        "contract_pass_rate": 1.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "schema_valid_rate": 1.0,
+        "score_mean": 1.0
+      },
+      "guard": {
+        "case_count": 50,
+        "contract_pass_rate": 1.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "schema_valid_rate": 1.0,
+        "score_mean": 1.0
+      },
+      "guard_repair_count": 16,
+      "guard_repair_rate": 0.32,
+      "guard_repair_rate_among_raw_failures": 1.0,
+      "layer_semantics": {
+        "final": "guard result or deterministic fallback replay; final 100% must not be attributed to the raw model",
+        "guard": "offline deterministic contract-repair replay; not a claim about historical production guard execution",
+        "raw": "observed model response"
+      },
+      "primary_metric": "contract_pass_rate",
+      "raw": {
+        "case_count": 50,
+        "contract_pass_rate": 0.68,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 0.98,
+        "json_valid_rate": 1.0,
+        "schema_valid_rate": 0.7,
+        "score_mean": 0.997333
+      },
+      "safety_sensitive_forbidden_leak_rate": 0.0
+    }
+  },
+  "paired_comparison": {
+    "case_count": 50,
+    "models": [
+      "champion",
+      "candidate"
+    ],
+    "pairwise": {
+      "champion_vs_candidate": {
+        "contract_ties": 44,
+        "full_ties": 44,
+        "left": "champion",
+        "left_wins": 0,
+        "ordering": "contract_pass_then_auxiliary_score",
+        "right": "candidate",
+        "right_wins": 6
+      }
+    }
+  },
+  "primary_metric": "contract_pass_rate",
+  "protocol": {
+    "cases_path": "cases/golden_adapter_50_v1.jsonl",
+    "cases_sha256": "dda6fe2bbe4ea4ddc75f3558f587cdc1e976398796bc7decd82d457b86fdcf83",
+    "max_tokens": "per_case.max_tokens",
+    "prompt_variant": "baseline",
+    "response_sha256": {
+      "candidate": "c77fb1ece917b811e8645b9aafbaae6d308c89bfeb959f60f154512354b96b62",
+      "champion": "82d5ab86d51cb6177a8caac0fdd7eac84e8a0beba90a2bbc2a249f0b09dcccce"
+    },
+    "seed": 20260708,
+    "temperature": 0.0,
+    "warning": "This manifest proves case identity and rescoring settings. It does not prove historical serve commands unless each source run saved its own immutable run manifest."
+  }
+}

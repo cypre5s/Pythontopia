@@ -1,0 +1,1966 @@
+{
+  "auxiliary_metric": "score_mean",
+  "claims_policy": "Smoke, small heldout, and guard/fallback-repaired results are not evidence that a model reached 100%.",
+  "failure_matrices": {
+    "dpo": {
+      "agent": {
+        "DebugAgent": {
+          "case_count": 50,
+          "contract_pass_rate": 0.32,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "json_invalid": 1,
+            "missing_schema_field:bug_type": 1,
+            "missing_schema_field:minimal_repro_hint": 1,
+            "missing_schema_field:misconception": 1,
+            "missing_schema_field:next_probe": 1,
+            "missing_schema_field:safety_flags": 6,
+            "schema_invalid": 32,
+            "schema_type_error:safety_flags": 27
+          },
+          "failure_count": 34
+        },
+        "GroundingCriticAgent": {
+          "case_count": 50,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "GuideCoachAgent": {
+          "case_count": 50,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "missing_schema_field:evidence_needed": 2,
+            "schema_invalid": 50,
+            "schema_type_error:evidence_needed": 48,
+            "schema_type_error:learner_state_update": 50
+          },
+          "failure_count": 50
+        },
+        "IntentRouterAgent": {
+          "case_count": 50,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "MindMapAgent": {
+          "case_count": 50,
+          "contract_pass_rate": 0.96,
+          "failure_categories": {
+            "json_invalid": 2,
+            "missing_schema_field:edges": 2,
+            "missing_schema_field:evidence_ids": 2,
+            "missing_schema_field:nodes": 2,
+            "missing_schema_field:prerequisites": 2
+          },
+          "failure_count": 2
+        },
+        "PathPlannerAgent": {
+          "case_count": 50,
+          "contract_pass_rate": 0.94,
+          "failure_categories": {
+            "forbidden_leak": 1,
+            "grounding_unsafe": 2
+          },
+          "failure_count": 3
+        },
+        "PracticeAgent": {
+          "case_count": 50,
+          "contract_pass_rate": 0.02,
+          "failure_categories": {
+            "schema_invalid": 49,
+            "schema_type_error:blocked_content": 49
+          },
+          "failure_count": 49
+        },
+        "ResourceDesignerAgent": {
+          "case_count": 50,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "SafetyAgent": {
+          "case_count": 50,
+          "contract_pass_rate": 0.94,
+          "failure_categories": {
+            "grounding_unsafe": 3
+          },
+          "failure_count": 3
+        },
+        "TutorAgent": {
+          "case_count": 50,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        }
+      },
+      "beginner_noise": {
+        "anxious_answer_request": {
+          "case_count": 12,
+          "contract_pass_rate": 0.75,
+          "failure_categories": {
+            "schema_invalid": 3,
+            "schema_type_error:evidence_needed": 3,
+            "schema_type_error:learner_state_update": 3
+          },
+          "failure_count": 3
+        },
+        "clean": {
+          "case_count": 350,
+          "contract_pass_rate": 0.697143,
+          "failure_categories": {
+            "forbidden_leak": 1,
+            "grounding_unsafe": 4,
+            "json_invalid": 2,
+            "missing_schema_field:bug_type": 1,
+            "missing_schema_field:edges": 1,
+            "missing_schema_field:evidence_ids": 1,
+            "missing_schema_field:evidence_needed": 2,
+            "missing_schema_field:minimal_repro_hint": 1,
+            "missing_schema_field:misconception": 1,
+            "missing_schema_field:next_probe": 1,
+            "missing_schema_field:nodes": 1,
+            "missing_schema_field:prerequisites": 1,
+            "missing_schema_field:safety_flags": 4,
+            "schema_invalid": 99,
+            "schema_type_error:blocked_content": 35,
+            "schema_type_error:evidence_needed": 33,
+            "schema_type_error:learner_state_update": 35,
+            "schema_type_error:safety_flags": 26
+          },
+          "failure_count": 106
+        },
+        "copy_paste_code_fragment": {
+          "case_count": 12,
+          "contract_pass_rate": 0.833333,
+          "failure_categories": {
+            "schema_invalid": 2,
+            "schema_type_error:evidence_needed": 2,
+            "schema_type_error:learner_state_update": 2
+          },
+          "failure_count": 2
+        },
+        "fragmented_sentence": {
+          "case_count": 12,
+          "contract_pass_rate": 0.75,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "schema_invalid": 2,
+            "schema_type_error:blocked_content": 2
+          },
+          "failure_count": 3
+        },
+        "incomplete_error_paste": {
+          "case_count": 12,
+          "contract_pass_rate": 0.75,
+          "failure_categories": {
+            "schema_invalid": 3,
+            "schema_type_error:evidence_needed": 3,
+            "schema_type_error:learner_state_update": 3
+          },
+          "failure_count": 3
+        },
+        "low_confidence_help": {
+          "case_count": 12,
+          "contract_pass_rate": 0.833333,
+          "failure_categories": {
+            "schema_invalid": 2,
+            "schema_type_error:blocked_content": 2
+          },
+          "failure_count": 2
+        },
+        "mixed_terminology": {
+          "case_count": 12,
+          "contract_pass_rate": 0.666667,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "schema_invalid": 3,
+            "schema_type_error:blocked_content": 2,
+            "schema_type_error:safety_flags": 1
+          },
+          "failure_count": 4
+        },
+        "mobile_short_message": {
+          "case_count": 13,
+          "contract_pass_rate": 0.846154,
+          "failure_categories": {
+            "schema_invalid": 2,
+            "schema_type_error:evidence_needed": 2,
+            "schema_type_error:learner_state_update": 2
+          },
+          "failure_count": 2
+        },
+        "reflection_after_failure": {
+          "case_count": 13,
+          "contract_pass_rate": 0.769231,
+          "failure_categories": {
+            "schema_invalid": 3,
+            "schema_type_error:blocked_content": 3
+          },
+          "failure_count": 3
+        },
+        "teacher_assignment_context": {
+          "case_count": 13,
+          "contract_pass_rate": 0.769231,
+          "failure_categories": {
+            "schema_invalid": 3,
+            "schema_type_error:evidence_needed": 3,
+            "schema_type_error:learner_state_update": 3
+          },
+          "failure_count": 3
+        },
+        "typo_pinyin_mix": {
+          "case_count": 13,
+          "contract_pass_rate": 0.846154,
+          "failure_categories": {
+            "schema_invalid": 2,
+            "schema_type_error:evidence_needed": 2,
+            "schema_type_error:learner_state_update": 2
+          },
+          "failure_count": 2
+        },
+        "vague_reference": {
+          "case_count": 13,
+          "contract_pass_rate": 0.692308,
+          "failure_categories": {
+            "json_invalid": 1,
+            "missing_schema_field:edges": 1,
+            "missing_schema_field:evidence_ids": 1,
+            "missing_schema_field:nodes": 1,
+            "missing_schema_field:prerequisites": 1,
+            "missing_schema_field:safety_flags": 1,
+            "schema_invalid": 3,
+            "schema_type_error:blocked_content": 2
+          },
+          "failure_count": 4
+        },
+        "wrong_kc_guess": {
+          "case_count": 13,
+          "contract_pass_rate": 0.692308,
+          "failure_categories": {
+            "missing_schema_field:safety_flags": 1,
+            "schema_invalid": 4,
+            "schema_type_error:blocked_content": 3
+          },
+          "failure_count": 4
+        }
+      },
+      "chapter": {
+        "1": {
+          "case_count": 72,
+          "contract_pass_rate": 0.75,
+          "failure_categories": {
+            "missing_schema_field:safety_flags": 1,
+            "schema_invalid": 18,
+            "schema_type_error:blocked_content": 6,
+            "schema_type_error:evidence_needed": 7,
+            "schema_type_error:learner_state_update": 7,
+            "schema_type_error:safety_flags": 4
+          },
+          "failure_count": 18
+        },
+        "2": {
+          "case_count": 72,
+          "contract_pass_rate": 0.722222,
+          "failure_categories": {
+            "forbidden_leak": 1,
+            "missing_schema_field:safety_flags": 3,
+            "schema_invalid": 19,
+            "schema_type_error:blocked_content": 6,
+            "schema_type_error:evidence_needed": 7,
+            "schema_type_error:learner_state_update": 7,
+            "schema_type_error:safety_flags": 3
+          },
+          "failure_count": 20
+        },
+        "3": {
+          "case_count": 71,
+          "contract_pass_rate": 0.732394,
+          "failure_categories": {
+            "json_invalid": 1,
+            "missing_schema_field:edges": 1,
+            "missing_schema_field:evidence_ids": 1,
+            "missing_schema_field:evidence_needed": 1,
+            "missing_schema_field:nodes": 1,
+            "missing_schema_field:prerequisites": 1,
+            "schema_invalid": 18,
+            "schema_type_error:blocked_content": 8,
+            "schema_type_error:evidence_needed": 6,
+            "schema_type_error:learner_state_update": 7,
+            "schema_type_error:safety_flags": 3
+          },
+          "failure_count": 19
+        },
+        "4": {
+          "case_count": 71,
+          "contract_pass_rate": 0.676056,
+          "failure_categories": {
+            "grounding_unsafe": 3,
+            "json_invalid": 1,
+            "missing_schema_field:bug_type": 1,
+            "missing_schema_field:minimal_repro_hint": 1,
+            "missing_schema_field:misconception": 1,
+            "missing_schema_field:next_probe": 1,
+            "missing_schema_field:safety_flags": 2,
+            "schema_invalid": 19,
+            "schema_type_error:blocked_content": 8,
+            "schema_type_error:evidence_needed": 7,
+            "schema_type_error:learner_state_update": 7,
+            "schema_type_error:safety_flags": 3
+          },
+          "failure_count": 23
+        },
+        "5": {
+          "case_count": 72,
+          "contract_pass_rate": 0.722222,
+          "failure_categories": {
+            "schema_invalid": 20,
+            "schema_type_error:blocked_content": 8,
+            "schema_type_error:evidence_needed": 7,
+            "schema_type_error:learner_state_update": 7,
+            "schema_type_error:safety_flags": 5
+          },
+          "failure_count": 20
+        },
+        "6": {
+          "case_count": 70,
+          "contract_pass_rate": 0.728571,
+          "failure_categories": {
+            "json_invalid": 1,
+            "missing_schema_field:edges": 1,
+            "missing_schema_field:evidence_ids": 1,
+            "missing_schema_field:evidence_needed": 1,
+            "missing_schema_field:nodes": 1,
+            "missing_schema_field:prerequisites": 1,
+            "schema_invalid": 18,
+            "schema_type_error:blocked_content": 6,
+            "schema_type_error:evidence_needed": 7,
+            "schema_type_error:learner_state_update": 8,
+            "schema_type_error:safety_flags": 4
+          },
+          "failure_count": 19
+        },
+        "7": {
+          "case_count": 72,
+          "contract_pass_rate": 0.694444,
+          "failure_categories": {
+            "grounding_unsafe": 3,
+            "schema_invalid": 19,
+            "schema_type_error:blocked_content": 7,
+            "schema_type_error:evidence_needed": 7,
+            "schema_type_error:learner_state_update": 7,
+            "schema_type_error:safety_flags": 5
+          },
+          "failure_count": 22
+        }
+      },
+      "evidence": {
+        "none": {
+          "case_count": 150,
+          "contract_pass_rate": 0.96,
+          "failure_categories": {
+            "forbidden_leak": 1,
+            "grounding_unsafe": 5
+          },
+          "failure_count": 6
+        },
+        "required": {
+          "case_count": 350,
+          "contract_pass_rate": 0.614286,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "json_invalid": 3,
+            "missing_schema_field:bug_type": 1,
+            "missing_schema_field:edges": 2,
+            "missing_schema_field:evidence_ids": 2,
+            "missing_schema_field:evidence_needed": 2,
+            "missing_schema_field:minimal_repro_hint": 1,
+            "missing_schema_field:misconception": 1,
+            "missing_schema_field:next_probe": 1,
+            "missing_schema_field:nodes": 2,
+            "missing_schema_field:prerequisites": 2,
+            "missing_schema_field:safety_flags": 6,
+            "schema_invalid": 131,
+            "schema_type_error:blocked_content": 49,
+            "schema_type_error:evidence_needed": 48,
+            "schema_type_error:learner_state_update": 50,
+            "schema_type_error:safety_flags": 27
+          },
+          "failure_count": 135
+        }
+      },
+      "failure_category": {
+        "forbidden_leak": 1,
+        "grounding_unsafe": 6,
+        "json_invalid": 3,
+        "missing_schema_field:bug_type": 1,
+        "missing_schema_field:edges": 2,
+        "missing_schema_field:evidence_ids": 2,
+        "missing_schema_field:evidence_needed": 2,
+        "missing_schema_field:minimal_repro_hint": 1,
+        "missing_schema_field:misconception": 1,
+        "missing_schema_field:next_probe": 1,
+        "missing_schema_field:nodes": 2,
+        "missing_schema_field:prerequisites": 2,
+        "missing_schema_field:safety_flags": 6,
+        "schema_invalid": 131,
+        "schema_type_error:blocked_content": 49,
+        "schema_type_error:evidence_needed": 48,
+        "schema_type_error:learner_state_update": 50,
+        "schema_type_error:safety_flags": 27
+      },
+      "missing_schema_field": {
+        "bug_type": 1,
+        "edges": 2,
+        "evidence_ids": 2,
+        "evidence_needed": 2,
+        "minimal_repro_hint": 1,
+        "misconception": 1,
+        "next_probe": 1,
+        "nodes": 2,
+        "prerequisites": 2,
+        "safety_flags": 6
+      },
+      "safety": {
+        "sensitive": {
+          "case_count": 68,
+          "contract_pass_rate": 0.691176,
+          "failure_categories": {
+            "grounding_unsafe": 3,
+            "schema_invalid": 18,
+            "schema_type_error:blocked_content": 18
+          },
+          "failure_count": 21
+        },
+        "standard": {
+          "case_count": 432,
+          "contract_pass_rate": 0.722222,
+          "failure_categories": {
+            "forbidden_leak": 1,
+            "grounding_unsafe": 3,
+            "json_invalid": 3,
+            "missing_schema_field:bug_type": 1,
+            "missing_schema_field:edges": 2,
+            "missing_schema_field:evidence_ids": 2,
+            "missing_schema_field:evidence_needed": 2,
+            "missing_schema_field:minimal_repro_hint": 1,
+            "missing_schema_field:misconception": 1,
+            "missing_schema_field:next_probe": 1,
+            "missing_schema_field:nodes": 2,
+            "missing_schema_field:prerequisites": 2,
+            "missing_schema_field:safety_flags": 6,
+            "schema_invalid": 113,
+            "schema_type_error:blocked_content": 31,
+            "schema_type_error:evidence_needed": 48,
+            "schema_type_error:learner_state_update": 50,
+            "schema_type_error:safety_flags": 27
+          },
+          "failure_count": 120
+        }
+      },
+      "schema_type_error": {
+        "blocked_content": 49,
+        "evidence_needed": 48,
+        "learner_state_update": 50,
+        "safety_flags": 27
+      },
+      "web_input": {
+        "ASK": {
+          "case_count": 9,
+          "contract_pass_rate": 0.777778,
+          "failure_categories": {
+            "schema_invalid": 2,
+            "schema_type_error:blocked_content": 1,
+            "schema_type_error:evidence_needed": 1,
+            "schema_type_error:learner_state_update": 1
+          },
+          "failure_count": 2
+        },
+        "DEBUG": {
+          "case_count": 9,
+          "contract_pass_rate": 0.666667,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "missing_schema_field:safety_flags": 1,
+            "schema_invalid": 2,
+            "schema_type_error:blocked_content": 1
+          },
+          "failure_count": 3
+        },
+        "HANDOUT": {
+          "case_count": 8,
+          "contract_pass_rate": 0.75,
+          "failure_categories": {
+            "missing_schema_field:evidence_needed": 1,
+            "schema_invalid": 2,
+            "schema_type_error:blocked_content": 1,
+            "schema_type_error:learner_state_update": 1
+          },
+          "failure_count": 2
+        },
+        "MINDMAP": {
+          "case_count": 8,
+          "contract_pass_rate": 0.75,
+          "failure_categories": {
+            "schema_invalid": 2,
+            "schema_type_error:blocked_content": 1,
+            "schema_type_error:evidence_needed": 1,
+            "schema_type_error:learner_state_update": 1
+          },
+          "failure_count": 2
+        },
+        "PATH": {
+          "case_count": 8,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "PRACTICE": {
+          "case_count": 8,
+          "contract_pass_rate": 0.5,
+          "failure_categories": {
+            "forbidden_leak": 1,
+            "schema_invalid": 3,
+            "schema_type_error:blocked_content": 1,
+            "schema_type_error:evidence_needed": 2,
+            "schema_type_error:learner_state_update": 2
+          },
+          "failure_count": 4
+        },
+        "non_web": {
+          "case_count": 450,
+          "contract_pass_rate": 0.715556,
+          "failure_categories": {
+            "grounding_unsafe": 5,
+            "json_invalid": 3,
+            "missing_schema_field:bug_type": 1,
+            "missing_schema_field:edges": 2,
+            "missing_schema_field:evidence_ids": 2,
+            "missing_schema_field:evidence_needed": 1,
+            "missing_schema_field:minimal_repro_hint": 1,
+            "missing_schema_field:misconception": 1,
+            "missing_schema_field:next_probe": 1,
+            "missing_schema_field:nodes": 2,
+            "missing_schema_field:prerequisites": 2,
+            "missing_schema_field:safety_flags": 5,
+            "schema_invalid": 120,
+            "schema_type_error:blocked_content": 44,
+            "schema_type_error:evidence_needed": 44,
+            "schema_type_error:learner_state_update": 45,
+            "schema_type_error:safety_flags": 27
+          },
+          "failure_count": 128
+        }
+      }
+    },
+    "orpo": {
+      "agent": {
+        "DebugAgent": {
+          "case_count": 50,
+          "contract_pass_rate": 0.7,
+          "failure_categories": {
+            "grounding_unsafe": 15
+          },
+          "failure_count": 15
+        },
+        "GroundingCriticAgent": {
+          "case_count": 50,
+          "contract_pass_rate": 0.98,
+          "failure_categories": {
+            "schema_invalid": 1,
+            "schema_type_error:revision_request": 1
+          },
+          "failure_count": 1
+        },
+        "GuideCoachAgent": {
+          "case_count": 50,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "forbidden_leak": 1,
+            "schema_invalid": 50,
+            "schema_type_error:evidence_needed": 50,
+            "schema_type_error:learner_state_update": 50,
+            "schema_type_error:recommended_action": 2
+          },
+          "failure_count": 50
+        },
+        "IntentRouterAgent": {
+          "case_count": 50,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "MindMapAgent": {
+          "case_count": 50,
+          "contract_pass_rate": 0.88,
+          "failure_categories": {
+            "forbidden_leak": 1,
+            "grounding_unsafe": 1,
+            "json_invalid": 5,
+            "missing_schema_field:edges": 5,
+            "missing_schema_field:evidence_ids": 5,
+            "missing_schema_field:nodes": 5,
+            "missing_schema_field:prerequisites": 5
+          },
+          "failure_count": 6
+        },
+        "PathPlannerAgent": {
+          "case_count": 50,
+          "contract_pass_rate": 0.74,
+          "failure_categories": {
+            "grounding_unsafe": 13
+          },
+          "failure_count": 13
+        },
+        "PracticeAgent": {
+          "case_count": 50,
+          "contract_pass_rate": 0.02,
+          "failure_categories": {
+            "schema_invalid": 49,
+            "schema_type_error:blocked_content": 49
+          },
+          "failure_count": 49
+        },
+        "ResourceDesignerAgent": {
+          "case_count": 50,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "SafetyAgent": {
+          "case_count": 50,
+          "contract_pass_rate": 0.88,
+          "failure_categories": {
+            "grounding_unsafe": 5,
+            "json_invalid": 2,
+            "missing_schema_field:allow": 2,
+            "missing_schema_field:reasons": 2,
+            "missing_schema_field:redactions": 2,
+            "missing_schema_field:safer_alternative": 2,
+            "schema_invalid": 2,
+            "schema_type_error:safer_alternative": 2
+          },
+          "failure_count": 6
+        },
+        "TutorAgent": {
+          "case_count": 50,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        }
+      },
+      "beginner_noise": {
+        "anxious_answer_request": {
+          "case_count": 12,
+          "contract_pass_rate": 0.75,
+          "failure_categories": {
+            "schema_invalid": 3,
+            "schema_type_error:evidence_needed": 3,
+            "schema_type_error:learner_state_update": 3
+          },
+          "failure_count": 3
+        },
+        "clean": {
+          "case_count": 350,
+          "contract_pass_rate": 0.714286,
+          "failure_categories": {
+            "forbidden_leak": 1,
+            "grounding_unsafe": 26,
+            "json_invalid": 3,
+            "missing_schema_field:edges": 3,
+            "missing_schema_field:evidence_ids": 3,
+            "missing_schema_field:nodes": 3,
+            "missing_schema_field:prerequisites": 3,
+            "schema_invalid": 73,
+            "schema_type_error:blocked_content": 35,
+            "schema_type_error:evidence_needed": 35,
+            "schema_type_error:learner_state_update": 35,
+            "schema_type_error:recommended_action": 2,
+            "schema_type_error:revision_request": 1,
+            "schema_type_error:safer_alternative": 2
+          },
+          "failure_count": 100
+        },
+        "copy_paste_code_fragment": {
+          "case_count": 12,
+          "contract_pass_rate": 0.833333,
+          "failure_categories": {
+            "schema_invalid": 2,
+            "schema_type_error:evidence_needed": 2,
+            "schema_type_error:learner_state_update": 2
+          },
+          "failure_count": 2
+        },
+        "fragmented_sentence": {
+          "case_count": 12,
+          "contract_pass_rate": 0.75,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "schema_invalid": 2,
+            "schema_type_error:blocked_content": 2
+          },
+          "failure_count": 3
+        },
+        "incomplete_error_paste": {
+          "case_count": 12,
+          "contract_pass_rate": 0.75,
+          "failure_categories": {
+            "schema_invalid": 3,
+            "schema_type_error:evidence_needed": 3,
+            "schema_type_error:learner_state_update": 3
+          },
+          "failure_count": 3
+        },
+        "low_confidence_help": {
+          "case_count": 12,
+          "contract_pass_rate": 0.666667,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "json_invalid": 1,
+            "missing_schema_field:allow": 1,
+            "missing_schema_field:reasons": 1,
+            "missing_schema_field:redactions": 1,
+            "missing_schema_field:safer_alternative": 1,
+            "schema_invalid": 2,
+            "schema_type_error:blocked_content": 2
+          },
+          "failure_count": 4
+        },
+        "mixed_terminology": {
+          "case_count": 12,
+          "contract_pass_rate": 0.583333,
+          "failure_categories": {
+            "grounding_unsafe": 2,
+            "json_invalid": 1,
+            "missing_schema_field:edges": 1,
+            "missing_schema_field:evidence_ids": 1,
+            "missing_schema_field:nodes": 1,
+            "missing_schema_field:prerequisites": 1,
+            "schema_invalid": 2,
+            "schema_type_error:blocked_content": 2
+          },
+          "failure_count": 5
+        },
+        "mobile_short_message": {
+          "case_count": 13,
+          "contract_pass_rate": 0.769231,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "schema_invalid": 2,
+            "schema_type_error:evidence_needed": 2,
+            "schema_type_error:learner_state_update": 2
+          },
+          "failure_count": 3
+        },
+        "reflection_after_failure": {
+          "case_count": 13,
+          "contract_pass_rate": 0.769231,
+          "failure_categories": {
+            "schema_invalid": 3,
+            "schema_type_error:blocked_content": 3
+          },
+          "failure_count": 3
+        },
+        "teacher_assignment_context": {
+          "case_count": 13,
+          "contract_pass_rate": 0.692308,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "schema_invalid": 3,
+            "schema_type_error:evidence_needed": 3,
+            "schema_type_error:learner_state_update": 3
+          },
+          "failure_count": 4
+        },
+        "typo_pinyin_mix": {
+          "case_count": 13,
+          "contract_pass_rate": 0.846154,
+          "failure_categories": {
+            "forbidden_leak": 1,
+            "schema_invalid": 2,
+            "schema_type_error:evidence_needed": 2,
+            "schema_type_error:learner_state_update": 2
+          },
+          "failure_count": 2
+        },
+        "vague_reference": {
+          "case_count": 13,
+          "contract_pass_rate": 0.692308,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "json_invalid": 1,
+            "missing_schema_field:edges": 1,
+            "missing_schema_field:evidence_ids": 1,
+            "missing_schema_field:nodes": 1,
+            "missing_schema_field:prerequisites": 1,
+            "schema_invalid": 2,
+            "schema_type_error:blocked_content": 2
+          },
+          "failure_count": 4
+        },
+        "wrong_kc_guess": {
+          "case_count": 13,
+          "contract_pass_rate": 0.692308,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "json_invalid": 1,
+            "missing_schema_field:allow": 1,
+            "missing_schema_field:reasons": 1,
+            "missing_schema_field:redactions": 1,
+            "missing_schema_field:safer_alternative": 1,
+            "schema_invalid": 3,
+            "schema_type_error:blocked_content": 3
+          },
+          "failure_count": 4
+        }
+      },
+      "chapter": {
+        "1": {
+          "case_count": 72,
+          "contract_pass_rate": 0.722222,
+          "failure_categories": {
+            "forbidden_leak": 1,
+            "grounding_unsafe": 6,
+            "json_invalid": 2,
+            "missing_schema_field:allow": 1,
+            "missing_schema_field:edges": 1,
+            "missing_schema_field:evidence_ids": 1,
+            "missing_schema_field:nodes": 1,
+            "missing_schema_field:prerequisites": 1,
+            "missing_schema_field:reasons": 1,
+            "missing_schema_field:redactions": 1,
+            "missing_schema_field:safer_alternative": 1,
+            "schema_invalid": 14,
+            "schema_type_error:blocked_content": 6,
+            "schema_type_error:evidence_needed": 7,
+            "schema_type_error:learner_state_update": 7,
+            "schema_type_error:safer_alternative": 1
+          },
+          "failure_count": 20
+        },
+        "2": {
+          "case_count": 72,
+          "contract_pass_rate": 0.736111,
+          "failure_categories": {
+            "grounding_unsafe": 5,
+            "json_invalid": 2,
+            "missing_schema_field:edges": 2,
+            "missing_schema_field:evidence_ids": 2,
+            "missing_schema_field:nodes": 2,
+            "missing_schema_field:prerequisites": 2,
+            "schema_invalid": 13,
+            "schema_type_error:blocked_content": 6,
+            "schema_type_error:evidence_needed": 7,
+            "schema_type_error:learner_state_update": 7
+          },
+          "failure_count": 19
+        },
+        "3": {
+          "case_count": 71,
+          "contract_pass_rate": 0.704225,
+          "failure_categories": {
+            "grounding_unsafe": 4,
+            "json_invalid": 2,
+            "missing_schema_field:allow": 1,
+            "missing_schema_field:edges": 1,
+            "missing_schema_field:evidence_ids": 1,
+            "missing_schema_field:nodes": 1,
+            "missing_schema_field:prerequisites": 1,
+            "missing_schema_field:reasons": 1,
+            "missing_schema_field:redactions": 1,
+            "missing_schema_field:safer_alternative": 1,
+            "schema_invalid": 15,
+            "schema_type_error:blocked_content": 8,
+            "schema_type_error:evidence_needed": 7,
+            "schema_type_error:learner_state_update": 7,
+            "schema_type_error:recommended_action": 1
+          },
+          "failure_count": 21
+        },
+        "4": {
+          "case_count": 71,
+          "contract_pass_rate": 0.71831,
+          "failure_categories": {
+            "grounding_unsafe": 5,
+            "schema_invalid": 15,
+            "schema_type_error:blocked_content": 8,
+            "schema_type_error:evidence_needed": 7,
+            "schema_type_error:learner_state_update": 7
+          },
+          "failure_count": 20
+        },
+        "5": {
+          "case_count": 72,
+          "contract_pass_rate": 0.708333,
+          "failure_categories": {
+            "grounding_unsafe": 6,
+            "schema_invalid": 15,
+            "schema_type_error:blocked_content": 8,
+            "schema_type_error:evidence_needed": 7,
+            "schema_type_error:learner_state_update": 7,
+            "schema_type_error:recommended_action": 1
+          },
+          "failure_count": 21
+        },
+        "6": {
+          "case_count": 70,
+          "contract_pass_rate": 0.742857,
+          "failure_categories": {
+            "grounding_unsafe": 4,
+            "schema_invalid": 15,
+            "schema_type_error:blocked_content": 6,
+            "schema_type_error:evidence_needed": 8,
+            "schema_type_error:learner_state_update": 8,
+            "schema_type_error:safer_alternative": 1
+          },
+          "failure_count": 18
+        },
+        "7": {
+          "case_count": 72,
+          "contract_pass_rate": 0.708333,
+          "failure_categories": {
+            "forbidden_leak": 1,
+            "grounding_unsafe": 4,
+            "json_invalid": 1,
+            "missing_schema_field:edges": 1,
+            "missing_schema_field:evidence_ids": 1,
+            "missing_schema_field:nodes": 1,
+            "missing_schema_field:prerequisites": 1,
+            "schema_invalid": 15,
+            "schema_type_error:blocked_content": 7,
+            "schema_type_error:evidence_needed": 7,
+            "schema_type_error:learner_state_update": 7,
+            "schema_type_error:revision_request": 1
+          },
+          "failure_count": 21
+        }
+      },
+      "evidence": {
+        "none": {
+          "case_count": 150,
+          "contract_pass_rate": 0.873333,
+          "failure_categories": {
+            "grounding_unsafe": 18,
+            "json_invalid": 2,
+            "missing_schema_field:allow": 2,
+            "missing_schema_field:reasons": 2,
+            "missing_schema_field:redactions": 2,
+            "missing_schema_field:safer_alternative": 2,
+            "schema_invalid": 2,
+            "schema_type_error:safer_alternative": 2
+          },
+          "failure_count": 19
+        },
+        "required": {
+          "case_count": 350,
+          "contract_pass_rate": 0.654286,
+          "failure_categories": {
+            "forbidden_leak": 2,
+            "grounding_unsafe": 16,
+            "json_invalid": 5,
+            "missing_schema_field:edges": 5,
+            "missing_schema_field:evidence_ids": 5,
+            "missing_schema_field:nodes": 5,
+            "missing_schema_field:prerequisites": 5,
+            "schema_invalid": 100,
+            "schema_type_error:blocked_content": 49,
+            "schema_type_error:evidence_needed": 50,
+            "schema_type_error:learner_state_update": 50,
+            "schema_type_error:recommended_action": 2,
+            "schema_type_error:revision_request": 1
+          },
+          "failure_count": 121
+        }
+      },
+      "failure_category": {
+        "forbidden_leak": 2,
+        "grounding_unsafe": 34,
+        "json_invalid": 7,
+        "missing_schema_field:allow": 2,
+        "missing_schema_field:edges": 5,
+        "missing_schema_field:evidence_ids": 5,
+        "missing_schema_field:nodes": 5,
+        "missing_schema_field:prerequisites": 5,
+        "missing_schema_field:reasons": 2,
+        "missing_schema_field:redactions": 2,
+        "missing_schema_field:safer_alternative": 2,
+        "schema_invalid": 102,
+        "schema_type_error:blocked_content": 49,
+        "schema_type_error:evidence_needed": 50,
+        "schema_type_error:learner_state_update": 50,
+        "schema_type_error:recommended_action": 2,
+        "schema_type_error:revision_request": 1,
+        "schema_type_error:safer_alternative": 2
+      },
+      "missing_schema_field": {
+        "allow": 2,
+        "edges": 5,
+        "evidence_ids": 5,
+        "nodes": 5,
+        "prerequisites": 5,
+        "reasons": 2,
+        "redactions": 2,
+        "safer_alternative": 2
+      },
+      "safety": {
+        "sensitive": {
+          "case_count": 68,
+          "contract_pass_rate": 0.647059,
+          "failure_categories": {
+            "grounding_unsafe": 5,
+            "json_invalid": 2,
+            "missing_schema_field:allow": 2,
+            "missing_schema_field:reasons": 2,
+            "missing_schema_field:redactions": 2,
+            "missing_schema_field:safer_alternative": 2,
+            "schema_invalid": 20,
+            "schema_type_error:blocked_content": 18,
+            "schema_type_error:safer_alternative": 2
+          },
+          "failure_count": 24
+        },
+        "standard": {
+          "case_count": 432,
+          "contract_pass_rate": 0.731481,
+          "failure_categories": {
+            "forbidden_leak": 2,
+            "grounding_unsafe": 29,
+            "json_invalid": 5,
+            "missing_schema_field:edges": 5,
+            "missing_schema_field:evidence_ids": 5,
+            "missing_schema_field:nodes": 5,
+            "missing_schema_field:prerequisites": 5,
+            "schema_invalid": 82,
+            "schema_type_error:blocked_content": 31,
+            "schema_type_error:evidence_needed": 50,
+            "schema_type_error:learner_state_update": 50,
+            "schema_type_error:recommended_action": 2,
+            "schema_type_error:revision_request": 1
+          },
+          "failure_count": 116
+        }
+      },
+      "schema_type_error": {
+        "blocked_content": 49,
+        "evidence_needed": 50,
+        "learner_state_update": 50,
+        "recommended_action": 2,
+        "revision_request": 1,
+        "safer_alternative": 2
+      },
+      "web_input": {
+        "ASK": {
+          "case_count": 9,
+          "contract_pass_rate": 0.777778,
+          "failure_categories": {
+            "schema_invalid": 2,
+            "schema_type_error:blocked_content": 1,
+            "schema_type_error:evidence_needed": 1,
+            "schema_type_error:learner_state_update": 1
+          },
+          "failure_count": 2
+        },
+        "DEBUG": {
+          "case_count": 9,
+          "contract_pass_rate": 0.888889,
+          "failure_categories": {
+            "schema_invalid": 1,
+            "schema_type_error:blocked_content": 1
+          },
+          "failure_count": 1
+        },
+        "HANDOUT": {
+          "case_count": 8,
+          "contract_pass_rate": 0.75,
+          "failure_categories": {
+            "schema_invalid": 2,
+            "schema_type_error:blocked_content": 1,
+            "schema_type_error:evidence_needed": 1,
+            "schema_type_error:learner_state_update": 1
+          },
+          "failure_count": 2
+        },
+        "MINDMAP": {
+          "case_count": 8,
+          "contract_pass_rate": 0.75,
+          "failure_categories": {
+            "schema_invalid": 2,
+            "schema_type_error:blocked_content": 1,
+            "schema_type_error:evidence_needed": 1,
+            "schema_type_error:learner_state_update": 1
+          },
+          "failure_count": 2
+        },
+        "PATH": {
+          "case_count": 8,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "PRACTICE": {
+          "case_count": 8,
+          "contract_pass_rate": 0.625,
+          "failure_categories": {
+            "schema_invalid": 3,
+            "schema_type_error:blocked_content": 1,
+            "schema_type_error:evidence_needed": 2,
+            "schema_type_error:learner_state_update": 2
+          },
+          "failure_count": 3
+        },
+        "non_web": {
+          "case_count": 450,
+          "contract_pass_rate": 0.711111,
+          "failure_categories": {
+            "forbidden_leak": 2,
+            "grounding_unsafe": 34,
+            "json_invalid": 7,
+            "missing_schema_field:allow": 2,
+            "missing_schema_field:edges": 5,
+            "missing_schema_field:evidence_ids": 5,
+            "missing_schema_field:nodes": 5,
+            "missing_schema_field:prerequisites": 5,
+            "missing_schema_field:reasons": 2,
+            "missing_schema_field:redactions": 2,
+            "missing_schema_field:safer_alternative": 2,
+            "schema_invalid": 92,
+            "schema_type_error:blocked_content": 44,
+            "schema_type_error:evidence_needed": 45,
+            "schema_type_error:learner_state_update": 45,
+            "schema_type_error:recommended_action": 2,
+            "schema_type_error:revision_request": 1,
+            "schema_type_error:safer_alternative": 2
+          },
+          "failure_count": 130
+        }
+      }
+    },
+    "sft": {
+      "agent": {
+        "DebugAgent": {
+          "case_count": 50,
+          "contract_pass_rate": 0.62,
+          "failure_categories": {
+            "grounding_unsafe": 19
+          },
+          "failure_count": 19
+        },
+        "GroundingCriticAgent": {
+          "case_count": 50,
+          "contract_pass_rate": 0.98,
+          "failure_categories": {
+            "schema_invalid": 1,
+            "schema_type_error:revision_request": 1
+          },
+          "failure_count": 1
+        },
+        "GuideCoachAgent": {
+          "case_count": 50,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "grounding_unsafe": 2,
+            "schema_invalid": 50,
+            "schema_type_error:evidence_needed": 50,
+            "schema_type_error:learner_state_update": 50,
+            "schema_type_error:recommended_action": 23
+          },
+          "failure_count": 50
+        },
+        "IntentRouterAgent": {
+          "case_count": 50,
+          "contract_pass_rate": 0.96,
+          "failure_categories": {
+            "grounding_unsafe": 2
+          },
+          "failure_count": 2
+        },
+        "MindMapAgent": {
+          "case_count": 50,
+          "contract_pass_rate": 0.6,
+          "failure_categories": {
+            "forbidden_leak": 1,
+            "grounding_unsafe": 6,
+            "json_invalid": 20,
+            "missing_schema_field:edges": 20,
+            "missing_schema_field:evidence_ids": 20,
+            "missing_schema_field:nodes": 20,
+            "missing_schema_field:prerequisites": 20
+          },
+          "failure_count": 20
+        },
+        "PathPlannerAgent": {
+          "case_count": 50,
+          "contract_pass_rate": 0.46,
+          "failure_categories": {
+            "forbidden_leak": 2,
+            "grounding_unsafe": 26,
+            "json_invalid": 1,
+            "missing_schema_field:evidence_ids": 1,
+            "missing_schema_field:mastery_gate": 1,
+            "missing_schema_field:next_practice": 1,
+            "missing_schema_field:next_resource": 1,
+            "missing_schema_field:state_summary": 1
+          },
+          "failure_count": 27
+        },
+        "PracticeAgent": {
+          "case_count": 50,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "schema_invalid": 50,
+            "schema_type_error:blocked_content": 50
+          },
+          "failure_count": 50
+        },
+        "ResourceDesignerAgent": {
+          "case_count": 50,
+          "contract_pass_rate": 0.98,
+          "failure_categories": {
+            "grounding_unsafe": 1
+          },
+          "failure_count": 1
+        },
+        "SafetyAgent": {
+          "case_count": 50,
+          "contract_pass_rate": 0.72,
+          "failure_categories": {
+            "forbidden_leak": 1,
+            "grounding_unsafe": 14,
+            "schema_invalid": 1,
+            "schema_type_error:safer_alternative": 1
+          },
+          "failure_count": 14
+        },
+        "TutorAgent": {
+          "case_count": 50,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        }
+      },
+      "beginner_noise": {
+        "anxious_answer_request": {
+          "case_count": 12,
+          "contract_pass_rate": 0.75,
+          "failure_categories": {
+            "schema_invalid": 3,
+            "schema_type_error:evidence_needed": 3,
+            "schema_type_error:learner_state_update": 3,
+            "schema_type_error:recommended_action": 1
+          },
+          "failure_count": 3
+        },
+        "clean": {
+          "case_count": 350,
+          "contract_pass_rate": 0.608571,
+          "failure_categories": {
+            "forbidden_leak": 4,
+            "grounding_unsafe": 55,
+            "json_invalid": 17,
+            "missing_schema_field:edges": 16,
+            "missing_schema_field:evidence_ids": 17,
+            "missing_schema_field:mastery_gate": 1,
+            "missing_schema_field:next_practice": 1,
+            "missing_schema_field:next_resource": 1,
+            "missing_schema_field:nodes": 16,
+            "missing_schema_field:prerequisites": 16,
+            "missing_schema_field:state_summary": 1,
+            "schema_invalid": 72,
+            "schema_type_error:blocked_content": 35,
+            "schema_type_error:evidence_needed": 35,
+            "schema_type_error:learner_state_update": 35,
+            "schema_type_error:recommended_action": 17,
+            "schema_type_error:revision_request": 1,
+            "schema_type_error:safer_alternative": 1
+          },
+          "failure_count": 137
+        },
+        "copy_paste_code_fragment": {
+          "case_count": 12,
+          "contract_pass_rate": 0.75,
+          "failure_categories": {
+            "grounding_unsafe": 2,
+            "schema_invalid": 2,
+            "schema_type_error:evidence_needed": 2,
+            "schema_type_error:learner_state_update": 2,
+            "schema_type_error:recommended_action": 1
+          },
+          "failure_count": 3
+        },
+        "fragmented_sentence": {
+          "case_count": 12,
+          "contract_pass_rate": 0.583333,
+          "failure_categories": {
+            "grounding_unsafe": 2,
+            "json_invalid": 1,
+            "missing_schema_field:edges": 1,
+            "missing_schema_field:evidence_ids": 1,
+            "missing_schema_field:nodes": 1,
+            "missing_schema_field:prerequisites": 1,
+            "schema_invalid": 2,
+            "schema_type_error:blocked_content": 2
+          },
+          "failure_count": 5
+        },
+        "incomplete_error_paste": {
+          "case_count": 12,
+          "contract_pass_rate": 0.666667,
+          "failure_categories": {
+            "grounding_unsafe": 2,
+            "schema_invalid": 3,
+            "schema_type_error:evidence_needed": 3,
+            "schema_type_error:learner_state_update": 3
+          },
+          "failure_count": 4
+        },
+        "low_confidence_help": {
+          "case_count": 12,
+          "contract_pass_rate": 0.75,
+          "failure_categories": {
+            "schema_invalid": 3,
+            "schema_type_error:blocked_content": 3
+          },
+          "failure_count": 3
+        },
+        "mixed_terminology": {
+          "case_count": 12,
+          "contract_pass_rate": 0.5,
+          "failure_categories": {
+            "grounding_unsafe": 2,
+            "json_invalid": 2,
+            "missing_schema_field:edges": 2,
+            "missing_schema_field:evidence_ids": 2,
+            "missing_schema_field:nodes": 2,
+            "missing_schema_field:prerequisites": 2,
+            "schema_invalid": 2,
+            "schema_type_error:blocked_content": 2
+          },
+          "failure_count": 6
+        },
+        "mobile_short_message": {
+          "case_count": 13,
+          "contract_pass_rate": 0.846154,
+          "failure_categories": {
+            "schema_invalid": 2,
+            "schema_type_error:evidence_needed": 2,
+            "schema_type_error:learner_state_update": 2
+          },
+          "failure_count": 2
+        },
+        "reflection_after_failure": {
+          "case_count": 13,
+          "contract_pass_rate": 0.692308,
+          "failure_categories": {
+            "json_invalid": 1,
+            "missing_schema_field:edges": 1,
+            "missing_schema_field:evidence_ids": 1,
+            "missing_schema_field:nodes": 1,
+            "missing_schema_field:prerequisites": 1,
+            "schema_invalid": 3,
+            "schema_type_error:blocked_content": 3
+          },
+          "failure_count": 4
+        },
+        "teacher_assignment_context": {
+          "case_count": 13,
+          "contract_pass_rate": 0.615385,
+          "failure_categories": {
+            "grounding_unsafe": 2,
+            "schema_invalid": 3,
+            "schema_type_error:evidence_needed": 3,
+            "schema_type_error:learner_state_update": 3,
+            "schema_type_error:recommended_action": 3
+          },
+          "failure_count": 5
+        },
+        "typo_pinyin_mix": {
+          "case_count": 13,
+          "contract_pass_rate": 0.846154,
+          "failure_categories": {
+            "schema_invalid": 2,
+            "schema_type_error:evidence_needed": 2,
+            "schema_type_error:learner_state_update": 2,
+            "schema_type_error:recommended_action": 1
+          },
+          "failure_count": 2
+        },
+        "vague_reference": {
+          "case_count": 13,
+          "contract_pass_rate": 0.769231,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "schema_invalid": 2,
+            "schema_type_error:blocked_content": 2
+          },
+          "failure_count": 3
+        },
+        "wrong_kc_guess": {
+          "case_count": 13,
+          "contract_pass_rate": 0.461538,
+          "failure_categories": {
+            "grounding_unsafe": 4,
+            "schema_invalid": 3,
+            "schema_type_error:blocked_content": 3
+          },
+          "failure_count": 7
+        }
+      },
+      "chapter": {
+        "1": {
+          "case_count": 72,
+          "contract_pass_rate": 0.680556,
+          "failure_categories": {
+            "grounding_unsafe": 9,
+            "json_invalid": 1,
+            "missing_schema_field:edges": 1,
+            "missing_schema_field:evidence_ids": 1,
+            "missing_schema_field:nodes": 1,
+            "missing_schema_field:prerequisites": 1,
+            "schema_invalid": 13,
+            "schema_type_error:blocked_content": 6,
+            "schema_type_error:evidence_needed": 7,
+            "schema_type_error:learner_state_update": 7,
+            "schema_type_error:recommended_action": 3
+          },
+          "failure_count": 23
+        },
+        "2": {
+          "case_count": 72,
+          "contract_pass_rate": 0.597222,
+          "failure_categories": {
+            "forbidden_leak": 1,
+            "grounding_unsafe": 16,
+            "json_invalid": 5,
+            "missing_schema_field:edges": 4,
+            "missing_schema_field:evidence_ids": 5,
+            "missing_schema_field:mastery_gate": 1,
+            "missing_schema_field:next_practice": 1,
+            "missing_schema_field:next_resource": 1,
+            "missing_schema_field:nodes": 4,
+            "missing_schema_field:prerequisites": 4,
+            "missing_schema_field:state_summary": 1,
+            "schema_invalid": 13,
+            "schema_type_error:blocked_content": 6,
+            "schema_type_error:evidence_needed": 7,
+            "schema_type_error:learner_state_update": 7,
+            "schema_type_error:recommended_action": 4
+          },
+          "failure_count": 29
+        },
+        "3": {
+          "case_count": 71,
+          "contract_pass_rate": 0.591549,
+          "failure_categories": {
+            "forbidden_leak": 1,
+            "grounding_unsafe": 10,
+            "json_invalid": 4,
+            "missing_schema_field:edges": 4,
+            "missing_schema_field:evidence_ids": 4,
+            "missing_schema_field:nodes": 4,
+            "missing_schema_field:prerequisites": 4,
+            "schema_invalid": 15,
+            "schema_type_error:blocked_content": 8,
+            "schema_type_error:evidence_needed": 7,
+            "schema_type_error:learner_state_update": 7,
+            "schema_type_error:recommended_action": 3
+          },
+          "failure_count": 29
+        },
+        "4": {
+          "case_count": 71,
+          "contract_pass_rate": 0.591549,
+          "failure_categories": {
+            "forbidden_leak": 1,
+            "grounding_unsafe": 9,
+            "json_invalid": 5,
+            "missing_schema_field:edges": 5,
+            "missing_schema_field:evidence_ids": 5,
+            "missing_schema_field:nodes": 5,
+            "missing_schema_field:prerequisites": 5,
+            "schema_invalid": 15,
+            "schema_type_error:blocked_content": 8,
+            "schema_type_error:evidence_needed": 7,
+            "schema_type_error:learner_state_update": 7,
+            "schema_type_error:recommended_action": 4
+          },
+          "failure_count": 29
+        },
+        "5": {
+          "case_count": 72,
+          "contract_pass_rate": 0.666667,
+          "failure_categories": {
+            "grounding_unsafe": 9,
+            "schema_invalid": 15,
+            "schema_type_error:blocked_content": 8,
+            "schema_type_error:evidence_needed": 7,
+            "schema_type_error:learner_state_update": 7,
+            "schema_type_error:recommended_action": 4
+          },
+          "failure_count": 24
+        },
+        "6": {
+          "case_count": 70,
+          "contract_pass_rate": 0.642857,
+          "failure_categories": {
+            "grounding_unsafe": 9,
+            "json_invalid": 4,
+            "missing_schema_field:edges": 4,
+            "missing_schema_field:evidence_ids": 4,
+            "missing_schema_field:nodes": 4,
+            "missing_schema_field:prerequisites": 4,
+            "schema_invalid": 15,
+            "schema_type_error:blocked_content": 7,
+            "schema_type_error:evidence_needed": 8,
+            "schema_type_error:learner_state_update": 8,
+            "schema_type_error:recommended_action": 2
+          },
+          "failure_count": 25
+        },
+        "7": {
+          "case_count": 72,
+          "contract_pass_rate": 0.652778,
+          "failure_categories": {
+            "forbidden_leak": 1,
+            "grounding_unsafe": 8,
+            "json_invalid": 2,
+            "missing_schema_field:edges": 2,
+            "missing_schema_field:evidence_ids": 2,
+            "missing_schema_field:nodes": 2,
+            "missing_schema_field:prerequisites": 2,
+            "schema_invalid": 16,
+            "schema_type_error:blocked_content": 7,
+            "schema_type_error:evidence_needed": 7,
+            "schema_type_error:learner_state_update": 7,
+            "schema_type_error:recommended_action": 3,
+            "schema_type_error:revision_request": 1,
+            "schema_type_error:safer_alternative": 1
+          },
+          "failure_count": 25
+        }
+      },
+      "evidence": {
+        "none": {
+          "case_count": 150,
+          "contract_pass_rate": 0.713333,
+          "failure_categories": {
+            "forbidden_leak": 3,
+            "grounding_unsafe": 42,
+            "json_invalid": 1,
+            "missing_schema_field:evidence_ids": 1,
+            "missing_schema_field:mastery_gate": 1,
+            "missing_schema_field:next_practice": 1,
+            "missing_schema_field:next_resource": 1,
+            "missing_schema_field:state_summary": 1,
+            "schema_invalid": 1,
+            "schema_type_error:safer_alternative": 1
+          },
+          "failure_count": 43
+        },
+        "required": {
+          "case_count": 350,
+          "contract_pass_rate": 0.597143,
+          "failure_categories": {
+            "forbidden_leak": 1,
+            "grounding_unsafe": 28,
+            "json_invalid": 20,
+            "missing_schema_field:edges": 20,
+            "missing_schema_field:evidence_ids": 20,
+            "missing_schema_field:nodes": 20,
+            "missing_schema_field:prerequisites": 20,
+            "schema_invalid": 101,
+            "schema_type_error:blocked_content": 50,
+            "schema_type_error:evidence_needed": 50,
+            "schema_type_error:learner_state_update": 50,
+            "schema_type_error:recommended_action": 23,
+            "schema_type_error:revision_request": 1
+          },
+          "failure_count": 141
+        }
+      },
+      "failure_category": {
+        "forbidden_leak": 4,
+        "grounding_unsafe": 70,
+        "json_invalid": 21,
+        "missing_schema_field:edges": 20,
+        "missing_schema_field:evidence_ids": 21,
+        "missing_schema_field:mastery_gate": 1,
+        "missing_schema_field:next_practice": 1,
+        "missing_schema_field:next_resource": 1,
+        "missing_schema_field:nodes": 20,
+        "missing_schema_field:prerequisites": 20,
+        "missing_schema_field:state_summary": 1,
+        "schema_invalid": 102,
+        "schema_type_error:blocked_content": 50,
+        "schema_type_error:evidence_needed": 50,
+        "schema_type_error:learner_state_update": 50,
+        "schema_type_error:recommended_action": 23,
+        "schema_type_error:revision_request": 1,
+        "schema_type_error:safer_alternative": 1
+      },
+      "missing_schema_field": {
+        "edges": 20,
+        "evidence_ids": 21,
+        "mastery_gate": 1,
+        "next_practice": 1,
+        "next_resource": 1,
+        "nodes": 20,
+        "prerequisites": 20,
+        "state_summary": 1
+      },
+      "safety": {
+        "sensitive": {
+          "case_count": 68,
+          "contract_pass_rate": 0.529412,
+          "failure_categories": {
+            "forbidden_leak": 1,
+            "grounding_unsafe": 14,
+            "schema_invalid": 19,
+            "schema_type_error:blocked_content": 18,
+            "schema_type_error:safer_alternative": 1
+          },
+          "failure_count": 32
+        },
+        "standard": {
+          "case_count": 432,
+          "contract_pass_rate": 0.648148,
+          "failure_categories": {
+            "forbidden_leak": 3,
+            "grounding_unsafe": 56,
+            "json_invalid": 21,
+            "missing_schema_field:edges": 20,
+            "missing_schema_field:evidence_ids": 21,
+            "missing_schema_field:mastery_gate": 1,
+            "missing_schema_field:next_practice": 1,
+            "missing_schema_field:next_resource": 1,
+            "missing_schema_field:nodes": 20,
+            "missing_schema_field:prerequisites": 20,
+            "missing_schema_field:state_summary": 1,
+            "schema_invalid": 83,
+            "schema_type_error:blocked_content": 32,
+            "schema_type_error:evidence_needed": 50,
+            "schema_type_error:learner_state_update": 50,
+            "schema_type_error:recommended_action": 23,
+            "schema_type_error:revision_request": 1
+          },
+          "failure_count": 152
+        }
+      },
+      "schema_type_error": {
+        "blocked_content": 50,
+        "evidence_needed": 50,
+        "learner_state_update": 50,
+        "recommended_action": 23,
+        "revision_request": 1,
+        "safer_alternative": 1
+      },
+      "web_input": {
+        "ASK": {
+          "case_count": 9,
+          "contract_pass_rate": 0.666667,
+          "failure_categories": {
+            "json_invalid": 1,
+            "missing_schema_field:edges": 1,
+            "missing_schema_field:evidence_ids": 1,
+            "missing_schema_field:nodes": 1,
+            "missing_schema_field:prerequisites": 1,
+            "schema_invalid": 2,
+            "schema_type_error:blocked_content": 1,
+            "schema_type_error:evidence_needed": 1,
+            "schema_type_error:learner_state_update": 1
+          },
+          "failure_count": 3
+        },
+        "DEBUG": {
+          "case_count": 9,
+          "contract_pass_rate": 0.888889,
+          "failure_categories": {
+            "schema_invalid": 1,
+            "schema_type_error:blocked_content": 1
+          },
+          "failure_count": 1
+        },
+        "HANDOUT": {
+          "case_count": 8,
+          "contract_pass_rate": 0.625,
+          "failure_categories": {
+            "json_invalid": 1,
+            "missing_schema_field:edges": 1,
+            "missing_schema_field:evidence_ids": 1,
+            "missing_schema_field:nodes": 1,
+            "missing_schema_field:prerequisites": 1,
+            "schema_invalid": 2,
+            "schema_type_error:blocked_content": 1,
+            "schema_type_error:evidence_needed": 1,
+            "schema_type_error:learner_state_update": 1
+          },
+          "failure_count": 3
+        },
+        "MINDMAP": {
+          "case_count": 8,
+          "contract_pass_rate": 0.75,
+          "failure_categories": {
+            "schema_invalid": 2,
+            "schema_type_error:blocked_content": 1,
+            "schema_type_error:evidence_needed": 1,
+            "schema_type_error:learner_state_update": 1
+          },
+          "failure_count": 2
+        },
+        "PATH": {
+          "case_count": 8,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "PRACTICE": {
+          "case_count": 8,
+          "contract_pass_rate": 0.375,
+          "failure_categories": {
+            "forbidden_leak": 2,
+            "grounding_unsafe": 1,
+            "json_invalid": 1,
+            "missing_schema_field:evidence_ids": 1,
+            "missing_schema_field:mastery_gate": 1,
+            "missing_schema_field:next_practice": 1,
+            "missing_schema_field:next_resource": 1,
+            "missing_schema_field:state_summary": 1,
+            "schema_invalid": 3,
+            "schema_type_error:blocked_content": 1,
+            "schema_type_error:evidence_needed": 2,
+            "schema_type_error:learner_state_update": 2,
+            "schema_type_error:recommended_action": 2
+          },
+          "failure_count": 5
+        },
+        "non_web": {
+          "case_count": 450,
+          "contract_pass_rate": 0.622222,
+          "failure_categories": {
+            "forbidden_leak": 2,
+            "grounding_unsafe": 69,
+            "json_invalid": 18,
+            "missing_schema_field:edges": 18,
+            "missing_schema_field:evidence_ids": 18,
+            "missing_schema_field:nodes": 18,
+            "missing_schema_field:prerequisites": 18,
+            "schema_invalid": 92,
+            "schema_type_error:blocked_content": 45,
+            "schema_type_error:evidence_needed": 45,
+            "schema_type_error:learner_state_update": 45,
+            "schema_type_error:recommended_action": 21,
+            "schema_type_error:revision_request": 1,
+            "schema_type_error:safer_alternative": 1
+          },
+          "failure_count": 170
+        }
+      }
+    }
+  },
+  "models": {
+    "dpo": {
+      "case_count": 500,
+      "critical_slices": {
+        "agent:GuideCoachAgent": 0.0,
+        "agent:PracticeAgent": 0.02,
+        "agent:SafetyAgent": 0.94,
+        "beginner_noise": 0.766667,
+        "evidence_required": 0.614286,
+        "safety_sensitive": 0.691176,
+        "web_input": 0.74
+      },
+      "fallback_count": 4,
+      "fallback_rate": 0.008,
+      "final": {
+        "case_count": 500,
+        "contract_pass_rate": 1.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "schema_valid_rate": 1.0,
+        "score_mean": 1.0
+      },
+      "guard": {
+        "case_count": 500,
+        "contract_pass_rate": 0.992,
+        "forbidden_leak_rate": 0.002,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 0.994,
+        "schema_valid_rate": 0.994,
+        "score_mean": 0.999333
+      },
+      "guard_repair_count": 137,
+      "guard_repair_rate": 0.274,
+      "guard_repair_rate_among_raw_failures": 0.971631,
+      "layer_semantics": {
+        "final": "guard result or deterministic fallback replay; final 100% must not be attributed to the raw model",
+        "guard": "offline deterministic contract-repair replay; not a claim about historical production guard execution",
+        "raw": "observed model response"
+      },
+      "primary_metric": "contract_pass_rate",
+      "raw": {
+        "case_count": 500,
+        "contract_pass_rate": 0.718,
+        "forbidden_leak_rate": 0.002,
+        "grounding_safe_rate": 0.988,
+        "json_valid_rate": 0.994,
+        "schema_valid_rate": 0.732,
+        "score_mean": 0.998
+      },
+      "safety_sensitive_forbidden_leak_rate": 0.0
+    },
+    "orpo": {
+      "case_count": 500,
+      "critical_slices": {
+        "agent:GuideCoachAgent": 0.0,
+        "agent:PracticeAgent": 0.02,
+        "agent:SafetyAgent": 0.88,
+        "beginner_noise": 0.733333,
+        "evidence_required": 0.654286,
+        "safety_sensitive": 0.647059,
+        "web_input": 0.8
+      },
+      "fallback_count": 9,
+      "fallback_rate": 0.018,
+      "final": {
+        "case_count": 500,
+        "contract_pass_rate": 1.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "schema_valid_rate": 1.0,
+        "score_mean": 1.0
+      },
+      "guard": {
+        "case_count": 500,
+        "contract_pass_rate": 0.982,
+        "forbidden_leak_rate": 0.004,
+        "grounding_safe_rate": 0.996,
+        "json_valid_rate": 0.986,
+        "schema_valid_rate": 0.984,
+        "score_mean": 0.9989
+      },
+      "guard_repair_count": 131,
+      "guard_repair_rate": 0.262,
+      "guard_repair_rate_among_raw_failures": 0.935714,
+      "layer_semantics": {
+        "final": "guard result or deterministic fallback replay; final 100% must not be attributed to the raw model",
+        "guard": "offline deterministic contract-repair replay; not a claim about historical production guard execution",
+        "raw": "observed model response"
+      },
+      "primary_metric": "contract_pass_rate",
+      "raw": {
+        "case_count": 500,
+        "contract_pass_rate": 0.72,
+        "forbidden_leak_rate": 0.004,
+        "grounding_safe_rate": 0.932,
+        "json_valid_rate": 0.986,
+        "schema_valid_rate": 0.782,
+        "score_mean": 0.990367
+      },
+      "safety_sensitive_forbidden_leak_rate": 0.0
+    },
+    "sft": {
+      "case_count": 500,
+      "critical_slices": {
+        "agent:GuideCoachAgent": 0.0,
+        "agent:PracticeAgent": 0.0,
+        "agent:SafetyAgent": 0.72,
+        "beginner_noise": 0.686667,
+        "evidence_required": 0.597143,
+        "safety_sensitive": 0.529412,
+        "web_input": 0.72
+      },
+      "fallback_count": 23,
+      "fallback_rate": 0.046,
+      "final": {
+        "case_count": 500,
+        "contract_pass_rate": 1.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "schema_valid_rate": 1.0,
+        "score_mean": 1.0
+      },
+      "guard": {
+        "case_count": 500,
+        "contract_pass_rate": 0.954,
+        "forbidden_leak_rate": 0.008,
+        "grounding_safe_rate": 0.984,
+        "json_valid_rate": 0.958,
+        "schema_valid_rate": 0.958,
+        "score_mean": 0.994033
+      },
+      "guard_repair_count": 161,
+      "guard_repair_rate": 0.322,
+      "guard_repair_rate_among_raw_failures": 0.875,
+      "layer_semantics": {
+        "final": "guard result or deterministic fallback replay; final 100% must not be attributed to the raw model",
+        "guard": "offline deterministic contract-repair replay; not a claim about historical production guard execution",
+        "raw": "observed model response"
+      },
+      "primary_metric": "contract_pass_rate",
+      "raw": {
+        "case_count": 500,
+        "contract_pass_rate": 0.632,
+        "forbidden_leak_rate": 0.008,
+        "grounding_safe_rate": 0.86,
+        "json_valid_rate": 0.958,
+        "schema_valid_rate": 0.754,
+        "score_mean": 0.9832
+      },
+      "safety_sensitive_forbidden_leak_rate": 0.014706
+    }
+  },
+  "paired_comparison": {
+    "case_count": 500,
+    "models": [
+      "sft",
+      "dpo",
+      "orpo"
+    ],
+    "pairwise": {
+      "dpo_vs_orpo": {
+        "contract_ties": 445,
+        "full_ties": 430,
+        "left": "dpo",
+        "left_wins": 41,
+        "ordering": "contract_pass_then_auxiliary_score",
+        "right": "orpo",
+        "right_wins": 29
+      },
+      "sft_vs_dpo": {
+        "contract_ties": 419,
+        "full_ties": 396,
+        "left": "sft",
+        "left_wins": 20,
+        "ordering": "contract_pass_then_auxiliary_score",
+        "right": "dpo",
+        "right_wins": 84
+      },
+      "sft_vs_orpo": {
+        "contract_ties": 432,
+        "full_ties": 423,
+        "left": "sft",
+        "left_wins": 17,
+        "ordering": "contract_pass_then_auxiliary_score",
+        "right": "orpo",
+        "right_wins": 60
+      }
+    }
+  },
+  "primary_metric": "contract_pass_rate",
+  "protocol": {
+    "cases_path": "cases/domain_cases_5000_v1_stratified500.jsonl",
+    "cases_sha256": "69e33f6dddff052577630672d2aa4cf7903363e87e1e505d6f1ba2fb2522c1e0",
+    "max_tokens": "per_case.max_tokens",
+    "prompt_variant": "baseline",
+    "response_sha256": {
+      "dpo": "35787c709e519d9a5807e1e5fa05f6d6c96f87840a51a57e3db7f7b10b601d4e",
+      "orpo": "b26c25da00bb65c6ab0b1177c68c596e57e58b4ef1b2ef5d0f4cbca774b9aefb",
+      "sft": "cdd5316469878728f4fed5bef9ad206928fd505071c510705ffb915d20983214"
+    },
+    "seed": 20260708,
+    "temperature": 0.0,
+    "warning": "This manifest proves case identity and rescoring settings. It does not prove historical serve commands unless each source run saved its own immutable run manifest."
+  }
+}

@@ -84,4 +84,19 @@ describe('useEndlessRun', () => {
     expect(run.history.value.length).toBe(0);
     expect(run.errorMessage.value).toContain('判题服务暂不可用');
   });
+
+  it('把纵深难度交给后端，并以服务端画像合成后的难度为真源', async () => {
+    apiMocks.requestBossProblem.mockResolvedValueOnce({ ...PROBLEM, difficulty: 4 });
+    const run = useEndlessRun();
+
+    await run.startRun();
+
+    expect(apiMocks.requestBossProblem).toHaveBeenCalledWith(
+      expect.any(Number),
+      expect.objectContaining({ difficulty: 2 }),
+      { allowGoldenFallback: false },
+    );
+    expect(run.problem.value?.difficulty).toBe(4);
+    expect(run.currentDifficulty.value).toBe(4);
+  });
 });

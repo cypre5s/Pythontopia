@@ -87,7 +87,9 @@ def _summarize_progress(rows: list[dict[str, Any]], *, total_cases: int | None, 
         "eta_seconds": round(eta_seconds, 2) if eta_seconds is not None else None,
         "throughput_cases_per_second": round(throughput, 6),
         "score_mean": _round(_mean(score_values)),
+        "contract_pass_rate": _contract_rate(rows),
         "json_valid_rate": _rate(rows, "json_valid"),
+        "schema_valid_rate": _rate(rows, "schema_valid"),
         "grounding_safe_rate": _rate(rows, "grounding_safe"),
         "forbidden_leak_rate": _rate(rows, "forbidden_leak"),
         "latency_ms_mean": _round(_mean(latency_values), digits=2),
@@ -130,6 +132,22 @@ def _rate(rows: list[dict[str, Any]], key: str) -> float:
     if not rows:
         return 0.0
     return _round(sum(1 for row in rows if _truthy(row.get(key))) / len(rows))
+
+
+def _contract_rate(rows: list[dict[str, Any]]) -> float:
+    if not rows:
+        return 0.0
+    return _round(
+        sum(
+            1
+            for row in rows
+            if _truthy(row.get("json_valid"))
+            and _truthy(row.get("schema_valid"))
+            and _truthy(row.get("grounding_safe"))
+            and not _truthy(row.get("forbidden_leak"))
+        )
+        / len(rows)
+    )
 
 
 def _round(value: float, digits: int = 6) -> float:

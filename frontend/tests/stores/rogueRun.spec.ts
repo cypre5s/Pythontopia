@@ -6,6 +6,8 @@ const judgeMock = vi.hoisted(() => ({
   fetchProblem: vi.fn(),
   judge: vi.fn(),
   prefetchProblem: vi.fn(),
+  retryPrefetch: vi.fn(),
+  getPrefetchState: vi.fn(),
   clearPrefetch: vi.fn(),
 }));
 const frontierApiMock = vi.hoisted(() => ({
@@ -23,15 +25,9 @@ vi.mock('@/composables/useChallengeJudge', () => ({
     fetchProblem: judgeMock.fetchProblem,
     judge: judgeMock.judge,
     prefetchProblem: judgeMock.prefetchProblem,
+    retryPrefetch: judgeMock.retryPrefetch,
+    getPrefetchState: judgeMock.getPrefetchState,
     clearPrefetch: judgeMock.clearPrefetch,
-  }),
-}));
-vi.mock('@/composables/useKcFrontier', () => ({
-  useKcFrontier: () => ({
-    masteryOf: () => 0,
-    frontier: () => ['PY43-KC-001'],
-    pickKc: () => 'PY43-KC-001',
-    difficultyForKc: () => 2,
   }),
 }));
 vi.mock('@/composables/useProfileSignals', () => ({
@@ -68,10 +64,14 @@ beforeEach(() => {
   localStorage.clear();
   judgeMock.fetchProblem.mockReset().mockResolvedValue(problem());
   judgeMock.judge.mockReset();
-  judgeMock.prefetchProblem.mockReset();
+  judgeMock.prefetchProblem.mockReset().mockResolvedValue({ phase: 'pending', attempts: 1 });
+  judgeMock.retryPrefetch.mockReset().mockResolvedValue({ phase: 'pending', attempts: 2 });
+  judgeMock.getPrefetchState.mockReset().mockReturnValue({ phase: 'idle', attempts: 0 });
   judgeMock.clearPrefetch.mockReset();
-  // 默认后端前沿选择器返回空 → 回退本地 useKcFrontier。
-  frontierApiMock.requestFrontierPicks.mockReset().mockResolvedValue([]);
+  // 默认使用后端权威画像/掌握度前沿；聚焦章节不足地图节点时循环这一真实排序。
+  frontierApiMock.requestFrontierPicks.mockReset().mockResolvedValue([
+    { kcCode: 'PY43-KC-001', chapter: 1, difficulty: 2, reason: '最近发展区' },
+  ]);
   // 默认没有后端活跃 run；startRun 新开局。
   frontierApiMock.fetchExpeditionRun.mockReset().mockResolvedValue(null);
   frontierApiMock.saveExpeditionRun.mockReset().mockResolvedValue(undefined);
@@ -473,12 +473,13 @@ describe('rogueRun store', () => {
     expect(start?.difficulty).toBe(4);
   });
 
-  it('falls back to local frontier when the backend selector throws', async () => {
+  it('keeps the run idle and reports an error when evidence-backed frontier loading fails', async () => {
     frontierApiMock.requestFrontierPicks.mockRejectedValueOnce(new Error('network'));
     const run = useRogueRunStore();
     await run.startRun(null);
-    const start = run.nodes.find((n) => n.layer === 0);
-    expect(start?.kcCode).toBe('PY43-KC-001'); // 本地 useKcFrontier mock
+    expect(run.phase).toBe('idle');
+    expect(run.nodes).toHaveLength(0);
+    expect(run.errorMessage).toContain('network');
   });
 
   it('shows an active backend run as a selectable save before continuing', async () => {

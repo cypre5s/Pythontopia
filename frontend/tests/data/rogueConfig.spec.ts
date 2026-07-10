@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   allKcCodes,
   chapterKcs,
+  computeLayeredDifficulty,
   computeRunDifficulty,
   kcChapter,
   KC_TOTAL,
@@ -35,6 +36,20 @@ describe('rogueConfig KC↔chapter', () => {
     ]);
     const union = [1, 2, 3, 4, 5, 6, 7].flatMap((c) => chapterKcs(c));
     expect(union.sort()).toEqual(allKcCodes().sort());
+  });
+});
+
+describe('computeLayeredDifficulty (画像基线 + 地图纵深)', () => {
+  it('starts from the evidence-backed baseline and rises every four layers', () => {
+    expect(computeLayeredDifficulty(2, 0)).toBe(2);
+    expect(computeLayeredDifficulty(2, 3)).toBe(2);
+    expect(computeLayeredDifficulty(2, 4)).toBe(3);
+    expect(computeLayeredDifficulty(2, 8)).toBe(4);
+  });
+
+  it('clamps malformed evidence and deep maps into 1..5', () => {
+    expect(computeLayeredDifficulty(0, 0)).toBe(1);
+    expect(computeLayeredDifficulty(5, 99)).toBe(5);
   });
 });
 

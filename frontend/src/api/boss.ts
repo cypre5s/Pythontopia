@@ -11,6 +11,7 @@ import { http, ApiClientError } from './http';
 import type {
   BossAttemptRequest,
   BossAttemptResultDto,
+  BossPrefetchStatusDto,
   BossProblemDto,
   BossProblemRequest,
 } from './dto/Boss';
@@ -227,8 +228,10 @@ function buildBuggyCode(template: GoldenTemplate): string {
 export async function requestBossProblem(
   chapter: number,
   arg: number | BossProblemRequest,
+  options: { allowGoldenFallback?: boolean } = {},
 ): Promise<BossProblemDto> {
   const req: BossProblemRequest = typeof arg === 'number' ? { stage: arg } : arg;
+  const allowGoldenFallback = options.allowGoldenFallback ?? true;
   try {
     const response = await http.post<BossProblemDto>(
       `/api/world/boss/${chapter}/problem`,
@@ -239,9 +242,16 @@ export async function requestBossProblem(
       },
     );
     if (response.data && typeof response.data.problemId === 'string') {
+      if (!allowGoldenFallback && (!response.data.aiGenerated || !response.data.reviewed)) {
+        throw new Error('生成题未通过 AI 审查，未进入远征');
+      }
       return normalizeProblemForKind(response.data, req.preferredKind);
     }
+    throw new Error('出题服务返回了不完整的题目');
   } catch (error) {
+    if (!allowGoldenFallback) {
+      throw error instanceof Error ? error : new Error(String(error));
+    }
     if (typeof console !== 'undefined') {
       const status = error instanceof ApiClientError ? error.status ?? 0 : 0;
       const msg = error instanceof Error ? error.message : String(error);
@@ -319,22 +329,44 @@ export async function submitBossAttempt(
 /**
  * 触发后台「预生成下一题」：POST /api/world/boss/{chapter}/prefetch。
  *
- * best-effort fire-and-forget——后端异步生成并落库 (status=READY)，本调用立即 resolve；任何失败
- * （4xx/5xx/网络）只 warn 不抛、不弹全局 toast（suppressNetworkToast），因为 nextProblem 会自然回退
- * 现场出题，预取仅为加速、非必需。
+ * 后端先持久化 PENDING 并返回 job id；生成成功才转 READY，失败转 FAILED。相同维度再次 POST
+ * 会重试 FAILED 任务。调用方必须处理 reject，避免把网络失败误报为就绪。
  */
 export async function prefetchBossProblem(
   chapter: number,
   req: BossProblemRequest,
-): Promise<void> {
-  try {
-    await http.post(`/api/world/boss/${chapter}/prefetch`, req, {
-      suppressNetworkToast: true,
-    });
-  } catch (error) {
-    if (typeof console !== 'undefined') {
-      const msg = error instanceof Error ? error.message : String(error);
-      console.warn('[boss] prefetch failed (ignored):', msg);
-    }
+): Promise<BossPrefetchStatusDto> {
+  const response = await http.post<BossPrefetchStatusDto>(
+    `/api/world/boss/${chapter}/prefetch`,
+    req,
+    { suppressNetworkToast: true },
+  );
+  if (!response.data || !['PENDING', 'READY', 'FAILED'].includes(response.data.status)) {
+    throw new Error('预加载服务返回了无效状态');
   }
+  return response.data;
+}
+
+/** Query the persisted state for exactly the same KC/kind/level/difficulty dimensions. */
+export async function fetchBossPrefetchStatus(
+  chapter: number,
+  req: Pick<BossProblemRequest, 'preferredKc' | 'preferredKind' | 'arenaLevel' | 'difficulty'>,
+): Promise<BossPrefetchStatusDto> {
+  if (req.difficulty == null) throw new Error('查询预加载状态必须提供 difficulty');
+  const response = await http.get<BossPrefetchStatusDto>(
+    `/api/world/boss/${chapter}/prefetch`,
+    {
+      params: {
+        preferredKc: req.preferredKc,
+        preferredKind: req.preferredKind,
+        arenaLevel: req.arenaLevel,
+        difficulty: req.difficulty,
+      },
+      suppressNetworkToast: true,
+    },
+  );
+  if (!response.data || !['IDLE', 'PENDING', 'READY', 'FAILED'].includes(response.data.status)) {
+    throw new Error('预加载状态查询返回了无效结果');
+  }
+  return response.data;
 }

@@ -269,3 +269,14 @@ Each experiment run writes:
 Training reports additionally write `training_curve.json` and `charts/training_loss.svg`.
 
 Generated raw datasets, normalized external data, model weights, virtualenvs, and run outputs are ignored by Git. The reusable code, configs, docs, and domain case set are tracked.
+
+## Contract quality flywheel
+
+Model promotion is failure-driven rather than time-driven:
+
+1. `scripts/build_quality_flywheel_report.py` rescores the same response files at raw / guard / final layers. The primary metric is `contract_pass_rate = json_valid && schema_valid && grounding_safe && !forbidden_leak`; auxiliary `score` must not override it.
+2. `scripts/build_schema_preferences.py` builds 200–500 chosen/rejected pairs from observed schema failures and excludes every protected golden/stratified case by id, prompt fingerprint, and lineage.
+3. `scripts/build_dpo_training_plan.py` plus `scripts/audit_one_variable_round.py` pins trainer controls and proves that a candidate changes only one declared variable. `train_dpo.py` / `train_orpo.py` run token, zero-label, duplicate, split-overlap, and protected-overlap checks before training; failures are archived separately and checkpoints can be resumed.
+4. Every candidate reruns golden 50 and the identical stratified 500. `pyt_agent_lab.promotion_gate.evaluate_promotion` permits the full 5000 + blind review only when raw contract and critical slices do not regress, schema improves on the stratified set, safety-sensitive leak is zero, and guard repair/fallback do not increase.
+
+Evaluation writes `run_manifest.json`, incremental responses/metrics/progress snapshots, dataset and prompt hashes, adapter/schema/seed/decoding metadata, and dependency versions. A final-layer 100% includes deterministic guard/fallback behavior and must never be reported as raw-model 100%.

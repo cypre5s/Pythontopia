@@ -10,6 +10,7 @@ from pyt_agent_lab.baseline import OpenAICompatClient, ResponseJsonlWriter, load
 from pyt_agent_lab.experiment_logging import ExperimentLogger
 from pyt_agent_lab.folds import kfold
 from pyt_agent_lab.reporting import aggregate_fold_metrics, build_report
+from pyt_agent_lab.training_quality import complete_evaluation_manifest, initialize_evaluation_manifest
 
 
 def main() -> None:
@@ -30,6 +31,16 @@ def main() -> None:
     run_dir = Path(args.run_dir or f"research/vllm-agent-ft-lab/runs/baseline-{_stamp()}")
     client = OpenAICompatClient(args.base_url, args.api_key, args.model)
     cases = load_cases(args.cases)
+    initialize_evaluation_manifest(
+        run_dir=run_dir,
+        cases_path=args.cases,
+        endpoint=args.base_url,
+        model=args.model,
+        prompt_variant=args.prompt_variant,
+        seed=args.seed,
+        folds=args.folds,
+        concurrency=args.concurrency,
+    )
     responses_path = run_dir / "responses.jsonl"
     completed_ids = load_completed_response_case_ids(responses_path) if args.resume else set()
     if completed_ids:
@@ -68,6 +79,7 @@ def main() -> None:
     metrics = _dedupe_metric_rows(list(csv.DictReader((run_dir / "metrics.csv").open(encoding="utf-8"))))
     summary = aggregate_fold_metrics(metrics)
     build_report(summary, run_dir)
+    complete_evaluation_manifest(run_dir, summary)
     print(run_dir)
     print(summary)
 

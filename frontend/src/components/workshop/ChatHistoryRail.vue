@@ -61,11 +61,6 @@ interface ConversationGroup {
   title: string;
   turnCount: number;
   latestAt: string;
-  evidenceLabel: string;
-  evidenceClass: string;
-  kindLabel: string;
-  kindClass: string;
-  toolLabel: string | null;
   turns: WorkshopChatHistoryTurnDto[];
 }
 
@@ -89,11 +84,6 @@ const groups = computed<ConversationGroup[]>(() => {
       title: earliest.userText,
       turnCount: asc.length,
       latestAt: latest.createdAt,
-      evidenceLabel: groundingLabel(latest.groundingStatus),
-      evidenceClass: latest.groundingStatus || 'NONE',
-      kindLabel: historyKindLabel(latest),
-      kindClass: historyKindClass(latest),
-      toolLabel: latest.toolLabel,
       turns: bucket,
     });
   }
@@ -145,27 +135,6 @@ function pick(group: ConversationGroup): void {
   emit('select', group.turns);
 }
 
-const GROUNDING_LABEL: Record<string, string> = {
-  PASSED: '引用充分',
-  NO_EVIDENCE: '通识',
-  FAILED: '未过',
-};
-function groundingLabel(status: string | null): string {
-  if (!status) return '记录';
-  return GROUNDING_LABEL[status] ?? status;
-}
-
-function historyKindLabel(turn: WorkshopChatHistoryTurnDto): string {
-  const source = turn.intent || turn.responseKind;
-  const normalized = source.trim().toUpperCase();
-  if (normalized === 'ANSWER') return 'ASK';
-  return normalized || '记录';
-}
-
-function historyKindClass(turn: WorkshopChatHistoryTurnDto): string {
-  return historyKindLabel(turn).replace(/[^A-Z0-9_-]/g, '');
-}
-
 function shortTime(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
@@ -209,28 +178,26 @@ function shortTime(iso: string): string {
       class="history__panel"
       data-testid="workshop-history-panel"
     >
-      <header class="history__head">
-        <span class="history__title">📜 历史问答</span>
+      <div class="history__tools">
+        <input
+          v-if="loaded && !failed && turns.length > 0"
+          v-model="query"
+          type="search"
+          class="history__search"
+          placeholder="搜索历史"
+          data-testid="workshop-history-search"
+        >
         <button
           type="button"
           class="history__refresh"
           data-testid="workshop-history-refresh"
+          aria-label="刷新历史问答"
           title="刷新"
           @click="refresh"
         >
           ↻
         </button>
-      </header>
-
-      <!-- 本地搜索：会话多了也能按标题 / 问题文本快速筛。 -->
-      <input
-        v-if="loaded && !failed && turns.length > 0"
-        v-model="query"
-        type="search"
-        class="history__search"
-        placeholder="搜索会话 / 问题…"
-        data-testid="workshop-history-search"
-      >
+      </div>
 
       <p
         v-if="loading"
@@ -255,7 +222,7 @@ function shortTime(iso: string): string {
         v-else-if="turns.length === 0"
         class="history__state"
       >
-        还没有问答记录，去对话框问点什么吧。
+        还没有问答记录
       </p>
       <p
         v-else-if="filteredGroups.length === 0"
@@ -283,28 +250,12 @@ function shortTime(iso: string): string {
                 v-if="g.turnCount > 1"
                 class="history__turns"
               >{{ g.turnCount }} 轮</span>
-              <span
-                class="history__g"
-                :class="`history__g--${g.evidenceClass}`"
-              >{{ g.evidenceLabel }}</span>
-              <span
-                class="history__kind"
-                :class="`history__kind--${g.kindClass}`"
-                :title="g.toolLabel || `类型：${g.kindLabel}`"
-              >{{ g.kindLabel }}</span>
               <span class="history__time">{{ shortTime(g.latestAt) }}</span>
             </span>
           </button>
         </li>
       </ul>
 
-      <!-- 续聊提示：点任意会话会回看并把当前窗口切到这段会话，接着问即并入同一条记录。 -->
-      <p
-        v-if="loaded && !failed && turns.length > 0"
-        class="history__hint"
-      >
-        💡 点会话可回看并接着聊
-      </p>
     </div>
   </aside>
 </template>
@@ -376,15 +327,12 @@ function shortTime(iso: string): string {
   gap: 6px;
   padding: 8px 10px;
 }
-.history__head {
+.history__tools {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
+  gap: 6px;
   flex: 0 0 auto;
-}
-.history__title {
-  font-size: 12px;
-  font-weight: 700;
 }
 .history__refresh {
   font-family: inherit;
@@ -401,8 +349,8 @@ function shortTime(iso: string): string {
   background: var(--pyt-color-warning-bg);
 }
 .history__search {
-  flex: 0 0 auto;
-  width: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
   box-sizing: border-box;
   font-family: inherit;
   font-size: 11px;
@@ -415,13 +363,6 @@ function shortTime(iso: string): string {
 .history__search:focus {
   outline: none;
   border-color: var(--pyt-color-text-hint);
-}
-.history__hint {
-  flex: 0 0 auto;
-  margin: 2px 0 0;
-  font-size: 10px;
-  line-height: 1.4;
-  color: var(--pyt-color-text-muted);
 }
 .history__state {
   margin: 4px 0 0;
@@ -448,26 +389,26 @@ function shortTime(iso: string): string {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 0;
   scrollbar-width: thin;
 }
 .history__item {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  padding: 6px 8px;
+  gap: 4px;
+  padding: 9px 4px;
   text-align: left;
   font-family: inherit;
-  border: 1px solid var(--pyt-color-border);
-  border-radius: var(--pyt-radius-md);
-  background: var(--pyt-color-bg-elevated);
+  border: 0;
+  border-bottom: 1px solid rgba(140, 106, 35, 0.22);
+  border-radius: 0;
+  background: transparent;
   color: var(--pyt-color-text-primary);
   cursor: pointer;
 }
 .history__item:hover {
-  background: #fff2c9;
-  border-color: var(--pyt-color-text-hint);
+  background: rgba(242, 218, 162, 0.34);
 }
 .history__q {
   font-size: 12px;
@@ -483,60 +424,9 @@ function shortTime(iso: string): string {
   justify-content: flex-start;
   gap: 6px;
 }
-.history__g,
-.history__kind {
-  font-size: 9px;
-  padding: 0 6px;
-  border-radius: var(--pyt-radius-full);
-  border: 1px solid var(--pyt-color-border);
-  background: var(--pyt-color-bg-soft);
-  color: var(--pyt-color-text-muted);
-  white-space: nowrap;
-}
-.history__g--PASSED {
-  background: #d6ead1;
-  border-color: #4d6e1d;
-  color: #2d5b1b;
-}
-.history__g--NO_EVIDENCE {
-  background: #fff3cd;
-  border-color: #d4af37;
-  color: var(--pyt-color-text-muted);
-}
-.history__g--FAILED {
-  background: #f8d7d0;
-  border-color: var(--pyt-color-danger);
-  color: #b3402a;
-}
-.history__kind {
-  border-color: #8c6a23;
-  background: #fff8df;
-  color: #6e4f1d;
-  font-weight: 700;
-  letter-spacing: 0;
-}
-.history__kind--ASK {
-  background: #e9f3ff;
-  border-color: #3d6f9f;
-  color: #285177;
-}
-.history__kind--PLAN {
-  background: #f1e7ff;
-  border-color: #7a55ad;
-  color: #5b368f;
-}
-.history__kind--RESOURCE {
-  background: #e2f7e8;
-  border-color: #43845a;
-  color: #2f6843;
-}
 .history__turns {
   font-size: 9px;
-  padding: 0 6px;
-  border-radius: var(--pyt-radius-full);
-  border: 1px solid #8c6a23;
-  background: #fff8df;
-  color: #6e4f1d;
+  color: var(--pyt-color-text-muted);
   white-space: nowrap;
 }
 .history__time {

@@ -3,6 +3,7 @@ package com.pythontopia.world.boss;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -14,6 +15,7 @@ import com.pythontopia.world.boss.dto.BossAttemptRequest;
 import com.pythontopia.world.boss.dto.BossAttemptResultDto;
 import com.pythontopia.world.boss.dto.BossProblemDto;
 import com.pythontopia.world.boss.dto.BossProblemRequest;
+import com.pythontopia.world.boss.dto.BossPrefetchStatusDto;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -79,6 +81,35 @@ class BossControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(new BossProblemRequest(1, null, 1, null, null, null, null))))
         .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void prefetchReturnsTrackablePendingJobAndStatusNeverClaimsReadyEarly() throws Exception {
+    BossPrefetchStatusDto pending =
+        new BossPrefetchStatusDto(17L, "PENDING", 1, null, false, "2026-07-10T00:00:00Z");
+    when(service.prefetch(anyInt(), any(), any())).thenReturn(pending);
+    when(service.prefetchStatus(anyInt(), any(), any(), any(), any(), any())).thenReturn(pending);
+
+    mockMvc
+        .perform(
+            post("/api/world/boss/1/prefetch")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    objectMapper.writeValueAsString(
+                        new BossProblemRequest(
+                            2, null, 2, "PY43-KC-001", "dual_track", null, null))))
+        .andExpect(status().isAccepted())
+        .andExpect(jsonPath("$.jobId").value(17))
+        .andExpect(jsonPath("$.status").value("PENDING"));
+
+    mockMvc
+        .perform(
+            get("/api/world/boss/1/prefetch")
+                .param("preferredKc", "PY43-KC-001")
+                .param("preferredKind", "dual_track")
+                .param("difficulty", "2"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status").value("PENDING"));
   }
 
   @Test

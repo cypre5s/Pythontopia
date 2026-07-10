@@ -5,7 +5,14 @@ from pathlib import Path
 from typing import Any
 
 
-METRICS = ("score_mean", "json_valid_rate", "grounding_safe_rate", "forbidden_leak_rate")
+METRICS = (
+    "contract_pass_rate",
+    "score_mean",
+    "json_valid_rate",
+    "schema_valid_rate",
+    "grounding_safe_rate",
+    "forbidden_leak_rate",
+)
 
 
 def compare_summaries(baseline: dict[str, Any], candidate: dict[str, Any]) -> dict[str, Any]:
@@ -38,9 +45,10 @@ def load_summary(path: str | Path) -> dict[str, Any]:
 
 def _story_gate_from_deltas(deltas: dict[str, float], candidate: dict[str, Any]) -> bool:
     return (
-        deltas["json_valid_rate"] >= 0.25
-        and deltas["grounding_safe_rate"] >= 0.20
-        and float(candidate.get("forbidden_leak_rate", 1.0)) <= 0.02
+        deltas["contract_pass_rate"] > 0
+        and deltas["schema_valid_rate"] >= 0
+        and deltas["grounding_safe_rate"] >= 0
+        and float(candidate.get("forbidden_leak_rate", 1.0)) == 0.0
     )
 
 

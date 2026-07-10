@@ -5,13 +5,17 @@ import com.pythontopia.coursepack.repository.CoursePackRepository;
 import com.pythontopia.learner.event.LearningEvent;
 import com.pythontopia.learner.mastery.MasteryRepository;
 import com.pythontopia.learner.mastery.MasterySnapshot;
+import com.pythontopia.learner.profile.dto.LearnerProfileDto;
+import com.pythontopia.learner.profile.service.ProfileService;
 import com.pythontopia.mainline.ChapterCatalog;
 import com.pythontopia.world.boss.dto.BossAttemptRequest;
 import com.pythontopia.world.boss.dto.BossAttemptResultDto;
 import com.pythontopia.world.boss.dto.BossEvaluateResultDto;
 import com.pythontopia.world.boss.dto.BossInternalProblem;
+import com.pythontopia.world.boss.dto.BossPrefetchStatusDto;
 import com.pythontopia.world.boss.dto.BossProblemDto;
 import com.pythontopia.world.boss.dto.BossProblemRequest;
+import com.pythontopia.world.boss.dto.BossProblemRequest.ProfileSignalsPayload;
 import com.pythontopia.world.boss.dto.BossTestCasePayload;
 import com.pythontopia.world.boss.dto.FrontierSelectRequest;
 import com.pythontopia.world.boss.dto.FrontierSelectResultDto;
@@ -59,6 +63,7 @@ public class BossService {
   private final BossGraphClient graphClient;
   private final MasteryRepository masteryRepository;
   private final CoursePackRepository coursePackRepository;
+  private final ProfileService profileService;
   private final EndlessPregenService pregenService;
   private final ApplicationEventPublisher eventPublisher;
   private final ConcurrentMap<String, CachedProblem> cache = new ConcurrentHashMap<>();
@@ -67,11 +72,13 @@ public class BossService {
       BossGraphClient graphClient,
       MasteryRepository masteryRepository,
       CoursePackRepository coursePackRepository,
+      ProfileService profileService,
       EndlessPregenService pregenService,
       ApplicationEventPublisher eventPublisher) {
     this.graphClient = graphClient;
     this.masteryRepository = masteryRepository;
     this.coursePackRepository = coursePackRepository;
+    this.profileService = profileService;
     this.pregenService = pregenService;
     this.eventPublisher = eventPublisher;
   }
@@ -79,7 +86,7 @@ public class BossService {
   /**
    * 无尽远征知识前沿选择（下沉自前端）：从权威掌握度 + 画像 + 近期 KC，调 graph 选择器返回候选。
    *
-   * <p>graph 不可达时返回空 picks（前端回退本地 useKcFrontier，绝不阻塞玩家）。
+   * <p>graph 不可达或返回空结果时显式 503；禁止用前端默认 KC 冒充画像自适应结果。
    */
   public FrontierSelectResultDto selectFrontier(Long userId, FrontierSelectRequest request) {
     Map<String, Double> mastery = new HashMap<>();
@@ -105,16 +112,22 @@ public class BossService {
       FrontierSelectResultDto result =
           graphClient.selectFrontier(
               mastery,
-              request.profileSignals(),
+              authoritativeSignals(userId, request.profileSignals()),
               request.recentKcs(),
               request.focusChapter(),
               request.exclude(),
               request.count(),
               lastPracticed);
-      return result == null ? FrontierSelectResultDto.empty() : result;
+      if (result == null || result.picks().isEmpty()) {
+        throw new RestClientException("frontier selector returned no evidence-backed picks");
+      }
+      return result;
     } catch (RestClientException ex) {
-      LOG.warn("select-frontier graph unavailable, returning empty (frontend falls back): {}", ex.getMessage());
-      return FrontierSelectResultDto.empty();
+      LOG.warn("select-frontier graph unavailable: {}", ex.getMessage());
+      throw new com.pythontopia.common.error.BusinessException(
+          org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+          "EXPEDITION_ADAPTATION_UNAVAILABLE",
+          "学习证据暂时不可用，请稍后重试远征");
     }
   }
 
@@ -124,14 +137,13 @@ public class BossService {
     String kc = resolveKc(chapter, effectiveKc);
     // 难度优先取前端显式请求；否则据该章 KC 的真实掌握度 + 置信度推断（学情驱动），而非仅按 stage。
     int difficulty =
-        request.difficulty() != null
-            ? request.difficulty()
-            : computeTargetDifficulty(userId, kc, request.stage());
+        computeTargetDifficulty(userId, kc, request.stage(), request.difficulty());
 
     // 1) 优先复用「已预生成未做」(READY) 的同维度题：命中即原子标 CONSUMED，省去现场等 LLM。
     //    这条同时实现「学生中途退出，下次登入复用已生成未做的题」——上次会话预取留下的 READY 行。
     Optional<BossInternalProblem> reused =
-        pregenService.claimReady(userId, chapter, kc, request.preferredKind(), request.arenaLevel());
+        pregenService.claimReady(
+            userId, chapter, kc, difficulty, request.preferredKind(), request.arenaLevel());
     if (reused.isPresent()) {
       BossInternalProblem p = reused.get();
       // 回灌内存缓存（用题目原 problemId 作键），供随后的 evaluateAttempt 直接取 hidden testCases。
@@ -166,7 +178,7 @@ public class BossService {
               difficulty,
               request.preferredKc(),
               request.preferredKind(),
-              request.profileSignals());
+              authoritativeSignals(userId, request.profileSignals()));
       if (fromGraph != null && fromGraph.problemId() != null) {
         cache.put(fromGraph.problemId(), new CachedProblem(fromGraph, Instant.now()));
         // 现场题也落库 (CONSUMED)，供内存缓存过期 / 进程重启后判题兜底取回 testCases（best-effort）。
@@ -187,26 +199,84 @@ public class BossService {
 
   /**
    * 触发后台预生成「下一题」：按同维度 + 当前难度异步生成并落 {@code pregenerated_problem} (READY)。
-   * 立即返回，真正生成在 {@link EndlessPregenService#pregenerate} 的 {@code @Async} 线程进行；
-   * 幂等 + best-effort。前端在 phase='playing' 后 fire-and-forget 调用，玩家做题时后台备好下一题。
+   * 立即返回带 job id 的 PENDING/READY，真正生成在
+   * {@link EndlessPregenService#generatePrefetch} 的 {@code @Async} 线程进行；失败落 FAILED，可重试。
    */
-  public void prefetch(int chapter, BossProblemRequest request, Long userId) {
+  public BossPrefetchStatusDto prefetch(int chapter, BossProblemRequest request, Long userId) {
     String effectiveKc = request.preferredKc() != null ? request.preferredKc() : request.kcCode();
     String kc = resolveKc(chapter, effectiveKc);
     int difficulty =
-        request.difficulty() != null
-            ? request.difficulty()
-            : computeTargetDifficulty(userId, kc, request.stage());
-    pregenService.pregenerate(
-        userId,
-        chapter,
-        request.stage(),
-        kc,
-        difficulty,
-        request.preferredKc(),
-        request.preferredKind(),
-        request.arenaLevel(),
-        request.profileSignals());
+        computeTargetDifficulty(userId, kc, request.stage(), request.difficulty());
+    EndlessPregenService.PrefetchStart start =
+        pregenService.beginPrefetch(
+            userId, chapter, kc, difficulty, request.preferredKind(), request.arenaLevel());
+    if (start.shouldGenerate() && start.status().jobId() != null) {
+      pregenService.generatePrefetch(
+          start.status().jobId(),
+          userId,
+          chapter,
+          request.stage(),
+          kc,
+          difficulty,
+          request.preferredKc(),
+          request.preferredKind(),
+          request.arenaLevel(),
+          authoritativeSignals(userId, request.profileSignals()));
+    }
+    return start.status();
+  }
+
+  /** 查询预加载状态；维度与取题复用完全同构，尤其包含 difficulty。 */
+  public BossPrefetchStatusDto prefetchStatus(
+      int chapter,
+      String preferredKc,
+      Integer requestedDifficulty,
+      String preferredKind,
+      String arenaLevel,
+      Long userId) {
+    String kc = resolveKc(chapter, preferredKc);
+    int progression = requestedDifficulty == null ? 1 : requestedDifficulty;
+    int difficulty =
+        computeTargetDifficulty(userId, kc, progression, requestedDifficulty);
+    return pregenService.getPrefetchStatus(
+        userId, chapter, kc, difficulty, preferredKind, arenaLevel);
+  }
+
+  /**
+   * 出题画像以服务端 learner_profile 为权威，避免客户端遗漏/篡改导致难度漂移；只有匿名或测试调用
+   * 才沿用请求内信号。
+   */
+  private ProfileSignalsPayload authoritativeSignals(
+      Long userId, ProfileSignalsPayload requestSignals) {
+    if (userId == null) {
+      return requestSignals;
+    }
+    LearnerProfileDto profile = profileService.findProfile(userId).orElse(null);
+    if (profile == null) {
+      return new ProfileSignalsPayload(List.of(), null, null, List.of(), null, null);
+    }
+    List<String> weak =
+        profile.errorPatterns() == null || profile.errorPatterns().frequentKcCodes() == null
+            ? List.of()
+            : profile.errorPatterns().frequentKcCodes().stream()
+                .filter(code -> code != null && !code.isBlank())
+                .distinct()
+                .limit(6)
+                .toList();
+    List<String> media =
+        profile.learningPreference() == null || profile.learningPreference().mediaPriority() == null
+            ? List.of()
+            : profile.learningPreference().mediaPriority().stream()
+                .filter(value -> value != null && !value.isBlank())
+                .limit(4)
+                .toList();
+    return new ProfileSignalsPayload(
+        weak,
+        profile.baseLevel() == null ? null : profile.baseLevel().pythonSelfRatedLevel(),
+        profile.practiceCapability() == null ? null : profile.practiceCapability().successRate(),
+        media,
+        profile.emotionPersistence() == null ? null : profile.emotionPersistence().resilience(),
+        requestSignals == null ? null : requestSignals.questPreferredKind());
   }
 
   public BossAttemptResultDto evaluateAttempt(BossAttemptRequest request, Long userId) {
@@ -354,52 +424,116 @@ public class BossService {
     cache.entrySet().removeIf(e -> Duration.between(e.getValue().cachedAt(), now).compareTo(CACHE_TTL) > 0);
   }
 
-  /**
-   * Boss 目标难度 1..5：据锚定 KC 所在章节的真实掌握度 + 置信度推断（学情驱动出题）。无任何学情
-   * （新生 / 该章无掌握记录 / 课程包读失败）时退化为按 stage 的旧逻辑，保证演示链路不断。
-   */
+  /** Boss 目标难度 1..5；无显式纵深时以 stage 作为递进主轴。 */
   int computeTargetDifficulty(Long userId, String anchorKc, int stage) {
-    int stageFallback = Math.min(5, Math.max(1, stage));
+    return computeTargetDifficulty(userId, anchorKc, stage, null);
+  }
+
+  /**
+   * 难度由两部分合成：地图纵深/关卡请求给出递进主轴，服务端掌握度与画像给出 readiness。
+   * readiness 只允许在当前层上下调整一档，既避免客户端把任意难度当权威，也保证同一学生随
+   * 纵深单调递进，不会因为画像较弱而在深层突然掉回新手题。
+   */
+  int computeTargetDifficulty(
+      Long userId, String anchorKc, int stage, Integer requestedProgression) {
+    int progression = clampDifficulty(requestedProgression == null ? stage : requestedProgression);
     if (userId == null || anchorKc == null) {
-      return stageFallback;
+      return progression;
     }
     try {
-      List<CourseKc> kcs = coursePackRepository.findKcs(DEFAULT_PACK_ID, null);
-      Long chapterId = null;
-      for (CourseKc kc : kcs) {
-        if (anchorKc.equals(kc.kcCode())) {
-          chapterId = kc.chapterId();
-          break;
-        }
+      Integer masteryDifficulty = masteryDifficulty(userId, anchorKc);
+      Integer profileDifficulty =
+          profileService.findProfile(userId).map(BossService::profileDifficulty).orElse(null);
+      Integer readiness = averageDifficulty(masteryDifficulty, profileDifficulty);
+      if (readiness == null) {
+        return progression;
       }
-      if (chapterId == null) {
-        return stageFallback;
-      }
-      Set<String> chapterKcCodes = new HashSet<>();
-      for (CourseKc kc : kcs) {
-        if (chapterId.equals(kc.chapterId()) && kc.kcCode() != null) {
-          chapterKcCodes.add(kc.kcCode());
-        }
-      }
-      double scoreSum = 0.0;
-      double confSum = 0.0;
-      int n = 0;
-      for (MasterySnapshot s : masteryRepository.findAll(userId)) {
-        if (s.masteryScore() == null || !chapterKcCodes.contains(s.kcCode())) {
-          continue;
-        }
-        scoreSum += s.masteryScore().doubleValue();
-        confSum += s.confidence() == null ? 0.5 : s.confidence().doubleValue();
-        n++;
-      }
-      if (n == 0) {
-        return stageFallback;
-      }
-      return bossDifficulty(scoreSum / n, confSum / n);
+      return clampDifficulty(progression + Integer.compare(readiness, progression));
     } catch (RuntimeException ex) {
       LOG.debug("boss target difficulty degraded for user {}: {}", userId, ex.getMessage());
-      return stageFallback;
+      return progression;
     }
+  }
+
+  private Integer masteryDifficulty(Long userId, String anchorKc) {
+    List<CourseKc> kcs = coursePackRepository.findKcs(DEFAULT_PACK_ID, null);
+    Long chapterId = null;
+    for (CourseKc kc : kcs) {
+      if (anchorKc.equals(kc.kcCode())) {
+        chapterId = kc.chapterId();
+        break;
+      }
+    }
+    if (chapterId == null) {
+      return null;
+    }
+    Set<String> chapterKcCodes = new HashSet<>();
+    for (CourseKc kc : kcs) {
+      if (chapterId.equals(kc.chapterId()) && kc.kcCode() != null) {
+        chapterKcCodes.add(kc.kcCode());
+      }
+    }
+    double scoreSum = 0.0;
+    double confSum = 0.0;
+    int n = 0;
+    for (MasterySnapshot s : masteryRepository.findAll(userId)) {
+      if (s.masteryScore() == null || !chapterKcCodes.contains(s.kcCode())) {
+        continue;
+      }
+      scoreSum += s.masteryScore().doubleValue();
+      confSum += s.confidence() == null ? 0.5 : s.confidence().doubleValue();
+      n++;
+    }
+    if (n == 0) {
+      return null;
+    }
+    return bossDifficulty(scoreSum / n, confSum / n);
+  }
+
+  static Integer profileDifficulty(LearnerProfileDto profile) {
+    List<Integer> signals = new java.util.ArrayList<>();
+    if (profile.baseLevel() != null && profile.baseLevel().pythonSelfRatedLevel() != null) {
+      int level = profile.baseLevel().pythonSelfRatedLevel();
+      signals.add(clampDifficulty(level == 0 ? 1 : level));
+    }
+    if (profile.practiceCapability() != null) {
+      if (profile.practiceCapability().successRate() != null) {
+        double rate = Math.max(0.0, Math.min(1.0, profile.practiceCapability().successRate()));
+        signals.add(clampDifficulty(1 + (int) Math.floor(rate * 5.0)));
+      }
+      if (profile.practiceCapability().avgAttemptsPerProblem() != null) {
+        double attempts = profile.practiceCapability().avgAttemptsPerProblem();
+        signals.add(attempts <= 1.2 ? 5 : attempts <= 2.0 ? 4 : attempts <= 3.0 ? 3 : 2);
+      }
+    }
+    if (signals.isEmpty()) {
+      return null;
+    }
+    int readiness = (int) Math.round(signals.stream().mapToInt(Integer::intValue).average().orElse(3));
+    if (profile.emotionPersistence() != null
+        && profile.emotionPersistence().resilience() != null) {
+      double resilience = profile.emotionPersistence().resilience();
+      if (resilience < 0.35) {
+        readiness--;
+      } else if (resilience > 0.8) {
+        readiness++;
+      }
+    }
+    return clampDifficulty(readiness);
+  }
+
+  private static Integer averageDifficulty(Integer mastery, Integer profile) {
+    if (mastery == null) {
+      return profile;
+    }
+    if (profile == null) {
+      return mastery;
+    }
+    return clampDifficulty((int) Math.round(mastery * 0.7 + profile * 0.3));
+  }
+
+  private static int clampDifficulty(int difficulty) {
+    return Math.min(5, Math.max(1, difficulty));
   }
 
   /**

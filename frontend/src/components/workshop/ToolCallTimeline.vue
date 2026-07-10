@@ -118,13 +118,9 @@ interface CallBadge {
 
 function badgesOf(note: string): CallBadge[] {
   const out: CallBadge[] = [];
-  if (note.includes('fallback')) out.push({ key: 'fallback', label: '已降级' });
-  if (note.includes('budget_skipped')) out.push({ key: 'budget', label: '预算跳过' });
+  if (note.includes('fallback')) out.push({ key: 'fallback', label: '已改用备用方式' });
+  if (note.includes('budget_skipped')) out.push({ key: 'budget', label: '已跳过非必要步骤' });
   return out;
-}
-
-function plainNote(note: string): string {
-  return note && badgesOf(note).length === 0 ? note : '';
 }
 
 function fmtMs(ms: number): string {
@@ -185,9 +181,9 @@ function fmtMs(ms: number): string {
           >{{ b.label }}</span>
         </span>
         <span
-          v-if="plainNote(c.note)"
-          class="timeline__note"
-        >{{ plainNote(c.note) }}</span>
+          v-if="c.status === 'error'"
+          class="timeline__note timeline__note--error"
+        >这一步未完成，请重试。</span>
       </span>
     </li>
   </ol>
@@ -309,10 +305,7 @@ function fmtMs(ms: number): string {
   font-size: 10px;
   font-weight: 700;
   color: #2d5b1b;
-  background: #e7f0df;
-  border: 1px solid rgba(77, 110, 29, 0.4);
-  border-radius: var(--pyt-radius-full);
-  padding: 0 6px;
+  padding: 0;
 }
 .timeline__badge {
   font-size: 9px;
@@ -326,15 +319,18 @@ function fmtMs(ms: number): string {
   color: #7a5210;
 }
 .timeline__badge--budget {
-  background: #ede9fe;
-  border: 1px solid #7b2cbf;
-  color: #5a1da8;
+  background: #f5e2c1;
+  border: 1px solid #c2871f;
+  color: #7a5210;
 }
 .timeline__note {
   font-size: 10px;
   line-height: 1.4;
   color: var(--pyt-color-text-muted);
   word-break: break-word;
+}
+.timeline__note--error {
+  color: #9a342b;
 }
 @media (prefers-reduced-motion: reduce) {
   .timeline__step {

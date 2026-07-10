@@ -292,7 +292,7 @@ test.describe('上线交付深链点击鲁棒性 @delivery-clicks', () => {
     assertNoFatal(report, '指南桌面/移动点击链');
   });
 
-  test('工坊历史/书房/调用抽屉与资源弹窗可反复开关', async ({
+  test('工坊历史/书房/进度抽屉与资源弹窗可反复开关', async ({
     page,
     context,
     request,
@@ -333,7 +333,7 @@ test.describe('上线交付深链点击鲁棒性 @delivery-clicks', () => {
 
     await page.getByTestId('workshop-open-calls').click();
     await expect(page.getByTestId('workshop-drawer-calls')).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByTestId('runtime-summary')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId('workshop-process')).toBeVisible({ timeout: 30_000 });
     await page.getByTestId('workshop-drawer-close').click();
     await expect(page.getByTestId('workshop-drawer-calls')).toHaveCount(0, { timeout: 10_000 });
 

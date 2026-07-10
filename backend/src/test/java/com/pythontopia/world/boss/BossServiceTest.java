@@ -17,11 +17,18 @@ import com.pythontopia.coursepack.repository.CoursePackRepository;
 import com.pythontopia.learner.event.LearningEvent;
 import com.pythontopia.learner.mastery.MasteryRepository;
 import com.pythontopia.learner.mastery.MasterySnapshot;
+import com.pythontopia.learner.profile.dto.BaseLevelDto;
+import com.pythontopia.learner.profile.dto.EmotionPersistenceDto;
+import com.pythontopia.learner.profile.dto.LearnerProfileDto;
+import com.pythontopia.learner.profile.dto.PracticeCapabilityDto;
+import com.pythontopia.learner.profile.service.ProfileService;
 import com.pythontopia.world.boss.dto.BossAttemptRequest;
 import com.pythontopia.world.boss.dto.BossEvaluateResultDto;
 import com.pythontopia.world.boss.dto.BossInternalProblem;
+import com.pythontopia.world.boss.dto.BossPrefetchStatusDto;
 import com.pythontopia.world.boss.dto.BossProblemRequest;
 import com.pythontopia.world.boss.dto.BossTestCasePayload;
+import com.pythontopia.world.boss.dto.FrontierPickDto;
 import com.pythontopia.world.boss.dto.FrontierSelectRequest;
 import com.pythontopia.world.boss.dto.FrontierSelectResultDto;
 import java.math.BigDecimal;
@@ -53,6 +60,7 @@ class BossServiceTest {
   @Mock BossGraphClient graphClient;
   @Mock MasteryRepository masteryRepository;
   @Mock CoursePackRepository coursePackRepository;
+  @Mock ProfileService profileService;
   @Mock EndlessPregenService pregenService;
   @Mock ApplicationEventPublisher eventPublisher;
   private BossService service;
@@ -61,7 +69,12 @@ class BossServiceTest {
   void setUp() {
     service =
         new BossService(
-            graphClient, masteryRepository, coursePackRepository, pregenService, eventPublisher);
+            graphClient,
+            masteryRepository,
+            coursePackRepository,
+            profileService,
+            pregenService,
+            eventPublisher);
   }
 
   @Test
@@ -80,7 +93,9 @@ class BossServiceTest {
                     lastPracticed,
                     lastPracticed)));
     when(graphClient.selectFrontier(any(), any(), any(), any(), any(), anyInt(), any()))
-        .thenReturn(FrontierSelectResultDto.empty());
+        .thenReturn(
+            new FrontierSelectResultDto(
+                List.of(new FrontierPickDto("PY43-KC-001", 1, 4, "最近发展区"))));
 
     service.selectFrontier(
         7L,
@@ -104,7 +119,7 @@ class BossServiceTest {
   }
 
   @Test
-  @DisplayName("低掌握章节 → Boss 难度比 stage 低（学情驱动）")
+  @DisplayName("低掌握章节 → 在纵深主轴上温和降一档")
   void lowMasteryYieldsEasierBossDifficulty() {
     stubChapterKcs();
     when(masteryRepository.findAll(7L))
@@ -121,12 +136,12 @@ class BossServiceTest {
         1, new BossProblemRequest(4, null, null, null, null, null, null), 7L);
 
     int difficulty = capturedDifficulty();
-    assertThat(difficulty).isEqualTo(1);
+    assertThat(difficulty).isEqualTo(3);
     assertThat(difficulty).isLessThan(4);
   }
 
   @Test
-  @DisplayName("高掌握+高置信章节 → Boss 难度更高")
+  @DisplayName("高掌握+高置信章节 → 在纵深主轴上升一档")
   void highMasteryHighConfidenceYieldsHarderBossDifficulty() {
     stubChapterKcs();
     when(masteryRepository.findAll(7L))
@@ -141,22 +156,49 @@ class BossServiceTest {
     service.fetchProblem(
         1, new BossProblemRequest(2, null, null, null, null, null, null), 7L);
 
-    assertThat(capturedDifficulty()).isEqualTo(5);
+    assertThat(capturedDifficulty()).isEqualTo(3);
   }
 
   @Test
-  @DisplayName("前端显式 difficulty 覆盖学情推断（不读掌握度）")
-  void explicitDifficultyOverridesMastery() {
+  @DisplayName("前端 difficulty 仅表达纵深，不能绕过服务端画像")
+  void explicitDifficultyIsAdaptedByServerProfile() {
+    when(coursePackRepository.findKcs(eq(43L), eq(null))).thenReturn(List.of());
+    when(profileService.findProfile(7L)).thenReturn(Optional.of(beginnerProfile()));
     when(graphClient.requestProblem(
             anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
         .thenReturn(internalProblem());
 
     service.fetchProblem(
-        1, new BossProblemRequest(2, null, 3, null, null, null, null), 7L);
+        1, new BossProblemRequest(4, null, 5, null, null, null, null), 7L);
 
-    assertThat(capturedDifficulty()).isEqualTo(3);
-    verifyNoInteractions(masteryRepository);
-    verifyNoInteractions(coursePackRepository);
+    assertThat(capturedDifficulty()).isEqualTo(4);
+  }
+
+  @Test
+  @DisplayName("画像自适应仍保持纵深难度单调递进")
+  void profileAdaptiveDifficultyRemainsMonotonicByDepth() {
+    when(coursePackRepository.findKcs(eq(43L), eq(null))).thenReturn(List.of());
+    when(profileService.findProfile(7L)).thenReturn(Optional.of(beginnerProfile()));
+
+    assertThat(
+            java.util.stream.IntStream.rangeClosed(1, 5)
+                .map(depth -> service.computeTargetDifficulty(7L, "PY43-KC-001", 1, depth))
+                .boxed()
+                .toList())
+        .containsExactly(1, 1, 2, 3, 4);
+  }
+
+  @Test
+  @DisplayName("预加载轮询使用与 POST 相同的服务端画像合成难度")
+  void prefetchStatusUsesAuthoritativeDifficultyDimensions() {
+    when(coursePackRepository.findKcs(eq(43L), eq(null))).thenReturn(List.of());
+    when(profileService.findProfile(7L)).thenReturn(Optional.of(beginnerProfile()));
+    when(pregenService.getPrefetchStatus(7L, 1, "PY43-KC-001", 4, "debug", "1-5"))
+        .thenReturn(BossPrefetchStatusDto.idle());
+
+    service.prefetchStatus(1, "PY43-KC-001", 5, "debug", "1-5", 7L);
+
+    verify(pregenService).getPrefetchStatus(7L, 1, "PY43-KC-001", 4, "debug", "1-5");
   }
 
   @Test
@@ -303,6 +345,22 @@ class BossServiceTest {
     return new BossInternalProblem(
         "p1", 1, 1, 1, "PY43-KC-001", "statement", List.of(), "in", "out", 1, true, true,
         List.of(), "");
+  }
+
+  private static LearnerProfileDto beginnerProfile() {
+    return new LearnerProfileDto(
+        1L,
+        7L,
+        43L,
+        "non-cs",
+        new BaseLevelDto(0, List.of(), 1),
+        null,
+        null,
+        null,
+        null,
+        new PracticeCapabilityDto(4.0, 0.1),
+        new EmotionPersistenceDto(0.2, "frustrated"),
+        "beginner");
   }
 
   /** 带 hidden testCases 的内部题：evaluateAttempt 才能越过「空 testCases」兜底进入真实判题路径。 */

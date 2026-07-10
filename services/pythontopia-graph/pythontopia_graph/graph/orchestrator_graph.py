@@ -779,7 +779,14 @@ class OrchestratorGraph:
 
     @staticmethod
     def _route_after_build_plan(state: OrchestratorState) -> str:
-        return "compose" if state.get("reused_plan") else "dispatch"
+        if not state.get("reused_plan"):
+            return "dispatch"
+        # 复用资源计划时只需向学生说明调整结果，避免重复生成整套工件；但 TutorAgent
+        # 步骤本身就是本轮答疑产物，若在协商/继续轮被直接跳到 compose，学生画像与降阶
+        # 要求都不会真正进入导师调用。仅放行 TutorAgent，保持资源步骤的去重语义。
+        if any(step.agent == "TutorAgent" for step in state.get("plan", [])):
+            return "dispatch"
+        return "compose"
 
     def _route_after_dispatch(self, state: OrchestratorState) -> str:
         if state["intent"] == "negotiate":

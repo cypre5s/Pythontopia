@@ -4,6 +4,7 @@ import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.common.web.CurrentUser;
 import com.pythontopia.world.boss.dto.BossAttemptRequest;
 import com.pythontopia.world.boss.dto.BossAttemptResultDto;
+import com.pythontopia.world.boss.dto.BossPrefetchStatusDto;
 import com.pythontopia.world.boss.dto.BossProblemDto;
 import com.pythontopia.world.boss.dto.BossProblemRequest;
 import com.pythontopia.world.boss.dto.FrontierSelectRequest;
@@ -13,10 +14,12 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import org.springframework.http.HttpStatus;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -24,8 +27,8 @@ import org.springframework.web.bind.annotation.RestController;
  * Boss 副本端点。
  *
  * <ul>
- *   <li>{@code POST /api/world/boss/{chapter}/problem}：根据 chapter / stage 拉取 AI / golden 题；
- *   <li>{@code POST /api/world/boss/{chapter}/attempt}：提交解答，服务端 graph 评测，失败时退化到前端 Pyodide。
+ *   <li>{@code POST /api/world/boss/{chapter}/problem}：根据 chapter / stage 拉取审查后的 AI 题；
+ *   <li>{@code POST /api/world/boss/{chapter}/attempt}：提交解答并由服务端 graph 正式评测。
  * </ul>
  *
  * <p>鉴权：JwtAuthenticationFilter 强制登录；{@link CurrentUserPrincipal} 用于上报 graph 做自适应难度。
@@ -56,17 +59,31 @@ public class BossController {
    */
   @PostMapping("/{chapter}/prefetch")
   @ResponseStatus(HttpStatus.ACCEPTED)
-  public void prefetchProblem(
+  public BossPrefetchStatusDto prefetchProblem(
       @PathVariable @Min(1) @Max(7) int chapter,
       @Valid @RequestBody BossProblemRequest request,
       @CurrentUser CurrentUserPrincipal user) {
     Long userId = user == null ? null : user.userId();
-    service.prefetch(chapter, request, userId);
+    return service.prefetch(chapter, request, userId);
+  }
+
+  /** 查询同一完整维度的预加载状态；PENDING 绝不冒充 READY，FAILED 可再次 POST 重试。 */
+  @GetMapping("/{chapter}/prefetch")
+  public BossPrefetchStatusDto prefetchStatus(
+      @PathVariable @Min(1) @Max(7) int chapter,
+      @RequestParam(required = false) String preferredKc,
+      @RequestParam @Min(1) @Max(5) Integer difficulty,
+      @RequestParam(required = false) String preferredKind,
+      @RequestParam(required = false) String arenaLevel,
+      @CurrentUser CurrentUserPrincipal user) {
+    Long userId = user == null ? null : user.userId();
+    return service.prefetchStatus(
+        chapter, preferredKc, difficulty, preferredKind, arenaLevel, userId);
   }
 
   /**
    * 无尽远征「下一题选择器」：后端读权威掌握度 + 画像 → graph 排序候选 KC，前端据此生成分支地图。
-   * graph 不可达时返回空 picks，前端回退本地 useKcFrontier。
+   * graph 不可达或没有证据支持的候选时显式返回 503，前端不得用本地默认 KC 冒充画像结果。
    */
   @PostMapping("/select-frontier")
   public FrontierSelectResultDto selectFrontier(

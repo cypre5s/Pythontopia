@@ -13,6 +13,9 @@ def build_dpo_training_plan(
     heldout_file: str,
     output_dir: str,
     max_seq_length: int = 768,
+    seed: int = 20260710,
+    champion_adapter_path: str | None = None,
+    changed_variable: str = "preference_dataset",
 ) -> dict[str, Any]:
     return {
         "method": "dpo_lora",
@@ -22,6 +25,14 @@ def build_dpo_training_plan(
         "heldout_file": heldout_file,
         "output_dir": output_dir,
         "max_seq_length": max_seq_length,
+        "seed": seed,
+        "schema_version": "agent-schema-v1",
+        "decoding": {"prompt_variant": "baseline", "temperature": 0.0},
+        "quality_round": {
+            "champion_adapter_path": champion_adapter_path or sft_adapter_path,
+            "changed_variables": [changed_variable],
+            "promotion_suites": ["golden_50", "stratified_500", "full_5000", "blind_review"],
+        },
         "dpo": {
             "beta": 0.1,
             "loss_type": "sigmoid",
@@ -52,11 +63,13 @@ def build_dpo_training_plan(
             "eval_strategy": "epoch",
             "gradient_checkpointing": True,
             "bf16": True,
+            "seed": seed,
+            "data_seed": seed,
         },
         "notes": [
             "Do not merge guard behavior into labels without preserving the raw rejected response and audit flags.",
-            "DPO starts from the existing SFT QLoRA adapter and optimizes preference between chosen/rejected Agent JSON.",
-            "Evaluate against SFT adapter, not only heldout preference loss.",
+            "DPO starts from the configured input LoRA adapter and optimizes preference between chosen/rejected Agent JSON.",
+            "Evaluate against the declared champion adapter, not only heldout preference loss.",
         ],
     }
 
@@ -72,6 +85,9 @@ def build_orpo_training_plan(
     beta: float = 0.1,
     learning_rate: float = 5e-5,
     max_grad_norm: float | None = None,
+    seed: int = 20260710,
+    champion_adapter_path: str | None = None,
+    changed_variable: str = "preference_method",
 ) -> dict[str, Any]:
     plan = build_dpo_training_plan(
         model_path=model_path,
@@ -80,6 +96,9 @@ def build_orpo_training_plan(
         heldout_file=heldout_file,
         output_dir=output_dir,
         max_seq_length=max_seq_length,
+        seed=seed,
+        champion_adapter_path=champion_adapter_path,
+        changed_variable=changed_variable,
     )
     plan["method"] = "orpo_lora"
     plan.pop("dpo", None)
@@ -91,8 +110,8 @@ def build_orpo_training_plan(
         plan["training"]["max_grad_norm"] = max_grad_norm
     plan["notes"] = [
         "ORPO is reference-model-free preference optimization; this run uses TRL experimental ORPOTrainer instead of a custom loss.",
-        "It starts from the existing SFT QLoRA adapter and uses the same chosen/rejected preference data as DPO.",
-        "Evaluate against SFT adapter and SFT + DPO on identical heldout slices.",
+        "It starts from the configured input LoRA adapter and uses the same chosen/rejected preference data as DPO.",
+        "Evaluate against the declared champion on identical heldout and promotion slices.",
     ]
     return plan
 

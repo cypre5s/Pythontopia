@@ -731,7 +731,7 @@ test.describe('Agentic Runtime 100+ 深链验收矩阵 @agentic-matrix', () => {
     }
   });
 
-  test('M147 Browser: 调用过程抽屉展示 runtime operations', async ({ browser }) => {
+  test('M147 Browser: 进度抽屉展示用户可读状态', async ({ browser }) => {
     const context = await browser.newContext();
     await injectSession(context, ctx.session);
     await suppressFirstVisitOverlays(context);
@@ -740,13 +740,13 @@ test.describe('Agentic Runtime 100+ 深链验收矩阵 @agentic-matrix', () => {
       await page.goto('/workshop', { waitUntil: 'domcontentloaded' });
       await page.getByTestId('workshop-open-calls').click();
       await expect(page.getByTestId('workshop-drawer-calls')).toBeVisible({ timeout: 30_000 });
-      await expect(page.getByTestId('runtime-operations')).toContainText('闭环运维状态', { timeout: 30_000 });
+      await expect(page.getByTestId('workshop-process')).toContainText('还没有处理记录', { timeout: 30_000 });
     } finally {
       await context.close();
     }
   });
 
-  test('M148 Browser: 调用过程抽屉展示 runtime summary', async ({ browser }) => {
+  test('M148 Browser: 进度抽屉不暴露 runtime summary', async ({ browser }) => {
     const context = await browser.newContext();
     await injectSession(context, ctx.session);
     await suppressFirstVisitOverlays(context);
@@ -754,7 +754,8 @@ test.describe('Agentic Runtime 100+ 深链验收矩阵 @agentic-matrix', () => {
     try {
       await page.goto('/workshop', { waitUntil: 'domcontentloaded' });
       await page.getByTestId('workshop-open-calls').click();
-      await expect(page.getByTestId('runtime-summary')).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByTestId('workshop-process')).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByTestId('workshop-drawer-calls')).not.toContainText(/Runtime|MCP 工具|能力包/);
     } finally {
       await context.close();
     }

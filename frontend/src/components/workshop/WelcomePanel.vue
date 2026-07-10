@@ -2,9 +2,9 @@
 /**
  * WelcomePanel —— 百晓工坊欢迎屏（对话流为空时的首屏）。
  *
- * 顶部百晓立绘 + 标题「想学什么直接说」+ 副文案；
+ * 顶部百晓立绘 + 标题「想学什么直接说」+ 极简副文案；
  * 中部 3 个快捷提问 chips（点击把完整文本 emit 给调用方代发）；
- * 能力入口默认折叠为单个按钮，点击后才展示 6 个学生可见能力组。
+ * 能力入口默认折叠为单个按钮，展开后以一行清单展示，不堆叠说明卡片。
  */
 import { ref } from 'vue';
 import WorkshopAvatar from '@/components/workshop/WorkshopAvatar.vue';
@@ -40,7 +40,7 @@ function toggleCapabilities(): void {
       想学什么直接说
     </p>
     <p class="welcome__sub">
-      比如「循环怎么用」，也可以让百晓出题、规划学习、找资料
+      可以提问、出题、规划或找资料
     </p>
     <div class="welcome__chips">
       <button
@@ -61,30 +61,30 @@ function toggleCapabilities(): void {
       :aria-expanded="capabilitiesOpen"
       @click="toggleCapabilities"
     >
-      {{ capabilitiesOpen ? '收起能力' : '查看百晓能帮我做什么' }}
+      {{ capabilitiesOpen ? '收起' : '百晓能做什么' }}
     </button>
-    <div
+    <p
       v-if="capabilitiesOpen"
       class="welcome__abilities"
       data-testid="welcome-abilities"
     >
-      <article
-        v-for="capability in WORKSHOP_CAPABILITIES"
+      <template
+        v-for="(capability, index) in WORKSHOP_CAPABILITIES"
         :key="capability.namespace"
-        class="welcome__capability-card"
-        data-testid="welcome-capability-card"
       >
-        <p class="welcome__capability-label">
+        <span
+          class="welcome__capability-label"
+          data-testid="welcome-capability-item"
+        >
           {{ capability.label }}
-        </p>
-        <p class="welcome__capability-desc">
-          {{ capability.description }}
-        </p>
-        <p class="welcome__capability-example">
-          例如：{{ capability.examples[0] }}
-        </p>
-      </article>
-    </div>
+        </span>
+        <span
+          v-if="index < WORKSHOP_CAPABILITIES.length - 1"
+          class="welcome__capability-separator"
+          aria-hidden="true"
+        >·</span>
+      </template>
+    </p>
   </div>
 </template>
 
@@ -99,7 +99,7 @@ function toggleCapabilities(): void {
   padding: 24px 16px;
   text-align: center;
   font-family: var(--pyt-font-pixel);
-  color: var(--pyt-color-text-primary);
+  color: #493416;
 }
 .welcome__avatar {
   margin-bottom: 2px;
@@ -127,19 +127,18 @@ function toggleCapabilities(): void {
   font-family: inherit;
   font-size: 12px;
   padding: 4px 12px;
-  background: #fff8df;
-  border: 2px solid #8c6a23;
+  background: #fff7e4;
+  border: 1px solid #b88939;
   border-radius: var(--pyt-radius-full);
   color: #2a1a08;
   cursor: pointer;
-  box-shadow: 2px 2px 0 rgba(140, 106, 35, 0.5);
+  box-shadow: none;
 }
 .welcome__chip:hover {
-  background: #ffe098;
+  background: #f4e0ae;
 }
 .welcome__chip:active {
-  transform: translate(2px, 2px);
-  box-shadow: none;
+  transform: translateY(1px);
 }
 .welcome__capability-button {
   margin-top: 10px;
@@ -157,35 +156,19 @@ function toggleCapabilities(): void {
   border-bottom-color: #8c6a23;
 }
 .welcome__abilities {
-  width: 100%;
+  width: min(100%, 440px);
   margin-top: 10px;
+  margin-bottom: 0;
   font-size: 12px;
-  text-align: left;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 6px;
-}
-.welcome__capability-card {
-  padding: 8px 10px;
-  background: #f5ecd4;
-  border: 1px solid rgba(140, 106, 35, 0.45);
-  border-radius: var(--pyt-radius-md);
+  line-height: 1.8;
+  text-align: center;
+  color: #725628;
 }
 .welcome__capability-label {
-  margin: 0 0 4px;
-  font-size: 12px;
   font-weight: 700;
-  color: #8c6a23;
 }
-.welcome__capability-desc,
-.welcome__capability-example {
-  margin: 0;
-  font-size: 10px;
-  line-height: 1.4;
-  color: var(--pyt-color-text-muted);
-}
-.welcome__capability-example {
-  margin-top: 3px;
-  color: #6b4b19;
+.welcome__capability-separator {
+  margin: 0 6px;
+  color: #b38c4c;
 }
 </style>

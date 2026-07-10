@@ -775,7 +775,7 @@ test.describe('下一代 Agentic 深度闭环 E2E @agentic-deep', () => {
     }
   });
 
-  test('28 workshop browser shows runtime operations in call drawer', async ({ browser }) => {
+  test('28 workshop progress drawer stays student-facing', async ({ browser }) => {
     const context = await browser.newContext();
     await injectSession(context, session);
     await suppressFirstVisitOverlays(context);
@@ -785,8 +785,8 @@ test.describe('下一代 Agentic 深度闭环 E2E @agentic-deep', () => {
       await expect(page.getByTestId('workshop-page')).toBeVisible({ timeout: 60_000 });
       await page.getByTestId('workshop-open-calls').click();
       await expect(page.getByTestId('workshop-drawer-calls')).toBeVisible({ timeout: 30_000 });
-      await expect(page.getByTestId('runtime-operations')).toContainText('闭环运维状态', { timeout: 30_000 });
-      await expect(page.getByTestId('runtime-operations')).toContainText(/资源审核|策略灰度/);
+      await expect(page.getByTestId('workshop-process')).toContainText('还没有处理记录', { timeout: 30_000 });
+      await expect(page.getByTestId('workshop-drawer-calls')).not.toContainText(/MCP 工具|策略灰度|闭环运维/);
     } finally {
       await context.close();
     }

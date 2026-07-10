@@ -1,22 +1,18 @@
 <script setup lang="ts">
 /**
  * 百晓工坊主页：
- *   - 顶部传送栏（返回小镇 / 快速传送 / 图书馆 / 闯关塔 / 历史 / 书房 / 调用）；
+ *   - 顶部传送栏（返回小镇 / 快速传送 / 图书馆 / 无尽远征 / 历史 / 书房 / 进度）；
  *   - 默认仅展示居中的单对话流；
- *   - 历史在左侧，书房、调用过程在右侧按需打开。
+ *   - 历史在左侧，书房、处理进度在右侧按需打开。
  */
 import { computed, onActivated, onDeactivated, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import AppLayout from '@/app/AppLayout.vue';
 import WorkshopChat from '@/components/workshop/WorkshopChat.vue';
-import MarvisPanel from '@/components/workshop/MarvisPanel.vue';
 import StudioDrawer from '@/components/workshop/StudioDrawer.vue';
 import ResourceDetailPanel from '@/components/workshop/ResourceDetailPanel.vue';
 import ChatHistoryRail from '@/components/workshop/ChatHistoryRail.vue';
-import ToolCallTimeline from '@/components/workshop/ToolCallTimeline.vue';
-import AiRuntimeSummaryPanel from '@/components/workshop/AiRuntimeSummaryPanel.vue';
-import RuntimeOperationsPanel from '@/components/workshop/RuntimeOperationsPanel.vue';
-import TwinWeekly from '@/components/companion/TwinWeekly.vue';
+import WorkshopProcessPanel from '@/components/workshop/WorkshopProcessPanel.vue';
 import {
   rememberWorkshopChatHistoryTurn,
   type WorkshopChatHistoryTurnDto,
@@ -26,7 +22,6 @@ import { useLearningStore } from '@stores/learning';
 import { useWorldStore } from '@stores/world';
 import { useToastStore } from '@stores/toast';
 import { useWorkshopUiStore } from '@stores/workshopUi';
-import { useWorkshopActivityStore } from '@stores/workshopActivity';
 import { playUiClick, playChime } from '@/composables/useStardewFx';
 
 // 名字供 App.vue 的 <KeepAlive include> 命中：离开工坊（返回小镇 / 去图书馆 / 闯关塔等任意跳转）
@@ -37,7 +32,6 @@ const learning = useLearningStore();
 const world = useWorldStore();
 const toast = useToastStore();
 const workshopUi = useWorkshopUiStore();
-const activity = useWorkshopActivityStore();
 const router = useRouter();
 
 // 被 KeepAlive 缓存时是否处于「激活」（当前可见）状态。
@@ -104,11 +98,6 @@ const chatRef = ref<{
 } | null>(null);
 function onSelectConversation(turns: WorkshopChatHistoryTurnDto[]): void {
   chatRef.value?.loadConversation(turns);
-}
-
-function onTwinPrompt(text: string): void {
-  chatRef.value?.prefillDraft(text);
-  toast.show('已带入工坊输入框', 'success');
 }
 
 // R-14 域1④：书房当前打开的资源 id 由 store 持有，不再进 URL（避免暴露可枚举 id）。
@@ -238,7 +227,7 @@ function onStudyOpenChange(open: boolean): void {
 
 const drawerTitle = computed<string>(() => {
   if (activeDrawer.value === 'study') return '我的书房';
-  if (activeDrawer.value === 'calls') return '调用过程';
+  if (activeDrawer.value === 'calls') return '处理进度';
   return '';
 });
 
@@ -302,7 +291,7 @@ const bodyClass = computed<Record<string, boolean>>(() => ({
             :aria-expanded="activeDrawer === 'calls'"
             @click="openDrawer('calls')"
           >
-            调用
+            进度
           </button>
         </nav>
         <span class="travel-spacer" />
@@ -339,10 +328,10 @@ const bodyClass = computed<Record<string, boolean>>(() => ({
               type="button"
               class="travel-chip travel-chip--arena"
               data-testid="workshop-open-arena"
-              title="章节闯关塔"
+              title="无尽远征"
               @click="openArena(1)"
             >
-              <span class="travel-chip__label">闯关塔 A</span>
+              <span class="travel-chip__label">无尽远征 A</span>
             </button>
           </li>
         </ul>
@@ -421,24 +410,7 @@ const bodyClass = computed<Record<string, boolean>>(() => ({
               v-else-if="activeDrawer === 'calls'"
               class="workshop-call-drawer"
             >
-              <AiRuntimeSummaryPanel />
-              <RuntimeOperationsPanel />
-              <TwinWeekly
-                class="workshop-twin-weekly"
-                @prompt="onTwinPrompt"
-              />
-              <MarvisPanel />
-              <ToolCallTimeline
-                :traces="activity.traces"
-                :live="activity.status === 'streaming'"
-              />
-              <p
-                v-if="activity.traces.length === 0"
-                class="workshop-call-drawer__empty"
-                data-testid="workshop-call-empty"
-              >
-                暂无调用过程，提问或生成后会显示链路。
-              </p>
+              <WorkshopProcessPanel />
             </div>
           </div>
         </aside>
@@ -481,13 +453,20 @@ const bodyClass = computed<Record<string, boolean>>(() => ({
 
 <style scoped>
 .workshop-page {
+  --pyt-color-bg-elevated: #fffaf0;
+  --pyt-color-bg-soft: #fbf1d9;
+  --pyt-color-border: #cba85f;
+  --pyt-color-text-primary: #3f2e16;
+  --pyt-color-text-hint: #8a6423;
+  --pyt-color-text-muted: #78684e;
+  --pyt-color-warning-bg: #f6e7bd;
   display: flex;
   flex-direction: column;
   gap: 0;
   padding: 0;
   height: calc(100dvh - 56px);
-  background: #f6f7f4;
-  color: #22262a;
+  background: #fbf3df;
+  color: #3f2e16;
   overflow: hidden;
   font-family:
     ui-sans-serif,
@@ -504,27 +483,27 @@ const bodyClass = computed<Record<string, boolean>>(() => ({
   gap: 8px;
   min-height: 52px;
   padding: 8px 14px;
-  border-bottom: 1px solid #d9ddd6;
-  background: rgba(251, 251, 248, 0.96);
-  color: #252a2e;
+  border-bottom: 1px solid #d8bc7c;
+  background: rgba(255, 250, 240, 0.97);
+  color: #493416;
   flex: 0 0 auto;
 }
 .travel-back {
   font: inherit;
   font-size: 12px;
   padding: 6px 10px;
-  background: #ffffff;
-  border: 1px solid #ccd3cb;
+  background: #fffaf0;
+  border: 1px solid #d2b36e;
   border-radius: 8px;
   cursor: pointer;
-  color: #2f4237;
+  color: #59401b;
 }
 .travel-back:hover {
-  background: #eef5ef;
-  border-color: #9db4a2;
+  background: #f7e7be;
+  border-color: #bc8d3c;
 }
 .travel-divider {
-  color: #a2aaa2;
+  color: #b49a6a;
 }
 .travel-label {
   font-size: 14px;
@@ -539,7 +518,7 @@ const bodyClass = computed<Record<string, boolean>>(() => ({
   font: inherit;
   font-size: 12px;
   padding: 6px 10px;
-  color: #46514c;
+  color: #654f2d;
   background: transparent;
   border: 1px solid transparent;
   border-radius: 8px;
@@ -547,9 +526,9 @@ const bodyClass = computed<Record<string, boolean>>(() => ({
 }
 .workshop-drawer-tab:hover,
 .workshop-drawer-tab--active {
-  background: #edf5ef;
-  border-color: #b7c9bb;
-  color: #20362a;
+  background: #f4e4bc;
+  border-color: #d0aa62;
+  color: #4c3413;
 }
 .travel-spacer {
   flex: 1 1 auto;
@@ -566,34 +545,34 @@ const bodyClass = computed<Record<string, boolean>>(() => ({
   font: inherit;
   font-size: 12px;
   padding: 6px 10px;
-  background: #ffffff;
-  border: 1px solid #d2d8d1;
-  color: #38433f;
+  background: #fffaf0;
+  border: 1px solid #d7bd82;
+  color: #5d4828;
   cursor: pointer;
   border-radius: 8px;
   min-height: 32px;
 }
 .travel-chip:hover:not([disabled]) {
-  background: #f4f7fb;
-  border-color: #9db1cf;
+  background: #f7e7be;
+  border-color: #bc8d3c;
 }
 .travel-chip[disabled] {
   opacity: 0.5;
   cursor: not-allowed;
 }
 .travel-chip--current {
-  background: #e7f4e7;
-  border-color: #92b98f;
+  background: #f2e5c5;
+  border-color: #c9aa68;
 }
 .travel-chip--library {
-  background: #eef4fb;
-  border-color: #9cb9d2;
-  color: #234961;
+  background: #fbefd2;
+  border-color: #c89f51;
+  color: #5b4119;
 }
 .travel-chip--arena {
-  background: #fff4e5;
-  border-color: #d7aa72;
-  color: #684019;
+  background: #f5e1b4;
+  border-color: #bc8634;
+  color: #59380f;
 }
 .travel-chip__label {
   letter-spacing: 0;
@@ -608,7 +587,7 @@ const bodyClass = computed<Record<string, boolean>>(() => ({
   overflow: hidden;
   position: relative;
   grid-template-columns: minmax(0, 1fr);
-  background: #ffffff;
+  background: #fffdf7;
 }
 .workshop-body--with-history {
   grid-template-columns: minmax(240px, 292px) minmax(520px, 1fr);
@@ -625,9 +604,9 @@ const bodyClass = computed<Record<string, boolean>>(() => ({
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: #ffffff;
-  border-right: 1px solid #e1e5df;
-  border-left: 1px solid #e1e5df;
+  background: #fffdf7;
+  border-right: 1px solid #e0c992;
+  border-left: 1px solid #e0c992;
   border-radius: 0;
   box-shadow: none;
   overflow: hidden;
@@ -640,17 +619,17 @@ const bodyClass = computed<Record<string, boolean>>(() => ({
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: #fafaf7;
+  background: #fbf3df;
   border: 0;
   border-radius: 0;
   box-shadow: none;
   overflow: hidden;
 }
 .workshop-drawer--history {
-  border-right: 1px solid #dfe4dd;
+  border-right: 1px solid #dcc28b;
 }
 .workshop-drawer--side {
-  border-left: 1px solid #dfe4dd;
+  border-left: 1px solid #dcc28b;
 }
 .workshop-drawer__bar {
   flex: 0 0 auto;
@@ -659,26 +638,26 @@ const bodyClass = computed<Record<string, boolean>>(() => ({
   justify-content: space-between;
   gap: 8px;
   /* 与对话区表头 .chat__topbar 统一为同一固定高度（box-sizing 含内边距与下边框），
-     让历史 / 对话 / 书房·调用各面板顶部的虚线分隔线落在同一水平线上对齐。 */
+     让历史 / 对话 / 书房·进度各面板顶部的分隔线落在同一水平线上对齐。 */
   min-height: 44px;
   box-sizing: border-box;
   padding: 8px 12px;
-  border-bottom: 1px solid #dfe4dd;
-  background: #fbfbf8;
+  border-bottom: 1px solid #dcc28b;
+  background: #fff8e9;
 }
 .workshop-drawer__title {
   font-size: 13px;
   font-weight: 650;
-  color: #2f3732;
+  color: #493416;
 }
 .workshop-drawer__close {
   font: inherit;
   font-size: 11px;
   padding: 5px 8px;
-  border: 1px solid #cbd3ca;
+  border: 1px solid #d4b875;
   border-radius: 8px;
-  background: #ffffff;
-  color: #48534e;
+  background: #fffaf0;
+  color: #654f2d;
   cursor: pointer;
 }
 .workshop-drawer__body {
@@ -699,21 +678,8 @@ const bodyClass = computed<Record<string, boolean>>(() => ({
 .workshop-call-drawer {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 0;
   min-height: 100%;
-}
-.workshop-twin-weekly {
-  width: 100%;
-  max-width: none;
-}
-.workshop-call-drawer__empty {
-  margin: 0;
-  padding: 10px;
-  font-size: 11px;
-  line-height: 1.6;
-  color: #6a736e;
-  border: 1px dashed #cfd7ce;
-  border-radius: 8px;
 }
 /* ── 书房资源详情弹窗（Teleport 到 body，仍受本组件 scoped 作用域约束） ── */
 .resource-modal-overlay {
@@ -731,8 +697,8 @@ const bodyClass = computed<Record<string, boolean>>(() => ({
   max-height: 88vh;
   display: flex;
   flex-direction: column;
-  background: #ffffff;
-  border: 1px solid #d7ddd5;
+  background: #fffdf7;
+  border: 1px solid #d1ae68;
   border-radius: 8px;
   box-shadow: 0 24px 70px rgba(24, 32, 28, 0.24);
   overflow: hidden;
@@ -744,12 +710,12 @@ const bodyClass = computed<Record<string, boolean>>(() => ({
   justify-content: space-between;
   gap: 8px;
   padding: 8px 12px;
-  border-bottom: 1px solid #e1e6df;
+  border-bottom: 1px solid #dfc78f;
 }
 .resource-modal__title {
   font-size: 13px;
   font-weight: 700;
-  color: #252a2e;
+  color: #493416;
 }
 .resource-modal__close {
   flex: 0 0 auto;
@@ -758,11 +724,11 @@ const bodyClass = computed<Record<string, boolean>>(() => ({
   line-height: 1;
   width: 28px;
   height: 28px;
-  background: #ffffff;
-  border: 1px solid #cbd3ca;
+  background: #fffaf0;
+  border: 1px solid #d4b875;
   border-radius: 8px;
   cursor: pointer;
-  color: #252a2e;
+  color: #493416;
 }
 .resource-modal__body {
   flex: 1 1 auto;
