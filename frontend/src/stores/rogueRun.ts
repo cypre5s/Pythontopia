@@ -12,12 +12,12 @@ import {
   EXPEDITION_MAX_HP,
   NODE_KIND_POOLS,
   REST_HEAL,
+  computeLayeredDifficulty,
   computeRunDifficulty,
 } from '@/data/rogueConfig';
 import { ROGUE_RELICS, relicById } from '@/data/rogueRelics';
 import { pickEventScenario, type RogueEventChoice } from '@/data/rogueEvents';
 import { kcDisplayName } from '@/data/kcNames';
-import { useKcFrontier } from '@/composables/useKcFrontier';
 import { useChallengeJudge, isJudgeUnavailable } from '@/composables/useChallengeJudge';
 import { useProfileSignals } from '@/composables/useProfileSignals';
 import {
@@ -175,7 +175,6 @@ function loadPersisted(): PersistShape | null {
 }
 
 export const useRogueRunStore = defineStore('rogueRun', () => {
-  const frontier = useKcFrontier();
   const challenge = useChallengeJudge();
   const { signals, hasAnySignal } = useProfileSignals();
   const mainline = useMainlineStore();
@@ -205,6 +204,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
   const activeCode = ref('');
   const challengeResult = ref<BossAttemptResultDto | null>(null);
   const loading = ref(false);
+  const starting = ref(false);
   const elapsedSec = ref(0);
   const errorMessage = ref('');
   const summaryReported = ref(false);
@@ -401,25 +401,25 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
 
   function resolveChallenge(
     kind: RogueNodeKind,
-    _layer: number,
-    usedKcs: Set<string>,
-    queue: FrontierPick[],
+    layer: number,
+    picks: readonly FrontierPick[],
+    cursor: { value: number },
   ) {
     if (kind === 'rest' || kind === 'chest') {
       return { kcCode: null, challengeKind: null as ArenaLevelKind | null, difficulty: 0 };
     }
-    // 优先用后端前沿选择器的 pick（权威 + 间隔重复）；用尽则回退本地 useKcFrontier。
-    const pick = queue.shift();
-    let kc: string;
-    let difficulty: number;
-    if (pick) {
-      kc = pick.kcCode;
-      difficulty = pick.difficulty;
-    } else {
-      kc = frontier.pickKc(focusChapter.value, usedKcs);
-      difficulty = frontier.difficultyForKc(kc);
+    // 全部挑战节点只消费后端权威前沿；聚焦章节 KC 少于地图节点时循环使用该真实排序，
+    // 不再静默换成前端默认 KC / 默认掌握度。
+    if (picks.length === 0) {
+      throw new Error('没有可用的画像学习前沿');
     }
-    usedKcs.add(kc);
+    const pick = picks[cursor.value % picks.length];
+    cursor.value += 1;
+    if (!pick || !pick.kcCode || !Number.isFinite(pick.difficulty)) {
+      throw new Error('学习前沿数据不完整');
+    }
+    const kc = pick.kcCode;
+    let difficulty = computeLayeredDifficulty(pick.difficulty, layer);
     const pool = NODE_KIND_POOLS[kind];
     const challengeKind = (pool.length > 0
       ? pool[Math.floor(Math.random() * pool.length)]
@@ -433,48 +433,54 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     focus: number | null,
     opts: { rng?: () => number; daily?: boolean } = {},
   ): Promise<void> {
+    if (starting.value) return;
+    starting.value = true;
+    errorMessage.value = '';
     focusChapter.value = focus;
-    // 后端权威「知识前沿选择器」（下沉）：取一批候选；失败/超时回退本地 useKcFrontier，绝不阻塞玩家。
-    const recent = history.value
-      .map((h) => h.kcCode)
-      .filter((k): k is string => !!k)
-      .slice(0, 12);
-    let picks: FrontierPick[] = [];
     try {
-      picks = await requestFrontierPicks({
+      // 后端同时读取 kc_mastery + learner_profile；失败时保持 idle 并明确提示，不用前端假数据造图。
+      const recent = history.value
+        .map((h) => h.kcCode)
+        .filter((k): k is string => !!k)
+        .slice(0, 12);
+      const picks = await requestFrontierPicks({
         focusChapter: focus,
         recentKcs: recent,
-        count: 28,
+        count: 40,
         ...(hasAnySignal.value ? { profileSignals: signals.value } : {}),
       });
-    } catch {
-      picks = [];
+      if (picks.length === 0) throw new Error('服务端未返回画像学习前沿');
+      const cursor = { value: 0 };
+      const map = generateRogueMap({
+        rng: opts.rng,
+        resolveChallenge: (kind, layer) => resolveChallenge(kind, layer, picks, cursor),
+      });
+      nodes.value = map.nodes;
+      layers.value = map.layers;
+      currentNodeId.value = null;
+      hp.value = EXPEDITION_MAX_HP;
+      maxHp.value = EXPEDITION_MAX_HP;
+      momentum.value = 0;
+      bestMomentum.value = 0;
+      score.value = 0;
+      relics.value = [];
+      history.value = [];
+      bossPhase.value = 1;
+      isDaily.value = opts.daily ?? false;
+      summaryReported.value = false;
+      scoreReported.value = false;
+      challenge.clearPrefetch();
+      clearActive();
+      phase.value = 'map';
+      prefetchAvailable();
+      persist();
+    } catch (error) {
+      errorMessage.value = error instanceof Error ? error.message : '画像学习前沿加载失败';
+      phase.value = 'idle';
+      toast.show(`远征暂未开始：${errorMessage.value}`, 'error');
+    } finally {
+      starting.value = false;
     }
-    const queue = [...picks];
-    const usedKcs = new Set<string>();
-    const map = generateRogueMap({
-      rng: opts.rng,
-      resolveChallenge: (kind, layer) => resolveChallenge(kind, layer, usedKcs, queue),
-    });
-    nodes.value = map.nodes;
-    layers.value = map.layers;
-    currentNodeId.value = null;
-    hp.value = EXPEDITION_MAX_HP;
-    maxHp.value = EXPEDITION_MAX_HP;
-    momentum.value = 0;
-    bestMomentum.value = 0;
-    score.value = 0;
-    relics.value = [];
-    history.value = [];
-    bossPhase.value = 1;
-    isDaily.value = opts.daily ?? false;
-    summaryReported.value = false;
-    scoreReported.value = false;
-    challenge.clearPrefetch();
-    clearActive();
-    phase.value = 'map';
-    prefetchAvailable();
-    persist();
   }
 
   /** 每日挑战：当日一次，弱项 + 日期种子稳定地图。 */
@@ -568,7 +574,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
       if (node.state !== 'available') continue;
       if (!node.kcCode || !node.challengeKind || node.kind === 'event') continue;
       const difficulty = computeRunDifficulty(node.difficulty, momentum.value, recentFailures);
-      challenge.prefetchProblem({ kc: node.kcCode, kind: node.challengeKind, difficulty });
+      void challenge.prefetchProblem({ kc: node.kcCode, kind: node.challengeKind, difficulty });
     }
   }
 
@@ -757,7 +763,24 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
   async function retryChallenge(): Promise<void> {
     const node = activeNode.value;
     if (!node) return;
+    const difficulty = activeDifficulty.value > 0 ? activeDifficulty.value : node.difficulty;
+    if (node.kcCode) {
+      await challenge.retryPrefetch({
+        kc: node.kcCode,
+        kind: node.challengeKind,
+        difficulty,
+      });
+    }
     await beginChallenge(node);
+  }
+
+  /** UI/诊断按 node 查询预加载状态；ready 只来自后端 READY。 */
+  function preloadStateForNode(id: string) {
+    const node = nodeById(id);
+    if (!node?.kcCode || !node.challengeKind) return null;
+    const recentFailures = history.value.slice(0, 2).filter((h) => !h.passed).length;
+    const difficulty = computeRunDifficulty(node.difficulty, momentum.value, recentFailures);
+    return challenge.getPrefetchState({ kc: node.kcCode, kind: node.challengeKind, difficulty });
   }
 
   /** 弃局：回到起始页 + 清后端活跃 run 与本地缓存（避免下次 startRun 续到废局）。 */
@@ -844,6 +867,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     activeCode,
     challengeResult,
     loading,
+    starting,
     elapsedSec,
     errorMessage,
     activeEventText,
@@ -866,6 +890,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     chooseReward,
     finishRun,
     retryChallenge,
+    preloadStateForNode,
     abort,
     tickSecond,
     leaderboard,

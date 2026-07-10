@@ -431,7 +431,7 @@ test.describe('引导手册 23 张截图（输出 frontend/public/guide/screensh
     await captureShot(page, testInfo, '17-library-rag');
   });
 
-  test('18-workshop-agents 多智能体工作室', async ({ page, context, request }, testInfo) => {
+  test('18-workshop-agents 处理进度', async ({ page, context, request }, testInfo) => {
     test.setTimeout(300_000);
     await prepareStudentContext(context, request);
     await page.goto('/workshop', { waitUntil: 'domcontentloaded' });
@@ -444,15 +444,11 @@ test.describe('引导手册 23 张截图（输出 frontend/public/guide/screensh
     await expect(page.locator('[data-testid="workshop-drawer-calls"]')).toBeVisible({
       timeout: 30_000,
     });
-    // 多智能体工作室（marvis 面板）亮起且出现至少一个智能体工位即可拍（协同进行中最有现场感）。
-    const marvis = page.locator('[data-testid="marvis-panel"]');
-    await expect(marvis, '多智能体工作室未亮起').toBeVisible({ timeout: 120_000 });
-    await expect(
-      marvis.locator('text=/设计师|审查官|规划师|安全员|学习总管/').first(),
-      '工作室没有出现智能体工位',
-    ).toBeVisible({ timeout: 120_000 });
-    // 等几个工位点亮、流式推进一段，画面更有内容。
-    await page.waitForTimeout(12_000);
+    const process = page.locator('[data-testid="workshop-process"]');
+    await expect(process, '处理进度未显示').toBeVisible({ timeout: 120_000 });
+    await expect(process.locator('[data-testid="tool-call-step"]').first(), '没有可读处理步骤')
+      .toBeVisible({ timeout: 120_000 });
+    await page.waitForTimeout(4_000);
     await settleFrames(page, 4);
     await captureShot(page, testInfo, '18-workshop-agents');
   });

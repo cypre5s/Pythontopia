@@ -1,6 +1,6 @@
 // 无尽模式状态机。
 //
-// 玩家进入 /endless 后系统连续出题（来自 graph /agents/boss/problem，回落 golden）。
+// 玩家进入 /endless 后系统连续出题（来自 graph /agents/boss/problem）。
 // 自适应规则（简化版）：
 //   * 连胜 1 → 难度 +0.5；连胜 2 → 难度 +1；
 //   * 失败 1 → 难度 -1，下一题 KC 不变；
@@ -188,20 +188,25 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
 
       const req: BossProblemRequest = {
         stage,
+        // 客户端只表达本局纵深；后端会与服务端 learner_profile + mastery 合成最终难度。
+        difficulty: clampDifficulty(adaptiveDiff),
         ...(preferredKc ? { preferredKc } : {}),
         ...(opts.preferredKind?.value ? { preferredKind: opts.preferredKind.value } : {}),
         ...(opts.arenaLevel?.value ? { arenaLevel: opts.arenaLevel.value } : {}),
         ...(profileSignals.hasAnySignal.value ? { profileSignals: profileSignals.signals.value } : {}),
       };
-      const fetched = await requestBossProblem(chapter, req);
-      problem.value = {
-        ...fetched,
-        difficulty: clampDifficulty(adaptiveDiff),
-      };
+      // 远征只接受服务端审查通过的 AI 题；golden / 本地模板不能冒充画像自适应关卡。
+      const fetched = await requestBossProblem(chapter, req, { allowGoldenFallback: false });
+      problem.value = fetched;
+      currentDifficulty.value = clampDifficulty(fetched.difficulty);
       phase.value = 'playing';
       // 进入答题即后台预生成「下一题」（不 await）：玩家做题时后端把下一题落 READY，
-      // nextProblem 时后端 claimReady 近乎瞬时返回；预取失败静默、nextProblem 回退现场出题。
-      void prefetchNext();
+      // nextProblem 时后端 claimReady 近乎瞬时返回；失败由调用方保留正常现场出题路径。
+      void prefetchNext().catch((error) => {
+        if (typeof console !== 'undefined') {
+          console.warn('[endless] prefetch failed:', error instanceof Error ? error.message : String(error));
+        }
+      });
     } catch (error) {
       phase.value = 'error';
       errorMessage.value = error instanceof Error ? error.message : String(error);
@@ -307,7 +312,7 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
       preferredKc: p.kcCode,
       ...(opts.preferredKind?.value ? { preferredKind: opts.preferredKind.value } : {}),
       ...(opts.arenaLevel?.value ? { arenaLevel: opts.arenaLevel.value } : {}),
-      // 预取按「当前难度」生成（不假定本题通过；过 / 挂后难度再变，后端维度匹配忽略难度仍可复用）。
+      // 预取按「当前难度」生成；后端复用严格匹配 difficulty，禁止易题冒充难题。
       difficulty: clampDifficulty(currentDifficulty.value),
       ...(profileSignals.hasAnySignal.value ? { profileSignals: profileSignals.signals.value } : {}),
     };

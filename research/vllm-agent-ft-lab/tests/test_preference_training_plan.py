@@ -20,6 +20,8 @@ def test_build_dpo_training_plan_records_adapter_and_preference_files() -> None:
     assert plan["dpo"]["beta"] == 0.1
     assert plan["lora"]["r"] == 8
     assert plan["training"]["learning_rate"] == 5e-5
+    assert plan["training"]["seed"] == 20260710
+    assert plan["training"]["data_seed"] == 20260710
     assert "Do not merge guard behavior into labels" in plan["notes"][0]
 
 

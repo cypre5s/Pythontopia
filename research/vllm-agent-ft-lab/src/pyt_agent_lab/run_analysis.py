@@ -38,6 +38,7 @@ def write_additional_charts(summary: dict[str, Any], charts_dir: str | Path) -> 
         title="Reliability rates by beginner-noise profile",
         labels=list(summary["by_noise_profile"].keys()),
         series=[
+            ("contract", [item["contract_pass_rate"] for item in summary["by_noise_profile"].values()]),
             ("json", [item["json_valid_rate"] for item in summary["by_noise_profile"].values()]),
             ("schema", [item["schema_valid_rate"] for item in summary["by_noise_profile"].values()]),
             ("grounding", [item["grounding_safe_rate"] for item in summary["by_noise_profile"].values()]),
@@ -116,6 +117,7 @@ def _write_optional_rates_chart(path: Path, title: str, grouped: dict[str, Any])
         title=title,
         labels=list(filtered.keys()),
         series=[
+            ("contract", [item["contract_pass_rate"] for item in filtered.values()]),
             ("json", [item["json_valid_rate"] for item in filtered.values()]),
             ("schema", [item["schema_valid_rate"] for item in filtered.values()]),
             ("grounding", [item["grounding_safe_rate"] for item in filtered.values()]),
@@ -132,6 +134,13 @@ def _summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
     schema_invalid_count = sum(not _truthy(row.get("schema_valid")) for row in rows)
     grounding_false_count = sum(not _truthy(row.get("grounding_safe")) for row in rows)
     forbidden_leak_count = sum(_truthy(row.get("forbidden_leak")) for row in rows)
+    contract_pass_count = sum(
+        _truthy(row.get("json_valid"))
+        and _truthy(row.get("schema_valid"))
+        and _truthy(row.get("grounding_safe"))
+        and not _truthy(row.get("forbidden_leak"))
+        for row in rows
+    )
     count = len(rows)
     return {
         "case_count": count,
@@ -145,6 +154,8 @@ def _summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "grounding_false_count": grounding_false_count,
         "forbidden_leak_rate": _round(forbidden_leak_count / count) if count else 0.0,
         "forbidden_leak_count": forbidden_leak_count,
+        "contract_pass_rate": _round(contract_pass_count / count) if count else 0.0,
+        "contract_pass_count": contract_pass_count,
         "latency_ms_mean": _round(_mean(latency), digits=2),
         "latency_ms_p50": _round(_percentile(latency, 50), digits=2),
         "latency_ms_p95": _round(_percentile(latency, 95), digits=2),

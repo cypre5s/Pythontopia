@@ -690,14 +690,25 @@ describe('WorkshopChat 17 工具分发', () => {
     expect(wrapper.find('[data-testid="quiz-mode-bar"]').exists()).toBe(false);
   });
 
-  it('资源意图（HANDOUT 带 KC）→ workshop_sse 管线 + 资源卡', async () => {
+  it('资源意图（HANDOUT 带 KC）→ workshop_sse 管线 + 资源卡 + 进度同步', async () => {
     const wrapper = mountChat();
     await flushPromises();
+    const workshop = sse(WORKSHOP_URL);
+    workshop.start.mockImplementation(async () => {
+      workshop.traces.value = [
+        { node: 'evidence_fetcher', phase: 'start', status: 'running', elapsed_ms: 0 },
+      ];
+      await flushPromises();
+      workshop.traces.value = [
+        { node: 'evidence_fetcher', phase: 'finish', status: 'ok', elapsed_ms: 18, chunks: 2 },
+      ];
+      workshop.status.value = 'done';
+      workshop.result.value = { runId: 1, resourceId: 101, status: 'SUCCESS' };
+    });
     armRoute({ intent: 'HANDOUT', kcCodes: ['PY43-KC-001'], focusHint: '循环' });
 
     await submit(wrapper, '给我做份循环讲义');
 
-    const workshop = sse(WORKSHOP_URL);
     expect(workshop.start).toHaveBeenCalledTimes(1);
     expect(workshop.start.mock.calls[0]?.[0]).toEqual({
       kcCodes: ['PY43-KC-001'],
@@ -705,8 +716,16 @@ describe('WorkshopChat 17 工具分发', () => {
       focusHint: '循环',
     });
     expect(sse(TUTOR_URL).start).not.toHaveBeenCalled();
-    expect(wrapper.find('[data-testid="resource-card"]').exists()).toBe(true);
+    await vi.waitFor(() => {
+      expect(wrapper.find('[data-testid="resource-card"]').exists()).toBe(true);
+    });
     expect(wrapper.html()).toContain('循环讲义');
+    const activity = useWorkshopActivityStore();
+    expect(activity.kind).toBe('resource');
+    expect(activity.status).toBe('done');
+    expect(activity.label).toBe('生成讲义');
+    expect(activity.traces).toHaveLength(1);
+    expect(activity.traces[0]?.chunks).toBe(2);
   });
 
   it('资源意图但没锚定到 KC → 答案优先回退答疑', async () => {
@@ -1398,15 +1417,20 @@ describe('WorkshopChat 17 工具分发', () => {
       kcCodes: ['PY43-KC-001'],
       type: 'HANDOUT',
     });
+    const resourceToken = activity.seq;
+    expect(resourceToken).toBeGreaterThan(guideToken);
+    expect(activity.kind).toBe('resource');
+    expect(activity.status).toBe('done');
 
-    // 返回小镇再回工坊（卸载 → 重挂）：仍不生成向导计划，共享状态不被动。
+    // 返回小镇再回工坊（卸载 → 重挂）：不自动开启新活动，共享状态保持上次资源生成结果。
     wrapper.unmount();
     const wrapper2 = mountChat();
     await flushPromises();
     expect(sse(ORCH_URL).start).not.toHaveBeenCalled();
     expect(sse(WORKSHOP_URL).start).not.toHaveBeenCalled();
-    expect(activity.seq).toBe(guideToken);
-    expect(activity.plan).toEqual({ type: 'plan', nodes: [] });
+    expect(activity.seq).toBe(resourceToken);
+    expect(activity.kind).toBe('resource');
+    expect(activity.status).toBe('done');
     // chip 重新可用但依旧只待点击，不自动生成。
     expect(wrapper2.find('[data-testid="secondary-go"]').exists()).toBe(true);
   });

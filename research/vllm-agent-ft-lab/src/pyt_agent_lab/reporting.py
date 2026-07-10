@@ -30,12 +30,13 @@ def build_report(summary: dict[str, Any], out_dir: str | Path) -> None:
     json_rates = [folds[label].get("json_valid_rate", 0.0) for label in labels]
     schema_rates = [folds[label].get("schema_valid_rate", 0.0) for label in labels]
     grounding_rates = [folds[label].get("grounding_safe_rate", 0.0) for label in labels]
+    contract_rates = [folds[label].get("contract_pass_rate", 0.0) for label in labels]
     _write_bar_svg(charts_dir / "score_by_fold.svg", "Score by fold", labels, [("score", score_values)])
     _write_bar_svg(
         charts_dir / "rates_by_fold.svg",
         "Validation rates by fold",
         labels,
-        [("json", json_rates), ("schema", schema_rates), ("grounding", grounding_rates)],
+        [("contract", contract_rates), ("json", json_rates), ("schema", schema_rates), ("grounding", grounding_rates)],
     )
 
 
@@ -49,6 +50,7 @@ def _summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "schema_valid_rate": _rate(rows, "schema_valid"),
         "grounding_safe_rate": _rate(rows, "grounding_safe"),
         "forbidden_leak_rate": _rate(rows, "forbidden_leak"),
+        "contract_pass_rate": _contract_rate(rows),
     }
 
 
@@ -70,6 +72,20 @@ def _rate(rows: list[dict[str, Any]], key: str) -> float:
     if not rows:
         return 0.0
     return round(sum(1 for row in rows if _truthy(row.get(key))) / len(rows), 6)
+
+
+def _contract_rate(rows: list[dict[str, Any]]) -> float:
+    if not rows:
+        return 0.0
+    passed = sum(
+        1
+        for row in rows
+        if _truthy(row.get("json_valid"))
+        and _truthy(row.get("schema_valid"))
+        and _truthy(row.get("grounding_safe"))
+        and not _truthy(row.get("forbidden_leak"))
+    )
+    return round(passed / len(rows), 6)
 
 
 def _truthy(value: Any) -> bool:

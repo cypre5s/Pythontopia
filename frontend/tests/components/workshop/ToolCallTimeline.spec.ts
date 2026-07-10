@@ -58,13 +58,14 @@ describe('ToolCallTimeline', () => {
     expect(steps[1]?.text()).toContain('练习设计师');
   });
 
-  it('note 命中治理关键词 → 徽章', () => {
+  it('note 只显示学生可理解的备用方式，不暴露内部诊断词', () => {
     const traces = [
       t({ node: 'tutor_diagram', phase: 'finish', status: 'skipped', elapsed_ms: 0, note: 'budget_skipped' }),
     ];
     const wrapper = mount(ToolCallTimeline, { props: { traces } });
 
-    expect(wrapper.get('[data-testid="tool-call-badge"]').text()).toBe('预算跳过');
+    expect(wrapper.get('[data-testid="tool-call-badge"]').text()).toBe('已跳过非必要步骤');
+    expect(wrapper.text()).not.toContain('budget_skipped');
   });
 
   it('非 live 完成快照：残留 running 兜底为完成（历史回放不转圈）', () => {

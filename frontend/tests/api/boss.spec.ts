@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const httpMock = vi.hoisted(() => ({
+  get: vi.fn(),
   post: vi.fn(),
 }));
 
@@ -15,10 +16,16 @@ vi.mock('@/api/http', () => ({
   },
 }));
 
-import { requestBossProblem, submitBossAttempt } from '@/api/boss';
+import {
+  fetchBossPrefetchStatus,
+  prefetchBossProblem,
+  requestBossProblem,
+  submitBossAttempt,
+} from '@/api/boss';
 
 beforeEach(() => {
   httpMock.post.mockReset();
+  httpMock.get.mockReset();
 });
 
 afterEach(() => {
@@ -152,6 +159,30 @@ describe('requestBossProblem', () => {
     expect(problem.totalTestCases).toBeGreaterThan(0);
   });
 
+  it('strict expedition mode rejects backend/local golden fallback explicitly', async () => {
+    httpMock.post.mockRejectedValueOnce(new Error('graph down'));
+    await expect(
+      requestBossProblem(
+        1,
+        { stage: 2, preferredKc: 'PY43-KC-001', difficulty: 2 },
+        { allowGoldenFallback: false },
+      ),
+    ).rejects.toThrow('graph down');
+  });
+
+  it('strict expedition mode rejects an unreviewed response even when it has a problem id', async () => {
+    httpMock.post.mockResolvedValueOnce({
+      data: {
+        problemId: 'golden-c1-s2', chapter: 1, stage: 2, difficulty: 2,
+        kcCode: 'PY43-KC-001', statement: 'fallback', hints: [], sampleInput: '',
+        sampleOutput: '', totalTestCases: 3, reviewed: false, aiGenerated: false,
+      },
+    });
+    await expect(
+      requestBossProblem(1, { stage: 2 }, { allowGoldenFallback: false }),
+    ).rejects.toThrow('未通过 AI 审查');
+  });
+
   it('falls back when backend returns malformed body (no problemId)', async () => {
     httpMock.post.mockResolvedValueOnce({ data: { foo: 'bar' } });
     const problem = await requestBossProblem(2, 1);
@@ -194,6 +225,32 @@ describe('requestBossProblem', () => {
     expect(problem.statement).toContain('30 秒');
     expect(problem.buggyCode).toContain('input');
     expect(problem.starterCode).toBe(problem.buggyCode);
+  });
+});
+
+describe('boss prefetch status', () => {
+  it('returns persisted PENDING and queries the exact difficulty dimension', async () => {
+    const pending = {
+      jobId: 9, status: 'PENDING', attempts: 1, errorMessage: null,
+      retryable: false, updatedAt: '2026-07-10T00:00:00Z',
+    } as const;
+    httpMock.post.mockResolvedValueOnce({ data: pending });
+    httpMock.get.mockResolvedValueOnce({ data: { ...pending, status: 'READY' } });
+    const req = {
+      stage: 2, preferredKc: 'PY43-KC-001', preferredKind: 'dual_track', difficulty: 2,
+    };
+
+    await expect(prefetchBossProblem(1, req)).resolves.toEqual(pending);
+    await expect(fetchBossPrefetchStatus(1, req)).resolves.toMatchObject({ status: 'READY' });
+    expect(httpMock.get).toHaveBeenCalledWith('/api/world/boss/1/prefetch', {
+      params: {
+        preferredKc: 'PY43-KC-001',
+        preferredKind: 'dual_track',
+        arenaLevel: undefined,
+        difficulty: 2,
+      },
+      suppressNetworkToast: true,
+    });
   });
 });
 

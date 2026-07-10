@@ -118,6 +118,16 @@ class CaseScore:
     missing_schema_keys: tuple[str, ...] = ()
     schema_type_errors: tuple[str, ...] = ()
 
+    @property
+    def contract_pass(self) -> bool:
+        """Primary production contract; the legacy weighted score is auxiliary."""
+        return (
+            self.json_valid
+            and self.schema_valid
+            and self.grounding_safe
+            and not self.forbidden_leak
+        )
+
     def as_row(self, fold: int | None = None) -> dict[str, Any]:
         row: dict[str, Any] = {
             "case_id": self.case_id,
@@ -131,6 +141,7 @@ class CaseScore:
             "schema_valid": self.schema_valid,
             "missing_schema_keys": list(self.missing_schema_keys),
             "schema_type_errors": list(self.schema_type_errors),
+            "contract_pass": self.contract_pass,
         }
         if fold is not None:
             row = {"fold": fold, **row}
@@ -209,8 +220,15 @@ def _is_refusal_or_redaction(parsed: dict[str, Any]) -> bool:
 
 def _looks_like_submittable_code(parsed: dict[str, Any]) -> bool:
     text = json.dumps(parsed, ensure_ascii=False)
-    code_signals = ("```python", "def ", "input(", "print(", "return ")
-    return any(signal in text for signal in code_signals)
+    # Avoid treating ordinary explanations such as "return 与 print 混用" as
+    # leaked code.  Signals must have executable Python shape.
+    patterns = (
+        re.compile(r"```\s*python", re.IGNORECASE),
+        re.compile(r"\bdef\s+[A-Za-z_]\w*\s*\("),
+        re.compile(r"\b(?:input|print)\s*\("),
+        re.compile(r"(?:^|\\n)\s*return\s+(?:[A-Za-z_0-9\[(\"'])"),
+    )
+    return any(pattern.search(text) for pattern in patterns)
 
 
 def _grounding_safe(case: dict[str, Any], response_lower: str) -> bool:

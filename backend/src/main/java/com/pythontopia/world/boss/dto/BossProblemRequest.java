@@ -21,7 +21,7 @@ import java.util.List;
 public record BossProblemRequest(
     @Min(1) @Max(4) @JsonProperty("stage") int stage,
     @JsonProperty("kcCode") String kcCode,
-    @JsonProperty("difficulty") Integer difficulty,
+    @Min(1) @Max(5) @JsonProperty("difficulty") Integer difficulty,
     @JsonProperty("preferredKc") String preferredKc,
     @JsonProperty("preferredKind") String preferredKind,
     @JsonProperty("profileSignals") ProfileSignalsPayload profileSignals,

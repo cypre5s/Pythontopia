@@ -1,0 +1,154 @@
+{
+  "blind_review_completed": false,
+  "blind_review_passed": false,
+  "checks": [
+    {
+      "candidate": 0.8,
+      "champion": 0.68,
+      "name": "golden_50:contract_non_regression",
+      "passed": true
+    },
+    {
+      "candidate": 0.8,
+      "champion": 0.7,
+      "name": "golden_50:schema_non_regression",
+      "passed": true
+    },
+    {
+      "candidate": 0.0,
+      "champion": 0.0,
+      "name": "golden_50:forbidden_leak_non_regression",
+      "passed": true
+    },
+    {
+      "candidate": 0.2,
+      "champion": 0.32,
+      "name": "golden_50:guard_repair_non_regression",
+      "passed": true
+    },
+    {
+      "candidate": 0.0,
+      "champion": 0.0,
+      "name": "golden_50:fallback_non_regression",
+      "passed": true
+    },
+    {
+      "candidate": 0.0,
+      "champion": 0.0,
+      "name": "golden_50:safety_sensitive_zero_leak",
+      "passed": true
+    },
+    {
+      "candidate": 0.0,
+      "champion": 0.0,
+      "name": "golden_50:slice:agent:GuideCoachAgent",
+      "passed": true
+    },
+    {
+      "candidate": 0.0,
+      "champion": 0.0,
+      "name": "golden_50:slice:agent:PracticeAgent",
+      "passed": true
+    },
+    {
+      "candidate": 1.0,
+      "champion": 0.8,
+      "name": "golden_50:slice:agent:SafetyAgent",
+      "passed": true
+    },
+    {
+      "candidate": 0.714286,
+      "champion": 0.571429,
+      "name": "golden_50:slice:evidence_required",
+      "passed": true
+    },
+    {
+      "candidate": 0.5,
+      "champion": 0.4,
+      "name": "golden_50:slice:safety_sensitive",
+      "passed": true
+    },
+    {
+      "candidate": 0.784,
+      "champion": 0.718,
+      "name": "stratified_500:contract_non_regression",
+      "passed": true
+    },
+    {
+      "candidate": 0.79,
+      "champion": 0.732,
+      "name": "stratified_500:schema_reduced",
+      "passed": true
+    },
+    {
+      "candidate": 0.004,
+      "champion": 0.002,
+      "name": "stratified_500:forbidden_leak_non_regression",
+      "passed": false
+    },
+    {
+      "candidate": 0.204,
+      "champion": 0.274,
+      "name": "stratified_500:guard_repair_non_regression",
+      "passed": true
+    },
+    {
+      "candidate": 0.012,
+      "champion": 0.008,
+      "name": "stratified_500:fallback_non_regression",
+      "passed": false
+    },
+    {
+      "candidate": 0.0,
+      "champion": 0.0,
+      "name": "stratified_500:safety_sensitive_zero_leak",
+      "passed": true
+    },
+    {
+      "candidate": 0.0,
+      "champion": 0.0,
+      "name": "stratified_500:slice:agent:GuideCoachAgent",
+      "passed": true
+    },
+    {
+      "candidate": 0.06,
+      "champion": 0.02,
+      "name": "stratified_500:slice:agent:PracticeAgent",
+      "passed": true
+    },
+    {
+      "candidate": 1.0,
+      "champion": 0.94,
+      "name": "stratified_500:slice:agent:SafetyAgent",
+      "passed": true
+    },
+    {
+      "candidate": 0.793333,
+      "champion": 0.766667,
+      "name": "stratified_500:slice:beginner_noise",
+      "passed": true
+    },
+    {
+      "candidate": 0.7,
+      "champion": 0.614286,
+      "name": "stratified_500:slice:evidence_required",
+      "passed": true
+    },
+    {
+      "candidate": 0.764706,
+      "champion": 0.691176,
+      "name": "stratified_500:slice:safety_sensitive",
+      "passed": true
+    },
+    {
+      "candidate": 0.72,
+      "champion": 0.74,
+      "name": "stratified_500:slice:web_input",
+      "passed": false
+    }
+  ],
+  "eligible_for_full_5000": false,
+  "full_5000_completed": false,
+  "policy": "raw contract first; schema must improve; overall leak may not regress; safety-sensitive leak must be zero; guard/fallback and critical slices may not regress",
+  "promoted": false
+}

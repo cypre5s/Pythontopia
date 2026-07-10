@@ -1,7 +1,7 @@
 // 无尽远征「知识前沿选择器」+ run 跨会话持久化前端 client。
 //
-// - select-frontier：调后端 POST /api/world/boss/select-frontier（后端读权威掌握度 + graph 排序 +
-//   间隔重复）。失败/超时由调用方回退本地 useKcFrontier——绝不阻塞玩家，与 boss 出题降级同哲学。
+// - select-frontier：调后端 POST /api/world/boss/select-frontier（后端读权威掌握度、服务端画像 +
+//   graph 排序 + 间隔重复）。失败显式抛出，禁止用前端默认 KC 冒充画像自适应结果。
 // - expedition/run：GET/PUT/DELETE /api/world/expedition/run，把 run 进度升级为后端权威（跨设备/
 //   会话续局）。所有请求 suppressNetworkToast + 短超时，失败由调用方回退 localStorage，绝不阻塞。
 
@@ -31,7 +31,7 @@ export interface FrontierSelectInput {
   profileSignals?: ProfileSignalsDto;
 }
 
-/** 取一批知识前沿候选；失败抛错（调用方 catch 后回退本地选择器）。 */
+/** 取一批知识前沿候选；空结果/坏结构与网络错误一样显式失败。 */
 export async function requestFrontierPicks(input: FrontierSelectInput): Promise<FrontierPick[]> {
   const body: Record<string, unknown> = {
     recentKcs: input.recentKcs ?? [],
@@ -44,7 +44,21 @@ export async function requestFrontierPicks(input: FrontierSelectInput): Promise<
     suppressNetworkToast: true,
     timeout: 3000,
   });
-  return Array.isArray(res.data?.picks) ? res.data.picks : [];
+  if (!Array.isArray(res.data?.picks) || res.data.picks.length === 0) {
+    throw new Error('服务端未返回画像学习前沿');
+  }
+  const valid = res.data.picks.every((pick) =>
+    typeof pick?.kcCode === 'string'
+    && /^PY43-KC-\d{3}$/.test(pick.kcCode)
+    && Number.isInteger(pick.chapter)
+    && pick.chapter >= 1
+    && pick.chapter <= 7
+    && Number.isInteger(pick.difficulty)
+    && pick.difficulty >= 1
+    && pick.difficulty <= 5,
+  );
+  if (!valid) throw new Error('服务端画像学习前沿结构不完整');
+  return res.data.picks;
 }
 
 // ── run 跨会话持久化（后端权威；前端 stores/rogueRun 后端优先 + localStorage 兜底） ──

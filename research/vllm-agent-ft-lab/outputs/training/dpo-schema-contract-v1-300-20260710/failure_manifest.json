@@ -1,0 +1,11 @@
+{
+  "status": "failed_not_candidate",
+  "stage": "dpo_training",
+  "stopped_after_step": 7,
+  "reason": "plan seed was recorded as 20260710 but the old launcher did not pass seed/data_seed to TRL, so Trainer used its default seed instead",
+  "recorded_plan_seed": 20260710,
+  "actual_trainer_seed": 42,
+  "failure_artifact": "outputs/adapters/dpo-schema-contract-v1-300-20260710/failed_runs/20260710T085136Z/failure.json",
+  "replacement_plan": "outputs/training/dpo-schema-contract-v1-300-seeded-20260710/training_plan.json",
+  "promotion_eligible": false
+}

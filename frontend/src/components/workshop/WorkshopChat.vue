@@ -9,7 +9,7 @@
  *   3. 按 17 工具分发表执行（蓝本 §0）：
  *      - tutor_sse：ASK / ASKME / EXPLAIN_CODE / FIX_BUG（共用 /api/tutor/ask，差异在 context 前缀 directive）；
  *      - workshop_sse：6 类资源 → /api/workshop/resources/stream + AgentStudioStream 思考链；
- *      - orchestrator_sse：PLAN → /api/orchestrator/turn/stream（点亮 MarvisPanel）；
+ *      - orchestrator_sse：PLAN → /api/orchestrator/turn/stream（同步右侧处理进度）；
  *      - frontend 零 LLM：VIDEO / REVIEW / PROGRESS / NAVIGATE / MY_STUDY。
  *   4. 置信分档：<0.45 出澄清气泡（ClarifyBubble）；0.45~0.7 正常执行 + 答后纠错 chips。
  *
@@ -353,6 +353,7 @@ const pendingHistorySaves = ref(0);
 // 镜像/收尾都持它写 store：向导（GuideOverlay）接管开新活动后，本组件过期流的数据被 store 忽略。
 const planRunToken = ref<number | null>(null);
 const askRunToken = ref<number | null>(null);
+const resourceRunToken = ref<number | null>(null);
 // 学生点了「⏹ 停止」：runAsk 收尾时据此跳过错误兜底（气泡已标「（已中断）」）。
 const askInterrupted = ref(false);
 
@@ -516,7 +517,7 @@ const officeStreamLabel = ref('');
 const browseBusy = ref(false);
 
 // orchestrator 协同活动：GuideOverlay 或本组件 PLAN 写入 workshopActivity 时，
-// AgentStudioStream 渲染思考链（MarvisPanel 同步点亮）。
+// AgentStudioStream 渲染思考链（右侧处理进度同步更新）。
 const isOrchestratorActive = computed(
   () => activity.kind === 'orchestrator' && activity.status === 'streaming',
 );
@@ -854,7 +855,7 @@ watch(workshopSse.tokens, (t) => {
   officeTokenPreview.value = t.slice(0, 200);
 });
 
-// ASK：答疑流的 traces/plan 也镜像进右侧 workshopActivity，驱动「调用过程」工作室动画。
+// ASK：答疑流的 traces/plan 镜像进右侧 workshopActivity，驱动学生可读的处理进度。
 watch(tutorSse.traces, (tr) => {
   if (askRunToken.value === null) return;
   activity.syncTraces('ask', tr, askRunToken.value);
@@ -864,7 +865,17 @@ watch(tutorSse.plan, (p) => {
   activity.syncPlan('ask', p, askRunToken.value);
 });
 
-// PLAN：orchestrator 流的 traces/plan 镜像进 workshopActivity（MarvisPanel / 思考链自动点亮）。
+// 资源生成与答疑复用同一进度抽屉；仅镜像既有 SSE，不发起额外请求。
+watch(workshopSse.traces, (tr) => {
+  if (resourceRunToken.value === null) return;
+  activity.syncTraces('resource', tr, resourceRunToken.value);
+});
+watch(workshopSse.plan, (p) => {
+  if (resourceRunToken.value === null) return;
+  activity.syncPlan('resource', p, resourceRunToken.value);
+});
+
+// PLAN：orchestrator 流的 traces/plan 镜像进 workshopActivity（进度时间线自动更新）。
 // 仅当本组件持有运行令牌时镜像——过期的流（如向导已开新活动）不得覆盖共享状态。
 watch(orchestratorSse.traces, (tr) => {
   if (planRunToken.value === null) return;
@@ -1819,6 +1830,8 @@ async function runResource(
   officeStreamState.value = 'streaming';
   officeTokenPreview.value = '';
   officeStreamLabel.value = `生成${commandOf(type).label}`;
+  const runToken = activity.start('resource', officeStreamLabel.value);
+  resourceRunToken.value = runToken;
 
   const trimmed = focusHint.trim();
   const reqPayload =
@@ -1826,8 +1839,11 @@ async function runResource(
   learning.streamCreateResource({ kcCodes, type });
 
   await workshopSse.start(reqPayload);
+  const resourceOk = workshopSse.status.value === 'done' && workshopSse.result.value !== null;
+  activity.finish(resourceOk, runToken);
+  if (resourceRunToken.value === runToken) resourceRunToken.value = null;
 
-  if (workshopSse.status.value === 'done' && workshopSse.result.value) {
+  if (resourceOk && workshopSse.result.value) {
     playSfx('sfx_success');
     const result = workshopSse.result.value;
 
@@ -2630,8 +2646,7 @@ onMounted(async () => {
         正在判断该用哪个工具…
       </div>
 
-      <!-- 统一思考过程动画：资源生成 / 学习总管协同 都改用与「提问」一致的工具调用时间轴
-           （右侧 MarvisPanel 仍同步点亮全员流水线，避免重复的双层卡片）。 -->
+      <!-- 统一处理进度：资源生成 / 学习总管协同都复用与「提问」一致的时间轴。 -->
       <ToolCallTimeline
         v-if="officeStreamState === 'streaming' && !isOrchestratorActive"
         :traces="workshopSse.traces.value"
@@ -2669,7 +2684,7 @@ onMounted(async () => {
     'PingFang SC',
     'Microsoft YaHei',
     sans-serif;
-  color: #252a2e;
+  color: #3f2e16;
 }
 .chat__topbar {
   flex: 0 0 auto;
@@ -2682,28 +2697,28 @@ onMounted(async () => {
   min-height: 44px;
   box-sizing: border-box;
   padding: 8px 14px;
-  border-bottom: 1px solid #dfe4dd;
-  background: #fbfbf8;
+  border-bottom: 1px solid #dcc28b;
+  background: #fff8e9;
 }
 .chat__topbar-title {
   font-size: 13px;
   font-weight: 650;
-  color: #2f3732;
+  color: #493416;
   letter-spacing: 0;
 }
 .chat__newchat {
   font: inherit;
   font-size: 12px;
   padding: 5px 10px;
-  background: #ffffff;
-  border: 1px solid #cbd3ca;
+  background: #fffaf0;
+  border: 1px solid #d4b875;
   border-radius: 8px;
-  color: #46514c;
+  color: #654f2d;
   cursor: pointer;
 }
 .chat__newchat:hover {
-  background: #eef5ef;
-  border-color: #9db4a2;
+  background: #f4e4bc;
+  border-color: #c89c4c;
 }
 .chat__newchat:disabled {
   opacity: 0.55;
@@ -2721,14 +2736,14 @@ onMounted(async () => {
   flex-direction: column;
   gap: 12px;
   padding: 18px 22px;
-  background: #ffffff;
+  background: #fffdf7;
   scrollbar-width: thin;
 }
 .chat__composer {
   flex: 0 0 auto;
   padding: 12px 18px 14px;
-  border-top: 1px solid #dfe4dd;
-  background: #fbfbf8;
+  border-top: 1px solid #dcc28b;
+  background: #fff8e9;
 }
 
 /* 续聊提示条 */
@@ -2740,9 +2755,9 @@ onMounted(async () => {
   gap: 8px;
   padding: 8px 10px;
   font-size: 12px;
-  color: #24485e;
-  background: #eef4fb;
-  border: 1px solid #c9d9e6;
+  color: #654a20;
+  background: #f8ebca;
+  border: 1px solid #d8b86e;
   border-radius: 8px;
 }
 .chat__continue-icon {
@@ -2757,10 +2772,10 @@ onMounted(async () => {
   font: inherit;
   font-size: 12px;
   padding: 4px 8px;
-  background: #ffffff;
-  border: 1px solid #9cb9d2;
+  background: #fffaf0;
+  border: 1px solid #cba45a;
   border-radius: 8px;
-  color: #24485e;
+  color: #654a20;
   cursor: pointer;
 }
 .chat__continue-new:hover {
@@ -2795,14 +2810,14 @@ onMounted(async () => {
 .msg {
   padding: 10px 13px;
   border-radius: 8px;
-  border: 1px solid #e0e5df;
+  border: 1px solid #dcc28b;
   max-width: 90%;
   box-shadow: none;
 }
 .msg--user {
-  background: #e8f3e8;
-  border-color: #c1d8c2;
-  color: #21352a;
+  background: #f3dfad;
+  border-color: #c89c4c;
+  color: #493416;
   align-self: flex-end;
   max-width: 76%;
 }
@@ -2823,9 +2838,9 @@ onMounted(async () => {
   padding: 3px 8px;
   font-size: 11px;
   border-radius: 8px;
-  background: #f7faf7;
-  border: 1px solid #cbd8ca;
-  color: #33423a;
+  background: #fff8e9;
+  border: 1px solid #d4b875;
+  color: #493416;
 }
 .user-attach__name {
   max-width: 140px;
@@ -2835,11 +2850,11 @@ onMounted(async () => {
   font-weight: 700;
 }
 .user-attach__meta {
-  color: #6c7771;
+  color: #78684e;
 }
 .msg--assistant {
-  background: #ffffff;
-  color: #252a2e;
+  background: #fffdf7;
+  color: #3f2e16;
   align-self: flex-start;
 }
 .msg--error {
@@ -2851,25 +2866,25 @@ onMounted(async () => {
 .msg--video {
   align-self: flex-start;
   width: 100%;
-  background: #ffffff;
+  background: #fffdf7;
 }
 .msg--browse {
   align-self: flex-start;
   width: 100%;
-  background: #ffffff;
+  background: #fffdf7;
 }
 /* 计划 / 学情 / 书房检索卡：撑满行，像素卡片底色。 */
 .msg--plan,
 .msg--progress,
 .msg--mystudy {
   width: 100%;
-  background: #fbfbf8;
+  background: #fffaf0;
 }
 .msg--navigate {
-  background: #ffffff;
+  background: #fffdf7;
 }
 .msg--clarify {
-  background: #fbfbf8;
+  background: #fffaf0;
   border-style: solid;
 }
 /* 「接着：xx →」chip：无气泡边框，仅一枚胶囊按钮。 */
@@ -2877,7 +2892,7 @@ onMounted(async () => {
   align-self: flex-start;
 }
 .msg__text--dim {
-  color: #6a736e;
+  color: #78684e;
   font-size: 12px;
 }
 /* 答案内嵌的工具入口 + 相关 B站讲解。 */
@@ -2886,7 +2901,7 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  border-top: 1px solid #e1e6df;
+  border-top: 1px solid #dcc28b;
   padding-top: 8px;
 }
 .msg__tool-actions {
@@ -2898,7 +2913,7 @@ onMounted(async () => {
 .msg__tool-hint {
   font-size: 11px;
   font-weight: 700;
-  color: #68736e;
+  color: #78684e;
   margin-right: 2px;
 }
 .msg__tool-videos {
@@ -2911,7 +2926,7 @@ onMounted(async () => {
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  border-top: 1px solid #e1e6df;
+  border-top: 1px solid #dcc28b;
   padding-top: 8px;
 }
 /* 纠错 chips：贴在气泡正下方的无框小行。 */
@@ -2926,15 +2941,15 @@ onMounted(async () => {
   font: inherit;
   font-size: 12px;
   padding: 5px 10px;
-  background: #ffffff;
-  border: 1px solid #cbd3ca;
+  background: #fffaf0;
+  border: 1px solid #d4b875;
   border-radius: 8px;
-  color: #33423a;
+  color: #493416;
   cursor: pointer;
 }
 .tool-chip:hover {
-  background: #f2f6f3;
-  border-color: #a7b9aa;
+  background: #f4e4bc;
+  border-color: #c89c4c;
 }
 .tool-chip:disabled {
   opacity: 0.5;
@@ -2943,8 +2958,8 @@ onMounted(async () => {
 .tool-chip--secondary {
   font-size: 12px;
   padding: 6px 12px;
-  background: #eef5ef;
-  border-color: #a7b9aa;
+  background: #f8ebca;
+  border-color: #cba45a;
 }
 .tool-chip--go {
   margin-top: 6px;
@@ -2964,7 +2979,7 @@ onMounted(async () => {
   font: inherit;
   font-size: 12px;
   padding: 5px 10px;
-  background: #ffffff;
+  background: #fffaf0;
   border: 1px solid #e2ada5;
   border-radius: 8px;
   color: #9e3528;
@@ -2980,9 +2995,9 @@ onMounted(async () => {
   padding: 1px 8px;
   font-size: 10px;
   font-weight: 700;
-  color: #36513f;
-  background: #edf5ef;
-  border: 1px solid #b7c9bb;
+  color: #654a20;
+  background: #f8ebca;
+  border: 1px solid #d8b86e;
   border-radius: 8px;
   cursor: help;
 }
@@ -2994,18 +3009,18 @@ onMounted(async () => {
 .msg__tool {
   font-size: 10px;
   font-weight: 700;
-  color: #24485e;
-  background: #eef4fb;
-  border: 1px solid #bfd3e3;
+  color: #654a20;
+  background: #fff7e4;
+  border: 1px solid #d4b875;
   border-radius: 8px;
   padding: 1px 8px;
 }
 .msg__kc {
   font-size: 10px;
   font-weight: 700;
-  color: #36513f;
-  background: #edf5ef;
-  border: 1px solid #b7c9bb;
+  color: #654a20;
+  background: #f8ebca;
+  border: 1px solid #d8b86e;
   border-radius: 8px;
   padding: 1px 8px;
 }
@@ -3060,7 +3075,7 @@ onMounted(async () => {
   border-radius: 8px;
   font-size: 10px;
   font-weight: 700;
-  border: 1px solid #d0d8cf;
+  border: 1px solid #dcc28b;
   white-space: nowrap;
   cursor: help;
 }
@@ -3080,8 +3095,8 @@ onMounted(async () => {
   gap: 6px;
   margin-top: 8px;
   padding: 10px;
-  background: #f7fafc;
-  border: 1px solid #c9d9e6;
+  background: #fff8e9;
+  border: 1px solid #d4b875;
   border-radius: 8px;
 }
 .quiz-fill__row {
@@ -3092,7 +3107,7 @@ onMounted(async () => {
 .quiz-fill__label {
   flex: 0 0 auto;
   font-weight: 700;
-  color: #24485e;
+  color: #654a20;
   font-size: 13px;
 }
 .quiz-fill__input {
@@ -3101,15 +3116,15 @@ onMounted(async () => {
   padding: 5px 8px;
   font: inherit;
   font-size: 13px;
-  border: 1px solid #c9d4ce;
+  border: 1px solid #d4b875;
   border-radius: 8px;
-  background: #ffffff;
-  color: #252a2e;
+  background: #fffdf7;
+  color: #3f2e16;
 }
 .quiz-fill__input:focus {
   outline: none;
-  border-color: #789d84;
-  box-shadow: 0 0 0 2px rgba(120, 157, 132, 0.16);
+  border-color: #c89c4c;
+  box-shadow: 0 0 0 2px rgba(200, 156, 76, 0.16);
 }
 .quiz-fill__submit {
   justify-self: start;
@@ -3118,9 +3133,9 @@ onMounted(async () => {
   font: inherit;
   font-size: 13px;
   cursor: pointer;
-  background: #2f6f4f;
+  background: #8a6423;
   color: #fff;
-  border: 1px solid #285d43;
+  border: 1px solid #654a20;
   border-radius: 8px;
 }
 .quiz-fill__submit:disabled {
@@ -3129,7 +3144,7 @@ onMounted(async () => {
 }
 .cursor {
   animation: blink 0.8s steps(2) infinite;
-  color: #2f6f4f;
+  color: #8a6423;
   font-weight: 700;
 }
 @keyframes blink {
@@ -3141,7 +3156,7 @@ onMounted(async () => {
 .msg--resource {
   align-self: flex-start;
   width: 100%;
-  background: #fbfbf8;
+  background: #fffaf0;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -3155,7 +3170,7 @@ onMounted(async () => {
 .resource-head__icon {
   font-size: 20px;
   text-align: center;
-  color: #2f6f4f;
+  color: #8a6423;
 }
 .resource-head__body {
   display: flex;
@@ -3179,7 +3194,7 @@ onMounted(async () => {
 }
 .resource-head__meta {
   font-size: 11px;
-  color: #6a736e;
+  color: #78684e;
 }
 .resource-head__actions {
   display: flex;
@@ -3196,41 +3211,41 @@ onMounted(async () => {
   cursor: pointer;
 }
 .resource-head__toggle {
-  background: #ffffff;
-  border: 1px solid #cbd3ca;
-  color: #33423a;
+  background: #fffaf0;
+  border: 1px solid #d4b875;
+  color: #493416;
 }
 .resource-head__toggle:hover {
-  background: #f2f6f3;
+  background: #f4e4bc;
 }
 .resource-head__open {
-  background: #eef4fb;
-  border: 1px solid #9cb9d2;
-  color: #24485e;
+  background: #f3dfad;
+  border: 1px solid #c89c4c;
+  color: #493416;
   font-weight: 700;
 }
 .resource-head__open:hover {
   background: #fff;
 }
 .resource-body {
-  border-top: 1px solid #e1e6df;
+  border-top: 1px solid #dcc28b;
   padding-top: 8px;
 }
 .resource-body__summary {
   margin: 0 0 8px;
   font-size: 13px;
   line-height: 1.55;
-  color: #33423a;
+  color: #493416;
 }
 .resource-body__loading,
 .resource-body__empty {
   margin: 0;
   font-size: 12px;
-  color: #6a736e;
+  color: #78684e;
 }
 /* MY_STUDY 命中资源行（复用资源卡头样式）。 */
 .mystudy-item {
-  border-top: 1px solid #e1e6df;
+  border-top: 1px solid #dcc28b;
   padding-top: 6px;
   margin-top: 6px;
 }
@@ -3239,10 +3254,10 @@ onMounted(async () => {
 .routing {
   align-self: flex-start;
   font-size: 12px;
-  color: #6a736e;
+  color: #78684e;
   padding: 6px 12px;
-  background: #fbfbf8;
-  border: 1px solid #dfe4dd;
+  background: #fff8e9;
+  border: 1px solid #dcc28b;
   border-radius: 8px;
 }
 </style>

@@ -26,9 +26,9 @@ M10 把「真判题失败」与「自适应挑战」收敛为三条子链，共�
 > 【截图占位 SC-S10-2】
 > - 访问：http://localhost:5173/endless（容器态 http://localhost:8080/endless）
 > - 登录角色：学生
-> - 操作步骤：1. 登录后由主线地图章节入口（`MainlineMapPage`）或暂停菜单进入 `/endless` 无尽模式；2. 系统连续出题（`useEndlessRun` 调 graph `/agents/boss/problem`，不可达回落 golden）；3. 连答冲连胜与积分，借 `prefetch` 预生成下一题降低等待。
+> - 操作步骤：1. 登录后由主线地图章节入口（`MainlineMapPage`）或暂停菜单进入 `/endless` 无尽模式；2. 系统连续出题（`useEndlessRun` 经后端调用 graph `/agents/boss/problem`，无尽/远征只接受审查通过的 AI 题）；3. 连答冲连胜与积分，借可查询的 `prefetch` 状态机预生成下一题降低等待。
 > - 截取对象：`EndlessPage` 的「题干 + 连胜/积分 HUD + 代码编辑器」区域。
-> - 期望画面：顶部显示当前连胜与累计积分，主区为 AI / golden 题干与作答编辑器，提交后即时给出判定并切入下一题。
+> - 期望画面：顶部显示当前连胜与累计积分，主区为审查通过的 AI 题干与作答编辑器，提交后即时给出判定并切入下一题；出题不可用时明确提示重试，不展示伪造题。
 
 ### 8.10.2 要素二：总体结构与组件划分（图 S10-1）
 
@@ -247,7 +247,7 @@ sequenceDiagram
 
 提交评测时：`BossService.evaluateAttempt` 先从缓存/`pregenerated_problem` 取回完整题，调 graph `/agents/boss/evaluate` 进 stdout 沙箱（或文本题接地评分），算分后**仅在真实判完路径**发 `PracticeSucceeded`/`PracticeFailed`。
 
-出题侧的鲁棒性来自三重设计：① `generate_boss_problem` 按 `temperature = 0.4 + 0.1×(重试序号-1)` 递增温度重试，前一次因撞题/超纲被拒后下一次更可能产出新题；② graph route 把 `max_retries` 收敛为 2、并对 `LlmProviderError` 直接走 golden，避免演示时长时间空转；③ `prefetch` 端点在玩家进入答题后 fire-and-forget 预生成下一题，把生成时延藏进玩家做题时间。所有 AI 现场题也会 best-effort 落 `pregenerated_problem`（CONSUMED），用于内存缓存过期或进程重启后凭 `problemId` 取回隐藏用例兜底判题；二者皆空时返回「Pyodide-only」提示，引导前端本地校验后再交，绝不把「未判定」当判定污染掌握度。难度则由 `computeTargetDifficulty` 据该章 KC 的真实掌握度与置信度推断，做到「弱者出易题建立信心、强者出难题促成长」的学情驱动出题。
+出题侧的鲁棒性来自三重设计：① `generate_boss_problem` 按 `temperature = 0.4 + 0.1×(重试序号-1)` 递增温度重试，前一次因撞题/超纲被拒后下一次更可能产出新题；② graph route 把 `max_retries` 收敛为 2，章末 Boss 仍可使用 golden 保底，但无尽/远征客户端只接收 `aiGenerated && reviewed` 的题，避免静态题冒充画像自适应；③ `prefetch` 先同步落 `PENDING` 并返回 job id，后台成功后转 `READY`、失败转 `FAILED`，同维度可重试且严格包含 difficulty。所有 AI 现场题也会 best-effort 落 `pregenerated_problem`（CONSUMED），用于内存缓存过期 / 进程重启后取回隐藏用例。正式评测不可用时只提示重试，绝不把公开样例预览当正式判定。难度以地图纵深为递进主轴，再由章节掌握度、置信度和 learner profile readiness 上下校准一档。
 
 **（3）无尽远征 run 状态（见 8.10.4 图 S10-5）**：前端 run 阶段流转 + 后端 `expedition_run` 持久化。
 
@@ -260,6 +260,7 @@ sequenceDiagram
 - `practice_submission.source`（V130 增 `BUG_MINE_VARIANT`、V132 增 `BUG_MINE_ECHO`）：标记矿洞重试/变式/遗忘回声三类来源。
 - `expedition_run`（V173）：`user_id` 主键 → 单用户单活跃 run；标量列 `phase/focus_chapter/hp/max_hp/momentum/best_momentum/score/layers/current_node_id/is_daily`，`nodes/relics/history` 为 JSONB 整体存取；`status` CHECK 仅 `ACTIVE`。
 - `boss_attempt`（V120）：`chapter` 1..7、`stage` 1..4、`difficulty` 1..5、`score` 0..100 等 CHECK 约束；`ai_generated` 区分 AI 题/golden；`reviewed` 标记审查链结论。
+- `pregenerated_problem`（V150；V185 增强）：预加载状态为 `PENDING/READY/FAILED/CONSUMED`，记录 attempts、失败原因和更新时间；活动任务按 user + chapter + KC + kind + arena level + difficulty 唯一，payload 在 PENDING/FAILED 时允许为空。
 
 存储设计遵循两条原则：**权威与过程分离**、**结构化与弹性兼顾**。掌握度、判题结果等「学情真值」永远落 `learner_mastery`/`practice_submission` 等权威表，永不随一局远征的弃局而回滚；`expedition_run` 只承载「一局过程进度」，故可安全地以 `user_id` 主键单行覆盖、弃局即整行删除。对节点地图这类 schema 易演进的数据，用 `nodes`/`relics`/`history` 三个 JSONB 列整体存取、后端不解释其内部结构，避免每次前端调整节点形状都要改表；而 `phase`/`hp`/`score` 等需要观测与统计的标量则单列存储并加约束。Bug 矿洞侧用 `submission_id` 唯一约束与 `UNIQUE(session_id, card_type)` 双重去重，保证「一次失败一会话、一会话一类卡至多一张」；`depth_layer`/`profile_depth_target` 的 1..5 CHECK 则把五层下探的取值空间约束在数据库层。`practice_submission.source` 通过迁移增补 `BUG_MINE_RETRY`/`BUG_MINE_VARIANT`/`BUG_MINE_ECHO` 枚举，让矿洞产生的每次提交都能被来源标识、回流统计时可区分。
 
@@ -301,18 +302,19 @@ REST 端点（路径取自真实 controller；详细字段见 R10 §4.2.4 与 §
 | `/api/bug-mine/sessions/{id}/variant-submit` | POST | STUDENT | L5 同 KC 变式确认 |
 | `/api/bug-mine/sessions/{id}/close` | POST | STUDENT | 置 RESOLVED/ABANDONED |
 | `/api/world/boss/{chapter}/problem` | POST | 登录 | 取 Boss/无尽题（chapter 1..7） |
-| `/api/world/boss/{chapter}/prefetch` | POST | 登录 | 异步预生成下一题（202） |
+| `/api/world/boss/{chapter}/prefetch` | POST | 登录 | 创建/重试预加载任务（202 + PENDING/READY/FAILED） |
+| `/api/world/boss/{chapter}/prefetch` | GET | 登录 | 按完整维度查询预加载状态 |
 | `/api/world/boss/select-frontier` | POST | 登录 | 知识前沿候选 KC |
 | `/api/world/boss/{chapter}/attempt` | POST | 登录 | 提交评测 |
 | `/api/world/expedition/run` | GET/PUT/DELETE | STUDENT | 远征 run 取/存/弃 |
 
-鉴权与幂等约定：Bug 矿洞与远征 run 端点强制 STUDENT 角色（教师/管理员 403），Boss 出题/评测端点仅需登录（`@CurrentUser` 可空以兼容探活，但匿名不发学习事件）；矿洞会话的私有 id（`submissionId`/`sessionId`）不经 URL、由前端 store 承载并经后端归属双键校验，防止地址栏篡改他人会话。单次 Boss `attempt` 仅在真实判完发一次事件，天然幂等；远征 `PUT /run` 为覆盖式 UPSERT，重复保存不产生副本；`prefetch` 立即返回 202、生成异步进行，前端可放心 fire-and-forget。所有对外 DTO 都不含隐藏用例（`testCases` 仅后端缓存与评测用），避免「输出隐藏测试」违反防作弊约束。
+鉴权与幂等约定：Bug 矿洞与远征 run 端点强制 STUDENT 角色（教师/管理员 403），Boss 出题/评测端点仅需登录；矿洞会话的私有 id（`submissionId`/`sessionId`）不经 URL、由前端 store 承载并经后端归属双键校验。单次 Boss `attempt` 仅在真实判完发一次事件；远征 `PUT /run` 为覆盖式 UPSERT；`prefetch` 返回可查询 job id，重复 PENDING/READY 不重复生成，FAILED 原行增加 attempts 后重试。所有对外 DTO 都不含隐藏用例。
 
 graph 内部端点（`X-Internal-Token` 鉴权）：`POST /agents/boss/problem`、`POST /agents/boss/evaluate`、`POST /agents/boss/select-frontier`、`POST /agents/debug/analyze`。后端经 `BossGraphClient`/`DebugAgentClient` 调用并带 `GraphClientRetryHelper` 重试；任一调用失败都收敛为前述降级路径，绝不把 5xx 透传给玩家。
 
 ### 8.10.6 要素六：关键算法、异常与降级
 
-- **自适应难度**（`BossService.bossDifficulty`）：按 KC 掌握度分 5 档（<0.2→1…≥0.8→5），置信度<0.4 降一档、置信度≥0.7 且逼近本档上沿升一档；无任何学情时退化为按 stage。
+- **自适应难度**（`BossService.computeTargetDifficulty`）：客户端地图纵深给出 1..5 的递进主轴；服务端综合章节掌握度/置信度与 learner profile 的基础水平、成功率、平均尝试和坚持度形成 readiness，并只在当前纵深上下校准一档；无学情时保持纵深值。
 - **难度校准**（`difficulty_estimator`）：以 `reference_solution` 的 AST 特征（语句长度、行数、深度、循环/分支/函数计数）估算难度，与声明值偏差 ≤1 通过、=2 自动覆盖、>2 reject。
 - **查重与安全**（`plagiarism_checker`）：`SequenceMatcher` 相似度 ≥0.8 视为撞题 reject；命中敏感词 reject。
 - **接地防超纲**（`grounding`）：题面+解答须命中 KC/章节关键词，且 `reference_solution` 的 AST 节点须落在该章语法白名单内（如第 1 章禁循环/分支），超纲 reject。
@@ -408,7 +410,7 @@ END
 | 审查链耗尽重试 | 多次 reject | 回落 golden（再过一遍审查） |
 | graph 评测不可达 | `RestClientException` | 提示前端 Pyodide 校验，**不发学习事件** |
 | 题目缓存过期且无持久化 | 取不到 testCases | 返回 Pyodide-only 兜底提示 |
-| 选路器 graph 不可达 | `select-frontier` 空 picks | 前端回退本地 `useKcFrontier` |
+| 选路器 graph 不可达或无证据候选 | `503 EXPEDITION_ADAPTATION_UNAVAILABLE` | 保持 idle 并提示稍后重试；禁止本地默认 KC 冒充画像结果 |
 | DebugAgent 不可达 | `BAD_GATEWAY` | 提示稍后再试，不落半截会话 |
 | 第 3 层提示含可粘贴代码 | safety 命中 | `_downgrade_layer3` 脱敏，仅给思路 |
 

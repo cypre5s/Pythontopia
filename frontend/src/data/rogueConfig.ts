@@ -114,3 +114,14 @@ export function computeRunDifficulty(
   if (recentFailures >= 2) d -= 1;
   return Math.max(1, Math.min(5, Math.round(d)));
 }
+
+/**
+ * 地图纵深难度：evidenceDifficulty 来自后端权威 mastery + learner_profile；地图每深入 4 层
+ * 提升一档（最多 +2），再由 elite/boss 的节点规则追加挑战档。这样新手从画像基线起步，
+ * 同一局随纵深稳步增加，而不是把 layer 当装饰字段。
+ */
+export function computeLayeredDifficulty(evidenceDifficulty: number, layer: number): number {
+  const evidence = Math.max(1, Math.min(5, Math.round(evidenceDifficulty)));
+  const depthBonus = Math.min(2, Math.floor(Math.max(0, layer) / 4));
+  return Math.max(1, Math.min(5, evidence + depthBonus));
+}

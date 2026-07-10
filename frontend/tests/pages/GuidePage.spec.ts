@@ -445,8 +445,8 @@ describe('GuidePage 内容覆盖十大主题', () => {
     expect(text).toContain('自然语言、@ 知识点和上传文件');
     expect(text).toContain('从 16 项能力中选择合适的处理方式');
     expect(text).toContain('课件证据、内容生成、引用审查、防幻觉与安全审查');
-    expect(text).toContain('右上方点「调用」');
-    expect(text).toContain('工具调用时间线');
+    expect(text).toContain('右上方点「进度」');
+    expect(text).toContain('当前步骤、课件命中和失败提示');
     expect(text).toContain('外部查证');
     expect(text).toContain('保存到「我的书房」继续复用');
   });

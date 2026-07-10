@@ -6,9 +6,9 @@ from pyt_agent_lab.web_ab_report import WebAbInput, build_web_ab_report, write_w
 def test_build_web_ab_report_marks_candidate_ready_when_repair_gate_passes() -> None:
     report = build_web_ab_report(
         WebAbInput(
-            baseline_summary={"overall": {"score_mean": 0.96, "json_valid_rate": 0.74, "grounding_safe_rate": 0.80, "forbidden_leak_rate": 0.01}},
-            adapter_summary={"overall": {"score_mean": 0.98, "json_valid_rate": 0.92, "grounding_safe_rate": 0.84, "forbidden_leak_rate": 0.0}},
-            repaired_summary={"overall": {"score_mean": 1.0, "json_valid_rate": 1.0, "grounding_safe_rate": 1.0, "forbidden_leak_rate": 0.0}},
+            baseline_summary={"overall": {"contract_pass_rate": 0.70, "score_mean": 0.96, "json_valid_rate": 0.74, "schema_valid_rate": 0.72, "grounding_safe_rate": 0.80, "forbidden_leak_rate": 0.01}},
+            adapter_summary={"overall": {"contract_pass_rate": 0.82, "score_mean": 0.98, "json_valid_rate": 0.92, "schema_valid_rate": 0.84, "grounding_safe_rate": 0.84, "forbidden_leak_rate": 0.0}},
+            repaired_summary={"overall": {"contract_pass_rate": 1.0, "score_mean": 1.0, "json_valid_rate": 1.0, "schema_valid_rate": 1.0, "grounding_safe_rate": 1.0, "forbidden_leak_rate": 0.0}},
             serving_models=["pythontopia-qwen35-awq-base", "pythontopia-qwen35-e1-lora"],
         )
     )

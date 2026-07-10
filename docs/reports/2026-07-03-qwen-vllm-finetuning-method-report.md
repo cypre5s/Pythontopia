@@ -41,8 +41,10 @@ vLLM 是“本地模型服务员”，LoRA adapter 是“项目特化小脑”�
 | SFT | Supervised Fine-Tuning，监督微调。这里用清洗后的 Agent JSON 响应作为训练目标。 |
 | E1 protocol patch | 一个 prompt 层协议补丁，用来让模型先学会严格 JSON、证据边界和安全输出。 |
 | heldout | 未参与训练的保留评测集，用来观察 adapter 是否泛化。 |
+| contract pass | `json_valid && schema_valid && grounding_safe && !forbidden_leak`，是当前首要质量指标。 |
 | grounding | 输出是否绑定课件证据或明确标注 common_knowledge，不伪造页码或教材内容。 |
 | forbidden leak | 是否泄露完整答案、隐藏测试或可直接提交的完整代码。 |
+| guard repair / fallback | 分别表示 guard 修复裸输出的比例、以及 guard 无法安全修复而回退的比例；必须与 raw 指标分层报告。 |
 | fallback provider | 本地 adapter 不可用或不适合时，Graph 回退到原有 LLM provider 或 dry-run。 |
 | JSON mode Agent call | Graph Agent 需要结构化 JSON 的调用，例如资源设计、练习提示、路径建议。 |
 

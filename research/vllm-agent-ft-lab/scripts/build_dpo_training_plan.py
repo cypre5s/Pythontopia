@@ -25,6 +25,9 @@ def main() -> None:
     parser.add_argument("--beta", type=float, default=None)
     parser.add_argument("--learning-rate", type=float, default=None)
     parser.add_argument("--max-grad-norm", type=float, default=None)
+    parser.add_argument("--seed", type=int, default=20260710)
+    parser.add_argument("--champion-adapter-path", default=None)
+    parser.add_argument("--changed-variable", default=None)
     args = parser.parse_args()
 
     common_args = {
@@ -34,6 +37,8 @@ def main() -> None:
         "heldout_file": args.heldout_file,
         "output_dir": args.output_dir,
         "max_seq_length": args.max_seq_length,
+        "seed": args.seed,
+        "champion_adapter_path": args.champion_adapter_path,
     }
     if args.method == "orpo":
         orpo_args = dict(common_args)
@@ -43,8 +48,12 @@ def main() -> None:
             orpo_args["learning_rate"] = args.learning_rate
         if args.max_grad_norm is not None:
             orpo_args["max_grad_norm"] = args.max_grad_norm
+        if args.changed_variable is not None:
+            orpo_args["changed_variable"] = args.changed_variable
         plan = build_orpo_training_plan(**orpo_args)
     else:
+        if args.changed_variable is not None:
+            common_args["changed_variable"] = args.changed_variable
         plan = build_dpo_training_plan(**common_args)
     write_preference_training_plan(plan, args.plan_output)
     print(json.dumps({"plan_output": str(Path(args.plan_output)), "plan": plan}, ensure_ascii=False, sort_keys=True))

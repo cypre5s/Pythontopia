@@ -6,18 +6,22 @@ from pyt_agent_lab.experiment_compare import compare_summaries, story_gate_passe
 def test_compare_summaries_computes_metric_deltas(tmp_path: Path) -> None:
     baseline = {
         "overall": {
+            "contract_pass_rate": 0.48,
             "score_mean": 0.7,
             "json_valid_rate": 0.5,
+            "schema_valid_rate": 0.52,
             "grounding_safe_rate": 0.6,
             "forbidden_leak_rate": 0.01,
         }
     }
     candidate = {
         "overall": {
+            "contract_pass_rate": 0.80,
             "score_mean": 0.82,
             "json_valid_rate": 0.82,
+            "schema_valid_rate": 0.84,
             "grounding_safe_rate": 0.84,
-            "forbidden_leak_rate": 0.01,
+            "forbidden_leak_rate": 0.0,
         }
     }
 

@@ -241,6 +241,20 @@ Bug 矿洞是错题复习支线：已有失败提交可进入矿洞；遗忘回�
 | POST | `/api/mainline/endless/summary` | STUDENT | 无尽一轮小结 → `ENDLESS_RECOVERY` 补星判定（防刷：每日每章至多记 1 次），body `{ chapter, correct, total, streak }` → `{ starAwarded }` |
 | POST | `/api/mainline/chapters/{chapter}/recovery/errorbook` | STUDENT | 申领错题复盘补星（校验本章 bug-mine RESOLVED ≥ 3，幂等）→ `{ starAwarded }` |
 
+#### 无尽远征 / Boss（学生玩法）
+
+| 方法 | 路径 | 鉴权 | 说明 |
+| --- | --- | --- | --- |
+| POST | `/api/world/boss/select-frontier` | Bearer | 服务端以掌握度和 learner profile 选择真实 KC 前沿；失败或空结果返回 `503 EXPEDITION_ADAPTATION_UNAVAILABLE`，客户端不得用本地默认 KC 冒充画像结果 |
+| POST | `/api/world/boss/{chapter}/problem` | Bearer | 按 KC、题型、纵深难度取题；远征客户端只接受 `aiGenerated=true && reviewed=true` |
+| POST | `/api/world/boss/{chapter}/prefetch` | Bearer | 创建/复用同 `chapter + kc + kind + arenaLevel + difficulty` 的预加载任务，返回 `202` + `BossPrefetchStatusDto` |
+| GET | `/api/world/boss/{chapter}/prefetch` | Bearer | 用 `preferredKc`、`preferredKind`、`arenaLevel`、`difficulty` 查询同维度状态 |
+| POST | `/api/world/boss/{chapter}/attempt` | Bearer | 正式提交，判题结果入库；公开样例的本地预览不能代替该接口 |
+
+`BossPrefetchStatusDto = { jobId, status, attempts, errorMessage, retryable, updatedAt }`，其中
+`status ∈ { IDLE, PENDING, READY, FAILED }`。只有审查通过且带隐藏测试的 AI 题可进入 `READY`；
+`FAILED` 以相同维度再次 `POST` 会增加 attempts 并重试。题目正文与隐藏测试从不进入预加载状态响应。
+
 > **星级（`chapter_star` 权威，0–3★）**：1★ = 章末测试最高分 ≥ 60；2★ = 1★ 且本章全部 stage 三件套（看+学+练）过线；
 > 3★ = 2★ 且（本章 KC 平均掌握度 ≥ 0.80 且测试最高分 ≥ 85）。补星每章每途径至多 +1、封顶 3★、幂等、只升不降。
 

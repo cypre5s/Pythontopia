@@ -39,18 +39,20 @@ describe('WelcomePanel', () => {
     expect(wrapper.find('[data-testid="welcome-open-capabilities"]').exists()).toBe(true);
   });
 
-  it('点击后按 6 个能力组展示 capability cards', async () => {
+  it('点击后以一行清单展示 6 个能力组，不堆叠说明卡片', async () => {
     const wrapper = mount(WelcomePanel);
 
     await wrapper.get('[data-testid="welcome-open-capabilities"]').trigger('click');
 
-    const cards = wrapper.findAll('[data-testid="welcome-capability-card"]');
-    expect(cards).toHaveLength(6);
+    const items = wrapper.findAll('[data-testid="welcome-capability-item"]');
+    expect(items).toHaveLength(6);
+    expect(wrapper.find('[data-testid="welcome-capability-card"]').exists()).toBe(false);
     expect(wrapper.text()).toContain('问一问');
     expect(wrapper.text()).toContain('考考我');
     expect(wrapper.text()).toContain('生成资料');
     expect(wrapper.text()).toContain('练一练');
     expect(wrapper.text()).toContain('规划学习');
     expect(wrapper.text()).toContain('找内容/带路');
+    expect(wrapper.text()).not.toContain('例如：');
   });
 });
