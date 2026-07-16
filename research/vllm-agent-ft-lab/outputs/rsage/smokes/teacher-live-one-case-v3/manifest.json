@@ -1,0 +1,21 @@
+{
+  "accepted_count": 1,
+  "backend": "live",
+  "cases_path": "research/vllm-agent-ft-lab/outputs/rsage/demos/case-builder/cases.jsonl",
+  "cases_sha256": "dee806ac8a609394b7312b1b50f02c9ca9ce7457ed07f3087169958c34c2f7af",
+  "credentials_logged": false,
+  "excluded_count": 0,
+  "format": "rsage_teacher_voting_manifest_v1",
+  "labels_path": "research/vllm-agent-ft-lab/outputs/rsage/smokes/teacher-live-one-case-v3/labels.jsonl",
+  "labels_sha256": "b513bfde285be88a3bdc07a6aaa5c213bd8c787ddf376a882517e4f3bc89289f",
+  "message_zh": "教师投票完成：处理 1 条，通过 1 条，排除 0 条，断点跳过 0 条，共发起 3 次教师请求",
+  "model": "deepseek-v4-pro",
+  "processed_count": 1,
+  "raw_votes_path": "research/vllm-agent-ft-lab/outputs/rsage/smokes/teacher-live-one-case-v3/raw_votes.jsonl",
+  "raw_votes_sha256": "b5cca7ff25b848ae4808d5e266cb52eeae8cc10a668d67a01b7d0a04fe141f7f",
+  "request_count": 3,
+  "resume_enabled": false,
+  "skipped_count": 0,
+  "timestamp_utc": "2026-07-16T07:24:57.615418+00:00",
+  "total_count": 1
+}

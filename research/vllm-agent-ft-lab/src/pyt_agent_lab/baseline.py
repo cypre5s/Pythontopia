@@ -13,6 +13,10 @@ from typing import Any, Callable
 from .experiment_logging import ExperimentLogger
 from .prompt_variants import apply_prompt_variant
 from .scoring import CaseScore, score_case_response
+from .serving import build_agent_structured_json_extra_body
+
+
+DECODING_MODES = ("unconstrained", "json_schema", "json_schema_bound")
 
 
 @dataclass(frozen=True)
@@ -32,6 +36,7 @@ class OpenAICompatClient:
         timeout: int = 180,
         retries: int = 2,
         retry_sleep_seconds: float = 1.0,
+        proxy_url: str | None = None,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
@@ -39,10 +44,25 @@ class OpenAICompatClient:
         self.timeout = timeout
         self.retries = retries
         self.retry_sleep_seconds = retry_sleep_seconds
-        self._opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else {}
+        self._opener = urllib.request.build_opener(urllib.request.ProxyHandler(proxies))
 
-    def chat(self, messages: list[dict[str, str]], temperature: float = 0.0, max_tokens: int = 512) -> str:
-        payload = build_chat_payload(self.model, messages, temperature=temperature, max_tokens=max_tokens)
+    def chat(
+        self,
+        messages: list[dict[str, str]],
+        temperature: float = 0.0,
+        max_tokens: int = 512,
+        response_format: dict[str, Any] | None = None,
+        enable_thinking: bool | None = None,
+    ) -> str:
+        payload = build_chat_payload(
+            self.model,
+            messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            response_format=response_format,
+            enable_thinking=enable_thinking,
+        )
         req = urllib.request.Request(
             f"{self.base_url}/chat/completions",
             data=json.dumps(payload).encode("utf-8"),
@@ -69,6 +89,8 @@ def build_chat_payload(
     messages: list[dict[str, str]],
     temperature: float = 0.0,
     max_tokens: int = 512,
+    response_format: dict[str, Any] | None = None,
+    enable_thinking: bool | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "model": model,
@@ -77,8 +99,12 @@ def build_chat_payload(
         "max_tokens": max_tokens,
     }
     # Qwen-specific: disable thinking/reasoning tokens
-    if "qwen" in model.lower():
+    if enable_thinking is not None:
+        payload["chat_template_kwargs"] = {"enable_thinking": enable_thinking}
+    elif "qwen" in model.lower():
         payload["chat_template_kwargs"] = {"enable_thinking": False}
+    if response_format is not None:
+        payload["response_format"] = response_format
     return payload
 
 
@@ -118,11 +144,21 @@ def run_cases(
     prompt_variant: str | None = None,
     concurrency: int = 1,
     on_result: Callable[[BaselineResult], None] | None = None,
+    decoding_mode: str = "unconstrained",
 ) -> list[BaselineResult]:
+    if decoding_mode not in DECODING_MODES:
+        raise ValueError(f"unsupported decoding_mode: {decoding_mode}")
     if concurrency <= 1:
         results = []
         for case in cases:
-            result = _run_one_case(case, client, logger, fold=fold, prompt_variant=prompt_variant)
+            result = _run_one_case(
+                case,
+                client,
+                logger,
+                fold=fold,
+                prompt_variant=prompt_variant,
+                decoding_mode=decoding_mode,
+            )
             if on_result:
                 on_result(result)
             results.append(result)
@@ -131,7 +167,15 @@ def run_cases(
     results_by_index: dict[int, BaselineResult] = {}
     with ThreadPoolExecutor(max_workers=concurrency) as executor:
         futures = {
-            executor.submit(_run_one_case, case, client, logger, fold=fold, prompt_variant=prompt_variant): index
+            executor.submit(
+                _run_one_case,
+                case,
+                client,
+                logger,
+                fold=fold,
+                prompt_variant=prompt_variant,
+                decoding_mode=decoding_mode,
+            ): index
             for index, case in enumerate(cases)
         }
         for future in as_completed(futures):
@@ -148,12 +192,25 @@ def _run_one_case(
     logger: ExperimentLogger,
     fold: int | None = None,
     prompt_variant: str | None = None,
+    decoding_mode: str = "unconstrained",
 ) -> BaselineResult:
     logger.event("case_started", {"case_id": case["id"], "agent": case["agent"], "fold": fold})
     started = time.perf_counter()
+    response_format = None
+    if decoding_mode in {"json_schema", "json_schema_bound"}:
+        response_format = build_agent_structured_json_extra_body(
+            str(case["agent"]),
+            str(case.get("schema_version") or "agent-schema-v1"),
+            evidence_ids=(
+                list(case.get("evidence_ids") or [])
+                if decoding_mode == "json_schema_bound"
+                else None
+            ),
+        )["response_format"]
     response = client.chat(
         build_case_messages(case, prompt_variant=prompt_variant),
         max_tokens=int(case.get("max_tokens", 512)),
+        response_format=response_format,
     )
     latency_ms = int((time.perf_counter() - started) * 1000)
     score = score_case_response(case, response)
