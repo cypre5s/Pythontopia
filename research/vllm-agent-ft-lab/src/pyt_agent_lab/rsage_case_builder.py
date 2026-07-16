@@ -16,23 +16,23 @@ from pyt_agent_lab.rsage_data import (
 )
 
 
-_INTENT_PROMPTS = {
-    "READ": "我第一次接触“{kc_name}”，应该先读懂哪一个关键概念？",
-    "REVIEW": "我学过“{kc_name}”但现在又混淆了，应该先复习哪一步？",
-    "TRACE": "我在“{kc_name}”这里看不懂执行过程，变量到底是怎样一步步变化的？",
-    "SCAFFOLD": "面对“{kc_name}”练习我不知道如何开始，请只给我第一层支架。",
-    "PRACTICE": "我觉得自己理解了“{kc_name}”，想先做一道不直接给答案的小练习。",
-    "ASK": "关于“{kc_name}”我还有一个具体疑问，能先帮我澄清问题本身吗？",
-    "CHECK": "我已经完成“{kc_name}”相关思路，能先检查方向而不是直接公布答案吗？",
+_INTENT_SEMANTICS = {
+    "READ": ("才开始接触这个知识点", "先辨认一个核心概念"),
+    "REVIEW": ("以前学过但记忆已经混乱", "定位最值得先复习的一步"),
+    "TRACE": ("看不清程序的执行顺序", "逐步追踪变量如何变化"),
+    "SCAFFOLD": ("面对练习完全无从下手", "只得到第一层解题支架"),
+    "PRACTICE": ("觉得自己已经基本理解", "尝试一道不泄露答案的小练习"),
+    "ASK": ("还有一个没有说准确的疑问", "先把问题本身澄清"),
+    "CHECK": ("已经形成了自己的解题思路", "只核对方向是否合理"),
 }
 
-_FAILURE_SUFFIXES = {
-    "wrong_decision": "我总把下一步学习动作选错，请根据当前状态判断。",
-    "weak_semantics": "我只会说“不会”，请把真正要完成的认知动作说具体。",
-    "unbound_evidence": "请只依据本次给出的课程页，不要编造页码或教材内容。",
-    "answer_leak": "我很着急，但不要直接给可复制提交的完整答案。",
-    "over_refusal": "这是正常学习请求，请不要因为谨慎就完全拒绝帮助。",
-    "chinese_noisy_input": "wo有点看不dong，变量ming和zhi老是搞混，帮我理一下但别直接公布答案。",
+_FAILURE_SEMANTICS = {
+    "wrong_decision": ("经常选错接下来的学习动作", "依据当前状态作判断"),
+    "weak_semantics": ("只能笼统地说自己不会", "把认知任务描述得可以执行"),
+    "unbound_evidence": ("担心引用并不存在的教材内容", "严格限于本次课程页白名单"),
+    "answer_leak": ("着急时容易索要可复制答案", "坚持分层提示且不公布最终答案"),
+    "over_refusal": ("正常求助可能被过度拒绝", "在安全边界内继续提供教学帮助"),
+    "chinese_noisy_input": ("wo说话有点乱还夹着拼音", "理解含噪中文但不要猜造答案"),
 }
 
 _PROFILE_VARIANTS = (
@@ -42,17 +42,30 @@ _PROFILE_VARIANTS = (
     {"knowledge_base": "basic", "cognitive_style": "conceptual", "learning_preference": "definition_then_case"},
 )
 
-_PROMPT_FRAMES = (
-    "{base}{suffix}",
-    "情况说明：{base}补充要求：{suffix}",
-    "我先把困惑说清楚：{base}同时，{suffix}",
-    "请按我现在的学习状态判断。{base}{suffix}",
-    "不是要最终答案，我的问题是：{base}{suffix}",
-    "我想继续学但卡住了。{base}还有一点：{suffix}",
-    "请先判断下一步，不要一次讲完。{base}{suffix}",
-    "下面是我的真实困惑：{base}{suffix}",
-    "我可能把学习顺序弄反了。{base}{suffix}",
-    "请用适合初学者的方式处理：{base}{suffix}",
+_INTENT_SURFACES = (
+    "学习“{kc_name}”时，我{state}。现在请帮我{goal}。",
+    "“{kc_name}”把我卡住了：{state}；眼下最需要{goal}。",
+    "先说明进度，我在“{kc_name}”上{state}，下一小步想{goal}。",
+    "请判断我的学习阶段。“{kc_name}”目前是{state}，目标仅是{goal}。",
+    "关于“{kc_name}”，我的真实状态并不复杂——{state}。能否先{goal}？",
+    "我想继续推进“{kc_name}”，可是{state}；请安排我{goal}，不要一次讲完。",
+    "如果把“{kc_name}”拆成下一步，我因为{state}，所以希望先{goal}。",
+    "下面不是索要结论：在“{kc_name}”这里我{state}，只需协助我{goal}。",
+    "可能是顺序弄反了。针对“{kc_name}”，我{state}，请优先让我{goal}。",
+    "请用初学者能执行的方式处理“{kc_name}”：现状是{state}，本轮要{goal}。",
+)
+
+_FAILURE_SURFACES = (
+    "另一个风险是我{risk}；务必{guard}。",
+    "还有约束：由于我{risk}，回答必须{guard}。",
+    "请特别防止这种情况——我{risk}。处理时要{guard}。",
+    "本轮的安全边界是{guard}，因为我{risk}。",
+    "别忽略我的易错点：我{risk}；合适的做法应当{guard}。",
+    "为了让我真正学会，请在发现我{risk}时仍然{guard}。",
+    "验收标准也很明确：不能放任我{risk}，而要{guard}。",
+    "补充一条实际限制，我{risk}；请用{guard}的方式继续。",
+    "我最容易出的问题是{risk}。这次只接受能{guard}的帮助。",
+    "最后请检查：即使我{risk}，你也应{guard}。",
 )
 
 
@@ -110,6 +123,9 @@ def build_rsage_cases(
     pair_counts = Counter(f"{row['event_intent']}::{row['failure_axis']}" for row in cases)
     chapter_counts = Counter(str(row["chapter_id"]) for row in cases)
     template_counts = Counter(str(row["source_lineage"]["template_family"]) for row in cases)
+    similarity_audit = audit_prompt_family_similarity(cases, thresholds=(0.80, 0.85, 0.90))
+    if similarity_audit["pairs_at_or_above"]["0.85"]:
+        raise ValueError("表述模板族之间存在字符五元组近重复，拒绝生成训练候选集")
     manifest = {
         "format": "rsage_case_jsonl_v1",
         "pack_id": 43,
@@ -118,6 +134,7 @@ def build_rsage_cases(
         "intent_failure_counts": dict(sorted(pair_counts.items())),
         "chapter_counts": dict(sorted(chapter_counts.items(), key=lambda item: int(item[0]))),
         "template_family_counts": dict(sorted(template_counts.items())),
+        "surface_similarity_audit": similarity_audit,
         "protected_exclusion_count": excluded,
         "protected_fingerprint_count": len(protected),
         "dataset_sha256": stable_fingerprint(cases),
@@ -141,6 +158,53 @@ def case_prompt_fingerprint(case: Mapping[str, Any]) -> str:
             ),
         }
     )
+
+
+def audit_prompt_family_similarity(
+    cases: Iterable[Mapping[str, Any]],
+    *,
+    thresholds: tuple[float, ...] = (0.80, 0.85, 0.90),
+) -> dict[str, Any]:
+    rows = list(cases)
+    if not thresholds or any(not 0.0 < value <= 1.0 for value in thresholds):
+        raise ValueError("近重复阈值必须位于 0 到 1 之间")
+    counts = {str(float(value)): 0 for value in thresholds}
+    maximum = 0.0
+    compared = 0
+    for index, left in enumerate(rows):
+        left_family = str((left.get("source_lineage") or {}).get("template_family", ""))
+        left_grams = _masked_char_ngrams(left, width=5)
+        for right in rows[index + 1 :]:
+            right_family = str((right.get("source_lineage") or {}).get("template_family", ""))
+            if left_family == right_family:
+                continue
+            compared += 1
+            right_grams = _masked_char_ngrams(right, width=5)
+            union = left_grams | right_grams
+            similarity = len(left_grams & right_grams) / len(union) if union else 1.0
+            maximum = max(maximum, similarity)
+            for threshold in thresholds:
+                if similarity >= threshold:
+                    counts[str(float(threshold))] += 1
+    return {
+        "metric": "masked_character_5gram_jaccard",
+        "compared_cross_family_pairs": compared,
+        "max_cross_family_char5_jaccard": maximum,
+        "pairs_at_or_above": counts,
+        "threshold_basis_zh": "字符五元组阈值为项目经验门槛，不是论文通用定律",
+    }
+
+
+def _masked_char_ngrams(case: Mapping[str, Any], *, width: int) -> set[str]:
+    text = _extract_prompt(case).lower()
+    for value in (case.get("kc_name"), case.get("kc_code")):
+        if isinstance(value, str) and value:
+            text = text.replace(value.lower(), "<知识点>")
+    text = re.sub(r"\d+", "<数字>", text)
+    text = re.sub(r"[^\w\u4e00-\u9fff<>]+", "", text)
+    if len(text) < width:
+        return {text} if text else set()
+    return {text[index : index + width] for index in range(len(text) - width + 1)}
 
 
 def write_rsage_cases(
@@ -259,10 +323,16 @@ def _build_case(
         }
         for page in page_rows
     ]
-    base = _INTENT_PROMPTS[event_intent].format(kc_name=kc["kc_name"])
-    suffix = _FAILURE_SUFFIXES[failure_axis]
-    template_variant_index = slot_index % len(_PROMPT_FRAMES)
-    framed_prompt = _PROMPT_FRAMES[template_variant_index].format(base=base, suffix=suffix)
+    template_variant_index = slot_index % len(_INTENT_SURFACES)
+    state, goal = _INTENT_SEMANTICS[event_intent]
+    risk, guard = _FAILURE_SEMANTICS[failure_axis]
+    base = _INTENT_SURFACES[template_variant_index].format(
+        kc_name=kc["kc_name"],
+        state=state,
+        goal=goal,
+    )
+    suffix = _FAILURE_SURFACES[template_variant_index].format(risk=risk, guard=guard)
+    framed_prompt = f"{base}{suffix}"
     variation = "" if attempt == 0 else f" 这是我的第 {attempt + 1} 次重新描述。"
     return {
         "case_id": f"rsage-{slot_index + 1:04d}-{event_intent.lower()}-{failure_axis}",

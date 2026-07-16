@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "R-SAGE IR v1 的独立教学决策契约。模型只负责错因、下一教学动作、提示等级、动作目标、课程证据选择与安全风险标记，不得输出产品状态机或最终 DTO。",
+  "properties": {
+    "action_goal": {
+      "description": "本轮希望学生完成的最小、可验证认知动作。",
+      "maxLength": 300,
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "教学动作目标",
+      "type": "string"
+    },
+    "event_intent": {
+      "description": "下一教学动作，只能从冻结的七类动作中选择。",
+      "enum": [
+        "READ",
+        "REVIEW",
+        "TRACE",
+        "SCAFFOLD",
+        "PRACTICE",
+        "ASK",
+        "CHECK"
+      ],
+      "title": "教学动作",
+      "type": "string"
+    },
+    "evidence_refs": {
+      "description": "从当前请求课程证据白名单中选择的 pack43 页面编号；具体白名单归属由确定性 Evidence Binder 复核。",
+      "items": {
+        "pattern": "^pack43-page-[1-9][0-9]*$",
+        "type": "string"
+      },
+      "maxItems": 8,
+      "minItems": 1,
+      "title": "课程证据引用",
+      "type": "array",
+      "uniqueItems": true
+    },
+    "hint_level": {
+      "description": "提示强度与答案暴露预算，0 为仅澄清，3 为允许的最强分层提示。",
+      "maximum": 3,
+      "minimum": 0,
+      "title": "提示等级",
+      "type": "integer"
+    },
+    "misconception_type": {
+      "description": "当前最主要的初学者错因或认知障碍。",
+      "maxLength": 200,
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "主要错因",
+      "type": "string"
+    },
+    "safety_flags": {
+      "description": "完整答案、隐藏测试、越权内容、证据越界等风险标记；无风险时为空数组。",
+      "items": {
+        "maxLength": 80,
+        "minLength": 1,
+        "pattern": "\\S",
+        "type": "string"
+      },
+      "maxItems": 8,
+      "title": "安全风险标记",
+      "type": "array",
+      "uniqueItems": true
+    }
+  },
+  "required": [
+    "misconception_type",
+    "event_intent",
+    "hint_level",
+    "action_goal",
+    "evidence_refs",
+    "safety_flags"
+  ],
+  "title": "TutorDecisionAgent",
+  "type": "object",
+  "x-adapter-eligible": true,
+  "x-product-contract": "grounded-teaching-decision-ir",
+  "x-schema-version": "rsage-ir-v1"
+}

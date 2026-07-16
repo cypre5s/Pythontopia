@@ -43,6 +43,12 @@ def main() -> None:
     parser.add_argument("--max-tokens", type=int, default=2400, help="单次教师响应的最大输出词元数。")
     parser.add_argument("--limit", type=int, default=0, help="仅处理前 N 条；0 表示全部。")
     parser.add_argument("--max-attempts", type=int, default=3)
+    parser.add_argument(
+        "--concurrency",
+        type=int,
+        default=3,
+        help="同一案例三个独立教师角色的并发数，范围 1 到 3。",
+    )
     parser.add_argument("--no-resume", action="store_true", help="关闭按标签文件跳过已完成案例。")
     parser.add_argument("--demo", action="store_true", help="用固定规则教师处理 3 条案例，证明脚本链路可运行。")
     args = parser.parse_args()
@@ -104,6 +110,7 @@ def main() -> None:
         resume=not args.no_resume,
         secret_values=secrets,
         event_callback=show_event,
+        reviewer_concurrency=args.concurrency,
     )
     manifest = {
         "format": "rsage_teacher_voting_manifest_v1",
@@ -122,6 +129,7 @@ def main() -> None:
         "excluded_count": summary.excluded_count,
         "skipped_count": summary.skipped_count,
         "request_count": summary.request_count,
+        "reviewer_concurrency": args.concurrency,
         "resume_enabled": not args.no_resume,
         "credentials_logged": False,
         "message_zh": summary.message_zh,

@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import json
+import threading
+import time
 from pathlib import Path
+
+import pytest
 
 from pyt_agent_lab.teacher_voting import (
     FixtureTeacherBackend,
@@ -160,6 +164,30 @@ def test_runner_resume_skips_cases_already_in_label_file(tmp_path: Path) -> None
     assert len(labels_path.read_text(encoding="utf-8").splitlines()) == 1
 
 
+def test_runner_resume_rejects_same_id_with_changed_prompt(tmp_path: Path) -> None:
+    raw_path = tmp_path / "raw_votes.jsonl"
+    labels_path = tmp_path / "labels.jsonl"
+    run_teacher_voting(
+        [_case()],
+        FixtureTeacherBackend(),
+        raw_votes_path=raw_path,
+        labels_path=labels_path,
+        retry_base_seconds=0,
+    )
+    changed = _case()
+    changed["student_input"] = "同一编号但提示已经变化"
+
+    with pytest.raises(ValueError, match="提示指纹发生变化"):
+        run_teacher_voting(
+            [changed],
+            FixtureTeacherBackend(),
+            raw_votes_path=raw_path,
+            labels_path=labels_path,
+            retry_base_seconds=0,
+            resume=True,
+        )
+
+
 def test_fixture_backend_is_deterministic_and_passes_verification() -> None:
     backend = FixtureTeacherBackend()
     raw_a = backend.review(_case(), "教学策略审查者", 1)
@@ -167,6 +195,38 @@ def test_fixture_backend_is_deterministic_and_passes_verification() -> None:
 
     assert raw_a == raw_b
     assert verify_teacher_response(raw_a, _case()).validation.passed is True
+
+
+def test_runner_can_vote_three_reviewer_roles_concurrently(tmp_path: Path) -> None:
+    class _ConcurrentBackend:
+        model_name = "fixture-concurrent"
+
+        def __init__(self) -> None:
+            self.active = 0
+            self.max_active = 0
+            self.lock = threading.Lock()
+
+        def review(self, case, reviewer_role: str, attempt: int) -> str:  # noqa: ANN001
+            with self.lock:
+                self.active += 1
+                self.max_active = max(self.max_active, self.active)
+            time.sleep(0.02)
+            with self.lock:
+                self.active -= 1
+            return json.dumps(_vote(), ensure_ascii=False)
+
+    backend = _ConcurrentBackend()
+    summary = run_teacher_voting(
+        [_case()],
+        backend,
+        raw_votes_path=tmp_path / "raw.jsonl",
+        labels_path=tmp_path / "labels.jsonl",
+        retry_base_seconds=0,
+        reviewer_concurrency=3,
+    )
+
+    assert summary.accepted_count == 1
+    assert backend.max_active == 3
 
 
 def test_live_backend_uses_configured_output_budget_and_disables_thinking() -> None:
