@@ -1,0 +1,67 @@
+{
+  "counts": {
+    "accepted_teacher_pairs": 3,
+    "preference_dev": 1,
+    "preference_heldout": 1,
+    "preference_train": 1,
+    "retention_sft_train": 2,
+    "sft_train": 3,
+    "target_dev": 1,
+    "target_heldout": 1,
+    "target_sft_train": 1
+  },
+  "dataset_sha256": "a883df96edf3818fca5ca25a6886af6995ec71ace831daad7708fee3c371de16",
+  "duplicate_prompt_count": 0,
+  "file_sha256": {
+    "preference_dev.jsonl": "fde576449940bb4bdc747331b134f05c6a71371ef5dedee3f27d098fb6d3b5a3",
+    "preference_heldout.jsonl": "8f4637ddee9f5337c00c5d8ed06694d0f3cae7d85d1373af013de5b71e192b09",
+    "preference_train.jsonl": "d4d34a3daeb69abb043eb615e175b2ba8d0cdb7288d85f0554d5a902fed3c4b5",
+    "retention_sft_train.jsonl": "7d7afa1c2f62cce169ff849f9e8e463e0a3ee9b242b26f5a69558b40b6f05e67",
+    "sft_dev.jsonl": "167d8757fe918ff9cc356665a0b3a488a803f2c56d11c4e8c3001aa7605b3bea",
+    "sft_heldout.jsonl": "5a4fe4d8d2298d58bb94e7c9cba02ecc3d4d2b1cf0599fa68483ef1387b8c2a9",
+    "sft_train.jsonl": "d2f72d0ee24d5a875a145832dc11256b647197b5f882027b224504a6953b1e1d",
+    "target_sft_train.jsonl": "5ffc0eec4a833d26ba53920f63df5a3cacd739c16998f25ed16a7cec9e2c1817"
+  },
+  "format": "rsage_curated_dataset_manifest_v1",
+  "input_files": {
+    "cases": {
+      "path": "research/vllm-agent-ft-lab/outputs/rsage/demos/case-builder-v2/cases.jsonl",
+      "sha256": "2e88d05dfb1dbe138475f359b5754214aa8a1f5c597534b54031dc3582c8f9ad"
+    },
+    "labels": {
+      "path": "research/vllm-agent-ft-lab/outputs/rsage/demos/teacher-voting-v2/labels.jsonl",
+      "sha256": "46869e256da0015707556ddce826a382c6620bc4d4e1455146927aca62c02aef"
+    },
+    "protected": [],
+    "retention": {
+      "path": "research/vllm-agent-ft-lab/outputs/sft/e1-protocol-patch-v1-1000-v1/train.jsonl",
+      "sha256": "7cdc5838da0e6dcb4b3537ddc4a6d98af7a00b10edac6bcdc9ec6340b964ffa0"
+    }
+  },
+  "message_zh": "已整理 3 条 SFT 与 1 条软偏好训练数据",
+  "preference_q_counts": {
+    "1.0": 1
+  },
+  "protected_family_count": 0,
+  "protected_family_exclusion_count": 0,
+  "protected_fingerprint_count": 0,
+  "retention_agent_counts": {
+    "ResourceDesignerAgent": 1,
+    "TutorAgent": 1
+  },
+  "seed": 20260716,
+  "split_template_families": {
+    "dev": [
+      "prompt-frame-1"
+    ],
+    "heldout": [
+      "prompt-frame-2"
+    ],
+    "train": [
+      "prompt-frame-0"
+    ]
+  },
+  "target_intent_failure_counts": {
+    "READ::wrong_decision": 1
+  }
+}
