@@ -6,13 +6,14 @@ import re
 import statistics
 import time
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Protocol, Sequence
 
 from .baseline import OpenAICompatClient
-from .rsage_data import EVENT_INTENTS, ValidationResult, validate_teacher_vote
+from .rsage_data import EVENT_INTENTS, ValidationResult, stable_fingerprint, validate_teacher_vote
 
 
 REVIEWER_ROLES = (
@@ -221,6 +222,7 @@ def aggregate_teacher_votes(
     common = {
         "format": "rsage_teacher_label_v1",
         "case_id": case_id,
+        "case_prompt_fingerprint": _case_prompt_fingerprint(case),
         "valid_vote_count": len(valid_records),
         "total_reviewer_count": len(vote_records),
         "reviewer_roles": [str(record.get("reviewer_role", "")) for record in vote_records],
@@ -305,15 +307,18 @@ def run_teacher_voting(
     reviewer_roles: Sequence[str] = REVIEWER_ROLES,
     secret_values: Sequence[str] = (),
     event_callback: Callable[[Mapping[str, Any]], None] | None = None,
+    reviewer_concurrency: int = 1,
 ) -> TeacherVotingSummary:
     if max_attempts <= 0:
         raise ValueError("每位教师的最大尝试次数必须为正整数")
     if len(reviewer_roles) != 3 or len(set(reviewer_roles)) != 3:
         raise ValueError("教师投票必须配置三个互不重复的评审角色")
+    if reviewer_concurrency < 1 or reviewer_concurrency > len(reviewer_roles):
+        raise ValueError("教师并发数必须在 1 到 3 之间")
 
     raw_path = Path(raw_votes_path)
     label_path = Path(labels_path)
-    completed = load_completed_case_ids(label_path) if resume else set()
+    completed = load_completed_case_fingerprints(label_path) if resume else {}
     accepted_count = 0
     excluded_count = 0
     skipped_count = 0
@@ -322,7 +327,13 @@ def run_teacher_voting(
 
     for case in cases:
         case_id = str(case.get("case_id") or "")
+        case_fingerprint = _case_prompt_fingerprint(case)
         if case_id in completed:
+            previous_fingerprint = completed[case_id]
+            if previous_fingerprint != case_fingerprint:
+                raise ValueError(
+                    f"断点续跑案例 {case_id} 的提示指纹发生变化，拒绝复用旧教师标签"
+                )
             skipped_count += 1
             _emit(
                 event_callback,
@@ -334,48 +345,45 @@ def run_teacher_voting(
             )
             continue
 
-        accepted_vote_records: list[dict[str, Any]] = []
-        for role in reviewer_roles:
-            final_record: dict[str, Any] | None = None
-            for attempt in range(1, max_attempts + 1):
-                request_count += 1
-                started = time.perf_counter()
-                raw_response = ""
-                parsed_vote: dict[str, Any] | None = None
-                errors: tuple[str, ...] = ()
-                passed = False
-                try:
-                    raw_response = backend.review(case, role, attempt)
-                    checked = verify_teacher_response(raw_response, case)
-                    parsed_vote = checked.parsed_vote
-                    errors = checked.validation.errors
-                    passed = checked.validation.passed
-                except Exception as exc:  # noqa: BLE001 - must persist provider failures for resume
-                    errors = (f"教师请求失败：{redact_secrets(str(exc), secret_values)}",)
-                latency_ms = int((time.perf_counter() - started) * 1000)
-                final_record = {
-                    "format": "rsage_teacher_raw_vote_v1",
-                    "timestamp_utc": datetime.now(timezone.utc).isoformat(),
-                    "case_id": case_id,
-                    "reviewer_role": role,
-                    "attempt": attempt,
-                    "model": str(backend.model_name),
-                    "latency_ms": latency_ms,
-                    "raw_response": redact_secrets(raw_response, secret_values),
-                    "parsed_vote": parsed_vote,
-                    "verifier": {"passed": passed, "errors": list(errors)},
-                    "message_zh": (
-                        f"案例 {case_id} 的{role}第 {attempt} 次投票已通过核验"
-                        if passed
-                        else f"案例 {case_id} 的{role}第 {attempt} 次投票未通过核验"
-                    ),
+        if reviewer_concurrency == 1:
+            role_results = [
+                _review_role_with_retries(
+                    case,
+                    role,
+                    backend,
+                    max_attempts=max_attempts,
+                    retry_base_seconds=retry_base_seconds,
+                    retry_max_seconds=retry_max_seconds,
+                    secret_values=secret_values,
+                )
+                for role in reviewer_roles
+            ]
+        else:
+            with ThreadPoolExecutor(
+                max_workers=reviewer_concurrency,
+                thread_name_prefix="rsage-teacher",
+            ) as executor:
+                futures = {
+                    role: executor.submit(
+                        _review_role_with_retries,
+                        case,
+                        role,
+                        backend,
+                        max_attempts=max_attempts,
+                        retry_base_seconds=retry_base_seconds,
+                        retry_max_seconds=retry_max_seconds,
+                        secret_values=secret_values,
+                    )
+                    for role in reviewer_roles
                 }
-                append_jsonl(raw_path, final_record)
-                _emit(event_callback, final_record)
-                if passed:
-                    break
-                if attempt < max_attempts and retry_base_seconds > 0:
-                    time.sleep(min(retry_base_seconds * (2 ** (attempt - 1)), retry_max_seconds))
+                role_results = [futures[role].result() for role in reviewer_roles]
+
+        accepted_vote_records: list[dict[str, Any]] = []
+        for records, final_record, role_request_count in role_results:
+            request_count += role_request_count
+            for record in records:
+                append_jsonl(raw_path, record)
+                _emit(event_callback, record)
             if final_record is not None:
                 accepted_vote_records.append(final_record)
 
@@ -400,11 +408,68 @@ def run_teacher_voting(
     )
 
 
+def _review_role_with_retries(
+    case: Mapping[str, Any],
+    role: str,
+    backend: TeacherBackend,
+    *,
+    max_attempts: int,
+    retry_base_seconds: float,
+    retry_max_seconds: float,
+    secret_values: Sequence[str],
+) -> tuple[list[dict[str, Any]], dict[str, Any] | None, int]:
+    case_id = str(case.get("case_id") or "")
+    records: list[dict[str, Any]] = []
+    final_record: dict[str, Any] | None = None
+    for attempt in range(1, max_attempts + 1):
+        started = time.perf_counter()
+        raw_response = ""
+        parsed_vote: dict[str, Any] | None = None
+        errors: tuple[str, ...] = ()
+        passed = False
+        try:
+            raw_response = backend.review(case, role, attempt)
+            checked = verify_teacher_response(raw_response, case)
+            parsed_vote = checked.parsed_vote
+            errors = checked.validation.errors
+            passed = checked.validation.passed
+        except Exception as exc:  # noqa: BLE001 - provider failures are archived per attempt
+            errors = (f"教师请求失败：{redact_secrets(str(exc), secret_values)}",)
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        final_record = {
+            "format": "rsage_teacher_raw_vote_v1",
+            "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+            "case_id": case_id,
+            "reviewer_role": role,
+            "attempt": attempt,
+            "model": str(backend.model_name),
+            "latency_ms": latency_ms,
+            "raw_response": redact_secrets(raw_response, secret_values),
+            "parsed_vote": parsed_vote,
+            "verifier": {"passed": passed, "errors": list(errors)},
+            "message_zh": (
+                f"案例 {case_id} 的{role}第 {attempt} 次投票已通过核验"
+                if passed
+                else f"案例 {case_id} 的{role}第 {attempt} 次投票未通过核验"
+            ),
+        }
+        records.append(final_record)
+        if passed:
+            break
+        if attempt < max_attempts and retry_base_seconds > 0:
+            time.sleep(min(retry_base_seconds * (2 ** (attempt - 1)), retry_max_seconds))
+    return records, final_record, len(records)
+
+
 def load_completed_case_ids(path: str | Path) -> set[str]:
+    return set(load_completed_case_fingerprints(path))
+
+
+def load_completed_case_fingerprints(path: str | Path) -> dict[str, str]:
     target = Path(path)
     if not target.exists():
-        return set()
-    completed: set[str] = set()
+        return {}
+    completed: dict[str, str] = {}
     for line in target.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
@@ -414,8 +479,34 @@ def load_completed_case_ids(path: str | Path) -> set[str]:
             continue
         case_id = row.get("case_id") if isinstance(row, Mapping) else None
         if isinstance(case_id, str) and case_id:
-            completed.add(case_id)
+            fingerprint = row.get("case_prompt_fingerprint")
+            if not isinstance(fingerprint, str) or not fingerprint:
+                raise ValueError(f"旧教师标签 {case_id} 缺少案例提示指纹，不能安全断点续跑")
+            previous = completed.get(case_id)
+            if previous is not None and previous != fingerprint:
+                raise ValueError(f"教师标签文件中案例 {case_id} 存在冲突提示指纹")
+            completed[case_id] = fingerprint
     return completed
+
+
+def _case_prompt_fingerprint(case: Mapping[str, Any]) -> str:
+    direct = case.get("prompt_fingerprint")
+    if isinstance(direct, str) and direct:
+        return direct
+    return stable_fingerprint(
+        {
+            "case_id": str(case.get("case_id") or ""),
+            "student_input": str(case.get("student_input") or ""),
+            "learner_profile": case.get("learner_profile") or {},
+            "kc_code": str(case.get("kc_code") or ""),
+            "failure_axis": str(case.get("failure_axis") or ""),
+            "evidence_ids": [
+                str(item.get("evidence_id"))
+                for item in case.get("evidence_refs", [])
+                if isinstance(item, Mapping)
+            ],
+        }
+    )
 
 
 def append_jsonl(path: str | Path, row: Mapping[str, Any]) -> None:

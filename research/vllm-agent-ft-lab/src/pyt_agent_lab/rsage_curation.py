@@ -3,22 +3,25 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import math
 from collections import Counter, defaultdict
 from dataclasses import dataclass
+from itertools import combinations
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence, TypeVar
 
 from .rsage_data import EVENT_INTENTS, stable_fingerprint
+from .rsage_length_preflight import RsageLengthPreflightError, run_rsage_length_preflight
 
 
 _SYSTEM_PROMPT = (
-    "你是 Pythontopia 的 TutorDecisionAgent 专属模型。根据学生状态、课程知识点和证据白名单，"
-    "只输出一个教学语义 JSON 对象，字段为 misconception_type、event_intent、hint_level、"
-    "action_goal、evidence_refs、safety_flags。event_intent 只能从 READ、REVIEW、TRACE、"
-    "SCAFFOLD、PRACTICE、ASK、CHECK 中选择；不得输出完整答案、隐藏测试或白名单外证据。"
+    "你是 TutorDecisionAgent。只输出含 misconception_type、event_intent、hint_level、"
+    "action_goal、evidence_refs、safety_flags 的 JSON。event_intent 限 READ/REVIEW/TRACE/"
+    "SCAFFOLD/PRACTICE/ASK/CHECK；证据只用白名单；禁止完整答案和隐藏测试。"
 )
 
 _T = TypeVar("_T")
+_RETENTION_TARGET_AGENTS = frozenset({"GuideCoachAgent", "PracticeAgent"})
 
 
 @dataclass(frozen=True)
@@ -32,6 +35,48 @@ class RsageCurationResult:
     preference_dev: list[dict[str, Any]]
     preference_heldout: list[dict[str, Any]]
     manifest: dict[str, Any]
+
+
+def filter_retention_rows_by_length(
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    tokenizer: Any,
+    max_seq_length: int,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    non_target = [
+        dict(row)
+        for row in rows
+        if str((row.get("metadata") or {}).get("agent", "未知"))
+        not in _RETENTION_TARGET_AGENTS
+    ]
+    if not non_target:
+        raise ValueError("排除目标 Agent 后没有可供长度筛选的 retention 回放")
+    try:
+        length_report = run_rsage_length_preflight(
+            sft_rows=non_target,
+            preference_rows=[],
+            tokenizer=tokenizer,
+            max_seq_length=max_seq_length,
+        )
+    except RsageLengthPreflightError as exc:
+        length_report = exc.report
+    overlength_ids = {str(value) for value in length_report["overlength_ids"]}
+    eligible = [row for row in non_target if str(row["id"]) not in overlength_ids]
+    report = {
+        "format": "rsage_retention_length_filter_v1",
+        "max_seq_length": max_seq_length,
+        "input_count": len(rows),
+        "target_agent_excluded_count": len(rows) - len(non_target),
+        "overlength_count": len(overlength_ids),
+        "overlength_ids": sorted(overlength_ids),
+        "eligible_count": len(eligible),
+        "length_tokens": length_report["length_tokens"],
+        "message_zh": (
+            f"retention 长度筛选完成：排除目标 Agent {len(rows) - len(non_target)} 条，"
+            f"排除超长 {len(overlength_ids)} 条，剩余 {len(eligible)} 条可训练回放"
+        ),
+    }
+    return eligible, report
 
 
 def curate_rsage_dataset(
@@ -87,7 +132,21 @@ def curate_rsage_dataset(
     dev_families = remaining_families[:dev_family_count]
     heldout_families = remaining_families[dev_family_count:]
 
-    train_pairs = _flatten_families(grouped, train_families, seed)
+    train_family_pairs = _flatten_families(grouped, train_families, seed)
+    train_pairs = (
+        train_family_pairs
+        if len(train_family_pairs) == target_sft_count
+        else _stratified_select(
+            train_family_pairs,
+            target_sft_count,
+            key=lambda pair: (
+                str(pair[1]["preferred_intent"]),
+                str(pair[0]["failure_axis"]),
+                str(pair[0]["chapter_id"]),
+            ),
+            seed=seed,
+        )
+    )
     dev_pairs = _flatten_families(grouped, dev_families, seed)
     heldout_pairs = _flatten_families(grouped, heldout_families, seed)
     if len(train_pairs) != target_sft_count:
@@ -138,6 +197,7 @@ def curate_rsage_dataset(
             1 for case, _ in paired if _template_family(case) in protected_families
         ),
         "duplicate_prompt_count": 0,
+        "unused_train_family_accepted_pairs": len(train_family_pairs) - len(train_pairs),
         "preference_q_counts": dict(
             sorted(Counter(str(row["preference_q"]) for row in preference_train).items())
         ),
@@ -151,6 +211,12 @@ def curate_rsage_dataset(
         ),
         "retention_agent_counts": dict(
             sorted(Counter(str(row["metadata"].get("agent", "未知")) for row in retention_sft_train).items())
+        ),
+        "retention_excluded_target_agent_count": sum(
+            1
+            for row in retention_rows
+            if str((row.get("metadata") or {}).get("agent", "未知"))
+            in _RETENTION_TARGET_AGENTS
         ),
         "message_zh": f"已整理 {len(sft_train)} 条 SFT 与 {len(preference_train)} 条软偏好训练数据",
     }
@@ -261,7 +327,20 @@ def _rejected_ir(
     candidate = str(case["event_intent"])
     admissible = {str(item) for item in label["admissible_intents"]}
     forbidden = [str(item) for item in label["forbidden_intents"]]
-    if candidate == preferred:
+    vote_counts = label.get("vote_counts")
+    dissenting_votes: list[tuple[int, str]] = []
+    if isinstance(vote_counts, Mapping):
+        dissenting_votes = sorted(
+            (
+                (int(count), str(intent))
+                for intent, count in vote_counts.items()
+                if str(intent) != preferred and isinstance(count, int) and count > 0
+            ),
+            key=lambda item: (-item[0], item[1]),
+        )
+    if dissenting_votes:
+        candidate = dissenting_votes[0][1]
+    elif candidate == preferred:
         candidate = forbidden[0] if forbidden else next(
             intent for intent in EVENT_INTENTS if intent not in admissible
         )
@@ -290,12 +369,12 @@ def _build_user_content(case: Mapping[str, Any]) -> str:
         "kc": {
             "code": case["kc_code"],
             "name": case["kc_name"],
-            "summary": case.get("kc_summary", ""),
+            "summary": str(case.get("kc_summary", ""))[:40],
         },
         "evidence_allowlist": [
             {
                 "evidence_id": item["evidence_id"],
-                "excerpt": item.get("excerpt", ""),
+                "title": item.get("title", "课程页"),
             }
             for item in case["evidence_refs"]
         ],
@@ -333,7 +412,12 @@ def _select_retention_rows(
     count: int,
     seed: int,
 ) -> list[dict[str, Any]]:
-    candidates = [copy.deepcopy(dict(row)) for row in rows]
+    candidates = [
+        copy.deepcopy(dict(row))
+        for row in rows
+        if str((row.get("metadata") or {}).get("agent", "未知"))
+        not in _RETENTION_TARGET_AGENTS
+    ]
     _require_unique(candidates, "id", "保留回放编号")
     message_fingerprints = [stable_fingerprint(row.get("messages")) for row in candidates]
     if len(message_fingerprints) != len(set(message_fingerprints)):
@@ -408,8 +492,22 @@ def _choose_family_subset(
                 updates[total] = [*selected, family]
         reachable.update(updates)
     if target_count not in reachable:
-        sizes = ", ".join(f"{family}={len(grouped[family])}" for family in family_order)
-        raise ValueError(f"无法在模板族完全隔离条件下选出 {target_count} 条训练案例；可用模板族规模：{sizes}")
+        candidates: list[tuple[int, int, tuple[int, ...], list[str]]] = []
+        maximum_train_families = len(family_order) - 2
+        for family_count in range(1, maximum_train_families + 1):
+            for indexes in combinations(range(len(family_order)), family_count):
+                selected = [family_order[index] for index in indexes]
+                total = sum(len(grouped[family]) for family in selected)
+                if total >= target_count:
+                    candidates.append((family_count, total - target_count, indexes, selected))
+            if candidates:
+                break
+        if not candidates:
+            sizes = ", ".join(f"{family}={len(grouped[family])}" for family in family_order)
+            raise ValueError(
+                f"保留至少两个独立评测模板族后仍不足 {target_count} 条训练案例；可用模板族规模：{sizes}"
+            )
+        return min(candidates, key=lambda item: (item[0], item[1], item[2]))[3]
     return reachable[target_count]
 
 
@@ -435,6 +533,21 @@ def _validate_accepted_label(case: Mapping[str, Any], label: Mapping[str, Any]) 
         raise ValueError(f"案例 {case['case_id']} 的可接受与禁止动作集合冲突")
     if isinstance(q, bool) or not isinstance(q, (int, float)) or not 0.5 <= float(q) <= 1.0:
         raise ValueError(f"案例 {case['case_id']} 的软偏好概率不在 0.5 到 1.0")
+    vote_counts = label.get("vote_counts")
+    if isinstance(vote_counts, Mapping):
+        parsed_counts = {
+            str(intent): int(count)
+            for intent, count in vote_counts.items()
+            if str(intent) in EVENT_INTENTS and isinstance(count, int) and count >= 0
+        }
+        total_votes = sum(parsed_counts.values())
+        if total_votes <= 0 or not math.isclose(
+            parsed_counts.get(str(preferred), 0) / total_votes,
+            float(q),
+            rel_tol=0.0,
+            abs_tol=1e-9,
+        ):
+            raise ValueError(f"案例 {case['case_id']} 的软偏好概率与教师投票不一致")
     allowlist = {
         str(item["evidence_id"])
         for item in case["evidence_refs"]

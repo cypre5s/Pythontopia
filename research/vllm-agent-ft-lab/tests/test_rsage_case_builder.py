@@ -5,6 +5,7 @@ from collections import Counter
 from pathlib import Path
 
 from pyt_agent_lab.rsage_case_builder import (
+    audit_prompt_family_similarity,
     build_rsage_cases,
     case_prompt_fingerprint,
     write_rsage_cases,
@@ -49,6 +50,17 @@ def test_case_generation_is_deterministic_for_same_seed() -> None:
 
     assert first == second
     assert first_manifest["dataset_sha256"] == second_manifest["dataset_sha256"]
+
+
+def test_surface_families_are_not_near_duplicates_after_masking_course_values() -> None:
+    cases, _ = build_rsage_cases(COURSE_DIR, count=420, seed=20260716)
+
+    audit = audit_prompt_family_similarity(cases, thresholds=(0.80, 0.85, 0.90))
+
+    assert audit["max_cross_family_char5_jaccard"] < 0.85
+    assert audit["pairs_at_or_above"]["0.85"] == 0
+    assert audit["pairs_at_or_above"]["0.9"] == 0
+    assert audit["threshold_basis_zh"] == "字符五元组阈值为项目经验门槛，不是论文通用定律"
 
 
 def test_protected_prompt_fingerprint_is_excluded_and_replaced() -> None:
