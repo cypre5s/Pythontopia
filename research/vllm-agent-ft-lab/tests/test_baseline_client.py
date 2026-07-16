@@ -18,6 +18,29 @@ def test_build_chat_payload_disables_qwen_thinking_by_default() -> None:
     assert payload["chat_template_kwargs"] == {"enable_thinking": False}
 
 
+def test_build_chat_payload_can_disable_thinking_for_teacher_model() -> None:
+    payload = build_chat_payload(
+        "deepseek-v4-pro",
+        [{"role": "user", "content": "只输出 JSON"}],
+        enable_thinking=False,
+    )
+
+    assert payload["chat_template_kwargs"] == {"enable_thinking": False}
+
+
+def test_build_chat_payload_can_request_strict_json_schema() -> None:
+    response_format = {
+        "type": "json_schema",
+        "json_schema": {"name": "IR", "schema": {"type": "object"}, "strict": True},
+    }
+
+    payload = build_chat_payload(
+        "qwen3", [{"role": "user", "content": "hi"}], response_format=response_format
+    )
+
+    assert payload["response_format"] == response_format
+
+
 def test_extract_message_text_falls_back_to_reasoning() -> None:
     assert extract_message_text({"content": None, "reasoning": "Thinking only"}) == "Thinking only"
     assert extract_message_text({"content": "Final", "reasoning": "Thinking"}) == "Final"
@@ -83,6 +106,44 @@ def test_openai_compat_client_uses_proxy_free_opener(monkeypatch) -> None:
     assert any(getattr(handler, "proxies", None) == {} for handler in handlers)
 
 
+def test_openai_compat_client_can_use_explicit_https_proxy(monkeypatch) -> None:
+    handlers = []
+
+    class _Opener:
+        def open(self, req, data=None, timeout=None):
+            class _Response:
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, exc_type, exc, tb) -> None:
+                    return None
+
+                def read(self) -> bytes:
+                    return b'{"choices":[{"message":{"content":"{\\"ok\\": true}"}}]}'
+
+            return _Response()
+
+    def fake_build_opener(*input_handlers):
+        handlers.extend(input_handlers)
+        return _Opener()
+
+    monkeypatch.setattr("urllib.request.build_opener", fake_build_opener)
+
+    client = OpenAICompatClient(
+        "https://example.test/v1",
+        "token",
+        "model",
+        proxy_url="http://127.0.0.1:7892",
+    )
+
+    assert client.chat([{"role": "user", "content": "hi"}]) == '{"ok": true}'
+    assert any(
+        getattr(handler, "proxies", None)
+        == {"http": "http://127.0.0.1:7892", "https": "http://127.0.0.1:7892"}
+        for handler in handlers
+    )
+
+
 def test_run_cases_can_use_bounded_concurrency(tmp_path: Path) -> None:
     cases = [
         {
@@ -146,7 +207,13 @@ class _FakeClient:
         self.in_flight = 0
         self.max_in_flight = 0
 
-    def chat(self, messages: list[dict[str, str]], temperature: float = 0.0, max_tokens: int = 512) -> str:
+    def chat(
+        self,
+        messages: list[dict[str, str]],
+        temperature: float = 0.0,
+        max_tokens: int = 512,
+        response_format=None,  # noqa: ANN001
+    ) -> str:
         with self._lock:
             self.in_flight += 1
             self.max_in_flight = max(self.max_in_flight, self.in_flight)
