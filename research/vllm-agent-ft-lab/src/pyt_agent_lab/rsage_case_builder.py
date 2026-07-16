@@ -42,6 +42,19 @@ _PROFILE_VARIANTS = (
     {"knowledge_base": "basic", "cognitive_style": "conceptual", "learning_preference": "definition_then_case"},
 )
 
+_PROMPT_FRAMES = (
+    "{base}{suffix}",
+    "情况说明：{base}补充要求：{suffix}",
+    "我先把困惑说清楚：{base}同时，{suffix}",
+    "请按我现在的学习状态判断。{base}{suffix}",
+    "不是要最终答案，我的问题是：{base}{suffix}",
+    "我想继续学但卡住了。{base}还有一点：{suffix}",
+    "请先判断下一步，不要一次讲完。{base}{suffix}",
+    "下面是我的真实困惑：{base}{suffix}",
+    "我可能把学习顺序弄反了。{base}{suffix}",
+    "请用适合初学者的方式处理：{base}{suffix}",
+)
+
 
 def build_rsage_cases(
     course_dir: str | Path,
@@ -96,6 +109,7 @@ def build_rsage_cases(
 
     pair_counts = Counter(f"{row['event_intent']}::{row['failure_axis']}" for row in cases)
     chapter_counts = Counter(str(row["chapter_id"]) for row in cases)
+    template_counts = Counter(str(row["source_lineage"]["template_family"]) for row in cases)
     manifest = {
         "format": "rsage_case_jsonl_v1",
         "pack_id": 43,
@@ -103,6 +117,7 @@ def build_rsage_cases(
         "total_count": len(cases),
         "intent_failure_counts": dict(sorted(pair_counts.items())),
         "chapter_counts": dict(sorted(chapter_counts.items(), key=lambda item: int(item[0]))),
+        "template_family_counts": dict(sorted(template_counts.items())),
         "protected_exclusion_count": excluded,
         "protected_fingerprint_count": len(protected),
         "dataset_sha256": stable_fingerprint(cases),
@@ -246,6 +261,8 @@ def _build_case(
     ]
     base = _INTENT_PROMPTS[event_intent].format(kc_name=kc["kc_name"])
     suffix = _FAILURE_SUFFIXES[failure_axis]
+    template_variant_index = slot_index % len(_PROMPT_FRAMES)
+    framed_prompt = _PROMPT_FRAMES[template_variant_index].format(base=base, suffix=suffix)
     variation = "" if attempt == 0 else f" 这是我的第 {attempt + 1} 次重新描述。"
     return {
         "case_id": f"rsage-{slot_index + 1:04d}-{event_intent.lower()}-{failure_axis}",
@@ -259,7 +276,7 @@ def _build_case(
         "kc_summary": str(kc.get("summary_markdown") or "")[:1200],
         "event_intent": event_intent,
         "failure_axis": failure_axis,
-        "student_input": f"{base}{suffix}{variation}",
+        "student_input": f"{framed_prompt}{variation}",
         "learner_profile": dict(_PROFILE_VARIANTS[(slot_index + attempt) % len(_PROFILE_VARIANTS)]),
         "evidence_refs": evidence_refs,
         "source": "pack43_teacher_vote_candidate",
@@ -267,7 +284,9 @@ def _build_case(
             "course_pack": 43,
             "kc_id": int(kc["id"]),
             "generation_seed": seed,
-            "template_family": f"{event_intent.lower()}::{failure_axis}",
+            "template_family": f"prompt-frame-{template_variant_index}",
+            "intent_failure_family": f"{event_intent.lower()}::{failure_axis}",
+            "template_variant_index": template_variant_index,
         },
     }
 

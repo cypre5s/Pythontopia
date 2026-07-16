@@ -22,6 +22,9 @@ def test_build_420_cases_has_complete_intent_failure_and_chapter_coverage() -> N
     assert len(pair_counts) == 42
     assert set(pair_counts.values()) == {10}
     assert Counter(row["chapter_id"] for row in cases) == {index: 60 for index in range(1, 8)}
+    assert Counter(row["source_lineage"]["template_family"] for row in cases) == {
+        f"prompt-frame-{index}": 42 for index in range(10)
+    }
     assert manifest["total_count"] == 420
     assert manifest["message_zh"] == "已构造 420 条 R-SAGE-IR 非保护训练候选案例"
 
