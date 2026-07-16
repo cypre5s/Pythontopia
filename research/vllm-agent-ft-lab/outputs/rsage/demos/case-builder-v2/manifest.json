@@ -8,7 +8,7 @@
     "6": 1,
     "7": 1
   },
-  "dataset_sha256": "b075d8693158ed262ff7b624f3973b1aab8988cc0a5013d0c79d84411814edf7",
+  "dataset_sha256": "04470fc558033e28ea099459599f51008a2451698a421dcaf0f5d963cd38ec98",
   "format": "rsage_case_jsonl_v1",
   "intent_failure_counts": {
     "READ::answer_leak": 1,
@@ -24,7 +24,7 @@
     "REVIEW::weak_semantics": 1,
     "REVIEW::wrong_decision": 1
   },
-  "jsonl_sha256": "2e88d05dfb1dbe138475f359b5754214aa8a1f5c597534b54031dc3582c8f9ad",
+  "jsonl_sha256": "12ec35d5b385ad2056ec08a989f96d7fff2fa9b218bcc793e05e9830ad8bc479",
   "message_zh": "已构造 12 条 R-SAGE-IR 非保护训练候选案例",
   "pack_id": 43,
   "protected_exclusion_count": 0,
@@ -34,6 +34,17 @@
     "chapters": "14b27086e9f5ae016730662a8be00a0dc54148d6191ddf6bf6a2f06dcbd59a30",
     "kcs": "8a0e40acd626e9b8e8ebbfea7dd796036cea3af64b2a5169a30eb282dbaf2216",
     "pages": "bf237c76a369a09b186c082f416eeabe56e371138772f82e0b5894d6d485af28"
+  },
+  "surface_similarity_audit": {
+    "compared_cross_family_pairs": 64,
+    "max_cross_family_char5_jaccard": 0.15447154471544716,
+    "metric": "masked_character_5gram_jaccard",
+    "pairs_at_or_above": {
+      "0.8": 0,
+      "0.85": 0,
+      "0.9": 0
+    },
+    "threshold_basis_zh": "字符五元组阈值为项目经验门槛，不是论文通用定律"
   },
   "template_family_counts": {
     "prompt-frame-0": 2,
