@@ -1,0 +1,39 @@
+{
+  "chapter_counts": {
+    "1": 2,
+    "2": 2,
+    "3": 2,
+    "4": 2,
+    "5": 2,
+    "6": 1,
+    "7": 1
+  },
+  "dataset_sha256": "0c426e172768727109c056e7adee6ee2b7aa6ea2351b5b1a267220e7a0103904",
+  "format": "rsage_case_jsonl_v1",
+  "intent_failure_counts": {
+    "READ::answer_leak": 1,
+    "READ::chinese_noisy_input": 1,
+    "READ::over_refusal": 1,
+    "READ::unbound_evidence": 1,
+    "READ::weak_semantics": 1,
+    "READ::wrong_decision": 1,
+    "REVIEW::answer_leak": 1,
+    "REVIEW::chinese_noisy_input": 1,
+    "REVIEW::over_refusal": 1,
+    "REVIEW::unbound_evidence": 1,
+    "REVIEW::weak_semantics": 1,
+    "REVIEW::wrong_decision": 1
+  },
+  "jsonl_sha256": "dee806ac8a609394b7312b1b50f02c9ca9ce7457ed07f3087169958c34c2f7af",
+  "message_zh": "已构造 12 条 R-SAGE-IR 非保护训练候选案例",
+  "pack_id": 43,
+  "protected_exclusion_count": 0,
+  "protected_fingerprint_count": 0,
+  "seed": 20260716,
+  "source_hashes": {
+    "chapters": "14b27086e9f5ae016730662a8be00a0dc54148d6191ddf6bf6a2f06dcbd59a30",
+    "kcs": "8a0e40acd626e9b8e8ebbfea7dd796036cea3af64b2a5169a30eb282dbaf2216",
+    "pages": "bf237c76a369a09b186c082f416eeabe56e371138772f82e0b5894d6d485af28"
+  },
+  "total_count": 12
+}
