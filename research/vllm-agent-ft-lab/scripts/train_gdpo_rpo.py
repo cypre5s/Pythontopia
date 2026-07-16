@@ -16,6 +16,14 @@ from pyt_agent_lab.gdpo_rpo import (
     summarize_preference_q,
 )
 from pyt_agent_lab.lora_training import load_training_plan, require_dependency
+from pyt_agent_lab.rsage_training_plan import (
+    filter_rows_for_training_plan,
+    validate_training_plan_hashes,
+)
+from pyt_agent_lab.rsage_length_preflight import (
+    RsageLengthPreflightError,
+    run_rsage_length_preflight,
+)
 
 
 def main() -> None:
@@ -38,6 +46,7 @@ def main() -> None:
 
     plan = load_training_plan(args.plan)
     _validate_plan(plan)
+    validate_training_plan_hashes(plan)
     from pyt_agent_lab.training_quality import (
         archive_training_failure,
         initialize_experiment_manifest,
@@ -55,16 +64,20 @@ def _train(plan: dict[str, Any], args: argparse.Namespace) -> None:
     require_dependency("trl")
     require_dependency("peft")
     require_dependency("bitsandbytes")
-    from datasets import load_dataset
     from peft import PeftModel
     from transformers import (
         AutoModelForMultimodalLM,
         AutoTokenizer,
         BitsAndBytesConfig,
         EarlyStoppingCallback,
+        PrinterCallback,
+        ProgressCallback,
         TrainerCallback,
     )
     from trl import DPOConfig
+    import trl.trainer.dpo_trainer as dpo_trainer_module
+
+    dpo_trainer_module.tqdm = lambda iterable, **kwargs: iterable
 
     from pyt_agent_lab.training_quality import (
         run_preference_preflight,
@@ -74,7 +87,7 @@ def _train(plan: dict[str, Any], args: argparse.Namespace) -> None:
 
     output_dir = Path(plan["output_dir"])
     output_dir.mkdir(parents=True, exist_ok=True)
-    train_rows = _load_jsonl(plan["train_file"])
+    train_rows = filter_rows_for_training_plan(_load_jsonl(plan["train_file"]), plan)
     eval_rows = _load_jsonl(plan["heldout_file"])
     q_preflight = {
         "train": summarize_preference_q(train_rows),
@@ -90,6 +103,25 @@ def _train(plan: dict[str, Any], args: argparse.Namespace) -> None:
     tokenizer = AutoTokenizer.from_pretrained(plan["model_path"], trust_remote_code=False)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
+
+    try:
+        length_report = run_rsage_length_preflight(
+            sft_rows=[],
+            preference_rows=[*train_rows, *eval_rows],
+            tokenizer=tokenizer,
+            max_seq_length=int(plan["max_seq_length"]),
+        )
+    except RsageLengthPreflightError as exc:
+        (output_dir / "length_preflight.json").write_text(
+            json.dumps(exc.report, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        raise
+    (output_dir / "length_preflight.json").write_text(
+        json.dumps(length_report, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    print(length_report["message_zh"], flush=True)
 
     quality_round = plan.get("quality_round") or {}
     preflight = run_preference_preflight(
@@ -123,9 +155,15 @@ def _train(plan: dict[str, Any], args: argparse.Namespace) -> None:
         model.gradient_checkpointing_enable()
         model.config.use_cache = False
 
-    raw = load_dataset(
-        "json",
-        data_files={"train": plan["train_file"], "eval": plan["heldout_file"]},
+    from datasets import Dataset, DatasetDict, disable_progress_bars
+
+    disable_progress_bars()
+
+    raw = DatasetDict(
+        {
+            "train": Dataset.from_list(train_rows),
+            "eval": Dataset.from_list(eval_rows),
+        }
     )
     dataset = raw.map(lambda item: _format_preference_item(item, tokenizer))
 
@@ -157,7 +195,7 @@ def _train(plan: dict[str, Any], args: argparse.Namespace) -> None:
         loss_weights=[1.0, lambda_sft],
         precompute_ref_log_probs=bool(objective.get("precompute_ref_log_probs", True)),
         precompute_ref_batch_size=1,
-        disable_dropout=False,
+        disable_dropout=bool(objective.get("disable_dropout", True)),
         remove_unused_columns=True,
         use_liger_kernel=False,
         f_divergence_type="reverse_kl",
@@ -181,6 +219,18 @@ def _train(plan: dict[str, Any], args: argparse.Namespace) -> None:
             }
             with (output_dir / "trainer_log.jsonl").open("a", encoding="utf-8") as handle:
                 handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+            summary = [f"全局步 {state.global_step}", f"轮次 {state.epoch}"]
+            translations = {
+                "loss": "训练损失",
+                "eval_loss": "开发损失",
+                "rewards/accuracies": "奖励准确率",
+                "rewards/margins": "奖励边距",
+                "grad_norm": "梯度范数",
+            }
+            for key, label in translations.items():
+                if key in logs:
+                    summary.append(f"{label} {logs[key]}")
+            print("GDPO+RPO 进度：" + "，".join(summary), flush=True)
 
     callbacks: list[Any] = [ChineseJsonlTrainerLogCallback()]
     patience = int(plan.get("fit_safeguards", {}).get("early_stopping_patience", 0))
@@ -195,6 +245,8 @@ def _train(plan: dict[str, Any], args: argparse.Namespace) -> None:
         )
 
     trainer_class = create_gdpo_rpo_trainer_class()
+    if dpo_config.precompute_ref_log_probs:
+        print("正在预计算训练集与开发集的参考对数概率", flush=True)
     trainer = trainer_class(
         model=model,
         args=dpo_config,
@@ -205,6 +257,8 @@ def _train(plan: dict[str, Any], args: argparse.Namespace) -> None:
         callbacks=callbacks,
         lambda_sft=lambda_sft,
     )
+    trainer.remove_callback(PrinterCallback)
+    trainer.remove_callback(ProgressCallback)
     if dpo_config.precompute_ref_log_probs:
         unwrapped = trainer.accelerator.unwrap_model(trainer.model)
         if hasattr(unwrapped, "peft_config") and "ref" in unwrapped.peft_config:
