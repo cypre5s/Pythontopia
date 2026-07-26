@@ -246,12 +246,18 @@ public class BugMineRepository {
         sessionId);
   }
 
-  public void updateStatus(Long sessionId, BugMineSessionStatus status) {
-    jdbcTemplate.update(
+  /**
+   * 把会话从 OPEN 迁移到终态（RESOLVED / ABANDONED）。{@code AND status = 'OPEN'} 让状态迁移幂等：
+   * 已是终态的会话不会被改判，并发重复请求由影响行数（0）识别，调用方据此避免重复发学习事件。
+   *
+   * @return 受影响行数（1 = 本次迁移生效；0 = 会话已是终态）
+   */
+  public int updateStatus(Long sessionId, BugMineSessionStatus status) {
+    return jdbcTemplate.update(
         """
         UPDATE bug_mine_session
         SET status = ?, closed_at = CASE WHEN ? = 'OPEN' THEN closed_at ELSE now() END
-        WHERE id = ?
+        WHERE id = ? AND status = 'OPEN'
         """,
         status.name(),
         status.name(),

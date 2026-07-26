@@ -60,13 +60,56 @@ class SandboxResourceLimitTest {
         .isTrue();
   }
 
+  /**
+   * 回归（管道死锁）：输出远超 Linux 管道缓冲区（64KiB）的<strong>正确</strong>程序必须正常结束，
+   * stdout 被截断到上限而不是丢空。修复前 waitFor 先于读取，子进程写满管道即阻塞 → 墙钟超时，
+   * 断言 {@code length() <= 64KB} 在长度为 0 时同样成立（假绿），故此处显式区分「截断」与「死锁」。
+   */
   @Test
-  void oversizedOutputIsBounded() {
+  void oversizedOutputIsTruncatedNotDeadlocked() {
     // print a very long string — stdout bounded to 64KB
     String code = "print('x' * 200_000)";
     JudgeTestCase tc = new JudgeTestCase("", "", 3000);
     SandboxRunResult result = sandbox.run(code, tc);
-    assertThat(result.stdout().length()).isLessThanOrEqualTo(64 * 1024);
+
+    assertThat(result.timedOut()).as("大输出不得被误判成 TLE（管道死锁）").isFalse();
+    assertThat(result.exitCode()).as("程序本身是正确的，应正常退出").isZero();
+    assertThat(result.stdout().length())
+        .as("stdout 必须恰好截断到上限，而不是被丢成空串")
+        .isEqualTo(64 * 1024);
+    assertThat(result.durationMs()).as("不应耗尽整个墙钟超时").isLessThan(3000L);
+  }
+
+  /**
+   * 回归（stderr 管道同样要排空）：往 stderr 写满管道缓冲区的程序也不能阻塞，
+   * 且它写到 stdout 的正确答案必须完整拿回来（修复前 stderr 写满 → 进程阻塞 → TLE，stdout 丢空）。
+   */
+  @Test
+  void oversizedStderrDoesNotBlockCorrectStdout() {
+    String code = "import sys\nsys.stderr.write('e' * 200_000)\nprint('hello')";
+    JudgeTestCase tc = new JudgeTestCase("", "hello", 3000);
+    SandboxRunResult result = sandbox.run(code, tc);
+
+    assertThat(result.timedOut()).as("大 stderr 不得阻塞子进程").isFalse();
+    assertThat(result.exitCode()).isZero();
+    assertThat(result.stdout()).contains("hello");
+    assertThat(result.stderr().length())
+        .as("stderr 截断到 16KB 上限")
+        .isEqualTo(16 * 1024);
+  }
+
+  /**
+   * 回归（CPU ulimit 抢跑）：墙钟超时必须是唯一的超时判据。修复前 {@code ulimit -t 5} 固定 5s，
+   * 用例超时 6s 时 CPU 上限先到 → 进程以 128+signal 退出、stderr 为空（exec 替换了 bash，
+   * 没有 shell 打印 "Killed"）→ {@code timedOut=false}，最终被判成 RE 而不是 TLE。
+   */
+  @Test
+  void cpuLimitDoesNotPreemptWallClockTimeout() {
+    JudgeTestCase tc = new JudgeTestCase("", "", 6000);
+    SandboxRunResult result = sandbox.run("while True:\n  pass", tc);
+
+    assertThat(result.timedOut()).as("必须由墙钟判定超时，而不是被 CPU ulimit 杀成 RE").isTrue();
+    assertThat(result.errorKind()).isEqualTo("TLE");
   }
 
   @Test

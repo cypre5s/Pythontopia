@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.pythontopia.submission.judge.JudgeTestCase;
+import com.pythontopia.submission.judge.JudgeWorkerPool;
 import com.pythontopia.submission.judge.PythonSandbox;
 import com.pythontopia.submission.judge.SandboxRunResult;
 import org.slf4j.Logger;
@@ -25,15 +26,24 @@ public class PythonTraceCollector {
 
   private final PythonSandbox sandbox;
   private final ObjectMapper objectMapper;
+  private final JudgeWorkerPool judgeWorkerPool;
 
-  public PythonTraceCollector(PythonSandbox sandbox, ObjectMapper objectMapper) {
+  public PythonTraceCollector(
+      PythonSandbox sandbox, ObjectMapper objectMapper, JudgeWorkerPool judgeWorkerPool) {
     this.sandbox = sandbox;
     this.objectMapper = objectMapper;
+    this.judgeWorkerPool = judgeWorkerPool;
   }
 
+  /**
+   * 收集变量轨迹。Python 子进程走 {@link JudgeWorkerPool}，与正式判题共用并发上限，
+   * 不在 Tomcat 请求线程上直接 fork；调用方不在池线程内，无嵌套提交死锁风险。
+   */
   public TraceResult collect(String code, String stdin) {
     String wrapper = buildWrapper(code);
-    SandboxRunResult result = sandbox.run(wrapper, new JudgeTestCase(stdin, "", 6000));
+    SandboxRunResult result =
+        judgeWorkerPool.submitAndWait(
+            () -> sandbox.run(wrapper, new JudgeTestCase(stdin, "", 6000)));
     ArrayNode steps = objectMapper.createArrayNode();
     boolean truncated = false;
     String stdout = result.stdout() == null ? "" : result.stdout();

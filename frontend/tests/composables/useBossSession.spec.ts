@@ -263,6 +263,42 @@ describe('useBossSession (R-13 §-1 BossPage 交互深挖)', () => {
     expect(s.playerKnockedDown.value).toBe(false);
   });
 
+  // ── 判题服务不可用：绝不拿 Pyodide 本地样例冒充正式判题 ──
+  it('后端判题失败时不推进 stage / 不扣血，置 error 态且 lastResult=null', async () => {
+    apiMocks.submitBossAttempt.mockRejectedValue(new Error('502 Bad Gateway'));
+    // 本地 Pyodide 跑出与样例一致的输出（修复前会被当成通过并推进战斗）
+    pyodideMock.run.mockResolvedValue({ stdout: '5\n', stderr: '' });
+    const s = useBossSession({ chapter: 1 });
+    await s.startStage();
+    s.code.value = 'print(5)';
+
+    await s.submit();
+
+    expect(s.phase.value).toBe('error');
+    expect(s.lastResult.value).toBeNull();
+    expect(s.errorMessage.value).toContain('判题服务暂不可用');
+    expect(s.clearedStages.value).toBe(0);
+    expect(s.bossHp.value).toBe(100);
+    expect(s.playerHp.value).toBe(100);
+    expect(s.stage.value).toBe(1);
+    expect(s.recentDamage.value).toBeNull();
+  });
+
+  it('最后一阶段后端不可用时不得直接 victory', async () => {
+    const s = useBossSession({ chapter: 1 });
+    s.stage.value = 4;
+    await s.startStage();
+    apiMocks.submitBossAttempt.mockRejectedValue(new Error('ECONNREFUSED'));
+    pyodideMock.run.mockResolvedValue({ stdout: '5\n', stderr: '' });
+    s.code.value = 'print(5)';
+
+    await s.submit();
+
+    expect(s.phase.value).toBe('error');
+    expect(s.clearedStages.value).toBe(0);
+    expect(s.bossHp.value).toBe(100);
+  });
+
   it('倒计时归零设置 stageTimedOut', async () => {
     const s = useBossSession({ chapter: 1 });
     await s.startStage();

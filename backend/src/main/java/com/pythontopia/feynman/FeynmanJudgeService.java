@@ -99,7 +99,7 @@ public class FeynmanJudgeService {
               if (tc.hiddenTestCases() != null
                   && tc.hiddenTestCases().isArray()
                   && tc.hiddenTestCases().size() > 0) {
-                cases.addAll(caseEvaluator.extractCases(tc.hiddenTestCases(), 10));
+                cases.addAll(caseEvaluator.extractCases(tc.hiddenTestCases(), 10, true));
               } else if (tc.samples() != null && tc.samples().isArray()) {
                 cases.addAll(caseEvaluator.extractCases(tc.samples(), 10));
               }

@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.pythontopia.common.error.BusinessException;
@@ -101,6 +102,41 @@ class SubmissionServiceTest {
         ArgumentCaptor.forClass(LearningEvent.PracticeFailed.class);
     verify(publisher).publishEvent(eventCaptor.capture());
     assertThat(eventCaptor.getValue().difficulty()).isEqualTo("basic");
+  }
+
+  /**
+   * 回归：判题系统故障（SYSTEM_ERROR）不是学生答错，不得发 PracticeFailed 学习事件
+   * （否则沙箱/解释器一挂，全体学生每次提交都扣掌握度、往画像写脏 error_pattern）。
+   */
+  @Test
+  void submitSystemErrorDoesNotEmitPracticeFailedEvent() {
+    when(submissions.countSubmittedAfter(anyLong(), any())).thenReturn(0);
+    when(problems.findPublic(eq(43L), eq(101L)))
+        .thenReturn(
+            Optional.of(
+                new PublicProblemDto(
+                    101L,
+                    43L,
+                    "PY43-KC-001",
+                    "题目",
+                    "statement",
+                    "input",
+                    "output",
+                    "basic",
+                    null)));
+    when(submissions.insertSubmission(anyLong(), anyLong(), any(), any(), any())).thenReturn(902L);
+    when(judge.judge(eq(902L), eq(101L), any()))
+        .thenReturn(new JudgeOutcome(Verdict.SYSTEM_ERROR, 0, 0, "SYSTEM_ERROR:ast_whitelist_launch_failed"));
+    when(problems.findKcCode(eq(101L))).thenReturn("PY43-KC-001");
+    when(submissions.findById(eq(902L)))
+        .thenReturn(Optional.of(sampleSubmission(902L, SubmissionStatus.ERROR)));
+
+    SubmissionDto result =
+        service.submit(
+            7L, new SubmissionCreateRequest(101L, "print(1)", null, SubmissionSource.TRAINING));
+
+    assertThat(result.status()).isEqualTo(SubmissionStatus.ERROR);
+    verifyNoInteractions(publisher);
   }
 
   @Test

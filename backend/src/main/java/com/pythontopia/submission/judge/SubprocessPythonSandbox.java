@@ -1,6 +1,8 @@
 package com.pythontopia.submission.judge;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -19,12 +21,18 @@ import org.springframework.stereotype.Component;
  *
  * <p>ulimit 参数（全部防御性，缺省场景远低于上限）：
  * <ul>
- *   <li>{@code -t 5} — CPU 时间 5s（TLE）</li>
+ *   <li>{@code -t ceil(timeoutMs/1000)+2} — CPU 时间兜底，<strong>刻意高于墙钟超时</strong>，
+ *       让墙钟成为唯一的超时判据（否则 CPU 上限先到会把超时进程杀成 128+signal 退出，
+ *       而 {@code exec} 已替换 bash、没有 shell 打印 "Killed"，最终被误判成 RE）</li>
  *   <li>{@code -v 262144} — 虚拟内存 256MB（内存炸弹防御）</li>
  *   <li>{@code -n 64} — 最大 64 文件描述符</li>
  *   <li>{@code -f 16384} — 最大 16MB 文件大小</li>
  *   <li>{@code -u 16} — 最大 16 进程（fork 炸弹防御）</li>
  * </ul>
+ *
+ * <p><b>管道排空</b>：{@code start()} 之后立即用两个守护线程持续排空 stdout/stderr（超出上限的字节
+ * 继续读并丢弃），再 {@code waitFor}。若先 {@code waitFor} 后读，输出超过 Linux 管道缓冲区（64KiB）
+ * 的正确程序会阻塞在 write 上直至墙钟超时，被误判成 TLE 且 stdout 丢空。
  *
  * <p><b>网络隔离</b>：当 {@code pythontopia.judge.isolation != none} 且宿主支持非特权用户命名空间时，
  * 在 {@code bash} 外再包一层 {@code unshare -r -n}（新建 user + network namespace，无需 root）。新 netns
@@ -43,6 +51,10 @@ public class SubprocessPythonSandbox implements PythonSandbox {
 
   private static final int MAX_STDOUT_BYTES = 64 * 1024;
   private static final int MAX_STDERR_BYTES = 16 * 1024;
+  /** CPU 时间上限相对墙钟超时的余量（秒）：保证墙钟先到，CPU ulimit 只做兜底。 */
+  private static final int CPU_LIMIT_HEADROOM_SECONDS = 2;
+  /** 进程退出后等待排空线程收尾的上限（毫秒）：管道已 EOF，正常瞬时完成。 */
+  private static final long PUMP_JOIN_MILLIS = 2000L;
 
   private final String pythonExecutable;
 
@@ -91,8 +103,14 @@ public class SubprocessPythonSandbox implements PythonSandbox {
 
       // bash + ulimit 资源限制，然后 exec python3 -I -B（隔离模式 + 不写 .pyc）。
       // ulimit 值：-t CPU秒, -v 虚拟内存KB, -n fd数, -f 文件大小KB, -u 进程数。
+      // -t 取「墙钟超时 + 2s」：墙钟必须先到，CPU 上限只在墙钟失效时兜底，避免超时被判成 RE。
+      long wallTimeoutMs = Math.max(100, testCase.timeoutMs());
+      long cpuLimitSeconds =
+          (long) Math.ceil(wallTimeoutMs / 1000.0) + CPU_LIMIT_HEADROOM_SECONDS;
       String ulimitWrapper =
-          "ulimit -t 5 -v 262144 -n 64 -f 16384 -u 16; exec "
+          "ulimit -t "
+              + cpuLimitSeconds
+              + " -v 262144 -n 64 -f 16384 -u 16; exec "
               + pythonExecutable
               + " -I -B "
               + scriptFile.getFileName().toString();
@@ -118,27 +136,35 @@ public class SubprocessPythonSandbox implements PythonSandbox {
 
       long started = System.currentTimeMillis();
       Process process = builder.start();
+      // 必须在 waitFor 之前排空：管道缓冲区（Linux 64KiB）写满会阻塞子进程，
+      // 导致输出较大的正确程序被墙钟误判成 TLE 且 stdout 丢空。
+      StreamPump stdoutPump =
+          StreamPump.start(process.getInputStream(), MAX_STDOUT_BYTES, "judge-stdout-pump");
+      StreamPump stderrPump =
+          StreamPump.start(process.getErrorStream(), MAX_STDERR_BYTES, "judge-stderr-pump");
       try (OutputStream stdin = process.getOutputStream()) {
         stdin.write(testCase.input().getBytes(StandardCharsets.UTF_8));
       } catch (IOException ignored) {
         // 部分短代码未读取 stdin 即结束，忽略此异常。
       }
-      boolean finished =
-          process.waitFor(Math.max(100, testCase.timeoutMs()), TimeUnit.MILLISECONDS);
+      boolean finished = process.waitFor(wallTimeoutMs, TimeUnit.MILLISECONDS);
       long durationMs = System.currentTimeMillis() - started;
       if (!finished) {
         process.destroyForcibly();
-        return new SandboxRunResult(true, -1, "", "Killed: TLE", durationMs, "TLE");
-      }
-      String stdout = readBoundedStream(process.getInputStream(), MAX_STDOUT_BYTES);
-      String stderr = readBoundedStream(process.getErrorStream(), MAX_STDERR_BYTES);
-      // ulimit 超限时 bash/内核会向 stderr 写入 "Killed"；检测并标记为资源溢出。
-      if (process.exitValue() != 0 && isResourceKill(stderr)) {
+        stdoutPump.awaitCompletion(PUMP_JOIN_MILLIS);
+        stderrPump.awaitCompletion(PUMP_JOIN_MILLIS);
         return new SandboxRunResult(
-            false, -1, redact(stdout), redact(stderr), durationMs, "SYSTEM_ERROR");
+            true, -1, redact(stdoutPump.text()), "Killed: TLE", durationMs, "TLE");
       }
+      stdoutPump.awaitCompletion(PUMP_JOIN_MILLIS);
+      stderrPump.awaitCompletion(PUMP_JOIN_MILLIS);
+      String stdout = stdoutPump.text();
+      String stderr = stderrPump.text();
+      int exitCode = process.exitValue();
+      // ulimit 超限时 bash/内核会向 stderr 写入 "Killed"；检测并标记为资源溢出。
+      String errorKind = exitCode != 0 && isResourceKill(stderr) ? "SYSTEM_ERROR" : null;
       return new SandboxRunResult(
-          false, process.exitValue(), redact(stdout), redact(stderr), durationMs, null);
+          false, exitCode, redact(stdout), redact(stderr), durationMs, errorKind);
     } catch (IOException | InterruptedException exception) {
       if (exception instanceof InterruptedException) {
         Thread.currentThread().interrupt();
@@ -199,12 +225,56 @@ public class SubprocessPythonSandbox implements PythonSandbox {
     return stderr.contains("Killed") || stderr.contains("Trace/breakpoint trap");
   }
 
-  private String readBoundedStream(java.io.InputStream stream, int maxBytes) throws IOException {
-    byte[] buffer = stream.readNBytes(maxBytes);
-    if (buffer.length == 0) {
-      return "";
+  /**
+   * 后台排空一条子进程输出管道：保留前 {@code maxBytes} 字节，超出部分继续读取并丢弃，
+   * 保证子进程永远不会因管道写满而阻塞。守护线程，随 JVM 退出。
+   */
+  private static final class StreamPump {
+
+    private final Thread thread;
+    private final ByteArrayOutputStream captured = new ByteArrayOutputStream();
+
+    private StreamPump(InputStream stream, int maxBytes, String threadName) {
+      this.thread =
+          new Thread(
+              () -> {
+                byte[] chunk = new byte[8192];
+                try (InputStream in = stream) {
+                  int read;
+                  while ((read = in.read(chunk)) != -1) {
+                    int room = maxBytes - captured.size();
+                    if (room > 0) {
+                      captured.write(chunk, 0, Math.min(room, read));
+                    }
+                    // room <= 0：已达上限，继续读并丢弃，防止子进程阻塞在 write 上。
+                  }
+                } catch (IOException ignored) {
+                  // 进程被强杀时管道会提前关闭，已捕获的部分照常返回。
+                }
+              },
+              threadName);
+      this.thread.setDaemon(true);
     }
-    return new String(buffer, StandardCharsets.UTF_8);
+
+    static StreamPump start(InputStream stream, int maxBytes, String threadName) {
+      StreamPump pump = new StreamPump(stream, maxBytes, threadName);
+      pump.thread.start();
+      return pump;
+    }
+
+    void awaitCompletion(long millis) {
+      try {
+        thread.join(millis);
+      } catch (InterruptedException ex) {
+        Thread.currentThread().interrupt();
+      }
+    }
+
+    /** 已捕获（可能被截断到上限）的文本。 */
+    String text() {
+      byte[] bytes = captured.toByteArray();
+      return bytes.length == 0 ? "" : new String(bytes, StandardCharsets.UTF_8);
+    }
   }
 
   private String redact(String text) {

@@ -118,6 +118,17 @@ public class SubmissionService {
 
   private void handleCompletion(
       Long userId, Long submissionId, SubmissionCreateRequest request, JudgeOutcome outcome) {
+    if (outcome.verdict() == Verdict.SYSTEM_ERROR) {
+      // 判题系统故障不是学生答错：不发 PracticeFailed（否则会扣掌握度、往画像写脏 error_pattern）。
+      log.error(
+          "Submission {} (user {}, problem {}) ended in SYSTEM_ERROR: {}. "
+              + "Judge infrastructure failure — no learning event published.",
+          submissionId,
+          userId,
+          request.problemId(),
+          outcome.failureReason());
+      return;
+    }
     String kcCode = problemRepository.findKcCode(request.problemId());
     if (kcCode == null || kcCode.isBlank()) {
       log.warn("Submission {} has no kc_code for problem {}", submissionId, request.problemId());

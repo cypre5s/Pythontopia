@@ -9,11 +9,15 @@ import com.pythontopia.submission.repository.PracticeSubmissionRepository;
 import com.pythontopia.submission.repository.PublicProblemRepository;
 import java.util.ArrayList;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class JudgeService {
+
+  private static final Logger log = LoggerFactory.getLogger(JudgeService.class);
 
   static final int MAX_CASES = 10;
 
@@ -52,13 +56,23 @@ public class JudgeService {
     submissionRepository.markStatus(submissionId, SubmissionStatus.RUNNING, null, null);
     StaticCodeChecker.CheckResult check = staticChecker.check(code);
     if (!check.passed()) {
+      // StaticCodeChecker 跨包契约：systemError=true 表示判题环境故障（解释器缺 ast / fork 失败），
+      // 必须判 SYSTEM_ERROR + ERROR，绝不能把基础设施问题记成学生的 CE + FAILED。
+      Verdict verdict = check.systemError() ? Verdict.SYSTEM_ERROR : Verdict.CE;
+      if (check.systemError()) {
+        log.error(
+            "Static check reported infrastructure failure for submission {} ({}); "
+                + "judged as SYSTEM_ERROR instead of student CE",
+            submissionId,
+            check.failureReason());
+      }
       ObjectNode trace = objectMapper.createObjectNode();
       trace.put("sandbox", sandbox.name());
       trace.put("checker", "static");
       submissionRepository.insertJudgeResult(
-          submissionId, Verdict.CE, 0, 0, check.failureReason(), trace);
-      submissionRepository.markStatus(submissionId, SubmissionStatus.FAILED, 0, null);
-      return new JudgeOutcome(Verdict.CE, 0, 0, check.failureReason());
+          submissionId, verdict, 0, 0, check.failureReason(), trace);
+      submissionRepository.markStatus(submissionId, statusFor(verdict), 0, null);
+      return new JudgeOutcome(verdict, 0, 0, check.failureReason());
     }
 
     List<JudgeTestCase> cases =
@@ -72,7 +86,8 @@ public class JudgeService {
       trace.put("checker", "no_test_cases");
       submissionRepository.insertJudgeResult(
           submissionId, Verdict.SYSTEM_ERROR, 0, 0, "题目没有可用测试用例", trace);
-      submissionRepository.markStatus(submissionId, SubmissionStatus.ERROR, 0, null);
+      submissionRepository.markStatus(
+          submissionId, statusFor(Verdict.SYSTEM_ERROR), 0, null);
       return new JudgeOutcome(Verdict.SYSTEM_ERROR, 0, 0, "题目没有可用测试用例");
     }
 
@@ -80,17 +95,25 @@ public class JudgeService {
     CaseEvaluation evaluation =
         judgeWorkerPool.submitAndWait(() -> caseEvaluator.evaluate(code, cases));
     persistEvaluation(submissionId, cases.size(), evaluation);
-    SubmissionStatus status =
-        evaluation.finalVerdict() == Verdict.AC
-            ? SubmissionStatus.PASSED
-            : SubmissionStatus.FAILED;
     submissionRepository.markStatus(
-        submissionId, status, evaluation.totalRuntimeMs(), null);
+        submissionId, statusFor(evaluation.finalVerdict()), evaluation.totalRuntimeMs(), null);
     return new JudgeOutcome(
         evaluation.finalVerdict(),
         evaluation.passedCases(),
         cases.size(),
         evaluation.failureReason());
+  }
+
+  /**
+   * verdict → 提交状态的<strong>单一映射</strong>：SYSTEM_ERROR 属判题系统故障，必须落 ERROR，
+   * 不能和学生答错一样计成 FAILED（否则沙箱 IOException 也会扣掌握度、写脏画像）。
+   */
+  private static SubmissionStatus statusFor(Verdict verdict) {
+    return switch (verdict) {
+      case AC -> SubmissionStatus.PASSED;
+      case SYSTEM_ERROR -> SubmissionStatus.ERROR;
+      default -> SubmissionStatus.FAILED;
+    };
   }
 
   private void persistEvaluation(
@@ -107,9 +130,10 @@ public class JudgeService {
   private List<JudgeTestCase> extractCases(PublicProblemRepository.JudgeTestCases tc) {
     List<JudgeTestCase> result = new ArrayList<>();
     if (tc.hiddenTestCases() != null && tc.hiddenTestCases().isArray() && tc.hiddenTestCases().size() > 0) {
-      result.addAll(caseEvaluator.extractCases(tc.hiddenTestCases(), MAX_CASES));
+      // 标记为隐藏：期望输出不得随失败原因回传给学生。
+      result.addAll(caseEvaluator.extractCases(tc.hiddenTestCases(), MAX_CASES, true));
     } else if (tc.samples() != null && tc.samples().isArray()) {
-      result.addAll(caseEvaluator.extractCases(tc.samples(), MAX_CASES));
+      result.addAll(caseEvaluator.extractCases(tc.samples(), MAX_CASES, false));
     }
     return result;
   }

@@ -40,6 +40,8 @@ import java.time.ZoneOffset;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
@@ -55,6 +57,8 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class BugMineService {
+
+  private static final Logger log = LoggerFactory.getLogger(BugMineService.class);
 
   private static final double MASTERY_WEIGHT = 0.35;
   private static final double DECAY_WEIGHT = 0.20;
@@ -433,7 +437,17 @@ public class BugMineService {
       throw new BusinessException(
           HttpStatus.BAD_REQUEST, "BUG_MINE_INVALID_CLOSE", "无法把会话状态置回 OPEN");
     }
-    repository.updateStatus(session.id(), status);
+    // 终态守卫：已 RESOLVED/ABANDONED 的会话不可再关闭，否则重复 POST 会反复发 PracticeAbandoned
+    // （反复改画像、写记忆流），还能把已解决的会话改判成放弃。
+    if (session.status() != BugMineSessionStatus.OPEN) {
+      throw new BusinessException(
+          HttpStatus.CONFLICT, "BUG_MINE_SESSION_CLOSED", "Bug 矿洞会话已关闭");
+    }
+    // 并发下 SQL 的 status='OPEN' 谓词才是真正的仲裁者：影响 0 行 = 已被别的请求先关闭。
+    if (repository.updateStatus(session.id(), status) == 0) {
+      throw new BusinessException(
+          HttpStatus.CONFLICT, "BUG_MINE_SESSION_CLOSED", "Bug 矿洞会话已关闭");
+    }
     if (status == BugMineSessionStatus.ABANDONED) {
       String kcCode = problemRepository.findKcCode(session.problemId());
       eventPublisher.publishEvent(
@@ -449,7 +463,11 @@ public class BugMineService {
   }
 
   private void resolveSession(Long userId, Long sessionId, Long problemId, boolean masteryConfirmed) {
-    repository.updateStatus(sessionId, BugMineSessionStatus.RESOLVED);
+    if (repository.updateStatus(sessionId, BugMineSessionStatus.RESOLVED) == 0) {
+      // 会话已是终态（并发请求先一步关闭）：不重复发 DebugResolved 事件。
+      log.warn("Bug mine session {} already in terminal state; skipping DebugResolved", sessionId);
+      return;
+    }
     if (masteryConfirmed) {
       repository.markMasteryConfirmed(sessionId);
     }
