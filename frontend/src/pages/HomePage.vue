@@ -6,7 +6,7 @@ import PyButton from '@/components/ui/PyButton.vue';
 import { useSessionStore } from '@stores/session';
 import { useLearningStore } from '@stores/learning';
 import { useWorkshopUiStore } from '@stores/workshopUi';
-import { listMyClassrooms } from '@/api/classroom';
+import { joinClassroom, listMyClassrooms } from '@/api/classroom';
 import { getRecommendations, type RecommendationDto } from '@/api/recommendations';
 import { playSfx } from '@/composables/useAudio';
 import type { ClassroomDto } from '@/api/dto/ClassroomDto';
@@ -20,6 +20,49 @@ const classroom = ref<ClassroomDto | null>(null);
 const recommendations = ref<RecommendationDto[]>([]);
 const loadingRecs = ref(false);
 const loadingQuests = ref(false);
+
+// ── 加入班级（班级链路第 2 步）──
+// 后端只有「学生凭加入码自助入班」这一条路（没有教师添加成员的端点），所以这里必须有入口，
+// 否则 classroom_members 永远为空 → 教师发任务发给 0 个人 → 所有班级看板恒空。
+const JOIN_CODE_LENGTH = 6;
+const joinCodeInput = ref('');
+const joining = ref(false);
+const joinError = ref<string | null>(null);
+
+const normalisedJoinCode = computed(() => joinCodeInput.value.trim().toUpperCase());
+const canJoin = computed(
+  () => !joining.value && normalisedJoinCode.value.length === JOIN_CODE_LENGTH,
+);
+
+async function loadClassroom(): Promise<void> {
+  try {
+    const list = await listMyClassrooms();
+    classroom.value = list.find((c) => c.status === 'ACTIVE') ?? null;
+  } catch {
+    /* 班级信息为可选数据，加载失败忽略 */
+  }
+}
+
+async function submitJoin(): Promise<void> {
+  if (!canJoin.value) {
+    joinError.value = `加入码为 ${JOIN_CODE_LENGTH} 位字符，请检查后重试。`;
+    return;
+  }
+  joining.value = true;
+  joinError.value = null;
+  try {
+    await joinClassroom({ joinCode: normalisedJoinCode.value });
+    joinCodeInput.value = '';
+    // 入班成功后重新拉取，让「班级：xxx」立即出现（后端同时补发了进行中的班级任务）。
+    await loadClassroom();
+    await learning.loadTodayQuests();
+    playSfx('sfx_click');
+  } catch (error) {
+    joinError.value = error instanceof Error ? error.message : '加入班级失败，请稍后重试。';
+  } finally {
+    joining.value = false;
+  }
+}
 
 const CIRCUMFERENCE = 2 * Math.PI * 42;
 
@@ -115,15 +158,7 @@ onMounted(async () => {
       }),
   );
 
-  tasks.push(
-    listMyClassrooms()
-      .then((list) => {
-        classroom.value = list.find((c) => c.status === 'ACTIVE') ?? null;
-      })
-      .catch(() => {
-        /* 班级信息为可选数据，加载失败忽略 */
-      }),
-  );
+  tasks.push(loadClassroom());
 
   await Promise.allSettled(tasks);
 });
@@ -145,12 +180,54 @@ onMounted(async () => {
             <p
               v-if="classroom"
               class="welcome-class"
+              data-testid="home-classroom"
             >
               班级：{{ classroom.name }}
             </p>
             <p class="welcome-hint">
               开始今天的学习吧
             </p>
+            <!-- 还没入班的学生：加入码入口。老师建班后把 6 位码发给学生，输入即入班。 -->
+            <form
+              v-if="!classroom"
+              class="join-form"
+              data-testid="join-classroom-form"
+              @submit.prevent="submitJoin"
+            >
+              <label
+                class="join-form__label"
+                for="join-code-input"
+              >输入老师给的加入码，加入班级</label>
+              <div class="join-form__row">
+                <input
+                  id="join-code-input"
+                  v-model="joinCodeInput"
+                  class="join-form__input"
+                  data-testid="join-code-input"
+                  :maxlength="JOIN_CODE_LENGTH"
+                  autocomplete="off"
+                  spellcheck="false"
+                  placeholder="如 A1B2C3"
+                  :disabled="joining"
+                >
+                <PyButton
+                  type="submit"
+                  variant="secondary"
+                  size="sm"
+                  test-id="join-classroom-submit"
+                  :disabled="!canJoin"
+                >
+                  {{ joining ? '加入中…' : '加入班级' }}
+                </PyButton>
+              </div>
+              <p
+                v-if="joinError"
+                class="join-form__error"
+                data-testid="join-classroom-error"
+              >
+                {{ joinError }}
+              </p>
+            </form>
           </div>
           <div class="mastery-ring-wrap">
             <svg
@@ -408,6 +485,50 @@ onMounted(async () => {
   margin: 6px 0 0;
   font-size: 12px;
   color: var(--pyt-color-text-muted);
+}
+
+/* ── 加入班级表单 ── */
+.join-form {
+  margin: 10px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.join-form__label {
+  font-size: 12px;
+  color: var(--pyt-color-text-muted);
+}
+.join-form__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.join-form__input {
+  flex: 0 1 140px;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 3px solid var(--pyt-color-border);
+  border-radius: 6px;
+  background: var(--pyt-color-bg-elevated);
+  color: var(--pyt-color-text-primary);
+  font-family: inherit;
+  font-size: 14px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+.join-form__input:focus {
+  outline: none;
+  border-color: var(--pyt-color-gold);
+}
+.join-form__input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.join-form__error {
+  margin: 0;
+  font-size: 12px;
+  color: var(--pyt-color-danger);
 }
 
 /* ── 掌握度环 ── */
