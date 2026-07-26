@@ -91,6 +91,11 @@ class AgentDispatcher:
         OrchestratorGraph._node_dispatch 逐 step 捕获并转 SSE error + ok=False。
         """
         started = time.monotonic()
+        if not step.kc_codes:
+            # 绝不用硬编码的 PY43-KC-001 兜住缺失的知识点锚：那会产出一份被标注成
+            # KC-001 的伪造讲义并入库，而 hallucination_detector 因 KC-001 合法而放行。
+            # 路由侧 required_context 闸门本该先澄清；漏到这里必须结构化失败。
+            return self._missing_kc_failure(step, started)
         agent_name = step.agent
         if agent_name == "DebugAgent":
             return await self._dispatch_debug(step, started)
@@ -100,6 +105,23 @@ class AgentDispatcher:
             return await self._dispatch_tutor(step, started)
         # 资源类 agent：StoryboardAgent / ResourceDesignerAgent / PracticeAgent
         return await self._dispatch_resource(step, user_id, started, focus_hint_extra)
+
+    def _missing_kc_failure(self, step: PlanStep, started: float) -> DispatchResult:
+        """缺知识点锚 → 结构化失败（不伪造 KC，不生成任何会入库的资源）。"""
+        return DispatchResult(
+            step_id=step.id,
+            agent=step.agent,
+            ok=False,
+            summary=f"{step.title} 缺少知识点锚定，未执行（不伪造课件引用）",
+            note="missing_required_context:topic_or_kc",
+            elapsed_ms=int((time.monotonic() - started) * 1000),
+            artifact={
+                "kind": "dispatch_failure",
+                "status": "missing_required_context",
+                "error_class": "MissingKnowledgeAnchor",
+                "missing": "topic_or_kc",
+            },
+        )
 
     async def _dispatch_resource(
         self, step: PlanStep, user_id: int, started: float, focus_hint_extra: str = ""
@@ -118,7 +140,7 @@ class AgentDispatcher:
 
         request = ResourceProduceRequest(
             user_id=user_id,
-            kc_codes=step.kc_codes if step.kc_codes else ["PY43-KC-001"],
+            kc_codes=step.kc_codes,
             type=resource_type,
             focus_hint=f"{step.title}{focus_hint_extra}"[:512],
             profile_snapshot=self._resource_profile_snapshot(),
@@ -172,7 +194,7 @@ class AgentDispatcher:
         规划结果：ok=True、有实质摘要、不谎称已分析代码。学生进入矿洞产生真实失败
         提交后，再由 DebugAgent 走真实分析链。
         """
-        kc_codes = step.kc_codes if step.kc_codes else ["PY43-KC-001"]
+        kc_codes = step.kc_codes
         context = self._ctx.debug_context
         if (
             context is not None
@@ -267,7 +289,7 @@ class AgentDispatcher:
                 confidence=(context.kc_confidence.get(code, 0.0) if context else 0.0),
                 unlocked=True,
             )
-            for code in (step.kc_codes if step.kc_codes else ["PY43-KC-001"])
+            for code in step.kc_codes
         ]
         try:
             request = PathPlannerRequest(

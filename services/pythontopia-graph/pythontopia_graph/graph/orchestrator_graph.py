@@ -115,6 +115,13 @@ LOG = logging.getLogger(__name__)
 # dispatch 节点单批最大并发子 agent 数（有界并发，防 provider 限流雪崩）。
 _DISPATCH_CONCURRENCY = 3
 
+# 流式回复的「先审后放」切段边界：攒到句/段末尾（或长度上限）才过一遍 scan_safety。
+_SAFETY_FLUSH_BOUNDARIES: tuple[str, ...] = (
+    "\n", "。", "！", "？", "；", "：", "”", "）", "!", "?", ";", ":", ")",
+)
+# 无标点长句的强制切段长度：越大首包越慢，越小审查粒度越碎；一个中文短句量级。
+_SAFETY_FLUSH_MAX_CHARS = 48
+
 
 def default_checkpointer() -> Any:
     """按 ``PYT_ORCH_CHECKPOINT`` 构建 checkpointer：memory（默认）/ postgres（可选）。
@@ -417,10 +424,12 @@ class OrchestratorGraph:
         started = time.monotonic()
         if req.route_decision is not None and req.route_decision.task.family == "MULTI_TASK":
             # RouteDecision 由百晓路由策略门签发；编排器只验证并执行，绝不让模型二次改路由。
+            # stage="execute"：签发时的 C3 search 即权威，执行期不按当前学情重算成本。
             validate_route_decision(
                 req.route_decision,
                 scope="default",
                 request=self._route_validation_request(req),
+                stage="execute",
             )
             step = GraphTraceStep(
                 node="understand",
@@ -484,6 +493,28 @@ class OrchestratorGraph:
         return {"plan": plan, "reused_plan": False, "trace": [step]}
 
     async def _node_dispatch(self, state: OrchestratorState) -> dict[str, Any]:
+        """受治理运行的指标记账包装：失败也必须进 executions 分母。
+
+        TaskPlanPolicyError / 依赖死锁 / 路由校验失败原先一次都不计入
+        ``executions.total``，导致 partialRate / switchRate 在故障期反而更好看。
+        这里以 ``status="ERROR"`` 记一笔（只记可观测量，不落学生原始输入）。
+        """
+        started = time.monotonic()
+        try:
+            return await self._dispatch_governed(state)
+        except Exception:
+            if state.get("task_plan") is not None:
+                record_execution(
+                    status="ERROR",
+                    dispatched_steps=0,
+                    blocked_steps=0,
+                    candidate_switches=0,
+                    same_step_retries=0,
+                    latency_ms=int((time.monotonic() - started) * 1000),
+                )
+            raise
+
+    async def _dispatch_governed(self, state: OrchestratorState) -> dict[str, Any]:
         req = state["req"]
         dispatch_started = time.monotonic()
         # Phase 2/4 预检必须先于任何 SSE 事件与副作用：签名 TaskPlan 是唯一执行事实源，
@@ -496,6 +527,7 @@ class OrchestratorGraph:
                 req.route_decision,
                 scope="default",
                 request=self._route_validation_request(req),
+                stage="execute",
             )
             validate_task_plan(task_plan, req.route_decision)
             plan = list(task_plan.steps)
@@ -1119,16 +1151,40 @@ class OrchestratorGraph:
     ) -> tuple[str, GraphTraceStep]:
         """流式产出回复并返回 (reply_md, compose_reply trace 步)。
 
+        token **先缓冲到句/段边界过一遍 scan_safety 再放行**：旧实现每个 token 立刻
+        emit，等 _assemble 算出 safety 判决时学生早已在屏幕上读完了完整可提交答案，
+        result.reply_md 换成降级模板已经来不及。命中关键词后停止放行剩余 token
+        （仍继续消费上游以拿到完整文本），由 _assemble 统一给出降级回复。
+
+        取舍：首包延迟从「第一个 token」变成「第一个句子边界（或 ``_SAFETY_FLUSH_MAX_CHARS``
+        个字符，取先到者）」，量级是几百毫秒；换来的是越权内容一个字都不会到达学生屏幕。
+
         provider 不可用时不抛裸异常：改用 OrchestratorAgent.fallback_reply 的确定性
-        教学兜底（结构化 plan 清单 / 单个澄清问题），trace note 标注 deterministic_fallback，
-        最终仍经 _assemble 的 safety/grounding 审查——绝不静默降级成自由聊天。
+        教学兜底（结构化 plan 清单 / 单个澄清问题），trace note 标注 deterministic_fallback。
         """
         started = time.monotonic()
         parts: list[str] = []
+        buffer: list[str] = []
+        withheld = False
         try:
             async for token in self._agent.reply_stream(req, plan, clarifying):
                 parts.append(token)
-                await self._emit_cb("token", {"delta": token})
+                if withheld:
+                    continue
+                buffer.append(token)
+                pending = "".join(buffer)
+                if not self._is_flush_boundary(pending):
+                    continue
+                withheld = not OrchestratorAgent.scan_safety("".join(parts))[0]
+                buffer.clear()
+                if withheld:
+                    LOG.warning("compose_reply 流式内容命中安全关键词，已停止放行剩余 token")
+                    continue
+                await self._emit_cb("token", {"delta": pending})
+            if not withheld and buffer:
+                withheld = not OrchestratorAgent.scan_safety("".join(parts))[0]
+                if not withheld:
+                    await self._emit_cb("token", {"delta": "".join(buffer)})
         except Exception as exc:  # noqa: BLE001 – provider 不可用：确定性教学兜底
             LOG.warning("compose_reply 流式失败（%s），改用确定性教学兜底回复", exc)
             fallback_md = self._agent.fallback_reply(req, plan, clarifying)
@@ -1141,9 +1197,19 @@ class OrchestratorGraph:
             )
             await self._emit_cb("trace", step.model_dump(mode="json"))
             return fallback_md, step
-        step = self._ok_step("compose_reply", started)
+        step = GraphTraceStep(
+            node="compose_reply",
+            elapsed_ms=int((time.monotonic() - started) * 1000),
+            status="fail" if withheld else "ok",
+            note="safety_withheld_stream" if withheld else "",
+        )
         await self._emit_cb("trace", step.model_dump(mode="json"))
         return "".join(parts), step
+
+    @staticmethod
+    def _is_flush_boundary(pending: str) -> bool:
+        """句/段边界，或达到有界长度上限（无标点长句也必须按段过审，不能无限攒）。"""
+        return pending.endswith(_SAFETY_FLUSH_BOUNDARIES) or len(pending) >= _SAFETY_FLUSH_MAX_CHARS
 
     def _assemble(self, allowed_set: set[str], final: dict[str, Any]) -> OrchestratorResponse:
         reply_md = final.get("reply_md", "")
@@ -1199,7 +1265,13 @@ class OrchestratorGraph:
             done = task_status == "COMPLETED"
         else:
             done = bool(plan) and all(step.status in ("done", "skipped") for step in plan)
-        grounding = self._grounding(plan, allowed_set)
+        request = final.get("req")
+        decision = request.route_decision if request else None
+        grounding = self._grounding(
+            plan,
+            allowed_set,
+            require_grounding=bool(decision and decision.policies.require_grounding),
+        )
 
         # critic 闸门（§3.6 / §4.3）：grounding + safety 双轨裁决 → critic 后调 eval_span。
         verdict = CriticVerdict(
@@ -1415,8 +1487,22 @@ class OrchestratorGraph:
         return detail if marker in detail else f"{detail}{marker}"
 
     @staticmethod
-    def _grounding(plan: list[PlanStep], allowed_set: set[str]) -> GroundingResult:
+    def _grounding(
+        plan: list[PlanStep], allowed_set: set[str], *, require_grounding: bool = False
+    ) -> GroundingResult:
+        """按 RouteDecision.policies.require_grounding 决定空目录时是过还是拒。
+
+        目录为空原本无条件 ``passed=True``：路由明明签发了 require_grounding，
+        执行期却因为证据目录没配上而静默放行，等于策略字段无人执行。
+        没有 RouteDecision 的旧路径保持原语义（require_grounding=False）。
+        """
         if not allowed_set:
+            if require_grounding:
+                return GroundingResult(
+                    passed=False,
+                    no_evidence_found=True,
+                    reasons=["EVIDENCE_CATALOGUE_UNAVAILABLE"],
+                )
             return GroundingResult(passed=True, no_evidence_found=True)
         invalid: list[str] = []
         for step in plan:
@@ -1441,6 +1527,7 @@ class OrchestratorGraph:
             "MindMapAgent": "导图绘制师",
             "CodeLabAgent": "代码实验室",
             "ReadingAgent": "阅读向导",
+            "BrowseAgent": "联网查证员",
         }
         return _AGENT_DISPLAY.get(agent, agent)
 

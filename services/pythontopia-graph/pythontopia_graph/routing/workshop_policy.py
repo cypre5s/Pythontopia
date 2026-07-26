@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from typing import Literal
 
 from pythontopia_graph.schemas.intent import IntentRouteRequest
 from pythontopia_graph.schemas.workshop_route import (
@@ -208,6 +209,28 @@ _PRIMARY_AGENT_BY_INTENT: dict[str, str | None] = {
 }
 
 
+# ── topic_or_kc 锚点判定（registry.required_context 的执行侧实现）──
+# 动作词 / 量词 / 载体名 / 套话；剥掉后仍剩具体名词才算学生真的说了主题。
+_TOPIC_NOISE_TOKENS: tuple[str, ...] = (
+    "帮我", "帮忙", "给我", "麻烦你", "麻烦", "请", "我想", "我要", "我需要", "想要", "需要",
+    "能不能", "可不可以", "可以", "谢谢",
+    "整理", "生成", "制作", "做成", "做", "画成", "画", "写", "出", "来", "搞", "给",
+    "一份", "一个", "一些", "几个", "几道", "一道", "两道", "三道", "个", "份", "道",
+    "资料", "材料", "东西", "内容",
+    "有没有", "有什么", "什么", "关于", "一下", "下", "的", "了", "吧", "呢", "吗", "啊",
+)
+# 按长度降序拼装，保证「思维导图」不会被「导图」抢先匹配掉。
+_TOPIC_NOISE = re.compile(
+    "|".join(re.escape(token) for token in sorted(_TOPIC_NOISE_TOKENS, key=len, reverse=True))
+)
+#: 剥噪后至少剩这么多字才算主题锚点（中文双字词是主题名词的下限）。
+_TOPIC_ANCHOR_MIN_CHARS = 2
+
+#: 校验时机：``issue`` = 路由签发（重算 C3 候选与成本）；``execute`` = 执行期
+#: （签发时的 search 即权威，只校验结构、预算与工具/Agent 授权）。
+ValidationStage = Literal["issue", "execute"]
+
+
 class RoutePolicyError(ValueError):
     """RouteDecision 违反确定性 Agent/工具/预算策略。"""
 
@@ -229,6 +252,10 @@ def compile_route_decision(
 
     if secondary_intent == intent or secondary_intent not in TOOLS:
         secondary_intent = None
+    elif not TOOLS[secondary_intent].allowed_agents:
+        # 没有注册 Agent 的前端工具不能当复合步；否则 Agent-tool 授权校验必抛
+        # RoutePolicyError（/agents/intent/route → 500 → Java 502）。降级为单工具路由。
+        secondary_intent = None
     family = _task_family(intent, request, resolved_kc_codes or [])
     primary_agent = _PRIMARY_AGENT_BY_INTENT[intent]
     allowed_in_scope = {spec.name for spec in tools_for_scope(request.scope)}
@@ -237,7 +264,10 @@ def compile_route_decision(
     requested_c3 = (
         len(planned_intents) == 3 and set(planned_intents) == _C3_TOOL_SET
     )
-    missing_context = any(_missing_required_context(name, request) for name in planned_intents)
+    missing_context = any(
+        _missing_required_context(name, request, resolved_kc_codes or [])
+        for name in planned_intents
+    )
     out_of_scope = any(name not in allowed_in_scope for name in planned_intents)
     # 显式单工具 launcher/slash 保留 Phase 1 的确定性入口语义；所有复合
     # 路由都必须重新通过低置信门，不能借入口夹带第二个写工具。
@@ -355,8 +385,15 @@ def validate_route_decision(
     *,
     scope: str,
     request: IntentRouteRequest | None = None,
+    stage: ValidationStage = "issue",
 ) -> None:
-    """在任何模型/工具执行前验证 Agent、工具、scope 与 Agent-tool 组合。"""
+    """在任何模型/工具执行前验证 Agent、工具、scope 与 Agent-tool 组合。
+
+    ``stage="issue"``（签发期）会连 C3 的 A* 候选与成本一起重算比对；
+    ``stage="execute"``（执行期）把签发时的 search 视为权威，只校验结构、预算与
+    工具/Agent 授权——学情事实（cognitive_load / frustration_level）在路由与开流
+    之间本来就会漂移，按「当前」上下文重算成本会让整轮 SSE 无法恢复地失败。
+    """
     if decision.task.complexity == "C3":
         if decision.search is None:
             raise RoutePolicyError("C3 route requires search")
@@ -419,7 +456,7 @@ def validate_route_decision(
         raise RoutePolicyError("resource_write tools require read_before_write policy")
 
     if decision.task.complexity == "C3":
-        if request is None:
+        if request is None and stage == "issue":
             raise RoutePolicyError("C3 route validation requires current request context")
         if not decision.policies.require_safety:
             raise RoutePolicyError("C3 route requires safety policy")
@@ -429,7 +466,7 @@ def validate_route_decision(
             raise RoutePolicyError("C3 route forbids ungrounded common knowledge")
         if not decision.output.require_evidence:
             raise RoutePolicyError("C3 route requires output evidence")
-        _validate_c3_search(decision, request=request)
+        _validate_c3_search(decision, request=request, stage=stage)
 
     if decision.orchestration.topology == "DIRECT" and agent is not None:
         raise RoutePolicyError("DIRECT route cannot declare a primary agent")
@@ -459,7 +496,8 @@ def validate_route_decision(
 def _validate_c3_search(
     decision: RouteDecision,
     *,
-    request: IntentRouteRequest,
+    request: IntentRouteRequest | None,
+    stage: ValidationStage = "issue",
 ) -> None:
     """Validate all public C3 search fields against route authority and budgets."""
     search = decision.search
@@ -544,6 +582,14 @@ def _validate_c3_search(
         raise RoutePolicyError("selected candidate is not the stable lowest-cost path")
     if search.replan_policy.max_candidate_switches > decision.policies.max_replans:
         raise RoutePolicyError("C3 candidate switch budget exceeds max_replans")
+    if stage == "execute":
+        # 执行期以签发时的 search 为权威：上面的结构 / 授权 / 预算 / 成本公式自洽性
+        # 已全部校验过，不再按「当前」学情重算候选与成本。C3 的典型入口就是刚交过失败
+        # 提交的学生，路由与开流之间再落一条判题结果就会改变 cognitive_load，
+        # 重算会把整轮 SSE 变成不可恢复的 ORCHESTRATOR_FAILED（重试同一 body 必然复现）。
+        return
+    if request is None:
+        raise RoutePolicyError("C3 route validation requires current request context")
     if not all(
         _has_authorized_c3_action(request.message, missing_tool=tool)
         for tool in ("HANDOUT", "PRACTICE", "PLAN")
@@ -981,18 +1027,78 @@ def _supporting_agents(
     return list(dict.fromkeys(agent for agent in agents if agent and agent != primary_agent))
 
 
-def _missing_required_context(intent: str, request: IntentRouteRequest) -> bool:
-    if intent not in {"FIX_BUG", "EXPLAIN_CODE"}:
-        return False
+def _missing_required_context(
+    intent: str,
+    request: IntentRouteRequest,
+    resolved_kc_codes: list[str] | None = None,
+) -> bool:
+    """按注册表声明的 ``ToolSpec.required_context`` 逐项执行（声明即闸门）。
+
+    未知的 required_context 标签一律保守放行（新增标签在这里补实现即可生效），
+    但 ``topic_or_kc`` 起必须真正拦住：缺 KC 时下游会退化成课程第一个 KC，
+    dispatch 再硬编码 ``PY43-KC-001``，学生会拿到一份被标注为 KC-001 的伪造讲义。
+    """
+    for label in TOOLS[intent].required_context:
+        if _context_label_missing(label, intent, request, resolved_kc_codes or []):
+            return True
+    return False
+
+
+def _context_label_missing(
+    label: str,
+    intent: str,
+    request: IntentRouteRequest,
+    resolved_kc_codes: list[str],
+) -> bool:
+    if label == "code":
+        return not _has_code_context(request)
+    if label in {"code_or_error", "verified_failed_submission"}:
+        return _missing_debug_context(label, request)
+    if label == "topic_or_kc":
+        return not _has_topic_anchor(request, resolved_kc_codes)
+    # allowed_destination / browse_goal 由 _coerce_target 与 BROWSE 闸门各自兜住。
+    return False
+
+
+def _has_code_context(request: IntentRouteRequest) -> bool:
     interaction = request.interaction
     current_code = interaction.current_code.strip() if interaction else ""
+    return bool(current_code or _has_fenced_code(request.message))
+
+
+def _missing_debug_context(label: str, request: IntentRouteRequest) -> bool:
+    interaction = request.interaction
+    if label == "verified_failed_submission":
+        # DebugAgent 的真实分析需要失败提交；缺失时澄清，绝不伪造。
+        return not (interaction and interaction.latest_submission_id)
     error_text = interaction.error_text.strip() if interaction else ""
-    fenced_code = bool(re.search(r"```(?:python)?\s+.+?```", request.message, re.DOTALL))
-    if intent == "EXPLAIN_CODE":
-        return not (current_code or fenced_code)
-    # DebugAgent 的真实分析需要失败提交和代码/错误上下文；缺失时澄清，绝不伪造。
-    submission_id = interaction.latest_submission_id if interaction else None
-    return not (submission_id and (current_code or fenced_code) and (error_text or fenced_code))
+    fenced_code = _has_fenced_code(request.message)
+    return not (_has_code_context(request) and (error_text or fenced_code))
+
+
+def _has_fenced_code(message: str) -> bool:
+    return bool(re.search(r"```(?:python)?\s+.+?```", message, re.DOTALL))
+
+
+def _has_topic_anchor(request: IntentRouteRequest, resolved_kc_codes: list[str]) -> bool:
+    """生成类工具必须有可锚定的主题：KC / 章节 / 选中课件页 / 消息里的具体名词。"""
+    if (
+        resolved_kc_codes
+        or request.manual_kc_codes
+        or request.recent_kc_codes
+        or request.last_kc_codes
+        or request.current_chapter is not None
+        or (request.interaction and request.interaction.selected_page_ids)
+    ):
+        return True
+    return _message_has_topic_token(request.message)
+
+
+def _message_has_topic_token(message: str) -> bool:
+    """剥掉动作词与套话后仍剩具体主题名词才算有锚点（「给我整理一份资料」= 无锚点）。"""
+    compact = _TOPIC_NOISE.sub("", message)
+    compact = re.sub(r"[\s\W_]+", "", compact, flags=re.UNICODE)
+    return len(compact) >= _TOPIC_ANCHOR_MIN_CHARS
 
 
 def _clarification_question(intent: str, *, missing_context: bool, out_of_scope: bool) -> str:
@@ -1002,6 +1108,8 @@ def _clarification_question(intent: str, *, missing_context: bool, out_of_scope:
         return "请提供代码、报错信息并选择最近一次失败提交，我才能基于真实判题证据分析。"
     if missing_context and intent == "EXPLAIN_CODE":
         return "请贴出需要讲解的代码。"
+    if missing_context and "topic_or_kc" in TOOLS[intent].required_context:
+        return "想让我针对哪个知识点做？说个主题或用 @ 选中知识点，我不会随便挑一个替你决定。"
     return "你想问概念、生成资料、练习，还是规划下一步？"
 
 
