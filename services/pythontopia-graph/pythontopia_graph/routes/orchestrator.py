@@ -76,6 +76,18 @@ def _valid_kc_codes(request: Request) -> set[str]:
     return set()
 
 
+def _effective_valid_kc_codes(
+    configured: set[str], body: OrchestratorRequest
+) -> set[str]:
+    """Use the server catalogue when present, otherwise the request's course index.
+
+    The Java gateway hydrates ``course_kc_index`` from pack 43.  Local Graph
+    processes do not always preload ``app.state.valid_kc_codes``; treating that
+    empty cache as authoritative would reject every legitimate course KC.
+    """
+    return configured or {code for code in body.course_kc_index if code}
+
+
 # ── Agentic Loop 侧挂依赖（Phase 2 集成接线；env 选型 + fail-soft，默认零行为变化）──
 
 
@@ -139,7 +151,7 @@ async def orchestrator_turn(
     graph = OrchestratorGraph(
         provider=provider,
         evidence_fetcher=evidence_fetcher,
-        valid_kc_codes=valid_kc_codes,
+        valid_kc_codes=_effective_valid_kc_codes(valid_kc_codes, body),
         memory_brief_provider=memory_brief_provider,
         browse_executor=browse_executor,
         browse_allowed_domains=_browse_allowed_domains(),
@@ -163,7 +175,7 @@ async def _orchestrator_stream_generator(
     graph = OrchestratorGraph(
         provider=provider,
         evidence_fetcher=evidence_fetcher,
-        valid_kc_codes=valid_kc_codes,
+        valid_kc_codes=_effective_valid_kc_codes(valid_kc_codes, body),
         memory_brief_provider=memory_brief_provider,
         browse_executor=browse_executor,
         browse_allowed_domains=_browse_allowed_domains(),

@@ -51,6 +51,38 @@ public class LearningEventLogRepository {
   }
 
   /**
+   * 最近由后端领域事件确认消费的学习资源；不接受同名 frontend 观察事件，避免客户端伪造路由事实。
+   */
+  public List<ResourceConsumption> findRecentResourceConsumptions(Long userId, int limit) {
+    return jdbc.query(
+        """
+        SELECT NULLIF(payload->>'resourceId', '')::bigint AS resource_id,
+               payload->>'kcCode' AS kc_code,
+               payload->>'resourceKind' AS resource_kind,
+               created_at
+        FROM learning_event_log
+        WHERE user_id = ?
+          AND event_type = 'resource_consumed'
+          AND source IN ('backend', 'graph')
+        ORDER BY created_at DESC
+        LIMIT ?
+        """,
+        (rs, rowNum) ->
+            new ResourceConsumption(
+                rs.getObject("resource_id", Long.class),
+                rs.getString("kc_code"),
+                rs.getString("resource_kind"),
+                rs.getTimestamp("created_at") == null
+                    ? null
+                    : rs.getTimestamp("created_at").toInstant()),
+        userId,
+        limit);
+  }
+
+  public record ResourceConsumption(
+      Long resourceId, String kcCode, String resourceKind, Instant createdAt) {}
+
+  /**
    * 列出 {@code since} 以来产生过学习事件的 distinct 学生 userId（按最近活跃时间降序，至多 {@code limit} 个）。
    *
    * <p>供 NPC 寒暄「每日预生成」任务挑选「有记忆的活跃学生」，避免给历史全量学生跑 LLM。
@@ -69,9 +101,25 @@ public class LearningEventLogRepository {
    * code），供记忆流检索打分。payload JSON 非法时降级为空节点 + 空 KC，单行失败不影响整体。
    */
   public List<MemoryRow> findRecentForMemory(Long userId, int windowSize) {
+    return findRecentForMemory(userId, windowSize, "");
+  }
+
+  /**
+   * 仅召回 backend/graph 已确认事件，供权限或教学策略相关的权威决策使用。
+   *
+   * <p>普通记忆流仍可读取 frontend 观察事件；调用方必须显式选择本方法才能把记忆用于路由决策。
+   */
+  public List<MemoryRow> findRecentAuthoritativeForMemory(Long userId, int windowSize) {
+    return findRecentForMemory(userId, windowSize, "AND source IN ('backend', 'graph')");
+  }
+
+  private List<MemoryRow> findRecentForMemory(
+      Long userId, int windowSize, String sourcePredicate) {
     return jdbc.query(
         "SELECT id, event_type, payload::text AS payload_text, importance, created_at "
-            + "FROM learning_event_log WHERE user_id = ? ORDER BY created_at DESC LIMIT ?",
+            + "FROM learning_event_log WHERE user_id = ? "
+            + sourcePredicate
+            + " ORDER BY created_at DESC LIMIT ?",
         (rs, rowNum) -> {
           long id = rs.getLong("id");
           String eventType = rs.getString("event_type");

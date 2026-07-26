@@ -7,7 +7,8 @@
 - ``GET /agents/intent/tools`` 暴露目录，前端欢迎屏「能力一览」与测试对账同源。
 
 exec_mode 说明（前端按此分发到既有管线，不新建 SSE 通道）：
-- ``tutor_sse``        → POST /api/tutor/ask（导师流；ASKME/EXPLAIN_CODE/FIX_BUG 以 directive 复用）
+- ``tutor_sse``        → POST /api/tutor/ask（导师流；ASKME/EXPLAIN_CODE 以 directive 复用）
+- ``bugmine``          → POST /api/bug-mine/sessions（可信失败提交 → DebugAgent 结构化调试）
 - ``workshop_sse``     → POST /api/workshop/resources/stream（6 类资源生成流）
 - ``orchestrator_sse`` → POST /api/orchestrator/turn/stream（学习总管协同流）
 - ``frontend``         → 纯前端工具（B站卡片 / 跳转 / 学情卡 / 书房检索），零 LLM 成本
@@ -21,7 +22,7 @@ from typing import Any, Literal
 
 RiskClass = Literal["read_only", "generative", "navigational"]
 CostClass = Literal["zero", "low", "medium", "high"]
-ExecMode = Literal["tutor_sse", "workshop_sse", "orchestrator_sse", "frontend"]
+ExecMode = Literal["tutor_sse", "workshop_sse", "orchestrator_sse", "bugmine", "frontend"]
 
 # 工具作用域：default = 常规聊天；quiz = 「考考我」考核模式进行中（动态收缩工具集，
 # 防止学生在被考核时跑去生成讲义逃避作答；退出考核由前端模式条控制）。
@@ -41,6 +42,8 @@ Renderer = Literal[
     "browse",
 ]
 Visibility = Literal["default_hidden", "default_visible", "debug_only"]
+SensitiveData = Literal["none", "learner", "submission", "external"]
+SideEffects = Literal["none", "navigation", "resource_write", "external_read"]
 
 
 @dataclass(frozen=True)
@@ -71,6 +74,11 @@ class ToolSpec:
     visibility: Visibility = "default_hidden"
     invocation_label: str = "处理中"
     completion_label: str = "已完成"
+    allowed_agents: tuple[str, ...] = ()
+    required_context: tuple[str, ...] = ()
+    result_schema: str = "WorkshopTextCard"
+    sensitive_data: SensitiveData = "none"
+    side_effects: SideEffects = "none"
 
 
 def _spec(  # noqa: PLR0913 - 声明式注册表，参数即文档
@@ -95,6 +103,11 @@ def _spec(  # noqa: PLR0913 - 声明式注册表，参数即文档
     visibility: Visibility = "default_hidden",
     invocation_label: str | None = None,
     completion_label: str | None = None,
+    allowed_agents: tuple[str, ...] | None = None,
+    required_context: tuple[str, ...] | None = None,
+    result_schema: str | None = None,
+    sensitive_data: SensitiveData | None = None,
+    side_effects: SideEffects | None = None,
 ) -> ToolSpec:
     resolved_namespace, resolved_label = CAPABILITY_BY_TOOL[name]
     return ToolSpec(
@@ -121,6 +134,11 @@ def _spec(  # noqa: PLR0913 - 声明式注册表，参数即文档
         visibility=visibility,
         invocation_label=invocation_label or f"正在处理：{zh_label}",
         completion_label=completion_label or f"{zh_label}已完成",
+        allowed_agents=allowed_agents or AGENTS_BY_TOOL.get(name, ()),
+        required_context=required_context or REQUIRED_CONTEXT_BY_TOOL.get(name, ()),
+        result_schema=result_schema or RESULT_SCHEMA_BY_TOOL.get(name, "WorkshopTextCard"),
+        sensitive_data=sensitive_data or SENSITIVE_DATA_BY_TOOL.get(name, "learner"),
+        side_effects=side_effects or SIDE_EFFECTS_BY_TOOL.get(name, "none"),
     )
 
 
@@ -157,6 +175,75 @@ RENDERER_BY_TOOL: dict[str, Renderer] = {
     "NAVIGATE": "navigation",
     "MY_STUDY": "study_space",
     "BROWSE": "browse",
+}
+
+AGENTS_BY_TOOL: dict[str, tuple[str, ...]] = {
+    "ASK": ("TutorAgent",),
+    "ASKME": ("TutorAgent",),
+    "EXPLAIN_CODE": ("TutorAgent",),
+    "FIX_BUG": ("DebugAgent",),
+    "HANDOUT": ("HandoutAgent",),
+    "MINDMAP": ("MindMapAgent",),
+    "READING": ("ReadingAgent",),
+    "STORYBOARD": ("StoryboardAgent",),
+    "PRACTICE": ("PracticeAgent",),
+    "CODE_LAB": ("CodeLabAgent",),
+    "PLAN": ("PathPlannerAgent",),
+    "BROWSE": ("OrchestratorAgent",),
+}
+
+REQUIRED_CONTEXT_BY_TOOL: dict[str, tuple[str, ...]] = {
+    "EXPLAIN_CODE": ("code",),
+    "FIX_BUG": ("code_or_error", "verified_failed_submission"),
+    "HANDOUT": ("topic_or_kc",),
+    "MINDMAP": ("topic_or_kc",),
+    "READING": ("topic_or_kc",),
+    "STORYBOARD": ("topic_or_kc",),
+    "PRACTICE": ("topic_or_kc",),
+    "CODE_LAB": ("topic_or_kc",),
+    "NAVIGATE": ("allowed_destination",),
+    "BROWSE": ("browse_goal",),
+}
+
+RESULT_SCHEMA_BY_TOOL: dict[str, str] = {
+    "ASK": "WorkshopAnswerCard",
+    "ASKME": "WorkshopPracticeCard",
+    "EXPLAIN_CODE": "WorkshopAnswerCard",
+    "FIX_BUG": "DebugHintCard",
+    "HANDOUT": "WorkshopResourceCard",
+    "MINDMAP": "WorkshopMindMapCard",
+    "READING": "WorkshopResourceCard",
+    "STORYBOARD": "WorkshopResourceCard",
+    "PRACTICE": "WorkshopPracticeCard",
+    "CODE_LAB": "WorkshopResourceCard",
+    "PLAN": "WorkshopPathCard",
+    "PROGRESS": "WorkshopProgressCard",
+    "NAVIGATE": "WorkshopNavigationCard",
+    "MY_STUDY": "WorkshopResourceListCard",
+    "VIDEO": "WorkshopVideoCard",
+    "REVIEW": "WorkshopNavigationCard",
+    "BROWSE": "WorkshopBrowseCard",
+}
+
+SENSITIVE_DATA_BY_TOOL: dict[str, SensitiveData] = {
+    "FIX_BUG": "submission",
+    "PROGRESS": "learner",
+    "MY_STUDY": "learner",
+    "PLAN": "learner",
+    "BROWSE": "external",
+}
+
+SIDE_EFFECTS_BY_TOOL: dict[str, SideEffects] = {
+    "HANDOUT": "resource_write",
+    "MINDMAP": "resource_write",
+    "READING": "resource_write",
+    "STORYBOARD": "resource_write",
+    "PRACTICE": "resource_write",
+    "CODE_LAB": "resource_write",
+    "NAVIGATE": "navigation",
+    "REVIEW": "navigation",
+    "VIDEO": "external_read",
+    "BROWSE": "external_read",
 }
 
 
@@ -298,7 +385,7 @@ TOOLS: dict[str, ToolSpec] = {
             "修报错",
             "学生贴报错/异常时定位根因并引导修复（沙箱实跑验证，不给完整修正代码）",
             ("报错了 TypeError 怎么办```python\nprint(1+'2')\n```",),
-            "tutor_sse",
+            "bugmine",
             "generative",
             "medium",
             timeout_s=90.0,
@@ -517,6 +604,11 @@ def tool_catalog_payload() -> list[dict[str, object]]:
             "visibility": spec.visibility,
             "invocationLabel": spec.invocation_label,
             "completionLabel": spec.completion_label,
+            "allowedAgents": list(spec.allowed_agents),
+            "requiredContext": list(spec.required_context),
+            "resultSchema": spec.result_schema,
+            "sensitiveData": spec.sensitive_data,
+            "sideEffects": spec.side_effects,
         }
         for spec in TOOLS.values()
     ]

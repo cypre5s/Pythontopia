@@ -98,6 +98,15 @@ _SIGNALS = (
 )
 
 
+def merge_historical_paths(
+    default_paths: Iterable[str | Path],
+    explicit_paths: Iterable[str | Path],
+) -> list[Path]:
+    """合并默认与显式历史输入；显式参数只能扩大隔离审计范围。"""
+
+    return sorted({Path(path) for path in (*default_paths, *explicit_paths)})
+
+
 def build_fresh_eval_pack(
     course_dir: str | Path,
     *,

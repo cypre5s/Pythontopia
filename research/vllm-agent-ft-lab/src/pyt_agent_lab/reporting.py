@@ -51,6 +51,8 @@ def _summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "grounding_safe_rate": _rate(rows, "grounding_safe"),
         "forbidden_leak_rate": _rate(rows, "forbidden_leak"),
         "contract_pass_rate": _contract_rate(rows),
+        "semantic_valid_rate": _rate(rows, "semantic_valid"),
+        "promotion_pass_rate": _rate(rows, "promotion_pass"),
     }
 
 

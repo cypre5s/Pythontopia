@@ -73,6 +73,7 @@ def run_preference_preflight(
     heldout = _read_jsonl(heldout_file)
     rows = [("train", row) for row in train] + [("heldout", row) for row in heldout]
     lengths = []
+    lengths_by_id: list[tuple[str, int]] = []
     zero_label_ids = []
     identical_pair_ids = []
     overlength_ids = []
@@ -91,7 +92,9 @@ def run_preference_preflight(
         rejected_tokens = _token_ids(tokenizer, rejected)
         chosen_length = len(prompt_tokens) + len(chosen_tokens)
         rejected_length = len(prompt_tokens) + len(rejected_tokens)
-        lengths.append(max(chosen_length, rejected_length))
+        example_length = max(chosen_length, rejected_length)
+        lengths.append(example_length)
+        lengths_by_id.append((row_id, example_length))
         if not chosen_tokens or not rejected_tokens:
             zero_label_ids.append(row_id)
         if chosen == rejected or chosen_tokens == rejected_tokens:
@@ -132,6 +135,12 @@ def run_preference_preflight(
             "mean": round(sum(lengths) / len(lengths), 2) if lengths else 0.0,
             "overlength_count": len(overlength_ids),
             "overlength_ids": overlength_ids,
+            "longest_examples": [
+                {"id": row_id, "tokens": length}
+                for row_id, length in sorted(
+                    lengths_by_id, key=lambda item: (-item[1], item[0])
+                )[:10]
+            ],
         },
         "zero_label_count": len(zero_label_ids),
         "zero_label_ids": zero_label_ids,
@@ -161,7 +170,7 @@ def initialize_experiment_manifest(
     plan: dict[str, Any],
     plan_path: str | Path,
     output_dir: str | Path,
-    schema_version: str = "agent-schema-v1",
+    schema_version: str | None = None,
 ) -> dict[str, Any]:
     target = Path(output_dir)
     target.mkdir(parents=True, exist_ok=True)
@@ -176,7 +185,7 @@ def initialize_experiment_manifest(
         "base_model": plan.get("model_path"),
         "input_adapter": plan.get("sft_adapter_path"),
         "output_adapter": plan.get("output_dir"),
-        "schema_version": schema_version,
+        "schema_version": schema_version or str(plan.get("schema_version") or "agent-schema-v1"),
         "random_seed": plan.get("seed", 20260710),
         "decoding": plan.get("decoding", {"temperature": 0.0, "prompt_variant": "baseline"}),
         "datasets": {
@@ -204,10 +213,20 @@ def initialize_evaluation_manifest(
     seed: int,
     folds: int,
     concurrency: int,
+    decoding_mode: str = "unconstrained",
+    adapter_path: str | None = None,
 ) -> dict[str, Any]:
     target = Path(run_dir)
     target.mkdir(parents=True, exist_ok=True)
     cases = _read_jsonl(cases_path)
+    schema_versions = sorted(
+        {str(case.get("schema_version") or "agent-schema-v1") for case in cases}
+    )
+    schema_version = (
+        schema_versions[0]
+        if len(schema_versions) == 1
+        else "mixed:" + ",".join(schema_versions)
+    )
     manifest = {
         "status": "running",
         "started_at": _now(),
@@ -229,12 +248,14 @@ def initialize_evaluation_manifest(
         ),
         "endpoint": endpoint,
         "model": model,
-        "adapter": model,
-        "schema_version": "agent-schema-v1",
+        "adapter": adapter_path or model,
+        "adapter_path": adapter_path,
+        "schema_version": schema_version,
         "seed": seed,
         "folds": folds,
         "prompt_variant": prompt_variant,
         "decoding": {
+            "mode": decoding_mode,
             "temperature": 0.0,
             "max_tokens": "per_case.max_tokens",
             "top_p": "server_generation_default_not_explicit",
@@ -257,6 +278,20 @@ def complete_evaluation_manifest(run_dir: str | Path, summary: dict[str, Any]) -
     manifest.update({"status": "evaluated", "completed_at": _now(), "summary": summary})
     _write_json_atomic(path, manifest)
     append_experiment_event(target, "evaluation_completed", {"case_count": summary.get("overall", {}).get("case_count")})
+
+
+def fail_evaluation_manifest(run_dir: str | Path, exc: BaseException) -> None:
+    """Persist an interrupted/failed evaluation without discarding partial rows."""
+    target = Path(run_dir)
+    path = target / "run_manifest.json"
+    manifest = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    failure = {
+        "exception_type": type(exc).__name__,
+        "message": str(exc)[:2000],
+    }
+    manifest.update({"status": "failed", "failed_at": _now(), "failure": failure})
+    _write_json_atomic(path, manifest)
+    append_experiment_event(target, "evaluation_failed", failure)
 
 
 def update_experiment_status(output_dir: str | Path, status: str, payload: dict[str, Any] | None = None) -> None:

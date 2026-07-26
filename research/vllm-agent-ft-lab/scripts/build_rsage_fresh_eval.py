@@ -6,6 +6,7 @@ from pathlib import Path
 
 from pyt_agent_lab.rsage_fresh_eval import (
     build_fresh_eval_pack,
+    merge_historical_paths,
     select_fresh_stratified_subset,
     write_fresh_eval_pack,
 )
@@ -55,7 +56,10 @@ def main() -> None:
         if args.subset_manifest == parser.get_default("subset_manifest"):
             subset_manifest_path = Path("research/vllm-agent-ft-lab/outputs/rsage/demos/fresh-eval/stratified10-manifest.json")
 
-    historical_paths = [Path(value) for value in args.historical] or _default_historical_paths()
+    historical_paths = merge_historical_paths(
+        _default_historical_paths(),
+        [Path(value) for value in args.historical],
+    )
     cases, manifest = build_fresh_eval_pack(args.course_dir, target_count=count, seed=args.seed)
     written = write_fresh_eval_pack(
         cases,
@@ -88,6 +92,7 @@ def _default_historical_paths() -> list[Path]:
         Path("research/vllm-agent-ft-lab/cases"),
         Path("research/vllm-agent-ft-lab/outputs/sft"),
         Path("research/vllm-agent-ft-lab/outputs/preferences"),
+        Path("research/vllm-agent-ft-lab/outputs/rsage"),
     ]
     candidates: set[Path] = set()
     for root in roots:
@@ -95,8 +100,11 @@ def _default_historical_paths() -> list[Path]:
             continue
         if root.name == "cases":
             candidates.update(root.glob("*.jsonl"))
-        else:
+        elif root.name != "rsage":
             candidates.update(root.glob("**/train.jsonl"))
+        else:
+            candidates.update(root.glob("**/sft_train.jsonl"))
+            candidates.update(root.glob("**/preference_train.jsonl"))
     return sorted(
         path
         for path in candidates

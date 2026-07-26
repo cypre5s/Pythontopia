@@ -1,0 +1,576 @@
+{
+  "auxiliary_metric": "score_mean",
+  "claims_policy": "Smoke, small heldout, and guard/fallback-repaired results are not evidence that a model reached 100%.",
+  "failure_matrices": {
+    "champion": {
+      "agent": {
+        "ResourceDesignerAgent.code_lab": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_plan:0:pattern:exception_guard:not_in:string_cleanup": 1,
+            "semantic_error:code_plan:0:pattern:string_cleanup:not_in:assignment_trace": 1,
+            "semantic_invalid": 2
+          },
+          "failure_count": 0
+        },
+        "ResourceDesignerAgent.handout": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "ResourceDesignerAgent.reading": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "ResourceDesignerAgent.storyboard": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        }
+      },
+      "beginner_noise": {
+        "clean": {
+          "case_count": 20,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_plan:0:pattern:exception_guard:not_in:string_cleanup": 1,
+            "semantic_error:code_plan:0:pattern:string_cleanup:not_in:assignment_trace": 1,
+            "semantic_invalid": 2
+          },
+          "failure_count": 0
+        }
+      },
+      "chapter": {
+        "1": {
+          "case_count": 4,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_plan:0:pattern:string_cleanup:not_in:assignment_trace": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 0
+        },
+        "3": {
+          "case_count": 4,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "4": {
+          "case_count": 4,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "6": {
+          "case_count": 4,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "7": {
+          "case_count": 4,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_plan:0:pattern:exception_guard:not_in:string_cleanup": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 0
+        }
+      },
+      "evidence": {
+        "required": {
+          "case_count": 20,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_plan:0:pattern:exception_guard:not_in:string_cleanup": 1,
+            "semantic_error:code_plan:0:pattern:string_cleanup:not_in:assignment_trace": 1,
+            "semantic_invalid": 2
+          },
+          "failure_count": 0
+        }
+      },
+      "failure_category": {
+        "semantic_error:code_plan:0:pattern:exception_guard:not_in:string_cleanup": 1,
+        "semantic_error:code_plan:0:pattern:string_cleanup:not_in:assignment_trace": 1,
+        "semantic_invalid": 2
+      },
+      "missing_schema_field": {},
+      "safety": {
+        "standard": {
+          "case_count": 20,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_plan:0:pattern:exception_guard:not_in:string_cleanup": 1,
+            "semantic_error:code_plan:0:pattern:string_cleanup:not_in:assignment_trace": 1,
+            "semantic_invalid": 2
+          },
+          "failure_count": 0
+        }
+      },
+      "schema_type_error": {},
+      "web_input": {
+        "non_web": {
+          "case_count": 20,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_plan:0:pattern:exception_guard:not_in:string_cleanup": 1,
+            "semantic_error:code_plan:0:pattern:string_cleanup:not_in:assignment_trace": 1,
+            "semantic_invalid": 2
+          },
+          "failure_count": 0
+        }
+      }
+    },
+    "global_candidate": {
+      "agent": {
+        "ResourceDesignerAgent.code_lab": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_plan:0:pattern:exception_guard:not_in:string_cleanup": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 0
+        },
+        "ResourceDesignerAgent.handout": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "ResourceDesignerAgent.reading": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "ResourceDesignerAgent.storyboard": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        }
+      },
+      "beginner_noise": {
+        "clean": {
+          "case_count": 20,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_plan:0:pattern:exception_guard:not_in:string_cleanup": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 0
+        }
+      },
+      "chapter": {
+        "1": {
+          "case_count": 4,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "3": {
+          "case_count": 4,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "4": {
+          "case_count": 4,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "6": {
+          "case_count": 4,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "7": {
+          "case_count": 4,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_plan:0:pattern:exception_guard:not_in:string_cleanup": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 0
+        }
+      },
+      "evidence": {
+        "required": {
+          "case_count": 20,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_plan:0:pattern:exception_guard:not_in:string_cleanup": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 0
+        }
+      },
+      "failure_category": {
+        "semantic_error:code_plan:0:pattern:exception_guard:not_in:string_cleanup": 1,
+        "semantic_invalid": 1
+      },
+      "missing_schema_field": {},
+      "safety": {
+        "standard": {
+          "case_count": 20,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_plan:0:pattern:exception_guard:not_in:string_cleanup": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 0
+        }
+      },
+      "schema_type_error": {},
+      "web_input": {
+        "non_web": {
+          "case_count": 20,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_plan:0:pattern:exception_guard:not_in:string_cleanup": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 0
+        }
+      }
+    },
+    "shadow_route": {
+      "agent": {
+        "ResourceDesignerAgent.code_lab": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_plan:0:pattern:exception_guard:not_in:string_cleanup": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 0
+        },
+        "ResourceDesignerAgent.handout": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "ResourceDesignerAgent.reading": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "ResourceDesignerAgent.storyboard": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        }
+      },
+      "beginner_noise": {
+        "clean": {
+          "case_count": 20,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_plan:0:pattern:exception_guard:not_in:string_cleanup": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 0
+        }
+      },
+      "chapter": {
+        "1": {
+          "case_count": 4,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "3": {
+          "case_count": 4,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "4": {
+          "case_count": 4,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "6": {
+          "case_count": 4,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "7": {
+          "case_count": 4,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_plan:0:pattern:exception_guard:not_in:string_cleanup": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 0
+        }
+      },
+      "evidence": {
+        "required": {
+          "case_count": 20,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_plan:0:pattern:exception_guard:not_in:string_cleanup": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 0
+        }
+      },
+      "failure_category": {
+        "semantic_error:code_plan:0:pattern:exception_guard:not_in:string_cleanup": 1,
+        "semantic_invalid": 1
+      },
+      "missing_schema_field": {},
+      "safety": {
+        "standard": {
+          "case_count": 20,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_plan:0:pattern:exception_guard:not_in:string_cleanup": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 0
+        }
+      },
+      "schema_type_error": {},
+      "web_input": {
+        "non_web": {
+          "case_count": 20,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_plan:0:pattern:exception_guard:not_in:string_cleanup": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 0
+        }
+      }
+    }
+  },
+  "models": {
+    "champion": {
+      "case_count": 20,
+      "critical_slices": {
+        "evidence_required": 1.0
+      },
+      "fallback_count": 2,
+      "fallback_rate": 0.1,
+      "final": {
+        "case_count": 20,
+        "contract_pass_rate": 1.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "promotion_pass_rate": 1.0,
+        "schema_valid_rate": 1.0,
+        "score_mean": 1.0,
+        "semantic_valid_rate": 1.0
+      },
+      "guard": {
+        "case_count": 20,
+        "contract_pass_rate": 1.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "promotion_pass_rate": 0.9,
+        "schema_valid_rate": 1.0,
+        "score_mean": 1.0,
+        "semantic_valid_rate": 0.9
+      },
+      "guard_repair_count": 0,
+      "guard_repair_rate": 0.0,
+      "guard_repair_rate_among_raw_failures": 0.0,
+      "layer_semantics": {
+        "final": "guard result or deterministic fallback replay; final 100% must not be attributed to the raw model",
+        "guard": "offline deterministic contract-repair replay; not a claim about historical production guard execution",
+        "raw": "observed model response"
+      },
+      "primary_metric": "contract_pass_rate",
+      "raw": {
+        "case_count": 20,
+        "contract_pass_rate": 1.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "promotion_pass_rate": 0.9,
+        "schema_valid_rate": 1.0,
+        "score_mean": 1.0,
+        "semantic_valid_rate": 0.9
+      },
+      "raw_promotion_pass_rate": 0.9,
+      "raw_semantic_valid_rate": 0.9,
+      "safety_sensitive_forbidden_leak_rate": 0.0
+    },
+    "global_candidate": {
+      "case_count": 20,
+      "critical_slices": {
+        "evidence_required": 1.0
+      },
+      "fallback_count": 1,
+      "fallback_rate": 0.05,
+      "final": {
+        "case_count": 20,
+        "contract_pass_rate": 1.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "promotion_pass_rate": 1.0,
+        "schema_valid_rate": 1.0,
+        "score_mean": 1.0,
+        "semantic_valid_rate": 1.0
+      },
+      "guard": {
+        "case_count": 20,
+        "contract_pass_rate": 1.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "promotion_pass_rate": 0.95,
+        "schema_valid_rate": 1.0,
+        "score_mean": 1.0,
+        "semantic_valid_rate": 0.95
+      },
+      "guard_repair_count": 0,
+      "guard_repair_rate": 0.0,
+      "guard_repair_rate_among_raw_failures": 0.0,
+      "layer_semantics": {
+        "final": "guard result or deterministic fallback replay; final 100% must not be attributed to the raw model",
+        "guard": "offline deterministic contract-repair replay; not a claim about historical production guard execution",
+        "raw": "observed model response"
+      },
+      "primary_metric": "contract_pass_rate",
+      "raw": {
+        "case_count": 20,
+        "contract_pass_rate": 1.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "promotion_pass_rate": 0.95,
+        "schema_valid_rate": 1.0,
+        "score_mean": 1.0,
+        "semantic_valid_rate": 0.95
+      },
+      "raw_promotion_pass_rate": 0.95,
+      "raw_semantic_valid_rate": 0.95,
+      "safety_sensitive_forbidden_leak_rate": 0.0
+    },
+    "shadow_route": {
+      "case_count": 20,
+      "critical_slices": {
+        "evidence_required": 1.0
+      },
+      "fallback_count": 1,
+      "fallback_rate": 0.05,
+      "final": {
+        "case_count": 20,
+        "contract_pass_rate": 1.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "promotion_pass_rate": 1.0,
+        "schema_valid_rate": 1.0,
+        "score_mean": 1.0,
+        "semantic_valid_rate": 1.0
+      },
+      "guard": {
+        "case_count": 20,
+        "contract_pass_rate": 1.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "promotion_pass_rate": 0.95,
+        "schema_valid_rate": 1.0,
+        "score_mean": 1.0,
+        "semantic_valid_rate": 0.95
+      },
+      "guard_repair_count": 0,
+      "guard_repair_rate": 0.0,
+      "guard_repair_rate_among_raw_failures": 0.0,
+      "layer_semantics": {
+        "final": "guard result or deterministic fallback replay; final 100% must not be attributed to the raw model",
+        "guard": "offline deterministic contract-repair replay; not a claim about historical production guard execution",
+        "raw": "observed model response"
+      },
+      "primary_metric": "contract_pass_rate",
+      "raw": {
+        "case_count": 20,
+        "contract_pass_rate": 1.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "promotion_pass_rate": 0.95,
+        "schema_valid_rate": 1.0,
+        "score_mean": 1.0,
+        "semantic_valid_rate": 0.95
+      },
+      "raw_promotion_pass_rate": 0.95,
+      "raw_semantic_valid_rate": 0.95,
+      "safety_sensitive_forbidden_leak_rate": 0.0
+    }
+  },
+  "paired_comparison": {
+    "case_count": 20,
+    "models": [
+      "champion",
+      "global_candidate",
+      "shadow_route"
+    ],
+    "pairwise": {
+      "champion_vs_global_candidate": {
+        "contract_ties": 20,
+        "full_ties": 20,
+        "left": "champion",
+        "left_wins": 0,
+        "ordering": "contract_pass_then_auxiliary_score",
+        "right": "global_candidate",
+        "right_wins": 0
+      },
+      "champion_vs_shadow_route": {
+        "contract_ties": 20,
+        "full_ties": 20,
+        "left": "champion",
+        "left_wins": 0,
+        "ordering": "contract_pass_then_auxiliary_score",
+        "right": "shadow_route",
+        "right_wins": 0
+      },
+      "global_candidate_vs_shadow_route": {
+        "contract_ties": 20,
+        "full_ties": 20,
+        "left": "global_candidate",
+        "left_wins": 0,
+        "ordering": "contract_pass_then_auxiliary_score",
+        "right": "shadow_route",
+        "right_wins": 0
+      }
+    }
+  },
+  "primary_metric": "contract_pass_rate",
+  "protocol": {
+    "cases_path": "cases/golden_adapter_20_v2_ir_resource4_codeplan_v21.jsonl",
+    "cases_sha256": "cd92b50ddb6beb7558bc569c9e5d2bc9199460da2e6c3b628633d472924b487e",
+    "max_tokens": "per_case.max_tokens",
+    "prompt_variant": "baseline",
+    "response_sha256": {
+      "champion": "6d67ff41aff9d309e9388f7ea93eeaa01c0de2902453c0f4251480721580b406",
+      "global_candidate": "85fd7a03486ec08b7c9991f8ad42addce45d804dd2424920f02b18545223081a",
+      "shadow_route": "38b52790f5e2c81189a5f9e61a7158d9499ba2d37359abae6ffe5bf02eb2e1ec"
+    },
+    "seed": 42,
+    "temperature": 0.0,
+    "warning": "This manifest proves case identity and rescoring settings. It does not prove historical serve commands unless each source run saved its own immutable run manifest."
+  }
+}

@@ -1,0 +1,100 @@
+{"agent": "TutorAgent", "case_id": "eval5000-new_chapter_slice-0000-domain-2000-tutoragent-c6", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:20:31+00:00"}
+{"agent": "TutorAgent", "case_id": "eval5000-new_chapter_slice-0000-domain-2000-tutoragent-c6", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:21:24+00:00"}
+{"agent": "TutorAgent", "case_id": "eval5000-new_chapter_slice-0010-domain-2010-tutoragent-c2", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:21:24+00:00"}
+{"agent": "TutorAgent", "case_id": "eval5000-new_chapter_slice-0010-domain-2010-tutoragent-c2", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:21:30+00:00"}
+{"agent": "TutorAgent", "case_id": "eval5000-new_chapter_slice-0020-domain-2020-tutoragent-c5", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:21:30+00:00"}
+{"agent": "TutorAgent", "case_id": "eval5000-new_chapter_slice-0020-domain-2020-tutoragent-c5", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:21:36+00:00"}
+{"agent": "TutorAgent", "case_id": "eval5000-new_chapter_slice-0030-domain-2030-tutoragent-c1", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:21:36+00:00"}
+{"agent": "TutorAgent", "case_id": "eval5000-new_chapter_slice-0030-domain-2030-tutoragent-c1", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:21:43+00:00"}
+{"agent": "TutorAgent", "case_id": "eval5000-new_chapter_slice-0040-domain-2040-tutoragent-c4", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:21:43+00:00"}
+{"agent": "TutorAgent", "case_id": "eval5000-new_chapter_slice-0040-domain-2040-tutoragent-c4", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:21:49+00:00"}
+{"agent": "PracticeAgent", "case_id": "eval5000-new_chapter_slice-0001-domain-2001-practiceagent-c7", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:21:49+00:00"}
+{"agent": "PracticeAgent", "case_id": "eval5000-new_chapter_slice-0001-domain-2001-practiceagent-c7", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:21:58+00:00"}
+{"agent": "PracticeAgent", "case_id": "eval5000-new_chapter_slice-0031-domain-2031-practiceagent-c2", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:21:58+00:00"}
+{"agent": "PracticeAgent", "case_id": "eval5000-new_chapter_slice-0031-domain-2031-practiceagent-c2", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:22:07+00:00"}
+{"agent": "PracticeAgent", "case_id": "eval5000-new_chapter_slice-0061-domain-2061-practiceagent-c4", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:22:07+00:00"}
+{"agent": "PracticeAgent", "case_id": "eval5000-new_chapter_slice-0061-domain-2061-practiceagent-c4", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:22:18+00:00"}
+{"agent": "PracticeAgent", "case_id": "eval5000-new_chapter_slice-0091-domain-2091-practiceagent-c6", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:22:18+00:00"}
+{"agent": "PracticeAgent", "case_id": "eval5000-new_chapter_slice-0091-domain-2091-practiceagent-c6", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:22:28+00:00"}
+{"agent": "PracticeAgent", "case_id": "eval5000-new_chapter_slice-0121-domain-2121-practiceagent-c1", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:22:28+00:00"}
+{"agent": "PracticeAgent", "case_id": "eval5000-new_chapter_slice-0121-domain-2121-practiceagent-c1", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:22:37+00:00"}
+{"agent": "ResourceDesignerAgent", "case_id": "eval5000-new_chapter_slice-0002-domain-2002-resourcedesigneragent-c1", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:22:37+00:00"}
+{"agent": "ResourceDesignerAgent", "case_id": "eval5000-new_chapter_slice-0002-domain-2002-resourcedesigneragent-c1", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:22:46+00:00"}
+{"agent": "ResourceDesignerAgent", "case_id": "eval5000-new_chapter_slice-0012-domain-2012-resourcedesigneragent-c4", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:22:46+00:00"}
+{"agent": "ResourceDesignerAgent", "case_id": "eval5000-new_chapter_slice-0012-domain-2012-resourcedesigneragent-c4", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:22:56+00:00"}
+{"agent": "ResourceDesignerAgent", "case_id": "eval5000-new_chapter_slice-0022-domain-2022-resourcedesigneragent-c7", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:22:56+00:00"}
+{"agent": "ResourceDesignerAgent", "case_id": "eval5000-new_chapter_slice-0022-domain-2022-resourcedesigneragent-c7", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:23:07+00:00"}
+{"agent": "ResourceDesignerAgent", "case_id": "eval5000-new_chapter_slice-0032-domain-2032-resourcedesigneragent-c3", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:23:07+00:00"}
+{"agent": "ResourceDesignerAgent", "case_id": "eval5000-new_chapter_slice-0032-domain-2032-resourcedesigneragent-c3", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:23:20+00:00"}
+{"agent": "ResourceDesignerAgent", "case_id": "eval5000-new_chapter_slice-0042-domain-2042-resourcedesigneragent-c6", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:23:20+00:00"}
+{"agent": "ResourceDesignerAgent", "case_id": "eval5000-new_chapter_slice-0042-domain-2042-resourcedesigneragent-c6", "event": "case_finished", "fold": 0, "score": 0.95, "ts": "2026-07-11T05:23:29+00:00"}
+{"agent": "IntentRouterAgent", "case_id": "eval5000-new_chapter_slice-0003-domain-2003-intentrouteragent-c2", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:23:29+00:00"}
+{"agent": "IntentRouterAgent", "case_id": "eval5000-new_chapter_slice-0003-domain-2003-intentrouteragent-c2", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:23:35+00:00"}
+{"agent": "IntentRouterAgent", "case_id": "eval5000-new_chapter_slice-0013-domain-2013-intentrouteragent-c5", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:23:35+00:00"}
+{"agent": "IntentRouterAgent", "case_id": "eval5000-new_chapter_slice-0013-domain-2013-intentrouteragent-c5", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:23:42+00:00"}
+{"agent": "IntentRouterAgent", "case_id": "eval5000-new_chapter_slice-0023-domain-2023-intentrouteragent-c1", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:23:42+00:00"}
+{"agent": "IntentRouterAgent", "case_id": "eval5000-new_chapter_slice-0023-domain-2023-intentrouteragent-c1", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:23:50+00:00"}
+{"agent": "IntentRouterAgent", "case_id": "eval5000-new_chapter_slice-0033-domain-2033-intentrouteragent-c4", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:23:50+00:00"}
+{"agent": "IntentRouterAgent", "case_id": "eval5000-new_chapter_slice-0033-domain-2033-intentrouteragent-c4", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:23:58+00:00"}
+{"agent": "IntentRouterAgent", "case_id": "eval5000-new_chapter_slice-0043-domain-2043-intentrouteragent-c7", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:23:58+00:00"}
+{"agent": "IntentRouterAgent", "case_id": "eval5000-new_chapter_slice-0043-domain-2043-intentrouteragent-c7", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:24:05+00:00"}
+{"agent": "GuideCoachAgent", "case_id": "eval5000-new_chapter_slice-0004-domain-2004-guidecoachagent-c3", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:24:05+00:00"}
+{"agent": "GuideCoachAgent", "case_id": "eval5000-new_chapter_slice-0004-domain-2004-guidecoachagent-c3", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:24:12+00:00"}
+{"agent": "GuideCoachAgent", "case_id": "eval5000-new_chapter_slice-0014-domain-2014-guidecoachagent-c6", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:24:12+00:00"}
+{"agent": "GuideCoachAgent", "case_id": "eval5000-new_chapter_slice-0014-domain-2014-guidecoachagent-c6", "event": "case_finished", "fold": 0, "score": 0.9, "ts": "2026-07-11T05:24:20+00:00"}
+{"agent": "GuideCoachAgent", "case_id": "eval5000-new_chapter_slice-0024-domain-2024-guidecoachagent-c2", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:24:20+00:00"}
+{"agent": "GuideCoachAgent", "case_id": "eval5000-new_chapter_slice-0024-domain-2024-guidecoachagent-c2", "event": "case_finished", "fold": 0, "score": 0.9, "ts": "2026-07-11T05:24:31+00:00"}
+{"agent": "GuideCoachAgent", "case_id": "eval5000-new_chapter_slice-0034-domain-2034-guidecoachagent-c5", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:24:31+00:00"}
+{"agent": "GuideCoachAgent", "case_id": "eval5000-new_chapter_slice-0034-domain-2034-guidecoachagent-c5", "event": "case_finished", "fold": 0, "score": 0.9, "ts": "2026-07-11T05:24:40+00:00"}
+{"agent": "GuideCoachAgent", "case_id": "eval5000-new_chapter_slice-0044-domain-2044-guidecoachagent-c1", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:24:40+00:00"}
+{"agent": "GuideCoachAgent", "case_id": "eval5000-new_chapter_slice-0044-domain-2044-guidecoachagent-c1", "event": "case_finished", "fold": 0, "score": 0.9, "ts": "2026-07-11T05:24:48+00:00"}
+{"agent": "DebugAgent", "case_id": "eval5000-new_chapter_slice-0005-domain-2005-debugagent-c4", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:24:48+00:00"}
+{"agent": "DebugAgent", "case_id": "eval5000-new_chapter_slice-0005-domain-2005-debugagent-c4", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:24:58+00:00"}
+{"agent": "DebugAgent", "case_id": "eval5000-new_chapter_slice-0015-domain-2015-debugagent-c7", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:24:58+00:00"}
+{"agent": "DebugAgent", "case_id": "eval5000-new_chapter_slice-0015-domain-2015-debugagent-c7", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:25:07+00:00"}
+{"agent": "DebugAgent", "case_id": "eval5000-new_chapter_slice-0025-domain-2025-debugagent-c3", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:25:07+00:00"}
+{"agent": "DebugAgent", "case_id": "eval5000-new_chapter_slice-0025-domain-2025-debugagent-c3", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:25:17+00:00"}
+{"agent": "DebugAgent", "case_id": "eval5000-new_chapter_slice-0035-domain-2035-debugagent-c6", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:25:17+00:00"}
+{"agent": "DebugAgent", "case_id": "eval5000-new_chapter_slice-0035-domain-2035-debugagent-c6", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:25:28+00:00"}
+{"agent": "DebugAgent", "case_id": "eval5000-new_chapter_slice-0045-domain-2045-debugagent-c2", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:25:28+00:00"}
+{"agent": "DebugAgent", "case_id": "eval5000-new_chapter_slice-0045-domain-2045-debugagent-c2", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:25:35+00:00"}
+{"agent": "GroundingCriticAgent", "case_id": "eval5000-new_chapter_slice-0006-domain-2006-groundingcriticagent-c5", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:25:35+00:00"}
+{"agent": "GroundingCriticAgent", "case_id": "eval5000-new_chapter_slice-0006-domain-2006-groundingcriticagent-c5", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:25:40+00:00"}
+{"agent": "GroundingCriticAgent", "case_id": "eval5000-new_chapter_slice-0016-domain-2016-groundingcriticagent-c1", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:25:40+00:00"}
+{"agent": "GroundingCriticAgent", "case_id": "eval5000-new_chapter_slice-0016-domain-2016-groundingcriticagent-c1", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:25:44+00:00"}
+{"agent": "GroundingCriticAgent", "case_id": "eval5000-new_chapter_slice-0026-domain-2026-groundingcriticagent-c4", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:25:44+00:00"}
+{"agent": "GroundingCriticAgent", "case_id": "eval5000-new_chapter_slice-0026-domain-2026-groundingcriticagent-c4", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:25:49+00:00"}
+{"agent": "GroundingCriticAgent", "case_id": "eval5000-new_chapter_slice-0036-domain-2036-groundingcriticagent-c7", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:25:49+00:00"}
+{"agent": "GroundingCriticAgent", "case_id": "eval5000-new_chapter_slice-0036-domain-2036-groundingcriticagent-c7", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:25:53+00:00"}
+{"agent": "GroundingCriticAgent", "case_id": "eval5000-new_chapter_slice-0046-domain-2046-groundingcriticagent-c3", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:25:53+00:00"}
+{"agent": "GroundingCriticAgent", "case_id": "eval5000-new_chapter_slice-0046-domain-2046-groundingcriticagent-c3", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:25:59+00:00"}
+{"agent": "SafetyAgent", "case_id": "eval5000-new_chapter_slice-0007-domain-2007-safetyagent-c6", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:25:59+00:00"}
+{"agent": "SafetyAgent", "case_id": "eval5000-new_chapter_slice-0007-domain-2007-safetyagent-c6", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:26:08+00:00"}
+{"agent": "SafetyAgent", "case_id": "eval5000-new_chapter_slice-0037-domain-2037-safetyagent-c1", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:26:08+00:00"}
+{"agent": "SafetyAgent", "case_id": "eval5000-new_chapter_slice-0037-domain-2037-safetyagent-c1", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:26:19+00:00"}
+{"agent": "SafetyAgent", "case_id": "eval5000-new_chapter_slice-0067-domain-2067-safetyagent-c3", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:26:19+00:00"}
+{"agent": "SafetyAgent", "case_id": "eval5000-new_chapter_slice-0067-domain-2067-safetyagent-c3", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:26:30+00:00"}
+{"agent": "SafetyAgent", "case_id": "eval5000-new_chapter_slice-0097-domain-2097-safetyagent-c5", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:26:30+00:00"}
+{"agent": "SafetyAgent", "case_id": "eval5000-new_chapter_slice-0097-domain-2097-safetyagent-c5", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:26:44+00:00"}
+{"agent": "SafetyAgent", "case_id": "eval5000-new_chapter_slice-0127-domain-2127-safetyagent-c7", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:26:44+00:00"}
+{"agent": "SafetyAgent", "case_id": "eval5000-new_chapter_slice-0127-domain-2127-safetyagent-c7", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:26:55+00:00"}
+{"agent": "PathPlannerAgent", "case_id": "eval5000-new_chapter_slice-0008-domain-2008-pathplanneragent-c7", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:26:55+00:00"}
+{"agent": "PathPlannerAgent", "case_id": "eval5000-new_chapter_slice-0008-domain-2008-pathplanneragent-c7", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:27:04+00:00"}
+{"agent": "PathPlannerAgent", "case_id": "eval5000-new_chapter_slice-0018-domain-2018-pathplanneragent-c3", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:27:04+00:00"}
+{"agent": "PathPlannerAgent", "case_id": "eval5000-new_chapter_slice-0018-domain-2018-pathplanneragent-c3", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:27:11+00:00"}
+{"agent": "PathPlannerAgent", "case_id": "eval5000-new_chapter_slice-0028-domain-2028-pathplanneragent-c6", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:27:11+00:00"}
+{"agent": "PathPlannerAgent", "case_id": "eval5000-new_chapter_slice-0028-domain-2028-pathplanneragent-c6", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:27:18+00:00"}
+{"agent": "PathPlannerAgent", "case_id": "eval5000-new_chapter_slice-0038-domain-2038-pathplanneragent-c2", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:27:18+00:00"}
+{"agent": "PathPlannerAgent", "case_id": "eval5000-new_chapter_slice-0038-domain-2038-pathplanneragent-c2", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:27:26+00:00"}
+{"agent": "PathPlannerAgent", "case_id": "eval5000-new_chapter_slice-0048-domain-2048-pathplanneragent-c5", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:27:26+00:00"}
+{"agent": "PathPlannerAgent", "case_id": "eval5000-new_chapter_slice-0048-domain-2048-pathplanneragent-c5", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:27:33+00:00"}
+{"agent": "MindMapAgent", "case_id": "eval5000-new_chapter_slice-0009-domain-2009-mindmapagent-c1", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:27:33+00:00"}
+{"agent": "MindMapAgent", "case_id": "eval5000-new_chapter_slice-0009-domain-2009-mindmapagent-c1", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:27:47+00:00"}
+{"agent": "MindMapAgent", "case_id": "eval5000-new_chapter_slice-0019-domain-2019-mindmapagent-c4", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:27:47+00:00"}
+{"agent": "MindMapAgent", "case_id": "eval5000-new_chapter_slice-0019-domain-2019-mindmapagent-c4", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:28:10+00:00"}
+{"agent": "MindMapAgent", "case_id": "eval5000-new_chapter_slice-0029-domain-2029-mindmapagent-c7", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:28:10+00:00"}
+{"agent": "MindMapAgent", "case_id": "eval5000-new_chapter_slice-0029-domain-2029-mindmapagent-c7", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:28:33+00:00"}
+{"agent": "MindMapAgent", "case_id": "eval5000-new_chapter_slice-0039-domain-2039-mindmapagent-c3", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:28:33+00:00"}
+{"agent": "MindMapAgent", "case_id": "eval5000-new_chapter_slice-0039-domain-2039-mindmapagent-c3", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:28:54+00:00"}
+{"agent": "MindMapAgent", "case_id": "eval5000-new_chapter_slice-0049-domain-2049-mindmapagent-c6", "event": "case_started", "fold": 0, "ts": "2026-07-11T05:28:54+00:00"}
+{"agent": "MindMapAgent", "case_id": "eval5000-new_chapter_slice-0049-domain-2049-mindmapagent-c6", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T05:29:12+00:00"}

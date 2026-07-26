@@ -1,0 +1,118 @@
+{
+  "data_fraction": 1.0,
+  "data_hashes": {
+    "heldout_file": "96a7994b558b019c51308670042e0d869f42b7922ec25e753ad100ba23e4d3fe",
+    "protected_heldout_file": "f964cfbd3b2d8af14b56dd4646de808ba2703a3965bc8524bd05006e7fe345b9",
+    "train_file": "eabd280d9a7ed5c0d01fc9c5e41cd9634636b25670ed2df96d545013cf9fb632"
+  },
+  "data_seed": 20260716,
+  "evaluation_boundary": {
+    "legacy_full5000_is_final_protected": false,
+    "message_zh": "旧 full5000 与历史训练源有重叠，只能作历史回归；正式最终评测必须使用新冻结且零重叠的 5000 集"
+  },
+  "fit_safeguards": {
+    "action_entropy_hard_stop": 0.65,
+    "action_entropy_warning": 0.8,
+    "checkpoint_selection_boundary_zh": "eval_loss 只用于优化早停，不能替代语义晋级评测",
+    "checkpoint_selection_metric": "eval_loss",
+    "early_stopping_patience": 2,
+    "early_stopping_threshold": 0.005,
+    "hard_stop_on_nan_or_oom": true,
+    "learning_curve_fractions": [
+      0.35,
+      0.7,
+      1.0
+    ],
+    "learning_curve_plateau_min_gain": 0.02,
+    "max_action_share_hard_stop": 0.5,
+    "max_action_share_warning": 0.35,
+    "three_seed_promotion": {
+      "maximum_seed_range": 0.1,
+      "median_gain_min": 0.03,
+      "minimum_positive_seeds": 2,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "worst_seed_floor": -0.02
+    },
+    "threshold_basis": "项目经验阈值，不是论文通用定律",
+    "train_dev_gap_warning": 0.15,
+    "underfit_max_preference_accuracy": 0.55,
+    "underfit_min_loss_reduction": 0.05
+  },
+  "gdpo_rpo": {
+    "beta": 0.1,
+    "formula_version": "neurips2024-geometric-soft-preference-plus-rpo-chosen-nll-v1",
+    "lambda_sft": 0.2,
+    "loss_types": [
+      "sigmoid",
+      "sft"
+    ],
+    "loss_weights": [
+      1.0,
+      0.2
+    ],
+    "precompute_ref_log_probs": true,
+    "soft_preference_field": "preference_q"
+  },
+  "heldout_file": "research/vllm-agent-ft-lab/outputs/rsage/demos/curation-v5/preference_dev.jsonl",
+  "max_seq_length": 384,
+  "method": "gdpo_rpo_lora",
+  "model_path": "/home/cypress/.cache/modelscope/Qwen/Qwen3.5-4B",
+  "notes_zh": [
+    "GDPO 使用教师成对软偏好概率；RPO chosen NLL 是独立正则项。",
+    "训练与开发 microbatch 均固定为 1，保证动态 beta 与逐样本 GDPO 公式严格等价。"
+  ],
+  "output_dir": "research/vllm-agent-ft-lab/outputs/rsage/demos/adapters-v6/rsage-gdpo-rpo-f100-seed42",
+  "protected_heldout_file": "research/vllm-agent-ft-lab/outputs/rsage/demos/curation-v5/preference_heldout.jsonl",
+  "quantization": {
+    "compute_dtype": "bfloat16",
+    "double_quant": true,
+    "load_in_4bit": true,
+    "quant_type": "nf4"
+  },
+  "seed": 42,
+  "selected_train_ids": [
+    "rsage-pref-rsage-0001-read-wrong_decision"
+  ],
+  "sft_adapter_path": "research/vllm-agent-ft-lab/outputs/rsage/demos/adapters-v6/rsage-sft-f100-seed42",
+  "specialist": {
+    "agent_name": "TutorDecisionAgent",
+    "message_zh": "仅训练下一教学动作专属 Adapter，非目标 Agent 保持冻结",
+    "non_target_policy": "继续使用冻结 champion，不加载本 specialist",
+    "route_is_deterministic": true,
+    "route_key": "TutorDecisionAgent::rsage-ir-v1",
+    "schema_version": "rsage-ir-v1"
+  },
+  "stage": "rsage_specialist_gdpo_rpo",
+  "subset_counts": {
+    "selected": 1,
+    "total": 1
+  },
+  "subset_sha256": "3fa99710e26b05c858bbea2687fd4bfa30cc61ec626e2933662468ec14e66528",
+  "train_file": "research/vllm-agent-ft-lab/outputs/rsage/demos/curation-v5/preference_train.jsonl",
+  "training": {
+    "bf16": true,
+    "data_seed": 20260716,
+    "disable_tqdm": true,
+    "eval_strategy": "epoch",
+    "gradient_accumulation_steps": 16,
+    "gradient_checkpointing": true,
+    "greater_is_better": false,
+    "learning_rate": 5e-06,
+    "load_best_model_at_end": true,
+    "logging_steps": 1,
+    "max_grad_norm": 0.3,
+    "metric_for_best_model": "eval_loss",
+    "num_train_epochs": 4,
+    "per_device_eval_batch_size": 1,
+    "per_device_train_batch_size": 1,
+    "save_strategy": "epoch",
+    "save_total_limit": 2,
+    "seed": 42,
+    "warmup_ratio": 0.05,
+    "weight_decay": 0.01
+  }
+}

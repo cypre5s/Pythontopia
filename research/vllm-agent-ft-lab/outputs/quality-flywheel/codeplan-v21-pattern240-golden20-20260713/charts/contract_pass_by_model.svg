@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360">
+<rect width="100%" height="100%" fill="#fff"/>
+<text x="60" y="32" font-family="Arial" font-size="20">Raw contract pass rate (primary)</text>
+<line x1="60" y1="300" x2="600" y2="300" stroke="#6b7280"/>
+<rect x="80.0" y="80.0" width="95.3" height="220.0" fill="#b45309"/>
+<text x="127.7" y="74.0" text-anchor="middle" font-family="Arial" font-size="12">1.000</text>
+<text x="127.7" y="326" text-anchor="middle" font-family="Arial" font-size="12">champion_bound</text>
+<rect x="253.3" y="245.0" width="95.3" height="55.0" fill="#b45309"/>
+<text x="301.0" y="239.0" text-anchor="middle" font-family="Arial" font-size="12">0.250</text>
+<text x="301.0" y="326" text-anchor="middle" font-family="Arial" font-size="12">candidate_unconstrained</text>
+<rect x="426.7" y="80.0" width="95.3" height="220.0" fill="#b45309"/>
+<text x="474.3" y="74.0" text-anchor="middle" font-family="Arial" font-size="12">1.000</text>
+<text x="474.3" y="326" text-anchor="middle" font-family="Arial" font-size="12">candidate_bound</text>
+</svg>

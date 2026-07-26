@@ -1,0 +1,77 @@
+{
+  "$defs": {
+    "PrerequisiteAudit": {
+      "description": "前置链路可审计解释（KC 子图感知，§3.3）。\n\n当 EvidenceBundle 携带 ``subgraph``（前置 KC 边）时，把「为什么先学 X」整理为\n可审计、可向学生展示的解释来源；并按 ``RagHit.via_prerequisite`` 把证据页分成\n「直接证据页」与「前置页」两区，供引用 chips 分区呈现（§3.8）。\n\n注意：前置链路只解释「学习顺序」，**不构成**答案主张的直接出处。",
+      "properties": {
+        "direct_page_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Direct Page Ids",
+          "type": "array"
+        },
+        "edges": {
+          "items": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "title": "Edges",
+          "type": "array"
+        },
+        "explanations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Explanations",
+          "type": "array"
+        },
+        "prerequisite_page_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Prerequisite Page Ids",
+          "type": "array"
+        }
+      },
+      "title": "PrerequisiteAudit",
+      "type": "object"
+    }
+  },
+  "description": "``grounding_critic`` 的扩展返回值。\n\n在基类（``passed`` / ``reasons`` / ``no_evidence_found`` / ``retried``）之外，附带\n前置链路审计 ``prerequisite_audit``。基类消费方（``resource_graph`` 等）只读基类字段，\n完全向后兼容；Phase 2 编排可读 ``prerequisite_audit`` 渲染引用 chips / 记 eval。",
+  "properties": {
+    "no_evidence_found": {
+      "default": false,
+      "title": "No Evidence Found",
+      "type": "boolean"
+    },
+    "passed": {
+      "title": "Passed",
+      "type": "boolean"
+    },
+    "prerequisite_audit": {
+      "$ref": "#/$defs/PrerequisiteAudit"
+    },
+    "reasons": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Reasons",
+      "type": "array"
+    },
+    "retried": {
+      "default": false,
+      "title": "Retried",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "passed"
+  ],
+  "title": "GroundingCriticAgent",
+  "type": "object",
+  "x-adapter-eligible": false,
+  "x-product-contract": "deterministic-product-output",
+  "x-schema-version": "agent-schema-v2"
+}

@@ -1,0 +1,72 @@
+{
+  "changed_variables": [
+    "preference_dataset"
+  ],
+  "dataset_sha256": {
+    "heldout": "4207c0d1d9075d30a87f5f9193007b71d3959afd3ead027c10706e64abeb963d",
+    "train": "2248652d3c812cd34609b677f5274484fe0e5dbb3e5d6093c98d583163af094c"
+  },
+  "duplicate_id_count": 0,
+  "duplicate_pair_count": 0,
+  "duplicate_prompt_count": 0,
+  "heldout_count": 30,
+  "identical_chosen_rejected_count": 0,
+  "identical_chosen_rejected_ids": [],
+  "max_seq_length": 512,
+  "one_variable_only": true,
+  "passed": true,
+  "protected_eval_overlap_count": 0,
+  "protected_eval_overlap_ids": [],
+  "token_length": {
+    "longest_examples": [
+      {
+        "id": "v2-pref-0243-eval5000-web_workshop_input-0404-domain-4904-guidecoachagent-c5",
+        "tokens": 382
+      },
+      {
+        "id": "v2-pref-0080-eval5000-new_question-0404-domain-0404-guidecoachagent-c6",
+        "tokens": 377
+      },
+      {
+        "id": "v2-pref-0022-eval5000-new_student_expression-1004-domain-4004-guidecoachagent-c1-beginner-teacher_assignment_context",
+        "tokens": 376
+      },
+      {
+        "id": "v2-pref-0181-eval5000-new_chapter_slice-0624-domain-2624-guidecoachagent-c7",
+        "tokens": 375
+      },
+      {
+        "id": "v2-pref-0250-eval5000-web_workshop_input-0104-domain-4604-guidecoachagent-c6",
+        "tokens": 375
+      },
+      {
+        "id": "v2-pref-0134-eval5000-new_student_expression-0104-domain-3104-guidecoachagent-c4-beginner-teacher_assignment_context",
+        "tokens": 374
+      },
+      {
+        "id": "v2-pref-0268-eval5000-new_question-1544-domain-1544-guidecoachagent-c5",
+        "tokens": 374
+      },
+      {
+        "id": "v2-pref-0028-eval5000-new_question-0754-domain-0754-guidecoachagent-c6",
+        "tokens": 373
+      },
+      {
+        "id": "v2-pref-0100-eval5000-new_chapter_slice-0744-domain-2744-guidecoachagent-c1",
+        "tokens": 373
+      },
+      {
+        "id": "v2-pref-0170-eval5000-new_student_expression-0464-domain-3464-guidecoachagent-c7-beginner-teacher_assignment_context",
+        "tokens": 373
+      }
+    ],
+    "max": 382,
+    "mean": 363.46,
+    "overlength_count": 0,
+    "overlength_ids": []
+  },
+  "train_count": 270,
+  "train_heldout_prompt_overlap_count": 0,
+  "zero_label_count": 0,
+  "zero_label_ids": []
+}

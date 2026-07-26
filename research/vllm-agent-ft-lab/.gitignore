@@ -2,6 +2,8 @@
 models/
 runs/
 outputs/adapters/
+# demo 流水线落盘的 LoRA 权重/分词器（约 200M），与 outputs/adapters/ 同类；JSON/MD 证据照常入库。
+outputs/rsage/demos/adapters-*/
 outputs/datasets/raw/
 outputs/datasets/normalized/
 *.log

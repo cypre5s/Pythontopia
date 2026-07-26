@@ -1,0 +1,211 @@
+{
+  "$defs": {
+    "CounterExampleCard": {
+      "properties": {
+        "diff_summary": {
+          "maxLength": 512,
+          "title": "Diff Summary",
+          "type": "string"
+        },
+        "expected_stdout": {
+          "maxLength": 2048,
+          "title": "Expected Stdout",
+          "type": "string"
+        },
+        "redacted": {
+          "default": false,
+          "title": "Redacted",
+          "type": "boolean"
+        },
+        "stdin": {
+          "maxLength": 2048,
+          "title": "Stdin",
+          "type": "string"
+        },
+        "your_stdout": {
+          "maxLength": 2048,
+          "title": "Your Stdout",
+          "type": "string"
+        }
+      },
+      "required": [
+        "stdin",
+        "expected_stdout",
+        "your_stdout",
+        "diff_summary"
+      ],
+      "title": "CounterExampleCard",
+      "type": "object"
+    },
+    "HintLayer": {
+      "properties": {
+        "body": {
+          "maxLength": 1200,
+          "title": "Body",
+          "type": "string"
+        },
+        "headline": {
+          "maxLength": 200,
+          "title": "Headline",
+          "type": "string"
+        },
+        "layer": {
+          "enum": [
+            1,
+            2,
+            3
+          ],
+          "title": "Layer",
+          "type": "integer"
+        },
+        "related_pages": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Related Pages",
+          "type": "array"
+        }
+      },
+      "required": [
+        "layer",
+        "headline",
+        "body"
+      ],
+      "title": "HintLayer",
+      "type": "object"
+    },
+    "RetryAdvice": {
+      "properties": {
+        "expected_kc_codes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Expected Kc Codes",
+          "type": "array"
+        },
+        "summary": {
+          "maxLength": 512,
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "summary"
+      ],
+      "title": "RetryAdvice",
+      "type": "object"
+    },
+    "TraceStep": {
+      "properties": {
+        "line": {
+          "minimum": 0,
+          "title": "Line",
+          "type": "integer"
+        },
+        "locals": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Locals",
+          "type": "object"
+        }
+      },
+      "required": [
+        "line"
+      ],
+      "title": "TraceStep",
+      "type": "object"
+    },
+    "VariableTrace": {
+      "properties": {
+        "steps": {
+          "items": {
+            "$ref": "#/$defs/TraceStep"
+          },
+          "maxItems": 200,
+          "title": "Steps",
+          "type": "array"
+        },
+        "truncated": {
+          "default": false,
+          "title": "Truncated",
+          "type": "boolean"
+        }
+      },
+      "title": "VariableTrace",
+      "type": "object"
+    },
+    "WrongAssumptionCard": {
+      "properties": {
+        "actually": {
+          "maxLength": 512,
+          "title": "Actually",
+          "type": "string"
+        },
+        "evidence_kc_codes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Evidence Kc Codes",
+          "type": "array"
+        },
+        "you_thought": {
+          "maxLength": 512,
+          "title": "You Thought",
+          "type": "string"
+        }
+      },
+      "required": [
+        "you_thought",
+        "actually"
+      ],
+      "title": "WrongAssumptionCard",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "counter_example": {
+      "$ref": "#/$defs/CounterExampleCard"
+    },
+    "hint_layers": {
+      "items": {
+        "$ref": "#/$defs/HintLayer"
+      },
+      "title": "Hint Layers",
+      "type": "array"
+    },
+    "retry_advice": {
+      "$ref": "#/$defs/RetryAdvice"
+    },
+    "safety_passed": {
+      "default": true,
+      "title": "Safety Passed",
+      "type": "boolean"
+    },
+    "safety_reasons": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Safety Reasons",
+      "type": "array"
+    },
+    "variable_trace_summary": {
+      "$ref": "#/$defs/VariableTrace"
+    },
+    "wrong_assumption": {
+      "$ref": "#/$defs/WrongAssumptionCard"
+    }
+  },
+  "required": [
+    "counter_example",
+    "variable_trace_summary",
+    "wrong_assumption",
+    "hint_layers",
+    "retry_advice"
+  ],
+  "title": "DebugAgent",
+  "type": "object",
+  "x-adapter-eligible": false,
+  "x-product-contract": "deterministic-product-output",
+  "x-schema-version": "agent-schema-v2"
+}

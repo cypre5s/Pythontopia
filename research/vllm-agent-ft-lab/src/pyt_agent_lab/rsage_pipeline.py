@@ -74,6 +74,7 @@ class _StageSpec:
     phase: StagePhase
     command: tuple[str, ...]
     depends_on: tuple[str, ...]
+    demo_gates: tuple[str, ...]
     environment: dict[str, str]
     cwd: str | None
 
@@ -248,6 +249,30 @@ def _validate_manifest(
             raise PipelineManifestError(
                 f"阶段 {stage_id} 只能依赖 manifest 中更早的阶段：{'、'.join(unknown)}"
             )
+        demo_gates = tuple(
+            _string_sequence(
+                raw_stage.get("demo_gates", []),
+                field=f"阶段 {stage_id} 的 demo_gates",
+                allow_empty=True,
+            )
+        )
+        if len(demo_gates) != len(set(demo_gates)):
+            raise PipelineManifestError(f"阶段 {stage_id} 的 demo_gates 不能重复")
+        if mode == "full" and phase in {"training", "evaluation"} and not demo_gates:
+            raise PipelineManifestError(
+                f"正式阶段 {stage_id} 必须声明至少一个对应的 demo_gates"
+            )
+        prior_by_id = {item.stage_id: item for item in stages}
+        invalid_demo_gates = [
+            gate_id
+            for gate_id in demo_gates
+            if gate_id not in prior_by_id or prior_by_id[gate_id].mode != "demo"
+        ]
+        if invalid_demo_gates:
+            raise PipelineManifestError(
+                f"阶段 {stage_id} 的 demo_gates 必须引用更早的 demo 阶段："
+                f"{'、'.join(invalid_demo_gates)}"
+            )
         cwd = raw_stage.get("cwd")
         if cwd is not None and (not isinstance(cwd, str) or not cwd.strip()):
             raise PipelineManifestError(f"阶段 {stage_id} 的 cwd 必须是非空字符串")
@@ -258,6 +283,7 @@ def _validate_manifest(
                 phase=phase,
                 command=command,
                 depends_on=dependencies,
+                demo_gates=demo_gates,
                 environment=_environment_mapping(
                     raw_stage.get("environment", {}),
                     field=f"阶段 {stage_id} 的 environment",
@@ -667,6 +693,7 @@ def _stage_hash_payload(stage: _StageSpec) -> dict[str, Any]:
         "phase": stage.phase,
         "command": list(stage.command),
         "depends_on": list(stage.depends_on),
+        "demo_gates": list(stage.demo_gates),
         "environment": stage.environment,
         "cwd": stage.cwd,
     }

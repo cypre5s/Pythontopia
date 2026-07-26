@@ -31,6 +31,9 @@ pythontopia:
     graphUrl: ${PYT_GRAPH_URL:http://localhost:18091}
     ragUrl: ${PYT_RAG_URL:http://localhost:18092}
     ragAdminToken: ${PYT_RAG_ADMIN_TOKEN:}
+  workshop-routing:
+    # 独立于 graph/rag internal token；留空时多 Agent 执行 fail closed。
+    executionSecret: ${PYT_ROUTE_EXECUTION_SECRET:}
   http:
     graph:
       # graphRestTemplate 超时（毫秒）：下游不可达时在阈值内 fail-fast，避免占满 Tomcat 线程。

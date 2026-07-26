@@ -11,6 +11,7 @@ import pytest
 
 from pyt_agent_lab.rsage_pipeline import (
     DemoReceiptGateError,
+    PipelineManifestError,
     PipelineResumeError,
     PipelineStageError,
     command_sha256,
@@ -47,9 +48,10 @@ def _stage(
     mode: str = "full",
     phase: str = "prepare",
     depends_on: list[str] | None = None,
+    demo_gates: list[str] | None = None,
     environment: dict[str, str] | None = None,
 ) -> dict[str, Any]:
-    return {
+    stage = {
         "id": stage_id,
         "mode": mode,
         "phase": phase,
@@ -57,6 +59,9 @@ def _stage(
         "depends_on": depends_on or [],
         "environment": environment or {},
     }
+    if demo_gates is not None:
+        stage["demo_gates"] = demo_gates
+    return stage
 
 
 def _manifest(tmp_path: Path, stages: list[dict[str, Any]]) -> dict[str, Any]:
@@ -255,6 +260,7 @@ def test_training_is_blocked_until_every_current_demo_receipt_passes(tmp_path: P
                 "sft-training",
                 _append_command(training_path, "train"),
                 phase="training",
+                demo_gates=["vote-demo"],
             ),
         ],
     )
@@ -282,6 +288,23 @@ def test_training_is_blocked_until_every_current_demo_receipt_passes(tmp_path: P
     assert summary["completed_stage_count"] == 1
 
 
+def test_unmapped_trivial_demo_cannot_unlock_a_training_stage(tmp_path: Path) -> None:
+    manifest = _manifest(
+        tmp_path,
+        [
+            _stage("unrelated-demo", _append_command(tmp_path / "demo.txt", "demo"), mode="demo"),
+            _stage(
+                "sft-training",
+                _append_command(tmp_path / "training.txt", "train"),
+                phase="training",
+            ),
+        ],
+    )
+
+    with pytest.raises(PipelineManifestError, match="demo_gates"):
+        run_rsage_pipeline(manifest, operation="demo")
+
+
 def test_training_rejects_a_demo_receipt_with_tampered_stage_identity(
     tmp_path: Path,
 ) -> None:
@@ -294,6 +317,7 @@ def test_training_rejects_a_demo_receipt_with_tampered_stage_identity(
                 "sft-training",
                 _append_command(training_path, "train"),
                 phase="training",
+                demo_gates=["required-demo"],
             ),
         ],
     )

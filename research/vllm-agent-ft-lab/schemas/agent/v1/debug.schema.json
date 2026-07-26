@@ -1,0 +1,1 @@
+{"$id":"agent-schema-v1/DebugAgent","title":"DebugAgent","type":"object","properties":{"bug_type":{"type":"string"},"minimal_repro_hint":{"type":"string"},"misconception":{"type":"string"},"next_probe":{"type":"string"},"safety_flags":{"type":"array"}},"required":["bug_type","minimal_repro_hint","misconception","next_probe","safety_flags"],"additionalProperties":true}

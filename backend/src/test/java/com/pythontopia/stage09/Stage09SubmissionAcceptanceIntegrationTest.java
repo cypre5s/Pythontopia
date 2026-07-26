@@ -3,6 +3,10 @@ package com.pythontopia.stage09;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.pythontopia.PythontopiaApplication;
+import com.pythontopia.learner.event.LearningEventLogRepository;
+import com.pythontopia.submission.repository.PracticeSubmissionRepository;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -53,6 +57,8 @@ class Stage09SubmissionAcceptanceIntegrationTest {
 
   @Autowired TestRestTemplate restTemplate;
   @Autowired JdbcTemplate jdbcTemplate;
+  @Autowired LearningEventLogRepository eventRepository;
+  @Autowired PracticeSubmissionRepository submissionRepository;
 
   @Test
   void publicProblemEndpointHidesSensitiveFields() {
@@ -181,6 +187,62 @@ class Stage09SubmissionAcceptanceIntegrationTest {
             "/api/submissions", HttpMethod.POST, bearer(token, body), Map.class);
     assertThat(second.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
     assertThat(second.getBody().get("code")).isEqualTo("SUBMISSION_THROTTLED");
+  }
+
+  @Test
+  void routingRepositoriesIgnoreFrontendEventsAndNonTerminalSubmissions() {
+    registerAndLogin("submit-stu06");
+    Long userId = userId("submit-stu06");
+    OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+    insertSubmission(userId, "PENDING", now.minusMinutes(5));
+    insertSubmission(userId, "RUNNING", now.minusMinutes(4));
+    insertSubmission(userId, "ERROR", now.minusMinutes(3));
+    insertSubmission(userId, "FAILED", now.minusMinutes(2));
+    insertSubmission(userId, "PASSED", now.minusMinutes(1));
+
+    var submissions = submissionRepository.findRecentForPlanner(userId, 12);
+
+    assertThat(submissions)
+        .extracting(PracticeSubmissionRepository.PlannerSubmission::passed)
+        .containsExactly(false, true);
+
+    eventRepository.insert(
+        userId,
+        "resource_consumed",
+        Map.of("resourceId", 901L, "kcCode", "PY43-KC-001", "resourceKind", "HANDOUT"),
+        "frontend",
+        1);
+    eventRepository.insert(
+        userId,
+        "resource_consumed",
+        Map.of("resourceId", 902L, "kcCode", "PY43-KC-002", "resourceKind", "MINDMAP"),
+        "backend",
+        1);
+    eventRepository.insert(
+        userId,
+        "resource_consumed",
+        Map.of("resourceId", 903L, "kcCode", "PY43-KC-003", "resourceKind", "READING"),
+        "graph",
+        1);
+
+    assertThat(eventRepository.findRecentResourceConsumptions(userId, 8))
+        .extracting(LearningEventLogRepository.ResourceConsumption::resourceId)
+        .containsExactly(903L, 902L);
+    assertThat(eventRepository.findRecentAuthoritativeForMemory(userId, 8))
+        .extracting(memory -> memory.eventId())
+        .hasSize(2);
+  }
+
+  private void insertSubmission(Long userId, String status, OffsetDateTime submittedAt) {
+    jdbcTemplate.update(
+        """
+        INSERT INTO practice_submission (
+          user_id, problem_id, source, language, code, submitted_at, status
+        ) VALUES (?, 476, 'TRAINING', 'PYTHON_3_11', 'print(0)', ?, ?)
+        """,
+        userId,
+        submittedAt,
+        status);
   }
 
   private Long userId(String username) {

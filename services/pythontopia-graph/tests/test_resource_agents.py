@@ -11,7 +11,6 @@ from pythontopia_graph.agents.storyboard_agent import StoryboardAgent
 from pythontopia_graph.llm.provider import LlmProvider, LlmResponse
 from pythontopia_graph.nodes.evidence_fetcher import EvidenceBundle, RagHit
 from pythontopia_graph.schemas.resource import (
-    HandoutContent,
     MindMapContent,
     PracticeContent,
     ProblemSpec,
@@ -25,8 +24,12 @@ from pythontopia_graph.schemas.resource import (
 class StubProvider(LlmProvider):
     def __init__(self, payload: dict | None) -> None:
         self.payload = payload
+        self.messages = None
+        self.kwargs = None
 
     async def chat(self, messages, **kwargs):  # type: ignore[override]
+        self.messages = messages
+        self.kwargs = kwargs
         return LlmResponse(content_json=self.payload)
 
 
@@ -63,20 +66,50 @@ async def test_handout_agent_accepts_llm_payload() -> None:
     payload = {
         "title": "讲义",
         "summary": "by llm",
-        "handout": HandoutContent(
-            sections=[
-                {
-                    "heading": "input 函数",
-                    "paragraphs": ["读取一行。"],
-                    "page_refs": [{"page_id": 101, "page_no": 12, "chapter_id": 3}],
-                }
-            ]
-        ).model_dump(),
+        "sections": [
+            {
+                "heading": "input 函数",
+                "paragraphs": ["读取一行。"],
+                "code_snippets": [],
+                "evidence_refs": ["page-101"],
+            }
+        ],
     }
-    agent = HandoutAgent(StubProvider(payload))
+    provider = StubProvider(payload)
+    agent = HandoutAgent(provider)
     draft = await agent.design(request_of("HANDOUT"), EVIDENCE)
     assert draft.title == "讲义"
     assert draft.handout is not None and draft.handout.sections[0].heading == "input 函数"
+    assert draft.handout.sections[0].page_refs[0].page_id == 101
+    assert provider.kwargs["guard_context"]["evidence_fields"] == [
+        "sections.*.evidence_refs"
+    ]
+
+
+@pytest.mark.asyncio
+async def test_handout_agent_does_not_trust_model_created_page_refs() -> None:
+    payload = {
+        "title": "伪造讲义",
+        "summary": "bad",
+        "handout": {
+            "sections": [
+                {
+                    "heading": "伪造",
+                    "paragraphs": ["伪造页码"],
+                    "page_refs": [{"page_id": 999, "page_no": 999}],
+                }
+            ]
+        },
+    }
+    draft = await HandoutAgent(StubProvider(payload)).design(
+        request_of("HANDOUT"), EVIDENCE
+    )
+
+    assert draft.title != "伪造讲义"
+    assert draft.handout is not None
+    assert {ref.page_id for section in draft.handout.sections for ref in section.page_refs} == {
+        101
+    }
 
 
 @pytest.mark.asyncio
@@ -256,6 +289,33 @@ async def test_code_lab_agent_rejects_syntax_invalid_llm() -> None:
 
 
 @pytest.mark.asyncio
+async def test_code_lab_agent_compiles_safe_semantics_and_bound_evidence() -> None:
+    provider = StubProvider(
+        {
+            "walkthroughs": [
+                {
+                    "title": "读取名字",
+                    "narrative": "读取一行名字，再用格式化字符串输出问候语。",
+                    "example_pattern": "assignment_trace",
+                    "observation_goal": "区分变量名、变量值与重新赋值。",
+                    "common_mistakes": ["忘记调用 input"],
+                    "evidence_refs": ["page-101"],
+                }
+            ]
+        }
+    )
+    draft = await CodeLabAgent(provider).design(request_of("CODE_LAB"), EVIDENCE)
+
+    assert draft.code_lab is not None
+    assert draft.code_lab.walkthroughs[0].title == "读取名字"
+    assert draft.code_lab.walkthroughs[0].code.startswith("name = 'Ada'")
+    assert provider.kwargs["guard_context"]["evidence_fields"] == [
+        "walkthroughs.*.evidence_refs"
+    ]
+    assert provider.kwargs["guard_context"]["semantic_validator"](provider.payload) is None
+
+
+@pytest.mark.asyncio
 async def test_reading_agent_has_at_least_two_items() -> None:
     agent = ReadingAgent(StubProvider(payload=None))
     draft = await agent.design(request_of("READING"), EVIDENCE)
@@ -270,6 +330,34 @@ async def test_reading_agent_keeps_evidence_refs_in_fallback() -> None:
     assert draft.reading is not None
     has_ref = any(item.page_refs for item in draft.reading.items)
     assert has_ref
+
+
+@pytest.mark.asyncio
+async def test_reading_agent_compiles_semantic_evidence_and_prompts_with_rag() -> None:
+    provider = StubProvider(
+        {
+            "items": [
+                {
+                    "summary_md": "先理解 input 会读取一行文本。",
+                    "evidence_refs": ["page-101"],
+                },
+                {
+                    "summary_md": "再练习把读取结果转换为需要的类型。",
+                    "evidence_refs": ["page-101"],
+                },
+            ]
+        }
+    )
+    draft = await ReadingAgent(provider).design(request_of("READING"), EVIDENCE)
+
+    assert draft.reading is not None
+    assert all(item.page_refs[0].page_id == 101 for item in draft.reading.items)
+    prompt_text = "\n".join(message["content"] for message in provider.messages)
+    assert "page-101" in prompt_text
+    assert "input 函数的基本用法" in prompt_text
+    assert provider.kwargs["guard_context"]["evidence_fields"] == [
+        "items.*.evidence_refs"
+    ]
 
 
 @pytest.mark.asyncio
@@ -316,3 +404,46 @@ async def test_storyboard_agent_rejects_real_people_visual_hint() -> None:
     assert draft.storyboard is not None
     for scene in draft.storyboard.scenes:
         assert "真实人物" not in scene.visual_hint
+
+
+@pytest.mark.asyncio
+async def test_storyboard_agent_compiles_semantic_pacing_and_evidence() -> None:
+    provider = StubProvider(
+        {
+            "scenes": [
+                {
+                    "title": "认识 input",
+                    "narration": "先观察程序如何等待用户输入一行文本。",
+                    "visual_intent": "像素终端等待键盘输入",
+                    "pacing": "brief",
+                    "evidence_refs": ["page-101"],
+                },
+                {
+                    "title": "保存输入",
+                    "narration": "再把 input 的返回值保存到变量中。",
+                    "visual_intent": "文本从终端流入变量盒子",
+                    "pacing": "normal",
+                    "evidence_refs": ["page-101"],
+                },
+                {
+                    "title": "检查类型",
+                    "narration": "最后提醒 input 返回文本，需要时再转换类型。",
+                    "visual_intent": "字符串标签与整数标签对比",
+                    "pacing": "deep",
+                    "evidence_refs": ["page-101"],
+                },
+            ]
+        }
+    )
+    draft = await StoryboardAgent(provider).design(
+        request_of("STORYBOARD"), EVIDENCE
+    )
+
+    assert draft.storyboard is not None
+    assert [scene.duration_seconds for scene in draft.storyboard.scenes] == [20, 45, 75]
+    assert all(scene.evidence_page_id == 101 for scene in draft.storyboard.scenes)
+    assert all(scene.kc_codes == ["PY43-KC-001"] for scene in draft.storyboard.scenes)
+    assert all("暖米黄色调" in scene.image_prompt for scene in draft.storyboard.scenes)
+    assert provider.kwargs["guard_context"]["evidence_fields"] == [
+        "scenes.*.evidence_refs"
+    ]

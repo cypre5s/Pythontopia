@@ -1,0 +1,218 @@
+{
+  "$defs": {
+    "EvidenceCitation": {
+      "description": "单条课件证据，供前端「课件证据」面板展示（仿 Alethicode 引用卡）。\n\npage_no：课本页码；page_id：回链 /library?pageId=；snippet：RAG 命中片段（折叠空白+截断）；score：相关度 0~1。",
+      "properties": {
+        "page_id": {
+          "title": "Page Id",
+          "type": "integer"
+        },
+        "page_no": {
+          "title": "Page No",
+          "type": "integer"
+        },
+        "score": {
+          "default": 0.0,
+          "title": "Score",
+          "type": "number"
+        },
+        "snippet": {
+          "default": "",
+          "title": "Snippet",
+          "type": "string"
+        },
+        "via_prerequisite": {
+          "default": false,
+          "title": "Via Prerequisite",
+          "type": "boolean"
+        },
+        "via_relation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Via Relation"
+        }
+      },
+      "required": [
+        "page_id",
+        "page_no"
+      ],
+      "title": "EvidenceCitation",
+      "type": "object"
+    },
+    "GroundingResult": {
+      "properties": {
+        "passed": {
+          "title": "Passed",
+          "type": "boolean"
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        }
+      },
+      "required": [
+        "passed"
+      ],
+      "title": "GroundingResult",
+      "type": "object"
+    },
+    "SafetyResult": {
+      "properties": {
+        "passed": {
+          "title": "Passed",
+          "type": "boolean"
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        }
+      },
+      "required": [
+        "passed"
+      ],
+      "title": "SafetyResult",
+      "type": "object"
+    },
+    "TutorVisualAid": {
+      "description": "答疑图解（按问题选型，常见图形式全覆盖）：\n\n- kind=mermaid：``mermaid`` 为 flowchart 源码（流程/结构/对比）；\n- kind=ascii：``ascii_art`` 为等宽字符画（内存布局/索引下标/逐格演示）；\n- kind=svg：``svg`` 为自包含、已服务端消毒的 ``<svg>`` 源码（几何/坐标/图形示意）；\n- kind=image：``image_prompt`` 供 /api/media/image 文生图（保留兼容，当前不主动产出）。",
+      "properties": {
+        "ascii_art": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ascii Art"
+        },
+        "caption": {
+          "default": "",
+          "title": "Caption",
+          "type": "string"
+        },
+        "image_prompt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Image Prompt"
+        },
+        "kc_codes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Kc Codes",
+          "type": "array"
+        },
+        "kind": {
+          "enum": [
+            "mermaid",
+            "image",
+            "ascii",
+            "svg"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "mermaid": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mermaid"
+        },
+        "svg": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Svg"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "TutorVisualAid",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "answer_md": {
+      "title": "Answer Md",
+      "type": "string"
+    },
+    "based_on_general_knowledge": {
+      "default": false,
+      "title": "Based On General Knowledge",
+      "type": "boolean"
+    },
+    "evidence": {
+      "items": {
+        "$ref": "#/$defs/EvidenceCitation"
+      },
+      "title": "Evidence",
+      "type": "array"
+    },
+    "evidence_page_ids": {
+      "items": {
+        "type": "integer"
+      },
+      "title": "Evidence Page Ids",
+      "type": "array"
+    },
+    "grounding_result": {
+      "$ref": "#/$defs/GroundingResult"
+    },
+    "safety_result": {
+      "$ref": "#/$defs/SafetyResult"
+    },
+    "visual_aids": {
+      "items": {
+        "$ref": "#/$defs/TutorVisualAid"
+      },
+      "title": "Visual Aids",
+      "type": "array"
+    }
+  },
+  "required": [
+    "answer_md",
+    "grounding_result",
+    "safety_result"
+  ],
+  "title": "TutorAgent",
+  "type": "object",
+  "x-adapter-eligible": false,
+  "x-product-contract": "streaming-product-output",
+  "x-schema-version": "agent-schema-v2"
+}

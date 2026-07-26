@@ -1,0 +1,74 @@
+{
+  "$defs": {
+    "CodeWalkthroughIR": {
+      "properties": {
+        "code": {
+          "maxLength": 3000,
+          "minLength": 1,
+          "title": "Code",
+          "type": "string"
+        },
+        "common_mistakes": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 5,
+          "title": "Common Mistakes",
+          "type": "array"
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "expected_output": {
+          "maxLength": 1000,
+          "title": "Expected Output",
+          "type": "string"
+        },
+        "narrative": {
+          "maxLength": 800,
+          "minLength": 10,
+          "title": "Narrative",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "narrative",
+        "code",
+        "expected_output"
+      ],
+      "title": "CodeWalkthroughIR",
+      "type": "object"
+    }
+  },
+  "description": "Frozen v2 free-code contract retained for historical experiment replay.",
+  "properties": {
+    "walkthroughs": {
+      "items": {
+        "$ref": "#/$defs/CodeWalkthroughIR"
+      },
+      "maxItems": 3,
+      "minItems": 1,
+      "title": "Walkthroughs",
+      "type": "array"
+    }
+  },
+  "required": [
+    "walkthroughs"
+  ],
+  "title": "ResourceDesignerAgent.code_lab",
+  "type": "object",
+  "x-adapter-eligible": true,
+  "x-product-contract": "semantic-ir-evidence-bound",
+  "x-schema-version": "agent-schema-v2"
+}

@@ -1,0 +1,1582 @@
+{
+  "auxiliary_metric": "score_mean",
+  "claims_policy": "Smoke, small heldout, and guard/fallback-repaired results are not evidence that a model reached 100%.",
+  "failure_matrices": {
+    "champion_evidence_bound": {
+      "agent": {
+        "ResourceDesignerAgent.code_lab": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_lab:0:invalid_python": 5,
+            "semantic_invalid": 5
+          },
+          "failure_count": 0
+        },
+        "ResourceDesignerAgent.handout": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "ResourceDesignerAgent.reading": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "ResourceDesignerAgent.storyboard": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        }
+      },
+      "beginner_noise": {
+        "clean": {
+          "case_count": 20,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_lab:0:invalid_python": 5,
+            "semantic_invalid": 5
+          },
+          "failure_count": 0
+        }
+      },
+      "chapter": {
+        "1": {
+          "case_count": 4,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_lab:0:invalid_python": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 0
+        },
+        "3": {
+          "case_count": 4,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_lab:0:invalid_python": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 0
+        },
+        "4": {
+          "case_count": 4,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_lab:0:invalid_python": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 0
+        },
+        "6": {
+          "case_count": 4,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_lab:0:invalid_python": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 0
+        },
+        "7": {
+          "case_count": 4,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_lab:0:invalid_python": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 0
+        }
+      },
+      "evidence": {
+        "required": {
+          "case_count": 20,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_lab:0:invalid_python": 5,
+            "semantic_invalid": 5
+          },
+          "failure_count": 0
+        }
+      },
+      "failure_category": {
+        "semantic_error:code_lab:0:invalid_python": 5,
+        "semantic_invalid": 5
+      },
+      "missing_schema_field": {},
+      "safety": {
+        "standard": {
+          "case_count": 20,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_lab:0:invalid_python": 5,
+            "semantic_invalid": 5
+          },
+          "failure_count": 0
+        }
+      },
+      "schema_type_error": {},
+      "web_input": {
+        "non_web": {
+          "case_count": 20,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_lab:0:invalid_python": 5,
+            "semantic_invalid": 5
+          },
+          "failure_count": 0
+        }
+      }
+    },
+    "champion_unconstrained": {
+      "agent": {
+        "ResourceDesignerAgent.code_lab": {
+          "case_count": 5,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "schema_invalid": 5,
+            "schema_type_error:walkthroughs[0].code": 3,
+            "schema_type_error:walkthroughs[0].common_mistakes": 5,
+            "semantic_error:code_lab:0:empty_code": 3,
+            "semantic_error:code_lab:0:invalid_python": 1,
+            "semantic_invalid": 4
+          },
+          "failure_count": 5
+        },
+        "ResourceDesignerAgent.handout": {
+          "case_count": 5,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "json_invalid": 5,
+            "missing_schema_field:sections": 5,
+            "missing_schema_field:title": 5
+          },
+          "failure_count": 5
+        },
+        "ResourceDesignerAgent.reading": {
+          "case_count": 5,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "json_invalid": 5,
+            "missing_schema_field:items": 5
+          },
+          "failure_count": 5
+        },
+        "ResourceDesignerAgent.storyboard": {
+          "case_count": 5,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "schema_invalid": 5,
+            "schema_type_error:scenes": 5
+          },
+          "failure_count": 5
+        }
+      },
+      "beginner_noise": {
+        "clean": {
+          "case_count": 20,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "json_invalid": 10,
+            "missing_schema_field:items": 5,
+            "missing_schema_field:sections": 5,
+            "missing_schema_field:title": 5,
+            "schema_invalid": 10,
+            "schema_type_error:scenes": 5,
+            "schema_type_error:walkthroughs[0].code": 3,
+            "schema_type_error:walkthroughs[0].common_mistakes": 5,
+            "semantic_error:code_lab:0:empty_code": 3,
+            "semantic_error:code_lab:0:invalid_python": 1,
+            "semantic_invalid": 4
+          },
+          "failure_count": 20
+        }
+      },
+      "chapter": {
+        "1": {
+          "case_count": 4,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "json_invalid": 2,
+            "missing_schema_field:items": 1,
+            "missing_schema_field:sections": 1,
+            "missing_schema_field:title": 1,
+            "schema_invalid": 2,
+            "schema_type_error:scenes": 1,
+            "schema_type_error:walkthroughs[0].code": 1,
+            "schema_type_error:walkthroughs[0].common_mistakes": 1,
+            "semantic_error:code_lab:0:empty_code": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 4
+        },
+        "3": {
+          "case_count": 4,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "json_invalid": 2,
+            "missing_schema_field:items": 1,
+            "missing_schema_field:sections": 1,
+            "missing_schema_field:title": 1,
+            "schema_invalid": 2,
+            "schema_type_error:scenes": 1,
+            "schema_type_error:walkthroughs[0].common_mistakes": 1
+          },
+          "failure_count": 4
+        },
+        "4": {
+          "case_count": 4,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "json_invalid": 2,
+            "missing_schema_field:items": 1,
+            "missing_schema_field:sections": 1,
+            "missing_schema_field:title": 1,
+            "schema_invalid": 2,
+            "schema_type_error:scenes": 1,
+            "schema_type_error:walkthroughs[0].common_mistakes": 1,
+            "semantic_error:code_lab:0:invalid_python": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 4
+        },
+        "6": {
+          "case_count": 4,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "json_invalid": 2,
+            "missing_schema_field:items": 1,
+            "missing_schema_field:sections": 1,
+            "missing_schema_field:title": 1,
+            "schema_invalid": 2,
+            "schema_type_error:scenes": 1,
+            "schema_type_error:walkthroughs[0].code": 1,
+            "schema_type_error:walkthroughs[0].common_mistakes": 1,
+            "semantic_error:code_lab:0:empty_code": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 4
+        },
+        "7": {
+          "case_count": 4,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "json_invalid": 2,
+            "missing_schema_field:items": 1,
+            "missing_schema_field:sections": 1,
+            "missing_schema_field:title": 1,
+            "schema_invalid": 2,
+            "schema_type_error:scenes": 1,
+            "schema_type_error:walkthroughs[0].code": 1,
+            "schema_type_error:walkthroughs[0].common_mistakes": 1,
+            "semantic_error:code_lab:0:empty_code": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 4
+        }
+      },
+      "evidence": {
+        "required": {
+          "case_count": 20,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "json_invalid": 10,
+            "missing_schema_field:items": 5,
+            "missing_schema_field:sections": 5,
+            "missing_schema_field:title": 5,
+            "schema_invalid": 10,
+            "schema_type_error:scenes": 5,
+            "schema_type_error:walkthroughs[0].code": 3,
+            "schema_type_error:walkthroughs[0].common_mistakes": 5,
+            "semantic_error:code_lab:0:empty_code": 3,
+            "semantic_error:code_lab:0:invalid_python": 1,
+            "semantic_invalid": 4
+          },
+          "failure_count": 20
+        }
+      },
+      "failure_category": {
+        "grounding_unsafe": 1,
+        "json_invalid": 10,
+        "missing_schema_field:items": 5,
+        "missing_schema_field:sections": 5,
+        "missing_schema_field:title": 5,
+        "schema_invalid": 10,
+        "schema_type_error:scenes": 5,
+        "schema_type_error:walkthroughs[0].code": 3,
+        "schema_type_error:walkthroughs[0].common_mistakes": 5,
+        "semantic_error:code_lab:0:empty_code": 3,
+        "semantic_error:code_lab:0:invalid_python": 1,
+        "semantic_invalid": 4
+      },
+      "missing_schema_field": {
+        "items": 5,
+        "sections": 5,
+        "title": 5
+      },
+      "safety": {
+        "standard": {
+          "case_count": 20,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "json_invalid": 10,
+            "missing_schema_field:items": 5,
+            "missing_schema_field:sections": 5,
+            "missing_schema_field:title": 5,
+            "schema_invalid": 10,
+            "schema_type_error:scenes": 5,
+            "schema_type_error:walkthroughs[0].code": 3,
+            "schema_type_error:walkthroughs[0].common_mistakes": 5,
+            "semantic_error:code_lab:0:empty_code": 3,
+            "semantic_error:code_lab:0:invalid_python": 1,
+            "semantic_invalid": 4
+          },
+          "failure_count": 20
+        }
+      },
+      "schema_type_error": {
+        "scenes": 5,
+        "walkthroughs[0].code": 3,
+        "walkthroughs[0].common_mistakes": 5
+      },
+      "web_input": {
+        "non_web": {
+          "case_count": 20,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "json_invalid": 10,
+            "missing_schema_field:items": 5,
+            "missing_schema_field:sections": 5,
+            "missing_schema_field:title": 5,
+            "schema_invalid": 10,
+            "schema_type_error:scenes": 5,
+            "schema_type_error:walkthroughs[0].code": 3,
+            "schema_type_error:walkthroughs[0].common_mistakes": 5,
+            "semantic_error:code_lab:0:empty_code": 3,
+            "semantic_error:code_lab:0:invalid_python": 1,
+            "semantic_invalid": 4
+          },
+          "failure_count": 20
+        }
+      }
+    },
+    "compact_orpo_unconstrained": {
+      "agent": {
+        "ResourceDesignerAgent.code_lab": {
+          "case_count": 5,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "schema_invalid": 5,
+            "schema_type_error:walkthroughs[0].code": 2,
+            "schema_type_error:walkthroughs[0].common_mistakes": 3,
+            "semantic_error:code_lab:0:empty_code": 2,
+            "semantic_error:code_lab:0:invalid_python": 2,
+            "semantic_invalid": 4
+          },
+          "failure_count": 5
+        },
+        "ResourceDesignerAgent.handout": {
+          "case_count": 5,
+          "contract_pass_rate": 0.6,
+          "failure_categories": {
+            "json_invalid": 2,
+            "missing_schema_field:sections": 2,
+            "missing_schema_field:title": 2
+          },
+          "failure_count": 2
+        },
+        "ResourceDesignerAgent.reading": {
+          "case_count": 5,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "grounding_unsafe": 2,
+            "json_invalid": 5,
+            "missing_schema_field:items": 5
+          },
+          "failure_count": 5
+        },
+        "ResourceDesignerAgent.storyboard": {
+          "case_count": 5,
+          "contract_pass_rate": 0.2,
+          "failure_categories": {
+            "schema_invalid": 4,
+            "schema_type_error:scenes": 4
+          },
+          "failure_count": 4
+        }
+      },
+      "beginner_noise": {
+        "clean": {
+          "case_count": 20,
+          "contract_pass_rate": 0.2,
+          "failure_categories": {
+            "grounding_unsafe": 2,
+            "json_invalid": 7,
+            "missing_schema_field:items": 5,
+            "missing_schema_field:sections": 2,
+            "missing_schema_field:title": 2,
+            "schema_invalid": 9,
+            "schema_type_error:scenes": 4,
+            "schema_type_error:walkthroughs[0].code": 2,
+            "schema_type_error:walkthroughs[0].common_mistakes": 3,
+            "semantic_error:code_lab:0:empty_code": 2,
+            "semantic_error:code_lab:0:invalid_python": 2,
+            "semantic_invalid": 4
+          },
+          "failure_count": 16
+        }
+      },
+      "chapter": {
+        "1": {
+          "case_count": 4,
+          "contract_pass_rate": 0.25,
+          "failure_categories": {
+            "json_invalid": 1,
+            "missing_schema_field:items": 1,
+            "schema_invalid": 2,
+            "schema_type_error:scenes": 1,
+            "schema_type_error:walkthroughs[0].code": 1,
+            "semantic_error:code_lab:0:empty_code": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 3
+        },
+        "3": {
+          "case_count": 4,
+          "contract_pass_rate": 0.25,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "json_invalid": 1,
+            "missing_schema_field:items": 1,
+            "schema_invalid": 2,
+            "schema_type_error:scenes": 1,
+            "schema_type_error:walkthroughs[0].common_mistakes": 1,
+            "semantic_error:code_lab:0:invalid_python": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 3
+        },
+        "4": {
+          "case_count": 4,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "json_invalid": 2,
+            "missing_schema_field:items": 1,
+            "missing_schema_field:sections": 1,
+            "missing_schema_field:title": 1,
+            "schema_invalid": 2,
+            "schema_type_error:scenes": 1,
+            "schema_type_error:walkthroughs[0].common_mistakes": 1,
+            "semantic_error:code_lab:0:invalid_python": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 4
+        },
+        "6": {
+          "case_count": 4,
+          "contract_pass_rate": 0.25,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "json_invalid": 1,
+            "missing_schema_field:items": 1,
+            "schema_invalid": 2,
+            "schema_type_error:scenes": 1,
+            "schema_type_error:walkthroughs[0].common_mistakes": 1
+          },
+          "failure_count": 3
+        },
+        "7": {
+          "case_count": 4,
+          "contract_pass_rate": 0.25,
+          "failure_categories": {
+            "json_invalid": 2,
+            "missing_schema_field:items": 1,
+            "missing_schema_field:sections": 1,
+            "missing_schema_field:title": 1,
+            "schema_invalid": 1,
+            "schema_type_error:walkthroughs[0].code": 1,
+            "semantic_error:code_lab:0:empty_code": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 3
+        }
+      },
+      "evidence": {
+        "required": {
+          "case_count": 20,
+          "contract_pass_rate": 0.2,
+          "failure_categories": {
+            "grounding_unsafe": 2,
+            "json_invalid": 7,
+            "missing_schema_field:items": 5,
+            "missing_schema_field:sections": 2,
+            "missing_schema_field:title": 2,
+            "schema_invalid": 9,
+            "schema_type_error:scenes": 4,
+            "schema_type_error:walkthroughs[0].code": 2,
+            "schema_type_error:walkthroughs[0].common_mistakes": 3,
+            "semantic_error:code_lab:0:empty_code": 2,
+            "semantic_error:code_lab:0:invalid_python": 2,
+            "semantic_invalid": 4
+          },
+          "failure_count": 16
+        }
+      },
+      "failure_category": {
+        "grounding_unsafe": 2,
+        "json_invalid": 7,
+        "missing_schema_field:items": 5,
+        "missing_schema_field:sections": 2,
+        "missing_schema_field:title": 2,
+        "schema_invalid": 9,
+        "schema_type_error:scenes": 4,
+        "schema_type_error:walkthroughs[0].code": 2,
+        "schema_type_error:walkthroughs[0].common_mistakes": 3,
+        "semantic_error:code_lab:0:empty_code": 2,
+        "semantic_error:code_lab:0:invalid_python": 2,
+        "semantic_invalid": 4
+      },
+      "missing_schema_field": {
+        "items": 5,
+        "sections": 2,
+        "title": 2
+      },
+      "safety": {
+        "standard": {
+          "case_count": 20,
+          "contract_pass_rate": 0.2,
+          "failure_categories": {
+            "grounding_unsafe": 2,
+            "json_invalid": 7,
+            "missing_schema_field:items": 5,
+            "missing_schema_field:sections": 2,
+            "missing_schema_field:title": 2,
+            "schema_invalid": 9,
+            "schema_type_error:scenes": 4,
+            "schema_type_error:walkthroughs[0].code": 2,
+            "schema_type_error:walkthroughs[0].common_mistakes": 3,
+            "semantic_error:code_lab:0:empty_code": 2,
+            "semantic_error:code_lab:0:invalid_python": 2,
+            "semantic_invalid": 4
+          },
+          "failure_count": 16
+        }
+      },
+      "schema_type_error": {
+        "scenes": 4,
+        "walkthroughs[0].code": 2,
+        "walkthroughs[0].common_mistakes": 3
+      },
+      "web_input": {
+        "non_web": {
+          "case_count": 20,
+          "contract_pass_rate": 0.2,
+          "failure_categories": {
+            "grounding_unsafe": 2,
+            "json_invalid": 7,
+            "missing_schema_field:items": 5,
+            "missing_schema_field:sections": 2,
+            "missing_schema_field:title": 2,
+            "schema_invalid": 9,
+            "schema_type_error:scenes": 4,
+            "schema_type_error:walkthroughs[0].code": 2,
+            "schema_type_error:walkthroughs[0].common_mistakes": 3,
+            "semantic_error:code_lab:0:empty_code": 2,
+            "semantic_error:code_lab:0:invalid_python": 2,
+            "semantic_invalid": 4
+          },
+          "failure_count": 16
+        }
+      }
+    },
+    "failure_directed_evidence_bound": {
+      "agent": {
+        "ResourceDesignerAgent.code_lab": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_lab:0:invalid_python": 4,
+            "semantic_invalid": 4
+          },
+          "failure_count": 0
+        },
+        "ResourceDesignerAgent.handout": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "ResourceDesignerAgent.reading": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "ResourceDesignerAgent.storyboard": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        }
+      },
+      "beginner_noise": {
+        "clean": {
+          "case_count": 20,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_lab:0:invalid_python": 4,
+            "semantic_invalid": 4
+          },
+          "failure_count": 0
+        }
+      },
+      "chapter": {
+        "1": {
+          "case_count": 4,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "3": {
+          "case_count": 4,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_lab:0:invalid_python": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 0
+        },
+        "4": {
+          "case_count": 4,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_lab:0:invalid_python": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 0
+        },
+        "6": {
+          "case_count": 4,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_lab:0:invalid_python": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 0
+        },
+        "7": {
+          "case_count": 4,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_lab:0:invalid_python": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 0
+        }
+      },
+      "evidence": {
+        "required": {
+          "case_count": 20,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_lab:0:invalid_python": 4,
+            "semantic_invalid": 4
+          },
+          "failure_count": 0
+        }
+      },
+      "failure_category": {
+        "semantic_error:code_lab:0:invalid_python": 4,
+        "semantic_invalid": 4
+      },
+      "missing_schema_field": {},
+      "safety": {
+        "standard": {
+          "case_count": 20,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_lab:0:invalid_python": 4,
+            "semantic_invalid": 4
+          },
+          "failure_count": 0
+        }
+      },
+      "schema_type_error": {},
+      "web_input": {
+        "non_web": {
+          "case_count": 20,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_lab:0:invalid_python": 4,
+            "semantic_invalid": 4
+          },
+          "failure_count": 0
+        }
+      }
+    },
+    "failure_directed_static_schema": {
+      "agent": {
+        "ResourceDesignerAgent.code_lab": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_lab:0:invalid_python": 4,
+            "semantic_invalid": 4
+          },
+          "failure_count": 0
+        },
+        "ResourceDesignerAgent.handout": {
+          "case_count": 5,
+          "contract_pass_rate": 0.2,
+          "failure_categories": {
+            "grounding_unsafe": 4
+          },
+          "failure_count": 4
+        },
+        "ResourceDesignerAgent.reading": {
+          "case_count": 5,
+          "contract_pass_rate": 0.4,
+          "failure_categories": {
+            "grounding_unsafe": 3
+          },
+          "failure_count": 3
+        },
+        "ResourceDesignerAgent.storyboard": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        }
+      },
+      "beginner_noise": {
+        "clean": {
+          "case_count": 20,
+          "contract_pass_rate": 0.65,
+          "failure_categories": {
+            "grounding_unsafe": 7,
+            "semantic_error:code_lab:0:invalid_python": 4,
+            "semantic_invalid": 4
+          },
+          "failure_count": 7
+        }
+      },
+      "chapter": {
+        "1": {
+          "case_count": 4,
+          "contract_pass_rate": 0.75,
+          "failure_categories": {
+            "grounding_unsafe": 1
+          },
+          "failure_count": 1
+        },
+        "3": {
+          "case_count": 4,
+          "contract_pass_rate": 0.5,
+          "failure_categories": {
+            "grounding_unsafe": 2,
+            "semantic_error:code_lab:0:invalid_python": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 2
+        },
+        "4": {
+          "case_count": 4,
+          "contract_pass_rate": 0.5,
+          "failure_categories": {
+            "grounding_unsafe": 2,
+            "semantic_error:code_lab:0:invalid_python": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 2
+        },
+        "6": {
+          "case_count": 4,
+          "contract_pass_rate": 0.75,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "semantic_error:code_lab:0:invalid_python": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 1
+        },
+        "7": {
+          "case_count": 4,
+          "contract_pass_rate": 0.75,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "semantic_error:code_lab:0:invalid_python": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 1
+        }
+      },
+      "evidence": {
+        "required": {
+          "case_count": 20,
+          "contract_pass_rate": 0.65,
+          "failure_categories": {
+            "grounding_unsafe": 7,
+            "semantic_error:code_lab:0:invalid_python": 4,
+            "semantic_invalid": 4
+          },
+          "failure_count": 7
+        }
+      },
+      "failure_category": {
+        "grounding_unsafe": 7,
+        "semantic_error:code_lab:0:invalid_python": 4,
+        "semantic_invalid": 4
+      },
+      "missing_schema_field": {},
+      "safety": {
+        "standard": {
+          "case_count": 20,
+          "contract_pass_rate": 0.65,
+          "failure_categories": {
+            "grounding_unsafe": 7,
+            "semantic_error:code_lab:0:invalid_python": 4,
+            "semantic_invalid": 4
+          },
+          "failure_count": 7
+        }
+      },
+      "schema_type_error": {},
+      "web_input": {
+        "non_web": {
+          "case_count": 20,
+          "contract_pass_rate": 0.65,
+          "failure_categories": {
+            "grounding_unsafe": 7,
+            "semantic_error:code_lab:0:invalid_python": 4,
+            "semantic_invalid": 4
+          },
+          "failure_count": 7
+        }
+      }
+    },
+    "failure_directed_unconstrained": {
+      "agent": {
+        "ResourceDesignerAgent.code_lab": {
+          "case_count": 5,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "schema_invalid": 5,
+            "schema_type_error:walkthroughs[0].code": 2,
+            "schema_type_error:walkthroughs[0].common_mistakes": 4,
+            "semantic_error:code_lab:0:empty_code": 2,
+            "semantic_error:code_lab:0:invalid_python": 2,
+            "semantic_invalid": 4
+          },
+          "failure_count": 5
+        },
+        "ResourceDesignerAgent.handout": {
+          "case_count": 5,
+          "contract_pass_rate": 0.6,
+          "failure_categories": {
+            "json_invalid": 2,
+            "missing_schema_field:sections": 2,
+            "missing_schema_field:title": 2
+          },
+          "failure_count": 2
+        },
+        "ResourceDesignerAgent.reading": {
+          "case_count": 5,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "grounding_unsafe": 2,
+            "json_invalid": 5,
+            "missing_schema_field:items": 5
+          },
+          "failure_count": 5
+        },
+        "ResourceDesignerAgent.storyboard": {
+          "case_count": 5,
+          "contract_pass_rate": 0.2,
+          "failure_categories": {
+            "schema_invalid": 4,
+            "schema_type_error:scenes": 4
+          },
+          "failure_count": 4
+        }
+      },
+      "beginner_noise": {
+        "clean": {
+          "case_count": 20,
+          "contract_pass_rate": 0.2,
+          "failure_categories": {
+            "grounding_unsafe": 2,
+            "json_invalid": 7,
+            "missing_schema_field:items": 5,
+            "missing_schema_field:sections": 2,
+            "missing_schema_field:title": 2,
+            "schema_invalid": 9,
+            "schema_type_error:scenes": 4,
+            "schema_type_error:walkthroughs[0].code": 2,
+            "schema_type_error:walkthroughs[0].common_mistakes": 4,
+            "semantic_error:code_lab:0:empty_code": 2,
+            "semantic_error:code_lab:0:invalid_python": 2,
+            "semantic_invalid": 4
+          },
+          "failure_count": 16
+        }
+      },
+      "chapter": {
+        "1": {
+          "case_count": 4,
+          "contract_pass_rate": 0.25,
+          "failure_categories": {
+            "json_invalid": 1,
+            "missing_schema_field:items": 1,
+            "schema_invalid": 2,
+            "schema_type_error:scenes": 1,
+            "schema_type_error:walkthroughs[0].code": 1,
+            "schema_type_error:walkthroughs[0].common_mistakes": 1,
+            "semantic_error:code_lab:0:empty_code": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 3
+        },
+        "3": {
+          "case_count": 4,
+          "contract_pass_rate": 0.25,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "json_invalid": 1,
+            "missing_schema_field:items": 1,
+            "schema_invalid": 2,
+            "schema_type_error:scenes": 1,
+            "schema_type_error:walkthroughs[0].common_mistakes": 1,
+            "semantic_error:code_lab:0:invalid_python": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 3
+        },
+        "4": {
+          "case_count": 4,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "json_invalid": 2,
+            "missing_schema_field:items": 1,
+            "missing_schema_field:sections": 1,
+            "missing_schema_field:title": 1,
+            "schema_invalid": 2,
+            "schema_type_error:scenes": 1,
+            "schema_type_error:walkthroughs[0].common_mistakes": 1,
+            "semantic_error:code_lab:0:invalid_python": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 4
+        },
+        "6": {
+          "case_count": 4,
+          "contract_pass_rate": 0.25,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "json_invalid": 1,
+            "missing_schema_field:items": 1,
+            "schema_invalid": 2,
+            "schema_type_error:scenes": 1,
+            "schema_type_error:walkthroughs[0].common_mistakes": 1
+          },
+          "failure_count": 3
+        },
+        "7": {
+          "case_count": 4,
+          "contract_pass_rate": 0.25,
+          "failure_categories": {
+            "json_invalid": 2,
+            "missing_schema_field:items": 1,
+            "missing_schema_field:sections": 1,
+            "missing_schema_field:title": 1,
+            "schema_invalid": 1,
+            "schema_type_error:walkthroughs[0].code": 1,
+            "semantic_error:code_lab:0:empty_code": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 3
+        }
+      },
+      "evidence": {
+        "required": {
+          "case_count": 20,
+          "contract_pass_rate": 0.2,
+          "failure_categories": {
+            "grounding_unsafe": 2,
+            "json_invalid": 7,
+            "missing_schema_field:items": 5,
+            "missing_schema_field:sections": 2,
+            "missing_schema_field:title": 2,
+            "schema_invalid": 9,
+            "schema_type_error:scenes": 4,
+            "schema_type_error:walkthroughs[0].code": 2,
+            "schema_type_error:walkthroughs[0].common_mistakes": 4,
+            "semantic_error:code_lab:0:empty_code": 2,
+            "semantic_error:code_lab:0:invalid_python": 2,
+            "semantic_invalid": 4
+          },
+          "failure_count": 16
+        }
+      },
+      "failure_category": {
+        "grounding_unsafe": 2,
+        "json_invalid": 7,
+        "missing_schema_field:items": 5,
+        "missing_schema_field:sections": 2,
+        "missing_schema_field:title": 2,
+        "schema_invalid": 9,
+        "schema_type_error:scenes": 4,
+        "schema_type_error:walkthroughs[0].code": 2,
+        "schema_type_error:walkthroughs[0].common_mistakes": 4,
+        "semantic_error:code_lab:0:empty_code": 2,
+        "semantic_error:code_lab:0:invalid_python": 2,
+        "semantic_invalid": 4
+      },
+      "missing_schema_field": {
+        "items": 5,
+        "sections": 2,
+        "title": 2
+      },
+      "safety": {
+        "standard": {
+          "case_count": 20,
+          "contract_pass_rate": 0.2,
+          "failure_categories": {
+            "grounding_unsafe": 2,
+            "json_invalid": 7,
+            "missing_schema_field:items": 5,
+            "missing_schema_field:sections": 2,
+            "missing_schema_field:title": 2,
+            "schema_invalid": 9,
+            "schema_type_error:scenes": 4,
+            "schema_type_error:walkthroughs[0].code": 2,
+            "schema_type_error:walkthroughs[0].common_mistakes": 4,
+            "semantic_error:code_lab:0:empty_code": 2,
+            "semantic_error:code_lab:0:invalid_python": 2,
+            "semantic_invalid": 4
+          },
+          "failure_count": 16
+        }
+      },
+      "schema_type_error": {
+        "scenes": 4,
+        "walkthroughs[0].code": 2,
+        "walkthroughs[0].common_mistakes": 4
+      },
+      "web_input": {
+        "non_web": {
+          "case_count": 20,
+          "contract_pass_rate": 0.2,
+          "failure_categories": {
+            "grounding_unsafe": 2,
+            "json_invalid": 7,
+            "missing_schema_field:items": 5,
+            "missing_schema_field:sections": 2,
+            "missing_schema_field:title": 2,
+            "schema_invalid": 9,
+            "schema_type_error:scenes": 4,
+            "schema_type_error:walkthroughs[0].code": 2,
+            "schema_type_error:walkthroughs[0].common_mistakes": 4,
+            "semantic_error:code_lab:0:empty_code": 2,
+            "semantic_error:code_lab:0:invalid_python": 2,
+            "semantic_invalid": 4
+          },
+          "failure_count": 16
+        }
+      }
+    }
+  },
+  "models": {
+    "champion_evidence_bound": {
+      "case_count": 20,
+      "critical_slices": {
+        "evidence_required": 1.0
+      },
+      "fallback_count": 5,
+      "fallback_rate": 0.25,
+      "final": {
+        "case_count": 20,
+        "contract_pass_rate": 1.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "promotion_pass_rate": 1.0,
+        "schema_valid_rate": 1.0,
+        "score_mean": 1.0,
+        "semantic_valid_rate": 1.0
+      },
+      "guard": {
+        "case_count": 20,
+        "contract_pass_rate": 1.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "promotion_pass_rate": 0.75,
+        "schema_valid_rate": 1.0,
+        "score_mean": 1.0,
+        "semantic_valid_rate": 0.75
+      },
+      "guard_repair_count": 0,
+      "guard_repair_rate": 0.0,
+      "guard_repair_rate_among_raw_failures": 0.0,
+      "layer_semantics": {
+        "final": "guard result or deterministic fallback replay; final 100% must not be attributed to the raw model",
+        "guard": "offline deterministic contract-repair replay; not a claim about historical production guard execution",
+        "raw": "observed model response"
+      },
+      "primary_metric": "contract_pass_rate",
+      "raw": {
+        "case_count": 20,
+        "contract_pass_rate": 1.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "promotion_pass_rate": 0.75,
+        "schema_valid_rate": 1.0,
+        "score_mean": 1.0,
+        "semantic_valid_rate": 0.75
+      },
+      "raw_promotion_pass_rate": 0.75,
+      "raw_semantic_valid_rate": 0.75,
+      "safety_sensitive_forbidden_leak_rate": 0.0
+    },
+    "champion_unconstrained": {
+      "case_count": 20,
+      "critical_slices": {
+        "evidence_required": 0.0
+      },
+      "fallback_count": 20,
+      "fallback_rate": 1.0,
+      "final": {
+        "case_count": 20,
+        "contract_pass_rate": 1.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "promotion_pass_rate": 1.0,
+        "schema_valid_rate": 1.0,
+        "score_mean": 1.0,
+        "semantic_valid_rate": 1.0
+      },
+      "guard": {
+        "case_count": 20,
+        "contract_pass_rate": 0.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 0.95,
+        "json_valid_rate": 0.5,
+        "promotion_pass_rate": 0.0,
+        "schema_valid_rate": 0.0,
+        "score_mean": 0.7975,
+        "semantic_valid_rate": 0.8
+      },
+      "guard_repair_count": 0,
+      "guard_repair_rate": 0.0,
+      "guard_repair_rate_among_raw_failures": 0.0,
+      "layer_semantics": {
+        "final": "guard result or deterministic fallback replay; final 100% must not be attributed to the raw model",
+        "guard": "offline deterministic contract-repair replay; not a claim about historical production guard execution",
+        "raw": "observed model response"
+      },
+      "primary_metric": "contract_pass_rate",
+      "raw": {
+        "case_count": 20,
+        "contract_pass_rate": 0.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 0.95,
+        "json_valid_rate": 0.5,
+        "promotion_pass_rate": 0.0,
+        "schema_valid_rate": 0.0,
+        "score_mean": 0.7975,
+        "semantic_valid_rate": 0.8
+      },
+      "raw_promotion_pass_rate": 0.0,
+      "raw_semantic_valid_rate": 0.8,
+      "safety_sensitive_forbidden_leak_rate": 0.0
+    },
+    "compact_orpo_unconstrained": {
+      "case_count": 20,
+      "critical_slices": {
+        "evidence_required": 0.2
+      },
+      "fallback_count": 16,
+      "fallback_rate": 0.8,
+      "final": {
+        "case_count": 20,
+        "contract_pass_rate": 1.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "promotion_pass_rate": 1.0,
+        "schema_valid_rate": 1.0,
+        "score_mean": 1.0,
+        "semantic_valid_rate": 1.0
+      },
+      "guard": {
+        "case_count": 20,
+        "contract_pass_rate": 0.2,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 0.9,
+        "json_valid_rate": 0.65,
+        "promotion_pass_rate": 0.2,
+        "schema_valid_rate": 0.2,
+        "score_mean": 0.83,
+        "semantic_valid_rate": 0.8
+      },
+      "guard_repair_count": 0,
+      "guard_repair_rate": 0.0,
+      "guard_repair_rate_among_raw_failures": 0.0,
+      "layer_semantics": {
+        "final": "guard result or deterministic fallback replay; final 100% must not be attributed to the raw model",
+        "guard": "offline deterministic contract-repair replay; not a claim about historical production guard execution",
+        "raw": "observed model response"
+      },
+      "primary_metric": "contract_pass_rate",
+      "raw": {
+        "case_count": 20,
+        "contract_pass_rate": 0.2,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 0.9,
+        "json_valid_rate": 0.65,
+        "promotion_pass_rate": 0.2,
+        "schema_valid_rate": 0.2,
+        "score_mean": 0.83,
+        "semantic_valid_rate": 0.8
+      },
+      "raw_promotion_pass_rate": 0.2,
+      "raw_semantic_valid_rate": 0.8,
+      "safety_sensitive_forbidden_leak_rate": 0.0
+    },
+    "failure_directed_evidence_bound": {
+      "case_count": 20,
+      "critical_slices": {
+        "evidence_required": 1.0
+      },
+      "fallback_count": 4,
+      "fallback_rate": 0.2,
+      "final": {
+        "case_count": 20,
+        "contract_pass_rate": 1.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "promotion_pass_rate": 1.0,
+        "schema_valid_rate": 1.0,
+        "score_mean": 1.0,
+        "semantic_valid_rate": 1.0
+      },
+      "guard": {
+        "case_count": 20,
+        "contract_pass_rate": 1.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "promotion_pass_rate": 0.8,
+        "schema_valid_rate": 1.0,
+        "score_mean": 1.0,
+        "semantic_valid_rate": 0.8
+      },
+      "guard_repair_count": 0,
+      "guard_repair_rate": 0.0,
+      "guard_repair_rate_among_raw_failures": 0.0,
+      "layer_semantics": {
+        "final": "guard result or deterministic fallback replay; final 100% must not be attributed to the raw model",
+        "guard": "offline deterministic contract-repair replay; not a claim about historical production guard execution",
+        "raw": "observed model response"
+      },
+      "primary_metric": "contract_pass_rate",
+      "raw": {
+        "case_count": 20,
+        "contract_pass_rate": 1.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "promotion_pass_rate": 0.8,
+        "schema_valid_rate": 1.0,
+        "score_mean": 1.0,
+        "semantic_valid_rate": 0.8
+      },
+      "raw_promotion_pass_rate": 0.8,
+      "raw_semantic_valid_rate": 0.8,
+      "safety_sensitive_forbidden_leak_rate": 0.0
+    },
+    "failure_directed_static_schema": {
+      "case_count": 20,
+      "critical_slices": {
+        "evidence_required": 0.65
+      },
+      "fallback_count": 4,
+      "fallback_rate": 0.2,
+      "final": {
+        "case_count": 20,
+        "contract_pass_rate": 1.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "promotion_pass_rate": 1.0,
+        "schema_valid_rate": 1.0,
+        "score_mean": 0.985,
+        "semantic_valid_rate": 1.0
+      },
+      "guard": {
+        "case_count": 20,
+        "contract_pass_rate": 1.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "promotion_pass_rate": 0.8,
+        "schema_valid_rate": 1.0,
+        "score_mean": 0.985,
+        "semantic_valid_rate": 0.8
+      },
+      "guard_repair_count": 7,
+      "guard_repair_rate": 0.35,
+      "guard_repair_rate_among_raw_failures": 1.0,
+      "layer_semantics": {
+        "final": "guard result or deterministic fallback replay; final 100% must not be attributed to the raw model",
+        "guard": "offline deterministic contract-repair replay; not a claim about historical production guard execution",
+        "raw": "observed model response"
+      },
+      "primary_metric": "contract_pass_rate",
+      "raw": {
+        "case_count": 20,
+        "contract_pass_rate": 0.65,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 0.65,
+        "json_valid_rate": 1.0,
+        "promotion_pass_rate": 0.45,
+        "schema_valid_rate": 1.0,
+        "score_mean": 0.945,
+        "semantic_valid_rate": 0.8
+      },
+      "raw_promotion_pass_rate": 0.45,
+      "raw_semantic_valid_rate": 0.8,
+      "safety_sensitive_forbidden_leak_rate": 0.0
+    },
+    "failure_directed_unconstrained": {
+      "case_count": 20,
+      "critical_slices": {
+        "evidence_required": 0.2
+      },
+      "fallback_count": 16,
+      "fallback_rate": 0.8,
+      "final": {
+        "case_count": 20,
+        "contract_pass_rate": 1.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "promotion_pass_rate": 1.0,
+        "schema_valid_rate": 1.0,
+        "score_mean": 1.0,
+        "semantic_valid_rate": 1.0
+      },
+      "guard": {
+        "case_count": 20,
+        "contract_pass_rate": 0.2,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 0.9,
+        "json_valid_rate": 0.65,
+        "promotion_pass_rate": 0.2,
+        "schema_valid_rate": 0.2,
+        "score_mean": 0.83,
+        "semantic_valid_rate": 0.8
+      },
+      "guard_repair_count": 0,
+      "guard_repair_rate": 0.0,
+      "guard_repair_rate_among_raw_failures": 0.0,
+      "layer_semantics": {
+        "final": "guard result or deterministic fallback replay; final 100% must not be attributed to the raw model",
+        "guard": "offline deterministic contract-repair replay; not a claim about historical production guard execution",
+        "raw": "observed model response"
+      },
+      "primary_metric": "contract_pass_rate",
+      "raw": {
+        "case_count": 20,
+        "contract_pass_rate": 0.2,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 0.9,
+        "json_valid_rate": 0.65,
+        "promotion_pass_rate": 0.2,
+        "schema_valid_rate": 0.2,
+        "score_mean": 0.83,
+        "semantic_valid_rate": 0.8
+      },
+      "raw_promotion_pass_rate": 0.2,
+      "raw_semantic_valid_rate": 0.8,
+      "safety_sensitive_forbidden_leak_rate": 0.0
+    }
+  },
+  "paired_comparison": {
+    "case_count": 20,
+    "models": [
+      "champion_unconstrained",
+      "compact_orpo_unconstrained",
+      "failure_directed_unconstrained",
+      "failure_directed_static_schema",
+      "failure_directed_evidence_bound",
+      "champion_evidence_bound"
+    ],
+    "pairwise": {
+      "champion_unconstrained_vs_champion_evidence_bound": {
+        "contract_ties": 0,
+        "full_ties": 0,
+        "left": "champion_unconstrained",
+        "left_wins": 0,
+        "ordering": "contract_pass_then_auxiliary_score",
+        "right": "champion_evidence_bound",
+        "right_wins": 20
+      },
+      "champion_unconstrained_vs_compact_orpo_unconstrained": {
+        "contract_ties": 16,
+        "full_ties": 12,
+        "left": "champion_unconstrained",
+        "left_wins": 0,
+        "ordering": "contract_pass_then_auxiliary_score",
+        "right": "compact_orpo_unconstrained",
+        "right_wins": 8
+      },
+      "champion_unconstrained_vs_failure_directed_evidence_bound": {
+        "contract_ties": 0,
+        "full_ties": 0,
+        "left": "champion_unconstrained",
+        "left_wins": 0,
+        "ordering": "contract_pass_then_auxiliary_score",
+        "right": "failure_directed_evidence_bound",
+        "right_wins": 20
+      },
+      "champion_unconstrained_vs_failure_directed_static_schema": {
+        "contract_ties": 7,
+        "full_ties": 0,
+        "left": "champion_unconstrained",
+        "left_wins": 4,
+        "ordering": "contract_pass_then_auxiliary_score",
+        "right": "failure_directed_static_schema",
+        "right_wins": 16
+      },
+      "champion_unconstrained_vs_failure_directed_unconstrained": {
+        "contract_ties": 16,
+        "full_ties": 12,
+        "left": "champion_unconstrained",
+        "left_wins": 0,
+        "ordering": "contract_pass_then_auxiliary_score",
+        "right": "failure_directed_unconstrained",
+        "right_wins": 8
+      },
+      "compact_orpo_unconstrained_vs_champion_evidence_bound": {
+        "contract_ties": 4,
+        "full_ties": 4,
+        "left": "compact_orpo_unconstrained",
+        "left_wins": 0,
+        "ordering": "contract_pass_then_auxiliary_score",
+        "right": "champion_evidence_bound",
+        "right_wins": 16
+      },
+      "compact_orpo_unconstrained_vs_failure_directed_evidence_bound": {
+        "contract_ties": 4,
+        "full_ties": 4,
+        "left": "compact_orpo_unconstrained",
+        "left_wins": 0,
+        "ordering": "contract_pass_then_auxiliary_score",
+        "right": "failure_directed_evidence_bound",
+        "right_wins": 16
+      },
+      "compact_orpo_unconstrained_vs_failure_directed_static_schema": {
+        "contract_ties": 5,
+        "full_ties": 1,
+        "left": "compact_orpo_unconstrained",
+        "left_wins": 4,
+        "ordering": "contract_pass_then_auxiliary_score",
+        "right": "failure_directed_static_schema",
+        "right_wins": 15
+      },
+      "compact_orpo_unconstrained_vs_failure_directed_unconstrained": {
+        "contract_ties": 20,
+        "full_ties": 20,
+        "left": "compact_orpo_unconstrained",
+        "left_wins": 0,
+        "ordering": "contract_pass_then_auxiliary_score",
+        "right": "failure_directed_unconstrained",
+        "right_wins": 0
+      },
+      "failure_directed_evidence_bound_vs_champion_evidence_bound": {
+        "contract_ties": 20,
+        "full_ties": 20,
+        "left": "failure_directed_evidence_bound",
+        "left_wins": 0,
+        "ordering": "contract_pass_then_auxiliary_score",
+        "right": "champion_evidence_bound",
+        "right_wins": 0
+      },
+      "failure_directed_static_schema_vs_champion_evidence_bound": {
+        "contract_ties": 13,
+        "full_ties": 13,
+        "left": "failure_directed_static_schema",
+        "left_wins": 0,
+        "ordering": "contract_pass_then_auxiliary_score",
+        "right": "champion_evidence_bound",
+        "right_wins": 7
+      },
+      "failure_directed_static_schema_vs_failure_directed_evidence_bound": {
+        "contract_ties": 13,
+        "full_ties": 13,
+        "left": "failure_directed_static_schema",
+        "left_wins": 0,
+        "ordering": "contract_pass_then_auxiliary_score",
+        "right": "failure_directed_evidence_bound",
+        "right_wins": 7
+      },
+      "failure_directed_unconstrained_vs_champion_evidence_bound": {
+        "contract_ties": 4,
+        "full_ties": 4,
+        "left": "failure_directed_unconstrained",
+        "left_wins": 0,
+        "ordering": "contract_pass_then_auxiliary_score",
+        "right": "champion_evidence_bound",
+        "right_wins": 16
+      },
+      "failure_directed_unconstrained_vs_failure_directed_evidence_bound": {
+        "contract_ties": 4,
+        "full_ties": 4,
+        "left": "failure_directed_unconstrained",
+        "left_wins": 0,
+        "ordering": "contract_pass_then_auxiliary_score",
+        "right": "failure_directed_evidence_bound",
+        "right_wins": 16
+      },
+      "failure_directed_unconstrained_vs_failure_directed_static_schema": {
+        "contract_ties": 5,
+        "full_ties": 1,
+        "left": "failure_directed_unconstrained",
+        "left_wins": 4,
+        "ordering": "contract_pass_then_auxiliary_score",
+        "right": "failure_directed_static_schema",
+        "right_wins": 15
+      }
+    }
+  },
+  "primary_metric": "contract_pass_rate",
+  "protocol": {
+    "cases_path": "cases/golden_adapter_20_v2_ir_resource4_compact.jsonl",
+    "cases_sha256": "261fee778ec007a23928c5cf97504acb0cb31fd5ddfebd20307754697732060c",
+    "max_tokens": "per_case.max_tokens",
+    "prompt_variant": "v2-ir-resource4-compact",
+    "response_sha256": {
+      "champion_evidence_bound": "86e3f2bbcdc3ca2a28a590df298d10ff0e30b3ecbc9d1d5a8cc9036688798312",
+      "champion_unconstrained": "0786df26dff3cf6af92147bcce14917b63792298d47fbc4e4643c92743e5b7c7",
+      "compact_orpo_unconstrained": "55afbbd77d62eddec487b8ae96cdc609e8d3146e6eeeafcb54758e8638fbceff",
+      "failure_directed_evidence_bound": "be9e25d23a64036000f2209ab946d79a873b842aae8a40d89f4fe1fb33f63ef9",
+      "failure_directed_static_schema": "3c66c4d418edc4f885677e090dc2fcc31293a3212ec28f98489bd693a17fe106",
+      "failure_directed_unconstrained": "21c306c6af1fd3c4d22376d6c655c82bdf59c8795131267f21d799d955603559"
+    },
+    "seed": 42,
+    "temperature": 0.0,
+    "warning": "This manifest proves case identity and rescoring settings. It does not prove historical serve commands unless each source run saved its own immutable run manifest."
+  }
+}

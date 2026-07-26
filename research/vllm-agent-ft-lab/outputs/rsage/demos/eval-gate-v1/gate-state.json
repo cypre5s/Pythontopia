@@ -1,0 +1,46 @@
+{
+  "adapter_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "candidate_id": "rsage-demo-candidate",
+  "demo": true,
+  "message_zh": "fresh_full5000_v2 已完成，评测预算关闭。",
+  "records": [
+    {
+      "artifact_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "case_count": 50,
+      "gate_status": "pass",
+      "message_zh": "阶段门禁已通过。",
+      "reason_codes": [],
+      "stage": "golden50",
+      "status": "passed"
+    },
+    {
+      "artifact_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "case_count": 500,
+      "gate_status": "pass",
+      "message_zh": "阶段门禁已通过。",
+      "reason_codes": [],
+      "stage": "stratified500",
+      "status": "passed"
+    },
+    {
+      "artifact_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "case_count": 500,
+      "gate_status": "pass",
+      "message_zh": "通过：未触发泛化门禁。",
+      "reason_codes": [],
+      "stage": "three_seed",
+      "status": "passed"
+    },
+    {
+      "artifact_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "case_count": 5000,
+      "gate_status": "pass",
+      "message_zh": "通过：未触发泛化门禁。",
+      "reason_codes": [],
+      "stage": "fresh_full5000_v2",
+      "status": "passed"
+    }
+  ],
+  "rejection_reason_codes": [],
+  "status": "completed"
+}

@@ -1,0 +1,1 @@
+{"$id":"agent-schema-v1/MindMapAgent","title":"MindMapAgent","type":"object","properties":{"nodes":{"type":"array"},"edges":{"type":"array"},"prerequisites":{"type":"array"},"evidence_ids":{"type":"array"}},"required":["nodes","edges","prerequisites","evidence_ids"],"additionalProperties":true}

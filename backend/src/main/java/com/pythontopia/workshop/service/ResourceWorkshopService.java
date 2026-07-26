@@ -185,12 +185,7 @@ public class ResourceWorkshopService {
             UUID.randomUUID(),
             runStatus);
 
-    if (runStatus == RunStatus.FAILED) {
-      throw new BusinessException(
-          HttpStatus.UNPROCESSABLE_ENTITY,
-          "RESOURCE_GENERATION_FAILED",
-          "资源生成失败：" + safetyReason(graphResponse));
-    }
+    enforcePublicationGate(runStatus, graphResponse);
 
     ResourceProduceResponseDto.ResourceDraftDto artifact = graphResponse.artifact();
     if (artifact == null) {
@@ -300,12 +295,7 @@ public class ResourceWorkshopService {
             UUID.randomUUID(),
             runStatus);
 
-    if (runStatus == RunStatus.FAILED) {
-      throw new BusinessException(
-          HttpStatus.UNPROCESSABLE_ENTITY,
-          "RESOURCE_GENERATION_FAILED",
-          "资源生成失败：" + safetyReason(graphResponse));
-    }
+    enforcePublicationGate(runStatus, graphResponse);
 
     Long resourceId = resourceRepository.insert(
         userId,
@@ -936,24 +926,67 @@ public class ResourceWorkshopService {
   }
 
   private ResourceStatusFlag flagFromSafety(ResourceProduceResponseDto.SafetyResultDto safety) {
-    if (safety == null) {
-      return ResourceStatusFlag.PASSED;
-    }
-    return Boolean.FALSE.equals(safety.passed()) ? ResourceStatusFlag.FAILED : ResourceStatusFlag.PASSED;
+    return safety != null && Boolean.TRUE.equals(safety.passed())
+        ? ResourceStatusFlag.PASSED
+        : ResourceStatusFlag.FAILED;
   }
 
   private ResourceStatusFlag flagFromGrounding(
       ResourceProduceResponseDto.GroundingResultDto grounding) {
     if (grounding == null) {
-      return ResourceStatusFlag.PASSED;
+      return ResourceStatusFlag.FAILED;
     }
-    if (Boolean.FALSE.equals(grounding.passed())) {
+    if (!Boolean.TRUE.equals(grounding.passed())) {
       return ResourceStatusFlag.FAILED;
     }
     if (Boolean.TRUE.equals(grounding.noEvidenceFound())) {
       return ResourceStatusFlag.NO_EVIDENCE;
     }
     return ResourceStatusFlag.PASSED;
+  }
+
+  /**
+   * 资源发布门禁：run 永远先审计，但只有显式 Safety/Grounding 通过的结果可以写 learning_resource。
+   * 无课件证据仅允许 Graph 明确返回 PARTIAL + no_evidence_found=true；前端据 NO_EVIDENCE 标识披露
+   * "通识知识"，不得把缺失/null/未知状态默认为通过。
+   */
+  private void enforcePublicationGate(
+      RunStatus runStatus, ResourceProduceResponseDto graphResponse) {
+    if (runStatus == RunStatus.FAILED) {
+      throw new BusinessException(
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          "RESOURCE_GENERATION_FAILED",
+          "资源生成失败：" + safetyReason(graphResponse));
+    }
+
+    ResourceProduceResponseDto.SafetyResultDto safety = graphResponse.safetyResult();
+    if (safety == null || !Boolean.TRUE.equals(safety.passed())) {
+      throw new BusinessException(
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          "RESOURCE_SAFETY_REJECTED",
+          "资源未通过安全审查，已保留 run 审计但不会发布");
+    }
+
+    ResourceProduceResponseDto.GroundingResultDto grounding = graphResponse.groundingResult();
+    if (grounding == null || !Boolean.TRUE.equals(grounding.passed())) {
+      throw new BusinessException(
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          "RESOURCE_GROUNDING_REJECTED",
+          "资源未通过证据审查，已保留 run 审计但不会发布");
+    }
+
+    boolean noEvidence = Boolean.TRUE.equals(grounding.noEvidenceFound());
+    String rawStatus = graphResponse.status() == null ? "" : graphResponse.status().trim();
+    boolean disclosedCommonKnowledge =
+        noEvidence && runStatus == RunStatus.PARTIAL && rawStatus.equalsIgnoreCase("PARTIAL");
+    boolean fullyGrounded =
+        !noEvidence && runStatus == RunStatus.SUCCESS && rawStatus.equalsIgnoreCase("SUCCESS");
+    if (!fullyGrounded && !disclosedCommonKnowledge) {
+      throw new BusinessException(
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          "RESOURCE_PUBLICATION_BLOCKED",
+          "资源状态未通过发布门禁；只有完整证据 SUCCESS 或明确通识披露 PARTIAL 可发布");
+    }
   }
 
   private BigDecimal cappedResourceDelta(Long userId, String kcCode) {

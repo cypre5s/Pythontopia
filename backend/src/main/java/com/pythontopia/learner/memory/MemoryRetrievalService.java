@@ -75,8 +75,25 @@ public class MemoryRetrievalService {
    */
   @Transactional(readOnly = true)
   public List<MemoryItemDto> retrieve(Long userId, String focusKc, String queryText, int limit) {
+    return retrieve(userId, focusKc, queryText, limit, false);
+  }
+
+  /**
+   * 权威记忆召回：仅使用 backend/graph 已确认事件，供路由、权限和教学策略决策使用。
+   */
+  @Transactional(readOnly = true)
+  public List<MemoryItemDto> retrieveAuthoritative(
+      Long userId, String focusKc, String queryText, int limit) {
+    return retrieve(userId, focusKc, queryText, limit, true);
+  }
+
+  private List<MemoryItemDto> retrieve(
+      Long userId, String focusKc, String queryText, int limit, boolean authoritative) {
     int safeLimit = clampLimit(limit);
-    List<MemoryRow> rows = eventRepository.findRecentForMemory(userId, SCAN_WINDOW);
+    List<MemoryRow> rows =
+        authoritative
+            ? eventRepository.findRecentAuthoritativeForMemory(userId, SCAN_WINDOW)
+            : eventRepository.findRecentForMemory(userId, SCAN_WINDOW);
     if (rows.isEmpty()) {
       return List.of();
     }

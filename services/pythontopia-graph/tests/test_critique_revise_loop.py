@@ -15,11 +15,7 @@ from pythontopia_graph.nodes.evidence_fetcher import (
     RagHit,
     StaticEvidenceFetcher,
 )
-from pythontopia_graph.schemas.resource import (
-    HandoutContent,
-    PageRef,
-    ResourceProduceRequest,
-)
+from pythontopia_graph.schemas.resource import ResourceProduceRequest
 
 
 class CallCountingProvider(LlmProvider):
@@ -58,31 +54,27 @@ async def test_critique_revise_loop_bad_page_then_fixed() -> None:
 
     断言两稿不同（修订生效）+ 最终 PASS。
     """
-    # 首稿：引用越界 page_id=999
+    # 首稿：IR 形状合法，但正文引用不存在的 KC，触发防幻觉审查。
     bad_draft = {
         "title": "讲义 v1",
-        "handout": HandoutContent(
-            sections=[
-                {
-                    "heading": "section",
-                    "paragraphs": ["引用了越界页码 999"],
-                    "page_refs": [PageRef(page_id=999, page_no=999, chapter_id=3).model_dump()],
-                }
-            ]
-        ).model_dump(),
+        "summary": "待核验讲义",
+        "sections": [{
+            "heading": "section",
+            "paragraphs": ["本段声称 PY43-KC-999 是课程知识点。"],
+            "code_snippets": [],
+            "evidence_refs": ["page-101"],
+        }],
     }
-    # 第二稿：修正后引用合法 page_id=101
+    # 第二稿：移除不存在的 KC，保留 compiler 可绑定的 opaque evidence ref。
     fixed_draft = {
         "title": "讲义 v2（已修订）",
-        "handout": HandoutContent(
-            sections=[
-                {
-                    "heading": "section",
-                    "paragraphs": ["修正后引用了正确页码"],
-                    "page_refs": [PageRef(page_id=101, page_no=12, chapter_id=3).model_dump()],
-                }
-            ]
-        ).model_dump(),
+        "summary": "已核验讲义",
+        "sections": [{
+            "heading": "section",
+            "paragraphs": ["for 循环用于遍历可迭代对象。"],
+            "code_snippets": [],
+            "evidence_refs": ["page-101"],
+        }],
     }
 
     provider = CallCountingProvider([bad_draft, fixed_draft])
@@ -117,15 +109,13 @@ async def test_critique_revise_no_extra_call_when_pass_on_first() -> None:
     """首稿即通过时仅 1 次 LLM 调用（成本守恒）。"""
     good_draft = {
         "title": "讲义",
-        "handout": HandoutContent(
-            sections=[
-                {
-                    "heading": "section",
-                    "paragraphs": ["合法引用"],
-                    "page_refs": [PageRef(page_id=101, page_no=12, chapter_id=3).model_dump()],
-                }
-            ]
-        ).model_dump(),
+        "summary": "合法讲义",
+        "sections": [{
+            "heading": "section",
+            "paragraphs": ["for 循环用于遍历可迭代对象。"],
+            "code_snippets": [],
+            "evidence_refs": ["page-101"],
+        }],
     }
 
     provider = CallCountingProvider([good_draft])
@@ -146,27 +136,23 @@ async def test_critique_revise_reasons_injected_into_prompt() -> None:
     """验证 reasons 确实注入到了第二次 design() 的 prompt 中。"""
     bad_draft = {
         "title": "讲义 v1",
-        "handout": HandoutContent(
-            sections=[
-                {
-                    "heading": "section",
-                    "paragraphs": ["伪造页码"],
-                    "page_refs": [PageRef(page_id=999, page_no=999, chapter_id=3).model_dump()],
-                }
-            ]
-        ).model_dump(),
+        "summary": "待核验讲义",
+        "sections": [{
+            "heading": "section",
+            "paragraphs": ["本段声称 PY43-KC-999 是课程知识点。"],
+            "code_snippets": [],
+            "evidence_refs": ["page-101"],
+        }],
     }
     fixed_draft = {
         "title": "讲义 v2 修订版",
-        "handout": HandoutContent(
-            sections=[
-                {
-                    "heading": "section",
-                    "paragraphs": ["已修正"],
-                    "page_refs": [PageRef(page_id=101, page_no=12, chapter_id=3).model_dump()],
-                }
-            ]
-        ).model_dump(),
+        "summary": "已核验讲义",
+        "sections": [{
+            "heading": "section",
+            "paragraphs": ["for 循环用于遍历可迭代对象。"],
+            "code_snippets": [],
+            "evidence_refs": ["page-101"],
+        }],
     }
 
     provider = CallCountingProvider([bad_draft, fixed_draft])
@@ -196,20 +182,16 @@ async def test_critique_revise_all_fail_still_errors() -> None:
     """全部 attempt 失败仍抛 ResourceGraphError（不静默降级）。"""
 
     def bad_draft(page_id: int) -> dict:
-        # 每轮引用不同越界页码 → 失败原因不同，规避震荡早停，正常耗尽 MAX_RETRIES。
+        # 每轮声称不同未知 KC → 失败原因不同，规避震荡早停，正常耗尽 MAX_RETRIES。
         return {
             "title": "讲义",
-            "handout": HandoutContent(
-                sections=[
-                    {
-                        "heading": "section",
-                        "paragraphs": ["始终引用越界页码"],
-                        "page_refs": [
-                            PageRef(page_id=page_id, page_no=page_id, chapter_id=3).model_dump()
-                        ],
-                    }
-                ]
-            ).model_dump(),
+            "summary": "待核验讲义",
+            "sections": [{
+                "heading": "section",
+                "paragraphs": [f"本段声称 PY43-KC-{page_id} 是课程知识点。"],
+                "code_snippets": [],
+                "evidence_refs": ["page-101"],
+            }],
         }
 
     # MAX_RETRIES=2 → 3 次全部失败

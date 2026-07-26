@@ -11,6 +11,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from pythontopia_graph.schemas.workshop_route import RouteDecision
+
 # ASK = 答疑问答（导师管线）；VIDEO = B站精选讲解视频（外部资源检索，非生成）；
 # REVIEW = 记忆矿脉回声复习（引导到错题矿洞按 FSRS 到期 KC 复盘，非生成）；
 # HANDOUT…STORYBOARD 6 个对应资源工坊的 6 类资源。
@@ -90,6 +92,59 @@ class SessionCorrection(BaseModel):
     corrected_intent: str = Field(max_length=32)
 
 
+class WorkshopInteractionContextRef(BaseModel):
+    """前端可声明的当前交互引用；画像、掌握度和判题结论必须由后端补齐。"""
+
+    session_id: str = Field(default="", max_length=128)
+    current_scene: str = Field(default="", max_length=64)
+    current_stage: str = Field(default="", max_length=64)
+    current_problem_id: int | None = Field(default=None, ge=1)
+    current_code: str = Field(default="", max_length=12000)
+    latest_submission_id: int | None = Field(default=None, ge=1)
+    selected_page_ids: list[int] = Field(default_factory=list, max_length=10)
+    error_text: str = Field(default="", max_length=4000)
+    frontend_action: str = Field(default="", max_length=64)
+    current_resource_id: int | None = Field(default=None, ge=1)
+
+
+class LearnerRecentResource(BaseModel):
+    """Backend-owned recent resource fact, flattened per KC for planner reuse."""
+
+    kc_code: str = Field(min_length=1, max_length=64)
+    type: Literal["HANDOUT", "MINDMAP", "PRACTICE", "CODE_LAB", "READING", "STORYBOARD"]
+    created_at: str = Field(default="", max_length=64)
+
+
+class LearnerRecentSubmission(BaseModel):
+    """Backend-owned formal submission projection; never accepted from the browser."""
+
+    problem_id: int = Field(ge=1)
+    kc_code: str = Field(min_length=1, max_length=64)
+    passed: bool
+
+
+class LearnerRoutingContext(BaseModel):
+    """Authoritative Phase 3 learner facts assembled by the Java backend."""
+
+    profile_brief: str = Field(default="", max_length=2000)
+    kc_mastery: dict[str, float] = Field(default_factory=dict, max_length=65)
+    kc_confidence: dict[str, float] = Field(default_factory=dict, max_length=65)
+    weak_kcs: list[str] = Field(default_factory=list, max_length=10)
+    recent_error_kcs: list[str] = Field(default_factory=list, max_length=10)
+    cognitive_load: Literal["LOW", "MEDIUM", "HIGH"] = "LOW"
+    frustration_level: Literal["LOW", "MEDIUM", "HIGH"] = "LOW"
+    cognitive_style: str = Field(default="", max_length=64)
+    learning_preferences: list[str] = Field(default_factory=list, max_length=8)
+    profile_major: Literal["CS", "NON_CS_STEM", "NON_CS_HUMANITIES", "OTHER"] = "OTHER"
+    python_level: int = Field(default=2, ge=1, le=5)
+    recent_resources: list[LearnerRecentResource] = Field(default_factory=list, max_length=20)
+    recent_submissions: list[LearnerRecentSubmission] = Field(default_factory=list, max_length=20)
+    struggle_patterns: list[str] = Field(default_factory=list, max_length=8)
+    recent_wins: list[str] = Field(default_factory=list, max_length=8)
+    intervention_hints: list[str] = Field(default_factory=list, max_length=8)
+    as_of: str = Field(default="", max_length=64)
+
+
 class IntentRouteRequest(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
     # 学生手动 @ 指定的 KC（最高优先级，永远保留在结果里）。
@@ -114,6 +169,12 @@ class IntentRouteRequest(BaseModel):
     source: RouteSource = "composer_text"
     # 能力启动器选中的 6 类分组：只作为候选空间 hint，不等同于强制 primary intent。
     capability_namespace: CapabilityNamespace | None = None
+    # Slash / 澄清候选 / 组合动作等学生显式选择的工具。只跳过语义消歧，不能跳过 scope、上下文与策略门。
+    requested_intent: IntentKind | None = None
+    # 当前题目/代码/失败提交/课件页等引用。这里只接收引用和编辑器文本；权威业务状态由 Java 校验。
+    interaction: WorkshopInteractionContextRef | None = None
+    # Java 端从画像、掌握度、正式提交、记忆与资源库聚合；浏览器声明会被服务端覆盖。
+    learner_context: LearnerRoutingContext | None = None
 
 
 class IntentRouteResponse(BaseModel):
@@ -136,3 +197,4 @@ class IntentRouteResponse(BaseModel):
     risk_class: RouteRiskClass
     render_mode: RouteRenderMode
     reason_code: RouteReasonCode
+    route_decision: RouteDecision

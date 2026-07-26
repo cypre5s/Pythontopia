@@ -32,6 +32,8 @@ class IntentControllerTest {
         List.of(),
         null,
         null,
+        null,
+        null,
         null);
   }
 
@@ -70,7 +72,8 @@ class IntentControllerTest {
             "",
             "generative",
             "resource",
-            "explicit_command");
+            "explicit_command",
+            null);
     when(service.route(eq(student), eq(request))).thenReturn(expected);
     IntentController controller = new IntentController(service);
 

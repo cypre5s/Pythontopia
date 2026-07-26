@@ -60,6 +60,39 @@ def test_invalid_json_is_counted_as_fallback_not_guard_repair() -> None:
     assert summary["safety_sensitive_forbidden_leak_rate"] == 0.0
 
 
+def test_code_lab_invalid_python_counts_as_semantic_fallback() -> None:
+    case = {
+        "id": "code-invalid-python",
+        "agent": "ResourceDesignerAgent.code_lab",
+        "schema_version": "agent-schema-v2",
+        "requires_evidence": True,
+        "evidence_ids": ["page-4-006"],
+    }
+    response = json.dumps(
+        {
+            "walkthroughs": [
+                {
+                    "title": "循环",
+                    "narrative": "观察循环条件如何影响执行路径。",
+                    "code": "while (i < 5) { i++; }",
+                    "expected_output": "",
+                    "common_mistakes": ["忘记更新变量"],
+                    "evidence_refs": ["page-4-006"],
+                }
+            ]
+        },
+        ensure_ascii=False,
+    )
+
+    record = build_layered_record({"case": case, "response": response})
+
+    assert record["raw_score"]["contract_pass"] is True
+    assert record["raw_score"]["semantic_valid"] is False
+    assert record["semantic_fallback"] is True
+    assert record["fallback_used"] is True
+    assert record["final_score"]["promotion_pass"] is True
+
+
 def test_failure_matrix_has_requested_slices_and_schema_fields() -> None:
     layered = build_layered_record({"case": _case(), "response": "not json"})
     matrix = build_failure_matrix([layered])

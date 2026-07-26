@@ -3,9 +3,16 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from pydantic import ValidationError
+
 from pythontopia_graph.agents.personalization import (
     agent_strategy_messages,
     personalization_messages,
+)
+from pythontopia_graph.contracts.semantic_ir import (
+    ContractCompiler,
+    EvidenceBinder,
+    MindMapSemanticIR,
 )
 from pythontopia_graph.llm.provider import LlmProvider
 from pythontopia_graph.nodes.evidence_fetcher import EvidenceBundle
@@ -34,8 +41,21 @@ class MindMapAgent:
         revision_notes: list[str] | None = None,
     ) -> ResourceDraft:
         messages = self._prompt(request, evidence, revision_notes)
-        response = await self.provider.chat(messages)
-        return self._build(request, response.content_json)
+        evidence_context = EvidenceBinder.bind(evidence)
+        response = await self.provider.chat(
+            messages,
+            guard_context={
+                "agent": self.AGENT_NAME,
+                "json_schema": MindMapSemanticIR.model_json_schema(),
+                "evidence_ids": evidence_context.allowed_ids,
+                "evidence_fields": ["evidence_refs"],
+            },
+        )
+        return self._build(
+            request,
+            response.content_json,
+            allowed_evidence_ids=evidence_context.allowed_ids,
+        )
 
     @staticmethod
     def syntax_valid(mermaid_text: str) -> bool:
@@ -65,9 +85,10 @@ class MindMapAgent:
             {
                 "role": "system",
                 "content": (
-                    "你是 MindMapAgent，输出 JSON 含 mermaid 字段。"
-                    "mermaid 必须以 graph TD/LR/RL/BT 或 flowchart 开头，节点用 [] 包裹。"
-                    "kc_map 字段：以中心 KC 为 key，相关 KC code 数组为 value。"
+                    "你是 MindMapAgent，输出符合 MindMapSemanticIR 的 JSON。"
+                    "只生成 nodes、edges、evidence_refs，不直接拼 Mermaid。"
+                    "node_id 必须以英文字母开头且只含字母、数字、下划线；"
+                    "kc_code 只能来自请求 KC；evidence_refs 只能引用 allowed_evidence。"
                 ),
             },
             *([{
@@ -77,11 +98,27 @@ class MindMapAgent:
             }] if revision_notes else []),
             *personalization_messages(request.profile_snapshot),
             *agent_strategy_messages(request.agent_strategy_directive),
-            {"role": "user", "content": ",".join(request.kc_codes)},
+            {
+                "role": "user",
+                "content": (
+                    f"allowed_kc_codes={request.kc_codes}; allowed_evidence="
+                    + EvidenceBinder.bind(evidence).model_dump_json()
+                ),
+            },
         ]
 
-    def _build(self, request: ResourceProduceRequest, content_json: dict[str, Any] | None) -> ResourceDraft:
-        mindmap = self._build_content(request, content_json)
+    def _build(
+        self,
+        request: ResourceProduceRequest,
+        content_json: dict[str, Any] | None,
+        *,
+        allowed_evidence_ids: list[str] | None = None,
+    ) -> ResourceDraft:
+        mindmap = self._build_content(
+            request,
+            content_json,
+            allowed_evidence_ids=allowed_evidence_ids or [],
+        )
         return ResourceDraft(
             title=f"思维导图：{','.join(request.kc_codes[:3])}",
             summary="围绕选定 KC 的关联结构",
@@ -90,8 +127,24 @@ class MindMapAgent:
         )
 
     def _build_content(
-        self, request: ResourceProduceRequest, content_json: dict[str, Any] | None
+        self,
+        request: ResourceProduceRequest,
+        content_json: dict[str, Any] | None,
+        *,
+        allowed_evidence_ids: list[str],
     ) -> MindMapContent:
+        if isinstance(content_json, dict):
+            try:
+                semantic_ir = MindMapSemanticIR.model_validate(content_json)
+                candidate = ContractCompiler.compile_mind_map(
+                    semantic_ir,
+                    allowed_kc_codes=request.kc_codes,
+                    allowed_evidence_ids=allowed_evidence_ids,
+                )
+                if self.syntax_valid(candidate.mermaid):
+                    return candidate
+            except (ValidationError, ValueError):
+                pass
         candidate = None
         if isinstance(content_json, dict) and "mindmap" in content_json:
             try:

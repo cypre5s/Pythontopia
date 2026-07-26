@@ -20,8 +20,8 @@ PYT_PUBLIC_IP="${PYT_PUBLIC_IP:-47.120.29.62}"
 ENV_FILE="${PYT_ENV_FILE:-/opt/pythontopia/shared/.env}"
 ENV_FILE_FALLBACK="/opt/pythontopia/current/deploy/.env"
 
-# 生产编排必需的变量名（只校验名字是否存在，绝不读取/打印值）
-REQUIRED_VARS=(PYT_DB_USERNAME PYT_DB_PASSWORD PYT_JWT_SECRET PYT_TEACHER_INVITE_CODE PYT_RAG_ADMIN_TOKEN)
+# 生产编排必需的变量名。密钥值只做本地强度校验，绝不打印。
+REQUIRED_VARS=(PYT_DB_USERNAME PYT_DB_PASSWORD PYT_JWT_SECRET PYT_TEACHER_INVITE_CODE PYT_RAG_ADMIN_TOKEN PYT_ROUTE_EXECUTION_SECRET)
 # 建议配置的变量名（缺失仅警告：相关功能会降级而不会阻塞主链路）
 RECOMMENDED_VARS=(PYT_LLM_PROVIDER PYT_OPENAI_BASE_URL PYT_OPENAI_API_KEY PYT_OPENAI_MODEL PYT_RAG_EMBEDDER PYT_RAG_EMBEDDING_FALLBACK EMBEDDING_BASE_URL EMBEDDING_MODEL EMBEDDING_DIM PYT_SPARK_APP_ID PYT_SPARK_API_KEY PYT_SPARK_API_SECRET)
 
@@ -176,6 +176,20 @@ if [ -f "${ENV_FILE}" ]; then
   else
     fail "缺少必需变量名：${MISSING_REQUIRED[*]}（compose 渲染会因 \${VAR:?} 直接失败）"
   fi
+
+  ROUTE_SECRET=$(sed -n 's/^[[:space:]]*PYT_ROUTE_EXECUTION_SECRET=//p' "${ENV_FILE}" 2>/dev/null | tail -n 1)
+  case "${ROUTE_SECRET}" in
+    ""|pytopia-rag-admin|pythontopia-route-secret|*change-me*|*placeholder*)
+      fail "PYT_ROUTE_EXECUTION_SECRET 为空或使用公开占位值（必须独立随机生成，且不会在此输出）"
+      ;;
+    *)
+      if [ "${#ROUTE_SECRET}" -ge 32 ]; then
+        pass "PYT_ROUTE_EXECUTION_SECRET 已配置独立高熵长度（值不输出）"
+      else
+        fail "PYT_ROUTE_EXECUTION_SECRET 长度不足 32（值不输出）"
+      fi
+      ;;
+  esac
 
   MISSING_RECOMMENDED=()
   for v in "${RECOMMENDED_VARS[@]}"; do

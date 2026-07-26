@@ -1,0 +1,30 @@
+{
+  "changed_variables": [
+    "preference_dataset"
+  ],
+  "dataset_sha256": {
+    "heldout": "b0df0edba68cacd573cca5592f0572af71b129e46685c5ee57ab84adf5a68214",
+    "train": "3cd1c932f650e40c6ab4051d825b0445e4b634fc54fb4160ee57eb4744059a68"
+  },
+  "duplicate_id_count": 0,
+  "duplicate_pair_count": 0,
+  "duplicate_prompt_count": 0,
+  "heldout_count": 40,
+  "identical_chosen_rejected_count": 0,
+  "identical_chosen_rejected_ids": [],
+  "max_seq_length": 512,
+  "one_variable_only": true,
+  "passed": true,
+  "protected_eval_overlap_count": 0,
+  "protected_eval_overlap_ids": [],
+  "token_length": {
+    "max": 374,
+    "mean": 309.35,
+    "overlength_count": 0,
+    "overlength_ids": []
+  },
+  "train_count": 360,
+  "train_heldout_prompt_overlap_count": 0,
+  "zero_label_count": 0,
+  "zero_label_ids": []
+}

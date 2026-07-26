@@ -1,0 +1,1 @@
+{"$id":"agent-schema-v1/GroundingCriticAgent","title":"GroundingCriticAgent","type":"object","properties":{"grounded":{"type":"boolean"},"missing_evidence":{"type":"array"},"unsafe_claims":{"type":"array"},"revision_request":{"type":"string"}},"required":["grounded","missing_evidence","unsafe_claims","revision_request"],"additionalProperties":true}

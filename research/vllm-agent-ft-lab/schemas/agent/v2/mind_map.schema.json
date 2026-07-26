@@ -1,0 +1,98 @@
+{
+  "$defs": {
+    "MindMapEdgeIR": {
+      "properties": {
+        "relation": {
+          "default": "关联",
+          "maxLength": 40,
+          "title": "Relation",
+          "type": "string"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        },
+        "target": {
+          "title": "Target",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source",
+        "target"
+      ],
+      "title": "MindMapEdgeIR",
+      "type": "object"
+    },
+    "MindMapNodeIR": {
+      "properties": {
+        "kc_code": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Kc Code"
+        },
+        "label": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "node_id": {
+          "pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$",
+          "title": "Node Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "node_id",
+        "label"
+      ],
+      "title": "MindMapNodeIR",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "edges": {
+      "items": {
+        "$ref": "#/$defs/MindMapEdgeIR"
+      },
+      "maxItems": 16,
+      "minItems": 1,
+      "title": "Edges",
+      "type": "array"
+    },
+    "evidence_refs": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Evidence Refs",
+      "type": "array"
+    },
+    "nodes": {
+      "items": {
+        "$ref": "#/$defs/MindMapNodeIR"
+      },
+      "maxItems": 12,
+      "minItems": 2,
+      "title": "Nodes",
+      "type": "array"
+    }
+  },
+  "required": [
+    "nodes",
+    "edges"
+  ],
+  "title": "MindMapAgent",
+  "type": "object",
+  "x-adapter-eligible": true,
+  "x-product-contract": "semantic-ir",
+  "x-schema-version": "agent-schema-v2"
+}

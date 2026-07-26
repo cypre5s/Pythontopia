@@ -1,0 +1,1 @@
+{"$id":"agent-schema-v1/SafetyAgent","title":"SafetyAgent","type":"object","properties":{"allow":{"type":"boolean"},"reasons":{"type":"array"},"redactions":{"type":"array"},"safer_alternative":{"type":"string"}},"required":["allow","reasons","redactions","safer_alternative"],"additionalProperties":true}

@@ -1,11 +1,18 @@
 package com.pythontopia.orchestrator;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.common.config.GraphServiceProperties;
 import com.pythontopia.common.sse.SseRelayExecutor;
+import com.pythontopia.intent.LearnerRoutingContext;
+import com.pythontopia.intent.RouteExecutionTokenSignerTest;
+import com.pythontopia.intent.dto.IntentRouteRequest;
 import com.pythontopia.orchestrator.dto.OrchestratorTurnMessage;
 import com.pythontopia.orchestrator.dto.OrchestratorTurnRequest;
 import com.sun.net.httpserver.HttpExchange;
@@ -18,6 +25,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiConsumer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter;
@@ -65,9 +73,6 @@ class OrchestratorGraphClientTest {
     CompletableFuture<String> capturedPath = new CompletableFuture<>();
     int port = startFakeGraph(capturedBody, capturedPath);
 
-    OrchestratorGraphClient client = newClient(port);
-    RecordingSseEmitter emitter = new RecordingSseEmitter();
-
     OrchestratorTurnRequest request =
         new OrchestratorTurnRequest(
             "讲一下 for 循环",
@@ -79,7 +84,32 @@ class OrchestratorGraphClientTest {
             List.of("PY43-KC-010"),
             List.of("sub-99"),
             "偏好示例驱动",
-            List.of("PY43-KC-001", "PY43-KC-010"));
+            List.of("PY43-KC-001", "PY43-KC-010"),
+            RouteExecutionTokenSignerTest.multiDecision("route_0123456789abcdef"),
+            "signed-token-never-forwarded",
+            new IntentRouteRequest.InteractionContext(
+                "workshop-sess",
+                "town_hub",
+                "practice",
+                41L,
+                "print(1 / 0)",
+                901L,
+                List.of(22L),
+                "RE: ZeroDivisionError",
+                "debug",
+                77L),
+            learnerContext());
+    OrchestratorRunRecorder recorder = mock(OrchestratorRunRecorder.class);
+    @SuppressWarnings("unchecked")
+    BiConsumer<String, String> peek = mock(BiConsumer.class);
+    when(recorder.open(eq(7L), eq(request), org.mockito.ArgumentMatchers.anyString()))
+        .thenReturn(
+            new OrchestratorRunRecorder.RecordingHandle(
+                99L,
+                "{\"name\":\"runtime_run\",\"value\":{\"loop_run_id\":99}}",
+                peek));
+    OrchestratorGraphClient client = newClient(port, recorder);
+    RecordingSseEmitter emitter = new RecordingSseEmitter();
 
     client.turnStream(7L, request, List.of("PY43-KC-016", "PY43-KC-022"), emitter, () -> {});
 
@@ -104,12 +134,36 @@ class OrchestratorGraphClientTest {
     assertThat(json.get("history").get(0).get("role").asText()).isEqualTo("user");
     assertThat(json.get("history").get(0).get("content").asText()).isEqualTo("你好");
     assertThat(json.get("history").get(1).get("role").asText()).isEqualTo("assistant");
+    assertThat(json.get("route_decision").get("routeId").asText())
+        .isEqualTo("route_0123456789abcdef");
+    assertThat(json.get("route_decision").get("task").get("subIntents").get(0).asText())
+        .isEqualTo("HANDOUT");
+    assertThat(json.has("route_execution_token")).isFalse();
+    assertThat(json.get("interaction").get("latest_submission_id").asLong()).isEqualTo(901L);
+    assertThat(json.get("interaction").get("current_code").asText()).isEqualTo("print(1 / 0)");
+    assertThat(json.get("learner_context").get("cognitive_load").asText()).isEqualTo("HIGH");
+    assertThat(
+            json.get("learner_context")
+                .get("kc_mastery")
+                .get("PY43-KC-010")
+                .asDouble())
+        .isEqualTo(0.27);
+    assertThat(
+            json.get("learner_context")
+                .get("recent_resources")
+                .get(0)
+                .get("type")
+                .asText())
+        .isEqualTo("MINDMAP");
 
     awaitEvent(emitter, "event:result");
+    assertThat(emitter.events())
+        .anyMatch(e -> e.contains("event:CUSTOM") && e.contains("loop_run_id"));
     assertThat(emitter.events()).anyMatch(e -> e.contains("event:trace"));
     assertThat(emitter.events()).anyMatch(e -> e.contains("event:token"));
     assertThat(emitter.events())
         .anyMatch(e -> e.contains("event:result") && e.contains("reply_md"));
+    verify(peek).accept("result", "{\"reply_md\":\"done\"}");
   }
 
   @Test
@@ -193,10 +247,37 @@ class OrchestratorGraphClientTest {
   }
 
   private OrchestratorGraphClient newClient(int port) {
+    return newClient(port, null);
+  }
+
+  private static LearnerRoutingContext learnerContext() {
+    return new LearnerRoutingContext(
+        "偏好图示；循环边界薄弱",
+        java.util.Map.of("PY43-KC-010", 0.27),
+        java.util.Map.of("PY43-KC-010", 0.74),
+        List.of("PY43-KC-010"),
+        List.of("PY43-KC-010"),
+        "HIGH",
+        "HIGH",
+        "visual",
+        List.of("MINDMAP"),
+        "NON_CS_STEM",
+        2,
+        List.of(
+            new LearnerRoutingContext.RecentResource(
+                "PY43-KC-010", "MINDMAP", "2026-07-22T16:00:00Z")),
+        List.of(new LearnerRoutingContext.RecentSubmission(476L, "PY43-KC-010", false)),
+        List.of("range 右边界连续失败"),
+        List.of(),
+        List.of("分步讲解"),
+        "2026-07-22T16:01:00Z");
+  }
+
+  private OrchestratorGraphClient newClient(int port, OrchestratorRunRecorder recorder) {
     GraphServiceProperties properties =
         new GraphServiceProperties("http://127.0.0.1:" + port, "http://rag.test", "secret");
     return new OrchestratorGraphClient(
-        properties, new ObjectMapper(), new SseRelayExecutor(), 2_000, 10_000);
+        properties, new ObjectMapper(), new SseRelayExecutor(), recorder, 2_000, 10_000);
   }
 
   private int startFakeGraph(

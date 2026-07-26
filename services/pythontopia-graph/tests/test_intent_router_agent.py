@@ -554,7 +554,7 @@ async def test_fence_without_signals_still_calls_llm() -> None:
         ("复习一下快忘了的知识点", "REVIEW"),
         ("帮我复盘一下之前学过的循环", "REVIEW"),
         ("梳理一下循环的讲义", "HANDOUT"),
-        ("为什么我的循环会报错", "ASK"),
+        ("为什么我的循环会报错", "FIX_BUG"),
         # ── R-16 新工具兜底 ──
         ("考考我循环", "ASKME"),
         ("检验一下我学得怎么样", "ASKME"),
@@ -574,6 +574,20 @@ async def test_keyword_fallback_when_provider_empty(message: str, expected: str)
     assert resp.intent == expected
     assert resp.intent in ALL_INTENTS
     assert resp.confidence <= 0.5  # 兜底判定信心不超过 0.5
+
+
+@pytest.mark.asyncio
+async def test_keyword_debug_without_verified_context_clarifies_instead_of_executing() -> None:
+    """Debug 关键词可进入专用意图，但缺可信失败提交时必须停在澄清门。"""
+    agent = IntentRouterAgent(StubProvider(None))
+
+    resp = await agent.route(request_of("为什么我的循环会报错"))
+
+    assert resp.intent == "FIX_BUG"
+    assert resp.needs_clarification is True
+    assert resp.reason_code == "missing_required_context"
+    assert resp.route_decision is not None
+    assert resp.route_decision.tools.required == []
 
 
 @pytest.mark.asyncio

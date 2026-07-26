@@ -1,10 +1,19 @@
 from __future__ import annotations
 
+import json
 from typing import Any
+
+from pydantic import ValidationError
 
 from pythontopia_graph.agents.personalization import (
     agent_strategy_messages,
     personalization_messages,
+)
+from pythontopia_graph.contracts.semantic_ir import (
+    ContractCompiler,
+    EvidenceBinder,
+    EvidenceContext,
+    ReadingSemanticIR,
 )
 from pythontopia_graph.llm.provider import LlmProvider
 from pythontopia_graph.nodes.evidence_fetcher import EvidenceBundle
@@ -18,7 +27,7 @@ from pythontopia_graph.schemas.resource import (
 
 
 class ReadingAgent:
-    """生成拓展阅读卡片（至少 2 项）；每项须含 summary_md 与 page_refs，否则回落证据/通识兜底。"""
+    """Generate reading semantics, then compile evidence IDs into product PageRef."""
 
     AGENT_NAME = "ResourceDesignerAgent.reading"
 
@@ -31,22 +40,35 @@ class ReadingAgent:
         evidence: EvidenceBundle,
         revision_notes: list[str] | None = None,
     ) -> ResourceDraft:
-        messages = self._prompt(request, evidence, revision_notes)
-        response = await self.provider.chat(messages)
-        return self._build(request, evidence, response.content_json)
+        evidence_context = EvidenceBinder.bind(evidence)
+        messages = self._prompt(request, evidence_context, revision_notes)
+        response = await self.provider.chat(
+            messages,
+            guard_context={
+                "agent": self.AGENT_NAME,
+                "json_schema": ReadingSemanticIR.model_json_schema(),
+                "evidence_ids": evidence_context.allowed_ids,
+                "evidence_fields": ["items.*.evidence_refs"],
+            },
+        )
+        return self._build(
+            request, evidence, evidence_context, response.content_json
+        )
 
     def _prompt(
         self,
         request: ResourceProduceRequest,
-        evidence: EvidenceBundle,
+        evidence: EvidenceContext,
         revision_notes: list[str] | None = None,
     ) -> list[dict[str, str]]:
         return [
             {
                 "role": "system",
                 "content": (
-                    "你是 ReadingAgent，输出 JSON，至少 2 个 item。"
-                    "每个 item 必须含 summary_md (>=10 字) 与 page_refs。"
+                    "你是 ReadingAgent，只输出符合 ReadingSemanticIR 的 JSON，含 2-4 个 items。"
+                    "每个 item 只含 summary_md 与 evidence_refs。"
+                    "evidence_refs 只能引用 allowed_evidence 中的 evidence_id；"
+                    "不要生成 page_id、page_no、chapter_id 或产品 DTO。"
                 ),
             },
             *([{
@@ -56,16 +78,25 @@ class ReadingAgent:
             }] if revision_notes else []),
             *personalization_messages(request.profile_snapshot),
             *agent_strategy_messages(request.agent_strategy_directive),
-            {"role": "user", "content": ",".join(request.kc_codes)},
+            {
+                "role": "user",
+                "content": (
+                    f"目标 KC: {','.join(request.kc_codes)}; allowed_evidence: "
+                    + json.dumps(evidence.model_dump(mode="json"), ensure_ascii=False)
+                ),
+            },
         ]
 
     def _build(
         self,
         request: ResourceProduceRequest,
         evidence: EvidenceBundle,
+        evidence_context: EvidenceContext,
         content_json: dict[str, Any] | None,
     ) -> ResourceDraft:
-        content = self._build_content(request, evidence, content_json)
+        content = self._build_content(
+            request, evidence, evidence_context, content_json
+        )
         return ResourceDraft(
             title=f"拓展阅读：{','.join(request.kc_codes[:3])}",
             summary="围绕 KC 的延伸阅读卡片",
@@ -77,14 +108,18 @@ class ReadingAgent:
         self,
         request: ResourceProduceRequest,
         evidence: EvidenceBundle,
+        evidence_context: EvidenceContext,
         content_json: dict[str, Any] | None,
     ) -> ReadingContent:
-        if isinstance(content_json, dict) and "reading" in content_json:
+        if isinstance(content_json, dict):
             try:
-                candidate = ReadingContent.model_validate(content_json["reading"])
-                if len(candidate.items) >= 2:
-                    return candidate
-            except Exception:  # noqa: BLE001
+                semantic_ir = ReadingSemanticIR.model_validate(content_json)
+                return ContractCompiler.compile_reading(
+                    semantic_ir,
+                    evidence=evidence_context,
+                    kc_codes=request.kc_codes,
+                )
+            except (ValidationError, ValueError):
                 pass
         return self._fallback(request, evidence)
 

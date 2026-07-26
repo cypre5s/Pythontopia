@@ -1,0 +1,69 @@
+{
+  "$defs": {
+    "PracticeProblemIR": {
+      "properties": {
+        "hints": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 4,
+          "title": "Hints",
+          "type": "array"
+        },
+        "sample_input": {
+          "title": "Sample Input",
+          "type": "string"
+        },
+        "sample_output": {
+          "title": "Sample Output",
+          "type": "string"
+        },
+        "statement": {
+          "minLength": 10,
+          "title": "Statement",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "statement",
+        "sample_input",
+        "sample_output"
+      ],
+      "title": "PracticeProblemIR",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "evidence_refs": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Evidence Refs",
+      "type": "array"
+    },
+    "problems": {
+      "items": {
+        "$ref": "#/$defs/PracticeProblemIR"
+      },
+      "maxItems": 3,
+      "minItems": 1,
+      "title": "Problems",
+      "type": "array"
+    }
+  },
+  "required": [
+    "problems"
+  ],
+  "title": "PracticeAgent",
+  "type": "object",
+  "x-adapter-eligible": true,
+  "x-product-contract": "semantic-ir",
+  "x-schema-version": "agent-schema-v2"
+}

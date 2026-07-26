@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="824" height="420" viewBox="0 0 824 420">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="72" y="34" font-family="Arial" font-size="20" fill="#111827">Reliability rates by chapter</text>
+<line x1="72" y1="322" x2="672" y2="322" stroke="#6b7280"/>
+<line x1="72" y1="58" x2="72" y2="322" stroke="#6b7280"/>
+<text x="114.86" y="358" text-anchor="end" transform="rotate(-32 114.86 358)" font-family="Arial" font-size="11" fill="#374151">1</text>
+<rect x="79.14" y="256.00" width="11.71" height="66.00" fill="#2563eb"><title>contract: 0.25</title></rect>
+<text x="85.00" y="251.00" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">0.25</text>
+<rect x="93.43" y="58.00" width="11.71" height="264.00" fill="#16a34a"><title>json: 1.00</title></rect>
+<text x="99.29" y="53.00" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">1.00</text>
+<rect x="107.71" y="256.00" width="11.71" height="66.00" fill="#dc2626"><title>schema: 0.25</title></rect>
+<text x="113.57" y="251.00" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">0.25</text>
+<rect x="122.00" y="58.00" width="11.71" height="264.00" fill="#9333ea"><title>grounding: 1.00</title></rect>
+<text x="127.86" y="53.00" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">1.00</text>
+<rect x="136.29" y="58.00" width="11.71" height="264.00" fill="#2563eb"><title>no leak: 1.00</title></rect>
+<text x="142.14" y="53.00" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">1.00</text>
+<text x="200.57" y="358" text-anchor="end" transform="rotate(-32 200.57 358)" font-family="Arial" font-size="11" fill="#374151">2</text>
+<rect x="164.86" y="234.00" width="11.71" height="88.00" fill="#2563eb"><title>contract: 0.33</title></rect>
+<text x="170.71" y="229.00" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">0.33</text>
+<rect x="179.14" y="58.00" width="11.71" height="264.00" fill="#16a34a"><title>json: 1.00</title></rect>
+<text x="185.00" y="53.00" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">1.00</text>
+<rect x="193.43" y="234.00" width="11.71" height="88.00" fill="#dc2626"><title>schema: 0.33</title></rect>
+<text x="199.29" y="229.00" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">0.33</text>
+<rect x="207.71" y="58.00" width="11.71" height="264.00" fill="#9333ea"><title>grounding: 1.00</title></rect>
+<text x="213.57" y="53.00" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">1.00</text>
+<rect x="222.00" y="58.00" width="11.71" height="264.00" fill="#2563eb"><title>no leak: 1.00</title></rect>
+<text x="227.86" y="53.00" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">1.00</text>
+<text x="286.29" y="358" text-anchor="end" transform="rotate(-32 286.29 358)" font-family="Arial" font-size="11" fill="#374151">3</text>
+<rect x="250.57" y="322.00" width="11.71" height="0.00" fill="#2563eb"><title>contract: 0.00</title></rect>
+<rect x="264.86" y="190.00" width="11.71" height="132.00" fill="#16a34a"><title>json: 0.50</title></rect>
+<text x="270.71" y="185.00" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">0.50</text>
+<rect x="279.14" y="322.00" width="11.71" height="0.00" fill="#dc2626"><title>schema: 0.00</title></rect>
+<rect x="293.43" y="58.00" width="11.71" height="264.00" fill="#9333ea"><title>grounding: 1.00</title></rect>
+<text x="299.29" y="53.00" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">1.00</text>
+<rect x="307.71" y="58.00" width="11.71" height="264.00" fill="#2563eb"><title>no leak: 1.00</title></rect>
+<text x="313.57" y="53.00" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">1.00</text>
+<text x="372.00" y="358" text-anchor="end" transform="rotate(-32 372.00 358)" font-family="Arial" font-size="11" fill="#374151">4</text>
+<rect x="336.29" y="234.00" width="11.71" height="88.00" fill="#2563eb"><title>contract: 0.33</title></rect>
+<text x="342.14" y="229.00" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">0.33</text>
+<rect x="350.57" y="58.00" width="11.71" height="264.00" fill="#16a34a"><title>json: 1.00</title></rect>
+<text x="356.43" y="53.00" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">1.00</text>
+<rect x="364.86" y="234.00" width="11.71" height="88.00" fill="#dc2626"><title>schema: 0.33</title></rect>
+<text x="370.71" y="229.00" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">0.33</text>
+<rect x="379.14" y="58.00" width="11.71" height="264.00" fill="#9333ea"><title>grounding: 1.00</title></rect>
+<text x="385.00" y="53.00" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">1.00</text>
+<rect x="393.43" y="58.00" width="11.71" height="264.00" fill="#2563eb"><title>no leak: 1.00</title></rect>
+<text x="399.29" y="53.00" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">1.00</text>
+<text x="457.71" y="358" text-anchor="end" transform="rotate(-32 457.71 358)" font-family="Arial" font-size="11" fill="#374151">5</text>
+<rect x="422.00" y="190.00" width="11.71" height="132.00" fill="#2563eb"><title>contract: 0.50</title></rect>
+<text x="427.86" y="185.00" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">0.50</text>
+<rect x="436.29" y="58.00" width="11.71" height="264.00" fill="#16a34a"><title>json: 1.00</title></rect>
+<text x="442.14" y="53.00" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">1.00</text>
+<rect x="450.57" y="190.00" width="11.71" height="132.00" fill="#dc2626"><title>schema: 0.50</title></rect>
+<text x="456.43" y="185.00" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">0.50</text>
+<rect x="464.86" y="58.00" width="11.71" height="264.00" fill="#9333ea"><title>grounding: 1.00</title></rect>
+<text x="470.71" y="53.00" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">1.00</text>
+<rect x="479.14" y="58.00" width="11.71" height="264.00" fill="#2563eb"><title>no leak: 1.00</title></rect>
+<text x="485.00" y="53.00" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">1.00</text>
+<text x="543.43" y="358" text-anchor="end" transform="rotate(-32 543.43 358)" font-family="Arial" font-size="11" fill="#374151">6</text>
+<rect x="507.71" y="322.00" width="11.71" height="0.00" fill="#2563eb"><title>contract: 0.00</title></rect>
+<rect x="522.00" y="58.00" width="11.71" height="264.00" fill="#16a34a"><title>json: 1.00</title></rect>
+<text x="527.86" y="53.00" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">1.00</text>
+<rect x="536.29" y="322.00" width="11.71" height="0.00" fill="#dc2626"><title>schema: 0.00</title></rect>
+<rect x="550.57" y="58.00" width="11.71" height="264.00" fill="#9333ea"><title>grounding: 1.00</title></rect>
+<text x="556.43" y="53.00" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">1.00</text>
+<rect x="564.86" y="58.00" width="11.71" height="264.00" fill="#2563eb"><title>no leak: 1.00</title></rect>
+<text x="570.71" y="53.00" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">1.00</text>
+<text x="629.14" y="358" text-anchor="end" transform="rotate(-32 629.14 358)" font-family="Arial" font-size="11" fill="#374151">7</text>
+<rect x="593.43" y="234.00" width="11.71" height="88.00" fill="#2563eb"><title>contract: 0.33</title></rect>
+<text x="599.29" y="229.00" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">0.33</text>
+<rect x="607.71" y="58.00" width="11.71" height="264.00" fill="#16a34a"><title>json: 1.00</title></rect>
+<text x="613.57" y="53.00" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">1.00</text>
+<rect x="622.00" y="234.00" width="11.71" height="88.00" fill="#dc2626"><title>schema: 0.33</title></rect>
+<text x="627.86" y="229.00" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">0.33</text>
+<rect x="636.29" y="58.00" width="11.71" height="264.00" fill="#9333ea"><title>grounding: 1.00</title></rect>
+<text x="642.14" y="53.00" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">1.00</text>
+<rect x="650.57" y="58.00" width="11.71" height="264.00" fill="#2563eb"><title>no leak: 1.00</title></rect>
+<text x="656.43" y="53.00" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">1.00</text>
+<rect x="692" y="46" width="12" height="12" fill="#2563eb"/>
+<text x="710" y="56" font-family="Arial" font-size="12" fill="#374151">contract</text>
+<rect x="692" y="70" width="12" height="12" fill="#16a34a"/>
+<text x="710" y="80" font-family="Arial" font-size="12" fill="#374151">json</text>
+<rect x="692" y="94" width="12" height="12" fill="#dc2626"/>
+<text x="710" y="104" font-family="Arial" font-size="12" fill="#374151">schema</text>
+<rect x="692" y="118" width="12" height="12" fill="#9333ea"/>
+<text x="710" y="128" font-family="Arial" font-size="12" fill="#374151">grounding</text>
+<rect x="692" y="142" width="12" height="12" fill="#2563eb"/>
+<text x="710" y="152" font-family="Arial" font-size="12" fill="#374151">no leak</text>
+</svg>

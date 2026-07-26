@@ -194,6 +194,7 @@ public class PracticeSubmissionRepository {
             FROM practice_submission s
             JOIN course_problem p ON p.id = s.problem_id
             WHERE s.user_id = ?
+              AND s.status IN ('PASSED', 'FAILED')
             ORDER BY s.submitted_at DESC
             LIMIT ?
             """,

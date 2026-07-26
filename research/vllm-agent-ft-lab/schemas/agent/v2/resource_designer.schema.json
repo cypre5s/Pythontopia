@@ -1,0 +1,498 @@
+{
+  "$defs": {
+    "CodeLabContent": {
+      "properties": {
+        "walkthroughs": {
+          "items": {
+            "$ref": "#/$defs/Walkthrough"
+          },
+          "maxItems": 3,
+          "minItems": 1,
+          "title": "Walkthroughs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "walkthroughs"
+      ],
+      "title": "CodeLabContent",
+      "type": "object"
+    },
+    "HandoutContent": {
+      "properties": {
+        "sections": {
+          "items": {
+            "$ref": "#/$defs/HandoutSection"
+          },
+          "minItems": 1,
+          "title": "Sections",
+          "type": "array"
+        }
+      },
+      "required": [
+        "sections"
+      ],
+      "title": "HandoutContent",
+      "type": "object"
+    },
+    "HandoutSection": {
+      "properties": {
+        "code_snippets": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Code Snippets",
+          "type": "array"
+        },
+        "heading": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Heading",
+          "type": "string"
+        },
+        "page_refs": {
+          "items": {
+            "$ref": "#/$defs/PageRef"
+          },
+          "title": "Page Refs",
+          "type": "array"
+        },
+        "paragraphs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Paragraphs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "heading"
+      ],
+      "title": "HandoutSection",
+      "type": "object"
+    },
+    "MindMapContent": {
+      "properties": {
+        "kc_map": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": "Kc Map",
+          "type": "object"
+        },
+        "mermaid": {
+          "minLength": 10,
+          "title": "Mermaid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mermaid"
+      ],
+      "title": "MindMapContent",
+      "type": "object"
+    },
+    "PageRef": {
+      "properties": {
+        "chapter_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chapter Id"
+        },
+        "page_id": {
+          "title": "Page Id",
+          "type": "integer"
+        },
+        "page_no": {
+          "title": "Page No",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "page_id",
+        "page_no"
+      ],
+      "title": "PageRef",
+      "type": "object"
+    },
+    "PracticeContent": {
+      "properties": {
+        "problems": {
+          "items": {
+            "$ref": "#/$defs/ProblemSpec"
+          },
+          "maxItems": 3,
+          "minItems": 1,
+          "title": "Problems",
+          "type": "array"
+        }
+      },
+      "required": [
+        "problems"
+      ],
+      "title": "PracticeContent",
+      "type": "object"
+    },
+    "ProblemSpec": {
+      "properties": {
+        "difficulty": {
+          "default": "basic",
+          "enum": [
+            "basic",
+            "medium",
+            "hard"
+          ],
+          "title": "Difficulty",
+          "type": "string"
+        },
+        "hints": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Hints",
+          "type": "array"
+        },
+        "kc_codes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Kc Codes",
+          "type": "array"
+        },
+        "sample_io": {
+          "items": {
+            "$ref": "#/$defs/SampleIo"
+          },
+          "minItems": 1,
+          "title": "Sample Io",
+          "type": "array"
+        },
+        "statement_md": {
+          "minLength": 10,
+          "title": "Statement Md",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "statement_md",
+        "sample_io"
+      ],
+      "title": "ProblemSpec",
+      "type": "object"
+    },
+    "ReadingContent": {
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/ReadingItem"
+          },
+          "minItems": 2,
+          "title": "Items",
+          "type": "array"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "title": "ReadingContent",
+      "type": "object"
+    },
+    "ReadingItem": {
+      "properties": {
+        "kc_codes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Kc Codes",
+          "type": "array"
+        },
+        "page_refs": {
+          "items": {
+            "$ref": "#/$defs/PageRef"
+          },
+          "title": "Page Refs",
+          "type": "array"
+        },
+        "summary_md": {
+          "minLength": 10,
+          "title": "Summary Md",
+          "type": "string"
+        }
+      },
+      "required": [
+        "summary_md"
+      ],
+      "title": "ReadingItem",
+      "type": "object"
+    },
+    "SampleIo": {
+      "properties": {
+        "input": {
+          "title": "Input",
+          "type": "string"
+        },
+        "output": {
+          "title": "Output",
+          "type": "string"
+        }
+      },
+      "required": [
+        "input",
+        "output"
+      ],
+      "title": "SampleIo",
+      "type": "object"
+    },
+    "StoryboardContent": {
+      "properties": {
+        "scenes": {
+          "items": {
+            "$ref": "#/$defs/StoryboardScene"
+          },
+          "maxItems": 5,
+          "minItems": 3,
+          "title": "Scenes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "scenes"
+      ],
+      "title": "StoryboardContent",
+      "type": "object"
+    },
+    "StoryboardScene": {
+      "properties": {
+        "duration_seconds": {
+          "maximum": 90,
+          "minimum": 5,
+          "title": "Duration Seconds",
+          "type": "integer"
+        },
+        "evidence_page_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evidence Page Id"
+        },
+        "image_asset_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Image Asset Id"
+        },
+        "image_prompt": {
+          "default": "",
+          "title": "Image Prompt",
+          "type": "string"
+        },
+        "kc_codes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Kc Codes",
+          "type": "array"
+        },
+        "narration": {
+          "title": "Narration",
+          "type": "string"
+        },
+        "narration_tts_voice": {
+          "default": "x4_yezi",
+          "title": "Narration Tts Voice",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "visual_hint": {
+          "title": "Visual Hint",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "narration",
+        "visual_hint",
+        "duration_seconds"
+      ],
+      "title": "StoryboardScene",
+      "type": "object"
+    },
+    "Walkthrough": {
+      "properties": {
+        "code": {
+          "minLength": 1,
+          "title": "Code",
+          "type": "string"
+        },
+        "common_mistakes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Common Mistakes",
+          "type": "array"
+        },
+        "expected_output": {
+          "title": "Expected Output",
+          "type": "string"
+        },
+        "narrative": {
+          "title": "Narrative",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "narrative",
+        "code",
+        "expected_output"
+      ],
+      "title": "Walkthrough",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "code_lab": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CodeLabContent"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "content_format": {
+      "enum": [
+        "MARKDOWN",
+        "MERMAID",
+        "STRUCT_JSON"
+      ],
+      "title": "Content Format",
+      "type": "string"
+    },
+    "handout": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/HandoutContent"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "mindmap": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MindMapContent"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "practice": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PracticeContent"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "reading": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ReadingContent"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "storyboard": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/StoryboardContent"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "summary": {
+      "anyOf": [
+        {
+          "maxLength": 512,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Summary"
+    },
+    "title": {
+      "maxLength": 256,
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    }
+  },
+  "required": [
+    "title",
+    "content_format"
+  ],
+  "title": "ResourceDesignerAgent",
+  "type": "object",
+  "x-adapter-eligible": false,
+  "x-product-contract": "subagent-ir-split-in-progress",
+  "x-schema-version": "agent-schema-v2"
+}

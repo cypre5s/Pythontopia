@@ -1,0 +1,72 @@
+{
+  "changed_variables": [
+    "preference_objective"
+  ],
+  "dataset_sha256": {
+    "heldout": "4599a4191893fd4f288fa7197d13e37dd1c02c0fa284cb3c54bdbe3ec63c63ae",
+    "train": "7e0fbd8b865329597725fa7c6e60167e1124627bbc62df27b5fe5b4b25cf86c8"
+  },
+  "duplicate_id_count": 0,
+  "duplicate_pair_count": 0,
+  "duplicate_prompt_count": 0,
+  "heldout_count": 25,
+  "identical_chosen_rejected_count": 0,
+  "identical_chosen_rejected_ids": [],
+  "max_seq_length": 512,
+  "one_variable_only": true,
+  "passed": true,
+  "protected_eval_overlap_count": 0,
+  "protected_eval_overlap_ids": [],
+  "token_length": {
+    "longest_examples": [
+      {
+        "id": "v2-pref-0230-eval5000-new_question-1664-domain-1664-guidecoachagent-c6",
+        "tokens": 364
+      },
+      {
+        "id": "v2-pref-0160-eval5000-web_workshop_input-0404-domain-4904-guidecoachagent-c5",
+        "tokens": 363
+      },
+      {
+        "id": "v2-pref-0188-eval5000-new_student_expression-0104-domain-3104-guidecoachagent-c4-beginner-teacher_assignment_context",
+        "tokens": 363
+      },
+      {
+        "id": "v2-pref-0158-eval5000-new_question-0344-domain-0344-guidecoachagent-c2-cf-scaffold-009",
+        "tokens": 362
+      },
+      {
+        "id": "v2-pref-0104-eval5000-new_question-0824-domain-0824-guidecoachagent-c6",
+        "tokens": 361
+      },
+      {
+        "id": "v2-pref-0080-eval5000-new_question-0894-domain-0894-guidecoachagent-c6",
+        "tokens": 360
+      },
+      {
+        "id": "v2-pref-0235-eval5000-new_question-0404-domain-0404-guidecoachagent-c6-cf-scaffold-013",
+        "tokens": 360
+      },
+      {
+        "id": "v2-pref-0014-eval5000-new_student_expression-0204-domain-3204-guidecoachagent-c6-beginner-incomplete_error_paste",
+        "tokens": 359
+      },
+      {
+        "id": "v2-pref-0110-eval5000-new_student_expression-0404-domain-3404-guidecoachagent-c3-beginner-teacher_assignment_context",
+        "tokens": 359
+      },
+      {
+        "id": "v2-pref-0194-eval5000-new_chapter_slice-0804-domain-2804-guidecoachagent-c5",
+        "tokens": 359
+      }
+    ],
+    "max": 364,
+    "mean": 349.36,
+    "overlength_count": 0,
+    "overlength_ids": []
+  },
+  "train_count": 227,
+  "train_heldout_prompt_overlap_count": 0,
+  "zero_label_count": 0,
+  "zero_label_ids": []
+}

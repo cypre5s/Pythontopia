@@ -157,6 +157,18 @@ class MemoryRetrievalServiceTest {
   }
 
   @Test
+  void authoritativeRetrievalUsesOnlyTrustedEventQuery() {
+    when(eventRepo.findRecentAuthoritativeForMemory(eq(7L), anyInt()))
+        .thenReturn(List.of(row(2, "practice_failed", List.of("PY43-KC-016"), 4, NOW)));
+    when(coursePackRepository.findKcs(eq(43L), eq(null))).thenReturn(List.of());
+
+    List<MemoryItemDto> items =
+        service.retrieveAuthoritative(7L, null, "循环失败", 8);
+
+    assertThat(items).singleElement().satisfies(item -> assertThat(item.eventId()).isEqualTo(2L));
+  }
+
+  @Test
   void coursePackFailureDegradesToNoChapterRelevance() {
     when(eventRepo.findRecentForMemory(eq(7L), anyInt()))
         .thenReturn(List.of(row(1, "practice_failed", List.of("PY43-KC-015"), 3, NOW)));

@@ -1,0 +1,87 @@
+{
+  "$defs": {
+    "CodePlanWalkthroughIR": {
+      "additionalProperties": false,
+      "description": "Model-owned pedagogical choice; executable syntax stays compiler-owned.",
+      "properties": {
+        "common_mistakes": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 5,
+          "minItems": 1,
+          "title": "Common Mistakes",
+          "type": "array"
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "example_pattern": {
+          "enum": [
+            "assignment_trace",
+            "conditional_branch",
+            "while_control",
+            "for_accumulate",
+            "list_iteration",
+            "function_scope",
+            "string_cleanup",
+            "exception_guard"
+          ],
+          "title": "Example Pattern",
+          "type": "string"
+        },
+        "narrative": {
+          "maxLength": 800,
+          "minLength": 10,
+          "title": "Narrative",
+          "type": "string"
+        },
+        "observation_goal": {
+          "maxLength": 240,
+          "minLength": 5,
+          "title": "Observation Goal",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "narrative",
+        "example_pattern",
+        "observation_goal",
+        "common_mistakes"
+      ],
+      "title": "CodePlanWalkthroughIR",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "walkthroughs": {
+      "items": {
+        "$ref": "#/$defs/CodePlanWalkthroughIR"
+      },
+      "maxItems": 3,
+      "minItems": 1,
+      "title": "Walkthroughs",
+      "type": "array"
+    }
+  },
+  "required": [
+    "walkthroughs"
+  ],
+  "title": "ResourceDesignerAgent.code_lab",
+  "type": "object",
+  "x-adapter-eligible": true,
+  "x-product-contract": "semantic-code-plan-evidence-bound",
+  "x-schema-version": "agent-schema-v2.1"
+}

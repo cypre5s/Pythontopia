@@ -3,6 +3,7 @@ package com.pythontopia.learner.memory;
 import com.pythontopia.learner.mastery.review.ReviewState;
 import com.pythontopia.learner.mastery.review.ReviewStateRepository;
 import com.pythontopia.learner.memory.dto.MemoryBriefDto;
+import com.pythontopia.learner.memory.dto.MemoryItemDto;
 import com.pythontopia.learner.memory.provider.MemoryProviderRouter;
 import com.pythontopia.learner.memory.provider.RecalledMemory;
 import com.pythontopia.learner.profile.dto.ProfileDimensionDto;
@@ -10,6 +11,7 @@ import com.pythontopia.learner.profile.service.PassiveProfileService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -53,24 +55,33 @@ public class MemoryBriefService {
   private final MemoryProviderRouter providerRouter;
   private final PassiveProfileService profileService;
   private final ReviewStateRepository reviewStateRepository;
+  private final MemoryRetrievalService authoritativeRetrievalService;
   private final Clock clock;
 
   @Autowired
   public MemoryBriefService(
       MemoryProviderRouter providerRouter,
       PassiveProfileService profileService,
-      ReviewStateRepository reviewStateRepository) {
-    this(providerRouter, profileService, reviewStateRepository, Clock.systemUTC());
+      ReviewStateRepository reviewStateRepository,
+      MemoryRetrievalService authoritativeRetrievalService) {
+    this(
+        providerRouter,
+        profileService,
+        reviewStateRepository,
+        authoritativeRetrievalService,
+        Clock.systemUTC());
   }
 
   MemoryBriefService(
       MemoryProviderRouter providerRouter,
       PassiveProfileService profileService,
       ReviewStateRepository reviewStateRepository,
+      MemoryRetrievalService authoritativeRetrievalService,
       Clock clock) {
     this.providerRouter = providerRouter;
     this.profileService = profileService;
     this.reviewStateRepository = reviewStateRepository;
+    this.authoritativeRetrievalService = authoritativeRetrievalService;
     this.clock = clock;
   }
 
@@ -80,8 +91,18 @@ public class MemoryBriefService {
    * <p>active provider 由 {@code MEMORY_PROVIDER} 决定；外部 provider 故障已在 router 内 fail-soft 回退 local。
    */
   public MemoryBriefDto buildBrief(long userId, String query) {
+    return buildBrief(userId, safeRecall(userId, query));
+  }
+
+  /**
+   * 为路由等决策生成权威 brief：只召回 backend/graph 事件，不采用可由浏览器直接写入的观察事件。
+   */
+  public MemoryBriefDto buildAuthoritativeBrief(long userId, String query) {
+    return buildBrief(userId, safeAuthoritativeRecall(userId, query));
+  }
+
+  private MemoryBriefDto buildBrief(long userId, List<RecalledMemory> recalled) {
     Instant now = Instant.now(clock);
-    List<RecalledMemory> recalled = safeRecall(userId, query);
 
     List<String> facts = toFacts(recalled);
     List<String> weakKcs = toWeakKcs(userId, recalled, now);
@@ -101,6 +122,43 @@ public class MemoryBriefService {
         strugglePatterns,
         recentWins,
         interventionHints);
+  }
+
+  private List<RecalledMemory> safeAuthoritativeRecall(long userId, String query) {
+    try {
+      List<MemoryItemDto> items =
+          authoritativeRetrievalService.retrieveAuthoritative(userId, null, query, RECALL_LIMIT);
+      if (items == null) {
+        return List.of();
+      }
+      return items.stream().map(MemoryBriefService::toRecalledMemory).toList();
+    } catch (RuntimeException ex) {
+      log.warn("authoritative memory brief degraded for user {}: {}", userId, ex.getMessage());
+      return List.of();
+    }
+  }
+
+  private static RecalledMemory toRecalledMemory(MemoryItemDto item) {
+    String kc =
+        item.kcCodes() == null || item.kcCodes().isEmpty() ? null : item.kcCodes().get(0);
+    return new RecalledMemory(
+        item.summaryZh(),
+        kc,
+        item.eventType(),
+        parseInstant(item.createdAt()),
+        item.totalScore(),
+        "local");
+  }
+
+  private static Instant parseInstant(String value) {
+    if (value == null || value.isBlank()) {
+      return null;
+    }
+    try {
+      return Instant.parse(value);
+    } catch (DateTimeParseException ex) {
+      return null;
+    }
   }
 
   private List<RecalledMemory> safeRecall(long userId, String query) {

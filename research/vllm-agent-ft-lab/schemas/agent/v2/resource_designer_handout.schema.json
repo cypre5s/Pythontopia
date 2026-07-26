@@ -1,0 +1,76 @@
+{
+  "$defs": {
+    "HandoutSectionIR": {
+      "properties": {
+        "code_snippets": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 3,
+          "title": "Code Snippets",
+          "type": "array"
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "heading": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Heading",
+          "type": "string"
+        },
+        "paragraphs": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 6,
+          "minItems": 1,
+          "title": "Paragraphs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "heading",
+        "paragraphs"
+      ],
+      "title": "HandoutSectionIR",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "sections": {
+      "items": {
+        "$ref": "#/$defs/HandoutSectionIR"
+      },
+      "maxItems": 6,
+      "minItems": 1,
+      "title": "Sections",
+      "type": "array"
+    },
+    "summary": {
+      "default": "",
+      "maxLength": 512,
+      "title": "Summary",
+      "type": "string"
+    },
+    "title": {
+      "maxLength": 256,
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    }
+  },
+  "required": [
+    "title",
+    "sections"
+  ],
+  "title": "ResourceDesignerAgent.handout",
+  "type": "object",
+  "x-adapter-eligible": true,
+  "x-product-contract": "semantic-ir-evidence-bound",
+  "x-schema-version": "agent-schema-v2"
+}

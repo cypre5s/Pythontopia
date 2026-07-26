@@ -44,7 +44,12 @@ def test_adapter_golden_expected_baseline_replays_through_guard_and_scoring() ->
         score = score_case_response(case, response)
         guard = apply_guard(case, response)
         expected_score = record["score"]
-        assert score.as_row() == expected_score
+        assert score.as_row() == {
+            **expected_score,
+            "semantic_valid": True,
+            "semantic_errors": [],
+            "promotion_pass": bool(expected_score["contract_pass"]),
+        }
         assert guard.passed is True
 
 

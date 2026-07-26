@@ -12,6 +12,7 @@ import pytest
 from pythontopia_graph.llm.provider import (
     FineTunedFallbackProvider,
     LlmResponse,
+    RoutedFineTunedProvider,
     OpenAiCompatProvider,
     provider_from_env,
     provider_label,
@@ -329,6 +330,57 @@ async def test_fine_tuned_provider_adds_debug_evidence_from_guard_context() -> N
 
 
 @pytest.mark.asyncio
+async def test_fine_tuned_provider_uses_request_bound_schema_only_for_adapter() -> None:
+    fine_tuned = _StaticProvider(
+        LlmResponse(
+            content_json={
+                "items": [
+                    {"summary_md": "变量名和值不同。", "evidence_refs": ["page-1-006"]}
+                ]
+            }
+        )
+    )
+    fallback = _StaticProvider(LlmResponse(content_json={"fallback": True}))
+    provider = FineTunedFallbackProvider(fine_tuned=fine_tuned, fallback=fallback)
+    item_schema = {
+        "type": "object",
+        "properties": {
+            "summary_md": {"type": "string"},
+            "evidence_refs": {"type": "array", "items": {"type": "string"}},
+        },
+        "required": ["summary_md"],
+    }
+    schema = {
+        "type": "object",
+        "properties": {"items": {"type": "array", "items": item_schema}},
+        "required": ["items"],
+    }
+
+    result = await provider.chat(
+        [{"role": "user", "content": "ping"}],
+        response_format={"type": "json_object"},
+        guard_context={
+            "agent": "ResourceDesignerAgent.reading",
+            "json_schema": schema,
+            "evidence_ids": ["page-1-006", "page-1-009"],
+            "evidence_fields": ["items.*.evidence_refs"],
+        },
+    )
+
+    assert result.content_json is not None
+    response_format = fine_tuned.last_kwargs["response_format"]
+    bound_item = response_format["json_schema"]["schema"]["properties"]["items"]["items"]
+    assert bound_item["properties"]["evidence_refs"]["items"]["enum"] == [
+        "page-1-006",
+        "page-1-009",
+    ]
+    assert bound_item["properties"]["evidence_refs"]["minItems"] == 1
+    assert "evidence_refs" in bound_item["required"]
+    assert fallback.chat_calls == 0
+    assert provider.guard_metrics.snapshot()["evidence_bound_rate"] == 1.0
+
+
+@pytest.mark.asyncio
 async def test_fine_tuned_provider_delegates_non_json_and_stream_to_fallback() -> None:
     fine_tuned = _StaticProvider(LlmResponse(content_json={"adapter": True}))
     fallback = _StaticProvider(LlmResponse(content_text="fallback text"), stream_chunks=["a", "b"])
@@ -340,6 +392,24 @@ async def test_fine_tuned_provider_delegates_non_json_and_stream_to_fallback() -
     assert text.content_text == "fallback text"
     assert chunks == ["a", "b"]
     assert fine_tuned.chat_calls == 0
+
+
+@pytest.mark.asyncio
+async def test_routed_fine_tuned_provider_selects_contract_adapter() -> None:
+    default = _StaticProvider(LlmResponse(content_json={"route": "default"}))
+    contract = _StaticProvider(LlmResponse(content_json={"route": "contract"}))
+    grounding = _StaticProvider(LlmResponse(content_json={"route": "grounding"}))
+    provider = RoutedFineTunedProvider(
+        default=default, contract=contract, grounding=grounding
+    )
+
+    result = await provider.chat(
+        [{"role": "user", "content": "ping"}], agent_route="PracticeAgent"
+    )
+
+    assert result.content_json == {"route": "contract"}
+    assert contract.chat_calls == 1
+    assert grounding.chat_calls == 0
 
 
 def test_provider_label_mentions_fine_tuned_adapter(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -356,9 +426,11 @@ class _StaticProvider:
         self.response = response
         self.stream_chunks = stream_chunks or []
         self.chat_calls = 0
+        self.last_kwargs: dict[str, object] = {}
 
     async def chat(self, messages: list[dict[str, str]], **kwargs: object) -> LlmResponse:
         self.chat_calls += 1
+        self.last_kwargs = dict(kwargs)
         return self.response
 
     async def chat_stream(self, messages: list[dict[str, str]], **kwargs: object):

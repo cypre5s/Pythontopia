@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, Request
 
 from pythontopia_graph.agents.intent_router_agent import IntentRouterAgent
 from pythontopia_graph.llm.provider import LlmProvider, provider_from_env
+from pythontopia_graph.routing.workshop_metrics import routing_metrics_snapshot
 from pythontopia_graph.schemas.intent import IntentRouteRequest, IntentRouteResponse
 from pythontopia_graph.tools.harness import harness_stats
 from pythontopia_graph.tools.registry import tool_catalog_payload
@@ -47,5 +48,5 @@ async def intent_tools() -> list[dict[str, object]]:
 
 @router.get("/agents/harness/stats")
 async def harness_stats_endpoint() -> dict[str, Any]:
-    """harness 统计快照：各工具调用数/失败数/降级数/均耗时 + 熔断器状态。"""
-    return harness_stats()
+    """harness 统计快照：工具调用/失败/降级/熔断器 + 百晓路由 routing 运行指标。"""
+    return {**harness_stats(), "routing": routing_metrics_snapshot()}

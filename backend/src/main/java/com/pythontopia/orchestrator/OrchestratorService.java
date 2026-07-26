@@ -2,12 +2,18 @@ package com.pythontopia.orchestrator;
 
 import com.pythontopia.bugmine.service.BugMineService;
 import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.coursepack.service.CoursePackService;
+import com.pythontopia.intent.InteractionContextVerifier;
+import com.pythontopia.intent.RouteExecutionTokenSigner;
+import com.pythontopia.intent.WorkshopLearningContextService;
 import com.pythontopia.orchestrator.dto.OrchestratorTurnRequest;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -34,16 +40,66 @@ public class OrchestratorService {
 
   private final OrchestratorGraphClient graphClient;
   private final BugMineService bugMineService;
+  private final RouteExecutionTokenSigner routeTokenSigner;
+  private final InteractionContextVerifier interactionVerifier;
+  private final CoursePackService coursePackService;
+  private final WorkshopLearningContextService learningContextService;
   /** 进行中的会话流（userId:sessionId），防同一会话并发重复提交。 */
   private final Set<String> inFlightSessions = ConcurrentHashMap.newKeySet();
 
-  public OrchestratorService(OrchestratorGraphClient graphClient, BugMineService bugMineService) {
+  @Autowired
+  public OrchestratorService(
+      OrchestratorGraphClient graphClient,
+      BugMineService bugMineService,
+      RouteExecutionTokenSigner routeTokenSigner,
+      InteractionContextVerifier interactionVerifier,
+      CoursePackService coursePackService,
+      WorkshopLearningContextService learningContextService) {
     this.graphClient = graphClient;
     this.bugMineService = bugMineService;
+    this.routeTokenSigner = routeTokenSigner;
+    this.interactionVerifier = interactionVerifier;
+    this.coursePackService = coursePackService;
+    this.learningContextService = learningContextService;
+  }
+
+  public OrchestratorService(
+      OrchestratorGraphClient graphClient,
+      BugMineService bugMineService,
+      RouteExecutionTokenSigner routeTokenSigner,
+      InteractionContextVerifier interactionVerifier,
+      CoursePackService coursePackService) {
+    this(
+        graphClient,
+        bugMineService,
+        routeTokenSigner,
+        interactionVerifier,
+        coursePackService,
+        null);
+  }
+
+  /** 保留给既有签名/上下文单测的轻量装配；生产使用上面的五参数构造。 */
+  public OrchestratorService(
+      OrchestratorGraphClient graphClient,
+      BugMineService bugMineService,
+      RouteExecutionTokenSigner routeTokenSigner,
+      InteractionContextVerifier interactionVerifier) {
+    this(graphClient, bugMineService, routeTokenSigner, interactionVerifier, null, null);
+  }
+
+  /** 既有 legacy PLAN 单元测试的轻量装配；生产使用带签名器与共享上下文校验器的构造。 */
+  public OrchestratorService(OrchestratorGraphClient graphClient, BugMineService bugMineService) {
+    this(graphClient, bugMineService, null, null, null, null);
   }
 
   public SseEmitter turn(Long userId, OrchestratorTurnRequest request) {
-    String sessionKey = inFlightKey(userId, request.sessionId());
+    // 先校验客户端原样回传的 message/context，确保任何篡改都在触发数据库补全前被拒绝；
+    // 凭证通过后仍重新按当前服务端数据补全 interaction，Graph 只接收权威上下文。
+    requireVerifiedMultiRoute(userId, request);
+    OrchestratorTurnRequest safeRequest =
+        verifiedLearningContext(
+            userId, verifiedCourseContext(verifiedInteraction(userId, request)));
+    String sessionKey = inFlightKey(userId, safeRequest.sessionId());
     if (sessionKey != null && !inFlightSessions.add(sessionKey)) {
       throw new BusinessException(
           HttpStatus.CONFLICT, "SESSION_BUSY", "上一条消息还在处理中，请稍候再试");
@@ -52,7 +108,7 @@ public class OrchestratorService {
         sessionKey == null ? () -> {} : () -> inFlightSessions.remove(sessionKey);
     try {
       SseEmitter emitter = new SseEmitter(STREAM_TIMEOUT_MS);
-      graphClient.turnStream(userId, request, decayingKcs(userId), emitter, release);
+      graphClient.turnStream(userId, safeRequest, decayingKcs(userId), emitter, release);
       return emitter;
     } catch (RuntimeException e) {
       release.run();
@@ -87,6 +143,73 @@ public class OrchestratorService {
       return null;
     }
     return userId + ":" + sessionId.trim();
+  }
+
+  private void requireVerifiedMultiRoute(Long userId, OrchestratorTurnRequest request) {
+    if (request.routeDecision() == null
+        || request.routeDecision().task() == null
+        || !"MULTI_TASK".equals(request.routeDecision().task().family())) {
+      return;
+    }
+    if (routeTokenSigner == null
+        || !routeTokenSigner.verify(
+            userId,
+            request.routeDecision(),
+            request.message(),
+            request.interaction(),
+            request.routeExecutionToken())) {
+      throw new BusinessException(
+          HttpStatus.FORBIDDEN,
+          "ROUTE_EXECUTION_TOKEN_INVALID",
+          "路由执行凭证无效或已过期，请重新提交");
+    }
+  }
+
+  private OrchestratorTurnRequest verifiedInteraction(
+      Long userId, OrchestratorTurnRequest request) {
+    if (interactionVerifier == null) {
+      return request;
+    }
+    return request.withInteraction(
+        interactionVerifier.verify(userId, request.message(), request.interaction()));
+  }
+
+  private OrchestratorTurnRequest verifiedLearningContext(
+      Long userId, OrchestratorTurnRequest request) {
+    if (learningContextService == null) {
+      return request;
+    }
+    return request.withLearningContext(learningContextService.build(userId, request.message()));
+  }
+
+  /**
+   * 忽略客户端自报的课程目录，始终从唯一知识底座 pack 43 重建 Graph 证据边界。
+   * 客户端选中的 recent KC 只能是该目录的子集。
+   */
+  private OrchestratorTurnRequest verifiedCourseContext(OrchestratorTurnRequest request) {
+    if (coursePackService == null) {
+      return request;
+    }
+    LinkedHashSet<String> authoritative = new LinkedHashSet<>();
+    coursePackService.listKcsByChapter(null).stream()
+        .map(kc -> kc.kcCode())
+        .filter(code -> code != null && !code.isBlank())
+        .map(String::trim)
+        .forEach(authoritative::add);
+    if (authoritative.isEmpty()) {
+      throw new BusinessException(
+          HttpStatus.SERVICE_UNAVAILABLE,
+          "COURSE_KC_INDEX_UNAVAILABLE",
+          "课程知识点目录暂时不可用");
+    }
+    List<String> verifiedRecent =
+        request.recentKcCodes() == null
+            ? List.of()
+            : request.recentKcCodes().stream()
+                .filter(authoritative::contains)
+                .distinct()
+                .toList();
+    return request.withCourseContext(verifiedRecent, List.copyOf(authoritative));
   }
 
   private List<String> decayingKcs(Long userId) {

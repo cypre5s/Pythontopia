@@ -47,6 +47,5 @@ export function candidateIntentsForCapability(namespace: WorkshopCapabilityNames
 
 export function shouldClarifyRoutePlan(plan: WorkshopToolRoutePlan): boolean {
   if (plan.needsClarification) return true;
-  if (plan.confidence < 0.45) return true;
-  return plan.source === 'composer_text' && plan.confidence < 0.75;
+  return plan.source === 'composer_text' && plan.confidence < 0.55;
 }

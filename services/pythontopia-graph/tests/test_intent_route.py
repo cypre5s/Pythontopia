@@ -61,6 +61,13 @@ def test_intent_route_returns_200_and_shape() -> None:
     assert data["risk_class"] == "generative"
     assert data["render_mode"] == "resource"
     assert data["reason_code"] in {"explicit_command", "contextual_match", "fallback"}
+    decision = data["route_decision"]
+    assert decision["task"]["family"] == "MINDMAP"
+    assert decision["task"]["complexity"] == "C1"
+    assert decision["orchestration"]["topology"] == "SINGLE_AGENT_TOOL"
+    assert decision["orchestration"]["primary_agent"] == "MindMapAgent"
+    assert decision["tools"]["required"] == ["MINDMAP"]
+    assert decision["policies"]["max_tool_calls"] == 8
 
     del app.state.llm_provider
 
@@ -223,6 +230,98 @@ def test_intent_route_clarifies_low_confidence_without_tool_call() -> None:
     assert data["candidate_intents"]
     assert data["clarification_prompt"]
     assert data["reason_code"] == "missing_required_context"
+    assert data["route_decision"]["task"]["needs_clarification"] is True
+    assert data["route_decision"]["orchestration"]["topology"] == "DIRECT"
+    assert data["route_decision"]["tools"]["required"] == []
+
+    del app.state.llm_provider
+
+
+def test_intent_route_accepts_free_text_at_exact_policy_threshold() -> None:
+    app.state.llm_provider = StubProvider(
+        {"intent": "ASK", "confidence": 0.60, "reason": "可执行的普通问答"}
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/agents/intent/route",
+        json={"message": "Python 的鸭子类型是什么意思", "course_kcs": []},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["needs_clarification"] is False
+    assert data["route_decision"]["task"]["needs_clarification"] is False
+    assert data["route_decision"]["orchestration"]["topology"] == "SINGLE_AGENT_TOOL"
+
+    del app.state.llm_provider
+
+
+def test_explicit_summary_then_practice_gets_stable_sequential_route() -> None:
+    app.state.llm_provider = StubProvider(None)
+    client = TestClient(app)
+
+    response = client.post(
+        "/agents/intent/route",
+        json={
+            "message": "总结循环课件，然后根据总结出三道练习",
+            "manual_kc_codes": ["PY43-KC-001"],
+            "course_kcs": [{"code": "PY43-KC-001", "name": "for 循环"}],
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["intent"] == "HANDOUT"
+    assert data["secondary_intent"] == "PRACTICE"
+    assert data["reason_code"] == "multi_intent"
+    assert data["route_decision"]["task"]["sub_intents"] == ["HANDOUT", "PRACTICE"]
+    assert data["route_decision"]["orchestration"]["topology"] == "SEQUENTIAL"
+
+    del app.state.llm_provider
+
+
+def test_compound_route_grounds_distinctive_fragment_from_real_course_kc_name() -> None:
+    app.state.llm_provider = StubProvider(None)
+    client = TestClient(app)
+
+    response = client.post(
+        "/agents/intent/route",
+        json={
+            "message": "总结 for 循环课件，然后根据总结出三道练习",
+            "course_kcs": [
+                {"code": "PY43-KC-031", "name": "for循环与遍历"},
+                {"code": "PY43-KC-032", "name": "while循环与循环分支结合"},
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["route_decision"]["orchestration"]["topology"] == "SEQUENTIAL"
+    assert data["kc_codes"] == ["PY43-KC-031"]
+
+    del app.state.llm_provider
+
+
+def test_requested_intent_still_obeys_missing_context_gate() -> None:
+    app.state.llm_provider = StubProvider({"intent": "ASK", "confidence": 0.99})
+    client = TestClient(app)
+
+    response = client.post(
+        "/agents/intent/route",
+        json={
+            "message": "帮我修报错",
+            "source": "slash_command",
+            "requested_intent": "FIX_BUG",
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["intent"] == "FIX_BUG"
+    assert data["needs_clarification"] is True
+    assert data["route_decision"]["tools"]["required"] == []
 
     del app.state.llm_provider
 

@@ -210,6 +210,8 @@ def verify_teacher_response(raw_response: str, case: Mapping[str, Any]) -> Check
 def aggregate_teacher_votes(
     case: Mapping[str, Any],
     vote_records: Sequence[Mapping[str, Any]],
+    *,
+    case_prompt_fingerprint: str | None = None,
 ) -> dict[str, Any]:
     case_id = str(case.get("case_id") or "未知案例")
     valid_records = [
@@ -222,7 +224,7 @@ def aggregate_teacher_votes(
     common = {
         "format": "rsage_teacher_label_v1",
         "case_id": case_id,
-        "case_prompt_fingerprint": _case_prompt_fingerprint(case),
+        "case_prompt_fingerprint": case_prompt_fingerprint or _case_prompt_fingerprint(case),
         "valid_vote_count": len(valid_records),
         "total_reviewer_count": len(vote_records),
         "reviewer_roles": [str(record.get("reviewer_role", "")) for record in vote_records],
@@ -327,7 +329,11 @@ def run_teacher_voting(
 
     for case in cases:
         case_id = str(case.get("case_id") or "")
-        case_fingerprint = _case_prompt_fingerprint(case)
+        case_fingerprint = _case_prompt_fingerprint(
+            case,
+            reviewer_roles=reviewer_roles,
+            teacher_model=str(backend.model_name),
+        )
         if case_id in completed:
             previous_fingerprint = completed[case_id]
             if previous_fingerprint != case_fingerprint:
@@ -387,7 +393,11 @@ def run_teacher_voting(
             if final_record is not None:
                 accepted_vote_records.append(final_record)
 
-        label = aggregate_teacher_votes(case, accepted_vote_records)
+        label = aggregate_teacher_votes(
+            case,
+            accepted_vote_records,
+            case_prompt_fingerprint=case_fingerprint,
+        )
         label["timestamp_utc"] = datetime.now(timezone.utc).isoformat()
         label["model"] = str(backend.model_name)
         append_jsonl(label_path, label)
@@ -489,21 +499,26 @@ def load_completed_case_fingerprints(path: str | Path) -> dict[str, str]:
     return completed
 
 
-def _case_prompt_fingerprint(case: Mapping[str, Any]) -> str:
-    direct = case.get("prompt_fingerprint")
-    if isinstance(direct, str) and direct:
-        return direct
+def _case_prompt_fingerprint(
+    case: Mapping[str, Any],
+    *,
+    reviewer_roles: Sequence[str] = REVIEWER_ROLES,
+    teacher_model: str = "",
+) -> str:
+    """绑定教师真正看到的消息、模型和核验契约，不能只信任上游提示指纹。"""
+
     return stable_fingerprint(
         {
-            "case_id": str(case.get("case_id") or ""),
-            "student_input": str(case.get("student_input") or ""),
-            "learner_profile": case.get("learner_profile") or {},
-            "kc_code": str(case.get("kc_code") or ""),
-            "failure_axis": str(case.get("failure_axis") or ""),
-            "evidence_ids": [
-                str(item.get("evidence_id"))
-                for item in case.get("evidence_refs", [])
-                if isinstance(item, Mapping)
+            "format": "rsage_teacher_prompt_identity_v2",
+            "upstream_prompt_fingerprint": str(case.get("prompt_fingerprint") or ""),
+            "teacher_model": teacher_model,
+            "verifier_contract": "rsage_teacher_vote_v1",
+            "reviewer_messages": [
+                {
+                    "reviewer_role": str(role),
+                    "messages": build_teacher_messages(case, str(role)),
+                }
+                for role in reviewer_roles
             ],
         }
     )

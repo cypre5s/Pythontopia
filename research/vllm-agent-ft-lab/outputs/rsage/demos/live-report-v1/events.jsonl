@@ -1,0 +1,5 @@
+{"event": "演示启动", "message_zh": "开始生成逐步增长的合成训练日志", "timestamp_utc": "2026-07-16T08:25:18+00:00"}
+{"event": "监控轮询", "gpu_status": "ok", "latest_step": 1, "message_zh": "已解析 1 条训练日志并刷新 4 张图表", "partial_trainer_line_ignored": false, "timestamp_utc": "2026-07-16T08:25:20+00:00", "trainer_rows": 1}
+{"event": "监控轮询", "gpu_status": "ok", "latest_step": 2, "message_zh": "已解析 2 条训练日志并刷新 4 张图表", "partial_trainer_line_ignored": false, "timestamp_utc": "2026-07-16T08:25:21+00:00", "trainer_rows": 2}
+{"event": "监控轮询", "gpu_status": "ok", "latest_step": 3, "message_zh": "已解析 3 条训练日志并刷新 4 张图表", "partial_trainer_line_ignored": false, "timestamp_utc": "2026-07-16T08:25:21+00:00", "trainer_rows": 3}
+{"event": "演示完成", "message_zh": "合成训练日志演示完成，实时报告已生成", "timestamp_utc": "2026-07-16T08:25:21+00:00", "trainer_rows": 3}

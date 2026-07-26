@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -56,7 +57,8 @@ class MemoryBriefServiceTest {
     Mem0MemoryProvider mem0 = new Mem0MemoryProvider(restTemplate, objectMapper, props);
     ZepMemoryProvider zep = new ZepMemoryProvider(restTemplate, objectMapper, props);
     MemoryProviderRouter router = new MemoryProviderRouter(local, mem0, zep, props, refs);
-    return new MemoryBriefService(router, profileService, reviewStateRepository, clock);
+    return new MemoryBriefService(
+        router, profileService, reviewStateRepository, retrieval, clock);
   }
 
   private static MemoryProviderProperties localProps() {
@@ -182,6 +184,30 @@ class MemoryBriefServiceTest {
     assertThat(brief.facts()).containsExactly("练习失败：PY43-KC-07");
     assertThat(brief.weakKcs()).containsExactly("PY43-KC-07");
     server.verify(Duration.ofSeconds(2));
+  }
+
+  @Test
+  void authoritativeBriefBypassesConfiguredExternalProvider() {
+    MemoryProviderRouter providerRouter = mock(MemoryProviderRouter.class);
+    when(retrieval.retrieveAuthoritative(eq(USER), isNull(), eq("循环"), anyInt()))
+        .thenReturn(
+            List.of(
+                item(
+                    9L,
+                    "practice_failed",
+                    "练习失败：PY43-KC-07",
+                    "PY43-KC-07",
+                    "2026-06-12T00:00:00Z")));
+    when(profileService.getDimensions(USER)).thenReturn(List.of());
+    when(reviewStateRepository.findAll(USER)).thenReturn(List.of());
+    MemoryBriefService authoritativeService =
+        new MemoryBriefService(
+            providerRouter, profileService, reviewStateRepository, retrieval, clock);
+
+    MemoryBriefDto brief = authoritativeService.buildAuthoritativeBrief(USER, "循环");
+
+    assertThat(brief.facts()).containsExactly("练习失败：PY43-KC-07");
+    verifyNoInteractions(providerRouter);
   }
 
   // ── ⑤ 画像缺失 / 各来源故障 → 优雅降级，brief 仍返回（空列表 + as_of）──

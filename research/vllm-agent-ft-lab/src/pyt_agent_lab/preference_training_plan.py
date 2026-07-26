@@ -16,7 +16,15 @@ def build_dpo_training_plan(
     seed: int = 20260710,
     champion_adapter_path: str | None = None,
     changed_variable: str = "preference_dataset",
+    schema_version: str = "agent-schema-v1",
+    dpo_loss_types: list[str] | None = None,
+    dpo_loss_weights: list[float] | None = None,
 ) -> dict[str, Any]:
+    loss_types = dpo_loss_types or ["sigmoid"]
+    if dpo_loss_weights is not None and len(dpo_loss_weights) != len(loss_types):
+        raise ValueError("dpo_loss_weights must match dpo_loss_types")
+    if dpo_loss_weights is not None and any(weight <= 0 for weight in dpo_loss_weights):
+        raise ValueError("dpo_loss_weights must be positive")
     return {
         "method": "dpo_lora",
         "model_path": model_path,
@@ -26,7 +34,7 @@ def build_dpo_training_plan(
         "output_dir": output_dir,
         "max_seq_length": max_seq_length,
         "seed": seed,
-        "schema_version": "agent-schema-v1",
+        "schema_version": schema_version,
         "decoding": {"prompt_variant": "baseline", "temperature": 0.0},
         "quality_round": {
             "champion_adapter_path": champion_adapter_path or sft_adapter_path,
@@ -35,7 +43,8 @@ def build_dpo_training_plan(
         },
         "dpo": {
             "beta": 0.1,
-            "loss_type": "sigmoid",
+            "loss_types": loss_types,
+            "loss_weights": dpo_loss_weights,
         },
         "lora": {
             "r": 8,
@@ -88,6 +97,7 @@ def build_orpo_training_plan(
     seed: int = 20260710,
     champion_adapter_path: str | None = None,
     changed_variable: str = "preference_method",
+    schema_version: str = "agent-schema-v1",
 ) -> dict[str, Any]:
     plan = build_dpo_training_plan(
         model_path=model_path,
@@ -99,6 +109,7 @@ def build_orpo_training_plan(
         seed=seed,
         champion_adapter_path=champion_adapter_path,
         changed_variable=changed_variable,
+        schema_version=schema_version,
     )
     plan["method"] = "orpo_lora"
     plan.pop("dpo", None)

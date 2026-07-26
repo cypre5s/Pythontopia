@@ -1,0 +1,22 @@
+{
+  "accepted_count": 1,
+  "backend": "live",
+  "cases_path": "research/vllm-agent-ft-lab/outputs/rsage/demos/case-builder-v2/cases.jsonl",
+  "cases_sha256": "12ec35d5b385ad2056ec08a989f96d7fff2fa9b218bcc793e05e9830ad8bc479",
+  "credentials_logged": false,
+  "excluded_count": 0,
+  "format": "rsage_teacher_voting_manifest_v1",
+  "labels_path": "research/vllm-agent-ft-lab/outputs/rsage/demos/teacher-voting-live-v4/labels.jsonl",
+  "labels_sha256": "033ec8ab49915e242f8c32d92e62b0aade1678bd5b62bd6161f44f3799cbd241",
+  "message_zh": "教师投票完成：处理 1 条，通过 1 条，排除 0 条，断点跳过 0 条，共发起 3 次教师请求",
+  "model": "deepseek-v4-pro",
+  "processed_count": 1,
+  "raw_votes_path": "research/vllm-agent-ft-lab/outputs/rsage/demos/teacher-voting-live-v4/raw_votes.jsonl",
+  "raw_votes_sha256": "dfbe62b8fb98328934e207b6f22671640a90ebef60346c683dab89b0b03e357c",
+  "request_count": 3,
+  "resume_enabled": true,
+  "reviewer_concurrency": 3,
+  "skipped_count": 0,
+  "timestamp_utc": "2026-07-16T08:28:26.395873+00:00",
+  "total_count": 1
+}

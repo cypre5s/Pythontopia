@@ -1,0 +1,70 @@
+{
+  "$defs": {
+    "StoryboardSceneIR": {
+      "properties": {
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 1,
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "narration": {
+          "maxLength": 800,
+          "minLength": 10,
+          "title": "Narration",
+          "type": "string"
+        },
+        "pacing": {
+          "default": "normal",
+          "enum": [
+            "brief",
+            "normal",
+            "deep"
+          ],
+          "title": "Pacing",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "visual_intent": {
+          "maxLength": 240,
+          "minLength": 2,
+          "title": "Visual Intent",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "narration",
+        "visual_intent"
+      ],
+      "title": "StoryboardSceneIR",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "scenes": {
+      "items": {
+        "$ref": "#/$defs/StoryboardSceneIR"
+      },
+      "maxItems": 5,
+      "minItems": 3,
+      "title": "Scenes",
+      "type": "array"
+    }
+  },
+  "required": [
+    "scenes"
+  ],
+  "title": "ResourceDesignerAgent.storyboard",
+  "type": "object",
+  "x-adapter-eligible": true,
+  "x-product-contract": "semantic-ir-evidence-bound",
+  "x-schema-version": "agent-schema-v2"
+}

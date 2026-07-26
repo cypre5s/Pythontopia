@@ -1,0 +1,1082 @@
+{
+  "auxiliary_metric": "score_mean",
+  "claims_policy": "Smoke, small heldout, and guard/fallback-repaired results are not evidence that a model reached 100%.",
+  "failure_matrices": {
+    "champion": {
+      "agent": {
+        "DebugAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "json_invalid": 1,
+            "missing_schema_field:bug_type": 1,
+            "missing_schema_field:minimal_repro_hint": 1,
+            "missing_schema_field:misconception": 1,
+            "missing_schema_field:next_probe": 1,
+            "missing_schema_field:safety_flags": 1,
+            "schema_invalid": 4,
+            "schema_type_error:safety_flags": 4
+          },
+          "failure_count": 5
+        },
+        "GroundingCriticAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "GuideCoachAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "missing_schema_field:evidence_needed": 1,
+            "schema_invalid": 5,
+            "schema_type_error:evidence_needed": 4,
+            "schema_type_error:learner_state_update": 5
+          },
+          "failure_count": 5
+        },
+        "IntentRouterAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "MindMapAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "PathPlannerAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 0.8,
+          "failure_categories": {
+            "grounding_unsafe": 1
+          },
+          "failure_count": 1
+        },
+        "PracticeAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "schema_invalid": 5,
+            "schema_type_error:blocked_content": 5
+          },
+          "failure_count": 5
+        },
+        "ResourceDesignerAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "SafetyAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "TutorAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        }
+      },
+      "beginner_noise": {
+        "clean": {
+          "case_count": 50,
+          "contract_pass_rate": 0.68,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "json_invalid": 1,
+            "missing_schema_field:bug_type": 1,
+            "missing_schema_field:evidence_needed": 1,
+            "missing_schema_field:minimal_repro_hint": 1,
+            "missing_schema_field:misconception": 1,
+            "missing_schema_field:next_probe": 1,
+            "missing_schema_field:safety_flags": 1,
+            "schema_invalid": 14,
+            "schema_type_error:blocked_content": 5,
+            "schema_type_error:evidence_needed": 4,
+            "schema_type_error:learner_state_update": 5,
+            "schema_type_error:safety_flags": 4
+          },
+          "failure_count": 16
+        }
+      },
+      "chapter": {
+        "1": {
+          "case_count": 8,
+          "contract_pass_rate": 0.75,
+          "failure_categories": {
+            "schema_invalid": 2,
+            "schema_type_error:blocked_content": 1,
+            "schema_type_error:evidence_needed": 1,
+            "schema_type_error:learner_state_update": 1
+          },
+          "failure_count": 2
+        },
+        "2": {
+          "case_count": 6,
+          "contract_pass_rate": 0.5,
+          "failure_categories": {
+            "schema_invalid": 3,
+            "schema_type_error:blocked_content": 1,
+            "schema_type_error:evidence_needed": 1,
+            "schema_type_error:learner_state_update": 1,
+            "schema_type_error:safety_flags": 1
+          },
+          "failure_count": 3
+        },
+        "3": {
+          "case_count": 7,
+          "contract_pass_rate": 0.714286,
+          "failure_categories": {
+            "schema_invalid": 2,
+            "schema_type_error:evidence_needed": 1,
+            "schema_type_error:learner_state_update": 1,
+            "schema_type_error:safety_flags": 1
+          },
+          "failure_count": 2
+        },
+        "4": {
+          "case_count": 7,
+          "contract_pass_rate": 0.714286,
+          "failure_categories": {
+            "json_invalid": 1,
+            "missing_schema_field:bug_type": 1,
+            "missing_schema_field:minimal_repro_hint": 1,
+            "missing_schema_field:misconception": 1,
+            "missing_schema_field:next_probe": 1,
+            "missing_schema_field:safety_flags": 1,
+            "schema_invalid": 1,
+            "schema_type_error:blocked_content": 1
+          },
+          "failure_count": 2
+        },
+        "5": {
+          "case_count": 6,
+          "contract_pass_rate": 0.833333,
+          "failure_categories": {
+            "schema_invalid": 1,
+            "schema_type_error:evidence_needed": 1,
+            "schema_type_error:learner_state_update": 1
+          },
+          "failure_count": 1
+        },
+        "6": {
+          "case_count": 8,
+          "contract_pass_rate": 0.5,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "missing_schema_field:evidence_needed": 1,
+            "schema_invalid": 3,
+            "schema_type_error:blocked_content": 1,
+            "schema_type_error:learner_state_update": 1,
+            "schema_type_error:safety_flags": 1
+          },
+          "failure_count": 4
+        },
+        "7": {
+          "case_count": 8,
+          "contract_pass_rate": 0.75,
+          "failure_categories": {
+            "schema_invalid": 2,
+            "schema_type_error:blocked_content": 1,
+            "schema_type_error:safety_flags": 1
+          },
+          "failure_count": 2
+        }
+      },
+      "evidence": {
+        "none": {
+          "case_count": 15,
+          "contract_pass_rate": 0.933333,
+          "failure_categories": {
+            "grounding_unsafe": 1
+          },
+          "failure_count": 1
+        },
+        "required": {
+          "case_count": 35,
+          "contract_pass_rate": 0.571429,
+          "failure_categories": {
+            "json_invalid": 1,
+            "missing_schema_field:bug_type": 1,
+            "missing_schema_field:evidence_needed": 1,
+            "missing_schema_field:minimal_repro_hint": 1,
+            "missing_schema_field:misconception": 1,
+            "missing_schema_field:next_probe": 1,
+            "missing_schema_field:safety_flags": 1,
+            "schema_invalid": 14,
+            "schema_type_error:blocked_content": 5,
+            "schema_type_error:evidence_needed": 4,
+            "schema_type_error:learner_state_update": 5,
+            "schema_type_error:safety_flags": 4
+          },
+          "failure_count": 15
+        }
+      },
+      "failure_category": {
+        "grounding_unsafe": 1,
+        "json_invalid": 1,
+        "missing_schema_field:bug_type": 1,
+        "missing_schema_field:evidence_needed": 1,
+        "missing_schema_field:minimal_repro_hint": 1,
+        "missing_schema_field:misconception": 1,
+        "missing_schema_field:next_probe": 1,
+        "missing_schema_field:safety_flags": 1,
+        "schema_invalid": 14,
+        "schema_type_error:blocked_content": 5,
+        "schema_type_error:evidence_needed": 4,
+        "schema_type_error:learner_state_update": 5,
+        "schema_type_error:safety_flags": 4
+      },
+      "missing_schema_field": {
+        "bug_type": 1,
+        "evidence_needed": 1,
+        "minimal_repro_hint": 1,
+        "misconception": 1,
+        "next_probe": 1,
+        "safety_flags": 1
+      },
+      "safety": {
+        "sensitive": {
+          "case_count": 10,
+          "contract_pass_rate": 0.5,
+          "failure_categories": {
+            "schema_invalid": 5,
+            "schema_type_error:blocked_content": 5
+          },
+          "failure_count": 5
+        },
+        "standard": {
+          "case_count": 40,
+          "contract_pass_rate": 0.725,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "json_invalid": 1,
+            "missing_schema_field:bug_type": 1,
+            "missing_schema_field:evidence_needed": 1,
+            "missing_schema_field:minimal_repro_hint": 1,
+            "missing_schema_field:misconception": 1,
+            "missing_schema_field:next_probe": 1,
+            "missing_schema_field:safety_flags": 1,
+            "schema_invalid": 9,
+            "schema_type_error:evidence_needed": 4,
+            "schema_type_error:learner_state_update": 5,
+            "schema_type_error:safety_flags": 4
+          },
+          "failure_count": 11
+        }
+      },
+      "schema_type_error": {
+        "blocked_content": 5,
+        "evidence_needed": 4,
+        "learner_state_update": 5,
+        "safety_flags": 4
+      },
+      "web_input": {
+        "non_web": {
+          "case_count": 50,
+          "contract_pass_rate": 0.68,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "json_invalid": 1,
+            "missing_schema_field:bug_type": 1,
+            "missing_schema_field:evidence_needed": 1,
+            "missing_schema_field:minimal_repro_hint": 1,
+            "missing_schema_field:misconception": 1,
+            "missing_schema_field:next_probe": 1,
+            "missing_schema_field:safety_flags": 1,
+            "schema_invalid": 14,
+            "schema_type_error:blocked_content": 5,
+            "schema_type_error:evidence_needed": 4,
+            "schema_type_error:learner_state_update": 5,
+            "schema_type_error:safety_flags": 4
+          },
+          "failure_count": 16
+        }
+      }
+    },
+    "global_candidate": {
+      "agent": {
+        "DebugAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "schema_invalid": 5,
+            "schema_type_error:safety_flags": 5
+          },
+          "failure_count": 5
+        },
+        "GroundingCriticAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "GuideCoachAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "schema_invalid": 5,
+            "schema_type_error:evidence_needed": 5,
+            "schema_type_error:learner_state_update": 5
+          },
+          "failure_count": 5
+        },
+        "IntentRouterAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "MindMapAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "PathPlannerAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 0.2,
+          "failure_categories": {
+            "grounding_unsafe": 4
+          },
+          "failure_count": 4
+        },
+        "PracticeAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "schema_invalid": 5,
+            "schema_type_error:blocked_content": 5
+          },
+          "failure_count": 5
+        },
+        "ResourceDesignerAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "SafetyAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 0.4,
+          "failure_categories": {
+            "grounding_unsafe": 3
+          },
+          "failure_count": 3
+        },
+        "TutorAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        }
+      },
+      "beginner_noise": {
+        "clean": {
+          "case_count": 50,
+          "contract_pass_rate": 0.56,
+          "failure_categories": {
+            "grounding_unsafe": 7,
+            "schema_invalid": 15,
+            "schema_type_error:blocked_content": 5,
+            "schema_type_error:evidence_needed": 5,
+            "schema_type_error:learner_state_update": 5,
+            "schema_type_error:safety_flags": 5
+          },
+          "failure_count": 22
+        }
+      },
+      "chapter": {
+        "1": {
+          "case_count": 8,
+          "contract_pass_rate": 0.625,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "schema_invalid": 2,
+            "schema_type_error:blocked_content": 1,
+            "schema_type_error:evidence_needed": 1,
+            "schema_type_error:learner_state_update": 1
+          },
+          "failure_count": 3
+        },
+        "2": {
+          "case_count": 6,
+          "contract_pass_rate": 0.333333,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "schema_invalid": 3,
+            "schema_type_error:blocked_content": 1,
+            "schema_type_error:evidence_needed": 1,
+            "schema_type_error:learner_state_update": 1,
+            "schema_type_error:safety_flags": 1
+          },
+          "failure_count": 4
+        },
+        "3": {
+          "case_count": 7,
+          "contract_pass_rate": 0.428571,
+          "failure_categories": {
+            "grounding_unsafe": 2,
+            "schema_invalid": 2,
+            "schema_type_error:evidence_needed": 1,
+            "schema_type_error:learner_state_update": 1,
+            "schema_type_error:safety_flags": 1
+          },
+          "failure_count": 4
+        },
+        "4": {
+          "case_count": 7,
+          "contract_pass_rate": 0.714286,
+          "failure_categories": {
+            "schema_invalid": 2,
+            "schema_type_error:blocked_content": 1,
+            "schema_type_error:safety_flags": 1
+          },
+          "failure_count": 2
+        },
+        "5": {
+          "case_count": 6,
+          "contract_pass_rate": 0.666667,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "schema_invalid": 1,
+            "schema_type_error:evidence_needed": 1,
+            "schema_type_error:learner_state_update": 1
+          },
+          "failure_count": 2
+        },
+        "6": {
+          "case_count": 8,
+          "contract_pass_rate": 0.5,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "schema_invalid": 3,
+            "schema_type_error:blocked_content": 1,
+            "schema_type_error:evidence_needed": 1,
+            "schema_type_error:learner_state_update": 1,
+            "schema_type_error:safety_flags": 1
+          },
+          "failure_count": 4
+        },
+        "7": {
+          "case_count": 8,
+          "contract_pass_rate": 0.625,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "schema_invalid": 2,
+            "schema_type_error:blocked_content": 1,
+            "schema_type_error:safety_flags": 1
+          },
+          "failure_count": 3
+        }
+      },
+      "evidence": {
+        "none": {
+          "case_count": 15,
+          "contract_pass_rate": 0.533333,
+          "failure_categories": {
+            "grounding_unsafe": 7
+          },
+          "failure_count": 7
+        },
+        "required": {
+          "case_count": 35,
+          "contract_pass_rate": 0.571429,
+          "failure_categories": {
+            "schema_invalid": 15,
+            "schema_type_error:blocked_content": 5,
+            "schema_type_error:evidence_needed": 5,
+            "schema_type_error:learner_state_update": 5,
+            "schema_type_error:safety_flags": 5
+          },
+          "failure_count": 15
+        }
+      },
+      "failure_category": {
+        "grounding_unsafe": 7,
+        "schema_invalid": 15,
+        "schema_type_error:blocked_content": 5,
+        "schema_type_error:evidence_needed": 5,
+        "schema_type_error:learner_state_update": 5,
+        "schema_type_error:safety_flags": 5
+      },
+      "missing_schema_field": {},
+      "safety": {
+        "sensitive": {
+          "case_count": 10,
+          "contract_pass_rate": 0.2,
+          "failure_categories": {
+            "grounding_unsafe": 3,
+            "schema_invalid": 5,
+            "schema_type_error:blocked_content": 5
+          },
+          "failure_count": 8
+        },
+        "standard": {
+          "case_count": 40,
+          "contract_pass_rate": 0.65,
+          "failure_categories": {
+            "grounding_unsafe": 4,
+            "schema_invalid": 10,
+            "schema_type_error:evidence_needed": 5,
+            "schema_type_error:learner_state_update": 5,
+            "schema_type_error:safety_flags": 5
+          },
+          "failure_count": 14
+        }
+      },
+      "schema_type_error": {
+        "blocked_content": 5,
+        "evidence_needed": 5,
+        "learner_state_update": 5,
+        "safety_flags": 5
+      },
+      "web_input": {
+        "non_web": {
+          "case_count": 50,
+          "contract_pass_rate": 0.56,
+          "failure_categories": {
+            "grounding_unsafe": 7,
+            "schema_invalid": 15,
+            "schema_type_error:blocked_content": 5,
+            "schema_type_error:evidence_needed": 5,
+            "schema_type_error:learner_state_update": 5,
+            "schema_type_error:safety_flags": 5
+          },
+          "failure_count": 22
+        }
+      }
+    },
+    "shadow_route": {
+      "agent": {
+        "DebugAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "json_invalid": 1,
+            "missing_schema_field:bug_type": 1,
+            "missing_schema_field:minimal_repro_hint": 1,
+            "missing_schema_field:misconception": 1,
+            "missing_schema_field:next_probe": 1,
+            "missing_schema_field:safety_flags": 1,
+            "schema_invalid": 4,
+            "schema_type_error:safety_flags": 4
+          },
+          "failure_count": 5
+        },
+        "GroundingCriticAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "GuideCoachAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "missing_schema_field:evidence_needed": 1,
+            "schema_invalid": 5,
+            "schema_type_error:evidence_needed": 4,
+            "schema_type_error:learner_state_update": 5
+          },
+          "failure_count": 5
+        },
+        "IntentRouterAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "MindMapAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "PathPlannerAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 0.8,
+          "failure_categories": {
+            "grounding_unsafe": 1
+          },
+          "failure_count": 1
+        },
+        "PracticeAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "schema_invalid": 5,
+            "schema_type_error:blocked_content": 5
+          },
+          "failure_count": 5
+        },
+        "ResourceDesignerAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "SafetyAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "TutorAgent": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        }
+      },
+      "beginner_noise": {
+        "clean": {
+          "case_count": 50,
+          "contract_pass_rate": 0.68,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "json_invalid": 1,
+            "missing_schema_field:bug_type": 1,
+            "missing_schema_field:evidence_needed": 1,
+            "missing_schema_field:minimal_repro_hint": 1,
+            "missing_schema_field:misconception": 1,
+            "missing_schema_field:next_probe": 1,
+            "missing_schema_field:safety_flags": 1,
+            "schema_invalid": 14,
+            "schema_type_error:blocked_content": 5,
+            "schema_type_error:evidence_needed": 4,
+            "schema_type_error:learner_state_update": 5,
+            "schema_type_error:safety_flags": 4
+          },
+          "failure_count": 16
+        }
+      },
+      "chapter": {
+        "1": {
+          "case_count": 8,
+          "contract_pass_rate": 0.75,
+          "failure_categories": {
+            "schema_invalid": 2,
+            "schema_type_error:blocked_content": 1,
+            "schema_type_error:evidence_needed": 1,
+            "schema_type_error:learner_state_update": 1
+          },
+          "failure_count": 2
+        },
+        "2": {
+          "case_count": 6,
+          "contract_pass_rate": 0.5,
+          "failure_categories": {
+            "schema_invalid": 3,
+            "schema_type_error:blocked_content": 1,
+            "schema_type_error:evidence_needed": 1,
+            "schema_type_error:learner_state_update": 1,
+            "schema_type_error:safety_flags": 1
+          },
+          "failure_count": 3
+        },
+        "3": {
+          "case_count": 7,
+          "contract_pass_rate": 0.714286,
+          "failure_categories": {
+            "schema_invalid": 2,
+            "schema_type_error:evidence_needed": 1,
+            "schema_type_error:learner_state_update": 1,
+            "schema_type_error:safety_flags": 1
+          },
+          "failure_count": 2
+        },
+        "4": {
+          "case_count": 7,
+          "contract_pass_rate": 0.714286,
+          "failure_categories": {
+            "json_invalid": 1,
+            "missing_schema_field:bug_type": 1,
+            "missing_schema_field:minimal_repro_hint": 1,
+            "missing_schema_field:misconception": 1,
+            "missing_schema_field:next_probe": 1,
+            "missing_schema_field:safety_flags": 1,
+            "schema_invalid": 1,
+            "schema_type_error:blocked_content": 1
+          },
+          "failure_count": 2
+        },
+        "5": {
+          "case_count": 6,
+          "contract_pass_rate": 0.833333,
+          "failure_categories": {
+            "schema_invalid": 1,
+            "schema_type_error:evidence_needed": 1,
+            "schema_type_error:learner_state_update": 1
+          },
+          "failure_count": 1
+        },
+        "6": {
+          "case_count": 8,
+          "contract_pass_rate": 0.5,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "missing_schema_field:evidence_needed": 1,
+            "schema_invalid": 3,
+            "schema_type_error:blocked_content": 1,
+            "schema_type_error:learner_state_update": 1,
+            "schema_type_error:safety_flags": 1
+          },
+          "failure_count": 4
+        },
+        "7": {
+          "case_count": 8,
+          "contract_pass_rate": 0.75,
+          "failure_categories": {
+            "schema_invalid": 2,
+            "schema_type_error:blocked_content": 1,
+            "schema_type_error:safety_flags": 1
+          },
+          "failure_count": 2
+        }
+      },
+      "evidence": {
+        "none": {
+          "case_count": 15,
+          "contract_pass_rate": 0.933333,
+          "failure_categories": {
+            "grounding_unsafe": 1
+          },
+          "failure_count": 1
+        },
+        "required": {
+          "case_count": 35,
+          "contract_pass_rate": 0.571429,
+          "failure_categories": {
+            "json_invalid": 1,
+            "missing_schema_field:bug_type": 1,
+            "missing_schema_field:evidence_needed": 1,
+            "missing_schema_field:minimal_repro_hint": 1,
+            "missing_schema_field:misconception": 1,
+            "missing_schema_field:next_probe": 1,
+            "missing_schema_field:safety_flags": 1,
+            "schema_invalid": 14,
+            "schema_type_error:blocked_content": 5,
+            "schema_type_error:evidence_needed": 4,
+            "schema_type_error:learner_state_update": 5,
+            "schema_type_error:safety_flags": 4
+          },
+          "failure_count": 15
+        }
+      },
+      "failure_category": {
+        "grounding_unsafe": 1,
+        "json_invalid": 1,
+        "missing_schema_field:bug_type": 1,
+        "missing_schema_field:evidence_needed": 1,
+        "missing_schema_field:minimal_repro_hint": 1,
+        "missing_schema_field:misconception": 1,
+        "missing_schema_field:next_probe": 1,
+        "missing_schema_field:safety_flags": 1,
+        "schema_invalid": 14,
+        "schema_type_error:blocked_content": 5,
+        "schema_type_error:evidence_needed": 4,
+        "schema_type_error:learner_state_update": 5,
+        "schema_type_error:safety_flags": 4
+      },
+      "missing_schema_field": {
+        "bug_type": 1,
+        "evidence_needed": 1,
+        "minimal_repro_hint": 1,
+        "misconception": 1,
+        "next_probe": 1,
+        "safety_flags": 1
+      },
+      "safety": {
+        "sensitive": {
+          "case_count": 10,
+          "contract_pass_rate": 0.5,
+          "failure_categories": {
+            "schema_invalid": 5,
+            "schema_type_error:blocked_content": 5
+          },
+          "failure_count": 5
+        },
+        "standard": {
+          "case_count": 40,
+          "contract_pass_rate": 0.725,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "json_invalid": 1,
+            "missing_schema_field:bug_type": 1,
+            "missing_schema_field:evidence_needed": 1,
+            "missing_schema_field:minimal_repro_hint": 1,
+            "missing_schema_field:misconception": 1,
+            "missing_schema_field:next_probe": 1,
+            "missing_schema_field:safety_flags": 1,
+            "schema_invalid": 9,
+            "schema_type_error:evidence_needed": 4,
+            "schema_type_error:learner_state_update": 5,
+            "schema_type_error:safety_flags": 4
+          },
+          "failure_count": 11
+        }
+      },
+      "schema_type_error": {
+        "blocked_content": 5,
+        "evidence_needed": 4,
+        "learner_state_update": 5,
+        "safety_flags": 4
+      },
+      "web_input": {
+        "non_web": {
+          "case_count": 50,
+          "contract_pass_rate": 0.68,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "json_invalid": 1,
+            "missing_schema_field:bug_type": 1,
+            "missing_schema_field:evidence_needed": 1,
+            "missing_schema_field:minimal_repro_hint": 1,
+            "missing_schema_field:misconception": 1,
+            "missing_schema_field:next_probe": 1,
+            "missing_schema_field:safety_flags": 1,
+            "schema_invalid": 14,
+            "schema_type_error:blocked_content": 5,
+            "schema_type_error:evidence_needed": 4,
+            "schema_type_error:learner_state_update": 5,
+            "schema_type_error:safety_flags": 4
+          },
+          "failure_count": 16
+        }
+      }
+    }
+  },
+  "models": {
+    "champion": {
+      "case_count": 50,
+      "critical_slices": {
+        "agent:GuideCoachAgent": 0.0,
+        "agent:PracticeAgent": 0.0,
+        "agent:SafetyAgent": 1.0,
+        "evidence_required": 0.571429,
+        "safety_sensitive": 0.5
+      },
+      "fallback_count": 1,
+      "fallback_rate": 0.02,
+      "final": {
+        "case_count": 50,
+        "contract_pass_rate": 1.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "promotion_pass_rate": 1.0,
+        "schema_valid_rate": 1.0,
+        "score_mean": 1.0,
+        "semantic_valid_rate": 1.0
+      },
+      "guard": {
+        "case_count": 50,
+        "contract_pass_rate": 0.98,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 0.98,
+        "promotion_pass_rate": 0.98,
+        "schema_valid_rate": 0.98,
+        "score_mean": 1.0,
+        "semantic_valid_rate": 1.0
+      },
+      "guard_repair_count": 15,
+      "guard_repair_rate": 0.3,
+      "guard_repair_rate_among_raw_failures": 0.9375,
+      "layer_semantics": {
+        "final": "guard result or deterministic fallback replay; final 100% must not be attributed to the raw model",
+        "guard": "offline deterministic contract-repair replay; not a claim about historical production guard execution",
+        "raw": "observed model response"
+      },
+      "primary_metric": "contract_pass_rate",
+      "raw": {
+        "case_count": 50,
+        "contract_pass_rate": 0.68,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 0.98,
+        "json_valid_rate": 0.98,
+        "promotion_pass_rate": 0.68,
+        "schema_valid_rate": 0.7,
+        "score_mean": 0.998,
+        "semantic_valid_rate": 1.0
+      },
+      "raw_promotion_pass_rate": 0.68,
+      "raw_semantic_valid_rate": 1.0,
+      "safety_sensitive_forbidden_leak_rate": 0.0
+    },
+    "global_candidate": {
+      "case_count": 50,
+      "critical_slices": {
+        "agent:GuideCoachAgent": 0.0,
+        "agent:PracticeAgent": 0.0,
+        "agent:SafetyAgent": 0.4,
+        "evidence_required": 0.571429,
+        "safety_sensitive": 0.2
+      },
+      "fallback_count": 0,
+      "fallback_rate": 0.0,
+      "final": {
+        "case_count": 50,
+        "contract_pass_rate": 1.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "promotion_pass_rate": 1.0,
+        "schema_valid_rate": 1.0,
+        "score_mean": 1.0,
+        "semantic_valid_rate": 1.0
+      },
+      "guard": {
+        "case_count": 50,
+        "contract_pass_rate": 1.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "promotion_pass_rate": 1.0,
+        "schema_valid_rate": 1.0,
+        "score_mean": 1.0,
+        "semantic_valid_rate": 1.0
+      },
+      "guard_repair_count": 22,
+      "guard_repair_rate": 0.44,
+      "guard_repair_rate_among_raw_failures": 1.0,
+      "layer_semantics": {
+        "final": "guard result or deterministic fallback replay; final 100% must not be attributed to the raw model",
+        "guard": "offline deterministic contract-repair replay; not a claim about historical production guard execution",
+        "raw": "observed model response"
+      },
+      "primary_metric": "contract_pass_rate",
+      "raw": {
+        "case_count": 50,
+        "contract_pass_rate": 0.56,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 0.86,
+        "json_valid_rate": 1.0,
+        "promotion_pass_rate": 0.56,
+        "schema_valid_rate": 0.7,
+        "score_mean": 0.994667,
+        "semantic_valid_rate": 1.0
+      },
+      "raw_promotion_pass_rate": 0.56,
+      "raw_semantic_valid_rate": 1.0,
+      "safety_sensitive_forbidden_leak_rate": 0.0
+    },
+    "shadow_route": {
+      "case_count": 50,
+      "critical_slices": {
+        "agent:GuideCoachAgent": 0.0,
+        "agent:PracticeAgent": 0.0,
+        "agent:SafetyAgent": 1.0,
+        "evidence_required": 0.571429,
+        "safety_sensitive": 0.5
+      },
+      "fallback_count": 1,
+      "fallback_rate": 0.02,
+      "final": {
+        "case_count": 50,
+        "contract_pass_rate": 1.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "promotion_pass_rate": 1.0,
+        "schema_valid_rate": 1.0,
+        "score_mean": 1.0,
+        "semantic_valid_rate": 1.0
+      },
+      "guard": {
+        "case_count": 50,
+        "contract_pass_rate": 0.98,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 0.98,
+        "promotion_pass_rate": 0.98,
+        "schema_valid_rate": 0.98,
+        "score_mean": 1.0,
+        "semantic_valid_rate": 1.0
+      },
+      "guard_repair_count": 15,
+      "guard_repair_rate": 0.3,
+      "guard_repair_rate_among_raw_failures": 0.9375,
+      "layer_semantics": {
+        "final": "guard result or deterministic fallback replay; final 100% must not be attributed to the raw model",
+        "guard": "offline deterministic contract-repair replay; not a claim about historical production guard execution",
+        "raw": "observed model response"
+      },
+      "primary_metric": "contract_pass_rate",
+      "raw": {
+        "case_count": 50,
+        "contract_pass_rate": 0.68,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 0.98,
+        "json_valid_rate": 0.98,
+        "promotion_pass_rate": 0.68,
+        "schema_valid_rate": 0.7,
+        "score_mean": 0.998,
+        "semantic_valid_rate": 1.0
+      },
+      "raw_promotion_pass_rate": 0.68,
+      "raw_semantic_valid_rate": 1.0,
+      "safety_sensitive_forbidden_leak_rate": 0.0
+    }
+  },
+  "paired_comparison": {
+    "case_count": 50,
+    "models": [
+      "champion",
+      "global_candidate",
+      "shadow_route"
+    ],
+    "pairwise": {
+      "champion_vs_global_candidate": {
+        "contract_ties": 44,
+        "full_ties": 42,
+        "left": "champion",
+        "left_wins": 7,
+        "ordering": "contract_pass_then_auxiliary_score",
+        "right": "global_candidate",
+        "right_wins": 1
+      },
+      "champion_vs_shadow_route": {
+        "contract_ties": 50,
+        "full_ties": 50,
+        "left": "champion",
+        "left_wins": 0,
+        "ordering": "contract_pass_then_auxiliary_score",
+        "right": "shadow_route",
+        "right_wins": 0
+      },
+      "global_candidate_vs_shadow_route": {
+        "contract_ties": 44,
+        "full_ties": 42,
+        "left": "global_candidate",
+        "left_wins": 1,
+        "ordering": "contract_pass_then_auxiliary_score",
+        "right": "shadow_route",
+        "right_wins": 7
+      }
+    }
+  },
+  "primary_metric": "contract_pass_rate",
+  "protocol": {
+    "cases_path": "cases/golden_adapter_50_v1.jsonl",
+    "cases_sha256": "dda6fe2bbe4ea4ddc75f3558f587cdc1e976398796bc7decd82d457b86fdcf83",
+    "max_tokens": "per_case.max_tokens",
+    "prompt_variant": "baseline",
+    "response_sha256": {
+      "champion": "4003455d1cc7875b261710fe39daae97b359d6e4bf71e93e368fd8fc041c2903",
+      "global_candidate": "1e8d51e554ae5f2ee9ff5626d4ae460466d69d8c522a838d25f63ced2c1252c8",
+      "shadow_route": "200f3f02135453f8dd3bd540632c72ea4a1f34f55a19c6a6c57384501a98b218"
+    },
+    "seed": 42,
+    "temperature": 0.0,
+    "warning": "This manifest proves case identity and rescoring settings. It does not prove historical serve commands unless each source run saved its own immutable run manifest."
+  }
+}

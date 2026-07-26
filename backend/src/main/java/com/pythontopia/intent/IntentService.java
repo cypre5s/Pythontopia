@@ -5,8 +5,10 @@ import com.pythontopia.auth.security.Role;
 import com.pythontopia.intent.dto.IntentRouteRequest;
 import com.pythontopia.intent.dto.IntentRouteResponse;
 import com.pythontopia.learner.profile.service.PassiveProfileService;
+import com.pythontopia.submission.repository.PracticeSubmissionRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /**
@@ -24,15 +26,99 @@ public class IntentService {
 
   private final IntentGraphClient graphClient;
   private final PassiveProfileService passiveProfileService;
+  private final InteractionContextVerifier interactionVerifier;
+  private final RouteExecutionTokenSigner routeTokenSigner;
+  private final WorkshopLearningContextService learningContextService;
 
+  @Autowired
   public IntentService(
-      IntentGraphClient graphClient, PassiveProfileService passiveProfileService) {
+      IntentGraphClient graphClient,
+      PassiveProfileService passiveProfileService,
+      InteractionContextVerifier interactionVerifier,
+      RouteExecutionTokenSigner routeTokenSigner,
+      WorkshopLearningContextService learningContextService) {
     this.graphClient = graphClient;
     this.passiveProfileService = passiveProfileService;
+    this.interactionVerifier = interactionVerifier;
+    this.routeTokenSigner = routeTokenSigner;
+    this.learningContextService = learningContextService;
+  }
+
+  IntentService(
+      IntentGraphClient graphClient,
+      PassiveProfileService passiveProfileService,
+      InteractionContextVerifier interactionVerifier,
+      RouteExecutionTokenSigner routeTokenSigner) {
+    this(graphClient, passiveProfileService, interactionVerifier, routeTokenSigner, null);
+  }
+
+  /** 保留给既有纯单元测试的轻量装配；生产由上面的 Spring 构造注入共享 verifier 与 signer。 */
+  IntentService(
+      IntentGraphClient graphClient,
+      PassiveProfileService passiveProfileService,
+      PracticeSubmissionRepository submissionRepository) {
+    this(
+        graphClient,
+        passiveProfileService,
+        new InteractionContextVerifier(submissionRepository),
+        null,
+        null);
   }
 
   public IntentRouteResponse route(CurrentUserPrincipal user, IntentRouteRequest request) {
-    return graphClient.route(request, resolveProfileBrief(user));
+    Long userId = user != null && user.role() == Role.STUDENT ? user.userId() : null;
+    IntentRouteRequest safeRequest =
+        copyWithInteraction(
+            request, interactionVerifier.verify(userId, request.message(), request.interaction()));
+    LearnerRoutingContext learnerContext = resolveLearnerContext(user, request.message());
+    String profileBrief =
+        learnerContext == null ? resolveProfileBrief(user) : learnerContext.profileBrief();
+    IntentRouteResponse response =
+        learnerContext == null
+            ? graphClient.route(safeRequest, profileBrief)
+            : graphClient.route(safeRequest, profileBrief, learnerContext);
+    if (learningContextService != null && userId != null) {
+      learningContextService.recordRoute(userId, response, learnerContext);
+    }
+    if (response.routeDecision() == null || routeTokenSigner == null || userId == null) {
+      return response;
+    }
+    // Graph 路由使用 safeRequest 的服务端补全上下文；执行凭证则必须绑定前端
+    // 实际能原样回传的 request。否则自由文本诊断在路由时隐式补全最近失败提交后，
+    // Orchestrator 会用原始 null interaction 验签失败。
+    return response.withRouteExecutionToken(
+        routeTokenSigner.issue(
+            userId, response.routeDecision(), request.message(), request.interaction()));
+  }
+
+  private LearnerRoutingContext resolveLearnerContext(
+      CurrentUserPrincipal user, String message) {
+    if (learningContextService == null
+        || user == null
+        || user.role() != Role.STUDENT
+        || user.userId() == null) {
+      return null;
+    }
+    return learningContextService.build(user.userId(), message);
+  }
+
+  private static IntentRouteRequest copyWithInteraction(
+      IntentRouteRequest request, IntentRouteRequest.InteractionContext interaction) {
+    return new IntentRouteRequest(
+        request.message(),
+        request.manualKcCodes(),
+        request.courseKcs(),
+        request.currentChapter(),
+        request.recentKcCodes(),
+        request.recentTurns(),
+        request.lastIntent(),
+        request.lastKcCodes(),
+        request.sessionCorrections(),
+        request.scope(),
+        request.source(),
+        request.capabilityNamespace(),
+        request.requestedIntent(),
+        interaction);
   }
 
   /** 仅学生注入画像摘要；异常降级空串（画像可用性绝不阻塞意图路由）。 */

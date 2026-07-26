@@ -1,0 +1,42 @@
+{
+  "agents": {
+    "GuideCoachAgent": 252
+  },
+  "contamination_policy": "Exclude golden50 and stratified500 by id, source lineage and prompt fingerprint.",
+  "heldout_count": 25,
+  "heldout_sha256": "4599a4191893fd4f288fa7197d13e37dd1c02c0fa284cb3c54bdbe3ec63c63ae",
+  "preference_axes": {
+    "legacy_contract": 42,
+    "safety_leak": 42,
+    "schema_constraint": 42,
+    "unbound_evidence": 42,
+    "weak_semantics": 42,
+    "wrong_decision": 42
+  },
+  "protected_evaluation_paths": [
+    "cases/golden_adapter_50_v1.jsonl",
+    "cases/domain_cases_5000_v1_stratified500.jsonl"
+  ],
+  "protected_evaluation_sha256": {
+    "cases/domain_cases_5000_v1_stratified500.jsonl": "69e33f6dddff052577630672d2aa4cf7903363e87e1e505d6f1ba2fb2522c1e0",
+    "cases/golden_adapter_50_v1.jsonl": "dda6fe2bbe4ea4ddc75f3558f587cdc1e976398796bc7decd82d457b86fdcf83"
+  },
+  "protected_overlap_count": 0,
+  "purpose": "v2_semantic_ir_preference_optimization",
+  "schema_version": "agent-schema-v2",
+  "seed": 20260711,
+  "semantic_labels": {
+    "ASK": 36,
+    "CHECK": 36,
+    "PRACTICE": 36,
+    "READ": 36,
+    "REVIEW": 36,
+    "SCAFFOLD": 36,
+    "TRACE": 36
+  },
+  "source_path": "cases/domain_cases_5000_v1.jsonl",
+  "source_sha256": "23ae6fdf4eeef3653eac6ba7ea580cdd358fae4dc3bdeedca7e0bd03b4bd3039",
+  "total_count": 252,
+  "train_count": 227,
+  "train_sha256": "7e0fbd8b865329597725fa7c6e60167e1124627bbc62df27b5fe5b4b25cf86c8"
+}

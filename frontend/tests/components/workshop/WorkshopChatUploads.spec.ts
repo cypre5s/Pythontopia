@@ -93,6 +93,7 @@ vi.mock('@/components/workshop/ChatComposer.vue', async () => {
 });
 
 import WorkshopChat from '@/components/workshop/WorkshopChat.vue';
+import { routeIntent } from '@/api/intent';
 
 interface FakeSse {
   start: ReturnType<typeof vi.fn>;
@@ -186,6 +187,23 @@ describe('WorkshopChat × 上传注入（A/B 通路 → 现有 context → /api/
     httpMock.get.mockReset();
     httpMock.post.mockReset();
     httpMock.delete.mockReset();
+    vi.mocked(routeIntent).mockReset();
+    vi.mocked(routeIntent).mockResolvedValue({
+      intent: 'ASK',
+      kcCodes: [],
+      focusHint: '',
+      confidence: 1,
+      reason: '显式问答工具',
+      target: '',
+      secondaryIntent: null,
+      namespace: 'ask',
+      candidateIntents: ['ASK'],
+      needsClarification: false,
+      clarificationPrompt: '',
+      riskClass: 'read_only',
+      renderMode: 'answer',
+      reasonCode: 'explicit_command',
+    });
   });
 
   afterEach(() => {

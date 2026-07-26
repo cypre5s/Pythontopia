@@ -1,5 +1,109 @@
 # Changelog
 
+## 2026-07-26 — 收口 Phase 4 遗留风险：切换状态重建纯函数化与仓库卫生
+
+- `routing/workshop_task_plan.py` 新增 `SwitchedRuntimeState` + `rebuild_runtime_after_switch`：C3 候选切换后 dispatch 的六份运行时集合（plan/completed/failed/pending/step_status/replans_used）由纯函数一次性一致重建并附一致性契约测试，`_node_dispatch` 不再手工逐份同步；切换时整体替换 `step_status`，被放弃候选的陈旧步骤键不再残留。Graph 全量 1628 passed / 1 skipped。
+- 仓库卫生：根目录 `A*.md`（`*` 为 Windows 非法文件名字符，会破坏 Windows 检出）移至 `docs/plans/2026-07-26-c3-tot-astar-task-prompt.md`；根目录 `todo.md` 实为 56K 微调研究报告，更名为 `research/vllm-agent-ft-lab/docs/finetuning-pain-points-report-2026-07-16.md`，3 处文档引用同步标注新路径。
+
+## 2026-07-26 — 百晓工坊 Agent 路由 Phase 4：有界 ToT + A* 候选搜索、一次恢复与运行指标
+
+> 完成根计划第四阶段与全链路收尾：仅 C3 复杂规划请求编译恰好三条受权候选路径，`f=g+h+penalty` 确定性选优；执行失败最多切换一次候选且成功步骤不重复；搜索合同经签名透传到 Java/前端并以可理解摘要展示；运行指标复用现有 harness 端点。C0-C2 行为不变。
+
+- C3 判定与三候选（规划诊断/知识重构/练习探测优先）在既有 route compiler 内实现：候选只能重排 RouteDecision 已授权的 `HANDOUT/PRACTICE/PLAN`，Agent 全部来自唯一 ToolRegistry；策略门强制三模板、深度≤3、总分等式、稳定最低分选中与读前写；执行前用当前请求与权威画像整块重算 search，伪造成本/选中项即使持有效签名也被拒。
+- `OrchestratorGraph._node_dispatch` 在任何 SSE 事件前完成 RouteDecision+TaskPlan 双预检，签名 TaskPlan 为唯一执行事实源；C3 失败复用纯函数一次候选切换（成功步骤保留、剩余按次优候选重排、`replans_used` 继承硬限 1），第二次失败 PARTIAL 并阻断依赖；C2 同步重试合同保留；trace 改为保留每次尝试的真实时间线，`task_step_result` 披露稳定幂等键，切换后重发 plan/loop_plan/STATE_DELTA，终态回写每步状态（含新增 `failed`）。
+- 新增 `routing/workshop_metrics.py` 并把 `routing` 快照挂到既有 `GET /agents/harness/stats`：路由总量/澄清/复杂度分布、三候选选中计数、执行终态、候选切换与同步重试、派发与阻断步数、近窗 nearest-rank P50/P95；只记录可观测量，准确率类指标继续离线真值计算。
+- Java `WorkshopRouteDecision` 新增 `Search/SearchCandidate/ReplanPolicy` 透明代理（签名摘要自动覆盖，篡改选中项或剥离 search 令牌即失效）；前端新增搜索类型与计划卡 `plan-search` 摘要「已比较 3 条受限学习路径，优先执行『…』」，测试断言不泄露候选 id、成本数值或隐藏推理。
+- 真实栈证据：C3 专项 Chromium 首跑自然出现生产级有界恢复——HANDOUT 首次生成被 semantic grounding 拒绝（证据未支持"1秒"表述）后自动一次候选切换并完成，运行时记录 4 次 agent run、指标记录 1 次切换；断言按冻结设计"最多一次恢复"修正后复跑通过。完整百晓套件 `--retries=0` **5/5 passed**；真实指标快照：2 条 C3 路由、2 次执行 COMPLETED、1 次切换、P50 138s。
+- 上会话遗留的 Task 3 RED 草稿有两处与冻结合同矛盾（期望第二次失败仍派发依赖步骤；weak-kc 下硬编码与已批准成本模型不符的切换目标），均按设计文档修正并在工作日志记录证据。
+- 回归：Graph 终验 1627 passed/1 skipped；RAG 127 passed/2 skipped；Frontend 231 files/2264 tests、typecheck、lint、scoped Prettier 全绿；Backend 933 tests 0 failures/6 pgvector Testcontainers 环境 errors，6 类合并复跑 18/18 全绿。
+- 独立审查（含只读探针复验未覆盖路径）结论 READY：无 Critical/Important；4 个测试侧 Minor 当场修复，恢复边界信任、dispatch 函数长度、执行期上下文严格相等与 E2E 新学生依赖等 4 项已记录为文档化风险。
+- 本阶段存在另一并行会话同时打磨 Task 2 语法边界并在状态回写上追加持久化恢复语义；两侧改动互补，终验全量为合并状态（详见工作日志"并发会话协调备注"）。
+
+## 2026-07-26 — 百晓工坊 Agent 路由 Phase 3：权威学习上下文与个性化路由
+
+> 在 Phase 1/2 的签名 RouteDecision、TaskPlan 和受控多 Agent 编排上贯通真实学习事实；同一请求现在能根据 KC、正式失败、错误模式、负荷、挫败、偏好和近期资源消费确定性调整教学节奏，并给出不泄露内部画像字段的用户解释。
+
+- 新增服务端 `WorkshopLearningContextService`，复用 Memory/Profile/Mastery/Submission/LearningEvent 现有事实源；Intent 与 Orchestrator 都按当前学生重建上下文并覆盖客户端声明，不新增画像表或伪学习数据。
+- 路由只采用 backend/graph 写入的学习事件和 `PASSED/FAILED` 终态提交；权威 brief 绕过外部 memory provider。浏览器可写观察事件、`PENDING/RUNNING/ERROR` submission 不能污染个性化决策，普通用户记忆召回保持原契约。
+- Graph 新增 `RoutePersonalization`：高负荷/挫败收敛为脚手架式串行与单并发，弱 KC 优先补救，视觉偏好优先可视资源；用户明确请求的工具、原有权限、安全与预算硬门保持不变。
+- ResourceGraph 和 PathPlanner 改用真实画像、掌握度、置信度、近期资源、提交与错误模式；route id 对学习事实做稳定指纹并排除纯时间戳漂移。
+- 路由只写 `workshop_route_selected` 观察事件且明确不修改 mastery；正式提交、资源消费等既有领域事件继续负责 KC/画像写回。
+- WorkshopChat 在 TaskPlan 中展示一条可理解的个性化策略原因，不渲染 `cognitive_load`、`frustration_level` 等内部信号。
+- 新增真实 Chromium 差异/抗污染验收：前端伪造失败与资源消费不改变 PARALLEL/STANDARD 和 route id；两次受 10 秒限流约束的真实失败后才转为 SEQUENTIAL/SCAFFOLD_FIRST/max parallel 1。场景连续 3/3、完整百晓路由套件 4/4 通过。
+- 回归：Graph 1319 passed/1 skipped；RAG 127 passed/2 skipped；Frontend 231 files/2263 tests、typecheck、scoped Prettier 全绿。Backend 全量 930 tests 为 0 failures/6 Testcontainers 容器启动 errors，六类逐一串行复跑 18 tests 全绿；权威 memory provider 零交互单测 6/6 通过。
+- 独立审查先以事件污染和非终态 submission 两个 Important 判定 NOT READY；修复并补真实 PostgreSQL/Chromium 证据后复审 READY。Graph 测试隔离修复只注入静态 evidence fetcher，生产 evidence fail-fast 行为未放宽。
+
+## 2026-07-23 — 百晓工坊 Agent 路由 Phase 2：受控多 Agent TaskPlan
+
+> 在既有 OrchestratorGraph、专职 Agent、ToolRegistry、AG-UI/SSE 与 `agent_loop_run` 运行时上完成多 Agent 编排；签名 RouteDecision 成为执行权威，复合任务不再被旧语义环节改写或拆成多次前端请求。
+
+- 新增统一 TaskPlan/DAG，支持 SEQUENTIAL、PARALLEL、PLANNER_EXECUTOR；fan-out/fan-in、步骤依赖、终态、Agent/工具/深度/并行/重规划预算均为确定性合同，同一步最多重试一次。
+- 新增独立 HMAC route execution token：绑定 user、route、原始 message/interaction 与 10 分钟 TTL；执行前再次验证 submission 所有权和数据库事实，服务端安全补全不再造成签名漂移。
+- 后端从唯一 pack43 重新装载课程 KC authority，Graph 在进程内集合为空时使用请求课程目录；TaskPlan 无 recent/decaying KC 时回退到权威目录锚点。
+- `OrchestratorRunRecorder` 复用既有 loop runtime，持久化 run、checkpoint、Agent、Tool、终态与 replay；WorkshopChat 展示真实 TaskPlan 状态与 loop run id。
+- 三条真实 Chromium 联测通过：Debug 单 Agent、顺序“总结后出题”、自由文本“诊断后补救”；后两条验证 signed route、真实 Agent 执行、数据库运行记录和 replay。
+- 回归：Graph 1314 passed/1 skipped；RAG 127 passed/2 skipped；Frontend 231 files/2262 tests、typecheck、Prettier、scoped Ruff/diff/shell syntax 全绿。Backend 全量 930 tests 为 0 failures/4 Testcontainers 动态端口 errors，4 类逐类复跑 13 tests 与空库 100 migrations 全绿。
+- 独立复核在修复 authoritative bypass、PLAN 首步、secret/消息绑定、运行可发现性、KC authority、runtime id 与 interaction 签名后给出 READY；环境端口抖动和 recorder fail-soft 风险已保留在阶段日志。
+
+## 2026-07-22 — 百晓工坊 Agent 路由 Phase 1：可信单 Agent 策略门
+
+> 完成 `baixiao_workshop_agent_routing_complete_plan.md` 第一阶段：在既有 IntentRouter、ToolRegistry、专用 Agent、Spring 业务闭环和 WorkshopChat 上增加统一 RouteDecision 与 fail-closed 策略门，不新建平行 Agent 框架。
+
+- 新增稳定 `RouteDecision` 合同：task family、C0-C3、五类 topology、Agent/工具选择、硬预算、审查、输出 schema 与 fallback 均结构化；Phase 1 只放行 DIRECT/SINGLE_AGENT_TOOL。
+- 扩展唯一 ToolRegistry：Agent allowlist、必需上下文、结果 schema、敏感数据、副作用与执行模式进入确定性校验；未知/越权/预算超限在执行前拒绝。
+- Spring Intent 链新增 interaction/requestedIntent 与 RouteDecision DTO；失败 submission 引用必须属于当前学生且状态为 FAILED，代码、题目和判题结论由数据库回填，前端声明不能越权覆盖。
+- `/修报错` 修正为真实 `BugMineService → DebugAgent` 路径，不再误入 Tutor；自由文本、slash、能力入口、澄清/纠错/secondary chip 全部统一经过策略门，路由异常 fail closed。
+- 资源发布改为 grounding 与 safety 显式通过；PARTIAL 无证据必须显式 `no_evidence=true`，缺字段不再默认发布。
+- 新增 `frontend/e2e/baixiaoAgentRouting.spec.ts`：真实注册学生、正式失败判题、Graph route decision、BugMine 会话、Debug 页面及 Tutor 零调用验收通过。
+- 回归：Graph 1290 passed/3 skipped；RAG 129 passed；Frontend 231 files/2256 tests、typecheck、lint 全绿；Backend 913 tests 首跑 0 failures/6 Testcontainers 端口错误，6 类合并重跑 18 tests 全绿；四个 `/healthz` 与专项 Playwright `--retries=0` 通过。
+
+## 2026-07-13 — Evidence-Bound Contract Decoding 与语义 fallback 计量
+
+> 在不继续盲训 DTO/JSON 的前提下，把 v2 IR 的结构合法性和请求级证据值域移到推理解码层；同时保留 unconstrained raw，防止受约束满分掩盖模型退化。
+
+- 完成 failure-directed Resource ORPO：240 条无保护集污染偏好，训练与 heldout 排序改善，但同集 unconstrained raw contract 仍为 20%，候选已淘汰。
+- 新增 `unconstrained / json_schema / json_schema_bound` 解码消融；request-bound schema 将 evidence allowlist 编译为枚举，并在有证据时强制引用非空。
+- golden20 上 candidate 与 champion 的 evidence-bound contract 均为 100%，但 semantic/promotion 仅为 80% / 75%；失败全部集中在 CodeLab 非法 Python，因此没有进入分层500、完整5000或双 Adapter 路由。
+- 产品 `FineTunedFallbackProvider` 接入同一 evidence-bound schema，仅作用于本地 adapter；新增 constrained/evidence-bound telemetry，并将 CodeLab AST/compiler 失败纳入可计数 semantic fallback。
+- 新增 CodeLab Python AST 语义评分与 v2 grounding 子集选择语义；final fallback 100% 继续与模型 raw/constrained 指标分开报告。
+- 架构、论文依据和本项目 SAGE-IR + EBCD 创新边界更新于 `docs/architecture/qwen-contract-runtime.md`；完整实验记录和图表位于质量飞轮日志与 `outputs/quality-flywheel/resource4-evidence-bound-decoding-golden20-20260713/`。
+- 新增 CodePlan v2.1：CodeLab 模型只选择八类教学代码模式并描述观察目标，确定性 compiler
+  生成 Python 与预期输出；严格 schema 拒绝模型夹带自由 `code`。golden20 单变量消融保持
+  contract 100%、leak 0，semantic/promotion 从旧 IR 的 75% 提升到 90%，但仍有 2 条模式
+  选择失败，未晋级。
+- 构造 240 条无 golden50/分层500 污染的 CodePlan 偏好数据，覆盖 wrong pattern、证据、
+  旧自由代码、安全和弱语义五类失败；preflight 全部通过，启动一轮固定超参的小规模 ORPO。
+- 评测 manifest 新增真实 `adapter_path`；一次误用旧 QLoRA 的 partial 运行已标记失败并排除，
+  防止相同服务名掩盖 Adapter 身份差异。
+- CodePlan ORPO 完成 240 条单变量训练；虽然 evidence-bound golden20 的 semantic/promotion
+  达到 95%，原始 golden50 同集却使 raw contract `68% -> 56%`、grounding `98% -> 86%`、
+  guard repair `30% -> 44%`。候选已淘汰并停在分层500之前，双 Adapter 继续禁用；保留
+  compiler-owned CodePlan 架构，下一步转向共享 Adapter 的跨 Agent 遗忘诊断。
+
+## 2026-07-12 — SAGE-IR 语义动作网格与严格语义门禁
+
+> 将 Qwen 从产品 WorkflowEvent/DTO 记忆中进一步解耦：模型只选择七类教学动作，确定性 compiler 负责状态机映射；新增 semantic/promotion 指标与二维偏好网格，用于保研项目的可证伪消融。
+
+- GuideCoach v2 IR 收敛为 `READ / REVIEW / TRACE / SCAFFOLD / PRACTICE / ASK / CHECK` 七类教学 ontology；未知 intent 和 live allowlist 外动作 fail fast。
+- 新增 `semantic_valid_rate` 与 `promotion_pass_rate`，证明 raw contract 100% 仍可能只有 20% 的事件语义正确率，避免结构满分掩盖教学决策错误。
+- 新增 SAGE-IR 二维采样：七类 intent × 六类失败轴；稀缺类使用保留章节/KC/画像/证据/安全上下文的可追溯反事实增强，严格排除 golden50 与分层500。
+- 纯 DPO 二维网格候选未改善 golden5 strict semantic，已淘汰；继续执行同数据的 chosen-SFT 单变量消融，不提前启用双 Adapter 路由。
+- 研究证据、负结果与剩余边界实时记录于 `research/vllm-agent-ft-lab/docs/quality-flywheel-log-2026-07-12.md`。
+- 将 ResourceDesigner 拆为 Handout / Reading / CodeLab / Storyboard 四个 evidence-bound v2 IR；模型只做内容、证据与节奏决策，compiler 负责页引用、KC、时长、voice/image prompt 与代码安全边界。
+- 新增四子 Agent 的 nested evidence guard、确定性 fallback 和 v2 schema registry；修复 Reading 未注入 RAG 证据及 scorer 未拒绝额外伪造证据的问题。
+- 构造无污染 240 条 Resource 偏好数据；三次 8GB GPU OOM 均独立归档后，以语义无损压缩把最长序列 438 降至 359 tokens，完成 reference-free ORPO。
+- 同集 golden20 显示 raw contract 从 champion 0% 提升至 20%，但 grounding 从 95% 降至 90%、fallback 仍 80%，候选已淘汰；未运行分层/完整集，也未启用双 Adapter 路由。
+
+## 2026-07-11 — Qwen v2 Semantic IR 与质量飞轮
+
+> 把小模型职责从记忆产品 DTO 收缩为事件、题目/图谱语义、证据引用与安全边界决策；由确定性 compiler 生成稳定产品合同，并以 raw contract 为首要晋级指标。
+
+- 新增版本化 `agent-schema-v1/v2` registry、EvidenceBinder、GuideCoach / Practice / IntentRouter / MindMap semantic IR 与 ContractCompiler；真实 Agent 调用接入 `guard_context`，生产仍保留 `FineTunedFallbackProvider`。
+- 评测新增 raw / guard / final 分层、`contract_pass_rate`、`guard_repair_rate` 与 `fallback_rate`，并把 JSON Schema 校验扩展到嵌套 `$ref`、数组、enum、pattern 和约束字段。
+- 偏好数据按 golden50 / 分层500 的 ID、lineage、prompt fingerprint 做污染隔离；训练前强制 token、零 label、重复、同答案与单变量检查，长运行支持增量记录和失败归档。
+- 首轮四 Agent 与后续三 Agent 候选均未通过真实同集门槛，已明确淘汰；当前继续推进 GuideCoach 单 Adapter 定向轮，双 Adapter 路由须在同集回归通过后才可启用。
+- 详细数据哈希、训练指标、逐 Agent 失败与门禁状态见 `research/vllm-agent-ft-lab/docs/quality-flywheel-log-2026-07-11.md`。
+
 ## 2026-07-03 — vLLM 1000+ Multi-Fold Evaluation：本地微调模型大样本可靠性验证
 
 > 完成面向真实百晓工坊 / Graph Agent 应用场景的本地 vLLM LoRA 长跑评测：使用新手表达增强后的 1000 case 主集，按 5-fold 记录 `events.jsonl`、`metrics.csv`、`responses.jsonl`、`summary.json` 与图表，验证结构化 JSON、grounding、安全泄露、得分与延迟稳定性。

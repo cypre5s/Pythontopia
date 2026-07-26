@@ -1,0 +1,92 @@
+{
+  "$defs": {
+    "GuideCoachStateDelta": {
+      "properties": {
+        "diagnosis_label": {
+          "default": "",
+          "title": "Diagnosis Label",
+          "type": "string"
+        },
+        "hint_level": {
+          "maximum": 3,
+          "minimum": 0,
+          "title": "Hint Level",
+          "type": "integer"
+        },
+        "student_state_label": {
+          "default": "",
+          "title": "Student State Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "hint_level"
+      ],
+      "title": "GuideCoachStateDelta",
+      "type": "object"
+    }
+  },
+  "description": "Small model-owned decision; product mechanics are deliberately absent.",
+  "properties": {
+    "action_goal": {
+      "maxLength": 300,
+      "minLength": 1,
+      "title": "Action Goal",
+      "type": "string"
+    },
+    "confidence": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Confidence",
+      "type": "number"
+    },
+    "event_intent": {
+      "enum": [
+        "READ",
+        "REVIEW",
+        "TRACE",
+        "SCAFFOLD",
+        "PRACTICE",
+        "ASK",
+        "CHECK"
+      ],
+      "title": "Event Intent",
+      "type": "string"
+    },
+    "evidence_refs": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Evidence Refs",
+      "type": "array"
+    },
+    "reason_summary": {
+      "maxLength": 240,
+      "minLength": 1,
+      "title": "Reason Summary",
+      "type": "string"
+    },
+    "state_delta": {
+      "$ref": "#/$defs/GuideCoachStateDelta"
+    },
+    "stop_condition": {
+      "maxLength": 300,
+      "minLength": 1,
+      "title": "Stop Condition",
+      "type": "string"
+    }
+  },
+  "required": [
+    "event_intent",
+    "action_goal",
+    "stop_condition",
+    "state_delta",
+    "confidence",
+    "reason_summary"
+  ],
+  "title": "GuideCoachAgent",
+  "type": "object",
+  "x-adapter-eligible": true,
+  "x-product-contract": "semantic-ir",
+  "x-schema-version": "agent-schema-v2"
+}

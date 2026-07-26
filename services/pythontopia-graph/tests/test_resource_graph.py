@@ -14,11 +14,7 @@ from pythontopia_graph.nodes.evidence_fetcher import (
     RagHit,
     StaticEvidenceFetcher,
 )
-from pythontopia_graph.schemas.resource import (
-    HandoutContent,
-    PageRef,
-    ResourceProduceRequest,
-)
+from pythontopia_graph.schemas.resource import ResourceProduceRequest
 
 
 class StubProvider(LlmProvider):
@@ -59,24 +55,21 @@ HIT = RagHit(
 
 
 def bad_handout_payload(page_id: int = 999, page_no: int = 999) -> dict:
-    """构造会被引用审查/语义接地打回的讲义草稿（page_id 不在证据页中）。
+    """构造会被防幻觉审查打回的合法 v2 IR（正文声称未知 KC）。
 
-    page_id 相同 → 相邻两轮失败原因等价（触发震荡熔断）；
-    page_id 不同 → 失败原因不同（正常耗尽 MAX_RETRIES）。
+    page_id 相同 → 相邻两轮失败原因等价（触发震荡熔断）；page_id 不同 →
+    失败原因不同（正常耗尽 MAX_RETRIES）。page_no 仅保留旧 helper 调用兼容性。
     """
+    del page_no
     return {
         "title": "讲义",
-        "handout": HandoutContent(
-            sections=[
-                {
-                    "heading": "section",
-                    "paragraphs": ["本段引用了不存在的证据页。"],
-                    "page_refs": [
-                        PageRef(page_id=page_id, page_no=page_no, chapter_id=3).model_dump()
-                    ],
-                }
-            ]
-        ).model_dump(),
+        "summary": "待核验讲义",
+        "sections": [{
+            "heading": "section",
+            "paragraphs": [f"本段声称 PY43-KC-{page_id} 是课程知识点。"],
+            "code_snippets": [],
+            "evidence_refs": ["page-101"],
+        }],
     }
 
 
@@ -113,15 +106,13 @@ async def test_resource_graph_no_evidence_marks_partial() -> None:
 async def test_resource_graph_safety_failure_raises() -> None:
     leak_payload = {
         "title": "讲义",
-        "handout": HandoutContent(
-            sections=[
-                {
-                    "heading": "原版讲义",
-                    "paragraphs": ["以下是 answer_key 完整答案。"],
-                    "page_refs": [PageRef(page_id=101, page_no=12, chapter_id=3).model_dump()],
-                }
-            ]
-        ).model_dump(),
+        "summary": "不安全讲义",
+        "sections": [{
+            "heading": "原版讲义",
+            "paragraphs": ["以下是 answer_key 完整答案。"],
+            "code_snippets": [],
+            "evidence_refs": ["page-101"],
+        }],
     }
     graph = ResourceGraph(
         provider=StubProvider([leak_payload]),

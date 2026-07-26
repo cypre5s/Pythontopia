@@ -2,7 +2,7 @@
 
 把有界工具调用循环里的 :class:`ToolCall`（收敛工具）展开回旧意图，并：
 
-- **生成类**（ASK/EXPLAIN_CODE/FIX_BUG → TutorAgent；HANDOUT/MINDMAP/READING/STORYBOARD/
+- **生成类**（ASK/EXPLAIN_CODE → TutorAgent；FIX_BUG → DebugAgent；HANDOUT/MINDMAP/READING/STORYBOARD/
   PRACTICE/CODE_LAB → ResourceDesigner；PLAN → PathPlanner）：构造 :class:`PlanStep` 交给
   **既有** :class:`AgentDispatcher`（非流式，返回 :class:`DispatchResult`），回带 summary；
 - **前端/交互/外部类**（VIDEO/PROGRESS/MY_STUDY/NAVIGATE/REVIEW/ASKME/BROWSE）：不经 dispatcher，
@@ -22,7 +22,7 @@ from pythontopia_graph.schemas.orchestrator import DispatchResult, Phase, PlanSt
 from pythontopia_graph.tools.consolidated import expand_tool_call
 
 # 旧意图分类：经 dispatcher 真派发的生成类工具。
-_TUTOR_INTENTS: frozenset[str] = frozenset({"ASK", "EXPLAIN_CODE", "FIX_BUG"})
+_TUTOR_INTENTS: frozenset[str] = frozenset({"ASK", "EXPLAIN_CODE"})
 _RESOURCE_INTENTS: frozenset[str] = frozenset(
     {"HANDOUT", "MINDMAP", "READING", "STORYBOARD", "PRACTICE", "CODE_LAB"}
 )
@@ -62,6 +62,16 @@ def _build_step(intent: str, args: dict[str, Any]) -> PlanStep | None:
             detail=str(args.get("code") or ""),
             agent="TutorAgent",
             kc_codes=_kc_codes(args),
+        )
+    if intent == "FIX_BUG":
+        return PlanStep(
+            id="tool-FIX_BUG",
+            phase="practice",
+            title=str(args.get("topic") or _TUTOR_TITLE[intent]),
+            detail=str(args.get("code") or ""),
+            agent="DebugAgent",
+            kc_codes=_kc_codes(args),
+            panel="bugmine",
         )
     if intent in _RESOURCE_INTENTS:
         phase: Phase = (

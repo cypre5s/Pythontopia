@@ -1,0 +1,12 @@
+{
+  "candidate_input_adapter": "outputs/adapters/e1-protocol-patch-v1-1000-v1-dpo-v2-len512",
+  "candidate_input_is_champion": true,
+  "champion_adapter": "outputs/adapters/e1-protocol-patch-v1-1000-v1-dpo-v2-len512",
+  "declared_changed_variables": [
+    "preference_dataset"
+  ],
+  "normalized_candidate_seed": 42,
+  "normalized_champion_seed": 42,
+  "passed": true,
+  "training_control_differences": {}
+}

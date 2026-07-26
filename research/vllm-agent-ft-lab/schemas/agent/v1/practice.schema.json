@@ -1,0 +1,1 @@
+{"$id":"agent-schema-v1/PracticeAgent","title":"PracticeAgent","type":"object","properties":{"misconception":{"type":"string"},"hint_steps":{"type":"array"},"blocked_content":{"type":"array"},"evidence_ids":{"type":"array"}},"required":["misconception","hint_steps","blocked_content","evidence_ids"],"additionalProperties":true}

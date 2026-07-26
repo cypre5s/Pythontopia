@@ -83,6 +83,18 @@ async def test_ask_explain_code_carries_code_to_tutor() -> None:
 
 
 @pytest.mark.asyncio
+async def test_fix_bug_dispatches_debug_agent_instead_of_tutor() -> None:
+    dispatcher = _FakeDispatcher()
+    executor = RegistryToolExecutor(dispatcher)
+    await executor.execute(
+        ToolCall(id="c", name="ask", arguments={"mode": "fix_bug", "code": "1 / 0"})
+    )
+    step = dispatcher.steps[0]
+    assert step.agent == "DebugAgent"
+    assert step.detail == "1 / 0"
+
+
+@pytest.mark.asyncio
 async def test_plan_study_dispatches_path_planner() -> None:
     dispatcher = _FakeDispatcher()
     executor = RegistryToolExecutor(dispatcher)

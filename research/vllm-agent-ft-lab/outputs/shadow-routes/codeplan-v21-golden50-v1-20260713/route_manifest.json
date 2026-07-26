@@ -1,0 +1,12 @@
+{
+  "case_count": 50,
+  "champion_count": 50,
+  "champion_source": "runs/champion-dpo-v2-len512-golden50-v1-unconstrained-20260713/responses.jsonl",
+  "mode": "offline_shadow_route",
+  "responses_sha256": "200f3f02135453f8dd3bd540632c72ea4a1f34f55a19c6a6c57384501a98b218",
+  "route_decisions_sha256": "8f4c0a5c2ca8da95e62f43c8a086dfb75ed5d9e05936a54cc9a548590f5e2d38",
+  "serving_enabled": false,
+  "specialist_count": 0,
+  "specialist_rate": 0.0,
+  "specialist_source": "runs/orpo-v21-codeplan-pattern240-golden50-v1-unconstrained-20260713/responses.jsonl"
+}

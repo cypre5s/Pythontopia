@@ -1,0 +1,29 @@
+[
+  {
+    "argv": [
+      "python3",
+      "research/vllm-agent-ft-lab/scripts/run_baseline.py",
+      "--cases",
+      "research/vllm-agent-ft-lab/outputs/rsage/demos/eval-gate-v1/fixture-fresh-full5000-v2.jsonl",
+      "--base-url",
+      "fixture://no-network",
+      "--model",
+      "fixture-rsage-candidate",
+      "--adapter-path",
+      "research/vllm-agent-ft-lab/outputs/rsage/demos/eval-gate-v1/fixture-adapter",
+      "--folds",
+      "1",
+      "--seed",
+      "20260716",
+      "--run-dir",
+      "research/vllm-agent-ft-lab/outputs/rsage/demos/eval-gate-v1/fixture-runs/fresh_full5000_v2-seed20260716",
+      "--prompt-variant",
+      "rsage-fresh_full5000_v2",
+      "--decoding-mode",
+      "json_schema"
+    ],
+    "expected_case_count": 5000,
+    "seed": 20260716,
+    "stage": "fresh_full5000_v2"
+  }
+]

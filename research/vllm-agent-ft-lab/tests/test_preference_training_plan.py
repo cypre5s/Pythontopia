@@ -18,6 +18,7 @@ def test_build_dpo_training_plan_records_adapter_and_preference_files() -> None:
     assert plan["train_file"] == "outputs/preferences/dpo/train.jsonl"
     assert plan["heldout_file"] == "outputs/preferences/dpo/heldout.jsonl"
     assert plan["dpo"]["beta"] == 0.1
+    assert plan["dpo"]["loss_types"] == ["sigmoid"]
     assert plan["lora"]["r"] == 8
     assert plan["training"]["learning_rate"] == 5e-5
     assert plan["training"]["seed"] == 20260710
@@ -36,6 +37,23 @@ def test_build_dpo_training_plan_accepts_shorter_sequence_length() -> None:
     )
 
     assert plan["max_seq_length"] == 512
+
+
+def test_build_dpo_training_plan_supports_chosen_sft_multi_loss() -> None:
+    plan = build_dpo_training_plan(
+        model_path="/models/qwen",
+        sft_adapter_path="outputs/adapters/sft-lora",
+        train_file="outputs/preferences/dpo/train.jsonl",
+        heldout_file="outputs/preferences/dpo/heldout.jsonl",
+        output_dir="outputs/adapters/dpo-sft",
+        changed_variable="preference_objective",
+        dpo_loss_types=["sigmoid", "sft"],
+        dpo_loss_weights=[0.8, 0.2],
+    )
+
+    assert plan["dpo"]["loss_types"] == ["sigmoid", "sft"]
+    assert plan["dpo"]["loss_weights"] == [0.8, 0.2]
+    assert plan["quality_round"]["changed_variables"] == ["preference_objective"]
 
 
 def test_build_orpo_training_plan_records_reference_free_method() -> None:

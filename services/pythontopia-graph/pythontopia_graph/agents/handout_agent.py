@@ -1,10 +1,19 @@
 from __future__ import annotations
 
+import json
 from typing import Any
+
+from pydantic import ValidationError
 
 from pythontopia_graph.agents.personalization import (
     agent_strategy_messages,
     personalization_messages,
+)
+from pythontopia_graph.contracts.semantic_ir import (
+    ContractCompiler,
+    EvidenceBinder,
+    EvidenceContext,
+    HandoutSemanticIR,
 )
 from pythontopia_graph.llm.provider import LlmProvider
 from pythontopia_graph.nodes.evidence_fetcher import EvidenceBundle
@@ -18,7 +27,7 @@ from pythontopia_graph.schemas.resource import (
 
 
 class HandoutAgent:
-    """据 RAG 证据页生成结构化讲义；page_refs 仅可引用证据中的 page_id/page_no，禁止编造页码。"""
+    """Generate semantic handout sections, then bind evidence IDs to PageRef."""
 
     AGENT_NAME = "ResourceDesignerAgent.handout"
 
@@ -31,37 +40,37 @@ class HandoutAgent:
         evidence: EvidenceBundle,
         revision_notes: list[str] | None = None,
     ) -> ResourceDraft:
-        messages = self._prompt(request, evidence, revision_notes)
-        response = await self.provider.chat(messages)
-        return self._build_from_response(request, evidence, response.content_json)
+        evidence_context = EvidenceBinder.bind(evidence)
+        messages = self._prompt(request, evidence_context, revision_notes)
+        response = await self.provider.chat(
+            messages,
+            guard_context={
+                "agent": self.AGENT_NAME,
+                "json_schema": HandoutSemanticIR.model_json_schema(),
+                "evidence_ids": evidence_context.allowed_ids,
+                "evidence_fields": ["sections.*.evidence_refs"],
+            },
+        )
+        return self._build_from_response(
+            request, evidence, evidence_context, response.content_json
+        )
 
     def _prompt(
         self,
         request: ResourceProduceRequest,
-        evidence: EvidenceBundle,
+        evidence: EvidenceContext,
         revision_notes: list[str] | None = None,
     ) -> list[dict[str, str]]:
-        evidence_summary = "\n".join(
-            f"page_id={hit.page_id} page_no={hit.page_no} kc={','.join(hit.kc_codes)} text={hit.text[:200]}"
-            for hit in evidence.chunks[:6]
-        )
-        # 约束顶层 handout 键与 page_refs 来源；缺键或校验失败时回落确定式兜底讲义。
-        schema_hint = (
-            '{"title": "字符串", "summary": "一句话摘要", '
-            '"handout": {"sections": [{"heading": "小节标题", '
-            '"paragraphs": ["正文段落"], "code_snippets": ["可选代码"], '
-            '"page_refs": [{"page_id": 整数, "page_no": 整数, "chapter_id": 整数或null}]}]}}'
-        )
         return [
             {
                 "role": "system",
                 "content": (
-                    "你是 Pythontopia ResourceDesignerAgent，为目标 KC 生成结构化讲义。"
-                    "只输出一个 JSON 对象，顶层必须包含 title、summary、handout 三个键，"
-                    f"严格遵循此结构：{schema_hint}。"
-                    "handout.sections 至少 1 个；每个 section 的 page_refs 只能引用下方证据中"
-                    "出现过的 page_id/page_no，严禁编造页码；若某段来自通识而非课件，"
-                    "page_refs 留空并在正文标注'基于通识知识'。"
+                    "你是 Pythontopia ResourceDesignerAgent，为目标 KC 设计讲义语义结构。"
+                    "只输出符合 HandoutSemanticIR 的 JSON：title、summary、sections。"
+                    "每个 section 只含 heading、paragraphs、code_snippets、evidence_refs。"
+                    "evidence_refs 只能引用 allowed_evidence 中的 evidence_id；"
+                    "不要生成 page_id、page_no、chapter_id 或产品 DTO。"
+                    "若某段来自通识而非课件，evidence_refs 留空并在正文标注'基于通识知识'。"
                 ),
             },
             *([{
@@ -73,7 +82,8 @@ class HandoutAgent:
                 "role": "system",
                 "content": (
                     f"目标 KC: {','.join(request.kc_codes)}\n"
-                    f"可引用证据(page_id/page_no/kc/文本片段):\n{evidence_summary}"
+                    "allowed_evidence: "
+                    + json.dumps(evidence.model_dump(mode="json"), ensure_ascii=False)
                 ),
             },
             *personalization_messages(request.profile_snapshot),
@@ -88,26 +98,23 @@ class HandoutAgent:
         self,
         request: ResourceProduceRequest,
         evidence: EvidenceBundle,
+        evidence_context: EvidenceContext,
         content_json: dict[str, Any] | None,
     ) -> ResourceDraft:
-        if content_json is None or "handout" not in content_json:
-            return self._fallback_draft(request, evidence)
-        try:
-            handout = HandoutContent.model_validate(content_json["handout"])
-        except Exception:  # noqa: BLE001 - fail safe to deterministic fallback
-            return self._fallback_draft(request, evidence)
-        title = str(content_json.get("title") or self._fallback_title(request))
-        summary = content_json.get("summary")
-        if isinstance(summary, str):
-            summary = summary[:500]
-        else:
-            summary = None
-        return ResourceDraft(
-            title=title,
-            summary=summary,
-            content_format="MARKDOWN",
-            handout=handout,
-        )
+        if isinstance(content_json, dict):
+            try:
+                semantic_ir = HandoutSemanticIR.model_validate(content_json)
+                return ResourceDraft(
+                    title=semantic_ir.title,
+                    summary=semantic_ir.summary or None,
+                    content_format="MARKDOWN",
+                    handout=ContractCompiler.compile_handout(
+                        semantic_ir, evidence=evidence_context
+                    ),
+                )
+            except (ValidationError, ValueError):
+                pass
+        return self._fallback_draft(request, evidence)
 
     def _fallback_title(self, request: ResourceProduceRequest) -> str:
         return f"KC 讲义：{','.join(request.kc_codes[:3])}"

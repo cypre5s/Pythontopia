@@ -146,7 +146,7 @@ def test_runner_resume_skips_cases_already_in_label_file(tmp_path: Path) -> None
     )
 
     class _MustNotRun:
-        model_name = "forbidden"
+        model_name = first.model_name
 
         def review(self, case, reviewer_role: str, attempt: int) -> str:  # noqa: ANN001
             raise AssertionError("断点续跑不应再次请求已完成案例")
@@ -176,6 +176,35 @@ def test_runner_resume_rejects_same_id_with_changed_prompt(tmp_path: Path) -> No
     )
     changed = _case()
     changed["student_input"] = "同一编号但提示已经变化"
+
+    with pytest.raises(ValueError, match="提示指纹发生变化"):
+        run_teacher_voting(
+            [changed],
+            FixtureTeacherBackend(),
+            raw_votes_path=raw_path,
+            labels_path=labels_path,
+            retry_base_seconds=0,
+            resume=True,
+        )
+
+
+def test_runner_resume_does_not_trust_builder_fingerprint_over_teacher_prompt(
+    tmp_path: Path,
+) -> None:
+    raw_path = tmp_path / "raw_votes.jsonl"
+    labels_path = tmp_path / "labels.jsonl"
+    original = _case()
+    original["prompt_fingerprint"] = "构造器只覆盖学生提示的旧指纹"
+    run_teacher_voting(
+        [original],
+        FixtureTeacherBackend(),
+        raw_votes_path=raw_path,
+        labels_path=labels_path,
+        retry_base_seconds=0,
+    )
+    changed = _case()
+    changed["prompt_fingerprint"] = original["prompt_fingerprint"]
+    changed["kc_summary"] = "教师实际看到的知识摘要已经变化。"
 
     with pytest.raises(ValueError, match="提示指纹发生变化"):
         run_teacher_voting(

@@ -1,0 +1,204 @@
+{
+  "$defs": {
+    "PathPlannerGroundingResult": {
+      "properties": {
+        "passed": {
+          "title": "Passed",
+          "type": "boolean"
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        },
+        "unknown_kc": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Unknown Kc",
+          "type": "array"
+        }
+      },
+      "required": [
+        "passed"
+      ],
+      "title": "PathPlannerGroundingResult",
+      "type": "object"
+    },
+    "PathPlannerSafetyResult": {
+      "properties": {
+        "passed": {
+          "title": "Passed",
+          "type": "boolean"
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        }
+      },
+      "required": [
+        "passed"
+      ],
+      "title": "PathPlannerSafetyResult",
+      "type": "object"
+    },
+    "PlannerNodeDraft": {
+      "properties": {
+        "day_index": {
+          "maximum": 7,
+          "minimum": 1,
+          "title": "Day Index",
+          "type": "integer"
+        },
+        "evidence_summary": {
+          "default": "",
+          "maxLength": 512,
+          "title": "Evidence Summary",
+          "type": "string"
+        },
+        "kc_code": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Kc Code",
+          "type": "string"
+        },
+        "node_type": {
+          "enum": [
+            "READ_RESOURCE",
+            "SOLVE_PROBLEM",
+            "FIX_BUG",
+            "PLANT_KC",
+            "PROFILE_UPDATE"
+          ],
+          "title": "Node Type",
+          "type": "string"
+        },
+        "order_in_day": {
+          "maximum": 8,
+          "minimum": 1,
+          "title": "Order In Day",
+          "type": "integer"
+        },
+        "reason_summary": {
+          "maxLength": 512,
+          "title": "Reason Summary",
+          "type": "string"
+        },
+        "source_classroom_quest_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Classroom Quest Id"
+        },
+        "suggested_problem_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Suggested Problem Id"
+        },
+        "suggested_resource_type": {
+          "anyOf": [
+            {
+              "enum": [
+                "HANDOUT",
+                "MINDMAP",
+                "PRACTICE",
+                "CODE_LAB",
+                "READING",
+                "STORYBOARD"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Suggested Resource Type"
+        }
+      },
+      "required": [
+        "day_index",
+        "order_in_day",
+        "kc_code",
+        "node_type",
+        "reason_summary"
+      ],
+      "title": "PlannerNodeDraft",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "deterministic_signature": {
+      "maxLength": 128,
+      "title": "Deterministic Signature",
+      "type": "string"
+    },
+    "goal_summary": {
+      "maxLength": 512,
+      "title": "Goal Summary",
+      "type": "string"
+    },
+    "grounding_result": {
+      "$ref": "#/$defs/PathPlannerGroundingResult"
+    },
+    "nodes": {
+      "items": {
+        "$ref": "#/$defs/PlannerNodeDraft"
+      },
+      "title": "Nodes",
+      "type": "array"
+    },
+    "pack_id": {
+      "title": "Pack Id",
+      "type": "integer"
+    },
+    "safety_result": {
+      "$ref": "#/$defs/PathPlannerSafetyResult"
+    },
+    "status": {
+      "default": "SUCCESS",
+      "enum": [
+        "SUCCESS",
+        "PARTIAL",
+        "FAILED"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "user_id": {
+      "title": "User Id",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "user_id",
+    "pack_id",
+    "goal_summary",
+    "safety_result",
+    "grounding_result",
+    "deterministic_signature"
+  ],
+  "title": "PathPlannerAgent",
+  "type": "object",
+  "x-adapter-eligible": false,
+  "x-product-contract": "deterministic-product-output",
+  "x-schema-version": "agent-schema-v2"
+}

@@ -1,0 +1,16 @@
+fold,case_id,agent,score,json_valid,grounding_safe,forbidden_leak,matched_expectations,expectation_count,schema_valid,missing_schema_keys,schema_type_errors,contract_pass,latency_ms,response_chars
+0,v2-eval5000-new_chapter_slice-0001-domain-2001-practiceagent-c7,PracticeAgent,1.0,True,True,False,2,3,True,[],[],True,11779,534
+0,v2-eval5000-new_chapter_slice-0031-domain-2031-practiceagent-c2,PracticeAgent,1.0,True,True,False,3,3,True,[],[],True,11246,513
+0,v2-eval5000-new_chapter_slice-0061-domain-2061-practiceagent-c4,PracticeAgent,1.0,True,True,False,3,3,True,[],[],True,10887,481
+0,v2-eval5000-new_chapter_slice-0091-domain-2091-practiceagent-c6,PracticeAgent,1.0,True,True,False,2,3,True,[],[],True,14102,590
+0,v2-eval5000-new_chapter_slice-0121-domain-2121-practiceagent-c1,PracticeAgent,1.0,True,True,False,3,3,True,[],[],True,14603,591
+0,v2-eval5000-new_chapter_slice-0004-domain-2004-guidecoachagent-c3,GuideCoachAgent,1.0,True,True,False,5,5,False,[],"['next_event', 'state_delta.hint_level']",False,9702,697
+0,v2-eval5000-new_chapter_slice-0014-domain-2014-guidecoachagent-c6,GuideCoachAgent,1.0,True,True,False,4,5,False,[],"['next_event', 'state_delta.hint_level']",False,7651,375
+0,v2-eval5000-new_chapter_slice-0024-domain-2024-guidecoachagent-c2,GuideCoachAgent,1.0,True,True,False,4,5,False,[],"['next_event', 'state_delta.hint_level']",False,10651,512
+0,v2-eval5000-new_chapter_slice-0034-domain-2034-guidecoachagent-c5,GuideCoachAgent,1.0,True,True,False,5,5,False,[],"['next_event', 'state_delta.hint_level']",False,11154,506
+0,v2-eval5000-new_chapter_slice-0044-domain-2044-guidecoachagent-c1,GuideCoachAgent,1.0,True,True,False,5,5,False,[],"['next_event', 'state_delta.hint_level']",False,8670,387
+0,v2-eval5000-new_chapter_slice-0009-domain-2009-mindmapagent-c1,MindMapAgent,1.0,True,True,False,4,4,False,[],"['nodes[0].node_id', 'nodes[1].node_id']",False,7639,335
+0,v2-eval5000-new_chapter_slice-0019-domain-2019-mindmapagent-c4,MindMapAgent,1.0,True,True,False,4,4,False,[],"['nodes[0].node_id', 'nodes[1].node_id', 'nodes[2].node_id']",False,11483,537
+0,v2-eval5000-new_chapter_slice-0029-domain-2029-mindmapagent-c7,MindMapAgent,1.0,True,True,False,4,4,False,[],"['nodes[0].node_id', 'nodes[1].node_id']",False,8166,392
+0,v2-eval5000-new_chapter_slice-0039-domain-2039-mindmapagent-c3,MindMapAgent,1.0,True,True,False,4,4,False,[],"['nodes[0].node_id', 'nodes[1].node_id']",False,8020,348
+0,v2-eval5000-new_chapter_slice-0049-domain-2049-mindmapagent-c6,MindMapAgent,1.0,True,True,False,4,4,False,[],"['nodes[0].node_id', 'nodes[1].node_id', 'nodes[2].node_id']",False,14197,566

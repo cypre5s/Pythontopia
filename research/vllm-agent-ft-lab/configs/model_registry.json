@@ -1,0 +1,110 @@
+{
+  "models": [
+    {
+      "adapter_path": "outputs/adapters/e1-protocol-patch-v1-1000-v1-dpo-v2-len512",
+      "evidence": [
+        "docs/quality-flywheel-log-2026-07-10.md"
+      ],
+      "model_id": "dpo-v2-len512",
+      "schema_version": "agent-schema-v1",
+      "state": "champion"
+    },
+    {
+      "adapter_path": "outputs/adapters/dpo-schema-contract-v1-300-seed42-20260710",
+      "evidence": [
+        "outputs/training/dpo-schema-contract-v1-300-seed42-20260710/promotion_decision.json"
+      ],
+      "model_id": "dpo-schema-contract-v1-300-seed42",
+      "schema_version": "agent-schema-v1",
+      "state": "rejected"
+    },
+    {
+      "adapter_path": "outputs/adapters/dpo-v2-ir-semantic-400-seed42-20260711",
+      "evidence": [
+        "outputs/evals/dpo-v2-ir-semantic-400-20260711/candidate/golden50-v1/summary.json",
+        "outputs/evals/dpo-v2-ir-semantic-400-20260711/candidate/golden20-v2/summary.json",
+        "outputs/evals/dpo-v2-ir-semantic-400-20260711/champion/golden20-v2/summary.json"
+      ],
+      "model_id": "dpo-v2-ir-semantic-400-seed42",
+      "schema_version": "agent-schema-v2",
+      "state": "rejected"
+    },
+    {
+      "adapter_path": "outputs/adapters/dpo-v2-ir-compact3-3agent-450-seed42-20260711",
+      "evidence": [
+        "outputs/comparisons/dpo-v2-ir-compact3-golden15-v2-deep-schema/quality_report.json"
+      ],
+      "model_id": "dpo-v2-ir-compact3-3agent-450-seed42",
+      "schema_version": "agent-schema-v2",
+      "state": "rejected"
+    },
+    {
+      "adapter_path": "outputs/adapters/dpo-v2-ir-guide-schema-compact4-300-seed42-20260711",
+      "evidence": [
+        "outputs/evals/dpo-v2-ir-guide-schema-compact4-300-20260711/candidate/golden5-v2-guide-semantic-intent/summary.json"
+      ],
+      "model_id": "dpo-v2-ir-guide-schema-compact4-300-seed42",
+      "schema_version": "agent-schema-v2",
+      "state": "rejected"
+    },
+    {
+      "adapter_path": "outputs/adapters/dpo-v2-ir-guide-event-intent-240-seed42-20260711",
+      "evidence": [
+        "outputs/evals/dpo-v2-ir-guide-event-intent-240-20260711/candidate/golden5-v2-guide-semantic-gate/summary.json",
+        "outputs/evals/dpo-v2-ir-guide-event-intent-240-20260711/champion/golden5-v2-guide-semantic-gate/summary.json"
+      ],
+      "model_id": "dpo-v2-ir-guide-event-intent-240-seed42",
+      "schema_version": "agent-schema-v2",
+      "state": "rejected"
+    },
+    {
+      "adapter_path": "outputs/adapters/dpo-v2-ir-guide-intent-grid252-seed42-20260711",
+      "evidence": [
+        "outputs/evals/dpo-v2-ir-guide-intent-grid252-20260711/candidate/golden5-v2-guide-semantic-gate/summary.json"
+      ],
+      "model_id": "dpo-v2-ir-guide-intent-grid252-seed42",
+      "schema_version": "agent-schema-v2",
+      "state": "rejected"
+    },
+    {
+      "adapter_path": "outputs/adapters/dpo-sft-v2-ir-guide-intent-grid252-seed42-20260712",
+      "evidence": [
+        "outputs/evals/dpo-sft-v2-ir-guide-intent-grid252-20260712/candidate/golden5-v2-guide-semantic-gate/summary.json"
+      ],
+      "model_id": "dpo-sft-v2-ir-guide-intent-grid252-seed42",
+      "schema_version": "agent-schema-v2",
+      "state": "rejected"
+    },
+    {
+      "adapter_path": "outputs/adapters/orpo-v2-ir-resource4-compact240-seed42-20260712",
+      "evidence": [
+        "outputs/quality-flywheel/resource4-compact-golden20-20260712/quality_report.json",
+        "docs/quality-flywheel-log-2026-07-12.md"
+      ],
+      "model_id": "orpo-v2-ir-resource4-compact240-seed42",
+      "schema_version": "agent-schema-v2",
+      "state": "rejected"
+    },
+    {
+      "adapter_path": "outputs/adapters/orpo-v2-ir-resource4-failure-directed240-seed42-20260712",
+      "evidence": [
+        "outputs/quality-flywheel/resource4-evidence-bound-decoding-golden20-20260713/quality_report.json",
+        "docs/quality-flywheel-log-2026-07-12.md"
+      ],
+      "model_id": "orpo-v2-ir-resource4-failure-directed240-seed42",
+      "schema_version": "agent-schema-v2",
+      "state": "rejected"
+    },
+    {
+      "adapter_path": "outputs/adapters/orpo-v21-codeplan-pattern240-seed42-20260713",
+      "evidence": [
+        "outputs/quality-flywheel/codeplan-v21-pattern240-golden50-v1-20260713/quality_report.json",
+        "docs/quality-flywheel-log-2026-07-12.md"
+      ],
+      "model_id": "orpo-v21-codeplan-pattern240-seed42",
+      "schema_version": "agent-schema-v2.1",
+      "state": "rejected"
+    }
+  ],
+  "registry_version": 1
+}

@@ -1,0 +1,24 @@
+{
+  "folds": {
+    "0": {
+      "case_count": 20,
+      "contract_pass_rate": 0.05,
+      "forbidden_leak_rate": 0.0,
+      "grounding_safe_rate": 1.0,
+      "json_valid_rate": 0.8,
+      "schema_valid_rate": 0.05,
+      "score_mean": 0.479167,
+      "score_std": 0.21864
+    }
+  },
+  "overall": {
+    "case_count": 20,
+    "contract_pass_rate": 0.05,
+    "forbidden_leak_rate": 0.0,
+    "grounding_safe_rate": 1.0,
+    "json_valid_rate": 0.8,
+    "schema_valid_rate": 0.05,
+    "score_mean": 0.479167,
+    "score_std": 0.21864
+  }
+}

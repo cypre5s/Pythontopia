@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="420" viewBox="0 0 760 420">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="72" y="34" font-family="Arial" font-size="20" fill="#111827">Reliability rates by beginner-noise profile</text>
+<line x1="72" y1="322" x2="608" y2="322" stroke="#6b7280"/>
+<line x1="72" y1="58" x2="72" y2="322" stroke="#6b7280"/>
+<text x="340.00" y="358" text-anchor="end" transform="rotate(-32 340.00 358)" font-family="Arial" font-size="11" fill="#374151">clean</text>
+<rect x="270.00" y="308.80" width="22.96" height="13.20" fill="#2563eb"><title>contract: 0.05</title></rect>
+<rect x="298.00" y="110.80" width="22.96" height="211.20" fill="#16a34a"><title>json: 0.80</title></rect>
+<text x="309.48" y="105.80" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">0.80</text>
+<rect x="326.00" y="308.80" width="22.96" height="13.20" fill="#dc2626"><title>schema: 0.05</title></rect>
+<rect x="354.00" y="58.00" width="22.96" height="264.00" fill="#9333ea"><title>grounding: 1.00</title></rect>
+<text x="365.48" y="53.00" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">1.00</text>
+<rect x="382.00" y="58.00" width="22.96" height="264.00" fill="#2563eb"><title>no leak: 1.00</title></rect>
+<text x="393.48" y="53.00" text-anchor="middle" font-family="Arial" font-size="10" fill="#111827">1.00</text>
+<rect x="628" y="46" width="12" height="12" fill="#2563eb"/>
+<text x="646" y="56" font-family="Arial" font-size="12" fill="#374151">contract</text>
+<rect x="628" y="70" width="12" height="12" fill="#16a34a"/>
+<text x="646" y="80" font-family="Arial" font-size="12" fill="#374151">json</text>
+<rect x="628" y="94" width="12" height="12" fill="#dc2626"/>
+<text x="646" y="104" font-family="Arial" font-size="12" fill="#374151">schema</text>
+<rect x="628" y="118" width="12" height="12" fill="#9333ea"/>
+<text x="646" y="128" font-family="Arial" font-size="12" fill="#374151">grounding</text>
+<rect x="628" y="142" width="12" height="12" fill="#2563eb"/>
+<text x="646" y="152" font-family="Arial" font-size="12" fill="#374151">no leak</text>
+</svg>
