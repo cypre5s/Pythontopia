@@ -16,7 +16,6 @@ import com.pythontopia.coursepack.domain.CourseKc;
 import com.pythontopia.coursepack.repository.CoursePackRepository;
 import com.pythontopia.learner.quest.dto.QuestNodeType;
 import com.pythontopia.learner.quest.dto.QuestSource;
-import com.pythontopia.learner.quest.repository.QuestRepository;
 import com.pythontopia.learner.quest.repository.QuestRepository.QuestInsert;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -25,7 +24,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,7 +37,6 @@ public class ClassroomQuestService {
 
   private final ClassroomQuestRepository repository;
   private final ClassroomRepository classroomRepository;
-  private final QuestRepository questRepository;
   private final ClassroomGuard classroomGuard;
   private final CoursePackRepository coursePackRepository;
   private final ObjectMapper objectMapper;
@@ -47,13 +44,11 @@ public class ClassroomQuestService {
   public ClassroomQuestService(
       ClassroomQuestRepository repository,
       ClassroomRepository classroomRepository,
-      QuestRepository questRepository,
       ClassroomGuard classroomGuard,
       CoursePackRepository coursePackRepository,
       ObjectMapper objectMapper) {
     this.repository = repository;
     this.classroomRepository = classroomRepository;
-    this.questRepository = questRepository;
     this.classroomGuard = classroomGuard;
     this.coursePackRepository = coursePackRepository;
     this.objectMapper = objectMapper;
@@ -114,44 +109,24 @@ public class ClassroomQuestService {
                 request.targetResourceType()));
 
     List<ClassroomMemberDto> members = classroomRepository.findMembers(classroomId);
+    StudentQuestTemplate template =
+        template(
+            classroomQuestId,
+            request.title(),
+            request.description(),
+            request.kcCodes(),
+            nodeType,
+            payload,
+            request.dueDate(),
+            request.targetProblemId(),
+            request.targetResourceType());
     int created = 0;
     int skipped = 0;
-    String kcCode = request.kcCodes().isEmpty() ? null : request.kcCodes().get(0);
-    String descriptionForQuest =
-        request.description() == null || request.description().isBlank()
-            ? "班级任务：" + request.title()
-            : request.description();
-    String questTitle = "班级任务 · " + request.title();
-    String deepLinkRoute = deepLinkRouteFor(nodeType, request.targetResourceType());
-    ObjectNode deepLinkParams =
-        deepLinkParamsFor(
-            nodeType, kcCode, request.targetProblemId(), request.targetResourceType());
-    String requiredEvidenceType =
-        nodeType == QuestNodeType.SOLVE_PROBLEM ? "submission" : null;
-    List<Long> targetProblemIds =
-        request.targetProblemId() == null ? List.of() : List.of(request.targetProblemId());
     for (ClassroomMemberDto member : members) {
-      try {
-        questRepository.insert(
-            new QuestInsert(
-                member.studentId(),
-                QuestSource.CLASSROOM,
-                classroomQuestId,
-                questTitle,
-                descriptionForQuest,
-                kcCode,
-                nodeType,
-                payload,
-                request.dueDate(),
-                9,
-                requiredEvidenceType,
-                null,
-                targetProblemIds,
-                null,
-                deepLinkRoute,
-                deepLinkParams));
+      // 幂等分发：命中 uniq_quest_classroom_user 直接跳过，不会把 @Transactional 事务标脏。
+      if (repository.insertStudentQuestIfAbsent(template.forStudent(member.studentId())).isPresent()) {
         created += 1;
-      } catch (DuplicateKeyException duplicate) {
+      } else {
         skipped += 1;
       }
     }
@@ -180,12 +155,111 @@ public class ClassroomQuestService {
           HttpStatus.FORBIDDEN, "FORBIDDEN", "班级任务不属于当前班级");
     }
     repository.archive(classroomQuestId);
+    // 归档必须同时撤回已分发的学生副本，否则 /api/quests/today（只看 quest.status + due_date）
+    // 仍会把它当今日任务展示、允许完成并触发 mastery 加分。
+    repository.skipDistributedQuests(classroomQuestId);
     return repository
         .findById(classroomQuestId)
         .orElseThrow(() -> new BusinessException(
             HttpStatus.INTERNAL_SERVER_ERROR,
             "CLASSROOM_QUEST_PERSIST_FAILED",
             "班级任务归档后未能读回"));
+  }
+
+  /**
+   * 新成员入班后补发该班「仍在进行中」的班级任务副本（status=ACTIVE 且未过截止日）。
+   *
+   * <p>没有它的话：发布之后才入班的学生在公告板上<b>看得到</b>任务卡（listActiveForStudent 用
+   * LEFT JOIN quest），但 {@code studentQuestId} 为 null，点「提交完成」只会得到「请刷新公告板」
+   * 且刷新永远无效。分发走 {@code ON CONFLICT DO NOTHING}，重复调用天然幂等。
+   *
+   * @return 实际补建的副本数
+   */
+  @Transactional
+  public int backfillForStudent(Long classroomId, Long studentId) {
+    List<ClassroomQuestDto> active =
+        repository.listActiveForClassroom(classroomId, LocalDate.now(ZoneOffset.UTC));
+    int created = 0;
+    for (ClassroomQuestDto quest : active) {
+      if (repository.insertStudentQuestIfAbsent(template(quest).forStudent(studentId)).isPresent()) {
+        created += 1;
+      }
+    }
+    return created;
+  }
+
+  /** 由已落库的班级任务重建分发模板（补发路径与发布路径共用同一份投影规则）。 */
+  private StudentQuestTemplate template(ClassroomQuestDto quest) {
+    return template(
+        quest.id(),
+        quest.title(),
+        quest.description(),
+        quest.kcCodes(),
+        quest.nodeType(),
+        quest.payload(),
+        quest.dueDate(),
+        quest.targetProblemId(),
+        quest.targetResourceType());
+  }
+
+  private StudentQuestTemplate template(
+      Long classroomQuestId,
+      String title,
+      String description,
+      List<String> kcCodes,
+      QuestNodeType nodeType,
+      Object payload,
+      LocalDate dueDate,
+      Long targetProblemId,
+      String targetResourceType) {
+    String kcCode = kcCodes == null || kcCodes.isEmpty() ? null : kcCodes.get(0);
+    return new StudentQuestTemplate(
+        classroomQuestId,
+        "班级任务 · " + title,
+        description == null || description.isBlank() ? "班级任务：" + title : description,
+        kcCode,
+        nodeType,
+        payload,
+        dueDate,
+        nodeType == QuestNodeType.SOLVE_PROBLEM ? "submission" : null,
+        targetProblemId == null ? List.of() : List.of(targetProblemId),
+        deepLinkRouteFor(nodeType, targetResourceType),
+        deepLinkParamsFor(nodeType, kcCode, targetProblemId, targetResourceType));
+  }
+
+  /** 一条班级任务对全班共享的学生副本投影；{@link #forStudent} 只换 userId。 */
+  private record StudentQuestTemplate(
+      Long classroomQuestId,
+      String questTitle,
+      String description,
+      String kcCode,
+      QuestNodeType nodeType,
+      Object payload,
+      LocalDate dueDate,
+      String requiredEvidenceType,
+      List<Long> targetProblemIds,
+      String deepLinkRoute,
+      Object deepLinkParams) {
+
+    QuestInsert forStudent(Long studentId) {
+      return new QuestInsert(
+          studentId,
+          QuestSource.CLASSROOM,
+          classroomQuestId,
+          questTitle,
+          description,
+          kcCode,
+          nodeType,
+          payload,
+          dueDate,
+          9,
+          requiredEvidenceType,
+          null,
+          targetProblemIds,
+          null,
+          deepLinkRoute,
+          deepLinkParams);
+    }
   }
 
   private void validateRequest(ClassroomQuestCreateRequest request) {

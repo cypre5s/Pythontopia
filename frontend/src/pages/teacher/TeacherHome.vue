@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import AppLayout from '@/app/AppLayout.vue';
 import PyButton from '@/components/ui/PyButton.vue';
@@ -16,6 +16,21 @@ const formOpen = ref(false);
 const newName = ref('');
 const newDescription = ref('');
 const creating = ref(false);
+
+/**
+ * `/teacher` 没有角色守卫，学生也能直接打开这个 URL。此前模板从不渲染 `lastError`，
+ * 于是 403 被吞成「你还没有创建任何班级」——一个断定式假空态 + 一个必然失败的「新建班级」按钮。
+ * 这里显式区分「无权限 / 加载失败 / 真的没有班级」三种状态。
+ */
+const isForbidden = computed(() => {
+  const message = teacher.lastError;
+  return message != null && /403|无权|权限|FORBIDDEN/i.test(message);
+});
+const hasError = computed(() => teacher.lastError != null);
+
+async function reload(): Promise<void> {
+  await teacher.loadClassrooms();
+}
 
 onMounted(async () => {
   await teacher.loadClassrooms();
@@ -59,89 +74,125 @@ async function createClassroom() {
         <p>这里是 {{ session.displayName }} 的班级总览。</p>
       </header>
 
-      <div class="actions">
-        <PyButton
-          variant="primary"
-          test-id="teacher-new-classroom"
-          @click="formOpen = !formOpen"
-        >
-          {{ formOpen ? '收起表单' : '+ 新建班级' }}
-        </PyButton>
-      </div>
-
-      <form
-        v-if="formOpen"
-        class="create-form"
-        data-testid="teacher-create-form"
-        @submit.prevent="createClassroom"
+      <!-- 无权限：不显示「新建班级」，避免引导学生去点一个必然 403 的按钮 -->
+      <section
+        v-if="isForbidden"
+        class="forbidden"
+        data-testid="teacher-forbidden"
       >
-        <label>
-          班级名称
-          <input
-            v-model="newName"
-            maxlength="64"
-            placeholder="例如 2026 春 Python 一班"
-            required
+        <h2>需要教师权限</h2>
+        <p>教师屋仅对教师账号开放。如果你是学生，请回到主页用加入码加入班级。</p>
+        <PyButton
+          variant="secondary"
+          test-id="teacher-forbidden-home"
+          @click="router.push('/')"
+        >
+          返回主页
+        </PyButton>
+      </section>
+
+      <template v-else>
+        <div class="actions">
+          <PyButton
+            variant="primary"
+            test-id="teacher-new-classroom"
+            @click="formOpen = !formOpen"
           >
-        </label>
-        <label>
-          班级说明
-          <textarea
-            v-model="newDescription"
-            maxlength="256"
-            placeholder="简要说明用途、面向学员、上课频率"
-          />
-        </label>
-        <PyButton
-          type="submit"
-          variant="primary"
-          :disabled="creating"
-        >
-          {{ creating ? '创建中...' : '创建班级' }}
-        </PyButton>
-      </form>
+            {{ formOpen ? '收起表单' : '+ 新建班级' }}
+          </PyButton>
+        </div>
 
-      <p
-        v-if="teacher.loading"
-        class="empty"
-      >
-        正在加载班级列表...
-      </p>
-      <p
-        v-else-if="!teacher.hasClassrooms"
-        class="empty"
-      >
-        你还没有创建任何班级，点击"新建班级"开始。
-      </p>
-      <ul
-        v-else
-        class="classroom-list"
-        data-testid="classroom-list"
-      >
-        <li
-          v-for="classroom in teacher.classrooms"
-          :key="classroom.classroomId"
-          class="classroom-card"
+        <form
+          v-if="formOpen"
+          class="create-form"
+          data-testid="teacher-create-form"
+          @submit.prevent="createClassroom"
         >
-          <header>
-            <h3>{{ classroom.name }}</h3>
-            <span class="badge">{{ classroom.status }}</span>
-          </header>
-          <p class="desc">
-            {{ classroom.description || '（暂无说明）' }}
-          </p>
-          <footer>
-            <span class="code">加入码：<code>{{ classroom.joinCode ?? '——' }}</code></span>
-            <PyButton
-              variant="secondary"
-              size="sm"
-              @click="open(classroom.classroomId)"
+          <label>
+            班级名称
+            <input
+              v-model="newName"
+              maxlength="64"
+              placeholder="例如 2026 春 Python 一班"
+              required
             >
-              进入看板
-            </PyButton>
-          </footer>
-        </li>
-      </ul>
+          </label>
+          <label>
+            班级说明
+            <textarea
+              v-model="newDescription"
+              maxlength="256"
+              placeholder="简要说明用途、面向学员、上课频率"
+            />
+          </label>
+          <PyButton
+            type="submit"
+            variant="primary"
+            :disabled="creating"
+          >
+            {{ creating ? '创建中...' : '创建班级' }}
+          </PyButton>
+        </form>
+
+        <p
+          v-if="teacher.loading"
+          class="empty"
+        >
+          正在加载班级列表...
+        </p>
+        <!-- 加载失败 ≠ 没有班级：必须显式报错并给重试，不能伪装成空态 -->
+        <div
+          v-else-if="hasError"
+          class="load-error"
+          data-testid="teacher-load-error"
+        >
+          <span>班级列表加载失败：{{ teacher.lastError }}</span>
+          <PyButton
+            variant="secondary"
+            size="sm"
+            test-id="teacher-reload"
+            @click="reload"
+          >
+            重试
+          </PyButton>
+        </div>
+        <p
+          v-else-if="!teacher.hasClassrooms"
+          class="empty"
+          data-testid="teacher-empty"
+        >
+          你还没有创建任何班级，点击"新建班级"开始。
+        </p>
+        <ul
+          v-else
+          class="classroom-list"
+          data-testid="classroom-list"
+        >
+          <li
+            v-for="classroom in teacher.classrooms"
+            :key="classroom.classroomId"
+            class="classroom-card"
+          >
+            <header>
+              <h3>{{ classroom.name }}</h3>
+              <span class="badge">{{ classroom.status }}</span>
+            </header>
+            <p class="desc">
+              {{ classroom.description || '（暂无说明）' }}
+            </p>
+            <footer>
+              <span class="code">加入码：<code>{{ classroom.joinCode ?? '——' }}</code></span>
+              <PyButton
+                variant="secondary"
+                size="sm"
+                @click="open(classroom.classroomId)"
+              >
+                进入看板
+              </PyButton>
+            </footer>
+          </li>
+        </ul>
+      </template>
     </section>
   </AppLayout>
 </template>
@@ -207,6 +258,39 @@ header p {
   border-radius: var(--pyt-radius-lg);
   text-align: center;
   color: var(--pyt-color-text-hint);
+}
+.load-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  background: var(--pyt-color-danger-bg);
+  border: 2px solid var(--pyt-color-danger);
+  border-radius: var(--pyt-radius-lg);
+  color: var(--pyt-color-danger);
+  font-size: var(--pyt-font-size-sm);
+}
+.forbidden {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+  padding: 20px;
+  background: var(--pyt-color-bg-elevated);
+  border: 2px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-lg);
+}
+.forbidden h2 {
+  margin: 0;
+  font-size: var(--pyt-font-size-lg);
+  font-family: var(--pyt-font-pixel);
+  color: var(--pyt-color-text-primary);
+}
+.forbidden p {
+  margin: 0;
+  font-size: var(--pyt-font-size-sm);
+  color: var(--pyt-color-text-muted);
 }
 /* ─── shadcn SectionCards-style classroom card grid ─── */
 .classroom-list {

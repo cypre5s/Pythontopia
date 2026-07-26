@@ -25,7 +25,6 @@ import com.pythontopia.classroom.security.ClassroomGuard;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.coursepack.domain.CourseKc;
 import com.pythontopia.coursepack.repository.CoursePackRepository;
-import com.pythontopia.learner.quest.repository.QuestRepository;
 import com.pythontopia.learner.quest.repository.QuestRepository.QuestInsert;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -33,25 +32,18 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
-import org.springframework.dao.DuplicateKeyException;
 import org.mockito.ArgumentCaptor;
 
 class ClassroomQuestServiceTest {
 
   private final ClassroomQuestRepository repository = mock(ClassroomQuestRepository.class);
   private final ClassroomRepository classroomRepository = mock(ClassroomRepository.class);
-  private final QuestRepository questRepository = mock(QuestRepository.class);
   private final ClassroomGuard classroomGuard = mock(ClassroomGuard.class);
   private final CoursePackRepository coursePackRepository = mock(CoursePackRepository.class);
   private final ObjectMapper objectMapper = new ObjectMapper();
   private final ClassroomQuestService service =
       new ClassroomQuestService(
-          repository,
-          classroomRepository,
-          questRepository,
-          classroomGuard,
-          coursePackRepository,
-          objectMapper);
+          repository, classroomRepository, classroomGuard, coursePackRepository, objectMapper);
 
   private final CurrentUserPrincipal teacher = new CurrentUserPrincipal(42L, "t01", Role.TEACHER);
 
@@ -73,6 +65,8 @@ class ClassroomQuestServiceTest {
                 new ClassroomMemberDto(13L, "stu03", "Stu 03", "ACTIVE")));
     when(repository.findById(77L))
         .thenReturn(Optional.of(sampleQuest(77L, "ACTIVE")));
+    when(repository.insertStudentQuestIfAbsent(any(QuestInsert.class)))
+        .thenReturn(Optional.of(101L), Optional.of(102L), Optional.of(103L));
 
     ClassroomQuestCreateRequest request =
         new ClassroomQuestCreateRequest(
@@ -88,7 +82,7 @@ class ClassroomQuestServiceTest {
     assertThat(response.createdQuests()).isEqualTo(3);
     assertThat(response.skippedDuplicates()).isEqualTo(0);
     ArgumentCaptor<QuestInsert> questInsertCaptor = ArgumentCaptor.forClass(QuestInsert.class);
-    verify(questRepository, times(3)).insert(questInsertCaptor.capture());
+    verify(repository, times(3)).insertStudentQuestIfAbsent(questInsertCaptor.capture());
     assertThat(questInsertCaptor.getAllValues())
         .allSatisfy(
             insert -> {
@@ -100,6 +94,10 @@ class ClassroomQuestServiceTest {
     verify(repository).insert(any(ClassroomQuestInsert.class));
   }
 
+  /**
+   * 重复分发必须走「ON CONFLICT DO NOTHING」的真幂等：PostgreSQL 里唯一键冲突会把整个
+   * @Transactional 事务标记为 aborted，靠 catch DuplicateKeyException 续跑会让后续 insert 全部失败。
+   */
   @Test
   void duplicateFanOutIsCountedAndDoesNotFailTransaction() {
     when(classroomGuard.requireOwner(teacher, 9L))
@@ -114,9 +112,8 @@ class ClassroomQuestServiceTest {
             List.of(
                 new ClassroomMemberDto(11L, "stu01", "Stu 01", "ACTIVE"),
                 new ClassroomMemberDto(12L, "stu02", "Stu 02", "ACTIVE")));
-    when(questRepository.insert(any(QuestInsert.class)))
-        .thenReturn(101L)
-        .thenThrow(new DuplicateKeyException("dup"));
+    when(repository.insertStudentQuestIfAbsent(any(QuestInsert.class)))
+        .thenReturn(Optional.of(101L), Optional.empty());
     when(repository.findById(78L)).thenReturn(Optional.of(sampleQuest(78L, "ACTIVE")));
 
     ClassroomQuestPublishResponse response =
@@ -172,6 +169,70 @@ class ClassroomQuestServiceTest {
     ClassroomQuestDto archived = service.archive(teacher, 9L, 77L);
     assertThat(archived.status()).isEqualTo("ARCHIVED");
     verify(repository).archive(77L);
+  }
+
+  /**
+   * 回归（缺陷 3）：只把 classroom_quest 置为 ARCHIVED 不够。学生侧「今日任务」走 learner 的
+   * {@code QuestRepository.findTodayQuests}，只看 {@code quest.status + due_date}、不 join
+   * classroom_quest，所以归档后学生仍能看到并完成它、继续加 mastery。归档必须同事务撤回副本。
+   */
+  @Test
+  void archiveAlsoWithdrawsDistributedStudentQuests() {
+    when(classroomGuard.requireOwner(teacher, 9L))
+        .thenReturn(new Classroom(9L, "DemoClass", "desc", 42L, 43L, "ABC123", "ACTIVE"));
+    when(repository.findById(77L))
+        .thenReturn(
+            Optional.of(sampleQuest(77L, "ACTIVE")), Optional.of(sampleQuest(77L, "ARCHIVED")));
+    when(repository.archive(77L)).thenReturn(1);
+    when(repository.skipDistributedQuests(77L)).thenReturn(3);
+
+    service.archive(teacher, 9L, 77L);
+
+    verify(repository).skipDistributedQuests(77L);
+  }
+
+  /**
+   * 回归（缺陷 4）：任务发布之后才入班的学生永远拿不到 quest 副本 —— 公告板用 LEFT JOIN quest，
+   * 所以他看得到任务卡但 studentQuestId 为 null，点「提交完成」只会得到「请刷新公告板」，
+   * 而刷新永远无效。入班后必须补发所有仍在进行中的班级任务副本。
+   */
+  @Test
+  void backfillForStudentCreatesCopiesOfActiveClassroomQuests() {
+    when(repository.listActiveForClassroom(eq(9L), any(LocalDate.class)))
+        .thenReturn(List.of(sampleQuest(77L, "ACTIVE"), sampleQuest(78L, "ACTIVE")));
+    when(repository.insertStudentQuestIfAbsent(any(QuestInsert.class)))
+        .thenReturn(Optional.of(501L), Optional.of(502L));
+
+    int created = service.backfillForStudent(9L, 55L);
+
+    assertThat(created).isEqualTo(2);
+    ArgumentCaptor<QuestInsert> captor = ArgumentCaptor.forClass(QuestInsert.class);
+    verify(repository, times(2)).insertStudentQuestIfAbsent(captor.capture());
+    assertThat(captor.getAllValues())
+        .allSatisfy(
+            insert -> {
+              assertThat(insert.userId()).isEqualTo(55L);
+              assertThat(insert.source().name()).isEqualTo("CLASSROOM");
+              // 补发的副本与发布时的投影完全一致（标题前缀 / 深链 / 证据要求）。
+              assertThat(insert.title()).startsWith("班级任务 · ");
+              assertThat(insert.deepLinkRoute()).isEqualTo("/training");
+              assertThat(insert.requiredEvidenceType()).isEqualTo("submission");
+              assertThat(insert.targetProblemIds()).containsExactly(12L);
+            });
+    assertThat(captor.getAllValues())
+        .extracting(QuestInsert::sourceRefId)
+        .containsExactly(77L, 78L);
+  }
+
+  /** 已有副本时补发是 no-op（ON CONFLICT DO NOTHING 返回 empty），重复入班不产生重复任务。 */
+  @Test
+  void backfillForStudentIsIdempotent() {
+    when(repository.listActiveForClassroom(eq(9L), any(LocalDate.class)))
+        .thenReturn(List.of(sampleQuest(77L, "ACTIVE")));
+    when(repository.insertStudentQuestIfAbsent(any(QuestInsert.class)))
+        .thenReturn(Optional.empty());
+
+    assertThat(service.backfillForStudent(9L, 55L)).isZero();
   }
 
   private ClassroomQuestDto sampleQuest(Long id, String status) {

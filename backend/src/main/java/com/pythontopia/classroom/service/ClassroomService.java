@@ -6,11 +6,14 @@ import com.pythontopia.classroom.domain.Classroom;
 import com.pythontopia.classroom.dto.ClassroomDto;
 import com.pythontopia.classroom.dto.ClassroomMemberDto;
 import com.pythontopia.classroom.dto.CreateClassroomRequest;
+import com.pythontopia.classroom.quest.service.ClassroomQuestService;
 import com.pythontopia.classroom.repository.ClassroomRepository;
+import com.pythontopia.classroom.security.ClassroomGuard;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.error.ResourceNotFoundException;
 import java.security.SecureRandom;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -21,10 +24,17 @@ public class ClassroomService {
   private static final char[] JOIN_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789".toCharArray();
 
   private final ClassroomRepository repository;
+  private final ClassroomGuard classroomGuard;
+  private final ClassroomQuestService classroomQuestService;
   private final SecureRandom random = new SecureRandom();
 
-  public ClassroomService(ClassroomRepository repository) {
+  public ClassroomService(
+      ClassroomRepository repository,
+      ClassroomGuard classroomGuard,
+      ClassroomQuestService classroomQuestService) {
     this.repository = repository;
+    this.classroomGuard = classroomGuard;
+    this.classroomQuestService = classroomQuestService;
   }
 
   public ClassroomDto create(CurrentUserPrincipal user, CreateClassroomRequest request) {
@@ -46,6 +56,11 @@ public class ClassroomService {
     return rows.stream().map(row -> toDto(row, teacher)).toList();
   }
 
+  /**
+   * 学生凭加入码入班。<b>可重入</b>：只有当成员行已是 {@code ACTIVE} 时才回 409；被教师移出
+   * （{@code REMOVED}）的学生可以再次加入（{@link ClassroomRepository#addMember} 是 upsert）。
+   * 入班成功后立刻补发该班「进行中」的班级任务副本，避免发布后才入班的学生看得到任务卡却点不动。
+   */
   public ClassroomDto join(CurrentUserPrincipal user, String joinCode) {
     requireRole(user, Role.STUDENT);
     Classroom classroom =
@@ -55,11 +70,20 @@ public class ClassroomService {
     if (!"ACTIVE".equals(classroom.status())) {
       throw new BusinessException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Classroom is archived");
     }
+    Optional<String> existingStatus =
+        repository.findMemberStatus(classroom.id(), user.userId());
+    if (existingStatus.filter("ACTIVE"::equals).isPresent()) {
+      throw new BusinessException(
+          HttpStatus.CONFLICT, "CLASSROOM_ALREADY_JOINED", "Student already joined");
+    }
     try {
       repository.addMember(classroom.id(), user.userId());
     } catch (DuplicateKeyException exception) {
-      throw new BusinessException(HttpStatus.CONFLICT, "CLASSROOM_ALREADY_JOINED", "Student already joined");
+      // upsert 之后只剩「并发双写」这一种可能：另一个请求刚刚把同一个学生加进来。
+      throw new BusinessException(
+          HttpStatus.CONFLICT, "CLASSROOM_ALREADY_JOINED", "Student already joined");
     }
+    classroomQuestService.backfillForStudent(classroom.id(), user.userId());
     return toDto(classroom, false);
   }
 
@@ -107,16 +131,13 @@ public class ClassroomService {
     return repository.findMembersByStatus(classroom.id(), normalised);
   }
 
+  /**
+   * 教师端班级归属校验：统一复用 {@link ClassroomGuard#requireOwner}，与 dashboard / quest /
+   * remediation / live 四条教师入口口径一致（ADMIN 同样放行，不再出现「同一个 ADMIN 能读看板
+   * 却在改名 / 重置加入码 / 成员管理上被 403」的自相矛盾）。
+   */
   private Classroom ownedClassroom(CurrentUserPrincipal user, Long classroomId) {
-    requireRole(user, Role.TEACHER);
-    Classroom classroom =
-        repository
-            .findById(classroomId)
-            .orElseThrow(() -> new ResourceNotFoundException("Classroom not found"));
-    if (!classroom.teacherId().equals(user.userId())) {
-      throw new BusinessException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Classroom belongs to another teacher");
-    }
-    return classroom;
+    return classroomGuard.requireOwner(user, classroomId);
   }
 
   private void requireRole(CurrentUserPrincipal user, Role role) {
