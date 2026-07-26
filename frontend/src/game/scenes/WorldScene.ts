@@ -1207,6 +1207,10 @@ export function toCardinal(dir: string, fallback: Direction): Direction {
     return dir;
   }
   const tokens = dir.split('_');
+  // 方向惯性（docs/stardew/03-character-walk-anim-spec §3.2 防颤动）：斜向输入包含
+  // 当前朝向轴时延续当前朝向。W+A 松紧交替（UP ↔ UP_LEFT）不再翻转朝向，
+  // 也不再触发多余的 turn-then-walk 停顿。
+  if (tokens.includes(fallback)) return fallback;
   if (tokens.includes('LEFT')) return 'LEFT';
   if (tokens.includes('RIGHT')) return 'RIGHT';
   if (tokens.includes('UP')) return 'UP';

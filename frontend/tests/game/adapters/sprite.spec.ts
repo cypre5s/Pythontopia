@@ -73,6 +73,31 @@ describe('createPlayerSprite', () => {
     expect(handle.direction).toBe('RIGHT');
   });
 
+  it('连续行走：单格 tween 完成后延迟落 idle，下一步在宽限内到达则取消 idle', () => {
+    const scene = createSceneMock();
+    const idleTimer = { remove: vi.fn() };
+    const delayedCall = vi.fn(() => idleTimer);
+    (scene as unknown as { time: { now: number; delayedCall: typeof delayedCall } }).time = {
+      now: 0,
+      delayedCall,
+    };
+
+    const handle = createPlayerSprite(scene, { tileX: 2, tileY: 3, direction: 'DOWN', tileSize: 32 });
+    handle.moveToTile(3, 3, 'RIGHT');
+
+    const moveTween = vi
+      .mocked(scene.tweens?.add)
+      .mock.calls.map((call) => call?.[0] as { onComplete?: () => void } | undefined)
+      .find((cfg) => typeof cfg?.onComplete === 'function');
+    moveTween?.onComplete?.();
+
+    // tween 完成不立即 idle，而是排一个宽限定时器。
+    expect(delayedCall).toHaveBeenCalledTimes(1);
+    // 宽限期内的下一步移动取消待落的 idle，走路动画跨格连贯。
+    handle.moveToTile(4, 3, 'RIGHT');
+    expect(idleTimer.remove).toHaveBeenCalled();
+  });
+
   it('jumpToTile updates coords, reports jumping during the arc, and lands at idle', () => {
     const scene = createSceneMock();
 

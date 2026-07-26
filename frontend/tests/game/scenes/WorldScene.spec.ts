@@ -354,6 +354,17 @@ describe('WorldScene.directionDelta / toCardinal (existing helpers; sanity)', ()
     expect(toCardinal('NONE' as unknown as string, 'DOWN')).toBe('DOWN');
   });
 
+  it('toCardinal 方向惯性：斜向包含当前朝向轴时延续当前朝向（§3.2 防颤动）', () => {
+    // W+A 松紧交替：UP → UP_LEFT 保持 UP，不翻转成 LEFT。
+    expect(toCardinal('UP_LEFT', 'UP')).toBe('UP');
+    expect(toCardinal('DOWN_RIGHT', 'DOWN')).toBe('DOWN');
+    expect(toCardinal('UP_LEFT', 'LEFT')).toBe('LEFT');
+    // 惯性生效时不触发 turn-then-walk 停顿。
+    expect(shouldTurnBeforeMove('UP', 'UP_LEFT')).toBe(false);
+    // 斜向不含当前朝向轴时仍按 LEFT/RIGHT 优先降级。
+    expect(toCardinal('UP_RIGHT', 'DOWN')).toBe('RIGHT');
+  });
+
   it('turns in place before moving when the requested cardinal facing changes', () => {
     expect(shouldTurnBeforeMove('DOWN', 'RIGHT')).toBe(true);
     expect(shouldTurnBeforeMove('RIGHT', 'RIGHT')).toBe(false);
