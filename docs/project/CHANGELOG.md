@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-07-26 — 重构：前端死代码清除（审计第 1 批）
+
+- 全仓引用扫描确认后删除三个零引用文件：`api/client.ts`（对 `./http` 的死转发层）、`composables/useKcFrontier.ts`（知识前沿选择器，调用点在无尽远征迭代中消失；其 ZPD+画像弱项选 KC 的设计思想保留为后续画像深化素材，且其注释本身建议下沉后端）、`utils/assertNever.ts`（唯一使用处已有局部实现）。旧 R-13 mainQuest 前端系统确认退役干净、无残留。
+- 验证：`vue-tsc --noEmit` 通过；前端全量 231 files / 2264 tests 全绿。
+
 ## 2026-07-26 — 收口 Phase 4 遗留风险：切换状态重建纯函数化与仓库卫生
 
 - `routing/workshop_task_plan.py` 新增 `SwitchedRuntimeState` + `rebuild_runtime_after_switch`：C3 候选切换后 dispatch 的六份运行时集合（plan/completed/failed/pending/step_status/replans_used）由纯函数一次性一致重建并附一致性契约测试，`_node_dispatch` 不再手工逐份同步；切换时整体替换 `step_status`，被放弃候选的陈旧步骤键不再残留。Graph 全量 1628 passed / 1 skipped。
