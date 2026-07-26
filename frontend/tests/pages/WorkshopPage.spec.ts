@@ -3,8 +3,19 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { createMemoryHistory, createRouter, type Router } from 'vue-router';
 
-// 真实 fastTravel 数据，不 mock
+// fastTravel 默认透传真实数据（R-14 单 hub）；置 ftRoutes.routes 可模拟「恢复多图」。
 import { FAST_TRAVEL_ROUTES } from '@/data/fastTravel';
+import {
+  RESTORED_FAST_TRAVEL_ROUTES,
+  type FastTravelRouteOverride,
+} from '../_helpers/fastTravelRoutes';
+
+const ftRoutes: FastTravelRouteOverride = vi.hoisted(() => ({ routes: null }));
+vi.mock('@/data/fastTravel', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/data/fastTravel')>();
+  const { createFastTravelModuleMock } = await import('../_helpers/fastTravelRoutes');
+  return createFastTravelModuleMock(actual, ftRoutes);
+});
 
 const apiMocks = vi.hoisted(() => ({
   listChapters: vi.fn(),
@@ -249,6 +260,8 @@ describe('WorkshopPage R-13 改造', () => {
   });
 
   afterEach(() => {
+    // 用例间必须还原成真实单 hub 路线表，否则 gate 的默认态会被上一条用例污染。
+    ftRoutes.routes = null;
     vi.restoreAllMocks();
   });
 
@@ -261,7 +274,12 @@ describe('WorkshopPage R-13 改造', () => {
     });
   }
 
-  it('exposes all 5 fast-travel chips + library quick access', async () => {
+  // R-14 单 hub：唯一一条路线的目的地就是玩家所在地，chip 会永久 disabled。
+  // 工坊这条 travel-list 与 HUD 传送入口共用 FAST_TRAVEL_ENABLED 这条 gate，
+  // 返回小镇由左侧「← 返回小镇」承担，故此处应整体不渲染。
+  it('suppresses fast-travel chips while only one route exists, keeping library access', async () => {
+    expect(FAST_TRAVEL_ROUTES.length).toBe(1);
+
     await router.push('/workshop');
     const wrapper = mountPage();
     await flushPromises();
@@ -269,48 +287,62 @@ describe('WorkshopPage R-13 改造', () => {
     for (const route of FAST_TRAVEL_ROUTES) {
       expect(
         wrapper.find(`[data-testid="workshop-travel-${route.key}"]`).exists(),
-        `chip ${route.key} missing`,
-      ).toBe(true);
+        `chip ${route.key} should be suppressed under the single hub`,
+      ).toBe(false);
     }
+    // 同一列表里的图书馆/远征入口与路线表无关，必须保留。
     expect(wrapper.find('[data-testid="workshop-open-library"]').exists()).toBe(true);
   });
 
-  it('clicking fast-travel chip writes to world.player and pushes /world', async () => {
-    const world = useWorldStore();
-    // R-14 单 hub：玩家位于（历史遗留的）外围图时，点击 hub chip 把 player 拉回 town_hub。
-    world.player = {
-      mapKey: 'port_west',
-      tileX: 2,
-      tileY: 15,
-      direction: 'DOWN',
-    };
+  it('restores fast-travel chips once more than one route exists', async () => {
+    ftRoutes.routes = RESTORED_FAST_TRAVEL_ROUTES;
 
     await router.push('/workshop');
     const wrapper = mountPage();
     await flushPromises();
 
-    await wrapper.find('[data-testid="workshop-travel-hub"]').trigger('click');
+    for (const route of RESTORED_FAST_TRAVEL_ROUTES) {
+      expect(
+        wrapper.find(`[data-testid="workshop-travel-${route.key}"]`).exists(),
+        `chip ${route.key} missing after routes restored`,
+      ).toBe(true);
+    }
+  });
+
+  it('clicking a fast-travel chip writes to world.player and pushes /world', async () => {
+    ftRoutes.routes = RESTORED_FAST_TRAVEL_ROUTES;
+    const target = RESTORED_FAST_TRAVEL_ROUTES.find((r) => r.toMap !== 'town_hub');
+    expect(target).toBeDefined();
+
+    const world = useWorldStore();
+    world.player = { mapKey: 'town_hub', tileX: 2, tileY: 15, direction: 'DOWN' };
+
+    await router.push('/workshop');
+    const wrapper = mountPage();
     await flushPromises();
 
-    expect(world.player.mapKey).toBe('town_hub');
+    await wrapper.find(`[data-testid="workshop-travel-${target!.key}"]`).trigger('click');
+    await flushPromises();
+
+    expect(world.player.mapKey).toBe(target!.toMap);
     expect(router.currentRoute.value.path).toBe('/world');
   });
 
-  it('current map chip is disabled (cannot travel to where you already are)', async () => {
+  it('disables the chip for the map the player is already on', async () => {
+    ftRoutes.routes = RESTORED_FAST_TRAVEL_ROUTES;
+    const here = RESTORED_FAST_TRAVEL_ROUTES.find((r) => r.toMap === 'town_hub');
+    expect(here).toBeDefined();
+
     const world = useWorldStore();
-    world.player = {
-      mapKey: 'town_hub',
-      tileX: 25,
-      tileY: 20,
-      direction: 'DOWN',
-    };
+    world.player = { mapKey: 'town_hub', tileX: 25, tileY: 20, direction: 'DOWN' };
 
     await router.push('/workshop');
     const wrapper = mountPage();
     await flushPromises();
 
-    const hubChip = wrapper.find('[data-testid="workshop-travel-hub"]');
-    expect(hubChip.attributes('disabled')).toBeDefined();
+    expect(
+      wrapper.find(`[data-testid="workshop-travel-${here!.key}"]`).attributes('disabled'),
+    ).toBeDefined();
   });
 
   it('opens library via the quick access chip', async () => {
