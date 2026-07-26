@@ -41,13 +41,15 @@ import org.springframework.stereotype.Service;
 /**
  * 主线域核心服务：关卡地图总览 + stage 三件套打点（R-14 看/学/练标准聚合）。
  *
- * <p>过线口径（Phase 1 P3）：
+ * <p>过线口径（Phase 1 P3）：章级标准算出后<b>按本章 stage 数均摊到每个小节</b>——计数器
+ * （{@code mainline_stage_progress}）本来就是每小节一份，直接把章级值套到每个小节会把要求放大 N 倍
+ * （实测第 7 章：视频 5 × 6394s ≈ 8.9h 远超实际 2.2h 内容；PPT 5 × 116 = 580 页次）：
  *
  * <ul>
- *   <li><b>看</b>：{@code requiredVideoSec = round(本章内置视频总时长 × 0.80)}（动态算，忽略
+ *   <li><b>看</b>：章级 {@code round(本章内置视频总时长 × 0.80)} ÷ 本章 stage 数（动态算，忽略
  *       {@code mainline_stage.required_video_sec} 占位列）。
- *   <li><b>学</b>：{@code coursewarePageIds = 本章文档全部页}（{@code documentId = 185 + chapter}），
- *       需 {@code pages_read} 覆盖全部。
+ *   <li><b>学</b>：本章文档全部页（{@code documentId = 185 + chapter}）按 stage 均分切片，
+ *       每小节只需读完<b>自己那片</b>；{@code pages_read} 打点也只接受本片内的 pageId。
  *   <li><b>练</b>：OJ 例题（同旧 {@code required_example_count}）+ 客观题全对（{@code MainlinePracticePort}）。
  * </ul>
  *
@@ -154,13 +156,16 @@ public class MainlineService implements MainlineStageCompletionPort {
       boolean unlocked = chapter == 1 || prevStars >= 1;
 
       List<StageOverview> stageViews = new ArrayList<>();
-      for (MainlineStage raw : stagesByChapter.getOrDefault(chapter, List.of())) {
+      List<MainlineStage> chapterStages = stagesByChapter.getOrDefault(chapter, List.of());
+      for (MainlineStage raw : chapterStages) {
         MainlineStageProgress progress = progressByStage.get(raw.id());
         int requiredVideoSec =
             requiredVideoSecByChapter.computeIfAbsent(chapter, this::requiredVideoSec);
         List<Long> chapterPageIds =
             pageIdsByChapter.computeIfAbsent(chapter, this::chapterPageIds);
-        MainlineStage stage = withChapterStandards(raw, requiredVideoSec, chapterPageIds);
+        // 章级标准 → 本小节标准（视频秒数均分、课件页切片），避免把整章要求套在每个小节上。
+        MainlineStage stage =
+            withChapterStandards(raw, requiredVideoSec, chapterPageIds, chapterStages.size());
         boolean questionsComplete = questionsComplete(userId, raw);
         stageViews.add(
             new StageOverview(
@@ -168,7 +173,7 @@ public class MainlineService implements MainlineStageCompletionPort {
                 stage.stageIndex(),
                 stage.title(),
                 progress == null ? 0 : progress.videoWatchedSec(),
-                requiredVideoSec,
+                stage.requiredVideoSec(),
                 StageCompletion.distinctPages(progress),
                 StageCompletion.requiredPagesDisplay(stage),
                 StageCompletion.distinctExamples(progress),
@@ -196,11 +201,10 @@ public class MainlineService implements MainlineStageCompletionPort {
   /** 学习页详情：stage 静态定义 + 看/学/练真实题面 + 当前用户三件套进度（id 集合）。 */
   public StageDetailDto stageDetail(long userId, long stageId) {
     MainlineStage raw = requireStage(stageId);
+    requireChapterUnlocked(userId, raw.chapter());
     MainlineStageProgress progress = progressRepository.find(userId, stageId).orElse(null);
 
-    int requiredVideoSec = requiredVideoSec(raw.chapter());
-    List<Long> chapterPageIds = chapterPageIds(raw.chapter());
-    MainlineStage stage = withChapterStandards(raw, requiredVideoSec, chapterPageIds);
+    MainlineStage stage = withChapterStandards(raw);
 
     List<StageVideoDto> videos =
         courseVideoService.listVideos(raw.chapter()).stream()
@@ -226,10 +230,10 @@ public class MainlineService implements MainlineStageCompletionPort {
         stage.title(),
         stage.kcCodes(),
         stage.videoKeyword(),
-        chapterPageIds,
+        stage.coursewarePageIds(),
         stage.exampleProblemIds(),
-        requiredVideoSec,
-        chapterPageIds.size(),
+        stage.requiredVideoSec(),
+        stage.coursewarePageIds().size(),
         stage.requiredExampleCount(),
         requiredQuestions,
         videos,
@@ -247,36 +251,55 @@ public class MainlineService implements MainlineStageCompletionPort {
   /** 视频时长上报：钳制单次上限 + 每分钟限频；超频 no-op（幂等软节流），不报错。 */
   public StageProgressDto reportVideoProgress(long userId, long stageId, int deltaSec) {
     MainlineStage raw = requireStage(stageId);
+    requireChapterUnlocked(userId, raw.chapter());
+    MainlineStage stage = withChapterStandards(raw);
     int clamped = Math.min(Math.max(deltaSec, 0), properties.videoDeltaMaxSec());
     if (clamped <= 0 || !videoThrottle.tryAcquire(userId, stageId)) {
-      return progressDto(userId, raw, progressRepository.find(userId, stageId).orElse(null), false);
+      return progressDto(userId, stage, progressRepository.find(userId, stageId).orElse(null), false);
     }
     MainlineStageProgress progress = progressRepository.addVideoSeconds(userId, stageId, clamped);
-    return progressDto(userId, raw, progress, true);
+    return progressDto(userId, stage, progress, true);
   }
 
-  /** 课件页阅读打点（单页，并集去重，幂等）。 */
+  /** 课件页阅读打点（单页，并集去重，幂等）。不属于本小节课件切片的 pageId 直接丢弃（no-op）。 */
   public StageProgressDto reportPageRead(long userId, long stageId, long pageId) {
     MainlineStage raw = requireStage(stageId);
+    requireChapterUnlocked(userId, raw.chapter());
+    MainlineStage stage = withChapterStandards(raw);
+    if (!isStagePage(stage, pageId)) {
+      log.debug("丢弃越界 pageId user={} stage={} page={}", userId, stageId, pageId);
+      return progressDto(userId, stage, progressRepository.find(userId, stageId).orElse(null), false);
+    }
     MainlineStageProgress progress = progressRepository.addPageRead(userId, stageId, pageId);
-    return progressDto(userId, raw, progress, true);
-  }
-
-  /** 课件页阅读批量打点（整章 PPT 一次上报多页，并集去重，幂等）。 */
-  public StageProgressDto reportPagesRead(long userId, long stageId, List<Long> pageIds) {
-    MainlineStage raw = requireStage(stageId);
-    MainlineStageProgress progress = progressRepository.addPagesRead(userId, stageId, pageIds);
-    return progressDto(userId, raw, progress, true);
+    return progressDto(userId, stage, progress, true);
   }
 
   /**
-   * 例题完成打点：带 submissionId 时强校验本人且 PASSED（§9）；不带时按「该生该题存在任一
-   * PASSED 提交」自动校验（R2：任务完成必须提供 evidence——堵住不判题直接打点的口子）。
-   * 并集去重，幂等。
+   * 课件页阅读批量打点（并集去重，幂等）。<b>白名单过滤</b>：只接受本小节课件切片内的 pageId，
+   * 其余静默丢弃——否则把 stageDetail 回传的整章页 id 原样 POST 回来即可 0 秒过「学」。
+   */
+  public StageProgressDto reportPagesRead(long userId, long stageId, List<Long> pageIds) {
+    MainlineStage raw = requireStage(stageId);
+    requireChapterUnlocked(userId, raw.chapter());
+    MainlineStage stage = withChapterStandards(raw);
+    List<Long> accepted = retainStagePages(stage, pageIds);
+    if (accepted.isEmpty()) {
+      return progressDto(userId, stage, progressRepository.find(userId, stageId).orElse(null), false);
+    }
+    MainlineStageProgress progress = progressRepository.addPagesRead(userId, stageId, accepted);
+    return progressDto(userId, stage, progress, true);
+  }
+
+  /**
+   * 例题完成打点：题目须属于本小节（{@code example_problem_ids}，V159 已按小节回填）；带 submissionId 时
+   * 强校验本人 + <b>同题</b> + PASSED（§9）；不带时按「该生该题存在任一 PASSED 提交」自动校验
+   * （R2：任务完成必须提供 evidence——堵住不判题直接打点的口子）。并集去重，幂等。
    */
   public StageProgressDto reportExampleDone(
       long userId, long stageId, long problemId, Long submissionId) {
     MainlineStage raw = requireStage(stageId);
+    requireChapterUnlocked(userId, raw.chapter());
+    requireStageExample(raw, problemId);
     if (submissionId != null) {
       SubmissionDto submission =
           submissionRepository
@@ -287,6 +310,11 @@ public class MainlineService implements MainlineStageCompletionPort {
                           HttpStatus.BAD_REQUEST,
                           "EXAMPLE_SUBMISSION_INVALID",
                           "提交不存在或不属于本人"));
+      // 不比对题号则一次 AC 可刷满所有小节的「练」（拿 ch2 的 AC 去交 ch7 的例题）。
+      if (submission.problemId() == null || submission.problemId() != problemId) {
+        throw new BusinessException(
+            HttpStatus.BAD_REQUEST, "EXAMPLE_SUBMISSION_PROBLEM_MISMATCH", "该提交不是这道例题的提交");
+      }
       if (submission.status() != SubmissionStatus.PASSED) {
         throw new BusinessException(
             HttpStatus.BAD_REQUEST, "EXAMPLE_SUBMISSION_NOT_PASSED", "该提交尚未通过判题");
@@ -299,7 +327,7 @@ public class MainlineService implements MainlineStageCompletionPort {
           "该例题还没有通过判题的提交，先去训练场提交通过后再标记完成");
     }
     MainlineStageProgress progress = progressRepository.addExampleDone(userId, stageId, problemId);
-    return progressDto(userId, raw, progress, true);
+    return progressDto(userId, withChapterStandards(raw), progress, true);
   }
 
   // --- 完成重算端口（MainlineStageCompletionPort，供 P2 答对客观题后回调） ----------
@@ -318,13 +346,12 @@ public class MainlineService implements MainlineStageCompletionPort {
   // --- 内部 -----------------------------------------------------------------
 
   /**
-   * 统一回包：按动态章级标准（视频 80% / 整章页）+ 客观题维度构造响应；{@code applyCompletion} 为 true 时
-   * （即发生过有效写入）先触发完成判定。
+   * 统一回包：{@code stage} 须为已套用小节级标准的实例（{@link #withChapterStandards}）；
+   * {@code applyCompletion} 为 true 时（即发生过有效写入）先触发完成判定。
    */
   private StageProgressDto progressDto(
-      long userId, MainlineStage raw, MainlineStageProgress progress, boolean applyCompletion) {
-    MainlineStage stage = withChapterStandards(raw);
-    boolean questionsComplete = questionsComplete(userId, raw);
+      long userId, MainlineStage stage, MainlineStageProgress progress, boolean applyCompletion) {
+    boolean questionsComplete = questionsComplete(userId, stage);
     if (applyCompletion) {
       maybeComplete(userId, stage, progress, questionsComplete);
     }
@@ -384,15 +411,22 @@ public class MainlineService implements MainlineStageCompletionPort {
   /** 用动态章级标准覆盖 stage 的占位列（required_video_sec / courseware_page_ids / required_pages）。 */
   private MainlineStage withChapterStandards(MainlineStage stage) {
     return withChapterStandards(
-        stage, requiredVideoSec(stage.chapter()), chapterPageIds(stage.chapter()));
+        stage,
+        requiredVideoSec(stage.chapter()),
+        chapterPageIds(stage.chapter()),
+        chapterStageCount(stage.chapter()));
   }
 
   /**
-   * 用给定章级标准覆盖 stage：{@code required_video_sec} 取动态 80% 口径；{@code courseware_page_ids}
-   * 取整章页；{@code required_pages} 置 0 以走「覆盖全部 courseware_page_ids」判定（{@link StageCompletion}）。
+   * 章级标准 → <b>小节级</b>标准：{@code required_video_sec} 取章级 80% 口径按 stage 数均分；
+   * {@code courseware_page_ids} 取整章页按 stage 均分后的本节切片；{@code required_pages} 置 0 以走
+   * 「覆盖全部 courseware_page_ids」判定（{@link StageCompletion}）。
+   *
+   * <p>计数器是每小节一份的，若把章级值原样塞进每个 stage，实际要求会被放大 stage 数倍。
    */
   private MainlineStage withChapterStandards(
-      MainlineStage stage, int requiredVideoSec, List<Long> chapterPageIds) {
+      MainlineStage stage, int chapterVideoSec, List<Long> chapterPageIds, int chapterStageCount) {
+    int stageCount = Math.max(1, chapterStageCount);
     return new MainlineStage(
         stage.id(),
         stage.chapter(),
@@ -400,11 +434,60 @@ public class MainlineService implements MainlineStageCompletionPort {
         stage.title(),
         stage.kcCodes(),
         stage.videoKeyword(),
-        chapterPageIds,
+        pageSlice(chapterPageIds, stage.stageIndex(), stageCount),
         stage.exampleProblemIds(),
-        requiredVideoSec,
+        chapterVideoSec / stageCount,
         0,
         stage.requiredExampleCount());
+  }
+
+  /** 本章 stage 数（seed 静态数据；用于把章级标准均摊到小节）。 */
+  private int chapterStageCount(int chapter) {
+    return stageRepository.findByChapter(chapter).size();
+  }
+
+  /**
+   * 整章课件页按 stage 均分的第 {@code stageIndex}（1 基）片：前 {@code size % stageCount} 片各多一页，
+   * 保证无遗漏无重叠。stage 数 ≤1 或无页时原样返回。
+   */
+  static List<Long> pageSlice(List<Long> chapterPageIds, int stageIndex, int stageCount) {
+    if (chapterPageIds.isEmpty() || stageCount <= 1) {
+      return chapterPageIds;
+    }
+    int index = Math.min(Math.max(stageIndex, 1), stageCount) - 1;
+    int base = chapterPageIds.size() / stageCount;
+    int remainder = chapterPageIds.size() % stageCount;
+    int from = index * base + Math.min(index, remainder);
+    int to = from + base + (index < remainder ? 1 : 0);
+    return List.copyOf(chapterPageIds.subList(from, to));
+  }
+
+  /** 该 pageId 是否属于本小节课件切片（切片为空=占位期，一律视为不可打点）。 */
+  private static boolean isStagePage(MainlineStage stage, long pageId) {
+    return stage.coursewarePageIds().contains(pageId);
+  }
+
+  /** 批量打点白名单过滤：只留本小节切片内的 pageId（去重，保持入参顺序）。 */
+  private static List<Long> retainStagePages(MainlineStage stage, List<Long> pageIds) {
+    if (pageIds == null || pageIds.isEmpty() || stage.coursewarePageIds().isEmpty()) {
+      return List.of();
+    }
+    java.util.Set<Long> allowed = new java.util.HashSet<>(stage.coursewarePageIds());
+    return pageIds.stream().filter(allowed::contains).distinct().toList();
+  }
+
+  /** 例题须属于本小节（{@code example_problem_ids} 为空=未回填，放行以兼容占位期）。 */
+  private static void requireStageExample(MainlineStage stage, long problemId) {
+    List<Long> allowed = stage.exampleProblemIds();
+    if (!allowed.isEmpty() && !allowed.contains(problemId)) {
+      throw new BusinessException(
+          HttpStatus.BAD_REQUEST, "EXAMPLE_NOT_IN_STAGE", "该例题不属于本小节");
+    }
+  }
+
+  /** 章解锁硬 gate：前一章不足 1★ 时所有写路径与详情页一律拒绝（overview 的 unlocked 只是展示位）。 */
+  private void requireChapterUnlocked(long userId, int chapter) {
+    ChapterUnlockGuard.requireUnlocked(starRepository, userId, chapter);
   }
 
   /** 客观题是否全对（题库 bean 缺失 / 无题要求时降级为 true）。 */
