@@ -41,15 +41,21 @@ function fallbackRoute(
       }
       return { path: '/training' };
     case 'READ_RESOURCE': {
+      // 工坊深链约定是 { kc, type }（WorkshopChat.consumeDeepLink 二者缺一即放弃消费），
+      // 与 useNextSteps 同款；写 kcCode 会让「去工坊读资源」丢掉整个 KC 上下文。
       const query: QueryRecord = {};
-      if (options.kcCode) query.kcCode = options.kcCode;
+      if (options.kcCode) query.kc = options.kcCode;
       if (options.resourceType) query.type = options.resourceType;
       return { path: '/workshop', query };
     }
+    // FIX_BUG / PLANT_KC 与后端 LearningPathService.deepLinkParamsFor 保持同一张表，
+    // 避免「今日任务」与「本周路径」点同一节点跳到两个地方。
     case 'FIX_BUG':
-      return { path: '/world' };
+      return { path: '/world', query: { goto: 'town_hub' } };
     case 'PLANT_KC':
-      return { path: '/workshop' };
+      return options.kcCode
+        ? { path: '/world', query: { focus: `kc_${options.kcCode.toLowerCase()}` } }
+        : { path: '/world' };
     case 'PROFILE_UPDATE':
       return { path: '/profile-room' };
     default:

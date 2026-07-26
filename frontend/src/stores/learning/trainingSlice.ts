@@ -14,12 +14,29 @@ import type {
 
 export type TrainingPhase = 'idle' | 'previewing' | 'submitting' | 'done' | 'error';
 
+/**
+ * 切题后的默认代码模板：由 TrainingPanel 在「无草稿」时落盘（store 只负责清空，
+ * 保证「草稿 ?? 模板」的赋值发生在唯一一处，不会与去抖草稿保存打架）。
+ */
+export const DEFAULT_TRAINING_CODE = '# 在这里编写 Python 代码\n';
+
 export interface TrainingState {
   problem: PublicProblemDto | null;
   code: string;
   preview: PyodideRunResult | null;
   submission: SubmissionDetailDto | null;
-  phase: TrainingPhase;
+  /** 本地 Pyodide 预览轨道相位（「运行」按钮只看它）。 */
+  previewPhase: TrainingPhase;
+  /** 服务端判题轨道相位（「提交」按钮只看它，运行不会把它重置成可点）。 */
+  submitPhase: TrainingPhase;
+  /** 本地运行错误：只喂给 Output 区的 Python 报错翻译。 */
+  previewError: string | null;
+  /** 提交/判题错误：只喂给提交结果与 toast。 */
+  submitError: string | null;
+  /**
+   * 题目加载错误；同时镜像最近一次运行/提交错误，兼容仅读 lastError 的旧调用方
+   * （工坊 CodeLabView / PracticeList 在 runPyodidePreview 后读它）。
+   */
   lastError: string | null;
 }
 
@@ -40,7 +57,10 @@ export function createTrainingSlice(deps: TrainingSliceDeps) {
     code: '',
     preview: null,
     submission: null,
-    phase: 'idle',
+    previewPhase: 'idle',
+    submitPhase: 'idle',
+    previewError: null,
+    submitError: null,
     lastError: null,
   });
 
@@ -48,17 +68,20 @@ export function createTrainingSlice(deps: TrainingSliceDeps) {
     training.value.lastError = null;
     try {
       const problem = await getPublicProblem(problemId);
+      // 切题必须清空上一题代码：随后由 TrainingPanel 的 problemId watch 用
+      // 「草稿 ?? 模板」做一次确定性赋值。否则上一题代码会被去抖草稿保存写成新题草稿，
+      // 且模板从第二题起永远不再出现。
+      training.value.code = '';
       training.value.problem = problem;
       training.value.preview = null;
       training.value.submission = null;
-      training.value.phase = 'idle';
-      if (!training.value.code) {
-        training.value.code = '# 在这里编写 Python 代码\n';
-      }
+      training.value.previewPhase = 'idle';
+      training.value.submitPhase = 'idle';
+      training.value.previewError = null;
+      training.value.submitError = null;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       training.value.lastError = message;
-      training.value.phase = 'error';
     }
   }
 
@@ -67,31 +90,44 @@ export function createTrainingSlice(deps: TrainingSliceDeps) {
   }
 
   async function runPyodidePreview(stdin: string = ''): Promise<void> {
-    training.value.phase = 'previewing';
+    training.value.previewPhase = 'previewing';
+    training.value.previewError = null;
     training.value.lastError = null;
+    // 进入本地调试轨道：清掉上一次服务端判题结果，避免旧 verdict 与新运行输出并排误导。
+    // 注意只清「结果」，不碰 submitPhase —— 判题在途时清它就等于把提交按钮重新放开。
+    training.value.submission = null;
+    training.value.submitError = null;
     try {
       const runner = getPyodideRunner();
       await runner.init();
       const result = await runner.run(training.value.code, stdin);
       training.value.preview = result;
-      training.value.phase = 'done';
+      training.value.previewPhase = 'done';
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      training.value.previewError = message;
       training.value.lastError = message;
-      training.value.phase = 'error';
+      training.value.previewPhase = 'error';
     }
   }
 
   async function submitToServer(
     payload: SubmissionCreateRequest,
   ): Promise<SubmissionDetailDto | null> {
-    training.value.phase = 'submitting';
+    // 提交进行中再次进来（多入口/回车）直接拒绝，避免同一份代码重复入库、重复计掌握度与任务证据。
+    if (training.value.submitPhase === 'submitting') return null;
+    training.value.submitPhase = 'submitting';
+    training.value.submitError = null;
     training.value.lastError = null;
+    // 进入服务端判题轨道：清掉本地预览结果，避免「本地跑通了」被当成判题依据。
+    // 同样只清「结果」，运行在途时不改 previewPhase。
+    training.value.preview = null;
+    training.value.previewError = null;
     try {
       const created = await createSubmission(payload);
       const detail = await getSubmission(created.id);
       training.value.submission = detail;
-      training.value.phase = 'done';
+      training.value.submitPhase = 'done';
       // 判题结果回来即刷新情绪氛围（streak 同时计入 AC/WA，故无论通过与否都刷）。
       notifyMoodRefresh();
       await deps.loadTodayQuests();
@@ -117,8 +153,9 @@ export function createTrainingSlice(deps: TrainingSliceDeps) {
       return detail;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      training.value.submitError = message;
       training.value.lastError = message;
-      training.value.phase = 'error';
+      training.value.submitPhase = 'error';
       return null;
     }
   }

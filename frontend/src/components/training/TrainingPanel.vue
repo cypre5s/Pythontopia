@@ -6,7 +6,8 @@ import { useToastStore } from '@stores/toast';
 import { playSfx } from '@/composables/useAudio';
 import { warmPyodide } from '@/game/adapters/pyodide';
 import { translatePyError } from '@/utils/pyErrorHints';
-import { loadCodeDraft, saveCodeDraft } from '@/composables/useCodeDraft';
+import { clearCodeDraft, loadCodeDraft, saveCodeDraft } from '@/composables/useCodeDraft';
+import { DEFAULT_TRAINING_CODE } from '@stores/learning/trainingSlice';
 import { useCodeEditorTheme } from '@/composables/useCodeEditorTheme';
 import { useResizable } from '@/composables/useResizable';
 import MarkdownView from '@/components/common/MarkdownView.vue';
@@ -33,8 +34,9 @@ const isVariantMode = computed<boolean>(() => route.query.variant === '1' && var
 const problem = computed(() => learning.training.problem);
 
 // 运行报错「翻译」为初学者友好提示（匹配不到则不显示，仍保留原始 stderr）。
+// 只看本地运行轨道的错误：提交/判题失败不是 Python 运行错误，不能拿去翻译成运行提示。
 const previewErrorHint = computed(() =>
-  translatePyError(learning.training.preview?.stderr ?? learning.training.lastError),
+  translatePyError(learning.training.preview?.stderr ?? learning.training.previewError),
 );
 
 // 编辑器「暗色/亮色」开关上提到头部（AI 助教左侧），与编辑器共享同一份响应式状态。
@@ -73,24 +75,31 @@ watch(
 );
 
 // 代码草稿自动保存：切到某题时恢复该题草稿；编辑时去抖写入 localStorage（刷新/断网/切页不丢）。
+// 切题时 store 已把 code 清空 → 这里做唯一一次确定性赋值：有草稿用草稿，没草稿回落模板，
+// 绝不把上一题的代码带进新题（否则去抖保存会把 A 的代码写成 B 的草稿）。
 watch(
   () => problem.value?.id ?? null,
   (id) => {
     if (id == null) return;
-    const draft = loadCodeDraft(id);
-    if (draft != null && draft !== learning.training.code) {
-      learning.setTrainingCode(draft);
-    }
+    // 期间已被其它入口显式写入代码（如工坊「带着这段代码去训练场」）时保持不覆盖。
+    if (learning.training.code !== '') return;
+    learning.setTrainingCode(loadCodeDraft(id) ?? DEFAULT_TRAINING_CODE);
   },
   { immediate: true },
 );
 let draftSaveTimer: number | null = null;
+function cancelPendingDraftSave(): void {
+  if (draftSaveTimer !== null) {
+    window.clearTimeout(draftSaveTimer);
+    draftSaveTimer = null;
+  }
+}
 watch(
   () => learning.training.code,
   (code) => {
     const id = problem.value?.id;
     if (id == null) return;
-    if (draftSaveTimer !== null) window.clearTimeout(draftSaveTimer);
+    cancelPendingDraftSave();
     draftSaveTimer = window.setTimeout(() => saveCodeDraft(id, code), 500);
   },
 );
@@ -100,9 +109,10 @@ async function preview(): Promise<void> {
     toast.show('请先选择题目。', 'error');
     return;
   }
+  if (learning.training.previewPhase === 'previewing') return;
   await learning.runPyodidePreview(debugInput.value);
-  if (learning.training.lastError) {
-    toast.show(learning.training.lastError, 'error');
+  if (learning.training.previewError) {
+    toast.show(learning.training.previewError, 'error');
   }
 }
 
@@ -111,6 +121,8 @@ async function submit(): Promise<void> {
     toast.show('请先选择题目。', 'error');
     return;
   }
+  // 判题在途时任何入口都不再发第二次（按钮 disabled 之外的兜底：回车 / 快捷键 / 误触）。
+  if (learning.training.submitPhase === 'submitting') return;
   const code = learning.training.code.trim();
   if (!code) {
     toast.show('代码不能为空。', 'error');
@@ -147,13 +159,17 @@ async function submit(): Promise<void> {
     });
     if (!detail) {
       playSfx('sfx_error');
-      toast.show(learning.training.lastError ?? '提交失败', 'error');
+      toast.show(learning.training.submitError ?? '提交失败', 'error');
       return;
     }
     const verdict = detail.judgeResult?.verdict;
     if (verdict === 'AC') {
       playSfx('sfx_jingle_complete');
-      toast.show('提交通过，掌握进度 +0.10', 'success');
+      // 掌握度增量由后端按事件类型 × 难度系数计算（三档各不相同），前端不复述具体数字。
+      toast.show('提交通过，掌握进度已更新', 'success');
+      // AC 即清掉该题本地草稿（含在途的去抖保存），下次进来回落模板而不是旧草稿。
+      cancelPendingDraftSave();
+      clearCodeDraft(problem.value.id);
     } else if (verdict === 'CE') {
       playSfx('sfx_error');
       toast.show('代码静态检查未通过：' + (detail.judgeResult?.failureReason ?? ''), 'error');
@@ -412,7 +428,7 @@ async function copySample(text: string): Promise<void> {
                 test-id="preview-button"
                 variant="secondary"
                 size="sm"
-                :disabled="learning.training.phase === 'previewing'"
+                :disabled="learning.training.previewPhase === 'previewing'"
                 @click="preview"
               >
                 运行
@@ -421,7 +437,7 @@ async function copySample(text: string): Promise<void> {
                 test-id="submit-button"
                 variant="primary"
                 size="sm"
-                :disabled="learning.training.phase === 'submitting'"
+                :disabled="learning.training.submitPhase === 'submitting'"
                 @click="submit"
               >
                 提交代码
@@ -501,7 +517,7 @@ async function copySample(text: string): Promise<void> {
           <GuideNudgeCard
             v-if="guideNudgeVerdict"
             :verdict="guideNudgeVerdict"
-            :disabled="learning.training.phase === 'submitting'"
+            :disabled="learning.training.submitPhase === 'submitting'"
             @continue="onGuideNudgeContinue"
           />
         </article>
@@ -524,7 +540,10 @@ async function copySample(text: string): Promise<void> {
         data-testid="training-tutor-body"
       >
         <div class="tutor-drawer__body">
+          <!-- :key 绑题目 id：切题即重建面板（重新拉该题的工作流会话），
+               避免助教展示上一题的卡片/sessionKey 而事件按新 problemId 发出。 -->
           <TutorWorkflowPanel
+            :key="problem.id"
             :problem-id="problem.id"
             :kc-codes="tutorKcCodes"
             :submission-id="tutorSubmissionId"

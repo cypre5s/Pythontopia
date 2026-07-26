@@ -58,6 +58,13 @@ export function createPathSlice(deps: PathSliceDeps) {
       pathState.value.active = response.path;
       pathState.value.phase = 'ready';
       await deps.loadTodayQuests();
+      // 重新规划会归档上一版路径（response.archivedPathIds）：不刷新的话
+      //「历史路径」页签永远看不到刚归档的那版（首次规划因列表为空恰好蒙对）。
+      try {
+        await loadArchivedPaths();
+      } catch {
+        /* 历史路径刷新失败不影响本次规划结果 */
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       pathState.value.lastError = message;

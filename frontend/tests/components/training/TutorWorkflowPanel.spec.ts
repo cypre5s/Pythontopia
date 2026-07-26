@@ -77,6 +77,7 @@ vi.mock('@/composables/useSseStream', async () => {
 
 import { useSseStream } from '@/composables/useSseStream';
 import { recordTutorWorkflowFeedback } from '@/api/tutorWorkflow';
+import { useToastStore } from '@stores/toast';
 
 interface MockStream {
   status: { value: 'idle' | 'connecting' | 'streaming' | 'done' | 'error' };
@@ -88,6 +89,7 @@ interface MockStream {
   events: { value: unknown[] };
   state: { value: Record<string, unknown> };
   start: ReturnType<typeof vi.fn>;
+  abort: ReturnType<typeof vi.fn>;
 }
 
 function getStream(): MockStream {
@@ -122,7 +124,37 @@ describe('TutorWorkflowPanel', () => {
     stream.events.value = [];
     stream.state.value = {};
     stream.start.mockClear();
+    stream.abort.mockClear();
     vi.mocked(recordTutorWorkflowFeedback).mockClear();
+  });
+
+  it('aborts the in-flight stream on unmount and stays silent afterwards', async () => {
+    const stream = getStream();
+    let releaseRun: (() => void) | null = null;
+    stream.start.mockImplementationOnce(async () => {
+      stream.status.value = 'connecting';
+      await new Promise<void>((resolve) => {
+        releaseRun = resolve;
+      });
+      // useSseStream.abort() 会把在途状态置成 done，但 result 仍为空。
+      stream.status.value = 'done';
+    });
+
+    const wrapper = mountPanel();
+    await flushPromises();
+    await wrapper.get('[data-testid="tw-actions"] button').trigger('click');
+    await nextTick();
+
+    wrapper.unmount();
+    expect(stream.abort).toHaveBeenCalled();
+
+    releaseRun?.();
+    await flushPromises();
+
+    // 已销毁的面板不得再对着别的页面弹「导学助手暂时没响应」。
+    const toast = useToastStore();
+    expect(toast.message).toBe('');
+    expect(toast.visible).toBe(false);
   });
 
   it('highlights the coach recommended next action and tucks tools into a collapsible drawer', async () => {
