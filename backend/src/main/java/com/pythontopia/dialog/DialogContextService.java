@@ -3,24 +3,17 @@ package com.pythontopia.dialog;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.pythontopia.auth.domain.UserAccount;
 import com.pythontopia.auth.repository.UserRepository;
-import com.pythontopia.dialog.DialogContextRepository.EnergyRow;
 import com.pythontopia.dialog.DialogContextRepository.KcChapterRow;
 import com.pythontopia.dialog.DialogContextRepository.KcFailureRow;
 import com.pythontopia.dialog.DialogContextRepository.KcMasteryRow;
 import com.pythontopia.dialog.DialogContextRepository.LastFailureRow;
-import com.pythontopia.dialog.DialogContextRepository.PeerRow;
-import com.pythontopia.dialog.DialogContextRepository.ProblemRow;
 import com.pythontopia.dialog.DialogContextRepository.VerdictCountRow;
 import com.pythontopia.learner.profile.dto.CognitiveStyleDto;
 import com.pythontopia.learner.profile.dto.LearnerProfileDto;
 import com.pythontopia.learner.profile.repository.ProfileRepository;
-import com.pythontopia.world.calendar.CalendarService;
-import com.pythontopia.world.calendar.dto.CalendarTodayResponse;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.LocalDate;
 import java.time.OffsetDateTime;
-import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -37,12 +30,17 @@ import org.springframework.stereotype.Service;
  *
  * <ul>
  *   <li>{@link DialogContextRepository} — practice_submission / judge_result / kc_mastery /
- *       kc_mastery_event / course_kc / course_chapter / course_page /
- *       course_problem / classrooms / classroom_members / classroom_quest / world_session；
- *   <li>{@link ProfileRepository} — learner_profile（推断 {@code profileType}）；
- *   <li>{@link CalendarService} — 当前 in-game day / season（季节中文化、daily problem 种子）；
+ *       course_kc / course_chapter / course_page / course_problem / classrooms /
+ *       classroom_members / classroom_quest；
+ *   <li>{@link ProfileRepository} — learner_profile（推断 {@code profileType} / {@code cognitiveStyle}）；
  *   <li>{@link UserRepository} — display_name 兜底。
  * </ul>
+ *
+ * <p><b>产出集 = 消费集</b>：这里产出的每个 {@code stats.*} key 都被 {@code data/npcs/&#42;/dialog.json}
+ * 的模板真实引用（{@code profileType} / {@code cognitiveStyle} 另外镜像到 DTO 顶层驱动
+ * {@code profileAdaptive} / {@code styleAdaptive} 分支）。历史上这里多产出 27 个从未被任何模板引用的
+ * key（商店周限购、作物枯萎/成熟、每日题、能量、同伴对比等 R-14 已删玩法的残留），每次对话都白跑十余条
+ * SQL，已随本次收敛一并裁掉——新增 key 前请先确认模板里确有对应占位符。
  *
  * <p>所有字段缺数据时回退到空字符串或合理零值，模板渲染器拿到字符串即可直接拼接，
  * 不会出现 {@code {{stats.xxx}}} 字面量泄露到 UI。
@@ -57,17 +55,14 @@ public class DialogContextService {
 
   private final DialogContextRepository repository;
   private final ProfileRepository profileRepository;
-  private final CalendarService calendarService;
   private final UserRepository userRepository;
 
   public DialogContextService(
       DialogContextRepository repository,
       ProfileRepository profileRepository,
-      CalendarService calendarService,
       UserRepository userRepository) {
     this.repository = repository;
     this.profileRepository = profileRepository;
-    this.calendarService = calendarService;
     this.userRepository = userRepository;
   }
 
@@ -76,16 +71,14 @@ public class DialogContextService {
     OffsetDateTime now = OffsetDateTime.now();
     OffsetDateTime weekStart = now.minusDays(7);
     OffsetDateTime twoWeeksAgo = now.minusDays(14);
-    OffsetDateTime monthAgo = now.minusDays(30);
 
     Map<String, String> stats = new LinkedHashMap<>();
 
-    // 本周/上周/差值练习量
+    // 本周/上周练习量
     int exercisesThisWeek = repository.countSubmissions(userId, weekStart, now);
     int exercisesLastWeek = repository.countSubmissions(userId, twoWeeksAgo, weekStart);
     stats.put("exercisesThisWeek", Integer.toString(exercisesThisWeek));
     stats.put("exercisesLastWeek", Integer.toString(exercisesLastWeek));
-    stats.put("exercisesDelta", formatSignedInt(exercisesThisWeek - exercisesLastWeek));
 
     int failedThisWeek = repository.countFailedSubmissions(userId, weekStart, now);
     stats.put("failedSubmissionsThisWeek", Integer.toString(failedThisWeek));
@@ -96,23 +89,7 @@ public class DialogContextService {
     stats.put("kcUnlockedThisWeek", Integer.toString(kcThisWeek));
     stats.put("kcUnlockedLastWeek", Integer.toString(kcLastWeek));
 
-    List<String> unlockedKcs = repository.findUnlockedKcNames(userId, 3);
-    stats.put("kcUnlocked", Integer.toString(unlockedKcs.size()));
-    stats.put("kcUnlockedListShort", unlockedKcs.isEmpty() ? "—" : String.join("、", unlockedKcs));
-    repository
-        .findLatestUnlockedKcName(userId)
-        .ifPresentOrElse(
-            name -> stats.put("latestKcName", name),
-            () -> stats.put("latestKcName", unlockedKcs.isEmpty() ? "—" : unlockedKcs.get(0)));
-    repository.findNextLockedKc(userId).ifPresentOrElse(
-        name -> stats.put("nextKcName", name),
-        () -> stats.put("nextKcName", "下一道关"));
-    repository.findWitheredKcName(userId).ifPresentOrElse(
-        name -> stats.put("wiltedKcName", name),
-        () -> stats.put("wiltedKcName", "暂无枯萎地块"));
-    repository.findHarvestKcName(userId).ifPresentOrElse(
-        name -> stats.put("harvestKcName", name),
-        () -> stats.put("harvestKcName", "尚未成熟的地块"));
+    stats.put("kcUnlocked", Integer.toString(repository.findUnlockedKcNames(userId, 3).size()));
 
     // 本周最难关 + 全时段错误模式
     List<KcFailureRow> toughest = repository.findToughestKcs(userId, weekStart, now, 1);
@@ -138,20 +115,15 @@ public class DialogContextService {
       stats.put("lastFailedProblemTitle", "—");
       stats.put("lastFailedErrorType", "—");
       stats.put("lastFailedMineLevel", "1");
-      stats.put("anxiousLastFailProblemNo", "—");
-      stats.put("anxiousLastFailError", "—");
     } else {
       stats.put("lastFailedProblemTitle", nullSafe(lastFail.title(), "—"));
       stats.put("lastFailedErrorType", verdictToHuman(lastFail.verdict()));
       stats.put("lastFailedMineLevel", Integer.toString(Math.min(5, 1 + failedThisWeek / 3)));
-      stats.put("anxiousLastFailProblemNo", lastFail.problemId() == null ? "—" : lastFail.problemId().toString());
-      stats.put("anxiousLastFailError", verdictToHuman(lastFail.verdict()));
     }
 
     // 掌握度 / 最低掌握 KC / 当前章节
     KcMasteryRow lowest = repository.findLowestMasteryKc(userId).orElse(null);
     String lowestKcCode = lowest == null ? null : lowest.kcCode();
-    stats.put("lowestMasteryKcName", lowest == null ? "—" : lowest.kcName());
 
     Optional<BigDecimal> avgMastery = repository.findAverageMastery(userId);
     int masteryAvgPercent =
@@ -159,12 +131,6 @@ public class DialogContextService {
             .map(v -> v.multiply(new BigDecimal(100)).setScale(0, RoundingMode.HALF_UP).intValue())
             .orElse(0);
     stats.put("masteryAvg", Integer.toString(masteryAvgPercent));
-
-    BigDecimal deltaSum =
-        repository.findMasteryDeltaSum(userId, weekStart, now).orElse(BigDecimal.ZERO);
-    int deltaPercent =
-        deltaSum.multiply(new BigDecimal(100)).setScale(0, RoundingMode.HALF_UP).intValue();
-    stats.put("masteryDelta", formatSignedInt(deltaPercent));
 
     int currentChapterOrder = repository.findCurrentChapterOrder(userId).orElse(1);
     stats.put("currentChapterOrder", Integer.toString(currentChapterOrder));
@@ -208,60 +174,6 @@ public class DialogContextService {
             ? "—"
             : focusChapter.examplePage().toString());
 
-    // 题目数据 + 推荐
-    int problemsSolved = repository.countDistinctPassedProblems(userId);
-    stats.put("problemsSolved", Integer.toString(problemsSolved));
-    int allSubs = repository.countAllSubmissions(userId);
-    int passedSubs = repository.countPassedSubmissions(userId);
-    int firstAttemptRate = allSubs == 0 ? 0 : Math.round((passedSubs * 100f) / allSubs);
-    stats.put("firstAttemptRate", Integer.toString(firstAttemptRate));
-
-    long entryId = repository.findEntryProblemId().orElse(1L);
-    stats.put("entryProblemNo", Long.toString(entryId));
-
-    ProblemRow recommended = repository.findRecommendProblem(lowestKcCode).orElse(null);
-    if (recommended == null) {
-      stats.put("recommendProblemNo", Long.toString(entryId));
-      stats.put("recommendProblemDifficulty", "BEGINNER");
-    } else {
-      stats.put("recommendProblemNo", recommended.id().toString());
-      stats.put("recommendProblemDifficulty", recommended.difficulty());
-    }
-    long challengeId =
-        repository
-            .findChallengeProblemId()
-            .orElseGet(() -> recommended == null ? entryId : recommended.id());
-    stats.put("challengeProblemNo", Long.toString(challengeId));
-
-    // 每日题：用日历 dayIndex 做种子，保证同日稳定
-    CalendarTodayResponse calendar = safeCalendar(userId);
-    int daySeed = calendar == null ? (int) (now.toEpochSecond() / 86400) : calendar.dayIndex();
-    long dailyChallenge =
-        repository
-            .findDailyProblemByDifficulty("ADVANCED", daySeed + (int) (userId % 7))
-            .orElse(challengeId);
-    long dailyReview =
-        repository
-            .findDailyProblemByDifficulty("BEGINNER", daySeed + (int) (userId % 5))
-            .orElse(entryId);
-    stats.put("dailyChallengeProblemNo", Long.toString(dailyChallenge));
-    stats.put("dailyReviewProblemNo", Long.toString(dailyReview));
-
-    // 季节 + 能量 + 商店
-    if (calendar == null) {
-      stats.put("seasonName", "春");
-    } else {
-      stats.put("seasonName", seasonToChinese(calendar.season()));
-    }
-    EnergyRow energy = repository.findEnergy(userId).orElse(new EnergyRow(100, 100));
-    stats.put("energyCurrent", Integer.toString(energy.current()));
-    stats.put("energyMax", Integer.toString(energy.max()));
-
-    // 商店周限购：3 本基础减本周已购；无库存表，按本周 mastery 事件粗估
-    stats.put(
-        "merchantWeeklySpecialLeft",
-        Integer.toString(Math.max(0, 3 - Math.min(3, kcThisWeek / 2))));
-
     // 班级数据
     Long classroomId = repository.findStudentPrimaryClassroom(userId).orElse(null);
     if (classroomId == null) {
@@ -272,11 +184,6 @@ public class DialogContextService {
       stats.put("classFocusKcName", "—");
       stats.put("classFinalProblemNo", "—");
       stats.put("classWeeklyHotspotKc", "—");
-      stats.put("peerDiligentExercisesWeek", "—");
-      stats.put("peerDiligentMastery", "—");
-      stats.put("peerLateStarterMastery", "—");
-      stats.put("masteryDeltaVsLateStarter", "—");
-      stats.put("peerLateStarterMonthExercises", "—");
     } else {
       int memberCount = repository.countActiveMembers(classroomId);
       int onTrack = repository.countOnTrackMembers(classroomId, ON_TRACK_THRESHOLD);
@@ -302,41 +209,6 @@ public class DialogContextService {
           repository
               .findClassWeeklyHotspot(classroomId, weekStart, now)
               .orElse("—"));
-      PeerRow diligent =
-          repository.findMostDiligentPeer(classroomId, userId, weekStart, now).orElse(null);
-      if (diligent == null) {
-        stats.put("peerDiligentExercisesWeek", Integer.toString(Math.max(exercisesThisWeek, 1)));
-        stats.put("peerDiligentMastery", Integer.toString(masteryAvgPercent));
-      } else {
-        stats.put("peerDiligentExercisesWeek", Integer.toString(diligent.metric()));
-        stats.put(
-            "peerDiligentMastery",
-            Integer.toString(
-                diligent
-                    .avgMastery()
-                    .multiply(new BigDecimal(100))
-                    .setScale(0, RoundingMode.HALF_UP)
-                    .intValue()));
-      }
-      PeerRow lateStarter =
-          repository.findLateStarterPeer(classroomId, userId, monthAgo).orElse(null);
-      if (lateStarter == null) {
-        stats.put("peerLateStarterMastery", "—");
-        stats.put("masteryDeltaVsLateStarter", "—");
-        stats.put("peerLateStarterMonthExercises", "—");
-      } else {
-        int lateMasteryPercent =
-            lateStarter
-                .avgMastery()
-                .multiply(new BigDecimal(100))
-                .setScale(0, RoundingMode.HALF_UP)
-                .intValue();
-        stats.put("peerLateStarterMastery", Integer.toString(lateMasteryPercent));
-        stats.put(
-            "masteryDeltaVsLateStarter",
-            formatSignedInt(masteryAvgPercent - lateMasteryPercent));
-        stats.put("peerLateStarterMonthExercises", Integer.toString(lateStarter.metric()));
-      }
     }
 
     String displayName = resolveDisplayName(userId, username);
@@ -363,16 +235,6 @@ public class DialogContextService {
       return user.displayName();
     }
     return user.username() == null ? "学习者" : user.username();
-  }
-
-  private CalendarTodayResponse safeCalendar(Long userId) {
-    try {
-      return calendarService.today(userId);
-    } catch (RuntimeException ex) {
-      // 新用户尚未初始化世界、SQL 失败等：用当前真实日期兜底，不让接口因日历缺失而 500。
-      log.debug("calendar unavailable for user {}: {}", userId, ex.getMessage());
-      return null;
-    }
   }
 
   /**
@@ -437,28 +299,8 @@ public class DialogContextService {
     };
   }
 
-  private static String formatSignedInt(int value) {
-    if (value > 0) {
-      return "+" + value;
-    }
-    return Integer.toString(value);
-  }
-
   private static String nullSafe(String value, String fallback) {
     return value == null || value.isBlank() ? fallback : value;
-  }
-
-  private static String seasonToChinese(String season) {
-    if (season == null) {
-      return "春";
-    }
-    return switch (season.toLowerCase(Locale.ROOT)) {
-      case "spring" -> "春";
-      case "summer" -> "夏";
-      case "autumn", "fall" -> "秋";
-      case "winter" -> "冬";
-      default -> season;
-    };
   }
 
   /** verdict -> 中文短语，让 NPC 对话不会蹦出 'RUNTIME_ERROR' 这种生硬字面量。 */
@@ -495,11 +337,5 @@ public class DialogContextService {
       return "后 50%";
     }
     return "后 25%";
-  }
-
-  /** 仅供测试观察：暴露今日日期 ZoneId，便于日历缺失时回归。 */
-  @SuppressWarnings("unused")
-  static LocalDate utcToday() {
-    return LocalDate.now(ZoneId.of("UTC"));
   }
 }

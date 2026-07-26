@@ -1,24 +1,15 @@
 package com.pythontopia.agent.runtime;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
 import com.pythontopia.loop.LoopRunService;
 import com.pythontopia.loop.LoopRuntimeService;
-import com.pythontopia.loop.dto.LoopRunDto;
-import com.pythontopia.loop.dto.LoopRunRecordRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
-import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -26,24 +17,34 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * Agent Runtime 控制面（均需 STUDENT）：
+ *
+ * <ul>
+ *   <li>{@code POST /api/events}：领域事件入库（graph / 前端上报）；
+ *   <li>{@code POST /api/agent-runs/{id}/loop-states}：闭环状态机快照；
+ *   <li>{@code POST /api/agent-runs/{id}/policy-decisions}：策略判定审计。
+ * </ul>
+ *
+ * <p><b>run 本身的创建与查询不在这里</b>：唯一入口是 {@link com.pythontopia.loop.LoopController} 的
+ * {@code POST /api/loop/runs} 与 {@code GET /api/loop/runs/{id}}（同一 {@link LoopRunService}、同一
+ * {@code loop_run} 表）。历史上这里还镜像了一份 {@code POST /api/agent-runs} / {@code GET
+ * /api/agent-runs/{id}}，以及一个 {@code produces=text/event-stream} 却返回一次性拼好字符串的
+ * {@code /stream}——后者恒发 {@code RUN_STARTED + RUN_FINISHED}（{@code LoopRunDto} 根本没有 status
+ * 字段），会把运行中/已失败的 run 谎报成 FINISHED。三者已删除：重复端点用 {@code /api/loop/runs}，
+ * 需要真流式时应实现真正的增量推送而不是伪装 SSE。{@code {id}} 仍是 {@code loop_run.id}。
+ */
 @RestController
 @RequestMapping("/api")
 public class AgentRuntimeController {
 
   private final AgentRuntimeEventService eventService;
-  private final LoopRunService loopRunService;
   private final LoopRuntimeService runtimeService;
-  private final ObjectMapper objectMapper;
 
   public AgentRuntimeController(
-      AgentRuntimeEventService eventService,
-      LoopRunService loopRunService,
-      LoopRuntimeService runtimeService,
-      ObjectMapper objectMapper) {
+      AgentRuntimeEventService eventService, LoopRuntimeService runtimeService) {
     this.eventService = eventService;
-    this.loopRunService = loopRunService;
     this.runtimeService = runtimeService;
-    this.objectMapper = objectMapper;
   }
 
   @PostMapping("/events")
@@ -53,34 +54,6 @@ public class AgentRuntimeController {
       @Valid @RequestBody AgentRuntimeEventService.EventRequest request) {
     requireStudent(user);
     return eventService.recordEvent(user.userId(), request);
-  }
-
-  @PostMapping("/agent-runs")
-  @ResponseStatus(HttpStatus.CREATED)
-  public LoopRunDto createAgentRun(
-      @CurrentUser CurrentUserPrincipal user, @Valid @RequestBody LoopRunRecordRequest request) {
-    requireStudent(user);
-    return loopRunService.record(user.userId(), request);
-  }
-
-  @GetMapping("/agent-runs/{id}")
-  public LoopRunDto getAgentRun(@CurrentUser CurrentUserPrincipal user, @PathVariable Long id) {
-    requireStudent(user);
-    return loopRunService.getForOwner(user.userId(), id);
-  }
-
-  @GetMapping(path = "/agent-runs/{id}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-  public ResponseEntity<String> streamAgentRun(
-      @CurrentUser CurrentUserPrincipal user, @PathVariable Long id) {
-    requireStudent(user);
-    LoopRunDto run = loopRunService.getForOwner(user.userId(), id);
-    String body =
-        sse("RUN_STARTED", eventPayload(run, "STARTED"))
-            + sse("RUN_FINISHED", eventPayload(run, "FINISHED"));
-    return ResponseEntity.ok()
-        .cacheControl(CacheControl.noCache())
-        .contentType(MediaType.TEXT_EVENT_STREAM)
-        .body(body);
   }
 
   @PostMapping("/agent-runs/{id}/loop-states")
@@ -118,24 +91,6 @@ public class AgentRuntimeController {
         request.decision(),
         request.reason(),
         request.traceId());
-  }
-
-  private ObjectNode eventPayload(LoopRunDto run, String status) {
-    ObjectNode node = objectMapper.createObjectNode();
-    node.put("runId", run.id());
-    node.put("userId", run.userId());
-    node.put("sessionId", run.sessionId());
-    node.put("traceId", run.traceId());
-    node.put("status", status);
-    return node;
-  }
-
-  private String sse(String event, ObjectNode data) {
-    try {
-      return "event: " + event + "\n" + "data: " + objectMapper.writeValueAsString(data) + "\n\n";
-    } catch (JsonProcessingException ex) {
-      throw new IllegalStateException("Unable to serialize agent runtime SSE event", ex);
-    }
   }
 
   private void requireStudent(CurrentUserPrincipal user) {
