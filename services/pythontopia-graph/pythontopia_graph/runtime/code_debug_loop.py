@@ -22,6 +22,10 @@ from pythontopia_graph.schemas.loop_contract import (
 )
 
 DebugVerdict = Literal["AC", "WA", "RE", "TLE", "CE", "MLE", "SYSTEM_ERROR"]
+# 触发调试循环的首次提交只接受「失败类」判定：AC 不是 Debug 的输入（通过的提交无需调试），
+# 混进来会被映成 wrong_answer、按 output_mismatch 产出假设、并以 0.8 置信度写回学生画像。
+# 在契约边界显式拒绝（路由层直接 422），而不是在循环内部悄悄纠正。
+DebugFailureVerdict = Literal["WA", "RE", "TLE", "CE", "MLE", "SYSTEM_ERROR"]
 FailureKind = Literal[
     "wrong_answer",
     "runtime_error",
@@ -40,7 +44,7 @@ class DebugSubmissionSnapshot(BaseModel):
     problem_id: int = Field(ge=1)
     user_id: int = Field(ge=1)
     kc_codes: list[str] = Field(default_factory=list)
-    verdict: DebugVerdict
+    verdict: DebugFailureVerdict
     code: str = Field(max_length=8192)
     counter_example: CounterExampleCard
     variable_trace: VariableTrace = Field(default_factory=VariableTrace)
@@ -75,7 +79,7 @@ class CodeDebugLoopRequest(BaseModel):
 class FailureObservation(BaseModel):
     submission_id: int
     problem_id: int
-    verdict: DebugVerdict
+    verdict: DebugFailureVerdict
     failure_kind: FailureKind
     target_kcs: list[str]
     attempt_count: int = Field(ge=1)
@@ -188,6 +192,10 @@ class CodeDebugLoop:
         evidence_refs = self._evidence_refs(request)
         attempt_count = request.prior_failure_count + 1
         risk_flags: list[str] = []
+        if request.failure.verdict == "SYSTEM_ERROR":
+            # 评测机/沙箱自身故障，不是学生的代码错误：既不能据此产出「你哪里写错了」
+            # 的假设，也不能写回错误模式画像。
+            risk_flags.append("judge_system_error")
         if not evidence_refs:
             risk_flags.append("missing_evidence")
         if attempt_count >= request.max_debug_attempts:
@@ -206,6 +214,8 @@ class CodeDebugLoop:
     def _hypothesize(
         self, request: CodeDebugLoopRequest, observation: FailureObservation
     ) -> list[DebugHypothesis]:
+        if "judge_system_error" in observation.risk_flags:
+            return self._system_error_hypotheses(observation)
         if "missing_evidence" in observation.risk_flags:
             return self._missing_evidence_hypotheses(observation)
         if request.failure.verdict == "RE":
@@ -245,6 +255,24 @@ class CodeDebugLoop:
         ]
         return sorted(hypotheses, key=lambda item: item.confidence, reverse=True)
 
+    def _system_error_hypotheses(
+        self, observation: FailureObservation
+    ) -> list[DebugHypothesis]:
+        """评测机故障只有一个诚实的解释：判定不来自学生代码，重判前不下学习结论。"""
+        return [
+            DebugHypothesis(
+                hypothesis_id=f"{observation.submission_id}:judge_system_error",
+                angle="runtime_behavior",
+                root_cause="judge_system_error",
+                confidence=0.4,
+                evidence_refs=observation.evidence_refs,
+                evidence_summary=(
+                    "The judge reported an infrastructure failure, so this verdict "
+                    "carries no signal about the submitted code."
+                ),
+            )
+        ]
+
     def _missing_evidence_hypotheses(
         self, observation: FailureObservation
     ) -> list[DebugHypothesis]:
@@ -266,6 +294,13 @@ class CodeDebugLoop:
         observation: FailureObservation,
         top_hypothesis: DebugHypothesis,
     ) -> HintPlan:
+        if "judge_system_error" in observation.risk_flags:
+            return HintPlan(
+                level=1,
+                disclosure_policy="evidence_only",
+                message="The judge hit a system error; resubmit for a real verdict before changing the code.",
+                related_pages=[],
+            )
         if "missing_evidence" in observation.risk_flags:
             return HintPlan(
                 level=1,
@@ -348,7 +383,8 @@ class CodeDebugLoop:
         observation: FailureObservation,
         top_hypothesis: DebugHypothesis,
     ) -> DebugMemoryWriteback:
-        if "missing_evidence" in observation.risk_flags:
+        # 评测机故障与证据缺失都不构成「学生的错误模式」证据，一律不写回 8 维画像。
+        if {"judge_system_error", "missing_evidence"} & set(observation.risk_flags):
             return DebugMemoryWriteback(writeback_recommended=False)
         submission_ids = [request.failure.submission_id]
         if request.resubmission is not None:
@@ -366,6 +402,8 @@ class CodeDebugLoop:
         comparison: ResubmissionComparison,
         transfer_task: TransferTask,
     ) -> tuple[LoopRunStatus, str, list[str]]:
+        if "judge_system_error" in observation.risk_flags:
+            return "REJECTED", "judge_system_error", ["resubmit:formal-judge"]
         if "missing_evidence" in observation.risk_flags:
             return "REJECTED", "missing_debug_evidence", ["request:debug-evidence"]
         if transfer_task.assignment_type == "prerequisite_remediation":
@@ -450,7 +488,9 @@ class CodeDebugLoop:
         if not any((existing.type, str(existing.id)) == key for existing in refs):
             refs.append(ref)
 
-    def _failure_kind(self, verdict: DebugVerdict) -> FailureKind:
+    def _failure_kind(self, verdict: DebugFailureVerdict) -> FailureKind:
+        # AC 不在映射里：它已被 DebugSubmissionSnapshot 的契约挡在入口之外，
+        # 绝不能再被悄悄映成 wrong_answer。
         return {
             "WA": "wrong_answer",
             "RE": "runtime_error",
@@ -458,7 +498,6 @@ class CodeDebugLoop:
             "CE": "compile_error",
             "MLE": "memory_error",
             "SYSTEM_ERROR": "system_error",
-            "AC": "wrong_answer",
         }[verdict]  # type: ignore[return-value]
 
     def _stderr_summary(self, request: CodeDebugLoopRequest) -> str:

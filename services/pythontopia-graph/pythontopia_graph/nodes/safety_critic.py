@@ -10,10 +10,16 @@ from pythontopia_graph.schemas.resource import (
 )
 
 
+# PII 正则单一来源：resource 流水线（本模块）/ 答疑答后审查（nodes/tutor_review）/
+# 章测卷面审查（agents/paper_reviews）三处共用，避免各自抄一份后漂移。
 PII_PATTERNS = [
-    re.compile(r"\b1[3-9]\d{9}\b"),
-    re.compile(r"\b\d{15}|\d{17}[0-9Xx]\b"),
-    re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"),
+    re.compile(r"\b1[3-9]\d{9}\b"),  # 手机号
+    # 身份证：15 位旧号 或 18 位新号（末位校验位可为 X）。两个分支必须整体包进
+    # (?:...) 再由 \b 夹住——写成 `\b\d{15}|\d{17}[0-9Xx]\b` 会被解析为
+    # `(\b\d{15})|(\d{17}[0-9Xx]\b)`，于是任意 ≥15 位数字串（如 16 位毫秒时间戳）
+    # 都会命中 PII_DETECTED；而 safety_critic 失败在 resource_graph 里是终止性的。
+    re.compile(r"\b(?:\d{15}|\d{17}[0-9Xx])\b"),  # 身份证
+    re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"),  # 邮箱
 ]
 ANSWER_LEAK_KEYWORDS = [
     "hidden_test_cases",

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from pythontopia_graph.main import app
 from pythontopia_graph.runtime.code_debug_loop import (
@@ -163,6 +165,51 @@ def test_missing_evidence_rejects_without_memory_writeback() -> None:
     assert result.hint.disclosure_policy == "evidence_only"
     assert result.memory_writeback.writeback_recommended is False
     assert result.next_actions == ["request:debug-evidence"]
+
+
+def test_accepted_submission_is_rejected_at_the_failure_snapshot_contract() -> None:
+    """AC 不是 Debug 循环的输入：契约边界直接拒绝，而不是被映成 wrong_answer。"""
+    with pytest.raises(ValidationError):
+        failure(verdict="AC")
+
+
+def test_accepted_verdict_returns_422_from_route(monkeypatch) -> None:
+    monkeypatch.setenv("PYT_INTERNAL_AUTH_OPTIONAL", "1")
+    client = TestClient(app)
+    body = request().model_dump(mode="json")
+    body["failure"]["verdict"] = "AC"
+
+    response = client.post("/runtime/code-debug-runs", json=body)
+
+    assert response.status_code == 422
+
+
+def test_system_error_does_not_blame_student_or_write_back_memory() -> None:
+    """评测机故障是基础设施信号：不产出学生错因假设，也不污染 8 维画像。"""
+    result = CodeDebugLoop().run(request(failed=failure(verdict="SYSTEM_ERROR")))
+
+    assert result.failure_observation.failure_kind == "system_error"
+    assert "judge_system_error" in result.failure_observation.risk_flags
+    assert [item.root_cause for item in result.hypotheses] == ["judge_system_error"]
+    assert result.hypotheses[0].root_cause != "output_mismatch"
+    assert result.memory_writeback.writeback_recommended is False
+    assert result.memory_writeback.error_pattern == ""
+    assert result.memory_writeback.confidence == 0.0
+    assert result.status == "REJECTED"
+    assert result.stop_reason == "judge_system_error"
+    assert result.next_actions == ["resubmit:formal-judge"]
+    assert result.hint.disclosure_policy == "evidence_only"
+    assert isinstance(LoopResult.model_validate(result.loop_result.model_dump()), LoopResult)
+
+
+def test_system_error_takes_priority_over_max_attempts_fallback() -> None:
+    result = CodeDebugLoop().run(
+        request(failed=failure(verdict="SYSTEM_ERROR"), prior_failure_count=2)
+    )
+
+    assert result.status == "REJECTED"
+    assert result.stop_reason == "judge_system_error"
+    assert result.memory_writeback.writeback_recommended is False
 
 
 def test_three_failed_attempts_fallback_to_prerequisite_remediation() -> None:

@@ -14,7 +14,13 @@ from pythontopia_graph.nodes.evidence_fetcher import (
     RagHit,
     StaticEvidenceFetcher,
 )
-from pythontopia_graph.schemas.resource import ResourceProduceRequest
+from pythontopia_graph.nodes.safety_critic import safety_critic
+from pythontopia_graph.schemas.resource import (
+    HandoutContent,
+    HandoutSection,
+    ResourceDraft,
+    ResourceProduceRequest,
+)
 
 
 class StubProvider(LlmProvider):
@@ -121,6 +127,37 @@ async def test_resource_graph_safety_failure_raises() -> None:
     )
     with pytest.raises(ResourceGraphError):
         await graph.run(request_of("HANDOUT"))
+
+
+def _handout_draft(paragraph: str) -> ResourceDraft:
+    return ResourceDraft(
+        title="讲义",
+        summary="PII 正则回归",
+        content_format="MARKDOWN",
+        handout=HandoutContent(
+            sections=[HandoutSection(heading="section", paragraphs=[paragraph])]
+        ),
+    )
+
+
+def test_safety_critic_does_not_flag_long_numbers_as_pii() -> None:
+    """16 位毫秒时间戳不是身份证：旧正则的运算符优先级错误会误判 PII_DETECTED。
+
+    safety_critic 失败在 resource_graph 里是终止性的（直接 raise，不重试），
+    误判等于让含长数字的讲义被永久拒绝。
+    """
+    result = safety_critic(_handout_draft("时间戳 1719999999999999 表示毫秒。"))
+
+    assert result.passed is True
+    assert "PII_DETECTED" not in result.reasons
+
+
+def test_safety_critic_still_flags_15_and_18_digit_id_numbers() -> None:
+    # 中国身份证 15 位（旧）与 18 位（新，末位可为 X）两个分支都必须保留。
+    for id_number in ("110101900307451", "11010119900307451X"):
+        result = safety_critic(_handout_draft(f"身份证 {id_number} 请勿外泄。"))
+        assert result.passed is False
+        assert "PII_DETECTED" in result.reasons
 
 
 @pytest.mark.asyncio

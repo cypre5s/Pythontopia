@@ -213,6 +213,8 @@ class StudentLearningLoop:
                     if kc in repeated_failures:
                         repeated_failures[kc] += 1
         risk_flags: list[str] = []
+        if not focus_kcs:
+            risk_flags.append("missing_kc")
         if any(count >= 2 for count in repeated_failures.values()):
             risk_flags.append("repeated_failure")
         if self._low_mastery_focus(request, focus_kcs):
@@ -241,6 +243,15 @@ class StudentLearningLoop:
                 root_causes=["insufficient_evidence"],
                 confidence=0.4,
                 evidence_refs=[],
+                risk_flags=observation.risk_flags,
+            )
+        if "missing_kc" in observation.risk_flags:
+            # 事件与 KC 状态都没带出知识点：不猜、不造占位码，只能要求补齐映射。
+            return Diagnosis(
+                gap_kcs=[],
+                root_causes=["missing_kc"],
+                confidence=0.4,
+                evidence_refs=observation.evidence_refs,
                 risk_flags=observation.risk_flags,
             )
         if "formal_judge_required" in observation.risk_flags:
@@ -290,6 +301,14 @@ class StudentLearningLoop:
                 stop_condition="Wait for a course page, KC, resource, or formal judge reference.",
                 message="Evidence is missing, so the loop only asks for grounded learning evidence.",
             )
+        if diagnosis.root_causes == ["missing_kc"]:
+            return TeachingPlan(
+                intervention_type="evidence_review",
+                target_kcs=[],
+                evidence_refs=diagnosis.evidence_refs,
+                stop_condition="Wait for the event or KC state to carry a real KC code.",
+                message="No knowledge component could be resolved, so the loop does not guess one.",
+            )
         if diagnosis.root_causes == ["practice_success"]:
             return TeachingPlan(
                 intervention_type="consolidation",
@@ -330,6 +349,15 @@ class StudentLearningLoop:
                 requires_formal_judge=False,
                 problem_id=problem_id,
                 prompt="Collect a real course page or formal judge reference before making a strong diagnosis.",
+            )
+        if diagnosis.root_causes == ["missing_kc"]:
+            return PracticeAssignment(
+                assignment_type="evidence_micro_check",
+                target_kcs=[],
+                difficulty="basic",
+                requires_formal_judge=False,
+                problem_id=problem_id,
+                prompt="Attach the KC code to this event before assigning any targeted practice.",
             )
         if diagnosis.root_causes == ["pyodide_preview_only"]:
             return PracticeAssignment(
@@ -389,7 +417,8 @@ class StudentLearningLoop:
         observation: ObservationSnapshot,
         diagnosis: Diagnosis,
     ) -> LearnerUpdatePlan:
-        if diagnosis.root_causes == ["insufficient_evidence"]:
+        # 证据缺失 / KC 未知：不下发任何掌握度增量、画像补丁或复习计划。
+        if diagnosis.root_causes in (["insufficient_evidence"], ["missing_kc"]):
             return LearnerUpdatePlan()
         if diagnosis.root_causes == ["pyodide_preview_only"]:
             return LearnerUpdatePlan(
@@ -434,6 +463,8 @@ class StudentLearningLoop:
     ) -> tuple[LoopRunStatus, str, list[str]]:
         if diagnosis.root_causes == ["insufficient_evidence"]:
             return "REJECTED", "missing_evidence", ["request:learner-evidence"]
+        if diagnosis.root_causes == ["missing_kc"]:
+            return "REJECTED", "missing_kc", ["request:kc-mapping"]
         if practice_assignment.assignment_type == "formal_submission":
             return "PARTIAL", "formal_judge_evidence_required", ["submit:formal-judge"]
         return "SUCCESS", "completed", ["complete:student_learning_loop"]
@@ -497,7 +528,10 @@ class StudentLearningLoop:
         for state in request.kc_states:
             if state.kc_code not in codes:
                 codes.append(state.kc_code)
-        return codes or ["UNKNOWN_KC"]
+        # 解析不到 KC 时返回空列表，绝不编一个 "UNKNOWN_KC" 占位码：占位码会一路流到
+        # kc_mastery_deltas / ReviewScheduleItem，把虚构知识点当成真实写指令下发给后端。
+        # 由 _observe 标 missing_kc、_termination 判 REJECTED（同 missing_evidence 路径）。
+        return codes
 
     def _event_kcs(self, event: EventEnvelope) -> list[str]:
         values = event.context.get("kc_codes") or event.payload.get("kc_codes")

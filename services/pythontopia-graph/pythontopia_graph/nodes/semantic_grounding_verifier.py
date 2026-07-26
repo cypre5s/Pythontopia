@@ -84,7 +84,12 @@ async def _llm_entailment_judgment(
 ) -> tuple[bool, list[str]] | None:
     """调轻量 LLM 判断「强断言是否被证据支持」。
 
-    返回 (False, [reason]) = 不支持；(True, []) = 支持；None = 调用/解析异常（由调用方降级规则）。
+    返回 (False, [reason]) = 不支持；(True, []) = 支持；None = 调用/解析异常或裁决不合约
+    （由调用方降级规则）。
+
+    ``supported`` 必须是 **布尔 True** 才算通过：字符串 ``"false"``、嵌套结构、缺字段、
+    ``content_json is None`` 等一律视为「没拿到裁决」→ 返回 None 降级规则版核验，
+    而不是默认判「支持」（那等于 entailment 这道关静默失能）。
     """
     try:
         response = await provider.chat([{
@@ -95,10 +100,15 @@ async def _llm_entailment_judgment(
         }])
     except Exception:  # noqa: BLE001 - 任何上游失败都交给调用方降级规则，不抛
         return None
-    result = response.content_json or {}
-    if result.get("supported") is False:
+    result = response.content_json
+    if not isinstance(result, dict):
+        return None
+    supported = result.get("supported")
+    if supported is True:
+        return True, []
+    if supported is False:
         return False, [str(result.get("reason") or "LLM判定论述不被证据支持")]
-    return True, []
+    return None
 
 
 async def verify_entailment(

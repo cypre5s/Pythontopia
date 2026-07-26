@@ -82,6 +82,16 @@ def test_safety_flags_pii() -> None:
     assert safety_review("联系我 13800138000。").passed is False
 
 
+def test_safety_shares_pii_patterns_with_resource_safety_critic() -> None:
+    """答疑侧与资源侧共用同一份 PII 正则：15 位身份证要拦、16 位时间戳不能误伤。"""
+    from pythontopia_graph.nodes import safety_critic as resource_safety
+    from pythontopia_graph.nodes import tutor_review
+
+    assert tutor_review._PII_PATTERNS is resource_safety.PII_PATTERNS
+    assert safety_review("身份证 110101900307451 请勿外泄。").passed is False
+    assert safety_review("这条日志的时间戳是 1719999999999999。").passed is True
+
+
 def test_safety_passes_clean_answer() -> None:
     assert safety_review("for 循环可以遍历列表，先想想边界条件。").passed is True
 

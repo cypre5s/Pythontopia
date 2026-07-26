@@ -111,6 +111,20 @@ def provider_supports_tool_calling(provider: object) -> bool:
     return bool(getattr(provider, "supports_tool_calling", False))
 
 
+# 仅供 provider 包装层消费、绝不能进入上游请求体的 kwargs。
+# - guard_context：含 semantic_validator 等可调用对象，随 body 一起 json.dumps 会直接
+#   抛 TypeError（默认部署 PYT_FINE_TUNED_LLM_ENABLED=false 时没有 FineTunedFallbackProvider
+#   帮忙 pop，CodeLab/Handout 等 Agent 会 100% 崩在序列化上）。
+# - agent_route：RoutedFineTunedProvider 的内部路由信号，上游不认。
+_NON_WIRE_KWARGS = ("guard_context", "agent_route")
+
+
+def _drop_non_wire_kwargs(kwargs: dict[str, object]) -> None:
+    """就地移除只属于本进程 provider 包装层的 kwargs（不影响任何真实上游参数）。"""
+    for name in _NON_WIRE_KWARGS:
+        kwargs.pop(name, None)
+
+
 class LlmProvider(Protocol):
     async def chat(
         self, messages: list[dict[str, str]], *, json_mode: bool = True, **kwargs: object
@@ -323,6 +337,7 @@ class OpenAiCompatProvider:
         self, messages: list[dict[str, str]], *, json_mode: bool = True, **kwargs: object
     ) -> LlmResponse:
         model = self._resolve_model(kwargs)
+        _drop_non_wire_kwargs(kwargs)
         # 按需结构化输出（json_mode）：仅当 json_mode=True（默认）才强制
         # response_format=json_object——资源/画像/图解/证据注/辩论等依赖 JSON 的调用沿用默认；
         # 纯文本答疑（导师作答 / 修订 / 考考我点评）显式传 json_mode=False，避免回答被压成
@@ -358,6 +373,7 @@ class OpenAiCompatProvider:
         self, messages: list[dict[str, str]], **kwargs: object
     ) -> AsyncIterator[str]:
         model = self._resolve_model(kwargs)
+        _drop_non_wire_kwargs(kwargs)
         url = f"{self.base_url.rstrip('/')}/chat/completions"
         payload: dict[str, object] = {
             "model": model,
