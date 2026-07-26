@@ -44,6 +44,7 @@ class _RoutingMetrics:
     def _reset_locked(self) -> None:
         self._routes_total = 0
         self._routes_clarification = 0
+        self._routes_error = 0
         self._routes_by_complexity: Counter[str] = Counter()
         self._c3_with_search = 0
         self._selected_candidates: Counter[str] = Counter()
@@ -71,6 +72,14 @@ class _RoutingMetrics:
                 self._selected_candidates[decision.search.selected_candidate_id] += 1
             self._route_latencies.append(max(0, int(latency_ms)))
 
+    def record_route_error(self, *, latency_ms: int) -> None:
+        """策略门抛错（RoutePolicyError 等）也要进分母，否则故障期指标反而更好看。"""
+        with self._lock:
+            self._routes_total += 1
+            self._routes_error += 1
+            self._routes_by_complexity["ERROR"] += 1
+            self._route_latencies.append(max(0, int(latency_ms)))
+
     def record_execution(
         self,
         *,
@@ -96,6 +105,7 @@ class _RoutingMetrics:
                 "routes": {
                     "total": self._routes_total,
                     "clarifications": self._routes_clarification,
+                    "errors": self._routes_error,
                     "byComplexity": dict(self._routes_by_complexity),
                     "c3WithSearch": self._c3_with_search,
                     "selectedCandidates": dict(self._selected_candidates),
@@ -105,6 +115,7 @@ class _RoutingMetrics:
                     },
                     "clarificationRate": _rate(self._routes_clarification, self._routes_total),
                     "c3Rate": _rate(self._c3_with_search, self._routes_total),
+                    "errorRate": _rate(self._routes_error, self._routes_total),
                 },
                 "executions": {
                     "total": self._executions_total,
@@ -121,6 +132,9 @@ class _RoutingMetrics:
                         self._executions_by_status["PARTIAL"], self._executions_total
                     ),
                     "switchRate": _rate(self._candidate_switches, self._executions_total),
+                    "errorRate": _rate(
+                        self._executions_by_status["ERROR"], self._executions_total
+                    ),
                 },
             }
 
@@ -130,6 +144,10 @@ _METRICS = _RoutingMetrics()
 
 def record_route(decision: RouteDecision, *, latency_ms: int) -> None:
     _METRICS.record_route(decision, latency_ms=latency_ms)
+
+
+def record_route_error(*, latency_ms: int) -> None:
+    _METRICS.record_route_error(latency_ms=latency_ms)
 
 
 def record_execution(

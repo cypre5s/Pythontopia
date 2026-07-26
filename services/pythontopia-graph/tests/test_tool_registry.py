@@ -30,10 +30,14 @@ def test_registry_matches_intent_kind_literal() -> None:
         assert spec.name == name
 
 
-def test_quiz_scope_shrinks_to_ask_and_review() -> None:
-    """考核模式工具集收缩：只剩 ASK/REVIEW（防止被考时跑去生成讲义逃避作答）。"""
+def test_quiz_scope_shrinks_to_ask_review_and_askme() -> None:
+    """考核模式工具集收缩：只剩 ASK/REVIEW/ASKME（防止被考时跑去生成讲义逃避作答）。
+
+    ASKME 必须在集合内——考核中「再考我一道」是合法诉求，且策略门与
+    ``_clamp_to_scope`` 共用这一个集合，少了它两套规则会互相否决成强制澄清。
+    """
     quiz_names = {spec.name for spec in tools_for_scope("quiz")}
-    assert quiz_names == {"ASK", "REVIEW"}
+    assert quiz_names == {"ASK", "REVIEW", "ASKME"}
     # default 作用域必须包含全部 17 工具。
     default_names = {spec.name for spec in tools_for_scope("default")}
     assert default_names == set(ALL_TOOL_NAMES)
@@ -44,7 +48,8 @@ def test_intent_catalog_lines_follow_scope() -> None:
     default_lines = intent_catalog_lines("default")
     assert len(default_lines) == 17
     quiz_lines = intent_catalog_lines("quiz")
-    assert len(quiz_lines) == 2
+    assert len(quiz_lines) == 3
+    assert {line.split("=", 1)[0] for line in quiz_lines} == {"ASK", "REVIEW", "ASKME"}
     for line in default_lines:
         name = line.split("=", 1)[0]
         assert name in ALL_TOOL_NAMES

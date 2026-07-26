@@ -99,8 +99,11 @@ def compile_task_plan(
             if tool_name not in TOOLS:
                 raise TaskPlanPolicyError(f"unknown tool: {tool_name}")
             spec = TOOLS[tool_name]
-            agent = spec.allowed_agents[0] if spec.allowed_agents else "OrchestratorAgent"
-            tool_agents.append((tool_name, agent))
+            if not spec.allowed_agents:
+                # 前端工具没有可执行 Agent；绝不用兜底 Agent 名把它塞进 DAG，
+                # 否则派发器会按默认分支执行另一个（被 forbidden 的）工具。
+                raise TaskPlanPolicyError(f"tool has no registered agent: {tool_name}")
+            tool_agents.append((tool_name, spec.allowed_agents[0]))
     steps: list[PlanStep] = []
     sequential = decision.orchestration.topology in {"SEQUENTIAL", "PLANNER_EXECUTOR"}
     for index, (tool_name, agent) in enumerate(tool_agents):
