@@ -10,6 +10,17 @@ import { mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { createMemoryHistory, createRouter, type Router } from 'vue-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { FastTravelRouteOverride } from '../_helpers/fastTravelRoutes';
+
+// R-14 快速旅行 gate：单 hub 下面板整体休眠、根本挂不出 DOM，
+// 校验 role/aria 契约必须先把路线表恢复到 >1。详见 tests/_helpers/fastTravelRoutes.ts。
+const ftRoutes: FastTravelRouteOverride = vi.hoisted(() => ({ routes: null }));
+vi.mock('@/data/fastTravel', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/data/fastTravel')>();
+  const { createFastTravelModuleMock } = await import('../_helpers/fastTravelRoutes');
+  return createFastTravelModuleMock(actual, ftRoutes);
+});
+
 import { useI18n } from '@/composables/useI18n';
 import { useHudStore } from '@stores/hud';
 import { useWorldStore } from '@stores/world';
@@ -18,6 +29,7 @@ import MiniMap from '@/components/hud/MiniMap.vue';
 import SettingsModal from '@/components/hud/SettingsModal.vue';
 import FastTravelPanel from '@/components/hud/FastTravelPanel.vue';
 import NotFoundPage from '@/pages/NotFoundPage.vue';
+import { RESTORED_FAST_TRAVEL_ROUTES } from '../_helpers/fastTravelRoutes';
 
 vi.mock('vue-router', async () => {
   const actual = await vi.importActual<typeof import('vue-router')>('vue-router');
@@ -203,21 +215,32 @@ describe('a11y.integration · 弹窗 role/aria', () => {
     expect(wrapper.get('[data-testid="settings-close"]').attributes('aria-label')).toBe('关闭设置');
   });
 
+  // R-14 单 hub 下面板整体休眠（唯一路线就是玩家所在地 → 打开只是一条死路），
+  // 所以先用模拟路线表把入口打开，再校验它 *能* 挂出来时的无障碍契约；
+  // 「休眠时不挂出来」由 settings-fasttravel.integration.spec.ts 负责。
   it('FastTravelPanel 打开后 role=dialog', async () => {
-    const world = useWorldStore();
-    world.player = {
-      playerStateId: 1,
-      avatarKey: 'x',
-      mapKey: 'town_hub',
-      tileX: 0,
-      tileY: 0,
-      direction: 'DOWN',
-    };
-    const wrapper = mount(FastTravelPanel, { attachTo: document.body });
-    window.dispatchEvent(new CustomEvent('pythontopia:fast-travel-open'));
-    await wrapper.vm.$nextTick();
-    expect(wrapper.get('[data-testid="fast-travel-panel"]').attributes('role')).toBe('dialog');
-    wrapper.unmount();
+    ftRoutes.routes = RESTORED_FAST_TRAVEL_ROUTES;
+    try {
+      const world = useWorldStore();
+      world.player = {
+        playerStateId: 1,
+        avatarKey: 'x',
+        mapKey: 'town_hub',
+        tileX: 0,
+        tileY: 0,
+        direction: 'DOWN',
+      };
+      const wrapper = mount(FastTravelPanel, { attachTo: document.body });
+      window.dispatchEvent(new CustomEvent('pythontopia:fast-travel-open'));
+      await wrapper.vm.$nextTick();
+      const panel = wrapper.get('[data-testid="fast-travel-panel"]');
+      expect(panel.attributes('role')).toBe('dialog');
+      expect(panel.attributes('aria-modal')).toBe('true');
+      expect(panel.attributes('aria-label')).toBe('快速旅行');
+      wrapper.unmount();
+    } finally {
+      ftRoutes.routes = null;
+    }
   });
 });
 

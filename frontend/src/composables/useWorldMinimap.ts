@@ -45,6 +45,7 @@ function normalizeMapKey(value: unknown): MapKey {
     farm: 'town_hub',
     farm_north: 'town_hub',
     mine: 'town_hub',
+    mine_south: 'town_hub',
     campus: 'town_hub',
     campus_east: 'town_hub',
     port: 'town_hub',

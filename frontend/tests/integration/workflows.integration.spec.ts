@@ -12,15 +12,20 @@
 import { mount, flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { createMemoryHistory, createRouter, type Router } from 'vue-router';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
+import { defineComponent, h } from 'vue';
 import { router as appRouter } from '@/app/router';
 import { useSessionStore } from '@stores/session';
 import { useHudStore } from '@stores/hud';
 import { useCalendarStore } from '@stores/calendar';
 import { useWorldStore } from '@stores/world';
 import { useDialogStore } from '@stores/dialog';
+import {
+  __resetMinimapCacheForTest,
+  useWorldMinimap,
+  type UseWorldMinimapReturn,
+} from '@/composables/useWorldMinimap';
 import HudShell from '@/components/hud/HudShell.vue';
-import FastTravelPanel from '@/components/hud/FastTravelPanel.vue';
 import FestivalRibbon from '@/components/hud/FestivalRibbon.vue';
 import type { WorldCalendarDto } from '@/api/dto/WorldCalendarDto';
 
@@ -233,35 +238,95 @@ describe('workflows.integration · Calendar + Festival 联动', () => {
   });
 });
 
-describe('workflows.integration · FastTravel + World player 联动', () => {
+// R-14 方案A：世界收缩为单一 town_hub，外围图（mine_south / farm_north /
+// campus_east / port_west）从主线与导航中弃用。但旧存档里的 player.mapKey 仍会
+// 带着这些 key 从后端回来，必须被归一到 town_hub，否则 minimap 会整块消失。
+//
+// 这组用例原先绕 FastTravelPanel 验证（点 hub 行把 player 写回 town_hub）；
+// 单 hub 下快速旅行入口已整体休眠（唯一路线就是玩家所在地 = 死路，见
+// src/data/fastTravel.ts 的 FAST_TRAVEL_ENABLED），面板不再挂出来。
+// 真正有价值的「旧存档别名归一」能力现在活在 useWorldMinimap 的别名表里，
+// 故改为直接验证它，而不是绕一个已被 gate 掉的组件。
+describe('workflows.integration · 旧存档地图别名归一到 town_hub', () => {
+  let fetchSpy: MockInstance<typeof globalThis.fetch>;
+
   beforeEach(() => {
     setActivePinia(createPinia());
+    __resetMinimapCacheForTest();
+    fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url =
+        typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.endsWith('/assets/maps/index.json')) {
+        return {
+          ok: true,
+          json: async () => ({ maps: [{ key: 'town_hub', label: 'Pythontopia 小镇' }] }),
+        } as unknown as Response;
+      }
+      if (url.endsWith('/assets/maps/town_hub.json')) {
+        return {
+          ok: true,
+          json: async () => ({
+            width: 2,
+            height: 2,
+            tilewidth: 16,
+            layers: [
+              { type: 'tilelayer', name: 'ground', width: 2, height: 2, data: [1, 1, 1, 1] },
+            ],
+          }),
+        } as unknown as Response;
+      }
+      // 外围图 JSON 已随 R-14 删除：真去拉必然 404。
+      return { ok: false, json: async () => ({}) } as unknown as Response;
+    });
   });
 
-  // R-14 方案A：世界收缩为单一 town_hub，快速旅行只剩 hub 一条路线。
-  // 验证点击 hub 路线会把 player 写回 town_hub（FastTravel ↔ worldStore 联动）。
+  afterEach(() => {
+    fetchSpy.mockRestore();
+    __resetMinimapCacheForTest();
+  });
+
+  function mountMinimapHost(): { hook: UseWorldMinimapReturn; unmount: () => void } {
+    const handle: { hook: UseWorldMinimapReturn } = {
+      hook: null as unknown as UseWorldMinimapReturn,
+    };
+    const Host = defineComponent({
+      setup() {
+        handle.hook = useWorldMinimap();
+        return () => h('div');
+      },
+    });
+    const wrapper = mount(Host);
+    return { hook: handle.hook, unmount: () => wrapper.unmount() };
+  }
+
   it.each([
     'mine_south',
     'farm_north',
     'campus_east',
     'port_west',
-  ])('从 %s（含旧存档别名）通过 FastTravel 回到 town_hub', async (from) => {
+  ])('旧存档 mapKey=%s 被归一到 town_hub（minimap 不消失）', async (legacyKey) => {
     const world = useWorldStore();
     world.player = {
       playerStateId: 1,
       avatarKey: 'x',
-      mapKey: from,
-      tileX: 0,
-      tileY: 0,
+      mapKey: legacyKey,
+      tileX: 3,
+      tileY: 4,
       direction: 'DOWN',
     };
-    const wrapper = mount(FastTravelPanel, { attachTo: document.body });
-    window.dispatchEvent(new CustomEvent('pythontopia:fast-travel-open'));
+    const { hook, unmount } = mountMinimapHost();
     await flushPromises();
-    await wrapper.find('[data-testid="fast-travel-hub"]').trigger('click');
     await flushPromises();
-    expect(world.player.mapKey).toBe('town_hub');
-    wrapper.unmount();
+
+    expect(hook.data.value?.mapKey).toBe('town_hub');
+    // 归一必须发生在 fetch 之前：绝不能去拉已删除的外围图 JSON。
+    const requested = fetchSpy.mock.calls.map(([input]) => String(input));
+    expect(requested).toContain('/assets/maps/town_hub.json');
+    expect(requested.some((url) => url.includes(legacyKey))).toBe(false);
+    // 玩家坐标照常同步，不因别名归一而丢失。
+    expect(hook.playerX.value).toBe(3);
+    expect(hook.playerY.value).toBe(4);
+    unmount();
   });
 });
 

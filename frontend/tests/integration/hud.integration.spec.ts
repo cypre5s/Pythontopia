@@ -14,8 +14,20 @@ import { mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { createMemoryHistory, createRouter, type Router } from 'vue-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { FastTravelRouteOverride } from '../_helpers/fastTravelRoutes';
+
+// R-14 快速旅行 gate：默认透传真实路线表（单 hub），需要「恢复多图」的用例把
+// ftRoutes.routes 换成模拟路线表。详见 tests/_helpers/fastTravelRoutes.ts。
+const ftRoutes: FastTravelRouteOverride = vi.hoisted(() => ({ routes: null }));
+vi.mock('@/data/fastTravel', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/data/fastTravel')>();
+  const { createFastTravelModuleMock } = await import('../_helpers/fastTravelRoutes');
+  return createFastTravelModuleMock(actual, ftRoutes);
+});
+
 import HudShell from '@/components/hud/HudShell.vue';
 import { useHudStore } from '@stores/hud';
+import { RESTORED_FAST_TRAVEL_ROUTES } from '../_helpers/fastTravelRoutes';
 
 function makeRouter(): Router {
   return createRouter({
@@ -36,6 +48,8 @@ function mountShell() {
 describe('hud.integration: 全键位 + 工具区 + 边界', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
+    // 默认透传真实路线表（R-14 单 hub）；需要多路线的用例自行覆盖。
+    ftRoutes.routes = null;
   });
 
   // R-15：dock 删「任务」槽；「地图」改为跳冒险地图（见下方单独用例），故仅 dialog/skill 切 activeSlot。
@@ -133,7 +147,21 @@ describe('hud.integration: 全键位 + 工具区 + 边界', () => {
     wrapper.unmount();
   });
 
-  it('keydown "t" 触发 window 快速旅行 CustomEvent', async () => {
+  // R-14：世界收缩为单一 town_hub 后快速旅行只剩一条「原地」路线，面板打开也只有
+  // 一行永久 disabled 的按钮。HudShell 因此按 FAST_TRAVEL_ENABLED gate 掉 T 键，
+  // 旧断言（T 一定派发 CustomEvent）随之翻转。
+  it('keydown "t" 在单 hub 下不再派发快速旅行 CustomEvent', async () => {
+    const wrapper = mountShell();
+    const handler = vi.fn();
+    window.addEventListener('pythontopia:fast-travel-open', handler);
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 't' }));
+    expect(handler).not.toHaveBeenCalled();
+    window.removeEventListener('pythontopia:fast-travel-open', handler);
+    wrapper.unmount();
+  });
+
+  it('路线恢复到 >1 时 keydown "t" 重新派发快速旅行 CustomEvent', async () => {
+    ftRoutes.routes = RESTORED_FAST_TRAVEL_ROUTES;
     const wrapper = mountShell();
     const handler = vi.fn();
     window.addEventListener('pythontopia:fast-travel-open', handler);
