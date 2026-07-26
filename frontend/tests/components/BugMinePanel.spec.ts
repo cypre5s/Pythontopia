@@ -341,6 +341,48 @@ describe('BugMinePanel', () => {
     });
   });
 
+  it('hides echo candidates whose KC already has an OPEN error book entry', async () => {
+    // 入矿不会改变该 KC 的 FSRS 到期状态：候选还留在列表里，再点一次就是第二条同 KC 会话。
+    vi.mocked(getBugMineErrorBook).mockResolvedValue([
+      buildErrorBookItem({ sessionId: 100, kcCode: 'PY43-KC-016' }),
+    ]);
+    vi.mocked(getBugMineEchoes).mockResolvedValue([
+      buildEchoCandidate({ kcCode: 'PY43-KC-016' }),
+      buildEchoCandidate({ kcCode: 'PY43-KC-020', problemId: 480 }),
+    ]);
+
+    const wrapper = mountPanel();
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="echo-candidate-PY43-KC-016"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="echo-candidate-PY43-KC-020"]').exists()).toBe(true);
+  });
+
+  it('collapses duplicate error book entries for the same KC and problem', async () => {
+    vi.mocked(getBugMineErrorBook).mockResolvedValue([
+      buildErrorBookItem({ sessionId: 100, minePriority: 0.9 }),
+      buildErrorBookItem({ sessionId: 101, minePriority: 0.4 }),
+      buildErrorBookItem({ sessionId: 102, problemId: 999, problemTitle: '另一题' }),
+    ]);
+
+    const wrapper = mountPanel();
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="error-book-item-100"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="error-book-item-101"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="error-book-item-102"]').exists()).toBe(true);
+  });
+
+  it('does not offer a DONE filter the error book API can never fill', async () => {
+    // 后端错题本查询固定 status = 'OPEN'，「已完成」分段恒为空视图。
+    const wrapper = mountPanel();
+    await flushPromises();
+
+    const segments = wrapper.findAll('.seg__btn').map((btn) => btn.text());
+    expect(segments).toEqual(['全部', '进行中']);
+    expect(wrapper.find('[data-testid="error-book"]').text()).not.toContain('自动入册');
+  });
+
   it('retry button posts new code and refreshes session', async () => {
     vi.mocked(retryBugMineSubmit).mockResolvedValue({
       id: 999,

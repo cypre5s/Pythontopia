@@ -21,6 +21,7 @@ vi.mock('@/api/classroomQuests', () => ({
 import {
   planLearningPath,
   getActiveLearningPath,
+  getArchivedLearningPaths,
 } from '@/api/path';
 import {
   startQuest,
@@ -33,6 +34,7 @@ describe('learning store path/quests slice', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     vi.mocked(getActiveLearningPath).mockResolvedValue(null);
+    vi.mocked(getArchivedLearningPaths).mockResolvedValue([]);
     vi.mocked(getTodayQuests).mockResolvedValue([]);
   });
 
@@ -67,6 +69,75 @@ describe('learning store path/quests slice', () => {
     expect(store.pathState.phase).toBe('ready');
     expect(store.pathState.active?.id).toBe(1);
     expect(getTodayQuests).toHaveBeenCalled();
+  });
+
+  it('planPath refreshes the archived path list so the just archived version shows up', async () => {
+    vi.mocked(planLearningPath).mockResolvedValue({
+      path: {
+        id: 2,
+        userId: 7,
+        packId: 43,
+        version: 2,
+        status: 'ACTIVE',
+        goalSummary: 'v2',
+        generatedAt: '2026-05-22T18:00:00Z',
+        nextReviewAt: null,
+        sourceRunId: null,
+        nodes: [],
+      },
+      archivedPathIds: [1],
+      generatedQuestCount: 0,
+      runStatus: 'SUCCESS',
+      groundingMessage: 'OK',
+    });
+    vi.mocked(getArchivedLearningPaths).mockResolvedValue([
+      {
+        id: 1,
+        userId: 7,
+        packId: 43,
+        version: 1,
+        status: 'ARCHIVED',
+        goalSummary: 'v1',
+        generatedAt: '2026-05-21T18:00:00Z',
+        nextReviewAt: null,
+        sourceRunId: null,
+        nodes: [],
+      },
+    ]);
+
+    const store = useLearningStore();
+    // 已有历史路径的场景：ArchivedPathsTab 只在列表为空时拉，所以刷新必须由 planPath 负责。
+    store.pathState.archived = [];
+    await store.planPath();
+
+    expect(getArchivedLearningPaths).toHaveBeenCalled();
+    expect(store.pathState.archived.map((path) => path.id)).toEqual([1]);
+  });
+
+  it('planPath still reports success when the archived path refresh fails', async () => {
+    vi.mocked(planLearningPath).mockResolvedValue({
+      path: {
+        id: 3,
+        userId: 7,
+        packId: 43,
+        version: 3,
+        status: 'ACTIVE',
+        goalSummary: 'v3',
+        generatedAt: '2026-05-23T18:00:00Z',
+        nextReviewAt: null,
+        sourceRunId: null,
+        nodes: [],
+      },
+      archivedPathIds: [],
+      generatedQuestCount: 0,
+      runStatus: 'SUCCESS',
+      groundingMessage: 'OK',
+    });
+    vi.mocked(getArchivedLearningPaths).mockRejectedValue(new Error('归档接口 500'));
+
+    const store = useLearningStore();
+    await expect(store.planPath()).resolves.toBeUndefined();
+    expect(store.pathState.phase).toBe('ready');
   });
 
   it('startQuestById replaces today quest with IN_PROGRESS state', async () => {

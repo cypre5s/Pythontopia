@@ -59,6 +59,7 @@ export const useLearningStore = defineStore('learning', () => {
   const evaluationSlice = createEvaluationSlice({
     loadActivePath: pathSlice.loadActivePath,
     loadTodayQuests: questsSlice.loadTodayQuests,
+    loadArchivedPaths: pathSlice.loadArchivedPaths,
   });
 
   /**

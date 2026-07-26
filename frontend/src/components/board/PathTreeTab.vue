@@ -38,7 +38,8 @@ function actionLabelFor(node: LearningPathNodeDto): string {
     case 'FIX_BUG':
       return '去矿洞修 Bug';
     case 'PLANT_KC':
-      return '去田里种知识';
+      // R-14 已废弃农场隐喻：该节点实际跳世界地图（/world?focus=kc_xxx），文案与行为对齐。
+      return '去世界解锁知识点';
     case 'PROFILE_UPDATE':
       return '去画像屋更新';
     default:
