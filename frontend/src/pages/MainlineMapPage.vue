@@ -161,7 +161,21 @@ function goOpenEndless(chapter: number): void {
   // 无尽模式补星：跳已存在的 /endless 并锁定本章范围。
   void router.push({ path: '/endless', query: { chapter: String(chapter) } });
 }
+function goOpenBoss(chapter: number): void {
+  // 章末 BOSS：入口只在本章 ≥1★ 时渲染，路由守卫再做一次权威校验。
+  void router.push({ path: `/boss/${chapter}` });
+}
+function goGraduation(): void {
+  void router.push({ path: '/graduation' });
+}
+
+/** 正在申领补星的章节（null = 空闲）：并发守卫，避免连点连发两次申领。 */
+const claimingChapter = ref<number | null>(null);
+
 async function onClaimErrorbook(chapter: number): Promise<void> {
+  // 幂等接口 + 连点 = 第一次「补星 +1 ★」、第二次「尚未满足补星条件」两条互斥提示同屏。
+  if (claimingChapter.value !== null) return;
+  claimingChapter.value = chapter;
   try {
     const awarded = await store.claimErrorbookRecovery(chapter);
     toast.show(
@@ -170,8 +184,15 @@ async function onClaimErrorbook(chapter: number): Promise<void> {
     );
   } catch (error) {
     toast.show(error instanceof Error ? error.message : '补星申领失败', 'error');
+  } finally {
+    claimingChapter.value = null;
   }
 }
+
+/** 毕业条件（与 GraduationPage / 后端权威星级同口径）：7 章全部 ≥1★。 */
+const graduated = computed<boolean>(
+  () => store.chapters.length >= 7 && store.chapters.every((c) => c.stars >= 1),
+);
 
 function closeDrawer(): void {
   store.selectChapter(null);
@@ -225,6 +246,17 @@ onBeforeUnmount(() => {
         <h1 class="map-title">
           冒险地图
         </h1>
+        <!-- 主线终局入口：7 章全部 ≥1★ 时才出现（此前 /graduation 全仓只有 BossPage 一条跳转，
+             学生除非手输 URL 否则永远走不到毕业典礼）。 -->
+        <button
+          v-if="graduated"
+          type="button"
+          class="map-back map-graduation"
+          data-testid="mainline-graduation"
+          @click="goGraduation"
+        >
+          🎓 前往毕业典礼
+        </button>
         <span
           class="map-total-stars"
           data-testid="mainline-total-stars"
@@ -287,10 +319,12 @@ onBeforeUnmount(() => {
             </button>
             <ChapterStagePanel
               :chapter="selectedView"
+              :claiming-errorbook="claimingChapter === selectedView.chapter"
               @enter-stage="goEnterStage"
               @open-test="goOpenTest"
               @open-endless="goOpenEndless"
               @claim-errorbook="onClaimErrorbook"
+              @open-boss="goOpenBoss"
             />
           </aside>
         </transition>
@@ -369,6 +403,11 @@ onBeforeUnmount(() => {
 .map-back:active {
   transform: translate(1px, 1px);
   box-shadow: none;
+}
+.map-graduation {
+  background: var(--pyt-color-gold-bright);
+  border-color: var(--pyt-color-gold);
+  font-weight: 700;
 }
 .map-state {
   padding: var(--pyt-space-4);

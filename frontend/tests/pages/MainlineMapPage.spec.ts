@@ -79,6 +79,8 @@ function setupRouter(): Router {
       { path: '/bug-mine', component: { template: '<div data-testid="bugmine-stub" />' } },
       { path: '/mainline/stage/:stageId', component: { template: '<div data-testid="stage-stub" />' } },
       { path: '/chapter-test/:chapter', component: { template: '<div data-testid="test-stub" />' } },
+      { path: '/boss/:chapter', component: { template: '<div data-testid="boss-stub" />' } },
+      { path: '/graduation', component: { template: '<div data-testid="graduation-stub" />' } },
     ],
   });
 }
@@ -203,6 +205,55 @@ describe('MainlineMapPage', () => {
     } finally {
       window.removeEventListener('pointerup', phaserPointerUp);
     }
+  });
+
+  it('章末 BOSS 入口跳 /boss/:chapter（仅 ≥1★ 的章节渲染）', async () => {
+    const { wrapper: w, router } = await mountPage();
+    // 默认选中第 2 章（1★）→ 有 BOSS 入口。
+    await w.get('[data-testid="mainline-open-boss"]').trigger('click');
+    await flushPromises();
+    expect(router.currentRoute.value.path).toBe('/boss/2');
+  });
+
+  it('未毕业时不渲染毕业典礼入口；七章全部 ≥1★ 时给出显式入口', async () => {
+    const { wrapper: w } = await mountPage();
+    expect(w.find('[data-testid="mainline-graduation"]').exists()).toBe(false);
+    w.unmount();
+    wrapper = null;
+
+    mocks.getMainlineOverview.mockReset();
+    mocks.getMainlineOverview.mockResolvedValue({
+      totalStars: 7,
+      chapters: [1, 2, 3, 4, 5, 6, 7].map((c) =>
+        chapter({ chapter: c, title: `第${c}章`, unlocked: true, stars: 1 }),
+      ),
+    });
+    const { wrapper: w2, router } = await mountPage();
+    expect(w2.find('[data-testid="mainline-graduation"]').exists()).toBe(true);
+    await w2.get('[data-testid="mainline-graduation"]').trigger('click');
+    await flushPromises();
+    expect(router.currentRoute.value.path).toBe('/graduation');
+  });
+
+  it('连点「错题复盘补星」只发一次申领（防两条互斥提示同屏）', async () => {
+    let resolveClaim: ((v: { starAwarded: boolean }) => void) | null = null;
+    mocks.postRecoveryErrorbook.mockImplementation(
+      () => new Promise<{ starAwarded: boolean }>((resolve) => { resolveClaim = resolve; }),
+    );
+    const { wrapper: w } = await mountPage();
+    await w.get('[data-testid="mainline-node-btn-3"]').trigger('click');
+    await flushPromises();
+
+    const button = w.get('[data-testid="mainline-claim-errorbook"]');
+    await button.trigger('click');
+    await flushPromises();
+    expect(button.attributes('disabled')).toBeDefined();
+    await button.trigger('click');
+    await flushPromises();
+
+    expect(mocks.postRecoveryErrorbook).toHaveBeenCalledTimes(1);
+    resolveClaim?.({ starAwarded: false });
+    await flushPromises();
   });
 
   it('shows an error state with retry when overview load fails', async () => {

@@ -13,6 +13,8 @@ import StarBadge from './StarBadge.vue';
 
 const props = defineProps<{
   chapter: MainlineChapterDto;
+  /** 错题复盘补星申领进行中：禁用按钮，避免连点连弹「补星 +1 ★」与「尚未满足补星条件」两条互斥提示。 */
+  claimingErrorbook?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -20,6 +22,7 @@ const emit = defineEmits<{
   (e: 'open-test', chapter: number): void;
   (e: 'open-endless', chapter: number): void;
   (e: 'claim-errorbook', chapter: number): void;
+  (e: 'open-boss', chapter: number): void;
 }>();
 
 const nodeState = computed(() => chapterNodeState(props.chapter));
@@ -29,6 +32,8 @@ const allStagesComplete = computed<boolean>(
   () => progress.value.total > 0 && progress.value.done === progress.value.total,
 );
 const isFullStar = computed<boolean>(() => props.chapter.stars >= 3);
+// 章末 BOSS 入口：本章已解锁且已通过章末大测试（≥1★）。与 router 的 /boss/:chapter 守卫同口径。
+const bossUnlocked = computed<boolean>(() => unlocked.value && props.chapter.stars >= 1);
 // 断点续学焦点：第一个未完成小节。它的入口升格为「继续学习」主 CTA 并高亮，
 // 学生打开抽屉即知从哪继续，不用逐行扫进度条。
 const resumeStageId = computed<number | null>(() =>
@@ -48,9 +53,13 @@ const TEST_STATUS_LABEL: Record<ChapterTestStatus, string> = {
   FAILED: '生成失败',
 };
 
-/** 单件进度比例 0..1：required ≤ 0 视为已满（无要求）。 */
+/**
+ * 单件进度比例 0..1。
+ * required ≤ 0 = 本节该维度无要求：**不画满格**。旧写法 return 1 会把「0/0」渲染成
+ * 100% 满绿条（R-14 起 requiredExamples 常为 0），学生看到三条全绿却拿不到 ✓。
+ */
 function ratio(value: number, required: number): number {
-  if (required <= 0) return 1;
+  if (required <= 0) return 0;
   return Math.max(0, Math.min(1, value / required));
 }
 function percent(value: number, required: number): string {
@@ -62,29 +71,43 @@ interface StagePiece {
   label: string;
   text: string;
   pct: string;
+  /** 本维度无要求（required ≤ 0）：文本显示「—」，进度条走虚线空态而非满格。 */
+  na: boolean;
+}
+
+function piece(
+  key: StagePiece['key'],
+  label: string,
+  value: number,
+  required: number,
+  text: string,
+): StagePiece {
+  const na = required <= 0;
+  return { key, label, text: na ? '—' : text, pct: percent(value, required), na };
 }
 
 function pieces(stage: MainlineStageDto): StagePiece[] {
   return [
-    {
-      key: 'video',
-      label: '看',
-      text: `${stage.videoWatchedSec}/${stage.requiredVideoSec}s`,
-      pct: percent(stage.videoWatchedSec, stage.requiredVideoSec),
-    },
-    {
-      key: 'pages',
-      label: '学',
-      text: `${stage.pagesRead}/${stage.requiredPages}`,
-      pct: percent(stage.pagesRead, stage.requiredPages),
-    },
-    {
-      key: 'examples',
-      label: '练',
-      text: `${stage.examplesDone}/${stage.requiredExamples}`,
-      pct: percent(stage.examplesDone, stage.requiredExamples),
-    },
+    piece('video', '看', stage.videoWatchedSec, stage.requiredVideoSec, `${stage.videoWatchedSec}/${stage.requiredVideoSec}s`),
+    piece('pages', '学', stage.pagesRead, stage.requiredPages, `${stage.pagesRead}/${stage.requiredPages}`),
+    piece('examples', '练', stage.examplesDone, stage.requiredExamples, `${stage.examplesDone}/${stage.requiredExamples}`),
   ];
+}
+
+/**
+ * overview DTO 里的三件套计数是否都已达标。
+ * 服务端的 stage.completed 还包含 overview **没有**的「本节客观题全对」维度，
+ * 所以「三条全满 + 无 ✓」是正常的——此时给出显式线索，别让学生对着满格进度条猜。
+ */
+function metersFull(stage: MainlineStageDto): boolean {
+  return (
+    stage.videoWatchedSec >= stage.requiredVideoSec
+    && stage.pagesRead >= stage.requiredPages
+    && stage.examplesDone >= stage.requiredExamples
+  );
+}
+function needsQuestionHint(stage: MainlineStageDto): boolean {
+  return !isStageComplete(stage) && metersFull(stage);
 }
 </script>
 
@@ -153,21 +176,30 @@ function pieces(stage: MainlineStageDto): StagePiece[] {
         </div>
         <div class="stage__pieces">
           <div
-            v-for="piece in pieces(stage)"
-            :key="piece.key"
+            v-for="p in pieces(stage)"
+            :key="p.key"
             class="piece"
-            :data-testid="`mainline-stage-${stage.id}-${piece.key}`"
+            :class="{ 'piece--na': p.na }"
+            :data-testid="`mainline-stage-${stage.id}-${p.key}`"
+            :data-na="p.na ? 'true' : 'false'"
           >
-            <span class="piece__label">{{ piece.label }}</span>
+            <span class="piece__label">{{ p.label }}</span>
             <span class="piece__bar">
               <span
                 class="piece__fill"
-                :style="{ width: piece.pct }"
+                :style="{ width: p.pct }"
               />
             </span>
-            <span class="piece__text">{{ piece.text }}</span>
+            <span class="piece__text">{{ p.na ? '本节无要求' : p.text }}</span>
           </div>
         </div>
+        <p
+          v-if="needsQuestionHint(stage)"
+          class="stage__gap"
+          :data-testid="`mainline-stage-${stage.id}-question-gap`"
+        >
+          看 / 学 / 练 已达标，还差本节客观题全部答对——进入学习页的「练」里把选择 / 填空 / 判断做对即可。
+        </p>
         <button
           type="button"
           class="stage__enter"
@@ -190,13 +222,30 @@ function pieces(stage: MainlineStageDto): StagePiece[] {
         class="action action--test"
         data-testid="mainline-open-test"
         :disabled="!allStagesComplete"
+        :title="allStagesComplete
+          ? '本章全部小节已完成，可参加章末大测试'
+          : '每个小节需：看/学/练三件套达标 + 本节客观题全部答对'"
         @click="allStagesComplete && emit('open-test', chapter.chapter)"
       >
         {{ allStagesComplete ? '参加大测试' : '完成全部小节后参加大测试' }}
         <span
           v-if="!allStagesComplete"
           class="action__hint"
-        >（看、学、练全部过线后解锁）</span>
+          data-testid="mainline-open-test-hint"
+        >（每节需看、学、练达标 + 本节客观题全对）</span>
+      </button>
+
+      <!-- 章末 BOSS：通过本章大测试（≥1★）后开放的可选挑战；未达标时不渲染入口，
+           与 /boss/:chapter 的路由守卫同口径，杜绝「手输 URL 直接开打」。 -->
+      <button
+        v-if="bossUnlocked"
+        type="button"
+        class="action action--boss"
+        data-testid="mainline-open-boss"
+        @click="emit('open-boss', chapter.chapter)"
+      >
+        ⚔ 挑战第 {{ chapter.chapter }} 章 BOSS
+        <span class="action__hint">（4 阶段限时作答，可选挑战）</span>
       </button>
 
       <div
@@ -210,9 +259,10 @@ function pieces(stage: MainlineStageDto): StagePiece[] {
           type="button"
           class="action action--recovery"
           data-testid="mainline-claim-errorbook"
+          :disabled="claimingErrorbook"
           @click="emit('claim-errorbook', chapter.chapter)"
         >
-          错题复盘补星
+          {{ claimingErrorbook ? '申领中…' : '错题复盘补星' }}
         </button>
         <span
           v-else
@@ -386,6 +436,24 @@ function pieces(stage: MainlineStageDto): StagePiece[] {
   color: var(--pyt-color-text-muted);
   font-variant-numeric: tabular-nums;
 }
+/* 本节该维度无要求：空槽 + 虚线边，一眼区别于「满格已完成」。 */
+.piece--na .piece__bar {
+  border-style: dashed;
+  background: transparent;
+}
+.piece--na .piece__text {
+  color: var(--pyt-color-text-hint);
+}
+.stage__gap {
+  margin: 0 0 var(--pyt-space-2);
+  padding: var(--pyt-space-1) var(--pyt-space-2);
+  font-size: var(--pyt-font-size-xs);
+  line-height: 1.5;
+  color: var(--pyt-color-text-muted);
+  background: var(--pyt-color-warning-bg);
+  border-left: 3px solid var(--pyt-color-gold);
+  border-radius: var(--pyt-radius-sm);
+}
 .stage__enter,
 .action {
   font-family: var(--pyt-font-pixel);
@@ -415,6 +483,16 @@ function pieces(stage: MainlineStageDto): StagePiece[] {
 }
 .action--test {
   background: var(--pyt-color-gold);
+}
+.action--boss {
+  background: var(--pyt-color-danger-bg, var(--pyt-color-warning-bg));
+  border-color: var(--pyt-color-danger);
+  color: var(--pyt-color-danger);
+}
+.action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
 }
 .action__hint {
   font-size: var(--pyt-font-size-xs);

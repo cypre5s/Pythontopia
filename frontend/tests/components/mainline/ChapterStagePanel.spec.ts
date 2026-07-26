@@ -77,6 +77,82 @@ describe('ChapterStagePanel', () => {
     expect(wrapper.get('[data-testid="mainline-stage-32"]').attributes('data-done')).toBe('true');
   });
 
+  it('required=0 的维度显示「—」空槽而不是 100% 满绿条', () => {
+    // R-14 起 requiredExamples 常为 0：旧 ratio() 对 required<=0 返回 1，把 0/0 画成满格，
+    // 学生看到三条全绿却没有 ✓、按钮还锁着。
+    const wrapper = mount(ChapterStagePanel, {
+      props: {
+        chapter: chapter({
+          stages: [stage({ id: 31, index: 1, requiredExamples: 0, examplesDone: 0, requiredPages: 0, pagesRead: 0 })],
+        }),
+      },
+    });
+
+    const examples = wrapper.get('[data-testid="mainline-stage-31-examples"]');
+    expect(examples.attributes('data-na')).toBe('true');
+    expect(examples.get('.piece__fill').attributes('style')).toContain('width: 0%');
+    expect(examples.text()).not.toContain('0/0');
+    expect(examples.text()).toContain('本节无要求');
+
+    const pages = wrapper.get('[data-testid="mainline-stage-31-pages"]');
+    expect(pages.get('.piece__fill').attributes('style')).toContain('width: 0%');
+    // 有要求的维度照常按比例渲染。
+    expect(wrapper.get('[data-testid="mainline-stage-31-video"]').attributes('data-na')).toBe('false');
+  });
+
+  it('三件套计数全满但服务端未判完成时，点出「客观题全对」这个隐藏维度', () => {
+    const wrapper = mount(ChapterStagePanel, {
+      props: {
+        chapter: chapter({
+          stages: [
+            stage({
+              id: 31,
+              index: 1,
+              videoWatchedSec: 240,
+              pagesRead: 2,
+              examplesDone: 2,
+              completed: false,
+            }),
+          ],
+        }),
+      },
+    });
+
+    expect(wrapper.find('[data-testid="mainline-stage-31-question-gap"]').exists()).toBe(true);
+    expect(wrapper.get('[data-testid="mainline-stage-31-question-gap"]').text()).toContain('客观题');
+    // 「参加大测试」的说明同样点名客观题维度。
+    expect(wrapper.get('[data-testid="mainline-open-test-hint"]').text()).toContain('客观题');
+  });
+
+  it('小节已完成时不显示客观题提示', () => {
+    const wrapper = mount(ChapterStagePanel, {
+      props: {
+        chapter: chapter({
+          stages: [stage({ id: 31, index: 1, videoWatchedSec: 240, pagesRead: 2, examplesDone: 2, completed: true })],
+        }),
+      },
+    });
+    expect(wrapper.find('[data-testid="mainline-stage-31-question-gap"]').exists()).toBe(false);
+  });
+
+  it('章末 BOSS 入口仅在本章 ≥1★ 时渲染并 emit open-boss', async () => {
+    const locked = mount(ChapterStagePanel, { props: { chapter: chapter({ stars: 0 }) } });
+    expect(locked.find('[data-testid="mainline-open-boss"]').exists()).toBe(false);
+
+    const wrapper = mount(ChapterStagePanel, { props: { chapter: chapter({ stars: 1 }) } });
+    await wrapper.get('[data-testid="mainline-open-boss"]').trigger('click');
+    expect(wrapper.emitted('open-boss')?.[0]).toEqual([3]);
+  });
+
+  it('补星申领中禁用「错题复盘补星」按钮（防连点连弹互斥提示）', () => {
+    const wrapper = mount(ChapterStagePanel, {
+      props: { chapter: chapter(), claimingErrorbook: true },
+    });
+    const button = wrapper.get('[data-testid="mainline-claim-errorbook"]');
+    expect(button.attributes('disabled')).toBeDefined();
+    expect(button.text()).toContain('申领中');
+  });
+
   it('emits enter-stage / open-test / open-endless / claim-errorbook', async () => {
     const ready = chapter({
       stages: [
