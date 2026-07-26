@@ -1,7 +1,8 @@
 // Boss 副本前端 API。
 //
-// 优先调真后端 `/api/world/boss/...`；后端 404 / 网络失败时降级使用本地 mock 题
-// （saves dev/演示场景，避免阻塞 UI）。
+// 优先调真后端 `/api/world/boss/...`；**只有出题**在后端 404 / 网络失败时降级到本地 golden 题
+// （dev/演示场景，避免阻塞 UI）。**判题不降级**：submitBossAttempt 失败一律抛出，
+// 由调用方按「本次不计分」处理，绝不返回伪造判定。
 //
 // 真后端契约：
 //   POST /api/world/boss/{chapter}/problem  body: { stage }  → BossProblemDto
@@ -295,35 +296,33 @@ function synthesizeBuggyCode(problem: BossProblemDto): string {
 }
 
 /**
- * 提交 boss 答案。
- * - 优先调真后端 /api/world/boss/{chapter}/attempt
- * - 真后端失败时本地用 Pyodide 评测（已在 useBossSession 中跑），这里只返回兜底空结果
+ * 提交 boss 答案（正式判题，唯一真源是后端沙箱）。
+ *
+ * **绝不返回伪造结果**：判题不可达时抛出，由调用方决定「本次不计分 / 不入历史 / 可重试」。
+ * 早期这里在 catch 里返回 `{passed:false, feedback:'后端未连接 / mock 评测…'}`，
+ * 使得网络故障被当成学生真答错——扣体力、清连胜、错题入库，还会被无尽小结当成真实
+ * 正确率上报给补星接口。调用方（useEndlessRun / rogueRun）已备好失败分支，这里必须 throw。
  */
 export async function submitBossAttempt(
   payload: BossAttemptRequest,
 ): Promise<BossAttemptResultDto> {
+  let response: Awaited<ReturnType<typeof http.post<BossAttemptResultDto>>>;
   try {
-    const response = await http.post<BossAttemptResultDto>(
+    response = await http.post<BossAttemptResultDto>(
       `/api/world/boss/${payload.chapter}/attempt`,
       payload,
     );
-    if (response.data && typeof response.data.problemId === 'string') {
-      return response.data;
-    }
   } catch (error) {
     if (typeof console !== 'undefined') {
       const msg = error instanceof Error ? error.message : String(error);
-      console.warn('[boss] backend submit failed, using local mock result:', msg);
+      console.warn('[boss] backend submit failed:', msg);
     }
+    throw error instanceof Error ? error : new Error(String(error));
   }
-  return {
-    problemId: payload.problemId,
-    passed: false,
-    passedTestCases: 0,
-    totalTestCases: 3,
-    feedback: '后端未连接 / mock 评测：请用浏览器内 Pyodide 验证后再实际提交。',
-    score: 0,
-  };
+  if (!response.data || typeof response.data.problemId !== 'string') {
+    throw new Error('判题服务返回了不完整的结果');
+  }
+  return response.data;
 }
 
 /**

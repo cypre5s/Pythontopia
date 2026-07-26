@@ -6,11 +6,20 @@
 //
 // 持久化：已答 probeKey 集合写 localStorage（pyt_probe_answered，pyt_* 约定），
 // 避免刷新后重复打扰；shown 仅为单次会话内「已弹出」标记，不持久化。
+//
+// 键按登录用户分命名空间（`pyt_probe_answered@u:<username>`）：公用机房同一浏览器换账号时，
+// 不带用户标识的键会让 B 永远不再被问到 A 答过的探针，B 的 8 维画像永久缺这些被动信号。
+// 用户切换后由 session.logout/login 的全局 store 复位触发本 store 重建，从而读到新用户的键。
 
 import { defineStore } from 'pinia';
 import { submitProbe } from '@api/learner';
+import { userScopedKey } from '@stores/session';
 
-const PERSIST_KEY = 'pyt_probe_answered';
+const PERSIST_KEY_BASE = 'pyt_probe_answered';
+
+function persistKey(): string {
+  return userScopedKey(PERSIST_KEY_BASE);
+}
 
 export interface ProbeState {
   /** 本次会话内已弹出过的 probeKey（不持久化，避免同一会话内重复弹）。 */
@@ -28,7 +37,7 @@ export interface ProbeState {
 function readAnswered(): Set<string> {
   if (typeof window === 'undefined') return new Set();
   try {
-    const raw = window.localStorage.getItem(PERSIST_KEY);
+    const raw = window.localStorage.getItem(persistKey());
     if (!raw) return new Set();
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return new Set();
@@ -41,7 +50,7 @@ function readAnswered(): Set<string> {
 function persistAnswered(answered: Set<string>): void {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(PERSIST_KEY, JSON.stringify([...answered]));
+    window.localStorage.setItem(persistKey(), JSON.stringify([...answered]));
   } catch {
     // 隐私模式 localStorage 不可用：忽略写入失败，内存状态仍生效。
   }

@@ -24,14 +24,23 @@ export interface CheckResultDto {
   reasons: string[];
 }
 
+/**
+ * 画像访谈单轮回包。
+ *
+ * 注意可空性：后端 `ProfileTurnResponse` 是 record，字段全部由外部 graph（ProfileAgent）
+ * 的 JSON 反序列化填充——graph 少给哪个键，Jackson 就填 null。因此除 `nextQuestion` 外，
+ * `done` / `dimensionsFilled` / `evidenceAnchors` / `safetyResult` / `groundingResult`
+ * 都必须按可空消费（消费点补默认值），不能声明成必填字段对前端谎报。
+ */
 export interface ProfileTurnResponse {
   nextQuestion: string | null;
   profileDraft: LearnerProfileDto | null;
-  done: boolean;
-  dimensionsFilled: string[];
-  evidenceAnchors: Array<{ source: string; ref: string; summary: string }>;
-  safetyResult: CheckResultDto;
-  groundingResult: CheckResultDto;
+  /** graph 未回该字段时为 null；消费方按「未完成」处理。 */
+  done: boolean | null;
+  dimensionsFilled: string[] | null;
+  evidenceAnchors: Array<{ source: string; ref: string; summary: string }> | null;
+  safetyResult: CheckResultDto | null;
+  groundingResult: CheckResultDto | null;
 }
 
 export interface ProfileRevisionDto {

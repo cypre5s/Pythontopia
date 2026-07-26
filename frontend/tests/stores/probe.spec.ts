@@ -7,11 +7,19 @@ vi.mock('@/api/learner', () => ({
   submitProbe: vi.fn(async () => undefined),
 }));
 
-const PERSIST_KEY = 'pyt_probe_answered';
+/** 探针持久化键按登录用户分命名空间；未登录落到 `anon`。 */
+const ANON_PERSIST_KEY = 'pyt_probe_answered@u:anon';
 
-function persistedAnswered(): string[] {
-  const raw = window.localStorage.getItem(PERSIST_KEY);
+function persistedAnswered(key: string = ANON_PERSIST_KEY): string[] {
+  const raw = window.localStorage.getItem(key);
   return raw ? (JSON.parse(raw) as string[]) : [];
+}
+
+function loginAs(username: string): void {
+  window.localStorage.setItem(
+    'pythontopia.user',
+    JSON.stringify({ id: 1, username, displayName: username, role: 'STUDENT' }),
+  );
 }
 
 describe('probe store', () => {
