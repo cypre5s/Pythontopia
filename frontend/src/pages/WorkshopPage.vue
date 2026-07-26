@@ -17,7 +17,7 @@ import {
   rememberWorkshopChatHistoryTurn,
   type WorkshopChatHistoryTurnDto,
 } from '@/api/workshopHistory';
-import { FAST_TRAVEL_ROUTES, type FastTravelRoute } from '@/data/fastTravel';
+import { FAST_TRAVEL_ENABLED, FAST_TRAVEL_ROUTES, type FastTravelRoute } from '@/data/fastTravel';
 import { useLearningStore } from '@stores/learning';
 import { useWorldStore } from '@stores/world';
 import { useToastStore } from '@stores/toast';
@@ -296,8 +296,10 @@ const bodyClass = computed<Record<string, boolean>>(() => ({
         </nav>
         <span class="travel-spacer" />
         <ul class="travel-list">
+          <!-- 与 HUD 传送入口同一条 gate：只剩一条路线时其目的地必等于当前所在地，
+               chip 会永久 disabled，属死入口（返回小镇由左侧「← 返回小镇」承担）。 -->
           <li
-            v-for="r in FAST_TRAVEL_ROUTES"
+            v-for="r in (FAST_TRAVEL_ENABLED ? FAST_TRAVEL_ROUTES : [])"
             :key="r.key"
           >
             <button
