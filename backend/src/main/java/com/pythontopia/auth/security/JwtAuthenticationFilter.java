@@ -1,5 +1,7 @@
 package com.pythontopia.auth.security;
 
+import com.pythontopia.auth.domain.UserAccount;
+import com.pythontopia.auth.repository.UserRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -16,9 +18,11 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
   private final JwtService jwtService;
+  private final UserRepository userRepository;
 
-  public JwtAuthenticationFilter(JwtService jwtService) {
+  public JwtAuthenticationFilter(JwtService jwtService, UserRepository userRepository) {
     this.jwtService = jwtService;
+    this.userRepository = userRepository;
   }
 
   /**
@@ -40,13 +44,30 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     String authorization = request.getHeader("Authorization");
     if (authorization != null && authorization.startsWith("Bearer ")) {
       CurrentUserPrincipal principal = jwtService.parse(authorization.substring(7));
-      UsernamePasswordAuthenticationToken authentication =
-          new UsernamePasswordAuthenticationToken(
-              principal,
-              null,
-              List.of(new SimpleGrantedAuthority("ROLE_" + principal.role().name())));
-      SecurityContextHolder.getContext().setAuthentication(authentication);
+      if (isSessionAlive(principal)) {
+        UsernamePasswordAuthenticationToken authentication =
+            new UsernamePasswordAuthenticationToken(
+                principal,
+                null,
+                List.of(new SimpleGrantedAuthority("ROLE_" + principal.role().name())));
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+      }
     }
     filterChain.doFilter(request, response);
+  }
+
+  /**
+   * 签名有效 ≠ 会话仍然有效。账号被停用（{@code users.status != 'ACTIVE'}）、用户被删除，或会话代次
+   * 已自增（改密 / 手工吊销，见 V186）时都必须拒绝，否则一枚泄露的 token 在 TTL 内不可撤销。
+   *
+   * <p>不认证即不写入 SecurityContext：请求随后由 SecurityConfig 的 authenticationEntryPoint 统一回
+   * 401 UNAUTHORIZED，与「没带 token」同构，不额外泄露账号状态。
+   */
+  private boolean isSessionAlive(CurrentUserPrincipal principal) {
+    return userRepository
+        .findById(principal.userId())
+        .filter(UserAccount::isActive)
+        .filter(user -> user.tokenVersion() == principal.tokenVersion())
+        .isPresent();
   }
 }

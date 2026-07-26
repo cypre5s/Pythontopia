@@ -4,9 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Base64;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.Test;
 
 class JwtServiceTest {
@@ -45,6 +49,53 @@ class JwtServiceTest {
     assertThatThrownBy(() -> service.parse(tampered))
         .isInstanceOf(JwtValidationException.class)
         .hasMessage("Invalid token signature");
+  }
+
+  @Test
+  void carriesTokenVersionThroughIssueAndParse() {
+    JwtService service = serviceAt(NOW, 60);
+
+    String token =
+        service.issue(new CurrentUserPrincipal(42L, "stu01", Role.STUDENT, 7)).token();
+
+    assertThat(service.parse(token).tokenVersion()).isEqualTo(7);
+  }
+
+  /** 升级前签发的旧 token 没有 tv 声明，必须按默认代次 0 解读，避免升级即把在线用户全部踢下线。 */
+  @Test
+  void treatsMissingTokenVersionAsZero() {
+    JwtService service = serviceAt(NOW, 60);
+    String legacyPayload =
+        Base64.getUrlEncoder()
+            .withoutPadding()
+            .encodeToString(
+                ("{\"sub\":\"42\",\"username\":\"stu01\",\"role\":\"STUDENT\",\"exp\":"
+                        + NOW.plusSeconds(600).getEpochSecond()
+                        + "}")
+                    .getBytes(StandardCharsets.UTF_8));
+    String header =
+        Base64.getUrlEncoder()
+            .withoutPadding()
+            .encodeToString("{\"alg\":\"HS256\",\"typ\":\"JWT\"}".getBytes(StandardCharsets.UTF_8));
+    String legacyToken = header + "." + legacyPayload + "." + hmac(header + "." + legacyPayload);
+
+    assertThat(service.parse(legacyToken))
+        .isEqualTo(new CurrentUserPrincipal(42L, "stu01", Role.STUDENT, 0));
+  }
+
+  private String hmac(String signingInput) {
+    try {
+      Mac mac = Mac.getInstance("HmacSHA256");
+      mac.init(
+          new SecretKeySpec(
+              "test-secret-must-be-long-enough-for-hs256".getBytes(StandardCharsets.UTF_8),
+              "HmacSHA256"));
+      return Base64.getUrlEncoder()
+          .withoutPadding()
+          .encodeToString(mac.doFinal(signingInput.getBytes(StandardCharsets.UTF_8)));
+    } catch (Exception exception) {
+      throw new IllegalStateException(exception);
+    }
   }
 
   private JwtService serviceAt(Instant instant, long ttlMinutes) {
