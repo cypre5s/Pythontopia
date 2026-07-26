@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-07-26 — 重构：tutor 答疑流治理逻辑去重（审计第 3 批）
+
+- `routes/tutor.py` 中普通答疑与考考我评卷两处**完全相同**的课件检索治理块（超时/重试/rag 熔断/空证据回退/obs 归一/trace 组装，各约 30 行）合并为单一 `_governed_evidence_fetch`；`_trace_start` 仍由调用方在 await 前发出，「检索中」工位的实时可见性不变。此前 RAG 治理参数改动必须双写两处，现在单点。
+- 三道同构的同步审查 trace 发射块（grounding/hallucination/safety，主流程 + 评卷流程共 5 处）统一为 `_review_with_trace`（Protocol 约束 passed/reasons 结构），事件流字节序与逐条发射完全一致。
+- 验证：tutor 定向 34 passed；Graph 全量 1628 passed / 1 skipped；Ruff check/format 通过。
+
 ## 2026-07-26 — 重构：WorkshopChat 答案视图投影抽为纯模块（审计第 2 批）
 
 - `WorkshopChat.vue`（3692 行，全仓最大文件）先切第一刀：把答案气泡的纯视图投影（`TutorStreamResult` snake_case 线格式类型、证据归一 `toCitations`、接地状态归一 `deriveGroundingStatus`、通识前缀清理 `normalizeAnswerText`、g-chip 标签映射 `groundingInfo`、三审徽章 `reviewBadges`）抽到新模块 `components/workshop/chatAnswerView.ts`（约 150 行），组件内以 import 替换，行为零变化。
