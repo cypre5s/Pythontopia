@@ -3,6 +3,7 @@ import LoginPage from '@/pages/LoginPage.vue';
 import { useSessionStore } from '@stores/session';
 import { useToastStore } from '@stores/toast';
 import { useDialogStore } from '@stores/dialog';
+import { useMainlineStore } from '@stores/mainline';
 import { isExamActive, isExamBlockedPath } from '@/components/chaptertest';
 
 export const router = createRouter({
@@ -182,17 +183,41 @@ export const router = createRouter({
       component: () => import('@/pages/teacher/TeacherReviewPage.vue'),
       meta: { requiresAuth: true },
     },
-    // 章末 BOSS 副本（4 阶段 AI 出题）。
-    // chapter param 1..7 对应主线 7 章；进入前必须本章 5 子任务全部完成。
+    // 章末 BOSS 副本（4 阶段 AI 出题）：本章通过章末大测试（≥1★）后开放的可选挑战。
+    // 入口在冒险地图的章节抽屉（ChapterStagePanel「挑战第 N 章 BOSS」），
+    // 守卫按后端权威 overview 校验，杜绝手输 /boss/7 直接开打终极 BOSS。
     {
       path: '/boss/:chapter(\\d+)',
       name: 'boss',
       component: () => import('@/pages/BossPage.vue'),
       meta: { requiresAuth: true },
       props: (route) => ({ chapter: Number(route.params.chapter) }),
+      beforeEnter: async (to) => {
+        const chapter = Number(to.params.chapter);
+        const mainline = useMainlineStore();
+        const toast = useToastStore();
+        // 已有缓存直接用（地图页刚拉过）；无缓存时拉一次权威 overview。
+        await mainline.load();
+        const ch = mainline.chapterByNumber(chapter);
+        if (!ch) {
+          toast.show(
+            mainline.error
+              ? '主线进度加载失败，暂时无法进入章末 BOSS，请稍后重试。'
+              : `第 ${chapter} 章不存在。`,
+            'error',
+          );
+          return { path: '/mainline-map', replace: true };
+        }
+        if (!ch.unlocked || ch.stars < 1) {
+          toast.show(`第 ${chapter} 章 BOSS 需先通过本章章末大测试后解锁。`, 'error');
+          return { path: '/mainline-map', replace: true };
+        }
+        return true;
+      },
     },
-    // 毕业典礼（主线终局演出）：boss7 通关后由 BossPage 跳入；
-    // 未通关经 URL 直入时页面内守卫重定向回 /world。
+    // 毕业典礼（主线终局演出）：7 章全部 ≥1★ 后由冒险地图「前往毕业典礼」进入
+    // （第 7 章 BOSS 通关也会跳这里）。未达标经 URL 直入时页面内给出「还差什么」的说明，
+    // 不再静默弹回小镇。
     {
       path: '/graduation',
       name: 'graduation',
@@ -274,9 +299,15 @@ export const router = createRouter({
 router.beforeEach((to: RouteLocationNormalized) => {
   const session = useSessionStore();
   const toast = useToastStore();
+  // refreshIfNeeded() 在过期时会 logout（清空 token），所以必须先取快照：
+  // 「从没登录过」与「登录过但已过期」是两件事，对首次访问的用户说「登录状态已失效」是误导。
+  const hadSession = session.token !== null;
   session.refreshIfNeeded();
   if (to.meta.requiresAuth && !session.isAuthenticated) {
-    toast.show('登录状态已失效，请重新登录。', 'error');
+    toast.show(
+      hadSession ? '登录状态已失效，请重新登录。' : '请先登录后再进入小镇。',
+      hadSession ? 'error' : 'info',
+    );
     return { name: 'login', query: { redirect: to.fullPath } };
   }
   if (to.meta.guestOnly && session.isAuthenticated) {
@@ -300,6 +331,15 @@ router.beforeEach((to: RouteLocationNormalized) => {
 // 整页加载会拉到最新 index.html 与正确的分块清单，路由随即正常解析。
 const CHUNK_RELOAD_KEY = 'pyt:chunk-reload-at';
 
+/**
+ * 站内路径断言：只接受单个 `/` 开头的绝对站内路径。
+ * `//evil.com` 这类协议相对 URL 传给 `location.assign` 会整页跳出本站（开放重定向），
+ * 而 targetPath 源自 `to.fullPath`（含攻击者可构造的地址），必须先过滤。
+ */
+export function toSafeInternalPath(targetPath: string): string {
+  return /^\/(?!\/)/.test(targetPath) ? targetPath : '/';
+}
+
 /** 是否为动态 import 分块加载失败（含跨浏览器措辞与 MIME 误判）。 */
 function isDynamicImportError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error ?? '');
@@ -322,7 +362,7 @@ function recoverFromStaleChunk(targetPath: string): void {
   } catch {
     /* sessionStorage 不可用：放弃闸门但仍尝试一次跳转（极少触发，可接受） */
   }
-  window.location.assign(targetPath);
+  window.location.assign(toSafeInternalPath(targetPath));
 }
 
 router.onError((error, to) => {

@@ -237,6 +237,9 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
   async function submit(): Promise<void> {
     const p = problem.value;
     if (!p) return;
+    // 并发守卫（同步置位，不可省）：BugMineCard 的 30s 定时器直接 emit('timeout') → onSubmit，
+    // 绕过按钮上的 :disabled。t≈29s 点提交 + 定时器触发 = 同一题两次正式判题、两条历史、双倍计分。
+    if (phase.value === 'evaluating') return;
     phase.value = 'evaluating';
     const localEval = await _runPyodide(p, code.value);
     let backendResult: BossAttemptResultDto;

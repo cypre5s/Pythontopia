@@ -6,7 +6,7 @@
 //       接入后改为调 `/api/world/fast-travel` 与服务端原子结算。
 
 import { computed, onMounted, onUnmounted, ref } from 'vue';
-import { FAST_TRAVEL_ROUTES, type FastTravelRoute } from '@/data/fastTravel';
+import { FAST_TRAVEL_ENABLED, FAST_TRAVEL_ROUTES, type FastTravelRoute } from '@/data/fastTravel';
 import { useWorldStore } from '@stores/world';
 import { useToastStore } from '@stores/toast';
 import { playUiClick, playChime } from '@/composables/useStardewFx';
@@ -17,6 +17,8 @@ const toast = useToastStore();
 const visible = ref(false);
 
 function open(): void {
+  // R-14 单 hub：唯一路线就是玩家当前所在地，面板打开也只有一行灰按钮 → 直接不开。
+  if (!FAST_TRAVEL_ENABLED) return;
   visible.value = true;
   playUiClick();
 }
@@ -33,6 +35,7 @@ function onKey(event: KeyboardEvent): void {
     }
   }
   if (event.key === 't' || event.key === 'T') {
+    if (!FAST_TRAVEL_ENABLED) return;
     visible.value = !visible.value;
     event.preventDefault();
     if (visible.value) playUiClick();
@@ -57,6 +60,7 @@ function travelTo(route: FastTravelRoute): void {
 }
 
 function onExternalOpen(): void {
+  if (!FAST_TRAVEL_ENABLED) return;
   visible.value = true;
 }
 

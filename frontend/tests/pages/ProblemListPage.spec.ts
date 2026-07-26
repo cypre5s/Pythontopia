@@ -209,6 +209,58 @@ describe('ProblemListPage', () => {
     expect(payload.query?.problemId).toBe('476');
   });
 
+  it('URL 上的 kcCode 初始化知识点筛选（图书馆「关联示例」链接不再丢过滤）', async () => {
+    const router = createTestRouter();
+    await router.push('/problems?kcCode=PY43-KC-022');
+    await router.isReady();
+    const wrapper = mount(ProblemListPage, {
+      global: { plugins: [router], stubs: { AppLayout: APP_LAYOUT_STUB } },
+    });
+    await flushPromises();
+
+    expect(
+      (wrapper.get('[data-testid="filter-kc"]').element as HTMLSelectElement).value,
+    ).toBe('PY43-KC-022');
+    const rows = wrapper.findAll('.problem-row:not(.problem-row--head)');
+    expect(rows.length).toBe(1);
+    expect(wrapper.text()).toContain('大写字母加密');
+    expect(wrapper.text()).not.toContain('莱布尼茨级数');
+  });
+
+  it('下拉切换知识点回写 URL；清空筛选移除 kcCode', async () => {
+    const router = createTestRouter();
+    await router.push('/problems?kcCode=PY43-KC-022');
+    await router.isReady();
+    const wrapper = mount(ProblemListPage, {
+      global: { plugins: [router], stubs: { AppLayout: APP_LAYOUT_STUB } },
+    });
+    await flushPromises();
+
+    await wrapper.get('[data-testid="filter-kc"]').setValue('PY43-KC-032');
+    await flushPromises();
+    expect(router.currentRoute.value.query.kcCode).toBe('PY43-KC-032');
+
+    await wrapper.get('[data-testid="filter-reset"]').trigger('click');
+    await flushPromises();
+    expect(router.currentRoute.value.query.kcCode).toBeUndefined();
+  });
+
+  it('URL 上的 kcCode 在题库里没有对应题目时回退为全部并清掉参数', async () => {
+    const router = createTestRouter();
+    await router.push('/problems?kcCode=PY43-KC-999');
+    await router.isReady();
+    const wrapper = mount(ProblemListPage, {
+      global: { plugins: [router], stubs: { AppLayout: APP_LAYOUT_STUB } },
+    });
+    await flushPromises();
+
+    expect(
+      (wrapper.get('[data-testid="filter-kc"]').element as HTMLSelectElement).value,
+    ).toBe('');
+    expect(wrapper.findAll('.problem-row:not(.problem-row--head)').length).toBe(PROBLEMS.length);
+    expect(router.currentRoute.value.query.kcCode).toBeUndefined();
+  });
+
   it('点击题目标题直达做题界面 /training（不再行内展开预览）', async () => {
     const router = createTestRouter();
     const pushSpy = vi.spyOn(router, 'push');
