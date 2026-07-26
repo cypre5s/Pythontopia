@@ -15,6 +15,15 @@ from pythontopia_rag.index.store import VectorStore
 COURSE_TITLE = "Python语言基础"
 
 
+class EmbeddingDegradedError(RuntimeError):
+    """重建过程中嵌入后端由真实语义向量降级为兜底 hash —— 索引会混入两套向量空间。
+
+    维度相同（如智谱 embedding-3 的 2048 维与同维 hash 兜底）时任何校验都发现不了，
+    但降级前后的向量互相做余弦等于随机噪声。此处**直接失败**而非静默续跑，
+    调用方应修复凭据/网络后重跑（旧索引未被触碰，仍可继续服务）。
+    """
+
+
 @dataclass
 class RebuildResult:
     built_chunks: int
@@ -23,6 +32,9 @@ class RebuildResult:
     store: str
     rebuilt_at: str
     chunks: list[Chunk]
+    # 本次索引是否整体由降级嵌入构建（启动即无可用凭据的场景）；禁止静默降级，须暴露。
+    degraded: bool = False
+    fallback_reason: str | None = None
 
 
 def build_context_prefix(page: IndexablePage) -> str:
@@ -67,10 +79,24 @@ async def rebuild_index(
             )
         )
 
-    await store.clear()
+    # 先把全部向量算完再动索引：embed 阶段任何失败都不能留下"空向量库 + 陈旧 BM25"
+    # 的分裂状态（clear() 一旦先跑，向量库清空后失败就再也回不来，而 BM25 还持旧 chunk，
+    # 查询会拿旧索引证据，/rag/index/status 却报 built_chunks=0）。
+    started_degraded, _ = _embedder_degradation(embedder)
+    embedded: list[tuple[list[Chunk], list[list[float]]]] = []
     for batch_index in range(0, len(all_chunks), batch_size):
         batch = all_chunks[batch_index : batch_index + batch_size]
         vectors = await embedder.embed([chunk.index_text for chunk in batch])
+        degraded, reason = _embedder_degradation(embedder)
+        if degraded and not started_degraded:
+            raise EmbeddingDegradedError(
+                f"embedder degraded to fallback mid-rebuild after {len(embedded) * batch_size}"
+                f"/{len(all_chunks)} chunks; index left untouched. reason: {reason}"
+            )
+        embedded.append((batch, vectors))
+
+    await store.clear()
+    for batch, vectors in embedded:
         await store.upsert(batch, vectors)
     if bm25 is not None:
         bm25.build(all_chunks)
@@ -78,6 +104,10 @@ async def rebuild_index(
     mark = getattr(store, "mark_rebuilt", None)
     if callable(mark):
         mark(rebuilt_at)
+    degraded, reason = _embedder_degradation(embedder)
+    mark_degraded = getattr(store, "mark_degraded", None)
+    if callable(mark_degraded):
+        mark_degraded(degraded, reason)
     elapsed = int((datetime.now(timezone.utc) - started).total_seconds() * 1000)
     return RebuildResult(
         built_chunks=len(all_chunks),
@@ -86,7 +116,17 @@ async def rebuild_index(
         store=store.name,
         rebuilt_at=rebuilt_at,
         chunks=all_chunks,
+        degraded=degraded,
+        fallback_reason=reason,
     )
+
+
+def _embedder_degradation(embedder: Embedder) -> tuple[bool, str | None]:
+    """读取兜底 embedder 的降级身份；非兜底实现（Hash/Zhipu strict 等）恒为未降级。"""
+    using_fallback = getattr(embedder, "using_fallback", None)
+    if using_fallback is None:
+        return False, None
+    return bool(using_fallback), getattr(embedder, "fallback_reason", None)
 
 
 async def _iter_pages(source: PageSource) -> list[IndexablePage]:

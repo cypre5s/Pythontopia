@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from pythontopia_rag.app_state import AppState
 from pythontopia_rag.data.page_source import IndexablePage, InMemoryPageSource
 from pythontopia_rag.index.builder import rebuild_index
-from pythontopia_rag.index.embedder import HashEmbedder
+from pythontopia_rag.index.embedder import FallbackEmbedder, HashEmbedder
 from pythontopia_rag.index.store import InMemoryVectorStore
 from pythontopia_rag.main import app
 
@@ -220,6 +220,62 @@ async def test_query_falls_back_to_vector_only_without_bm25_index() -> None:
     assert "vector_only" in body["route_reason"]
     assert body["no_evidence_found"] is False
     assert body["hits"][0]["page_id"] == 11
+
+
+@pytest.mark.asyncio
+async def test_hits_and_citations_carry_document_id_and_native_scores() -> None:
+    """page_no 跨文档重复 → 引用键必须能定位到文档；同时暴露各路原生相关度。"""
+    state = app.state.rag
+    await rebuild_index(
+        source=_seed_pages(), embedder=state.embedder, store=state.store, bm25=state.bm25
+    )
+
+    client = TestClient(app)
+    response = client.post(
+        "/rag/query", json={"query": "input 函数", "top_k": 5, "min_score": 0.1}
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["hits"]
+    for hit in body["hits"]:
+        assert hit["document_id"] == 2
+        assert hit["vector_score"] is not None or hit["bm25_score"] is not None
+    for citation in body["citations"]:
+        assert citation["document_id"] == 2
+
+
+@pytest.mark.asyncio
+async def test_index_status_exposes_embedding_degradation() -> None:
+    """禁止静默降级：兜底 embedder 生效时 /rag/index/status 必须报 degraded。"""
+    state = app.state.rag
+    dim = HashEmbedder().dim
+    state.embedder = FallbackEmbedder(
+        primary=None,
+        fallback=HashEmbedder(dim=dim),
+        dim=dim,
+        name="zhipu-embedding-3+hash-fallback",
+        fallback_reason="ValueError: missing EMBEDDING_API_KEY",
+    )
+    await rebuild_index(
+        source=_seed_pages(), embedder=state.embedder, store=state.store, bm25=state.bm25
+    )
+
+    client = TestClient(app)
+    body = client.get("/rag/index/status").json()
+    assert body["degraded"] is True
+    assert "EMBEDDING_API_KEY" in body["fallback_reason"]
+
+
+@pytest.mark.asyncio
+async def test_index_status_reports_healthy_embedder_as_not_degraded() -> None:
+    state = app.state.rag
+    await rebuild_index(
+        source=_seed_pages(), embedder=state.embedder, store=state.store, bm25=state.bm25
+    )
+    client = TestClient(app)
+    body = client.get("/rag/index/status").json()
+    assert body["degraded"] is False
+    assert body["fallback_reason"] is None
 
 
 @pytest.mark.asyncio

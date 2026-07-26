@@ -10,7 +10,7 @@ from pythontopia_rag.data.loader import DEFAULT_DB_URL, fetch_pages
 from pythontopia_rag.graph.kc_graph import build_kc_graph_from_chunks
 from pythontopia_rag.graph.router import route_and_retrieve
 from pythontopia_rag.graph.traverse import traverse_subgraph
-from pythontopia_rag.index.builder import rebuild_index
+from pythontopia_rag.index.builder import EmbeddingDegradedError, rebuild_index
 from pythontopia_rag.index.kc_graph import fetch_kc_graph
 from pythontopia_rag.data.page_source import InMemoryPageSource, page_records_to_indexable
 from pythontopia_rag.safety.forbidden import is_forbidden
@@ -58,6 +58,7 @@ def _citation_from_hit(hit: RagHit) -> RagCitation:
     return RagCitation(
         page_id=hit.page_id,
         page_no=hit.page_no,
+        document_id=hit.document_id,
         chunk_id=hit.chunk_id,
         chapter_id=hit.chapter_id,
         kc_codes=hit.kc_codes,
@@ -159,10 +160,13 @@ async def rag_query(
             chunk_id=hit.chunk.chunk_id,
             page_id=hit.chunk.page_id,
             page_no=hit.chunk.page_no,
+            document_id=hit.chunk.document_id,
             chapter_id=hit.chunk.chapter_id,
             kc_codes=hit.chunk.kc_codes,
             text=hit.chunk.text,
             score=round(hit.score, 4),
+            vector_score=None if hit.vector_score is None else round(hit.vector_score, 4),
+            bm25_score=None if hit.bm25_score is None else round(hit.bm25_score, 4),
             via_prerequisite=hit.via_prerequisite,
             via_relation=hit.via_relation,
         )
@@ -221,9 +225,16 @@ async def rag_rebuild(
     _require_admin_token(x_internal_token)
     state: AppState = request.app.state.rag
     source = _resolve_rebuild_source(request)
-    result = await rebuild_index(
-        source=source, embedder=state.embedder, store=state.store, bm25=state.bm25
-    )
+    try:
+        result = await rebuild_index(
+            source=source, embedder=state.embedder, store=state.store, bm25=state.bm25
+        )
+    except EmbeddingDegradedError as exc:
+        # 嵌入中途降级 → 索引未被触碰，旧索引仍在服务；诚实报错而非留下混合向量空间。
+        logger.error("RAG rebuild aborted: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
+        ) from exc
     # 重建顺带刷新 KC 前置图（重灌库后前置关系可能变化；失败保留旧图）。
     refreshed = fetch_kc_graph(os.environ.get("PYT_DB_URL", DEFAULT_DB_URL))
     if refreshed.size > 0:
@@ -236,15 +247,23 @@ async def rag_rebuild(
         elapsed_ms=result.elapsed_ms,
         embed_model=result.embed_model,
         store=result.store,
+        degraded=result.degraded,
+        fallback_reason=result.fallback_reason,
     )
 
 
 @router.get("/rag/index/status", response_model=RagIndexStatus)
 async def rag_status(state: AppState = Depends(_state)) -> RagIndexStatus:
     status_info = await state.store.status()
+    # 降级信号取「索引构建时记录的降级」∪「当前 embedder 已降级」：前者说明库里的向量
+    # 不是语义向量，后者说明后续查询向量会落到另一个空间——任一为真都不可信。
+    live_degraded = bool(getattr(state.embedder, "using_fallback", False))
     return RagIndexStatus(
         built_chunks=status_info.built_chunks,
         last_rebuilt_at=status_info.last_rebuilt_at,
         embed_model=state.embedder.name,
         store=state.store.name,
+        degraded=status_info.degraded or live_degraded,
+        fallback_reason=status_info.fallback_reason
+        or getattr(state.embedder, "fallback_reason", None),
     )

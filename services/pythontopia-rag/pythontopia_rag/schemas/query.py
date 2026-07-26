@@ -39,10 +39,18 @@ class RagHit(BaseModel):
     chunk_id: str
     page_id: int
     page_no: int
+    # 所属课件文档 id（向后兼容追加，可选）。**page_no 不是全局唯一**：packId=43 的 7 份
+    # 文档页码各自从 1 开始，实测 116 个 page_no 里 105 个在多份文档间重复，仅凭 page_no
+    # 拼引用必然错位。下游做引用键请用 page_id，展示用 (document_id, page_no)。
+    document_id: int | None = None
     chapter_id: int | None = None
     kc_codes: list[str] = Field(default_factory=list)
     text: str
+    # 混合检索下是**融合排序位次分**（0~1]，非相关度；真实相关度读 vector_score/bm25_score。
     score: float
+    # 各召回路原生分（向后兼容追加，可选）：余弦相似度 / BM25 分；该路未召回时为 None。
+    vector_score: float | None = None
+    bm25_score: float | None = None
     # KC 图谱感知扩展（R-16）：True = 命中来自前置 KC 召回路（「困惑根源在前置知识」），
     # 下游可据此把该页标注为「前置知识」。向后兼容追加，默认 False。
     via_prerequisite: bool = False
@@ -55,6 +63,8 @@ class RagCitation(BaseModel):
 
     page_id: int
     page_no: int
+    # 见 RagHit.document_id：page_no 跨文档重复，引用键必须是 page_id。
+    document_id: int | None = None
     chunk_id: str
     chapter_id: int | None = None
     kc_codes: list[str] = Field(default_factory=list)
@@ -106,6 +116,10 @@ class RagIndexStatus(BaseModel):
     last_rebuilt_at: str | None = None
     embed_model: str
     store: str
+    # 索引是否由降级嵌入（hash 兜底）构建：True 时向量空间不是真实语义空间，
+    # 检索质量不可信。禁止静默降级——运维/前端应能直接看到。
+    degraded: bool = False
+    fallback_reason: str | None = None
 
 
 class RagRebuildResponse(BaseModel):
@@ -113,3 +127,5 @@ class RagRebuildResponse(BaseModel):
     elapsed_ms: int
     embed_model: str
     store: str
+    degraded: bool = False
+    fallback_reason: str | None = None
