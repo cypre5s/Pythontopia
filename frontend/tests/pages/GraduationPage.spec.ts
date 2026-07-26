@@ -37,6 +37,7 @@ function createTestRouter(): Router {
     history: createMemoryHistory(),
     routes: [
       { path: '/world', name: 'world', component: { template: '<div />' } },
+      { path: '/mainline-map', name: 'mainline-map', component: { template: '<div />' } },
       { path: '/profile-room', name: 'profile-room', component: { template: '<div />' } },
       { path: '/graduation', name: 'graduation', component: GraduationPage },
     ],
@@ -49,7 +50,7 @@ describe('GraduationPage', () => {
     localStorage.clear();
   });
 
-  it('未达毕业条件（存在 <1★ 章节）经 URL 直入 → 重定向回 /world', async () => {
+  it('未达毕业条件（存在 <1★ 章节）→ 说明还差哪几章，不静默弹回小镇', async () => {
     const router = createTestRouter();
     await router.push('/graduation');
     await router.isReady();
@@ -62,7 +63,45 @@ describe('GraduationPage', () => {
     await flushPromises();
 
     expect(wrapper.find('[data-testid="graduation-page"]').exists()).toBe(false);
-    expect(router.currentRoute.value.path).toBe('/world');
+    expect(wrapper.find('[data-testid="graduation-locked"]').exists()).toBe(true);
+    // 停在毕业典礼页并说清差距，而不是零提示 replace 回 /world。
+    expect(router.currentRoute.value.path).toBe('/graduation');
+    expect(wrapper.get('[data-testid="graduation-missing"]').text()).toContain('已通关 3 / 7 章');
+    expect(wrapper.get('[data-testid="graduation-missing"]').text()).toContain('第 4、5、6、7 章');
+
+    await wrapper.get('[data-testid="graduation-to-map"]').trigger('click');
+    await flushPromises();
+    expect(router.currentRoute.value.path).toBe('/mainline-map');
+  });
+
+  it('overview 加载失败 → 区分为「查不到」错误态并给重试，不当作未毕业', async () => {
+    const router = createTestRouter();
+    await router.push('/graduation');
+    await router.isReady();
+
+    const mainline = useMainlineStore();
+    // load() 内部把异常吞进 store.error、overview 保持 null。
+    const loadSpy = vi.spyOn(mainline, 'load').mockImplementation(async () => {
+      mainline.error = 'network down';
+    });
+
+    const wrapper = mount(GraduationPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="graduation-error"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="graduation-locked"]').exists()).toBe(false);
+    expect(wrapper.text()).toContain('network down');
+    expect(router.currentRoute.value.path).toBe('/graduation');
+
+    // 重试重新强拉一次权威 overview。
+    loadSpy.mockImplementation(async () => {
+      mainline.error = null;
+      mainline.overview = makeOverview([1, 1, 1, 1, 1, 1, 1]);
+    });
+    await wrapper.get('[data-testid="graduation-retry"]').trigger('click');
+    await flushPromises();
+    expect(loadSpy).toHaveBeenCalledWith(true);
+    expect(wrapper.find('[data-testid="graduation-page"]').exists()).toBe(true);
   });
 
   it('7 章全部 ≥1★ → 渲染毕业典礼与星级回顾', async () => {

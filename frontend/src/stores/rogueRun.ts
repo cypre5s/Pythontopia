@@ -762,15 +762,24 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
   /** 战斗失败后重试同一节点（重新出一道同 KC/题型/难度的题，事件加成保留）。 */
   async function retryChallenge(): Promise<void> {
     const node = activeNode.value;
-    if (!node) return;
+    // 与 submitChallenge 同款并发守卫：重复点击「再试一次」会重复触发 LLM 出题（计费）
+    // 且后到的 beginChallenge 会覆盖 activeProblem / activeCode。
+    if (!node || loading.value) return;
     const difficulty = activeDifficulty.value > 0 ? activeDifficulty.value : node.difficulty;
-    if (node.kcCode) {
-      await challenge.retryPrefetch({
-        kc: node.kcCode,
-        kind: node.challengeKind,
-        difficulty,
-      });
+    // 预取先于 beginChallenge，其间 loading 必须已置位，否则守卫留有空窗（双击仍会出两题）。
+    loading.value = true;
+    try {
+      if (node.kcCode) {
+        await challenge.retryPrefetch({
+          kc: node.kcCode,
+          kind: node.challengeKind,
+          difficulty,
+        });
+      }
+    } catch {
+      // 预取失败不阻断重试：beginChallenge 会走现场出题路径。
     }
+    // beginChallenge 内部 finally 会把 loading 归位。
     await beginChallenge(node);
   }
 

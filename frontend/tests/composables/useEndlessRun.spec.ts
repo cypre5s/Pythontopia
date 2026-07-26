@@ -85,6 +85,22 @@ describe('useEndlessRun', () => {
     expect(run.errorMessage.value).toContain('判题服务暂不可用');
   });
 
+  it('评测中重复提交只走一次正式判题（手动提交 + BugMineCard 30s 定时器同帧触发）', async () => {
+    const run = useEndlessRun();
+    await run.startRun();
+    run.code.value = 'print(5)';
+
+    // BugMineCard 的 timeout 直接 emit → onSubmit，绕过按钮 :disabled；
+    // t≈29s 手点提交 + 30s 定时器 = 同一题两次 submit()。
+    const manual = run.submit();
+    const timeout = run.submit();
+    await Promise.all([manual, timeout]);
+
+    expect(apiMocks.submitBossAttempt).toHaveBeenCalledTimes(1);
+    expect(run.attempts.value).toBe(1);
+    expect(run.history.value.length).toBe(1);
+  });
+
   it('把纵深难度交给后端，并以服务端画像合成后的难度为真源', async () => {
     apiMocks.requestBossProblem.mockResolvedValueOnce({ ...PROBLEM, difficulty: 4 });
     const run = useEndlessRun();

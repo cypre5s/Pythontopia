@@ -2,7 +2,7 @@
 // 题库浏览页：按 KC / 难度 / 玩家状态过滤，按章节 / 难度 / 尝试次数排序；
 // 点击题号 / 标题 / 「去做」均直达做题界面 /training（不再行内展开题面预览）。
 import { computed, onMounted, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import AppLayout from '@/app/AppLayout.vue';
 import PyButton from '@/components/ui/PyButton.vue';
 import {
@@ -25,15 +25,25 @@ type SortField = 'chapter' | 'difficulty' | 'attempts';
 type DifficultyFilter = '' | 'Low' | 'Medium' | 'High';
 type StatusFilter = '' | PlayerProblemStatus;
 
+const route = useRoute();
 const router = useRouter();
 const toast = useToastStore();
+
+/** 从 URL 取 kcCode（图书馆「关联示例」、/examples 重定向、NPC open_panel 都带这个参数）。 */
+function kcCodeFromQuery(): string {
+  const raw = route.query.kcCode;
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  return typeof value === 'string' ? value : '';
+}
 
 const problems = ref<CourseProblemSummary[]>([]);
 const kcMap = ref<Map<string, CourseKcSummary>>(new Map());
 const progressMap = ref<Map<number, PlayerProblemProgress>>(new Map());
 
 const searchQuery = ref<string>('');
-const filterKcCode = ref<string>('');
+// URL 是这个筛选的初值来源（`/problems?kcCode=...`），下拉变更再写回 URL：
+// 站内所有「关联示例 / 关联题目」链接都靠它把学生带到已过滤好的题单。
+const filterKcCode = ref<string>(kcCodeFromQuery());
 const filterDifficulty = ref<DifficultyFilter>('');
 const filterStatus = ref<StatusFilter>('');
 const sortField = ref<SortField>('chapter');
@@ -173,6 +183,30 @@ watch(kcsWithProblems, (kcs) => {
     filterKcCode.value = '';
   }
 });
+
+// URL ←→ 下拉双向同步：
+//  · 下拉变更（含「清空筛选」与上面的无效 KC 回退）→ replace 回写，刷新 / 分享链接保持同一视图；
+//  · 外部再次带 kcCode 进来（图书馆连点两个不同 KC 的「关联示例」）→ 同步到下拉。
+watch(filterKcCode, (code) => {
+  if (code === kcCodeFromQuery()) return;
+  const query = { ...route.query };
+  if (code) {
+    query.kcCode = code;
+  } else {
+    delete query.kcCode;
+  }
+  void router.replace({ path: route.path, query });
+});
+
+watch(
+  () => route.query.kcCode,
+  () => {
+    const code = kcCodeFromQuery();
+    if (code !== filterKcCode.value) {
+      filterKcCode.value = code;
+    }
+  },
+);
 
 function goTraining(problemId: number): void {
   void router.push({ path: '/training', query: { problemId: String(problemId) } });

@@ -6,27 +6,33 @@ import { computed, onMounted, onBeforeUnmount, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useGameSettingsStore } from '@stores/gameSettings';
 import { useWorldStore } from '@stores/world';
+import { FAST_TRAVEL_ENABLED } from '@/data/fastTravel';
 import { playUiClick, playUiHover } from '@/composables/useStardewFx';
 
 interface WheelItem {
   icon: string;
   label: string;
   action: () => void;
+  /** false = 该玩法当前休眠，扇区不渲染（如 R-14 单 hub 下的「传送」）。 */
+  available?: boolean;
 }
 
 const router = useRouter();
 const settings = useGameSettingsStore();
 const world = useWorldStore();
 
-const items: readonly WheelItem[] = [
+const ALL_ITEMS: readonly WheelItem[] = [
   { icon: 'L',  label: '课程',  action: () => void router.push('/library') },
   { icon: 'A',  label: '远征',  action: () => void router.push('/expedition') },
-  { icon: 'T',  label: '传送',  action: () => window.dispatchEvent(new CustomEvent('pythontopia:fast-travel-open')) },
+  { icon: 'T',  label: '传送',  available: FAST_TRAVEL_ENABLED, action: () => window.dispatchEvent(new CustomEvent('pythontopia:fast-travel-open')) },
   { icon: 'Z',  label: '休息',  action: () => void world.sleep() },
   { icon: 'B',  label: '矿洞',  action: () => void router.push('/bug-mine') },
   { icon: 'W',  label: '工坊',  action: () => void router.push('/workshop') },
   { icon: '#',  label: '训练',  action: () => void router.push('/training') },
 ] as const;
+
+// 休眠玩法不占扇区：留一个点了没反应（或打开空面板）的入口比没有入口更糟。
+const items: readonly WheelItem[] = ALL_ITEMS.filter((item) => item.available !== false);
 
 const SECTOR_COUNT = items.length;
 const SECTOR_ANGLE = 360 / SECTOR_COUNT;
