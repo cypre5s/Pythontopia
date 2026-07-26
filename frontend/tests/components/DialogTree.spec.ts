@@ -12,11 +12,13 @@
  *   - mock `@/composables/useAudio` 避免 jsdom 加载 Phaser 抛错；
  *   - 直接用 setActivePinia + 真实 store，不 mock store 内部逻辑，保证组件与 store 接口契约。
  */
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import DialogTree from '@/components/game/DialogTree.vue';
-import { useDialogStore, type NpcDialogTree } from '@/stores/dialog';
+import { useDialogStore, __resetDialogFlagsForTests, type NpcDialogTree } from '@/stores/dialog';
 import { useSessionStore } from '@/stores/session';
 
 const sfxMocks = vi.hoisted(() => ({
@@ -60,6 +62,18 @@ function makeTree(): NpcDialogTree {
   };
 }
 
+/**
+ * 读取仓库根 data/npcs 下的<b>真实</b>对话树。
+ *
+ * 条件过滤在 UI 层失效的缺陷之所以逃过测试，正是因为老用例全用合成 fixture；
+ * 这里直接吃线上数据，NPC 数据改动破坏条件语义时能当场暴露。
+ */
+function readRealTree(npcKey: string): NpcDialogTree {
+  const fromFrontend = resolve(process.cwd(), '../data/npcs');
+  const base = existsSync(fromFrontend) ? fromFrontend : resolve(process.cwd(), 'data/npcs');
+  return JSON.parse(readFileSync(resolve(base, npcKey, 'dialog.json'), 'utf8')) as NpcDialogTree;
+}
+
 function primeStore(text = 'hi'): ReturnType<typeof useDialogStore> {
   const store = useDialogStore();
   store.visible = true;
@@ -79,12 +93,15 @@ function primeStore(text = 'hi'): ReturnType<typeof useDialogStore> {
 describe('DialogTree.vue', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
+    // flag_set / first_time_this_week 条件读 localStorage：用例间必须复位，避免互相污染。
+    __resetDialogFlagsForTests();
     vi.useFakeTimers();
   });
 
   afterEach(() => {
     vi.useRealTimers();
     vi.clearAllMocks();
+    __resetDialogFlagsForTests();
   });
 
   it('renders nothing when store.visible is false', () => {
@@ -258,6 +275,88 @@ describe('DialogTree.vue', () => {
     const wrapper = mount(DialogTree);
     await wrapper.find('.dialog-overlay').trigger('keydown.esc');
     expect(closeSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders only visible choices and clicks them by their raw index', async () => {
+    // 真实 foreman_bug 树：greet 的 4 个选项里，0「上次失败的提交…」要求 has_failed_submission，
+    // 2「我没失败过」要求 no_failed_submission —— 二者互斥，UI 任何时候只该出现其中一个。
+    const store = primeStore();
+    store.npcKey = 'foreman_bug';
+    store.tree = readRealTree('foreman_bug');
+    store.currentNodeId = 'greet';
+    store.history = ['greet'];
+    store.context = { playerName: '小七', profileType: 'cautious', stats: {} };
+    const spy = vi.spyOn(store, 'selectChoice');
+
+    const wrapper = mount(DialogTree);
+    await vi.advanceTimersByTimeAsync(3000);
+
+    const labels = wrapper.findAll('.choice-btn').map((btn) => btn.text());
+    expect(labels).not.toContain('上次失败的提交是什么？');
+    expect(labels).toContain('我没失败过');
+    expect(labels).toEqual(['矿洞规则？', '我没失败过', '下次见']);
+
+    // 关键回归：点第一个可见选项要落到它在原始 choices 里的下标（1），而不是过滤后的 0。
+    await wrapper.findAll('.choice-btn')[0]!.trigger('click');
+    expect(spy).toHaveBeenCalledWith(1);
+  });
+
+  it('reveals the failed-submission branch once context reports a failed submission', async () => {
+    const store = primeStore();
+    store.npcKey = 'foreman_bug';
+    store.tree = readRealTree('foreman_bug');
+    store.currentNodeId = 'greet';
+    store.history = ['greet'];
+    store.context = {
+      playerName: '小七',
+      profileType: 'cautious',
+      stats: { lastFailedProblemTitle: '两数之和' },
+    };
+
+    const wrapper = mount(DialogTree);
+    await vi.advanceTimersByTimeAsync(3000);
+
+    const labels = wrapper.findAll('.choice-btn').map((btn) => btn.text());
+    expect(labels).toContain('上次失败的提交是什么？');
+    expect(labels).not.toContain('我没失败过');
+  });
+
+  it('single visible choice advances via its raw index when the panel is clicked', async () => {
+    // 复盘师 weekly_retro：两个选项都不带条件，此处构造「首项被隐藏」的场景验证
+    // onAdvance 用的是可见项的 rawIndex 而非硬编码 0。
+    const store = primeStore();
+    store.tree = {
+      npcKey: 'sage_review',
+      rootNodeId: 'greet',
+      nodes: {
+        greet: {
+          id: 'greet',
+          text: 'hi',
+          conditions: [],
+          choices: [
+            { label: '被条件挡住的选项', nextNodeId: 'gated' },
+            { label: '唯一可见', nextNodeId: null },
+          ],
+        },
+        gated: {
+          id: 'gated',
+          text: 'gated',
+          conditions: [{ type: 'flag_set', flagKey: 'never_set_flag' }],
+          choices: [{ label: '好', nextNodeId: null }],
+        },
+      },
+    };
+    store.currentNodeId = 'greet';
+    store.history = ['greet'];
+    const spy = vi.spyOn(store, 'selectChoice');
+
+    const wrapper = mount(DialogTree);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(wrapper.findAll('.choice-btn')).toHaveLength(1);
+
+    await wrapper.find('.dialog-overlay').trigger('click');
+
+    expect(spy).toHaveBeenCalledWith(1);
   });
 
   it('shows load error and a close button when store.loadError is set', async () => {
