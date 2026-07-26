@@ -59,8 +59,8 @@
           "nextNodeId": null,
           "effects": [
             {
-              "type": "quest_recommend",
-              "questKey": "read_chapter_today"
+              "type": "open_panel",
+              "route": "/lecture/1"
             }
           ]
         },

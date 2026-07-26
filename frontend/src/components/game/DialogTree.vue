@@ -92,13 +92,18 @@ const hideScriptText = computed<boolean>(
     (store.greetingStatus === 'loading' || store.greetingStatus === 'ready'),
 );
 
-const renderedChoices = computed(() => {
-  const node = currentNode.value;
-  if (!node) return [] as Array<{ label: string; rawIndex: number }>;
+/**
+ * 可见选项 = store.visibleChoices（已按目标节点 conditions 过滤）+ 模板渲染后的文案。
+ *
+ * `rawIndex` 必须保持为 `currentNode.choices` 的原始下标：`selectChoice` 只认原始下标，
+ * 用过滤后数组的下标会整体错位选到隔壁分支。
+ */
+const renderedChoices = computed<Array<{ label: string; rawIndex: number }>>(() => {
+  if (!currentNode.value) return [];
   const ctx = templateContext.value;
-  return node.choices.map((choice, idx) => ({
-    label: renderDialogText(choice.label, ctx),
-    rawIndex: idx,
+  return store.visibleChoices.map((entry) => ({
+    label: renderDialogText(entry.choice.label, ctx),
+    rawIndex: entry.rawIndex,
   }));
 });
 
@@ -181,9 +186,11 @@ function onAdvance(): void {
     finishTypewriter();
     return;
   }
-  // 文本已读完但只有单选项时，点击空白等同选第一项（保持星露谷"一直回车推进"手感）。
-  if (currentNode.value && currentNode.value.choices.length === 1) {
-    chooseOption(0);
+  // 文本已读完但只有单个「可见」选项时，点击空白等同选它（保持星露谷"一直回车推进"手感）。
+  // 必须按可见项判断并用其 rawIndex：条件隐藏后剩一项时，硬点 0 会选到被隐藏的那条。
+  const only = renderedChoices.value.length === 1 ? renderedChoices.value[0] : undefined;
+  if (only) {
+    chooseOption(only.rawIndex);
   }
 }
 
