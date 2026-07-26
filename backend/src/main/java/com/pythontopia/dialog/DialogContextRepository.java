@@ -6,7 +6,6 @@ import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
-import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -15,6 +14,10 @@ import org.springframework.stereotype.Repository;
  *
  * <p>所有 SQL 都按 user_id / classroom_id 做了 owner filter，禁止跨用户跨班级泄露；各方法返回值
  * 统一用 {@link Optional} 或空集合，调用方（{@link DialogContextService}）负责兜底，不把空数据当异常抛。
+ *
+ * <p>这里只保留「模板真会用到」的聚合：每加一个方法都意味着每次 NPC 对话多一条 SQL，所以新增前
+ * 必须先在 {@code data/npcs/&#42;/dialog.json} 里存在对应 {@code {{stats.*}}} 占位符。R-14 收缩残留的
+ * 能量 / 每日题 / 推荐题 / 同伴对比 / 作物枯萎成熟等查询已随无人消费的 key 一并删除。
  */
 @Repository
 class DialogContextRepository {
@@ -54,54 +57,6 @@ class DialogContextRepository {
             since,
             until);
     return count == null ? 0 : count;
-  }
-
-  int countDistinctPassedProblems(Long userId) {
-    Integer count =
-        jdbcTemplate.queryForObject(
-            """
-            SELECT COUNT(DISTINCT problem_id) FROM practice_submission
-            WHERE user_id = ? AND status = 'PASSED'
-            """,
-            Integer.class,
-            userId);
-    return count == null ? 0 : count;
-  }
-
-  /** 全部提交数，用于估算 firstAttemptRate（首次通过率 proxy）。 */
-  int countAllSubmissions(Long userId) {
-    Integer count =
-        jdbcTemplate.queryForObject(
-            "SELECT COUNT(*) FROM practice_submission WHERE user_id = ?",
-            Integer.class,
-            userId);
-    return count == null ? 0 : count;
-  }
-
-  int countPassedSubmissions(Long userId) {
-    Integer count =
-        jdbcTemplate.queryForObject(
-            "SELECT COUNT(*) FROM practice_submission WHERE user_id = ? AND status = 'PASSED'",
-            Integer.class,
-            userId);
-    return count == null ? 0 : count;
-  }
-
-  /** 按 kc_code 查 kc_name，限定 pack_id = 43。 */
-  Optional<String> findKcName(String kcCode) {
-    if (kcCode == null || kcCode.isBlank()) {
-      return Optional.empty();
-    }
-    try {
-      String name =
-          jdbcTemplate.queryForObject(
-              "SELECT kc_name FROM course_kc WHERE pack_id = 43 AND kc_code = ?",
-              String.class,
-              kcCode);
-      return Optional.ofNullable(name);
-    } catch (EmptyResultDataAccessException ignored) {
-      return Optional.empty();
-    }
   }
 
   /** 查 KC 所属章节：chapter_order、标题、page_no 范围、首个示例页。 */
@@ -221,79 +176,6 @@ class DialogContextRepository {
     return count == null ? 0 : count;
   }
 
-  /** 下一个未达标 KC（含从未练过的，按 chapter_order 取最靠前）。 */
-  Optional<String> findNextLockedKc(Long userId) {
-    return jdbcTemplate
-        .query(
-            """
-            SELECT COALESCE(kc.kc_name, kc.kc_code) AS kc_name
-            FROM course_kc kc
-            LEFT JOIN kc_mastery m ON m.kc_code = kc.kc_code AND m.user_id = ?
-            WHERE kc.pack_id = 43 AND COALESCE(m.mastery_score, 0) < 0.4
-            ORDER BY COALESCE(kc.chapter_order, 99), kc.kc_code
-            LIMIT 1
-            """,
-            (rs, rowNum) -> rs.getString("kc_name"),
-            userId)
-        .stream()
-        .findFirst();
-  }
-
-  /** 最近一个达标的 KC（按最近学习事件时间倒序）。 */
-  Optional<String> findLatestUnlockedKcName(Long userId) {
-    return jdbcTemplate
-        .query(
-            """
-            SELECT COALESCE(kc.kc_name, m.kc_code) AS kc_name
-            FROM kc_mastery m
-            LEFT JOIN course_kc kc ON kc.kc_code = m.kc_code AND kc.pack_id = 43
-            WHERE m.user_id = ? AND m.mastery_score >= 0.4
-              AND m.last_event_at IS NOT NULL
-            ORDER BY m.last_event_at DESC
-            LIMIT 1
-            """,
-            (rs, rowNum) -> rs.getString("kc_name"),
-            userId)
-        .stream()
-        .findFirst();
-  }
-
-  /** 「枯萎」语义：有进度但未达标（0 < mastery < 0.4），最近更新的一个 —— 复习提醒文案用。 */
-  Optional<String> findWitheredKcName(Long userId) {
-    return jdbcTemplate
-        .query(
-            """
-            SELECT COALESCE(kc.kc_name, m.kc_code) AS kc_name
-            FROM kc_mastery m
-            LEFT JOIN course_kc kc ON kc.kc_code = m.kc_code AND kc.pack_id = 43
-            WHERE m.user_id = ? AND m.mastery_score > 0 AND m.mastery_score < 0.4
-            ORDER BY m.updated_at DESC
-            LIMIT 1
-            """,
-            (rs, rowNum) -> rs.getString("kc_name"),
-            userId)
-        .stream()
-        .findFirst();
-  }
-
-  /** 「成熟待收」语义：达标 KC 中掌握度最高的一个。 */
-  Optional<String> findHarvestKcName(Long userId) {
-    return jdbcTemplate
-        .query(
-            """
-            SELECT COALESCE(kc.kc_name, m.kc_code) AS kc_name
-            FROM kc_mastery m
-            LEFT JOIN course_kc kc ON kc.kc_code = m.kc_code AND kc.pack_id = 43
-            WHERE m.user_id = ? AND m.mastery_score >= 0.4
-            ORDER BY m.mastery_score DESC
-            LIMIT 1
-            """,
-            (rs, rowNum) -> rs.getString("kc_name"),
-            userId)
-        .stream()
-        .findFirst();
-  }
-
   /** 已达标 KC 名（前 N 个，按章节顺序）。 */
   List<String> findUnlockedKcNames(Long userId, int limit) {
     return jdbcTemplate.query(
@@ -338,22 +220,6 @@ class DialogContextRepository {
             "SELECT AVG(mastery_score) FROM kc_mastery WHERE user_id = ?",
             BigDecimal.class,
             userId));
-  }
-
-  /** 本周 mastery delta 合计（用于 masteryDelta）。 */
-  Optional<BigDecimal> findMasteryDeltaSum(
-      Long userId, OffsetDateTime since, OffsetDateTime until) {
-    return Optional.ofNullable(
-        jdbcTemplate.queryForObject(
-            """
-            SELECT COALESCE(SUM(delta), 0)
-            FROM kc_mastery_event
-            WHERE user_id = ? AND created_at >= ? AND created_at < ?
-            """,
-            BigDecimal.class,
-            userId,
-            since,
-            until));
   }
 
   /** 当前章节序：mastery ≥ 0.5 的 KC 中最大的 chapter_order。 */
@@ -407,80 +273,6 @@ class DialogContextRepository {
             afterOrder)
         .stream()
         .findFirst();
-  }
-
-  /** entry problem：beginner 难度第一个题号。 */
-  Optional<Long> findEntryProblemId() {
-    try {
-      return Optional.ofNullable(
-          jdbcTemplate.queryForObject(
-              """
-              SELECT id FROM course_problem
-              WHERE pack_id = 43 AND difficulty = 'BEGINNER'
-              ORDER BY id LIMIT 1
-              """,
-              Long.class));
-    } catch (EmptyResultDataAccessException ignored) {
-      return Optional.empty();
-    }
-  }
-
-  /** 推荐题：lowestMasteryKc 对应 KC 的第一道题，没有则任意 INTERMEDIATE 题。 */
-  Optional<ProblemRow> findRecommendProblem(String kcCode) {
-    if (kcCode != null && !kcCode.isBlank()) {
-      List<ProblemRow> hit =
-          jdbcTemplate.query(
-              """
-              SELECT id, difficulty FROM course_problem
-              WHERE pack_id = 43 AND kc_code = ?
-              ORDER BY difficulty, id
-              LIMIT 1
-              """,
-              (rs, rowNum) -> new ProblemRow(rs.getLong("id"), rs.getString("difficulty")),
-              kcCode);
-      if (!hit.isEmpty()) {
-        return Optional.of(hit.get(0));
-      }
-    }
-    return jdbcTemplate
-        .query(
-            """
-            SELECT id, difficulty FROM course_problem
-            WHERE pack_id = 43 AND difficulty = 'INTERMEDIATE'
-            ORDER BY id LIMIT 1
-            """,
-            (rs, rowNum) -> new ProblemRow(rs.getLong("id"), rs.getString("difficulty")))
-        .stream()
-        .findFirst();
-  }
-
-  Optional<Long> findChallengeProblemId() {
-    try {
-      return Optional.ofNullable(
-          jdbcTemplate.queryForObject(
-              """
-              SELECT id FROM course_problem
-              WHERE pack_id = 43 AND difficulty = 'ADVANCED'
-              ORDER BY id LIMIT 1
-              """,
-              Long.class));
-    } catch (EmptyResultDataAccessException ignored) {
-      return Optional.empty();
-    }
-  }
-
-  /** 按难度 + dayIndex 取整 hash 出每日题号，保证同一天对同一玩家稳定。 */
-  Optional<Long> findDailyProblemByDifficulty(String difficulty, int seed) {
-    List<Long> ids =
-        jdbcTemplate.query(
-            "SELECT id FROM course_problem WHERE pack_id = 43 AND difficulty = ? ORDER BY id",
-            (rs, rowNum) -> rs.getLong("id"),
-            difficulty);
-    if (ids.isEmpty()) {
-      return Optional.empty();
-    }
-    int index = Math.floorMod(seed, ids.size());
-    return Optional.of(ids.get(index));
   }
 
   /** 学生当前第一个 ACTIVE 班级（按 classroom id 升序取第一个）。 */
@@ -587,74 +379,6 @@ class DialogContextRepository {
         .findFirst();
   }
 
-  /** 班级中本周练习最多的同学（除自己之外）。 */
-  Optional<PeerRow> findMostDiligentPeer(
-      Long classroomId, Long excludeUserId, OffsetDateTime since, OffsetDateTime until) {
-    return jdbcTemplate
-        .query(
-            """
-            WITH peer_stats AS (
-              SELECT ps.user_id, COUNT(*) AS exercises
-              FROM practice_submission ps
-              JOIN classroom_members cm ON cm.student_id = ps.user_id AND cm.status = 'ACTIVE'
-              WHERE cm.classroom_id = ?
-                AND ps.user_id <> ?
-                AND ps.submitted_at >= ? AND ps.submitted_at < ?
-              GROUP BY ps.user_id
-              ORDER BY exercises DESC
-              LIMIT 1
-            )
-            SELECT ps.user_id, ps.exercises,
-                   COALESCE((SELECT AVG(mastery_score) FROM kc_mastery WHERE user_id = ps.user_id), 0) AS avg_mastery
-            FROM peer_stats ps
-            """,
-            (rs, rowNum) ->
-                new PeerRow(
-                    rs.getLong("user_id"),
-                    rs.getInt("exercises"),
-                    rs.getBigDecimal("avg_mastery")),
-            classroomId,
-            excludeUserId,
-            since,
-            until)
-        .stream()
-        .findFirst();
-  }
-
-  /** 班级中刚起步同学（mastery 较低的）。 */
-  Optional<PeerRow> findLateStarterPeer(
-      Long classroomId, Long excludeUserId, OffsetDateTime monthSince) {
-    return jdbcTemplate
-        .query(
-            """
-            WITH base AS (
-              SELECT cm.student_id AS user_id,
-                     COALESCE(
-                       (SELECT AVG(mastery_score) FROM kc_mastery WHERE user_id = cm.student_id),
-                       0) AS avg_mastery,
-                     (SELECT COUNT(*) FROM practice_submission ps2
-                      WHERE ps2.user_id = cm.student_id AND ps2.submitted_at >= ?) AS month_exercises
-              FROM classroom_members cm
-              WHERE cm.classroom_id = ? AND cm.status = 'ACTIVE' AND cm.student_id <> ?
-            )
-            SELECT user_id, month_exercises, avg_mastery
-            FROM base
-            WHERE avg_mastery > 0
-            ORDER BY avg_mastery ASC
-            LIMIT 1
-            """,
-            (rs, rowNum) ->
-                new PeerRow(
-                    rs.getLong("user_id"),
-                    rs.getInt("month_exercises"),
-                    rs.getBigDecimal("avg_mastery")),
-            monthSince,
-            classroomId,
-            excludeUserId)
-        .stream()
-        .findFirst();
-  }
-
   /** 用户在班级 mastery 排名（1-based），用于段位划分。 */
   Optional<Integer> findStudentClassroomRank(Long classroomId, Long userId) {
     return jdbcTemplate
@@ -678,27 +402,6 @@ class DialogContextRepository {
         .findFirst();
   }
 
-  /** world_session 的 energy / energy_cap；列不存在或 SQL 失败时返回 empty。 */
-  Optional<EnergyRow> findEnergy(Long userId) {
-    try {
-      return jdbcTemplate
-          .query(
-              """
-              SELECT energy, energy_cap FROM world_session
-              WHERE user_id = ?
-              ORDER BY id DESC
-              LIMIT 1
-              """,
-              (rs, rowNum) -> new EnergyRow(rs.getInt("energy"), rs.getInt("energy_cap")),
-              userId)
-          .stream()
-          .findFirst();
-    } catch (org.springframework.jdbc.BadSqlGrammarException ignored) {
-      // 老库可能没跑 V115，静默返回 empty 让 Service 走 100/100 默认。
-      return Optional.empty();
-    }
-  }
-
   record KcChapterRow(Integer chapterOrder, String title, Integer pageMin, Integer pageMax, Integer examplePage) {}
 
   record KcFailureRow(String kcCode, String kcName, int failedCount) {}
@@ -708,10 +411,4 @@ class DialogContextRepository {
   record LastFailureRow(Long problemId, String title, String verdict) {}
 
   record KcMasteryRow(String kcCode, String kcName, BigDecimal masteryScore) {}
-
-  record ProblemRow(Long id, String difficulty) {}
-
-  record PeerRow(Long userId, int metric, BigDecimal avgMastery) {}
-
-  record EnergyRow(int current, int max) {}
 }

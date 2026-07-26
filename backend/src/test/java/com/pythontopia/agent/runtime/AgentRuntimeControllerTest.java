@@ -1,13 +1,11 @@
 package com.pythontopia.agent.runtime;
 
-import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -19,10 +17,7 @@ import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.GlobalExceptionHandler;
 import com.pythontopia.common.web.CurrentUserArgumentResolver;
 import com.pythontopia.common.web.WebConfig;
-import com.pythontopia.loop.LoopRunService;
 import com.pythontopia.loop.LoopRuntimeService;
-import com.pythontopia.loop.dto.LoopRunDto;
-import com.pythontopia.loop.dto.LoopRunRecordRequest;
 import java.time.OffsetDateTime;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
@@ -49,8 +44,6 @@ class AgentRuntimeControllerTest {
   @Autowired ObjectMapper objectMapper;
 
   @MockBean AgentRuntimeEventService eventService;
-
-  @MockBean LoopRunService loopRunService;
 
   @MockBean LoopRuntimeService runtimeService;
 
@@ -117,44 +110,26 @@ class AgentRuntimeControllerTest {
         .andExpect(status().isForbidden())
         .andExpect(jsonPath("$.code").value("FORBIDDEN"));
 
-    verifyNoInteractions(eventService, loopRunService, runtimeService);
+    verifyNoInteractions(eventService, runtimeService);
   }
 
+  /**
+   * run 的创建/查询只保留 {@code /api/loop/runs} 一个入口；这里曾镜像出一套完全等价的
+   * {@code /api/agent-runs}（同 DTO 同 service 方法），外加一个恒报 FINISHED 的假 SSE
+   * {@code /stream}（{@code produces=text/event-stream} 却返回一次性拼好的字符串，而
+   * {@code LoopRunDto} 根本没有 status 字段）。三条路由必须保持删除状态。
+   */
   @Test
-  void agentRunResourceCreatesAndReadsRunsThroughExistingLoopService() throws Exception {
-    LoopRunDto run = runDto(99L, "trace-agent-run");
-    when(loopRunService.record(eq(7L), any(LoopRunRecordRequest.class))).thenReturn(run);
-    when(loopRunService.getForOwner(7L, 99L)).thenReturn(run);
-
-    ObjectNode body = loopRunBody();
-
+  void duplicatedRunRoutesAndFakeSseStreamAreGone() throws Exception {
     mockMvc
         .perform(
             post("/api/agent-runs")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(body)))
-        .andExpect(status().isCreated())
-        .andExpect(jsonPath("$.id").value(99))
-        .andExpect(jsonPath("$.traceId").value("trace-agent-run"));
+                .content(objectMapper.writeValueAsString(loopRunBody())))
+        .andExpect(status().isNotFound());
 
-    mockMvc
-        .perform(get("/api/agent-runs/99"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.id").value(99))
-        .andExpect(jsonPath("$.sessionId").value("agentic-session-1"));
-  }
-
-  @Test
-  void agentRunStreamReturnsAgUiCompatibleLifecycleEvents() throws Exception {
-    when(loopRunService.getForOwner(7L, 99L)).thenReturn(runDto(99L, "trace-stream-99"));
-
-    mockMvc
-        .perform(get("/api/agent-runs/99/stream"))
-        .andExpect(status().isOk())
-        .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_EVENT_STREAM))
-        .andExpect(content().string(containsString("event: RUN_STARTED")))
-        .andExpect(content().string(containsString("event: RUN_FINISHED")))
-        .andExpect(content().string(containsString("\"traceId\":\"trace-stream-99\"")));
+    mockMvc.perform(get("/api/agent-runs/99")).andExpect(status().isNotFound());
+    mockMvc.perform(get("/api/agent-runs/99/stream")).andExpect(status().isNotFound());
   }
 
   @Test
@@ -255,24 +230,6 @@ class AgentRuntimeControllerTest {
     body.put("outputTokens", 80);
     body.put("traceId", "trace-agent-run");
     return body;
-  }
-
-  private LoopRunDto runDto(Long id, String traceId) {
-    return new LoopRunDto(
-        id,
-        7L,
-        "agentic-session-1",
-        1,
-        4,
-        3,
-        1,
-        List.of("course_rag.search", "judge.run"),
-        true,
-        true,
-        120,
-        80,
-        traceId,
-        OffsetDateTime.parse("2026-06-30T00:00:00Z"));
   }
 
   private void authenticate(CurrentUserPrincipal principal, String authority) {

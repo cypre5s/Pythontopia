@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pythontopia.auth.security.JwtProperties;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.media.domain.MediaAsset;
 import com.pythontopia.media.domain.MediaJob;
@@ -62,6 +63,7 @@ class MediaJobServiceTest {
             compositionService,
             streamRegistry,
             objectMapper,
+            new MediaAssetUrls(new JwtProperties("media-job-test-secret-at-least-32-chars", 60)),
             properties,
             SYNCHRONOUS);
   }

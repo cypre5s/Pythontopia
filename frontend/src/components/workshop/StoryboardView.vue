@@ -91,7 +91,10 @@ function coursePageFallback(scene: StoryboardScene): void {
   sceneImageError.value = false;
   imageDegraded.value = false;
   if (scene.evidence_page_id) {
-    sceneImageUrl.value = `/api/coursepack/pages/${scene.evidence_page_id}/image`;
+    // 后端契约是 /api/course/pages/{pageId}/image（CoursePageImageController，匿名放行）。
+    // 这里曾误写成 /api/coursepack/...，导致文生图不可用（未配讯飞密钥时是常态）走到本兜底
+    // 分支时连课件原页都 404，整条降级链断掉。
+    sceneImageUrl.value = `/api/course/pages/${scene.evidence_page_id}/image`;
   } else {
     sceneImageUrl.value = '';
     sceneImageError.value = true;
@@ -147,12 +150,12 @@ function friendlyComposeError(code: string | undefined, fallback: string): strin
   return mapped ?? fallback;
 }
 
-function assetUrl(assetId: number): string {
-  return `/api/media/assets/${assetId}`;
-}
-
-function enterPlayback(assetId: number, url?: string): void {
-  composedVideoUrl.value = url !== undefined && url.length > 0 ? url : assetUrl(assetId);
+/**
+ * 成片直链只能用后端下发的 url：{@code /api/media/assets/{id}} 带签名参数（见后端 MediaAssetUrls），
+ * 前端按 assetId 自行拼接的裸直链会被服务端 404。
+ */
+function enterPlayback(url: string): void {
+  composedVideoUrl.value = url;
   composeError.value = null;
 }
 
@@ -178,9 +181,12 @@ async function composeVideo(): Promise<void> {
   try {
     const job = await createStoryboardVideoJob(scenes.value.map(toSceneSpec));
     if (job.cached && job.assetId !== undefined) {
-      enterPlayback(job.assetId);
+      // 创建响应只给 assetId；成片直链带签名，必须读作业详情拿后端下发的 url，不能自行拼接。
+      await recoverViaPoll(job.jobId);
       composing.value = false;
-      toast.show('已命中合成缓存，直接播放', 'success');
+      if (composeError.value === null) {
+        toast.show('已命中合成缓存，直接播放', 'success');
+      }
       return;
     }
     await subscribeJob(job.jobId);
@@ -204,8 +210,8 @@ async function subscribeJob(jobId: number): Promise<void> {
     return;
   }
   const ready = stream.result.value;
-  if (ready && ready.assetId !== undefined) {
-    enterPlayback(ready.assetId, ready.url);
+  if (ready && ready.url) {
+    enterPlayback(ready.url);
     return;
   }
   // SSE 正常结束却未拿到成片：轮询一次真实作业状态兜底（不伪造结果）。
@@ -215,8 +221,8 @@ async function subscribeJob(jobId: number): Promise<void> {
 async function recoverViaPoll(jobId: number): Promise<void> {
   try {
     const job = await getMediaJob(jobId);
-    if (job.status === 'SUCCESS' && job.assetId !== undefined) {
-      enterPlayback(job.assetId, job.url);
+    if (job.status === 'SUCCESS' && job.url) {
+      enterPlayback(job.url);
     } else if (job.status === 'FAILED') {
       composeError.value = friendlyComposeError(job.errorCode, '视频合成失败，请稍后重试');
     } else {
