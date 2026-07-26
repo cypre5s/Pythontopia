@@ -12,7 +12,7 @@ import os
 import re
 import time
 from collections.abc import AsyncIterator, Callable
-from typing import Any
+from typing import Any, Protocol, TypeVar
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
@@ -240,14 +240,85 @@ class _SseHeartbeat:
         return max(0.05, self.heartbeat_s - self.idle_s())
 
 
-async def _pings_while(
-    task: asyncio.Future[Any], heartbeat: _SseHeartbeat
-) -> AsyncIterator[str]:
+async def _pings_while(task: asyncio.Future[Any], heartbeat: _SseHeartbeat) -> AsyncIterator[str]:
     """task 完成前按心跳节奏产出 ping 注释行（不消费 task 结果，结果由调用方 await）。"""
     while not task.done():
         await asyncio.wait({task}, timeout=heartbeat.seconds_until_due())
         if not task.done() and heartbeat.due():
             yield _PING
+
+
+class _Review(Protocol):
+    passed: bool
+    reasons: list[str]
+
+
+_ReviewT = TypeVar("_ReviewT", bound=_Review)
+
+
+def _review_with_trace(
+    node: str,
+    review_fn: Callable[..., _ReviewT],
+    *args: Any,
+    fail_status: str = "retry",
+) -> tuple[_ReviewT, list[str]]:
+    """同步审查 + 对称 start/finish trace 块（三审共用；safety 未过标 fail，其余标 retry）。
+
+    审查函数为纯同步正则/规则，耗时亚毫秒，start/finish 一并返回由调用方顺序 yield，
+    事件流字节序与逐条发射完全一致。
+    """
+    started = time.monotonic()
+    review = review_fn(*args)
+    return review, [
+        _trace_start(node),
+        _trace_finish(
+            node,
+            "ok" if review.passed else fail_status,
+            int((time.monotonic() - started) * 1000),
+            **_note_kwargs(review.reasons),
+        ),
+    ]
+
+
+async def _governed_evidence_fetch(
+    evidence_fetcher: EvidenceFetcher, *, kc_codes: list[str], query: str
+) -> tuple[EvidenceBundle, str]:
+    """治理化课件检索（超时 + 重试 + rag 熔断；失败回空证据 → 通识标注路径）。
+
+    返回 (evidence, finish trace 块)。对应的 ``_trace_start("evidence_fetcher")``
+    由调用方在 await 前先行 yield，保证检索进行中前端即可见「检索中」工位。
+    """
+    started = time.monotonic()
+
+    async def _fetch() -> EvidenceBundle:
+        return await evidence_fetcher.fetch(kc_codes=kc_codes, query=query, top_k=_TOP_K)
+
+    async def _empty() -> EvidenceBundle:
+        return EvidenceBundle(chunks=[], no_evidence_found=True)
+
+    fetch_obs = await run_with_governance(
+        "evidence_fetch",
+        _fetch,
+        timeout_s=_RAG_TIMEOUT_S,
+        max_retries=1,
+        fallback=_empty,
+        breaker_key="rag",
+    )
+    evidence = (
+        fetch_obs.value
+        if isinstance(fetch_obs.value, EvidenceBundle)
+        else EvidenceBundle(chunks=[], no_evidence_found=True)
+    )
+    extra: dict[str, Any] = {"chunks": len(evidence.chunks)}
+    if fetch_obs.status != "ok":
+        extra["note"] = fetch_obs.as_trace_note()
+    finish = _trace_finish(
+        "evidence_fetcher",
+        "ok" if fetch_obs.status == "ok" else "retry",
+        int((time.monotonic() - started) * 1000),
+        **extra,
+    )
+    return evidence, finish
 
 
 def _build_revise_prompt(question: str, answer: str, reasons: list[str]) -> str:
@@ -287,8 +358,14 @@ async def tutor_ask_stream(
             quiz = _detect_quiz_mode(context)
             if quiz is not None:
                 async for chunk in _quiz_stages(
-                    quiz, body, base_question, kc_codes, query,
-                    provider, evidence_fetcher, heartbeat,
+                    quiz,
+                    body,
+                    base_question,
+                    kc_codes,
+                    query,
+                    provider,
+                    evidence_fetcher,
+                    heartbeat,
                 ):
                     yield chunk
                 return
@@ -299,41 +376,15 @@ async def tutor_ask_stream(
             # 开场工位清单（零 LLM 成本，在任何节点运行前发出）。
             yield _format_sse("plan", _ASK_PLAN)
 
-            # ── 馆员：课件 RAG 检索（治理：超时 + 重试 + rag 熔断；失败回空证据 → 通识标注路径） ──
+            # ── 馆员：课件 RAG 检索（治理细节在 _governed_evidence_fetch）──
             # 统一发 start（C2：所有节点 start+finish 对称，便于前端按 node 折叠去重）。
             yield _trace_start("evidence_fetcher")
-            started = time.monotonic()
-
-            async def _fetch_evidence() -> EvidenceBundle:
-                return await evidence_fetcher.fetch(
-                    kc_codes=kc_codes, query=query, top_k=_TOP_K,
-                )
-
-            async def _empty_evidence() -> EvidenceBundle:
-                return EvidenceBundle(chunks=[], no_evidence_found=True)
-
-            fetch_obs = await run_with_governance(
-                "evidence_fetch",
-                _fetch_evidence,
-                timeout_s=_RAG_TIMEOUT_S,
-                max_retries=1,
-                fallback=_empty_evidence,
-                breaker_key="rag",
+            evidence, fetch_trace = await _governed_evidence_fetch(
+                evidence_fetcher,
+                kc_codes=kc_codes,
+                query=query,
             )
-            evidence = (
-                fetch_obs.value
-                if isinstance(fetch_obs.value, EvidenceBundle)
-                else EvidenceBundle(chunks=[], no_evidence_found=True)
-            )
-            fetch_extra: dict[str, Any] = {"chunks": len(evidence.chunks)}
-            if fetch_obs.status != "ok":
-                fetch_extra["note"] = fetch_obs.as_trace_note()
-            yield _trace_finish(
-                "evidence_fetcher",
-                "ok" if fetch_obs.status == "ok" else "retry",
-                int((time.monotonic() - started) * 1000),
-                **fetch_extra,
-            )
+            yield fetch_trace
 
             # ── 导师：流式作答 ──
             agent = TutorAgent(provider)
@@ -362,19 +413,23 @@ async def tutor_ask_stream(
                 # 复合 debate 工位先发 start，子节点 solver/critic/referee 嵌套其中（start+finish 对称·C2）。
                 yield _trace_start("debate")
                 async for kind, payload in debate.run_events(
-                    agent_question, evidence.chunks, body.profile_brief,
+                    agent_question,
+                    evidence.chunks,
+                    body.profile_brief,
                 ):
                     # node_* 载荷为 {node, agent_label}（事件源头自带中文 label·C1）。
                     if kind == "node_start" and isinstance(payload, dict):
                         pending = payload
                         node_started = time.monotonic()
                         yield _trace_start(
-                            payload["node"], agent_label=payload.get("agent_label"),
+                            payload["node"],
+                            agent_label=payload.get("agent_label"),
                         )
                     elif kind == "node_finish" and isinstance(payload, dict):
                         pending = None
                         yield _trace_finish(
-                            payload["node"], "ok",
+                            payload["node"],
+                            "ok",
                             int((time.monotonic() - node_started) * 1000),
                             agent_label=payload.get("agent_label"),
                         )
@@ -385,7 +440,8 @@ async def tutor_ask_stream(
                     answer = debate_result.answer
                     # 辩论完成后关闭复合 debate 工位（前端可视为"多个 agent 争论"）。
                     yield _trace_finish(
-                        "debate", "ok",
+                        "debate",
+                        "ok",
                         int((time.monotonic() - debate_started) * 1000),
                         note=f"confidence={debate_result.confidence:.2f}",
                     )
@@ -396,11 +452,14 @@ async def tutor_ask_stream(
                     # 子节点 start 未配对 finish 时补 error finish，再关闭复合 debate 工位（保持对称）。
                     if pending is not None:
                         yield _trace_finish(
-                            pending["node"], "error", 0,
+                            pending["node"],
+                            "error",
+                            0,
                             agent_label=pending.get("agent_label"),
                         )
                     yield _trace_finish(
-                        "debate", "error",
+                        "debate",
+                        "error",
                         int((time.monotonic() - debate_started) * 1000),
                     )
                     debate_mode = False
@@ -429,38 +488,31 @@ async def tutor_ask_stream(
                     "TutorAgent", "ok", int((time.monotonic() - tutor_started) * 1000)
                 )
 
-            # ── 审查官：引用审查（答案 [页 X] 是否命中证据页） ──
-            yield _trace_start("grounding_critic")
-            g_started = time.monotonic()
-            grounding = grounding_review(answer, evidence.chunks)
-            yield _trace_finish(
+            # ── 三道审查：审查官（引用）→ 校对官（防幻觉）→ 安全员（泄答/歧视/PII/危险代码） ──
+            grounding, g_trace = _review_with_trace(
                 "grounding_critic",
-                "ok" if grounding.passed else "retry",
-                int((time.monotonic() - g_started) * 1000),
-                **_note_kwargs(grounding.reasons),
+                grounding_review,
+                answer,
+                evidence.chunks,
             )
-
-            # ── 校对官：防幻觉（统计型数字是否有据） ──
-            yield _trace_start("hallucination_detector")
-            h_started = time.monotonic()
-            hallucination = hallucination_review(answer, evidence.chunks)
-            yield _trace_finish(
+            for chunk in g_trace:
+                yield chunk
+            hallucination, h_trace = _review_with_trace(
                 "hallucination_detector",
-                "ok" if hallucination.passed else "retry",
-                int((time.monotonic() - h_started) * 1000),
-                **_note_kwargs(hallucination.reasons),
+                hallucination_review,
+                answer,
+                evidence.chunks,
             )
-
-            # ── 安全员：泄答 / 歧视 / PII / 危险代码 ──
-            yield _trace_start("safety_critic")
-            s_started = time.monotonic()
-            safety = safety_review(answer)
-            yield _trace_finish(
+            for chunk in h_trace:
+                yield chunk
+            safety, s_trace = _review_with_trace(
                 "safety_critic",
-                "ok" if safety.passed else "fail",
-                int((time.monotonic() - s_started) * 1000),
-                **_note_kwargs(safety.reasons),
+                safety_review,
+                answer,
+                fail_status="fail",
             )
+            for chunk in s_trace:
+                yield chunk
 
             # ── critique→revise 闭环：grounding/hallucination 未过 → 注入审查意见做一轮有界修订 ──
             # 修订发生在 token 流之后（非流式），前端以 result.answer_md 终值渲染（契约本就支持）。
@@ -484,7 +536,10 @@ async def tutor_ask_stream(
 
                 revise_task = asyncio.ensure_future(
                     run_with_governance(
-                        "tutor_revise", _revise, breaker_key="provider", budget=guard,
+                        "tutor_revise",
+                        _revise,
+                        breaker_key="provider",
+                        budget=guard,
                     )
                 )
                 async for ping in _pings_while(revise_task, heartbeat):
@@ -493,7 +548,10 @@ async def tutor_ask_stream(
                 revise_elapsed = int((time.monotonic() - revise_started) * 1000)
                 if revise_obs.status == "budget_skipped":
                     yield _trace_finish(
-                        "TutorAgent.revise", "skipped", revise_elapsed, note="budget_skipped",
+                        "TutorAgent.revise",
+                        "skipped",
+                        revise_elapsed,
+                        note="budget_skipped",
                     )
                 else:
                     candidate = ""
@@ -547,7 +605,10 @@ async def tutor_ask_stream(
 
             async def _make_evidence_note() -> str:
                 return await agent.summarize_evidence(
-                    base_question, context, body.profile_brief, evidence.chunks,
+                    base_question,
+                    context,
+                    body.profile_brief,
+                    evidence.chunks,
                 )
 
             async def _skip() -> None:
@@ -555,7 +616,10 @@ async def tutor_ask_stream(
 
             diagram_coro = (
                 run_with_governance(
-                    "tutor_diagram", _make_diagram, breaker_key="provider", budget=guard,
+                    "tutor_diagram",
+                    _make_diagram,
+                    breaker_key="provider",
+                    budget=guard,
                 )
                 if want_diagram
                 else _skip()
@@ -588,7 +652,10 @@ async def tutor_ask_stream(
             if isinstance(diagram_obs, ToolObservation):
                 if diagram_obs.status == "budget_skipped":
                     yield _trace_finish(
-                        "tutor_diagram", "skipped", tail_elapsed, note="budget_skipped",
+                        "tutor_diagram",
+                        "skipped",
+                        tail_elapsed,
+                        note="budget_skipped",
                     )
                 elif diagram_obs.ok and isinstance(diagram_obs.value, list):
                     visual_aids = [aid.model_dump(mode="json") for aid in diagram_obs.value]
@@ -601,7 +668,10 @@ async def tutor_ask_stream(
             if isinstance(note_obs, ToolObservation):
                 if note_obs.status == "budget_skipped":
                     yield _trace_finish(
-                        "tutor_evidence_note", "skipped", tail_elapsed, note="budget_skipped",
+                        "tutor_evidence_note",
+                        "skipped",
+                        tail_elapsed,
+                        note="budget_skipped",
                     )
                 elif note_obs.ok and isinstance(note_obs.value, str):
                     evidence_note = note_obs.value
@@ -609,21 +679,24 @@ async def tutor_ask_stream(
                 else:
                     yield _trace_finish("tutor_evidence_note", "retry", tail_elapsed)
 
-            yield _format_sse("result", _build_result(
-                answer=answer,
-                page_ids=page_ids,
-                evidence=evidence_list,
-                grounding_status=grounding_status,
-                combined_passed=combined_passed,
-                grounding=grounding,
-                hallucination=hallucination,
-                safety=safety,
-                based_on_general=based_on_general,
-                visual_aids=visual_aids,
-                evidence_note=evidence_note,
-                revised=revised,
-                personalization_note=TutorAgent.personalization_note(body.profile_brief),
-            ))
+            yield _format_sse(
+                "result",
+                _build_result(
+                    answer=answer,
+                    page_ids=page_ids,
+                    evidence=evidence_list,
+                    grounding_status=grounding_status,
+                    combined_passed=combined_passed,
+                    grounding=grounding,
+                    hallucination=hallucination,
+                    safety=safety,
+                    based_on_general=based_on_general,
+                    visual_aids=visual_aids,
+                    evidence_note=evidence_note,
+                    revised=revised,
+                    personalization_note=TutorAgent.personalization_note(body.profile_brief),
+                ),
+            )
         except Exception as exc:
             yield _format_sse("error", {"code": "TUTOR_FAILED", "message": str(exc)})
 
@@ -728,7 +801,9 @@ async def _quiz_stages(
         topic = base_question or "、".join(kc_codes) or "Python 基础"
         ask_task = asyncio.ensure_future(
             agent.ask_quiz_question(
-                topic=topic, profile_brief=body.profile_brief, round_no=round_no,
+                topic=topic,
+                profile_brief=body.profile_brief,
+                round_no=round_no,
             )
         )
         async for ping in _pings_while(ask_task, heartbeat):
@@ -737,7 +812,9 @@ async def _quiz_stages(
             quiz_q = await ask_task
         except Exception as exc:  # noqa: BLE001 - 出题失败 fail-fast 报错，不静默降级
             yield _trace_finish(
-                "quiz_question", "error", int((time.monotonic() - q_started) * 1000),
+                "quiz_question",
+                "error",
+                int((time.monotonic() - q_started) * 1000),
             )
             yield _format_sse("error", {"code": "QUIZ_FAILED", "message": str(exc)})
             return
@@ -753,57 +830,36 @@ async def _quiz_stages(
         )
         for piece in _stream_pieces(answer_md):
             yield _format_sse("token", {"delta": piece})
-        yield _format_sse("result", _build_quiz_result(
-            answer_md=answer_md,
-            quiz={
-                "phase": "ask",
-                "round": round_no,
-                "stem": stem,
-                "blanks": blanks,
-                "cite_evidence": False,
-            },
-            page_ids=[],
-            evidence=[],
-            grounding_status="NO_EVIDENCE",
-            based_on_general=True,
-            safety=safety,
-            profile_brief=body.profile_brief,
-        ))
+        yield _format_sse(
+            "result",
+            _build_quiz_result(
+                answer_md=answer_md,
+                quiz={
+                    "phase": "ask",
+                    "round": round_no,
+                    "stem": stem,
+                    "blanks": blanks,
+                    "cite_evidence": False,
+                },
+                page_ids=[],
+                evidence=[],
+                grounding_status="NO_EVIDENCE",
+                based_on_general=True,
+                safety=safety,
+                profile_brief=body.profile_brief,
+            ),
+        )
         return
 
     # ── phase == "judge"：先检索判定 RAG 是否命中（决定能否引用 PPT） ──
     yield _format_sse("plan", _QUIZ_JUDGE_PLAN)
     yield _trace_start("evidence_fetcher")
-    started = time.monotonic()
-
-    async def _fetch_evidence() -> EvidenceBundle:
-        return await evidence_fetcher.fetch(kc_codes=kc_codes, query=query, top_k=_TOP_K)
-
-    async def _empty_evidence() -> EvidenceBundle:
-        return EvidenceBundle(chunks=[], no_evidence_found=True)
-
-    fetch_obs = await run_with_governance(
-        "evidence_fetch",
-        _fetch_evidence,
-        timeout_s=_RAG_TIMEOUT_S,
-        max_retries=1,
-        fallback=_empty_evidence,
-        breaker_key="rag",
+    evidence, fetch_trace = await _governed_evidence_fetch(
+        evidence_fetcher,
+        kc_codes=kc_codes,
+        query=query,
     )
-    evidence = (
-        fetch_obs.value
-        if isinstance(fetch_obs.value, EvidenceBundle)
-        else EvidenceBundle(chunks=[], no_evidence_found=True)
-    )
-    fetch_extra: dict[str, Any] = {"chunks": len(evidence.chunks)}
-    if fetch_obs.status != "ok":
-        fetch_extra["note"] = fetch_obs.as_trace_note()
-    yield _trace_finish(
-        "evidence_fetcher",
-        "ok" if fetch_obs.status == "ok" else "retry",
-        int((time.monotonic() - started) * 1000),
-        **fetch_extra,
-    )
+    yield fetch_trace
 
     # 上一轮题目（评卷依据）：取最近一条 assistant 历史。
     prev_question = next(
@@ -826,36 +882,38 @@ async def _quiz_stages(
         judged = await judge_task
     except Exception as exc:  # noqa: BLE001 - 评卷失败 fail-fast 报错
         yield _trace_finish(
-            "quiz_judge", "error", int((time.monotonic() - j_started) * 1000),
+            "quiz_judge",
+            "error",
+            int((time.monotonic() - j_started) * 1000),
         )
         yield _format_sse("error", {"code": "QUIZ_FAILED", "message": str(exc)})
         return
     explanation = judged["explanation_md"]
     verdict = judged["verdict"]
     yield _trace_finish(
-        "quiz_judge", "ok", int((time.monotonic() - j_started) * 1000),
+        "quiz_judge",
+        "ok",
+        int((time.monotonic() - j_started) * 1000),
         note=f"verdict={verdict}",
     )
 
     # 引用审查：点评里的 [页 X] 必须命中证据页（防伪造页码红线）。
-    yield _trace_start("grounding_critic")
-    g_started = time.monotonic()
-    grounding = grounding_review(explanation, evidence.chunks)
-    yield _trace_finish(
+    grounding, g_trace = _review_with_trace(
         "grounding_critic",
-        "ok" if grounding.passed else "retry",
-        int((time.monotonic() - g_started) * 1000),
-        **_note_kwargs(grounding.reasons),
+        grounding_review,
+        explanation,
+        evidence.chunks,
     )
-    yield _trace_start("safety_critic")
-    s_started = time.monotonic()
-    safety = safety_review(explanation)
-    yield _trace_finish(
+    for chunk in g_trace:
+        yield chunk
+    safety, s_trace = _review_with_trace(
         "safety_critic",
-        "ok" if safety.passed else "fail",
-        int((time.monotonic() - s_started) * 1000),
-        **_note_kwargs(safety.reasons),
+        safety_review,
+        explanation,
+        fail_status="fail",
     )
+    for chunk in s_trace:
+        yield chunk
 
     for piece in _stream_pieces(explanation):
         yield _format_sse("token", {"delta": piece})
@@ -879,22 +937,25 @@ async def _quiz_stages(
         grounding_status = "NO_EVIDENCE"
         based_on_general = True
 
-    yield _format_sse("result", _build_quiz_result(
-        answer_md=explanation,
-        quiz={
-            "phase": "judge",
-            "round": round_no,
-            "verdict": verdict,
-            "cite_evidence": has_valid_citation,
-        },
-        page_ids=page_ids,
-        evidence=evidence_list,
-        grounding_status=grounding_status,
-        based_on_general=based_on_general,
-        safety=safety,
-        profile_brief=body.profile_brief,
-        grounding=grounding,
-    ))
+    yield _format_sse(
+        "result",
+        _build_quiz_result(
+            answer_md=explanation,
+            quiz={
+                "phase": "judge",
+                "round": round_no,
+                "verdict": verdict,
+                "cite_evidence": has_valid_citation,
+            },
+            page_ids=page_ids,
+            evidence=evidence_list,
+            grounding_status=grounding_status,
+            based_on_general=based_on_general,
+            safety=safety,
+            profile_brief=body.profile_brief,
+            grounding=grounding,
+        ),
+    )
 
 
 def _build_quiz_result(
