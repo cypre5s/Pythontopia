@@ -15,6 +15,7 @@ import com.pythontopia.common.sse.SseRelayExecutor;
 import com.pythontopia.coursepack.repository.CoursePackRepository;
 import com.pythontopia.learner.profile.dto.ProfileTurnRequest;
 import com.pythontopia.learner.profile.repository.ProfileRepository;
+import com.pythontopia.learner.profile.service.InterviewDimensionMirror;
 import com.pythontopia.learner.profile.service.ProfileService;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -42,7 +43,8 @@ class ProfileServiceFailureTest {
             graph,
             new GraphServiceProperties("http://graph", "http://rag", "token"),
             new ObjectMapper(),
-            mock(SseRelayExecutor.class));
+            mock(SseRelayExecutor.class),
+            mock(InterviewDimensionMirror.class));
 
     assertThatThrownBy(
             () -> service.sendTurn(7L, "session-1", new ProfileTurnRequest("hello", List.of())))
