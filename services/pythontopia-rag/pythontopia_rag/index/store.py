@@ -10,11 +10,16 @@ from pythontopia_rag.index.chunker import Chunk
 @dataclass
 class Hit:
     chunk: Chunk
+    # hybrid 模式下是**融合排序分**（RRF 位次归一，0~1]，用于排序/展示，非相关度；
+    # vector_only 模式下就是余弦相关度。真实相关度请读 vector_score / bm25_score。
     score: float
     # KC 图谱感知扩展：命中来自「前置 KC 召回路」而非主题 KC（融合层判定并标注）。
     via_prerequisite: bool = False
     # 命中来自图扩展时记录主导关系；None 表示主题 KC 直接命中或非图扩展。
     via_relation: str | None = None
+    # 各召回路的原生分（向后兼容追加）：余弦相似度 / BM25 分。未被该路召回时为 None。
+    vector_score: float | None = None
+    bm25_score: float | None = None
 
 
 @dataclass
@@ -23,6 +28,9 @@ class StoreStatus:
     last_rebuilt_at: str | None
     embed_dim: int
     store: str
+    # 索引是否由降级嵌入（hash 兜底）构建；True 时向量空间不是真实语义空间。
+    degraded: bool = False
+    fallback_reason: str | None = None
 
 
 class VectorStore(Protocol):
@@ -62,6 +70,8 @@ class InMemoryVectorStore:
     embed_dim: int = 0
     last_rebuilt_at: str | None = None
     rows: list[_Row] = field(default_factory=list)
+    degraded: bool = False
+    fallback_reason: str | None = None
 
     async def upsert(self, chunks: list[Chunk], vectors: list[list[float]]) -> None:
         if len(chunks) != len(vectors):
@@ -81,6 +91,8 @@ class InMemoryVectorStore:
         self.rows = []
         self.embed_dim = 0
         self.last_rebuilt_at = None
+        self.degraded = False
+        self.fallback_reason = None
 
     async def search(
         self,
@@ -111,10 +123,17 @@ class InMemoryVectorStore:
             last_rebuilt_at=self.last_rebuilt_at,
             embed_dim=self.embed_dim,
             store=self.name,
+            degraded=self.degraded,
+            fallback_reason=self.fallback_reason,
         )
 
     def mark_rebuilt(self, timestamp: str) -> None:
         self.last_rebuilt_at = timestamp
+
+    def mark_degraded(self, degraded: bool, reason: str | None) -> None:
+        """记录本次重建所用嵌入是否为降级兜底，供 /rag/index/status 暴露（禁止静默降级）。"""
+        self.degraded = degraded
+        self.fallback_reason = reason
 
 
 def _intersect(left: Iterable[str], right: Iterable[str]) -> bool:
