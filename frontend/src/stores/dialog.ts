@@ -40,6 +40,17 @@ export interface DialogChoice {
 }
 
 /**
+ * 条件过滤后仍可见的选项，附带它在 `currentNode.choices` 里的<b>原始下标</b>。
+ *
+ * `rawIndex` 是 `selectChoice(index)` 唯一合法的入参：UI 只渲染可见项，
+ * 若改用过滤后数组的下标会与 store 的原始数组错位，选到隔壁分支。
+ */
+export interface VisibleDialogChoice {
+  choice: DialogChoice;
+  rawIndex: number;
+}
+
+/**
  * `dialog:choice` 全局事件 payload。
  *
  * 由 `chooseBranch(choiceId)` 触发，供业务侧（任务系统 / 分析 / 教师后台）订阅，
@@ -153,6 +164,16 @@ interface DialogState {
   isTypingDone: boolean;
 
   /**
+   * 「等分支走完再跳」的暂存路由。
+   *
+   * 选项同时带 `nextNodeId` 和导航类 effect（如复盘师「写下心得」→ retro_thanks +
+   * quest_recommend）时，立刻跳转会吃掉后续节点与它的 give_item 效果。此处先暂存，
+   * 待玩家走到分支终点（`nextNodeId === null`）时才真正派发导航事件；
+   * 中途 ESC / 关闭对话则随 `close()` 一起丢弃（玩家主动放弃，不该被强拽走）。
+   */
+  pendingRoute: string | null;
+
+  /**
    * 当前对话使用的渲染上下文，由 `openWithTree` 调用 /api/dialog/context 拿到。
    *
    * - 拉取失败 / 未登录时保留为 null，DialogTree / DialogModal 渲染器自动用空 stats + 'cautious'
@@ -188,6 +209,150 @@ const PANEL_ROUTE_MAP: Readonly<Record<string, string>> = Object.freeze({
   examples: '/examples',
   problems: '/problems',
 });
+
+/**
+ * `quest_recommend.questKey` → 前端路由的<b>显式</b>映射。
+ *
+ * 后端主线的标识空间是 `mainline_stage(chapter, stage_index)` + 数字主键（路由
+ * `/mainline/stage/:stageId(\d+)`），并不存在 questKey 这一标识空间，故这里只承认
+ * 明确落过地的 key；其余一律走 {@link resolveQuestRoute} 的兜底 + 告警，不再静默吞掉。
+ */
+const QUEST_ROUTE_MAP: Readonly<Record<string, string>> = Object.freeze({
+  // 班级任务不在主线里，直接带到公告板·班级任务页签，学生在那里真实领取教师发布的任务。
+  claim_class_quest: '/board?tab=classroom',
+});
+
+/** `章-节` 序号形式的 questKey（如 `3-1`）：能识别语义，但无法在前端解析成真实 stageId。 */
+const CHAPTER_STAGE_QUEST_RE = /^\d+-\d+$/;
+
+/** 主线入口兜底路由：解析不出具体 stage 时，至少把玩家送到冒险地图自行选关。 */
+const MAINLINE_MAP_ROUTE = '/mainline-map';
+
+/** 已告警过的 questKey，避免同一份数据在一次会话里反复刷控制台。 */
+const warnedQuestKeys = new Set<string>();
+
+function warnQuestKeyOnce(questKey: string, reason: string): void {
+  if (warnedQuestKeys.has(questKey)) return;
+  warnedQuestKeys.add(questKey);
+  if (typeof console !== 'undefined' && typeof console.warn === 'function') {
+    console.warn(`[dialog] quest_recommend questKey="${questKey}" ${reason}`);
+  }
+}
+
+/**
+ * 把 `quest_recommend` 的 questKey 解析成导航目标。
+ *
+ * - 命中 {@link QUEST_ROUTE_MAP}：按显式映射跳；
+ * - `章-节` 形式（`1-1` / `3-1`…）：前端没有 chapter/stage_index → stageId 的映射表，
+ *   落到冒险地图并告警一次，提示该 key 未接入真实主线标识；
+ * - 其余（未知 key）：同样落冒险地图并告警，避免「静默跳主线」把数据错误藏起来。
+ */
+function resolveQuestRoute(questKey: string): string {
+  const mapped = QUEST_ROUTE_MAP[questKey];
+  if (mapped) return mapped;
+  if (CHAPTER_STAGE_QUEST_RE.test(questKey)) {
+    warnQuestKeyOnce(questKey, '无法解析成真实 stageId（主线标识空间是数字主键），回落到冒险地图');
+  } else {
+    warnQuestKeyOnce(questKey, '不在已知任务标识空间内，回落到冒险地图');
+  }
+  return MAINLINE_MAP_ROUTE;
+}
+
+/**
+ * 导航类 effect 的优先级：显式面板/路由 > 任务推荐。
+ *
+ * 一个选项可能同时带多个导航类 effect（如「领取本章任务·去上课」= quest_recommend + open_panel）。
+ * 按数组顺序「最后一个赢」会让跳转目标取决于数据书写顺序，改字段顺序就悄悄改行为；
+ * 这里改为按优先级裁决，同优先级时<b>先声明者胜</b>（与 UI「上面的优先」直觉一致）。
+ */
+const EFFECT_ROUTE_PRIORITY: Readonly<Record<string, number>> = Object.freeze({
+  route: 2,
+  open_panel: 2,
+  quest_recommend: 1,
+});
+
+/**
+ * 评估条件列表是否全部满足（AND 逻辑）。
+ *
+ * 提成模块级纯函数（只依赖入参 context + 持久层读取），是为了让 Pinia <b>getter</b>
+ * （visibleChoices）也能复用同一份判定——getter 的 `this` 类型里看不到 actions。
+ *
+ * - first_time_this_week：该 key 本 ISO 周尚未被「完成」（完成时由 markNodeCompleted 记录）；
+ * - flag_set：set_flag 效果落过对应 flagKey；
+ * - kc_mastered：learning store 掌握度快照中该 KC ≥ 阈值（默认 0.4，与「测·达标」一致）；
+ * - has_failed_submission / no_failed_submission：基于对话 context 的最近失败提交；
+ *   context 尚未到达（后台异步拉取中）时按「无失败记录」处理，保证新玩家路径可见。
+ */
+function evaluateDialogConditions(
+  conditions: DialogCondition[],
+  context: DialogContextDto | null,
+): boolean {
+  if (conditions.length === 0) return true;
+  const hasFailed = (): boolean => {
+    const title = context?.stats?.['lastFailedProblemTitle'];
+    return Boolean(title) && title !== '—' && title !== '-';
+  };
+  for (const cond of conditions) {
+    switch (cond.type) {
+      case 'has_failed_submission':
+        if (!hasFailed()) return false;
+        break;
+      case 'no_failed_submission':
+        if (hasFailed()) return false;
+        break;
+      case 'first_time_this_week': {
+        const key = cond.key ?? cond.flagKey;
+        if (key && weeklySeenThisWeek(key)) return false;
+        break;
+      }
+      case 'flag_set': {
+        const key = cond.flagKey ?? cond.key;
+        if (key && !hasDialogFlag(key)) return false;
+        break;
+      }
+      case 'kc_mastered': {
+        if (!cond.kcCode) break;
+        try {
+          const learning = useLearningStore();
+          const snap = learning.field.masterySnapshot.find((entry) => entry.kcCode === cond.kcCode);
+          const threshold = cond.value ?? 0.4;
+          if (!snap || snap.masteryScore < threshold) return false;
+        } catch {
+          // learning store 不可用（极端测试环境）→ 视为未达成，隐藏增益内容。
+          return false;
+        }
+        break;
+      }
+    }
+  }
+  return true;
+}
+
+/**
+ * 从一个选项的 effects 里裁决出唯一导航目标（纯函数，除 questKey 告警外无副作用）。
+ *
+ * 非导航类 effect（set_flag / give_item）在此被忽略，由 `selectChoice` 单独落地。
+ * 返回 null 表示该选项不触发任何跳转。
+ */
+export function resolveEffectRoute(effects: readonly DialogEffect[] | undefined): string | null {
+  let best: { route: string; priority: number } | null = null;
+  for (const effect of effects ?? []) {
+    const priority = EFFECT_ROUTE_PRIORITY[effect.type] ?? 0;
+    if (priority === 0) continue;
+    const route =
+      effect.type === 'quest_recommend'
+        ? effect.questKey
+          ? resolveQuestRoute(effect.questKey)
+          : null
+        : // 打开学习面板：既支持 effect.route 带参路由（/lecture/1），也支持 effect.panel 简称。
+          effect.route ?? (effect.panel ? PANEL_ROUTE_MAP[effect.panel] ?? null : null);
+    if (!route) continue;
+    if (best === null || priority > best.priority) {
+      best = { route, priority };
+    }
+  }
+  return best === null ? null : best.route;
+}
 
 /**
  * 模块级 `dialog:choice` 事件监听集合。
@@ -379,6 +544,7 @@ export const useDialogStore = defineStore('dialog', {
     loading: false,
     branchChoices: [],
     isTypingDone: false,
+    pendingRoute: null,
     context: null,
     greetingStatus: 'idle',
     greetingText: '',
@@ -391,6 +557,28 @@ export const useDialogStore = defineStore('dialog', {
     currentNode(state): DialogNode | null {
       if (!state.tree || !state.currentNodeId) return null;
       return state.tree.nodes[state.currentNodeId] ?? null;
+    },
+    /**
+     * 当前节点里「目标节点条件满足」的选项 + 其原始下标。
+     *
+     * <b>条件过滤的唯一真源</b>：DialogTree 直接渲染它，DialogModal 经
+     * `markTypingDone` → branchChoices 间接消费它，两条 UI 路径不会再各过滤各的而漂移
+     * （历史缺陷：DialogTree 直接 map 原始 choices，条件形同虚设——没失败提交的新玩家
+     * 也能点开「上次失败的提交是什么？」并看到一屏 '—'）。
+     */
+    visibleChoices(state): VisibleDialogChoice[] {
+      const tree = state.tree;
+      const node = tree && state.currentNodeId ? tree.nodes[state.currentNodeId] ?? null : null;
+      if (!node) return [];
+      return node.choices
+        .map((choice, rawIndex) => ({ choice, rawIndex }))
+        .filter(({ choice }) => {
+          if (!choice.nextNodeId) return true;
+          const target = tree?.nodes[choice.nextNodeId];
+          // 目标节点缺失时不隐藏：保留原有「点了才报 loadError」的可诊断行为。
+          if (!target) return true;
+          return evaluateDialogConditions(target.conditions ?? [], state.context);
+        });
     },
     /** 当前是否有可展示的分支选项（打字机结束 + currentNode.choices 非空）。 */
     hasBranches: (state): boolean => state.branchChoices.length > 0,
@@ -420,6 +608,7 @@ export const useDialogStore = defineStore('dialog', {
       this.portrait = null;
       this.branchChoices = [];
       this.isTypingDone = false;
+      this.pendingRoute = null;
       this.greetingStatus = 'idle';
       this.greetingText = '';
       this.greetingGrounded = false;
@@ -440,12 +629,10 @@ export const useDialogStore = defineStore('dialog', {
         const entryId = this.pickEntryNodeId(tree);
         this.currentNodeId = entryId;
         this.history = entryId ? [entryId] : [];
-        const entryNode = entryId ? tree.nodes[entryId] : undefined;
-        if (entryNode) {
-          this.markNodeShown(entryNode);
-          if (entryId !== tree.rootNodeId) {
-            markWeeklySeen(entrySeenKey(tree.npcKey, entryId));
-          }
+        // 「本周一次」只记录入口<b>抢占</b>（避免同一条插话本周反复劫持 greet），
+        // 不记录节点内容已被消费——后者由 markNodeCompleted 在玩家真正做出选择时记账。
+        if (entryId && entryId !== tree.rootNodeId && tree.nodes[entryId]) {
+          markWeeklySeen(entrySeenKey(tree.npcKey, entryId));
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -507,9 +694,12 @@ export const useDialogStore = defineStore('dialog', {
 
     /**
      * 选择当前节点的某个选项：
-     *   - 先按顺序应用 effects（quest_recommend 发主线任务、route/open_panel 触发导航）；
-     *   - nextNodeId 为 null 时关闭对话；
-     *   - 否则切换到下一节点并写入 history。
+     *   - 先应用非导航 effects（set_flag / give_item）；
+     *   - 导航类 effects 按优先级（route/open_panel > quest_recommend）裁决出唯一目标；
+     *   - `nextNodeId === null`（分支终点）：关闭对话并派发导航（本次目标优先于暂存目标）；
+     *   - 否则切换到下一节点，导航目标暂存到 `pendingRoute` 等分支走完再触发。
+     *
+     * @param choiceIndex `currentNode.choices` 里的<b>原始下标</b>（见 {@link VisibleDialogChoice}）。
      */
     selectChoice(choiceIndex: number): void {
       const node = this.currentNode;
@@ -517,70 +707,61 @@ export const useDialogStore = defineStore('dialog', {
       const choice = node.choices[choiceIndex];
       if (!choice) return;
 
-      let routeToNavigate: string | null = null;
+      // 导航目标：按 EFFECT_ROUTE_PRIORITY 裁决，与 effects 数组书写顺序无关。
+      const chosenRoute =
+        choice.effects && this.npcKey ? resolveEffectRoute(choice.effects) : null;
+
       if (choice.effects && this.npcKey) {
         for (const effect of choice.effects) {
-          // NPC「推荐主线」：R-15 退役旧 mainQuest acceptQuest 后，统一引导到冒险地图入口。
-          if (effect.type === 'quest_recommend' && effect.questKey) {
-            if (effect.questKey === 'claim_class_quest') {
-              // 班长「领班级任务」：班级任务不在主线里，直接带到公告板·班级任务页签，
-              // 学生在那里真实领取教师发布的任务。
-              routeToNavigate = '/board?tab=classroom';
-            } else {
-              routeToNavigate = '/mainline-map';
-            }
-          }
           // set_flag：落持久 flag，供 flag_set 条件与后续内容解锁使用。
           if (effect.type === 'set_flag' && effect.flagKey) {
             setDialogFlag(effect.flagKey);
           }
-          // give_item：R-14 后无背包系统，发放 = flag 记录（item:<key>）+ toast 反馈，
-          // 既不静默丢弃也不引入无教育目的的库存 UI。
+          // give_item：R-14 后无背包系统，发放 = flag 记录（item:<key>）+ toast 反馈。
+          // 幂等：同一道具只发一次，重复进入该分支不再刷「获得『证据条』」toast。
           if (effect.type === 'give_item' && effect.itemKey) {
             const itemKey = effect.itemKey;
-            setDialogFlag(`item:${itemKey}`);
-            try {
-              useToastStore().show(
-                `获得「${DIALOG_ITEM_LABELS[itemKey] ?? itemKey}」`,
-                'success',
-              );
-            } catch {
-              /* toast store 未挂载（test / 极端环境）忽略 */
-            }
-          }
-          // 打开学习面板：复用 route 的 pythontopia:dialog-navigate 机制，
-          // 既支持 effect.route 带参路由（/lecture/1），也支持 effect.panel 简称。
-          if (effect.type === 'route' || effect.type === 'open_panel') {
-            const target =
-              effect.route ?? (effect.panel ? PANEL_ROUTE_MAP[effect.panel] ?? null : null);
-            if (target) {
-              routeToNavigate = target;
+            if (!hasDialogFlag(`item:${itemKey}`)) {
+              setDialogFlag(`item:${itemKey}`);
+              try {
+                useToastStore().show(
+                  `获得「${DIALOG_ITEM_LABELS[itemKey] ?? itemKey}」`,
+                  'success',
+                );
+              } catch {
+                /* toast store 未挂载（test / 极端环境）忽略 */
+              }
             }
           }
         }
       }
 
-      if (routeToNavigate) {
-        this.close();
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('pythontopia:dialog-navigate', { detail: { route: routeToNavigate } }));
-        }
-        return;
-      }
+      // 玩家做出了选择 = 该节点的内容已被消费，「每周一次」从此刻起算（而非进入即消耗）。
+      this.markNodeCompleted(node, choice);
 
       if (choice.nextNodeId === null) {
+        // 分支终点：本次选项自带的目标优先，否则用分支途中暂存的目标。
+        const target = chosenRoute ?? this.pendingRoute;
         this.close();
+        if (target && typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('pythontopia:dialog-navigate', { detail: { route: target } }),
+          );
+        }
         return;
       }
+
       const next = this.tree?.nodes[choice.nextNodeId];
       if (!next) {
         this.loadError = `对话节点缺失：${choice.nextNodeId}`;
         return;
       }
+      // 还有下文：先把导航目标存起来，别把后续节点和它的 give_item 效果吃掉。
+      if (chosenRoute) {
+        this.pendingRoute = chosenRoute;
+      }
       this.currentNodeId = choice.nextNodeId;
       this.history.push(choice.nextNodeId);
-      // 进入条件节点（如 weekly_retro）即记录展示，「每周一次」从此刻起算。
-      this.markNodeShown(next);
       // 切换节点必须把上一节点的分支快照和打字机状态归零，
       // 否则 UI 会在下一段文字还没滚完时就把旧选项渲染出来。
       this.branchChoices = [];
@@ -599,16 +780,10 @@ export const useDialogStore = defineStore('dialog', {
     markTypingDone(): void {
       if (this.isTypingDone) return;
       this.isTypingDone = true;
-      const node = this.currentNode;
-      if (node) {
-        // 过滤掉「目标节点条件不满足」的选项：例如没有失败提交时隐藏
+      if (this.currentNode) {
+        // 条件过滤统一走 visibleChoices（唯一真源）：例如没有失败提交时隐藏
         // 「上次失败的提交是什么？」、本周已复盘过时隐藏「开始本周复盘」。
-        this.branchChoices = node.choices.filter((choice) => {
-          if (!choice.nextNodeId || !this.tree) return true;
-          const target = this.tree.nodes[choice.nextNodeId];
-          if (!target) return true;
-          return this.evaluateConditions(target.conditions ?? []);
-        });
+        this.branchChoices = this.visibleChoices.map((entry) => entry.choice);
       }
     },
 
@@ -632,13 +807,11 @@ export const useDialogStore = defineStore('dialog', {
         choice,
         timestamp: Date.now(),
       });
-      const node = this.currentNode;
-      if (node) {
-        const idx = node.choices.findIndex((c) => c.label === choiceId);
-        if (idx >= 0) {
-          this.selectChoice(idx);
-          return;
-        }
+      // 用 visibleChoices 反查原始下标：条件不满足的选项即便被外部按 label 调用也点不动。
+      const visible = this.visibleChoices.find((entry) => entry.choice.label === choiceId);
+      if (visible) {
+        this.selectChoice(visible.rawIndex);
+        return;
       }
       this.close();
     },
@@ -657,63 +830,25 @@ export const useDialogStore = defineStore('dialog', {
     },
 
     /**
-     * 评估条件列表是否全部满足（AND 逻辑）。
-     *
-     * - first_time_this_week：该 key 本 ISO 周尚未展示过（展示时由 markNodeShown 记录）；
-     * - flag_set：set_flag 效果落过对应 flagKey；
-     * - kc_mastered：learning store 掌握度快照中该 KC ≥ 阈值（默认 0.4，与「测·达标」一致）；
-     * - has_failed_submission / no_failed_submission：基于对话 context 的最近失败提交；
-     *   context 尚未到达（后台异步拉取中）时按「无失败记录」处理，保证新玩家路径可见。
+     * 评估条件列表是否全部满足（AND 逻辑）：绑定当前 context 后委托给
+     * {@link evaluateDialogConditions}（各条件语义见该函数注释）。
      */
     evaluateConditions(conditions: DialogCondition[]): boolean {
-      if (conditions.length === 0) return true;
-      const hasFailed = (): boolean => {
-        const title = this.context?.stats?.['lastFailedProblemTitle'];
-        return Boolean(title) && title !== '—' && title !== '-';
-      };
-      for (const cond of conditions) {
-        switch (cond.type) {
-          case 'has_failed_submission':
-            if (!hasFailed()) return false;
-            break;
-          case 'no_failed_submission':
-            if (hasFailed()) return false;
-            break;
-          case 'first_time_this_week': {
-            const key = cond.key ?? cond.flagKey;
-            if (key && weeklySeenThisWeek(key)) return false;
-            break;
-          }
-          case 'flag_set': {
-            const key = cond.flagKey ?? cond.key;
-            if (key && !hasDialogFlag(key)) return false;
-            break;
-          }
-          case 'kc_mastered': {
-            if (!cond.kcCode) break;
-            try {
-              const learning = useLearningStore();
-              const snap = learning.field.masterySnapshot.find(
-                (entry) => entry.kcCode === cond.kcCode,
-              );
-              const threshold = cond.value ?? 0.4;
-              if (!snap || snap.masteryScore < threshold) return false;
-            } catch {
-              // learning store 不可用（极端测试环境）→ 视为未达成，隐藏增益内容。
-              return false;
-            }
-            break;
-          }
-        }
-      }
-      return true;
+      return evaluateDialogConditions(conditions, this.context);
     },
 
     /**
-     * 节点真正展示给玩家时调用：first_time_this_week 类条件记下「本周已看过」，
-     * 下次评估即不满足，实现「每周一次」的插话语义。
+     * 玩家在某节点做出选择后调用：把该节点的 first_time_this_week 记为「本周已做过」。
+     *
+     * 语义是<b>「完成才算做过」</b>而非「看到即消耗」——历史缺陷：进入 weekly_retro
+     * 的瞬间就写周记录，玩家选「我下周再写」时这一周已被吃掉，本周再也进不去复盘。
+     *
+     * 判据：纯打发式选项（既无 effects 又不通向下一节点，如「我下周再写」/「晚点再去」）
+     * 视为放弃，不消耗周额度；其余（带 effects 或有下文）视为已完成。
      */
-    markNodeShown(node: DialogNode): void {
+    markNodeCompleted(node: DialogNode, choice: DialogChoice): void {
+      const isDismissal = choice.nextNodeId === null && (choice.effects ?? []).length === 0;
+      if (isDismissal) return;
       for (const cond of node.conditions ?? []) {
         if (cond.type === 'first_time_this_week') {
           const key = cond.key ?? cond.flagKey;
@@ -771,6 +906,8 @@ export const useDialogStore = defineStore('dialog', {
       this.loading = false;
       this.branchChoices = [];
       this.isTypingDone = false;
+      // 暂存路由随对话一起丢弃：玩家中途 ESC / 关窗即视为放弃，不该被强拽到别的页面。
+      this.pendingRoute = null;
       // 关闭时清掉 context，下次再开走最新数据；避免本周练习数 / 班级数据等过期。
       this.context = null;
       // 寒暄随对话关闭复位，下次开新 NPC 重新拉取。
@@ -788,4 +925,9 @@ export const useDialogStore = defineStore('dialog', {
 /** 内部测试钩子：清空 `dialog:choice` 监听集合，仅供 vitest 使用。 */
 export function __resetChoiceListenersForTests(): void {
   choiceListeners.clear();
+}
+
+/** 内部测试钩子：清空 questKey 告警去重集合（告警只发一次，用例间需复位），仅供 vitest 使用。 */
+export function __resetQuestWarningsForTests(): void {
+  warnedQuestKeys.clear();
 }
