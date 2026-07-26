@@ -5,8 +5,9 @@
 //   playing -> evaluating -> passed(下一阶段) | failed(允许重试)
 //   通过 stage 4 后 -> victory
 //
-// 评测策略：先在浏览器跑 Pyodide 给玩家即时反馈，再调真后端 submitBossAttempt
-// 把分数 / mastery 同步入库（后端 5xx 时仍以 Pyodide 判定为准）。
+// 评测策略：先在浏览器跑 Pyodide 给玩家即时反馈（仅公开样例），正式判定一律以后端
+// submitBossAttempt 为准。后端不可用时进入 error 态、不推进战斗——Pyodide 预览
+// 永远不能冒充正式判题。
 
 import { computed, ref, type ComputedRef, type Ref } from 'vue';
 import { requestBossProblem, submitBossAttempt } from '@/api/boss';
@@ -238,7 +239,7 @@ export function useBossSession(opts: UseBossSessionOptions): UseBossSessionRetur
     phase.value = 'evaluating';
     const p = problem.value;
     const localEval = await runPyodideEvaluation(p, code.value);
-    let backendResult: BossAttemptResultDto | null = null;
+    let backendResult: BossAttemptResultDto;
     try {
       backendResult = await submitBossAttempt({
         problemId: p.problemId,
@@ -248,16 +249,14 @@ export function useBossSession(opts: UseBossSessionOptions): UseBossSessionRetur
         elapsedSec: elapsedSec.value,
       });
     } catch (error) {
-      // 后端失败不影响本地 Pyodide 判定
-      const msg = error instanceof Error ? error.message : String(error);
-      backendResult = {
-        problemId: p.problemId,
-        passed: localEval.ok,
-        passedTestCases: localEval.ok ? p.totalTestCases : 0,
-        totalTestCases: p.totalTestCases,
-        score: localEval.ok ? 80 : 0,
-        feedback: `后端联通失败，按本地 Pyodide 判定：${msg}`,
-      };
+      // 判题服务不可用：绝不拿本地公开样例冒充正式判题（否则后端宕机时仅凭可见样例即可「过关」，
+      // boss 会被扣血、stage 推进甚至直接 victory）。本次不推进 stage / 不动 HP，玩家可重试提交。
+      // 语义与 useEndlessRun.submit 的判题服务不可用分支保持一致。
+      errorMessage.value =
+        `判题服务暂不可用，本次不计入战斗结果，请稍后重试。（${error instanceof Error ? error.message : String(error)}）`;
+      lastResult.value = null;
+      phase.value = 'error';
+      return;
     }
     // 后端有隐藏用例与正式判题结果；本地 Pyodide 只跑样例，不能把后端 WA 抬成通过。
     const passed = backendResult.passed;

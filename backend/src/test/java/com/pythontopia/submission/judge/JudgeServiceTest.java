@@ -91,6 +91,62 @@ class JudgeServiceTest {
     when(problems.findTestCases(eq(2L))).thenReturn(Optional.empty());
     JudgeOutcome outcome = judge.judge(1L, 2L, "print(1)");
     assertThat(outcome.verdict()).isEqualTo(Verdict.SYSTEM_ERROR);
+    verify(submissions).markStatus(eq(1L), eq(SubmissionStatus.ERROR), eq(0), eq(null));
+  }
+
+  /**
+   * 回归：静态检查报基础设施故障（解释器缺 ast / 无法 fork）时，必须判 SYSTEM_ERROR + ERROR，
+   * 绝不能把判题环境问题记成学生的 CE + FAILED（否则会扣掌握度、往画像写脏 error_pattern）。
+   */
+  @Test
+  void systemErrorWhenStaticCheckerHitsInfrastructureFailure() {
+    // 指向一个不存在的解释器 → runAstWhitelist 抛 IOException → CheckResult.systemError()=true
+    StaticCodeChecker brokenChecker =
+        new StaticCodeChecker("/nonexistent/python-that-cannot-be-launched");
+    JudgeService brokenJudge =
+        new JudgeService(
+            submissions, problems, sandbox, brokenChecker, mapper, workerPool, caseEvaluator);
+
+    JudgeOutcome outcome = brokenJudge.judge(1L, 2L, "print(1)");
+
+    assertThat(outcome.verdict()).isEqualTo(Verdict.SYSTEM_ERROR);
+    assertThat(outcome.failureReason()).startsWith("SYSTEM_ERROR:");
+    verify(submissions)
+        .insertJudgeResult(eq(1L), eq(Verdict.SYSTEM_ERROR), eq(0), eq(0), any(), any());
+    verify(submissions).markStatus(eq(1L), eq(SubmissionStatus.ERROR), eq(0), eq(null));
+  }
+
+  /** 回归：评测阶段的 SYSTEM_ERROR（沙箱 IOException 等）必须落 ERROR，而不是学生失败 FAILED。 */
+  @Test
+  void evaluationSystemErrorMarksStatusErrorNotFailed() {
+    setupTestCases("1\n", "1");
+    when(sandbox.name()).thenReturn("subprocess");
+    when(sandbox.run(any(), any()))
+        .thenReturn(new SandboxRunResult(false, -1, "", "Sandbox error", 0L, "SYSTEM_ERROR"));
+
+    JudgeOutcome outcome = judge.judge(1L, 2L, "print(1)");
+
+    assertThat(outcome.verdict()).isEqualTo(Verdict.SYSTEM_ERROR);
+    verify(submissions).markStatus(eq(1L), eq(SubmissionStatus.ERROR), anyInt(), eq(null));
+  }
+
+  /** 回归：隐藏用例的期望输出不得随 failureReason 回传给学生（硬约束：不允许输出隐藏测试）。 */
+  @Test
+  void hiddenCaseFailureNeverLeaksExpectedOutput() {
+    com.fasterxml.jackson.databind.node.ArrayNode hidden = mapper.createArrayNode();
+    hidden.add(mapper.createObjectNode().put("input", "1\n").put("output", "SECRET-42"));
+    when(problems.findTestCases(eq(2L)))
+        .thenReturn(
+            Optional.of(
+                new PublicProblemRepository.JudgeTestCases(mapper.createArrayNode(), hidden)));
+    when(sandbox.name()).thenReturn("subprocess");
+    when(sandbox.run(any(), any())).thenReturn(new SandboxRunResult(false, 0, "0\n", "", 5, null));
+
+    JudgeOutcome outcome = judge.judge(1L, 2L, "print(0)");
+
+    assertThat(outcome.verdict()).isEqualTo(Verdict.WA);
+    assertThat(outcome.failureReason()).doesNotContain("SECRET-42");
+    assertThat(outcome.failureReason()).isEqualTo("第 1 个隐藏用例输出不匹配");
   }
 
   private void setupTestCases(String input, String output) {

@@ -2,6 +2,7 @@ package com.pythontopia.bugmine.judge;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.pythontopia.submission.judge.JudgeTestCase;
+import com.pythontopia.submission.judge.JudgeWorkerPool;
 import com.pythontopia.submission.judge.PythonSandbox;
 import com.pythontopia.submission.judge.SandboxRunResult;
 import com.pythontopia.submission.repository.PublicProblemRepository;
@@ -14,16 +15,24 @@ public class CounterExampleSelector {
 
   private final PublicProblemRepository problemRepository;
   private final PythonSandbox sandbox;
+  private final JudgeWorkerPool judgeWorkerPool;
 
   public CounterExampleSelector(
-      PublicProblemRepository problemRepository, PythonSandbox sandbox) {
+      PublicProblemRepository problemRepository,
+      PythonSandbox sandbox,
+      JudgeWorkerPool judgeWorkerPool) {
     this.problemRepository = problemRepository;
     this.sandbox = sandbox;
+    this.judgeWorkerPool = judgeWorkerPool;
   }
 
   /**
    * 返回首个未通过的测试用例作为反例：优先取隐藏用例（其 stdin 会脱敏以防泄题），否则取样例；
    * 无用例或全部通过时返回 {@link Optional#empty()}。
+   *
+   * <p>用例扫描（fork Python 子进程）走 {@link JudgeWorkerPool}，与正式判题共用并发上限，
+   * 不在 Tomcat 请求线程上直接 fork。调用方（{@code BugMineService.open}）本身跑在请求线程上、
+   * 不在池线程内，因此不存在「池线程再向同一池提交」的嵌套死锁。DB 读取留在调用线程的事务里。
    */
   public Optional<CounterExample> findFirstFailing(Long problemId, String code) {
     Optional<PublicProblemRepository.JudgeTestCases> testCasesOpt =
@@ -42,6 +51,12 @@ public class CounterExampleSelector {
     } else {
       return Optional.empty();
     }
+    JsonNode cases = source;
+    boolean redactStdin = redacted;
+    return judgeWorkerPool.submitAndWait(() -> scan(cases, code, redactStdin));
+  }
+
+  private Optional<CounterExample> scan(JsonNode source, String code, boolean redacted) {
     Iterator<JsonNode> iter = source.elements();
     while (iter.hasNext()) {
       JsonNode element = iter.next();
@@ -50,7 +65,8 @@ public class CounterExampleSelector {
       if (expected.isEmpty()) {
         expected = element.path("expected_stdout").asText("");
       }
-      SandboxRunResult result = sandbox.run(code, new JudgeTestCase(input, expected, 5000));
+      SandboxRunResult result =
+          sandbox.run(code, new JudgeTestCase(input, expected, 5000, redacted));
       String actual = result.stdout() == null ? "" : result.stdout();
       if (!normalise(expected).equals(normalise(actual))) {
         String shownInput = redacted ? redact(input) : input;
