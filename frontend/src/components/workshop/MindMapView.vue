@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import type { MindMapContent } from '@/api/dto/Workshop';
+import { sanitizeMermaidSvgMarkup } from '@/utils/sanitizeSvg';
 
 const props = defineProps<{
   content: MindMapContent;
@@ -25,6 +26,12 @@ async function renderMermaid(): Promise<void> {
     mermaid.initialize({
       startOnLoad: false,
       theme: 'base',
+      // mermaid.initialize 是全局的 last-call-wins：本组件与 TutorVisualAids 会互相覆盖配置，
+      // 因此不能依赖 mermaid 未声明的默认值，必须每次显式声明安全档。
+      securityLevel: 'strict',
+      // 标签走原生 <text> 而非 foreignObject：下面的消毒会连同 foreignObject 的内容一起丢弃，
+      // 若用 HTML 标签则整图文字会消失。
+      htmlLabels: false,
       themeVariables: {
         primaryColor: '#fff7e6',
         primaryBorderColor: '#c9a86b',
@@ -37,7 +44,8 @@ async function renderMermaid(): Promise<void> {
     });
     const id = `mermaid-${Date.now()}`;
     const { svg } = await mermaid.render(id, props.content.mermaid);
-    renderContainer.value.innerHTML = svg;
+    // mermaid 源文本是 LLM 生成的：渲染结果不直接进 innerHTML，先过一道 DOMPurify。
+    renderContainer.value.innerHTML = sanitizeMermaidSvgMarkup(svg);
   } catch (e: unknown) {
     renderError.value = e instanceof Error ? e.message : '渲染失败';
   }

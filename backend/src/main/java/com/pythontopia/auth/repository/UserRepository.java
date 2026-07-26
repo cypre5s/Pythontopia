@@ -47,7 +47,7 @@ public class UserRepository {
     return jdbcTemplate
         .query(
             """
-            SELECT id, username, display_name, password_hash, email, role, status
+            SELECT id, username, display_name, password_hash, email, role, status, token_version
             FROM users
             WHERE id = ?
             """,
@@ -61,7 +61,7 @@ public class UserRepository {
     return jdbcTemplate
         .query(
             """
-            SELECT id, username, display_name, password_hash, email, role, status
+            SELECT id, username, display_name, password_hash, email, role, status, token_version
             FROM users
             WHERE username = ?
             """,
@@ -69,6 +69,22 @@ public class UserRepository {
             username)
         .stream()
         .findFirst();
+  }
+
+  /**
+   * 自增会话代次：该用户全部已签发 JWT（携带旧 {@code tv}）随即失效。停用账号、重置密码或怀疑
+   * token 泄露时调用；等价的运维手段是 {@code UPDATE users SET token_version = token_version + 1}。
+   *
+   * @return 受影响行数，0 表示用户不存在
+   */
+  public int bumpTokenVersion(Long userId) {
+    return jdbcTemplate.update(
+        """
+        UPDATE users
+        SET token_version = token_version + 1, updated_at = now()
+        WHERE id = ?
+        """,
+        userId);
   }
 
   private UserAccount map(ResultSet rs, int rowNum) throws SQLException {
@@ -79,6 +95,7 @@ public class UserRepository {
         rs.getString("password_hash"),
         rs.getString("email"),
         Role.valueOf(rs.getString("role")),
-        rs.getString("status"));
+        rs.getString("status"),
+        rs.getInt("token_version"));
   }
 }
