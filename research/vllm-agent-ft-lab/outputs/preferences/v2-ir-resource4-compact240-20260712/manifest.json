@@ -1,0 +1,42 @@
+{
+  "agents": {
+    "ResourceDesignerAgent.code_lab": 60,
+    "ResourceDesignerAgent.handout": 60,
+    "ResourceDesignerAgent.reading": 60,
+    "ResourceDesignerAgent.storyboard": 60
+  },
+  "contamination_policy": "Exclude golden50 and stratified500 by id, source lineage and prompt fingerprint.",
+  "heldout_count": 24,
+  "heldout_sha256": "fc40ab8a8d152f8017d7f07b5f936184e264e9e5c57e1b465d37aab04db5f594",
+  "preference_axes": {
+    "legacy_contract": 40,
+    "safety_leak": 40,
+    "schema_constraint": 40,
+    "unbound_evidence": 40,
+    "weak_semantics": 40,
+    "wrong_decision": 40
+  },
+  "protected_evaluation_paths": [
+    "cases/golden_adapter_50_v1.jsonl",
+    "cases/domain_cases_5000_v1_stratified500.jsonl"
+  ],
+  "protected_evaluation_sha256": {
+    "cases/domain_cases_5000_v1_stratified500.jsonl": "69e33f6dddff052577630672d2aa4cf7903363e87e1e505d6f1ba2fb2522c1e0",
+    "cases/golden_adapter_50_v1.jsonl": "dda6fe2bbe4ea4ddc75f3558f587cdc1e976398796bc7decd82d457b86fdcf83"
+  },
+  "protected_overlap_count": 0,
+  "purpose": "v2_semantic_ir_preference_optimization",
+  "schema_version": "agent-schema-v2",
+  "seed": 20260712,
+  "semantic_labels": {
+    "code_lab": 60,
+    "handout": 60,
+    "reading": 60,
+    "storyboard": 60
+  },
+  "source_path": "cases/domain_cases_5000_v1.jsonl",
+  "source_sha256": "23ae6fdf4eeef3653eac6ba7ea580cdd358fae4dc3bdeedca7e0bd03b4bd3039",
+  "total_count": 240,
+  "train_count": 216,
+  "train_sha256": "73125d18b6c37f815f62d46209db78380d8dd7fecd0b0c92b38cbe1fadeddd3f"
+}

@@ -113,11 +113,21 @@ def _train(plan: dict[str, Any], args: argparse.Namespace) -> None:
         training["save_strategy"] = "no"
         training["eval_strategy"] = "no"
 
+    dpo = dict(plan["dpo"])
+    loss_types = dpo.get("loss_types")
+    if not isinstance(loss_types, list):
+        loss_types = [str(dpo.get("loss_type", "sigmoid"))]
+    loss_weights = dpo.get("loss_weights")
     dpo_config = DPOConfig(
         output_dir=plan["output_dir"],
         max_length=plan["max_seq_length"],
-        beta=float(plan["dpo"]["beta"]),
-        loss_type=[str(plan["dpo"].get("loss_type", "sigmoid"))],
+        beta=float(dpo["beta"]),
+        loss_type=[str(item) for item in loss_types],
+        loss_weights=(
+            [float(item) for item in loss_weights]
+            if isinstance(loss_weights, list)
+            else None
+        ),
         report_to=[],
         **training,
     )

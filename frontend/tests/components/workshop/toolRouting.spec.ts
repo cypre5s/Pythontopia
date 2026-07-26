@@ -45,4 +45,22 @@ describe('workshop tool routing', () => {
 
     expect(shouldClarifyRoutePlan(plan)).toBe(false);
   });
+
+  it('uses 0.55 as the free-text low-confidence boundary', () => {
+    const plan: WorkshopToolRoutePlan = {
+      source: 'composer_text',
+      namespace: 'ask',
+      intent: 'ASK',
+      args: {},
+      confidence: 0.55,
+      needsClarification: false,
+      riskClass: 'generative',
+      renderMode: 'answer',
+      candidateIntents: ['ASK'],
+      reasonCode: 'contextual_match',
+    };
+
+    expect(shouldClarifyRoutePlan(plan)).toBe(false);
+    expect(shouldClarifyRoutePlan({ ...plan, confidence: 0.54 })).toBe(true);
+  });
 });

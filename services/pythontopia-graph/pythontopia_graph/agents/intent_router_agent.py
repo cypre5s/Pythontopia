@@ -21,9 +21,15 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from typing import Any
 
+from pydantic import ValidationError
+
+from pythontopia_graph.contracts.semantic_ir import IntentRouterSemanticIR
 from pythontopia_graph.llm.provider import LlmProvider, LlmResponse
+from pythontopia_graph.routing.workshop_metrics import record_route
+from pythontopia_graph.routing.workshop_policy import compile_route_decision
 from pythontopia_graph.schemas.intent import IntentRouteRequest, IntentRouteResponse
 from pythontopia_graph.tools.harness import run_with_governance
 from pythontopia_graph.tools.registry import (
@@ -95,6 +101,7 @@ _INTENT_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("STORYBOARD", ("动画", "分镜", "故事板", "动画脚本", "视频脚本", "storyboard")),
     ("VIDEO", ("看视频", "视频讲解", "讲解视频", "b站", "bilibili", "哔哩", "影片", "找视频", "看个视频")),
     ("BROWSE", ("联网查证", "联网搜索", "查官方", "官方文档", "最新", "最新资料", "查一下官网", "python 官网", "web search", "browse")),
+    ("FIX_BUG", ("修报错", "报错", "错误诊断", "诊断", "失败提交", "这次 wa", "这次 re")),
     ("CODE_LAB", ("代码", "示例代码", "敲代码", "实操", "动手", "跑一下", "运行", "code", "demo")),
     ("PRACTICE", ("练习", "练一练", "做题", "习题", "题目", "出题", "练题", "道题", "practice", "quiz")),
     ("READING", ("拓展", "延伸", "扩展阅读", "延伸阅读", "课外", "拓展阅读", "reading")),
@@ -550,9 +557,12 @@ class IntentRouterAgent:
 
     async def route(self, req: IntentRouteRequest) -> IntentRouteResponse:
         """路由主流程：确定性预判 → 受治理 LLM（失败降级关键词路由）→ 校验与 scope 收缩。"""
+        route_started = time.monotonic()
         allowed = {kc.code for kc in req.course_kcs}
 
-        data = self._deterministic_preroute(req)
+        data = self._compound_preroute(req)
+        if data is None:
+            data = self._deterministic_preroute(req)
         if data is None:
             messages = self._messages(req)
 
@@ -596,33 +606,36 @@ class IntentRouterAgent:
             if not suggested:
                 suggested = self._ground(fallback["kc_codes"], allowed)
 
-        deterministic_route_confirmed = False
-        context_intent, context_note = self._context_policy_intent(req, intent)
-        if context_intent != intent:
-            intent = context_intent
-            confidence = max(confidence, 0.82)
-            reason = f"{reason}；{context_note}" if reason else context_note
-            secondary_raw = None
-            if intent != "NAVIGATE":
-                target_raw = ""
-            deterministic_route_confirmed = True
-
-        boundary_intent, boundary_note = self._boundary_policy_intent(req.message, intent)
-        if boundary_note:
-            deterministic_route_confirmed = True
-            if boundary_intent != intent:
-                intent = boundary_intent
+        deterministic_route_confirmed = req.requested_intent is not None or bool(
+            data.get("policy_locked")
+        )
+        if not deterministic_route_confirmed:
+            context_intent, context_note = self._context_policy_intent(req, intent)
+            if context_intent != intent:
+                intent = context_intent
+                confidence = max(confidence, 0.82)
+                reason = f"{reason}；{context_note}" if reason else context_note
                 secondary_raw = None
                 if intent != "NAVIGATE":
                     target_raw = ""
-            if "兜底" not in reason:
-                confidence = max(confidence, 0.82)
-            reason = f"{reason}；{boundary_note}" if reason else boundary_note
+                deterministic_route_confirmed = True
 
-        if self._is_context_free_vague(req):
-            confidence = min(confidence, 0.44)
-            note = "模糊提问缺少上下文，先澄清学生想问的对象或动作"
-            reason = f"{reason}；{note}" if reason else note
+            boundary_intent, boundary_note = self._boundary_policy_intent(req.message, intent)
+            if boundary_note:
+                deterministic_route_confirmed = True
+                if boundary_intent != intent:
+                    intent = boundary_intent
+                    secondary_raw = None
+                    if intent != "NAVIGATE":
+                        target_raw = ""
+                if "兜底" not in reason:
+                    confidence = max(confidence, 0.82)
+                reason = f"{reason}；{boundary_note}" if reason else boundary_note
+
+            if self._is_context_free_vague(req):
+                confidence = min(confidence, 0.44)
+                note = "模糊提问缺少上下文，先澄清学生想问的对象或动作"
+                reason = f"{reason}；{note}" if reason else note
 
         if (model_needs_clarification or model_missing_context) and not deterministic_route_confirmed:
             confidence = min(confidence, 0.44)
@@ -654,6 +667,29 @@ class IntentRouterAgent:
             clarification_prompt_override=model_clarification_prompt,
         )
 
+        route_decision = compile_route_decision(
+            req,
+            intent=intent,
+            secondary_intent=metadata["secondary_intent"],
+            confidence=confidence,
+            needs_clarification=bool(metadata["needs_clarification"]),
+            clarification_prompt=str(metadata["clarification_prompt"]),
+            render_mode=str(metadata["render_mode"]),
+            resolved_kc_codes=kc_codes,
+        )
+        # 旧字段继续在线，并以统一合同的确定性策略门为准，避免前端和新执行器判断分叉。
+        metadata["needs_clarification"] = route_decision.task.needs_clarification
+        metadata["clarification_prompt"] = route_decision.task.clarification_question
+        metadata["render_mode"] = route_decision.output.render_mode
+        if route_decision.task.needs_clarification:
+            metadata["reason_code"] = "missing_required_context"
+
+        # 运行指标只记录可观测量（复杂度/澄清/C3 选中项/延迟），不落任何学生原始输入。
+        record_route(
+            route_decision,
+            latency_ms=int((time.monotonic() - route_started) * 1000),
+        )
+
         return IntentRouteResponse(
             intent=intent,  # type: ignore[arg-type]  # 已校验 ∈ ALL_TOOL_NAMES，pydantic 二次校验
             kc_codes=kc_codes,
@@ -669,13 +705,74 @@ class IntentRouterAgent:
             risk_class=metadata["risk_class"],
             render_mode=metadata["render_mode"],
             reason_code=metadata["reason_code"],
+            route_decision=route_decision,
         )
 
     # ── 确定性预判 ──
 
     @classmethod
+    def _compound_preroute(cls, req: IntentRouteRequest) -> dict[str, Any] | None:
+        """Recognize two explicit high-signal clauses before model routing.
+
+        Only clauses that each hit an existing tool keyword with >=0.76 confidence qualify;
+        default ASK clauses never create a compound route. This keeps normal conjunctions from
+        becoming accidental multi-agent work while making the four Phase 2 cases stable.
+        """
+        if req.source != "composer_text" or req.requested_intent:
+            return None
+        parts = [
+            part.strip(" ，,。；;")
+            for part in re.split(r"(?:然后|接着|同时|并且|以及|再|和)", req.message, maxsplit=1)
+        ]
+        if len(parts) != 2 or not all(parts):
+            return None
+        first = cls._keyword_payload(req.model_copy(update={"message": parts[0]}))
+        second = cls._keyword_payload(req.model_copy(update={"message": parts[1]}))
+        primary = str(first["intent"])
+        secondary = str(second["intent"])
+        supported = {
+            "HANDOUT",
+            "MINDMAP",
+            "READING",
+            "STORYBOARD",
+            "CODE_LAB",
+            "PRACTICE",
+            "ASKME",
+            "FIX_BUG",
+            "PLAN",
+        }
+        if (
+            primary == secondary
+            or primary not in supported
+            or secondary not in supported
+            or float(first["confidence"]) < 0.76
+            or float(second["confidence"]) < 0.76
+        ):
+            return None
+        return {
+            "intent": primary,
+            "kc_codes": cls._anaphora_kcs(req),
+            "confidence": 0.94,
+            "reason": "确定性复合任务预判：两个明确动作进入受限多 Agent TaskPlan",
+            "target": "",
+            "secondary_intent": secondary,
+            "policy_locked": True,
+        }
+
+    @classmethod
     def _deterministic_preroute(cls, req: IntentRouteRequest) -> dict[str, Any] | None:
         """显式工具场景确定性预判（不调 LLM）：代码围栏 / 联网查证等低歧义动作。"""
+        if req.requested_intent:
+            payload = cls._keyword_payload(req)
+            payload.update(
+                {
+                    "intent": req.requested_intent,
+                    "confidence": 1.0,
+                    "reason": "学生显式选择工具；仍执行 scope、上下文与策略门校验",
+                    "secondary_intent": None,
+                }
+            )
+            return payload
         lowered = req.message.lower()
         if _CODE_FENCE not in req.message:
             allowed_by_capability = set(cls._capability_candidate_intents(req))
@@ -961,16 +1058,29 @@ class IntentRouterAgent:
     # ── LLM 调用与 prompt ──
 
     async def _chat_json(self, messages: list[dict[str, str]]) -> dict[str, Any]:
+        guard_context = {
+            "agent": self.AGENT_NAME,
+            "json_schema": IntentRouterSemanticIR.model_json_schema(),
+            "evidence_ids": [],
+            "evidence_fields": [],
+        }
         try:
             response = await self.provider.chat(
-                messages, response_format={"type": "json_object"}, temperature=0.1
+                messages,
+                response_format={"type": "json_object"},
+                temperature=0.1,
+                guard_context=guard_context,
             )
         except TypeError:
             try:
                 response = await self.provider.chat(messages, temperature=0.1)
             except TypeError:
                 response = await self.provider.chat(messages)
-        return self._coerce_json(response)
+        payload = self._coerce_json(response)
+        try:
+            return IntentRouterSemanticIR.model_validate(payload).model_dump(mode="json")
+        except ValidationError:
+            return {}
 
     @staticmethod
     def _coerce_json(response: LlmResponse) -> dict[str, Any]:
@@ -1188,7 +1298,6 @@ class IntentRouterAgent:
         candidates = self._candidate_intents(namespace, req.scope)
         needs_clarification = self._needs_clarification(confidence, req.source)
         reason_code = self._reason_code(
-            confidence=confidence,
             source=req.source,
             reason=reason,
             secondary_intent=secondary_intent,
@@ -1226,13 +1335,7 @@ class IntentRouterAgent:
 
     @staticmethod
     def _needs_clarification(confidence: float, source: str) -> bool:
-        if confidence < 0.45:
-            return True
-        return (
-            source == "composer_text"
-            and confidence < 0.75
-            and source not in {"slash_command", "capability_launcher"}
-        )
+        return source == "composer_text" and confidence < 0.55
 
     @staticmethod
     def _clarification_prompt(intent: str, req: IntentRouteRequest) -> str:
@@ -1268,7 +1371,6 @@ class IntentRouterAgent:
 
     @staticmethod
     def _reason_code(
-        confidence: float,
         source: str,
         reason: str,
         secondary_intent: str | None,
@@ -1278,7 +1380,7 @@ class IntentRouterAgent:
         lowered = message.lower()
         if any(token in lowered for token in ("hidden test", "system prompt", "完整答案", "隐藏测试", "忽略规则")):
             return "safety_constrained"
-        if needs_clarification or confidence < 0.45:
+        if needs_clarification:
             return "missing_required_context"
         if secondary_intent:
             return "multi_intent"
@@ -1327,12 +1429,23 @@ class IntentRouterAgent:
 
     @staticmethod
     def _match_by_name(req: IntentRouteRequest) -> list[str]:
-        msg = req.message.lower()
+        msg = re.sub(r"[\s_\-·・]+", "", req.message.lower())
         out: list[str] = []
+        # 先做完整名称匹配，保证精确命中优先于目录中更早出现的局部名称。
         for kc in req.course_kcs:
-            name = (kc.name or "").strip().lower()
+            name = re.sub(r"[\s_\-·・]+", "", (kc.name or "").strip().lower())
             if len(name) >= 2 and name in msg and kc.code not in out:
                 out.append(kc.code)
+        if out:
+            return out[:_MAX_KC]
+        # 真实课程名常用“X与Y”（如“for循环与遍历”），学生只会说其中的独特主题 X。
+        # 只接受长度 >=3 的连接词分段，避免“循环”等二字泛词同时误中多个 KC。
+        for kc in req.course_kcs:
+            for fragment in re.split(r"(?:与|和|及|、|/|／)", (kc.name or "").lower()):
+                normalized = re.sub(r"[\s_\-·・]+", "", fragment)
+                if len(normalized) >= 3 and normalized in msg and kc.code not in out:
+                    out.append(kc.code)
+                    break
         return out[:_MAX_KC]
 
     @staticmethod

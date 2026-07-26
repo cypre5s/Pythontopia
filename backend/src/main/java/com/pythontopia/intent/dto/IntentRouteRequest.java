@@ -33,7 +33,12 @@ public record IntentRouteRequest(
     @Pattern(regexp = "default|quiz") String scope,
     @Pattern(regexp = "composer_text|slash_command|capability_launcher|contextual_suggestion")
         String source,
-    @Pattern(regexp = "ask|quiz|make|practice|plan|find") String capabilityNamespace) {
+    @Pattern(regexp = "ask|quiz|make|practice|plan|find") String capabilityNamespace,
+    @Pattern(
+            regexp =
+                "ASK|VIDEO|REVIEW|HANDOUT|MINDMAP|PRACTICE|CODE_LAB|READING|STORYBOARD|ASKME|EXPLAIN_CODE|FIX_BUG|PLAN|PROGRESS|NAVIGATE|MY_STUDY|BROWSE")
+        String requestedIntent,
+    @Valid InteractionContext interaction) {
 
   /** 课程 KC 目录条目：code 用于锚定，name 用于让 LLM 把语句主题映射到正确知识点。 */
   public record CourseKc(@NotBlank @Size(max = 64) String code, @Size(max = 200) String name) {}
@@ -46,4 +51,19 @@ public record IntentRouteRequest(
   /** 会话内意图纠错记忆：学生点「不是想要这个」改派后记录（原话 → 改派意图）。 */
   public record Correction(
       @Size(max = 600) String message, @Size(max = 32) String correctedIntent) {}
+
+  /**
+   * 当前交互引用。只允许客户端声明页面/编辑器事实和资源 id；画像、掌握度、判题结果必须由服务端校验。
+   */
+  public record InteractionContext(
+      @Size(max = 128) String sessionId,
+      @Size(max = 64) String currentScene,
+      @Size(max = 64) String currentStage,
+      Long currentProblemId,
+      @Size(max = 12000) String currentCode,
+      Long latestSubmissionId,
+      @Size(max = 10) List<Long> selectedPageIds,
+      @Size(max = 4000) String errorText,
+      @Size(max = 64) String frontendAction,
+      Long currentResourceId) {}
 }

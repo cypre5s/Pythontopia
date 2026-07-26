@@ -1,0 +1,33 @@
+{
+  "agents": {
+    "GuideCoachAgent": 300
+  },
+  "contamination_policy": "Exclude golden50 and stratified500 by id, source lineage and prompt fingerprint.",
+  "heldout_count": 30,
+  "heldout_sha256": "bd6234cfe6774934a55c00dd1be3b51be732813de2d6a8ceef42d619d76fcbcf",
+  "preference_axes": {
+    "legacy_contract": 50,
+    "safety_leak": 50,
+    "schema_constraint": 50,
+    "unbound_evidence": 50,
+    "weak_semantics": 50,
+    "wrong_decision": 50
+  },
+  "protected_evaluation_paths": [
+    "cases/golden_adapter_50_v1.jsonl",
+    "cases/domain_cases_5000_v1_stratified500.jsonl"
+  ],
+  "protected_evaluation_sha256": {
+    "cases/domain_cases_5000_v1_stratified500.jsonl": "69e33f6dddff052577630672d2aa4cf7903363e87e1e505d6f1ba2fb2522c1e0",
+    "cases/golden_adapter_50_v1.jsonl": "dda6fe2bbe4ea4ddc75f3558f587cdc1e976398796bc7decd82d457b86fdcf83"
+  },
+  "protected_overlap_count": 0,
+  "purpose": "v2_semantic_ir_preference_optimization",
+  "schema_version": "agent-schema-v2",
+  "seed": 20260711,
+  "source_path": "cases/domain_cases_5000_v1.jsonl",
+  "source_sha256": "23ae6fdf4eeef3653eac6ba7ea580cdd358fae4dc3bdeedca7e0bd03b4bd3039",
+  "total_count": 300,
+  "train_count": 270,
+  "train_sha256": "5f9ef15e6c3ddbee035b1f6d0a5953e7a79d1e0053339cc2ac2657bb0c680400"
+}

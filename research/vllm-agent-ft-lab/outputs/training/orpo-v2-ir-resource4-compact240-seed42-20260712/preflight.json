@@ -1,0 +1,72 @@
+{
+  "changed_variables": [
+    "preference_dataset_compaction"
+  ],
+  "dataset_sha256": {
+    "heldout": "fc40ab8a8d152f8017d7f07b5f936184e264e9e5c57e1b465d37aab04db5f594",
+    "train": "73125d18b6c37f815f62d46209db78380d8dd7fecd0b0c92b38cbe1fadeddd3f"
+  },
+  "duplicate_id_count": 0,
+  "duplicate_pair_count": 0,
+  "duplicate_prompt_count": 0,
+  "heldout_count": 24,
+  "identical_chosen_rejected_count": 0,
+  "identical_chosen_rejected_ids": [],
+  "max_seq_length": 512,
+  "one_variable_only": true,
+  "passed": true,
+  "protected_eval_overlap_count": 0,
+  "protected_eval_overlap_ids": [],
+  "token_length": {
+    "longest_examples": [
+      {
+        "id": "v2-pref-0100-eval5000-new_question-0262-domain-0262-resourcedesigneragent-c4::v2-storyboard",
+        "tokens": 359
+      },
+      {
+        "id": "v2-pref-0156-eval5000-new_student_expression-0092-domain-3092-resourcedesigneragent-c6-beginner-teacher_assignment_context::v2-storyboard",
+        "tokens": 359
+      },
+      {
+        "id": "v2-pref-0212-eval5000-new_question-1712-domain-1712-resourcedesigneragent-c5::v2-storyboard",
+        "tokens": 359
+      },
+      {
+        "id": "v2-pref-0028-eval5000-new_chapter_slice-0132-domain-2132-resourcedesigneragent-c5::v2-storyboard",
+        "tokens": 358
+      },
+      {
+        "id": "v2-pref-0068-eval5000-new_student_expression-1352-domain-4352-resourcedesigneragent-c6-beginner-teacher_assignment_context::v2-storyboard",
+        "tokens": 358
+      },
+      {
+        "id": "v2-pref-0124-eval5000-new_student_expression-0452-domain-3452-resourcedesigneragent-c2-beginner-teacher_assignment_context::v2-storyboard",
+        "tokens": 358
+      },
+      {
+        "id": "v2-pref-0184-eval5000-new_question-1412-domain-1412-resourcedesigneragent-c6::v2-storyboard",
+        "tokens": 358
+      },
+      {
+        "id": "v2-pref-0076-eval5000-new_chapter_slice-0442-domain-2442-resourcedesigneragent-c7::v2-storyboard",
+        "tokens": 356
+      },
+      {
+        "id": "v2-pref-0052-eval5000-web_workshop_input-0482-domain-4982-resourcedesigneragent-c6::v2-storyboard",
+        "tokens": 355
+      },
+      {
+        "id": "v2-pref-0084-eval5000-new_student_expression-0722-domain-3722-resourcedesigneragent-c6-beginner-copy_paste_code_fragment::v2-storyboard",
+        "tokens": 355
+      }
+    ],
+    "max": 359,
+    "mean": 266.1,
+    "overlength_count": 0,
+    "overlength_ids": []
+  },
+  "train_count": 216,
+  "train_heldout_prompt_overlap_count": 0,
+  "zero_label_count": 0,
+  "zero_label_ids": []
+}

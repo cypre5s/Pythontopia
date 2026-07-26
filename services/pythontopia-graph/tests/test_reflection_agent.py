@@ -37,9 +37,11 @@ class FakeProvider(LlmProvider):
     def __init__(self, content_json: dict | None) -> None:
         self.content_json = content_json
         self.calls = 0
+        self.kwargs = None
 
     async def chat(self, messages, **kwargs):  # type: ignore[override]
         self.calls += 1
+        self.kwargs = kwargs
         return LlmResponse(content_json=self.content_json)
 
     async def chat_stream(self, messages, **kwargs) -> AsyncIterator[str]:  # type: ignore[override]
@@ -78,29 +80,31 @@ async def test_parses_and_filters_insights() -> None:
     mems = [_memory(10)]
     fake = FakeProvider(
         content_json={
-            "insights": [
+            "observations": [
                 {
-                    "text": "列表别名可变性反复出错",
-                    "dimension_key": "error_pattern",
+                    "claim": "列表别名可变性反复出错",
+                    "dimension_intent": "ERROR_PATTERN",
                     "tags": ["mutable_alias"],
-                    "evidence_event_ids": [10],
+                    "evidence_refs": ["event-10"],
                     "confidence": 0.8,
                 },
                 {
-                    "text": "无证据洞察",
-                    "dimension_key": "error_pattern",
-                    "evidence_event_ids": [],
+                    "claim": "无证据洞察",
+                    "dimension_intent": "ERROR_PATTERN",
+                    "evidence_refs": [],
                     "confidence": 0.9,
                 },
                 {
-                    "text": "非法维度",
-                    "dimension_key": "foo",
-                    "evidence_event_ids": [10],
+                    "claim": "非法维度",
+                    "dimension_intent": "FOO",
+                    "evidence_refs": ["event-10"],
+                    "confidence": 0.5,
                 },
                 {
-                    "text": "引用了不存在的事件",
-                    "dimension_key": "error_pattern",
-                    "evidence_event_ids": [999],
+                    "claim": "引用了不存在的事件",
+                    "dimension_intent": "ERROR_PATTERN",
+                    "evidence_refs": ["event-999"],
+                    "confidence": 0.5,
                 },
             ]
         }
@@ -114,19 +118,24 @@ async def test_parses_and_filters_insights() -> None:
     assert only.evidence_event_ids == [10]
     assert only.confidence == 0.8
     assert fake.calls == 1
+    assert fake.kwargs["guard_context"]["evidence_ids"] == ["event-10"]
+    assert fake.kwargs["guard_context"]["evidence_fields"] == [
+        "observations.*.evidence_refs"
+    ]
 
 
 async def test_keeps_at_most_three_insights() -> None:
     mems = [_memory(1), _memory(2), _memory(3), _memory(4)]
     insights = [
         {
-            "text": f"洞察 {i}",
-            "dimension_key": "error_pattern",
-            "evidence_event_ids": [i],
+            "claim": f"洞察 {i}",
+            "dimension_intent": "ERROR_PATTERN",
+            "evidence_refs": [f"event-{i}"],
+            "confidence": 0.5,
         }
         for i in range(1, 5)
     ]
-    fake = FakeProvider(content_json={"insights": insights})
+    fake = FakeProvider(content_json={"observations": insights})
     out = await ReflectionAgent(fake).reflect(ReflectionInput(user_id=1, memories=mems))
     assert len(out.insights) == 3
 

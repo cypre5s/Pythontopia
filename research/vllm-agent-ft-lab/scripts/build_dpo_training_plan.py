@@ -28,6 +28,9 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=20260710)
     parser.add_argument("--champion-adapter-path", default=None)
     parser.add_argument("--changed-variable", default=None)
+    parser.add_argument("--schema-version", default="agent-schema-v1")
+    parser.add_argument("--dpo-loss-type", action="append", default=[])
+    parser.add_argument("--dpo-loss-weight", action="append", type=float, default=[])
     args = parser.parse_args()
 
     common_args = {
@@ -39,6 +42,7 @@ def main() -> None:
         "max_seq_length": args.max_seq_length,
         "seed": args.seed,
         "champion_adapter_path": args.champion_adapter_path,
+        "schema_version": args.schema_version,
     }
     if args.method == "orpo":
         orpo_args = dict(common_args)
@@ -54,6 +58,10 @@ def main() -> None:
     else:
         if args.changed_variable is not None:
             common_args["changed_variable"] = args.changed_variable
+        if args.dpo_loss_type:
+            common_args["dpo_loss_types"] = args.dpo_loss_type
+        if args.dpo_loss_weight:
+            common_args["dpo_loss_weights"] = args.dpo_loss_weight
         plan = build_dpo_training_plan(**common_args)
     write_preference_training_plan(plan, args.plan_output)
     print(json.dumps({"plan_output": str(Path(args.plan_output)), "plan": plan}, ensure_ascii=False, sort_keys=True))

@@ -29,4 +29,62 @@ public record IntentRouteResponse(
     String clarificationPrompt,
     String riskClass,
     String renderMode,
-    String reasonCode) {}
+    String reasonCode,
+    WorkshopRouteDecision routeDecision,
+    String routeExecutionToken) {
+
+  public IntentRouteResponse(
+      String intent,
+      List<String> kcCodes,
+      String focusHint,
+      double confidence,
+      String reason,
+      String target,
+      String secondaryIntent,
+      String namespace,
+      List<String> candidateIntents,
+      boolean needsClarification,
+      String clarificationPrompt,
+      String riskClass,
+      String renderMode,
+      String reasonCode,
+      WorkshopRouteDecision routeDecision) {
+    this(
+        intent,
+        kcCodes,
+        focusHint,
+        confidence,
+        reason,
+        target,
+        secondaryIntent,
+        namespace,
+        candidateIntents,
+        needsClarification,
+        clarificationPrompt,
+        riskClass,
+        renderMode,
+        reasonCode,
+        routeDecision,
+        null);
+  }
+
+  public IntentRouteResponse withRouteExecutionToken(String token) {
+    return new IntentRouteResponse(
+        intent,
+        kcCodes,
+        focusHint,
+        confidence,
+        reason,
+        target,
+        secondaryIntent,
+        namespace,
+        candidateIntents,
+        needsClarification,
+        clarificationPrompt,
+        riskClass,
+        renderMode,
+        reasonCode,
+        routeDecision,
+        token);
+  }
+}

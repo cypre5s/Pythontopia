@@ -1,0 +1,12 @@
+{
+  "actual_count": 5000,
+  "dataset_sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "fixture_only": true,
+  "format": "fresh_full5000_v2",
+  "message_zh": "演示 manifest，仅验证门禁控制流，不代表真实 final 数据。",
+  "overlap_audit": {
+    "declared_zero_historical_overlap": true,
+    "historical_eval_overlap_count": 0,
+    "training_overlap_count": 0
+  }
+}

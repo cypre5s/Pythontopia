@@ -1,0 +1,40 @@
+{
+  "contamination_policy": "Exclude golden50 and stratified500 by id, source lineage and stable prompt fingerprint.",
+  "heldout_count": 24,
+  "heldout_sha256": "6112358e6c463b5b7ef0cd08a1899222c555f0ac5a9c8f360e37792e2a8d9918",
+  "policy_version": "code-plan-pattern-policy-v1",
+  "preference_axes": {
+    "legacy_free_code": 30,
+    "safety_leak": 30,
+    "unbound_evidence": 30,
+    "weak_observation": 30,
+    "wrong_pattern": 120
+  },
+  "protected_evaluation_paths": [
+    "cases/golden_adapter_50_v1.jsonl",
+    "cases/domain_cases_5000_v1_stratified500.jsonl"
+  ],
+  "protected_evaluation_sha256": {
+    "cases/domain_cases_5000_v1_stratified500.jsonl": "69e33f6dddff052577630672d2aa4cf7903363e87e1e505d6f1ba2fb2522c1e0",
+    "cases/golden_adapter_50_v1.jsonl": "dda6fe2bbe4ea4ddc75f3558f587cdc1e976398796bc7decd82d457b86fdcf83"
+  },
+  "protected_overlap_count": 0,
+  "purpose": "code_plan_v21_semantic_pattern_preference_optimization",
+  "schema_version": "agent-schema-v2.1",
+  "seed": 42,
+  "semantic_labels": {
+    "assignment_trace": 33,
+    "conditional_branch": 33,
+    "exception_guard": 32,
+    "for_accumulate": 32,
+    "function_scope": 32,
+    "list_iteration": 32,
+    "string_cleanup": 13,
+    "while_control": 33
+  },
+  "source_path": "cases/domain_cases_5000_v1.jsonl",
+  "source_sha256": "23ae6fdf4eeef3653eac6ba7ea580cdd358fae4dc3bdeedca7e0bd03b4bd3039",
+  "total_count": 240,
+  "train_count": 216,
+  "train_sha256": "65b15ede43854785667ca828adb46d0251b5289359bc059c27630fd8c0c1c854"
+}

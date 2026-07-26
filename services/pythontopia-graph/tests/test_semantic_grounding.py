@@ -110,15 +110,12 @@ def _handout_payload(paragraph: str, *, title: str) -> dict:
     return {
         "title": title,
         "summary": "循环讲解",
-        "handout": HandoutContent(
-            sections=[
-                HandoutSection(
-                    heading="for 循环",
-                    paragraphs=[paragraph],
-                    page_refs=[PageRef(page_id=101, page_no=12, chapter_id=3)],
-                )
-            ]
-        ).model_dump(),
+        "sections": [{
+            "heading": "for 循环",
+            "paragraphs": [paragraph],
+            "code_snippets": [],
+            "evidence_refs": ["page-101"],
+        }],
     }
 
 

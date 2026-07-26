@@ -1,0 +1,23 @@
+{
+  "properties": {
+    "passed": {
+      "title": "Passed",
+      "type": "boolean"
+    },
+    "reasons": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Reasons",
+      "type": "array"
+    }
+  },
+  "required": [
+    "passed"
+  ],
+  "title": "SafetyAgent",
+  "type": "object",
+  "x-adapter-eligible": false,
+  "x-product-contract": "deterministic-product-output",
+  "x-schema-version": "agent-schema-v2"
+}

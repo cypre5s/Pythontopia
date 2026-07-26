@@ -1,0 +1,125 @@
+{
+  "data_fraction": 1.0,
+  "data_hashes": {
+    "heldout_file": "27d92fd4ddbd6bcaff8e918ba94aefb6230a4271317bbd33281dd69070b46ab7",
+    "protected_heldout_file": "d305c2c03ae377aff32addfae2fb624a5fe4cd4eafb7501e055cb5d8d44b4c4e",
+    "train_file": "7f89e27000911e43dd6238ea3409d4c5fcaffbfa31f836eae9dcc4c1fb4ee063"
+  },
+  "data_seed": 20260716,
+  "evaluation_boundary": {
+    "legacy_full5000_is_final_protected": false,
+    "message_zh": "旧 full5000 与历史训练源有重叠，只能作历史回归；正式最终评测必须使用新冻结且零重叠的 5000 集"
+  },
+  "fit_safeguards": {
+    "action_entropy_hard_stop": 0.65,
+    "action_entropy_warning": 0.8,
+    "checkpoint_selection_boundary_zh": "eval_loss 只用于优化早停，不能替代语义晋级评测",
+    "checkpoint_selection_metric": "eval_loss",
+    "early_stopping_patience": 2,
+    "early_stopping_threshold": 0.005,
+    "hard_stop_on_nan_or_oom": true,
+    "learning_curve_fractions": [
+      0.35,
+      0.7,
+      1.0
+    ],
+    "learning_curve_plateau_min_gain": 0.02,
+    "max_action_share_hard_stop": 0.5,
+    "max_action_share_warning": 0.35,
+    "three_seed_promotion": {
+      "maximum_seed_range": 0.1,
+      "median_gain_min": 0.03,
+      "minimum_positive_seeds": 2,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "worst_seed_floor": -0.02
+    },
+    "threshold_basis": "项目经验阈值，不是论文通用定律",
+    "train_dev_gap_warning": 0.15,
+    "underfit_max_preference_accuracy": 0.55,
+    "underfit_min_loss_reduction": 0.05
+  },
+  "heldout_file": "research/vllm-agent-ft-lab/outputs/rsage/demos/curation-v5/sft_dev.jsonl",
+  "lora": {
+    "alpha": 16,
+    "dropout": 0.05,
+    "r": 8,
+    "target_modules": [
+      "q_proj",
+      "k_proj",
+      "v_proj",
+      "o_proj",
+      "gate_proj",
+      "up_proj",
+      "down_proj"
+    ]
+  },
+  "loss_masking": {
+    "mode": "assistant_only"
+  },
+  "max_seq_length": 384,
+  "method": "qlora_4bit",
+  "model_path": "/home/cypress/.cache/modelscope/Qwen/Qwen3.5-4B",
+  "notes_zh": [
+    "SFT 训练集包含教师核验目标样本与分层 retention 回放。",
+    "开发集只用于早停；独立留出集和正式 protected 集均不得训练。"
+  ],
+  "output_dir": "research/vllm-agent-ft-lab/outputs/rsage/demos/adapters-v6/rsage-sft-f100-seed42",
+  "protected_heldout_file": "research/vllm-agent-ft-lab/outputs/rsage/demos/curation-v5/sft_heldout.jsonl",
+  "quantization": {
+    "compute_dtype": "bfloat16",
+    "double_quant": true,
+    "load_in_4bit": true,
+    "quant_type": "nf4"
+  },
+  "seed": 42,
+  "selected_train_ids": [
+    "rsage-sft-rsage-0001-read-wrong_decision",
+    "rsage-retention-sft-domain-0952-resourcedesigneragent-c1",
+    "rsage-retention-sft-domain-0120-tutoragent-c2"
+  ],
+  "specialist": {
+    "agent_name": "TutorDecisionAgent",
+    "message_zh": "仅训练下一教学动作专属 Adapter，非目标 Agent 保持冻结",
+    "non_target_policy": "继续使用冻结 champion，不加载本 specialist",
+    "route_is_deterministic": true,
+    "route_key": "TutorDecisionAgent::rsage-ir-v1",
+    "schema_version": "rsage-ir-v1"
+  },
+  "stage": "rsage_specialist_sft",
+  "subset_counts": {
+    "retention_selected": 2,
+    "retention_total": 2,
+    "selected": 3,
+    "target_selected": 1,
+    "target_total": 1,
+    "total": 3
+  },
+  "subset_sha256": "a89860fa98b27e49e318c952596f65384397ce2dd77ade6c50d21f9121146149",
+  "train_file": "research/vllm-agent-ft-lab/outputs/rsage/demos/curation-v5/sft_train.jsonl",
+  "training": {
+    "bf16": true,
+    "data_seed": 20260716,
+    "disable_tqdm": true,
+    "eval_strategy": "epoch",
+    "gradient_accumulation_steps": 16,
+    "gradient_checkpointing": true,
+    "greater_is_better": false,
+    "learning_rate": 5e-05,
+    "load_best_model_at_end": true,
+    "logging_steps": 1,
+    "max_grad_norm": 1.0,
+    "metric_for_best_model": "eval_loss",
+    "num_train_epochs": 4,
+    "per_device_eval_batch_size": 1,
+    "per_device_train_batch_size": 1,
+    "save_strategy": "epoch",
+    "save_total_limit": 2,
+    "seed": 42,
+    "warmup_ratio": 0.05,
+    "weight_decay": 0.01
+  }
+}

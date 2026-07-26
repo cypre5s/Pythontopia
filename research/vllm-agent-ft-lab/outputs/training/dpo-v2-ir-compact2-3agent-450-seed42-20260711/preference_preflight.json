@@ -1,0 +1,72 @@
+{
+  "changed_variables": [
+    "preference_dataset"
+  ],
+  "dataset_sha256": {
+    "heldout": "38cec39846ceedb5ea4c85f550e5642c5651a5b97688cb081ffc4ec31b3d245b",
+    "train": "1b4e3fb977ce46f094b34b2094e8ef4f6d4721ca32e90e98719481429d9bf1b7"
+  },
+  "duplicate_id_count": 0,
+  "duplicate_pair_count": 0,
+  "duplicate_prompt_count": 0,
+  "heldout_count": 45,
+  "identical_chosen_rejected_count": 0,
+  "identical_chosen_rejected_ids": [],
+  "max_seq_length": 512,
+  "one_variable_only": true,
+  "passed": true,
+  "protected_eval_overlap_count": 0,
+  "protected_eval_overlap_ids": [],
+  "token_length": {
+    "longest_examples": [
+      {
+        "id": "v2-pref-0238-eval5000-new_question-0404-domain-0404-guidecoachagent-c6",
+        "tokens": 390
+      },
+      {
+        "id": "v2-pref-0064-eval5000-new_student_expression-1004-domain-4004-guidecoachagent-c1-beginner-teacher_assignment_context",
+        "tokens": 389
+      },
+      {
+        "id": "v2-pref-0400-eval5000-new_student_expression-0104-domain-3104-guidecoachagent-c4-beginner-teacher_assignment_context",
+        "tokens": 389
+      },
+      {
+        "id": "v2-pref-0429-eval5000-web_workshop_input-0019-domain-4519-mindmapagent-c5",
+        "tokens": 388
+      },
+      {
+        "id": "v2-pref-0082-eval5000-new_question-0754-domain-0754-guidecoachagent-c6",
+        "tokens": 386
+      },
+      {
+        "id": "v2-pref-0298-eval5000-new_chapter_slice-0744-domain-2744-guidecoachagent-c1",
+        "tokens": 386
+      },
+      {
+        "id": "v2-pref-0420-eval5000-new_chapter_slice-0119-domain-2119-mindmapagent-c6",
+        "tokens": 386
+      },
+      {
+        "id": "v2-pref-0085-eval5000-new_chapter_slice-0864-domain-2864-guidecoachagent-c2",
+        "tokens": 385
+      },
+      {
+        "id": "v2-pref-0100-eval5000-new_question-0224-domain-0224-guidecoachagent-c1",
+        "tokens": 385
+      },
+      {
+        "id": "v2-pref-0103-eval5000-new_question-0154-domain-0154-guidecoachagent-c1",
+        "tokens": 385
+      }
+    ],
+    "max": 390,
+    "mean": 361.74,
+    "overlength_count": 0,
+    "overlength_ids": []
+  },
+  "train_count": 405,
+  "train_heldout_prompt_overlap_count": 0,
+  "zero_label_count": 0,
+  "zero_label_ids": []
+}

@@ -1,0 +1,677 @@
+{
+  "auxiliary_metric": "score_mean",
+  "claims_policy": "Smoke, small heldout, and guard/fallback-repaired results are not evidence that a model reached 100%.",
+  "failure_matrices": {
+    "candidate_bound": {
+      "agent": {
+        "ResourceDesignerAgent.code_lab": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_plan:0:pattern:exception_guard:not_in:string_cleanup": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 0
+        },
+        "ResourceDesignerAgent.handout": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "ResourceDesignerAgent.reading": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "ResourceDesignerAgent.storyboard": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        }
+      },
+      "beginner_noise": {
+        "clean": {
+          "case_count": 20,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_plan:0:pattern:exception_guard:not_in:string_cleanup": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 0
+        }
+      },
+      "chapter": {
+        "1": {
+          "case_count": 4,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "3": {
+          "case_count": 4,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "4": {
+          "case_count": 4,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "6": {
+          "case_count": 4,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "7": {
+          "case_count": 4,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_plan:0:pattern:exception_guard:not_in:string_cleanup": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 0
+        }
+      },
+      "evidence": {
+        "required": {
+          "case_count": 20,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_plan:0:pattern:exception_guard:not_in:string_cleanup": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 0
+        }
+      },
+      "failure_category": {
+        "semantic_error:code_plan:0:pattern:exception_guard:not_in:string_cleanup": 1,
+        "semantic_invalid": 1
+      },
+      "missing_schema_field": {},
+      "safety": {
+        "standard": {
+          "case_count": 20,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_plan:0:pattern:exception_guard:not_in:string_cleanup": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 0
+        }
+      },
+      "schema_type_error": {},
+      "web_input": {
+        "non_web": {
+          "case_count": 20,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_plan:0:pattern:exception_guard:not_in:string_cleanup": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 0
+        }
+      }
+    },
+    "candidate_unconstrained": {
+      "agent": {
+        "ResourceDesignerAgent.code_lab": {
+          "case_count": 5,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "schema_invalid": 5,
+            "schema_type_error:walkthroughs[0].common_mistakes": 5,
+            "schema_type_error:walkthroughs[0].example_pattern": 5,
+            "semantic_error:code_plan:0:pattern:break:not_in:while_control": 1,
+            "semantic_error:code_plan:0:pattern:if:not_in:conditional_branch": 1,
+            "semantic_error:code_plan:0:pattern:read_line:not_in:string_cleanup": 1,
+            "semantic_error:code_plan:0:pattern:variable:not_in:assignment_trace": 1,
+            "semantic_error:code_plan:0:pattern:参数顺序:not_in:function_scope": 1,
+            "semantic_invalid": 5
+          },
+          "failure_count": 5
+        },
+        "ResourceDesignerAgent.handout": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "ResourceDesignerAgent.reading": {
+          "case_count": 5,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "missing_schema_field:items": 5,
+            "schema_invalid": 5
+          },
+          "failure_count": 5
+        },
+        "ResourceDesignerAgent.storyboard": {
+          "case_count": 5,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "schema_invalid": 5,
+            "schema_type_error:scenes": 5
+          },
+          "failure_count": 5
+        }
+      },
+      "beginner_noise": {
+        "clean": {
+          "case_count": 20,
+          "contract_pass_rate": 0.25,
+          "failure_categories": {
+            "missing_schema_field:items": 5,
+            "schema_invalid": 15,
+            "schema_type_error:scenes": 5,
+            "schema_type_error:walkthroughs[0].common_mistakes": 5,
+            "schema_type_error:walkthroughs[0].example_pattern": 5,
+            "semantic_error:code_plan:0:pattern:break:not_in:while_control": 1,
+            "semantic_error:code_plan:0:pattern:if:not_in:conditional_branch": 1,
+            "semantic_error:code_plan:0:pattern:read_line:not_in:string_cleanup": 1,
+            "semantic_error:code_plan:0:pattern:variable:not_in:assignment_trace": 1,
+            "semantic_error:code_plan:0:pattern:参数顺序:not_in:function_scope": 1,
+            "semantic_invalid": 5
+          },
+          "failure_count": 15
+        }
+      },
+      "chapter": {
+        "1": {
+          "case_count": 4,
+          "contract_pass_rate": 0.25,
+          "failure_categories": {
+            "missing_schema_field:items": 1,
+            "schema_invalid": 3,
+            "schema_type_error:scenes": 1,
+            "schema_type_error:walkthroughs[0].common_mistakes": 1,
+            "schema_type_error:walkthroughs[0].example_pattern": 1,
+            "semantic_error:code_plan:0:pattern:variable:not_in:assignment_trace": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 3
+        },
+        "3": {
+          "case_count": 4,
+          "contract_pass_rate": 0.25,
+          "failure_categories": {
+            "missing_schema_field:items": 1,
+            "schema_invalid": 3,
+            "schema_type_error:scenes": 1,
+            "schema_type_error:walkthroughs[0].common_mistakes": 1,
+            "schema_type_error:walkthroughs[0].example_pattern": 1,
+            "semantic_error:code_plan:0:pattern:if:not_in:conditional_branch": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 3
+        },
+        "4": {
+          "case_count": 4,
+          "contract_pass_rate": 0.25,
+          "failure_categories": {
+            "missing_schema_field:items": 1,
+            "schema_invalid": 3,
+            "schema_type_error:scenes": 1,
+            "schema_type_error:walkthroughs[0].common_mistakes": 1,
+            "schema_type_error:walkthroughs[0].example_pattern": 1,
+            "semantic_error:code_plan:0:pattern:break:not_in:while_control": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 3
+        },
+        "6": {
+          "case_count": 4,
+          "contract_pass_rate": 0.25,
+          "failure_categories": {
+            "missing_schema_field:items": 1,
+            "schema_invalid": 3,
+            "schema_type_error:scenes": 1,
+            "schema_type_error:walkthroughs[0].common_mistakes": 1,
+            "schema_type_error:walkthroughs[0].example_pattern": 1,
+            "semantic_error:code_plan:0:pattern:参数顺序:not_in:function_scope": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 3
+        },
+        "7": {
+          "case_count": 4,
+          "contract_pass_rate": 0.25,
+          "failure_categories": {
+            "missing_schema_field:items": 1,
+            "schema_invalid": 3,
+            "schema_type_error:scenes": 1,
+            "schema_type_error:walkthroughs[0].common_mistakes": 1,
+            "schema_type_error:walkthroughs[0].example_pattern": 1,
+            "semantic_error:code_plan:0:pattern:read_line:not_in:string_cleanup": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 3
+        }
+      },
+      "evidence": {
+        "required": {
+          "case_count": 20,
+          "contract_pass_rate": 0.25,
+          "failure_categories": {
+            "missing_schema_field:items": 5,
+            "schema_invalid": 15,
+            "schema_type_error:scenes": 5,
+            "schema_type_error:walkthroughs[0].common_mistakes": 5,
+            "schema_type_error:walkthroughs[0].example_pattern": 5,
+            "semantic_error:code_plan:0:pattern:break:not_in:while_control": 1,
+            "semantic_error:code_plan:0:pattern:if:not_in:conditional_branch": 1,
+            "semantic_error:code_plan:0:pattern:read_line:not_in:string_cleanup": 1,
+            "semantic_error:code_plan:0:pattern:variable:not_in:assignment_trace": 1,
+            "semantic_error:code_plan:0:pattern:参数顺序:not_in:function_scope": 1,
+            "semantic_invalid": 5
+          },
+          "failure_count": 15
+        }
+      },
+      "failure_category": {
+        "missing_schema_field:items": 5,
+        "schema_invalid": 15,
+        "schema_type_error:scenes": 5,
+        "schema_type_error:walkthroughs[0].common_mistakes": 5,
+        "schema_type_error:walkthroughs[0].example_pattern": 5,
+        "semantic_error:code_plan:0:pattern:break:not_in:while_control": 1,
+        "semantic_error:code_plan:0:pattern:if:not_in:conditional_branch": 1,
+        "semantic_error:code_plan:0:pattern:read_line:not_in:string_cleanup": 1,
+        "semantic_error:code_plan:0:pattern:variable:not_in:assignment_trace": 1,
+        "semantic_error:code_plan:0:pattern:参数顺序:not_in:function_scope": 1,
+        "semantic_invalid": 5
+      },
+      "missing_schema_field": {
+        "items": 5
+      },
+      "safety": {
+        "standard": {
+          "case_count": 20,
+          "contract_pass_rate": 0.25,
+          "failure_categories": {
+            "missing_schema_field:items": 5,
+            "schema_invalid": 15,
+            "schema_type_error:scenes": 5,
+            "schema_type_error:walkthroughs[0].common_mistakes": 5,
+            "schema_type_error:walkthroughs[0].example_pattern": 5,
+            "semantic_error:code_plan:0:pattern:break:not_in:while_control": 1,
+            "semantic_error:code_plan:0:pattern:if:not_in:conditional_branch": 1,
+            "semantic_error:code_plan:0:pattern:read_line:not_in:string_cleanup": 1,
+            "semantic_error:code_plan:0:pattern:variable:not_in:assignment_trace": 1,
+            "semantic_error:code_plan:0:pattern:参数顺序:not_in:function_scope": 1,
+            "semantic_invalid": 5
+          },
+          "failure_count": 15
+        }
+      },
+      "schema_type_error": {
+        "scenes": 5,
+        "walkthroughs[0].common_mistakes": 5,
+        "walkthroughs[0].example_pattern": 5
+      },
+      "web_input": {
+        "non_web": {
+          "case_count": 20,
+          "contract_pass_rate": 0.25,
+          "failure_categories": {
+            "missing_schema_field:items": 5,
+            "schema_invalid": 15,
+            "schema_type_error:scenes": 5,
+            "schema_type_error:walkthroughs[0].common_mistakes": 5,
+            "schema_type_error:walkthroughs[0].example_pattern": 5,
+            "semantic_error:code_plan:0:pattern:break:not_in:while_control": 1,
+            "semantic_error:code_plan:0:pattern:if:not_in:conditional_branch": 1,
+            "semantic_error:code_plan:0:pattern:read_line:not_in:string_cleanup": 1,
+            "semantic_error:code_plan:0:pattern:variable:not_in:assignment_trace": 1,
+            "semantic_error:code_plan:0:pattern:参数顺序:not_in:function_scope": 1,
+            "semantic_invalid": 5
+          },
+          "failure_count": 15
+        }
+      }
+    },
+    "champion_bound": {
+      "agent": {
+        "ResourceDesignerAgent.code_lab": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_plan:0:pattern:exception_guard:not_in:string_cleanup": 1,
+            "semantic_error:code_plan:0:pattern:string_cleanup:not_in:assignment_trace": 1,
+            "semantic_invalid": 2
+          },
+          "failure_count": 0
+        },
+        "ResourceDesignerAgent.handout": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "ResourceDesignerAgent.reading": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "ResourceDesignerAgent.storyboard": {
+          "case_count": 5,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        }
+      },
+      "beginner_noise": {
+        "clean": {
+          "case_count": 20,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_plan:0:pattern:exception_guard:not_in:string_cleanup": 1,
+            "semantic_error:code_plan:0:pattern:string_cleanup:not_in:assignment_trace": 1,
+            "semantic_invalid": 2
+          },
+          "failure_count": 0
+        }
+      },
+      "chapter": {
+        "1": {
+          "case_count": 4,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_plan:0:pattern:string_cleanup:not_in:assignment_trace": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 0
+        },
+        "3": {
+          "case_count": 4,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "4": {
+          "case_count": 4,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "6": {
+          "case_count": 4,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {},
+          "failure_count": 0
+        },
+        "7": {
+          "case_count": 4,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_plan:0:pattern:exception_guard:not_in:string_cleanup": 1,
+            "semantic_invalid": 1
+          },
+          "failure_count": 0
+        }
+      },
+      "evidence": {
+        "required": {
+          "case_count": 20,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_plan:0:pattern:exception_guard:not_in:string_cleanup": 1,
+            "semantic_error:code_plan:0:pattern:string_cleanup:not_in:assignment_trace": 1,
+            "semantic_invalid": 2
+          },
+          "failure_count": 0
+        }
+      },
+      "failure_category": {
+        "semantic_error:code_plan:0:pattern:exception_guard:not_in:string_cleanup": 1,
+        "semantic_error:code_plan:0:pattern:string_cleanup:not_in:assignment_trace": 1,
+        "semantic_invalid": 2
+      },
+      "missing_schema_field": {},
+      "safety": {
+        "standard": {
+          "case_count": 20,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_plan:0:pattern:exception_guard:not_in:string_cleanup": 1,
+            "semantic_error:code_plan:0:pattern:string_cleanup:not_in:assignment_trace": 1,
+            "semantic_invalid": 2
+          },
+          "failure_count": 0
+        }
+      },
+      "schema_type_error": {},
+      "web_input": {
+        "non_web": {
+          "case_count": 20,
+          "contract_pass_rate": 1.0,
+          "failure_categories": {
+            "semantic_error:code_plan:0:pattern:exception_guard:not_in:string_cleanup": 1,
+            "semantic_error:code_plan:0:pattern:string_cleanup:not_in:assignment_trace": 1,
+            "semantic_invalid": 2
+          },
+          "failure_count": 0
+        }
+      }
+    }
+  },
+  "models": {
+    "candidate_bound": {
+      "case_count": 20,
+      "critical_slices": {
+        "evidence_required": 1.0
+      },
+      "fallback_count": 1,
+      "fallback_rate": 0.05,
+      "final": {
+        "case_count": 20,
+        "contract_pass_rate": 1.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "promotion_pass_rate": 1.0,
+        "schema_valid_rate": 1.0,
+        "score_mean": 1.0,
+        "semantic_valid_rate": 1.0
+      },
+      "guard": {
+        "case_count": 20,
+        "contract_pass_rate": 1.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "promotion_pass_rate": 0.95,
+        "schema_valid_rate": 1.0,
+        "score_mean": 1.0,
+        "semantic_valid_rate": 0.95
+      },
+      "guard_repair_count": 0,
+      "guard_repair_rate": 0.0,
+      "guard_repair_rate_among_raw_failures": 0.0,
+      "layer_semantics": {
+        "final": "guard result or deterministic fallback replay; final 100% must not be attributed to the raw model",
+        "guard": "offline deterministic contract-repair replay; not a claim about historical production guard execution",
+        "raw": "observed model response"
+      },
+      "primary_metric": "contract_pass_rate",
+      "raw": {
+        "case_count": 20,
+        "contract_pass_rate": 1.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "promotion_pass_rate": 0.95,
+        "schema_valid_rate": 1.0,
+        "score_mean": 1.0,
+        "semantic_valid_rate": 0.95
+      },
+      "raw_promotion_pass_rate": 0.95,
+      "raw_semantic_valid_rate": 0.95,
+      "safety_sensitive_forbidden_leak_rate": 0.0
+    },
+    "candidate_unconstrained": {
+      "case_count": 20,
+      "critical_slices": {
+        "evidence_required": 0.25
+      },
+      "fallback_count": 15,
+      "fallback_rate": 0.75,
+      "final": {
+        "case_count": 20,
+        "contract_pass_rate": 1.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "promotion_pass_rate": 1.0,
+        "schema_valid_rate": 1.0,
+        "score_mean": 1.0,
+        "semantic_valid_rate": 1.0
+      },
+      "guard": {
+        "case_count": 20,
+        "contract_pass_rate": 0.25,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "promotion_pass_rate": 0.25,
+        "schema_valid_rate": 0.25,
+        "score_mean": 0.99,
+        "semantic_valid_rate": 0.75
+      },
+      "guard_repair_count": 0,
+      "guard_repair_rate": 0.0,
+      "guard_repair_rate_among_raw_failures": 0.0,
+      "layer_semantics": {
+        "final": "guard result or deterministic fallback replay; final 100% must not be attributed to the raw model",
+        "guard": "offline deterministic contract-repair replay; not a claim about historical production guard execution",
+        "raw": "observed model response"
+      },
+      "primary_metric": "contract_pass_rate",
+      "raw": {
+        "case_count": 20,
+        "contract_pass_rate": 0.25,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "promotion_pass_rate": 0.25,
+        "schema_valid_rate": 0.25,
+        "score_mean": 0.99,
+        "semantic_valid_rate": 0.75
+      },
+      "raw_promotion_pass_rate": 0.25,
+      "raw_semantic_valid_rate": 0.75,
+      "safety_sensitive_forbidden_leak_rate": 0.0
+    },
+    "champion_bound": {
+      "case_count": 20,
+      "critical_slices": {
+        "evidence_required": 1.0
+      },
+      "fallback_count": 2,
+      "fallback_rate": 0.1,
+      "final": {
+        "case_count": 20,
+        "contract_pass_rate": 1.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "promotion_pass_rate": 1.0,
+        "schema_valid_rate": 1.0,
+        "score_mean": 1.0,
+        "semantic_valid_rate": 1.0
+      },
+      "guard": {
+        "case_count": 20,
+        "contract_pass_rate": 1.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "promotion_pass_rate": 0.9,
+        "schema_valid_rate": 1.0,
+        "score_mean": 1.0,
+        "semantic_valid_rate": 0.9
+      },
+      "guard_repair_count": 0,
+      "guard_repair_rate": 0.0,
+      "guard_repair_rate_among_raw_failures": 0.0,
+      "layer_semantics": {
+        "final": "guard result or deterministic fallback replay; final 100% must not be attributed to the raw model",
+        "guard": "offline deterministic contract-repair replay; not a claim about historical production guard execution",
+        "raw": "observed model response"
+      },
+      "primary_metric": "contract_pass_rate",
+      "raw": {
+        "case_count": 20,
+        "contract_pass_rate": 1.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "promotion_pass_rate": 0.9,
+        "schema_valid_rate": 1.0,
+        "score_mean": 1.0,
+        "semantic_valid_rate": 0.9
+      },
+      "raw_promotion_pass_rate": 0.9,
+      "raw_semantic_valid_rate": 0.9,
+      "safety_sensitive_forbidden_leak_rate": 0.0
+    }
+  },
+  "paired_comparison": {
+    "case_count": 20,
+    "models": [
+      "champion_bound",
+      "candidate_unconstrained",
+      "candidate_bound"
+    ],
+    "pairwise": {
+      "candidate_unconstrained_vs_candidate_bound": {
+        "contract_ties": 5,
+        "full_ties": 5,
+        "left": "candidate_unconstrained",
+        "left_wins": 0,
+        "ordering": "contract_pass_then_auxiliary_score",
+        "right": "candidate_bound",
+        "right_wins": 15
+      },
+      "champion_bound_vs_candidate_bound": {
+        "contract_ties": 20,
+        "full_ties": 20,
+        "left": "champion_bound",
+        "left_wins": 0,
+        "ordering": "contract_pass_then_auxiliary_score",
+        "right": "candidate_bound",
+        "right_wins": 0
+      },
+      "champion_bound_vs_candidate_unconstrained": {
+        "contract_ties": 5,
+        "full_ties": 5,
+        "left": "champion_bound",
+        "left_wins": 15,
+        "ordering": "contract_pass_then_auxiliary_score",
+        "right": "candidate_unconstrained",
+        "right_wins": 0
+      }
+    }
+  },
+  "primary_metric": "contract_pass_rate",
+  "protocol": {
+    "cases_path": "cases/golden_adapter_20_v2_ir_resource4_codeplan_v21.jsonl",
+    "cases_sha256": "cd92b50ddb6beb7558bc569c9e5d2bc9199460da2e6c3b628633d472924b487e",
+    "max_tokens": "per_case.max_tokens",
+    "prompt_variant": "baseline",
+    "response_sha256": {
+      "candidate_bound": "85fd7a03486ec08b7c9991f8ad42addce45d804dd2424920f02b18545223081a",
+      "candidate_unconstrained": "3982f835231e3104b327c44d38b805548b58fd9597093458ec5f2a244b43198d",
+      "champion_bound": "6d67ff41aff9d309e9388f7ea93eeaa01c0de2902453c0f4251480721580b406"
+    },
+    "seed": 42,
+    "temperature": 0.0,
+    "warning": "This manifest proves case identity and rescoring settings. It does not prove historical serve commands unless each source run saved its own immutable run manifest."
+  }
+}

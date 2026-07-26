@@ -102,3 +102,34 @@ def test_build_agent_structured_json_extra_body_uses_openai_json_schema_format()
     assert schema["required"] == ["diagnosis", "next_hint", "evidence_ids", "safety_flags"]
     assert schema["properties"]["diagnosis"]["type"] == "string"
     assert schema["properties"]["evidence_ids"]["type"] == "array"
+
+
+def test_build_agent_structured_json_extra_body_binds_nested_v2_evidence_allowlist() -> None:
+    extra_body = build_agent_structured_json_extra_body(
+        "ResourceDesignerAgent.handout",
+        "agent-schema-v2",
+        evidence_ids=["page-1-006", "page-1-009", "page-1-006"],
+    )
+
+    schema = extra_body["response_format"]["json_schema"]["schema"]
+    section = schema["$defs"]["HandoutSectionIR"]
+    assert section["properties"]["evidence_refs"]["items"]["enum"] == [
+        "page-1-006",
+        "page-1-009",
+    ]
+    assert section["properties"]["evidence_refs"]["minItems"] == 1
+    assert "evidence_refs" in section["required"]
+
+
+def test_evidence_binding_does_not_mutate_registry_schema() -> None:
+    build_agent_structured_json_extra_body(
+        "ResourceDesignerAgent.handout",
+        "agent-schema-v2",
+        evidence_ids=["page-1-006"],
+    )
+
+    unbound = build_agent_structured_json_extra_body(
+        "ResourceDesignerAgent.handout", "agent-schema-v2"
+    )
+    schema = unbound["response_format"]["json_schema"]["schema"]
+    assert "enum" not in schema["$defs"]["HandoutSectionIR"]["properties"]["evidence_refs"]["items"]

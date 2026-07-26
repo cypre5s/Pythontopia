@@ -172,6 +172,12 @@ export PYT_TEACHER_INVITE_CODE="${PYT_TEACHER_INVITE_CODE:-pytopia-teacher}"
 export PYT_GRAPH_URL="${PYT_GRAPH_URL:-http://127.0.0.1:18091}"
 export PYT_RAG_URL="${PYT_RAG_URL:-http://127.0.0.1:18092}"
 export PYT_RAG_ADMIN_TOKEN="${PYT_RAG_ADMIN_TOKEN:-pytopia-rag-admin}"
+# 多 Agent RouteDecision 执行签名使用独立、每次开发栈启动随机的高熵密钥；不复用公开的
+# graph/rag internal token。外部显式配置时保持原值，便于多后端实例共享验证。
+if [[ -z "${PYT_ROUTE_EXECUTION_SECRET:-}" ]]; then
+  require_cmd openssl
+  export PYT_ROUTE_EXECUTION_SECRET="$(openssl rand -hex 32)"
+fi
 # 多模态：复用讯飞 PYT_SPARK_*（缺失则文生图/合成自动降级为本地占位，不影响可用）
 export PYT_SPARK_APP_ID="${PYT_SPARK_APP_ID:-}"
 export PYT_SPARK_API_KEY="${PYT_SPARK_API_KEY:-}"

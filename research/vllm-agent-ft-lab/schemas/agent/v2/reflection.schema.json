@@ -1,0 +1,77 @@
+{
+  "$defs": {
+    "ReflectionObservationIR": {
+      "additionalProperties": false,
+      "description": "Model-owned learning observation; event IDs and product keys stay hidden.",
+      "properties": {
+        "claim": {
+          "maxLength": 200,
+          "minLength": 2,
+          "title": "Claim",
+          "type": "string"
+        },
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "dimension_intent": {
+          "enum": [
+            "ERROR_PATTERN",
+            "COGNITIVE_STYLE",
+            "EMOTION_PERSISTENCE",
+            "PRACTICAL_ABILITY",
+            "KNOWLEDGE_BASE"
+          ],
+          "title": "Dimension Intent",
+          "type": "string"
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 5,
+          "minItems": 1,
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 5,
+          "title": "Tags",
+          "type": "array"
+        }
+      },
+      "required": [
+        "claim",
+        "dimension_intent",
+        "evidence_refs",
+        "confidence"
+      ],
+      "title": "ReflectionObservationIR",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "observations": {
+      "items": {
+        "$ref": "#/$defs/ReflectionObservationIR"
+      },
+      "maxItems": 3,
+      "title": "Observations",
+      "type": "array"
+    }
+  },
+  "required": [
+    "observations"
+  ],
+  "title": "ReflectionAgent",
+  "type": "object",
+  "x-adapter-eligible": true,
+  "x-product-contract": "semantic-ir-event-evidence-bound",
+  "x-schema-version": "agent-schema-v2"
+}

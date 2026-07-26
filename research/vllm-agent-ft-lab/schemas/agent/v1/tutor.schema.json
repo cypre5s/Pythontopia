@@ -1,0 +1,1 @@
+{"$id":"agent-schema-v1/TutorAgent","title":"TutorAgent","type":"object","properties":{"diagnosis":{"type":"string"},"next_hint":{"type":"string"},"evidence_ids":{"type":"array"},"safety_flags":{"type":"array"}},"required":["diagnosis","next_hint","evidence_ids","safety_flags"],"additionalProperties":true}

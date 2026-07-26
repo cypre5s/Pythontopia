@@ -8,16 +8,18 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from pythontopia_graph.schemas.resource import (
     GraphTraceStep,
     GroundingResult,
     SafetyResult,
 )
+from pythontopia_graph.schemas.intent import LearnerRoutingContext, WorkshopInteractionContextRef
+from pythontopia_graph.schemas.workshop_route import RouteDecision, Topology
 
 Phase = Literal["watch", "learn", "practice", "assess"]
-StepStatus = Literal["pending", "active", "done", "skipped"]
+StepStatus = Literal["pending", "active", "done", "failed", "skipped"]
 
 
 class OrchestratorTurn(BaseModel):
@@ -37,6 +39,89 @@ class PlanStep(BaseModel):
     panel: str | None = None
     status: StepStatus = "pending"
     resource_type: str | None = None
+    tool_name: str | None = Field(default=None, max_length=64)
+    depends_on: list[str] = Field(default_factory=list, max_length=3)
+    input_refs: list[str] = Field(default_factory=list, max_length=4)
+    output_schema: str | None = Field(default=None, max_length=80)
+    parallel_group: str | None = Field(default=None, max_length=64)
+    idempotency_key: str | None = Field(default=None, max_length=160)
+    on_failure: Literal["RETURN_PARTIAL", "BLOCK_DEPENDENTS", "REPLAN_ONCE"] = "BLOCK_DEPENDENTS"
+
+
+class TaskPlan(BaseModel):
+    """Supervisor 编译后的唯一执行计划；steps 复用既有 PlanStep，避免协议分叉。"""
+
+    plan_id: str = Field(pattern=r"^plan_[0-9a-f]{16}$")
+    route_id: str = Field(pattern=r"^route_[0-9a-f]{16}$")
+    initial_candidate_id: str | None = Field(
+        default=None,
+        pattern=r"^candidate_[a-z0-9][a-z0-9_-]{0,63}$",
+    )
+    active_candidate_id: str | None = Field(
+        default=None,
+        pattern=r"^candidate_[a-z0-9][a-z0-9_-]{0,63}$",
+    )
+    replanned_candidate_id: str | None = Field(
+        default=None,
+        pattern=r"^candidate_[a-z0-9][a-z0-9_-]{0,63}$",
+    )
+    topology: Topology
+    steps: list[PlanStep] = Field(min_length=1, max_length=4)
+    max_tool_calls: int = Field(default=8, ge=1, le=8)
+    max_calls_per_tool: int = Field(default=2, ge=1, le=2)
+    max_parallel_agents: int = Field(default=3, ge=1, le=3)
+    max_planning_depth: int = Field(default=3, ge=1, le=3)
+    max_replans: int = Field(default=1, ge=0, le=1)
+    replans_used: int = Field(default=0, ge=0, le=1)
+    status: Literal["PENDING", "RUNNING", "PARTIAL", "COMPLETED", "FAILED"] = "PENDING"
+
+    @model_validator(mode="after")
+    def _unique_step_ids(self) -> "TaskPlan":
+        ids = [step.id for step in self.steps]
+        if len(ids) != len(set(ids)):
+            raise ValueError("TaskPlan step ids must be unique")
+        step_statuses = [step.status for step in self.steps]
+        if self.status == "PENDING" and any(
+            step_status != "pending" for step_status in step_statuses
+        ):
+            raise ValueError("PENDING TaskPlan requires every step to be pending")
+        if self.status == "COMPLETED" and any(
+            step_status != "done" for step_status in step_statuses
+        ):
+            raise ValueError("COMPLETED TaskPlan requires every step to be done")
+        if self.status == "PARTIAL" and (
+            "done" not in step_statuses
+            or not any(step_status in {"failed", "skipped"} for step_status in step_statuses)
+        ):
+            raise ValueError("PARTIAL TaskPlan requires done and failed or skipped steps")
+        if self.status == "FAILED" and (
+            "done" in step_statuses
+            or not any(step_status in {"failed", "skipped"} for step_status in step_statuses)
+        ):
+            raise ValueError("FAILED TaskPlan cannot contain done steps")
+        candidate_ids = (
+            self.initial_candidate_id,
+            self.active_candidate_id,
+            self.replanned_candidate_id,
+        )
+        if self.initial_candidate_id is None:
+            if any(candidate_id is not None for candidate_id in candidate_ids):
+                raise ValueError("candidate ids require initial_candidate_id")
+            return self
+        if self.active_candidate_id is None:
+            raise ValueError("C3 TaskPlan requires active_candidate_id")
+        if self.replans_used == 0:
+            if (
+                self.active_candidate_id != self.initial_candidate_id
+                or self.replanned_candidate_id is not None
+            ):
+                raise ValueError("unreplanned C3 TaskPlan must keep the initial candidate active")
+        elif (
+            self.replanned_candidate_id != self.active_candidate_id
+            or self.active_candidate_id == self.initial_candidate_id
+        ):
+            raise ValueError("replanned C3 TaskPlan must identify the switched candidate")
+        return self
 
 
 class DispatchResult(BaseModel):
@@ -70,6 +155,9 @@ class OrchestratorRequest(BaseModel):
     # 学习总管据此把看/学/练/测计划优先锚定到这些待复习知识点。
     decaying_kcs: list[str] = Field(default_factory=list)
     course_kc_index: list[str] = Field(default_factory=list)
+    route_decision: RouteDecision | None = None
+    interaction: WorkshopInteractionContextRef | None = None
+    learner_context: LearnerRoutingContext | None = None
 
 
 class OrchestratorResponse(BaseModel):
@@ -77,11 +165,11 @@ class OrchestratorResponse(BaseModel):
     clarifying_question: str | None = None
     needs_user_input: bool = False
     plan: list[PlanStep] = Field(default_factory=list)
+    route_decision: RouteDecision | None = None
+    task_plan: TaskPlan | None = None
     dispatch_results: list[DispatchResult] = Field(default_factory=list)
     profile_updates: list[ProfileSignal] = Field(default_factory=list)
     trace: list[GraphTraceStep] = Field(default_factory=list)
     done: bool = False
     safety_result: SafetyResult = Field(default_factory=lambda: SafetyResult(passed=True))
-    grounding_result: GroundingResult = Field(
-        default_factory=lambda: GroundingResult(passed=True)
-    )
+    grounding_result: GroundingResult = Field(default_factory=lambda: GroundingResult(passed=True))

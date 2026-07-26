@@ -14,7 +14,7 @@ from pythontopia_graph.tools.registry import (
     tools_for_scope,
 )
 
-EXEC_MODES = {"tutor_sse", "workshop_sse", "orchestrator_sse", "frontend"}
+EXEC_MODES = {"tutor_sse", "workshop_sse", "orchestrator_sse", "bugmine", "frontend"}
 RISK_CLASSES = {"read_only", "generative", "navigational"}
 COST_CLASSES = {"zero", "low", "medium", "high"}
 
@@ -77,6 +77,11 @@ def test_tool_catalog_payload_fields_complete() -> None:
             "visibility",
             "invocationLabel",
             "completionLabel",
+            "allowedAgents",
+            "requiredContext",
+            "resultSchema",
+            "sensitiveData",
+            "sideEffects",
         }
         assert isinstance(entry["zhLabel"], str) and entry["zhLabel"]
         assert isinstance(entry["desc"], str) and entry["desc"]
@@ -91,6 +96,16 @@ def test_tool_catalog_payload_fields_complete() -> None:
         assert entry["visibility"] in {"default_hidden", "default_visible", "debug_only"}
         assert isinstance(entry["invocationLabel"], str) and entry["invocationLabel"]
         assert isinstance(entry["completionLabel"], str) and entry["completionLabel"]
+        assert isinstance(entry["allowedAgents"], list)
+        assert isinstance(entry["requiredContext"], list)
+        assert isinstance(entry["resultSchema"], str) and entry["resultSchema"]
+        assert entry["sensitiveData"] in {"none", "learner", "submission", "external"}
+        assert entry["sideEffects"] in {
+            "none",
+            "navigation",
+            "resource_write",
+            "external_read",
+        }
 
 
 def test_capability_groups_cover_all_17_tools() -> None:

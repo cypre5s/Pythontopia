@@ -26,6 +26,10 @@ from pythontopia_graph.graph.resource_graph import (
 from pythontopia_graph.llm.provider import LlmProvider
 from pythontopia_graph.nodes.evidence_fetcher import EvidenceFetcher
 from pythontopia_graph.schemas.orchestrator import DispatchResult, PlanStep
+from pythontopia_graph.schemas.intent import (
+    LearnerRoutingContext,
+    WorkshopInteractionContextRef,
+)
 from pythontopia_graph.schemas.resource import (
     GraphTraceStep,
     ResourceDraft,
@@ -65,6 +69,9 @@ class DispatchContext:
     valid_kc_codes: set[str]
     # 本轮请求的学生画像简报（OrchestratorRequest.profile_brief），真实透传给子 agent。
     profile_brief: str = ""
+    # 仅由 Java 端按当前用户校验并从数据库回填；客户端原始 code/error 不得直达这里。
+    debug_context: WorkshopInteractionContextRef | None = None
+    learner_context: LearnerRoutingContext | None = None
 
 
 class AgentDispatcher:
@@ -114,6 +121,7 @@ class AgentDispatcher:
             kc_codes=step.kc_codes if step.kc_codes else ["PY43-KC-001"],
             type=resource_type,
             focus_hint=f"{step.title}{focus_hint_extra}"[:512],
+            profile_snapshot=self._resource_profile_snapshot(),
         )
         graph = ResourceGraph(
             provider=self._ctx.provider,
@@ -165,6 +173,15 @@ class AgentDispatcher:
         提交后，再由 DebugAgent 走真实分析链。
         """
         kc_codes = step.kc_codes if step.kc_codes else ["PY43-KC-001"]
+        context = self._ctx.debug_context
+        if (
+            context is not None
+            and context.latest_submission_id
+            and context.current_problem_id
+            and context.current_code.strip()
+            and context.error_text.strip()
+        ):
+            return self._verified_debug_diagnosis(step, context, kc_codes, started)
         elapsed_ms = int((time.monotonic() - started) * 1000)
         kc_label = "、".join(kc_codes)
         return DispatchResult(
@@ -181,6 +198,55 @@ class AgentDispatcher:
             },
         )
 
+    @staticmethod
+    def _verified_debug_diagnosis(
+        step: PlanStep,
+        context: WorkshopInteractionContextRef,
+        kc_codes: list[str],
+        started: float,
+    ) -> DispatchResult:
+        """Diagnose only from backend-verified submission evidence; never invent a counterexample."""
+        error = context.error_text.strip()
+        lowered = error.lower()
+        if "syntaxerror" in lowered or lowered.startswith("ce"):
+            category, remediation = "语法/静态检查", "先定位报错行与括号、缩进、禁用语法"
+        elif "typeerror" in lowered:
+            category, remediation = "类型不匹配", "逐项核对参与运算的变量类型与转换位置"
+        elif "indexerror" in lowered or "off_by_one" in lowered:
+            category, remediation = "边界错误", "核对 range 右边界、下标起点和循环次数"
+        elif lowered.startswith("tle") or "time limit" in lowered:
+            category, remediation = "超时/终止条件", "核对循环终止条件与重复计算量"
+        elif lowered.startswith("wa") or "wrong answer" in lowered:
+            category, remediation = "答案不一致", "从输出格式、循环边界和累积变量三个方向做最小反例复核"
+        else:
+            category, remediation = "运行失败", "沿判题错误末行回溯到首个异常变量"
+        code_lines = [line for line in context.current_code.splitlines() if line.strip()]
+        suspicious_line = max(1, len(code_lines))
+        elapsed_ms = int((time.monotonic() - started) * 1000)
+        summary = (
+            f"已基于失败提交 #{context.latest_submission_id} 完成诊断：{category}；{remediation}"
+        )
+        return DispatchResult(
+            step_id=step.id,
+            agent="DebugAgent",
+            ok=True,
+            summary=summary,
+            note=error[:200],
+            elapsed_ms=elapsed_ms,
+            artifact={
+                "kind": "verified_debug_diagnosis",
+                "title": "失败提交诊断",
+                "summary": f"{category}：{remediation}",
+                "submission_id": context.latest_submission_id,
+                "problem_id": context.current_problem_id,
+                "error_category": category,
+                "error_excerpt": error[:300],
+                "suspicious_line": suspicious_line,
+                "kc_codes": kc_codes,
+                "counter_example_available": False,
+            },
+        )
+
     async def _dispatch_path_planner(
         self, step: PlanStep, user_id: int, started: float
     ) -> DispatchResult:
@@ -188,13 +254,17 @@ class AgentDispatcher:
         from pythontopia_graph.schemas.path import (
             PathPlannerRequest,
             PlannerKcSnapshot,
+            PlannerProblemSubmission,
             PlannerProfileSnapshot,
+            PlannerResourceUsage,
         )
 
+        context = self._ctx.learner_context
         kc_snapshots = [
             PlannerKcSnapshot(
                 kc_code=code,
-                mastery_score=0.5,
+                mastery_score=(context.kc_mastery.get(code, 0.0) if context else 0.0),
+                confidence=(context.kc_confidence.get(code, 0.0) if context else 0.0),
                 unlocked=True,
             )
             for code in (step.kc_codes if step.kc_codes else ["PY43-KC-001"])
@@ -203,8 +273,30 @@ class AgentDispatcher:
             request = PathPlannerRequest(
                 user_id=user_id,
                 pack_id=43,
-                profile=PlannerProfileSnapshot(has_profile=False),
+                profile=PlannerProfileSnapshot(
+                    has_profile=bool(context and context.profile_brief),
+                    major=context.profile_major if context else "OTHER",
+                    python_self_rated_level=context.python_level if context else 2,
+                    days_since_last_profile_update=0 if context and context.profile_brief else 999,
+                ),
                 kcs=kc_snapshots,
+                recent_resources=[
+                    PlannerResourceUsage(
+                        kc_code=item.kc_code,
+                        type=item.type,
+                        created_at=item.created_at,
+                    )
+                    for item in (context.recent_resources if context else [])
+                ],
+                recent_submissions=[
+                    PlannerProblemSubmission(
+                        problem_id=item.problem_id,
+                        kc_code=item.kc_code,
+                        passed=item.passed,
+                    )
+                    for item in (context.recent_submissions if context else [])
+                ],
+                error_pattern_kcs=context.recent_error_kcs if context else [],
             )
             response = PathPlannerAgent().plan(request)
             elapsed_ms = int((time.monotonic() - started) * 1000)
@@ -231,6 +323,24 @@ class AgentDispatcher:
                 note=str(exc),
                 elapsed_ms=elapsed_ms,
             )
+
+    def _resource_profile_snapshot(self):  # type: ignore[no-untyped-def]
+        """Map the same authoritative context into the existing resource-agent profile schema."""
+        from pythontopia_graph.schemas.resource import ProfileSnapshot
+
+        context = self._ctx.learner_context
+        if context is None:
+            return ProfileSnapshot()
+        return ProfileSnapshot(
+            major=context.profile_major,
+            python_self_rated_level=context.python_level,
+            media_priority=context.learning_preferences,
+            cognitive_style=context.cognitive_style,
+            error_patterns=context.recent_error_kcs,
+            recent_insight=context.struggle_patterns[0] if context.struggle_patterns else "",
+            memory_highlights=[*context.struggle_patterns, *context.recent_wins][:8],
+            memory_directives=context.intervention_hints,
+        )
 
     async def _dispatch_tutor(
         self, step: PlanStep, started: float

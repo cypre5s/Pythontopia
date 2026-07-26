@@ -107,6 +107,8 @@ def test_builds_nf4_specialist_sft_and_gdpo_rpo_plans(tmp_path: Path) -> None:
     assert gdpo["gdpo_rpo"]["beta"] == 0.1
     assert gdpo["gdpo_rpo"]["lambda_sft"] == 0.2
     assert gdpo["gdpo_rpo"]["disable_dropout"] is True
+    assert sft["initialization"]["mode"] == "continue_from_frozen_champion_adapter"
+    assert sft["initial_adapter_path"].endswith("e1-protocol-patch-v1-1000-v1-dpo-v2-len512")
     assert gdpo["sft_adapter_path"] == sft["output_dir"]
     assert gdpo["output_dir"] != sft["output_dir"]
     assert "seed42" in gdpo["output_dir"]

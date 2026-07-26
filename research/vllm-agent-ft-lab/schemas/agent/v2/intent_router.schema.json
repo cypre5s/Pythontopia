@@ -1,0 +1,77 @@
+{
+  "description": "Only the uncertain semantic decision; route governance stays deterministic.",
+  "properties": {
+    "clarification_prompt": {
+      "default": "",
+      "maxLength": 240,
+      "title": "Clarification Prompt",
+      "type": "string"
+    },
+    "confidence": {
+      "default": 0.5,
+      "title": "Confidence",
+      "type": "number"
+    },
+    "focus_hint": {
+      "default": "",
+      "maxLength": 120,
+      "title": "Focus Hint",
+      "type": "string"
+    },
+    "intent": {
+      "title": "Intent",
+      "type": "string"
+    },
+    "kc_codes": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 3,
+      "title": "Kc Codes",
+      "type": "array"
+    },
+    "missing_context": {
+      "default": "",
+      "maxLength": 160,
+      "title": "Missing Context",
+      "type": "string"
+    },
+    "needs_clarification": {
+      "default": false,
+      "title": "Needs Clarification",
+      "type": "boolean"
+    },
+    "reason": {
+      "default": "",
+      "maxLength": 240,
+      "title": "Reason",
+      "type": "string"
+    },
+    "secondary_intent": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Secondary Intent"
+    },
+    "target": {
+      "default": "",
+      "maxLength": 32,
+      "title": "Target",
+      "type": "string"
+    }
+  },
+  "required": [
+    "intent"
+  ],
+  "title": "IntentRouterAgent",
+  "type": "object",
+  "x-adapter-eligible": true,
+  "x-product-contract": "semantic-ir",
+  "x-schema-version": "agent-schema-v2"
+}

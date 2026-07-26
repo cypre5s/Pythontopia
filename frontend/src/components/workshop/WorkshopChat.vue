@@ -7,77 +7,80 @@
  *   2. forcedIntent 为空 → 调 /api/intent/route（带最近 6 轮摘要 / 上轮意图 / 本会话纠错 / scope）
  *      自动判定工具 + 锚定 KC；否则直接用；
  *   3. 按 17 工具分发表执行（蓝本 §0）：
- *      - tutor_sse：ASK / ASKME / EXPLAIN_CODE / FIX_BUG（共用 /api/tutor/ask，差异在 context 前缀 directive）；
+ *      - tutor_sse：ASK / ASKME / EXPLAIN_CODE；FIX_BUG 复用 BugMineService → DebugAgent 真链；
  *      - workshop_sse：6 类资源 → /api/workshop/resources/stream + AgentStudioStream 思考链；
  *      - orchestrator_sse：PLAN → /api/orchestrator/turn/stream（同步右侧处理进度）；
  *      - frontend 零 LLM：VIDEO / REVIEW / PROGRESS / NAVIGATE / MY_STUDY。
- *   4. 置信分档：<0.45 出澄清气泡（ClarifyBubble）；0.45~0.7 正常执行 + 答后纠错 chips。
+ *   4. 置信分档：自由文本 <0.55 出澄清气泡；0.55~0.7 正常执行 + 答后纠错 chips。
  *
  * 资源详情由父级 WorkshopPage 的 store openResourceId 打开弹窗，不再把资源 id 写进 URL。
  */
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
-import { useLearningStore } from '@stores/learning';
-import { useMainlineStore } from '@stores/mainline';
-import { useToastStore } from '@stores/toast';
-import { useWorkshopActivityStore } from '@stores/workshopActivity';
-import { playSfx } from '@/composables/useAudio';
-import { useSseStream, type SseTraceEvent } from '@/composables/useSseStream';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import { useLearningStore } from "@stores/learning";
+import { useMainlineStore } from "@stores/mainline";
+import { useToastStore } from "@stores/toast";
+import { useWorkshopActivityStore } from "@stores/workshopActivity";
+import { playSfx } from "@/composables/useAudio";
+import { useSseStream, type SseTraceEvent } from "@/composables/useSseStream";
 import ChatComposer, {
   type ComposerSubmitPayload,
-} from '@/components/workshop/ChatComposer.vue';
-import HandoutView from '@/components/workshop/HandoutView.vue';
-import MindMapView from '@/components/workshop/MindMapView.vue';
-import PracticeList from '@/components/workshop/PracticeList.vue';
-import CodeLabView from '@/components/workshop/CodeLabView.vue';
-import ReadingList from '@/components/workshop/ReadingList.vue';
-import StoryboardView from '@/components/workshop/StoryboardView.vue';
-import WorkshopAvatar from '@/components/workshop/WorkshopAvatar.vue';
-import WelcomePanel from '@/components/workshop/WelcomePanel.vue';
-import ClarifyBubble from '@/components/workshop/ClarifyBubble.vue';
-import QuizModeBar from '@/components/workshop/QuizModeBar.vue';
-import ProgressCard from '@/components/workshop/ProgressCard.vue';
-import PlanCard from '@/components/workshop/PlanCard.vue';
-import ToolTraceLine from '@/components/workshop/ToolTraceLine.vue';
-import ToolCallTimeline from '@/components/workshop/ToolCallTimeline.vue';
-import AnswerFeedback from '@/components/workshop/AnswerFeedback.vue';
-import MarkdownView from '@/components/common/MarkdownView.vue';
-import { annotateCitations } from '@/utils/citations';
-import TutorVisualAids, { type TutorVisualAid } from '@/components/tutor/TutorVisualAids.vue';
-import CoursewareEvidence from '@/components/tutor/CoursewareEvidence.vue';
-import BilibiliVideoCards from '@/components/video/BilibiliVideoCards.vue';
-import BrowseTimeline from '@/components/workshop/BrowseTimeline.vue';
+} from "@/components/workshop/ChatComposer.vue";
+import HandoutView from "@/components/workshop/HandoutView.vue";
+import MindMapView from "@/components/workshop/MindMapView.vue";
+import PracticeList from "@/components/workshop/PracticeList.vue";
+import CodeLabView from "@/components/workshop/CodeLabView.vue";
+import ReadingList from "@/components/workshop/ReadingList.vue";
+import StoryboardView from "@/components/workshop/StoryboardView.vue";
+import WorkshopAvatar from "@/components/workshop/WorkshopAvatar.vue";
+import WelcomePanel from "@/components/workshop/WelcomePanel.vue";
+import ClarifyBubble from "@/components/workshop/ClarifyBubble.vue";
+import QuizModeBar from "@/components/workshop/QuizModeBar.vue";
+import ProgressCard from "@/components/workshop/ProgressCard.vue";
+import PlanCard from "@/components/workshop/PlanCard.vue";
+import ToolTraceLine from "@/components/workshop/ToolTraceLine.vue";
+import ToolCallTimeline from "@/components/workshop/ToolCallTimeline.vue";
+import AnswerFeedback from "@/components/workshop/AnswerFeedback.vue";
+import MarkdownView from "@/components/common/MarkdownView.vue";
+import { annotateCitations } from "@/utils/citations";
+import TutorVisualAids, {
+  type TutorVisualAid,
+} from "@/components/tutor/TutorVisualAids.vue";
+import CoursewareEvidence from "@/components/tutor/CoursewareEvidence.vue";
+import BilibiliVideoCards from "@/components/video/BilibiliVideoCards.vue";
+import BrowseTimeline from "@/components/workshop/BrowseTimeline.vue";
 import {
   styleEngaged,
   type CognitiveStyle,
   type EvidenceCitation,
   type TutorAskRequest,
-} from '@/api/tutor';
+} from "@/api/tutor";
 import {
   recordWorkshopChatHistoryTurn,
   type WorkshopChatHistoryRecordRequest,
   type WorkshopChatHistoryTurnDto,
-} from '@/api/workshopHistory';
-import { kcDisplayName } from '@/data/kcNames';
-import { listChapters, listKnowledgeComponents } from '@/api/course';
-import { getWorkshopResource } from '@/api/workshop';
-import { postLearningEvent } from '@/api/learningEvent';
+} from "@/api/workshopHistory";
+import { kcDisplayName } from "@/data/kcNames";
+import { listChapters, listKnowledgeComponents } from "@/api/course";
+import { getWorkshopResource } from "@/api/workshop";
+import { getBugMineErrorBook, openBugMineSession } from "@/api/bugMine";
+import { postLearningEvent } from "@/api/learningEvent";
 import {
   attachmentIcon,
   buildUploadInjection,
   mergeUploadContext,
   type UploadAttachmentRef,
-} from '@/api/upload';
+} from "@/api/upload";
 import {
   buildMentionItems,
   type MentionItem,
-} from '@/composables/useCoursewareMention';
+} from "@/composables/useCoursewareMention";
 import {
   createBrowseRun,
   getBrowseRun,
   type BrowseRunDetailDto,
-} from '@/api/browse';
-import { SLASH_COMMANDS } from '@/composables/useSlashCommand';
+} from "@/api/browse";
+import { SLASH_COMMANDS } from "@/composables/useSlashCommand";
 import {
   isResourceIntent,
   routeIntent,
@@ -86,12 +89,14 @@ import {
   type IntentKind,
   type IntentRouteRequest,
   type IntentTurnRef,
-} from '@/api/intent';
+  type WorkshopInteractionContextRef,
+  type WorkshopRouteDecision,
+} from "@/api/intent";
 import type {
   OrchestratorPlanStep,
   OrchestratorResult,
   OrchestratorTurnRequest,
-} from '@/api/orchestrator';
+} from "@/api/orchestrator";
 import type {
   WorkshopContent,
   WorkshopCreateResponse,
@@ -104,7 +109,7 @@ import type {
   CodeLabContent,
   ReadingContent,
   StoryboardContent,
-} from '@/api/dto/Workshop';
+} from "@/api/dto/Workshop";
 
 /** 单道审查结果（与 graph `_build_result` 的 review.* 同形：passed + reasons）。 */
 interface TutorReviewItem {
@@ -127,7 +132,12 @@ interface TutorStreamResult {
   answer_md?: string;
   evidence_page_ids?: number[];
   /** 命中的课件证据明细（页码 + 原文片段）。 */
-  evidence?: Array<{ page_id: number; page_no: number; snippet?: string; score?: number }>;
+  evidence?: Array<{
+    page_id: number;
+    page_no: number;
+    snippet?: string;
+    score?: number;
+  }>;
   grounding_result?: { passed: boolean; reasons: string[] };
   based_on_general_knowledge?: boolean;
   safety_result?: { passed: boolean; reasons: string[] };
@@ -154,7 +164,9 @@ interface TutorStreamResult {
 }
 
 function hasCoursewareEvidence(r: TutorStreamResult): boolean {
-  return (r.evidence?.length ?? 0) > 0 || (r.evidence_page_ids?.length ?? 0) > 0;
+  return (
+    (r.evidence?.length ?? 0) > 0 || (r.evidence_page_ids?.length ?? 0) > 0
+  );
 }
 
 const GENERAL_KNOWLEDGE_PREFIX_RE = /^\s*基于通识知识\s*[：:]\s*/;
@@ -162,17 +174,22 @@ const GENERAL_KNOWLEDGE_PREFIX_RE = /^\s*基于通识知识\s*[：:]\s*/;
 /** 有课件证据时，清掉模型或旧后端残留的「基于通识知识」前缀，避免正文与证据面板自相矛盾。 */
 function normalizeAnswerText(r: TutorStreamResult, fallback: string): string {
   const text = r.answer_md || fallback;
-  return hasCoursewareEvidence(r) ? text.replace(GENERAL_KNOWLEDGE_PREFIX_RE, '') : text;
+  return hasCoursewareEvidence(r)
+    ? text.replace(GENERAL_KNOWLEDGE_PREFIX_RE, "")
+    : text;
 }
 
 /** 由 graph 的 grounding_result / based_on_general_knowledge / 实际证据归一成前端 g-chip 用的状态串。 */
 function deriveGroundingStatus(r: TutorStreamResult): string {
   if (hasCoursewareEvidence(r)) {
-    return r.grounding_result && r.grounding_result.passed === false ? 'FAILED' : 'PASSED';
+    return r.grounding_result && r.grounding_result.passed === false
+      ? "FAILED"
+      : "PASSED";
   }
-  if (r.based_on_general_knowledge) return 'NO_EVIDENCE';
-  if (r.grounding_result && r.grounding_result.passed === false) return 'FAILED';
-  return 'PASSED';
+  if (r.based_on_general_knowledge) return "NO_EVIDENCE";
+  if (r.grounding_result && r.grounding_result.passed === false)
+    return "FAILED";
+  return "PASSED";
 }
 
 /** 把 result.evidence（snake_case）投影成「课件证据」面板用的 EvidenceCitation（camelCase）。 */
@@ -181,10 +198,10 @@ function toCitations(r: TutorStreamResult): EvidenceCitation[] {
     const citation: EvidenceCitation = {
       pageId: e.page_id,
       pageNo: e.page_no,
-      snippet: e.snippet ?? '',
+      snippet: e.snippet ?? "",
     };
     // exactOptionalPropertyTypes：score 仅在确有数值时赋值，避免写入 undefined。
-    if (typeof e.score === 'number') citation.score = e.score;
+    if (typeof e.score === "number") citation.score = e.score;
     return citation;
   });
   if (fromEvidence.length > 0) return fromEvidence;
@@ -194,7 +211,11 @@ function toCitations(r: TutorStreamResult): EvidenceCitation[] {
 
 /** 仅有课件页 id（无页码/片段，如历史回放）时合成证据项：页图按 pageId 取，页码缺省 0（面板显示「课件页」）。 */
 function pageIdsToCitations(pageIds: number[] | undefined): EvidenceCitation[] {
-  return (pageIds ?? []).map((pid) => ({ pageId: pid, pageNo: 0, snippet: '' }));
+  return (pageIds ?? []).map((pid) => ({
+    pageId: pid,
+    pageNo: 0,
+    snippet: "",
+  }));
 }
 
 /** 一次工具执行所需的全部上下文：澄清 pick / 纠错改派 / 「接着」chip 据此重放。 */
@@ -205,6 +226,13 @@ interface DispatchContext {
   contextHint: string;
   /** NAVIGATE 专用地标（路由响应的 target）。 */
   target: string;
+  /** 仅服务端验证后的失败提交引用可触发真实 DebugAgent/BugMine 链。 */
+  latestSubmissionId?: number;
+  /** 路由服务返回的完整权威决策；复合拓扑交由现有 Orchestrator 执行。 */
+  routeDecision?: WorkshopRouteDecision;
+  routeExecutionToken?: string;
+  /** 已从当前真实交互取得的上下文引用，不在前端补造。 */
+  interaction?: WorkshopInteractionContextRef;
 }
 
 /** tutor_sse 工具族的差异化选项（同一 /api/tutor/ask 管线）。 */
@@ -219,26 +247,37 @@ interface AskOptions {
 
 /** 错误气泡「重试」chip 的参数缓存（重放上次 runAsk / runResource）。 */
 type RetryInfo =
-  | { mode: 'ask'; question: string; kcCodes: string[]; context: string; opts: AskOptions }
-  | { mode: 'resource'; type: WorkshopResourceType; kcCodes: string[]; focusHint: string }
-  | { mode: 'browse'; ctx: DispatchContext };
+  | {
+      mode: "ask";
+      question: string;
+      kcCodes: string[];
+      context: string;
+      opts: AskOptions;
+    }
+  | {
+      mode: "resource";
+      type: WorkshopResourceType;
+      kcCodes: string[];
+      focusHint: string;
+    }
+  | { mode: "browse"; ctx: DispatchContext };
 
 interface ChatMessage {
   id: string;
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   kind:
-    | 'text'
-    | 'answer'
-    | 'resource'
-    | 'video'
-    | 'browse'
-    | 'error'
-    | 'clarify'
-    | 'plan'
-    | 'progress'
-    | 'mystudy'
-    | 'navigate'
-    | 'secondary';
+    | "text"
+    | "answer"
+    | "resource"
+    | "video"
+    | "browse"
+    | "error"
+    | "clarify"
+    | "plan"
+    | "progress"
+    | "mystudy"
+    | "navigate"
+    | "secondary";
   text: string;
   streaming?: boolean;
   intent?: IntentKind;
@@ -269,8 +308,16 @@ interface ChatMessage {
   traces?: SseTraceEvent[];
   /** kind==='answer' 且 live：画像个性化说明 → 气泡顶「✨ 为你定制」小标签的 title。 */
   personalizationNote?: string;
+  /** kind==='plan'：仅展示服务端提供的学生可读路由解释，不展示内部信号字段。 */
+  personalizationSummary?: string;
+  /** kind==='plan' 且 C3：三条受限候选比较与选中路线的学生可读摘要。 */
+  searchSummary?: string;
   /** kind==='answer'：考考我出题（多轮填空）→ 气泡内渲染可填空输入 + 提交作答按钮。 */
-  quiz?: { round: number; stem: string; blanks: Array<{ index: number; hint: string }> };
+  quiz?: {
+    round: number;
+    stem: string;
+    blanks: Array<{ index: number; hint: string }>;
+  };
   /** kind==='answer'：用于答案内自动嵌入工具（相关 B站视频检索词 / 生成入口）。 */
   suggestTopic?: string;
   resourceId?: number;
@@ -308,6 +355,8 @@ interface ChatMessage {
   secondaryUsed?: boolean;
   /** kind==='plan'：学习总管产出的看学练测步骤（PlanCard steps）。 */
   planSteps?: OrchestratorPlanStep[];
+  /** kind==='plan'：后端已落库的 loop_run id，供恢复、回放与验收查询。 */
+  loopRunId?: number;
   /** kind==='mystudy'：书房命中的资源（≤5 张卡）。 */
   mystudyItems?: WorkshopResourceListItemDto[];
   /** kind==='navigate'：确认气泡的目标路由 / 人话地名。 */
@@ -318,8 +367,8 @@ interface ChatMessage {
 }
 
 const emit = defineEmits<{
-  (event: 'open-resource', resourceId: number): void;
-  (event: 'history-saved', turn: WorkshopChatHistoryTurnDto): void;
+  (event: "open-resource", resourceId: number): void;
+  (event: "history-saved", turn: WorkshopChatHistoryTurnDto): void;
 }>();
 
 const router = useRouter();
@@ -334,12 +383,19 @@ const mentionItems = ref<MentionItem[]>([]);
 const courseKcs = ref<CourseKcRef[]>([]);
 const routing = ref(false);
 const scrollRef = ref<HTMLElement | null>(null);
-const composerRef = ref<{ focus: () => void; prefill: (text: string) => void } | null>(null);
+const composerRef = ref<{
+  focus: () => void;
+  prefill: (text: string) => void;
+} | null>(null);
 
-const tutorSse = useSseStream<TutorStreamResult>('/api/tutor/ask');
-const workshopSse = useSseStream<WorkshopCreateResponse>('/api/workshop/resources/stream');
+const tutorSse = useSseStream<TutorStreamResult>("/api/tutor/ask");
+const workshopSse = useSseStream<WorkshopCreateResponse>(
+  "/api/workshop/resources/stream",
+);
 // PLAN 专用：学习总管 orchestrator 流（与 GuideOverlay 同端点，独立实例避免串台）。
-const orchestratorSse = useSseStream<OrchestratorResult>('/api/orchestrator/turn/stream');
+const orchestratorSse = useSseStream<OrchestratorResult>(
+  "/api/orchestrator/turn/stream",
+);
 
 // 答疑流式期间「工具调用生命周期」时间轴的数据源（证据检索→作答→三审，实时 trace）。
 const liveAskTraces = computed(() => tutorSse.traces.value);
@@ -378,7 +434,12 @@ function rememberUploads(atts: UploadAttachmentRef[]): void {
 }
 
 // 考核模式状态机（ASKME · 多轮填空）：开考后 1-3 轮，每轮出填空题、学生气泡内填空提交；QuizModeBar 驻顶。
-const quiz = ref<{ kcCodes: string[]; round: number; total: 3; topic: string } | null>(null);
+const quiz = ref<{
+  kcCodes: string[];
+  round: number;
+  total: 3;
+  topic: string;
+} | null>(null);
 // 每条填空题（按消息 id）的学生填空草稿，提交时拼成作答串送评卷。
 const quizDrafts = ref<Record<string, string[]>>({});
 
@@ -389,10 +450,10 @@ const sessionCorrections = ref<IntentCorrectionRef[]>([]);
 /** 开新对话窗口：清空当前对话流并换一个会话 id（此后提问归入新会话）。 */
 function newChat(): void {
   if (busy.value) {
-    toast.show('当前回复正在生成或保存，稍等一下再开新对话', 'info');
+    toast.show("当前回复正在生成或保存，稍等一下再开新对话", "info");
     return;
   }
-  playSfx('sfx_click');
+  playSfx("sfx_click");
   messages.value = [];
   streamingAskId.value = null;
   quiz.value = null;
@@ -413,89 +474,117 @@ function prefillDraft(text: string): void {
  * 并把当前会话 id 切到这段会话——于是学生可「接着这段对话继续问」。
  * 旧数据（conversationId 为 null）无法续聊，续问会新开一个会话以免污染分组。
  */
-function payloadObject(turn: WorkshopChatHistoryTurnDto): Record<string, unknown> {
-  return turn.responsePayload && typeof turn.responsePayload === 'object' ? turn.responsePayload : {};
+function payloadObject(
+  turn: WorkshopChatHistoryTurnDto,
+): Record<string, unknown> {
+  return turn.responsePayload && typeof turn.responsePayload === "object"
+    ? turn.responsePayload
+    : {};
 }
 
-function historyAssistantMessage(turn: WorkshopChatHistoryTurnDto): ChatMessage {
+function historyAssistantMessage(
+  turn: WorkshopChatHistoryTurnDto,
+): ChatMessage {
   const payload = payloadObject(turn);
   const intent = asIntentKind(turn.intent);
   const meta = commandOf(intent);
-  const kind = turn.responseKind as ChatMessage['kind'];
+  const kind = turn.responseKind as ChatMessage["kind"];
   const msg: ChatMessage = {
     id: genId(),
-    role: 'assistant',
+    role: "assistant",
     kind,
     intent,
-    text: turn.responseText ?? '',
+    text: turn.responseText ?? "",
     toolLabel: turn.toolLabel ?? meta.label,
     toolIcon: meta.icon,
     streaming: false,
   };
 
-  if (kind === 'answer') {
-    msg.groundingStatus = turn.groundingStatus ?? 'NO_EVIDENCE';
+  if (kind === "answer") {
+    msg.groundingStatus = turn.groundingStatus ?? "NO_EVIDENCE";
     msg.evidencePageIds = turn.evidencePageIds;
     msg.evidence = pageIdsToCitations(turn.evidencePageIds);
     return msg;
   }
-  if (kind === 'plan') {
+  if (kind === "plan") {
     msg.planSteps = Array.isArray(payload.planSteps)
       ? (payload.planSteps as OrchestratorPlanStep[])
       : [];
     return msg;
   }
-  if (kind === 'resource') {
-    if (typeof payload.resourceId === 'number') msg.resourceId = payload.resourceId;
-    if (typeof payload.resourceType === 'string') {
+  if (kind === "resource") {
+    if (typeof payload.resourceId === "number")
+      msg.resourceId = payload.resourceId;
+    if (typeof payload.resourceType === "string") {
       msg.resourceType = payload.resourceType as WorkshopResourceType;
     }
-    if (typeof payload.resourceTitle === 'string') msg.resourceTitle = payload.resourceTitle;
-    if (typeof payload.resourceGrounding === 'string') msg.resourceGrounding = payload.resourceGrounding;
-    if (typeof payload.resourceSafety === 'string') msg.resourceSafety = payload.resourceSafety;
-    if (typeof payload.resourceSummary === 'string') msg.resourceSummary = payload.resourceSummary;
-    if (Array.isArray(payload.resourceKcCodes)) msg.resourceKcCodes = payload.resourceKcCodes as string[];
-    if (payload.resourceContent && typeof payload.resourceContent === 'object') {
+    if (typeof payload.resourceTitle === "string")
+      msg.resourceTitle = payload.resourceTitle;
+    if (typeof payload.resourceGrounding === "string")
+      msg.resourceGrounding = payload.resourceGrounding;
+    if (typeof payload.resourceSafety === "string")
+      msg.resourceSafety = payload.resourceSafety;
+    if (typeof payload.resourceSummary === "string")
+      msg.resourceSummary = payload.resourceSummary;
+    if (Array.isArray(payload.resourceKcCodes))
+      msg.resourceKcCodes = payload.resourceKcCodes as string[];
+    if (
+      payload.resourceContent &&
+      typeof payload.resourceContent === "object"
+    ) {
       msg.resourceContent = payload.resourceContent as WorkshopContent;
     }
     msg.resourceExpanded = false;
     return msg;
   }
-  if (kind === 'video') {
-    if (typeof payload.videoKeyword === 'string') msg.videoKeyword = payload.videoKeyword;
+  if (kind === "video") {
+    if (typeof payload.videoKeyword === "string")
+      msg.videoKeyword = payload.videoKeyword;
     return msg;
   }
-  if (kind === 'browse') {
-    if (payload.browseRun && typeof payload.browseRun === 'object') {
+  if (kind === "browse") {
+    if (payload.browseRun && typeof payload.browseRun === "object") {
       msg.browseRun = payload.browseRun as BrowseRunDetailDto;
     }
     return msg;
   }
-  if (kind === 'mystudy') {
+  if (kind === "mystudy") {
     if (Array.isArray(payload.mystudyItems)) {
       msg.mystudyItems = payload.mystudyItems as WorkshopResourceListItemDto[];
     }
     return msg;
   }
-  if (kind === 'navigate') {
-    if (typeof payload.navRoute === 'string') msg.navRoute = payload.navRoute;
-    if (typeof payload.navLabel === 'string') msg.navLabel = payload.navLabel;
+  if (kind === "navigate") {
+    if (typeof payload.navRoute === "string") msg.navRoute = payload.navRoute;
+    if (typeof payload.navLabel === "string") msg.navLabel = payload.navLabel;
     return msg;
   }
-  if (kind === 'clarify') {
+  if (kind === "clarify") {
     if (Array.isArray(payload.clarifyOptions)) {
-      msg.clarifyOptions = payload.clarifyOptions as Array<{ intent: string; label: string; icon: string }>;
+      msg.clarifyOptions = payload.clarifyOptions as Array<{
+        intent: string;
+        label: string;
+        icon: string;
+      }>;
     }
-    if (typeof payload.clarifyReason === 'string') msg.clarifyReason = payload.clarifyReason;
+    if (typeof payload.clarifyReason === "string")
+      msg.clarifyReason = payload.clarifyReason;
   }
   return msg;
 }
 
 function loadConversation(turns: WorkshopChatHistoryTurnDto[]): void {
-  const ordered = [...turns].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const ordered = [...turns].sort((a, b) =>
+    a.createdAt.localeCompare(b.createdAt),
+  );
   const replay: ChatMessage[] = [];
   for (const turn of ordered) {
-    replay.push({ id: genId(), role: 'user', kind: 'text', text: turn.userText });
+    replay.push({
+      id: genId(),
+      role: "user",
+      kind: "text",
+      text: turn.userText,
+    });
     replay.push(historyAssistantMessage(turn));
   }
   messages.value = replay;
@@ -511,38 +600,38 @@ defineExpose({ loadConversation, newChat, prefillDraft });
 
 // 资源生成「实时思考」状态：驱动 AgentStudioStream（替代旧的像素事务所动画 + 证据卡覆盖层）。
 // 仅 'streaming' 时显示思考链；完成即就地内联展示资源，出错即出错误气泡，随后归 'idle'。
-const officeStreamState = ref<'idle' | 'streaming' | 'done' | 'error'>('idle');
-const officeTokenPreview = ref('');
-const officeStreamLabel = ref('');
+const officeStreamState = ref<"idle" | "streaming" | "done" | "error">("idle");
+const officeTokenPreview = ref("");
+const officeStreamLabel = ref("");
 const browseBusy = ref(false);
 
 // orchestrator 协同活动：GuideOverlay 或本组件 PLAN 写入 workshopActivity 时，
 // AgentStudioStream 渲染思考链（右侧处理进度同步更新）。
 const isOrchestratorActive = computed(
-  () => activity.kind === 'orchestrator' && activity.status === 'streaming',
+  () => activity.kind === "orchestrator" && activity.status === "streaming",
 );
 
 const busy = computed(
   () =>
     routing.value ||
-    tutorSse.status.value === 'streaming' ||
-    tutorSse.status.value === 'connecting' ||
-    orchestratorSse.status.value === 'streaming' ||
-    orchestratorSse.status.value === 'connecting' ||
+    tutorSse.status.value === "streaming" ||
+    tutorSse.status.value === "connecting" ||
+    orchestratorSse.status.value === "streaming" ||
+    orchestratorSse.status.value === "connecting" ||
     browseBusy.value ||
-    officeStreamState.value === 'streaming' ||
+    officeStreamState.value === "streaming" ||
     isOrchestratorActive.value ||
     pendingHistorySaves.value > 0,
 );
 
 const GROUNDING_LABELS: Record<string, { text: string; cls: string }> = {
-  PASSED: { text: '引用充分', cls: 'g--passed' },
-  NO_EVIDENCE: { text: '通识知识', cls: 'g--general' },
-  FAILED: { text: '未通过', cls: 'g--failed' },
+  PASSED: { text: "引用充分", cls: "g--passed" },
+  NO_EVIDENCE: { text: "通识知识", cls: "g--general" },
+  FAILED: { text: "未通过", cls: "g--failed" },
 };
 
 function groundingInfo(status: string): { text: string; cls: string } {
-  return GROUNDING_LABELS[status] ?? { text: status, cls: '' };
+  return GROUNDING_LABELS[status] ?? { text: status, cls: "" };
 }
 
 /** 一枚「三审徽章」视图模型：通过/未通过 + hover 显示该审查的具体理由。 */
@@ -564,40 +653,44 @@ function reviewBadges(review: TutorReview): ReviewBadge[] {
     qualifier: string,
     item: TutorReviewItem,
   ): ReviewBadge => {
-    const reasons = (item.reasons ?? []).filter((r) => r && r.trim().length > 0);
-    const head = `${label}（${qualifier}）：${item.passed ? '已通过' : '未通过'}`;
+    const reasons = (item.reasons ?? []).filter(
+      (r) => r && r.trim().length > 0,
+    );
+    const head = `${label}（${qualifier}）：${item.passed ? "已通过" : "未通过"}`;
     return {
       key,
       label,
       passed: item.passed,
-      title: reasons.length > 0 ? `${head}\n${reasons.join('\n')}` : head,
+      title: reasons.length > 0 ? `${head}\n${reasons.join("\n")}` : head,
     };
   };
   return [
-    make('grounding', '审查官', '引用', review.grounding),
-    make('hallucination', '校对官', '防幻觉', review.hallucination),
-    make('safety', '安全员', '安全', review.safety),
+    make("grounding", "审查官", "引用", review.grounding),
+    make("hallucination", "校对官", "防幻觉", review.hallucination),
+    make("safety", "安全员", "安全", review.safety),
   ];
 }
 
 function commandOf(intent: IntentKind): { label: string; icon: string } {
   const cmd = SLASH_COMMANDS.find((c) => c.intent === intent);
-  return { label: cmd?.label ?? intent, icon: cmd?.icon ?? '•' };
+  return { label: cmd?.label ?? intent, icon: cmd?.icon ?? "•" };
 }
 
 function asIntentKind(intent: string | null | undefined): IntentKind {
   const hit = SLASH_COMMANDS.find((c) => c.intent === intent);
-  return (hit?.intent ?? 'ASK') as IntentKind;
+  return (hit?.intent ?? "ASK") as IntentKind;
 }
 
 function assistantMessageById(id: string | null): ChatMessage | null {
   if (!id) return null;
-  return messages.value.find((m) => m.id === id && m.role === 'assistant') ?? null;
+  return (
+    messages.value.find((m) => m.id === id && m.role === "assistant") ?? null
+  );
 }
 
 function historyPayloadFor(m: ChatMessage): Record<string, unknown> {
-  if (m.kind === 'plan') return { planSteps: m.planSteps ?? [] };
-  if (m.kind === 'resource') {
+  if (m.kind === "plan") return { planSteps: m.planSteps ?? [] };
+  if (m.kind === "resource") {
     return {
       resourceId: m.resourceId,
       resourceType: m.resourceType,
@@ -609,31 +702,42 @@ function historyPayloadFor(m: ChatMessage): Record<string, unknown> {
       resourceContent: m.resourceContent ?? null,
     };
   }
-  if (m.kind === 'video') return { videoKeyword: m.videoKeyword ?? '' };
-  if (m.kind === 'browse') return { browseRun: m.browseRun ?? null };
-  if (m.kind === 'progress') return { masterySnapshot: learning.field.masterySnapshot };
-  if (m.kind === 'mystudy') return { mystudyItems: m.mystudyItems ?? [] };
-  if (m.kind === 'navigate') return { navRoute: m.navRoute ?? '', navLabel: m.navLabel ?? '' };
-  if (m.kind === 'clarify') {
-    return { clarifyOptions: m.clarifyOptions ?? [], clarifyReason: m.clarifyReason ?? '' };
+  if (m.kind === "video") return { videoKeyword: m.videoKeyword ?? "" };
+  if (m.kind === "browse") return { browseRun: m.browseRun ?? null };
+  if (m.kind === "progress")
+    return { masterySnapshot: learning.field.masterySnapshot };
+  if (m.kind === "mystudy") return { mystudyItems: m.mystudyItems ?? [] };
+  if (m.kind === "navigate")
+    return { navRoute: m.navRoute ?? "", navLabel: m.navLabel ?? "" };
+  if (m.kind === "clarify") {
+    return {
+      clarifyOptions: m.clarifyOptions ?? [],
+      clarifyReason: m.clarifyReason ?? "",
+    };
   }
-  if (m.kind === 'error') return { retryMode: m.retry?.mode ?? null };
-  if (m.kind === 'secondary') return { secondaryIntent: m.secondaryIntent ?? null };
+  if (m.kind === "error") return { retryMode: m.retry?.mode ?? null };
+  if (m.kind === "secondary")
+    return { secondaryIntent: m.secondaryIntent ?? null };
   return {};
 }
 
 function responseTextForHistory(m: ChatMessage): string {
   if (m.text.trim()) return m.text.trim();
-  if (m.kind === 'plan') return '学习规划';
-  if (m.kind === 'resource') return m.resourceTitle ?? m.toolLabel ?? '资源';
-  if (m.kind === 'video') return m.videoKeyword ?? '相关视频';
-  if (m.kind === 'browse') return m.browseRun?.finalSummary || m.text || '联网查证';
-  if (m.kind === 'progress') return '学情报告';
-  if (m.kind === 'mystudy') return m.mystudyItems?.length ? '我的书房检索结果' : '';
-  if (m.kind === 'navigate') return m.navLabel ? `带你去${m.navLabel}` : '导航';
-  if (m.kind === 'clarify') return m.clarifyReason ?? '需要澄清意图';
-  if (m.kind === 'secondary') return m.secondaryIntent ? `接着：${commandOf(m.secondaryIntent).label}` : '';
-  return '';
+  if (m.kind === "plan") return "学习规划";
+  if (m.kind === "resource") return m.resourceTitle ?? m.toolLabel ?? "资源";
+  if (m.kind === "video") return m.videoKeyword ?? "相关视频";
+  if (m.kind === "browse")
+    return m.browseRun?.finalSummary || m.text || "联网查证";
+  if (m.kind === "progress") return "学情报告";
+  if (m.kind === "mystudy")
+    return m.mystudyItems?.length ? "我的书房检索结果" : "";
+  if (m.kind === "navigate") return m.navLabel ? `带你去${m.navLabel}` : "导航";
+  if (m.kind === "clarify") return m.clarifyReason ?? "需要澄清意图";
+  if (m.kind === "secondary")
+    return m.secondaryIntent
+      ? `接着：${commandOf(m.secondaryIntent).label}`
+      : "";
+  return "";
 }
 
 function groundingStatusForHistory(m: ChatMessage): string | null {
@@ -645,7 +749,7 @@ function emitSavedWorkshopTurn(
   recordId: number,
   m: ChatMessage,
 ): void {
-  emit('history-saved', {
+  emit("history-saved", {
     id: `workshop-${recordId}`,
     conversationId: request.conversationId,
     userText: request.userText,
@@ -672,14 +776,14 @@ function emitProvisionalAnswerTurn(
   kcCodes: string[],
 ): void {
   const meta = commandOf(intent);
-  emit('history-saved', {
+  emit("history-saved", {
     id: `local-${messageId}`,
     conversationId: conversationId.value,
     userText: question,
     intent,
-    responseKind: 'answer',
-    toolLabel: intent === 'ASK' ? '问答' : meta.label,
-    responseText: '',
+    responseKind: "answer",
+    toolLabel: intent === "ASK" ? "问答" : meta.label,
+    responseText: "",
     responsePayload: { kcCodes },
     evidencePageIds: [],
     groundingStatus: null,
@@ -696,18 +800,18 @@ function emitSavedAnswerTurn(
   kcCodes: string[],
 ): void {
   const meta = commandOf(intent);
-  emit('history-saved', {
+  emit("history-saved", {
     id: `local-${messageId}`,
     conversationId: conversationId.value,
     userText: question,
     intent,
-    responseKind: 'answer',
-    toolLabel: intent === 'ASK' ? '问答' : meta.label,
+    responseKind: "answer",
+    toolLabel: intent === "ASK" ? "问答" : meta.label,
     responseText: text,
     responsePayload: {
       kcCodes,
-      evidenceNote: result.evidence_note ?? '',
-      personalizationNote: result.personalization_note ?? '',
+      evidenceNote: result.evidence_note ?? "",
+      personalizationNote: result.personalization_note ?? "",
       visualAids: result.visual_aids ?? [],
     },
     evidencePageIds: result.evidence_page_ids ?? [],
@@ -716,13 +820,16 @@ function emitSavedAnswerTurn(
   });
 }
 
-async function persistWorkshopHistoryTurn(ctx: DispatchContext, messageId: string | null): Promise<void> {
+async function persistWorkshopHistoryTurn(
+  ctx: DispatchContext,
+  messageId: string | null,
+): Promise<void> {
   const m = assistantMessageById(messageId);
-  if (!m || m.kind === 'answer' || m.kind === 'text') return;
+  if (!m || m.kind === "answer" || m.kind === "text") return;
   const request: WorkshopChatHistoryRecordRequest = {
     conversationId: conversationId.value,
     userText: ctx.text,
-    intent: m.intent ?? 'ASK',
+    intent: m.intent ?? "ASK",
     responseKind: m.kind,
     toolLabel: m.toolLabel ?? (m.intent ? commandOf(m.intent).label : null),
     responseText: responseTextForHistory(m),
@@ -743,12 +850,17 @@ async function persistWorkshopHistoryTurn(ctx: DispatchContext, messageId: strin
  * 文本以已知斜杠命令 token 起手（如欢迎屏快捷语「/考考我 循环」，或手敲 / 命令但没走下拉菜单选中），
  * 解析出强制意图并剥离 token——否则「/考考我 循环」会被当普通文本送进意图路由器，置信不足而兜底澄清。
  */
-function parseLeadingSlashCommand(text: string): { intent: IntentKind; text: string } | null {
+function parseLeadingSlashCommand(
+  text: string,
+): { intent: IntentKind; text: string } | null {
   const trimmed = text.trimStart();
-  if (!trimmed.startsWith('/')) return null;
+  if (!trimmed.startsWith("/")) return null;
   for (const cmd of SLASH_COMMANDS) {
     if (trimmed === cmd.token || trimmed.startsWith(`${cmd.token} `)) {
-      return { intent: cmd.intent, text: trimmed.slice(cmd.token.length).trim() };
+      return {
+        intent: cmd.intent,
+        text: trimmed.slice(cmd.token.length).trim(),
+      };
     }
   }
   return null;
@@ -772,13 +884,14 @@ function quizJudgeDirective(round: number): string {
   );
 }
 const EXPLAIN_CODE_DIRECTIVE =
-  '【讲代码】逐行解释下面代码的执行过程与每行意图，标出常见陷阱；不要重写或优化成完整答案。';
-const FIX_BUG_DIRECTIVE =
-  '【修报错】定位报错根因，引导学生自己修复（阶梯提示：换述→拆解→指方向），绝不直接给完整修正代码。';
+  "【讲代码】逐行解释下面代码的执行过程与每行意图，标出常见陷阱；不要重写或优化成完整答案。";
 
 function genId(): string {
   try {
-    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    if (
+      typeof crypto !== "undefined" &&
+      typeof crypto.randomUUID === "function"
+    ) {
       return crypto.randomUUID();
     }
   } catch {
@@ -793,7 +906,9 @@ function pushMessage(msg: ChatMessage): void {
 }
 
 function updateMessage(id: string, patch: Partial<ChatMessage>): void {
-  messages.value = messages.value.map((m) => (m.id === id ? { ...m, ...patch } : m));
+  messages.value = messages.value.map((m) =>
+    m.id === id ? { ...m, ...patch } : m,
+  );
 }
 
 // ============ 滚动权归用户：仅当学生位于底部 ±40px 时才自动跟随 ============
@@ -810,8 +925,8 @@ function scrollToBottom(force = false): void {
   void nextTick(() => {
     const el = scrollRef.value;
     if (!el) return;
-    if (typeof el.scrollTo === 'function') {
-      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    if (typeof el.scrollTo === "function") {
+      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
     } else {
       el.scrollTop = el.scrollHeight;
     }
@@ -858,61 +973,83 @@ watch(workshopSse.tokens, (t) => {
 // ASK：答疑流的 traces/plan 镜像进右侧 workshopActivity，驱动学生可读的处理进度。
 watch(tutorSse.traces, (tr) => {
   if (askRunToken.value === null) return;
-  activity.syncTraces('ask', tr, askRunToken.value);
+  activity.syncTraces("ask", tr, askRunToken.value);
 });
 watch(tutorSse.plan, (p) => {
   if (askRunToken.value === null) return;
-  activity.syncPlan('ask', p, askRunToken.value);
+  activity.syncPlan("ask", p, askRunToken.value);
 });
 
 // 资源生成与答疑复用同一进度抽屉；仅镜像既有 SSE，不发起额外请求。
 watch(workshopSse.traces, (tr) => {
   if (resourceRunToken.value === null) return;
-  activity.syncTraces('resource', tr, resourceRunToken.value);
+  activity.syncTraces("resource", tr, resourceRunToken.value);
 });
 watch(workshopSse.plan, (p) => {
   if (resourceRunToken.value === null) return;
-  activity.syncPlan('resource', p, resourceRunToken.value);
+  activity.syncPlan("resource", p, resourceRunToken.value);
 });
 
 // PLAN：orchestrator 流的 traces/plan 镜像进 workshopActivity（进度时间线自动更新）。
 // 仅当本组件持有运行令牌时镜像——过期的流（如向导已开新活动）不得覆盖共享状态。
 watch(orchestratorSse.traces, (tr) => {
   if (planRunToken.value === null) return;
-  activity.syncTraces('orchestrator', tr, planRunToken.value);
+  activity.syncTraces("orchestrator", tr, planRunToken.value);
 });
 watch(orchestratorSse.plan, (p) => {
   if (planRunToken.value === null) return;
-  activity.syncPlan('orchestrator', p, planRunToken.value);
+  activity.syncPlan("orchestrator", p, planRunToken.value);
 });
 // PLAN 流式：dispatch 经 AG-UI STATE_DELTA 推送的真实 plan 步骤进度，实时写入当前 plan 卡点亮步骤。
 watch(orchestratorSse.state, (st) => {
   if (!streamingPlanId.value) return;
   const steps = st.plan_steps;
   if (Array.isArray(steps)) {
-    updateMessage(streamingPlanId.value, { planSteps: steps as OrchestratorPlanStep[] });
+    updateMessage(streamingPlanId.value, {
+      planSteps: steps as OrchestratorPlanStep[],
+    });
     scrollToBottom();
+  }
+});
+// 运行可发现性：把后端预创建 loop run 的 CUSTOM 事件投影到当前计划卡。
+watch(orchestratorSse.events, (events) => {
+  if (!streamingPlanId.value) return;
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event?.type !== "CUSTOM" || event.name !== "runtime_run") continue;
+    const value = event.value;
+    if (!value || typeof value !== "object") return;
+    const loopRunId = (value as Record<string, unknown>)["loop_run_id"];
+    if (
+      typeof loopRunId === "number" &&
+      Number.isSafeInteger(loopRunId) &&
+      loopRunId > 0
+    ) {
+      updateMessage(streamingPlanId.value, { loopRunId });
+    }
+    return;
   }
 });
 
 // ============ 多轮路由上下文 ============
 /** 计入路由上下文的消息 kind（错误 / 澄清 / 「接着」chip 是 UI 噪音，不上送）。 */
-const ROUTE_TURN_KINDS = new Set<ChatMessage['kind']>([
-  'text',
-  'answer',
-  'resource',
-  'video',
-  'browse',
-  'plan',
-  'progress',
-  'mystudy',
-  'navigate',
+const ROUTE_TURN_KINDS = new Set<ChatMessage["kind"]>([
+  "text",
+  "answer",
+  "resource",
+  "video",
+  "browse",
+  "plan",
+  "progress",
+  "mystudy",
+  "navigate",
 ]);
 
 /** 一条消息的路由摘要：user 原文截 200 字；assistant 取 kind + 标题/前 120 字。 */
 function turnSummary(m: ChatMessage): string {
-  if (m.role === 'user') return m.text.slice(0, 200);
-  const body = m.resourceTitle ?? (m.text || m.toolLabel || m.videoKeyword || '');
+  if (m.role === "user") return m.text.slice(0, 200);
+  const body =
+    m.resourceTitle ?? (m.text || m.toolLabel || m.videoKeyword || "");
   return `[${m.kind}] ${body}`.slice(0, 120);
 }
 
@@ -925,11 +1062,17 @@ function buildRecentTurns(): IntentTurnRef[] {
 }
 
 /** 最近一条已执行意图的 assistant 消息 → lastIntent / lastKcCodes。 */
-function lastExecutedIntent(): { intent: IntentKind; kcCodes: string[] } | null {
+function lastExecutedIntent(): {
+  intent: IntentKind;
+  kcCodes: string[];
+} | null {
   for (let i = messages.value.length - 1; i >= 0; i -= 1) {
     const m = messages.value[i];
-    if (m && m.role === 'assistant' && m.intent) {
-      return { intent: m.intent, kcCodes: m.kcCodes ?? m.resourceKcCodes ?? [] };
+    if (m && m.role === "assistant" && m.intent) {
+      return {
+        intent: m.intent,
+        kcCodes: m.kcCodes ?? m.resourceKcCodes ?? [],
+      };
     }
   }
   return null;
@@ -946,6 +1089,7 @@ function pushCorrection(message: string, correctedIntent: string): void {
 /** 澄清候选：路由猜测的意图置顶 + SLASH_COMMANDS 前排常用工具，共 5 个。 */
 function buildClarifyOptions(
   guess: IntentKind,
+  serverCandidates: IntentKind[] = [],
 ): Array<{ intent: string; label: string; icon: string }> {
   const picks: Array<{ intent: string; label: string; icon: string }> = [];
   const seen = new Set<string>();
@@ -955,6 +1099,10 @@ function buildClarifyOptions(
     seen.add(intent);
     picks.push({ intent, label: meta.label, icon: meta.icon });
   };
+  if (serverCandidates.length > 0) {
+    for (const candidate of serverCandidates) add(candidate);
+    return picks;
+  }
   add(guess);
   for (const cmd of SLASH_COMMANDS) {
     if (picks.length >= 5) break;
@@ -963,14 +1111,19 @@ function buildClarifyOptions(
   return picks;
 }
 
-function pushClarify(guess: IntentKind, ctx: DispatchContext, reason: string): string {
+function pushClarify(
+  guess: IntentKind,
+  ctx: DispatchContext,
+  reason: string,
+  serverCandidates: IntentKind[] = [],
+): string {
   const id = genId();
   pushMessage({
     id,
-    role: 'assistant',
-    kind: 'clarify',
-    text: '',
-    clarifyOptions: buildClarifyOptions(guess),
+    role: "assistant",
+    kind: "clarify",
+    text: "",
+    clarifyOptions: buildClarifyOptions(guess, serverCandidates),
     clarifyReason: reason,
     dispatchCtx: ctx,
   });
@@ -981,15 +1134,19 @@ function onClarifyPick(m: ChatMessage, intentStr: string): void {
   if (m.clarifyResolved || !m.dispatchCtx) return;
   const cmd = SLASH_COMMANDS.find((c) => c.intent === intentStr);
   if (!cmd) return;
-  playSfx('sfx_click');
+  playSfx("sfx_click");
   updateMessage(m.id, { clarifyResolved: true });
-  void dispatchIntent(cmd.intent, m.dispatchCtx);
+  void routeSelectedIntent(cmd.intent, m.dispatchCtx);
 }
 
 /** 纠错备选池：通用兜底工具（执行过的意图除外，取 3 个）。 */
-const CORRECTION_POOL: IntentKind[] = ['ASK', 'HANDOUT', 'PRACTICE', 'VIDEO'];
+const CORRECTION_POOL: IntentKind[] = ["ASK", "HANDOUT", "PRACTICE", "VIDEO"];
 
-function attachCorrections(messageId: string, executed: IntentKind, ctx: DispatchContext): void {
+function attachCorrections(
+  messageId: string,
+  executed: IntentKind,
+  ctx: DispatchContext,
+): void {
   const options = CORRECTION_POOL.filter((k) => k !== executed)
     .slice(0, 3)
     .map((k) => {
@@ -1002,19 +1159,19 @@ function attachCorrections(messageId: string, executed: IntentKind, ctx: Dispatc
 function onCorrectionPick(m: ChatMessage, intentStr: string): void {
   const cmd = SLASH_COMMANDS.find((c) => c.intent === intentStr);
   if (!cmd || !m.dispatchCtx) return;
-  playSfx('sfx_click');
+  playSfx("sfx_click");
   pushCorrection(m.dispatchCtx.text, cmd.intent);
   updateMessage(m.id, { correctionOptions: [] });
-  void dispatchIntent(cmd.intent, m.dispatchCtx);
+  void routeSelectedIntent(cmd.intent, m.dispatchCtx);
 }
 
 // ============ 组合意图：「接着：xx →」chip ============
 function pushSecondary(intent: IntentKind, ctx: DispatchContext): void {
   pushMessage({
     id: genId(),
-    role: 'assistant',
-    kind: 'secondary',
-    text: '',
+    role: "assistant",
+    kind: "secondary",
+    text: "",
     secondaryIntent: intent,
     dispatchCtx: ctx,
   });
@@ -1022,14 +1179,101 @@ function pushSecondary(intent: IntentKind, ctx: DispatchContext): void {
 
 function onSecondaryPick(m: ChatMessage): void {
   if (!m.secondaryIntent || !m.dispatchCtx || m.secondaryUsed) return;
-  playSfx('sfx_click');
+  playSfx("sfx_click");
   updateMessage(m.id, { secondaryUsed: true });
-  void dispatchIntent(m.secondaryIntent, m.dispatchCtx);
+  void routeSelectedIntent(m.secondaryIntent, m.dispatchCtx);
+}
+
+/** FIX_BUG 只发送错题本中的 submission 引用；代码、题目与 verdict 由 Java 按当前用户回填。 */
+async function interactionForRequestedIntent(
+  requestedIntent: IntentKind | null,
+): Promise<WorkshopInteractionContextRef | undefined> {
+  if (requestedIntent !== "FIX_BUG") return undefined;
+  const base: WorkshopInteractionContextRef = {
+    sessionId: conversationId.value,
+    currentScene: "town_hub",
+    currentStage: "workshop",
+    frontendAction: "open_bug_mine",
+  };
+  try {
+    const errorBook = await getBugMineErrorBook();
+    const candidate = errorBook[0];
+    return candidate
+      ? { ...base, latestSubmissionId: candidate.submissionId }
+      : base;
+  } catch {
+    return base;
+  }
+}
+
+/** 澄清、纠错和组合动作的统一策略门；显式选择也不能直接 dispatch。 */
+async function routeSelectedIntent(
+  requestedIntent: IntentKind,
+  ctx: DispatchContext,
+): Promise<void> {
+  const interaction = await interactionForRequestedIntent(requestedIntent);
+  const recentTurns = buildRecentTurns();
+  const last = lastExecutedIntent();
+  const req: IntentRouteRequest = {
+    message: ctx.text,
+    manualKcCodes: ctx.kcCodes,
+    courseKcs: courseKcs.value,
+    scope: quiz.value ? "quiz" : "default",
+    source: "contextual_suggestion",
+    requestedIntent,
+  };
+  if (interaction) req.interaction = interaction;
+  if (recentTurns.length > 0) req.recentTurns = recentTurns;
+  if (last) {
+    req.lastIntent = last.intent;
+    req.lastKcCodes = last.kcCodes;
+  }
+  if (sessionCorrections.value.length > 0) {
+    req.sessionCorrections = [...sessionCorrections.value];
+  }
+  try {
+    const res = await routeIntent(req);
+    const routedCtx: DispatchContext = {
+      ...ctx,
+      kcCodes: res.kcCodes.length > 0 ? res.kcCodes : ctx.kcCodes,
+      focusHint: res.focusHint || ctx.focusHint,
+      target: res.target || ctx.target,
+    };
+    if (interaction?.latestSubmissionId) {
+      routedCtx.latestSubmissionId = interaction.latestSubmissionId;
+    }
+    if (interaction) routedCtx.interaction = interaction;
+    if (res.routeDecision) routedCtx.routeDecision = res.routeDecision;
+    if (res.routeExecutionToken)
+      routedCtx.routeExecutionToken = res.routeExecutionToken;
+    if (res.needsClarification || res.routeDecision?.task.needsClarification) {
+      const clarifyId = pushClarify(
+        res.intent,
+        routedCtx,
+        res.clarificationPrompt ||
+          res.routeDecision?.task.clarificationQuestion ||
+          res.reason,
+        res.candidateIntents ?? [],
+      );
+      void persistWorkshopHistoryTurn(routedCtx, clarifyId);
+      return;
+    }
+    const msgId = await dispatchRoutedIntent(res.intent, routedCtx);
+    void persistWorkshopHistoryTurn(routedCtx, msgId);
+  } catch {
+    const clarifyId = pushClarify(
+      requestedIntent,
+      ctx,
+      "路由服务暂时不可用，未执行任何工具，请稍后重试。",
+      [requestedIntent],
+    );
+    void persistWorkshopHistoryTurn(ctx, clarifyId);
+  }
 }
 
 // ============ 主入口：一条消息 → 路由 → 分发 ============
 async function onSubmit(payload: ComposerSubmitPayload): Promise<void> {
-  playSfx('sfx_click');
+  playSfx("sfx_click");
 
   // 快捷语 / 手敲未走菜单的斜杠命令（如「/考考我 循环」）：解析成强制意图 + 剥离 token，
   // 否则会被当普通文本送进路由器，置信不足而兜底澄清。
@@ -1039,7 +1283,7 @@ async function onSubmit(payload: ComposerSubmitPayload): Promise<void> {
       payload = {
         ...payload,
         forcedIntent: parsed.intent,
-        source: 'slash_command',
+        source: "slash_command",
         text: parsed.text,
       };
     }
@@ -1051,7 +1295,12 @@ async function onSubmit(payload: ComposerSubmitPayload): Promise<void> {
 
   // 考核模式：普通输入即作答（不再路由，直接评卷下一轮）；/ 强制工具仍可临时打断（逃生门）。
   if (quiz.value && !payload.forcedIntent) {
-    const quizUserMsg: ChatMessage = { id: genId(), role: 'user', kind: 'text', text: payload.text };
+    const quizUserMsg: ChatMessage = {
+      id: genId(),
+      role: "user",
+      kind: "text",
+      text: payload.text,
+    };
     if (attachments.length > 0) quizUserMsg.attachments = attachments;
     pushMessage(quizUserMsg);
     scrollToBottom(true);
@@ -1065,8 +1314,8 @@ async function onSubmit(payload: ComposerSubmitPayload): Promise<void> {
 
   const userMsg: ChatMessage = {
     id: genId(),
-    role: 'user',
-    kind: 'text',
+    role: "user",
+    kind: "text",
     text: payload.text,
   };
   if (payload.forcedIntent) {
@@ -1081,61 +1330,82 @@ async function onSubmit(payload: ComposerSubmitPayload): Promise<void> {
 
   let intent: IntentKind | null = payload.forcedIntent;
   let kcCodes: string[] = [...payload.manualKcCodes];
-  let focusHint = '';
-  let target = '';
+  let focusHint = "";
+  let target = "";
   let confidence: number | null = null;
   let secondary: IntentKind | null = null;
-  let routeReason = '';
+  let routeReason = "";
+  let routeNeedsClarification = false;
+  let routeClarificationPrompt = "";
+  let routeCandidates: IntentKind[] = [];
+  let routedInteraction: WorkshopInteractionContextRef | undefined;
+  let routeDecision: WorkshopRouteDecision | undefined;
+  let routeExecutionToken: string | undefined;
 
-  // 需要路由的三种情况：①未强制工具；②资源类强制但没 @ 锚定 KC（解析 KC + focusHint，
-  // 否则设计师接不了活、过去会静默退回答疑）；③强制带路（需要解析地标 target）。
-  const needRoute =
-    !intent || (isResourceIntent(intent) && kcCodes.length === 0) || intent === 'NAVIGATE';
-
-  if (needRoute) {
-    routing.value = true;
-    try {
-      const req: IntentRouteRequest = {
-        message: payload.text,
-        manualKcCodes: payload.manualKcCodes,
-        courseKcs: courseKcs.value,
-        scope: quiz.value ? 'quiz' : 'default',
-        source: payload.source ?? 'composer_text',
-      };
-      if (payload.source === 'capability_launcher' && payload.capabilityNamespace) {
-        req.capabilityNamespace = payload.capabilityNamespace;
-      }
-      if (recentTurns.length > 0) req.recentTurns = recentTurns;
-      if (last) {
-        req.lastIntent = last.intent;
-        req.lastKcCodes = last.kcCodes;
-      }
-      if (sessionCorrections.value.length > 0) {
-        req.sessionCorrections = [...sessionCorrections.value];
-      }
-      const res = await routeIntent(req);
-      if (!intent) intent = res.intent; // 仅未强制时采用路由判定的意图
-      if (kcCodes.length === 0) kcCodes = res.kcCodes; // 没手动 KC 时用路由解析的 KC
-      focusHint = res.focusHint;
-      target = typeof res.target === 'string' ? res.target : '';
-      if (!payload.forcedIntent) {
-        // 置信分档与组合意图只对「自动判定」生效；强制工具永远直接执行。
-        confidence = typeof res.confidence === 'number' ? res.confidence : null;
-        secondary = res.secondaryIntent ?? null;
-        routeReason = res.reason ?? '';
-      }
-    } catch {
-      // 分类失败兜底：按答疑处理（不需要 KC，永远可用）。
-      if (!intent) intent = 'ASK';
-    } finally {
-      routing.value = false;
+  // 所有入口统一经过 Graph 的确定性策略门。显式工具只跳过语义消歧，不跳过 scope / 上下文 / allowlist。
+  routing.value = true;
+  try {
+    routedInteraction = await interactionForRequestedIntent(
+      payload.forcedIntent,
+    );
+    const req: IntentRouteRequest = {
+      message: payload.text,
+      manualKcCodes: payload.manualKcCodes,
+      courseKcs: courseKcs.value,
+      scope: quiz.value ? "quiz" : "default",
+      source: payload.source ?? "composer_text",
+    };
+    if (payload.forcedIntent) req.requestedIntent = payload.forcedIntent;
+    if (routedInteraction) req.interaction = routedInteraction;
+    if (
+      payload.source === "capability_launcher" &&
+      payload.capabilityNamespace
+    ) {
+      req.capabilityNamespace = payload.capabilityNamespace;
     }
+    if (recentTurns.length > 0) req.recentTurns = recentTurns;
+    if (last) {
+      req.lastIntent = last.intent;
+      req.lastKcCodes = last.kcCodes;
+    }
+    if (sessionCorrections.value.length > 0) {
+      req.sessionCorrections = [...sessionCorrections.value];
+    }
+    const res = await routeIntent(req);
+    intent = res.intent;
+    if (kcCodes.length === 0) kcCodes = res.kcCodes; // 没手动 KC 时用路由解析的 KC
+    focusHint = res.focusHint;
+    target = typeof res.target === "string" ? res.target : "";
+    confidence = typeof res.confidence === "number" ? res.confidence : null;
+    secondary = res.secondaryIntent ?? null;
+    routeReason = res.reason ?? "";
+    routeNeedsClarification =
+      res.needsClarification === true ||
+      res.routeDecision?.task.needsClarification === true;
+    routeClarificationPrompt =
+      res.clarificationPrompt ||
+      res.routeDecision?.task.clarificationQuestion ||
+      "";
+    routeCandidates = Array.isArray(res.candidateIntents)
+      ? res.candidateIntents
+      : [];
+    routeDecision = res.routeDecision;
+    routeExecutionToken = res.routeExecutionToken;
+  } catch {
+    // 路由失败必须 fail closed；不再静默把请求降级为 Tutor。
+    if (!intent) intent = "ASK";
+    routeNeedsClarification = true;
+    routeClarificationPrompt =
+      "路由服务暂时不可用，未执行任何工具，请稍后重试。";
+    routeCandidates = [intent];
+  } finally {
+    routing.value = false;
   }
-  if (!intent) intent = 'ASK';
+  if (!intent) intent = "ASK";
 
   // 上传注入（契约 §3.5，红线：只进带标签 context、绝不当课件证据）：
   //   A 通路 = 本轮附件全文（截断）；B 通路 = scoped 检索本会话早先上传（默认不每问都检索）。
-  // 仅 tutor_sse 工具族（ASK/ASKME/EXPLAIN_CODE/FIX_BUG）消费 contextHint；其余意图忽略，无副作用。
+  // 仅 tutor_sse 工具族（ASK/ASKME/EXPLAIN_CODE）消费 contextHint；其余意图忽略，无副作用。
   // 无附件且本会话无早先上传时返回空串、不发任何网络请求。
   const uploadInjection = await buildUploadInjection(
     payload.text,
@@ -1150,15 +1420,26 @@ async function onSubmit(payload: ComposerSubmitPayload): Promise<void> {
     contextHint: mergeUploadContext(payload.contextHint, uploadInjection),
     target,
   };
+  if (routedInteraction?.latestSubmissionId) {
+    ctx.latestSubmissionId = routedInteraction.latestSubmissionId;
+  }
+  if (routedInteraction) ctx.interaction = routedInteraction;
+  if (routeDecision) ctx.routeDecision = routeDecision;
+  if (routeExecutionToken) ctx.routeExecutionToken = routeExecutionToken;
 
-  // 低置信（<0.45 且非强制）：不直接执行，出澄清气泡让学生自己点工具。
-  if (confidence !== null && confidence < 0.45) {
-    const clarifyId = pushClarify(intent, ctx, routeReason);
+  // 服务端确定性策略门优先；自由文本置信度 <0.55 时也不调用工具。
+  if (routeNeedsClarification || (confidence !== null && confidence < 0.55)) {
+    const clarifyId = pushClarify(
+      intent,
+      ctx,
+      routeClarificationPrompt || routeReason,
+      routeCandidates,
+    );
     void persistWorkshopHistoryTurn(ctx, clarifyId);
     return;
   }
 
-  const msgId = await dispatchIntent(intent, ctx);
+  const msgId = await dispatchRoutedIntent(intent, ctx);
   void persistWorkshopHistoryTurn(ctx, msgId);
 
   // 中置信（0.45~0.7）：已正常执行，答后在该 assistant 消息挂纠错 chips。
@@ -1167,51 +1448,77 @@ async function onSubmit(payload: ComposerSubmitPayload): Promise<void> {
   }
 
   // 组合意图：主动作完成后出「接着：xx →」chip（考核模式中不打扰）。
-  if (secondary && secondary !== intent && !quiz.value) {
+  if (
+    !isCompoundRoute(ctx.routeDecision) &&
+    secondary &&
+    secondary !== intent &&
+    !quiz.value
+  ) {
     pushSecondary(secondary, ctx);
   }
 }
 
+const COMPOUND_TOPOLOGIES = new Set([
+  "SEQUENTIAL",
+  "PARALLEL",
+  "PLANNER_EXECUTOR",
+]);
+
+function isCompoundRoute(decision: WorkshopRouteDecision | undefined): boolean {
+  return decision
+    ? COMPOUND_TOPOLOGIES.has(decision.orchestration.topology)
+    : false;
+}
+
+/** 复合拓扑只交给 Supervisor 一次；普通拓扑保持现有单工具分发表。 */
+async function dispatchRoutedIntent(
+  intent: IntentKind,
+  ctx: DispatchContext,
+): Promise<string | null> {
+  if (isCompoundRoute(ctx.routeDecision)) return runPlan(ctx.text, ctx);
+  return dispatchIntent(intent, ctx);
+}
+
 /** 17 工具分发表（蓝本 §0）：按 execMode 分派到 tutor / workshop / orchestrator / browse / 纯前端。 */
-async function dispatchIntent(intent: IntentKind, ctx: DispatchContext): Promise<string | null> {
-  if (intent === 'ASK') {
+async function dispatchIntent(
+  intent: IntentKind,
+  ctx: DispatchContext,
+): Promise<string | null> {
+  if (intent === "ASK") {
     return runAsk(ctx.text, ctx.kcCodes, ctx.contextHint);
   }
-  if (intent === 'ASKME') {
+  if (intent === "ASKME") {
     return startQuiz(ctx);
   }
-  if (intent === 'EXPLAIN_CODE') {
+  if (intent === "EXPLAIN_CODE") {
     return runAsk(ctx.text, ctx.kcCodes, ctx.contextHint, {
-      intent: 'EXPLAIN_CODE',
+      intent: "EXPLAIN_CODE",
       directive: EXPLAIN_CODE_DIRECTIVE,
     });
   }
-  if (intent === 'FIX_BUG') {
-    return runAsk(ctx.text, ctx.kcCodes, ctx.contextHint, {
-      intent: 'FIX_BUG',
-      directive: FIX_BUG_DIRECTIVE,
-    });
+  if (intent === "FIX_BUG") {
+    return runDebug(ctx);
   }
-  if (intent === 'VIDEO') {
+  if (intent === "VIDEO") {
     return runVideo(ctx.kcCodes, ctx.focusHint || ctx.text);
   }
-  if (intent === 'BROWSE') {
+  if (intent === "BROWSE") {
     return runBrowse(ctx);
   }
-  if (intent === 'REVIEW') {
+  if (intent === "REVIEW") {
     runReview(ctx.kcCodes);
     return null;
   }
-  if (intent === 'PLAN') {
-    return runPlan(ctx.text);
+  if (intent === "PLAN") {
+    return runPlan(ctx.text, ctx);
   }
-  if (intent === 'PROGRESS') {
+  if (intent === "PROGRESS") {
     return runProgress();
   }
-  if (intent === 'NAVIGATE') {
+  if (intent === "NAVIGATE") {
     return runNavigate(ctx);
   }
-  if (intent === 'MY_STUDY') {
+  if (intent === "MY_STUDY") {
     return runMyStudy(ctx);
   }
   if (ctx.kcCodes.length === 0) {
@@ -1221,18 +1528,75 @@ async function dispatchIntent(intent: IntentKind, ctx: DispatchContext): Promise
   return runResource(intent, ctx.kcCodes, ctx.focusHint || ctx.text);
 }
 
+/** 复用现有 BugMineService → DebugAgentClient → /agents/debug/analyze 真链，不走 Tutor SSE。 */
+async function runDebug(ctx: DispatchContext): Promise<string> {
+  const meta = commandOf("FIX_BUG");
+  const id = genId();
+  if (!ctx.latestSubmissionId) {
+    pushMessage({
+      id,
+      role: "assistant",
+      kind: "error",
+      intent: "FIX_BUG",
+      text: "没有可验证的失败提交，先去训练场完成一次判题，再回来定位错误。",
+      toolIcon: meta.icon,
+      toolLabel: meta.label,
+    });
+    return id;
+  }
+  try {
+    const session = await openBugMineSession({
+      submissionId: ctx.latestSubmissionId,
+    });
+    learning.setPendingBugMineEntry({ sessionId: session.id });
+    pushMessage({
+      id,
+      role: "assistant",
+      kind: "navigate",
+      intent: "FIX_BUG",
+      text: "已由 DebugAgent 建立真实失败提交的调试会话，带你查看反例、变量轨迹和分层提示。",
+      navRoute: "/bug-mine",
+      navLabel: "错题矿洞",
+      toolIcon: meta.icon,
+      toolLabel: meta.label,
+    });
+    playSfx("sfx_success");
+    await router.push("/bug-mine");
+  } catch (error) {
+    pushMessage({
+      id,
+      role: "assistant",
+      kind: "error",
+      intent: "FIX_BUG",
+      text:
+        error instanceof Error
+          ? error.message
+          : "DebugAgent 暂时不可用，请稍后重试。",
+      toolIcon: meta.icon,
+      toolLabel: meta.label,
+    });
+    playSfx("sfx_error");
+  }
+  return id;
+}
+
 // ============ ASKME 考核模式状态机 ============
 const quizKcLabel = computed<string>(() => {
   const code = quiz.value?.kcCodes[0];
-  return code ? kcDisplayName(code) : '';
+  return code ? kcDisplayName(code) : "";
 });
 
 /** 开考：进入 quiz 模式（第 1/3 轮），考官出第一道填空题（不引课件）。 */
 async function startQuiz(ctx: DispatchContext): Promise<string> {
-  quiz.value = { kcCodes: [...ctx.kcCodes], round: 1, total: 3, topic: ctx.text };
-  toast.show('进入考核模式：共 3 轮填空小测，在题目气泡里直接填空提交', 'info');
+  quiz.value = {
+    kcCodes: [...ctx.kcCodes],
+    round: 1,
+    total: 3,
+    topic: ctx.text,
+  };
+  toast.show("进入考核模式：共 3 轮填空小测，在题目气泡里直接填空提交", "info");
   return runAsk(ctx.text, ctx.kcCodes, ctx.contextHint, {
-    intent: 'ASKME',
+    intent: "ASKME",
     directive: quizAskDirective(1),
   });
 }
@@ -1241,8 +1605,8 @@ async function startQuiz(ctx: DispatchContext): Promise<string> {
 async function runQuizAnswer(answer: string): Promise<void> {
   const q = quiz.value;
   if (!q) return;
-  await runAsk(answer, q.kcCodes, '', {
-    intent: 'ASKME',
+  await runAsk(answer, q.kcCodes, "", {
+    intent: "ASKME",
     directive: quizJudgeDirective(q.round),
   });
   if (!quiz.value) return; // 评卷途中学生手动退出
@@ -1253,8 +1617,8 @@ async function runQuizAnswer(answer: string): Promise<void> {
   const nextRound = q.round + 1;
   quiz.value = { ...q, round: nextRound };
   // 出下一轮填空题（沿用本次考核主题）。
-  await runAsk(q.topic, q.kcCodes, '', {
-    intent: 'ASKME',
+  await runAsk(q.topic, q.kcCodes, "", {
+    intent: "ASKME",
     directive: quizAskDirective(nextRound),
   });
 }
@@ -1270,9 +1634,9 @@ async function submitQuizFill(m: ChatMessage): Promise<void> {
   if (!quiz.value || !m.quiz) return;
   const draft = quizDrafts.value[m.id] ?? [];
   const answer = m.quiz.blanks
-    .map((b, i) => `(${b.index}) ${(draft[i] ?? '').trim()}`)
-    .join('  ');
-  pushMessage({ id: genId(), role: 'user', kind: 'text', text: answer });
+    .map((b, i) => `(${b.index}) ${(draft[i] ?? "").trim()}`)
+    .join("  ");
+  pushMessage({ id: genId(), role: "user", kind: "text", text: answer });
   scrollToBottom(true);
   await runQuizAnswer(answer);
 }
@@ -1280,13 +1644,13 @@ async function submitQuizFill(m: ChatMessage): Promise<void> {
 function finishQuiz(): void {
   const q = quiz.value;
   quiz.value = null;
-  playSfx('sfx_success');
-  toast.show('考核结束：3 轮小测完成，小结与掌握度建议见上方点评', 'success');
+  playSfx("sfx_success");
+  toast.show("考核结束：3 轮小测完成，小结与掌握度建议见上方点评", "success");
   // 考核完成回流学习事件（后端通用审计落库）。
   // TODO(LearningEvent)：后续由后端把 quiz_finished 消费进画像「知识基础/情绪坚持」维度与任务 evidence。
   if (q) {
     void postLearningEvent({
-      eventType: 'quiz_finished',
+      eventType: "quiz_finished",
       payload: { kcCodes: q.kcCodes, rounds: q.total },
     }).catch(() => {
       /* 回流失败静默，不打扰学生 */
@@ -1295,28 +1659,43 @@ function finishQuiz(): void {
 }
 
 function exitQuiz(): void {
-  playSfx('sfx_click');
+  playSfx("sfx_click");
   quiz.value = null;
-  toast.show('已退出考核模式', 'info');
+  toast.show("已退出考核模式", "info");
 }
 
 // 面向「非科班 Python 初学者」：B站检索词一律以「Python」打头、并加「教程」偏向入门讲解；
 // 未提其它语言时默认 Python（后端再按语言/领域过滤掉机器人/C 语言等跑题结果）。
 function buildVideoKeyword(topic: string, kcCodes: string[]): string {
-  const kcPart = kcCodes.map((c) => kcDisplayName(c)).filter(Boolean).join(' ');
-  const cleanTopic = (topic || '')
-    .replace(/[?？!！。.,，、:：]/g, ' ')
-    .replace(/\s+/g, ' ')
+  const kcPart = kcCodes
+    .map((c) => kcDisplayName(c))
+    .filter(Boolean)
+    .join(" ");
+  const cleanTopic = (topic || "")
+    .replace(/[?？!！。.,，、:：]/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
-  return `Python ${kcPart} ${cleanTopic} 教程`.replace(/\s+/g, ' ').trim().slice(0, 50);
+  return `Python ${kcPart} ${cleanTopic} 教程`
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 50);
 }
 
 // 学生语句是否表达「想看视频」——B站讲解仅在该意图或 / 命令下触发，不再每答必带。
 const VIDEO_INTENT_TOKENS = [
-  '视频', 'b站', 'bilibili', '讲解视频', '看视频', '教学视频', 'up主', '找视频', '推荐视频', '影片',
+  "视频",
+  "b站",
+  "bilibili",
+  "讲解视频",
+  "看视频",
+  "教学视频",
+  "up主",
+  "找视频",
+  "推荐视频",
+  "影片",
 ];
 function wantsVideo(text: string): boolean {
-  const t = (text || '').toLowerCase();
+  const t = (text || "").toLowerCase();
   return VIDEO_INTENT_TOKENS.some((k) => t.includes(k));
 }
 
@@ -1325,16 +1704,16 @@ function wantsVideo(text: string): boolean {
  * 现取现渲染（外部资源）。关键词 = Python + KC 显示名 + 学习重点（去重去空、限长）。
  */
 function runVideo(kcCodes: string[], focus: string): string {
-  const meta = commandOf('VIDEO');
+  const meta = commandOf("VIDEO");
   const keyword = buildVideoKeyword(focus, kcCodes);
-  playSfx('sfx_success');
+  playSfx("sfx_success");
   const id = genId();
   pushMessage({
     id,
-    role: 'assistant',
-    kind: 'video',
-    intent: 'VIDEO',
-    text: '',
+    role: "assistant",
+    kind: "video",
+    intent: "VIDEO",
+    text: "",
     videoKeyword: keyword,
     toolIcon: meta.icon,
     toolLabel: meta.label,
@@ -1343,15 +1722,15 @@ function runVideo(kcCodes: string[], focus: string): string {
 }
 
 async function runBrowse(ctx: DispatchContext): Promise<string> {
-  const meta = commandOf('BROWSE');
+  const meta = commandOf("BROWSE");
   const id = genId();
   const goal = (ctx.focusHint || ctx.text).trim();
   pushMessage({
     id,
-    role: 'assistant',
-    kind: 'browse',
-    intent: 'BROWSE',
-    text: '正在联网查证…',
+    role: "assistant",
+    kind: "browse",
+    intent: "BROWSE",
+    text: "正在联网查证…",
     streaming: true,
     browseRun: null,
     toolIcon: meta.icon,
@@ -1363,21 +1742,24 @@ async function runBrowse(ctx: DispatchContext): Promise<string> {
     const detail = await getBrowseRun(created.id);
     const text =
       detail.finalSummary ||
-      (detail.error ? `联网查证失败：${detail.error}` : '联网查证已完成，见下方步骤与来源。');
+      (detail.error
+        ? `联网查证失败：${detail.error}`
+        : "联网查证已完成，见下方步骤与来源。");
     updateMessage(id, {
       text,
       browseRun: detail,
       streaming: false,
     });
-    playSfx(detail.status === 'FAILED' ? 'sfx_error' : 'sfx_success');
+    playSfx(detail.status === "FAILED" ? "sfx_error" : "sfx_success");
   } catch (err) {
-    const message = err instanceof Error ? err.message : '联网查证暂时不可用，请稍后重试';
-    playSfx('sfx_error');
+    const message =
+      err instanceof Error ? err.message : "联网查证暂时不可用，请稍后重试";
+    playSfx("sfx_error");
     updateMessage(id, {
-      kind: 'error',
+      kind: "error",
       text: message,
       streaming: false,
-      retry: { mode: 'browse', ctx },
+      retry: { mode: "browse", ctx },
     });
   } finally {
     browseBusy.value = false;
@@ -1391,32 +1773,32 @@ async function runBrowse(ctx: DispatchContext): Promise<string> {
  * kcCodes 为后端 ReviewSignal 算出的待复习知识点（可空），仅用于提示，矿洞页自取到期排序。
  */
 function runReview(kcCodes: string[]): void {
-  playSfx('sfx_success');
+  playSfx("sfx_success");
   const names = kcCodes.map((c) => kcDisplayName(c)).filter(Boolean);
   const tip = names.length
-    ? `记忆矿脉回声：「${names.join('、')}」快遗忘了，带你去错题矿洞复盘。`
-    : '记忆矿脉回声：带你去错题矿洞复盘最该巩固的知识点。';
-  toast.show(tip, 'info');
-  void router.push('/bug-mine');
+    ? `记忆矿脉回声：「${names.join("、")}」快遗忘了，带你去错题矿洞复盘。`
+    : "记忆矿脉回声：带你去错题矿洞复盘最该巩固的知识点。";
+  toast.show(tip, "info");
+  void router.push("/bug-mine");
 }
 
 /** 答疑答案内「看相关视频」入口：按答案主题 / KC 出一条 B站视频气泡。 */
 function onAnswerVideo(m: ChatMessage): void {
-  runVideo(m.kcCodes ?? [], m.suggestTopic ?? '');
+  runVideo(m.kcCodes ?? [], m.suggestTopic ?? "");
 }
 
 /** 答疑答案内「生成讲义 / 练习」入口：按答案 KC 直接生成。 */
 function onAnswerGenerate(m: ChatMessage, type: WorkshopResourceType): void {
-  void runResource(type, m.kcCodes ?? [], m.suggestTopic ?? '');
+  void runResource(type, m.kcCodes ?? [], m.suggestTopic ?? "");
 }
 
 function onAnswerFeedback(m: ChatMessage, up: boolean): void {
   void postLearningEvent({
-    eventType: 'answer_feedback',
+    eventType: "answer_feedback",
     payload: {
       messageId: m.id,
       useful: up,
-      intent: m.intent ?? 'ASK',
+      intent: m.intent ?? "ASK",
       kcCodes: m.kcCodes ?? [],
     },
   }).catch(() => {
@@ -1424,7 +1806,7 @@ function onAnswerFeedback(m: ChatMessage, up: boolean): void {
   });
 }
 
-// ============ tutor_sse：ASK / ASKME / EXPLAIN_CODE / FIX_BUG 共用管线 ============
+// ============ tutor_sse：ASK / ASKME / EXPLAIN_CODE 共用管线 ============
 async function runAsk(
   question: string,
   kcCodes: string[],
@@ -1432,16 +1814,16 @@ async function runAsk(
   opts: AskOptions = {},
 ): Promise<string> {
   const id = genId();
-  const intent: IntentKind = opts.intent ?? 'ASK';
+  const intent: IntentKind = opts.intent ?? "ASK";
   const initial: ChatMessage = {
     id,
-    role: 'assistant',
-    kind: 'answer',
+    role: "assistant",
+    kind: "answer",
     intent,
-    text: '',
+    text: "",
     streaming: true,
   };
-  if (intent !== 'ASK') {
+  if (intent !== "ASK") {
     // 非默认答疑的 tutor 工具（考考我/讲代码/修报错）：气泡带工具徽标。
     const meta = commandOf(intent);
     initial.toolLabel = meta.label;
@@ -1467,11 +1849,13 @@ async function runAsk(
   };
   if (opts.style) body.style = opts.style;
 
-  const askLabel = question.trim() ? `答疑：${question.trim().slice(0, 30)}` : '答疑';
-  const runToken = activity.start('ask', askLabel);
+  const askLabel = question.trim()
+    ? `答疑：${question.trim().slice(0, 30)}`
+    : "答疑";
+  const runToken = activity.start("ask", askLabel);
   askRunToken.value = runToken;
   await tutorSse.start(body);
-  activity.finish(tutorSse.status.value === 'done', runToken);
+  activity.finish(tutorSse.status.value === "done", runToken);
   if (askRunToken.value === runToken) askRunToken.value = null;
   // 收尾：把 rAF 攒着的最后一段 token 落进消息（中断/出错时也能看到已生成部分）。
   flushPendingTokens();
@@ -1483,8 +1867,8 @@ async function runAsk(
     return id;
   }
 
-  if (tutorSse.status.value === 'done' && tutorSse.result.value) {
-    playSfx('sfx_success');
+  if (tutorSse.status.value === "done" && tutorSse.result.value) {
+    playSfx("sfx_success");
     const r = tutorSse.result.value;
     const answerText = normalizeAnswerText(r, tutorSse.tokens.value);
     updateMessage(id, {
@@ -1497,14 +1881,22 @@ async function runAsk(
       // 课件证据总览说明（live 才有；为空则不写）。
       ...(r.evidence_note ? { evidenceNote: r.evidence_note } : {}),
       // 画像个性化说明 →「✨ 为你定制」小标签（live 才有；为空则不写）。
-      ...(r.personalization_note ? { personalizationNote: r.personalization_note } : {}),
+      ...(r.personalization_note
+        ? { personalizationNote: r.personalization_note }
+        : {}),
       // 考考我出题（多轮填空）：带 blanks 时气泡内渲染填空 input + 提交作答。
-      ...(r.quiz && r.quiz.phase === 'ask' && Array.isArray(r.quiz.blanks) && r.quiz.blanks.length > 0
+      ...(r.quiz &&
+      r.quiz.phase === "ask" &&
+      Array.isArray(r.quiz.blanks) &&
+      r.quiz.blanks.length > 0
         ? {
             quiz: {
               round: r.quiz.round ?? quiz.value?.round ?? 1,
-              stem: r.quiz.stem ?? r.answer_md ?? '',
-              blanks: r.quiz.blanks.map((b) => ({ index: b.index, hint: b.hint ?? '' })),
+              stem: r.quiz.stem ?? r.answer_md ?? "",
+              blanks: r.quiz.blanks.map((b) => ({
+                index: b.index,
+                hint: b.hint ?? "",
+              })),
             },
           }
         : {}),
@@ -1522,12 +1914,12 @@ async function runAsk(
     });
     emitSavedAnswerTurn(id, question, intent, r, answerText, kcCodes);
   } else {
-    playSfx('sfx_error');
+    playSfx("sfx_error");
     updateMessage(id, {
-      kind: 'error',
-      text: tutorSse.error.value?.message ?? 'AI 助教暂时没答上来，再试一次',
+      kind: "error",
+      text: tutorSse.error.value?.message ?? "AI 助教暂时没答上来，再试一次",
       streaming: false,
-      retry: { mode: 'ask', question, kcCodes, context, opts },
+      retry: { mode: "ask", question, kcCodes, context, opts },
     });
   }
   scrollToBottom();
@@ -1537,14 +1929,14 @@ async function runAsk(
 /** 「⏹ 停止」：中断导师流，保留已生成部分并标注（已中断）。 */
 function onStopStream(m: ChatMessage): void {
   if (!m.streaming) return;
-  playSfx('sfx_click');
+  playSfx("sfx_click");
   askInterrupted.value = true;
   tutorSse.abort();
   flushPendingTokens();
   const base = tutorSse.tokens.value;
   updateMessage(m.id, {
     streaming: false,
-    text: base ? `${base}\n\n（已中断）` : '（已中断）',
+    text: base ? `${base}\n\n（已中断）` : "（已中断）",
   });
 }
 
@@ -1552,10 +1944,10 @@ function onStopStream(m: ChatMessage): void {
 function onRetry(m: ChatMessage): void {
   const r = m.retry;
   if (!r || busy.value) return;
-  playSfx('sfx_click');
-  if (r.mode === 'ask') {
+  playSfx("sfx_click");
+  if (r.mode === "ask") {
     void runAsk(r.question, r.kcCodes, r.context, r.opts);
-  } else if (r.mode === 'resource') {
+  } else if (r.mode === "resource") {
     void runResource(r.type, r.kcCodes, r.focusHint);
   } else {
     void runBrowse(r.ctx);
@@ -1564,40 +1956,63 @@ function onRetry(m: ChatMessage): void {
 
 // ============ 换讲法闭环：图解 / 逻辑链 / 示例上手 ============
 const STYLE_CHIPS: Array<{ style: CognitiveStyle; label: string }> = [
-  { style: 'visual', label: '✦ 图解' },
-  { style: 'logical', label: '⛓ 逻辑链' },
-  { style: 'trial', label: '⚒ 示例上手' },
+  { style: "visual", label: "✦ 图解" },
+  { style: "logical", label: "⛓ 逻辑链" },
+  { style: "trial", label: "⚒ 示例上手" },
 ];
 
 function onStyleChip(m: ChatMessage, style: CognitiveStyle): void {
-  playSfx('sfx_click');
+  playSfx("sfx_click");
   // 因材施教闭环：学生显式采纳某讲法 → 回流画像 cognitive_style（失败静默）。
   void styleEngaged(style, m.kcCodes?.[0]).catch(() => {
     /* 画像回流失败静默 */
   });
-  void runAsk(m.suggestTopic ?? m.text.slice(0, 200), m.kcCodes ?? [], '', { style });
+  void runAsk(m.suggestTopic ?? m.text.slice(0, 200), m.kcCodes ?? [], "", {
+    style,
+  });
 }
 
 // ============ orchestrator_sse：PLAN 学习规划 ============
 const PLAN_PANEL_ROUTES: Record<string, string> = {
-  library: '/library',
-  training: '/training',
-  problems: '/problems',
-  workshop: '/workshop',
-  tutor: '/workshop',
-  examples: '/examples',
-  review: '/review-hall',
+  library: "/library",
+  training: "/training",
+  problems: "/problems",
+  workshop: "/workshop",
+  tutor: "/workshop",
+  examples: "/examples",
+  review: "/review-hall",
 };
 
-async function runPlan(text: string): Promise<string> {
-  const runToken = activity.start('orchestrator', '学习规划');
+function routePersonalizationSummary(
+  decision: WorkshopRouteDecision | undefined,
+): string | undefined {
+  return decision?.personalization?.explanations.find(
+    (explanation) => explanation.trim().length > 0,
+  );
+}
+
+/** C3 搜索摘要只引用公开候选 label，不透出候选 id、成本数值或内部推理。 */
+function routeSearchSummary(
+  decision: WorkshopRouteDecision | undefined,
+): string | undefined {
+  const search = decision?.search;
+  if (!search) return undefined;
+  const selected = search.candidates.find(
+    (candidate) => candidate.candidateId === search.selectedCandidateId,
+  );
+  if (!selected) return undefined;
+  return `已比较 ${search.candidates.length} 条受限学习路径，优先执行「${selected.label}」`;
+}
+
+async function runPlan(text: string, ctx?: DispatchContext): Promise<string> {
+  const runToken = activity.start("orchestrator", "学习规划");
   planRunToken.value = runToken;
 
   // history 取最近 6 条 role/content；当前这条消息已在 onSubmit push，须从历史中剔除。
   const turns = buildRecentTurns();
   const tail = turns[turns.length - 1];
   const history =
-    tail && tail.role === 'user' && tail.content === text.slice(0, 200)
+    tail && tail.role === "user" && tail.content === text.slice(0, 200)
       ? turns.slice(0, -1)
       : turns;
 
@@ -1607,43 +2022,52 @@ async function runPlan(text: string): Promise<string> {
     history,
     courseKcCodes: courseKcs.value.map((k) => k.code),
   };
+  if (ctx?.kcCodes.length) body.recentKcCodes = [...ctx.kcCodes];
+  if (ctx?.routeDecision) body.routeDecision = ctx.routeDecision;
+  if (ctx?.routeExecutionToken)
+    body.routeExecutionToken = ctx.routeExecutionToken;
+  if (ctx?.interaction) body.interaction = ctx.interaction;
 
   // 先落一张流式 plan 卡：dispatch 进度经 STATE_DELTA → watch(orchestratorSse.state) 实时点亮步骤。
-  const meta = commandOf('PLAN');
+  const meta = commandOf("PLAN");
   const id = genId();
   streamingPlanId.value = id;
   pushMessage({
     id,
-    role: 'assistant',
-    kind: 'plan',
-    intent: 'PLAN',
-    text: '',
+    role: "assistant",
+    kind: "plan",
+    intent: "PLAN",
+    text: "",
     planSteps: [],
     streaming: true,
     toolIcon: meta.icon,
     toolLabel: meta.label,
+    personalizationSummary: routePersonalizationSummary(ctx?.routeDecision),
+    searchSummary: routeSearchSummary(ctx?.routeDecision),
   });
 
   await orchestratorSse.start(body);
   streamingPlanId.value = null;
 
   const result = orchestratorSse.result.value;
-  const ok = orchestratorSse.status.value === 'done' && result !== null;
+  const ok = orchestratorSse.status.value === "done" && result !== null;
   // 持令牌收尾：若向导（GuideOverlay）已开新活动，本次过期收尾被 store 忽略。
   activity.finish(ok, runToken);
   if (planRunToken.value === runToken) planRunToken.value = null;
 
   if (!ok || !result) {
-    playSfx('sfx_error');
+    playSfx("sfx_error");
     updateMessage(id, {
-      kind: 'error',
-      text: orchestratorSse.error.value?.message ?? '学习规划暂时没排出来，再试一次',
+      kind: "error",
+      text:
+        orchestratorSse.error.value?.message ??
+        "学习规划暂时没排出来，再试一次",
       streaming: false,
     });
     return id;
   }
 
-  playSfx('sfx_success');
+  playSfx("sfx_success");
   // 最终态：用 STATE_DELTA 累积的真实进度（status 准确）覆盖；state 缺失时回退 result.plan。
   const liveSteps = orchestratorSse.state.value.plan_steps;
   const finalSteps =
@@ -1671,23 +2095,26 @@ interface PlanOpenStep {
  * 去工坊（workshop/tutor）再带 `type`（resource_type），落地后可一键接着生成。
  */
 function onPlanOpen(step: PlanOpenStep): void {
-  playSfx('sfx_click');
-  const panel = step.panel ?? '';
+  playSfx("sfx_click");
+  const panel = step.panel ?? "";
   if (!panel) return;
   const kcCodes = step.kc_codes ?? [];
   const query: Record<string, string> = {};
-  if (kcCodes.length > 0) query.kc = kcCodes.join(',');
-  if ((panel === 'workshop' || panel === 'tutor') && step.resource_type) {
+  if (kcCodes.length > 0) query.kc = kcCodes.join(",");
+  if ((panel === "workshop" || panel === "tutor") && step.resource_type) {
     query.type = step.resource_type;
   }
-  if (panel === 'lecture') {
-    void router.push({ path: `/lecture/${mainline.firstActionableChapter}`, query });
+  if (panel === "lecture") {
+    void router.push({
+      path: `/lecture/${mainline.firstActionableChapter}`,
+      query,
+    });
     return;
   }
-  if (panel === 'training') {
-    toast.show('去训练场练一练', 'info');
+  if (panel === "training") {
+    toast.show("去训练场练一练", "info");
   }
-  void router.push({ path: PLAN_PANEL_ROUTES[panel] ?? '/world', query });
+  void router.push({ path: PLAN_PANEL_ROUTES[panel] ?? "/world", query });
 }
 
 // ============ 纯前端：PROGRESS 学情报告 ============
@@ -1699,15 +2126,15 @@ async function runProgress(): Promise<string> {
       /* 学情拉取失败：仍出卡，由卡内空态兜底 */
     }
   }
-  playSfx('sfx_success');
-  const meta = commandOf('PROGRESS');
+  playSfx("sfx_success");
+  const meta = commandOf("PROGRESS");
   const id = genId();
   pushMessage({
     id,
-    role: 'assistant',
-    kind: 'progress',
-    intent: 'PROGRESS',
-    text: '',
+    role: "assistant",
+    kind: "progress",
+    intent: "PROGRESS",
+    text: "",
     toolIcon: meta.icon,
     toolLabel: meta.label,
   });
@@ -1716,18 +2143,18 @@ async function runProgress(): Promise<string> {
 
 /** ProgressCard「去练」：toast 提示后直达训练场。 */
 function onPracticeKc(kcCode: string): void {
-  playSfx('sfx_click');
-  toast.show(`去训练场练「${kcDisplayName(kcCode)}」`, 'info');
-  void router.push('/training');
+  playSfx("sfx_click");
+  toast.show(`去训练场练「${kcDisplayName(kcCode)}」`, "info");
+  void router.push("/training");
 }
 
 // ============ 纯前端：NAVIGATE 带路 ============
 const NAV_TARGETS: Record<string, { route: string; label: string }> = {
-  library: { route: '/library', label: '图书馆' },
-  arena: { route: '/expedition', label: '无尽远征' },
-  bugmine: { route: '/bug-mine', label: '错题矿洞' },
-  world: { route: '/world', label: '小镇广场' },
-  workshop: { route: '/workshop', label: '百晓工坊' },
+  library: { route: "/library", label: "图书馆" },
+  arena: { route: "/expedition", label: "无尽远征" },
+  bugmine: { route: "/bug-mine", label: "错题矿洞" },
+  world: { route: "/world", label: "小镇广场" },
+  workshop: { route: "/workshop", label: "百晓工坊" },
 };
 
 async function runNavigate(ctx: DispatchContext): Promise<string> {
@@ -1736,14 +2163,14 @@ async function runNavigate(ctx: DispatchContext): Promise<string> {
     // 未知地标：回退答疑，把学生的话正常答掉。
     return runAsk(ctx.text, ctx.kcCodes, ctx.contextHint);
   }
-  playSfx('sfx_success');
-  const meta = commandOf('NAVIGATE');
+  playSfx("sfx_success");
+  const meta = commandOf("NAVIGATE");
   const id = genId();
   pushMessage({
     id,
-    role: 'assistant',
-    kind: 'navigate',
-    intent: 'NAVIGATE',
+    role: "assistant",
+    kind: "navigate",
+    intent: "NAVIGATE",
     text: `带你去${hit.label}`,
     navRoute: hit.route,
     navLabel: hit.label,
@@ -1755,7 +2182,7 @@ async function runNavigate(ctx: DispatchContext): Promise<string> {
 
 function onNavigateGo(m: ChatMessage): void {
   if (!m.navRoute) return;
-  playSfx('sfx_click');
+  playSfx("sfx_click");
   void router.push(m.navRoute);
 }
 
@@ -1790,25 +2217,27 @@ async function runMyStudy(ctx: DispatchContext): Promise<string> {
       : list.filter((item) => {
           // 标题反向包含：学生消息里直接提到了某资源标题。
           const titleLower = item.title.toLowerCase();
-          if (titleLower.length >= 2 && textLower.includes(titleLower)) return true;
-          const kcNames = item.kcCodes.map((c) => kcDisplayName(c)).join(' ');
-          const hay = `${item.title} ${commandOf(item.type).label} ${item.kcCodes.join(' ')} ${kcNames}`.toLowerCase();
+          if (titleLower.length >= 2 && textLower.includes(titleLower))
+            return true;
+          const kcNames = item.kcCodes.map((c) => kcDisplayName(c)).join(" ");
+          const hay =
+            `${item.title} ${commandOf(item.type).label} ${item.kcCodes.join(" ")} ${kcNames}`.toLowerCase();
           return terms.some((t) => hay.includes(t));
         });
   const shown = matched.slice(0, 5);
 
-  playSfx('sfx_success');
-  const meta = commandOf('MY_STUDY');
+  playSfx("sfx_success");
+  const meta = commandOf("MY_STUDY");
   const id = genId();
   pushMessage({
     id,
-    role: 'assistant',
-    kind: 'mystudy',
-    intent: 'MY_STUDY',
+    role: "assistant",
+    kind: "mystudy",
+    intent: "MY_STUDY",
     text:
       shown.length > 0
-        ? ''
-        : '书房里还没找到相关的资源。直接说想学什么，或用 /讲义 /练习题 现做一份？',
+        ? ""
+        : "书房里还没找到相关的资源。直接说想学什么，或用 /讲义 /练习题 现做一份？",
     mystudyItems: shown,
     toolIcon: meta.icon,
     toolLabel: meta.label,
@@ -1824,27 +2253,30 @@ async function runResource(
 ): Promise<string> {
   // 不强制 @KC：调用方（dispatchIntent）已保证无 KC 时改走答疑；这里仅作防御性兜底。
   if (kcCodes.length === 0) {
-    return runAsk(focusHint, kcCodes, '');
+    return runAsk(focusHint, kcCodes, "");
   }
 
-  officeStreamState.value = 'streaming';
-  officeTokenPreview.value = '';
+  officeStreamState.value = "streaming";
+  officeTokenPreview.value = "";
   officeStreamLabel.value = `生成${commandOf(type).label}`;
-  const runToken = activity.start('resource', officeStreamLabel.value);
+  const runToken = activity.start("resource", officeStreamLabel.value);
   resourceRunToken.value = runToken;
 
   const trimmed = focusHint.trim();
   const reqPayload =
-    trimmed.length > 0 ? { kcCodes, type, focusHint: trimmed } : { kcCodes, type };
+    trimmed.length > 0
+      ? { kcCodes, type, focusHint: trimmed }
+      : { kcCodes, type };
   learning.streamCreateResource({ kcCodes, type });
 
   await workshopSse.start(reqPayload);
-  const resourceOk = workshopSse.status.value === 'done' && workshopSse.result.value !== null;
+  const resourceOk =
+    workshopSse.status.value === "done" && workshopSse.result.value !== null;
   activity.finish(resourceOk, runToken);
   if (resourceRunToken.value === runToken) resourceRunToken.value = null;
 
   if (resourceOk && workshopSse.result.value) {
-    playSfx('sfx_success');
+    playSfx("sfx_success");
     const result = workshopSse.result.value;
 
     // 取回完整资源（含 content）用于「在对话里就地浏览」：content 直传子视图，
@@ -1858,19 +2290,21 @@ async function runResource(
 
     // 同步「我的书房」列表（历史资源库入口保留），但不依赖单槽。
     await learning.loadResources();
-    const listItem = learning.resources.list.find((r) => r.id === result.resourceId);
+    const listItem = learning.resources.list.find(
+      (r) => r.id === result.resourceId,
+    );
     const meta = commandOf(type);
     const grounding: string =
       detail?.groundingStatus ??
       listItem?.groundingStatus ??
-      (result.status === 'FAILED' ? 'FAILED' : 'PASSED');
+      (result.status === "FAILED" ? "FAILED" : "PASSED");
 
     const msg: ChatMessage = {
       id: genId(),
-      role: 'assistant',
-      kind: 'resource',
+      role: "assistant",
+      kind: "resource",
       intent: type,
-      text: '',
+      text: "",
       resourceId: result.resourceId,
       resourceType: type,
       resourceTitle: detail?.title ?? listItem?.title ?? meta.label,
@@ -1888,28 +2322,28 @@ async function runResource(
     }
     pushMessage(msg);
 
-    officeStreamState.value = 'idle';
-    officeTokenPreview.value = '';
-    officeStreamLabel.value = '';
+    officeStreamState.value = "idle";
+    officeTokenPreview.value = "";
+    officeStreamLabel.value = "";
 
     // R-15：旧 mainQuest「学」里程碑钩子已退役（主线进度由后端 mainline stage 三件套权威）。
-    toast.show('已生成并收入「我的书房」', 'success');
+    toast.show("已生成并收入「我的书房」", "success");
     return msg.id;
   }
 
-  officeStreamState.value = 'error';
-  playSfx('sfx_error');
+  officeStreamState.value = "error";
+  playSfx("sfx_error");
   const errId = genId();
   pushMessage({
     id: errId,
-    role: 'assistant',
-    kind: 'error',
-    text: workshopSse.error.value?.message ?? '资源生成失败，请稍后重试。',
-    retry: { mode: 'resource', type, kcCodes, focusHint },
+    role: "assistant",
+    kind: "error",
+    text: workshopSse.error.value?.message ?? "资源生成失败，请稍后重试。",
+    retry: { mode: "resource", type, kcCodes, focusHint },
   });
-  officeStreamState.value = 'idle';
-  officeTokenPreview.value = '';
-  officeStreamLabel.value = '';
+  officeStreamState.value = "idle";
+  officeTokenPreview.value = "";
+  officeStreamLabel.value = "";
   return errId;
 }
 
@@ -1918,7 +2352,7 @@ async function runResource(
  * content 直传子视图——绝不复用 learning.resources.current 单槽。
  */
 async function toggleResource(m: ChatMessage): Promise<void> {
-  playSfx('sfx_click');
+  playSfx("sfx_click");
   const next = !m.resourceExpanded;
   if (next && !m.resourceContent && m.resourceId && !m.resourceLoading) {
     updateMessage(m.id, { resourceExpanded: true, resourceLoading: true });
@@ -1937,7 +2371,7 @@ async function toggleResource(m: ChatMessage): Promise<void> {
       updateMessage(m.id, patch);
     } catch {
       updateMessage(m.id, { resourceLoading: false, resourceExpanded: false });
-      toast.show('资源载入失败，请到「我的书房」查看', 'error');
+      toast.show("资源载入失败，请到「我的书房」查看", "error");
     }
     return;
   }
@@ -1945,20 +2379,20 @@ async function toggleResource(m: ChatMessage): Promise<void> {
 }
 
 function openResource(resourceId: number): void {
-  playSfx('sfx_click');
-  emit('open-resource', resourceId);
+  playSfx("sfx_click");
+  emit("open-resource", resourceId);
 }
 
 function goToPage(pageId: number): void {
-  playSfx('sfx_click');
-  void router.push({ path: '/library', query: { pageId: String(pageId) } });
+  playSfx("sfx_click");
+  void router.push({ path: "/library", query: { pageId: String(pageId) } });
 }
 
 // ============ 深链落地：/workshop?kc=...&type=...（向导计划「前往工坊」带来的上下文） ============
 /** query 值归一成单个非空字符串（vue-router 的 LocationQueryValue 可能是数组/null）。 */
 function firstQueryValue(value: unknown): string | null {
   const raw = Array.isArray(value) ? value[0] : value;
-  return typeof raw === 'string' && raw.trim().length > 0 ? raw.trim() : null;
+  return typeof raw === "string" && raw.trim().length > 0 ? raw.trim() : null;
 }
 
 /**
@@ -1970,7 +2404,7 @@ function consumeDeepLink(): void {
   const kcStr = firstQueryValue(route.query.kc);
   if (!kcStr) return;
   const kcCodes = kcStr
-    .split(',')
+    .split(",")
     .map((code) => code.trim())
     .filter((code) => code.length > 0);
   if (kcCodes.length === 0) return;
@@ -1981,18 +2415,19 @@ function consumeDeepLink(): void {
   if (!isResourceIntent(intent)) return;
 
   pushSecondary(intent, {
-    text: '',
+    text: "",
     kcCodes,
-    focusHint: '',
-    contextHint: '',
-    target: '',
+    focusHint: "",
+    contextHint: "",
+    target: "",
   });
 }
 
 // 深链签名（kc|type）：挂载后 query 才就位（如路由异步恢复），或人在工坊内点计划
 // 「前往工坊」就地换上下文（组件不重挂）时，靠签名变化补消费；无效签名由 consumeDeepLink 自滤。
 const deepLinkSignature = computed(
-  () => `${firstQueryValue(route.query.kc) ?? ''}|${firstQueryValue(route.query.type) ?? ''}`,
+  () =>
+    `${firstQueryValue(route.query.kc) ?? ""}|${firstQueryValue(route.query.type) ?? ""}`,
 );
 watch(deepLinkSignature, () => {
   consumeDeepLink();
@@ -2000,7 +2435,13 @@ watch(deepLinkSignature, () => {
 
 // ============ 角色化：欢迎屏快捷语 / 轻反馈 ============
 function onWelcomeQuick(text: string): void {
-  void onSubmit({ text, manualKcCodes: [], contextHint: '', forcedIntent: null, attachments: [] });
+  void onSubmit({
+    text,
+    manualKcCodes: [],
+    contextHint: "",
+    forcedIntent: null,
+    attachments: [],
+  });
 }
 
 onMounted(async () => {
@@ -2020,10 +2461,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div
-    class="chat"
-    data-testid="workshop-chat"
-  >
+  <div class="chat" data-testid="workshop-chat">
     <div class="chat__topbar">
       <span class="chat__topbar-title">✦ AI 答疑</span>
       <button
@@ -2031,7 +2469,11 @@ onMounted(async () => {
         class="chat__newchat"
         data-testid="workshop-new-chat"
         :disabled="busy"
-        :title="busy ? '当前回复正在生成或保存，稍等一下再开新对话' : '开一段新对话（之前的会进「聊天记录」）'"
+        :title="
+          busy
+            ? '当前回复正在生成或保存，稍等一下再开新对话'
+            : '开一段新对话（之前的会进「聊天记录」）'
+        "
         @click="newChat"
       >
         ＋ 新对话
@@ -2049,22 +2491,17 @@ onMounted(async () => {
       @exit="exitQuiz"
     />
 
-    <div
-      ref="scrollRef"
-      class="chat__scroll"
-      @scroll.passive="onScroll"
-    >
+    <div ref="scrollRef" class="chat__scroll" @scroll.passive="onScroll">
       <!-- 续聊提示：回看历史会话后，明确告诉学生「接着问会并入这段会话」。 -->
       <div
         v-if="continuing && messages.length > 0"
         class="chat__continue"
         data-testid="workshop-continue-hint"
       >
-        <span
-          class="chat__continue-icon"
-          aria-hidden="true"
-        >↩</span>
-        <span class="chat__continue-text">正在继续这段会话，新的提问会并入同一条「聊天记录」</span>
+        <span class="chat__continue-icon" aria-hidden="true">↩</span>
+        <span class="chat__continue-text"
+          >正在继续这段会话，新的提问会并入同一条「聊天记录」</span
+        >
         <button
           type="button"
           class="chat__continue-new"
@@ -2082,10 +2519,7 @@ onMounted(async () => {
         @quick="onWelcomeQuick"
       />
 
-      <template
-        v-for="m in messages"
-        :key="m.id"
-      >
+      <template v-for="m in messages" :key="m.id">
         <!-- 用户气泡（附件 pill 渲染在气泡上方） -->
         <template v-if="m.role === 'user'">
           <div
@@ -2099,10 +2533,9 @@ onMounted(async () => {
               class="user-attach"
               :title="a.filename"
             >
-              <span
-                class="user-attach__icon"
-                aria-hidden="true"
-              >{{ attachmentIcon(a.ext) }}</span>
+              <span class="user-attach__icon" aria-hidden="true">{{
+                attachmentIcon(a.ext)
+              }}</span>
               <span class="user-attach__name">{{ a.filename }}</span>
               <span class="user-attach__meta">{{ a.charCount }} 字</span>
             </span>
@@ -2112,14 +2545,12 @@ onMounted(async () => {
               v-if="m.toolLabel || (m.kcCodes && m.kcCodes.length)"
               class="msg__tags"
             >
-              <span
-                v-if="m.toolLabel"
-                class="msg__tool"
-              >{{ m.toolIcon }} {{ m.toolLabel }}</span>
-              <span
-                v-if="m.kcCodes && m.kcCodes.length"
-                class="msg__kc"
-              >@{{ m.kcCodes.length }} 知识点</span>
+              <span v-if="m.toolLabel" class="msg__tool"
+                >{{ m.toolIcon }} {{ m.toolLabel }}</span
+              >
+              <span v-if="m.kcCodes && m.kcCodes.length" class="msg__kc"
+                >@{{ m.kcCodes.length }} 知识点</span
+              >
             </div>
             <p class="msg__text">
               {{ m.text }}
@@ -2128,20 +2559,13 @@ onMounted(async () => {
         </template>
 
         <!-- 助手消息行：左侧百晓像素头像 + 右侧气泡 -->
-        <div
-          v-else
-          class="msg-row"
-          :data-kind="m.kind"
-        >
+        <div v-else class="msg-row" :data-kind="m.kind">
           <div class="msg-row__avatar">
             <WorkshopAvatar :streaming="m.streaming === true" />
           </div>
           <div class="msg-row__body">
             <!-- 助手：答疑（ASK / ASKME / EXPLAIN_CODE / FIX_BUG 共用） -->
-            <div
-              v-if="m.kind === 'answer'"
-              class="msg msg--assistant"
-            >
+            <div v-if="m.kind === 'answer'" class="msg msg--assistant">
               <div
                 v-if="m.personalizationNote"
                 class="msg__pnote"
@@ -2149,11 +2573,10 @@ onMounted(async () => {
               >
                 ✨ 为你定制
               </div>
-              <div
-                v-if="m.toolLabel"
-                class="msg__tags"
-              >
-                <span class="msg__tool">{{ m.toolIcon }} {{ m.toolLabel }}</span>
+              <div v-if="m.toolLabel" class="msg__tags">
+                <span class="msg__tool"
+                  >{{ m.toolIcon }} {{ m.toolLabel }}</span
+                >
               </div>
               <div
                 v-if="m.groundingStatus || (m.review && !m.streaming)"
@@ -2163,7 +2586,8 @@ onMounted(async () => {
                   v-if="m.groundingStatus"
                   class="g-chip"
                   :class="groundingInfo(m.groundingStatus).cls"
-                >{{ groundingInfo(m.groundingStatus).text }}</span>
+                  >{{ groundingInfo(m.groundingStatus).text }}</span
+                >
                 <!-- 三审徽章：仅 live 答疑（带 review）显示；历史回放无 review → 不显示。 -->
                 <template v-if="m.review && !m.streaming">
                   <span
@@ -2172,7 +2596,8 @@ onMounted(async () => {
                     class="r-badge"
                     :class="b.passed ? 'r-badge--ok' : 'r-badge--no'"
                     :title="b.title"
-                  >{{ b.passed ? '✓' : '✗' }} {{ b.label }}</span>
+                    >{{ b.passed ? "✓" : "✗" }} {{ b.label }}</span
+                  >
                 </template>
                 <!-- 折叠「⚙ 工具调用」轨迹（渐进披露），挂在三审徽章行尾部。 -->
                 <ToolTraceLine
@@ -2203,9 +2628,15 @@ onMounted(async () => {
                     :placeholder="b.hint || '在此填空'"
                     :value="quizDrafts[m.id]?.[i] || ''"
                     :disabled="!quiz || busy"
-                    @input="setQuizDraft(m.id, i, ($event.target as HTMLInputElement).value)"
+                    @input="
+                      setQuizDraft(
+                        m.id,
+                        i,
+                        ($event.target as HTMLInputElement).value,
+                      )
+                    "
                     @keydown.enter.prevent="submitQuizFill(m)"
-                  >
+                  />
                 </div>
                 <button
                   type="button"
@@ -2216,20 +2647,14 @@ onMounted(async () => {
                   提交作答
                 </button>
               </div>
-              <span
-                v-if="m.streaming"
-                class="cursor"
-              >▌</span>
+              <span v-if="m.streaming" class="cursor">▌</span>
               <!-- 流式期间：工具调用生命周期实时时间轴（证据检索 → 作答 → 三审）。 -->
               <ToolCallTimeline
                 v-if="m.streaming"
                 :traces="liveAskTraces"
                 live
               />
-              <div
-                v-if="m.streaming"
-                class="msg__stoprow"
-              >
+              <div v-if="m.streaming" class="msg__stoprow">
                 <button
                   type="button"
                   class="stop-chip"
@@ -2252,10 +2677,7 @@ onMounted(async () => {
                 :aids="m.visualAids"
               />
               <!-- 工具产出按需触发：动作按钮常驻（手动入口）；B站讲解仅在视频意图下自动内嵌。 -->
-              <div
-                v-if="!m.streaming && m.suggestTopic"
-                class="msg__tools"
-              >
+              <div v-if="!m.streaming && m.suggestTopic" class="msg__tools">
                 <div class="msg__tool-actions">
                   <span class="msg__tool-hint">接下来</span>
                   <button
@@ -2324,11 +2746,16 @@ onMounted(async () => {
                   :title="m.resourceExpanded ? '收起全文' : '展开全文'"
                   @click="toggleResource(m)"
                 >
-                  <span class="resource-head__title">{{ m.resourceTitle }}</span>
+                  <span class="resource-head__title">{{
+                    m.resourceTitle
+                  }}</span>
                   <span class="resource-head__meta">
-                    {{ m.toolLabel }} · {{ groundingInfo(m.resourceGrounding ?? '').text }}
+                    {{ m.toolLabel }} ·
+                    {{ groundingInfo(m.resourceGrounding ?? "").text }}
                     <template v-if="m.resourceSafety">
-                      · 安全{{ m.resourceSafety === 'PASSED' ? '通过' : '注意' }}
+                      · 安全{{
+                        m.resourceSafety === "PASSED" ? "通过" : "注意"
+                      }}
                     </template>
                   </span>
                 </button>
@@ -2339,7 +2766,7 @@ onMounted(async () => {
                     data-testid="resource-toggle"
                     @click="toggleResource(m)"
                   >
-                    {{ m.resourceExpanded ? '收起 ▲' : '展开 ▼' }}
+                    {{ m.resourceExpanded ? "收起 ▲" : "展开 ▼" }}
                   </button>
                   <button
                     type="button"
@@ -2357,48 +2784,39 @@ onMounted(async () => {
                 class="resource-body"
                 data-testid="resource-inline"
               >
-                <p
-                  v-if="m.resourceSummary"
-                  class="resource-body__summary"
-                >
+                <p v-if="m.resourceSummary" class="resource-body__summary">
                   {{ m.resourceSummary }}
                 </p>
-                <p
-                  v-if="m.resourceLoading"
-                  class="resource-body__loading"
-                >
+                <p v-if="m.resourceLoading" class="resource-body__loading">
                   正在载入资源全文…
                 </p>
                 <template v-else-if="m.resourceContent && m.resourceType">
                   <HandoutView
                     v-if="m.resourceType === 'HANDOUT'"
-                    :content="(m.resourceContent as HandoutContent)"
+                    :content="m.resourceContent as HandoutContent"
                   />
                   <MindMapView
                     v-else-if="m.resourceType === 'MINDMAP'"
-                    :content="(m.resourceContent as MindMapContent)"
+                    :content="m.resourceContent as MindMapContent"
                   />
                   <PracticeList
                     v-else-if="m.resourceType === 'PRACTICE'"
-                    :content="(m.resourceContent as PracticeContent)"
+                    :content="m.resourceContent as PracticeContent"
                   />
                   <CodeLabView
                     v-else-if="m.resourceType === 'CODE_LAB'"
-                    :content="(m.resourceContent as CodeLabContent)"
+                    :content="m.resourceContent as CodeLabContent"
                   />
                   <ReadingList
                     v-else-if="m.resourceType === 'READING'"
-                    :content="(m.resourceContent as ReadingContent)"
+                    :content="m.resourceContent as ReadingContent"
                   />
                   <StoryboardView
                     v-else-if="m.resourceType === 'STORYBOARD'"
-                    :content="(m.resourceContent as StoryboardContent)"
+                    :content="m.resourceContent as StoryboardContent"
                   />
                 </template>
-                <p
-                  v-else
-                  class="resource-body__empty"
-                >
+                <p v-else class="resource-body__empty">
                   暂无法在此内联展示，请点「书房 →」查看。
                 </p>
               </div>
@@ -2409,11 +2827,10 @@ onMounted(async () => {
               v-else-if="m.kind === 'video'"
               class="msg msg--assistant msg--video"
             >
-              <div
-                v-if="m.toolLabel"
-                class="msg__tags"
-              >
-                <span class="msg__tool">{{ m.toolIcon }} {{ m.toolLabel }}</span>
+              <div v-if="m.toolLabel" class="msg__tags">
+                <span class="msg__tool"
+                  >{{ m.toolIcon }} {{ m.toolLabel }}</span
+                >
               </div>
               <BilibiliVideoCards
                 :keyword="m.videoKeyword ?? ''"
@@ -2427,21 +2844,17 @@ onMounted(async () => {
               class="msg msg--assistant msg--browse"
               data-testid="browse-msg"
             >
-              <div
-                v-if="m.toolLabel"
-                class="msg__tags"
-              >
-                <span class="msg__tool">{{ m.toolIcon }} {{ m.toolLabel }}</span>
+              <div v-if="m.toolLabel" class="msg__tags">
+                <span class="msg__tool"
+                  >{{ m.toolIcon }} {{ m.toolLabel }}</span
+                >
               </div>
               <p
                 v-if="m.text && (m.streaming || !m.browseRun)"
                 class="msg__text"
               >
                 {{ m.text }}
-                <span
-                  v-if="m.streaming"
-                  class="cursor"
-                >▌</span>
+                <span v-if="m.streaming" class="cursor">▌</span>
               </p>
               <BrowseTimeline :run="m.browseRun ?? null" />
             </div>
@@ -2451,21 +2864,30 @@ onMounted(async () => {
               v-else-if="m.kind === 'plan'"
               class="msg msg--assistant msg--plan"
               data-testid="plan-card-msg"
+              :data-loop-run-id="m.loopRunId ?? undefined"
+              :data-streaming="String(Boolean(m.streaming))"
             >
-              <div
-                v-if="m.toolLabel"
-                class="msg__tags"
-              >
-                <span class="msg__tool">{{ m.toolIcon }} {{ m.toolLabel }}</span>
+              <div v-if="m.toolLabel" class="msg__tags">
+                <span class="msg__tool"
+                  >{{ m.toolIcon }} {{ m.toolLabel }}</span
+                >
               </div>
-              <MarkdownView
-                v-if="m.text"
-                :source="m.text"
-              />
-              <PlanCard
-                :steps="m.planSteps ?? []"
-                @open-step="onPlanOpen"
-              />
+              <p
+                v-if="m.personalizationSummary"
+                class="plan-personalization"
+                data-testid="plan-personalization"
+              >
+                ✨ 个性化策略：{{ m.personalizationSummary }}
+              </p>
+              <p
+                v-if="m.searchSummary"
+                class="plan-personalization"
+                data-testid="plan-search"
+              >
+                🔀 {{ m.searchSummary }}
+              </p>
+              <MarkdownView v-if="m.text" :source="m.text" />
+              <PlanCard :steps="m.planSteps ?? []" @open-step="onPlanOpen" />
             </div>
 
             <!-- 助手：学情卡（PROGRESS，纯前端读 masterySnapshot） -->
@@ -2474,11 +2896,10 @@ onMounted(async () => {
               class="msg msg--assistant msg--progress"
               data-testid="progress-card-msg"
             >
-              <div
-                v-if="m.toolLabel"
-                class="msg__tags"
-              >
-                <span class="msg__tool">{{ m.toolIcon }} {{ m.toolLabel }}</span>
+              <div v-if="m.toolLabel" class="msg__tags">
+                <span class="msg__tool"
+                  >{{ m.toolIcon }} {{ m.toolLabel }}</span
+                >
               </div>
               <ProgressCard
                 :snapshot="learning.field.masterySnapshot"
@@ -2492,16 +2913,12 @@ onMounted(async () => {
               class="msg msg--assistant msg--mystudy"
               data-testid="mystudy-msg"
             >
-              <div
-                v-if="m.toolLabel"
-                class="msg__tags"
-              >
-                <span class="msg__tool">{{ m.toolIcon }} {{ m.toolLabel }}</span>
+              <div v-if="m.toolLabel" class="msg__tags">
+                <span class="msg__tool"
+                  >{{ m.toolIcon }} {{ m.toolLabel }}</span
+                >
               </div>
-              <p
-                v-if="m.text"
-                class="msg__text"
-              >
+              <p v-if="m.text" class="msg__text">
                 {{ m.text }}
               </p>
               <div
@@ -2510,7 +2927,9 @@ onMounted(async () => {
                 class="resource-head mystudy-item"
                 data-testid="mystudy-item"
               >
-                <span class="resource-head__icon">{{ commandOf(item.type).icon }}</span>
+                <span class="resource-head__icon">{{
+                  commandOf(item.type).icon
+                }}</span>
                 <button
                   type="button"
                   class="resource-head__body"
@@ -2519,7 +2938,8 @@ onMounted(async () => {
                 >
                   <span class="resource-head__title">{{ item.title }}</span>
                   <span class="resource-head__meta">
-                    {{ commandOf(item.type).label }} · {{ groundingInfo(item.groundingStatus).text }}
+                    {{ commandOf(item.type).label }} ·
+                    {{ groundingInfo(item.groundingStatus).text }}
                   </span>
                 </button>
                 <span class="resource-head__actions">
@@ -2540,11 +2960,10 @@ onMounted(async () => {
               class="msg msg--assistant msg--navigate"
               data-testid="navigate-msg"
             >
-              <div
-                v-if="m.toolLabel"
-                class="msg__tags"
-              >
-                <span class="msg__tool">{{ m.toolIcon }} {{ m.toolLabel }}</span>
+              <div v-if="m.toolLabel" class="msg__tags">
+                <span class="msg__tool"
+                  >{{ m.toolIcon }} {{ m.toolLabel }}</span
+                >
               </div>
               <p class="msg__text">
                 {{ m.text }}
@@ -2586,13 +3005,10 @@ onMounted(async () => {
                 data-testid="secondary-go"
                 @click="onSecondaryPick(m)"
               >
-                接着：{{ commandOf(m.secondaryIntent ?? 'ASK').label }} →
+                接着：{{ commandOf(m.secondaryIntent ?? "ASK").label }} →
               </button>
-              <p
-                v-else
-                class="msg__text msg__text--dim"
-              >
-                已接着执行：{{ commandOf(m.secondaryIntent ?? 'ASK').label }}
+              <p v-else class="msg__text msg__text--dim">
+                已接着执行：{{ commandOf(m.secondaryIntent ?? "ASK").label }}
               </p>
             </div>
 
@@ -2618,7 +3034,11 @@ onMounted(async () => {
 
             <!-- 纠错 chips：中置信执行后挂在该 assistant 消息下（点击改派执行）。 -->
             <div
-              v-if="!m.streaming && m.correctionOptions && m.correctionOptions.length"
+              v-if="
+                !m.streaming &&
+                m.correctionOptions &&
+                m.correctionOptions.length
+              "
               class="msg-followup"
               data-testid="correction-chips"
             >
@@ -2638,11 +3058,7 @@ onMounted(async () => {
         </div>
       </template>
 
-      <div
-        v-if="routing"
-        class="routing"
-        data-testid="routing-indicator"
-      >
+      <div v-if="routing" class="routing" data-testid="routing-indicator">
         正在判断该用哪个工具…
       </div>
 
@@ -2681,8 +3097,8 @@ onMounted(async () => {
     system-ui,
     -apple-system,
     BlinkMacSystemFont,
-    'PingFang SC',
-    'Microsoft YaHei',
+    "PingFang SC",
+    "Microsoft YaHei",
     sans-serif;
   color: #3f2e16;
 }
@@ -2879,6 +3295,15 @@ onMounted(async () => {
 .msg--mystudy {
   width: 100%;
   background: #fffaf0;
+}
+.plan-personalization {
+  margin: 4px 0 8px;
+  padding: 6px 8px;
+  color: #654a20;
+  background: #f8ebca;
+  border-left: 3px solid #d8b86e;
+  font-size: 12px;
+  line-height: 1.5;
 }
 .msg--navigate {
   background: #fffdf7;
@@ -3148,8 +3573,12 @@ onMounted(async () => {
   font-weight: 700;
 }
 @keyframes blink {
-  0% { opacity: 1; }
-  50% { opacity: 0; }
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
 }
 
 /* 资源卡：就地内联浏览（生成完直接展开全文；可折叠；「书房 →」仍作历史库大图入口） */

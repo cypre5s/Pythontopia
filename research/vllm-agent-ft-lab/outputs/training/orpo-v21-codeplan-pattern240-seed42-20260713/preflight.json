@@ -1,0 +1,72 @@
+{
+  "changed_variables": [
+    "codeplan_v21_preference_dataset"
+  ],
+  "dataset_sha256": {
+    "heldout": "6112358e6c463b5b7ef0cd08a1899222c555f0ac5a9c8f360e37792e2a8d9918",
+    "train": "65b15ede43854785667ca828adb46d0251b5289359bc059c27630fd8c0c1c854"
+  },
+  "duplicate_id_count": 0,
+  "duplicate_pair_count": 0,
+  "duplicate_prompt_count": 0,
+  "heldout_count": 24,
+  "identical_chosen_rejected_count": 0,
+  "identical_chosen_rejected_ids": [],
+  "max_seq_length": 512,
+  "one_variable_only": true,
+  "passed": true,
+  "protected_eval_overlap_count": 0,
+  "protected_eval_overlap_ids": [],
+  "token_length": {
+    "longest_examples": [
+      {
+        "id": "codeplan-v21-pref-0078-eval5000-new_question-0992-domain-0992-resourcedesigneragent-c6",
+        "tokens": 314
+      },
+      {
+        "id": "codeplan-v21-pref-0166-eval5000-new_chapter_slice-0812-domain-2812-resourcedesigneragent-c6",
+        "tokens": 312
+      },
+      {
+        "id": "codeplan-v21-pref-0054-eval5000-new_student_expression-1142-domain-4142-resourcedesigneragent-c6-beginner-copy_paste_code_fragment",
+        "tokens": 311
+      },
+      {
+        "id": "codeplan-v21-pref-0222-eval5000-new_question-0222-domain-0222-resourcedesigneragent-c6",
+        "tokens": 311
+      },
+      {
+        "id": "codeplan-v21-pref-0022-eval5000-web_workshop_input-0272-domain-4772-resourcedesigneragent-c6",
+        "tokens": 310
+      },
+      {
+        "id": "codeplan-v21-pref-0046-eval5000-new_question-0782-domain-0782-resourcedesigneragent-c6",
+        "tokens": 310
+      },
+      {
+        "id": "codeplan-v21-pref-0038-eval5000-new_student_expression-0302-domain-3302-resourcedesigneragent-c6-beginner-copy_paste_code_fragment",
+        "tokens": 309
+      },
+      {
+        "id": "codeplan-v21-pref-0070-eval5000-new_student_expression-1072-domain-4072-resourcedesigneragent-c6-beginner-anxious_answer_request",
+        "tokens": 309
+      },
+      {
+        "id": "codeplan-v21-pref-0094-eval5000-web_workshop_input-0062-domain-4562-resourcedesigneragent-c6",
+        "tokens": 309
+      },
+      {
+        "id": "codeplan-v21-pref-0110-eval5000-new_student_expression-1212-domain-4212-resourcedesigneragent-c6-beginner-incomplete_error_paste",
+        "tokens": 309
+      }
+    ],
+    "max": 314,
+    "mean": 289.6,
+    "overlength_count": 0,
+    "overlength_ids": []
+  },
+  "train_count": 216,
+  "train_heldout_prompt_overlap_count": 0,
+  "zero_label_count": 0,
+  "zero_label_ids": []
+}

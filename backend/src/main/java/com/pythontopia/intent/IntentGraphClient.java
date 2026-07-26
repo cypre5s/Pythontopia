@@ -78,6 +78,13 @@ public class IntentGraphClient {
    * @param profileBrief 学生 8 维画像摘要（由 {@link IntentService} 注入，前端不传）；空白时不写入 body。
    */
   public IntentRouteResponse route(IntentRouteRequest request, String profileBrief) {
+    return route(request, profileBrief, null);
+  }
+
+  public IntentRouteResponse route(
+      IntentRouteRequest request,
+      String profileBrief,
+      LearnerRoutingContext learnerContext) {
     Map<String, Object> body = new LinkedHashMap<>();
     body.put("message", request.message());
     if (request.manualKcCodes() != null && !request.manualKcCodes().isEmpty()) {
@@ -119,11 +126,21 @@ public class IntentGraphClient {
     if (request.capabilityNamespace() != null && !request.capabilityNamespace().isBlank()) {
       body.put("capability_namespace", request.capabilityNamespace());
     }
+    if (request.requestedIntent() != null && !request.requestedIntent().isBlank()) {
+      body.put("requested_intent", request.requestedIntent());
+    }
+    Map<String, Object> interaction = buildInteraction(request.interaction());
+    if (!interaction.isEmpty()) {
+      body.put("interaction", interaction);
+    }
     if (profileBrief != null && !profileBrief.isBlank()) {
       // graph 契约 profile_brief max_length=1000：超长截断，避免极端 tag 长度导致 422 断送路由。
       body.put(
           "profile_brief",
           profileBrief.length() > 1000 ? profileBrief.substring(0, 1000) : profileBrief);
+    }
+    if (learnerContext != null) {
+      body.put("learner_context", learnerContext.toGraphPayload());
     }
 
     HttpHeaders headers = new HttpHeaders();
@@ -213,6 +230,38 @@ public class IntentGraphClient {
     return payload;
   }
 
+  private Map<String, Object> buildInteraction(IntentRouteRequest.InteractionContext interaction) {
+    Map<String, Object> payload = new LinkedHashMap<>();
+    if (interaction == null) {
+      return payload;
+    }
+    putNonBlank(payload, "session_id", interaction.sessionId());
+    putNonBlank(payload, "current_scene", interaction.currentScene());
+    putNonBlank(payload, "current_stage", interaction.currentStage());
+    putNonNull(payload, "current_problem_id", interaction.currentProblemId());
+    putNonBlank(payload, "current_code", interaction.currentCode());
+    putNonNull(payload, "latest_submission_id", interaction.latestSubmissionId());
+    if (interaction.selectedPageIds() != null && !interaction.selectedPageIds().isEmpty()) {
+      payload.put("selected_page_ids", interaction.selectedPageIds());
+    }
+    putNonBlank(payload, "error_text", interaction.errorText());
+    putNonBlank(payload, "frontend_action", interaction.frontendAction());
+    putNonNull(payload, "current_resource_id", interaction.currentResourceId());
+    return payload;
+  }
+
+  private void putNonBlank(Map<String, Object> target, String key, String value) {
+    if (value != null && !value.isBlank()) {
+      target.put(key, value);
+    }
+  }
+
+  private void putNonNull(Map<String, Object> target, String key, Object value) {
+    if (value != null) {
+      target.put(key, value);
+    }
+  }
+
   private IntentRouteResponse fallbackRouteResponse(String message) {
     return new IntentRouteResponse(
         "ASK",
@@ -224,15 +273,17 @@ public class IntentGraphClient {
         null,
         "ask",
         List.of("ASK"),
-        false,
-        "",
+        true,
+        "路由服务暂时不可用，请稍后重试。",
         "generative",
-        "answer",
-        "graph_unavailable");
+        "clarification",
+        "graph_unavailable",
+        null);
   }
 
   private IntentRouteResponse graphRouteResponse(IntentGraphResponse graph) {
     String intent = graph.intent();
+    boolean legacyResponse = graph.routeDecision() == null;
     return new IntentRouteResponse(
         intent,
         graph.kcCodes() != null ? graph.kcCodes() : List.of(),
@@ -246,11 +297,14 @@ public class IntentGraphClient {
         graph.candidateIntents() != null && !graph.candidateIntents().isEmpty()
             ? graph.candidateIntents()
             : List.of(intent),
-        graph.needsClarification() != null && graph.needsClarification(),
-        graph.clarificationPrompt() != null ? graph.clarificationPrompt() : "",
+        legacyResponse || (graph.needsClarification() != null && graph.needsClarification()),
+        legacyResponse
+            ? "路由服务版本尚未提供受审计决策，请刷新后重试。"
+            : graph.clarificationPrompt() != null ? graph.clarificationPrompt() : "",
         nonBlank(graph.riskClass(), riskClassFor(intent)),
-        nonBlank(graph.renderMode(), renderModeFor(intent)),
-        nonBlank(graph.reasonCode(), "legacy_response"));
+        legacyResponse ? "clarification" : nonBlank(graph.renderMode(), renderModeFor(intent)),
+        legacyResponse ? "legacy_response" : nonBlank(graph.reasonCode(), "fallback"),
+        graph.routeDecision());
   }
 
   private String namespaceFor(String intent) {

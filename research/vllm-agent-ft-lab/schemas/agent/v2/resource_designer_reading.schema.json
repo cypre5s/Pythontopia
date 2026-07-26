@@ -1,0 +1,45 @@
+{
+  "$defs": {
+    "ReadingItemIR": {
+      "properties": {
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "summary_md": {
+          "maxLength": 800,
+          "minLength": 10,
+          "title": "Summary Md",
+          "type": "string"
+        }
+      },
+      "required": [
+        "summary_md"
+      ],
+      "title": "ReadingItemIR",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "items": {
+      "items": {
+        "$ref": "#/$defs/ReadingItemIR"
+      },
+      "maxItems": 4,
+      "minItems": 2,
+      "title": "Items",
+      "type": "array"
+    }
+  },
+  "required": [
+    "items"
+  ],
+  "title": "ResourceDesignerAgent.reading",
+  "type": "object",
+  "x-adapter-eligible": true,
+  "x-product-contract": "semantic-ir-evidence-bound",
+  "x-schema-version": "agent-schema-v2"
+}

@@ -12,6 +12,9 @@ from fastapi.testclient import TestClient
 
 from pythontopia_graph.llm.provider import LlmProvider, LlmResponse
 from pythontopia_graph.main import app
+from pythontopia_graph.nodes.evidence_fetcher import RagHit, StaticEvidenceFetcher
+from pythontopia_graph.routing.workshop_policy import compile_route_decision
+from pythontopia_graph.schemas.intent import IntentRouteRequest
 
 
 class StubProvider(LlmProvider):
@@ -150,3 +153,62 @@ def test_orchestrator_followup_reuses_stored_plan_without_dispatch() -> None:
     assert "dispatch." not in text
 
     del app.state.llm_provider
+
+
+def test_compound_orchestrator_stream_emits_task_plan_and_incremental_results() -> None:
+    app.state.llm_provider = StubProvider([], reply="总结和练习已经协同完成。")
+    app.state.evidence_fetcher = StaticEvidenceFetcher(
+        [
+            RagHit(
+                chunk_id="compound-route-c1",
+                page_id=101,
+                page_no=12,
+                chapter_id=3,
+                kc_codes=["PY43-KC-001"],
+                text="for 循环用于按顺序遍历可迭代对象。",
+                score=0.81,
+            )
+        ]
+    )
+    # 生产进程未预加载 KC 集合时，请求内的课程索引仍是本轮证据接地的权威边界。
+    app.state.valid_kc_codes = set()
+    client = TestClient(app)
+    route = compile_route_decision(
+        IntentRouteRequest(
+            message="总结循环课件，然后根据总结出三道练习",
+            manual_kc_codes=["PY43-KC-001"],
+        ),
+        intent="HANDOUT",
+        secondary_intent="PRACTICE",
+        confidence=0.94,
+        needs_clarification=False,
+        clarification_prompt="",
+        render_mode="resource",
+    )
+    body = {
+        "user_id": 1,
+        "session_id": "route-compound-task-plan",
+        "user_message": "总结循环课件，然后根据总结出三道练习",
+        "recent_kc_codes": ["PY43-KC-001"],
+        "course_kc_index": ["PY43-KC-001"],
+        "route_decision": route.model_dump(mode="json"),
+    }
+
+    response = client.post("/agents/orchestrator/turn/stream", json=body)
+
+    assert response.status_code == 200
+    text = response.text
+    assert "event: RUN_FINISHED" in text
+    assert '"topology": "SEQUENTIAL"' in text
+    assert '"task_plan"' in text
+    assert '"status": "COMPLETED"' in text
+    assert '"name": "task_step_result"' in text
+    assert '"tool_name": "HANDOUT"' in text
+    assert '"tool_name": "PRACTICE"' in text
+    assert text.index('"tool_name": "HANDOUT"') < text.index('"tool_name": "PRACTICE"')
+    assert "Unknown KC" not in text
+    assert "event: RUN_ERROR" not in text
+
+    del app.state.llm_provider
+    del app.state.evidence_fetcher
+    del app.state.valid_kc_codes

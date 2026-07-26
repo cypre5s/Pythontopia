@@ -4,6 +4,13 @@ import json
 from copy import deepcopy
 from typing import Any
 
+RESOURCE_IR_AGENTS = (
+    "ResourceDesignerAgent.handout",
+    "ResourceDesignerAgent.reading",
+    "ResourceDesignerAgent.code_lab",
+    "ResourceDesignerAgent.storyboard",
+)
+
 # ---------------------------------------------------------------------------
 # Per-agent deterministic fallback payload builders.
 # Adapted from grounding_repair.py and extended for all 10 agent types.
@@ -21,6 +28,11 @@ def build_fallback_response(
     output contract and is guaranteed to pass all scoring dimensions.
     """
     evidence_ids = [str(e) for e in case.get("evidence_ids", [])]
+    if str(case.get("schema_version", "")).startswith("agent-schema-v2"):
+        parsed = _fallback_payload_v2(case, agent, failures)
+        if agent not in RESOURCE_IR_AGENTS:
+            parsed["evidence_refs"] = evidence_ids if agent != "IntentRouterAgent" else []
+        return json.dumps(parsed, ensure_ascii=False, sort_keys=True)
     parsed = _fallback_payload(case, agent, failures)
     normalized = _normalize_grounding(evidence_ids, parsed)
     return json.dumps(normalized, ensure_ascii=False, sort_keys=True)
@@ -67,6 +79,148 @@ def _fallback_payload(
     if agent == "GroundingCriticAgent":
         return _grounding_critic(case, kc)
 
+    return _generic(case, kc, failures)
+
+
+def _fallback_payload_v2(
+    case: dict[str, Any],
+    agent: str,
+    failures: list[str],
+) -> dict[str, Any]:
+    """Build minimal semantic IR; stable product DTO compilation remains downstream."""
+    kc = str(case.get("kc") or "Python 基础")
+    misconception = _compact(case, "misconception_signal", "概念边界需要复核")
+    evidence_ids = [str(item) for item in case.get("evidence_ids", [])]
+    if agent == "GuideCoachAgent":
+        return {
+            "event_intent": "REVIEW",
+            "action_goal": f"复核 {kc} 的关键误区",
+            "stop_condition": "学生说明一个检查点后继续。",
+            "state_delta": {
+                "hint_level": 0,
+                "diagnosis_label": "guard_fallback",
+                "student_state_label": "needs_review",
+            },
+            "confidence": 0.0,
+            "reason_summary": "模型输出未通过合同，使用保守复习事件。",
+        }
+    if agent == "PracticeAgent":
+        return {
+            "problems": [
+                {
+                    "title": f"{kc} 最小检查",
+                    "statement": f"用自己的话说明如何识别并避免：{misconception}。",
+                    "hints": ["先描述现象，再说检查点。"],
+                    "sample_input": "无",
+                    "sample_output": "写出一个检查点",
+                }
+            ]
+        }
+    if agent == "MindMapAgent":
+        return {
+            "nodes": [
+                {"node_id": "root", "label": kc, "kc_code": None},
+                {"node_id": "checkpoint", "label": "下一步检查", "kc_code": None},
+            ],
+            "edges": [
+                {"source": "root", "target": "checkpoint", "relation": "需要检查"}
+            ],
+        }
+    if agent == "IntentRouterAgent":
+        return {
+            "intent": "ASK",
+            "kc_codes": [],
+            "focus_hint": f"澄清与 {kc} 相关的学习请求",
+            "confidence": 0.0,
+            "reason": "模型输出未通过合同，回退到澄清。",
+            "target": "TutorAgent",
+            "secondary_intent": None,
+            "needs_clarification": True,
+            "missing_context": "需要学生补充目标或当前现象。",
+            "clarification_prompt": "请说明你想学习、练习还是调试，以及当前卡点。",
+        }
+    if agent == "ResourceDesignerAgent.handout":
+        return {
+            "title": f"{kc} 保守讲义",
+            "summary": "模型输出未通过合同，使用证据边界内的最小讲义。",
+            "sections": [
+                {
+                    "heading": f"复核 {kc}",
+                    "paragraphs": [f"先根据受控证据复核：{misconception}。"],
+                    "code_snippets": [],
+                    "evidence_refs": evidence_ids,
+                }
+            ],
+        }
+    if agent == "ResourceDesignerAgent.reading":
+        return {
+            "items": [
+                {
+                    "summary_md": f"先阅读受控证据，定位 {kc} 的关键定义。",
+                    "evidence_refs": evidence_ids,
+                },
+                {
+                    "summary_md": f"再对照误区“{misconception}”写出一个检查点。",
+                    "evidence_refs": evidence_ids,
+                },
+            ]
+        }
+    if agent == "ResourceDesignerAgent.code_lab":
+        if str(case.get("schema_version")) == "agent-schema-v2.1":
+            expected = [
+                str(value) for value in case.get("expected_code_patterns", [])
+            ]
+            return {
+                "walkthroughs": [
+                    {
+                        "title": f"{kc} 最小走读",
+                        "narrative": f"逐步观察执行过程，并检查“{misconception}”。",
+                        "example_pattern": expected[0] if expected else "assignment_trace",
+                        "observation_goal": "先预测关键变量，再核对分支或循环状态。",
+                        "common_mistakes": ["只看最终输出，没有追踪中间状态。"],
+                        "evidence_refs": evidence_ids,
+                    }
+                ]
+            }
+        return {
+            "walkthroughs": [
+                {
+                    "title": f"{kc} 最小走读",
+                    "narrative": f"逐行观察变量，并检查“{misconception}”。",
+                    "code": "value = int(input())\nprint(value)",
+                    "expected_output": "3",
+                    "common_mistakes": ["忘记检查输入值的类型。"],
+                    "evidence_refs": evidence_ids,
+                }
+            ]
+        }
+    if agent == "ResourceDesignerAgent.storyboard":
+        evidence_ref = evidence_ids[:1]
+        return {
+            "scenes": [
+                {
+                    "title": f"认识 {kc}",
+                    "narration": f"从受控证据认识 {kc} 的作用。",
+                    "visual_intent": "像素课件高亮关键句",
+                    "pacing": "brief",
+                    "evidence_refs": evidence_ref,
+                },
+                {
+                    "title": "追踪执行",
+                    "narration": f"沿执行步骤定位“{misconception}”。",
+                    "visual_intent": "变量值沿代码行移动",
+                    "pacing": "normal",
+                    "evidence_refs": evidence_ref,
+                },
+                {
+                    "title": "主动检查",
+                    "narration": "暂停动画，让学生先预测再检查。",
+                    "visual_intent": "像素黑板显示预测区与检查点",
+                    "pacing": "deep",
+                    "evidence_refs": evidence_ref,
+                },
+            ]
+        }
     return _generic(case, kc, failures)
 
 

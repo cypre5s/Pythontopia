@@ -1,0 +1,1 @@
+{"$id":"agent-schema-v1/IntentRouterAgent","title":"IntentRouterAgent","type":"object","properties":{"intent":{"type":"string"},"target_agent":{"type":"string"},"required_tools":{"type":"array"},"confidence":{"type":"number"},"reason":{"type":"string"}},"required":["intent","target_agent","required_tools","confidence","reason"],"additionalProperties":true}

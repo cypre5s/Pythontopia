@@ -179,7 +179,7 @@
 ### Task 12: Completion audit
 
 **Files:**
-- Update: `todo.md` only to append an implementation-status section if it does not overwrite the original report
+- Update: `todo.md` (moved to `research/vllm-agent-ft-lab/docs/finetuning-pain-points-report-2026-07-16.md`) only to append an implementation-status section if it does not overwrite the original report
 - Update: `research/vllm-agent-ft-lab/docs/rsage-experiment-log-2026-07-16.md`
 
 **Steps:**

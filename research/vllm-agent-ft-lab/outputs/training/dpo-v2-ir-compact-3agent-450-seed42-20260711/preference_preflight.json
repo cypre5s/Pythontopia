@@ -1,0 +1,72 @@
+{
+  "changed_variables": [
+    "preference_dataset"
+  ],
+  "dataset_sha256": {
+    "heldout": "0518db5c84623f4f69b048f5af0bf803c2fce7b6da0b7d978d0444f207e3203d",
+    "train": "7298a38e010e6380025a8f294ea8e5ea2794cec36ec20133efbc6f4e72d51846"
+  },
+  "duplicate_id_count": 0,
+  "duplicate_pair_count": 0,
+  "duplicate_prompt_count": 0,
+  "heldout_count": 45,
+  "identical_chosen_rejected_count": 0,
+  "identical_chosen_rejected_ids": [],
+  "max_seq_length": 512,
+  "one_variable_only": true,
+  "passed": true,
+  "protected_eval_overlap_count": 0,
+  "protected_eval_overlap_ids": [],
+  "token_length": {
+    "longest_examples": [
+      {
+        "id": "v2-pref-0400-eval5000-new_student_expression-0104-domain-3104-guidecoachagent-c4-beginner-teacher_assignment_context",
+        "tokens": 415
+      },
+      {
+        "id": "v2-pref-0064-eval5000-new_student_expression-1004-domain-4004-guidecoachagent-c1-beginner-teacher_assignment_context",
+        "tokens": 413
+      },
+      {
+        "id": "v2-pref-0294-eval5000-new_student_expression-0799-domain-3799-mindmapagent-c6-beginner-reflection_after_failure",
+        "tokens": 410
+      },
+      {
+        "id": "v2-pref-0373-eval5000-new_student_expression-0504-domain-3504-guidecoachagent-c5-beginner-incomplete_error_paste",
+        "tokens": 410
+      },
+      {
+        "id": "v2-pref-0046-eval5000-new_student_expression-0884-domain-3884-guidecoachagent-c7-beginner-teacher_assignment_context",
+        "tokens": 409
+      },
+      {
+        "id": "v2-pref-0138-eval5000-new_student_expression-1159-domain-4159-mindmapagent-c2-beginner-reflection_after_failure",
+        "tokens": 409
+      },
+      {
+        "id": "v2-pref-0267-eval5000-new_student_expression-0449-domain-3449-mindmapagent-c6-beginner-fragmented_sentence",
+        "tokens": 409
+      },
+      {
+        "id": "v2-pref-0076-eval5000-new_student_expression-1064-domain-4064-guidecoachagent-c5-beginner-teacher_assignment_context",
+        "tokens": 408
+      },
+      {
+        "id": "v2-pref-0238-eval5000-new_question-0404-domain-0404-guidecoachagent-c6",
+        "tokens": 408
+      },
+      {
+        "id": "v2-pref-0427-eval5000-new_student_expression-0404-domain-3404-guidecoachagent-c3-beginner-teacher_assignment_context",
+        "tokens": 408
+      }
+    ],
+    "max": 415,
+    "mean": 383.23,
+    "overlength_count": 0,
+    "overlength_ids": []
+  },
+  "train_count": 405,
+  "train_heldout_prompt_overlap_count": 0,
+  "zero_label_count": 0,
+  "zero_label_ids": []
+}

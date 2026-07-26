@@ -7,13 +7,17 @@ provider 失败向上传播（fail-fast），绝不退化为自由对话。非 R
 
 from __future__ import annotations
 
-import json
-import re
 from typing import Any
 
+from pydantic import ValidationError
+
+from pythontopia_graph.contracts.semantic_ir import (
+    ContractCompiler,
+    ReflectionObservationIR,
+    ReflectionSemanticIR,
+)
 from pythontopia_graph.llm.provider import LlmProvider, LlmResponse
 from pythontopia_graph.schemas.reflection import (
-    Insight,
     ReflectionInput,
     ReflectionOutput,
 )
@@ -32,13 +36,6 @@ ALLOWED_DIMENSIONS: tuple[str, ...] = (
 MAX_INSIGHTS = 3
 
 
-def _strip_json_fence(text: str) -> str:
-    """剥离可选的 ```json … ``` 围栏后再 json.loads。"""
-
-    fence = re.match(r"^\s*```(?:json)?\s*(.+?)\s*```\s*$", text, re.DOTALL)
-    return fence.group(1) if fence else text
-
-
 class ReflectionAgent:
     """记忆流 → 学情洞察的 grounded 反思器；输出结构化 ReflectionOutput。"""
 
@@ -51,17 +48,33 @@ class ReflectionAgent:
         # 空记忆：直接返回空洞察，绝不触发 LLM（成本红线 + 无证据不臆测）。
         if not payload.memories:
             return ReflectionOutput(insights=[])
-        data = await self._chat_json(self._messages(payload))
-        allowed_ids = {mem.event_id for mem in payload.memories}
-        insights = self._parse_insights(data.get("insights"), allowed_ids)
-        return ReflectionOutput(insights=insights)
+        allowed_ids = [mem.event_id for mem in payload.memories]
+        data = await self._chat_json(
+            self._messages(payload),
+            guard_context={
+                "agent": self.AGENT_NAME,
+                "json_schema": ReflectionSemanticIR.model_json_schema(),
+                "evidence_ids": [f"event-{event_id}" for event_id in allowed_ids],
+                "evidence_fields": ["observations.*.evidence_refs"],
+                "allow_empty_evidence_collection": True,
+            },
+        )
+        return self._parse_observations(data.get("observations"), allowed_ids)
 
-    async def _chat_json(self, messages: list[dict[str, str]]) -> dict[str, Any]:
+    async def _chat_json(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        guard_context: dict[str, Any],
+    ) -> dict[str, Any]:
         # 仅吞 TypeError（chat 不支持 response_format/temperature 形参时回退）；
         # provider 真正失败（限流/欠费/网络）抛出的异常不捕获，向上传播 fail-fast。
         try:
             response = await self.provider.chat(
-                messages, response_format={"type": "json_object"}, temperature=0.2
+                messages,
+                response_format={"type": "json_object"},
+                temperature=0.2,
+                guard_context=guard_context,
             )
         except TypeError:
             try:
@@ -74,53 +87,48 @@ class ReflectionAgent:
     def _coerce_json(response: LlmResponse) -> dict[str, Any]:
         if response.content_json is not None:
             return response.content_json
-        if response.content_text:
-            try:
-                parsed = json.loads(_strip_json_fence(response.content_text))
-            except json.JSONDecodeError:
-                return {}
-            if isinstance(parsed, dict):
-                return parsed
         return {}
 
-    def _parse_insights(self, raw: Any, allowed_ids: set[int]) -> list[Insight]:
-        """逐条校验：schema（白名单 + 非空证据）+ 证据 id ⊆ 输入记忆；最多保留 3 条。"""
-
+    def _parse_observations(
+        self, raw: Any, allowed_ids: list[int]
+    ) -> ReflectionOutput:
+        """Validate each semantic observation and compile opaque event refs."""
         if not isinstance(raw, list):
-            return []
-        insights: list[Insight] = []
+            return ReflectionOutput(insights=[])
+        observations: list[ReflectionObservationIR] = []
         for item in raw:
             if not isinstance(item, dict):
                 continue
             try:
-                insight = Insight.model_validate(item)
-            except Exception:  # noqa: BLE001 - 非法维度/空证据由 schema 拦下，直接丢弃
+                observation = ReflectionObservationIR.model_validate(item)
+                ContractCompiler.compile_reflection(
+                    ReflectionSemanticIR(observations=[observation]),
+                    allowed_event_ids=allowed_ids,
+                )
+            except (ValidationError, ValueError):
                 continue
-            if not set(insight.evidence_event_ids).issubset(allowed_ids):
-                continue
-            insights.append(insight)
-            if len(insights) >= MAX_INSIGHTS:
+            observations.append(observation)
+            if len(observations) >= MAX_INSIGHTS:
                 break
-        return insights
+        return ContractCompiler.compile_reflection(
+            ReflectionSemanticIR(observations=observations),
+            allowed_event_ids=allowed_ids,
+        )
 
     def _messages(self, payload: ReflectionInput) -> list[dict[str, str]]:
         allowed = ", ".join(ALLOWED_DIMENSIONS)
-        schema_hint = (
-            '{"insights":[{"text":"一句话学情洞察","dimension_key":"error_pattern",'
-            '"tags":["可选标签"],"evidence_event_ids":[整数],"confidence":0~1}]}'
-        )
         system = (
             "你是 Pythontopia 学情反思器，只输出一个 JSON 对象，不要输出多余文字。"
             "基于下方真实学习记忆条目，综合 1-3 条关于该生学习模式的洞察。"
-            f"严格遵循结构：{schema_hint}。"
-            "每条洞察的 evidence_event_ids 必须引用下方记忆里出现过的 event_id，"
-            "不得编造或引用不存在的 event_id；"
-            f"dimension_key 只能取其一：{allowed}；"
-            '若证据不足或无法得出可靠洞察，返回 {"insights":[]}；'
+            "输出 ReflectionSemanticIR：observations 中每项只含 claim、dimension_intent、"
+            "tags、evidence_refs、confidence，不要生成产品 DTO 或真实 event_id。"
+            "每条观察的 evidence_refs 必须使用下方提供的 event-N 引用，不能编造；"
+            f"dimension_intent 对应维度只能取其一：{allowed.upper()}；"
+            '若证据不足或无法得出可靠洞察，返回 {"observations":[]}；'
             "严禁输出题目答案、可直接提交的完整代码答案或课件页码。"
         )
         memory_lines = "\n".join(
-            f"event_id={mem.event_id} type={mem.event_type} "
+            f"evidence_ref=event-{mem.event_id} type={mem.event_type} "
             f"importance={mem.importance} kc={','.join(mem.kc_codes)} "
             f"time={mem.created_at} summary={mem.summary}"
             for mem in payload.memories
@@ -133,6 +141,6 @@ class ReflectionAgent:
             },
             {
                 "role": "user",
-                "content": "请综合上述记忆，输出引用了 event_id 的学情洞察 JSON。",
+                "content": "请综合上述记忆，输出引用 event-N 的学情观察 IR。",
             },
         ]

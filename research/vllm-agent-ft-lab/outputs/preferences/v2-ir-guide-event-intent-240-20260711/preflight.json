@@ -1,0 +1,72 @@
+{
+  "changed_variables": [
+    "preference_dataset"
+  ],
+  "dataset_sha256": {
+    "heldout": "c37a9f4de64ea06c72ead825fb91da563398ef13b58266d63d517f7c6a91222b",
+    "train": "bfcf64a4b1d1591043d920f3444c4ec8a0dc45976982b72a4b405a53c3a30a39"
+  },
+  "duplicate_id_count": 0,
+  "duplicate_pair_count": 0,
+  "duplicate_prompt_count": 0,
+  "heldout_count": 24,
+  "identical_chosen_rejected_count": 0,
+  "identical_chosen_rejected_ids": [],
+  "max_seq_length": 512,
+  "one_variable_only": true,
+  "passed": true,
+  "protected_eval_overlap_count": 0,
+  "protected_eval_overlap_ids": [],
+  "token_length": {
+    "longest_examples": [
+      {
+        "id": "v2-pref-0080-eval5000-new_question-0404-domain-0404-guidecoachagent-c6",
+        "tokens": 365
+      },
+      {
+        "id": "v2-pref-0134-eval5000-new_student_expression-0104-domain-3104-guidecoachagent-c4-beginner-teacher_assignment_context",
+        "tokens": 363
+      },
+      {
+        "id": "v2-pref-0170-eval5000-new_student_expression-0464-domain-3464-guidecoachagent-c7-beginner-teacher_assignment_context",
+        "tokens": 361
+      },
+      {
+        "id": "v2-pref-0152-eval5000-new_question-0824-domain-0824-guidecoachagent-c6",
+        "tokens": 360
+      },
+      {
+        "id": "v2-pref-0230-eval5000-new_question-0584-domain-0584-guidecoachagent-c4",
+        "tokens": 359
+      },
+      {
+        "id": "v2-pref-0002-eval5000-new_question-1064-domain-1064-guidecoachagent-c1",
+        "tokens": 358
+      },
+      {
+        "id": "v2-pref-0022-eval5000-new_student_expression-1004-domain-4004-guidecoachagent-c1-beginner-teacher_assignment_context",
+        "tokens": 358
+      },
+      {
+        "id": "v2-pref-0026-eval5000-new_student_expression-1064-domain-4064-guidecoachagent-c5-beginner-teacher_assignment_context",
+        "tokens": 358
+      },
+      {
+        "id": "v2-pref-0050-eval5000-new_question-1354-domain-1354-guidecoachagent-c4",
+        "tokens": 358
+      },
+      {
+        "id": "v2-pref-0217-eval5000-new_student_expression-1254-domain-4254-guidecoachagent-c6-beginner-mobile_short_message",
+        "tokens": 358
+      }
+    ],
+    "max": 365,
+    "mean": 347.73,
+    "overlength_count": 0,
+    "overlength_ids": []
+  },
+  "train_count": 216,
+  "train_heldout_prompt_overlap_count": 0,
+  "zero_label_count": 0,
+  "zero_label_ids": []
+}

@@ -1,0 +1,6 @@
+review_item_id,case_id,model_a,model_b,legacy_rule_intent
+semantic-0001,v2-eval5000-new_chapter_slice-0034-domain-2034-guidecoachagent-c5,dpo_sft,champion,REVIEW
+semantic-0002,v2-eval5000-new_chapter_slice-0004-domain-2004-guidecoachagent-c3,champion,dpo_sft,REVIEW
+semantic-0003,v2-eval5000-new_chapter_slice-0044-domain-2044-guidecoachagent-c1,champion,dpo_sft,READ
+semantic-0004,v2-eval5000-new_chapter_slice-0024-domain-2024-guidecoachagent-c2,dpo_sft,champion,CHECK
+semantic-0005,v2-eval5000-new_chapter_slice-0014-domain-2014-guidecoachagent-c6,dpo_sft,champion,READ

@@ -4,8 +4,14 @@
 // SSE 事件：trace / token / result / error（与 useSseStream 既有契约一致）。
 // result 载荷是 Python OrchestratorResponse 的 model_dump（snake_case），故此处字段用 snake_case。
 
+import type {
+  WorkshopInteractionContextRef,
+  WorkshopRouteDecision,
+  WorkshopRouteTopology,
+} from "./intent";
+
 /** 规范学习闭环阶段：看 / 学 / 练 / 测。 */
-export type OrchestratorPhase = 'watch' | 'learn' | 'practice' | 'assess';
+export type OrchestratorPhase = "watch" | "learn" | "practice" | "assess";
 
 export interface OrchestratorPlanStep {
   id: string;
@@ -18,9 +24,32 @@ export interface OrchestratorPlanStep {
   /** 直达学习面板的简称：lecture/library/training/workshop/tutor/problems/examples/review。 */
   panel: string | null;
   /** 运行态：dispatch 中可达 'failed'（STATE_DELTA 实时进度）；result.plan 仅前四态。 */
-  status: 'pending' | 'active' | 'done' | 'skipped' | 'failed';
+  status: "pending" | "active" | "done" | "skipped" | "failed";
   /** phase=learn 时的资源类型（HANDOUT/MINDMAP/...）。 */
   resource_type: string | null;
+  /** Phase 2 TaskPlan 的受控工具名与依赖信息。 */
+  tool_name?: string | null;
+  depends_on?: string[];
+  input_refs?: string[];
+  output_schema?: string | null;
+  parallel_group?: string | null;
+  idempotency_key?: string | null;
+  on_failure?: "RETURN_PARTIAL" | "BLOCK_DEPENDENTS" | "REPLAN_ONCE";
+}
+
+/** Supervisor 编译出的唯一有界执行计划；直接复用 plan step，避免平行协议。 */
+export interface OrchestratorTaskPlan {
+  plan_id: string;
+  route_id: string;
+  topology: WorkshopRouteTopology;
+  steps: OrchestratorPlanStep[];
+  max_tool_calls: number;
+  max_calls_per_tool: number;
+  max_parallel_agents: number;
+  max_planning_depth: number;
+  max_replans: number;
+  replans_used: number;
+  status: "PENDING" | "RUNNING" | "PARTIAL" | "COMPLETED" | "FAILED";
 }
 
 export interface OrchestratorDispatchResult {
@@ -57,6 +86,7 @@ export interface OrchestratorResult {
   clarifying_question: string | null;
   needs_user_input: boolean;
   plan: OrchestratorPlanStep[];
+  task_plan?: OrchestratorTaskPlan | null;
   dispatch_results: OrchestratorDispatchResult[];
   /** 对话即画像：本轮抽取到的画像特征更新。 */
   profile_updates: OrchestratorProfileSignal[];
@@ -67,7 +97,7 @@ export interface OrchestratorResult {
 }
 
 export interface OrchestratorTurnMessage {
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   content: string;
 }
 
@@ -81,4 +111,9 @@ export interface OrchestratorTurnRequest {
   recentFailures?: string[];
   profileBrief?: string;
   courseKcCodes?: string[];
+  /** /api/intent/route 返回的完整权威决策与 Backend 签发令牌。 */
+  routeDecision?: WorkshopRouteDecision;
+  routeExecutionToken?: string;
+  /** 仅透传已获取的真实页面/提交引用，不由前端补造业务事实。 */
+  interaction?: WorkshopInteractionContextRef;
 }

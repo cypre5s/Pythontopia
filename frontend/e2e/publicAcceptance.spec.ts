@@ -69,9 +69,15 @@ function qaDir(): string {
 async function evidence(page: Page, name: string): Promise<void> {
   const dir = path.join(qaDir(), `public-acceptance-${RUN_STAMP}`);
   fs.mkdirSync(dir, { recursive: true });
+  const target = path.join(dir, `${name}.png`);
   await page
-    .screenshot({ path: path.join(dir, `${name}.png`), fullPage: false })
-    .catch(() => undefined);
+    .screenshot({ path: target, fullPage: false, timeout: 15_000 })
+    .catch((error: unknown) => {
+      test.info().annotations.push({
+        type: '截图证据跳过',
+        description: `${name}: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    });
 }
 
 async function gotoWithRetry(page: Page, pathOrUrl: string, scene: string): Promise<void> {

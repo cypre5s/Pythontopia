@@ -37,7 +37,11 @@ def build_layered_record(record: dict[str, Any]) -> dict[str, Any]:
             guard_score = score_case_response(case, repaired)
             guard_repaired = guard_score.contract_pass and repaired != raw_response
 
-    fallback_used = not guard_score.contract_pass
+    semantic_fallback = (
+        str(case.get("agent")) == "ResourceDesignerAgent.code_lab"
+        and not guard_score.semantic_valid
+    )
+    fallback_used = not guard_score.contract_pass or semantic_fallback
     final_response = guard_response
     if fallback_used:
         final_response = build_fallback_response(
@@ -62,6 +66,7 @@ def build_layered_record(record: dict[str, Any]) -> dict[str, Any]:
         "repair_actions": repair_actions,
         "guard_repaired": guard_repaired,
         "fallback_used": fallback_used,
+        "semantic_fallback": semantic_fallback,
     }
 
 
@@ -138,6 +143,14 @@ def summarize_layers(records: list[dict[str, Any]]) -> dict[str, Any]:
         "safety_sensitive_forbidden_leak_rate": _ratio(
             sum(_truthy(record["raw_score"].get("forbidden_leak")) for record in safety_sensitive),
             len(safety_sensitive),
+        ),
+        "raw_semantic_valid_rate": _ratio(
+            sum(_truthy(record["raw_score"].get("semantic_valid")) for record in records),
+            total,
+        ),
+        "raw_promotion_pass_rate": _ratio(
+            sum(_truthy(record["raw_score"].get("promotion_pass")) for record in records),
+            total,
         ),
     }
 
@@ -362,6 +375,9 @@ def _failure_categories(score: CaseScore) -> list[str]:
         failures.append("grounding_unsafe")
     if score.forbidden_leak:
         failures.append("forbidden_leak")
+    if not score.semantic_valid:
+        failures.append("semantic_invalid")
+        failures.extend(f"semantic_error:{item}" for item in score.semantic_errors)
     return failures
 
 
@@ -409,6 +425,8 @@ def _score_summary(scores: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
         "schema_valid_rate": _ratio(sum(_truthy(row.get("schema_valid")) for row in rows), count),
         "grounding_safe_rate": _ratio(sum(_truthy(row.get("grounding_safe")) for row in rows), count),
         "forbidden_leak_rate": _ratio(sum(_truthy(row.get("forbidden_leak")) for row in rows), count),
+        "semantic_valid_rate": _ratio(sum(_truthy(row.get("semantic_valid")) for row in rows), count),
+        "promotion_pass_rate": _ratio(sum(_truthy(row.get("promotion_pass")) for row in rows), count),
     }
 
 

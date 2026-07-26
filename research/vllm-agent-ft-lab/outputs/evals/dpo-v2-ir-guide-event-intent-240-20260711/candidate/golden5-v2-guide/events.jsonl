@@ -1,0 +1,10 @@
+{"agent": "GuideCoachAgent", "case_id": "v2-eval5000-new_chapter_slice-0004-domain-2004-guidecoachagent-c3", "event": "case_started", "fold": 0, "ts": "2026-07-11T14:02:31+00:00"}
+{"agent": "GuideCoachAgent", "case_id": "v2-eval5000-new_chapter_slice-0004-domain-2004-guidecoachagent-c3", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T14:02:50+00:00"}
+{"agent": "GuideCoachAgent", "case_id": "v2-eval5000-new_chapter_slice-0014-domain-2014-guidecoachagent-c6", "event": "case_started", "fold": 0, "ts": "2026-07-11T14:02:50+00:00"}
+{"agent": "GuideCoachAgent", "case_id": "v2-eval5000-new_chapter_slice-0014-domain-2014-guidecoachagent-c6", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T14:02:59+00:00"}
+{"agent": "GuideCoachAgent", "case_id": "v2-eval5000-new_chapter_slice-0024-domain-2024-guidecoachagent-c2", "event": "case_started", "fold": 0, "ts": "2026-07-11T14:02:59+00:00"}
+{"agent": "GuideCoachAgent", "case_id": "v2-eval5000-new_chapter_slice-0024-domain-2024-guidecoachagent-c2", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T14:03:08+00:00"}
+{"agent": "GuideCoachAgent", "case_id": "v2-eval5000-new_chapter_slice-0034-domain-2034-guidecoachagent-c5", "event": "case_started", "fold": 0, "ts": "2026-07-11T14:03:08+00:00"}
+{"agent": "GuideCoachAgent", "case_id": "v2-eval5000-new_chapter_slice-0034-domain-2034-guidecoachagent-c5", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T14:03:18+00:00"}
+{"agent": "GuideCoachAgent", "case_id": "v2-eval5000-new_chapter_slice-0044-domain-2044-guidecoachagent-c1", "event": "case_started", "fold": 0, "ts": "2026-07-11T14:03:18+00:00"}
+{"agent": "GuideCoachAgent", "case_id": "v2-eval5000-new_chapter_slice-0044-domain-2044-guidecoachagent-c1", "event": "case_finished", "fold": 0, "score": 1.0, "ts": "2026-07-11T14:03:27+00:00"}

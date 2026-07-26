@@ -234,6 +234,123 @@ class ResourceWorkshopServiceTest {
   }
 
   @Test
+  void createFailsClosedWhenSafetyResultIsMissing() {
+    ResourceProduceResponseDto base = successResponse();
+    when(graphClient.produce(any()))
+        .thenReturn(
+            new ResourceProduceResponseDto(
+                base.artifact(),
+                base.type(),
+                base.evidencePageIds(),
+                base.groundingResult(),
+                null,
+                base.graphTrace(),
+                "SUCCESS"));
+
+    assertThatThrownBy(
+            () ->
+                service.create(
+                    1L,
+                    new ResourceCreateRequest(
+                        List.of("PY43-KC-001"), ResourceType.HANDOUT, null)))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("安全审查");
+    verify(resourceRepository, Mockito.never())
+        .insert(anyLong(), anyLong(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+  }
+
+  @Test
+  void createFailsClosedWhenGroundingResultIsMissing() {
+    ResourceProduceResponseDto base = successResponse();
+    when(graphClient.produce(any()))
+        .thenReturn(
+            new ResourceProduceResponseDto(
+                base.artifact(),
+                base.type(),
+                base.evidencePageIds(),
+                null,
+                base.safetyResult(),
+                base.graphTrace(),
+                "SUCCESS"));
+
+    assertThatThrownBy(
+            () ->
+                service.create(
+                    1L,
+                    new ResourceCreateRequest(
+                        List.of("PY43-KC-001"), ResourceType.HANDOUT, null)))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("证据审查");
+    verify(resourceRepository, Mockito.never())
+        .insert(anyLong(), anyLong(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+  }
+
+  @Test
+  void createRejectsPartialWithoutExplicitNoEvidenceDisclosure() {
+    ResourceProduceResponseDto base = successResponse();
+    when(graphClient.produce(any()))
+        .thenReturn(
+            new ResourceProduceResponseDto(
+                base.artifact(),
+                base.type(),
+                base.evidencePageIds(),
+                base.groundingResult(),
+                base.safetyResult(),
+                base.graphTrace(),
+                "PARTIAL"));
+
+    assertThatThrownBy(
+            () ->
+                service.create(
+                    1L,
+                    new ResourceCreateRequest(
+                        List.of("PY43-KC-001"), ResourceType.HANDOUT, null)))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("未通过发布门禁");
+    verify(resourceRepository, Mockito.never())
+        .insert(anyLong(), anyLong(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+  }
+
+  @Test
+  void createAllowsExplicitNoEvidencePartialAndPersistsDisclosureFlag() {
+    ResourceProduceResponseDto base = successResponse();
+    when(graphClient.produce(any()))
+        .thenReturn(
+            new ResourceProduceResponseDto(
+                base.artifact(),
+                base.type(),
+                List.of(),
+                new ResourceProduceResponseDto.GroundingResultDto(
+                    true, List.of("NO_EVIDENCE"), true, false),
+                base.safetyResult(),
+                base.graphTrace(),
+                "PARTIAL"));
+
+    ResourceCreateResponse response =
+        service.create(
+            1L,
+            new ResourceCreateRequest(
+                List.of("PY43-KC-001"), ResourceType.HANDOUT, null));
+
+    assertThat(response.status()).isEqualTo("PARTIAL");
+    verify(resourceRepository)
+        .insert(
+            eq(1L),
+            eq(43L),
+            any(),
+            any(),
+            eq(ResourceType.HANDOUT),
+            any(),
+            any(),
+            any(),
+            eq(List.of()),
+            any(),
+            eq(ResourceStatusFlag.PASSED),
+            eq(ResourceStatusFlag.NO_EVIDENCE),
+            eq(42L));
+  }
+
+  @Test
   void consumePublishesResourceConsumedWithCappedDelta() {
     when(resourceRepository.findById(1L, 7L)).thenReturn(Optional.of(resource()));
 

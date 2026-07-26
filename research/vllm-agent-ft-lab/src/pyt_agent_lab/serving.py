@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .scoring import AGENT_SCHEMA
+from .schema_registry import SCHEMA_VERSION_V1, schema_for_agent
 
 
 @dataclass(frozen=True)
@@ -65,20 +66,15 @@ def build_vllm_lora_serve_command(config: VllmLoraServeConfig) -> list[str]:
     return command
 
 
-def build_agent_structured_json_extra_body(agent: str) -> dict[str, Any]:
-    schema = AGENT_SCHEMA.get(agent)
-    if schema is None:
-        raise ValueError(f"unknown agent schema: {agent}")
-    required = schema["required"]
-    json_schema = {
-        "type": "object",
-        "properties": {
-            key: {"type": _json_schema_type(expected_type)}
-            for key, expected_type in required.items()
-        },
-        "required": list(required),
-        "additionalProperties": True,
-    }
+def build_agent_structured_json_extra_body(
+    agent: str,
+    schema_version: str = SCHEMA_VERSION_V1,
+    *,
+    evidence_ids: list[str | int] | None = None,
+) -> dict[str, Any]:
+    json_schema = deepcopy(schema_for_agent(agent, schema_version))
+    if evidence_ids:
+        _bind_evidence_allowlist(json_schema, evidence_ids)
     return {
         "response_format": {
             "type": "json_schema",
@@ -91,15 +87,31 @@ def build_agent_structured_json_extra_body(agent: str) -> dict[str, Any]:
     }
 
 
-def _json_schema_type(expected_type: Any) -> str:
-    if expected_type is str:
-        return "string"
-    if expected_type is bool:
-        return "boolean"
-    if expected_type is list:
-        return "array"
-    if expected_type is dict:
-        return "object"
-    if expected_type in {int, float} or expected_type == (int, float):
-        return "number"
-    return "string"
+def _bind_evidence_allowlist(
+    node: Any, evidence_ids: list[str | int]
+) -> None:
+    """Specialize evidence arrays without changing the semantic IR contract.
+
+    The model still selects evidence; constrained decoding only prevents values
+    outside the request-local allowlist.  This is intentionally separate from
+    guard repair so inference-time gains remain observable.
+    """
+    if isinstance(node, dict):
+        properties = node.get("properties")
+        if isinstance(properties, dict):
+            for field in ("evidence_ids", "evidence_refs", "evidence_page_ids"):
+                value = properties.get(field)
+                if not isinstance(value, dict):
+                    continue
+                items = value.get("items")
+                if isinstance(items, dict):
+                    items["enum"] = list(dict.fromkeys(evidence_ids))
+                    value["minItems"] = max(1, int(value.get("minItems", 0)))
+                    required = node.setdefault("required", [])
+                    if isinstance(required, list) and field not in required:
+                        required.append(field)
+        for value in node.values():
+            _bind_evidence_allowlist(value, evidence_ids)
+    elif isinstance(node, list):
+        for value in node:
+            _bind_evidence_allowlist(value, evidence_ids)

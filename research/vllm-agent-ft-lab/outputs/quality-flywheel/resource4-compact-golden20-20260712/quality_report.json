@@ -1,0 +1,561 @@
+{
+  "auxiliary_metric": "score_mean",
+  "claims_policy": "Smoke, small heldout, and guard/fallback-repaired results are not evidence that a model reached 100%.",
+  "failure_matrices": {
+    "champion": {
+      "agent": {
+        "ResourceDesignerAgent.code_lab": {
+          "case_count": 5,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "schema_invalid": 5,
+            "schema_type_error:walkthroughs[0].code": 3,
+            "schema_type_error:walkthroughs[0].common_mistakes": 5
+          },
+          "failure_count": 5
+        },
+        "ResourceDesignerAgent.handout": {
+          "case_count": 5,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "json_invalid": 5,
+            "missing_schema_field:sections": 5,
+            "missing_schema_field:title": 5
+          },
+          "failure_count": 5
+        },
+        "ResourceDesignerAgent.reading": {
+          "case_count": 5,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "json_invalid": 5,
+            "missing_schema_field:items": 5
+          },
+          "failure_count": 5
+        },
+        "ResourceDesignerAgent.storyboard": {
+          "case_count": 5,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "schema_invalid": 5,
+            "schema_type_error:scenes": 5
+          },
+          "failure_count": 5
+        }
+      },
+      "beginner_noise": {
+        "clean": {
+          "case_count": 20,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "json_invalid": 10,
+            "missing_schema_field:items": 5,
+            "missing_schema_field:sections": 5,
+            "missing_schema_field:title": 5,
+            "schema_invalid": 10,
+            "schema_type_error:scenes": 5,
+            "schema_type_error:walkthroughs[0].code": 3,
+            "schema_type_error:walkthroughs[0].common_mistakes": 5
+          },
+          "failure_count": 20
+        }
+      },
+      "chapter": {
+        "1": {
+          "case_count": 4,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "json_invalid": 2,
+            "missing_schema_field:items": 1,
+            "missing_schema_field:sections": 1,
+            "missing_schema_field:title": 1,
+            "schema_invalid": 2,
+            "schema_type_error:scenes": 1,
+            "schema_type_error:walkthroughs[0].code": 1,
+            "schema_type_error:walkthroughs[0].common_mistakes": 1
+          },
+          "failure_count": 4
+        },
+        "3": {
+          "case_count": 4,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "json_invalid": 2,
+            "missing_schema_field:items": 1,
+            "missing_schema_field:sections": 1,
+            "missing_schema_field:title": 1,
+            "schema_invalid": 2,
+            "schema_type_error:scenes": 1,
+            "schema_type_error:walkthroughs[0].common_mistakes": 1
+          },
+          "failure_count": 4
+        },
+        "4": {
+          "case_count": 4,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "json_invalid": 2,
+            "missing_schema_field:items": 1,
+            "missing_schema_field:sections": 1,
+            "missing_schema_field:title": 1,
+            "schema_invalid": 2,
+            "schema_type_error:scenes": 1,
+            "schema_type_error:walkthroughs[0].common_mistakes": 1
+          },
+          "failure_count": 4
+        },
+        "6": {
+          "case_count": 4,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "json_invalid": 2,
+            "missing_schema_field:items": 1,
+            "missing_schema_field:sections": 1,
+            "missing_schema_field:title": 1,
+            "schema_invalid": 2,
+            "schema_type_error:scenes": 1,
+            "schema_type_error:walkthroughs[0].code": 1,
+            "schema_type_error:walkthroughs[0].common_mistakes": 1
+          },
+          "failure_count": 4
+        },
+        "7": {
+          "case_count": 4,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "json_invalid": 2,
+            "missing_schema_field:items": 1,
+            "missing_schema_field:sections": 1,
+            "missing_schema_field:title": 1,
+            "schema_invalid": 2,
+            "schema_type_error:scenes": 1,
+            "schema_type_error:walkthroughs[0].code": 1,
+            "schema_type_error:walkthroughs[0].common_mistakes": 1
+          },
+          "failure_count": 4
+        }
+      },
+      "evidence": {
+        "required": {
+          "case_count": 20,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "json_invalid": 10,
+            "missing_schema_field:items": 5,
+            "missing_schema_field:sections": 5,
+            "missing_schema_field:title": 5,
+            "schema_invalid": 10,
+            "schema_type_error:scenes": 5,
+            "schema_type_error:walkthroughs[0].code": 3,
+            "schema_type_error:walkthroughs[0].common_mistakes": 5
+          },
+          "failure_count": 20
+        }
+      },
+      "failure_category": {
+        "grounding_unsafe": 1,
+        "json_invalid": 10,
+        "missing_schema_field:items": 5,
+        "missing_schema_field:sections": 5,
+        "missing_schema_field:title": 5,
+        "schema_invalid": 10,
+        "schema_type_error:scenes": 5,
+        "schema_type_error:walkthroughs[0].code": 3,
+        "schema_type_error:walkthroughs[0].common_mistakes": 5
+      },
+      "missing_schema_field": {
+        "items": 5,
+        "sections": 5,
+        "title": 5
+      },
+      "safety": {
+        "standard": {
+          "case_count": 20,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "json_invalid": 10,
+            "missing_schema_field:items": 5,
+            "missing_schema_field:sections": 5,
+            "missing_schema_field:title": 5,
+            "schema_invalid": 10,
+            "schema_type_error:scenes": 5,
+            "schema_type_error:walkthroughs[0].code": 3,
+            "schema_type_error:walkthroughs[0].common_mistakes": 5
+          },
+          "failure_count": 20
+        }
+      },
+      "schema_type_error": {
+        "scenes": 5,
+        "walkthroughs[0].code": 3,
+        "walkthroughs[0].common_mistakes": 5
+      },
+      "web_input": {
+        "non_web": {
+          "case_count": 20,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "json_invalid": 10,
+            "missing_schema_field:items": 5,
+            "missing_schema_field:sections": 5,
+            "missing_schema_field:title": 5,
+            "schema_invalid": 10,
+            "schema_type_error:scenes": 5,
+            "schema_type_error:walkthroughs[0].code": 3,
+            "schema_type_error:walkthroughs[0].common_mistakes": 5
+          },
+          "failure_count": 20
+        }
+      }
+    },
+    "orpo_resource4": {
+      "agent": {
+        "ResourceDesignerAgent.code_lab": {
+          "case_count": 5,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "schema_invalid": 5,
+            "schema_type_error:walkthroughs[0].code": 2,
+            "schema_type_error:walkthroughs[0].common_mistakes": 3
+          },
+          "failure_count": 5
+        },
+        "ResourceDesignerAgent.handout": {
+          "case_count": 5,
+          "contract_pass_rate": 0.6,
+          "failure_categories": {
+            "json_invalid": 2,
+            "missing_schema_field:sections": 2,
+            "missing_schema_field:title": 2
+          },
+          "failure_count": 2
+        },
+        "ResourceDesignerAgent.reading": {
+          "case_count": 5,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "grounding_unsafe": 2,
+            "json_invalid": 5,
+            "missing_schema_field:items": 5
+          },
+          "failure_count": 5
+        },
+        "ResourceDesignerAgent.storyboard": {
+          "case_count": 5,
+          "contract_pass_rate": 0.2,
+          "failure_categories": {
+            "schema_invalid": 4,
+            "schema_type_error:scenes": 4
+          },
+          "failure_count": 4
+        }
+      },
+      "beginner_noise": {
+        "clean": {
+          "case_count": 20,
+          "contract_pass_rate": 0.2,
+          "failure_categories": {
+            "grounding_unsafe": 2,
+            "json_invalid": 7,
+            "missing_schema_field:items": 5,
+            "missing_schema_field:sections": 2,
+            "missing_schema_field:title": 2,
+            "schema_invalid": 9,
+            "schema_type_error:scenes": 4,
+            "schema_type_error:walkthroughs[0].code": 2,
+            "schema_type_error:walkthroughs[0].common_mistakes": 3
+          },
+          "failure_count": 16
+        }
+      },
+      "chapter": {
+        "1": {
+          "case_count": 4,
+          "contract_pass_rate": 0.25,
+          "failure_categories": {
+            "json_invalid": 1,
+            "missing_schema_field:items": 1,
+            "schema_invalid": 2,
+            "schema_type_error:scenes": 1,
+            "schema_type_error:walkthroughs[0].code": 1
+          },
+          "failure_count": 3
+        },
+        "3": {
+          "case_count": 4,
+          "contract_pass_rate": 0.25,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "json_invalid": 1,
+            "missing_schema_field:items": 1,
+            "schema_invalid": 2,
+            "schema_type_error:scenes": 1,
+            "schema_type_error:walkthroughs[0].common_mistakes": 1
+          },
+          "failure_count": 3
+        },
+        "4": {
+          "case_count": 4,
+          "contract_pass_rate": 0.0,
+          "failure_categories": {
+            "json_invalid": 2,
+            "missing_schema_field:items": 1,
+            "missing_schema_field:sections": 1,
+            "missing_schema_field:title": 1,
+            "schema_invalid": 2,
+            "schema_type_error:scenes": 1,
+            "schema_type_error:walkthroughs[0].common_mistakes": 1
+          },
+          "failure_count": 4
+        },
+        "6": {
+          "case_count": 4,
+          "contract_pass_rate": 0.25,
+          "failure_categories": {
+            "grounding_unsafe": 1,
+            "json_invalid": 1,
+            "missing_schema_field:items": 1,
+            "schema_invalid": 2,
+            "schema_type_error:scenes": 1,
+            "schema_type_error:walkthroughs[0].common_mistakes": 1
+          },
+          "failure_count": 3
+        },
+        "7": {
+          "case_count": 4,
+          "contract_pass_rate": 0.25,
+          "failure_categories": {
+            "json_invalid": 2,
+            "missing_schema_field:items": 1,
+            "missing_schema_field:sections": 1,
+            "missing_schema_field:title": 1,
+            "schema_invalid": 1,
+            "schema_type_error:walkthroughs[0].code": 1
+          },
+          "failure_count": 3
+        }
+      },
+      "evidence": {
+        "required": {
+          "case_count": 20,
+          "contract_pass_rate": 0.2,
+          "failure_categories": {
+            "grounding_unsafe": 2,
+            "json_invalid": 7,
+            "missing_schema_field:items": 5,
+            "missing_schema_field:sections": 2,
+            "missing_schema_field:title": 2,
+            "schema_invalid": 9,
+            "schema_type_error:scenes": 4,
+            "schema_type_error:walkthroughs[0].code": 2,
+            "schema_type_error:walkthroughs[0].common_mistakes": 3
+          },
+          "failure_count": 16
+        }
+      },
+      "failure_category": {
+        "grounding_unsafe": 2,
+        "json_invalid": 7,
+        "missing_schema_field:items": 5,
+        "missing_schema_field:sections": 2,
+        "missing_schema_field:title": 2,
+        "schema_invalid": 9,
+        "schema_type_error:scenes": 4,
+        "schema_type_error:walkthroughs[0].code": 2,
+        "schema_type_error:walkthroughs[0].common_mistakes": 3
+      },
+      "missing_schema_field": {
+        "items": 5,
+        "sections": 2,
+        "title": 2
+      },
+      "safety": {
+        "standard": {
+          "case_count": 20,
+          "contract_pass_rate": 0.2,
+          "failure_categories": {
+            "grounding_unsafe": 2,
+            "json_invalid": 7,
+            "missing_schema_field:items": 5,
+            "missing_schema_field:sections": 2,
+            "missing_schema_field:title": 2,
+            "schema_invalid": 9,
+            "schema_type_error:scenes": 4,
+            "schema_type_error:walkthroughs[0].code": 2,
+            "schema_type_error:walkthroughs[0].common_mistakes": 3
+          },
+          "failure_count": 16
+        }
+      },
+      "schema_type_error": {
+        "scenes": 4,
+        "walkthroughs[0].code": 2,
+        "walkthroughs[0].common_mistakes": 3
+      },
+      "web_input": {
+        "non_web": {
+          "case_count": 20,
+          "contract_pass_rate": 0.2,
+          "failure_categories": {
+            "grounding_unsafe": 2,
+            "json_invalid": 7,
+            "missing_schema_field:items": 5,
+            "missing_schema_field:sections": 2,
+            "missing_schema_field:title": 2,
+            "schema_invalid": 9,
+            "schema_type_error:scenes": 4,
+            "schema_type_error:walkthroughs[0].code": 2,
+            "schema_type_error:walkthroughs[0].common_mistakes": 3
+          },
+          "failure_count": 16
+        }
+      }
+    }
+  },
+  "models": {
+    "champion": {
+      "case_count": 20,
+      "critical_slices": {
+        "evidence_required": 0.0
+      },
+      "fallback_count": 20,
+      "fallback_rate": 1.0,
+      "final": {
+        "case_count": 20,
+        "contract_pass_rate": 1.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "promotion_pass_rate": 1.0,
+        "schema_valid_rate": 1.0,
+        "score_mean": 1.0,
+        "semantic_valid_rate": 1.0
+      },
+      "guard": {
+        "case_count": 20,
+        "contract_pass_rate": 0.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 0.95,
+        "json_valid_rate": 0.5,
+        "promotion_pass_rate": 0.0,
+        "schema_valid_rate": 0.0,
+        "score_mean": 0.7975,
+        "semantic_valid_rate": 1.0
+      },
+      "guard_repair_count": 0,
+      "guard_repair_rate": 0.0,
+      "guard_repair_rate_among_raw_failures": 0.0,
+      "layer_semantics": {
+        "final": "guard result or deterministic fallback replay; final 100% must not be attributed to the raw model",
+        "guard": "offline deterministic contract-repair replay; not a claim about historical production guard execution",
+        "raw": "observed model response"
+      },
+      "primary_metric": "contract_pass_rate",
+      "raw": {
+        "case_count": 20,
+        "contract_pass_rate": 0.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 0.95,
+        "json_valid_rate": 0.5,
+        "promotion_pass_rate": 0.0,
+        "schema_valid_rate": 0.0,
+        "score_mean": 0.7975,
+        "semantic_valid_rate": 1.0
+      },
+      "raw_promotion_pass_rate": 0.0,
+      "raw_semantic_valid_rate": 1.0,
+      "safety_sensitive_forbidden_leak_rate": 0.0
+    },
+    "orpo_resource4": {
+      "case_count": 20,
+      "critical_slices": {
+        "evidence_required": 0.2
+      },
+      "fallback_count": 16,
+      "fallback_rate": 0.8,
+      "final": {
+        "case_count": 20,
+        "contract_pass_rate": 1.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "promotion_pass_rate": 1.0,
+        "schema_valid_rate": 1.0,
+        "score_mean": 1.0,
+        "semantic_valid_rate": 1.0
+      },
+      "guard": {
+        "case_count": 20,
+        "contract_pass_rate": 0.2,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 0.9,
+        "json_valid_rate": 0.65,
+        "promotion_pass_rate": 0.2,
+        "schema_valid_rate": 0.2,
+        "score_mean": 0.83,
+        "semantic_valid_rate": 1.0
+      },
+      "guard_repair_count": 0,
+      "guard_repair_rate": 0.0,
+      "guard_repair_rate_among_raw_failures": 0.0,
+      "layer_semantics": {
+        "final": "guard result or deterministic fallback replay; final 100% must not be attributed to the raw model",
+        "guard": "offline deterministic contract-repair replay; not a claim about historical production guard execution",
+        "raw": "observed model response"
+      },
+      "primary_metric": "contract_pass_rate",
+      "raw": {
+        "case_count": 20,
+        "contract_pass_rate": 0.2,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 0.9,
+        "json_valid_rate": 0.65,
+        "promotion_pass_rate": 0.2,
+        "schema_valid_rate": 0.2,
+        "score_mean": 0.83,
+        "semantic_valid_rate": 1.0
+      },
+      "raw_promotion_pass_rate": 0.2,
+      "raw_semantic_valid_rate": 1.0,
+      "safety_sensitive_forbidden_leak_rate": 0.0
+    }
+  },
+  "paired_comparison": {
+    "case_count": 20,
+    "models": [
+      "champion",
+      "orpo_resource4"
+    ],
+    "pairwise": {
+      "champion_vs_orpo_resource4": {
+        "contract_ties": 16,
+        "full_ties": 12,
+        "left": "champion",
+        "left_wins": 0,
+        "ordering": "contract_pass_then_auxiliary_score",
+        "right": "orpo_resource4",
+        "right_wins": 8
+      }
+    }
+  },
+  "primary_metric": "contract_pass_rate",
+  "protocol": {
+    "cases_path": "cases/golden_adapter_20_v2_ir_resource4_compact.jsonl",
+    "cases_sha256": "261fee778ec007a23928c5cf97504acb0cb31fd5ddfebd20307754697732060c",
+    "max_tokens": "per_case.max_tokens",
+    "prompt_variant": "baseline",
+    "response_sha256": {
+      "champion": "0786df26dff3cf6af92147bcce14917b63792298d47fbc4e4643c92743e5b7c7",
+      "orpo_resource4": "55afbbd77d62eddec487b8ae96cdc609e8d3146e6eeeafcb54758e8638fbceff"
+    },
+    "seed": 42,
+    "temperature": 0.0,
+    "warning": "This manifest proves case identity and rescoring settings. It does not prove historical serve commands unless each source run saved its own immutable run manifest."
+  }
+}

@@ -3,9 +3,16 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from pydantic import ValidationError
+
 from pythontopia_graph.agents.personalization import (
     agent_strategy_messages,
     personalization_messages,
+)
+from pythontopia_graph.contracts.semantic_ir import (
+    ContractCompiler,
+    EvidenceBinder,
+    PracticeSemanticIR,
 )
 from pythontopia_graph.llm.provider import LlmProvider, apply_compiled_prompt
 from pythontopia_graph.nodes.evidence_fetcher import EvidenceBundle
@@ -46,8 +53,21 @@ class PracticeAgent:
         messages = apply_compiled_prompt(
             self._prompt(request, evidence, revision_notes), "practice_generate"
         )
-        response = await self.provider.chat(messages)
-        return self._build(request, response.content_json)
+        evidence_context = EvidenceBinder.bind(evidence)
+        response = await self.provider.chat(
+            messages,
+            guard_context={
+                "agent": self.AGENT_NAME,
+                "json_schema": PracticeSemanticIR.model_json_schema(),
+                "evidence_ids": evidence_context.allowed_ids,
+                "evidence_fields": ["evidence_refs"],
+            },
+        )
+        return self._build(
+            request,
+            response.content_json,
+            allowed_evidence_ids=evidence_context.allowed_ids,
+        )
 
     def _prompt(
         self,
@@ -59,7 +79,9 @@ class PracticeAgent:
             {
                 "role": "system",
                 "content": (
-                    "你是 PracticeAgent，输出 JSON，1-3 道题。每题必须包含 sample_io。"
+                    "你是 PracticeAgent，输出符合 PracticeSemanticIR 的 JSON，含 1-3 道题。"
+                    "每题仅输出 title、statement、hints、sample_input、sample_output。"
+                    "evidence_refs 只能引用 allowed_evidence 中的 evidence_id。"
                     "严禁返回 hidden_test_cases / answer_key / secret_test。"
                     "禁止给出完整答案；如需提示请放 hints 字段。"
                 ),
@@ -79,12 +101,25 @@ class PracticeAgent:
                         f"; 目标难度: {request.target_difficulty}（低掌握→basic建信心，高掌握→hard促成长）"
                         if request.target_difficulty else ""
                     )
+                    + "; allowed_evidence: "
+                    + json.dumps(
+                        EvidenceBinder.bind(evidence).model_dump(mode="json"),
+                        ensure_ascii=False,
+                    )
                 ),
             },
         ]
 
-    def _build(self, request: ResourceProduceRequest, content_json: dict[str, Any] | None) -> ResourceDraft:
-        practice = self._build_content(request, content_json)
+    def _build(
+        self,
+        request: ResourceProduceRequest,
+        content_json: dict[str, Any] | None,
+        *,
+        allowed_evidence_ids: list[str] | None = None,
+    ) -> ResourceDraft:
+        practice = self._build_content(
+            request, content_json, allowed_evidence_ids=allowed_evidence_ids or []
+        )
         return ResourceDraft(
             title=f"练习题：{','.join(request.kc_codes[:3])}",
             summary=f"针对自评等级 {request.profile_snapshot.python_self_rated_level} 的练习",
@@ -93,8 +128,23 @@ class PracticeAgent:
         )
 
     def _build_content(
-        self, request: ResourceProduceRequest, content_json: dict[str, Any] | None
+        self,
+        request: ResourceProduceRequest,
+        content_json: dict[str, Any] | None,
+        *,
+        allowed_evidence_ids: list[str],
     ) -> PracticeContent:
+        if isinstance(content_json, dict):
+            try:
+                semantic_ir = PracticeSemanticIR.model_validate(content_json)
+                return ContractCompiler.compile_practice(
+                    semantic_ir,
+                    request=request,
+                    difficulty=self._difficulty_for(request),  # type: ignore[arg-type]
+                    allowed_evidence_ids=allowed_evidence_ids,
+                )
+            except (ValidationError, ValueError):
+                pass
         if isinstance(content_json, dict) and "practice" in content_json:
             try:
                 practice = PracticeContent.model_validate(content_json["practice"])

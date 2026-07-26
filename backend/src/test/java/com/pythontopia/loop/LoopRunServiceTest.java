@@ -8,8 +8,11 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.pythontopia.agent.runtime.AgentRuntimeEventRepository;
 import com.pythontopia.agent.runtime.AgentRuntimeEventService;
 import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.intent.RouteExecutionTokenSignerTest;
 import com.pythontopia.loop.dto.LoopRunDto;
 import com.pythontopia.loop.dto.LoopRunRecordRequest;
+import com.pythontopia.orchestrator.OrchestratorRunRecorder;
+import com.pythontopia.orchestrator.dto.OrchestratorTurnRequest;
 import java.sql.Array;
 import java.util.List;
 import org.flywaydb.core.Flyway;
@@ -695,6 +698,79 @@ class LoopRunServiceTest {
     assertThat(debugReplay.reason()).isEqualTo("failed submission -> Bug Mine -> retry/recovery");
     assertThat(debugReplay.steps()).extracting(LoopRuntimeService.ReplayStep::stepIndex)
         .containsExactly(2);
+  }
+
+  @Test
+  void orchestratorRecorderPersistsDiscoverableAndReplayableTaskPlanInRealDatabase() {
+    OrchestratorRunRecorder recorder =
+        new OrchestratorRunRecorder(service, runtimeService, objectMapper);
+    var decision = RouteExecutionTokenSignerTest.multiDecision("route_0123456789abcdef");
+    OrchestratorTurnRequest request =
+        new OrchestratorTurnRequest(
+            "先总结再出题",
+            "phase2-real-db",
+            null,
+            null,
+            List.of("PY43-KC-012"),
+            null,
+            null,
+            List.of("PY43-KC-012"),
+            decision,
+            "signed-token",
+            null);
+
+    OrchestratorRunRecorder.RecordingHandle handle =
+        recorder.open(userId, request, "phase2-real-db");
+    assertThat(handle).isNotNull();
+    assertThat(handle.runtimeEventData()).contains("runtime_run", handle.loopRunId().toString());
+
+    handle
+        .onEvent()
+        .accept(
+            "STATE_DELTA",
+            """
+            {"delta":{"plan_steps":[
+              {"id":"step-summary","agent":"HandoutAgent","tool_name":"HANDOUT","status":"active"},
+              {"id":"step-practice","agent":"PracticeAgent","tool_name":"PRACTICE","status":"pending"}
+            ]}}
+            """);
+    handle
+        .onEvent()
+        .accept(
+            "CUSTOM",
+            """
+            {"name":"task_step_result","value":{"step_id":"step-summary","agent":"HandoutAgent",
+            "tool_name":"HANDOUT","status":"COMPLETED","summary":"总结完成","attempt":1,
+            "artifact":{"title":"循环总结","evidence_page_ids":[22]}}}
+            """);
+    handle
+        .onEvent()
+        .accept(
+            "RUN_FINISHED",
+            """
+            {"result":{"task_plan":{"plan_id":"plan_0123456789abcdef",
+            "route_id":"route_0123456789abcdef","topology":"SEQUENTIAL","status":"COMPLETED",
+            "steps":[
+              {"id":"step-summary","agent":"HandoutAgent","tool_name":"HANDOUT","status":"done"},
+              {"id":"step-practice","agent":"PracticeAgent","tool_name":"PRACTICE","status":"done"}
+            ]},"dispatch_results":[
+              {"step_id":"step-summary","agent":"HandoutAgent","ok":true,"summary":"总结完成",
+              "artifact":{"title":"循环总结","evidence_page_ids":[22]}},
+              {"step_id":"step-practice","agent":"PracticeAgent","ok":true,"summary":"练习完成",
+              "artifact":{"count":3,"evidence_page_ids":[22]}}
+            ]}}
+            """);
+
+    var snapshot = runtimeService.restoreSnapshot(userId, handle.loopRunId());
+    var replay = runtimeService.restoreReplayPlan(userId, handle.loopRunId());
+    assertThat(snapshot.checkpoints()).hasSize(2);
+    assertThat(snapshot.agentRuns()).hasSize(2);
+    assertThat(snapshot.toolCalls()).hasSize(2);
+    assertThat(replay.loopType()).isEqualTo("RESOURCE");
+    assertThat(replay.resumeCursor()).isEqualTo("step-practice");
+    assertThat(replay.nextAction()).isEqualTo("review_result");
+    assertThat(replay.evidenceRefs()).contains("route:route_0123456789abcdef", "22");
+    assertThat(replay.replayable()).isTrue();
   }
 
   @Test

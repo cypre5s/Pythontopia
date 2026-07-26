@@ -14,10 +14,13 @@ from pythontopia_graph.nodes.evidence_fetcher import (
     RagHit,
     StaticEvidenceFetcher,
 )
-from pythontopia_graph.schemas.orchestrator import (
-    OrchestratorRequest,
-    PlanStep,
+from pythontopia_graph.schemas.intent import (
+    LearnerRecentResource,
+    LearnerRecentSubmission,
+    LearnerRoutingContext,
+    WorkshopInteractionContextRef,
 )
+from pythontopia_graph.schemas.orchestrator import OrchestratorRequest, PlanStep
 from pythontopia_graph.tools.harness import reset_harness_state
 
 
@@ -149,19 +152,54 @@ async def test_dispatcher_debug_agent_returns_deterministic_result() -> None:
 
 
 @pytest.mark.asyncio
+async def test_dispatcher_debug_agent_uses_backend_verified_submission_evidence() -> None:
+    provider = StubProvider([])
+    context = WorkshopInteractionContextRef(
+        current_problem_id=41,
+        current_code="for i in range(n + 1):\n    total += i",
+        latest_submission_id=901,
+        error_text="WA: expected 10, got 15",
+    )
+    dispatcher = AgentDispatcher(
+        DispatchContext(
+            provider=provider,
+            evidence_fetcher=StaticEvidenceFetcher([]),
+            valid_kc_codes={"PY43-KC-001"},
+            debug_context=context,
+        )
+    )
+    step = PlanStep(
+        id="s-debug-real",
+        phase="practice",
+        title="诊断失败提交",
+        detail="先诊断再补练",
+        agent="DebugAgent",
+        kc_codes=["PY43-KC-001"],
+        tool_name="FIX_BUG",
+    )
+
+    result = await dispatcher.dispatch(step, user_id=7)
+
+    assert result.ok is True
+    assert result.artifact is not None
+    assert result.artifact["kind"] == "verified_debug_diagnosis"
+    assert result.artifact["submission_id"] == 901
+    assert result.artifact["counter_example_available"] is False
+    assert "失败提交 #901" in result.summary
+
+
+@pytest.mark.asyncio
 async def test_dispatcher_resource_designer_without_type_falls_back() -> None:
     """ResourceDesignerAgent 有 resource_type 时真生成，无类型时降级。"""
     handout_payload = {
         "title": "for 循环讲义",
-        "handout": {
-            "sections": [
-                {
-                    "heading": "for 循环",
-                    "paragraphs": ["for 循环用于遍历可迭代对象。"],
-                    "page_refs": [{"page_id": 101, "page_no": 12, "chapter_id": 3}],
-                }
-            ]
-        },
+        "summary": "用课件证据解释 for 循环。",
+        "sections": [{
+            "heading": "for 循环",
+            "paragraphs": ["for 循环用于遍历可迭代对象。"],
+            "code_snippets": [],
+            "evidence_refs": ["page-101"],
+        }],
     }
     provider = StubProvider([handout_payload])
     ctx = DispatchContext(
@@ -194,15 +232,12 @@ async def test_dispatcher_resource_result_includes_resource_graph_review_trace()
     handout_payload = {
         "title": "for 循环讲义",
         "summary": "用课件证据解释 for 循环。",
-        "handout": {
-            "sections": [
-                {
-                    "heading": "for 循环",
-                    "paragraphs": ["for 循环遍历可迭代对象。"],
-                    "page_refs": [{"page_id": 101, "page_no": 12, "chapter_id": 3}],
-                }
-            ]
-        },
+        "sections": [{
+            "heading": "for 循环",
+            "paragraphs": ["for 循环遍历可迭代对象。"],
+            "code_snippets": [],
+            "evidence_refs": ["page-101"],
+        }],
     }
     provider = StubProvider([handout_payload])
     ctx = DispatchContext(
@@ -285,21 +320,135 @@ async def test_dispatcher_path_planner_uses_request_user_id(
     assert captured["user_id"] == 4242
 
 
+def test_dispatcher_resource_profile_uses_authoritative_learning_context() -> None:
+    """资源 Agent 的画像必须来自后端事实，不能继续使用空默认值。"""
+    context = LearnerRoutingContext(
+        profile_brief="计算机专业；偏好图示；循环边界易错",
+        cognitive_style="visual",
+        learning_preferences=["MINDMAP", "HANDOUT"],
+        profile_major="CS",
+        python_level=3,
+        recent_error_kcs=["PY43-KC-001"],
+        struggle_patterns=["连续两次在 range 右边界出错"],
+        recent_wins=["已掌握列表索引"],
+        intervention_hints=["先给图示，再给最小反例"],
+    )
+    dispatcher = AgentDispatcher(
+        DispatchContext(
+            provider=StubProvider([]),
+            evidence_fetcher=StaticEvidenceFetcher([HIT]),
+            valid_kc_codes={"PY43-KC-001"},
+            learner_context=context,
+        )
+    )
+
+    snapshot = dispatcher._resource_profile_snapshot()
+
+    assert snapshot.major == "CS"
+    assert snapshot.python_self_rated_level == 3
+    assert snapshot.media_priority == ["MINDMAP", "HANDOUT"]
+    assert snapshot.cognitive_style == "visual"
+    assert snapshot.error_patterns == ["PY43-KC-001"]
+    assert snapshot.recent_insight == "连续两次在 range 右边界出错"
+    assert "已掌握列表索引" in snapshot.memory_highlights
+    assert snapshot.memory_directives == ["先给图示，再给最小反例"]
+
+
+@pytest.mark.asyncio
+async def test_dispatcher_path_planner_uses_authoritative_learning_facts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """路径规划必须消费真实掌握度、资源使用和正式提交，而非历史固定值。"""
+    from pythontopia_graph.agents.path_planner_agent import PathPlannerAgent
+    from pythontopia_graph.schemas.path import (
+        PathPlannerGroundingResult,
+        PathPlannerResponse,
+        PathPlannerSafetyResult,
+    )
+
+    captured: dict[str, object] = {}
+
+    def fake_plan(self, request):  # type: ignore[no-untyped-def]
+        captured["request"] = request
+        return PathPlannerResponse(
+            user_id=request.user_id,
+            pack_id=request.pack_id,
+            status="SUCCESS",
+            goal_summary="personalized path",
+            nodes=[],
+            safety_result=PathPlannerSafetyResult(passed=True),
+            grounding_result=PathPlannerGroundingResult(passed=True),
+            deterministic_signature="personalized-signature",
+        )
+
+    monkeypatch.setattr(PathPlannerAgent, "plan", fake_plan)
+    context = LearnerRoutingContext(
+        profile_brief="非计算机理工科，Python 自评 4 级",
+        profile_major="NON_CS_STEM",
+        python_level=4,
+        kc_mastery={"PY43-KC-001": 0.23},
+        kc_confidence={"PY43-KC-001": 0.71},
+        recent_error_kcs=["PY43-KC-001"],
+        recent_resources=[
+            LearnerRecentResource(
+                kc_code="PY43-KC-001",
+                type="MINDMAP",
+                created_at="2026-07-22T10:00:00+08:00",
+            )
+        ],
+        recent_submissions=[
+            LearnerRecentSubmission(
+                problem_id=41,
+                kc_code="PY43-KC-001",
+                passed=False,
+            )
+        ],
+    )
+    dispatcher = AgentDispatcher(
+        DispatchContext(
+            provider=StubProvider([]),
+            evidence_fetcher=StaticEvidenceFetcher([HIT]),
+            valid_kc_codes={"PY43-KC-001"},
+            learner_context=context,
+        )
+    )
+    step = PlanStep(
+        id="s-path-personalized",
+        phase="learn",
+        title="规划下一步",
+        detail="根据真实学情规划",
+        agent="PathPlannerAgent",
+        kc_codes=["PY43-KC-001"],
+        panel="workshop",
+    )
+
+    result = await dispatcher.dispatch(step, user_id=7)
+
+    assert result.ok is True
+    request = captured["request"]
+    assert request.profile.has_profile is True  # type: ignore[union-attr]
+    assert request.profile.major == "NON_CS_STEM"  # type: ignore[union-attr]
+    assert request.profile.python_self_rated_level == 4  # type: ignore[union-attr]
+    assert request.kcs[0].mastery_score == 0.23  # type: ignore[union-attr]
+    assert request.kcs[0].confidence == 0.71  # type: ignore[union-attr]
+    assert request.recent_resources[0].type == "MINDMAP"  # type: ignore[union-attr]
+    assert request.recent_submissions[0].problem_id == 41  # type: ignore[union-attr]
+    assert request.recent_submissions[0].passed is False  # type: ignore[union-attr]
+    assert request.error_pattern_kcs == ["PY43-KC-001"]  # type: ignore[union-attr]
+
+
 @pytest.mark.asyncio
 async def test_dispatcher_resource_graph_failure_is_structured_failure() -> None:
     """编排内坏资源草稿必须被 ResourceGraph 拦住并作为结构化失败返回。"""
     bad_payload = {
         "title": "for 循环讲义",
         "summary": "包含未经证据支持的页码。",
-        "handout": {
-            "sections": [
-                {
-                    "heading": "for 循环",
-                    "paragraphs": ["根据第 999 页可知 for 循环总是运行 3 秒。"],
-                    "page_refs": [{"page_id": 999, "page_no": 999, "chapter_id": 3}],
-                }
-            ]
-        },
+        "sections": [{
+            "heading": "for 循环",
+            "paragraphs": ["根据第 999 页可知 for 循环总是运行 3 秒。"],
+            "code_snippets": [],
+            "evidence_refs": [],
+        }],
     }
     provider = StubProvider([bad_payload, bad_payload, bad_payload])
     ctx = DispatchContext(

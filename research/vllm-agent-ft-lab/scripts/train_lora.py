@@ -7,7 +7,7 @@ from pathlib import Path
 
 import torch
 from datasets import Dataset, DatasetDict, disable_progress_bars
-from peft import LoraConfig
+from peft import LoraConfig, PeftModel
 from transformers import (
     AutoModelForMultimodalLM,
     AutoTokenizer,
@@ -49,6 +49,9 @@ def main() -> None:
         validate_training_plan_hashes(plan)
     if plan["method"] == "qlora_4bit":
         require_dependency("bitsandbytes")
+    initial_adapter_path = plan.get("initial_adapter_path")
+    if initial_adapter_path and not Path(str(initial_adapter_path)).exists():
+        raise FileNotFoundError(f"冻结 champion Adapter 不存在：{initial_adapter_path}")
 
     tokenizer = AutoTokenizer.from_pretrained(plan["model_path"], trust_remote_code=False)
     if tokenizer.pad_token is None:
@@ -63,13 +66,20 @@ def main() -> None:
             bnb_4bit_use_double_quant=True,
         )
 
-    model = AutoModelForMultimodalLM.from_pretrained(
+    base_model = AutoModelForMultimodalLM.from_pretrained(
         plan["model_path"],
         device_map="auto",
         torch_dtype=torch.bfloat16,
         quantization_config=quantization_config,
         trust_remote_code=False,
     )
+    model = (
+        PeftModel.from_pretrained(base_model, str(initial_adapter_path), is_trainable=True)
+        if initial_adapter_path
+        else base_model
+    )
+    if initial_adapter_path:
+        print(f"已从冻结 champion Adapter 初始化 specialist：{initial_adapter_path}", flush=True)
     if plan["training"].get("gradient_checkpointing", False):
         model.gradient_checkpointing_enable()
         model.config.use_cache = False
@@ -136,13 +146,15 @@ def main() -> None:
         sft_config_kwargs["dataset_text_field"] = dataset_text_field
     sft_config = SFTConfig(**sft_config_kwargs)
     lora = plan["lora"]
-    peft_config = LoraConfig(
-        r=int(lora["r"]),
-        lora_alpha=int(lora["alpha"]),
-        lora_dropout=float(lora["dropout"]),
-        target_modules=list(lora["target_modules"]),
-        task_type="CAUSAL_LM",
-    )
+    peft_config = None
+    if not initial_adapter_path:
+        peft_config = LoraConfig(
+            r=int(lora["r"]),
+            lora_alpha=int(lora["alpha"]),
+            lora_dropout=float(lora["dropout"]),
+            target_modules=list(lora["target_modules"]),
+            task_type="CAUSAL_LM",
+        )
 
     output_dir = Path(plan["output_dir"])
 

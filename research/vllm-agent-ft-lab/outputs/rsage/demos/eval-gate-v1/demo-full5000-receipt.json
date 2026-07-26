@@ -1,0 +1,26 @@
+{
+  "claimed_at": "2026-07-16T08:25:21.138121+00:00",
+  "consumes_final_budget": false,
+  "demo": true,
+  "format": "rsage_fresh_full5000_receipt_v2",
+  "fresh_manifest_audit": {
+    "actual_count": 5000,
+    "dataset_sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "declared_zero_historical_overlap": true,
+    "eligible_for_final": true,
+    "format": "fresh_full5000_v2",
+    "historical_eval_overlap_count": 0,
+    "message_zh": "fresh_full5000_v2 已声明并通过零历史重叠审计。",
+    "training_overlap_count": 0
+  },
+  "identity": {
+    "adapter_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "candidate_id": "rsage-demo-candidate",
+    "command_sha256": "0d601d5d5d3be17a05b9c08214a523c11ddf8e4988b5bc31c9417ce8ee071991",
+    "dataset_sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+  },
+  "legacy_full5000_role": "historical_regression_only",
+  "message_zh": "演示仅生成隔离凭据，不占用真实 fresh_full5000_v2 预算。",
+  "stage": "fresh_full5000_v2",
+  "status": "demo_only"
+}

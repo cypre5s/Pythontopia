@@ -1,0 +1,38 @@
+{
+  "contamination_policy": "Exclude golden50, reflection golden50 and stratified500 by id, lineage and fingerprint.",
+  "dimensions": {
+    "COGNITIVE_STYLE": 48,
+    "EMOTION_PERSISTENCE": 48,
+    "ERROR_PATTERN": 48,
+    "KNOWLEDGE_BASE": 48,
+    "PRACTICAL_ABILITY": 48
+  },
+  "heldout_count": 24,
+  "heldout_sha256": "37e5fc3ce8ed2cab6ae004437eee2ceb79201390fd23e0eb5ae6dcafbcff70fa",
+  "preference_axes": {
+    "safety_leak": 48,
+    "unbound_evidence": 48,
+    "weak_claim": 48,
+    "wrong_dimension": 48,
+    "wrong_evidence": 48
+  },
+  "protected_evaluation_paths": [
+    "cases/golden_adapter_50_v1.jsonl",
+    "cases/golden_adapter_50_v2_ir_reflection.jsonl",
+    "cases/domain_cases_5000_v1_stratified500.jsonl"
+  ],
+  "protected_evaluation_sha256": {
+    "cases/domain_cases_5000_v1_stratified500.jsonl": "69e33f6dddff052577630672d2aa4cf7903363e87e1e505d6f1ba2fb2522c1e0",
+    "cases/golden_adapter_50_v1.jsonl": "dda6fe2bbe4ea4ddc75f3558f587cdc1e976398796bc7decd82d457b86fdcf83",
+    "cases/golden_adapter_50_v2_ir_reflection.jsonl": "122dad91e0b01159459a94890e1ca603826e2206d71a91eaed01de758dc6beea"
+  },
+  "protected_overlap_count": 0,
+  "purpose": "reflection_v2_event_evidence_preference_optimization",
+  "schema_version": "agent-schema-v2",
+  "seed": 42,
+  "source_path": "cases/domain_cases_5000_v1.jsonl",
+  "source_sha256": "23ae6fdf4eeef3653eac6ba7ea580cdd358fae4dc3bdeedca7e0bd03b4bd3039",
+  "total_count": 240,
+  "train_count": 216,
+  "train_sha256": "bf5a9ccf82f117c1ef9cb3c1069d9f9233d489a10c5e9572ce65452d1b9c9869"
+}

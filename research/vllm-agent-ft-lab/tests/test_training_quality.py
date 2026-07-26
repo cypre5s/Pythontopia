@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import json
 
-from pyt_agent_lab.training_quality import audit_one_variable_round, run_preference_preflight
+from pyt_agent_lab.training_quality import (
+    audit_one_variable_round,
+    fail_evaluation_manifest,
+    initialize_evaluation_manifest,
+    run_preference_preflight,
+)
 
 
 class _Tokenizer:
@@ -128,4 +133,56 @@ def test_one_variable_audit_rejects_training_seed_change() -> None:
     assert report["training_control_differences"]["training.seed"] == {
         "champion": 42,
         "candidate": 20260710,
+    }
+
+
+def test_evaluation_manifest_records_case_schema_and_decoding_mode(tmp_path) -> None:
+    cases = tmp_path / "cases.jsonl"
+    _write(
+        cases,
+        [
+            {
+                "id": "v2-1",
+                "agent": "ResourceDesignerAgent.handout",
+                "schema_version": "agent-schema-v2",
+                "system": "system",
+                "user": "user",
+            }
+        ],
+    )
+
+    manifest = initialize_evaluation_manifest(
+        run_dir=tmp_path / "run",
+        cases_path=cases,
+        endpoint="http://127.0.0.1:18094/v1",
+        model="qwen-candidate",
+        prompt_variant="baseline",
+        seed=42,
+        folds=1,
+        concurrency=1,
+        decoding_mode="json_schema",
+        adapter_path="outputs/adapters/qwen-candidate",
+    )
+
+    assert manifest["schema_version"] == "agent-schema-v2"
+    assert manifest["decoding"]["mode"] == "json_schema"
+    assert manifest["adapter"] == "outputs/adapters/qwen-candidate"
+    assert manifest["adapter_path"] == "outputs/adapters/qwen-candidate"
+
+
+def test_failed_evaluation_manifest_preserves_resume_metadata(tmp_path) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "run_manifest.json").write_text(
+        json.dumps({"status": "running", "resume_supported": True}), encoding="utf-8"
+    )
+
+    fail_evaluation_manifest(run_dir, RuntimeError("endpoint stopped"))
+
+    manifest = json.loads((run_dir / "run_manifest.json").read_text(encoding="utf-8"))
+    assert manifest["status"] == "failed"
+    assert manifest["resume_supported"] is True
+    assert manifest["failure"] == {
+        "exception_type": "RuntimeError",
+        "message": "endpoint stopped",
     }

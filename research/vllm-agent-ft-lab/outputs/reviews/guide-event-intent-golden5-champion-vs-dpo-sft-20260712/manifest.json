@@ -1,0 +1,12 @@
+{
+  "answer_key_sha256": "0993bef24ba2d9f032d66dae46d9c8f7e4cb1df3ebd9937a3b3ab1771eb55986",
+  "case_count": 5,
+  "items_sha256": "cbef55e4f5dc021440dd075a7ff436dd4839dfd49688d7bfbf995ba1c4f4e1dc",
+  "label_policy": "annotate admissible intent set before revealing model identity",
+  "models": [
+    "champion",
+    "dpo_sft"
+  ],
+  "purpose": "pre-promotion semantic label adjudication; not the final blind-review gate",
+  "seed": 20260712
+}

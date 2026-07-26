@@ -13,6 +13,11 @@ from typing import Any
 
 from pydantic import BaseModel, Field, ValidationError
 
+from pythontopia_graph.contracts.semantic_ir import (
+    BoundEvidence,
+    ContractCompiler,
+    GuideCoachSemanticIR,
+)
 from pythontopia_graph.llm.provider import LlmProvider, LlmResponse, apply_compiled_prompt
 from pythontopia_graph.schemas.tutor_workflow import (
     GuideCoachDecision,
@@ -69,6 +74,7 @@ class CoachContext(BaseModel):
     diagnosis: WorkflowDiagnosisContext | None = None
     profile_brief: str = ""
     recent_cards: list[dict[str, Any]] = Field(default_factory=list)
+    allowed_evidence: list[BoundEvidence] = Field(default_factory=list)
 
 
 class GuideCoachAgent:
@@ -174,6 +180,7 @@ class GuideCoachAgent:
     ) -> GuideCoachDecision | None:
         if not allowed:
             return None
+        evidence_ids = [item.evidence_id for item in ctx.allowed_evidence]
         try:
             # P2-dspy-loader（§3.5）：命中离线 GEPA 冻结产物则套用冻结 instruction+demos，
             # 缺/损坏产物时原样返回手写 prompt（零回归）。运行时绝不重编译。
@@ -181,6 +188,12 @@ class GuideCoachAgent:
                 apply_compiled_prompt(self._messages(ctx, allowed), "guide_coach_decision"),
                 response_format={"type": "json_object"},
                 temperature=0.1,
+                guard_context={
+                    "agent": "GuideCoachAgent",
+                    "json_schema": GuideCoachSemanticIR.model_json_schema(),
+                    "evidence_ids": evidence_ids,
+                    "evidence_fields": ["evidence_refs"],
+                },
             )
         except Exception:  # noqa: BLE001 - manager 不因 provider 失败打断导学入口
             return None
@@ -188,8 +201,20 @@ class GuideCoachAgent:
         if not payload:
             return None
         try:
-            decision = GuideCoachDecision.model_validate(payload)
-        except ValidationError:
+            semantic_ir = GuideCoachSemanticIR.model_validate(payload)
+            resolved_event = ContractCompiler.resolve_guide_event(
+                semantic_ir.event_intent, allowed
+            )
+            decision = ContractCompiler.compile_guide_coach(
+                semantic_ir,
+                allowed_events=allowed,
+                tool_by_event=_TOOL_BY_EVENT,
+                followups=self._followups(
+                    resolved_event, allowed, semantic_ir.reason_summary
+                ),
+                allowed_evidence_ids=evidence_ids,
+            )
+        except (ValidationError, ValueError):
             return None
         return decision if decision.next_event in allowed else None
 
@@ -269,7 +294,7 @@ class GuideCoachAgent:
     ) -> WorkflowEvent | None:
         for candidate in candidates:
             if candidate in allowed:
-                return candidate  # type: ignore[return-value]
+                return candidate
         return None
 
     @staticmethod
@@ -278,7 +303,7 @@ class GuideCoachAgent:
     ) -> list[WorkflowAction]:
         ordered = [item for item in allowed if item != event]
         if event == "AC_REVIEW" and "TRANSFER" in allowed:
-            ordered = ["TRANSFER", *[item for item in ordered if item != "TRANSFER"]]  # type: ignore[list-item]
+            ordered = ["TRANSFER", *[item for item in ordered if item != "TRANSFER"]]
         followups: list[WorkflowAction] = []
         for candidate in ordered[:3]:
             key, label = _LABEL_BY_EVENT.get(candidate, (str(candidate).lower(), str(candidate)))
@@ -314,13 +339,15 @@ class GuideCoachAgent:
             "diagnosis": diagnosis,
             "profile_brief": ctx.profile_brief,
             "recent_cards": ctx.recent_cards[-3:],
+            "allowed_evidence": [item.model_dump(mode="json") for item in ctx.allowed_evidence],
         }
         return [
             {
                 "role": "system",
                 "content": (
                     "你是 Pythontopia 的 GuideCoachAgent，只在 allowed_events 中选择下一步教育动作。"
-                    "输出 JSON，字段必须符合 GuideCoachDecision。不要输出完整可提交代码、隐藏测试、"
+                    "输出 JSON，字段必须符合 GuideCoachSemanticIR；不要生成 tool_name、按钮或产品 DTO。"
+                    "evidence_refs 只能引用 allowed_evidence 中的 evidence_id。不要输出完整可提交代码、隐藏测试、"
                     "chain-of-thought 或逐步隐性推理；reason_summary 只写一句可审计摘要。"
                 ),
             },

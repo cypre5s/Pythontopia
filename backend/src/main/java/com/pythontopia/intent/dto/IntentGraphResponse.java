@@ -25,4 +25,5 @@ public record IntentGraphResponse(
     @JsonProperty("clarification_prompt") String clarificationPrompt,
     @JsonProperty("risk_class") String riskClass,
     @JsonProperty("render_mode") String renderMode,
-    @JsonProperty("reason_code") String reasonCode) {}
+    @JsonProperty("reason_code") String reasonCode,
+    @JsonProperty("route_decision") WorkshopRouteDecision routeDecision) {}

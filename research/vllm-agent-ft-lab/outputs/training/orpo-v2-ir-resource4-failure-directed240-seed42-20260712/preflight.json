@@ -1,0 +1,72 @@
+{
+  "changed_variables": [
+    "preference_dataset_failure_distribution"
+  ],
+  "dataset_sha256": {
+    "heldout": "d548a2d08bc442715913aac9a914b08ebb58969b998a940335e18463ae4b95fb",
+    "train": "058044a304d990b8e928cc42a2b8fd41a753a1a2e8277a97778ea9e462e4aaee"
+  },
+  "duplicate_id_count": 0,
+  "duplicate_pair_count": 0,
+  "duplicate_prompt_count": 0,
+  "heldout_count": 24,
+  "identical_chosen_rejected_count": 0,
+  "identical_chosen_rejected_ids": [],
+  "max_seq_length": 512,
+  "one_variable_only": true,
+  "passed": true,
+  "protected_eval_overlap_count": 0,
+  "protected_eval_overlap_ids": [],
+  "token_length": {
+    "longest_examples": [
+      {
+        "id": "v2-pref-0156-eval5000-new_student_expression-0092-domain-3092-resourcedesigneragent-c6-beginner-teacher_assignment_context::v2-storyboard",
+        "tokens": 364
+      },
+      {
+        "id": "v2-pref-0084-eval5000-new_student_expression-0722-domain-3722-resourcedesigneragent-c6-beginner-copy_paste_code_fragment::v2-storyboard",
+        "tokens": 360
+      },
+      {
+        "id": "v2-pref-0212-eval5000-new_question-1712-domain-1712-resourcedesigneragent-c5::v2-storyboard",
+        "tokens": 359
+      },
+      {
+        "id": "v2-pref-0068-eval5000-new_student_expression-1352-domain-4352-resourcedesigneragent-c6-beginner-teacher_assignment_context::v2-storyboard",
+        "tokens": 358
+      },
+      {
+        "id": "v2-pref-0108-eval5000-new_question-1972-domain-1972-resourcedesigneragent-c6::v2-storyboard",
+        "tokens": 358
+      },
+      {
+        "id": "v2-pref-0180-eval5000-new_student_expression-1012-domain-4012-resourcedesigneragent-c2-beginner-anxious_answer_request::v2-storyboard",
+        "tokens": 358
+      },
+      {
+        "id": "v2-pref-0184-eval5000-new_question-1412-domain-1412-resourcedesigneragent-c6::v2-storyboard",
+        "tokens": 358
+      },
+      {
+        "id": "v2-pref-0012-eval5000-new_chapter_slice-0592-domain-2592-resourcedesigneragent-c3::v2-storyboard",
+        "tokens": 355
+      },
+      {
+        "id": "v2-pref-0036-eval5000-new_question-1432-domain-1432-resourcedesigneragent-c5::v2-storyboard",
+        "tokens": 355
+      },
+      {
+        "id": "v2-pref-0060-eval5000-new_chapter_slice-0542-domain-2542-resourcedesigneragent-c2::v2-storyboard",
+        "tokens": 355
+      }
+    ],
+    "max": 364,
+    "mean": 265.73,
+    "overlength_count": 0,
+    "overlength_ids": []
+  },
+  "train_count": 216,
+  "train_heldout_prompt_overlap_count": 0,
+  "zero_label_count": 0,
+  "zero_label_ids": []
+}

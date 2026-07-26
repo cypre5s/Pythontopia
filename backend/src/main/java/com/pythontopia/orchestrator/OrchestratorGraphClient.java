@@ -5,13 +5,16 @@ import com.pythontopia.common.config.GraphHttpClientProperties;
 import com.pythontopia.common.config.GraphServiceProperties;
 import com.pythontopia.common.sse.SseRelayExecutor;
 import com.pythontopia.common.web.GraphInternalTokenSupport;
+import com.pythontopia.intent.dto.IntentRouteRequest;
 import com.pythontopia.orchestrator.dto.OrchestratorTurnMessage;
 import com.pythontopia.orchestrator.dto.OrchestratorTurnRequest;
 import com.pythontopia.tutor.GraphStreamRelay;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiConsumer;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -31,6 +34,8 @@ public class OrchestratorGraphClient {
   private final GraphServiceProperties properties;
   private final SseRelayExecutor sseRelayExecutor;
   private final GraphStreamRelay relay;
+  private final OrchestratorRunRecorder runRecorder;
+  private final ObjectMapper objectMapper;
 
   /** Spring 注入构造：连接超时复用 graphRestTemplate 的 {@code pythontopia.http.graph} 配置（fail fast）。 */
   @Autowired
@@ -38,11 +43,13 @@ public class OrchestratorGraphClient {
       GraphServiceProperties properties,
       GraphHttpClientProperties httpProperties,
       ObjectMapper objectMapper,
-      SseRelayExecutor sseRelayExecutor) {
+      SseRelayExecutor sseRelayExecutor,
+      OrchestratorRunRecorder runRecorder) {
     this(
         properties,
         objectMapper,
         sseRelayExecutor,
+        runRecorder,
         httpProperties.connectTimeoutMs(),
         STREAM_READ_TIMEOUT_MS);
   }
@@ -52,11 +59,23 @@ public class OrchestratorGraphClient {
       GraphServiceProperties properties,
       ObjectMapper objectMapper,
       SseRelayExecutor sseRelayExecutor,
+      OrchestratorRunRecorder runRecorder,
       int connectTimeoutMs,
       int readTimeoutMs) {
     this.properties = properties;
     this.sseRelayExecutor = sseRelayExecutor;
+    this.runRecorder = runRecorder;
+    this.objectMapper = objectMapper;
     this.relay = new GraphStreamRelay(objectMapper, connectTimeoutMs, readTimeoutMs);
+  }
+
+  OrchestratorGraphClient(
+      GraphServiceProperties properties,
+      ObjectMapper objectMapper,
+      SseRelayExecutor sseRelayExecutor,
+      int connectTimeoutMs,
+      int readTimeoutMs) {
+    this(properties, objectMapper, sseRelayExecutor, null, connectTimeoutMs, readTimeoutMs);
   }
 
   /**
@@ -132,14 +151,70 @@ public class OrchestratorGraphClient {
     if (request.courseKcCodes() != null && !request.courseKcCodes().isEmpty()) {
       body.put("course_kc_index", request.courseKcCodes());
     }
+    if (request.learnerContext() != null) {
+      body.put("learner_context", request.learnerContext().toGraphPayload());
+    }
+    if (request.routeDecision() != null) {
+      // Graph 的 RouteContractModel 接受 camelCase 嵌套字段；对象原样转发，避免手工重组丢策略字段。
+      body.put("route_decision", request.routeDecision());
+    }
+    Map<String, Object> interaction = buildInteraction(request.interaction());
+    if (!interaction.isEmpty()) {
+      body.put("interaction", interaction);
+    }
     // 记忆矿脉回声：服务端从 ReviewSignal 算出的到期 KC，供总管把计划优先锚定到待复习知识点。
     if (decayingKcs != null && !decayingKcs.isEmpty()) {
       body.put("decaying_kcs", decayingKcs);
     }
 
     String internalToken = GraphInternalTokenSupport.tokenOrNull(properties);
+    OrchestratorRunRecorder.RecordingHandle recording =
+        runRecorder == null ? null : runRecorder.open(userId, request, sessionId);
+    BiConsumer<String, String> onEvent = recording == null ? null : recording.onEvent();
+    if (recording != null) {
+      try {
+        emitter.send(
+            SseEmitter.event().name("CUSTOM").data(recording.runtimeEventData()));
+      } catch (IOException | IllegalStateException sendFailure) {
+        onFinished.run();
+        return;
+      }
+    }
     sseRelayExecutor.submit(
-        () -> relay.relay(url, () -> body, internalToken, emitter, null, onFinished));
+        () -> relay.relay(url, () -> body, internalToken, emitter, onEvent, onFinished));
+  }
+
+  private Map<String, Object> buildInteraction(
+      IntentRouteRequest.InteractionContext interaction) {
+    Map<String, Object> payload = new LinkedHashMap<>();
+    if (interaction == null) {
+      return payload;
+    }
+    putNonBlank(payload, "session_id", interaction.sessionId());
+    putNonBlank(payload, "current_scene", interaction.currentScene());
+    putNonBlank(payload, "current_stage", interaction.currentStage());
+    putNonNull(payload, "current_problem_id", interaction.currentProblemId());
+    putNonBlank(payload, "current_code", interaction.currentCode());
+    putNonNull(payload, "latest_submission_id", interaction.latestSubmissionId());
+    if (interaction.selectedPageIds() != null && !interaction.selectedPageIds().isEmpty()) {
+      payload.put("selected_page_ids", interaction.selectedPageIds());
+    }
+    putNonBlank(payload, "error_text", interaction.errorText());
+    putNonBlank(payload, "frontend_action", interaction.frontendAction());
+    putNonNull(payload, "current_resource_id", interaction.currentResourceId());
+    return payload;
+  }
+
+  private static void putNonBlank(Map<String, Object> target, String key, String value) {
+    if (value != null && !value.isBlank()) {
+      target.put(key, value);
+    }
+  }
+
+  private static void putNonNull(Map<String, Object> target, String key, Object value) {
+    if (value != null) {
+      target.put(key, value);
+    }
   }
 
   private List<Map<String, Object>> buildHistory(List<OrchestratorTurnMessage> history) {

@@ -9,6 +9,7 @@ import pytest
 from pyt_agent_lab.rsage_fresh_eval import (
     audit_fresh_eval_against_history,
     build_fresh_eval_pack,
+    merge_historical_paths,
     select_fresh_stratified_subset,
     write_fresh_eval_pack,
 )
@@ -16,6 +17,18 @@ from pyt_agent_lab.rsage_eval_budget import validate_fresh_full5000_manifest
 
 
 COURSE_DIR = Path(__file__).parents[3] / "data" / "course-pack-43"
+
+
+def test_explicit_history_extends_defaults_instead_of_replacing_them(tmp_path: Path) -> None:
+    default_history = tmp_path / "default.jsonl"
+    explicit_history = tmp_path / "explicit.jsonl"
+
+    merged = merge_historical_paths(
+        [default_history, explicit_history],
+        [explicit_history],
+    )
+
+    assert merged == [default_history, explicit_history]
 
 
 def test_builds_independent_fresh_pack_with_target_and_retention_coverage() -> None:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json as _json
 import os
 import re
+from copy import deepcopy
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any, Protocol
@@ -11,6 +12,7 @@ import httpx
 from dotenv import dotenv_values
 from pydantic import BaseModel
 
+from pythontopia_graph.llm.guard_pipeline import GuardMetrics, GuardPipeline
 from pythontopia_graph.optimize.loader import CompiledPrompt, load_compiled
 from pythontopia_graph.schemas.profile import ProfileDraft
 
@@ -210,6 +212,13 @@ def _fine_tuned_env() -> tuple[str | None, str | None, str | None]:
     return base_url, api_key, model
 
 
+def _specialized_adapter_models() -> tuple[str | None, str | None]:
+    return (
+        os.environ.get("PYT_FINE_TUNED_CONTRACT_MODEL"),
+        os.environ.get("PYT_FINE_TUNED_GROUNDING_MODEL"),
+    )
+
+
 def _fine_tuned_enabled() -> bool:
     value = (os.environ.get("PYT_FINE_TUNED_LLM_ENABLED") or "").strip().lower()
     return value in {"1", "true", "yes", "on"}
@@ -391,6 +400,8 @@ class FineTunedFallbackProvider:
     def __init__(self, *, fine_tuned: LlmProvider, fallback: LlmProvider) -> None:
         self.fine_tuned = fine_tuned
         self.fallback = fallback
+        self.guard_pipeline = GuardPipeline()
+        self.guard_metrics = GuardMetrics()
 
     async def chat(
         self, messages: list[dict[str, str]], *, json_mode: bool = True, **kwargs: object
@@ -398,18 +409,41 @@ class FineTunedFallbackProvider:
         guard_context = kwargs.pop("guard_context", None)
         if not self._should_use_adapter(json_mode=json_mode, kwargs=kwargs):
             return await self.fallback.chat(messages, json_mode=json_mode, **kwargs)
+        self.guard_metrics.record_attempt()
         try:
             adapter_kwargs = dict(kwargs)
             adapter_kwargs.setdefault("temperature", 0.0)
             adapter_kwargs.setdefault("top_p", 1.0)
+            context = dict(guard_context) if isinstance(guard_context, dict) else None
+            if context is not None and isinstance(context.get("json_schema"), dict):
+                adapter_kwargs["response_format"] = _bound_json_schema_response_format(
+                    context
+                )
+                self.guard_metrics.record_constrained_attempt(
+                    evidence_bound=bool(context.get("evidence_ids"))
+                )
+            if getattr(self.fine_tuned, "supports_agent_routing", False) and context:
+                adapter_kwargs["agent_route"] = str(context.get("agent") or "")
             response = await self.fine_tuned.chat(
                 messages, json_mode=json_mode, **adapter_kwargs
             )
-            guarded = _guard_fine_tuned_response(response, guard_context)
-            if guarded is not None:
-                return guarded
+            parsed = _response_json(response)
+            raw_parsed = dict(parsed) if parsed is not None else None
+            if context is not None and not context.get("json_schema"):
+                if _needs_safety_refusal(context, parsed):
+                    parsed = _safety_refusal_payload(context)
+                if parsed is not None:
+                    parsed = _normalize_fine_tuned_grounding(context, parsed)
+                    context["_contract_repaired"] = parsed != raw_parsed
+            result = self.guard_pipeline.evaluate(parsed, context)
+            self.guard_metrics.record(result)
+            if result.passed and result.payload is not None:
+                text = _json.dumps(result.payload, ensure_ascii=False, sort_keys=True)
+                return LlmResponse(content_json=result.payload, content_text=text)
+            self.guard_metrics.record_fallback()
             return await self.fallback.chat(messages, json_mode=json_mode, **kwargs)
         except Exception:  # noqa: BLE001 - adapter is optional; fallback keeps Agent alive.
+            self.guard_metrics.record_fallback()
             return await self.fallback.chat(messages, json_mode=json_mode, **kwargs)
 
     async def chat_stream(
@@ -429,22 +463,76 @@ class FineTunedFallbackProvider:
         return True
 
 
-def _guard_fine_tuned_response(
-    response: LlmResponse, guard_context: object
-) -> LlmResponse | None:
-    context = guard_context if isinstance(guard_context, dict) else None
-    parsed = _response_json(response)
-    if context is None:
-        return response if parsed is not None else None
-    if _needs_safety_refusal(context, parsed):
-        parsed = _safety_refusal_payload(context)
-    elif parsed is None:
-        return None
-    elif _fine_tuned_forbidden_leak(parsed):
-        return None
-    normalized = _normalize_fine_tuned_grounding(context, parsed)
-    text = _json.dumps(normalized, ensure_ascii=False, sort_keys=True)
-    return LlmResponse(content_json=normalized, content_text=text)
+def _bound_json_schema_response_format(context: dict[str, Any]) -> dict[str, Any]:
+    schema = deepcopy(context["json_schema"])
+    evidence_ids = [
+        value
+        for value in context.get("evidence_ids", []) or []
+        if isinstance(value, (str, int)) and not isinstance(value, bool)
+    ]
+    if evidence_ids:
+        _bind_evidence_schema(schema, evidence_ids)
+    agent = re.sub(r"[^A-Za-z0-9_]", "_", str(context.get("agent") or "Agent"))
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": f"{agent}SemanticIR",
+            "schema": schema,
+            "strict": True,
+        },
+    }
+
+
+def _bind_evidence_schema(node: object, evidence_ids: list[str | int]) -> None:
+    if isinstance(node, dict):
+        properties = node.get("properties")
+        if isinstance(properties, dict):
+            for field in ("evidence_ids", "evidence_refs", "evidence_page_ids"):
+                value = properties.get(field)
+                if not isinstance(value, dict) or not isinstance(value.get("items"), dict):
+                    continue
+                value["items"]["enum"] = list(dict.fromkeys(evidence_ids))
+                value["minItems"] = max(1, int(value.get("minItems", 0)))
+                required = node.setdefault("required", [])
+                if isinstance(required, list) and field not in required:
+                    required.append(field)
+        for value in node.values():
+            _bind_evidence_schema(value, evidence_ids)
+    elif isinstance(node, list):
+        for value in node:
+            _bind_evidence_schema(value, evidence_ids)
+
+
+class RoutedFineTunedProvider:
+    """Routes agent families to independently promotable adapters."""
+
+    supports_tool_calling = False
+    supports_agent_routing = True
+    CONTRACT_AGENTS = frozenset({"GuideCoachAgent", "PracticeAgent", "DebugAgent"})
+
+    def __init__(
+        self,
+        *,
+        default: LlmProvider,
+        contract: LlmProvider | None = None,
+        grounding: LlmProvider | None = None,
+    ) -> None:
+        self.default = default
+        self.contract = contract or default
+        self.grounding = grounding or default
+
+    async def chat(
+        self, messages: list[dict[str, str]], *, json_mode: bool = True, **kwargs: object
+    ) -> LlmResponse:
+        agent = str(kwargs.pop("agent_route", ""))
+        provider = self.contract if agent in self.CONTRACT_AGENTS else self.grounding
+        return await provider.chat(messages, json_mode=json_mode, **kwargs)
+
+    async def chat_stream(
+        self, messages: list[dict[str, str]], **kwargs: object
+    ) -> AsyncIterator[str]:
+        async for chunk in self.default.chat_stream(messages, **kwargs):
+            yield chunk
 
 
 def _response_json(response: LlmResponse) -> dict[str, Any] | None:
@@ -686,13 +774,31 @@ def _with_optional_fine_tuned_provider(fallback: LlmProvider) -> LlmProvider:
     base_url, api_key, model = _fine_tuned_env()
     if not base_url or not api_key or not model:
         return fallback
-    fine_tuned = OpenAiCompatProvider(
+    fine_tuned: LlmProvider = OpenAiCompatProvider(
         base_url=base_url,
         api_key=api_key,
         model=model,
         fast_model=model,
         enable_thinking=False,
     )
+    contract_model, grounding_model = _specialized_adapter_models()
+    if contract_model or grounding_model:
+        def adapter(candidate_model: str | None) -> LlmProvider | None:
+            if not candidate_model:
+                return None
+            return OpenAiCompatProvider(
+                base_url=base_url,
+                api_key=api_key,
+                model=candidate_model,
+                fast_model=candidate_model,
+                enable_thinking=False,
+            )
+
+        fine_tuned = RoutedFineTunedProvider(
+            default=fine_tuned,
+            contract=adapter(contract_model),
+            grounding=adapter(grounding_model),
+        )
     return FineTunedFallbackProvider(fine_tuned=fine_tuned, fallback=fallback)
 
 

@@ -1,5 +1,16 @@
 # Qwen contract quality flywheel — 2026-07-10
 
+## 2026-07-11 architecture hardening
+
+- 将历史 `AGENT_SCHEMA` 移入版本化 Schema Registry；`agent-schema-v1` 冻结，既有结果不重算口径。
+- 产品侧新增 GuideCoach / Practice 语义 IR、Evidence Binder 与确定性 Contract Compiler；导出的
+  `agent-schema-v2` 用于后续产品对齐数据，不覆盖 v1。
+- `FineTunedFallbackProvider` 的 guard 拆为 contract / grounding / safety 三段，并记录逐层拒绝、
+  `guard_repair_rate`、`fallback_rate`；GuideCoach 与 Practice 的线上调用现在实际传入 schema 和证据白名单。
+- 新增可选 agent-family adapter router；默认仍使用单 champion，专用 adapter 必须独立过完整门禁。
+- 新增模型状态机和 `configs/model_registry.json`。当前 DPO v2 是 champion；2026-07-10 schema 候选保持
+  rejected，禁止以新平均分绕过既有失败证据重新标记。
+
 本日志只记录可复现的同集结果。首要指标为 `contract_pass_rate = json_valid && schema_valid && grounding_safe && !forbidden_leak`；`score` 仅作辅助。guard / final 满分不得描述为裸模型满分。
 
 ## 固定协议

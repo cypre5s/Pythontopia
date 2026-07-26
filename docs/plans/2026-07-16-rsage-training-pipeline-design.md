@@ -4,7 +4,7 @@
 
 ## 目标
 
-把根目录 `todo.md` 中可在学生放假期间自动执行的研究主线实现成一组可审计、可恢复、可通过脚本启动的流水线：课程证据驱动的案例生成、强教师多次投票、规则验证、缩减后的训练集、TutorDecision specialist QLoRA、GDPO 软偏好与 RPO chosen-NLL 正则、分级评测、实时日志和图表。
+把根目录 `todo.md`（已移至 `research/vllm-agent-ft-lab/docs/finetuning-pain-points-report-2026-07-16.md`）中可在学生放假期间自动执行的研究主线实现成一组可审计、可恢复、可通过脚本启动的流水线：课程证据驱动的案例生成、强教师多次投票、规则验证、缩减后的训练集、TutorDecision specialist QLoRA、GDPO 软偏好与 RPO chosen-NLL 正则、分级评测、实时日志和图表。
 
 本设计不把自动教师投票表述为人工金标，也不把最终 guard/fallback 成功率表述为裸模型能力。真实学生学习效果仍需要返校后的 field pilot 才能验证。
 

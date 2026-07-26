@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="360" viewBox="0 0 720 360">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="52" y="30" font-family="Arial" font-size="20" fill="#111827">Validation rates by fold</text>
+<line x1="52" y1="308" x2="668" y2="308" stroke="#6b7280"/>
+<line x1="52" y1="52" x2="52" y2="308" stroke="#6b7280"/>
+<text x="360.0" y="340" text-anchor="middle" font-family="Arial" font-size="12" fill="#374151">0</text>
+<rect x="113.60" y="295.20" width="96.10" height="12.80" fill="#2563eb"><title>contract: 0.050</title></rect>
+<text x="161.65" y="289.20" text-anchor="middle" font-family="Arial" font-size="11" fill="#111827">0.05</text>
+<rect x="236.80" y="103.20" width="96.10" height="204.80" fill="#16a34a"><title>json: 0.800</title></rect>
+<text x="284.85" y="97.20" text-anchor="middle" font-family="Arial" font-size="11" fill="#111827">0.80</text>
+<rect x="360.00" y="295.20" width="96.10" height="12.80" fill="#dc2626"><title>schema: 0.050</title></rect>
+<text x="408.05" y="289.20" text-anchor="middle" font-family="Arial" font-size="11" fill="#111827">0.05</text>
+<rect x="483.20" y="52.00" width="96.10" height="256.00" fill="#9333ea"><title>grounding: 1.000</title></rect>
+<text x="531.25" y="48.00" text-anchor="middle" font-family="Arial" font-size="11" fill="#111827">1.00</text>
+<rect x="538" y="40" width="12" height="12" fill="#2563eb"/>
+<text x="556" y="50" font-family="Arial" font-size="12" fill="#374151">contract</text>
+<rect x="538" y="62" width="12" height="12" fill="#16a34a"/>
+<text x="556" y="72" font-family="Arial" font-size="12" fill="#374151">json</text>
+<rect x="538" y="84" width="12" height="12" fill="#dc2626"/>
+<text x="556" y="94" font-family="Arial" font-size="12" fill="#374151">schema</text>
+<rect x="538" y="106" width="12" height="12" fill="#9333ea"/>
+<text x="556" y="116" font-family="Arial" font-size="12" fill="#374151">grounding</text>
+</svg>

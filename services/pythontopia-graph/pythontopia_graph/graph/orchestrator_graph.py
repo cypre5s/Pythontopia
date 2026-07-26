@@ -79,7 +79,17 @@ from pythontopia_graph.graph.orchestrator_session import (
 from pythontopia_graph.llm.provider import LlmProvider
 from pythontopia_graph.memory.contract import MemoryBrief
 from pythontopia_graph.nodes.evidence_fetcher import EvidenceFetcher, StaticEvidenceFetcher
+from pythontopia_graph.routing.workshop_metrics import record_execution
+from pythontopia_graph.routing.workshop_policy import validate_route_decision
+from pythontopia_graph.routing.workshop_task_plan import (
+    TaskPlanPolicyError,
+    compile_task_plan,
+    rebuild_runtime_after_switch,
+    switch_task_plan_candidate_once,
+    validate_task_plan,
+)
 from pythontopia_graph.schemas.agentic_loop import AgenticLoopRunRecord, LoopStep
+from pythontopia_graph.schemas.intent import IntentRouteRequest
 from pythontopia_graph.schemas.orchestrator import (
     DispatchResult,
     OrchestratorRequest,
@@ -87,6 +97,7 @@ from pythontopia_graph.schemas.orchestrator import (
     OrchestratorTurn,
     PlanStep,
     ProfileSignal,
+    TaskPlan,
 )
 from pythontopia_graph.schemas.resource import (
     GraphTraceStep,
@@ -151,6 +162,7 @@ class OrchestratorState(AgenticLoopState, total=False):
     needs_user_input: bool
     # 下游产出
     plan: list[PlanStep]
+    task_plan: TaskPlan
     reused_plan: bool
     dispatch_results: Annotated[list[DispatchResult], operator.add]
     signals: list[ProfileSignal]
@@ -286,6 +298,8 @@ class OrchestratorGraph:
                 evidence_fetcher=self._evidence_fetcher,
                 valid_kc_codes=self._valid_kc_codes,
                 profile_brief=merged_req.profile_brief or "",
+                debug_context=merged_req.interaction,
+                learner_context=merged_req.learner_context,
             )
         )
 
@@ -331,9 +345,7 @@ class OrchestratorGraph:
         turn_no: int,
     ) -> AgenticLoopRunRecord:
         """从本轮终态组织闭环审计记录（plan/tool_trail/critic/replan/trace_id）。"""
-        dispatch_results = self._collapse_redispatched_results(
-            final.get("dispatch_results", [])
-        )
+        dispatch_results = self._collapse_redispatched_results(final.get("dispatch_results", []))
         trace = final.get("trace", [])
         tools_used = tool_trail_from_results(dispatch_results)
         replan_count = count_bounded_recoveries(trace)
@@ -341,8 +353,7 @@ class OrchestratorGraph:
         verdict = CriticVerdict(
             grounding_pass=response.grounding_result.passed,
             safety_pass=response.safety_result.passed,
-            reasons=list(response.grounding_result.reasons)
-            + list(response.safety_result.reasons),
+            reasons=list(response.grounding_result.reasons) + list(response.safety_result.reasons),
         )
         return self._loop.build_run_record(
             user_id=req.user_id,
@@ -390,9 +401,41 @@ class OrchestratorGraph:
         )
         await self._emit_cb("CUSTOM", {"name": "loop_step", "value": loop_step_event(loop_step)})
 
+    @staticmethod
+    def _route_validation_request(req: OrchestratorRequest) -> IntentRouteRequest:
+        """Rebuild the request facts needed to verify a signed C3 search decision."""
+        return IntentRouteRequest(
+            message=req.user_message,
+            current_chapter=req.current_chapter,
+            recent_kc_codes=req.recent_kc_codes,
+            interaction=req.interaction,
+            learner_context=req.learner_context,
+        )
+
     async def _node_understand(self, state: OrchestratorState) -> dict[str, Any]:
         req = state["req"]
         started = time.monotonic()
+        if req.route_decision is not None and req.route_decision.task.family == "MULTI_TASK":
+            # RouteDecision 由百晓路由策略门签发；编排器只验证并执行，绝不让模型二次改路由。
+            validate_route_decision(
+                req.route_decision,
+                scope="default",
+                request=self._route_validation_request(req),
+            )
+            step = GraphTraceStep(
+                node="understand",
+                elapsed_ms=int((time.monotonic() - started) * 1000),
+                status="ok",
+                note="authoritative_multi_task_route",
+            )
+            await self._emit_cb("trace", step.model_dump(mode="json"))
+            return {
+                "intent": "compound",
+                "goal": req.user_message,
+                "ambiguous": False,
+                "clarifying": None,
+                "trace": [step],
+            }
         understanding = await self._agent.understand(req)
         step = self._ok_step("understand", started)
         await self._emit_cb("trace", step.model_dump(mode="json"))
@@ -406,6 +449,20 @@ class OrchestratorGraph:
 
     async def _node_build_plan(self, state: OrchestratorState) -> dict[str, Any]:
         req = state["req"]
+        if req.route_decision is not None and req.route_decision.task.family == "MULTI_TASK":
+            task_plan = compile_task_plan(
+                req.route_decision,
+                message=req.user_message,
+                kc_codes=list(req.recent_kc_codes or req.decaying_kcs or req.course_kc_index[:1]),
+            )
+            step = self._sync_step("decompose", note=f"task_plan:{task_plan.topology}")
+            await self._emit_cb("trace", step.model_dump(mode="json"))
+            return {
+                "plan": task_plan.steps,
+                "task_plan": task_plan,
+                "reused_plan": False,
+                "trace": [step],
+            }
         # continue/negotiate 意图复用 stored plan：这类轮次是在已有学习计划上追问或调整，
         # 不应重新 dispatch 四个子 agent，否则一个“下一步做什么”会再次生成全套资源。
         if state["intent"] in {"continue", "negotiate"}:
@@ -428,33 +485,58 @@ class OrchestratorGraph:
 
     async def _node_dispatch(self, state: OrchestratorState) -> dict[str, Any]:
         req = state["req"]
-        plan = state["plan"]
+        dispatch_started = time.monotonic()
+        # Phase 2/4 预检必须先于任何 SSE 事件与副作用：签名 TaskPlan 是唯一执行事实源，
+        # state["plan"] 可能来自被伪造的恢复状态，越权计划不得泄漏到 plan/loop_plan 事件。
+        task_plan = state.get("task_plan")
+        if task_plan is not None:
+            if req.route_decision is None:
+                raise TaskPlanPolicyError("signed TaskPlan execution requires RouteDecision")
+            validate_route_decision(
+                req.route_decision,
+                scope="default",
+                request=self._route_validation_request(req),
+            )
+            validate_task_plan(task_plan, req.route_decision)
+            plan = list(task_plan.steps)
+            replans_used = task_plan.replans_used
+        else:
+            plan = list(state["plan"])
+            replans_used = 0
 
-        # Emit plan SSE event listing all dispatch steps as nodes
-        plan_nodes = [
-            {
-                "node": f"dispatch.{step.agent}",
-                "agent_label": self._agent_display_name(step.agent),
-                "kind": self._infer_kind(step),
-            }
-            for step in plan
-        ]
-        await self._emit_cb(
-            "plan",
-            {"type": "orchestrator", "nodes": plan_nodes},
-        )
+        async def _emit_plan_nodes() -> None:
+            # Emit plan SSE event listing all dispatch steps as nodes；C3 候选切换后
+            # 用切换后的权威计划重发，前端计划卡与 loopSlice 都能看到新步序。
+            plan_nodes = [
+                {
+                    "node": f"dispatch.{step.agent}",
+                    "agent_label": self._agent_display_name(step.agent),
+                    "kind": self._infer_kind(step),
+                }
+                for step in plan
+            ]
+            await self._emit_cb(
+                "plan",
+                {"type": "orchestrator", "nodes": plan_nodes},
+            )
+            # §3.8 闭环可见有界计划（Claude Code 网页版格式）：发 loop_plan CUSTOM 事件供前端
+            # loopSlice 累积，LoopProgress 渲染（与既有 plan/STATE_DELTA 事件并存，向后兼容）。
+            await self._emit_cb(
+                "CUSTOM",
+                {"name": "loop_plan", "value": loop_plan_event(self._loop.build_loop_plan(plan))},
+            )
 
-        # §3.8 闭环可见有界计划（Claude Code 网页版格式）：发 loop_plan CUSTOM 事件供前端
-        # loopSlice 累积，LoopProgress 渲染（与既有 plan/STATE_DELTA 事件并存，向后兼容）。
-        await self._emit_cb(
-            "CUSTOM",
-            {"name": "loop_plan", "value": loop_plan_event(self._loop.build_loop_plan(plan))},
-        )
+        await _emit_plan_nodes()
 
         # AG-UI STATE_DELTA：plan 步骤进度的累积状态映射（step_id → pending/active/done/failed），
         # 随 dispatch 真实推进实时同步前端。区别于离散 trace 日志，这是「当前完整状态」快照，前端
         # useSseStream.state 浅合并即得最新全量、可直接绑定计划卡，无需自行从 trace 流累积。
-        step_status: dict[str, str] = {step.id: "pending" for step in plan}
+        # ``done`` 是持久化恢复边界：候选切换前已经成功并产生副作用的步骤必须
+        # 直接视为完成，不能因进程重启再次派发。active/failed/skipped 都不是可恢复
+        # 的成功证明，恢复执行时回到 pending 并由稳定 idempotency_key 保护重试。
+        step_status: dict[str, str] = {
+            step.id: "done" if step.status == "done" else "pending" for step in plan
+        }
 
         async def _emit_plan_progress() -> None:
             # 发完整步骤视图（真实 PlanStep 字段 + 实时 status），前端 state.plan_steps 可直接渲染
@@ -466,16 +548,39 @@ class OrchestratorGraph:
 
         await _emit_plan_progress()
 
-        # 两批有界并发：watch/learn/assess 无依赖先并发；practice 依赖 learn 工件随后执行。
-        first_batch = [step for step in plan if step.phase != "practice"]
-        second_batch = [step for step in plan if step.phase == "practice"]
-        semaphore = asyncio.Semaphore(_DISPATCH_CONCURRENCY)
+        # Phase 2：TaskPlan 由显式依赖驱动；旧看学练测计划保持 practice 依赖 learn 的兼容语义。
+        def _dependencies_for(current_plan: list[PlanStep]) -> dict[str, list[str]]:
+            explicit_dependencies = any(step.depends_on for step in current_plan)
+            legacy_learn_ids = [step.id for step in current_plan if step.phase == "learn"]
+            return {
+                step.id: (
+                    list(step.depends_on)
+                    if explicit_dependencies or task_plan is not None
+                    else legacy_learn_ids
+                    if step.phase == "practice"
+                    else []
+                )
+                for step in current_plan
+            }
+
+        dependencies = _dependencies_for(plan)
+        concurrency = (
+            min(task_plan.max_parallel_agents, _DISPATCH_CONCURRENCY)
+            if task_plan is not None
+            else _DISPATCH_CONCURRENCY
+        )
+        semaphore = asyncio.Semaphore(concurrency)
         results_by_id: dict[str, DispatchResult] = {}
-        traces_by_id: dict[str, GraphTraceStep] = {}
+        # 真实时间线：dispatch/evaluate/replan/阻断标记按发生顺序记录，重试步骤保留每次尝试，
+        # 供审计与测试还原「先失败一次、切换候选、再失败一次」的完整恢复过程。
+        timeline: list[GraphTraceStep] = []
+        attempts_by_id: dict[str, int] = {}
 
         async def _run_step(step: PlanStep, focus_hint_extra: str = "") -> None:
             """单 step 全生命周期：start trace → dispatch → error/finish trace（失败不外抛）。"""
             async with semaphore:
+                attempts_by_id[step.id] = attempts_by_id.get(step.id, 0) + 1
+                attempt = attempts_by_id[step.id]
                 step_status[step.id] = "active"
                 await _emit_plan_progress()
                 await self._emit_loop_step(step, "active")
@@ -551,28 +656,240 @@ class OrchestratorGraph:
                     error="" if result.ok else (result.note or result.summary or ""),
                 )
                 results_by_id[step.id] = result
-                traces_by_id[step.id] = GraphTraceStep(
-                    node=f"dispatch.{step.agent}",
-                    elapsed_ms=elapsed_ms,
-                    status="ok" if result.ok else "fail",
-                    note=result.summary,
+                timeline.append(
+                    GraphTraceStep(
+                        node=f"dispatch.{step.agent}",
+                        elapsed_ms=elapsed_ms,
+                        status="ok" if result.ok else "fail",
+                        note=result.summary,
+                    )
+                )
+                # 增量耐久化事件：在依赖步骤被放行前先交给 Java SSE 旁路落 checkpoint /
+                # agent_run / tool_call。载荷仅含结构化摘要与审计工件，不含模型思维过程；
+                # idempotency_key 让重试/候选切换后的同一步发布共享稳定幂等边界。
+                await self._emit_cb(
+                    "CUSTOM",
+                    {
+                        "name": "task_step_result",
+                        "value": {
+                            "step_id": step.id,
+                            "agent": step.agent,
+                            "tool_name": step.tool_name or step.resource_type or step.agent,
+                            "status": "COMPLETED" if result.ok else "FAILED",
+                            "summary": result.summary,
+                            "elapsed_ms": result.elapsed_ms or elapsed_ms,
+                            "attempt": attempt,
+                            "idempotency_key": step.idempotency_key or "",
+                            "artifact": result.artifact or {},
+                        },
+                    },
                 )
 
-        if first_batch:
-            await asyncio.gather(*(_run_step(step) for step in first_batch))
-        learn_hint = self._learn_artifact_hint(plan, results_by_id)
-        if second_batch:
-            await asyncio.gather(*(_run_step(step, learn_hint) for step in second_batch))
+        completed: set[str] = {step.id for step in plan if step_status[step.id] == "done"}
+        pending = {step.id: step for step in plan if step.id not in completed}
+        failed: set[str] = set()
+        while pending:
+            blocked = [
+                step
+                for step in pending.values()
+                if any(dependency in failed for dependency in dependencies[step.id])
+            ]
+            for step in blocked:
+                result = DispatchResult(
+                    step_id=step.id,
+                    agent=step.agent,
+                    ok=False,
+                    summary="前置步骤失败，本步骤未执行",
+                    note="dependency_failed",
+                    artifact={"kind": "dependency_blocked"},
+                )
+                results_by_id[step.id] = result
+                timeline.append(
+                    GraphTraceStep(
+                        node=f"dispatch.{step.agent}",
+                        elapsed_ms=0,
+                        status="fail",
+                        note=result.summary,
+                    )
+                )
+                step_status[step.id] = "skipped"
+                await self._emit_loop_step(
+                    step,
+                    "failed",
+                    reason_summary=result.summary,
+                    error="dependency_failed",
+                )
+                failed.add(step.id)
+                completed.add(step.id)
+                pending.pop(step.id)
+            if blocked:
+                await _emit_plan_progress()
+                continue
 
-        # 聚合结果按 plan 原序输出（SSE 事件完成顺序可乱，step_id 已对齐）。
+            ready = [step for step in pending.values() if set(dependencies[step.id]) <= completed]
+            if not ready:
+                raise RuntimeError("TaskPlan dependency graph has no runnable step")
+            await asyncio.gather(
+                *(
+                    _run_step(
+                        step,
+                        self._dependency_artifact_hint(dependencies[step.id], results_by_id),
+                    )
+                    for step in ready
+                )
+            )
+            candidate_switched = False
+            if task_plan is not None and task_plan.topology == "PLANNER_EXECUTOR":
+                for step in ready:
+                    current = results_by_id[step.id]
+                    evaluate = GraphTraceStep(
+                        node="evaluate",
+                        elapsed_ms=0,
+                        status="ok" if current.ok else "fail",
+                        note=f"planner_executor:{step.id}:{'pass' if current.ok else 'retryable'}",
+                    )
+                    await self._emit_cb("trace", evaluate.model_dump(mode="json"))
+                    timeline.append(evaluate)
+                    if (
+                        current.ok
+                        or step.on_failure != "REPLAN_ONCE"
+                        or replans_used >= task_plan.max_replans
+                    ):
+                        continue
+                    if (
+                        req.route_decision is not None
+                        and req.route_decision.task.complexity == "C3"
+                    ):
+                        previous_candidate_id = task_plan.active_candidate_id
+                        successful_step_ids = {
+                            step_id for step_id, status in step_status.items() if status == "done"
+                        }
+                        task_plan = switch_task_plan_candidate_once(
+                            task_plan,
+                            req.route_decision,
+                            successful_step_ids=successful_step_ids,
+                        )
+                        # 六份运行时集合由纯函数整体一致重建；这里重绑定局部名即可，
+                        # 嵌套闭包（_run_step/_emit_plan_progress）读到的就是新集合。
+                        runtime = rebuild_runtime_after_switch(
+                            task_plan,
+                            successful_step_ids=successful_step_ids,
+                        )
+                        plan = runtime.plan
+                        dependencies = _dependencies_for(plan)
+                        completed = runtime.completed
+                        failed = runtime.failed
+                        pending = runtime.pending
+                        step_status = runtime.step_status
+                        replans_used = runtime.replans_used
+                        replan = GraphTraceStep(
+                            node="replan",
+                            elapsed_ms=0,
+                            status="retry",
+                            note=(
+                                f"candidate_switch:{previous_candidate_id}"
+                                f"->{task_plan.active_candidate_id}"
+                            ),
+                        )
+                        await self._emit_cb("trace", replan.model_dump(mode="json"))
+                        timeline.append(replan)
+                        # 候选切换改变了权威步序：重发 plan/loop_plan 与全量进度快照，
+                        # 前端计划卡按切换后的路径重新渲染，而不是停留在被放弃的候选上。
+                        await _emit_plan_nodes()
+                        await _emit_plan_progress()
+                        candidate_switched = True
+                        break
+                    # C2 原合同：受权 PLANNER_EXECUTOR 只重试完全相同的 Agent/tool/step。
+                    # No fallback substitution and no legacy recent_failures Debug insertion.
+                    replan = GraphTraceStep(
+                        node="replan",
+                        elapsed_ms=0,
+                        status="retry",
+                        note=f"authorized_same_step:{step.id}",
+                    )
+                    await self._emit_cb("trace", replan.model_dump(mode="json"))
+                    timeline.append(replan)
+                    replans_used += 1
+                    await _run_step(
+                        step,
+                        self._dependency_artifact_hint(dependencies[step.id], results_by_id),
+                    )
+            if candidate_switched:
+                continue
+            for step in ready:
+                result = results_by_id[step.id]
+                if not result.ok:
+                    failed.add(step.id)
+                completed.add(step.id)
+                pending.pop(step.id)
+
+        # 聚合结果按 plan 原序输出（SSE 事件完成顺序可乱，step_id 已对齐）；
+        # trace 保留真实时间线，重试与候选切换的每次尝试都可回放。
         results = [results_by_id[step.id] for step in plan if step.id in results_by_id]
-        traces = [traces_by_id[step.id] for step in plan if step.id in traces_by_id]
-        return {"dispatch_results": results, "trace": traces}
+        result: dict[str, Any] = {"dispatch_results": results, "trace": timeline}
+        if task_plan is not None:
+            final_statuses = [step_status.get(step.id, step.status) for step in task_plan.steps]
+            status = (
+                "COMPLETED"
+                if final_statuses and all(step_status == "done" for step_status in final_statuses)
+                else "PARTIAL"
+                if any(step_status == "done" for step_status in final_statuses)
+                else "FAILED"
+            )
+            payload = task_plan.model_dump(mode="python")
+            payload["steps"] = [
+                {
+                    **step.model_dump(mode="python"),
+                    "status": step_status.get(step.id, step.status),
+                }
+                for step in task_plan.steps
+            ]
+            payload.update({"replans_used": replans_used, "status": status})
+            task_plan = TaskPlan.model_validate(payload)
+            if req.route_decision is not None:
+                validate_task_plan(task_plan, req.route_decision)
+            result["task_plan"] = task_plan
+            result["plan"] = task_plan.steps
+            # 运行指标只记录可观测量（终态/派发数/阻断数/恢复次数/延迟），不含学生数据。
+            record_execution(
+                status=status,
+                dispatched_steps=sum(attempts_by_id.values()),
+                blocked_steps=sum(
+                    1 for dispatch_result in results if dispatch_result.note == "dependency_failed"
+                ),
+                candidate_switches=sum(
+                    1
+                    for trace in timeline
+                    if trace.node == "replan" and trace.note.startswith("candidate_switch")
+                ),
+                same_step_retries=sum(
+                    1
+                    for trace in timeline
+                    if trace.node == "replan" and trace.note.startswith("authorized_same_step")
+                ),
+                latency_ms=int((time.monotonic() - dispatch_started) * 1000),
+            )
+        return result
 
     @staticmethod
-    def _learn_artifact_hint(
-        plan: list[PlanStep], results_by_id: dict[str, DispatchResult]
+    def _dependency_artifact_hint(
+        dependency_ids: list[str], results_by_id: dict[str, DispatchResult]
     ) -> str:
+        """Only pass bounded public summaries from completed predecessor artifacts."""
+        hints: list[str] = []
+        for dependency_id in dependency_ids:
+            result = results_by_id.get(dependency_id)
+            if result is None or not result.ok:
+                continue
+            artifact = result.artifact or {}
+            title = str(artifact.get("title") or result.summary or "").strip()[:80]
+            summary = str(artifact.get("summary") or "").strip()[:120]
+            if title:
+                hints.append(f"练习紧扣讲义《{title}》要点" + (f"：{summary}" if summary else ""))
+        return ("；" + "；".join(hints)) if hints else ""
+
+    @staticmethod
+    def _learn_artifact_hint(plan: list[PlanStep], results_by_id: dict[str, DispatchResult]) -> str:
         """工件链协作：learn 步真产物摘要 → practice 步 focus_hint 追加句。"""
         for step in plan:
             if step.phase != "learn":
@@ -626,6 +943,10 @@ class OrchestratorGraph:
         negotiate 与 recent_failures→replan 既有路由零影响。重派结果与原失败共享 step_id，
         由 ``_assemble`` 的 ``_collapse_redispatched_results`` 收敛为该步最终结果。
         """
+        # 签名 TaskPlan 的恢复只能发生在 _node_dispatch 内，并且只能原 Agent/工具重试。
+        # 旧资源类型降级会改变真实工具语义，严禁用于受 RouteDecision 约束的请求。
+        if state.get("task_plan") is not None:
+            return {}
         req = state["req"]
         plan = state.get("plan", [])
         # dispatch 节点已按 plan 原序写入；step_id → 最近一次结果。
@@ -645,13 +966,8 @@ class OrchestratorGraph:
                 # 已是 READING / 不可降级 → 保留失败结果，不重派（杜绝无界重试）。
                 continue
 
-            note = (
-                f"reflect_retry:learn {step.resource_type or '-'}"
-                f"→{downgraded.resource_type}"
-            )
-            reflect_step = GraphTraceStep(
-                node="reflect", elapsed_ms=0, status="retry", note=note
-            )
+            note = f"reflect_retry:learn {step.resource_type or '-'}" f"→{downgraded.resource_type}"
+            reflect_step = GraphTraceStep(node="reflect", elapsed_ms=0, status="retry", note=note)
             await self._emit_cb("trace", reflect_step.model_dump(mode="json"))
             await self._emit_cb(
                 "trace",
@@ -711,9 +1027,7 @@ class OrchestratorGraph:
         failed = self._ground_failures(req, state["allowed_set"])
         debug_step = self._build_debug_step(failed)
         self._insert_before_assess(plan, debug_step)
-        replan_step = self._sync_step(
-            "replan", note=f"recent_failures:{','.join(failed[:3])}"
-        )
+        replan_step = self._sync_step("replan", note=f"recent_failures:{','.join(failed[:3])}")
         await self._emit_cb("trace", replan_step.model_dump(mode="json"))
         # emit trace start for DebugAgent dispatch
         await self._emit_cb(
@@ -791,6 +1105,10 @@ class OrchestratorGraph:
     def _route_after_dispatch(self, state: OrchestratorState) -> str:
         if state["intent"] == "negotiate":
             return "extract_profile"
+        # authoritative TaskPlan 已在 dispatch 内按 route policy 完成依赖、评估和至多一次
+        # 原步重规划；旧 recent_failures 分支会擅自插入 DebugAgent，必须跳过。
+        if state.get("task_plan") is not None:
+            return "extract_profile"
         failed = self._ground_failures(state["req"], state["allowed_set"])
         if failed and not any(step.agent == "DebugAgent" for step in state["plan"]):
             return "replan"
@@ -827,9 +1145,7 @@ class OrchestratorGraph:
         await self._emit_cb("trace", step.model_dump(mode="json"))
         return "".join(parts), step
 
-    def _assemble(
-        self, allowed_set: set[str], final: dict[str, Any]
-    ) -> OrchestratorResponse:
+    def _assemble(self, allowed_set: set[str], final: dict[str, Any]) -> OrchestratorResponse:
         reply_md = final.get("reply_md", "")
         trace = final.get("trace", [])
         goal = final.get("goal") or ""
@@ -852,6 +1168,8 @@ class OrchestratorGraph:
                 clarifying_question=final.get("clarifying"),
                 needs_user_input=True,
                 plan=[],
+                route_decision=final.get("req").route_decision if final.get("req") else None,
+                task_plan=final.get("task_plan"),
                 dispatch_results=[],
                 profile_updates=[],
                 trace=trace,
@@ -861,7 +1179,26 @@ class OrchestratorGraph:
             )
 
         plan = final.get("plan", [])
-        done = bool(plan) and all(step.status in ("done", "skipped") for step in plan)
+        dispatch_results = self._collapse_redispatched_results(final.get("dispatch_results", []))
+        task_plan = final.get("task_plan")
+        if task_plan is not None:
+            step_statuses = [step.status for step in task_plan.steps]
+            task_status = (
+                "COMPLETED"
+                if step_statuses and all(step_status == "done" for step_status in step_statuses)
+                else "PARTIAL"
+                if any(step_status == "done" for step_status in step_statuses)
+                else "FAILED"
+            )
+            payload = task_plan.model_dump(mode="python")
+            payload["status"] = task_status
+            task_plan = TaskPlan.model_validate(payload)
+            route_decision = final.get("req").route_decision if final.get("req") else None
+            if route_decision is not None:
+                validate_task_plan(task_plan, route_decision)
+            done = task_status == "COMPLETED"
+        else:
+            done = bool(plan) and all(step.status in ("done", "skipped") for step in plan)
         grounding = self._grounding(plan, allowed_set)
 
         # critic 闸门（§3.6 / §4.3）：grounding + safety 双轨裁决 → critic 后调 eval_span。
@@ -882,9 +1219,9 @@ class OrchestratorGraph:
             clarifying_question=None,
             needs_user_input=False,
             plan=plan,
-            dispatch_results=self._collapse_redispatched_results(
-                final.get("dispatch_results", [])
-            ),
+            route_decision=final.get("req").route_decision if final.get("req") else None,
+            task_plan=task_plan,
+            dispatch_results=dispatch_results,
             profile_updates=final.get("signals", []),
             trace=trace,
             done=done,
@@ -892,9 +1229,7 @@ class OrchestratorGraph:
             grounding_result=grounding,
         )
 
-    async def _persist(
-        self, req: OrchestratorRequest, response: OrchestratorResponse
-    ) -> None:
+    async def _persist(self, req: OrchestratorRequest, response: OrchestratorResponse) -> None:
         await append_turns(
             req.session_id,
             [
@@ -1089,9 +1424,7 @@ class OrchestratorGraph:
                 if code not in allowed_set and code not in invalid:
                     invalid.append(code)
         if invalid:
-            return GroundingResult(
-                passed=False, reasons=[f"UNKNOWN_KC:{code}" for code in invalid]
-            )
+            return GroundingResult(passed=False, reasons=[f"UNKNOWN_KC:{code}" for code in invalid])
         return GroundingResult(passed=True)
 
     @staticmethod

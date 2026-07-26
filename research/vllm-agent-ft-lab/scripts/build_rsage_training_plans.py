@@ -28,6 +28,11 @@ def main() -> None:
         help="各训练阶段隔离输出根目录。",
     )
     parser.add_argument(
+        "--initial-adapter-path",
+        default="research/vllm-agent-ft-lab/outputs/adapters/e1-protocol-patch-v1-1000-v1-dpo-v2-len512",
+        help="冻结 champion Adapter；SFT specialist 从其副本继续训练。",
+    )
+    parser.add_argument(
         "--output-dir",
         default="research/vllm-agent-ft-lab/outputs/rsage/plans",
         help="冻结计划输出根目录。",
@@ -63,6 +68,7 @@ def main() -> None:
             model_path=args.model_path,
             adapter_root=args.adapter_root,
             seed=args.seed,
+            initial_adapter_path=args.initial_adapter_path,
             max_seq_length=args.max_seq_length,
             beta=args.beta,
             lambda_sft=args.lambda_sft,

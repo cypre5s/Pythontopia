@@ -1,0 +1,49 @@
+{
+  "agents": {
+    "ResourceDesignerAgent.code_lab": 60,
+    "ResourceDesignerAgent.handout": 60,
+    "ResourceDesignerAgent.reading": 60,
+    "ResourceDesignerAgent.storyboard": 60
+  },
+  "contamination_policy": "Exclude golden50 and stratified500 by id, source lineage and prompt fingerprint.",
+  "heldout_count": 24,
+  "heldout_sha256": "d548a2d08bc442715913aac9a914b08ebb58969b998a940335e18463ae4b95fb",
+  "preference_axes": {
+    "empty_code": 10,
+    "invalid_pacing": 10,
+    "legacy_contract": 30,
+    "missing_evidence_refs": 10,
+    "missing_sections": 10,
+    "non_json_prose": 10,
+    "non_json_yaml": 10,
+    "safety_leak": 40,
+    "scalar_common_mistakes": 10,
+    "too_few_items": 10,
+    "too_few_scenes": 10,
+    "unbound_evidence": 40,
+    "weak_semantics": 40
+  },
+  "protected_evaluation_paths": [
+    "cases/golden_adapter_50_v1.jsonl",
+    "cases/domain_cases_5000_v1_stratified500.jsonl"
+  ],
+  "protected_evaluation_sha256": {
+    "cases/domain_cases_5000_v1_stratified500.jsonl": "69e33f6dddff052577630672d2aa4cf7903363e87e1e505d6f1ba2fb2522c1e0",
+    "cases/golden_adapter_50_v1.jsonl": "dda6fe2bbe4ea4ddc75f3558f587cdc1e976398796bc7decd82d457b86fdcf83"
+  },
+  "protected_overlap_count": 0,
+  "purpose": "v2_semantic_ir_preference_optimization",
+  "schema_version": "agent-schema-v2",
+  "seed": 20260712,
+  "semantic_labels": {
+    "code_lab": 60,
+    "handout": 60,
+    "reading": 60,
+    "storyboard": 60
+  },
+  "source_path": "cases/domain_cases_5000_v1.jsonl",
+  "source_sha256": "23ae6fdf4eeef3653eac6ba7ea580cdd358fae4dc3bdeedca7e0bd03b4bd3039",
+  "total_count": 240,
+  "train_count": 216,
+  "train_sha256": "058044a304d990b8e928cc42a2b8fd41a753a1a2e8277a97778ea9e462e4aaee"
+}

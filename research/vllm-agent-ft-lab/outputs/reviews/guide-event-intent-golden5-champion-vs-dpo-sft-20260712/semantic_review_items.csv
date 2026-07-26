@@ -1,0 +1,159 @@
+review_item_id,case_id,chapter,kc,learner_profile,learning_signal,misconception_signal,task_focus,allowed_evidence,response_a,response_b,acceptable_intents,primary_intent,preferred_response,confidence_1_to_3,review_notes
+semantic-0001,v2-eval5000-new_chapter_slice-0034-domain-2034-guidecoachagent-c5,5,列表,竞赛兴趣强，倾向直接写代码但复盘不足,复盘大厅记录显示同类错误第三次出现,列表别名和复制混淆,更新学习状态,"[""page-5-009""]","{
+  ""event_intent"": ""TRACE"",
+  ""action_goal"": ""识别列表别名与复制混淆的误区"",
+  ""stop_condition"": ""学生解释清楚混淆原因"",
+  ""state_delta"": {
+    ""hint_level"": 1,
+    ""diagnosis_label"": ""概念混淆"",
+    ""student_state_label"": ""迷思概念""
+  },
+  ""evidence_refs"": [
+    ""page-5-009""
+  ],
+  ""confidence"": 0.85,
+  ""reason_summary"": ""学生将列表别名与复制操作混为一谈，需引导区分两者机制。""
+}","{
+  ""event_intent"": ""TRACE"",
+  ""action_goal"": ""识别学生因混淆列表别名与复制导致的重复错误模式"",
+  ""stop_condition"": ""学生能够区分别名引用与值复制的区别"",
+  ""state_delta"": {
+    ""hint_level"": 2,
+    ""diagnosis_label"": ""alias_vs_copy_confusion"",
+    ""student_state_label"": ""repeated_error_pattern""
+  },
+  ""evidence_refs"": [
+    ""page-5-009""
+  ],
+  ""confidence"": 0.85,
+  ""reason_summary"": ""学生第三次出现同类错误，提示需引导其理解别名机制而非直接纠正代码"",
+  ""grounding_type"": ""evidence""
+}",,,,,
+semantic-0002,v2-eval5000-new_chapter_slice-0004-domain-2004-guidecoachagent-c3,3,if,非计算机专业新生，数学基础较好但首次系统学编程,路径规划卡在补救节点，需要决定继续或换资源,布尔表达式短路不清,决定通过/补救/换资源,"[""page-3-021""]","{
+  ""event_intent"": ""SCAFFOLD"",
+  ""action_goal"": ""引导学生识别布尔表达式短路求值机制，以诊断当前路径规划失败原因"",
+  ""stop_condition"": ""学生能够独立解释为何第二个条件未被执行"",
+  ""state_delta"": {
+    ""hint_level"": 1,
+    ""diagnosis_label"": ""short_circuit_evaluation"",
+    ""student_state_label"": ""confused_about_execution_flow""
+  },
+  ""evidence_refs"": [
+    ""page-3-021""
+  ],
+  ""confidence"": 0.85,
+  ""reason_summary"": ""学生卡在补救节点，需引导其理解短路求值如何导致第二个条件被跳过"",
+  ""evidence_ids"": [
+    ""page-3-021""
+  ]
+}","{
+  ""event_intent"": ""REVIEW"",
+  ""action_goal"": ""检查学生是否理解布尔表达式短路求值规则"",
+  ""stop_condition"": ""学生能准确解释短路行为或请求提示"",
+  ""state_delta"": {
+    ""hint_level"": 1,
+    ""diagnosis_label"": ""概念模糊"",
+    ""student_state_label"": ""partial_understanding""
+  },
+  ""evidence_refs"": [
+    ""page-3-021""
+  ],
+  ""confidence"": 0.85,
+  ""reason_summary"": ""学生已掌握基础语法，但对短路求值机制存在认知模糊，需通过回顾强化概念。""
+}",,,,,
+semantic-0003,v2-eval5000-new_chapter_slice-0044-domain-2044-guidecoachagent-c1,1,变量,机械专业学生，能理解流程图但对语法细节不稳定,页面阅读完成但微测错在概念边界,把赋值当成数学等式,安排下一步任务,"[""page-1-006""]","{
+  ""event_intent"": ""SCAFFOLD"",
+  ""action_goal"": ""引导学生区分赋值操作与数学等式的概念差异"",
+  ""stop_condition"": ""学生能够准确描述变量赋值与数学等式的区别"",
+  ""state_delta"": {
+    ""hint_level"": 1,
+    ""diagnosis_label"": ""conceptual_confusion"",
+    ""student_state_label"": ""partial_understanding""
+  },
+  ""evidence_refs"": [
+    ""page-1-006""
+  ],
+  ""confidence"": 0.85,
+  ""reason_summary"": ""学生将赋值操作误认为数学等式，需通过提示引导其理解变量变化的动态过程"",
+  ""grounding_type"": ""evidence""
+}","{
+  ""event_intent"": ""SCAFFOLD"",
+  ""action_goal"": ""纠正变量赋值与数学等式的概念混淆"",
+  ""stop_condition"": ""学生能区分赋值操作与数学等式含义"",
+  ""state_delta"": {
+    ""hint_level"": 1,
+    ""diagnosis_label"": ""conceptual_misconception"",
+    ""student_state_label"": ""partial_understanding""
+  },
+  ""evidence_refs"": [
+    ""page-1-006""
+  ],
+  ""confidence"": 0.85,
+  ""reason_summary"": ""学生将变量赋值误认为数学等式，需通过提示引导其理解编程中赋值是操作而非断言。""
+}",,,,,
+semantic-0004,v2-eval5000-new_chapter_slice-0024-domain-2024-guidecoachagent-c2,2,range,自学过一点 C 语言，常把缩进和花括号模型混用,提交通过了样例，但解释与代码行为不一致,缩进导致循环体范围错误,压缩导学动作,"[""page-2-014""]","{
+  ""event_intent"": ""TRACE"",
+  ""action_goal"": ""诊断缩进与花括号混用导致的循环范围误解"",
+  ""stop_condition"": ""学生澄清缩进与花括号在循环体范围判断中的区别"",
+  ""state_delta"": {
+    ""hint_level"": 1,
+    ""diagnosis_label"": ""scope_boundary_confusion"",
+    ""student_state_label"": ""partial_misconception""
+  },
+  ""evidence_refs"": [
+    ""page-2-014""
+  ],
+  ""confidence"": 0.85,
+  ""reason_summary"": ""学生将缩进误认为循环体边界，需引导其观察花括号实际作用范围"",
+  ""grounding_id"": ""a08c7da0e9d6""
+}","{
+  ""event_intent"": ""TRACE"",
+  ""action_goal"": ""diagnose_scope_error"",
+  ""stop_condition"": ""student_provides_revised_code_or_explanation"",
+  ""state_delta"": {
+    ""hint_level"": 1,
+    ""diagnosis_label"": ""indentation_misleading_scope"",
+    ""student_state_label"": ""confused_about_brace_vs_indent""
+  },
+  ""evidence_refs"": [
+    ""page-2-014""
+  ],
+  ""confidence"": 0.85,
+  ""reason_summary"": ""student's explanation contradicts observed execution flow due to incorrect assumption that indentation defines loop bounds instead of braces"",
+  ""ir_version"": 2
+}",,,,,
+semantic-0005,v2-eval5000-new_chapter_slice-0014-domain-2014-guidecoachagent-c6,6,作用域,基础薄弱但坚持度高，愿意按步骤完成微练习,页面阅读时间很短，可能只是快速划过,默认参数可变对象误用,设定停止条件,"[""page-6-018""]","{
+  ""event_intent"": ""SCAFFOLD"",
+  ""action_goal"": ""引导学生识别默认参数中可变对象被意外修改的陷阱"",
+  ""stop_condition"": ""学生能够口头描述为何第二次调用函数时输出与预期不符"",
+  ""state_delta"": {
+    ""hint_level"": 1,
+    ""diagnosis_label"": ""mutable_default_argument"",
+    ""student_state_label"": ""probing""
+  },
+  ""evidence_refs"": [
+    ""page-6-018""
+  ],
+  ""confidence"": 0.85,
+  ""reason_summary"": ""当前步骤旨在通过提问引导学生观察变量状态变化，避免直接解释机制。""
+}","{
+  ""event_intent"": ""SCAFFOLD"",
+  ""action_goal"": ""引导学生识别默认参数中可变对象被意外修改的问题"",
+  ""stop_condition"": ""学生能够口头描述为什么函数调用后对象状态发生了改变"",
+  ""state_delta"": {
+    ""hint_level"": 1,
+    ""diagnosis_label"": ""mutable_default_argument"",
+    ""student_state_label"": ""aware_of_observation""
+  },
+  ""evidence_refs"": [
+    ""page-6-018""
+  ],
+  ""confidence"": 0.85,
+  ""reason_summary"": ""学生已观察到对象状态变化，需引导其联系默认参数机制与可变对象特性"",
+  ""id"": ""4edf938d7e18"",
+  ""constraint"": ""输出要能被后续 Agent 接着"",
+  ""profile"": ""基础薄弱但坚持度高，愿意按步骤完成微练习"",
+  ""safety"": false,
+  ""signal"": ""页面阅读时间很短，可能只是快速划过"",
+  ""web"": null
+}",,,,,

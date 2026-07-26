@@ -1,6 +1,7 @@
 import json
 
 from pyt_agent_lab.fallback import build_fallback_response
+from pyt_agent_lab.scoring import score_case_response
 
 
 # ---------------------------------------------------------------------------
@@ -132,3 +133,27 @@ def test_fallback_all_agents_produce_deterministic_output() -> None:
         r1 = build_fallback_response(case, agent, ["json_invalid"])
         r2 = build_fallback_response(case, agent, ["json_invalid"])
         assert r1 == r2, f"{agent} fallback should be deterministic"
+
+
+def test_v2_semantic_fallbacks_pass_contract_for_adapter_agents() -> None:
+    agents = (
+        "GuideCoachAgent",
+        "PracticeAgent",
+        "MindMapAgent",
+        "IntentRouterAgent",
+        "ResourceDesignerAgent.handout",
+        "ResourceDesignerAgent.reading",
+        "ResourceDesignerAgent.code_lab",
+        "ResourceDesignerAgent.storyboard",
+    )
+    for agent in agents:
+        evidence_ids = [] if agent == "IntentRouterAgent" else ["page-1"]
+        case = {
+            **_case(agent, evidence_ids=evidence_ids),
+            "id": f"v2-{agent}",
+            "schema_version": "agent-schema-v2",
+            "expected_markers": [],
+        }
+        response = build_fallback_response(case, agent, ["schema_invalid"])
+
+        assert score_case_response(case, response).contract_pass

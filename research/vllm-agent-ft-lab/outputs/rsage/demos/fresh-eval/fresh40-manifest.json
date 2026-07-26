@@ -1,0 +1,274 @@
+{
+  "actual_count": 40,
+  "agent_counts": {
+    "DebugAgent": 4,
+    "GroundingCriticAgent": 4,
+    "GuideCoachAgent": 4,
+    "IntentRouterAgent": 4,
+    "MindMapAgent": 4,
+    "PathPlannerAgent": 4,
+    "PracticeAgent": 4,
+    "ResourceDesignerAgent": 4,
+    "SafetyAgent": 4,
+    "TutorDecisionAgent": 4
+  },
+  "chapter_counts": {
+    "1": 3,
+    "2": 6,
+    "3": 9,
+    "4": 5,
+    "5": 6,
+    "6": 3,
+    "7": 8
+  },
+  "dataset_sha256": "8456ac22e3e1213d4c2a191cf337b0ed657bce13fa499e7c326fb549a9469852",
+  "eval_pack_version": "fresh-full5000-v2",
+  "eval_slice_counts": {
+    "fresh_retention": 36,
+    "fresh_target": 4
+  },
+  "format": "rsage_fresh_eval_manifest_v2",
+  "freshness_audit": {
+    "fresh_row_count": 40,
+    "historical_row_count": 15586,
+    "message_zh": "fresh 评测集与历史数据的编号、提示和模板族均为零重叠",
+    "prompt_overlap_count": 0,
+    "prompt_overlap_examples": [],
+    "source_id_overlap_count": 0,
+    "source_id_overlap_examples": [],
+    "template_overlap_count": 0,
+    "template_overlap_examples": [],
+    "zero_historical_overlap": true
+  },
+  "historical_inputs": [
+    {
+      "path": "research/vllm-agent-ft-lab/cases/adapter_heldout_failure_cases_v1.jsonl",
+      "sha256": "27467c8ded91bd6b52ac6d0a8c1dfef9a20d82471c3cabcd31020eea30629e3c"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/cases/baseline_cases.jsonl",
+      "sha256": "4c5c87a88749813312cb04e0ce123cc4d18d973c5469d1a63c74d9172ea8b398"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/cases/domain_cases_100.jsonl",
+      "sha256": "8ffd5f993d7d445a69de7717e1be668c92ed69510f5c36033877932e70cca237"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/cases/domain_cases_1000_v1.jsonl",
+      "sha256": "38f385188ed5f56d0cff42bac7d9e2a966ecc08d7a1ad7f6f2b4f885c35d8f48"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/cases/domain_cases_1000_v1_beginner_noise.jsonl",
+      "sha256": "5d9fd9cf0d7c89fc9a232c5bfedf091d249811af3759c7aef9eb714c678a6264"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/cases/domain_cases_140.jsonl",
+      "sha256": "f1423272c546a569248406e55818303e92e814ada8f37d178a559a9ed33249c0"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/cases/domain_cases_140_v2.jsonl",
+      "sha256": "3d0ddc690e2120422682d542683a91ab8d13a9bce9a9dee79adde5999131a11d"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/cases/domain_cases_5000_v1.jsonl",
+      "sha256": "23ae6fdf4eeef3653eac6ba7ea580cdd358fae4dc3bdeedca7e0bd03b4bd3039"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/cases/domain_cases_5000_v1_smoke20.jsonl",
+      "sha256": "42ce551e451c30755adcc2855b8f832d19cb7ed7a4519c28dfdc22fb9e569c2f"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/cases/domain_cases_5000_v1_smoke4.jsonl",
+      "sha256": "69659e200c8a191461b7f0be316f4e06288d5abfb4c20abb8218ad0f37b06239"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/cases/domain_cases_5000_v1_stratified150_v2_ir_3agent.jsonl",
+      "sha256": "ef6d9ffb27d8091e8c10adf5dcb2e5cc9a6508376b99896a9d17acfe7eb0ac5d"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/cases/domain_cases_5000_v1_stratified200_v2_ir.jsonl",
+      "sha256": "2d5b88a30835b8094b7b522214aadff96e4fa214d140823d7483feebeca08f68"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/cases/domain_cases_5000_v1_stratified200_v2_ir_resource4.jsonl",
+      "sha256": "081209b8d554a46aa24aad6498678a6b885c3bf7683e1810613e68f636c1db3a"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/cases/domain_cases_5000_v1_stratified200_v2_ir_resource4_compact.jsonl",
+      "sha256": "7fa2e22e9655bdbe4316a981d92c4bbc7b3880c578f7eda3a58c7cda3452f59a"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/cases/domain_cases_5000_v1_stratified500.jsonl",
+      "sha256": "69e33f6dddff052577630672d2aa4cf7903363e87e1e505d6f1ba2fb2522c1e0"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/cases/domain_cases_5000_v1_stratified50_v1_guide.jsonl",
+      "sha256": "c49fe633a6d8a22e460eb46999a98b45cace8b844eeea2b9ac092b42b733da48"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/cases/domain_cases_5000_v1_stratified50_v2_ir_guide.jsonl",
+      "sha256": "eec6170950b11d2548fde3be362a3f6371071ff8ba0959d849d02c15fa4fb911"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/cases/golden_adapter_15_v1_3agent.jsonl",
+      "sha256": "56d7d03aa42cc0313f01c42085c0183b6a338add35919f36818a3eddb4d97516"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/cases/golden_adapter_15_v2_ir_3agent.jsonl",
+      "sha256": "413100d92801ab02eb23a45427558cc997bbf1070c57f183120f034a08160875"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/cases/golden_adapter_20_v2_ir.jsonl",
+      "sha256": "ec09abb1c006a20339f0964c7940f5470cfa96cd181d17ec423d18af00df85fe"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/cases/golden_adapter_20_v2_ir_resource4.jsonl",
+      "sha256": "53826211a9a8cf591c8d16ac2caab3c247dc1187665227a5bed3e3b656a25fd1"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/cases/golden_adapter_20_v2_ir_resource4_codeplan_v21.jsonl",
+      "sha256": "cd92b50ddb6beb7558bc569c9e5d2bc9199460da2e6c3b628633d472924b487e"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/cases/golden_adapter_20_v2_ir_resource4_compact.jsonl",
+      "sha256": "261fee778ec007a23928c5cf97504acb0cb31fd5ddfebd20307754697732060c"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/cases/golden_adapter_50_v1.jsonl",
+      "sha256": "dda6fe2bbe4ea4ddc75f3558f587cdc1e976398796bc7decd82d457b86fdcf83"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/cases/golden_adapter_50_v2_ir_reflection.jsonl",
+      "sha256": "122dad91e0b01159459a94890e1ca603826e2206d71a91eaed01de758dc6beea"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/cases/golden_adapter_5_v1_guide.jsonl",
+      "sha256": "2ed44662444077de83de1350c895c492135dc3375cd2d759efc58ef7ffb625ce"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/cases/golden_adapter_5_v2_ir_guide.jsonl",
+      "sha256": "3c5a720a32f10043bef94b998446b25905050fe50170a2ea0b2c234d87e2b61c"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/outputs/preferences/codeplan-v21-pattern240-20260713/train.jsonl",
+      "sha256": "65b15ede43854785667ca828adb46d0251b5289359bc059c27630fd8c0c1c854"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/outputs/preferences/dpo-v2-e1-vs-raw-baseline-1000-v1/train.jsonl",
+      "sha256": "606d7655283b42050458a99622fbd7ea8bd1f4f0e33ba4b2d7a272f13102f03c"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/outputs/preferences/dpo-v2-guarded-vs-raw-lora-beginner-noise-1000/train.jsonl",
+      "sha256": "b1c396bb8b0051b75d13e3fd46a94f57fd6777432b1391cb4ecb013c686ccbc6"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/outputs/preferences/orpo-v1-e1-vs-raw-baseline-1000-v1-len384-filtered/train.jsonl",
+      "sha256": "ce17eefb2fca958c2b42aa883dbde4fdf5f26f26be3bc227e193bfc360a5e9f5"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/outputs/preferences/reflection-v2-event-evidence240-20260713/train.jsonl",
+      "sha256": "bf5a9ccf82f117c1ef9cb3c1069d9f9233d489a10c5e9572ce65452d1b9c9869"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/outputs/preferences/schema-contract-v1-300-20260710/train.jsonl",
+      "sha256": "d02d5c5a31b7e39d1c7be13f3bcde67c4acdcf94f9630043d64c54878a81a15c"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/outputs/preferences/v2-ir-balanced-500-20260711/train.jsonl",
+      "sha256": "5a146d60100cba50dc2ee871ace1ca83c9646205d845dea14e2f5287c120e3d7"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/outputs/preferences/v2-ir-compact-3agent-450-20260711/train.jsonl",
+      "sha256": "7298a38e010e6380025a8f294ea8e5ea2794cec36ec20133efbc6f4e72d51846"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/outputs/preferences/v2-ir-compact2-3agent-450-20260711/train.jsonl",
+      "sha256": "1b4e3fb977ce46f094b34b2094e8ef4f6d4721ca32e90e98719481429d9bf1b7"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/outputs/preferences/v2-ir-compact3-3agent-450-20260711/train.jsonl",
+      "sha256": "90b9d4d697e41d96675bb89c2b2e3bdc134ab1bf7042b1e14b55570d050ecb5c"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/outputs/preferences/v2-ir-guide-event-intent-240-20260711/train.jsonl",
+      "sha256": "bfcf64a4b1d1591043d920f3444c4ec8a0dc45976982b72a4b405a53c3a30a39"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/outputs/preferences/v2-ir-guide-intent-grid252-20260711/train.jsonl",
+      "sha256": "7e0fbd8b865329597725fa7c6e60167e1124627bbc62df27b5fe5b4b25cf86c8"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/outputs/preferences/v2-ir-guide-schema-300-20260711/train.jsonl",
+      "sha256": "ae9b052ed840e36de87a0a9b2bac2ccdfa806b86e6de8a801b1d0fa2dcc9caf8"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/outputs/preferences/v2-ir-guide-schema-compact2-300-20260711/train.jsonl",
+      "sha256": "be295dcb1a59d2962da8139f0fdb845123e9f748cb55cb6304abb4d7352f5bb4"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/outputs/preferences/v2-ir-guide-schema-compact3-300-20260711/train.jsonl",
+      "sha256": "5f9ef15e6c3ddbee035b1f6d0a5953e7a79d1e0053339cc2ac2657bb0c680400"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/outputs/preferences/v2-ir-guide-schema-compact300-20260711/train.jsonl",
+      "sha256": "2248652d3c812cd34609b677f5274484fe0e5dbb3e5d6093c98d583163af094c"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/outputs/preferences/v2-ir-guide-schema-compact4-300-20260711/train.jsonl",
+      "sha256": "2021da2a3c21d216c89b36865286dbad7754a8340a15dcadef28e2dcaafabc2d"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/outputs/preferences/v2-ir-resource4-balanced240-20260712/train.jsonl",
+      "sha256": "0ee37898d135907d084620de5190a334ec8796b8fcb06eea97c3ad63902baf03"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/outputs/preferences/v2-ir-resource4-compact240-20260712/train.jsonl",
+      "sha256": "73125d18b6c37f815f62d46209db78380d8dd7fecd0b0c92b38cbe1fadeddd3f"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/outputs/preferences/v2-ir-resource4-failure-directed240-20260712/train.jsonl",
+      "sha256": "058044a304d990b8e928cc42a2b8fd41a753a1a2e8277a97778ea9e462e4aaee"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/outputs/preferences/v2-ir-semantic-400-20260711/train.jsonl",
+      "sha256": "3cd1c932f650e40c6ab4051d825b0445e4b634fc54fb4160ee57eb4744059a68"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/outputs/sft/e1-protocol-patch-v1-1000-v1/train.jsonl",
+      "sha256": "7cdc5838da0e6dcb4b3537ddc4a6d98af7a00b10edac6bcdc9ec6340b964ffa0"
+    },
+    {
+      "path": "research/vllm-agent-ft-lab/outputs/sft/e1-protocol-patch-v1-v2/train.jsonl",
+      "sha256": "ffaf699b35a9ea80405d1d43aa0ab75cca327e33732cb475495c2938efda06e9"
+    }
+  ],
+  "jsonl_sha256": "4819a9cc21b7da0e741772a4113418de346060d20099939bb6d1a0c967493f87",
+  "message_zh": "已构造并冻结 40 条 fresh-full5000-v2 独立评测案例",
+  "prompt_family_counts": {
+    "fresh-v2-surface-00": 3,
+    "fresh-v2-surface-01": 2,
+    "fresh-v2-surface-02": 3,
+    "fresh-v2-surface-03": 2,
+    "fresh-v2-surface-04": 2,
+    "fresh-v2-surface-05": 2,
+    "fresh-v2-surface-06": 2,
+    "fresh-v2-surface-07": 2,
+    "fresh-v2-surface-08": 2,
+    "fresh-v2-surface-09": 2,
+    "fresh-v2-surface-10": 1,
+    "fresh-v2-surface-11": 2,
+    "fresh-v2-surface-12": 1,
+    "fresh-v2-surface-13": 2,
+    "fresh-v2-surface-14": 2,
+    "fresh-v2-surface-15": 2,
+    "fresh-v2-surface-16": 2,
+    "fresh-v2-surface-17": 2,
+    "fresh-v2-surface-18": 2,
+    "fresh-v2-surface-19": 2
+  },
+  "protected_status": "never_train",
+  "seed": 20260716,
+  "target_count": 40,
+  "unique_case_ids": 40,
+  "unique_prompt_fingerprints": 40
+}

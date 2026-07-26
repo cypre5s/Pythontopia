@@ -6,7 +6,6 @@ from pythontopia_graph.graph.resource_graph import ResourceGraph, ResourceGraphC
 from pythontopia_graph.llm.provider import LlmProvider, LlmResponse
 from pythontopia_graph.nodes.evidence_fetcher import RagHit, StaticEvidenceFetcher
 from pythontopia_graph.schemas.resource import ResourceProduceRequest
-from pythontopia_graph.schemas.resource import HandoutContent, PageRef
 
 VALID_FINISH_STATUSES = {"ok", "retry", "fail"}
 
@@ -137,17 +136,12 @@ async def test_stream_semantic_grounding_failure_retries_and_ends_error() -> Non
     bad_payload = {
         "title": "讲义",
         "summary": "包含未经证据支持的强断言",
-        "handout": HandoutContent(
-            sections=[
-                {
-                    "heading": "section",
-                    "paragraphs": ["根据第 999 页可知 input 函数总是运行 3 秒。"],
-                    "page_refs": [
-                        PageRef(page_id=999, page_no=999, chapter_id=3).model_dump()
-                    ],
-                }
-            ]
-        ).model_dump(),
+        "sections": [{
+            "heading": "section",
+            "paragraphs": ["根据第 999 页可知 input 函数总是运行 3 秒。"],
+            "code_snippets": [],
+            "evidence_refs": [],
+        }],
     }
     graph = ResourceGraph(
         provider=StubProvider([bad_payload, bad_payload, bad_payload]),

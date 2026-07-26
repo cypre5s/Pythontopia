@@ -1,0 +1,9 @@
+{
+  "format": "rsage_training_plans_manifest_v1",
+  "message_zh": "R-SAGE SFT 与 GDPO+RPO 训练计划已冻结",
+  "plan_sha256": {
+    "gdpo-rpo-plan.json": "36afda3a522c2b885d3f7bd3f6d98f8bb565a1c6af965f4f7533bcfdcf9821fe",
+    "sft-plan.json": "37b4dba26ebd0d2a5ca9dfe252161dc62b3ab3b7cfbcdcea943d663c30d68893"
+  },
+  "seed": 42
+}

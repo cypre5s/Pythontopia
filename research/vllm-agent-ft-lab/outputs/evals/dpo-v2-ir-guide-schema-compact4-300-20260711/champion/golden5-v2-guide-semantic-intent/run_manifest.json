@@ -1,0 +1,65 @@
+{
+  "adapter": "pythontopia-qwen35-champion",
+  "case_count": 5,
+  "case_ids_sha256": "fc2bfa46c9e95dd0f1122f8a47ecdc221deef5728805c8a45e95584933b0d29a",
+  "cases_path": "cases/golden_adapter_5_v2_ir_guide.jsonl",
+  "cases_sha256": "70e2732790054a6e04a7b433aea4245c15d535655649aec973341c3ffbc22a95",
+  "code_commit": "5fe192d6c9006c792893e7ecedc034b88651f429",
+  "code_dirty": true,
+  "completed_at": "2026-07-11T13:25:56+00:00",
+  "concurrency": 1,
+  "decoding": {
+    "chat_template_kwargs": {
+      "enable_thinking": false
+    },
+    "max_tokens": "per_case.max_tokens",
+    "temperature": 0.0,
+    "top_p": "server_generation_default_not_explicit"
+  },
+  "endpoint": "http://192.168.3.67:18094/v1",
+  "folds": 1,
+  "incremental_outputs": [
+    "events.jsonl",
+    "metrics.csv",
+    "progress_snapshots.jsonl",
+    "responses.jsonl"
+  ],
+  "model": "pythontopia-qwen35-champion",
+  "prompt_sha256": "6bb931c7628fa46776dbab38a88ddb17025cd08778e108d4f3f1c3175f96c639",
+  "prompt_variant": "baseline",
+  "resume_supported": true,
+  "schema_version": "agent-schema-v1",
+  "seed": 20260711,
+  "started_at": "2026-07-11T13:24:57+00:00",
+  "status": "evaluated",
+  "summary": {
+    "folds": {
+      "0": {
+        "case_count": 5,
+        "contract_pass_rate": 1.0,
+        "forbidden_leak_rate": 0.0,
+        "grounding_safe_rate": 1.0,
+        "json_valid_rate": 1.0,
+        "schema_valid_rate": 1.0,
+        "score_mean": 1.0,
+        "score_std": 0.0
+      }
+    },
+    "overall": {
+      "case_count": 5,
+      "contract_pass_rate": 1.0,
+      "forbidden_leak_rate": 0.0,
+      "grounding_safe_rate": 1.0,
+      "json_valid_rate": 1.0,
+      "schema_valid_rate": 1.0,
+      "score_mean": 1.0,
+      "score_std": 0.0
+    }
+  },
+  "versions": {
+    "peft": null,
+    "transformers": null,
+    "trl": null,
+    "vllm": null
+  }
+}

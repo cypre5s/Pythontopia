@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="840" height="360">
+<rect width="100%" height="100%" fill="#fff"/>
+<text x="60" y="32" font-family="Arial" font-size="20">Raw contract failure signals</text>
+<line x1="60" y1="300" x2="800" y2="300" stroke="#6b7280"/>
+<rect x="80.0" y="80.0" width="66.0" height="220.0" fill="#b45309"/>
+<text x="113.0" y="74.0" text-anchor="middle" font-family="Arial" font-size="12">57.000</text>
+<text x="113.0" y="326" text-anchor="middle" font-family="Arial" font-size="12">champion_unconstrained</text>
+<rect x="200.0" y="130.2" width="66.0" height="169.8" fill="#b45309"/>
+<text x="233.0" y="124.2" text-anchor="middle" font-family="Arial" font-size="12">44.000</text>
+<text x="233.0" y="326" text-anchor="middle" font-family="Arial" font-size="12">compact_orpo_unconstrained</text>
+<rect x="320.0" y="126.3" width="66.0" height="173.7" fill="#b45309"/>
+<text x="353.0" y="120.3" text-anchor="middle" font-family="Arial" font-size="12">45.000</text>
+<text x="353.0" y="326" text-anchor="middle" font-family="Arial" font-size="12">failure_directed_unconstrained</text>
+<rect x="440.0" y="242.1" width="66.0" height="57.9" fill="#b45309"/>
+<text x="473.0" y="236.1" text-anchor="middle" font-family="Arial" font-size="12">15.000</text>
+<text x="473.0" y="326" text-anchor="middle" font-family="Arial" font-size="12">failure_directed_static_schema</text>
+<rect x="560.0" y="269.1" width="66.0" height="30.9" fill="#b45309"/>
+<text x="593.0" y="263.1" text-anchor="middle" font-family="Arial" font-size="12">8.000</text>
+<text x="593.0" y="326" text-anchor="middle" font-family="Arial" font-size="12">failure_directed_evidence_bound</text>
+<rect x="680.0" y="261.4" width="66.0" height="38.6" fill="#b45309"/>
+<text x="713.0" y="255.4" text-anchor="middle" font-family="Arial" font-size="12">10.000</text>
+<text x="713.0" y="326" text-anchor="middle" font-family="Arial" font-size="12">champion_evidence_bound</text>
+</svg>
