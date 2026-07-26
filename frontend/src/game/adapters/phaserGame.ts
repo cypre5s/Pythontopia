@@ -84,6 +84,20 @@ export function resumePhaserGame(): void {
   }
 }
 
+/**
+ * 只唤醒主循环，不动任何场景的暂停状态。
+ *
+ * 给「借用 /world 的 canvas 跑别的场景」的页面用（如 /mainline-map 的
+ * ChapterMapScene）：pausePhaserGame() 的 loop.sleep() 会直接 raf.stop()，
+ * 不唤醒则借来的场景一帧都渲染不出来（画面定格在小镇最后一帧）。
+ * 但也不能整个 resumePhaserGame —— 那会把 WorldScene 一起恢复，它的 update()
+ * 会在地图页背后继续吃 WASD/E 输入（走位、甚至 router.push 跳走）。
+ */
+export function resumePhaserLoop(): void {
+  if (!gameInstance) return;
+  gameInstance.loop.wake();
+}
+
 // 给渲染器装上 draw call 计数。仅在创建真实 Game 后调用一次（测试环境不会创建
 // Game，故不受影响）。WebGL 路径只新增一次自增开销，对帧率影响可忽略。
 function instrumentDrawCalls(game: Phaser.Game): void {

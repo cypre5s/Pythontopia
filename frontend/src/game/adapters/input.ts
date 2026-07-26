@@ -9,7 +9,7 @@
 //   - Phaser 仅以 `import type` 方式引入，运行时不依赖 phaser 模块，便于
 //     jsdom 单测加载。
 import type Phaser from 'phaser';
-import type { Direction } from '@api/dto/Direction';
+import type { CardinalDirection } from '@api/dto/Direction';
 import type { KeyboardKeyLike, SceneLike } from './sceneTypes';
 import { createKeyboardAdapter } from './keyboardAdapter';
 import { createTouchAdapter } from './touchAdapter';
@@ -36,7 +36,12 @@ export interface DirectionController {
   isToolPressed(): boolean;
 }
 
-export function toServerDirection(dir: ExtendedDirection): Direction {
+/**
+ * 写后端前的方向降级：后端 `PlayerStatePatch.direction` 只接受 4 向。
+ * 返回类型收窄为 CardinalDirection（而非 8 向的 Direction），让调用点拿到的就是
+ * 编译期可证的 4 向值 —— 见 WorldScene.persistPlayerTile（唯一写回口）。
+ */
+export function toServerDirection(dir: ExtendedDirection): CardinalDirection {
   switch (dir) {
     case 'UP':
     case 'UP_LEFT':

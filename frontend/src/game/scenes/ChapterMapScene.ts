@@ -139,6 +139,7 @@ interface ScaleLike {
   width: number;
   height: number;
   on(event: string, cb: (...args: unknown[]) => void): void;
+  off?(event: string, cb: (...args: unknown[]) => void): void;
 }
 interface LoadLike {
   spritesheet(key: string, url: string, config: Record<string, unknown>): void;
@@ -161,7 +162,6 @@ let currentNodes: ChapterMapNode[] = [];
 let selectedChapter: number | null = null;
 let liveScene: ChapterMapSceneContext | null = null;
 let selectHandler: ((chapter: number) => void) | null = null;
-let resizeBound = false;
 
 /** 喂入/更新地图节点数据；若场景已就绪则立刻重绘。 */
 export function setChapterMapData(nodes: ChapterMapNode[]): void {
@@ -192,7 +192,6 @@ export function __resetChapterMapBridgeForTests(): void {
   selectedChapter = null;
   liveScene = null;
   selectHandler = null;
-  resizeBound = false;
 }
 
 function scheduleRender(): void {
@@ -638,13 +637,16 @@ export const ChapterMapScene = {
     // eslint-disable-next-line @typescript-eslint/no-this-alias -- 缓存当前 Phaser 场景上下文，供外部 setChapterMapData/Selection 重绘；shutdown 时清除。
     liveScene = this;
     renderChapterMap(this, currentNodes);
-    if (this.scale && !resizeBound) {
-      resizeBound = true;
-      this.scale.on('resize', () => {
-        if (liveScene) renderChapterMap(liveScene, currentNodes);
-      });
-    }
+    // resize 监听按「场景实例」绑定/解绑，不用模块级 resizeBound 布尔守卫：
+    // 那个守卫跨 Phaser.Game 实例残留（destroy 不复位），第 2 次进本页时
+    // `!resizeBound` 为 false，新实例上压根不再绑 resize，窗口缩放不再重排。
+    const scale = this.scale;
+    const onResize = (): void => {
+      if (liveScene) renderChapterMap(liveScene, currentNodes);
+    };
+    scale?.on('resize', onResize);
     this.events?.on('shutdown', () => {
+      scale?.off?.('resize', onResize);
       if (liveScene === this) {
         liveScene = null;
       }

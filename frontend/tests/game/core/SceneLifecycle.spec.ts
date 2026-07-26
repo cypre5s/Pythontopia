@@ -123,6 +123,44 @@ describe('attachLifecycle', () => {
     expect(order).toEqual(['killAll', 'removeAllEvents', 'removeAllListeners', 'onShutdown']);
   });
 
+  it('runs opts.onShutdown on destroy even when shutdown never fires', () => {
+    // 回归：Phaser 的 Systems.destroy() 只 emit DESTROY，不 emit SHUTDOWN
+    // （Game.runDestroy → SceneManager.destroy → Systems.destroy）。
+    // 销毁整个 Phaser.Game 时业务清理必须照样跑，否则 window 监听器永久泄漏。
+    const onShutdown = vi.fn();
+    attachLifecycle(mock.scene, { onShutdown });
+
+    mock.emit('destroy');
+
+    expect(onShutdown).toHaveBeenCalledTimes(1);
+  });
+
+  it('runs opts.onShutdown exactly once when shutdown is followed by destroy', () => {
+    const onShutdown = vi.fn();
+    attachLifecycle(mock.scene, { onShutdown });
+
+    mock.emit('shutdown');
+    mock.emit('destroy');
+
+    expect(onShutdown).toHaveBeenCalledTimes(1);
+    // 运行时兜底清理仍两次都跑（既有幂等安全网契约不变）。
+    expect(mock.spies.killAll).toHaveBeenCalledTimes(2);
+  });
+
+  it('a throwing onShutdown still counts as done — destroy does not retry it', () => {
+    const onShutdown = vi.fn(() => {
+      throw new Error('boom-business');
+    });
+    const logger = vi.fn();
+    attachLifecycle(mock.scene, { onShutdown, logger });
+
+    expect(() => mock.emit('shutdown')).not.toThrow();
+    mock.emit('destroy');
+
+    expect(onShutdown).toHaveBeenCalledTimes(1);
+    expect(logger).toHaveBeenCalledWith(expect.stringContaining('boom-business'));
+  });
+
   it('swallows errors thrown by cleanup primitives and forwards them to the logger', () => {
     mock.spies.killAll.mockImplementation(() => {
       throw new Error('boom-tween');

@@ -23,7 +23,11 @@ export interface ITrigger {
   onEnter?: (ctx: TriggerContext) => void;
   /** 当玩家离开时回调 */
   onExit?: (ctx: TriggerContext) => void;
-  /** 玩家在范围内按交互键时回调 */
+  /**
+   * 玩家在范围内按交互键时回调。
+   * 独占：同一帧只有「注册顺序第一个活跃 trigger」（= 气泡提示的那个）会收到，
+   * 重叠区域的其余 trigger 不会被顺带激活。
+   */
   onActivate?: (ctx: TriggerContext) => void;
   /** UI 提示文本（默认 "按 E 交互"） */
   hint?: string;
@@ -78,8 +82,8 @@ export function shapeContains(
 }
 
 export class InteractableSystem {
-  // Map 保留插入顺序，迭代顺序即注册顺序；getActive / onActivate 多个 trigger
-  // 时的可预测排序依赖这一点。
+  // Map 保留插入顺序，迭代顺序即注册顺序；getActive 排序与「主 trigger」
+  // （气泡 + onActivate 的唯一接收者）的选择都依赖这一点 —— 注册顺序 = 优先级。
   private readonly triggers = new Map<string, ITrigger>();
   // activeIds 用 Set 保证 O(1) 判定；遍历活跃 trigger 时通过 triggers Map 顺序
   // 过滤，从而保留注册顺序。
@@ -182,23 +186,33 @@ export class InteractableSystem {
       this.activeIds.add(id);
     }
 
-    // 第 5 步：actionPressed 触发 onActivate（按注册顺序遍历 triggers Map，
-    // 过滤出活跃的，保证多 trigger 触发顺序可预测）。
-    if (actionPressed && this.activeIds.size > 0) {
-      for (const [id, trigger] of this.triggers) {
-        if (this.activeIds.has(id)) {
-          trigger.onActivate?.({
-            trigger,
-            playerX,
-            playerY,
-            scene: this.scene,
-          });
-        }
-      }
+    // 第 5 步：actionPressed 只触发「主 trigger」的 onActivate。
+    //
+    // 独占语义（不是全部激活）：气泡只提示一个 trigger，玩家按 E 时的预期就是
+    // 「做气泡说的那件事」。若对全部命中的 trigger 都调 onActivate，重叠格（如
+    // 图书馆门口同时命中 NPC 对话 trigger + 建筑入口 trigger）会一次按键同时开对话
+    // 并 router.push 走人。主 trigger 与 refreshHint 共用 primaryActive()，保证
+    // 「看到什么提示 = 按 E 做什么」始终一致，注册顺序即真正的优先级。
+    if (actionPressed) {
+      const primary = this.primaryActive();
+      primary?.onActivate?.({
+        trigger: primary,
+        playerX,
+        playerY,
+        scene: this.scene,
+      });
     }
 
     // 第 6 步：更新气泡。
     this.refreshHint();
+  }
+
+  /**
+   * 当前「主 trigger」：按注册顺序第一个活跃的 trigger，即气泡提示的那一个，
+   * 也是按交互键时唯一会收到 onActivate 的那一个。无活跃 trigger 时返回 null。
+   */
+  getPrimaryActive(): ITrigger | null {
+    return this.primaryActive();
   }
 
   /** 获取当前激活的（玩家在内的）trigger 列表（按注册顺序） */
@@ -235,21 +249,32 @@ export class InteractableSystem {
     });
   }
 
+  /**
+   * 主 trigger 选择逻辑（唯一实现）：按注册顺序第一个活跃 trigger。
+   * refreshHint 与 onActivate 共用本方法，保证「提示什么 = 按 E 做什么」。
+   */
+  private primaryActive(): ITrigger | null {
+    if (this.activeIds.size === 0) {
+      return null;
+    }
+    for (const [id, trigger] of this.triggers) {
+      if (this.activeIds.has(id)) {
+        return trigger;
+      }
+    }
+    return null;
+  }
+
   private refreshHint(): void {
     const renderer = this.hintRenderer;
     if (!renderer) {
       return;
     }
-    if (this.activeIds.size === 0) {
+    const primary = this.primaryActive();
+    if (!primary) {
       renderer.hide();
       return;
     }
-    // 找到第一个活跃 trigger（按注册顺序），用它的 hint。
-    for (const [id, trigger] of this.triggers) {
-      if (this.activeIds.has(id)) {
-        renderer.show(trigger.hint ?? DEFAULT_HINT);
-        return;
-      }
-    }
+    renderer.show(primary.hint ?? DEFAULT_HINT);
   }
 }

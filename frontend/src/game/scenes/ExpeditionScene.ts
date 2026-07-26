@@ -63,6 +63,7 @@ export interface ExpeditionSceneContext {
     width: number;
     height: number;
     on(event: string, cb: (...args: unknown[]) => void): void;
+    off?(event: string, cb: (...args: unknown[]) => void): void;
   };
   time?: { now: number };
   events?: { on(event: string, cb: () => void): void };
@@ -119,7 +120,6 @@ let currentMap: RogueMap | null = null;
 let runView: ExpeditionRunView = { ...DEFAULT_VIEW };
 let onNodeClick: ((id: string) => void) | null = null;
 let liveScene: ExpeditionSceneContext | null = null;
-let resizeBound = false;
 
 interface NodePos {
   node: RogueNode;
@@ -165,7 +165,6 @@ export function __resetExpeditionForTests(): void {
   runView = { ...DEFAULT_VIEW };
   onNodeClick = null;
   liveScene = null;
-  resizeBound = false;
 }
 
 function readDimensions(ctx: ExpeditionSceneContext): { width: number; height: number } {
@@ -493,18 +492,20 @@ export const ExpeditionScene = {
     liveScene = this;
     rebuildTower(this);
 
+    // resize 监听按「场景实例」绑定/解绑：模块级 resizeBound 布尔跨 Phaser.Game
+    // 实例残留（destroy 不复位），第 2 次进页时新实例上不再绑 resize，重排失效。
+    const scale = this.scale;
+    const onResize = (): void => {
+      if (liveScene) rebuildTower(liveScene);
+    };
+    scale?.on('resize', onResize);
+
     this.events?.on('shutdown', () => {
+      scale?.off?.('resize', onResize);
       if (liveScene === this) {
         liveScene = null;
       }
     });
-
-    if (this.scale && !resizeBound) {
-      resizeBound = true;
-      this.scale.on('resize', () => {
-        if (liveScene) rebuildTower(liveScene);
-      });
-    }
   },
 };
 

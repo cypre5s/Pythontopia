@@ -16,11 +16,15 @@ import { router } from '@/app/router';
 import { perfMonitor } from '@/services/perfMonitor';
 import { playBgm, playSfx, type BgmKey } from '@/composables/useAudio';
 import { Haptics } from '@game/adapters/haptics';
-import type { Direction } from '@api/dto/Direction';
-import { createDirectionController, type DirectionController } from '@game/adapters/input';
+import type { CardinalDirection, Direction } from '@api/dto/Direction';
+import {
+  createDirectionController,
+  toServerDirection,
+  type DirectionController,
+} from '@game/adapters/input';
 import { openNpcDialog } from '@game/adapters/dialog';
 import { createPlayerSprite } from '@game/adapters/sprite';
-import type { CharacterAction } from '@game/adapters/lpcAnimations';
+import { cardinalize, type CharacterAction } from '@game/adapters/lpcAnimations';
 import { drawNpcSprite, type NpcSpawn, type NpcSpriteController } from '@game/adapters/tilemap';
 import type { PlayerSpriteHandle, SceneLike } from '@game/adapters/sceneTypes';
 import { applyWeather, normalizeWeatherKind, type WeatherHandle, type WeatherKind } from '@game/adapters/weather';
@@ -73,6 +77,8 @@ function toolActionForMap(mapKey: string): CharacterAction {
 const TURN_DELAY_MS = 70;
 const RAIN_SLOWDOWN = 1.25;
 const FADE_DURATION_MS = 280;
+// 起跳 → 落地音的间隔，约等于 sprite.ts 的 JUMP_DURATION_MS(260) 的落地时刻。
+const LANDING_SFX_DELAY_MS = 220;
 
 // ── 人物↔NPC AABB 碰撞 + 顿帧(hit-stop) ──
 // 玩家与 NPC 各视作以贴图中心为原点的正方形包围盒；候选目标格中心与各 NPC 像素中心
@@ -153,6 +159,18 @@ interface LowObstacleZone {
 }
 
 /**
+ * 地标（`type='landmark'`，如 town_hub 的镜月喷泉）：不参与碰撞、不可交互，
+ * 只在瓦片实景上补一块名牌，让「地图 JSON 里写了名字」这件事在画面上有落点。
+ */
+interface LandmarkZone {
+  label: string;
+  tileX: number;
+  tileY: number;
+  width: number;
+  height: number;
+}
+
+/**
  * 公告板 trigger 在 town_hub 中的中心 tile。
  * 喷泉位于 tile(24,19)-(25,20) 区域；公告板放在喷泉东侧两格，避开 spawn(25,20)。
  * hub 默认 50×40，27,20 落在喷泉右下方且在玩家可达范围内。
@@ -181,6 +199,12 @@ const ADVENTURE_MAP_ROUTE = '/mainline-map';
 interface PhaserHintRendererHandle {
   renderer: HintRenderer;
   destroy(): void;
+}
+
+/** NPC 可点击热点句柄（只暴露 update() 需要的最小接口，避免耦合 Phaser 类型）。 */
+interface NpcHotspotHandle {
+  setPosition?(x: number, y: number): unknown;
+  destroy?(): void;
 }
 
 interface WorldSceneState {
@@ -219,6 +243,9 @@ interface WorldSceneState {
   // 每个 NPC 的「按 E 对话」trigger 引用：wander 时每帧把 trigger 圆心同步到 NPC 当前
   // 位置，让交互区跟随移动的 NPC（InteractableSystem 每帧读 shape，直接改 shape 即可）。
   npcTriggers: Map<string, ITrigger>;
+  // 每个 NPC 的可点击热点（点一下开对话）：与 trigger 一样在 update 的同步循环里
+  // 跟随 NPC 当前位置，wander / 日程 teleport 后仍然对得上。
+  npcHotspots: Map<string, NpcHotspotHandle>;
   hintRendererHandle: PhaserHintRendererHandle | null;
   lifecycleDetach: (() => void) | null;
   // npcFramework.update 需要 deltaMs。Phaser scene 的 this.time.now 是单调递增
@@ -257,6 +284,7 @@ const state: WorldSceneState = {
   npcFramework: null,
   npcSprites: new Map(),
   npcTriggers: new Map(),
+  npcHotspots: new Map(),
   hintRendererHandle: null,
   lifecycleDetach: null,
   prevUpdateTimeMs: 0,
@@ -341,7 +369,11 @@ export const WorldScene = {
     const decorationLayer = map.createLayer('decoration', tileset, 0, 0);
     decorationLayer?.setScale(RENDER_SCALE).setDepth(4);
 
-    const { spawnTile, exits, buildings, npcs, lowObstacles } = parseObjects(map, state.entry?.spawn, index);
+    const { spawnTile, exits, buildings, npcs, lowObstacles, landmarks } = parseObjects(
+      map,
+      state.entry?.spawn,
+      index,
+    );
     state.exits = exits;
     state.npcs = npcs;
     state.lowObstacles = buildLowObstacleGrid(map.width, map.height, lowObstacles);
@@ -356,7 +388,10 @@ export const WorldScene = {
     const player = createPlayerSprite(this, {
       tileX: persisted.tileX,
       tileY: persisted.tileY,
-      direction: worldStore.player?.direction ?? 'DOWN',
+      // 存档 DTO 的 direction 类型上仍允许 8 向（历史数据 / 其它客户端可能写入）；
+      // 世界层只认 4 向，回读时先 cardinalize，避免把对角朝向塞进 sprite 后
+      // 落到 LPC 表里找不到对应行。
+      direction: cardinalize(worldStore.player?.direction ?? 'DOWN'),
       tileSize: RENDER_TILE_SIZE,
     });
     state.player = player;
@@ -378,12 +413,16 @@ export const WorldScene = {
     lowObstacles.forEach((obstacle) => {
       paintLowObstacleSprite(phaserScene, obstacle);
     });
+    landmarks.forEach((landmark) => {
+      paintLandmarkLabel(phaserScene, landmark);
+    });
     state.npcSprites.clear();
+    state.npcHotspots.clear();
     const npcWorkAction = toolActionForMap(state.mapKey);
     npcs.forEach((npc) => {
       const controller = drawNpcSprite(this, npc, RENDER_TILE_SIZE, { workAction: npcWorkAction });
       state.npcSprites.set(npc.npcKey, controller);
-      paintNpcHotspot(phaserScene, npc);
+      state.npcHotspots.set(npc.npcKey, paintNpcHotspot(phaserScene, npc));
     });
 
     // NpcFramework 持有逻辑层 NPC（巡逻/朝向/对话状态），InteractableSystem 持有
@@ -489,10 +528,9 @@ export const WorldScene = {
     };
     applyCoverZoom();
     if (typeof phaserScene.scale?.on === 'function') {
+      // 解绑放在下面的 teardown 里（同时覆盖 shutdown 与 destroy），
+      // 单挂 once('shutdown') 在整 Game 销毁路径上永远不会触发。
       phaserScene.scale.on('resize', applyCoverZoom);
-      phaserScene.events?.once?.('shutdown', () => {
-        phaserScene.scale?.off?.('resize', applyCoverZoom);
-      });
     }
     phaserScene.cameras.main.fadeIn(FADE_DURATION_MS, 0, 0, 0);
 
@@ -554,13 +592,30 @@ export const WorldScene = {
         state.npcSprites.forEach((controller) => controller.destroy());
         state.npcSprites.clear();
         state.npcTriggers.clear();
+        // 热点是场景自己 add 的 GameObject，显式 destroy 后清引用（与 npcSprites 一致）。
+        state.npcHotspots.forEach((hotspot) => hotspot.destroy?.());
+        state.npcHotspots.clear();
         state.hintRendererHandle?.destroy();
         state.hintRendererHandle = null;
         state.prevUpdateTimeMs = 0;
       },
     });
 
-    this.events?.on('shutdown', () => {
+    // 同一个 teardown 同时挂 'shutdown' 与 'destroy'：Phaser 销毁整个 Game 时
+    // （destroyPhaserGame → SceneManager.destroy → Systems.destroy）只 emit DESTROY
+    // **不** emit SHUTDOWN，只挂 shutdown 会让下面这两个 window 监听器随每次
+    // /world ↔ /code-theater 往返累积一份，永不回收。torndown 标志保证两个事件
+    // 只跑一次，并在跑完把自己从两个事件上摘掉（restart 时不叠加多份监听）。
+    const sceneEventsForTeardown = this.events;
+    let torndown = false;
+    const teardown = (): void => {
+      if (torndown) {
+        return;
+      }
+      torndown = true;
+      sceneEventsForTeardown?.off?.('shutdown', teardown);
+      sceneEventsForTeardown?.off?.('destroy', teardown);
+      phaserScene.scale?.off?.('resize', applyCoverZoom);
       window.removeEventListener('beforeunload', onBeforeUnload);
       window.removeEventListener('pythontopia:mood-changed', onMoodChanged);
       // 显示对象随场景销毁，这里只清引用，避免 restart 时对旧对象重复 destroy。
@@ -584,13 +639,15 @@ export const WorldScene = {
       state.actionWasDown = false;
       state.jumpWasDown = false;
       state.toolWasDown = false;
-      // attachLifecycle 自己监听 shutdown 已经触发 onShutdown，这里仅 detach
+      // attachLifecycle 自己监听 shutdown/destroy 已经触发 onShutdown，这里仅 detach
       // 多余引用，避免 restart 时挂多份相同监听。
       if (state.lifecycleDetach) {
         state.lifecycleDetach();
         state.lifecycleDetach = null;
       }
-    });
+    };
+    this.events?.on('shutdown', teardown);
+    this.events?.on('destroy', teardown);
   },
   update(this: SceneLike): void {
     if (state.switching) {
@@ -627,12 +684,8 @@ export const WorldScene = {
       if (jump.kind === 'jump') {
         player.jumpToTile(jump.landing.tileX, jump.landing.tileY, jump.direction);
         playSfx('sfx_jump', { volume: 0.42 });
-        window.setTimeout(() => playSfx('sfx_land', { volume: 0.36 }), 220);
-        void useWorldStore().updatePlayerTile({
-          tileX: jump.landing.tileX,
-          tileY: jump.landing.tileY,
-          direction: jump.direction,
-        });
+        scheduleLandingSfx(this, 0.36);
+        persistPlayerTile(jump.landing.tileX, jump.landing.tileY, jump.direction);
         const exit = findExit(jump.landing.tileX, jump.landing.tileY);
         if (exit) {
           triggerSceneTransition(this as unknown as Phaser.Scene, exit);
@@ -640,7 +693,7 @@ export const WorldScene = {
       } else {
         player.jumpToTile(player.tileX, player.tileY, facing);
         playSfx('sfx_jump', { volume: 0.18 });
-        window.setTimeout(() => playSfx('sfx_land', { volume: 0.18 }), 220);
+        scheduleLandingSfx(this, 0.18);
       }
       return;
     }
@@ -654,11 +707,7 @@ export const WorldScene = {
     state.toolWasDown = toolIsDown;
     if (toolPressedEdge && !player.isBusy()) {
       player.playAction(toolActionForMap(state.mapKey));
-      void useWorldStore().updatePlayerTile({
-        tileX: player.tileX,
-        tileY: player.tileY,
-        direction: toCardinal(player.direction, 'DOWN'),
-      });
+      persistPlayerTile(player.tileX, player.tileY, toCardinal(player.direction, 'DOWN'));
     }
 
     const running = controller.isRunPressed();
@@ -669,9 +718,8 @@ export const WorldScene = {
     const effectiveCooldown = running ? baseCooldown * RUN_COOLDOWN_FACTOR : baseCooldown;
     if (rawDirection && !player.isBusy() && this.time.now - state.lastMoveAt > effectiveCooldown) {
       state.lastMoveAt = this.time.now;
-      const delta = directionDelta(rawDirection);
-      const cardinal = toCardinal(rawDirection, player.direction);
-      if (delta.dx === 0 && delta.dy === 0) {
+      const { cardinal, dx, dy } = resolveMoveStep(rawDirection, player.direction);
+      if (dx === 0 && dy === 0) {
         return;
       }
       // 星露谷式 turn-then-walk：当前 cardinal 不是玩家朝向时，第一次按只转身不前进，
@@ -681,26 +729,18 @@ export const WorldScene = {
         // 转身只占用较短的 turn 延迟，而非整段移动冷却：下一帧只要再过 TURN_DELAY_MS
         // 就能起步，避免「转完身要干等一个完整冷却才走」的卡顿。
         state.lastMoveAt = this.time.now - (effectiveCooldown - TURN_DELAY_MS);
-        void useWorldStore().updatePlayerTile({
-          tileX: player.tileX,
-          tileY: player.tileY,
-          direction: cardinal,
-        });
+        persistPlayerTile(player.tileX, player.tileY, cardinal);
         return;
       }
-      const nextX = clamp(player.tileX + delta.dx, 0, state.width - 1);
-      const nextY = clamp(player.tileY + delta.dy, 0, state.height - 1);
+      const nextX = clamp(player.tileX + dx, 0, state.width - 1);
+      const nextY = clamp(player.tileY + dy, 0, state.height - 1);
       const blockedByTile = isBlocked(nextX, nextY);
       // 人物↔NPC AABB 碰撞：地形可走但目标格被 NPC 包围盒占据时同样不可进入。
       const blockedByNpc = !blockedByTile && npcOverlapsTile(nextX, nextY);
       if (!blockedByTile && !blockedByNpc) {
-        player.moveToTile(nextX, nextY, cardinal, { running });
+        player.moveToTile(nextX, nextY, cardinal, { running, durationMs: effectiveCooldown });
         spawnFootstepFx(this, player);
-        void useWorldStore().updatePlayerTile({
-          tileX: nextX,
-          tileY: nextY,
-          direction: cardinal,
-        });
+        persistPlayerTile(nextX, nextY, cardinal);
         const exit = findExit(nextX, nextY);
         if (exit) {
           triggerSceneTransition(this as unknown as Phaser.Scene, exit);
@@ -747,6 +787,11 @@ export const WorldScene = {
             trig.shape.x = instance.x;
             trig.shape.y = instance.y;
           }
+          // 鼠标点击热点同理跟随，否则 wander / 日程 teleport 后热点还钉在出生格。
+          const hotspot = state.npcHotspots.get(instance.id);
+          if (hotspot) {
+            syncNpcHotspot(hotspot, instance.x, instance.y);
+          }
         }
       }
     }
@@ -757,6 +802,31 @@ export const WorldScene = {
     state.interactable?.update(playerCenterX, playerCenterY, actionPressedEdge);
   },
 };
+
+/**
+ * 写回后端玩家格位的唯一出口。
+ *
+ * 项目约束：后端 `PlayerStatePatch.direction` 只接受 4 向（DTO 类型上仍是 8 向，
+ * 兼容历史 / 其它客户端数据），所以每一次写都必须先过 `toServerDirection` 降级。
+ * 四条写路径（跳跃落地 / 工具动作 / 转身 / 走一格）统一走这个函数，新增写路径也
+ * 不可能忘记降级 —— 这是「写后端降 4 向」约束在前端的落点。
+ */
+export function persistPlayerTile(tileX: number, tileY: number, direction: Direction): void {
+  void useWorldStore().updatePlayerTile({
+    tileX,
+    tileY,
+    direction: toServerDirection(direction),
+  });
+}
+
+/**
+ * 跳跃落地音：用 scene 自己的 time.delayedCall 而非 window.setTimeout。
+ * 原生定时器不在 SceneLifecycle 的 `time.removeAllEvents()` 管辖内，落地前离场
+ * 会在已销毁的场景上放音（Phaser sound 已随 Game 一起销毁 → 抛异常 / 幽灵音）。
+ */
+function scheduleLandingSfx(scene: SceneLike, volume: number): void {
+  scene.time.delayedCall?.(LANDING_SFX_DELAY_MS, () => playSfx('sfx_land', { volume }));
+}
 
 function triggerSceneTransition(phaserScene: Phaser.Scene, exit: ExitTile): void {
   if (!SUPPORTED_MAP_KEYS.has(exit.toMap)) {
@@ -786,6 +856,10 @@ function buildCollisions(map: Phaser.Tilemaps.Tilemap): boolean[][] {
   const grid = Array.from({ length: map.height }, () =>
     Array.from({ length: map.width }, () => false),
   );
+  // 'collision' 是 maps/README 里约定的专用碰撞层名，但 scripts/generate-maps.mjs
+  // 至今不产出该层（town_hub.json 只有 ground/buildings/decoration/objects），
+  // 所以实际起作用的只有 'buildings'。保留 'collision' 作前向兼容：生成器补上后
+  // 这里无需改动即可生效。
   const layerNames = ['collision', 'buildings'];
   layerNames.forEach((name) => {
     const layer = map.getLayer(name);
@@ -831,7 +905,7 @@ function mergeCollisionGrids(collisions: boolean[][], lowObstacles: boolean[][])
   );
 }
 
-function parseObjects(
+export function parseObjects(
   map: Phaser.Tilemaps.Tilemap,
   fallbackSpawn: { tileX: number; tileY: number } | undefined,
   index: MapIndex | null,
@@ -841,12 +915,14 @@ function parseObjects(
   buildings: BuildingZone[];
   npcs: NpcSpawn[];
   lowObstacles: LowObstacleZone[];
+  landmarks: LandmarkZone[];
 } {
   let spawnTile: { tileX: number; tileY: number } = fallbackSpawn ?? { tileX: 5, tileY: 5 };
   const exits: ExitTile[] = [];
   const buildings: BuildingZone[] = [];
   const npcs: NpcSpawn[] = [];
   const lowObstacles: LowObstacleZone[] = [];
+  const landmarks: LandmarkZone[] = [];
 
   map.objects.forEach((group) => {
     group.objects.forEach((obj) => {
@@ -928,11 +1004,47 @@ function parseObjects(
           tileY,
           sprite: typeof spriteValue === 'string' ? spriteValue : 'player_sara',
         });
+        return;
       }
+      if (type === 'landmark') {
+        landmarks.push({
+          label: String(props['label'] ?? obj.name ?? ''),
+          tileX,
+          tileY,
+          width: Math.max(1, Math.floor((obj.width ?? TILE_SIZE) / TILE_SIZE)),
+          height: Math.max(1, Math.floor((obj.height ?? TILE_SIZE) / TILE_SIZE)),
+        });
+        return;
+      }
+      // 兜底分支：地图 JSON 写了、代码没实现的对象类型此前被静默丢弃
+      //（landmark 喷泉就这么消失了半年）。这里打一次 warn 让缺口可见。
+      warnUnknownObjectType(type, obj.name);
     });
   });
 
-  return { spawnTile, exits, buildings, npcs, lowObstacles };
+  return { spawnTile, exits, buildings, npcs, lowObstacles, landmarks };
+}
+
+// 每种未知类型只 warn 一次：parseObjects 每次 create 都跑一遍，不去重会刷屏。
+const warnedObjectTypes = new Set<string>();
+
+function warnUnknownObjectType(type: string, name: unknown): void {
+  const key = type || '(empty)';
+  if (warnedObjectTypes.has(key)) {
+    return;
+  }
+  warnedObjectTypes.add(key);
+  if (typeof console !== 'undefined' && typeof console.warn === 'function') {
+    console.warn(
+      `[WorldScene] parseObjects: 未处理的地图对象 type="${key}"（如 "${String(name ?? '')}"），已忽略。`
+      + ' 要么在 parseObjects 里补一个分支，要么把该类型从地图生成器中删掉。',
+    );
+  }
+}
+
+/** 仅供测试：清空「未知对象类型」的 warn 去重集合。 */
+export function __resetUnknownObjectTypeWarnings(): void {
+  warnedObjectTypes.clear();
 }
 
 function collectProperties(props: unknown): Record<string, unknown> {
@@ -1001,10 +1113,17 @@ function paintBuildingZone(phaserScene: Phaser.Scene, building: BuildingZone): v
   interactive.on('pointerout', () => label.setVisible(false));
 }
 
-function paintNpcHotspot(phaserScene: Phaser.Scene, npc: NpcSpawn): void {
-  // 名牌已由 NpcSpriteController 常驻显示在头顶上方；此处只保留覆盖整个 NPC 立绘
-  // 高度的可点击热点（点一下直接开对话），不再重复画名牌。热点比单格高，覆盖
-  // ULPC 立绘（约 2.5 tile 高）。
+/**
+ * 画 NPC 的可点击热点并返回句柄。
+ *
+ * 名牌已由 NpcSpriteController 常驻显示在头顶上方；此处只保留覆盖整个 NPC 立绘
+ * 高度的可点击热点（点一下直接开对话），不再重复画名牌。热点比单格高，覆盖
+ * ULPC 立绘（约 2.5 tile 高）。
+ *
+ * 返回句柄由 update() 每帧同步到 NPC 实时位置 —— NPC 默认 wander 2 tile、按日程
+ * 还会异步 teleport，热点钉死在出生格的话，点 NPC 点不着、点空地反而开对话。
+ */
+function paintNpcHotspot(phaserScene: Phaser.Scene, npc: NpcSpawn): NpcHotspotHandle {
   const cx = npc.tileX * RENDER_TILE_SIZE + RENDER_TILE_SIZE / 2;
   const cy = npc.tileY * RENDER_TILE_SIZE + RENDER_TILE_SIZE / 2;
   const marker = phaserScene.add
@@ -1012,6 +1131,38 @@ function paintNpcHotspot(phaserScene: Phaser.Scene, npc: NpcSpawn): void {
     .setInteractive({ useHandCursor: true })
     .setDepth(12);
   marker.on('pointerdown', () => openNpcDialog(npc.npcKey));
+  return marker as unknown as NpcHotspotHandle;
+}
+
+/** 把热点同步到 NPC 当前像素中心（热点中心比 NPC 中心高一格，与创建时一致）。 */
+function syncNpcHotspot(handle: NpcHotspotHandle, npcX: number, npcY: number): void {
+  handle.setPosition?.(npcX, npcY - RENDER_TILE_SIZE);
+}
+
+/**
+ * 地标名牌：贴在地标区位正上方的一行小字（如「镜月喷泉」）。
+ * 地标本体的像素画面来自 decoration 瓦片层，这里只补名字，不加碰撞、不加交互。
+ */
+function paintLandmarkLabel(phaserScene: Phaser.Scene, landmark: LandmarkZone): void {
+  if (!landmark.label) {
+    return;
+  }
+  try {
+    const cx = (landmark.tileX + landmark.width / 2) * RENDER_TILE_SIZE;
+    const topY = landmark.tileY * RENDER_TILE_SIZE - 4;
+    phaserScene.add
+      .text(cx, topY, landmark.label, {
+        fontFamily: 'monospace',
+        fontSize: '10px',
+        color: '#fff8e1',
+        backgroundColor: '#2b3a2199',
+        padding: { x: 4, y: 2 },
+      })
+      .setOrigin(0.5, 1)
+      .setDepth(8);
+  } catch {
+    // jsdom / 无渲染环境（测试桩）忽略。
+  }
 }
 
 function paintLowObstacleSprite(phaserScene: Phaser.Scene, obstacle: LowObstacleZone): void {
@@ -1202,7 +1353,14 @@ export function directionDelta(dir: string): { dx: number; dy: number } {
   return { dx, dy };
 }
 
-export function toCardinal(dir: string, fallback: Direction): Direction {
+/**
+ * 把任意方向串收敛到 4 向。
+ *
+ * 返回类型与 fallback 参数都收窄成 CardinalDirection：旧签名 `(dir, fallback: Direction)
+ * => Direction` 的末条 `return fallback` 会把 8 向对角值原样吐回，编译器完全兜不住
+ * 「世界层只跑 4 向」的约束。收窄后，任何试图把对角值当朝向传下去的调用点都会编译失败。
+ */
+export function toCardinal(dir: string, fallback: CardinalDirection): CardinalDirection {
   if (dir === 'UP' || dir === 'DOWN' || dir === 'LEFT' || dir === 'RIGHT') {
     return dir;
   }
@@ -1218,8 +1376,33 @@ export function toCardinal(dir: string, fallback: Direction): Direction {
   return fallback;
 }
 
+/**
+ * 由「本帧输入方向 + 当前朝向」解出这一步的朝向与格位增量。
+ *
+ * 关键约定：位移取 cardinal（4 向）的 delta，而不是 rawDirection（8 向）的。原因有二：
+ *   1. 速度一致 —— 对角 delta 是 (±1,±1)，同一个 MOVE_COOLDOWN_MS 内走的却是 √2 个
+ *      tile 的距离，斜走凭空快 1.41×（直线 123 px/s → 对角 174 px/s，叠 Shift 达 280）；
+ *   2. 不穿墙角 —— 对角移动只判目标格，两个正交邻格都是墙时照样能斜穿过去
+ *      （town_hub 主街栅栏 (26,31)→(25,32)、工坊墙角 (39,27)→(40,28) 均可复现）。
+ * cardinal 本来就是驱动贴图朝向与存档方向的那个值，位移跟它走，三者不再分叉。
+ * 8 向输入仍保留其唯一有用的语义：toCardinal 的方向惯性（W+A 松紧交替不翻朝向）。
+ *
+ * 后置条件：|dx| + |dy| ≤ 1，永远不会出现对角步。
+ */
+export function resolveMoveStep(
+  rawDirection: string,
+  facing: Direction,
+): { cardinal: CardinalDirection; dx: number; dy: number } {
+  const cardinal = toCardinal(rawDirection, cardinalize(facing));
+  const { dx, dy } = directionDelta(cardinal);
+  return { cardinal, dx, dy };
+}
+
 export function shouldTurnBeforeMove(currentDirection: Direction, requestedDirection: string): boolean {
-  return currentDirection !== toCardinal(requestedDirection, currentDirection);
+  const facing = cardinalize(currentDirection);
+  // currentDirection 若是（历史存档带进来的）对角值，cardinalize 后必然 !== 原值，
+  // 于是先转身把朝向掰正，再走 —— 正是想要的兜底。
+  return currentDirection !== toCardinal(requestedDirection, facing);
 }
 
 function clamp(value: number, lower: number, upper: number): number {

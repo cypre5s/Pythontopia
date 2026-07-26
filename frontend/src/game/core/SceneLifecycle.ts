@@ -52,20 +52,34 @@ export function attachLifecycle(
     }
   };
 
+  // Phaser 的 Systems.destroy() 只 emit DESTROY，**不** emit SHUTDOWN
+  // （Game.runDestroy → SceneManager.destroy → Systems.destroy）。因此销毁整个
+  // Phaser.Game（如离开 /world 调 destroyPhaserGame）时 shutdown 永远不会来，
+  // 业务侧挂在 onShutdown 的清理（window 监听器 / framework 实例）会永久泄漏。
+  // 这里让 destroy 也跑一次 onShutdown，并用 businessCleanupDone 保证只跑一次
+  // （restart 场景下 shutdown 先到，destroy 不再重复调）。
+  let businessCleanupDone = false;
+  const runBusinessCleanup = (): void => {
+    if (businessCleanupDone || !opts?.onShutdown) {
+      return;
+    }
+    businessCleanupDone = true;
+    try {
+      opts.onShutdown();
+    } catch (err) {
+      log?.(`[SceneLifecycle] onShutdown threw: ${describeError(err)}`);
+    }
+  };
+
   const shutdownHandler = (): void => {
     cleanupRuntime(SHUTDOWN_EVENT);
-    if (opts?.onShutdown) {
-      try {
-        opts.onShutdown();
-      } catch (err) {
-        log?.(`[SceneLifecycle] onShutdown threw: ${describeError(err)}`);
-      }
-    }
+    runBusinessCleanup();
     log?.('[SceneLifecycle] shutdown cleanup done');
   };
 
   const destroyHandler = (): void => {
     cleanupRuntime(DESTROY_EVENT);
+    runBusinessCleanup();
     log?.('[SceneLifecycle] destroy cleanup done');
   };
 
