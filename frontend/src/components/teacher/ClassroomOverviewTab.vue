@@ -15,7 +15,9 @@ const props = defineProps<{
   recentActivity: RecentActivityDto[];
 }>();
 
-const weeklySubmissionGuess = computed<number>(() => {
+// 口径：这是「最近活跃事件流里的提交条数」，而事件流本身是近 7 日 + 最多 20 条的截断样本，
+// 不是全班本周提交总数。文案与后端窗口保持一致，避免把一个上限 20 的数字标成「本周提交」。
+const recentSubmissionCount = computed<number>(() => {
   return props.recentActivity.filter((entry) => entry.eventKind === 'SUBMISSION').length;
 });
 
@@ -50,18 +52,18 @@ function fmtRate(value: number): string {
         <small>仅统计 ACTIVE 状态。</small>
       </article>
       <article class="card">
-        <h4>近期事件数</h4>
+        <h4>近 7 日事件数</h4>
         <p class="value">
           {{ recentActivity.length }}
         </p>
-        <small>含 KC 掌握、提交、资源 3 类事件。</small>
+        <small>含 KC 掌握、提交、资源 3 类事件（最多 20 条）。</small>
       </article>
       <article class="card">
-        <h4>本周提交</h4>
+        <h4>近 7 日提交</h4>
         <p class="value">
-          {{ weeklySubmissionGuess }}
+          {{ recentSubmissionCount }}
         </p>
-        <small>来自最近活跃事件流（粗估）。</small>
+        <small>取自近 7 日活跃事件流样本，非全量统计。</small>
       </article>
       <article class="card">
         <h4>班级任务平均完成率</h4>

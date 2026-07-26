@@ -21,6 +21,8 @@ public class ClassroomDashboardService {
 
   private static final int DEFAULT_ERROR_DAYS = 7;
   private static final int DEFAULT_RESOURCE_DAYS = 7;
+  /** 最近活跃事件流的时间窗口，与误区 / 资源使用统一为 7 天。 */
+  private static final int DEFAULT_ACTIVITY_DAYS = 7;
   private static final int DEFAULT_ACTIVITY_LIMIT = 20;
   /** 教师 copilot 摘要里各列表的最大条目数（控制注入答疑的上下文长度）。 */
   private static final int COPILOT_TOP_N = 3;
@@ -34,13 +36,16 @@ public class ClassroomDashboardService {
     this.classroomGuard = classroomGuard;
   }
 
+  /**
+   * KC 热力图（读 + 刷快照）。快照刷新走<b>一条</b>多值 upsert：原实现对 65 个 KC 逐个
+   * {@code INSERT ON CONFLICT}，而班级详情页在 onMounted / 路由切换 / 发布任务后各调一次，
+   * 等于每次打开班级就打 65 条往返。
+   */
   @Transactional
   public List<KcHeatmapEntryDto> kcHeatmap(CurrentUserPrincipal user, Long classroomId) {
     classroomGuard.requireOwner(user, classroomId);
     List<KcHeatmapEntryDto> entries = repository.findKcHeatmap(classroomId);
-    for (KcHeatmapEntryDto entry : entries) {
-      repository.upsertSnapshot(classroomId, entry);
-    }
+    repository.upsertSnapshots(classroomId, entries);
     return entries;
   }
 
@@ -67,7 +72,7 @@ public class ClassroomDashboardService {
       CurrentUserPrincipal user, Long classroomId, Integer limit) {
     classroomGuard.requireOwner(user, classroomId);
     int safe = limit == null ? DEFAULT_ACTIVITY_LIMIT : Math.max(1, Math.min(50, limit));
-    return repository.findRecentActivity(classroomId, safe);
+    return repository.findRecentActivity(classroomId, safe, DEFAULT_ACTIVITY_DAYS);
   }
 
   /**
@@ -111,7 +116,10 @@ public class ClassroomDashboardService {
       return out;
     }
     heatmap.stream()
-        .filter(e -> e.studentCount() > 0)
+        // studentCount 是班级规模而非「练过这个 KC 的人数」，用它过滤等于永不过滤：
+        // 只要班里有 1 个人，65 个 KC 全部通过，于是刚建好的空班也会被断言成
+        //「最弱知识点：<某个从没教过的 KC>(掌握度0.00)」。真正的「有数据」判据是三个分桶之和。
+        .filter(e -> e.masteredCount() + e.learningCount() + e.strugglingCount() > 0)
         .sorted(
             Comparator.comparingInt(KcHeatmapEntryDto::strugglingCount)
                 .reversed()

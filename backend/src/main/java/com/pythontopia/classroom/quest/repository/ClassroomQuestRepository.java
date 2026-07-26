@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.classroom.quest.dto.ClassroomQuestDto;
 import com.pythontopia.learner.quest.dto.QuestNodeType;
+import com.pythontopia.learner.quest.repository.QuestRepository.QuestInsert;
 import java.sql.Array;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -219,6 +220,92 @@ public class ClassroomQuestRepository {
         WHERE id = ? AND status = 'ACTIVE'
         """,
         id);
+  }
+
+  /**
+   * 归档班级任务时同步撤回已分发的学生任务副本。
+   *
+   * <p>两条读路口径本来是分叉的：{@code /api/classroom/quests/mine} 过滤 {@code cq.status='ACTIVE'}
+   * 会让归档任务消失，而 {@code /api/quests/today}（learner 包，只看 {@code quest.status + due_date}）
+   * 仍会把它列成今日任务并允许完成、触发 mastery。这里把还没做完的副本置为 {@code SKIPPED}，
+   * 已完成（COMPLETED）的历史不动，保留复盘证据。
+   *
+   * <p>SQL 写在 classroom 包内（learner 的 QuestRepository 不归本模块改）。
+   */
+  public int skipDistributedQuests(Long classroomQuestId) {
+    return jdbcTemplate.update(
+        """
+        UPDATE quest
+        SET status = 'SKIPPED', updated_at = now()
+        WHERE source = 'CLASSROOM'
+          AND source_ref_id = ?
+          AND status IN ('OPEN', 'IN_PROGRESS')
+        """,
+        classroomQuestId);
+  }
+
+  /**
+   * 幂等分发一条学生任务副本：命中 {@code uniq_quest_classroom_user}
+   * （{@code quest(user_id, source_ref_id) WHERE source='CLASSROOM'}）时静默跳过。
+   *
+   * <p>相比「先 INSERT 再 catch DuplicateKeyException」，这里不会在 @Transactional 里把整个事务
+   * 标脏（PostgreSQL 唯一键冲突会 abort 事务，后续 insert 全部失败）。
+   *
+   * @return 新建的 quest id；已存在则 empty。
+   */
+  public Optional<Long> insertStudentQuestIfAbsent(QuestInsert insert) {
+    List<Long> ids =
+        jdbcTemplate.query(
+            connection -> {
+              PreparedStatement ps =
+                  connection.prepareStatement(
+                      """
+                      INSERT INTO quest (
+                        user_id, source, source_ref_id, title, description, kc_code,
+                        node_type, payload, due_date, priority, status,
+                        required_evidence_type, required_mastery_delta,
+                        target_problem_ids, target_resource_id,
+                        deep_link_route, deep_link_params
+                      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, 'OPEN',
+                                ?, ?, ?, ?, ?, ?::jsonb)
+                      ON CONFLICT DO NOTHING
+                      RETURNING id
+                      """);
+              ps.setLong(1, insert.userId());
+              ps.setString(2, insert.source().name());
+              if (insert.sourceRefId() == null) {
+                ps.setNull(3, java.sql.Types.BIGINT);
+              } else {
+                ps.setLong(3, insert.sourceRefId());
+              }
+              ps.setString(4, insert.title());
+              ps.setString(5, insert.description());
+              ps.setString(6, insert.kcCode());
+              ps.setString(7, insert.nodeType().name());
+              ps.setString(8, writeJson(insert.payload()));
+              ps.setObject(9, insert.dueDate());
+              ps.setInt(10, insert.priority());
+              ps.setString(11, insert.requiredEvidenceType());
+              if (insert.requiredMasteryDelta() == null) {
+                ps.setNull(12, java.sql.Types.NUMERIC);
+              } else {
+                ps.setBigDecimal(12, insert.requiredMasteryDelta());
+              }
+              List<Long> targetProblemIds =
+                  insert.targetProblemIds() == null ? List.of() : insert.targetProblemIds();
+              ps.setArray(
+                  13, connection.createArrayOf("BIGINT", targetProblemIds.toArray(Long[]::new)));
+              if (insert.targetResourceId() == null) {
+                ps.setNull(14, java.sql.Types.BIGINT);
+              } else {
+                ps.setLong(14, insert.targetResourceId());
+              }
+              ps.setString(15, insert.deepLinkRoute());
+              ps.setString(16, writeJson(insert.deepLinkParams()));
+              return ps;
+            },
+            (rs, rowNum) -> rs.getLong("id"));
+    return ids.stream().findFirst();
   }
 
   private ClassroomQuestDto map(ResultSet rs) throws SQLException {

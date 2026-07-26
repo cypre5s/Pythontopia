@@ -94,14 +94,36 @@ public class ClassroomRepository {
         studentId);
   }
 
+  /**
+   * 加入班级（幂等）：{@code classroom_members} 上有 {@code UNIQUE (classroom_id, student_id)}，
+   * 而 {@link #removeMember} 是软删（{@code status='REMOVED'}）。裸 INSERT 会让「被移出的学生」
+   * 永远撞唯一键、再也回不来，因此这里改为 upsert 复活成员行。
+   */
   public void addMember(Long classroomId, Long studentId) {
     jdbcTemplate.update(
         """
         INSERT INTO classroom_members (classroom_id, student_id, status)
         VALUES (?, ?, 'ACTIVE')
+        ON CONFLICT (classroom_id, student_id) DO UPDATE
+          SET status = 'ACTIVE', joined_at = now()
         """,
         classroomId,
         studentId);
+  }
+
+  /** 成员当前状态（ACTIVE / REMOVED）；从未加入过则为 empty。 */
+  public Optional<String> findMemberStatus(Long classroomId, Long studentId) {
+    return jdbcTemplate
+        .query(
+            """
+            SELECT status FROM classroom_members
+            WHERE classroom_id = ? AND student_id = ?
+            """,
+            (rs, rowNum) -> rs.getString("status"),
+            classroomId,
+            studentId)
+        .stream()
+        .findFirst();
   }
 
   public List<ClassroomMemberDto> findMembers(Long classroomId) {

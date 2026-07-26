@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
 import PyButton from '@/components/ui/PyButton.vue';
 import type {
   ClassroomQuestCreateRequest,
@@ -7,10 +7,15 @@ import type {
 } from '@/api/dto/ClassroomQuest';
 import type { QuestCompletionDto } from '@/api/dto/TeacherDashboard';
 
-const props = defineProps<{
-  quests: ClassroomQuestDto[];
-  questSummary: QuestCompletionDto[];
-}>();
+const props = withDefaults(
+  defineProps<{
+    quests: ClassroomQuestDto[];
+    questSummary: QuestCompletionDto[];
+    /** 发布请求是否在飞行中；由父组件在 await publish 期间置 true，防重复提交。 */
+    publishing?: boolean;
+  }>(),
+  { publishing: false },
+);
 const emit = defineEmits<{
   (event: 'publish', payload: ClassroomQuestCreateRequest): void;
   (event: 'archive', questId: number): void;
@@ -35,6 +40,7 @@ const form = reactive<QuestFormState>({
 });
 
 const kcInput = ref<string>('');
+const submitError = ref<string | null>(null);
 
 const resourceTypes = ['HANDOUT', 'MIND_MAP', 'PRACTICE', 'CODE_LAB', 'READING', 'STORYBOARD'];
 
@@ -49,8 +55,24 @@ function syncKcCodes() {
     .filter((code) => code.length > 0);
 }
 
+const anchorMissing = computed(
+  () => form.targetProblemId == null && !form.targetResourceType,
+);
+/** 表单可提交性：请求飞行中禁止再次提交（否则回车/双击会产出两条重复的 classroom_quest）。 */
+const canSubmit = computed(() => !props.publishing && !anchorMissing.value);
+
 function submit() {
+  // `<form @submit.prevent>` 里任意 input 按回车都会触发提交，所以校验必须写在这里，
+  // 不能只靠按钮的 disabled 状态。
+  if (props.publishing) return;
   syncKcCodes();
+  if (anchorMissing.value) {
+    // 后端 validateRequest 与 DB CHECK(chk_classroom_quest_anchor) 都要求二者必居其一，
+    // 前置拦截省掉一次必然 400 的往返。
+    submitError.value = '请至少绑定一个目标：题目 ID 或资源类型。';
+    return;
+  }
+  submitError.value = null;
   const payload: ClassroomQuestCreateRequest = {
     title: form.title,
     kcCodes: form.kcCodes,
@@ -127,7 +149,7 @@ function rateColor(value: number): string {
 
       <!-- 绑定目标 -->
       <fieldset class="form-section">
-        <legend>绑定目标（题目 / 资源二选一，可留空）</legend>
+        <legend>绑定目标（题目 / 资源至少选其一）</legend>
         <div class="form-row">
           <label>
             题目 ID
@@ -168,10 +190,19 @@ function rateColor(value: number): string {
         <PyButton
           type="submit"
           variant="primary"
+          test-id="publish-submit"
+          :disabled="!canSubmit"
         >
-          发布任务
+          {{ publishing ? '发布中...' : '发布任务' }}
         </PyButton>
       </div>
+      <p
+        v-if="submitError"
+        class="form-error"
+        data-testid="publish-error"
+      >
+        {{ submitError }}
+      </p>
     </form>
 
     <h3>班级任务列表</h3>
@@ -280,6 +311,11 @@ function rateColor(value: number): string {
   flex-wrap: wrap;
 }
 .form-foot__due { flex: 0 0 auto; }
+.form-error {
+  margin: 0;
+  font-size: var(--pyt-font-size-sm);
+  color: var(--pyt-color-danger);
+}
 .publish-form label {
   display: grid;
   gap: 4px;

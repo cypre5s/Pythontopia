@@ -37,8 +37,8 @@ public class ClassroomDashboardRepository {
     this.jdbcTemplate = jdbcTemplate;
   }
 
-  public List<KcHeatmapEntryDto> findKcHeatmap(Long classroomId) {
-    return jdbcTemplate.query(
+  /** KC 热力图取数（提为常量便于对「班级口径」做静态断言，见 ClassroomDashboardSqlContractTest）。 */
+  static final String KC_HEATMAP_SQL =
         """
         WITH active_members AS (
           SELECT student_id FROM classroom_members
@@ -53,7 +53,12 @@ public class ClassroomDashboardRepository {
                kc.kc_name AS kc_name,
                kc.chapter_id AS chapter_id,
                kc.chapter_order AS chapter_order,
-               COALESCE(AVG(m.mastery_score), 0) AS avg_mastery,
+               -- 班级口径：分母固定为全班 ACTIVE 人数，没练过该 KC 的学生按 0 计。
+               -- 用 AVG() 会跳过 NULL（只对已有 kc_mastery 行的学生取平均），30 人班里 2 人练到
+               -- 0.95 就会把热力格涂成「已掌握 95%」，与底部「2/30 掌握」自相矛盾。
+               COALESCE(
+                 SUM(m.mastery_score) / NULLIF(COUNT(DISTINCT am.student_id), 0), 0
+               ) AS avg_mastery,
                COUNT(DISTINCT am.student_id) AS student_count,
                COUNT(DISTINCT CASE WHEN m.mastery_score >= 0.8 THEN m.user_id END) AS mastered_count,
                COUNT(DISTINCT CASE WHEN m.mastery_score >= 0.3 AND m.mastery_score < 0.8 THEN m.user_id END) AS learning_count,
@@ -64,7 +69,11 @@ public class ClassroomDashboardRepository {
           ON m.user_id = am.student_id AND m.kc_code = kc.kc_code
         GROUP BY kc.kc_code, kc.kc_name, kc.chapter_id, kc.chapter_order
         ORDER BY kc.chapter_order, kc.kc_code
-        """,
+        """;
+
+  public List<KcHeatmapEntryDto> findKcHeatmap(Long classroomId) {
+    return jdbcTemplate.query(
+        KC_HEATMAP_SQL,
         (rs, rowNum) -> new KcHeatmapEntryDto(
             rs.getString("kc_code"),
             rs.getString("kc_name"),
@@ -78,8 +87,13 @@ public class ClassroomDashboardRepository {
         classroomId);
   }
 
-  public List<QuestCompletionDto> findQuestSummary(Long classroomId) {
-    return jdbcTemplate.query(
+  /**
+   * 班级任务完成情况。分子分母必须同口径，否则会出现 completionRate &gt; 100%：
+   * 分母是<b>当前</b> ACTIVE 成员数，分子若统计 source_ref_id 命中的全部 quest 行，就会把
+   * 已被移出班级的学生也算进来（3 人全完成 → 移除 1 人 → 3/2 = 150%）。这里在 JOIN 上补
+   * EXISTS 子查询，三个计数一律只看仍在班的成员。
+   */
+  static final String QUEST_SUMMARY_SQL =
         """
         SELECT cq.id AS classroom_quest_id,
                cq.title,
@@ -94,15 +108,35 @@ public class ClassroomDashboardRepository {
         FROM classroom_quest cq
         LEFT JOIN quest q
           ON q.source = 'CLASSROOM' AND q.source_ref_id = cq.id
+         AND EXISTS (
+               SELECT 1 FROM classroom_members cm2
+               WHERE cm2.classroom_id = cq.classroom_id
+                 AND cm2.student_id = q.user_id
+                 AND cm2.status = 'ACTIVE')
         WHERE cq.classroom_id = ?
         GROUP BY cq.id, cq.title, cq.due_date, cq.status, cq.classroom_id
         ORDER BY cq.due_date DESC, cq.id DESC
-        """,
+        """;
+
+  /**
+   * 完成率 = 完成人数 / 当前 ACTIVE 成员数。分母为 0 时返回 0（旧实现用 {@code Math.max(1, total)}
+   * 只防除零、不防倒挂，配合「分子含已移出学生」会算出 150%）。
+   */
+  static BigDecimal completionRate(int completed, int totalStudents) {
+    if (totalStudents <= 0) {
+      return BigDecimal.ZERO.setScale(3, RoundingMode.HALF_UP);
+    }
+    return BigDecimal.valueOf(completed)
+        .divide(BigDecimal.valueOf(totalStudents), 3, RoundingMode.HALF_UP);
+  }
+
+  public List<QuestCompletionDto> findQuestSummary(Long classroomId) {
+    return jdbcTemplate.query(
+        QUEST_SUMMARY_SQL,
         (rs, rowNum) -> {
-          int total = Math.max(1, rs.getInt("total_students"));
+          int total = rs.getInt("total_students");
           int completed = rs.getInt("completed_count");
-          BigDecimal rate = BigDecimal.valueOf(completed)
-              .divide(BigDecimal.valueOf(total), 3, RoundingMode.HALF_UP);
+          BigDecimal rate = completionRate(completed, total);
           return new QuestCompletionDto(
               rs.getLong("classroom_quest_id"),
               rs.getString("title"),
@@ -207,34 +241,49 @@ public class ClassroomDashboardRepository {
     return new ResourceUsageDto(start, today, totals, daily);
   }
 
-  public List<RecentActivityDto> findRecentActivity(Long classroomId, int limit) {
+  /**
+   * 最近活跃事件流（近 {@code recentDays} 天）。
+   *
+   * <p>三路 UNION ALL 原本没有任何时间下界，外层 LIMIT 只能在全量排序后才生效——班级跑一学期后
+   * 每次打开概览都要全表扫描 + 排序。这里与 {@link #findErrorHotspots} / {@link #findResourceUsage}
+   * 统一到同一个 7 天窗口，并让每个子查询各自 {@code ORDER BY ... LIMIT}，把排序成本压在索引上。
+   */
+  public List<RecentActivityDto> findRecentActivity(Long classroomId, int limit, int recentDays) {
     int safeLimit = Math.max(1, Math.min(50, limit));
+    OffsetDateTime since = OffsetDateTime.now(ZoneOffset.UTC).minusDays(recentDays);
+    java.sql.Timestamp sinceTs = java.sql.Timestamp.from(since.toInstant());
     return jdbcTemplate.query(
         """
         SELECT * FROM (
-          SELECT u.id AS student_id, u.display_name, 'KC_MASTERY' AS event_kind,
-                 e.kc_code AS kc_code, e.source AS detail, e.created_at AS occurred_at
-          FROM kc_mastery_event e
-          JOIN classroom_members cm ON cm.student_id = e.user_id AND cm.status = 'ACTIVE'
-          JOIN users u ON u.id = e.user_id
-          WHERE cm.classroom_id = ?
+          (SELECT u.id AS student_id, u.display_name, 'KC_MASTERY' AS event_kind,
+                  e.kc_code AS kc_code, e.source AS detail, e.created_at AS occurred_at
+           FROM kc_mastery_event e
+           JOIN classroom_members cm ON cm.student_id = e.user_id AND cm.status = 'ACTIVE'
+           JOIN users u ON u.id = e.user_id
+           WHERE cm.classroom_id = ? AND e.created_at >= ?
+           ORDER BY e.created_at DESC
+           LIMIT ?)
           UNION ALL
-          SELECT u.id, u.display_name, 'SUBMISSION' AS event_kind,
-                 cp.kc_code AS kc_code, COALESCE(jr.verdict, 'PENDING') AS detail,
-                 ps.submitted_at AS occurred_at
-          FROM practice_submission ps
-          JOIN classroom_members cm ON cm.student_id = ps.user_id AND cm.status = 'ACTIVE'
-          JOIN users u ON u.id = ps.user_id
-          JOIN course_problem cp ON cp.id = ps.problem_id
-          LEFT JOIN judge_result jr ON jr.submission_id = ps.id
-          WHERE cm.classroom_id = ?
+          (SELECT u.id, u.display_name, 'SUBMISSION' AS event_kind,
+                  cp.kc_code AS kc_code, COALESCE(jr.verdict, 'PENDING') AS detail,
+                  ps.submitted_at AS occurred_at
+           FROM practice_submission ps
+           JOIN classroom_members cm ON cm.student_id = ps.user_id AND cm.status = 'ACTIVE'
+           JOIN users u ON u.id = ps.user_id
+           JOIN course_problem cp ON cp.id = ps.problem_id
+           LEFT JOIN judge_result jr ON jr.submission_id = ps.id
+           WHERE cm.classroom_id = ? AND ps.submitted_at >= ?
+           ORDER BY ps.submitted_at DESC
+           LIMIT ?)
           UNION ALL
-          SELECT u.id, u.display_name, 'RESOURCE' AS event_kind,
-                 NULL AS kc_code, lr.type AS detail, lr.created_at AS occurred_at
-          FROM learning_resource lr
-          JOIN classroom_members cm ON cm.student_id = lr.user_id AND cm.status = 'ACTIVE'
-          JOIN users u ON u.id = lr.user_id
-          WHERE cm.classroom_id = ?
+          (SELECT u.id, u.display_name, 'RESOURCE' AS event_kind,
+                  NULL AS kc_code, lr.type AS detail, lr.created_at AS occurred_at
+           FROM learning_resource lr
+           JOIN classroom_members cm ON cm.student_id = lr.user_id AND cm.status = 'ACTIVE'
+           JOIN users u ON u.id = lr.user_id
+           WHERE cm.classroom_id = ? AND lr.created_at >= ?
+           ORDER BY lr.created_at DESC
+           LIMIT ?)
         ) merged
         ORDER BY occurred_at DESC
         LIMIT ?
@@ -247,30 +296,61 @@ public class ClassroomDashboardRepository {
             rs.getString("detail"),
             offset(rs, "occurred_at")),
         classroomId,
+        sinceTs,
+        safeLimit,
         classroomId,
+        sinceTs,
+        safeLimit,
         classroomId,
+        sinceTs,
+        safeLimit,
         safeLimit);
   }
 
-  public void upsertSnapshot(Long classroomId, KcHeatmapEntryDto entry) {
-    jdbcTemplate.update(
+  /**
+   * 批量刷新班级 KC 快照：一条多值 INSERT ... ON CONFLICT 覆盖全部 65 个 KC，
+   * 替换原来「每个 KC 一次往返」的 65 条 upsert。
+   *
+   * <p>同时修正列语义错位：{@code passed_count / learning_count / failed_count} 与
+   * {@code masteredCount / learningCount / strugglingCount} 一一对应（原实现直接丢掉
+   * learningCount，导致快照表里 passed + failed ≠ student_count）。
+   */
+  public int upsertSnapshots(Long classroomId, List<KcHeatmapEntryDto> entries) {
+    if (entries == null || entries.isEmpty()) {
+      return 0;
+    }
+    String values =
+        entries.stream()
+            .map(entry -> "(?, ?, ?, ?, ?, ?, ?, '[]'::jsonb)")
+            .collect(java.util.stream.Collectors.joining(", "));
+    List<Object> args = new ArrayList<>(entries.size() * 7);
+    for (KcHeatmapEntryDto entry : entries) {
+      args.add(classroomId);
+      args.add(entry.kcCode());
+      args.add(entry.avgMastery());
+      args.add(entry.studentCount());
+      args.add(entry.masteredCount());
+      args.add(entry.learningCount());
+      args.add(entry.strugglingCount());
+    }
+    return jdbcTemplate.update(
         """
         INSERT INTO classroom_kc_snapshot (
-          classroom_id, kc_code, avg_mastery, student_count, passed_count, failed_count, top_error_categories
-        ) VALUES (?, ?, ?, ?, ?, ?, '[]'::jsonb)
+          classroom_id, kc_code, avg_mastery, student_count,
+          passed_count, learning_count, failed_count, top_error_categories
+        ) VALUES """
+            + values
+            + """
+
         ON CONFLICT (classroom_id, kc_code) DO UPDATE SET
           avg_mastery = EXCLUDED.avg_mastery,
           student_count = EXCLUDED.student_count,
           passed_count = EXCLUDED.passed_count,
+          learning_count = EXCLUDED.learning_count,
           failed_count = EXCLUDED.failed_count,
           computed_at = now()
         """,
-        classroomId,
-        entry.kcCode(),
-        entry.avgMastery(),
-        entry.studentCount(),
-        entry.masteredCount(),
-        entry.strugglingCount());
+        args.toArray());
   }
 
   private OffsetDateTime offset(ResultSet rs, String column) throws SQLException {
