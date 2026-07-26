@@ -193,11 +193,24 @@ describe('SceneLifecycle 边界 - 错误传播与 logger', () => {
     ).toBe(true);
   });
 
-  it('onShutdown 只在 shutdown 阶段被调用，destroy 阶段不会再次触发', () => {
+  // 契约变更（修复「destroy 不跑业务清理」）：Phaser 的 Systems.destroy() 只 emit
+  // DESTROY 不 emit SHUTDOWN，销毁整个 Game 时若只认 shutdown，业务清理永不执行
+  // （WorldScene 的 window 监听器会随每次 /world 往返累积）。新契约是「shutdown 与
+  // destroy 谁先来谁触发，且只触发一次」。
+  it('onShutdown 在 destroy 阶段也会触发（整 Game 销毁路径没有 shutdown）', () => {
     const onShutdown = vi.fn();
     attachLifecycle(mock.scene, { onShutdown });
     mock.emit('destroy');
-    expect(onShutdown).not.toHaveBeenCalled();
+    expect(onShutdown).toHaveBeenCalledTimes(1);
+    // 之后再来的 shutdown / destroy 不重复触发。
+    mock.emit('shutdown');
+    mock.emit('destroy');
+    expect(onShutdown).toHaveBeenCalledTimes(1);
+  });
+
+  it('onShutdown 先由 shutdown 触发后，destroy 不会再触发一次', () => {
+    const onShutdown = vi.fn();
+    attachLifecycle(mock.scene, { onShutdown });
     mock.emit('shutdown');
     expect(onShutdown).toHaveBeenCalledTimes(1);
     mock.emit('destroy');

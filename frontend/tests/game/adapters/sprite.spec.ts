@@ -3,7 +3,7 @@
 //          tileX/tileY/direction 与初始入参一致，moveToTile 后会更新这些字段。
 //          不再断言具体 Phaser API 调用细节。
 import { describe, expect, it, vi } from 'vitest';
-import { createPlayerSprite } from '@/game/adapters/sprite';
+import { createPlayerSprite, resolveMoveDuration } from '@/game/adapters/sprite';
 import type { SceneLike } from '@/game/adapters/sceneTypes';
 
 function chainSprite() {
@@ -16,6 +16,10 @@ function chainSprite() {
     setFrame: vi.fn(() => sprite),
     play: vi.fn(() => sprite),
     stop: vi.fn(() => sprite),
+    once: vi.fn(() => sprite),
+    off: vi.fn(() => sprite),
+    setVisible: vi.fn(() => sprite),
+    setTexture: vi.fn(() => sprite),
   };
   return sprite;
 }
@@ -118,5 +122,67 @@ describe('createPlayerSprite', () => {
     tweenConfig?.onComplete?.();
 
     expect(handle.isJumping()).toBe(false);
+  });
+});
+
+describe('resolveMoveDuration (#8 位移 tween 跟随逐格冷却)', () => {
+  it('uses the caller-provided cooldown so the sprite lands when the next step unlocks', () => {
+    expect(resolveMoveDuration(130)).toBe(130);
+    // 奔跑：130 × RUN_COOLDOWN_FACTOR(0.62) ≈ 80.6ms。写死 140ms 时每 80.6ms 就掐掉
+    // 一个刚跑 58% 的 140ms tween，稳态下贴图比逻辑格多欠约 0.74 tile。
+    expect(resolveMoveDuration(130 * 0.62)).toBeCloseTo(80.6, 1);
+    // 雨天：130 × RAIN_SLOWDOWN(1.25) = 162.5ms。
+    expect(resolveMoveDuration(162.5)).toBe(162.5);
+  });
+
+  it('falls back to the default for missing / non-finite / non-positive input', () => {
+    expect(resolveMoveDuration(undefined)).toBe(140);
+    expect(resolveMoveDuration(Number.NaN)).toBe(140);
+    expect(resolveMoveDuration(Number.POSITIVE_INFINITY)).toBe(140);
+    expect(resolveMoveDuration(0)).toBe(140);
+    expect(resolveMoveDuration(-5)).toBe(140);
+  });
+});
+
+describe('playAction ANIMATION_COMPLETE 解绑 (#9)', () => {
+  function playerSpriteOf(scene: SceneLike): ReturnType<typeof chainSprite> {
+    const addSprite = vi.mocked((scene.add as unknown as { sprite: () => unknown }).sprite);
+    return addSprite.mock.results[0]?.value as ReturnType<typeof chainSprite>;
+  }
+
+  it('unbinds the previous finish listener when a new action starts', () => {
+    const scene = createSceneMock();
+    const handle = createPlayerSprite(scene, { tileX: 0, tileY: 0, direction: 'DOWN', tileSize: 32 });
+    const sprite = playerSpriteOf(scene);
+
+    handle.playAction('celebrate');
+    const firstFinish = sprite.once.mock.calls.at(-1)?.[1];
+    expect(typeof firstFinish).toBe('function');
+
+    sprite.off.mockClear();
+    handle.playAction('celebrate');
+
+    // 回归：旧实现只清 delayedCall 兜底、从不 off once，陈旧 finish 会在下一个
+    // 动画播完时先跑，把当前动作的收尾抢走（busy 已被新动作置回 true，`!busy` 守卫拦不住）。
+    expect(sprite.off).toHaveBeenCalledWith(expect.any(String), firstFinish);
+  });
+
+  it('unbinds the pending finish listener when the action is interrupted by walking', () => {
+    const scene = createSceneMock();
+    const handle = createPlayerSprite(scene, { tileX: 0, tileY: 0, direction: 'DOWN', tileSize: 32 });
+    const sprite = playerSpriteOf(scene);
+
+    handle.playAction('celebrate');
+    const finish = sprite.once.mock.calls.at(-1)?.[1];
+
+    sprite.off.mockClear();
+    handle.moveToTile(1, 0, 'RIGHT');
+    expect(sprite.off).toHaveBeenCalledWith(expect.any(String), finish);
+
+    handle.playAction('celebrate');
+    const finish2 = sprite.once.mock.calls.at(-1)?.[1];
+    sprite.off.mockClear();
+    handle.jumpToTile(1, 1, 'DOWN');
+    expect(sprite.off).toHaveBeenCalledWith(expect.any(String), finish2);
   });
 });

@@ -43,7 +43,17 @@ export interface CreatePlayerOptions {
   tileSize: number;
 }
 
-const TWEEN_DURATION_MS = 140;
+// 单格位移 tween 的默认时长（未显式传 durationMs 时用）。
+//
+// 调用方（WorldScene）应把当前的 effectiveCooldown 传进来：逐格移动的节奏由
+// MOVE_COOLDOWN_MS × (雨天 RAIN_SLOWDOWN / 奔跑 RUN_COOLDOWN_FACTOR) 决定，
+// tween 却写死 140ms 的话，奔跑（冷却 ≈81ms）时每 81ms 就发一次新的 140ms tween，
+// 上一格还没走完就被 killTweensOf 掐掉并从半路重新起算。稳态下「发令时刻贴图到目标
+// 格的距离」收敛到 duration/cooldown = 140/81 ≈ 1.74 tile，即比理想值(1 tile)多欠
+// 约 0.74 tile —— 贴图肉眼可见地拖在角色逻辑位置后面。让 tween 时长跟随同一个冷却
+// 值后 duration/cooldown ≡ 1：贴图恰好在下一步可发出的时刻抵达目标格，walk/run 两侧
+// 被同一系数缩放，滑步比例保持不变。
+const DEFAULT_TWEEN_DURATION_MS = 140;
 const JUMP_DURATION_MS = 260;
 const JUMP_ARC_PX = 18;
 // 连续行走宽限：单格 tween 完成后等一小段再切 idle。逐格冷却（雨天 162ms、键盘
@@ -70,8 +80,20 @@ function ensureAnims(phaserScene: Phaser.Scene): void {
 // 在 192px 帧里对应 (96,112)，故 origin = (0.5, 112/192)。
 const WEAPON_ORIGIN_Y = 112 / 192;
 
+/**
+ * 单格 tween 时长：优先用调用方给的逐格冷却，无值 / 非法值退回默认。
+ * 下限 1ms（duration 0 在 Phaser 里等于「立即完成」，会吞掉 onUpdate）。
+ */
+export function resolveMoveDuration(durationMs?: number): number {
+  if (typeof durationMs !== 'number' || !Number.isFinite(durationMs) || durationMs <= 0) {
+    return DEFAULT_TWEEN_DURATION_MS;
+  }
+  return Math.max(1, durationMs);
+}
+
 interface SpriteWithEvents {
   once?(event: string, cb: () => void): void;
+  off?(event: string, cb: () => void): void;
 }
 interface TimeWithDelay {
   delayedCall?(ms: number, cb: () => void): { remove?: () => void };
@@ -97,10 +119,21 @@ export function createPlayerSprite(scene: SceneLike, opts: CreatePlayerOptions):
   let busy = false;
   let actionFallback: { remove?: () => void } | null = null;
   let pendingIdle: { remove?: () => void } | null = null;
+  // 上一次 playAction 挂在 ANIMATION_COMPLETE 上的 finish 回调。
+  // once() 只在「动画自然播完」时自动解绑；被 moveToTile / jumpToTile / 下一次
+  // playAction 打断时它仍挂在 sprite 上，等到下一个动画播完先跑掉，把 B 动作的
+  // 收尾抢走（陈旧 finish 能穿过 `if (!busy) return` 守卫 —— 那时 busy 已被
+  // 新动作置回 true）。所以每条打断路径都要显式 off 掉它。
+  let actionFinish: (() => void) | null = null;
 
   function clearActionFallback(): void {
     if (actionFallback?.remove) actionFallback.remove();
     actionFallback = null;
+    if (actionFinish) {
+      const spriteEvents = sprite as unknown as SpriteWithEvents;
+      spriteEvents.off?.(Phaser.Animations.Events.ANIMATION_COMPLETE, actionFinish);
+      actionFinish = null;
+    }
   }
 
   function cancelPendingIdle(): void {
@@ -262,7 +295,12 @@ export function createPlayerSprite(scene: SceneLike, opts: CreatePlayerOptions):
       snapToTile(this);
       playIdle(direction);
     },
-    moveToTile(tileX: number, tileY: number, direction: Direction, moveOpts?: { running?: boolean }): void {
+    moveToTile(
+      tileX: number,
+      tileY: number,
+      direction: Direction,
+      moveOpts?: { running?: boolean; durationMs?: number },
+    ): void {
       jumping = false;
       busy = false;
       clearActionFallback();
@@ -274,6 +312,7 @@ export function createPlayerSprite(scene: SceneLike, opts: CreatePlayerOptions):
       this.direction = direction;
       const targetX = tileX * opts.tileSize + opts.tileSize / 2;
       const targetY = tileY * opts.tileSize + opts.tileSize / 2;
+      const duration = resolveMoveDuration(moveOpts?.durationMs);
       sprite.setScale(SPRITE_FIXED_SCALE);
       sprite.play(moveOpts?.running ? runAnimKey(direction) : walkAnimKey(direction), true);
       phaserScene.tweens.killTweensOf(sprite);
@@ -282,7 +321,7 @@ export function createPlayerSprite(scene: SceneLike, opts: CreatePlayerOptions):
         targets: sprite,
         x: targetX,
         y: targetY,
-        duration: TWEEN_DURATION_MS,
+        duration,
         ease: 'Linear',
         onUpdate: () => {
           handle.x = sprite.x;
@@ -298,7 +337,7 @@ export function createPlayerSprite(scene: SceneLike, opts: CreatePlayerOptions):
         targets: shadow,
         x: targetX,
         y: targetY + opts.tileSize / 2 - 4,
-        duration: TWEEN_DURATION_MS,
+        duration,
         ease: 'Linear',
       });
     },
@@ -389,6 +428,10 @@ export function createPlayerSprite(scene: SceneLike, opts: CreatePlayerOptions):
 
       const spriteEvents = sprite as unknown as SpriteWithEvents;
       if (typeof spriteEvents.once === 'function') {
+        // 保存引用：打断路径（moveToTile / jumpToTile / 下一次 playAction）经
+        // clearActionFallback 把它从 ANIMATION_COMPLETE 上摘掉，避免陈旧 finish
+        // 在下一个动画播完时先跑，提前掐断当前动作。
+        actionFinish = finish;
         spriteEvents.once(Phaser.Animations.Events.ANIMATION_COMPLETE, finish);
       }
       const time = phaserScene.time as unknown as TimeWithDelay;

@@ -18,6 +18,8 @@ import { useRouter } from 'vue-router';
 import {
   createPhaserGame,
   getPhaserGame,
+  pausePhaserGame,
+  resumePhaserLoop,
   type PhaserGameHandle,
   type PhaserSceneConfig,
 } from '@game/adapters/phaserGame';
@@ -94,6 +96,14 @@ function mountScene(): void {
     try {
       borrowExistingCanvas(existing);
       ensureChapterMapSceneStarted(existing);
+      // 从 KeepAlive 的 /world 过来时，WorldCanvas 的 onDeactivated 已经
+      // pausePhaserGame() → loop.sleep() → raf.stop()。不唤醒主循环的话
+      // ChapterMapScene 的 create 即使跑了也永远没有一帧被渲染，画面会定格在
+      // 小镇最后一帧（DOM 覆盖层照常可用，所以不表现为白屏）。
+      // 只唤醒循环、不 resume WorldScene：后者会在本页背后继续吃 WASD/E 输入。
+      // WorldScene 保持 paused 仍会被渲染，但 ChapterMapScene 的 drawGround
+      // 铺满全屏且 bringToTop，完全遮住。
+      resumePhaserLoop();
     } catch {
       // 复用失败不阻塞覆盖层 UI（地图仅为增强）。
     }
@@ -130,6 +140,10 @@ function unmountScene(): void {
         // ignore
       }
     }
+    // 归还 canvas 后再把主循环停回 mountScene 之前的状态：若接着回 /world，
+    // WorldCanvas 的 onActivated 会重新 resumePhaserGame()；若去别的页面，
+    // 主循环不该在后台空转（与 WorldCanvas.onDeactivated 的约定一致）。
+    pausePhaserGame();
   }
   borrowedCanvas = null;
   originalCanvasParent = null;

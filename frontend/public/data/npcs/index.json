@@ -60,21 +60,21 @@
       "key": "professor",
       "name": "教授",
       "category": "educator_core",
-      "spawnMap": "town_hub",
+      "spawnMap": null,
       "portrait": "portrait_professor.png"
     },
     {
       "key": "mine_keeper",
       "name": "矿洞守矿人",
       "category": "educator_core",
-      "spawnMap": "town_hub",
+      "spawnMap": null,
       "portrait": "portrait_mine_keeper.png"
     },
     {
       "key": "student_a",
       "name": "学生 A",
       "category": "student",
-      "spawnMap": "town_hub",
+      "spawnMap": null,
       "portrait": "portrait_student_a.png"
     },
     {
@@ -95,7 +95,7 @@
       "key": "arena_guard",
       "name": "竞技场守卫",
       "category": "life",
-      "spawnMap": "town_hub",
+      "spawnMap": null,
       "portrait": "portrait_arena_guard.png"
     }
   ]

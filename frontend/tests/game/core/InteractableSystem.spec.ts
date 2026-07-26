@@ -173,7 +173,9 @@ describe('InteractableSystem', () => {
     expect(sys.getActive()).toEqual([]);
   });
 
-  it('multiple simultaneously-active triggers fire onActivate in registration order', () => {
+  it('overlapping triggers: only the first-registered active one fires onActivate', () => {
+    // 回归：此前对**所有**命中的 trigger 调 onActivate，重叠格按一次 E 会同时
+    // 「开 NPC 对话」+「router.push 走人」。现在按键独占给主 trigger。
     const sys = new InteractableSystem(scene);
     const order: string[] = [];
     const mkTrigger = (id: string): ITrigger => ({
@@ -186,7 +188,69 @@ describe('InteractableSystem', () => {
     sys.register(mkTrigger('charlie'));
 
     sys.update(5, 5, true);
-    expect(order).toEqual(['alpha', 'bravo', 'charlie']);
+    expect(order).toEqual(['alpha']);
+
+    // 三个都仍算「活跃」：enter/exit/getActive 的邻近语义不受独占影响。
+    expect(sys.getActive().map((t) => t.id)).toEqual(['alpha', 'bravo', 'charlie']);
+  });
+
+  it('the activated trigger is exactly the one the hint bubble advertises', () => {
+    const { renderer, show } = makeHintRenderer();
+    const sys = new InteractableSystem(scene, { hintRenderer: renderer });
+    const activated: string[] = [];
+    sys.register({
+      id: 'npc',
+      shape: { type: 'circle', x: 5, y: 5, radius: 8 },
+      hint: '按 E 与 馆长 Doc 对话',
+      onActivate: () => activated.push('npc'),
+    });
+    sys.register({
+      id: 'building',
+      shape: { type: 'rect', x: 0, y: 0, width: 10, height: 10 },
+      hint: '按 E 进入图书馆',
+      onActivate: () => activated.push('building'),
+    });
+
+    sys.update(5, 5, true);
+
+    expect(show).toHaveBeenLastCalledWith('按 E 与 馆长 Doc 对话');
+    expect(activated).toEqual(['npc']);
+  });
+
+  it('getPrimaryActive returns the first-registered active trigger, null when none', () => {
+    const sys = new InteractableSystem(scene);
+    sys.register({ id: 'first', shape: { type: 'rect', x: 0, y: 0, width: 10, height: 10 } });
+    sys.register({ id: 'second', shape: { type: 'rect', x: 0, y: 0, width: 10, height: 10 } });
+
+    expect(sys.getPrimaryActive()).toBeNull();
+
+    sys.update(5, 5, false);
+    expect(sys.getPrimaryActive()?.id).toBe('first');
+
+    sys.update(500, 500, false);
+    expect(sys.getPrimaryActive()).toBeNull();
+  });
+
+  it('primary falls through to the next registered trigger once the first one detaches', () => {
+    const sys = new InteractableSystem(scene);
+    const activated: string[] = [];
+    const detachFirst = sys.register({
+      id: 'first',
+      shape: { type: 'rect', x: 0, y: 0, width: 10, height: 10 },
+      onActivate: () => activated.push('first'),
+    });
+    sys.register({
+      id: 'second',
+      shape: { type: 'rect', x: 0, y: 0, width: 10, height: 10 },
+      onActivate: () => activated.push('second'),
+    });
+
+    sys.update(5, 5, true);
+    expect(activated).toEqual(['first']);
+
+    detachFirst();
+    sys.update(5, 5, true);
+    expect(activated).toEqual(['first', 'second']);
   });
 
   it('trigger with enabled=false is skipped for enter / activate / getActive', () => {
