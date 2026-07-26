@@ -124,6 +124,28 @@ class ChapterStarServiceTest {
     verify(starRepo, never()).insertEvent(anyLong(), anyInt(), anyInt(), any(), any());
   }
 
+  /**
+   * stars 只升不降（GREATEST）但 breakdown 整份覆盖 → 掌握度衰减后会写出「stars=3 / breakdown 只有 1 分构成」
+   * 的自相矛盾。保留更高历史星数时，breakdown 也须逐键取历史最大。
+   */
+  @Test
+  void keepsBreakdownConsistentWhenHigherExistingStarsAreRetained() throws Exception {
+    when(stageRepo.findByChapter(CH)).thenReturn(List.of(stage(10), stage(11)));
+    when(progressRepo.findByUser(USER)).thenReturn(List.of()); // stage 门槛不过
+    lenient().when(masteryRepo.findAll(USER)).thenReturn(List.of()); // 掌握度衰减到 0
+    when(testRepo.findBestScore(USER, CH)).thenReturn(Optional.of(60)); // 核心只剩 1★
+    when(starRepo.find(USER, CH))
+        .thenReturn(Optional.of(existingStar(3, "{\"test\":1,\"stage\":1,\"mastery\":1,\"recovered\":[]}")));
+
+    service.recalc(USER, CH, StarSource.MASTERY);
+
+    ArgumentCaptor<String> breakdown = ArgumentCaptor.forClass(String.class);
+    verify(starRepo).upsert(eq(USER), eq(CH), eq(3), any(), breakdown.capture());
+    JsonNode bd = mapper.readTree(breakdown.getValue());
+    assertThat(bd.get("test").asInt() + bd.get("stage").asInt() + bd.get("mastery").asInt())
+        .isEqualTo(3); // 与保留下来的 stars 一致，而非退化成 1
+  }
+
   @Test
   void preservesRecoveredStarFromExistingBreakdown() throws Exception {
     stubAllStagesComplete();

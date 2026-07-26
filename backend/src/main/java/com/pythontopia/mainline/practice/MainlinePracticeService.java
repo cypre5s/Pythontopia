@@ -2,11 +2,13 @@ package com.pythontopia.mainline.practice;
 
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.error.ResourceNotFoundException;
+import com.pythontopia.mainline.ChapterUnlockGuard;
 import com.pythontopia.mainline.MainlineStageCompletionPort;
 import com.pythontopia.mainline.MainlineStageRepository;
 import com.pythontopia.mainline.domain.MainlineStage;
 import com.pythontopia.mainline.practice.dto.PracticeAnswerResultDto;
 import com.pythontopia.mainline.practice.dto.StagePracticeQuestionDto;
+import com.pythontopia.mainline.star.ChapterStarRepository;
 import java.text.Normalizer;
 import java.util.HashSet;
 import java.util.List;
@@ -23,7 +25,9 @@ import org.springframework.stereotype.Service;
  *
  * <p>判分策略：{@code CHOICE}/{@code JUDGE} 比对答案文本（NFKC + 去空白，大小写敏感）；{@code FILL} 逐空规范化
  * （trim + NFKC 去全角空格 + 去成对引号 + 去空白 + 忽略大小写）。答对则幂等并集计入小节进度并触发一次
- * stage 完成重算（无论对错都回传正确答案与讲解供自检）。
+ * stage 完成重算。<b>答错只回讲解、不回答案</b>——回传正确答案等于把「练-客观题」这道门直接送给学生
+ * （11/24 个小节 {@code required_example_count = 0}，客观题是唯一的「练」门槛），也违反「不给可复制提交的
+ * 完整答案」硬约束；订正答案在答对后 / 章测结果页给出。
  *
  * <p>{@link MainlineStageCompletionPort} 经 {@link ObjectProvider} 惰性获取：既满足「bean 不在时跳过」的
  * 优雅降级（与 {@code Optional.ifPresent} 语义一致），又避免与 P3 的 {@code Optional<MainlinePracticePort>}
@@ -34,14 +38,17 @@ public class MainlinePracticeService implements MainlinePracticePort {
 
   private final MainlinePracticeRepository repository;
   private final MainlineStageRepository stageRepository;
+  private final ChapterStarRepository starRepository;
   private final ObjectProvider<MainlineStageCompletionPort> completionPortProvider;
 
   public MainlinePracticeService(
       MainlinePracticeRepository repository,
       MainlineStageRepository stageRepository,
+      ChapterStarRepository starRepository,
       ObjectProvider<MainlineStageCompletionPort> completionPortProvider) {
     this.repository = repository;
     this.stageRepository = stageRepository;
+    this.starRepository = starRepository;
     this.completionPortProvider = completionPortProvider;
   }
 
@@ -77,8 +84,9 @@ public class MainlinePracticeService implements MainlinePracticePort {
   // --- 判分 ----------------------------------------------------------------
 
   /**
-   * 客观题判分：校验题目归属该 stage → 判对错 → 答对幂等计入进度并触发 stage 完成重算。无论对错都回传正确答案
-   * 与讲解（{@link PracticeAnswerResultDto}）供学生自检订正。
+   * 客观题判分：校验章已解锁 + 题目归属该 stage → 判对错 → 答对幂等计入进度并触发 stage 完成重算。
+   * 答对回传正确答案 + 讲解；答错只回讲解（{@link PracticeAnswerResultDto#correctAnswers()} 为空），
+   * 避免一次试错即拿到可直接复制回填的答案。
    */
   public PracticeAnswerResultDto grade(
       long userId, long stageId, long questionId, List<String> answers) {
@@ -86,6 +94,7 @@ public class MainlinePracticeService implements MainlinePracticePort {
         stageRepository
             .findById(stageId)
             .orElseThrow(() -> new ResourceNotFoundException("stage 不存在: " + stageId));
+    ChapterUnlockGuard.requireUnlocked(starRepository, userId, stage.chapter());
     MainlinePracticeQuestion question =
         repository
             .findById(questionId)
@@ -102,7 +111,7 @@ public class MainlinePracticeService implements MainlinePracticePort {
       triggerCompletion(userId, stageId);
     }
     return new PracticeAnswerResultDto(
-        questionId, correct, question.answers(), question.explanation());
+        questionId, correct, correct ? question.answers() : List.of(), question.explanation());
   }
 
   /** bean 不在时跳过（{@code Optional.ifPresent} 语义），不影响答题打点本身。 */
