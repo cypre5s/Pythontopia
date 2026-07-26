@@ -28,12 +28,15 @@ export type ChapterTestStatus =
  * 星级构成明细（后端 `chapter_star.breakdown` JSONB 的前端镜像）。
  * test/stage/mastery 为各路径贡献的星数（0/1），recovered 为已生效的补星来源标签
  * （如 `ENDLESS_RECOVERY` / `ERRORBOOK_RECOVERY`，JSONB 自由集合，故用宽松 string[]）。
+ *
+ * 全部可选：后端类型是自由 `JsonNode`，没有 chapter_star 行时返回 `{}`（`MainlineService`
+ * 用 `objectMapper.createObjectNode()` 兜底），声明成必填就是对前端谎报。消费点请补默认值。
  */
 export interface StarBreakdownDto {
-  test: number;
-  stage: number;
-  mastery: number;
-  recovered: string[];
+  test?: number;
+  stage?: number;
+  mastery?: number;
+  recovered?: string[];
 }
 
 /** 本章补星完成情况（§9 overview.recovery）。 */
@@ -170,23 +173,27 @@ export interface StageDetailDto {
 /**
  * stage 三件套打点端点的统一返回（video-progress / page-read / example-done 共用）。
  * 字段为后端重算后的该 stage 最新进度；`stageId` === overview 中 `MainlineStageDto.id`。
- * `pagesReadIds` / `examplesDoneIds` 为可选的「已完成 id 集合」，供 stage 学习页（A5）标记，
- * overview 聚合视图只用 `pagesRead` / `examplesDone` 计数。
+ *
+ * 逐字段对齐后端 `mainline/dto/StageProgressDto.java`（record，字段名即 JSON 键）：
+ * 小节序号是 `stageIndex` 而非 `index`；三件套各自的过线布尔（`videoComplete` /
+ * `pagesComplete` / `examplesComplete`）后端会返回；后端**不返回** `title`，也不返回
+ * 「已完成 id 集合」（`pagesReadIds` / `examplesDoneIds` 只存在于 `StageDetailDto`）。
  */
 export interface StageProgressDto {
   stageId: number;
   chapter: number;
-  index: number;
-  title: string;
+  /** 小节序号（后端字段名 stageIndex；曾误写成 index，导致该字段运行时恒为 undefined）。 */
+  stageIndex: number;
   videoWatchedSec: number;
   requiredVideoSec: number;
+  videoComplete: boolean;
   pagesRead: number;
   requiredPages: number;
+  pagesComplete: boolean;
   examplesDone: number;
   requiredExamples: number;
+  examplesComplete: boolean;
   completed: boolean;
-  pagesReadIds?: number[];
-  examplesDoneIds?: number[];
 }
 
 /** 无尽模式轮次小结上报体（§7 / §9）。 */

@@ -1,4 +1,4 @@
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import {
   completeQuest,
   getTodayQuests,
@@ -31,6 +31,15 @@ export function createQuestsSlice() {
     lastError: null,
   });
 
+  /**
+   * 加载失败与「今天真的没有任务」是两回事。
+   *
+   * 拉取异常时 `today` 保持原样（很可能仍是空数组），只有 `lastError` 能区分两者；
+   * 组件的空态判定必须叠加 `!questsLoadFailed`，否则后端抖动会被渲染成「今天没有任务」，
+   * 学生既看不到出错也没有重试入口。
+   */
+  const questsLoadFailed = computed<boolean>(() => quests.value.lastError !== null);
+
   async function loadTodayQuests(): Promise<void> {
     quests.value.loading = true;
     quests.value.lastError = null;
@@ -47,10 +56,17 @@ export function createQuestsSlice() {
   async function loadClassroomQuests(): Promise<void> {
     try {
       quests.value.classroom = await getMyClassroomQuests();
+      // 成功必须清错：否则一次失败会让错误态永久粘住，重试成功也退不出来。
+      quests.value.lastError = null;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       quests.value.lastError = message;
     }
+  }
+
+  /** 供组件的「重试」按钮在发起重试前清掉上一次的错误提示。 */
+  function clearQuestsError(): void {
+    quests.value.lastError = null;
   }
 
   async function listRecentPassedSubmissions(
@@ -109,6 +125,8 @@ export function createQuestsSlice() {
 
   return {
     quests,
+    questsLoadFailed,
+    clearQuestsError,
     loadTodayQuests,
     loadClassroomQuests,
     listRecentPassedSubmissions,
