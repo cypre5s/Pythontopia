@@ -189,7 +189,11 @@ AGENTS_BY_TOOL: dict[str, tuple[str, ...]] = {
     "PRACTICE": ("PracticeAgent",),
     "CODE_LAB": ("CodeLabAgent",),
     "PLAN": ("PathPlannerAgent",),
-    "BROWSE": ("OrchestratorAgent",),
+    # BROWSE 必须落在 BrowseAgent：OrchestratorGraph._dispatch_step 只按
+    # ``agent == "BrowseAgent"`` 路由到有界浏览闭环；写成 OrchestratorAgent 会让
+    # TaskPlan 步掉进资源派发默认分支并被静默改写成 HANDOUT（执行 RouteDecision
+    # 明令 forbidden 的工具）。
+    "BROWSE": ("BrowseAgent",),
 }
 
 REQUIRED_CONTEXT_BY_TOOL: dict[str, tuple[str, ...]] = {
@@ -367,6 +371,10 @@ TOOLS: dict[str, ToolSpec] = {
             timeout_s=90.0,
             max_retries=1,
             fallback="ASK",
+            # 考核中说「再考我一道」必须合法：与 IntentRouterAgent._clamp_to_scope 的
+            # `tools_for_scope("quiz") ∪ {ASKME}` 同源，否则策略门会把它判成 out_of_scope
+            # 并强制澄清，学生永远拿不到下一题。退出考核由前端模式条控制，graph 不感知。
+            scopes=("default", "quiz"),
         ),
         _spec(
             "EXPLAIN_CODE",
