@@ -37,6 +37,7 @@ public class ProfileService {
   private final GraphServiceProperties graphProperties;
   private final ObjectMapper objectMapper;
   private final SseRelayExecutor sseRelayExecutor;
+  private final InterviewDimensionMirror interviewDimensionMirror;
 
   public ProfileService(
       ProfileRepository profileRepository,
@@ -45,7 +46,8 @@ public class ProfileService {
       RestTemplate graphRestTemplate,
       GraphServiceProperties graphProperties,
       ObjectMapper objectMapper,
-      SseRelayExecutor sseRelayExecutor) {
+      SseRelayExecutor sseRelayExecutor,
+      InterviewDimensionMirror interviewDimensionMirror) {
     this.profileRepository = profileRepository;
     this.coursePackRepository = coursePackRepository;
     this.resourceRunRecorder = resourceRunRecorder;
@@ -53,6 +55,7 @@ public class ProfileService {
     this.graphProperties = graphProperties;
     this.objectMapper = objectMapper;
     this.sseRelayExecutor = sseRelayExecutor;
+    this.interviewDimensionMirror = interviewDimensionMirror;
   }
 
   public ProfileInterviewStartResponse openOrResumeInterview(Long userId) {
@@ -195,8 +198,15 @@ public class ProfileService {
     }
   }
 
+  /**
+   * 落库访谈结果：写旧列 → 镜像进 8 维 dimensions → 记 revision → 关闭访谈。
+   *
+   * <p>镜像这一步不可省：8 维消费方（答疑 / NPC / 工坊 / 记忆简报 / 推荐）只读 dimensions，
+   * 只写旧列等于访谈信号对下游完全不可见。详见 {@link InterviewDimensionMirror}。
+   */
   public void applyDraft(Long userId, String sessionId, LearnerProfileDto draft) {
     profileRepository.upsertProfile(userId, draft);
+    interviewDimensionMirror.mirror(userId, draft);
     profileRepository.addRevision(userId, "INTERVIEW", draft);
     profileRepository.completeInterview(userId, sessionId);
   }
