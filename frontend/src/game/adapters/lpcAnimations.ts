@@ -125,10 +125,16 @@ function actionBank(layout: LpcLayout, action: CharacterAction): Bank | null {
   }
 }
 
+// walk / run 的帧率必须与移动速率同比，否则脚步与位移脱节（「滑步」）。
+// walk 与 run 都是 8 帧循环（walk 跳过第 0 帧站姿，见 bankFramesByBank），
+// 而 run 每格耗时 = MOVE_COOLDOWN_MS × RUN_COOLDOWN_FACTOR = 130 × 0.62 ≈ 80.6ms，
+// 故 run 帧率应为 walk 的 130/80.6 ≈ 1.61 倍。12.5 → 20 恰好满足，
+// 也正是 docs/stardew/03-character-walk-anim-spec.md §4.1 的规范值（walk 80ms/帧、run 50ms/帧）。
+// 此前的 10 / 14 组合比值只有 1.4，run 动画慢于其实际位移。
 const BANK_FRAME_RATE: Readonly<Record<Bank, number>> = {
   spellcast: 9,
   thrust: 12,
-  walk: 10,
+  walk: 12.5,
   slash: 13,
   shoot: 8,
   hurt: 7,
@@ -137,7 +143,7 @@ const BANK_FRAME_RATE: Readonly<Record<Bank, number>> = {
   jump: 10,
   sit: 6,
   emote: 6,
-  run: 14,
+  run: 20,
 };
 
 const LOOP_ACTIONS: ReadonlySet<CharacterAction> = new Set(['walk', 'run', 'idle']);
