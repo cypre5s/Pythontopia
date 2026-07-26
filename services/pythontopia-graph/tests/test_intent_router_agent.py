@@ -782,12 +782,37 @@ async def test_quiz_scope_clamps_out_of_scope_intent_to_ask() -> None:
 @pytest.mark.asyncio
 @pytest.mark.parametrize("intent", ["ASK", "REVIEW", "ASKME"])
 async def test_quiz_scope_allows_ask_review_askme(intent: str) -> None:
-    """quiz 合法集 = tools_for_scope("quiz") ∪ {ASKME}（再考一轮合法，退出由前端控制）。"""
+    """quiz 合法集 = tools_for_scope("quiz")（再考一轮合法，退出由前端控制）。
+
+    旧断言只看 resp.intent，漏掉了策略门：ASKME 未声明 quiz scope 时
+    compile_route_decision 会判 out_of_scope 并强制澄清，学生在考核里永远拿不到
+    下一题。这里必须同时锁住 needs_clarification / render_mode / 授权工具集。
+    """
     agent = IntentRouterAgent(StubProvider({"intent": intent, "confidence": 0.9}))
 
     resp = await agent.route(request_of("继续吧", scope="quiz"))
 
     assert resp.intent == intent
+    assert resp.needs_clarification is False
+    assert resp.render_mode != "clarification"
+    assert resp.route_decision is not None
+    assert resp.route_decision.task.needs_clarification is False
+    assert resp.route_decision.tools.required == [intent]
+
+
+@pytest.mark.asyncio
+async def test_quiz_scope_askme_survives_policy_gate_for_next_question() -> None:
+    """考核中「再考我一道」必须直接出题，不能被两套 scope 规则互相否决成澄清。"""
+    agent = IntentRouterAgent(StubProvider({"intent": "ASKME", "confidence": 0.92}))
+
+    resp = await agent.route(request_of("再考我一道", scope="quiz"))
+
+    assert resp.intent == "ASKME"
+    assert resp.needs_clarification is False
+    assert resp.clarification_prompt == ""
+    assert resp.route_decision is not None
+    assert resp.route_decision.output.render_mode != "clarification"
+    assert "ASKME" not in resp.route_decision.tools.forbidden
 
 
 # prompt 组装（目录自动生成 + 多轮上下文注入）
@@ -838,9 +863,11 @@ def test_messages_quiz_scope_shrinks_catalog() -> None:
 
     system = agent._messages(request_of("继续", scope="quiz"))[0]["content"]
 
-    assert '"intent":"ASK|REVIEW"' in system
-    assert "考考我" not in system  # quiz 目录不再暴露 ASKME 等工具
+    # 考核目录 = tools_for_scope("quiz")：ASK/REVIEW/ASKME（「再考我一道」必须在目录里）。
+    assert '"intent":"ASK|REVIEW|ASKME"' in system
+    assert "ASKME=" in system
     assert "HANDOUT=" not in system
+    assert "BROWSE=" not in system
 
 
 def test_messages_omit_empty_context_blocks() -> None:

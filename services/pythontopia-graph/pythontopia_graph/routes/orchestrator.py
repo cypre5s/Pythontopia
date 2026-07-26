@@ -295,7 +295,9 @@ async def orchestrator_tool_loop(
     """混合工具编排（非流式）；flag off 时 404，绝不影响既有 orchestrator 路径。"""
     if not _tool_loop_enabled():
         raise HTTPException(status_code=404, detail="tool loop disabled (set PYT_TOOL_LOOP=on)")
-    orchestrator = _build_hybrid(provider, evidence_fetcher, valid_kc_codes, body)
+    orchestrator = _build_hybrid(
+        provider, evidence_fetcher, _effective_valid_kc_codes(valid_kc_codes, body), body
+    )
     return await orchestrator.run(
         system_prompt=_TOOL_LOOP_SYSTEM_PROMPT, user_message=body.user_message
     )
@@ -327,7 +329,11 @@ async def _tool_loop_stream_generator(
             loop_step["error"] = step.summary
         await emit("CUSTOM", {"name": "loop_step", "value": loop_step})
 
-    orchestrator = _build_hybrid(provider, evidence_fetcher, valid_kc_codes, body)
+    # 与 /turn 同源：app.state.valid_kc_codes 在生产恒为空集，直接透传会让
+    # hallucination_detector 判所有 KC 未知而必然失败；退回请求携带的课程目录。
+    orchestrator = _build_hybrid(
+        provider, evidence_fetcher, _effective_valid_kc_codes(valid_kc_codes, body), body
+    )
 
     async def run_hybrid() -> None:
         try:

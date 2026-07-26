@@ -28,7 +28,7 @@ from pydantic import ValidationError
 
 from pythontopia_graph.contracts.semantic_ir import IntentRouterSemanticIR
 from pythontopia_graph.llm.provider import LlmProvider, LlmResponse
-from pythontopia_graph.routing.workshop_metrics import record_route
+from pythontopia_graph.routing.workshop_metrics import record_route, record_route_error
 from pythontopia_graph.routing.workshop_policy import compile_route_decision
 from pythontopia_graph.schemas.intent import IntentRouteRequest, IntentRouteResponse
 from pythontopia_graph.tools.harness import run_with_governance
@@ -667,15 +667,25 @@ class IntentRouterAgent:
             clarification_prompt_override=model_clarification_prompt,
         )
 
-        route_decision = compile_route_decision(
-            req,
-            intent=intent,
-            secondary_intent=metadata["secondary_intent"],
-            confidence=confidence,
-            needs_clarification=bool(metadata["needs_clarification"]),
-            clarification_prompt=str(metadata["clarification_prompt"]),
-            render_mode=str(metadata["render_mode"]),
-            resolved_kc_codes=kc_codes,
+        # 运行指标只记录可观测量（复杂度/澄清/C3 选中项/延迟），不落任何学生原始输入。
+        # 策略门抛错时也必须记一笔 ERROR，否则 routes.total 分母恰好漏掉它要反映的失败面。
+        try:
+            route_decision = compile_route_decision(
+                req,
+                intent=intent,
+                secondary_intent=metadata["secondary_intent"],
+                confidence=confidence,
+                needs_clarification=bool(metadata["needs_clarification"]),
+                clarification_prompt=str(metadata["clarification_prompt"]),
+                render_mode=str(metadata["render_mode"]),
+                resolved_kc_codes=kc_codes,
+            )
+        except Exception:
+            record_route_error(latency_ms=int((time.monotonic() - route_started) * 1000))
+            raise
+        record_route(
+            route_decision,
+            latency_ms=int((time.monotonic() - route_started) * 1000),
         )
         # 旧字段继续在线，并以统一合同的确定性策略门为准，避免前端和新执行器判断分叉。
         metadata["needs_clarification"] = route_decision.task.needs_clarification
@@ -683,12 +693,6 @@ class IntentRouterAgent:
         metadata["render_mode"] = route_decision.output.render_mode
         if route_decision.task.needs_clarification:
             metadata["reason_code"] = "missing_required_context"
-
-        # 运行指标只记录可观测量（复杂度/澄清/C3 选中项/延迟），不落任何学生原始输入。
-        record_route(
-            route_decision,
-            latency_ms=int((time.monotonic() - route_started) * 1000),
-        )
 
         return IntentRouteResponse(
             intent=intent,  # type: ignore[arg-type]  # 已校验 ∈ ALL_TOOL_NAMES，pydantic 二次校验
@@ -1225,13 +1229,15 @@ class IntentRouterAgent:
 
     @staticmethod
     def _clamp_to_scope(intent: str, scope: Scope) -> tuple[str, str]:
-        """考核模式收缩：最终意图必须 ∈ tools_for_scope("quiz") ∪ {ASKME}，越界回退 ASK。
+        """考核模式收缩：最终意图必须 ∈ ``tools_for_scope("quiz")``，越界回退 ASK。
 
-        ASKME 例外：考核中说「再考我」仍合法；退出考核由前端模式条控制，graph 不感知。
+        合法集唯一事实源是注册表的 ``ToolSpec.scopes``（ASKME 已声明 quiz），与
+        ``workshop_policy`` 的 scope 门共用同一集合；这里不得再叠加本地例外，
+        否则两套规则会互相否决（考核中「再考我一道」被强制澄清）。
         """
         if scope != "quiz":
             return intent, ""
-        allowed = {spec.name for spec in tools_for_scope("quiz")} | {"ASKME"}
+        allowed = {spec.name for spec in tools_for_scope("quiz")}
         if intent in allowed:
             return intent, ""
         return "ASK", "考核模式下工具收缩，已回退为答疑"
@@ -1275,9 +1281,17 @@ class IntentRouterAgent:
 
     @classmethod
     def _coerce_secondary(cls, raw: Any, primary: str, scope: Scope) -> str | None:
-        """secondary_intent 必须 ∈ 当前 scope 工具集且 ≠ 主意图，否则置 None。"""
+        """secondary_intent 必须 ∈ 当前 scope 工具集、≠ 主意图、且有可执行 Agent，否则置 None。
+
+        没有注册 Agent 的前端工具（VIDEO / PROGRESS / NAVIGATE / MY_STUDY / REVIEW）
+        只能作为唯一主意图由前端渲染；把它们当复合步的 secondary 会让策略门在
+        Agent-tool 授权校验处抛 RoutePolicyError，整个 /agents/intent/route 变 500
+        （Java 侧再放大成 502），工坊入口整体挂掉。模型给出这类组合时静默降级为单工具。
+        """
         secondary = cls._coerce_intent(raw)
         if secondary is None or secondary == primary:
+            return None
+        if not TOOLS[secondary].allowed_agents:
             return None
         scope_names = {spec.name for spec in tools_for_scope(scope)}
         return secondary if secondary in scope_names else None
