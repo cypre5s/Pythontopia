@@ -7,7 +7,8 @@
 ⑦ C3 执行期以签发时的 search 为权威，学情漂移不得整轮报错；
 ⑧ required_context 声明必须被策略门执行，缺 KC 时澄清而非硬编码 PY43-KC-001；
 ⑪ 空证据目录 + require_grounding 不得静默放行；
-⑫ 路由 / 执行指标的失败面必须进分母。
+⑫ 路由 / 执行指标的失败面必须进分母；
+⑬ tool-loop 两个入口的 grounding 目录必须与 /turn 同源（app.state 恒为空集）。
 """
 
 from __future__ import annotations
@@ -84,7 +85,14 @@ def test_agentless_secondary_intent_degrades_instead_of_raising(secondary: str) 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("secondary", _AGENTLESS_TOOLS)
 async def test_router_never_emits_agentless_secondary_intent(secondary: str) -> None:
-    """路由器自身也必须把这类 secondary 归零，否则整个工坊入口 502。"""
+    """路由器自身也必须把这类 secondary 归零，否则整个工坊入口 502。
+
+    探针消息必须是「干净的答疑句」：带「找个视频」之类措辞会先被
+    ``_boundary_policy_intent`` 裁决成单工具 VIDEO 并顺手清空 secondary_raw，
+    模型给的 secondary 根本到不了 ``_coerce_secondary``，这条用例就变成空转。
+    因此这里同时锁住 ``resp.intent == "ASK"``：将来边界规则再改动而劫持这句话时
+    要立刻报红，而不是悄悄退化成恒真断言。
+    """
     from tests.test_intent_router_agent import StubProvider, request_of  # noqa: PLC0415
 
     from pythontopia_graph.agents.intent_router_agent import IntentRouterAgent  # noqa: PLC0415
@@ -93,8 +101,9 @@ async def test_router_never_emits_agentless_secondary_intent(secondary: str) -> 
         StubProvider({"intent": "ASK", "secondary_intent": secondary, "confidence": 0.9})
     )
 
-    resp = await agent.route(request_of("讲讲循环，再给我找个视频"))
+    resp = await agent.route(request_of("讲讲 for 循环是怎么回事"))
 
+    assert resp.intent == "ASK"
     assert resp.secondary_intent is None
     assert resp.route_decision is not None
     assert resp.route_decision.tools.required == ["ASK"]
@@ -405,3 +414,54 @@ async def test_dispatch_node_records_error_execution_on_policy_failure(
     assert executions["byStatus"]["ERROR"] == 1
     assert executions["errorRate"] == 1.0
     reset_routing_metrics()
+
+
+# ── ⑬ tool-loop 的 grounding 目录与 /turn 同源 ─────────────────────────────
+
+_TOOL_LOOP_BODY = {
+    "user_id": 1,
+    "session_id": "tool-loop-grounding",
+    "user_message": "给我整理一份函数的讲义",
+    "course_kc_index": ["PY43-KC-001", "PY43-KC-031"],
+}
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["/agents/orchestrator/tool-loop", "/agents/orchestrator/tool-loop/stream"],
+)
+def test_tool_loop_grounds_on_request_catalogue_when_app_state_is_empty(
+    monkeypatch: pytest.MonkeyPatch, path: str
+) -> None:
+    """两个 tool-loop 入口都必须走 _effective_valid_kc_codes。
+
+    ``app.state.valid_kc_codes`` 在生产恒为空集（目录由 Java 网关随请求下发）。
+    直接透传这个空集会让 hallucination_detector 判定所有 KC 未知 → 每次派发必然
+    失败；而 grounding 若按「空目录即放行」实现则相反，变成无条件 pass。两种失效
+    方向都不可接受，必须退回请求携带的 course_kc_index。
+    """
+    from fastapi.testclient import TestClient  # noqa: PLC0415
+
+    from pythontopia_graph.main import app  # noqa: PLC0415
+    from pythontopia_graph.nodes.evidence_fetcher import StaticEvidenceFetcher  # noqa: PLC0415
+    from pythontopia_graph.routes import orchestrator as orchestrator_routes  # noqa: PLC0415
+    from tests.test_tool_loop_route import _RouteStub  # noqa: PLC0415
+
+    seen: list[set[str]] = []
+    real_build = orchestrator_routes._build_hybrid
+
+    def _spy(provider, evidence_fetcher, valid_kc_codes, body):  # noqa: ANN001, ANN202
+        seen.append(set(valid_kc_codes))
+        return real_build(provider, evidence_fetcher, valid_kc_codes, body)
+
+    monkeypatch.setattr(orchestrator_routes, "_build_hybrid", _spy)
+    monkeypatch.setenv("PYT_TOOL_LOOP", "on")
+    # 生产实况：目录缓存没预热，app.state 是空集。
+    monkeypatch.setattr(app.state, "valid_kc_codes", set(), raising=False)
+    monkeypatch.setattr(app.state, "llm_provider", _RouteStub(), raising=False)
+    monkeypatch.setattr(app.state, "evidence_fetcher", StaticEvidenceFetcher([]), raising=False)
+
+    response = TestClient(app).post(path, json=_TOOL_LOOP_BODY)
+
+    assert response.status_code == 200
+    assert seen == [set(_TOOL_LOOP_BODY["course_kc_index"])]
