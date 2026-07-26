@@ -59,12 +59,12 @@
       "conditions": [],
       "choices": [
         {
-          "label": "去找邮差寄一封",
+          "label": "去公告板给老师留言",
           "nextNodeId": null,
           "effects": [
             {
-              "type": "quest_recommend",
-              "questKey": "send_question_to_teacher"
+              "type": "open_panel",
+              "route": "/board?tab=classroom"
             }
           ]
         }

@@ -6,6 +6,13 @@
  * 与 DialogTree.vue 分工：DialogTree 是 store.visible（openWithTree 路径）驱动的底部 9-slice 面板，
  * 两者共用同一 dialog store，但入口与版式不同。
  *
+ * <b>当前状态</b>：本组件挂在 WorldPage.vue，但仅在 `store.isOpen`（= openNpcKey 非空，旧 lines 入口）
+ * 时渲染，而生产代码目前没有任何地方写 openNpcKey——所有 NPC 交互都走 openWithTree/DialogTree。
+ * 保留而不删除的理由：挂载点 WorldPage.vue 与本组件不属同一改动范围，删组件会留下悬空 import；
+ * 且它是旧 lines 占位入口的唯一渲染器。为避免两条 UI 路径的条件过滤各写各的而漂移，
+ * 选项过滤已统一收敛到 store：本组件读的 `branchChoices` 由 `markTypingDone` 从
+ * `store.visibleChoices` 快照而来，与 DialogTree 渲染的是同一份过滤结果。
+ *
  * 关键约定：
  *   - 键盘：E/Enter 跳过打字机或确认选项，↑/↓ 或 W/S 切换高亮，ESC 关闭；
  *   - 立绘 portraitLeft/Right 经 props 指定；portraitLeft 缺省且有 npcKey 时回退到

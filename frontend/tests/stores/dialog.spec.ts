@@ -17,6 +17,10 @@
  *   - onChoice 返回的取消订阅函数能正确 detach 监听器
  *   - selectChoice 跨节点导航时 branchChoices/isTypingDone 自动归零
  *   - close 同时清空 branchChoices/isTypingDone
+ *
+ * 注：本文件全部使用<b>合成 fixture</b>，只验 store 状态机；
+ * 与真实 data/npcs/** 的契约（条件语义 / effect 路由 / questKey 标识空间）
+ * 由 dialogNpcData.spec.ts 覆盖。
  */
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -404,6 +408,7 @@ describe('dialog store - condition system (P3 接通)', () => {
               nextNodeId: null,
               effects: [{ type: 'set_flag', flagKey: 'weekly_retro_done' }],
             },
+            { label: '我下周再写', nextNodeId: null },
           ],
         },
         last_failed: {
@@ -480,7 +485,7 @@ describe('dialog store - condition system (P3 接通)', () => {
     expect(labels).toContain('再见');
   });
 
-  it('进入过 weekly_retro 后，本周内该分支被隐藏', async () => {
+  it('完成 weekly_retro（写下心得）后，本周内该分支被隐藏', async () => {
     installFetchMock(async (url) => {
       if (url.endsWith('/meta.json')) return makeMeta();
       if (url.endsWith('/dialog.json')) return makeConditionalTree();
@@ -493,11 +498,35 @@ describe('dialog store - condition system (P3 接通)', () => {
     store.markTypingDone();
     store.chooseBranch('开始本周复盘');
     expect(store.currentNodeId).toBe('weekly_retro');
-    store.close();
+    store.markTypingDone();
+    store.chooseBranch('写下心得');
 
     await store.openWithTree('sage_review');
     store.markTypingDone();
     expect(store.branchChoices.map((c) => c.label)).not.toContain('开始本周复盘');
+  });
+
+  it('只是「进入」weekly_retro 但没写完，不消耗本周额度', async () => {
+    // 语义是「完成才算做过」：进入即记周记录会让选「我下周再写」的玩家本周再也进不去复盘。
+    installFetchMock(async (url) => {
+      if (url.endsWith('/meta.json')) return makeMeta();
+      if (url.endsWith('/dialog.json')) return makeConditionalTree();
+      throw new Error(`unexpected url ${url}`);
+    });
+    const store = useDialogStore();
+    await store.openWithTree('sage_review');
+    store.close();
+    await store.openWithTree('sage_review');
+    store.markTypingDone();
+    store.chooseBranch('开始本周复盘');
+    expect(store.currentNodeId).toBe('weekly_retro');
+    store.markTypingDone();
+    store.chooseBranch('我下周再写');
+    expect(store.visible).toBe(false);
+
+    await store.openWithTree('sage_review');
+    store.markTypingDone();
+    expect(store.branchChoices.map((c) => c.label)).toContain('开始本周复盘');
   });
 
   it('set_flag / give_item 效果落持久 flag（不再被静默丢弃）', async () => {

@@ -68,8 +68,8 @@
               "flagKey": "weekly_retro_done"
             },
             {
-              "type": "quest_recommend",
-              "questKey": "weekly_retro_submit"
+              "type": "open_panel",
+              "route": "/review-hall"
             }
           ]
         },
