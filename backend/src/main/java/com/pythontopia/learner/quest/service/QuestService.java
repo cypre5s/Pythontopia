@@ -76,7 +76,14 @@ public class QuestService {
           "任务当前状态 " + quest.status() + " 无法完成");
     }
     evidenceVerifier.verify(userId, quest, request);
-    repository.updateStatus(userId, questId, QuestStatus.COMPLETED);
+    // 上面的状态校验是无锁快照，真正的并发守卫在 UPDATE 的 WHERE status IN (...) 上：
+    // 命中 0 行说明任务已被并发请求（双击 / 客户端重试）终结，必须在此中止，
+    // 否则会重复写 COMPLETED 进度、重复发事件、把掌握度记两次。
+    int affected = repository.updateStatus(userId, questId, QuestStatus.COMPLETED);
+    if (affected == 0) {
+      throw new BusinessException(
+          HttpStatus.CONFLICT, "QUEST_ALREADY_FINALIZED", "任务已被其他请求完成，请刷新后查看");
+    }
     repository.recordProgress(questId, "COMPLETED", request == null ? null : request.note());
     publishCompletionEvent(quest);
     return refresh(userId, questId);
@@ -135,9 +142,12 @@ public class QuestService {
     switch (quest.nodeType()) {
       case READ_RESOURCE -> eventPublisher.publishEvent(
           new LearningEvent.ResourceConsumed(quest.userId(), quest.kcCode(), "quest"));
-      case SOLVE_PROBLEM -> eventPublisher.publishEvent(
-          new LearningEvent.PracticeSucceeded(
-              quest.userId(), quest.kcCode(), extractProblemId(quest), null));
+      case SOLVE_PROBLEM -> {
+        // 刻意不发 PracticeSucceeded：SOLVE_PROBLEM 任务的完成证据就是一次 AC 提交，
+        // 而判题链路（SubmissionService.handleCompletion）在 AC 时已经发过一次同样的事件，
+        // 随后才回调本方法完成任务。这里再发一次会让 MasteryEvaluator 对同一次 AC 记两遍掌握度
+        // （它不按 problemId 去重），也会把 practical_ability 维度的证据数灌成双倍。
+      }
       case FIX_BUG -> eventPublisher.publishEvent(
           new LearningEvent.DebugResolved(
               quest.userId(), quest.kcCode(), extractProblemId(quest)));

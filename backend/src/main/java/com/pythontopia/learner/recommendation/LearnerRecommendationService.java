@@ -252,29 +252,43 @@ public class LearnerRecommendationService {
     return new ArrayList<>(priority);
   }
 
-  /** 从 learning_preference 维度累积的 tags 推导媒介类别顺序（多模态消费/评估回流信号）。 */
+  /**
+   * 从 learning_preference 维度累积的 tags 推导媒介类别顺序（多模态消费/评估回流信号）。
+   *
+   * <p><b>倒序遍历</b>：全仓约定 tags 数组「末尾 = 最近/主导信号」（PassiveProfileService 按时间追加，
+   * INTERVIEW 自评还会把所选 tag 移到末尾；DialogContextService / NpcGreetingService / MemoryBriefService
+   * 均取末尾）。按正序遍历会把学生最新、最明确表达的偏好排到推荐优先级的最后一位。
+   */
   private List<String> mediaPriorityFromConsumption(Long userId) {
-    List<String> media = new ArrayList<>();
     try {
       for (ProfileDimensionDto dim : passiveProfileService.getDimensions(userId)) {
-        if (!"learning_preference".equals(dim.key())) {
-          continue;
-        }
-        for (String tag : dim.tags()) {
-          String category = mapTagToMedia(tag);
-          if (category != null && !media.contains(category)) {
-            media.add(category);
-          }
+        if ("learning_preference".equals(dim.key())) {
+          return mediaPriorityFromTags(dim.tags());
         }
       }
+      return List.of();
     } catch (RuntimeException ex) {
       // 画像维度不可用时不阻塞推荐（降级为仅用结构化偏好）。
       return List.of();
     }
-    return media;
   }
 
-  private String mapTagToMedia(String tag) {
+  /** tags → 媒介类别（去重、末尾优先）。抽成静态方法便于直接回归排序口径。 */
+  static List<String> mediaPriorityFromTags(List<String> tags) {
+    if (tags == null || tags.isEmpty()) {
+      return List.of();
+    }
+    List<String> media = new ArrayList<>();
+    for (int i = tags.size() - 1; i >= 0; i--) {
+      String category = mapTagToMedia(tags.get(i));
+      if (category != null && !media.contains(category)) {
+        media.add(category);
+      }
+    }
+    return List.copyOf(media);
+  }
+
+  private static String mapTagToMedia(String tag) {
     if (tag == null) {
       return null;
     }

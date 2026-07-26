@@ -197,11 +197,27 @@ public class ProfileRepository {
    * 本方法刻意不吞，以便调用方（PassiveProfileService / PassiveProfileRevisionListener）显式降级。
    */
   public Optional<JsonNode> findDimensions(Long userId) {
+    return readDimensions("SELECT dimensions FROM learner_profile WHERE user_id = ?", userId);
+  }
+
+  /**
+   * 与 {@link #findDimensions} 相同，但对 learner_profile 行加行级写锁（{@code FOR UPDATE}）。
+   *
+   * <p>dimensions 是整块 JSONB 的 read-modify-write：并发学习事件（如 {@code POST /api/learning/events} 与
+   * 答疑事件同时到达同一学生）若各自读到同一份快照，后写者会整块覆盖前写者的维度更新。写路径统一走本方法，
+   * 让同一学生的并发更新在同一事务边界内串行化。
+   *
+   * <p><b>必须在可写事务中调用</b>：PostgreSQL 在只读事务里执行 {@code SELECT ... FOR UPDATE} 会直接报错，
+   * 因此读路径（getDimensions / profileBrief 等 {@code readOnly = true}）仍走 {@link #findDimensions}。
+   */
+  public Optional<JsonNode> findDimensionsForUpdate(Long userId) {
+    return readDimensions(
+        "SELECT dimensions FROM learner_profile WHERE user_id = ? FOR UPDATE", userId);
+  }
+
+  private Optional<JsonNode> readDimensions(String sql, Long userId) {
     return jdbcTemplate
-        .query(
-            "SELECT dimensions FROM learner_profile WHERE user_id = ?",
-            (rs, rowNum) -> rs.getString("dimensions"),
-            userId)
+        .query(sql, (rs, rowNum) -> rs.getString("dimensions"), userId)
         .stream()
         .findFirst()
         .map(this::tryReadJson)
@@ -209,19 +225,25 @@ public class ProfileRepository {
   }
 
   /**
-   * 覆盖写入 learner_profile.dimensions（八维聚合）。需要 profile 行存在；不存在时静默跳过（依赖 INTERVIEW 流程先建 profile）。
+   * 覆盖写入 learner_profile.dimensions（八维聚合），profile 行不存在时按默认值补建。
+   *
+   * <p>历史实现是裸 UPDATE：未走过 {@code POST /api/world/bootstrap} 的新注册学生没有 learner_profile 行，
+   * 维度写入命中 0 行却静默成功，接口返回 200「已更新」而库里什么都没写。改为 upsert 后写入总能落库。
+   *
+   * @return 受影响行数；0 表示写入未落库，调用方不应据此写 revision 审计。
    */
-  public void saveDimensions(Long userId, JsonNode dimensions) {
+  public int saveDimensions(Long userId, JsonNode dimensions) {
     String payload = writeJson(dimensions == null ? objectMapper.createObjectNode() : dimensions);
-    jdbcTemplate.update(
+    return jdbcTemplate.update(
         """
-        UPDATE learner_profile
-        SET dimensions = ?::jsonb,
-            updated_at = now()
-        WHERE user_id = ?
+        INSERT INTO learner_profile (user_id, pack_id, dimensions, updated_at)
+        VALUES (?, 43, ?::jsonb, now())
+        ON CONFLICT (user_id) DO UPDATE SET
+          dimensions = EXCLUDED.dimensions,
+          updated_at = now()
         """,
-        payload,
-        userId);
+        userId,
+        payload);
   }
 
   private JsonNode tryReadJson(String json) {
