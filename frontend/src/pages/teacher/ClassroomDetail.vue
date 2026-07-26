@@ -49,6 +49,24 @@ const dashboard = computed(() => teacher.current.dashboard);
 const members = computed(() => teacher.current.members);
 const quests = computed(() => teacher.current.quests);
 
+// 班级级错误（成员 / 任务拉取失败，含 403）。与看板级错误分开展示：
+// 只要其中任意一层挂了，页面都必须给出可见反馈 + 重试，而不是永久「正在加载...」。
+const classroomError = computed(() => teacher.current.lastError ?? teacher.lastError);
+const classroomLoading = computed(() => teacher.current.loading || teacher.loading);
+const isForbidden = computed(() => {
+  const message = classroomError.value;
+  return message != null && /403|无权|权限|FORBIDDEN/i.test(message);
+});
+const classroomName = computed(() => {
+  if (classroom.value) return classroom.value.name;
+  if (classroomError.value) return '无法加载班级';
+  return classroomLoading.value ? '正在加载...' : '未找到班级';
+});
+
+async function retry(): Promise<void> {
+  await teacher.reloadCurrent(classroomId.value);
+}
+
 // ── 一键补救包（P6.1）：基于全班薄弱 KC 生成针对性补救资源 ──
 const remediationLoading = ref(false);
 const remediationError = ref<string | null>(null);
@@ -66,21 +84,27 @@ async function generateRemediation(): Promise<void> {
   }
 }
 
+// 班级级与看板级并列执行：任何一条失败都不得阻断另一条（旧写法是顺序 await，
+// openClassroom 一抛错 loadDashboard 就永远不会跑，页面停在「正在加载...」）。
 onMounted(async () => {
-  await teacher.openClassroom(classroomId.value);
-  await teacher.loadDashboard(classroomId.value);
+  await teacher.reloadCurrent(classroomId.value);
 });
 
 watch(
   () => Number(route.params.id),
   async (newId, oldId) => {
     if (newId === oldId) return;
-    await teacher.openClassroom(newId);
-    await teacher.loadDashboard(newId);
+    await teacher.reloadCurrent(newId);
   },
 );
 
+// 防重复提交：发布是「新建 classroom_quest 行」的非幂等写，双击 / 回车会造出两条同名任务
+// （id 不同，uniq_quest_classroom_user 挡不住），每个学生因此拿到两条一模一样的任务。
+const publishing = ref(false);
+
 async function publishQuest(payload: ClassroomQuestCreateRequest) {
+  if (publishing.value) return;
+  publishing.value = true;
   try {
     const response = await teacher.publishQuest(classroomId.value, payload);
     toast.show(
@@ -90,6 +114,8 @@ async function publishQuest(payload: ClassroomQuestCreateRequest) {
     await teacher.loadDashboard(classroomId.value);
   } catch (error) {
     toast.show(error instanceof Error ? error.message : '发布失败', 'error');
+  } finally {
+    publishing.value = false;
   }
 }
 
@@ -142,7 +168,7 @@ function back() {
             ← 班级列表
           </button>
           <h2 class="cd-nav__name">
-            {{ classroom?.name ?? '正在加载...' }}
+            {{ classroomName }}
           </h2>
           <div class="cd-nav__meta">
             <span class="cd-badge">{{ classroom?.status }}</span>
@@ -184,12 +210,48 @@ function back() {
 
       <!-- ─── Main content (SidebarInset pattern) ─── -->
       <main class="cd-main">
-        <p
-          v-if="dashboard.lastError"
-          class="cd-banner cd-banner--error"
+        <!-- 班级级错误（含 403）：独立于看板错误，必须显式可见并可重试 -->
+        <div
+          v-if="classroomError"
+          class="cd-banner cd-banner--error cd-banner--action"
+          data-testid="classroom-error"
         >
-          看板加载失败：{{ dashboard.lastError }}
+          <span>
+            {{ isForbidden ? '你没有查看这个班级的权限（仅班级归属教师可进入）。' : `班级数据加载失败：${classroomError}` }}
+          </span>
+          <PyButton
+            v-if="!isForbidden"
+            variant="secondary"
+            size="sm"
+            test-id="classroom-retry"
+            @click="retry"
+          >
+            重试
+          </PyButton>
+        </div>
+        <p
+          v-else-if="classroomLoading"
+          class="cd-banner"
+          data-testid="classroom-loading"
+        >
+          班级数据加载中...
         </p>
+
+        <div
+          v-if="dashboard.lastError"
+          class="cd-banner cd-banner--error cd-banner--action"
+          data-testid="dashboard-error"
+        >
+          <span>看板加载失败：{{ dashboard.lastError }}</span>
+          <PyButton
+            variant="secondary"
+            size="sm"
+            test-id="dashboard-retry"
+            @click="teacher.loadDashboard(classroomId)"
+          >
+            重试
+          </PyButton>
+        </div>
         <p
           v-else-if="dashboard.loading"
           class="cd-banner"
@@ -212,6 +274,13 @@ function back() {
           <template v-else-if="remediationResult">
             <p class="cd-remediation__summary">
               共发现 {{ remediationResult.weakKcCount }} 个薄弱知识点
+            </p>
+            <p
+              v-if="remediationResult.partial"
+              class="cd-remediation__partial"
+              data-testid="remediation-partial"
+            >
+              本次已生成 {{ remediationResult.packs.length }}/{{ remediationResult.weakKcCount }} 个补救包（受每小时生成配额限制），稍后可再次点击补齐剩余部分。
             </p>
             <p
               v-if="remediationResult.packs.length === 0"
@@ -308,6 +377,7 @@ function back() {
             data-testid="quest-tab"
             :quests="quests"
             :quest-summary="dashboard.questSummary"
+            :publishing="publishing"
             @publish="publishQuest"
             @archive="archiveQuest"
           />
@@ -476,6 +546,13 @@ function back() {
   border-color: var(--pyt-color-danger);
   color: var(--pyt-color-danger);
 }
+.cd-banner--action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
 .cd-content {
   flex: 1 1 auto;
   padding: 20px 24px;
@@ -501,6 +578,7 @@ function back() {
 }
 .cd-remediation__error { margin: 0; color: var(--pyt-color-danger); font-size: var(--pyt-font-size-sm); }
 .cd-remediation__summary { margin: 0; font-size: 13px; font-weight: 600; color: var(--pyt-color-text-primary); }
+.cd-remediation__partial { margin: 0; font-size: 12px; color: var(--pyt-color-warning); }
 .cd-remediation__packs { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .cd-remediation__pack {
   display: grid;

@@ -49,6 +49,10 @@ export interface TeacherClassroomDetailState {
   members: ClassroomMemberDto[];
   quests: ClassroomQuestDto[];
   dashboard: TeacherDashboardState;
+  /** 班级级（成员/任务）加载错误。为 null 表示这一层没有出错。 */
+  lastError: string | null;
+  /** 班级级数据是否在飞行中。 */
+  loading: boolean;
 }
 
 export const useTeacherStore = defineStore('teacher', {
@@ -61,6 +65,8 @@ export const useTeacherStore = defineStore('teacher', {
       classroom: null,
       members: [],
       quests: [],
+      lastError: null,
+      loading: false,
       dashboard: {
         kcHeatmap: [],
         questSummary: [],
@@ -125,11 +131,40 @@ export const useTeacherStore = defineStore('teacher', {
       }
       await this.refreshDetail();
     },
+    /**
+     * 刷新班级级数据（成员 + 任务）。
+     *
+     * 这里必须自己吞掉异常并写 `current.lastError`：调用方 ClassroomDetail 只有一条
+     * `await openClassroom() → await loadDashboard()` 的顺序链，一旦这里抛出（403 / 网络），
+     * loadDashboard 永远不会执行，`dashboard.loading` 和 `dashboard.lastError` 都保持初值，
+     * 页面上两个 banner 一个都不显示，侧栏永久停在「正在加载...」。
+     */
     async refreshDetail(): Promise<void> {
       if (!this.currentId) return;
       const id = this.currentId;
-      this.current.members = await listClassroomMembersByStatus(id);
-      this.current.quests = await listClassroomQuestsForTeacher(id);
+      this.current.loading = true;
+      this.current.lastError = null;
+      try {
+        const [members, quests] = await Promise.all([
+          listClassroomMembersByStatus(id),
+          listClassroomQuestsForTeacher(id),
+        ]);
+        this.current.members = members;
+        this.current.quests = quests;
+      } catch (error) {
+        this.current.lastError = errorMessage(error);
+        this.current.members = [];
+        this.current.quests = [];
+      } finally {
+        this.current.loading = false;
+      }
+    },
+    /** 班级详情页的统一重试入口：班级级 + 看板并列重跑，互不阻塞。 */
+    async reloadCurrent(classroomId: number): Promise<void> {
+      await Promise.allSettled([
+        this.openClassroom(classroomId),
+        this.loadDashboard(classroomId),
+      ]);
     },
     async publishQuest(
       classroomId: number,

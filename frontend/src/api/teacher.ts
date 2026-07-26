@@ -125,10 +125,16 @@ export interface RemediationPackDto {
   evidencePageIds: number[];
 }
 
-/** 班级「一键补救」结果：全班薄弱 KC 数 + 每个薄弱 KC 的补救包。 */
+/**
+ * 班级「一键补救」结果：全班薄弱 KC 数 + 每个薄弱 KC 的补救包。
+ *
+ * `partial=true` 表示只产出了一部分（工坊每小时配额裁剪，或中途生成失败）；
+ * 此时 `packs` 仍是可用的半成品，`packs.length < weakKcCount`，教师可稍后再次触发补齐。
+ */
 export interface RemediationResultDto {
   classroomId: number;
   weakKcCount: number;
+  partial?: boolean;
   packs: RemediationPackDto[];
 }
 

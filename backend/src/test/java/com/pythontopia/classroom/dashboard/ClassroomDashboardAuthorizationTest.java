@@ -4,15 +4,20 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.classroom.dashboard.repository.ClassroomDashboardRepository;
 import com.pythontopia.classroom.dashboard.service.ClassroomDashboardService;
+import com.pythontopia.classroom.domain.Classroom;
 import com.pythontopia.classroom.repository.ClassroomRepository;
 import com.pythontopia.classroom.security.ClassroomGuard;
 import com.pythontopia.common.error.BusinessException;
+import java.util.Optional;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 
@@ -74,5 +79,75 @@ class ClassroomDashboardAuthorizationTest {
             ex -> assertThat(ex.status()).isEqualTo(HttpStatus.FORBIDDEN));
     // 红线：学生被拒后绝不能读到任何班级聚合 → 聚合仓储零交互。
     verifyNoInteractions(dashboardRepository);
+  }
+
+  /**
+   * 红线（缺陷 8 的缺失测试）：<b>跨教师</b>访问。此前全仓没有任何「教师 A 打开教师 B 的班级」
+   * 用例——把 {@link ClassroomGuard} 里的归属分支整段删掉，测试套件依旧全绿。
+   *
+   * <p>classroomId 是顺序 BIGSERIAL，一旦归属闸失效，任意教师改一下 URL 里的数字就能读到别班
+   * 的学情、误区与成员活动。这里用真实 ClassroomGuard + findById 返回 teacherId=42 的班级，
+   * 断言 teacherId=99 的教师被 FORBIDDEN 拒绝，且聚合仓储零交互（一条聚合都不许泄露）。
+   */
+  @Nested
+  @DisplayName("跨教师归属闸")
+  class CrossTeacherOwnership {
+
+    private static final long OWNER_TEACHER_ID = 42L;
+    private final CurrentUserPrincipal otherTeacher =
+        new CurrentUserPrincipal(99L, "teacher99", Role.TEACHER);
+
+    private void stubClassroomOwnedBySomeoneElse() {
+      when(classroomRepository.findById(9L))
+          .thenReturn(
+              Optional.of(
+                  new Classroom(
+                      9L, "别人的班", "", OWNER_TEACHER_ID, 43L, "ABC123", "ACTIVE")));
+    }
+
+    @Test
+    void otherTeacherCannotReadKcHeatmap() {
+      stubClassroomOwnedBySomeoneElse();
+      assertForbidden(() -> service.kcHeatmap(otherTeacher, 9L));
+    }
+
+    @Test
+    void otherTeacherCannotReadQuestSummary() {
+      stubClassroomOwnedBySomeoneElse();
+      assertForbidden(() -> service.questSummary(otherTeacher, 9L));
+    }
+
+    @Test
+    void otherTeacherCannotReadErrorHotspots() {
+      stubClassroomOwnedBySomeoneElse();
+      assertForbidden(() -> service.errorHotspots(otherTeacher, 9L));
+    }
+
+    @Test
+    void otherTeacherCannotReadResourceUsage() {
+      stubClassroomOwnedBySomeoneElse();
+      assertForbidden(() -> service.resourceUsage(otherTeacher, 9L));
+    }
+
+    @Test
+    void otherTeacherCannotReadRecentActivity() {
+      stubClassroomOwnedBySomeoneElse();
+      assertForbidden(() -> service.recentActivity(otherTeacher, 9L, 20));
+    }
+
+    @Test
+    void otherTeacherCannotReadCopilotBrief() {
+      stubClassroomOwnedBySomeoneElse();
+      assertForbidden(() -> service.copilotBrief(otherTeacher, 9L));
+    }
+
+    @Test
+    @DisplayName("归属教师本人不受影响（闸门不是无脑拒绝）")
+    void owningTeacherIsAllowed() {
+      stubClassroomOwnedBySomeoneElse();
+      CurrentUserPrincipal owner =
+          new CurrentUserPrincipal(OWNER_TEACHER_ID, "teacher42", Role.TEACHER);
+      assertThat(service.questSummary(owner, 9L)).isNotNull();
+    }
   }
 }

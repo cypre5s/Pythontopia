@@ -33,8 +33,13 @@ class ClassroomDashboardServiceTest {
       new ClassroomDashboardService(repository, classroomGuard);
   private final CurrentUserPrincipal teacher = new CurrentUserPrincipal(42L, "t01", Role.TEACHER);
 
+  /**
+   * 回归（缺陷 9a）：快照刷新必须是<b>一次</b>批量 upsert。旧实现对 65 个 KC 逐条
+   * {@code INSERT ON CONFLICT}，而班级详情页 onMounted / 路由切换 / 发布任务后各调一次热力图，
+   * 等于每次打开班级就打 65 条往返。
+   */
   @Test
-  void kcHeatmapWritesSnapshotForEachEntry() {
+  void kcHeatmapWritesAllSnapshotsInOneBatch() {
     when(classroomGuard.requireOwner(teacher, 9L))
         .thenReturn(new Classroom(9L, "DemoClass", "", 42L, 43L, "ABC123", "ACTIVE"));
     KcHeatmapEntryDto a =
@@ -45,8 +50,7 @@ class ClassroomDashboardServiceTest {
 
     List<KcHeatmapEntryDto> result = service.kcHeatmap(teacher, 9L);
     assertThat(result).hasSize(2);
-    verify(repository).upsertSnapshot(9L, a);
-    verify(repository).upsertSnapshot(9L, b);
+    verify(repository, org.mockito.Mockito.times(1)).upsertSnapshots(9L, List.of(a, b));
   }
 
   @Test
@@ -81,16 +85,21 @@ class ClassroomDashboardServiceTest {
     assertThat(service.resourceUsage(teacher, 9L)).isNotNull();
   }
 
+  /**
+   * 回归（缺陷 9b）：最近活跃事件流必须带 7 天窗口（与高频误区 / 资源使用同口径），
+   * 且 limit 仍被夹到 50。旧实现三路 UNION ALL 无任何时间下界，LIMIT 只在全量排序之后生效。
+   */
   @Test
-  void recentActivityClampsLimit() {
+  void recentActivityClampsLimitAndUsesSevenDayWindow() {
     when(classroomGuard.requireOwner(teacher, 9L))
         .thenReturn(new Classroom(9L, "DemoClass", "", 42L, 43L, "ABC123", "ACTIVE"));
-    when(repository.findRecentActivity(9L, 50))
+    when(repository.findRecentActivity(9L, 50, 7))
         .thenReturn(List.of(
             new RecentActivityDto(11L, "Stu 01", "SUBMISSION", "PY43-KC-001", "AC",
                 OffsetDateTime.now(ZoneOffset.UTC))));
     List<RecentActivityDto> rows = service.recentActivity(teacher, 9L, 999);
     assertThat(rows).hasSize(1);
+    verify(repository).findRecentActivity(9L, 50, 7);
   }
 
   @Test
@@ -113,7 +122,7 @@ class ClassroomDashboardServiceTest {
     // 红线：摘要必须自带「只读 + 不泄题」声明。
     assertThat(brief).contains("泄题");
     // 只读：copilotBrief 绝不写快照。
-    verify(repository, org.mockito.Mockito.never()).upsertSnapshot(any(), any());
+    verify(repository, org.mockito.Mockito.never()).upsertSnapshots(any(), any());
   }
 
   @Test
@@ -125,5 +134,53 @@ class ClassroomDashboardServiceTest {
 
     String brief = service.copilotBrief(teacher, 9L);
     assertThat(brief).contains("暂无足够学情数据").contains("泄题");
+  }
+
+  /**
+   * 回归（缺陷 6）：刚建好的班（有成员但一个 KC 都没练过）不得输出「最弱知识点：xxx(掌握度0.00)」。
+   *
+   * <p>旧过滤条件是 {@code studentCount() > 0}，而 studentCount 是<b>班级规模</b>而非「练过这个 KC
+   * 的人数」——只要班里有 1 个人，65 个 KC 全部通过过滤，「暂无足够学情数据」分支变成死代码，
+   * copilot 会把从没教过的 KC 断言成本班最弱知识点。
+   */
+  @Test
+  void copilotBriefTreatsUntouchedKcsAsNoData() {
+    when(classroomGuard.requireOwner(teacher, 9L))
+        .thenReturn(new Classroom(9L, "DemoClass", "", 42L, 43L, "ABC123", "ACTIVE"));
+    // 30 人班，两个 KC 都还没人练过：student_count=30，但三个分桶全为 0。
+    when(repository.findKcHeatmap(9L))
+        .thenReturn(
+            List.of(
+                new KcHeatmapEntryDto(
+                    "PY43-KC-050", "还没教的 KC", 7L, 50, BigDecimal.ZERO, 30, 0, 0, 0),
+                new KcHeatmapEntryDto(
+                    "PY43-KC-051", "更靠后的 KC", 7L, 51, BigDecimal.ZERO, 30, 0, 0, 0)));
+    when(repository.findErrorHotspots(eq(9L), any(Integer.class))).thenReturn(List.of());
+
+    String brief = service.copilotBrief(teacher, 9L);
+
+    assertThat(brief).contains("暂无足够学情数据");
+    assertThat(brief).doesNotContain("最弱知识点");
+    assertThat(brief).doesNotContain("还没教的 KC");
+  }
+
+  /** 有人练过（哪怕只有 1 人）才进入最弱知识点列表。 */
+  @Test
+  void copilotBriefListsKcOnceAtLeastOneStudentPracticed() {
+    when(classroomGuard.requireOwner(teacher, 9L))
+        .thenReturn(new Classroom(9L, "DemoClass", "", 42L, 43L, "ABC123", "ACTIVE"));
+    when(repository.findKcHeatmap(9L))
+        .thenReturn(
+            List.of(
+                new KcHeatmapEntryDto(
+                    "PY43-KC-050", "还没教的 KC", 7L, 50, BigDecimal.ZERO, 30, 0, 0, 0),
+                new KcHeatmapEntryDto(
+                    "PY43-KC-016", "列表推导式", 2L, 16, new BigDecimal("0.030"), 30, 0, 0, 1)));
+    when(repository.findErrorHotspots(eq(9L), any(Integer.class))).thenReturn(List.of());
+
+    String brief = service.copilotBrief(teacher, 9L);
+
+    assertThat(brief).contains("最弱知识点").contains("列表推导式");
+    assertThat(brief).doesNotContain("还没教的 KC");
   }
 }
