@@ -25,6 +25,9 @@
 # 数据目录约定（由 install_release.sh 创建）：
 #   /opt/pythontopia/shared/data/course-pack-43/   课件 PDF / 视频（只读挂载，主线闯关必需）
 #   /opt/pythontopia/shared/data/generated-media/  多模态生成产物（读写挂载，可重生成）
+#   /opt/pythontopia/shared/data/npcs/             NPC 人格/对话种子（只读挂载，随发布包
+#                                                  deploy/npc-seed/ 同步；缺失则所有 NPC
+#                                                  寒暄塌缩成同一段通用人设）
 # =============================================================================
 
 # 日志轮转：每容器最多 10m x 3 份，防小盘被日志写满。
@@ -113,6 +116,11 @@ services:
       - ${PYT_SHARED_DATA_DIR:-/opt/pythontopia/shared/data}/course-pack-43:/data/course-pack-43:ro
       # 多模态生成产物（文生图/TTS/合成视频）：读写；内容可重生成。
       - ${PYT_SHARED_DATA_DIR:-/opt/pythontopia/shared/data}/generated-media:/data/generated-media
+      # NPC 人格/对话种子：只读，必须挂在容器内 /app/data/npcs（WORKDIR=/app，
+      # NpcPersonaService.seedFromMeta 只认相对 CWD 的 data/npcs 与 ../data/npcs）。
+      # 缺这份数据时 npc_persona 表恒空 → 所有 NPC 寒暄塌缩成同一段通用人设，且服务端静默
+      # 无日志。内容由 install_release.sh 从发布包 deploy/npc-seed/ 同步到共享数据目录。
+      - ${PYT_SHARED_DATA_DIR:-/opt/pythontopia/shared/data}/npcs:/app/data/npcs:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     # 仅绑定回环：供主机诊断（curl 127.0.0.1:18080/healthz），不对公网暴露。

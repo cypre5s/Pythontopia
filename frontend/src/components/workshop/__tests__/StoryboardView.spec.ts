@@ -115,12 +115,20 @@ describe('StoryboardView · 一键合成短视频（media job）', () => {
     });
   });
 
-  it('① 命中缓存：直接内联播放成片，不订阅 SSE', async () => {
+  it('① 命中缓存：读作业详情拿签名直链内联播放，不订阅 SSE', async () => {
     vi.mocked(createStoryboardVideoJob).mockResolvedValue({
       jobId: 1,
       status: 'SUCCESS',
       cached: true,
       assetId: 42,
+    });
+    // 成片直链带签名（后端 MediaAssetUrls），只能用后端下发的 url，不能按 assetId 自行拼接。
+    vi.mocked(getMediaJob).mockResolvedValue({
+      jobId: 1,
+      status: 'SUCCESS',
+      progress: {},
+      assetId: 42,
+      url: '/api/media/assets/42?k=sig42',
     });
 
     const w = mountView();
@@ -129,7 +137,7 @@ describe('StoryboardView · 一键合成短视频（media job）', () => {
 
     const video = w.find('[data-testid="storyboard-video"]');
     expect(video.exists()).toBe(true);
-    expect(video.attributes('src')).toBe('/api/media/assets/42');
+    expect(video.attributes('src')).toBe('/api/media/assets/42?k=sig42');
     // 缓存命中不应建立 SSE 流。
     expect(useSseStream).not.toHaveBeenCalled();
     expect(w.find('[data-testid="storyboard-studio"]').exists()).toBe(false);
@@ -257,5 +265,36 @@ describe('StoryboardView · 一键合成短视频（media job）', () => {
     const video = w.find('[data-testid="storyboard-video"]');
     expect(video.exists()).toBe(true);
     expect(video.attributes('src')).toBe('/api/media/assets/77');
+  });
+});
+
+describe('StoryboardView · 文生图降级回退课件原页图', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // 未配讯飞密钥时文生图恒不可用，coursePageFallback 是常态路径；后端契约是
+  // /api/course/pages/{pageId}/image（CoursePageImageController），曾误写成 /api/coursepack/...
+  // 导致这条兜底链本身 404。
+  it('AI 出图失败时回退到 /api/course/pages/{pageId}/image', async () => {
+    vi.mocked(generateImage).mockRejectedValue(new Error('讯飞未配置'));
+
+    const w = mount(StoryboardView, {
+      props: {
+        content: {
+          scenes: [{ ...sampleScenes[0], evidence_page_id: 12 } as StoryboardScene],
+        },
+      },
+      global: {
+        plugins: [createPinia()],
+        stubs: { BilibiliVideoCards: true },
+      },
+    });
+    await flushPromises();
+    await nextTick();
+
+    const img = w.find('img.stage-image');
+    expect(img.exists()).toBe(true);
+    expect(img.attributes('src')).toBe('/api/course/pages/12/image');
   });
 });

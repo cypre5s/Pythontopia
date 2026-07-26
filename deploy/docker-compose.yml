@@ -67,6 +67,13 @@ services:
         -Dhttp.proxyHost=${PYT_XFYUN_PROXY_HOST:-host.docker.internal}
         -Dhttp.proxyPort=${PYT_XFYUN_PROXY_PORT:-7892}
         -Dhttp.nonProxyHosts=localhost|127.0.0.1|postgres|redis|pythontopia-graph|pythontopia-rag
+    volumes:
+      # NPC 人格/对话种子（关键踩坑）：NpcPersonaService.seedFromMeta 只按 CWD 找 data/npcs
+      # 与 ../data/npcs，而镜像 WORKDIR=/app 且只 COPY 了 jar——不挂这份数据时 npc_persona 表
+      # 恒空（且该服务目录缺失时静默 return，一行日志都没有），所有 NPC 寒暄塌缩成同一段通用
+      # 人设，NpcDialogService.loadStaticGreeting 也读不到 dialog.json。只读挂载即可，内容随
+      # 仓库演进，不需要重建镜像。
+      - ../data/npcs:/app/data/npcs:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:

@@ -90,7 +90,16 @@ Authorization: Bearer <token>
 | `traceId` | string | 链路追踪 id（可能为空串） |
 | `timestamp` | string | 服务端时间（ISO-8601） |
 
-常见 `code` / 状态：`UNAUTHORIZED`(401)、`FORBIDDEN`(403)、`BAD_CREDENTIALS`(401)、`REFRESH_TOKEN_INVALID`(401)、`*_NOT_FOUND`(404)、`BAD_REQUEST`/字段校验(400)。客户端应基于 `code` 分支处理，基于 `message` 兜底展示。
+常见 `code` / 状态：`UNAUTHORIZED`(401)、`FORBIDDEN`(403)、`BAD_CREDENTIALS`(401)、`REFRESH_TOKEN_INVALID`(401)、`*_NOT_FOUND`(404)、`VALIDATION_ERROR`(400)、`BAD_REQUEST`(400)。客户端应基于 `code` 分支处理，基于 `message` 兜底展示。
+
+**两个 400 的适用范围不同**（`GlobalExceptionHandler`）：
+
+| `code` | 触发条件 | `details` |
+| --- | --- | --- |
+| `VALIDATION_ERROR` | 报文能解析，但字段级校验不过（`@Valid` body 的 `MethodArgumentNotValidException`、`@PathVariable`/`@RequestParam` 上的 `ConstraintViolationException`） | 非空，每项形如 `字段: 说明` |
+| `BAD_REQUEST` | 报文本身不可解析 / 参数缺失或类型不符（JSON 语法错误、缺必填 query 参数、`IllegalArgumentException` 等） | 通常为空 |
+
+客户端做字段级表单回填时应匹配 `VALIDATION_ERROR`（旧文档误写成 `BAD_REQUEST`）。
 
 ---
 

@@ -2,17 +2,19 @@ package com.pythontopia.media.dto;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pythontopia.media.MediaAssetUrls;
 import com.pythontopia.media.domain.MediaJob;
 
 /**
  * {@code GET /api/media/jobs/{id}} 的轮询兜底响应。{@code progress} 为 {@code media_job.progress_json}
- * 原貌（{@code {phase,sceneIndex,sceneTotal,roleKey,message,percent}}）；成功时 {@code url} 指向成片，
- * 失败时 {@code errorCode} 给出失败码。
+ * 原貌（{@code {phase,sceneIndex,sceneTotal,roleKey,message,percent}}）；成功时 {@code url} 指向成片的
+ * 签名直链（{@link MediaAssetUrls}），失败时 {@code errorCode} 给出失败码。
  */
 public record JobStatusResponse(
     long jobId, String status, JsonNode progress, Long assetId, String url, String errorCode) {
 
-  public static JobStatusResponse from(MediaJob job, ObjectMapper objectMapper) {
+  public static JobStatusResponse from(
+      MediaJob job, ObjectMapper objectMapper, MediaAssetUrls assetUrls) {
     JsonNode progress;
     try {
       String raw = job.progressJson();
@@ -23,7 +25,7 @@ public record JobStatusResponse(
     } catch (Exception ex) {
       progress = objectMapper.createObjectNode();
     }
-    String url = job.assetId() == null ? null : "/api/media/assets/" + job.assetId();
+    String url = job.assetId() == null ? null : assetUrls.urlFor(job.assetId());
     return new JobStatusResponse(
         job.id(), job.status().name(), progress, job.assetId(), url, job.errorCode());
   }

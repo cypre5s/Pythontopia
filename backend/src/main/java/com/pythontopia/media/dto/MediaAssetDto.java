@@ -1,11 +1,14 @@
 package com.pythontopia.media.dto;
 
+import com.pythontopia.media.MediaAssetUrls;
 import com.pythontopia.media.domain.MediaAsset;
 import java.util.List;
 
 /**
- * 下发给前端的多模态媒资元数据。{@code url} 指向 {@code GET /api/media/assets/{id}}，可直接用于
- * {@code <img src>} / {@code <video src>}；{@code degraded=true} 时前端可显示「占位/未接入真实模型」角标。
+ * 下发给前端的多模态媒资元数据。{@code url} 指向带签名的 {@code GET /api/media/assets/{id}?k=<sig>}，
+ * 可直接用于 {@code <img src>} / {@code <video src>}；客户端应原样使用该 url，不要自行按 id 拼接
+ * （无签名的裸 id 直链会被服务端 404，见 {@link MediaAssetUrls}）。{@code degraded=true} 时前端可
+ * 显示「占位/未接入真实模型」角标。
  */
 public record MediaAssetDto(
     long id,
@@ -17,11 +20,11 @@ public record MediaAssetDto(
     String prompt,
     List<String> kcCodes) {
 
-  public static MediaAssetDto from(MediaAsset asset) {
+  public static MediaAssetDto from(MediaAsset asset, MediaAssetUrls assetUrls) {
     return new MediaAssetDto(
         asset.id(),
         asset.kind().name(),
-        "/api/media/assets/" + asset.id(),
+        assetUrls.urlFor(asset.id()),
         asset.mimeType(),
         asset.degraded(),
         asset.source(),

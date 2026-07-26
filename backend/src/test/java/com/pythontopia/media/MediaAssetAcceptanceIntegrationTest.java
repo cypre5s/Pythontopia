@@ -87,12 +87,36 @@ class MediaAssetAcceptanceIntegrationTest {
             userId);
     assertThat(rows).isEqualTo(1);
 
-    // 匿名取流（<img src> 不带 Authorization）：permitAll 放行，返回真实 PNG 字节。
+    // 下发的直链自带签名（<img src> 不带 Authorization，只能靠签名授权）。
+    assertThat(url).contains("?k=");
+
+    // 匿名带签名取流：permitAll 放行 + 签名校验通过，返回真实 PNG 字节。
     ResponseEntity<byte[]> served =
         restTemplate.exchange(url, HttpMethod.GET, HttpEntity.EMPTY, byte[].class);
     assertThat(served.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(served.getBody()).isNotEmpty();
     assertThat(served.getHeaders().getContentType().toString()).contains("image/png");
+
+    // 反例：去掉签名后按 BIGSERIAL id 枚举一律 404，不能匿名拖走他人生成的媒资。
+    ResponseEntity<byte[]> enumerated =
+        restTemplate.exchange(
+            "/api/media/assets/" + assetId, HttpMethod.GET, HttpEntity.EMPTY, byte[].class);
+    assertThat(enumerated.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+
+    // 反例：签名伪造（挪用相邻 id 的签名）同样 404。
+    ResponseEntity<byte[]> forged =
+        restTemplate.exchange(
+            "/api/media/assets/" + assetId + "?k=deadbeefdeadbeef",
+            HttpMethod.GET,
+            HttpEntity.EMPTY,
+            byte[].class);
+    assertThat(forged.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+
+    // owner 带 JWT 时无需签名也能取流（原生客户端保留 Authorization 头的场景）。
+    ResponseEntity<byte[]> byOwner =
+        restTemplate.exchange(
+            "/api/media/assets/" + assetId, HttpMethod.GET, bearer(token, null), byte[].class);
+    assertThat(byOwner.getStatusCode()).isEqualTo(HttpStatus.OK);
   }
 
   @Test
