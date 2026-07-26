@@ -106,7 +106,7 @@ describe('PathTreeTab deep link', () => {
     expect(router.currentRoute.value.query.problemId).toBe('476');
   });
 
-  it('READ_RESOURCE node routes to /workshop?kcCode=&type=', async () => {
+  it('READ_RESOURCE node routes to /workshop?kc=&type= (the contract WorkshopChat consumes)', async () => {
     const wrapper = await setupNode({
       id: 2,
       nodeType: 'READ_RESOURCE',
@@ -118,11 +118,12 @@ describe('PathTreeTab deep link', () => {
     await flushPromises();
 
     expect(router.currentRoute.value.path).toBe('/workshop');
-    expect(router.currentRoute.value.query.kcCode).toBe('PY43-KC-001');
+    // WorkshopChat.consumeDeepLink 只认 kc + type；kcCode 会被整段忽略。
+    expect(router.currentRoute.value.query.kc).toBe('PY43-KC-001');
     expect(router.currentRoute.value.query.type).toBe('HANDOUT');
   });
 
-  it('FIX_BUG node routes to /world (mine is a side area, no goto query)', async () => {
+  it('FIX_BUG node routes to /world?goto=town_hub like the backend deep link', async () => {
     const wrapper = await setupNode({
       id: 3,
       nodeType: 'FIX_BUG',
@@ -134,10 +135,10 @@ describe('PathTreeTab deep link', () => {
     await flushPromises();
 
     expect(router.currentRoute.value.path).toBe('/world');
-    expect(router.currentRoute.value.query.goto).toBeUndefined();
+    expect(router.currentRoute.value.query.goto).toBe('town_hub');
   });
 
-  it('PLANT_KC node routes to /workshop (learn the KC in the workshop)', async () => {
+  it('PLANT_KC node routes to /world?focus=kc_... like the backend deep link', async () => {
     const wrapper = await setupNode({
       id: 4,
       nodeType: 'PLANT_KC',
@@ -148,7 +149,9 @@ describe('PathTreeTab deep link', () => {
     await wrapper.find('[data-testid="path-node-link-4"]').trigger('click');
     await flushPromises();
 
-    expect(router.currentRoute.value.path).toBe('/workshop');
+    // 后端 quest 深链是 /world?focus=kc_xxx；前端兜底曾跳 /workshop，同一节点两种行为。
+    expect(router.currentRoute.value.path).toBe('/world');
+    expect(router.currentRoute.value.query.focus).toBe('kc_py43-kc-004');
   });
 
   it('PROFILE_UPDATE node routes to /profile-room', async () => {

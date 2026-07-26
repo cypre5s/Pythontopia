@@ -66,15 +66,27 @@ export function createBugMineSlice(deps: BugMineSliceDeps) {
     lastVariant: null,
   });
 
+  /**
+   * 错题本请求序号：页面/面板/入矿动作可能并发发起多次拉取，
+   * 只允许「最后一次发起」的响应落地，避免旧响应覆盖掉包含新建会话的那次。
+   */
+  let errorBookRequestSeq = 0;
+
   async function loadBugMineErrorBook(): Promise<void> {
+    const seq = (errorBookRequestSeq += 1);
     bugMine.value.errorBookLoading = true;
     bugMine.value.errorBookError = null;
     try {
-      bugMine.value.errorBook = await getBugMineErrorBook();
+      const items = await getBugMineErrorBook();
+      if (seq !== errorBookRequestSeq) return;
+      bugMine.value.errorBook = items;
     } catch (error) {
+      if (seq !== errorBookRequestSeq) return;
       bugMine.value.errorBookError = error instanceof Error ? error.message : String(error);
     } finally {
-      bugMine.value.errorBookLoading = false;
+      if (seq === errorBookRequestSeq) {
+        bugMine.value.errorBookLoading = false;
+      }
     }
   }
 
@@ -122,6 +134,16 @@ export function createBugMineSlice(deps: BugMineSliceDeps) {
   }
 
   async function openBugMineEchoByKc(kcCode: string): Promise<BugMineSessionDto | null> {
+    // 幂等前端半边：该 KC 已有 OPEN 会话就直接切过去，不再重复入矿。
+    // （后端 openEcho 每次调用都会新插 submission + session，FSRS 到期状态又不随入矿改变，
+    //   再点一次就是错题本里的第二条同 KC 条目。）
+    const existing = bugMine.value.errorBook.find(
+      (item) => item.kcCode === kcCode && item.status === 'OPEN',
+    );
+    if (existing) {
+      await loadBugMine(existing.sessionId);
+      return bugMine.value.session;
+    }
     bugMine.value.loading = true;
     bugMine.value.lastError = null;
     try {
