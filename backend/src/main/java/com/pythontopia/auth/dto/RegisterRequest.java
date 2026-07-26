@@ -11,6 +11,10 @@ import jakarta.validation.constraints.Size;
  * username 与 displayName 拒绝 HTML 元字符（&lt; &gt; &amp; " '），避免字段在其他端
  * （Android / 邮件通知 / OpenAPI 文档）被原样渲染触发 XSS；username 进一步限定为
  * 字母/数字/下划线/连字符/点。
+ *
+ * <p>{@code role} 是不可信输入：注册端点 permitAll，请求体可以自称任意角色。真正的准入判定在
+ * {@code AuthService#register} 的白名单（仅 STUDENT / TEACHER，TEACHER 另需邀请码），此处的
+ * {@code @NotNull} 只保证字段存在。
  */
 public record RegisterRequest(
     @NotBlank

@@ -37,6 +37,30 @@ info() { echo "[信息] $*"; }
 
 section() { echo; echo "===== $* ====="; }
 
+# 秘密强度校验：只读取长度与占位特征，任何分支都不打印变量值本身。
+# 用法：check_secret_strength <变量名> <最小长度> <fail|warn>（第三参数决定长度不足时的严重级）
+check_secret_strength() {
+  local var_name="$1"
+  local min_len="$2"
+  local short_severity="$3"
+  local value
+  value=$(sed -n "s/^[[:space:]]*${var_name}=//p" "${ENV_FILE}" 2>/dev/null | tail -n 1)
+  case "${value}" in
+    ""|pytopia-teacher|pytopia-rag-admin|pythontopia-route-secret\
+      |*replace-with*|*replace_with*|*change-me*|*changeme*|*placeholder*|*your-secret*)
+      fail "${var_name} 为空或使用公开占位值（必须独立随机生成，且不会在此输出）"
+      return
+      ;;
+  esac
+  if [ "${#value}" -ge "${min_len}" ]; then
+    pass "${var_name} 已配置独立高熵长度（值不输出）"
+  elif [ "${short_severity}" = "warn" ]; then
+    warn "${var_name} 长度不足 ${min_len}，建议加长（值不输出）"
+  else
+    fail "${var_name} 长度不足 ${min_len}（值不输出）"
+  fi
+}
+
 echo "Pythontopia ECS 部署预检（只读） $(date '+%Y-%m-%d %H:%M:%S')"
 echo "目标公网 IP：${PYT_PUBLIC_IP}"
 
@@ -177,19 +201,13 @@ if [ -f "${ENV_FILE}" ]; then
     fail "缺少必需变量名：${MISSING_REQUIRED[*]}（compose 渲染会因 \${VAR:?} 直接失败）"
   fi
 
-  ROUTE_SECRET=$(sed -n 's/^[[:space:]]*PYT_ROUTE_EXECUTION_SECRET=//p' "${ENV_FILE}" 2>/dev/null | tail -n 1)
-  case "${ROUTE_SECRET}" in
-    ""|pytopia-rag-admin|pythontopia-route-secret|*change-me*|*placeholder*)
-      fail "PYT_ROUTE_EXECUTION_SECRET 为空或使用公开占位值（必须独立随机生成，且不会在此输出）"
-      ;;
-    *)
-      if [ "${#ROUTE_SECRET}" -ge 32 ]; then
-        pass "PYT_ROUTE_EXECUTION_SECRET 已配置独立高熵长度（值不输出）"
-      else
-        fail "PYT_ROUTE_EXECUTION_SECRET 长度不足 32（值不输出）"
-      fi
-      ;;
-  esac
+  # 秘密类变量逐个做「占位值 + 长度」校验。只查变量名是否存在是不够的：.env.example 里的
+  # 占位值是公开的，原样进生产等于把 JWT 签名密钥 / 教师邀请码 / 内部令牌直接公开。
+  check_secret_strength PYT_JWT_SECRET 32 fail
+  check_secret_strength PYT_ROUTE_EXECUTION_SECRET 32 fail
+  check_secret_strength PYT_RAG_ADMIN_TOKEN 32 fail
+  # 邀请码是人工分发的短串，长度只给建议值；但公开占位值同样一票否决。
+  check_secret_strength PYT_TEACHER_INVITE_CODE 16 warn
 
   MISSING_RECOMMENDED=()
   for v in "${RECOMMENDED_VARS[@]}"; do
