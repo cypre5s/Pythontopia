@@ -93,10 +93,9 @@ export function createTrainingSlice(deps: TrainingSliceDeps) {
     training.value.previewPhase = 'previewing';
     training.value.previewError = null;
     training.value.lastError = null;
-    // 进入本地调试轨道：清掉上一次服务端判题结果，避免旧 verdict 与新运行输出并排误导。
-    // 注意只清「结果」，不碰 submitPhase —— 判题在途时清它就等于把提交按钮重新放开。
-    training.value.submission = null;
-    training.value.submitError = null;
+    // 刻意不清 submission/submitError：本地运行与服务端判题是两个独立卡片（Output vs 判题结果），
+    // 清掉判题结果会连带抹掉「进入 Bug 矿洞」入口 —— 而判题失败后先本地跑一遍正是最常见的调试动作。
+    // 两轨的错误已由 previewError / submitError 分开承载，不存在串味。
     try {
       const runner = getPyodideRunner();
       await runner.init();
