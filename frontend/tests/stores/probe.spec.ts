@@ -46,7 +46,7 @@ describe('probe store', () => {
   });
 
   it('hydrates the answered set from localStorage on init', () => {
-    window.localStorage.setItem(PERSIST_KEY, JSON.stringify(['cog_intro']));
+    window.localStorage.setItem(ANON_PERSIST_KEY, JSON.stringify(['cog_intro']));
     const store = useProbeStore();
     expect(store.answered.has('cog_intro')).toBe(true);
     expect(store.shouldShow('cog_intro')).toBe(false);
