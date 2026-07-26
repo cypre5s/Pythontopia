@@ -1,7 +1,10 @@
 package com.pythontopia.mainline;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 /**
  * packId=43 的 7 章静态目录（章号 → 标题 + KC 区间）。
@@ -45,6 +48,27 @@ public final class ChapterCatalog {
       codes.add(KC_PREFIX + String.format("%03d", n));
     }
     return codes;
+  }
+
+  /** KC code → 所属章的反查索引（由 {@link #kcCodes(int)} 构建，保证与正查口径一致）。 */
+  private static final Map<String, Integer> CHAPTER_BY_KC = buildChapterByKc();
+
+  private static Map<String, Integer> buildChapterByKc() {
+    Map<String, Integer> index = new LinkedHashMap<>();
+    for (int chapter = 1; chapter <= CHAPTER_COUNT; chapter++) {
+      for (String kc : kcCodes(chapter)) {
+        index.put(kc, chapter);
+      }
+    }
+    return Map.copyOf(index);
+  }
+
+  /** KC code → 章号；不属于本课程 KC 区间（或为空）时返回 {@link Optional#empty()}。 */
+  public static Optional<Integer> chapterOfKc(String kcCode) {
+    if (kcCode == null || kcCode.isBlank()) {
+      return Optional.empty();
+    }
+    return Optional.ofNullable(CHAPTER_BY_KC.get(kcCode.trim()));
   }
 
   private static ChapterDef def(int chapter) {
