@@ -48,6 +48,7 @@ public class MediaJobService {
   private final StoryboardCompositionService compositionService;
   private final MediaJobStreamRegistry streamRegistry;
   private final ObjectMapper objectMapper;
+  private final MediaAssetUrls assetUrls;
   private final Executor composeExecutor;
   private final Semaphore imageSemaphore;
   private final Semaphore ttsSemaphore;
@@ -58,6 +59,7 @@ public class MediaJobService {
       StoryboardCompositionService compositionService,
       MediaJobStreamRegistry streamRegistry,
       ObjectMapper objectMapper,
+      MediaAssetUrls assetUrls,
       MediaComposeProperties properties,
       @Qualifier("mediaComposeExecutor") Executor composeExecutor) {
     this.jobRepository = jobRepository;
@@ -65,6 +67,7 @@ public class MediaJobService {
     this.compositionService = compositionService;
     this.streamRegistry = streamRegistry;
     this.objectMapper = objectMapper;
+    this.assetUrls = assetUrls;
     this.composeExecutor = composeExecutor;
     this.imageSemaphore = new Semaphore(properties.ttiConcurrency(), true);
     this.ttsSemaphore = new Semaphore(properties.ttsConcurrency(), true);
@@ -227,7 +230,7 @@ public class MediaJobService {
     Map<String, Object> result = new LinkedHashMap<>();
     result.put("jobId", jobId);
     result.put("assetId", assetId);
-    result.put("url", "/api/media/assets/" + assetId);
+    result.put("url", assetUrls.urlFor(assetId));
     return result;
   }
 

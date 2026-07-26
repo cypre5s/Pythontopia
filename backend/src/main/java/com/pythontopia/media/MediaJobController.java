@@ -33,7 +33,8 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
  *       前端用 {@code fetch}+JWT（非 EventSource）订阅。
  * </ul>
  *
- * <p>成片读取走匿名的 {@code GET /api/media/assets/{assetId}}（{@code <video src>} 不带 Authorization）。
+ * <p>成片读取走匿名但带签名的 {@code GET /api/media/assets/{assetId}?k=<sig>}（{@code <video src>}
+ * 不带 Authorization，签名见 {@link MediaAssetUrls}）；客户端必须原样使用响应里的 {@code url}。
  */
 @Validated
 @RestController
@@ -42,10 +43,13 @@ public class MediaJobController {
 
   private final MediaJobService service;
   private final ObjectMapper objectMapper;
+  private final MediaAssetUrls assetUrls;
 
-  public MediaJobController(MediaJobService service, ObjectMapper objectMapper) {
+  public MediaJobController(
+      MediaJobService service, ObjectMapper objectMapper, MediaAssetUrls assetUrls) {
     this.service = service;
     this.objectMapper = objectMapper;
+    this.assetUrls = assetUrls;
   }
 
   @PostMapping("/storyboard/video/jobs")
@@ -59,7 +63,7 @@ public class MediaJobController {
   public JobStatusResponse getJob(
       @CurrentUser CurrentUserPrincipal user, @PathVariable @Positive long id) {
     MediaJob job = service.getJob(id).filter(found -> ownedBy(found, user)).orElseThrow(this::notFound);
-    return JobStatusResponse.from(job, objectMapper);
+    return JobStatusResponse.from(job, objectMapper, assetUrls);
   }
 
   @GetMapping(value = "/jobs/{id}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)

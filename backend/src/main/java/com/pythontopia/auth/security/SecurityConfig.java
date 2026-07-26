@@ -41,6 +41,9 @@ public class SecurityConfig {
         .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(
             requests -> {
+              // /api/media/assets/** 必须匿名可达（<img>/<video> src 不带 Authorization 头），
+              // 但端点内部按签名（MediaAssetUrls）或 owner JWT 授权，裸 id 直链一律 404，
+              // 不可按 BIGSERIAL 顺序枚举他人生成的图片/视频。
               requests
                   .requestMatchers(
                       "/api/auth/**",

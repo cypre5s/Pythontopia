@@ -134,7 +134,8 @@ echo "    本次 release：${RELEASE_DIR}"
 step "准备目录结构"
 # ---------------------------------------------------------------------------
 mkdir -p "${RELEASES_DIR}" "${BACKUPS_DIR}" "${SHARED_DIR}" \
-  "${SHARED_DIR}/data/course-pack-43" "${SHARED_DIR}/data/generated-media"
+  "${SHARED_DIR}/data/course-pack-43" "${SHARED_DIR}/data/generated-media" \
+  "${SHARED_DIR}/data/npcs"
 chmod 700 "${SHARED_DIR}"
 
 if [ ! -f "${ENV_FILE}" ]; then
@@ -256,6 +257,19 @@ step "接线 .env 并校验 Compose 渲染"
 ln -sfn "${ENV_FILE}" "${RELEASE_DIR}/deploy/.env"
 ( cd "${RELEASE_DIR}/deploy" && docker compose -p "${COMPOSE_PROJECT}" -f "${COMPOSE_FILE_NAME}" config -q )
 echo "    docker compose config 校验通过"
+
+# NPC 人格/对话种子同步到共享数据目录（生产 compose 以只读挂到容器 /app/data/npcs）。
+# 后端镜像只 COPY jar，容器内没有这份数据时 NpcPersonaService.seedFromMeta 静默 no-op，
+# npc_persona 表恒空 → 所有 NPC 寒暄塌缩成同一段通用人设，且服务端不打任何日志。
+if [ -d "${RELEASE_DIR}/deploy/npc-seed" ]; then
+  rm -rf "${SHARED_DIR}/data/npcs"
+  mkdir -p "${SHARED_DIR}/data/npcs"
+  cp -a "${RELEASE_DIR}/deploy/npc-seed/." "${SHARED_DIR}/data/npcs/"
+  chmod -R a+rX "${SHARED_DIR}/data/npcs"
+  echo "    NPC 人格种子已同步：$(find "${SHARED_DIR}/data/npcs" -name meta.json | wc -l) 个 NPC"
+else
+  echo "    [警告] 发布包缺少 deploy/npc-seed/，NPC 人格将退化为通用人设（请用新版打包脚本重出包）" >&2
+fi
 
 # 生成媒体目录授权给 backend 容器内用户（uid 在镜像构建时分配，运行时查询）
 BACKEND_UID="$(docker run --rm "pythontopia/backend:release" id -u 2>/dev/null | tr -dc '0-9' || true)"

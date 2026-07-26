@@ -9,7 +9,6 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.pythontopia.auth.repository.UserRepository;
 import com.pythontopia.learner.profile.repository.ProfileRepository;
-import com.pythontopia.world.calendar.CalendarService;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessResourceFailureException;
@@ -30,11 +29,10 @@ class DialogContextServiceTest {
 
   private final DialogContextRepository repository = mock(DialogContextRepository.class);
   private final ProfileRepository profileRepository = mock(ProfileRepository.class);
-  private final CalendarService calendarService = mock(CalendarService.class);
   private final UserRepository userRepository = mock(UserRepository.class);
 
   private final DialogContextService service =
-      new DialogContextService(repository, profileRepository, calendarService, userRepository);
+      new DialogContextService(repository, profileRepository, userRepository);
 
   private DialogContextDto build() {
     return service.buildContext(USER_ID, "tester");

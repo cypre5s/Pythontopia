@@ -178,6 +178,19 @@ for tree in "${TREES[@]}"; do
   rsync -a "${EXCLUDES[@]}" "$ROOT/$tree/" "$STAGE/$tree/"
 done
 
+# NPC 人格/对话种子（~140K JSON）随包发出：后端镜像只 COPY jar，容器内没有 data/npcs，
+# NpcPersonaService.seedFromMeta 会静默 no-op → npc_persona 恒空、所有 NPC 共用一段通用人设。
+# 生产 compose 从共享数据目录只读挂载，install_release.sh 负责把这里同步过去。
+# 放在 deploy/ 树内（顶层契约只允许 backend/ deploy/ frontend/ README.md），且由打包时从
+# 仓库唯一真源 data/npcs 拷贝，不在仓库里留第二份副本。
+if [[ -d "$ROOT/data/npcs" ]]; then
+  echo "==> 暂存 NPC 人格种子：data/npcs -> deploy/npc-seed/"
+  mkdir -p "$STAGE/deploy/npc-seed"
+  rsync -a "$ROOT/data/npcs/" "$STAGE/deploy/npc-seed/"
+else
+  die "NPC 人格种子缺失：$ROOT/data/npcs（后端 NPC 寒暄会全部降级为通用人设）"
+fi
+
 echo "==> [3/7] docker save 导出镜像到 deploy/runtime/images/"
 IMAGES_DIR="$STAGE/deploy/runtime/images"
 mkdir -p "$IMAGES_DIR"
