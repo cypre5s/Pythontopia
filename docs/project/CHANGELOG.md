@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-07-26 — 重构：WorkshopChat 答案视图投影抽为纯模块（审计第 2 批）
+
+- `WorkshopChat.vue`（3692 行，全仓最大文件）先切第一刀：把答案气泡的纯视图投影（`TutorStreamResult` snake_case 线格式类型、证据归一 `toCitations`、接地状态归一 `deriveGroundingStatus`、通识前缀清理 `normalizeAnswerText`、g-chip 标签映射 `groundingInfo`、三审徽章 `reviewBadges`）抽到新模块 `components/workshop/chatAnswerView.ts`（约 150 行），组件内以 import 替换，行为零变化。
+- 新增 `chatAnswerView.spec.ts` 6 用例直接覆盖这些此前只能经组件测试间接覆盖的分支（含 FAILED/NO_EVIDENCE 归一、score 可选字段、reasons 空白过滤）。
+- 模块注释明确与 `TutorPanel.vue` 的同名 `TutorStreamResult`（`/api/tutor/ask` camelCase 契约）是两种线格式，不可合并——防止后续「顺手统一」造成契约破坏。
+- 验证：typecheck 通过；workshop 组件套件 23 files / 136 tests 全绿；ESLint 0 errors；Prettier 通过。
+
 ## 2026-07-26 — 重构：前端死代码清除（审计第 1 批）
 
 - 全仓引用扫描确认后删除三个零引用文件：`api/client.ts`（对 `./http` 的死转发层）、`composables/useKcFrontier.ts`（知识前沿选择器，调用点在无尽远征迭代中消失；其 ZPD+画像弱项选 KC 的设计思想保留为后续画像深化素材，且其注释本身建议下沉后端）、`utils/assertNever.ts`（唯一使用处已有局部实现）。旧 R-13 mainQuest 前端系统确认退役干净、无残留。
