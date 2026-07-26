@@ -15,6 +15,7 @@ import { useCalendarStore } from '@stores/calendar';
 import { useDialogStore, __resetChoiceListenersForTests } from '@stores/dialog';
 import FestivalRibbon from '@/components/hud/FestivalRibbon.vue';
 import FastTravelPanel from '@/components/hud/FastTravelPanel.vue';
+import { FAST_TRAVEL_ENABLED } from '@/data/fastTravel';
 import { router as appRouter } from '@/app/router';
 
 vi.mock('@/composables/useAudio', () => ({
@@ -89,18 +90,15 @@ describe('demo-smoke.integration · 完整演示链路', () => {
     expect(world.player?.tileX).toBe(25);
   });
 
-  it('STEP 5 FastTravel 面板只提供 hub 路线（R-14 单 hub，外围图已移除）', async () => {
-    // R-14 方案A：世界收缩为单一 town_hub，快速旅行只剩 hub 一条路线，
-    // 不再提供前往 farm_north 等外围图的传送（外围图已从主线/导航弃用）。
+  it('STEP 5 FastTravel 入口在单 hub 下休眠（面板不再打开成一行灰按钮）', async () => {
+    // R-14 方案A：世界收缩为单一 town_hub，快速旅行只剩 hub 一条路线 = 玩家当前所在地，
+    // 面板里唯一一行永久 disabled → 打开它等于给玩家一个死路。FAST_TRAVEL_ENABLED 关掉全部入口。
     setPlayer('town_hub');
     const wrapper = mount(FastTravelPanel, { attachTo: document.body });
     window.dispatchEvent(new CustomEvent('pythontopia:fast-travel-open'));
     await flushPromises();
-    expect(wrapper.find('[data-testid="fast-travel-panel"]').exists()).toBe(true);
-    expect(wrapper.find('[data-testid="fast-travel-hub"]').exists()).toBe(true);
-    expect(wrapper.find('[data-testid="fast-travel-farm"]').exists()).toBe(false);
-    // 已位于 hub，hub 路线被 disabled（单图收缩后无处可去即预期行为）。
-    expect(wrapper.find('[data-testid="fast-travel-hub"]').attributes('disabled')).toBeDefined();
+    expect(FAST_TRAVEL_ENABLED).toBe(false);
+    expect(wrapper.find('[data-testid="fast-travel-panel"]').exists()).toBe(false);
     expect(useWorldStore().player?.mapKey).toBe('town_hub');
     wrapper.unmount();
   });

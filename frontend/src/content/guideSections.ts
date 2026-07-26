@@ -6,6 +6,8 @@
  * 开发期文件可能尚未落盘，GuideScreenshot 会优雅降级为文字占位说明。
  */
 
+import { FAST_TRAVEL_ENABLED } from '@/data/fastTravel';
+
 export interface GuideScreenshotSpec {
   /** 冻结契约 URL，前缀固定为 /guide/screenshots/ */
   readonly src: string;
@@ -115,8 +117,12 @@ export const GUIDE_NAV_GROUPS: readonly GuideNavGroup[] = [
 
 const SCREENSHOT_BASE = '/guide/screenshots';
 
-/** 小镇全部快捷键（与 HUD 实际键位保持一致）。 */
-const TOWN_HOTKEYS: readonly GuideKeyRow[] = [
+/**
+ * 小镇全部快捷键（与 HUD 实际键位保持一致）。
+ * 休眠玩法的键位不写进指南：R-14 单 hub 下「T · 传送」已无可去之处（见 data/fastTravel.ts），
+ * 指南继续宣传它就是把学生指向一个打不开的面板。
+ */
+const ALL_TOWN_HOTKEYS: readonly GuideKeyRow[] = [
   { keys: 'WASD / 方向键', desc: '移动（支持八方向）' },
   { keys: 'F / Enter', desc: '与 NPC 交谈 / 进入建筑' },
   { keys: 'Tab', desc: '快捷轮盘' },
@@ -131,6 +137,10 @@ const TOWN_HOTKEYS: readonly GuideKeyRow[] = [
   { keys: 'C', desc: '休息' },
   { keys: ',', desc: '设置' },
 ];
+
+const TOWN_HOTKEYS: readonly GuideKeyRow[] = ALL_TOWN_HOTKEYS.filter(
+  (row) => row.keys !== 'T' || FAST_TRAVEL_ENABLED,
+);
 
 const ALL_GUIDE_SECTIONS: readonly GuideSectionContent[] = [
   {

@@ -657,6 +657,30 @@ describe('rogueRun store', () => {
     expect(run.leaderboard).toEqual(board);
   });
 
+  it('连点「再试一次」只出一题（retryChallenge 并发守卫，防重复 LLM 计费）', async () => {
+    const run = useRogueRunStore();
+    await run.startRun(null);
+    const start = run.nodes.find((n) => n.layer === 0);
+    judgeMock.judge.mockResolvedValue({
+      problemId: 'p1', passed: false, passedTestCases: 0, totalTestCases: 1, score: 0, feedback: 'wa',
+    });
+    await run.enterNode(start!.id);
+    await run.submitChallenge();
+    expect(run.challengeResult?.passed).toBe(false);
+
+    judgeMock.retryPrefetch.mockClear();
+    judgeMock.fetchProblem.mockClear();
+
+    // 双击：两次调用在同一帧发出（第二次必须被 loading 守卫吞掉）。
+    const first = run.retryChallenge();
+    const second = run.retryChallenge();
+    await Promise.all([first, second]);
+
+    expect(judgeMock.retryPrefetch).toHaveBeenCalledTimes(1);
+    expect(judgeMock.fetchProblem).toHaveBeenCalledTimes(1);
+    expect(run.loading).toBe(false);
+  });
+
   it('does not double-report when a run settles via HP loss then finishRun', async () => {
     const run = useRogueRunStore();
     await run.startRun(null);

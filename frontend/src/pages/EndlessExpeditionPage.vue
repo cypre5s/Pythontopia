@@ -675,9 +675,11 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
           <PyButton
             variant="primary"
             size="sm"
+            test-id="expedition-error-retry"
+            :disabled="run.loading"
             @click="run.retryChallenge()"
           >
-            重试
+            {{ run.loading ? '出题中…' : '重试' }}
           </PyButton>
         </div>
 
@@ -735,9 +737,10 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
                   v-if="run.hp > 0"
                   variant="primary"
                   test-id="expedition-retry"
+                  :disabled="run.loading"
                   @click="run.retryChallenge()"
                 >
-                  再试一次（换一题）
+                  {{ run.loading ? '出题中…' : '再试一次（换一题）' }}
                 </PyButton>
                 <PyButton
                   v-else

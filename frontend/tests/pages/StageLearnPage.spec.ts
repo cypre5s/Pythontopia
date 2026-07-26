@@ -198,6 +198,44 @@ describe('StageLearnPage（小节学习页 · 三件套编排）', () => {
     wrapper.unmount();
   });
 
+  it('本节无关联课件页（requiredPages=0）时「学」判为已过线，章节小测可进入', async () => {
+    // V156 seed：courseware_page_ids 默认 '{}'、required_pages 默认 0。
+    // 后端 StageCompletion 对空课件判「已过线」，前端必须一致，否则小测按钮永久锁死。
+    vi.mocked(getStageDetail).mockResolvedValue(
+      makeStageDetail({
+        chapter: 2,
+        index: 3,
+        coursewarePageIds: [],
+        requiredPages: 0,
+        pagesReadIds: [],
+        videoWatchedSec: 240,
+      }),
+    );
+    const { wrapper } = await mountAt(7);
+
+    expect(wrapper.find('[data-testid="summary-courseware-val"]').text()).toBe('无需阅读');
+    expect(wrapper.find('[data-testid="stage-toc-courseware"]').classes()).toContain(
+      'stage-learn__toc-item--done',
+    );
+
+    await wrapper.find('[data-testid="stage-toc-practice"]').trigger('click');
+    const button = wrapper.find('[data-testid="stage-chapter-quiz"]');
+    expect(button.attributes('disabled')).toBeUndefined();
+    expect(button.text()).toContain('进入章节小测');
+
+    wrapper.unmount();
+  });
+
+  it('有课件页但未读满时「学」仍未过线，章节小测保持锁定', async () => {
+    vi.mocked(getStageDetail).mockResolvedValue(
+      makeStageDetail({ chapter: 2, index: 3, videoWatchedSec: 240, pagesReadIds: [101] }),
+    );
+    const { wrapper } = await mountAt(7);
+    await wrapper.find('[data-testid="stage-toc-practice"]').trigger('click');
+    expect(wrapper.find('[data-testid="stage-chapter-quiz"]').attributes('disabled')).toBeDefined();
+    wrapper.unmount();
+  });
+
   it('章节小测在视频或 PPT 未完成时保持锁定', async () => {
     vi.mocked(getStageDetail).mockResolvedValue(
       makeStageDetail({ chapter: 2, index: 3, videoWatchedSec: 239 }),

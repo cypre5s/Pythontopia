@@ -10,6 +10,7 @@ import { useSessionStore } from '@stores/session';
 import { useGameSettingsStore } from '@stores/gameSettings';
 import { useGuideStore } from '@stores/guide';
 import { useAudio } from '@/composables/useAudio';
+import { FAST_TRAVEL_ENABLED } from '@/data/fastTravel';
 import { playUiClick, playUiHover } from '@/composables/useStardewFx';
 
 interface SlotDescriptor {
@@ -174,6 +175,8 @@ function onSlotHover(): void {
 }
 
 function onOpenFastTravel(): void {
+  // R-14 单 hub 下快速旅行休眠（见 data/fastTravel.ts）：入口不渲染，T 键也不再触发空面板。
+  if (!FAST_TRAVEL_ENABLED) return;
   playUiClick();
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('pythontopia:fast-travel-open'));
@@ -305,7 +308,7 @@ function onKey(event: KeyboardEvent): void {
   if (isWorldGameplayActive() && (lowered === 'a' || lowered === 'c')) {
     return;
   }
-  if (lowered === 't' && !event.shiftKey) {
+  if (lowered === 't' && !event.shiftKey && FAST_TRAVEL_ENABLED) {
     onOpenFastTravel();
     event.preventDefault();
     return;
