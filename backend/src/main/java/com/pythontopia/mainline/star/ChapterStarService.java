@@ -73,7 +73,10 @@ public class ChapterStarService {
     int computed = Math.min(StarFormula.MAX_STARS, core.total() + recovered.size());
     int finalStars = Math.max(existingStars, computed);
 
-    String breakdownJson = breakdownJson(core, recovered);
+    // stars 只升不降（GREATEST），breakdown 却整份覆盖：掌握度衰减后会出现「stars=3 但 breakdown 只有 2 分
+    // 构成」的自相矛盾。保留了更高的历史星数时，breakdown 也逐键取历史最大，二者口径保持一致。
+    CoreStars persisted = finalStars > computed ? maxCore(core, existing) : core;
+    String breakdownJson = breakdownJson(persisted, recovered);
     starRepository.upsert(userId, chapter, finalStars, bestScore, breakdownJson);
 
     if (finalStars > existingStars) {
@@ -125,6 +128,19 @@ public class ChapterStarService {
       }
     }
     return sum / kcCodes.size();
+  }
+
+  /** 新算构成与既有 breakdown 逐键取 max（既有缺失/非法键按 0 处理）。 */
+  private static CoreStars maxCore(CoreStars core, ChapterStar existing) {
+    com.fasterxml.jackson.databind.JsonNode breakdown =
+        existing == null ? null : existing.breakdown();
+    if (breakdown == null || !breakdown.isObject()) {
+      return core;
+    }
+    return new CoreStars(
+        Math.max(core.test(), breakdown.path("test").asInt(0)),
+        Math.max(core.stage(), breakdown.path("stage").asInt(0)),
+        Math.max(core.mastery(), breakdown.path("mastery").asInt(0)));
   }
 
   private List<String> existingRecovered(ChapterStar existing) {

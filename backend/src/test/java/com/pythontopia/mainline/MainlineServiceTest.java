@@ -83,6 +83,20 @@ class MainlineServiceTest {
         id, chapter, 1, "s" + id, List.of("PY43-KC-001"), "kw", List.of(), List.of(), 240, 0, 2);
   }
 
+  private MainlineStage stage(long id, int chapter, int stageIndex, List<Long> exampleProblemIds) {
+    return new MainlineStage(
+        id, chapter, stageIndex, "s" + id, List.of("PY43-KC-001"), "kw", List.of(),
+        exampleProblemIds, 240, 0, 2);
+  }
+
+  /** 前一章已达 1★ → 章解锁 gate 放行（锁章路径另有专测）。 */
+  private void stubChapterUnlocked(int chapter) {
+    when(starRepo.find(USER, chapter - 1))
+        .thenReturn(
+            Optional.of(
+                new ChapterStar(1L, USER, chapter - 1, 1, 70, mapper.createObjectNode(), null)));
+  }
+
   private MainlineStageProgress progress(
       long stageId, int videoSec, List<Long> examples, OffsetDateTime completedAt) {
     return new MainlineStageProgress(
@@ -339,5 +353,135 @@ class MainlineServiceTest {
     assertThat(dto.completed()).isTrue();
     verify(progressRepo).addPagesRead(USER, 10L, List.of(5001L, 5002L, 5003L));
     verify(starService, times(1)).recalc(USER, 1, StarSource.STAGE_COMPLETE);
+  }
+
+  // --- 例题打点：题号 / 归属校验 -------------------------------------------
+
+  /** 带 submissionId 时必须比对题号：否则一次 AC 可刷满所有小节的「练」。 */
+  @Test
+  void exampleDoneRejectsSubmissionOfAnotherProblem() {
+    when(stageRepo.findById(10L)).thenReturn(Optional.of(stage(10, 1)));
+    when(submissionRepo.findSubmission(USER, 56L))
+        .thenReturn(
+            Optional.of(
+                new SubmissionDto(
+                    56L, USER, 99L, null, null, "py", "code", OffsetDateTime.now(),
+                    SubmissionStatus.PASSED, 1, null)));
+
+    assertThatThrownBy(() -> service.reportExampleDone(USER, 10L, 42L, 56L))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("不是这道例题的提交");
+
+    verify(progressRepo, never()).addExampleDone(anyLong(), anyLong(), anyLong());
+  }
+
+  /** 题号必须落在本小节 example_problem_ids 内（V159 已按小节回填），挡住写入不存在题号。 */
+  @Test
+  void exampleDoneRejectsProblemOutsideStage() {
+    when(stageRepo.findById(10L)).thenReturn(Optional.of(stage(10, 1, 1, List.of(476L))));
+
+    assertThatThrownBy(() -> service.reportExampleDone(USER, 10L, 99999L, null))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("不属于本小节");
+
+    verify(submissionRepo, never()).list(anyLong(), anyLong(), any(), anyInt(), anyInt());
+    verify(progressRepo, never()).addExampleDone(anyLong(), anyLong(), anyLong());
+  }
+
+  // --- 章级标准均摊到小节 ---------------------------------------------------
+
+  /** 章级视频秒数按 stage 数均分、整章课件页按 stage 切片，不再把整章要求套在每个小节上。 */
+  @Test
+  void chapterStandardsAreSplitAcrossStagesOfTheChapter() {
+    stubChapterUnlocked(7);
+    MainlineStage second = stage(70L, 7, 2, List.of());
+    when(stageRepo.findById(70L)).thenReturn(Optional.of(second));
+    when(stageRepo.findByChapter(7))
+        .thenReturn(
+            List.of(
+                stage(69L, 7, 1, List.of()), second, stage(71L, 7, 3, List.of()),
+                stage(72L, 7, 4, List.of()), stage(73L, 7, 5, List.of())));
+    when(progressRepo.find(USER, 70L)).thenReturn(Optional.empty());
+    // 看：本章视频共 1000s → 章级 800s → 5 个小节各 160s。
+    when(courseVideoService.listVideos(7))
+        .thenReturn(List.of(new CourseVideoDto(700L, 7, "v", 1000, List.of(), true)));
+    // 学：整章 10 页 → 5 个小节各 2 页；第 2 小节拿第 3、4 页。
+    when(coursePackRepository.findDocumentIdByPackOrder(43L, 7)).thenReturn(Optional.of(900L));
+    when(coursePackRepository.findPageIdsByDocument(900L))
+        .thenReturn(List.of(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L, 10L));
+    when(ojCatalogRepository.examplesForStage(7, 2)).thenReturn(List.of());
+
+    StageDetailDto dto = service.stageDetail(USER, 70L);
+
+    assertThat(dto.requiredVideoSec()).isEqualTo(160);
+    assertThat(dto.coursewarePageIds()).containsExactly(3L, 4L);
+    assertThat(dto.requiredPages()).isEqualTo(2);
+  }
+
+  /** 「学」打点白名单：只接受本小节切片内的 pageId，整章 id 原样回灌无效。 */
+  @Test
+  void pagesReadKeepsOnlyPagesOfThisStageSlice() {
+    stubChapterUnlocked(7);
+    MainlineStage second = stage(70L, 7, 2, List.of());
+    when(stageRepo.findById(70L)).thenReturn(Optional.of(second));
+    when(stageRepo.findByChapter(7))
+        .thenReturn(
+            List.of(
+                stage(69L, 7, 1, List.of()), second, stage(71L, 7, 3, List.of()),
+                stage(72L, 7, 4, List.of()), stage(73L, 7, 5, List.of())));
+    when(courseVideoService.listVideos(7)).thenReturn(List.of());
+    when(coursePackRepository.findDocumentIdByPackOrder(43L, 7)).thenReturn(Optional.of(900L));
+    when(coursePackRepository.findPageIdsByDocument(900L))
+        .thenReturn(List.of(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L, 10L));
+    when(progressRepo.addPagesRead(USER, 70L, List.of(3L, 4L)))
+        .thenReturn(progress(70, 0, List.of(), null));
+
+    service.reportPagesRead(USER, 70L, List.of(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L, 10L));
+
+    verify(progressRepo).addPagesRead(USER, 70L, List.of(3L, 4L));
+    verify(progressRepo, never()).addPagesRead(USER, 70L, List.of(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L, 10L));
+  }
+
+  // --- 章解锁 gate ---------------------------------------------------------
+
+  /** 前一章 0★ 时详情页即拒绝，堵住「直接跳到第 7 章」。 */
+  @Test
+  void stageDetailRejectedWhenPreviousChapterIsLocked() {
+    when(stageRepo.findById(70L)).thenReturn(Optional.of(stage(70L, 7, 1, List.of())));
+    when(starRepo.find(USER, 6)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.stageDetail(USER, 70L))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("尚未解锁");
+
+    verify(coursePackRepository, never()).findPageIdsByDocument(anyLong());
+  }
+
+  /** 打点写路径同样 gate（不只是读路径）。 */
+  @Test
+  void videoProgressRejectedWhenPreviousChapterIsLocked() {
+    when(stageRepo.findById(70L)).thenReturn(Optional.of(stage(70L, 7, 1, List.of())));
+    when(starRepo.find(USER, 6))
+        .thenReturn(
+            Optional.of(new ChapterStar(1L, USER, 6, 0, null, mapper.createObjectNode(), null)));
+
+    assertThatThrownBy(() -> service.reportVideoProgress(USER, 70L, 60))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("尚未解锁");
+
+    verify(progressRepo, never()).addVideoSeconds(anyLong(), anyLong(), anyInt());
+  }
+
+  // --- 页切片纯函数 --------------------------------------------------------
+
+  @Test
+  void pageSliceSplitsWithoutGapOrOverlap() {
+    List<Long> pages = List.of(1L, 2L, 3L, 4L, 5L, 6L, 7L);
+    // 7 页 / 3 节 → 3 + 2 + 2（余数摊在前几节），并集正好等于全集。
+    assertThat(MainlineService.pageSlice(pages, 1, 3)).containsExactly(1L, 2L, 3L);
+    assertThat(MainlineService.pageSlice(pages, 2, 3)).containsExactly(4L, 5L);
+    assertThat(MainlineService.pageSlice(pages, 3, 3)).containsExactly(6L, 7L);
+    assertThat(MainlineService.pageSlice(pages, 1, 1)).isEqualTo(pages);
+    assertThat(MainlineService.pageSlice(List.of(), 2, 3)).isEmpty();
   }
 }

@@ -30,6 +30,20 @@ class ChapterCatalogTest {
     assertThat(ChapterCatalog.kcCodes(1)).first().isEqualTo("PY43-KC-001");
   }
 
+  /** KC → 章反查（掌握度事件触发章星重算需要它）：与 kcCodes 正查口径一致，非本课程 KC 返回空。 */
+  @Test
+  void chapterOfKcMirrorsKcCodes() {
+    for (int ch = 1; ch <= ChapterCatalog.CHAPTER_COUNT; ch++) {
+      for (String kc : ChapterCatalog.kcCodes(ch)) {
+        assertThat(ChapterCatalog.chapterOfKc(kc)).contains(ch);
+      }
+    }
+    assertThat(ChapterCatalog.chapterOfKc("PY43-KC-066")).isEmpty();
+    assertThat(ChapterCatalog.chapterOfKc("  PY43-KC-054 ")).contains(7);
+    assertThat(ChapterCatalog.chapterOfKc(null)).isEmpty();
+    assertThat(ChapterCatalog.chapterOfKc(" ")).isEmpty();
+  }
+
   @Test
   void invalidChapterRejected() {
     assertThat(ChapterCatalog.isValidChapter(0)).isFalse();

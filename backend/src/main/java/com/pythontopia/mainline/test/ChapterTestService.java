@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.mainline.ChapterCatalog;
+import com.pythontopia.mainline.ChapterUnlockGuard;
 import com.pythontopia.mainline.MainlineStageProgressRepository;
 import com.pythontopia.mainline.MainlineStageRepository;
 import com.pythontopia.mainline.domain.ChapterAssessmentKind;
@@ -74,8 +75,11 @@ public class ChapterTestService {
   }
 
   /**
-   * 触发/复用预生成（幂等）。已在 GENERATING/READY/IN_PROGRESS 则直接返回当前状态不重复触发；
+   * 触发/复用预生成（幂等）。已在 GENERATING/READY/<b>未超时的</b> IN_PROGRESS 则直接返回当前状态不重复触发；
    * 否则新建 attempt 置 GENERATING 并投递异步生成。
+   *
+   * <p>已超时但仍挂在 IN_PROGRESS 的场次必须走重开：否则 prepare 回 IN_PROGRESS 让学生「继续考」，
+   * 而 start 会把它判过期后抛「题目仍在生成，请稍后重试」，学生按提示等待却永远等不到。
    */
   public TestPrepareResponse prepare(long userId, int chapter) {
     return prepare(userId, chapter, ChapterAssessmentKind.FINAL);
@@ -93,8 +97,11 @@ public class ChapterTestService {
     if (latest != null
         && (latest.status() == ChapterTestStatus.GENERATING
             || latest.status() == ChapterTestStatus.READY
-            || latest.status() == ChapterTestStatus.IN_PROGRESS)) {
+            || (latest.status() == ChapterTestStatus.IN_PROGRESS && !isPastDeadline(latest)))) {
       return new TestPrepareResponse(latest.status().name());
+    }
+    if (latest != null && latest.status() == ChapterTestStatus.IN_PROGRESS) {
+      repository.markStatus(latest.id(), ChapterTestStatus.EXPIRED); // 超时残留场次作废，允许重新准备
     }
     int attemptNo = repository.nextAttemptNo(userId, chapter, assessmentKind);
     int timeLimitSec =
@@ -138,6 +145,7 @@ public class ChapterTestService {
   private ChapterTestPaperDto start(
       long userId, int chapter, ChapterAssessmentKind assessmentKind) {
     requireChapter(chapter);
+    ChapterUnlockGuard.requireUnlocked(starRepository, userId, chapter);
     requireFinalStagesCompleted(userId, chapter, assessmentKind);
     ChapterTestRecord latest =
         repository.findLatest(userId, chapter, assessmentKind).orElse(null);
@@ -152,6 +160,11 @@ public class ChapterTestService {
     }
 
     if (latest == null || latest.status() != ChapterTestStatus.READY) {
+      // EXPIRED 单独成文案：此时「等一等」没有意义，必须重新 prepare 才会有新卷。
+      if (latest != null && latest.status() == ChapterTestStatus.EXPIRED) {
+        throw new BusinessException(
+            HttpStatus.CONFLICT, "CHAPTER_ASSESSMENT_EXPIRED", "本场已超时，请重新准备");
+      }
       throw new BusinessException(
           HttpStatus.CONFLICT,
           "CHAPTER_ASSESSMENT_NOT_READY",

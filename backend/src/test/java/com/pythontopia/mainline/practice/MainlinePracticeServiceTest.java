@@ -3,6 +3,7 @@ package com.pythontopia.mainline.practice;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -12,9 +13,11 @@ import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.error.ResourceNotFoundException;
 import com.pythontopia.mainline.MainlineStageCompletionPort;
 import com.pythontopia.mainline.MainlineStageRepository;
+import com.pythontopia.mainline.domain.ChapterStar;
 import com.pythontopia.mainline.domain.MainlineStage;
 import com.pythontopia.mainline.practice.dto.PracticeAnswerResultDto;
 import com.pythontopia.mainline.practice.dto.StagePracticeQuestionDto;
+import com.pythontopia.mainline.star.ChapterStarRepository;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,6 +42,7 @@ class MainlinePracticeServiceTest {
 
   @Mock private MainlinePracticeRepository repository;
   @Mock private MainlineStageRepository stageRepository;
+  @Mock private ChapterStarRepository starRepository;
   @Mock private ObjectProvider<MainlineStageCompletionPort> completionProvider;
   @Mock private MainlineStageCompletionPort completionPort;
 
@@ -46,7 +50,13 @@ class MainlinePracticeServiceTest {
 
   @BeforeEach
   void setUp() {
-    service = new MainlinePracticeService(repository, stageRepository, completionProvider);
+    service =
+        new MainlinePracticeService(
+            repository, stageRepository, starRepository, completionProvider);
+    // 本测试的 stage 在第 2 章：默认前置章已达 1★，章解锁 gate 放行（解锁本身另有专测）。
+    lenient()
+        .when(starRepository.find(USER, CH - 1))
+        .thenReturn(Optional.of(new ChapterStar(1L, USER, CH - 1, 1, 70, null, null)));
   }
 
   // --- 判分：选择 ----------------------------------------------------------
@@ -68,8 +78,9 @@ class MainlinePracticeServiceTest {
     verify(completionPort).recheckCompletion(USER, STAGE_ID);
   }
 
+  /** 答错不得回传正确答案（否则一次试错即可复制回填，「练-客观题」门槛失效）；讲解仍给，供订正。 */
   @Test
-  void choiceWrongReturnsAnswersWithoutSideEffects() {
+  void choiceWrongWithholdsAnswersButKeepsExplanation() {
     MainlinePracticeQuestion q = choice(11L, CH, SI, List.of("A 选项", "B 选项"), "A 选项");
     when(stageRepository.findById(STAGE_ID)).thenReturn(Optional.of(stage(STAGE_ID, CH, SI)));
     when(repository.findById(11L)).thenReturn(Optional.of(q));
@@ -77,9 +88,25 @@ class MainlinePracticeServiceTest {
     PracticeAnswerResultDto result = service.grade(USER, STAGE_ID, 11L, List.of("B 选项"));
 
     assertThat(result.correct()).isFalse();
-    assertThat(result.correctAnswers()).containsExactly("A 选项"); // 错也回传答案供订正
+    assertThat(result.correctAnswers()).isEmpty();
+    assertThat(result.explanation()).isEqualTo("讲解");
     verify(repository, never()).appendCorrect(anyLong(), anyLong(), anyLong());
     verify(completionProvider, never()).getIfAvailable();
+  }
+
+  /** 章解锁 gate：前一章 0★ 时连答题都不该收（服务端写路径必须自己 gate，不能只靠 overview 展示）。 */
+  @Test
+  void gradeRejectedWhenPreviousChapterHasNoStar() {
+    when(stageRepository.findById(STAGE_ID)).thenReturn(Optional.of(stage(STAGE_ID, CH, SI)));
+    when(starRepository.find(USER, CH - 1)).thenReturn(Optional.empty()); // 前置章 0★
+
+    assertThatThrownBy(() -> service.grade(USER, STAGE_ID, 11L, List.of("A")))
+        .isInstanceOf(BusinessException.class)
+        .extracting(e -> ((BusinessException) e).status())
+        .isEqualTo(HttpStatus.CONFLICT);
+
+    verify(repository, never()).findById(anyLong());
+    verify(repository, never()).appendCorrect(anyLong(), anyLong(), anyLong());
   }
 
   @Test

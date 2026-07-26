@@ -66,6 +66,14 @@ class ChapterTestServiceTest {
   @BeforeEach
   void setUp() {
     stubChapterStagesComplete();
+    stubPreviousChapterUnlocked();
+  }
+
+  /** CH=2：开考需前一章 ≥1★，默认放行；锁章路径另有专测。 */
+  private void stubPreviousChapterUnlocked() {
+    when(starRepo.find(USER, CH - 1))
+        .thenReturn(
+            Optional.of(new ChapterStar(9L, USER, CH - 1, 1, 70, mapper.createObjectNode(), null)));
   }
 
   private JsonNode questions() {
@@ -182,6 +190,45 @@ class ChapterTestServiceTest {
             TEST_ID, USER, CH, ChapterAssessmentKind.FINAL, List.of("s"));
   }
 
+  /** 已超时却仍挂 IN_PROGRESS：prepare 不能回「继续考」，必须作废旧场次并重新生成。 */
+  @Test
+  void prepareRestartsWhenInProgressAttemptIsPastDeadline() {
+    when(repo.findLatest(USER, CH, ChapterAssessmentKind.FINAL))
+        .thenReturn(
+            Optional.of(
+                record(
+                    ChapterTestStatus.IN_PROGRESS,
+                    OffsetDateTime.now().minusMinutes(5), // 已过 deadline
+                    questions(),
+                    null)));
+    when(repo.findLatest(USER, CH, ChapterAssessmentKind.QUIZ)).thenReturn(Optional.empty());
+    when(repo.nextAttemptNo(USER, CH, ChapterAssessmentKind.FINAL)).thenReturn(2);
+    when(repo.insertPending(USER, CH, ChapterAssessmentKind.FINAL, 2, 7200)).thenReturn(101L);
+
+    TestPrepareResponse resp = service.prepare(USER, CH);
+
+    assertThat(resp.status()).isEqualTo("GENERATING");
+    verify(repo).markStatus(TEST_ID, ChapterTestStatus.EXPIRED); // 旧场次作废
+    verify(pregen).pregenerate(101L, USER, CH, ChapterAssessmentKind.FINAL, List.of());
+  }
+
+  /** 未超时的 IN_PROGRESS 仍应幂等复用（不误伤正常续考）。 */
+  @Test
+  void prepareKeepsLiveInProgressAttempt() {
+    when(repo.findLatest(USER, CH, ChapterAssessmentKind.FINAL))
+        .thenReturn(
+            Optional.of(
+                record(
+                    ChapterTestStatus.IN_PROGRESS,
+                    OffsetDateTime.now().plusMinutes(20),
+                    questions(),
+                    null)));
+
+    assertThat(service.prepare(USER, CH).status()).isEqualTo("IN_PROGRESS");
+    verify(repo, never()).insertPending(anyLong(), anyInt(), any(), anyInt(), anyInt());
+    verify(repo, never()).markStatus(anyLong(), any());
+  }
+
   // --- start -----------------------------------------------------------------
 
   @Test
@@ -232,6 +279,33 @@ class ChapterTestServiceTest {
     assertThatThrownBy(() -> service.start(USER, CH))
         .isInstanceOf(BusinessException.class)
         .hasMessageContaining("先完成本章所有小节");
+
+    verify(repo, never()).startExam(anyLong(), any(), any());
+  }
+
+  /** 过期场次开考应给「重新准备」而不是「题目仍在生成，请稍后重试」（后者让学生白等）。 */
+  @Test
+  void startExpiredAttemptTellsStudentToPrepareAgain() {
+    when(repo.findLatest(USER, CH, ChapterAssessmentKind.FINAL))
+        .thenReturn(
+            Optional.of(record(ChapterTestStatus.EXPIRED, OffsetDateTime.now().minusHours(3),
+                questions(), null)));
+
+    assertThatThrownBy(() -> service.start(USER, CH))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("本场已超时，请重新准备");
+
+    verify(repo, never()).startExam(anyLong(), any(), any());
+  }
+
+  /** 章解锁 gate：前一章 0★ 时不得开考（否则可直接跳到第 7 章）。 */
+  @Test
+  void startRejectsWhenPreviousChapterHasNoStar() {
+    when(starRepo.find(USER, CH - 1)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.start(USER, CH))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("尚未解锁");
 
     verify(repo, never()).startExam(anyLong(), any(), any());
   }
