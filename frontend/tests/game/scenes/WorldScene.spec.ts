@@ -7,6 +7,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  __resetUnknownObjectTypeWarnings,
   BULLETIN_BOARD_TRIGGER_ID,
   NPC_TRIGGER_ID_PREFIX,
   buildBuildingTrigger,
@@ -15,6 +16,9 @@ import {
   buildNpcHintText,
   buildNpcTrigger,
   directionDelta,
+  parseObjects,
+  persistPlayerTile,
+  resolveMoveStep,
   shouldTurnBeforeMove,
   toCardinal,
   WorldScene,
@@ -22,6 +26,8 @@ import {
 import { InteractableSystem, type HintRenderer } from '@/game/core/InteractableSystem';
 import { NpcFramework } from '@/game/core/NpcFramework';
 import { useDialogStore } from '@/stores/dialog';
+import { useWorldStore } from '@/stores/world';
+import type { Direction } from '@/api/dto/Direction';
 import type { NpcSpawn } from '@/game/adapters/tilemap';
 
 const TILE_SIZE = 32;
@@ -337,6 +343,47 @@ describe('WorldScene integration: NPC triggers + dialog store + NpcFramework', (
     expect(sys.getActive()).toHaveLength(0);
     expect(hide).toHaveBeenCalled();
   });
+
+  it('#1 overlapping NPC + building trigger: E opens the dialog only, no route push', () => {
+    // town_hub 实测重叠格：图书馆地基 tile(10,8) 5×4，门口 trigger 外扩 1 圈；
+    // 馆长 Doc 站在 tile(11,12)。玩家站 tile(12,12) 同时命中两者。
+    // 修复前：按 E 既开对话又 router.push('/library') —— 玩家被直接弹出小镇。
+    const TILE = 16;
+    const dialogOpened: string[] = [];
+    const routePushes: string[] = [];
+    const { renderer, show } = makeHintRenderer();
+    const sys = new InteractableSystem(makeScene(), { hintRenderer: renderer });
+
+    // 注册顺序与 WorldScene.create 一致：NPC trigger 先，建筑 trigger 后。
+    sys.register(
+      buildNpcTrigger(
+        { npcKey: 'librarian_doc', label: '馆长 Doc', tileX: 11, tileY: 12, sprite: 'npc_librarian' },
+        TILE,
+        () => dialogOpened.push('librarian_doc'),
+      ),
+    );
+    sys.register(
+      buildBuildingTrigger(
+        { route: '/library', label: '图书馆', tileX: 10, tileY: 8, width: 5, height: 4 },
+        TILE,
+        () => routePushes.push('/library'),
+      ),
+    );
+
+    const px = 12 * TILE + TILE / 2;
+    const py = 12 * TILE + TILE / 2;
+    // 两个 trigger 都确实命中（否则这条用例证明不了独占）。
+    sys.update(px, py, false);
+    expect(sys.getActive().map((t) => t.id)).toEqual([
+      `${NPC_TRIGGER_ID_PREFIX}librarian_doc`,
+      'building:/library',
+    ]);
+    expect(show).toHaveBeenLastCalledWith('按 E 与 馆长 Doc 对话');
+
+    sys.update(px, py, true);
+    expect(dialogOpened).toEqual(['librarian_doc']);
+    expect(routePushes).toEqual([]);
+  });
 });
 
 describe('WorldScene.directionDelta / toCardinal (existing helpers; sanity)', () => {
@@ -369,5 +416,171 @@ describe('WorldScene.directionDelta / toCardinal (existing helpers; sanity)', ()
     expect(shouldTurnBeforeMove('DOWN', 'RIGHT')).toBe(true);
     expect(shouldTurnBeforeMove('RIGHT', 'RIGHT')).toBe(false);
     expect(shouldTurnBeforeMove('RIGHT', 'UP_RIGHT')).toBe(false);
+  });
+
+  it('toCardinal never returns a diagonal, even when the fallback path is taken', () => {
+    // 回归 #4：旧签名 `(dir, fallback: Direction) => Direction` 的末条 return fallback
+    // 会把对角值原样吐回。收窄后无论走哪条分支都只可能是 4 向。
+    const cardinals = ['UP', 'DOWN', 'LEFT', 'RIGHT'];
+    for (const raw of ['', 'NONE', 'WEIRD', 'UP_LEFT', 'DOWN_RIGHT']) {
+      for (const fb of cardinals) {
+        expect(cardinals).toContain(toCardinal(raw, fb as 'UP'));
+      }
+    }
+  });
+});
+
+describe('WorldScene.resolveMoveStep (#3 对角速度 / 斜穿墙角)', () => {
+  const EIGHT_WAY = [
+    'UP', 'DOWN', 'LEFT', 'RIGHT',
+    'UP_LEFT', 'UP_RIGHT', 'DOWN_LEFT', 'DOWN_RIGHT',
+  ] as const;
+
+  it('never produces a diagonal step: |dx| + |dy| is always exactly 1', () => {
+    // 回归：此前位移取 directionDelta(rawDirection)，对角输入给出 (±1,±1) —— 同一个
+    // 移动冷却里走了 √2 个 tile（1.41× 速度），而且只判目标格 → 可斜穿墙角。
+    for (const raw of EIGHT_WAY) {
+      for (const facing of EIGHT_WAY) {
+        const { dx, dy } = resolveMoveStep(raw, facing);
+        expect(Math.abs(dx) + Math.abs(dy)).toBe(1);
+      }
+    }
+  });
+
+  it('the step delta always matches the cardinal that drives sprite + save direction', () => {
+    for (const raw of EIGHT_WAY) {
+      for (const facing of EIGHT_WAY) {
+        const { cardinal, dx, dy } = resolveMoveStep(raw, facing);
+        expect({ dx, dy }).toEqual(directionDelta(cardinal));
+      }
+    }
+  });
+
+  it('keeps direction inertia: W+A while facing UP still steps UP, not LEFT', () => {
+    expect(resolveMoveStep('UP_LEFT', 'UP')).toEqual({ cardinal: 'UP', dx: 0, dy: -1 });
+    expect(resolveMoveStep('DOWN_RIGHT', 'DOWN')).toEqual({ cardinal: 'DOWN', dx: 0, dy: 1 });
+    // 不含当前朝向轴时按 LEFT/RIGHT 优先降级。
+    expect(resolveMoveStep('UP_RIGHT', 'DOWN')).toEqual({ cardinal: 'RIGHT', dx: 1, dy: 0 });
+  });
+
+  it('normalizes a stale diagonal facing loaded from a save', () => {
+    // 存档 DTO 允许 8 向；回读到对角朝向时也必须解出 4 向单轴步。
+    const { cardinal, dx, dy } = resolveMoveStep('UP', 'DOWN_LEFT');
+    expect(['UP', 'DOWN', 'LEFT', 'RIGHT']).toContain(cardinal);
+    expect(Math.abs(dx) + Math.abs(dy)).toBe(1);
+  });
+
+  it('returns no step for an empty input direction', () => {
+    // 空输入走 fallback 分支，仍是合法 4 向（调用方靠 rawDirection 非空来门控）。
+    const { cardinal } = resolveMoveStep('', 'DOWN');
+    expect(cardinal).toBe('DOWN');
+  });
+});
+
+describe('WorldScene.persistPlayerTile (#4 写后端降 4 向)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+  });
+
+  it('degrades every diagonal direction to a cardinal before hitting the store', () => {
+    const world = useWorldStore();
+    const spy = vi.spyOn(world, 'updatePlayerTile').mockResolvedValue(undefined);
+
+    const cases: Array<[Direction, string]> = [
+      ['UP_LEFT', 'UP'],
+      ['UP_RIGHT', 'UP'],
+      ['DOWN_LEFT', 'DOWN'],
+      ['DOWN_RIGHT', 'DOWN'],
+      ['LEFT', 'LEFT'],
+      ['RIGHT', 'RIGHT'],
+    ];
+    for (const [input, expected] of cases) {
+      spy.mockClear();
+      persistPlayerTile(3, 4, input);
+      expect(spy).toHaveBeenCalledWith({ tileX: 3, tileY: 4, direction: expected });
+    }
+  });
+});
+
+describe('WorldScene.parseObjects (#10 地图数据↔代码空档)', () => {
+  interface StubObject {
+    type: string;
+    name?: string;
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
+    properties?: Array<{ name: string; value: unknown }>;
+  }
+
+  function makeMap(objects: StubObject[]): Phaser.Tilemaps.Tilemap {
+    return {
+      objects: [{ name: 'objects', objects }],
+    } as unknown as Phaser.Tilemaps.Tilemap;
+  }
+
+  beforeEach(() => {
+    __resetUnknownObjectTypeWarnings();
+  });
+
+  it('parses type="landmark" instead of silently dropping it (town_hub 镜月喷泉)', () => {
+    // 16px tile：x=384,y=304 → tile (24,19)；32×32 → 2×2 tiles。
+    const result = parseObjects(
+      makeMap([
+        {
+          type: 'landmark',
+          name: 'fountain',
+          x: 384,
+          y: 304,
+          width: 32,
+          height: 32,
+          properties: [{ name: 'label', value: '镜月喷泉' }],
+        },
+      ]),
+      undefined,
+      null,
+    );
+
+    expect(result.landmarks).toEqual([
+      { label: '镜月喷泉', tileX: 24, tileY: 19, width: 2, height: 2 },
+    ]);
+  });
+
+  it('warns once per unknown object type instead of dropping it silently', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    parseObjects(
+      makeMap([
+        { type: 'teleporter', name: 'tp_a', x: 0, y: 0 },
+        { type: 'teleporter', name: 'tp_b', x: 16, y: 16 },
+        { type: 'weather_zone', name: 'wz', x: 32, y: 32 },
+      ]),
+      undefined,
+      null,
+    );
+
+    expect(warn).toHaveBeenCalledTimes(2);
+    expect(warn.mock.calls[0]?.[0]).toContain('teleporter');
+    expect(warn.mock.calls[1]?.[0]).toContain('weather_zone');
+    warn.mockRestore();
+  });
+
+  it('does not warn for the object types the scene actually implements', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    parseObjects(
+      makeMap([
+        { type: 'spawn', x: 400, y: 320 },
+        { type: 'building', x: 160, y: 128, width: 80, height: 64, properties: [{ name: 'route', value: '/library' }] },
+        { type: 'low_obstacle', x: 368, y: 352, width: 16, height: 16 },
+        { type: 'npc', x: 176, y: 192, properties: [{ name: 'key', value: 'librarian_doc' }] },
+        { type: 'landmark', x: 384, y: 304, width: 32, height: 32, properties: [{ name: 'label', value: '镜月喷泉' }] },
+      ]),
+      undefined,
+      null,
+    );
+
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 });

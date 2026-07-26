@@ -44,6 +44,9 @@ vi.mock('phaser', () => {
     Game: MockGame,
     Scene: class {},
     Scenes: { Events: { SHUTDOWN: 'shutdown' } },
+    // sprite.ts 的 playAction 用 ANIMATION_COMPLETE 挂/摘一次性动作的收尾回调，
+    // 常量值与真实 Phaser 一致（'animationcomplete'）。
+    Animations: { Events: { ANIMATION_COMPLETE: 'animationcomplete' } },
     Scale: { FIT: 'FIT', CENTER_BOTH: 'CENTER_BOTH', NONE: 'NONE' },
     Sound: { BaseSound: MockBaseSound },
     Tilemaps: { TilemapLayer: class {} },

@@ -66,6 +66,7 @@ export interface CodeTheaterSceneContext extends StageContext {
     width: number;
     height: number;
     on(event: string, cb: (...args: unknown[]) => void): void;
+    off?(event: string, cb: (...args: unknown[]) => void): void;
   };
   time?: { now: number };
   events?: { on(event: string, cb: () => void): void };
@@ -90,7 +91,6 @@ let ladderLayout: LadderLayout | null = null;
 let stageDim = { width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT };
 let prevTimeMs = 0;
 let lastRenderedCount = -1;
-let resizeBound = false;
 
 /** 对外控制接口：共享时间轴播放器（play/pause/step/seek/setRate/subscribe...）。 */
 export function getCodeTheaterPlayer(): TimelinePlayer {
@@ -116,7 +116,6 @@ export function __resetCodeTheaterForTests(): void {
   stageDim = { width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT };
   prevTimeMs = 0;
   lastRenderedCount = -1;
-  resizeBound = false;
   player.load([]);
 }
 
@@ -275,21 +274,23 @@ export const CodeTheaterScene = {
     prevTimeMs = this.time?.now ?? 0;
     rebuildStage(this);
 
+    // resize 监听按「场景实例」绑定/解绑：模块级 resizeBound 布尔跨 Phaser.Game
+    // 实例残留（destroy 不复位），第 2 次进页时新实例上不再绑 resize，重排失效。
+    const scale = this.scale;
+    const onResize = (): void => {
+      if (liveScene) rebuildStage(liveScene);
+    };
+    scale?.on('resize', onResize);
+
     attachLifecycle(this as unknown as Phaser.Scene, {
       onShutdown: () => {
+        scale?.off?.('resize', onResize);
         if (liveScene === this) {
           liveScene = null;
           handles = null;
         }
       },
     });
-
-    if (this.scale && !resizeBound) {
-      resizeBound = true;
-      this.scale.on('resize', () => {
-        if (liveScene) rebuildStage(liveScene);
-      });
-    }
   },
   update(this: CodeTheaterSceneContext): void {
     const now = this.time?.now ?? prevTimeMs;
