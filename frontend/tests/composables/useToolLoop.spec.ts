@@ -12,6 +12,10 @@ import type { ToolLoopHybridResult } from '@/api/toolLoop';
 interface MockSse {
   events: Ref<AguiEvent[]>;
   result: Ref<ToolLoopHybridResult | null>;
+  // 传输层错误（fetch 失败 / !response.ok / 空 body）不会产生 RUN_ERROR 事件，
+  // useToolLoop 必须直接读这两个才能把「服务端 500」暴露给用户。
+  error: Ref<{ code: string; message: string } | null>;
+  status: Ref<'idle' | 'connecting' | 'streaming' | 'done' | 'error'>;
   start: ReturnType<typeof vi.fn>;
   abort: ReturnType<typeof vi.fn>;
 }
@@ -19,6 +23,8 @@ interface MockSse {
 const mockSse: MockSse = {
   events: ref<AguiEvent[]>([]),
   result: ref<ToolLoopHybridResult | null>(null),
+  error: ref<{ code: string; message: string } | null>(null),
+  status: ref<'idle' | 'connecting' | 'streaming' | 'done' | 'error'>('idle'),
   start: vi.fn(async () => {}),
   abort: vi.fn(),
 };
@@ -42,6 +48,8 @@ describe('useToolLoop', () => {
   beforeEach(() => {
     mockSse.events.value = [];
     mockSse.result.value = null;
+    mockSse.error.value = null;
+    mockSse.status.value = 'idle';
     mockSse.start.mockClear();
     mockSse.abort.mockClear();
   });

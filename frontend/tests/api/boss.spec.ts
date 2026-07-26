@@ -281,16 +281,19 @@ describe('submitBossAttempt', () => {
     expect(result.score).toBe(95);
   });
 
-  it('returns mock failed result on backend error so caller can use Pyodide verdict', async () => {
+  // 后端不可达时必须把异常抛给调用方：调用方（useEndlessRun / useBossSession）已写好
+  // 「不计分、不入历史、不动连胜/HP」的失败分支；若在此伪造 passed:false，
+  // 正确代码会被记成真实答错并上报补星接口。
+  it('rethrows on backend error instead of faking a failed verdict', async () => {
     httpMock.post.mockRejectedValueOnce(new Error('graph down'));
-    const result = await submitBossAttempt({
-      problemId: 'ai-1',
-      chapter: 1,
-      stage: 1,
-      code: 'print(1)',
-      elapsedSec: 5,
-    });
-    expect(result.passed).toBe(false);
-    expect(result.feedback).toContain('mock');
+    await expect(
+      submitBossAttempt({
+        problemId: 'ai-1',
+        chapter: 1,
+        stage: 1,
+        code: 'print(1)',
+        elapsedSec: 5,
+      }),
+    ).rejects.toThrow('graph down');
   });
 });
