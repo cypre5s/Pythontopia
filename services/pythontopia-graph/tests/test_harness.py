@@ -192,6 +192,74 @@ async def test_consecutive_failures_open_breaker_for_next_call() -> None:
     assert harness_stats()["breakers"]["dep_z"]["open"] is True
 
 
+@pytest.mark.asyncio
+async def test_retries_of_one_call_count_as_one_breaker_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """一次逻辑调用的 N 次重试只记 1 次熔断失败。
+
+    在重试循环内记账会把单个请求放大成 N 次「连续失败」，阈值 3 时一个请求就能打开
+    进程级共享熔断器（breaker_key="provider" 多处共用）并殃及所有会话。
+    """
+    monkeypatch.setattr(harness_mod, "_backoff_delay", lambda attempts: 0.0)
+    calls = {"n": 0}
+
+    async def failing() -> str:
+        calls["n"] += 1
+        raise ConnectionError("network down")
+
+    obs = await run_with_governance(
+        "retry_tool", failing, timeout_s=1.0, max_retries=4, breaker_key="dep_retry"
+    )
+
+    assert calls["n"] == 5  # 重试语义不变
+    assert obs.attempts == 5
+    breaker = breaker_for("dep_retry")
+    assert breaker.snapshot()["consecutiveFailures"] == 1
+    assert breaker.is_open is False
+
+
+@pytest.mark.asyncio
+async def test_three_separate_retrying_calls_still_open_breaker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """降噪不等于失能：三次独立的失败调用仍然把熔断器推过阈值。"""
+    monkeypatch.setattr(harness_mod, "_backoff_delay", lambda attempts: 0.0)
+
+    async def failing() -> str:
+        raise ConnectionError("network down")
+
+    for _ in range(3):
+        await run_with_governance(
+            "retry_tool", failing, timeout_s=1.0, max_retries=2, breaker_key="dep_retry3"
+        )
+
+    assert breaker_for("dep_retry3").is_open is True
+
+
+@pytest.mark.asyncio
+async def test_success_after_retry_does_not_record_breaker_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """重试后成功 → 不记失败，且 record_success 清零计数（语义不变）。"""
+    monkeypatch.setattr(harness_mod, "_backoff_delay", lambda attempts: 0.0)
+    calls = {"n": 0}
+
+    async def flaky() -> str:
+        calls["n"] += 1
+        if calls["n"] < 3:
+            raise ConnectionError("network down")
+        return "recovered"
+
+    obs = await run_with_governance(
+        "flaky_tool", flaky, timeout_s=1.0, max_retries=3, breaker_key="dep_flaky"
+    )
+
+    assert obs.ok is True
+    assert obs.value == "recovered"
+    assert breaker_for("dep_flaky").snapshot()["consecutiveFailures"] == 0
+
+
 # ── 预算路径 ──
 
 

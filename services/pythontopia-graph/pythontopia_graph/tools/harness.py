@@ -443,11 +443,16 @@ async def run_with_governance(
                 # 永久错误（校验/认证/4xx 语义）：即便仍有重试额度也 fail fast；
                 # 且不计入熔断（非依赖健康信号，避免客户端错误误开熔断器）。
                 break
-            if breaker is not None:
-                breaker.record_failure()
             if attempts <= max_retries:
                 # 瞬时错误：指数退避 + 全抖动，单 worker 下让出事件循环即可。
                 await asyncio.sleep(_backoff_delay(attempts))
+
+        # 一次逻辑调用只记一次失败：重试额度耗尽后才计入熔断。放在循环内会把
+        # 单个请求的 N 次重试放大成 N 次「连续失败」——阈值 3 时一个请求就能打开
+        # 进程级共享熔断器（breaker_key="provider" 被答疑/意图/派发多处共用）30s，
+        # 殃及所有会话。永久错误不计入（非依赖健康信号）。
+        if breaker is not None and not permanent:
+            breaker.record_failure()
 
         error_class = type(last_error).__name__ if last_error else "UnknownError"
         if fallback is not None:

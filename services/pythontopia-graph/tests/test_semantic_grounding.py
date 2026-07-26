@@ -9,7 +9,11 @@ from pythontopia_graph.nodes.evidence_fetcher import (
     RagHit,
     StaticEvidenceFetcher,
 )
-from pythontopia_graph.nodes.semantic_grounding_verifier import verify_semantic_grounding
+from pythontopia_graph.nodes.semantic_grounding_verifier import (
+    verify_answer_entailment,
+    verify_entailment,
+    verify_semantic_grounding,
+)
 from pythontopia_graph.schemas.resource import (
     HandoutContent,
     HandoutSection,
@@ -181,3 +185,98 @@ async def test_entailment_skipped_when_no_strong_assertion() -> None:
     response = await graph.run(_produce_request())
     assert response.status == "SUCCESS"
     assert provider.entailment_calls == 0
+
+
+# ── entailment 裁决必须显式为布尔（不合约 → 降级规则，不静默判「支持」） ──
+
+
+class _VerdictProvider(LlmProvider):
+    """固定返回一个 entailment 裁决 payload（None 表示 content_json 缺失）。"""
+
+    def __init__(self, verdict: dict | None) -> None:
+        self._verdict = verdict
+
+    async def chat(self, messages, **kwargs):  # type: ignore[override]
+        return LlmResponse(content_json=self._verdict)
+
+    async def chat_stream(self, messages, **kwargs) -> AsyncIterator[str]:  # type: ignore[override]
+        yield ""
+
+
+def _ungrounded_draft() -> ResourceDraft:
+    """规则版必定判失败的草稿：含强断言 + PageRef 指向非证据页。"""
+    return ResourceDraft(
+        title="T",
+        summary="该操作耗时 5 秒",
+        content_format="MARKDOWN",
+        handout=HandoutContent(
+            sections=[
+                HandoutSection(
+                    heading="H",
+                    paragraphs=["p1"],
+                    page_refs=[PageRef(page_id=99, page_no=99)],
+                )
+            ]
+        ),
+    )
+
+
+@pytest.mark.parametrize(
+    "verdict",
+    [
+        {"supported": "false"},  # 字符串而非布尔
+        {"supported": {"value": False}},  # 嵌套结构
+        {"reason": "模型只回了理由"},  # 缺字段
+        None,  # content_json 解析失败
+    ],
+)
+@pytest.mark.asyncio
+async def test_entailment_non_boolean_verdict_falls_back_to_rules(verdict) -> None:
+    """裁决不是布尔 → 降级规则版核验；绝不因为「不是 False」就默认判支持。"""
+    evidence = EvidenceBundle(chunks=[make_rag_hit(1)])
+
+    ok, reasons = await verify_entailment(
+        _ungrounded_draft(), evidence, _VerdictProvider(verdict)
+    )
+
+    assert ok is False
+    assert any("99" in reason for reason in reasons)
+
+
+@pytest.mark.asyncio
+async def test_entailment_boolean_true_still_passes() -> None:
+    evidence = EvidenceBundle(chunks=[make_rag_hit(1)])
+
+    ok, reasons = await verify_entailment(
+        _ungrounded_draft(), evidence, _VerdictProvider({"supported": True})
+    )
+
+    assert ok is True
+    assert reasons == []
+
+
+@pytest.mark.asyncio
+async def test_entailment_boolean_false_still_fails_with_model_reason() -> None:
+    evidence = EvidenceBundle(chunks=[make_rag_hit(1)])
+
+    ok, reasons = await verify_entailment(
+        _ungrounded_draft(),
+        evidence,
+        _VerdictProvider({"supported": False, "reason": "证据未提及该耗时"}),
+    )
+
+    assert ok is False
+    assert reasons == ["证据未提及该耗时"]
+
+
+@pytest.mark.asyncio
+async def test_answer_entailment_non_boolean_verdict_falls_back_to_rules() -> None:
+    """答疑侧同源：裁决不合约时回落 verify_answer_grounding，而不是判「支持」。"""
+    answer = "该操作耗时 5 秒。"
+
+    ok, reasons = await verify_answer_entailment(
+        answer, [_ENTAIL_HIT], _VerdictProvider({"supported": "true"})
+    )
+
+    assert ok is False
+    assert any("未标注引用页" in reason for reason in reasons)

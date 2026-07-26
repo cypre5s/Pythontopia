@@ -137,6 +137,53 @@ def test_missing_evidence_degrades_without_fabricating_diagnosis() -> None:
     assert result.loop_result.status == "REJECTED"
 
 
+def test_unresolvable_kc_rejects_without_fabricating_a_placeholder_code() -> None:
+    """解析不到 KC 时不造 "UNKNOWN_KC"：虚构知识点会被当成真实写指令下发给后端。"""
+    trigger = EventEnvelope(
+        event_id="evt-no-kc",
+        event_type="submission.failed",
+        user_id=7,
+        session_id="sess-phase3",
+        trace_id="trace-phase3",
+        timestamp="2026-06-30T22:30:00Z",
+        context={"chapter_id": 2},
+        payload={"problem_id": 301, "verdict": "WA", "formal": True},
+        evidence_refs=[EvidenceRef(type="course_page", id=118, label="列表基础页")],
+    )
+    body = StudentLearningLoopRequest(
+        event=trigger,
+        recent_events=[trigger],
+        profile=LearnerProfileState(user_id=7),
+        kc_states=[],
+        course_evidence=[
+            CourseEvidence(
+                evidence_ref=EvidenceRef(type="course_page", id=118, label="列表基础页"),
+                kc_codes=[],
+                summary="课件说明列表索引从 0 开始。",
+            )
+        ],
+        policy_version="agentic_loop_v1",
+    )
+
+    result = StudentLearningLoop().run(body)
+
+    assert result.observation.focus_kcs == []
+    assert "missing_kc" in result.observation.risk_flags
+    assert result.diagnosis.root_causes == ["missing_kc"]
+    assert result.diagnosis.gap_kcs == []
+    assert result.status == "REJECTED"
+    assert result.stop_reason == "missing_kc"
+    assert result.next_actions == ["request:kc-mapping"]
+    # 关键：没有任何针对虚构 KC 的真实写指令。
+    assert result.update_plan.kc_mastery_deltas == {}
+    assert result.update_plan.review_schedule == []
+    assert result.update_plan.profile_dimension_patches == []
+    assert result.practice_assignment.target_kcs == []
+    assert result.teaching_plan.target_kcs == []
+    assert "UNKNOWN_KC" not in result.loop_result.model_dump_json()
+    assert isinstance(LoopResult.model_validate(result.loop_result.model_dump()), LoopResult)
+
+
 def test_three_failures_route_to_remediation_not_harder_practice() -> None:
     events = [
         evt("evt-fail-1", "submission.failed"),

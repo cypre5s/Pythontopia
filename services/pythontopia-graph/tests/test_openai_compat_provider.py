@@ -145,6 +145,61 @@ async def test_chat_uses_fast_model_when_tier_is_fast(
 
 
 @pytest.mark.asyncio
+async def test_chat_drops_guard_context_before_serializing_request_body(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """guard_context 只服务于本进程的 guard 包装层，含 lambda，绝不能进请求体。
+
+    未 pop 时 httpx 的 json=body 会 json.dumps 出 TypeError（默认部署下没有
+    FineTunedFallbackProvider 兜底），CodeLab / Handout 等 Agent 会 100% 崩。
+    """
+    bodies = _capture_request_bodies(monkeypatch)
+    provider = OpenAiCompatProvider()
+
+    result = await provider.chat(
+        [{"role": "user", "content": "ping"}],
+        guard_context={
+            "agent": "CodeLabAgent",
+            "json_schema": {"type": "object"},
+            "evidence_ids": ["p1"],
+            "semantic_validator": lambda payload: None,
+        },
+    )
+
+    assert result.content_json == {"ok": True}
+    assert "guard_context" not in bodies[0]
+    assert "semantic_validator" not in json.dumps(bodies[0])
+
+
+@pytest.mark.asyncio
+async def test_chat_stream_drops_guard_context_before_serializing_payload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bodies: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        bodies.append(json.loads(request.content))
+        return httpx.Response(
+            200,
+            text='data: {"choices":[{"delta":{"content":"hi"}}]}\n\n' "data: [DONE]\n\n",
+        )
+
+    _capture_async_client_kwargs(monkeypatch, handler)
+    provider = OpenAiCompatProvider()
+
+    chunks = [
+        chunk
+        async for chunk in provider.chat_stream(
+            [{"role": "user", "content": "ping"}],
+            guard_context={"semantic_validator": lambda payload: None},
+        )
+    ]
+
+    assert chunks == ["hi"]
+    assert "guard_context" not in bodies[0]
+
+
+@pytest.mark.asyncio
 async def test_chat_defaults_to_primary_model_without_tier(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -12,6 +12,7 @@ import re
 from typing import TYPE_CHECKING
 
 from pythontopia_graph.nodes.evidence_fetcher import RagHit
+from pythontopia_graph.nodes.safety_critic import PII_PATTERNS as _PII_PATTERNS
 from pythontopia_graph.schemas.tutor import GroundingResult, SafetyResult
 
 if TYPE_CHECKING:
@@ -32,11 +33,8 @@ ANSWER_LEAK_KEYWORDS = (
     "完整答案",
 )
 DISCRIMINATION_KEYWORDS = ("种族歧视", "暴力分裂", "色情")
-_PII_PATTERNS = [
-    re.compile(r"\b1[3-9]\d{9}\b"),  # 手机号
-    re.compile(r"\b\d{17}[0-9Xx]\b"),  # 身份证
-    re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"),  # 邮箱
-]
+# PII 正则复用 nodes/safety_critic 的单一来源（手机号 / 身份证 / 邮箱），
+# 避免两处各写一份后漂移（曾出现资源侧误判 16 位时间戳、答疑侧漏判 15 位身份证）。
 _DANGEROUS_CODE = ("os.system", "rm -rf", "shutil.rmtree")
 
 
