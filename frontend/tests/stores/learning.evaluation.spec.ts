@@ -30,6 +30,7 @@ import {
   acceptEvaluationPath,
   keepOldEvaluationPath,
 } from '@/api/evaluation';
+import { getArchivedLearningPaths } from '@/api/path';
 
 const SAMPLE: EvaluationDto = {
   id: 101,
@@ -70,6 +71,37 @@ describe('learning store evaluation actions', () => {
     expect(result).not.toBeNull();
     expect(store.evaluation.phase).toBe('ready');
     expect(store.evaluation.list[0]?.id).toBe(102);
+  });
+
+  it('runEvaluationNow keeps the already loaded weekly history instead of truncating it', async () => {
+    // 复盘大厅按周分组渲染，进页面加载 20 条；点「立即评估」不能把历史静默截断到 8 条。
+    const history: EvaluationDto[] = Array.from({ length: 20 }, (_, i) => ({
+      ...SAMPLE,
+      id: 200 + i,
+    }));
+    vi.mocked(listEvaluations).mockResolvedValue(history);
+
+    const store = useLearningStore();
+    await store.loadEvaluations(20);
+    expect(store.evaluation.list).toHaveLength(20);
+
+    await store.runEvaluationNow({ periodDays: 7 });
+
+    expect(store.evaluation.list[0]?.id).toBe(102);
+    expect(store.evaluation.list).toHaveLength(20);
+    expect(store.evaluation.list.map((entry) => entry.id)).toContain(218);
+  });
+
+  it('acceptEvaluationPath refreshes the archived path list', async () => {
+    // 采纳新路径 = 旧路径被归档；不刷新的话「历史路径」页签仍是旧快照。
+    const store = useLearningStore();
+    await store.loadEvaluations(4);
+    store.evaluation.current = SAMPLE;
+    vi.mocked(getArchivedLearningPaths).mockClear();
+
+    await store.acceptEvaluationPath(101);
+
+    expect(getArchivedLearningPaths).toHaveBeenCalledTimes(1);
   });
 
   it('acceptEvaluationPath updates list entry and current', async () => {

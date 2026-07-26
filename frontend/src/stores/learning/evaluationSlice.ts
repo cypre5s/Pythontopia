@@ -23,7 +23,15 @@ export interface EvaluationSliceDeps {
   loadActivePath: () => Promise<void>;
   /** 采纳新路径后刷新今日任务。 */
   loadTodayQuests: () => Promise<void>;
+  /** 采纳新路径会归档旧路径 → 刷新「历史路径」列表。 */
+  loadArchivedPaths: () => Promise<void>;
 }
+
+/**
+ * 复盘列表上限：与 ReviewHallPage 的 loadEvaluations(20) 对齐。
+ * 「立即评估」后就地插入结果时按同一上限截断，否则会把已加载的历史周报截没。
+ */
+export const EVALUATION_LIST_LIMIT = 20;
 
 /** 复盘大厅（阶段评估 / 路径再规划建议）切片。 */
 export function createEvaluationSlice(deps: EvaluationSliceDeps) {
@@ -71,7 +79,7 @@ export function createEvaluationSlice(deps: EvaluationSliceDeps) {
       evaluation.value.list = [
         result,
         ...evaluation.value.list.filter((entry) => entry.id !== result.id),
-      ].slice(0, 8);
+      ].slice(0, EVALUATION_LIST_LIMIT);
       evaluation.value.phase = 'ready';
       return result;
     } catch (error) {
@@ -91,6 +99,12 @@ export function createEvaluationSlice(deps: EvaluationSliceDeps) {
       );
       await deps.loadActivePath();
       await deps.loadTodayQuests();
+      // 采纳新路径 = 旧路径被归档：不刷新的话「历史路径」页签仍是旧快照。
+      try {
+        await deps.loadArchivedPaths();
+      } catch {
+        /* 历史路径刷新失败不影响采纳结果 */
+      }
       return updated;
     } catch (error) {
       evaluation.value.lastError = error instanceof Error ? error.message : String(error);

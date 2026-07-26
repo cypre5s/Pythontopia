@@ -98,11 +98,23 @@ type ProblemTab = 'statement' | 'samples' | 'kc';
 const problemTab = ref<ProblemTab>('statement');
 
 // 左栏选题区：搜索 + 状态筛选 + 排序（系统已按入矿优先级排序，这里允许学生临时切换视角）。
+// 注：错题本接口只返回 OPEN 会话，故没有「已完成」视图（后端加 status 过滤参数后再补）。
 const searchQuery = ref<string>('');
-type StatusFilter = 'ALL' | 'OPEN' | 'DONE';
+type StatusFilter = 'ALL' | 'OPEN';
 const statusFilter = ref<StatusFilter>('ALL');
 type SortBy = 'priority' | 'mastery' | 'decay';
 const sortBy = ref<SortBy>('priority');
+
+/** 同一 KC + 同一题只保留排序后的第一条：重复入矿会在错题本里堆出多条等价条目。 */
+function dedupeErrorBook(items: BugMineErrorBookItemDto[]): BugMineErrorBookItemDto[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = `${item.kcCode}#${item.problemId}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
 
 const filteredErrorBook = computed<BugMineErrorBookItemDto[]>(() => {
   const keyword = searchQuery.value.trim().toLowerCase();
@@ -111,10 +123,7 @@ const filteredErrorBook = computed<BugMineErrorBookItemDto[]>(() => {
       keyword === '' ||
       item.problemTitle.toLowerCase().includes(keyword) ||
       item.kcCode.toLowerCase().includes(keyword);
-    const matchesStatus =
-      statusFilter.value === 'ALL' ||
-      (statusFilter.value === 'OPEN' && item.status === 'OPEN') ||
-      (statusFilter.value === 'DONE' && item.status !== 'OPEN');
+    const matchesStatus = statusFilter.value === 'ALL' || item.status === 'OPEN';
     return matchesKeyword && matchesStatus;
   });
   const sorted = [...filtered];
@@ -125,7 +134,18 @@ const filteredErrorBook = computed<BugMineErrorBookItemDto[]>(() => {
   } else {
     sorted.sort((a, b) => b.minePriority - a.minePriority);
   }
-  return sorted;
+  return dedupeErrorBook(sorted);
+});
+
+/**
+ * 遗忘回声候选：过滤掉「该 KC 已在错题本里有 OPEN 会话」的项。
+ * 入矿不会改变该 KC 的 FSRS 到期状态，候选仍会留在列表里，再点一次就是第二条同 KC 会话。
+ */
+const visibleEchoes = computed<BugMineEchoCandidateDto[]>(() => {
+  const minedKcs = new Set(
+    errorBook.value.filter((item) => item.status === 'OPEN').map((item) => item.kcCode),
+  );
+  return echoes.value.filter((candidate) => !minedKcs.has(candidate.kcCode));
 });
 
 // 当前会话在错题本中的条目：用于把「历史错因 / 掌握度 / 遗忘风险」带进题干上下文与系统引导。
@@ -166,12 +186,6 @@ function formatMasteryScore(score: number): string {
 
 function formatPriority(score: number): string {
   return `${Math.round(score * 100)}%`;
-}
-
-function statusLabel(item: BugMineErrorBookItemDto): string {
-  if (item.status === 'RESOLVED') return '已修复';
-  if (item.status === 'ABANDONED') return '已搁置';
-  return '进行中';
 }
 
 function sessionStatusLabel(status: string): string {
@@ -317,7 +331,7 @@ async function retry(): Promise<void> {
         class="rail"
       >
         <section
-          v-if="echoes.length > 0 || learning.bugMine.echoesLoading || learning.bugMine.echoesError"
+          v-if="visibleEchoes.length > 0 || learning.bugMine.echoesLoading || learning.bugMine.echoesError"
           class="board"
           data-testid="echo-board"
         >
@@ -342,7 +356,7 @@ async function retry(): Promise<void> {
             class="rail-list"
           >
             <li
-              v-for="candidate in echoes"
+              v-for="candidate in visibleEchoes"
               :key="candidate.kcCode"
               class="echo-card"
               :data-testid="`echo-candidate-${candidate.kcCode}`"
@@ -377,7 +391,7 @@ async function retry(): Promise<void> {
           <div class="board__head">
             <div class="board__titles">
               <h3>错题本</h3>
-              <span class="board__caption">判题失败自动入册 · 按系统入矿优先级排序</span>
+              <span class="board__caption">判题失败后点「进入 Bug 矿洞」入册 · 按系统入矿优先级排序</span>
             </div>
             <span
               v-if="learning.bugMine.errorBookLoading"
@@ -431,14 +445,6 @@ async function retry(): Promise<void> {
                 >
                   进行中
                 </button>
-                <button
-                  type="button"
-                  class="seg__btn"
-                  :class="{ 'seg__btn--on': statusFilter === 'DONE' }"
-                  @click="statusFilter = 'DONE'"
-                >
-                  已完成
-                </button>
               </div>
             </div>
           </div>
@@ -458,7 +464,7 @@ async function retry(): Promise<void> {
           <PyEmptyState
             v-else-if="errorBook.length === 0"
             title="暂无错题"
-            description="训练场判题失败后会自动写入这里。"
+            description="训练场判题失败后点「进入 Bug 矿洞」，这道题就会入册到这里。"
           />
           <PyEmptyState
             v-else-if="filteredErrorBook.length === 0"
@@ -476,20 +482,14 @@ async function retry(): Promise<void> {
               <button
                 type="button"
                 class="error-item"
-                :class="{
-                  'error-item--active': session?.id === item.sessionId,
-                  'error-item--resolved': item.status === 'RESOLVED',
-                }"
+                :class="{ 'error-item--active': session?.id === item.sessionId }"
                 :aria-pressed="session?.id === item.sessionId"
                 :data-testid="`error-book-item-${item.sessionId}`"
                 @click="openErrorBookItem(item)"
               >
+                <!-- 错题本接口只返回 OPEN 会话，故不再渲染恒为「进行中」的状态徽标。 -->
                 <span class="error-item__eyebrow">
                   <span class="kc-code">{{ item.kcCode }}</span>
-                  <span
-                    v-if="item.status !== 'OPEN'"
-                    class="chip chip--soft"
-                  >{{ statusLabel(item) }}</span>
                 </span>
                 <span class="error-item__title">{{ item.problemTitle }}</span>
                 <span
@@ -1331,9 +1331,6 @@ async function retry(): Promise<void> {
   border-left-color: var(--pyt-color-gold);
   background: var(--pyt-color-bg-elevated);
   box-shadow: 0 0 0 1px var(--pyt-color-gold) inset;
-}
-.error-item--resolved {
-  border-left-color: var(--pyt-color-success);
 }
 .error-item__eyebrow {
   display: flex;

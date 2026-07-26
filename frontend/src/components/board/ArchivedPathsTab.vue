@@ -6,9 +6,12 @@ const learning = useLearningStore();
 
 const paths = computed(() => learning.pathState.archived);
 
+// 每次激活页签都重新拉：只在列表为空时拉会让「重新规划后刚归档的那版」永远看不到。
 onMounted(async () => {
-  if (learning.pathState.archived.length === 0) {
+  try {
     await learning.loadArchivedPaths();
+  } catch {
+    /* 历史路径是只读视图，拉取失败保持上一次快照即可 */
   }
 });
 </script>

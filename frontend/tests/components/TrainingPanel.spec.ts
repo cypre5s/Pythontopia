@@ -29,6 +29,10 @@ vi.mock('@/api/quests', () => ({
 vi.mock('@/api/classroomQuests', () => ({
   getMyClassroomQuests: vi.fn(),
 }));
+vi.mock('@/api/field', () => ({
+  fetchMastery: vi.fn(async () => []),
+  bootstrapCurriculum: vi.fn(),
+}));
 vi.mock('@/api/tutorWorkflow', () => ({
   getActiveWorkflowSession: vi.fn(async () => ({
     sessionKey: 'wf-test',
@@ -42,6 +46,10 @@ vi.mock('@/api/tutorWorkflow', () => ({
 import { getPublicProblem } from '@/api/problems';
 import { createSubmission, getSubmission } from '@/api/submissions';
 import { getTodayQuests } from '@/api/quests';
+import { useToastStore } from '@stores/toast';
+import { loadCodeDraft, saveCodeDraft } from '@/composables/useCodeDraft';
+import { DEFAULT_TRAINING_CODE } from '@stores/learning/trainingSlice';
+import type { SubmissionDto } from '@/api/dto/Submission';
 
 function mountPanel(options: { stubTutor?: boolean } = {}) {
   const router: Router = createRouter({
@@ -70,7 +78,7 @@ function mountPanel(options: { stubTutor?: boolean } = {}) {
 describe('TrainingPanel', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
-    window.localStorage.removeItem('pyt_main_quest_progress_v1');
+    window.localStorage.clear();
     vi.mocked(getPublicProblem).mockResolvedValue({
       id: 476,
       packId: 43,
@@ -351,6 +359,190 @@ describe('TrainingPanel', () => {
     expect(statement.find('h3').text()).toBe('题目描述');
     expect(statement.find('code').text()).toBe('print()');
     expect(statement.text()).not.toContain('### 题目描述');
+  });
+
+  it('resets the editor to the template when switching to a problem without a draft', async () => {
+    const wrapper = mountPanel();
+    const learning = useLearningStore();
+    await learning.loadTrainingProblem(476);
+    await flushPromises();
+    learning.setTrainingCode('print("上一题的代码")');
+    await flushPromises();
+
+    vi.mocked(getPublicProblem).mockResolvedValue({
+      id: 477,
+      packId: 43,
+      kcCode: 'PY43-KC-017',
+      title: '下一题',
+      statementMarkdown: '题干',
+      inputDescription: null,
+      outputDescription: null,
+      difficulty: 'basic',
+      samples: [],
+    });
+    await learning.loadTrainingProblem(477);
+    await flushPromises();
+
+    // 上一题的代码绝不能带过来（否则去抖保存会把它写成新题草稿）。
+    expect(learning.training.code).toBe(DEFAULT_TRAINING_CODE);
+    expect(learning.training.code).not.toContain('上一题的代码');
+    expect(loadCodeDraft(477)).not.toBe('print("上一题的代码")');
+    expect(wrapper.get('[data-testid="code-editor"]').text()).not.toContain('上一题的代码');
+  });
+
+  it('restores the target problem draft when switching problems', async () => {
+    saveCodeDraft(477, 'print("477 的草稿")');
+    const wrapper = mountPanel();
+    const learning = useLearningStore();
+    await learning.loadTrainingProblem(476);
+    await flushPromises();
+    learning.setTrainingCode('print("上一题的代码")');
+    await flushPromises();
+
+    vi.mocked(getPublicProblem).mockResolvedValue({
+      id: 477,
+      packId: 43,
+      kcCode: 'PY43-KC-017',
+      title: '下一题',
+      statementMarkdown: '题干',
+      inputDescription: null,
+      outputDescription: null,
+      difficulty: 'basic',
+      samples: [],
+    });
+    await learning.loadTrainingProblem(477);
+    await flushPromises();
+
+    expect(learning.training.code).toBe('print("477 的草稿")');
+    wrapper.unmount();
+  });
+
+  it('keeps submit disabled while judging even after a local run finishes', async () => {
+    const fakeRunner = {
+      init: vi.fn(async () => {}),
+      run: vi.fn(async () => ({ stdout: '1\n', stderr: '', durationMs: 4, isError: false })),
+      dispose: vi.fn(),
+    };
+    setPyodideRunner(fakeRunner);
+    let releaseCreate: ((value: SubmissionDto) => void) | null = null;
+    vi.mocked(createSubmission).mockImplementation(
+      () =>
+        new Promise<SubmissionDto>((resolve) => {
+          releaseCreate = resolve;
+        }),
+    );
+    vi.mocked(createSubmission).mockClear();
+
+    const wrapper = mountPanel();
+    const learning = useLearningStore();
+    await learning.loadTrainingProblem(476);
+    learning.setTrainingCode('print(1)');
+    await flushPromises();
+
+    await wrapper.get('[data-testid="submit-button"]').trigger('click');
+    await flushPromises();
+    expect(wrapper.get('[data-testid="submit-button"]').attributes('disabled')).toBeDefined();
+
+    // 判题在途时点「运行」：旧实现共用 phase，运行结束会把提交按钮重新放开 → 可重复提交。
+    await wrapper.get('[data-testid="preview-button"]').trigger('click');
+    await flushPromises();
+    expect(fakeRunner.run).toHaveBeenCalledTimes(1);
+    expect(wrapper.get('[data-testid="submit-button"]').attributes('disabled')).toBeDefined();
+
+    await wrapper.get('[data-testid="submit-button"]').trigger('click');
+    await flushPromises();
+    expect(createSubmission).toHaveBeenCalledTimes(1);
+
+    releaseCreate?.({
+      id: 5,
+      userId: 7,
+      problemId: 476,
+      questId: null,
+      source: 'TRAINING',
+      language: 'PYTHON_3_11',
+      code: 'print(1)',
+      submittedAt: '2026-05-21T19:00:00Z',
+      status: 'FAILED',
+      runtimeMs: 12,
+      memoryKb: null,
+    });
+    setPyodideRunner(null);
+  });
+
+  it('does not translate a submission failure as a Python runtime error hint', async () => {
+    vi.mocked(createSubmission).mockRejectedValue(
+      new Error("NameError: name 'total' is not defined"),
+    );
+
+    const wrapper = mountPanel();
+    const learning = useLearningStore();
+    await learning.loadTrainingProblem(476);
+    learning.setTrainingCode('print(1)');
+    await flushPromises();
+
+    await wrapper.get('[data-testid="submit-button"]').trigger('click');
+    await flushPromises();
+
+    // 提交失败的报错不属于本地运行轨道，不得被翻译成 Output 区的 Python 运行提示。
+    expect(wrapper.find('[data-testid="py-error-hint"]').exists()).toBe(false);
+  });
+
+  it('announces AC without quoting a hardcoded mastery delta', async () => {
+    vi.mocked(createSubmission).mockResolvedValue({
+      id: 41,
+      userId: 7,
+      problemId: 476,
+      questId: null,
+      source: 'TRAINING',
+      language: 'PYTHON_3_11',
+      code: 'print(1)',
+      submittedAt: '2026-05-21T19:00:00Z',
+      status: 'PASSED',
+      runtimeMs: 12,
+      memoryKb: null,
+    });
+    vi.mocked(getSubmission).mockResolvedValue({
+      submission: {
+        id: 41,
+        userId: 7,
+        problemId: 476,
+        questId: null,
+        source: 'TRAINING',
+        language: 'PYTHON_3_11',
+        code: 'print(1)',
+        submittedAt: '2026-05-21T19:00:00Z',
+        status: 'PASSED',
+        runtimeMs: 12,
+        memoryKb: null,
+      },
+      judgeResult: {
+        id: 51,
+        submissionId: 41,
+        verdict: 'AC',
+        passedCases: 3,
+        totalCases: 3,
+        failureReason: null,
+        trace: {},
+        createdAt: '2026-05-21T19:00:00Z',
+      },
+    });
+
+    const wrapper = mountPanel();
+    const learning = useLearningStore();
+    const toast = useToastStore();
+    await learning.loadTrainingProblem(476);
+    learning.setTrainingCode('print(1)');
+    saveCodeDraft(476, 'print(1)');
+    await flushPromises();
+
+    await wrapper.get('[data-testid="submit-button"]').trigger('click');
+    await flushPromises();
+
+    // 后端掌握度增量按事件 × 难度系数（0.14/0.20/0.30），前端不复述数字。
+    expect(toast.message).not.toContain('+0.10');
+    expect(toast.message).toContain('掌握进度');
+    // AC 后清掉本题草稿（此前 clearCodeDraft 从未被调用）。
+    expect(loadCodeDraft(476)).toBeNull();
   });
 
   it('uses a CodeMirror 6 editor surface for Python code', async () => {

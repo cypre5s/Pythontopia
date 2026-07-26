@@ -12,7 +12,8 @@ const toast = useToastStore();
 // 上游（训练场判题失败「进入 Bug 矿洞」/ L5 变式通过）在导航前 setPendingBugMineEntry，
 // 本页 consume 后用于开/读会话；避免学生在地址栏看到或篡改他人 id（后端另有归属双键校验）。
 async function bootstrap(entry: { submissionId: number | null; sessionId: number | null }): Promise<void> {
-  await learning.loadBugMineErrorBook();
+  // 错题本/遗忘回声的首屏加载由 BugMinePanel.onMounted 单点负责（本页不再重复拉一次）：
+  // 三处并发拉取的响应会互相覆盖，最后落地的不一定是包含新建会话的那次。
   if (entry.submissionId != null) {
     const session = await learning.openBugMine(entry.submissionId);
     if (!session) {

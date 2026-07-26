@@ -8,7 +8,7 @@
  * - 基于学生画像作答（后端 learner_block 注入）+ 与百晓工坊联动（一键去工坊生成针对本题资源）；
  * - 防泄答：后端 prompt 硬约束不给可直接提交的完整答案。
  */
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import MarkdownView from '@/components/common/MarkdownView.vue';
 import { useSseStream, type SseTraceEvent } from '@/composables/useSseStream';
@@ -161,15 +161,26 @@ function scrollBottom(): void {
 
 onMounted(load);
 
+// 组件销毁（收起助教 / 切题重建 / 路由离开）即掐断在途 SSE：
+// 否则后端 LLM 会继续跑到底，且 await 之后的 toast 会在别的页面弹出。
+let alive = true;
+onBeforeUnmount(() => {
+  alive = false;
+  sse.abort();
+});
+
 async function load(): Promise<void> {
   try {
     const snap = await getActiveWorkflowSession(props.problemId);
+    if (!alive) return;
     sessionKey.value = snap.sessionKey;
     cards.value = snap.cards.map((c) => ({ key: c.cardKey, payload: c.payload, seq: c.seq }));
     phase.value = snap.phase;
   } catch {
+    if (!alive) return;
     cards.value = [];
   }
+  if (!alive) return;
   availableActions.value = INITIAL_ACTIONS;
   loaded.value = true;
   void consumeInitialRequest();
@@ -193,6 +204,9 @@ async function runEvent(event: WorkflowEvent, eventData?: Record<string, unknown
   const body: Record<string, unknown> = { problemId: props.problemId, event };
   if (eventData) body.eventData = eventData;
   await sse.start(body);
+  // 组件已销毁（含 onBeforeUnmount 的 abort：abort 会把 status 置成 done 但 result 为空）→
+  // 不再落卡片、更不弹「导学助手暂时没响应」到别的页面。
+  if (!alive) return;
   if (sse.status.value === 'done' && sse.result.value) {
     const r = sse.result.value;
     sessionKey.value = r.session_id || sessionKey.value;
