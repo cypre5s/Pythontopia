@@ -10,6 +10,7 @@ import { useToastStore } from '@stores/toast';
 import { playChime } from '@/composables/useStardewFx';
 import type { Direction } from '@api/dto/Direction';
 import type { GameBootstrapResponseDto } from '@api/dto/GameBootstrapResponseDto';
+import type { MasterySnapshotDto } from '@api/dto/MasterySnapshotDto';
 import type { NpcStateDto } from '@api/dto/NpcStateDto';
 import type { PlayerStateDto } from '@api/dto/PlayerStateDto';
 import type { SaveSlotDto } from '@api/dto/SaveSlotDto';
@@ -21,6 +22,19 @@ interface PendingPlayerUpdate {
   tileX: number;
   tileY: number;
   direction: Direction;
+}
+
+/**
+ * KC 掌握度快照（masteryScore ∈ [0,1]，后端 MasteryEvaluator 钳制）折算成 HUD 需要的
+ * 0–100 百分比平均值。空快照返回 0（HUD 进度条显示空条）。
+ */
+export function masteryAvgPercent(snapshot: readonly MasterySnapshotDto[]): number {
+  if (snapshot.length === 0) {
+    return 0;
+  }
+  const total = snapshot.reduce((sum, entry) => sum + (Number.isFinite(entry.masteryScore) ? entry.masteryScore : 0), 0);
+  const avg = total / snapshot.length;
+  return Math.round(Math.max(0, Math.min(1, avg)) * 100);
 }
 
 let throttleTimer: ReturnType<typeof setTimeout> | null = null;
@@ -125,6 +139,9 @@ export const useWorldStore = defineStore('world', {
       useHudStore().syncMeta({
         dayIndex: data.world.dayIndex ?? 1,
         weather: data.world.weather ?? 'SUNNY',
+        // HUD 掌握度条是 0–100 的百分比；mastery 快照是 0–1 标度，这里统一折算，
+        // 否则 HudShell 的进度条永远停在 0%。
+        masteryAvg: masteryAvgPercent(data.mastery ?? []),
       });
     },
     /**
@@ -148,7 +165,8 @@ export const useWorldStore = defineStore('world', {
      *   - 返回 { world: <patch>, calendar, events? }，由 world store merge 进 session
      *   - UI 通过 toast 提示，详细变化由 WorldScene 自行读取 calendar.unprocessedEvents 弹板
      *
-     * 调用方负责后续刷新 mastery（通常通过 learning.refreshAfterEvent）。
+     * 掌握度衰减是**后端**语义（MasteryEvaluator 读时按天衰减并钳在 [0,1]），推进一天后本
+     * store 只负责重新拉取服务端权威快照，绝不在前端伪造衰减。
      */
     async sleep(): Promise<void> {
       const response = await postWorldSleep();
@@ -166,18 +184,21 @@ export const useWorldStore = defineStore('world', {
       }
       useToastStore().show(`第 ${response.world.dayIndex} 天醒来`, 'info');
 
-      useHudStore().syncMeta({
+      const hud = useHudStore();
+      hud.syncMeta({
         dayIndex: response.world.dayIndex,
         weather: response.world.weather ?? 'SUNNY',
       });
 
-      // KC mastery 自然衰减 — 模拟遗忘曲线，sleep 推进 1 天时已掌握 KC 各 -2
+      // 推进一天后重新取服务端掌握度（含后端的遗忘衰减），并刷新 HUD 掌握度条。
+      // 拉取失败不阻塞「醒来」流程：下次进入学习页 / bootstrap 会重新拉。
       try {
-        const learningStore = (await import('@stores/learning')).useLearningStore();
-        if (typeof learningStore.applyMasteryDecay === 'function') {
-          learningStore.applyMasteryDecay(2);
-        }
-      } catch { /* learning store 不存在时忽略 */ }
+        const learningStore = useLearningStore();
+        await learningStore.loadField();
+        hud.syncMeta({ masteryAvg: masteryAvgPercent(learningStore.field.masterySnapshot) });
+      } catch {
+        /* 掌握度刷新失败静默降级，保留上一份快照 */
+      }
 
       try {
         playChime('dawn');
