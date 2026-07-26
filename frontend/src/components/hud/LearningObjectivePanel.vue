@@ -1,16 +1,29 @@
 <script setup lang="ts">
-// 左侧「当前学习目标」面板（R-15 精简）：
-// 旧 mainQuest 子任务 / 指路（questGuidance）/ 章末 Boss 逻辑已退役。本面板改为读后端权威
-// mainline overview，展示「当前章 + 星级 + 学习要点」，并提供唯一「去冒险地图」引导入口。
+// 左侧「当前学习目标」面板：读后端权威 mainline overview + KC 掌握度 + 画像信号，
+// 经 useNextSteps 推导出针对本人的「下一步」行动（主线断点 / 弱项补强 / 补星或偏好），
+// 数据未就绪时回退到「去冒险地图」通用入口与静态章节要点。
 // 默认折叠（只露标题 + CTA），点击标题或按 H 展开/收起。
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useMainlineStore, clampStars } from '@stores/mainline';
 import { useDraggable } from '@/composables/useDraggable';
+import { useNextSteps, type NextStep } from '@/composables/useNextSteps';
 import { playUiClick } from '@/composables/useStardewFx';
 
 const router = useRouter();
 const mainline = useMainlineStore();
+const { steps } = useNextSteps();
+const primaryStep = computed<NextStep | null>(() => steps.value[0] ?? null);
+const secondarySteps = computed<NextStep[]>(() => steps.value.slice(1));
+
+function goStep(step: NextStep): void {
+  playUiClick();
+  void router.push(
+    step.route.query
+      ? { path: step.route.path, query: step.route.query }
+      : { path: step.route.path },
+  );
+}
 
 const rootRef = ref<HTMLElement | null>(null);
 const { style: dragStyle, onPointerDown: onDragStart } = useDraggable(
@@ -150,7 +163,7 @@ onUnmounted(() => {
         ✕
       </button>
     </div>
-    <!-- 唯一注意力线：去冒险地图（折叠态也常驻） -->
+    <!-- 唯一注意力线：个人化「下一步」（数据未就绪时回退冒险地图入口），折叠态也常驻 -->
     <div
       class="lop-next"
       data-testid="lop-next-step"
@@ -162,10 +175,26 @@ onUnmounted(() => {
         >➤</span>
         <span class="lop-next__label">下一步</span>
       </div>
-      <p class="lop-next__text">
-        前往「冒险地图」按章闯关：看视频 · 读课件 · 做例题，章末测试拿星。
-      </p>
+      <template v-if="primaryStep">
+        <button
+          type="button"
+          class="lop-next__cta"
+          data-testid="lop-step-primary"
+          :aria-label="primaryStep.label"
+          @click="goStep(primaryStep)"
+        >
+          <span
+            class="lop-next__cta-icon"
+            aria-hidden="true"
+          >▶</span>
+          <span class="lop-next__cta-text">{{ primaryStep.label }}</span>
+        </button>
+        <p class="lop-next__why">
+          {{ primaryStep.hint }}
+        </p>
+      </template>
       <button
+        v-else
         type="button"
         class="lop-next__cta"
         data-testid="lop-go-next"
@@ -191,7 +220,27 @@ onUnmounted(() => {
         <span class="lop-row__label">本章星级</span>
         <span class="lop-row__value lop-row__value--reward">{{ chapterStarText }} · 总星 {{ totalStars }} / 21</span>
       </div>
-      <div class="lop-section">
+      <div
+        v-if="secondarySteps.length > 0"
+        class="lop-section"
+      >
+        <span class="lop-section__label">也可以</span>
+        <button
+          v-for="s in secondarySteps"
+          :key="s.kind"
+          type="button"
+          class="lop-alt"
+          :data-testid="`lop-step-${s.kind}`"
+          @click="goStep(s)"
+        >
+          <span class="lop-alt__label">{{ s.label }}</span>
+          <span class="lop-alt__hint">{{ s.hint }}</span>
+        </button>
+      </div>
+      <div
+        v-else-if="!primaryStep"
+        class="lop-section"
+      >
         <span class="lop-section__label">学习目标</span>
         <ul class="lop-goal-list">
           <li
@@ -207,9 +256,6 @@ onUnmounted(() => {
           </li>
         </ul>
       </div>
-      <p class="lop-tip">
-        [TIP] 在冒险地图里完成每个小节的「看 / 学 / 练」，再挑战章末测试即可获得星星。
-      </p>
     </div>
   </aside>
 </template>
@@ -430,15 +476,37 @@ onUnmounted(() => {
   50% { transform: translateX(3px); }
 }
 
-.lop-tip {
-  margin: 0;
-  padding: 6px 8px;
-  background: rgba(0, 0, 0, 0.15);
-  border-left: 2px solid var(--pyt-text-gold);
-  border-radius: 2px;
+.lop-next__why {
+  margin: 4px 0 0;
   font-size: 11px;
   color: var(--pyt-text-secondary);
   line-height: 1.4;
+}
+
+.lop-alt {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  margin-top: 6px;
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--pyt-panel-border);
+  border-radius: 2px;
+  color: inherit;
+  font-family: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.lop-alt:hover {
+  border-color: var(--pyt-text-gold);
+  color: var(--pyt-text-accent);
+}
+.lop-alt__hint {
+  font-size: 11px;
+  color: var(--pyt-text-secondary);
 }
 
 @media (max-width: 1280px) {
