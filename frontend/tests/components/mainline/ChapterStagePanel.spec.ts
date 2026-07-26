@@ -38,6 +38,27 @@ function chapter(overrides: Partial<MainlineChapterDto> = {}): MainlineChapterDt
 }
 
 describe('ChapterStagePanel', () => {
+  it('高亮第一个未完成小节为「继续学习」断点续学 CTA', () => {
+    const wrapper = mount(ChapterStagePanel, { props: { chapter: chapter() } });
+    const resume = wrapper.get('[data-testid="mainline-stage-31"]');
+    expect(resume.attributes('data-resume')).toBe('true');
+    expect(resume.text()).toContain('当前');
+    expect(wrapper.get('[data-testid="mainline-enter-stage-31"]').text()).toContain('继续学习');
+    // 已完成小节保持普通入口，不抢焦点。
+    const done = wrapper.get('[data-testid="mainline-stage-32"]');
+    expect(done.attributes('data-resume')).toBe('false');
+    expect(wrapper.get('[data-testid="mainline-enter-stage-32"]').text()).toContain('进入学习');
+  });
+
+  it('锁定章节没有断点续学焦点', () => {
+    const wrapper = mount(ChapterStagePanel, {
+      props: { chapter: chapter({ unlocked: false }) },
+    });
+    expect(wrapper.get('[data-testid="mainline-stage-31"]').attributes('data-resume')).toBe(
+      'false',
+    );
+  });
+
   it('renders chapter title, test status, best score and stage rows', () => {
     const wrapper = mount(ChapterStagePanel, { props: { chapter: chapter() } });
     expect(wrapper.get('[data-testid="mainline-chapter-title"]').text()).toContain('信息表示');

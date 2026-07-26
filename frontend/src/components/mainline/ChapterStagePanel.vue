@@ -29,6 +29,13 @@ const allStagesComplete = computed<boolean>(
   () => progress.value.total > 0 && progress.value.done === progress.value.total,
 );
 const isFullStar = computed<boolean>(() => props.chapter.stars >= 3);
+// 断点续学焦点：第一个未完成小节。它的入口升格为「继续学习」主 CTA 并高亮，
+// 学生打开抽屉即知从哪继续，不用逐行扫进度条。
+const resumeStageId = computed<number | null>(() =>
+  unlocked.value
+    ? (props.chapter.stages.find((s) => !isStageComplete(s))?.id ?? null)
+    : null,
+);
 
 const TEST_STATUS_LABEL: Record<ChapterTestStatus, string> = {
   NONE: '未开始',
@@ -122,13 +129,22 @@ function pieces(stage: MainlineStageDto): StagePiece[] {
         v-for="stage in chapter.stages"
         :key="stage.id"
         class="stage"
-        :class="{ 'stage--done': isStageComplete(stage) }"
+        :class="{
+          'stage--done': isStageComplete(stage),
+          'stage--resume': stage.id === resumeStageId,
+        }"
         :data-testid="`mainline-stage-${stage.id}`"
         :data-done="isStageComplete(stage) ? 'true' : 'false'"
+        :data-resume="stage.id === resumeStageId ? 'true' : 'false'"
       >
         <div class="stage__head">
           <span class="stage__index">{{ stage.index }}</span>
           <span class="stage__title">{{ stage.title }}</span>
+          <span
+            v-if="stage.id === resumeStageId"
+            class="stage__now"
+            aria-label="当前进度"
+          >当前</span>
           <span
             v-if="isStageComplete(stage)"
             class="stage__check"
@@ -155,11 +171,12 @@ function pieces(stage: MainlineStageDto): StagePiece[] {
         <button
           type="button"
           class="stage__enter"
+          :class="{ 'stage__enter--resume': stage.id === resumeStageId }"
           :data-testid="`mainline-enter-stage-${stage.id}`"
           :disabled="!unlocked"
           @click="emit('enter-stage', stage.id)"
         >
-          进入学习
+          {{ stage.id === resumeStageId ? '▶ 继续学习' : '进入学习' }}
         </button>
       </li>
     </ol>
@@ -317,6 +334,22 @@ function pieces(stage: MainlineStageDto): StagePiece[] {
 }
 .stage__check {
   color: var(--pyt-color-success);
+  font-weight: 700;
+}
+.stage--resume {
+  border-color: var(--pyt-color-accent, #e8a33d);
+  box-shadow: 0 0 0 1px var(--pyt-color-accent, #e8a33d);
+}
+.stage__now {
+  padding: 0 6px;
+  background: var(--pyt-color-accent, #e8a33d);
+  border-radius: var(--pyt-radius-sm);
+  color: var(--pyt-color-bg-primary, #241a10);
+  font-size: 11px;
+  line-height: 18px;
+}
+.stage__enter--resume {
+  border-color: var(--pyt-color-accent, #e8a33d);
   font-weight: 700;
 }
 .stage__pieces {
