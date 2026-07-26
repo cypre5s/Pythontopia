@@ -23,14 +23,27 @@ const audioMocks = {
 };
 vi.mock('@/composables/useAudio', () => ({ useAudio: () => audioMocks }));
 
+// R-14 快速旅行 gate：默认透传真实路线表（单 hub），需要「恢复多图」的用例把
+// ftRoutes.routes 换成模拟路线表。详见 tests/_helpers/fastTravelRoutes.ts。
+const ftRoutes: FastTravelRouteOverride = vi.hoisted(() => ({ routes: null }));
+vi.mock('@/data/fastTravel', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/data/fastTravel')>();
+  const { createFastTravelModuleMock } = await import('../_helpers/fastTravelRoutes');
+  return createFastTravelModuleMock(actual, ftRoutes);
+});
+
 import SettingsModal from '@/components/hud/SettingsModal.vue';
 import FastTravelPanel from '@/components/hud/FastTravelPanel.vue';
 import FestivalRibbon from '@/components/hud/FestivalRibbon.vue';
+import QuickWheel from '@/components/hud/QuickWheel.vue';
+import { FAST_TRAVEL_ENABLED, FAST_TRAVEL_ROUTES } from '@/data/fastTravel';
 import { useHudStore } from '@stores/hud';
 import { useSessionStore } from '@stores/session';
 import { useWorldStore } from '@stores/world';
 import { useCalendarStore } from '@stores/calendar';
 import type { WorldCalendarDto } from '@/api/dto/WorldCalendarDto';
+import type { FastTravelRouteOverride } from '../_helpers/fastTravelRoutes';
+import { RESTORED_FAST_TRAVEL_ROUTES } from '../_helpers/fastTravelRoutes';
 
 function makeCal(d: number): WorldCalendarDto {
   return {
@@ -176,67 +189,98 @@ describe('settings.integration: SettingsModal（20 case）', () => {
   });
 });
 
-describe('fasttravel.integration: FastTravelPanel（15 case）', () => {
+function setMap(mapKey: string): void {
+  const world = useWorldStore();
+  world.player = {
+    playerStateId: 1,
+    avatarKey: 'student_default',
+    mapKey,
+    tileX: 0,
+    tileY: 0,
+    direction: 'DOWN',
+  };
+}
+
+/** QuickWheel 当前渲染的扇区文案（Tab 打开后读 .wheel-sector__label）。 */
+async function openQuickWheelLabels(): Promise<{ labels: string[]; unmount: () => void }> {
+  const wrapper = mount(QuickWheel, { attachTo: document.body });
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab' }));
+  await flushPromises();
+  const labels = wrapper.findAll('.wheel-sector__label').map((node) => node.text());
+  return { labels, unmount: () => wrapper.unmount() };
+}
+
+// R-14：世界收缩为单一 town_hub，FAST_TRAVEL_ROUTES 只剩一条且目的地就是玩家
+// 当前所在地图 —— 面板里唯一一行永久 disabled，打开它等于给玩家一条死路。
+// 实现改为用 FAST_TRAVEL_ENABLED（src/data/fastTravel.ts）统一 gate 掉全部入口，
+// 旧断言（能打开 / 渲染 hub 行 / T 键切换）随之翻转为「入口被抑制」。
+describe('fasttravel.integration: 单 hub 下入口休眠', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
+    ftRoutes.routes = null;
   });
-
-  function setMap(mapKey: string): void {
-    const world = useWorldStore();
-    world.player = {
-      playerStateId: 1,
-      avatarKey: 'student_default',
-      mapKey,
-      tileX: 0,
-      tileY: 0,
-      direction: 'DOWN',
-    };
-  }
 
   it('默认不可见', () => {
     const wrapper = mount(FastTravelPanel);
     expect(wrapper.find('[data-testid="fast-travel-panel"]').exists()).toBe(false);
   });
 
-  it('CustomEvent 打开', async () => {
+  it('gate 成立的前提：每条路线的目的地都是玩家当前所在地图', () => {
+    setMap('town_hub');
+    const world = useWorldStore();
+    expect(FAST_TRAVEL_ROUTES).toHaveLength(1);
+    // 每一行都会命中 `disabled = currentMap === route.toMap` → 整个面板毫无可点项。
+    expect(FAST_TRAVEL_ROUTES.every((route) => route.toMap === world.player?.mapKey)).toBe(true);
+    expect(FAST_TRAVEL_ENABLED).toBe(false);
+  });
+
+  it('CustomEvent 不再打开面板', async () => {
+    setMap('town_hub');
+    const wrapper = mount(FastTravelPanel, { attachTo: document.body });
+    window.dispatchEvent(new CustomEvent('pythontopia:fast-travel-open'));
+    await flushPromises();
+    expect(wrapper.find('[data-testid="fast-travel-panel"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('keydown T 不再打开面板', async () => {
+    setMap('town_hub');
+    const wrapper = mount(FastTravelPanel, { attachTo: document.body });
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 't' }));
+    await flushPromises();
+    expect(wrapper.find('[data-testid="fast-travel-panel"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('QuickWheel 不渲染「传送」扇区，其余扇区照常', async () => {
+    const { labels, unmount } = await openQuickWheelLabels();
+    expect(labels).not.toContain('传送');
+    // 留一个点了没反应的入口比没有入口更糟；但只能删传送，别的玩法必须还在。
+    expect(labels).toEqual(['课程', '远征', '休息', '矿洞', '工坊', '训练']);
+    unmount();
+  });
+});
+
+// 将来重新开放外围图时，路线表一变长 gate 就该自动放行；这组用例锁住这个方向，
+// 避免 gate 被写成「永久关闭」。
+describe('fasttravel.integration: 路线恢复 >1 后入口回归', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    ftRoutes.routes = RESTORED_FAST_TRAVEL_ROUTES;
+  });
+
+  it('CustomEvent 重新打开面板并渲染全部路线', async () => {
     setMap('town_hub');
     const wrapper = mount(FastTravelPanel, { attachTo: document.body });
     window.dispatchEvent(new CustomEvent('pythontopia:fast-travel-open'));
     await flushPromises();
     expect(wrapper.find('[data-testid="fast-travel-panel"]').exists()).toBe(true);
-    wrapper.unmount();
-  });
-
-  it('路线 hub 渲染（R-14 单 hub）', async () => {
-    setMap('town_hub');
-    const wrapper = mount(FastTravelPanel, { attachTo: document.body });
-    window.dispatchEvent(new CustomEvent('pythontopia:fast-travel-open'));
-    await flushPromises();
     expect(wrapper.find('[data-testid="fast-travel-hub"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="fast-travel-farm"]').exists()).toBe(true);
     wrapper.unmount();
   });
 
-  it('mapKey=town_hub → 路线 hub 被 disabled', async () => {
-    setMap('town_hub');
-    const wrapper = mount(FastTravelPanel, { attachTo: document.body });
-    window.dispatchEvent(new CustomEvent('pythontopia:fast-travel-open'));
-    await flushPromises();
-    const btn = wrapper.find('[data-testid="fast-travel-hub"]');
-    expect(btn.attributes('disabled')).toBeDefined();
-    wrapper.unmount();
-  });
-
-  it('单 hub：外围图路线已移除（farm/mine/campus/port 不渲染）', async () => {
-    setMap('town_hub');
-    const wrapper = mount(FastTravelPanel, { attachTo: document.body });
-    window.dispatchEvent(new CustomEvent('pythontopia:fast-travel-open'));
-    await flushPromises();
-    expect(wrapper.find('[data-testid="fast-travel-farm"]').exists()).toBe(false);
-    expect(wrapper.find('[data-testid="fast-travel-campus"]').exists()).toBe(false);
-    wrapper.unmount();
-  });
-
-  it('keydown T 切换面板', async () => {
+  it('keydown T 重新切换面板', async () => {
     setMap('town_hub');
     const wrapper = mount(FastTravelPanel, { attachTo: document.body });
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 't' }));
@@ -246,6 +290,12 @@ describe('fasttravel.integration: FastTravelPanel（15 case）', () => {
     await flushPromises();
     expect(wrapper.find('[data-testid="fast-travel-panel"]').exists()).toBe(false);
     wrapper.unmount();
+  });
+
+  it('QuickWheel 恢复「传送」扇区', async () => {
+    const { labels, unmount } = await openQuickWheelLabels();
+    expect(labels).toContain('传送');
+    unmount();
   });
 });
 
