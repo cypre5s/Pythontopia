@@ -46,6 +46,9 @@ export interface CreatePlayerOptions {
 const TWEEN_DURATION_MS = 140;
 const JUMP_DURATION_MS = 260;
 const JUMP_ARC_PX = 18;
+// 连续行走宽限：单格 tween 完成后等一小段再切 idle。逐格冷却（雨天 162ms、键盘
+// repeat 间隙）大于 tween 时长时，两格之间不再闪一帧站立，走路循环保持连贯。
+const IDLE_GRACE_MS = 90;
 
 function ensureAnims(phaserScene: Phaser.Scene): void {
   registerCharacterAnimations(phaserScene.anims, LPC_SHEET_KEY, PLAYER_ANIM_PREFIX, PLAYER_LAYOUT);
@@ -93,10 +96,31 @@ export function createPlayerSprite(scene: SceneLike, opts: CreatePlayerOptions):
   let jumping = false;
   let busy = false;
   let actionFallback: { remove?: () => void } | null = null;
+  let pendingIdle: { remove?: () => void } | null = null;
 
   function clearActionFallback(): void {
     if (actionFallback?.remove) actionFallback.remove();
     actionFallback = null;
+  }
+
+  function cancelPendingIdle(): void {
+    if (pendingIdle?.remove) pendingIdle.remove();
+    pendingIdle = null;
+  }
+
+  // 行走单格结束后延迟 IDLE_GRACE_MS 再落 idle；期间来了下一步移动/跳跃/动作
+  // 就取消，走路动画跨格连贯。无 delayedCall 的环境（测试 mock）立即落 idle。
+  function scheduleIdle(direction: Direction): void {
+    cancelPendingIdle();
+    const time = phaserScene.time as unknown as TimeWithDelay;
+    if (typeof time.delayedCall === 'function') {
+      pendingIdle = time.delayedCall(IDLE_GRACE_MS, () => {
+        pendingIdle = null;
+        playIdle(direction);
+      });
+    } else {
+      playIdle(direction);
+    }
   }
 
   // 手持工具叠加层（浇水壶/锄头），与主角同帧布局，叠在身体前后两层。
@@ -232,6 +256,7 @@ export function createPlayerSprite(scene: SceneLike, opts: CreatePlayerOptions):
     },
     faceDirection(direction: Direction): void {
       this.direction = direction;
+      cancelPendingIdle();
       phaserScene.tweens.killTweensOf(sprite);
       phaserScene.tweens.killTweensOf(shadow);
       snapToTile(this);
@@ -241,6 +266,7 @@ export function createPlayerSprite(scene: SceneLike, opts: CreatePlayerOptions):
       jumping = false;
       busy = false;
       clearActionFallback();
+      cancelPendingIdle();
       hideTool();
       hideWeapon();
       this.tileX = tileX;
@@ -263,7 +289,7 @@ export function createPlayerSprite(scene: SceneLike, opts: CreatePlayerOptions):
           handle.y = sprite.y;
         },
         onComplete: () => {
-          playIdle(direction);
+          scheduleIdle(direction);
           handle.x = sprite.x;
           handle.y = sprite.y;
         },
@@ -289,6 +315,7 @@ export function createPlayerSprite(scene: SceneLike, opts: CreatePlayerOptions):
       jumping = true;
       busy = false;
       clearActionFallback();
+      cancelPendingIdle();
       hideTool();
       hideWeapon();
       this.tileX = tileX;
@@ -334,6 +361,7 @@ export function createPlayerSprite(scene: SceneLike, opts: CreatePlayerOptions):
       const direction = actionOpts?.direction ?? this.direction;
       this.direction = direction;
       const key = resolveAnimKey(PLAYER_ANIM_PREFIX, PLAYER_LAYOUT, action, direction);
+      cancelPendingIdle();
       phaserScene.tweens.killTweensOf(sprite);
       phaserScene.tweens.killTweensOf(shadow);
       snapToTile(this);
