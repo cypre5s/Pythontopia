@@ -97,6 +97,12 @@ export interface InputLike {
 
 export interface SceneTimeLike {
   now: number;
+  /**
+   * scene 自己的延时器。用它而不是 window.setTimeout：只有 scene 的 Clock 会被
+   * SceneLifecycle 的 `time.removeAllEvents()` 一并清掉，场景销毁后不会有回调
+   * 落在已销毁的场景上。测试桩可省略。
+   */
+  delayedCall?(delayMs: number, callback: () => void): unknown;
 }
 
 export interface SceneCameraMainLike {
@@ -144,7 +150,16 @@ export interface PlayerSpriteHandle {
   tileY: number;
   direction: Direction;
   faceDirection(direction: Direction): void;
-  moveToTile(tileX: number, tileY: number, direction: Direction, opts?: { running?: boolean }): void;
+  /**
+   * 走一格。`opts.durationMs` 传当前逐格移动冷却，让位移 tween 与逻辑节奏同步
+   * （不传则用适配器默认时长）。
+   */
+  moveToTile(
+    tileX: number,
+    tileY: number,
+    direction: Direction,
+    opts?: { running?: boolean; durationMs?: number },
+  ): void;
   jumpToTile(tileX: number, tileY: number, direction: Direction): void;
   isJumping(): boolean;
   /** 是否正在播放一次性动作动画（浇水/挖矿等），调用方据此暂停移动输入。 */
