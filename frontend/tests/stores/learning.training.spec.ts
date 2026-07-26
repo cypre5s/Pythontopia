@@ -182,7 +182,10 @@ describe('learning store training slice', () => {
     expect(store.training.submission).not.toBeNull();
 
     await store.runPyodidePreview('5');
-    expect(store.training.submission).toBeNull();
+    // 本地运行不得抹掉判题结果：面板据此渲染「进入 Bug 矿洞」入口，
+    // 而判题失败后先本地跑一遍恰恰是最常见的调试路径。
+    expect(store.training.submission).not.toBeNull();
+    expect(store.training.submission?.judgeResult?.verdict).toBe('WA');
     expect(store.training.preview?.stdout).toBe('1\n');
   });
 });
