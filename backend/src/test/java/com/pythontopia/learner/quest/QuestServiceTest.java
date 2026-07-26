@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -55,18 +56,53 @@ class QuestServiceTest {
   }
 
   @Test
-  void completePublishesPracticeSucceededEvent() {
+  void completeSolveProblemDoesNotDoubleCountMastery() {
     ObjectNode payload = mapper.createObjectNode();
     payload.put("suggestedProblemId", 42L);
     QuestDto quest = sampleQuest(QuestStatus.IN_PROGRESS, QuestNodeType.SOLVE_PROBLEM, 11L, payload);
     when(repository.findById(eq(7L), eq(11L))).thenReturn(Optional.of(quest));
+    when(repository.updateStatus(7L, 11L, QuestStatus.COMPLETED)).thenReturn(1);
     when(repository.findOwned(eq(7L), eq(11L)))
         .thenReturn(Optional.of(sampleQuest(QuestStatus.COMPLETED, QuestNodeType.SOLVE_PROBLEM, 11L, payload)));
 
     QuestDto result = service.complete(7L, 11L, new QuestCompleteRequest("done"));
     assertThat(result.status()).isEqualTo(QuestStatus.COMPLETED);
-    verify(publisher, times(1)).publishEvent(any(LearningEvent.PracticeSucceeded.class));
+    // 判题链路（SubmissionService）在 AC 时已发过 PracticeSucceeded 并随后回调本方法，
+    // 这里再发一次会让同一次 AC 被 MasteryEvaluator 记两遍掌握度。
+    verify(publisher, never()).publishEvent(any(LearningEvent.PracticeSucceeded.class));
     verify(repository).recordProgress(11L, "COMPLETED", "done");
+  }
+
+  @Test
+  void completeFixBugStillPublishesDebugResolved() {
+    ObjectNode payload = mapper.createObjectNode();
+    payload.put("suggestedProblemId", 42L);
+    QuestDto quest = sampleQuest(QuestStatus.IN_PROGRESS, QuestNodeType.FIX_BUG, 15L, payload);
+    when(repository.findById(eq(7L), eq(15L))).thenReturn(Optional.of(quest));
+    when(repository.updateStatus(7L, 15L, QuestStatus.COMPLETED)).thenReturn(1);
+    when(repository.findOwned(eq(7L), eq(15L)))
+        .thenReturn(Optional.of(sampleQuest(QuestStatus.COMPLETED, QuestNodeType.FIX_BUG, 15L, payload)));
+
+    service.complete(7L, 15L, new QuestCompleteRequest("fixed"));
+
+    verify(publisher, times(1)).publishEvent(any(LearningEvent.DebugResolved.class));
+  }
+
+  @Test
+  void completeLosingTheConcurrentRaceConflictsInsteadOfDoubleRecording() {
+    QuestDto quest = sampleQuest(QuestStatus.IN_PROGRESS, QuestNodeType.FIX_BUG, 16L);
+    when(repository.findById(eq(7L), eq(16L))).thenReturn(Optional.of(quest));
+    // 前置状态校验是无锁快照：并发请求已把任务推到 COMPLETED 时 UPDATE 命中 0 行。
+    when(repository.updateStatus(7L, 16L, QuestStatus.COMPLETED)).thenReturn(0);
+
+    assertThatThrownBy(() -> service.complete(7L, 16L, new QuestCompleteRequest("double-click")))
+        .isInstanceOf(BusinessException.class)
+        .extracting(exception -> ((BusinessException) exception).code())
+        .isEqualTo("QUEST_ALREADY_FINALIZED");
+
+    // 重复的进度行、重复的事件、翻倍的掌握度都必须被挡住。
+    verify(repository, never()).recordProgress(anyLong(), anyString(), any());
+    verify(publisher, never()).publishEvent(any(LearningEvent.class));
   }
 
   @Test

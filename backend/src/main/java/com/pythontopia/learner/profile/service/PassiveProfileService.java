@@ -37,7 +37,9 @@ import org.springframework.transaction.annotation.Transactional;
  * </ul>
  *
  * <ul>
- *   <li>{@link #applyDimensionUpdate} 为事务方法：读 dimensions JSONB → 应用 delta → 写回并追加 profile_revision；
+ *   <li>{@link #applyDimensionUpdate} 为事务方法：{@link ProfileRepository#findDimensionsForUpdate 加行锁读}
+ *       dimensions JSONB → 应用 delta → upsert 写回并追加 profile_revision；行锁是并发正确性的前提，
+ *       整块 JSONB 的 read-modify-write 无锁并发时后写者会覆盖前写者；
  *   <li>{@link DimensionDelta#source()} 不在 profile_revision 允许的 source 枚举内时，跳过 revision 写入但仍更新 dimension；
  *   <li>{@code learner_profile.dimensions} 列尚未创建时 {@link ProfileRepository#findDimensions} 返回
  *       {@link java.util.Optional#empty()}，由调用方或上层 Listener 做降级。
@@ -93,6 +95,9 @@ public class PassiveProfileService {
   /** confidence 饱和证据数：evidence_count 达到该值时置信度=1（读时派生，不入库）。 */
   private static final int EVIDENCE_SATURATION = 8;
 
+  /** evidence_count 入库上界（sanity 兜底，防单次请求把证据数顶到荒谬量级）。 */
+  private static final int EVIDENCE_COUNT_MAX = 1000;
+
   /** 读时 decay 半衰期（天）：久未更新的维度得分向中性 0.5 回归。 */
   private static final double DECAY_HALF_LIFE_DAYS = 14.0;
 
@@ -127,7 +132,8 @@ public class PassiveProfileService {
           HttpStatus.BAD_REQUEST, "PROFILE_DELTA_REQUIRED", "Dimension delta is required");
     }
 
-    JsonNode existing = profileRepository.findDimensions(userId).orElse(null);
+    // 写路径统一走 FOR UPDATE：整块 JSONB 的 read-modify-write 必须在行锁保护下串行，否则并发事件互相覆盖。
+    JsonNode existing = profileRepository.findDimensionsForUpdate(userId).orElse(null);
     ObjectNode dimensionsObj;
     if (existing instanceof ObjectNode obj) {
       dimensionsObj = obj;
@@ -143,14 +149,21 @@ public class PassiveProfileService {
       dimensionObj = objectMapper.createObjectNode();
     }
 
-    if (delta.scoreDelta() != null) {
-      double currentScore = dimensionObj.path("score").asDouble(DEFAULT_SCORE);
-      double newScore = clamp01(currentScore + delta.scoreDelta());
+    // 增量基准必须与读路径一致：getDimensions 返回的是 applyDecay 之后的 effectiveScore，前端按
+    // 「目标值 - 展示值」算 delta。若这里仍加在未衰减的原始分上，学生把 0.6 拖到 0.7 会被算成 0.9+0.1=1.0。
+    // 因此先把原始分折算成 effective（顺带把衰减落库），再叠加 delta；写入后 last_updated=now，
+    // 读路径衰减因子=1，GET→PUT→GET 幂等收敛。
+    String storedLastUpdated = textOrNull(dimensionObj.get("last_updated"));
+    boolean hasStoredScore = dimensionObj.hasNonNull("score");
+    if (delta.scoreDelta() != null || hasStoredScore) {
+      double base =
+          applyDecay(dimensionObj.path("score").asDouble(DEFAULT_SCORE), storedLastUpdated);
+      double newScore = clamp01(delta.scoreDelta() == null ? base : base + delta.scoreDelta());
       dimensionObj.put("score", newScore);
     }
     if (delta.evidenceIncrement() != null) {
       int currentCount = dimensionObj.path("evidence_count").asInt(0);
-      dimensionObj.put("evidence_count", currentCount + delta.evidenceIncrement());
+      dimensionObj.put("evidence_count", clampEvidence(currentCount + delta.evidenceIncrement()));
     }
     if (delta.tagsAdd() != null && !delta.tagsAdd().isEmpty()) {
       ArrayNode tagsArray;
@@ -191,7 +204,20 @@ public class PassiveProfileService {
     dimensionObj.put("last_updated", Instant.now().toString());
 
     dimensionsObj.set(dimensionKey, dimensionObj);
-    profileRepository.saveDimensions(userId, dimensionsObj);
+    int affected = profileRepository.saveDimensions(userId, dimensionsObj);
+    if (affected <= 0) {
+      // 维度没能落库（如 learner_profile 行缺失且 upsert 未生效）时不能写审计：
+      // revision 会记下一次并不存在的变更，学生也会收到「已更新」的假成功。
+      log.warn(
+          "PassiveProfileService dimension write affected 0 rows userId={} dim={} source={}",
+          userId,
+          dimensionKey,
+          delta.source());
+      throw new BusinessException(
+          HttpStatus.INTERNAL_SERVER_ERROR,
+          "PROFILE_DIMENSION_NOT_PERSISTED",
+          "画像维度写入未生效，请稍后重试");
+    }
 
     writeRevisionAudit(userId, dimensionKey, delta, dimensionObj);
 
@@ -230,7 +256,8 @@ public class PassiveProfileService {
       List<String> tags = new java.util.ArrayList<>();
       if (dim instanceof ObjectNode obj) {
         rawScore = obj.path("score").asDouble(DEFAULT_SCORE);
-        evidenceCount = obj.path("evidence_count").asInt(0);
+        // 历史脏数据（负 / 超大 evidence_count）在读时也钳制，避免 confidence 越界。
+        evidenceCount = clampEvidence(obj.path("evidence_count").asInt(0));
         JsonNode lu = obj.get("last_updated");
         lastUpdated = lu != null && lu.isTextual() ? lu.asText() : null;
         JsonNode tagsNode = obj.get("tags");
@@ -240,7 +267,7 @@ public class PassiveProfileService {
           }
         }
       }
-      double confidence = Math.min(1.0, evidenceCount / (double) EVIDENCE_SATURATION);
+      double confidence = clamp01(evidenceCount / (double) EVIDENCE_SATURATION);
       double effectiveScore = applyDecay(rawScore, lastUpdated);
       out.add(
           new com.pythontopia.learner.profile.dto.ProfileDimensionDto(
@@ -431,6 +458,18 @@ public class PassiveProfileService {
 
   private static double clamp01(double v) {
     return Math.max(0.0, Math.min(1.0, v));
+  }
+
+  /**
+   * evidence_count 双向钳制：负增量不得把证据数打成负数（否则 confidence 为负，该生画像对全部下游永久静默），
+   * 上界仅作 sanity 兜底（confidence 在 {@value #EVIDENCE_SATURATION} 条证据处已饱和）。
+   */
+  private static int clampEvidence(int count) {
+    return Math.max(0, Math.min(EVIDENCE_COUNT_MAX, count));
+  }
+
+  private static String textOrNull(JsonNode node) {
+    return node != null && node.isTextual() ? node.asText() : null;
   }
 
   private static boolean arrayContains(ArrayNode arr, String value) {

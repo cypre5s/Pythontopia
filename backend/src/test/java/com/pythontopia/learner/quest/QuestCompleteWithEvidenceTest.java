@@ -40,6 +40,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -60,6 +61,12 @@ class QuestCompleteWithEvidenceTest {
       new QuestEvidenceVerifier(submissions, resources, jdbcTemplate);
   private final QuestService service = new QuestService(repository, publisher, verifier);
   private final ObjectMapper mapper = new ObjectMapper();
+
+  /** 状态推进由带并发守卫的 UPDATE 决定：命中 1 行=本请求赢得推进权。 */
+  @BeforeEach
+  void stubWinningTheStatusTransition() {
+    when(repository.updateStatus(anyLong(), anyLong(), any(QuestStatus.class))).thenReturn(1);
+  }
 
   @Test
   void testComplete_submissionEvidence_passed() {
