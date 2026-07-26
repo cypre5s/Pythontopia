@@ -45,6 +45,8 @@ public class JwtService {
     payload.put("sub", principal.userId().toString());
     payload.put("username", principal.username());
     payload.put("role", principal.role().name());
+    // tv = 会话代次，见 users.token_version（V186）；鉴权时与库中当前值比对以支持吊销。
+    payload.put("tv", principal.tokenVersion());
     payload.put("exp", expiresAt.getEpochSecond());
     String headerPart = encodeJson(header);
     String payloadPart = encodeJson(payload);
@@ -71,12 +73,21 @@ public class JwtService {
       return new CurrentUserPrincipal(
           Long.valueOf((String) payload.get("sub")),
           (String) payload.get("username"),
-          Role.valueOf((String) payload.get("role")));
+          Role.valueOf((String) payload.get("role")),
+          tokenVersionOf(payload));
     } catch (JwtValidationException exception) {
       throw exception;
     } catch (Exception exception) {
       throw new JwtValidationException("Invalid token", exception);
     }
+  }
+
+  /**
+   * 升级前签发、payload 里没有 {@code tv} 的旧 token 按代次 0 解读——与 {@code users.token_version}
+   * 的默认值一致，因此升级不会踢掉在线用户；而任意一次自增都会立刻让这些旧 token 失配。
+   */
+  private int tokenVersionOf(Map<String, Object> payload) {
+    return payload.get("tv") instanceof Number number ? number.intValue() : 0;
   }
 
   private String encodeJson(Map<String, Object> value) {
