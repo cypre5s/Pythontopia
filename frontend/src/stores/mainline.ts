@@ -137,7 +137,15 @@ export const useMainlineStore = defineStore('mainline', {
       this.selectedChapter = chapter;
     },
 
-    /** 把某 stage 的打点返回就地合并进 overview（不动星级/解锁等后端权威字段）。 */
+    /**
+     * 把某 stage 的打点返回就地合并进 overview（不动星级/解锁等后端权威字段）。
+     *
+     * ⚠️ 本方法与下面三个 `report*` 目前**没有调用方**：三件套子组件
+     * （StageVideoWatcher / StageCoursewareReader / StageExamplePractice）直接调 `@api/mainline`
+     * 打点、并刻意「不读返回体」，于是 overview 缓存不会被更新——学生完成小节后若不经
+     * `/mainline-map` 回主界面，HUD「下一步」仍指向已完成的小节。修复需要让那三个组件改走
+     * 本 store（组件不在本次改动范围内，见交付报告的跨模块待办），因此这里保留合并入口。
+     */
     patchStage(progress: StageProgressDto): void {
       if (!this.overview) return;
       const chapters = this.overview.chapters.map((ch) => {

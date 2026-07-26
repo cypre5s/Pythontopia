@@ -38,11 +38,24 @@ export function createProfileSlice() {
     profile.value = await getLearnerProfile();
   }
 
+  /**
+   * 打开 / 续接画像访谈。
+   *
+   * 后端 `ProfileService.openOrResumeInterview` 的两条分支（新建、续接 OPEN）都只回
+   * `{sessionId, status}`，`draft` 恒为 null、`history` 恒为空——因此**不能**拿返回值去
+   * 覆盖已有画像与历史，否则学生一走进画像室就把 `learning.profile` 清成 null，
+   * 整个会话内 useProfileSignals 恒空（主界面「下一步」丢画像依据、出题退化成无画像随机）。
+   * 只有非空返回才覆盖。
+   */
   async function openInterview(): Promise<void> {
     const response = await openProfileInterview();
     profileInterview.value.sessionId = response.interviewSessionId;
-    profileInterview.value.history = response.history;
-    profile.value = response.draft;
+    if (response.history && response.history.length > 0) {
+      profileInterview.value.history = response.history;
+    }
+    if (response.draft) {
+      profile.value = response.draft;
+    }
   }
 
   async function sendTurn(userMessage: string): Promise<void> {
@@ -59,10 +72,12 @@ export function createProfileSlice() {
       const priorHistory = [...profileInterview.value.history];
       profileInterview.value.history.push({ role: 'user', content: userMessage });
       const response = await sendProfileTurn(sessionId, { userMessage, history: priorHistory });
-      profileInterview.value.dimensionsFilled = response.dimensionsFilled;
-      profileInterview.value.done = response.done;
-      profileInterview.value.safety = response.safetyResult;
-      profileInterview.value.grounding = response.groundingResult;
+      // 这些字段由外部 graph 填充，缺键时后端回 null；补默认值，避免访谈永远不进入完成态
+      // 或把 null 写进 state 让组件 `.length` 崩掉。
+      profileInterview.value.dimensionsFilled = response.dimensionsFilled ?? [];
+      profileInterview.value.done = response.done ?? false;
+      profileInterview.value.safety = response.safetyResult ?? null;
+      profileInterview.value.grounding = response.groundingResult ?? null;
       if (response.nextQuestion) {
         profileInterview.value.currentQuestion = response.nextQuestion;
         profileInterview.value.history.push({ role: 'assistant', content: response.nextQuestion });

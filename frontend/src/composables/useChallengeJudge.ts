@@ -12,11 +12,32 @@ import { useProfileSignals } from '@/composables/useProfileSignals';
 import { kcChapter } from '@/data/rogueConfig';
 import type { BossAttemptResultDto, BossProblemDto } from '@/api/dto/Boss';
 
-const UNAVAILABLE_HINT = '后端未连接';
+/**
+ * 「本次没有真正判定」的后端 feedback 前缀集合。
+ *
+ * 后端 `BossService.evaluateAttempt` 的三条未判定路径都返回 **200 + passed:false + score:0**
+ * （题目缓存过期无持久化 / 缓存缺 testCases / graph 评测服务不可用），且这三条路径**不发**
+ * LearningEvent——即后端自己也认为这次不算数。前端若把它们当成真实答错，就会扣体力、清气势、
+ * 错题入库，并被当作真实正确率上报补星接口，前后端对「这次算不算」直接分叉。
+ *
+ * 注：正解是后端返回显式判别位（如 `judged:false`）或 5xx，而不是让前端嗅探文案；
+ * 在 BossService/BossAttemptResultDto 改造前，这里按稳定前缀匹配兜住。
+ */
+const JUDGE_UNAVAILABLE_HINTS: readonly string[] = [
+  '题目缓存过期且无持久化记录',
+  '题目缓存数据异常',
+  'graph 评测服务不可用',
+  // 历史前端 mock 兜底文案（已废弃，保留以兼容旧缓存/旧后端）
+  '后端未连接',
+];
 
-/** 后端判题不可达时（boss.ts 返回 mock 兜底）：不应据此扣血/计分，交由调用方提示重试。 */
+/** 后端返回「未判定」结果时：不应据此扣血/计分/入库，交由调用方提示重试。 */
 export function isJudgeUnavailable(result: BossAttemptResultDto): boolean {
-  return !result.passed && result.score === 0 && result.feedback.includes(UNAVAILABLE_HINT);
+  if (result.passed || result.score !== 0) {
+    return false;
+  }
+  const feedback = result.feedback ?? '';
+  return JUDGE_UNAVAILABLE_HINTS.some((hint) => feedback.includes(hint));
 }
 
 export interface ChallengeProblemArgs {

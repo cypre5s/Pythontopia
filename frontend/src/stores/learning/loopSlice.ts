@@ -274,8 +274,10 @@ export function createLoopSlice(): LoopSlice {
   }
 
   function syncFromEvents(events: AguiEvent[]): void {
-    // 累积数组缩短（如重新发起一轮使 events 被重置）→ 游标归零重放。
-    if (events.length < consumed.value) consumed.value = 0;
+    // 累积数组缩短（如重新发起一轮使 events 被重置）→ 整体复位后重放。
+    // 只把游标归零是不够的：steps / status / runError 会带着上一轮的「完成」态残留，
+    // 而 RUN_STARTED 仅在 status==='idle' 时推进，新一轮的失败/进度就再也显示不出来。
+    if (events.length < consumed.value) reset();
     for (let i = consumed.value; i < events.length; i += 1) {
       const ev = events[i];
       if (ev) ingestSseEvent(ev);
