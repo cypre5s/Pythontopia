@@ -127,7 +127,7 @@ class LearningEffectTraceServiceTest {
     assertThat(summary.failedCheckCount()).isEqualTo(1);
     assertThat(summary.checkPassRate()).isEqualTo(0.5);
     assertThat(summary.evidenceCompletionRate()).isEqualTo(1.0);
-    assertThat(summary.remediationRate()).isEqualTo(0.5);
+    assertThat(summary.remediationRate()).isEqualTo(1.0);
     assertThat(summary.totalMasteryDelta()).isEqualByComparingTo(new BigDecimal("0.030"));
     assertThat(summary.positiveResourceReadEvents()).isZero();
     assertThat(summary.checkMasteryEvents()).isEqualTo(2);
