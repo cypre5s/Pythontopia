@@ -4,6 +4,7 @@ import com.pythontopia.common.config.BossProblemHttpClientProperties;
 import com.pythontopia.common.config.ChapterTestHttpClientProperties;
 import com.pythontopia.common.config.FeynmanTuteeHttpClientProperties;
 import com.pythontopia.common.config.GraphHttpClientProperties;
+import com.pythontopia.common.config.WorkshopHttpClientProperties;
 import java.time.Duration;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.context.annotation.Bean;
@@ -68,6 +69,21 @@ public class RestClientConfig {
     return builder
         .setConnectTimeout(Duration.ofMillis(graphHttpProperties.connectTimeoutMs()))
         .setReadTimeout(Duration.ofMillis(feynmanTuteeHttpProperties.readTimeoutMs()))
+        .build();
+  }
+
+  /**
+   * 百晓工坊资源生成专用客户端。资源图包含证据检索、设计和语义接地审查，生产耗时会超过普通
+   * Graph 30 秒读窗口；只放宽该端点，避免意图路由等短请求失去 fail-fast。
+   */
+  @Bean
+  RestTemplate workshopRestTemplate(
+      RestTemplateBuilder builder,
+      GraphHttpClientProperties graphHttpProperties,
+      WorkshopHttpClientProperties workshopHttpProperties) {
+    return builder
+        .setConnectTimeout(Duration.ofMillis(graphHttpProperties.connectTimeoutMs()))
+        .setReadTimeout(Duration.ofMillis(workshopHttpProperties.readTimeoutMs()))
         .build();
   }
 

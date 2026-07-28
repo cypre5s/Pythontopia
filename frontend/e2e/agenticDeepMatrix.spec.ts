@@ -268,7 +268,7 @@ async function createResource(
         type: 'HANDOUT',
         focusHint,
       },
-      timeout: 150_000,
+      timeout: 210_000,
     });
     if (response.ok()) {
       const body = (await response.json()) as ResourceCreateBody;
@@ -359,7 +359,7 @@ test.describe('Agentic Runtime 100+ 深链验收矩阵 @agentic-matrix', () => {
   let ctx: MatrixContext;
 
   test.beforeAll(async () => {
-    test.setTimeout(420_000);
+    test.setTimeout(600_000);
     const api = await playwrightRequest.newContext({ baseURL: BASE_URL });
     const session = await acquireStudentSession(api);
     const bootstrap = await postJson<BootstrapBody>(api, session, '/api/game/bootstrap');

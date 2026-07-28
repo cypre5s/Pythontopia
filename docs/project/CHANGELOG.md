@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-07-28 — 百晓工坊资源图专用生产超时
+
+- 最终 ECS HTTPS 227 项复测在首个深闭环前置资源生成连续返回
+  `WORKSHOP_GRAPH_UNAVAILABLE`；同一时段 Graph 容器始终健康，RAG 与 DeepSeek 均持续 200，
+  证据锁定 Java 把完整资源图错误限制在普通 Graph 30 秒读取窗口。
+- 新增仅供 `WorkshopGraphClient.produce` 使用的 `workshopRestTemplate`：连接仍 3 秒快速失败，
+  读取窗口独立为 180 秒；意图路由、RAG、费曼与其他短 Graph 调用不受影响。
+- 前端非流式资源创建对齐为 190 秒；Workshop SSE emitter 从 120 秒对齐前端容器 300 秒代理窗口。
+  公网深链夹具只扩大观察预算，Playwright runner 仍为 `--retries=0`。
+- TDD 证据：后端先因缺少 `WorkshopHttpClientProperties` 编译失败，前端测试明确捕获旧调用没有
+  190 秒配置；修复后 Workshop/RestTemplate/服务/Spring 全上下文、前端 API/Store、类型检查与 lint
+  全部通过。
+
 ## 2026-07-28 — 费曼 AI 学弟专用生产超时
 
 - ECS HTTPS 真实费曼闭环连续两次在教学阶段按合同显示“重试提交”；后端证据均为

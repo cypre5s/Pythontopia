@@ -348,3 +348,29 @@ BASE_URL=https://47.120.29.62 PYT_E2E_REGISTER=1 \
   前端 API/store/component 16 项与 `vue-tsc --noEmit` 通过。
 
 状态：等待含费曼专用超时的第三个 release 发布，并在最终公网状态复验费曼、双协议与 227 项报告。
+
+### 第三次生产发布、费曼复验与 Workshop 资源图超时
+
+- 第三发布包：`pythontopia-web-20260728T090138Z.tar.gz`，690 MiB，SHA-256
+  `2d87384e2887ac79e319f61b0022fe97ac28bb6cdf66df7a25714f45ee355598`；
+  4086 个常规文件逐项哈希、违禁内容、顶层结构和 4 个镜像 tar 均通过，本地/远端哈希一致。
+- 事务式安装为 `/opt/pythontopia/releases/20260728-170619`，上一版本
+  `/opt/pythontopia/releases/20260728-151314` 可回滚，数据库与配置备份在
+  `/opt/pythontopia/backups/20260728-170619`；三项秘密门禁、6 个容器、HTTP/HTTPS 安装终验通过。
+- 最终 release 的 HTTPS 认证专项 4/4；真实费曼新学生完成正式 WA → 找茬命中且误 0 / 漏 0 →
+  教学产码 → 沙箱判题通过 → 掌握度回流；课件外“装饰器”保持 `NA` 且禁用判题。后端日志无
+  `Read timed out` 或 `FEYNMAN_TUTEE_UNAVAILABLE`。
+- 随后的 227 项复测在第一个深闭环 `beforeAll` 失败：两次资源创建均为
+  `WORKSHOP_GRAPH_UNAVAILABLE`，第 1 项 0 ms 失败且同套件后续跳过，因此主动中止，拒绝把该结果
+  当作最终证据。
+- 同时段 Graph 容器持续 healthy，RAG 和 DeepSeek 请求持续 200；Java
+  `WorkshopGraphClient` 却复用普通 30 秒 `graphRestTemplate`。Python 资源图包含检索、设计与
+  语义接地审查，provider 单次读取合同已是 90 秒，根因为上下游预算错配而非 HTTPS 或供应商失败。
+- 修复边界：Workshop 非流式专用客户端 180 秒、前端非流式 190 秒、SSE emitter 300 秒；
+  普通 Graph 保持 30 秒。深链夹具观察窗口对齐 210 秒，runner 仍无重试。
+- RED：后端缺少 `WorkshopHttpClientProperties` 编译失败；前端 API 测试捕获旧调用没有超时配置。
+- GREEN：后端 `RestClientConfigTest,WorkshopGraphClientTest,ResourceWorkshopServiceTest,
+  PythontopiaApplicationTests` 通过；前端 Workshop API/Store 6 项、typecheck 和定向 ESLint 通过。
+
+状态：等待构建并部署含 Workshop 专用超时的最终 release；部署后从 227 项第 1 条完整重跑，
+不得沿用中断结果。

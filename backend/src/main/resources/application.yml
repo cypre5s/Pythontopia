@@ -45,6 +45,9 @@ pythontopia:
     feynman-tutee:
       # AI 学弟需同步产出误区更新与可判题代码，独立于普通 Graph 的 30s 快速请求窗口。
       read-timeout-ms: ${PYT_FEYNMAN_TUTEE_READ_TIMEOUT_MS:90000}
+    workshop:
+      # 资源图包含检索、结构化设计与语义接地审查，独立于普通 Graph 的 30s 快速请求窗口。
+      read-timeout-ms: ${PYT_WORKSHOP_READ_TIMEOUT_MS:180000}
     chapter-test:
       read-timeout-ms: ${PYT_CHAPTER_TEST_READ_TIMEOUT_MS:600000}
     boss-problem:
