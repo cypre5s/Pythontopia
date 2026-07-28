@@ -15,13 +15,6 @@ function persistedAnswered(key: string = ANON_PERSIST_KEY): string[] {
   return raw ? (JSON.parse(raw) as string[]) : [];
 }
 
-function loginAs(username: string): void {
-  window.localStorage.setItem(
-    'pythontopia.user',
-    JSON.stringify({ id: 1, username, displayName: username, role: 'STUDENT' }),
-  );
-}
-
 describe('probe store', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
