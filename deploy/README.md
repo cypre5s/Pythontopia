@@ -164,9 +164,10 @@ Docker Compose 同样保留官方镜像名，镜像加速交给本机 Docker dae
 
 ---
 
-## 生产部署（阿里云 ECS · http://47.120.29.62）
+## 生产部署（阿里云 ECS · HTTP + HTTPS）
 
-生产环境为阿里云 ECS（Ubuntu 22.04，2C4G，公网 `47.120.29.62`），**仅 80 端口对外**。
+生产环境为阿里云 ECS（Ubuntu 22.04，2C4G，公网 `47.120.29.62`），
+**80（HTTP）与 443（HTTPS）同时对外**。
 与开发编排（`docker-compose.yml`）不同，生产用 `docker-compose.production.yml` +
 主机 Nginx（`nginx/pythontopia.conf`）+ 三个运维脚本（`scripts/preflight_ecs.sh`、
 `scripts/install_release.sh`、`scripts/rollback_release.sh`）。
@@ -175,7 +176,7 @@ Docker Compose 同样保留官方镜像名，镜像加速交给本机 Docker dae
 
 ```mermaid
 flowchart LR
-    U[浏览器] -->|"公网 80（安全组放行）"| N["主机 Nginx<br/>deploy/nginx/pythontopia.conf"]
+    U[浏览器] -->|"公网 80 / 443（安全组放行）"| N["主机 Nginx<br/>deploy/nginx/pythontopia.conf"]
     N -->|127.0.0.1:8080| F[frontend 容器<br/>内置 nginx]
     F -->|"/api/ → backend:18080"| B[backend 容器]
     subgraph Docker bridge 网络（-p deploy）
@@ -191,8 +192,13 @@ flowchart LR
 
 要点：
 
-- 对外只有主机 Nginx 的 80；`frontend` 绑 `127.0.0.1:8080`、`backend` 绑 `127.0.0.1:18080`
+- 对外只有主机 Nginx 的 80/443；`frontend` 绑 `127.0.0.1:8080`、`backend` 绑 `127.0.0.1:18080`
   （仅主机诊断），graph / rag / postgres / redis **不绑任何宿主端口**。
+- HTTP 与 HTTPS 共用同一个 Nginx `server` 和全部代理规则；不做 80→443 强制跳转，
+  也不启用 HSTS，两个入口长期并存。
+- HTTPS 使用 Let’s Encrypt 为 `47.120.29.62` 签发的可信 IP 短期证书。证书位于
+  `/etc/letsencrypt/live/47.120.29.62/`，由
+  `pythontopia-certbot-renew.timer` 每日检查两次，续期成功后自动 reload Nginx。
 - 旧部署的两处公网暴露（frontend `0.0.0.0:8080`、graph host 网络 `0.0.0.0:18091`）在新拓扑下消除：
   graph 迁入 Compose bridge 网络，backend 通过服务名 `http://pythontopia-graph:18091` 访问。
 - Compose 项目名**固定 `-p deploy`**，从而复用现有数据卷 `deploy_pytopia_pg`（卷声明名 `pytopia_pg`）。
@@ -241,6 +247,7 @@ install -D -m 600 <旧部署目录>/deploy/.env /opt/pythontopia/shared/.env
 sudo bash /opt/pythontopia/current/deploy/scripts/preflight_ecs.sh   # 或发布包内同路径脚本
 # 预检输出 SECURITY_GROUP_PORT_80_BLOCKED 时：本机 80 通而公网 80 不通，
 # 去阿里云控制台安全组放行 TCP 80 后重跑。
+# HTTPS 还要求安全组放行入方向 TCP 443（0.0.0.0/0）。
 
 # 2. 事务式安装（备份 → 校验 → 导镜像 → 起服务 → 装 Nginx → 原子切换）
 sudo bash <发布包内>/deploy/scripts/install_release.sh /path/to/pythontopia-release.tar.gz
@@ -253,14 +260,32 @@ sudo bash <发布包内>/deploy/scripts/install_release.sh /path/to/pythontopia-
 
 ```bash
 curl -s http://127.0.0.1/healthz          # 主机 Nginx → frontend 容器（全链路）
+curl --resolve 47.120.29.62:443:127.0.0.1 -s https://47.120.29.62/healthz
 curl -s http://127.0.0.1:8080/healthz     # frontend 容器直连
 curl -s http://127.0.0.1:18080/healthz    # backend 容器直连（主机诊断口）
 docker compose -p deploy ps               # 六个服务应全部 healthy
 curl -s http://47.120.29.62/healthz       # 公网全链路（任意机器）
+curl -s https://47.120.29.62/healthz      # 公网 HTTPS + 可信 IP 证书
 ```
 
 graph / rag 不绑宿主端口，诊断走容器内：
 `docker exec deploy-pythontopia-graph-1 curl -fsS http://127.0.0.1:18091/healthz`（rag 同理，18092）。
+
+### HTTPS 证书续期
+
+Let’s Encrypt IP 证书是约 160 小时的短期证书，必须保持自动续期：
+
+```bash
+systemctl is-enabled pythontopia-certbot-renew.timer
+systemctl is-active pythontopia-certbot-renew.timer
+systemctl list-timers pythontopia-certbot-renew.timer
+systemctl status pythontopia-certbot-renew.service
+openssl x509 -in /etc/letsencrypt/live/47.120.29.62/fullchain.pem \
+  -noout -dates -ext subjectAltName
+```
+
+timer 每日检查两次；renewal 配置使用 `shortlived` + `webroot`，成功续期后执行
+`systemctl reload nginx`。HTTP-01 challenge 依赖公网 TCP 80，不能关闭 80。
 
 ### 备份策略
 
@@ -308,7 +333,8 @@ docker compose -p deploy -f docker-compose.production.yml up -d
 
 | 现象 | 原因与处置 |
 | --- | --- |
-| 预检输出 `SECURITY_GROUP_PORT_80_BLOCKED` | 本机 80 通、公网 80 不通：阿里云控制台 → 安全组 → 入方向放行 TCP 80（0.0.0.0/0）。ECS 上有 aliyun CLI 凭证，预检会尽力打印安全组规则佐证 |
+| 预检输出 `SECURITY_GROUP_PORT_80_BLOCKED` | 本机 80 通、公网 80 不通：阿里云控制台 → 安全组 → 入方向放行 TCP 80（0.0.0.0/0） |
+| 本机 HTTPS 正常但公网 443 超时 | 阿里云控制台 → 安全组 → 入方向放行 TCP 443（0.0.0.0/0），不要放行内部服务端口 |
 | compose 渲染报「缺少 PYT_DB_USERNAME/...」 | `/opt/pythontopia/shared/.env` 缺必需变量名；先跑预检第 5 节核对（只比对变量名，不读值） |
 | backend 一直不健康，日志见数据库认证失败 | 复用 `deploy_pytopia_pg` 卷时凭据以**建卷时**为准，`.env` 中 `PYT_DB_USERNAME/PYT_DB_PASSWORD` 必须与卷内一致（同开发踩坑 `docs/operations/dev-startup.md`） |
 | rag 启动报数据库连接串解析错误 | `PYT_DB_PASSWORD` 含 `@ : /` 等 URL 保留字符时拼接 `postgresql://` 会解析失败；更换无保留字符的密码，或自行 URL 转义 |
@@ -327,7 +353,7 @@ docker compose -p deploy -f docker-compose.production.yml up -d
 | graph 网络 | `network_mode: host`（0.0.0.0:18091） | bridge，仅服务名可达，不绑宿主端口 |
 | graph → rag | `http://127.0.0.1:18092` | `http://pythontopia-rag:18092` |
 | backend → graph/rag | `PYTHONTOPIA_SERVICES_*` 服务名 | 同名变量 + `PYT_GRAPH_URL`/`PYT_RAG_URL` 双写覆盖，防 .env 残留旧地址 |
-| frontend 端口 | `8080:80`（全网卡） | `127.0.0.1:8080:80`，对外由主机 Nginx 80 代理 |
+| frontend 端口 | `8080:80`（全网卡） | `127.0.0.1:8080:80`，对外由主机 Nginx 80/443 代理 |
 | postgres/redis 端口 | `15432`/`16379` | 不绑宿主端口 |
 | 秘密 | compose 内 `${VAR:-默认值}` | `env_file` 指向 `/opt/pythontopia/shared/.env`，必需项 `${VAR:?}` 硬校验 |
 | JAVA_OPTS | 默认带宿主代理 `host.docker.internal:7892` | 默认直连，可用 `PYT_BACKEND_JAVA_OPTS` 覆盖 |
