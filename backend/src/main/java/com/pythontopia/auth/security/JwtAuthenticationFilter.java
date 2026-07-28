@@ -58,7 +58,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
   /**
    * 签名有效 ≠ 会话仍然有效。账号被停用（{@code users.status != 'ACTIVE'}）、用户被删除，或会话代次
-   * 已自增（改密 / 手工吊销，见 V186）时都必须拒绝，否则一枚泄露的 token 在 TTL 内不可撤销。
+   * 已自增（改密 / 手工吊销，见 V188）时都必须拒绝，否则一枚泄露的 token 在 TTL 内不可撤销。
    *
    * <p>不认证即不写入 SecurityContext：请求随后由 SecurityConfig 的 authenticationEntryPoint 统一回
    * 401 UNAUTHORIZED，与「没带 token」同构，不额外泄露账号状态。

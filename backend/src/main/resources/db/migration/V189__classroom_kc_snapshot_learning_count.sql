@@ -1,4 +1,4 @@
--- Purpose: record the "learning" bucket (0.3 <= mastery < 0.8) of the classroom KC heatmap.
+-- V189 Purpose: record the "learning" bucket (0.3 <= mastery < 0.8) of the classroom KC heatmap.
 -- Tables affected: classroom_kc_snapshot.
 -- Irreversible risk: none; additive column with a safe default.
 --

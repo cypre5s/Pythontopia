@@ -1,4 +1,4 @@
--- Purpose: 清掉 R-14「单中央小镇收缩」后残留的整套经济玩法 schema 与快速旅行路线表。
+-- V190 Purpose: 清掉 R-14「单中央小镇收缩」后残留的整套经济玩法 schema 与快速旅行路线表。
 --   R-14 已删除商店 / 背包 / 货币 / 快速旅行玩法，但只做了一半清理：V126 正确 DROP 了
 --   crop_tile_state、V135 正确 DROP 了 npc_gift_log/npc_relationship，而下面 6 张表被漏下：
 --     * V103 item_catalog / inventory_item（道具目录 + 玩家背包）

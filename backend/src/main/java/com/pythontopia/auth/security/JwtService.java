@@ -45,7 +45,7 @@ public class JwtService {
     payload.put("sub", principal.userId().toString());
     payload.put("username", principal.username());
     payload.put("role", principal.role().name());
-    // tv = 会话代次，见 users.token_version（V186）；鉴权时与库中当前值比对以支持吊销。
+    // tv = 会话代次，见 users.token_version（V188）；鉴权时与库中当前值比对以支持吊销。
     payload.put("tv", principal.tokenVersion());
     payload.put("exp", expiresAt.getEpochSecond());
     String headerPart = encodeJson(header);
