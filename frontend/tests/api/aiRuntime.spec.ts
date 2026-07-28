@@ -27,6 +27,12 @@ describe('aiRuntime api', () => {
   it('fetches runtime operations through /api/ai/runtime/operations', async () => {
     httpMock.get.mockResolvedValueOnce({
       data: {
+        subject: {
+          scope: 'PLATFORM',
+          label: '全平台学习证据',
+          learnerCount: 12,
+          evidenceLearnerCount: 9,
+        },
         loops: [
           {
             loopType: 'RESOURCE',
@@ -53,6 +59,8 @@ describe('aiRuntime api', () => {
     const dto = await fetchAiRuntimeOperations();
 
     expect(httpMock.get).toHaveBeenCalledWith('/api/ai/runtime/operations');
+    expect(dto.subject.scope).toBe('PLATFORM');
+    expect(dto.subject.label).toBe('全平台学习证据');
     expect(dto.loops[0].loopType).toBe('RESOURCE');
     expect(dto.governance[0].key).toBe('policy_canary_review');
   });

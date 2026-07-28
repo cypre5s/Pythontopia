@@ -29,18 +29,21 @@ public class AiRuntimeSummaryService {
   private final EvidenceMemoryService evidenceMemoryService;
   private final WeeklyReportService weeklyReportService;
   private final BrowseProperties browseProperties;
+  private final AiRuntimePlatformSnapshotRepository platformSnapshotRepository;
 
   public AiRuntimeSummaryService(
       ProtocolGatewayService protocolGatewayService,
       LearningEvidenceGraphService evidenceGraphService,
       EvidenceMemoryService evidenceMemoryService,
       WeeklyReportService weeklyReportService,
-      BrowseProperties browseProperties) {
+      BrowseProperties browseProperties,
+      AiRuntimePlatformSnapshotRepository platformSnapshotRepository) {
     this.protocolGatewayService = protocolGatewayService;
     this.evidenceGraphService = evidenceGraphService;
     this.evidenceMemoryService = evidenceMemoryService;
     this.weeklyReportService = weeklyReportService;
     this.browseProperties = browseProperties;
+    this.platformSnapshotRepository = platformSnapshotRepository;
   }
 
   @Transactional(readOnly = true)
@@ -71,7 +74,42 @@ public class AiRuntimeSummaryService {
   @Transactional(readOnly = true)
   public AiRuntimeOperationsDto operationsForUser(long userId) {
     AiRuntimeSummaryDto summary = summaryForUser(userId);
-    return new AiRuntimeOperationsDto(loopOperations(summary), governanceItems(summary));
+    boolean hasEvidence = summary.evidence().nodeCount() > 0;
+    OperationMetrics metrics =
+        new OperationMetrics(
+            hasEvidence,
+            summary.learnerTwin().failedPracticeCount(),
+            summary.learnerTwin().resourceRunCount(),
+            summary.evidence().touchedKcCount(),
+            gateStatus(summary, "protocol.skill_packages"));
+    return new AiRuntimeOperationsDto(
+        new AiRuntimeOperationsDto.OperationsSubject(
+            "SELF", "本人学习证据", 1, hasEvidence ? 1 : 0),
+        loopOperations(metrics),
+        governanceItems(metrics));
+  }
+
+  @Transactional(readOnly = true)
+  public AiRuntimeOperationsDto operationsForPlatform() {
+    AiRuntimePlatformSnapshotRepository.PlatformSnapshot snapshot =
+        platformSnapshotRepository.snapshot();
+    AiRuntimeSummaryDto.ProtocolSummary protocol =
+        protocolSummary(protocolGatewayService.descriptor());
+    OperationMetrics metrics =
+        new OperationMetrics(
+            snapshot.evidenceLearnerCount() > 0,
+            snapshot.failedPracticeCount(),
+            snapshot.resourceRunCount(),
+            snapshot.touchedKcCount(),
+            protocolSkillStatus(protocol));
+    return new AiRuntimeOperationsDto(
+        new AiRuntimeOperationsDto.OperationsSubject(
+            "PLATFORM",
+            "全平台学习证据",
+            snapshot.activeStudentCount(),
+            snapshot.evidenceLearnerCount()),
+        loopOperations(metrics),
+        governanceItems(metrics));
   }
 
   private static AiRuntimeSummaryDto.ProtocolSummary protocolSummary(
@@ -180,81 +218,84 @@ public class AiRuntimeSummaryService {
   }
 
   private static List<AiRuntimeOperationsDto.LoopOperation> loopOperations(
-      AiRuntimeSummaryDto summary) {
-    AiRuntimeSummaryDto.EvidenceSummary evidence = summary.evidence();
-    AiRuntimeSummaryDto.LearnerTwinSummary twin = summary.learnerTwin();
+      OperationMetrics metrics) {
     return List.of(
         new AiRuntimeOperationsDto.LoopOperation(
             "LEARNER",
             "学生学习闭环",
-            evidence.nodeCount() > 0 ? "PASS" : "INSUFFICIENT_EVIDENCE",
-            evidence.nodeCount() > 0 ? "learner-evidence-graph" : "",
+            metrics.hasEvidence() ? "PASS" : "INSUFFICIENT_EVIDENCE",
+            metrics.hasEvidence() ? "learner-evidence-graph" : "",
             "open:student-learning-loop",
             List.of("learner.evidence.graph")),
         new AiRuntimeOperationsDto.LoopOperation(
             "DEBUG",
             "代码调试闭环",
-            debugStatus(evidence, twin),
-            twin.failedPracticeCount() > 0 ? "bug-mine-errors" : "",
+            debugStatus(metrics),
+            metrics.failedPracticeCount() > 0 ? "bug-mine-errors" : "",
             "open:bug-mine-or-transfer",
-            twin.failedPracticeCount() > 0 ? List.of("bugmine.errorbook") : List.of()),
+            metrics.failedPracticeCount() > 0 ? List.of("bugmine.errorbook") : List.of()),
         new AiRuntimeOperationsDto.LoopOperation(
             "RESOURCE",
             "资源生成闭环",
-            twin.resourceRunCount() > 0 ? "PASS" : "INSUFFICIENT_EVIDENCE",
-            twin.resourceRunCount() > 0 ? "workshop-resource-runs" : "",
+            metrics.resourceRunCount() > 0 ? "PASS" : "INSUFFICIENT_EVIDENCE",
+            metrics.resourceRunCount() > 0 ? "workshop-resource-runs" : "",
             "evaluate:resource_feedback_or_check",
-            twin.resourceRunCount() > 0 ? List.of("resource_feedback_or_check") : List.of()),
+            metrics.resourceRunCount() > 0
+                ? List.of("resource_feedback_or_check")
+                : List.of()),
         new AiRuntimeOperationsDto.LoopOperation(
             "WORLD",
             "小镇世界闭环",
-            evidence.touchedKcCount() > 0 ? "PASS" : "INSUFFICIENT_EVIDENCE",
-            evidence.touchedKcCount() > 0 ? "town_hub-world-proposal" : "",
+            metrics.touchedKcCount() > 0 ? "PASS" : "INSUFFICIENT_EVIDENCE",
+            metrics.touchedKcCount() > 0 ? "town_hub-world-proposal" : "",
             "review:town_hub-world-patch",
-            evidence.touchedKcCount() > 0 ? List.of("world-loop-proposal") : List.of()),
+            metrics.touchedKcCount() > 0 ? List.of("world-loop-proposal") : List.of()),
         new AiRuntimeOperationsDto.LoopOperation(
             "IMPROVE",
             "系统演化闭环",
-            gateStatus(summary, "protocol.skill_packages"),
+            metrics.improveStatus(),
             "agentic-m3-system-evolution-v1",
             "review:policy-canary-dry-run",
             List.of("agentic-m3-system-evolution-v1")));
   }
 
   private static List<AiRuntimeOperationsDto.GovernanceItem> governanceItems(
-      AiRuntimeSummaryDto summary) {
-    AiRuntimeSummaryDto.EvidenceSummary evidence = summary.evidence();
-    AiRuntimeSummaryDto.LearnerTwinSummary twin = summary.learnerTwin();
+      OperationMetrics metrics) {
     return List.of(
         new AiRuntimeOperationsDto.GovernanceItem(
             "resource_review",
             "资源发布审查",
-            twin.resourceRunCount() > 0 ? "PASS" : "INSUFFICIENT_EVIDENCE",
+            metrics.resourceRunCount() > 0 ? "PASS" : "INSUFFICIENT_EVIDENCE",
             "查看资源发布、反馈和微测效果",
             "/workshop",
-            twin.resourceRunCount() > 0 ? List.of("resource_feedback_or_check") : List.of()),
+            metrics.resourceRunCount() > 0
+                ? List.of("resource_feedback_or_check")
+                : List.of()),
         new AiRuntimeOperationsDto.GovernanceItem(
             "world_patch_review",
             "世界补丁审查",
-            evidence.touchedKcCount() > 0 ? "PASS" : "INSUFFICIENT_EVIDENCE",
+            metrics.touchedKcCount() > 0 ? "PASS" : "INSUFFICIENT_EVIDENCE",
             "检查 town_hub patch 与 rollback",
             "/teacher/review",
-            evidence.touchedKcCount() > 0 ? List.of("world-loop-proposal") : List.of()),
+            metrics.touchedKcCount() > 0 ? List.of("world-loop-proposal") : List.of()),
         new AiRuntimeOperationsDto.GovernanceItem(
             "policy_canary_review",
             "策略灰度审核",
-            gateStatus(summary, "protocol.skill_packages"),
+            metrics.improveStatus(),
             "查看 canary dry-run 与 rollback 状态",
             "/teacher/review",
             List.of("agentic-m3-system-evolution-v1")));
   }
 
-  private static String debugStatus(
-      AiRuntimeSummaryDto.EvidenceSummary evidence, AiRuntimeSummaryDto.LearnerTwinSummary twin) {
-    if (twin.failedPracticeCount() > 0) {
+  private static String debugStatus(OperationMetrics metrics) {
+    if (metrics.failedPracticeCount() > 0) {
       return "WARN";
     }
-    return evidence.nodeCount() > 0 ? "PASS" : "INSUFFICIENT_EVIDENCE";
+    return metrics.hasEvidence() ? "PASS" : "INSUFFICIENT_EVIDENCE";
+  }
+
+  private static String protocolSkillStatus(AiRuntimeSummaryDto.ProtocolSummary protocol) {
+    return protocol.evidenceSkillPackageCount() >= 3 ? "PASS" : "WARN";
   }
 
   private static String gateStatus(AiRuntimeSummaryDto summary, String key) {
@@ -264,4 +305,11 @@ public class AiRuntimeSummaryService {
         .findFirst()
         .orElse("INSUFFICIENT_EVIDENCE");
   }
+
+  private record OperationMetrics(
+      boolean hasEvidence,
+      int failedPracticeCount,
+      int resourceRunCount,
+      int touchedKcCount,
+      String improveStatus) {}
 }

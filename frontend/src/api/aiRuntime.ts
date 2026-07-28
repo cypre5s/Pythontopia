@@ -78,7 +78,15 @@ export interface RuntimeGovernanceItem {
   evidenceRefs: string[];
 }
 
+export interface RuntimeOperationsSubject {
+  scope: 'SELF' | 'PLATFORM';
+  label: string;
+  learnerCount: number;
+  evidenceLearnerCount: number;
+}
+
 export interface AiRuntimeOperations {
+  subject: RuntimeOperationsSubject;
   loops: RuntimeLoopOperation[];
   governance: RuntimeGovernanceItem[];
 }
