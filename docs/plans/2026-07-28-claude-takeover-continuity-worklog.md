@@ -266,3 +266,49 @@ BASE_URL=https://47.120.29.62 PYT_E2E_REGISTER=1 \
 部署后门禁：HTTPS 认证专项必须从 2/4 恢复为 4/4，随后才允许启动 227 项公网工作流矩阵。
 
 状态：进行中。
+
+### 首次生产发布与 227 项公网矩阵
+
+- 首个发布包：`pythontopia-web-20260728T060840Z.tar.gz`，大小约 695 MiB，SHA-256
+  `c7ad27ca9195a3dd247e7adb1534a8e889caed5ed066e91f40cd58bd06ec7616`；
+  本地 allowlist 复验为 4088 个源码文件与 4 个 Docker 镜像，上传后远端哈希一致。
+- 安装为 `/opt/pythontopia/releases/20260728-141301`，切换前版本
+  `/opt/pythontopia/releases/20260704-204351`，备份位于
+  `/opt/pythontopia/backups/20260728-141301`；6 个容器健康，迁移到 `V190`，
+  课程包统计精确为 7 文档 / 561 页 / 7 章 / 65 KC / 46 示例 / 39 题。
+- HTTPS 认证专项从旧版 2/4 恢复为新版本 4/4，确认账号表单登录、快速演示登录、
+  未登录守卫和已有会话路由均已恢复。
+- 首轮 HTTPS 227 项矩阵结果：221 passed / 1 flaky / 1 skipped / 4 failed。
+  其中一项学生微测资源创建首次遭遇 502、Playwright 重试后通过；教师全流程未传生产教师邀请码，
+  属测试环境缺项；另外三项百晓失败均显示 `routeExecutionToken=null`，形成下一轮生产配置修复输入。
+
+### 生产路由执行密钥缺失：fail-fast 修复
+
+只读检查确认共享 `.env` 与后端容器均缺少 `PYT_ROUTE_EXECUTION_SECRET`。预检脚本虽然已有要求，
+但事务式安装器没有调用该预检，Compose 也没有把变量传入后端，因此系统处于“普通请求可用、
+多 Agent 编排缺少签名令牌”的半可用状态。
+
+- RED：新增 `test_install_release_secret_contract.sh`，安装器强度校验和 Compose fail-fast 共 2 项失败；
+- GREEN：安装器在解包/切换前检查 `PYT_JWT_SECRET`、`PYT_RAG_ADMIN_TOKEN`、
+  `PYT_ROUTE_EXECUTION_SECRET`，拒绝缺失、公开占位与少于 32 字符的值且永不打印秘密；
+  Compose 使用 `${PYT_ROUTE_EXECUTION_SECRET:?...}` 强制注入；
+- 线上先备份共享 `.env`，再生成独立 64 位十六进制随机值并只重建后端；全程不把值写入终端输出；
+- 百晓专项复验由 3 项执行令牌失败恢复为 4/5 通过，剩余一项已进入真实 Agent 执行而非鉴权失败。
+
+### `for 循环` 课程锚点竞态：权威目录修复
+
+剩余百晓失败不是放宽 grounding 能解决的问题。数据库 trace 显示 HandoutAgent 三次都因引用
+`PY43-KC-001` 的计算机历史课件而被证据审查正确拒绝；公网请求在工坊首屏加载完成前提交，
+携带空 `courseKcs`，Graph 在没有课程名称的情况下只能回退到列表首个 code。
+
+- 方案：`IntentService` 在生产路由前从 `CoursePackService` 读取 pack 43 全量 KC，
+  覆盖客户端课程目录；手动 KC、最近上下文及其他路由字段保持原合同。
+- RED：新增 `productionRouteReplacesEmptyClientCatalogWithAuthoritativePack43Kcs`，
+  首次编译因生产构造器尚无 `CoursePackService` 参数而失败。
+- GREEN：Intent Java 定向测试通过；Graph 既有
+  `test_compound_route_grounds_distinctive_fragment_from_real_course_kc_name`
+  通过，确认真实目录能把目标语句唯一映射为 `PY43-KC-031`。
+- 公网 Playwright 用例追加 `kcCodes == ["PY43-KC-031"]`，最终 release 必须同时满足正确路由、
+  两步 Agent 全成功和证据审查通过。
+
+状态：修复已完成本地定向验证；等待第二个 release 发布后，在最终服务器状态重跑无重试的 227 项矩阵。

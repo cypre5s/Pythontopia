@@ -102,6 +102,28 @@ wait_healthy() {
   done
 }
 
+# 从生产 .env 校验秘密存在性、公开占位特征与最小长度；任何分支都不打印值。
+check_env_secret() {
+  local var_name="$1"
+  local min_len="$2"
+  local value
+  value="$(sed -n "s/^[[:space:]]*${var_name}=//p" "${ENV_FILE}" 2>/dev/null | tail -n 1)"
+  value="${value%$'\r'}"
+  case "${value}" in
+    ""|pytopia-rag-admin|pythontopia-route-secret\
+      |*replace-with*|*replace_with*|*change-me*|*changeme*|*placeholder*|*your-secret*)
+      echo "[安装失败] ${var_name} 缺失或仍是公开占位值；请写入独立随机密钥（值不会输出）。" >&2
+      return 1
+      ;;
+  esac
+  if [ "${#value}" -lt "${min_len}" ]; then
+    echo "[安装失败] ${var_name} 长度不足 ${min_len}；请写入独立高熵密钥（值不会输出）。" >&2
+    return 1
+  fi
+  unset value
+  echo "    ${var_name} 强度校验通过（值不输出）"
+}
+
 # ---------------------------------------------------------------------------
 step "参数与运行环境检查"
 # ---------------------------------------------------------------------------
@@ -145,6 +167,9 @@ if [ ! -f "${ENV_FILE}" ]; then
   exit 1
 fi
 chmod 600 "${ENV_FILE}"
+check_env_secret PYT_JWT_SECRET 32
+check_env_secret PYT_RAG_ADMIN_TOKEN 32
+check_env_secret PYT_ROUTE_EXECUTION_SECRET 32
 echo "    秘密文件就绪：${ENV_FILE}（权限 600，内容不读取不打印）"
 
 # ---------------------------------------------------------------------------

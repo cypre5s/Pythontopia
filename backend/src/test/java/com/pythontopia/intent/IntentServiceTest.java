@@ -9,6 +9,8 @@ import static org.mockito.Mockito.when;
 
 import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
+import com.pythontopia.coursepack.domain.CourseKc;
+import com.pythontopia.coursepack.service.CoursePackService;
 import com.pythontopia.intent.dto.IntentRouteRequest;
 import com.pythontopia.intent.dto.IntentRouteResponse;
 import com.pythontopia.learner.profile.service.PassiveProfileService;
@@ -285,5 +287,49 @@ class IntentServiceTest {
         .route(org.mockito.ArgumentMatchers.any(), eq("认知风格: visual"), eq(context));
     verify(contextService).recordRoute(7L, RESPONSE, context);
     verifyNoInteractions(passiveProfileService);
+  }
+
+  @Test
+  void productionRouteReplacesEmptyClientCatalogWithAuthoritativePack43Kcs() {
+    InteractionContextVerifier verifier = mock(InteractionContextVerifier.class);
+    RouteExecutionTokenSigner signer = mock(RouteExecutionTokenSigner.class);
+    WorkshopLearningContextService contextService = mock(WorkshopLearningContextService.class);
+    CoursePackService coursePackService = mock(CoursePackService.class);
+    IntentService authoritativeService =
+        new IntentService(
+            graphClient,
+            passiveProfileService,
+            verifier,
+            signer,
+            contextService,
+            coursePackService);
+    CurrentUserPrincipal student = new CurrentUserPrincipal(7L, "stu", Role.STUDENT);
+    IntentRouteRequest req = request();
+    LearnerRoutingContext context = LearnerRoutingContext.empty();
+    when(verifier.verify(7L, req.message(), req.interaction())).thenReturn(null);
+    when(contextService.build(7L, req.message())).thenReturn(context);
+    when(coursePackService.listKcsByChapter(null))
+        .thenReturn(
+            List.of(
+                new CourseKc(
+                    1797L,
+                    CoursePackService.ACTIVE_PACK_ID,
+                    "PY43-KC-031",
+                    "for循环与遍历",
+                    182L,
+                    4,
+                    "basic",
+                    "for 语句与 range")));
+    when(graphClient.route(
+            org.mockito.ArgumentMatchers.any(), eq(""), eq(context)))
+        .thenReturn(RESPONSE);
+
+    authoritativeService.route(student, req);
+
+    ArgumentCaptor<IntentRouteRequest> safeRequest =
+        ArgumentCaptor.forClass(IntentRouteRequest.class);
+    verify(graphClient).route(safeRequest.capture(), eq(""), eq(context));
+    assertThat(safeRequest.getValue().courseKcs())
+        .containsExactly(new IntentRouteRequest.CourseKc("PY43-KC-031", "for循环与遍历"));
   }
 }
