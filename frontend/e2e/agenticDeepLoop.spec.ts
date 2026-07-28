@@ -216,7 +216,7 @@ async function createResource(
         type: 'HANDOUT',
         focusHint,
       },
-      timeout: 150_000,
+      timeout: 210_000,
     });
     if (response.ok()) {
       const body = (await response.json()) as ResourceCreateBody;
@@ -317,7 +317,7 @@ test.describe('下一代 Agentic 深度闭环 E2E @agentic-deep', () => {
   let bugMineSession: BugMineSessionBody;
 
   test.beforeAll(async () => {
-    test.setTimeout(360_000);
+    test.setTimeout(600_000);
     api = await playwrightRequest.newContext({ baseURL: BASE_URL });
     session = await acquireStudentSession(api);
     bootstrap = await postJson<BootstrapBody>(api, session, '/api/game/bootstrap');

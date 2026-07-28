@@ -6,6 +6,7 @@ vi.mock('@/api/http', () => ({
 
 import { http } from '@/api/http';
 import {
+  createWorkshopResource,
   getWorkshopResourceEffectiveness,
   type WorkshopResourceEffectivenessDto,
 } from '@/api/workshop';
@@ -15,6 +16,28 @@ beforeEach(() => {
 });
 
 describe('workshop.ts · REST 访问层', () => {
+  it('createWorkshopResource：覆盖后端资源图专用读取窗口', async () => {
+    vi.mocked(http.post).mockResolvedValue({
+      data: { runId: 42, resourceId: 7, status: 'SUCCESS' },
+    });
+
+    await createWorkshopResource({
+      kcCodes: ['PY43-KC-031'],
+      type: 'HANDOUT',
+      focusHint: '公网资源生成',
+    });
+
+    expect(http.post).toHaveBeenCalledWith(
+      '/api/workshop/resources',
+      {
+        kcCodes: ['PY43-KC-031'],
+        type: 'HANDOUT',
+        focusHint: '公网资源生成',
+      },
+      { timeout: 190_000 },
+    );
+  });
+
   it('getWorkshopResourceEffectiveness：GET resource effectiveness signal', async () => {
     const body: WorkshopResourceEffectivenessDto = {
       resourceId: 7,

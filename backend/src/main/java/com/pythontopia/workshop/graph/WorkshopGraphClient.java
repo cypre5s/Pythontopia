@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -32,11 +33,11 @@ public class WorkshopGraphClient {
   private final SseRelayExecutor sseRelayExecutor;
 
   public WorkshopGraphClient(
-      RestTemplate graphRestTemplate,
+      @Qualifier("workshopRestTemplate") RestTemplate workshopRestTemplate,
       GraphServiceProperties properties,
       ObjectMapper objectMapper,
       SseRelayExecutor sseRelayExecutor) {
-    this.restTemplate = graphRestTemplate;
+    this.restTemplate = workshopRestTemplate;
     this.properties = properties;
     this.objectMapper = objectMapper;
     this.sseRelayExecutor = sseRelayExecutor;

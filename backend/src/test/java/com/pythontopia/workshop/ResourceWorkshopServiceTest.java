@@ -792,7 +792,9 @@ class ResourceWorkshopServiceTest {
     @SuppressWarnings("unchecked")
     ArgumentCaptor<Function<String, String>> resultHandlerCaptor =
         ArgumentCaptor.forClass(Function.class);
-    verify(graphClient).produceStream(any(), any(SseEmitter.class), resultHandlerCaptor.capture());
+    ArgumentCaptor<SseEmitter> emitterCaptor = ArgumentCaptor.forClass(SseEmitter.class);
+    verify(graphClient).produceStream(any(), emitterCaptor.capture(), resultHandlerCaptor.capture());
+    assertThat(emitterCaptor.getValue().getTimeout()).isEqualTo(300_000L);
 
     String outboundJson =
         resultHandlerCaptor.getValue().apply(objectMapper.writeValueAsString(successResponse()));

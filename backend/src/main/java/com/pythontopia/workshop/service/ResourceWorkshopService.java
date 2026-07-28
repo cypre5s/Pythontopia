@@ -235,7 +235,9 @@ public class ResourceWorkshopService {
             targetDifficulty,
             agentStrategyDirective(request.type()));
 
-    SseEmitter emitter = new SseEmitter(120_000L);
+    // 与 GraphSseConsumer 的 3 分钟资源图窗口及前端容器 300 秒代理窗口对齐；
+    // emitter 本身不能先于证据检索、设计和语义审查链结束。
+    SseEmitter emitter = new SseEmitter(300_000L);
     Long chapterId = pickChapterId(validatedKcCodes, kcIdx);
 
     graphClient.produceStream(graphRequest, emitter, resultJson -> {

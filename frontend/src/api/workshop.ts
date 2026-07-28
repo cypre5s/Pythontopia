@@ -14,12 +14,16 @@ import type {
 
 export type { WorkshopResourceEffectivenessDto } from './dto/Workshop';
 
+// 覆盖后端工坊专用 180s read 上限，给双层公网代理和 JSON 映射留出余量。
+const WORKSHOP_GENERATION_TIMEOUT_MS = 190_000;
+
 export async function createWorkshopResource(
   request: WorkshopCreateRequest,
 ): Promise<WorkshopCreateResponse> {
   const response = await http.post<WorkshopCreateResponse>(
     '/api/workshop/resources',
     request,
+    { timeout: WORKSHOP_GENERATION_TIMEOUT_MS },
   );
   return response.data;
 }
