@@ -47,6 +47,7 @@ interface RouteSearchCandidateBody {
 interface RouteResponseBody {
   intent: string;
   secondaryIntent?: string | null;
+  kcCodes?: string[];
   needsClarification: boolean;
   routeExecutionToken?: string;
   routeDecision?: {
@@ -359,6 +360,7 @@ test.describe("百晓工坊 Agent 路由真实联测 @baixiao-routing", () => {
       },
     });
     expect(route.routeExecutionToken).toBeTruthy();
+    expect(route.kcCodes).toEqual(["PY43-KC-031"]);
 
     const orchestratorBody = orchestratorRequest.postDataJSON() as {
       routeDecision?: RouteResponseBody["routeDecision"];

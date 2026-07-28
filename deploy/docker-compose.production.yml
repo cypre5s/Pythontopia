@@ -98,6 +98,9 @@ services:
       PYTHONTOPIA_SERVICES_RAGURL: http://pythontopia-rag:18092
       PYT_GRAPH_URL: http://pythontopia-graph:18091
       PYT_RAG_URL: http://pythontopia-rag:18092
+      # 签名 RouteDecision/TaskPlan 的独立 HMAC 密钥；缺失时必须阻止生产启动，
+      # 否则普通答疑仍可用但多 Agent 编排只能返回空执行令牌。
+      PYT_ROUTE_EXECUTION_SECRET: ${PYT_ROUTE_EXECUTION_SECRET:?缺少 PYT_ROUTE_EXECUTION_SECRET}
       # 生产环境不公开 Swagger/OpenAPI，避免匿名枚举完整接口与 DTO。
       PYT_EXPOSE_API_DOCS: "false"
       # ---- 数据目录接线：远端 .env 中的宿主相对路径在容器内无意义，统一覆盖 ----

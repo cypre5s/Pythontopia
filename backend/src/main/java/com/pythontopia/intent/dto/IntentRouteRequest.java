@@ -10,7 +10,8 @@ import java.util.List;
  * 百晓工坊「意图路由」请求（前端 camelCase）。
  *
  * <p>前端把这一句话、已加载的课程 KC 目录（{@code courseKcs}，为 {@code @} 提及菜单本就全量加载）
- * 以及学生手动 {@code @} 指定的 KC（{@code manualKcCodes}，最高优先级）发来；Java 仅做透传代理，
+ * 以及学生手动 {@code @} 指定的 KC（{@code manualKcCodes}，最高优先级）发来；Java 在转交 Graph 前
+ * 用唯一课程包 43 的服务端目录覆盖客户端目录，避免页面刚加载时的空目录竞态或客户端伪造目录。
  * 真正的意图分类与 KC 锚定在 Python graph 的 IntentRouterAgent 完成。除 {@code message} 外均可空。
  *
  * <p>R-16 多轮意图理解新增（契约见百晓深度优化蓝本 §0）：{@code recentTurns}（≤6 轮，时间正序）、

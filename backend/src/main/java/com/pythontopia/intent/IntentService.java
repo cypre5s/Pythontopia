@@ -2,10 +2,12 @@ package com.pythontopia.intent;
 
 import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
+import com.pythontopia.coursepack.service.CoursePackService;
 import com.pythontopia.intent.dto.IntentRouteRequest;
 import com.pythontopia.intent.dto.IntentRouteResponse;
 import com.pythontopia.learner.profile.service.PassiveProfileService;
 import com.pythontopia.submission.repository.PracticeSubmissionRepository;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,6 +31,7 @@ public class IntentService {
   private final InteractionContextVerifier interactionVerifier;
   private final RouteExecutionTokenSigner routeTokenSigner;
   private final WorkshopLearningContextService learningContextService;
+  private final CoursePackService coursePackService;
 
   @Autowired
   public IntentService(
@@ -36,12 +39,29 @@ public class IntentService {
       PassiveProfileService passiveProfileService,
       InteractionContextVerifier interactionVerifier,
       RouteExecutionTokenSigner routeTokenSigner,
-      WorkshopLearningContextService learningContextService) {
+      WorkshopLearningContextService learningContextService,
+      CoursePackService coursePackService) {
     this.graphClient = graphClient;
     this.passiveProfileService = passiveProfileService;
     this.interactionVerifier = interactionVerifier;
     this.routeTokenSigner = routeTokenSigner;
     this.learningContextService = learningContextService;
+    this.coursePackService = coursePackService;
+  }
+
+  IntentService(
+      IntentGraphClient graphClient,
+      PassiveProfileService passiveProfileService,
+      InteractionContextVerifier interactionVerifier,
+      RouteExecutionTokenSigner routeTokenSigner,
+      WorkshopLearningContextService learningContextService) {
+    this(
+        graphClient,
+        passiveProfileService,
+        interactionVerifier,
+        routeTokenSigner,
+        learningContextService,
+        null);
   }
 
   IntentService(
@@ -49,7 +69,7 @@ public class IntentService {
       PassiveProfileService passiveProfileService,
       InteractionContextVerifier interactionVerifier,
       RouteExecutionTokenSigner routeTokenSigner) {
-    this(graphClient, passiveProfileService, interactionVerifier, routeTokenSigner, null);
+    this(graphClient, passiveProfileService, interactionVerifier, routeTokenSigner, null, null);
   }
 
   /** 保留给既有纯单元测试的轻量装配；生产由上面的 Spring 构造注入共享 verifier 与 signer。 */
@@ -62,14 +82,17 @@ public class IntentService {
         passiveProfileService,
         new InteractionContextVerifier(submissionRepository),
         null,
+        null,
         null);
   }
 
   public IntentRouteResponse route(CurrentUserPrincipal user, IntentRouteRequest request) {
     Long userId = user != null && user.role() == Role.STUDENT ? user.userId() : null;
     IntentRouteRequest safeRequest =
-        copyWithInteraction(
-            request, interactionVerifier.verify(userId, request.message(), request.interaction()));
+        copyWithServerContext(
+            request,
+            interactionVerifier.verify(userId, request.message(), request.interaction()),
+            authoritativeCourseKcs(request));
     LearnerRoutingContext learnerContext = resolveLearnerContext(user, request.message());
     String profileBrief =
         learnerContext == null ? resolveProfileBrief(user) : learnerContext.profileBrief();
@@ -102,12 +125,23 @@ public class IntentService {
     return learningContextService.build(user.userId(), message);
   }
 
-  private static IntentRouteRequest copyWithInteraction(
-      IntentRouteRequest request, IntentRouteRequest.InteractionContext interaction) {
+  private List<IntentRouteRequest.CourseKc> authoritativeCourseKcs(IntentRouteRequest request) {
+    if (coursePackService == null) {
+      return request.courseKcs() == null ? List.of() : request.courseKcs();
+    }
+    return coursePackService.listKcsByChapter(null).stream()
+        .map(kc -> new IntentRouteRequest.CourseKc(kc.kcCode(), kc.kcName()))
+        .toList();
+  }
+
+  private static IntentRouteRequest copyWithServerContext(
+      IntentRouteRequest request,
+      IntentRouteRequest.InteractionContext interaction,
+      List<IntentRouteRequest.CourseKc> courseKcs) {
     return new IntentRouteRequest(
         request.message(),
         request.manualKcCodes(),
-        request.courseKcs(),
+        courseKcs,
         request.currentChapter(),
         request.recentKcCodes(),
         request.recentTurns(),
