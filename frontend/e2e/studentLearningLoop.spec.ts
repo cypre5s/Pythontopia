@@ -60,14 +60,38 @@ async function createLoopResource(
   request: APIRequestContext,
   session: DemoSession,
 ): Promise<number> {
-  const body = await postJson<ResourceCreateBody>(request, session, '/api/workshop/resources', {
-    kcCodes: [KC_CODE],
-    type: 'HANDOUT',
-    focusHint: 'E2E 学习闭环：读后必须微测、练习提交、再决策。',
-  });
-  expect(body.status, `资源生成失败 run=${body.runId}`).not.toBe('FAILED');
-  expect(body.resourceId).toBeGreaterThan(0);
-  return body.resourceId;
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const response = await request.post(u('/api/workshop/resources'), {
+      headers: bearer(session),
+      data: {
+        kcCodes: [KC_CODE],
+        type: 'HANDOUT',
+        focusHint: 'E2E 学习闭环：读后必须微测、练习提交、再决策。',
+      },
+      timeout: 120_000,
+    });
+    if (response.ok()) {
+      const body = (await response.json()) as ResourceCreateBody;
+      expect(body.status, `资源生成失败 run=${body.runId}`).not.toBe('FAILED');
+      expect(body.resourceId).toBeGreaterThan(0);
+      return body.resourceId;
+    }
+    const body = await response.text();
+    if (
+      response.status() === 502
+      && body.includes('WORKSHOP_GRAPH_UNAVAILABLE')
+      && attempt < 2
+    ) {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 5_000);
+      });
+      continue;
+    }
+    throw new Error(
+      `POST /api/workshop/resources failed: HTTP ${response.status()} ${body}`,
+    );
+  }
+  throw new Error('POST /api/workshop/resources failed after bounded retry');
 }
 
 async function createSubmission(
@@ -97,7 +121,7 @@ async function openResourceInStudy(page: Page, resourceId: number): Promise<void
 
 test.describe('学生学习闭环 E2E @learning-loop', () => {
   test('微测两轮失败后从补救升级到换资源', async ({ page, context, request }) => {
-    test.setTimeout(180_000);
+    test.setTimeout(300_000);
     const session = await prepareStudent(context, request);
     const resourceId = await createLoopResource(request, session);
 
@@ -115,7 +139,7 @@ test.describe('学生学习闭环 E2E @learning-loop', () => {
   });
 
   test('最近失败训练提交会把闭环推进到重规划', async ({ page, context, request }) => {
-    test.setTimeout(180_000);
+    test.setTimeout(300_000);
     const session = await prepareStudent(context, request);
     const resourceId = await createLoopResource(request, session);
     const submission = await createSubmission(request, session, 'print("0.0000")');
@@ -129,7 +153,7 @@ test.describe('学生学习闭环 E2E @learning-loop', () => {
   });
 
   test('最近通过训练提交会完成通过闭环', async ({ page, context, request }) => {
-    test.setTimeout(180_000);
+    test.setTimeout(300_000);
     const session = await prepareStudent(context, request);
     const resourceId = await createLoopResource(request, session);
     const submission = await createSubmission(

@@ -777,18 +777,21 @@ test.describe("百晓工坊 Agent 路由真实联测 @baixiao-routing", () => {
       (candidate) =>
         candidate.request().method() === "POST" &&
         candidate.url().includes("/api/intent/route"),
+      { timeout: 90_000 },
     );
     const orchestratorRequestPromise = page.waitForRequest(
       (candidate) =>
         candidate.method() === "POST" &&
         candidate.url().includes("/api/orchestrator/turn/stream"),
-      { timeout: 60_000 },
+      // IntentGraphClient 最坏会经历一次 30s read timeout 后重试；观察窗口必须覆盖
+      // 两次下游预算与退避，否则测试会在真实恢复成功前主动断开 SSE。
+      { timeout: 90_000 },
     );
     const orchestratorResponsePromise = page.waitForResponse(
       (candidate) =>
         candidate.request().method() === "POST" &&
         candidate.url().includes("/api/orchestrator/turn/stream"),
-      { timeout: 60_000 },
+      { timeout: 90_000 },
     );
 
     await page
