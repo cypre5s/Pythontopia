@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-07-28 — 最终 ECS 双协议发布与 227 项公网验收
+
+- 最终发布包 `pythontopia-web-20260728T093105Z.tar.gz`（723,071,498 bytes，
+  SHA-256 `32d1717dc75e92eb3d8828f3c63a208f80fd5872a23b13ba7299fcdc96d9e1bc`）通过
+  allowlist、逐文件哈希、秘密扫描、顶层结构和镜像 tar 门禁；上传哈希一致，事务式安装到
+  `/opt/pythontopia/releases/20260728-173503`，保留上一 release 与数据库/配置备份。
+- 公网 HTTPS 以单 worker、`--retries=0` 完成 7 files / 227 workflows：
+  227 passed、0 failed、0 flaky、0 skipped、31.0 分钟；认证 4/4、真实长 SSE、百晓路由、
+  Workshop/RAG、判题三态、学生闭环与教师-学生班级全流程均通过。
+- HTTP 使用同一公共核心合同最终 27/27，通过认证、SSE 故障恢复、深链、RAG、判题、刷新与安全面。
+  首轮唯一失败由 trace 证明是测试总预算 240 秒短于单回合 300 秒合同；仅将包含首屏、故障注入与
+  真实重试的该用例总预算对齐为 360 秒，业务断言与生产代码不变，定点 1/1 和完整重跑均无重试通过。
+- 最终 release 另行通过费曼真实 WA → 误区 → 找茬 → 教学产码 → 沙箱真判题 → 掌握度回流；
+  6 个容器全 healthy，HTTP/HTTPS health 均为 `ok`，Flyway 到 V190，pack 43 精确为
+  7 文档 / 561 页 / 7 章 / 65 KC / 46 示例 / 39 题，目标生产错误关键字扫描为 0。
+- 逐项报告落在 `docs/reports/2026-07-28-ecs-public-workflow-acceptance.md`，包含 227 行工作流明细、
+  双协议对照、运行态与原始证据索引。
+
 ## 2026-07-28 — 百晓工坊资源图专用生产超时
 
 - 最终 ECS HTTPS 227 项复测在首个深闭环前置资源生成连续返回

@@ -374,3 +374,32 @@ BASE_URL=https://47.120.29.62 PYT_E2E_REGISTER=1 \
 
 状态：等待构建并部署含 Workshop 专用超时的最终 release；部署后从 227 项第 1 条完整重跑，
 不得沿用中断结果。
+
+### 第四次生产发布与最终验收完成
+
+- 最终发布包：`pythontopia-web-20260728T093105Z.tar.gz`，723,071,498 bytes，SHA-256
+  `32d1717dc75e92eb3d8828f3c63a208f80fd5872a23b13ba7299fcdc96d9e1bc`；
+  4,090 个常规文件的 allowlist、逐文件哈希、秘密扫描、顶层结构与 4 个镜像 tar 均通过，
+  上传前后哈希一致。
+- 事务式安装到 `/opt/pythontopia/releases/20260728-173503`，上一 release
+  `/opt/pythontopia/releases/20260728-170619` 保留，备份位于
+  `/opt/pythontopia/backups/20260728-173503`；未删除任何历史 worktree 或 release。
+- 部署后定点深闭环首条在 1.8 分钟内通过，确认 Workshop 资源图专用 180 秒预算生效且不再返回 502。
+- 最终公网 HTTPS 矩阵：7 files / **227 passed** / 0 failed / 0 flaky / 0 skipped，
+  单 worker、`--retries=0`，31.0 分钟。包含 HTTPS 认证 4/4、Agentic 185 项深链、
+  百晓真实路由、反复点击、公共验收、学生补救/重规划/闭环与教师-学生证据同步。
+- 最终公网 HTTP 公共核心：27/27 passed、0 failed / 0 flaky / 0 skipped、13.0 分钟。
+  首轮 26/27 的唯一 runner 超时经 trace 锁定为测试总预算 240 秒与单回合 300 秒合同冲突：
+  第二次 SSE 已 200、完整回复与计划已渲染，输入框在 runner 超时后约 8 秒恢复。仅将该测试总预算
+  改为 360 秒，故障注入、业务调用和断言不变；定点 1/1 与完整 27/27 均以零重试通过。
+- 最终费曼公网专项使用新学生完成正式 WA → 真实误区 → 找茬 → 教学产码 → 沙箱判题通过 →
+  掌握度回流；自由概念保持 `NA` 且禁用判题。
+- 运行态终验：6 容器全部 healthy；公网 HTTP/HTTPS `/healthz` 均为 `ok`；Flyway 最新 V190；
+  pack 43 为 7 文档 / 561 页 / 7 章 / 65 KC / 46 示例 / 39 题；证书有效；
+  最终发布后的四个应用容器未命中 `ERROR/FATAL`、`Read timed out`、
+  `WORKSHOP_GRAPH_UNAVAILABLE` 或 `FEYNMAN_TUTEE_UNAVAILABLE`。
+- 详细报告：`docs/reports/2026-07-28-ecs-public-workflow-acceptance.md`，机械列出 227 个工作流结果，
+  并记录双协议、费曼、发布运行态、根因与原始 JSON/HTML 证据。
+
+状态：完成。最近一周 18 个 worktree 分支均已收敛到 `main`，未删除 worktree；最终 release 已部署，
+HTTPS 登录恢复，HTTP/HTTPS 功能矩阵、费曼真实闭环与不少于 100 样例的公网验收全部完成。
