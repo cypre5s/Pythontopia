@@ -27,6 +27,9 @@ IMAGE_COMPONENTS=(frontend backend graph rag)
 
 NGINX_AVAIL="/etc/nginx/sites-available/pythontopia.conf"
 NGINX_ENABLED="/etc/nginx/sites-enabled/pythontopia.conf"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+NGINX_VERIFIER="${SCRIPT_DIR}/verify_nginx_dual_protocol.sh"
+NGINX_SELECTOR="${SCRIPT_DIR}/select_rollback_nginx_config.sh"
 
 STEP="参数检查"
 on_error() {
@@ -154,8 +157,17 @@ wait_healthy 480 postgres redis pythontopia-rag pythontopia-graph backend fronte
 # ---------------------------------------------------------------------------
 step "回切主机 Nginx 配置"
 # ---------------------------------------------------------------------------
-install -m 644 "${TARGET}/deploy/nginx/pythontopia.conf" "${NGINX_AVAIL}"
+NGINX_SOURCE="$(
+  "${NGINX_SELECTOR}" \
+    "${NGINX_AVAIL}" \
+    "${TARGET}/deploy/nginx/pythontopia.conf" \
+    "${NGINX_VERIFIER}"
+)"
+if [ "${NGINX_SOURCE}" != "${NGINX_AVAIL}" ]; then
+  install -m 644 "${NGINX_SOURCE}" "${NGINX_AVAIL}"
+fi
 ln -sfn "${NGINX_AVAIL}" "${NGINX_ENABLED}"
+"${NGINX_VERIFIER}" "${NGINX_AVAIL}"
 if ! nginx -t; then
   echo "[回滚失败] 目标版本 Nginx 配置未通过 nginx -t，主机 Nginx 配置保持当前内容未 reload。" >&2
   exit 1
@@ -180,13 +192,17 @@ fi
 echo "    current -> ${TARGET}"
 
 # ---------------------------------------------------------------------------
-step "终验：80 全链路健康检查"
+step "终验：80/443 全链路健康检查"
 # ---------------------------------------------------------------------------
 sleep 2
 curl -fsS -m 5 -o /dev/null http://127.0.0.1:8080/healthz \
   || { echo "[回滚失败] 容器直连 127.0.0.1:8080/healthz 不可达。" >&2; exit 1; }
 curl -fsS -m 5 -o /dev/null http://127.0.0.1/healthz \
   || { echo "[回滚失败] 主机 Nginx 80 端口 /healthz 不可达。" >&2; exit 1; }
+curl -fsS -m 10 -o /dev/null \
+  --resolve 47.120.29.62:443:127.0.0.1 \
+  https://47.120.29.62/healthz \
+  || { echo "[回滚失败] 主机 Nginx 443 端口 /healthz 不可达或证书校验失败。" >&2; exit 1; }
 
 echo ""
 echo "============================================================"
