@@ -19,7 +19,7 @@ pythontopia-web-<UTC>.tar.gz
     ├── docker-compose.production.yml  ← 生产编排（使用包内 release 镜像，部署用这份）
     ├── .env.example                   ← 环境变量样板（首次部署复制为 .env 后填写）
     ├── initdb/                        ← Postgres 初始化挂载目录
-    ├── nginx/                         ← 主机 Nginx 站点配置（对外 80 端口入口）
+    ├── nginx/                         ← 主机 Nginx 站点配置（对外 80/443 入口）
     ├── scripts/                       ← 部署辅助脚本（预检/安装/验收、包校验器等）
     ├── release/                       ← 发布说明源文件与内容契约（archive-allowlist.txt）
     └── runtime/
@@ -45,7 +45,7 @@ pythontopia-web-<UTC>.tar.gz
 | 操作系统 | Linux x86_64（Ubuntu 22.04 实测） |
 | Docker | Docker Engine ≥ 24，含 Compose v2（`docker compose version` 可验证） |
 | 资源 | 最低 2C4G（生产编排已按此设 mem_limit），建议 4C8G；磁盘空闲 ≥ 20 GB（镜像 + 解包暂存 + 数据库） |
-| 端口 | 对外仅 `80`（主机 Nginx，配置见 `deploy/nginx/`）；容器侧只绑定回环 `127.0.0.1:8080`（frontend）与 `127.0.0.1:18080`（backend 诊断）；graph/rag/postgres/redis 不暴露宿主端口 |
+| 端口 | 对外仅 `80/443`（主机 Nginx，配置见 `deploy/nginx/`）；容器侧只绑定回环 `127.0.0.1:8080`（frontend）与 `127.0.0.1:18080`（backend 诊断）；graph/rag/postgres/redis 不暴露宿主端口 |
 | 基础镜像 | `pgvector/pgvector:pg16` 与 `redis:7-alpine` **不在包内**，目标机需可拉取（或由交付人另行提供镜像 tar 后 `docker load`） |
 
 ## 3. 部署步骤
@@ -125,6 +125,9 @@ docker compose -p deploy -f docker-compose.production.yml ps   # 六个服务应
 # 宿主回环口（生产编排只暴露这两个）
 curl -sf http://127.0.0.1:8080/healthz   && echo " frontend ok"
 curl -sf http://127.0.0.1:18080/healthz  && echo " backend ok"
+curl -sf http://127.0.0.1/healthz         && echo " nginx http ok"
+curl -sf --resolve 47.120.29.62:443:127.0.0.1 \
+  https://47.120.29.62/healthz            && echo " nginx https ok"
 
 # graph / rag 不绑定宿主端口，进容器网络检查
 docker compose -p deploy -f docker-compose.production.yml exec pythontopia-graph \
@@ -133,7 +136,7 @@ docker compose -p deploy -f docker-compose.production.yml exec pythontopia-rag \
   curl -sf http://127.0.0.1:18092/healthz && echo " rag ok"
 ```
 
-浏览器访问 `http://<服务器IP>/`（主机 Nginx 80 端口），能进入登录页并完成注册/登录即部署成功。
+浏览器分别访问 `http://<服务器IP>/` 与 `https://<服务器IP>/`，能进入登录页并完成注册/登录即部署成功。
 注意：AI 流式输出（SSE）经前端 nginx 的 `/api/` 反代，已配置关闭缓冲与 300s 长超时；
 若外层还有自建网关/CDN，需同样对 `/api/` 关闭缓冲，否则打字机效果会变成一次性整段输出。
 
