@@ -356,12 +356,21 @@ class FeynmanTuteeAgent:
             updated.append(misconception)
         if not updated:
             return None
+        raw_produced_code = data.get("produced_code")
+        produced_code = (
+            raw_produced_code
+            if isinstance(raw_produced_code, str) and raw_produced_code.strip()
+            else None
+        )
+        # 教学回合一旦宣告误区已解决，就必须同步给出可进入真判题的代码。
+        # 否则后端会把会话推进到 TAUGHT，前端却永久停在「等学弟写代码」。
+        # 将这种不完整 LLM 输出判为无效，交给规则兜底保持未解决状态，避免伪闭环。
+        if not is_initial and any(mis.resolved for mis in updated) and produced_code is None:
+            return None
         return FeynmanTuteeOutput(
             reply_md=reply_md,
             updated_misconceptions=updated,
-            produced_code=data.get("produced_code")
-            if isinstance(data.get("produced_code"), str)
-            else None,
+            produced_code=produced_code,
         )
 
     def _rule_step(self, inp: FeynmanTuteeInput) -> FeynmanTuteeOutput:
@@ -438,7 +447,7 @@ class FeynmanTuteeAgent:
         schema_hint = (
             '{"reply_md":"AI 学弟回复","updated_misconceptions":'
             '[{"tag":"误解标签","evidence_event_ids":[整数],"resolved":false}],'
-            '"produced_code":null}'
+            '"produced_code":"纠正后的完整可运行 Python 代码；尚未学会时为 null"}'
         )
         base_system = (
             "你是 Pythontopia 费曼反演里的 AI 学弟，只输出一个 JSON 对象，不要输出多余文字。"
@@ -463,7 +472,12 @@ class FeynmanTuteeAgent:
                 "并把代码放进 produced_code（代码里带着你的误解，但不要点破哪里错）。"
             )
         else:
-            system = base_system
+            system = base_system + (
+                "现在是教学评估阶段：如果你把任一误解标为 resolved=true，produced_code 必须同时"
+                "给出应用本轮教学后改写的完整、可运行 Python 代码，供下一步真实判题；"
+                "不得只口头说“明白了”却返回 null 或空代码。若仍未学会，则保持 resolved=false "
+                "且 produced_code=null。"
+            )
             user = teaching
         misconceptions = json.dumps(
             [mis.model_dump(mode="json") for mis in inp.misconceptions],

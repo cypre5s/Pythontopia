@@ -142,6 +142,27 @@ async def test_teaching_is_evaluated_by_llm_for_arbitrary_tag() -> None:
     assert out.updated_misconceptions[0].resolved is True
 
 
+async def test_resolved_llm_output_without_code_does_not_create_dead_taught_state() -> None:
+    provider = JsonProvider(
+        {
+            "reply_md": "我懂了，这次会按上限包含关系来修正。",
+            "updated_misconceptions": [
+                {"tag": "WA", "evidence_event_ids": [636], "resolved": True}
+            ],
+            "produced_code": None,
+        }
+    )
+    inp = _input(
+        misconceptions=[Misconception(tag="WA", evidence_event_ids=[636])],
+        teaching="循环右端要包含上限，并累加每一个满足条件的偶数。",
+    )
+
+    out = await FeynmanTuteeAgent(provider).step(inp)
+
+    assert out.updated_misconceptions[0].resolved is False
+    assert out.produced_code is None
+
+
 async def test_initial_step_forces_misconception_unresolved() -> None:
     # 初始暴露阶段（无教学）即使 LLM 误标 resolved=true，也必须被强制改回 false。
     # reply_md 用中性的代码描述（不忏悔），但 resolved 强制收敛逻辑不变。
