@@ -319,3 +319,13 @@ RAG 页码证据、AC/WA/RE 判题、资源读测判闭环、补救/换资源/�
 - 费曼截图：`qa-screens/feynman-local-1785235444/`
 - ECS 报告副本：`/opt/pythontopia/reports/2026-07-28-ecs-public-workflow-acceptance.md`
 - JSON 汇总字段与本报告逐项统计已由生成脚本机械核对。
+
+## 9. 已知非阻塞告警
+
+- `MemoryEmbeddingWriter` 在部分学习事件上记录 `expected=2048 actual=1024` 并跳过向量写入；
+  不影响本轮确定性证据、画像、判题和闭环断言，但可能降低后续语义记忆召回覆盖。
+- `WeeklyReportService` 曾对 `resource_run` 查询记录 `bad SQL grammar`；周报其余内容仍可生成，
+  但该资源运行片段可能缺失。
+- 两项均为协议无关的既有后端告警，不构成 HTTPS 相对 HTTP 的回归；本轮没有在缺少独立 RED/GREEN
+  与迁移影响分析的情况下顺手修改。建议后续分别作为“Embedding 维度契约”和“周报资源查询契约”
+  的独立任务处理。
