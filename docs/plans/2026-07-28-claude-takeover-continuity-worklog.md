@@ -150,6 +150,7 @@
   - `TEACHER / ADMIN`：全平台活跃学生聚合。
 - 新增 `subject(scope, label, learnerCount, evidenceLearnerCount)`，不返回学习者 ID；
 - 新增单条 CTE 聚合查询，统计活跃学生、证据学习者、失败练习、资源运行和触达 KC；
+- 平台聚合中的学习事件仅信任 `backend / graph` 来源，拒绝学生可写的 `frontend` 观察事件污染；
 - 前端卡片展示“本人学习证据”或“全平台学习证据”及证据覆盖人数。
 
 ### AI Runtime TDD 与验证
@@ -162,19 +163,47 @@
 | 2026-07-28 12:50 CST | 前端 RED | `npm run test -- --run tests/api/aiRuntime.spec.ts tests/components/workshop/RuntimeOperationsPanel.spec.ts tests/pages/TeacherReviewPage.spec.ts tests/pages/WorkshopPage.spec.ts` | 28 项中 2 项预期失败：卡片尚未展示数据主体 |
 | 2026-07-28 12:50 CST | 前端 GREEN | 同上 | 28 tests 全绿；测试日志保留既有 jsdom `127.0.0.1:3000` 探测与 Pyodide sourcemap 警告，不影响结果 |
 | 2026-07-28 12:55 CST | 前端类型/静态检查 | `npm run typecheck`、定向 ESLint | `vue-tsc --noEmit` 通过；ESLint 通过 |
+| 2026-07-28 13:04 CST | 安全 RED | `mvn -s /home/cypress/.m2/settings.xml -Dtest=AiRuntimePlatformSnapshotRepositoryTest test` | 伪造 `frontend practice_failed / FAKE-KC` 把预期 `2/2/2` 污染为 `3/3/3` |
+| 2026-07-28 13:06 CST | 安全 GREEN | 同上 | 只采信 `backend / graph`；真实 PostgreSQL 2 tests 全绿 |
 
 ### TutorBench 修改
 
 - 补救率分母由全部微测改为失败微测；
 - 零失败时补救条件视为不适用并通过，但掌握度增量上限仍强制检查；
-- 原因文案区分无需补救、补救缺失和刷分风险。
+- 原因文案区分不适用、补救缺失和刷分风险。
 
 | 时间 | 阶段 | 命令 | 结果 |
 |---|---|---|---|
 | 2026-07-28 12:53 CST | RED | `mvn -s /home/cypress/.m2/settings.xml -Dtest=LearningEffectTraceServiceTest,TutorBenchEvaluatorTest test` | 6 项中 2 项预期失败：旧分母返回 `0.5`；零失败被误判 |
 | 2026-07-28 12:54 CST | GREEN | 同上 | 真实 PostgreSQL trace 与评测边界共 6 tests 全绿 |
+| 2026-07-28 13:07 CST | 边界 RED | `mvn -s /home/cypress/.m2/settings.xml -Dtest=TutorBenchEvaluatorTest test` | 7 项中 2 项预期失败：零失败文案未明确“不适用” |
+| 2026-07-28 13:08 CST | 边界 GREEN | `mvn -s /home/cypress/.m2/settings.xml -Dtest=LearningEffectTraceServiceTest,TutorBenchEvaluatorTest test` | 新增 1 失败 + 99 通过、全零新学习者、零补救三条边界；9 tests 全绿 |
 
-状态：完成。
+### 独立审查与生产回滚防护
+
+- 只读代码审查结论先为 `NOT READY`，发现两项 Important：学生可伪造平台 Runtime 证据；回滚旧 release 会用 HTTP-only Nginx 配置覆盖现有 HTTPS。
+- Runtime 可信来源缺陷已按上表完成 RED/GREEN。
+- 回滚新增配置选择器：目标 release 满足双协议契约才采用，否则保留当前合格主机配置；两者都不合格时拒绝切换。
+- 回滚终验增加使用 `--resolve 47.120.29.62:443:127.0.0.1` 的真实证书校验。
+
+| 时间 | 阶段 | 命令 | 结果 |
+|---|---|---|---|
+| 2026-07-28 13:04 CST | 回滚 RED | `bash deploy/scripts/test_rollback_nginx_selection.sh` | 预期失败：尚无回滚配置选择器 |
+| 2026-07-28 13:05 CST | 回滚 GREEN | `bash -n ...`、`bash deploy/scripts/test_rollback_nginx_selection.sh`、`bash deploy/scripts/verify_nginx_dual_protocol.sh` | 语法、三条选择路径与双协议模板契约通过 |
+
+### 首轮全量验证
+
+| 时间 | 范围 | 命令 | 结果 |
+|---|---|---|---|
+| 2026-07-28 12:58 CST | 前端测试 | `npm run test -- --run` | 242 files / 2410 tests 全绿 |
+| 2026-07-28 12:59 CST | 前端类型 | `npm run typecheck` | 通过 |
+| 2026-07-28 13:00 CST | 前端静态检查 | `npm run lint` | 首轮发现 1 个未使用测试 helper；删除后 0 errors / 114 既有 warnings |
+| 2026-07-28 13:06 CST | Graph | `.venv/bin/python -m pytest -q` | 1680 passed / 1 skipped / 11 dependency warnings |
+| 2026-07-28 13:08 CST | RAG | `.venv/bin/python -m pytest -q` | 150 passed / 2 skipped |
+| 2026-07-28 13:07 CST | 后端首轮全量 | `mvn -s /home/cypress/.m2/settings.xml clean test` | 1086 tests / 0 failures / 1 error；与定向 Maven 并发共享 `backend/target`，`DecisionTraceControllerTest` 登录响应为空，结果作废 |
+| 2026-07-28 13:09 CST | 后端隔离复现 | `mvn -s /home/cypress/.m2/settings.xml -Dtest=DecisionTraceControllerTest test` | 1 test 全绿，确认非业务回归；合并后仍须串行重跑全量 |
+
+状态：代码修复完成，等待合并后最终全量复验。
 
 ## Phase 5：全链路验收与工作树收敛
 
