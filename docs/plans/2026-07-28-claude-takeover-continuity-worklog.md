@@ -143,8 +143,44 @@
 
 ## Phase 4：AI Runtime 与 TutorBench
 
-状态：待开始。
+### AI Runtime 修改
+
+- 保持既有 `/api/ai/runtime/operations` 契约路径，按登录角色选择数据主体：
+  - `STUDENT`：既有本人证据摘要；
+  - `TEACHER / ADMIN`：全平台活跃学生聚合。
+- 新增 `subject(scope, label, learnerCount, evidenceLearnerCount)`，不返回学习者 ID；
+- 新增单条 CTE 聚合查询，统计活跃学生、证据学习者、失败练习、资源运行和触达 KC；
+- 前端卡片展示“本人学习证据”或“全平台学习证据”及证据覆盖人数。
+
+### AI Runtime TDD 与验证
+
+| 时间 | 阶段 | 命令 | 结果 |
+|---|---|---|---|
+| 2026-07-28 12:48 CST | 后端 RED | `mvn -s /home/cypress/.m2/settings.xml -Dtest=AiRuntimeSummaryServiceTest,AiRuntimeSummaryControllerTest,AiRuntimePlatformSnapshotRepositoryTest test` | 编译失败：缺少 `AiRuntimePlatformSnapshotRepository`，证明教师平台聚合尚未实现 |
+| 2026-07-28 12:49 CST | 后端 GREEN 1 | 同上 | 空库完整执行 105 个迁移到 `V190`；10 tests 全绿 |
+| 2026-07-28 12:52 CST | 后端 GREEN 2 | 同上 | 增加混合角色真实数据：禁用学生/教师排除、学习者/KC 去重均通过；11 tests 全绿 |
+| 2026-07-28 12:50 CST | 前端 RED | `npm run test -- --run tests/api/aiRuntime.spec.ts tests/components/workshop/RuntimeOperationsPanel.spec.ts tests/pages/TeacherReviewPage.spec.ts tests/pages/WorkshopPage.spec.ts` | 28 项中 2 项预期失败：卡片尚未展示数据主体 |
+| 2026-07-28 12:50 CST | 前端 GREEN | 同上 | 28 tests 全绿；测试日志保留既有 jsdom `127.0.0.1:3000` 探测与 Pyodide sourcemap 警告，不影响结果 |
+| 2026-07-28 12:55 CST | 前端类型/静态检查 | `npm run typecheck`、定向 ESLint | `vue-tsc --noEmit` 通过；ESLint 通过 |
+
+### TutorBench 修改
+
+- 补救率分母由全部微测改为失败微测；
+- 零失败时补救条件视为不适用并通过，但掌握度增量上限仍强制检查；
+- 原因文案区分无需补救、补救缺失和刷分风险。
+
+| 时间 | 阶段 | 命令 | 结果 |
+|---|---|---|---|
+| 2026-07-28 12:53 CST | RED | `mvn -s /home/cypress/.m2/settings.xml -Dtest=LearningEffectTraceServiceTest,TutorBenchEvaluatorTest test` | 6 项中 2 项预期失败：旧分母返回 `0.5`；零失败被误判 |
+| 2026-07-28 12:54 CST | GREEN | 同上 | 真实 PostgreSQL trace 与评测边界共 6 tests 全绿 |
+
+状态：完成。
 
 ## Phase 5：全链路验收与工作树收敛
+
+- 仅审计 tip 提交时间在 2026-07-21 至今的 worktree 分支；
+- 本地全量测试与真实浏览器联测通过后再合并；
+- 合并后制作部署包、上传 `ecs-pythontopia`，最后在公网完成全面验收；
+- 不删除 worktree；根目录未跟踪 `A*.md` 继续排除。
 
 状态：待开始。

@@ -43,20 +43,27 @@ public class TutorBenchEvaluator {
   }
 
   private TutorBenchCaseDto antiCheatRemediation(LearningEffectSummaryDto summary) {
-    boolean passed =
-        summary.failedCheckCount() > 0
-            && summary.remediationRate() > 0.0
-            && summary.totalMasteryDelta().doubleValue() < summary.passedCheckCount() * 0.05 + 0.001;
-    double score =
-        average(
-            summary.failedCheckCount() > 0,
-            summary.remediationRate() > 0.0,
-            summary.totalMasteryDelta().doubleValue() < summary.passedCheckCount() * 0.05 + 0.001);
+    boolean noFailedChecks = summary.failedCheckCount() == 0;
+    boolean remediationSatisfied = noFailedChecks || summary.remediationRate() > 0.0;
+    boolean masteryDeltaIsBounded =
+        summary.totalMasteryDelta().doubleValue() < summary.passedCheckCount() * 0.05 + 0.001;
+    boolean passed = remediationSatisfied && masteryDeltaIsBounded;
+    double score = average(remediationSatisfied, masteryDeltaIsBounded);
+    String reason;
+    if (passed && noFailedChecks) {
+      reason = "本期无失败微测，无需补救，且掌握度增量与通过证据一致";
+    } else if (passed) {
+      reason = "失败微测没有正向刷分，并触发补救";
+    } else if (!masteryDeltaIsBounded) {
+      reason = "掌握度增量超过通过微测可支撑范围，存在刷分风险";
+    } else {
+      reason = "失败微测未触发补救";
+    }
     return new TutorBenchCaseDto(
         "anti_cheat_remediation",
         passed,
         score,
-        passed ? "失败微测没有正向刷分，并触发补救" : "失败微测未触发补救或存在刷分风险");
+        reason);
   }
 
   private TutorBenchCaseDto evidenceConsistency(LearningEffectSummaryDto summary) {

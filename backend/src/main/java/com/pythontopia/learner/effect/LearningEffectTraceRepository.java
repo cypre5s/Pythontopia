@@ -78,7 +78,7 @@ public class LearningEffectTraceRepository {
         failed,
         ratio(passed, checks),
         ratio(checkedResources, consumed),
-        ratio(remedied, checks),
+        ratio(remedied, failed),
         totalDelta,
         positiveResourceRead,
         checkMasteryEvents);
