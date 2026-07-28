@@ -102,7 +102,28 @@
 
 ## Phase 3：费曼真判题链
 
-状态：待开始。
+### 修改
+
+- 教学文本防作弊与 AI 产出代码防泄答分离，合法完整程序不再被 `def/import` 误伤；
+- Markdown 代码围栏在送入沙箱前剥离；
+- 复用 `JudgeWorkerPool` 执行沙箱评测；
+- 裁定扩为 `PASSED / FAILED / ERROR / NA`，保留 `passed` 兼容字段；
+- 缺用例、`SYSTEM_ERROR`、worker 异常均不写失败状态或失败学习事件；
+- `JUDGED_PASS` 通过条件更新原子认领，只有首个成功请求回流掌握度和成功事件；
+- 失败条件更新不得覆盖并发已经写入的 `JUDGED_PASS`；
+- 公开/隐藏用例失败信息不回显期望输出。
+
+### TDD 与验证
+
+| 时间 | 阶段 | 命令 | 结果 |
+|---|---|---|---|
+| 2026-07-28 12:31 CST | RED 1 | `mvn -s /home/cypress/.m2/settings.xml -Dtest=FeynmanAntiCheatTest test` | 编译失败：缺少代码专用泄答检查与围栏剥离 |
+| 2026-07-28 12:33 CST | RED 2 | `mvn -s /home/cypress/.m2/settings.xml -Dtest=FeynmanAntiCheatTest,FeynmanJudgeServiceTest test` | 编译失败：缺少四态 DTO、worker 注入与新防泄答方法 |
+| 2026-07-28 12:35 CST | 夹具修正 | 同上 | 17 项已通过，1 项 Mockito 重设桩时误执行旧 Answer；改用 `doThrow`，未修改生产语义 |
+| 2026-07-28 12:36 CST | GREEN 1 | 同上 | 18 tests，0 failures，0 errors |
+| 2026-07-28 12:36 CST | GREEN 2 | `mvn -s /home/cypress/.m2/settings.xml -Dtest='com.pythontopia.feynman.*Test' test` | 费曼后端全量 30 tests，0 failures，0 errors |
+
+状态：完成。
 
 ## Phase 4：AI Runtime 与 TutorBench
 
