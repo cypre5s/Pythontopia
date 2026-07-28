@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-07-28 — 费曼前端：以后端四态为事实源
+
+- API 教学超时调整为 35 秒以覆盖后端 Graph 连接/读取上限，真判题使用 60 秒覆盖最多 10 个 5 秒用例；`Verdict.status` 与 `TurnResponse.noticeMd` 进入明确 TypeScript DTO。
+- Pinia 不再把所有 `passed=false` 强制转换成 `FAILED`，完整保留 `ERROR / NA`；成功/失败才投影为 `JUDGED_PASS / JUDGED_FAIL` 会话状态。
+- Graph 失败时保留学生尚未提交成功的解释并显示“重试提交”；无真实误解的 `noticeMd` 使用独立系统提示，不冒充 AI 学弟发言。
+- 概念模式和已通过会话禁用重复真判题；`FAILED` 使用失败色、`ERROR` 使用警示色、`NA` 使用中性信息色，在既有像素卡片语言内区分业务失败、平台故障和不适用。
+- TDD 证据：新增 API/store/component 测试先得到 9 项预期失败，再以 15 tests 全绿；`vue-tsc --noEmit`、定向 Prettier 通过，ESLint 0 errors（保留 2 条既有模板换行风格 warnings）。
+
 ## 2026-07-28 — 费曼真判题：四态事实、受控沙箱与并发幂等计分
 
 - 判题返回从布尔二态扩为 `PASSED / FAILED / ERROR / NA`，同时保留 `passed` 兼容投影：概念模式为中性 `NA`，缺测试用例、沙箱 `SYSTEM_ERROR` 或 worker 故障为 `ERROR`，均不再写学生失败事件。

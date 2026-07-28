@@ -123,6 +123,22 @@
 | 2026-07-28 12:36 CST | GREEN 1 | 同上 | 18 tests，0 failures，0 errors |
 | 2026-07-28 12:36 CST | GREEN 2 | `mvn -s /home/cypress/.m2/settings.xml -Dtest='com.pythontopia.feynman.*Test' test` | 费曼后端全量 30 tests，0 failures，0 errors |
 
+### 前端事实投影
+
+- API DTO 接收 `noticeMd` 与四态判题 `status`，教学/判题超时分别为 35 秒/60 秒；
+- Pinia 直接使用后端状态，只有真实 `PASSED/FAILED` 改写当前会话状态；
+- 教学失败保留输入并提供重试，系统 notice 与学弟台词分离；
+- 概念模式和已通过会话禁用真判题；
+- `FAILED / ERROR / NA` 分别使用失败、警示、中性视觉语义。
+
+| 时间 | 阶段 | 命令 | 结果 |
+|---|---|---|---|
+| 2026-07-28 12:39 CST | RED | `npx vitest run tests/components/FeynmanPanel.spec.ts tests/api/feynman.spec.ts tests/stores/feynman.spec.ts` | 15 项中 9 项预期失败，命中旧超时、布尔强转、缺重试/notice、概念和已通过仍可判题 |
+| 2026-07-28 12:41 CST | GREEN | 同上（`--coverage.enabled=false`） | 15 tests，0 failures |
+| 2026-07-28 12:41 CST | 类型 | `npm run typecheck` | 通过 |
+| 2026-07-28 12:43 CST | 格式与静态检查 | 定向 `prettier --check`、`eslint` | Prettier 通过；ESLint 0 errors / 2 个既有 Vue 模板换行 warnings |
+| 2026-07-28 12:43 CST | 格式后回归 | 同一组 Vitest | 15 tests，0 failures |
+
 状态：完成。
 
 ## Phase 4：AI Runtime 与 TutorBench

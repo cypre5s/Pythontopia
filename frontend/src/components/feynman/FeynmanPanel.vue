@@ -26,7 +26,10 @@ const {
   latestJudgeResult,
 } = storeToRefs(store);
 const teachingText = ref('');
+const teachFailed = ref(false);
 const prefersReducedMotion = useReducedMotion();
+// 概念模式：非课程 KC（课件外自由概念）→ 通识知识，以代码找茬为准、不计入掌握度。
+const isConcept = computed(() => !isFeynmanSelfTestKc(props.kcCode));
 
 const canTeach = computed(
   () => currentSession.value !== null && teachingText.value.trim().length > 0 && !teaching.value,
@@ -34,25 +37,54 @@ const canTeach = computed(
 
 const canJudge = computed(
   () =>
-    currentSession.value !== null && latestProducedCode.value.trim().length > 0 && !judging.value,
+    currentSession.value !== null &&
+    !isConcept.value &&
+    currentSession.value.status !== 'JUDGED_PASS' &&
+    latestJudgeResult.value?.status !== 'PASSED' &&
+    latestProducedCode.value.trim().length > 0 &&
+    !judging.value,
 );
 
 const misconceptions = computed(() => currentSession.value?.tuteeState.misconceptions ?? []);
 
 const judgeText = computed(() => {
   const result = latestJudgeResult.value;
+  if (isConcept.value) {
+    return result?.status === 'NA'
+      ? result.messageZh
+      : '通识概念以代码找茬为准，不进行代表题真判题，也不计入掌握度。';
+  }
+  if (currentSession.value?.status === 'JUDGED_PASS' && !result) {
+    return '本会话已经通过真判题，掌握度已完成回流。';
+  }
   if (!result) {
     return '等待代码';
   }
   return result.messageZh;
 });
 
-const misconceptionSummary = computed(() => misconceptions.value.map((item) => item.tag).join('、'));
+const judgeButtonText = computed(() => {
+  if (judging.value) {
+    return '判题中…';
+  }
+  if (isConcept.value) {
+    return '概念模式无需判题';
+  }
+  if (
+    currentSession.value?.status === 'JUDGED_PASS' ||
+    latestJudgeResult.value?.status === 'PASSED'
+  ) {
+    return '已通过';
+  }
+  return '真判题裁定';
+});
+
+const misconceptionSummary = computed(() =>
+  misconceptions.value.map((item) => item.tag).join('、'),
+);
 const latestTurn = computed(() => turns.value.at(-1) ?? null);
 const teachHint = computed(() => store.bugHunt?.hintMd ?? '');
 const kcLabel = computed(() => kcDisplayName(props.kcCode));
-// 概念模式：非课程 KC（课件外自由概念）→ 通识知识，以代码找茬为准、不计入掌握度。
-const isConcept = computed(() => !isFeynmanSelfTestKc(props.kcCode));
 
 /** 学弟中性描述代码在做什么（不暴露「我以为…」式自我纠错）。 */
 const TUTEE_CODE_DESC: Record<string, string> = {
@@ -78,10 +110,17 @@ const tuteeVoice = computed(() => {
 });
 
 const hasChat = computed(
-  () => tuteeVoice.value.length > 0 || turns.value.length > 0 || Boolean(latestTurn.value?.taughtFix),
+  () =>
+    tuteeVoice.value.length > 0 || turns.value.length > 0 || Boolean(latestTurn.value?.taughtFix),
 );
 
 function judgeClass(result: FeynmanJudgeResultDto | null): string {
+  if (isConcept.value && (!result || result.status === 'PENDING')) {
+    return 'feynman-panel__judge--na';
+  }
+  if (currentSession.value?.status === 'JUDGED_PASS' && !result) {
+    return 'feynman-panel__judge--passed';
+  }
   if (!result) {
     return 'feynman-panel__judge--pending';
   }
@@ -89,6 +128,7 @@ function judgeClass(result: FeynmanJudgeResultDto | null): string {
 }
 
 async function start(): Promise<void> {
+  teachFailed.value = false;
   try {
     await store.startSession(props.kcCode);
   } catch {
@@ -101,10 +141,12 @@ async function submitTeaching(): Promise<void> {
   if (!canTeach.value || explanation.length === 0) {
     return;
   }
+  teachFailed.value = false;
   try {
     await store.teach(explanation);
     teachingText.value = '';
   } catch {
+    teachFailed.value = true;
     // 错误已写入 store.error 并在面板内提示，这里吞掉以避免未处理的 promise rejection。
   }
 }
@@ -140,7 +182,8 @@ async function submitJudge(): Promise<void> {
         class="feynman-panel__concept-badge"
         data-testid="feynman-concept-badge"
         title="课件外概念 · 通识知识：以代码找茬为准，不计入掌握度"
-      >通识 · 非课件</span>
+        >通识 · 非课件</span
+      >
       <p
         v-if="currentSession && misconceptionSummary"
         class="feynman-panel__misc"
@@ -259,6 +302,14 @@ async function submitJudge(): Promise<void> {
                 </div>
                 <span class="chat-msg__avatar">我</span>
               </div>
+              <p
+                v-if="turn.noticeMd"
+                class="feynman-panel__system-notice"
+                data-testid="feynman-system-notice"
+                role="status"
+              >
+                {{ turn.noticeMd }}
+              </p>
             </template>
 
             <p
@@ -286,7 +337,7 @@ async function submitJudge(): Promise<void> {
                 :disabled="!canTeach"
                 @click="submitTeaching"
               >
-                {{ teaching ? '思考中…' : '讲给学弟听' }}
+                {{ teaching ? '思考中…' : teachFailed ? '重试提交' : '讲给学弟听' }}
               </button>
             </div>
           </div>
@@ -315,7 +366,7 @@ async function submitJudge(): Promise<void> {
               :disabled="!canJudge"
               @click="submitJudge"
             >
-              {{ judging ? '判题中…' : '真判题裁定' }}
+              {{ judgeButtonText }}
             </button>
           </div>
         </article>
@@ -677,6 +728,20 @@ async function submitJudge(): Promise<void> {
   text-align: center;
 }
 
+.feynman-panel__system-notice {
+  align-self: center;
+  margin: 0;
+  max-width: 92%;
+  padding: var(--pyt-space-2) var(--pyt-space-3);
+  border: 1px dashed var(--pyt-color-warning);
+  border-radius: var(--pyt-radius-sm);
+  background: var(--pyt-color-warning-bg);
+  color: var(--pyt-color-text-hint);
+  font-size: var(--pyt-font-size-xs);
+  line-height: 1.55;
+  text-align: center;
+}
+
 .feynman-panel__teach-input {
   width: 100%;
   resize: none;
@@ -719,10 +784,19 @@ async function submitJudge(): Promise<void> {
   background: var(--pyt-color-success-bg);
 }
 
-.feynman-panel__judge--failed,
-.feynman-panel__judge--error {
+.feynman-panel__judge--failed {
   border-color: var(--pyt-color-danger);
   background: var(--pyt-color-danger-bg);
+}
+
+.feynman-panel__judge--error {
+  border-color: var(--pyt-color-warning);
+  background: var(--pyt-color-warning-bg);
+}
+
+.feynman-panel__judge--na {
+  border-color: var(--pyt-color-info);
+  background: var(--pyt-color-info-bg);
 }
 
 .feynman-panel__judge--pending {

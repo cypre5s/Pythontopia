@@ -121,12 +121,23 @@ export const useFeynmanStore = defineStore('feynman', {
       try {
         const verdict = await judgeFeynmanSession(sessionId);
         const result: FeynmanJudgeResultDto = {
-          status: verdict.passed ? 'PASSED' : 'FAILED',
+          status: verdict.status,
           messageZh: verdict.message,
           // 判题证据回链到学弟当前误解的真实 event_id（零合成）。
           evidenceEventIds: this.misconceptions.flatMap((item) => item.evidenceEventIds),
         };
         this.latestJudgeResult = result;
+        if (this.currentSession && verdict.status === 'PASSED') {
+          this.currentSession = {
+            ...this.currentSession,
+            status: 'JUDGED_PASS',
+          };
+        } else if (this.currentSession && verdict.status === 'FAILED') {
+          this.currentSession = {
+            ...this.currentSession,
+            status: 'JUDGED_FAIL',
+          };
+        }
         return result;
       } catch (error) {
         this.error = errorMessage(error);

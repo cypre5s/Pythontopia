@@ -7,6 +7,8 @@ import { useFeynmanStore } from '@/stores/feynman';
 const mocks = vi.hoisted(() => ({
   startFeynmanSession: vi.fn(),
   teachFeynmanSession: vi.fn(),
+  huntFeynmanBug: vi.fn(),
+  judgeFeynmanSession: vi.fn(),
 }));
 
 vi.mock('@/api/feynman', () => mocks);
@@ -38,6 +40,8 @@ describe('FeynmanPanel', () => {
     setActivePinia(createPinia());
     mocks.startFeynmanSession.mockReset();
     mocks.teachFeynmanSession.mockReset();
+    mocks.huntFeynmanBug.mockReset();
+    mocks.judgeFeynmanSession.mockReset();
     mocks.startFeynmanSession.mockResolvedValue(session);
     mocks.teachFeynmanSession.mockResolvedValue({
       id: 21,
@@ -50,6 +54,13 @@ describe('FeynmanPanel', () => {
         messageZh: '隐藏用例通过',
         evidenceEventIds: [101, 102],
       },
+    });
+    mocks.huntFeynmanBug.mockResolvedValue(null);
+    mocks.judgeFeynmanSession.mockResolvedValue({
+      sessionId: 11,
+      passed: true,
+      status: 'PASSED',
+      message: '教学成功',
     });
   });
 
@@ -78,7 +89,9 @@ describe('FeynmanPanel', () => {
 
     await wrapper.get('[data-testid="feynman-start"]').trigger('click');
     await flushPromises();
-    await wrapper.get('[data-testid="feynman-teach-input"]').setValue('先读变量名，再看 = 右边的值。');
+    await wrapper
+      .get('[data-testid="feynman-teach-input"]')
+      .setValue('先读变量名，再看 = 右边的值。');
     await wrapper.get('[data-testid="feynman-teach-submit"]').trigger('click');
     await flushPromises();
 
@@ -123,5 +136,111 @@ print("1到5的和是", total)`,
 
     expect(wrapper.find('[data-testid="feynman-teach-input"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="feynman-teach-submit"]').exists()).toBe(false);
+  });
+
+  it('Graph 失败时保留学生解释并把提交动作变成明确重试', async () => {
+    mocks.teachFeynmanSession.mockRejectedValueOnce(new Error('AI 学弟暂时不可用'));
+    const wrapper = mount(FeynmanPanel, {
+      props: { kcCode: 'PY43-KC-010' },
+    });
+    await wrapper.get('[data-testid="feynman-start"]').trigger('click');
+    await flushPromises();
+
+    const input = wrapper.get('[data-testid="feynman-teach-input"]');
+    await input.setValue('range 的右端点不包含，所以应调整 stop。');
+    await wrapper.get('[data-testid="feynman-teach-submit"]').trigger('click');
+    await flushPromises();
+
+    expect((input.element as HTMLTextAreaElement).value).toContain('右端点不包含');
+    expect(wrapper.get('[data-testid="feynman-teach-submit"]').text()).toContain('重试');
+    expect(wrapper.get('[role="alert"]').text()).toContain('AI 学弟暂时不可用');
+  });
+
+  it('把后端 noticeMd 显示为独立系统提示而不是学弟台词', async () => {
+    mocks.teachFeynmanSession.mockResolvedValueOnce({
+      id: 22,
+      role: 'TUTEE',
+      content: '我可以继续听你解释。',
+      taughtFix: null,
+      noticeMd: '请先去做题积累真实错误，再回来完成费曼反演。',
+    });
+    const wrapper = mount(FeynmanPanel, {
+      props: { kcCode: 'PY43-KC-010' },
+    });
+    await wrapper.get('[data-testid="feynman-start"]').trigger('click');
+    await flushPromises();
+    await wrapper.get('[data-testid="feynman-teach-input"]').setValue('先解释边界规则。');
+    await wrapper.get('[data-testid="feynman-teach-submit"]').trigger('click');
+    await flushPromises();
+
+    const notice = wrapper.get('[data-testid="feynman-system-notice"]');
+    expect(notice.text()).toContain('先去做题');
+    expect(notice.classes()).toContain('feynman-panel__system-notice');
+    expect(wrapper.get('.chat-msg__bubble').text()).not.toContain('先去做题');
+  });
+
+  it('概念模式以中性说明禁用代表题真判题', async () => {
+    mocks.startFeynmanSession.mockResolvedValueOnce({
+      ...session,
+      kcCode: '正则表达式',
+      tuteeState: { ...session.tuteeState, producedCode: 'print("regex")' },
+    });
+    const wrapper = mount(FeynmanPanel, {
+      props: { kcCode: '正则表达式' },
+    });
+    await wrapper.get('[data-testid="feynman-start"]').trigger('click');
+    await flushPromises();
+
+    expect(
+      wrapper.get('[data-testid="feynman-judge-submit"]').attributes('disabled'),
+    ).toBeDefined();
+    expect(wrapper.get('[data-testid="feynman-judge-submit"]').text()).toContain('无需判题');
+    expect(wrapper.get('[data-testid="feynman-judge"]').text()).toContain('代码找茬');
+    expect(wrapper.get('.feynman-panel__verdict').classes()).toContain('feynman-panel__judge--na');
+  });
+
+  it('已通过会话禁用重复真判题', async () => {
+    mocks.startFeynmanSession.mockResolvedValueOnce({
+      ...session,
+      status: 'JUDGED_PASS',
+      tuteeState: {
+        ...session.tuteeState,
+        producedCode: 'print(1)',
+        judgeResult: null,
+      },
+    });
+    const wrapper = mount(FeynmanPanel, {
+      props: { kcCode: 'PY43-KC-010' },
+    });
+    await wrapper.get('[data-testid="feynman-start"]').trigger('click');
+    await flushPromises();
+
+    expect(
+      wrapper.get('[data-testid="feynman-judge-submit"]').attributes('disabled'),
+    ).toBeDefined();
+    expect(wrapper.get('[data-testid="feynman-judge-submit"]').text()).toContain('已通过');
+    expect(wrapper.get('.feynman-panel__verdict').classes()).toContain(
+      'feynman-panel__judge--passed',
+    );
+  });
+
+  it.each([
+    ['ERROR', 'feynman-panel__judge--error'],
+    ['NA', 'feynman-panel__judge--na'],
+  ])('保留 %s 的独立判题视觉状态', async (status, expectedClass) => {
+    const wrapper = mount(FeynmanPanel, {
+      props: { kcCode: 'PY43-KC-010' },
+    });
+    await wrapper.get('[data-testid="feynman-start"]').trigger('click');
+    await flushPromises();
+    const store = useFeynmanStore();
+    store.latestJudgeResult = {
+      status: status as 'ERROR' | 'NA',
+      messageZh: status,
+      evidenceEventIds: [],
+    };
+    await flushPromises();
+
+    expect(wrapper.get('.feynman-panel__verdict').classes()).toContain(expectedClass);
   });
 });
