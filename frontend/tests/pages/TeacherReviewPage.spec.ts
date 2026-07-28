@@ -71,6 +71,12 @@ describe('TeacherReviewPage', () => {
     vi.mocked(requestBossProblem).mockReset();
     runtimeMocks.fetchAiRuntimeOperations.mockReset();
     runtimeMocks.fetchAiRuntimeOperations.mockResolvedValue({
+      subject: {
+        scope: 'PLATFORM',
+        label: '全平台学习证据',
+        learnerCount: 6,
+        evidenceLearnerCount: 4,
+      },
       loops: [
         {
           loopType: 'IMPROVE',
@@ -115,6 +121,7 @@ describe('TeacherReviewPage', () => {
 
     expect(runtimeMocks.fetchAiRuntimeOperations).toHaveBeenCalledTimes(1);
     expect(wrapper.find('[data-testid="runtime-operations"]').exists()).toBe(true);
+    expect(wrapper.text()).toContain('全平台学习证据');
     expect(wrapper.text()).toContain('系统演化闭环');
     expect(wrapper.text()).toContain('策略灰度审核');
   });

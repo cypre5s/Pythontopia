@@ -199,6 +199,12 @@ describe('WorkshopPage R-13 改造', () => {
       ],
     });
     apiMocks.fetchAiRuntimeOperations.mockResolvedValue({
+      subject: {
+        scope: 'SELF',
+        label: '本人学习证据',
+        learnerCount: 1,
+        evidenceLearnerCount: 1,
+      },
       loops: [
         {
           loopType: 'LEARNER',

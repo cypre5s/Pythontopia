@@ -28,7 +28,9 @@ public class AiRuntimeSummaryController {
   @GetMapping("/operations")
   public AiRuntimeOperationsDto operations(@CurrentUser CurrentUserPrincipal user) {
     requireRuntimeViewer(user);
-    return service.operationsForUser(user.userId());
+    return user.role() == Role.STUDENT
+        ? service.operationsForUser(user.userId())
+        : service.operationsForPlatform();
   }
 
   private void requireStudent(CurrentUserPrincipal user) {

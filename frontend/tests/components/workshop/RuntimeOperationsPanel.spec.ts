@@ -13,6 +13,12 @@ import RuntimeOperationsPanel from '@/components/workshop/RuntimeOperationsPanel
 
 function sampleOperations() {
   return {
+    subject: {
+      scope: 'PLATFORM',
+      label: '全平台学习证据',
+      learnerCount: 12,
+      evidenceLearnerCount: 9,
+    },
     loops: [
       {
         loopType: 'LEARNER',
@@ -57,6 +63,9 @@ describe('RuntimeOperationsPanel', () => {
 
     expect(apiMocks.fetchAiRuntimeOperations).toHaveBeenCalled();
     expect(wrapper.find('[data-testid="runtime-operations"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="runtime-operations-subject"]').text()).toBe(
+      '全平台学习证据 · 9 / 12 名学习者已有证据',
+    );
     expect(wrapper.text()).toContain('学生学习闭环');
     expect(wrapper.text()).toContain('资源生成闭环');
     expect(wrapper.text()).toContain('证据不足');

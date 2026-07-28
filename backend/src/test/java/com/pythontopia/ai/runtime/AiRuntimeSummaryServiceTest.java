@@ -25,6 +25,8 @@ class AiRuntimeSummaryServiceTest {
       mock(LearningEvidenceGraphService.class);
   private final EvidenceMemoryService evidenceMemoryService = mock(EvidenceMemoryService.class);
   private final WeeklyReportService weeklyReportService = mock(WeeklyReportService.class);
+  private final AiRuntimePlatformSnapshotRepository platformSnapshotRepository =
+      mock(AiRuntimePlatformSnapshotRepository.class);
   private final BrowseProperties browseProperties =
       new BrowseProperties(List.of("judge.pythontopia.local"));
   private final AiRuntimeSummaryService service =
@@ -33,7 +35,8 @@ class AiRuntimeSummaryServiceTest {
           evidenceGraphService,
           evidenceMemoryService,
           weeklyReportService,
-          browseProperties);
+          browseProperties,
+          platformSnapshotRepository);
 
   @Test
   void summaryCombinesProtocolEvidenceMemoryTwinAndBrowseSafetyWall() {
@@ -118,6 +121,10 @@ class AiRuntimeSummaryServiceTest {
 
     AiRuntimeOperationsDto operations = service.operationsForUser(userId);
 
+    assertThat(operations.subject().scope()).isEqualTo("SELF");
+    assertThat(operations.subject().label()).isEqualTo("本人学习证据");
+    assertThat(operations.subject().learnerCount()).isEqualTo(1);
+    assertThat(operations.subject().evidenceLearnerCount()).isEqualTo(1);
     assertThat(operations.loops()).extracting(AiRuntimeOperationsDto.LoopOperation::loopType)
         .containsExactly("LEARNER", "DEBUG", "RESOURCE", "WORLD", "IMPROVE");
     assertThat(operations.loops())
@@ -189,5 +196,57 @@ class AiRuntimeSummaryServiceTest {
         .first()
         .extracting(AiRuntimeOperationsDto.GovernanceItem::status)
         .isEqualTo("INSUFFICIENT_EVIDENCE");
+  }
+
+  @Test
+  void emptyPlatformSnapshotIsExplicitAndEvidenceLoopsStayInsufficient() {
+    when(platformSnapshotRepository.snapshot())
+        .thenReturn(new AiRuntimePlatformSnapshotRepository.PlatformSnapshot(12, 0, 0, 0, 0));
+
+    AiRuntimeOperationsDto operations = service.operationsForPlatform();
+
+    assertThat(operations.subject().scope()).isEqualTo("PLATFORM");
+    assertThat(operations.subject().label()).isEqualTo("全平台学习证据");
+    assertThat(operations.subject().learnerCount()).isEqualTo(12);
+    assertThat(operations.subject().evidenceLearnerCount()).isZero();
+    assertThat(operations.loops())
+        .filteredOn(operation -> !"IMPROVE".equals(operation.loopType()))
+        .extracting(AiRuntimeOperationsDto.LoopOperation::status)
+        .containsOnly("INSUFFICIENT_EVIDENCE");
+  }
+
+  @Test
+  void platformAggregateCountsDriveLoopStatusesWithoutLearnerIdentifiers() {
+    when(platformSnapshotRepository.snapshot())
+        .thenReturn(new AiRuntimePlatformSnapshotRepository.PlatformSnapshot(12, 5, 2, 4, 3));
+
+    AiRuntimeOperationsDto operations = service.operationsForPlatform();
+
+    assertThat(operations.subject())
+        .extracting(
+            AiRuntimeOperationsDto.OperationsSubject::scope,
+            AiRuntimeOperationsDto.OperationsSubject::learnerCount,
+            AiRuntimeOperationsDto.OperationsSubject::evidenceLearnerCount)
+        .containsExactly("PLATFORM", 12, 5);
+    assertThat(operations.loops())
+        .filteredOn(operation -> "LEARNER".equals(operation.loopType()))
+        .first()
+        .extracting(AiRuntimeOperationsDto.LoopOperation::status)
+        .isEqualTo("PASS");
+    assertThat(operations.loops())
+        .filteredOn(operation -> "DEBUG".equals(operation.loopType()))
+        .first()
+        .extracting(AiRuntimeOperationsDto.LoopOperation::status)
+        .isEqualTo("WARN");
+    assertThat(operations.loops())
+        .filteredOn(operation -> "RESOURCE".equals(operation.loopType()))
+        .first()
+        .extracting(AiRuntimeOperationsDto.LoopOperation::status)
+        .isEqualTo("PASS");
+    assertThat(operations.loops())
+        .filteredOn(operation -> "WORLD".equals(operation.loopType()))
+        .first()
+        .extracting(AiRuntimeOperationsDto.LoopOperation::status)
+        .isEqualTo("PASS");
   }
 }

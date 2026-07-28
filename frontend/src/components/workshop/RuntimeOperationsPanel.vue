@@ -51,6 +51,14 @@ function statusLabel(status: RuntimeOperationStatus): string {
     </p>
 
     <template v-else-if="operations">
+      <p
+        class="ops__subject"
+        data-testid="runtime-operations-subject"
+      >
+        {{ operations.subject.label }} · {{ operations.subject.evidenceLearnerCount }} /
+        {{ operations.subject.learnerCount }} 名学习者已有证据
+      </p>
+
       <ul class="ops__loops">
         <li
           v-for="loop in operations.loops"
@@ -121,6 +129,15 @@ function statusLabel(status: RuntimeOperationStatus): string {
 }
 .ops__error {
   color: #9e3528;
+}
+.ops__subject {
+  margin: 0;
+  padding: 6px 8px;
+  border-left: 3px solid #6f8d78;
+  background: #f4f7f3;
+  color: #4a5b51;
+  font-size: 11px;
+  line-height: 1.5;
 }
 .ops__loops,
 .ops__governance {
