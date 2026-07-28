@@ -82,7 +82,23 @@
 
 ## Phase 2：费曼教学链
 
-状态：待开始。
+### 修改
+
+- Java Graph 请求补齐既有 Python `history` 合同；
+- 读取本会话最近 12 条历史，在 6000 字符预算内保留最新上下文；
+- 删除按解释长度伪造成功与代码的 `fallbackStep`，Graph 不可达统一 502；
+- 空误解列表保持 `OPEN`，以 `noticeMd` 区分系统提示和学弟回复。
+
+### TDD 与验证
+
+| 时间 | 阶段 | 命令 | 结果 |
+|---|---|---|---|
+| 2026-07-28 12:23 CST | RED 1 | `mvn -s /home/cypress/.m2/settings.xml -Dtest=FeynmanGraphClientTest test` | 编译失败：缺少 `ConversationTurn` 与四参数 `step`，证明 history 合同尚未实现 |
+| 2026-07-28 12:24 CST | RED 2 | `mvn -s /home/cypress/.m2/settings.xml -Dtest=FeynmanSessionServiceTest,FeynmanSessionServiceSecurityTest test` | 编译失败：缺少 history-aware 调用与 `noticeMd`，新行为测试有效 |
+| 2026-07-28 12:25 CST | GREEN | `mvn -s /home/cypress/.m2/settings.xml -Dtest=FeynmanGraphClientTest,FeynmanSessionServiceTest,FeynmanSessionServiceSecurityTest,FeynmanControllerSecurityTest test` | 12 tests，0 failures，0 errors |
+| 2026-07-28 12:27 CST | 格式门诊断 | `mvn -s /home/cypress/.m2/settings.xml spotless:check` | Maven 镜像无法解析 Spotless 运行时依赖；按约定经 7892 代理重试仍未进入格式检查，非代码格式失败；`git diff --check` 另行通过 |
+
+状态：完成。
 
 ## Phase 3：费曼真判题链
 

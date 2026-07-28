@@ -6,6 +6,8 @@ import com.pythontopia.feynman.dto.FeynmanDtos.SessionResponse;
 import com.pythontopia.feynman.dto.FeynmanDtos.TurnResponse;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.submission.repository.PublicProblemRepository;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,6 +19,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class FeynmanSessionService {
+
+  private static final int HISTORY_TURN_LIMIT = 12;
+  private static final int HISTORY_CHAR_BUDGET = 6000;
 
   private final JdbcTemplate jdbc;
   private final ObjectMapper objectMapper;
@@ -67,6 +72,8 @@ public class FeynmanSessionService {
   public TurnResponse teach(long userId, long sessionId, String explanation) {
     SessionData session = loadSession(userId, sessionId);
     List<Misconception> misconceptions = parseMisconceptions(session.tuteeState());
+    // 必须先读取再插入本轮，否则本轮解释会在 history 和 student_teaching 中重复。
+    List<FeynmanGraphClient.ConversationTurn> history = recentHistory(sessionId);
 
     // 学生本回合的教学先落库为 STUDENT 轮，支撑「误解→你的教学→判题→证据」玻璃盒可溯源。
     jdbc.update(
@@ -81,8 +88,13 @@ public class FeynmanSessionService {
 
     FeynmanGraphClient.FeynmanOutput output =
         graphClient
-            .step(session.kcCode(), misconceptions, explanation)
-            .orElseGet(() -> fallbackStep(misconceptions, explanation));
+            .step(session.kcCode(), misconceptions, explanation, history)
+            .orElseThrow(
+                () ->
+                    new BusinessException(
+                        HttpStatus.BAD_GATEWAY,
+                        "FEYNMAN_TUTEE_UNAVAILABLE",
+                        "AI 学弟暂时不可用，本次教学未判定成败，请稍后重试"));
     String nextState = toState(output.updatedMisconceptions());
     Long turnId =
         jdbc.queryForObject(
@@ -98,7 +110,51 @@ public class FeynmanSessionService {
         allResolved(output.updatedMisconceptions()) ? "TAUGHT" : "OPEN",
         sessionId);
     return new TurnResponse(
-        turnId == null ? 0L : turnId, "TUTEE", output.replyMd(), output.producedCode());
+        turnId == null ? 0L : turnId,
+        "TUTEE",
+        output.replyMd(),
+        output.producedCode(),
+        noMisconceptionNotice(output.updatedMisconceptions()));
+  }
+
+  private List<FeynmanGraphClient.ConversationTurn> recentHistory(long sessionId) {
+    List<FeynmanGraphClient.ConversationTurn> newestFirst =
+        jdbc.query(
+            "SELECT role, content FROM feynman_turn WHERE session_id = ? "
+                + "ORDER BY created_at DESC, id DESC LIMIT ?",
+            (rs, rowNum) -> {
+              String role =
+                  switch (rs.getString("role")) {
+                    case "STUDENT" -> "user";
+                    case "TUTEE" -> "assistant";
+                    default -> throw new IllegalStateException("Unknown Feynman turn role");
+                  };
+              String content = rs.getString("content");
+              return new FeynmanGraphClient.ConversationTurn(
+                  role, content == null ? "" : content);
+            },
+            sessionId,
+            HISTORY_TURN_LIMIT);
+    List<FeynmanGraphClient.ConversationTurn> chronological =
+        new ArrayList<>(newestFirst);
+    Collections.reverse(chronological);
+
+    int totalCharacters =
+        chronological.stream().mapToInt(turn -> turn.content().length()).sum();
+    int firstKept = 0;
+    while (totalCharacters > HISTORY_CHAR_BUDGET && firstKept < chronological.size()) {
+      totalCharacters -= chronological.get(firstKept).content().length();
+      firstKept++;
+    }
+    return List.copyOf(chronological.subList(firstKept, chronological.size()));
+  }
+
+  private static String noMisconceptionNotice(List<Misconception> misconceptions) {
+    if (misconceptions != null && !misconceptions.isEmpty()) {
+      return null;
+    }
+    return "你在这个知识点上还没有真实的做题错误记录，学弟没有可被纠正的误解。"
+        + "请先去做题积累真实错误，再回来完成费曼反演。";
   }
 
   /** 代码找茬：基于该会话的真实误解，让学弟写出含 bug 的代码 + 真实 bug 行号供学生找茬。 */
@@ -140,7 +196,7 @@ public class FeynmanSessionService {
         "UPDATE feynman_session SET tutee_state = ?::jsonb, status = 'OPEN' WHERE id = ?",
         toState(misconceptions),
         sessionId);
-    return new TurnResponse(turnId == null ? 0L : turnId, "TUTEE", reply, null);
+    return new TurnResponse(turnId == null ? 0L : turnId, "TUTEE", reply, null, null);
   }
 
   SessionData loadSession(long userId, long sessionId) {
@@ -164,24 +220,10 @@ public class FeynmanSessionService {
     }
   }
 
-  private FeynmanGraphClient.FeynmanOutput fallbackStep(
-      List<Misconception> misconceptions, String explanation) {
-    // 仅离线兜底：要求解释足够具体（且已通过防作弊），否则视为「没讲清原因」。
-    boolean correct = explanation != null && explanation.length() >= 12;
-    List<Misconception> updated =
-        misconceptions.stream()
-            .map(m -> correct ? new Misconception(m.tag(), m.evidenceEventIds(), true) : m)
-            .toList();
-    String reply =
-        correct
-            ? "我懂了：要先说清原因，再改代码。我试着按你的解释修正。"
-            : "我还没真正懂，能不能别直接给答案，而是讲讲为什么这样改？";
-    String code = correct ? "print('ok')" : null;
-    return new FeynmanGraphClient.FeynmanOutput(reply, updated, code);
-  }
-
   private static boolean allResolved(List<Misconception> misconceptions) {
-    return misconceptions != null && misconceptions.stream().allMatch(Misconception::resolved);
+    return misconceptions != null
+        && !misconceptions.isEmpty()
+        && misconceptions.stream().allMatch(Misconception::resolved);
   }
 
   /** 持久化形态对齐迁移注释 {@code {misconceptions:[...]}} 与前端 FeynmanTuteeStateDto。 */

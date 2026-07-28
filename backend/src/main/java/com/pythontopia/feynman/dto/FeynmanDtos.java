@@ -14,7 +14,8 @@ public final class FeynmanDtos {
 
   public record SessionResponse(long id, long userId, String kcCode, String status, JsonNode tuteeState) {}
 
-  public record TurnResponse(long id, String role, String content, String taughtFix) {}
+  public record TurnResponse(
+      long id, String role, String content, String taughtFix, String noticeMd) {}
 
   public record Verdict(long sessionId, boolean passed, String message) {}
 
