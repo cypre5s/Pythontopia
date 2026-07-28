@@ -59,11 +59,26 @@
 - [x] 失败基线复现
 - [x] 方案比较与设计批准
 - [x] 设计文档落盘
-- [ ] 详细实施计划
+- [x] 详细实施计划
 
 ## Phase 1：恢复后端基线
 
-状态：待开始。
+### 修改
+
+- 保留 `V186__learner_profile_cognitive_style_jsonb.sql`；
+- 将另外三个冲突迁移改为连续且唯一的 `V188`、`V189`、`V190`；
+- JWT 会话代次注释同步指向 `V188`；
+- 新增纯文件系统测试，阻断重复 Flyway 版本再次进入主分支。
+
+### TDD 与验证
+
+| 时间 | 阶段 | 命令 | 结果 |
+|---|---|---|---|
+| 2026-07-28 12:19 CST | RED | `mvn -s /home/cypress/.m2/settings.xml -Dtest=FlywayMigrationVersionUniquenessTest test` | 1 test / 1 failure；准确列出 4 个 `V186` |
+| 2026-07-28 12:20 CST | 增量构建诊断 | `mvn -s /home/cypress/.m2/settings.xml -Dtest=FlywayMigrationVersionUniquenessTest,CognitiveStyleColumnMigrationTest,LoopRunServiceTest test` | 唯一性测试通过，但 `target/classes` 残留旧迁移使集成测试失败；确认必须 clean 验证迁移重命名 |
+| 2026-07-28 12:21 CST | GREEN | `mvn -s /home/cypress/.m2/settings.xml clean -Dtest=FlywayMigrationVersionUniquenessTest,CognitiveStyleColumnMigrationTest,LoopRunServiceTest test` | 105 个迁移从空库执行到 `V190`；19 tests，0 failures，0 errors |
+
+状态：完成。
 
 ## Phase 2：费曼教学链
 
