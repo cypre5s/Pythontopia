@@ -207,9 +207,43 @@
 
 ## Phase 5：全链路验收与工作树收敛
 
-- 仅审计 tip 提交时间在 2026-07-21 至今的 worktree 分支；
-- 本地全量测试与真实浏览器联测通过后再合并；
-- 合并后制作部署包、上传 `ecs-pythontopia`，最后在公网完成全面验收；
-- 不删除 worktree；根目录未跟踪 `A*.md` 继续排除。
+### 最近一周 worktree 审计与合并
 
-状态：待开始。
+- 口径固定为 tip 提交时间在 2026-07-21 至 2026-07-28 的分支；
+- 16 个 Claude 分支的 tip 均已是 `main` 祖先；
+- `infra/dual-http-https` 的补丁已由 `22153d04` 等价落入 `main`，再以 `--no-ff` 合并记录分支祖先关系，未引入内容变化；
+- 两个 Claude worktree 留有未提交 WIP：迁移/JWT 草稿已被当前实现覆盖，费曼/Runtime/TutorBench 旧方案也已被本轮更严格实现取代；未擅自移动或提交这些工作树内容；
+- 18 个最近一周分支最终均显示 merged；未删除任何 worktree。
+
+### 串行全量与基础设施复验
+
+| 时间 | 范围 | 命令 | 结果 |
+|---|---|---|---|
+| 2026-07-28 13:12 CST | 后端最终串行全量 | `mvn -s /home/cypress/.m2/settings.xml clean test` | 1082 tests / 0 failures / 4 Testcontainers errors；WSL 临时端口区间仅 `44620-48715`，Docker 启动 pgvector 时命中瞬时端口占用，非业务断言失败 |
+| 2026-07-28 13:21 CST | 后端失败类隔离复验 | `mvn -s /home/cypress/.m2/settings.xml -Dtest=CoursePackServiceIntegrationTest,DecisionTraceControllerTest,MemoryRetrievalSemanticIntegrationTest,RecommendationServiceTest test` | 11 tests / 0 failures / 0 errors |
+| 2026-07-28 13:24 CST | 本地启动 RED | `./dev.sh` | JWT 安全门拒绝 `deploy/.env` 的公开占位值，后端 fail fast；确认开发启动脚本与安全约束不一致 |
+| 2026-07-28 13:25 CST | 本地启动 GREEN | `bash deploy/scripts/test_resolve_dev_jwt_secret.sh` + `./dev.sh` | 解析器测试通过；启动仅在内存生成临时高熵 JWT，前后端与 graph/rag 健康 |
+| 2026-07-28 13:46 CST | 公共浏览器主流程 | `BASE_URL=http://127.0.0.1:5173 PYT_E2E_REGISTER=1 npx playwright test e2e/publicAcceptance.spec.ts --project=chromium --retries=0` | 27/27 passed（11.3 分钟），覆盖认证、主城、AI 向导 SSE/重试、工坊、RAG 页码证据、AC/WA/RE、画像、刷新与安全错误面 |
+
+### 费曼真实闭环补充发现与修复
+
+首轮专项使用新账号时，页面正确提示“无真实做题错误，不计入掌握度”；为验证真判题链，验收脚本改为先对代表题 `481 / PY43-KC-031` 提交真实 WA。由此复现新的产品断点：Graph 把 `WA` 误区标为 `resolved=true`，但 DeepSeek 返回 `produced_code=null`，数据库会话已是 `TAUGHT`，前端仍只能显示“等学弟写代码”。
+
+- RED：新增 `test_resolved_llm_output_without_code_does_not_create_dead_taught_state`，旧实现错误接受 `resolved=true + produced_code=null`；
+- GREEN：Graph 输出归一化拒绝该不完整组合，规则兜底保持未解决；提示合同同时强制解决误区时返回完整可运行代码；
+- Graph 单文件 25 tests 全绿；Graph 全量 `1681 passed / 1 skipped / 11 dependency warnings`；
+- 真实浏览器复验通过：WA 事件 `636` 被抽取为真实误区，找茬命中 1 / 误 0 / 漏 0，学弟产出偶数求和代码，沙箱真判题显示“教学成功：学弟代码通过沙箱运行，掌握度已回流”；
+- 课件外“装饰器”模式显示“通识 · 非课件”，真判题按钮为禁用态并明确“不计入掌握度”。
+
+状态：最近一周工作树已全部收敛到 `main`，本地全链路完成；等待构建发布包、ECS 部署与公网全面验收。
+
+## Phase 6：ECS 发布与公网全面验收
+
+- 构建并复验 allowlist 发布包；
+- 上传到 `ecs-pythontopia`，核对本地/远端 SHA-256；
+- 使用本轮最新事务式安装脚本切换 release，保留可回滚版本；
+- 公网同时验证 HTTP / HTTPS、证书与服务健康；浏览器验收不止 27 项公共主流程，按用户追加门禁执行不少于 100 个多工作流样例；
+- 当前 Playwright 清单为 8 files / 251 tests；公网主跑排除会覆盖手册静态图的截图生成套件，执行其余 7 files / 227 tests，并保留逐用例 JSON/HTML 证据；
+- 再跑费曼真实 WA 全闭环，确认生产 Graph、后端、数据库与前端一致。
+
+状态：进行中。
