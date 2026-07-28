@@ -57,13 +57,20 @@ class AiRuntimePlatformSnapshotRepositoryTest {
   void snapshotCountsOnlyActiveStudentsAndDeduplicatesLearnersAndKnowledgeComponents() {
     long activeOne = insertUser("active-one", "STUDENT", "ACTIVE");
     long activeTwo = insertUser("active-two", "STUDENT", "ACTIVE");
+    long frontendOnly = insertUser("frontend-only", "STUDENT", "ACTIVE");
     long disabledStudent = insertUser("disabled", "STUDENT", "DISABLED");
     long teacher = insertUser("teacher", "TEACHER", "ACTIVE");
 
-    insertLearningEvent(activeOne, "practice_failed", "{\"kcCode\":\"PY43-KC-001\"}");
-    insertLearningEvent(activeOne, "practice_failed", "{\"kcCodes\":[\"PY43-KC-001\"]}");
-    insertLearningEvent(disabledStudent, "practice_failed", "{\"kcCode\":\"PY43-KC-099\"}");
-    insertLearningEvent(teacher, "practice_failed", "{\"kcCode\":\"PY43-KC-100\"}");
+    insertLearningEvent(
+        activeOne, "practice_failed", "{\"kcCode\":\"PY43-KC-001\"}", "backend");
+    insertLearningEvent(
+        activeOne, "practice_failed", "{\"kcCodes\":[\"PY43-KC-001\"]}", "backend");
+    insertLearningEvent(
+        frontendOnly, "practice_failed", "{\"kcCode\":\"FAKE-KC\"}", "frontend");
+    insertLearningEvent(
+        disabledStudent, "practice_failed", "{\"kcCode\":\"PY43-KC-099\"}", "backend");
+    insertLearningEvent(
+        teacher, "practice_failed", "{\"kcCode\":\"PY43-KC-100\"}", "backend");
     jdbc.update(
         """
         INSERT INTO kc_mastery_event(user_id, kc_code, source, delta)
@@ -77,7 +84,7 @@ class AiRuntimePlatformSnapshotRepositoryTest {
     AiRuntimePlatformSnapshotRepository.PlatformSnapshot snapshot = repository.snapshot();
 
     assertThat(snapshot)
-        .isEqualTo(new AiRuntimePlatformSnapshotRepository.PlatformSnapshot(2, 2, 2, 2, 2));
+        .isEqualTo(new AiRuntimePlatformSnapshotRepository.PlatformSnapshot(3, 2, 2, 2, 2));
   }
 
   private long insertUser(String username, String role, String status) {
@@ -94,15 +101,16 @@ class AiRuntimePlatformSnapshotRepositoryTest {
         status);
   }
 
-  private void insertLearningEvent(long userId, String eventType, String payload) {
+  private void insertLearningEvent(long userId, String eventType, String payload, String source) {
     jdbc.update(
         """
-        INSERT INTO learning_event_log(user_id, event_type, payload)
-        VALUES (?, ?, ?::jsonb)
+        INSERT INTO learning_event_log(user_id, event_type, payload, source)
+        VALUES (?, ?, ?::jsonb, ?)
         """,
         userId,
         eventType,
-        payload);
+        payload,
+        source);
   }
 
   private void insertResourceRun(long userId) {

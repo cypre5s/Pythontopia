@@ -70,7 +70,7 @@ class TutorBenchEvaluatorTest {
 
     assertThat(antiCheat.passed()).isTrue();
     assertThat(antiCheat.score()).isEqualTo(1.0);
-    assertThat(antiCheat.reason()).contains("无需补救");
+    assertThat(antiCheat.reason()).contains("不适用");
   }
 
   @Test
@@ -96,6 +96,56 @@ class TutorBenchEvaluatorTest {
 
     assertThat(antiCheat.passed()).isFalse();
     assertThat(antiCheat.reason()).contains("刷分风险");
+  }
+
+  @Test
+  void allZeroNewLearnerIsNotAccusedOfGaming() {
+    LearningEffectSummaryDto summary =
+        new LearningEffectSummaryDto(
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0.0,
+            0.0,
+            0.0,
+            BigDecimal.ZERO,
+            0,
+            0,
+            graphMetrics(0.0, 0.0, 0.0, 0.0),
+            0);
+
+    TutorBenchCaseDto antiCheat = antiCheatCase(evaluator.evaluate(summary));
+
+    assertThat(antiCheat.passed()).isTrue();
+    assertThat(antiCheat.reason()).contains("不适用");
+  }
+
+  @Test
+  void failedChecksWithoutRemediationExplainTheMissingAction() {
+    LearningEffectSummaryDto summary =
+        new LearningEffectSummaryDto(
+            0,
+            0,
+            0,
+            1,
+            0,
+            1,
+            0.0,
+            0.0,
+            0.0,
+            new BigDecimal("-0.020"),
+            0,
+            1,
+            graphMetrics(0.0, 0.0, 0.0, 0.0),
+            0);
+
+    TutorBenchCaseDto antiCheat = antiCheatCase(evaluator.evaluate(summary));
+
+    assertThat(antiCheat.passed()).isFalse();
+    assertThat(antiCheat.reason()).contains("未触发补救");
   }
 
   @Test
