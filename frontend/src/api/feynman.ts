@@ -2,7 +2,7 @@ import { http } from './http';
 
 export type FeynmanSessionStatus = 'OPEN' | 'TAUGHT' | 'JUDGED_PASS' | 'JUDGED_FAIL';
 export type FeynmanTurnRole = 'TUTEE' | 'STUDENT';
-export type FeynmanJudgeStatus = 'PENDING' | 'PASSED' | 'FAILED' | 'ERROR';
+export type FeynmanJudgeStatus = 'PENDING' | 'PASSED' | 'FAILED' | 'ERROR' | 'NA';
 
 export interface FeynmanMisconceptionDto {
   tag: string;
@@ -43,18 +43,20 @@ export interface FeynmanTurnDto {
   role: FeynmanTurnRole;
   content: string;
   taughtFix: string | null;
+  noticeMd?: string | null;
   producedCode?: string | null;
   judgeResult?: FeynmanJudgeResultDto | null;
 }
 
 export async function startFeynmanSession(kcCode: string): Promise<FeynmanSessionDto> {
-  const response = await http.post<FeynmanSessionDto>('/api/feynman/sessions', { kcCode });
+  const response = await http.post<FeynmanSessionDto>('/api/feynman/sessions', {
+    kcCode,
+  });
   return response.data;
 }
 
-// 费曼「教学/出题」要等 graph LLM（学弟评估 / 现生 bug），放宽到 25s，
-// 覆盖全局默认 10s（< 后端 graphRestTemplate 30s、≥ graph LLM 18s，三层对齐）。
-const FEYNMAN_LLM_TIMEOUT_MS = 25_000;
+// 覆盖后端 Graph 3s connect + 30s read 上限，给网络与 JSON 映射留出余量。
+const FEYNMAN_LLM_TIMEOUT_MS = 35_000;
 
 export async function teachFeynmanSession(
   sessionId: number,
@@ -92,12 +94,14 @@ export interface FeynmanVerdictDto {
   sessionId: number;
   passed: boolean;
   message: string;
+  status: Exclude<FeynmanJudgeStatus, 'PENDING'>;
 }
 
 export async function judgeFeynmanSession(sessionId: number): Promise<FeynmanVerdictDto> {
   const response = await http.post<FeynmanVerdictDto>(
     `/api/feynman/sessions/${encodeURIComponent(String(sessionId))}/judge`,
     {},
+    { timeout: 60_000 },
   );
   return response.data;
 }
