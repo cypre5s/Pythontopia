@@ -166,7 +166,12 @@ mkdir -p "$ROOT_DIR/data/course-pack-43/generated-media"
 export PYT_DB_URL="jdbc:postgresql://127.0.0.1:15432/pythontopia"
 export PYT_DB_USERNAME="${PYT_DB_USERNAME:-pytopia}"
 export PYT_DB_PASSWORD="${PYT_DB_PASSWORD:-pytopia_dev_password}"
-export PYT_JWT_SECRET="${PYT_JWT_SECRET:-pythontopia-local-dev-secret-32chars-min}"
+configured_jwt_secret="${PYT_JWT_SECRET:-}"
+resolved_jwt_secret="$("$DEPLOY_DIR/scripts/resolve_dev_jwt_secret.sh" "$configured_jwt_secret")"
+if [[ "$resolved_jwt_secret" != "$configured_jwt_secret" ]]; then
+  c_warn "本地 PYT_JWT_SECRET 缺失、过短或仍为公开占位值；本次启动已生成临时高熵密钥（未写入磁盘）"
+fi
+export PYT_JWT_SECRET="$resolved_jwt_secret"
 export PYT_TEACHER_INVITE_CODE="${PYT_TEACHER_INVITE_CODE:-pytopia-teacher}"
 # 后端默认即 localhost:18091/18092，这里显式声明对齐 dockerized graph/rag
 export PYT_GRAPH_URL="${PYT_GRAPH_URL:-http://127.0.0.1:18091}"
