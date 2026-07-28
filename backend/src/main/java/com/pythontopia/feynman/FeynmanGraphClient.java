@@ -29,7 +29,10 @@ public class FeynmanGraphClient {
   }
 
   public Optional<FeynmanOutput> step(
-      String kcCode, List<Misconception> misconceptions, String studentTeaching) {
+      String kcCode,
+      List<Misconception> misconceptions,
+      String studentTeaching,
+      List<ConversationTurn> history) {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
     // 内部调用令牌：与 IntentGraphClient / RagEmbeddingClient 一致复用 ragAdminToken；
@@ -38,8 +41,12 @@ public class FeynmanGraphClient {
     List<GraphMisconception> wire =
         (misconceptions == null ? List.<Misconception>of() : misconceptions)
             .stream().map(GraphMisconception::from).toList();
+    List<GraphTurn> historyWire =
+        (history == null ? List.<ConversationTurn>of() : history)
+            .stream().map(GraphTurn::from).toList();
     HttpEntity<FeynmanInput> entity =
-        new HttpEntity<>(new FeynmanInput(kcCode, wire, studentTeaching), headers);
+        new HttpEntity<>(
+            new FeynmanInput(kcCode, wire, studentTeaching, historyWire), headers);
     try {
       GraphFeynmanOutput body =
           restTemplate
@@ -123,7 +130,17 @@ public class FeynmanGraphClient {
   record FeynmanInput(
       @JsonProperty("kc_code") String kcCode,
       @JsonProperty("misconceptions") List<GraphMisconception> misconceptions,
-      @JsonProperty("student_teaching") String studentTeaching) {}
+      @JsonProperty("student_teaching") String studentTeaching,
+      @JsonProperty("history") List<GraphTurn> history) {}
+
+  public record ConversationTurn(String role, String content) {}
+
+  record GraphTurn(
+      @JsonProperty("role") String role, @JsonProperty("content") String content) {
+    static GraphTurn from(ConversationTurn turn) {
+      return new GraphTurn(turn.role(), turn.content());
+    }
+  }
 
   /** 误解在 graph 线缆上的 snake_case 投影，隔离 wire 格式与领域/DB/前端契约。 */
   record GraphMisconception(

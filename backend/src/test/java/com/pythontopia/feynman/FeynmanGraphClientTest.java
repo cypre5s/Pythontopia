@@ -32,6 +32,12 @@ class FeynmanGraphClientTest {
             MockRestRequestMatchers.jsonPath("$.misconceptions[0].tag").value("off_by_one_range"))
         .andExpect(
             MockRestRequestMatchers.jsonPath("$.misconceptions[0].evidence_event_ids[0]").value(501))
+        .andExpect(MockRestRequestMatchers.jsonPath("$.history[0].role").value("user"))
+        .andExpect(
+            MockRestRequestMatchers.jsonPath("$.history[0].content").value("第一轮学生解释"))
+        .andExpect(MockRestRequestMatchers.jsonPath("$.history[1].role").value("assistant"))
+        .andExpect(
+            MockRestRequestMatchers.jsonPath("$.history[1].content").value("第一轮学弟追问"))
         .andRespond(
             MockRestResponseCreators.withSuccess(
                 """
@@ -49,7 +55,10 @@ class FeynmanGraphClientTest {
         client.step(
             "PY43-KC-016",
             List.of(new Misconception("off_by_one_range", List.of(501L), false)),
-            "range 右端不包含");
+            "range 右端不包含",
+            List.of(
+                new FeynmanGraphClient.ConversationTurn("user", "第一轮学生解释"),
+                new FeynmanGraphClient.ConversationTurn("assistant", "第一轮学弟追问")));
 
     assertThat(output).isPresent();
     assertThat(output.get().replyMd()).isEqualTo("我懂了");
@@ -72,7 +81,8 @@ class FeynmanGraphClientTest {
         client.step(
             "PY43-KC-016",
             List.of(new Misconception("off_by_one_range", List.of(501L), false)),
-            "随便讲");
+            "随便讲",
+            List.of());
 
     assertThat(output).isEmpty();
     server.verify(Duration.ofSeconds(2));

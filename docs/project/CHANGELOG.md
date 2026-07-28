@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-07-28 — 费曼教学链：真实多轮上下文与故障诚实性
+
+- Java Graph client 对齐既有 Python `FeynmanTuteeInput.history` 合同；教学服务在写入本轮前读取最近 12 条真实会话记录，映射为 `user/assistant` 后按时间正序回放，并以 6000 字符预算丢弃最旧上下文。
+- 删除按解释长度伪造“学弟已懂”与 `print('ok')` 的本地 fallback；Graph 不可达时返回 `FEYNMAN_TUTEE_UNAVAILABLE`（502），事务不写入学弟回复、不改变会话判定。
+- 修复空误解列表被 `allMatch` 恒真误判为 `TAUGHT`：会话保持 `OPEN`，通过独立 `noticeMd` 诚实提示学生先做题积累真实错误。
+- TDD 证据：Graph history 合同与教学服务行为测试均先编译 RED；完成后费曼 Graph、session、安全及控制器定向 12 tests 全绿。
+
 ## 2026-07-28 — 后端空库迁移恢复：消除合并后的 Flyway 版本冲突
 
 - 保留画像认知风格迁移为 `V186`，将会话吊销、班级 KC 学习档位、R-14 经济/快速旅行清理迁移依次调整为 `V188`、`V189`、`V190`；同步修正 JWT 会话代次注释，迁移执行 SQL 不变。
