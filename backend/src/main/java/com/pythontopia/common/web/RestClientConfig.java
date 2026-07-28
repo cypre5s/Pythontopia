@@ -2,6 +2,7 @@ package com.pythontopia.common.web;
 
 import com.pythontopia.common.config.BossProblemHttpClientProperties;
 import com.pythontopia.common.config.ChapterTestHttpClientProperties;
+import com.pythontopia.common.config.FeynmanTuteeHttpClientProperties;
 import com.pythontopia.common.config.GraphHttpClientProperties;
 import java.time.Duration;
 import org.springframework.boot.web.client.RestTemplateBuilder;
@@ -52,6 +53,21 @@ public class RestClientConfig {
     return builder
         .setConnectTimeout(Duration.ofMillis(graphHttpProperties.connectTimeoutMs()))
         .setReadTimeout(Duration.ofMillis(bossProblemHttpProperties.readTimeoutMs()))
+        .build();
+  }
+
+  /**
+   * 费曼 AI 学弟教学回合专用客户端。真实 LLM 还要同步返回误区状态和可判题代码，生产实测会超过普通
+   * Graph 30 秒读窗口；只放宽该端点，避免让意图路由、RAG 等短请求长期占用 Tomcat 线程。
+   */
+  @Bean
+  RestTemplate feynmanTuteeRestTemplate(
+      RestTemplateBuilder builder,
+      GraphHttpClientProperties graphHttpProperties,
+      FeynmanTuteeHttpClientProperties feynmanTuteeHttpProperties) {
+    return builder
+        .setConnectTimeout(Duration.ofMillis(graphHttpProperties.connectTimeoutMs()))
+        .setReadTimeout(Duration.ofMillis(feynmanTuteeHttpProperties.readTimeoutMs()))
         .build();
   }
 

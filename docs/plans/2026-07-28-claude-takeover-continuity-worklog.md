@@ -312,3 +312,39 @@ BASE_URL=https://47.120.29.62 PYT_E2E_REGISTER=1 \
   两步 Agent 全成功和证据审查通过。
 
 状态：修复已完成本地定向验证；等待第二个 release 发布后，在最终服务器状态重跑无重试的 227 项矩阵。
+
+### 第二次生产发布与最终 HTTPS 227 项矩阵
+
+- 第二发布包：`pythontopia-web-20260728T070853Z.tar.gz`，699 MiB，SHA-256
+  `4ba8f80481f81366796efd3f24238aea2b5a8aebca7d67d98c15d1a9c54edd43`；
+  4087 个常规文件逐项哈希、违禁内容、顶层结构和 4 个镜像 tar 均通过，本地/远端哈希一致。
+- 事务式安装为 `/opt/pythontopia/releases/20260728-151314`，上一版本
+  `/opt/pythontopia/releases/20260728-141301` 可回滚，备份在
+  `/opt/pythontopia/backups/20260728-151314`；三项生产秘密强度门禁、6 个容器健康与 HTTP/HTTPS
+  终验全部通过。
+- 部署后 HTTPS 认证专项 4/4；百晓 `for 循环` 专项确认 `kcCodes=["PY43-KC-031"]`、
+  RouteExecutionToken 非空、Handout/Practice 两步均成功。
+- 第一轮无重试矩阵为 225/227：一项意图请求经历 Graph 30 秒读超时后重试，在第 60 秒恢复前被
+  测试观察窗口主动中断；一项学习闭环的测试前置资源生成遇到明确
+  `WORKSHOP_GRAPH_UNAVAILABLE`，旧夹具没有同仓其他矩阵已有的有界恢复。
+- 测试合同收口：前者把观察窗口对齐两次下游预算为 90 秒；后者只对该明确 502 模拟一次可见的
+  5 秒后重试，Playwright runner 仍为 `--retries=0`。两项定向复验 2/2。
+- 完整重跑最终结果：**227/227 passed，0 failed / 0 flaky / 0 skipped，33.1 分钟**；单 worker、
+  公网 HTTPS、真实教师邀请码、真实后端/Graph/RAG/PostgreSQL/Chromium。
+
+### 矩阵外费曼闭环发现：教学专用超时
+
+227 项矩阵没有包含费曼真判题，因此另以公网 HTTPS 新学生执行真实 WA → 误区 → 找茬 → 教学 →
+沙箱判题。两次可见重试均失败，后端日志都指向
+`/agents/feynman/tutee/step` 的共享 30 秒 `Read timed out`；代码找茬和真实证据已成功，边界稳定复现。
+
+- 排除全局 90 秒方案：会让意图路由、RAG 等短请求失去 fail-fast；
+- 排除自动重试 LLM：可能重复计费和生成不同答案，两次 30 秒公网实测也均超时；
+- 采用端点级隔离：教学 `feynmanTuteeRestTemplate` 90 秒、前端 95 秒；代码找茬和其他 Graph
+  请求保持 30 秒。
+- RED：`RestClientConfigTest` 因缺少 `FeynmanTuteeHttpClientProperties` 编译失败；
+  `feynman.spec.ts` 明确显示预期 95000、实际 35000。
+- GREEN：后端专用超时/Feynman client 8 项、Spring 全上下文及费曼服务/安全定向均通过；
+  前端 API/store/component 16 项与 `vue-tsc --noEmit` 通过。
+
+状态：等待含费曼专用超时的第三个 release 发布，并在最终公网状态复验费曼、双协议与 227 项报告。

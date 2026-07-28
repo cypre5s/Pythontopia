@@ -55,8 +55,10 @@ export async function startFeynmanSession(kcCode: string): Promise<FeynmanSessio
   return response.data;
 }
 
-// 覆盖后端 Graph 3s connect + 30s read 上限，给网络与 JSON 映射留出余量。
-const FEYNMAN_LLM_TIMEOUT_MS = 35_000;
+// 覆盖后端费曼教学专用 90s read 上限，给公网代理与 JSON 映射留出余量。
+const FEYNMAN_TUTEE_TIMEOUT_MS = 95_000;
+// 代码找茬仍走普通 Graph 30s fail-fast 客户端。
+const FEYNMAN_GRAPH_TIMEOUT_MS = 35_000;
 
 export async function teachFeynmanSession(
   sessionId: number,
@@ -65,7 +67,7 @@ export async function teachFeynmanSession(
   const response = await http.post<FeynmanTurnDto>(
     `/api/feynman/sessions/${encodeURIComponent(String(sessionId))}/teach`,
     { explanation },
-    { timeout: FEYNMAN_LLM_TIMEOUT_MS },
+    { timeout: FEYNMAN_TUTEE_TIMEOUT_MS },
   );
   return response.data;
 }
@@ -85,7 +87,7 @@ export async function huntFeynmanBug(sessionId: number): Promise<FeynmanBugHuntD
   const response = await http.post<FeynmanBugHuntDto>(
     `/api/feynman/sessions/${encodeURIComponent(String(sessionId))}/bug-hunt`,
     {},
-    { timeout: FEYNMAN_LLM_TIMEOUT_MS },
+    { timeout: FEYNMAN_GRAPH_TIMEOUT_MS },
   );
   return response.data;
 }
