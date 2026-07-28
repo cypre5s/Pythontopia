@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -21,11 +23,21 @@ public class FeynmanGraphClient {
   private static final Logger log = LoggerFactory.getLogger(FeynmanGraphClient.class);
 
   private final RestTemplate restTemplate;
+  private final RestTemplate tuteeRestTemplate;
   private final GraphServiceProperties properties;
 
-  public FeynmanGraphClient(RestTemplate graphRestTemplate, GraphServiceProperties properties) {
+  @Autowired
+  public FeynmanGraphClient(
+      @Qualifier("graphRestTemplate") RestTemplate graphRestTemplate,
+      @Qualifier("feynmanTuteeRestTemplate") RestTemplate feynmanTuteeRestTemplate,
+      GraphServiceProperties properties) {
     this.restTemplate = graphRestTemplate;
+    this.tuteeRestTemplate = feynmanTuteeRestTemplate;
     this.properties = properties;
+  }
+
+  FeynmanGraphClient(RestTemplate graphRestTemplate, GraphServiceProperties properties) {
+    this(graphRestTemplate, graphRestTemplate, properties);
   }
 
   public Optional<FeynmanOutput> step(
@@ -49,7 +61,7 @@ public class FeynmanGraphClient {
             new FeynmanInput(kcCode, wire, studentTeaching, historyWire), headers);
     try {
       GraphFeynmanOutput body =
-          restTemplate
+          tuteeRestTemplate
               .exchange(
                   // graph 路由统一挂在 /agents 前缀下（见 routes/feynman.py）。
                   properties.graphUrl() + "/agents/feynman/tutee/step",

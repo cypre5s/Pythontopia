@@ -5,7 +5,11 @@ vi.mock('@/api/http', () => ({
 }));
 
 import { http } from '@/api/http';
-import { judgeFeynmanSession, teachFeynmanSession } from '@/api/feynman';
+import {
+  huntFeynmanBug,
+  judgeFeynmanSession,
+  teachFeynmanSession,
+} from '@/api/feynman';
 
 describe('feynman API timeouts', () => {
   beforeEach(() => {
@@ -13,13 +17,13 @@ describe('feynman API timeouts', () => {
     vi.mocked(http.post).mockResolvedValue({ data: {} });
   });
 
-  it('allows the Graph-backed teaching request to outlive the backend read timeout', async () => {
+  it('allows the Graph-backed teaching request to outlive the dedicated tutee timeout', async () => {
     await teachFeynmanSession(11, 'range 的右端点不包含');
 
     expect(http.post).toHaveBeenCalledWith(
       '/api/feynman/sessions/11/teach',
       { explanation: 'range 的右端点不包含' },
-      { timeout: 35_000 },
+      { timeout: 95_000 },
     );
   });
 
@@ -30,6 +34,16 @@ describe('feynman API timeouts', () => {
       '/api/feynman/sessions/11/judge',
       {},
       { timeout: 60_000 },
+    );
+  });
+
+  it('keeps bug exposure on the ordinary fail-fast Graph timeout', async () => {
+    await huntFeynmanBug(11);
+
+    expect(http.post).toHaveBeenCalledWith(
+      '/api/feynman/sessions/11/bug-hunt',
+      {},
+      { timeout: 35_000 },
     );
   });
 });

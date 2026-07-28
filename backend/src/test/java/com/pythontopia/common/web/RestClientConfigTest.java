@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.pythontopia.common.config.BossProblemHttpClientProperties;
 import com.pythontopia.common.config.ChapterTestHttpClientProperties;
+import com.pythontopia.common.config.FeynmanTuteeHttpClientProperties;
 import com.pythontopia.common.config.GraphHttpClientProperties;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
@@ -74,6 +75,7 @@ class RestClientConfigTest {
     assertThat(defaults.readTimeoutMs()).isEqualTo(30000);
     assertThat(new BossProblemHttpClientProperties(null).readTimeoutMs()).isEqualTo(180000);
     assertThat(new ChapterTestHttpClientProperties(null).readTimeoutMs()).isEqualTo(600000);
+    assertThat(new FeynmanTuteeHttpClientProperties(null).readTimeoutMs()).isEqualTo(90000);
   }
 
   @Test
@@ -102,6 +104,24 @@ class RestClientConfigTest {
                 new RestTemplateBuilder(),
                 new GraphHttpClientProperties(1000, 30000),
                 new BossProblemHttpClientProperties(300));
+    String url = "http://127.0.0.1:" + server.getAddress().getPort() + "/slow";
+
+    long startNanos = System.nanoTime();
+    assertThatThrownBy(() -> restTemplate.getForObject(url, String.class))
+        .isInstanceOf(ResourceAccessException.class);
+    long elapsedMs = Duration.ofNanos(System.nanoTime() - startNanos).toMillis();
+
+    assertThat(elapsedMs).isLessThan(3000L);
+  }
+
+  @Test
+  void feynmanTuteeRestTemplateUsesItsOwnReadTimeout() {
+    RestTemplate restTemplate =
+        new RestClientConfig()
+            .feynmanTuteeRestTemplate(
+                new RestTemplateBuilder(),
+                new GraphHttpClientProperties(1000, 30000),
+                new FeynmanTuteeHttpClientProperties(300));
     String url = "http://127.0.0.1:" + server.getAddress().getPort() + "/slow";
 
     long startNanos = System.nanoTime();

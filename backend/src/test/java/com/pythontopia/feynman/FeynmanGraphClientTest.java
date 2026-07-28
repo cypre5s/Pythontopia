@@ -22,6 +22,34 @@ class FeynmanGraphClientTest {
   private final FeynmanGraphClient client = new FeynmanGraphClient(restTemplate, properties);
 
   @Test
+  void teachingStepUsesDedicatedTuteeClientInsteadOfShortGraphClient() {
+    RestTemplate shortGraphTemplate = new RestTemplate();
+    RestTemplate tuteeTemplate = new RestTemplate();
+    MockRestServiceServer shortGraphServer =
+        MockRestServiceServer.bindTo(shortGraphTemplate).build();
+    MockRestServiceServer tuteeServer = MockRestServiceServer.bindTo(tuteeTemplate).build();
+    FeynmanGraphClient isolatedClient =
+        new FeynmanGraphClient(shortGraphTemplate, tuteeTemplate, properties);
+    tuteeServer
+        .expect(MockRestRequestMatchers.requestTo("http://graph.test/agents/feynman/tutee/step"))
+        .andRespond(
+            MockRestResponseCreators.withSuccess(
+                """
+                {
+                  "reply_md": "继续讲",
+                  "updated_misconceptions": [],
+                  "produced_code": null
+                }
+                """,
+                MediaType.APPLICATION_JSON));
+
+    assertThat(isolatedClient.step("PY43-KC-031", List.of(), "解释循环", List.of()))
+        .isPresent();
+    tuteeServer.verify(Duration.ofSeconds(2));
+    shortGraphServer.verify(Duration.ofSeconds(2));
+  }
+
+  @Test
   void postsToAgentsPathWithSnakeCaseMisconceptionsAndMapsResponse() {
     MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
     server

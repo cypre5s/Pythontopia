@@ -42,6 +42,9 @@ pythontopia:
       # graphRestTemplate 超时（毫秒）：下游不可达时在阈值内 fail-fast，避免占满 Tomcat 线程。
       connect-timeout-ms: ${PYT_GRAPH_CONNECT_TIMEOUT_MS:3000}
       read-timeout-ms: ${PYT_GRAPH_READ_TIMEOUT_MS:30000}
+    feynman-tutee:
+      # AI 学弟需同步产出误区更新与可判题代码，独立于普通 Graph 的 30s 快速请求窗口。
+      read-timeout-ms: ${PYT_FEYNMAN_TUTEE_READ_TIMEOUT_MS:90000}
     chapter-test:
       read-timeout-ms: ${PYT_CHAPTER_TEST_READ_TIMEOUT_MS:600000}
     boss-problem:
