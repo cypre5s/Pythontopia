@@ -14,7 +14,9 @@ public class AiRuntimePlatformSnapshotRepository {
         WHERE role = 'STUDENT' AND status = 'ACTIVE'
       ),
       evidence_users AS (
-        SELECT user_id FROM learning_event_log
+        SELECT user_id
+        FROM learning_event_log
+        WHERE source IN ('backend', 'graph')
         UNION
         SELECT user_id FROM learning_resource
         UNION
@@ -26,6 +28,7 @@ public class AiRuntimePlatformSnapshotRepository {
         SELECT NULLIF(le.payload->>'kcCode', '') AS kc_code
         FROM learning_event_log le
         JOIN active_students student ON student.id = le.user_id
+        WHERE le.source IN ('backend', 'graph')
         UNION
         SELECT jsonb_array_elements_text(
           CASE
@@ -35,6 +38,7 @@ public class AiRuntimePlatformSnapshotRepository {
         ) AS kc_code
         FROM learning_event_log le
         JOIN active_students student ON student.id = le.user_id
+        WHERE le.source IN ('backend', 'graph')
         UNION
         SELECT unnest(lr.kc_codes) AS kc_code
         FROM learning_resource lr
@@ -60,6 +64,7 @@ public class AiRuntimePlatformSnapshotRepository {
           FROM learning_event_log event_log
           JOIN active_students student ON student.id = event_log.user_id
           WHERE event_log.event_type = 'practice_failed'
+            AND event_log.source IN ('backend', 'graph')
         ) AS failed_practice_count,
         (
           SELECT COUNT(*)

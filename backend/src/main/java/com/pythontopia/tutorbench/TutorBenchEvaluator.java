@@ -51,7 +51,7 @@ public class TutorBenchEvaluator {
     double score = average(remediationSatisfied, masteryDeltaIsBounded);
     String reason;
     if (passed && noFailedChecks) {
-      reason = "本期无失败微测，无需补救，且掌握度增量与通过证据一致";
+      reason = "本期无失败微测，补救指标不适用，且掌握度增量与通过证据一致";
     } else if (passed) {
       reason = "失败微测没有正向刷分，并触发补救";
     } else if (!masteryDeltaIsBounded) {

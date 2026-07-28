@@ -138,4 +138,27 @@ class LearningEffectTraceServiceTest {
     assertThat(summary.evidenceGraphMetrics().graphCompletenessScore()).isGreaterThan(0.6);
     assertThat(summary.personalizationSignalCount()).isGreaterThanOrEqualTo(1);
   }
+
+  @Test
+  void oneRemediatedFailureAmongNinetyNinePassesStillHasFullRemediationRate() {
+    jdbc.update(
+        """
+        INSERT INTO resource_learning_check (
+          user_id, resource_id, kc_code, evidence_type, answer_text, operation_evidence,
+          status, mastery_delta, remediation_type, reason
+        )
+        SELECT ?, ?, 'PY43-KC-001', 'MICRO_QUIZ', 'input 读取用户输入', '{}'::jsonb,
+          'PASSED', 0.000, NULL, 'additional pass'
+        FROM generate_series(1, 98)
+        """,
+        userId,
+        resourceId);
+
+    LearningEffectSummaryDto summary = service.summary(userId);
+
+    assertThat(summary.checkCount()).isEqualTo(100);
+    assertThat(summary.passedCheckCount()).isEqualTo(99);
+    assertThat(summary.failedCheckCount()).isEqualTo(1);
+    assertThat(summary.remediationRate()).isEqualTo(1.0);
+  }
 }
