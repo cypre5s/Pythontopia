@@ -246,4 +246,23 @@
 - 当前 Playwright 清单为 8 files / 251 tests；公网主跑排除会覆盖手册静态图的截图生成套件，执行其余 7 files / 227 tests，并保留逐用例 JSON/HTML 证据；
 - 再跑费曼真实 WA 全闭环，确认生产 Graph、后端、数据库与前端一致。
 
+### HTTPS 登录故障：部署前复现与修复
+
+公网现行版本先跑认证专项而不是直接假设 HTTPS 可用：
+
+```text
+BASE_URL=https://47.120.29.62 PYT_E2E_REGISTER=1 \
+  npx playwright test e2e/publicAcceptance.spec.ts \
+  --project=chromium --retries=0 -g '认证与会话'
+```
+
+结果为 2 passed / 2 failed：未登录守卫和已有本地会话路由正常；账号表单登录仍停在 `/login`，快速演示登录的 `POST /api/auth/login` 返回 403。线上主机 Nginx 已正确写入 `X-Forwarded-Proto $scheme`，但前端容器 Nginx 又用内部连接的 `$scheme=http` 覆盖它，Spring 同时未启用转发头还原，因此浏览器 `Origin: https://47.120.29.62` 被误判为跨域。
+
+- RED：新增 `test_https_forwarded_proto_contract.sh`，前端协议保留、Spring 转发头处理、发布 HTTPS 终验共 4 项全部按预期失败；
+- GREEN：前端容器用受限 `map` 保留外层 `http/https` 并在直连时回退；Spring 设置 `server.forward-headers-strategy: framework`；安装器增加证书校验后的 443 健康检查；
+- 静态/局部验证：HTTPS 契约 4/4、双协议主机 Nginx 契约、`nginx -t`、Shell 语法与 `git diff --check` 全绿；
+- 后端认证/安全定向 `SecurityConfigCorsTest,AuthServiceSecurityTest,JwtAuthenticationFilterTest` 全绿；首次依赖解析受 WSL 网络超时阻断，切换仓库已有的构建代理设置后成功。
+
+部署后门禁：HTTPS 认证专项必须从 2/4 恢复为 4/4，随后才允许启动 227 项公网工作流矩阵。
+
 状态：进行中。

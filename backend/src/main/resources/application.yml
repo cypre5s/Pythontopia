@@ -18,6 +18,9 @@ spring:
 
 server:
   port: 18080
+  # 生产流量经过主机 Nginx 与前端容器 Nginx 两层代理。让 Spring 用可信转发头
+  # 还原公网 scheme/host，避免 HTTPS 同源请求被误判为跨域而拒绝登录。
+  forward-headers-strategy: framework
 
 pythontopia:
   judge:
