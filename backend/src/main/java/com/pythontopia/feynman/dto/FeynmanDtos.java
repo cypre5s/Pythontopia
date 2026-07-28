@@ -17,7 +17,19 @@ public final class FeynmanDtos {
   public record TurnResponse(
       long id, String role, String content, String taughtFix, String noticeMd) {}
 
-  public record Verdict(long sessionId, boolean passed, String message) {}
+  public record Verdict(long sessionId, boolean passed, String message, String status) {
+
+    public Verdict(long sessionId, JudgeStatus status, String message) {
+      this(sessionId, status == JudgeStatus.PASSED, message, status.name());
+    }
+  }
+
+  public enum JudgeStatus {
+    PASSED,
+    FAILED,
+    ERROR,
+    NA
+  }
 
   /**
    * 代码找茬：学弟写出的含 bug 代码 + 真实 bug 行号（供前端限时找茬判定命中）。

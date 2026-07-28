@@ -39,4 +39,19 @@ class FeynmanAntiCheatTest {
     assertThat(FeynmanAntiCheat.looksLikeAnswerDump(null)).isFalse();
     assertThat(FeynmanAntiCheat.looksLikeAnswerDump("   ")).isFalse();
   }
+
+  @Test
+  void producedProgramStructureIsNotMistakenForLeakedAnswer() {
+    assertThat(FeynmanAntiCheat.looksLikeLeakedAnswer("def solve():\n    return 1")).isFalse();
+    assertThat(FeynmanAntiCheat.looksLikeLeakedAnswer("import sys\nprint(sys.stdin.read())"))
+        .isFalse();
+    assertThat(FeynmanAntiCheat.looksLikeLeakedAnswer("ANSWER_KEY = 'secret'")).isTrue();
+  }
+
+  @Test
+  void stripsMarkdownFenceBeforeSendingProducedCodeToSandbox() {
+    assertThat(FeynmanAntiCheat.stripCodeFence("```python\nprint(1)\n```"))
+        .isEqualTo("print(1)\n");
+    assertThat(FeynmanAntiCheat.stripCodeFence("print(1)")).isEqualTo("print(1)");
+  }
 }

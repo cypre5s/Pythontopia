@@ -27,13 +27,40 @@ public final class FeynmanAntiCheat {
     if (text == null || text.isBlank()) {
       return false;
     }
-    String lower = text.toLowerCase();
-    if (lower.contains("answer_key")) {
+    if (looksLikeLeakedAnswer(text)) {
       return true;
     }
     if (text.contains("```")) {
       return true;
     }
     return FULL_PROGRAM.matcher(text).find();
+  }
+
+  /**
+   * 学弟产出代码本来就应是完整程序，因此只检查明确的答案标记，不复用教学文本的
+   * {@code def/import/```} 规则。
+   */
+  public static boolean looksLikeLeakedAnswer(String code) {
+    return code != null
+        && !code.isBlank()
+        && code.toLowerCase(java.util.Locale.ROOT).contains("answer_key");
+  }
+
+  /** 剥离 LLM 常附带的 Markdown 代码围栏；没有完整围栏时保留原文。 */
+  public static String stripCodeFence(String code) {
+    if (code == null) {
+      return null;
+    }
+    String trimmed = code.strip();
+    if (!trimmed.startsWith("```")) {
+      return code;
+    }
+    int firstLineBreak = trimmed.indexOf('\n');
+    if (firstLineBreak < 0) {
+      return "";
+    }
+    String body = trimmed.substring(firstLineBreak + 1);
+    int closingFence = body.lastIndexOf("```");
+    return closingFence < 0 ? code : body.substring(0, closingFence);
   }
 }

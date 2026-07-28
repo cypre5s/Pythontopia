@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-07-28 — 费曼真判题：四态事实、受控沙箱与并发幂等计分
+
+- 判题返回从布尔二态扩为 `PASSED / FAILED / ERROR / NA`，同时保留 `passed` 兼容投影：概念模式为中性 `NA`，缺测试用例、沙箱 `SYSTEM_ERROR` 或 worker 故障为 `ERROR`，均不再写学生失败事件。
+- 复用正式判题链的 `JudgeWorkerPool` 限制 Python 子进程并发；AI 产出代码使用独立泄答检查，允许合法的 `def/import`，并在入沙箱前剥离 Markdown 围栏。
+- 通过数据库条件更新原子认领 `JUDGED_PASS`：只有首个成功请求能回流掌握度并发布成功事件；并发重复通过只回放成功。失败更新也不得覆盖已经提交的通过状态。
+- 公开样例与隐藏用例文案按实际来源区分，均不回显期望/实际输出，避免经费曼接口泄露答案。
+- TDD 证据：防泄答与判题语义测试先编译 RED；完成后定向 18 tests、费曼后端全量 30 tests 均为 0 failures / 0 errors。
+
 ## 2026-07-28 — 费曼教学链：真实多轮上下文与故障诚实性
 
 - Java Graph client 对齐既有 Python `FeynmanTuteeInput.history` 合同；教学服务在写入本轮前读取最近 12 条真实会话记录，映射为 `user/assistant` 后按时间正序回放，并以 6000 字符预算丢弃最旧上下文。
