@@ -357,14 +357,16 @@ fi
 echo "    Nginx 已生效（reload/start）"
 
 # ---------------------------------------------------------------------------
-step "终验：80 全链路与容器直连健康检查"
+step "终验：HTTP/HTTPS 全链路与容器直连健康检查"
 # ---------------------------------------------------------------------------
 sleep 2
 curl -fsS -m 5 -o /dev/null http://127.0.0.1:8080/healthz \
   || { echo "[安装失败] 容器直连 127.0.0.1:8080/healthz 不可达。" >&2; exit 1; }
 curl -fsS -m 5 -o /dev/null http://127.0.0.1/healthz \
   || { echo "[安装失败] 主机 Nginx 80 端口 /healthz 不可达（容器层正常，问题在主机 Nginx）。" >&2; exit 1; }
-echo "    本机 80 全链路健康"
+curl -fsS --connect-timeout 5 --max-time 10 --resolve 47.120.29.62:443:127.0.0.1 -o /dev/null https://47.120.29.62/healthz \
+  || { echo "[安装失败] 主机 Nginx 443 端口 HTTPS /healthz 不可达或证书校验失败。" >&2; exit 1; }
+echo "    本机 HTTP + HTTPS 全链路健康"
 
 # ---------------------------------------------------------------------------
 # 收尾报告
@@ -375,7 +377,8 @@ echo "安装完成。"
 echo "  生效版本：${RELEASE_DIR}"
 [ -n "${PREV_RELEASE:-}" ] && echo "  上一版本：${PREV_RELEASE}（保留，可回滚）"
 echo "  本次备份：${BACKUP_DIR}"
-echo "  对外入口：http://47.120.29.62/（仅 80 端口）"
+echo "  HTTP 入口：http://47.120.29.62/"
+echo "  HTTPS 入口：https://47.120.29.62/"
 echo "  回滚命令：bash ${CURRENT_LINK}/deploy/scripts/rollback_release.sh"
 RELEASE_COUNT="$(find "${RELEASES_DIR}" -mindepth 1 -maxdepth 1 -type d | wc -l)"
 if [ "${RELEASE_COUNT}" -gt 3 ]; then
