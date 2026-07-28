@@ -400,6 +400,9 @@ BASE_URL=https://47.120.29.62 PYT_E2E_REGISTER=1 \
   `WORKSHOP_GRAPH_UNAVAILABLE` 或 `FEYNMAN_TUTEE_UNAVAILABLE`。
 - 详细报告：`docs/reports/2026-07-28-ecs-public-workflow-acceptance.md`，机械列出 227 个工作流结果，
   并记录双协议、费曼、发布运行态、根因与原始 JSON/HTML 证据。
+- 非阻塞告警如实保留：部分 `MemoryEmbeddingWriter` 因 1024/2048 维度不匹配跳过写入；
+  `WeeklyReportService` 的 `resource_run` 片段曾出现 SQL grammar 告警。二者未造成双协议矩阵失败，
+  但分别可能影响语义记忆覆盖与周报资源统计；本轮不在无独立 RED/GREEN 的情况下顺手改动。
 
 状态：完成。最近一周 18 个 worktree 分支均已收敛到 `main`，未删除 worktree；最终 release 已部署，
 HTTPS 登录恢复，HTTP/HTTPS 功能矩阵、费曼真实闭环与不少于 100 样例的公网验收全部完成。
