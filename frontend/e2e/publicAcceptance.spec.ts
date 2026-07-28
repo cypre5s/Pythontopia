@@ -774,7 +774,8 @@ test.describe('公网验收 · AI 向导 SSE @guide-ai', () => {
 
   test('注入一次网络失败后，可见失败态并重试成功', async ({ page, request }, testInfo) => {
     test.skip(!ACCOUNT_AVAILABLE, SKIP_REASON_NO_ACCOUNT);
-    test.setTimeout(240_000);
+    // 首屏准备 + 注入失败态 + 一次真实 Agent 重试；单回合本身允许等待 300 秒。
+    test.setTimeout(360_000);
     await preparePage(page, request, testInfo.workerIndex);
 
     await page.goto(u('/world'), { waitUntil: 'domcontentloaded' });
