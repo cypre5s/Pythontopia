@@ -53,7 +53,7 @@ describe('ChatHistoryRail · 历史列表缓存', () => {
       } as never);
 
     const first = mount(ChatHistoryRail, {
-      props: { embeddedOpen: true },
+      props: { embeddedOpen: true, userId: 101 },
     });
     await flushPromises();
     expect(first.text()).toContain('什么是 if 语句');
@@ -61,7 +61,7 @@ describe('ChatHistoryRail · 历史列表缓存', () => {
     first.unmount();
 
     const second = mount(ChatHistoryRail, {
-      props: { embeddedOpen: true },
+      props: { embeddedOpen: true, userId: 101 },
     });
     await flushPromises();
     expect(second.text()).toContain('什么是 if 语句');
@@ -71,5 +71,53 @@ describe('ChatHistoryRail · 历史列表缓存', () => {
     await flushPromises();
     expect(second.text()).toContain('什么是 while 语句');
     expect(vi.mocked(http.get)).toHaveBeenCalledTimes(2);
+  });
+
+  it('切换 userId 立即清空旧列表，并拒绝旧用户晚到结果覆盖新用户', async () => {
+    let resolveFirst:
+      | ((value: { data: WorkshopChatHistoryTurnDto[] }) => void)
+      | undefined;
+    let resolveSecond:
+      | ((value: { data: WorkshopChatHistoryTurnDto[] }) => void)
+      | undefined;
+    vi.mocked(http.get)
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirst = resolve;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveSecond = resolve;
+          }),
+      );
+
+    const wrapper = mount(ChatHistoryRail, {
+      props: { embeddedOpen: true, userId: 101 },
+    });
+    await Promise.resolve();
+    expect(vi.mocked(http.get)).toHaveBeenCalledTimes(1);
+
+    await wrapper.setProps({ userId: 202 });
+    await Promise.resolve();
+    expect(vi.mocked(http.get)).toHaveBeenCalledTimes(2);
+    expect(wrapper.text()).not.toContain(baseTurn.userText);
+
+    const secondUserTurn: WorkshopChatHistoryTurnDto = {
+      ...baseTurn,
+      id: '2',
+      conversationId: 'conv-2',
+      userText: 'B 用户自己的循环问题',
+    };
+    resolveSecond?.({ data: [secondUserTurn] });
+    await flushPromises();
+    expect(wrapper.text()).toContain(secondUserTurn.userText);
+
+    resolveFirst?.({ data: [baseTurn] });
+    await flushPromises();
+    expect(wrapper.text()).toContain(secondUserTurn.userText);
+    expect(wrapper.text()).not.toContain(baseTurn.userText);
   });
 });

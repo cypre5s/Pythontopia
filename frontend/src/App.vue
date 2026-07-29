@@ -5,9 +5,11 @@ import { RouterView, useRouter } from 'vue-router';
 import AppToast from '@/components/system/AppToast.vue';
 import DialogTree from '@/components/game/DialogTree.vue';
 import PerfHud from '@/components/hud/PerfHud.vue';
+import { useSessionStore } from '@stores/session';
 import { useToastStore } from '@stores/toast';
 
 const router = useRouter();
+const session = useSessionStore();
 const toast = useToastStore();
 const fatalError = ref<string | null>(null);
 
@@ -62,7 +64,10 @@ onBeforeUnmount(() => {
       <!-- WorkshopPage 同样缓存：离开百晓工坊（返回小镇 / 去图书馆 / 闯关塔等任意跳转）不销毁本页，
            下次回来对话流、面板布局（历史/书房/调用）与书房弹窗都停在离开时那一刻。 -->
       <RouterView v-slot="{ Component, route }">
-        <KeepAlive :include="['WorldPage', 'WorkshopPage']">
+        <KeepAlive
+          :key="session.user?.id ?? 'anonymous'"
+          :include="['WorldPage', 'WorkshopPage']"
+        >
           <Transition
             :name="route.name === 'world' ? 'route-none' : 'route-fade'"
             mode="out-in"

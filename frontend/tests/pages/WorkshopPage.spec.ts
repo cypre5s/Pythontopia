@@ -72,6 +72,7 @@ vi.mock('@/api/learner', () => ({
 
 vi.mock('@/api/workshopHistory', () => {
   return {
+    clearWorkshopChatHistoryCache: vi.fn(),
     listWorkshopChatHistoryTurns: apiMocks.listWorkshopChatHistoryTurns,
     rememberWorkshopChatHistoryTurn: apiMocks.rememberWorkshopChatHistoryTurn,
     recordWorkshopChatHistoryTurn: vi.fn(),
@@ -106,6 +107,7 @@ vi.mock('@/composables/useAudio', async () => {
 
 import WorkshopPage from '@/pages/WorkshopPage.vue';
 import WorkshopChat from '@/components/workshop/WorkshopChat.vue';
+import { useSessionStore } from '@stores/session';
 import { useWorldStore } from '@stores/world';
 
 const APP_LAYOUT_STUB = { template: '<div data-testid="layout-stub"><slot /></div>' };
@@ -129,6 +131,15 @@ describe('WorkshopPage R-13 改造', () => {
     // 否则前一用例开过的抽屉会被后一用例的全新挂载 hydrate，污染默认布局断言。
     localStorage.clear();
     setActivePinia(createPinia());
+    const session = useSessionStore();
+    session.token = 'test-token';
+    session.expiresAt = '2099-01-01T00:00:00Z';
+    session.user = {
+      id: 101,
+      username: 'workshop-a',
+      displayName: '工坊学生 A',
+      role: 'STUDENT',
+    };
     router = setupRouter();
     Object.values(apiMocks).forEach((fn) => fn.mockReset?.());
     apiMocks.listChapters.mockResolvedValue([
@@ -498,6 +509,11 @@ describe('WorkshopPage R-13 改造', () => {
     expect(wrapper.find('[data-testid="workshop-drawer-history"]').exists()).toBe(true);
     await flushPromises();
     expect(apiMocks.listWorkshopChatHistoryTurns).toHaveBeenCalledTimes(1);
+    expect(apiMocks.listWorkshopChatHistoryTurns).toHaveBeenCalledWith(
+      101,
+      50,
+      expect.objectContaining({ force: false }),
+    );
     expect(wrapper.text()).toContain('还没有问答记录');
 
     wrapper.findComponent(WorkshopChat).vm.$emit('history-saved', savedTurn);
@@ -533,6 +549,6 @@ describe('WorkshopPage R-13 改造', () => {
     expect(wrapper.find('[data-testid="workshop-drawer-history"]').exists()).toBe(false);
     wrapper.findComponent(WorkshopChat).vm.$emit('history-saved', savedTurn);
 
-    expect(apiMocks.rememberWorkshopChatHistoryTurn).toHaveBeenCalledWith(savedTurn);
+    expect(apiMocks.rememberWorkshopChatHistoryTurn).toHaveBeenCalledWith(101, savedTurn);
   });
 });

@@ -19,6 +19,7 @@ import {
 } from '@/api/workshopHistory';
 import { FAST_TRAVEL_ENABLED, FAST_TRAVEL_ROUTES, type FastTravelRoute } from '@/data/fastTravel';
 import { useLearningStore } from '@stores/learning';
+import { useSessionStore } from '@stores/session';
 import { useWorldStore } from '@stores/world';
 import { useToastStore } from '@stores/toast';
 import { useWorkshopUiStore } from '@stores/workshopUi';
@@ -29,6 +30,7 @@ import { playUiClick, playChime } from '@/composables/useStardewFx';
 defineOptions({ name: 'WorkshopPage' });
 
 const learning = useLearningStore();
+const session = useSessionStore();
 const world = useWorldStore();
 const toast = useToastStore();
 const workshopUi = useWorkshopUiStore();
@@ -76,6 +78,7 @@ const drawerOpen = ref(restoredLayout.activeDrawer === 'study');
 const historyOpen = ref(restoredLayout.historyOpen);
 const activeDrawer = ref<WorkshopDrawer>(restoredLayout.activeDrawer);
 const historyPendingTurn = ref<WorkshopChatHistoryTurnDto | null>(null);
+const historyOwnerId = computed<number | null>(() => session.user?.id ?? null);
 
 // 面板布局变化即持久化，供刷新/重开后恢复（会话内保留仍由 KeepAlive 负责）。
 watch([historyOpen, activeDrawer], ([open, drawer]) => {
@@ -214,7 +217,9 @@ function closeHistoryDrawer(): void {
 }
 
 function appendHistoryTurn(turn: WorkshopChatHistoryTurnDto): void {
-  rememberWorkshopChatHistoryTurn(turn);
+  const ownerId = historyOwnerId.value;
+  if (ownerId === null) return;
+  rememberWorkshopChatHistoryTurn(ownerId, turn);
   historyPendingTurn.value = turn;
 }
 
@@ -366,7 +371,10 @@ const bodyClass = computed<Record<string, boolean>>(() => ({
           </header>
           <div class="workshop-drawer__body">
             <ChatHistoryRail
+              v-if="historyOwnerId !== null"
+              :key="historyOwnerId"
               embedded-open
+              :user-id="historyOwnerId"
               :pending-turn="historyPendingTurn"
               @select="onSelectConversation"
             />

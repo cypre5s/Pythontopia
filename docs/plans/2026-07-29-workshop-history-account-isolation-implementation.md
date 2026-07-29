@@ -54,9 +54,10 @@ Expected: compile failures because the owner-aware signatures and public clear f
 - Add positive-integer `WorkshopHistoryOwnerId`.
 - Key cache entries by `${userId}:${limit}`.
 - Track active `AbortController` instances.
+- Capture a repository generation before each request and only cache results if it is still current.
 - Pass `signal` only as Axios transport configuration; never send `userId` as an authorization parameter.
 - In `finally`, remove the completed controller from the active set.
-- Export `clearWorkshopChatHistoryCache()` to abort all active reads and clear all cache entries.
+- Export `clearWorkshopChatHistoryCache()` to advance the generation, abort all active reads, and clear all cache entries.
 - Keep `resetWorkshopChatHistoryCacheForTest()` as a compatibility alias that calls the production clear function.
 
 **Step 5: Run GREEN**
@@ -289,4 +290,3 @@ Stage only task-owned files and commit:
 ```bash
 git commit -m "refactor(frontend): isolate workshop history by account"
 ```
-

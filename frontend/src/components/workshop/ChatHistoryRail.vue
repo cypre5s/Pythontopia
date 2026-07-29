@@ -15,7 +15,11 @@ import {
 import { playUiClick } from '@/composables/useStardewFx';
 
 const props = withDefaults(
-  defineProps<{ embeddedOpen?: boolean; pendingTurn?: WorkshopChatHistoryTurnDto | null }>(),
+  defineProps<{
+    userId: number;
+    embeddedOpen?: boolean;
+    pendingTurn?: WorkshopChatHistoryTurnDto | null;
+  }>(),
   {
     embeddedOpen: false,
     pendingTurn: null,
@@ -30,17 +34,27 @@ const loaded = ref(false);
 const failed = ref(false);
 const turns = ref<WorkshopChatHistoryTurnDto[]>([]);
 const effectiveOpen = computed<boolean>(() => props.embeddedOpen || open.value);
+let loadGeneration = 0;
 
 async function load(force = false): Promise<void> {
+  const generation = ++loadGeneration;
+  const ownerId = props.userId;
   loading.value = true;
   failed.value = false;
   try {
-    turns.value = await listWorkshopChatHistoryTurns(50, { force });
-    loaded.value = true;
+    const nextTurns = await listWorkshopChatHistoryTurns(ownerId, 50, { force });
+    if (generation === loadGeneration && ownerId === props.userId) {
+      turns.value = nextTurns;
+      loaded.value = true;
+    }
   } catch {
-    failed.value = true;
+    if (generation === loadGeneration && ownerId === props.userId) {
+      failed.value = true;
+    }
   } finally {
-    loading.value = false;
+    if (generation === loadGeneration && ownerId === props.userId) {
+      loading.value = false;
+    }
   }
 }
 
@@ -51,7 +65,7 @@ function mergeTurn(turn: WorkshopChatHistoryTurnDto): void {
   } else {
     turns.value = [turn, ...turns.value];
   }
-  rememberWorkshopChatHistoryTurn(turn);
+  rememberWorkshopChatHistoryTurn(props.userId, turn);
   failed.value = false;
 }
 
@@ -115,6 +129,19 @@ watch(
     if (value && !loaded.value && !loading.value) void load();
   },
   { immediate: true },
+);
+
+watch(
+  () => props.userId,
+  () => {
+    loadGeneration += 1;
+    turns.value = [];
+    query.value = '';
+    loading.value = false;
+    loaded.value = false;
+    failed.value = false;
+    if (effectiveOpen.value) void load();
+  },
 );
 
 watch(

@@ -1,7 +1,15 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSessionStore } from '@/stores/session';
-import { refresh } from '@/api/auth';
+import { login, refresh } from '@/api/auth';
+
+const historyMocks = vi.hoisted(() => ({
+  clearWorkshopChatHistoryCache: vi.fn(),
+}));
+
+vi.mock('@/api/workshopHistory', () => ({
+  clearWorkshopChatHistoryCache: historyMocks.clearWorkshopChatHistoryCache,
+}));
 
 vi.mock('@/api/auth', () => ({
   login: vi.fn(async () => ({
@@ -23,6 +31,7 @@ vi.mock('@/api/auth', () => ({
 }));
 
 const refreshMock = vi.mocked(refresh);
+const loginMock = vi.mocked(login);
 
 async function flushAsync(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -33,6 +42,8 @@ describe('session store', () => {
     setActivePinia(createPinia());
     localStorage.clear();
     refreshMock.mockClear();
+    loginMock.mockClear();
+    historyMocks.clearWorkshopChatHistoryCache.mockClear();
   });
 
   it('stores token / expiry / user snapshot after login', async () => {
@@ -48,11 +59,13 @@ describe('session store', () => {
       username: 'stu01',
       role: 'STUDENT',
     });
+    expect(historyMocks.clearWorkshopChatHistoryCache).toHaveBeenCalledTimes(1);
   });
 
   it('clears token / expiry / user on logout', async () => {
     const store = useSessionStore();
     await store.login({ username: 'stu01', password: 'P@ssw0rd1' });
+    historyMocks.clearWorkshopChatHistoryCache.mockClear();
 
     store.logout();
 
@@ -60,6 +73,18 @@ describe('session store', () => {
     expect(store.user).toBeNull();
     expect(localStorage.getItem('pythontopia.token')).toBeNull();
     expect(localStorage.getItem('pythontopia.user')).toBeNull();
+    expect(historyMocks.clearWorkshopChatHistoryCache).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not clear the active account cache when login fails', async () => {
+    loginMock.mockRejectedValueOnce(new Error('bad credentials'));
+    const store = useSessionStore();
+
+    await expect(store.login({ username: 'stu01', password: 'wrong-pass' })).rejects.toThrow(
+      'bad credentials',
+    );
+
+    expect(historyMocks.clearWorkshopChatHistoryCache).not.toHaveBeenCalled();
   });
 
   it('logs out when hydrating an expired token', () => {

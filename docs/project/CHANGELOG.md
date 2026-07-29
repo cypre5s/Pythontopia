@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-07-29 — 重构：百晓工坊历史按账号隔离（P0-1）
+
+- 工坊历史查询缓存从仅按 `limit` 改为显式按 `userId + limit` 隔离；统一清理会取消所有
+  在途读取，并以 repository generation 阻止忽略 abort 的旧响应在登出后重新灌回缓存。
+- 登录成功与登出都清理历史查询仓库；失败登录与同账号 token refresh 不误清当前缓存。
+  `ChatHistoryRail` 在 owner 变化时立即清空本地列表，并用 owner + load generation 拒绝晚到结果。
+- `WorkshopPage` 只用当前认证用户 id 读写历史；应用级 KeepAlive 按账号重建，避免公用浏览器
+  A → B 换号后继续保留 A 的工坊对话、历史栏或世界页局部状态。后端仍以 JWT 为唯一授权事实源。
+- TDD 先固定 9 项 Vitest 预期失败和 1 项真实 Chromium 跨账号失败；修复后 focused 35/35、
+  Chromium 同一 SPA A 登出 → B 登录 1/1、前端全量 242 files / 2418 tests、TypeScript strict
+  与 ESLint（0 errors）全部通过。
+
 ## 2026-07-28 — 最终 ECS 双协议发布与 227 项公网验收
 
 - 最终发布包 `pythontopia-web-20260728T093105Z.tar.gz`（723,071,498 bytes，

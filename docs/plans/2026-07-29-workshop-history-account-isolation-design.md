@@ -58,6 +58,10 @@ session.login/logout
 `userId` 双重校验晚到结果，即使测试替身或某个 transport 没有响应 abort，也不能把 A 的结果
 写入 B 的局部状态。
 
+Repository 自身也维护清理世代号：请求开始时捕获 generation，返回时只有 generation 未变化
+才允许写缓存。这样即使 transport 忽略 abort，登出前发起的旧请求也不能在清理后重新灌回 A 的
+缓存条目。
+
 ## 4. 行为兼容
 
 - 历史后端端点和请求参数仍为 `limit`，`userId` 只用于前端身份隔离，不发送给后端作为授权依据；

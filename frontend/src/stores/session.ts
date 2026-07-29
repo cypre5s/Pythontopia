@@ -1,6 +1,7 @@
 import { defineStore, getActivePinia } from 'pinia';
 import { login as loginApi, refresh as refreshApi, register as registerApi } from '@api/auth';
 import { setTokenProvider, setUnauthorizedHandler } from '@api/http';
+import { clearWorkshopChatHistoryCache } from '@api/workshopHistory';
 import type { LoginRequest } from '@api/dto/LoginRequest';
 import type { LoginResponse } from '@api/dto/LoginResponse';
 import type { RegisterRequest } from '@api/dto/RegisterRequest';
@@ -185,7 +186,9 @@ export const useSessionStore = defineStore('session', {
      * 也需要在 user 落地后重建，才能读到新账号自己的持久化数据。
      */
     async login(req: LoginRequest): Promise<void> {
-      this.applySession(await loginApi(req));
+      const response = await loginApi(req);
+      clearWorkshopChatHistoryCache();
+      this.applySession(response);
       this.configureHttp();
       resetStoresForAccountSwitch();
     },
@@ -221,6 +224,7 @@ export const useSessionStore = defineStore('session', {
      */
     logout(): void {
       const scope = currentUserScope();
+      clearWorkshopChatHistoryCache();
       this.token = null;
       this.user = null;
       this.expiresAt = null;

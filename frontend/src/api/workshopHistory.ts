@@ -57,7 +57,13 @@ export interface RememberWorkshopChatHistoryOptions {
 }
 
 const DEFAULT_HISTORY_CACHE_TTL_MS = 60_000;
-const historyCache = new Map<number, WorkshopHistoryCacheEntry>();
+const historyCache = new Map<string, WorkshopHistoryCacheEntry>();
+const activeHistoryRequests = new Set<AbortController>();
+let historyCacheGeneration = 0;
+
+function historyCacheKey(userId: number, limit: number): string {
+  return `${userId}:${limit}`;
+}
 
 function cloneTurns(turns: WorkshopChatHistoryTurnDto[]): WorkshopChatHistoryTurnDto[] {
   return turns.map((turn) => ({
@@ -72,22 +78,33 @@ function resolveNow(options?: { now?: () => number }): number {
 }
 
 export async function listWorkshopChatHistoryTurns(
+  userId: number,
   limit = 50,
   options: ListWorkshopChatHistoryOptions = {},
 ): Promise<WorkshopChatHistoryTurnDto[]> {
   const now = resolveNow(options);
   const ttlMs = options.ttlMs ?? DEFAULT_HISTORY_CACHE_TTL_MS;
-  const cached = historyCache.get(limit);
+  const cacheKey = historyCacheKey(userId, limit);
+  const cached = historyCache.get(cacheKey);
   if (!options.force && cached && now - cached.loadedAt < ttlMs) {
     return cloneTurns(cached.turns);
   }
 
-  const response = await http.get<WorkshopChatHistoryTurnDto[]>(
-    '/api/workshop/chat-history/turns',
-    { params: { limit } },
-  );
-  historyCache.set(limit, { loadedAt: now, turns: cloneTurns(response.data) });
-  return cloneTurns(response.data);
+  const requestGeneration = historyCacheGeneration;
+  const controller = new AbortController();
+  activeHistoryRequests.add(controller);
+  try {
+    const response = await http.get<WorkshopChatHistoryTurnDto[]>(
+      '/api/workshop/chat-history/turns',
+      { params: { limit }, signal: controller.signal },
+    );
+    if (requestGeneration === historyCacheGeneration) {
+      historyCache.set(cacheKey, { loadedAt: now, turns: cloneTurns(response.data) });
+    }
+    return cloneTurns(response.data);
+  } finally {
+    activeHistoryRequests.delete(controller);
+  }
 }
 
 export async function recordWorkshopChatHistoryTurn(
@@ -101,11 +118,13 @@ export async function recordWorkshopChatHistoryTurn(
 }
 
 export function rememberWorkshopChatHistoryTurn(
+  userId: number,
   turn: WorkshopChatHistoryTurnDto,
   limit = 50,
   options: RememberWorkshopChatHistoryOptions = {},
 ): void {
-  const cached = historyCache.get(limit);
+  const cacheKey = historyCacheKey(userId, limit);
+  const cached = historyCache.get(cacheKey);
   if (!cached) return;
 
   const nextTurns = cloneTurns(cached.turns);
@@ -115,12 +134,21 @@ export function rememberWorkshopChatHistoryTurn(
   } else {
     nextTurns.unshift(cloneTurns([turn])[0]!);
   }
-  historyCache.set(limit, {
+  historyCache.set(cacheKey, {
     loadedAt: resolveNow(options),
     turns: nextTurns.slice(0, limit),
   });
 }
 
-export function resetWorkshopChatHistoryCacheForTest(): void {
+export function clearWorkshopChatHistoryCache(): void {
+  historyCacheGeneration += 1;
+  for (const controller of activeHistoryRequests) {
+    controller.abort();
+  }
+  activeHistoryRequests.clear();
   historyCache.clear();
+}
+
+export function resetWorkshopChatHistoryCacheForTest(): void {
+  clearWorkshopChatHistoryCache();
 }
