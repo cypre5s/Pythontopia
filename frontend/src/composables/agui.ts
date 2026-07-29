@@ -14,6 +14,7 @@
 // （运行时依赖单向：useSseStream → agui）。
 
 import type { SsePlan, SseTraceEvent } from './useSseStream';
+import type { Operation as JsonPatchOperation } from 'fast-json-patch';
 
 /** AG-UI 核心事件类型（判别式联合的 tag）。 */
 export type AguiEventType =
@@ -119,10 +120,16 @@ export interface AguiStateSnapshot {
   snapshot: Record<string, unknown>;
 }
 
-/** 状态增量（模块 D：浅合并进 useSseStream.state）。 */
+/** AG-UI 只接受 RFC 6902 标准操作；排除 fast-json-patch 的内部 `_get` 扩展。 */
+export type AguiJsonPatchOperation = Exclude<
+  JsonPatchOperation,
+  { op: '_get' }
+>;
+
+/** 状态增量（模块 D：RFC 6902 JSON Patch 应用到 useSseStream.state）。 */
 export interface AguiStateDelta {
   type: 'STATE_DELTA';
-  delta: Record<string, unknown>;
+  delta: AguiJsonPatchOperation[];
 }
 
 /** 自定义事件（承载无官方对应的语义，如历史 plan「工位清单」）。 */
@@ -151,6 +158,24 @@ export type AguiEvent =
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+}
+
+function escapeJsonPointerToken(value: string): string {
+  return value.replaceAll('~', '~0').replaceAll('/', '~1');
+}
+
+/**
+ * 旧 Graph 曾把 STATE_DELTA.delta 作为顶层浅合并对象发送。
+ * 只在输入边界转成等价的根属性 add，支持前后端滚动发布；新生产端不再输出该形状。
+ */
+function legacyObjectDeltaToPatch(
+  delta: Record<string, unknown>,
+): AguiJsonPatchOperation[] {
+  return Object.entries(delta).map(([key, value]) => ({
+    op: 'add',
+    path: `/${escapeJsonPointerToken(key)}`,
+    value,
+  }));
 }
 
 /**
@@ -262,8 +287,14 @@ export function toAguiEvent(eventName: string, raw: string): AguiEvent | null {
       return { type: 'STATE_SNAPSHOT', snapshot: d.snapshot ?? asRecord(data) };
     }
     case 'STATE_DELTA': {
-      const d = data as { delta?: Record<string, unknown> };
-      return { type: 'STATE_DELTA', delta: d.delta ?? asRecord(data) };
+      const d = data as { delta?: unknown };
+      const delta = d.delta;
+      return {
+        type: 'STATE_DELTA',
+        delta: Array.isArray(delta)
+          ? (delta as AguiJsonPatchOperation[])
+          : legacyObjectDeltaToPatch(asRecord(delta)),
+      };
     }
     case 'CUSTOM': {
       const d = data as { name?: string; value?: unknown };

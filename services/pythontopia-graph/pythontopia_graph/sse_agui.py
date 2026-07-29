@@ -10,7 +10,8 @@
 * ``RUN_FINISHED`` → ``{"result": <any>}``
 * ``RUN_ERROR`` → ``{"code": str, "message": str}``
 * ``TOOL_CALL_*`` → ``{"toolCallId": str, ...}``
-* ``STATE_SNAPSHOT`` → ``{"snapshot": {...}}`` ; ``STATE_DELTA`` → ``{"delta": {...}}``
+* ``STATE_SNAPSHOT`` → ``{"snapshot": {...}}`` ;
+  ``STATE_DELTA`` → ``{"delta": [{"op": ..., "path": ...}]}``（RFC 6902）
 * ``CUSTOM`` → ``{"name": str, "value": <any>}``
 
 Java 中转层（``GraphSseConsumer`` + 各 ``*GraphClient``）按事件名原样透传，故新事件名穿过后端零改动。
@@ -226,8 +227,8 @@ def state_snapshot(snapshot: dict[str, Any]) -> str:
     return format_sse("STATE_SNAPSHOT", {"snapshot": snapshot})
 
 
-def state_delta(delta: dict[str, Any]) -> str:
-    """运行态增量（前端浅合并进 ``useSseStream.state``，模块 D：HUD 实时同步）。"""
+def state_delta(delta: list[dict[str, Any]]) -> str:
+    """运行态增量（RFC 6902 JSON Patch；前端应用到 ``useSseStream.state``）。"""
     return format_sse("STATE_DELTA", {"delta": delta})
 
 

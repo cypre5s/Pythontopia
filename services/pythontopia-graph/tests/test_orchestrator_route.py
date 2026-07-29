@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import AsyncIterator
 
 from fastapi.testclient import TestClient
@@ -105,12 +106,22 @@ def test_orchestrator_stream_emits_state_delta_plan_progress() -> None:
 
     assert response.status_code == 200
     text = response.text
-    # AG-UI 官方事件名 + plan 进度袋，前端 useSseStream 双语兼容层可直接归一化进 state。
-    assert "event: STATE_DELTA" in text
-    assert "plan_steps" in text
+    state_deltas = [
+        json.loads(block.split("data: ", maxsplit=1)[1])["delta"]
+        for block in text.split("\n\n")
+        if block.startswith("event: STATE_DELTA\n")
+    ]
+    assert state_deltas
+    assert all(isinstance(delta, list) for delta in state_deltas)
+    assert all(
+        operation["op"] == "add" and operation["path"] == "/plan_steps"
+        for delta in state_deltas
+        for operation in delta
+    )
+    plan_steps = [operation["value"] for delta in state_deltas for operation in delta]
     # 开场全 pending 快照 + 每步真实推进到 active（done/failed 视 dispatch 结果）。
-    assert '"pending"' in text
-    assert '"active"' in text
+    assert any(step["status"] == "pending" for steps in plan_steps for step in steps)
+    assert any(step["status"] == "active" for steps in plan_steps for step in steps)
 
     del app.state.llm_provider
 

@@ -177,9 +177,49 @@
 | 2026-07-29 | Graph 命令环境 | `python -m pytest -q tests/test_sse_agui.py tests/test_orchestrator_route.py` | 未执行测试：当前工作树无 `python` 别名，改用仓库可用的 `python3` |
 | 2026-07-29 | Graph 定向基线 | `python3 -m pytest -q tests/test_sse_agui.py tests/test_orchestrator_route.py` | 27 passed |
 | 2026-07-29 | JSON Patch 依赖复核 | `npm view fast-json-patch version license dist.unpackedSize --proxy http://127.0.0.1:7892` | 3.1.1 / MIT / 159025 bytes |
+| 2026-07-29 | Graph 契约 RED | `python3 -m pytest -q tests/test_sse_agui.py tests/test_orchestrator_route.py` | 1 expected failure / 26 passed；路由实流中的 `STATE_DELTA.delta` 仍为对象而非操作数组 |
+| 2026-07-29 | 前端执行 RED | `npm run test -- tests/composables/useSseStream.spec.ts` | 1 expected failure / 5 passed；RFC 6902 数组被浅合并成 `"0"/"1"/"2"` 状态键，嵌套替换与删除均未执行 |
+| 2026-07-29 | Graph 定向 GREEN | `python3 -m pytest -q tests/test_sse_agui.py tests/test_orchestrator_route.py` | 27 passed；helper 与路由实流均输出 RFC 6902 操作数组 |
+| 2026-07-29 | 前端定向 GREEN | `npm run test -- tests/composables/useSseStream.spec.ts` | 6 passed；replace/remove/add 与旧对象载荷兼容均通过 |
+| 2026-07-29 | 前端协议/工坊联跑 | `npx vitest run tests/composables/useSseStream.spec.ts tests/components/workshop/WorkshopChat.spec.ts --coverage.enabled=false` | 2 files / 51 tests passed；计划卡继续消费 `state.plan_steps` |
+| 2026-07-29 | TypeScript strict | `npm run typecheck` | passed |
+| 2026-07-29 | Graph 全量首轮 | `python3 -m pytest -q` | 1672 passed / 3 skipped，7 failures；均为 `test_workshop_route_defects.py` 导入仓库 sibling fixture 时命中第三方 `tests` 包 |
+| 2026-07-29 | Graph 导入根因 | `python3 -c "import tests; print(tests.__file__)"` | 指向 `/home/cypress/.local/lib/python3.10/site-packages/tests/__init__.py`；仓库 `tests/` 缺显式 package 边界 |
+| 2026-07-29 | Graph 夹具修复 | `python3 -m pytest -q tests/test_workshop_route_defects.py` | 新增 `tests/__init__.py` 后 31 passed；独立提交 `faa6d59f`，无生产行为修改 |
+| 2026-07-29 | Graph 全量复验 | `python3 -m pytest -q` | 1679 passed / 3 skipped；仅 1 条既有 FastAPI 422 常量弃用告警 |
+| 2026-07-29 | 前端全量回归 | `npm run test` | 242 files / 2419 tests passed |
+| 2026-07-29 | 前端生产构建 | `npm run build` | TypeScript strict + Vite 4068 modules 构建成功；同步脚本生成的 manifest 时间戳已恢复，未夹带 |
+| 2026-07-29 | 前端 lint | `npm run lint` | exit 0，0 errors / 114 warnings；warning 均为既有 Vue 模板风格，无本切片 TS 命中 |
+| 2026-07-29 | 提交前最终复验 | Graph 定向 27 项 + 前端协议/工坊 51 项 | 27 passed；2 files / 51 tests passed |
+| 2026-07-29 | 生产依赖审计 | `npm audit --omit=dev --audit-level=high --registry https://registry.npmjs.org --proxy http://127.0.0.1:7892` | 新增 `fast-json-patch` 无告警；报告既有 Axios/form-data/PostCSS 3 high、DOMPurify 1 moderate，按独立依赖升级列车处理 |
 
 设计：`docs/plans/2026-07-29-agui-state-delta-json-patch-design.md`
 
 实施：`docs/plans/2026-07-29-agui-state-delta-json-patch-implementation.md`
 
-状态：事实与方案已冻结，下一步建立 Graph 与前端双端 RED。
+### 格式与静态分析基线
+
+- 变更 Python 文件 `ruff check` 全部通过；Graph 全量 `ruff check .` 仅报告既有
+  `tests/test_agentic_ab.py:5` 未使用 `pytest`；
+- `ruff format --check .` 报 172 个既有文件 drift；本切片五个 Python 文件中
+  `sse_agui.py`、两项新/改测试和测试包文件已符合 formatter，`orchestrator_graph.py` 与
+  `test_orchestrator_route.py` 的 HEAD 版本本身存在 unrelated whole-file drift，未扩大修改面；
+- 定向 Prettier 对三个既有 TS 文件仍报告 whole-file drift，HEAD 输入同样失败；新增行已按
+  single-quote 风格局部对齐，package JSON 通过，ESLint 定向与全量均为 0 errors；
+- `git diff --check` 通过。
+
+### Slice 4 收口
+
+- 已完成：Graph canonical `STATE_DELTA` 使用 RFC 6902 操作数组；前端类型化解析并用成熟库
+  安全执行 patch，旧对象载荷只保留滚动发布兼容。
+- 行为边界不变：orchestrator 仍发送完整 `plan_steps` 当前值，组件继续读取
+  `state.plan_steps`；Java 中转、数据库、API、鉴权、运行生命周期和 SSE transport 未改。
+- 全量证据：Graph 1679 passed / 3 skipped；前端 242 files / 2419 tests、生产构建、
+  TypeScript strict 和 ESLint 通过。
+- 比赛演示影响：正向。复合任务计划卡继续实时点亮，同时状态流可被标准 AG-UI 客户端执行，
+  不再只是“事件名看起来兼容”。
+- 剩余风险：本切片未部署 ECS；`RUN_STARTED/RUN_FINISHED` 的 run/thread id 仍未全端点对齐，
+  统一超时、心跳、取消与单终态 transport 也在后续切片；npm audit 的 4 项既有依赖告警
+  不属于本切片，需在独立依赖升级发布列车中逐项验证修复。
+
+状态：Slice 4 完成，下一小步为 AG-UI 生命周期 `threadId/runId` 契约。

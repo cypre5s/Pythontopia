@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-07-29 — 重构：AG-UI STATE_DELTA 可执行 JSON Patch 契约（P0-2c）
+
+- Graph orchestrator 的计划进度从同名但非标准的对象增量改为 RFC 6902
+  `add /plan_steps` 操作数组；pending / active / done / failed 的真实进度与最终
+  `state.plan_steps` 投影保持不变。
+- 前端 `AguiStateDelta` 收敛为标准 JSON Patch 操作，使用 MIT 许可的
+  `fast-json-patch@3.1.1` 执行、校验并阻断 prototype modification；旧对象载荷只在协议边界
+  转成等价根属性 `add`，支持前后端滚动发布。
+- TDD 双端 RED 分别捕获对象载荷和浅合并错误；修复后 Graph 定向 27/27、全量
+  1679 passed / 3 skipped，前端协议/工坊联跑 51/51、全量 242 files / 2419 tests，
+  TypeScript strict、ESLint（0 errors）与生产构建全部通过。
+- 全量 Graph 首轮另暴露本机第三方 `tests` 包遮蔽仓库同名目录；新增显式测试包边界后，
+  受影响文件 31/31 通过并以独立提交收口，不修改生产行为。
+
 ## 2026-07-29 — 重构：周报 resource_run 真实 SQL 契约（P0-2b）
 
 - `WeeklyReportService` 将七天窗口起点从裸 `Instant` 改为 JDBC 可确定映射的
