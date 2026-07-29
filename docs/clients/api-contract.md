@@ -322,6 +322,12 @@ data: <json>
 
 ```
 
+帧解释遵循 WHATWG SSE 规则：同一事件的多个 `data:` 字段以单个 LF（`\n`）连接，`: ...`
+注释心跳与未知字段忽略，缺省 `event` 为 `message`，只有空行才分发完整事件；连接在空行前结束时，
+未完成尾帧必须丢弃。Java 后端的旧 Graph consumer 与 Tutor/Orchestrator relay 共用
+`common.sse.SseFrameDecoder` 执行该合同；终态识别、读超时、客户端断开与 fallback 仍由各 transport
+负责。跨端客户端自行解析时也必须保留上述语义，不能直接拼接多行 data 或分发 EOF 半帧。
+
 事件语义（并集 = `plan / trace / token / result / error`，并非每个流都发全部）：
 
 | event | data 形态 | 含义 |

@@ -92,31 +92,17 @@ public final class GraphSseConsumer {
     try (BufferedReader reader =
         new BufferedReader(
             new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
-      String currentEvent = "message";
-      StringBuilder dataBuffer = new StringBuilder();
-
-      String line;
-      while ((line = reader.readLine()) != null) {
-        if (line.startsWith("event:")) {
-          currentEvent = line.substring("event:".length()).trim();
-        } else if (line.startsWith("data:")) {
-          dataBuffer.append(line.substring("data:".length()).trim());
-        } else if (line.isEmpty() && dataBuffer.length() > 0) {
-          try {
-            onEvent.accept(currentEvent, dataBuffer.toString());
-          } catch (Exception e) {
-            log.warn("SSE event handler error for event={}", currentEvent, e);
-          }
-          currentEvent = "message";
-          dataBuffer.setLength(0);
-        }
-      }
-      if (dataBuffer.length() > 0) {
-        try {
-          onEvent.accept(currentEvent, dataBuffer.toString());
-        } catch (Exception e) {
-          log.warn("SSE event handler error for trailing event={}", currentEvent, e);
-        }
+      SseFrameDecoder.DecodeResult result =
+          SseFrameDecoder.decode(reader, frame -> {
+            try {
+              onEvent.accept(frame.event(), frame.data());
+            } catch (Exception e) {
+              log.warn("SSE event handler error for event={}", frame.event(), e);
+            }
+            return true;
+          });
+      if (result == SseFrameDecoder.DecodeResult.TRUNCATED) {
+        log.warn("Discarding unterminated trailing Graph SSE frame");
       }
     }
   }

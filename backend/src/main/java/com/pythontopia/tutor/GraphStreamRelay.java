@@ -1,6 +1,7 @@
 package com.pythontopia.tutor;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pythontopia.common.sse.SseFrameDecoder;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -126,37 +127,29 @@ public final class GraphStreamRelay {
     try (BufferedReader reader =
         new BufferedReader(
             new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))) {
-      String currentEvent = "message";
-      StringBuilder dataBuffer = new StringBuilder();
-      String line;
-      while ((line = reader.readLine()) != null) {
-        if (line.startsWith("event:")) {
-          currentEvent = line.substring("event:".length()).trim();
-        } else if (line.startsWith("data:")) {
-          dataBuffer.append(line.substring("data:".length()).trim());
-        } else if (line.isEmpty() && dataBuffer.length() > 0) {
-          String eventName = currentEvent;
-          String data = dataBuffer.toString();
-          currentEvent = "message";
-          dataBuffer.setLength(0);
-          try {
-            emitter.send(SseEmitter.event().name(eventName).data(data));
-          } catch (IOException | IllegalStateException sendFailure) {
-            log.debug("SSE client gone, aborting graph relay", sendFailure);
-            return StreamEnd.CLIENT_GONE;
-          }
-          notifyPeek(onEvent, eventName, data);
-          if (TERMINAL_EVENTS.contains(eventName)) {
-            return StreamEnd.TERMINAL;
-          }
-        }
+      StreamEnd[] stoppedAs = {StreamEnd.TRUNCATED};
+      SseFrameDecoder.DecodeResult result =
+          SseFrameDecoder.decode(reader, frame -> {
+            try {
+              emitter.send(SseEmitter.event().name(frame.event()).data(frame.data()));
+            } catch (IOException | IllegalStateException sendFailure) {
+              log.debug("SSE client gone, aborting graph relay", sendFailure);
+              stoppedAs[0] = StreamEnd.CLIENT_GONE;
+              return false;
+            }
+            notifyPeek(onEvent, frame.event(), frame.data());
+            if (TERMINAL_EVENTS.contains(frame.event())) {
+              stoppedAs[0] = StreamEnd.TERMINAL;
+              return false;
+            }
+            return true;
+          });
+      if (result == SseFrameDecoder.DecodeResult.STOPPED) {
+        return stoppedAs[0];
       }
-      if (dataBuffer.length() > 0) {
+      if (result == SseFrameDecoder.DecodeResult.TRUNCATED) {
         // 未以空行收束的半截帧：按 SSE 规范丢弃，防止把截断 JSON 当正常事件透传。
-        log.warn(
-            "Discarding unterminated trailing SSE frame (event={}, {} chars)",
-            currentEvent,
-            dataBuffer.length());
+        log.warn("Discarding unterminated trailing SSE frame");
       }
       return StreamEnd.TRUNCATED;
     }

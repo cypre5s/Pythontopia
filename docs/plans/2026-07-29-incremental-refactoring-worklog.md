@@ -3,7 +3,7 @@
 > 开始时间：2026-07-29
 > 当前分支：`refactor/workshop-history-account-isolation`
 > 总体输入：用户提供的八方向重构审阅
-> 当前切片：P0-2b 周报 resource_run 真实 SQL 契约
+> 当前切片：P1-4a Java SSE 公共帧解码合同
 
 ## 交付纪律
 
@@ -305,5 +305,32 @@
 |---|---|---|---|
 | 2026-07-29 | Java SSE 调用链审计 | `rg` + 两套实现/调用方/失败测试源码检查 | 确认 2 套 parser、5 条 Graph 调用链及 EOF/多行 data 行为分叉 |
 | 2026-07-29 | WHATWG 合同复核 | HTML Living Standard §9.2.5–9.2.6 | 官方要求 data 行追加 LF、注释忽略、空行分发、EOF pending data 丢弃 |
+| 2026-07-29 | Relay 定向基线 | `mvn -q -Dtest='OrchestratorGraphClientTest,OrchestratorGraphClientFailureTest,TutorGraphClientSseTest,TutorGraphClientFailureTest' test` | 4 classes / 15 tests passed；正常、HTTP/连接错误、读超时、截断和客户端断开合同均绿 |
+| 2026-07-29 | Consumer 真流 RED | `mvn -q -Dtest=GraphSseConsumerTest test` | 1 expected failure；实际错误输出 `firstsecond` 且额外分发半截 result，精确命中两个 parser 缺陷 |
+| 2026-07-29 | Decoder 类合同 RED | `mvn -q -Dtest=SseFrameDecoderTest test` | expected test-compile failure；公共 decoder 尚不存在 |
+| 2026-07-29 | 公共 decoder 定向 GREEN | 设计实施计划 Task 3 的 6 类定向命令 | 6 classes / 20 tests passed；新增 5 项标准帧合同 + 既有 Relay 15 项故障合同 |
+| 2026-07-29 | Relay 多行旁路复核 | `mvn -q -Dtest='GraphSseConsumerTest,SseFrameDecoderTest,OrchestratorGraphClientTest' test` | 3 classes / 9 tests passed；peek 收到标准 `{"text":\n"hi"}`，SseEmitter 仍按 wire data 行正确编码 |
+| 2026-07-29 | 变更文件 Spotless | `mvn -q -DspotlessFiles='<6 changed java files>' spotless:check` | passed |
+| 2026-07-29 | 全仓 Spotless 基线 | `mvn -q spotless:check` | 既有 570 个 Java 文件格式漂移；未执行 apply，避免扩大修改面 |
+| 2026-07-29 | Backend 全量首轮 | `mvn test` | 1090 tests；0 failures / 6 errors。6 项均为 `pgvector` Testcontainers 启动前随机宿主端口 `address already in use`，无业务断言失败 |
+| 2026-07-29 | 首轮容器错误隔离复跑 | `mvn -q -Dtest='CoursePackServiceIntegrationTest,DecisionTraceControllerTest,EvidenceMemoryServiceTest,LearningEvidenceGraphServiceTest,MemoryRetrievalSemanticIntegrationTest,RecommendationServiceTest' test` | 6 classes / 18 tests passed；真实 PostgreSQL/pgvector 与 V190 迁移均通过 |
+| 2026-07-29 | Backend 全量复验 | `mvn test` | 1090 tests；0 failures / 7 errors。相同 6 项容器随机端口冲突再次出现，另有 `LongTermClassroomEffectSimulationTest` 因数据库容器被连带中断而连接失败 |
+| 2026-07-29 | 连带错误隔离复跑 | `mvn -q -Dtest=LongTermClassroomEffectSimulationTest test` | 1 test passed；独立 pgvector 容器、完整 V190 迁移与长期课堂模拟全部通过 |
 
-状态：Slice 6 设计完成，下一步建立 Backend 定向基线与真流 RED。
+### Slice 6 收口
+
+- 已完成：新增无日志、无业务策略的 `SseFrameDecoder`；旧 consumer 与强 Relay 共用同一
+  WHATWG 帧解释，删除两份重复 line parser；HTTP client、超时、fallback、emitter 和终态策略不变。
+- 协议边界：首行 BOM、注释/未知字段、默认 `message`、显式空 data、多行 LF 合并、空行分发、
+  handler 提前停止与 EOF 半帧丢弃均有合同测试；旧 consumer 不再把截断 JSON 上送业务回调。
+- 全量证据：Backend 全量命令执行两次，均为业务断言 0 failures，但被本机 Docker 随机宿主端口
+  分配冲突阻断为 6/7 个环境 errors；所有受影响测试类随后隔离复跑 19/19 通过，不能据此宣称获得
+  一次单命令全绿，环境限制已如实保留。
+- 格式证据：6 个变更 Java 文件 Spotless 通过；全仓检查仍有 570 个既有文件 drift，本切片不夹带
+  全仓机械格式化。
+- 比赛演示影响：正向。多行 AG-UI/SSE 载荷保留标准换行，截断尾帧不会被当作完整结果继续落库或
+  渲染；既有端点、正常单行载荷及错误终态保持兼容。
+- 未验证与风险：尚未部署 ECS、未做公网长流验收；`GraphSseConsumer` 三个调用方仍缺少强 Relay
+  的统一读超时、客户端取消和单终态保障，下一切片应逐调用方迁移而非一次性替换全部。
+
+状态：Slice 6 完成；下一小步为 P1-4b 旧 Graph SSE 调用方向统一 transport 的首个迁移切片。

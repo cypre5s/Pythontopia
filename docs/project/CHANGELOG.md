@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-07-29 — 重构：Java Graph SSE 公共帧解码合同（P1-4a）
+
+- 新增无业务策略的 `common.sse.SseFrameDecoder`，让工坊/画像/TutorWorkflow 使用的旧
+  `GraphSseConsumer` 与 Tutor/Orchestrator 的强 `GraphStreamRelay` 共享唯一 wire parser；保留各自
+  HTTP client、超时、fallback、emitter、终态和回调边界。
+- 对齐 WHATWG：首行 BOM 被移除，多行 `data:` 以 LF 连接，注释与未知字段忽略，缺省事件为
+  `message`，显式空 data 可分发，只有空行完成帧；EOF 前未完成尾帧丢弃，不再把截断 JSON 当结果上送。
+- TDD 先用 JDK 本地 HTTP 真流稳定复现 `firstsecond` 与尾帧误分发，再建立 decoder 编译 RED；修复后
+  6 类聚焦 20/20、Relay 多行旁路 9/9，变更 Java 文件 Spotless 通过。
+- Backend 全量执行两次均为 1090 项、0 个业务断言失败，但分别被本机 Docker 随机宿主端口冲突阻断为
+  6/7 个 Testcontainers 环境错误；全部受影响类隔离复跑 19/19 通过。未把该证据表述为一次全量纯绿，
+  ECS 与公网长流仍待后续发布验收。
+
 ## 2026-07-29 — 重构：AG-UI 主编排流生命周期身份（P0-2d）
 
 - `/agents/orchestrator/turn/stream` 明确区分长期会话与单次运行：`threadId` 沿用

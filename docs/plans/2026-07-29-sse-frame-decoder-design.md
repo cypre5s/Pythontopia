@@ -2,7 +2,7 @@
 
 日期：2026-07-29
 
-状态：已确认，待 TDD 实施
+状态：已完成并验证
 
 ## 背景
 
@@ -54,6 +54,7 @@ DecodeResult decode(BufferedReader reader, Predicate<SseFrame> handler)
 ```
 
 - `SseFrame` 只包含 `event` 与 `data`；空 event 映射为默认 `message`；
+- 首行 UTF-8 BOM 被移除，CRLF / LF 由 `BufferedReader` 统一为行边界；
 - 每个 `data:` 字段去掉冒号后的至多一个前导空格，字段之间以 `\n` 连接，不删除其他空白；
 - `: ...` 注释、未知字段和无 data 的空事件不分发；
 - 只有空行完成帧；EOF 尚有 data 时返回 `TRUNCATED` 且不调用 handler；
