@@ -466,3 +466,25 @@
   单独设计和迁移；本切片不引入重连、首包 deadline、序号或 `Last-Event-ID`。
 
 状态：Slice 9 完成；下一小步为 Workshop SSE 业务适配迁移。
+
+## Slice 10：Workshop SSE 终态投影迁移
+
+### 基线与设计决策
+
+- Workshop 是最后一个生产 `GraphSseConsumer` 调用方；它已兼容 canonical wrapper，但仍重复持有
+  HTTP、fallback、emitter 与 complete 生命周期；
+- Workshop 成功终态必须先落库生成 `resourceId` 再替换上游终态，不能使用“先发送、后旁路”的普通
+  callback；
+- 公共 transport 只增加受白名单约束的 terminal mapper，不开放非终态事件重写；mapper 失败不重跑
+  Graph，只有连接/超时/截断才进入同步 recovery；
+- 本切片不触碰 `ResourceWorkshopService` 的长事务生成边界，P0-3 状态机拆分单独排期。
+
+设计：`docs/plans/2026-07-29-workshop-sse-terminal-projection-design.md`
+
+实施：`docs/plans/2026-07-29-workshop-sse-terminal-projection-implementation.md`
+
+| 时间 | 范围 | 命令 | 结果 |
+|---|---|---|---|
+| 2026-07-29 | Workshop/Graph 路由审计 | Java/Python/前端定向源码检查 | 确认 canonical 已映射，但 EOF 静默成功、客户端断开不传播、fallback 双收口；前端要求落库后的 legacy result |
+
+状态：Slice 10 设计完成，下一步建立 Workshop 真流 RED。
