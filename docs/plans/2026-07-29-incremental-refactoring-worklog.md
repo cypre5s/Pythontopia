@@ -54,3 +54,24 @@
   单账号工坊历史、JWT 授权与后端接口保持不变。
 
 状态：Slice 1 完成，等待进入下一小步。
+
+## Slice 2：Embedding Profile 跨语言契约
+
+### 基线与事实复核
+
+- 生产告警：`MemoryEmbeddingWriter expected=2048 actual=1024`，会跳过部分学习事件向量写入；
+- 数据库事实：V175 已把记忆与上传语料向量列固定为 `halfvec(2048)`；
+- 部署事实：开发与 `.env.example` 均声明 `PYT_RAG_EMBEDDER=zhipu`、
+  `EMBEDDING_DIM=2048`，但显式 `hash` selector 仍硬走默认 1024；
+- 边界事实：Pydantic `/embed` 已返回 `model/dim/vectors`，Java DTO 已接收元信息但客户端未执行校验。
+
+| 时间 | 范围 | 命令 | 结果 |
+|---|---|---|---|
+| 2026-07-29 | RAG 定向基线 | `python -m pytest -q tests/test_zhipu_embedder.py tests/test_embed_route.py` | 7 passed |
+| 2026-07-29 | Backend 定向基线 | `mvn --settings .mvn/settings.build.xml -Dtest=EmbeddingClientTest,MemoryEmbeddingWriterTest test` | 11 tests passed；0 failures / 0 errors |
+
+设计：`docs/plans/2026-07-29-embedding-profile-contract-design.md`
+
+实施：`docs/plans/2026-07-29-embedding-profile-contract-implementation.md`
+
+状态：Slice 2 进行中。
