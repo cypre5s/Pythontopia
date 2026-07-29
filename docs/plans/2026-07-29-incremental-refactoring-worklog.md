@@ -3,7 +3,7 @@
 > 开始时间：2026-07-29
 > 当前分支：`refactor/workshop-history-account-isolation`
 > 总体输入：用户提供的八方向重构审阅
-> 当前切片：P1-4a Java SSE 公共帧解码合同
+> 当前切片：P1-4b TutorWorkflow SSE 强中继迁移
 
 ## 交付纪律
 
@@ -353,5 +353,30 @@
 |---|---|---|---|
 | 2026-07-29 | 旧调用方与 Graph 路由审计 | `rg` + Java/Python 定向源码检查 | 确认 TutorWorkflow 是最小迁移面；Graph 每 10 秒 ping，终态为 `RUN_FINISHED/RUN_ERROR` |
 | 2026-07-29 | TutorWorkflow/共享 Relay 基线 | `mvn -q -Dtest='TutorWorkflowServiceTest,TutorGraphClientSseTest,TutorGraphClientFailureTest' test` | 3 classes / 16 tests passed；投影、正常透传及 Relay 截断/超时/断开合同基线为绿 |
+| 2026-07-29 | 无终态 EOF RED | `mvn -q -Dtest=TutorWorkflowGraphClientTest test` | 1 expected failure；trace 已到达，但旧客户端静默 complete，预期唯一中断 error 实际为 0 |
+| 2026-07-29 | 可控读超时 RED | 同目标测试命令 | expected test-compile failure；旧客户端没有可注入 connect/read timeout 接线 |
+| 2026-07-29 | 目标客户端 GREEN | 同目标测试命令 | 1 class / 4 tests passed；成功 RUN_FINISHED、上游 RUN_ERROR、无终态 EOF 与 stalled timeout 合同均绿 |
+| 2026-07-29 | 目标与共享 Relay 联跑 | `mvn -q -Dtest='TutorWorkflowGraphClientTest,TutorWorkflowServiceTest,TutorGraphClientSseTest,TutorGraphClientFailureTest,OrchestratorGraphClientTest,OrchestratorGraphClientFailureTest' test` | 6 classes / 30 tests passed；投影、认证、透传、截断、超时、连接失败和客户端断开守恒 |
+| 2026-07-29 | Spring 全上下文 | `mvn -q -Dtest=PythontopiaApplicationTests test` | 1 test passed；`GraphHttpClientProperties` 新构造注入成功 |
+| 2026-07-29 | 变更文件 Spotless | `mvn -q -DspotlessFiles='<2 changed java files>' spotless:check` | passed |
+| 2026-07-29 | Backend 全量 | `mvn test` | 1094 tests；0 failures / 7 errors。6 项为 pgvector 随机宿主端口启动冲突，1 项课堂模拟因其数据库连接被连带中断；Slice 7 新测试全部通过 |
+| 2026-07-29 | 端口冲突根因 | `ss -tanp` + `sysctl net.ipv4.ip_local_port_range` | 失败端口位于 44620–48715 临时区间，且当时正是 host→container:5432 的 TIME_WAIT；Docker 29 从同一区间分配下一映射而自碰撞 |
+| 2026-07-29 | 全量错误类新鲜隔离复跑 | 等待上一 PostgreSQL TIME_WAIT 自然释放后，每类独立执行 `mvn -q -Dtest='<class>' test` | 7 classes / 19 tests passed；完整 V190 迁移、课堂模拟与六个真库合同全部通过，未修改系统端口或重启 Docker |
 
-状态：Slice 7 设计完成，下一步建立目标客户端无终态 EOF 与读超时 RED。
+### Slice 7 收口
+
+- 已完成：TutorWorkflow 从旧 consumer 迁到既有强 Relay；连接超时复用 Graph HTTP 配置，读不活动
+  上限对齐 180 秒 emitter，Python 10 秒注释心跳保持正常长生成活跃。
+- 成功合同不变：请求 body、`X-Internal-Token`、事件名与 data 原样透传；`result/RUN_FINISHED`
+  仍以原始 payload 恰好一次触发投影 callback。
+- 故障合同收紧：连接/HTTP/超时/无终态 EOF 都以唯一净化 error 收尾；部分 trace 保留，客户端断开
+  停止上游，所有路径只 complete 一次且不再裸 `completeWithError`。
+- 全量证据：目标与共享 Relay 30/30、Spring 上下文 1/1、变更文件 Spotless 通过；Backend 全量
+  1094 项业务断言 0 failures，但 7 个 Docker/Testcontainers 环境 errors 阻止单命令纯绿，全部错误类
+  已按内核 TIME_WAIT 证据安全串行复跑 19/19 通过。
+- 比赛演示影响：正向。导学工作流 Graph 中断不再被 UI 当成成功结束，学生能收到可重试错误；正常卡片
+  生成、AG-UI 终态和 Java 投影落库形状不变。
+- 未验证与风险：尚未部署 ECS、未做真实浏览器/公网长流验收；Workshop 与 Profile 两个旧 consumer
+  调用方仍未获得强 Relay 的取消和单终态语义，且首包独立 deadline、序号仍未统一。
+
+状态：Slice 7 完成；下一小步为 P1-4c Workshop/Profile 中风险较低调用方的独立 transport 迁移设计。

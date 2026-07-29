@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-07-29 — 重构：TutorWorkflow SSE 强中继迁移（P1-4b）
+
+- `TutorWorkflowGraphClient` 从旧 `GraphSseConsumer` 迁到已由 Tutor/Orchestrator 验证的
+  `GraphStreamRelay`；连接超时复用 Graph HTTP 配置，读不活动上限对齐现有 180 秒 emitter，Python
+  TutorWorkflow 每 10 秒注释 heartbeat 保持正常长生成活跃。
+- 成功链路保持请求 body、内部 token、事件/data 与 `result/RUN_FINISHED` 原始投影 callback 不变；
+  故障链路现在保留部分事件并以唯一净化 error 收尾，客户端断开立即停止上游，且不再裸
+  `completeWithError`。
+- TDD 先稳定复现“无终态 EOF 静默成功”和缺少可控 read timeout 接线；修复后目标客户端 4/4、
+  TutorWorkflow/共享 Relay 联跑 30/30、Spring 全上下文 1/1、变更 Java 文件 Spotless 通过。
+- Backend 全量 1094 项业务断言 0 failures，但本机 Docker 29 将下一容器映射分配到 PostgreSQL
+  TIME_WAIT 临时端口，产生 7 个环境 errors；内核连接表确认根因后，不改系统配置地等待释放并逐类
+  复跑，全部受影响真库/课堂模拟合同 19/19 通过。ECS 与公网长流仍待后续发布验收。
+
 ## 2026-07-29 — 重构：Java Graph SSE 公共帧解码合同（P1-4a）
 
 - 新增无业务策略的 `common.sse.SseFrameDecoder`，让工坊/画像/TutorWorkflow 使用的旧

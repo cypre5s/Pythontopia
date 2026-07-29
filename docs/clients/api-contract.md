@@ -328,6 +328,11 @@ data: <json>
 `common.sse.SseFrameDecoder` 执行该合同；终态识别、读超时、客户端断开与 fallback 仍由各 transport
 负责。跨端客户端自行解析时也必须保留上述语义，不能直接拼接多行 data 或分发 EOF 半帧。
 
+Java 内部 `/agents/tutor-workflow/run/stream` 中继已采用强 Relay：连接超时复用 Graph HTTP 配置，
+读不活动上限为 180 秒（上游每 10 秒注释 heartbeat 会续活）；上游无终态关闭时保留已到达事件并补
+唯一 `error`（`AI_STREAM_INTERRUPTED`），读超时为 `AI_SERVICE_TIMEOUT`，客户端断开会关闭上游。
+正常 `RUN_FINISHED/RUN_ERROR` 仍原样透传，不额外生成第二个终态。
+
 事件语义（并集 = `plan / trace / token / result / error`，并非每个流都发全部）：
 
 | event | data 形态 | 含义 |
