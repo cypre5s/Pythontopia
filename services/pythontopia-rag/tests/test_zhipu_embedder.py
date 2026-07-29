@@ -52,3 +52,42 @@ async def test_select_zhipu_without_key_still_uses_2048_dim_hash_fallback(monkey
     assert embedder.dim == ZHIPU_DEFAULT_DIM
     assert "hash-fallback" in embedder.name
     assert len(vectors[0]) == ZHIPU_DEFAULT_DIM
+
+
+@pytest.mark.asyncio
+async def test_select_hash_honors_configured_embedding_dimension(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PYT_RAG_EMBEDDER", "hash")
+    monkeypatch.delenv("PYT_RAG_EMBEDDING_DIM", raising=False)
+    monkeypatch.setenv("EMBEDDING_DIM", "2048")
+
+    embedder = select_embedder()
+    vectors = await embedder.embed(["列表推导式"])
+
+    assert embedder.name == "hash-bow-2048"
+    assert embedder.dim == 2048
+    assert len(vectors[0]) == 2048
+
+
+def test_pyt_dimension_takes_precedence_for_hash(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PYT_RAG_EMBEDDER", "hash")
+    monkeypatch.setenv("PYT_RAG_EMBEDDING_DIM", "64")
+    monkeypatch.setenv("EMBEDDING_DIM", "128")
+
+    embedder = select_embedder()
+
+    assert embedder.name == "hash-bow-64"
+    assert embedder.dim == 64
+
+
+@pytest.mark.parametrize("configured_dim", ["0", "-1", "not-an-integer"])
+def test_select_hash_rejects_invalid_configured_dimension(
+    monkeypatch: pytest.MonkeyPatch,
+    configured_dim: str,
+) -> None:
+    monkeypatch.setenv("PYT_RAG_EMBEDDER", "hash")
+    monkeypatch.setenv("PYT_RAG_EMBEDDING_DIM", configured_dim)
+
+    with pytest.raises(ValueError, match="embedding dimension"):
+        select_embedder()

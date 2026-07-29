@@ -3,7 +3,7 @@
 > 开始时间：2026-07-29
 > 当前分支：`refactor/workshop-history-account-isolation`
 > 总体输入：用户提供的八方向重构审阅
-> 当前切片：P0-1 百晓工坊历史缓存账户隔离
+> 当前切片：P0-2a Embedding Profile 跨语言契约
 
 ## 交付纪律
 
@@ -69,9 +69,43 @@
 |---|---|---|---|
 | 2026-07-29 | RAG 定向基线 | `python -m pytest -q tests/test_zhipu_embedder.py tests/test_embed_route.py` | 7 passed |
 | 2026-07-29 | Backend 定向基线 | `mvn --settings .mvn/settings.build.xml -Dtest=EmbeddingClientTest,MemoryEmbeddingWriterTest test` | 11 tests passed；0 failures / 0 errors |
+| 2026-07-29 | RAG RED | `python -m pytest -q tests/test_zhipu_embedder.py` | 5 个预期失败 / 2 passed：hash 未服从配置维度，也未拒绝非法维度 |
+| 2026-07-29 | Backend RED | `mvn --settings .mvn/settings.build.xml -Dtest=EmbeddingClientTest test` | 2 个预期失败 / 6 passed：声明维度不一致与非正维度仍被客户端接受 |
+| 2026-07-29 | RAG Focused GREEN | `python -m pytest -q tests/test_zhipu_embedder.py tests/test_embed_route.py` | 12 passed |
+| 2026-07-29 | Backend Focused GREEN | `mvn --settings .mvn/settings.build.xml -Dtest=EmbeddingClientTest,MemoryEmbeddingWriterTest test` | 13 tests passed；0 failures / 0 errors |
+| 2026-07-29 | RAG 全量 | `python -m pytest -q` | 155 passed / 2 skipped |
+| 2026-07-29 | RAG Ruff lint | `python -m ruff check .` | 通过；All checks passed |
+| 2026-07-29 | Backend 首轮全量 | `mvn --settings .mvn/settings.build.xml test` | 1095 tests；3 failures / 2 errors。3 项 Stage07 旧测试仍 mock 已弃用的 `graphRestTemplate`；2 项 Testcontainers 因 Docker 随机宿主端口被占用而启动失败，均与本切片代码无调用关系 |
+| 2026-07-29 | Stage07 根因 RED | `mvn --settings .mvn/settings.build.xml -Dtest=Stage07WorkshopAcceptanceIntegrationTest test` | 隔离复现 3 failures：生产已改用 `workshopRestTemplate`，测试仍绑定旧 client，mock 未收到请求而业务返回 502 |
+| 2026-07-29 | Stage07 测试接线 GREEN | 同上 | 改为按 qualifier 绑定生产实际 `workshopRestTemplate` 后 4 passed；仅修测试夹具，不改生产行为 |
+| 2026-07-29 | 容器失败隔离复跑 | `mvn --settings .mvn/settings.build.xml -Dtest=EvidenceMemoryServiceTest test`；同法运行 `RecommendationServiceTest` | 分别 3 passed、2 passed；两者都在真实 PostgreSQL/pgvector 空库应用 105 个迁移至 V190，首轮确认为随机端口环境碰撞 |
+| 2026-07-29 | Backend 第二轮全量 | `mvn --settings .mvn/settings.build.xml test` | 1091 tests；0 failures / 3 errors。Stage07 已通过；3 errors 均发生于 pgvector 容器启动前，Docker 报随机宿主端口 `address already in use`，失败测试类与首轮不同 |
+| 2026-07-29 | 第二轮容器失败隔离复跑 | `mvn --settings .mvn/settings.build.xml -Dtest=DecisionTraceControllerTest,LearningEvidenceGraphServiceTest,MemoryRetrievalSemanticIntegrationTest test` | 10 passed；3 个真实 PostgreSQL/pgvector 测试类均应用 V190 后通过，确认无业务/SQL 回归 |
 
 设计：`docs/plans/2026-07-29-embedding-profile-contract-design.md`
 
 实施：`docs/plans/2026-07-29-embedding-profile-contract-implementation.md`
 
-状态：Slice 2 进行中。
+格式与静态分析基线：
+
+- `ruff format --check .` 报 21 个既有文件 whole-file drift；本切片两个 Python 文件的 HEAD
+  版本本身也不满足当前 formatter，新增行无独立格式差异，因此未夹带全文件机械格式化；
+- `mypy pythontopia_rag` 仅报告既有 `routes/query.py:38,50` 两项缺失返回类型，本切片文件 0 errors；
+- Maven Spotless 插件解析被本机 TUN 与仓库 id 缓存不一致阻断；编译、聚焦测试及 Java diff check
+  均已通过，门禁失败原因保留为环境证据。
+
+### Slice 2 收口
+
+- 已完成：显式 hash selector 服从部署维度、非法维度启动时 fail fast、zhipu/fallback
+  复用同一解析规则；Java 在 HTTP 边界拒绝非正声明维度及声明/实际长度不一致的向量。
+- 数据库与 provider 未变：V175 `halfvec(2048)`、上传语料与记忆写入的 2048 最终守卫均保留。
+- 全量证据：RAG 155 passed / 2 skipped；Backend 两轮共覆盖全部套件，第二轮业务断言
+  0 failures，3 个受本机 Docker 随机端口碰撞打断的测试类隔离复跑 10/10 通过。
+- 附带修复：Stage07 旧验收夹具改绑生产实际 `workshopRestTemplate`，独立提交
+  `a7e4b0e6`；仅恢复既有测试对 7 月 28 日专用 client 拆分后的覆盖，不改变产品行为。
+- 比赛演示影响：正向。生产即使临时选择 hash fallback，也会按 2048 profile 生成可入库向量；
+  违约 `/embed` 响应在进入记忆/上传语料存储前被隔离，主学习链路继续 fail-soft。
+- 剩余风险：本切片尚未部署到 ECS，生产告警消失需在后续发布后复核；本机长套件的
+  Testcontainers 随机端口碰撞和既有 formatter/mypy 基线漂移仍需单独治理。
+
+状态：Slice 2 完成，下一小步为 P0-2b 周报 `resource_run` 真实 SQL 契约。

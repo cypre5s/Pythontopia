@@ -76,9 +76,23 @@ public class RagEmbeddingClient implements EmbeddingClient {
     if (body == null || body.vectors() == null) {
       return emptyVectors(expected);
     }
+    if (body.dim() <= 0) {
+      log.warn(
+          "embedding 响应 profile 非法：model={} declaredDim={}", body.model(), body.dim());
+      return emptyVectors(expected);
+    }
     List<Optional<float[]>> result = new ArrayList<>(expected);
     for (List<Double> vector : body.vectors()) {
       if (vector == null || vector.isEmpty()) {
+        result.add(Optional.empty());
+        continue;
+      }
+      if (vector.size() != body.dim()) {
+        log.warn(
+            "embedding 响应 profile 不一致：model={} declaredDim={} actualDim={}",
+            body.model(),
+            body.dim(),
+            vector.size());
         result.add(Optional.empty());
         continue;
       }

@@ -64,6 +64,32 @@ class EmbeddingClientTest {
   }
 
   @Test
+  void declaredDimensionMismatchYieldsEmpty() {
+    MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+    server
+        .expect(MockRestRequestMatchers.requestTo("http://rag.test/embed"))
+        .andRespond(
+            MockRestResponseCreators.withSuccess(
+                "{\"model\":\"broken\",\"dim\":3,\"vectors\":[[1.0,0.0]]}",
+                MediaType.APPLICATION_JSON));
+
+    assertThat(client.embed("x")).isEmpty();
+  }
+
+  @Test
+  void nonPositiveDeclaredDimensionYieldsEmpty() {
+    MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+    server
+        .expect(MockRestRequestMatchers.requestTo("http://rag.test/embed"))
+        .andRespond(
+            MockRestResponseCreators.withSuccess(
+                "{\"model\":\"broken\",\"dim\":0,\"vectors\":[[1.0]]}",
+                MediaType.APPLICATION_JSON));
+
+    assertThat(client.embed("x")).isEmpty();
+  }
+
+  @Test
   void timeoutYieldsEmptyWithoutThrowing() {
     MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
     server

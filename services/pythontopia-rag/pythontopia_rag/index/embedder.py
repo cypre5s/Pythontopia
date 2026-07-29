@@ -104,6 +104,17 @@ def _env(*names: str, default: str = "") -> str:
     return default
 
 
+def _configured_embedding_dim(default: int) -> int:
+    raw = _env("PYT_RAG_EMBEDDING_DIM", "EMBEDDING_DIM", default=str(default))
+    try:
+        dimension = int(raw)
+    except ValueError as exc:
+        raise ValueError("embedding dimension must be a positive integer") from exc
+    if dimension <= 0:
+        raise ValueError("embedding dimension must be a positive integer")
+    return dimension
+
+
 class ZhipuEmbedder:
     """智谱开放平台 embedding-3（OpenAI 兼容 /embeddings 协议）真实语义向量。
 
@@ -123,9 +134,7 @@ class ZhipuEmbedder:
             "PYT_RAG_EMBEDDING_BASE_URL", "EMBEDDING_BASE_URL", default=ZHIPU_DEFAULT_BASE_URL
         ).rstrip("/")
         self.model = _env("PYT_RAG_EMBEDDING_MODEL", "EMBEDDING_MODEL", default=ZHIPU_DEFAULT_MODEL)
-        self.dim = int(
-            _env("PYT_RAG_EMBEDDING_DIM", "EMBEDDING_DIM", default=str(ZHIPU_DEFAULT_DIM))
-        )
+        self.dim = _configured_embedding_dim(ZHIPU_DEFAULT_DIM)
         self.name = f"zhipu-{self.model}"
         self._timeout = float(_env("PYT_RAG_EMBEDDING_TIMEOUT", default="30"))
         self._batch = max(1, int(_env("PYT_RAG_EMBEDDING_BATCH", default="64")))
@@ -210,7 +219,7 @@ class FallbackEmbedder:
 
 
 def _zhipu_with_hash_fallback() -> Embedder:
-    dim = int(_env("PYT_RAG_EMBEDDING_DIM", "EMBEDDING_DIM", default=str(ZHIPU_DEFAULT_DIM)))
+    dim = _configured_embedding_dim(ZHIPU_DEFAULT_DIM)
     model = _env("PYT_RAG_EMBEDDING_MODEL", "EMBEDDING_MODEL", default=ZHIPU_DEFAULT_MODEL)
     fallback_mode = _env("PYT_RAG_EMBEDDING_FALLBACK", default="hash").lower()
     if fallback_mode in ("", "none", "off", "false", "strict"):
@@ -236,7 +245,7 @@ def _zhipu_with_hash_fallback() -> Embedder:
 def select_embedder() -> Embedder:
     kind = os.environ.get("PYT_RAG_EMBEDDER", "hash").lower()
     if kind == "hash":
-        return HashEmbedder()
+        return HashEmbedder(dim=_configured_embedding_dim(DEFAULT_DIM))
     if kind == "bge":
         return BgeSmallEmbedder()
     if kind == "iflytek":

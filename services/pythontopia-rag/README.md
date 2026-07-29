@@ -31,7 +31,8 @@ PYT_RAG_EMBEDDING_FALLBACK=hash
 
 若 key 缺失、API 过期、超时或返回维度异常，`zhipu` embedder 会在进程内切到同样 2048
 维的确定性 hash，保证 `/embed`、课程检索和后端记忆/上传语料向量链路继续可用。离线 CI
-仍可显式设 `PYT_RAG_EMBEDDER=hash` 使用 1024 维旧哈希实现。
+仍可显式设 `PYT_RAG_EMBEDDER=hash`；该模式会服从 `PYT_RAG_EMBEDDING_DIM` /
+`EMBEDDING_DIM`，两者均未配置时才使用 1024 维离线默认。
 
 稳定性探针（不打印密钥，只输出统计摘要）：
 

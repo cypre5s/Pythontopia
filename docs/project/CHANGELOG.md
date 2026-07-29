@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-07-29 — 重构：Embedding Profile 跨语言契约（P0-2a）
+
+- RAG 显式 `hash` selector 现在服从 `PYT_RAG_EMBEDDING_DIM` /
+  `EMBEDDING_DIM`，部署声明 2048 时生成 `hash-bow-2048`；两者均缺失才保留 1024
+  离线默认。非法、零或负维度在 selector 阶段 fail fast，zhipu 与 hash fallback 复用同一规则。
+- Java `RagEmbeddingClient` 开始执行 `/embed` 的 `model/dim/vectors` profile：
+  非正声明维度或向量实际长度与 `dim` 不一致时返回 empty 并记录不含向量内容的 warn，
+  不再把违约向量送入 2048 维记忆/上传语料存储；既有 fail-soft 回退保持不变。
+- 不改数据库与 provider：V175 `halfvec(2048)`、`MemoryEmbeddingWriter` 与上传语料的最终维度
+  守卫继续生效。RAG 全量 155 passed / 2 skipped，Ruff lint 通过；Backend 聚焦 13/13，
+  全量第二轮 1091 项业务断言 0 failures，3 个受 Docker 随机端口碰撞打断的 pgvector
+  测试类隔离复跑 10/10 通过。
+- 全量回归同时发现 7 月 28 日工坊专用 HTTP client 拆分后，Stage07 验收仍 mock 旧
+  `graphRestTemplate`；测试夹具改绑生产实际 `workshopRestTemplate` 后独立 4/4 通过，
+  未修改生产行为。
+
 ## 2026-07-29 — 重构：百晓工坊历史按账号隔离（P0-1）
 
 - 工坊历史查询缓存从仅按 `limit` 改为显式按 `userId + limit` 隔离；统一清理会取消所有
