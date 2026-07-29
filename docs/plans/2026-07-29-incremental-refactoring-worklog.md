@@ -127,9 +127,31 @@
 | 时间 | 范围 | 命令 | 结果 |
 |---|---|---|---|
 | 2026-07-29 | 周报定向基线 | `mvn --settings .mvn/settings.build.xml -Dtest=WeeklyReportServiceTest,TwinWeeklyControllerTest test` | 6 tests passed；仅 mock/控制器合同，不覆盖真实 SQL |
+| 2026-07-29 | 真库契约 RED | `mvn --settings .mvn/settings.build.xml -Dtest=WeeklyReportResourceRunIntegrationTest test` | 完整迁移 105 项至 V190 后 2 个预期失败：本人近期记录与 10 条上限均返回 0；服务复现 `PreparedStatementCallback; bad SQL grammar` |
+| 2026-07-29 | 根因诊断 | `mvn --settings .mvn/settings.build.xml -Dtest=WeeklyReportResourceRunIntegrationTest#diagnosticExposesInstantBindingFailure test -e` | 预期 1 error；底层 `PSQLException` 明确为无法推断 `java.time.Instant` 的 SQL 类型，排除 schema 与 SQL 字段漂移 |
+| 2026-07-29 | 真库契约 GREEN | `mvn --settings .mvn/settings.build.xml -Dtest=WeeklyReportResourceRunIntegrationTest test` | 2 passed；V190 真库上验证本人/时间窗隔离、倒序、`BIGINT[]` 计数与 10 条上限 |
+| 2026-07-29 | 周报定向联跑 | `mvn --settings .mvn/settings.build.xml -Dtest=WeeklyReportResourceRunIntegrationTest,WeeklyReportServiceTest,TwinWeeklyControllerTest test` | 8 passed；真实 SQL、服务聚合与控制器合同全部通过 |
+| 2026-07-29 | Backend 全量回归 | `mvn --settings .mvn/settings.build.xml test` | 1100 tests passed，0 failures / 0 errors / 0 skipped；构建成功并生成 JaCoCo 报告 |
+| 2026-07-29 | Java 格式门禁 | `mvn --settings .mvn/settings.build.xml -DskipTests spotless:check` | 环境阻断：Maven 将已缓存插件归属到当前不可用的仓库 id，直连被 TUN 解析到 `198.18.0.95` 超时；7892 对 `curl` 可用，但 Maven 显式代理仍被同一 TUN 路径阻断；离线模式也因仓库 id 不匹配拒绝缓存 |
+| 2026-07-29 | 提交前最终复验 | `mvn --settings .mvn/settings.build.xml -Dtest=WeeklyReportResourceRunIntegrationTest,WeeklyReportServiceTest,TwinWeeklyControllerTest test` | 8 passed，0 failures / 0 errors；完整迁移 105 项至 V190，`BUILD SUCCESS` |
 
 设计：`docs/plans/2026-07-29-weekly-report-resource-run-sql-contract-design.md`
 
 实施：`docs/plans/2026-07-29-weekly-report-resource-run-sql-contract-implementation.md`
 
-状态：设计完成，下一步在完整 Flyway schema 的真实 PostgreSQL 上建立 RED。
+### Slice 3 收口
+
+- 已完成：周报七天窗口以 `Timestamp.from(weekStart)` 绑定 `TIMESTAMPTZ`；其余 SQL、
+  DTO、API、时间窗、排序、限制和 fail-soft 边界保持不变。
+- 真库契约：从空 PostgreSQL 执行 105 项迁移到 V190，验证本人近期记录、跨账号与七天外隔离、
+  `BIGINT[]` 证据计数、倒序和 10 条上限。
+- 全量证据：Backend 1100 passed，0 failures / 0 errors / 0 skipped；退出期 Surefire
+  等待残留 Spring 调度线程并输出数据库已关闭告警，但最终结果为 `BUILD SUCCESS`。
+- 静态检查：`git diff --check` 通过；Spotless 因上述本机 Maven 仓库/TUN 环境问题未执行，
+  未以格式化命令扩大修改面。
+- 比赛演示影响：正向。周报不再因 JDBC 时间参数类型不确定而静默漏掉资源生成轨迹，
+  学生近七天的 Agent 运行摘要恢复为真实数据库事实。
+- 剩余风险：本切片尚未部署 ECS；生产 `bad SQL grammar` 告警消失和真实历史数据展示
+  仍需在后续发布验收中复核。
+
+状态：Slice 3 完成，下一小步为 P0-3 事务边界分离的事实复核与设计。

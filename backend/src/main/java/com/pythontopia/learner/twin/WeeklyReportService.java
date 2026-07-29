@@ -11,6 +11,7 @@ import com.pythontopia.learner.twin.dto.WeeklyReportDto.InsightBrief;
 import com.pythontopia.learner.twin.dto.WeeklyReportDto.MasteryDeltaBrief;
 import com.pythontopia.learner.twin.dto.WeeklyReportDto.MemoryBrief;
 import com.pythontopia.learner.twin.dto.WeeklyReportDto.ResourceRunBrief;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -146,7 +147,7 @@ public class WeeklyReportService {
               evidenceCount(rs.getArray("evidence_page_ids")),
               rs.getString("created_at")),
           userId,
-          weekStart,
+          Timestamp.from(weekStart),
           RUN_LIMIT);
     } catch (RuntimeException ex) {
       log.warn("Failed to query resource_run for user {}: {}", userId, ex.getMessage());

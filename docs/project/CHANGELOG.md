@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-07-29 — 重构：周报 resource_run 真实 SQL 契约（P0-2b）
+
+- `WeeklyReportService` 将七天窗口起点从裸 `Instant` 改为 JDBC 可确定映射的
+  `Timestamp`，修复 PostgreSQL 无法推断参数类型而被 fail-soft 吞为资源运行空列表的问题；
+  SQL 字段、本人隔离、时间窗、倒序和 10 条上限均不变。
+- 新增基于 `pgvector/pgvector:pg16` 与完整 105 项 Flyway 迁移到 V190 的真库契约测试，
+  覆盖本人近期记录、跨账号排除、七天外排除、`BIGINT[]` 证据计数、倒序与 10 条上限。
+- TDD 先稳定复现 2 项空列表失败及生产同款 `bad SQL grammar`，诊断 trace 进一步锁定
+  PostgreSQL 无法推断 `java.time.Instant`；最小修复后周报定向 8/8、Backend 全量
+  1100/1100 通过，0 failures / 0 errors。
+
 ## 2026-07-29 — 重构：Embedding Profile 跨语言契约（P0-2a）
 
 - RAG 显式 `hash` selector 现在服从 `PYT_RAG_EMBEDDING_DIM` /
