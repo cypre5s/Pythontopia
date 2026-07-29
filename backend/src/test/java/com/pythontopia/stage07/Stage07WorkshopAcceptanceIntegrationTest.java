@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.HttpEntity;
@@ -63,11 +64,13 @@ class Stage07WorkshopAcceptanceIntegrationTest {
   @Autowired TestRestTemplate restTemplate;
   @Autowired JdbcTemplate jdbcTemplate;
   @Autowired ObjectMapper objectMapper;
-  @Autowired RestTemplate graphRestTemplate;
+  @Autowired
+  @Qualifier("workshopRestTemplate")
+  RestTemplate workshopRestTemplate;
 
   @Test
   void studentRequestsHandoutAndResourceIsPersistedWithEvidence() throws Exception {
-    MockRestServiceServer graphServer = MockRestServiceServer.bindTo(graphRestTemplate).build();
+    MockRestServiceServer graphServer = MockRestServiceServer.bindTo(workshopRestTemplate).build();
     String token = registerAndLogin("workshop-stu01");
     Long userId = userId("workshop-stu01");
     seedProfile(userId);
@@ -277,7 +280,7 @@ class Stage07WorkshopAcceptanceIntegrationTest {
 
   @Test
   void throttlingReturnsTooManyRequestsAfterCap() throws Exception {
-    MockRestServiceServer graphServer = MockRestServiceServer.bindTo(graphRestTemplate).build();
+    MockRestServiceServer graphServer = MockRestServiceServer.bindTo(workshopRestTemplate).build();
     String token = registerAndLogin("workshop-stu02");
     Long userId = userId("workshop-stu02");
     seedProfile(userId);
@@ -346,7 +349,7 @@ class Stage07WorkshopAcceptanceIntegrationTest {
 
   @Test
   void safetyFailureMarksRunAsFailedAndDoesNotPersistResource() throws Exception {
-    MockRestServiceServer graphServer = MockRestServiceServer.bindTo(graphRestTemplate).build();
+    MockRestServiceServer graphServer = MockRestServiceServer.bindTo(workshopRestTemplate).build();
     String token = registerAndLogin("workshop-stu04");
     Long userId = userId("workshop-stu04");
     seedProfile(userId);
