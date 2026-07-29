@@ -296,6 +296,10 @@ Bug 矿洞是错题复习支线：已有失败提交可进入矿洞；遗忘回�
 > `STEP_*` 当思考链、`RUN_FINISHED.result`（常再包一层 `{ "result": { ... } }`）为终态、`RUN_ERROR` 为错误、
 > `CUSTOM{name:"plan"}` 为工位清单。参考实现：`frontend/src/composables/agui.ts`、
 > `clients/wechat/miniprogram/miniprogram/utils/agui.ts`。
+> `/api/orchestrator/turn/stream` 的 canonical 成功生命周期还要求 `RUN_STARTED` 与
+> `RUN_FINISHED` 同时携带相同的 `threadId/runId`：`threadId` 等于请求的长期 `session_id`，
+> `runId` 是每次流请求唯一的 `orchestrator:<uuid>`。历史端点在滚动迁移期间可能缺少这两个字段，
+> 但客户端不得把同一 thread 的多轮请求当作同一个 run。
 > 另：资源工坊流 `/api/workshop/resources/stream` 的 `RUN_FINISHED.result` 只含 graph 内联
 > `artifact`（**无 `resourceId`**，`status` 可能为 `PARTIAL`）；要拿可渲染的**持久化**资源，请用非流式
 > `POST /api/workshop/resources`（返回 `resourceId`）→ `GET /api/workshop/resources/{id}`（返回 `LearningResource`）。

@@ -99,7 +99,11 @@ describe('useSseStream', () => {
     const encoder = new TextEncoder();
     const body = new ReadableStream<Uint8Array>({
       start(controller) {
-        controller.enqueue(encoder.encode('event: RUN_STARTED\ndata: {}\n\n'));
+        controller.enqueue(
+          encoder.encode(
+            'event: RUN_STARTED\ndata: {"threadId":"thread-1","runId":"run-1"}\n\n',
+          ),
+        );
         controller.enqueue(
           encoder.encode(
             'event: STEP_STARTED\ndata: {"node":"evidence_fetcher","phase":"start","status":"running","elapsed_ms":0}\n\n',
@@ -114,7 +118,7 @@ describe('useSseStream', () => {
         controller.enqueue(encoder.encode('event: TEXT_MESSAGE_CONTENT\ndata: {"delta":"世界"}\n\n'));
         controller.enqueue(
           encoder.encode(
-            'event: RUN_FINISHED\ndata: {"result":{"runId":9,"resourceId":3,"status":"SUCCESS"}}\n\n',
+            'event: RUN_FINISHED\ndata: {"threadId":"thread-1","runId":"run-1","result":{"runId":9,"resourceId":3,"status":"SUCCESS"}}\n\n',
           ),
         );
         controller.close();
@@ -135,8 +139,16 @@ describe('useSseStream', () => {
     expect(sse.status.value).toBe('done');
     // 类型化事件流：RUN_STARTED + 2×STEP + 2×TEXT + RUN_FINISHED = 6。
     expect(sse.events.value).toHaveLength(6);
-    expect(sse.events.value[0]?.type).toBe('RUN_STARTED');
-    expect(sse.events.value.at(-1)?.type).toBe('RUN_FINISHED');
+    expect(sse.events.value[0]).toMatchObject({
+      type: 'RUN_STARTED',
+      threadId: 'thread-1',
+      runId: 'run-1',
+    });
+    expect(sse.events.value.at(-1)).toMatchObject({
+      type: 'RUN_FINISHED',
+      threadId: 'thread-1',
+      runId: 'run-1',
+    });
   });
 
   it('applies RFC 6902 STATE_DELTA operations to the state bag', async () => {

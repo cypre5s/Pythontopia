@@ -32,6 +32,21 @@ class StubProvider(LlmProvider):
             yield self._reply[index : index + 5]
 
 
+def _sse_events(text: str) -> list[tuple[str, dict]]:
+    events: list[tuple[str, dict]] = []
+    for block in text.split("\n\n"):
+        if not block.startswith("event: "):
+            continue
+        event_line, data_line = block.split("\n", maxsplit=1)
+        events.append(
+            (
+                event_line.removeprefix("event: "),
+                json.loads(data_line.removeprefix("data: ")),
+            )
+        )
+    return events
+
+
 def test_orchestrator_turn_returns_200_and_response_shape() -> None:
     app.state.llm_provider = StubProvider([], reply="我们先看再学。")
     client = TestClient(app)
@@ -87,6 +102,43 @@ def test_orchestrator_stream_emits_canonical_agui_events() -> None:
     assert "event: trace" not in text
     assert "event: token" not in text
     assert "event: result" not in text
+
+    events = _sse_events(text)
+    started = next(data for name, data in events if name == "RUN_STARTED")
+    finished = next(data for name, data in events if name == "RUN_FINISHED")
+    assert started["threadId"] == "route-stream"
+    assert started["runId"].startswith("orchestrator:")
+    assert started["runId"] != "orchestrator:route-stream"
+    assert finished["threadId"] == started["threadId"]
+    assert finished["runId"] == started["runId"]
+
+    del app.state.llm_provider
+
+
+def test_orchestrator_stream_uses_unique_run_id_per_request() -> None:
+    app.state.llm_provider = StubProvider([], reply="本轮安排已就绪。")
+    client = TestClient(app)
+    body = {
+        "user_id": 1,
+        "session_id": "route-run-identity",
+        "user_message": "帮我安排循环的学习",
+        "course_kc_index": ["PY43-KC-001"],
+    }
+
+    first = client.post("/agents/orchestrator/turn/stream", json=body)
+    second = client.post("/agents/orchestrator/turn/stream", json=body)
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    starts = [
+        next(data for name, data in _sse_events(response.text) if name == "RUN_STARTED")
+        for response in (first, second)
+    ]
+    assert [event["threadId"] for event in starts] == [
+        "route-run-identity",
+        "route-run-identity",
+    ]
+    assert starts[0]["runId"] != starts[1]["runId"]
 
     del app.state.llm_provider
 

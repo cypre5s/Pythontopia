@@ -244,5 +244,43 @@
 | 时间 | 范围 | 命令 | 结果 |
 |---|---|---|---|
 | 2026-07-29 | 身份链路复核 | `rg` + 定向源码检查 | 确认开始事件 run 身份按 session 重复、结束事件丢失身份、前端 parser 丢弃身份 |
+| 2026-07-29 | Graph 定向基线 | `python3 -m pytest -q tests/test_sse_agui.py tests/test_orchestrator_route.py` | 27 passed |
+| 2026-07-29 | 前端定向基线 | `npx vitest run tests/composables/useSseStream.spec.ts --coverage.enabled=false` | 1 file / 6 tests passed |
+| 2026-07-29 | Graph 生命周期 RED | 同 Graph 定向命令 | 4 expected failures / 26 passed；helper 不接受生命周期上下文，主流 run 身份按 session 重复，成功终态缺身份 |
+| 2026-07-29 | 前端身份保留 RED | 同前端定向命令 | 1 expected failure / 5 passed；canonical `RUN_STARTED` 的 `threadId/runId` 被 parser 丢弃 |
+| 2026-07-29 | Graph 定向 GREEN | 同 Graph 定向命令 | 32 passed；含成对身份、同 session 两请求 run 唯一和 partial identity fail-fast |
+| 2026-07-29 | 前端定向 GREEN | 同前端定向命令 | 1 file / 6 tests passed；canonical 生命周期身份完整保留 |
+| 2026-07-29 | 前端受影响联跑 | `npx vitest run tests/composables/useSseStream.spec.ts tests/stores/loopSlice.spec.ts tests/composables/useToolLoop.spec.ts --coverage.enabled=false` | 3 files / 23 tests passed；旧内部事件构造与 loop 消费兼容 |
+| 2026-07-29 | TypeScript strict | `npm run typecheck` | passed |
+| 2026-07-29 | Graph 变更 lint | `ruff check` 四个变更 Python 文件 | passed |
+| 2026-07-29 | Graph 全量回归 | `python3 -m pytest -q` | 1684 passed / 3 skipped；1 条既有 FastAPI 422 常量弃用告警 |
+| 2026-07-29 | 前端全量首轮 | `npm run test` | 2418 passed / 1 failed；与本切片无代码交集的 TrainingPanel 草稿断言被上一用例 500ms 定时器晚到回写污染 |
+| 2026-07-29 | TrainingPanel 根因复跑 | `npx vitest run tests/components/TrainingPanel.spec.ts --coverage.enabled=false` | 12 passed；单文件耗时短于定时器窗口，结合失败值 `print(0)` 锁定跨用例 debounce 污染 |
+| 2026-07-29 | TrainingPanel 夹具隔离 | 同 TrainingPanel 定向命令 | fake timer 按用例创建/清理后 12 passed；独立提交 `e3be9431`，生产代码零改动 |
+| 2026-07-29 | 前端全量复验 | `npm run test` | 242 files / 2419 tests passed |
+| 2026-07-29 | 前端 lint | `npm run lint` | exit 0，0 errors / 114 个既有 Vue 模板 warning；本切片 TS 无命中 |
+| 2026-07-29 | 前端生产构建 | `npm run build` | TypeScript strict + Vite 4068 modules 构建成功；生成 manifest 仅时间戳变化并已恢复，未夹带 |
+| 2026-07-29 | 提交前最终复验 | Graph 定向 32 项 + 前端受影响 23 项 + `git diff --check` | 32 passed；3 files / 23 tests passed；diff check passed |
 
-状态：Slice 5 设计完成，下一步进入 Graph 与前端协议 RED。
+### 格式与静态分析边界
+
+- Graph 四个变更 Python 文件的 `ruff check` 全部通过；`ruff format --check` 只指出
+  `orchestrator.py` 与 `test_orchestrator_route.py` 各一处本切片前已存在的 whole-file drift，
+  用 `git show HEAD:<path> | ruff format --check -` 复核 HEAD 同样失败；新增代码未引入格式差异；
+- 前端 TypeScript strict、ESLint 和生产构建通过；114 个 lint warning 与 Slice 4 基线一致，
+  均在既有 Vue 文件，变更的 `agui.ts` 与测试无命中；
+- `git diff --check` 作为提交前最终门禁执行，不用 formatter 扩大无关修改面。
+
+### Slice 5 收口
+
+- 已完成：主 orchestrator 每次流请求生成独立 `orchestrator:<uuid>` run 身份，长期
+  `threadId=session_id`；成功开始/终态携带同一组身份，partial identity 在 helper 边界 fail fast；
+- 兼容边界：其他 Graph 端点无上下文时维持原 `RUN_FINISHED.result` 形状；前端 canonical 事件
+  保留身份，历史 `result` 与缺身份旧端点继续可消费；
+- 全量证据：Graph 1684 passed / 3 skipped；前端 242 files / 2419 tests、生产构建、
+  TypeScript strict 与 ESLint（0 errors）通过；
+- 比赛演示影响：正向。同一导学会话的连续/并发回合现在可按 run 精确追踪，不再互相覆盖；
+- 剩余风险：本切片未部署 ECS；`RUN_ERROR`、tool-loop/tutor/workflow 等其他流端点尚未统一成对身份，
+  心跳、deadline、取消、序号和恰好一个终态仍属于后续统一 transport 切片。
+
+状态：Slice 5 完成；下一小步继续附件顺序，审计并收敛 Java 两套 SSE 中转的最小公共 transport 边界。

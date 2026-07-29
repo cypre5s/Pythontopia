@@ -37,11 +37,19 @@ export type AguiEventType =
 /** 运行开始（一次 agent run 的生命周期起点）。 */
 export interface AguiRunStarted {
   type: 'RUN_STARTED';
+  /** canonical AG-UI 流必填；可选仅用于兼容仍在滚动迁移的历史端点。 */
+  threadId?: string;
+  /** canonical AG-UI 流必填；可选仅用于兼容仍在滚动迁移的历史端点。 */
+  runId?: string;
 }
 
 /** 运行成功结束，携带最终结构化结果（投影到 useSseStream.result）。 */
 export interface AguiRunFinished {
   type: 'RUN_FINISHED';
+  /** 与 RUN_STARTED 相同；历史 result 事件可能缺失。 */
+  threadId?: string;
+  /** 与 RUN_STARTED 相同；历史 result 事件可能缺失。 */
+  runId?: string;
   result: unknown;
 }
 
@@ -221,7 +229,17 @@ export function toAguiEvent(eventName: string, raw: string): AguiEvent | null {
     try {
       const parsed = JSON.parse(raw);
       if (name === 'RUN_FINISHED' && parsed && typeof parsed === 'object' && 'result' in parsed) {
-        return { type: 'RUN_FINISHED', result: (parsed as { result: unknown }).result };
+        const terminal = parsed as {
+          threadId?: unknown;
+          runId?: unknown;
+          result: unknown;
+        };
+        return {
+          type: 'RUN_FINISHED',
+          ...(typeof terminal.threadId === 'string' ? { threadId: terminal.threadId } : {}),
+          ...(typeof terminal.runId === 'string' ? { runId: terminal.runId } : {}),
+          result: terminal.result,
+        };
       }
       return { type: 'RUN_FINISHED', result: parsed };
     } catch {
@@ -252,8 +270,14 @@ export function toAguiEvent(eventName: string, raw: string): AguiEvent | null {
     }
 
     // ── AG-UI 官方事件名 ──
-    case 'RUN_STARTED':
-      return { type: 'RUN_STARTED' };
+    case 'RUN_STARTED': {
+      const started = data as { threadId?: unknown; runId?: unknown };
+      return {
+        type: 'RUN_STARTED',
+        ...(typeof started.threadId === 'string' ? { threadId: started.threadId } : {}),
+        ...(typeof started.runId === 'string' ? { runId: started.runId } : {}),
+      };
+    }
     case 'STEP_STARTED':
       return { type: 'STEP_STARTED', step: data as SseTraceEvent };
     case 'STEP_FINISHED':

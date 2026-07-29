@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-07-29 — 重构：AG-UI 主编排流生命周期身份（P0-2d）
+
+- `/agents/orchestrator/turn/stream` 明确区分长期会话与单次运行：`threadId` 沿用
+  `session_id`，`runId` 改为每请求唯一的 `orchestrator:<uuid>`；同一 session 的串行或并发回合
+  不再复用 run 身份。
+- canonical `RUN_STARTED/RUN_FINISHED` 现在携带完全相同的 `threadId/runId`；Graph helper
+  对只给一半身份 fail fast，无上下文的其他旧端点保持原终态载荷。前端协议层保留 canonical 身份，
+  同时继续兼容历史 `result` 与缺身份旧流。
+- TDD 先得到 Graph 4 项和前端 1 项预期失败，分别证明 helper 缺口、重复 run、终态缺身份与
+  parser 丢字段；修复后 Graph 定向 32/32、全量 1684 passed / 3 skipped，前端受影响联跑
+  23/23、全量 242 files / 2419 tests，TypeScript strict、ESLint（0 errors）及生产构建通过。
+- 前端全量首轮另暴露 `TrainingPanel` 真实 500ms 草稿定时器跨测试污染；测试夹具按用例隔离并清理
+  fake timer 后独立 12/12、全量复验通过，生产代码零改动，修复以 `e3be9431` 独立提交。
+
 ## 2026-07-29 — 重构：AG-UI STATE_DELTA 可执行 JSON Patch 契约（P0-2c）
 
 - Graph orchestrator 的计划进度从同名但非标准的对象增量改为 RFC 6902

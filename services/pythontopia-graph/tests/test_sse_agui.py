@@ -22,6 +22,33 @@ def test_run_finished_wraps_result() -> None:
     )
 
 
+def test_run_finished_includes_lifecycle_identity_when_provided() -> None:
+    assert (
+        sse_agui.run_finished(
+            {"ok": True},
+            thread_id="thread-1",
+            run_id="run-1",
+        )
+        == 'event: RUN_FINISHED\ndata: {"threadId": "thread-1", "runId": "run-1", "result": {"ok": true}}\n\n'
+    )
+
+
+@pytest.mark.parametrize(
+    ("thread_id", "run_id"),
+    [("thread-1", None), (None, "run-1")],
+)
+def test_run_finished_rejects_partial_lifecycle_identity(
+    thread_id: str | None,
+    run_id: str | None,
+) -> None:
+    with pytest.raises(ValueError, match="thread_id and run_id"):
+        sse_agui.run_finished(
+            {"ok": True},
+            thread_id=thread_id,
+            run_id=run_id,
+        )
+
+
 def test_run_error_shape() -> None:
     assert (
         sse_agui.run_error("BOOM", "炸了")
@@ -101,6 +128,18 @@ def test_translate_result_wraps() -> None:
     assert (
         sse_agui.translate("result", {"answer_md": "x"})
         == 'event: RUN_FINISHED\ndata: {"result": {"answer_md": "x"}}\n\n'
+    )
+
+
+def test_translate_result_includes_lifecycle_context() -> None:
+    assert (
+        sse_agui.translate(
+            "result",
+            {"answer_md": "x"},
+            thread_id="thread-1",
+            run_id="run-1",
+        )
+        == 'event: RUN_FINISHED\ndata: {"threadId": "thread-1", "runId": "run-1", "result": {"answer_md": "x"}}\n\n'
     )
 
 
