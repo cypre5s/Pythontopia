@@ -3,12 +3,12 @@ package com.pythontopia.orchestrator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.common.config.GraphHttpClientProperties;
 import com.pythontopia.common.config.GraphServiceProperties;
+import com.pythontopia.common.sse.GraphStreamTransport;
 import com.pythontopia.common.sse.SseRelayExecutor;
 import com.pythontopia.common.web.GraphInternalTokenSupport;
 import com.pythontopia.intent.dto.IntentRouteRequest;
 import com.pythontopia.orchestrator.dto.OrchestratorTurnMessage;
 import com.pythontopia.orchestrator.dto.OrchestratorTurnRequest;
-import com.pythontopia.tutor.GraphStreamRelay;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -21,7 +21,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
  * 学习总管 SSE 代理客户端，镜像 {@code TutorGraphClient}：把前端请求转成 Python graph 服务期望的
- * snake_case body，并在后台线程里经 {@link GraphStreamRelay} 把上游 SSE 事件（trace / token /
+ * snake_case body，并在后台线程里经 {@link GraphStreamTransport} 把上游 SSE 事件（trace / token /
  * result / error）原样转发给浏览器；故障语义（快速失败 / 读超时 / 单条终止性 error / 断开清理）
  * 由中继统一保证。不做任何落库——会话记忆全部在 Python 服务侧。
  */
@@ -33,7 +33,7 @@ public class OrchestratorGraphClient {
 
   private final GraphServiceProperties properties;
   private final SseRelayExecutor sseRelayExecutor;
-  private final GraphStreamRelay relay;
+  private final GraphStreamTransport relay;
   private final OrchestratorRunRecorder runRecorder;
   private final ObjectMapper objectMapper;
 
@@ -66,7 +66,7 @@ public class OrchestratorGraphClient {
     this.sseRelayExecutor = sseRelayExecutor;
     this.runRecorder = runRecorder;
     this.objectMapper = objectMapper;
-    this.relay = new GraphStreamRelay(objectMapper, connectTimeoutMs, readTimeoutMs);
+    this.relay = new GraphStreamTransport(objectMapper, connectTimeoutMs, readTimeoutMs);
   }
 
   OrchestratorGraphClient(

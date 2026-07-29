@@ -2,7 +2,7 @@
 
 日期：2026-07-29
 
-状态：已确认，待机械迁移
+状态：已完成并验证
 
 ## 背景
 
@@ -43,7 +43,7 @@ Slice 7 后剩余旧 consumer 调用方位于 `workshop` 和 `learner.profile`�
 
 - 迁移前 6 类 / 30 项目标与共享 Relay 合同为绿；
 - 迁移后同一命令仍 30/30；
-- `rg GraphStreamRelay` 为 0，`GraphStreamTransport` 只出现在公共实现和三个调用方；
+- `rg GraphStreamRelay backend/src` 为 0，`GraphStreamTransport` 只出现在公共实现和三个调用方；
 - `PythontopiaApplicationTests` 通过，证明 Spring 构造链无漂移；
 - 变更 Java 文件 Spotless、`git diff --check` 和 Backend 全量按真实结果记录。
 

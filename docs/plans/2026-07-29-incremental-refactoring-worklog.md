@@ -3,7 +3,7 @@
 > 开始时间：2026-07-29
 > 当前分支：`refactor/workshop-history-account-isolation`
 > 总体输入：用户提供的八方向重构审阅
-> 当前切片：P1-4b TutorWorkflow SSE 强中继迁移
+> 当前切片：P1-4c GraphStreamTransport 公共包归属
 
 ## 交付纪律
 
@@ -398,5 +398,24 @@
 |---|---|---|---|
 | 2026-07-29 | 包依赖审计 | `rg GraphStreamRelay` + 三个生产调用方源码检查 | 仅 1 个实现、3 个调用方；实现无 Tutor 业务依赖，适合提升到 common |
 | 2026-07-29 | 迁移前守恒基线 | Slice 7 最终 6 类定向命令 | 6 classes / 30 tests passed；成功、故障、断开、投影合同均绿 |
+| 2026-07-29 | 纯机械类型迁移 | `tutor.GraphStreamRelay` → `common.sse.GraphStreamTransport`，切换 3 个调用方 | 旧符号在 `backend/src` 归零；公共实现 1 处、生产调用方 3 处 |
+| 2026-07-29 | 语义 diff 守卫 | HEAD 旧实现经 package/class 替换后与新文件 `diff -u` | 仅类级 Javadoc 与 `{@link GraphSseConsumer}` 链接变化，常量/方法/控制流无差异 |
+| 2026-07-29 | 迁移后守恒回归 | Slice 7 同一 6 类定向命令 | 6 classes / 30 tests passed；日志来源切到 `common.sse.GraphStreamTransport` |
+| 2026-07-29 | Spring 全上下文 | `mvn -q -Dtest=PythontopiaApplicationTests test` | 1 test passed；三个客户端构造链正常 |
+| 2026-07-29 | 变更文件 Spotless | `mvn -q -DspotlessFiles='<4 changed java files>' spotless:check` | passed |
+| 2026-07-29 | Backend 全量 | `mvn test` | 1094 tests；0 failures / 6 errors。6 项均为已确认的 pgvector 临时端口 TIME_WAIT 自碰撞；课堂模拟本轮直接通过 |
+| 2026-07-29 | 全量错误类新鲜隔离复跑 | 等待上一 PostgreSQL TIME_WAIT 自然释放后，每类独立执行 `mvn -q -Dtest='<class>' test` | 6 classes / 18 tests passed；完整 V190 真库合同均通过 |
 
-状态：Slice 8 设计完成，下一步执行纯机械 package/class 迁移。
+### Slice 8 收口
+
+- 已完成：历史 `tutor.GraphStreamRelay` 原子提升为唯一 `common.sse.GraphStreamTransport`；Tutor、
+  TutorWorkflow、Orchestrator 三个调用方全部切换，旧符号在源码中归零且无兼容 wrapper。
+- 行为守恒：构造参数、HTTP 打开、decoder、超时、错误码、终态识别、callback 与资源收口控制流均不变；
+  语义 diff 仅剩公共职责 Javadoc 与类名/package。
+- 验证：迁移前后同一 30 项合同均绿，Spring 上下文 1/1、4 文件 Spotless 通过；Backend 全量
+  1094 项业务断言 0 failures，6 个 Docker 环境 errors 新鲜隔离复跑 18/18 通过。
+- 比赛演示影响：中性。运行行为不变，但统一 transport 现在位于正确公共边界，为 Workshop/Profile
+  接入取消、超时和单终态铺平路径，不再要求业务模块依赖 tutor 包。
+- 未验证与风险：尚未部署 ECS；本切片未迁剩余两个旧 consumer，也未新增首包 deadline、序号或重连。
+
+状态：Slice 8 完成；下一小步为 P1-4d Profile/Workshop 的业务适配迁移设计。

@@ -3,6 +3,7 @@ package com.pythontopia.tutor;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.common.config.GraphHttpClientProperties;
 import com.pythontopia.common.config.GraphServiceProperties;
+import com.pythontopia.common.sse.GraphStreamTransport;
 import com.pythontopia.common.sse.SseRelayExecutor;
 import com.pythontopia.common.web.GraphInternalTokenSupport;
 import com.pythontopia.media.XfyunImageUnderstandingService;
@@ -42,7 +43,7 @@ public class TutorGraphClient {
   private final ObjectMapper objectMapper;
   private final SseRelayExecutor sseRelayExecutor;
   private final XfyunImageUnderstandingService imageUnderstanding;
-  private final GraphStreamRelay relay;
+  private final GraphStreamTransport relay;
 
   /** Spring 注入构造：连接超时复用 graphRestTemplate 的 {@code pythontopia.http.graph} 配置（fail fast）。 */
   @Autowired
@@ -73,7 +74,7 @@ public class TutorGraphClient {
     this.objectMapper = objectMapper;
     this.sseRelayExecutor = sseRelayExecutor;
     this.imageUnderstanding = imageUnderstanding;
-    this.relay = new GraphStreamRelay(objectMapper, connectTimeoutMs, readTimeoutMs);
+    this.relay = new GraphStreamTransport(objectMapper, connectTimeoutMs, readTimeoutMs);
   }
 
   /**

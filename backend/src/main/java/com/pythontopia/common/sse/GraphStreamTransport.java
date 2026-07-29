@@ -1,7 +1,6 @@
-package com.pythontopia.tutor;
+package com.pythontopia.common.sse;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.pythontopia.common.sse.SseFrameDecoder;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -20,10 +19,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
- * tutor / orchestrator 共用的有界 graph SSE 中继（学习总管按既有「镜像 tutor」约定复用本类；
- * 共享代码放本包是因为 {@code OrchestratorGraphClient} 自诞生起就是 {@code TutorGraphClient} 的镜像）。
+ * Graph SSE 共用的有界传输：统一读超时、净化错误、截断保护、客户端断开传播和资源收口。
  *
- * <p>相对直接用 {@code GraphSseConsumer} 的旧路径，收紧了故障语义：
+ * <p>相对直接用 {@link GraphSseConsumer} 的旧路径，收紧了故障语义：
  *
  * <ul>
  *   <li><b>连接失败 / 上游 HTTP ≥400</b>：在 connect/read 超时阈值内快速失败，绝不无限挂起；
@@ -40,7 +38,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
  *       （不裸 {@code completeWithError} 断流）、执行一次 {@code onFinished} 释放回调。
  * </ul>
  */
-public final class GraphStreamRelay {
+public final class GraphStreamTransport {
 
   static final String CODE_UNAVAILABLE = "AI_SERVICE_UNAVAILABLE";
   static final String CODE_TIMEOUT = "AI_SERVICE_TIMEOUT";
@@ -54,13 +52,13 @@ public final class GraphStreamRelay {
   private static final Set<String> TERMINAL_EVENTS =
       Set.of("result", "error", "RUN_FINISHED", "RUN_ERROR");
 
-  private static final Logger log = LoggerFactory.getLogger(GraphStreamRelay.class);
+  private static final Logger log = LoggerFactory.getLogger(GraphStreamTransport.class);
 
   private final ObjectMapper objectMapper;
   private final int connectTimeoutMs;
   private final int readTimeoutMs;
 
-  public GraphStreamRelay(ObjectMapper objectMapper, int connectTimeoutMs, int readTimeoutMs) {
+  public GraphStreamTransport(ObjectMapper objectMapper, int connectTimeoutMs, int readTimeoutMs) {
     this.objectMapper = objectMapper;
     this.connectTimeoutMs = connectTimeoutMs;
     this.readTimeoutMs = readTimeoutMs;
@@ -120,7 +118,7 @@ public final class GraphStreamRelay {
     }
   }
 
-  /** 逐帧透传上游 SSE；解析规则与 {@code GraphSseConsumer} 一致（event:/data:/空行分发）。 */
+  /** 逐帧透传上游 SSE；解析规则与 {@link GraphSseConsumer} 一致（event:/data:/空行分发）。 */
   private StreamEnd relayEvents(
       HttpURLConnection connection, SseEmitter emitter, BiConsumer<String, String> onEvent)
       throws IOException {

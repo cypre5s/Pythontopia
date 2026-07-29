@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-07-29 — 重构：GraphStreamTransport 公共包归属（P1-4c）
+
+- 将已服务 Tutor、Orchestrator、TutorWorkflow 的历史 `tutor.GraphStreamRelay` 原子提升并改名为唯一
+  `common.sse.GraphStreamTransport`；三个生产调用方同步切换，源码旧符号归零，不保留兼容 wrapper。
+- 这是纯机械边界修正：构造参数、HTTP/decoder、timeout、错误码、终态、callback 与资源收口控制流
+  逐行不变；对 HEAD 旧实现做 package/class 替换后的语义 diff 仅剩公共职责 Javadoc。
+- 迁移前后同一目标/共享合同均为 30/30，Spring 全上下文 1/1、4 个变更 Java 文件 Spotless 通过；
+  Backend 全量 1094 项业务断言 0 failures，6 个 Docker/PostgreSQL TIME_WAIT 端口环境 errors 逐类新鲜
+  复跑 18/18 通过。
+- 运行与比赛演示行为不变；公共归属消除了后续 Workshop/Profile 依赖 tutor 包的架构障碍。ECS 未部署，
+  剩余旧 consumer、首包 deadline、序号和重连仍在后续独立切片。
+
 ## 2026-07-29 — 重构：TutorWorkflow SSE 强中继迁移（P1-4b）
 
 - `TutorWorkflowGraphClient` 从旧 `GraphSseConsumer` 迁到已由 Tutor/Orchestrator 验证的

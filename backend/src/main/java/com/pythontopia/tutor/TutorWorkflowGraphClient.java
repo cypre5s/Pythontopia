@@ -3,6 +3,7 @@ package com.pythontopia.tutor;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.common.config.GraphHttpClientProperties;
 import com.pythontopia.common.config.GraphServiceProperties;
+import com.pythontopia.common.sse.GraphStreamTransport;
 import com.pythontopia.common.sse.SseRelayExecutor;
 import com.pythontopia.common.web.GraphInternalTokenSupport;
 import java.util.Map;
@@ -20,7 +21,7 @@ public class TutorWorkflowGraphClient {
 
   private final GraphServiceProperties properties;
   private final SseRelayExecutor sseRelayExecutor;
-  private final GraphStreamRelay relay;
+  private final GraphStreamTransport relay;
 
   @Autowired
   public TutorWorkflowGraphClient(
@@ -45,7 +46,7 @@ public class TutorWorkflowGraphClient {
       int readTimeoutMs) {
     this.properties = properties;
     this.sseRelayExecutor = sseRelayExecutor;
-    this.relay = new GraphStreamRelay(objectMapper, connectTimeoutMs, readTimeoutMs);
+    this.relay = new GraphStreamTransport(objectMapper, connectTimeoutMs, readTimeoutMs);
   }
 
   /**
