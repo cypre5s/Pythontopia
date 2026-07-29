@@ -223,3 +223,26 @@
   不属于本切片，需在独立依赖升级发布列车中逐项验证修复。
 
 状态：Slice 4 完成，下一小步为 AG-UI 生命周期 `threadId/runId` 契约。
+
+## Slice 5：AG-UI 生命周期身份契约
+
+### 基线与设计决策
+
+- 官方 `RUN_STARTED/RUN_FINISHED` 合同都要求 `threadId/runId`；
+- 当前主 orchestrator 的开始事件把 `runId` 固定为 `orchestrator:{session_id}`，
+  同一会话多轮重复；结束事件只有 `result`，前端又会丢弃已有身份字段；
+- `threadId` 继续使用长期会话的 `session_id`；`runId` 使用路由请求级 UUID，避免依赖
+  图内部晚于开始事件才能确定的 turn 计数，也避免并发竞态；
+- 本切片只修改主 `/agents/orchestrator/turn/stream` 成功生命周期；其他端点继续走
+  无上下文兼容分支，错误终态和统一 transport 留给后续切片；
+- 前端内部类型为兼容历史端点保留可选字段，但 canonical 路由与解析测试强制完整 wire contract。
+
+设计：`docs/plans/2026-07-29-agui-lifecycle-identity-design.md`
+
+实施：`docs/plans/2026-07-29-agui-lifecycle-identity-implementation.md`
+
+| 时间 | 范围 | 命令 | 结果 |
+|---|---|---|---|
+| 2026-07-29 | 身份链路复核 | `rg` + 定向源码检查 | 确认开始事件 run 身份按 session 重复、结束事件丢失身份、前端 parser 丢弃身份 |
+
+状态：Slice 5 设计完成，下一步进入 Graph 与前端协议 RED。
