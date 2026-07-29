@@ -26,10 +26,11 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
  * <ul>
  *   <li><b>连接失败 / 上游 HTTP ≥400</b>：在 connect/read 超时阈值内快速失败，绝不无限挂起；
  *   <li><b>读超时</b>：上游卡死时按 {@code readTimeoutMs}（socket 不活动上限）切断；
- *   <li><b>终止性 error 恰好一条</b>：任何故障只向客户端发一条 {@code event: error}（形状
- *       {@code {"code","message"}}，与 WorkshopGraphClient / MediaJobService 既有约定一致），
- *       文案中文、简短、可执行，<b>绝不泄漏</b>内部 URL / 端口 / 堆栈 / 内部 token（详情只进服务端日志）；
- *   <li><b>部分内容保留</b>：故障前已透传的 trace / token 原样保留，error 总在其后；
+ *   <li><b>终止事件恰好一条</b>：业务恢复成功时发送恢复给出的终态；否则发送一条 {@code event:
+ *       error}（形状 {@code {"code","message"}}，与 WorkshopGraphClient / MediaJobService
+ *       既有约定一致），文案中文、简短、可执行，<b>绝不泄漏</b>内部 URL / 端口 / 堆栈 / 内部 token
+ *       （详情只进服务端日志）；
+ *   <li><b>部分内容保留</b>：故障前已透传的 trace / token 原样保留，恢复终态或净化 error 总在其后；
  *   <li><b>坏损流</b>：未以空行收束的半截事件帧按 SSE 规范丢弃（防止半截 result 被当正常结果）；
  *       上游未发终态事件（{@code result} / {@code error} / AG-UI {@code RUN_FINISHED} /
  *       {@code RUN_ERROR}）即关闭时补一条终止性 error，绝不静默当成功收尾；
@@ -39,6 +40,24 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
  * </ul>
  */
 public final class GraphStreamTransport {
+
+  /** 供业务恢复策略判定的传输故障类别，不暴露内部异常或地址。 */
+  public enum FailureKind {
+    UNAVAILABLE,
+    TIMEOUT,
+    INTERRUPTED
+  }
+
+  /** 恢复成功后由 transport 发出的终态事件。 */
+  public record TerminalEvent(String event, Object data) {}
+
+  /**
+   * 可选的业务恢复策略。返回 {@code null} 或非终态事件时，transport 回落到标准脱敏 error。
+   */
+  @FunctionalInterface
+  public interface FailureRecovery {
+    TerminalEvent recover(FailureKind failure) throws Exception;
+  }
 
   static final String CODE_UNAVAILABLE = "AI_SERVICE_UNAVAILABLE";
   static final String CODE_TIMEOUT = "AI_SERVICE_TIMEOUT";
@@ -88,6 +107,20 @@ public final class GraphStreamTransport {
       SseEmitter emitter,
       BiConsumer<String, String> onEvent,
       Runnable onFinished) {
+    relay(url, bodySupplier, internalToken, emitter, onEvent, null, onFinished);
+  }
+
+  /**
+   * 带可选业务恢复策略的转发。恢复只在传输故障时触发；客户端断开及上游主动终态不触发。
+   */
+  public void relay(
+      String url,
+      Supplier<?> bodySupplier,
+      String internalToken,
+      SseEmitter emitter,
+      BiConsumer<String, String> onEvent,
+      FailureRecovery recovery,
+      Runnable onFinished) {
     HttpURLConnection connection = null;
     try {
       byte[] payload = objectMapper.writeValueAsBytes(bodySupplier.get());
@@ -95,26 +128,53 @@ public final class GraphStreamTransport {
       int status = connection.getResponseCode();
       if (status >= 400) {
         log.error("Graph SSE endpoint {} returned HTTP {}", url, status);
-        sendTerminalError(emitter, CODE_UNAVAILABLE, MSG_UNAVAILABLE);
+        handleFailure(emitter, recovery, FailureKind.UNAVAILABLE);
         return;
       }
       StreamEnd end = relayEvents(connection, emitter, onEvent);
       if (end == StreamEnd.TRUNCATED) {
         log.error("Graph SSE stream {} closed before terminal event", url);
-        sendTerminalError(emitter, CODE_INTERRUPTED, MSG_INTERRUPTED);
+        handleFailure(emitter, recovery, FailureKind.INTERRUPTED);
       }
     } catch (SocketTimeoutException e) {
       log.error("Graph SSE relay timed out (read-timeout {} ms) for {}", readTimeoutMs, url, e);
-      sendTerminalError(emitter, CODE_TIMEOUT, MSG_TIMEOUT);
+      handleFailure(emitter, recovery, FailureKind.TIMEOUT);
     } catch (IOException | RuntimeException e) {
       log.error("Graph SSE relay failed for {}", url, e);
-      sendTerminalError(emitter, CODE_UNAVAILABLE, MSG_UNAVAILABLE);
+      handleFailure(emitter, recovery, FailureKind.UNAVAILABLE);
     } finally {
       if (connection != null) {
         connection.disconnect();
       }
       completeQuietly(emitter);
       runQuietly(onFinished);
+    }
+  }
+
+  private void handleFailure(
+      SseEmitter emitter, FailureRecovery recovery, FailureKind failureKind) {
+    if (recovery != null) {
+      try {
+        TerminalEvent recovered = recovery.recover(failureKind);
+        if (recovered != null && TERMINAL_EVENTS.contains(recovered.event())) {
+          emitter.send(SseEmitter.event().name(recovered.event()).data(recovered.data()));
+          return;
+        }
+        if (recovered != null) {
+          log.warn(
+              "Graph SSE recovery returned non-terminal event={} for failure={}",
+              recovered.event(),
+              failureKind);
+        }
+      } catch (Exception recoveryFailure) {
+        log.warn("Graph SSE recovery failed for failure={}", failureKind, recoveryFailure);
+      }
+    }
+
+    switch (failureKind) {
+      case TIMEOUT -> sendTerminalError(emitter, CODE_TIMEOUT, MSG_TIMEOUT);
+      case INTERRUPTED -> sendTerminalError(emitter, CODE_INTERRUPTED, MSG_INTERRUPTED);
+      case UNAVAILABLE -> sendTerminalError(emitter, CODE_UNAVAILABLE, MSG_UNAVAILABLE);
     }
   }
 

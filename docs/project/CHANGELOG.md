@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-07-29 — 重构：Profile SSE 显式恢复与 canonical 投影（P1-4d）
+
+- `GraphStreamTransport` 新增可选、受终态白名单约束的业务 recovery；连接失败、读超时和无终态 EOF
+  可由业务返回唯一替代终态，恢复为空/非法/异常仍回到既有脱敏 error。旧 6 参数调用方行为不变，
+  客户端断开和上游主动终态不触发恢复。
+- Profile 流从旧 `GraphSseConsumer` 迁到公共 transport，修复 Python 已发送 canonical
+  `RUN_FINISHED.result`、Java 却只识别 legacy `result` 导致画像成功但未落库的问题；wrapper 仍原样透传，
+  upsert、8 维镜像、revision、resource run 与访谈完成各一次。
+- 保留一次同 ProfileAgent 的同步恢复：恢复成功只发一个 legacy `result` 且不重复业务副作用；恢复失败
+  只发一个按故障类别映射的脱敏 `error`，不再以 `completeWithError` 裸断流；上游 `RUN_ERROR` 原样终止。
+- TDD 先得到行为 RED 和完整合同编译 RED；修复后 Profile/transport/Tutor/Orchestrator 聚焦 46/46、
+  Spring 全上下文 1/1、6 个变更 Java 文件 Spotless 通过。Backend 全量 1102 项业务断言 0 failures，
+  7 个 Docker/PostgreSQL TIME_WAIT 环境 errors 逐类新鲜复跑 19/19 通过。
+- 当前 Web 仍走同步画像 API，未修改前端、数据库或 Python 路由；ECS 未部署，Workshop 旧 consumer 与
+  其业务 fallback 留给下一独立切片。
+
 ## 2026-07-29 — 重构：GraphStreamTransport 公共包归属（P1-4c）
 
 - 将已服务 Tutor、Orchestrator、TutorWorkflow 的历史 `tutor.GraphStreamRelay` 原子提升并改名为唯一

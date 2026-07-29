@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.agent.run.ResourceRunRecorder;
+import com.pythontopia.common.config.GraphHttpClientProperties;
 import com.pythontopia.common.config.GraphServiceProperties;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.sse.SseRelayExecutor;
@@ -42,6 +43,7 @@ class ProfileServiceFailureTest {
             mock(ResourceRunRecorder.class),
             graph,
             new GraphServiceProperties("http://graph", "http://rag", "token"),
+            new GraphHttpClientProperties(null, null),
             new ObjectMapper(),
             mock(SseRelayExecutor.class),
             mock(InterviewDimensionMirror.class));

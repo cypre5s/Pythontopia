@@ -121,7 +121,17 @@ Authorization: Bearer <token>
 | GET | `/api/learner/profile/revisions?limit=10` | Bearer | 画像修订历史 |
 | GET | `/api/learner/profile/dimensions` | Bearer | 8 维画像快照（雷达图 + 自评 UI 用） |
 | PUT | `/api/learner/profile/dimensions/{dimensionKey}` | Bearer | 自评直写单维；学生仅可改 4 个主观维度，越权改客观维度 → `403` |
+| POST | `/api/learner/profile/interview` | STUDENT | 创建或恢复当前学生的 OPEN 画像访谈 |
+| POST | `/api/learner/profile/interview/{sessionId}/turn` | STUDENT | 同步 ProfileAgent 回合；当前 Web 画像屋使用此端点 |
+| POST | `/api/learner/profile/interview/{sessionId}/turn/stream` | STUDENT | SSE ProfileAgent 回合；成功终态为 legacy `result` 或 canonical `RUN_FINISHED` |
+| POST | `/api/learner/profile/interview/{sessionId}/finish` | STUDENT | 主动结束本人访谈 |
 | GET | `/api/learner/mastery` | Bearer | KC 掌握度快照列表 |
+
+Profile SSE 透传上游事件；canonical `RUN_FINISHED` 的 data 保持 `{"result": {...}}` wrapper。连接失败、
+读超时或无终态 EOF 时，服务端只尝试一次同 ProfileAgent 同步恢复：恢复成功只发一个 legacy
+`result`；恢复失败只发一个脱敏 `error`（`AI_SERVICE_UNAVAILABLE` / `AI_SERVICE_TIMEOUT` /
+`AI_STREAM_INTERRUPTED`）。上游主动 `error/RUN_ERROR` 不触发恢复。任何成功终态都只执行一次画像落库、
+8 维镜像、revision、resource run 与访谈完成。
 
 ### 4.3 任务（公告板，仅学生）
 

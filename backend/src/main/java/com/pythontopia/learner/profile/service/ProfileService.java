@@ -1,21 +1,23 @@
 package com.pythontopia.learner.profile.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.agent.run.ResourceRunRecorder;
 import com.pythontopia.agent.run.RunStatus;
+import com.pythontopia.common.config.GraphHttpClientProperties;
 import com.pythontopia.common.config.GraphServiceProperties;
 import com.pythontopia.common.error.BusinessException;
-import com.pythontopia.common.sse.GraphSseConsumer;
+import com.pythontopia.common.sse.GraphStreamTransport;
 import com.pythontopia.common.sse.SseRelayExecutor;
 import com.pythontopia.common.web.GraphInternalTokenSupport;
 import com.pythontopia.coursepack.repository.CoursePackRepository;
 import com.pythontopia.learner.profile.dto.*;
 import com.pythontopia.learner.profile.repository.ProfileRepository;
-import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -29,6 +31,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 public class ProfileService {
 
   private static final Logger log = LoggerFactory.getLogger(ProfileService.class);
+  private static final int STREAM_READ_TIMEOUT_MS = 120_000;
 
   private final ProfileRepository profileRepository;
   private final CoursePackRepository coursePackRepository;
@@ -38,8 +41,33 @@ public class ProfileService {
   private final ObjectMapper objectMapper;
   private final SseRelayExecutor sseRelayExecutor;
   private final InterviewDimensionMirror interviewDimensionMirror;
+  private final GraphStreamTransport streamTransport;
 
+  @Autowired
   public ProfileService(
+      ProfileRepository profileRepository,
+      CoursePackRepository coursePackRepository,
+      ResourceRunRecorder resourceRunRecorder,
+      RestTemplate graphRestTemplate,
+      GraphServiceProperties graphProperties,
+      GraphHttpClientProperties graphHttpProperties,
+      ObjectMapper objectMapper,
+      SseRelayExecutor sseRelayExecutor,
+      InterviewDimensionMirror interviewDimensionMirror) {
+    this(
+        profileRepository,
+        coursePackRepository,
+        resourceRunRecorder,
+        graphRestTemplate,
+        graphProperties,
+        objectMapper,
+        sseRelayExecutor,
+        interviewDimensionMirror,
+        graphHttpProperties.connectTimeoutMs(),
+        STREAM_READ_TIMEOUT_MS);
+  }
+
+  ProfileService(
       ProfileRepository profileRepository,
       CoursePackRepository coursePackRepository,
       ResourceRunRecorder resourceRunRecorder,
@@ -47,7 +75,9 @@ public class ProfileService {
       GraphServiceProperties graphProperties,
       ObjectMapper objectMapper,
       SseRelayExecutor sseRelayExecutor,
-      InterviewDimensionMirror interviewDimensionMirror) {
+      InterviewDimensionMirror interviewDimensionMirror,
+      int connectTimeoutMs,
+      int readTimeoutMs) {
     this.profileRepository = profileRepository;
     this.coursePackRepository = coursePackRepository;
     this.resourceRunRecorder = resourceRunRecorder;
@@ -56,6 +86,8 @@ public class ProfileService {
     this.objectMapper = objectMapper;
     this.sseRelayExecutor = sseRelayExecutor;
     this.interviewDimensionMirror = interviewDimensionMirror;
+    this.streamTransport =
+        new GraphStreamTransport(objectMapper, connectTimeoutMs, readTimeoutMs);
   }
 
   public ProfileInterviewStartResponse openOrResumeInterview(Long userId) {
@@ -122,6 +154,13 @@ public class ProfileService {
   }
 
   public SseEmitter sendTurnStream(Long userId, String sessionId, ProfileTurnRequest request) {
+    SseEmitter emitter = new SseEmitter((long) STREAM_READ_TIMEOUT_MS);
+    startTurnStream(userId, sessionId, request, emitter);
+    return emitter;
+  }
+
+  void startTurnStream(
+      Long userId, String sessionId, ProfileTurnRequest request, SseEmitter emitter) {
     if (!profileRepository.ownsInterview(userId, sessionId)) {
       throw new BusinessException(
           HttpStatus.NOT_FOUND, "PROFILE_INTERVIEW_NOT_FOUND", "Interview not found");
@@ -136,41 +175,52 @@ public class ProfileService {
                 .map(kc -> new KcIndexItemDto(kc.kcCode(), kc.kcName()))
                 .toList());
 
-    SseEmitter emitter = new SseEmitter(120_000L);
     String url = graphProperties.graphUrl() + "/agents/profile/turn/stream";
 
-    sseRelayExecutor.submit(() -> {
-      try {
-        GraphSseConsumer.consume(
-            url,
-            agentRequest,
-            objectMapper,
-            GraphInternalTokenSupport.tokenOrNull(graphProperties),
-            (event, data) -> {
-          try {
-            emitter.send(SseEmitter.event().name(event).data(data));
-            if ("result".equals(event)) {
-              handleTurnResult(userId, sessionId, request, data);
-            }
-          } catch (IOException e) {
-            log.debug("Profile SSE emitter write failed", e);
-          }
-        });
-        emitter.complete();
-      } catch (IOException e) {
-        log.warn("Profile turn SSE stream failed, falling back to non-streaming", e);
-        try {
-          ProfileTurnResponse fallback = sendTurn(userId, sessionId, request);
-          String json = objectMapper.writeValueAsString(fallback);
-          emitter.send(SseEmitter.event().name("result").data(json));
-          emitter.complete();
-        } catch (Exception fallbackEx) {
-          log.error("Profile turn SSE fallback failed", fallbackEx);
-          emitter.completeWithError(fallbackEx);
-        }
+    sseRelayExecutor.submit(
+        () ->
+            streamTransport.relay(
+                url,
+                () -> agentRequest,
+                GraphInternalTokenSupport.tokenOrNull(graphProperties),
+                emitter,
+                (event, data) -> {
+                  if ("result".equals(event)) {
+                    handleTurnResult(userId, sessionId, request, data);
+                  } else if ("RUN_FINISHED".equals(event)) {
+                    handleTurnResult(userId, sessionId, request, unwrapAguiResult(data));
+                  }
+                },
+                failure -> recoverProfileTurn(userId, sessionId, request, failure),
+                null));
+  }
+
+  private GraphStreamTransport.TerminalEvent recoverProfileTurn(
+      Long userId,
+      String sessionId,
+      ProfileTurnRequest request,
+      GraphStreamTransport.FailureKind failure) {
+    log.warn("Profile turn SSE failed as {}; trying synchronous ProfileAgent recovery", failure);
+    try {
+      ProfileTurnResponse fallback = sendTurn(userId, sessionId, request);
+      return new GraphStreamTransport.TerminalEvent(
+          "result", objectMapper.writeValueAsString(fallback));
+    } catch (Exception fallbackFailure) {
+      log.error("Profile turn synchronous recovery failed after SSE failure={}", failure, fallbackFailure);
+      return null;
+    }
+  }
+
+  private String unwrapAguiResult(String data) {
+    try {
+      JsonNode result = objectMapper.readTree(data).get("result");
+      if (result != null && result.isObject()) {
+        return objectMapper.writeValueAsString(result);
       }
-    });
-    return emitter;
+    } catch (Exception e) {
+      log.warn("Failed to unwrap ProfileAgent RUN_FINISHED payload", e);
+    }
+    return data;
   }
 
   private void handleTurnResult(

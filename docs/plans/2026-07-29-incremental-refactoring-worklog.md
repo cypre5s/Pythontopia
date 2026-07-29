@@ -441,5 +441,28 @@
 | 2026-07-29 | Profile/Workshop fallback 审计 | Java/Python/前端定向源码检查 | 确认 canonical Profile wrapper 漏投影、两业务 fallback 与 transport 自动 error 的冲突；Web 当前不用 Profile SSE |
 | 2026-07-29 | Profile 既有单测基线 | `mvn -q -Dtest='ProfileServiceFailureTest,InterviewDimensionMirrorTest' test` | 2 classes / 8 tests passed；同步错误映射与 8 维镜像为绿 |
 | 2026-07-29 | 公共 transport 基线 | Slice 8 最终共享合同命令 | 6 classes / 30 tests passed |
+| 2026-07-29 | canonical 行为 RED | `mvn -q -Dtest=ProfileServiceStreamTest test` | 1 expected failure；上游 `RUN_FINISHED` 已透传，但 `upsertProfile` 从未调用，精确证明 wrapper 漏投影 |
+| 2026-07-29 | 完整合同编译 RED | 同目标命令 | expected test-compile failure；旧服务缺少 `startTurnStream` 真流接缝与可注入 connect/read timeout 构造器 |
+| 2026-07-29 | Profile adapter GREEN | 同目标命令 | 1 class / 4 tests passed；canonical 投影、同步恢复成功/失败、上游 RUN_ERROR 四合同均绿 |
+| 2026-07-29 | Transport recovery 边界 | `mvn -q -Dtest='GraphStreamTransportRecoveryTest,ProfileServiceStreamTest,ProfileServiceFailureTest,InterviewDimensionMirrorTest' test` | 4 classes / 16 tests passed；UNAVAILABLE/INTERRUPTED 分类、恢复异常与唯一脱敏终态均绿 |
+| 2026-07-29 | Profile 与共享 transport 联跑 | 10 个 Profile/transport/Tutor/Orchestrator 测试类定向命令 | 10 classes / 46 tests passed；成功、故障、投影、断开与既有调用方合同守恒 |
+| 2026-07-29 | Spring 全上下文 | `mvn -q -Dtest=PythontopiaApplicationTests test` | 1 test passed；`GraphHttpClientProperties` 新构造注入成功 |
+| 2026-07-29 | 变更文件 Spotless | `mvn -q -DspotlessFiles='<6 changed java files>' spotless:check` | passed；全仓仍有既有格式漂移，未执行全仓 apply |
+| 2026-07-29 | Backend 全量 | `mvn test` | 1102 tests；0 failures / 7 errors。6 项为 pgvector 临时端口 TIME_WAIT 自碰撞，课堂模拟因容器连接重置连带失败；Slice 9 新增 8 项全部通过 |
+| 2026-07-29 | 全量错误类新鲜隔离复跑 | 等待上一 PostgreSQL TIME_WAIT 自然释放后，每类独立执行 `mvn -q -Dtest='<class>' test` | 7 classes / 19 tests passed；完整 V190 迁移与长期课堂模拟均通过 |
+| 2026-07-29 | 最终聚焦/格式/文本门禁 | 10 类 46 项定向测试 + 6 个 Java 文件 Spotless + `git diff --check` | passed；canonical wrapper 与五类副作用一次性断言一并通过 |
 
-状态：Slice 9 设计完成，下一步建立 canonical RUN_FINISHED 漏投影真流 RED。
+### Slice 9 收口
+
+- 已完成：公共 transport 新增受白名单约束的显式 recovery；既有 6 参数调用方零改动，仍由 transport
+  统一拥有 wire send、唯一终态、连接关闭与 emitter complete；
+- Profile 已从旧 consumer 迁移到 `GraphStreamTransport`；canonical wrapper 原样透传并正确投影，
+  legacy 结果继续兼容；同步 fallback 仍调用同一 ProfileAgent，不伪造普通聊天；
+- 副作用守恒：canonical 成功与 recovery 成功都只执行一次 upsert、8 维镜像、revision、resource run
+  和访谈完成；失败不再裸 `completeWithError`；
+- 比赛演示影响：正向但低风险。当前 Web 仍走同步画像 API，流端点修复不会切换现有 UI；后端 SSE
+  接口不再出现“看似成功但画像没落库”或 error + result 双终态；
+- 未验证与风险：尚未部署 ECS/公网长流；Workshop 仍使用旧 consumer，其业务 fallback 需下一切片
+  单独设计和迁移；本切片不引入重连、首包 deadline、序号或 `Last-Event-ID`。
+
+状态：Slice 9 完成；下一小步为 Workshop SSE 业务适配迁移。
