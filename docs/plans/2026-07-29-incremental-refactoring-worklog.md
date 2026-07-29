@@ -154,4 +154,32 @@
 - 剩余风险：本切片尚未部署 ECS；生产 `bad SQL grammar` 告警消失和真实历史数据展示
   仍需在后续发布验收中复核。
 
-状态：Slice 3 完成，下一小步为 P0-3 事务边界分离的事实复核与设计。
+状态：Slice 3 完成；复核附件“建议实施顺序”后，下一小步在下节校正为 AG-UI 契约。
+
+## Slice 4：AG-UI STATE_DELTA RFC 6902 契约
+
+### 基线与事实复核
+
+- 附件实施顺序明确要求先完成 OpenAPI/AG-UI 契约与统一 SSE，再进入工坊三阶段事务；
+  因此本切片优先于原先按方向编号选择的事务切片；
+- AG-UI 当前官方合同要求 `STATE_DELTA.delta` 为 RFC 6902 JSON Patch 操作数组，
+  `RUN_STARTED` 则要求 `threadId/runId`；
+- 当前 Graph 唯一生产 `STATE_DELTA` 是 orchestrator 的完整 `plan_steps` 进度，
+  仍发送 `{"delta":{"plan_steps":[]}}`；
+- 当前前端把 `delta` 声明为对象并浅合并，无法执行嵌套/删除等 JSON Patch 语义；
+- 本切片只修 `STATE_DELTA`；生命周期 id 与统一 transport 分别留给后续小切片；
+- npm 通过 7892 实测 `fast-json-patch@3.1.1` 为 MIT、解包 159025 bytes，采用成熟实现，
+  不自写 RFC 6902 引擎。
+
+| 时间 | 范围 | 命令 | 结果 |
+|---|---|---|---|
+| 2026-07-29 | 前端定向基线 | `npm run test -- tests/composables/useSseStream.spec.ts` | 1 file / 5 tests passed；存在既有 Pyodide source map 缺失告警，不影响结果 |
+| 2026-07-29 | Graph 命令环境 | `python -m pytest -q tests/test_sse_agui.py tests/test_orchestrator_route.py` | 未执行测试：当前工作树无 `python` 别名，改用仓库可用的 `python3` |
+| 2026-07-29 | Graph 定向基线 | `python3 -m pytest -q tests/test_sse_agui.py tests/test_orchestrator_route.py` | 27 passed |
+| 2026-07-29 | JSON Patch 依赖复核 | `npm view fast-json-patch version license dist.unpackedSize --proxy http://127.0.0.1:7892` | 3.1.1 / MIT / 159025 bytes |
+
+设计：`docs/plans/2026-07-29-agui-state-delta-json-patch-design.md`
+
+实施：`docs/plans/2026-07-29-agui-state-delta-json-patch-implementation.md`
+
+状态：事实与方案已冻结，下一步建立 Graph 与前端双端 RED。
