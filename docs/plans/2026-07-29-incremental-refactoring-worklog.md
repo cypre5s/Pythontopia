@@ -3,7 +3,7 @@
 > 开始时间：2026-07-29
 > 当前分支：`refactor/workshop-history-account-isolation`
 > 总体输入：用户提供的八方向重构审阅
-> 当前切片：P0-2a Embedding Profile 跨语言契约
+> 当前切片：P0-2b 周报 resource_run 真实 SQL 契约
 
 ## 交付纪律
 
@@ -109,3 +109,27 @@
   Testcontainers 随机端口碰撞和既有 formatter/mypy 基线漂移仍需单独治理。
 
 状态：Slice 2 完成，下一小步为 P0-2b 周报 `resource_run` 真实 SQL 契约。
+
+## Slice 3：周报 resource_run 真实 SQL 契约
+
+### 基线与事实复核
+
+- 生产告警：ECS 公网验收曾记录 `WeeklyReportService` 的 `resource_run` 查询
+  `bad SQL grammar`，服务 catch 后返回空列表，周报其余内容可生成；
+- schema 事实：V021 已定义查询使用的全部列，`created_at` 为 `TIMESTAMPTZ`，
+  `(user_id, created_at DESC)` 索引存在，后续迁移未删除字段；
+- 代码事实：SQL 字段、过滤、排序和限制均与 schema 对齐，唯一异常绑定是把 `Instant`
+  直接作为无显式 SQL 类型的 `JdbcTemplate` vararg；
+- 仓内惯例：其他 PostgreSQL 时间范围查询均先调用 `Timestamp.from(...)`；
+- 覆盖缺口：既有 `WeeklyReportServiceTest` mock 了 `JdbcTemplate`，不会执行 JDBC 参数绑定、
+  真实迁移或 `BIGINT[]` 映射。
+
+| 时间 | 范围 | 命令 | 结果 |
+|---|---|---|---|
+| 2026-07-29 | 周报定向基线 | `mvn --settings .mvn/settings.build.xml -Dtest=WeeklyReportServiceTest,TwinWeeklyControllerTest test` | 6 tests passed；仅 mock/控制器合同，不覆盖真实 SQL |
+
+设计：`docs/plans/2026-07-29-weekly-report-resource-run-sql-contract-design.md`
+
+实施：`docs/plans/2026-07-29-weekly-report-resource-run-sql-contract-implementation.md`
+
+状态：设计完成，下一步在完整 Flyway schema 的真实 PostgreSQL 上建立 RED。
