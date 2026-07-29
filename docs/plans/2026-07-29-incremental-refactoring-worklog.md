@@ -419,3 +419,27 @@
 - 未验证与风险：尚未部署 ECS；本切片未迁剩余两个旧 consumer，也未新增首包 deadline、序号或重连。
 
 状态：Slice 8 完成；下一小步为 P1-4d Profile/Workshop 的业务适配迁移设计。
+
+## Slice 9：Profile SSE 显式 recovery 迁移
+
+### 基线与设计决策
+
+- Python Profile 流已发 canonical `RUN_FINISHED.result`，Java 旧路径只识别 legacy `result`，存在成功
+  访谈漏投影；
+- Profile/Workshop 都需同步 fallback，公共 transport 必须先支持“业务返回替代终态”，否则会 error +
+  result 双终态；
+- recovery 只返回白名单终态，由 transport 统一 send/complete；Profile 同步 `sendTurn` 负责既有副作用，
+  adapter 不重复投影；
+- 前端当前仍使用同步画像 API，先迁 Profile 可降低演示主链路风险并固定公共 recovery 合同。
+
+设计：`docs/plans/2026-07-29-profile-sse-transport-recovery-design.md`
+
+实施：`docs/plans/2026-07-29-profile-sse-transport-recovery-implementation.md`
+
+| 时间 | 范围 | 命令 | 结果 |
+|---|---|---|---|
+| 2026-07-29 | Profile/Workshop fallback 审计 | Java/Python/前端定向源码检查 | 确认 canonical Profile wrapper 漏投影、两业务 fallback 与 transport 自动 error 的冲突；Web 当前不用 Profile SSE |
+| 2026-07-29 | Profile 既有单测基线 | `mvn -q -Dtest='ProfileServiceFailureTest,InterviewDimensionMirrorTest' test` | 2 classes / 8 tests passed；同步错误映射与 8 维镜像为绿 |
+| 2026-07-29 | 公共 transport 基线 | Slice 8 最终共享合同命令 | 6 classes / 30 tests passed |
+
+状态：Slice 9 设计完成，下一步建立 canonical RUN_FINISHED 漏投影真流 RED。
