@@ -334,3 +334,24 @@
   的统一读超时、客户端取消和单终态保障，下一切片应逐调用方迁移而非一次性替换全部。
 
 状态：Slice 6 完成；下一小步为 P1-4b 旧 Graph SSE 调用方向统一 transport 的首个迁移切片。
+
+## Slice 7：TutorWorkflow SSE 强中继迁移
+
+### 基线与设计决策
+
+- 三个旧 consumer 调用方中优先 TutorWorkflow：同包可直接复用 Relay、无同步 fallback，业务只做
+  原样透传与终态投影；Workshop/Profile 的额外变形和状态副作用留给后续独立切片；
+- 当前旧路径在无终态 EOF 时静默完成，客户端断开后继续读上游，异常用 `completeWithError` 裸断流；
+- Python TutorWorkflow 路由已有 10 秒注释心跳，生产 read inactivity timeout 对齐现有 180 秒 emitter；
+- 本切片不新增抽象，只迁移一个调用方并复用已经测试的 `GraphStreamRelay`。
+
+设计：`docs/plans/2026-07-29-tutor-workflow-sse-transport-design.md`
+
+实施：`docs/plans/2026-07-29-tutor-workflow-sse-transport-implementation.md`
+
+| 时间 | 范围 | 命令 | 结果 |
+|---|---|---|---|
+| 2026-07-29 | 旧调用方与 Graph 路由审计 | `rg` + Java/Python 定向源码检查 | 确认 TutorWorkflow 是最小迁移面；Graph 每 10 秒 ping，终态为 `RUN_FINISHED/RUN_ERROR` |
+| 2026-07-29 | TutorWorkflow/共享 Relay 基线 | `mvn -q -Dtest='TutorWorkflowServiceTest,TutorGraphClientSseTest,TutorGraphClientFailureTest' test` | 3 classes / 16 tests passed；投影、正常透传及 Relay 截断/超时/断开合同基线为绿 |
+
+状态：Slice 7 设计完成，下一步建立目标客户端无终态 EOF 与读超时 RED。
