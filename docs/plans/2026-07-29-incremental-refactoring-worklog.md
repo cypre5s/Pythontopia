@@ -380,3 +380,23 @@
   调用方仍未获得强 Relay 的取消和单终态语义，且首包独立 deadline、序号仍未统一。
 
 状态：Slice 7 完成；下一小步为 P1-4c Workshop/Profile 中风险较低调用方的独立 transport 迁移设计。
+
+## Slice 8：GraphStreamTransport 公共包归属
+
+### 基线与设计决策
+
+- 强 Relay 已服务 Tutor、Orchestrator、TutorWorkflow，内部不依赖 Tutor DTO/业务，但历史上仍放在
+  `tutor` 包；继续迁移 Workshop/Profile 会制造反向模块依赖；
+- 本切片按附件目标改名为 `common.sse.GraphStreamTransport`，只做原子符号/包迁移，不改行为；
+- 不保留旧类兼容 wrapper，避免制造第二入口；剩余调用方迁移留在后续业务切片。
+
+设计：`docs/plans/2026-07-29-graph-stream-transport-package-design.md`
+
+实施：`docs/plans/2026-07-29-graph-stream-transport-package-implementation.md`
+
+| 时间 | 范围 | 命令 | 结果 |
+|---|---|---|---|
+| 2026-07-29 | 包依赖审计 | `rg GraphStreamRelay` + 三个生产调用方源码检查 | 仅 1 个实现、3 个调用方；实现无 Tutor 业务依赖，适合提升到 common |
+| 2026-07-29 | 迁移前守恒基线 | Slice 7 最终 6 类定向命令 | 6 classes / 30 tests passed；成功、故障、断开、投影合同均绿 |
+
+状态：Slice 8 设计完成，下一步执行纯机械 package/class 迁移。
