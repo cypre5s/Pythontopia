@@ -284,3 +284,26 @@
   心跳、deadline、取消、序号和恰好一个终态仍属于后续统一 transport 切片。
 
 状态：Slice 5 完成；下一小步继续附件顺序，审计并收敛 Java 两套 SSE 中转的最小公共 transport 边界。
+
+## Slice 6：Java SSE 公共帧解码合同
+
+### 基线与设计决策
+
+- `GraphSseConsumer`（工坊/画像/TutorWorkflow）与 `GraphStreamRelay`（Tutor/Orchestrator）
+  各自复制行解析循环，后者已有更强的超时、断连、截断和单终态语义；
+- 两套实现都把多行 `data:` 直接拼接，违反 WHATWG 以 LF 连接的合同；旧 consumer 还会把
+  EOF 前未以空行完成的半帧上送，Relay 则会丢弃并补中断终态；
+- 本切片先建立 `common.sse.SseFrameDecoder`，让两套路径共享 wire 解释；HTTP client、超时、
+  fallback 与业务回调继续由上层负责，后续再逐调用方迁移到统一 transport；
+- 采用 JDK 自有类型，不引入新依赖，不换 WebFlux，不做重连或开放式兼容层。
+
+设计：`docs/plans/2026-07-29-sse-frame-decoder-design.md`
+
+实施：`docs/plans/2026-07-29-sse-frame-decoder-implementation.md`
+
+| 时间 | 范围 | 命令 | 结果 |
+|---|---|---|---|
+| 2026-07-29 | Java SSE 调用链审计 | `rg` + 两套实现/调用方/失败测试源码检查 | 确认 2 套 parser、5 条 Graph 调用链及 EOF/多行 data 行为分叉 |
+| 2026-07-29 | WHATWG 合同复核 | HTML Living Standard §9.2.5–9.2.6 | 官方要求 data 行追加 LF、注释忽略、空行分发、EOF pending data 丢弃 |
+
+状态：Slice 6 设计完成，下一步建立 Backend 定向基线与真流 RED。
