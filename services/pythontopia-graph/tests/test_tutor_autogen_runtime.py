@@ -6,15 +6,19 @@ import pytest
 from autogen_core import CancellationToken
 from fastapi import HTTPException
 
+from pythontopia_graph.agents import tutor_agent as tutor_agent_module
+from pythontopia_graph.agents.tutor_agent import TutorAgent
 from pythontopia_graph.graph import tutor_workflow_session as session_store
 from pythontopia_graph.graph.autogen_tutor_runtime import (
     _PRIVATE_IMAGE_DATA_KEY,
     _encode_state,
     _decode_state,
     run_autogen_tutor_workflow,
+    run_autogen_tutor_call,
     validate_autogen_tutor_checkpoint_scope,
 )
 from pythontopia_graph.nodes.evidence_fetcher import RagHit, StaticEvidenceFetcher
+from pythontopia_graph.llm.provider import LlmResponse
 from pythontopia_graph.routes.tutor_workflow import (
     WorkflowRunEnvelope,
     tutor_workflow_run_stream,
@@ -36,6 +40,42 @@ def _request() -> WorkflowRunRequest:
         event="READING",
         problem=WorkflowProblemContext(problem_id=12, title="输入输出"),
     )
+
+
+@pytest.mark.asyncio
+async def test_autogen_single_call_preserves_nonserializable_result() -> None:
+    expected = object()
+    called = False
+
+    async def call():
+        nonlocal called
+        called = True
+        return expected
+
+    result = await run_autogen_tutor_call("TutorAgent", call)
+
+    assert called is True
+    assert result is expected
+
+
+@pytest.mark.asyncio
+async def test_nonstream_tutor_ask_uses_fixed_autogen_stage(monkeypatch) -> None:
+    stages: list[str] = []
+    original = tutor_agent_module.run_autogen_tutor_call
+
+    async def observe(stage_name, call):
+        stages.append(stage_name)
+        return await original(stage_name, call)
+
+    class Provider:
+        async def chat(self, _messages, **_kwargs):
+            return LlmResponse(content_text="基于通识知识，这里是解释。")
+
+    monkeypatch.setattr(tutor_agent_module, "run_autogen_tutor_call", observe)
+    response = await TutorAgent(Provider()).ask("什么是变量？", "", [], [])  # type: ignore[arg-type]
+
+    assert stages == ["TutorAgent"]
+    assert response.answer_md == "基于通识知识，这里是解释。"
 
 
 @pytest.mark.asyncio

@@ -5,23 +5,27 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.world.boss.dto.ExpeditionRunDto;
+import com.pythontopia.world.boss.dto.FrontierPickDto;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 无尽远征 run 跨会话快照持久化。
  *
- * <p>每个用户至多一条活跃/已结算 run。run id 由服务端签发，活跃期间不可由快照改写；新局只能在
- * 结算或显式弃局后创建。
+ * <p>每个用户至多一条活跃/已结算 run。run id 与地图配置由服务端签发，活跃期间不可由快照改写；新局只能在结算或显式弃局后创建。
  *
  * <ul>
  *   <li>{@link #findActive}：GET 活跃 run（无则 empty → controller 返 204）；
@@ -29,15 +33,21 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li>{@link #abandon}：DELETE 结束 / 弃局。
  * </ul>
  *
- * <p>nodes/relics/history 以 JSONB 整体存取（{@link ObjectMapper} 序列化），后端不解释其内部结构。
- * shortcut: map, HP, relic and history fields are client-authored; never use them for verified rewards or leaderboard trust; replace with a server action ledger before trusting them.
- * 掌握度 / 判题结果由 learner_mastery 等权威表负责，成绩由 expedition_verified_attempt 汇总。
+ * <p>地图拓扑与题目配置在开局后不可由快照改写；节点进度、HP、遗物和历史仍由客户端提供，不能用于正式奖励或排行榜。 shortcut: per-action state is
+ * client-authored; move it to a server action ledger before granting rewards or trusting
+ * completion. 掌握度 / 判题结果由 learner_mastery 等权威表负责，成绩由 expedition_verified_attempt 汇总。
  */
 @Service
 public class ExpeditionRunService {
 
   private static final Logger log = LoggerFactory.getLogger(ExpeditionRunService.class);
   private static final int MAX_SNAPSHOT_BYTES = 64 * 1024;
+  private static final Set<String> PERSISTABLE_PHASES =
+      Set.of("map", "event", "challenge", "reward");
+  private static final Set<String> NODE_STATES =
+      Set.of("locked", "available", "current", "cleared", "bypassed");
+  private static final Set<String> IMMUTABLE_NODE_FIELDS =
+      Set.of("id", "layer", "col", "kind", "kcCode", "challengeKind", "difficulty", "next");
   private static final TypeReference<List<Map<String, Object>>> LIST_OF_MAP =
       new TypeReference<>() {};
   private static final TypeReference<List<String>> LIST_OF_STRING = new TypeReference<>() {};
@@ -57,7 +67,9 @@ public class ExpeditionRunService {
     }
     List<ExpeditionRunDto> rows =
         jdbcTemplate.query(
-            "SELECT run_id::text AS run_id, phase, focus_chapter, nodes::text AS nodes, layers, current_node_id,"
+            "SELECT run_id::text AS run_id,"
+                + " CASE WHEN phase IN ('event', 'challenge', 'reward') THEN phase ELSE 'map' END AS phase,"
+                + " focus_chapter, nodes::text AS nodes, layers, current_node_id,"
                 + " hp, max_hp, momentum, best_momentum,"
                 + " (SELECT COALESCE(SUM(a.score), 0) FROM expedition_verified_attempt a"
                 + " WHERE a.user_id = expedition_run.user_id AND a.run_id = expedition_run.run_id)"
@@ -88,32 +100,71 @@ public class ExpeditionRunService {
     return rows.stream().findFirst();
   }
 
-  /** 保存当前 run；客户端不能替换活动 run 身份，且快照中的分数不作为事实来源。 */
+  /** 保存当前 run；身份、章节和开局地图不可改写，快照中的分数不作为事实来源。 */
   @Transactional
   public ExpeditionRunDto save(Long userId, ExpeditionRunDto dto) {
+    return persistSnapshot(userId, dto, false);
+  }
+
+  /** Start a run with a server-generated map and reset all client-supplied gameplay state. */
+  @Transactional
+  public ExpeditionRunDto start(
+      Long userId, Integer focusChapter, boolean isDaily, List<FrontierPickDto> picks) {
+    long seed =
+        isDaily
+            ? LocalDate.now(ZoneOffset.UTC).toEpochDay()
+            : ThreadLocalRandom.current().nextLong();
+    ExpeditionMapGenerator.MapData map = ExpeditionMapGenerator.generate(picks, seed);
+    ExpeditionRunDto initial =
+        new ExpeditionRunDto(
+            "map",
+            focusChapter,
+            map.nodes(),
+            map.layers(),
+            null,
+            5,
+            5,
+            0,
+            0,
+            0,
+            List.of(),
+            isDaily,
+            List.of(),
+            null,
+            0);
+    return persistSnapshot(userId, initial, true);
+  }
+
+  private ExpeditionRunDto persistSnapshot(Long userId, ExpeditionRunDto dto, boolean allowNewRun) {
     if (userId == null) {
       return dto;
     }
     validateSnapshotSize(dto);
+    validatePersistablePhase(dto.phase());
     jdbcTemplate.queryForObject(
         "SELECT pg_advisory_xact_lock(hashtext('pythontopia.expedition.run'), hashtext(?))",
         Object.class,
         userId.toString());
     List<ExistingRun> existing =
         jdbcTemplate.query(
-            "SELECT run_id::text AS run_id, status, focus_chapter FROM expedition_run"
+            "SELECT run_id::text AS run_id, status, focus_chapter, nodes::text AS nodes, layers, is_daily"
+                + " FROM expedition_run"
                 + " WHERE user_id = ? FOR UPDATE",
             (rs, rowNum) ->
                 new ExistingRun(
                     rs.getString("run_id"),
                     rs.getString("status"),
-                    (Integer) rs.getObject("focus_chapter")),
+                    (Integer) rs.getObject("focus_chapter"),
+                    listOfMap(rs.getString("nodes")),
+                    rs.getInt("layers"),
+                    rs.getBoolean("is_daily")),
             userId);
 
     String requestedRunId = dto.runId() == null ? null : UUID.fromString(dto.runId()).toString();
     String runId;
     if (existing.isEmpty()) {
-      if (requestedRunId != null) {
+      if (requestedRunId != null || !allowNewRun) {
+        if (requestedRunId == null && !allowNewRun) throw startRequired();
         throw staleRun();
       }
       runId = UUID.randomUUID().toString();
@@ -126,9 +177,11 @@ public class ExpeditionRunService {
         if (!Objects.equals(current.focusChapter(), dto.focusChapter())) {
           throw chapterChanged();
         }
+        validateMapSnapshot(current, dto);
         runId = current.runId();
       } else {
-        if (requestedRunId != null) {
+        if (requestedRunId != null || !allowNewRun) {
+          if (requestedRunId == null && !allowNewRun) throw startRequired();
           throw staleRun();
         }
         runId = UUID.randomUUID().toString();
@@ -171,7 +224,8 @@ public class ExpeditionRunService {
             (rs, rowNum) -> new VerifiedProgress(rs.getInt("score"), rs.getInt("verified_depth")),
             userId,
             runId);
-    return withRunId(dto, runId, verifiedProgress == null ? new VerifiedProgress(0, 0) : verifiedProgress);
+    return withRunId(
+        dto, runId, verifiedProgress == null ? new VerifiedProgress(0, 0) : verifiedProgress);
   }
 
   /** Validate a problem request against the user's active run and its immutable focus chapter. */
@@ -244,37 +298,105 @@ public class ExpeditionRunService {
     try {
       if (objectMapper.writeValueAsBytes(dto).length > MAX_SNAPSHOT_BYTES) {
         throw new BusinessException(
-            HttpStatus.PAYLOAD_TOO_LARGE,
-            "EXPEDITION_SNAPSHOT_TOO_LARGE",
-            "远征存档快照过大");
+            HttpStatus.PAYLOAD_TOO_LARGE, "EXPEDITION_SNAPSHOT_TOO_LARGE", "远征存档快照过大");
       }
     } catch (JsonProcessingException e) {
       throw new IllegalArgumentException("invalid expedition run snapshot", e);
     }
   }
 
-  private ExpeditionRunDto withRunId(ExpeditionRunDto run, String runId, VerifiedProgress progress) {
+  private void validatePersistablePhase(String phase) {
+    if (!PERSISTABLE_PHASES.contains(phase)) {
+      throw new BusinessException(HttpStatus.BAD_REQUEST, "EXPEDITION_PHASE_INVALID", "远征阶段无效");
+    }
+  }
+
+  private void validateMapSnapshot(ExistingRun current, ExpeditionRunDto requested) {
+    if (current.layers() != requested.layers()
+        || current.isDaily() != requested.isDaily()
+        || current.nodes().size() != requested.nodes().size()) {
+      throw mapChanged();
+    }
+    Map<String, Map<String, Object>> requestedById = new java.util.HashMap<>();
+    for (Map<String, Object> node : requested.nodes()) {
+      Object id = node.get("id");
+      if (!(id instanceof String nodeId)
+          || !(node.get("state") instanceof String state)
+          || !NODE_STATES.contains(state)
+          || requestedById.put(nodeId, node) != null) {
+        throw mapChanged();
+      }
+    }
+    if (requested.currentNodeId() != null
+        && !requestedById.containsKey(requested.currentNodeId())) {
+      throw mapChanged();
+    }
+    for (Map<String, Object> existingNode : current.nodes()) {
+      Object id = existingNode.get("id");
+      Map<String, Object> requestedNode =
+          id instanceof String nodeId ? requestedById.get(nodeId) : null;
+      if (requestedNode == null
+          || !existingNode.keySet().equals(requestedNode.keySet())
+          || IMMUTABLE_NODE_FIELDS.stream()
+              .anyMatch(
+                  field -> !Objects.equals(existingNode.get(field), requestedNode.get(field)))) {
+        throw mapChanged();
+      }
+    }
+  }
+
+  private ExpeditionRunDto withRunId(
+      ExpeditionRunDto run, String runId, VerifiedProgress progress) {
     return new ExpeditionRunDto(
-        run.phase(), run.focusChapter(), run.nodes(), run.layers(), run.currentNodeId(),
-        run.hp(), run.maxHp(), run.momentum(), run.bestMomentum(), progress.score(), run.relics(),
-        run.isDaily(), run.history(), runId, progress.depth());
+        run.phase(),
+        run.focusChapter(),
+        run.nodes(),
+        run.layers(),
+        run.currentNodeId(),
+        run.hp(),
+        run.maxHp(),
+        run.momentum(),
+        run.bestMomentum(),
+        progress.score(),
+        run.relics(),
+        run.isDaily(),
+        run.history(),
+        runId,
+        progress.depth());
   }
 
   private BusinessException staleRun() {
+    return new BusinessException(HttpStatus.CONFLICT, "EXPEDITION_RUN_CHANGED", "远征存档已变化，请刷新后重试");
+  }
+
+  private BusinessException startRequired() {
     return new BusinessException(
-        HttpStatus.CONFLICT, "EXPEDITION_RUN_CHANGED", "远征存档已变化，请刷新后重试");
+        HttpStatus.BAD_REQUEST, "EXPEDITION_RUN_START_REQUIRED", "新局只能通过服务端开局");
+  }
+
+  private BusinessException mapChanged() {
+    return new BusinessException(
+        HttpStatus.CONFLICT, "EXPEDITION_MAP_CHANGED", "远征地图配置不可修改，请重新加载存档");
   }
 
   private BusinessException chapterChanged() {
     return new BusinessException(
-        HttpStatus.CONFLICT,
-        "EXPEDITION_CHAPTER_CHANGED",
-        "远征章节已绑定，不能在本局中切换章节");
+        HttpStatus.CONFLICT, "EXPEDITION_CHAPTER_CHANGED", "远征章节已绑定，不能在本局中切换章节");
   }
 
-  record ExistingRun(String runId, String status, Integer focusChapter) {
+  record ExistingRun(
+      String runId,
+      String status,
+      Integer focusChapter,
+      List<Map<String, Object>> nodes,
+      int layers,
+      boolean isDaily) {
     ExistingRun(String runId, String status) {
-      this(runId, status, null);
+      this(runId, status, null, List.of(), 0, false);
+    }
+
+    ExistingRun(String runId, String status, Integer focusChapter) {
+      this(runId, status, focusChapter, List.of(), 0, false);
     }
   }
 

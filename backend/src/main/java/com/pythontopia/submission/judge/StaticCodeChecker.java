@@ -11,6 +11,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -32,8 +33,8 @@ public class StaticCodeChecker {
   private volatile PythonSandbox.Readiness readiness =
       new PythonSandbox.Readiness(false, "AST whitelist self-check has not run");
 
-  public StaticCodeChecker(
-      @Value("${pythontopia.judge.python:python3}") String pythonExecutable) {
+  @Autowired
+  public StaticCodeChecker(@Value("${pythontopia.judge.python:python3}") String pythonExecutable) {
     this(pythonExecutable, StaticCodeChecker.class.getClassLoader());
   }
 

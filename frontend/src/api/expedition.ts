@@ -1,9 +1,9 @@
 // 无尽远征「知识前沿选择器」+ run 跨会话持久化前端 client。
 //
 // - select-frontier：调后端 POST /api/world/boss/select-frontier（后端读权威掌握度、服务端画像 +
-//   graph 排序 + 间隔重复）。失败显式抛出，禁止用前端默认 KC 冒充画像自适应结果。
-// - expedition/run：GET/PUT/DELETE /api/world/expedition/run，把 run 进度升级为后端权威（跨设备/
-//   会话续局）。所有请求 suppressNetworkToast + 短超时，失败由调用方回退 localStorage，绝不阻塞。
+//   graph 排序 + 间隔重复）。
+// - expedition/run：POST 开局时由服务端选择前沿并生成地图；GET/PUT/DELETE 负责存档和弃局。
+//   所有请求 suppressNetworkToast + 短超时，失败由调用方回退 localStorage，绝不阻塞。
 
 import { http } from './http';
 import type { ProfileSignalsDto } from '@/api/dto/Boss';
@@ -27,6 +27,11 @@ export interface FrontierSelectInput {
   /** 需要的候选数量。 */
   count: number;
   profileSignals?: ProfileSignalsDto;
+}
+
+export interface ExpeditionRunStartInput {
+  focusChapter: number | null;
+  isDaily: boolean;
 }
 
 /** 取一批知识前沿候选；空结果/坏结构与网络错误一样显式失败。 */
@@ -83,6 +88,17 @@ export interface ExpeditionRunSnapshot {
 }
 
 const RUN_PATH = '/api/world/expedition/run';
+
+/** Starts a run whose frontier, map and initial gameplay state are issued by the server. */
+export async function createExpeditionRun(
+  input: ExpeditionRunStartInput,
+): Promise<ExpeditionRunSnapshot> {
+  const res = await http.post<ExpeditionRunSnapshot>(RUN_PATH, input, {
+    suppressNetworkToast: true,
+    timeout: 3000,
+  });
+  return res.data;
+}
 
 /** 取当前用户的活跃 run；无活跃 run（204/空）返回 null。失败抛错（调用方回退本地）。 */
 export async function fetchExpeditionRun(): Promise<ExpeditionRunSnapshot | null> {

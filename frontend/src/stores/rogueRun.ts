@@ -7,12 +7,9 @@
 
 import { computed, ref, watch } from 'vue';
 import { defineStore } from 'pinia';
-import { generateRogueMap } from '@/data/rogueMap';
 import {
   EXPEDITION_MAX_HP,
-  NODE_KIND_POOLS,
   REST_HEAL,
-  computeLayeredDifficulty,
   computeRunDifficulty,
 } from '@/data/rogueConfig';
 import { ROGUE_RELICS, relicById } from '@/data/rogueRelics';
@@ -21,15 +18,14 @@ import { kcDisplayName } from '@/data/kcNames';
 import { useChallengeJudge, isJudgeUnavailable } from '@/composables/useChallengeJudge';
 import { useProfileSignals } from '@/composables/useProfileSignals';
 import {
+  createExpeditionRun,
   deleteExpeditionRun,
   fetchExpeditionLeaderboard,
   fetchExpeditionRun,
-  requestFrontierPicks,
   saveExpeditionRun,
   submitExpeditionScore,
   type ExpeditionLeaderboard,
   type ExpeditionRunSnapshot,
-  type FrontierPick,
 } from '@/api/expedition';
 import { useMainlineStore } from '@stores/mainline';
 import { userScopedKey } from '@stores/session';
@@ -71,15 +67,6 @@ function saveDailyDate(date: string): void {
     /* 隐私模式禁写，忽略 */
   }
 }
-/** 确定性 RNG（LCG）：每日挑战按日期种子生成稳定的当日地图。 */
-function makeLcg(seed: number): () => number {
-  let s = (seed >>> 0) || 1;
-  return () => {
-    s = (s * 1664525 + 1013904223) >>> 0;
-    return s / 0xffffffff;
-  };
-}
-
 // run 可持久化快照：与后端 expedition_run 同构（api/expedition.ts 单一事实源）。
 type PersistShape = ExpeditionRunSnapshot;
 
@@ -178,7 +165,7 @@ function loadPersisted(): PersistShape | null {
 
 export const useRogueRunStore = defineStore('rogueRun', () => {
   const challenge = useChallengeJudge();
-  const { signals, hasAnySignal } = useProfileSignals();
+  const { signals } = useProfileSignals();
   const mainline = useMainlineStore();
   const toast = useToastStore();
 
@@ -461,39 +448,9 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     persist();
   }
 
-  function resolveChallenge(
-    kind: RogueNodeKind,
-    layer: number,
-    picks: readonly FrontierPick[],
-    cursor: { value: number },
-  ) {
-    if (kind === 'rest' || kind === 'chest') {
-      return { kcCode: null, challengeKind: null as ArenaLevelKind | null, difficulty: 0 };
-    }
-    // 全部挑战节点只消费后端权威前沿；聚焦章节 KC 少于地图节点时循环使用该真实排序，
-    // 不再静默换成前端默认 KC / 默认掌握度。
-    if (picks.length === 0) {
-      throw new Error('没有可用的画像学习前沿');
-    }
-    const pick = picks[cursor.value % picks.length];
-    cursor.value += 1;
-    if (!pick || !pick.kcCode || !Number.isFinite(pick.difficulty)) {
-      throw new Error('学习前沿数据不完整');
-    }
-    const kc = pick.kcCode;
-    let difficulty = computeLayeredDifficulty(pick.difficulty, layer);
-    const pool = NODE_KIND_POOLS[kind];
-    const challengeKind = (pool.length > 0
-      ? pool[Math.floor(Math.random() * pool.length)]
-      : 'dual_track') as ArenaLevelKind;
-    if (kind === 'elite') difficulty = Math.min(5, difficulty + 1);
-    if (kind === 'boss') difficulty = Math.min(5, Math.max(3, difficulty + 1));
-    return { kcCode: kc, challengeKind, difficulty };
-  }
-
   async function startRun(
     focus: number | null,
-    opts: { rng?: () => number; daily?: boolean } = {},
+    daily = false,
   ): Promise<void> {
     if (starting.value) return;
     persistenceGeneration += 1;
@@ -514,34 +471,25 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
         const existing = await fetchExpeditionRun();
         if (existing?.runId) await deleteExpeditionRun();
       }
-      // 后端同时读取 kc_mastery + learner_profile；失败时保持 idle 并明确提示，不用前端假数据造图。
-      const picks = await requestFrontierPicks({
-        focusChapter: focus,
-        count: 40,
-        ...(hasAnySignal.value ? { profileSignals: signals.value } : {}),
-      });
-      if (picks.length === 0) throw new Error('服务端未返回画像学习前沿');
-      const cursor = { value: 0 };
-      const map = generateRogueMap({
-        rng: opts.rng,
-        resolveChallenge: (kind, layer) => resolveChallenge(kind, layer, picks, cursor),
-      });
-      runId.value = null;
-      nodes.value = map.nodes;
-      layers.value = map.layers;
-      currentNodeId.value = null;
-      hp.value = EXPEDITION_MAX_HP;
-      maxHp.value = EXPEDITION_MAX_HP;
-      momentum.value = 0;
-      bestMomentum.value = 0;
-      score.value = 0;
-      verifiedScore.value = 0;
-      verifiedDepth.value = 0;
+      // 前沿和地图由服务端一次性签发，客户端不再决定本局的节点拓扑与挑战配置。
+      const started = await createExpeditionRun({ focusChapter: focus, isDaily: daily });
+      if (!started.runId) throw new Error('服务端未签发远征 run');
+      runId.value = started.runId;
+      nodes.value = started.nodes;
+      layers.value = started.layers;
+      currentNodeId.value = started.currentNodeId;
+      hp.value = started.hp;
+      maxHp.value = started.maxHp;
+      momentum.value = started.momentum;
+      bestMomentum.value = started.bestMomentum;
+      score.value = started.score;
+      verifiedScore.value = started.score;
+      verifiedDepth.value = started.verifiedDepth ?? 0;
       savedRunVerified.value = false;
-      relics.value = [];
-      history.value = [];
+      relics.value = started.relics;
+      history.value = started.history;
       bossPhase.value = 1;
-      isDaily.value = opts.daily ?? false;
+      isDaily.value = started.isDaily;
       summaryReported.value = false;
       scoreReported.value = false;
       challenge.clearPrefetch();
@@ -559,14 +507,13 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     }
   }
 
-  /** 每日挑战：当日一次，弱项 + 日期种子稳定地图。 */
+  /** 每日挑战：当日一次；地图种子与初始状态由服务端决定。 */
   async function startDailyRun(): Promise<void> {
     if (!dailyAvailable.value) {
       toast.show('今日挑战已完成，明天再来', 'info');
       return;
     }
-    const seed = Number(todayStr().replace(/-/g, ''));
-    await startRun(null, { rng: makeLcg(seed), daily: true });
+    await startRun(null, true);
   }
 
   function clearActive(): void {
@@ -614,7 +561,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
   }
 
   /** 拉取并进入某节点的判题（战斗/精英/抓bug/boss，以及事件选择后的挑战）。 */
-  async function beginChallenge(node: RogueNode): Promise<void> {
+  async function beginChallenge(node: RogueNode, difficultyBonus = 0): Promise<void> {
     const requestGeneration = ++challengeGeneration;
     activeNode.value = node;
     activeCode.value = '';
@@ -623,9 +570,12 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     elapsedSec.value = 0;
     phase.value = 'challenge';
     loading.value = true;
-    // 局内自适应：连胜抬难度、近期连败温和降（不改地图基准 node.difficulty，只影响本次出题/计分）。
+    // 局内自适应和事件加成只影响当前题，不改服务端签发的地图配置。
     const recentFailures = history.value.slice(0, 2).filter((h) => !h.passed).length;
-    activeDifficulty.value = computeRunDifficulty(node.difficulty, momentum.value, recentFailures);
+    activeDifficulty.value = Math.min(
+      5,
+      computeRunDifficulty(node.difficulty, momentum.value, recentFailures) + difficultyBonus,
+    );
     persist();
     try {
       const problem = await challenge.fetchProblem({
@@ -723,12 +673,11 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
       return;
     }
     if (choice === 'study') {
-      node.difficulty = Math.min(5, node.difficulty + 1);
       eventScoreMult.value = 1.5;
     } else {
       eventScoreMult.value = 1;
     }
-    await beginChallenge(node);
+    await beginChallenge(node, choice === 'study' ? 1 : 0);
   }
 
   function scoreFor(node: RogueNode): number {

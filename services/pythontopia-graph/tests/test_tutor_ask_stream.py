@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import AsyncIterator
 
@@ -9,6 +10,7 @@ import pytest
 
 from pythontopia_graph.llm.provider import LlmProvider, LlmResponse
 from pythontopia_graph.nodes.evidence_fetcher import RagHit, StaticEvidenceFetcher
+from pythontopia_graph.routes import tutor as tutor_route
 from pythontopia_graph.routes.tutor import tutor_ask_stream
 from pythontopia_graph.schemas.tutor import TutorAskRequest
 
@@ -121,6 +123,126 @@ async def test_ask_stream_runs_all_review_agents() -> None:
         phases = [t.get("phase") for t in traces if t["node"] == node]
         assert "start" in phases, f"{node} missing start"
         assert "finish" in phases, f"{node} missing finish"
+
+
+@pytest.mark.asyncio
+async def test_ask_stream_runs_answer_and_reviews_through_fixed_autogen_stages(monkeypatch) -> None:
+    seen: list[str] = []
+    original = tutor_route.run_autogen_tutor_workflow
+
+    async def observe_autogen(state, stages, **kwargs):
+        seen.extend(name for name, _handler in stages)
+        return await original(state, stages, **kwargs)
+
+    monkeypatch.setattr(tutor_route, "run_autogen_tutor_workflow", observe_autogen)
+    events = await _run("for 循环怎么用", ["PY43-KC-001"], "参考 [页 12]，for 循环可遍历列表。")
+
+    assert seen == ["TutorAgent", "grounding_critic", "hallucination_detector", "safety_critic"]
+    assert events[-1][0] == "result"
+
+
+@pytest.mark.asyncio
+async def test_ask_stream_keeps_image_payload_out_of_autogen_state(monkeypatch) -> None:
+    image = "data:image/png;base64,iVBORw0KGgo="
+    observed: list[dict] = []
+    original = tutor_route.run_autogen_tutor_workflow
+
+    async def observe_autogen(state, stages, **kwargs):
+        observed.append(state)
+        return await original(state, stages, **kwargs)
+
+    class ImageProvider(StreamStubProvider):
+        def __init__(self) -> None:
+            super().__init__("图中是一个列表。")
+            self.last_messages = None
+            self.last_kwargs = None
+
+        async def chat_stream(self, messages, **kwargs):  # type: ignore[override]
+            self.last_messages = messages
+            self.last_kwargs = kwargs
+            yield "图中是一个列表。"
+
+    provider = ImageProvider()
+    monkeypatch.setattr(tutor_route, "run_autogen_tutor_workflow", observe_autogen)
+    response = await tutor_ask_stream(
+        TutorAskRequest(user_id=1, question="请看图", images=[image]),
+        provider=provider,
+        evidence_fetcher=StaticEvidenceFetcher([]),
+    )
+    events = await _collect_sse(response)
+
+    assert events[-1][0] == "result"
+    assert observed and "images" not in observed[0]
+    assert image not in str(observed[0])
+    assert provider.last_messages[-1]["content"] == [
+        {"type": "text", "text": "请看图"},
+        {"type": "image_url", "image_url": {"url": image}},
+    ]
+    assert provider.last_kwargs["model_tier"] == "vision"
+
+
+@pytest.mark.asyncio
+async def test_ask_stream_disconnect_cancels_autogen_tutor_stage() -> None:
+    started = asyncio.Event()
+    cancelled = asyncio.Event()
+
+    class BlockingProvider(StreamStubProvider):
+        async def chat_stream(self, messages, **kwargs):  # type: ignore[override]
+            started.set()
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                cancelled.set()
+                raise
+            yield ""
+
+    response = await tutor_ask_stream(
+        TutorAskRequest(user_id=1, question="for 循环怎么用"),
+        provider=BlockingProvider(""),
+        evidence_fetcher=StaticEvidenceFetcher([]),
+    )
+    iterator = response.body_iterator
+    while not started.is_set():
+        await asyncio.wait_for(iterator.__anext__(), timeout=1)
+
+    await asyncio.wait_for(iterator.aclose(), timeout=1)
+    await asyncio.wait_for(cancelled.wait(), timeout=1)
+
+
+@pytest.mark.asyncio
+async def test_quiz_question_and_judgement_use_autogen_stages(monkeypatch) -> None:
+    seen: list[str] = []
+    original = tutor_route.run_autogen_tutor_call
+
+    async def observe_autogen(stage_name, call):
+        seen.append(stage_name)
+        return await original(stage_name, call)
+
+    monkeypatch.setattr(tutor_route, "run_autogen_tutor_call", observe_autogen)
+    provider = StreamStubProvider("")
+
+    ask_response = await tutor_ask_stream(
+        TutorAskRequest(user_id=1, question="for 循环", context="QUIZ_TURN_1"),
+        provider=provider,
+        evidence_fetcher=StaticEvidenceFetcher([]),
+    )
+    ask_events = await _collect_sse(ask_response)
+
+    judge_response = await tutor_ask_stream(
+        TutorAskRequest(
+            user_id=1,
+            question="for item in items",
+            context="QUIZ_JUDGE",
+            conversation_history=[{"role": "assistant", "content": "请补全 for 循环语法"}],
+        ),
+        provider=provider,
+        evidence_fetcher=StaticEvidenceFetcher([HIT]),
+    )
+    judge_events = await _collect_sse(judge_response)
+
+    assert seen == ["quiz_question", "quiz_judge"]
+    assert ask_events[-1][1]["quiz"]["phase"] == "ask"
+    assert judge_events[-1][1]["quiz"]["phase"] == "judge"
 
 
 @pytest.mark.asyncio

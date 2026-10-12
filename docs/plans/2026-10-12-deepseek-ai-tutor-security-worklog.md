@@ -2,6 +2,27 @@
 
 日期：2026-10-12 至 2026-10-13
 
+## 2026-10-13 远征服务端开局与 Web 接线
+
+- Web 新局改走 `POST /api/world/expedition/run`：后端读取权威学习前沿、生成兼容现有 Roguelike schema 的 10 层可达地图并初始化 HP/气势/遗物/历史；前端 store 只接收服务端快照。`PUT` 不能再创建新 run 或改写已签发地图拓扑/题目配置，活动 run id 和章节绑定校验保留。
+- API 契约补充 POST/PUT 语义；新增地图 DAG、前沿字段、角色/章节校验及 Web store/API 回归。后端定向 25 tests、前端定向 48 tests、TypeScript typecheck、定向 ESLint、8 个 Java 文件 Spotless 和 `git diff --check` 通过；PostgreSQL 集成 7 tests 通过，空库迁移到 V203。
+- 当前客户端范围只接 Web：Android 与 Windows 仍调用旧 PUT 开局，现会收到 `EXPEDITION_RUN_START_REQUIRED`；未改这些客户端。其远征开局需后续接入 POST 才兼容。`PUT` 仍允许客户端改节点进度、当前位置、HP、气势、遗物和历史；这些字段不参与正式判题 ledger/成绩，但移动合法性与每日次数还未服务端验证。
+- 按用户优先级未启动 Web 全栈、未请求 DeepSeek、未测远征性能。
+
+## 2026-10-13 管理用户角色筛选
+
+- 管理员用户列表原来只有文本搜索和账号状态筛选。新增角色下拉筛选，角色值沿用现有 `STUDENT` / `TEACHER` / `ADMIN`；Web API、ADMIN-only controller/service 与分页 repository 同步接收并应用角色条件，没有新增表或字段。
+- RED/GREEN：后端服务测试先因新角色参数缺失编译失败；Web API 测试确认参数未发出、页面测试确认角色控件缺失。实现后管理员服务定向 Maven 测试通过；前端 API/页面 5 tests、TypeScript typecheck、定向 ESLint 通过；Graph Tutor/AutoGen 定向 36 tests 与 Ruff 通过；`git diff --check` 通过。
+- 未启动 Web 全栈或真实 DeepSeek 请求；后续补充 PostgreSQL repository 集成测试，管理页端到端仍待联测。无尽远征性能照用户要求留待功能收尾后测。
+
+## 2026-10-13 Tutor AutoGen 主链替换
+
+- 常用 `/agents/tutor/ask/stream` 现在在既有 RAG 检索后，经固定顺序 AutoGen team 运行 `TutorAgent`、`grounding_critic`、`hallucination_detector`、`safety_critic`。回答阶段内保留原难题辩论和代码验证分支，SSE token 与终态字段不变；修订、图解、证据注、考考我出题/评卷及非流式 `TutorAgent.ask` 也经固定 handler 执行。
+- 图片只由回答阶段闭包传给 DeepSeek vision；AutoGen 状态和 checkpoint 不包含图片字段或字节。关闭 SSE 时取消运行中的 team 与 provider stage。
+- RED/GREEN：新增常用文本链路 AutoGen 固定阶段、图片不入状态且交给 vision、SSE 断连取消、非流式 `ask` 以及 quiz 出题/评卷路由测试；Tutor/AutoGen、修订和 orchestrator 定向 66 tests 通过，Graph 全量 `1801 passed, 1 skipped`，Ruff 全量通过。
+- strict mypy 定向扫描仍报 3 个既有类型错误（TutorAgent 证据摘要返回值、Tutor 路由的 FastAPI state provider）；本次改动代码在修正泛型状态推断后没有新增 mypy 错误。
+- 未启动 Web 全栈或发送真实 DeepSeek 请求；远征性能按用户顺序继续待测。
+
 ## 2026-10-13 功能优先补充
 
 - 画像访谈发送失败时回滚乐观用户消息并保留输入；完成画像失败时显示错误并保持当前页面。首页班级列表加载失败显示错误和重试，不再误示为尚未入班；学习推荐卡使用原生按钮支持键盘操作。教师重置加入码期间禁用按钮，避免重复生成。画像屋删除 `[占位]` 并说明现有访谈功能。
@@ -185,3 +206,23 @@
 - V202 为非空指纹建立 run 范围唯一索引；同局提交先锁定 run 行，再查同题指纹，因此新签发 ID 的重试只更新最高分/通过状态，不新建计分或学习证据。
 - 验证：`BossServiceTest` 32、`ExpeditionScoreServiceTest` 8、`ExpeditionRunPostgresIntegrationTest` 5，共 45 tests 通过；Testcontainers 空库迁移到 V202。后端全量运行 1240 tests，0 failures、7 errors：6 个 PostgreSQL 容器因宿主机随机端口 `address already in use` 未能启动；长周期班级模拟在全量运行中临时数据库连接中断，单独重跑通过。
 - V202 前活动局中既有 ledger 行的指纹保持 NULL，不对历史 JSON 做不可靠重算；若旧题从未重判且在升级后的同一旧 run 再次签发，仍有一次重复计分窗口。新 run 和新写入记录不受此限制。
+
+## 2026-10-13 补充：Tutor AutoGen 隐私与管理用户筛选
+
+- 将 `autogen_core` / `autogen_core.events` 日志级别设为 WARNING；安装版本的运行时源码显示 INFO 会输出完整消息内容。新增日志级别测试，先验证其在默认 root WARNING 下也会失败，再验证修复通过。
+- Tutor 终态投影和失败时将 AutoGen checkpoint 状态体清空为 `{}`；INTERRUPTED 保留恢复状态。V203 清理已有 COMPLETED/FAILED 行中的 checkpoint JSON，不删除卡片或业务投影。Testcontainers 集成验证续跑阶段仍保留状态、成功/失败终态清空，并将空库迁移到 V203。
+- 管理员用户页新增角色筛选，服务端分页 SQL 按真实 `users.role` 过滤；定向后端和 Web 测试通过，详见当天 changelog。
+- 当前验证：Graph Tutor/AutoGen 定向 50 tests、Ruff 通过；Tutor workflow PostgreSQL 集成 8 tests（先迁移到 V202 并播种旧终态文本，再应用 V203 验证清除）、远征 run/service 与 PostgreSQL 集成共 12 tests、管理员 repository PostgreSQL 集成与服务单测通过；后端变更文件 Spotless 检查通过；Web 用户管理/API 5 tests、类型检查与定向 ESLint 通过。
+- 尚未清理或检查生产运行日志；INTERRUPTED checkpoint 仍为续跑而保留，暂无过期清理策略。无尽远征的路线、体力、遗物、胜利状态仍由客户端快照驱动，题目尚未绑定可达节点，服务端权威动作状态机仍是 P1 未完成项。按用户要求暂不做远征性能测试。
+
+## 2026-10-13 补充：远征客户端终态拒绝
+
+- `/api/world/expedition/run` 当前仅接受 `map/event/challenge/reward` 续局阶段；直接 PUT `idle/cleared/over` 在触库前返回 400。GET 将升级前已有活动行中的其他 phase 归一为 `map`。写入和旧行读取 RED 回归均证明旧代码会接受终态，修复后 `ExpeditionRunServiceTest` 6 项与 Testcontainers `ExpeditionRunPostgresIntegrationTest` 6 项通过，空库迁移至 V203。
+- 这个小补丁只阻止客户端把终态写入可续局后端快照；它没有把节点拓扑、移动、体力、遗物和实际 Boss 通关迁到服务端。上述远征动作状态机、题目与可达节点绑定仍是 P1 未完成项，不据此宣称通关/分数伪造风险已完全修复。
+
+## 2026-10-13 本地 Web 启动回归
+
+- 本地全栈启动发现 `StaticCodeChecker` 有两个构造器但没有明确注入构造器，Spring 因而尝试调用无参构造并阻止后端启动。新增 Spring 容器装配回归，先复现 `No default constructor found`，再为配置构造器标记 `@Autowired`。
+- 修复后后端 `/healthz` 返回 200；Vite 5173 已有本项目进程运行，因此 `./dev.sh` 的前端启动阶段提示端口占用并退出，随后复用已运行的 Web 进程完成浏览器测试。
+- `StaticCodeCheckerTest` 15 tests passed；`deliveryClickRobustness.spec.ts` 的小镇 HUD、主线地图/学习往返、指南桌面/移动目录 3 项 Playwright passed。另以浏览器登录临时学生并从页面真实开局，确认服务端返回并渲染 10 层 / 29 节点地图；浏览器拦截 1 次 Boss 预取，未请求出题服务。
+- 本轮没有 DeepSeek 请求或远征性能测量。服务端远征节点动作、题目与可达节点绑定、权威 HP/奖励仍未完成；本地自动注册的临时 E2E 学生账号留在开发数据库中。

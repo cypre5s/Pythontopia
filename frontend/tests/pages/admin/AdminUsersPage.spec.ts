@@ -54,6 +54,20 @@ describe('AdminUsersPage', () => {
     expect(searchAdminUsers).toHaveBeenCalledTimes(2);
   });
 
+  it('filters the real user list by role', async () => {
+    const wrapper = mount(AdminUsersPage);
+    await flushPromises();
+
+    await wrapper.get('[data-testid="admin-users-role-filter"]').setValue('TEACHER');
+    await flushPromises();
+
+    expect(searchAdminUsers).toHaveBeenLastCalledWith({
+      page: 0,
+      size: 20,
+      role: 'TEACHER',
+    });
+  });
+
   it('does not offer the current administrator a self-disable action', async () => {
     vi.mocked(searchAdminUsers).mockResolvedValueOnce({
       content: [{

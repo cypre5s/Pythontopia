@@ -6,6 +6,7 @@ import {
   searchAdminUsers,
   setAdminUserStatus,
   type AdminUserDto,
+  type AdminUserRoleFilter,
   type AdminUserStatus,
   type AdminUserStatusFilter,
 } from '@/api/adminUsers';
@@ -19,6 +20,7 @@ const error = ref<string | null>(null);
 const searchInput = ref('');
 const searchTerm = ref('');
 const statusFilter = ref<AdminUserStatusFilter>('ALL');
+const roleFilter = ref<AdminUserRoleFilter>('ALL');
 const page = ref(0);
 const totalPages = ref(0);
 const totalElements = ref(0);
@@ -45,6 +47,7 @@ async function loadUsers(): Promise<void> {
       size: PAGE_SIZE,
       ...(searchTerm.value ? { q: searchTerm.value } : {}),
       ...(statusFilter.value === 'ALL' ? {} : { status: statusFilter.value }),
+      ...(roleFilter.value === 'ALL' ? {} : { role: roleFilter.value }),
     });
     let result = await readPage();
     const lastPage = Math.max(0, result.totalPages - 1);
@@ -155,6 +158,21 @@ onMounted(() => {
             <option value="ALL">全部状态</option>
             <option value="ACTIVE">正常</option>
             <option value="DISABLED">已停用</option>
+          </select>
+        </label>
+        <label class="admin-users__role-filter">
+          <span>用户角色</span>
+          <select
+            v-model="roleFilter"
+            aria-label="按用户角色筛选"
+            data-testid="admin-users-role-filter"
+            :disabled="loading"
+            @change="applyFilters"
+          >
+            <option value="ALL">全部角色</option>
+            <option value="STUDENT">学生</option>
+            <option value="TEACHER">教师</option>
+            <option value="ADMIN">管理员</option>
           </select>
         </label>
         <button
@@ -322,7 +340,8 @@ onMounted(() => {
 }
 
 .admin-users__search,
-.admin-users__status-filter {
+.admin-users__status-filter,
+.admin-users__role-filter {
   display: grid;
   gap: 5px;
   color: var(--admin-muted);
@@ -330,7 +349,8 @@ onMounted(() => {
 }
 
 .admin-users__search input,
-.admin-users__status-filter select {
+.admin-users__status-filter select,
+.admin-users__role-filter select {
   min-height: 36px;
   border: 1px solid var(--admin-border);
   border-radius: 8px;
@@ -380,6 +400,7 @@ onMounted(() => {
 .admin-users__button:focus-visible,
 .admin-users__search input:focus-visible,
 .admin-users__status-filter select:focus-visible,
+.admin-users__role-filter select:focus-visible,
 .admin-users__table-scroll:focus-visible {
   outline: 3px solid #93c5fd;
   outline-offset: 2px;

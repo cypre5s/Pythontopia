@@ -52,6 +52,8 @@ class HealthResponse(BaseModel):
 # tool_call 审计 INFO 日志会被整体吞掉（治理可观测性失效）。这里兜底配置 root：
 # 已有 handler 时 basicConfig 是 no-op，不会重复输出。
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+logging.getLogger("autogen_core").setLevel(logging.WARNING)
+logging.getLogger("autogen_core.events").setLevel(logging.WARNING)
 
 LOG = logging.getLogger(__name__)
 _TRUTHY = frozenset({"1", "true", "yes", "on"})

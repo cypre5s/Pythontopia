@@ -3,21 +3,20 @@ package com.pythontopia.world.boss.dto;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import java.util.List;
 import java.util.Map;
 
 /**
- * 无尽远征一局 run 的可持久化快照 DTO（前后端同构；前端 stores/rogueRun PersistShape +
- * api/expedition.ts ExpeditionRunSnapshot 的对端）。
+ * 无尽远征一局 run 的可持久化快照 DTO（前后端同构；前端 stores/rogueRun PersistShape + api/expedition.ts
+ * ExpeditionRunSnapshot 的对端）。
  *
- * <p>除服务端签发的 runId 和从判题记录计算的 score 外，其余过程字段仍由客户端提供，只用于续局展示/玩法；
- * 不得用于正式成绩、学习奖励或已通关认定。
+ * <p>服务端签发的 runId、章节绑定和地图拓扑/题目配置不可由快照改写。节点进度、HP、遗物和历史仍由客户端提供， 只用于续局展示/玩法；不得用于正式成绩、学习奖励或已通关认定。
  * verifiedDepth 同样只由服务端判题账本派生；请求中的值会被忽略。
  *
- * <p>nodes / history 用 {@code List<Map<String,Object>>} 透传前端 RogueNode[] / RogueHistoryEntry[]，
- * 后端不解释其内部结构（避免节点 schema 漂移时频繁改后端 DTO），仅整体存取于 {@code expedition_run}。
+ * <p>nodes 用 {@code List<Map<String,Object>>} 透传前端 RogueNode[]，后端比对其固定拓扑与题目字段；history 整体存取，
+ * 不用于成绩、奖励或通关事实来源。
  *
  * @param phase 阶段（idle/map/event/challenge/cleared/over；服务端仅持久化，challenge/event 续局回退由前端处理）
  * @param focusChapter 聚焦章节 1..7（null=全局自适应）
@@ -47,7 +46,9 @@ public record ExpeditionRunDto(
     @Size(max = 7) List<String> relics,
     boolean isDaily,
     @Size(max = 50) List<Map<String, Object>> history,
-    @Pattern(regexp = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+    @Pattern(
+            regexp =
+                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
         String runId,
     @Min(0) @Max(12) int verifiedDepth) {
 
@@ -68,8 +69,21 @@ public record ExpeditionRunDto(
       List<Map<String, Object>> history,
       String runId) {
     this(
-        phase, focusChapter, nodes, layers, currentNodeId, hp, maxHp, momentum, bestMomentum,
-        score, relics, isDaily, history, runId, 0);
+        phase,
+        focusChapter,
+        nodes,
+        layers,
+        currentNodeId,
+        hp,
+        maxHp,
+        momentum,
+        bestMomentum,
+        score,
+        relics,
+        isDaily,
+        history,
+        runId,
+        0);
   }
 
   public ExpeditionRunDto {

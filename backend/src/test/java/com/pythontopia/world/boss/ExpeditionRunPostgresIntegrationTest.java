@@ -7,7 +7,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.world.boss.dto.ExpeditionRunDto;
 import com.pythontopia.world.boss.dto.ExpeditionScoreSubmitDto;
+import com.pythontopia.world.boss.dto.FrontierPickDto;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeAll;
@@ -26,8 +29,7 @@ class ExpeditionRunPostgresIntegrationTest {
   @Container
   static final PostgreSQLContainer<?> POSTGRES =
       new PostgreSQLContainer<>(
-              DockerImageName.parse("pgvector/pgvector:pg16")
-                  .asCompatibleSubstituteFor("postgres"))
+              DockerImageName.parse("pgvector/pgvector:pg16").asCompatibleSubstituteFor("postgres"))
           .withDatabaseName("pythontopia")
           .withUsername("pytopia")
           .withPassword("pytopia");
@@ -49,7 +51,7 @@ class ExpeditionRunPostgresIntegrationTest {
   void serverOwnsRunIdentityAndSettlementState() {
     long userId = createStudent();
     ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());
-    ExpeditionRunDto initial = runs.save(userId, snapshot(null, 999_999));
+    ExpeditionRunDto initial = startRun(runs, userId, 1, false);
 
     assertThat(initial.runId()).isNotBlank();
     assertThat(initial.score()).isZero();
@@ -80,48 +82,80 @@ class ExpeditionRunPostgresIntegrationTest {
             + " VALUES (?, 1, 1, 'PY43-KC-002', 1, 'ready-problem', '{}'::jsonb, 'READY', 1, ?::uuid)",
         userId,
         initial.runId());
-    ExpeditionRunDto updated = runs.save(userId, snapshot(initial.runId(), 999_999));
+    ExpeditionRunDto updated = runs.save(userId, withScore(initial, 999_999));
     assertThat(updated.score()).isEqualTo(80);
 
-    new ExpeditionScoreService(jdbc)
-        .record(userId, new ExpeditionScoreSubmitDto(initial.runId()));
-    assertThat(jdbc.queryForObject(
-            "SELECT status FROM expedition_run WHERE user_id = ?", String.class, userId))
+    new ExpeditionScoreService(jdbc).record(userId, new ExpeditionScoreSubmitDto(initial.runId()));
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT status FROM expedition_run WHERE user_id = ?", String.class, userId))
         .isEqualTo("SETTLED");
-    assertThat(jdbc.queryForObject(
-            "SELECT score FROM expedition_score WHERE user_id = ? AND run_id = ?::uuid",
-            Integer.class,
-            userId,
-            initial.runId()))
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT score FROM expedition_score WHERE user_id = ? AND run_id = ?::uuid",
+                Integer.class,
+                userId,
+                initial.runId()))
         .isEqualTo(80);
-    assertThat(jdbc.queryForObject(
-            "SELECT COUNT(*) FROM pregenerated_problem WHERE user_id = ?"
-                + " AND expedition_run_id = ?::uuid AND status = 'FAILED'",
-            Integer.class,
-            userId,
-            initial.runId()))
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT COUNT(*) FROM pregenerated_problem WHERE user_id = ?"
+                    + " AND expedition_run_id = ?::uuid AND status = 'FAILED'",
+                Integer.class,
+                userId,
+                initial.runId()))
         .isEqualTo(2);
 
     new ExpeditionScoreService(jdbc)
         .recordVerifiedAttempt(
             userId, initial.runId(), "late-submission", "a".repeat(64), true, 100);
-    assertThat(jdbc.queryForObject(
-            "SELECT COUNT(*) FROM expedition_verified_attempt WHERE user_id = ? AND run_id = ?::uuid",
-            Integer.class,
-            userId,
-            initial.runId()))
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT COUNT(*) FROM expedition_verified_attempt WHERE user_id = ? AND run_id = ?::uuid",
+                Integer.class,
+                userId,
+                initial.runId()))
         .isEqualTo(1);
 
-    ExpeditionRunDto next = runs.save(userId, snapshot(null, 999_999));
+    ExpeditionRunDto next = startRun(runs, userId, 1, false);
     assertThat(next.runId()).isNotEqualTo(initial.runId());
     assertThat(next.score()).isZero();
+  }
+
+  @Test
+  void activeSnapshotCannotReturnAStoredClientTerminalPhase() {
+    long userId = createStudent();
+    ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());
+    ExpeditionRunDto active = startRun(runs, userId, 1, false);
+    jdbc.update(
+        "UPDATE expedition_run SET phase = 'cleared' WHERE user_id = ? AND run_id = ?::uuid",
+        userId,
+        active.runId());
+
+    assertThat(runs.findActive(userId).orElseThrow().phase()).isEqualTo("map");
+  }
+
+  @Test
+  void activeSnapshotCannotRewriteTheServerIssuedMap() {
+    long userId = createStudent();
+    ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());
+    ExpeditionRunDto active = startRun(runs, userId, 1, false);
+    List<Map<String, Object>> alteredNodes =
+        active.nodes().stream().<Map<String, Object>>map(HashMap::new).toList();
+    alteredNodes.getFirst().put("kcCode", "PY43-KC-065");
+
+    assertThatThrownBy(() -> runs.save(userId, withSnapshot(active, alteredNodes, 0)))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("地图配置");
+    assertThat(runs.findActive(userId).orElseThrow().nodes().getFirst().get("kcCode"))
+        .isEqualTo(active.nodes().getFirst().get("kcCode"));
   }
 
   @Test
   void expeditionLearningEvidenceStopsAfterFirstFailureThenFirstPass() {
     long userId = createStudent();
     ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());
-    ExpeditionRunDto active = runs.save(userId, snapshot(null, 0));
+    ExpeditionRunDto active = startRun(runs, userId, 1, false);
     ExpeditionScoreService scores = new ExpeditionScoreService(jdbc);
     String fingerprint = "b".repeat(64);
 
@@ -141,24 +175,30 @@ class ExpeditionRunPostgresIntegrationTest {
         scores.recordVerifiedAttempt(
             userId, active.runId(), "issued-problem", fingerprint, false, 0);
 
-    assertThat(firstFailure).isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(true, true));
-    assertThat(repeatedFailure).isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(true, false));
+    assertThat(firstFailure)
+        .isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(true, true));
+    assertThat(repeatedFailure)
+        .isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(true, false));
     assertThat(firstPass).isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(true, true));
-    assertThat(repeatedPass).isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(true, false));
-    assertThat(failureAfterPass).isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(true, false));
-    assertThat(jdbc.queryForObject(
-            "SELECT passed FROM expedition_verified_attempt WHERE user_id = ? AND run_id = ?::uuid"
-                + " AND problem_id = 'issued-problem'",
-            Boolean.class,
-            userId,
-            active.runId()))
+    assertThat(repeatedPass)
+        .isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(true, false));
+    assertThat(failureAfterPass)
+        .isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(true, false));
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT passed FROM expedition_verified_attempt WHERE user_id = ? AND run_id = ?::uuid"
+                    + " AND problem_id = 'issued-problem'",
+                Boolean.class,
+                userId,
+                active.runId()))
         .isTrue();
-    assertThat(jdbc.queryForObject(
-            "SELECT score FROM expedition_verified_attempt WHERE user_id = ? AND run_id = ?::uuid"
-                + " AND problem_id = 'issued-problem'",
-            Integer.class,
-            userId,
-            active.runId()))
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT score FROM expedition_verified_attempt WHERE user_id = ? AND run_id = ?::uuid"
+                    + " AND problem_id = 'issued-problem'",
+                Integer.class,
+                userId,
+                active.runId()))
         .isEqualTo(100);
   }
 
@@ -166,7 +206,7 @@ class ExpeditionRunPostgresIntegrationTest {
   void sameQuestionWithDifferentIssuedIdsUsesOneVerifiedLedgerEntry() {
     long userId = createStudent();
     ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());
-    ExpeditionRunDto active = runs.save(userId, snapshot(null, 0));
+    ExpeditionRunDto active = startRun(runs, userId, 1, false);
     ExpeditionScoreService scores = new ExpeditionScoreService(jdbc);
     String fingerprint = "a".repeat(64);
 
@@ -183,28 +223,33 @@ class ExpeditionRunPostgresIntegrationTest {
         scores.recordVerifiedAttempt(
             userId, active.runId(), "issued-problem-3", fingerprint, true, 100);
 
-    assertThat(firstFailure).isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(true, true));
+    assertThat(firstFailure)
+        .isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(true, true));
     assertThat(duplicateFailure)
         .isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(true, false));
     assertThat(firstPass).isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(true, true));
-    assertThat(duplicatePass).isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(true, false));
-    assertThat(jdbc.queryForObject(
-            "SELECT COUNT(*) FROM expedition_verified_attempt WHERE user_id = ? AND run_id = ?::uuid",
-            Integer.class,
-            userId,
-            active.runId()))
+    assertThat(duplicatePass)
+        .isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(true, false));
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT COUNT(*) FROM expedition_verified_attempt WHERE user_id = ? AND run_id = ?::uuid",
+                Integer.class,
+                userId,
+                active.runId()))
         .isEqualTo(1);
-    assertThat(jdbc.queryForObject(
-            "SELECT passed FROM expedition_verified_attempt WHERE user_id = ? AND run_id = ?::uuid",
-            Boolean.class,
-            userId,
-            active.runId()))
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT passed FROM expedition_verified_attempt WHERE user_id = ? AND run_id = ?::uuid",
+                Boolean.class,
+                userId,
+                active.runId()))
         .isTrue();
-    assertThat(jdbc.queryForObject(
-            "SELECT score FROM expedition_verified_attempt WHERE user_id = ? AND run_id = ?::uuid",
-            Integer.class,
-            userId,
-            active.runId()))
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT score FROM expedition_verified_attempt WHERE user_id = ? AND run_id = ?::uuid",
+                Integer.class,
+                userId,
+                active.runId()))
         .isEqualTo(100);
   }
 
@@ -212,11 +257,7 @@ class ExpeditionRunPostgresIntegrationTest {
   void globalDailyRunCanIssueProblemsFromAnyCourseChapter() {
     long userId = createStudent();
     ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());
-    ExpeditionRunDto daily =
-        runs.save(
-            userId,
-            new ExpeditionRunDto(
-                "map", null, List.of(), 10, null, 5, 5, 0, 0, 0, List.of(), true, List.of(), null));
+    ExpeditionRunDto daily = startRun(runs, userId, null, true);
 
     org.assertj.core.api.Assertions.assertThatNoException()
         .isThrownBy(() -> runs.validateProblemRequest(userId, daily.runId(), 1));
@@ -228,7 +269,7 @@ class ExpeditionRunPostgresIntegrationTest {
   void abandoningRunReleasesItsOutstandingPrefetchJobs() {
     long userId = createStudent();
     ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());
-    ExpeditionRunDto active = runs.save(userId, snapshot(null, 0));
+    ExpeditionRunDto active = startRun(runs, userId, 1, false);
     jdbc.update(
         "INSERT INTO pregenerated_problem"
             + " (user_id, chapter, stage, kc_code, difficulty, status, attempt_count, expedition_run_id)"
@@ -238,12 +279,13 @@ class ExpeditionRunPostgresIntegrationTest {
 
     runs.abandon(userId);
 
-    assertThat(jdbc.queryForObject(
-            "SELECT COUNT(*) FROM pregenerated_problem WHERE user_id = ?"
-                + " AND expedition_run_id = ?::uuid AND status IN ('PENDING', 'READY')",
-            Integer.class,
-            userId,
-            active.runId()))
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT COUNT(*) FROM pregenerated_problem WHERE user_id = ?"
+                    + " AND expedition_run_id = ?::uuid AND status IN ('PENDING', 'READY')",
+                Integer.class,
+                userId,
+                active.runId()))
         .isZero();
     assertThat(runs.findActive(userId)).isEmpty();
   }
@@ -263,5 +305,34 @@ class ExpeditionRunPostgresIntegrationTest {
   private static ExpeditionRunDto snapshot(String runId, int score, int chapter) {
     return new ExpeditionRunDto(
         "map", chapter, List.of(), 10, null, 5, 5, 0, 0, score, List.of(), false, List.of(), runId);
+  }
+
+  private static ExpeditionRunDto withScore(ExpeditionRunDto run, int score) {
+    return withSnapshot(run, run.nodes(), score);
+  }
+
+  private static ExpeditionRunDto withSnapshot(
+      ExpeditionRunDto run, List<Map<String, Object>> nodes, int score) {
+    return new ExpeditionRunDto(
+        run.phase(),
+        run.focusChapter(),
+        nodes,
+        run.layers(),
+        run.currentNodeId(),
+        run.hp(),
+        run.maxHp(),
+        run.momentum(),
+        run.bestMomentum(),
+        score,
+        run.relics(),
+        run.isDaily(),
+        run.history(),
+        run.runId());
+  }
+
+  private static ExpeditionRunDto startRun(
+      ExpeditionRunService runs, long userId, Integer focusChapter, boolean isDaily) {
+    return runs.start(
+        userId, focusChapter, isDaily, List.of(new FrontierPickDto("PY43-KC-001", 1, 2, "weak")));
   }
 }

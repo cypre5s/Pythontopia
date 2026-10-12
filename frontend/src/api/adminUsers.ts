@@ -3,6 +3,7 @@ import type { UserRole } from './dto/UserDto';
 
 export type AdminUserStatus = 'ACTIVE' | 'DISABLED';
 export type AdminUserStatusFilter = 'ALL' | AdminUserStatus;
+export type AdminUserRoleFilter = 'ALL' | UserRole;
 
 export interface AdminUserDto {
   id: number;
@@ -25,6 +26,7 @@ export interface AdminUserSearch {
   size: number;
   q?: string;
   status?: AdminUserStatus;
+  role?: UserRole;
 }
 
 export async function searchAdminUsers(search: AdminUserSearch): Promise<AdminUserPageDto> {
@@ -34,6 +36,7 @@ export async function searchAdminUsers(search: AdminUserSearch): Promise<AdminUs
     size: search.size,
     ...(query ? { q: query } : {}),
     ...(search.status ? { status: search.status } : {}),
+    ...(search.role ? { role: search.role } : {}),
   };
   const response = await http.get<AdminUserPageDto>('/api/admin/users', { params });
   return response.data;

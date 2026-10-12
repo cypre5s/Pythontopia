@@ -24,7 +24,7 @@ class AdminUserServiceTest {
   void nonAdminCannotListUsers() {
     CurrentUserPrincipal student = new CurrentUserPrincipal(2L, "student", Role.STUDENT);
 
-    assertThatThrownBy(() -> service.page(student, 0, 20, null, null))
+    assertThatThrownBy(() -> service.page(student, 0, 20, null, null, null))
         .isInstanceOf(BusinessException.class)
         .satisfies(
             exception -> {
@@ -41,10 +41,11 @@ class AdminUserServiceTest {
     CurrentUserPrincipal admin = new CurrentUserPrincipal(1L, "admin", Role.ADMIN);
     AdminUserDto user = new AdminUserDto(7L, "stu", "Student", Role.STUDENT, "ACTIVE");
     AdminUserPageDto expected = new AdminUserPageDto(List.of(user), 0, 20, 1, 1);
-    when(repository.page(0, 20, "stu", AdminUserStatus.ACTIVE)).thenReturn(expected);
+    when(repository.page(0, 20, "stu", AdminUserStatus.ACTIVE, Role.TEACHER)).thenReturn(expected);
 
-    assertThat(service.page(admin, 0, 20, " stu ", AdminUserStatus.ACTIVE)).isSameAs(expected);
-    verify(repository).page(0, 20, "stu", AdminUserStatus.ACTIVE);
+    assertThat(service.page(admin, 0, 20, " stu ", AdminUserStatus.ACTIVE, Role.TEACHER))
+        .isSameAs(expected);
+    verify(repository).page(0, 20, "stu", AdminUserStatus.ACTIVE, Role.TEACHER);
   }
 
   @Test

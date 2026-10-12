@@ -4,10 +4,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.InputStream;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 
 class StaticCodeCheckerTest {
 
   private final StaticCodeChecker checker = new StaticCodeChecker("python3");
+
+  @Test
+  void springUsesTheConfiguredConstructor() {
+    try (var context = new AnnotationConfigApplicationContext(StaticCodeChecker.class)) {
+      assertThat(context.getBean(StaticCodeChecker.class)).isNotNull();
+    }
+  }
 
   @Test
   void rejectsImportOs() {
@@ -52,8 +60,7 @@ class StaticCodeCheckerTest {
   @Test
   void rejectsOsSystemViaAlias() {
     // 即便 os 已通过别名导入也不放过 os.system 调用
-    StaticCodeChecker.CheckResult result =
-        checker.check("import os as _x\n_x.system('ls')");
+    StaticCodeChecker.CheckResult result = checker.check("import os as _x\n_x.system('ls')");
     assertThat(result.passed()).isFalse();
   }
 

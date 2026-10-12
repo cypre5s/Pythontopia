@@ -220,7 +220,8 @@ public class TutorWorkflowRepository {
         actionKey,
         projection.actionPayloadJson());
     jdbcTemplate.update(
-        "UPDATE tutor_workflow_autogen_checkpoint SET status = 'COMPLETED', updated_at = now()"
+        "UPDATE tutor_workflow_autogen_checkpoint SET status = 'COMPLETED',"
+            + " checkpoint = '{}'::jsonb, updated_at = now()"
             + " WHERE session_id = ? AND run_id = ? AND status = 'RUNNING'",
         sessionId,
         projection.runId());
@@ -322,8 +323,11 @@ public class TutorWorkflowRepository {
       throw new IllegalArgumentException("Unsupported AutoGen run status");
     }
     return jdbcTemplate.update(
-            "UPDATE tutor_workflow_autogen_checkpoint SET status = ?, updated_at = now()"
+            "UPDATE tutor_workflow_autogen_checkpoint SET status = ?,"
+                + " checkpoint = CASE WHEN ? = 'FAILED' THEN '{}'::jsonb ELSE checkpoint END,"
+                + " updated_at = now()"
                 + " WHERE session_id = ? AND run_id = ? AND status = 'RUNNING'",
+            status,
             status,
             sessionId,
             runId)
