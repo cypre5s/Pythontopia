@@ -1,7 +1,7 @@
 import pytest
 
 from pythontopia_graph.agents.profile_agent import ProfileAgent
-from pythontopia_graph.llm.provider import LlmResponse, LlmProvider, load_alethicode_env
+from pythontopia_graph.llm.provider import LlmResponse, LlmProvider
 from pythontopia_graph.schemas.profile import (
     KcIndexItem,
     ProfileAgentInput,
@@ -70,11 +70,3 @@ async def test_profile_agent_fails_fast_on_safety_failure() -> None:
     assert output.profile_draft is None
     assert output.safety_result.passed is False
     assert output.grounding_result.passed is False
-
-
-def test_load_alethicode_env_reads_existing_file_without_returning_secret_values() -> None:
-    loaded = load_alethicode_env("/home/cypress/Alethicode/backend/.env")
-
-    assert loaded.path.endswith("/home/cypress/Alethicode/backend/.env")
-    assert loaded.exists is True
-    assert loaded.loaded_keys >= 0

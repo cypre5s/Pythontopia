@@ -16,7 +16,6 @@ import pytest
 from pythontopia_graph.llm.provider import (
     DryRunProvider,
     OpenAiCompatProvider,
-    SparkProvider,
     _parse_chat_message,
     provider_supports_tool_calling,
 )
@@ -65,12 +64,9 @@ def _env(monkeypatch: pytest.MonkeyPatch) -> None:
         "http_proxy",
     ):
         monkeypatch.delenv(name, raising=False)
-    # 隔离 deploy/.env 与 Alethicode .env 注入，保证测试前提确定。
+    # 隔离 deploy/.env 注入，保证测试前提确定。
     monkeypatch.setattr(
         "pythontopia_graph.llm.provider.load_pythontopia_env", lambda *a, **k: None
-    )
-    monkeypatch.setattr(
-        "pythontopia_graph.llm.provider.load_alethicode_env", lambda *a, **k: None
     )
 
 
@@ -190,8 +186,6 @@ async def test_no_tools_still_forces_json_object(
 def test_capability_flags() -> None:
     assert provider_supports_tool_calling(OpenAiCompatProvider.__new__(OpenAiCompatProvider))
     assert provider_supports_tool_calling(DryRunProvider())
-    # Spark 构造需 env，用 __new__ 仅看类属性。
-    assert not provider_supports_tool_calling(SparkProvider.__new__(SparkProvider))
     assert not provider_supports_tool_calling(object())
 
 

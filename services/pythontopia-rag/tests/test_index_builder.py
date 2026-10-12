@@ -164,7 +164,7 @@ async def test_startup_degraded_embedder_is_surfaced_not_silent() -> None:
         primary=None,
         fallback=HashEmbedder(dim=dim),
         dim=dim,
-        name="zhipu+hash-fallback",
+        name="test-primary+hash-fallback",
         fallback_reason="ValueError: missing EMBEDDING_API_KEY",
     )
     result = await rebuild_index(

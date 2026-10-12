@@ -13,6 +13,7 @@ import com.pythontopia.learner.profile.service.PassiveProfileService;
 import com.pythontopia.learner.profile.service.ProfileService;
 import jakarta.validation.Valid;
 import java.util.List;
+import java.util.Set;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,6 +27,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/learner/profile")
 public class ProfileController {
+
+  private static final Set<String> STUDENT_COGNITIVE_STYLE_TAGS =
+      Set.of("visual", "logical", "trial");
 
   private final ProfileService profileService;
   private final PassiveProfileService passiveProfileService;
@@ -59,8 +63,8 @@ public class ProfileController {
   /**
    * 学生 / 教师对单个维度的直写（自评）接口，只作用于调用者本人的画像。
    *
-   * <p>学生（STUDENT）只能直写 {@link PassiveProfileService#SELF_EDITABLE_DIMENSIONS} 内的主观维度；
-   * 教师（TEACHER）/ 管理员（ADMIN）可直写自身画像的全部 8 维。
+   * <p>学生（STUDENT）只能直写 {@link PassiveProfileService#SELF_EDITABLE_DIMENSIONS} 内的主观维度； 教师（TEACHER）/
+   * 管理员（ADMIN）可直写自身画像的全部 8 维。
    */
   @PutMapping("/dimensions/{dimensionKey}")
   DimensionUpdateResult selfUpdate(
@@ -78,7 +82,26 @@ public class ProfileController {
       throw new BusinessException(
           HttpStatus.FORBIDDEN,
           "PROFILE_DIMENSION_NOT_SELF_EDITABLE",
-          "Students can only self-update dimensions: " + PassiveProfileService.SELF_EDITABLE_DIMENSIONS);
+          "Students can only self-update dimensions: "
+              + PassiveProfileService.SELF_EDITABLE_DIMENSIONS);
+    }
+    if (!privileged && request.metadata() != null && !request.metadata().isEmpty()) {
+      throw new BusinessException(
+          HttpStatus.BAD_REQUEST,
+          "PROFILE_SELF_UPDATE_METADATA_NOT_ALLOWED",
+          "Students cannot set profile metadata");
+    }
+    List<String> tags = request.tagsAdd();
+    if (!privileged
+        && tags != null
+        && !tags.isEmpty()
+        && (!dimensionKey.equals("cognitive_style")
+            || tags.stream()
+                .anyMatch(tag -> tag == null || !STUDENT_COGNITIVE_STYLE_TAGS.contains(tag)))) {
+      throw new BusinessException(
+          HttpStatus.BAD_REQUEST,
+          "PROFILE_SELF_UPDATE_TAG_NOT_ALLOWED",
+          "Students can only choose a supported cognitive style tag");
     }
     return passiveProfileService.applyDimensionUpdate(
         user.userId(), dimensionKey, request.toDelta("INTERVIEW"));

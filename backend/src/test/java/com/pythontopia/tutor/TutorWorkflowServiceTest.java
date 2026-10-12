@@ -608,6 +608,31 @@ class TutorWorkflowServiceTest {
         .isEqualTo(projection.getAllValues().get(1).runId());
   }
 
+  @Test
+  void projectionFailurePropagatesToSseRelay() {
+    AtomicReference<Consumer<String>> onResult = new AtomicReference<>();
+    org.mockito.Mockito.doAnswer(
+            invocation -> {
+              onResult.set(invocation.getArgument(3));
+              return null;
+            })
+        .when(graphClient)
+        .runStream(any(), any(), any(), any());
+    org.mockito.Mockito.doThrow(new IllegalStateException("database unavailable"))
+        .when(repository)
+        .persistRunProjection(eq(session.id()), any(TutorWorkflowRepository.RunProjection.class));
+
+    service.run(USER, new TutorWorkflowRunRequest(PROBLEM, "READING", Map.of()));
+
+    assertThatThrownBy(
+            () ->
+                onResult
+                    .get()
+                    .accept("{\"result\":{\"event\":\"READING\",\"phase\":\"READING\",\"seq\":1}}"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("Failed to persist tutor workflow projection");
+  }
+
   private TutorWorkflowRepository.RunProjection capturedProjection() {
     ArgumentCaptor<TutorWorkflowRepository.RunProjection> projection =
         ArgumentCaptor.forClass(TutorWorkflowRepository.RunProjection.class);

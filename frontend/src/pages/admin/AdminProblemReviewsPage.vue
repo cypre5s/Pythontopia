@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, ref } from 'vue';
 import { useToastStore } from '@stores/toast';
 import {
   decideProblemReview,
@@ -32,6 +32,9 @@ const pendingDecision = ref<FinalDecision | null>(null);
 const decisionReason = ref('');
 const decisionError = ref<string | null>(null);
 const deciding = ref(false);
+const reviewPage = ref<HTMLElement | null>(null);
+const decisionDialog = ref<HTMLDialogElement | null>(null);
+const decisionTrigger = ref<HTMLButtonElement | null>(null);
 
 const selectedEntry = computed(
   () => entries.value.find((entry) => entry.id === selectedId.value) ?? null,
@@ -115,18 +118,32 @@ function movePage(delta: number): void {
   void loadQueue();
 }
 
-function openDecision(decision: FinalDecision): void {
+function openDecision(decision: FinalDecision, event: MouseEvent): void {
   if (!selectedEntry.value || selectedEntry.value.decision !== 'PENDING' || deciding.value) return;
+  decisionTrigger.value = event.currentTarget as HTMLButtonElement;
   pendingDecision.value = decision;
   decisionReason.value = '';
   decisionError.value = null;
+  void nextTick(() => {
+    decisionDialog.value?.showModal();
+    decisionDialog.value?.querySelector('textarea')?.focus();
+  });
 }
 
 function closeDecision(): void {
   if (deciding.value) return;
+  dismissDecision();
+}
+
+function dismissDecision(restoreTrigger = true): void {
+  decisionDialog.value?.close();
   pendingDecision.value = null;
   decisionReason.value = '';
   decisionError.value = null;
+  void nextTick(() => {
+    if (restoreTrigger && decisionTrigger.value?.isConnected) decisionTrigger.value.focus();
+    else reviewPage.value?.focus();
+  });
 }
 
 async function submitDecision(): Promise<void> {
@@ -148,8 +165,7 @@ async function submitDecision(): Promise<void> {
       version: entry.version,
     });
     entries.value = entries.value.map((item) => item.id === updated.id ? updated : item);
-    pendingDecision.value = null;
-    decisionReason.value = '';
+    dismissDecision(false);
     toast.show(decision === 'APPROVED' ? '题目审核已通过。' : '题目已驳回，审核记录已保存。', 'success');
     await loadQueue();
   } catch (cause) {
@@ -167,7 +183,9 @@ onMounted(() => {
 
 <template>
   <section
+    ref="reviewPage"
     class="admin-reviews"
+    tabindex="-1"
     data-testid="admin-problem-reviews"
   >
     <AdminPanel
@@ -498,14 +516,14 @@ onMounted(() => {
             <button
               class="review-decision review-decision--approve"
               type="button"
-              @click="openDecision('APPROVED')"
+              @click="openDecision('APPROVED', $event)"
             >
               通过并发布
             </button>
             <button
               class="review-decision review-decision--reject"
               type="button"
-              @click="openDecision('REJECTED')"
+              @click="openDecision('REJECTED', $event)"
             >
               驳回并留档
             </button>
@@ -514,59 +532,55 @@ onMounted(() => {
       </div>
     </AdminPanel>
 
-    <div
+    <dialog
       v-if="pendingDecision"
-      class="review-dialog-backdrop"
+      ref="decisionDialog"
+      class="review-dialog"
+      aria-labelledby="review-dialog-title"
+      @cancel.prevent="closeDecision"
       @click.self="closeDecision"
     >
-      <section
-        class="review-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="review-dialog-title"
+      <h2 id="review-dialog-title">
+        {{ pendingDecision === 'APPROVED' ? '确认通过题目' : '确认驳回题目' }}
+      </h2>
+      <p>审核决定会写入后端题库和审计记录，请填写本次审核意见。</p>
+      <label for="review-decision-reason">审核意见</label>
+      <textarea
+        id="review-decision-reason"
+        v-model="decisionReason"
+        rows="4"
+        maxlength="1000"
+        :disabled="deciding"
+        data-testid="admin-review-reason"
+      />
+      <p
+        v-if="decisionError"
+        class="review-dialog__error"
+        role="alert"
       >
-        <h2 id="review-dialog-title">
-          {{ pendingDecision === 'APPROVED' ? '确认通过题目' : '确认驳回题目' }}
-        </h2>
-        <p>审核决定会写入后端题库和审计记录，请填写本次审核意见。</p>
-        <label for="review-decision-reason">审核意见</label>
-        <textarea
-          id="review-decision-reason"
-          v-model="decisionReason"
-          rows="4"
-          maxlength="1000"
+        {{ decisionError }}
+      </p>
+      <div class="review-dialog__actions">
+        <button
+          class="admin-button"
+          type="button"
           :disabled="deciding"
-          data-testid="admin-review-reason"
-        />
-        <p
-          v-if="decisionError"
-          class="review-dialog__error"
-          role="alert"
+          @click="closeDecision"
         >
-          {{ decisionError }}
-        </p>
-        <div class="review-dialog__actions">
-          <button
-            class="admin-button"
-            type="button"
-            :disabled="deciding"
-            @click="closeDecision"
-          >
-            取消
-          </button>
-          <button
-            class="review-decision"
-            :class="pendingDecision === 'APPROVED' ? 'review-decision--approve' : 'review-decision--reject'"
-            type="button"
-            :disabled="deciding"
-            data-testid="admin-review-confirm"
-            @click="submitDecision"
-          >
-            {{ deciding ? '正在提交…' : '确认提交' }}
-          </button>
-        </div>
-      </section>
-    </div>
+          取消
+        </button>
+        <button
+          class="review-decision"
+          :class="pendingDecision === 'APPROVED' ? 'review-decision--approve' : 'review-decision--reject'"
+          type="button"
+          :disabled="deciding"
+          data-testid="admin-review-confirm"
+          @click="submitDecision"
+        >
+          {{ deciding ? '正在提交…' : '确认提交' }}
+        </button>
+      </div>
+    </dialog>
   </section>
 </template>
 
@@ -950,18 +964,17 @@ onMounted(() => {
   color: #991b1b;
 }
 
-.review-dialog-backdrop {
-  position: fixed;
-  z-index: 1000;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  padding: 18px;
+.review-dialog::backdrop {
   background: rgb(15 23 42 / 42%);
 }
 
 .review-dialog {
+  position: fixed;
+  z-index: 1000;
   width: min(480px, 100%);
+  max-height: calc(100dvh - 36px);
+  margin: auto;
+  overflow: auto;
   padding: 22px;
   border: 1px solid #dbe3ef;
   border-radius: 12px;

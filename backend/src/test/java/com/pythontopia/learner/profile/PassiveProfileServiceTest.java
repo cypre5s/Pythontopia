@@ -25,6 +25,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.springframework.http.HttpStatus;
 
 class PassiveProfileServiceTest {
@@ -57,6 +58,18 @@ class PassiveProfileServiceTest {
     verify(profileRepository).saveDimensions(eq(7L), captor.capture());
     JsonNode persisted = captor.getValue();
     assertThat(persisted.path("practical_ability").path("score").asDouble()).isEqualTo(1.0);
+  }
+
+  @Test
+  void createsProfileRowBeforeTakingTheDimensionWriteLock() {
+    when(profileRepository.findDimensionsForUpdate(7L)).thenReturn(Optional.empty());
+
+    service.applyDimensionUpdate(
+        7L, "knowledge_base", DimensionDelta.ofScore(0.1, "PRACTICE_PASS"));
+
+    InOrder order = org.mockito.Mockito.inOrder(profileRepository);
+    order.verify(profileRepository).ensureDefaultProfile(7L);
+    order.verify(profileRepository).findDimensionsForUpdate(7L);
   }
 
   @Test

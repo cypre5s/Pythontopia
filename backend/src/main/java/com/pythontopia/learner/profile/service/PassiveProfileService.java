@@ -133,7 +133,8 @@ public class PassiveProfileService {
           HttpStatus.BAD_REQUEST, "PROFILE_DELTA_REQUIRED", "Dimension delta is required");
     }
 
-    // 写路径统一走 FOR UPDATE：整块 JSONB 的 read-modify-write 必须在行锁保护下串行，否则并发事件互相覆盖。
+    // FOR UPDATE 不会锁住尚不存在的行，先并发安全地补建默认 profile，再串行读改写整块 JSONB。
+    profileRepository.ensureDefaultProfile(userId);
     JsonNode existing = profileRepository.findDimensionsForUpdate(userId).orElse(null);
     ObjectNode dimensionsObj;
     if (existing instanceof ObjectNode obj) {

@@ -1,6 +1,17 @@
 # DeepSeek 导学安全与数据边界工作日志
 
-日期：2026-10-12
+日期：2026-10-12 至 2026-10-13
+
+## 2026-10-13 后续功能收尾
+
+- Graph `ChatEventData` 改为拒绝未知字段；图片继续只通过有 owner/session 校验的附件 ID 传输。新增嵌套图片载荷绕过回归，先确认 RED，再修复为 GREEN。
+- Tutor SSE 将终态投影移到结果事件转发之前；Java 投影异常会通过错误终止传给调用方，不再被吞掉并呈现为成功。新增服务层传播和 Graph 中继顺序测试，均完成 RED/GREEN。
+- 学生画像自评接口拒绝非空 metadata 和自由文本 tag；`cognitive_style` 只接受画像页已有的 `visual`、`logical`、`trial` 选项，教师/管理员路径保持原行为。控制器回归测试先有 3 项按预期失败，改动后 4 项控制器测试及 3 项 DTO 校验测试通过。
+- 修复无聚焦章节的全局/每日 run 签题时误拒合法章节；固定章节 run 仍拒绝换章。排行榜将账本 `verifiedDepth` 标为“通过题数”，不再暗示地图层数。
+- Alethicode 对照仅做只读核验：`/home/cypress/Alethicode` 最新相关提交仍为 `d96f609`（2026-05-17），AutoGen Tutor/checkpoint 实现处于 dirty/untracked 工作树；对应 Codex rollout `01a12f26-6bab-7371-8763-06f922c1b13b`（10/12）记录文字实跑与合成图片调用。Alethicode 保存原生 AutoGen team checkpoint 并处理恢复/取消；Pythontopia 采用固定阶段 AutoGen + Java 纯文本投影，可在事件间从 DB 继续，但不支持同一中断阶段原位恢复。没有从 Alethicode 复制脏工作树文件。
+- 验证：Graph 全量 `1769 passed, 1 skipped`，Ruff 通过；RAG 全量 `157 passed, 2 skipped`；后端画像/Twin/Tutor/远征/审核定向 14 类共 124 tests passed，Testcontainers 空库迁移到 V198；Web Vitest `251 files / 2461 tests` 通过、TypeScript 类型检查与 Vite production build 通过，ESLint 0 errors / 131 warnings。
+- 未启动 Web 全栈 / Playwright，未发起真实 DeepSeek 请求；按用户要求，远征性能测量最后做。`deploy/.env` 中 API key 仅以布尔值确认已配置，秘密未输出且扫描未在项目文件发现明文。对话中暴露过的 key 应轮换。
+- 未解决：远征地图节点、HP、遗物和 phase 仍是客户端快照；判题 ledger 保护排行榜得分和通过题数，但没有服务端地图动作状态机。重复提交缺稳定 submission ID，可能重复增加 mastery/Twin 证据。媒体播放目前只在 Lecture 页会话内标记，不进入 Twin；Mem0/Zep 如被显式配置仍会访问外部记忆服务。
 
 ## 实施
 
@@ -38,6 +49,15 @@
 - AutoGen CHAT 把图片作为 OpenAI-compatible image parts 交给 DeepSeek vision tier；Graph 复用 Tutor 的媒体类型、真实签名、base64、5 MiB 与最多 3 张校验。Java 只持久化问题文本，图片不进入历史卡片或对话记录；回复仍为文本。
 - RED/GREEN：Graph Tutor 图片/工作流 schema 与 SSE 测试 23 passed；Web 三个导师面板回归 12 passed；Vue 类型检查、定向 Ruff、`git diff --check` 通过。定向 ESLint 0 errors，保留 AutoGen 面板原有模板格式 warnings。
 - 按用户指示先完成功能，不启动本地全栈性能测试、不调用真实 DeepSeek API；浏览器真实模型联测和远征 P50/P95 等指标继续待测。
+
+## 2026-10-13 补充：provider 与访谈写入边界
+
+- 删除可单独构造并向任意地址发请求的 Spark provider/export；移除 Graph 测试读取 Alethicode `.env` 的 helper。DeepSeek 项目配置优先于通用 `OPENAI_*` / `LLM_*` 别名。
+- 删除可直接请求智谱 embedding API 的 RAG provider；选择器只接受本地 hash/BGE，并继续拒绝讯飞/智谱配置名。
+- 画像行锁前确保默认画像行存在，避免首轮并发维度事件因 `FOR UPDATE` 锁空集而整块 JSONB 丢更新。
+- 访谈提交通过 `status = 'OPEN'` 条件更新抢占一次性完成权；事务落库移到独立 `ProfileDraftService`，避免 `ProfileService` 自调用绕过 Spring 事务代理；同事务内写 legacy profile、八维镜像和 revision，重放不重复覆盖。已完成/已中止的访谈不再接收新 turn，也不会被后续失败回调改成 ABORTED。
+- 并发开启访谈通过 UPSERT 返回唯一 OPEN 会话；V198 将历史重复会话归档为 ABORTED，并建立每用户唯一 OPEN 会话索引。
+- 验证：后端画像与 Twin 定向 5 类 / 48 tests；空库迁移至 V198；Graph 全量 1768 passed / 1 skipped、RAG 全量 157 passed / 2 skipped。未运行 Maven 全量、真实 DeepSeek、全栈浏览器或远征性能测试；性能指标仍待实测。
 
 ## Graph 导师代码验证执行边界修复（2026-10-12）
 

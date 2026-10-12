@@ -8,10 +8,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.learner.event.LearningEventLogRepository;
 import com.pythontopia.learner.mastery.MasteryRepository;
 import com.pythontopia.learner.memory.MemoryRetrievalService;
+import com.pythontopia.learner.profile.repository.ProfileRepository;
 import com.pythontopia.learner.reflection.LearnerInsightRepository;
 import com.pythontopia.learner.twin.dto.WeeklyReportDto;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.UUID;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.MigrationVersion;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -35,6 +41,9 @@ class WeeklyReportServicePostgresIntegrationTest {
           .withPassword("pytopia");
 
   private static JdbcTemplate jdbc;
+  private static int migratedOpenInterviewCount;
+  private static int migratedAbortedInterviewCount;
+  private static int openInterviewIndexCount;
   private WeeklyReportService service;
 
   @BeforeAll
@@ -44,8 +53,35 @@ class WeeklyReportServicePostgresIntegrationTest {
     dataSource.setUrl(POSTGRES.getJdbcUrl());
     dataSource.setUsername(POSTGRES.getUsername());
     dataSource.setPassword(POSTGRES.getPassword());
-    Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").load().migrate();
     jdbc = new JdbcTemplate((DataSource) dataSource);
+    Flyway.configure()
+        .dataSource(dataSource)
+        .locations("classpath:db/migration")
+        .target(MigrationVersion.fromVersion("197"))
+        .load()
+        .migrate();
+    long duplicateOwner = insertMigrationUser();
+    jdbc.update(
+        """
+        INSERT INTO profile_interview (user_id, session_id, status, started_at)
+        VALUES (?, ?, 'OPEN', now() - interval '1 day'), (?, ?, 'OPEN', now())
+        """,
+        duplicateOwner,
+        UUID.randomUUID(),
+        duplicateOwner,
+        UUID.randomUUID());
+    Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").load().migrate();
+    migratedOpenInterviewCount = jdbc.queryForObject(
+        "SELECT COUNT(*) FROM profile_interview WHERE user_id = ? AND status = 'OPEN'",
+        Integer.class,
+        duplicateOwner);
+    migratedAbortedInterviewCount = jdbc.queryForObject(
+        "SELECT COUNT(*) FROM profile_interview WHERE user_id = ? AND status = 'ABORTED'",
+        Integer.class,
+        duplicateOwner);
+    openInterviewIndexCount = jdbc.queryForObject(
+        "SELECT COUNT(*) FROM pg_indexes WHERE schemaname = 'public' AND tablename = 'profile_interview' AND indexname = 'uq_profile_interview_one_open_per_user'",
+        Integer.class);
   }
 
   @BeforeEach
@@ -115,6 +151,51 @@ class WeeklyReportServicePostgresIntegrationTest {
               assertThat(delta.evidenceSources()).containsExactly("PRACTICE_PASS");
               assertThat(delta.currentScore()).isEqualTo(0.700);
             });
+  }
+
+  @Test
+  void concurrentInterviewStartsResumeTheSameOpenSession() throws Exception {
+    long userId = insertUser("concurrent-interview-owner");
+    ProfileRepository repository = new ProfileRepository(jdbc, new ObjectMapper());
+    CountDownLatch start = new CountDownLatch(1);
+
+    try (var executor = Executors.newFixedThreadPool(2)) {
+      var first = executor.submit(() -> {
+        start.await();
+        return repository.createInterview(userId);
+      });
+      var second = executor.submit(() -> {
+        start.await();
+        return repository.createInterview(userId);
+      });
+      start.countDown();
+
+      assertThat(first.get(10, TimeUnit.SECONDS).interviewSessionId())
+          .isEqualTo(second.get(10, TimeUnit.SECONDS).interviewSessionId());
+    }
+
+    assertThat(jdbc.queryForObject(
+            "SELECT COUNT(*) FROM profile_interview WHERE user_id = ? AND status = 'OPEN'",
+            Integer.class,
+            userId))
+        .isEqualTo(1);
+  }
+
+  @Test
+  void migrationClosesOlderDuplicateOpenInterviewsBeforeAddingTheUniqueIndex() {
+    assertThat(migratedOpenInterviewCount).isEqualTo(1);
+    assertThat(migratedAbortedInterviewCount).isEqualTo(1);
+    assertThat(openInterviewIndexCount).isEqualTo(1);
+  }
+
+  private static long insertMigrationUser() {
+    return jdbc.queryForObject(
+        """
+        INSERT INTO users(username, display_name, password_hash, role)
+        VALUES ('duplicate-interview-migration', 'Migration user', 'test-hash', 'STUDENT')
+        RETURNING id
+        """,
+        Long.class);
   }
 
   private long insertUser(String username) {

@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-10-13 — 写入一致性、DeepSeek 配置与管理交互
+
+- 画像首次写入先并发安全地补建默认行，再执行 JSONB 行锁读改写；访谈草稿事务移至独立服务，避免导师回合内部调用绕过 Spring 事务代理；完成权只领取 OPEN 状态，重复终态不再覆盖画像。
+- 访谈并发启动通过 UPSERT 复用同一 OPEN 会话；V198 将历史重复 OPEN 会话归档为 ABORTED，并建立每用户唯一 OPEN 会话索引。
+- 项目专用 `PYT_OPENAI_*` 配置优先于通用别名；移除可直接请求讯飞 Spark 的 provider，以及测试中读取 Alethicode `.env` 的遗留 helper。
+- 删除可直接请求智谱的 RAG embedder；运行时只允许本地 hash/BGE，拒绝智谱/讯飞选择值。
+- 审核确认框改用原生 `<dialog>`，支持平台焦点隔离与 Escape 关闭；取消时回焦到触发按钮，提交后焦点落回审核页。
+- AutoGen CHAT 拒绝附件 ID、文本和服务端引用以外的未知字段，避免将图片数据塞入额外字段绕过私有附件传输。
+- Tutor SSE 先落库再发送成功终态；投影写入失败时终止为错误，避免前端已显示成功而跨会话状态未保存。
+- 学生画像自评拒绝任意 metadata 与自由 tag；认知风格只允许画像页已有的 `visual`、`logical`、`trial` 三个选项。
+- 修复全局/每日远征 `focusChapter=null` 时有效章节请求被误拒；聚焦 run 仍锁定原章节。排行榜把 `verifiedDepth` 明确显示为“通过题数”。
+- 首阶段验证：后端画像与 Twin 定向 48 tests 通过，空库迁移至 V198；Graph 全量 1768 passed / 1 skipped，RAG 全量 157 passed / 2 skipped；审核页 7 tests、前端类型检查与定向 ESLint 通过。
+- 当前复验：后端画像/Twin/Tutor/远征/审核定向 14 类 / 124 tests，Graph 1769 passed / 1 skipped，RAG 157 passed / 2 skipped，Web Vitest 251 files / 2461 tests；TypeScript 与生产构建通过。ESLint 0 errors / 131 warnings。
+- 未启动本地全栈、未发真实 DeepSeek 请求或无尽远征性能测试；这些性能指标仍待测。
+
 ## 2026-10-12 — 导学计划恢复与上下文引用
 
 - Tutor 工作流增加计划推荐、开始、响应、暂停/恢复、跳过、接管和重定向事件；计划控制携带 revision，拒绝过期状态操作，并在刷新或 Graph 重启后恢复计划与纯文本对话历史。

@@ -261,7 +261,7 @@ async def test_index_status_exposes_embedding_degradation() -> None:
         primary=None,
         fallback=HashEmbedder(dim=dim),
         dim=dim,
-        name="zhipu-embedding-3+hash-fallback",
+        name="test-primary+hash-fallback",
         fallback_reason="ValueError: missing EMBEDDING_API_KEY",
     )
     await rebuild_index(

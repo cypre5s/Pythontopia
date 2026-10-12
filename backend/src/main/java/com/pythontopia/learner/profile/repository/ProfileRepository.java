@@ -56,20 +56,29 @@ public class ProfileRepository {
 
   public ProfileInterviewStartResponse createInterview(Long userId) {
     UUID sessionId = UUID.randomUUID();
-    jdbcTemplate.update(
-        """
-        INSERT INTO profile_interview (user_id, session_id, status)
-        VALUES (?, ?, 'OPEN')
-        """,
-        userId,
-        sessionId);
-    return new ProfileInterviewStartResponse(sessionId.toString(), "OPEN", List.of(), null);
+    return jdbcTemplate
+        .query(
+            """
+            INSERT INTO profile_interview (user_id, session_id, status)
+            VALUES (?, ?, 'OPEN')
+            ON CONFLICT (user_id) WHERE status = 'OPEN'
+            DO UPDATE SET session_id = profile_interview.session_id
+            RETURNING session_id::text, status
+            """,
+            (rs, rowNum) ->
+                new ProfileInterviewStartResponse(
+                    rs.getString("session_id"), rs.getString("status"), List.of(), null),
+            userId,
+            sessionId)
+        .stream()
+        .findFirst()
+        .orElseThrow(() -> new IllegalStateException("Failed to create or resume profile interview"));
   }
 
   public boolean ownsInterview(Long userId, String sessionId) {
     Integer count =
         jdbcTemplate.queryForObject(
-            "SELECT COUNT(*) FROM profile_interview WHERE user_id = ? AND session_id = ?::uuid",
+            "SELECT COUNT(*) FROM profile_interview WHERE user_id = ? AND session_id = ?::uuid AND status = 'OPEN'",
             Integer.class,
             userId,
             sessionId);
@@ -149,15 +158,15 @@ public class ProfileRepository {
         draft.narrativeSummary());
   }
 
-  public void completeInterview(Long userId, String sessionId) {
-    jdbcTemplate.update(
+  public boolean completeInterview(Long userId, String sessionId) {
+    return jdbcTemplate.update(
         """
         UPDATE profile_interview
         SET status = 'COMPLETED', completed_at = now()
-        WHERE user_id = ? AND session_id = ?::uuid
+        WHERE user_id = ? AND session_id = ?::uuid AND status = 'OPEN'
         """,
         userId,
-        sessionId);
+        sessionId) == 1;
   }
 
   public void abortInterview(Long userId, String sessionId) {
@@ -165,7 +174,7 @@ public class ProfileRepository {
         """
         UPDATE profile_interview
         SET status = 'ABORTED', completed_at = now()
-        WHERE user_id = ? AND session_id = ?::uuid
+        WHERE user_id = ? AND session_id = ?::uuid AND status = 'OPEN'
         """,
         userId,
         sessionId);

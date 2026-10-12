@@ -112,6 +112,20 @@ def test_workflow_chat_rejects_embedded_image_data_and_oversized_messages() -> N
         )
 
 
+def test_workflow_chat_rejects_unrecognized_fields_that_could_bypass_attachment_transport() -> None:
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        WorkflowRunRequest(
+            session_id="wf-1",
+            user_id=1,
+            event="CHAT",
+            problem={"problem_id": 42},
+            event_data={
+                "message": "请看图",
+                "hidden_image": {"data": "data:image/png;base64,aGVsbG8="},
+            },
+        )
+
+
 def test_workflow_rejects_images_outside_chat_event() -> None:
     attachment_id = "d0162eb8-8c60-4d85-a3da-3aa3f11460ba"
     with pytest.raises(ValidationError, match="attachment_ids are only supported for CHAT"):

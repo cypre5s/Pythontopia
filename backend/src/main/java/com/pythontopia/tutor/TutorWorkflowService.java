@@ -160,7 +160,7 @@ public class TutorWorkflowService {
           try {
             persistProjection(session, request, runId, resultJson);
           } catch (Exception e) {
-            log.warn("Failed to persist tutor workflow projection", e);
+            throw new IllegalStateException("Failed to persist tutor workflow projection", e);
           }
         });
     return emitter;
