@@ -33,6 +33,7 @@ import type {
 import {
   ALLOWED_UPLOAD_EXTS,
   extOf,
+  MAX_UPLOAD_BYTES,
   uploadFile,
   uploadRejectionReason,
   type UploadAttachmentRef,
@@ -54,6 +55,8 @@ export interface ComposerSubmitPayload {
    * 仅含上传成功（status==='ready'、带后端 upload id）的文件；上传中 / 失败的不进 payload。
    */
   attachments: UploadAttachmentRef[];
+  /** 本轮直接交给导师视觉模型的图片 Data URL（不经文档上传/解析接口）。 */
+  images?: string[];
 }
 
 const DEFAULT_PLACEHOLDER = '说说你想学什么…';
@@ -95,11 +98,19 @@ const selectedCapability = ref<WorkshopCapability | null>(null);
 // 原始 File 句柄存在非响应式 Map，供失败重试复用（不必让 File 进入响应式系统）。
 const attachments = ref<AttachmentDraft[]>([]);
 const fileHandles = new Map<string, File>();
+const IMAGE_MIME_TYPES: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+};
+const MAX_IMAGE_ATTACHMENTS = 3;
 const dragActive = ref(false);
 let dragDepth = 0;
 let localSeq = 0;
 
-const uploadAccept = ALLOWED_UPLOAD_EXTS.join(',');
+const uploadAccept = [...ALLOWED_UPLOAD_EXTS, ...Object.keys(IMAGE_MIME_TYPES)].join(',');
 const hasUploading = computed<boolean>(() =>
   attachments.value.some((a) => a.status === 'uploading'),
 );
@@ -332,6 +343,33 @@ function patchAttachment(localId: string, patch: Partial<AttachmentDraft>): void
 
 /** 单个文件上传：先前端预校验（白名单 / 5MB），再 POST；按结果推进状态机。 */
 async function runUpload(localId: string, file: File): Promise<void> {
+  const imageMime = IMAGE_MIME_TYPES[extOf(file.name)];
+  if (imageMime) {
+    const imageCount = attachments.value.filter((a) => IMAGE_MIME_TYPES[a.ext]).length;
+    if (imageCount > MAX_IMAGE_ATTACHMENTS) {
+      patchAttachment(localId, {
+        status: 'error',
+        error: `最多上传 ${MAX_IMAGE_ATTACHMENTS} 张图片`,
+      });
+      return;
+    }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      patchAttachment(localId, { status: 'error', error: '图片不能超过 5 MB' });
+      return;
+    }
+    if (file.type && file.type !== imageMime) {
+      patchAttachment(localId, { status: 'error', error: '图片格式与文件扩展名不匹配' });
+      return;
+    }
+    patchAttachment(localId, { status: 'uploading', error: undefined });
+    try {
+      const imageDataUrl = await readImageDataUrl(file, imageMime);
+      patchAttachment(localId, { status: 'ready', imageDataUrl, error: undefined });
+    } catch {
+      patchAttachment(localId, { status: 'error', error: '图片读取失败' });
+    }
+    return;
+  }
   const reason = uploadRejectionReason(file);
   if (reason) {
     patchAttachment(localId, { status: 'error', error: reason });
@@ -355,6 +393,26 @@ async function runUpload(localId: string, file: File): Promise<void> {
     const message = err instanceof Error ? err.message : '上传失败';
     patchAttachment(localId, { status: 'error', error: message });
   }
+}
+
+function readImageDataUrl(file: File, mimeType: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== 'string') {
+        reject(new Error('图片读取失败'));
+        return;
+      }
+      const separator = reader.result.indexOf(',');
+      if (separator < 0) {
+        reject(new Error('图片读取失败'));
+        return;
+      }
+      resolve(`data:${mimeType};base64,${reader.result.slice(separator + 1)}`);
+    };
+    reader.onerror = () => reject(new Error('图片读取失败'));
+    reader.readAsDataURL(file);
+  });
 }
 
 function addFiles(files: FileList | File[] | null | undefined): void {
@@ -458,6 +516,16 @@ function readyAttachments(): UploadAttachmentRef[] {
   return out;
 }
 
+function readyImages(): string[] {
+  const images: string[] = [];
+  for (const attachment of attachments.value) {
+    if (attachment.status === 'ready' && attachment.imageDataUrl) {
+      images.push(attachment.imageDataUrl);
+    }
+  }
+  return images;
+}
+
 function submit(): void {
   const text = inputText.value.trim();
   if (!text || isDisabled.value || isBusy.value) return;
@@ -470,6 +538,7 @@ function submit(): void {
     : slash.forcedIntent.value
       ? 'slash_command'
       : 'composer_text';
+  const images = readyImages();
   emit('submit', {
     text,
     manualKcCodes: [...mention.selectedKcCodes.value],
@@ -478,6 +547,7 @@ function submit(): void {
     source,
     ...(capabilityNamespace ? { capabilityNamespace } : {}),
     attachments: readyAttachments(),
+    ...(images.length > 0 ? { images } : {}),
   });
   mention.reset();
   slash.reset();
@@ -506,7 +576,7 @@ defineExpose({ focus: focusInput, prefill });
       class="composer__dropzone"
       data-testid="composer-dropzone"
     >
-      <span class="composer__dropzone-text">📎 松开上传文件</span>
+      <span class="composer__dropzone-text">📎 松开上传文件或图片</span>
     </div>
 
     <!-- 隐藏文件选择器（📎 触发，支持多选） -->
@@ -626,7 +696,7 @@ defineExpose({ focus: focusInput, prefill });
         type="button"
         class="composer__attach"
         data-testid="composer-attach"
-        title="上传文件（也可拖拽 / 粘贴）"
+        title="上传文件或图片（也可拖拽 / 粘贴）"
         :disabled="isDisabled"
         @click="openFilePicker"
       >

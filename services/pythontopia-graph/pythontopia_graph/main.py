@@ -8,7 +8,6 @@ from pydantic import BaseModel
 from pythontopia_graph.agents.curriculum_mapper_agent import CurriculumMapperAgent
 from pythontopia_graph.agents.profile_agent import ProfileAgent
 from pythontopia_graph.llm.provider import (
-    load_alethicode_env,
     load_pythontopia_env,
     provider_from_env,
     provider_label,
@@ -57,9 +56,8 @@ LOG = logging.getLogger(__name__)
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # OpenTelemetry GenAI 可观测性：幂等初始化；缺 opentelemetry 依赖时为 no-op，不影响启动与主链路。
     init_tracing()
-    # 启动时加载 deploy/.env 与 Alethicode .env，构建共享 LLM provider 供各路由复用；失败不阻塞启动。
+    # 启动时只加载本项目 deploy/.env，避免读取 Alethicode 的凭据。
     load_pythontopia_env()
-    load_alethicode_env()
     try:
         _app.state.llm_provider = provider_from_env()
         LOG.info("LLM provider 已初始化: %s", provider_label())

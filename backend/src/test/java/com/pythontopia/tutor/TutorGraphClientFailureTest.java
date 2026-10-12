@@ -2,14 +2,10 @@ package com.pythontopia.tutor;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.common.config.GraphServiceProperties;
 import com.pythontopia.common.sse.SseRelayExecutor;
-import com.pythontopia.media.XfyunImageUnderstandingService;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -172,13 +168,10 @@ class TutorGraphClientFailureTest {
   private TutorGraphClient newClient(int port, int connectTimeoutMs, int readTimeoutMs) {
     GraphServiceProperties properties =
         new GraphServiceProperties("http://127.0.0.1:" + port, "http://rag.test", INTERNAL_TOKEN);
-    XfyunImageUnderstandingService imageUnderstanding = mock(XfyunImageUnderstandingService.class);
-    when(imageUnderstanding.isEnabled()).thenReturn(false);
     return new TutorGraphClient(
         properties,
         new ObjectMapper(),
         new SseRelayExecutor(),
-        imageUnderstanding,
         connectTimeoutMs,
         readTimeoutMs);
   }

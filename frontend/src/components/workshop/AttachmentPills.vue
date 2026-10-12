@@ -25,6 +25,8 @@ export interface AttachmentDraft {
   /** status==='ready'：解析行数 / 字数。 */
   lineCount?: number;
   charCount?: number;
+  /** 图片附件只保留本轮 Data URL，不上传或持久化到文档附件服务。 */
+  imageDataUrl?: string;
   /** status==='error'：错误信息。 */
   error?: string;
 }
@@ -59,7 +61,7 @@ const hasAttachments = computed<boolean>(() => props.attachments.length > 0);
       <span
         class="pill__icon"
         aria-hidden="true"
-      >{{ attachmentIcon(a.ext) }}</span>
+      >{{ a.imageDataUrl ? '🖼️' : attachmentIcon(a.ext) }}</span>
       <span class="pill__body">
         <span
           class="pill__name"
@@ -75,7 +77,10 @@ const hasAttachments = computed<boolean>(() => props.attachments.length > 0);
             <span>{{ formatFileSize(a.byteSize) }} · 解析中…</span>
           </template>
           <template v-else-if="a.status === 'ready'">
-            {{ formatFileSize(a.byteSize) }} · {{ a.lineCount ?? 0 }} 行 · {{ a.charCount ?? 0 }} 字
+            <template v-if="a.imageDataUrl">{{ formatFileSize(a.byteSize) }} · 图片</template>
+            <template v-else>
+              {{ formatFileSize(a.byteSize) }} · {{ a.lineCount ?? 0 }} 行 · {{ a.charCount ?? 0 }} 字
+            </template>
           </template>
           <span
             v-else

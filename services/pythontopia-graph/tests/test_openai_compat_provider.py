@@ -30,11 +30,14 @@ def _openai_compat_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "LLM_API_KEY",
         "LLM_MODEL",
         "OPENAI_MODEL_FAST",
+        "OPENAI_MODEL_VISION",
         "LLM_MODEL_FAST",
+        "LLM_MODEL_VISION",
         "PYT_OPENAI_BASE_URL",
         "PYT_OPENAI_API_KEY",
         "PYT_OPENAI_MODEL",
         "PYT_OPENAI_MODEL_FAST",
+        "PYT_OPENAI_MODEL_VISION",
         "HTTP_PROXY",
         "http_proxy",
         "HTTPS_PROXY",
@@ -142,6 +145,76 @@ async def test_chat_uses_fast_model_when_tier_is_fast(
     assert bodies[0]["model"] == "deepseek-v4-flash"
     # model_tier 是路由提示，不得透传进上游请求体。
     assert "model_tier" not in bodies[0]
+
+
+@pytest.mark.asyncio
+async def test_chat_stream_uses_vision_model_and_forwards_image_blocks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENAI_MODEL_VISION", "deepseek-flash")
+    bodies: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        bodies.append(json.loads(request.content))
+        return httpx.Response(
+            200,
+            text='data: {"choices":[{"delta":{"content":"看到了"}}]}\n\n'
+            "data: [DONE]\n\n",
+        )
+
+    _capture_async_client_kwargs(monkeypatch, handler)
+    provider = OpenAiCompatProvider()
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "请看图"},
+                {
+                    "type": "image_url",
+                    "image_url": {"url": "data:image/png;base64,aW1hZ2U="},
+                },
+            ],
+        }
+    ]
+
+    chunks = [
+        chunk
+        async for chunk in provider.chat_stream(messages, model_tier="vision")
+    ]
+
+    assert chunks == ["看到了"]
+    assert bodies[0]["model"] == "deepseek-flash"
+    assert bodies[0]["messages"] == messages
+    assert "model_tier" not in bodies[0]
+
+
+@pytest.mark.asyncio
+async def test_chat_stream_fails_fast_when_vision_model_is_unconfigured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for name in (
+        "OPENAI_MODEL_VISION",
+        "LLM_MODEL_VISION",
+        "PYT_OPENAI_MODEL_VISION",
+    ):
+        monkeypatch.setenv(name, "")
+    provider = OpenAiCompatProvider()
+    assert not provider.vision_model
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "请看图"},
+                {"type": "image_url", "image_url": {"url": "data:image/png;base64,aQ=="}},
+            ],
+        }
+    ]
+
+    with pytest.raises(RuntimeError, match="vision model is not configured"):
+        _ = [
+            chunk
+            async for chunk in provider.chat_stream(messages, model_tier="vision")
+        ]
 
 
 @pytest.mark.asyncio

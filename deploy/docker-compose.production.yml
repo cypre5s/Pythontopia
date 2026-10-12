@@ -157,10 +157,12 @@ services:
       OPENAI_API_KEY: ${PYT_OPENAI_API_KEY:-}
       OPENAI_MODEL: ${PYT_OPENAI_MODEL:-}
       OPENAI_MODEL_FAST: ${PYT_OPENAI_MODEL_FAST:-}
+      OPENAI_MODEL_VISION: ${PYT_OPENAI_MODEL_VISION:-}
       LLM_BASE_URL: ${PYT_OPENAI_BASE_URL:-}
       LLM_API_KEY: ${PYT_OPENAI_API_KEY:-}
       LLM_MODEL: ${PYT_OPENAI_MODEL:-}
       LLM_MODEL_FAST: ${PYT_OPENAI_MODEL_FAST:-}
+      LLM_MODEL_VISION: ${PYT_OPENAI_MODEL_VISION:-}
       # bridge 网络内用服务名访问 RAG（开发 host 网络时是 127.0.0.1:18092）。
       PYT_RAG_URL: http://pythontopia-rag:18092
       # 生产默认不走 B 站代理；确有需要时在远端 .env 设 PYT_BILI_PROXY 覆盖。

@@ -357,6 +357,8 @@ async def tutor_ask_stream(
             #     含 QUIZ_JUDGE → 评卷（仅 RAG 命中才引用 PPT）。命中即走考核专用流，不跑普通答疑。 ──
             quiz = _detect_quiz_mode(context)
             if quiz is not None:
+                if body.images:
+                    raise ValueError("图片输入暂不支持考核模式")
                 async for chunk in _quiz_stages(
                     quiz,
                     body,
@@ -401,7 +403,11 @@ async def tutor_ask_stream(
             # trace（前端据此渲染「已验证」徽标）。判定串须与传入 ask_stream 的完全一致。
             verify = TutorAgent.should_verify(agent_question)
             # 难题 / 需严谨论证的问题路由进 Solver→Critic→Referee 复核（与 code 验证互斥优先）。
-            debate_mode = (not verify) and TutorAgent.should_debate(base_question)
+            debate_mode = (
+                (not verify)
+                and not body.images
+                and TutorAgent.should_debate(base_question)
+            )
 
             answer = ""
             if debate_mode:
@@ -476,6 +482,7 @@ async def tutor_ask_stream(
                     profile_brief=body.profile_brief,
                     conversation_history=history,
                     evidence_chunks=evidence.chunks,
+                    images=body.images or None,
                 ):
                     collected.append(token)
                     yield _format_sse("token", {"delta": token})

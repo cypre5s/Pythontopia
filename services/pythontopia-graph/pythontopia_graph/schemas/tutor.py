@@ -2,9 +2,24 @@
 
 from __future__ import annotations
 
-from typing import Literal
+import base64
+import binascii
+import re
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+
+def _image_mime_type(data: bytes) -> str | None:
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if data.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if data.startswith((b"GIF87a", b"GIF89a")):
+        return "image/gif"
+    if data.startswith(b"RIFF") and data[8:12] == b"WEBP":
+        return "image/webp"
+    return None
 
 
 class TutorTurn(BaseModel):
@@ -38,6 +53,38 @@ class TutorAskRequest(BaseModel):
     kc_codes: list[str] = Field(default_factory=list, max_length=10)
     # 当前学习上下文（视频标题/PPT 页/题面摘要），增强证据检索；空串时与无上下文行为一致。
     context: str = Field(default="", max_length=2000)
+    images: list[Annotated[str, Field(max_length=8_000_000)]] = Field(
+        default_factory=list, max_length=3
+    )
+
+    @field_validator("images")
+    @classmethod
+    def normalize_images(cls, images: list[str]) -> list[str]:
+        normalized: list[str] = []
+        for image in images:
+            encoded = image
+            declared_mime: str | None = None
+            if image.startswith("data:"):
+                header, separator, encoded = image.partition(",")
+                match = re.fullmatch(
+                    r"data:(image/(?:png|jpeg|gif|webp));base64", header
+                )
+                if not separator or match is None:
+                    raise ValueError("images must be supported base64 image data")
+                declared_mime = match.group(1)
+            try:
+                data = base64.b64decode(encoded, validate=True)
+            except (binascii.Error, ValueError) as exc:
+                raise ValueError("images must contain valid base64 data") from exc
+            if len(data) > 5 * 1024 * 1024:
+                raise ValueError("each image must be at most 5 MiB")
+            detected_mime = _image_mime_type(data)
+            if detected_mime is None or (
+                declared_mime and declared_mime != detected_mime
+            ):
+                raise ValueError("images must be JPEG, PNG, GIF, or WebP")
+            normalized.append(f"data:{detected_mime};base64,{encoded}")
+        return normalized
 
 
 class EvidenceCitation(BaseModel):
