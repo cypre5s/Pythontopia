@@ -73,3 +73,14 @@
 - 管理题目审核列表增加按申请时间、题面、申请人升降序；后端排序字段/方向使用固定白名单，排序变化回第一页。
 - 已执行定向验证：前端 5 个文件、68 tests 通过；`npm run typecheck` 通过，定向 ESLint 0 errors。Graph 导学 24 tests 与 Ruff 通过。后端变更相关定向 Maven 累计 74 tests 通过（包括阶段/run 绑定、结算/放弃清理预生成任务及配额锁的 PostgreSQL 集成复验），空库 Flyway 迁移到 V195 成功。
 - 不启动本地全栈、不发真实 DeepSeek 请求或性能压测；远征 P50/P95、缓存命中率、重复率、恢复率与完成率留待后续实测。地图节点、HP、遗物仍是客户端存档状态，未用于服务端排行榜分数或判题深度。
+
+## Tutor 计划恢复、引用授权与管理台外观（2026-10-12）
+
+- Graph Tutor 为 `AGENT_FEEDBACK`、`COMPACT`、`PLAN_RECOMMEND`、`PLAN_START`、`PLAN_RESPONSE`、`PLAN_STEERING` 补齐事件 DTO 与确定性状态处理；计划控制携带 revision，过期请求返回 `PLAN_STALE`，新计划使用新 ID。
+- Java 仅从当前用户会话卡片解析 `@card:<id>`，仅从 pack 43 解析 `@courseware:<pageId>`；忽略客户端提交的 `references`，拒绝不存在或越权内容，并将引用数限制为 5、课件摘录限制为 2,000 字符。
+- AutoGen 阶段通过受限 JSON 状态信封保存/恢复 student state、episode plan 和最多 20 轮纯文本历史；图片字节不会进入状态、卡片或检查点。V197 以 `(session_id, run_id)` 唯一键保证 Graph 终态投影的 marker、session、agent state、card 和 action event 在同一事务中提交，重复终态回调不重复写入。
+- 正式提交事件更新已有状态 envelope，并仅在当前 ACTIVE 计划步骤匹配期望证据时推进步骤；状态与提交观察 action 原子写入。`LearningEvent` 当前不携带 submission ID，因此无法区分同一正式提交事件被精确重放与两次相同判定提交，重放可能重复计数；后续需给事件增加稳定提交 ID 才能做精确去重。
+- 管理台沿用现有 API 与权限，仅调整侧栏、窄屏导航、面板和审核表格外观；不新增虚构菜单或 API。
+- 当前验证：Java 定向 9 个类 / 103 tests 全通过，Testcontainers 空库迁移到 V197；Graph 6 个文件 / 58 tests 与 Ruff 通过；Web 定向 7 个文件 / 38 tests、TypeScript typecheck 通过；ESLint 0 errors / 41 warnings；`git diff --check` 通过。
+- 项目配置核验只输出布尔值：DeepSeek OpenAI-compatible endpoint/key 已配置于被忽略的 `deploy/.env`；研究 runner 中原有的硬编码凭证已改为读取 `PYT_OPENAI_API_KEY`。
+- 未运行全栈浏览器联测、真实 DeepSeek 请求或无尽远征性能测试。复核时本地 compose 无运行服务且 `PYT_PISTON_URL` 未配置，因此真实判题路径不可用；无尽远征 P50/P95、缓存命中、重复率、恢复率与完成率继续待测。密钥曾出现在对话中，应轮换后再用于生产。

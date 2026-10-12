@@ -26,12 +26,14 @@ from typing import Any, TypedDict
 from autogen_core import CancellationToken
 
 from pythontopia_graph.agents.guide_coach_agent import CoachContext, GuideCoachAgent
+from pythontopia_graph.agents.guide_episode_planner import GuideEpisodePlanner
 from pythontopia_graph.agents.guide_guardrail_critic import GuideGuardrailCritic
 from pythontopia_graph.agents.tutor_workflow_cards import (
     CardGenerationError,
     TutorWorkflowCardAgent,
 )
 from pythontopia_graph.graph.autogen_tutor_runtime import (
+    PrivateImageResolver,
     StageHandler,
     run_autogen_tutor_workflow,
 )
@@ -40,6 +42,9 @@ from pythontopia_graph.nodes.evidence_fetcher import EvidenceBundle, EvidenceFet
 from pythontopia_graph.schemas.tutor_workflow import (
     EVENT_OUTPUT_KEY,
     GuideCoachDecision,
+    AiReplyCard,
+    TutorEpisodePlan,
+    TutorEpisodePlanPatch,
     TutorStudentState,
     WorkflowAction,
     WorkflowDiagnosisContext,
@@ -65,8 +70,32 @@ PHASE_TRANSITIONS: dict[str, frozenset[str]] = {
 # SKELETON 任意阶段可请求骨架；CHAT 任意阶段可问；KNOWLEDGE_REVIEW / EXECUTION_TRACE /
 # VISUALIZE / PARSONS 为补齐的辅助导学动作，均不推进阶段。
 AUXILIARY_EVENTS: frozenset[str] = frozenset(
-    {"CHAT", "SKELETON", "KNOWLEDGE_REVIEW", "EXECUTION_TRACE", "VISUALIZE", "PARSONS"}
+    {
+        "CHAT",
+        "AGENT_FEEDBACK",
+        "COMPACT",
+        "PLAN_RECOMMEND",
+        "PLAN_START",
+        "PLAN_RESPONSE",
+        "PLAN_STEERING",
+        "SKELETON",
+        "KNOWLEDGE_REVIEW",
+        "EXECUTION_TRACE",
+        "VISUALIZE",
+        "PARSONS",
+    }
 )
+
+PLAN_EVENTS: frozenset[str] = frozenset(
+    {"PLAN_RECOMMEND", "PLAN_START", "PLAN_RESPONSE", "PLAN_STEERING"}
+)
+_PLAN_CONTROL_EVENTS: frozenset[str] = frozenset(
+    {"PLAN_START", "PLAN_RESPONSE", "PLAN_STEERING"}
+)
+_SUBMISSION_EVIDENCE: frozenset[str] = frozenset(
+    {"SUBMISSION_OBSERVED", "AC_SUBMISSION", "TRANSFER_ATTEMPT"}
+)
+_COMPACT_CHAT_TURNS = 8
 
 # 需要判题证据的事件（请求体必须带 diagnosis）。
 DIAGNOSIS_EVENTS: frozenset[str] = frozenset({"ERROR_FEEDBACK", "AC_REVIEW"})
@@ -162,7 +191,7 @@ def _coach_allowed_events(
     has_post_ac: bool,
 ) -> list[WorkflowEvent]:
     """Coach 决策白名单：请求事件 + 当前/目标阶段动作，诊断类事件需有判题证据。"""
-    candidates: list[str] = [request.event]
+    candidates: list[str] = [] if request.event == "PLAN_RECOMMEND" else [request.event]
     for phase in (current_phase, new_phase):
         candidates.extend(action.event for action in decide_actions(phase, has_post_ac=has_post_ac))
     allowed: list[WorkflowEvent] = []
@@ -223,6 +252,11 @@ class WorkflowGraphState(TypedDict, total=False):
     failure_bucket: str | None
     last_error: str | None
     available_actions: list[WorkflowAction]
+    episode_plan: TutorEpisodePlan | None
+    episode_patch: TutorEpisodePlanPatch | None
+    resume_chat_history: list[dict[str, str]]
+    # Stage-local image bytes; AutoGen runtime removes this key before encoding a message.
+    _tutor_stage_private_image_data: list[str]
 
 
 class TutorWorkflowGraph:
@@ -238,6 +272,7 @@ class TutorWorkflowGraph:
         self._agent = TutorWorkflowCardAgent(provider)
         self._coach = GuideCoachAgent(provider)
         self._guardrail = GuideGuardrailCritic()
+        self._episode_planner = GuideEpisodePlanner()
         self._evidence_fetcher = evidence_fetcher
         self._emit = emit
 
@@ -246,7 +281,11 @@ class TutorWorkflowGraph:
         state: WorkflowGraphState,
         *,
         cancellation_token: CancellationToken | None = None,
+        private_image_resolver: PrivateImageResolver | None = None,
     ) -> WorkflowGraphState:
+        request = state.get("request")
+        if request is not None and "episode_plan" not in state:
+            state = {**state, "episode_plan": request.episode_plan}
         stages: list[tuple[str, StageHandler[WorkflowGraphState]]] = [
             ("validate_transition", self._node_validate_transition),
             ("coach_decide", self._node_coach_decide),
@@ -258,16 +297,18 @@ class TutorWorkflowGraph:
             state,
             stages,
             cancellation_token=cancellation_token,
+            private_image_resolver=private_image_resolver,
         )
 
     # ── 节点 ──
 
     async def _node_validate_transition(self, state: WorkflowGraphState) -> WorkflowGraphState:
         request = state["request"]
+        current_phase = state.get("current_phase", "READING")
         started = time.monotonic()
         await self._emit_step_start("validate_transition")
         try:
-            new_phase = validate_transition(state.get("current_phase", "READING"), request.event)
+            new_phase = validate_transition(current_phase, request.event)
         except TransitionError as exc:
             await self._emit_step_finish("validate_transition", "fail", started, note=str(exc))
             return {
@@ -286,11 +327,140 @@ class TutorWorkflowGraph:
                 "failure_bucket": "INSUFFICIENT_EVIDENCE",
                 "last_error": f"diagnosis evidence required for {request.event}",
             }
+        plan = request.episode_plan
+        if request.event == "PLAN_RECOMMEND":
+            trigger_event = request.event_data.get("trigger_event")
+            if trigger_event is not None:
+                available = {
+                    action.event
+                    for action in decide_actions(
+                        current_phase,
+                        has_post_ac=bool(state.get("next_practice_direction")),
+                    )
+                    if action.event not in DIAGNOSIS_EVENTS or request.diagnosis is not None
+                }
+                if trigger_event not in available:
+                    await self._emit_step_finish(
+                        "validate_transition",
+                        "fail",
+                        started,
+                        note="PLAN_RECOMMEND trigger_event is not an available action",
+                    )
+                    return {
+                        **state,
+                        "runtime_state": "FAILED",
+                        "failure_bucket": "TRANSITION_VIOLATION",
+                        "last_error": "PLAN_RECOMMEND trigger_event is not available in this phase",
+                    }
+        if plan is not None and (
+            plan.session_id != request.session_id
+            or plan.user_id != request.user_id
+            or plan.problem_id != request.problem.problem_id
+        ):
+            await self._emit_step_finish(
+                "validate_transition", "fail", started, note="episode plan scope mismatch"
+            )
+            return {
+                **state,
+                "runtime_state": "FAILED",
+                "failure_bucket": "PLAN_SCOPE_MISMATCH",
+                "last_error": "episode plan does not belong to this user, session, and problem",
+            }
+        patch = request.episode_patch
+        if patch is not None and plan is None:
+            await self._emit_step_finish(
+                "validate_transition", "fail", started, note="episode plan patch has no plan"
+            )
+            return {
+                **state,
+                "runtime_state": "FAILED",
+                "failure_bucket": "PLAN_NOT_FOUND",
+                "last_error": "episode plan patch cannot be applied without its saved plan",
+            }
+        if patch is not None and plan is not None and (
+            patch.plan_id != plan.plan_id
+            or patch.revision != plan.revision
+            or (
+                patch.current_step_id is not None
+                and patch.current_step_id != plan.current_step_id
+            )
+            or patch.status not in {None, plan.status}
+        ):
+            await self._emit_step_finish(
+                "validate_transition", "fail", started, note="stale episode plan patch"
+            )
+            return {
+                **state,
+                "runtime_state": "FAILED",
+                "failure_bucket": "PLAN_STALE",
+                "last_error": "episode plan patch does not match the saved plan",
+            }
+        if request.event == "PLAN_START" and request.event_data.get("current_phase") != current_phase:
+            await self._emit_step_finish(
+                "validate_transition", "fail", started, note="stale phase in PLAN_START"
+            )
+            return {
+                **state,
+                "runtime_state": "FAILED",
+                "failure_bucket": "TRANSITION_VIOLATION",
+                "last_error": "PLAN_START current_phase does not match the server phase",
+            }
+        if request.event in _PLAN_CONTROL_EVENTS:
+            if plan is None or request.event_data.get("plan_id") != plan.plan_id:
+                await self._emit_step_finish(
+                    "validate_transition", "fail", started, note="missing or mismatched episode plan"
+                )
+                return {
+                    **state,
+                    "runtime_state": "FAILED",
+                    "failure_bucket": "PLAN_NOT_FOUND",
+                    "last_error": "the referenced episode plan is not active in this session",
+                }
+            if request.event_data.get("revision") != plan.revision:
+                await self._emit_step_finish(
+                    "validate_transition", "fail", started, note="stale episode plan revision"
+                )
+                return {
+                    **state,
+                    "runtime_state": "FAILED",
+                    "failure_bucket": "PLAN_STALE",
+                    "last_error": "the episode plan changed after this action was prepared",
+                }
+            if request.event == "PLAN_RESPONSE":
+                active = next((step for step in plan.steps if step.status == "ACTIVE"), None)
+                if plan.status != "ACTIVE" or active is None:
+                    reason = "episode plan is not active"
+                elif request.event_data.get("step_id") != active.step_id:
+                    reason = "PLAN_RESPONSE must reference the current active step"
+                elif active.expected_evidence in _SUBMISSION_EVIDENCE:
+                    reason = "this step requires a verified server submission"
+                elif not str(request.event_data.get("response", "")).strip():
+                    reason = "PLAN_RESPONSE requires a student response"
+                else:
+                    reason = ""
+                if reason:
+                    await self._emit_step_finish(
+                        "validate_transition", "fail", started, note=reason
+                    )
+                    return {
+                        **state,
+                        "runtime_state": "FAILED",
+                        "failure_bucket": "INSUFFICIENT_EVIDENCE",
+                        "last_error": reason,
+                    }
         await self._emit_step_finish("validate_transition", "ok", started)
         return {**state, "new_phase": new_phase}
 
     async def _node_coach_decide(self, state: WorkflowGraphState) -> WorkflowGraphState:
         request = state["request"]
+        if request.event in {
+            "AGENT_FEEDBACK",
+            "COMPACT",
+            "PLAN_START",
+            "PLAN_RESPONSE",
+            "PLAN_STEERING",
+        }:
+            return {**state, "effective_event": request.event}
         if not request.coach_mode:
             return {**state, "effective_event": request.event}
         started = time.monotonic()
@@ -308,8 +478,14 @@ class TutorWorkflowGraph:
             consecutive_errors=request.diagnosis.consecutive_errors if request.diagnosis else 0,
         )
         await self._emit_step_finish("coach.load_state", "ok", load_started)
+        coach_request = request
+        requested_event = request.event
+        if request.event == "PLAN_RECOMMEND":
+            trigger_event = request.event_data.get("trigger_event")
+            requested_event = str(trigger_event or current_phase).upper()
+            coach_request = request.model_copy(update={"event": requested_event})
         allowed_events = _coach_allowed_events(
-            request,
+            coach_request,
             current_phase=current_phase,
             new_phase=new_phase,
             has_post_ac=bool(state.get("next_practice_direction")),
@@ -318,7 +494,7 @@ class TutorWorkflowGraph:
             allowed_events = [request.force_event]
         decision = await self._coach.decide(
             CoachContext(
-                requested_event=request.force_event or request.event,
+                requested_event=request.force_event or requested_event,  # type: ignore[arg-type]
                 allowed_events=allowed_events,
                 state=student_state,
                 problem=request.problem,
@@ -354,7 +530,9 @@ class TutorWorkflowGraph:
         )
         return {
             **state,
-            "effective_event": decision.next_event,
+            "effective_event": "PLAN_RECOMMEND"
+            if request.event == "PLAN_RECOMMEND"
+            else decision.next_event,
             "coach_decision": decision,
             "student_state": updated_state,
         }
@@ -362,7 +540,7 @@ class TutorWorkflowGraph:
     async def _node_fetch_evidence(self, state: WorkflowGraphState) -> WorkflowGraphState:
         request = state["request"]
         event = state.get("effective_event", request.event)
-        if event not in COURSEWARE_EVENTS:
+        if event not in COURSEWARE_EVENTS or request.event == "PLAN_RECOMMEND":
             return {**state, "evidence_chunks": []}
         started = time.monotonic()
         await self._emit_step_start("evidence_fetcher")
@@ -383,6 +561,29 @@ class TutorWorkflowGraph:
     async def _node_generate_card(self, state: WorkflowGraphState) -> WorkflowGraphState:
         request = state["request"]
         event = state.get("effective_event", request.event)
+        if event == "COMPACT":
+            history = list(state.get("chat_history", []))[-_COMPACT_CHAT_TURNS:]
+            summary_lines = [
+                f"{'学生' if turn.get('role') == 'user' else '导师'}：{turn.get('content', '').strip()}"
+                for turn in history
+                if turn.get("role") in {"user", "assistant"}
+                and isinstance(turn.get("content"), str)
+                and turn["content"].strip()
+            ]
+            summary = (
+                "已整理并保留最近的对话：\n" + "\n".join(summary_lines)
+                if summary_lines
+                else "目前没有可整理的对话，当前题目和学习阶段已保留。"
+            )[:1600]
+            return {
+                **state,
+                "card_key": "ai_reply",
+                "card": AiReplyCard(content=summary).model_dump(mode="json"),
+                "resume_chat_history": history,
+                "runtime_state": "SUCCEEDED",
+            }
+        if event in PLAN_EVENTS:
+            return self._apply_plan_event(state, request, event)
         card_key = EVENT_OUTPUT_KEY.get(event)
         if event == "CODING":
             # 纯状态推进：学生宣告进入编码，不产卡（源版 coding 节点同此默认行为）。
@@ -400,7 +601,11 @@ class TutorWorkflowGraph:
                 tool_node = f"coach.tool.{tool_name}"
                 tool_started = time.monotonic()
                 await self._emit_step_start(tool_node)
-            card = await self._dispatch_card(state, effective_request)
+            card = await self._dispatch_card(
+                state,
+                effective_request,
+                images=state.get("_tutor_stage_private_image_data"),
+            )
             if tool_node:
                 await self._emit_step_finish(tool_node, "ok", tool_started)
             card = await self._apply_guardrail(state, effective_request, card_key or "", card)
@@ -418,7 +623,11 @@ class TutorWorkflowGraph:
         return {**state, "card_key": card_key, "card": card, "runtime_state": "SUCCEEDED"}
 
     async def _dispatch_card(
-        self, state: WorkflowGraphState, request: WorkflowRunRequest
+        self,
+        state: WorkflowGraphState,
+        request: WorkflowRunRequest,
+        *,
+        images: list[str] | None = None,
     ) -> dict[str, Any]:
         problem: WorkflowProblemContext = request.problem
         diagnosis: WorkflowDiagnosisContext | None = request.diagnosis
@@ -463,10 +672,12 @@ class TutorWorkflowGraph:
             return await self._agent.parsons(
                 problem, str(request.event_data.get("sub_skill", "")), brief
             )
-        if event == "CHAT":
+        if event in {"CHAT", "AGENT_FEEDBACK"}:
             message = str(request.event_data.get("message", "")).strip()
             if not message:
-                raise CardGenerationError("INSUFFICIENT_EVIDENCE", "CHAT requires event_data.message")
+                raise CardGenerationError(
+                    "INSUFFICIENT_EVIDENCE", f"{event} requires event_data.message"
+                )
             return await self._agent.chat(
                 problem,
                 state.get("new_phase", "READING"),
@@ -474,9 +685,184 @@ class TutorWorkflowGraph:
                 state.get("last_cards", []),
                 state.get("chat_history", []),
                 brief,
-                images=request.event_data.get("images"),
+                images=images,
+                references=request.event_data.get("references", []),
             )
         raise CardGenerationError("SYSTEM_ERROR", f"unsupported event: {event}")
+
+    def _apply_plan_event(
+        self,
+        state: WorkflowGraphState,
+        request: WorkflowRunRequest,
+        event: str,
+    ) -> WorkflowGraphState:
+        plan = state.get("episode_plan") or request.episode_plan
+        if event == "PLAN_RECOMMEND":
+            decision = state.get("coach_decision")
+            student_state = state.get("student_state")
+            if decision is None or student_state is None:
+                return self._plan_failure(state, "PLAN_RECOMMEND requires a coach decision")
+            if plan is not None and plan.status in {"ACTIVE", "PAUSED"}:
+                return self._plan_failure(state, "an active episode plan cannot be replaced")
+            trigger_event = str(
+                request.event_data.get("trigger_event") or state.get("new_phase", "READING")
+            ).upper()
+            context = CoachContext(
+                requested_event=trigger_event,  # type: ignore[arg-type]
+                allowed_events=_coach_allowed_events(
+                    request.model_copy(update={"event": trigger_event}),
+                    current_phase=state.get("current_phase", "READING"),
+                    new_phase=state.get("new_phase", "READING"),
+                    has_post_ac=bool(state.get("next_practice_direction")),
+                ),
+                state=student_state,
+                problem=request.problem,
+                diagnosis=request.diagnosis,
+                profile_brief=request.profile_brief,
+                recent_cards=state.get("last_cards", []),
+            )
+            plan = self._episode_planner.plan(context, decision)
+            return {
+                **state,
+                "episode_plan": plan,
+                "episode_patch": None,
+                "card_key": None,
+                "card": None,
+                "runtime_state": "SUCCEEDED",
+            }
+
+        if plan is None:
+            return self._plan_failure(state, "episode plan is not restored for this session")
+
+        payload = request.event_data
+        plan_id = str(payload.get("plan_id", ""))
+        if plan_id != plan.plan_id:
+            return self._plan_failure(state, "episode plan id does not match the saved plan")
+
+        previous = plan
+        reason = ""
+        changed_step_ids: list[str] = []
+        if event == "PLAN_START":
+            if plan.status not in {"RECOMMENDED", "PAUSED"}:
+                return self._plan_failure(state, "episode plan cannot be started in its current state")
+            plan = plan.model_copy(update={"status": "ACTIVE", "revision": plan.revision + 1})
+            reason = str(payload.get("reason", "")).strip()
+        elif event == "PLAN_RESPONSE":
+            response_step = next(
+                (step for step in plan.steps if step.step_id == plan.current_step_id), None
+            )
+            if response_step is None or response_step.status != "ACTIVE":
+                return self._plan_failure(state, "episode plan has no active step")
+            plan = self._advance_plan(plan, "DONE")
+            changed_step_ids.append(response_step.step_id)
+            reason = f"学生完成了 {response_step.title} 的引导检查点。"
+        elif event == "PLAN_STEERING":
+            signal = str(payload.get("signal_type", ""))
+            if signal == "pause":
+                if plan.status != "ACTIVE":
+                    return self._plan_failure(state, "only an active episode plan can pause")
+                plan = plan.model_copy(update={"status": "PAUSED", "revision": plan.revision + 1})
+                reason = "学生暂停了当前计划。"
+            elif signal == "resume":
+                if plan.status != "PAUSED":
+                    return self._plan_failure(state, "only a paused episode plan can resume")
+                plan = plan.model_copy(update={"status": "ACTIVE", "revision": plan.revision + 1})
+                reason = "学生恢复了当前计划。"
+            elif signal == "skip":
+                if plan.status != "ACTIVE":
+                    return self._plan_failure(state, "only an active episode plan can skip a step")
+                active = next((step for step in plan.steps if step.status == "ACTIVE"), None)
+                if active is None:
+                    return self._plan_failure(state, "episode plan has no active step")
+                changed_step_ids.append(active.step_id)
+                plan = self._advance_plan(plan, "SKIPPED")
+                reason = f"学生跳过了 {active.title}。"
+            elif signal == "take_over":
+                if plan.status not in {"RECOMMENDED", "ACTIVE", "PAUSED"}:
+                    return self._plan_failure(state, "completed episode plan cannot be taken over")
+                plan = plan.model_copy(
+                    update={"status": "SURRENDERED", "revision": plan.revision + 1}
+                )
+                reason = "学生选择自行安排后续步骤。"
+            elif signal == "redirect":
+                if plan.status not in {"RECOMMENDED", "ACTIVE", "PAUSED"}:
+                    return self._plan_failure(state, "completed episode plan cannot be redirected")
+                instruction = str(payload.get("redirect_instruction", "")).strip()
+                plan = plan.model_copy(
+                    update={
+                        "status": "PAUSED",
+                        "revision": plan.revision + 1,
+                        "revision_reason": f"学生请求调整方向：{instruction}"[:500],
+                    }
+                )
+                reason = plan.revision_reason
+
+        if plan is previous:
+            return self._plan_failure(state, "unsupported episode plan event")
+        plan = plan.model_copy(update={"revision_reason": reason or plan.revision_reason})
+        patch = TutorEpisodePlanPatch(
+            plan_id=plan.plan_id,
+            revision=plan.revision,
+            current_step_id=plan.current_step_id,
+            revised_step_ids=changed_step_ids,
+            revision_reason=plan.revision_reason,
+            stop_policy=plan.stop_policy,
+            status=plan.status,
+        )
+        return {
+            **state,
+            "episode_plan": plan,
+            "episode_patch": patch,
+            "card_key": None,
+            "card": None,
+            "runtime_state": "SUCCEEDED",
+        }
+
+    def _advance_plan(self, plan: TutorEpisodePlan, final_status: str) -> TutorEpisodePlan:
+        current_index = next(
+            index for index, step in enumerate(plan.steps) if step.step_id == plan.current_step_id
+        )
+        steps = list(plan.steps)
+        steps[current_index] = steps[current_index].model_copy(update={"status": final_status})
+        next_index = next(
+            (
+                index
+                for index in range(current_index + 1, len(steps))
+                if steps[index].status == "PENDING"
+            ),
+            None,
+        )
+        has_active = next_index is not None
+        current_step_id = plan.current_step_id
+        if next_index is not None:
+            steps[next_index] = steps[next_index].model_copy(update={"status": "ACTIVE"})
+            current_step_id = steps[next_index].step_id
+            active = steps[next_index]
+            stop_policy = (
+                "WAIT_FOR_SUBMISSION"
+                if active.expected_evidence in _SUBMISSION_EVIDENCE
+                else "WAIT_FOR_CLICK"
+            )
+        else:
+            stop_policy = "DONE"
+        return plan.model_copy(
+            update={
+                "steps": steps,
+                "current_step_id": current_step_id,
+                "status": "ACTIVE" if has_active else "COMPLETED",
+                "stop_policy": stop_policy,
+                "revision": plan.revision + 1,
+            }
+        )
+
+    @staticmethod
+    def _plan_failure(state: WorkflowGraphState, message: str) -> WorkflowGraphState:
+        return {
+            **state,
+            "runtime_state": "FAILED",
+            "failure_bucket": "PLAN_TRANSITION_VIOLATION",
+            "last_error": message,
+        }
 
     async def _apply_guardrail(
         self,
@@ -507,7 +893,11 @@ class TutorWorkflowGraph:
                         )
                     }
                 )
-                card = await self._dispatch_card(state, request)
+                card = await self._dispatch_card(
+                    state,
+                    request,
+                    images=state.get("_tutor_stage_private_image_data"),
+                )
                 continue
             raise CardGenerationError(
                 "GUIDE_GUARDRAIL_FAILED",

@@ -19,16 +19,14 @@ import com.pythontopia.coursepack.repository.CoursePackRepository;
 import com.pythontopia.learner.event.LearningEvent;
 import com.pythontopia.learner.mastery.MasteryRepository;
 import com.pythontopia.learner.mastery.MasterySnapshot;
-import com.pythontopia.learner.profile.dto.BaseLevelDto;
-import com.pythontopia.learner.profile.dto.EmotionPersistenceDto;
-import com.pythontopia.learner.profile.dto.LearnerProfileDto;
-import com.pythontopia.learner.profile.dto.PracticeCapabilityDto;
-import com.pythontopia.learner.profile.service.ProfileService;
+import com.pythontopia.learner.profile.dto.LearnerProfileSignals;
+import com.pythontopia.learner.profile.service.PassiveProfileService;
 import com.pythontopia.world.boss.dto.BossAttemptRequest;
 import com.pythontopia.world.boss.dto.BossEvaluateResultDto;
 import com.pythontopia.world.boss.dto.BossInternalProblem;
 import com.pythontopia.world.boss.dto.BossPrefetchStatusDto;
 import com.pythontopia.world.boss.dto.BossProblemRequest;
+import com.pythontopia.world.boss.dto.BossProblemRequest.ProfileSignalsPayload;
 import com.pythontopia.world.boss.dto.BossTestCasePayload;
 import com.pythontopia.world.boss.dto.FrontierPickDto;
 import com.pythontopia.world.boss.dto.FrontierSelectRequest;
@@ -64,7 +62,7 @@ class BossServiceTest {
   @Mock BossGraphClient graphClient;
   @Mock MasteryRepository masteryRepository;
   @Mock CoursePackRepository coursePackRepository;
-  @Mock ProfileService profileService;
+  @Mock PassiveProfileService passiveProfileService;
   @Mock EndlessPregenService pregenService;
   @Mock BossProblemReviewRepository reviewRepository;
   @Mock ExpeditionRunService expeditionRunService;
@@ -79,12 +77,15 @@ class BossServiceTest {
             graphClient,
             masteryRepository,
             coursePackRepository,
-            profileService,
+            passiveProfileService,
             pregenService,
             reviewRepository,
             expeditionRunService,
             expeditionScoreService,
             eventPublisher);
+    lenient()
+        .when(passiveProfileService.getPersonalizationSignals(anyLong()))
+        .thenReturn(LearnerProfileSignals.empty());
   }
 
   @Test
@@ -438,7 +439,7 @@ class BossServiceTest {
   @DisplayName("前端 difficulty 仅表达纵深，不能绕过服务端画像")
   void explicitDifficultyIsAdaptedByServerProfile() {
     when(coursePackRepository.findKcs(eq(43L), eq(null))).thenReturn(List.of());
-    when(profileService.findProfile(7L)).thenReturn(Optional.of(beginnerProfile()));
+    when(passiveProfileService.getPersonalizationSignals(7L)).thenReturn(beginnerSignals());
     when(graphClient.requestProblem(
             anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
         .thenReturn(problemWithStage(4));
@@ -453,7 +454,7 @@ class BossServiceTest {
   @DisplayName("画像自适应仍保持纵深难度单调递进")
   void profileAdaptiveDifficultyRemainsMonotonicByDepth() {
     when(coursePackRepository.findKcs(eq(43L), eq(null))).thenReturn(List.of());
-    when(profileService.findProfile(7L)).thenReturn(Optional.of(beginnerProfile()));
+    when(passiveProfileService.getPersonalizationSignals(7L)).thenReturn(beginnerSignals());
 
     assertThat(
             java.util.stream.IntStream.rangeClosed(1, 5)
@@ -467,13 +468,48 @@ class BossServiceTest {
   @DisplayName("预加载轮询使用与 POST 相同的服务端画像合成难度")
   void prefetchStatusUsesAuthoritativeDifficultyDimensions() {
     when(coursePackRepository.findKcs(eq(43L), eq(null))).thenReturn(List.of());
-    when(profileService.findProfile(7L)).thenReturn(Optional.of(beginnerProfile()));
+    when(passiveProfileService.getPersonalizationSignals(7L)).thenReturn(beginnerSignals());
     when(pregenService.getPrefetchStatus(7L, 1, 4, "PY43-KC-001", 4, "debug", "1-5", null))
         .thenReturn(BossPrefetchStatusDto.idle());
 
     service.prefetchStatus(1, 4, "PY43-KC-001", 5, "debug", "1-5", null, 7L);
 
     verify(pregenService).getPrefetchStatus(7L, 1, 4, "PY43-KC-001", 4, "debug", "1-5", null);
+  }
+
+  @Test
+  @DisplayName("Boss 个性化信号由 dimensions metadata 覆盖客户端画像字段")
+  void problemRequestUsesUnifiedDimensionSignalsAndPreservesRequestQuestKind() {
+    when(passiveProfileService.getPersonalizationSignals(7L))
+        .thenReturn(
+            new LearnerProfileSignals(
+                List.of("PY43-KC-009"), 2, 0.6, List.of("video", "diagram"), 0.4, 2.5));
+    when(graphClient.requestProblem(anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
+        .thenReturn(problemWithStage(1));
+    ProfileSignalsPayload clientSignals =
+        new ProfileSignalsPayload(List.of("CLIENT-KC"), 5, 1.0, List.of("client"), 1.0, "debug");
+
+    service.fetchProblem(
+        1,
+        new BossProblemRequest(1, null, null, null, "review", clientSignals, null, null),
+        7L);
+
+    ArgumentCaptor<ProfileSignalsPayload> captured =
+        ArgumentCaptor.forClass(ProfileSignalsPayload.class);
+    verify(graphClient)
+        .requestProblem(
+            eq(7L),
+            eq(1),
+            eq(1),
+            eq("PY43-KC-001"),
+            anyInt(),
+            org.mockito.ArgumentMatchers.isNull(),
+            eq("review"),
+            captured.capture());
+    assertThat(captured.getValue())
+        .isEqualTo(
+            new ProfileSignalsPayload(
+                List.of("PY43-KC-009"), 2, 0.6, List.of("video", "diagram"), 0.4, "debug"));
   }
 
   @Test
@@ -640,20 +676,8 @@ class BossServiceTest {
         List.of(), "");
   }
 
-  private static LearnerProfileDto beginnerProfile() {
-    return new LearnerProfileDto(
-        1L,
-        7L,
-        43L,
-        "non-cs",
-        new BaseLevelDto(0, List.of(), 1),
-        null,
-        null,
-        null,
-        null,
-        new PracticeCapabilityDto(4.0, 0.1),
-        new EmotionPersistenceDto(0.2, "frustrated"),
-        "beginner");
+  private static LearnerProfileSignals beginnerSignals() {
+    return new LearnerProfileSignals(List.of(), 0, 0.1, List.of(), 0.2, 4.0);
   }
 
   /** 带 hidden testCases 的内部题：evaluateAttempt 才能越过「空 testCases」兜底进入真实判题路径。 */

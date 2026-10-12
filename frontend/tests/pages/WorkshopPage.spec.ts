@@ -109,6 +109,7 @@ import WorkshopChat from '@/components/workshop/WorkshopChat.vue';
 import ChatHistoryRail from '@/components/workshop/ChatHistoryRail.vue';
 import { useSessionStore } from '@stores/session';
 import { useWorldStore } from '@stores/world';
+import { useWorkshopUiStore } from '@stores/workshopUi';
 
 const APP_LAYOUT_STUB = { template: '<div data-testid="layout-stub"><slot /></div>' };
 
@@ -306,6 +307,20 @@ describe('WorkshopPage R-13 改造', () => {
     }
     // 同一列表里的图书馆/远征入口与路线表无关，必须保留。
     expect(wrapper.find('[data-testid="workshop-open-library"]').exists()).toBe(true);
+  });
+
+  it('consumes a Learner Twin prompt into the chat draft on entry', async () => {
+    const ui = useWorkshopUiStore();
+    ui.setPendingPrompt('基于本周证据复习 PY43-KC-001');
+
+    await router.push('/workshop');
+    const wrapper = mountPage();
+    await flushPromises();
+
+    expect(wrapper.get('[data-testid="composer-input"]').element.value).toBe(
+      '基于本周证据复习 PY43-KC-001',
+    );
+    expect(ui.pendingPrompt).toBeNull();
   });
 
   it('restores fast-travel chips once more than one route exists', async () => {

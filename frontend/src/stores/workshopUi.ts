@@ -11,6 +11,7 @@ import { defineStore } from 'pinia';
 export const useWorkshopUiStore = defineStore('workshopUi', {
   state: () => ({
     openResourceId: null as number | null,
+    pendingPrompt: null as string | null,
   }),
   actions: {
     openResource(id: number): void {
@@ -18,6 +19,14 @@ export const useWorkshopUiStore = defineStore('workshopUi', {
     },
     closeResource(): void {
       this.openResourceId = null;
+    },
+    setPendingPrompt(text: string): void {
+      this.pendingPrompt = text;
+    },
+    takePendingPrompt(): string | null {
+      const prompt = this.pendingPrompt;
+      this.pendingPrompt = null;
+      return prompt;
     },
   },
 });

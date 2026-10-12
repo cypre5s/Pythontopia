@@ -49,15 +49,15 @@ class TutorWorkflowSubmissionFeedbackListenerTest {
     listener.onPracticeFailed(
         new LearningEvent.PracticeFailed(USER, "PY43-KC-016", PROBLEM, "WA", "basic"));
 
-    ArgumentCaptor<String> stateJson = ArgumentCaptor.forClass(String.class);
-    verify(repository).upsertAgentState(eq(session.id()), stateJson.capture(), any());
-    JsonNode state = objectMapper.readTree(stateJson.getValue());
-    assertThat(state.path("attempt_count").asInt()).isEqualTo(3);
-    assertThat(state.path("latest_verdict").asText()).isEqualTo("WA");
-    assertThat(state.path("consecutive_errors").asInt()).isEqualTo(2);
-    assertThat(state.path("last_action_effective").asBoolean()).isFalse();
-    verify(repository)
-        .insertActionEvent(eq(session.id()), eq(5), eq("SUBMISSION_OBSERVED"), eq("WA"), any());
+    TutorWorkflowRepository.SubmissionFeedbackProjection projection = capturedProjection();
+    JsonNode state = objectMapper.readTree(projection.stateJson());
+    JsonNode studentState = state.path("student_state");
+    assertThat(studentState.path("attempt_count").asInt()).isEqualTo(3);
+    assertThat(studentState.path("latest_verdict").asText()).isEqualTo("WA");
+    assertThat(studentState.path("consecutive_errors").asInt()).isEqualTo(2);
+    assertThat(studentState.path("last_action_effective").asBoolean()).isFalse();
+    assertThat(projection.seq()).isEqualTo(5);
+    assertThat(projection.verdict()).isEqualTo("WA");
   }
 
   @Test
@@ -78,15 +78,95 @@ class TutorWorkflowSubmissionFeedbackListenerTest {
     listener.onPracticeSucceeded(
         new LearningEvent.PracticeSucceeded(USER, "PY43-KC-016", PROBLEM, "basic"));
 
-    ArgumentCaptor<String> stateJson = ArgumentCaptor.forClass(String.class);
-    verify(repository).upsertAgentState(eq(session.id()), stateJson.capture(), any());
-    JsonNode state = objectMapper.readTree(stateJson.getValue());
-    assertThat(state.path("attempt_count").asInt()).isEqualTo(4);
-    assertThat(state.path("latest_verdict").asText()).isEqualTo("AC");
-    assertThat(state.path("consecutive_errors").asInt()).isZero();
-    assertThat(state.path("frustration_level").asText()).isEqualTo("low");
-    assertThat(state.path("last_action_effective").asBoolean()).isTrue();
-    verify(repository)
-        .insertActionEvent(eq(session.id()), eq(5), eq("SUBMISSION_OBSERVED"), eq("AC"), any());
+    TutorWorkflowRepository.SubmissionFeedbackProjection projection = capturedProjection();
+    JsonNode state = objectMapper.readTree(projection.stateJson());
+    JsonNode studentState = state.path("student_state");
+    assertThat(studentState.path("attempt_count").asInt()).isEqualTo(4);
+    assertThat(studentState.path("latest_verdict").asText()).isEqualTo("AC");
+    assertThat(studentState.path("consecutive_errors").asInt()).isZero();
+    assertThat(studentState.path("frustration_level").asText()).isEqualTo("low");
+    assertThat(studentState.path("last_action_effective").asBoolean()).isTrue();
+    assertThat(projection.seq()).isEqualTo(5);
+    assertThat(projection.verdict()).isEqualTo("AC");
+  }
+
+  @Test
+  void submissionAdvancesOnlyMatchingActiveStepThatRequiresSubmission() throws Exception {
+    when(repository.findActive(USER, PROBLEM)).thenReturn(Optional.of(session));
+    when(repository.findAgentState(session.id()))
+        .thenReturn(
+            Optional.of(
+                new TutorWorkflowAgentStateDto(
+                    session.id(),
+                    """
+                    {
+                      "student_state":{"session_id":"wf-7-476-abc","user_id":7,"problem_id":476,
+                        "phase":"CODING","attempt_count":0,"consecutive_errors":0},
+                      "episode_plan":{"plan_id":"plan-1","session_id":"wf-7-476-abc",
+                        "problem_id":476,"user_id":7,"objective":"finish","trigger_event":"ERROR_FEEDBACK",
+                        "revision":1,"current_step_id":"step-1","status":"ACTIVE",
+                        "steps":[
+                          {"step_id":"step-1","event":"CODING","title":"提交当前程序",
+                           "status":"ACTIVE","expected_evidence":"SUBMISSION_OBSERVED"},
+                          {"step_id":"step-2","event":"TRANSFER","title":"尝试迁移题",
+                           "status":"PENDING","depends_on":["step-1"],
+                           "expected_evidence":"TRANSFER_ATTEMPT"}
+                        ]},
+                      "chat_history":[{"role":"user","content":"旧问题"}]
+                    }
+                    """,
+                    "{}")));
+
+    listener.onPracticeFailed(
+        new LearningEvent.PracticeFailed(USER, "PY43-KC-016", PROBLEM, "WA", "basic"));
+
+    TutorWorkflowRepository.SubmissionFeedbackProjection projection = capturedProjection();
+    JsonNode state = objectMapper.readTree(projection.stateJson());
+    assertThat(state.path("student_state").path("attempt_count").asInt()).isEqualTo(1);
+    assertThat(state.path("episode_plan").path("current_step_id").asText()).isEqualTo("step-2");
+    assertThat(state.path("episode_plan").path("revision").asInt()).isEqualTo(2);
+    assertThat(state.path("episode_plan").path("steps").get(0).path("status").asText())
+        .isEqualTo("DONE");
+    assertThat(state.path("episode_plan").path("steps").get(1).path("status").asText())
+        .isEqualTo("ACTIVE");
+    assertThat(state.path("chat_history").get(0).path("content").asText()).isEqualTo("旧问题");
+  }
+
+  @Test
+  void submissionDoesNotAdvanceCardEvidenceStep() throws Exception {
+    when(repository.findActive(USER, PROBLEM)).thenReturn(Optional.of(session));
+    when(repository.findAgentState(session.id()))
+        .thenReturn(
+            Optional.of(
+                new TutorWorkflowAgentStateDto(
+                    session.id(),
+                    """
+                    {"student_state":{"attempt_count":0},
+                     "episode_plan":{"plan_id":"plan-1","session_id":"wf-7-476-abc",
+                       "problem_id":476,"user_id":7,"objective":"finish","trigger_event":"ERROR_FEEDBACK",
+                       "revision":1,"current_step_id":"step-1","status":"ACTIVE",
+                       "steps":[{"step_id":"step-1","event":"CODING","title":"先看讲解",
+                         "status":"ACTIVE","expected_evidence":"CARD_VIEWED"},
+                         {"step_id":"step-2","event":"AC_REVIEW","title":"通过后复盘",
+                          "status":"PENDING","depends_on":["step-1"],
+                          "expected_evidence":"AC_SUBMISSION"}]},
+                     "chat_history":[]}
+                    """,
+                    "{}")));
+
+    listener.onPracticeSucceeded(
+        new LearningEvent.PracticeSucceeded(USER, "PY43-KC-016", PROBLEM, "basic"));
+
+    JsonNode plan = objectMapper.readTree(capturedProjection().stateJson()).path("episode_plan");
+    assertThat(plan.path("current_step_id").asText()).isEqualTo("step-1");
+    assertThat(plan.path("revision").asInt()).isEqualTo(1);
+    assertThat(plan.path("steps").get(0).path("status").asText()).isEqualTo("ACTIVE");
+  }
+
+  private TutorWorkflowRepository.SubmissionFeedbackProjection capturedProjection() {
+    ArgumentCaptor<TutorWorkflowRepository.SubmissionFeedbackProjection> projection =
+        ArgumentCaptor.forClass(TutorWorkflowRepository.SubmissionFeedbackProjection.class);
+    verify(repository).persistSubmissionFeedback(eq(session.id()), projection.capture());
+    return projection.getValue();
   }
 }

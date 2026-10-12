@@ -5,8 +5,8 @@ import com.pythontopia.coursepack.repository.CoursePackRepository;
 import com.pythontopia.learner.event.LearningEvent;
 import com.pythontopia.learner.mastery.MasteryRepository;
 import com.pythontopia.learner.mastery.MasterySnapshot;
-import com.pythontopia.learner.profile.dto.LearnerProfileDto;
-import com.pythontopia.learner.profile.service.ProfileService;
+import com.pythontopia.learner.profile.dto.LearnerProfileSignals;
+import com.pythontopia.learner.profile.service.PassiveProfileService;
 import com.pythontopia.mainline.ChapterCatalog;
 import com.pythontopia.world.boss.dto.BossAttemptRequest;
 import com.pythontopia.world.boss.dto.BossAttemptResultDto;
@@ -68,7 +68,7 @@ public class BossService {
   private final BossGraphClient graphClient;
   private final MasteryRepository masteryRepository;
   private final CoursePackRepository coursePackRepository;
-  private final ProfileService profileService;
+  private final PassiveProfileService passiveProfileService;
   private final EndlessPregenService pregenService;
   private final BossProblemReviewRepository reviewRepository;
   private final ExpeditionRunService expeditionRunService;
@@ -80,7 +80,7 @@ public class BossService {
       BossGraphClient graphClient,
       MasteryRepository masteryRepository,
       CoursePackRepository coursePackRepository,
-      ProfileService profileService,
+      PassiveProfileService passiveProfileService,
       EndlessPregenService pregenService,
       BossProblemReviewRepository reviewRepository,
       ExpeditionRunService expeditionRunService,
@@ -89,7 +89,7 @@ public class BossService {
     this.graphClient = graphClient;
     this.masteryRepository = masteryRepository;
     this.coursePackRepository = coursePackRepository;
-    this.profileService = profileService;
+    this.passiveProfileService = passiveProfileService;
     this.pregenService = pregenService;
     this.reviewRepository = reviewRepository;
     this.expeditionRunService = expeditionRunService;
@@ -302,39 +302,21 @@ public class BossService {
   }
 
   /**
-   * 出题画像以服务端 learner_profile 为权威，避免客户端遗漏/篡改导致难度漂移；只有匿名或测试调用
-   * 才沿用请求内信号。
+   * 出题画像以服务端 unified dimensions 为权威，避免客户端遗漏/篡改导致信号漂移；只有匿名调用
+   * 才沿用请求内画像。访谈 metadata 是自评快照，不替代下方正式掌握度与练习历史。
    */
   private ProfileSignalsPayload authoritativeSignals(
       Long userId, ProfileSignalsPayload requestSignals) {
     if (userId == null) {
       return requestSignals;
     }
-    LearnerProfileDto profile = profileService.findProfile(userId).orElse(null);
-    if (profile == null) {
-      return new ProfileSignalsPayload(List.of(), null, null, List.of(), null, null);
-    }
-    List<String> weak =
-        profile.errorPatterns() == null || profile.errorPatterns().frequentKcCodes() == null
-            ? List.of()
-            : profile.errorPatterns().frequentKcCodes().stream()
-                .filter(code -> code != null && !code.isBlank())
-                .distinct()
-                .limit(6)
-                .toList();
-    List<String> media =
-        profile.learningPreference() == null || profile.learningPreference().mediaPriority() == null
-            ? List.of()
-            : profile.learningPreference().mediaPriority().stream()
-                .filter(value -> value != null && !value.isBlank())
-                .limit(4)
-                .toList();
+    LearnerProfileSignals profile = passiveProfileService.getPersonalizationSignals(userId);
     return new ProfileSignalsPayload(
-        weak,
-        profile.baseLevel() == null ? null : profile.baseLevel().pythonSelfRatedLevel(),
-        profile.practiceCapability() == null ? null : profile.practiceCapability().successRate(),
-        media,
-        profile.emotionPersistence() == null ? null : profile.emotionPersistence().resilience(),
+        profile.frequentKcCodes(),
+        profile.pythonSelfRatedLevel(),
+        profile.successRate(),
+        profile.mediaPriority(),
+        profile.resilience(),
         requestSignals == null ? null : requestSignals.questPreferredKind());
   }
 
@@ -553,7 +535,7 @@ public class BossService {
     try {
       Integer masteryDifficulty = masteryDifficulty(userId, anchorKc);
       Integer profileDifficulty =
-          profileService.findProfile(userId).map(BossService::profileDifficulty).orElse(null);
+          profileDifficulty(passiveProfileService.getPersonalizationSignals(userId));
       Integer readiness = averageDifficulty(masteryDifficulty, profileDifficulty);
       if (readiness == null) {
         return progression;
@@ -600,29 +582,29 @@ public class BossService {
     return bossDifficulty(scoreSum / n, confSum / n);
   }
 
-  static Integer profileDifficulty(LearnerProfileDto profile) {
+  static Integer profileDifficulty(LearnerProfileSignals profile) {
+    if (profile == null) {
+      return null;
+    }
     List<Integer> signals = new java.util.ArrayList<>();
-    if (profile.baseLevel() != null && profile.baseLevel().pythonSelfRatedLevel() != null) {
-      int level = profile.baseLevel().pythonSelfRatedLevel();
+    if (profile.pythonSelfRatedLevel() != null) {
+      int level = profile.pythonSelfRatedLevel();
       signals.add(clampDifficulty(level == 0 ? 1 : level));
     }
-    if (profile.practiceCapability() != null) {
-      if (profile.practiceCapability().successRate() != null) {
-        double rate = Math.max(0.0, Math.min(1.0, profile.practiceCapability().successRate()));
-        signals.add(clampDifficulty(1 + (int) Math.floor(rate * 5.0)));
-      }
-      if (profile.practiceCapability().avgAttemptsPerProblem() != null) {
-        double attempts = profile.practiceCapability().avgAttemptsPerProblem();
-        signals.add(attempts <= 1.2 ? 5 : attempts <= 2.0 ? 4 : attempts <= 3.0 ? 3 : 2);
-      }
+    if (profile.successRate() != null) {
+      double rate = Math.max(0.0, Math.min(1.0, profile.successRate()));
+      signals.add(clampDifficulty(1 + (int) Math.floor(rate * 5.0)));
+    }
+    if (profile.avgAttemptsPerProblem() != null) {
+      double attempts = profile.avgAttemptsPerProblem();
+      signals.add(attempts <= 1.2 ? 5 : attempts <= 2.0 ? 4 : attempts <= 3.0 ? 3 : 2);
     }
     if (signals.isEmpty()) {
       return null;
     }
     int readiness = (int) Math.round(signals.stream().mapToInt(Integer::intValue).average().orElse(3));
-    if (profile.emotionPersistence() != null
-        && profile.emotionPersistence().resilience() != null) {
-      double resilience = profile.emotionPersistence().resilience();
+    if (profile.resilience() != null) {
+      double resilience = profile.resilience();
       if (resilience < 0.35) {
         readiness--;
       } else if (resilience > 0.8) {

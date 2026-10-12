@@ -20,6 +20,9 @@ vi.mock('@/api/tutorWorkflow', async (importOriginal) => {
       cards: [],
     })),
     recordTutorWorkflowFeedback: vi.fn(async () => undefined),
+    uploadTutorWorkflowImage: vi.fn(async () => ({
+      attachmentId: 'd0162eb8-8c60-4d85-a3da-3aa3f11460ba',
+    })),
   };
 });
 
@@ -76,7 +79,7 @@ vi.mock('@/composables/useSseStream', async () => {
 });
 
 import { useSseStream } from '@/composables/useSseStream';
-import { recordTutorWorkflowFeedback } from '@/api/tutorWorkflow';
+import { getActiveWorkflowSession, recordTutorWorkflowFeedback, uploadTutorWorkflowImage } from '@/api/tutorWorkflow';
 import { useToastStore } from '@stores/toast';
 
 interface MockStream {
@@ -126,6 +129,8 @@ describe('TutorWorkflowPanel', () => {
     stream.start.mockClear();
     stream.abort.mockClear();
     vi.mocked(recordTutorWorkflowFeedback).mockClear();
+    vi.mocked(uploadTutorWorkflowImage).mockClear();
+    vi.mocked(getActiveWorkflowSession).mockClear();
   });
 
   afterEach(() => vi.unstubAllGlobals());
@@ -144,7 +149,7 @@ describe('TutorWorkflowPanel', () => {
 
     const wrapper = mountPanel();
     await flushPromises();
-    await wrapper.get('[data-testid="tw-actions"] button').trigger('click');
+    await wrapper.get('[data-testid="coach-recommended-action"]').trigger('click');
     await nextTick();
 
     wrapper.unmount();
@@ -164,7 +169,7 @@ describe('TutorWorkflowPanel', () => {
     await flushPromises();
 
     // 初始主推荐是「题目导读」；点它触发一次 run，返回 execution_trace(recommended)+knowledge_review。
-    await wrapper.get('[data-testid="tw-actions"] button').trigger('click');
+    await wrapper.get('[data-testid="coach-recommended-action"]').trigger('click');
     await flushPromises();
     await nextTick();
 
@@ -184,7 +189,7 @@ describe('TutorWorkflowPanel', () => {
     const wrapper = mountPanel();
     await flushPromises();
 
-    await wrapper.get('[data-testid="tw-actions"] button').trigger('click');
+    await wrapper.get('[data-testid="coach-recommended-action"]').trigger('click');
     await flushPromises();
 
     expect(recordTutorWorkflowFeedback).toHaveBeenCalledWith('wf-test', {
@@ -198,7 +203,7 @@ describe('TutorWorkflowPanel', () => {
   it('records helpful card feedback without blocking the workflow UI', async () => {
     const wrapper = mountPanel();
     await flushPromises();
-    await wrapper.get('[data-testid="tw-actions"] button').trigger('click');
+    await wrapper.get('[data-testid="coach-recommended-action"]').trigger('click');
     await flushPromises();
 
     await wrapper.get('[data-testid="card-helpful"]').trigger('click');
@@ -212,16 +217,78 @@ describe('TutorWorkflowPanel', () => {
     expect(wrapper.get('[data-testid="card-feedback-state"]').text()).toContain('已记录');
   });
 
-  it('sends an attached image with the CHAT event', async () => {
-    vi.stubGlobal('FileReader', class {
-      result: string | null = null;
-      onload: (() => void) | null = null;
-      onerror: (() => void) | null = null;
-      readAsDataURL(file: Blob): void {
-        this.result = `data:${file.type};base64,iVBORw0KGgo=`;
-        this.onload?.();
-      }
+  it('asks the tutor to re-explain a card after negative feedback', async () => {
+    const wrapper = mountPanel();
+    await flushPromises();
+    await wrapper.get('[data-testid="coach-recommended-action"]').trigger('click');
+    await flushPromises();
+
+    await wrapper.get('[data-testid="card-not-helpful"]').trigger('click');
+    await flushPromises();
+
+    expect(getStream().start).toHaveBeenLastCalledWith(expect.objectContaining({
+      event: 'AGENT_FEEDBACK',
+      eventData: { message: '@card:card-reading-1 这张“题目导读”没有解决我的问题，请换一种方式解释。' },
+    }));
+  });
+
+  it('shows a generated episode plan and sends the server phase when starting it', async () => {
+    const plan = {
+      plan_id: 'ep-wf-test',
+      session_id: 'wf-test',
+      problem_id: 476,
+      user_id: 7,
+      objective: '先读懂题目，再独立完成练习。',
+      trigger_event: 'READING',
+      trigger_verdict: '',
+      revision: 0,
+      current_step_id: 's1',
+      steps: [{
+        step_id: 's1', event: 'READING', tool_name: 'read_problem', title: '先把题读透',
+        goal: '明确输入输出。', student_visible_reason: '先一起看清题目。',
+        stop_condition: '能复述题意。', status: 'ACTIVE', depends_on: [],
+        expected_evidence: 'CHECKPOINT_COMPLETED',
+      }, {
+        step_id: 's2', event: 'IDEATING', tool_name: 'ideate_solution', title: '理一下思路',
+        goal: '拆分解题步骤。', student_visible_reason: '再理顺思路。',
+        stop_condition: '说出解题步骤。', status: 'PENDING', depends_on: ['s1'],
+        expected_evidence: 'CHECKPOINT_COMPLETED',
+      }],
+      status: 'RECOMMENDED',
+      stop_policy: 'WAIT_FOR_CLICK',
+      revision_reason: '',
+      created_by: 'coach',
+      evidence_summary: 'verdict=NONE',
+    } as const;
+    vi.mocked(getActiveWorkflowSession).mockResolvedValueOnce({
+      sessionKey: 'wf-test', problemId: 476, phase: 'READING', seq: 0, cards: [], episodePlan: plan,
     });
+    const stream = getStream();
+    stream.start.mockImplementationOnce(async () => {
+      stream.result.value = {
+        session_id: 'wf-test', event: 'PLAN_START', phase: 'READING', card_key: null,
+        card: null, available_actions: [], episode_plan: { ...plan, status: 'ACTIVE', revision: 1 }, seq: 0,
+      };
+      stream.status.value = 'done';
+    });
+    const wrapper = mountPanel();
+    await flushPromises();
+    expect(wrapper.get('[data-testid="tutor-episode-plan"]').text()).toContain('先把题读透');
+
+    await wrapper.get('[data-testid="plan-start"]').trigger('click');
+    await flushPromises();
+
+    expect(stream.start).toHaveBeenCalledWith({
+      problemId: 476,
+      event: 'PLAN_START',
+      eventData: {
+        plan_id: 'ep-wf-test', revision: 0, reason: '学生开始已推荐的学习计划',
+        trigger_source: 'student', current_phase: 'READING',
+      },
+    });
+  });
+
+  it('sends an attached image with the CHAT event', async () => {
     const wrapper = mountPanel();
     await flushPromises();
     const file = new File([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])], 'question.png', { type: 'image/png' });
@@ -235,13 +302,35 @@ describe('TutorWorkflowPanel', () => {
     await wrapper.get('.tw-chat').trigger('submit');
     await flushPromises();
 
+    expect(uploadTutorWorkflowImage).toHaveBeenCalledWith('wf-test', file);
     expect(getStream().start).toHaveBeenCalledWith(expect.objectContaining({
       event: 'CHAT',
       eventData: expect.objectContaining({
         message: '请看这张图',
-        images: [expect.stringMatching(/^data:image\/png;base64,/)],
+        attachment_ids: ['d0162eb8-8c60-4d85-a3da-3aa3f11460ba'],
       }),
     }));
+    expect(getStream().start).toHaveBeenCalledWith(expect.objectContaining({
+      eventData: expect.not.objectContaining({ images: expect.anything() }),
+    }));
+  });
+
+  it('keeps the text and image draft when attachment upload fails', async () => {
+    vi.mocked(uploadTutorWorkflowImage).mockRejectedValueOnce(new Error('upload failed'));
+    const wrapper = mountPanel();
+    await flushPromises();
+    const file = new File([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])], 'question.png', { type: 'image/png' });
+    const input = wrapper.get('[data-testid="tw-chat-image-input"]');
+    Object.defineProperty(input.element, 'files', { value: [file], configurable: true });
+    await input.trigger('change');
+    await flushPromises();
+    await wrapper.get('.tw-chat__input').setValue('请看这张图');
+    await wrapper.get('.tw-chat').trigger('submit');
+    await flushPromises();
+
+    expect((wrapper.get('.tw-chat__input').element as HTMLTextAreaElement).value).toBe('请看这张图');
+    expect(wrapper.find('[data-testid="tw-chat-images"]').exists()).toBe(true);
+    expect(getStream().start).not.toHaveBeenCalled();
   });
 
   it('renders bounded coach progress from trace nodes without exposing raw internals', async () => {

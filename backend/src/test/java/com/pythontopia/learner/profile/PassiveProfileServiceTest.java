@@ -294,6 +294,94 @@ class PassiveProfileServiceTest {
   }
 
   @Test
+  void personalizationSignalsReadExistingMetadataOnlyWhenDimensionEvidenceIsConfident() {
+    ObjectNode dims = objectMapper.createObjectNode();
+    dims.putObject("error_pattern")
+        .put("evidence_count", 3)
+        .put("frequent_kc_codes", objectMapper.valueToTree(List.of("PY43-KC-001", "PY43-KC-002")));
+    dims.putObject("knowledge_base").put("evidence_count", 3).put("python_self_rated_level", 2);
+    dims.putObject("practical_ability")
+        .put("evidence_count", 3)
+        .put("success_rate", 0.6)
+        .put("avg_attempts_per_problem", 2.5)
+        .put("score", 0.99);
+    ObjectNode preference = dims.putObject("learning_preference");
+    preference.put("evidence_count", 3);
+    preference.set("media_priority", objectMapper.valueToTree(List.of("video", "text")));
+    preference.set("tags", objectMapper.valueToTree(List.of("diagram")));
+    dims.putObject("emotion_persistence")
+        .put("evidence_count", 3)
+        .put("resilience", 0.4)
+        .put("score", 0.01);
+    when(profileRepository.findDimensions(7L)).thenReturn(Optional.of(dims));
+
+    var signals = service.getPersonalizationSignals(7L);
+
+    assertThat(signals.frequentKcCodes()).containsExactly("PY43-KC-001", "PY43-KC-002");
+    assertThat(signals.pythonSelfRatedLevel()).isEqualTo(2);
+    assertThat(signals.successRate()).isEqualTo(0.6);
+    assertThat(signals.avgAttemptsPerProblem()).isEqualTo(2.5);
+    assertThat(signals.mediaPriority()).containsExactly("video", "text", "diagram");
+    assertThat(signals.resilience()).isEqualTo(0.4);
+  }
+
+  @Test
+  void personalizationSignalsDoNotInferNumericValuesFromDimensionScoresOrLowEvidenceMetadata() {
+    ObjectNode dims = objectMapper.createObjectNode();
+    dims.putObject("knowledge_base")
+        .put("evidence_count", 2)
+        .put("python_self_rated_level", 4)
+        .put("score", 0.95);
+    dims.putObject("practical_ability")
+        .put("evidence_count", 2)
+        .put("success_rate", 0.9)
+        .put("score", 0.99);
+    dims.putObject("emotion_persistence")
+        .put("evidence_count", 2)
+        .put("resilience", 0.8)
+        .put("score", 0.01);
+    when(profileRepository.findDimensions(7L)).thenReturn(Optional.of(dims));
+
+    var signals = service.getPersonalizationSignals(7L);
+
+    assertThat(signals.pythonSelfRatedLevel()).isNull();
+    assertThat(signals.successRate()).isNull();
+    assertThat(signals.avgAttemptsPerProblem()).isNull();
+    assertThat(signals.resilience()).isNull();
+    assertThat(signals.frequentKcCodes()).isEmpty();
+    assertThat(signals.mediaPriority()).isEmpty();
+  }
+
+  @Test
+  void personalizationSignalsNeverUseScoresAsMetricsAndAllowOnlyPreferenceTagsAsStrings() {
+    ObjectNode dims = objectMapper.createObjectNode();
+    dims.putObject("knowledge_base")
+        .put("evidence_count", 3)
+        .put("score", 0.95)
+        .put("tags", objectMapper.valueToTree(List.of("5")));
+    dims.putObject("practical_ability")
+        .put("evidence_count", 3)
+        .put("score", 0.99)
+        .put("tags", objectMapper.valueToTree(List.of("0.9")));
+    dims.putObject("emotion_persistence")
+        .put("evidence_count", 3)
+        .put("score", 0.01)
+        .put("tags", objectMapper.valueToTree(List.of("0.1")));
+    ObjectNode preference = dims.putObject("learning_preference");
+    preference.put("evidence_count", 3);
+    preference.set("tags", objectMapper.valueToTree(List.of("video")));
+    when(profileRepository.findDimensions(7L)).thenReturn(Optional.of(dims));
+
+    var signals = service.getPersonalizationSignals(7L);
+
+    assertThat(signals.pythonSelfRatedLevel()).isNull();
+    assertThat(signals.successRate()).isNull();
+    assertThat(signals.avgAttemptsPerProblem()).isNull();
+    assertThat(signals.resilience()).isNull();
+    assertThat(signals.mediaPriority()).containsExactly("video");
+  }
+
+  @Test
   void testGetDimensions_decayTowardHalf() {
     ObjectNode dims = objectMapper.createObjectNode();
     ObjectNode prac = dims.putObject("practical_ability");

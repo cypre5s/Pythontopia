@@ -37,26 +37,28 @@ withDefaults(defineProps<{ title: string; description?: string }>(), {
   min-width: 0;
   overflow: hidden;
   border: 1px solid var(--admin-border);
-  border-radius: 12px;
+  border-radius: var(--admin-panel-radius);
   background: var(--admin-surface);
-  box-shadow: 0 2px 8px rgb(15 23 42 / 4%);
+  box-shadow: var(--admin-panel-shadow);
 }
 
 .admin-panel__header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
-  padding: 18px 20px;
-  border-bottom: 1px solid var(--admin-border);
+  gap: 20px;
+  padding: 20px 22px 16px;
+  border-bottom: 1px solid rgb(148 163 184 / 12%);
+  background: linear-gradient(180deg, rgb(255 255 255 / 98%) 0%, rgb(246 249 252 / 92%) 100%);
 }
 
 .admin-panel__header h2 {
   margin: 0;
   color: var(--admin-text);
-  font-size: 17px;
+  font-size: 20px;
   font-weight: 700;
-  line-height: 1.4;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
 }
 
 .admin-panel__header p {
@@ -76,17 +78,21 @@ withDefaults(defineProps<{ title: string; description?: string }>(), {
 
 .admin-panel__body {
   min-width: 0;
-  padding: 20px;
+  padding: 18px 22px 22px;
 }
 
 .admin-panel__footer {
-  padding: 0 20px 20px;
+  padding: 0 22px 22px;
 }
 
 @media (max-width: 640px) {
   .admin-panel__header,
   .admin-panel__body {
     padding: 16px;
+  }
+
+  .admin-panel__footer {
+    padding: 0 16px 16px;
   }
 
   .admin-panel__header {

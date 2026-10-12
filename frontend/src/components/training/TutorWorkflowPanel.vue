@@ -17,6 +17,7 @@ import { useToastStore } from '@stores/toast';
 import {
   getActiveWorkflowSession,
   recordTutorWorkflowFeedback,
+  uploadTutorWorkflowImage,
   type AiReplyCardDto,
   type ErrorDiagnosisCardDto,
   type ExecutionTraceCardDto,
@@ -27,6 +28,8 @@ import {
   type ProblemGuideCardDto,
   type SkeletonCodeCardDto,
   type TransferProblemCardDto,
+  type TutorEpisodePlanDto,
+  type TutorEpisodeStepDto,
   type VisualizeCardDto,
   type WorkflowActionDto,
   type WorkflowCardKey,
@@ -62,14 +65,21 @@ const cards = ref<CardEntry[]>([]);
 const availableActions = ref<WorkflowActionDto[]>([]);
 const phase = ref<string>('READING');
 const sessionKey = ref('');
+const episodePlan = ref<TutorEpisodePlanDto | null>(null);
+const planResponse = ref('');
+const planRedirect = ref('');
 const chatInput = ref('');
 const chatFileInput = ref<HTMLInputElement | null>(null);
-const chatImages = ref<string[]>([]);
+interface ChatImageDraft {
+  file: File;
+  previewUrl: string;
+}
+const chatImages = ref<ChatImageDraft[]>([]);
 const chatImageReads = ref(0);
 const canSendChat = computed(() => !running.value && !chatImageReads.value
   && (chatInput.value.trim().length > 0 || chatImages.value.length > 0));
 const MAX_CHAT_IMAGES = 3;
-const MAX_CHAT_IMAGE_BYTES = 4 * 1024 * 1024;
+const MAX_CHAT_IMAGE_BYTES = 5 * 1024 * 1024;
 const bodyRef = ref<HTMLElement | null>(null);
 const loaded = ref(false);
 const lastInitialNonce = ref(0);
@@ -135,6 +145,18 @@ const secondaryPhaseActions = computed<WorkflowActionDto[]>(
 const toolActions = computed<WorkflowActionDto[]>(
   () => availableActions.value.filter((a) => AUX_KEYS.has(a.key) && a.key !== primaryAction.value?.key),
 );
+const activePlanStep = computed<TutorEpisodeStepDto | null>(
+  () => episodePlan.value?.steps.find((step) => step.step_id === episodePlan.value?.current_step_id) ?? null,
+);
+const planIsTerminal = computed(
+  () => !episodePlan.value || ['COMPLETED', 'SURRENDERED'].includes(episodePlan.value.status),
+);
+const planNeedsSubmission = computed(
+  () => activePlanStep.value?.expected_evidence === 'SUBMISSION_OBSERVED'
+    || activePlanStep.value?.expected_evidence === 'AC_SUBMISSION'
+    || activePlanStep.value?.expected_evidence === 'TRANSFER_ATTEMPT',
+);
+const compactAvailable = computed(() => cards.value.filter((card) => card.key === 'ai_reply').length > 4);
 
 // 「学习工具」抽屉与「思考过程」默认收起（用户要求：这些内容平时缩小收纳）。
 const toolsOpen = ref(false);
@@ -174,6 +196,7 @@ let alive = true;
 onBeforeUnmount(() => {
   alive = false;
   sse.abort();
+  chatImages.value.forEach((image) => revokeImagePreview(image.previewUrl));
 });
 
 async function load(): Promise<void> {
@@ -183,6 +206,7 @@ async function load(): Promise<void> {
     sessionKey.value = snap.sessionKey;
     cards.value = snap.cards.map((c) => ({ key: c.cardKey, payload: c.payload, seq: c.seq }));
     phase.value = snap.phase;
+    episodePlan.value = snap.episodePlan ?? null;
   } catch {
     if (!alive) return;
     cards.value = [];
@@ -203,7 +227,54 @@ function eventDataFor(event: WorkflowEvent): Record<string, unknown> | undefined
   if (event === 'ERROR_FEEDBACK' || event === 'AC_REVIEW') {
     return props.submissionId ? { submission_id: props.submissionId } : undefined;
   }
+  const plan = episodePlan.value;
+  if (event === 'PLAN_START' && plan) {
+    return {
+      plan_id: plan.plan_id,
+      revision: plan.revision,
+      reason: '学生开始已推荐的学习计划',
+      trigger_source: 'student',
+      current_phase: phase.value,
+    };
+  }
+  if (event === 'PLAN_RESPONSE' && plan && activePlanStep.value) {
+    return {
+      plan_id: plan.plan_id,
+      revision: plan.revision,
+      step_id: activePlanStep.value.step_id,
+      evidence_type: 'reflection',
+      response: planResponse.value.trim(),
+    };
+  }
+  if (event === 'PLAN_STEERING' && plan) {
+    return { plan_id: plan.plan_id, revision: plan.revision, signal_type: 'pause' };
+  }
   return undefined;
+}
+
+function startEpisodePlan(): void {
+  void runEvent('PLAN_RECOMMEND');
+}
+
+function respondToPlan(): void {
+  if (!planResponse.value.trim()) return;
+  const data = eventDataFor('PLAN_RESPONSE');
+  if (!data) return;
+  void runEvent('PLAN_RESPONSE', data);
+  planResponse.value = '';
+}
+
+function steerEpisodePlan(signal: 'pause' | 'resume' | 'skip' | 'take_over' | 'redirect'): void {
+  const plan = episodePlan.value;
+  if (!plan) return;
+  if (signal === 'redirect' && !planRedirect.value.trim()) return;
+  void runEvent('PLAN_STEERING', {
+    plan_id: plan.plan_id,
+    revision: plan.revision,
+    signal_type: signal,
+    ...(signal === 'redirect' ? { redirect_instruction: planRedirect.value.trim() } : {}),
+  });
+  if (signal === 'redirect') planRedirect.value = '';
 }
 
 async function runEvent(event: WorkflowEvent, eventData?: Record<string, unknown>): Promise<void> {
@@ -218,6 +289,7 @@ async function runEvent(event: WorkflowEvent, eventData?: Record<string, unknown
     const r = sse.result.value;
     sessionKey.value = r.session_id || sessionKey.value;
     phase.value = r.phase;
+    episodePlan.value = r.episode_plan ?? null;
     if (r.card && r.card_key) {
       const entry: CardEntry = { key: r.card_key, payload: r.card, seq: r.seq };
       const msg = eventData?.message;
@@ -249,6 +321,16 @@ watch(
   },
   { deep: true },
 );
+
+watch(() => props.submissionId, async () => {
+  if (!loaded.value) return;
+  try {
+    const snapshot = await getActiveWorkflowSession(props.problemId);
+    if (alive) episodePlan.value = snapshot.episodePlan ?? null;
+  } catch {
+    // Keep the visible plan until the next successful session refresh.
+  }
+});
 
 function onAction(action: WorkflowActionDto): void {
   void recordFeedback({
@@ -282,6 +364,11 @@ async function markCardFeedback(entry: CardEntry, value: 'helpful' | 'not_helpfu
     payload: { cardId: id, seq: entry.seq },
   });
   cardFeedback.value = { ...cardFeedback.value, [id]: value };
+  if (value === 'not_helpful' && !running.value) {
+    void runEvent('AGENT_FEEDBACK', {
+      message: `@card:${id} 这张“${CARD_TITLES[entry.key]}”没有解决我的问题，请换一种方式解释。`,
+    });
+  }
 }
 
 function onChatImagesSelected(event: Event): void {
@@ -298,35 +385,60 @@ function onChatImagesSelected(event: Event): void {
       continue;
     }
     if (file.size > MAX_CHAT_IMAGE_BYTES) {
-      toast.show('单张图片不能超过 4MB', 'error');
+      toast.show('单张图片不能超过 5 MiB', 'error');
       continue;
     }
-    chatImageReads.value += 1;
-    const reader = new FileReader();
-    reader.onload = () => {
-      chatImageReads.value -= 1;
-      if (typeof reader.result === 'string') chatImages.value = [...chatImages.value, reader.result];
-    };
-    reader.onerror = () => {
-      chatImageReads.value -= 1;
-      toast.show('图片读取失败', 'error');
-    };
-    reader.readAsDataURL(file);
+    const previewUrl =
+      typeof URL.createObjectURL === 'function' ? URL.createObjectURL(file) : '';
+    chatImages.value = [...chatImages.value, { file, previewUrl }];
   }
 }
 
 function removeChatImage(index: number): void {
+  const removed = chatImages.value[index];
+  if (removed) revokeImagePreview(removed.previewUrl);
   chatImages.value = chatImages.value.filter((_, i) => i !== index);
 }
 
-function sendChat(): void {
-  const text = chatInput.value.trim();
+function revokeImagePreview(previewUrl: string): void {
+  if (previewUrl && typeof URL.revokeObjectURL === 'function') {
+    URL.revokeObjectURL(previewUrl);
+  }
+}
+
+async function sendChat(): Promise<void> {
+  const draft = chatInput.value;
+  const text = draft.trim();
   if ((!text && !chatImages.value.length) || running.value || chatImageReads.value) return;
   const message = text || '请结合这张图片帮我分析。';
   const images = [...chatImages.value];
-  chatInput.value = '';
-  chatImages.value = [];
-  void runEvent('CHAT', { message, ...(images.length ? { images } : {}) });
+  chatImageReads.value += 1;
+  try {
+    // shortcut: if one of several uploads fails, successful siblings remain quota-bound until the 30-minute TTL cleanup.
+    const uploadResults = await Promise.allSettled(
+      images.map((image) => uploadTutorWorkflowImage(sessionKey.value, image.file)),
+    );
+    const failedUpload = uploadResults.find((result) => result.status === 'rejected');
+    if (failedUpload?.status === 'rejected') throw failedUpload.reason;
+    if (!alive) return;
+    const attachments = uploadResults.map((result) => {
+      if (result.status !== 'fulfilled') throw new Error('Image upload did not complete');
+      return result.value;
+    });
+    if (chatInput.value === draft) chatInput.value = '';
+    chatImages.value = chatImages.value.filter((image) => !images.includes(image));
+    images.forEach((image) => revokeImagePreview(image.previewUrl));
+    await runEvent('CHAT', {
+      message,
+      ...(attachments.length
+        ? { attachment_ids: attachments.map((attachment) => attachment.attachmentId) }
+        : {}),
+    });
+  } catch {
+    toast.show('图片上传失败，请重试', 'error');
+  } finally {
+    chatImageReads.value -= 1;
+  }
 }
 
 function insertSkeleton(code: string): void {
@@ -567,6 +679,23 @@ function cardId(entry: CardEntry): string {
         <!-- 百晓回复（CHAT） -->
         <template v-else-if="entry.key === 'ai_reply'">
           <MarkdownView :source="asReply(entry.payload).content" />
+          <ul
+            v-if="asReply(entry.payload).courseware_refs?.length"
+            class="tw-refs"
+            aria-label="引用课件页"
+          >
+            <li
+              v-for="(reference, index) in asReply(entry.payload).courseware_refs"
+              :key="`${reference.page_id ?? 'page'}-${index}`"
+            >
+              <RouterLink
+                v-if="reference.page_id"
+                :to="`/library?pageId=${reference.page_id}`"
+              >
+                参考课件第 {{ reference.page_no }} 页
+              </RouterLink>
+            </li>
+          </ul>
         </template>
 
         <!-- 知识点复盘 -->
@@ -702,6 +831,110 @@ function cardId(entry: CardEntry): string {
         </footer>
       </article>
 
+      <section
+        v-if="episodePlan"
+        class="tw-plan"
+        data-testid="tutor-episode-plan"
+        aria-label="个性化学习计划"
+      >
+        <header class="tw-plan__head">
+          <strong>学习计划</strong>
+          <span>{{ episodePlan.status === 'RECOMMENDED' ? '待开始' : episodePlan.status === 'ACTIVE' ? '进行中' : episodePlan.status === 'PAUSED' ? '已暂停' : episodePlan.status === 'COMPLETED' ? '已完成' : '已接管' }}</span>
+        </header>
+        <p class="tw-plan__objective">{{ episodePlan.objective }}</p>
+        <ol class="tw-plan__steps">
+          <li
+            v-for="step in episodePlan.steps"
+            :key="step.step_id"
+            :class="{ 'is-active': step.step_id === episodePlan.current_step_id, 'is-done': step.status === 'DONE' || step.status === 'SKIPPED' }"
+          >
+            <b>{{ step.title }}</b>
+            <small>{{ step.student_visible_reason }}</small>
+          </li>
+        </ol>
+        <p
+          v-if="activePlanStep && episodePlan.status === 'ACTIVE'"
+          class="tw-plan__stop"
+        >
+          当前目标：{{ activePlanStep.stop_condition }}
+          <template v-if="planNeedsSubmission"> 正式提交后自动推进。</template>
+        </p>
+        <button
+          v-if="episodePlan.status === 'RECOMMENDED'"
+          type="button"
+          class="tw-btn"
+          data-testid="plan-start"
+          :disabled="running"
+          @click="runEvent('PLAN_START', eventDataFor('PLAN_START'))"
+        >
+          开始计划
+        </button>
+        <template v-else-if="episodePlan.status === 'ACTIVE' && !planNeedsSubmission">
+          <label class="tw-plan__response-label" for="tw-plan-response">完成这一步后，用自己的话说说你理解了什么</label>
+          <textarea
+            id="tw-plan-response"
+            v-model="planResponse"
+            class="tw-plan__input"
+            rows="2"
+            maxlength="2000"
+          />
+          <button
+            type="button"
+            class="tw-btn"
+            data-testid="plan-respond"
+            :disabled="running || !planResponse.trim()"
+            @click="respondToPlan"
+          >
+            完成当前步骤
+          </button>
+        </template>
+        <div
+          v-if="episodePlan.status === 'ACTIVE' || episodePlan.status === 'PAUSED'"
+          class="tw-plan__controls"
+        >
+          <button
+            v-if="episodePlan.status === 'ACTIVE'"
+            type="button"
+            class="tw-chip"
+            :disabled="running"
+            @click="steerEpisodePlan('pause')"
+          >暂停</button>
+          <button
+            v-else
+            type="button"
+            class="tw-chip"
+            :disabled="running"
+            @click="steerEpisodePlan('resume')"
+          >继续计划</button>
+          <button
+            v-if="episodePlan.status === 'ACTIVE'"
+            type="button"
+            class="tw-chip"
+            :disabled="running"
+            @click="steerEpisodePlan('skip')"
+          >跳过当前步</button>
+          <input
+            v-model="planRedirect"
+            class="tw-plan__redirect"
+            maxlength="500"
+            aria-label="计划调整方向"
+            placeholder="需要调整时说明方向"
+          >
+          <button
+            type="button"
+            class="tw-chip"
+            :disabled="running || !planRedirect.trim()"
+            @click="steerEpisodePlan('redirect')"
+          >调整计划</button>
+          <button
+            type="button"
+            class="tw-chip"
+            :disabled="running"
+            @click="steerEpisodePlan('take_over')"
+          >自行安排</button>
+        </div>
+      </section>
+
       <!-- 思考过程：默认只显示一行「思考中…」，详细节点收纳进可展开列表（用户要求缩小收纳）。 -->
       <div
         v-if="running"
@@ -743,6 +976,24 @@ function cardId(entry: CardEntry): string {
       class="tw-next"
       data-testid="tw-actions"
     >
+      <button
+        v-if="planIsTerminal"
+        type="button"
+        class="tw-chip"
+        data-testid="plan-recommend"
+        :disabled="running"
+        @click="startEpisodePlan"
+      >
+        {{ episodePlan ? '重新生成学习计划' : '生成个性化学习计划' }}
+      </button>
+      <button
+        v-if="compactAvailable"
+        type="button"
+        class="tw-chip"
+        data-testid="compact-chat"
+        :disabled="running"
+        @click="runEvent('COMPACT')"
+      >整理对话上下文</button>
       <button
         v-if="primaryAction"
         type="button"
@@ -812,11 +1063,11 @@ function cardId(entry: CardEntry): string {
     >
       <div
         v-for="(image, index) in chatImages"
-        :key="index"
+        :key="image.previewUrl || index"
         class="tw-chat__image"
       >
         <img
-          :src="image"
+          :src="image.previewUrl"
           :alt="`待发送图片 ${index + 1}`"
         >
         <button
@@ -854,7 +1105,7 @@ function cardId(entry: CardEntry): string {
         v-model="chatInput"
         class="tw-chat__input"
         type="text"
-        placeholder="卡住了？直接问思路、要提示…"
+        placeholder="提问，或引用 @card:卡片ID / @courseware:页ID"
         :disabled="running"
       >
       <button
@@ -943,6 +1194,79 @@ function cardId(entry: CardEntry): string {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+.tw-plan {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid rgba(42, 111, 151, 0.35);
+  border-radius: 8px;
+  background: rgba(230, 242, 251, 0.55);
+}
+.tw-plan__head,
+.tw-plan__controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tw-plan__head {
+  justify-content: space-between;
+  color: #1b4a6b;
+  font-size: 13px;
+}
+.tw-plan__head span,
+.tw-plan__steps small,
+.tw-plan__stop {
+  font-size: 11px;
+  color: var(--pyt-color-text-muted);
+}
+.tw-plan__objective,
+.tw-plan__stop {
+  margin: 0;
+  line-height: 1.55;
+}
+.tw-plan__steps {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding-left: 20px;
+}
+.tw-plan__steps li {
+  padding-left: 2px;
+  line-height: 1.45;
+}
+.tw-plan__steps li.is-active b {
+  color: #1b4a6b;
+}
+.tw-plan__steps li.is-done b {
+  color: var(--pyt-color-text-hint);
+  text-decoration: line-through;
+}
+.tw-plan__steps small {
+  display: block;
+}
+.tw-plan__response-label {
+  font-size: 11px;
+  color: var(--pyt-color-text-muted);
+}
+.tw-plan__input,
+.tw-plan__redirect {
+  min-width: 0;
+  padding: 5px 7px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--pyt-color-text-primary);
+  background: var(--pyt-color-bg-primary, #fffdf6);
+  border: 1px solid var(--pyt-color-border);
+  border-radius: 4px;
+}
+.tw-plan__input {
+  resize: vertical;
+}
+.tw-plan__redirect {
+  flex: 1 1 140px;
 }
 .tw-card__user {
   margin: 0 0 2px;

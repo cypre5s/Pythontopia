@@ -1,14 +1,23 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import AppLayout from '@/app/AppLayout.vue';
 import ProfileInterviewPanel from '@/components/profile/ProfileInterviewPanel.vue';
 import AgentNotebook from '@/components/agents/AgentNotebook.vue';
 import TwinWeekly from '@/components/companion/TwinWeekly.vue';
 import { useLearningStore } from '@/stores/learning';
+import { useWorkshopUiStore } from '@/stores/workshopUi';
 
 const learning = useLearningStore();
+const workshopUi = useWorkshopUiStore();
+const router = useRouter();
 const showNotebook = ref(false);
 const showWeekly = ref(false);
+
+function onTwinPrompt(prompt: string): void {
+  workshopUi.setPendingPrompt(prompt);
+  void router.push('/workshop');
+}
 
 onMounted(async () => {
   if (!learning.profileInterview.sessionId) {
@@ -40,6 +49,7 @@ onMounted(async () => {
         <TwinWeekly
           v-if="showWeekly"
           class="weekly-panel"
+          @prompt="onTwinPrompt"
         />
         <AgentNotebook
           v-if="showNotebook"

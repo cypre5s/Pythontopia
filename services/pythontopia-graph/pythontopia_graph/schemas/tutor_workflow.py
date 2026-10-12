@@ -19,11 +19,11 @@
 from __future__ import annotations
 
 import re
+from uuid import UUID
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from pythontopia_graph.schemas.tutor import normalize_image_data
 
 Phase = Literal[
     "READING",
@@ -44,6 +44,27 @@ WorkflowEvent = Literal[
     "TRANSFER",
     "CHAT",
     # 辅助事件（不改变 Phase，与源版 AUXILIARY_EVENTS 对齐）。
+    "KNOWLEDGE_REVIEW",
+    "EXECUTION_TRACE",
+    "VISUALIZE",
+    "PARSONS",
+    "AGENT_FEEDBACK",
+    "COMPACT",
+    "PLAN_RECOMMEND",
+    "PLAN_START",
+    "PLAN_RESPONSE",
+    "PLAN_STEERING",
+]
+
+TutorActionEvent = Literal[
+    "READING",
+    "IDEATING",
+    "SKELETON",
+    "CODING",
+    "ERROR_FEEDBACK",
+    "AC_REVIEW",
+    "TRANSFER",
+    "CHAT",
     "KNOWLEDGE_REVIEW",
     "EXECUTION_TRACE",
     "VISUALIZE",
@@ -116,6 +137,9 @@ TutorEpisodeExpectedEvidence = Literal[
 ]
 
 TutorEpisodeStopPolicy = Literal["WAIT_FOR_CLICK", "WAIT_FOR_SUBMISSION", "DONE"]
+TutorEpisodePlanStatus = Literal[
+    "RECOMMENDED", "ACTIVE", "PAUSED", "COMPLETED", "SURRENDERED"
+]
 
 # 学生可见文本里禁止出现的原始推理痕迹标记（防把 chain-of-thought / system prompt 泄给前端）。
 _RAW_REASONING_MARKERS: tuple[str, ...] = (
@@ -170,6 +194,7 @@ class TutorEpisodePlan(BaseModel):
     revision: int = Field(default=0, ge=0)
     current_step_id: str = Field(min_length=1)
     steps: list[TutorEpisodeStep] = Field(min_length=2, max_length=4)
+    status: TutorEpisodePlanStatus = "RECOMMENDED"
     stop_policy: TutorEpisodeStopPolicy = "WAIT_FOR_CLICK"
     revision_reason: str = ""
     created_by: Literal["coach", "fallback"] = "coach"
@@ -198,6 +223,107 @@ class TutorEpisodePlanPatch(BaseModel):
     revised_step_ids: list[str] = Field(default_factory=list)
     revision_reason: str = ""
     stop_policy: TutorEpisodeStopPolicy | None = None
+    status: TutorEpisodePlanStatus | None = None
+
+
+class ChatEventData(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    message: str = ""
+    attachment_ids: list[str] = Field(default_factory=list, max_length=3)
+    # Populated only by the Java owner/session resolver, never copied from user input.
+    references: list[dict[str, Any]] = Field(default_factory=list, max_length=5)
+
+
+class AgentFeedbackEventData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    message: str = Field(min_length=1, max_length=2000)
+    # Populated only by the Java owner/session resolver, never copied from user input.
+    references: list[dict[str, Any]] = Field(default_factory=list, max_length=5)
+
+    @field_validator("message")
+    @classmethod
+    def _nonblank_message(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("AGENT_FEEDBACK requires a nonblank message")
+        return value
+
+
+class CompactEventData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class PlanRecommendEventData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    trigger_event: TutorActionEvent | None = None
+
+
+class PlanStartEventData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    plan_id: str = Field(min_length=1, max_length=80)
+    revision: int = Field(ge=0)
+    reason: str = Field(min_length=1, max_length=500)
+    trigger_source: str = Field(min_length=1, max_length=80)
+    current_phase: Phase
+
+    @field_validator("reason", "trigger_source")
+    @classmethod
+    def _nonblank_context(cls, value: str, info: Any) -> str:
+        if not value.strip():
+            raise ValueError(f"PLAN_START requires a nonblank {info.field_name}")
+        if info.field_name == "reason":
+            _assert_no_raw_reasoning(value)
+        return value
+
+
+class PlanResponseEventData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    plan_id: str = Field(min_length=1, max_length=80)
+    revision: int = Field(ge=0)
+    step_id: str = Field(min_length=1, max_length=80)
+    evidence_type: Literal["text", "sample_prediction", "code_change", "reflection"]
+    response: str = Field(default="", max_length=2000)
+
+
+class PlanSteeringEventData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    plan_id: str = Field(min_length=1, max_length=80)
+    revision: int = Field(ge=0)
+    signal_type: Literal["pause", "resume", "skip", "take_over", "redirect"]
+    redirect_instruction: str = Field(default="", max_length=500)
+
+    @model_validator(mode="after")
+    def _validate_redirect(self) -> PlanSteeringEventData:
+        if self.signal_type == "redirect" and not self.redirect_instruction.strip():
+            raise ValueError("PLAN_STEERING redirect requires redirect_instruction")
+        _assert_no_raw_reasoning(self.redirect_instruction)
+        return self
+
+
+WorkflowEventData = (
+    ChatEventData
+    | AgentFeedbackEventData
+    | CompactEventData
+    | PlanRecommendEventData
+    | PlanStartEventData
+    | PlanResponseEventData
+    | PlanSteeringEventData
+)
+
+_EVENT_DATA_MODELS: dict[str, type[BaseModel]] = {
+    "CHAT": ChatEventData,
+    "AGENT_FEEDBACK": AgentFeedbackEventData,
+    "COMPACT": CompactEventData,
+    "PLAN_RECOMMEND": PlanRecommendEventData,
+    "PLAN_START": PlanStartEventData,
+    "PLAN_RESPONSE": PlanResponseEventData,
+    "PLAN_STEERING": PlanSteeringEventData,
+}
 
 
 class WorkflowRunRequest(BaseModel):
@@ -214,16 +340,20 @@ class WorkflowRunRequest(BaseModel):
     force_event: WorkflowEvent | None = None
     # CHAT 消息 / IDEATING 学生思路等事件数据。
     event_data: dict[str, Any] = Field(default_factory=dict)
+    # Typed view of the existing event_data REST field; excluded from graph envelopes.
+    typed_event_data: WorkflowEventData | None = Field(default=None, exclude=True)
     profile_brief: str = Field(default="", max_length=1000)
     # Java 投影还原的既有 episode 计划（首次触发为 None，由 graph 新建）。
     episode_plan: TutorEpisodePlan | None = None
     episode_patch: TutorEpisodePlanPatch | None = None
 
     @model_validator(mode="after")
-    def validate_chat_images(self) -> "WorkflowRunRequest":
-        images = self.event_data.get("images")
-        if images is not None and self.event != "CHAT":
-            raise ValueError("images are only supported for CHAT")
+    def validate_chat_attachments(self) -> "WorkflowRunRequest":
+        if "images" in self.event_data:
+            raise ValueError("workflow image bytes must use private attachment transport")
+        attachment_ids = self.event_data.get("attachment_ids")
+        if attachment_ids is not None and self.event != "CHAT":
+            raise ValueError("attachment_ids are only supported for CHAT")
         if self.event == "CHAT":
             message = self.event_data.get("message", "")
             if not isinstance(message, str):
@@ -232,16 +362,31 @@ class WorkflowRunRequest(BaseModel):
                 raise ValueError("CHAT message must be at most 2000 characters")
             if re.search(r"(?i)data:image/(?:png|jpeg|gif|webp);base64,", message):
                 raise ValueError("CHAT message must not contain image data URI")
-            if images is None:
-                images = []
-            if not isinstance(images, list) or not all(isinstance(image, str) for image in images):
-                raise ValueError("event_data.images must be a list of image data")
-            normalized = normalize_image_data(images)
-            if not message.strip() and normalized:
+            if attachment_ids is None:
+                attachment_ids = []
+            if (
+                not isinstance(attachment_ids, list)
+                or len(attachment_ids) > 3
+                or not all(isinstance(item, str) for item in attachment_ids)
+            ):
+                raise ValueError("event_data.attachment_ids must contain at most three IDs")
+            try:
+                for attachment_id in attachment_ids:
+                    UUID(attachment_id)
+            except ValueError as exc:
+                raise ValueError("event_data.attachment_ids must be UUIDs") from exc
+            if not message.strip() and attachment_ids:
                 message = "请结合图片帮我分析。"
-            if not message.strip():
-                raise ValueError("CHAT requires a message or image")
-            self.event_data = {**self.event_data, "message": message, "images": normalized}
+            if not message.strip() and not attachment_ids:
+                raise ValueError("CHAT requires a message or attachment")
+            self.event_data = {
+                **self.event_data,
+                "message": message,
+                "attachment_ids": attachment_ids,
+            }
+        event_data_model = _EVENT_DATA_MODELS.get(self.event)
+        if event_data_model is not None:
+            self.typed_event_data = event_data_model.model_validate(self.event_data)  # type: ignore[assignment]
         return self
 
 
@@ -373,16 +518,6 @@ class TransferProblemCard(BaseModel):
     target_kcs: list[str] = Field(default_factory=list)
 
 
-class AiReplyCard(BaseModel):
-    """阶段内导学对话回复（CHAT，不改变 Phase）。"""
-
-    content: str = Field(min_length=1)
-    referenced_card_ids: list[str] = Field(default_factory=list)
-
-
-# ── 辅助卡片（不改变 Phase，补齐源版被裁动作） ──
-
-
 class CoursewareRef(BaseModel):
     """课件引用（由服务端据 RAG 证据确定性回填，防伪造页码）。"""
 
@@ -390,6 +525,17 @@ class CoursewareRef(BaseModel):
     page_id: int | None = None
     chapter_id: int | None = None
     snippet: str = ""
+
+
+class AiReplyCard(BaseModel):
+    """阶段内导学对话回复（CHAT，不改变 Phase）。"""
+
+    content: str = Field(min_length=1)
+    referenced_card_ids: list[str] = Field(default_factory=list)
+    courseware_refs: list[CoursewareRef] = Field(default_factory=list)
+
+
+# ── 辅助卡片（不改变 Phase，补齐源版被裁动作） ──
 
 
 class KnowledgeReviewCard(BaseModel):
@@ -505,6 +651,7 @@ EVENT_OUTPUT_KEY: dict[str, str] = {
     "AC_REVIEW": "post_ac",
     "TRANSFER": "transfer_problem",
     "CHAT": "ai_reply",
+    "AGENT_FEEDBACK": "ai_reply",
     "KNOWLEDGE_REVIEW": "knowledge_review",
     "EXECUTION_TRACE": "execution_trace",
     "VISUALIZE": "visualize",
@@ -542,5 +689,7 @@ class WorkflowRunResult(BaseModel):
     # 有界自主多步辅导计划（coach_mode 才有；纯状态推进事件可为 None）。
     episode_plan: TutorEpisodePlan | None = None
     episode_patch: TutorEpisodePlanPatch | None = None
+    # Plain text context only; Java persists it as the stop-boundary resume checkpoint.
+    resume_chat_history: list[dict[str, str]] = Field(default_factory=list, max_length=20)
     # 会话内卡片序号（投影排序用；无卡片事件不递增）。
     seq: int = 0

@@ -10,6 +10,8 @@ GuideEpisodePlanner 把 GuideCoachAgent 的单步决策展开成一个有界（2
 
 from __future__ import annotations
 
+from uuid import uuid4
+
 from pydantic import BaseModel
 
 from pythontopia_graph.agents.guide_coach_agent import CoachContext
@@ -302,7 +304,7 @@ class GuideEpisodePlanner:
         active = next((step for step in steps if step.status == "ACTIVE"), steps[0])
         verdict = (ctx.diagnosis.verdict if ctx.diagnosis else ctx.state.latest_verdict).upper()
         return TutorEpisodePlan(
-            plan_id=plan_id or f"ep-{ctx.state.session_id}"[:80],
+            plan_id=plan_id or f"ep-{ctx.state.session_id}-{uuid4().hex}"[:80],
             session_id=ctx.state.session_id,
             problem_id=ctx.problem.problem_id,
             user_id=ctx.state.user_id,

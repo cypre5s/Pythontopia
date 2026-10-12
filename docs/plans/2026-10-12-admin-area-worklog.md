@@ -19,3 +19,11 @@
 - 平台 AI runtime 聚合限制为 ADMIN；学生接口仍按本人数据查询，教师访问被拒绝。
 - 后台账号区提供退出按钮，清理会话并回到登录页；后台宽度对齐 Alethicode 侧栏。
 - 管理布局定向 2 tests、runtime 后端权限定向测试通过；全前端 248 files / 2444 tests、类型检查、生产构建通过，ESLint 0 errors / 114 warnings。未做浏览器全栈验证。
+
+## 2026-10-12 Task 6：Alethicode 管理壳视觉对齐
+
+- 管理区局部样式对齐 Alethicode 的蓝灰色 token：渐变工作区底色、蓝色渐变选中项、16px 面板圆角、面板阴影，以及审核表格表头/行 hover 色和单元格留白；未改游戏全局色板。
+- 保留现有两项真实 API 页面、分组路由、ADMIN 守卫、窄屏抽屉/遮罩与退出交互；没有添加菜单、API、DTO 或假数据，也没有引入 Element Plus。
+- TDD：新增管理壳样式契约测试，修改前 2 项失败于旧主题/面板值；对齐样式后管理壳、运维页、审核页及样式测试共 12 项通过：`npm run test -- tests/pages/admin/AdminShellStyle.spec.ts tests/pages/admin/AdminLayout.spec.ts tests/pages/admin/AdminOperationsPage.spec.ts tests/pages/admin/AdminProblemReviewsPage.spec.ts --coverage.enabled=false`。
+- 验证：`npm run typecheck` 通过；对四个 admin Vue 文件和新增测试运行定向 ESLint 通过；`git diff --check` 通过。
+- 未运行浏览器/全栈联测、后端和 Graph 测试；本切片只修改管理台样式/前端回归测试。CHANGELOG 由整合者统一更新。

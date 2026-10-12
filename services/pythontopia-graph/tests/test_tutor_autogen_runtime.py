@@ -7,6 +7,7 @@ from autogen_core import CancellationToken
 
 from pythontopia_graph.graph import tutor_workflow_session as session_store
 from pythontopia_graph.graph.autogen_tutor_runtime import (
+    _PRIVATE_IMAGE_DATA_KEY,
     _encode_state,
     run_autogen_tutor_workflow,
 )
@@ -94,31 +95,53 @@ async def test_autogen_stages_round_trip_typed_workflow_state() -> None:
 
 
 @pytest.mark.asyncio
-async def test_chat_images_stay_out_of_autogen_state_messages() -> None:
+async def test_private_chat_images_reach_only_card_stage_and_stay_out_of_state() -> None:
     image = "data:image/png;base64,iVBORw0KGgo="
     request = WorkflowRunRequest(
         session_id="autogen-image-session",
         user_id=7,
         event="CHAT",
         problem=WorkflowProblemContext(problem_id=12, title="输入输出"),
-        event_data={"message": "请看图", "images": [image]},
+        event_data={"message": "请看图", "attachment_ids": ["e780cb26-4b20-4e69-a043-750eeddf4051"]},
     )
     encoded = _encode_state({"request": request})
     assert image not in encoded
 
+    seen_stages: list[tuple[str, bool, bool]] = []
     seen_images: list[list[str]] = []
+    encoded_card_state: list[str] = []
 
-    async def image_stage(state):
-        seen_images.append(state["request"].event_data["images"])
+    async def ordinary_stage(state):
+        seen_stages.append(
+            ("coach_decide", "images" in state["request"].event_data, _PRIVATE_IMAGE_DATA_KEY in state)
+        )
         return state
+
+    async def card_stage(state):
+        seen_stages.append(
+            ("generate_card", "images" in state["request"].event_data, _PRIVATE_IMAGE_DATA_KEY in state)
+        )
+        seen_images.append(state[_PRIVATE_IMAGE_DATA_KEY])
+        encoded_card_state.append(_encode_state(state))
+        return state
+
+    async def resolve_images(stage_request):
+        assert stage_request.session_id == request.session_id
+        assert stage_request.event_data["attachment_ids"] == request.event_data["attachment_ids"]
+        return [image]
 
     result = await run_autogen_tutor_workflow(
         {"request": request},
-        [("image_stage", image_stage)],
+        [("coach_decide", ordinary_stage), ("generate_card", card_stage)],
+        private_image_resolver=resolve_images,
     )
 
+    assert seen_stages == [("coach_decide", False, False), ("generate_card", False, True)]
     assert seen_images == [[image]]
+    assert "images" not in result["request"].event_data
     assert image not in result["request"].model_dump_json()
+    assert image not in encoded_card_state[0]
+    assert image not in _encode_state(result)
 
 
 @pytest.mark.asyncio

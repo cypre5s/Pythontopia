@@ -2,6 +2,7 @@
 """Runner script for 100-case A/B/C eval. Avoids shell piping issues."""
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -22,7 +23,7 @@ config = AbcEvalConfig(
     group_a=GroupEndpoint(
         label="External LLM",
         base_url="https://api.deepseek.com/v1",
-        api_key="sk-1a63d26b26244c818b9ade169da9f850",
+        api_key=os.environ["PYT_OPENAI_API_KEY"],
         model="deepseek-v4-flash",
     ),
     group_b=GroupEndpoint(
