@@ -181,14 +181,16 @@ watch(navigationOpen, (open) => {
         </nav>
 
         <div class="admin-sidebar__account">
-          <span
-            class="admin-sidebar__avatar"
-            aria-hidden="true"
-          >管</span>
-          <span class="admin-sidebar__identity">
-            <strong>{{ session.displayName }}</strong>
-            <small>ADMIN</small>
-          </span>
+          <div class="admin-sidebar__account-user">
+            <span
+              class="admin-sidebar__avatar"
+              aria-hidden="true"
+            >管</span>
+            <span class="admin-sidebar__identity">
+              <strong>{{ session.displayName }}</strong>
+              <small>ADMIN</small>
+            </span>
+          </div>
           <button
             class="admin-sidebar__logout"
             type="button"
@@ -382,11 +384,19 @@ watch(navigationOpen, (open) => {
 
 .admin-sidebar__account {
   display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  margin-top: auto;
+  padding: 12px;
+  border-top: 1px solid var(--admin-border);
+}
+
+.admin-sidebar__account-user {
+  display: flex;
+  min-width: 0;
   align-items: center;
   gap: 10px;
-  margin-top: auto;
-  padding: 16px 20px;
-  border-top: 1px solid var(--admin-border);
 }
 
 .admin-sidebar__avatar {
@@ -415,22 +425,24 @@ watch(navigationOpen, (open) => {
 }
 
 .admin-sidebar__logout {
-  flex: 0 0 auto;
-  margin-left: auto;
-  padding: 6px 9px;
-  border: 1px solid var(--admin-border);
-  border-radius: 7px;
-  background: var(--admin-surface);
-  color: var(--admin-muted);
+  display: inline-flex;
+  width: 100%;
+  height: 42px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 12px;
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
   font: inherit;
-  font-size: 11px;
+  font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
 }
 
 .admin-sidebar__logout:hover {
-  border-color: #bfdbfe;
-  background: var(--admin-primary-soft);
-  color: var(--admin-primary-hover);
+  background: rgba(239, 68, 68, 0.16);
+  color: #b91c1c;
 }
 
 .admin-shell__main {
@@ -520,7 +532,7 @@ watch(navigationOpen, (open) => {
 
 @media (max-width: 767px) {
   .admin-sidebar {
-    width: min(288px, 86vw);
+    width: min(320px, 90vw);
     box-shadow: 12px 0 32px rgb(15 23 42 / 14%);
     transform: translateX(-105%);
   }

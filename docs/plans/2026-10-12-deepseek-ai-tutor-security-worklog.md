@@ -2,6 +2,39 @@
 
 日期：2026-10-12 至 2026-10-13
 
+## 2026-10-13 BROWSE DNS 重绑定修复
+
+- Chromium 启动前按白名单主机解析并验证公网地址，使用 `--host-resolver-rules` 固定连接目标；域名规则按长度降序，避免宽域覆盖更具体的域。URL 层原有 scheme、端口、allowlist 和 DNS 公网检查继续保留。
+- 回归先确认失败，再验证 Chromium 收到固定规则，且白名单解析为私网时不启动浏览器。Graph BROWSE executor、allowlist、route 定向测试 60 项通过，Ruff 通过。
+- Graph 全量测试 `1795 passed, 1 skipped`；Web 全量 Vitest、`npm run typecheck` 和 `npm run build` 均通过。
+- 未运行真实 Chromium 网络集成测试；固定映射将域名子域也指向已验证的父域 IP，遇到托管在不同 IP 的子域时可能无法访问，但不会回退到浏览器自行解析。
+- Tutor 账号级请求额度需要避免擅自决定影响课堂和模型费用的日限额，等待用户选定策略；全栈和无尽远征性能仍按用户顺序留待后续。
+
+## 2026-10-13 Web 安全和恢复补丁
+
+- 私人媒体能力 URL 新增 24 小时过期值，并将资产 ID 与过期值一起纳入 HMAC；旧 `?k=` 仅在 `created_at + 24h` 内过渡兼容。Nginx 自定义 access log 只记录 `$uri`，不记录 query；release 安装和回滚同步管理 log format。已有超过 24 小时的资源 URL 需经现有 DTO/作业接口重新取新 URL。
+- 上传解析添加 100 页 PDF 上限、PDF 临时文件流缓存、DOCX 解压累计 16 MiB / 最多 100 个 ZIP 条目，以及所有格式最多 100,000 个提取字符。超限仍落入既有 FAILED 状态。
+- 运维管理页的长动作/Trace/相关页面增加完整 title；四个教师数据 Tab 在独立请求失败后可按原 loader 重试。
+- Graph README 去掉已禁用的本地 Qwen fallback，改为文/图 DeepSeek 配置和 `deploy/.env` 说明。
+- 验证：Maven 上传、媒体链接、无尽远征集成 5 类 / 42 tests 通过，Testcontainers 空库迁移到 V202；Web 5 个文件 / 21 tests、`npm run typecheck` 通过；Graph provider 41 tests 通过、1 条现有 async 标记 warning；Nginx 安全日志契约和 release/rollback shell 检查通过。
+- 暂未关闭：Tutor 端点没有跨实例的账号级花费预算，策略待用户选择；浏览器 DNS 重绑定窗口已增加 Chromium 公网解析固定，但尚未做真实浏览器网络集成验证。对话中已展示的 DeepSeek key 应先轮换后再用于生产。无尽远征性能仍依照用户顺序留到最后。
+
+## 2026-10-13 远征学情防重放与判题测试边界
+
+- 同一远征题目的正式判题结果仍可从失败更新为通过，账本仍取通过状态与最高分；学情事件仅在第一次判题和第一次通过时发布。以不同 `attemptId` 重放已通过题目不会再产生 Mastery/Twin 事件。判定在活动 run 行锁内完成，避免并发重复发布。
+- Graph Boss 测试夹具此前使用本机 Python 子进程执行提交代码。现改为按已知输入返回固定假结果，未知源码不执行；增加 marker 与 `subprocess.run` guard，golden 题库测试不再声称覆盖实际运行正确性。
+- 验证：`mvn --settings .mvn/settings.build.xml -q -Dtest=ExpeditionScoreServiceTest,BossServiceTest,ExpeditionRunPostgresIntegrationTest test` 通过（3 类 / 43 项，Testcontainers 空库迁移到 V201）；Graph `tests/agents/boss` 209 passed，Ruff 通过；Admin shell/users Web 定向 10 tests 通过，`npm run typecheck` 通过。
+- 未验证：没有启动 Piston、Web 全栈或 DeepSeek 请求。Fake Piston 回归只保证测试不执行学生提交，generated/golden 代码的真实执行正确性仍须真实隔离 Piston 集成覆盖。
+- 未解决：节点拓扑、移动、HP、遗物和 phase 仍来自客户端快照；它们不进入官方成绩、通过题数或 `cleared` 奖励。要把这些局内字段升级为服务端权威状态仍需单独设计并覆盖完整地图动作流程。
+
+## 2026-10-13 功能优先补丁
+
+- 远征画像信号补上可信度达标的专业背景、学习目标/目标 KC、认知风格和每日学习时长；前端、Java 与 Graph DTO 对齐，Java 画像来源会覆盖已登录请求中的客户端画像值。目标 KC 只对 pack 43 有效且未掌握的点加权；自评偏好仅调整题面表达，难度仍由正式掌握度和练习记录主导。
+- 画像页按 schema 的 `-1..1` 与 `0..1` 刻度显示。Graph 对 `preferredKind` 限定为现有 9 种题型；Java 请求体、嵌套画像和预取状态入口也校验白名单。RED 确认未知题型原来会进入 Graph 并返回题目，GREEN 后 Java 返回 400、Graph 返回 422。
+- 出题场景提示从花田/收菜替换为中央小镇的图书馆、工坊、课堂和公告板，遵循 R-14 单 hub 设定。
+- 验证：画像/Boss/控制器 3 个定向 Maven 测试类通过；Graph 远征选择、命题工厂和 Boss 路由 37 tests 通过；Web 画像、Twin、管理员和路由现有 6 个测试文件 / 48 tests 通过，本轮 Vue 类型检查通过；前端生产构建、定向 ESLint、Graph Ruff、`git diff --check` 通过。
+- 按“功能先、性能后”没有启动 Web 全栈或发 DeepSeek 请求，远征性能仍待有可用正式判题沙箱后测量。
+
 ## 2026-10-13 收尾补测（本轮）
 
 - 远征前沿使用服务端正式练习事件时间做间隔重复排序；Web 停止发送本地历史 KC，后端旧 `recentKcs` 字段仅用于兼容请求格式并忽略。Graph 排序函数不再接受客户端近期列表。
@@ -25,7 +58,7 @@
 - Tutor SSE 将终态投影移到结果事件转发之前；Java 投影异常会通过错误终止传给调用方，不再被吞掉并呈现为成功。新增服务层传播和 Graph 中继顺序测试，均完成 RED/GREEN。
 - 学生画像自评接口拒绝非空 metadata 和自由文本 tag；`cognitive_style` 只接受画像页已有的 `visual`、`logical`、`trial` 选项，教师/管理员路径保持原行为。控制器回归测试先有 3 项按预期失败，改动后 4 项控制器测试及 3 项 DTO 校验测试通过。
 - 修复无聚焦章节的全局/每日 run 签题时误拒合法章节；固定章节 run 仍拒绝换章。排行榜将账本 `verifiedDepth` 标为“通过题数”，不再暗示地图层数。
-- Alethicode 对照仅做只读核验：`/home/cypress/Alethicode` 最新相关提交仍为 `d96f609`（2026-05-17），AutoGen Tutor/checkpoint 实现处于 dirty/untracked 工作树；对应 Codex rollout `01a12f26-6bab-7371-8763-06f922c1b13b`（10/12）记录文字实跑与合成图片调用。Alethicode 保存原生 AutoGen team checkpoint 并处理恢复/取消；Pythontopia 采用固定阶段 AutoGen + Java 纯文本投影，可在事件间从 DB 继续，但不支持同一中断阶段原位恢复。没有从 Alethicode 复制脏工作树文件。
+- Alethicode 对照仅做只读核验：其当前 HEAD 为 `10a97fe`（2026-05-20），AutoGen runtime 及若干 Tutor/Admin 文件处于 dirty/untracked 工作树，不能作为稳定提交基线；对应 Codex rollout `01a12f26-6bab-7371-8763-06f922c1b13b`（10/12）记录文字实跑与合成图片调用。Alethi 按事件组装更完整的 Tutor 阶段并保存原生 AutoGen team checkpoint、处理恢复/取消；Pythontopia 已接入五阶段 AutoGen 并可跨事件从 DB 恢复，但行为未完全 parity。没有从 Alethicode 脏工作树复制文件。
 - 阶段验证：Graph 全量 `1769 passed, 1 skipped`，Ruff 通过；RAG 全量 `157 passed, 2 skipped`；后端画像/Twin/Tutor/远征/审核定向 14 类共 124 tests passed，Testcontainers 空库迁移到 V198；Web Vitest `251 files / 2461 tests` 通过、TypeScript 类型检查与 Vite production build 通过，ESLint 0 errors / 131 warnings。10/13 收尾复验的更新结果见文末。
 - `deploy/.env` 中 API key 仅以布尔值确认已配置，秘密未输出且扫描未在项目文件发现明文。对话中暴露过的 key 应轮换。
 - 当前限制：远征地图节点、HP、遗物和 phase 仍是客户端快照；判题 ledger 保护排行榜分数和通过题数，但没有服务端地图动作状态机。Web Boss 提交现带稳定 `attemptId` 并持久幂等，未传 ID 的旧客户端仍保留兼容但没有重放去重。Lecture 的 PPT 通过资源消费 API 写服务端事件；视频观看仍只在本页会话标记。Mem0/Zep 配置固定走本地记忆；可选 Langfuse/OTLP、浏览器检索、B 站元数据和远程 Piston 仍属于独立外部出口。
@@ -138,3 +171,10 @@
 - 当前验证：Java 定向 9 个类 / 103 tests 全通过，Testcontainers 空库迁移到 V197；Graph 6 个文件 / 58 tests 与 Ruff 通过；Web 定向 7 个文件 / 38 tests、TypeScript typecheck 通过；ESLint 0 errors / 41 warnings；`git diff --check` 通过。
 - 项目配置核验只输出布尔值：DeepSeek OpenAI-compatible endpoint/key 已配置于被忽略的 `deploy/.env`；研究 runner 中原有的硬编码凭证已改为读取 `PYT_OPENAI_API_KEY`。
 - 未运行全栈浏览器联测、真实 DeepSeek 请求或无尽远征性能测试。复核时本地 compose 无运行服务且 `PYT_PISTON_URL` 未配置，因此真实判题路径不可用；无尽远征 P50/P95、缓存命中、重复率、恢复率与完成率继续待测。密钥曾出现在对话中，应轮换后再用于生产。
+
+## 2026-10-13 补充：远征同题跨 ID 防重复计分
+
+- 远征正式判题按权威 KC、题面、样例与排序后的判题用例计算 SHA-256 指纹，忽略随机签发 ID、提示、难度和参考解；相同题在同一用户的同一 run 下合并到原 ledger 行，保留原 `problem_id`，避免影响题目来源核对。
+- V202 为非空指纹建立 run 范围唯一索引；同局提交先锁定 run 行，再查同题指纹，因此新签发 ID 的重试只更新最高分/通过状态，不新建计分或学习证据。
+- 验证：`BossServiceTest` 32、`ExpeditionScoreServiceTest` 8、`ExpeditionRunPostgresIntegrationTest` 5，共 45 tests 通过；Testcontainers 空库迁移到 V202。后端全量运行 1240 tests，0 failures、7 errors：6 个 PostgreSQL 容器因宿主机随机端口 `address already in use` 未能启动；长周期班级模拟在全量运行中临时数据库连接中断，单独重跑通过。
+- V202 前活动局中既有 ledger 行的指纹保持 NULL，不对历史 JSON 做不可靠重算；若旧题从未重判且在升级后的同一旧 run 再次签发，仍有一次重复计分窗口。新 run 和新写入记录不受此限制。

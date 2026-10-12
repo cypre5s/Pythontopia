@@ -73,4 +73,22 @@ describe('AdminUsersPage', () => {
 
     expect(wrapper.get('[data-testid="admin-user-status-1"]').attributes('disabled')).toBeDefined();
   });
+
+  it('keeps full display name and username available when long cells are truncated', async () => {
+    const displayName = '学生'.repeat(30);
+    const username = 'student'.repeat(20);
+    vi.mocked(searchAdminUsers).mockResolvedValueOnce({
+      content: [{ ...activeUser, displayName, username }],
+      page: 0,
+      size: 20,
+      totalElements: 1,
+      totalPages: 1,
+    });
+    const wrapper = mount(AdminUsersPage);
+    await flushPromises();
+
+    const cells = wrapper.findAll('tbody td');
+    expect(cells[1].attributes('title')).toBe(displayName);
+    expect(cells[2].attributes('title')).toBe(username);
+  });
 });

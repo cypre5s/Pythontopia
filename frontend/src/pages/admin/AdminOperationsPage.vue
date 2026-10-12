@@ -119,8 +119,11 @@ onMounted(() => {
               >{{ statusLabel(loop.status) }}</span>
               <div class="operation-row__body">
                 <strong>{{ loop.label }}</strong>
-                <span>{{ loop.nextAction }}</span>
-                <small v-if="loop.latestTraceId">Trace {{ loop.latestTraceId }}</small>
+                <span :title="loop.nextAction">{{ loop.nextAction }}</span>
+                <small
+                  v-if="loop.latestTraceId"
+                  :title="`Trace ${loop.latestTraceId}`"
+                >Trace {{ loop.latestTraceId }}</small>
               </div>
               <span
                 v-if="loop.evidenceRefs.length"
@@ -158,8 +161,11 @@ onMounted(() => {
               >{{ statusLabel(item.status) }}</span>
               <div class="operation-row__body">
                 <strong>{{ item.label }}</strong>
-                <span>{{ item.action }}</span>
-                <small v-if="item.reviewRoute">关联页面：{{ item.reviewRoute }}</small>
+                <span :title="item.action">{{ item.action }}</span>
+                <small
+                  v-if="item.reviewRoute"
+                  :title="`关联页面：${item.reviewRoute}`"
+                >关联页面：{{ item.reviewRoute }}</small>
               </div>
               <span
                 v-if="item.evidenceRefs.length"

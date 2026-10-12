@@ -21,7 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * 资源工坊文件上传服务：白名单校验（415）、大小限制（≤5MB 否则 413）、同步解析（PDFBox/POI/UTF-8），
+ * 资源工坊文件上传服务：白名单校验（415）、大小限制（≤5MB 否则 413）、有界同步解析（PDFBox/POI/UTF-8），
  * 解析失败 fail-soft 落 {@code status=FAILED + error} 而非抛 500。上传内容是「用户提供内容」，仅经
  * {@code extractedText} 带标签注入答疑 context，绝不当课件 evidence。
  */

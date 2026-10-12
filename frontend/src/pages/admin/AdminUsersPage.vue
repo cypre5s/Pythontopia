@@ -233,8 +233,12 @@ onMounted(() => {
               :key="user.id"
             >
               <td>{{ user.id }}</td>
-              <td>{{ user.displayName }}</td>
-              <td>{{ user.username }}</td>
+              <td :title="user.displayName">
+                {{ user.displayName }}
+              </td>
+              <td :title="user.username">
+                {{ user.username }}
+              </td>
               <td>{{ roleLabel(user.role) }}</td>
               <td>
                 <span
@@ -327,7 +331,7 @@ onMounted(() => {
 
 .admin-users__search input,
 .admin-users__status-filter select {
-  min-height: 38px;
+  min-height: 36px;
   border: 1px solid var(--admin-border);
   border-radius: 8px;
   padding: 0 10px;
@@ -343,7 +347,7 @@ onMounted(() => {
 
 .admin-users__button {
   display: inline-flex;
-  min-height: 38px;
+  min-height: 36px;
   align-items: center;
   justify-content: center;
   border: 1px solid #cbd5e1;
@@ -405,25 +409,52 @@ onMounted(() => {
 
 .admin-users__table {
   width: 100%;
-  min-width: 700px;
+  min-width: 820px;
   border-collapse: collapse;
+  table-layout: fixed;
   text-align: left;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .admin-users__table th {
-  padding: 12px 14px;
+  height: 44px;
+  padding: 0 16px;
   background: var(--admin-table-header);
-  color: #475569;
-  font-size: 12px;
+  color: var(--admin-text);
+  font-size: 11px;
   font-weight: 700;
   white-space: nowrap;
 }
 
 .admin-users__table td {
-  padding: 12px 14px;
+  height: 52px;
+  padding: 10px 16px;
   border-top: 1px solid var(--admin-border);
   color: #334155;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-users__table th:nth-child(1),
+.admin-users__table td:nth-child(1) { width: 72px; }
+.admin-users__table th:nth-child(2),
+.admin-users__table td:nth-child(2) { width: 170px; }
+.admin-users__table th:nth-child(3),
+.admin-users__table td:nth-child(3) { width: 190px; }
+.admin-users__table th:nth-child(4),
+.admin-users__table td:nth-child(4) { width: 100px; }
+.admin-users__table th:nth-child(5),
+.admin-users__table td:nth-child(5) { width: 110px; }
+.admin-users__table th:nth-child(6),
+.admin-users__table td:nth-child(6) { width: 178px; }
+
+.admin-users__table td:nth-child(1),
+.admin-users__table td:nth-child(4),
+.admin-users__table td:nth-child(5),
+.admin-users__table td:nth-child(6) {
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .admin-users__table tbody tr:hover {

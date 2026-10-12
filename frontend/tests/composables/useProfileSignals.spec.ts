@@ -115,6 +115,29 @@ describe('useProfileSignals', () => {
     expect(useProfileSignals().signals.value.resilience).toBe(0.6);
   });
 
+  it('includes the remaining bounded background, goal, cognition, and session signals', () => {
+    const learning = useLearningStore();
+    learning.profile = makeProfile({
+      major: 'NON_CS_HUMANITIES',
+      learningGoal: {
+        kind: 'JOB',
+        deadlineIso: null,
+        targetKcCodes: ['PY43-KC-031', 'PY43-KC-999'],
+      },
+      cognitiveStyle: { fieldDependent: 0.7, sequentialVsHolistic: -0.5 },
+      learningPreference: { mediaPriority: [], sessionMinutesPerDay: 20 },
+    });
+
+    expect(useProfileSignals().signals.value).toMatchObject({
+      major: 'NON_CS_HUMANITIES',
+      learningGoalKind: 'JOB',
+      targetKcCodes: ['PY43-KC-031'],
+      fieldDependent: 0.7,
+      sequentialVsHolistic: -0.5,
+      sessionMinutesPerDay: 20,
+    });
+  });
+
   it('hasAnySignal true when at least one field is filled', () => {
     const learning = useLearningStore();
     learning.profile = makeProfile({

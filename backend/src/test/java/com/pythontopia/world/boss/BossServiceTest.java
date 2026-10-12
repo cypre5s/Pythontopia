@@ -271,12 +271,14 @@ class BossServiceTest {
         .thenReturn(new BossEvaluateResultDto("ignored", true, 1, 1, null, null, List.of()));
     when(pregenService.findExpeditionRunId(eq(7L), anyString())).thenReturn(Optional.of(runId));
     when(expeditionScoreService.recordVerifiedAttempt(
-            eq(7L), eq(runId), anyString(), eq(true), eq(100)))
-        .thenReturn(true);
+            eq(7L), eq(runId), anyString(), anyString(), eq(true), eq(100)))
+        .thenReturn(new ExpeditionScoreService.VerifiedAttemptResult(true, true));
 
     BossProblemRequest request = new BossProblemRequest(1, null, 1, null, null, null, null, runId);
     var problem = service.fetchProblem(1, request, 7L);
     service.evaluateAttempt(new BossAttemptRequest(problem.problemId(), 1, 1, "print(1)", 1), 7L);
+    BossInternalProblem internalProblem =
+        problemWithInput("server-owned").issueAs(problem.problemId(), "PY43-KC-001");
 
     verify(pregenService)
         .persistConsumed(
@@ -289,7 +291,13 @@ class BossServiceTest {
             org.mockito.ArgumentMatchers.argThat(p -> p.problemId().equals(problem.problemId())),
             eq(runId));
     verify(expeditionScoreService)
-        .recordVerifiedAttempt(7L, runId, problem.problemId(), true, 100);
+        .recordVerifiedAttempt(
+            7L,
+            runId,
+            problem.problemId(),
+            BossService.questionFingerprint(internalProblem),
+            true,
+            100);
   }
 
   @Test
@@ -372,8 +380,9 @@ class BossServiceTest {
         .thenReturn(Optional.of(problemWithTests(1)));
     when(graphClient.evaluateAttempt(eq("p1"), anyString(), anyList(), anyInt()))
         .thenReturn(new BossEvaluateResultDto("p1", true, 1, 1, null, null, List.of()));
-    when(expeditionScoreService.recordVerifiedAttempt(7L, runId, "p1", true, 100))
-        .thenReturn(false);
+    when(expeditionScoreService.recordVerifiedAttempt(
+            eq(7L), eq(runId), eq("p1"), anyString(), eq(true), eq(100)))
+        .thenReturn(new ExpeditionScoreService.VerifiedAttemptResult(false, false));
 
     assertThatThrownBy(
             () -> service.evaluateAttempt(
@@ -382,6 +391,114 @@ class BossServiceTest {
         .hasMessageContaining("判题次数");
 
     verify(eventPublisher, never()).publishEvent(any());
+  }
+
+  @Test
+  @DisplayName("远征题只记录首次失败和首次通过的学情，已通过后重判仍返回结果但不重复发事件")
+  void expeditionProblemPublishesOnlyFirstFailureAndFirstPass() {
+    String runId = "123e4567-e89b-12d3-a456-426614174000";
+    when(pregenService.findExpeditionRunId(7L, "p1")).thenReturn(Optional.of(runId));
+    when(expeditionRunService.isActiveRun(7L, runId)).thenReturn(true);
+    when(pregenService.findByProblemId(7L, "p1"))
+        .thenReturn(Optional.of(problemWithTests(3)));
+    when(graphClient.evaluateAttempt(eq("p1"), anyString(), anyList(), anyInt()))
+        .thenReturn(
+            new BossEvaluateResultDto("p1", false, 0, 1, "hint", null, List.of(0)),
+            new BossEvaluateResultDto("p1", true, 1, 1, null, null, List.of()),
+            new BossEvaluateResultDto("p1", true, 1, 1, null, null, List.of()));
+    when(expeditionScoreService.recordVerifiedAttempt(
+            eq(7L), eq(runId), eq("p1"), anyString(), eq(false), eq(0)))
+        .thenReturn(new ExpeditionScoreService.VerifiedAttemptResult(true, true));
+    when(expeditionScoreService.recordVerifiedAttempt(
+            eq(7L), eq(runId), eq("p1"), anyString(), eq(true), eq(100)))
+        .thenReturn(
+            new ExpeditionScoreService.VerifiedAttemptResult(true, true),
+            new ExpeditionScoreService.VerifiedAttemptResult(true, false));
+
+    UUID firstId = UUID.fromString("123e4567-e89b-12d3-a456-426614174001");
+    UUID secondId = UUID.fromString("123e4567-e89b-12d3-a456-426614174002");
+    UUID thirdId = UUID.fromString("123e4567-e89b-12d3-a456-426614174003");
+    BossAttemptRequest first = new BossAttemptRequest("p1", 1, 1, "print(0)", 1, firstId);
+    BossAttemptRequest second = new BossAttemptRequest("p1", 1, 1, "print(5)", 1, secondId);
+    BossAttemptRequest third = new BossAttemptRequest("p1", 1, 1, "print(5)", 1, thirdId);
+    var firstClaim = new BossAttemptIdempotencyService.Claim(UUID.randomUUID(), null, "a".repeat(64));
+    var secondClaim = new BossAttemptIdempotencyService.Claim(UUID.randomUUID(), null, "b".repeat(64));
+    var thirdClaim = new BossAttemptIdempotencyService.Claim(UUID.randomUUID(), null, "c".repeat(64));
+    when(attemptIdempotencyService.claim(7L, firstId, first)).thenReturn(firstClaim);
+    when(attemptIdempotencyService.claim(7L, secondId, second)).thenReturn(secondClaim);
+    when(attemptIdempotencyService.claim(7L, thirdId, third)).thenReturn(thirdClaim);
+    when(attemptIdempotencyService.complete(eq(7L), eq(firstId), eq(firstClaim), any(), any()))
+        .thenAnswer(call -> call.getArgument(3));
+    when(attemptIdempotencyService.complete(
+            eq(7L), eq(secondId), eq(secondClaim), any(),
+            org.mockito.ArgumentMatchers.nullable(LearningEvent.class)))
+        .thenAnswer(call -> call.getArgument(3));
+    when(attemptIdempotencyService.complete(
+            eq(7L), eq(thirdId), eq(thirdClaim), any(),
+            org.mockito.ArgumentMatchers.nullable(LearningEvent.class)))
+        .thenAnswer(call -> call.getArgument(3));
+
+    var firstResult = service.evaluateAttempt(first, 7L);
+    var secondResult = service.evaluateAttempt(second, 7L);
+    var thirdResult = service.evaluateAttempt(third, 7L);
+
+    assertThat(firstResult.passed()).isFalse();
+    assertThat(secondResult.passed()).isTrue();
+    assertThat(thirdResult.passed()).isTrue();
+    assertThat(thirdResult.score()).isEqualTo(100);
+    verify(attemptIdempotencyService)
+        .complete(eq(7L), eq(firstId), eq(firstClaim), any(),
+            org.mockito.ArgumentMatchers.argThat(LearningEvent.PracticeFailed.class::isInstance));
+    verify(attemptIdempotencyService)
+        .complete(eq(7L), eq(secondId), eq(secondClaim), any(),
+            org.mockito.ArgumentMatchers.argThat(LearningEvent.PracticeSucceeded.class::isInstance));
+    verify(attemptIdempotencyService)
+        .complete(eq(7L), eq(thirdId), eq(thirdClaim), any(),
+            org.mockito.ArgumentMatchers.isNull());
+    verifyNoInteractions(eventPublisher);
+  }
+
+  @Test
+  @DisplayName("远征题目指纹忽略签发 ID 和难度标签，但包含实际题面与判题用例")
+  void expeditionQuestionFingerprintTracksJudgedContent() {
+    BossInternalProblem issuedOne = problemWithTests(2);
+    BossInternalProblem issuedAgain =
+        new BossInternalProblem(
+            "issue-another-id",
+            1,
+            4,
+            5,
+            "PY43-KC-001",
+            "statement",
+            List.of("different hint"),
+            "2 3",
+            "5",
+            1,
+            true,
+            true,
+            List.of(new BossTestCasePayload("2 3", "5", false)),
+            "different reference solution");
+    BossInternalProblem differentQuestion =
+        new BossInternalProblem(
+            "issue-third-id",
+            1,
+            1,
+            2,
+            "PY43-KC-001",
+            "statement",
+            List.of(),
+            "2 3",
+            "5",
+            1,
+            true,
+            true,
+            List.of(new BossTestCasePayload("2 3", "6", false)),
+            "ref");
+
+    assertThat(BossService.questionFingerprint(issuedAgain))
+        .isEqualTo(BossService.questionFingerprint(issuedOne));
+    assertThat(BossService.questionFingerprint(differentQuestion))
+        .isNotEqualTo(BossService.questionFingerprint(issuedOne));
   }
 
   @Test
@@ -528,11 +645,34 @@ class BossServiceTest {
     when(passiveProfileService.getPersonalizationSignals(7L))
         .thenReturn(
             new LearnerProfileSignals(
-                List.of("PY43-KC-009"), 2, 0.6, List.of("video", "diagram"), 0.4, 2.5));
+                List.of("PY43-KC-009"),
+                2,
+                0.6,
+                List.of("video", "diagram"),
+                0.4,
+                2.5,
+                "NON_CS_HUMANITIES",
+                "JOB",
+                List.of("PY43-KC-001"),
+                0.7,
+                -0.5,
+                30));
     when(graphClient.requestProblem(anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
         .thenReturn(problemWithStage(1));
     ProfileSignalsPayload clientSignals =
-        new ProfileSignalsPayload(List.of("CLIENT-KC"), 5, 1.0, List.of("client"), 1.0, "debug");
+        new ProfileSignalsPayload(
+            List.of("CLIENT-KC"),
+            5,
+            1.0,
+            List.of("client"),
+            1.0,
+            "debug",
+            "CS",
+            "EXAM",
+            List.of("PY43-KC-065"),
+            0.1,
+            0.5,
+            60);
 
     service.fetchProblem(
         1,
@@ -554,7 +694,18 @@ class BossServiceTest {
     assertThat(captured.getValue())
         .isEqualTo(
             new ProfileSignalsPayload(
-                List.of("PY43-KC-009"), 2, 0.6, List.of("video", "diagram"), 0.4, "debug"));
+                List.of("PY43-KC-009"),
+                2,
+                0.6,
+                List.of("video", "diagram"),
+                0.4,
+                "debug",
+                "NON_CS_HUMANITIES",
+                "JOB",
+                List.of("PY43-KC-001"),
+                0.7,
+                -0.5,
+                30));
   }
 
   @Test
@@ -759,7 +910,8 @@ class BossServiceTest {
   }
 
   private static LearnerProfileSignals beginnerSignals() {
-    return new LearnerProfileSignals(List.of(), 0, 0.1, List.of(), 0.2, 4.0);
+    return new LearnerProfileSignals(
+        List.of(), 0, 0.1, List.of(), 0.2, 4.0, null, null, List.of(), null, null, null);
   }
 
   /** 带 hidden testCases 的内部题：evaluateAttempt 才能越过「空 testCases」兜底进入真实判题路径。 */

@@ -179,9 +179,9 @@ def test_generate_boss_problem_passes_temperature_bump_to_factory() -> None:
     assert seen_temperatures[2] > seen_temperatures[1]
 
 
-def test_run_all_reviews_real_self_test_succeeds() -> None:
+def test_run_all_reviews_fixed_self_test_response_succeeds() -> None:
     p = _good_problem()
-    # 真实 Python 解释器自测
+    # The unit fixture returns fixed Piston responses without executing the source.
     review = run_all_reviews(p)
     assert review.passed
     assert any(v.review == "self_test" and v.passed for v in review.verdicts)

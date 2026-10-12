@@ -20,11 +20,13 @@ from pythontopia_graph.agents.boss.kc_map import (
     all_kc_codes,
     chapter_for_kc,
     kc_codes_for_chapter,
+    is_known_kc,
 )
 
 ZPD_LO = 0.2
 ZPD_HI = 0.8
 MASTERED = 0.8
+GOAL_TARGET_BONUS = 28  # Below the ZPD bonus (50), so a self-reported goal stays secondary.
 
 
 @dataclass(frozen=True)
@@ -50,6 +52,7 @@ def _priority(
     mastery: dict[str, float],
     confidence: dict[str, float],
     weak: set[str],
+    learning_goal_targets: set[str],
     last_practiced: dict[str, str],
     now: datetime,
 ) -> tuple[float, str]:
@@ -59,6 +62,9 @@ def _priority(
     if kc in weak and m < MASTERED:
         score += 100
         reasons.append("画像弱项")
+    if kc in learning_goal_targets and m < MASTERED:
+        score += GOAL_TARGET_BONUS
+        reasons.append("学习目标")
     if ZPD_LO <= m <= ZPD_HI:
         score += 50
         reasons.append("最近发展区")
@@ -126,6 +132,10 @@ def select_frontier(
     confidence = confidence or {}
     signals = profile_signals or {}
     weak = set(signals.get("weakKcCodes") or signals.get("weak_kc_codes") or [])
+    raw_targets = signals.get("targetKcCodes") or signals.get("target_kc_codes") or []
+    goal_targets = {
+        code for code in raw_targets if isinstance(code, str) and is_known_kc(code)
+    }
     success_rate = signals.get("successRate", signals.get("success_rate"))
     practiced = dict(last_practiced or {})
     clock = now or datetime.now(timezone.utc)
@@ -144,6 +154,7 @@ def select_frontier(
                     mastery,
                     confidence,
                     weak,
+                    goal_targets,
                     practiced,
                     clock,
                 ),

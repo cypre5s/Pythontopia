@@ -49,9 +49,22 @@ PROBLEM_GEN_SYSTEM_PROMPT = """你是 Python 编程题命题官，专注「Pytho
   出现 1 次中文关键词或对应英文语法。
 
 【风格】
-- 题面像星露谷小镇生活：浇花、收菜、点灯、记账等具体场景；
+- 题面使用中央小镇的学习与服务场景，例如图书馆整理目录、工坊调试程序、课堂统计和公告板任务；
 - 不要在题面里写「这是 KC-xxx」之类的元信息；玩家只关心故事。
 """
+
+_MAJOR_CONTEXTS = {
+    "CS": "计算机相关背景",
+    "NON_CS_STEM": "非计算机理工背景",
+    "NON_CS_HUMANITIES": "非计算机人文背景",
+    "OTHER": "其他专业背景",
+}
+_LEARNING_GOALS = {
+    "EXAM": "考试备考",
+    "PROJECT": "项目实践",
+    "INTEREST": "兴趣探索",
+    "JOB": "求职实践",
+}
 
 
 def _strip_json_fence(text: str) -> str:
@@ -216,6 +229,32 @@ def build_llm_problem_factory(provider: LlmProvider) -> ProblemFactory:
                     "但 reference_solution 必须从 stdin 输入、向 stdout 输出，且必须给至少 3 条 test_cases。"
                 )
         if profile_signals:
+            major = profile_signals.get("major")
+            if major in _MAJOR_CONTEXTS:
+                extras.append(f"专业背景参考：{_MAJOR_CONTEXTS[major]}。")
+            goal = profile_signals.get("learningGoalKind")
+            if goal in _LEARNING_GOALS:
+                extras.append(f"学习目标参考：{_LEARNING_GOALS[goal]}；目标只影响场景，不改变课程标准。")
+            target_kcs = profile_signals.get("targetKcCodes") or []
+            if kc_code in target_kcs:
+                extras.append("本题知识点属于学生明确设定的学习目标，请说明它在该目标中的用途。")
+
+            field_dependent = profile_signals.get("fieldDependent")
+            if isinstance(field_dependent, (int, float)):
+                if field_dependent >= 0.65:
+                    extras.append("学生偏好情境线索，请明确输入信息的含义并标出关键条件。")
+                elif field_dependent <= 0.35:
+                    extras.append("学生偏好直接结构，请减少无关故事背景并突出规则。")
+            sequential_vs_holistic = profile_signals.get("sequentialVsHolistic")
+            if isinstance(sequential_vs_holistic, (int, float)):
+                if sequential_vs_holistic >= 0.35:
+                    extras.append("学生略偏整体视角，请先给简短目标概览，再展开步骤。")
+                elif sequential_vs_holistic <= -0.35:
+                    extras.append("学生略偏逐步推理，请按步骤组织说明，再回顾整体目标。")
+            session_minutes = profile_signals.get("sessionMinutesPerDay")
+            if isinstance(session_minutes, int) and session_minutes <= 20:
+                extras.append(f"学生每日学习时间较短（约 {session_minutes} 分钟），题目应适合短时完成。")
+
             weak = profile_signals.get("weakKcCodes") or []
             if weak:
                 extras.append(f"学生弱项 KC: {','.join(weak[:4])} —— 优先围绕这些 KC 出题。")
@@ -229,7 +268,8 @@ def build_llm_problem_factory(provider: LlmProvider) -> ProblemFactory:
                 elif success > 0.75:
                     extras.append("学生近况通过率较高，可以略提高综合度。")
             media = profile_signals.get("mediaPriority") or []
-            if "DIAGRAM" in media:
+            normalized_media = {str(value).strip().lower() for value in media}
+            if normalized_media.intersection({"diagram", "mindmap"}):
                 extras.append("学生偏好可视化，可在 statement 末尾用 mermaid 或 ascii 简图。")
             resilience = profile_signals.get("resilience")
             if isinstance(resilience, (int, float)) and resilience < 0.4:

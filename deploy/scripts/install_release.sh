@@ -38,8 +38,10 @@ COMPOSE_FILE_NAME="docker-compose.production.yml"
 IMAGE_COMPONENTS=(frontend backend graph rag)
 
 NGINX_SITE_SRC_REL="deploy/nginx/pythontopia.conf"
+NGINX_LOG_FORMAT_SRC_REL="deploy/nginx/pythontopia-log-format.conf"
 NGINX_AVAIL="/etc/nginx/sites-available/pythontopia.conf"
 NGINX_ENABLED="/etc/nginx/sites-enabled/pythontopia.conf"
+NGINX_LOG_FORMAT_AVAIL="/etc/nginx/conf.d/pythontopia-log-format.conf"
 
 TS="$(date '+%Y%m%d-%H%M%S')"
 RELEASE_DIR="${RELEASES_DIR}/${TS}"
@@ -330,6 +332,9 @@ if [ -f "${NGINX_AVAIL}" ]; then
 else
   echo "    主机尚无 Pythontopia Nginx 站点配置，跳过备份（首次部署属预期）"
 fi
+if [ -f "${NGINX_LOG_FORMAT_AVAIL}" ]; then
+  install -m 644 "${NGINX_LOG_FORMAT_AVAIL}" "${BACKUP_DIR}/nginx-pythontopia-log-format.conf.backup"
+fi
 
 # 4) 当前 release 的 Compose 文件与覆盖文件备份
 if [ -L "${CURRENT_LINK}" ] && [ -d "${CURRENT_LINK}/deploy" ]; then
@@ -359,6 +364,7 @@ fi
 for required in \
   "deploy/${COMPOSE_FILE_NAME}" \
   "${NGINX_SITE_SRC_REL}" \
+  "${NGINX_LOG_FORMAT_SRC_REL}" \
   "deploy/course-data/video_transcripts.json" \
   "deploy/scripts/validate_course_runtime_data.py" \
   "deploy/runtime/sha256sums.txt" \
@@ -485,6 +491,7 @@ if ! command -v nginx >/dev/null 2>&1; then
 fi
 
 install -m 644 "${RELEASE_DIR}/${NGINX_SITE_SRC_REL}" "${NGINX_AVAIL}"
+install -m 644 "${RELEASE_DIR}/${NGINX_LOG_FORMAT_SRC_REL}" "${NGINX_LOG_FORMAT_AVAIL}"
 ln -sfn "${NGINX_AVAIL}" "${NGINX_ENABLED}"
 # 停用 Ubuntu 自带 default 站点，避免与本站点的 default_server 冲突
 # （sites-available/default 原文件保留，可随时恢复）
@@ -492,6 +499,11 @@ rm -f /etc/nginx/sites-enabled/default
 
 if ! nginx -t; then
   echo "[安装失败] nginx -t 校验未通过，开始恢复旧 Nginx 配置..." >&2
+  if [ -f "${BACKUP_DIR}/nginx-pythontopia-log-format.conf.backup" ]; then
+    install -m 644 "${BACKUP_DIR}/nginx-pythontopia-log-format.conf.backup" "${NGINX_LOG_FORMAT_AVAIL}"
+  else
+    rm -f "${NGINX_LOG_FORMAT_AVAIL}"
+  fi
   if [ -f "${BACKUP_DIR}/nginx-pythontopia.conf.backup" ]; then
     install -m 644 "${BACKUP_DIR}/nginx-pythontopia.conf.backup" "${NGINX_AVAIL}"
     nginx -t >&2 || true

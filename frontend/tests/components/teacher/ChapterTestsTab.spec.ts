@@ -75,4 +75,20 @@ describe('ChapterTestsTab', () => {
     await flushPromises();
     expect(wrapper.find('[data-testid="tests-error"]').text()).toContain('章测聚合异常');
   });
+
+  it('失败后可在本页重试章测数据请求', async () => {
+    apiMocks.fetchChapterTests
+      .mockRejectedValueOnce(new Error('章测聚合异常'))
+      .mockResolvedValueOnce({ totalStudents: 0, chapters: [] });
+    const wrapper = mount(ChapterTestsTab, { props: { classroomId: 9 } });
+    await flushPromises();
+
+    await wrapper.get('[data-testid="tests-retry"]').trigger('click');
+    await flushPromises();
+
+    expect(apiMocks.fetchChapterTests).toHaveBeenCalledTimes(2);
+    expect(apiMocks.fetchChapterTests).toHaveBeenLastCalledWith(9);
+    expect(wrapper.find('[data-testid="tests-error"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="tests-empty"]').exists()).toBe(true);
+  });
 });

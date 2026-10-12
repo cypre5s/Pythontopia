@@ -1,25 +1,62 @@
-"""Run Boss unit cases through a test-only fake Piston endpoint.
-
-Production code has no local-execution fallback; this test server evaluates only
-the fixed, trusted snippets in the unit suite so existing result mapping tests
-remain useful without a deployed Piston service.
-"""
+"""Use fixed, non-executing responses for Boss unit tests."""
 
 from __future__ import annotations
 
-import subprocess
-import sys
-import time
 from typing import Any
 
 import httpx
 import pytest
+from pythontopia_graph.schemas.chapter_test import QuestionPaper, SelfTestReport
+
+
+_ADD_TWO_NUMBERS = "a, b = map(int, input().split())\nprint(a + b)"
+_PLUS_ONE = "n = int(input())\nprint(n + 1)"
+_DOUBLE = "print(int(input()) * 2)"
+_ECHO_INPUT = "print(input())"
+_MULTILINE_SUM = (
+    "n = int(input())\ntotal = 0\nfor _ in range(n):\n"
+    "    total += int(input())\nprint(total)"
+)
+_COUNT_TO_THREE = "for i in range(3):\n    print(i)"
+_PRINT_ALWAYS_ZERO = "print('always 0')"
+_PRINT_ONE = "x = 1\nprint(x)"
+
+# Test snippets map to recorded outcomes; unknown source is a fixed runtime error.
+_FIXED_STDOUT: dict[tuple[str, str], str] = {
+    (_ADD_TWO_NUMBERS, "1 2"): "3\n",
+    (_ADD_TWO_NUMBERS, "10 -7"): "3\n",
+    (_ADD_TWO_NUMBERS, "0 0"): "0\n",
+    (_ADD_TWO_NUMBERS, "10 20"): "30\n",
+    (_ADD_TWO_NUMBERS, "100 -50"): "50\n",
+    (_ADD_TWO_NUMBERS, "100 200"): "300\n",
+    (_ADD_TWO_NUMBERS, "-1 1"): "0\n",
+    (_PLUS_ONE, "1"): "2\n",
+    (_PLUS_ONE, "3"): "4\n",
+    (_PLUS_ONE, "4"): "5\n",
+    (_PLUS_ONE, "5"): "6\n",
+    (_PLUS_ONE, "9"): "10\n",
+    (_DOUBLE, "2"): "4\n",
+    (_DOUBLE, "3"): "6\n",
+    (_DOUBLE, "4"): "8\n",
+    **{(_ECHO_INPUT, value): f"{value}\n" for value in ("a", "b", "c", "x", "y", "z")},
+    (_MULTILINE_SUM, "3\n1\n2\n3"): "6\n",
+    (_MULTILINE_SUM, "2\n5\n5"): "10\n",
+    (_MULTILINE_SUM, "1\n42"): "42\n",
+    (_COUNT_TO_THREE, ""): "0\n1\n2\n",
+    (_PRINT_ALWAYS_ZERO, "1 2"): "always 0\n",
+    (_PRINT_ALWAYS_ZERO, "4 5"): "always 0\n",
+    (_PRINT_ALWAYS_ZERO, "0 0"): "always 0\n",
+    (_PRINT_ALWAYS_ZERO, ""): "always 0\n",
+    **{(_PRINT_ONE, value): "1\n" for value in ("1", "2", "3")},
+}
 
 
 @pytest.fixture(autouse=True)
-def _fake_piston_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+def fake_piston_endpoint(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, str]]:
+    """Answer known unit snippets without interpreting or executing source."""
     monkeypatch.setenv("PYT_PISTON_URL", "http://piston.test")
     monkeypatch.setenv("PYT_PISTON_PYTHON_VERSION", "3.11.13")
+    submissions: list[tuple[str, str]] = []
 
     def post(
         url: str,
@@ -28,38 +65,55 @@ def _fake_piston_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
         headers: dict[str, str],
         timeout: float,
     ) -> httpx.Response:
-        del url, headers, timeout
+        del headers, timeout
         source = json["files"][0]["content"]
-        started = time.monotonic()
-        try:
-            result = subprocess.run(
-                [sys.executable, "-I", "-B", "-c", source],
-                input=json["stdin"],
-                capture_output=True,
-                text=True,
-                timeout=json["run_timeout"] / 1000,
-                env={"PYTHONIOENCODING": "utf-8"},
-            )
-        except subprocess.TimeoutExpired as exc:
-            stdout = exc.stdout or ""
-            stderr = exc.stderr or ""
-            if isinstance(stdout, bytes):
-                stdout = stdout.decode("utf-8", errors="replace")
-            if isinstance(stderr, bytes):
-                stderr = stderr.decode("utf-8", errors="replace")
-            run = {"status": "TO", "code": -1, "stdout": stdout, "stderr": stderr}
+        stdin = json["stdin"]
+        submissions.append((source, stdin))
+        stdout = _FIXED_STDOUT.get((source, stdin))
+        if source == "while True:\n    pass":
+            run = {"status": "TO", "code": -1, "stdout": "", "stderr": "time limit exceeded"}
+        elif source == "raise SystemExit(1)":
+            run = {"status": "RE", "code": 1, "stdout": "", "stderr": "exit status 1"}
+        elif source == "this is not python":
+            run = {"status": "RE", "code": 1, "stdout": "", "stderr": "SyntaxError: invalid syntax"}
+        elif stdout is not None:
+            run = {"status": None, "code": 0, "stdout": stdout, "stderr": ""}
         else:
             run = {
-                "status": None if result.returncode == 0 else "RE",
-                "code": result.returncode,
-                "stdout": result.stdout,
-                "stderr": result.stderr,
+                "status": "RE",
+                "code": 1,
+                "stdout": "",
+                "stderr": "no fixed response for this test snippet",
             }
-        run["wall_time"] = int((time.monotonic() - started) * 1000)
         return httpx.Response(
             200,
             json={"run": run},
-            request=httpx.Request("POST", "http://piston.test/api/v2/execute"),
+            request=httpx.Request("POST", url),
         )
 
     monkeypatch.setattr("pythontopia_graph.agents.boss.execution_sandbox.httpx.post", post)
+    return submissions
+
+
+@pytest.fixture
+def chapter_test_sandbox(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Stub paper review self-tests; their sandbox contract has separate tests."""
+    def self_test(paper: QuestionPaper) -> SelfTestReport:
+        coding = paper.coding_items()
+        case_count = sum(len(item.samples) + len(item.hidden_test_cases) for item in coding)
+        bad_solutions = {"print('wrong')", "print(0)"}
+        passed = all(item.reference_solution not in bad_solutions for item in coding)
+        return SelfTestReport(
+            passed=passed,
+            coding_items=len(coding),
+            cases_total=case_count,
+            cases_passed=case_count if passed else 0,
+            reasons=[] if passed else ["self_test:p1:expected output mismatch"],
+        )
+
+    for target in (
+        "pythontopia_graph.agents.paper_reviews.sandbox_self_test",
+        "pythontopia_graph.agents.paper_designer.sandbox_self_test",
+        "pythontopia_graph.agents.paper_pipeline.sandbox_self_test",
+    ):
+        monkeypatch.setattr(target, self_test)

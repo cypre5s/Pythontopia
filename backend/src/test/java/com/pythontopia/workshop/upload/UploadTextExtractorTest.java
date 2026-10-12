@@ -9,6 +9,9 @@ import com.pythontopia.workshop.upload.parser.UploadTextExtractor;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Random;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
@@ -78,6 +81,73 @@ class UploadTextExtractorTest {
     assertThatThrownBy(() -> extractor.extract(".docx", garbage))
         .isInstanceOf(UploadParseException.class)
         .hasMessageContaining("DOCX 解析失败");
+  }
+
+  @Test
+  void rejectsExtractedTextAboveLimit() {
+    byte[] text = "x".repeat(100_001).getBytes(StandardCharsets.UTF_8);
+
+    assertThatThrownBy(() -> extractor.extract(".txt", text))
+        .isInstanceOf(UploadParseException.class)
+        .hasMessageContaining("提取文本超过上限");
+  }
+
+  @Test
+  void rejectsPdfAbovePageLimit() throws IOException {
+    byte[] pdf;
+    try (PDDocument document = new PDDocument()) {
+      for (int i = 0; i < 101; i++) {
+        document.addPage(new PDPage());
+      }
+      ByteArrayOutputStream out = new ByteArrayOutputStream();
+      document.save(out);
+      pdf = out.toByteArray();
+    }
+
+    assertThatThrownBy(() -> extractor.extract(".pdf", pdf))
+        .isInstanceOf(UploadParseException.class)
+        .hasMessageContaining("PDF 页数超过上限");
+  }
+
+  @Test
+  void rejectsDocxAboveExpandedArchiveLimit() throws IOException {
+    byte[] archive;
+    try (ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ZipOutputStream zip = new ZipOutputStream(out)) {
+      zip.putNextEntry(new ZipEntry("word/document.xml"));
+      byte[] random = new byte[4 * 1024];
+      new Random(7).nextBytes(random);
+      byte[] zeros = new byte[28 * 1024];
+      for (int i = 0; i < 512; i++) {
+        zip.write(random);
+        zip.write(zeros);
+      }
+      zip.write(1);
+      zip.closeEntry();
+      archive = out.toByteArray();
+    }
+    assertThat(archive.length).isLessThan(5 * 1024 * 1024);
+
+    assertThatThrownBy(() -> extractor.extract(".docx", archive))
+        .isInstanceOf(UploadParseException.class)
+        .hasMessageContaining("DOCX 解压后内容超过上限");
+  }
+
+  @Test
+  void rejectsDocxWithTooManyArchiveEntries() throws IOException {
+    byte[] archive;
+    try (ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ZipOutputStream zip = new ZipOutputStream(out)) {
+      for (int i = 0; i < 101; i++) {
+        zip.putNextEntry(new ZipEntry("part-" + i));
+        zip.closeEntry();
+      }
+      archive = out.toByteArray();
+    }
+
+    assertThatThrownBy(() -> extractor.extract(".docx", archive))
+        .isInstanceOf(UploadParseException.class)
+        .hasMessageContaining("DOCX 文件条目超过上限");
   }
 
   @Test

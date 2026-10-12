@@ -1,5 +1,15 @@
 # 管理后台最小实现工作日志
 
+## 2026-10-13：用户列表与 Twin 提示的本轮收尾
+
+- 基于当前 HEAD 的只读复核确认管理端包含 AI 运维、题目审核、用户管理三项真实 API-backed 页面；本轮没有新增占位页面。
+- 修正画像页认知风格尺度错配：`sequential_vs_holistic` 按 `-1..1` 的正负呈现整体/序列倾向，`field_dependent` 按 `0..1` 换算显示 `/10`。
+- 管理用户页表格与审核表采用相同的 44px 表头、52px 行和 16px/10px 留白，设置列宽与文本截断；完整用户名/显示名可通过 title 查看，窄屏仍可横向滚动。
+- 路由测试补上 `/admin/users` 的 ADMIN-only 检查。Twin 周报把事件计数启发式标为“证据充分度”，并说明不是答题概率，保留原 API 字段。
+- RED/GREEN：样式与 Twin 说明测试先失败，再通过；新增长用户名/显示名 title 回归先失败，再补齐 title。
+- 验证：画像页 4 项、Admin 样式、AdminUsers 页面、TwinWeekly 共 15 项通过；管理员路由用例 1 项通过；TypeScript 类型检查、定向 ESLint 和 `git diff --check` 均通过。
+- 按用户要求暂缓全栈/付费请求和无尽远征性能基准；性能指标保留待测。
+
 ## 2026-10-13：补齐用户管理与窄屏键盘操作
 
 - 新增 ADMIN-only `GET /api/admin/users` 分页/搜索与 `PATCH /api/admin/users/{id}` 启用/停用，复用现有 `users.status`、`token_version`，不暴露邮箱或密码字段；停用后旧 JWT 立即失效，并禁止管理员停用自己的当前账号。

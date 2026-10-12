@@ -1,6 +1,9 @@
 package com.pythontopia.world.boss.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
@@ -26,8 +29,10 @@ public record BossProblemRequest(
     @JsonProperty("kcCode") @Size(max = 64) String kcCode,
     @Min(1) @Max(5) @JsonProperty("difficulty") Integer difficulty,
     @JsonProperty("preferredKc") @Size(max = 64) String preferredKc,
-    @JsonProperty("preferredKind") @Size(max = 32) String preferredKind,
-    @JsonProperty("profileSignals") ProfileSignalsPayload profileSignals,
+    @JsonProperty("preferredKind")
+        @Pattern(regexp = "^(pdf_question|fill_blank|debug|short_answer|closed_loop|dual_track|multi_round|teach_back|bug_mine)$")
+        String preferredKind,
+    @JsonProperty("profileSignals") @Valid ProfileSignalsPayload profileSignals,
     @JsonProperty("arenaLevel") @Size(max = 16) String arenaLevel,
     @JsonProperty("expeditionRunId")
         @Pattern(regexp = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
@@ -55,5 +60,21 @@ public record BossProblemRequest(
       @JsonProperty("successRate") Double successRate,
       @JsonProperty("mediaPriority") List<String> mediaPriority,
       @JsonProperty("resilience") Double resilience,
-      @JsonProperty("questPreferredKind") String questPreferredKind) {}
+      @JsonProperty("questPreferredKind")
+          @Pattern(regexp = "^(pdf_question|fill_blank|debug|short_answer|closed_loop|dual_track|multi_round|teach_back|bug_mine)$")
+          String questPreferredKind,
+      @JsonProperty("major") @Pattern(regexp = "^(CS|NON_CS_STEM|NON_CS_HUMANITIES|OTHER)$") String major,
+      @JsonProperty("learningGoalKind")
+          @Pattern(regexp = "^(EXAM|PROJECT|INTEREST|JOB)$")
+          String learningGoalKind,
+      @JsonProperty("targetKcCodes") @Size(max = 6) List<String> targetKcCodes,
+      @JsonProperty("fieldDependent")
+          @DecimalMin("0.0")
+          @DecimalMax("1.0")
+          Double fieldDependent,
+      @JsonProperty("sequentialVsHolistic")
+          @DecimalMin("-1.0")
+          @DecimalMax("1.0")
+          Double sequentialVsHolistic,
+      @JsonProperty("sessionMinutesPerDay") @Min(5) @Max(240) Integer sessionMinutesPerDay) {}
 }

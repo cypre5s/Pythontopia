@@ -82,7 +82,7 @@
 - Test: `frontend/tests/pages/admin/`, `frontend/tests/app/router.spec.ts`
 - Docs: `docs/project/CHANGELOG.md`, `docs/plans/2026-10-12-*-worklog.md`
 
-1. Preserve the two existing real-data admin features and align sidebar, panels, table spacing, colors, and small-screen navigation with Alethicode's admin shell.
+1. Preserve the three existing API-backed admin features and align sidebar, panels, table spacing, colors, and small-screen navigation with Alethicode's admin shell.
 2. Keep Pythontopia's current API/auth contracts; do not add menu entries or mock pages for Alethicode capabilities without Pythontopia endpoints.
 3. Run focused admin tests, frontend typecheck/lint, affected backend and Graph suites.
 4. Review `git diff --check`, ensure no key appears in tracked files, update changelog/worklogs with current test output and explicit unverified items.
@@ -103,9 +103,10 @@
 
 ## Execution notes
 
-- Tasks 1–5 are already implemented in checkpoint `3b5cf56d` and recorded in `docs/plans/2026-10-12-deepseek-ai-tutor-security-worklog.md`; this pass first closes remaining Tutor, admin visual, and Twin functional gaps.
+- Tasks 1–5 are implemented in the local baseline `9f1b8053` and recorded in `docs/plans/2026-10-12-deepseek-ai-tutor-security-worklog.md`; this pass closes Tutor, admin visual, Twin, and profile-driven expedition gaps.
 - User priority is behavior and integration fixes before performance. Do not start the Web full-stack benchmark or spend DeepSeek request quota until these changes are reviewed and verified; no real model request is required for unit tests.
-- Current pass completed the remaining Tutor event/state/reference work and admin visual alignment; focused Java, Graph, and Web regressions are green. Only after final configuration checks, consider the separately requested local performance run; do not exceed 30 DeepSeek calls.
+- Current pass completed the Tutor event/state/reference work, aligned the users table, added coverage for its ADMIN-only route, corrected profile scales, wired the remaining validated learner dimensions into expedition selection/prompting, and restricted preferred question kinds to the existing enum.
+- Keep performance last, as the user directed. Do not start the Web full-stack benchmark or spend DeepSeek request quota during this functional closeout; no real model request is required for unit tests.
 - Final local check found the ignored DeepSeek config present, but no running Compose services and no `PYT_PISTON_URL`; the real expedition judge path is unavailable, so no full-stack or paid performance run was started.
 
 - Implement in the current authorized workspace because its existing changes are part of this task; do not create a competing checkout or reset/clean the worktree.

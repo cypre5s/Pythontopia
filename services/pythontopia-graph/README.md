@@ -7,15 +7,17 @@ python -m pip install -e ".[dev]"
 python -m pytest -q
 ```
 
-## Optional Local Fine-Tuned Provider
+## DeepSeek configuration
 
-The local Qwen3.5 LoRA adapter can be enabled for structured JSON Agent calls while keeping the normal provider as fallback:
+The graph service loads the repository's `deploy/.env` when run outside Compose. Configure the project variables there (keep the API key out of source control):
 
-```bash
-export PYT_FINE_TUNED_LLM_ENABLED=true
-export PYT_FINE_TUNED_BASE_URL=http://127.0.0.1:18094/v1
-export PYT_FINE_TUNED_API_KEY=local-dev-token
-export PYT_FINE_TUNED_MODEL=pythontopia-qwen35-e1-lora
+```dotenv
+PYT_LLM_PROVIDER=openai_compat
+PYT_OPENAI_BASE_URL=https://api.deepseek.com
+PYT_OPENAI_API_KEY=your-key
+PYT_OPENAI_MODEL=deepseek-v4-pro
+PYT_OPENAI_MODEL_FAST=deepseek-flash
+PYT_OPENAI_MODEL_VISION=deepseek-flash
 ```
 
-Only JSON-mode Agent calls are routed to the adapter. Text streaming, tool calling, `model_tier=fast`, and adapter failures fall back to `PYT_LLM_PROVIDER`.
+Text and image input use DeepSeek; responses are text. Fine-tuned local providers are disabled, and setting `PYT_FINE_TUNED_LLM_ENABLED=true` makes startup fail.

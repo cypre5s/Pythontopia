@@ -41,7 +41,7 @@ const PROFILE = {
   userId: 1,
   packId: 43,
   major: 'CS',
-  cognitiveStyle: { fieldDependent: 5, sequentialVsHolistic: 4 },
+  cognitiveStyle: { fieldDependent: 0.6, sequentialVsHolistic: 0.25 },
   narrativeSummary: null,
 };
 
@@ -114,6 +114,26 @@ describe('ProfilePage cognitive_style 纠偏', () => {
     expect(wrapper.find('[data-testid="cog-style-visual"]').classes()).not.toContain(
       'py-btn--primary',
     );
+  });
+
+  it('renders cognitive style using the profile schema scales', async () => {
+    const wrapper = await mountPage();
+    const card = wrapper.find('[data-testid="dim-cognitiveStyle"]');
+
+    expect(card.find('.dim-card__value').text()).toBe('喜欢先看全局');
+    expect(card.find('.dim-card__detail').text()).toContain('整体型 · 场依存 6/10');
+  });
+
+  it('renders negative sequential-versus-holistic values as step-by-step preference', async () => {
+    getLearnerProfileMock.mockResolvedValueOnce({
+      ...PROFILE,
+      cognitiveStyle: { fieldDependent: 0.4, sequentialVsHolistic: -0.25 },
+    });
+    const wrapper = await mountPage();
+    const card = wrapper.find('[data-testid="dim-cognitiveStyle"]');
+
+    expect(card.find('.dim-card__value').text()).toBe('喜欢一步步来');
+    expect(card.find('.dim-card__detail').text()).toContain('序列型 · 场依存 4/10');
   });
 
   it('picking a style calls selfUpdateDimension with tagsAdd + small evidence/score', async () => {

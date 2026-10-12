@@ -79,4 +79,20 @@ describe('MainlineProgressTab', () => {
     await flushPromises();
     expect(wrapper.find('[data-testid="progress-error"]').text()).toContain('进度聚合异常');
   });
+
+  it('失败后可在本页重试主线进度请求', async () => {
+    apiMocks.fetchMainlineProgress
+      .mockRejectedValueOnce(new Error('进度聚合异常'))
+      .mockResolvedValueOnce(payload());
+    const wrapper = mount(MainlineProgressTab, { props: { classroomId: 9 } });
+    await flushPromises();
+
+    await wrapper.get('[data-testid="progress-retry"]').trigger('click');
+    await flushPromises();
+
+    expect(apiMocks.fetchMainlineProgress).toHaveBeenCalledTimes(2);
+    expect(apiMocks.fetchMainlineProgress).toHaveBeenLastCalledWith(9);
+    expect(wrapper.find('[data-testid="progress-error"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="progress-matrix"]').exists()).toBe(true);
+  });
 });

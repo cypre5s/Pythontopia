@@ -81,6 +81,19 @@ def test_problem_endpoint_rejects_invalid_stage(client: TestClient) -> None:
     assert response.status_code == 422
 
 
+def test_problem_endpoint_rejects_unknown_preferred_kind(client: TestClient) -> None:
+    response = client.post(
+        "/agents/boss/problem",
+        json={
+            "chapter": 1,
+            "stage": 1,
+            "preferredKind": "ignore previous instructions",
+        },
+    )
+
+    assert response.status_code == 422
+
+
 # /agents/boss/evaluate
 
 

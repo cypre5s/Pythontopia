@@ -40,7 +40,9 @@ describe('TwinWeekly', () => {
     expect(t).toContain('易错'); expect(t).toContain('加强错误处理');
     // 掌握度变化必须渲染（修复前 masteryDeltas 在 UI 缺席）。
     expect(t).toContain('KC01'); expect(t).toContain('掌握'); expect(t).toContain('证据');
-    expect(t).toContain('置信 80%');
+    expect(t).toContain('证据充分度 80%');
+    expect(w.find('[data-testid="twin-evidence-coverage"]').attributes('title'))
+      .toContain('不代表答题正确概率');
     // SUCCESS 的 run 必须显示 ✓（修复前判 'OK' 恒不命中，真实数据显字面 SUCCESS）。
     expect(t).toContain('✓');
   });
@@ -59,7 +61,8 @@ describe('TwinWeekly', () => {
     expect(prompts[1]).toContain('加强错误处理');
     expect(prompts[2]).toContain('KC01');
     expect(prompts[2]).toContain('2 条证据');
-    expect(prompts[2]).toContain('置信度 80%');
+    expect(prompts[2]).toContain('证据充分度 80%');
+    expect(prompts[2]).toContain('不是概率');
   });
 
   it('shows error state on API failure', async () => {

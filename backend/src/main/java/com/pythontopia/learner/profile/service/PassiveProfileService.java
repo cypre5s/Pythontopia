@@ -92,6 +92,9 @@ public class PassiveProfileService {
           "REFLECTION");
 
   private static final double DEFAULT_SCORE = 0.5;
+  private static final Set<String> PROFILE_MAJORS =
+      Set.of("CS", "NON_CS_STEM", "NON_CS_HUMANITIES", "OTHER");
+  private static final Set<String> LEARNING_GOAL_KINDS = Set.of("EXAM", "PROJECT", "INTEREST", "JOB");
 
   /** confidence 饱和证据数：evidence_count 达到该值时置信度=1（读时派生，不入库）。 */
   private static final int EVIDENCE_SATURATION = 8;
@@ -302,6 +305,9 @@ public class PassiveProfileService {
     JsonNode practice = confidentDimension(dimensions, "practical_ability");
     JsonNode preference = confidentDimension(dimensions, "learning_preference");
     JsonNode emotion = confidentDimension(dimensions, "emotion_persistence");
+    JsonNode background = confidentDimension(dimensions, "professional_background");
+    JsonNode goal = confidentDimension(dimensions, "learning_goal");
+    JsonNode cognition = confidentDimension(dimensions, "cognitive_style");
 
     List<String> mediaPriority = stringArray(preference, "media_priority", 4);
     if (preference != null) {
@@ -321,7 +327,13 @@ public class PassiveProfileService {
         boundedNumber(practice, "success_rate", 0.0, 1.0),
         mediaPriority,
         boundedNumber(emotion, "resilience", 0.0, 1.0),
-        boundedNumber(practice, "avg_attempts_per_problem", 0.0, 20.0));
+        boundedNumber(practice, "avg_attempts_per_problem", 0.0, 20.0),
+        allowlistedString(background, "major", PROFILE_MAJORS),
+        allowlistedString(goal, "kind", LEARNING_GOAL_KINDS),
+        kcCodeArray(goal, "target_kc_codes", 6),
+        boundedNumber(cognition, "field_dependent", 0.0, 1.0),
+        boundedNumber(cognition, "sequential_vs_holistic", -1.0, 1.0),
+        boundedInteger(preference, "session_minutes_per_day", 5, 240));
   }
 
   private static JsonNode confidentDimension(JsonNode dimensions, String key) {
@@ -374,6 +386,15 @@ public class PassiveProfileService {
       }
     }
     return codes;
+  }
+
+  private static String allowlistedString(JsonNode dimension, String key, Set<String> allowed) {
+    JsonNode value = dimension == null ? null : dimension.get(key);
+    if (value == null || !value.isTextual()) {
+      return null;
+    }
+    String candidate = value.asText().trim();
+    return allowed.contains(candidate) ? candidate : null;
   }
 
   private static Integer boundedInteger(JsonNode dimension, String key, int min, int max) {

@@ -1,5 +1,39 @@
 # Changelog
 
+## 2026-10-13 — BROWSE DNS 重绑定防护
+
+- 联网查证启动 Chromium 前解析白名单主机、校验全部地址为公网地址，并通过 Chromium host resolver rules 固定连接目标；子资源、脚本和非文档请求仍按原策略拦截。
+- Graph 全量 `1795 passed, 1 skipped`、Ruff 通过；Web 全量 Vitest、`npm run typecheck` 和生产构建通过。BROWSE executor、allowlist、route 定向测试 60 项通过。
+- 未启动 Web 全栈或真实浏览器联网验证；Tutor 的账号级请求额度仍待确定。无尽远征性能按用户顺序留到最后。
+
+## 2026-10-13 — Web 上传边界、媒体链接与教师重试
+
+- PDF 上传限 100 页并用临时文件缓存解析；DOCX 解压累计最多 16 MiB、归档最多 100 项；所有格式最多保存 100,000 个提取字符。超限继续走现有 FAILED 解析状态。
+- 私人媒体 URL 的签名现在包含 24 小时过期时间；旧格式仅按资产创建时间兼容 24 小时。Nginx 访问日志改记 `$uri`，不写入 query 签名，并纳入 release 安装与回滚。
+- 管理运维列表长动作保留完整 title；四个教师统计页的独立加载错误态增加页内重试。
+- Graph README 改为当前 DeepSeek 环境变量说明，移除可启用本地 Qwen 的过时配置。
+- 验证：后端上传、媒体、远征 5 类定向测试通过（42 项，Testcontainers 空库迁移到 V202）；Web 5 个测试文件 / 21 项、类型检查通过；Graph provider 41 项通过（1 条现有 pytest 标记警告）；Nginx capability-safe 日志契约、release/rollback Shell 检查通过。
+- 没有启动全栈、没有发起 DeepSeek 请求，也没有测无尽远征性能；导师账号级请求额度仍待确定。
+
+## 2026-10-13 — 远征学情防重放与判题测试边界
+
+- 同一远征题目仅在首次判错、以及首次由错转对时发布学习事件；已通过后用新 `attemptId` 重判仍返回真实判题结果，但不会重复累计掌握度/Twin 证据。数据库 run 行锁串行化同局提交，原有最高分和通过状态合并规则保持不变。
+- 同一 KC、题面、样例与判题用例即使以新 `problemId` 签发，也只占一条远征判题账本记录，避免重复题重复计分；原始签发 ID 保留用于核对真实题目来源。
+- Graph Boss 测试中的 Fake Piston 改为固定响应，不再用本机 `subprocess.run` 执行学生提交代码；golden 题库测试不再暗中运行代码，执行正确性需由真实隔离 Piston 集成验证。
+- 验证：远征指纹补丁定向 Maven 3 类 / 45 项通过，Testcontainers 从空库迁移到 V202；Graph Boss 测试 209 项通过、Ruff 通过；Admin shell/users 定向 Web 测试 10 项通过、TypeScript typecheck 通过。后端全量 Maven 运行 1240 tests、0 failures、7 errors：6 个 PostgreSQL Testcontainers 因 Docker 宿主机端口冲突启动失败；长周期效果模拟仅在全量运行中丢失临时数据库连接，隔离重跑通过。
+- 仍待处理/验证：地图路径、HP、遗物和 phase 仍由客户端存档表达，不用于官方成绩、深度或通关奖励；本机没有 Piston 配置，因此未验证真实执行隔离，也未测远征性能。
+
+## 2026-10-13 — Twin、画像自适应与 Web 管理功能收尾
+
+- Twin 周报将事件计数启发式从“置信度”改为“证据充分度”，并说明该数值不是答题正确概率；API 字段保持兼容。
+- 修正画像页认知风格显示：按 `sequential_vs_holistic -1..1` 判断整体/序列倾向，并把 `field_dependent 0..1` 换算成 `/10`。
+- 远征命题/选题接入可信度达标的专业背景、目标类型与知识点、认知风格和每日时长；目标 KC 只对 pack 43 已收录且尚未掌握的知识点加权，其余画像作为题面风格提示。
+- Java 与 Graph 将 `preferredKind` 限定到现有题型枚举，拦截任意文本进入 DeepSeek 命题提示；题面场景从农场/作物改为中央小镇的图书馆、工坊、课堂与公告板。
+- 用户管理页表格统一为 44px 表头、52px 行、16px/10px 留白，长显示名和用户名截断时仍可查看完整 title；按钮和筛选控件统一 36px 高度，窄屏保留横向滚动。
+- 增加管理员用户路由权限覆盖和长文本可读性回归。
+- 验证：画像、Twin、管理员和路由定向 Web 测试 48 项 / 6 个文件通过；本轮前端类型检查通过；画像/Boss/控制器定向 Maven 测试 3 类通过；Graph 远征选择、命题和路由 37 tests 通过；前端生产构建、定向 ESLint、Graph Ruff、`git diff --check` 通过。
+- 按用户顺序未启动 Web 全栈、未发 DeepSeek 请求；无尽远征性能指标继续待测。
+
 ## 2026-10-13 — Web 运行正确性与远征数据边界补强
 
 - 无尽远征的知识前沿排序不再采信 Web 本地 `recentKcs`；Web 不再发送该字段，后端到 Graph 的契约只传正式练习事件时间。旧请求字段继续接受但不参与排序，避免旧客户端请求格式失效。

@@ -21,9 +21,15 @@ import com.pythontopia.world.boss.dto.FrontierSelectRequest;
 import com.pythontopia.world.boss.dto.FrontierSelectResultDto;
 import com.pythontopia.world.boss.review.ApprovedBossProblem;
 import com.pythontopia.world.boss.review.BossProblemReviewRepository;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
+import java.util.Comparator;
+import java.util.HexFormat;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -343,7 +349,13 @@ public class BossService {
         profile.successRate(),
         profile.mediaPriority(),
         profile.resilience(),
-        requestSignals == null ? null : requestSignals.questPreferredKind());
+        requestSignals == null ? null : requestSignals.questPreferredKind(),
+        profile.major(),
+        profile.learningGoalKind(),
+        profile.targetKcCodes(),
+        profile.fieldDependent(),
+        profile.sequentialVsHolistic(),
+        profile.sessionMinutesPerDay());
   }
 
   public BossAttemptResultDto evaluateAttempt(BossAttemptRequest request, Long userId) {
@@ -420,7 +432,9 @@ public class BossService {
       }
       int score = scoreFor(graphResult);
       String runId = expeditionRunId.orElse(null);
-      if (!recordVerifiedExpeditionAttempt(userId, runId, request.problemId(), graphResult, score)) {
+      ExpeditionScoreService.VerifiedAttemptResult attemptResult =
+          recordVerifiedExpeditionAttempt(userId, runId, problem, graphResult, score);
+      if (!attemptResult.accepted()) {
         if (!expeditionRunService.isActiveRun(userId, runId)) {
           throw expiredExpeditionRun();
         }
@@ -450,7 +464,7 @@ public class BossService {
               graphResult.failureFirstHint(),
               score,
               feedback),
-          practiceOutcomeEvent(userId, problem, graphResult));
+          attemptResult.publishLearningEvent() ? practiceOutcomeEvent(userId, problem, graphResult) : null);
     } catch (RestClientException ex) {
       LOG.warn(
           "graph evaluate failed ({}): {} — returning an unavailable error without a verdict",
@@ -487,13 +501,52 @@ public class BossService {
     return runId;
   }
 
-  private boolean recordVerifiedExpeditionAttempt(
-      Long userId, String runId, String problemId, BossEvaluateResultDto result, int score) {
+  private ExpeditionScoreService.VerifiedAttemptResult recordVerifiedExpeditionAttempt(
+      Long userId,
+      String runId,
+      BossInternalProblem problem,
+      BossEvaluateResultDto result,
+      int score) {
     if (userId == null || runId == null) {
-      return true;
+      return new ExpeditionScoreService.VerifiedAttemptResult(true, true);
     }
     return expeditionScoreService.recordVerifiedAttempt(
-        userId, runId, problemId, result.passed(), score);
+        userId,
+        runId,
+        problem.problemId(),
+        questionFingerprint(problem),
+        result.passed(),
+        score);
+  }
+
+  static String questionFingerprint(BossInternalProblem problem) {
+    try {
+      MessageDigest digest = MessageDigest.getInstance("SHA-256");
+      updateFingerprint(digest, problem.kcCode());
+      updateFingerprint(digest, problem.statement());
+      updateFingerprint(digest, problem.sampleInput());
+      updateFingerprint(digest, problem.sampleOutput());
+      var testCases =
+          problem.testCases().stream()
+              .sorted(
+                  Comparator.comparing(BossTestCasePayload::input)
+                      .thenComparing(BossTestCasePayload::expectedOutput))
+              .toList();
+      updateFingerprint(digest, Integer.toString(testCases.size()));
+      for (BossTestCasePayload testCase : testCases) {
+        updateFingerprint(digest, testCase.input());
+        updateFingerprint(digest, testCase.expectedOutput());
+      }
+      return HexFormat.of().formatHex(digest.digest());
+    } catch (NoSuchAlgorithmException exception) {
+      throw new IllegalStateException("SHA-256 is unavailable", exception);
+    }
+  }
+
+  private static void updateFingerprint(MessageDigest digest, String value) {
+    byte[] bytes = (value == null ? "" : value).getBytes(StandardCharsets.UTF_8);
+    digest.update(ByteBuffer.allocate(Integer.BYTES).putInt(bytes.length).array());
+    digest.update(bytes);
   }
 
   private void requireProblemContext(BossInternalProblem problem, int chapter, int stage) {

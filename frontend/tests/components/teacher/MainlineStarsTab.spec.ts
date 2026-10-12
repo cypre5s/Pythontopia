@@ -58,6 +58,22 @@ describe('MainlineStarsTab', () => {
     expect(wrapper.find('[data-testid="stars-error"]').text()).toContain('班级聚合异常');
   });
 
+  it('失败后可在本页重试星级数据请求', async () => {
+    apiMocks.fetchMainlineStars
+      .mockRejectedValueOnce(new Error('班级聚合异常'))
+      .mockResolvedValueOnce(payload());
+    const wrapper = mount(MainlineStarsTab, { props: { classroomId: 9 } });
+    await flushPromises();
+
+    await wrapper.get('[data-testid="stars-retry"]').trigger('click');
+    await flushPromises();
+
+    expect(apiMocks.fetchMainlineStars).toHaveBeenCalledTimes(2);
+    expect(apiMocks.fetchMainlineStars).toHaveBeenLastCalledWith(9);
+    expect(wrapper.find('[data-testid="stars-error"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="star-topn"]').text()).toContain('Stu A');
+  });
+
   it('classroomId 变化时重新取数', async () => {
     apiMocks.fetchMainlineStars.mockResolvedValue(payload());
     const wrapper = mount(MainlineStarsTab, { props: { classroomId: 9 } });

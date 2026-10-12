@@ -1,4 +1,4 @@
-"""evaluate_student_code 单元测试。"""
+"""evaluate_student_code tests with fixed, non-executing fake Piston responses."""
 
 from __future__ import annotations
 
@@ -59,14 +59,22 @@ def test_forbidden_import_returns_runtime_error() -> None:
     assert "socket" in result.runtime_error
 
 
-def test_syntax_error_reported_as_first_failure() -> None:
+def test_syntax_error_is_reported_as_first_failure() -> None:
     code = "this is not python"
     cases = [_tc("", "ignored", sample=True), _tc("", "x"), _tc("", "y")]
     result = evaluate_student_code(code, cases)
     assert not result.passed
     assert result.passed_count == 0
     assert result.first_failure is not None
-    assert result.first_failure.stderr  # 语法错误应写入 stderr
+    assert "SyntaxError" in result.first_failure.stderr
+
+
+def test_nonzero_exit_is_reported_as_failed_case() -> None:
+    result = evaluate_student_code("raise SystemExit(1)", [_tc("", "")])
+
+    assert not result.passed
+    assert result.first_failure is not None
+    assert result.first_failure.stderr == "exit status 1"
 
 
 @pytest.mark.parametrize("timeout_sec", [1])

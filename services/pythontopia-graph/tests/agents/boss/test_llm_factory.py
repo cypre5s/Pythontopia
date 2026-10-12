@@ -219,6 +219,47 @@ async def test_debug_prompt_preserves_stdout_judge_contract() -> None:
 
 
 @pytest.mark.asyncio
+async def test_profile_prompt_uses_background_goal_cognitive_style_and_session_budget() -> None:
+    provider = _StubProvider(LlmResponse(content_json=_good_payload()))
+    factory = build_llm_problem_factory(provider)
+
+    await factory(
+        chapter=4,
+        stage=1,
+        kc_code="PY43-KC-031",
+        difficulty=2,
+        profile_signals={
+            "major": "NON_CS_HUMANITIES",
+            "learningGoalKind": "JOB",
+            "targetKcCodes": ["PY43-KC-031"],
+            "fieldDependent": 0.7,
+            "sequentialVsHolistic": -0.5,
+            "sessionMinutesPerDay": 20,
+        },
+    )
+
+    user_prompt = provider.last_messages[-1]["content"]
+    assert "人文背景" in user_prompt
+    assert "求职实践" in user_prompt
+    assert "按步骤" in user_prompt
+    assert "20 分钟" in user_prompt
+
+
+@pytest.mark.asyncio
+async def test_boss_problem_prompt_uses_town_hub_learning_scenes() -> None:
+    provider = _StubProvider(LlmResponse(content_json=_good_payload()))
+    await build_llm_problem_factory(provider)(
+        chapter=1, stage=1, kc_code="PY43-KC-001", difficulty=1
+    )
+
+    system_prompt = provider.last_messages[0]["content"]
+    assert "图书馆" in system_prompt
+    assert "工坊" in system_prompt
+    assert "浇花" not in system_prompt
+    assert "收菜" not in system_prompt
+
+
+@pytest.mark.asyncio
 async def test_chapter_1_prompt_repeats_json_and_syntax_contract() -> None:
     provider = _StubProvider(LlmResponse(content_json=_good_payload()))
     factory = build_llm_problem_factory(provider)

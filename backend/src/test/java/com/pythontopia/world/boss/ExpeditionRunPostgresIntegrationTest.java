@@ -103,7 +103,8 @@ class ExpeditionRunPostgresIntegrationTest {
         .isEqualTo(2);
 
     new ExpeditionScoreService(jdbc)
-        .recordVerifiedAttempt(userId, initial.runId(), "late-submission", true, 100);
+        .recordVerifiedAttempt(
+            userId, initial.runId(), "late-submission", "a".repeat(64), true, 100);
     assertThat(jdbc.queryForObject(
             "SELECT COUNT(*) FROM expedition_verified_attempt WHERE user_id = ? AND run_id = ?::uuid",
             Integer.class,
@@ -114,6 +115,97 @@ class ExpeditionRunPostgresIntegrationTest {
     ExpeditionRunDto next = runs.save(userId, snapshot(null, 999_999));
     assertThat(next.runId()).isNotEqualTo(initial.runId());
     assertThat(next.score()).isZero();
+  }
+
+  @Test
+  void expeditionLearningEvidenceStopsAfterFirstFailureThenFirstPass() {
+    long userId = createStudent();
+    ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());
+    ExpeditionRunDto active = runs.save(userId, snapshot(null, 0));
+    ExpeditionScoreService scores = new ExpeditionScoreService(jdbc);
+    String fingerprint = "b".repeat(64);
+
+    var firstFailure =
+        scores.recordVerifiedAttempt(
+            userId, active.runId(), "issued-problem", fingerprint, false, 0);
+    var repeatedFailure =
+        scores.recordVerifiedAttempt(
+            userId, active.runId(), "issued-problem", fingerprint, false, 0);
+    var firstPass =
+        scores.recordVerifiedAttempt(
+            userId, active.runId(), "issued-problem", fingerprint, true, 100);
+    var repeatedPass =
+        scores.recordVerifiedAttempt(
+            userId, active.runId(), "issued-problem", fingerprint, true, 100);
+    var failureAfterPass =
+        scores.recordVerifiedAttempt(
+            userId, active.runId(), "issued-problem", fingerprint, false, 0);
+
+    assertThat(firstFailure).isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(true, true));
+    assertThat(repeatedFailure).isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(true, false));
+    assertThat(firstPass).isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(true, true));
+    assertThat(repeatedPass).isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(true, false));
+    assertThat(failureAfterPass).isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(true, false));
+    assertThat(jdbc.queryForObject(
+            "SELECT passed FROM expedition_verified_attempt WHERE user_id = ? AND run_id = ?::uuid"
+                + " AND problem_id = 'issued-problem'",
+            Boolean.class,
+            userId,
+            active.runId()))
+        .isTrue();
+    assertThat(jdbc.queryForObject(
+            "SELECT score FROM expedition_verified_attempt WHERE user_id = ? AND run_id = ?::uuid"
+                + " AND problem_id = 'issued-problem'",
+            Integer.class,
+            userId,
+            active.runId()))
+        .isEqualTo(100);
+  }
+
+  @Test
+  void sameQuestionWithDifferentIssuedIdsUsesOneVerifiedLedgerEntry() {
+    long userId = createStudent();
+    ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());
+    ExpeditionRunDto active = runs.save(userId, snapshot(null, 0));
+    ExpeditionScoreService scores = new ExpeditionScoreService(jdbc);
+    String fingerprint = "a".repeat(64);
+
+    var firstFailure =
+        scores.recordVerifiedAttempt(
+            userId, active.runId(), "issued-problem-1", fingerprint, false, 0);
+    var duplicateFailure =
+        scores.recordVerifiedAttempt(
+            userId, active.runId(), "issued-problem-2", fingerprint, false, 0);
+    var firstPass =
+        scores.recordVerifiedAttempt(
+            userId, active.runId(), "issued-problem-2", fingerprint, true, 100);
+    var duplicatePass =
+        scores.recordVerifiedAttempt(
+            userId, active.runId(), "issued-problem-3", fingerprint, true, 100);
+
+    assertThat(firstFailure).isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(true, true));
+    assertThat(duplicateFailure)
+        .isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(true, false));
+    assertThat(firstPass).isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(true, true));
+    assertThat(duplicatePass).isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(true, false));
+    assertThat(jdbc.queryForObject(
+            "SELECT COUNT(*) FROM expedition_verified_attempt WHERE user_id = ? AND run_id = ?::uuid",
+            Integer.class,
+            userId,
+            active.runId()))
+        .isEqualTo(1);
+    assertThat(jdbc.queryForObject(
+            "SELECT passed FROM expedition_verified_attempt WHERE user_id = ? AND run_id = ?::uuid",
+            Boolean.class,
+            userId,
+            active.runId()))
+        .isTrue();
+    assertThat(jdbc.queryForObject(
+            "SELECT score FROM expedition_verified_attempt WHERE user_id = ? AND run_id = ?::uuid",
+            Integer.class,
+            userId,
+            active.runId()))
+        .isEqualTo(100);
   }
 
   @Test

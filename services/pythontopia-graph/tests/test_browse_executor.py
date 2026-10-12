@@ -367,6 +367,105 @@ async def test_playwright_transfers_only_bounded_body_text(monkeypatch: pytest.M
     assert result.bytes_read == 65
 
 
+async def test_playwright_pins_allowed_hosts_to_validated_public_addresses(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Context:
+        def set_default_timeout(self, timeout_ms: int) -> None:
+            pass
+
+        def set_default_navigation_timeout(self, timeout_ms: int) -> None:
+            pass
+
+        async def route(self, pattern: str, handler: object) -> None:
+            pass
+
+    class Browser:
+        async def new_context(self, **kwargs: object) -> Context:
+            return Context()
+
+        async def close(self) -> None:
+            pass
+
+    class Chromium:
+        launch_args: dict[str, object] = {}
+
+        async def launch(self, **kwargs: object) -> Browser:
+            self.launch_args = kwargs
+            return Browser()
+
+    chromium_instance = Chromium()
+
+    class Playwright:
+        chromium = chromium_instance
+
+        async def stop(self) -> None:
+            pass
+
+    class PlaywrightFactory:
+        async def start(self) -> Playwright:
+            return Playwright()
+
+    class AsyncApi:
+        def async_playwright(self) -> PlaywrightFactory:
+            return PlaywrightFactory()
+
+    async def resolve(_host: str) -> list[str]:
+        return ["151.101.0.223", "2a04:4e42::223"]
+
+    monkeypatch.setattr(browse_executor_module, "_import_or_fail", lambda _name: AsyncApi())
+    monkeypatch.setattr(browse_executor_module, "_resolve_public_ips", resolve)
+    session = _PlaywrightReadOnlySession(env={})
+
+    await session.open(allowed_domains=[DOCS], timeout_seconds=10)
+
+    assert (
+        "--host-resolver-rules=MAP docs.python.org 151.101.0.223,"
+        "MAP *.docs.python.org 151.101.0.223"
+        in chromium_instance.launch_args["args"]
+    )
+    await session.close()
+
+
+async def test_playwright_does_not_launch_when_allowed_host_resolves_private(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Chromium:
+        launched = False
+
+        async def launch(self, **kwargs: object) -> object:
+            self.launched = True
+            return object()
+
+    chromium_instance = Chromium()
+
+    class Playwright:
+        async def stop(self) -> None:
+            pass
+
+        chromium = chromium_instance
+
+    class PlaywrightFactory:
+        async def start(self) -> Playwright:
+            return Playwright()
+
+    class AsyncApi:
+        def async_playwright(self) -> PlaywrightFactory:
+            return PlaywrightFactory()
+
+    async def resolve(_host: str) -> list[str]:
+        return ["10.0.0.8"]
+
+    monkeypatch.setattr(browse_executor_module, "_import_or_fail", lambda _name: AsyncApi())
+    monkeypatch.setattr(browse_executor_module, "_resolve_public_ips", resolve)
+    session = _PlaywrightReadOnlySession(env={})
+
+    with pytest.raises(ValueError, match="公网"):
+        await session.open(allowed_domains=[DOCS], timeout_seconds=10)
+
+    assert chromium_instance.launched is False
+
+
 async def test_default_engine_failsfast_when_browseruse_unavailable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -9,7 +9,9 @@
  *   - pythonSelfRatedLevel ← baseLevel.pythonSelfRatedLevel：自评水平 0..5；
  *   - successRate ← practiceCapability.successRate：近况通过率，影响起始难度；
  *   - mediaPriority ← learningPreference.mediaPriority：影响题面格式（代码块 / 流程图 / 例子）；
+ *   - sessionMinutesPerDay ← learningPreference.sessionMinutesPerDay：控制题目长度；
  *   - resilience ← emotionPersistence.resilience：影响失败时是否降难度；
+ *   - major / learningGoalKind / targetKcCodes / cognitiveStyle ← 专业、目标和认知偏好；
  *   - questPreferredKind ← ArenaPage 关卡类型：选择对应出题模板。
  */
 export interface ProfileSignalsDto {
@@ -23,6 +25,13 @@ export interface ProfileSignalsDto {
   mediaPriority?: string[];
   /** 抗挫折度 0..1。 */
   resilience?: number;
+  major?: string;
+  learningGoalKind?: string;
+  /** pack 43 中最多 6 个目标知识点。 */
+  targetKcCodes?: string[];
+  fieldDependent?: number;
+  sequentialVsHolistic?: number;
+  sessionMinutesPerDay?: number;
   /** Arena 关卡题型（若来自 ArenaPage） */
   questPreferredKind?: string;
 }
