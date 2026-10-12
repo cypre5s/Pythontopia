@@ -82,4 +82,26 @@ describe('AdminOperationsPage', () => {
     expect(wrapper.find('[role="alert"]').exists()).toBe(false);
     expect(wrapper.text()).toContain('活跃学习者');
   });
+
+  it('keeps the full operations text available when list rows are truncated', async () => {
+    const nextAction = '继续检查学习证据'.repeat(20);
+    const action = '复核证据覆盖情况'.repeat(20);
+    const reviewRoute = `/admin/${'review/'.repeat(20)}`;
+    const traceId = `trace-${'1234567890'.repeat(8)}`;
+    api.fetchAiRuntimeOperations.mockResolvedValueOnce({
+      ...snapshot,
+      loops: [{ ...snapshot.loops[0], nextAction, latestTraceId: traceId }],
+      governance: [{ ...snapshot.governance[0], action, reviewRoute }],
+    });
+
+    const wrapper = mount(AdminOperationsPage);
+    await flushPromises();
+
+    const descriptions = wrapper.findAll('.operation-row__body span');
+    const details = wrapper.findAll('.operation-row__body small');
+    expect(descriptions[0].attributes('title')).toBe(nextAction);
+    expect(descriptions[1].attributes('title')).toBe(action);
+    expect(details[0].attributes('title')).toBe(`Trace ${traceId}`);
+    expect(details[1].attributes('title')).toBe(`关联页面：${reviewRoute}`);
+  });
 });

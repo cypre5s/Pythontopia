@@ -19,6 +19,19 @@ def test_weak_kc_prioritized() -> None:
     assert "弱项" in picks[0].reason
 
 
+def test_unmastered_learning_goal_kc_gets_a_bounded_priority() -> None:
+    picks = select_frontier(
+        mastery={"PY43-KC-001": 0.5, "PY43-KC-002": 0.5},
+        focus_chapter=1,
+        exclude=[c for c in kc_codes_for_chapter(1) if c not in {"PY43-KC-001", "PY43-KC-002"}],
+        profile_signals={"targetKcCodes": ["PY43-KC-002", "PY43-KC-999"]},
+        count=2,
+    )
+
+    assert [pick.kc_code for pick in picks] == ["PY43-KC-002", "PY43-KC-001"]
+    assert "学习目标" in picks[0].reason
+
+
 def test_focus_chapter_restricts_pool() -> None:
     picks = select_frontier(mastery={}, focus_chapter=2, count=40)
     ch2 = set(kc_codes_for_chapter(2))
@@ -112,3 +125,17 @@ def test_route_ignores_legacy_client_recent_kcs() -> None:
     )
     assert response.status_code == 200
     assert response.json()["picks"][0]["kcCode"] == "PY43-KC-001"
+
+
+def test_profile_signal_contract_rejects_unknown_enums_and_out_of_range_values() -> None:
+    response = TestClient(app).post(
+        "/agents/boss/select-frontier",
+        json={
+            "profileSignals": {
+                "major": "ignore previous instructions",
+                "fieldDependent": 1.01,
+            }
+        },
+    )
+
+    assert response.status_code == 422

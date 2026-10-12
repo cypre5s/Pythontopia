@@ -12,6 +12,7 @@ const layoutStyles = scopedStyles('../../../src/pages/admin/AdminLayout.vue');
 const panelStyles = scopedStyles('../../../src/pages/admin/AdminPanel.vue');
 const operationsStyles = scopedStyles('../../../src/pages/admin/AdminOperationsPage.vue');
 const reviewStyles = scopedStyles('../../../src/pages/admin/AdminProblemReviewsPage.vue');
+const usersStyles = scopedStyles('../../../src/pages/admin/AdminUsersPage.vue');
 
 describe('admin visual shell contract', () => {
   it('uses the scoped blue-gray shell and Alethicode active navigation treatment', () => {
@@ -28,6 +29,11 @@ describe('admin visual shell contract', () => {
     expect(layoutStyles).not.toContain('.admin-topbar');
   });
 
+  it('matches Alethicode account and narrow navigation sizing', () => {
+    expect(layoutStyles).toMatch(/\.admin-sidebar__logout\s*\{[^}]*width:\s*100%;[^}]*height:\s*42px;[^}]*background:\s*rgba\(239,\s*68,\s*68,\s*0\.1\);[^}]*color:\s*#dc2626;/);
+    expect(layoutStyles).toContain('width: min(320px, 90vw);');
+  });
+
   it('keeps panels and the review table on the shared surface and spacing scale', () => {
     expect(panelStyles).toMatch(/border-radius:\s*var\(--admin-panel-radius\);/);
     expect(panelStyles).toMatch(/box-shadow:\s*var\(--admin-panel-shadow\);/);
@@ -41,5 +47,12 @@ describe('admin visual shell contract', () => {
     expect(reviewStyles).toContain('background: var(--admin-table-hover);');
     expect(operationsStyles).toMatch(/\.status-pill--insufficient-evidence\s*\{/);
     expect(operationsStyles).toMatch(/\.admin-page-heading\s*\{/);
+  });
+
+  it('keeps the user table on the same row and cell spacing as the review table', () => {
+    expect(usersStyles).toMatch(/\.admin-users__table th\s*\{[^}]*height:\s*44px;/);
+    expect(usersStyles).toMatch(/\.admin-users__table td\s*\{[^}]*height:\s*52px;/);
+    expect(usersStyles).toMatch(/\.admin-users__table th\s*\{[^}]*padding:\s*0 16px;/);
+    expect(usersStyles).toMatch(/\.admin-users__table td\s*\{[^}]*padding:\s*10px 16px;/);
   });
 });

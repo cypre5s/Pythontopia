@@ -1,4 +1,4 @@
-"""golden 题库完整性：28 道题（7 章×4 stage）须通过五重审查链，越界 chapter/stage 应 clamp。"""
+"""Golden 题库完整性：28 道题（7 章×4 stage）须通过非执行审查，越界值应 clamp。"""
 
 from __future__ import annotations
 
@@ -21,9 +21,10 @@ def test_all_golden_problems_have_28_entries() -> None:
 
 @pytest.mark.parametrize("chapter", list(range(1, 8)))
 @pytest.mark.parametrize("stage", list(range(1, 5)))
-def test_golden_problem_passes_all_reviews(chapter: int, stage: int) -> None:
+def test_golden_problem_passes_non_execution_reviews(chapter: int, stage: int) -> None:
     p = get_golden_problem(chapter, stage)
-    review = run_all_reviews(p)
+    # 单测假 Piston 只返回固定记录，不执行 28 份 reference_solution。
+    review = run_all_reviews(p, skip_self_test=True)
     error_msgs = [
         f"[{i.review}:{i.code}] {i.message}"
         for i in review.issues

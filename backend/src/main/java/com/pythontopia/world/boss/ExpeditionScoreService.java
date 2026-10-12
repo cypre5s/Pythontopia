@@ -95,10 +95,19 @@ public class ExpeditionScoreService {
 
   /** 只记录实际判题结果；同一题可从失败更新为通过，但不能重复累计。 */
   @Transactional
-  public boolean recordVerifiedAttempt(
-      Long userId, String runId, String problemId, boolean passed, int score) {
-    if (userId == null || runId == null || problemId == null) {
-      return false;
+  public VerifiedAttemptResult recordVerifiedAttempt(
+      Long userId,
+      String runId,
+      String problemId,
+      String questionFingerprint,
+      boolean passed,
+      int score) {
+    if (userId == null
+        || runId == null
+        || problemId == null
+        || questionFingerprint == null
+        || !questionFingerprint.matches("[0-9a-f]{64}")) {
+      return new VerifiedAttemptResult(false, false);
     }
     UUID runUuid = UUID.fromString(runId);
     // Locking the run row serializes budget checks for parallel submissions in this run.
@@ -110,35 +119,67 @@ public class ExpeditionScoreService {
             userId,
             runUuid)
         .isEmpty()) {
-      return false;
+      return new VerifiedAttemptResult(false, false);
     }
-    return jdbcTemplate.update(
-        "INSERT INTO expedition_verified_attempt (user_id, run_id, problem_id, passed, score)"
-            + " SELECT ?, ?::uuid, ?, ?, ?"
-            + " WHERE EXISTS (SELECT 1 FROM expedition_run WHERE user_id = ?"
-            + " AND run_id = ?::uuid AND status = 'ACTIVE')"
-            + " AND NOT EXISTS (SELECT 1 FROM expedition_score WHERE user_id = ? AND run_id = ?::uuid)"
-            + " AND ((SELECT COUNT(*) FROM expedition_verified_attempt"
-            + " WHERE user_id = ? AND run_id = ?::uuid) < " + MAX_VERIFIED_ATTEMPTS_PER_RUN
-            + " OR EXISTS (SELECT 1 FROM expedition_verified_attempt"
-            + " WHERE user_id = ? AND run_id = ?::uuid AND problem_id = ?))"
-            + " ON CONFLICT (user_id, run_id, problem_id) DO UPDATE SET"
-            + " passed = expedition_verified_attempt.passed OR EXCLUDED.passed,"
-            + " score = GREATEST(expedition_verified_attempt.score, EXCLUDED.score)",
-        userId,
-        runUuid,
-        problemId,
-        passed,
-        passed ? Math.max(0, score) : 0,
-        userId,
-        runUuid,
-        userId,
-        runUuid,
-        userId,
-        runUuid,
-        userId,
-        runUuid,
-        problemId) > 0;
+    List<ExistingAttempt> existing =
+        jdbcTemplate.query(
+            "SELECT id, passed FROM expedition_verified_attempt"
+                + " WHERE user_id = ? AND run_id = ?::uuid AND question_fingerprint = ? LIMIT 1",
+            (rs, rowNum) ->
+                new ExistingAttempt(rs.getLong("id"), rs.getBoolean("passed")),
+            userId,
+            runUuid,
+            questionFingerprint);
+    if (existing.isEmpty()) {
+      existing =
+          jdbcTemplate.query(
+              "SELECT id, passed FROM expedition_verified_attempt"
+                  + " WHERE user_id = ? AND run_id = ?::uuid AND problem_id = ? LIMIT 1",
+              (rs, rowNum) ->
+                  new ExistingAttempt(rs.getLong("id"), rs.getBoolean("passed")),
+              userId,
+              runUuid,
+              problemId);
+    }
+    if (!existing.isEmpty()) {
+      ExistingAttempt attempt = existing.getFirst();
+      int updated =
+          jdbcTemplate.update(
+              "UPDATE expedition_verified_attempt SET passed = passed OR ?,"
+                  + " score = GREATEST(score, ?),"
+                  + " question_fingerprint = COALESCE(question_fingerprint, ?) WHERE id = ?",
+              passed,
+              passed ? Math.max(0, score) : 0,
+              questionFingerprint,
+              attempt.id());
+      boolean publishLearningEvent = !attempt.passed() && passed;
+      return new VerifiedAttemptResult(
+          updated > 0, updated > 0 && publishLearningEvent);
+    }
+
+    int inserted =
+        jdbcTemplate.update(
+            "INSERT INTO expedition_verified_attempt"
+                + " (user_id, run_id, problem_id, question_fingerprint, passed, score)"
+                + " SELECT ?, ?::uuid, ?, ?, ?, ?"
+                + " WHERE EXISTS (SELECT 1 FROM expedition_run WHERE user_id = ?"
+                + " AND run_id = ?::uuid AND status = 'ACTIVE')"
+                + " AND NOT EXISTS (SELECT 1 FROM expedition_score WHERE user_id = ? AND run_id = ?::uuid)"
+                + " AND (SELECT COUNT(*) FROM expedition_verified_attempt"
+                + " WHERE user_id = ? AND run_id = ?::uuid) < " + MAX_VERIFIED_ATTEMPTS_PER_RUN,
+            userId,
+            runUuid,
+            problemId,
+            questionFingerprint,
+            passed,
+            passed ? Math.max(0, score) : 0,
+            userId,
+            runUuid,
+            userId,
+            runUuid,
+            userId,
+            runUuid);
+    return new VerifiedAttemptResult(inserted > 0, inserted > 0);
   }
 
   /** 判定一个活动远征 run 在指定章节的真实答题汇总。 */
@@ -241,6 +282,10 @@ public class ExpeditionScoreService {
   private record Ranked(long userId, String displayName, int bestScore, int bestDepth) {}
 
   record VerifiedAttempt(boolean passed, int score) {}
+
+  record ExistingAttempt(long id, boolean passed) {}
+
+  public record VerifiedAttemptResult(boolean accepted, boolean publishLearningEvent) {}
 
   public record VerifiedAttemptSummary(int total, int correct) {}
 }

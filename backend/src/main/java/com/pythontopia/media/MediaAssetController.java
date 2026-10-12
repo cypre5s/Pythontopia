@@ -104,9 +104,10 @@ public class MediaAssetController {
   public ResponseEntity<Resource> serveAsset(
       @PathVariable @Positive long id,
       @RequestParam(name = MediaAssetUrls.QUERY_PARAM, required = false) String signature,
+      @RequestParam(name = MediaAssetUrls.EXPIRES_PARAM, required = false) Long expiresAtEpochSecond,
       @RequestHeader(value = HttpHeaders.RANGE, required = false) String rangeHeader) {
     Optional<MediaAsset> asset = repository.findById(id);
-    if (asset.isEmpty() || !isAuthorized(asset.get(), signature)) {
+    if (asset.isEmpty() || !isAuthorized(asset.get(), signature, expiresAtEpochSecond)) {
       return ResponseEntity.notFound().build();
     }
     Optional<Path> file = storage.resolveExisting(asset.get().filePath());
@@ -119,12 +120,14 @@ public class MediaAssetController {
     return ByteRangeResponder.serve(file.get(), contentType, rangeHeader);
   }
 
-  private boolean isAuthorized(MediaAsset asset, String signature) {
+  private boolean isAuthorized(MediaAsset asset, String signature, Long expiresAtEpochSecond) {
     if (asset.userId() == null) {
       // 无 owner 的系统级资产：任何人可读，不含用户生成内容。
       return true;
     }
-    if (assetUrls.verify(asset.id(), signature)) {
+    if (assetUrls.verify(asset.id(), expiresAtEpochSecond, signature)
+        || (expiresAtEpochSecond == null
+            && assetUrls.verifyLegacy(asset.id(), signature, asset.createdAt()))) {
       return true;
     }
     Long callerId = currentUserId();

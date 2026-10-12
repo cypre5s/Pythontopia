@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
+import PyButton from '@/components/ui/PyButton.vue';
 import { fetchMainlineProgress, type MainlineProgressMatrixDto } from '@/api/teacher';
 
 const props = defineProps<{ classroomId: number }>();
@@ -47,13 +48,22 @@ watch(() => props.classroomId, load);
     >
       主线进度加载中…
     </p>
-    <p
+    <div
       v-else-if="error"
       class="banner banner--error"
+      role="alert"
       data-testid="progress-error"
     >
-      {{ error }}
-    </p>
+      <span>{{ error }}</span>
+      <PyButton
+        variant="secondary"
+        size="sm"
+        test-id="progress-retry"
+        @click="load"
+      >
+        重试
+      </PyButton>
+    </div>
     <template v-else-if="data">
       <p
         v-if="data.members.length === 0"
@@ -134,7 +144,14 @@ watch(() => props.classroomId, load);
   color: var(--pyt-color-text-muted);
   margin: 0;
 }
-.banner--error { background: var(--pyt-color-danger-bg); color: var(--pyt-color-danger); }
+.banner--error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--pyt-color-danger-bg);
+  color: var(--pyt-color-danger);
+}
 .empty {
   padding: 16px;
   background: var(--pyt-color-bg-soft);

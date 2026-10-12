@@ -3,6 +3,7 @@ package com.pythontopia.world.boss;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -20,6 +21,7 @@ import org.springframework.jdbc.core.RowMapper;
 class ExpeditionScoreServiceTest {
 
   private static final UUID RUN_ID = UUID.fromString("123e4567-e89b-12d3-a456-426614174000");
+  private static final String QUESTION_FINGERPRINT = "a".repeat(64);
 
   @Mock JdbcTemplate jdbcTemplate;
 
@@ -111,9 +113,18 @@ class ExpeditionScoreServiceTest {
   void refusesToAddANewVerifiedAttemptAfterOneRunBudgetIsUsed() {
     when(jdbcTemplate.query(contains("FOR UPDATE"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(List.of(1));
+    when(jdbcTemplate.query(contains("question_fingerprint = ?"), any(RowMapper.class), any(Object[].class)))
+        .thenReturn(List.of());
+    when(jdbcTemplate.query(contains("problem_id = ?"), any(RowMapper.class), any(Object[].class)))
+        .thenReturn(List.of());
     ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate);
 
-    service.recordVerifiedAttempt(7L, RUN_ID.toString(), "issue-one", true, 80);
+    var result =
+        service.recordVerifiedAttempt(
+            7L, RUN_ID.toString(), "issue-one", QUESTION_FINGERPRINT, true, 80);
+
+    assertThat(result.accepted()).isFalse();
+    assertThat(result.publishLearningEvent()).isFalse();
 
     org.mockito.ArgumentCaptor<String> sql = org.mockito.ArgumentCaptor.forClass(String.class);
     verify(jdbcTemplate).update(sql.capture(), any(Object[].class));
@@ -124,9 +135,14 @@ class ExpeditionScoreServiceTest {
   void locksTheActiveRunBeforeCheckingItsAttemptBudget() {
     when(jdbcTemplate.query(contains("FOR UPDATE"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(List.of(1));
+    when(jdbcTemplate.query(contains("question_fingerprint = ?"), any(RowMapper.class), any(Object[].class)))
+        .thenReturn(List.of());
+    when(jdbcTemplate.query(contains("problem_id = ?"), any(RowMapper.class), any(Object[].class)))
+        .thenReturn(List.of());
     ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate);
 
-    service.recordVerifiedAttempt(7L, RUN_ID.toString(), "issue-one", true, 80);
+    service.recordVerifiedAttempt(
+        7L, RUN_ID.toString(), "issue-one", QUESTION_FINGERPRINT, true, 80);
 
     verify(jdbcTemplate)
         .query(
@@ -134,6 +150,53 @@ class ExpeditionScoreServiceTest {
             any(RowMapper.class),
             eq(7L),
             eq(RUN_ID));
+  }
+
+  @Test
+  void publishesLearningEvidenceOnlyForFirstFailureAndFirstPass() {
+    when(jdbcTemplate.query(contains("FOR UPDATE"), any(RowMapper.class), any(Object[].class)))
+        .thenReturn(List.of(1));
+    when(jdbcTemplate.query(contains("question_fingerprint = ?"), any(RowMapper.class), any(Object[].class)))
+        .thenReturn(
+            List.of(),
+            List.of(new ExpeditionScoreService.ExistingAttempt(1, false)),
+            List.of(new ExpeditionScoreService.ExistingAttempt(1, false)),
+            List.of(new ExpeditionScoreService.ExistingAttempt(1, true)),
+            List.of(new ExpeditionScoreService.ExistingAttempt(1, true)));
+    when(jdbcTemplate.query(contains("problem_id = ?"), any(RowMapper.class), any(Object[].class)))
+        .thenReturn(List.of());
+    when(jdbcTemplate.update(contains("INSERT INTO expedition_verified_attempt"), any(Object[].class)))
+        .thenReturn(1);
+    when(jdbcTemplate.update(contains("UPDATE expedition_verified_attempt"), any(Object[].class)))
+        .thenReturn(1, 1, 1, 1);
+    ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate);
+
+    var firstFailure =
+        service.recordVerifiedAttempt(
+            7L, RUN_ID.toString(), "issue-one", QUESTION_FINGERPRINT, false, 0);
+    var repeatedFailure =
+        service.recordVerifiedAttempt(
+            7L, RUN_ID.toString(), "issue-one", QUESTION_FINGERPRINT, false, 0);
+    var firstPass =
+        service.recordVerifiedAttempt(
+            7L, RUN_ID.toString(), "issue-one", QUESTION_FINGERPRINT, true, 100);
+    var repeatedPass =
+        service.recordVerifiedAttempt(
+            7L, RUN_ID.toString(), "issue-one", QUESTION_FINGERPRINT, true, 100);
+    var failureAfterPass =
+        service.recordVerifiedAttempt(
+            7L, RUN_ID.toString(), "issue-one", QUESTION_FINGERPRINT, false, 0);
+
+    assertThat(firstFailure.accepted()).isTrue();
+    assertThat(firstFailure.publishLearningEvent()).isTrue();
+    assertThat(repeatedFailure.accepted()).isTrue();
+    assertThat(repeatedFailure.publishLearningEvent()).isFalse();
+    assertThat(firstPass.accepted()).isTrue();
+    assertThat(firstPass.publishLearningEvent()).isTrue();
+    assertThat(repeatedPass.accepted()).isTrue();
+    assertThat(repeatedPass.publishLearningEvent()).isFalse();
+    assertThat(failureAfterPass.accepted()).isTrue();
+    assertThat(failureAfterPass.publishLearningEvent()).isFalse();
   }
 
   @Test

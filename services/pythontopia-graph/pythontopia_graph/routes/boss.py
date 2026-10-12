@@ -11,10 +11,11 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
+from pythontopia_graph.schemas.profile import GoalKind, Major
 
 from pythontopia_graph.agents.boss.evaluator import build_failure_hint, evaluate_boss_attempt
 from pythontopia_graph.agents.boss.expedition_selector import select_frontier
@@ -35,13 +36,24 @@ LOG = logging.getLogger(__name__)
 
 router = APIRouter()
 BOSS_PROBLEM_MAX_RETRIES = 6
+BossProblemKind = Literal[
+    "pdf_question",
+    "fill_blank",
+    "debug",
+    "short_answer",
+    "closed_loop",
+    "dual_track",
+    "multi_round",
+    "teach_back",
+    "bug_mine",
+]
 
 
 class ProfileSignalsPayload(BaseModel):
     """学生画像信号（与前端 ProfileSignalsDto、后端 ProfileSignalsPayload 字段对齐）。
 
     供 PracticeAgent + ProfileAgent 在 LLM 出题阶段选择 prompt 模板：weak KC 命中本章时优先该 KC，
-    successRate < 0.3 时拉低难度，mediaPriority 含 DIAGRAM 时题面可带 mermaid 等可视化。
+    目标 KC 参与前沿排序；其他画像只作为题目表达偏好，不替代正式判题能力数据。
     """
 
     weakKcCodes: list[str] | None = Field(default=None, description="弱项 KC 编码")
@@ -49,7 +61,13 @@ class ProfileSignalsPayload(BaseModel):
     successRate: float | None = Field(default=None, ge=0, le=1)
     mediaPriority: list[str] | None = Field(default=None)
     resilience: float | None = Field(default=None, ge=0, le=1)
-    questPreferredKind: str | None = Field(default=None, description="Arena 关卡题型")
+    questPreferredKind: BossProblemKind | None = Field(default=None, description="Arena 关卡题型")
+    major: Major | None = None
+    learningGoalKind: GoalKind | None = None
+    targetKcCodes: list[str] | None = Field(default=None, max_length=6)
+    fieldDependent: float | None = Field(default=None, ge=0, le=1)
+    sequentialVsHolistic: float | None = Field(default=None, ge=-1, le=1)
+    sessionMinutesPerDay: int | None = Field(default=None, ge=5, le=240)
 
 
 class BossProblemRequest(BaseModel):
@@ -59,7 +77,7 @@ class BossProblemRequest(BaseModel):
     kcCode: str = Field(default="", description="目标 KC 代码；空则用 chapter 默认 KC")
     difficulty: int | None = Field(default=None, ge=1, le=5)
     preferredKc: str | None = Field(default=None)
-    preferredKind: str | None = Field(default=None)
+    preferredKind: BossProblemKind | None = Field(default=None)
     profileSignals: ProfileSignalsPayload | None = Field(default=None)
 
 

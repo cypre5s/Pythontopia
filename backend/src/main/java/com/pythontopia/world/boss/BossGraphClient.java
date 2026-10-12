@@ -96,6 +96,17 @@ public class BossGraphClient {
       if (profileSignals.resilience() != null) sig.put("resilience", profileSignals.resilience());
       if (profileSignals.questPreferredKind() != null)
         sig.put("questPreferredKind", profileSignals.questPreferredKind());
+      if (profileSignals.major() != null) sig.put("major", profileSignals.major());
+      if (profileSignals.learningGoalKind() != null)
+        sig.put("learningGoalKind", profileSignals.learningGoalKind());
+      if (profileSignals.targetKcCodes() != null)
+        sig.put("targetKcCodes", profileSignals.targetKcCodes());
+      if (profileSignals.fieldDependent() != null)
+        sig.put("fieldDependent", profileSignals.fieldDependent());
+      if (profileSignals.sequentialVsHolistic() != null)
+        sig.put("sequentialVsHolistic", profileSignals.sequentialVsHolistic());
+      if (profileSignals.sessionMinutesPerDay() != null)
+        sig.put("sessionMinutesPerDay", profileSignals.sessionMinutesPerDay());
       if (!sig.isEmpty()) {
         body.put("profileSignals", sig);
       }
@@ -182,6 +193,17 @@ public class BossGraphClient {
     if (profileSignals.resilience() != null) sig.put("resilience", profileSignals.resilience());
     if (profileSignals.questPreferredKind() != null)
       sig.put("questPreferredKind", profileSignals.questPreferredKind());
+    if (profileSignals.major() != null) sig.put("major", profileSignals.major());
+    if (profileSignals.learningGoalKind() != null)
+      sig.put("learningGoalKind", profileSignals.learningGoalKind());
+    if (profileSignals.targetKcCodes() != null)
+      sig.put("targetKcCodes", profileSignals.targetKcCodes());
+    if (profileSignals.fieldDependent() != null)
+      sig.put("fieldDependent", profileSignals.fieldDependent());
+    if (profileSignals.sequentialVsHolistic() != null)
+      sig.put("sequentialVsHolistic", profileSignals.sequentialVsHolistic());
+    if (profileSignals.sessionMinutesPerDay() != null)
+      sig.put("sessionMinutesPerDay", profileSignals.sessionMinutesPerDay());
     return sig;
   }
 

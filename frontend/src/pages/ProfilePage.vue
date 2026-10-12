@@ -160,12 +160,12 @@ const dimensionCards = computed(() => {
       key: 'cognitiveStyle',
       title: '认知风格',
       value: p.value.cognitiveStyle
-        ? p.value.cognitiveStyle.sequentialVsHolistic > 5
+        ? p.value.cognitiveStyle.sequentialVsHolistic > 0
           ? '喜欢先看全局'
           : '喜欢一步步来'
         : '待评估',
       detail: p.value.cognitiveStyle
-        ? `学术：${p.value.cognitiveStyle.sequentialVsHolistic > 5 ? '整体型' : '序列型'} · 场依存 ${p.value.cognitiveStyle.fieldDependent}/10`
+        ? `学术：${p.value.cognitiveStyle.sequentialVsHolistic > 0 ? '整体型' : '序列型'} · 场依存 ${Math.round(p.value.cognitiveStyle.fieldDependent * 10)}/10`
         : null,
     },
     {

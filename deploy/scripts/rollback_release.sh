@@ -27,6 +27,7 @@ IMAGE_COMPONENTS=(frontend backend graph rag)
 
 NGINX_AVAIL="/etc/nginx/sites-available/pythontopia.conf"
 NGINX_ENABLED="/etc/nginx/sites-enabled/pythontopia.conf"
+NGINX_LOG_FORMAT_AVAIL="/etc/nginx/conf.d/pythontopia-log-format.conf"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NGINX_VERIFIER="${SCRIPT_DIR}/verify_nginx_dual_protocol.sh"
 NGINX_SELECTOR="${SCRIPT_DIR}/select_rollback_nginx_config.sh"
@@ -157,6 +158,9 @@ wait_healthy 480 postgres redis pythontopia-rag pythontopia-graph backend fronte
 # ---------------------------------------------------------------------------
 step "回切主机 Nginx 配置"
 # ---------------------------------------------------------------------------
+if [ -f "${TARGET}/deploy/nginx/pythontopia-log-format.conf" ]; then
+  install -m 644 "${TARGET}/deploy/nginx/pythontopia-log-format.conf" "${NGINX_LOG_FORMAT_AVAIL}"
+fi
 NGINX_SOURCE="$(
   "${NGINX_SELECTOR}" \
     "${NGINX_AVAIL}" \

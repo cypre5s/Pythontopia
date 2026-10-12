@@ -75,4 +75,20 @@ describe('EndlessActivityTab', () => {
     await flushPromises();
     expect(wrapper.find('[data-testid="endless-error"]').text()).toContain('无尽聚合异常');
   });
+
+  it('失败后可在本页重试无尽活跃数据请求', async () => {
+    apiMocks.fetchEndlessActivity
+      .mockRejectedValueOnce(new Error('无尽聚合异常'))
+      .mockResolvedValueOnce(payload(null));
+    const wrapper = mount(EndlessActivityTab, { props: { classroomId: 9 } });
+    await flushPromises();
+
+    await wrapper.get('[data-testid="endless-retry"]').trigger('click');
+    await flushPromises();
+
+    expect(apiMocks.fetchEndlessActivity).toHaveBeenCalledTimes(2);
+    expect(apiMocks.fetchEndlessActivity).toHaveBeenLastCalledWith(9);
+    expect(wrapper.find('[data-testid="endless-error"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="endless-daybars"]').exists()).toBe(true);
+  });
 });

@@ -2,7 +2,8 @@
 
 它不是自治浏览 Agent：只读取 goal 中明确给出的 URL；没有 URL 时，只构造 Python 官方站点
 自身的搜索 URL。所有网络请求在 Playwright ``BrowserContext.route`` 层再次经过 scheme、端口、
-allowlist 和 DNS 公网地址校验；脚本、Service Worker、下载和非 document 子资源全部关闭。
+allowlist 与 DNS 公网地址校验；Chromium 连接使用启动前固定的公网解析结果，脚本、Service Worker、下载
+和非 document 子资源全部关闭。
 """
 
 from __future__ import annotations
@@ -378,6 +379,54 @@ async def _resolve_public_ips(host: str) -> list[str]:
     return await asyncio.to_thread(resolve)
 
 
+async def _validated_public_addresses(
+    host: str, resolver: Resolver
+) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+    try:
+        addresses = [ipaddress.ip_address(host)]
+    except ValueError:
+        resolved = resolver(host)
+        raw_addresses = await resolved if inspect.isawaitable(resolved) else resolved
+        if not raw_addresses:
+            raise ValueError("目标主机 DNS 无可用地址")
+        try:
+            addresses = [ipaddress.ip_address(address) for address in raw_addresses]
+        except ValueError as exc:
+            raise ValueError("目标主机 DNS 返回了无效地址") from exc
+    if any(not address.is_global for address in addresses):
+        raise ValueError("目标主机解析到非公网地址")
+    return addresses
+
+
+async def _chromium_host_resolver_rules(allowed_domains: Iterable[str]) -> str:
+    rules: list[str] = []
+    domains = sorted(set(allowed_domains), key=len, reverse=True)
+    for raw_domain in domains:
+        host = raw_domain.rstrip(".").lower()
+        try:
+            ipaddress.ip_address(host)
+            continue
+        except ValueError:
+            pass
+        labels = host.split(".")
+        if (
+            not host
+            or len(host) > 253
+            or any(
+                not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", label)
+                for label in labels
+            )
+        ):
+            raise ValueError("白名单包含无效主机名")
+        addresses = await _validated_public_addresses(host, _resolve_public_ips)
+        # IPv4 is more widely reachable in the current container deployment.
+        pinned = next((address for address in addresses if address.version == 4), addresses[0])
+        replacement = f"[{pinned}]" if pinned.version == 6 else str(pinned)
+        # shortcut: subdomains share the base IP; pin concrete hosts separately if access needs differ.
+        rules.extend((f"MAP {host} {replacement}", f"MAP *.{host} {replacement}"))
+    return ",".join(rules)
+
+
 async def validate_network_url(
     url: str,
     allowed_domains: Iterable[str],
@@ -403,20 +452,7 @@ async def validate_network_url(
     host = parsed.hostname.rstrip(".").lower()
     if host in _METADATA_HOSTS or host == "localhost" or host.endswith(".localhost"):
         raise ValueError("目标主机不是公网地址")
-    try:
-        addresses: Sequence[str] = [host] if ipaddress.ip_address(host) else []
-    except ValueError:
-        resolved = resolver(host)
-        addresses = await resolved if inspect.isawaitable(resolved) else resolved
-    if not addresses:
-        raise ValueError("目标主机 DNS 无可用地址")
-    try:
-        if any(not ipaddress.ip_address(address).is_global for address in addresses):
-            raise ValueError("目标主机解析到非公网地址")
-    except ValueError as exc:
-        if "非公网" in str(exc):
-            raise
-        raise ValueError("目标主机 DNS 返回了无效地址") from exc
+    await _validated_public_addresses(host, resolver)
 
 
 class _PlaywrightReadOnlySession:
@@ -435,10 +471,14 @@ class _PlaywrightReadOnlySession:
         self._timeout_ms = int(timeout_seconds * 1000)
         self._playwright = await async_api.async_playwright().start()
         executable = self._env.get("BROWSE_CHROMIUM_EXECUTABLE_PATH", "").strip() or None
+        resolver_rules = await _chromium_host_resolver_rules(self._allowed_domains)
+        args = ["--disable-dev-shm-usage"]
+        if resolver_rules:
+            args.append(f"--host-resolver-rules={resolver_rules}")
         self._browser = await self._playwright.chromium.launch(
             headless=True,
             executable_path=executable,
-            args=["--disable-dev-shm-usage"],
+            args=args,
         )
         self._context = await self._browser.new_context(
             accept_downloads=False,

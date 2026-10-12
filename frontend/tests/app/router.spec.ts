@@ -95,14 +95,17 @@ describe('/admin 管理后台路由与角色边界', () => {
     localStorage.clear();
   });
 
-  it('registers the operations and problem-review pages under an ADMIN-only shell', () => {
+  it('registers all API-backed admin pages under an ADMIN-only shell', () => {
     const operations = router.resolve('/admin/operations');
     const reviews = router.resolve('/admin/problem-reviews');
+    const users = router.resolve('/admin/users');
 
     expect(operations.name).toBe('admin-operations');
     expect(reviews.name).toBe('admin-problem-reviews');
+    expect(users.name).toBe('admin-users');
     expect(operations.meta.adminOnly).toBe(true);
     expect(reviews.meta.adminOnly).toBe(true);
+    expect(users.meta.adminOnly).toBe(true);
     expect(operations.meta.fullscreen).toBe(true);
     expect(operations.meta.hideCompanion).toBe(true);
   });

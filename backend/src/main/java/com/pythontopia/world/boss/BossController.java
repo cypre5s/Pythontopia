@@ -12,6 +12,7 @@ import com.pythontopia.world.boss.dto.FrontierSelectResultDto;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Pattern;
 import org.springframework.http.HttpStatus;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -74,7 +75,9 @@ public class BossController {
       @RequestParam(required = false) @Min(1) @Max(4) Integer stage,
       @RequestParam(required = false) String preferredKc,
       @RequestParam @Min(1) @Max(5) Integer difficulty,
-      @RequestParam(required = false) String preferredKind,
+      @RequestParam(required = false)
+          @Pattern(regexp = "^(pdf_question|fill_blank|debug|short_answer|closed_loop|dual_track|multi_round|teach_back|bug_mine)$")
+          String preferredKind,
       @RequestParam(required = false) String arenaLevel,
       @RequestParam(required = false) String expeditionRunId,
       @CurrentUser CurrentUserPrincipal user) {

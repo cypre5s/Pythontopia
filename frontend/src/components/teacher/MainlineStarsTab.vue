@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import { fetchMainlineStars, type MainlineStarMatrixDto } from '@/api/teacher';
+import PyButton from '@/components/ui/PyButton.vue';
 
 // 自取数 Tab：仅依赖 classroomId，主代理在 ClassroomDetail.vue 注册时透传该 prop 即可。
 const props = defineProps<{ classroomId: number }>();
@@ -78,13 +79,22 @@ watch(() => props.classroomId, load);
     >
       星级分布加载中…
     </p>
-    <p
+    <div
       v-else-if="error"
       class="banner banner--error"
+      role="alert"
       data-testid="stars-error"
     >
-      {{ error }}
-    </p>
+      <span>{{ error }}</span>
+      <PyButton
+        variant="secondary"
+        size="sm"
+        test-id="stars-retry"
+        @click="load"
+      >
+        重试
+      </PyButton>
+    </div>
     <p
       v-else-if="totalStudents === 0"
       class="empty"
@@ -183,6 +193,10 @@ watch(() => props.classroomId, load);
   margin: 0;
 }
 .banner--error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   background: var(--pyt-color-danger-bg);
   color: var(--pyt-color-danger);
 }

@@ -1,13 +1,18 @@
 package com.pythontopia.workshop.upload.parser;
 
 /**
- * 解析结果：规范化后的纯文本及其字符数 / 行数。行尾统一为 {@code \n} 以保证 char/line 计数稳定，
- * {@code charCount} 为规范化后文本长度，{@code lineCount} 为非空文本的逻辑行数（空文本为 0）。
+ * 解析结果：规范化后的纯文本及其字符数 / 行数，文本最多 100000 字符。行尾统一为 {@code \n} 以保证
+ * char/line 计数稳定；{@code lineCount} 为非空文本的逻辑行数（空文本为 0）。
  */
 public record ExtractedContent(String text, int charCount, int lineCount) {
 
+  static final int MAX_CHAR_COUNT = 100_000;
+
   public static ExtractedContent of(String rawText) {
     String normalized = normalizeNewlines(rawText);
+    if (normalized.length() > MAX_CHAR_COUNT) {
+      throw new UploadParseException("提取文本超过上限（100000 字符）");
+    }
     return new ExtractedContent(normalized, normalized.length(), lineCount(normalized));
   }
 

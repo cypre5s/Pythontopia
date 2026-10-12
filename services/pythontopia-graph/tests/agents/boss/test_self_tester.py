@@ -1,4 +1,4 @@
-"""self_tester 沙箱单元测试：覆盖正常题、解法错误、超时与 forbidden import。"""
+"""self_tester tests with fixed responses for pass, error, timeout, and forbidden imports."""
 
 from __future__ import annotations
 
@@ -106,14 +106,24 @@ def test_forbidden_imports_rejected(code: str) -> None:
     assert any(i.code == "forbidden_imports" for i in verdict.issues)
 
 
-def test_dangerous_os_system_through_subprocess_is_rejected() -> None:
-    """os.system 类调用：os 不在 forbidden 名单，仅冒烟断言 verdict 类型。"""
-    problem = _make(
-        "import os; os.system('echo HACK')\nprint('x')",
-        [TestCase("", "x", is_sample=True), TestCase("", "x"), TestCase("", "x")],
-    )
-    verdict = self_test_problem(problem)
-    assert isinstance(verdict.passed, bool)
+def test_fake_piston_never_executes_submitted_source(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+    fake_piston_endpoint: list[tuple[str, str]],
+) -> None:
+    marker = tmp_path / "source-executed"
+    source = f"open({str(marker)!r}, 'w').write('executed')"
+
+    def forbidden_local_execution(*args: object, **kwargs: object) -> None:
+        pytest.fail("the fake Piston fixture must never execute submitted source")
+
+    monkeypatch.setattr(subprocess, "run", forbidden_local_execution)
+    verdict = self_test_problem(_make(source, [TestCase("", "")]))
+
+    assert not verdict.passed
+    assert any(issue.code == "reference_nonzero_exit" for issue in verdict.issues)
+    assert (source, "") in fake_piston_endpoint
+    assert not marker.exists()
 
 
 def test_list_forbidden_imports_returns_known_set() -> None:

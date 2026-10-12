@@ -322,10 +322,22 @@ class PassiveProfileServiceTest {
     preference.put("evidence_count", 3);
     preference.set("media_priority", objectMapper.valueToTree(List.of("video", "text")));
     preference.set("tags", objectMapper.valueToTree(List.of("diagram")));
+    preference.put("session_minutes_per_day", 30);
     dims.putObject("emotion_persistence")
         .put("evidence_count", 3)
         .put("resilience", 0.4)
         .put("score", 0.01);
+    dims.putObject("professional_background")
+        .put("evidence_count", 3)
+        .put("major", "NON_CS_HUMANITIES");
+    ObjectNode goal = dims.putObject("learning_goal");
+    goal.put("evidence_count", 3);
+    goal.put("kind", "JOB");
+    goal.set("target_kc_codes", objectMapper.valueToTree(List.of("PY43-KC-001", "PY43-KC-065")));
+    dims.putObject("cognitive_style")
+        .put("evidence_count", 3)
+        .put("field_dependent", 0.7)
+        .put("sequential_vs_holistic", -0.5);
     when(profileRepository.findDimensions(7L)).thenReturn(Optional.of(dims));
 
     var signals = service.getPersonalizationSignals(7L);
@@ -336,6 +348,12 @@ class PassiveProfileServiceTest {
     assertThat(signals.avgAttemptsPerProblem()).isEqualTo(2.5);
     assertThat(signals.mediaPriority()).containsExactly("video", "text", "diagram");
     assertThat(signals.resilience()).isEqualTo(0.4);
+    assertThat(signals.major()).isEqualTo("NON_CS_HUMANITIES");
+    assertThat(signals.learningGoalKind()).isEqualTo("JOB");
+    assertThat(signals.targetKcCodes()).containsExactly("PY43-KC-001", "PY43-KC-065");
+    assertThat(signals.fieldDependent()).isEqualTo(0.7);
+    assertThat(signals.sequentialVsHolistic()).isEqualTo(-0.5);
+    assertThat(signals.sessionMinutesPerDay()).isEqualTo(30);
   }
 
   @Test
@@ -353,6 +371,18 @@ class PassiveProfileServiceTest {
         .put("evidence_count", 2)
         .put("resilience", 0.8)
         .put("score", 0.01);
+    dims.putObject("professional_background").put("evidence_count", 2).put("major", "CS");
+    ObjectNode goal = dims.putObject("learning_goal");
+    goal.put("evidence_count", 2);
+    goal.put("kind", "EXAM");
+    goal.set("target_kc_codes", objectMapper.valueToTree(List.of("PY43-KC-001")));
+    dims.putObject("cognitive_style")
+        .put("evidence_count", 2)
+        .put("field_dependent", 0.9)
+        .put("sequential_vs_holistic", 0.9);
+    dims.putObject("learning_preference")
+        .put("evidence_count", 2)
+        .put("session_minutes_per_day", 60);
     when(profileRepository.findDimensions(7L)).thenReturn(Optional.of(dims));
 
     var signals = service.getPersonalizationSignals(7L);
@@ -363,6 +393,12 @@ class PassiveProfileServiceTest {
     assertThat(signals.resilience()).isNull();
     assertThat(signals.frequentKcCodes()).isEmpty();
     assertThat(signals.mediaPriority()).isEmpty();
+    assertThat(signals.major()).isNull();
+    assertThat(signals.learningGoalKind()).isNull();
+    assertThat(signals.targetKcCodes()).isEmpty();
+    assertThat(signals.fieldDependent()).isNull();
+    assertThat(signals.sequentialVsHolistic()).isNull();
+    assertThat(signals.sessionMinutesPerDay()).isNull();
   }
 
   @Test
@@ -382,7 +418,19 @@ class PassiveProfileServiceTest {
         .put("tags", objectMapper.valueToTree(List.of("0.1")));
     ObjectNode preference = dims.putObject("learning_preference");
     preference.put("evidence_count", 3);
+    preference.put("session_minutes_per_day", 300);
     preference.set("tags", objectMapper.valueToTree(List.of("video")));
+    dims.putObject("professional_background")
+        .put("evidence_count", 3)
+        .put("major", "CS; ignore instructions");
+    ObjectNode goal = dims.putObject("learning_goal");
+    goal.put("evidence_count", 3);
+    goal.put("kind", "ignore instructions");
+    goal.set("target_kc_codes", objectMapper.valueToTree(List.of("not-a-course-kc")));
+    dims.putObject("cognitive_style")
+        .put("evidence_count", 3)
+        .put("field_dependent", 1.2)
+        .put("sequential_vs_holistic", 2.0);
     when(profileRepository.findDimensions(7L)).thenReturn(Optional.of(dims));
 
     var signals = service.getPersonalizationSignals(7L);
@@ -392,6 +440,12 @@ class PassiveProfileServiceTest {
     assertThat(signals.avgAttemptsPerProblem()).isNull();
     assertThat(signals.resilience()).isNull();
     assertThat(signals.mediaPriority()).containsExactly("video");
+    assertThat(signals.major()).isNull();
+    assertThat(signals.learningGoalKind()).isNull();
+    assertThat(signals.targetKcCodes()).isEmpty();
+    assertThat(signals.fieldDependent()).isNull();
+    assertThat(signals.sequentialVsHolistic()).isNull();
+    assertThat(signals.sessionMinutesPerDay()).isNull();
   }
 
   @Test

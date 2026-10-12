@@ -8,8 +8,11 @@ import { computed, type ComputedRef } from 'vue';
 import { useLearningStore } from '@stores/learning';
 import type { ProfileSignalsDto } from '@/api/dto/Boss';
 import type { LearnerProfileDto } from '@/api/dto/LearnerProfileDto';
+import { KC_NAMES } from '@/data/kcNames';
 
 const MAX_WEAK_KCS = 6;
+const MAJOR_CODES = new Set(['CS', 'NON_CS_STEM', 'NON_CS_HUMANITIES', 'OTHER']);
+const GOAL_KINDS = new Set(['EXAM', 'PROJECT', 'INTEREST', 'JOB']);
 
 function deriveSignals(profile: LearnerProfileDto | null): ProfileSignalsDto {
   if (!profile) return {};
@@ -18,6 +21,34 @@ function deriveSignals(profile: LearnerProfileDto | null): ProfileSignalsDto {
   const weak = profile.errorPatterns?.frequentKcCodes;
   if (Array.isArray(weak) && weak.length > 0) {
     out.weakKcCodes = weak.slice(0, MAX_WEAK_KCS);
+  }
+
+  if (profile.major && MAJOR_CODES.has(profile.major)) {
+    out.major = profile.major;
+  }
+
+  const goal = profile.learningGoal;
+  if (goal && GOAL_KINDS.has(goal.kind)) {
+    out.learningGoalKind = goal.kind;
+  }
+  const targetKcs = goal?.targetKcCodes?.filter((code) =>
+    Object.prototype.hasOwnProperty.call(KC_NAMES, code),
+  );
+  if (targetKcs?.length) {
+    out.targetKcCodes = [...new Set(targetKcs)].slice(0, MAX_WEAK_KCS);
+  }
+
+  const fieldDependent = profile.cognitiveStyle?.fieldDependent;
+  if (typeof fieldDependent === 'number' && fieldDependent >= 0 && fieldDependent <= 1) {
+    out.fieldDependent = fieldDependent;
+  }
+  const sequentialVsHolistic = profile.cognitiveStyle?.sequentialVsHolistic;
+  if (
+    typeof sequentialVsHolistic === 'number' &&
+    sequentialVsHolistic >= -1 &&
+    sequentialVsHolistic <= 1
+  ) {
+    out.sequentialVsHolistic = sequentialVsHolistic;
   }
 
   const level = profile.baseLevel?.pythonSelfRatedLevel;
@@ -33,6 +64,15 @@ function deriveSignals(profile: LearnerProfileDto | null): ProfileSignalsDto {
   const media = profile.learningPreference?.mediaPriority;
   if (Array.isArray(media) && media.length > 0) {
     out.mediaPriority = media.slice(0, 4);
+  }
+  const sessionMinutes = profile.learningPreference?.sessionMinutesPerDay;
+  if (
+    typeof sessionMinutes === 'number' &&
+    Number.isInteger(sessionMinutes) &&
+    sessionMinutes >= 5 &&
+    sessionMinutes <= 240
+  ) {
+    out.sessionMinutesPerDay = sessionMinutes;
   }
 
   const resilience = profile.emotionPersistence?.resilience;
