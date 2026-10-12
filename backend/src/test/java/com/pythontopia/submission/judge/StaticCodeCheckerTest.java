@@ -2,6 +2,7 @@ package com.pythontopia.submission.judge;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.io.InputStream;
 import org.junit.jupiter.api.Test;
 
 class StaticCodeCheckerTest {
@@ -93,5 +94,24 @@ class StaticCodeCheckerTest {
   @Test
   void acceptsSafeImportViaAst() {
     assertThat(checker.check("import math\nprint(math.sqrt(4))").passed()).isTrue();
+  }
+
+  @Test
+  void missingAstWhitelistFailsClosedAndMarksCheckerNotReady() {
+    ClassLoader withoutResources =
+        new ClassLoader(null) {
+          @Override
+          public InputStream getResourceAsStream(String name) {
+            return null;
+          }
+        };
+
+    StaticCodeChecker missingChecker = new StaticCodeChecker("python3", withoutResources);
+    StaticCodeChecker.CheckResult result = missingChecker.check("print(1)");
+
+    assertThat(result.passed()).isFalse();
+    assertThat(result.systemError()).isTrue();
+    assertThat(result.failureReason()).isEqualTo("SYSTEM_ERROR:ast_whitelist_missing");
+    assertThat(missingChecker.readiness().ready()).isFalse();
   }
 }

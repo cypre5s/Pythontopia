@@ -47,14 +47,15 @@ public class JudgeService {
   }
 
   /**
-   * 在判题工作线程池上执行 Python 子进程调用（避免占用 Tomcat 请求线程），
+   * AST 预检和判题沙箱调用均在判题工作线程池上执行（避免占用 Tomcat 请求线程），
    * 但 DB 事务仍在调用线程上管理（由上层 {@code @Transactional} 控制）。
    * 内部用 {@link JudgeWorkerPool#submitAndWait} 限制并发子进程数。
    */
   @Transactional
   public JudgeOutcome judge(Long submissionId, Long problemId, String code) {
     submissionRepository.markStatus(submissionId, SubmissionStatus.RUNNING, null, null);
-    StaticCodeChecker.CheckResult check = staticChecker.check(code);
+    StaticCodeChecker.CheckResult check =
+        judgeWorkerPool.submitAndWait(() -> staticChecker.check(code));
     if (!check.passed()) {
       // StaticCodeChecker 跨包契约：systemError=true 表示判题环境故障（解释器缺 ast / fork 失败），
       // 必须判 SYSTEM_ERROR + ERROR，绝不能把基础设施问题记成学生的 CE + FAILED。

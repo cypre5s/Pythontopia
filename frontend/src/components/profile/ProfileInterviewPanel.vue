@@ -6,6 +6,8 @@ import { useLearningStore } from '@/stores/learning';
 const learning = useLearningStore();
 const router = useRouter();
 const answer = ref('');
+const errorMessage = ref<string | null>(null);
+const finishing = ref(false);
 
 const dimensionLabels: Record<string, string> = {
   major: '专业背景',
@@ -19,17 +21,31 @@ const dimensionLabels: Record<string, string> = {
 };
 
 async function send(): Promise<void> {
-  if (!answer.value.trim()) {
+  if (!answer.value.trim() || learning.profileInterview.loading || finishing.value) {
     return;
   }
   const message = answer.value.trim();
-  answer.value = '';
-  await learning.sendTurn(message);
+  errorMessage.value = null;
+  try {
+    await learning.sendTurn(message);
+    answer.value = '';
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '发送失败，请稍后重试。';
+  }
 }
 
 async function finish(): Promise<void> {
-  await learning.finishInterview();
-  await router.push('/profile');
+  if (finishing.value) return;
+  finishing.value = true;
+  errorMessage.value = null;
+  try {
+    await learning.finishInterview();
+    await router.push('/profile');
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '保存画像失败，请稍后重试。';
+  } finally {
+    finishing.value = false;
+  }
 }
 </script>
 
@@ -58,6 +74,14 @@ async function finish(): Promise<void> {
       <span>Grounding: {{ learning.profileInterview.grounding?.passed === false ? '需补充' : '通过' }}</span>
       <span>Safety: {{ learning.profileInterview.safety?.passed === false ? '失败' : '通过' }}</span>
     </div>
+    <p
+      v-if="errorMessage"
+      class="profile-error"
+      data-testid="profile-interview-error"
+      role="alert"
+    >
+      {{ errorMessage }}
+    </p>
 
     <form
       v-if="!learning.profileInterview.done"
@@ -66,13 +90,14 @@ async function finish(): Promise<void> {
     >
       <textarea
         v-model="answer"
+        :disabled="learning.profileInterview.loading || finishing"
         placeholder="写下你的学习背景、目标或偏好"
       />
       <button
-        :disabled="learning.profileInterview.loading"
+        :disabled="learning.profileInterview.loading || finishing"
         type="submit"
       >
-        发送
+        {{ learning.profileInterview.loading ? '发送中…' : '发送' }}
       </button>
     </form>
 
@@ -80,9 +105,10 @@ async function finish(): Promise<void> {
       v-else
       class="finish"
       type="button"
+      :disabled="finishing"
       @click="finish"
     >
-      完成访谈
+      {{ finishing ? '保存中…' : '完成访谈' }}
     </button>
   </aside>
 </template>

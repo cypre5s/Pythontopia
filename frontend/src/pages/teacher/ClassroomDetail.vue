@@ -137,12 +137,18 @@ async function removeMember(studentId: number) {
   }
 }
 
+const regeneratingJoinCode = ref(false);
+
 async function regenerate() {
+  if (regeneratingJoinCode.value) return;
+  regeneratingJoinCode.value = true;
   try {
     const updated = await teacher.regenerateJoinCode(classroomId.value);
     toast.show(`已生成新加入码：${updated.joinCode ?? '——'}`, 'success');
   } catch (error) {
     toast.show(error instanceof Error ? error.message : '重置失败', 'error');
+  } finally {
+    regeneratingJoinCode.value = false;
   }
 }
 
@@ -192,9 +198,11 @@ function back() {
           <PyButton
             variant="secondary"
             size="sm"
+            test-id="regenerate-join-code"
+            :disabled="regeneratingJoinCode"
             @click="regenerate"
           >
-            重置加入码
+            {{ regeneratingJoinCode ? '重置中…' : '重置加入码' }}
           </PyButton>
           <PyButton
             variant="primary"

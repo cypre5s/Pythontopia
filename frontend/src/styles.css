@@ -320,6 +320,12 @@ a {
   line-height: 1.6;
 }
 
+.profile-error {
+  margin: 0;
+  color: #9b2c20;
+  font-size: 14px;
+}
+
 .profile-form {
   display: grid;
   gap: 10px;

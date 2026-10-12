@@ -17,6 +17,7 @@ import com.pythontopia.submission.judge.JudgeService.JudgeOutcome;
 import com.pythontopia.submission.repository.PracticeSubmissionRepository;
 import com.pythontopia.submission.repository.PublicProblemRepository;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -114,6 +115,26 @@ class JudgeServiceTest {
     verify(submissions)
         .insertJudgeResult(eq(1L), eq(Verdict.SYSTEM_ERROR), eq(0), eq(0), any(), any());
     verify(submissions).markStatus(eq(1L), eq(SubmissionStatus.ERROR), eq(0), eq(null));
+  }
+
+  @Test
+  void runsAstStaticCheckOnBoundedJudgeWorkerPool() {
+    AtomicReference<String> checkThread = new AtomicReference<>();
+    StaticCodeChecker threadRecordingChecker =
+        new StaticCodeChecker("python3") {
+          @Override
+          public CheckResult check(String code) {
+            checkThread.set(Thread.currentThread().getName());
+            return super.check(code);
+          }
+        };
+    JudgeService checkedJudge =
+        new JudgeService(
+            submissions, problems, sandbox, threadRecordingChecker, mapper, workerPool, caseEvaluator);
+
+    checkedJudge.judge(1L, 2L, "print(1)");
+
+    assertThat(checkThread.get()).startsWith("judge-worker-");
   }
 
   /** 回归：评测阶段的 SYSTEM_ERROR（沙箱 IOException 等）必须落 ERROR，而不是学生失败 FAILED。 */

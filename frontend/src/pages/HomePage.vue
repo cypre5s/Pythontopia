@@ -17,6 +17,8 @@ const learning = useLearningStore();
 const workshopUi = useWorkshopUiStore();
 
 const classroom = ref<ClassroomDto | null>(null);
+const classroomLoading = ref(true);
+const classroomLoadError = ref<string | null>(null);
 const recommendations = ref<RecommendationDto[]>([]);
 const loadingRecs = ref(false);
 const loadingQuests = ref(false);
@@ -35,11 +37,17 @@ const canJoin = computed(
 );
 
 async function loadClassroom(): Promise<void> {
+  classroomLoading.value = true;
+  classroomLoadError.value = null;
   try {
     const list = await listMyClassrooms();
     classroom.value = list.find((c) => c.status === 'ACTIVE') ?? null;
-  } catch {
-    /* 班级信息为可选数据，加载失败忽略 */
+  } catch (error) {
+    classroom.value = null;
+    classroomLoadError.value =
+      error instanceof Error ? error.message : '班级信息加载失败，请稍后重试。';
+  } finally {
+    classroomLoading.value = false;
   }
 }
 
@@ -184,12 +192,35 @@ onMounted(async () => {
             >
               班级：{{ classroom.name }}
             </p>
+            <div
+              v-else-if="classroomLoadError"
+              class="classroom-load-error"
+              data-testid="classroom-load-error"
+              role="alert"
+            >
+              <span>班级信息暂时无法加载：{{ classroomLoadError }}</span>
+              <PyButton
+                variant="secondary"
+                size="sm"
+                test-id="classroom-retry"
+                @click="loadClassroom"
+              >
+                重试
+              </PyButton>
+            </div>
+            <p
+              v-else-if="classroomLoading"
+              class="welcome-class"
+              data-testid="classroom-loading"
+            >
+              班级信息加载中…
+            </p>
             <p class="welcome-hint">
               开始今天的学习吧
             </p>
             <!-- 还没入班的学生：加入码入口。老师建班后把 6 位码发给学生，输入即入班。 -->
             <form
-              v-if="!classroom"
+              v-if="!classroom && !classroomLoading && !classroomLoadError"
               class="join-form"
               data-testid="join-classroom-form"
               @submit.prevent="submitJoin"
@@ -297,18 +328,22 @@ onMounted(async () => {
             <li
               v-for="rec in recommendations"
               :key="rec.resourceId"
-              class="rec-card"
-              @click="onRecommendClick(rec)"
             >
-              <span
-                class="rec-card__icon"
-                aria-hidden="true"
-              >{{ typeIcon(rec.type) }}</span>
-              <div class="rec-card__body">
-                <span class="rec-card__title">{{ rec.title }}</span>
-                <span class="rec-card__kc">{{ rec.kcName }}</span>
-                <span class="rec-card__reason">{{ rec.reason }}</span>
-              </div>
+              <button
+                class="rec-card"
+                type="button"
+                @click="onRecommendClick(rec)"
+              >
+                <span
+                  class="rec-card__icon"
+                  aria-hidden="true"
+                >{{ typeIcon(rec.type) }}</span>
+                <span class="rec-card__body">
+                  <span class="rec-card__title">{{ rec.title }}</span>
+                  <span class="rec-card__kc">{{ rec.kcName }}</span>
+                  <span class="rec-card__reason">{{ rec.reason }}</span>
+                </span>
+              </button>
             </li>
           </ul>
         </section>
@@ -595,14 +630,22 @@ onMounted(async () => {
 .rec-card {
   display: flex;
   align-items: flex-start;
+  width: 100%;
   gap: 10px;
   padding: 10px 14px;
   background: var(--pyt-color-bg-elevated);
   border: 3px solid var(--pyt-color-border);
   border-radius: var(--pyt-radius-lg);
   cursor: pointer;
+  font: inherit;
+  color: inherit;
+  text-align: left;
   transition: background 120ms, border-color 120ms, transform 80ms;
   box-shadow: 0 2px 0 rgba(0, 0, 0, 0.1);
+}
+.rec-card:focus-visible {
+  outline: 3px solid var(--pyt-color-text-hint);
+  outline-offset: 2px;
 }
 .rec-card:hover {
   background: var(--pyt-color-warning-bg);

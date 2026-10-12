@@ -1,6 +1,7 @@
 package com.pythontopia.common.web;
 
 import com.pythontopia.coursepack.service.CourseVideoTranscriptService;
+import com.pythontopia.submission.judge.StaticCodeChecker;
 import com.pythontopia.submission.judge.PythonSandbox;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
@@ -12,10 +13,15 @@ import org.springframework.web.bind.annotation.RestController;
 public class HealthController {
 
   private final PythonSandbox sandbox;
+  private final StaticCodeChecker staticCodeChecker;
   private final CourseVideoTranscriptService videoTranscripts;
 
-  public HealthController(PythonSandbox sandbox, CourseVideoTranscriptService videoTranscripts) {
+  public HealthController(
+      PythonSandbox sandbox,
+      StaticCodeChecker staticCodeChecker,
+      CourseVideoTranscriptService videoTranscripts) {
     this.sandbox = sandbox;
+    this.staticCodeChecker = staticCodeChecker;
     this.videoTranscripts = videoTranscripts;
   }
 
@@ -27,8 +33,9 @@ public class HealthController {
   @GetMapping("/readyz")
   ResponseEntity<Map<String, String>> readyz() {
     PythonSandbox.Readiness judge = sandbox.readiness();
+    PythonSandbox.Readiness staticCheck = staticCodeChecker.readiness();
     CourseVideoTranscriptService.Readiness courseVideoTranscripts = videoTranscripts.readiness();
-    boolean ready = judge.ready() && courseVideoTranscripts.ready();
+    boolean ready = judge.ready() && staticCheck.ready() && courseVideoTranscripts.ready();
     HttpStatus status = ready ? HttpStatus.OK : HttpStatus.SERVICE_UNAVAILABLE;
     return ResponseEntity.status(status)
         .body(
@@ -37,6 +44,8 @@ public class HealthController {
                 ready ? "ready" : "not_ready",
                 "judge",
                 judge.detail(),
+                "python_static_checker",
+                staticCheck.detail(),
                 "course_video_transcripts",
                 courseVideoTranscripts.detail()));
   }

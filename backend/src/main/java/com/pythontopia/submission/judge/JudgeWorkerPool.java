@@ -1,20 +1,23 @@
 package com.pythontopia.submission.judge;
 
+import com.pythontopia.common.error.BusinessException;
 import jakarta.annotation.PreDestroy;
 import java.util.concurrent.Callable;
+import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
 /**
  * 判题任务有界线程池：限制并发 Python 子进程数（默认 core=2 / max=4），队列有界（缺省 100），
- * 满载时 {@code CallerRunsPolicy} 回压调用线程（通常为 Tomcat 请求线程），避免无限制 fork
- * Python 子进程在突发提交下拖垮宿主机。
+ * 满载时拒绝新任务并返回 503，避免请求线程绕过并发上限自行 fork Python 子进程。
  *
  * <p>每次判题提交一行代码，最多跑 {@link JudgeService#MAX_CASES} 个测试用例（串行），
  * 因此 pool size 不需很大；瓶颈在 CPU / 内存而非 IO。
@@ -45,7 +48,7 @@ public class JudgeWorkerPool {
             TimeUnit.SECONDS,
             new LinkedBlockingQueue<>(queueCapacity),
             namedDaemonThreadFactory(),
-            new ThreadPoolExecutor.CallerRunsPolicy());
+            new ThreadPoolExecutor.AbortPolicy());
     log.info(
         "JudgeWorkerPool started core={} max={} queue={}",
         core,
@@ -62,9 +65,19 @@ public class JudgeWorkerPool {
    * @throws RuntimeException 如果任务执行失败
    */
   public <T> T submitAndWait(Callable<T> task) {
+    Future<T> future = null;
     try {
-      return executor.submit(task).get();
+      future = executor.submit(task);
+      return future.get();
+    } catch (RejectedExecutionException e) {
+      throw new BusinessException(
+          HttpStatus.SERVICE_UNAVAILABLE,
+          "JUDGE_CAPACITY",
+          "判题服务繁忙，请稍后重试");
     } catch (InterruptedException e) {
+      if (future != null) {
+        future.cancel(true);
+      }
       Thread.currentThread().interrupt();
       throw new JudgeRejectedException("Judge interrupted", e);
     } catch (java.util.concurrent.ExecutionException e) {
