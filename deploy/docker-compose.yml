@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: ${PYT_DB_USERNAME:-pytopia}
       POSTGRES_PASSWORD: ${PYT_DB_PASSWORD:-pytopia_dev_password}
     ports:
-      - "15432:5432"
+      - "127.0.0.1:15432:5432"
     volumes:
       - pytopia_pg:/var/lib/postgresql/data
       - ./initdb:/docker-entrypoint-initdb.d:ro
@@ -19,7 +19,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "16379:6379"
+      - "127.0.0.1:16379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -44,7 +44,7 @@ services:
       PYT_TEACHER_INVITE_CODE: ${PYT_TEACHER_INVITE_CODE:?请在 deploy/.env 配置 PYT_TEACHER_INVITE_CODE}
       PYTHONTOPIA_SERVICES_GRAPHURL: http://pythontopia-graph:18091
       PYTHONTOPIA_SERVICES_RAGURL: http://pythontopia-rag:18092
-      PYTHONTOPIA_SERVICES_RAGADMINTOKEN: ${PYT_RAG_ADMIN_TOKEN:?请在 deploy/.env 配置 PYT_RAG_ADMIN_TOKEN}
+      PYTHONTOPIA_SERVICES_RAGADMINTOKEN: ${PYT_RAG_ADMIN_TOKEN:-}
       PYT_ROUTE_EXECUTION_SECRET: ${PYT_ROUTE_EXECUTION_SECRET:-}
       PYT_JUDGE_PROVIDER: ${PYT_JUDGE_PROVIDER:-piston}
       PYT_PISTON_URL: ${PYT_PISTON_URL:-}
@@ -70,9 +70,10 @@ services:
       context: ../services/pythontopia-graph
       dockerfile: Dockerfile
     # graph 需要访问宿主机本地代理 7892（B站/外网检索）；很多代理只监听
-    # 127.0.0.1，bridge 网络下容器无法连到。开发态让 graph 使用 host 网络，
-    # 保持 http://127.0.0.1:18091 对外入口不变。
+    # 127.0.0.1，bridge 网络下容器无法连到。host 网络下服务只绑定回环地址，
+    # 后端仍从 http://127.0.0.1:18091 访问，外部网卡无法访问 Graph API。
     network_mode: host
+    command: ["uvicorn", "pythontopia_graph.main:app", "--host", "127.0.0.1", "--port", "18091", "--workers", "1"]
     # R-13 §5 Phase 6 续：开发态把 host 源码 mount 进 /app，
     # 容器内 sys.path 优先 /app/pythontopia_graph，因此 hot reload 走这里；
     # site-packages 也保留原 wheel（pyproject 依赖照常工作）。
@@ -99,7 +100,7 @@ services:
       LLM_MODEL_FAST: ${PYT_OPENAI_MODEL_FAST:-deepseek-flash}
       LLM_MODEL_VISION: ${PYT_OPENAI_MODEL_VISION:-deepseek-flash}
       PYT_RAG_URL: http://127.0.0.1:18092
-      PYT_RAG_ADMIN_TOKEN: ${PYT_RAG_ADMIN_TOKEN:-pytopia-rag-admin}
+      PYT_RAG_ADMIN_TOKEN: ${PYT_RAG_ADMIN_TOKEN:-}
       PYT_PISTON_URL: ${PYT_PISTON_URL:-}
       PYT_PISTON_PYTHON_VERSION: ${PYT_PISTON_PYTHON_VERSION:-3.11.13}
       PYT_PISTON_AUTH_TOKEN: ${PYT_PISTON_AUTH_TOKEN:-}
@@ -138,7 +139,7 @@ services:
       - ../services/pythontopia-rag/pythontopia_rag:/app/pythontopia_rag:ro
     environment:
       PYT_DB_URL: postgresql://${PYT_DB_USERNAME:-pytopia}:${PYT_DB_PASSWORD:-pytopia_dev_password}@postgres:5432/pythontopia
-      PYT_RAG_ADMIN_TOKEN: ${PYT_RAG_ADMIN_TOKEN:-pytopia-rag-admin}
+      PYT_RAG_ADMIN_TOKEN: ${PYT_RAG_ADMIN_TOKEN:-}
       PYT_RAG_EMBEDDER: hash
     depends_on:
       postgres:
@@ -155,7 +156,7 @@ services:
       backend:
         condition: service_started
     ports:
-      - "8080:80"
+      - "127.0.0.1:8080:80"
 
   # ════════════════════════════════════════════════════════════════════════
   # 可观测性（可选 profile：observability）· Langfuse 自托管 · OTLP-native

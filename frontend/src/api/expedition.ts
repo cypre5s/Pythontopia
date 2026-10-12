@@ -22,8 +22,6 @@ interface FrontierSelectResult {
 
 export interface FrontierSelectInput {
   focusChapter?: number | null;
-  /** 近期练过的 KC（最近在前），间隔重复用。 */
-  recentKcs?: string[];
   /** 本局已用 KC，避免重复。 */
   exclude?: string[];
   /** 需要的候选数量。 */
@@ -34,7 +32,6 @@ export interface FrontierSelectInput {
 /** 取一批知识前沿候选；空结果/坏结构与网络错误一样显式失败。 */
 export async function requestFrontierPicks(input: FrontierSelectInput): Promise<FrontierPick[]> {
   const body: Record<string, unknown> = {
-    recentKcs: input.recentKcs ?? [],
     exclude: input.exclude ?? [],
     count: input.count,
   };

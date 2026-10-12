@@ -122,6 +122,40 @@ describe('useEndlessRun', () => {
     expect(run.errorMessage.value).toContain('判题服务暂不可用');
   });
 
+  it('下一题获取失败后重试取题，不重交旧题或重置本局进度', async () => {
+    const nextProblem = { ...PROBLEM, problemId: 'p-endless-2' };
+    apiMocks.requestBossProblem
+      .mockResolvedValueOnce(PROBLEM)
+      .mockRejectedValueOnce(new Error('next question timeout'))
+      .mockResolvedValueOnce(nextProblem);
+    apiMocks.submitBossAttempt.mockResolvedValueOnce({
+      problemId: PROBLEM.problemId,
+      passed: true,
+      passedTestCases: 3,
+      totalTestCases: 3,
+      score: 20,
+      feedback: '通过',
+    });
+    const run = useEndlessRun();
+    await run.startRun();
+    await run.submit();
+    const score = run.totalScore.value;
+
+    await run.nextProblem();
+    expect(run.phase.value).toBe('error');
+    expect(run.problem.value).toBeNull();
+    expect(run.attempts.value).toBe(1);
+    expect(run.totalScore.value).toBe(score);
+
+    await run.retry();
+
+    expect(apiMocks.requestBossProblem).toHaveBeenCalledTimes(3);
+    expect(apiMocks.submitBossAttempt).toHaveBeenCalledTimes(1);
+    expect(run.problem.value?.problemId).toBe(nextProblem.problemId);
+    expect(run.attempts.value).toBe(1);
+    expect(run.totalScore.value).toBe(score);
+  });
+
   it('评测中重复提交只走一次正式判题（手动提交 + BugMineCard 30s 定时器同帧触发）', async () => {
     const run = useEndlessRun();
     await run.startRun();

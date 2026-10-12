@@ -248,9 +248,8 @@ function buildBuggyCode(template: GoldenTemplate): string {
  * 真正基于学生画像偏好出题，不再随机抽 KC。
  *
  * - 优先调真后端 /api/world/boss/{chapter}/problem
- * - 任意 4xx/5xx/网络异常默认向上抛出，不产生伪题
- * - 只有隔离开发测试显式 allowGoldenFallback=true 时，才允许按 preferredKc 生成本地模板；
- *   否则按 stage 取默认 template（保留旧行为）。
+ * - 只接收后端审核通过的题目；AI 生成或后端课程题均可
+ * - 任意 4xx/5xx/网络异常默认向上抛出；只有隔离开发测试显式开启时才用本地模板
  */
 export async function requestBossProblem(
   chapter: number,
@@ -269,8 +268,8 @@ export async function requestBossProblem(
       },
     );
     if (response.data && typeof response.data.problemId === 'string') {
-      if (!allowGoldenFallback && (!response.data.aiGenerated || !response.data.reviewed)) {
-        throw new Error('生成题未通过 AI 审查，未进入远征');
+      if (!response.data.reviewed) {
+        throw new Error('生成题未通过审核，未进入远征');
       }
       return normalizeProblemForKind(response.data, req.preferredKind);
     }

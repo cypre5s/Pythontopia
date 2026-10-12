@@ -116,7 +116,7 @@ public class BossGraphClient {
   /**
    * 调 graph 知识前沿选择器（无尽远征生成地图用）。失败抛 {@link RestClientException}，由调用方决定降级。
    *
-   * <p>mastery 与 confidence 由后端从权威来源读取后传入；profileSignals / recentKcs / focusChapter / exclude 透传。
+   * <p>掌握度、画像与练习时间均由后端权威读取；focusChapter / exclude 是本局导航提示。
    * lastPracticed 为每个 KC 的后端权威最近练习时间（ISO-8601，来自正式练习事件），
    * 供 graph 做真·间隔重复（久未练上浮），见 {@code expedition_selector.select_frontier}。
    */
@@ -124,7 +124,6 @@ public class BossGraphClient {
       Map<String, Double> mastery,
       Map<String, Double> confidence,
       ProfileSignalsPayload profileSignals,
-      List<String> recentKcs,
       Integer focusChapter,
       List<String> exclude,
       int count,
@@ -147,7 +146,6 @@ public class BossGraphClient {
             .toList();
     Map<String, Object> body = new HashMap<>();
     body.put("mastery", masteryList);
-    body.put("recentKcs", recentKcs == null ? List.of() : recentKcs);
     body.put("lastPracticed", lastPracticed == null ? Map.of() : lastPracticed);
     body.put("exclude", exclude == null ? List.of() : exclude);
     body.put("count", count);

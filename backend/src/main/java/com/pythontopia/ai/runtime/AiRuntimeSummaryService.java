@@ -223,8 +223,8 @@ public class AiRuntimeSummaryService {
         new AiRuntimeOperationsDto.LoopOperation(
             "LEARNER",
             "学生学习闭环",
-            metrics.hasEvidence() ? "PASS" : "INSUFFICIENT_EVIDENCE",
-            metrics.hasEvidence() ? "learner-evidence-graph" : "",
+            metrics.hasEvidence() ? "WARN" : "INSUFFICIENT_EVIDENCE",
+            "",
             "open:student-learning-loop",
             List.of("learner.evidence.graph")),
         new AiRuntimeOperationsDto.LoopOperation(
@@ -237,8 +237,8 @@ public class AiRuntimeSummaryService {
         new AiRuntimeOperationsDto.LoopOperation(
             "RESOURCE",
             "资源生成闭环",
-            metrics.resourceRunCount() > 0 ? "PASS" : "INSUFFICIENT_EVIDENCE",
-            metrics.resourceRunCount() > 0 ? "workshop-resource-runs" : "",
+            metrics.resourceRunCount() > 0 ? "WARN" : "INSUFFICIENT_EVIDENCE",
+            "",
             "evaluate:resource_feedback_or_check",
             metrics.resourceRunCount() > 0
                 ? List.of("resource_feedback_or_check")
@@ -246,8 +246,8 @@ public class AiRuntimeSummaryService {
         new AiRuntimeOperationsDto.LoopOperation(
             "WORLD",
             "小镇世界闭环",
-            metrics.touchedKcCount() > 0 ? "PASS" : "INSUFFICIENT_EVIDENCE",
-            metrics.touchedKcCount() > 0 ? "town_hub-world-proposal" : "",
+            metrics.touchedKcCount() > 0 ? "WARN" : "INSUFFICIENT_EVIDENCE",
+            "",
             "review:town_hub-world-patch",
             metrics.touchedKcCount() > 0 ? List.of("world-loop-proposal") : List.of()),
         new AiRuntimeOperationsDto.LoopOperation(

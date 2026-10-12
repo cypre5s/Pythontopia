@@ -90,6 +90,17 @@ describe('useChallengeJudge preload state', () => {
     );
   });
 
+  it('does not request another problem while the prefetch job is still pending', async () => {
+    apiMock.prefetchBossProblem.mockResolvedValueOnce(status('PENDING'));
+    apiMock.fetchBossPrefetchStatus.mockResolvedValueOnce(status('PENDING'));
+    const judge = useChallengeJudge();
+    await judge.prefetchProblem(ARGS);
+
+    await expect(judge.fetchProblem(ARGS)).rejects.toThrow('仍在生成');
+
+    expect(apiMock.requestBossProblem).not.toHaveBeenCalled();
+  });
+
   it('forwards the active expedition run id to the server-issued problem', async () => {
     const judge = useChallengeJudge();
     const expeditionRunId = '123e4567-e89b-12d3-a456-426614174000';

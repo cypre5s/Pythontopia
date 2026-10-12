@@ -132,6 +132,12 @@ set -a
 source "$DEPLOY_DIR/.env"
 set +a
 
+configured_internal_token="${PYT_RAG_ADMIN_TOKEN:-}"
+export PYT_RAG_ADMIN_TOKEN="$("$DEPLOY_DIR/scripts/resolve_dev_internal_token.sh" "$configured_internal_token")"
+if [[ "$PYT_RAG_ADMIN_TOKEN" != "$configured_internal_token" ]]; then
+  c_warn "本次开发栈已生成临时服务间鉴权令牌（未写入磁盘）"
+fi
+
 # ---- 1. 依赖（docker） ----
 if [[ "$START_DEPS" == "1" ]]; then
   c_info "拉起依赖容器: ${DEP_SERVICES[*]} …"
@@ -183,7 +189,6 @@ esac
 # 后端默认即 localhost:18091/18092，这里显式声明对齐 dockerized graph/rag
 export PYT_GRAPH_URL="${PYT_GRAPH_URL:-http://127.0.0.1:18091}"
 export PYT_RAG_URL="${PYT_RAG_URL:-http://127.0.0.1:18092}"
-export PYT_RAG_ADMIN_TOKEN="${PYT_RAG_ADMIN_TOKEN:-pytopia-rag-admin}"
 # 多 Agent RouteDecision 执行签名使用独立、每次开发栈启动随机的高熵密钥；不复用公开的
 # graph/rag internal token。外部显式配置时保持原值，便于多后端实例共享验证。
 if [[ -z "${PYT_ROUTE_EXECUTION_SECRET:-}" ]]; then

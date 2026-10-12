@@ -99,10 +99,12 @@ export function useChallengeJudge(): UseChallengeJudgeReturn {
   }
 
   async function fetchProblem(args: ChallengeProblemArgs): Promise<BossProblemDto> {
+    let preload = getPrefetchState(args);
     if (getPrefetchState(args).phase !== 'idle') {
       // 点击节点时最后确认一次；PENDING/FAILED 不会被客户端乐观改成 READY。
-      await refreshPrefetch(args).catch(() => getPrefetchState(args));
+      preload = await refreshPrefetch(args).catch(() => getPrefetchState(args));
     }
+    if (preload.phase === 'pending') throw new Error('题目仍在生成，请稍后重试');
     return request(args);
   }
 

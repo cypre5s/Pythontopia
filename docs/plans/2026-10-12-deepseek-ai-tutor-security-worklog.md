@@ -2,6 +2,15 @@
 
 日期：2026-10-12 至 2026-10-13
 
+## 2026-10-13 收尾补测（本轮）
+
+- 远征前沿使用服务端正式练习事件时间做间隔重复排序；Web 停止发送本地历史 KC，后端旧 `recentKcs` 字段仅用于兼容请求格式并忽略。Graph 排序函数不再接受客户端近期列表。
+- 远征功能修正：同步出题遇到相同维度预生成 `PENDING` 时返回冲突；审核过的后端 Golden 题按 `reviewed` 接受；Graph 故障不发通用 KC 占位题；成绩未获得服务端结算时不能开始下一局，支持重试。
+- 修复远征存档写入/弃局顺序与迟到判题响应竞态，避免旧请求覆盖新局；本地离线快照不反写服务端活跃局。主线视频/课件在服务端达标后通过唯一标记发布 `MediaConsumed` 学习事件。
+- 开发 Compose 仅绑定本机回环；`./dev.sh` 为缺失、占位或过短内部令牌生成仅本次启动有效的随机值，不写回 `.env`。
+- 验证：Web 定向 5 files / 76 tests 与 TypeScript 检查通过；后端运行摘要、Boss、主线进度及 marker repository 定向测试通过；Graph 前沿选择器 9 tests 与 Ruff 通过；PostgreSQL Testcontainers 从空库应用全部 116 个迁移到 V201；令牌生成、Compose 回环契约、Compose 配置和 shell 语法检查通过；`git diff --check` 通过。
+- 本轮按“功能先、性能后”未启动全栈、未发 DeepSeek 请求、未运行 Piston 或远征性能基准；相关真实性能数据继续待测。本轮未新增素材。此前对话中的 DeepSeek key 仍需轮换。
+
 ## 2026-10-13 当前功能复验
 
 - Tutor 课件检索失败现在直接终止当前工作流，不再把无证据导学卡交给模型生成；新增 fail-fast 回归。管理员账号列表/启停 API 与 Web 页面复用现有 `users.status`、`token_version`，停用即撤销旧会话；refresh 按 JWT user ID 取用户、请求鉴权核对数据库角色，登出增加服务端令牌撤销。Workshop 上传限制为每人最多 20 个、合计 50 MiB，并以用户行锁串行额度检查。

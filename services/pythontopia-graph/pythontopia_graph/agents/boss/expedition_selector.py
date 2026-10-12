@@ -1,11 +1,11 @@
 """无尽远征「知识前沿选择器」：把出题 KC 的挑选逻辑下沉到 graph（权威 + 可扩展间隔重复）。
 
-输入学生掌握度 + 画像信号 + 近期练过的 KC，输出按优先级排序的候选 KC（含章节、建议难度、原因）。
+输入学生掌握度 + 画像信号 + 服务端持久化的练习时间，输出按优先级排序的候选 KC（含章节、建议难度、原因）。
 纯逻辑无 I/O，便于单测：
 
 * ZPD 优先：掌握度在 [0.2, 0.8] 的「够得着」知识点优先；
 * 画像弱项加权；尚未掌握加权；越不熟越靠前；
-* 间隔重复：久未练（不在近期列表）适合复习上浮，刚练过的强力压制避免立刻重复；
+* 间隔重复：只根据服务端持久化的练习时间压制刚练过的 KC、上浮久未练的 KC；
 * 难度由掌握度推断，低成功率下调、高成功率上调。
 
 KC↔章节用单一事实源 ``kc_map``，绝不臆造课程包外的 KC。
@@ -50,7 +50,6 @@ def _priority(
     mastery: dict[str, float],
     confidence: dict[str, float],
     weak: set[str],
-    recent_rank: int | None,
     last_practiced: dict[str, str],
     now: datetime,
 ) -> tuple[float, str]:
@@ -72,14 +71,10 @@ def _priority(
         score += (1 - certainty) * 8
         if certainty < 0.6:
             reasons.append("证据待确认")
-    if recent_rank is None:
-        spacing_score, spacing_reason = _spacing_priority(kc, last_practiced, now)
-        score += spacing_score
-        if spacing_reason:
-            reasons.append(spacing_reason)
-    else:
-        # 越近越压制（rank 0 最近 → -25，rank≥5 → -5），避免立刻重复同一 KC。
-        score -= 25 - min(recent_rank, 5) * 4
+    spacing_score, spacing_reason = _spacing_priority(kc, last_practiced, now)
+    score += spacing_score
+    if spacing_reason:
+        reasons.append(spacing_reason)
     return score, "、".join(reasons) or "巩固"
 
 
@@ -119,7 +114,6 @@ def select_frontier(
     mastery: dict[str, float] | None = None,
     confidence: dict[str, float] | None = None,
     profile_signals: dict | None = None,
-    recent_kcs: list[str] | None = None,
     last_practiced: dict[str, str] | None = None,
     now: datetime | None = None,
     focus_chapter: int | None = None,
@@ -133,8 +127,6 @@ def select_frontier(
     signals = profile_signals or {}
     weak = set(signals.get("weakKcCodes") or signals.get("weak_kc_codes") or [])
     success_rate = signals.get("successRate", signals.get("success_rate"))
-    recent = list(recent_kcs or [])
-    recent_rank = {kc: i for i, kc in enumerate(recent)}
     practiced = dict(last_practiced or {})
     clock = now or datetime.now(timezone.utc)
     exclude_set = set(exclude or [])
@@ -152,7 +144,6 @@ def select_frontier(
                     mastery,
                     confidence,
                     weak,
-                    recent_rank.get(kc),
                     practiced,
                     clock,
                 ),
